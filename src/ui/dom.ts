@@ -23,9 +23,11 @@ const css = `
 .ui-btn { display: block; width: 100%; margin-top: 10px; padding: 12px; font: 600 15px system-ui, sans-serif;
   border: 3px solid #2b2233; border-radius: 6px; background: #8fd16a; color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
 .ui-btn:active, .ui-chip:active { transform: translateY(2px); box-shadow: 0 1px 0 #2b2233; }
+.ui-btn.secondary { background: #f2c14e; }
 .ui-btn[disabled], .ui-chip[disabled] { background: #c9c0ad; color: #7a7066; }
 .ui-chip { padding: 5px 9px; font: 600 13px system-ui, sans-serif; border: 2px solid #2b2233; border-radius: 6px;
   background: #f2c14e; color: #2b2233; box-shadow: 0 2px 0 #2b2233; min-width: 34px; }
+.ui-chip.active { background: #2b2233; color: #f4ecd8; }
 .ui-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .ui-tabs { display: flex; gap: 4px; margin: 8px 0 6px; }
 .ui-tab { flex: 1; padding: 8px 1px; font: 600 12px system-ui, sans-serif; border: 2px solid #2b2233;

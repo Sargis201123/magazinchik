@@ -211,7 +211,7 @@ describe('помещение, долг и расходы', () => {
       money: 5000,
       day: MONTH_DAYS,
       debt: 600,
-      staff: [{ role: 'cashier', wage: STAFF_ROLES.cashier.wage }],
+      staff: [{ role: 'cashier', name: 0, skill: 2, wage: STAFF_ROLES.cashier.wage, months: 0 }],
     };
     const level = STORE_LEVELS[1];
     const bill = monthlyBill(s);

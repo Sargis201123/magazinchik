@@ -44,3 +44,27 @@ describe('цены', () => {
     expect(run(0.8)).toBeGreaterThan(run(1));
   });
 });
+
+describe('персонал', () => {
+  const run = (hireStaff: boolean) => {
+    const runs = 8;
+    let money = 0;
+    let l5 = 0;
+    for (let seed = 1; seed <= runs; seed++) {
+      const r = simulate({ days: 100, seed, hireStaff });
+      money += r.days[r.days.length - 1].money;
+      l5 += r.levelDay[4] ?? 101;
+    }
+    return { money: money / runs, l5: l5 / runs };
+  };
+  const withStaff = run(true);
+  const solo = run(false);
+
+  it('с персоналом магазин зарабатывает намного больше', () => {
+    expect(withStaff.money).toBeGreaterThan(solo.money * 2);
+  });
+
+  it('и до универмага с персоналом доходят быстрее', () => {
+    expect(withStaff.l5).toBeLessThan(solo.l5);
+  });
+});

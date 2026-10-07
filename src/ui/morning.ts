@@ -1,4 +1,4 @@
-import { t } from '../i18n';
+import { staffName, t } from '../i18n';
 import type { TextKey } from '../i18n/ru';
 import {
   buyChance,
@@ -37,6 +37,14 @@ import {
   warehouseCapacity,
   warehouseCount,
   warehouseOf,
+  answerRaise,
+  fire,
+  hire,
+  STAFF_ROLE_IDS,
+  staffLimit,
+  staffOf,
+  TRAITS,
+  type StaffMember,
   type BadBatchChoice,
   type ProductId,
   type StoreState,
@@ -52,6 +60,7 @@ import {
   type Deal,
   type SupplierId,
 } from '../game/suppliers';
+import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal } from './dom';
 
@@ -61,13 +70,13 @@ interface MorningOptions {
   onOpen: () => void;
 }
 
-type Tab = 'buy' | 'warehouse' | 'shelves' | 'store' | 'prices';
+type Tab = 'buy' | 'warehouse' | 'shelves' | 'staff' | 'store';
 const TABS: [Tab, TextKey][] = [
   ['buy', 'tab.buy'],
   ['warehouse', 'tab.warehouse'],
   ['shelves', 'tab.shelves'],
+  ['staff', 'tab.staff'],
   ['store', 'tab.store'],
-  ['prices', 'tab.prices'],
 ];
 
 const productLabel = (id: ProductId) => `${PRODUCTS[id].icon} ${t(PRODUCTS[id].nameKey)}`;
@@ -97,6 +106,15 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       card.replaceChildren(title, qualityBox(pendingBad));
       return;
     }
+    if (state.quitNotice?.length) {
+      card.replaceChildren(title, quitBox(state.quitNotice));
+      return;
+    }
+    const asking = state.staff.find((m) => m.raiseAsk);
+    if (asking) {
+      card.replaceChildren(title, raiseBox(asking));
+      return;
+    }
 
     const tabs = el('div', 'ui-tabs');
     for (const [id, label] of TABS) {
@@ -112,7 +130,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       );
     }
 
-    const body = { buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, store: storeTab, prices: pricesTab }[tab](state);
+    const body = { buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, staff: staffTab, store: storeTab }[tab](state);
     card.replaceChildren(
       title,
       el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: expectedGuests(state.rating, state.level) })),
@@ -132,6 +150,8 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     el('div', 'ui-note', t('buy.note')),
     el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
     ...SUPPLIER_IDS.map((sid) => supplierBox(sid, state)),
+    el('h3', '', t('tab.prices')),
+    ...pricesTab(state),
   ];
 
   const supplierBox = (sid: SupplierId, state: StoreState) => {
@@ -338,6 +358,112 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
           ),
         );
       }
+    }
+    return out;
+  };
+
+  // ---------- Персонал ----------
+
+  const quitBox = (quit: StaffMember[]) => {
+    const box = el('div', 'ui-box');
+    box.append(el('h3', '', `😤 ${t('staffTab.quitTitle')}`));
+    for (const m of quit) box.append(el('p', '', t('staffTab.quitText', { name: staffName(m.name), role: t(STAFF_ROLES[m.role].nameKey) })));
+    box.append(button(t('staffTab.ok'), () => update({ ...getState(), quitNotice: undefined })));
+    return box;
+  };
+
+  const raiseBox = (m: StaffMember) => {
+    const box = el('div', 'ui-box');
+    box.append(
+      el('h3', '', `💬 ${t('staffTab.raiseTitle')}`),
+      el(
+        'p',
+        '',
+        t('staffTab.raiseText', {
+          name: staffName(m.name),
+          role: t(STAFF_ROLES[m.role].nameKey),
+          from: m.wage,
+          to: m.raiseAsk ?? m.wage,
+        }),
+      ),
+      el('div', 'ui-muted', `${'★'.repeat(m.skill).padEnd(3, '☆')} · ${t('staffTab.months', { n: m.months })}`),
+      button(t('staffTab.raiseYes', { n: m.raiseAsk ?? m.wage }), () => update(answerRaise(getState(), m.role, true), 'success')),
+      el('div', 'ui-muted', t('staffTab.raiseYesHint')),
+      button(t('staffTab.raiseNo'), () => update(answerRaise(getState(), m.role, false), 'error'), 'ui-btn secondary'),
+      el('div', 'ui-muted', t('staffTab.raiseNoHint')),
+    );
+    return box;
+  };
+
+  const traitLine = (m: StaffMember) => {
+    const stars = '★'.repeat(m.skill).padEnd(3, '☆');
+    const trait = m.trait ? ` · ${t(TRAITS[m.trait].nameKey)}: ${t(TRAITS[m.trait].descKey)}` : '';
+    return `${stars}${trait}`;
+  };
+
+  const staffTab = (state: StoreState): HTMLElement[] => {
+    const limit = staffLimit(state);
+    const out: HTMLElement[] = [
+      el('div', 'ui-muted', t('staffTab.count', { n: state.staff.length, max: limit })),
+      el('div', 'ui-note', t('staffTab.wageNote')),
+    ];
+    if (state.staff.length === 0) out.push(el('div', 'ui-note', t('staffTab.none')));
+    for (const m of state.staff) {
+      const box = el('div', 'ui-box');
+      const head = el('div', 'ui-row');
+      const title = el('span');
+      title.append(el('b', '', `${staffName(m.name)} — ${t(STAFF_ROLES[m.role].nameKey)} `));
+      head.append(title, button(t('staffTab.fire'), () => update(fire(getState(), m.role)), 'ui-chip'));
+      box.append(
+        head,
+        el('div', 'ui-muted', t(STAFF_ROLES[m.role].descKey)),
+        el('div', 'ui-muted', traitLine(m)),
+        el(
+          'div',
+          'ui-muted',
+          `${t('staffTab.wage', { n: m.wage })} · ${m.months ? t('staffTab.months', { n: m.months }) : t('staffTab.new')}`,
+        ),
+      );
+      if (m.upset) box.append(el('div', 'ui-note', t('staffTab.upset')));
+      out.push(box);
+    }
+
+    const full = state.staff.length >= limit;
+    out.push(el('h3', '', t('staffTab.search')), el('div', 'ui-muted', t('staffTab.searchNote', { cost: JOB_AD_COST })));
+    const roles = el('div', 'ui-chips');
+    for (const role of STAFF_ROLE_IDS) {
+      const searched = state.jobSearch?.day === state.day && state.jobSearch.role === role;
+      roles.append(
+        button(
+          t(STAFF_ROLES[role].nameKey),
+          () => update(startJobSearch(getState(), role)),
+          `ui-chip${searched ? ' active' : ''}`,
+          Boolean(staffOf(state, role)) || full || (!searched && state.money < JOB_AD_COST),
+        ),
+      );
+    }
+    out.push(roles);
+
+    const candidates = currentCandidates(state);
+    if (state.jobSearch?.day === state.day) {
+      out.push(el('h3', '', t('staffTab.candidates', { role: t(STAFF_ROLES[state.jobSearch.role].nameKey) })));
+      if (candidates.length === 0) out.push(el('div', 'ui-note', t('staffTab.noCandidates')));
+    }
+    for (const c of candidates) {
+      const box = el('div', 'ui-box');
+      const head = el('div', 'ui-row');
+      const taken = Boolean(staffOf(state, c.role));
+      head.append(
+        el('b', '', staffName(c.name)),
+        button(
+          taken ? t('staffTab.roleTaken') : full ? t('staffTab.full') : t('staffTab.hire'),
+          () => update(hire(getState(), c), 'success'),
+          'ui-chip',
+          taken || full,
+        ),
+      );
+      box.append(head, el('div', 'ui-muted', traitLine(c)), el('div', '', t('staffTab.wage', { n: c.wage })));
+      out.push(box);
     }
     return out;
   };

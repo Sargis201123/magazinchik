@@ -1,6 +1,6 @@
 import { detectLang, type Lang } from './detect';
-import { en } from './en';
-import { ru, type TextKey } from './ru';
+import { en, enNames } from './en';
+import { ru, ruNames, type TextKey } from './ru';
 import { telegramLanguage } from '../platform/telegram';
 
 export type { Lang, TextKey };
@@ -22,3 +22,6 @@ export function t(key: TextKey, params: Record<string, string | number> = {}): s
   const template = dictionaries[lang][key] ?? ru[key];
   return template.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? `{${name}}`));
 }
+
+const names: Record<Lang, string[]> = { ru: ruNames, en: enNames };
+export const staffName = (index: number): string => names[lang][index % names[lang].length];

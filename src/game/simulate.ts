@@ -46,20 +46,20 @@ import {
   BAD_COMPLAINT_CHANCE,
   hasUnmarkedBad,
   freeSlots,
+  answerRaise,
+  guardCatchChance,
+  hire,
+  staffLimit,
+  staffOf,
+  thiefChance,
+  type StaffRole,
+  type StoreState,
 } from './economy';
+import { candidatesFor } from './staff';
+import { rng } from './random';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
 
-/** Воспроизводимый генератор случайных чисел. */
-export function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export { rng };
 
 export interface SimDay {
   day: number;
@@ -94,6 +94,8 @@ export interface SimOptions {
   tripsPerDay?: (level: number) => number;
   /** Во сколько раз игрок ставит цены относительно базовых. */
   priceMult?: number;
+  /** Нанимает ли игрок персонал. */
+  hireStaff?: boolean;
 }
 
 /** В каком порядке разумный игрок докупает полки. */
@@ -101,7 +103,27 @@ const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy
 
 const AVG_WANTS = 1.5;
 
-export function simulate({ days, seed = 1, queueLoss = 0.05, tripsPerDay = (l) => 3 + l, priceMult = 1 }: SimOptions): SimResult {
+/** Когда разумный игрок нанимает людей: по мере того, как один не справляется. */
+const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
+  ['cashier', (s) => expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 1.2],
+  ['loader', (s) => s.level >= 2],
+  ['guard', (s) => s.level >= 2],
+  ['cleaner', (s) => s.level >= 3],
+];
+
+/** Сколько покупателей за 90 секунд успевает пробить один человек, если ещё и бегает по делам. */
+const SOLO_SERVE_CAP = 30;
+/** Сколько успевает кассир (хозяин помогает). */
+const CASHIER_SERVE_CAP = 100;
+
+export function simulate({
+  days,
+  seed = 1,
+  queueLoss,
+  tripsPerDay,
+  priceMult = 1,
+  hireStaff = true,
+}: SimOptions): SimResult {
   const random = rng(seed);
   let state = newGame();
   for (const id of PRODUCT_IDS) state = setPrice(state, id, Math.round((PRODUCTS[id].basePrice * priceMult) / 5) * 5);
@@ -145,6 +167,17 @@ export function simulate({ days, seed = 1, queueLoss = 0.05, tripsPerDay = (l) =
       }
     }
 
+    // ---------- Утро: персонал ----------
+    // Разумный игрок соглашается на прибавки: обиженный сотрудник работает хуже.
+    for (const m of state.staff) if (m.raiseAsk) state = answerRaise(state, m.role, true);
+    if (hireStaff) {
+      const role = HIRE_WHEN.find(([r, need]) => !staffOf(state, r) && need(state))?.[0];
+      const candidate = role && candidatesFor(state.day, 0, role).find((c) => c.trait !== 'sticky');
+      if (candidate && state.staff.length < staffLimit(state) && state.money >= reserve + candidate.wage) {
+        state = hire(state, candidate) ?? state;
+      }
+    }
+
     // ---------- Утро: закупка ----------
     const sellable = sellableProducts(state);
     const guests = expectedGuests(state.rating, state.level);
@@ -182,8 +215,26 @@ export function simulate({ days, seed = 1, queueLoss = 0.05, tripsPerDay = (l) =
     // ---------- День ----------
     const stats: DayStats = emptyDayStats();
     const dayGuests = Math.max(0, Math.round(guests * (0.85 + random() * 0.3)));
-    let trips = tripsPerDay(state.level);
+    // Один игрок не успевает всё: чем больше магазин, тем больше теряется без персонала.
+    const has = (r: StaffRole) => Boolean(staffOf(state, r));
+    let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
+    const lossInQueue = queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level);
+    const serveCap = has('cashier') ? CASHIER_SERVE_CAP : SOLO_SERVE_CAP;
+    const dirtComplaint = has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level;
+    const guard = staffOf(state, 'guard');
     for (let g = 0; g < dayGuests; g++) {
+      if (random() < thiefChance(state.level)) {
+        // Вор берёт товар; его ловит охранник или, реже, сам игрок.
+        const id = sellable[Math.floor(random() * sellable.length)];
+        const index = shelfFor(state, id);
+        const taken = index >= 0 ? takeFromShelf(state, index, id) : null;
+        if (!taken) continue;
+        const caught = random() < (guard ? guardCatchChance(guard) : 0.3);
+        state = caught ? returnToShelf(taken.state, [{ id, unit: taken.unit }]) : taken.state;
+        if (caught) stats.caught++;
+        else stats.stolen += unitSalePrice(state, id, taken.unit);
+        continue;
+      }
       // Игрок замечает пустую полку и несёт товар со склада.
       for (const id of sellable) {
         if (trips > 0 && onShelves(state, id) === 0 && warehouseOf(state, id) > 0) {
@@ -216,7 +267,7 @@ export function simulate({ days, seed = 1, queueLoss = 0.05, tripsPerDay = (l) =
         if (sawEmpty || tooExpensive) stats.lost++;
         continue;
       }
-      if (random() < queueLoss) {
+      if (random() < lossInQueue || stats.served >= serveCap) {
         state = returnToShelf(state, cart);
         stats.lost++;
         continue;
@@ -226,6 +277,7 @@ export function simulate({ days, seed = 1, queueLoss = 0.05, tripsPerDay = (l) =
       stats.revenue += paid.total;
       stats.served++;
       if (hasUnmarkedBad(cart) && random() < BAD_COMPLAINT_CHANCE) stats.complaints++;
+      if (random() < dirtComplaint) stats.complaints++;
     }
 
     // ---------- Ночь ----------

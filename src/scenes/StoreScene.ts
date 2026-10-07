@@ -9,6 +9,10 @@ import {
   emptyDayStats,
   endDay,
   billTotal,
+  guardCatchChance,
+  staffOf,
+  thiefChance,
+  workSpeed,
   hasUnmarkedBad,
   moveToShelf,
   newGame,
@@ -29,6 +33,8 @@ import {
   type Category,
   type DayStats,
   type ProductId,
+  type StaffMember,
+  type StaffRole,
   type StoreState,
 } from '../game/economy';
 import { loadGame, saveGame } from '../game/save';
@@ -73,6 +79,14 @@ const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
   meat: { texture: 'fridge', tint: 0xffd6d6 },
 };
 const SHIRTS = [0x5b6ee1, 0xd95763, 0x6abe30, 0xfbf236, 0x76428a, 0xdf7126, 0x37946e];
+/** Тёмная кофта — так игрок может заметить вора. */
+const THIEF_SHIRT = 0x45444f;
+const THIEF_SPEED = 52;
+/** Форма сотрудников. */
+const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082 };
+const STAFF_SPEED = 60;
+/** Сколько кассир пробивает одного покупателя при обычной скорости. */
+const CASHIER_MS = 1400;
 const SKINS = [0xf2d3ab, 0xd9a066, 0x8f563b, 0xeec39a];
 
 interface Customer {
@@ -84,6 +98,14 @@ interface Customer {
   patience?: Phaser.Time.TimerEvent;
   waitStart: number;
   gone: boolean;
+  thief: boolean;
+}
+
+interface Worker {
+  member: StaffMember;
+  sprite: Phaser.GameObjects.Container;
+  carried: Phaser.GameObjects.Image;
+  home: { x: number; y: number };
 }
 
 interface ShelfView {
@@ -113,6 +135,11 @@ export class StoreScene extends Phaser.Scene {
   private customers = new Set<Customer>();
   private queue: Customer[] = [];
   private trash = new Set<Phaser.GameObjects.Image>();
+  /** Мусор, за которым уже кто-то пошёл. */
+  private claimedTrash = new Set<Phaser.GameObjects.Image>();
+  private workers = new Map<StaffRole, Worker>();
+  /** Смена номера останавливает циклы работы старых сотрудников. */
+  private staffGen = 0;
   private toiletDirt = 0;
   private wcDoor!: Phaser.GameObjects.Image;
   private wcBar!: Phaser.GameObjects.Image;
@@ -164,7 +191,8 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private currentHint(): string {
-    if (this.sellerBusy && this.queue.length > 0) return t('hint.recall');
+    if (!this.workers.has('guard') && [...this.customers].some((c) => c.thief && !c.gone)) return t('hint.thief');
+    if (this.sellerBusy && !this.workers.has('cashier') && this.queue.length > 0) return t('hint.recall');
     if (this.queue.length > 0 && this.state.day <= 2 && this.stats.served < 3) return t('hint.serve');
     if (this.state.day <= 4 && this.shelfNeedsRestock()) return t('hint.restock');
     if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
@@ -205,6 +233,8 @@ export class StoreScene extends Phaser.Scene {
     this.refreshShelves();
     this.refreshWarehouse();
     this.refreshToilet();
+    this.workers.clear();
+    this.syncStaff();
   }
 
   private buildStore(): void {
@@ -232,7 +262,9 @@ export class StoreScene extends Phaser.Scene {
       .on('pointerdown', () => this.cleanToilet());
 
     this.add.image(counter.x, counter.y, 'counter').setDepth(counter.y + 20);
-    this.seller = this.makePerson(sellerHome.x, sellerHome.y, 0x8fd16a, SKINS[0]);
+    void sellerHome;
+    const home = this.ownerHome();
+    this.seller = this.makePerson(home.x, home.y, 0x8fd16a, SKINS[0]);
     this.carried = this.add.image(0, -12, 'box').setVisible(false);
     this.seller.add(this.carried);
     this.add
@@ -375,13 +407,20 @@ export class StoreScene extends Phaser.Scene {
 
   private async returnSeller(): Promise<void> {
     const id = this.choreId;
-    await this.walk(this.seller, this.layout.sellerHome.x, this.layout.sellerHome.y, SELLER_SPEED);
+    const home = this.ownerHome();
+    await this.walk(this.seller, home.x, home.y, SELLER_SPEED);
     if (id === this.choreId) this.sellerBusy = false;
+  }
+
+  /** Где стоит хозяин (игрок): за кассой, а если нанят кассир — рядом с ним. */
+  private ownerHome(): { x: number; y: number } {
+    const { sellerHome } = this.layout;
+    return staffOf(this.state, 'cashier') ? { x: sellerHome.x, y: sellerHome.y - 24 } : sellerHome;
   }
 
   private callSellerIfNeeded(): void {
     const front = this.queue[0];
-    if (!this.sellerBusy || !front || !this.isAtRegister(front)) return;
+    if (this.workers.has('cashier') || !this.sellerBusy || !front || !this.isAtRegister(front)) return;
     if (this.time.now - this.lastCall < CALL_EVERY_MS) return;
     this.lastCall = this.time.now;
     this.popup(front.sprite.x, front.sprite.y - 22, t('popup.callRegister'), '#fff3b0');
@@ -443,30 +482,242 @@ export class StoreScene extends Phaser.Scene {
       .setDepth(1)
       .setInteractive(new Phaser.Geom.Rectangle(-5, -5, 16, 15), Phaser.Geom.Rectangle.Contains);
     piece.on('pointerdown', () => {
+      if (this.claimedTrash.has(piece) || this.sellerBusy) return;
+      this.claimedTrash.add(piece);
       void this.doChore([
         {
           x: piece.x + 6,
           y: piece.y,
           ms: TRASH_CLEAN_MS,
-          action: () => {
-            this.trash.delete(piece);
-            piece.destroy();
-          },
+          action: () => this.removeTrash(piece),
         },
       ]);
     });
     this.trash.add(piece);
   }
 
+  private removeTrash(piece: Phaser.GameObjects.Image): void {
+    this.trash.delete(piece);
+    this.claimedTrash.delete(piece);
+    piece.destroy();
+  }
+
+  // ---------- Сотрудники ----------
+
+  /** Расставляет нанятых сотрудников по местам и запускает их работу. */
+  private syncStaff(): void {
+    const gen = ++this.staffGen;
+    for (const w of this.workers.values()) {
+      this.tweens.killTweensOf(w.sprite);
+      w.sprite.destroy();
+    }
+    this.workers.clear();
+    this.claimedTrash.clear();
+    for (const member of this.state.staff) {
+      const home = this.workerHome(member.role);
+      const sprite = this.makePerson(home.x, home.y, UNIFORMS[member.role], Phaser.Utils.Array.GetRandom(SKINS));
+      const carried = this.add.image(0, -12, 'box').setVisible(false);
+      sprite.add(carried);
+      const worker: Worker = { member, sprite, carried, home };
+      this.workers.set(member.role, worker);
+      const loop = { cashier: this.cashierLoop, cleaner: this.cleanerLoop, loader: this.loaderLoop, guard: null }[member.role];
+      if (loop) void loop.call(this, worker, gen);
+    }
+    // Хозяин уступает место кассиру.
+    const home = this.ownerHome();
+    if (!this.sellerBusy) this.seller.setPosition(home.x, home.y).setDepth(home.y);
+  }
+
+  private workerHome(role: StaffRole): { x: number; y: number } {
+    const { sellerHome, wc, warehouse, door } = this.layout;
+    switch (role) {
+      case 'cashier':
+        return sellerHome;
+      case 'cleaner':
+        return { x: wc.x - 18, y: wc.spotY + 8 };
+      case 'loader':
+        return { x: warehouse.doorway.x + 6, y: warehouse.doorway.y - 18 };
+      case 'guard':
+        return { x: door.x + 22, y: door.y - 14 };
+    }
+  }
+
+  private alive(gen: number): boolean {
+    return gen === this.staffGen && this.scene.isActive();
+  }
+
+  /** Шаг сотрудника с учётом его скорости. */
+  private workerWalk(w: Worker, x: number, y: number): Promise<void> {
+    return this.walk(w.sprite, x, y, STAFF_SPEED * workSpeed(w.member));
+  }
+
+  private workerWait(w: Worker, ms: number): Promise<void> {
+    return this.wait(ms / workSpeed(w.member));
+  }
+
+  /** Кассир сам пробивает очередь. */
+  private async cashierLoop(w: Worker, gen: number): Promise<void> {
+    while (this.alive(gen)) {
+      const front = this.queue[0];
+      if (!this.running || !front || !this.isAtRegister(front)) {
+        await this.wait(200);
+        continue;
+      }
+      await this.workerWait(w, CASHIER_MS);
+      if (this.alive(gen) && this.queue[0] === front) this.checkoutFront();
+    }
+  }
+
+  /** Уборщик подбирает мусор, а когда его нет — моет туалет. */
+  private async cleanerLoop(w: Worker, gen: number): Promise<void> {
+    while (this.alive(gen)) {
+      const piece = this.running ? this.nearestTrash(w.sprite.x, w.sprite.y) : undefined;
+      if (piece) {
+        this.claimedTrash.add(piece);
+        await this.workerWalk(w, piece.x + 6, piece.y);
+        if (!this.alive(gen)) return;
+        await this.workerWait(w, TRASH_CLEAN_MS);
+        if (piece.active) this.removeTrash(piece);
+        continue;
+      }
+      if (this.running && this.toiletDirt >= 40) {
+        await this.workerWalk(w, this.layout.wc.x, this.layout.wc.spotY);
+        if (!this.alive(gen)) return;
+        await this.workerWait(w, TOILET_CLEAN_MS);
+        this.toiletDirt = 0;
+        this.refreshToilet();
+        continue;
+      }
+      if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
+      await this.wait(300);
+    }
+  }
+
+  private nearestTrash(x: number, y: number): Phaser.GameObjects.Image | undefined {
+    let best: Phaser.GameObjects.Image | undefined;
+    let bestDist = Infinity;
+    for (const piece of this.trash) {
+      if (this.claimedTrash.has(piece)) continue;
+      const d = Phaser.Math.Distance.Between(x, y, piece.x, piece.y);
+      if (d < bestDist) [best, bestDist] = [piece, d];
+    }
+    return best;
+  }
+
+  /** Грузчик носит товар со склада на полки, где он кончается. */
+  private async loaderLoop(w: Worker, gen: number): Promise<void> {
+    while (this.alive(gen)) {
+      const index = this.running ? this.shelfToRestock() : -1;
+      if (index < 0) {
+        if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
+        await this.wait(400);
+        continue;
+      }
+      const { doorway, pickup } = this.layout.warehouse;
+      const slot = this.layout.slots[index];
+      await this.workerWalk(w, doorway.x, doorway.y);
+      await this.workerWalk(w, pickup.x, pickup.y);
+      await this.workerWait(w, PICKUP_MS);
+      if (!this.alive(gen)) return;
+      w.carried.setVisible(true);
+      await this.workerWalk(w, doorway.x, doorway.y);
+      await this.workerWalk(w, slot.x, slot.y + 20);
+      await this.workerWait(w, PLACE_MS);
+      if (!this.alive(gen)) return;
+      w.carried.setVisible(false);
+      this.state = moveToShelf(this.state, index, undefined, CARRY).state;
+      this.refreshShelves();
+      this.refreshWarehouse();
+    }
+  }
+
+  /** Полка, которую стоит пополнить: место есть, а на складе есть подходящий товар. */
+  private shelfToRestock(): number {
+    let best = -1;
+    let bestFree = 0;
+    this.state.shelves.forEach((shelf, i) => {
+      const free = shelfFree(shelf);
+      const hasGoods = PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id] ?? []).some((u) => !u.pending));
+      const runningOut = PRODUCT_IDS.some(
+        (id) => canPlace(id, shelf) && (shelf.items[id]?.length ?? 0) === 0 && (this.state.warehouse[id]?.length ?? 0) > 0,
+      );
+      if (hasGoods && (free >= 3 || (runningOut && free > 0)) && free > bestFree) [best, bestFree] = [i, free];
+    });
+    return best;
+  }
+
   // ---------- Покупатели ----------
 
   private spawnCustomer(): void {
-    const sprite = this.makePerson(this.layout.door.x, this.layout.h + 16, Phaser.Utils.Array.GetRandom(SHIRTS), Phaser.Utils.Array.GetRandom(SKINS));
+    const thief = Math.random() < thiefChance(this.state.level);
+    const shirt = thief ? THIEF_SHIRT : Phaser.Utils.Array.GetRandom(SHIRTS);
+    const sprite = this.makePerson(this.layout.door.x, this.layout.h + 16, shirt, Phaser.Utils.Array.GetRandom(SKINS));
     const bubble = this.add.image(0, -13, 'bubble').setVisible(false);
     sprite.add(bubble);
-    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false };
+    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief };
     this.customers.add(customer);
-    void this.runCustomer(customer);
+    if (thief) {
+      // Вора можно поймать касанием.
+      sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.catchThief(customer, false));
+      void this.runThief(customer);
+    } else {
+      void this.runCustomer(customer);
+    }
+  }
+
+  // ---------- Воры ----------
+
+  private async runThief(c: Customer): Promise<void> {
+    const { door } = this.layout;
+    await this.walk(c.sprite, door.x, door.y - 10);
+    const wanted = Phaser.Utils.Array.Shuffle(sellableProducts(this.state)).slice(0, Phaser.Math.Between(1, 2));
+    for (const id of wanted) {
+      const index = shelfFor(this.state, id);
+      if (index < 0 || c.gone) continue;
+      const slot = this.layout.slots[index];
+      await this.walk(c.sprite, slot.x + Phaser.Math.Between(-8, 8), slot.y + 22);
+      if (c.gone) return;
+      await this.wait(400);
+      const taken = takeFromShelf(this.state, index, id);
+      if (taken && !c.gone) {
+        this.state = taken.state;
+        c.items.push({ id, unit: taken.unit });
+        this.refreshShelves();
+      }
+    }
+    if (c.gone) return;
+    // Мимо кассы — сразу к выходу.
+    await this.walk(c.sprite, door.x, door.y - 10, THIEF_SPEED);
+    if (c.gone) return;
+    const guard = this.workers.get('guard');
+    if (guard && c.items.length && Math.random() < guardCatchChance(guard.member)) {
+      void this.walk(guard.sprite, c.sprite.x + 10, c.sprite.y, STAFF_SPEED * 1.5).then(() =>
+        this.walk(guard.sprite, guard.home.x, guard.home.y, STAFF_SPEED),
+      );
+      this.catchThief(c, true);
+      return;
+    }
+    if (c.items.length) {
+      const value = c.items.reduce((sum, { id, unit }) => sum + unitSalePrice(this.state, id, unit), 0);
+      this.stats.stolen += value;
+      haptic.error();
+      this.popup(c.sprite.x, c.sprite.y - 14, `${t('popup.stolen')} −${value} 💰`, '#ffd0d0');
+    }
+    await this.leave(c);
+  }
+
+  /** Вора поймали: товар возвращается на полки, вор уходит ни с чем. */
+  private catchThief(c: Customer, byGuard: boolean): void {
+    if (c.gone || !this.running) return;
+    c.sprite.disableInteractive();
+    this.state = returnToShelf(this.state, c.items);
+    c.items = [];
+    this.refreshShelves();
+    this.refreshWarehouse();
+    this.stats.caught++;
+    haptic.success();
+    this.popup(c.sprite.x, c.sprite.y - 14, byGuard ? t('popup.guardCaught') : t('popup.thiefCaught'), '#c8ffb0');
+    void this.leave(c);
   }
 
   private async runCustomer(c: Customer): Promise<void> {
@@ -541,11 +792,21 @@ export class StoreScene extends Phaser.Scene {
     this.refreshToilet();
   }
 
+  /** Касание кассы: обслужить первого в очереди или позвать продавца обратно. */
   private serveNext(): void {
+    if (this.workers.has('cashier')) {
+      // Кассир работает сам; хозяин может помочь, если свободен.
+      if (!this.sellerBusy) this.checkoutFront();
+      return;
+    }
     if (this.sellerBusy) {
       this.recallSeller();
       return;
     }
+    this.checkoutFront();
+  }
+
+  private checkoutFront(): void {
     const c = this.queue[0];
     if (!c || !this.isAtRegister(c)) return;
     c.patience?.remove();
@@ -645,9 +906,11 @@ export class StoreScene extends Phaser.Scene {
     showMorning({
       getState: () => this.state,
       setState: (s) => {
+        const staffChanged = s.staff !== this.state.staff;
         this.state = s;
         saveGame(s);
         if (s.level !== this.builtLevel) this.buildWorld();
+        else if (staffChanged) this.syncStaff();
         this.refreshShelves();
         this.refreshWarehouse();
         this.hud.update(s, DAY_SECONDS);
@@ -671,9 +934,12 @@ export class StoreScene extends Phaser.Scene {
     this.running = false;
     const finishedDay = this.state.day;
     const ratingBefore = this.state.rating;
-    const { state, spoiled, bill, shortfall } = endDay(this.state, this.stats);
+    const { state, spoiled, bill, shortfall, skimmed } = endDay(this.state, this.stats);
+    const promoted = state.staff !== this.state.staff;
     this.state = state;
     this.stats.spoiled = spoiled;
+    this.stats.skimmed = skimmed;
+    if (promoted) this.syncStaff();
     saveGame(this.state);
     this.refreshShelves();
     this.refreshWarehouse();

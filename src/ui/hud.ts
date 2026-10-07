@@ -59,6 +59,9 @@ export class Hud {
     row(t('summary.lost'), stats.lost);
     row(t('summary.complaints'), stats.complaints);
     row(t('summary.spoiled'), stats.spoiled);
+    if (stats.stolen) row(t('summary.stolen'), `−${stats.stolen} 💰`);
+    if (stats.caught) row(t('summary.caught'), stats.caught);
+    if (stats.skimmed) row(t('summary.skimmed'), `−${stats.skimmed} 💰`);
     if (money.bill !== null) row(t('summary.bills'), `−${money.bill} 💰`);
     row(t('summary.money'), `${money.total} 💰`);
     if (money.shortfall > 0) card.append(el('div', 'ui-note', t('summary.shortfall', { n: money.shortfall })));
