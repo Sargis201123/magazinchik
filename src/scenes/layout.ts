@@ -53,7 +53,7 @@ export function layoutFor(level: number): Layout {
     wc: { x: w - 13, y: 20, spotY: WALL_H + 12 },
     counter: { x: w - 30, y: h - 66 },
     sellerHome: { x: w - 14, y: h - 50 },
-    queue: { x: queueX, y: h - 50, step: 13 },
+    queue: { x: queueX, y: h - 50, step: 17 },
     door: { x: (whW + 4 + queueX - 6) / 2, y: h - 4 },
     warehouse: {
       x: 0,

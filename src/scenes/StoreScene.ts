@@ -343,10 +343,10 @@ export class StoreScene extends Phaser.Scene {
     const { w, h, wallH, wc, door, warehouse, slots } = this.layout;
     for (let x = 30; x < wc.x - 16; x += 64) this.add.image(x, 12, 'poster').setDepth(1);
     this.add.image(door.x + 26, h - 8, 'baskets').setDepth(h - 8);
-    // Растения в свободных углах: у правой стены и у склада — не на пути покупателей.
+    // Растения в свободных углах: у правой стены и в левом углу над складом — не на пути покупателей.
     const spots = [
       { x: w - 9, y: wallH + 14 },
-      { x: warehouse.w + 12, y: warehouse.y - 10 },
+      { x: 9, y: warehouse.y - 14 },
     ];
     for (const p of spots) {
       const busy = slots.some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
