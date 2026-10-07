@@ -8,7 +8,7 @@ import {
   DAY_SECONDS,
   emptyDayStats,
   endDay,
-  expensesTotal,
+  billTotal,
   hasUnmarkedBad,
   moveToShelf,
   newGame,
@@ -671,7 +671,7 @@ export class StoreScene extends Phaser.Scene {
     this.running = false;
     const finishedDay = this.state.day;
     const ratingBefore = this.state.rating;
-    const { state, spoiled, expenses } = endDay(this.state, this.stats);
+    const { state, spoiled, bill, shortfall } = endDay(this.state, this.stats);
     this.state = state;
     this.stats.spoiled = spoiled;
     saveGame(this.state);
@@ -682,7 +682,7 @@ export class StoreScene extends Phaser.Scene {
       finishedDay,
       this.stats,
       { before: ratingBefore, after: state.rating },
-      { expenses: expensesTotal(expenses), total: state.money },
+      { bill: bill && billTotal(bill), shortfall, total: state.money },
       () => this.showMorning(),
     );
   }

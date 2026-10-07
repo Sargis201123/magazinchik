@@ -13,7 +13,10 @@ import {
   emptyDayStats,
   endDay,
   expandStore,
-  type Expenses,
+  billTotal,
+  daysUntilBill,
+  MONTH_DAYS,
+  monthlyBill,
   expectedGuests,
   moveToShelf,
   newGame,
@@ -108,7 +111,9 @@ export function simulate({ days, seed = 1, queueLoss = 0.05, tripsPerDay = (l) =
   for (let d = 0; d < days; d++) {
     const moneyStart = state.money;
     let investments = 0;
-    const reserve = 150 + 100 * state.level;
+    // Запас на закупку плюс копилка на счета в конце месяца.
+    const bill = billTotal(monthlyBill(state));
+    const reserve = 150 + 100 * state.level + Math.round(bill * (1 - daysUntilBill(state.day) / MONTH_DAYS));
 
     // ---------- Утро: долг, расширение, полки ----------
     if (state.debt > 0 && state.money - state.debt >= reserve) state = payDebt(state, state.debt) ?? state;
@@ -226,7 +231,7 @@ export function simulate({ days, seed = 1, queueLoss = 0.05, tripsPerDay = (l) =
     // ---------- Ночь ----------
     const night = endDay(state, stats);
     state = night.state;
-    const expenses = sumExpenses(night.expenses);
+    const expenses = night.bill ? billTotal(night.bill) : 0;
     out.push({
       day: state.day - 1,
       level: state.level,
@@ -248,7 +253,6 @@ export function simulate({ days, seed = 1, queueLoss = 0.05, tripsPerDay = (l) =
   return { days: out, levelDay };
 }
 
-const sumExpenses = (e: Expenses) => e.rent + e.power + e.debt;
 
 /** Средний результат по нескольким прогонам: день достижения каждого уровня. */
 export function averageLevelDays(days: number, runs: number): (number | null)[] {

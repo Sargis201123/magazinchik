@@ -44,7 +44,7 @@ export class Hud {
     day: number,
     stats: DayStats,
     rating: { before: number; after: number },
-    money: { expenses: number; total: number },
+    money: { bill: number | null; shortfall: number; total: number },
     onNext: () => void,
   ): void {
     const { card, close } = openModal();
@@ -59,8 +59,9 @@ export class Hud {
     row(t('summary.lost'), stats.lost);
     row(t('summary.complaints'), stats.complaints);
     row(t('summary.spoiled'), stats.spoiled);
-    row(t('summary.expenses'), `−${money.expenses} 💰`);
+    if (money.bill !== null) row(t('summary.bills'), `−${money.bill} 💰`);
     row(t('summary.money'), `${money.total} 💰`);
+    if (money.shortfall > 0) card.append(el('div', 'ui-note', t('summary.shortfall', { n: money.shortfall })));
     const arrow = rating.after > rating.before ? '▲' : rating.after < rating.before ? '▼' : '';
     row(t('summary.rating'), `${rating.before.toFixed(1)} → ${rating.after.toFixed(1)}★ ${arrow}`);
     card.append(

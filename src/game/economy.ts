@@ -49,8 +49,8 @@ export const SHELF_KINDS: Record<Category, ShelfKind> = {
 
 /** Проданная полка возвращает часть цены. */
 export const SHELF_RESALE = 0.5;
-/** Электричество одного холодильника в день. */
-export const FRIDGE_POWER = 15;
+/** Электричество одного холодильника за месяц. */
+export const FRIDGE_POWER = 100;
 
 export const CATEGORIES = Object.keys(SHELF_KINDS) as Category[];
 
@@ -72,8 +72,12 @@ export interface StoreLevel {
   /** Сколько полок помещается. */
   slots: number;
   warehouse: number;
-  /** Аренда в день. */
+  /** Аренда за месяц. */
   rent: number;
+  /** Коммуналка за месяц: вода, вывоз мусора. */
+  utilities: number;
+  /** Электричество за месяц без холодильников: свет, касса, вывеска. */
+  power: number;
   /** Множитель потока гостей: большой магазин видно с улицы. */
   guests: number;
   /** Сколько покупателей одновременно бывает в зале. */
@@ -81,16 +85,40 @@ export interface StoreLevel {
 }
 
 export const STORE_LEVELS: StoreLevel[] = [
-  { nameKey: 'store.l1', cost: 0, slots: 2, warehouse: 20, rent: 20, guests: 1, maxCustomers: 5 },
-  { nameKey: 'store.l2', cost: 1000, slots: 4, warehouse: 35, rent: 50, guests: 1.3, maxCustomers: 7 },
-  { nameKey: 'store.l3', cost: 3000, slots: 6, warehouse: 55, rent: 90, guests: 1.6, maxCustomers: 9 },
-  { nameKey: 'store.l4', cost: 8000, slots: 8, warehouse: 80, rent: 150, guests: 1.9, maxCustomers: 11 },
-  { nameKey: 'store.l5', cost: 18000, slots: 10, warehouse: 110, rent: 230, guests: 2.2, maxCustomers: 13 },
+  { nameKey: 'store.l1', cost: 0, slots: 2, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 5 },
+  { nameKey: 'store.l2', cost: 1000, slots: 4, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 7 },
+  { nameKey: 'store.l3', cost: 3000, slots: 6, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
+  { nameKey: 'store.l4', cost: 8000, slots: 8, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
+  { nameKey: 'store.l5', cost: 18000, slots: 10, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
 ];
 
-/** Бабушкин долг: списывается понемногу каждый день, можно гасить досрочно. */
+/**
+ * Игровой месяц — 7 дней (~15–20 минут игры). В конце месяца приходят счета:
+ * аренда, коммуналка, электричество, зарплаты и платёж по кредиту.
+ */
+export const MONTH_DAYS = 7;
+/** Не хватило денег на счета — недостача уходит в долг, сверху пени. */
+export const LATE_PENALTY = 0.1;
+
+/** Бабушкин кредит: платёж раз в месяц вместе со счетами, можно гасить досрочно. */
 export const START_DEBT = 500;
-export const DEBT_PAYMENT = 50;
+export const DEBT_PAYMENT = 250;
+
+export type StaffRole = 'cashier' | 'cleaner' | 'loader' | 'guard';
+
+/** Сотрудники (наём — следующий этап). Зарплата за месяц. */
+export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; wage: number }> = {
+  cashier: { nameKey: 'staff.cashier', wage: 420 },
+  cleaner: { nameKey: 'staff.cleaner', wage: 280 },
+  loader: { nameKey: 'staff.loader', wage: 350 },
+  guard: { nameKey: 'staff.guard', wage: 490 },
+};
+
+export interface StaffMember {
+  role: StaffRole;
+  /** Зарплата за месяц (у опытных выше). */
+  wage: number;
+}
 
 /** Сколько штук продавец уносит со склада за один поход. */
 export const CARRY = 6;
@@ -133,6 +161,7 @@ export interface StoreState {
   level: number;
   /** Долг: пока он есть, арендодатель не даёт расширяться. */
   debt: number;
+  staff: StaffMember[];
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -163,6 +192,7 @@ export const newGame = (): StoreState => ({
   money: 150,
   level: 0,
   debt: START_DEBT,
+  staff: [],
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [
@@ -362,29 +392,46 @@ export function payDebt(state: StoreState, amount: number): StoreState | null {
   return { ...state, money: state.money - paid, debt: state.debt - paid };
 }
 
-export interface Expenses {
+/** Счета за месяц. */
+export interface Bill {
   rent: number;
+  utilities: number;
+  /** Свет помещения + холодильники. */
   power: number;
+  salaries: number;
+  /** Платёж по кредиту. */
   debt: number;
 }
 
-/** Обязательные расходы за день: аренда, свет холодильников, платёж по долгу. */
-export function dailyExpenses(state: StoreState): Expenses {
+export function monthlyBill(state: StoreState): Bill {
+  const level = storeLevel(state);
   const fridges = state.shelves.filter((s) => SHELF_KINDS[s.kind].fridge).length;
-  return { rent: storeLevel(state).rent, power: fridges * FRIDGE_POWER, debt: Math.min(DEBT_PAYMENT, state.debt) };
+  return {
+    rent: level.rent,
+    utilities: level.utilities,
+    power: level.power + fridges * FRIDGE_POWER,
+    salaries: state.staff.reduce((sum, m) => sum + m.wage, 0),
+    debt: Math.min(DEBT_PAYMENT, state.debt),
+  };
 }
 
-export const expensesTotal = (e: Expenses): number => e.rent + e.power + e.debt;
+export const billTotal = (b: Bill): number => b.rent + b.utilities + b.power + b.salaries + b.debt;
 
-/** Списывает расходы. Если денег не хватает, недостача уходит в долг. */
-export function payExpenses(state: StoreState): { state: StoreState; expenses: Expenses } {
-  const expenses = dailyExpenses(state);
-  const total = expensesTotal(expenses);
+export const monthOf = (day: number): number => Math.ceil(day / MONTH_DAYS);
+/** Сколько дней до счетов: 0 — счета придут сегодня вечером. */
+export const daysUntilBill = (day: number): number => (MONTH_DAYS - (day % MONTH_DAYS)) % MONTH_DAYS;
+
+/** Оплата счетов. Если денег не хватает, недостача с пени уходит в долг. */
+export function payBill(state: StoreState): { state: StoreState; bill: Bill; shortfall: number } {
+  const bill = monthlyBill(state);
+  const total = billTotal(bill);
   const paid = Math.min(total, Math.max(0, state.money));
   const shortfall = total - paid;
+  const penalty = Math.round(shortfall * LATE_PENALTY);
   return {
-    state: { ...state, money: state.money - paid, debt: state.debt - expenses.debt + shortfall },
-    expenses,
+    state: { ...state, money: state.money - paid, debt: state.debt - bill.debt + shortfall + penalty },
+    bill,
+    shortfall,
   };
 }
 
@@ -456,11 +503,20 @@ function ageStock(stock: Stock): { stock: Stock; spoiled: number } {
   return { stock: next, spoiled };
 }
 
+export interface NightResult {
+  state: StoreState;
+  spoiled: number;
+  /** Счета, если сегодня конец месяца. */
+  bill: Bill | null;
+  /** Сколько не хватило на счета (ушло в долг с пени). */
+  shortfall: number;
+}
+
 /**
  * Ночь: товар стареет и портится (и на складе, и на полках), рейтинг двигается
- * от довольства покупателей, списываются расходы.
+ * от довольства покупателей, в конце месяца приходят счета.
  */
-export function endDay(state: StoreState, stats: DayStats): { state: StoreState; spoiled: number; expenses: Expenses } {
+export function endDay(state: StoreState, stats: DayStats): NightResult {
   const warehouse = ageStock(state.warehouse);
   let spoiled = warehouse.spoiled;
   const shelves = state.shelves.map((shelf) => {
@@ -470,8 +526,9 @@ export function endDay(state: StoreState, stats: DayStats): { state: StoreState;
   });
   const rating = Math.min(5, Math.max(0, state.rating + (satisfaction(stats) - 0.7) * 0.5));
   const aged = { ...state, day: state.day + 1, rating: Math.round(rating * 100) / 100, warehouse: warehouse.stock, shelves };
-  const paid = payExpenses(aged);
-  return { state: paid.state, spoiled, expenses: paid.expenses };
+  if (daysUntilBill(state.day) !== 0) return { state: aged, spoiled, bill: null, shortfall: 0 };
+  const paid = payBill(aged);
+  return { state: paid.state, spoiled, bill: paid.bill, shortfall: paid.shortfall };
 }
 
 /**

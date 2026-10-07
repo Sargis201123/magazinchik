@@ -6,11 +6,14 @@ import {
   buyStock,
   canPlace,
   CATEGORIES,
+  billTotal,
+  daysUntilBill,
   DEBT_PAYMENT,
-  dailyExpenses,
+  monthlyBill,
+  monthOf,
+  STAFF_ROLES,
   expandStore,
   expectedGuests,
-  expensesTotal,
   freeSlots,
   moveToShelf,
   nextStoreLevel,
@@ -113,6 +116,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     card.replaceChildren(
       title,
       el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: expectedGuests(state.rating, state.level) })),
+      billForecast(state),
       tabs,
       ...body,
       button(t('morning.open'), () => {
@@ -338,6 +342,18 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return out;
   };
 
+  // ---------- Магазин: помещение, кредит, счета ----------
+
+  /** Строка под заголовком: когда счета и сколько примерно. */
+  const billForecast = (state: StoreState) => {
+    const daysLeft = daysUntilBill(state.day);
+    const sum = billTotal(monthlyBill(state));
+    const text = daysLeft === 0 ? t('morning.billsTonight', { sum }) : t('morning.bills', { n: daysLeft, sum });
+    const line = el('div', 'ui-muted', text);
+    if (daysLeft <= 1 && state.money < sum) line.style.color = '#b13e53';
+    return line;
+  };
+
   // ---------- Магазин: помещение, долг, расходы ----------
 
   const storeTab = (state: StoreState): HTMLElement[] => {
@@ -388,18 +404,32 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     }
     out.push(debt);
 
-    const e = dailyExpenses(state);
+    const bill = monthlyBill(state);
+    const daysLeft = daysUntilBill(state.day);
     const costs = el('div', 'ui-box');
-    costs.append(el('b', '', t('expenses.title')));
-    const row = (label: string, value: number) => {
+    costs.append(
+      el('b', '', t('bills.title')),
+      el(
+        'div',
+        'ui-muted',
+        daysLeft === 0 ? t('bills.tonight', { m: monthOf(state.day) }) : t('bills.when', { m: monthOf(state.day), n: daysLeft }),
+      ),
+    );
+    const row = (label: string, value: number | string) => {
       const r = el('div', 'ui-row');
-      r.append(el('span', '', label), el('span', '', `${value} 💰`));
+      r.append(el('span', '', label), el('span', '', typeof value === 'number' ? `${value} 💰` : value));
       costs.append(r);
     };
-    row(t('expenses.rent'), e.rent);
-    if (e.power) row(t('expenses.power'), e.power);
-    if (e.debt) row(t('expenses.debt'), e.debt);
-    row(t('expenses.total'), expensesTotal(e));
+    row(t('bills.rent'), bill.rent);
+    row(t('bills.utilities'), bill.utilities);
+    row(t('bills.power'), bill.power);
+    row(t('bills.salaries'), state.staff.length ? bill.salaries : t('bills.noStaff'));
+    if (bill.debt) row(t('bills.debt'), bill.debt);
+    row(t('bills.total'), billTotal(bill));
+    const wages = (Object.keys(STAFF_ROLES) as (keyof typeof STAFF_ROLES)[])
+      .map((r) => `${t(STAFF_ROLES[r].nameKey)} ${STAFF_ROLES[r].wage}`)
+      .join(', ');
+    costs.append(el('div', 'ui-muted', t('bills.staffPreview', { list: wages })));
     out.push(costs);
     return out;
   };

@@ -26,8 +26,13 @@ import {
   upgradeShelf,
   warehouseCapacity,
   warehouseCount,
-  dailyExpenses,
+  billTotal,
+  daysUntilBill,
   DEBT_PAYMENT,
+  LATE_PENALTY,
+  monthlyBill,
+  MONTH_DAYS,
+  STAFF_ROLES,
   expandStore,
   FRIDGE_POWER,
   payDebt,
@@ -191,19 +196,45 @@ describe('помещение, долг и расходы', () => {
     }
   });
 
-  it('каждый вечер: аренда, свет холодильников и платёж по долгу', () => {
-    const s = { ...empty(), debt: 120 };
-    expect(dailyExpenses(s)).toEqual({ rent: STORE_LEVELS[1].rent, power: FRIDGE_POWER, debt: DEBT_PAYMENT });
+  it('счета приходят раз в месяц, в остальные дни расходов нет', () => {
+    expect(daysUntilBill(1)).toBe(MONTH_DAYS - 1);
+    expect(daysUntilBill(MONTH_DAYS)).toBe(0);
+    const s = { ...empty(), day: 3 };
     const night = endDay(s, emptyDayStats());
-    expect(night.state.debt).toBe(120 - DEBT_PAYMENT);
-    expect(night.state.money).toBe(s.money - STORE_LEVELS[1].rent - FRIDGE_POWER - DEBT_PAYMENT);
+    expect(night.bill).toBeNull();
+    expect(night.state.money).toBe(s.money);
   });
 
-  it('если денег не хватает на расходы — недостача уходит в долг', () => {
-    const s = { ...empty(), money: 10, debt: 0 };
-    const night = endDay(s, emptyDayStats()).state;
-    expect(night.money).toBe(0);
-    expect(night.debt).toBe(STORE_LEVELS[1].rent + FRIDGE_POWER - 10);
+  it('счета: аренда, коммуналка, свет с холодильниками, зарплаты и кредит', () => {
+    const s: StoreState = {
+      ...empty(),
+      money: 5000,
+      day: MONTH_DAYS,
+      debt: 600,
+      staff: [{ role: 'cashier', wage: STAFF_ROLES.cashier.wage }],
+    };
+    const level = STORE_LEVELS[1];
+    const bill = monthlyBill(s);
+    expect(bill).toEqual({
+      rent: level.rent,
+      utilities: level.utilities,
+      power: level.power + FRIDGE_POWER, // в empty() один молочный холодильник
+      salaries: STAFF_ROLES.cashier.wage,
+      debt: DEBT_PAYMENT,
+    });
+    const night = endDay(s, emptyDayStats());
+    expect(night.bill).toEqual(bill);
+    expect(night.state.money).toBe(5000 - billTotal(bill));
+    expect(night.state.debt).toBe(600 - DEBT_PAYMENT);
+  });
+
+  it('не хватило на счета — недостача уходит в долг с пени', () => {
+    const s = { ...empty(), day: MONTH_DAYS, money: 100, debt: 0 };
+    const total = billTotal(monthlyBill(s));
+    const night = endDay(s, emptyDayStats());
+    expect(night.shortfall).toBe(total - 100);
+    expect(night.state.money).toBe(0);
+    expect(night.state.debt).toBe(total - 100 + Math.round((total - 100) * LATE_PENALTY));
   });
 
   it('гасить долг больше, чем есть денег, нельзя', () => {
