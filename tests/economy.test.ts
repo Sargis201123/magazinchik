@@ -12,6 +12,7 @@ import {
   moveToShelf,
   newGame,
   onShelves,
+  PRODUCTS,
   resolveBadBatch,
   returnToShelf,
   satisfaction,
@@ -23,8 +24,17 @@ import {
   takeFromShelf,
   unitSalePrice,
   upgradeShelf,
-  WAREHOUSE_CAPACITY,
+  warehouseCapacity,
   warehouseCount,
+  dailyExpenses,
+  DEBT_PAYMENT,
+  expandStore,
+  FRIDGE_POWER,
+  payDebt,
+  sellShelf,
+  shelfResale,
+  STORE_LEVELS,
+  freeSlots,
   warehouseOf,
   type StoreState,
   type Unit,
@@ -35,11 +45,18 @@ import { detectLang } from '../src/i18n/detect';
 const u = (age = 0, extra: Partial<Unit> = {}): Unit => ({ age, ...extra });
 const units = (n: number, age = 0) => Array.from({ length: n }, () => u(age));
 
-/** Пустой ларёк: три стандартные полки без товара, пустой склад. */
+/** Пустой магазинчик (2-й уровень, без долга): хлебная, овощная и молочная полки без товара, пустой склад. */
 const empty = (): StoreState => ({
   ...newGame(),
+  money: 300,
+  level: 1,
+  debt: 0,
   warehouse: {},
-  shelves: newGame().shelves.map((s) => ({ ...s, items: {} })),
+  shelves: [
+    { kind: 'bakery', level: 0, items: {} },
+    { kind: 'produce', level: 0, items: {} },
+    { kind: 'dairy', level: 0, items: {} },
+  ],
 });
 
 /** Пустой ларёк, но на полке index лежит этот товар. */
@@ -49,11 +66,20 @@ const withShelf = (index: number, items: StoreState['shelves'][number]['items'])
 });
 
 describe('buyChance', () => {
-  it('падает с ростом цены и не выходит за границы', () => {
+  it('дешевле базовой — охотнее, дороже — спрос падает круто', () => {
     expect(buyChance(20, 40)).toBe(1);
     expect(buyChance(40, 40)).toBe(0.75);
-    expect(buyChance(80, 40)).toBe(0.25);
-    expect(buyChance(1000, 40)).toBe(0.05);
+    expect(buyChance(48, 40)).toBeCloseTo(0.55);
+    expect(buyChance(60, 40)).toBeCloseTo(0.25);
+    expect(buyChance(80, 40)).toBe(0.02);
+  });
+
+  it('выгоднее всего цена чуть выше базовой, а не задранная', () => {
+    // Прибыль с одного желающего купить хлеб: шанс покупки × наценка.
+    const perWant = (price: number) => buyChance(price, 40) * (price - 25);
+    expect(perWant(45)).toBeGreaterThan(perWant(40));
+    expect(perWant(45)).toBeGreaterThan(perWant(60));
+    expect(perWant(70)).toBeLessThan(perWant(40));
   });
 });
 
@@ -62,18 +88,18 @@ describe('закупка на склад', () => {
     const s = buyStock(empty(), 'bread', 5, 18)!;
     expect(warehouseOf(s, 'bread')).toBe(5);
     expect(onShelves(s, 'bread')).toBe(0);
-    expect(s.money).toBe(newGame().money - 90);
+    expect(s.money).toBe(empty().money - 90);
   });
 
   it('не даёт уйти в минус и переполнить склад', () => {
     expect(buyStock({ ...empty(), money: 10 }, 'bread', 1, 18)).toBeNull();
-    expect(buyStock({ ...empty(), money: 1e6 }, 'apples', WAREHOUSE_CAPACITY + 1, 1)).toBeNull();
+    expect(buyStock({ ...empty(), money: 1e6 }, 'apples', warehouseCapacity(empty()) + 1, 1)).toBeNull();
   });
 });
 
 describe('полки по типам', () => {
   it('мясо нельзя на хлебную полку, хлеб — только на хлебную', () => {
-    const [bakery, produce, dairy] = newGame().shelves;
+    const [bakery, produce, dairy] = empty().shelves;
     expect(canPlace('meat', bakery)).toBe(false);
     expect(canPlace('bread', bakery)).toBe(true);
     expect(canPlace('bread', produce)).toBe(false);
@@ -117,11 +143,72 @@ describe('полки по типам', () => {
     expect(upgradeShelf(max, 0)).toBeNull();
   });
 
-  it('мясо продаётся только после покупки мясного холодильника, полок не больше 4', () => {
+  it('мясо продаётся только после покупки мясного холодильника, полок не больше, чем мест', () => {
     expect(sellableProducts(empty())).not.toContain('meat');
-    const s = buyShelf(empty(), 'meat')!;
+    const s = buyShelf({ ...empty(), money: 1000 }, 'meat')!;
     expect(sellableProducts(s)).toContain('meat');
+    expect(freeSlots(s)).toBe(0);
     expect(buyShelf({ ...s, money: 1e6 }, 'bakery')).toBeNull();
+  });
+
+  it('полку можно продать за половину цены, товар с неё уходит на склад', () => {
+    const s = { ...empty(), shelves: [{ kind: 'dairy' as const, level: 1, items: { milk: units(3) } }] };
+    const sold = sellShelf(s, 0)!;
+    expect(shelfResale(s.shelves[0])).toBe((300 + SHELF_LEVELS[1].cost) / 2);
+    expect(sold.money).toBe(s.money + 210);
+    expect(sold.shelves).toEqual([]);
+    expect(warehouseOf(sold, 'milk')).toBe(3);
+  });
+});
+
+describe('помещение, долг и расходы', () => {
+  it('в начале ларёк на 2 полки, с долгом', () => {
+    const s = newGame();
+    expect(STORE_LEVELS[s.level].slots).toBe(2);
+    expect(s.shelves).toHaveLength(2);
+    expect(freeSlots(s)).toBe(0);
+    expect(s.debt).toBeGreaterThan(0);
+  });
+
+  it('расширяться нельзя, пока есть долг', () => {
+    const rich = { ...newGame(), money: 1e6 };
+    expect(expandStore(rich)).toBeNull();
+    const paid = payDebt(rich, rich.debt)!;
+    expect(paid.debt).toBe(0);
+    const bigger = expandStore(paid)!;
+    expect(bigger.level).toBe(1);
+    expect(freeSlots(bigger)).toBe(2);
+    expect(bigger.money).toBe(paid.money - STORE_LEVELS[1].cost);
+  });
+
+  it('с каждым уровнем больше мест, склад и аренда, и дороже расширение', () => {
+    for (let i = 1; i < STORE_LEVELS.length; i++) {
+      const [a, b] = [STORE_LEVELS[i - 1], STORE_LEVELS[i]];
+      expect(b.slots).toBeGreaterThan(a.slots);
+      expect(b.warehouse).toBeGreaterThan(a.warehouse);
+      expect(b.rent).toBeGreaterThan(a.rent);
+      expect(b.cost).toBeGreaterThan(a.cost);
+    }
+  });
+
+  it('каждый вечер: аренда, свет холодильников и платёж по долгу', () => {
+    const s = { ...empty(), debt: 120 };
+    expect(dailyExpenses(s)).toEqual({ rent: STORE_LEVELS[1].rent, power: FRIDGE_POWER, debt: DEBT_PAYMENT });
+    const night = endDay(s, emptyDayStats());
+    expect(night.state.debt).toBe(120 - DEBT_PAYMENT);
+    expect(night.state.money).toBe(s.money - STORE_LEVELS[1].rent - FRIDGE_POWER - DEBT_PAYMENT);
+  });
+
+  it('если денег не хватает на расходы — недостача уходит в долг', () => {
+    const s = { ...empty(), money: 10, debt: 0 };
+    const night = endDay(s, emptyDayStats()).state;
+    expect(night.money).toBe(0);
+    expect(night.debt).toBe(STORE_LEVELS[1].rent + FRIDGE_POWER - 10);
+  });
+
+  it('гасить долг больше, чем есть денег, нельзя', () => {
+    expect(payDebt({ ...newGame(), money: 0 }, 100)).toBeNull();
+    expect(payDebt({ ...newGame(), money: 1e6 }, 1e6)!.debt).toBe(0);
   });
 });
 
@@ -215,7 +302,7 @@ describe('торг', () => {
   it('удачный торг даёт скидку, больше торговаться нельзя', () => {
     const { deal, success } = haggle(farmer, newDeal(farmer), 0.1, 3, 0);
     expect(success).toBe(true);
-    expect(unitPrice(farmer, deal, 'bread')).toBe(18);
+    expect(unitPrice(farmer, deal, 'bread')).toBe(Math.round(PRODUCTS.bread.cost * 0.9));
     expect(canHaggle(deal)).toBe(false);
   });
 
@@ -223,12 +310,12 @@ describe('торг', () => {
     let deal = newDeal(farmer);
     for (let i = 0; i < farmer.patience; i++) deal = haggle(farmer, deal, 0.2, 3, 0.99).deal;
     expect(deal.angry).toBe(true);
-    expect(unitPrice(farmer, deal, 'bread')).toBe(22);
+    expect(unitPrice(farmer, deal, 'bread')).toBe(Math.round(PRODUCTS.bread.cost * 1.1));
   });
 
   it('поставщик не продаёт чужой товар', () => {
     expect(unitPrice(farmer, newDeal(farmer), 'milk')).toBeNull();
-    expect(unitPrice(SUPPLIERS.butcher, newDeal(SUPPLIERS.butcher), 'meat')).toBe(80);
+    expect(unitPrice(SUPPLIERS.butcher, newDeal(SUPPLIERS.butcher), 'meat')).toBe(PRODUCTS.meat.cost);
   });
 });
 

@@ -6,9 +6,15 @@ import {
   buyStock,
   canPlace,
   CATEGORIES,
+  DEBT_PAYMENT,
+  dailyExpenses,
+  expandStore,
   expectedGuests,
-  MAX_SHELVES,
+  expensesTotal,
+  freeSlots,
   moveToShelf,
+  nextStoreLevel,
+  payDebt,
   PRICE_STEP,
   PRODUCTS,
   PRODUCT_IDS,
@@ -17,12 +23,15 @@ import {
   setPrice,
   SHELF_KINDS,
   SHELF_LEVELS,
+  sellShelf,
   shelfCapacity,
   shelfCount,
   shelfFree,
+  shelfResale,
+  storeLevel,
   upgradeCost,
   upgradeShelf,
-  WAREHOUSE_CAPACITY,
+  warehouseCapacity,
   warehouseCount,
   warehouseOf,
   type BadBatchChoice,
@@ -49,11 +58,12 @@ interface MorningOptions {
   onOpen: () => void;
 }
 
-type Tab = 'buy' | 'warehouse' | 'shelves' | 'prices';
+type Tab = 'buy' | 'warehouse' | 'shelves' | 'store' | 'prices';
 const TABS: [Tab, TextKey][] = [
   ['buy', 'tab.buy'],
   ['warehouse', 'tab.warehouse'],
   ['shelves', 'tab.shelves'],
+  ['store', 'tab.store'],
   ['prices', 'tab.prices'],
 ];
 
@@ -99,10 +109,10 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       );
     }
 
-    const body = { buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, prices: pricesTab }[tab](state);
+    const body = { buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, store: storeTab, prices: pricesTab }[tab](state);
     card.replaceChildren(
       title,
-      el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: expectedGuests(state.rating) })),
+      el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: expectedGuests(state.rating, state.level) })),
       tabs,
       ...body,
       button(t('morning.open'), () => {
@@ -116,7 +126,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
 
   const buyTab = (state: StoreState): HTMLElement[] => [
     el('div', 'ui-note', t('buy.note')),
-    el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: WAREHOUSE_CAPACITY })),
+    el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
     ...SUPPLIER_IDS.map((sid) => supplierBox(sid, state)),
   ];
 
@@ -131,7 +141,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       return box;
     }
 
-    const free = WAREHOUSE_CAPACITY - warehouseCount(state);
+    const free = warehouseCapacity(state) - warehouseCount(state);
     for (const pid of PRODUCT_IDS) {
       const price = unitPrice(s, deal, pid);
       if (price === null) continue;
@@ -218,7 +228,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
 
   const warehouseTab = (state: StoreState): HTMLElement[] => {
     const out: HTMLElement[] = [
-      el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: WAREHOUSE_CAPACITY })),
+      el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
     ];
     const present = PRODUCT_IDS.filter((pid) => warehouseOf(state, pid) > 0);
     if (present.length === 0) {
@@ -273,13 +283,22 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   // ---------- Полки ----------
 
   const shelvesTab = (state: StoreState): HTMLElement[] => {
-    const out: HTMLElement[] = [el('div', 'ui-note', t('shelves.rule'))];
+    const slots = storeLevel(state).slots;
+    const out: HTMLElement[] = [
+      el('div', 'ui-note', t('shelves.rule')),
+      el('div', 'ui-muted', t('shelves.slots', { n: state.shelves.length, max: slots })),
+    ];
     state.shelves.forEach((shelf, i) => {
       const box = el('div', 'ui-box');
       const head = el('div', 'ui-row');
-      head.append(
-        el('b', '', t(SHELF_KINDS[shelf.kind].nameKey)),
+      const title = el('span');
+      title.append(
+        el('b', '', `${t(SHELF_KINDS[shelf.kind].nameKey)} `),
         el('span', 'ui-muted', t('shelves.places', { n: shelfCount(shelf), max: shelfCapacity(shelf) })),
+      );
+      head.append(
+        title,
+        button(t('shelves.sell', { n: shelfResale(shelf) }), () => update(sellShelf(getState(), i)), 'ui-chip'),
       );
       const allowed = PRODUCT_IDS.filter((pid) => PRODUCTS[pid].category === shelf.kind).map(productLabel).join(', ');
       box.append(head, el('div', 'ui-muted', t('shelves.only', { list: allowed })));
@@ -301,7 +320,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     });
 
     out.push(el('h3', '', t('shelves.buyTitle')));
-    if (state.shelves.length >= MAX_SHELVES) {
+    if (freeSlots(state) <= 0) {
       out.push(el('div', 'ui-muted', t('shelves.noRoom')));
     } else {
       for (const kind of CATEGORIES) {
@@ -316,6 +335,72 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         );
       }
     }
+    return out;
+  };
+
+  // ---------- Магазин: помещение, долг, расходы ----------
+
+  const storeTab = (state: StoreState): HTMLElement[] => {
+    const level = storeLevel(state);
+    const next = nextStoreLevel(state);
+    const out: HTMLElement[] = [];
+
+    const current = el('div', 'ui-box');
+    current.append(
+      el('b', '', t('store.current', { name: t(level.nameKey) })),
+      el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: level.warehouse, g: level.guests })),
+    );
+    out.push(current);
+
+    const grow = el('div', 'ui-box');
+    if (!next) {
+      grow.append(el('div', 'ui-muted', t('store.max')));
+    } else {
+      grow.append(
+        el('b', '', t('store.next', { name: t(next.nameKey) })),
+        el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, g: next.guests, rent: next.rent })),
+      );
+      if (state.debt > 0) grow.append(el('div', 'ui-note', t('store.needNoDebt')));
+      grow.append(
+        button(
+          t('store.expand', { cost: next.cost }),
+          () => update(expandStore(getState()), 'success'),
+          'ui-btn secondary',
+          state.debt > 0 || next.cost > state.money,
+        ),
+      );
+    }
+    out.push(grow);
+
+    const debt = el('div', 'ui-box');
+    if (state.debt > 0) {
+      debt.append(el('b', '', t('debt.title', { n: state.debt })), el('div', 'ui-muted', t('debt.note', { p: DEBT_PAYMENT })));
+      const chips = el('div', 'ui-chips');
+      for (const amount of [100, state.debt]) {
+        if (amount === 100 && state.debt <= 100) continue;
+        chips.append(
+          button(t('debt.pay', { n: amount }), () => update(payDebt(getState(), amount), 'success'), 'ui-chip', state.money < amount),
+        );
+      }
+      debt.append(chips);
+    } else {
+      debt.append(el('b', '', t('debt.none')));
+    }
+    out.push(debt);
+
+    const e = dailyExpenses(state);
+    const costs = el('div', 'ui-box');
+    costs.append(el('b', '', t('expenses.title')));
+    const row = (label: string, value: number) => {
+      const r = el('div', 'ui-row');
+      r.append(el('span', '', label), el('span', '', `${value} 💰`));
+      costs.append(r);
+    };
+    row(t('expenses.rent'), e.rent);
+    if (e.power) row(t('expenses.power'), e.power);
+    if (e.debt) row(t('expenses.debt'), e.debt);
+    row(t('expenses.total'), expensesTotal(e));
+    out.push(costs);
     return out;
   };
 

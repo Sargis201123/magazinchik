@@ -28,7 +28,7 @@ const css = `
   background: #f2c14e; color: #2b2233; box-shadow: 0 2px 0 #2b2233; min-width: 34px; }
 .ui-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .ui-tabs { display: flex; gap: 4px; margin: 8px 0 6px; }
-.ui-tab { flex: 1; padding: 8px 2px; font: 600 13px system-ui, sans-serif; border: 2px solid #2b2233;
+.ui-tab { flex: 1; padding: 8px 1px; font: 600 12px system-ui, sans-serif; border: 2px solid #2b2233;
   border-radius: 6px; background: #e6dcc4; color: #2b2233; }
 .ui-tab.active { background: #2b2233; color: #f4ecd8; }
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }

@@ -23,11 +23,11 @@ export interface Product {
 }
 
 export const PRODUCTS: Record<ProductId, Product> = {
-  bread: { id: 'bread', nameKey: 'product.bread', icon: '🍞', category: 'bakery', cost: 20, basePrice: 40, shelfLife: 2, color: 0xd9a066 },
-  apples: { id: 'apples', nameKey: 'product.apples', icon: '🍎', category: 'produce', cost: 10, basePrice: 30, shelfLife: 5, color: 0xd04648 },
-  potatoes: { id: 'potatoes', nameKey: 'product.potatoes', icon: '🥔', category: 'produce', cost: 8, basePrice: 20, shelfLife: 7, color: 0xa47a52 },
-  milk: { id: 'milk', nameKey: 'product.milk', icon: '🥛', category: 'dairy', cost: 30, basePrice: 60, shelfLife: 3, color: 0xeef3f7 },
-  meat: { id: 'meat', nameKey: 'product.meat', icon: '🥩', category: 'meat', cost: 80, basePrice: 150, shelfLife: 2, color: 0xb83a4b },
+  bread: { id: 'bread', nameKey: 'product.bread', icon: '🍞', category: 'bakery', cost: 25, basePrice: 40, shelfLife: 2, color: 0xd9a066 },
+  apples: { id: 'apples', nameKey: 'product.apples', icon: '🍎', category: 'produce', cost: 16, basePrice: 30, shelfLife: 5, color: 0xd04648 },
+  potatoes: { id: 'potatoes', nameKey: 'product.potatoes', icon: '🥔', category: 'produce', cost: 10, basePrice: 20, shelfLife: 7, color: 0xa47a52 },
+  milk: { id: 'milk', nameKey: 'product.milk', icon: '🥛', category: 'dairy', cost: 36, basePrice: 60, shelfLife: 3, color: 0xeef3f7 },
+  meat: { id: 'meat', nameKey: 'product.meat', icon: '🥩', category: 'meat', cost: 90, basePrice: 150, shelfLife: 2, color: 0xb83a4b },
 };
 
 export const PRODUCT_IDS = Object.keys(PRODUCTS) as ProductId[];
@@ -36,14 +36,21 @@ export interface ShelfKind {
   nameKey: TextKey;
   /** Цена покупки новой полки такого типа. */
   price: number;
+  /** Холодильник: каждый день тратит электричество. */
+  fridge: boolean;
 }
 
 export const SHELF_KINDS: Record<Category, ShelfKind> = {
-  bakery: { nameKey: 'shelf.bakery', price: 150 },
-  produce: { nameKey: 'shelf.produce', price: 150 },
-  dairy: { nameKey: 'shelf.dairy', price: 250 },
-  meat: { nameKey: 'shelf.meat', price: 250 },
+  bakery: { nameKey: 'shelf.bakery', price: 150, fridge: false },
+  produce: { nameKey: 'shelf.produce', price: 150, fridge: false },
+  dairy: { nameKey: 'shelf.dairy', price: 300, fridge: true },
+  meat: { nameKey: 'shelf.meat', price: 400, fridge: true },
 };
+
+/** Проданная полка возвращает часть цены. */
+export const SHELF_RESALE = 0.5;
+/** Электричество одного холодильника в день. */
+export const FRIDGE_POWER = 15;
 
 export const CATEGORIES = Object.keys(SHELF_KINDS) as Category[];
 
@@ -54,9 +61,37 @@ export const SHELF_LEVELS = [
   { capacity: 16, cost: 250 },
 ] as const;
 
-/** Сколько полок помещается в ларьке (позже расширим магазин). */
-export const MAX_SHELVES = 4;
-export const WAREHOUSE_CAPACITY = 40;
+/**
+ * Помещение магазина. Растёт за монеты: больше места под полки, больше склад,
+ * больше гостей — но и аренда выше.
+ */
+export interface StoreLevel {
+  nameKey: TextKey;
+  /** Цена расширения до этого уровня. */
+  cost: number;
+  /** Сколько полок помещается. */
+  slots: number;
+  warehouse: number;
+  /** Аренда в день. */
+  rent: number;
+  /** Множитель потока гостей: большой магазин видно с улицы. */
+  guests: number;
+  /** Сколько покупателей одновременно бывает в зале. */
+  maxCustomers: number;
+}
+
+export const STORE_LEVELS: StoreLevel[] = [
+  { nameKey: 'store.l1', cost: 0, slots: 2, warehouse: 20, rent: 20, guests: 1, maxCustomers: 5 },
+  { nameKey: 'store.l2', cost: 1000, slots: 4, warehouse: 35, rent: 50, guests: 1.3, maxCustomers: 7 },
+  { nameKey: 'store.l3', cost: 3000, slots: 6, warehouse: 55, rent: 90, guests: 1.6, maxCustomers: 9 },
+  { nameKey: 'store.l4', cost: 8000, slots: 8, warehouse: 80, rent: 150, guests: 1.9, maxCustomers: 11 },
+  { nameKey: 'store.l5', cost: 18000, slots: 10, warehouse: 110, rent: 230, guests: 2.2, maxCustomers: 13 },
+];
+
+/** Бабушкин долг: списывается понемногу каждый день, можно гасить досрочно. */
+export const START_DEBT = 500;
+export const DEBT_PAYMENT = 50;
+
 /** Сколько штук продавец уносит со склада за один поход. */
 export const CARRY = 6;
 
@@ -94,6 +129,10 @@ export interface Shelf {
 export interface StoreState {
   day: number;
   money: number;
+  /** Уровень помещения — индекс в STORE_LEVELS. */
+  level: number;
+  /** Долг: пока он есть, арендодатель не даёт расширяться. */
+  debt: number;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -121,16 +160,22 @@ const fresh = (n: number): Unit[] => Array.from({ length: n }, () => ({ age: 0 }
 
 export const newGame = (): StoreState => ({
   day: 1,
-  money: 300,
+  money: 150,
+  level: 0,
+  debt: START_DEBT,
   rating: 3,
-  warehouse: { bread: fresh(4), apples: fresh(6), milk: fresh(4) },
+  warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [
     { kind: 'bakery', level: 0, items: { bread: fresh(4) } },
     { kind: 'produce', level: 0, items: { apples: fresh(3), potatoes: fresh(3) } },
-    { kind: 'dairy', level: 0, items: { milk: fresh(3) } },
   ],
   prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150 },
 });
+
+export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];
+export const nextStoreLevel = (state: StoreState): StoreLevel | undefined => STORE_LEVELS[state.level + 1];
+export const warehouseCapacity = (state: StoreState): number => storeLevel(state).warehouse;
+export const freeSlots = (state: StoreState): number => storeLevel(state).slots - state.shelves.length;
 
 export const emptyDayStats = (): DayStats => ({ revenue: 0, served: 0, lost: 0, complaints: 0, spoiled: 0 });
 
@@ -163,11 +208,14 @@ export const sellableProducts = (state: StoreState): ProductId[] =>
 
 /**
  * Вероятность, что покупатель возьмёт товар при такой цене.
- * Цена = базовой → 75%, в два раза дешевле → 100%, в два раза дороже → 25%.
+ * Дешевле базовой — берут охотнее (в два раза дешевле → 100%).
+ * Дороже — спрос падает круто: +20% → 55%, +50% → 25%, +75% и выше → почти никто.
+ * Так выгоднее всего держать цену чуть выше базовой, а задирать её — себе дороже.
  */
 export function buyChance(price: number, basePrice: number): number {
   const ratio = price / basePrice;
-  return Math.min(1, Math.max(0.05, 1.25 - 0.5 * ratio));
+  const chance = ratio <= 1 ? 0.75 + 0.5 * (1 - ratio) : 0.75 - (ratio - 1);
+  return Math.min(1, Math.max(0.02, chance));
 }
 
 /** Сколько реально заплатит покупатель за эту штуку. */
@@ -188,7 +236,7 @@ export function setPrice(state: StoreState, id: ProductId, price: number): Store
  */
 export function buyStock(state: StoreState, id: ProductId, qty: number, unitPrice: number, bad = false): StoreState | null {
   const total = qty * unitPrice;
-  if (qty <= 0 || total > state.money || warehouseCount(state) + qty > WAREHOUSE_CAPACITY) return null;
+  if (qty <= 0 || total > state.money || warehouseCount(state) + qty > warehouseCapacity(state)) return null;
   const units: Unit[] = Array.from({ length: qty }, () => (bad ? { age: 0, bad: true, pending: true } : { age: 0 }));
   return {
     ...state,
@@ -269,8 +317,75 @@ export function upgradeShelf(state: StoreState, shelfIndex: number): StoreState 
 
 export function buyShelf(state: StoreState, kind: Category): StoreState | null {
   const price = SHELF_KINDS[kind].price;
-  if (state.shelves.length >= MAX_SHELVES || price > state.money) return null;
+  if (freeSlots(state) <= 0 || price > state.money) return null;
   return { ...state, money: state.money - price, shelves: [...state.shelves, { kind, level: 0, items: {} }] };
+}
+
+/** Сколько вернут за полку: половина цены самой полки и её улучшений. */
+export function shelfResale(shelf: Shelf): number {
+  const upgrades = SHELF_LEVELS.slice(1, shelf.level + 1).reduce((sum, l) => sum + l.cost, 0);
+  return Math.round((SHELF_KINDS[shelf.kind].price + upgrades) * SHELF_RESALE);
+}
+
+/** Продать полку, чтобы освободить место под другую. Товар с неё уходит на склад (что не влезло — пропадает). */
+export function sellShelf(state: StoreState, shelfIndex: number): StoreState | null {
+  const shelf = state.shelves[shelfIndex];
+  if (!shelf) return null;
+  const warehouse: Stock = { ...state.warehouse };
+  let room = warehouseCapacity(state) - warehouseCount(state);
+  for (const id of PRODUCT_IDS) {
+    const units = shelf.items[id] ?? [];
+    const kept = units.slice(0, Math.max(0, room));
+    room -= kept.length;
+    if (kept.length) warehouse[id] = [...(warehouse[id] ?? []), ...kept];
+  }
+  return {
+    ...state,
+    money: state.money + shelfResale(shelf),
+    warehouse,
+    shelves: state.shelves.filter((_, i) => i !== shelfIndex),
+  };
+}
+
+// ---------- Помещение и долг ----------
+
+/** Расширение магазина. Нельзя, пока висит долг. */
+export function expandStore(state: StoreState): StoreState | null {
+  const next = nextStoreLevel(state);
+  if (!next || state.debt > 0 || next.cost > state.money) return null;
+  return { ...state, money: state.money - next.cost, level: state.level + 1 };
+}
+
+export function payDebt(state: StoreState, amount: number): StoreState | null {
+  const paid = Math.min(amount, state.debt, state.money);
+  if (paid <= 0) return null;
+  return { ...state, money: state.money - paid, debt: state.debt - paid };
+}
+
+export interface Expenses {
+  rent: number;
+  power: number;
+  debt: number;
+}
+
+/** Обязательные расходы за день: аренда, свет холодильников, платёж по долгу. */
+export function dailyExpenses(state: StoreState): Expenses {
+  const fridges = state.shelves.filter((s) => SHELF_KINDS[s.kind].fridge).length;
+  return { rent: storeLevel(state).rent, power: fridges * FRIDGE_POWER, debt: Math.min(DEBT_PAYMENT, state.debt) };
+}
+
+export const expensesTotal = (e: Expenses): number => e.rent + e.power + e.debt;
+
+/** Списывает расходы. Если денег не хватает, недостача уходит в долг. */
+export function payExpenses(state: StoreState): { state: StoreState; expenses: Expenses } {
+  const expenses = dailyExpenses(state);
+  const total = expensesTotal(expenses);
+  const paid = Math.min(total, Math.max(0, state.money));
+  const shortfall = total - paid;
+  return {
+    state: { ...state, money: state.money - paid, debt: state.debt - expenses.debt + shortfall },
+    expenses,
+  };
 }
 
 // ---------- Продажа ----------
@@ -341,8 +456,11 @@ function ageStock(stock: Stock): { stock: Stock; spoiled: number } {
   return { stock: next, spoiled };
 }
 
-/** Ночь: товар стареет и портится (и на складе, и на полках), рейтинг двигается от довольства покупателей. */
-export function endDay(state: StoreState, stats: DayStats): { state: StoreState; spoiled: number } {
+/**
+ * Ночь: товар стареет и портится (и на складе, и на полках), рейтинг двигается
+ * от довольства покупателей, списываются расходы.
+ */
+export function endDay(state: StoreState, stats: DayStats): { state: StoreState; spoiled: number; expenses: Expenses } {
   const warehouse = ageStock(state.warehouse);
   let spoiled = warehouse.spoiled;
   const shelves = state.shelves.map((shelf) => {
@@ -350,18 +468,18 @@ export function endDay(state: StoreState, stats: DayStats): { state: StoreState;
     spoiled += aged.spoiled;
     return { ...shelf, items: aged.stock };
   });
-  const rating = Math.min(5, Math.max(0, state.rating + (satisfaction(stats) - 0.7) * 0.6));
-  return {
-    state: { ...state, day: state.day + 1, rating: Math.round(rating * 100) / 100, warehouse: warehouse.stock, shelves },
-    spoiled,
-  };
+  const rating = Math.min(5, Math.max(0, state.rating + (satisfaction(stats) - 0.7) * 0.5));
+  const aged = { ...state, day: state.day + 1, rating: Math.round(rating * 100) / 100, warehouse: warehouse.stock, shelves };
+  const paid = payExpenses(aged);
+  return { state: paid.state, spoiled, expenses: paid.expenses };
 }
 
 /**
- * Секунд между появлениями покупателей. Рейтинг сильно влияет на поток:
- * 0★ — раз в 7.5 с, 3★ — раз в 4.2 с, 5★ — раз в 2 с.
+ * Секунд между появлениями покупателей. Рейтинг сильно влияет на поток
+ * (в ларьке: 0★ — раз в 7.5 с, 3★ — раз в 4.2 с, 5★ — раз в 2 с),
+ * большой магазин привлекает больше гостей.
  */
-export const spawnInterval = (rating: number): number => 7.5 - rating * 1.1;
+export const spawnInterval = (rating: number, level = 0): number => (7.5 - rating * 1.1) / STORE_LEVELS[level].guests;
 
-/** Примерно столько гостей придёт за день при таком рейтинге. */
-export const expectedGuests = (rating: number): number => Math.round(DAY_SECONDS / spawnInterval(rating));
+/** Примерно столько гостей придёт за день. */
+export const expectedGuests = (rating: number, level = 0): number => Math.round(DAY_SECONDS / spawnInterval(rating, level));

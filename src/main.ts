@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
-import { StoreScene, WORLD_H, WORLD_W } from './scenes/StoreScene';
+import { CANVAS_H, CANVAS_W, StoreScene } from './scenes/StoreScene';
 import { initTelegram } from './platform/telegram';
 
 const BG = '#1d1a26';
@@ -16,8 +16,8 @@ const game = new Phaser.Game({
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: WORLD_W * 2,
-    height: WORLD_H * 2,
+    width: CANVAS_W,
+    height: CANVAS_H,
   },
   scene: [BootScene, StoreScene],
 });
