@@ -2,7 +2,7 @@ import { newGame, type StoreState } from './economy';
 
 // Пока сохраняем локально. На этапе 6 добавим облачные сохранения в Supabase.
 const KEY = 'magazinchik.save';
-const VERSION = 8;
+const VERSION = 9;
 
 interface SaveFile {
   version: number;

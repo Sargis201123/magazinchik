@@ -2,6 +2,8 @@
 // на сервере (проверка сохранений, расчёт дохода офлайн).
 
 import type { TextKey } from '../i18n/ru';
+import type { DayPlan } from './events';
+import type { StoryState } from './story';
 
 /** Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу. */
 export type Category = 'bakery' | 'produce' | 'dairy' | 'meat';
@@ -264,6 +266,8 @@ export interface Shelf {
   level: number;
   /** Товар на полке, у каждого товара самые старые штуки — в начале. */
   items: Stock;
+  /** Сломанный холодильник: с него не продают и не раскладывают, товар портится быстрее. */
+  broken?: boolean;
 }
 
 export interface StoreState {
@@ -278,6 +282,9 @@ export interface StoreState {
   jobSearch?: { day: number; role: StaffRole; candidates: StaffMember[] };
   /** Кто уволился в конце месяца (показываем утром). */
   quitNotice?: StaffMember[];
+  /** План сегодняшнего дня: событие утра, проверка, час пик. */
+  plan?: DayPlan;
+  story: StoryState;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -315,6 +322,7 @@ export const newGame = (): StoreState => ({
   level: 0,
   debt: START_DEBT,
   staff: [],
+  story: { chapter: 0, introSeen: false, ordersDone: 0, inspectionsPassed: 0 },
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [
@@ -357,7 +365,7 @@ export const onShelves = (state: StoreState, id: ProductId): number =>
 
 /** Индекс полки, куда идти за этим товаром (первая, где он есть, иначе первая подходящая). */
 export function shelfFor(state: StoreState, id: ProductId): number {
-  const withStock = state.shelves.findIndex((s) => (s.items[id]?.length ?? 0) > 0);
+  const withStock = state.shelves.findIndex((s) => !s.broken && (s.items[id]?.length ?? 0) > 0);
   return withStock >= 0 ? withStock : state.shelves.findIndex((s) => canPlace(id, s));
 }
 
@@ -437,7 +445,7 @@ export function moveToShelf(
   limit = Infinity,
 ): { state: StoreState; moved: number } {
   const shelf = state.shelves[shelfIndex];
-  if (!shelf) return { state, moved: 0 };
+  if (!shelf || shelf.broken) return { state, moved: 0 };
   const candidates = (id ? [id] : PRODUCT_IDS).filter((p) => canPlace(p, shelf));
   const warehouse: Stock = { ...state.warehouse };
   const items: Stock = { ...shelf.items };
@@ -575,6 +583,7 @@ export function takeFromShelf(
   id: ProductId,
 ): { state: StoreState; unit: Unit } | null {
   const shelf = state.shelves[shelfIndex];
+  if (shelf?.broken) return null;
   const [unit, ...rest] = shelf?.items[id] ?? [];
   if (!unit) return null;
   const shelves = state.shelves.map((s, i) => (i === shelfIndex ? { ...s, items: { ...s.items, [id]: rest } } : s));

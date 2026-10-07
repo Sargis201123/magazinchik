@@ -28,23 +28,12 @@ export class Hud {
     if (this.hint.textContent !== text) this.hint.textContent = text;
   }
 
-  showIntro(onStart: () => void): void {
-    const { card, close } = openModal();
-    card.append(
-      el('h2', '', t('title')),
-      el('p', '', t('story.intro')),
-      button(t('story.start'), () => {
-        close();
-        onStart();
-      }),
-    );
-  }
-
   showSummary(
     day: number,
     stats: DayStats,
     rating: { before: number; after: number },
     money: { bill: number | null; shortfall: number; total: number },
+    extra: [string, string][],
     onNext: () => void,
   ): void {
     const { card, close } = openModal();
@@ -62,6 +51,7 @@ export class Hud {
     if (stats.stolen) row(t('summary.stolen'), `−${stats.stolen} 💰`);
     if (stats.caught) row(t('summary.caught'), stats.caught);
     if (stats.skimmed) row(t('summary.skimmed'), `−${stats.skimmed} 💰`);
+    for (const [label, value] of extra) row(label, value);
     if (money.bill !== null) row(t('summary.bills'), `−${money.bill} 💰`);
     row(t('summary.money'), `${money.total} 💰`);
     if (money.shortfall > 0) card.append(el('div', 'ui-note', t('summary.shortfall', { n: money.shortfall })));

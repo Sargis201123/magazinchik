@@ -11,7 +11,6 @@ import {
   checkout,
   type DayStats,
   emptyDayStats,
-  endDay,
   expandStore,
   billTotal,
   daysUntilBill,
@@ -55,7 +54,10 @@ import {
   type StaffRole,
   type StoreState,
 } from './economy';
+import { ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
+import { answerEvent, inspect } from './events';
 import { candidatesFor } from './staff';
+import { finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
 
@@ -125,7 +127,7 @@ export function simulate({
   hireStaff = true,
 }: SimOptions): SimResult {
   const random = rng(seed);
-  let state = newGame();
+  let state = ensurePlan(newGame());
   for (const id of PRODUCT_IDS) state = setPrice(state, id, Math.round((PRODUCTS[id].basePrice * priceMult) / 5) * 5);
   const out: SimDay[] = [];
   const levelDay: (number | null)[] = STORE_LEVELS.map((_, i) => (i === 0 ? 1 : null));
@@ -168,6 +170,18 @@ export function simulate({
     }
 
     // ---------- Утро: персонал ----------
+    // Сюжет: прочитать диалоги, получить награды.
+    for (let story = pendingStory(state); story; story = pendingStory(state)) {
+      state = story.kind === 'intro' ? finishIntro(state) : finishChapter(state);
+    }
+    // Утреннее событие: заказ — если товара хватает, партия — если есть деньги, холодильник — чинить.
+    const event = state.plan?.event;
+    if (event && !state.plan?.decided) {
+      const accept =
+        event.kind !== 'order' || warehouseOf(state, event.product) + onShelves(state, event.product) >= event.qty;
+      state = answerEvent(state, accept) ?? answerEvent(state, false) ?? state;
+    }
+
     // Разумный игрок соглашается на прибавки: обиженный сотрудник работает хуже.
     for (const m of state.staff) if (m.raiseAsk) state = answerRaise(state, m.role, true);
     if (hireStaff) {
@@ -180,7 +194,7 @@ export function simulate({
 
     // ---------- Утро: закупка ----------
     const sellable = sellableProducts(state);
-    const guests = expectedGuests(state.rating, state.level);
+    const guests = guestsToday(state);
     let purchases = 0;
     const deals = Object.fromEntries(
       SUPPLIER_IDS.map((sid) => {
@@ -250,7 +264,8 @@ export function simulate({
       let tooExpensive = false;
       for (const id of new Set(wanted)) {
         const index = shelfFor(state, id);
-        const oldest = state.shelves[index]?.items[id]?.[0];
+        const shelf = state.shelves[index];
+        const oldest = shelf && !shelf.broken ? shelf.items[id]?.[0] : undefined;
         if (!oldest) {
           sawEmpty = true;
           continue;
@@ -280,8 +295,14 @@ export function simulate({
       if (random() < dirtComplaint) stats.complaints++;
     }
 
+    // Проверка: с уборщиком чисто почти всегда, в одиночку — как повезёт.
+    if (state.plan?.inspection) {
+      const clean = random() < (staffOf(state, 'cleaner') ? 0.9 : 0.6);
+      state = inspectionDone(state, inspect(state, { trash: clean ? 0 : 3, toiletDirt: clean ? 0 : 70 }));
+    }
+
     // ---------- Ночь ----------
-    const night = endDay(state, stats);
+    const night = nightCycle(state, stats, random);
     state = night.state;
     const expenses = night.bill ? billTotal(night.bill) : 0;
     out.push({

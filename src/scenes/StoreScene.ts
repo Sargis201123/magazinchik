@@ -7,7 +7,6 @@ import {
   checkout,
   DAY_SECONDS,
   emptyDayStats,
-  endDay,
   billTotal,
   guardCatchChance,
   staffOf,
@@ -23,7 +22,6 @@ import {
   shelfCapacity,
   shelfFor,
   shelfFree,
-  spawnInterval,
   STORE_LEVELS,
   storeLevel,
   takeFromShelf,
@@ -37,6 +35,8 @@ import {
   type StaffRole,
   type StoreState,
 } from '../game/economy';
+import { ensurePlan, inspectionDone, nightCycle, spawnIntervalToday } from '../game/day';
+import { inspect, RUSH_SECONDS, type InspectionResult } from '../game/events';
 import { loadGame, saveGame } from '../game/save';
 import { t } from '../i18n';
 import { haptic } from '../platform/telegram';
@@ -87,6 +87,12 @@ const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cleaner: 0xfbf2
 const STAFF_SPEED = 60;
 /** Сколько кассир пробивает одного покупателя при обычной скорости. */
 const CASHIER_MS = 1400;
+const INSPECTOR_SHIRT = 0x222034;
+/** Соседка Валентина заходит раз в день — в вишнёвой кофте и с седыми волосами. */
+const VALYA = { shirt: 0xb13e53, hair: 0xd8d8e0 };
+/** На какой секунде дня приходит инспектор. */
+const INSPECTOR_AT = 25;
+const BROKEN_TINT = 0x8a8a8a;
 const SKINS = [0xf2d3ab, 0xd9a066, 0x8f563b, 0xeec39a];
 
 interface Customer {
@@ -150,6 +156,11 @@ export class StoreScene extends Phaser.Scene {
   private choreId = 0;
   private lastCall = 0;
   private timeLeft = DAY_SECONDS;
+  /** Инспектор: 'pending' — ещё не пришёл, 'here' — ходит по залу, 'done' — ушёл. */
+  private inspector: 'none' | 'pending' | 'here' | 'done' = 'none';
+  private inspection: InspectionResult | null = null;
+  private rushAnnounced = false;
+  private valyaCame = false;
   private nextSpawn = 1;
   private running = false;
 
@@ -158,15 +169,13 @@ export class StoreScene extends Phaser.Scene {
   }
 
   create(): void {
-    const saved = loadGame();
-    this.state = saved ?? newGame();
+    this.state = ensurePlan(loadGame() ?? newGame());
     this.hud = new Hud();
 
     this.buildWorld();
     this.hud.update(this.state, this.timeLeft);
-
-    if (saved) this.showMorning();
-    else this.hud.showIntro(() => this.showMorning());
+    // Первая встреча с сюжетом (письмо бабушки) показывается на утреннем экране.
+    this.showMorning();
   }
 
   update(_time: number, deltaMs: number): void {
@@ -174,13 +183,24 @@ export class StoreScene extends Phaser.Scene {
     const dt = deltaMs / 1000;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
 
+    const elapsed = DAY_SECONDS - this.timeLeft;
+    const rushAt = this.state.plan?.rushAt;
+    const rush = rushAt !== undefined && elapsed >= rushAt && elapsed < rushAt + RUSH_SECONDS;
+    if (rush && !this.rushAnnounced) {
+      this.rushAnnounced = true;
+      haptic.tap();
+      this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.rush'), '#fff3b0');
+    }
+    if (this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void this.runInspector();
+
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;
-      if (this.nextSpawn <= 0 && this.customers.size < storeLevel(this.state).maxCustomers) {
+      const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0);
+      if (this.nextSpawn <= 0 && this.customers.size < maxCustomers) {
         this.spawnCustomer();
-        this.nextSpawn = spawnInterval(this.state.rating, this.state.level) * Phaser.Math.FloatBetween(0.7, 1.3);
+        this.nextSpawn = (spawnIntervalToday(this.state) / (rush ? 2 : 1)) * Phaser.Math.FloatBetween(0.7, 1.3);
       }
-    } else if (this.customers.size === 0) {
+    } else if (this.customers.size === 0 && this.inspector !== 'here') {
       this.finishDay();
     }
 
@@ -191,6 +211,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private currentHint(): string {
+    if (this.inspector === 'here') return t('hint.inspector');
     if (!this.workers.has('guard') && [...this.customers].some((c) => c.thief && !c.gone)) return t('hint.thief');
     if (this.sellerBusy && !this.workers.has('cashier') && this.queue.length > 0) return t('hint.recall');
     if (this.queue.length > 0 && this.state.day <= 2 && this.stats.served < 3) return t('hint.serve');
@@ -336,6 +357,7 @@ export class StoreScene extends Phaser.Scene {
         }
       });
       view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
+      view.bg.setTint(shelf.broken ? BROKEN_TINT : SHELF_LOOK[shelf.kind].tint);
     });
   }
 
@@ -431,6 +453,10 @@ export class StoreScene extends Phaser.Scene {
     if (!this.running || this.sellerBusy) return;
     const shelf = this.state.shelves[index];
     const slot = this.layout.slots[index];
+    if (shelf.broken) {
+      this.popup(slot.x, slot.y - 18, t('popup.broken'), '#ffd0d0');
+      return;
+    }
     if (shelfFree(shelf) === 0) {
       this.popup(slot.x, slot.y - 18, t('popup.shelfFull'), '#fff3b0');
       return;
@@ -514,6 +540,7 @@ export class StoreScene extends Phaser.Scene {
     this.workers.clear();
     this.claimedTrash.clear();
     for (const member of this.state.staff) {
+      if (this.state.plan?.sick === member.role) continue;
       const home = this.workerHome(member.role);
       const sprite = this.makePerson(home.x, home.y, UNIFORMS[member.role], Phaser.Utils.Array.GetRandom(SKINS));
       const carried = this.add.image(0, -12, 'box').setVisible(false);
@@ -636,6 +663,7 @@ export class StoreScene extends Phaser.Scene {
     let best = -1;
     let bestFree = 0;
     this.state.shelves.forEach((shelf, i) => {
+      if (shelf.broken) return;
       const free = shelfFree(shelf);
       const hasGoods = PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id] ?? []).some((u) => !u.pending));
       const runningOut = PRODUCT_IDS.some(
@@ -646,12 +674,50 @@ export class StoreScene extends Phaser.Scene {
     return best;
   }
 
+  // ---------- Проверка ----------
+
+  /** Инспектор обходит полки, туалет и кассу, потом выносит решение. */
+  private async runInspector(): Promise<void> {
+    this.inspector = 'here';
+    const { door, wc, sellerHome, slots } = this.layout;
+    const sprite = this.makePerson(door.x, this.layout.h + 16, INSPECTOR_SHIRT, SKINS[0]);
+    const look = (x: number, y: number) => this.walk(sprite, x, y, 35).then(() => this.wait(700));
+    this.popup(door.x, door.y - 24, t('popup.inspector'), '#fff3b0');
+    haptic.tap();
+    await this.walk(sprite, door.x, door.y - 10, 35);
+    for (const i of this.state.shelves.map((_, i) => i)) await look(slots[i].x, slots[i].y + 22);
+    await look(wc.x - 6, wc.spotY + 4);
+    await look(sellerHome.x - 30, sellerHome.y - 10);
+    if (!this.sys.isActive()) return;
+
+    const result = inspect(this.state, { trash: this.trash.size, toiletDirt: this.toiletDirt });
+    this.inspection = result;
+    this.state = inspectionDone(this.state, result);
+    if (result.passed) {
+      haptic.success();
+      this.popup(sprite.x, sprite.y - 16, t('popup.inspectionPassed'), '#c8ffb0');
+    } else {
+      haptic.error();
+      this.popup(sprite.x, sprite.y - 16, t('popup.inspectionFailed', { n: result.fine }), '#ffd0d0');
+    }
+    await this.walk(sprite, door.x, this.layout.h + 16, 35);
+    sprite.destroy();
+    this.inspector = 'done';
+  }
+
   // ---------- Покупатели ----------
 
   private spawnCustomer(): void {
     const thief = Math.random() < thiefChance(this.state.level);
-    const shirt = thief ? THIEF_SHIRT : Phaser.Utils.Array.GetRandom(SHIRTS);
-    const sprite = this.makePerson(this.layout.door.x, this.layout.h + 16, shirt, Phaser.Utils.Array.GetRandom(SKINS));
+    const valya = !thief && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
+    const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
+    const sprite = this.makePerson(this.layout.door.x, this.layout.h + 16, shirt, valya ? SKINS[0] : Phaser.Utils.Array.GetRandom(SKINS));
+    if (valya) {
+      this.valyaCame = true;
+      // Седые волосы поверх головы и приветствие.
+      sprite.add(this.add.image(0, -7, 'bar').setDisplaySize(8, 2).setTint(VALYA.hair));
+      this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.valya'), '#fff3b0'));
+    }
     const bubble = this.add.image(0, -13, 'bubble').setVisible(false);
     sprite.add(bubble);
     const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief };
@@ -758,6 +824,10 @@ export class StoreScene extends Phaser.Scene {
   /** Покупатель у полки: берёт товар, если он есть и цена устраивает. */
   private tryTake(c: Customer, id: ProductId): 'taken' | 'empty' | 'expensive' | 'skipped' {
     const index = shelfFor(this.state, id);
+    if (this.state.shelves[index]?.broken) {
+      this.popup(c.sprite.x, c.sprite.y - 14, t('popup.broken'), '#ffd0d0');
+      return 'empty';
+    }
     const oldest = this.state.shelves[index]?.items[id]?.[0];
     if (!oldest) {
       this.popup(c.sprite.x, c.sprite.y - 14, t('popup.noStock'), '#ffd0d0');
@@ -920,6 +990,11 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private startDay(): void {
+    this.inspector = this.state.plan?.inspection ? 'pending' : 'none';
+    this.inspection = null;
+    this.rushAnnounced = false;
+    this.valyaCame = false;
+    this.syncStaff();
     this.stats = emptyDayStats();
     this.timeLeft = DAY_SECONDS;
     this.nextSpawn = 1;
@@ -934,7 +1009,16 @@ export class StoreScene extends Phaser.Scene {
     this.running = false;
     const finishedDay = this.state.day;
     const ratingBefore = this.state.rating;
-    const { state, spoiled, bill, shortfall, skimmed } = endDay(this.state, this.stats);
+    const { state, spoiled, bill, shortfall, skimmed, order } = nightCycle(this.state, this.stats);
+    const extra: [string, string][] = [];
+    if (order) extra.push([t('summary.order'), order.delivered ? t('summary.orderDone', { n: order.earned }) : t('summary.orderFailed')]);
+    if (this.inspection) {
+      const r = this.inspection;
+      extra.push([
+        t('summary.inspection'),
+        r.passed ? t('summary.inspectionPassed') : t('summary.inspectionFailed', { n: r.fine, problems: r.problems.map((p) => t(p)).join(', ') }),
+      ]);
+    }
     const promoted = state.staff !== this.state.staff;
     this.state = state;
     this.stats.spoiled = spoiled;
@@ -949,6 +1033,7 @@ export class StoreScene extends Phaser.Scene {
       this.stats,
       { before: ratingBefore, after: state.rating },
       { bill: bill && billTotal(bill), shortfall, total: state.money },
+      extra,
       () => this.showMorning(),
     );
   }

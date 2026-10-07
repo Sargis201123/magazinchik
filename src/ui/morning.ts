@@ -13,7 +13,7 @@ import {
   monthOf,
   STAFF_ROLES,
   expandStore,
-  expectedGuests,
+  onShelves,
   freeSlots,
   moveToShelf,
   nextStoreLevel,
@@ -60,7 +60,10 @@ import {
   type Deal,
   type SupplierId,
 } from '../game/suppliers';
+import { guestsToday } from '../game/day';
+import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type MorningEvent } from '../game/events';
 import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
+import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter } from '../game/story';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal } from './dom';
 
@@ -87,6 +90,8 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
   let tab: Tab = 'buy';
+  /** Какая реплика сюжетного диалога сейчас на экране. */
+  let storyLine = 0;
   /** Бракованная партия, по которой ждём решения игрока. */
   let pendingBad: { sid: SupplierId; pid: ProductId; qty: number; price: number } | null = null;
 
@@ -106,6 +111,11 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       card.replaceChildren(title, qualityBox(pendingBad));
       return;
     }
+    const story = pendingStory(state);
+    if (story) {
+      card.replaceChildren(storyBox(state, story.kind, story.chapter));
+      return;
+    }
     if (state.quitNotice?.length) {
       card.replaceChildren(title, quitBox(state.quitNotice));
       return;
@@ -113,6 +123,10 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const asking = state.staff.find((m) => m.raiseAsk);
     if (asking) {
       card.replaceChildren(title, raiseBox(asking));
+      return;
+    }
+    if (state.plan?.event && !state.plan.decided) {
+      card.replaceChildren(title, eventBox(state, state.plan.event));
       return;
     }
 
@@ -133,7 +147,8 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const body = { buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, staff: staffTab, store: storeTab }[tab](state);
     card.replaceChildren(
       title,
-      el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: expectedGuests(state.rating, state.level) })),
+      goalLine(state),
+      el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
       billForecast(state),
       tabs,
       ...body,
@@ -326,6 +341,13 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       );
       const allowed = PRODUCT_IDS.filter((pid) => PRODUCTS[pid].category === shelf.kind).map(productLabel).join(', ');
       box.append(head, el('div', 'ui-muted', t('shelves.only', { list: allowed })));
+      if (shelf.broken) {
+        const cost = fridgeRepairCost(state.level);
+        box.append(
+          el('div', 'ui-note', `🔧 ${t('shelves.broken')}`),
+          button(t('shelves.repair', { cost }), () => update(repairShelf(getState(), i), 'success'), 'ui-btn', state.money < cost),
+        );
+      }
 
       const cost = upgradeCost(shelf);
       if (cost === null) {
@@ -360,6 +382,117 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       }
     }
     return out;
+  };
+
+  // ---------- Сюжет и события ----------
+
+  const goalLine = (state: StoreState) => {
+    const chapter = currentChapter(state);
+    const text = chapter
+      ? t('story.goalLine', { title: t(chapter.titleKey), goal: t(chapter.goalKey, chapter.progress(state)) })
+      : t('story.free');
+    return el('div', 'ui-note', text);
+  };
+
+  const storyBox = (state: StoreState, kind: 'intro' | 'outro', chapter: Chapter) => {
+    const lines = kind === 'intro' ? chapter.intro : chapter.outro;
+    const current = lines[Math.min(storyLine, lines.length - 1)];
+    const who = CHARACTERS[current.who];
+    const box = el('div', 'ui-box');
+    box.append(
+      el('div', 'ui-muted', t('story.chapter', { n: state.story.chapter + 1, title: t(chapter.titleKey) })),
+      el('h3', '', `${who.icon} ${t(who.nameKey)}`),
+      el('p', '', `«${t(current.key)}»`),
+    );
+    const last = storyLine >= lines.length - 1;
+    if (last && kind === 'intro') box.append(el('div', 'ui-note', `🎯 ${t(chapter.goalKey, chapter.progress(state))}`));
+    if (last && kind === 'outro') {
+      const reward = [
+        chapter.reward.money ? `+${chapter.reward.money} 💰` : '',
+        chapter.reward.rating ? `+${chapter.reward.rating}★` : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      box.append(el('div', 'ui-note', t('story.reward', { reward })));
+    }
+    box.append(
+      button(t('story.next'), () => {
+        if (!last) {
+          storyLine++;
+          render();
+          return;
+        }
+        storyLine = 0;
+        update(kind === 'intro' ? finishIntro(getState()) : finishChapter(getState()), kind === 'outro' ? 'success' : 'tap');
+      }),
+    );
+    return box;
+  };
+
+  const eventBox = (state: StoreState, event: MorningEvent) => {
+    const box = el('div', 'ui-box');
+    const answer = (accept: boolean) => update(answerEvent(getState(), accept), accept ? 'success' : 'tap');
+    switch (event.kind) {
+      case 'order': {
+        const client = CLIENTS[event.client];
+        const have = warehouseOf(state, event.product) + onShelves(state, event.product);
+        box.append(
+          el('h3', '', `🍽 ${t('event.order.title')}`),
+          el('b', '', t(client.nameKey)),
+          el('p', '', `«${t(client.askKey, { qty: event.qty, product: productLabel(event.product), pay: event.pay })}»`),
+          el('div', 'ui-muted', `${t('buy.inWarehouse', { n: have })} · ${t('event.order.note')}`),
+          button(t('event.order.accept'), () => answer(true)),
+          button(t('event.order.decline'), () => answer(false), 'ui-btn secondary'),
+        );
+        break;
+      }
+      case 'deal': {
+        const free = warehouseCapacity(state) - warehouseCount(state);
+        box.append(
+          el('h3', '', `💸 ${t('event.deal.title')}`),
+          el(
+            'p',
+            '',
+            t('event.deal.text', {
+              supplier: t(SUPPLIERS[event.supplier].nameKey),
+              qty: event.qty,
+              product: productLabel(event.product),
+              price: event.price,
+            }),
+          ),
+          el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
+          button(t('event.deal.accept'), () => answer(true), 'ui-btn', free <= 0 || state.money < event.price),
+          button(t('event.deal.decline'), () => answer(false), 'ui-btn secondary'),
+        );
+        break;
+      }
+      case 'fridgeBroken':
+        box.append(
+          el('h3', '', `🔧 ${t('event.fridge.title')}`),
+          el('p', '', t('event.fridge.text', { shelf: t(SHELF_KINDS[state.shelves[event.shelf].kind].nameKey) })),
+          button(t('event.fridge.repair', { cost: event.cost }), () => answer(true), 'ui-btn', state.money < event.cost),
+          button(t('event.fridge.later'), () => answer(false), 'ui-btn secondary'),
+          el('div', 'ui-muted', t('event.fridge.laterNote')),
+        );
+        break;
+      case 'sick': {
+        const m = staffOf(state, event.role);
+        box.append(
+          el('h3', '', `🤒 ${t('event.sick.title')}`),
+          el('p', '', t('event.sick.text', { name: m ? staffName(m.name) : '', role: t(STAFF_ROLES[event.role].nameKey) })),
+          button(t('event.ok'), () => answer(true)),
+        );
+        break;
+      }
+      case 'inspection':
+        box.append(
+          el('h3', '', `📋 ${t('event.inspection.title')}`),
+          el('p', '', t('event.inspection.text')),
+          button(t('event.ok'), () => answer(true)),
+        );
+        break;
+    }
+    return box;
   };
 
   // ---------- Персонал ----------
