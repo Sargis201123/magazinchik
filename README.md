@@ -9,12 +9,15 @@ npm install
 npm run dev      # http://localhost:5173 (?lang=en — английский)
 npm test         # тесты игровой логики
 npm run build    # сборка в dist/
+npm run sim      # симулятор экономики (баланс)
+python3 art/sprites.py  # перерисовать спрайты в public/assets
 ```
 
 ## Структура
 
 - `src/game` — игровая логика без Phaser (экономика, сохранения), покрыта тестами.
-- `src/scenes` — сцены Phaser: `BootScene` (временная графика), `StoreScene` (магазин).
+- `src/scenes` — сцены Phaser: `BootScene` (загрузка спрайтов), `StoreScene` (магазин), `layout.ts` (планировки помещений).
+- `art/sprites.py` — вся пиксельная графика: пиксельные карты и палитра, результат в `public/assets`.
 - `src/ui` — интерфейс поверх canvas (HUD, окна).
 - `src/i18n` — переводы ru/en.
 - `src/platform/telegram.ts` — обёртка над Telegram WebApp API. Вне Telegram ничего не делает.
