@@ -32,6 +32,7 @@ const SPRITES = [
   'p_hair_bun',
   'p_hair_cap',
   'p_hair_bald',
+  'shadow',
   'plant',
   'poster',
   'baskets',

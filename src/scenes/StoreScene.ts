@@ -65,12 +65,15 @@ import { Hud } from '../ui/hud';
 import { showMorning } from '../ui/morning';
 import { layoutFor, type Layout } from './layout';
 
-// Холст 360×640. Камера подбирает масштаб под размер магазина: ларёк крупно, универмаг мельче.
-export const CANVAS_W = 360;
-export const CANVAS_H = 640;
+// Холст 720×1280 (9:16): на телефоне хватает пикселей для детальных спрайтов.
+// Камера подбирает масштаб под размер магазина: ларёк крупно, универмаг мельче.
+export const CANVAS_W = 720;
+export const CANVAS_H = 1280;
 /** Сверху интерфейс (деньги, товар), снизу подсказки — магазин рисуем между ними. */
-const HUD_TOP = 100;
-const HUD_BOTTOM = 40;
+const HUD_TOP = 200;
+const HUD_BOTTOM = 80;
+/** Спрайты нарисованы с двойной детализацией (DETAIL в art/sprites.py): в мире они вдвое меньше своих пикселей. */
+const ART = 2;
 
 /** Терпение в очереди. Отсчёт начинается, когда покупатель дошёл до очереди. */
 const PATIENCE_MS = 20_000;
@@ -306,7 +309,7 @@ export class StoreScene extends Phaser.Scene {
     const midY = HUD_TOP + (CANVAS_H - HUD_TOP - HUD_BOTTOM) / 2;
     this.cameras.main.setZoom(zoom).centerOn(next.w / 2, next.h / 2 + (CANVAS_H / 2 - midY) / zoom);
     // Улица под зданием.
-    this.add.tileSprite(-208, next.h, next.w + 416, 208, 'asphalt').setOrigin(0);
+    this.add.tileSprite(-208, next.h, next.w + 416, 208, 'asphalt').setOrigin(0).setTileScale(1 / ART);
     if (next !== this.layout) this.buildForRent(next);
 
     this.buildStore();
@@ -320,14 +323,14 @@ export class StoreScene extends Phaser.Scene {
 
   private buildStore(): void {
     const { w, h, wallH, door, wc, counter, sellerHome } = this.layout;
-    this.add.tileSprite(0, wallH, w, h - wallH, 'floor').setOrigin(0);
-    this.add.tileSprite(0, 0, w, wallH, 'wall').setOrigin(0);
+    this.add.tileSprite(0, wallH, w, h - wallH, 'floor').setOrigin(0).setTileScale(1 / ART);
+    this.add.tileSprite(0, 0, w, wallH, 'wall').setOrigin(0).setTileScale(1 / ART);
     const wallColor = 0x4a3b52;
     this.add.rectangle(-3, 0, 3, h, wallColor).setOrigin(0);
     this.add.rectangle(w, 0, 3, h, wallColor).setOrigin(0);
     this.add.rectangle(-3, h, door.x - 16 + 3, 3, wallColor).setOrigin(0);
     this.add.rectangle(door.x + 16, h, w - door.x - 16 + 3, 3, wallColor).setOrigin(0);
-    this.add.image(door.x, h + 1, 'door');
+    this.art(door.x, h + 1, 'door');
     this.add
       .text(w / 2, -6, t(storeLevel(this.state).nameKey), { fontFamily: UI_FONT, fontSize: '8px', color: '#f2c14e' })
       .setOrigin(0.5)
@@ -335,22 +338,22 @@ export class StoreScene extends Phaser.Scene {
     this.buildWarehouse();
     this.buildDecor();
 
-    this.wcDoor = this.add.image(wc.x, wc.y, 'wc');
-    this.add.image(wc.x, wc.y - 15, 'bar').setDisplaySize(14, 3).setTint(0x2b2233);
-    this.wcBar = this.add.image(wc.x - 7, wc.y - 15, 'bar').setOrigin(0, 0.5).setDisplaySize(0, 2);
+    this.wcDoor = this.art(wc.x, wc.y, 'wc');
+    this.art(wc.x, wc.y - 15, 'bar').setDisplaySize(14, 3).setTint(0x2b2233);
+    this.wcBar = this.art(wc.x - 7, wc.y - 15, 'bar').setOrigin(0, 0.5).setDisplaySize(0, 2);
     this.add
       .zone(wc.x, wc.y + 4, 24, 36)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.cleanToilet());
 
-    this.add.image(counter.x, counter.y, 'counter').setDepth(counter.y + 20);
+    this.art(counter.x, counter.y, 'counter').setDepth(counter.y + 20);
     // Полоска пробивки над кассой.
     this.scanBar = this.add.rectangle(counter.x - 9, counter.y - 31, 18, 4, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
     this.scanFill = this.add.rectangle(counter.x - 8, counter.y - 31, 0, 2, 0x63c74d).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
     void sellerHome;
     const home = this.ownerHome();
     this.seller = this.makePerson(home.x, home.y, OWNER);
-    this.carried = this.add.image(0, 3, 'box').setVisible(false);
+    this.carried = this.art(0, 3, 'box').setVisible(false);
     this.seller.add(this.carried);
     this.add
       .zone(counter.x + 6, counter.y + 6, 40, 64)
@@ -362,8 +365,8 @@ export class StoreScene extends Phaser.Scene {
   private buildForRent(next: Layout): void {
     const { w, h } = this.layout;
     const cost = STORE_LEVELS[this.state.level + 1].cost;
-    if (next.w > w) this.add.tileSprite(w + 3, 0, next.w - w - 3, next.h, 'lot').setOrigin(0);
-    if (next.h > h) this.add.tileSprite(0, h + 3, w + 3, next.h - h - 3, 'lot').setOrigin(0);
+    if (next.w > w) this.add.tileSprite(w + 3, 0, next.w - w - 3, next.h, 'lot').setOrigin(0).setTileScale(1 / ART);
+    if (next.h > h) this.add.tileSprite(0, h + 3, w + 3, next.h - h - 3, 'lot').setOrigin(0).setTileScale(1 / ART);
     this.add.rectangle(0, 0, next.w, next.h).setOrigin(0).setStrokeStyle(1, 0x8a8494);
     const signX = next.w > w ? w + (next.w - w) / 2 : w / 2;
     const signY = next.w > w ? next.h / 2 : h + (next.h - h) / 2;
@@ -381,8 +384,8 @@ export class StoreScene extends Phaser.Scene {
   /** Плакаты на стене, растения и корзинки у входа — чтобы зал не выглядел пустым. */
   private buildDecor(): void {
     const { w, h, wallH, wc, door, warehouse, slots } = this.layout;
-    for (let x = 30; x < wc.x - 16; x += 64) this.add.image(x, 12, 'poster').setDepth(1);
-    this.add.image(door.x + 26, h - 8, 'baskets').setDepth(h - 8);
+    for (let x = 30; x < wc.x - 16; x += 64) this.art(x, 12, 'poster').setDepth(1);
+    this.art(door.x + 26, h - 8, 'baskets').setDepth(h - 8);
     // Растения в свободных углах: у правой стены и в левом углу над складом — не на пути покупателей.
     const spots = [
       { x: w - 9, y: wallH + 14 },
@@ -390,14 +393,14 @@ export class StoreScene extends Phaser.Scene {
     ];
     for (const p of spots) {
       const busy = slots.some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
-      if (!busy) this.add.image(p.x, p.y, 'plant').setDepth(p.y + 6);
+      if (!busy) this.art(p.x, p.y, 'plant').setDepth(p.y + 6);
     }
   }
 
   private buildWarehouse(): void {
     const { x, y, w, h, doorway } = this.layout.warehouse;
     const wallColor = 0x4a3b52;
-    this.add.tileSprite(x, y, w, h, 'concrete').setOrigin(0);
+    this.add.tileSprite(x, y, w, h, 'concrete').setOrigin(0).setTileScale(1 / ART);
     this.add.rectangle(x, y - 3, w + 4, 3, wallColor).setOrigin(0);
     // Правая стена с проёмом.
     this.add.rectangle(x + w, y, 4, doorway.y - 10 - y, wallColor).setOrigin(0);
@@ -442,11 +445,11 @@ export class StoreScene extends Phaser.Scene {
   private buildShelf(index: number, kind: Category): ShelfView {
     const slot = this.layout.slots[index];
     const look = SHELF_LOOK[kind];
-    const bg = this.add.image(slot.x, slot.y, look.texture).setTint(look.tint).setDepth(slot.y - 14);
+    const bg = this.art(slot.x, slot.y, look.texture).setTint(look.tint).setDepth(slot.y - 14);
     bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.restockShelf(index));
-    const items = Array.from({ length: 16 }, () => this.add.image(slot.x, slot.y, 'item').setDepth(slot.y - 13));
+    const items = Array.from({ length: 16 }, () => this.art(slot.x, slot.y, 'item').setDepth(slot.y - 13));
     // Уровень улучшения — жёлтые точки над полкой.
-    const pips = [0, 1].map((n) => this.add.image(slot.x - 17 + n * 4, slot.y - 15, 'pip').setDepth(slot.y - 13));
+    const pips = [0, 1].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 15, 'pip').setDepth(slot.y - 13));
     return { kind, bg, items, pips };
   }
 
@@ -456,7 +459,7 @@ export class StoreScene extends Phaser.Scene {
     const boxes = PRODUCT_IDS.flatMap((id) =>
       Array.from({ length: Math.ceil((this.state.warehouse[id]?.length ?? 0) / perBox) }, () => id),
     ).slice(0, 36);
-    while (this.boxes.length < boxes.length) this.boxes.push(this.add.image(0, 0, 'box').setDepth(this.layout.warehouse.y + 1));
+    while (this.boxes.length < boxes.length) this.boxes.push(this.art(0, 0, 'box').setDepth(this.layout.warehouse.y + 1));
     this.boxes.forEach((img, n) => {
       const id = boxes[n];
       img.setVisible(Boolean(id));
@@ -472,13 +475,19 @@ export class StoreScene extends Phaser.Scene {
     this.wcDoor.setTint(dirt >= TOILET_DIRTY ? 0xc8a878 : 0xffffff);
   }
 
-  /** Человечек из слоёв: штаны, рубашка, кожа, волосы — каждый перекрашивается тинтом. */
+  /** Картинка из public/assets в мировом масштабе. */
+  private art(x: number, y: number, key: string): Phaser.GameObjects.Image {
+    return this.add.image(x, y, key).setScale(1 / ART);
+  }
+
+  /** Человечек из слоёв: тень, штаны, рубашка, кожа, волосы — каждый слой перекрашивается тинтом. */
   private makePerson(x: number, y: number, look: Look): Phaser.GameObjects.Container {
-    const legs = this.add.image(0, 0, 'p_legs0').setTint(look.pants ?? 0x3a4466);
-    const shirt = this.add.image(0, 0, 'p_shirt').setTint(look.shirt);
-    const skin = this.add.image(0, 0, 'p_skin').setTint(look.skin);
-    const hair = this.add.image(0, 0, `p_hair_${look.style ?? 'short'}`).setTint(look.hair ?? 0x4a2c1a);
-    const person = this.add.container(x, y, [legs, shirt, skin, hair]).setDepth(y);
+    const shadow = this.art(0, 8.5, 'shadow');
+    const legs = this.art(0, 0, 'p_legs0').setTint(look.pants ?? 0x3a4466);
+    const shirt = this.art(0, 0, 'p_shirt').setTint(look.shirt);
+    const skin = this.art(0, 0, 'p_skin').setTint(look.skin);
+    const hair = this.art(0, 0, `p_hair_${look.style ?? 'short'}`).setTint(look.hair ?? 0x4a2c1a);
+    const person = this.add.container(x, y, [shadow, legs, shirt, skin, hair]).setDepth(y);
     person.setData('legs', legs);
     return person;
   }
@@ -585,8 +594,8 @@ export class StoreScene extends Phaser.Scene {
 
   private dropTrash(x: number, y: number): void {
     if (this.trash.size >= MAX_TRASH) return;
-    const piece = this.add
-      .image(x + Phaser.Math.Between(-6, 6), y + Phaser.Math.Between(4, 8), 'trash')
+    const piece = this
+      .art(x + Phaser.Math.Between(-6, 6), y + Phaser.Math.Between(4, 8), 'trash')
       .setTint(Phaser.Utils.Array.GetRandom([0xe6e1d6, 0xd95763, 0x5b6ee1, 0xf2c14e]))
       .setDepth(1)
       .setInteractive(new Phaser.Geom.Rectangle(-5, -5, 16, 15), Phaser.Geom.Rectangle.Contains);
@@ -631,7 +640,7 @@ export class StoreScene extends Phaser.Scene {
         style: STAFF_HAIR[member.role],
         hair: member.role === 'guard' ? UNIFORMS.guard : Phaser.Utils.Array.GetRandom(HAIR_COLORS),
       });
-      const carried = this.add.image(0, 3, 'box').setVisible(false);
+      const carried = this.art(0, 3, 'box').setVisible(false);
       sprite.add(carried);
       const worker: Worker = { member, sprite, carried, home };
       this.workers.set(member.role, worker);
@@ -818,7 +827,7 @@ export class StoreScene extends Phaser.Scene {
       this.valyaCame = true;
       this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.valya'), '#fff3b0'));
     }
-    const bubble = this.add.image(0, -14, 'bubble').setVisible(false);
+    const bubble = this.art(0, -14, 'bubble').setVisible(false);
     sprite.add(bubble);
     const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief, rare: rare?.id };
     this.customers.add(customer);
@@ -990,7 +999,7 @@ export class StoreScene extends Phaser.Scene {
     for (const { id } of c.items) {
       await this.wait(timing.item * 1000);
       if (!this.sys.isActive()) return;
-      const item = this.add.image(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2).setDepth(1000);
+      const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2 / ART).setDepth(1000);
       this.tweens.add({ targets: item, x: counter.x, y: counter.y - 14, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
       haptic.tap();
     }
