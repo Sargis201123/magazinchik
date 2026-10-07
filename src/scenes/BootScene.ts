@@ -28,11 +28,30 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(0x6b4a2f).fillRect(0, 0, 40, 26);
       g.fillStyle(0x8a6240).fillRect(2, 2, 36, 10).fillRect(2, 14, 36, 10);
     });
-    make('register', 28, 22, () => {
-      g.fillStyle(0x4a3b52).fillRect(0, 8, 28, 14);
-      g.fillStyle(0x7d6a8a).fillRect(0, 8, 28, 3);
-      g.fillStyle(0x2b2233).fillRect(14, 0, 12, 9);
-      g.fillStyle(0x8fd16a).fillRect(16, 2, 8, 4);
+    // Касса стоит боком: длинная стойка с лентой, терминал в конце — как в супермаркете.
+    make('counter', 16, 52, () => {
+      g.fillStyle(0x4a3b52).fillRect(0, 0, 16, 52);
+      g.fillStyle(0x7d6a8a).fillRect(0, 0, 16, 2).fillRect(0, 0, 2, 52);
+      g.fillStyle(0x2b2233).fillRect(3, 3, 10, 30);
+      g.fillStyle(0x3f3a48);
+      for (let y = 5; y < 33; y += 4) g.fillRect(3, y, 10, 1);
+      g.fillStyle(0x2b2233).fillRect(5, 37, 9, 11);
+      g.fillStyle(0x8fd16a).fillRect(7, 39, 5, 4);
+    });
+    make('wc', 16, 24, () => {
+      g.fillStyle(0x4a3b52).fillRect(0, 0, 16, 24);
+      g.fillStyle(0x9badb7).fillRect(2, 2, 12, 22);
+      g.fillStyle(0x2b2233).fillRect(11, 13, 2, 2);
+      g.fillStyle(0xffffff).fillRect(4, 5, 8, 5);
+      g.fillStyle(0x5b6ee1).fillRect(5, 6, 2, 3);
+      g.fillStyle(0xd95763).fillRect(9, 6, 2, 3);
+    });
+    make('trash', 6, 5, () => {
+      g.fillStyle(0xffffff).fillRect(0, 1, 5, 3).fillRect(2, 0, 4, 2);
+      g.fillStyle(0x2b2233).fillRect(1, 2, 1, 1);
+    });
+    make('bar', 1, 1, () => {
+      g.fillStyle(0xffffff).fillRect(0, 0, 1, 1);
     });
     make('door', 32, 6, () => {
       g.fillStyle(0x8a6240).fillRect(0, 0, 32, 6);

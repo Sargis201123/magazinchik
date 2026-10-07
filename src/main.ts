@@ -7,7 +7,7 @@ const BG = '#1d1a26';
 
 initTelegram(BG);
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   backgroundColor: BG,
@@ -21,3 +21,6 @@ new Phaser.Game({
   },
   scene: [BootScene, StoreScene],
 });
+
+// Отладка: ?debug открывает доступ к игре из консоли браузера.
+if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { game });
