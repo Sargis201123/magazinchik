@@ -234,6 +234,38 @@ export const thiefChance = (level: number): number => 0.05 + 0.015 * level;
 /** Шанс, что охранник поймает вора у выхода. */
 export const guardCatchChance = (m: StaffMember): number => Math.min(0.95, 0.6 * workSpeed(m));
 
+// ---------- Касса: пробивка занимает время ----------
+
+/** Навык кассы хозяина: сколько покупателей надо обслужить для каждого уровня (★1…★5). */
+export const OWNER_LEVELS = [0, 25, 70, 150, 300];
+/** Секунд на один товар у хозяина по уровням навыка. */
+const OWNER_SCAN = [1.0, 0.85, 0.72, 0.6, 0.48];
+/** Сколько секунд кассир с обычной скоростью тратит на товар и на оплату. */
+const CASHIER_SCAN = 0.7;
+const CASHIER_PAY = 0.5;
+
+export const ownerLevel = (served: number): number => OWNER_LEVELS.filter((n) => served >= n).length;
+
+/** Сколько осталось до следующего уровня навыка кассы (null — максимум). */
+export const ownerNextLevelAt = (served: number): number | null => OWNER_LEVELS[ownerLevel(served)] ?? null;
+
+export interface ScanTiming {
+  /** Секунд на один товар. */
+  item: number;
+  /** Секунд на оплату. */
+  pay: number;
+}
+
+export function ownerScan(served: number): ScanTiming {
+  const item = OWNER_SCAN[ownerLevel(served) - 1];
+  return { item, pay: item * 0.7 };
+}
+
+export const cashierScan = (m: StaffMember): ScanTiming => ({ item: CASHIER_SCAN / workSpeed(m), pay: CASHIER_PAY / workSpeed(m) });
+
+/** Сколько секунд пробивается корзина. */
+export const checkoutSeconds = (t: ScanTiming, items: number): number => t.item * items + t.pay;
+
 /** Сколько штук продавец уносит со склада за один поход. */
 export const CARRY = 6;
 
@@ -278,6 +310,8 @@ export interface StoreState {
   /** Долг: пока он есть, арендодатель не даёт расширяться. */
   debt: number;
   staff: StaffMember[];
+  /** Сколько покупателей хозяин обслужил сам — от этого растёт навык кассы. */
+  ownerServed: number;
   /** Сегодняшнее объявление о вакансии и кандидаты по нему. */
   jobSearch?: { day: number; role: StaffRole; candidates: StaffMember[] };
   /** Кто уволился в конце месяца (показываем утром). */
@@ -322,6 +356,7 @@ export const newGame = (): StoreState => ({
   level: 0,
   debt: START_DEBT,
   staff: [],
+  ownerServed: 0,
   story: { chapter: 0, introSeen: false, ordersDone: 0, inspectionsPassed: 0 },
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },

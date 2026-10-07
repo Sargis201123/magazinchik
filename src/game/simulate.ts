@@ -53,6 +53,10 @@ import {
   thiefChance,
   type StaffRole,
   type StoreState,
+  cashierScan,
+  checkoutSeconds,
+  DAY_SECONDS,
+  ownerScan,
 } from './economy';
 import { ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { answerEvent, inspect } from './events';
@@ -113,10 +117,22 @@ const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
   ['cleaner', (s) => s.level >= 3],
 ];
 
-/** Сколько покупателей за 90 секунд успевает пробить один человек, если ещё и бегает по делам. */
+/** Для решения «пора нанимать кассира»: примерно столько успевает один человек. */
 const SOLO_SERVE_CAP = 30;
-/** Сколько успевает кассир (хозяин помогает). */
-const CASHIER_SERVE_CAP = 100;
+/** Средняя корзина в штуках. */
+const AVG_BASKET = 1.4;
+/** Один игрок стоит за кассой не весь день: ещё бегает на склад и убирает — в большом магазине дел больше. */
+const ownerAtRegister = (level: number): number => 0.65 - 0.07 * level;
+/** Подойти к кассе и отойти — секунды на каждого покупателя. */
+const QUEUE_STEP_SECONDS = 0.3;
+
+/** Сколько покупателей реально пробить за день: пробивка занимает время и зависит от навыка. */
+function serveCapacity(state: StoreState): number {
+  const cashier = staffOf(state, 'cashier');
+  if (cashier) return Math.floor(DAY_SECONDS / (checkoutSeconds(cashierScan(cashier), AVG_BASKET) + QUEUE_STEP_SECONDS));
+  const owner = checkoutSeconds(ownerScan(state.ownerServed), AVG_BASKET) + QUEUE_STEP_SECONDS;
+  return Math.floor((DAY_SECONDS * ownerAtRegister(state.level)) / owner);
+}
 
 export function simulate({
   days,
@@ -186,7 +202,7 @@ export function simulate({
     for (const m of state.staff) if (m.raiseAsk) state = answerRaise(state, m.role, true);
     if (hireStaff) {
       const role = HIRE_WHEN.find(([r, need]) => !staffOf(state, r) && need(state))?.[0];
-      const candidate = role && candidatesFor(state.day, 0, role).find((c) => c.trait !== 'sticky');
+      const candidate = role && candidatesFor(state.day, 0, role).filter((c) => c.trait !== 'sticky').sort((a, b) => b.skill - a.skill)[0];
       if (candidate && state.staff.length < staffLimit(state) && state.money >= reserve + candidate.wage) {
         state = hire(state, candidate) ?? state;
       }
@@ -233,7 +249,7 @@ export function simulate({
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
     const lossInQueue = queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level);
-    const serveCap = has('cashier') ? CASHIER_SERVE_CAP : SOLO_SERVE_CAP;
+    const serveCap = serveCapacity(state);
     const dirtComplaint = has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level;
     const guard = staffOf(state, 'guard');
     for (let g = 0; g < dayGuests; g++) {
@@ -302,6 +318,7 @@ export function simulate({
     }
 
     // ---------- Ночь ----------
+    if (!has('cashier')) state = { ...state, ownerServed: state.ownerServed + stats.served };
     const night = nightCycle(state, stats, random);
     state = night.state;
     const expenses = night.bill ? billTotal(night.bill) : 0;

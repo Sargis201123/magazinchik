@@ -38,7 +38,11 @@ import {
   warehouseCount,
   warehouseOf,
   answerRaise,
+  cashierScan,
   fire,
+  ownerLevel,
+  ownerNextLevelAt,
+  ownerScan,
   hire,
   STAFF_ROLE_IDS,
   staffLimit,
@@ -531,12 +535,28 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const traitLine = (m: StaffMember) => {
     const stars = '★'.repeat(m.skill).padEnd(3, '☆');
     const trait = m.trait ? ` · ${t(TRAITS[m.trait].nameKey)}: ${t(TRAITS[m.trait].descKey)}` : '';
-    return `${stars}${trait}`;
+    const speed = m.role === 'cashier' ? ` · ${t('staffTab.scanSpeed', { s: cashierScan(m).item.toFixed(2) })}` : '';
+    return `${stars}${speed}${trait}`;
   };
 
   const staffTab = (state: StoreState): HTMLElement[] => {
     const limit = staffLimit(state);
+    const lvl = ownerLevel(state.ownerServed);
+    const next = ownerNextLevelAt(state.ownerServed);
+    const scan = ownerScan(state.ownerServed);
+    const skill = el('div', 'ui-box');
+    skill.append(
+      el('b', '', `${t('staffTab.ownerSkill')} ${'★'.repeat(lvl).padEnd(5, '☆')}`),
+      el(
+        'div',
+        'ui-muted',
+        next === null
+          ? t('staffTab.ownerSkillMax', { s: scan.item.toFixed(2) })
+          : t('staffTab.ownerSkillNext', { n: state.ownerServed, next, s: scan.item.toFixed(2) }),
+      ),
+    );
     const out: HTMLElement[] = [
+      skill,
       el('div', 'ui-muted', t('staffTab.count', { n: state.staff.length, max: limit })),
       el('div', 'ui-note', t('staffTab.wageNote')),
     ];

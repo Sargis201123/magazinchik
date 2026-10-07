@@ -26,6 +26,11 @@ import {
   storeLevel,
   takeFromShelf,
   unitSalePrice,
+  cashierScan,
+  checkoutSeconds,
+  ownerLevel,
+  ownerScan,
+  type ScanTiming,
   warehouseCapacity,
   type CartItem,
   type Category,
@@ -107,7 +112,6 @@ const THIEF_SPEED = 52;
 const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082 };
 const STAFF_SPEED = 60;
 /** Сколько кассир пробивает одного покупателя при обычной скорости. */
-const CASHIER_MS = 1400;
 const INSPECTOR_SHIRT = 0x222034;
 /** Соседка Валентина заходит раз в день — в вишнёвой кофте и с седыми волосами. */
 const VALYA: Look = { shirt: 0xb13e53, skin: 0xf2d3ab, pants: 0x68386c, hair: 0xd8d8e0, style: 'bun' };
@@ -128,6 +132,8 @@ interface Customer {
   waitStart: number;
   gone: boolean;
   thief: boolean;
+  /** Уже пробивается на кассе — из очереди не уйдёт. */
+  serving?: boolean;
 }
 
 interface Worker {
@@ -183,6 +189,10 @@ export class StoreScene extends Phaser.Scene {
   private inspector: 'none' | 'pending' | 'here' | 'done' = 'none';
   private inspection: InspectionResult | null = null;
   private rushAnnounced = false;
+  /** Идёт пробивка: кто пробивает и когда закончит — для полоски над кассой. */
+  private scanning: { start: number; total: number; byOwner: boolean } | null = null;
+  private scanBar!: Phaser.GameObjects.Rectangle;
+  private scanFill!: Phaser.GameObjects.Rectangle;
   private valyaCame = false;
   private nextSpawn = 1;
   private running = false;
@@ -228,6 +238,7 @@ export class StoreScene extends Phaser.Scene {
     }
 
     for (const c of this.queue) this.updateBubble(c);
+    this.updateScanBar();
     this.callSellerIfNeeded();
     this.hud.setHint(this.currentHint());
     this.hud.update(this.state, this.timeLeft);
@@ -278,6 +289,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshWarehouse();
     this.refreshToilet();
     this.workers.clear();
+    this.scanning = null;
     this.syncStaff();
   }
 
@@ -307,6 +319,9 @@ export class StoreScene extends Phaser.Scene {
       .on('pointerdown', () => this.cleanToilet());
 
     this.add.image(counter.x, counter.y, 'counter').setDepth(counter.y + 20);
+    // Полоска пробивки над кассой.
+    this.scanBar = this.add.rectangle(counter.x - 9, counter.y - 31, 18, 4, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
+    this.scanFill = this.add.rectangle(counter.x - 8, counter.y - 31, 0, 2, 0x63c74d).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
     void sellerHome;
     const home = this.ownerHome();
     this.seller = this.makePerson(home.x, home.y, OWNER);
@@ -447,7 +462,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Продавец уходит от кассы по шагам и возвращается. Пока его нет, касса пустует. */
   private async doChore(steps: ChoreStep[]): Promise<void> {
-    if (this.sellerBusy) return;
+    if (this.sellerBusy || this.scanning?.byOwner) return;
     const id = ++this.choreId;
     this.sellerBusy = true;
     haptic.tap();
@@ -637,8 +652,11 @@ export class StoreScene extends Phaser.Scene {
         await this.wait(200);
         continue;
       }
-      await this.workerWait(w, CASHIER_MS);
-      if (this.alive(gen) && this.queue[0] === front) this.checkoutFront();
+      if (front.serving || this.scanning) {
+        await this.wait(100);
+        continue;
+      }
+      await this.scanCustomer(front, cashierScan(w.member), false);
     }
   }
 
@@ -908,26 +926,65 @@ export class StoreScene extends Phaser.Scene {
     this.refreshToilet();
   }
 
-  /** Касание кассы: обслужить первого в очереди или позвать продавца обратно. */
+  /** Касание кассы: начать пробивать первого в очереди или позвать продавца обратно. */
   private serveNext(): void {
-    if (this.workers.has('cashier')) {
-      // Кассир работает сам; хозяин может помочь, если свободен.
-      if (!this.sellerBusy) this.checkoutFront();
-      return;
-    }
+    // Касса одна: если нанят кассир, пробивает он.
+    if (this.workers.has('cashier') || this.scanning) return;
     if (this.sellerBusy) {
       this.recallSeller();
       return;
     }
-    this.checkoutFront();
+    const c = this.queue[0];
+    if (!c || c.serving || !this.isAtRegister(c)) return;
+    haptic.tap();
+    void this.scanCustomer(c, ownerScan(this.state.ownerServed), true);
   }
 
-  private checkoutFront(): void {
-    const c = this.queue[0];
-    if (!c || !this.isAtRegister(c)) return;
+  /**
+   * Пробивка: товары по одному уезжают по ленте, потом оплата. Время зависит от навыка
+   * того, кто стоит за кассой (хозяин или кассир) и от размера корзины.
+   */
+  private async scanCustomer(c: Customer, timing: ScanTiming, byOwner: boolean): Promise<void> {
+    c.serving = true;
     c.patience?.remove();
-    this.queue.shift();
     c.bubble.setVisible(false);
+    this.scanning = { start: this.time.now, total: checkoutSeconds(timing, c.items.length) * 1000, byOwner };
+    const { counter } = this.layout;
+    for (const { id } of c.items) {
+      await this.wait(timing.item * 1000);
+      if (!this.sys.isActive()) return;
+      const item = this.add.image(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2).setDepth(1000);
+      this.tweens.add({ targets: item, x: counter.x, y: counter.y - 14, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
+      haptic.tap();
+    }
+    await this.wait(timing.pay * 1000);
+    this.scanning = null;
+    if (!this.sys.isActive()) return;
+    this.finishCheckout(c);
+    if (byOwner) this.ownerServedOne();
+  }
+
+  /** Хозяин обслужил покупателя: растёт навык кассы. */
+  private ownerServedOne(): void {
+    const before = ownerLevel(this.state.ownerServed);
+    this.state = { ...this.state, ownerServed: this.state.ownerServed + 1 };
+    const after = ownerLevel(this.state.ownerServed);
+    if (after > before) {
+      haptic.success();
+      const { sellerHome } = this.layout;
+      this.popup(sellerHome.x - 20, sellerHome.y - 34, t('popup.skillUp', { stars: '★'.repeat(after) }), '#fee761');
+    }
+  }
+
+  private updateScanBar(): void {
+    const scan = this.scanning;
+    this.scanBar.setVisible(Boolean(scan));
+    this.scanFill.setVisible(Boolean(scan));
+    if (scan) this.scanFill.width = 16 * Math.min(1, (this.time.now - scan.start) / scan.total);
+  }
+
+  private finishCheckout(c: Customer): void {
+    this.queue = this.queue.filter((q) => q !== c);
 
     const { state, total } = checkout(this.state, c.items);
     this.state = state;
@@ -948,7 +1005,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private async giveUp(c: Customer): Promise<void> {
-    if (c.gone) return;
+    if (c.gone || c.serving) return;
     this.queue = this.queue.filter((q) => q !== c);
     c.bubble.setVisible(false);
     this.state = returnToShelf(this.state, c.items);
@@ -1044,6 +1101,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private startDay(): void {
+    this.scanning = null;
     this.inspector = this.state.plan?.inspection ? 'pending' : 'none';
     this.inspection = null;
     this.rushAnnounced = false;
