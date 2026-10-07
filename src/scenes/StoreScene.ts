@@ -40,6 +40,7 @@ import { inspect, RUSH_SECONDS, type InspectionResult } from '../game/events';
 import { loadGame, saveGame } from '../game/save';
 import { t } from '../i18n';
 import { haptic } from '../platform/telegram';
+import { UI_FONT } from '../ui/dom';
 import { Hud } from '../ui/hud';
 import { showMorning } from '../ui/morning';
 import { layoutFor, type Layout } from './layout';
@@ -78,7 +79,27 @@ const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
   dairy: { texture: 'fridge', tint: 0xd8ecff },
   meat: { texture: 'fridge', tint: 0xffd6d6 },
 };
-const SHIRTS = [0x5b6ee1, 0xd95763, 0x6abe30, 0xfbf236, 0x76428a, 0xdf7126, 0x37946e];
+const SHIRTS = [0x5b6ee1, 0xd95763, 0x6abe30, 0xfbf236, 0x76428a, 0xdf7126, 0x37946e, 0xf6757a, 0x2ce8f5];
+const PANTS = [0x3a4466, 0x262b44, 0x5a6988, 0x733e39, 0x265c42];
+const HAIR_COLORS = [0x4a2c1a, 0x181425, 0x733e39, 0xfeae34, 0xb86f50, 0x8b9bb4];
+const HAIR_STYLES = ['short', 'short', 'long', 'long', 'bald'] as const;
+type HairStyle = 'short' | 'long' | 'bun' | 'cap' | 'bald';
+
+interface Look {
+  shirt: number;
+  skin: number;
+  pants?: number;
+  hair?: number;
+  style?: HairStyle;
+}
+
+const randomLook = (shirt: number): Look => ({
+  shirt,
+  skin: Phaser.Utils.Array.GetRandom(SKINS),
+  pants: Phaser.Utils.Array.GetRandom(PANTS),
+  hair: Phaser.Utils.Array.GetRandom(HAIR_COLORS),
+  style: Phaser.Utils.Array.GetRandom([...HAIR_STYLES]),
+});
 /** Тёмная кофта — так игрок может заметить вора. */
 const THIEF_SHIRT = 0x45444f;
 const THIEF_SPEED = 52;
@@ -89,7 +110,9 @@ const STAFF_SPEED = 60;
 const CASHIER_MS = 1400;
 const INSPECTOR_SHIRT = 0x222034;
 /** Соседка Валентина заходит раз в день — в вишнёвой кофте и с седыми волосами. */
-const VALYA = { shirt: 0xb13e53, hair: 0xd8d8e0 };
+const VALYA: Look = { shirt: 0xb13e53, skin: 0xf2d3ab, pants: 0x68386c, hair: 0xd8d8e0, style: 'bun' };
+const OWNER: Look = { shirt: 0x8fd16a, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short' };
+const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cleaner: 'short', loader: 'short', guard: 'cap' };
 /** На какой секунде дня приходит инспектор. */
 const INSPECTOR_AT = 25;
 const BROKEN_TINT = 0x8a8a8a;
@@ -214,7 +237,7 @@ export class StoreScene extends Phaser.Scene {
     if (this.inspector === 'here') return t('hint.inspector');
     if (!this.workers.has('guard') && [...this.customers].some((c) => c.thief && !c.gone)) return t('hint.thief');
     if (this.sellerBusy && !this.workers.has('cashier') && this.queue.length > 0) return t('hint.recall');
-    if (this.queue.length > 0 && this.state.day <= 2 && this.stats.served < 3) return t('hint.serve');
+    if (!this.workers.has('cashier') && this.queue.length > 0 && this.state.day <= 2 && this.stats.served < 3) return t('hint.serve');
     if (this.state.day <= 4 && this.shelfNeedsRestock()) return t('hint.restock');
     if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
     return '';
@@ -247,7 +270,7 @@ export class StoreScene extends Phaser.Scene {
     const midY = HUD_TOP + (CANVAS_H - HUD_TOP - HUD_BOTTOM) / 2;
     this.cameras.main.setZoom(zoom).centerOn(next.w / 2, next.h / 2 + (CANVAS_H / 2 - midY) / zoom);
     // Улица под зданием.
-    this.add.rectangle(-200, next.h, next.w + 400, 200, 0x3a3a44).setOrigin(0);
+    this.add.tileSprite(-208, next.h, next.w + 416, 208, 'asphalt').setOrigin(0);
     if (next !== this.layout) this.buildForRent(next);
 
     this.buildStore();
@@ -269,10 +292,11 @@ export class StoreScene extends Phaser.Scene {
     this.add.rectangle(door.x + 16, h, w - door.x - 16 + 3, 3, wallColor).setOrigin(0);
     this.add.image(door.x, h + 1, 'door');
     this.add
-      .text(w / 2, -6, t(storeLevel(this.state).nameKey), { fontFamily: 'system-ui, sans-serif', fontSize: '8px', color: '#f2c14e' })
+      .text(w / 2, -6, t(storeLevel(this.state).nameKey), { fontFamily: UI_FONT, fontSize: '8px', color: '#f2c14e' })
       .setOrigin(0.5)
       .setResolution(4);
     this.buildWarehouse();
+    this.buildDecor();
 
     this.wcDoor = this.add.image(wc.x, wc.y, 'wc');
     this.add.image(wc.x, wc.y - 15, 'bar').setDisplaySize(14, 3).setTint(0x2b2233);
@@ -285,8 +309,8 @@ export class StoreScene extends Phaser.Scene {
     this.add.image(counter.x, counter.y, 'counter').setDepth(counter.y + 20);
     void sellerHome;
     const home = this.ownerHome();
-    this.seller = this.makePerson(home.x, home.y, 0x8fd16a, SKINS[0]);
-    this.carried = this.add.image(0, -12, 'box').setVisible(false);
+    this.seller = this.makePerson(home.x, home.y, OWNER);
+    this.carried = this.add.image(0, 3, 'box').setVisible(false);
     this.seller.add(this.carried);
     this.add
       .zone(counter.x + 6, counter.y + 6, 40, 64)
@@ -298,15 +322,14 @@ export class StoreScene extends Phaser.Scene {
   private buildForRent(next: Layout): void {
     const { w, h } = this.layout;
     const cost = STORE_LEVELS[this.state.level + 1].cost;
-    const lot = 0x4b4654;
-    if (next.w > w) this.add.rectangle(w + 3, 0, next.w - w - 3, next.h, lot).setOrigin(0);
-    if (next.h > h) this.add.rectangle(0, h + 3, w + 3, next.h - h - 3, lot).setOrigin(0);
+    if (next.w > w) this.add.tileSprite(w + 3, 0, next.w - w - 3, next.h, 'lot').setOrigin(0);
+    if (next.h > h) this.add.tileSprite(0, h + 3, w + 3, next.h - h - 3, 'lot').setOrigin(0);
     this.add.rectangle(0, 0, next.w, next.h).setOrigin(0).setStrokeStyle(1, 0x8a8494);
     const signX = next.w > w ? w + (next.w - w) / 2 : w / 2;
     const signY = next.w > w ? next.h / 2 : h + (next.h - h) / 2;
     this.add
       .text(signX, signY, `${t('store.forRent')}\n${cost} 💰`, {
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: UI_FONT,
         fontSize: '7px',
         color: '#c9c0ad',
         align: 'center',
@@ -315,16 +338,32 @@ export class StoreScene extends Phaser.Scene {
       .setResolution(4);
   }
 
+  /** Плакаты на стене, растения и корзинки у входа — чтобы зал не выглядел пустым. */
+  private buildDecor(): void {
+    const { w, h, wallH, wc, door, warehouse, slots } = this.layout;
+    for (let x = 30; x < wc.x - 16; x += 64) this.add.image(x, 12, 'poster').setDepth(1);
+    this.add.image(door.x + 26, h - 8, 'baskets').setDepth(h - 8);
+    // Растения в свободных углах: у правой стены и у склада — не на пути покупателей.
+    const spots = [
+      { x: w - 9, y: wallH + 14 },
+      { x: warehouse.w + 12, y: warehouse.y - 10 },
+    ];
+    for (const p of spots) {
+      const busy = slots.some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
+      if (!busy) this.add.image(p.x, p.y, 'plant').setDepth(p.y + 6);
+    }
+  }
+
   private buildWarehouse(): void {
     const { x, y, w, h, doorway } = this.layout.warehouse;
     const wallColor = 0x4a3b52;
-    this.add.tileSprite(x, y, w, h, 'floor').setOrigin(0).setTint(0x9a8a70);
+    this.add.tileSprite(x, y, w, h, 'concrete').setOrigin(0);
     this.add.rectangle(x, y - 3, w + 4, 3, wallColor).setOrigin(0);
     // Правая стена с проёмом.
     this.add.rectangle(x + w, y, 4, doorway.y - 10 - y, wallColor).setOrigin(0);
     this.add.rectangle(x + w, doorway.y + 10, 4, y + h - doorway.y - 10, wallColor).setOrigin(0);
     this.add
-      .text(x + w / 2, y + 6, t('warehouse.label'), { fontFamily: 'system-ui, sans-serif', fontSize: '6px', color: '#e6e1d6' })
+      .text(x + w / 2, y + 6, t('warehouse.label'), { fontFamily: UI_FONT, fontSize: '6px', color: '#e6e1d6' })
       .setOrigin(0.5)
       .setResolution(4);
   }
@@ -351,9 +390,8 @@ export class StoreScene extends Phaser.Scene {
         img.setVisible(n < capacity && Boolean(entry));
         img.setPosition(slot.x - 17 + step * ((n % perRow) + 0.5), slot.y - 6 + Math.floor(n / perRow) * 12);
         if (entry) {
-          const base = PRODUCTS[entry.id].color;
-          const bad = Phaser.Display.Color.IntegerToColor(base).darken(35).color;
-          img.setTint(entry.unit.markdown ? 0xf2c14e : entry.unit.bad ? bad : base);
+          img.setTexture(`item_${entry.id}`);
+          img.setTint(entry.unit.markdown ? 0xffe08a : entry.unit.bad ? 0x9a8a80 : 0xffffff);
         }
       });
       view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
@@ -394,10 +432,15 @@ export class StoreScene extends Phaser.Scene {
     this.wcDoor.setTint(dirt >= TOILET_DIRTY ? 0xc8a878 : 0xffffff);
   }
 
-  private makePerson(x: number, y: number, shirt: number, skin: number): Phaser.GameObjects.Container {
-    const body = this.add.image(0, 4, 'cust_body').setTint(shirt);
-    const head = this.add.image(0, -4, 'cust_head').setTint(skin);
-    return this.add.container(x, y, [body, head]).setDepth(y);
+  /** Человечек из слоёв: штаны, рубашка, кожа, волосы — каждый перекрашивается тинтом. */
+  private makePerson(x: number, y: number, look: Look): Phaser.GameObjects.Container {
+    const legs = this.add.image(0, 0, 'p_legs0').setTint(look.pants ?? 0x3a4466);
+    const shirt = this.add.image(0, 0, 'p_shirt').setTint(look.shirt);
+    const skin = this.add.image(0, 0, 'p_skin').setTint(look.skin);
+    const hair = this.add.image(0, 0, `p_hair_${look.style ?? 'short'}`).setTint(look.hair ?? 0x4a2c1a);
+    const person = this.add.container(x, y, [legs, shirt, skin, hair]).setDepth(y);
+    person.setData('legs', legs);
+    return person;
   }
 
   // ---------- Продавец: уборка и выкладка ----------
@@ -542,8 +585,12 @@ export class StoreScene extends Phaser.Scene {
     for (const member of this.state.staff) {
       if (this.state.plan?.sick === member.role) continue;
       const home = this.workerHome(member.role);
-      const sprite = this.makePerson(home.x, home.y, UNIFORMS[member.role], Phaser.Utils.Array.GetRandom(SKINS));
-      const carried = this.add.image(0, -12, 'box').setVisible(false);
+      const sprite = this.makePerson(home.x, home.y, {
+        ...randomLook(UNIFORMS[member.role]),
+        style: STAFF_HAIR[member.role],
+        hair: member.role === 'guard' ? UNIFORMS.guard : Phaser.Utils.Array.GetRandom(HAIR_COLORS),
+      });
+      const carried = this.add.image(0, 3, 'box').setVisible(false);
       sprite.add(carried);
       const worker: Worker = { member, sprite, carried, home };
       this.workers.set(member.role, worker);
@@ -680,7 +727,7 @@ export class StoreScene extends Phaser.Scene {
   private async runInspector(): Promise<void> {
     this.inspector = 'here';
     const { door, wc, sellerHome, slots } = this.layout;
-    const sprite = this.makePerson(door.x, this.layout.h + 16, INSPECTOR_SHIRT, SKINS[0]);
+    const sprite = this.makePerson(door.x, this.layout.h + 16, { shirt: INSPECTOR_SHIRT, skin: SKINS[0], pants: INSPECTOR_SHIRT, hair: 0x181425, style: 'short' });
     const look = (x: number, y: number) => this.walk(sprite, x, y, 35).then(() => this.wait(700));
     this.popup(door.x, door.y - 24, t('popup.inspector'), '#fff3b0');
     haptic.tap();
@@ -711,14 +758,13 @@ export class StoreScene extends Phaser.Scene {
     const thief = Math.random() < thiefChance(this.state.level);
     const valya = !thief && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
     const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
-    const sprite = this.makePerson(this.layout.door.x, this.layout.h + 16, shirt, valya ? SKINS[0] : Phaser.Utils.Array.GetRandom(SKINS));
+    const look = valya ? VALYA : thief ? { ...randomLook(shirt), style: 'long' as const, hair: THIEF_SHIRT } : randomLook(shirt);
+    const sprite = this.makePerson(this.layout.door.x, this.layout.h + 16, look);
     if (valya) {
       this.valyaCame = true;
-      // Седые волосы поверх головы и приветствие.
-      sprite.add(this.add.image(0, -7, 'bar').setDisplaySize(8, 2).setTint(VALYA.hair));
       this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.valya'), '#fff3b0'));
     }
-    const bubble = this.add.image(0, -13, 'bubble').setVisible(false);
+    const bubble = this.add.image(0, -14, 'bubble').setVisible(false);
     sprite.add(bubble);
     const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief };
     this.customers.add(customer);
@@ -942,6 +988,7 @@ export class StoreScene extends Phaser.Scene {
 
   private walk(target: Phaser.GameObjects.Container, x: number, y: number, speed = CUSTOMER_SPEED): Promise<void> {
     this.tweens.killTweensOf(target);
+    const legs = target.getData('legs') as Phaser.GameObjects.Image | undefined;
     const distance = Phaser.Math.Distance.Between(target.x, target.y, x, y);
     return new Promise((resolve) => {
       this.tweens.add({
@@ -949,8 +996,15 @@ export class StoreScene extends Phaser.Scene {
         x,
         y,
         duration: (distance / speed) * 1000,
-        onUpdate: () => target.setDepth(target.y),
-        onComplete: () => resolve(),
+        onUpdate: () => {
+          target.setDepth(target.y);
+          // Шаги: ноги переставляются каждые 150 мс.
+          legs?.setTexture(Math.floor(this.time.now / 150) % 2 ? 'p_legs1' : 'p_legs0');
+        },
+        onComplete: () => {
+          legs?.setTexture('p_legs0');
+          resolve();
+        },
         onStop: () => resolve(),
       });
     });
@@ -962,7 +1016,7 @@ export class StoreScene extends Phaser.Scene {
 
   private popup(x: number, y: number, text: string, color: string): void {
     const label = this.add
-      .text(x, y, text, { fontFamily: 'system-ui, sans-serif', fontSize: '8px', color, stroke: '#2b2233', strokeThickness: 2 })
+      .text(x, y, text, { fontFamily: UI_FONT, fontSize: '8px', color, stroke: '#2b2233', strokeThickness: 2 })
       .setOrigin(0.5)
       .setResolution(4)
       .setDepth(1000);

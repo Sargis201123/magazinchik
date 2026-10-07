@@ -1,7 +1,14 @@
 // Интерфейс поверх canvas делаем на DOM: текст остаётся чётким на любом экране,
 // а переводы и вёрстка меню проще, чем внутри Phaser.
 
+/**
+ * Шрифт интерфейса и надписей в игре. Пиксельные шрифты пробовали: кириллица и цифры
+ * в них читаются плохо («5» похожа на «S»), поэтому — чёткий системный.
+ */
+export const UI_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
 const css = `
+.ui-hud span { background: rgba(24, 20, 37, .72); padding: 4px 8px; border-radius: 6px; }
 .ui-hud { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
   padding: calc(env(safe-area-inset-top) + 8px) 12px 8px; font: 600 15px/1.2 system-ui, sans-serif;
   color: #fff; text-shadow: 0 1px 0 #000; pointer-events: none; }
