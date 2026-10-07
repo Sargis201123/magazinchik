@@ -1,7 +1,7 @@
 import type { TextKey } from '../i18n/ru';
-import { PRODUCTS, type ProductId } from './economy';
+import { PRODUCTS, type Category, type ProductId } from './economy';
 
-export type SupplierId = 'farmer' | 'dairy';
+export type SupplierId = 'farmer' | 'dairy' | 'butcher';
 
 export interface Supplier {
   id: SupplierId;
@@ -16,6 +16,8 @@ export interface Supplier {
   patience: number;
   /** Шанс, что партия окажется бракованной (редкое событие). */
   badChance: number;
+  /** Без полки этого типа закупать нечего (мясо без холодильника не продать). */
+  requires?: Category;
   color: number;
 }
 
@@ -24,7 +26,7 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
     id: 'farmer',
     nameKey: 'supplier.farmer',
     lines: { hello: 'supplier.farmer.hello', yes: 'supplier.farmer.yes', no: 'supplier.farmer.no', angry: 'supplier.farmer.angry' },
-    products: { bread: 1, apples: 0.9 },
+    products: { bread: 1, apples: 0.9, potatoes: 1 },
     flexibility: 0.9,
     patience: 3,
     badChance: 0.12,
@@ -39,6 +41,17 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
     patience: 2,
     badChance: 0.05,
     color: 0x5b6ee1,
+  },
+  butcher: {
+    id: 'butcher',
+    nameKey: 'supplier.butcher',
+    lines: { hello: 'supplier.butcher.hello', yes: 'supplier.butcher.yes', no: 'supplier.butcher.no', angry: 'supplier.butcher.angry' },
+    products: { meat: 1 },
+    flexibility: 0.7,
+    patience: 2,
+    badChance: 0.1,
+    requires: 'meat',
+    color: 0xb83a4b,
   },
 };
 

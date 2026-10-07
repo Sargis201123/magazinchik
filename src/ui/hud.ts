@@ -1,5 +1,5 @@
 import { t } from '../i18n';
-import { PRODUCTS, PRODUCT_IDS, stockCount, type DayStats, type StoreState } from '../game/economy';
+import { onShelves, PRODUCTS, sellableProducts, warehouseCount, type DayStats, type StoreState } from '../game/economy';
 import { button, el, injectStyles, openModal } from './dom';
 
 export class Hud {
@@ -20,7 +20,8 @@ export class Hud {
       el('span', '', `${t('hud.day', { n: state.day })} · ${clock}`),
       el('span', '', stars),
     );
-    this.stock.textContent = PRODUCT_IDS.map((id) => `${t(PRODUCTS[id].nameKey)}: ${stockCount(state, id)}`).join(' · ');
+    const shelves = sellableProducts(state).map((id) => `${PRODUCTS[id].icon}${onShelves(state, id)}`);
+    this.stock.textContent = `${shelves.join('  ')}   📦${warehouseCount(state)}`;
   }
 
   setHint(text: string): void {

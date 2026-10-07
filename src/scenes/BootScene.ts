@@ -57,8 +57,28 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(0x8a6240).fillRect(0, 0, 32, 6);
       g.fillStyle(0xa47a52).fillRect(2, 1, 28, 4);
     });
-    make('item', 4, 5, () => {
-      g.fillStyle(0xffffff).fillRect(0, 0, 4, 5);
+    make('stand', 40, 26, () => {
+      g.fillStyle(0x4b692f).fillRect(0, 0, 40, 26);
+      g.fillStyle(0x8a6240).fillRect(2, 2, 36, 10).fillRect(2, 14, 36, 10);
+      g.fillStyle(0x6b4a2f);
+      for (let x = 2; x < 38; x += 6) g.fillRect(x, 2, 1, 22);
+    });
+    // Холодильник: нейтральный, цвет задаём тинтом (молочный — голубой, мясной — розовый).
+    make('fridge', 40, 26, () => {
+      g.fillStyle(0xe6eef2).fillRect(0, 0, 40, 26);
+      g.fillStyle(0x9badb7).fillRect(2, 2, 36, 10).fillRect(2, 14, 36, 10);
+      g.fillStyle(0xffffff).fillRect(2, 2, 36, 1).fillRect(2, 14, 36, 1);
+    });
+    make('box', 8, 7, () => {
+      g.fillStyle(0xc8a878).fillRect(0, 0, 8, 7);
+      g.fillStyle(0xffffff).fillRect(1, 1, 6, 2);
+      g.fillStyle(0x8a6240).fillRect(0, 3, 8, 1);
+    });
+    make('pip', 2, 2, () => {
+      g.fillStyle(0xf2c14e).fillRect(0, 0, 2, 2);
+    });
+    make('item', 3, 4, () => {
+      g.fillStyle(0xffffff).fillRect(0, 0, 3, 4);
     });
     make('cust_body', 10, 10, () => {
       g.fillStyle(0xffffff).fillRect(1, 0, 8, 7);

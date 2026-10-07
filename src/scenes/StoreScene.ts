@@ -2,21 +2,27 @@ import Phaser from 'phaser';
 import {
   BAD_COMPLAINT_CHANCE,
   buyChance,
+  CARRY,
+  canPlace,
   checkout,
   DAY_SECONDS,
   emptyDayStats,
   endDay,
   hasUnmarkedBad,
+  moveToShelf,
   newGame,
   PRODUCT_IDS,
   PRODUCTS,
   returnToShelf,
-  SHELF_CAPACITY,
+  sellableProducts,
+  shelfCapacity,
+  shelfFor,
+  shelfFree,
   spawnInterval,
-  stockCount,
   takeFromShelf,
   unitSalePrice,
   type CartItem,
+  type Category,
   type DayStats,
   type ProductId,
   type StoreState,
@@ -48,15 +54,32 @@ const TOILET_DIRT_PER_VISIT = 20;
 const TOILET_DIRTY = 60;
 const TOILET_CLEAN_MS = 1000;
 const TRASH_CLEAN_MS = 400;
+const PICKUP_MS = 500;
+const PLACE_MS = 400;
+/** Одна коробка на складе изображает столько штук товара. */
+const UNITS_PER_BOX = 3;
 
-const SHELF_Y = 86;
-const SHELF_X: Record<ProductId, number> = { bread: 28, milk: 76, apples: 124 };
+/** Места под полки: три вдоль стены и одно в зале. */
+const SHELF_SLOTS = [
+  { x: 28, y: 86 },
+  { x: 76, y: 86 },
+  { x: 124, y: 86 },
+  { x: 48, y: 164 },
+];
+const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
+  bakery: { texture: 'shelf', tint: 0xffffff },
+  produce: { texture: 'stand', tint: 0xffffff },
+  dairy: { texture: 'fridge', tint: 0xd8ecff },
+  meat: { texture: 'fridge', tint: 0xffd6d6 },
+};
 const WC = { x: 166, y: 60, spotY: 84 };
 /** Касса стоит боком: очередь выстраивается вдоль ленты сверху вниз. */
 const COUNTER = { x: 140, y: 214 };
 const SELLER_HOME = { x: 156, y: 230 };
 const QUEUE = { x: 124, y: 230, step: 13 };
 const DOOR = { x: 90, y: 312 };
+/** Склад — отдельная комната в углу, вход сбоку. */
+const WAREHOUSE = { x: 0, y: 246, w: 62, h: WORLD_H - 246, doorway: { x: 70, y: 274 }, pickup: { x: 34, y: 284 } };
 
 const SHIRTS = [0x5b6ee1, 0xd95763, 0x6abe30, 0xfbf236, 0x76428a, 0xdf7126, 0x37946e];
 const SKINS = [0xf2d3ab, 0xd9a066, 0x8f563b, 0xeec39a];
@@ -72,11 +95,27 @@ interface Customer {
   gone: boolean;
 }
 
+interface ShelfView {
+  kind: Category;
+  bg: Phaser.GameObjects.Image;
+  items: Phaser.GameObjects.Image[];
+  pips: Phaser.GameObjects.Image[];
+}
+
+/** Шаг дела продавца: дойти до точки, подождать, сделать действие. */
+interface ChoreStep {
+  x: number;
+  y: number;
+  ms?: number;
+  action?: () => void;
+}
+
 export class StoreScene extends Phaser.Scene {
   private state!: StoreState;
   private stats: DayStats = emptyDayStats();
   private hud!: Hud;
-  private shelfItems = new Map<ProductId, Phaser.GameObjects.Image[]>();
+  private shelfViews: ShelfView[] = [];
+  private boxes: Phaser.GameObjects.Image[] = [];
   private customers = new Set<Customer>();
   private queue: Customer[] = [];
   private trash = new Set<Phaser.GameObjects.Image>();
@@ -84,6 +123,7 @@ export class StoreScene extends Phaser.Scene {
   private wcDoor!: Phaser.GameObjects.Image;
   private wcBar!: Phaser.GameObjects.Image;
   private seller!: Phaser.GameObjects.Container;
+  private carried!: Phaser.GameObjects.Image;
   private sellerBusy = false;
   /** Номер текущего дела продавца: смена номера отменяет дело (продавца позвали к кассе). */
   private choreId = 0;
@@ -104,6 +144,7 @@ export class StoreScene extends Phaser.Scene {
     this.cameras.main.setZoom(2).centerOn(WORLD_W / 2, WORLD_H / 2);
     this.buildStore();
     this.refreshShelves();
+    this.refreshWarehouse();
     this.refreshToilet();
     this.hud.update(this.state, this.timeLeft);
 
@@ -135,8 +176,18 @@ export class StoreScene extends Phaser.Scene {
   private currentHint(): string {
     if (this.sellerBusy && this.queue.length > 0) return t('hint.recall');
     if (this.queue.length > 0 && this.state.day <= 2 && this.stats.served < 3) return t('hint.serve');
+    if (this.state.day <= 4 && this.shelfNeedsRestock()) return t('hint.restock');
     if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
     return '';
+  }
+
+  /** Есть товар на складе, а на его полке он закончился. */
+  private shelfNeedsRestock(): boolean {
+    return PRODUCT_IDS.some(
+      (id) =>
+        (this.state.warehouse[id]?.length ?? 0) > 0 &&
+        this.state.shelves.some((s) => canPlace(id, s) && (s.items[id]?.length ?? 0) === 0 && shelfFree(s) > 0),
+    );
   }
 
   // ---------- Магазин ----------
@@ -145,18 +196,7 @@ export class StoreScene extends Phaser.Scene {
     this.add.tileSprite(0, 40, WORLD_W, WORLD_H - 40, 'floor').setOrigin(0);
     this.add.tileSprite(0, 40, WORLD_W, 32, 'wall').setOrigin(0);
     this.add.image(DOOR.x, DOOR.y + 3, 'door');
-
-    for (const id of PRODUCT_IDS) {
-      this.add.image(SHELF_X[id], SHELF_Y, 'shelf');
-      const items: Phaser.GameObjects.Image[] = [];
-      for (let i = 0; i < SHELF_CAPACITY; i++) {
-        const row = Math.floor(i / 5);
-        items.push(
-          this.add.image(SHELF_X[id] - 14 + (i % 5) * 7, SHELF_Y - 6 + row * 12, 'item').setTint(PRODUCTS[id].color),
-        );
-      }
-      this.shelfItems.set(id, items);
-    }
+    this.buildWarehouse();
 
     this.wcDoor = this.add.image(WC.x, WC.y, 'wc');
     this.add.image(WC.x, WC.y - 15, 'bar').setDisplaySize(14, 3).setTint(0x2b2233);
@@ -168,23 +208,80 @@ export class StoreScene extends Phaser.Scene {
 
     this.add.image(COUNTER.x, COUNTER.y, 'counter').setDepth(COUNTER.y + 20);
     this.seller = this.makePerson(SELLER_HOME.x, SELLER_HOME.y, 0x8fd16a, SKINS[0]);
+    this.carried = this.add.image(0, -12, 'box').setVisible(false);
+    this.seller.add(this.carried);
     this.add
       .zone(COUNTER.x + 6, COUNTER.y + 6, 40, 64)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.serveNext());
   }
 
+  private buildWarehouse(): void {
+    const { x, y, w, h, doorway } = WAREHOUSE;
+    this.add.tileSprite(x, y, w, h, 'floor').setOrigin(0).setTint(0x9a8a70);
+    this.add.image(x, y - 3, 'bar').setOrigin(0).setDisplaySize(w + 4, 4).setTint(0x4a3b52);
+    // Правая стена с проёмом напротив двери.
+    this.add.image(x + w, y, 'bar').setOrigin(0).setDisplaySize(4, doorway.y - 10 - y).setTint(0x4a3b52);
+    this.add.image(x + w, doorway.y + 10, 'bar').setOrigin(0).setDisplaySize(4, WORLD_H - doorway.y - 10).setTint(0x4a3b52);
+    this.add
+      .text(x + w / 2, y + 6, t('warehouse.label'), { fontFamily: 'system-ui, sans-serif', fontSize: '6px', color: '#e6e1d6' })
+      .setOrigin(0.5)
+      .setResolution(4);
+  }
+
+  /** Создаёт картинки для новых полок и обновляет товар на всех. */
   private refreshShelves(): void {
-    for (const id of PRODUCT_IDS) {
-      const units = this.state.stock[id];
-      const base = PRODUCTS[id].color;
-      const bad = Phaser.Display.Color.IntegerToColor(base).darken(35).color;
-      this.shelfItems.get(id)!.forEach((img, i) => {
-        const unit = units[i];
-        img.setVisible(Boolean(unit));
-        if (unit) img.setTint(unit.markdown ? 0xf2c14e : unit.bad ? bad : base);
+    this.state.shelves.forEach((shelf, i) => {
+      let view = this.shelfViews[i];
+      if (!view || view.kind !== shelf.kind) {
+        view?.bg.destroy();
+        view?.items.forEach((img) => img.destroy());
+        view?.pips.forEach((img) => img.destroy());
+        view = this.buildShelf(i, shelf.kind);
+        this.shelfViews[i] = view;
+      }
+
+      const capacity = shelfCapacity(shelf);
+      const perRow = capacity / 2;
+      const step = 34 / perRow;
+      const slot = SHELF_SLOTS[i];
+      const units = PRODUCT_IDS.flatMap((id) => (shelf.items[id] ?? []).map((unit) => ({ id, unit })));
+      view.items.forEach((img, n) => {
+        const entry = units[n];
+        img.setVisible(n < capacity && Boolean(entry));
+        img.setPosition(slot.x - 17 + step * ((n % perRow) + 0.5), slot.y - 6 + Math.floor(n / perRow) * 12);
+        if (entry) {
+          const base = PRODUCTS[entry.id].color;
+          const bad = Phaser.Display.Color.IntegerToColor(base).darken(35).color;
+          img.setTint(entry.unit.markdown ? 0xf2c14e : entry.unit.bad ? bad : base);
+        }
       });
-    }
+      view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
+    });
+  }
+
+  private buildShelf(index: number, kind: Category): ShelfView {
+    const slot = SHELF_SLOTS[index];
+    const look = SHELF_LOOK[kind];
+    const bg = this.add.image(slot.x, slot.y, look.texture).setTint(look.tint).setDepth(slot.y - 14);
+    bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.restockShelf(index));
+    const items = Array.from({ length: 16 }, () => this.add.image(slot.x, slot.y, 'item').setDepth(slot.y - 13));
+    // Уровень улучшения — жёлтые точки над полкой.
+    const pips = [0, 1].map((n) => this.add.image(slot.x - 17 + n * 4, slot.y - 15, 'pip').setDepth(slot.y - 13));
+    return { kind, bg, items, pips };
+  }
+
+  private refreshWarehouse(): void {
+    const boxes = PRODUCT_IDS.flatMap((id) =>
+      Array.from({ length: Math.ceil((this.state.warehouse[id]?.length ?? 0) / UNITS_PER_BOX) }, () => id),
+    );
+    while (this.boxes.length < boxes.length) this.boxes.push(this.add.image(0, 0, 'box').setDepth(WAREHOUSE.y + 1));
+    this.boxes.forEach((img, n) => {
+      const id = boxes[n];
+      img.setVisible(Boolean(id));
+      if (!id) return;
+      img.setPosition(WAREHOUSE.x + 8 + (n % 6) * 9, WAREHOUSE.y + 16 + Math.floor(n / 6) * 8).setTint(PRODUCTS[id].color);
+    });
   }
 
   private refreshToilet(): void {
@@ -200,26 +297,29 @@ export class StoreScene extends Phaser.Scene {
     return this.add.container(x, y, [body, head]).setDepth(y);
   }
 
-  // ---------- Продавец: уборка ----------
+  // ---------- Продавец: уборка и выкладка ----------
 
-  /** Продавец уходит от кассы на дело и возвращается. Пока его нет, касса пустует. */
-  private async doChore(x: number, y: number, ms: number, done: () => void): Promise<void> {
+  /** Продавец уходит от кассы по шагам и возвращается. Пока его нет, касса пустует. */
+  private async doChore(steps: ChoreStep[]): Promise<void> {
     if (this.sellerBusy) return;
     const id = ++this.choreId;
     this.sellerBusy = true;
     haptic.tap();
-    await this.walk(this.seller, x, y, SELLER_SPEED);
-    if (id !== this.choreId) return;
-    await this.wait(ms);
-    if (id !== this.choreId) return;
-    done();
+    for (const step of steps) {
+      await this.walk(this.seller, step.x, step.y, SELLER_SPEED);
+      if (id !== this.choreId) return;
+      if (step.ms) await this.wait(step.ms);
+      if (id !== this.choreId) return;
+      step.action?.();
+    }
     await this.returnSeller();
   }
 
-  /** Продавца позвали к кассе: бросает дело на полпути и идёт обратно. */
+  /** Продавца позвали к кассе: бросает дело на полпути и идёт обратно. Несённый товар остаётся на складе. */
   private recallSeller(): void {
     if (!this.sellerBusy) return;
     this.choreId++;
+    this.carried.setVisible(false);
     haptic.tap();
     void this.returnSeller();
   }
@@ -238,12 +338,52 @@ export class StoreScene extends Phaser.Scene {
     this.popup(front.sprite.x, front.sprite.y - 22, t('popup.callRegister'), '#fff3b0');
   }
 
+  /** Касание полки: продавец идёт на склад, берёт коробку подходящего товара и раскладывает. */
+  private restockShelf(index: number): void {
+    if (!this.running || this.sellerBusy) return;
+    const shelf = this.state.shelves[index];
+    const slot = SHELF_SLOTS[index];
+    if (shelfFree(shelf) === 0) {
+      this.popup(slot.x, slot.y - 18, t('popup.shelfFull'), '#fff3b0');
+      return;
+    }
+    const available = PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id] ?? []).some((u) => !u.pending));
+    if (!available) {
+      this.popup(slot.x, slot.y - 18, t('popup.warehouseEmpty'), '#ffd0d0');
+      return;
+    }
+    const { doorway, pickup } = WAREHOUSE;
+    void this.doChore([
+      { ...doorway },
+      { ...pickup, ms: PICKUP_MS, action: () => this.carried.setVisible(true) },
+      { ...doorway },
+      {
+        x: slot.x,
+        y: slot.y + 20,
+        ms: PLACE_MS,
+        action: () => {
+          this.carried.setVisible(false);
+          this.state = moveToShelf(this.state, index, undefined, CARRY).state;
+          this.refreshShelves();
+          this.refreshWarehouse();
+        },
+      },
+    ]);
+  }
+
   private cleanToilet(): void {
     if (this.toiletDirt === 0) return;
-    void this.doChore(WC.x, WC.spotY, TOILET_CLEAN_MS, () => {
-      this.toiletDirt = 0;
-      this.refreshToilet();
-    });
+    void this.doChore([
+      {
+        x: WC.x,
+        y: WC.spotY,
+        ms: TOILET_CLEAN_MS,
+        action: () => {
+          this.toiletDirt = 0;
+          this.refreshToilet();
+        },
+      },
+    ]);
   }
 
   private dropTrash(x: number, y: number): void {
@@ -254,10 +394,17 @@ export class StoreScene extends Phaser.Scene {
       .setDepth(1)
       .setInteractive(new Phaser.Geom.Rectangle(-5, -5, 16, 15), Phaser.Geom.Rectangle.Contains);
     piece.on('pointerdown', () => {
-      void this.doChore(piece.x + 6, piece.y, TRASH_CLEAN_MS, () => {
-        this.trash.delete(piece);
-        piece.destroy();
-      });
+      void this.doChore([
+        {
+          x: piece.x + 6,
+          y: piece.y,
+          ms: TRASH_CLEAN_MS,
+          action: () => {
+            this.trash.delete(piece);
+            piece.destroy();
+          },
+        },
+      ]);
     });
     this.trash.add(piece);
   }
@@ -265,12 +412,7 @@ export class StoreScene extends Phaser.Scene {
   // ---------- Покупатели ----------
 
   private spawnCustomer(): void {
-    const sprite = this.makePerson(
-      DOOR.x,
-      WORLD_H + 10,
-      Phaser.Utils.Array.GetRandom(SHIRTS),
-      Phaser.Utils.Array.GetRandom(SKINS),
-    );
+    const sprite = this.makePerson(DOOR.x, WORLD_H + 10, Phaser.Utils.Array.GetRandom(SHIRTS), Phaser.Utils.Array.GetRandom(SKINS));
     const bubble = this.add.image(0, -13, 'bubble').setVisible(false);
     sprite.add(bubble);
     const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false };
@@ -281,25 +423,15 @@ export class StoreScene extends Phaser.Scene {
   private async runCustomer(c: Customer): Promise<void> {
     await this.walk(c.sprite, DOOR.x, DOOR.y - 10);
 
-    const wanted = Phaser.Utils.Array.Shuffle([...PRODUCT_IDS]).slice(0, Phaser.Math.Between(1, 2));
+    const wanted = Phaser.Utils.Array.Shuffle(sellableProducts(this.state)).slice(0, Phaser.Math.Between(1, 2));
     let sawEmptyShelf = false;
     for (const id of wanted) {
-      await this.walk(c.sprite, SHELF_X[id] + Phaser.Math.Between(-8, 8), SHELF_Y + 22);
+      const index = shelfFor(this.state, id);
+      if (index < 0) continue;
+      const slot = SHELF_SLOTS[index];
+      await this.walk(c.sprite, slot.x + Phaser.Math.Between(-8, 8), slot.y + 22);
       await this.wait(500);
-      if (stockCount(this.state, id) === 0) {
-        sawEmptyShelf = true;
-        this.popup(c.sprite.x, c.sprite.y - 14, t('popup.noStock'), '#ffd0d0');
-        continue;
-      }
-      const oldest = this.state.stock[id][0];
-      if (Math.random() < buyChance(unitSalePrice(this.state, id, oldest), PRODUCTS[id].basePrice)) {
-        const taken = takeFromShelf(this.state, id);
-        if (taken) {
-          this.state = taken.state;
-          c.items.push({ id, unit: taken.unit });
-          this.refreshShelves();
-        }
-      }
+      if (!this.tryTake(c, id)) sawEmptyShelf = true;
     }
 
     if (Math.random() < TRASH_CHANCE) this.dropTrash(c.sprite.x, c.sprite.y);
@@ -319,6 +451,25 @@ export class StoreScene extends Phaser.Scene {
     c.bubble.setVisible(true);
     c.patience = this.time.delayedCall(PATIENCE_MS, () => void this.giveUp(c));
     this.layoutQueue();
+  }
+
+  /** Покупатель у полки: берёт товар, если он есть и цена устраивает. false — товара нет. */
+  private tryTake(c: Customer, id: ProductId): boolean {
+    const index = shelfFor(this.state, id);
+    const oldest = this.state.shelves[index]?.items[id]?.[0];
+    if (!oldest) {
+      this.popup(c.sprite.x, c.sprite.y - 14, t('popup.noStock'), '#ffd0d0');
+      return false;
+    }
+    if (Math.random() < buyChance(unitSalePrice(this.state, id, oldest), PRODUCTS[id].basePrice)) {
+      const taken = takeFromShelf(this.state, index, id);
+      if (taken) {
+        this.state = taken.state;
+        c.items.push({ id, unit: taken.unit });
+        this.refreshShelves();
+      }
+    }
+    return true;
   }
 
   private async visitToilet(c: Customer): Promise<void> {
@@ -372,6 +523,7 @@ export class StoreScene extends Phaser.Scene {
     this.state = returnToShelf(this.state, c.items);
     c.items = [];
     this.refreshShelves();
+    this.refreshWarehouse();
     this.stats.lost++;
     haptic.error();
     this.popup(c.sprite.x, c.sprite.y - 14, t('popup.leftAngry'), '#ffd0d0');
@@ -442,6 +594,7 @@ export class StoreScene extends Phaser.Scene {
         this.state = s;
         saveGame(s);
         this.refreshShelves();
+        this.refreshWarehouse();
         this.hud.update(s, DAY_SECONDS);
       },
       onOpen: () => this.startDay(),
@@ -468,9 +621,8 @@ export class StoreScene extends Phaser.Scene {
     this.stats.spoiled = spoiled;
     saveGame(this.state);
     this.refreshShelves();
+    this.refreshWarehouse();
     this.hud.update(this.state, 0);
-    this.hud.showSummary(finishedDay, this.stats, { before: ratingBefore, after: state.rating }, () =>
-      this.showMorning(),
-    );
+    this.hud.showSummary(finishedDay, this.stats, { before: ratingBefore, after: state.rating }, () => this.showMorning());
   }
 }
