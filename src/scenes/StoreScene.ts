@@ -59,10 +59,12 @@ import {
 } from '../game/endless';
 import { loadGame, saveGame } from '../game/save';
 import { t } from '../i18n';
+import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
 import { UI_FONT } from '../ui/dom';
 import { Hud } from '../ui/hud';
 import { showMorning } from '../ui/morning';
+import { showTitle } from '../ui/title';
 import { layoutFor, type Layout } from './layout';
 
 // Холст 720×1280 (9:16): на телефоне хватает пикселей для детальных спрайтов.
@@ -209,6 +211,8 @@ export class StoreScene extends Phaser.Scene {
   private inspector: 'none' | 'pending' | 'here' | 'done' = 'none';
   private inspection: InspectionResult | null = null;
   private rushAnnounced = false;
+  /** Сколько заданий дня уже отпраздновали всплывашкой. */
+  private questsSeen = 0;
   /** Идёт пробивка: кто пробивает и когда закончит — для полоски над кассой. */
   private scanning: { start: number; total: number; byOwner: boolean } | null = null;
   private scanBar!: Phaser.GameObjects.Rectangle;
@@ -222,13 +226,14 @@ export class StoreScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.state = ensurePlan(loadGame() ?? newGame());
+    const save = loadGame();
+    this.state = ensurePlan(save ?? newGame());
     this.hud = new Hud();
 
     this.buildWorld();
     this.hud.update(this.state, this.timeLeft);
-    // Первая встреча с сюжетом (письмо бабушки) показывается на утреннем экране.
-    this.showMorning();
+    // Сначала вывеска, потом утро. Первая встреча с сюжетом (письмо бабушки) — на утреннем экране.
+    showTitle({ save, onPlay: () => this.showMorning() });
   }
 
   update(_time: number, deltaMs: number): void {
@@ -242,6 +247,7 @@ export class StoreScene extends Phaser.Scene {
     if (rush && !this.rushAnnounced) {
       this.rushAnnounced = true;
       haptic.tap();
+      sound.bell();
       this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.rush'), '#fff3b0');
     }
     if (this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void this.runInspector();
@@ -269,6 +275,12 @@ export class StoreScene extends Phaser.Scene {
     const quests = this.state.plan?.quests ?? [];
     if (!quests.length) return '';
     const done = quests.filter((q) => questDone(q, this.stats)).length;
+    if (done > this.questsSeen) {
+      this.questsSeen = done;
+      sound.good();
+      const { sellerHome } = this.layout;
+      this.popup(sellerHome.x - 20, sellerHome.y - 46, t('popup.questDone', { done, total: quests.length }), '#fee761');
+    }
     return t('quest.hud', { done, total: quests.length });
   }
 
@@ -784,6 +796,7 @@ export class StoreScene extends Phaser.Scene {
     const look = (x: number, y: number) => this.walk(sprite, x, y, 35).then(() => this.wait(700));
     this.popup(door.x, door.y - 24, t('popup.inspector'), '#fff3b0');
     haptic.tap();
+    sound.bell();
     await this.walk(sprite, door.x, door.y - 10, 35);
     for (const i of this.state.shelves.map((_, i) => i)) await look(slots[i].x, slots[i].y + 22);
     await look(wc.x - 6, wc.spotY + 4);
@@ -795,9 +808,11 @@ export class StoreScene extends Phaser.Scene {
     this.state = inspectionDone(this.state, result);
     if (result.passed) {
       haptic.success();
+      sound.good();
       this.popup(sprite.x, sprite.y - 16, t('popup.inspectionPassed'), '#c8ffb0');
     } else {
       haptic.error();
+      sound.bad();
       this.popup(sprite.x, sprite.y - 16, t('popup.inspectionFailed', { n: result.fine }), '#ffd0d0');
     }
     await this.walk(sprite, door.x, this.layout.h + 16, 35);
@@ -821,6 +836,7 @@ export class StoreScene extends Phaser.Scene {
           : randomLook(shirt);
     const sprite = this.makePerson(this.layout.door.x, this.layout.h + 16, look);
     if (rare) {
+      sound.bell();
       this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.rareGuest', { name: `${rare.icon} ${t(rare.nameKey)}` }), '#fee761'));
     }
     if (valya) {
@@ -876,6 +892,7 @@ export class StoreScene extends Phaser.Scene {
       const value = c.items.reduce((sum, { id, unit }) => sum + unitSalePrice(this.state, id, unit), 0);
       this.stats.stolen += value;
       haptic.error();
+      sound.bad();
       this.popup(c.sprite.x, c.sprite.y - 14, `${t('popup.stolen')} −${value} 💰`, '#ffd0d0');
     }
     await this.leave(c);
@@ -891,6 +908,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshWarehouse();
     this.stats.caught++;
     haptic.success();
+    sound.good();
     this.popup(c.sprite.x, c.sprite.y - 14, byGuard ? t('popup.guardCaught') : t('popup.thiefCaught'), '#c8ffb0');
     void this.leave(c);
   }
@@ -1002,6 +1020,7 @@ export class StoreScene extends Phaser.Scene {
       const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2 / ART).setDepth(1000);
       this.tweens.add({ targets: item, x: counter.x, y: counter.y - 14, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
       haptic.tap();
+      sound.scan();
     }
     await this.wait(timing.pay * 1000);
     this.scanning = null;
@@ -1023,6 +1042,7 @@ export class StoreScene extends Phaser.Scene {
       ? t('popup.albumNew', { name: `${guest.icon} ${t(guest.nameKey)}`, tip })
       : t('popup.tip', { tip });
     this.popup(sellerHome.x - 24, sellerHome.y - 40, text, '#fee761');
+    if (result.isNew) sound.fanfare();
     if (result.completed) {
       haptic.success();
       this.time.delayedCall(1200, () => this.popup(sellerHome.x - 24, sellerHome.y - 52, t('popup.albumDone', { money: ALBUM_REWARD.money }), '#fee761'));
@@ -1036,6 +1056,7 @@ export class StoreScene extends Phaser.Scene {
     const after = ownerLevel(this.state.ownerServed);
     if (after > before) {
       haptic.success();
+      sound.good();
       const { sellerHome } = this.layout;
       this.popup(sellerHome.x - 20, sellerHome.y - 34, t('popup.skillUp', { stars: '★'.repeat(after) }), '#fee761');
     }
@@ -1058,6 +1079,7 @@ export class StoreScene extends Phaser.Scene {
     recordSale(this.stats, c.items);
     if (c.rare) this.rareGuestServed(c, total);
     haptic.success();
+    sound.coin();
     this.popup(this.layout.sellerHome.x - 8, this.layout.sellerHome.y - 18, `+${total} 💰`, '#c8ffb0');
 
     const dirty = this.trash.size >= TRASH_COMPLAINT;
@@ -1081,6 +1103,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshWarehouse();
     this.stats.lost++;
     haptic.error();
+    sound.bad();
     this.popup(c.sprite.x, c.sprite.y - 14, t('popup.leftAngry'), '#ffd0d0');
     this.layoutQueue();
     await this.leave(c);
@@ -1176,6 +1199,7 @@ export class StoreScene extends Phaser.Scene {
     this.inspector = this.state.plan?.inspection ? 'pending' : 'none';
     this.inspection = null;
     this.rushAnnounced = false;
+    this.questsSeen = 0;
     this.valyaCame = false;
     this.syncStaff();
     const season = seasonFor(this.state.day);
@@ -1217,6 +1241,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshShelves();
     this.refreshWarehouse();
     this.hud.update(this.state, 0);
+    sound.fanfare();
     this.hud.showSummary(
       finishedDay,
       this.stats,

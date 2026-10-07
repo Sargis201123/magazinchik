@@ -2,6 +2,7 @@ import { detectLang, type Lang } from './detect';
 import { en, enNames } from './en';
 import { ru, ruNames, type TextKey } from './ru';
 import { telegramLanguage } from '../platform/telegram';
+import { storedLang } from './stored';
 
 export type { Lang, TextKey };
 
@@ -9,6 +10,7 @@ const dictionaries: Record<Lang, Record<TextKey, string>> = { ru, en };
 
 let lang: Lang = detectLang(
   new URLSearchParams(location.search).get('lang'),
+  storedLang(),
   telegramLanguage(),
   navigator.language,
 );

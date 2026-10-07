@@ -80,6 +80,7 @@ import {
 import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type MorningEvent } from '../game/events';
 import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter } from '../game/story';
+import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal } from './dom';
 
@@ -115,6 +116,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     if (!next) return;
     setState(next);
     haptic[feedback]();
+    sound[feedback === 'tap' ? 'tap' : feedback === 'success' ? 'coin' : 'bad']();
     render();
   };
 

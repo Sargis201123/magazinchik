@@ -772,6 +772,35 @@ def ui_bits():
     c.save("bar")
 
 
+def icon():
+    """Иконка 32×32: витрина магазинчика с полосатым навесом. Сохраняется и крупно — для аватарки бота."""
+    c = Canvas(32, 32)
+    c.round_rect(0, 0, 32, 32, "K", r=4)
+    # Стены и витрина.
+    c.rect(4, 12, 24, 16, "N")
+    c.hline(4, 12, 24, "w")
+    c.rect(6, 16, 10, 8, "c")
+    c.hline(6, 16, 10, "w")
+    c.px(8, 18, "w")
+    c.px(9, 17, "w")
+    c.rect(7, 21, 3, 3, "y")
+    c.rect(11, 20, 3, 4, "R")
+    c.rect(18, 16, 8, 12, "B")
+    c.vline(18, 16, 12, "n")
+    c.px(24, 22, "Y")
+    c.rect(4, 27, 24, 1, "a")
+    # Навес с фестонами.
+    for i, x in enumerate(range(2, 30, 4)):
+        c.rect(x, 5, 4, 6, "R" if i % 2 == 0 else "w")
+        c.px(x + 1, 11, "R" if i % 2 == 0 else "w")
+        c.px(x + 2, 11, "R" if i % 2 == 0 else "w")
+    c.hline(2, 4, 28, "r")
+    c.outline("k")
+    pub = OUT.parent
+    c.img.save(pub / "favicon.png")
+    c.img.resize((512, 512), Image.NEAREST).save(pub / "icon-512.png")
+
+
 def main():
     floor()
     wall()
@@ -790,6 +819,7 @@ def main():
     people()
     decor()
     ui_bits()
+    icon()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
