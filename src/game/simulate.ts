@@ -57,12 +57,14 @@ import {
   checkoutSeconds,
   DAY_SECONDS,
   ownerScan,
+  recordSale,
 } from './economy';
 import { ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { answerEvent, inspect } from './events';
 import { candidatesFor } from './staff';
 import { finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
+import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
 
 export { rng };
@@ -219,7 +221,10 @@ export function simulate({
       }),
     );
     for (const id of sellable) {
-      const demand = (guests * AVG_WANTS * buyChance(state.prices[id], PRODUCTS[id].basePrice)) / sellable.length;
+      // Доля спроса на товар: в сезон любимые товары берут чаще.
+      const weight = (p: ProductId) => seasonFor(state.day)?.demand[p] ?? 1;
+      const share = weight(id) / sellable.reduce((sum, p) => sum + weight(p), 0);
+      const demand = guests * AVG_WANTS * buyChance(state.prices[id], perceivedBase(state, id)) * share;
       const shelfRoom = state.shelves
         .filter((s) => s.kind === PRODUCTS[id].category)
         .reduce((sum, s) => sum + shelfCapacity(s), 0);
@@ -273,8 +278,7 @@ export function simulate({
           trips--;
         }
       }
-      const wants = Math.floor(random() * sellable.length);
-      const wanted = [sellable[wants], ...(random() < AVG_WANTS - 1 ? [sellable[(wants + 1) % sellable.length]] : [])];
+      const wanted = pickWanted(state, random, random() < AVG_WANTS - 1 ? 2 : 1);
       const cart: CartItem[] = [];
       let sawEmpty = false;
       let tooExpensive = false;
@@ -286,11 +290,11 @@ export function simulate({
           sawEmpty = true;
           continue;
         }
-        if (random() < buyChance(unitSalePrice(state, id, oldest), PRODUCTS[id].basePrice)) {
+        if (random() < buyChance(unitSalePrice(state, id, oldest), perceivedBase(state, id))) {
           const taken = takeFromShelf(state, index, id)!;
           state = taken.state;
           cart.push({ id, unit: taken.unit });
-        } else if (unitSalePrice(state, id, oldest) > PRODUCTS[id].basePrice) {
+        } else if (unitSalePrice(state, id, oldest) > perceivedBase(state, id)) {
           tooExpensive = true;
         }
       }
@@ -307,9 +311,13 @@ export function simulate({
       state = paid.state;
       stats.revenue += paid.total;
       stats.served++;
+      recordSale(stats, cart);
       if (hasUnmarkedBad(cart) && random() < BAD_COMPLAINT_CHANCE) stats.complaints++;
       if (random() < dirtComplaint) stats.complaints++;
     }
+
+    // Мусор: уборщик убирает всё, игрок — сколько успеет.
+    stats.trashCleaned = has('cleaner') ? 3 + state.level : Math.floor(random() * (3 + state.level));
 
     // Проверка: с уборщиком чисто почти всегда, в одиночку — как повезёт.
     if (state.plan?.inspection) {

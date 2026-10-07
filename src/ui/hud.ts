@@ -12,7 +12,7 @@ export class Hud {
     document.body.append(this.top, this.stock, this.hint);
   }
 
-  update(state: StoreState, secondsLeft: number): void {
+  update(state: StoreState, secondsLeft: number, quests = ''): void {
     const stars = '★'.repeat(Math.round(state.rating)).padEnd(5, '☆');
     const clock = `${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
     this.top.replaceChildren(
@@ -21,7 +21,7 @@ export class Hud {
       el('span', '', stars),
     );
     const shelves = sellableProducts(state).map((id) => `${PRODUCTS[id].icon}${onShelves(state, id)}`);
-    this.stock.textContent = `${shelves.join('  ')}   📦${warehouseCount(state)}`;
+    this.stock.textContent = `${shelves.join('  ')}   📦${warehouseCount(state)}${quests ? `   ${quests}` : ''}`;
   }
 
   setHint(text: string): void {

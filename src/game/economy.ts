@@ -312,6 +312,10 @@ export interface StoreState {
   staff: StaffMember[];
   /** Сколько покупателей хозяин обслужил сам — от этого растёт навык кассы. */
   ownerServed: number;
+  /** Выручка за всё время — от неё растёт звание магазина. */
+  totalRevenue: number;
+  /** Редкие гости, которых уже обслужили (альбом). */
+  album: string[];
   /** Сегодняшнее объявление о вакансии и кандидаты по нему. */
   jobSearch?: { day: number; role: StaffRole; candidates: StaffMember[] };
   /** Кто уволился в конце месяца (показываем утром). */
@@ -341,6 +345,15 @@ export interface DayStats {
   caught: number;
   /** Сколько унесли из кассы сотрудники «нечист на руку». */
   skimmed: number;
+  /** Продано штук каждого товара — для заданий дня. */
+  sold: Partial<Record<ProductId, number>>;
+  /** Сколько мусора убрали. */
+  trashCleaned: number;
+}
+
+/** Учёт проданного (для заданий дня). */
+export function recordSale(stats: DayStats, items: CartItem[]): void {
+  for (const { id } of items) stats.sold[id] = (stats.sold[id] ?? 0) + 1;
 }
 
 export interface CartItem {
@@ -357,6 +370,8 @@ export const newGame = (): StoreState => ({
   debt: START_DEBT,
   staff: [],
   ownerServed: 0,
+  totalRevenue: 0,
+  album: [],
   story: { chapter: 0, introSeen: false, ordersDone: 0, inspectionsPassed: 0 },
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
@@ -381,6 +396,8 @@ export const emptyDayStats = (): DayStats => ({
   stolen: 0,
   caught: 0,
   skimmed: 0,
+  sold: {},
+  trashCleaned: 0,
 });
 
 // ---------- Подсчёты ----------
@@ -707,6 +724,7 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
     ...state,
     day: state.day + 1,
     money: state.money - skimmed,
+    totalRevenue: state.totalRevenue + stats.revenue,
     rating: Math.round(rating * 100) / 100,
     warehouse: warehouse.stock,
     shelves,

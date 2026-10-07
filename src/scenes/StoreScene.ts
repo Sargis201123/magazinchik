@@ -18,13 +18,13 @@ import {
   PRODUCT_IDS,
   PRODUCTS,
   returnToShelf,
-  sellableProducts,
   shelfCapacity,
   shelfFor,
   shelfFree,
   STORE_LEVELS,
   storeLevel,
   takeFromShelf,
+  recordSale,
   unitSalePrice,
   cashierScan,
   checkoutSeconds,
@@ -42,6 +42,21 @@ import {
 } from '../game/economy';
 import { ensurePlan, inspectionDone, nightCycle, spawnIntervalToday } from '../game/day';
 import { inspect, RUSH_SECONDS, type InspectionResult } from '../game/events';
+import {
+  ALBUM_REWARD,
+  collectRareGuest,
+  perceivedBase,
+  pickRareGuest,
+  pickWanted,
+  questDone,
+  rankName,
+  rankOf,
+  RARE_GUESTS,
+  RARE_TIP,
+  rareGuestChance,
+  seasonFor,
+  type RareGuestId,
+} from '../game/endless';
 import { loadGame, saveGame } from '../game/save';
 import { t } from '../i18n';
 import { haptic } from '../platform/telegram';
@@ -134,6 +149,8 @@ interface Customer {
   thief: boolean;
   /** Уже пробивается на кассе — из очереди не уйдёт. */
   serving?: boolean;
+  /** Редкий гость для альбома. */
+  rare?: RareGuestId;
 }
 
 interface Worker {
@@ -241,7 +258,15 @@ export class StoreScene extends Phaser.Scene {
     this.updateScanBar();
     this.callSellerIfNeeded();
     this.hud.setHint(this.currentHint());
-    this.hud.update(this.state, this.timeLeft);
+    this.hud.update(this.state, this.timeLeft, this.questsLine());
+  }
+
+  /** «📋 1/3» в верхней панели: сколько заданий дня уже выполнено. */
+  private questsLine(): string {
+    const quests = this.state.plan?.quests ?? [];
+    if (!quests.length) return '';
+    const done = quests.filter((q) => questDone(q, this.stats)).length;
+    return t('quest.hud', { done, total: quests.length });
   }
 
   private currentHint(): string {
@@ -581,6 +606,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private removeTrash(piece: Phaser.GameObjects.Image): void {
+    if (this.trash.has(piece)) this.stats.trashCleaned++;
     this.trash.delete(piece);
     this.claimedTrash.delete(piece);
     piece.destroy();
@@ -776,15 +802,25 @@ export class StoreScene extends Phaser.Scene {
     const thief = Math.random() < thiefChance(this.state.level);
     const valya = !thief && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
     const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
-    const look = valya ? VALYA : thief ? { ...randomLook(shirt), style: 'long' as const, hair: THIEF_SHIRT } : randomLook(shirt);
+    const rare = !thief && !valya && Math.random() < rareGuestChance(this.state.level) ? pickRareGuest(this.state, Math.random) : null;
+    const look = rare
+      ? rare.look
+      : valya
+        ? VALYA
+        : thief
+          ? { ...randomLook(shirt), style: 'long' as const, hair: THIEF_SHIRT }
+          : randomLook(shirt);
     const sprite = this.makePerson(this.layout.door.x, this.layout.h + 16, look);
+    if (rare) {
+      this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.rareGuest', { name: `${rare.icon} ${t(rare.nameKey)}` }), '#fee761'));
+    }
     if (valya) {
       this.valyaCame = true;
       this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.valya'), '#fff3b0'));
     }
     const bubble = this.add.image(0, -14, 'bubble').setVisible(false);
     sprite.add(bubble);
-    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief };
+    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief, rare: rare?.id };
     this.customers.add(customer);
     if (thief) {
       // Вора можно поймать касанием.
@@ -800,7 +836,7 @@ export class StoreScene extends Phaser.Scene {
   private async runThief(c: Customer): Promise<void> {
     const { door } = this.layout;
     await this.walk(c.sprite, door.x, door.y - 10);
-    const wanted = Phaser.Utils.Array.Shuffle(sellableProducts(this.state)).slice(0, Phaser.Math.Between(1, 2));
+    const wanted = pickWanted(this.state, Math.random, Phaser.Math.Between(1, 2));
     for (const id of wanted) {
       const index = shelfFor(this.state, id);
       if (index < 0 || c.gone) continue;
@@ -853,7 +889,7 @@ export class StoreScene extends Phaser.Scene {
   private async runCustomer(c: Customer): Promise<void> {
     await this.walk(c.sprite, this.layout.door.x, this.layout.door.y - 10);
 
-    const wanted = Phaser.Utils.Array.Shuffle(sellableProducts(this.state)).slice(0, Phaser.Math.Between(1, 2));
+    const wanted = pickWanted(this.state, Math.random, Phaser.Math.Between(1, 2));
     let disappointed = false;
     for (const id of wanted) {
       const index = shelfFor(this.state, id);
@@ -898,8 +934,9 @@ export class StoreScene extends Phaser.Scene {
       return 'empty';
     }
     const price = unitSalePrice(this.state, id, oldest);
-    if (Math.random() >= buyChance(price, PRODUCTS[id].basePrice)) {
-      if (price <= PRODUCTS[id].basePrice) return 'skipped';
+    const fair = perceivedBase(this.state, id);
+    if (Math.random() >= buyChance(price, fair)) {
+      if (price <= fair) return 'skipped';
       this.popup(c.sprite.x, c.sprite.y - 14, t('popup.expensive'), '#ffd0d0');
       return 'expensive';
     }
@@ -964,6 +1001,25 @@ export class StoreScene extends Phaser.Scene {
     if (byOwner) this.ownerServedOne();
   }
 
+  /** Редкий гость оставляет чаевые; первый раз — попадает в альбом. */
+  private rareGuestServed(c: Customer, total: number): void {
+    const tip = Math.round(total * RARE_TIP);
+    this.state = { ...this.state, money: this.state.money + tip };
+    this.stats.revenue += tip;
+    const guest = RARE_GUESTS.find((g) => g.id === c.rare)!;
+    const result = collectRareGuest(this.state, guest.id);
+    this.state = result.state;
+    const { sellerHome } = this.layout;
+    const text = result.isNew
+      ? t('popup.albumNew', { name: `${guest.icon} ${t(guest.nameKey)}`, tip })
+      : t('popup.tip', { tip });
+    this.popup(sellerHome.x - 24, sellerHome.y - 40, text, '#fee761');
+    if (result.completed) {
+      haptic.success();
+      this.time.delayedCall(1200, () => this.popup(sellerHome.x - 24, sellerHome.y - 52, t('popup.albumDone', { money: ALBUM_REWARD.money }), '#fee761'));
+    }
+  }
+
   /** Хозяин обслужил покупателя: растёт навык кассы. */
   private ownerServedOne(): void {
     const before = ownerLevel(this.state.ownerServed);
@@ -990,6 +1046,8 @@ export class StoreScene extends Phaser.Scene {
     this.state = state;
     this.stats.revenue += total;
     this.stats.served++;
+    recordSale(this.stats, c.items);
+    if (c.rare) this.rareGuestServed(c, total);
     haptic.success();
     this.popup(this.layout.sellerHome.x - 8, this.layout.sellerHome.y - 18, `+${total} 💰`, '#c8ffb0');
 
@@ -1077,7 +1135,11 @@ export class StoreScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setResolution(4)
       .setDepth(1000);
-    this.tweens.add({ targets: label, y: y - 14, alpha: 0, duration: 1100, onComplete: () => label.destroy() });
+    // Длинная надпись не должна вылезать за край магазина; и висит дольше, чтобы успеть прочитать.
+    const half = label.width / 2 + 2;
+    label.x = Phaser.Math.Clamp(x, half, Math.max(half, this.layout.w - half));
+    const duration = Math.min(2600, 900 + 45 * text.length);
+    this.tweens.add({ targets: label, y: y - 14, alpha: { from: 1, to: 0 }, ease: 'Quad.easeIn', duration, onComplete: () => label.destroy() });
   }
 
   // ---------- День ----------
@@ -1107,6 +1169,8 @@ export class StoreScene extends Phaser.Scene {
     this.rushAnnounced = false;
     this.valyaCame = false;
     this.syncStaff();
+    const season = seasonFor(this.state.day);
+    if (season) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
     this.stats = emptyDayStats();
     this.timeLeft = DAY_SECONDS;
     this.nextSpawn = 1;
@@ -1121,8 +1185,12 @@ export class StoreScene extends Phaser.Scene {
     this.running = false;
     const finishedDay = this.state.day;
     const ratingBefore = this.state.rating;
-    const { state, spoiled, bill, shortfall, skimmed, order } = nightCycle(this.state, this.stats);
+    const rankBefore = rankOf(this.state.totalRevenue);
+    const { state, spoiled, bill, shortfall, skimmed, order, quests } = nightCycle(this.state, this.stats);
     const extra: [string, string][] = [];
+    if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
+    const rankAfter = rankOf(state.totalRevenue);
+    if (rankAfter > rankBefore) extra.push(['🏅', t('summary.rankUp', { name: rankName(rankAfter, t) })]);
     if (order) extra.push([t('summary.order'), order.delivered ? t('summary.orderDone', { n: order.earned }) : t('summary.orderFailed')]);
     if (this.inspection) {
       const r = this.inspection;

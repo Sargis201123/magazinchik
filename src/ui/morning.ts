@@ -65,6 +65,18 @@ import {
   type SupplierId,
 } from '../game/suppliers';
 import { guestsToday } from '../game/day';
+import {
+  ALBUM_REWARD,
+  ALL_QUESTS_RATING,
+  QUEST_TEXT,
+  RANK_GUESTS,
+  rankName,
+  rankOf,
+  rankThreshold,
+  RARE_GUESTS,
+  seasonFor,
+  type Quest,
+} from '../game/endless';
 import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type MorningEvent } from '../game/events';
 import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter } from '../game/story';
@@ -152,8 +164,10 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     card.replaceChildren(
       title,
       goalLine(state),
+      ...seasonLine(state),
       el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
       billForecast(state),
+      questsBox(state),
       tabs,
       ...body,
       button(t('morning.open'), () => {
@@ -386,6 +400,66 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       }
     }
     return out;
+  };
+
+  // ---------- Бесконечная игра: сезон, задания, звание, альбом ----------
+
+  const seasonLine = (state: StoreState): HTMLElement[] => {
+    const season = seasonFor(state.day);
+    if (season) {
+      return [el('div', 'ui-note', t('season.banner', { icon: season.icon, name: t(season.nameKey), desc: t(season.descKey) }))];
+    }
+    for (let d = 1; d <= 3; d++) {
+      const next = seasonFor(state.day + d);
+      if (next) return [el('div', 'ui-muted', t('season.soon', { n: d, icon: next.icon, name: t(next.nameKey) }))];
+    }
+    return [];
+  };
+
+  const questText = (q: Quest) =>
+    t(QUEST_TEXT[q.kind], { n: q.target, product: q.product ? productLabel(q.product) : '' });
+
+  const questsBox = (state: StoreState) => {
+    const quests = state.plan?.quests ?? [];
+    const box = el('div', 'ui-box');
+    if (!quests.length) return el('div');
+    box.append(el('b', '', t('quest.title')));
+    for (const q of quests) {
+      const r = el('div', 'ui-row');
+      r.append(el('span', '', `• ${questText(q)}`), el('span', 'ui-muted', t('quest.reward', { n: q.reward })));
+      box.append(r);
+    }
+    box.append(el('div', 'ui-muted', t('quest.allBonus', { r: ALL_QUESTS_RATING })));
+    return box;
+  };
+
+  const rankBox = (state: StoreState) => {
+    const n = rankOf(state.totalRevenue);
+    const box = el('div', 'ui-box');
+    box.append(
+      el('b', '', t('rank.title', { name: rankName(n, t) })),
+      el(
+        'div',
+        'ui-muted',
+        t('rank.progress', { n: state.totalRevenue, next: rankThreshold(n + 1), bonus: Math.round(n * RANK_GUESTS * 100) }),
+      ),
+    );
+    return box;
+  };
+
+  const albumBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(
+      el('b', '', t('album.title', { n: state.album.length, max: RARE_GUESTS.length })),
+      el('div', 'ui-muted', t('album.note', { money: ALBUM_REWARD.money, r: ALBUM_REWARD.rating })),
+    );
+    const grid = el('div', 'ui-chips');
+    for (const g of RARE_GUESTS) {
+      const got = state.album.includes(g.id);
+      grid.append(el('span', got ? 'ui-chip' : 'ui-chip ui-chip-off', got ? `${g.icon} ${t(g.nameKey)}` : `❔ ${t('album.unknown')}`));
+    }
+    box.append(grid);
+    return box;
   };
 
   // ---------- Сюжет и события ----------
@@ -638,7 +712,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const storeTab = (state: StoreState): HTMLElement[] => {
     const level = storeLevel(state);
     const next = nextStoreLevel(state);
-    const out: HTMLElement[] = [];
+    const out: HTMLElement[] = [rankBox(state), albumBox(state)];
 
     const current = el('div', 'ui-box');
     current.append(
