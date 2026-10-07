@@ -5,19 +5,25 @@ import {
   checkout,
   emptyDayStats,
   endDay,
+  expectedGuests,
+  hasUnmarkedBad,
   newGame,
+  resolveBadBatch,
   returnToShelf,
   satisfaction,
   setPrice,
   SHELF_CAPACITY,
   stockCount,
   takeFromShelf,
+  unitSalePrice,
   type StoreState,
+  type Unit,
 } from '../src/game/economy';
 import { canHaggle, haggle, newDeal, SUPPLIERS, unitPrice } from '../src/game/suppliers';
 import { detectLang } from '../src/i18n/detect';
 
 const empty = (): StoreState => ({ ...newGame(), stock: { bread: [], milk: [], apples: [] } });
+const u = (age = 0, extra: Partial<Unit> = {}): Unit => ({ age, ...extra });
 
 describe('buyChance', () => {
   it('падает с ростом цены и не выходит за границы', () => {
@@ -50,31 +56,37 @@ describe('цены', () => {
 
 describe('продажа', () => {
   it('покупатель берёт самый старый товар, деньги приходят на кассе', () => {
-    let s: StoreState = { ...empty(), stock: { bread: [1, 0], milk: [], apples: [] } };
-    s = takeFromShelf(s, 'bread')!;
-    expect(s.stock.bread).toEqual([0]);
+    const start: StoreState = { ...empty(), stock: { bread: [u(1), u(0)], milk: [], apples: [] } };
+    const taken = takeFromShelf(start, 'bread')!;
+    expect(taken.unit.age).toBe(1);
+    const s = taken.state;
+    expect(s.stock.bread).toEqual([u(0)]);
     expect(takeFromShelf(s, 'milk')).toBeNull();
-    const { state, total } = checkout(s, ['bread']);
+    const { state, total } = checkout(s, [{ id: 'bread', unit: taken.unit }]);
     expect(total).toBe(s.prices.bread);
     expect(state.money).toBe(s.money + total);
   });
 
   it('товар возвращается на полку, но не сверх вместимости', () => {
-    const full = { ...empty(), stock: { bread: Array(SHELF_CAPACITY).fill(0), milk: [], apples: [] } };
-    expect(stockCount(returnToShelf(full, ['bread', 'milk']), 'bread')).toBe(SHELF_CAPACITY);
-    expect(stockCount(returnToShelf(full, ['bread', 'milk']), 'milk')).toBe(1);
+    const full = { ...empty(), stock: { bread: Array.from({ length: SHELF_CAPACITY }, () => u()), milk: [], apples: [] } };
+    const items = [
+      { id: 'bread' as const, unit: u() },
+      { id: 'milk' as const, unit: u() },
+    ];
+    expect(stockCount(returnToShelf(full, items), 'bread')).toBe(SHELF_CAPACITY);
+    expect(stockCount(returnToShelf(full, items), 'milk')).toBe(1);
   });
 });
 
 describe('конец дня', () => {
   it('хлеб живёт 2 дня, яблоки дольше', () => {
-    let s: StoreState = { ...empty(), stock: { bread: [0], milk: [], apples: [0] } };
+    let s: StoreState = { ...empty(), stock: { bread: [u()], milk: [], apples: [u()] } };
     let r = endDay(s, emptyDayStats());
     expect(r.spoiled).toBe(0);
     r = endDay(r.state, emptyDayStats());
     expect(r.spoiled).toBe(1);
     expect(r.state.stock.bread).toEqual([]);
-    expect(r.state.stock.apples).toEqual([2]);
+    expect(r.state.stock.apples).toEqual([u(2)]);
     s = r.state;
     expect(s.day).toBe(3);
   });
@@ -85,6 +97,38 @@ describe('конец дня', () => {
     expect(endDay(s, stats(10, 0)).state.rating).toBeGreaterThan(s.rating);
     expect(endDay(s, stats(0, 10)).state.rating).toBeLessThan(s.rating);
     expect(satisfaction(stats(10, 0, 4))).toBeLessThan(satisfaction(stats(10, 0)));
+  });
+});
+
+describe('брак', () => {
+  const bought = () => buyStock(empty(), 'milk', 4, 30, true)!;
+
+  it('бракованная партия ждёт решения игрока', () => {
+    expect(bought().stock.milk.every((x) => x.bad && x.pending)).toBe(true);
+  });
+
+  it('поставить как есть: полная цена, но риск жалоб и порча на день раньше', () => {
+    const s = resolveBadBatch(bought(), 'milk', 'shelf', 30);
+    const unit = s.stock.milk[0];
+    expect(unit.pending).toBeUndefined();
+    expect(unitSalePrice(s, 'milk', unit)).toBe(60);
+    expect(hasUnmarkedBad([{ id: 'milk', unit }])).toBe(true);
+    const after = endDay(endDay(s, emptyDayStats()).state, emptyDayStats());
+    expect(after.spoiled).toBe(4); // молоко живёт 3 дня, брак — 2
+  });
+
+  it('уценка: половина цены и без жалоб', () => {
+    const s = resolveBadBatch(bought(), 'milk', 'markdown', 30);
+    const unit = s.stock.milk[0];
+    expect(unitSalePrice(s, 'milk', unit)).toBe(30);
+    expect(hasUnmarkedBad([{ id: 'milk', unit }])).toBe(false);
+  });
+
+  it('возврат: товар уходит, возвращается половина денег, старый товар не трогаем', () => {
+    const withOld = { ...bought(), stock: { ...bought().stock, milk: [u(1), ...bought().stock.milk] } };
+    const s = resolveBadBatch(withOld, 'milk', 'return', 30);
+    expect(s.stock.milk).toEqual([u(1)]);
+    expect(s.money).toBe(withOld.money + 60);
   });
 });
 
@@ -116,5 +160,14 @@ describe('detectLang', () => {
     expect(detectLang(undefined, 'uk')).toBe('ru');
     expect(detectLang('de')).toBe('en');
     expect(detectLang()).toBe('ru');
+  });
+});
+
+describe('рейтинг и поток гостей', () => {
+  it('чем ниже рейтинг, тем меньше гостей', () => {
+    expect(expectedGuests(0)).toBeLessThan(expectedGuests(3));
+    expect(expectedGuests(3)).toBeLessThan(expectedGuests(5));
+    expect(expectedGuests(0)).toBe(12);
+    expect(expectedGuests(5)).toBe(45);
   });
 });

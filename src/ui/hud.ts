@@ -39,7 +39,7 @@ export class Hud {
     );
   }
 
-  showSummary(day: number, stats: DayStats, onNext: () => void): void {
+  showSummary(day: number, stats: DayStats, rating: { before: number; after: number }, onNext: () => void): void {
     const { card, close } = openModal();
     card.append(el('h2', '', t('summary.title', { n: day })));
     const row = (label: string, value: string | number) => {
@@ -52,6 +52,8 @@ export class Hud {
     row(t('summary.lost'), stats.lost);
     row(t('summary.complaints'), stats.complaints);
     row(t('summary.spoiled'), stats.spoiled);
+    const arrow = rating.after > rating.before ? '▲' : rating.after < rating.before ? '▼' : '';
+    row(t('summary.rating'), `${rating.before.toFixed(1)} → ${rating.after.toFixed(1)}★ ${arrow}`);
     card.append(
       button(t('summary.next'), () => {
         close();

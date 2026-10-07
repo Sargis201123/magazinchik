@@ -14,6 +14,8 @@ export interface Supplier {
   flexibility: number;
   /** Сколько неудачных попыток торга вытерпит за день. */
   patience: number;
+  /** Шанс, что партия окажется бракованной (редкое событие). */
+  badChance: number;
   color: number;
 }
 
@@ -25,6 +27,7 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
     products: { bread: 1, apples: 0.9 },
     flexibility: 0.9,
     patience: 3,
+    badChance: 0.12,
     color: 0x6abe30,
   },
   dairy: {
@@ -34,6 +37,7 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
     products: { milk: 1, bread: 1.15 },
     flexibility: 0.6,
     patience: 2,
+    badChance: 0.05,
     color: 0x5b6ee1,
   },
 };

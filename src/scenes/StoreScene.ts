@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import {
+  BAD_COMPLAINT_CHANCE,
   buyChance,
   checkout,
+  DAY_SECONDS,
   emptyDayStats,
   endDay,
+  hasUnmarkedBad,
   newGame,
   PRODUCT_IDS,
   PRODUCTS,
@@ -12,6 +15,8 @@ import {
   spawnInterval,
   stockCount,
   takeFromShelf,
+  unitSalePrice,
+  type CartItem,
   type DayStats,
   type ProductId,
   type StoreState,
@@ -26,10 +31,12 @@ import { showMorning } from '../ui/morning';
 export const WORLD_W = 180;
 export const WORLD_H = 320;
 
-const DAY_SECONDS = 90;
-const PATIENCE_MS = 15_000;
+/** Терпение в очереди. Отсчёт начинается, когда покупатель дошёл до очереди. */
+const PATIENCE_MS = 20_000;
 const CUSTOMER_SPEED = 40; // пикселей мира в секунду
-const SELLER_SPEED = 70;
+const SELLER_SPEED = 90;
+/** Как часто покупатель у пустой кассы зовёт продавца. */
+const CALL_EVERY_MS = 3000;
 const MAX_CUSTOMERS = 6;
 
 const TRASH_CHANCE = 0.15;
@@ -39,7 +46,7 @@ const TRASH_COMPLAINT = 3;
 const TOILET_CHANCE = 0.25;
 const TOILET_DIRT_PER_VISIT = 20;
 const TOILET_DIRTY = 60;
-const TOILET_CLEAN_MS = 1500;
+const TOILET_CLEAN_MS = 1000;
 const TRASH_CLEAN_MS = 400;
 
 const SHELF_Y = 86;
@@ -57,7 +64,7 @@ const SKINS = [0xf2d3ab, 0xd9a066, 0x8f563b, 0xeec39a];
 interface Customer {
   sprite: Phaser.GameObjects.Container;
   bubble: Phaser.GameObjects.Image;
-  items: ProductId[];
+  items: CartItem[];
   /** Что-то испортило впечатление (грязный туалет) — при оплате будет жалоба. */
   unhappy: boolean;
   patience?: Phaser.Time.TimerEvent;
@@ -78,6 +85,9 @@ export class StoreScene extends Phaser.Scene {
   private wcBar!: Phaser.GameObjects.Image;
   private seller!: Phaser.GameObjects.Container;
   private sellerBusy = false;
+  /** Номер текущего дела продавца: смена номера отменяет дело (продавца позвали к кассе). */
+  private choreId = 0;
+  private lastCall = 0;
   private timeLeft = DAY_SECONDS;
   private nextSpawn = 1;
   private running = false;
@@ -117,11 +127,13 @@ export class StoreScene extends Phaser.Scene {
     }
 
     for (const c of this.queue) this.updateBubble(c);
+    this.callSellerIfNeeded();
     this.hud.setHint(this.currentHint());
     this.hud.update(this.state, this.timeLeft);
   }
 
   private currentHint(): string {
+    if (this.sellerBusy && this.queue.length > 0) return t('hint.recall');
     if (this.queue.length > 0 && this.state.day <= 2 && this.stats.served < 3) return t('hint.serve');
     if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
     return '';
@@ -164,8 +176,14 @@ export class StoreScene extends Phaser.Scene {
 
   private refreshShelves(): void {
     for (const id of PRODUCT_IDS) {
-      const count = stockCount(this.state, id);
-      this.shelfItems.get(id)!.forEach((img, i) => img.setVisible(i < count));
+      const units = this.state.stock[id];
+      const base = PRODUCTS[id].color;
+      const bad = Phaser.Display.Color.IntegerToColor(base).darken(35).color;
+      this.shelfItems.get(id)!.forEach((img, i) => {
+        const unit = units[i];
+        img.setVisible(Boolean(unit));
+        if (unit) img.setTint(unit.markdown ? 0xf2c14e : unit.bad ? bad : base);
+      });
     }
   }
 
@@ -187,13 +205,37 @@ export class StoreScene extends Phaser.Scene {
   /** Продавец уходит от кассы на дело и возвращается. Пока его нет, касса пустует. */
   private async doChore(x: number, y: number, ms: number, done: () => void): Promise<void> {
     if (this.sellerBusy) return;
+    const id = ++this.choreId;
     this.sellerBusy = true;
     haptic.tap();
     await this.walk(this.seller, x, y, SELLER_SPEED);
+    if (id !== this.choreId) return;
     await this.wait(ms);
+    if (id !== this.choreId) return;
     done();
+    await this.returnSeller();
+  }
+
+  /** Продавца позвали к кассе: бросает дело на полпути и идёт обратно. */
+  private recallSeller(): void {
+    if (!this.sellerBusy) return;
+    this.choreId++;
+    haptic.tap();
+    void this.returnSeller();
+  }
+
+  private async returnSeller(): Promise<void> {
+    const id = this.choreId;
     await this.walk(this.seller, SELLER_HOME.x, SELLER_HOME.y, SELLER_SPEED);
-    this.sellerBusy = false;
+    if (id === this.choreId) this.sellerBusy = false;
+  }
+
+  private callSellerIfNeeded(): void {
+    const front = this.queue[0];
+    if (!this.sellerBusy || !front || !this.isAtRegister(front)) return;
+    if (this.time.now - this.lastCall < CALL_EVERY_MS) return;
+    this.lastCall = this.time.now;
+    this.popup(front.sprite.x, front.sprite.y - 22, t('popup.callRegister'), '#fff3b0');
   }
 
   private cleanToilet(): void {
@@ -249,11 +291,12 @@ export class StoreScene extends Phaser.Scene {
         this.popup(c.sprite.x, c.sprite.y - 14, t('popup.noStock'), '#ffd0d0');
         continue;
       }
-      if (Math.random() < buyChance(this.state.prices[id], PRODUCTS[id].basePrice)) {
-        const next = takeFromShelf(this.state, id);
-        if (next) {
-          this.state = next;
-          c.items.push(id);
+      const oldest = this.state.stock[id][0];
+      if (Math.random() < buyChance(unitSalePrice(this.state, id, oldest), PRODUCTS[id].basePrice)) {
+        const taken = takeFromShelf(this.state, id);
+        if (taken) {
+          this.state = taken.state;
+          c.items.push({ id, unit: taken.unit });
           this.refreshShelves();
         }
       }
@@ -270,6 +313,8 @@ export class StoreScene extends Phaser.Scene {
     if (Math.random() < TOILET_CHANCE) await this.visitToilet(c);
 
     this.queue.push(c);
+    await this.walk(c.sprite, QUEUE.x, QUEUE.y - (this.queue.length - 1) * QUEUE.step);
+    if (c.gone) return;
     c.waitStart = this.time.now;
     c.bubble.setVisible(true);
     c.patience = this.time.delayedCall(PATIENCE_MS, () => void this.giveUp(c));
@@ -292,8 +337,12 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private serveNext(): void {
+    if (this.sellerBusy) {
+      this.recallSeller();
+      return;
+    }
     const c = this.queue[0];
-    if (!c || this.sellerBusy || !this.isAtRegister(c)) return;
+    if (!c || !this.isAtRegister(c)) return;
     c.patience?.remove();
     this.queue.shift();
     c.bubble.setVisible(false);
@@ -306,9 +355,11 @@ export class StoreScene extends Phaser.Scene {
     this.popup(SELLER_HOME.x - 8, SELLER_HOME.y - 18, `+${total} 💰`, '#c8ffb0');
 
     const dirty = this.trash.size >= TRASH_COMPLAINT;
-    if (c.unhappy || dirty) {
+    const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
+    if (c.unhappy || dirty || badGoods) {
       this.stats.complaints++;
-      this.popup(c.sprite.x, c.sprite.y - 26, dirty ? t('popup.dirty') : '😣', '#ffd0d0');
+      const why = badGoods ? t('popup.badProduct') : dirty ? t('popup.dirty') : '😣';
+      this.popup(c.sprite.x, c.sprite.y - 26, why, '#ffd0d0');
     }
     this.layoutQueue();
     void this.leave(c, true);
@@ -345,6 +396,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private updateBubble(c: Customer): void {
+    if (!c.bubble.visible) return;
     const left = 1 - (this.time.now - c.waitStart) / PATIENCE_MS;
     c.bubble.setTint(left > 0.6 ? 0x8fd16a : left > 0.3 ? 0xf2c14e : 0xd95763);
   }
@@ -410,12 +462,15 @@ export class StoreScene extends Phaser.Scene {
   private finishDay(): void {
     this.running = false;
     const finishedDay = this.state.day;
+    const ratingBefore = this.state.rating;
     const { state, spoiled } = endDay(this.state, this.stats);
     this.state = state;
     this.stats.spoiled = spoiled;
     saveGame(this.state);
     this.refreshShelves();
     this.hud.update(this.state, 0);
-    this.hud.showSummary(finishedDay, this.stats, () => this.showMorning());
+    this.hud.showSummary(finishedDay, this.stats, { before: ratingBefore, after: state.rating }, () =>
+      this.showMorning(),
+    );
   }
 }

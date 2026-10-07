@@ -2,12 +2,16 @@ import { t } from '../i18n';
 import {
   buyChance,
   buyStock,
+  expectedGuests,
   PRICE_STEP,
   PRODUCTS,
   PRODUCT_IDS,
+  RETURN_REFUND,
   SHELF_CAPACITY,
+  resolveBadBatch,
   setPrice,
   stockCount,
+  type BadBatchChoice,
   type ProductId,
   type StoreState,
 } from '../game/economy';
@@ -37,12 +41,22 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const { card, close } = openModal();
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
+  /** Бракованная партия, по которой ждём решения игрока. */
+  let pendingBad: { sid: SupplierId; pid: ProductId; qty: number; price: number } | null = null;
 
   const render = () => {
     const state = getState();
     const title = el('h2');
     title.append(el('span', '', t('morning.title', { n: state.day })), el('span', '', t('morning.money', { n: state.money })));
-    card.replaceChildren(title, el('h3', '', t('morning.suppliers')));
+    if (pendingBad) {
+      card.replaceChildren(title, qualityBox(pendingBad));
+      return;
+    }
+    card.replaceChildren(
+      title,
+      el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: expectedGuests(state.rating) })),
+      el('h3', '', t('morning.suppliers')),
+    );
 
     for (const sid of SUPPLIER_IDS) card.append(supplierBox(sid, state));
 
@@ -71,7 +85,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       const info = el('span');
       info.append(
         el('span', '', `${t(PRODUCTS[pid].nameKey)} · ${price} 💰 `),
-        el('span', 'ui-muted', t('morning.shelf', { n: count, max: SHELF_CAPACITY })),
+        el('span', 'ui-muted', shelfInfo(state, pid)),
       );
       const chips = el('div', 'ui-chips');
       for (const qty of [1, 5]) {
@@ -80,10 +94,16 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
           button(
             `+${qty}`,
             () => {
-              const next = buyStock(getState(), pid, qty, price);
+              const bad = Math.random() < s.badChance;
+              const next = buyStock(getState(), pid, qty, price, bad);
               if (!next) return;
-              haptic.tap();
               setState(next);
+              if (bad) {
+                pendingBad = { sid, pid, qty, price };
+                haptic.error();
+              } else {
+                haptic.tap();
+              }
               render();
             },
             'ui-chip',
@@ -125,6 +145,36 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return box;
   };
 
+  const qualityBox = (batch: NonNullable<typeof pendingBad>) => {
+    const box = el('div', 'ui-box');
+    box.append(
+      el('h3', '', `⚠️ ${t('quality.title')}`),
+      el(
+        'p',
+        '',
+        t('quality.text', { product: t(PRODUCTS[batch.pid].nameKey), n: batch.qty, supplier: t(SUPPLIERS[batch.sid].nameKey) }),
+      ),
+    );
+    const refund = Math.round(batch.qty * batch.price * RETURN_REFUND);
+    const options: [BadBatchChoice, TextKey, string][] = [
+      ['shelf', 'quality.shelf', t('quality.shelfHint')],
+      ['markdown', 'quality.markdown', t('quality.markdownHint')],
+      ['return', 'quality.return', t('quality.returnHint', { n: refund })],
+    ];
+    for (const [choice, label, hint] of options) {
+      box.append(
+        button(t(label), () => {
+          setState(resolveBadBatch(getState(), batch.pid, choice, batch.price));
+          pendingBad = null;
+          haptic.tap();
+          render();
+        }),
+        el('div', 'ui-muted', hint),
+      );
+    }
+    return box;
+  };
+
   const priceRow = (pid: ProductId, state: StoreState) => {
     const price = state.prices[pid];
     const row = el('div', 'ui-row');
@@ -148,4 +198,14 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   };
 
   render();
+}
+
+function shelfInfo(state: StoreState, pid: ProductId): string {
+  const units = state.stock[pid];
+  const parts = [t('morning.shelf', { n: units.length, max: SHELF_CAPACITY })];
+  const bad = units.filter((u) => u.bad && !u.markdown).length;
+  const markdown = units.filter((u) => u.markdown).length;
+  if (bad) parts.push(t('morning.badStock', { n: bad }));
+  if (markdown) parts.push(t('morning.markdownStock', { n: markdown }));
+  return parts.join(', ');
 }
