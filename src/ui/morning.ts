@@ -545,8 +545,11 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         .join(' ');
       after.push(el('div', 'ui-note', t('story.reward', { reward })));
     }
+    // Картинка — на первой реплике главы и на последней реплике финала.
+    const art = kind === 'intro' ? (storyLine === 0 ? chapter.introArt : undefined) : last ? chapter.outroArt : undefined;
     return dialogBox({
       caption: t('story.chapter', { n: state.story.chapter + 1, title: t(chapter.titleKey) }),
+      art,
       portrait: `portrait_${current.who}${current.mood ? `_${current.mood}` : ''}`,
       name: t(speaker.nameKey),
       text: `«${t(current.key)}»`,

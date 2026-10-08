@@ -126,6 +126,9 @@ const css = `
 .ui-badge .ui-bar { width: 100%; }
 /* Диалог как в RPG: крупный портрет, табличка с именем, облако реплики с хвостиком. */
 .ui-dialog { margin: 4px 0; }
+.ui-dialog-art { display: block; width: 100%; aspect-ratio: 16 / 9; image-rendering: pixelated; margin: 6px 0 10px;
+  border: 3px solid #2b2233; border-radius: 8px; box-shadow: 0 3px 0 #2b2233; animation: ui-art .6s ease-out; }
+@keyframes ui-art { from { opacity: 0; transform: scale(1.04); } }
 .ui-dialog-row { display: flex; align-items: flex-end; gap: 10px; margin-top: 6px; }
 .ui-dialog-face { width: 88px; height: 88px; flex: none; image-rendering: pixelated; border: 3px solid #2b2233;
   border-radius: 8px; box-shadow: 0 3px 0 #2b2233; background: #fbf6ea; animation: ui-pop .3s cubic-bezier(.3, 1.45, .5, 1); }

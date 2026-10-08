@@ -7,6 +7,8 @@ import { button, el } from './dom';
 export interface DialogOptions {
   /** Над диалогом: глава и её название. */
   caption?: string;
+  /** Иллюстрация сцены над диалогом (если файла нет — просто не показывается). */
+  art?: string;
   /** Имя картинки портрета без assets/ и .png (portrait_grandma_happy). */
   portrait: string;
   name: string;
@@ -24,6 +26,13 @@ const CHAR_MS = 26;
 export function dialogBox(o: DialogOptions): HTMLElement {
   const box = el('div', 'ui-dialog');
   if (o.caption) box.append(el('div', 'ui-muted', o.caption));
+  if (o.art) {
+    const art = el('img', 'ui-dialog-art');
+    art.src = o.art;
+    art.alt = '';
+    art.addEventListener('error', () => art.remove());
+    box.append(art);
+  }
   const row = el('div', 'ui-dialog-row');
   const face = el('img', 'ui-dialog-face talking');
   face.src = `assets/${o.portrait}.png`;
