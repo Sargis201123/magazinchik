@@ -129,7 +129,7 @@ export interface SimOptions {
   ovenBurn?: number;
 }
 
-export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat';
+export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'register2';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy'];
@@ -143,6 +143,8 @@ const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
   ['loader', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
   ['guard', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
   ['cleaner', (s) => s.level >= 3 && Boolean(staffOf(s, 'cashier'))],
+  // Второй кассир — когда есть вторая касса и гостей больше, чем пробьёт один.
+  ['cashier2', (s) => hasUpgrade(s, 'register2') && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 2],
 ];
 
 /** Для решения «пора нанимать кассира»: примерно столько успевает один человек. */
@@ -157,9 +159,14 @@ const QUEUE_STEP_SECONDS = 0.3;
 /** Сколько покупателей реально пробить за день: пробивка занимает время и зависит от навыка. */
 function serveCapacity(state: StoreState): number {
   const cashier = staffOf(state, 'cashier');
-  if (cashier) return Math.floor(DAY_SECONDS / (checkoutSeconds(cashierScan(cashier), AVG_BASKET) + QUEUE_STEP_SECONDS));
   const owner = checkoutSeconds(ownerScan(state.ownerServed), AVG_BASKET) + QUEUE_STEP_SECONDS;
-  return Math.floor((DAY_SECONDS * ownerAtRegister(state.level)) / owner);
+  const ownerCap = Math.floor((DAY_SECONDS * ownerAtRegister(state.level)) / owner);
+  if (!cashier) return ownerCap;
+  const main = Math.floor(DAY_SECONDS / (checkoutSeconds(cashierScan(cashier), AVG_BASKET) + QUEUE_STEP_SECONDS));
+  if (!hasUpgrade(state, 'register2')) return main;
+  // Вторая касса: второй кассир или сам хозяин (между другими делами).
+  const second = staffOf(state, 'cashier2');
+  return main + (second ? Math.floor(DAY_SECONDS / (checkoutSeconds(cashierScan(second), AVG_BASKET) + QUEUE_STEP_SECONDS)) : ownerCap);
 }
 
 export function simulate({
@@ -257,6 +264,7 @@ export function simulate({
       ['coffee', 'coffee'],
       ['oven', 'oven'],
       ['night', 'nightShift'],
+      ['register2', 'register2'],
     ];
     for (const [feature, id] of wants) {
       if (!features[feature] || hasUpgrade(state, id) || state.money < UPGRADES[id].price + reserve) continue;

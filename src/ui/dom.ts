@@ -208,6 +208,10 @@ const css = `
 .ui-review-stars { color: #f77622; font-size: 14px; letter-spacing: 1px; }
 .ui-review-text { font-size: 14px; line-height: 1.3; color: #2b2233; margin: 2px 0; }
 .ui-review-who { font-size: 12px; color: #6a5f58; text-align: right; }
+.ui-loss-bar { display: flex; height: 14px; border: 2px solid #2b2233; border-radius: 6px; overflow: hidden; margin: 6px 0 2px; }
+.ui-loss-row { display: grid; grid-template-columns: 14px 1fr; gap: 6px; align-items: start; padding: 5px 0; }
+.ui-loss-row + .ui-loss-row { border-top: 1px dashed #d8ccb0; }
+.ui-loss-dot { width: 12px; height: 12px; border: 2px solid #2b2233; border-radius: 3px; margin-top: 3px; box-sizing: border-box; }
 `;
 let styled = false;
 export function injectStyles(): void {

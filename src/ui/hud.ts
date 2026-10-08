@@ -1,8 +1,39 @@
-import { t } from '../i18n';
+import { t, type TextKey } from '../i18n';
 import { onShelves, PRODUCTS, sellableProducts, warehouseCount, type DayStats, type StoreState } from '../game/economy';
 import { button, curtain, el, injectStyles, openModal, pixelize } from './dom';
 import type { Review } from '../game/reviews';
 import { reviewCards } from './reviews';
+import type { LossAdvice } from '../game/losses';
+
+/** Цвета причин ухода — те же, что в полоске. */
+const LOSS_COLORS = { queue: '#f77622', empty: '#8b9bb4', expensive: '#e43b44', eduard: '#68386c' } as const;
+
+/** «Куда ушли покупатели»: полоска купили/ушли по причинам и совет к каждой причине. */
+function lossBox(served: number, losses: LossAdvice[]): HTMLElement {
+  const box = el('div', 'ui-box');
+  box.append(el('b', '', t('loss.title')));
+  const total = served + losses.reduce((sum, l) => sum + l.count, 0);
+  const bar = el('div', 'ui-loss-bar');
+  const part = (n: number, color: string) => {
+    const seg = el('div');
+    seg.style.flex = String(n);
+    seg.style.background = color;
+    bar.append(seg);
+  };
+  part(served, '#63c74d');
+  for (const l of losses) part(l.count, LOSS_COLORS[l.reason]);
+  box.append(bar, el('div', 'ui-muted', `🟩 ${t('loss.bought')}: ${served} / ${total}`));
+  for (const l of losses) {
+    const row = el('div', 'ui-loss-row');
+    const dot = el('span', 'ui-loss-dot');
+    dot.style.background = LOSS_COLORS[l.reason];
+    const text = el('div');
+    text.append(el('b', '', `${t(`loss.r.${l.reason}` as TextKey)} — ${l.count}`), el('div', 'ui-item-sub', t(l.key, l.params)));
+    row.append(dot, text);
+    box.append(row);
+  }
+  return box;
+}
 
 export class Hud {
   private readonly top = el('div', 'ui-hud');
@@ -94,6 +125,7 @@ export class Hud {
     money: { bill: number | null; shortfall: number; total: number },
     extra: [string, string][],
     history: number[],
+    losses: LossAdvice[],
     reviews: Review[],
     onNext: () => void,
   ): void {
@@ -131,6 +163,7 @@ export class Hud {
       r.append(el('span', '', label), el('b', '', String(value)));
       card.append(r);
     };
+    if (losses.length) card.append(lossBox(stats.served, losses));
     row(t('summary.complaints'), stats.complaints);
     row(t('summary.spoiled'), stats.spoiled);
     if (stats.nightRevenue) row(t('summary.night'), `+${stats.nightRevenue} 💰`);
