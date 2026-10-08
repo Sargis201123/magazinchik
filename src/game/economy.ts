@@ -357,6 +357,8 @@ export interface DayStats {
   sold: Partial<Record<ProductId, number>>;
   /** Сколько мусора убрали. */
   trashCleaned: number;
+  /** Самая длинная серия: покупатели, обслуженные подряд без долгих пауз. */
+  bestCombo: number;
 }
 
 /** Учёт проданного (для заданий дня). */
@@ -408,6 +410,7 @@ export const emptyDayStats = (): DayStats => ({
   skimmed: 0,
   sold: {},
   trashCleaned: 0,
+  bestCombo: 0,
 });
 
 // ---------- Подсчёты ----------

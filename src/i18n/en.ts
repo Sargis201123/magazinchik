@@ -370,6 +370,7 @@ export const en: Record<TextKey, string> = {
   'title.musicOn': '🎵 Music',
   'title.musicOff': '🎵 No music',
   'summary.week': 'Revenue this week',
+  'popup.combo': 'Combo ×{n}!',
   'popup.rush': "Rush hour!",
   'popup.broken': "Fridge is broken",
   'hint.inspector': "The inspector is here! Quickly clean the trash and toilet",

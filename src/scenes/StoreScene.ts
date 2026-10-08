@@ -156,6 +156,9 @@ const MUD_CHANCE = 0.15;
 /** Больше двух грязных пятен разом не бывает — иначе гроза засыпает жалобами. */
 const MAX_MUD = 2;
 const MOP_MS = 1300;
+/** Следующий покупатель обслужен за столько после предыдущего — серия продолжается. */
+const COMBO_WINDOW_MS = 7000;
+const COMBO_COLORS = ['#fee761', '#feae34', '#f77622', '#e43b44', '#b55088', '#2ce8f5'];
 const TOILET_CHANCE = 0.25;
 const TOILET_DIRT_PER_VISIT = 20;
 const TOILET_DIRTY = 60;
@@ -395,6 +398,9 @@ export class StoreScene extends Phaser.Scene {
   /** Таймеры кота и голубей: при перестройке мира старые останавливаются. */
   private critterTimers: Phaser.Time.TimerEvent[] = [];
   private valyaCame = false;
+  /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
+  private combo = 0;
+  private lastSaleAt = -Infinity;
   private nextSpawn = 1;
   private running = false;
 
@@ -1620,6 +1626,40 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
+  /** «Серия ×3!» над кассой: крупная цифра, звёздочки, нота всё выше. */
+  private celebrateCombo(n: number): void {
+    const { counter } = this.layout;
+    const color = COMBO_COLORS[Math.min(n - 2, COMBO_COLORS.length - 1)];
+    const label = this.add
+      .text(counter.x - 14, counter.y - 40, t('popup.combo', { n }), {
+        fontFamily: UI_FONT,
+        fontSize: `${Math.min(9 + n, 15)}px`,
+        fontStyle: 'bold',
+        color,
+        stroke: '#181425',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setResolution(5)
+      .setDepth(LIGHT_DEPTH + 6)
+      .setScale(0.2)
+      .setAngle(-8);
+    this.tweens.add({ targets: label, scale: 1, angle: 0, duration: 260, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: label, y: label.y - 12, alpha: 0, delay: 900, duration: 500, onComplete: () => label.destroy() });
+    const burst = this.add.particles(counter.x - 14, counter.y - 40, 'spark', {
+      speed: { min: 20, max: 40 + n * 6 },
+      lifespan: 600,
+      scale: { start: 0.7, end: 0 },
+      tint: [0xfee761, 0xffffff, 0xfeae34],
+      quantity: 6 + n * 2,
+      emitting: false,
+    });
+    burst.setDepth(LIGHT_DEPTH + 5).explode(6 + n * 2);
+    this.time.delayedCall(800, () => burst.destroy());
+    sound.combo(n);
+    if (n >= 4) this.cameras.main.shake(120, 0.002);
+  }
+
   /** Облачко пыли: мусор убрали. */
   private puff(x: number, y: number): void {
     const cloud = this.art(x, y - 2, 'puff').setDepth(y + 5);
@@ -2318,7 +2358,12 @@ export class StoreScene extends Phaser.Scene {
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
     this.popup(this.layout.sellerHome.x - 8, this.layout.sellerHome.y - 18, `+${total} 💰`, '#c8ffb0');
-    this.flyCoins(this.layout.counter.x, this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)));
+    this.combo = this.time.now - this.lastSaleAt < COMBO_WINDOW_MS ? this.combo + 1 : 1;
+    this.lastSaleAt = this.time.now;
+    this.stats.bestCombo = Math.max(this.stats.bestCombo, this.combo);
+    // В серии монет летит больше.
+    this.flyCoins(this.layout.counter.x, this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)) + Math.min(this.combo - 1, 5));
+    if (this.combo >= 2) this.celebrateCombo(this.combo);
 
     const dirty = this.trash.size >= TRASH_COMPLAINT;
     const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
@@ -2343,6 +2388,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshShelves();
     this.refreshWarehouse();
     this.stats.lost++;
+    this.combo = 0;
     haptic.error();
     sound.bad();
     this.popup(c.sprite.x, c.sprite.y - 14, t('popup.leftAngry'), '#ffd0d0');
@@ -2614,6 +2660,8 @@ export class StoreScene extends Phaser.Scene {
     const season = seasonFor(this.state.day);
     if (season) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
     this.stats = emptyDayStats();
+    this.combo = 0;
+    this.lastSaleAt = -Infinity;
     this.timeLeft = DAY_SECONDS;
     this.nextSpawn = 1;
     this.toiletDirt = 0;

@@ -135,6 +135,15 @@ export const sound = {
       { freq: 523, at: 0.3, dur: 0.35, wave: 'triangle', vol: 0.06 },
     ]),
 
+  /** Серия обслуживания: короткое арпеджио, с каждой ступенью выше. */
+  combo: (n: number) => {
+    const base = 523 * 2 ** (Math.min(n - 2, 8) / 12);
+    play([
+      { freq: base, dur: 0.07, wave: 'square', vol: 0.03 },
+      { freq: base * 1.26, at: 0.06, dur: 0.07, wave: 'square', vol: 0.03 },
+      { freq: base * 1.5, at: 0.12, dur: 0.16, wave: 'square', vol: 0.03 },
+    ]);
+  },
   /** «Чпок» товара на полке; n — какой по счёту (каждый следующий чуть выше). */
   pop: (n = 0) => play([{ freq: 660 + n * 40, dur: 0.05, wave: 'sine', vol: 0.05, slide: 990 + n * 50 }]),
   /** Раскат грома в грозу. */

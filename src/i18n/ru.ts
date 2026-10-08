@@ -368,6 +368,7 @@ export const ru = {
   'title.musicOn': '🎵 Музыка',
   'title.musicOff': '🎵 Без музыки',
   'summary.week': 'Выручка за неделю',
+  'popup.combo': 'Серия ×{n}!',
   'popup.rush': "Час пик!",
   'popup.broken': "Холодильник сломан",
   'hint.inspector': "Инспектор в зале! Быстро убери мусор и туалет",
