@@ -2,7 +2,7 @@
 // разбирают охотнее. Свой хлеб дешевле, чем у поставщика, но печь надо караулить:
 // если вовремя не вынуть, всё сгорит.
 
-import { canPlace, shelfFree, type StoreState, type Unit } from './economy';
+import { canPlace, shelfFree, warehouseCapacity, warehouseCount, type StoreState, type Unit } from './economy';
 
 /** Сколько буханок в одной закладке и сколько стоят мука и дрожжи на неё. */
 export const OVEN_BATCH = 6;
@@ -16,9 +16,14 @@ export const AROMA_SECONDS = 25;
 export const AROMA_DEMAND = 2;
 export const AROMA_TOLERANCE = 1.2;
 
-/** Заложить противень: деньги за муку. null — не хватает денег. */
+/** Сколько свежего хлеба сейчас есть куда положить: свободное место на хлебных полках и на складе. */
+export const breadRoom = (state: StoreState): number =>
+  state.shelves.reduce((sum, s) => sum + (!s.broken && canPlace('bread', s) ? shelfFree(s) : 0), 0) +
+  Math.max(0, warehouseCapacity(state) - warehouseCount(state));
+
+/** Заложить противень: деньги за муку. null — не хватает денег или хлеб некуда положить. */
 export function startBatch(state: StoreState): StoreState | null {
-  if (state.money < OVEN_BATCH_COST) return null;
+  if (state.money < OVEN_BATCH_COST || breadRoom(state) < OVEN_BATCH) return null;
   return { ...state, money: state.money - OVEN_BATCH_COST };
 }
 

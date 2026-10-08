@@ -1132,6 +1132,13 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, g: next.guests, rent: next.rent })),
       );
       if (state.debt > 0) grow.append(el('div', 'ui-note', t('store.needNoDebt')));
+      // После стройки может не хватить на счета по новой аренде — предупредить заранее.
+      const billAfter = billTotal(monthlyBill({ ...state, level: state.level + 1 }));
+      if (state.debt === 0 && state.money >= next.cost && state.money - next.cost < billAfter) {
+        const warn = el('div', 'ui-note', t('store.billWarn', { left: state.money - next.cost, bill: billAfter, n: daysUntilBill(state.day) }));
+        warn.style.color = '#b13e53';
+        grow.append(warn);
+      }
       grow.append(
         button(
           t('store.expand', { cost: next.cost }),

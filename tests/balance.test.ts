@@ -71,3 +71,24 @@ describe('персонал', () => {
     expect(withStaff.l5).toBeLessThan(solo.l5);
   });
 });
+
+describe('новые механики', () => {
+  // Каждая механика заметно помогает, но не ломает игру: деньги к 100-му дню растут, но не в разы.
+  const money = (features: Parameters<typeof simulate>[0]['features']) => {
+    const runs = 6;
+    let sum = 0;
+    for (let seed = 1; seed <= runs; seed++) {
+      const r = simulate({ days: 100, seed, features });
+      sum += r.days[r.days.length - 1].money;
+    }
+    return sum / runs;
+  };
+  const base = money({});
+
+  it.each([['cat'], ['candy'], ['coffee'], ['oven'], ['night']] as const)('%s — в плюс, но не больше чем вдвое', (feature) => {
+    const m = money({ [feature]: true });
+    expect(m).toBeGreaterThan(base);
+    expect(m).toBeLessThan(base * 2);
+  });
+
+});
