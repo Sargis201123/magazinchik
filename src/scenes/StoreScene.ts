@@ -85,7 +85,7 @@ import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
-import { binCapacity, binSprite, brewSeconds, coffeePrice, coffeeSprite, ovenBake, ovenBatchCost, ovenSprite, registerSprite } from '../game/gear';
+import { binCapacity, binSprite, brewSeconds, coffeePrice, coffeeSprite, gearTier, ovenBake, ovenBatchCost, ovenSprite, registerSprite } from '../game/gear';
 import { CASHIER_ROLES, nextRegisterCount, registerCount, registerOfRole } from '../game/registers';
 import {
   AROMA_SECONDS,
@@ -94,7 +94,7 @@ import {
   startBatch,
   takeOutBread,
 } from '../game/bakery';
-import { canWorkNight, NIGHT_GUESTS, NIGHT_POWER, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from '../game/night';
+import { canWorkNight, NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from '../game/night';
 import { CAT_BEDS, CAT_TIP, catHome, catPatience, catTipChance, fedToday } from '../game/cat';
 import { note, reviewsFor } from '../game/reviews';
 import { warLeaves } from '../game/war';
@@ -1907,7 +1907,7 @@ export class StoreScene extends Phaser.Scene {
     const { card, close } = openModal();
     card.append(
       el('h2', '', t('night.title')),
-      el('p', '', t('night.text', { n: NIGHT_SECONDS })),
+      el('p', '', t('night.text', { n: NIGHT_SECONDS, p: Math.round((NIGHT_MARKUP - 1) * 100) })),
       el('div', 'ui-muted', t('night.cost', { n: NIGHT_POWER })),
       button(
         t('night.yes'),
@@ -4256,8 +4256,8 @@ export class StoreScene extends Phaser.Scene {
       note(this.stats, 'expensive');
       return 'eduard';
     }
-    const price = unitSalePrice(this.state, id, oldest);
-    // Ночью к ценам не придираются; пока пахнет свежим хлебом, за него готовы платить больше.
+    // Ночью — наценка, зато к ценам не придираются; пока пахнет свежим хлебом, за него готовы платить больше.
+    const price = Math.ceil(unitSalePrice(this.state, id, oldest) * (this.night ? NIGHT_MARKUP : 1));
     const fair =
       perceivedBase(this.state, id) *
       (this.night ? NIGHT_TOLERANCE : 1) *
@@ -4394,7 +4394,8 @@ export class StoreScene extends Phaser.Scene {
       r.fill.setVisible(Boolean(scan));
       if (scan) r.fill.width = 16 * Math.min(1, (this.time.now - scan.start) / scan.total);
       r.screen.setVisible(Boolean(scan));
-      r.beam.setVisible(Boolean(scan));
+      // У кассового аппарата нет сканера — луча нет.
+      r.beam.setVisible(Boolean(scan) && gearTier(this.state, 'register') > 0);
       if (scan) {
         const blink = Math.floor(this.time.now / 140) % 2;
         r.screen.setAlpha(blink ? 0.95 : 0.45);
@@ -4408,7 +4409,7 @@ export class StoreScene extends Phaser.Scene {
     const at = this.registerOf(c);
     if (at) at.customer = null;
 
-    const { state, total: goods } = checkout(this.state, c.items);
+    const { state, total: goods } = checkout(this.state, c.items, this.night ? NIGHT_MARKUP : 1);
     // Шоколадка и кофе — сверху к товару.
     const extras = (c.extras ?? []).reduce((sum, e) => sum + e.price, 0);
     const total = goods + extras;

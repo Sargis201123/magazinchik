@@ -26,7 +26,7 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   selfCheckout: { id: 'selfCheckout', icon: '🖥', nameKey: 'upgrade.selfCheckout', descKey: 'upgrade.selfCheckout.desc', price: 2500, minLevel: 2 },
   coffee: { id: 'coffee', icon: '☕', nameKey: 'upgrade.coffee', descKey: 'upgrade.coffee.desc', price: 1500, minLevel: 2 },
   oven: { id: 'oven', icon: '🥖', nameKey: 'upgrade.oven', descKey: 'upgrade.oven.desc', price: 1800, minLevel: 1 },
-  nightShift: { id: 'nightShift', icon: '🌙', nameKey: 'upgrade.nightShift', descKey: 'upgrade.nightShift.desc', price: 5000, minLevel: 3 },
+  nightShift: { id: 'nightShift', icon: '🌙', nameKey: 'upgrade.nightShift', descKey: 'upgrade.nightShift.desc', price: 3500, minLevel: 3 },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

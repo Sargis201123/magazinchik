@@ -94,8 +94,9 @@ import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, t
 import { sound } from '../platform/sound';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
 import { CANDY_COST, CANDY_PRICE, nextRack, rackCapacity, rackOf, refillRack, upgradeRack } from '../game/impulse';
-import { buyCups, COFFEE_CHANCE, COFFEE_PRICE, CUP_COST, cupsOf, CUPS_MAX } from '../game/coffee';
-import { OVEN_BAKE_SECONDS, OVEN_BATCH, OVEN_BATCH_COST } from '../game/bakery';
+import { buyCups, COFFEE_CHANCE, CUP_COST, cupsOf, CUPS_MAX } from '../game/coffee';
+import { coffeePrice, coffeeSprite, GEAR, GEAR_IDS, gearAvailable, gearTier, nextGear, ovenBake, ovenBatch, ovenBatchCost, ovenSprite, upgradeGear, type GearId } from '../game/gear';
+import { isCashierRole, nextRegisterCount, registerCount, registerOfRole } from '../game/registers';
 import { activeWar, answerWar } from '../game/war';
 import {
   adoptCat,
@@ -714,13 +715,13 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       return box;
     }
     const chance = Math.min(0.6, COFFEE_CHANCE * WEATHER_EFFECTS[weatherFor(state.day)].coffee);
-    box.append(el('div', 'ui-muted', t('coffee.note', { price: COFFEE_PRICE, cost: CUP_COST, n: Math.max(2, Math.round(1 / chance)) })));
+    box.append(el('div', 'ui-muted', t('coffee.note', { price: coffeePrice(state), cost: CUP_COST, n: Math.max(2, Math.round(1 / chance)) })));
     const free = CUPS_MAX - cupsOf(state);
     const amounts = [...new Set([Math.min(10, free), free])].filter((n) => n > 0);
     const actions = amounts.map((n) =>
       button(t('coffee.buy', { n, cost: n * CUP_COST }), () => update(buyCups(getState(), n), 'success'), 'ui-chip', state.money < n * CUP_COST),
     );
-    box.append(artRow('coffee_machine', { name: t('coffee.cups', { n: cupsOf(state), max: CUPS_MAX }), actions }));
+    box.append(artRow(coffeeSprite(state), { name: t('coffee.cups', { n: cupsOf(state), max: CUPS_MAX }), actions }));
     return box;
   };
 
@@ -728,7 +729,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('oven.title')));
     box.append(
-      el('div', 'ui-muted', hasUpgrade(state, 'oven') ? t('oven.note', { n: OVEN_BATCH, cost: OVEN_BATCH_COST, s: OVEN_BAKE_SECONDS }) : t('oven.locked')),
+      el('div', 'ui-muted', hasUpgrade(state, 'oven') ? t('oven.note', { n: ovenBatch(state), cost: ovenBatchCost(state), s: ovenBake(state) }) : t('oven.locked')),
     );
     return box;
   };
@@ -820,6 +821,47 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       );
       row.append(body, actions);
       box.append(row);
+    }
+    return box;
+  };
+
+  /** Картинка модели в списке оборудования. */
+  const gearArt = (state: StoreState, id: GearId, tier: number): string => {
+    // Кассу показываем крупным планом: сам стол слишком длинный для строки.
+    const at = { ...state, gear: { ...state.gear, [id]: tier } };
+    const art: Record<GearId, string> = { register: `counter_icon${tier}`, bin: tier ? `bin_t${tier}_0` : 'bin0', coffee: coffeeSprite(at), oven: ovenSprite(at) };
+    return art[id];
+  };
+
+  /** Оборудование: какая модель стоит и какую можно поставить следующей. */
+  const gearBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('gear.title')), el('div', 'ui-muted', t('gear.note')));
+    for (const id of GEAR_IDS) {
+      const gear = GEAR[id];
+      const tier = gearTier(state, id);
+      const now = gear.models[tier];
+      const next = nextGear(state, id);
+      const needs = gear.needs && !hasUpgrade(state, gear.needs);
+      box.append(
+        artRow(gearArt(state, id, tier), {
+          name: `${gear.icon} ${t(gear.nameKey)}: ${t(now.nameKey)}`,
+          sub: needs ? t(`gear.needs.${gear.needs}` as TextKey) : t(now.effectKey),
+          actions: next || needs ? [] : [el('span', 'ui-tag', t('gear.max'))],
+        }),
+      );
+      if (!next || needs) continue;
+      const locked = state.level < next.minLevel;
+      box.append(
+        artRow(gearArt(state, id, tier + 1), {
+          name: `→ ${t(next.nameKey)}`,
+          price: next.price,
+          sub: locked ? t('upgrade.needLevel', { name: t(STORE_LEVELS[next.minLevel].nameKey) }) : t(next.effectKey),
+          actions: [
+            button(t('gear.buy'), () => update(upgradeGear(getState(), id), 'success'), 'ui-chip', !gearAvailable(state, id) || state.money < next.price),
+          ],
+        }),
+      );
     }
     return box;
   };
@@ -1366,9 +1408,9 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const current = el('div', 'ui-box');
     current.append(
       el('b', '', t('store.current', { name: t(level.nameKey) })),
-      el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: level.warehouse, g: level.guests })),
+      el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: level.warehouse, r: registerCount(state), g: level.guests })),
     );
-    out.push(current);
+    out.push(current, gearBox(state));
 
     const grow = el('div', 'ui-box');
     if (!next) {
@@ -1376,7 +1418,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     } else {
       grow.append(
         el('b', '', t('store.next', { name: t(next.nameKey) })),
-        el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, g: next.guests, rent: next.rent })),
+        el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, r: Math.max(registerCount(state), nextRegisterCount(state) ?? 0), g: next.guests, rent: next.rent })),
       );
       if (state.debt > 0) grow.append(el('div', 'ui-note', t('store.needNoDebt')));
       // После стройки может не хватить на счета по новой аренде — предупредить заранее.

@@ -75,7 +75,7 @@ import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRac
 import { buyCups, coffeeChance, useCup } from './coffee';
 import { brewSeconds, coffeePrice, gearAvailable, nextGear, ovenBatch, upgradeGear, type GearId } from './gear';
 import { AROMA_SECONDS, AROMA_TOLERANCE, startBatch, takeOutBread } from './bakery';
-import { NIGHT_GUESTS, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
+import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
@@ -277,8 +277,12 @@ export function simulate({
       ['cart', 'cart'],
       ['loyalty', 'loyalty'],
     ];
+    // Дорогое «для удобства» (ночная смена, новые модели) разумный игрок берёт, когда уже не копит на расширение.
+    const nextLevel = nextStoreLevel(state);
+    const canSplurge = (price: number) => !nextLevel || state.money - price >= nextLevel.cost + reserve;
     for (const [feature, id] of wants) {
       if (!features[feature] || hasUpgrade(state, id) || state.money < UPGRADES[id].price + reserve) continue;
+      if (id === 'nightShift' && !canSplurge(UPGRADES[id].price)) continue;
       const bought = buyUpgrade(state, id);
       if (bought) {
         investments += UPGRADES[id].price;
@@ -289,7 +293,7 @@ export function simulate({
     if (features.gear) {
       for (const id of ['register', 'coffee', 'oven'] as GearId[]) {
         const next = nextGear(state, id);
-        if (!next || !gearAvailable(state, id) || state.money < next.price + reserve * 2) continue;
+        if (!next || !gearAvailable(state, id) || state.money < next.price + reserve * 2 || !canSplurge(next.price)) continue;
         investments += next.price;
         state = upgradeGear(state, id) ?? state;
       }
@@ -460,11 +464,12 @@ export function simulate({
           tooExpensive = true;
           continue;
         }
-        if (random() < buyChance(unitSalePrice(state, id, oldest), fair(id))) {
+        const price = Math.ceil(unitSalePrice(state, id, oldest) * (night ? NIGHT_MARKUP : 1));
+        if (random() < buyChance(price, fair(id))) {
           const taken = takeFromShelf(state, index, id)!;
           state = taken.state;
           cart.push({ id, unit: taken.unit });
-        } else if (unitSalePrice(state, id, oldest) > fair(id)) {
+        } else if (price > fair(id)) {
           tooExpensive = true;
         }
       }
@@ -477,7 +482,7 @@ export function simulate({
         stats.lost++;
         continue;
       }
-      const paid = checkout(state, cart);
+      const paid = checkout(state, cart, night ? NIGHT_MARKUP : 1);
       const extra = extras(night) + (extraRandom() < catTipChance(state) ? CAT_TIP : 0);
       state = { ...paid.state, money: paid.state.money + extra };
       stats.revenue += paid.total + extra;

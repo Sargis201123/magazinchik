@@ -796,8 +796,9 @@ export function returnToShelf(state: StoreState, items: CartItem[]): StoreState 
   return next;
 }
 
-export function checkout(state: StoreState, items: CartItem[]): { state: StoreState; total: number } {
-  const total = items.reduce((sum, { id, unit, free }) => sum + (free ? 0 : unitSalePrice(state, id, unit)), 0);
+/** markup — ночная наценка (цена на ценнике × markup, округляя вверх). */
+export function checkout(state: StoreState, items: CartItem[], markup = 1): { state: StoreState; total: number } {
+  const total = items.reduce((sum, { id, unit, free }) => sum + (free ? 0 : Math.ceil(unitSalePrice(state, id, unit) * markup)), 0);
   return { state: { ...state, money: state.money + total }, total };
 }
 

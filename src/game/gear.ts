@@ -37,9 +37,9 @@ export const GEAR: Record<GearId, Gear> = {
     nameKey: 'gear.register',
     models: [
       model('gear.register.0', 0, 0, 'gear.register.0.fx'),
-      model('gear.register.1', 700, 1, 'gear.register.1.fx'),
-      model('gear.register.2', 2200, 2, 'gear.register.2.fx'),
-      model('gear.register.3', 5500, 3, 'gear.register.3.fx'),
+      model('gear.register.1', 500, 1, 'gear.register.1.fx'),
+      model('gear.register.2', 1500, 2, 'gear.register.2.fx'),
+      model('gear.register.3', 4000, 3, 'gear.register.3.fx'),
     ],
   },
   bin: {
