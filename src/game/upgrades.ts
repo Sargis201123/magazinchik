@@ -1,10 +1,11 @@
-// Улучшения кассы: терминал для карт (оплата быстрее) и касса самообслуживания
-// (покупатели с 1–2 товарами пробивают себя сами, пока у основной кассы очередь).
+// Улучшения магазина: терминал для карт (оплата быстрее), касса самообслуживания
+// (покупатели с 1–2 товарами пробивают себя сами, пока у основной кассы очередь),
+// кофейный уголок, своя печь и ночная смена.
 
 import type { TextKey } from '../i18n/ru';
 import type { ScanTiming, StoreState } from './economy';
 
-export type UpgradeId = 'terminal' | 'selfCheckout';
+export type UpgradeId = 'terminal' | 'selfCheckout' | 'coffee' | 'oven' | 'nightShift';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -19,6 +20,9 @@ export interface Upgrade {
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
   terminal: { id: 'terminal', icon: '💳', nameKey: 'upgrade.terminal', descKey: 'upgrade.terminal.desc', price: 600, minLevel: 1 },
   selfCheckout: { id: 'selfCheckout', icon: '🖥', nameKey: 'upgrade.selfCheckout', descKey: 'upgrade.selfCheckout.desc', price: 2500, minLevel: 2 },
+  coffee: { id: 'coffee', icon: '☕', nameKey: 'upgrade.coffee', descKey: 'upgrade.coffee.desc', price: 1200, minLevel: 1 },
+  oven: { id: 'oven', icon: '🥖', nameKey: 'upgrade.oven', descKey: 'upgrade.oven.desc', price: 1800, minLevel: 1 },
+  nightShift: { id: 'nightShift', icon: '🌙', nameKey: 'upgrade.nightShift', descKey: 'upgrade.nightShift.desc', price: 5000, minLevel: 3 },
 };
 
 export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];

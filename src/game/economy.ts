@@ -5,6 +5,9 @@ import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
 import { newDecor, type DecorState } from './decor';
+import type { ReviewTopic, Review } from './reviews';
+import type { War } from './war';
+import type { ShopCat } from './cat';
 
 /** Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу. */
 export type Category = 'bakery' | 'produce' | 'dairy' | 'meat';
@@ -365,6 +368,17 @@ export interface StoreState {
   upgrades?: string[];
   /** Реклама: какая и в какие дни (включительно) работает. */
   ads?: { id: 'flyers' | 'banner' | 'blogger'; from: number; until: number };
+  /** Стойка со сладостями у кассы (impulse.ts). */
+  rack?: { level: number; stock: number };
+  /** Стаканчики в кофейном уголке (coffee.ts). */
+  cups?: number;
+  /** Ценовая война с Эдуардом (war.ts). */
+  war?: War;
+  /** Кот магазина (cat.ts) и с какого дня снова предложить его оставить. */
+  cat?: ShopCat;
+  catAsk?: number;
+  /** Отзывы за последний день (reviews.ts). */
+  reviews?: Review[];
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -404,6 +418,10 @@ export interface DayStats {
   trashCleaned: number;
   /** Самая длинная серия: покупатели, обслуженные подряд без долгих пауз. */
   bestCombo: number;
+  /** Что заметили покупатели — для отзывов (reviews.ts). */
+  notes?: Partial<Record<ReviewTopic, number>>;
+  /** Выручка ночной смены (входит в revenue). */
+  nightRevenue?: number;
 }
 
 /** Учёт проданного (для заданий дня). */
@@ -433,6 +451,7 @@ export const newGame = (): StoreState => ({
   achievements: [],
   lifetime: newLifetime(),
   gift: { lastDate: '', streak: 0 },
+  rack: { level: 0, stock: 6 },
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [
@@ -459,6 +478,7 @@ export const emptyDayStats = (): DayStats => ({
   sold: {},
   trashCleaned: 0,
   bestCombo: 0,
+  notes: {},
 });
 
 // ---------- Подсчёты ----------

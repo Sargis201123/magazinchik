@@ -2540,6 +2540,151 @@ def seasonal_goods():
     c.save("crate_flowers")
 
 
+def stage9():
+    """Шоколадка, кофемашина и стаканчик, печь, доска отзывов, кот (идёт, сидит) и лежанки."""
+    # Шоколадка в красной обёртке — летит со стойки в руки покупателю.
+    c = Canvas(8, 6)
+    c.rect(0, 0, 8, 6, "R")
+    c.rect(0, 0, 2, 6, "b")
+    c.rect(6, 0, 2, 6, "b")
+    c.hline(2, 1, 4, "s")
+    c.px(3, 3, "Y")
+    c.px(4, 3, "Y")
+    c.outline("k")
+    c.save("candy")
+    # Кофемашина: корпус, табло, носик, поддон и стопка стаканчиков сбоку.
+    c = Canvas(24, 36)
+    c.round_rect(2, 4, 16, 30, "K", r=2)
+    c.vline(3, 5, 28, "g")
+    c.rect(4, 6, 12, 6, "x")
+    c.rect(5, 7, 10, 4, "u")
+    c.hline(6, 8, 5, "c")
+    c.px(13, 9, "E")
+    c.rect(4, 14, 12, 12, "z")
+    c.rect(8, 14, 4, 3, "W")
+    c.vline(9, 17, 2, "l")
+    c.vline(10, 17, 2, "l")
+    c.rect(5, 26, 10, 2, "G")
+    c.hline(5, 26, 10, "l")
+    c.rect(2, 28, 16, 6, "g")
+    c.hline(3, 29, 14, "G")
+    c.px(14, 31, "R")
+    c.px(12, 31, "E")
+    # Стаканчики стопкой справа.
+    for i in range(4):
+        c.rect(19, 10 + i * 5, 4, 5, "w")
+        c.hline(19, 10 + i * 5, 4, "W")
+    c.hline(19, 30, 4, "W")
+    c.outline("k")
+    shadowed(c, 12, 34, 10, 2).save("coffee_machine")
+    # Стаканчик кофе в руке.
+    c = Canvas(6, 8)
+    c.rect(1, 1, 4, 6, "w")
+    c.hline(0, 1, 6, "a")
+    c.rect(1, 3, 4, 2, "B")
+    c.outline("k")
+    c.save("cup")
+    # Печь: кирпичная кладка, железная дверца с окошком, труба вверх.
+    c = Canvas(30, 38)
+    c.rect(1, 10, 28, 26, "b")
+    for y in range(11, 35, 4):
+        off = 0 if (y // 4) % 2 else 3
+        for x in range(1 + off, 29, 6):
+            c.rect(x, y, 5, 3, "B")
+    c.rect(1, 8, 28, 3, "x")
+    c.hline(1, 8, 28, "a")
+    c.rect(11, 1, 6, 8, "K")
+    c.vline(12, 1, 7, "g")
+    c.rect(4, 15, 22, 15, "K")
+    c.rect(5, 16, 20, 13, "g")
+    c.rect(7, 18, 16, 8, "x")
+    c.rect(8, 19, 14, 6, "k")
+    c.hline(5, 28, 20, "G")
+    c.rect(12, 26, 6, 2, "W")
+    c.rect(1, 33, 28, 3, "x")
+    c.outline("k")
+    shadowed(c, 15, 36, 13, 2).save("oven")
+    # Буханки на противне — видны в окошке, когда хлеб готов.
+    c = Canvas(14, 6)
+    for x in (0, 5, 10):
+        c.ellipse(x + 2, 3, 2.4, 1.8, "y")
+        c.px(x + 1, 2, "Y")
+        c.px(x + 3, 3, "o")
+    c.save("oven_bread")
+    # Доска отзывов «Отзывы ★»: меловая доска на ножках.
+    c = Canvas(26, 32)
+    c.line(3, 31, 7, 4, "a")
+    c.line(22, 31, 18, 4, "a")
+    c.rect(2, 2, 22, 20, "x")
+    c.rect(3, 3, 20, 18, "d")
+    c.rect(4, 4, 18, 16, "K")
+    for y, w in ((6, 12), (10, 15), (14, 10)):
+        c.hline(6, y, w, "W")
+    for x in (6, 9, 12, 15, 18):
+        c.px(x, 17, "Y")
+    c.px(19, 6, "Y")
+    c.outline("k")
+    shadowed(c, 13, 31, 10, 2).save("review_board")
+    # Рыжий кот: два кадра шага (смотрит влево) и сидит.
+    legs = {0: ((5, 0), (8, 1), (13, 0), (16, 1)), 1: ((5, 1), (8, 0), (13, 1), (16, 0))}
+    for frame, feet in legs.items():
+        c = Canvas(22, 14)
+        c.ellipse(11, 7, 7, 3.2, "o")
+        c.ellipse(11, 8, 5, 1.8, "y")
+        for x in (9, 12, 15):
+            c.vline(x, 5, 2, "B")
+        for x, lift in feet:
+            c.vline(x, 9, 3 - lift, "o")
+        c.ellipse(4, 5, 3.2, 2.8, "o")
+        c.stamp(["o.o", "ooo"], 2, 1)
+        c.px(3, 5, "k")
+        c.px(1, 6, "s")
+        c.line(18, 6, 21, 2 + frame, "o")
+        c.outline("k")
+        c.save(f"cat_walk{frame}")
+    c = Canvas(16, 18)
+    c.ellipse(8, 12, 5, 5, "o")
+    c.ellipse(8, 13, 3, 3.5, "y")
+    c.ellipse(8, 6, 4, 3.5, "o")
+    c.stamp(["o.....o", "oo...oo"], 4, 1)
+    c.px(6, 6, "k")
+    c.px(10, 6, "k")
+    c.px(8, 7, "s")
+    c.rect(5, 16, 2, 1, "y")
+    c.rect(9, 16, 2, 1, "y")
+    c.line(13, 15, 15, 10, "o")
+    c.outline("k")
+    c.save("cat_sit")
+    # Лежанки: плетёная корзинка, красная подушка, домик с круглым входом.
+    c = Canvas(26, 12)
+    c.ellipse(13, 6, 12, 5, "a")
+    c.ellipse(13, 5, 10, 3, "N")
+    for x in range(3, 24, 3):
+        c.vline(x, 7, 3, "b")
+    c.outline("k")
+    c.save("cat_basket")
+    c = Canvas(26, 10)
+    c.round_rect(1, 2, 24, 7, "R", r=3)
+    c.hline(4, 3, 18, "s")
+    c.px(1, 2, "Y")
+    c.px(24, 2, "Y")
+    c.px(1, 8, "Y")
+    c.px(24, 8, "Y")
+    c.outline("k")
+    c.save("cat_pillow")
+    c = Canvas(28, 30)
+    c.rect(3, 12, 22, 16, "P")
+    c.vline(4, 13, 14, "s")
+    for i in range(12):
+        c.hline(2 + i, 12 - i, 24 - 2 * i, "p")
+    c.ellipse(14, 22, 5, 5, "k")
+    c.rect(9, 22, 10, 6, "k")
+    c.ellipse(14, 26, 6, 2, "N")
+    c.px(14, 4, "Y")
+    c.outline("k")
+    c.save("cat_house")
+
+
 def environment2():
     building()
     lot2()
@@ -2565,6 +2710,7 @@ def environment2():
     live_events()
     checkout_upgrades()
     seasonal_goods()
+    stage9()
 
 
 # ---------------------------------------------------------------- люди

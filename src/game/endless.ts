@@ -47,10 +47,13 @@ export function seasonFor(day: number): Season | null {
   return SEASONS[SEASON_ORDER[(month / SEASON_EVERY - 1) % SEASON_ORDER.length]];
 }
 
-/** Корзина покупателя: 1–2 разных товара, в сезон любимые товары выбирают чаще. */
-export function pickWanted(state: StoreState, random: () => number, count: number): ProductId[] {
+/**
+ * Корзина покупателя: 1–2 разных товара, в сезон любимые товары выбирают чаще.
+ * demand — спрос дня сверх сезона (погода, ценовая война, запах хлеба; см. demand.ts).
+ */
+export function pickWanted(state: StoreState, random: () => number, count: number, demand: (id: ProductId) => number = () => 1): ProductId[] {
   const season = seasonFor(state.day);
-  const pool = sellableProducts(state).map((id) => ({ id, w: (season?.demand[id] ?? 1) * seasonalDemand(id, state.day) }));
+  const pool = sellableProducts(state).map((id) => ({ id, w: (season?.demand[id] ?? 1) * seasonalDemand(id, state.day) * demand(id) }));
   const picked: ProductId[] = [];
   while (picked.length < count && pool.length) {
     const total = pool.reduce((s, p) => s + p.w, 0);

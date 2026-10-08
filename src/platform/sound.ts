@@ -99,7 +99,60 @@ function thunder(): void {
   src.stop(now + 4);
 }
 
+/** Шипение (пар кофемашины, противень из печи): шум через полосовой фильтр. */
+function hiss(seconds = 0.9, freq = 3200, vol = 0.05): void {
+  const ac = audio();
+  if (!ac) return;
+  const now = ac.currentTime + 0.01;
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuffer(ac, seconds);
+  const filter = ac.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = freq;
+  const gain = ac.createGain();
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(vol, now + 0.08);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
+  src.connect(filter).connect(gain).connect(ac.destination);
+  src.start(now);
+  src.stop(now + seconds);
+}
+
+/** Мурчание: низкий гул, который пульсирует ~25 раз в секунду. */
+function purr(): void {
+  const ac = audio();
+  if (!ac) return;
+  const now = ac.currentTime + 0.01;
+  const osc = ac.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.value = 52;
+  const lfo = ac.createOscillator();
+  lfo.frequency.value = 24;
+  const depth = ac.createGain();
+  depth.gain.value = 0.03;
+  const gain = ac.createGain();
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.035, now + 0.15);
+  gain.gain.setValueAtTime(0.035, now + 1);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
+  lfo.connect(depth).connect(gain.gain);
+  osc.connect(gain).connect(ac.destination);
+  osc.start(now);
+  lfo.start(now);
+  osc.stop(now + 1.45);
+  lfo.stop(now + 1.45);
+}
+
 export const sound = {
+  /** Мяу: короткое скольжение вверх и вниз. */
+  meow: () =>
+    play([
+      { freq: 620, dur: 0.12, wave: 'triangle', vol: 0.05, slide: 900 },
+      { freq: 900, at: 0.12, dur: 0.22, wave: 'triangle', vol: 0.045, slide: 520 },
+    ]),
+  purr,
+  /** Пар кофемашины и шипение печи. */
+  hiss,
   /** Касание, начало дела. */
   tap: () => play([{ freq: 520, dur: 0.05, wave: 'triangle', vol: 0.05 }]),
   /** Писк сканера на каждом товаре. */
