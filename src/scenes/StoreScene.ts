@@ -68,6 +68,7 @@ import { Hud } from '../ui/hud';
 import { showMorning } from '../ui/morning';
 import { showTitle } from '../ui/title';
 import { isWet, weatherFor, type Weather } from '../game/weather';
+import { holidayFor, yearTime } from '../game/calendar';
 import { activeDecor } from '../game/decor';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 
@@ -387,6 +388,8 @@ export class StoreScene extends Phaser.Scene {
   private nightLights: NightLight[] = [];
   /** Мебель в зале (в координатах центра человека): люди обходят её. */
   private obstacles: Rect[] = [];
+  /** Летучие мыши на Хэллоуин: видны только вечером. */
+  private bats: Phaser.GameObjects.Image[] = [];
   /** Где стоят фонари: от них падают тени прохожих. */
   private lampXs: number[] = [];
   /** Поддон с водой или стойка «Акция» на местах, где полки ещё нет. */
@@ -842,6 +845,7 @@ export class StoreScene extends Phaser.Scene {
     }
     for (const g of this.lampGlows) g.setAlpha(0.7 * evening);
     for (const g of this.ceilingGlows) g.setAlpha(0.06 + 0.16 * evening);
+    for (const bat of this.bats) bat.setAlpha(Phaser.Math.Clamp(evening * 1.5, 0, 1));
     const now = this.time.now;
     for (const light of this.nightLights) {
       let alpha = light.alpha * evening;
@@ -859,6 +863,7 @@ export class StoreScene extends Phaser.Scene {
     for (const obj of this.weatherObjs) obj.destroy();
     this.weatherObjs = [];
     this.nightLights = this.nightLights.filter((light) => light.obj.active);
+    this.bats = [];
     this.weather = weatherFor(this.state.day);
     // Камера ещё не пересчитала видимую область — берём её с запасом от планировки.
     const area = { x: -80, y: -140, w: this.next.w + 160, h: this.next.h + STREET_VIEW + 220 };
@@ -906,12 +911,8 @@ export class StoreScene extends Phaser.Scene {
         frequency: 35,
       })).setDepth(-5);
       // Гирлянда на фасаде и ёлка в зале.
-      const { w, h, wallH } = this.layout;
-      const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x0099db];
-      for (let x = -WALL + 2, i = 0; x < w + WALL; x += 5, i++) {
-        const bulb = keep(this.add.rectangle(x, h + 1, 1.6, 1.6, colors[i % colors.length]).setDepth(h + 42));
-        this.tweens.add({ targets: bulb, alpha: 0.25, duration: 500, delay: (i % 4) * 250, yoyo: true, repeat: -1 });
-      }
+      const { w, wallH } = this.layout;
+      this.garland([0xe43b44, 0xfee761, 0x63c74d, 0x0099db], keep);
       keep(this.art(w - 11, wallH + 14, 'xmas_tree').setDepth(wallH + 25));
     }
     if (this.weather === 'leaves') {
@@ -927,7 +928,125 @@ export class StoreScene extends Phaser.Scene {
         frequency: 150,
       })).setDepth(-5);
     }
+    this.applySeason(keep);
     this.updateLighting(this.running ? undefined : 0);
+  }
+
+  /** Гирлянда по краю фасада: лампочки мигают по очереди. */
+  private garland(colors: number[], keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
+    const { w, h } = this.layout;
+    for (let x = -WALL + 2, i = 0; x < w + WALL; x += 5, i++) {
+      const bulb = keep(this.add.rectangle(x, h + 1, 1.6, 1.6, colors[i % colors.length]).setDepth(h + 42));
+      this.tweens.add({ targets: bulb, alpha: 0.25, duration: 500, delay: (i % 4) * 250, yoyo: true, repeat: -1 });
+    }
+  }
+
+  /**
+   * Время года и праздники: весной цветут деревья и газон, летом у входа ларь с мороженым,
+   * осенью желтеют деревья и лежат листья; 8 Марта — тюльпаны и розовая гирлянда,
+   * Хэллоуин — тыквы со светом и летучие мыши, Новый год — снеговик и огоньки на деревьях.
+   */
+  private applySeason(keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
+    const day = this.state.day;
+    const time = yearTime(day);
+    const holiday = holidayFor(day);
+    const rnd = new Phaser.Math.RandomDataGenerator([`season${day}`]);
+    const { door, h } = this.layout;
+    const front = h + FACADE_H;
+    const top = this.next.h + 4;
+    const trees = this.greenery.filter((g) => g.texture.key === 'tree');
+    // По всему газону вокруг: не на здании, участке «Сдаётся», соседях и улице.
+    const scatter = (count: number, make: (x: number, y: number) => void) => {
+      for (let placed = 0, tries = 0; placed < count && tries < count * 5; tries++) {
+        const x = -190 + rnd.frac() * (this.next.w + 380);
+        const y = -170 + rnd.frac() * (top + 330);
+        if (y > top - 4 && y < top + 92) continue;
+        if (x > -WALL - 4 && x < this.next.w + 4 && y > -14 && y < top) continue;
+        if ((x < -20 || x > this.next.w + 20) && y > top - 156 && y < top) continue;
+        make(x, y);
+        placed++;
+      }
+    };
+    if (this.weather !== 'leaves' && this.weather !== 'snow') {
+      trees.forEach((tree, i) => {
+        // Осенью кроны в рыжих и жёлтых пятнах листвы.
+        if (time === 'autumn') {
+          tree.setTint(i % 3 === 2 ? 0xffffff : 0xffe0a0);
+          const tones = i % 3 === 2 ? [0xfeae34] : [0xf77622, 0xfeae34, 0xfee761, 0xe43b44];
+          for (let n = 0; n < (i % 3 === 2 ? 5 : 22); n++) {
+            keep(this.add.rectangle(tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 2.4, 2.4, rnd.pick(tones)).setDepth(tree.depth + 0.5));
+          }
+        }
+        // Весной кроны в розово-белом цвету.
+        if (time === 'spring') {
+          for (let n = 0; n < 14; n++) {
+            keep(this.add.rectangle(tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 1.6, 1.6, rnd.pick([0xffd2e2, 0xffffff, 0xf6a5c0])).setDepth(tree.depth + 0.5));
+          }
+        }
+      });
+    }
+    const flowers = [0xffffff, 0xf6757a, 0xfee761, 0xb55088, 0xe43b44, 0x2ce8f5];
+    if (time === 'spring' || time === 'summer') {
+      scatter(time === 'spring' ? 160 : 70, (x, y) => keep(this.art(x, y, 'flower').setTint(rnd.pick(flowers)).setDepth(-9)));
+    }
+    if (time === 'spring') {
+      // С цветущих деревьев облетают лепестки.
+      keep(this.add.particles(0, 0, 'leaf', {
+        x: { min: -120, max: this.next.w + 120 },
+        y: -120,
+        speedY: { min: 8, max: 16 },
+        speedX: { min: -8, max: 8 },
+        rotate: { min: 0, max: 360 },
+        tint: [0xffd2e2, 0xffffff, 0xf6a5c0],
+        scale: 1 / ART,
+        lifespan: ((top + 200) / 12) * 1000,
+        frequency: 260,
+      })).setDepth(-5);
+    }
+    if (time === 'summer') keep(this.art(door.x - 26, front + 7, 'icecream').setDepth(front + 12));
+    if (time === 'autumn' && this.weather !== 'snow') {
+      scatter(110, (x, y) => keep(this.art(x, y, 'leaf').setTint(rnd.pick([0xf77622, 0xfeae34, 0xb86f50, 0xe43b44])).setAngle(rnd.angle()).setDepth(-9)));
+    }
+
+    if (holiday === 'march8') {
+      this.garland([0xf6757a, 0xffffff, 0xe43b44, 0xffd2e2], keep);
+      keep(this.art(door.x + 22, front + 6, 'tulips').setDepth(front + 12));
+    }
+    if (holiday === 'halloween') {
+      this.garland([0xf77622, 0x68386c, 0xfeae34, 0x68386c], keep);
+      for (const dx of [-20, 20]) {
+        keep(this.art(door.x + dx, front + 5, 'pumpkin').setDepth(front + 8));
+        // Вечером внутри тыкв горит свет.
+        keep(this.nightGlow(this.art(door.x + dx, front + 5, 'glow').setScale(18 / 64).setTint(0xffa040), 0.9));
+      }
+      for (let i = 0; i < 4; i++) {
+        const bat = keep(this.art(door.x, -40, 'bat0').setScale(1.6 / ART).setDepth(LIGHT_DEPTH + 2));
+        this.bats.push(bat);
+        const cx = this.layout.w / 2 + rnd.between(-60, 60);
+        const cy = rnd.between(-48, -30);
+        this.tweens.addCounter({
+          from: 0,
+          to: Math.PI * 2,
+          duration: rnd.between(5000, 8000),
+          repeat: -1,
+          onUpdate: (tw) => {
+            const a = (tw.getValue() ?? 0) + i;
+            bat.setPosition(cx + Math.cos(a) * 46, cy + Math.sin(a * 2) * 10).setTexture(Math.floor(this.time.now / 140 + i) % 2 ? 'bat0' : 'bat1');
+          },
+        });
+      }
+    }
+    if (holiday === 'newyear') {
+      keep(this.art(-40, top - 190, 'snowman').setDepth(top - 180));
+      // Разноцветные огоньки на деревьях.
+      const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xffffff];
+      trees.forEach((tree) => {
+        for (let i = 0; i < 6; i++) {
+          const bulb = keep(this.add.rectangle(tree.x + rnd.between(-8, 8), tree.y - rnd.between(6, 22), 1.4, 1.4, rnd.pick(colors)).setDepth(tree.depth + 1));
+          this.tweens.add({ targets: bulb, alpha: 0.2, duration: rnd.between(400, 900), yoyo: true, repeat: -1 });
+        }
+      });
+    }
   }
 
   /** Мокрая улица: асфальт блестит, в нём отражаются фонари, по лужам идут круги. */

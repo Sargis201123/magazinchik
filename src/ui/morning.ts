@@ -83,6 +83,7 @@ import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter } from '../game/story';
 import { sound } from '../platform/sound';
 import { weatherFor } from '../game/weather';
+import { holidayFor } from '../game/calendar';
 import { buyDecor, DECOR, DECOR_KINDS, setDecor } from '../game/decor';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, who } from './dom';
@@ -179,6 +180,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       goalLine(state),
       ...seasonLine(state),
       ...weatherLine(state),
+      ...holidayLine(state),
       el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
       billForecast(state),
       questsBox(state),
@@ -420,6 +422,11 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   // ---------- Бесконечная игра: сезон, задания, звание, альбом ----------
 
   /** Погода дня — только если не ясно. */
+  const holidayLine = (state: StoreState): HTMLElement[] => {
+    const holiday = holidayFor(state.day);
+    return holiday === 'march8' || holiday === 'halloween' ? [el('div', 'ui-muted', t(`holiday.${holiday}`))] : [];
+  };
+
   const weatherLine = (state: StoreState): HTMLElement[] => {
     const weather = weatherFor(state.day);
     return weather === 'clear' ? [] : [el('div', 'ui-muted', t(`weather.${weather}`))];

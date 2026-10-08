@@ -2171,6 +2171,96 @@ def bags_and_pets():
         c.save(f"dog_sit{i}")
 
 
+def seasonal():
+    """Времена года и праздники: цветы на газоне, лари с мороженым, тыквы, летучая мышь, тюльпаны, снеговик."""
+    # Цветок на газоне: белые лепестки под тинт, жёлтая серединка.
+    c = Canvas(8, 9)
+    c.vline(4, 4, 5, "e")
+    c.px(5, 6, "E")
+    for x, y in ((3, 2), (5, 2), (4, 1), (4, 3), (3, 3), (5, 3)):
+        c.px(x, y, "1")
+    c.px(4, 2, "Y")
+    c.outline("k")
+    c.save("flower")
+    # Ларь с мороженым: белый корпус, стеклянная крышка, внутри разноцветные стаканчики.
+    c = Canvas(30, 26)
+    c.round_rect(1, 6, 28, 18, "w", r=2)
+    c.rect(1, 18, 28, 6, "W")
+    c.hline(2, 19, 26, "l")
+    c.rect(3, 7, 24, 9, "c")
+    c.rect(4, 8, 22, 7, "U")
+    for i, (x, tone) in enumerate(((5, "s"), (9, "Y"), (13, "N"), (17, "E"), (21, "s"), (24, "Y"))):
+        c.ellipse(x + 1, 11 if i % 2 else 12, 1.6, 1.4, tone)
+    for i in range(3):
+        c.px(6 + i * 7, 8, "w")
+    c.rect(9, 20, 12, 3, "R")
+    c.hline(10, 21, 10, "w")
+    c.round_rect(6, 0, 18, 6, "R", r=2)
+    c.hline(8, 2, 14, "w")
+    c.px(12, 3, "Y")
+    c.px(17, 3, "Y")
+    c.outline("k")
+    shadowed(c, 15, 24, 13, 2.5).save("icecream")
+    # Тыква с вырезанным лицом (вечером внутри горит свет — его рисует игра).
+    c = Canvas(14, 12)
+    c.ellipse(7, 7, 6.4, 4.6, "o")
+    c.ellipse(4, 7, 2.6, 4.2, "y")
+    c.ellipse(10, 7, 2.6, 4.2, "y")
+    c.ellipse(7, 7, 2.2, 4.4, "o")
+    c.rect(6, 1, 2, 3, "e")
+    for x, y in ((4, 6), (9, 6)):
+        c.px(x, y, "k")
+        c.px(x + 1, y, "k")
+        c.px(x, y - 1, "k")
+    c.hline(5, 9, 5, "k")
+    c.px(6, 8, "k")
+    c.px(8, 8, "k")
+    c.outline("k")
+    c.save("pumpkin")
+    # Летучая мышь: два взмаха.
+    for i, rows in enumerate((
+        ["k.......k", "kk.k.k.kk", "kkkkkkkkk", ".kkkkkkk.", "...kkk..."],
+        [".........", "...k.k...", ".kkkkkkk.", "kkkkkkkkk", "k..kkk..k"],
+    )):
+        c = Canvas(9, 5)
+        c.stamp([r.replace("k", "P") for r in rows])
+        for x, y in ((4, 2), (4, 3), (3, 3), (5, 3)):
+            c.px(x, y, "p")
+        c.px(3, 2, "Y")
+        c.px(5, 2, "Y")
+        c.save(f"bat{i}")
+    # Ведро с тюльпанами у входа к 8 Марта.
+    c = Canvas(18, 20)
+    c.rect(3, 11, 12, 8, "l")
+    c.hline(3, 11, 12, "W")
+    c.vline(3, 12, 7, "G")
+    for x, top, tone in ((4, 3, "R"), (7, 1, "s"), (10, 2, "Y"), (13, 4, "P"), (6, 6, "s"), (11, 6, "R")):
+        c.vline(x, top + 3, 11 - top - 3, "e")
+        c.round_rect(x - 1, top, 3, 4, tone, r=1)
+        c.px(x, top, "w")
+    c.px(5, 8, "E")
+    c.px(12, 9, "E")
+    c.outline("k")
+    shadowed(c, 9, 19, 7, 2).save("tulips")
+    # Снеговик с морковкой и шарфом.
+    c = Canvas(18, 26)
+    c.ellipse(9, 19, 6.5, 5.5, "w")
+    c.ellipse(9, 11, 5, 4.5, "w")
+    c.ellipse(9, 5, 3.6, 3.4, "w")
+    c.ellipse(10.5, 20.5, 4, 3, "W")
+    c.rect(5, 8, 9, 2, "R")
+    c.rect(11, 9, 2, 4, "R")
+    c.px(8, 4, "k")
+    c.px(10, 4, "k")
+    c.hline(11, 5, 3, "o")
+    for y in (12, 15, 18):
+        c.px(9, y, "k")
+    c.rect(6, 0, 6, 2, "K")
+    c.hline(5, 2, 8, "K")
+    c.outline("k")
+    shadowed(c, 9, 25, 7, 2).save("snowman")
+
+
 def environment2():
     building()
     lot2()
@@ -2189,6 +2279,7 @@ def environment2():
     wet_weather()
     gondola()
     bags_and_pets()
+    seasonal()
 
 
 # ---------------------------------------------------------------- люди

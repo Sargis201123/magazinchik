@@ -216,6 +216,8 @@ export const en: Record<TextKey, string> = {
   'neighbor.pharmacy': 'Pharmacy',
   'neighbor.eduard': 'Eduard Mart',
   'neighbor.bakery': 'Flowers',
+  'holiday.march8': '🌷 Women\'s Day — tulips at the door and a pink garland.',
+  'holiday.halloween': '🎃 Halloween — pumpkins at the door, bats fly in the evening.',
   'weather.rain': '🌧 Rainy day — people carry umbrellas.',
   'weather.storm': '⛈ Thunderstorm — thunder rumbles, people track mud inside.',
   'weather.snow': '❄️ It is snowing.',
