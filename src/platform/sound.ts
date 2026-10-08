@@ -25,6 +25,11 @@ export function audioContext(): AudioContext | null {
   return ctx;
 }
 
+/** Контекст, если он уже создан касанием; сам не создаёт (для фоновых звуков в каждом кадре). */
+export function existingAudioContext(): AudioContext | null {
+  return ctx && ctx.state === 'running' ? ctx : null;
+}
+
 function audio(): AudioContext | null {
   if (muted) return null;
   return audioContext();

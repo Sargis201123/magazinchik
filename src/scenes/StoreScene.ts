@@ -60,6 +60,7 @@ import { loadGame, saveGame } from '../game/save';
 import { t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
+import { ambience } from '../platform/ambience';
 import { haptic } from '../platform/telegram';
 import { UI_FONT } from '../ui/dom';
 import { Hud } from '../ui/hud';
@@ -417,6 +418,7 @@ export class StoreScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     this.scarePigeons();
+    ambience.update(this.weather, this.evening, this.running);
     if (!this.running) return;
     const dt = deltaMs / 1000;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
@@ -690,6 +692,9 @@ export class StoreScene extends Phaser.Scene {
           }
         }
         bob = frame % 2 === 0 ? -0.5 : 0;
+        // Шаги слышно только у продавца — остальных было бы слишком много.
+        if (person === this.seller && frame % 2 === 0 && person.getData('stepFrame') !== frame) ambience.step();
+        person.setData('stepFrame', frame);
       } else {
         bob = Math.sin((now + phase) / 650) > 0.35 ? -0.5 : 0;
       }
@@ -763,6 +768,7 @@ export class StoreScene extends Phaser.Scene {
   private updateDoor(): void {
     const { door, h } = this.layout;
     const near = [...this.customers].some((c) => Math.abs(c.sprite.x - door.x) < 16 && Math.abs(c.sprite.y - h - 4) < 18);
+    if (near && this.doorOpen === 0) ambience.chime();
     this.doorOpen = Phaser.Math.Clamp(this.doorOpen + (near ? 0.12 : -0.06), 0, 1);
     const key = this.doorOpen < 0.34 ? 'door' : this.doorOpen < 0.67 ? 'door_half' : 'door_open';
     if (this.doorImg.texture.key !== key) this.doorImg.setTexture(key);
@@ -2359,6 +2365,7 @@ export class StoreScene extends Phaser.Scene {
         );
       }
       const car = this.add.container(toRight ? left : right, y, parts).setDepth(y);
+      ambience.carPass();
       car.setScale(toRight ? 1 : -1, 1);
       this.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
     }
