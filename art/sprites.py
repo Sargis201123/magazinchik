@@ -62,6 +62,10 @@ PALETTE = {
     "q": "#f8ebcf",
     "Q": "#d8b88a",
     "v": "#c49a6c",
+    # Газон светлее и желтее, чем листва деревьев, — чтобы кроны не сливались с травой.
+    "j": "#7cb342",
+    "J": "#98c95a",
+    "i": "#5e9535",
     # Оттенки для слоёв под тинт: белый — основной цвет, серые — тени.
     "1": "#ffffff",
     "2": "#dadada",
@@ -79,6 +83,14 @@ def rgba(ch, alpha=255):
     if hex_ is None:
         return (0, 0, 0, 0)
     return (int(hex_[1:3], 16), int(hex_[3:5], 16), int(hex_[5:7], 16), alpha)
+
+
+def shadowed(c, cx, cy, rx, ry, alpha=70):
+    """Мягкая тень под предметом: рисуется отдельно, без контура."""
+    out = Canvas(c.w, c.h)
+    out.ellipse(cx, cy, rx, ry, (24, 20, 37, alpha))
+    out.img.alpha_composite(c.img)
+    return out
 
 
 class Canvas:
@@ -880,6 +892,303 @@ def items():
                 c.save(f"item_{product}")
 
 
+# ---------------------------------------------------------------- интерьер
+
+
+def mat():
+    """Коврик у входа 44×16."""
+    c = Canvas(44, 16)
+    c.round_rect(0, 0, 44, 16, "K", r=2)
+    c.round_rect(2, 2, 40, 12, "g", r=1)
+    for x in range(4, 40, 3):
+        c.vline(x, 3, 10, "G")
+    c.hline(3, 7, 38, "y")
+    c.save("mat")
+
+
+def vending():
+    """Автомат с напитками 26×44: стекло с бутылками, кнопки, лоток."""
+    c = Canvas(26, 44)
+    c.rect(0, 0, 26, 44, "R")
+    c.vline(1, 1, 42, "s")
+    c.vline(24, 1, 42, "r")
+    c.rect(3, 4, 15, 26, "K")
+    for row, y in enumerate(range(6, 29, 6)):
+        for x in range(4, 17, 4):
+            tone = ("U", "E", "Y", "w")[(row + x) % 4]
+            c.rect(x, y, 2, 4, tone)
+            c.px(x, y, "w")
+    for i in range(3):
+        c.px(5 + i * 2, 4 + i, "W")
+    c.rect(20, 6, 3, 10, "k")
+    for y in range(7, 16, 3):
+        c.px(21, y, "Y")
+    c.rect(20, 18, 3, 3, "w")
+    c.rect(4, 34, 18, 6, "k")
+    c.hline(4, 34, 18, "G")
+    c.rect(0, 0, 26, 3, "m")
+    c.hline(2, 1, 22, "w")
+    c.outline("k")
+    shadowed(c, 13, 42, 12, 2.5).save("vending")
+
+
+def pallet_water():
+    """Поддон с упаковками воды 80×52 — стоит на месте будущей полки."""
+    c = Canvas(80, 52)
+    # Поддон.
+    c.rect(4, 42, 72, 8, "B")
+    c.hline(4, 42, 72, "n")
+    for x in (4, 37, 70):
+        c.rect(x, 46, 6, 4, "a")
+    # Упаковки в плёнке: три яруса.
+    for tier, (y, x0, n) in enumerate(((30, 6, 6), (18, 12, 5), (6, 18, 4))):
+        for i in range(n):
+            x = x0 + i * 11
+            c.rect(x, y, 11, 12, "U")
+            c.vline(x, y, 12, "c")
+            for bx in range(x + 2, x + 10, 3):
+                c.rect(bx, y + 1, 2, 3, "w")
+                c.px(bx, y + 1, "u")
+            c.hline(x, y + 6, 11, "u")
+            c.px(x + 2, y + 8, "w")
+    c.outline("k")
+    shadowed(c, 40, 49, 38, 3).save("pallet_water")
+
+
+def promo():
+    """Картонная стойка «Акция» 80×52: ярусы с пачками печенья и большой знак %."""
+    c = Canvas(80, 52)
+    c.rect(14, 10, 52, 40, "N")
+    c.vline(14, 10, 40, "w")
+    c.vline(65, 10, 40, "n")
+    for y in (22, 36):
+        c.rect(14, y, 52, 3, "R")
+        c.hline(14, y, 52, "s")
+    for row, y in enumerate((13, 27, 41)):
+        for x in range(17, 62, 9):
+            tone = ("o", "y", "P")[(row + x // 9) % 3]
+            c.rect(x, y, 7, 8 if row < 2 else 7, tone)
+            c.hline(x, y, 7, "w")
+            c.px(x + 3, y + 4, "w")
+    # Шапка со знаком процента.
+    c.round_rect(22, 0, 36, 12, "R", r=2)
+    c.hline(23, 1, 34, "s")
+    c.stamp(["w..w", "..w.", ".w..", "w..w"], 38, 4)
+    c.outline("k")
+    shadowed(c, 40, 49, 30, 3).save("promo")
+
+
+def interior():
+    mat()
+    vending()
+    pallet_water()
+    promo()
+
+
+# ---------------------------------------------------------------- улица
+
+
+def grass():
+    """Газон 32×32: два тона травы, редкие травинки и цветочки."""
+    c = Canvas(32, 32)
+    c.rect(0, 0, 32, 32, "j")
+    rnd = random.Random(12)
+    for _ in range(26):
+        x, y = rnd.randrange(32), rnd.randrange(32)
+        c.px(x, y, "J")
+        c.px(x, (y + 1) % 32, "i")
+    for _ in range(10):
+        c.px(rnd.randrange(32), rnd.randrange(32), "i")
+    c.px(7, 21, "Y")
+    c.px(24, 9, "w")
+    c.save("grass")
+
+
+def paving():
+    """Тротуарная плитка 32×32: кирпичики вразбежку."""
+    c = Canvas(32, 32)
+    c.rect(0, 0, 32, 32, "W")
+    for row, y in enumerate(range(0, 32, 8)):
+        c.hline(0, y, 32, "l")
+        c.hline(0, y + 1, 32, "w")
+        for x in range(8 if row % 2 else 0, 32, 16):
+            c.vline(x, y, 8, "l")
+            c.vline(x + 1, y + 1, 7, "w")
+    c.speckle(0, 0, 32, 32, ["l"], 8, 3)
+    c.save("paving")
+
+
+def tree():
+    """Дерево 48×56: крона из трёх тонов, ствол, тень."""
+    c = Canvas(48, 56)
+    c.ellipse(24, 50, 18, 5, (24, 20, 37, 70))
+    c.rect(21, 34, 6, 16, "a")
+    c.vline(21, 34, 16, "B")
+    c.vline(26, 34, 16, "b")
+    canopy = Canvas(48, 56)
+    for cx, cy, r in ((24, 20, 17), (13, 26, 10), (35, 26, 10), (24, 9, 10)):
+        canopy.ellipse(cx, cy, r, r * 0.9, "e")
+    for cx, cy, r in ((19, 15, 7), (30, 13, 6), (14, 24, 4)):
+        canopy.ellipse(cx, cy, r, r * 0.9, "E")
+    for cx, cy, r in ((26, 30, 9), (36, 28, 5)):
+        canopy.ellipse(cx, cy, r, r * 0.6, "d")
+    rnd = random.Random(5)
+    for _ in range(40):
+        x, y = rnd.randrange(48), rnd.randrange(40)
+        if canopy.get(x, y)[3]:
+            canopy.px(x, y, rnd.choice(["E", "d", "e"]))
+    canopy.outline("k")
+    c.img.alpha_composite(canopy.img)
+    c.save("tree")
+
+
+def bush():
+    c = Canvas(24, 18)
+    c.ellipse(12, 10, 11, 7, "e")
+    c.ellipse(9, 8, 6, 4, "E")
+    c.ellipse(15, 12, 6, 3, "d")
+    c.px(6, 7, "R")
+    c.px(16, 6, "R")
+    c.outline("k")
+    c.save("bush")
+
+
+def lamp():
+    """Фонарь 16×56: столб, плафон; свет вечером рисует игра."""
+    c = Canvas(16, 56)
+    c.rect(7, 10, 3, 43, "g")
+    c.vline(7, 10, 43, "G")
+    c.rect(5, 50, 7, 3, "K")
+    c.rect(2, 4, 12, 5, "K")
+    c.hline(3, 4, 10, "G")
+    c.rect(4, 8, 8, 2, "Y")
+    c.hline(4, 9, 8, "y")
+    c.outline("k")
+    shadowed(c, 8, 53, 6, 2.5).save("lamp")
+
+
+def bench():
+    c = Canvas(36, 16)
+    c.rect(1, 2, 34, 4, "B")
+    c.hline(1, 2, 34, "n")
+    c.rect(1, 7, 34, 4, "B")
+    c.hline(1, 7, 34, "n")
+    c.hline(1, 10, 34, "a")
+    for x in (4, 30):
+        c.rect(x, 11, 2, 4, "K")
+    c.outline("k")
+    c.save("bench")
+
+
+def bin_():
+    c = Canvas(12, 16)
+    c.rect(1, 3, 10, 12, "e")
+    c.vline(2, 3, 12, "E")
+    c.vline(9, 3, 12, "d")
+    c.rect(0, 1, 12, 3, "d")
+    c.hline(0, 1, 12, "E")
+    c.outline("k")
+    c.save("bin")
+
+
+def fence():
+    """Забор участка «Сдаётся»: штакетник по горизонтали и по вертикали."""
+    c = Canvas(32, 14)
+    c.rect(0, 4, 32, 2, "a")
+    c.rect(0, 10, 32, 2, "a")
+    for x in range(1, 32, 6):
+        c.rect(x, 1, 4, 13, "n")
+        c.vline(x, 1, 13, "N")
+        c.vline(x + 3, 1, 13, "B")
+        c.hline(x, 0, 4, "k")
+        c.px(x + 1, 0, "N")
+    c.save("fence_h")
+    c = Canvas(8, 32)
+    c.rect(2, 0, 4, 32, "n")
+    c.vline(2, 0, 32, "N")
+    c.vline(5, 0, 32, "B")
+    for y in range(0, 32, 8):
+        c.hline(1, y, 6, "k")
+    c.save("fence_v")
+
+
+def for_rent():
+    """Табличка на столбиках 56×36: игра пишет на ней «Сдаётся» и цену."""
+    c = Canvas(56, 36)
+    for x in (12, 42):
+        c.rect(x, 20, 3, 13, "a")
+        c.vline(x, 20, 13, "B")
+    c.rect(2, 2, 52, 22, "N")
+    c.frame(2, 2, 52, 22, "a")
+    c.hline(3, 3, 50, "w")
+    c.hline(3, 22, 50, "n")
+    c.outline("k")
+    shadowed(c, 28, 33, 22, 3).save("for_rent")
+
+
+def awning():
+    """Полосатый навес над входом 80×20 с фестонами."""
+    c = Canvas(80, 20)
+    for i, x in enumerate(range(0, 80, 8)):
+        tone, shade = ("R", "r") if i % 2 == 0 else ("w", "W")
+        c.rect(x, 0, 8, 14, tone)
+        c.hline(x, 12, 8, shade)
+        c.ellipse(x + 4, 14, 4, 3, tone)
+        c.hline(x + 1, 16, 6, shade)
+    c.hline(0, 0, 80, "m")
+    c.outline("k")
+    c.save("awning")
+
+
+def car():
+    """Машина сверху 64×30: кузов под тинт, стёкла, фары."""
+    c = Canvas(64, 30)
+    for x in (10, 46):
+        c.rect(x, 1, 8, 3, "k")
+        c.rect(x, 22, 8, 3, "k")
+    c.round_rect(2, 3, 60, 20, "1", r=4)
+    c.hline(4, 4, 56, "1")
+    c.hline(4, 21, 56, "3")
+    c.round_rect(18, 6, 28, 14, "2", r=2)
+    c.rect(40, 6, 6, 14, "u")
+    c.rect(18, 6, 5, 14, "u")
+    c.vline(41, 7, 4, "c")
+    c.rect(59, 5, 3, 4, "Y")
+    c.rect(59, 17, 3, 4, "Y")
+    c.rect(2, 5, 2, 4, "R")
+    c.rect(2, 17, 2, 4, "R")
+    c.outline("k")
+    shadowed(c, 33, 26, 30, 4).save("car")
+
+
+def sign():
+    """Вывеска с названием магазина 128×26: доска с лампочками по краю."""
+    c = Canvas(128, 26)
+    c.round_rect(0, 0, 128, 26, "x", r=3)
+    c.round_rect(3, 3, 122, 20, "p", r=2)
+    c.hline(4, 4, 120, "P")
+    for x in range(6, 124, 8):
+        c.px(x, 1, "Y")
+        c.px(x, 24, "Y")
+    c.outline("k")
+    c.save("sign")
+
+
+def street():
+    grass()
+    paving()
+    tree()
+    bush()
+    lamp()
+    bench()
+    bin_()
+    fence()
+    for_rent()
+    awning()
+    car()
+    sign()
+
+
 # ---------------------------------------------------------------- люди
 
 # Человек 24×36 (в мире 12×18) из слоёв: кожа (голова, шея, кисти), волосы,
@@ -1217,6 +1526,8 @@ def main():
     concrete()
     asphalt()
     lot()
+    street()
+    interior()
     shelf()
     stand()
     fridge()
