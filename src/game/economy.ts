@@ -331,6 +331,10 @@ export interface StoreState {
   decor: DecorState;
   /** Выручка последних дней — для графика в итогах дня. */
   history: number[];
+  /** Открытые достижения (id из achievements.ts). */
+  achievements: string[];
+  /** Счётчики за всю игру — для достижений. */
+  lifetime: Lifetime;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -338,6 +342,17 @@ export interface StoreState {
   shelves: Shelf[];
   prices: Record<ProductId, number>;
 }
+
+export interface Lifetime {
+  served: number;
+  caught: number;
+  trashCleaned: number;
+  bestCombo: number;
+  /** Дней без единой жалобы (и хотя бы с 10 покупателями). */
+  cleanDays: number;
+}
+
+export const newLifetime = (): Lifetime => ({ served: 0, caught: 0, trashCleaned: 0, bestCombo: 0, cleanDays: 0 });
 
 export interface DayStats {
   revenue: number;
@@ -385,6 +400,8 @@ export const newGame = (): StoreState => ({
   story: { chapter: 0, introSeen: false, ordersDone: 0, inspectionsPassed: 0 },
   decor: newDecor(),
   history: [],
+  achievements: [],
+  lifetime: newLifetime(),
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [

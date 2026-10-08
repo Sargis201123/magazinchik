@@ -69,6 +69,8 @@ import { showMorning } from '../ui/morning';
 import { showTitle } from '../ui/title';
 import { isWet, weatherFor, type Weather } from '../game/weather';
 import { holidayFor, yearTime } from '../game/calendar';
+import { liveProgress, recordDay, unlockAchievements, type AchievementId } from '../game/achievements';
+import { announceAchievement } from '../ui/achievements';
 import { activeDecor } from '../game/decor';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 
@@ -463,6 +465,8 @@ export class StoreScene extends Phaser.Scene {
     this.setupCameraDrag();
     // Улица живёт своей жизнью: прохожие и машины.
     this.time.addEvent({ delay: 1800, loop: true, callback: () => this.streetLife() });
+    // Достижения проверяются и посреди дня: серия, сотый покупатель — сразу всплывашка.
+    this.time.addEvent({ delay: 1000, loop: true, callback: () => this.running && this.checkAchievements(true) });
     // Сначала вывеска, потом утро. Первая встреча с сюжетом (письмо бабушки) — на утреннем экране.
     const stopShow = this.titleShow();
     showTitle({
@@ -1825,6 +1829,16 @@ export class StoreScene extends Phaser.Scene {
     return person;
   }
 
+  /** Открывает выполненные достижения; новые — всплывашкой по очереди. Возвращает, что открылось. */
+  private checkAchievements(live: boolean): AchievementId[] {
+    const { state, unlocked } = unlockAchievements(liveProgress(this.state, live ? this.stats : undefined));
+    if (!unlocked.length) return unlocked;
+    this.state = state;
+    saveGame(state);
+    unlocked.forEach((id, i) => this.time.delayedCall(i * 3800, () => announceAchievement(id)));
+    return unlocked;
+  }
+
   /** Вторая половинка пары идёт следом за первой — тем же путём, чуть позади. */
   private addCompanion(leader: Phaser.GameObjects.Container): void {
     const companion = this.makePerson(leader.x - 8, leader.y + 1, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS)));
@@ -2955,6 +2969,8 @@ export class StoreScene extends Phaser.Scene {
   // ---------- День ----------
 
   private showMorning(): void {
+    // Старые сохранения сразу получают значки за то, что уже сделано.
+    this.checkAchievements(false);
     this.hud.update(this.state, DAY_SECONDS);
     if (weatherFor(this.state.day) !== this.weather) this.applyWeather();
     this.updateLighting(0);
@@ -3019,10 +3035,12 @@ export class StoreScene extends Phaser.Scene {
       ]);
     }
     const promoted = state.staff !== this.state.staff;
-    this.state = state;
+    this.state = recordDay(state, this.stats);
     this.stats.spoiled = spoiled;
     this.stats.skimmed = skimmed;
     if (promoted) this.syncStaff();
+    const unlocked = this.checkAchievements(false);
+    if (unlocked.length) extra.push([t('ach.summary'), unlocked.map((id) => t(`ach.${id}` as TextKey)).join(', ')]);
     saveGame(this.state);
     this.refreshShelves();
     this.refreshWarehouse();

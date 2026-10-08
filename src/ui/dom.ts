@@ -105,6 +105,25 @@ const css = `
 .ui-bump { display: inline-block; animation: ui-bump .35s ease-out; }
 @keyframes ui-bump { 40% { transform: scale(1.25); background: rgba(143, 209, 106, .85); } }
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }
+/* Всплывашка «Новое достижение!» сверху: выезжает, висит и уезжает. */
+.ui-toast { position: fixed; z-index: 40; left: 50%; top: calc(env(safe-area-inset-top) + 62px); display: flex; gap: 10px;
+  align-items: center; padding: 8px 14px 8px 10px; background: #fbf6ea; color: #2b2233; border: 3px solid #2b2233;
+  border-radius: 10px; box-shadow: 0 4px 0 #2b2233; font: 13px/1.3 system-ui, sans-serif; pointer-events: none;
+  transform: translate(-50%, -160%); transition: transform .45s cubic-bezier(.3, 1.4, .5, 1); max-width: 88vw; }
+.ui-toast.shown { transform: translate(-50%, 0); }
+.ui-toast img { width: 36px; height: 42px; image-rendering: pixelated; animation: ui-badge 1.2s ease-in-out infinite; }
+@keyframes ui-badge { 50% { transform: rotate(-8deg) scale(1.08); } }
+.ui-toast b { display: block; font-size: 12px; color: #b86f50; text-transform: uppercase; letter-spacing: .5px; }
+/* Книга достижений: сетка значков; закрытые — серые, с полоской прогресса. */
+.ui-badges { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 8px 0; }
+.ui-badge { border: 2px solid #2b2233; border-radius: 8px; background: #fbf6ea; padding: 6px 4px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ui-badge img { width: 40px; height: 47px; image-rendering: pixelated; }
+.ui-badge b { font-size: 12px; line-height: 1.2; }
+.ui-badge span { font-size: 10.5px; color: #7a7066; line-height: 1.25; }
+.ui-badge.locked img { filter: grayscale(1) brightness(.75); opacity: .55; }
+.ui-badge.locked { background: #ece3cf; }
+.ui-badge .ui-bar { width: 100%; }
 /* Диалог как в RPG: крупный портрет, табличка с именем, облако реплики с хвостиком. */
 .ui-dialog { margin: 4px 0; }
 .ui-dialog-row { display: flex; align-items: flex-end; gap: 10px; margin-top: 6px; }
@@ -190,6 +209,22 @@ export function curtain(label: string, middle: () => void): void {
     setTimeout(() => shade.classList.add('up'), 350);
     setTimeout(() => shade.remove(), 950);
   }, 480);
+}
+
+/** Всплывашка сверху на пару секунд: картинка, заголовок, текст. */
+export function toast(image: string, title: string, text: string): void {
+  injectStyles();
+  const box = el('div', 'ui-toast');
+  const img = el('img');
+  img.src = image;
+  img.alt = '';
+  const body = el('div');
+  body.append(el('b', '', title), el('span', '', text));
+  box.append(img, body);
+  document.body.append(box);
+  requestAnimationFrame(() => requestAnimationFrame(() => box.classList.add('shown')));
+  setTimeout(() => box.classList.remove('shown'), 3200);
+  setTimeout(() => box.remove(), 3800);
 }
 
 const ICONS: Record<string, string> = {

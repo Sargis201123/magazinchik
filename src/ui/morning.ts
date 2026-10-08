@@ -85,6 +85,7 @@ import { sound } from '../platform/sound';
 import { weatherFor } from '../game/weather';
 import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
+import { achievementsButton } from './achievements';
 
 /** Высота «голоса» героев в диалогах. */
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
@@ -769,7 +770,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const storeTab = (state: StoreState): HTMLElement[] => {
     const level = storeLevel(state);
     const next = nextStoreLevel(state);
-    const out: HTMLElement[] = [rankBox(state), albumBox(state), decorBox(state)];
+    const out: HTMLElement[] = [achievementsButton(state), rankBox(state), albumBox(state), decorBox(state)];
 
     const current = el('div', 'ui-box');
     current.append(
