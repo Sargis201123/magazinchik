@@ -180,7 +180,7 @@ const SHIRTS = [0x5b6ee1, 0xd95763, 0x6abe30, 0xfbf236, 0x76428a, 0xdf7126, 0x37
 const PANTS = [0x3a4466, 0x262b44, 0x5a6988, 0x733e39, 0x265c42];
 const HAIR_COLORS = [0x4a2c1a, 0x181425, 0x733e39, 0xfeae34, 0xb86f50, 0x8b9bb4];
 const HAIR_STYLES = ['short', 'short', 'long', 'long', 'bald', 'ponytail', 'curly'] as const;
-type HairStyle = 'short' | 'long' | 'bun' | 'cap' | 'bald' | 'ponytail' | 'curly';
+type HairStyle = 'short' | 'long' | 'bun' | 'cap' | 'bald' | 'ponytail' | 'curly' | 'beanie';
 /** Поверх одежды: фартук (красится), жилет грузчика, значок охранника. */
 type Accessory = 'apron' | 'vest' | 'badge' | 'tie';
 type Facing = 'down' | 'up' | 'left' | 'right';
@@ -197,6 +197,13 @@ interface Look {
   /** Ребёнок — ростом поменьше. */
   kid?: boolean;
   glasses?: boolean;
+  /** Сумка через плечо или школьный рюкзак. */
+  bag?: 'bag' | 'backpack';
+  bagTint?: number;
+  /** Мама катит коляску. */
+  stroller?: number;
+  /** С собакой: окрас. Собаку привязывают у входа. */
+  dog?: number;
 }
 
 const randomLook = (shirt: number): Look => ({
@@ -208,12 +215,34 @@ const randomLook = (shirt: number): Look => ({
 });
 
 /** Покупатели бывают разные: дети, пожилые, рабочие в касках и жилетах. */
+const HAT_COLORS = [0xe43b44, 0x0099db, 0x63c74d, 0xfeae34, 0xb55088, 0x2ce8f5, 0xf6757a];
+const BAG_COLORS = [0x8f563b, 0x262b44, 0xe43b44, 0xc28569, 0x68386c];
+const DOG_COLORS = [0xc28569, 0xead4aa, 0x4a3b52, 0xffffff, 0xe4a672];
+
 function customerLook(shirt: number): Look {
   const look = randomLook(shirt);
   const roll = Math.random();
-  if (roll < 0.14) return { ...look, kid: true, style: Phaser.Utils.Array.GetRandom(['short', 'ponytail', 'curly'] as const) };
+  // Школьники с рюкзаками.
+  if (roll < 0.14) {
+    const kid: Look = { ...look, kid: true, style: Phaser.Utils.Array.GetRandom(['short', 'ponytail', 'curly'] as const) };
+    return Math.random() < 0.7 ? { ...kid, bag: 'backpack', bagTint: Phaser.Utils.Array.GetRandom(HAT_COLORS) } : kid;
+  }
   if (roll < 0.26) return { ...look, hair: Phaser.Utils.Array.GetRandom([0xd8d8e0, 0xc0cbdc]), style: Phaser.Utils.Array.GetRandom(['bun', 'bald', 'short'] as const) };
   if (roll < 0.33) return { ...look, style: 'cap', hair: 0xfeae34, acc: 'vest' };
+  // Шапки и кепки разных цветов, сумки через плечо.
+  const hat = Math.random();
+  const head: Partial<Look> =
+    hat < 0.16 ? { style: 'beanie', hair: Phaser.Utils.Array.GetRandom(HAT_COLORS) } : hat < 0.26 ? { style: 'cap', hair: Phaser.Utils.Array.GetRandom(HAT_COLORS) } : {};
+  const bag: Partial<Look> = Math.random() < 0.28 ? { bag: 'bag', bagTint: Phaser.Utils.Array.GetRandom(BAG_COLORS) } : {};
+  return { ...look, ...head, ...bag };
+}
+
+/** Иногда покупатель приходит с коляской или с собакой. */
+function withCompanionItems(look: Look): Look {
+  if (look.kid) return look;
+  const roll = Math.random();
+  if (roll < 0.05) return { ...look, stroller: Phaser.Utils.Array.GetRandom(HAT_COLORS), style: Phaser.Utils.Array.GetRandom(['long', 'ponytail', 'bun'] as const) };
+  if (roll < 0.11) return { ...look, dog: Phaser.Utils.Array.GetRandom(DOG_COLORS) };
   return look;
 }
 
@@ -686,6 +715,16 @@ export class StoreScene extends Phaser.Scene {
     const now = this.time.now;
     for (const person of this.people) {
       if (!person.active) continue;
+      const leader = person.getData('leader') as Phaser.GameObjects.Container | undefined;
+      if (leader?.active) this.followLeader(person, leader);
+      const trail = person.getData('trail') as { x: number; y: number }[] | undefined;
+      const last = trail?.at(-1);
+      if (trail && (!last || Phaser.Math.Distance.Between(last.x, last.y, person.x, person.y) > 0.5)) {
+        trail.push({ x: person.x, y: person.y });
+        if (trail.length > 40) trail.shift();
+      }
+      const dog = person.getData('dog') as Phaser.GameObjects.Image | undefined;
+      if (dog?.active) this.updateDog(person, dog);
       const legs = person.getData('legs') as Phaser.GameObjects.Image | undefined;
       const facing = (person.getData('facing') as Facing | undefined) ?? 'down';
       const suffix = VIEW_SUFFIX[facing];
@@ -1597,6 +1636,11 @@ export class StoreScene extends Phaser.Scene {
       layers.push([acc, `acc_${look.acc}`]);
       parts.push(acc);
     }
+    if (look.bag) {
+      const bag = this.art(0, 0, look.bag).setTint(look.bagTint ?? 0xffffff);
+      layers.push([bag, look.bag]);
+      parts.push(bag);
+    }
     parts.push(skin);
     if (look.glasses) {
       const glasses = this.art(0, 0, 'acc_glasses');
@@ -1615,9 +1659,95 @@ export class StoreScene extends Phaser.Scene {
     person.setData('baseScale', baseScale);
     // Сдвиг фазы: люди дышат и шагают не в унисон.
     person.setData('phase', Math.random() * 1000);
+    if (look.stroller !== undefined) {
+      const stroller = this.art(0, 9, 'stroller').setTint(look.stroller);
+      person.add(stroller);
+      person.setData('stroller', stroller);
+    }
+    if (look.dog !== undefined) {
+      const dog = this.art(x - 9, y + 6, 'dog_sit0').setTint(look.dog);
+      person.setData('dog', dog);
+      person.once('destroy', () => dog.destroy());
+    }
     this.people.add(person);
     person.once('destroy', () => this.people.delete(person));
     return person;
+  }
+
+  /** Вторая половинка пары идёт следом за первой — тем же путём, чуть позади. */
+  private addCompanion(leader: Phaser.GameObjects.Container): void {
+    const companion = this.makePerson(leader.x - 8, leader.y + 1, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS)));
+    this.addUmbrella(companion);
+    companion.setData('leader', leader);
+    leader.setData('trail', [] as { x: number; y: number }[]);
+    leader.once('destroy', () => companion.destroy());
+    // Парочка иногда обменивается сердечками.
+    const hearts = this.time.addEvent({
+      delay: 5000,
+      loop: true,
+      callback: () => companion.active && Math.random() < 0.35 && this.emote(companion, 'emo_heart'),
+    });
+    companion.once('destroy', () => hearts.remove());
+  }
+
+  /** Спутник идёт по следу ведущего: берёт точку следа не ближе 9 к нему. */
+  private followLeader(person: Phaser.GameObjects.Container, leader: Phaser.GameObjects.Container): void {
+    const trail = (leader.getData('trail') as { x: number; y: number }[] | undefined) ?? [];
+    let target: { x: number; y: number } | undefined;
+    for (let i = trail.length - 1; i >= 0; i--) {
+      if (Phaser.Math.Distance.Between(trail[i].x, trail[i].y, leader.x, leader.y) >= 9) {
+        target = trail[i];
+        break;
+      }
+    }
+    const dx = (target?.x ?? person.x) - person.x;
+    const dy = (target?.y ?? person.y) - person.y;
+    const moving = Math.hypot(dx, dy) > 0.4;
+    if (moving) {
+      person.x += dx * 0.2;
+      person.y += dy * 0.2;
+      person.setDepth(person.y);
+      this.setFacing(person, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy < 0 ? 'up' : 'down');
+    }
+    person.setData('walking', moving);
+  }
+
+  /** Собака идёт рядом с хозяином; пока он в магазине — сидит привязанная у входа и виляет хвостом. */
+  private updateDog(person: Phaser.GameObjects.Container, dog: Phaser.GameObjects.Image): void {
+    const { h, door } = this.layout;
+    const outside = person.y > h + FACADE_H;
+    const side = person.getData('facing') === 'left' ? 1 : -1;
+    const tx = outside ? person.x + side * 9 : door.x + 17;
+    const ty = outside ? person.y + 5 : h + FACADE_H + 7;
+    const dx = tx - dog.x;
+    const dy = ty - dog.y;
+    const d = Math.hypot(dx, dy);
+    const now = this.time.now;
+    if (d > 0.8) {
+      const step = Math.min(d, Math.max(0.9, d * 0.18));
+      dog.x += (dx / d) * step;
+      dog.y += (dy / d) * step;
+      dog.setTexture(Math.floor(now / 110) % 2 ? 'dog0' : 'dog1').setFlipX(dx < 0);
+    } else {
+      dog.setTexture(Math.floor(now / (outside ? 700 : 220)) % 2 ? 'dog_sit0' : 'dog_sit1').setFlipX(false);
+    }
+    dog.setDepth(dog.y + 3);
+  }
+
+  /** Коляска всегда впереди мамы: снизу, сверху (за ней) или сбоку. */
+  private placeStroller(person: Phaser.GameObjects.Container, facing: Facing): void {
+    const stroller = person.getData('stroller') as Phaser.GameObjects.Image | undefined;
+    if (!stroller) return;
+    if (facing === 'down') {
+      stroller.setTexture('stroller').setPosition(0, 9).setFlipX(false);
+      person.bringToTop(stroller);
+    } else if (facing === 'up') {
+      stroller.setTexture('stroller').setPosition(0, -5).setFlipX(false);
+      person.sendToBack(stroller);
+    } else {
+      stroller.setTexture('stroller_s').setPosition(facing === 'right' ? 11 : -11, 3).setFlipX(facing === 'left');
+      person.bringToTop(stroller);
+    }
   }
 
   /** Поворот: спереди, со спины или боком (левый бок — зеркальный правый). Значок охранника виден только спереди. */
@@ -1635,6 +1765,7 @@ export class StoreScene extends Phaser.Scene {
     }
     const legs = person.getData('legs') as Phaser.GameObjects.Image | undefined;
     legs?.setTexture(`p_legs0${suffix}`).setFlipX(facing === 'left');
+    this.placeStroller(person, facing);
   }
 
   /** Монетки летят от кассы к счётчику денег в углу экрана. */
@@ -2100,16 +2231,18 @@ export class StoreScene extends Phaser.Scene {
     const valya = !thief && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
     const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
     const rare = !thief && !valya && Math.random() < rareGuestChance(this.state.level) ? pickRareGuest(this.state, Math.random) : null;
-    const look = rare
+    const look: Look = rare
       ? rare.look
       : valya
         ? VALYA
         : thief
           ? { ...randomLook(shirt), style: 'long' as const, hair: THIEF_SHIRT }
-          : customerLook(shirt);
+          : withCompanionItems(customerLook(shirt));
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, look);
     this.addUmbrella(sprite);
+    // Иногда приходят парой.
+    if (!thief && !rare && !valya && look.stroller === undefined && Math.random() < 0.08) this.addCompanion(sprite);
     if (rare) {
       sound.bell();
       // Редкий гость сверкает, пока он в магазине.
@@ -2444,8 +2577,9 @@ export class StoreScene extends Phaser.Scene {
     if (Math.random() < 0.45) {
       const fromLeft = Math.random() < 0.5;
       const y = this.streetY + Phaser.Math.Between(-5, 5);
-      const person = this.makePerson(fromLeft ? left : right, y, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS)));
+      const person = this.makePerson(fromLeft ? left : right, y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS))));
       this.addUmbrella(person);
+      if (Math.random() < 0.1) this.addCompanion(person);
       void this.walk(person, fromLeft ? right : left, y, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1.1)).then(() => person.destroy());
     }
     if (Math.random() < 0.04) this.driveBus();

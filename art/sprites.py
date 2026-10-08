@@ -155,6 +155,23 @@ class Canvas:
                 if (nx, ny) not in solid:
                     self.px(nx, ny, ch)
 
+    def line(self, x0, y0, x1, y1, ch):
+        """Прямая по пикселям (Брезенхем)."""
+        dx, dy = abs(x1 - x0), -abs(y1 - y0)
+        sx, sy = (1 if x0 < x1 else -1), (1 if y0 < y1 else -1)
+        err = dx + dy
+        while True:
+            self.px(x0, y0, ch)
+            if x0 == x1 and y0 == y1:
+                break
+            e2 = 2 * err
+            if e2 >= dy:
+                err += dy
+                x0 += sx
+            if e2 <= dx:
+                err += dx
+                y0 += sy
+
     def save(self, name):
         OUT.mkdir(parents=True, exist_ok=True)
         self.img.save(OUT / f"{name}.png")
@@ -2051,6 +2068,109 @@ def gondola():
     save_with_top(c, "gondola", "metal")
 
 
+def bags_and_pets():
+    """Сумка через плечо, школьный рюкзак (спереди, со спины, сбоку), коляска и собака."""
+    # Сумка: ремень наискосок через грудь и сумка у бедра. Белая — цвет задаёт игра.
+    c = Canvas(24, 36)
+    for i in range(9):
+        c.px(8 + i, 17 + i, "2")
+    c.round_rect(15, 24, 6, 5, "1", r=1)
+    c.hline(15, 25, 6, "2")
+    c.outline("k")
+    c.save("bag")
+    c = Canvas(24, 36)
+    for i in range(9):
+        c.px(15 - i, 17 + i, "2")
+    c.round_rect(3, 24, 6, 5, "1", r=1)
+    c.hline(3, 25, 6, "2")
+    c.outline("k")
+    c.save("bag_b")
+    c = Canvas(24, 36)
+    c.round_rect(9, 23, 7, 6, "1", r=1)
+    c.hline(9, 24, 7, "2")
+    c.vline(12, 17, 6, "2")
+    c.outline("k")
+    c.save("bag_s")
+    # Рюкзак: спереди лямки, со спины — сам рюкзак с карманом, сбоку торчит за спиной.
+    c = Canvas(24, 36)
+    c.vline(8, 17, 9, "1")
+    c.vline(15, 17, 9, "1")
+    c.outline("k")
+    c.save("backpack")
+    c = Canvas(24, 36)
+    c.round_rect(6, 16, 12, 12, "1", r=2)
+    c.rect(8, 22, 8, 5, "2")
+    c.hline(8, 22, 8, "3")
+    c.px(12, 24, "w")
+    c.outline("k")
+    c.save("backpack_b")
+    c = Canvas(24, 36)
+    c.round_rect(3, 17, 6, 10, "1", r=2)
+    c.vline(4, 19, 6, "2")
+    c.vline(9, 17, 8, "3")
+    c.outline("k")
+    c.save("backpack_s")
+
+    # Коляска: вид сверху-спереди (капюшон, малыш, ручка) и сбоку (колёса).
+    c = Canvas(20, 22)
+    c.round_rect(3, 5, 14, 13, "1", r=3)
+    c.round_rect(3, 5, 14, 6, "2", r=3)
+    c.ellipse(10, 13, 3, 2.6, "t")
+    c.px(9, 13, "k")
+    c.px(11, 13, "k")
+    c.hline(4, 2, 12, "K")
+    c.vline(4, 2, 4, "K")
+    c.vline(15, 2, 4, "K")
+    for x in (3, 15):
+        c.rect(x, 18, 3, 3, "K")
+    c.outline("k")
+    c.save("stroller")
+    c = Canvas(26, 22)
+    c.round_rect(6, 6, 16, 9, "1", r=3)
+    c.round_rect(14, 4, 9, 9, "2", r=3)
+    c.ellipse(11, 9, 2.6, 2.2, "t")
+    c.line(6, 8, 1, 2, "K")
+    c.hline(0, 2, 3, "K")
+    for x in (8, 19):
+        c.ellipse(x, 18, 2.6, 2.6, "K")
+        c.px(x, 18, "l")
+    c.outline("k")
+    c.save("stroller_s")
+
+    # Собака сбоку: два кадра шага; сидит — хвост виляет (два кадра). Белая — окрас задаёт игра.
+    def dog(name, legs, tail):
+        c = Canvas(18, 14)
+        c.ellipse(8, 7, 5.5, 3, "1")
+        c.ellipse(14, 4.5, 3, 2.6, "1")
+        c.rect(15, 5, 3, 2, "1")
+        c.px(17, 5, "k")
+        c.px(14, 3, "k")
+        c.rect(12, 1, 2, 3, "2")
+        for x, y in legs:
+            c.rect(x, 9, 2, y, "2")
+        c.line(3, 6, 1, tail, "1")
+        c.hline(9, 6, 3, "R")
+        c.outline("k")
+        c.save(name)
+    dog("dog0", ((4, 4), (11, 4)), 3)
+    dog("dog1", ((6, 4), (9, 4)), 4)
+    for i, tail in enumerate((3, 9)):
+        c = Canvas(14, 16)
+        c.ellipse(7, 10, 4.5, 4, "1")
+        c.ellipse(7, 5, 3.5, 3.2, "1")
+        c.rect(3, 2, 2, 4, "2")
+        c.rect(9, 2, 2, 4, "2")
+        c.px(6, 5, "k")
+        c.px(8, 5, "k")
+        c.px(7, 7, "k")
+        c.hline(5, 8, 5, "R")
+        c.rect(4, 13, 2, 2, "2")
+        c.rect(8, 13, 2, 2, "2")
+        c.line(11, 12, 13, tail, "1")
+        c.outline("k")
+        c.save(f"dog_sit{i}")
+
+
 def environment2():
     building()
     lot2()
@@ -2068,6 +2188,7 @@ def environment2():
     night_lights()
     wet_weather()
     gondola()
+    bags_and_pets()
 
 
 # ---------------------------------------------------------------- люди
@@ -2241,6 +2362,17 @@ HAIR = {
 }
 
 
+HAIR["beanie"] = [
+    "..........kkkk..........",
+    ".........k1221k.........",
+    "........kkkkkkkk........",
+    "......kk12121212kk......",
+    ".....k121212121212k.....",
+    "....k12121212121212k....",
+    "....kkkkkkkkkkkkkkkk....",
+    "....k33333333333333k....",
+    "....kkkkkkkkkkkkkkkk....",
+]
 HAIR["ponytail"] = HAIR["short"]
 HAIR["curly"] = [
     ".......kkkkkkkkkk.......",
@@ -2253,7 +2385,7 @@ HAIR["curly"] = [
     "...k12k..........k21k...",
     "....kk............kk....",
 ]
-HAIR_OFFSET = {"short": 3, "long": 3, "bun": 0, "cap": 2, "bald": 3, "ponytail": 3, "curly": 1}
+HAIR_OFFSET = {"short": 3, "long": 3, "bun": 0, "cap": 2, "bald": 3, "ponytail": 3, "curly": 1, "beanie": 1}
 
 
 def grid(rows, offset=0):
@@ -2295,7 +2427,7 @@ def back_shirt():
 def back_hair(style):
     """Затылок: волосы закрывают голову до своей длины."""
     c = Canvas(24, 36)
-    cutoff = {"short": 12, "long": 15, "bun": 12, "cap": 8, "ponytail": 12, "curly": 13, "bald": 12}[style]
+    cutoff = {"short": 12, "long": 15, "bun": 12, "cap": 8, "ponytail": 12, "curly": 13, "bald": 12, "beanie": 9}[style]
     top = 9 if style == "bald" else 0
     for x, y in HEAD:
         if top <= y <= cutoff and SKIN[y][x] != "k":
@@ -2309,6 +2441,12 @@ def back_hair(style):
         c.ellipse(12, 2, 2.6, 2.2, "1")
     if style == "cap":
         c.hline(5, 8, 14, "3")
+    if style == "beanie":
+        for x in range(6, 18, 2):
+            c.vline(x, 3, 5, "2")
+        c.hline(5, 8, 14, "3")
+        c.hline(5, 9, 14, "3")
+        c.ellipse(12, 1.5, 2, 1.6, "1")
     if style == "ponytail":
         c.rect(11, 13, 2, 7, "1")
         c.px(12, 19, "2")
@@ -2408,6 +2546,12 @@ def side_hair(style):
         c.px(12, 4, "Y")
         c.hline(6, 7, 12, "3")
         c.rect(16, 7, 5, 2, "3")
+    if style == "beanie":
+        c.round_rect(6, 2, 12, 7, "1", r=2)
+        for x in range(7, 18, 2):
+            c.vline(x, 3, 4, "2")
+        c.rect(6, 7, 12, 2, "3")
+        c.ellipse(11, 1, 1.8, 1.5, "1")
     if style == "bald":
         c.rect(7, 8, 3, 4, "1")
     if style == "curly":
