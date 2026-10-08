@@ -42,6 +42,7 @@ import {
   warehouseOf,
   answerRaise,
   cashierScan,
+  servePerDay,
   fire,
   ownerLevel,
   ownerNextLevelAt,
@@ -81,7 +82,8 @@ import {
   type Quest,
 } from '../game/endless';
 import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
-import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
+import { applyReorder, recordPurchase, reorderPlan } from '../game/reorder';
+import { currentCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
@@ -109,7 +111,7 @@ import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
-import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES } from '../game/upgrades';
+import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../game/upgrades';
 import { MAX_LOYALTY, met, REGULARS, regularState } from '../game/regulars';
 
 /** Высота «голоса» героев в диалогах. */
@@ -271,9 +273,35 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
 
   // ---------- Закупка ----------
 
+  /** «Как в прошлый раз»: последняя закупка одной кнопкой, по сегодняшним ценам. */
+  const reorderBox = (state: StoreState): HTMLElement[] => {
+    const plan = reorderPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid));
+    const last = (state.purchases ?? []).filter((d) => d.day < state.day && d.lines.length).pop();
+    if (!plan || !last) return [];
+    const box = el('div', 'ui-box');
+    const list = last.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' ');
+    box.append(el('b', '', t('reorder.title')), el('div', 'ui-muted', t('reorder.text', { day: last.day, list })));
+    if (!plan.lines.length) {
+      box.append(el('div', 'ui-note', t('reorder.empty')));
+      return [box];
+    }
+    if (plan.cut) box.append(el('div', 'ui-note', t('reorder.cut')));
+    box.append(
+      button(t('reorder.buy', { n: plan.total }), () => {
+        const fresh = reorderPlan(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid));
+        if (!fresh?.lines.length) return;
+        const result = applyReorder(getState(), fresh, (line) => Math.random() < SUPPLIERS[line.sid].badChance);
+        if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
+        update(result.state, result.badLine ? 'error' : 'success');
+      }),
+    );
+    return [box];
+  };
+
   const buyTab = (state: StoreState): HTMLElement[] => [
     el('div', 'ui-note', t('buy.note')),
     el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
+    ...reorderBox(state),
     ...SUPPLIER_IDS.map((sid) => supplierBox(sid, state)),
     el('h3', '', t('tab.prices')),
     ...pricesTab(state),
@@ -301,7 +329,8 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
             `+${qty}`,
             () => {
               const bad = Math.random() < s.badChance;
-              const next = buyStock(getState(), pid, qty, price, bad);
+              const bought = buyStock(getState(), pid, qty, price, bad);
+              const next = bought && recordPurchase(bought, sid, pid, qty);
               if (bad && next) pendingBad = { sid, pid, qty, price };
               update(next, bad ? 'error' : 'tap');
             },
@@ -1001,10 +1030,13 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return box;
   };
 
+  /** Кассир: сколько покупателей в день пробьёт (с терминалом — быстрее). */
+  const isCashier = (m: StaffMember) => m.role === 'cashier' || m.role === 'cashier2';
+  const perDay = (state: StoreState, m: StaffMember) => servePerDay(withUpgrades(state, cashierScan(m)));
   const traitLine = (m: StaffMember) => {
     const stars = '★'.repeat(m.skill).padEnd(3, '☆');
     const trait = m.trait ? ` · ${t(TRAITS[m.trait].nameKey)}: ${t(TRAITS[m.trait].descKey)}` : '';
-    const speed = m.role === 'cashier' ? ` · ${t('staffTab.scanSpeed', { s: cashierScan(m).item.toFixed(2) })}` : '';
+    const speed = isCashier(m) ? ` · ${t('staffTab.perDay', { n: perDay(getState(), m) })}` : '';
     return `${stars}${speed}${trait}`;
   };
 
@@ -1023,6 +1055,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
           ? t('staffTab.ownerSkillMax', { s: scan.item.toFixed(2) })
           : t('staffTab.ownerSkillNext', { n: state.ownerServed, next, s: scan.item.toFixed(2) }),
       ),
+      el('div', 'ui-muted', t('staffTab.ownerPerDay', { n: servePerDay(withUpgrades(state, scan)) })),
     );
     const out: HTMLElement[] = [
       skill,
@@ -1047,6 +1080,23 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         ),
       );
       if (m.upset) box.append(el('div', 'ui-note', t('staffTab.upset')));
+      // «Тормоз» за кассой упирает весь магазин в потолок — предупредить и предложить курсы.
+      if (isCashier(m) && m.trait === 'slowpoke') {
+        const warn = el('div', 'ui-note', t('staffTab.slowWarn', { n: perDay(state, m) }));
+        warn.style.color = '#b13e53';
+        box.append(warn);
+      }
+      const cost = trainingCost(m);
+      if (cost !== null) {
+        box.append(
+          button(
+            m.skill < 3 ? t('staffTab.train', { n: cost }) : t('staffTab.fixSlow', { n: cost }),
+            () => update(train(getState(), m.role), 'success'),
+            'ui-chip',
+            state.money < cost,
+          ),
+        );
+      }
       out.push(box);
     }
 
@@ -1060,7 +1110,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
           t(STAFF_ROLES[role].nameKey),
           () => update(startJobSearch(getState(), role)),
           `ui-chip${searched ? ' active' : ''}`,
-          Boolean(staffOf(state, role)) || full || (!searched && state.money < JOB_AD_COST),
+          Boolean(staffOf(state, role)) || full || (!searched && state.money < JOB_AD_COST) || (role === 'cashier2' && !hasUpgrade(state, 'register2')),
         ),
       );
     }

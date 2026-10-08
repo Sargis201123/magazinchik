@@ -135,11 +135,12 @@ export const LATE_PENALTY = 0.1;
 export const START_DEBT = 500;
 export const DEBT_PAYMENT = 250;
 
-export type StaffRole = 'cashier' | 'cleaner' | 'loader' | 'guard';
+export type StaffRole = 'cashier' | 'cashier2' | 'cleaner' | 'loader' | 'guard';
 
 /** Сотрудники: каждый забирает у игрока одно ручное дело. Зарплата — базовая за месяц. */
 export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number }> = {
   cashier: { nameKey: 'staff.cashier', descKey: 'staff.cashier.desc', wage: 420 },
+  cashier2: { nameKey: 'staff.cashier2', descKey: 'staff.cashier2.desc', wage: 420 },
   cleaner: { nameKey: 'staff.cleaner', descKey: 'staff.cleaner.desc', wage: 280 },
   loader: { nameKey: 'staff.loader', descKey: 'staff.loader.desc', wage: 350 },
   guard: { nameKey: 'staff.guard', descKey: 'staff.guard.desc', wage: 490 },
@@ -167,7 +168,7 @@ export const STICKY_SKIM = 0.04;
 /** Навык растёт каждые столько месяцев работы. */
 export const MONTHS_PER_SKILL = 2;
 /** Сколько сотрудников помещается в помещении каждого уровня. */
-export const STAFF_LIMIT = [1, 2, 3, 4, 4];
+export const STAFF_LIMIT = [1, 2, 4, 5, 5];
 
 export interface StaffMember {
   role: StaffRole;
@@ -292,6 +293,12 @@ export function ownerScan(served: number): ScanTiming {
 
 export const cashierScan = (m: StaffMember): ScanTiming => ({ item: CASHIER_SCAN / workSpeed(m), pay: CASHIER_PAY / workSpeed(m) });
 
+/** Средняя корзина в штуках и сколько секунд покупатель подходит к кассе и отходит. */
+export const AVG_BASKET = 1.4;
+export const QUEUE_STEP_SECONDS = 0.3;
+/** Сколько покупателей за день успевает пробить тот, кто стоит за кассой без перерыва. */
+export const servePerDay = (t: ScanTiming): number => Math.floor(DAY_SECONDS / (checkoutSeconds(t, AVG_BASKET) + QUEUE_STEP_SECONDS));
+
 /** Сколько секунд пробивается корзина. */
 export const checkoutSeconds = (t: ScanTiming, items: number): number => t.item * items + t.pay;
 
@@ -379,6 +386,8 @@ export interface StoreState {
   catAsk?: number;
   /** Отзывы за последний день (reviews.ts). */
   reviews?: Review[];
+  /** Утренние закупки последних дней — для «как в прошлый раз» (reorder.ts). */
+  purchases?: { day: number; lines: { sid: string; pid: ProductId; qty: number }[] }[];
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -422,7 +431,13 @@ export interface DayStats {
   notes?: Partial<Record<ReviewTopic, number>>;
   /** Выручка ночной смены (входит в revenue). */
   nightRevenue?: number;
+  /** Почему ушли без покупки (losses.ts) и каких товаров не хватило или показались дорогими. */
+  lostWhy?: Partial<Record<LostReason, number>>;
+  missing?: Partial<Record<ProductId, number>>;
+  pricey?: Partial<Record<ProductId, number>>;
 }
+
+export type LostReason = 'queue' | 'empty' | 'expensive' | 'eduard';
 
 /** Учёт проданного (для заданий дня). */
 export function recordSale(stats: DayStats, items: CartItem[]): void {

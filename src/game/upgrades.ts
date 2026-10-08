@@ -5,7 +5,7 @@
 import type { TextKey } from '../i18n/ru';
 import type { ScanTiming, StoreState } from './economy';
 
-export type UpgradeId = 'terminal' | 'selfCheckout' | 'coffee' | 'oven' | 'nightShift';
+export type UpgradeId = 'terminal' | 'register2' | 'selfCheckout' | 'coffee' | 'oven' | 'nightShift';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -19,6 +19,7 @@ export interface Upgrade {
 
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
   terminal: { id: 'terminal', icon: '💳', nameKey: 'upgrade.terminal', descKey: 'upgrade.terminal.desc', price: 600, minLevel: 1 },
+  register2: { id: 'register2', icon: '🧾', nameKey: 'upgrade.register2', descKey: 'upgrade.register2.desc', price: 3000, minLevel: 2 },
   selfCheckout: { id: 'selfCheckout', icon: '🖥', nameKey: 'upgrade.selfCheckout', descKey: 'upgrade.selfCheckout.desc', price: 2500, minLevel: 2 },
   coffee: { id: 'coffee', icon: '☕', nameKey: 'upgrade.coffee', descKey: 'upgrade.coffee.desc', price: 1500, minLevel: 2 },
   oven: { id: 'oven', icon: '🥖', nameKey: 'upgrade.oven', descKey: 'upgrade.oven.desc', price: 1800, minLevel: 1 },

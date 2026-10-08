@@ -11,7 +11,7 @@ export const CANDIDATES_PER_SEARCH = 3;
 export const JOB_AD_COST = 30;
 
 const TRAIT_ROLL: (Trait | undefined)[] = [undefined, undefined, undefined, 'hardworker', 'slowpoke', 'sticky'];
-const ROLE_SEED: Record<StaffRole, number> = { cashier: 1, cleaner: 2, loader: 3, guard: 4 };
+const ROLE_SEED: Record<StaffRole, number> = { cashier: 1, cashier2: 5, cleaner: 2, loader: 3, guard: 4 };
 
 export function candidatesFor(day: number, seed: number, role: StaffRole): StaffMember[] {
   const random = rng(day * 7919 + seed * 104729 + ROLE_SEED[role] * 31);
@@ -42,3 +42,25 @@ export function startJobSearch(state: StoreState, role: StaffRole): StoreState |
 /** Кандидаты из сегодняшнего объявления (вчерашние уже нашли другую работу). */
 export const currentCandidates = (state: StoreState): StaffMember[] =>
   state.jobSearch && state.jobSearch.day === state.day ? state.jobSearch.candidates : [];
+
+// ---------- Обучение ----------
+
+/** Курсы: поднять навык (до 3★) или, на 3★, отучить «тормоза». Цена — по текущему навыку. */
+export const TRAINING_COST = [250, 600];
+export const SLOWPOKE_FIX_COST = 500;
+
+export function trainingCost(m: StaffMember): number | null {
+  if (m.skill < 3) return TRAINING_COST[m.skill - 1];
+  return m.trait === 'slowpoke' ? SLOWPOKE_FIX_COST : null;
+}
+
+/** Отправить на курсы: навык растёт (или уходит «тормоз»), зарплата — не меньше положенной по навыку. */
+export function train(state: StoreState, role: StaffRole): StoreState | null {
+  const m = state.staff.find((s) => s.role === role);
+  const cost = m && trainingCost(m);
+  if (!m || cost === null || cost === undefined || state.money < cost) return null;
+  const skill = m.skill < 3 ? m.skill + 1 : m.skill;
+  const trait: Trait | undefined = m.skill < 3 ? m.trait : undefined;
+  const trained: StaffMember = { ...m, skill, trait, wage: Math.max(m.wage, wageFor(role, skill, trait)) };
+  return { ...state, money: state.money - cost, staff: state.staff.map((s) => (s.role === role ? trained : s)) };
+}
