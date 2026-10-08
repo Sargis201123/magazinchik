@@ -72,6 +72,7 @@ import { holidayFor, yearTime } from '../game/calendar';
 import { liveProgress, recordDay, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
+import { activeAd } from '../game/ads';
 import { showGift } from '../ui/gift';
 import { activeDecor } from '../game/decor';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
@@ -414,6 +415,8 @@ export class StoreScene extends Phaser.Scene {
   private nightLights: NightLight[] = [];
   /** Мебель в зале (в координатах центра человека): люди обходят её. */
   private obstacles: Rect[] = [];
+  /** Реклама на улице: промоутер с листовками, баннер на фасаде, блогер у входа. */
+  private adObjs: { destroy: () => void }[] = [];
   /** Летучие мыши на Хэллоуин: видны только вечером. */
   private bats: Phaser.GameObjects.Image[] = [];
   /** Где стоят фонари: от них падают тени прохожих. */
@@ -671,6 +674,7 @@ export class StoreScene extends Phaser.Scene {
 
     this.buildStore();
     this.buildLighting(next);
+    this.applyAds();
     this.refreshShelves();
     this.refreshWarehouse();
     this.refreshToilet();
@@ -1113,6 +1117,60 @@ export class StoreScene extends Phaser.Scene {
           this.tweens.add({ targets: bulb, alpha: 0.2, duration: rnd.between(400, 900), yoyo: true, repeat: -1 });
         }
       });
+    }
+  }
+
+  /** Реклама видна на улице, пока работает. */
+  private applyAds(): void {
+    for (const obj of this.adObjs) obj.destroy();
+    this.adObjs = [];
+    const ad = activeAd(this.state);
+    if (!ad) return;
+    const { door, h } = this.layout;
+    const keep = <T extends { destroy: () => void }>(obj: T): T => {
+      this.adObjs.push(obj);
+      return obj;
+    };
+    if (ad.id === 'banner') {
+      const banner = keep(this.art(door.x - 44, h + 4, 'ad_banner').setDepth(h + 44));
+      this.tweens.add({ targets: banner, angle: { from: -1.5, to: 1.5 }, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    if (ad.id === 'flyers') {
+      // Промоутер в жёлтом жилете раздаёт листовки прохожим.
+      const spot = { x: door.x + 24, y: this.streetY - 3 };
+      const promoter = keep(this.makePerson(spot.x, spot.y, { ...randomLook(0xfee761), acc: 'vest', accTint: 0xfee761 }));
+      this.people.delete(promoter);
+      keep(
+        this.time.addEvent({
+          delay: 2200,
+          loop: true,
+          callback: () => {
+            const target = [...this.people].find((p) => p.active && Math.abs(p.x - spot.x) < 50 && p.y > this.layout.h + FACADE_H);
+            if (!target) return;
+            const flyer = this.art(spot.x, spot.y - 4, 'flyer').setDepth(spot.y + 20);
+            this.tweens.add({ targets: flyer, x: target.x, y: target.y - 4, angle: 180, duration: 450, onComplete: () => flyer.destroy() });
+          },
+        }),
+      );
+    }
+    if (ad.id === 'blogger') {
+      // Блогер снимает обзор у входа: блёстки вокруг.
+      const spot = { x: door.x - 20, y: this.layout.h + FACADE_H + 8 };
+      const blogger = keep(this.makePerson(spot.x, spot.y, { shirt: 0xf6757a, pants: 0x262b44, hair: 0xb55088, style: 'long', skin: 0xf2d3ab }));
+      this.people.delete(blogger);
+      this.setFacing(blogger, 'up');
+      const sparkles = keep(
+        this.add.particles(0, 0, 'spark', {
+          lifespan: 700,
+          speed: { min: 4, max: 14 },
+          scale: { start: 0.5, end: 0 },
+          alpha: { start: 1, end: 0 },
+          frequency: 220,
+          x: { min: -8, max: 8 },
+          y: { min: -16, max: 2 },
+        }),
+      );
+      sparkles.startFollow(blogger).setDepth(LIGHT_DEPTH - 1);
     }
   }
 
@@ -2647,7 +2705,9 @@ export class StoreScene extends Phaser.Scene {
     const thief = Math.random() < thiefChance(this.state.level);
     const valya = !thief && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
     const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
-    const rare = !thief && !valya && Math.random() < rareGuestChance(this.state.level) ? pickRareGuest(this.state, Math.random) : null;
+    // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще.
+    const rareChance = rareGuestChance(this.state.level) * (activeAd(this.state)?.id === 'blogger' ? 2 : 1);
+    const rare = !thief && !valya && Math.random() < rareChance ? pickRareGuest(this.state, Math.random) : null;
     const look: Look = rare
       ? rare.look
       : valya
@@ -3240,11 +3300,13 @@ export class StoreScene extends Phaser.Scene {
       setState: (s) => {
         const staffChanged = s.staff !== this.state.staff;
         const decorChanged = s.decor !== this.state.decor;
+        const adsChanged = s.ads !== this.state.ads;
         this.state = s;
         saveGame(s);
         if (s.level > this.builtLevel) void this.celebrateExpansion();
         else if (s.level !== this.builtLevel || decorChanged) this.buildWorld();
         else if (staffChanged) this.syncStaff();
+        if (adsChanged) this.applyAds();
         this.refreshShelves();
         this.refreshWarehouse();
         this.hud.update(s, DAY_SECONDS);

@@ -12,6 +12,7 @@ import {
 } from './events';
 import { storyChances, storyGuests } from './story';
 import { questsFor, rankGuests, rewardQuests, seasonFor } from './endless';
+import { adBoost } from './ads';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -52,9 +53,9 @@ export function inspectionDone(state: StoreState, result: InspectionResult): Sto
   return { ...s, story: { ...s.story, inspectionsPassed: s.story.inspectionsPassed + 1 } };
 }
 
-/** Множитель гостей сегодня: сюжет (конкурент), сезон и звание магазина. */
+/** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина и реклама. */
 export const guestFactor = (state: StoreState): number =>
-  storyGuests(state) * (seasonFor(state.day)?.guests ?? 1) * rankGuests(state);
+  storyGuests(state) * (seasonFor(state.day)?.guests ?? 1) * rankGuests(state) * adBoost(state);
 
 /** Секунд между гостями сегодня: рейтинг, помещение, сюжет, сезон и звание. */
 export const spawnIntervalToday = (state: StoreState): number => spawnInterval(state.rating, state.level) / guestFactor(state);

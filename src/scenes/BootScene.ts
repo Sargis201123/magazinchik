@@ -52,6 +52,8 @@ const SPRITES = [
   'dumpster',
   'spill',
   'spill_pack',
+  'ad_banner',
+  'flyer',
   'floor_wood',
   'floor_checker',
   'floor_gold',

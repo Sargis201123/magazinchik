@@ -2384,6 +2384,29 @@ def bins():
     c.save("spill_pack")
 
 
+def ad_things():
+    """Реклама: баннер на фасад (красный, со звёздами и «%»), пачка листовок, телефон блогера."""
+    c = Canvas(44, 18)
+    c.rect(0, 2, 44, 14, "R")
+    c.hline(0, 2, 44, "s")
+    c.hline(0, 15, 44, "r")
+    for x in (2, 41):
+        c.vline(x, 0, 3, "K")
+    for x, y in ((6, 6), (36, 6)):
+        c.stamp([".Y.", "YYY", ".Y."], x, y)
+    c.stamp(["YY..Y", "YY.Y.", "..Y..", ".Y.YY", "Y..YY"], 19, 6)
+    c.hline(10, 12, 7, "Y")
+    c.hline(27, 12, 7, "Y")
+    c.outline("k")
+    c.save("ad_banner")
+    c = Canvas(6, 6)
+    c.rect(0, 0, 5, 5, "w")
+    c.hline(1, 1, 3, "R")
+    c.hline(1, 3, 3, "l")
+    c.outline("k")
+    c.save("flyer")
+
+
 def environment2():
     building()
     lot2()
@@ -2405,6 +2428,7 @@ def environment2():
     seasonal()
     badges()
     bins()
+    ad_things()
 
 
 # ---------------------------------------------------------------- люди

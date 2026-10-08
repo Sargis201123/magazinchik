@@ -86,6 +86,7 @@ import { weatherFor } from '../game/weather';
 import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
+import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
 
 /** Высота «голоса» героев в диалогах. */
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
@@ -485,6 +486,33 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   };
 
   /** Оформление: по каждому виду — «как было», купленное (переставить) и что можно купить. */
+  /** Реклама: карточка на каждый вид — иконка, что даёт, цена и кнопка. */
+  const adsBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('ads.title')), el('div', 'ui-muted', t('ads.note')));
+    const running = activeAd(state);
+    for (const id of AD_IDS) {
+      const ad = ADS[id];
+      const row = el('div', 'ui-item');
+      row.append(el('div', 'ui-ad-icon', ad.icon));
+      const body = el('div');
+      const name = el('div', 'ui-item-name', t(ad.nameKey));
+      name.append(el('span', 'ui-tag', `${adPrice(state, id)} 💰`));
+      body.append(name, el('div', 'ui-item-sub', running?.id === id ? t('ads.active', { n: state.ads?.until ?? state.day }) : t(ad.descKey)));
+      const action = button(
+        running?.id === id ? '✓' : t('ads.order'),
+        () => update(buyAd(getState(), id), 'success'),
+        'ui-chip',
+        Boolean(running) || state.money < adPrice(state, id),
+      );
+      const actions = el('div', 'ui-item-actions');
+      actions.append(action);
+      row.append(body, actions);
+      box.append(row);
+    }
+    return box;
+  };
+
   const decorBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('decor.title')), el('div', 'ui-muted', t('decor.note')));
@@ -815,7 +843,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const storeTab = (state: StoreState): HTMLElement[] => {
     const level = storeLevel(state);
     const next = nextStoreLevel(state);
-    const out: HTMLElement[] = [achievementsButton(state), rankBox(state), albumBox(state), decorBox(state)];
+    const out: HTMLElement[] = [achievementsButton(state), adsBox(state), rankBox(state), albumBox(state), decorBox(state)];
 
     const current = el('div', 'ui-box');
     current.append(
