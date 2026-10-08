@@ -209,6 +209,9 @@ export const ru = {
   'shelves.slots': 'Мест под полки: занято {n} из {max}',
   'shelves.sell': 'Продать за {n} 💰',
 
+  'weather.rain': '🌧 Сегодня дождь — прохожие с зонтами.',
+  'weather.snow': '❄️ Идёт снег.',
+  'weather.leaves': '🍂 Листопад.',
   'prices.locked': 'откроется, когда купишь «{shelf}»',
   'prices.base': 'обычно {n}',
   'prices.demand': 'спрос {p}%',

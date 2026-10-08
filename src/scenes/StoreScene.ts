@@ -64,6 +64,7 @@ import { UI_FONT } from '../ui/dom';
 import { Hud } from '../ui/hud';
 import { showMorning } from '../ui/morning';
 import { showTitle } from '../ui/title';
+import { weatherFor, type Weather } from '../game/weather';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 
 // Холст 720×1280 (9:16): на телефоне хватает пикселей для детальных спрайтов.
@@ -106,6 +107,15 @@ const INDOOR_LIGHT: [number, number][] = [
   [0.85, 0xfff0dc],
   [1, 0xe4d8ec],
 ];
+
+/** Погода приглушает свет на улице: в дождь серо-синий, в снег чуть холодный. */
+const WEATHER_LIGHT: Record<Weather, number> = { clear: 0xffffff, rain: 0xb4bed2, snow: 0xf0f4ff, leaves: 0xfff2e0 };
+
+/** Перемножение цветов (как тинт). */
+function mulColor(a: number, b: number): number {
+  const ch = (shift: number) => Math.round((((a >> shift) & 255) * ((b >> shift) & 255)) / 255);
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
 
 /** Цвет между ключевыми точками. */
 function lerpKeys(keys: [number, number][], p: number): number {
@@ -269,6 +279,11 @@ export class StoreScene extends Phaser.Scene {
   /** Насколько открыты двери: 0 — закрыты, 1 — открыты. */
   private doorOpen = 0;
   private outdoorShades: Phaser.GameObjects.Rectangle[] = [];
+  /** Погода дня и всё, что её рисует (частицы, снег на газоне, гирлянда, ёлка). */
+  private weather: Weather = 'clear';
+  private weatherObjs: Phaser.GameObjects.GameObject[] = [];
+  private lawns: { x: number; y: number; w: number; h: number }[] = [];
+  private greenery: Phaser.GameObjects.Image[] = [];
   private doorImg!: Phaser.GameObjects.Image;
   private vignette?: Phaser.FX.Vignette;
   /** Насколько вечер (0 — день, 1 — сумерки): фары машин горят сильнее. */
@@ -438,6 +453,7 @@ export class StoreScene extends Phaser.Scene {
     this.workers.clear();
     this.scanning = null;
     this.syncStaff();
+    this.applyWeather();
   }
 
   private buildStore(): void {
@@ -545,6 +561,8 @@ export class StoreScene extends Phaser.Scene {
       }
       if (legs && (legs.texture.key !== key || legs.flipX !== flip)) legs.setTexture(key).setFlipX(flip);
       for (const img of (person.getData('upper') as Phaser.GameObjects.Image[]) ?? []) img.y = bob;
+      const umbrella = person.getData('umbrella') as Phaser.GameObjects.Image | undefined;
+      umbrella?.setVisible(person.y > this.layout.h + 2);
     }
   }
 
@@ -589,7 +607,7 @@ export class StoreScene extends Phaser.Scene {
   private updateLighting(progress?: number): void {
     if (!this.indoorShade) return;
     const p = progress ?? Phaser.Math.Clamp(1 - this.timeLeft / DAY_SECONDS, 0, 1);
-    const outdoor = lerpKeys(OUTDOOR_LIGHT, p);
+    const outdoor = mulColor(lerpKeys(OUTDOOR_LIGHT, p), WEATHER_LIGHT[this.weather]);
     const indoor = lerpKeys(INDOOR_LIGHT, p);
     for (const r of this.outdoorShades) r.setFillStyle(outdoor);
     this.indoorShade.setFillStyle(indoor);
@@ -603,6 +621,89 @@ export class StoreScene extends Phaser.Scene {
     for (const g of this.ceilingGlows) g.setAlpha(0.06 + 0.16 * evening);
   }
 
+  /**
+   * Погода дня: дождь с брызгами и зонтами, снег (белый газон, гирлянда на фасаде, ёлка в зале),
+   * листопад (рыжие деревья). Частицы падают только снаружи: здание рисуется поверх них.
+   */
+  private applyWeather(): void {
+    for (const obj of this.weatherObjs) obj.destroy();
+    this.weatherObjs = [];
+    this.weather = weatherFor(this.state.day);
+    // Камера ещё не пересчитала видимую область — берём её с запасом от планировки.
+    const area = { x: -80, y: -140, w: this.next.w + 160, h: this.next.h + STREET_VIEW + 220 };
+    const keep = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
+      this.weatherObjs.push(obj);
+      return obj;
+    };
+    const tree = this.weather === 'snow' ? 0xdce6f2 : this.weather === 'leaves' ? 0xffb868 : 0xffffff;
+    for (const g of this.greenery) g.setTint(tree);
+
+    if (this.weather === 'rain') {
+      keep(this.add.particles(0, 0, 'raindrop', {
+        x: { min: area.x, max: area.x + area.w },
+        y: area.y,
+        speedY: { min: 240, max: 300 },
+        speedX: -30,
+        scale: 1 / ART,
+        lifespan: (area.h / 260) * 1000,
+        quantity: 3,
+        frequency: 25,
+      })).setDepth(-5);
+      keep(this.add.particles(0, 0, 'splash', {
+        x: { min: area.x, max: area.x + area.w },
+        y: { min: area.y, max: area.y + area.h },
+        scale: { start: 0.3 / ART, end: 1 / ART },
+        alpha: { start: 1, end: 0 },
+        lifespan: 280,
+        frequency: 30,
+      })).setDepth(-5);
+    }
+    if (this.weather === 'snow') {
+      for (const lawn of this.lawns) {
+        keep(this.add.tileSprite(lawn.x, lawn.y, lawn.w, lawn.h, 'snow_ground').setOrigin(0).setTileScale(1 / ART).setDepth(-9.5));
+      }
+      keep(this.add.particles(0, 0, 'snowflake', {
+        x: { min: area.x, max: area.x + area.w },
+        y: area.y,
+        speedY: { min: 14, max: 30 },
+        speedX: { min: -10, max: 10 },
+        scale: { min: 1.2 / ART, max: 2 / ART },
+        lifespan: (area.h / 18) * 1000,
+        frequency: 35,
+      })).setDepth(-5);
+      // Гирлянда на фасаде и ёлка в зале.
+      const { w, h, wallH } = this.layout;
+      const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x0099db];
+      for (let x = -WALL + 2, i = 0; x < w + WALL; x += 5, i++) {
+        const bulb = keep(this.add.rectangle(x, h + 1, 1.6, 1.6, colors[i % colors.length]).setDepth(h + 42));
+        this.tweens.add({ targets: bulb, alpha: 0.25, duration: 500, delay: (i % 4) * 250, yoyo: true, repeat: -1 });
+      }
+      keep(this.art(w - 11, wallH + 14, 'xmas_tree').setDepth(wallH + 25));
+    }
+    if (this.weather === 'leaves') {
+      keep(this.add.particles(0, 0, 'leaf', {
+        x: { min: area.x, max: area.x + area.w },
+        y: area.y,
+        speedY: { min: 10, max: 22 },
+        speedX: { min: -14, max: 6 },
+        rotate: { min: 0, max: 360 },
+        tint: [0xf77622, 0xfeae34, 0xb86f50, 0xe43b44],
+        scale: 1.6 / ART,
+        lifespan: (area.h / 12) * 1000,
+        frequency: 150,
+      })).setDepth(-5);
+    }
+    this.updateLighting(this.running ? undefined : 0);
+  }
+
+  /** Зонт над головой: только в дождь и только на улице. */
+  private addUmbrella(person: Phaser.GameObjects.Container): void {
+    if (this.weather !== 'rain') return;
+    const umbrella = this.art(0, -13, 'umbrella').setTint(Phaser.Utils.Array.GetRandom(CAR_COLORS));
+    person.add(umbrella);
+    person.setData('umbrella', umbrella);
+  }
+
   /** Улица вокруг здания: газон с деревьями, тротуар с фонарями и скамейкой, дорога. */
   private buildStreet(next: Layout): void {
     const { h, door } = this.layout;
@@ -612,6 +713,10 @@ export class StoreScene extends Phaser.Scene {
     const width = next.w + 800;
     const top = next.h + 4;
     this.streetY = top + 12;
+    this.lawns = [
+      { x: left, y: -400, w: width, h: top + 400 },
+      { x: left, y: top + 88, w: width, h: 300 },
+    ];
     tile(left, -400, width, top + 400, 'grass');
     tile(left, top, width, 22, 'paving');
     this.add.rectangle(left, top + 22, width, 2, 0x8b9bb4).setOrigin(0).setDepth(-9);
@@ -640,8 +745,9 @@ export class StoreScene extends Phaser.Scene {
       [next.w * 0.25, -12],
       [next.w * 0.75, -16],
     ];
-    for (const [x, y] of trees) this.art(x, y, 'tree').setOrigin(0.5, 0.9).setDepth(y);
-    for (let x = 10; x < next.w; x += 34) this.art(x, -6, 'bush').setDepth(-6);
+    this.greenery = [];
+    for (const [x, y] of trees) this.greenery.push(this.art(x, y, 'tree').setOrigin(0.5, 0.9).setDepth(y));
+    for (let x = 10; x < next.w; x += 34) this.greenery.push(this.art(x, -6, 'bush').setDepth(-6));
   }
 
   /** Толстые стены с кирпичной крышкой и фасад с витринами, дверями и роллетом склада. */
@@ -1308,6 +1414,7 @@ export class StoreScene extends Phaser.Scene {
           : customerLook(shirt);
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, look);
+    this.addUmbrella(sprite);
     if (rare) {
       sound.bell();
       // Редкий гость сверкает, пока он в магазине.
@@ -1626,6 +1733,7 @@ export class StoreScene extends Phaser.Scene {
       const fromLeft = Math.random() < 0.5;
       const y = this.streetY + Phaser.Math.Between(-5, 5);
       const person = this.makePerson(fromLeft ? left : right, y, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS)));
+      this.addUmbrella(person);
       void this.walk(person, fromLeft ? right : left, y, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1.1)).then(() => person.destroy());
     }
     if (Math.random() < 0.3) {
@@ -1736,6 +1844,7 @@ export class StoreScene extends Phaser.Scene {
 
   private showMorning(): void {
     this.hud.update(this.state, DAY_SECONDS);
+    if (weatherFor(this.state.day) !== this.weather) this.applyWeather();
     this.updateLighting(0);
     showMorning({
       getState: () => this.state,

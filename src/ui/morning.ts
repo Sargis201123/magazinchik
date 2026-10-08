@@ -82,6 +82,7 @@ import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, typ
 import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter } from '../game/story';
 import { sound } from '../platform/sound';
+import { weatherFor } from '../game/weather';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, who } from './dom';
 
@@ -171,6 +172,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       title,
       goalLine(state),
       ...seasonLine(state),
+      ...weatherLine(state),
       el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
       billForecast(state),
       questsBox(state),
@@ -409,6 +411,12 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   };
 
   // ---------- Бесконечная игра: сезон, задания, звание, альбом ----------
+
+  /** Погода дня — только если не ясно. */
+  const weatherLine = (state: StoreState): HTMLElement[] => {
+    const weather = weatherFor(state.day);
+    return weather === 'clear' ? [] : [el('div', 'ui-muted', t(`weather.${weather}`))];
+  };
 
   const seasonLine = (state: StoreState): HTMLElement[] => {
     const season = seasonFor(state.day);

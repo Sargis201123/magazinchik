@@ -211,6 +211,9 @@ export const en: Record<TextKey, string> = {
   'shelves.slots': 'Shelf slots: {n} of {max} used',
   'shelves.sell': 'Sell for {n} 💰',
 
+  'weather.rain': '🌧 Rainy day — people carry umbrellas.',
+  'weather.snow': '❄️ It is snowing.',
+  'weather.leaves': '🍂 Leaves are falling.',
   'prices.locked': 'unlocks when you buy the {shelf}',
   'prices.base': 'usual {n}',
   'prices.demand': 'demand {p}%',

@@ -1555,6 +1555,51 @@ def store_extras():
     shadowed(c, 17, 20, 15, 2).save("carts")
 
 
+def weather_sprites():
+    """Капля, брызги, снежинка, листик, зонт, ёлка."""
+    c = Canvas(2, 8)
+    c.vline(0, 0, 8, (192, 220, 255, 150))
+    c.vline(1, 2, 6, (230, 240, 255, 200))
+    c.save("raindrop")
+    c = Canvas(8, 4)
+    c.ellipse(4, 2, 3.6, 1.6, (220, 235, 255, 160))
+    c.ellipse(4, 2, 2.2, 0.8, (0, 0, 0, 0))
+    c.save("splash")
+    c = Canvas(4, 4)
+    c.stamp([".w..", "wWw.", ".w..", "...."])
+    c.save("snowflake")
+    c = Canvas(5, 4)
+    c.stamp([".11.", "1111", "11.1", "...1"])
+    c.save("leaf")
+    c = Canvas(32, 32)
+    c.rect(0, 0, 32, 32, (236, 242, 252, 235))
+    c.speckle(0, 0, 32, 32, [(206, 220, 240, 235), (255, 255, 255, 255)], 30, 17)
+    c.save("snow_ground")
+    c = Canvas(20, 12)
+    c.ellipse(10, 6, 9.5, 5, "1")
+    c.ellipse(10, 7, 9.5, 3, "2")
+    for x in (3, 10, 17):
+        c.vline(x, 4, 5, "3")
+    c.rect(9, 0, 2, 2, "K")
+    c.outline("k")
+    c.save("umbrella")
+    # Ёлка 28×44: ярусы, игрушки, звезда, ведро.
+    c = Canvas(28, 44)
+    for i, (y, w) in enumerate(((6, 8), (12, 14), (19, 20), (27, 26))):
+        for row in range(8):
+            half = int(w / 2 * (row + 2) / 9)
+            c.hline(14 - half, y + row, half * 2, "e" if row % 3 else "E")
+    c.rect(12, 35, 4, 3, "a")
+    c.rect(9, 37, 10, 6, "R")
+    c.hline(9, 37, 10, "s")
+    for x, y, tone in ((10, 14, "R"), (17, 17, "Y"), (8, 23, "U"), (19, 25, "R"), (12, 30, "Y"), (6, 32, "P"), (21, 31, "U")):
+        c.px(x, y, tone)
+        c.px(x, y + 1, tone)
+    c.outline("k")
+    c.stamp(["..Y..", ".YYY.", "YYwYY", ".YYY.", "Y...Y"], 12, 0)
+    shadowed(c, 14, 42, 10, 2).save("xmas_tree")
+
+
 def environment2():
     building()
     lot2()
@@ -1562,6 +1607,7 @@ def environment2():
     cars()
     floors()
     store_extras()
+    weather_sprites()
 
 
 # ---------------------------------------------------------------- люди
