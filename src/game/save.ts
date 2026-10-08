@@ -17,7 +17,9 @@ export function loadGame(): StoreState | null {
     if (!raw) return null;
     const save = JSON.parse(raw) as SaveFile;
     if (save.version < MIN_COMPATIBLE || save.version > VERSION) return null;
-    return { ...newGame(), ...save.state };
+    // Новые товары появляются в старых сохранениях со своей ценой по умолчанию.
+    const fresh = newGame();
+    return { ...fresh, ...save.state, prices: { ...fresh.prices, ...save.state.prices } };
   } catch {
     return null;
   }

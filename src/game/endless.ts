@@ -6,6 +6,7 @@ import {
   monthOf,
   PRODUCTS,
   sellableProducts,
+  seasonalDemand,
   type DayStats,
   type ProductId,
   type StoreState,
@@ -49,7 +50,7 @@ export function seasonFor(day: number): Season | null {
 /** Корзина покупателя: 1–2 разных товара, в сезон любимые товары выбирают чаще. */
 export function pickWanted(state: StoreState, random: () => number, count: number): ProductId[] {
   const season = seasonFor(state.day);
-  const pool = sellableProducts(state).map((id) => ({ id, w: season?.demand[id] ?? 1 }));
+  const pool = sellableProducts(state).map((id) => ({ id, w: (season?.demand[id] ?? 1) * seasonalDemand(id, state.day) }));
   const picked: ProductId[] = [];
   while (picked.length < count && pool.length) {
     const total = pool.reduce((s, p) => s + p.w, 0);

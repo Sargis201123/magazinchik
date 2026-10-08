@@ -2468,6 +2468,78 @@ def checkout_upgrades():
     shadowed(c, 12, 36, 9, 2).save("kiosk")
 
 
+SEASONAL_ITEMS = {
+    "icecream": [
+        ["..........", "...kkkk...", "..kswssk..", ".ksssssPk.", ".kPsssPPk.", "..kkkkkk..",
+         "..knNnnk..", "...knnk...", "...knak...", "....kk....", "..........", ".........."],
+        ["..........", "..........", "...kkkk...", "..kNNaak..", ".kNwNaaak.", ".kkkkkkkk.",
+         ".kUwUUUUk.", ".kUUUUUUk.", "..kUuUUk..", "..kuuuuk..", "...kkkk...", ".........."],
+        ["...kkkk...", "..kaawak..", "..kaaaak..", "..kaBaak..", "..kaaaak..", "..kaaBak..",
+         "..kaaaak..", "...kkkk...", "....knk...", "....knk...", "....kkk...", ".........."],
+    ],
+    "tangerines": [
+        ["..........", "....e.....", "....eE....", "...kkkk...", "..kYoook..", ".kYooooyk.",
+         ".koooooyk.", ".kooooyyk.", "..kooyyk..", "...kkkk...", "..........", ".........."],
+        ["..........", "..........", "......e...", ".kkk.kkkk.", "kYookkYook", "koooykooyk",
+         "kooyykoyyk", ".kkk.kkkk.", "..........", "..........", "..........", ".........."],
+        ["....kk....", "...k..k...", "..kkkkkk..", ".kYoYoook.", ".koWoWoWk.", ".kYoYoyok.",
+         ".koWoWoWk.", ".kooyoyok.", "..kooyok..", "...kkkk...", "..........", ".........."],
+    ],
+    "flowers": [
+        ["..kk.kk...", ".kRRkRRk..", ".kRrkRrk..", "..kEkEk...", "...kEEk...", "..kwwwwk..",
+         "..kwWWwk..", "...kwwk...", "...kwWk...", "....kk....", "..........", ".........."],
+        ["..kkkkk...", ".kPsPsPk..", ".ksPsPsk..", "..kEkEk...", "...kEEk...", "..kYYYYk..",
+         "..kYyyYk..", "...kYYk...", "...kyYk...", "....kk....", "..........", ".........."],
+        [".kkk.kkk..", "kwYwkwYwk.", ".kkk.kkk..", "..kE.Ek...", "...kEEk...", "..kkkkkk..",
+         "..kaBBak..", "..kBBBBk..", "...kBBk...", "...kkkk...", "..........", ".........."],
+    ],
+}
+
+
+def seasonal_goods():
+    """Сезонные товары: мороженое (лето), мандарины (Новый год), цветы (весна, 8 Марта) и их тара."""
+    for product, variants in SEASONAL_ITEMS.items():
+        for i, rows in enumerate(variants):
+            assert len(rows) == 12 and all(len(r) == 10 for r in rows), f"{product}_{i}"
+            c = Canvas(10, 12)
+            c.stamp(rows)
+            c.save(f"item_{product}_{i}")
+            if i == 0:
+                c.save(f"item_{product}")
+    # Мороженое в белом термоящике с цветными крышками стаканчиков.
+    c = Canvas(16, 16)
+    for x, tone in ((2, "s"), (6, "Y"), (10, "N")):
+        c.ellipse(x + 1.5, 6, 1.8, 1.4, tone)
+    c.rect(0, 7, 16, 8, "w")
+    c.hline(0, 7, 16, "W")
+    c.rect(3, 10, 10, 2, "U")
+    c.hline(0, 14, 16, "l")
+    c.outline("k")
+    c.save("crate_icecream")
+    # Мандарины в деревянном ящике.
+    c = Canvas(16, 16)
+    for x, y in ((3, 7), (7, 6), (11, 7), (5, 5), (10, 5)):
+        c.ellipse(x + 0.5, y + 0.5, 2.1, 2.1, "o")
+        c.px(x - 1, y - 1, "Y")
+    c.px(8, 3, "e")
+    c.rect(0, 9, 16, 6, "n")
+    c.hline(0, 9, 16, "N")
+    for x in (5, 10):
+        c.vline(x, 10, 5, "a")
+    c.outline("k")
+    c.save("crate_tangerines")
+    # Цветы в цинковом ведре.
+    c = Canvas(16, 16)
+    for x, tone in ((3, "R"), (7, "s"), (11, "Y"), (5, "P"), (9, "R")):
+        c.vline(x, 4, 5, "e")
+        c.round_rect(x - 1, 1 + (x % 3), 3, 3, tone, r=1)
+    c.rect(2, 8, 12, 7, "l")
+    c.hline(2, 8, 12, "W")
+    c.vline(3, 9, 5, "W")
+    c.outline("k")
+    c.save("crate_flowers")
+
+
 def environment2():
     building()
     lot2()
@@ -2492,6 +2564,7 @@ def environment2():
     ad_things()
     live_events()
     checkout_upgrades()
+    seasonal_goods()
 
 
 # ---------------------------------------------------------------- люди

@@ -9,7 +9,7 @@ import { newDecor, type DecorState } from './decor';
 /** Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу. */
 export type Category = 'bakery' | 'produce' | 'dairy' | 'meat';
 
-export type ProductId = 'bread' | 'apples' | 'potatoes' | 'milk' | 'meat';
+export type ProductId = 'bread' | 'apples' | 'potatoes' | 'milk' | 'meat' | 'icecream' | 'tangerines' | 'flowers';
 
 export interface Product {
   id: ProductId;
@@ -31,9 +31,31 @@ export const PRODUCTS: Record<ProductId, Product> = {
   potatoes: { id: 'potatoes', nameKey: 'product.potatoes', icon: '🥔', category: 'produce', cost: 10, basePrice: 20, shelfLife: 7, color: 0xa47a52 },
   milk: { id: 'milk', nameKey: 'product.milk', icon: '🥛', category: 'dairy', cost: 36, basePrice: 60, shelfLife: 3, color: 0xeef3f7 },
   meat: { id: 'meat', nameKey: 'product.meat', icon: '🥩', category: 'meat', cost: 90, basePrice: 150, shelfLife: 2, color: 0xb83a4b },
+  // Сезонные товары: продаются только в свои месяцы (см. SEASONAL).
+  icecream: { id: 'icecream', nameKey: 'product.icecream', icon: '🍦', category: 'dairy', cost: 30, basePrice: 55, shelfLife: 4, color: 0xf6c6d6 },
+  tangerines: { id: 'tangerines', nameKey: 'product.tangerines', icon: '🍊', category: 'produce', cost: 20, basePrice: 40, shelfLife: 6, color: 0xf77622 },
+  flowers: { id: 'flowers', nameKey: 'product.flowers', icon: '💐', category: 'produce', cost: 35, basePrice: 70, shelfLife: 3, color: 0xe43b44 },
 };
 
 export const PRODUCT_IDS = Object.keys(PRODUCTS) as ProductId[];
+
+/** Месяцев в игровом году (= YEAR_MONTHS в calendar.ts, проверяется тестом). */
+const YEAR_MONTHS = 16;
+/**
+ * Сезонные товары: в какие месяцы игрового года (0…15) их продают.
+ * Мороженое — летом, мандарины — перед Новым годом и в новогоднюю неделю, цветы — весной.
+ */
+export const SEASONAL: Partial<Record<ProductId, number[]>> = { icecream: [7, 8, 9, 10], tangerines: [2, 3], flowers: [4, 5, 6] };
+
+export const monthInYear = (day: number): number => (monthOf(day) - 1) % YEAR_MONTHS;
+export const productAvailable = (id: ProductId, day: number): boolean => SEASONAL[id]?.includes(monthInYear(day)) ?? true;
+
+/** Спрос на сезонный товар: в сезон берут охотно, на 8 Марта (первые два дня весны) цветы — нарасхват. */
+export function seasonalDemand(id: ProductId, day: number): number {
+  if (!SEASONAL[id]) return 1;
+  if (id === 'flowers' && monthInYear(day) === 4 && (day - 1) % MONTH_DAYS < 2) return 5;
+  return 1.5;
+}
 
 export interface ShelfKind {
   nameKey: TextKey;
@@ -415,7 +437,7 @@ export const newGame = (): StoreState => ({
     { kind: 'bakery', level: 0, items: { bread: fresh(4) } },
     { kind: 'produce', level: 0, items: { apples: fresh(3), potatoes: fresh(3) } },
   ],
-  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150 },
+  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70 },
 });
 
 export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];
@@ -460,7 +482,7 @@ export function shelfFor(state: StoreState, id: ProductId): number {
 
 /** Товары, для которых в магазине есть подходящая полка: только их и ищут покупатели. */
 export const sellableProducts = (state: StoreState): ProductId[] =>
-  PRODUCT_IDS.filter((id) => state.shelves.some((s) => canPlace(id, s)));
+  PRODUCT_IDS.filter((id) => productAvailable(id, state.day) && state.shelves.some((s) => canPlace(id, s)));
 
 // ---------- Цены и спрос ----------
 

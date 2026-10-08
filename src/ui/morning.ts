@@ -34,6 +34,7 @@ import {
   shelfResale,
   storeLevel,
   STORE_LEVELS,
+  productAvailable,
   upgradeCost,
   upgradeShelf,
   warehouseCapacity,
@@ -244,7 +245,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const free = warehouseCapacity(state) - warehouseCount(state);
     for (const pid of PRODUCT_IDS) {
       const price = unitPrice(s, deal, pid);
-      if (price === null) continue;
+      if (price === null || !productAvailable(pid, state.day)) continue;
       const chips: HTMLElement[] = [];
       for (const qty of [1, 5]) {
         chips.push(
@@ -961,7 +962,11 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       info.append(el('b', '', t(product.nameKey)));
       if (!sellable.includes(pid)) {
         card.classList.add('ui-price-locked');
-        info.append(el('div', 'ui-muted', `🔒 ${t('prices.locked', { shelf: t(SHELF_KINDS[product.category].nameKey) })}`));
+        // Сезонный товар вне сезона — «только летом», иначе — какая полка нужна.
+        const why = productAvailable(pid, state.day)
+          ? t('prices.locked', { shelf: t(SHELF_KINDS[product.category].nameKey) })
+          : t(`prices.season.${pid}` as TextKey);
+        info.append(el('div', 'ui-muted', `🔒 ${why}`));
         card.append(icon, info);
         return card;
       }

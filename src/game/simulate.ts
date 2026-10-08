@@ -29,6 +29,7 @@ import {
   returnToShelf,
   setPrice,
   sellableProducts,
+  seasonalDemand,
   SHELF_KINDS,
   SHELF_LEVELS,
   shelfCapacity,
@@ -222,7 +223,7 @@ export function simulate({
     );
     for (const id of sellable) {
       // Доля спроса на товар: в сезон любимые товары берут чаще.
-      const weight = (p: ProductId) => seasonFor(state.day)?.demand[p] ?? 1;
+      const weight = (p: ProductId) => (seasonFor(state.day)?.demand[p] ?? 1) * seasonalDemand(p, state.day);
       const share = weight(id) / sellable.reduce((sum, p) => sum + weight(p), 0);
       const demand = guests * AVG_WANTS * buyChance(state.prices[id], perceivedBase(state, id)) * share;
       const shelfRoom = state.shelves

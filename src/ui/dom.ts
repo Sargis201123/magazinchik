@@ -287,8 +287,11 @@ const ICONS: Record<string, string> = {
   '🥛': 'item_milk',
   '🥩': 'item_meat',
   '📦': 'box',
+  '🍦': 'item_icecream',
+  '🍊': 'item_tangerines',
+  '💐': 'item_flowers',
 };
-const ICON_RE = /(💰|🍞|🍎|🥔|🥛|🥩|📦)/u;
+const ICON_RE = /(💰|🍞|🍎|🥔|🥛|🥩|📦|🍦|🍊|💐)/u;
 
 /** Заменяет эмодзи денег и товаров на пиксельные картинки из игры. */
 export function pixelize(root: Node): void {
