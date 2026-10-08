@@ -715,6 +715,62 @@ export class StoreScene extends Phaser.Scene {
     person.setData('umbrella', umbrella);
   }
 
+  /**
+   * Расширение — событие: утреннее окно прячется, на участке леса и строители стучат молотками,
+   * вспышка — и зал уже больше, летит конфетти, звучат фанфары.
+   */
+  private async celebrateExpansion(): Promise<void> {
+    const modal = document.querySelector<HTMLElement>('.ui-modal');
+    if (modal) modal.style.visibility = 'hidden';
+    const { w, h } = this.layout;
+    const next = this.next;
+    const spots: { x: number; y: number }[] = [];
+    if (next.w > w) spots.push({ x: w + (next.w - w) / 2, y: next.h * 0.3 }, { x: w + (next.w - w) / 2, y: next.h * 0.7 });
+    if (next.h > h) spots.push({ x: w * 0.3, y: h + (next.h - h) / 2 }, { x: w * 0.7, y: h + (next.h - h) / 2 });
+    const crew: Phaser.GameObjects.GameObject[] = [];
+    for (const spot of spots) {
+      crew.push(this.art(spot.x, spot.y, 'scaffold').setDepth(spot.y));
+      const builder = this.makePerson(spot.x + 14, spot.y + 10, { ...randomLook(0xfeae34), style: 'cap', hair: 0xfeae34, acc: 'vest' });
+      this.tweens.add({ targets: builder, scaleY: 0.92, duration: 140, yoyo: true, repeat: -1 });
+      crew.push(builder);
+    }
+    this.popup(next.w / 2, next.h / 2, t('popup.construction'), '#fee761');
+    const hammer = this.time.addEvent({
+      delay: 260,
+      loop: true,
+      callback: () => {
+        sound.tap();
+        const spot = Phaser.Utils.Array.GetRandom(spots);
+        if (spot) this.puff(spot.x + Phaser.Math.Between(-14, 14), spot.y + Phaser.Math.Between(-10, 14));
+      },
+    });
+    await this.wait(2400);
+    hammer.remove();
+    for (const obj of crew) obj.destroy();
+    this.cameras.main.flash(300, 255, 250, 235);
+    this.buildWorld();
+    this.refreshShelves();
+    this.refreshWarehouse();
+    this.hud.update(this.state, DAY_SECONDS);
+    const confetti = this.add.particles(this.layout.w / 2, this.layout.h / 2, 'confetti', {
+      speed: { min: 60, max: 170 },
+      angle: { min: 200, max: 340 },
+      gravityY: 160,
+      rotate: { min: 0, max: 360 },
+      scale: 1 / ART,
+      lifespan: 1800,
+      tint: [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xb55088],
+      emitting: false,
+    });
+    confetti.setDepth(LIGHT_DEPTH + 10).explode(70);
+    sound.fanfare();
+    haptic.success();
+    this.popup(this.layout.w / 2, this.layout.h / 2 - 20, t('popup.expanded', { name: t(storeLevel(this.state).nameKey) }), '#fee761');
+    await this.wait(1600);
+    confetti.destroy();
+    if (modal) modal.style.visibility = '';
+  }
+
   /** Нажатие засчитывается, только если палец не двигал камеру. */
   private tap(action: () => void): void {
     if (!this.dragged) action();
@@ -1953,7 +2009,8 @@ export class StoreScene extends Phaser.Scene {
         const staffChanged = s.staff !== this.state.staff;
         this.state = s;
         saveGame(s);
-        if (s.level !== this.builtLevel) this.buildWorld();
+        if (s.level > this.builtLevel) void this.celebrateExpansion();
+        else if (s.level !== this.builtLevel) this.buildWorld();
         else if (staffChanged) this.syncStaff();
         this.refreshShelves();
         this.refreshWarehouse();

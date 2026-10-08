@@ -332,6 +332,8 @@ export const en: Record<TextKey, string> = {
   'title.progress': 'Day {day} · {money} 💰',
   'title.soundOn': '🔊 Sound',
   'title.soundOff': '🔇 Muted',
+  'popup.construction': 'Construction! 🔨',
+  'popup.expanded': 'We are now a {name}! 🎉',
   'popup.rush': "Rush hour!",
   'popup.broken': "Fridge is broken",
   'hint.inspector': "The inspector is here! Quickly clean the trash and toilet",

@@ -330,6 +330,8 @@ export const ru = {
   'title.progress': 'День {day} · {money} 💰',
   'title.soundOn': '🔊 Звук',
   'title.soundOff': '🔇 Без звука',
+  'popup.construction': 'Стройка! 🔨',
+  'popup.expanded': 'Теперь у нас {name}! 🎉',
   'popup.rush': "Час пик!",
   'popup.broken': "Холодильник сломан",
   'hint.inspector': "Инспектор в зале! Быстро убери мусор и туалет",

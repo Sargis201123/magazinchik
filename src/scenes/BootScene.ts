@@ -16,6 +16,8 @@ const SPRITES = [
   'door_half',
   'raindrop',
   'roof',
+  'scaffold',
+  'confetti',
   'ac_unit',
   'skylight',
   'bus_stop',

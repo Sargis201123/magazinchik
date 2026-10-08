@@ -1662,6 +1662,25 @@ def neighborhood():
     lamp.save("bus_lights")
 
 
+def construction():
+    """Строительные леса 40×44 и конфетти."""
+    c = Canvas(40, 44)
+    for x in (3, 19, 35):
+        c.rect(x, 0, 2, 44, "l")
+        c.vline(x, 0, 44, "W")
+    for y in (8, 22, 36):
+        c.rect(1, y, 38, 3, "B")
+        c.hline(1, y, 38, "n")
+    for i in range(14):
+        c.px(5 + i, 10 + i, "G")
+        c.px(21 + i, 24 - i, "G")
+    c.outline("k")
+    c.save("scaffold")
+    c = Canvas(4, 3)
+    c.rect(0, 0, 4, 3, "w")
+    c.save("confetti")
+
+
 def environment2():
     building()
     lot2()
@@ -1671,6 +1690,7 @@ def environment2():
     store_extras()
     weather_sprites()
     neighborhood()
+    construction()
 
 
 # ---------------------------------------------------------------- люди
