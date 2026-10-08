@@ -105,6 +105,44 @@ const css = `
 .ui-bump { display: inline-block; animation: ui-bump .35s ease-out; }
 @keyframes ui-bump { 40% { transform: scale(1.25); background: rgba(143, 209, 106, .85); } }
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }
+.ui-chip { white-space: nowrap; }
+/* Сводка утра: каждая строка — отдельно, крупнее и темнее, без «простыни» серого текста. */
+.ui-infos { border: 2px solid #2b2233; border-radius: 8px; background: #fbf6ea; padding: 2px 10px; margin: 4px 0 8px; }
+.ui-infos > div { font-size: 13.5px; line-height: 1.3; color: #3a3046; padding: 5px 0; margin: 0; font-style: normal; }
+.ui-infos > div + div { border-top: 1px dashed #d8ccb0; }
+/* Вкладки прилипают к верху окна, пока листаешь длинный список. */
+.ui-card .ui-tabs { position: sticky; top: -2px; z-index: 3; background: #f4ecd8; padding: 6px 0; margin: 4px 0 6px;
+  box-shadow: 0 6px 6px -6px rgba(43, 34, 51, .35); }
+.ui-tab { font-size: 12.5px; }
+.ui-card h3 { font-size: 16px; border-bottom: 2px solid #2b2233; padding-bottom: 2px; }
+/* Строка товара: крупная иконка, название с жёлтым ценником, подпись, кнопки справа — ничего не переносится. */
+.ui-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 8px; align-items: center; padding: 7px 0; }
+.ui-item + .ui-item { border-top: 1px dashed #d8ccb0; }
+.ui-item-icon { width: 30px; height: 36px; image-rendering: pixelated; justify-self: center; }
+.ui-item-name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ui-item-sub { font-size: 12.5px; color: #6a5f58; margin-top: 1px; }
+.ui-item-actions { display: flex; gap: 6px; align-items: center; }
+.ui-item-actions .ui-chip { min-width: 46px; padding: 8px 6px; font-size: 14px; }
+.ui-tag { display: inline-flex; align-items: center; gap: 2px; background: #fee761; border: 2px solid #2b2233; border-radius: 6px;
+  padding: 0 5px; font: 800 13px system-ui, sans-serif; line-height: 1.5; }
+.ui-haggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 8px;
+  background: #f4ecd8; border-radius: 6px; }
+.ui-haggle b { font-size: 13px; }
+.ui-haggle .ui-muted { margin-left: auto; }
+/* Оформление: сетка карточек с превью. Поставленное — зелёное, премиум — с золотой рамкой. */
+.ui-decor-kind { font: 700 14px system-ui, sans-serif; margin: 12px 0 4px; }
+.ui-decor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.ui-decor { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; border: 2px solid #2b2233;
+  border-radius: 8px; background: #fbf6ea; color: #2b2233; box-shadow: 0 2px 0 #2b2233; font: 12px/1.2 system-ui, sans-serif; }
+.ui-decor.active { background: #e3f5d6; border-color: #3e8948; box-shadow: 0 2px 0 #3e8948; }
+.ui-decor.premium { border-color: #feae34; }
+.ui-decor[disabled] { opacity: .65; }
+.ui-decor-preview { width: 52px; height: 36px; border: 2px solid #2b2233; border-radius: 4px; image-rendering: pixelated;
+  background-size: 32px 32px; display: flex; align-items: center; justify-content: center; font-size: 20px; background-color: #fff; }
+.ui-decor-preview img { max-width: 48px; max-height: 32px; image-rendering: pixelated; }
+.ui-decor-name { font-weight: 700; min-height: 2.4em; display: flex; align-items: center; text-align: center; }
+.ui-decor-status { font-size: 11.5px; font-weight: 700; color: #6a5f58; }
+.ui-decor.active .ui-decor-status { color: #3e8948; }
 /* Всплывашка «Новое достижение!» сверху: выезжает, висит и уезжает. */
 .ui-toast { position: fixed; z-index: 40; left: 50%; top: calc(env(safe-area-inset-top) + 62px); display: flex; gap: 10px;
   align-items: center; padding: 8px 14px 8px 10px; background: #fbf6ea; color: #2b2233; border: 3px solid #2b2233;

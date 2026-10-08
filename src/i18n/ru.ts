@@ -392,6 +392,8 @@ export const ru = {
   'decor.kind.plants': 'Растения',
   'decor.kind.neon': 'Неон',
   'decor.kind.aquarium': 'Аквариум',
+  'decor.on': 'Стоит',
+  'decor.put': 'Поставить',
   'decor.none': 'Как было',
   'decor.starsSoon': '⭐ {n} — скоро',
   'decor.wall_mint': 'Мятные',

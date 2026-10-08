@@ -89,7 +89,7 @@ import { achievementsButton } from './achievements';
 
 /** Высота «голоса» героев в диалогах. */
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
-import { buyDecor, DECOR, DECOR_KINDS, setDecor } from '../game/decor';
+import { buyDecor, DECOR, DECOR_KINDS, setDecor, type DecorItem, type DecorKind } from '../game/decor';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, who } from './dom';
 
@@ -112,6 +112,23 @@ const TABS: [Tab, TextKey][] = [
 ];
 
 const productLabel = (id: ProductId) => `${PRODUCTS[id].icon} ${t(PRODUCTS[id].nameKey)}`;
+
+/** Строка товара: крупная пиксельная иконка, название (и ценник), подпись и кнопки справа. */
+function itemRow(pid: ProductId, opts: { price?: number; sub?: string; actions: HTMLElement[] }): HTMLElement {
+  const row = el('div', 'ui-item');
+  const icon = el('img', 'ui-item-icon');
+  icon.src = `assets/item_${pid}_0.png`;
+  icon.alt = '';
+  const body = el('div');
+  const name = el('div', 'ui-item-name', t(PRODUCTS[pid].nameKey));
+  if (opts.price !== undefined) name.append(el('span', 'ui-tag', `${opts.price} 💰`));
+  body.append(name);
+  if (opts.sub) body.append(el('div', 'ui-item-sub', opts.sub));
+  const actions = el('div', 'ui-item-actions');
+  actions.append(...opts.actions);
+  row.append(icon, body, actions);
+  return row;
+}
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
 export function showMorning({ getState, setState, onOpen }: MorningOptions): void {
@@ -182,12 +199,14 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     slideTab = false;
     card.replaceChildren(
       title,
-      goalLine(state),
-      ...seasonLine(state),
-      ...weatherLine(state),
-      ...holidayLine(state),
-      el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
-      billForecast(state),
+      infos(
+        goalLine(state),
+        ...seasonLine(state),
+        ...weatherLine(state),
+        ...holidayLine(state),
+        el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
+        billForecast(state),
+      ),
       questsBox(state),
       tabs,
       body,
@@ -223,15 +242,9 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     for (const pid of PRODUCT_IDS) {
       const price = unitPrice(s, deal, pid);
       if (price === null) continue;
-      const row = el('div', 'ui-row');
-      const info = el('span');
-      info.append(
-        el('span', '', `${productLabel(pid)} · ${price} 💰 `),
-        el('span', 'ui-muted', t('buy.inWarehouse', { n: warehouseOf(state, pid) })),
-      );
-      const chips = el('div', 'ui-chips');
+      const chips: HTMLElement[] = [];
       for (const qty of [1, 5]) {
-        chips.append(
+        chips.push(
           button(
             `+${qty}`,
             () => {
@@ -246,17 +259,16 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
           ),
         );
       }
-      row.append(info, chips);
-      box.append(row);
+      box.append(itemRow(pid, { price, sub: t('buy.inWarehouse', { n: warehouseOf(state, pid) }), actions: chips }));
     }
 
-    const haggleRow = el('div', 'ui-chips');
+    const haggleRow = el('div', 'ui-haggle');
     if (deal.discount > 0) {
-      haggleRow.append(el('span', 'ui-muted', t('buy.discount', { p: Math.round(deal.discount * 100) })));
+      haggleRow.append(el('b', '', t('buy.discount', { p: Math.round(deal.discount * 100) })));
     } else if (deal.angry) {
-      haggleRow.append(el('span', 'ui-muted', t('buy.angryNote')));
+      haggleRow.append(el('span', '', t('buy.angryNote')));
     } else {
-      haggleRow.append(el('span', 'ui-muted', t('buy.haggle')));
+      haggleRow.append(el('b', '', t('buy.haggle')));
       for (const ask of HAGGLE_ASKS) {
         haggleRow.append(
           button(
@@ -323,26 +335,18 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         .filter(Boolean)
         .join(', ');
 
-      const row = el('div', 'ui-row');
-      const info = el('span');
-      info.append(el('span', '', `${productLabel(pid)} ×${units.length} `), el('span', 'ui-muted', extra));
-
       const shelfIndex = state.shelves.findIndex((sh) => canPlace(pid, sh) && shelfFree(sh) > 0);
       const hasShelfKind = state.shelves.some((sh) => canPlace(pid, sh));
-      if (!hasShelfKind) {
-        row.append(info, el('span', 'ui-muted', t('warehouse.noShelf', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) })));
-      } else {
-        row.append(
-          info,
-          button(
+      const sub = [t('buy.inWarehouse', { n: units.length }), extra].filter(Boolean).join(' · ');
+      const action = hasShelfKind
+        ? button(
             shelfIndex >= 0 ? t('warehouse.toShelf') : t('warehouse.shelfFull'),
             () => update(moveToShelf(getState(), shelfIndex, pid).state),
             'ui-chip',
             shelfIndex < 0,
-          ),
-        );
-      }
-      box.append(row);
+          )
+        : el('span', 'ui-muted', t('warehouse.noShelf', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) }));
+      box.append(itemRow(pid, { sub, actions: [action] }));
     }
     out.push(
       box,
@@ -485,24 +489,55 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('decor.title')), el('div', 'ui-muted', t('decor.note')));
     for (const kind of DECOR_KINDS) {
-      const row = el('div', 'ui-chips');
-      row.append(el('span', 'ui-muted', `${t(`decor.kind.${kind}` as TextKey)}:`));
-      const active = state.decor.active[kind];
-      row.append(button(t('decor.none'), () => update(setDecor(getState(), kind, null)), `ui-chip${active ? '' : ' active'}`));
-      for (const item of DECOR.filter((d) => d.kind === kind)) {
-        const name = t(item.nameKey);
-        if (state.decor.owned.includes(item.id)) {
-          row.append(button(name, () => update(setDecor(getState(), kind, item.id)), `ui-chip${active === item.id ? ' active' : ''}`));
-        } else if (item.price !== undefined) {
-          row.append(button(`${name} · ${item.price} 💰`, () => update(buyDecor(getState(), item.id), 'success'), 'ui-chip', state.money < item.price));
-        } else {
-          row.append(button(`${name} · ${t('decor.starsSoon', { n: item.stars ?? 0 })}`, () => undefined, 'ui-chip ui-chip-off', true));
-        }
-      }
-      box.append(row);
+      box.append(el('div', 'ui-decor-kind', t(`decor.kind.${kind}` as TextKey)));
+      const grid = el('div', 'ui-decor-grid');
+      grid.append(decorCard(state, kind, null));
+      for (const item of DECOR.filter((d) => d.kind === kind)) grid.append(decorCard(state, kind, item));
+      box.append(grid);
     }
     return box;
   };
+
+  /** Карточка оформления: превью, название и что будет по нажатию (купить, поставить, уже стоит). */
+  const decorCard = (state: StoreState, kind: DecorKind, item: DecorItem | null) => {
+    const owned = !item || state.decor.owned.includes(item.id);
+    const active = item ? state.decor.active[kind] === item.id : !state.decor.active[kind];
+    const premium = Boolean(item && item.price === undefined);
+    const canBuy = item?.price !== undefined && state.money >= item.price;
+    const card = button(
+      '',
+      () => {
+        if (active) return;
+        if (owned) update(setDecor(getState(), kind, item?.id ?? null));
+        else if (item) update(buyDecor(getState(), item.id), 'success');
+      },
+      `ui-decor${active ? ' active' : ''}${premium ? ' premium' : ''}`,
+      !owned && (premium || !canBuy),
+    );
+    const preview = el('div', 'ui-decor-preview');
+    if (!item) preview.textContent = '↺';
+    else if (item.color !== undefined) {
+      const hex = `#${item.color.toString(16).padStart(6, '0')}`;
+      preview.style.background = `url(assets/wall.png) 0 0 / 32px 32px, ${hex}`;
+      preview.style.backgroundBlendMode = 'multiply';
+    } else if (kind === 'floor') preview.style.backgroundImage = `url(assets/${item.texture}.png)`;
+    else {
+      const img = el('img');
+      img.src = `assets/${item.texture}.png`;
+      img.alt = '';
+      preview.append(img);
+    }
+    const status = active
+      ? `✓ ${t('decor.on')}`
+      : owned
+        ? t('decor.put')
+        : item?.price !== undefined
+          ? `${item.price} 💰`
+          : t('decor.starsSoon', { n: item?.stars ?? 0 });
+    card.append(preview, el('div', 'ui-decor-name', item ? t(item.nameKey) : t('decor.none')), el('div', 'ui-decor-status', status));
+    return card;
+  };
+
 
   const albumBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
@@ -520,6 +555,13 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   };
 
   // ---------- Сюжет и события ----------
+
+  /** Сводка утра одной аккуратной плашкой. */
+  const infos = (...lines: HTMLElement[]) => {
+    const box = el('div', 'ui-infos');
+    box.append(...lines);
+    return box;
+  };
 
   const goalLine = (state: StoreState) => {
     const chapter = currentChapter(state);

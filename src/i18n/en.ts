@@ -394,6 +394,8 @@ export const en: Record<TextKey, string> = {
   'decor.kind.plants': 'Plants',
   'decor.kind.neon': 'Neon',
   'decor.kind.aquarium': 'Aquarium',
+  'decor.on': 'In place',
+  'decor.put': 'Put in',
   'decor.none': 'Default',
   'decor.starsSoon': '⭐ {n} — soon',
   'decor.wall_mint': 'Mint',
