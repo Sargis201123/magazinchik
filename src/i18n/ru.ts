@@ -209,6 +209,10 @@ export const ru = {
   'shelves.slots': 'Мест под полки: занято {n} из {max}',
   'shelves.sell': 'Продать за {n} 💰',
 
+  'neighbor.cafe': 'Кафе «Пончик»',
+  'neighbor.pharmacy': 'Аптека',
+  'neighbor.eduard': 'Эдуард-Маркет',
+  'neighbor.bakery': 'Цветы',
   'weather.rain': '🌧 Сегодня дождь — прохожие с зонтами.',
   'weather.snow': '❄️ Идёт снег.',
   'weather.leaves': '🍂 Листопад.',

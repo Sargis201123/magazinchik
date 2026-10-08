@@ -1600,6 +1600,68 @@ def weather_sprites():
     shadowed(c, 14, 42, 10, 2).save("xmas_tree")
 
 
+def neighborhood():
+    """Крыши соседних зданий, кондиционеры, окно в крыше, остановка, автобус."""
+    c = Canvas(32, 32)
+    c.rect(0, 0, 32, 32, "G")
+    for y in range(0, 32, 8):
+        c.hline(0, y, 32, "g")
+        c.hline(0, y + 1, 32, "l")
+    c.speckle(0, 0, 32, 32, ["g", "l"], 14, 31)
+    c.save("roof")
+    c = Canvas(22, 16)
+    c.rect(1, 2, 20, 12, "W")
+    c.hline(1, 2, 20, "w")
+    c.ellipse(11, 8, 5, 4.5, "l")
+    for i in range(-4, 5, 2):
+        c.hline(7, 8 + i // 2, 9, "G")
+    c.vline(20, 2, 12, "l")
+    c.outline("k")
+    shadowed(c, 12, 14, 10, 2).save("ac_unit")
+    c = Canvas(24, 18)
+    c.rect(1, 1, 22, 16, "W")
+    c.rect(3, 3, 18, 12, "U")
+    c.rect(3, 3, 18, 4, "c")
+    c.vline(12, 3, 12, "W")
+    c.outline("k")
+    c.save("skylight")
+    # Остановка 64×40: стеклянный навес, скамейка, табличка «А».
+    c = Canvas(64, 40)
+    c.rect(2, 4, 60, 6, "u")
+    c.hline(2, 4, 60, "U")
+    c.rect(4, 10, 56, 20, (180, 220, 240, 120))
+    for x in (4, 59):
+        c.rect(x, 10, 2, 24, "g")
+    c.rect(10, 26, 44, 4, "B")
+    c.hline(10, 26, 44, "n")
+    c.rect(48, 0, 12, 10, "Y")
+    c.frame(48, 0, 12, 10, "k")
+    c.stamp(["..k..", ".k.k.", "kkkkk", "k...k"], 52, 3)
+    c.outline("k")
+    shadowed(c, 32, 36, 30, 3).save("bus_stop")
+    # Автобус 120×42: кузов под тинт, окна, двери, фары.
+    c = Canvas(120, 42)
+    for x in (16, 92):
+        c.rect(x, 3, 12, 3, "k")
+        c.rect(x, 36, 12, 3, "k")
+    c.round_rect(2, 5, 116, 32, "1", r=4)
+    c.hline(4, 34, 112, "3")
+    c.rect(8, 9, 98, 24, "2")
+    for x in range(10, 104, 12):
+        c.rect(x, 9, 9, 5, "u")
+        c.rect(x, 28, 9, 5, "u")
+    c.rect(106, 8, 10, 26, "u")
+    c.vline(108, 9, 8, "c")
+    c.outline("k")
+    shadowed(c, 60, 38, 58, 4).save("bus")
+    lamp = Canvas(120, 42)
+    lamp.rect(116, 8, 2, 5, "Y")
+    lamp.rect(116, 29, 2, 5, "Y")
+    lamp.rect(2, 8, 2, 5, "R")
+    lamp.rect(2, 29, 2, 5, "R")
+    lamp.save("bus_lights")
+
+
 def environment2():
     building()
     lot2()
@@ -1608,6 +1670,7 @@ def environment2():
     floors()
     store_extras()
     weather_sprites()
+    neighborhood()
 
 
 # ---------------------------------------------------------------- люди

@@ -57,7 +57,7 @@ import {
   type RareGuestId,
 } from '../game/endless';
 import { loadGame, saveGame } from '../game/save';
-import { t } from '../i18n';
+import { t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
 import { UI_FONT } from '../ui/dom';
@@ -78,6 +78,8 @@ const HUD_BOTTOM = 80;
 const ART = 2;
 /** Сколько улицы видно под зданием (в точках мира). */
 const STREET_VIEW = 40;
+/** Насколько далеко можно отвести камеру от магазина пальцем. */
+const CAMERA_REACH = 200;
 /** Толщина наружных стен и высота фасада (в точках мира). */
 const WALL = 6;
 const FACADE_H = 10;
@@ -274,6 +276,12 @@ export class StoreScene extends Phaser.Scene {
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
   private boxes: Phaser.GameObjects.Image[] = [];
+  /** Палец двигал камеру — это не нажатие. */
+  private dragged = false;
+  private dragStart = { x: 0, y: 0 };
+  /** Куда камера возвращается после осмотра квартала. */
+  private home = { x: 0, y: 0 };
+  private homeTimer?: Phaser.Time.TimerEvent;
   /** Все люди на экране: для шагов и дыхания. */
   private people = new Set<Phaser.GameObjects.Container>();
   /** Насколько открыты двери: 0 — закрыты, 1 — открыты. */
@@ -341,6 +349,7 @@ export class StoreScene extends Phaser.Scene {
 
     this.buildWorld();
     this.hud.update(this.state, this.timeLeft);
+    this.setupCameraDrag();
     // Улица живёт своей жизнью: прохожие и машины.
     this.time.addEvent({ delay: 1800, loop: true, callback: () => this.streetLife() });
     // Сначала вывеска, потом утро. Первая встреча с сюжетом (письмо бабушки) — на утреннем экране.
@@ -438,11 +447,13 @@ export class StoreScene extends Phaser.Scene {
     const viewH = next.h + 24 + STREET_VIEW;
     const zoom = Math.min(CANVAS_W / (next.w + 16), (CANVAS_H - HUD_TOP - HUD_BOTTOM) / viewH);
     const midY = HUD_TOP + (CANVAS_H - HUD_TOP - HUD_BOTTOM) / 2;
-    this.cameras.main.setZoom(zoom).centerOn(next.w / 2, viewH / 2 - 12 + (CANVAS_H / 2 - midY) / zoom);
+    this.home = { x: next.w / 2, y: viewH / 2 - 12 + (CANVAS_H / 2 - midY) / zoom };
+    this.cameras.main.setZoom(zoom).centerOn(this.home.x, this.home.y);
     // Мягкая виньетка по краям кадра; к вечеру гуще.
     this.cameras.main.postFX?.clear();
     this.vignette = this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.2);
     this.buildStreet(next);
+    this.buildNeighbors(next);
     if (next !== this.layout) this.buildForRent(next);
 
     this.buildStore();
@@ -482,7 +493,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .zone(wc.x, wc.y + 4, 24, 36)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.cleanToilet());
+      .on('pointerup', () => this.tap(() => this.cleanToilet()));
 
     this.art(counter.x + 2, counter.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(counter.y + 19);
     this.art(counter.x, counter.y, 'counter').setDepth(counter.y + 20);
@@ -497,7 +508,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .zone(counter.x + 6, counter.y + 6, 40, 64)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.serveNext());
+      .on('pointerup', () => this.tap(() => this.serveNext()));
   }
 
   /**
@@ -702,6 +713,78 @@ export class StoreScene extends Phaser.Scene {
     const umbrella = this.art(0, -13, 'umbrella').setTint(Phaser.Utils.Array.GetRandom(CAR_COLORS));
     person.add(umbrella);
     person.setData('umbrella', umbrella);
+  }
+
+  /** Нажатие засчитывается, только если палец не двигал камеру. */
+  private tap(action: () => void): void {
+    if (!this.dragged) action();
+  }
+
+  /** Квартал можно рассмотреть, проведя пальцем; через несколько секунд камера возвращается к магазину. */
+  private setupCameraDrag(): void {
+    const cam = this.cameras.main;
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      this.dragged = false;
+      this.dragStart = { x: p.x, y: p.y };
+    });
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (!p.isDown) return;
+      if (!this.dragged && Phaser.Math.Distance.Between(p.x, p.y, this.dragStart.x, this.dragStart.y) < 12) return;
+      this.dragged = true;
+      this.homeTimer?.remove();
+      const dx = (p.x - p.prevPosition.x) / cam.zoom;
+      const dy = (p.y - p.prevPosition.y) / cam.zoom;
+      const cx = Phaser.Math.Clamp(cam.midPoint.x - dx, -CAMERA_REACH, this.next.w + CAMERA_REACH);
+      const cy = Phaser.Math.Clamp(cam.midPoint.y - dy, -CAMERA_REACH / 2, this.next.h + CAMERA_REACH / 2);
+      cam.centerOn(cx, cy);
+    });
+    this.input.on('pointerup', () => {
+      if (!this.dragged) return;
+      this.homeTimer?.remove();
+      this.homeTimer = this.time.delayedCall(4000, () => cam.pan(this.home.x, this.home.y, 700, 'Sine.easeInOut'));
+    });
+  }
+
+  /**
+   * Соседи по улице: слева кафе и жилой дом, справа магазин конкурента Эдуарда и аптека.
+   * Крыши с кондиционерами, кирпичные фасады с витринами, вывески.
+   */
+  private buildNeighbors(next: Layout): void {
+    const bottom = next.h + 4;
+    const neighbors: { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number }[] = [
+      { x: -136, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0 },
+      { x: -268, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0 },
+      { x: next.w + 26, w: 128, h: 140, name: 'neighbor.eduard', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec },
+      { x: next.w + 170, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc },
+    ];
+    const rnd = new Phaser.Math.RandomDataGenerator(['neighbors']);
+    for (const n of neighbors) {
+      const top = bottom - n.h;
+      this.add.tileSprite(n.x, top, n.w, n.h - FACADE_H, 'roof').setOrigin(0).setTileScale(1 / ART).setTint(n.roof).setDepth(-3);
+      this.add.tileSprite(n.x - 2, top - 3, n.w + 4, 3, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(-3);
+      this.add.tileSprite(n.x, bottom - FACADE_H, n.w, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(bottom - 5);
+      // Кондиционеры и окно в крыше.
+      for (let i = 0; i < 3; i++) {
+        this.art(n.x + 14 + rnd.frac() * (n.w - 28), top + 12 + rnd.frac() * (n.h - 40), i === 0 ? 'skylight' : 'ac_unit').setDepth(-2);
+      }
+      // Витрины, дверь и навес.
+      const doorX = n.x + n.w * 0.62;
+      this.art(doorX, bottom - 5, 'door').setDepth(bottom - 4);
+      for (let x = n.x + 14; x < n.x + n.w - 10; x += 24) {
+        if (Math.abs(x - doorX) < 22) continue;
+        this.art(x, bottom - 4.5, 'shopwin').setDepth(bottom - 4);
+      }
+      this.art(doorX, bottom - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(bottom + 40);
+      // Вывеска на краю крыши.
+      this.art(n.x + n.w / 2, bottom - FACADE_H - 8, 'sign').setTint(n.sign).setDepth(bottom - 3);
+      this.add
+        .text(n.x + n.w / 2, bottom - FACADE_H - 8, t(n.name), { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
+        .setOrigin(0.5)
+        .setResolution(4)
+        .setDepth(bottom - 2);
+    }
+    // Остановка на тротуаре слева.
+    this.art(-70, this.streetY - 4, 'bus_stop').setDepth(this.streetY);
   }
 
   /** Улица вокруг здания: газон с деревьями, тротуар с фонарями и скамейкой, дорога. */
@@ -934,7 +1017,7 @@ export class StoreScene extends Phaser.Scene {
     const shadow = this.art(slot.x, slot.y + 12, 'shadow_wide').setDepth(slot.y - 15);
     const bg = this.art(slot.x, slot.y, look.texture).setTint(look.tint).setDepth(slot.y - 14);
     const front = this.art(slot.x, slot.y, `${look.texture}_front`).setDepth(slot.y - 12);
-    bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.restockShelf(index));
+    bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.restockShelf(index)));
     const items = Array.from({ length: 16 }, () => this.art(slot.x, slot.y, 'item').setDepth(slot.y - 13));
     // Уровень улучшения — жёлтые точки над полкой.
     const pips = [0, 1].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 15, 'pip').setDepth(slot.y - 12));
@@ -1183,8 +1266,8 @@ export class StoreScene extends Phaser.Scene {
       .setDepth(1)
       .setInteractive(new Phaser.Geom.Rectangle(-5, -5, 16, 15), Phaser.Geom.Rectangle.Contains);
     piece.setData('glow', piece.preFX?.addGlow(0xffffff, 1, 0, false, 0.1, 6));
-    piece.on('pointerdown', () => {
-      if (this.claimedTrash.has(piece) || this.sellerBusy) return;
+    piece.on('pointerup', () => {
+      if (this.dragged || this.claimedTrash.has(piece) || this.sellerBusy) return;
       this.claimedTrash.add(piece);
       void this.doChore([
         {
@@ -1444,7 +1527,7 @@ export class StoreScene extends Phaser.Scene {
     this.customers.add(customer);
     if (thief) {
       // Вора можно поймать касанием.
-      sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.catchThief(customer, false));
+      sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.catchThief(customer, false)));
       void this.runThief(customer);
     } else {
       void this.runCustomer(customer);
@@ -1736,6 +1819,7 @@ export class StoreScene extends Phaser.Scene {
       this.addUmbrella(person);
       void this.walk(person, fromLeft ? right : left, y, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1.1)).then(() => person.destroy());
     }
+    if (Math.random() < 0.04) this.driveBus();
     if (Math.random() < 0.3) {
       const toRight = Math.random() < 0.5;
       const y = this.streetY + (toRight ? 24 : 42);
@@ -1755,6 +1839,23 @@ export class StoreScene extends Phaser.Scene {
       car.setScale(toRight ? 1 : -1, 1);
       this.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
     }
+  }
+
+  /** Иногда по дороге едет автобус и останавливается на остановке. */
+  private driveBus(): void {
+    const y = this.streetY + 25;
+    const body = this.art(0, 0, 'bus').setTint(Phaser.Utils.Array.GetRandom([0xfeae34, 0xe43b44, 0x63c74d]));
+    const lights = this.art(0, 0, 'bus_lights');
+    const bus = this.add.container(-120, y, [body, lights]).setDepth(y);
+    const stopX = -70;
+    this.tweens.add({
+      targets: bus,
+      x: stopX,
+      duration: 2600,
+      ease: 'Sine.easeOut',
+      onComplete: () =>
+        this.tweens.add({ targets: bus, x: this.next.w + 140, delay: 1800, duration: 3200, ease: 'Sine.easeIn', onComplete: () => bus.destroy() }),
+    });
   }
 
   /** Откуда приходят с улицы: с тротуара слева или справа от входа. */

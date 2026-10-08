@@ -211,6 +211,10 @@ export const en: Record<TextKey, string> = {
   'shelves.slots': 'Shelf slots: {n} of {max} used',
   'shelves.sell': 'Sell for {n} 💰',
 
+  'neighbor.cafe': 'Donut Café',
+  'neighbor.pharmacy': 'Pharmacy',
+  'neighbor.eduard': 'Eduard Mart',
+  'neighbor.bakery': 'Flowers',
   'weather.rain': '🌧 Rainy day — people carry umbrellas.',
   'weather.snow': '❄️ It is snowing.',
   'weather.leaves': '🍂 Leaves are falling.',
