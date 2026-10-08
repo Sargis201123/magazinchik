@@ -60,6 +60,7 @@ import { loadGame, saveGame } from '../game/save';
 import { t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
+import { findPath, type Rect } from './paths';
 import { ambience } from '../platform/ambience';
 import { haptic } from '../platform/telegram';
 import { UI_FONT } from '../ui/dom';
@@ -285,6 +286,8 @@ interface ShelfView {
   shadow: Phaser.GameObjects.Image;
   items: Phaser.GameObjects.Image[];
   pips: Phaser.GameObjects.Image[];
+  /** Свет холодильника: стекло светится, на пол ложится холодный отсвет. */
+  lights: Phaser.GameObjects.GameObject[];
   /** Табличка «Осталось 2» над почти пустой полкой. */
   low: Phaser.GameObjects.Text;
   /** Подсветка: полка пустая, а на складе её товар есть — пора нести. */
@@ -353,6 +356,8 @@ export class StoreScene extends Phaser.Scene {
   private ceilingGlows: Phaser.GameObjects.Image[] = [];
   /** Ночные огни (витрины, лужи света, конусы фонарей, неон): сила растёт к вечеру. */
   private nightLights: NightLight[] = [];
+  /** Мебель в зале (в координатах центра человека): люди обходят её. */
+  private obstacles: Rect[] = [];
   /** Где стоят фонари: от них падают тени прохожих. */
   private lampXs: number[] = [];
   /** Поддон с водой или стойка «Акция» на местах, где полки ещё нет. */
@@ -614,6 +619,7 @@ export class StoreScene extends Phaser.Scene {
 
     this.art(counter.x + 2, counter.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(counter.y + 19);
     this.art(counter.x, counter.y + FURNITURE_TOP / 2, 'counter').setDepth(counter.y + 20);
+    this.buildShowcases();
     // Полоска пробивки над кассой.
     this.scanBar = this.add.rectangle(counter.x - 9, counter.y - 31, 18, 4, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
     this.scanFill = this.add.rectangle(counter.x - 8, counter.y - 31, 0, 2, 0x63c74d).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
@@ -1293,6 +1299,22 @@ export class StoreScene extends Phaser.Scene {
     this.art(door.x, h + 1, 'awning').setScale(1 / ART, 0.6 / ART).setDepth(h + 41);
   }
 
+  /**
+   * Острова-витрины «Акция» в пустом центре зала и список препятствий для обхода:
+   * полки (и места под них), витрины, касса. Человек за мебелью — если его центр выше её задней кромки,
+   * перед ней — если ноги ниже передней.
+   */
+  private buildShowcases(): void {
+    const { slots, showcases, counter } = this.layout;
+    for (const { x, y } of showcases) {
+      this.art(x, y + 12, 'shadow_wide').setDepth(y - 15);
+      this.art(x, y - FURNITURE_TOP / 2, 'gondola').setDepth(y - 14);
+    }
+    const furniture = (x: number, y: number): Rect => ({ x: x - 25, y: y - 16, w: 50, h: 24 });
+    this.obstacles = [...slots, ...showcases].map(({ x, y }) => furniture(x, y));
+    this.obstacles.push({ x: counter.x - 13, y: counter.y - 30, w: 26, h: 54 });
+  }
+
   /** Витрина вечером светится, и тёплый свет из неё ложится на тротуар. */
   private windowLight(x: number, glassY: number, groundY: number): void {
     this.nightGlow(this.add.rectangle(x, glassY, 18, 5, 0xffc870), 0.45);
@@ -1413,7 +1435,7 @@ export class StoreScene extends Phaser.Scene {
       { x: 9, y: warehouse.y - 14 },
     ];
     for (const p of spots) {
-      const busy = slots.some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
+      const busy = [...slots, ...this.layout.showcases].some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
       if (!busy) this.art(p.x, p.y, activeDecor(this.state, 'plants') ? 'plant_big' : 'plant').setDepth(p.y + 6);
     }
   }
@@ -1457,6 +1479,7 @@ export class StoreScene extends Phaser.Scene {
         view?.items.forEach((img) => img.destroy());
         view?.pips.forEach((img) => img.destroy());
         view?.low.destroy();
+        view?.lights.forEach((obj) => obj.destroy());
         view = this.buildShelf(i, shelf.kind);
         this.shelfViews[i] = view;
       }
@@ -1511,7 +1534,16 @@ export class StoreScene extends Phaser.Scene {
       .setDepth(990)
       .setVisible(false);
     this.tweens.add({ targets: low, y: low.y - 1.5, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    return { kind, bg, front, shadow, items, pips, low, glow, needsStock: false };
+    const lights: Phaser.GameObjects.GameObject[] = [];
+    if (look.texture === 'fridge') {
+      const cool = kind === 'meat' ? 0xffd8d8 : 0xc8f0ff;
+      const glass = this.add.rectangle(slot.x, slot.y - 1.5, 36, 19, cool).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.1).setDepth(slot.y - 12.5);
+      this.tweens.add({ targets: glass, alpha: 0.16, duration: 1800 + index * 130, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      const spill = this.art(slot.x, slot.y + 13, 'light_spill').setOrigin(0.5, 0).setScale(1.4 / ART, 0.5 / ART).setTint(cool);
+      spill.setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(0.4);
+      lights.push(glass, spill);
+    }
+    return { kind, bg, front, shadow, items, pips, lights, low, glow, needsStock: false };
   }
 
   private refreshWarehouse(): void {
@@ -2558,7 +2590,19 @@ export class StoreScene extends Phaser.Scene {
     return y - index * Math.min(step, fit);
   }
 
+  /** Идёт к точке; в зале — в обход мебели, по нескольким отрезкам. Новый walk отменяет прежний. */
   private walk(target: Phaser.GameObjects.Container, x: number, y: number, speed = CUSTOMER_SPEED): Promise<void> {
+    const gen = ((target.getData('walkGen') as number | undefined) ?? 0) + 1;
+    target.setData('walkGen', gen);
+    const indoor = target.y < this.layout.h - 2 && y < this.layout.h - 2;
+    const legs = indoor ? findPath({ x: target.x, y: target.y }, { x, y }, this.obstacles) : [{ x, y }];
+    return legs.reduce<Promise<void>>(
+      (done, leg) => done.then(() => (target.active && target.getData('walkGen') === gen ? this.walkLeg(target, leg.x, leg.y, speed) : undefined)),
+      Promise.resolve(),
+    );
+  }
+
+  private walkLeg(target: Phaser.GameObjects.Container, x: number, y: number, speed: number): Promise<void> {
     // Останавливаем только прошлый шаг: прыжок от радости и прочие анимации доигрывают.
     (target.getData('move') as Phaser.Tweens.Tween | undefined)?.stop();
     const distance = Phaser.Math.Distance.Between(target.x, target.y, x, y);

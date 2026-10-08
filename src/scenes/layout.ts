@@ -21,6 +21,11 @@ export interface Layout {
   /** Начало очереди у кассы, очередь растёт вверх, но не выше minY (тогда сжимается). */
   queue: Point & { step: number; minY: number };
   door: Point;
+  /**
+   * Островные стеллажи-витрины в пустом центре зала: стоят там, где на следующем уровне будут полки
+   * (на последнем — в свободных местах). Покупатели обходят их, как и полки.
+   */
+  showcases: Point[];
   /** Склад: стеллаж из rows ярусов, внизу проход к двери. */
   warehouse: { x: number; y: number; w: number; h: number; rows: number; doorway: Point; pickup: Point };
 }
@@ -45,18 +50,32 @@ const warehouseRows = (capacity: number): number =>
 
 const WALL_H = 32;
 const SHELF_STEP = 46;
+/** Острова-витрины на последнем уровне, где новых полок уже не будет. */
+const LAST_SHOWCASES: [number, number][] = [
+  [2, 1],
+  [1, 2],
+];
+const islandPoint = ([c, r]: [number, number]): Point => ({ x: 24 + SHELF_STEP * c, y: 116 + 56 * r });
 
 export function layoutFor(level: number): Layout {
   const { w, h, wall, islands } = SHAPES[Math.min(level, SHAPES.length - 1)];
   const slots: Point[] = [
     ...Array.from({ length: wall }, (_, i) => ({ x: 24 + SHELF_STEP * i, y: WALL_H + 14 })),
-    ...islands.map(([c, r]) => ({ x: 24 + SHELF_STEP * c, y: 116 + 56 * r })),
+    ...islands.map(islandPoint),
   ];
   const whW = 60;
   const rows = warehouseRows(STORE_LEVELS[Math.min(level, STORE_LEVELS.length - 1)].warehouse);
   // Подпись, ярусы стеллажа по 8 и проход внизу.
   const whH = 16 + rows * 8 + 16;
   const queueX = w - 46;
+  const whY = h - whH;
+  const next = SHAPES[level + 1];
+  const own = new Set(islands.map(([c, r]) => `${c},${r}`));
+  // Витрина целиком в зале: не залезает на склад, очередь, кассу и проход у двери.
+  const showcases = (next ? next.islands : LAST_SHOWCASES)
+    .filter(([c, r]) => !own.has(`${c},${r}`))
+    .map(islandPoint)
+    .filter(({ x, y }) => y + 40 < h - 30 && !(x - 22 < whW + 6 && y + 16 > whY) && x + 28 < queueX - 6);
   return {
     w,
     h,
@@ -67,9 +86,10 @@ export function layoutFor(level: number): Layout {
     sellerHome: { x: w - 14, y: h - 50 },
     queue: { x: queueX, y: h - 50, step: 17, minY: WALL_H + 44 },
     door: { x: (whW + 4 + queueX - 6) / 2, y: h - 4 },
+    showcases,
     warehouse: {
       x: 0,
-      y: h - whH,
+      y: whY,
       w: whW,
       h: whH,
       rows,

@@ -302,6 +302,7 @@ ICONS = {
     "bread": ["..nn..", ".nNNn.", "nBnBnB", "BBBBBB"],
     "apple": ["..e...", ".RRwR.", "RRRRRr", ".rrrr."],
     "snow": ["..c..", "c.c.c", ".ccc.", "c.c.c", "..c.."],
+    "sale": ["RR..R", "RR.R.", "..R..", ".R.RR", "R..RR"],
 }
 
 
@@ -312,6 +313,7 @@ def save_with_top(front, name, style):
         "wood": ("n", "N", "a", "B"),
         "green": ("e", "E", "d", "E"),
         "fridge": ("1", "1", "3", "2"),
+        "metal": ("W", "w", "l", "G"),
     }[style]
     c.rect(0, 0, 80, TOP + 1, base)
     c.hline(0, 1, 80, dark)
@@ -322,10 +324,10 @@ def save_with_top(front, name, style):
     else:
         c.speckle(1, 2, 78, TOP - 4, [speck], 18, len(name))
     # Табличка категории посередине крышки.
-    icon = {"wood": "bread", "green": "apple", "fridge": "snow"}[style]
+    icon = {"wood": "bread", "green": "apple", "fridge": "snow", "metal": "sale"}[style]
     c.round_rect(32, 1, 16, TOP - 2, "w", r=1)
     c.frame(32, 1, 16, TOP - 2, "G")
-    c.stamp(ICONS[icon], 37 if icon != "snow" else 38, 3)
+    c.stamp(ICONS[icon], 37 if icon not in ("snow", "sale") else 38, 3)
     c.frame(0, 0, 80, TOP + 1, "k")
     c.img.alpha_composite(front.img, (0, TOP))
     c.save(name)
@@ -1993,6 +1995,62 @@ def wet_weather():
     c.save("puddle_wet")
 
 
+def gondola():
+    """Остров-витрина «Акция»: металлическая горка с банками, коробками и бутылками, жёлтые ценники."""
+    c = Canvas(80, 52)
+    cabinet(c, "w", "W", "l")
+    for top, h in BACKS:
+        c.rect(4, top, 72, h, "W")
+        for y in range(top + 2, top + h, 4):
+            for x in range(6, 76, 4):
+                c.px(x, y, "l")
+    rnd = random.Random(7)
+    for lip in LIPS:
+        x = 6
+        while x < 72:
+            kind = rnd.choice(["can", "can", "box", "bottle", "jar"])
+            if kind == "can":
+                tone, band = rnd.choice([("R", "w"), ("U", "Y"), ("E", "w"), ("o", "Y")])
+                c.rect(x, lip - 8, 5, 8, tone)
+                c.hline(x, lip - 5, 5, band)
+                c.hline(x, lip - 8, 5, "W")
+                c.vline(x, lip - 7, 6, "w")
+                c.frame(x, lip - 8, 5, 8, "k")
+                x += 6
+            elif kind == "box":
+                tone = rnd.choice(["Y", "y", "P", "c"])
+                c.rect(x, lip - 12, 7, 12, tone)
+                c.rect(x + 1, lip - 9, 5, 4, "w")
+                c.px(x + 2, lip - 8, "R")
+                c.px(x + 4, lip - 7, "u")
+                c.frame(x, lip - 12, 7, 12, "k")
+                x += 8
+            elif kind == "bottle":
+                tone = rnd.choice(["e", "U", "s"])
+                c.rect(x, lip - 10, 4, 10, tone)
+                c.rect(x + 1, lip - 13, 2, 3, tone)
+                c.px(x + 1, lip - 14, "R")
+                c.rect(x, lip - 7, 4, 3, "w")
+                c.vline(x, lip - 9, 7, "W")
+                c.frame(x, lip - 10, 4, 10, "k")
+                x += 5
+            else:
+                c.rect(x, lip - 7, 6, 7, "n")
+                c.rect(x, lip - 9, 6, 2, "R")
+                c.rect(x + 1, lip - 5, 4, 3, "w")
+                c.frame(x, lip - 9, 6, 9, "k")
+                x += 7
+        # Металлическая кромка с жёлтыми ценниками «акция».
+        c.hline(4, lip, 72, "w")
+        c.rect(4, lip + 1, 72, 2, "W")
+        c.hline(4, lip + 3, 72, "G")
+        for x in range(8, 72, 16):
+            c.rect(x, lip + 1, 8, 3, "Y")
+            c.px(x + 1, lip + 2, "R")
+            c.hline(x + 3, lip + 2, 4, "k")
+    save_with_top(c, "gondola", "metal")
+
+
 def environment2():
     building()
     lot2()
@@ -2009,6 +2067,7 @@ def environment2():
     critters()
     night_lights()
     wet_weather()
+    gondola()
 
 
 # ---------------------------------------------------------------- люди

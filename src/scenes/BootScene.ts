@@ -29,6 +29,7 @@ const SPRITES = [
   'ripple',
   'mop',
   'puddle_wet',
+  'gondola',
   'floor_wood',
   'floor_checker',
   'floor_gold',
