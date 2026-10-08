@@ -43,6 +43,8 @@ const css = `
 .ui-tab { flex: 1; padding: 8px 1px; font: 600 12px system-ui, sans-serif; border: 2px solid #2b2233;
   border-radius: 6px; background: #e6dcc4; color: #2b2233; }
 .ui-tab.active { background: #2b2233; color: #f4ecd8; }
+.ui-bump { display: inline-block; animation: ui-bump .35s ease-out; }
+@keyframes ui-bump { 40% { transform: scale(1.25); background: rgba(143, 209, 106, .85); } }
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }
 `;
 

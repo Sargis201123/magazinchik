@@ -989,12 +989,64 @@ def glow():
     c.save("glow")
 
 
+def effects():
+    """Мелочи для эффектов: монетка, искра, облачко пыли, пузырь, запах, мусор разный."""
+    c = Canvas(10, 10)
+    c.ellipse(5, 5, 4.6, 4.6, "y")
+    c.ellipse(4.6, 4.6, 3.4, 3.4, "Y")
+    c.vline(5, 3, 4, "y")
+    c.px(3, 3, "w")
+    c.outline("k")
+    c.save("coin")
+    c = Canvas(7, 7)
+    c.stamp(["...w...", "...Y...", "..YwY..", "wYwwwYw", "..YwY..", "...Y...", "...w..."])
+    c.save("spark")
+    c = Canvas(14, 10)
+    for cx, cy, r in ((4, 6, 3.4), (8, 4, 3.8), (11, 6, 2.8), (7, 7, 3)):
+        c.ellipse(cx, cy, r, r * 0.85, "w")
+    c.ellipse(9, 6, 3, 2, "W")
+    c.save("puff")
+    c = Canvas(6, 6)
+    c.ellipse(3, 3, 2.6, 2.6, "c")
+    c.ellipse(3, 3, 1.6, 1.6, (255, 255, 255, 0))
+    c.px(2, 1, "w")
+    c.save("bubble_s")
+    c = Canvas(14, 16)
+    for x0 in (2, 7):
+        for i, y in enumerate(range(14, 1, -2)):
+            c.px(x0 + (1 if i % 2 else 0), y, "E")
+            c.px(x0 + (1 if i % 2 else 0), y - 1, "e")
+    c.save("stink")
+    c = Canvas(12, 8)
+    c.stamp(
+        [
+            "...........k",
+            "..........kY",
+            ".........kYk",
+            "kk......kYYk",
+            "kYk....kYYk.",
+            ".kYYkkkYYk..",
+            "..kyYYYYk...",
+            "...kkkkk....",
+        ]
+    )
+    c.save("trash_banana")
+    c = Canvas(10, 12)
+    c.rect(2, 2, 6, 9, "w")
+    c.rect(2, 4, 6, 3, "R")
+    c.hline(1, 1, 8, "W")
+    c.vline(7, 2, 9, "W")
+    c.outline("k")
+    c.save("trash_cup")
+
+
 def interior():
     mat()
     vending()
     pallet_water()
     promo()
     glow()
+    effects()
 
 
 # ---------------------------------------------------------------- улица

@@ -267,6 +267,7 @@ export class StoreScene extends Phaser.Scene {
   /** Смена номера останавливает циклы работы старых сотрудников. */
   private staffGen = 0;
   private toiletDirt = 0;
+  private wcStink!: Phaser.GameObjects.Image;
   private wcDoor!: Phaser.GameObjects.Image;
   private wcBar!: Phaser.GameObjects.Image;
   private seller!: Phaser.GameObjects.Container;
@@ -432,6 +433,9 @@ export class StoreScene extends Phaser.Scene {
     this.buildDecor();
 
     this.wcDoor = this.art(wc.x, wc.y, 'wc');
+    // Над грязным туалетом поднимается запах.
+    this.wcStink = this.art(wc.x, wc.y - 10, 'stink').setScale(1.4 / ART).setDepth(wc.y + 30).setVisible(false);
+    this.tweens.add({ targets: this.wcStink, y: wc.y - 15, alpha: { from: 1, to: 0.35 }, duration: 900, yoyo: true, repeat: -1 });
     this.art(wc.x, wc.y - 15, 'bar').setDisplaySize(14, 3).setTint(0x2b2233);
     this.wcBar = this.art(wc.x - 7, wc.y - 15, 'bar').setOrigin(0, 0.5).setDisplaySize(0, 2);
     this.add
@@ -694,6 +698,7 @@ export class StoreScene extends Phaser.Scene {
     this.wcBar.setDisplaySize((14 * dirt) / 100, 2);
     this.wcBar.setTint(dirt < 30 ? 0x8fd16a : dirt < TOILET_DIRTY ? 0xf2c14e : 0xd95763);
     this.wcDoor.setTint(dirt >= TOILET_DIRTY ? 0xc8a878 : 0xffffff);
+    this.wcStink.setVisible(dirt >= TOILET_DIRTY);
   }
 
   /** Картинка из public/assets в мировом масштабе. */
@@ -745,6 +750,41 @@ export class StoreScene extends Phaser.Scene {
     }
     const legs = person.getData('legs') as Phaser.GameObjects.Image | undefined;
     legs?.setTexture(`p_legs0${suffix}`).setFlipX(facing === 'left');
+  }
+
+  /** Монетки летят от кассы к счётчику денег в углу экрана. */
+  private flyCoins(x: number, y: number, count: number): void {
+    const target = this.cameras.main.getWorldPoint(70, 52);
+    for (let i = 0; i < count; i++) {
+      const coin = this.art(x + Phaser.Math.Between(-4, 4), y - 10, 'coin').setDepth(LIGHT_DEPTH + 5);
+      this.tweens.add({
+        targets: coin,
+        x: target.x,
+        y: target.y,
+        scale: 0.8 / ART,
+        delay: i * 70,
+        duration: 650,
+        ease: 'Cubic.easeIn',
+        onComplete: () => {
+          coin.destroy();
+          if (i === count - 1) this.hud.bumpMoney();
+        },
+      });
+    }
+  }
+
+  /** Облачко пыли: мусор убрали. */
+  private puff(x: number, y: number): void {
+    const cloud = this.art(x, y - 2, 'puff').setDepth(y + 5);
+    this.tweens.add({ targets: cloud, y: y - 8, scale: 0.8 / ART, alpha: 0, duration: 500, onComplete: () => cloud.destroy() });
+  }
+
+  /** Пузыри: туалет отмыт. */
+  private bubbles(x: number, y: number): void {
+    for (let i = 0; i < 6; i++) {
+      const b = this.art(x + Phaser.Math.Between(-7, 7), y + Phaser.Math.Between(-4, 8), 'bubble_s').setDepth(y + 40);
+      this.tweens.add({ targets: b, y: b.y - Phaser.Math.Between(10, 18), alpha: 0, delay: i * 80, duration: 700, onComplete: () => b.destroy() });
+    }
   }
 
   /** Эмоция над головой: всплывает и тает. */
@@ -856,6 +896,7 @@ export class StoreScene extends Phaser.Scene {
         action: () => {
           this.toiletDirt = 0;
           this.refreshToilet();
+          this.bubbles(this.layout.wc.x, this.layout.wc.y);
         },
       },
     ]);
@@ -864,8 +905,7 @@ export class StoreScene extends Phaser.Scene {
   private dropTrash(x: number, y: number): void {
     if (this.trash.size >= MAX_TRASH) return;
     const piece = this
-      .art(x + Phaser.Math.Between(-6, 6), y + Phaser.Math.Between(4, 8), 'trash')
-      .setTint(Phaser.Utils.Array.GetRandom([0xe6e1d6, 0xd95763, 0x5b6ee1, 0xf2c14e]))
+      .art(x + Phaser.Math.Between(-6, 6), y + Phaser.Math.Between(4, 8), Phaser.Utils.Array.GetRandom(['trash', 'trash', 'trash_banana', 'trash_cup']))
       .setDepth(1)
       .setInteractive(new Phaser.Geom.Rectangle(-5, -5, 16, 15), Phaser.Geom.Rectangle.Contains);
     piece.on('pointerdown', () => {
@@ -887,6 +927,7 @@ export class StoreScene extends Phaser.Scene {
     if (this.trash.has(piece)) this.stats.trashCleaned++;
     this.trash.delete(piece);
     this.claimedTrash.delete(piece);
+    this.puff(piece.x, piece.y);
     piece.destroy();
   }
 
@@ -984,6 +1025,7 @@ export class StoreScene extends Phaser.Scene {
         await this.workerWait(w, TOILET_CLEAN_MS);
         this.toiletDirt = 0;
         this.refreshToilet();
+        this.bubbles(this.layout.wc.x, this.layout.wc.y);
         continue;
       }
       if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
@@ -1099,6 +1141,18 @@ export class StoreScene extends Phaser.Scene {
     const sprite = this.makePerson(start.x, start.y, look);
     if (rare) {
       sound.bell();
+      // Редкий гость сверкает, пока он в магазине.
+      const sparkles = this.add.particles(0, 0, 'spark', {
+        lifespan: 700,
+        speed: { min: 4, max: 14 },
+        scale: { start: 0.5, end: 0 },
+        alpha: { start: 1, end: 0 },
+        frequency: 160,
+        x: { min: -7, max: 7 },
+        y: { min: -16, max: 4 },
+      });
+      sparkles.startFollow(sprite).setDepth(LIGHT_DEPTH - 1);
+      sprite.once('destroy', () => sparkles.destroy());
       this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.rareGuest', { name: `${rare.icon} ${t(rare.nameKey)}` }), '#fee761'));
     }
     if (valya) {
@@ -1348,6 +1402,7 @@ export class StoreScene extends Phaser.Scene {
     haptic.success();
     sound.coin();
     this.popup(this.layout.sellerHome.x - 8, this.layout.sellerHome.y - 18, `+${total} 💰`, '#c8ffb0');
+    this.flyCoins(this.layout.counter.x, this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)));
 
     const dirty = this.trash.size >= TRASH_COMPLAINT;
     const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;

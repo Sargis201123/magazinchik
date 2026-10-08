@@ -24,6 +24,15 @@ export class Hud {
     this.stock.textContent = `${shelves.join('  ')}   📦${warehouseCount(state)}${quests ? `   ${quests}` : ''}`;
   }
 
+  /** Счётчик денег подпрыгивает, когда в него «долетели» монетки. */
+  bumpMoney(): void {
+    const money = this.top.firstElementChild;
+    if (!money) return;
+    money.classList.remove('ui-bump');
+    void (money as HTMLElement).offsetWidth;
+    money.classList.add('ui-bump');
+  }
+
   setHint(text: string): void {
     if (this.hint.textContent !== text) this.hint.textContent = text;
   }
