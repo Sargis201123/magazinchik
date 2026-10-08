@@ -17,6 +17,8 @@ const SPRITES = [
   'raindrop',
   'roof',
   'arrow',
+  'think',
+  'cross',
   'floor_wood',
   'floor_checker',
   'floor_gold',

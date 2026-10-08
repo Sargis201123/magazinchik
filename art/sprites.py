@@ -1874,6 +1874,24 @@ def tutorial_arrow():
     c.save("arrow")
 
 
+def thought():
+    """Облачко-мысль 20×18 и красный крестик 9×9."""
+    c = Canvas(20, 18)
+    c.round_rect(3, 0, 17, 13, "w", r=4)
+    c.ellipse(4, 14, 1.8, 1.6, "w")
+    c.ellipse(1.5, 16.5, 1.1, 1.1, "w")
+    c.outline("k")
+    c.save("think")
+    c = Canvas(9, 9)
+    for i in range(7):
+        c.px(1 + i, 1 + i, "R")
+        c.px(2 + i, 1 + i, "R")
+        c.px(7 - i, 1 + i, "R")
+        c.px(8 - i, 1 + i, "R")
+    c.outline("k")
+    c.save("cross")
+
+
 def environment2():
     building()
     lot2()
@@ -1886,6 +1904,7 @@ def environment2():
     construction()
     decor_items()
     tutorial_arrow()
+    thought()
 
 
 # ---------------------------------------------------------------- люди

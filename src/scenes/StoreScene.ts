@@ -645,6 +645,23 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
+  /** Облачко-мысль с товаром над головой. */
+  private think(person: Phaser.GameObjects.Container, id: ProductId): Phaser.GameObjects.Container {
+    const cloud = this.art(0, 0, 'think');
+    const icon = this.art(1, -1.5, `item_${id}_0`).setScale(0.75 / ART);
+    const thought = this.add.container(4, -22, [cloud, icon]).setScale(0.2);
+    person.add(thought);
+    this.tweens.add({ targets: thought, scale: 1, duration: 220, ease: 'Back.easeOut' });
+    return thought;
+  }
+
+  /** Взял — облачко тает; не нашёл или дорого — товар перечёркнут, потом облачко тает. */
+  private endThought(thought: Phaser.GameObjects.Container, failed: boolean): void {
+    if (!thought.active) return;
+    if (failed) thought.add(this.art(1, -1.5, 'cross'));
+    this.tweens.add({ targets: thought, alpha: 0, delay: failed ? 1100 : 150, duration: 250, onComplete: () => thought.destroy() });
+  }
+
   /** Покупатель тянется к полке; если взял — товар летит ему в руки. */
   private reachShelf(c: Customer, slot: { x: number; y: number }, id: ProductId | null): void {
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
@@ -1795,14 +1812,14 @@ export class StoreScene extends Phaser.Scene {
       const index = shelfFor(this.state, id);
       if (index < 0) continue;
       const slot = this.layout.slots[index];
+      // Над головой облачко: что покупатель ищет.
+      const thought = this.think(c.sprite, id);
       await this.walk(c.sprite, slot.x + Phaser.Math.Between(-8, 8), slot.y + 22);
       await this.wait(500);
       const result = this.tryTake(c, id);
       this.reachShelf(c, slot, result === 'taken' ? id : null);
-      if (result === 'empty' || result === 'expensive') {
-        disappointed = true;
-        this.emote(c.sprite, 'emo_question');
-      }
+      this.endThought(thought, result === 'empty' || result === 'expensive');
+      if (result === 'empty' || result === 'expensive') disappointed = true;
     }
 
     if (Math.random() < TRASH_CHANCE) this.dropTrash(c.sprite.x, c.sprite.y);
