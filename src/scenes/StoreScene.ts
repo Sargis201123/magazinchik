@@ -2196,17 +2196,36 @@ export class StoreScene extends Phaser.Scene {
     return new Promise((resolve) => this.time.delayedCall(ms, resolve));
   }
 
+  /** Всплывающая надпись: жирная, на тёмной плашке, выпрыгивает, потом поднимается и тает. */
   private popup(x: number, y: number, text: string, color: string): void {
     const label = this.add
-      .text(x, y, text, { fontFamily: UI_FONT, fontSize: '8px', color, stroke: '#2b2233', strokeThickness: 2 })
+      .text(x, y, text, {
+        fontFamily: UI_FONT,
+        fontSize: '8.5px',
+        fontStyle: 'bold',
+        color,
+        backgroundColor: 'rgba(24, 20, 37, 0.78)',
+        padding: { x: 3, y: 1.5 },
+        align: 'center',
+        // Длинная фраза переносится, чтобы не вылезать за край магазина.
+        wordWrap: { width: Math.min(110, this.layout.w - 10) },
+      })
       .setOrigin(0.5)
-      .setResolution(4)
-      .setDepth(1000);
+      .setResolution(5)
+      .setDepth(1000)
+      .setScale(0.4);
     // Длинная надпись не должна вылезать за край магазина; и висит дольше, чтобы успеть прочитать.
     const half = label.width / 2 + 2;
     label.x = Phaser.Math.Clamp(x, half, Math.max(half, this.layout.w - half));
-    const duration = Math.min(2600, 900 + 45 * text.length);
-    this.tweens.add({ targets: label, y: y - 14, alpha: { from: 1, to: 0 }, ease: 'Quad.easeIn', duration, onComplete: () => label.destroy() });
+    const hold = Math.min(1800, 500 + 40 * text.length);
+    this.tweens.add({
+      targets: label,
+      scale: 1,
+      duration: 220,
+      ease: 'Back.easeOut',
+      onComplete: () =>
+        this.tweens.add({ targets: label, y: y - 12, alpha: 0, delay: hold, duration: 600, ease: 'Quad.easeIn', onComplete: () => label.destroy() }),
+    });
   }
 
   // ---------- День ----------
