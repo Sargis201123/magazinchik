@@ -955,7 +955,7 @@ export class StoreScene extends Phaser.Scene {
    * вспышка — и зал уже больше, летит конфетти, звучат фанфары.
    */
   private async celebrateExpansion(): Promise<void> {
-    const modal = document.querySelector<HTMLElement>('.ui-modal');
+    const modal = document.querySelector<HTMLElement>('.ui-modal:not(.closing)');
     if (modal) modal.style.visibility = 'hidden';
     const { w, h } = this.layout;
     const next = this.next;

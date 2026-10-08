@@ -38,7 +38,31 @@ const css = `
 .ui-box { border: 2px solid #2b2233; border-radius: 6px; padding: 8px; margin: 6px 0; background: #fbf6ea; }
 .ui-btn { display: block; width: 100%; margin-top: 10px; padding: 12px; font: 600 15px system-ui, sans-serif;
   border: 3px solid #2b2233; border-radius: 6px; background: #8fd16a; color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
-.ui-btn:active, .ui-chip:active { transform: translateY(2px); box-shadow: 0 1px 0 #2b2233; }
+.ui-btn, .ui-chip, .ui-tab { transition: transform .18s cubic-bezier(.3, 1.8, .5, 1), box-shadow .1s;
+  -webkit-tap-highlight-color: transparent; }
+.ui-btn:active, .ui-chip:active { transform: translateY(2px) scale(.97); box-shadow: 0 1px 0 #2b2233; transition-duration: .05s; }
+.ui-tab:active { transform: scale(.94); transition-duration: .05s; }
+/* Окна появляются с лёгким подпрыгиванием и тают при закрытии. */
+.ui-modal { animation: ui-fade .18s ease-out; }
+.ui-modal .ui-card { animation: ui-pop .3s cubic-bezier(.3, 1.45, .5, 1); }
+.ui-modal.closing { animation: none; opacity: 0; transition: opacity .15s; pointer-events: none; }
+@keyframes ui-fade { from { opacity: 0; } }
+@keyframes ui-pop { from { transform: translateY(14px) scale(.92); opacity: 0; } }
+/* Новая вкладка въезжает сбоку. */
+.ui-enter { animation: ui-enter .22s ease-out; }
+@keyframes ui-enter { from { transform: translateX(14px); opacity: 0; } }
+/* Деньги в верхней панели: растут — зелёным, тратятся — красным. */
+.ui-money-up { color: #b8f59a; }
+.ui-money-down { color: #ff9a9a; }
+/* Шторка между днями: роллет опускается, на нём номер дня, и поднимается уже утром. */
+.ui-curtain { position: fixed; inset: 0; z-index: 50; transform: translateY(-101%);
+  background: repeating-linear-gradient(#9aa8c0 0 11px, #6b7a99 11px 13px, #c0cadc 13px 14px);
+  border-bottom: 10px solid #3a4466; box-shadow: 0 6px 0 rgba(24, 20, 37, .5);
+  transition: transform .42s cubic-bezier(.55, 0, .35, 1.15); display: flex; align-items: center; justify-content: center; }
+.ui-curtain.down { transform: translateY(0); }
+.ui-curtain.up { transform: translateY(-101%); transition: transform .5s cubic-bezier(.6, -0.2, .7, 1); }
+.ui-curtain-label { font: 800 30px system-ui, sans-serif; color: #fee761; background: #2b2233; padding: 10px 22px;
+  border: 3px solid #181425; border-radius: 8px; box-shadow: 0 4px 0 #181425; letter-spacing: 1px; }
 .ui-btn.secondary { background: #f2c14e; }
 .ui-btn[disabled], .ui-chip[disabled] { background: #c9c0ad; color: #7a7066; }
 .ui-chip { padding: 5px 9px; font: 600 13px system-ui, sans-serif; border: 2px solid #2b2233; border-radius: 6px;
@@ -129,9 +153,24 @@ export function openModal(): { card: HTMLDivElement; close: () => void } {
     card,
     close: () => {
       observer.disconnect();
-      overlay.remove();
+      overlay.classList.add('closing');
+      setTimeout(() => overlay.remove(), 160);
     },
   };
+}
+
+/** Шторка между экранами: опускается, в середине выполняется смена экрана, поднимается. */
+export function curtain(label: string, middle: () => void): void {
+  injectStyles();
+  const shade = el('div', 'ui-curtain');
+  shade.append(el('div', 'ui-curtain-label', label));
+  document.body.append(shade);
+  requestAnimationFrame(() => requestAnimationFrame(() => shade.classList.add('down')));
+  setTimeout(() => {
+    middle();
+    setTimeout(() => shade.classList.add('up'), 350);
+    setTimeout(() => shade.remove(), 950);
+  }, 480);
 }
 
 const ICONS: Record<string, string> = {

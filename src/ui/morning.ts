@@ -113,6 +113,8 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
   let tab: Tab = 'buy';
+  /** Вкладку только что переключили — содержимое въезжает сбоку (при покупках не дёргается). */
+  let slideTab = false;
   /** Какая реплика сюжетного диалога сейчас на экране. */
   let storyLine = 0;
   /** Бракованная партия, по которой ждём решения игрока. */
@@ -161,6 +163,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
           t(label),
           () => {
             tab = id;
+            slideTab = true;
             render();
           },
           `ui-tab${tab === id ? ' active' : ''}`,
@@ -168,7 +171,9 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       );
     }
 
-    const body = { buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, staff: staffTab, store: storeTab }[tab](state);
+    const body = el('div', slideTab ? 'ui-enter' : '');
+    body.append(...{ buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, staff: staffTab, store: storeTab }[tab](state));
+    slideTab = false;
     card.replaceChildren(
       title,
       goalLine(state),
@@ -178,7 +183,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       billForecast(state),
       questsBox(state),
       tabs,
-      ...body,
+      body,
       button(t('morning.open'), () => {
         close();
         onOpen();

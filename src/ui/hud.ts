@@ -1,34 +1,74 @@
 import { t } from '../i18n';
 import { onShelves, PRODUCTS, sellableProducts, warehouseCount, type DayStats, type StoreState } from '../game/economy';
-import { button, el, injectStyles, openModal, pixelize } from './dom';
+import { button, curtain, el, injectStyles, openModal, pixelize } from './dom';
 
 export class Hud {
   private readonly top = el('div', 'ui-hud');
   private readonly stock = el('div', 'ui-stock');
   private readonly hint = el('div', 'ui-hint');
+  private readonly money = el('span');
+  private readonly moneyText = document.createTextNode('');
+  private readonly clock = el('span');
+  private readonly stars = el('span');
+  /** Сколько денег сейчас показано — число «докручивается» до настоящего. */
+  private shownMoney: number | null = null;
+  private targetMoney = 0;
+  private roll = 0;
 
   constructor() {
     injectStyles();
+    const coin = el('img', 'ui-ico');
+    coin.src = 'assets/coin.png';
+    coin.alt = '💰';
+    this.money.append(coin, this.moneyText);
+    this.top.append(this.money, this.clock, this.stars);
     document.body.append(this.top, this.stock, this.hint);
   }
 
   update(state: StoreState, secondsLeft: number, quests = ''): void {
+    this.setMoney(state.money);
+    const clock = `${t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
+    if (this.clock.textContent !== clock) this.clock.textContent = clock;
     const stars = '★'.repeat(Math.round(state.rating)).padEnd(5, '☆');
-    const clock = `${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
-    const top = [`💰 ${state.money}`, `${t('hud.day', { n: state.day })} · ${clock}`, stars];
+    if (this.stars.textContent !== stars) this.stars.textContent = stars;
     const shelves = sellableProducts(state).map((id) => `${PRODUCTS[id].icon}${onShelves(state, id)}`);
     const stock = `${shelves.join('  ')}   📦${warehouseCount(state)}${quests ? `   ${quests}` : ''}`;
     // Перерисовываем только когда что-то изменилось: update зовётся каждый кадр.
-    const key = [...top, stock].join('|');
-    if (key === this.lastKey) return;
-    this.lastKey = key;
-    this.top.replaceChildren(...top.map((text) => el('span', '', text)));
+    if (stock === this.lastStock) return;
+    this.lastStock = stock;
     this.stock.textContent = stock;
-    pixelize(this.top);
     pixelize(this.stock);
   }
 
-  private lastKey = '';
+  private lastStock = '';
+
+  /** Деньги не прыгают, а быстро докручиваются, как барабан кассы. */
+  private setMoney(value: number): void {
+    if (this.shownMoney !== null && value === this.targetMoney) return;
+    const from = this.shownMoney ?? value;
+    this.targetMoney = value;
+    cancelAnimationFrame(this.roll);
+    if (from === value) {
+      this.renderMoney(value);
+      return;
+    }
+    this.money.classList.toggle('ui-money-up', value > from);
+    this.money.classList.toggle('ui-money-down', value < from);
+    const start = performance.now();
+    const duration = Math.min(800, 250 + Math.abs(value - from) * 3);
+    const step = (now: number) => {
+      const k = Math.min(1, (now - start) / duration);
+      this.renderMoney(Math.round(from + (value - from) * (1 - (1 - k) ** 3)));
+      if (k < 1) this.roll = requestAnimationFrame(step);
+      else this.money.classList.remove('ui-money-up', 'ui-money-down');
+    };
+    this.roll = requestAnimationFrame(step);
+  }
+
+  private renderMoney(value: number): void {
+    this.shownMoney = value;
+    this.moneyText.nodeValue = ` ${value}`;
+  }
 
   /** Счётчик денег подпрыгивает, когда в него «долетели» монетки. */
   bumpMoney(): void {
@@ -100,8 +140,11 @@ export class Hud {
     row(t('summary.rating'), `${rating.before.toFixed(1)} → ${rating.after.toFixed(1)}★ ${arrowRating}`);
     card.append(
       button(t('summary.next'), () => {
-        close();
-        onNext();
+        // Роллет опускается с номером нового дня — и поднимается уже утром.
+        curtain(t('hud.day', { n: day + 1 }), () => {
+          close();
+          onNext();
+        });
       }),
     );
   }
