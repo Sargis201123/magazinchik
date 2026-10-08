@@ -913,15 +913,20 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return box;
   };
 
-  /** Картинка модели в списке оборудования. */
-  const gearArt = (state: StoreState, id: GearId, tier: number): string => {
+  /** Картинка модели в списке оборудования (у кого нет своей картинки — значок). */
+  const gearArt = (state: StoreState, id: GearId, tier: number): string | null => {
     // Кассу показываем крупным планом: сам стол слишком длинный для строки.
     const at = { ...state, gear: { ...state.gear, [id]: tier } };
-    const art: Record<GearId, string> = { register: `counter_icon${tier}`, bin: tier ? `bin_t${tier}_0` : 'bin0', coffee: coffeeSprite(at), oven: ovenSprite(at) };
-    return art[id];
+    const art: Partial<Record<GearId, string>> = {
+      register: `counter_icon${tier}`,
+      bin: tier ? `bin_t${tier}_0` : 'bin0',
+      coffee: coffeeSprite(at),
+      oven: ovenSprite(at),
+    };
+    return art[id] ?? null;
   };
 
-  /** Оборудование: какая модель стоит и какую можно поставить следующей. */
+  /** Оборудование: по строке на каждую линейку — что стоит, на что поменять, что это даст. */
   const gearBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('gear.title')), el('div', 'ui-muted', t('gear.note')));
@@ -931,25 +936,36 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       const now = gear.models[tier];
       const next = nextGear(state, id);
       const needs = gear.needs && !hasUpgrade(state, gear.needs);
-      box.append(
-        artRow(gearArt(state, id, tier), {
-          name: `${gear.icon} ${t(gear.nameKey)}: ${t(now.nameKey)}`,
-          sub: needs ? t(`gear.needs.${gear.needs}` as TextKey) : t(now.effectKey),
-          actions: next || needs ? [] : [el('span', 'ui-tag', t('gear.max'))],
-        }),
-      );
-      if (!next || needs) continue;
-      const locked = state.level < next.minLevel;
-      box.append(
-        artRow(gearArt(state, id, tier + 1), {
-          name: `→ ${t(next.nameKey)}`,
-          price: next.price,
-          sub: locked ? t('upgrade.needLevel', { name: t(STORE_LEVELS[next.minLevel].nameKey) }) : t(next.effectKey),
-          actions: [
-            button(t('gear.buy'), () => update(upgradeGear(getState(), id), 'success'), 'ui-chip', !gearAvailable(state, id) || state.money < next.price),
-          ],
-        }),
-      );
+      const row = el('div', 'ui-item');
+      const texture = gearArt(state, id, next && !needs ? tier + 1 : tier);
+      if (texture) {
+        const img = el('img', 'ui-item-art');
+        img.src = `assets/${texture}.png`;
+        img.alt = '';
+        row.append(img);
+      } else row.append(el('div', 'ui-ad-icon', gear.icon));
+      const body = el('div');
+      const name = el('div', 'ui-item-name', t(gear.nameKey));
+      const actions = el('div', 'ui-item-actions');
+      if (needs) {
+        body.append(name, el('div', 'ui-item-sub', t(`gear.needs.${gear.needs}` as TextKey)));
+      } else if (!next) {
+        body.append(name, el('div', 'ui-item-sub', `${t(now.nameKey)} — ${t(now.effectKey)}`));
+        actions.append(el('span', 'ui-tag', t('gear.max')));
+      } else {
+        name.append(el('span', 'ui-tag', `${next.price} 💰`));
+        const locked = state.level < next.minLevel;
+        body.append(
+          name,
+          el('div', 'ui-item-sub', t('gear.upgrade', { from: t(now.nameKey), to: t(next.nameKey) })),
+          el('div', 'ui-item-sub', locked ? t('upgrade.needLevel', { name: t(STORE_LEVELS[next.minLevel].nameKey) }) : t(next.effectKey)),
+        );
+        actions.append(
+          button(t('gear.buy'), () => update(upgradeGear(getState(), id), 'success'), 'ui-chip', !gearAvailable(state, id) || state.money < next.price),
+        );
+      }
+      row.append(body, actions);
+      box.append(row);
     }
     return box;
   };

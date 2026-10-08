@@ -8,7 +8,7 @@ import { newDecor, type DecorState } from './decor';
 import type { ReviewTopic, Review } from './reviews';
 import type { War } from './war';
 import type { ShopCat } from './cat';
-import type { GearId } from './gear';
+import { fridgeLife, fridgePower, lightsPower, warehouseRoom, type GearId } from './gear';
 
 /** Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу. */
 export type Category = 'bakery' | 'produce' | 'dairy' | 'meat';
@@ -513,7 +513,8 @@ export const newGame = (): StoreState => ({
 
 export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];
 export const nextStoreLevel = (state: StoreState): StoreLevel | undefined => STORE_LEVELS[state.level + 1];
-export const warehouseCapacity = (state: StoreState): number => storeLevel(state).warehouse;
+/** Сколько мест на складе: по помещению и оборудованию склада (gear.ts). */
+export const warehouseCapacity = (state: StoreState): number => Math.round(storeLevel(state).warehouse * warehouseRoom(state));
 export const freeSlots = (state: StoreState): number => storeLevel(state).slots - state.shelves.length;
 
 export const emptyDayStats = (): DayStats => ({
@@ -738,7 +739,8 @@ export function monthlyBill(state: StoreState): Bill {
   return {
     rent: level.rent,
     utilities: level.utilities,
-    power: level.power + fridges * FRIDGE_POWER,
+    // Свет в зале дешевле с LED, холодильники — с новыми моделями (gear.ts).
+    power: Math.round(level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state)),
     salaries: state.staff.reduce((sum, m) => sum + m.wage, 0),
     debt: Math.min(DEBT_PAYMENT, state.debt),
   };
@@ -823,13 +825,17 @@ export function satisfaction(stats: DayStats): number {
   return Math.max(0, (stats.served - stats.complaints * 0.5) / visitors);
 }
 
-/** Сколько дней проживёт штука: брак портится на день раньше. */
-export const unitLife = (id: ProductId, unit: Unit): number => Math.max(1, PRODUCTS[id].shelfLife - (unit.bad ? 1 : 0));
+/**
+ * Сколько дней проживёт штука: брак портится на день раньше, а молочка и мясо в хороших
+ * холодильниках — дольше (fresh — сколько дней добавляют холодильники, gear.ts).
+ */
+export const unitLife = (id: ProductId, unit: Unit, fresh = 0): number =>
+  Math.max(1, PRODUCTS[id].shelfLife + (SHELF_KINDS[PRODUCTS[id].category].fridge ? fresh : 0) - (unit.bad ? 1 : 0));
 
 /** Сколько штук испортится этой ночью (и ещё не уценено). */
 export function expiringCount(state: StoreState): number {
   const count = (stock: Stock) =>
-    PRODUCT_IDS.reduce((sum, id) => sum + (stock[id] ?? []).filter((u) => !u.markdown && !u.pending && u.age + 1 >= unitLife(id, u)).length, 0);
+    PRODUCT_IDS.reduce((sum, id) => sum + (stock[id] ?? []).filter((u) => !u.markdown && !u.pending && u.age + 1 >= unitLife(id, u, fridgeLife(state))).length, 0);
   return count(state.warehouse) + state.shelves.reduce((sum, s) => sum + count(s.items), 0);
 }
 
@@ -842,7 +848,7 @@ export function markdownExpiring(state: StoreState): { state: StoreState; count:
       const units = stock[id];
       if (!units) continue;
       next[id] = units.map((u) => {
-        if (u.markdown || u.pending || u.age + 1 < unitLife(id, u)) return u;
+        if (u.markdown || u.pending || u.age + 1 < unitLife(id, u, fridgeLife(state))) return u;
         count++;
         return { ...u, markdown: true };
       });
@@ -853,14 +859,14 @@ export function markdownExpiring(state: StoreState): { state: StoreState; count:
   return { state: count ? next : state, count };
 }
 
-function ageStock(stock: Stock): { stock: Stock; spoiled: number } {
+function ageStock(stock: Stock, fresh: number): { stock: Stock; spoiled: number } {
   let spoiled = 0;
   const next: Stock = {};
   for (const id of PRODUCT_IDS) {
     const units = stock[id];
     if (!units) continue;
     const aged = units.map((u) => ({ ...u, age: u.age + 1 }));
-    const kept = aged.filter((u) => u.age < unitLife(id, u));
+    const kept = aged.filter((u) => u.age < unitLife(id, u, fresh));
     spoiled += aged.length - kept.length;
     next[id] = kept;
   }
@@ -883,10 +889,10 @@ export interface NightResult {
  * от довольства покупателей, в конце месяца приходят счета.
  */
 export function endDay(state: StoreState, stats: DayStats, random: () => number = Math.random): NightResult {
-  const warehouse = ageStock(state.warehouse);
+  const warehouse = ageStock(state.warehouse, fridgeLife(state));
   let spoiled = warehouse.spoiled;
   const shelves = state.shelves.map((shelf) => {
-    const aged = ageStock(shelf.items);
+    const aged = ageStock(shelf.items, fridgeLife(state));
     spoiled += aged.spoiled;
     return { ...shelf, items: aged.stock };
   });

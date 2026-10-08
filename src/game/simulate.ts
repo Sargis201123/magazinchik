@@ -73,7 +73,8 @@ import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
 import { CASHIER_ROLES, registerCount } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
-import { brewSeconds, coffeePrice, gearAvailable, nextGear, ovenBatch, upgradeGear, type GearId } from './gear';
+import { weatherFor } from './weather';
+import { brewSeconds, cameraTheft, climatePatience, coffeePrice, entranceMud, fridgeLeak, GEAR_IDS, gearAvailable, nextGear, ovenBatch, REGISTER_JAM_SECONDS, registerJam, upgradeGear, wcDirt } from './gear';
 import { AROMA_SECONDS, AROMA_TOLERANCE, startBatch, takeOutBread } from './bakery';
 import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
@@ -163,14 +164,16 @@ const QUEUE_STEP_SECONDS = 0.3;
 
 /** Сколько покупателей реально пробить за день: пробивка занимает время и зависит от навыка. */
 function serveCapacity(state: StoreState): number {
-  const owner = checkoutSeconds(withUpgrades(state, ownerScan(state.ownerServed)), AVG_BASKET) + QUEUE_STEP_SECONDS;
+  // Старая касса иногда заедает — в среднем столько секунд на покупателя.
+  const jam = registerJam(state) * REGISTER_JAM_SECONDS;
+  const owner = checkoutSeconds(withUpgrades(state, ownerScan(state.ownerServed)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
   const ownerCap = Math.floor((DAY_SECONDS * ownerAtRegister(state.level)) / owner);
   // Каждая касса: свой кассир или (одна, первая свободная) — хозяин между другими делами.
   let total = 0;
   let ownerUsed = false;
   for (const role of CASHIER_ROLES.slice(0, registerCount(state))) {
     const m = staffOf(state, role);
-    if (m) total += Math.floor(DAY_SECONDS / (checkoutSeconds(withUpgrades(state, cashierScan(m)), AVG_BASKET) + QUEUE_STEP_SECONDS));
+    if (m) total += Math.floor(DAY_SECONDS / (checkoutSeconds(withUpgrades(state, cashierScan(m)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam));
     else if (!ownerUsed) {
       total += ownerCap;
       ownerUsed = true;
@@ -289,9 +292,9 @@ export function simulate({
         state = bought;
       }
     }
-    // Новые модели кассы, кофемашины и печи — когда хватает денег с запасом.
+    // Новые модели оборудования — когда хватает денег с запасом и не копит на расширение.
     if (features.gear) {
-      for (const id of ['register', 'coffee', 'oven'] as GearId[]) {
+      for (const id of GEAR_IDS) {
         const next = nextGear(state, id);
         if (!next || !gearAvailable(state, id) || state.money < next.price + reserve * 2 || !canSplurge(next.price)) continue;
         investments += next.price;
@@ -393,9 +396,11 @@ export function simulate({
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
     // С котом в очереди ждут дольше — уходят реже.
-    const lossInQueue = (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state);
+    const lossInQueue =
+      (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day));
     const serveCap = serveCapacity(state);
-    const dirtComplaint = has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level;
+    // Грязь: уборщик, а ещё вход (грязь с улицы) и туалет (gear.ts).
+    const dirtComplaint = (has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level) * (0.6 + 0.2 * entranceMud(state) + 0.2 * wcDirt(state));
     const guard = staffOf(state, 'guard');
     let candy = 0;
     let coffee = 0;
@@ -425,7 +430,7 @@ export function simulate({
     };
     const runGuests = (count: number, tolerance: number, cap: number, night: boolean) => {
     for (let g = 0; g < count; g++) {
-      if (random() < thiefChance(state.level)) {
+      if (random() < thiefChance(state.level) * cameraTheft(state)) {
         // Вор берёт товар; его ловит охранник или, реже, сам игрок.
         const id = sellable[Math.floor(random() * sellable.length)];
         const index = shelfFor(state, id);
@@ -509,6 +514,8 @@ export function simulate({
     }
 
     stats.revenue += stallRevenue;
+    // Протёк старый холодильник — кто-то поскользнулся и пожаловался.
+    if (extraRandom() < fridgeLeak(state) && state.shelves.some((sh) => SHELF_KINDS[sh.kind].fridge)) stats.complaints++;
 
     // Мусор: уборщик убирает всё, игрок — сколько успеет.
     stats.trashCleaned = has('cleaner') ? 3 + state.level : Math.floor(random() * (3 + state.level));
