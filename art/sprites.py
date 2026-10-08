@@ -1372,6 +1372,280 @@ HAIR = {
 }
 
 
+HAIR["ponytail"] = HAIR["short"]
+HAIR["curly"] = [
+    ".......kkkkkkkkkk.......",
+    ".....kk1112111211kk.....",
+    "....k11211121112111k....",
+    "...k1121111111111121k...",
+    "...k1111211112111211k...",
+    "...k121k11111111k121k...",
+    "...k11k..........k11k...",
+    "...k12k..........k21k...",
+    "....kk............kk....",
+]
+HAIR_OFFSET = {"short": 3, "long": 3, "bun": 0, "cap": 2, "bald": 3, "ponytail": 3, "curly": 1}
+
+
+def grid(rows, offset=0):
+    """Слой 24×36 как список строк-списков; строки сдвинуты вниз на offset."""
+    g = [["."] * 24 for _ in range(36)]
+    for dy, row in enumerate(rows):
+        for dx, ch in enumerate(row):
+            g[offset + dy][dx] = ch
+    return g
+
+
+def save_grid(g, name):
+    c = Canvas(24, 36)
+    c.stamp(["".join(r) for r in g])
+    c.save(name)
+
+
+# Голова спереди: всё непрозрачное в SKIN до 15-й строки.
+HEAD = {(x, y) for y in range(3, 16) for x in range(24) if SKIN[y][x] != "."}
+
+
+def back_skin():
+    g = grid(SKIN)
+    for y in range(10, 14):
+        for x in range(6, 17):
+            if g[y][x] in "k56":
+                g[y][x] = "1"
+    save_grid(g, "p_skin_b")
+
+
+def back_shirt():
+    g = grid(SHIRT)
+    g[16] = list("......kkkkkkkkkkkk......")
+    g[17][11] = "1"
+    g[17][13] = "1"
+    save_grid(g, "p_shirt_b")
+
+
+def back_hair(style):
+    """Затылок: волосы закрывают голову до своей длины."""
+    c = Canvas(24, 36)
+    cutoff = {"short": 12, "long": 15, "bun": 12, "cap": 8, "ponytail": 12, "curly": 13, "bald": 12}[style]
+    top = 9 if style == "bald" else 0
+    for x, y in HEAD:
+        if top <= y <= cutoff and SKIN[y][x] != "k":
+            c.px(x, y, "2" if x >= 16 or y == cutoff else "1")
+    if style == "long":
+        for y in range(16, 21):
+            c.hline(5, y, 14, "1")
+            c.px(17, y, "2")
+            c.px(18, y, "2")
+    if style == "bun":
+        c.ellipse(12, 2, 2.6, 2.2, "1")
+    if style == "cap":
+        c.hline(5, 8, 14, "3")
+    if style == "ponytail":
+        c.rect(11, 13, 2, 7, "1")
+        c.px(12, 19, "2")
+    if style == "curly":
+        for x, y in grid_points(HAIR["curly"], HAIR_OFFSET["curly"]):
+            c.px(x, y, "1")
+        for x, y in ((8, 5), (13, 4), (16, 7), (10, 9), (14, 11)):
+            c.px(x, y, "2")
+    c.outline("k")
+    if style == "ponytail":
+        c.hline(11, 13, 2, "k")
+    c.save(f"p_hair_{style}_b")
+
+
+def grid_points(rows, offset):
+    return [(x, y + offset) for y, r in enumerate(rows) for x, ch in enumerate(r) if ch not in ".k"]
+
+
+def side_skin():
+    c = Canvas(24, 36)
+    c.round_rect(7, 4, 11, 12, "1", r=2)
+    c.vline(7, 6, 8, "2")
+    c.hline(9, 15, 7, "2")
+    c.px(18, 10, "1")
+    c.rect(11, 16, 3, 1, "2")
+    c.rect(13, 24, 2, 2, "1")
+    c.px(14, 25, "2")
+    c.outline("k")
+    c.px(15, 9, "k")
+    c.px(15, 10, "k")
+    c.px(14, 12, "5")
+    c.px(16, 13, "6")
+    c.px(10, 10, "2")
+    c.px(10, 11, "2")
+    c.save("p_skin_s")
+
+
+def side_shirt():
+    c = Canvas(24, 36)
+    c.round_rect(8, 17, 8, 11, "1", r=1)
+    c.vline(8, 18, 9, "2")
+    c.hline(8, 26, 8, "2")
+    c.hline(8, 27, 8, "3")
+    c.outline("k")
+    # Рука спереди.
+    c.vline(11, 18, 7, "k")
+    c.rect(12, 18, 3, 7, "1")
+    c.vline(14, 19, 6, "2")
+    c.hline(12, 25, 3, "k")
+    c.save("p_shirt_s")
+
+
+def side_legs():
+    c = Canvas(24, 36)
+    c.rect(9, 27, 6, 6, "1")
+    c.vline(14, 27, 6, "2")
+    c.rect(9, 33, 8, 2, "K")
+    c.outline("k")
+    c.save("p_legs0_s")
+    c = Canvas(24, 36)
+    c.rect(7, 30, 4, 3, "2")
+    c.rect(10, 27, 5, 3, "1")
+    c.rect(12, 30, 4, 3, "1")
+    c.rect(5, 33, 5, 2, "K")
+    c.rect(12, 33, 6, 2, "K")
+    c.outline("k")
+    c.save("p_legs1_s")
+
+
+def side_hair(style):
+    c = Canvas(24, 36)
+    if style in ("short", "long", "bun", "ponytail"):
+        c.round_rect(6, 3, 12, 4, "1", r=1)
+        c.rect(6, 6, 4, 6, "1")
+        c.vline(6, 6, 6, "2")
+        c.px(16, 6, "2")
+    if style == "long":
+        c.rect(5, 6, 5, 15, "1")
+        c.vline(5, 8, 13, "2")
+    if style == "bun":
+        c.ellipse(6, 4, 2.6, 2.4, "1")
+    if style == "ponytail":
+        c.rect(3, 7, 4, 3, "1")
+        c.rect(2, 10, 3, 5, "1")
+        c.px(2, 14, "2")
+    if style == "cap":
+        c.round_rect(6, 2, 12, 6, "1", r=2)
+        c.px(12, 4, "Y")
+        c.hline(6, 7, 12, "3")
+        c.rect(16, 7, 5, 2, "3")
+    if style == "bald":
+        c.rect(7, 8, 3, 4, "1")
+    if style == "curly":
+        c.ellipse(12, 6, 7.5, 4.5, "1")
+        c.ellipse(8, 10, 4, 4.5, "1")
+        for x, y in ((9, 4), (14, 3), (7, 9), (12, 7)):
+            c.px(x, y, "2")
+    c.outline("k")
+    c.save(f"p_hair_{style}_s")
+
+
+# Форма персонала: фартук (тинт), жилет грузчика, значок охранника. _b — спина, _s — бок.
+def uniforms():
+    c = Canvas(24, 36)
+    c.rect(8, 19, 8, 9, "1")
+    c.vline(15, 19, 9, "2")
+    c.hline(10, 24, 4, "3")
+    c.vline(9, 17, 2, "1")
+    c.vline(14, 17, 2, "1")
+    c.outline("k")
+    c.rect(10, 20, 3, 1, "G")
+    c.save("acc_apron")
+    c = Canvas(24, 36)
+    for i in range(5):
+        c.px(9 + i // 2, 17 + i, "1")
+        c.px(14 - i // 2, 17 + i, "1")
+    c.rect(10, 22, 4, 2, "1")
+    c.px(9, 24, "1")
+    c.px(14, 24, "1")
+    c.outline("k")
+    c.save("acc_apron_b")
+    c = Canvas(24, 36)
+    c.rect(15, 19, 2, 9, "1")
+    c.px(13, 17, "1")
+    c.px(14, 18, "1")
+    c.outline("k")
+    c.save("acc_apron_s")
+
+    def stripes(c, x, w):
+        for y in (21, 24):
+            c.hline(x, y, w, "w")
+
+    c = Canvas(24, 36)
+    c.rect(6, 17, 5, 10, "o")
+    c.rect(13, 17, 5, 10, "o")
+    stripes(c, 6, 5)
+    stripes(c, 13, 5)
+    c.outline("k")
+    c.save("acc_vest")
+    c = Canvas(24, 36)
+    c.rect(6, 17, 12, 10, "o")
+    stripes(c, 6, 12)
+    c.outline("k")
+    c.save("acc_vest_b")
+    c = Canvas(24, 36)
+    c.rect(8, 17, 3, 10, "o")
+    c.rect(15, 17, 1, 10, "o")
+    stripes(c, 8, 3)
+    c.outline("k")
+    c.save("acc_vest_s")
+    c = Canvas(24, 36)
+    c.stamp(["YY", "yy"], 8, 19)
+    c.save("acc_badge")
+
+
+def emotes():
+    """Эмоции над головой 12×12: злость, сердечко, вопрос."""
+    for name, rows in {
+        "emo_angry": [
+            "............",
+            "..k......k..",
+            ".kRk....kRk.",
+            ".kRRk..kRRk.",
+            "..kRRkkRRk..",
+            "...kRRRRk...",
+            "...kRRRRk...",
+            "..kRRkkRRk..",
+            ".kRRk..kRRk.",
+            ".kRk....kRk.",
+            "..k......k..",
+            "............",
+        ],
+        "emo_heart": [
+            "............",
+            "..kkk..kkk..",
+            ".kRwRkkRRRk.",
+            ".kRwRRRRRRk.",
+            ".kRRRRRRRrk.",
+            "..kRRRRRrk..",
+            "...kRRRrk...",
+            "....kRrk....",
+            ".....kk.....",
+            "............",
+            "............",
+            "............",
+        ],
+        "emo_question": [
+            "..kkkkkkk...",
+            ".kwwwwwwwk..",
+            "kwwwkkkwwwk.",
+            "kwwkwwwkwwk.",
+            "kwwwwwkwwwk.",
+            "kwwwwkwwwwk.",
+            "kwwwwwwwwwk.",
+            "kwwwwkwwwwk.",
+            ".kwwwwwwwk..",
+            "..kkkkkkk...",
+            "....kk......",
+            "...k........",
+        ],
+    }.items():
+        c = Canvas(12, 12)
+        c.stamp(rows)
+        c.save(name)
+
+
 def people():
     c = Canvas(24, 36)
     c.stamp(SKIN)
@@ -1383,10 +1657,20 @@ def people():
         c = Canvas(24, 36)
         c.stamp(rows, 0, 27)
         c.save(f"p_legs{i}")
+        c.save(f"p_legs{i}_b")
     for style, rows in HAIR.items():
         c = Canvas(24, 36)
-        c.stamp(rows, 0, 0 if style == "bun" else 2 if style == "cap" else 3)
+        c.stamp(rows, 0, HAIR_OFFSET[style])
         c.save(f"p_hair_{style}")
+        back_hair(style)
+        side_hair(style)
+    back_skin()
+    back_shirt()
+    side_skin()
+    side_shirt()
+    side_legs()
+    uniforms()
+    emotes()
     # Тень под ногами.
     c = Canvas(20, 8)
     c.ellipse(10, 4, 9, 3.2, (24, 20, 37, 90))

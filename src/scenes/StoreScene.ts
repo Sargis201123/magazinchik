@@ -136,8 +136,12 @@ const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
 const SHIRTS = [0x5b6ee1, 0xd95763, 0x6abe30, 0xfbf236, 0x76428a, 0xdf7126, 0x37946e, 0xf6757a, 0x2ce8f5];
 const PANTS = [0x3a4466, 0x262b44, 0x5a6988, 0x733e39, 0x265c42];
 const HAIR_COLORS = [0x4a2c1a, 0x181425, 0x733e39, 0xfeae34, 0xb86f50, 0x8b9bb4];
-const HAIR_STYLES = ['short', 'short', 'long', 'long', 'bald'] as const;
-type HairStyle = 'short' | 'long' | 'bun' | 'cap' | 'bald';
+const HAIR_STYLES = ['short', 'short', 'long', 'long', 'bald', 'ponytail', 'curly'] as const;
+type HairStyle = 'short' | 'long' | 'bun' | 'cap' | 'bald' | 'ponytail' | 'curly';
+/** Поверх одежды: фартук (красится), жилет грузчика, значок охранника. */
+type Accessory = 'apron' | 'vest' | 'badge';
+type Facing = 'down' | 'up' | 'left' | 'right';
+const VIEW_SUFFIX: Record<Facing, string> = { down: '', up: '_b', left: '_s', right: '_s' };
 
 interface Look {
   shirt: number;
@@ -145,6 +149,10 @@ interface Look {
   pants?: number;
   hair?: number;
   style?: HairStyle;
+  acc?: Accessory;
+  accTint?: number;
+  /** Ребёнок — ростом поменьше. */
+  kid?: boolean;
 }
 
 const randomLook = (shirt: number): Look => ({
@@ -154,6 +162,24 @@ const randomLook = (shirt: number): Look => ({
   hair: Phaser.Utils.Array.GetRandom(HAIR_COLORS),
   style: Phaser.Utils.Array.GetRandom([...HAIR_STYLES]),
 });
+
+/** Покупатели бывают разные: дети, пожилые, рабочие в касках и жилетах. */
+function customerLook(shirt: number): Look {
+  const look = randomLook(shirt);
+  const roll = Math.random();
+  if (roll < 0.14) return { ...look, kid: true, style: Phaser.Utils.Array.GetRandom(['short', 'ponytail', 'curly'] as const) };
+  if (roll < 0.26) return { ...look, hair: Phaser.Utils.Array.GetRandom([0xd8d8e0, 0xc0cbdc]), style: Phaser.Utils.Array.GetRandom(['bun', 'bald', 'short'] as const) };
+  if (roll < 0.33) return { ...look, style: 'cap', hair: 0xfeae34, acc: 'vest' };
+  return look;
+}
+
+/** Форма персонала. */
+const STAFF_ACC: Record<StaffRole, { acc: Accessory; tint: number }> = {
+  cashier: { acc: 'apron', tint: 0xffffff },
+  cleaner: { acc: 'apron', tint: 0x5fcde4 },
+  loader: { acc: 'vest', tint: 0xffffff },
+  guard: { acc: 'badge', tint: 0xffffff },
+};
 /** Тёмная кофта — так игрок может заметить вора. */
 const THIEF_SHIRT = 0x45444f;
 const CAR_COLORS = [0xe43b44, 0x0099db, 0x3e8948, 0xfeae34, 0xc0cbdc, 0x68386c, 0x262b44];
@@ -675,16 +701,64 @@ export class StoreScene extends Phaser.Scene {
     return this.add.image(x, y, key).setScale(1 / ART);
   }
 
-  /** Человечек из слоёв: тень, штаны, рубашка, кожа, волосы — каждый слой перекрашивается тинтом. */
+  /** Человечек из слоёв: тень, штаны, рубашка, форма, кожа, волосы — каждый слой перекрашивается тинтом. */
   private makePerson(x: number, y: number, look: Look): Phaser.GameObjects.Container {
     const shadow = this.art(0, 8.5, 'shadow');
     const legs = this.art(0, 0, 'p_legs0').setTint(look.pants ?? 0x3a4466);
     const shirt = this.art(0, 0, 'p_shirt').setTint(look.shirt);
     const skin = this.art(0, 0, 'p_skin').setTint(look.skin);
-    const hair = this.art(0, 0, `p_hair_${look.style ?? 'short'}`).setTint(look.hair ?? 0x4a2c1a);
-    const person = this.add.container(x, y, [shadow, legs, shirt, skin, hair]).setDepth(y);
+    const hairBase = `p_hair_${look.style ?? 'short'}`;
+    const hair = this.art(0, 0, hairBase).setTint(look.hair ?? 0x4a2c1a);
+    // Слои, которые поворачиваются вместе с человеком: [картинка, имя текстуры спереди].
+    const layers: [Phaser.GameObjects.Image, string][] = [
+      [shirt, 'p_shirt'],
+      [skin, 'p_skin'],
+      [hair, hairBase],
+    ];
+    const parts = [shadow, legs, shirt];
+    if (look.acc) {
+      const acc = this.art(0, 0, `acc_${look.acc}`).setTint(look.accTint ?? 0xffffff);
+      layers.push([acc, `acc_${look.acc}`]);
+      parts.push(acc);
+    }
+    parts.push(skin, hair);
+    const person = this.add.container(x, y, parts).setDepth(y);
+    if (look.kid) person.setScale(0.8);
     person.setData('legs', legs);
+    person.setData('layers', layers);
+    person.setData('facing', 'down');
     return person;
+  }
+
+  /** Поворот: спереди, со спины или боком (левый бок — зеркальный правый). Значок охранника виден только спереди. */
+  private setFacing(person: Phaser.GameObjects.Container, facing: Facing): void {
+    if (person.getData('facing') === facing) return;
+    person.setData('facing', facing);
+    const suffix = VIEW_SUFFIX[facing];
+    const layers = person.getData('layers') as [Phaser.GameObjects.Image, string][] | undefined;
+    for (const [img, base] of layers ?? []) {
+      if (base === 'acc_badge') {
+        img.setVisible(facing === 'down');
+        continue;
+      }
+      img.setTexture(base + suffix).setFlipX(facing === 'left');
+    }
+    const legs = person.getData('legs') as Phaser.GameObjects.Image | undefined;
+    legs?.setTexture(`p_legs0${suffix}`).setFlipX(facing === 'left');
+  }
+
+  /** Эмоция над головой: всплывает и тает. */
+  private emote(person: Phaser.GameObjects.Container, key: 'emo_angry' | 'emo_heart' | 'emo_question'): void {
+    if (!person.active) return;
+    const icon = this.art(0, -17, key);
+    person.add(icon);
+    this.tweens.add({
+      targets: icon,
+      y: -21,
+      duration: 500,
+      ease: 'Back.easeOut',
+      onComplete: () => this.tweens.add({ targets: icon, alpha: 0, delay: 800, duration: 300, onComplete: () => icon.destroy() }),
+    });
   }
 
   // ---------- Продавец: уборка и выкладка ----------
@@ -833,6 +907,8 @@ export class StoreScene extends Phaser.Scene {
       const sprite = this.makePerson(home.x, home.y, {
         ...randomLook(UNIFORMS[member.role]),
         style: STAFF_HAIR[member.role],
+        acc: STAFF_ACC[member.role].acc,
+        accTint: STAFF_ACC[member.role].tint,
         hair: member.role === 'guard' ? UNIFORMS.guard : Phaser.Utils.Array.GetRandom(HAIR_COLORS),
       });
       const carried = this.art(0, 3, 'box').setVisible(false);
@@ -1018,7 +1094,7 @@ export class StoreScene extends Phaser.Scene {
         ? VALYA
         : thief
           ? { ...randomLook(shirt), style: 'long' as const, hair: THIEF_SHIRT }
-          : randomLook(shirt);
+          : customerLook(shirt);
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, look);
     if (rare) {
@@ -1113,7 +1189,10 @@ export class StoreScene extends Phaser.Scene {
       await this.walk(c.sprite, slot.x + Phaser.Math.Between(-8, 8), slot.y + 22);
       await this.wait(500);
       const result = this.tryTake(c, id);
-      if (result === 'empty' || result === 'expensive') disappointed = true;
+      if (result === 'empty' || result === 'expensive') {
+        disappointed = true;
+        this.emote(c.sprite, 'emo_question');
+      }
     }
 
     if (Math.random() < TRASH_CHANCE) this.dropTrash(c.sprite.x, c.sprite.y);
@@ -1276,6 +1355,9 @@ export class StoreScene extends Phaser.Scene {
       this.stats.complaints++;
       const why = badGoods ? t('popup.badProduct') : dirty ? t('popup.dirty') : '😣';
       this.popup(c.sprite.x, c.sprite.y - 26, why, '#ffd0d0');
+      this.emote(c.sprite, 'emo_angry');
+    } else if (Math.random() < 0.5) {
+      this.emote(c.sprite, 'emo_heart');
     }
     this.layoutQueue();
     void this.leave(c, true);
@@ -1293,6 +1375,7 @@ export class StoreScene extends Phaser.Scene {
     haptic.error();
     sound.bad();
     this.popup(c.sprite.x, c.sprite.y - 14, t('popup.leftAngry'), '#ffd0d0');
+    this.emote(c.sprite, 'emo_angry');
     this.layoutQueue();
     await this.leave(c);
   }
@@ -1312,7 +1395,7 @@ export class StoreScene extends Phaser.Scene {
     if (Math.random() < 0.45) {
       const fromLeft = Math.random() < 0.5;
       const y = this.streetY + Phaser.Math.Between(-5, 5);
-      const person = this.makePerson(fromLeft ? left : right, y, randomLook(Phaser.Utils.Array.GetRandom(SHIRTS)));
+      const person = this.makePerson(fromLeft ? left : right, y, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS)));
       void this.walk(person, fromLeft ? right : left, y, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1.1)).then(() => person.destroy());
     }
     if (Math.random() < 0.3) {
@@ -1367,6 +1450,11 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.killTweensOf(target);
     const legs = target.getData('legs') as Phaser.GameObjects.Image | undefined;
     const distance = Phaser.Math.Distance.Between(target.x, target.y, x, y);
+    // Поворачивается туда, куда идёт.
+    const dx = x - target.x;
+    const dy = y - target.y;
+    if (distance > 0.5) this.setFacing(target, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy < 0 ? 'up' : 'down');
+    const suffix = VIEW_SUFFIX[(target.getData('facing') as Facing | undefined) ?? 'down'];
     return new Promise((resolve) => {
       this.tweens.add({
         targets: target,
@@ -1376,10 +1464,10 @@ export class StoreScene extends Phaser.Scene {
         onUpdate: () => {
           target.setDepth(target.y);
           // Шаги: ноги переставляются каждые 150 мс.
-          legs?.setTexture(Math.floor(this.time.now / 150) % 2 ? 'p_legs1' : 'p_legs0');
+          legs?.setTexture(Math.floor(this.time.now / 150) % 2 ? `p_legs1${suffix}` : `p_legs0${suffix}`);
         },
         onComplete: () => {
-          legs?.setTexture('p_legs0');
+          legs?.setTexture(`p_legs0${suffix}`);
           resolve();
         },
         onStop: () => resolve(),
