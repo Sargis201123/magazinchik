@@ -70,7 +70,8 @@ const css = `
 .ui-chip.active { background: #2b2233; color: #f4ecd8; }
 .ui-chip-off { background: #e6dcc4; color: #7a7066; box-shadow: none; }
 .ui-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.ui-tabs { display: flex; gap: 4px; margin: 8px 0 6px; }
+/* Шесть вкладок — в две строки по три, чтобы ни одна не обрезалась на узком телефоне. */
+.ui-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 8px 0 6px; }
 .ui-tab { flex: 1; padding: 8px 1px; font: 600 12px system-ui, sans-serif; border: 2px solid #2b2233;
   border-radius: 6px; background: #e6dcc4; color: #2b2233; }
 .ui-tab.active { background: #2b2233; color: #f4ecd8; }
@@ -196,8 +197,18 @@ const css = `
 .ui-dialog-caret { display: inline-block; margin-left: 4px; font-size: 10px; color: #b86f50; animation: ui-tip .8s ease-in-out infinite; }
 .ui-dialog-after { opacity: 0; transform: translateY(4px); transition: opacity .25s, transform .25s; }
 .ui-dialog-after.shown { opacity: 1; transform: none; }
+/* Поле ввода (имя кота) и пиксельная картинка в строке. */
+.ui-input { width: 100%; box-sizing: border-box; font: 700 16px system-ui, sans-serif; padding: 9px 10px; margin: 6px 0;
+  border: 2px solid #2b2233; border-radius: 8px; background: #fff; color: #2b2233; }
+.ui-item-art { width: 32px; height: 32px; image-rendering: pixelated; object-fit: contain; justify-self: center; }
+/* Карточка отзыва: звёзды, текст, подпись; плохие — розовые, хорошие — зелёные. */
+.ui-review { border: 2px solid #2b2233; border-radius: 8px; padding: 6px 9px; margin: 6px 0; background: #fbf6ea; }
+.ui-review.good { background: #e3f5d6; }
+.ui-review.bad { background: #fbe0dc; }
+.ui-review-stars { color: #f77622; font-size: 14px; letter-spacing: 1px; }
+.ui-review-text { font-size: 14px; line-height: 1.3; color: #2b2233; margin: 2px 0; }
+.ui-review-who { font-size: 12px; color: #6a5f58; text-align: right; }
 `;
-
 let styled = false;
 export function injectStyles(): void {
   if (styled) return;

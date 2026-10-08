@@ -1,6 +1,8 @@
 import { t } from '../i18n';
 import { onShelves, PRODUCTS, sellableProducts, warehouseCount, type DayStats, type StoreState } from '../game/economy';
 import { button, curtain, el, injectStyles, openModal, pixelize } from './dom';
+import type { Review } from '../game/reviews';
+import { reviewCards } from './reviews';
 
 export class Hud {
   private readonly top = el('div', 'ui-hud');
@@ -25,9 +27,9 @@ export class Hud {
     document.body.append(this.top, this.stock, this.hint);
   }
 
-  update(state: StoreState, secondsLeft: number, quests = ''): void {
+  update(state: StoreState, secondsLeft: number, quests = '', night = false): void {
     this.setMoney(state.money);
-    const clock = `${t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
+    const clock = `${night ? t('hud.night') : t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
     if (this.clock.textContent !== clock) this.clock.textContent = clock;
     const stars = '★'.repeat(Math.round(state.rating)).padEnd(5, '☆');
     if (this.stars.textContent !== stars) this.stars.textContent = stars;
@@ -92,6 +94,7 @@ export class Hud {
     money: { bill: number | null; shortfall: number; total: number },
     extra: [string, string][],
     history: number[],
+    reviews: Review[],
     onNext: () => void,
   ): void {
     const { card, close } = openModal();
@@ -130,6 +133,7 @@ export class Hud {
     };
     row(t('summary.complaints'), stats.complaints);
     row(t('summary.spoiled'), stats.spoiled);
+    if (stats.nightRevenue) row(t('summary.night'), `+${stats.nightRevenue} 💰`);
     if (stats.stolen) row(t('summary.stolen'), `−${stats.stolen} 💰`);
     if (stats.caught) row(t('summary.caught'), stats.caught);
     if (stats.skimmed) row(t('summary.skimmed'), `−${stats.skimmed} 💰`);
@@ -138,6 +142,8 @@ export class Hud {
     row(t('summary.money'), `${money.total} 💰`);
     if (money.shortfall > 0) card.append(el('div', 'ui-note', t('summary.shortfall', { n: money.shortfall })));
     row(t('summary.rating'), `${rating.before.toFixed(1)} → ${rating.after.toFixed(1)}★ ${arrowRating}`);
+    // Что написали посетители — сразу видно, что исправить завтра.
+    if (reviews.length) card.append(el('h3', '', t('summary.reviews')), ...reviewCards(reviews));
     card.append(
       button(t('summary.next'), () => {
         // Роллет опускается с номером нового дня — и поднимается уже утром.
