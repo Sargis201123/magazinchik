@@ -74,11 +74,19 @@ import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 
 // Холст 720×1280 (9:16): на телефоне хватает пикселей для детальных спрайтов.
 // Камера подбирает масштаб под размер магазина: ларёк крупно, универмаг мельче.
-export const CANVAS_W = 720;
-export const CANVAS_H = 1280;
+/**
+ * Во сколько раз холст плотнее базовых 720×1280: под экран телефона (ширина × devicePixelRatio),
+ * от 1 до 1,5 с шагом 0,25 (больше — тяжело слабым телефонам). Пиксель-арт и надписи не мылятся.
+ */
+export const RES = (() => {
+  const cssWidth = Math.min(window.innerWidth, (window.innerHeight * 9) / 16);
+  return Phaser.Math.Clamp(Math.round(((cssWidth * (window.devicePixelRatio || 1)) / 720) * 4) / 4, 1, 1.5);
+})();
+export const CANVAS_W = Math.round(720 * RES);
+export const CANVAS_H = Math.round(1280 * RES);
 /** Сверху интерфейс (деньги, товар), снизу подсказки — магазин рисуем между ними. */
-const HUD_TOP = 140;
-const HUD_BOTTOM = 80;
+const HUD_TOP = 140 * RES;
+const HUD_BOTTOM = 80 * RES;
 /** Спрайты нарисованы с двойной детализацией (DETAIL в art/sprites.py): в мире они вдвое меньше своих пикселей. */
 const ART = 2;
 /** Сколько улицы видно под зданием (в точках мира). */
@@ -1227,7 +1235,7 @@ export class StoreScene extends Phaser.Scene {
       }
       this.pinch = null;
       if (!p.isDown) return;
-      if (!this.dragged && Phaser.Math.Distance.Between(p.x, p.y, this.dragStart.x, this.dragStart.y) < 12) return;
+      if (!this.dragged && Phaser.Math.Distance.Between(p.x, p.y, this.dragStart.x, this.dragStart.y) < 12 * RES) return;
       this.dragged = true;
       this.homeTimer?.remove();
       const dx = (p.x - p.prevPosition.x) / cam.zoom;
@@ -1913,7 +1921,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Монетки летят от кассы к счётчику денег в углу экрана. */
   private flyCoins(x: number, y: number, count: number): void {
-    const target = this.cameras.main.getWorldPoint(70, 52);
+    const target = this.cameras.main.getWorldPoint(70 * RES, 52 * RES);
     for (let i = 0; i < count; i++) {
       const coin = this.art(x + Phaser.Math.Between(-4, 4), y - 10, 'coin').setDepth(LIGHT_DEPTH + 5);
       this.tweens.add({
