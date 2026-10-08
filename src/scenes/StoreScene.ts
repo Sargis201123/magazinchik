@@ -456,7 +456,31 @@ export class StoreScene extends Phaser.Scene {
     // Улица живёт своей жизнью: прохожие и машины.
     this.time.addEvent({ delay: 1800, loop: true, callback: () => this.streetLife() });
     // Сначала вывеска, потом утро. Первая встреча с сюжетом (письмо бабушки) — на утреннем экране.
-    showTitle({ save, onPlay: () => this.showMorning() });
+    const stopShow = this.titleShow();
+    showTitle({
+      save,
+      onPlay: () => {
+        stopShow();
+        this.showMorning();
+      },
+    });
+  }
+
+  /**
+   * За титулом — живая улица на закате: горят фонари и неон, едут машины, идут люди,
+   * камера медленно плывёт вдоль квартала. Возвращает функцию, которая вернёт камеру к магазину.
+   */
+  private titleShow(): () => void {
+    const cam = this.cameras.main;
+    this.updateLighting(0.88);
+    cam.setZoom(this.baseZoom * 0.8).centerOn(this.layout.door.x - 110, this.next.h - 20);
+    const pan = this.tweens.add({ targets: cam, scrollX: cam.scrollX + 220, duration: 20000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    return () => {
+      pan.remove();
+      cam.pan(this.home.x, this.home.y, 700, 'Sine.easeInOut');
+      cam.zoomTo(this.baseZoom, 700, 'Sine.easeInOut');
+      this.updateLighting(0);
+    };
   }
 
   update(_time: number, deltaMs: number): void {
