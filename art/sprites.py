@@ -1305,7 +1305,7 @@ def building():
     c.outline("k")
     c.save("awning_small")
     # Раздвижные двери 64×20: закрытые и открытые.
-    for name, gap in (("door", 0), ("door_open", 22)):
+    for name, gap in (("door", 0), ("door_half", 11), ("door_open", 22)):
         c = Canvas(64, 20)
         c.rect(0, 0, 64, 20, "g")
         c.rect(2, 2, 60, 16, "K")
@@ -1870,6 +1870,15 @@ def side_legs():
     c.rect(12, 33, 6, 2, "K")
     c.outline("k")
     c.save("p_legs1_s")
+    # Второй шаг: другая нога впереди (дальняя — в тени).
+    c = Canvas(24, 36)
+    c.rect(12, 30, 4, 3, "2")
+    c.rect(9, 27, 5, 3, "1")
+    c.rect(7, 30, 4, 3, "1")
+    c.rect(5, 33, 5, 2, "K")
+    c.rect(12, 33, 6, 2, "K")
+    c.outline("k")
+    c.save("p_legs2_s")
 
 
 def side_hair(style):

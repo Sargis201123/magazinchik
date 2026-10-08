@@ -264,6 +264,10 @@ export class StoreScene extends Phaser.Scene {
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
   private boxes: Phaser.GameObjects.Image[] = [];
+  /** Все люди на экране: для шагов и дыхания. */
+  private people = new Set<Phaser.GameObjects.Container>();
+  /** Насколько открыты двери: 0 — закрыты, 1 — открыты. */
+  private doorOpen = 0;
   private outdoorShades: Phaser.GameObjects.Rectangle[] = [];
   private doorImg!: Phaser.GameObjects.Image;
   private vignette?: Phaser.FX.Vignette;
@@ -362,6 +366,7 @@ export class StoreScene extends Phaser.Scene {
     this.updateLighting();
     this.updateDoor();
     this.pulseHighlights();
+    this.animatePeople();
     this.hud.update(this.state, this.timeLeft, this.questsLine());
   }
 
@@ -509,6 +514,58 @@ export class StoreScene extends Phaser.Scene {
     this.updateLighting(this.running ? undefined : 0);
   }
 
+  /**
+   * Шаги в 4 кадра (ноги: шаг, вместе, другой шаг, вместе; тело чуть подпрыгивает)
+   * и дыхание, когда человек стоит. Спереди и сзади другой шаг — зеркало первого.
+   */
+  private animatePeople(): void {
+    const now = this.time.now;
+    for (const person of this.people) {
+      if (!person.active) continue;
+      const legs = person.getData('legs') as Phaser.GameObjects.Image | undefined;
+      const facing = (person.getData('facing') as Facing | undefined) ?? 'down';
+      const suffix = VIEW_SUFFIX[facing];
+      const phase = (person.getData('phase') as number) ?? 0;
+      let key = `p_legs0${suffix}`;
+      let flip = facing === 'left';
+      let bob = 0;
+      if (person.getData('walking')) {
+        const frame = Math.floor((now + phase) / 110) % 4;
+        if (frame === 1) key = `p_legs1${suffix}`;
+        if (frame === 3) {
+          if (suffix === '_s') key = 'p_legs2_s';
+          else {
+            key = `p_legs1${suffix}`;
+            flip = !flip;
+          }
+        }
+        bob = frame % 2 === 0 ? -0.5 : 0;
+      } else {
+        bob = Math.sin((now + phase) / 650) > 0.35 ? -0.5 : 0;
+      }
+      if (legs && (legs.texture.key !== key || legs.flipX !== flip)) legs.setTexture(key).setFlipX(flip);
+      for (const img of (person.getData('upper') as Phaser.GameObjects.Image[]) ?? []) img.y = bob;
+    }
+  }
+
+  /** Покупатель тянется к полке; если взял — товар летит ему в руки. */
+  private reachShelf(c: Customer, slot: { x: number; y: number }, id: ProductId | null): void {
+    const base = (c.sprite.getData('baseScale') as number) ?? 1;
+    this.tweens.add({ targets: c.sprite, scaleY: base * 1.07, duration: 140, yoyo: true, onComplete: () => c.sprite.setScale(base) });
+    if (!id) return;
+    const item = this.art(slot.x + Phaser.Math.Between(-12, 12), slot.y - 5, `item_${id}_0`).setDepth(c.sprite.y + 1);
+    this.tweens.add({
+      targets: item,
+      x: c.sprite.x,
+      y: c.sprite.y - 3,
+      scale: 0.5 / ART,
+      alpha: 0.4,
+      duration: 320,
+      ease: 'Quad.easeIn',
+      onComplete: () => item.destroy(),
+    });
+  }
+
   /** То, что можно нажать, мягко пульсирует подсветкой: пустые полки (есть товар на складе) и мусор. */
   private pulseHighlights(): void {
     const pulse = 1.5 + Math.sin(this.time.now / 260) * 1.2;
@@ -522,8 +579,10 @@ export class StoreScene extends Phaser.Scene {
   /** Двери разъезжаются, когда к ним подходят. */
   private updateDoor(): void {
     const { door, h } = this.layout;
-    const near = [...this.customers].some((c) => Math.abs(c.sprite.x - door.x) < 14 && Math.abs(c.sprite.y - h - 4) < 14);
-    this.doorImg.setTexture(near ? 'door_open' : 'door');
+    const near = [...this.customers].some((c) => Math.abs(c.sprite.x - door.x) < 16 && Math.abs(c.sprite.y - h - 4) < 18);
+    this.doorOpen = Phaser.Math.Clamp(this.doorOpen + (near ? 0.12 : -0.06), 0, 1);
+    const key = this.doorOpen < 0.34 ? 'door' : this.doorOpen < 0.67 ? 'door_half' : 'door_open';
+    if (this.doorImg.texture.key !== key) this.doorImg.setTexture(key);
   }
 
   /** Оттенок по ходу дня: тёплое утро, белый день, закат, сумерки. */
@@ -830,10 +889,17 @@ export class StoreScene extends Phaser.Scene {
     }
     parts.push(skin, hair);
     const person = this.add.container(x, y, parts).setDepth(y);
-    if (look.kid) person.setScale(0.8);
+    const baseScale = look.kid ? 0.8 : 1;
+    person.setScale(baseScale);
     person.setData('legs', legs);
     person.setData('layers', layers);
+    person.setData('upper', layers.map(([img]) => img));
     person.setData('facing', 'down');
+    person.setData('baseScale', baseScale);
+    // Сдвиг фазы: люди дышат и шагают не в унисон.
+    person.setData('phase', Math.random() * 1000);
+    this.people.add(person);
+    person.once('destroy', () => this.people.delete(person));
     return person;
   }
 
@@ -1349,6 +1415,7 @@ export class StoreScene extends Phaser.Scene {
       await this.walk(c.sprite, slot.x + Phaser.Math.Between(-8, 8), slot.y + 22);
       await this.wait(500);
       const result = this.tryTake(c, id);
+      this.reachShelf(c, slot, result === 'taken' ? id : null);
       if (result === 'empty' || result === 'expensive') {
         disappointed = true;
         this.emote(c.sprite, 'emo_question');
@@ -1507,6 +1574,8 @@ export class StoreScene extends Phaser.Scene {
     if (c.rare) this.rareGuestServed(c, total);
     haptic.success();
     sound.coin();
+    const base = (c.sprite.getData('baseScale') as number) ?? 1;
+    this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
     this.popup(this.layout.sellerHome.x - 8, this.layout.sellerHome.y - 18, `+${total} 💰`, '#c8ffb0');
     this.flyCoins(this.layout.counter.x, this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)));
 
@@ -1618,31 +1687,31 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private walk(target: Phaser.GameObjects.Container, x: number, y: number, speed = CUSTOMER_SPEED): Promise<void> {
-    this.tweens.killTweensOf(target);
-    const legs = target.getData('legs') as Phaser.GameObjects.Image | undefined;
+    // Останавливаем только прошлый шаг: прыжок от радости и прочие анимации доигрывают.
+    (target.getData('move') as Phaser.Tweens.Tween | undefined)?.stop();
     const distance = Phaser.Math.Distance.Between(target.x, target.y, x, y);
     // Поворачивается туда, куда идёт.
     const dx = x - target.x;
     const dy = y - target.y;
     if (distance > 0.5) this.setFacing(target, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy < 0 ? 'up' : 'down');
-    const suffix = VIEW_SUFFIX[(target.getData('facing') as Facing | undefined) ?? 'down'];
+    target.setData('walking', true);
     return new Promise((resolve) => {
-      this.tweens.add({
+      const move = this.tweens.add({
         targets: target,
         x,
         y,
         duration: (distance / speed) * 1000,
-        onUpdate: () => {
-          target.setDepth(target.y);
-          // Шаги: ноги переставляются каждые 150 мс.
-          legs?.setTexture(Math.floor(this.time.now / 150) % 2 ? `p_legs1${suffix}` : `p_legs0${suffix}`);
-        },
+        onUpdate: () => target.setDepth(target.y),
         onComplete: () => {
-          legs?.setTexture(`p_legs0${suffix}`);
+          target.setData('walking', false);
           resolve();
         },
-        onStop: () => resolve(),
+        onStop: () => {
+          target.setData('walking', false);
+          resolve();
+        },
       });
+      target.setData('move', move);
     });
   }
 

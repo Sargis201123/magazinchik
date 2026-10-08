@@ -13,6 +13,8 @@ const SPRITES = [
   'shopwin',
   'awning_small',
   'door_open',
+  'door_half',
+  'p_legs2_s',
   'shutter',
   'weeds',
   'bricks',
