@@ -4,7 +4,7 @@ import { getLang, setLang, t, type Lang } from '../i18n';
 import { saveLang } from '../i18n/stored';
 import { sound } from '../platform/sound';
 import type { StoreState } from '../game/economy';
-import { button, el, injectStyles } from './dom';
+import { button, el, injectStyles, pixelize } from './dom';
 
 const css = `
 .ui-title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -71,6 +71,7 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
     langs.append(toggle);
 
     root.replaceChildren(sign, play, ...(progress ? [progress] : []), langs);
+    pixelize(root);
   };
   render();
 }

@@ -1819,6 +1819,169 @@ def decor():
     c.save("baskets")
 
 
+# ---------------------------------------------------------------- интерфейс
+
+
+def ui_frame():
+    """Рамка окна 24×24 для border-image: тёмный контур, светлая фаска, кремовая середина."""
+    c = Canvas(24, 24)
+    c.round_rect(0, 0, 24, 24, "k", r=2)
+    c.round_rect(1, 1, 22, 22, "B", r=1)
+    c.rect(2, 2, 20, 20, "a")
+    c.rect(3, 3, 18, 18, (244, 236, 216, 255))
+    c.hline(3, 3, 18, "w")
+    c.vline(3, 3, 18, "w")
+    c.hline(2, 1, 20, "n")
+    c.vline(1, 2, 20, "n")
+    c.save("ui_frame")
+
+
+def rgb(hex_):
+    return (int(hex_[1:3], 16), int(hex_[3:5], 16), int(hex_[5:7], 16), 255)
+
+
+def shade(color, k):
+    return tuple(max(0, min(255, int(v * k))) for v in color[:3]) + (255,)
+
+
+def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None):
+    """Портрет 32×32: голова и плечи на цветном фоне. Причёску и детали рисуют функции."""
+    skin, hair, shirt, bg = rgb(skin), rgb(hair), rgb(shirt), rgb(bg)
+    c = Canvas(32, 32)
+    c.round_rect(0, 0, 32, 32, bg, r=4)
+    c.ellipse(16, 10, 13, 9, shade(bg, 1.12))
+    p = Canvas(32, 32)
+    p.ellipse(16, 32, 13, 7.5, shirt)
+    p.ellipse(19, 33, 9, 6, shade(shirt, 0.82))
+    p.rect(13, 21, 6, 5, shade(skin, 0.86))
+    p.ellipse(16, 14, 7.5, 8.5, skin)
+    p.ellipse(19.5, 16, 3.5, 6, shade(skin, 0.92))
+    p.px(8, 14, skin)
+    p.px(24, 14, shade(skin, 0.9))
+    draw_hair(p, hair)
+    p.outline("k")
+    # Лицо.
+    for x in (12, 19):
+        p.rect(x, 14, 2, 2, "k")
+        p.px(x, 14, "w")
+    p.px(16, 17, shade(skin, 0.8))
+    p.hline(15, 19, 3, shade(skin, 0.6))
+    p.px(11, 17, rgb("#f6757a"))
+    p.px(21, 17, rgb("#f6757a"))
+    if extras:
+        extras(p, skin, hair, shirt)
+    c.img.alpha_composite(p.img)
+    c.save(f"portrait_{name}")
+
+
+def hair_bun(p, hair):
+    p.ellipse(16, 8, 8.5, 5, hair)
+    p.ellipse(16, 2.5, 3.5, 2.5, hair)
+    p.rect(8, 8, 2, 6, hair)
+    p.rect(22, 8, 2, 6, hair)
+    p.px(13, 6, shade(hair, 1.15))
+
+
+def hair_curly(p, hair):
+    for cx, cy in ((10, 9), (14, 6), (18, 6), (22, 9), (9, 13), (23, 13), (16, 5)):
+        p.ellipse(cx, cy, 3.4, 3.2, hair)
+    p.px(14, 5, shade(hair, 1.15))
+
+
+def hair_chef(p, hair):
+    p.ellipse(16, 9, 8, 3.5, rgb("#4a2c1a"))
+    p.rect(9, 3, 14, 5, rgb("#ffffff"))
+    for cx in (11, 16, 21):
+        p.ellipse(cx, 2.5, 3.2, 2.6, rgb("#ffffff"))
+    p.hline(9, 7, 14, rgb("#c0cbdc"))
+
+
+def hair_slick(p, hair):
+    p.ellipse(16, 8, 8.5, 4.5, hair)
+    p.rect(8, 8, 2, 4, hair)
+    p.rect(22, 8, 2, 4, hair)
+    p.hline(11, 6, 8, shade(hair, 1.4))
+
+
+def hair_cap(p, hair):
+    p.ellipse(16, 7, 9, 4.5, hair)
+    p.rect(7, 8, 18, 2, shade(hair, 0.7))
+    p.rect(14, 4, 4, 3, rgb("#feae34"))
+
+
+def hair_straw(p, hair):
+    p.ellipse(16, 8, 13, 3, rgb("#e4a672"))
+    p.ellipse(16, 5, 7, 4, rgb("#ead4aa"))
+    p.hline(9, 7, 14, rgb("#b86f50"))
+
+
+def hair_scarf(p, hair):
+    p.ellipse(16, 7, 9.5, 5.5, hair)
+    p.rect(7, 8, 3, 11, hair)
+    p.rect(22, 8, 3, 11, hair)
+    for x, y in ((11, 5), (17, 4), (21, 7), (13, 9), (8, 14), (23, 12)):
+        p.px(x, y, rgb("#ffffff"))
+
+
+def hair_bald(p, hair):
+    p.rect(8, 11, 2, 4, hair)
+    p.rect(22, 11, 2, 4, hair)
+
+
+def hair_net(p, hair):
+    p.ellipse(16, 8, 8.5, 5, hair)
+    p.ellipse(16, 7, 9, 4, rgb("#c0cbdc"))
+    for x in range(9, 24, 2):
+        p.px(x, 7, rgb("#8b9bb4"))
+
+
+def glasses(p, skin, hair, shirt):
+    for x in (11, 18):
+        p.frame(x, 13, 4, 4, "G")
+        p.px(x + 1, 14, "k")
+        p.px(x + 2, 15, "k")
+        p.px(x + 1, 15, "k")
+    p.hline(15, 14, 3, "G")
+
+
+def mustache(p, skin, hair, shirt):
+    p.hline(13, 18, 7, hair)
+    p.px(12, 19, hair)
+    p.px(20, 19, hair)
+
+
+def beard(p, skin, hair, shirt):
+    p.ellipse(16, 20, 6, 3.2, rgb("#8b9bb4"))
+    p.hline(14, 19, 5, shade(skin, 0.6))
+
+
+def tie(p, skin, hair, shirt):
+    p.rect(15, 25, 2, 6, rgb("#e43b44"))
+    p.px(14, 25, rgb("#ffffff"))
+    p.px(17, 25, rgb("#ffffff"))
+
+
+def badge(p, skin, hair, shirt):
+    p.rect(20, 27, 3, 3, rgb("#feae34"))
+
+
+def apron(p, skin, hair, shirt):
+    p.rect(12, 26, 8, 6, rgb("#ffffff"))
+    p.px(14, 28, rgb("#e43b44"))
+
+
+def portraits():
+    portrait("grandma", "#b55088", "#f2d3ab", "#d8d8e0", "#68386c", hair_bun, glasses)
+    portrait("valya", "#e43b44", "#eec39a", "#c0cbdc", "#a22633", hair_curly)
+    portrait("marat", "#feae34", "#d9a066", "#4a2c1a", "#ffffff", hair_chef, mustache)
+    portrait("eduard", "#262b44", "#f2d3ab", "#181425", "#3a4466", hair_slick, tie)
+    portrait("inspector", "#5a6988", "#eec39a", "#262b44", "#262b44", hair_cap, badge)
+    portrait("farmer", "#63c74d", "#e4a672", "#8b9bb4", "#3e8948", hair_straw, beard)
+    portrait("dairy", "#0099db", "#f2d3ab", "#0099db", "#ffffff", hair_scarf)
+    portrait("butcher", "#a22633", "#eec39a", "#733e39", "#c0cbdc", hair_bald, lambda p, *a: (mustache(p, *a), apron(p, *a)))
+    portrait("school", "#fee761", "#f2d3ab", "#733e39", "#5fcde4", hair_net)
+
+
 # ---------------------------------------------------------------- мелочи
 
 
@@ -1889,6 +2052,8 @@ def main():
     people()
     decor()
     ui_bits()
+    ui_frame()
+    portraits()
     icon()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 

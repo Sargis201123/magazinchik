@@ -20,9 +20,16 @@ const css = `
   text-align: center; font: 13px system-ui, sans-serif; color: #e6e1d6; pointer-events: none; }
 .ui-modal { position: fixed; inset: 0; background: rgba(15, 12, 22, .78); display: flex; align-items: center;
   justify-content: center; padding: 16px; overflow-y: auto; }
-.ui-card { background: #f4ecd8; color: #2b2233; border: 3px solid #2b2233; border-radius: 6px; padding: 14px;
-  max-width: 360px; width: 100%; max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box;
-  font: 15px/1.4 system-ui, sans-serif; box-shadow: 0 4px 0 #2b2233; }
+/* Окно в пиксельной рамке (assets/ui_frame.png, 9 частей по 8 пикселей). */
+.ui-card { color: #2b2233; border: 16px solid transparent; border-image: url(assets/ui_frame.png) 8 fill / 16px stretch;
+  image-rendering: pixelated; padding: 2px 4px; max-width: 372px; width: 100%; max-height: calc(100dvh - 32px);
+  overflow-y: auto; box-sizing: border-box; font: 15px/1.4 system-ui, sans-serif;
+  filter: drop-shadow(0 4px 0 rgba(24, 20, 37, .6)); }
+/* Пиксельные иконки вместо эмодзи (монета, товары, коробка). */
+.ui-ico { height: 1.15em; width: auto; vertical-align: -0.22em; image-rendering: pixelated; }
+.ui-portrait { width: 48px; height: 48px; image-rendering: pixelated; border-radius: 6px; flex: none; }
+.ui-who { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+.ui-who b, .ui-who h3 { margin: 0; }
 .ui-card h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; }
 .ui-card h3 { margin: 14px 0 6px; font-size: 15px; }
 .ui-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0; }
@@ -87,5 +94,60 @@ export function openModal(): { card: HTMLDivElement; close: () => void } {
   const card = el('div', 'ui-card');
   overlay.append(card);
   document.body.append(overlay);
-  return { card, close: () => overlay.remove() };
+  // Всё, что окно нарисует, получает пиксельные иконки вместо эмодзи.
+  const observer = new MutationObserver(() => pixelize(card));
+  observer.observe(card, { childList: true, subtree: true, characterData: true });
+  return {
+    card,
+    close: () => {
+      observer.disconnect();
+      overlay.remove();
+    },
+  };
+}
+
+const ICONS: Record<string, string> = {
+  '💰': 'coin',
+  '🍞': 'item_bread',
+  '🍎': 'item_apples',
+  '🥔': 'item_potatoes',
+  '🥛': 'item_milk',
+  '🥩': 'item_meat',
+  '📦': 'box',
+};
+const ICON_RE = /(💰|🍞|🍎|🥔|🥛|🥩|📦)/u;
+
+/** Заменяет эмодзи денег и товаров на пиксельные картинки из игры. */
+export function pixelize(root: Node): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const found: Text[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (ICON_RE.test(node.nodeValue ?? '')) found.push(node as Text);
+  }
+  for (const node of found) {
+    const frag = document.createDocumentFragment();
+    for (const part of (node.nodeValue ?? '').split(ICON_RE)) {
+      if (!part) continue;
+      const key = ICONS[part];
+      if (!key) {
+        frag.append(part);
+        continue;
+      }
+      const img = el('img', 'ui-ico');
+      img.src = `assets/${key}.png`;
+      img.alt = part;
+      frag.append(img);
+    }
+    node.replaceWith(frag);
+  }
+}
+
+/** Пиксельный портрет персонажа или поставщика (assets/portrait_<id>.png) рядом с именем. */
+export function who(portraitId: string, name: HTMLElement): HTMLDivElement {
+  const row = el('div', 'ui-who');
+  const img = el('img', 'ui-portrait');
+  img.src = `assets/portrait_${portraitId}.png`;
+  img.alt = '';
+  row.append(img, name);
+  return row;
 }

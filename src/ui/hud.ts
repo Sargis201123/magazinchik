@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 import { onShelves, PRODUCTS, sellableProducts, warehouseCount, type DayStats, type StoreState } from '../game/economy';
-import { button, el, injectStyles, openModal } from './dom';
+import { button, el, injectStyles, openModal, pixelize } from './dom';
 
 export class Hud {
   private readonly top = el('div', 'ui-hud');
@@ -15,14 +15,20 @@ export class Hud {
   update(state: StoreState, secondsLeft: number, quests = ''): void {
     const stars = '★'.repeat(Math.round(state.rating)).padEnd(5, '☆');
     const clock = `${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
-    this.top.replaceChildren(
-      el('span', '', `💰 ${state.money}`),
-      el('span', '', `${t('hud.day', { n: state.day })} · ${clock}`),
-      el('span', '', stars),
-    );
+    const top = [`💰 ${state.money}`, `${t('hud.day', { n: state.day })} · ${clock}`, stars];
     const shelves = sellableProducts(state).map((id) => `${PRODUCTS[id].icon}${onShelves(state, id)}`);
-    this.stock.textContent = `${shelves.join('  ')}   📦${warehouseCount(state)}${quests ? `   ${quests}` : ''}`;
+    const stock = `${shelves.join('  ')}   📦${warehouseCount(state)}${quests ? `   ${quests}` : ''}`;
+    // Перерисовываем только когда что-то изменилось: update зовётся каждый кадр.
+    const key = [...top, stock].join('|');
+    if (key === this.lastKey) return;
+    this.lastKey = key;
+    this.top.replaceChildren(...top.map((text) => el('span', '', text)));
+    this.stock.textContent = stock;
+    pixelize(this.top);
+    pixelize(this.stock);
   }
+
+  private lastKey = '';
 
   /** Счётчик денег подпрыгивает, когда в него «долетели» монетки. */
   bumpMoney(): void {

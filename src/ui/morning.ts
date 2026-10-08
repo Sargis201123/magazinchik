@@ -77,12 +77,15 @@ import {
   seasonFor,
   type Quest,
 } from '../game/endless';
-import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type MorningEvent } from '../game/events';
+import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
 import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter } from '../game/story';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
-import { button, el, openModal } from './dom';
+import { button, el, openModal, who } from './dom';
+
+/** Портрет заказчика: шеф — это Марат. */
+const CLIENT_PORTRAIT: Record<ClientId, string> = { chef: 'marat', school: 'school', valya: 'valya' };
 
 interface MorningOptions {
   getState: () => StoreState;
@@ -193,7 +196,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const s = SUPPLIERS[sid];
     const deal = deals[sid];
     const box = el('div', 'ui-box');
-    box.append(el('b', '', t(s.nameKey)), el('div', 'ui-quote', `«${t(quotes[sid])}»`));
+    box.append(who(sid, el('b', '', t(s.nameKey))), el('div', 'ui-quote', `«${t(quotes[sid])}»`));
 
     if (s.requires && !state.shelves.some((sh) => sh.kind === s.requires)) {
       box.append(el('div', 'ui-muted', t('buy.needShelf', { shelf: t(SHELF_KINDS[s.requires].nameKey) })));
@@ -477,11 +480,11 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const storyBox = (state: StoreState, kind: 'intro' | 'outro', chapter: Chapter) => {
     const lines = kind === 'intro' ? chapter.intro : chapter.outro;
     const current = lines[Math.min(storyLine, lines.length - 1)];
-    const who = CHARACTERS[current.who];
+    const speaker = CHARACTERS[current.who];
     const box = el('div', 'ui-box');
     box.append(
       el('div', 'ui-muted', t('story.chapter', { n: state.story.chapter + 1, title: t(chapter.titleKey) })),
-      el('h3', '', `${who.icon} ${t(who.nameKey)}`),
+      who(current.who, el('h3', '', t(speaker.nameKey))),
       el('p', '', `«${t(current.key)}»`),
     );
     const last = storyLine >= lines.length - 1;
@@ -518,7 +521,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         const have = warehouseOf(state, event.product) + onShelves(state, event.product);
         box.append(
           el('h3', '', `🍽 ${t('event.order.title')}`),
-          el('b', '', t(client.nameKey)),
+          who(CLIENT_PORTRAIT[event.client], el('b', '', t(client.nameKey))),
           el('p', '', `«${t(client.askKey, { qty: event.qty, product: productLabel(event.product), pay: event.pay })}»`),
           el('div', 'ui-muted', `${t('buy.inWarehouse', { n: have })} · ${t('event.order.note')}`),
           button(t('event.order.accept'), () => answer(true)),
