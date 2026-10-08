@@ -195,6 +195,21 @@ const css = `
   border-radius: 6px; padding: 1px 8px; font: 700 13px system-ui, sans-serif; }
 .ui-dialog-text { margin: 0; font-size: 15px; line-height: 1.4; min-height: 3em; }
 .ui-dialog-caret { display: inline-block; margin-left: 4px; font-size: 10px; color: #b86f50; animation: ui-tip .8s ease-in-out infinite; }
+.ui-tour { position: fixed; left: 8px; right: 8px; bottom: 8px; max-width: 480px; margin: 0 auto; z-index: 50; color: #2b2233;
+  background: #f4ecd8; border: 3px solid #2b2233; border-radius: 10px; padding: 8px 10px 10px; box-shadow: 0 6px 0 rgba(0,0,0,.35);
+  animation: ui-pop .3s cubic-bezier(.3, 1.45, .5, 1); }
+.ui-tour .ui-dialog { margin: 0; }
+.ui-tour .ui-dialog-face { width: 64px; height: 64px; }
+.ui-tour .ui-dialog-speech { min-height: 64px; }
+.ui-tour .ui-dialog-text { font-size: 14px; min-height: 0; }
+.ui-tour-head { font-size: 12px; color: #8b6d5c; margin-bottom: 10px; }
+.ui-tour-skip { position: absolute; top: 4px; right: 8px; background: none; border: none; color: #8b6d5c; font-size: 12px;
+  text-decoration: underline; padding: 2px; cursor: pointer; }
+.ui-card.touring { padding-bottom: 230px; }
+.ui-tour-focus { position: relative; z-index: 4; outline: 3px solid #fee761; outline-offset: 2px; border-radius: 6px;
+  box-shadow: 0 0 0 6px #2b2233, 0 0 0 2000px rgba(15, 12, 22, .45); animation: ui-tour-pulse 1s ease-in-out infinite; }
+@keyframes ui-tour-pulse { 50% { outline-color: #feae34; } }
+.ui-tour-lit { position: relative; z-index: 5; background: #f4ecd8; border-radius: 6px; box-shadow: 0 0 0 4px #f4ecd8; }
 .ui-dialog-after { opacity: 0; transform: translateY(4px); transition: opacity .25s, transform .25s; }
 .ui-dialog-after.shown { opacity: 1; transform: none; }
 /* Поле ввода (имя кота) и пиксельная картинка в строке. */

@@ -805,6 +805,23 @@ export const en: Record<TextKey, string> = {
   "gear.oven.1.fx": "9 loaves in 12 s",
   "gear.oven.2": "Baker's oven",
   "gear.oven.2.fx": "12 loaves in 10 s",
+  "tour.title": "Grandma shows you around · {n}/{total}",
+  "tour.next": "Next",
+  "tour.skip": "Skip",
+  "tour.done": "Let's go!",
+  "tour.replay": "Grandma's tour",
+  "tour.replayNote": "Grandma shows you where everything is again",
+  "tour.hello": "Hello, dear! Before I leave, let me show you how everything works here. It won't take long!",
+  "tour.top": "At the top — today's day and your money. Mornings you prepare, days you trade, evenings you count the takings.",
+  "tour.today": "Here's what matters today: what to do this morning, the weather, how many customers to expect and when rent and power are due.",
+  "tour.buy": "“Buy” — get goods from suppliers here. Haggle, don't be shy! What you buy is delivered to the storage room.",
+  "tour.warehouse": "“Storage” — your stock. Goods go from here to the shelves; mark down whatever is about to spoil.",
+  "tour.shelves": "“Shelves” — what stands where and at what price. Too expensive — nobody buys; too cheap — you go broke. New shelves are bought here too.",
+  "tour.extras": "“Corners” — sweets at the till, coffee, your own oven, a cat. For when the shop grows.",
+  "tour.staff": "“Staff” — cashier, cleaner, loader, guard. At first you do everything yourself; when it gets busy, hire help.",
+  "tour.store": "“Store” — expanding the premises, new equipment, ads, bills and my debt to the neighbours. Each expansion adds a register.",
+  "tour.open": "When you're ready, tap “Open the store”. Customers take goods from the shelves and go to the till: tap the till to ring them up.",
+  "tour.hall": "Empty shelf — tap it to bring goods from storage. Clean up trash and spills, take out the bin. In the evening you'll see what you earned. Good luck, dear!",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */
