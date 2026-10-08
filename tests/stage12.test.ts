@@ -191,3 +191,29 @@ describe('автозаказ, ценники, тележки', () => {
     expect(cartExtra({ ...at(1), upgrades: ['cart'] }, () => 0.9)).toBe(0);
   });
 });
+
+describe('новые отделы', () => {
+  it('полки нового отдела — только с нужного помещения', async () => {
+    const { buyShelf, shelfKindOpen } = await import('../src/game/economy');
+    expect(shelfKindOpen(at(0), 'drinks')).toBe(false);
+    expect(buyShelf({ ...at(0), shelves: [] }, 'drinks')).toBeNull();
+    expect(buyShelf({ ...at(1), shelves: [] }, 'drinks')?.shelves[0].kind).toBe('drinks');
+    expect(buyShelf({ ...at(1), shelves: [] }, 'frozen')).toBeNull();
+    expect(buyShelf({ ...at(3), shelves: [] }, 'household')?.shelves[0].kind).toBe('household');
+  });
+
+  it('оптовик открыт, когда есть полка любого нового отдела', async () => {
+    const { SUPPLIERS, supplierOpen } = await import('../src/game/suppliers');
+    expect(supplierOpen(SUPPLIERS.wholesale, [{ kind: 'bakery' }])).toBe(false);
+    expect(supplierOpen(SUPPLIERS.wholesale, [{ kind: 'frozen' }])).toBe(true);
+    expect(supplierOpen(SUPPLIERS.butcher, [{ kind: 'meat' }])).toBe(true);
+  });
+
+  it('каждый новый отдел приводит гостей; товар продаётся только с полки своего отдела', async () => {
+    const { departmentGuests, sellableProducts } = await import('../src/game/economy');
+    const s: StoreState = { ...at(3), shelves: [{ kind: 'drinks', level: 0, items: {} }, { kind: 'frozen', level: 0, items: {} }] };
+    expect(departmentGuests(s)).toBeCloseTo(1.12);
+    expect(departmentGuests(at(3))).toBe(1);
+    expect(sellableProducts(s).sort()).toEqual(['dumplings', 'fish', 'juice', 'water']);
+  });
+});

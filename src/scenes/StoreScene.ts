@@ -258,6 +258,10 @@ const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
   produce: { texture: 'stand', tint: 0xffffff },
   dairy: { texture: 'fridge', tint: 0xd8ecff },
   meat: { texture: 'fridge', tint: 0xffd6d6 },
+  drinks: { texture: 'drinks', tint: 0xffffff },
+  // Морозильник — тот же холодильник, но ледяной.
+  frozen: { texture: 'fridge', tint: 0xc4f4ff },
+  household: { texture: 'chem', tint: 0xffffff },
 };
 const SHIRTS = [0x5b6ee1, 0xd95763, 0x6abe30, 0xfbf236, 0x76428a, 0xdf7126, 0x37946e, 0xf6757a, 0x2ce8f5];
 const PANTS = [0x3a4466, 0x262b44, 0x5a6988, 0x733e39, 0x265c42];

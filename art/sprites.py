@@ -320,6 +320,8 @@ ICONS = {
     "apple": ["..e...", ".RRwR.", "RRRRRr", ".rrrr."],
     "snow": ["..c..", "c.c.c", ".ccc.", "c.c.c", "..c.."],
     "sale": ["RR..R", "RR.R.", "..R..", ".R.RR", "R..RR"],
+    "drop": ["..U..", ".UUU.", "UUcUU", "UUUUU", ".UUU."],
+    "bubble": [".PP..", "PwPP.", ".PP.P", "...PP", "...PP"],
 }
 
 
@@ -331,6 +333,8 @@ def save_with_top(front, name, style):
         "green": ("e", "E", "d", "E"),
         "fridge": ("1", "1", "3", "2"),
         "metal": ("W", "w", "l", "G"),
+        "drinks": ("U", "c", "u", "c"),
+        "chem": ("P", "s", "p", "s"),
     }[style]
     c.rect(0, 0, 80, TOP + 1, base)
     c.hline(0, 1, 80, dark)
@@ -341,10 +345,10 @@ def save_with_top(front, name, style):
     else:
         c.speckle(1, 2, 78, TOP - 4, [speck], 18, len(name))
     # Табличка категории посередине крышки.
-    icon = {"wood": "bread", "green": "apple", "fridge": "snow", "metal": "sale"}[style]
+    icon = {"wood": "bread", "green": "apple", "fridge": "snow", "metal": "sale", "drinks": "drop", "chem": "bubble"}[style]
     c.round_rect(32, 1, 16, TOP - 2, "w", r=1)
     c.frame(32, 1, 16, TOP - 2, "G")
-    c.stamp(ICONS[icon], 37 if icon not in ("snow", "sale") else 38, 3)
+    c.stamp(ICONS[icon], 37 if icon not in ("snow", "sale", "drop", "bubble") else 38, 3)
     c.frame(0, 0, 80, TOP + 1, "k")
     c.img.alpha_composite(front.img, (0, TOP))
     c.save(name)
@@ -408,6 +412,49 @@ def stand():
     f = Canvas(80, 52)
     crate_fronts(f)
     save_overlay(f, "stand_front")
+
+
+def wire_lips(c, tag):
+    """Металлические проволочные кромки с ценниками цвета отдела."""
+    for y in LIPS:
+        c.hline(4, y, 72, "w")
+        c.hline(4, y + 2, 72, "l")
+        for x in range(6, 76, 3):
+            c.px(x, y + 1, "G")
+        for x in range(9, 72, 17):
+            c.rect(x, y + 1, 6, 2, tag)
+            c.px(x + 1, y + 1, "w")
+
+
+def drinks_rack():
+    """Стеллаж с напитками: синяя металлическая рама, светлая задняя стенка, проволочные полки."""
+    c = Canvas(80, 52)
+    cabinet(c, "c", "U", "u")
+    for top, h in BACKS:
+        c.rect(4, top, 72, h, "W")
+        c.rect(4, top, 72, 2, "l")
+        for x in range(4, 76, 12):
+            c.vline(x, top + 2, h - 2, "w")
+    wire_lips(c, "Y")
+    save_with_top(c, "drinks", "drinks")
+    f = Canvas(80, 52)
+    wire_lips(f, "Y")
+    save_overlay(f, "drinks_front")
+
+
+def chem_rack():
+    """Стеллаж бытовой химии: сиреневая рама, белые полки, розовые ценники."""
+    c = Canvas(80, 52)
+    cabinet(c, "s", "P", "p")
+    for top, h in BACKS:
+        c.rect(4, top, 72, h, "w")
+        c.rect(4, top, 72, 2, "W")
+        c.speckle(4, top + 2, 72, h - 2, ["W"], 10, top)
+    wire_lips(c, "s")
+    save_with_top(c, "chem", "chem")
+    f = Canvas(80, 52)
+    wire_lips(f, "s")
+    save_overlay(f, "chem_front")
 
 
 GLASS = (215, 240, 255, 46)
@@ -774,7 +821,26 @@ def rack():
     c.save("rack")
 
 
+def crate_simple(name, base, light, dark, label):
+    """Картонная коробка с цветной наклейкой отдела (для новых отделов)."""
+    c = Canvas(16, 16)
+    c.rect(0, 4, 16, 11, base)
+    c.hline(0, 4, 16, light)
+    c.hline(0, 14, 16, dark)
+    c.vline(8, 4, 3, dark)
+    c.rect(4, 8, 8, 4, label)
+    c.hline(4, 8, 8, "w")
+    c.outline("k")
+    c.save(f"crate_{name}")
+
+
 def crates():
+    crate_simple("water", "B", "n", "a", "U")
+    crate_simple("juice", "B", "n", "a", "o")
+    crate_simple("dumplings", "W", "w", "l", "U")
+    crate_simple("fish", "W", "w", "l", "c")
+    crate_simple("soap", "B", "n", "a", "s")
+    crate_simple("detergent", "B", "n", "a", "R")
     crate_bread()
     crate_apples()
     crate_potatoes()
@@ -798,6 +864,270 @@ def trash():
 
 
 ITEMS = {
+    "water": [
+        [  # бутылка воды
+            "....kk....",
+            "...kUUk...",
+            "...kwwk...",
+            "..kcwcck..",
+            "..kcwccck.",
+            "..kUUUUUk.",
+            "..kcwccck.",
+            "..kcwccck.",
+            "..kcwccck.",
+            "..kcccccк.".replace("к", "k"),
+            "..kUUUUUk.",
+            "...kkkkk..",
+        ],
+        [  # большая бутыль
+            "...kkk....",
+            "...kUk....",
+            "..kcwck...",
+            ".kccwccck.",
+            ".kcwwccck.",
+            ".kUUUUUUk.",
+            ".kYYwYYYk.",
+            ".kUUUUUUk.",
+            ".kccwccck.",
+            ".kccwccck.",
+            ".kcccccck.",
+            "..kkkkkk..",
+        ],
+        [  # маленькая бутылочка
+            "..........",
+            "..........",
+            "....kk....",
+            "...kRRk...",
+            "...kwck...",
+            "..kcwcck..",
+            "..kRRRRk..",
+            "..kwwRRk..",
+            "..kcwcck..",
+            "..kcwcck..",
+            "..kcccck..",
+            "...kkkk...",
+        ],
+    ],
+    "juice": [
+        [  # пакет сока с трубочкой
+            "......kk..",
+            ".....kwk..",
+            "..kkkkwkk.",
+            "..kyyyyyk.",
+            "..kYYYYyk.",
+            "..koooook.",
+            "..koRRook.",
+            "..koRRook.",
+            "..kooEook.",
+            "..kooooak.",
+            "..kyyyyyk.",
+            "..kkkkkkk.",
+        ],
+        [  # яблочный
+            "..........",
+            "...kkkkk..",
+            "..kwwwwwk.",
+            "..kEEEEEk.",
+            "..kEwwwEk.",
+            "..kERRwEk.",
+            "..kERRREk.",
+            "..kEwwwEk.",
+            "..kEEEEEk.",
+            "..kEEEEdk.",
+            "..kddddek.",
+            "..kkkkkkk.",
+        ],
+        [  # бутылка сока
+            "....kk....",
+            "...kooк...".replace("к", "k"),
+            "...kwwk...",
+            "..kooook..",
+            "..kyyyyk..",
+            "..kooooк..".replace("к", "k"),
+            "..kwwwwk..",
+            "..kwoowk..",
+            "..kwwwwk..",
+            "..kooook..",
+            "..kooyyk..",
+            "...kkkk...",
+        ],
+    ],
+    "dumplings": [
+        [  # пачка пельменей
+            "..........",
+            ".kkkkkkkk.",
+            ".kUUUUUUk.",
+            ".kwwwwwwk.",
+            ".kwNNNNwk.",
+            ".kNnNNnNk.",
+            ".kwNNNNwk.",
+            ".kRRRRRRk.",
+            ".kUUUUUUk.",
+            ".kUwwUUUk.",
+            ".kUUUUUUk.",
+            ".kkkkkkkk.",
+        ],
+        [  # пачка вареников
+            "..........",
+            ".kkkkkkkk.",
+            ".kEEEEEEk.",
+            ".kwwwwwwk.",
+            ".kwNNNwwk.",
+            ".kNnNNNwk.",
+            ".kwNNNNwk.",
+            ".kYYYYYYk.",
+            ".kEEEEEEk.",
+            ".kEwwEEEk.",
+            ".kEEEEEEk.",
+            ".kkkkkkkk.",
+        ],
+        [  # пельмени в лотке
+            "..........",
+            "..........",
+            "..........",
+            "..........",
+            "..kkkkkk..",
+            ".kNNkNNNk.",
+            "kNnNNnNNnk",
+            "kNNNNNNNNk",
+            "kwwwwwwwwk",
+            "kWWWWWWWWk",
+            ".kkkkkkkk.",
+            "..........",
+        ],
+    ],
+    "fish": [
+        [  # замороженная рыба
+            "..........",
+            "..........",
+            "..........",
+            "kk......k.",
+            "klk..kkkGk",
+            "kllkkWWlGk",
+            ".kllWWWlkk",
+            "kllWWlWlGk",
+            "klk.kkkkGk",
+            "kk......k.",
+            "..........",
+            "..........",
+        ],
+        [  # филе в пакете
+            "..........",
+            ".kkkkkkkk.",
+            ".kccccccк.".replace("к", "k"),
+            ".kcssssck.",
+            ".kssWsssk.",
+            ".kcssssck.",
+            ".kccccccк.".replace("к", "k"),
+            ".kUUUUUUk.",
+            ".kUwwwUUk.",
+            ".kUUUUUUk.",
+            ".kkkkkkkk.",
+            "..........",
+        ],
+        [  # рыбные палочки
+            "..........",
+            ".kkkkkkkk.",
+            ".kRRRRRRk.",
+            ".kwwwwwwk.",
+            ".kyyyyyyk.",
+            ".koooooоk.".replace("о", "o"),
+            ".kyyyyyyk.",
+            ".kwwwwwwk.",
+            ".kUUUUUUk.",
+            ".kUwwUUUk.",
+            ".kUUUUUUk.",
+            ".kkkkkkkk.",
+        ],
+    ],
+    "soap": [
+        [  # кусок мыла
+            "..........",
+            "..........",
+            "..........",
+            "..........",
+            "..........",
+            "..kkkkkk..",
+            ".kssssssk.",
+            "kswwssssPk",
+            "kssssssssk",
+            "kPPPPPPPPk",
+            ".kkkkkkkk.",
+            "..........",
+        ],
+        [  # мыло в коробочке
+            "..........",
+            "..........",
+            "..........",
+            "..........",
+            ".kkkkkkkk.",
+            ".kEEEEEEk.",
+            ".kwwwwwwk.",
+            ".kwEEEEwk.",
+            ".kwwwwwwk.",
+            ".kEEEEEEk.",
+            ".kkkkkkkk.",
+            "..........",
+        ],
+        [  # жидкое мыло с дозатором
+            "...kkk....",
+            "...kGkkk..",
+            "...kGk....",
+            "..kkGkk...",
+            ".kssssskk.",
+            ".kswssssk.",
+            ".kswssssk.",
+            ".kssPPssk.",
+            ".kssPPssk.",
+            ".kssssssk.",
+            ".kssssssk.",
+            "..kkkkkk..",
+        ],
+    ],
+    "detergent": [
+        [  # коробка порошка
+            ".kkkkkkkk.",
+            ".kRRRRRRk.",
+            ".kwwwwwwk.",
+            ".kwUUUUwk.",
+            ".kUcwwcUk.",
+            ".kUwUUwUk.",
+            ".kUcwwcUk.",
+            ".kwUUUUwk.",
+            ".kwwwwwwk.",
+            ".kYYYYYYk.",
+            ".kRRRRRRk.",
+            ".kkkkkkkk.",
+        ],
+        [  # бутыль кондиционера
+            "...kkk....",
+            "..kUUUk...",
+            "..kkkkk...",
+            ".kccccck..",
+            "kcwccccck.",
+            "kcwcPPcck.",
+            "kccPwPPck.",
+            "kccPPPPck.",
+            "kccccccck.",
+            "kccccccck.",
+            ".kcccccck.",
+            "..kkkkkk..",
+        ],
+        [  # средство для посуды
+            "....kk....",
+            "...kRRk...",
+            "...kwwk...",
+            "..kEEEEk..",
+            "..kEwEEk..",
+            "..kEwEEk..",
+            "..kYYYYk..",
+            "..kYwYYk..",
+            "..kEEEEk..",
+            "..kEEEEk..",
+            "..kEEEEk..",
+            "...kkkk...",
+        ],
+    ],
     "bread": [
         [  # батон с надрезами
             "..........",
@@ -3924,6 +4254,7 @@ def portraits():
     portrait("dairy", "#0099db", "#f2d3ab", "#0099db", "#ffffff", hair_scarf)
     portrait("butcher", "#a22633", "#eec39a", "#733e39", "#c0cbdc", hair_bald, lambda p, *a: (mustache(p, *a), apron(p, *a)))
     portrait("school", "#fee761", "#f2d3ab", "#733e39", "#5fcde4", hair_net)
+    portrait("wholesale", "#5a6988", "#d9a066", "#181425", "#3a4466", hair_cap, beard)
 
 
 # ---------------------------------------------------------------- мелочи
@@ -3986,6 +4317,8 @@ def main():
     shelf()
     stand()
     fridge()
+    drinks_rack()
+    chem_rack()
     counter()
     wc()
     door()

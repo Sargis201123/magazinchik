@@ -1,7 +1,7 @@
 import type { TextKey } from '../i18n/ru';
 import { PRODUCTS, type Category, type ProductId } from './economy';
 
-export type SupplierId = 'farmer' | 'dairy' | 'butcher';
+export type SupplierId = 'farmer' | 'dairy' | 'butcher' | 'wholesale';
 
 export interface Supplier {
   id: SupplierId;
@@ -16,8 +16,8 @@ export interface Supplier {
   patience: number;
   /** Шанс, что партия окажется бракованной (редкое событие). */
   badChance: number;
-  /** Без полки этого типа закупать нечего (мясо без холодильника не продать). */
-  requires?: Category;
+  /** Без полки этого типа закупать нечего (мясо без холодильника не продать). Список — хватит любой. */
+  requires?: Category | Category[];
   color: number;
 }
 
@@ -53,7 +53,23 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
     requires: 'meat',
     color: 0xb83a4b,
   },
+  // Оптовик: напитки, заморозка и бытовая химия для новых отделов — дёшево, но торгуется туго.
+  wholesale: {
+    id: 'wholesale',
+    nameKey: 'supplier.wholesale',
+    lines: { hello: 'supplier.wholesale.hello', yes: 'supplier.wholesale.yes', no: 'supplier.wholesale.no', angry: 'supplier.wholesale.angry' },
+    products: { water: 1, juice: 1, dumplings: 1, fish: 1, soap: 1, detergent: 1 },
+    flexibility: 0.5,
+    patience: 2,
+    badChance: 0.06,
+    requires: ['drinks', 'frozen', 'household'],
+    color: 0x3a4466,
+  },
 };
+
+/** Есть ли полка, без которой у поставщика нечего брать. */
+export const supplierOpen = (s: Supplier, shelves: { kind: Category }[]): boolean =>
+  !s.requires || (Array.isArray(s.requires) ? s.requires : [s.requires]).some((k) => shelves.some((sh) => sh.kind === k));
 
 export const SUPPLIER_IDS = Object.keys(SUPPLIERS) as SupplierId[];
 

@@ -896,6 +896,21 @@ export const ru = {
   "auto.delivered": "🤖 Автозаказ привёз: {list} за {cost} 💰",
   "auto.cut": "🤖 Автозаказ: не на всё хватило денег или места",
   "popup.etags": "🏷 Уценено к вечеру: {n}",
+  "product.water": "Вода",
+  "product.juice": "Сок",
+  "product.dumplings": "Пельмени",
+  "product.fish": "Рыба",
+  "product.soap": "Мыло",
+  "product.detergent": "Порошок",
+  "shelf.drinks": "Стеллаж с напитками",
+  "shelf.frozen": "Морозильный ларь",
+  "shelf.household": "Стеллаж бытовой химии",
+  "shelf.lockedLevel": "Откроется в помещении «{name}»",
+  "supplier.wholesale": "Оптовик Гриша",
+  "supplier.wholesale.hello": "Вода, соки, пельмени, рыба, мыло, порошок — всё оптом, всё со склада. Чего надо?",
+  "supplier.wholesale.yes": "Эх, уговорил. Только никому не говори, какая цена.",
+  "supplier.wholesale.no": "У меня и так цена оптовая, куда ниже-то?",
+  "supplier.wholesale.angry": "Всё, хватит. Сегодня — по прайсу и с надбавкой.",
 } as const;
 
 export type TextKey = keyof typeof ru;

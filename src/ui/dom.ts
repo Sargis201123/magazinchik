@@ -14,8 +14,10 @@ const css = `
 .ui-hud { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
   padding: calc(env(safe-area-inset-top) + 8px) 12px 8px; font: 600 15px/1.2 system-ui, sans-serif;
   color: #fff; text-shadow: 0 1px 0 #000; pointer-events: none; }
-.ui-stock { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 32px); display: flex;
-  gap: 10px; justify-content: center; font: 13px system-ui, sans-serif; color: #e6e1d6; pointer-events: none; }
+.ui-stock { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 32px); padding: 0 10px;
+  text-align: center; font: 13px/1.5 system-ui, sans-serif; color: #e6e1d6; pointer-events: none; }
+/* С новыми отделами товаров много: мельче и в две строки, а не за край экрана. */
+.ui-stock.dense { font-size: 11px; }
 .ui-hint { position: fixed; left: 0; right: 0; padding: 0 12px; bottom: calc(env(safe-area-inset-bottom) + 12px);
   text-align: center; font: 13px system-ui, sans-serif; color: #e6e1d6; pointer-events: none; }
 .ui-modal { position: fixed; inset: 0; background: rgba(15, 12, 22, .78); display: flex; align-items: center;
@@ -335,8 +337,14 @@ const ICONS: Record<string, string> = {
   '🍦': 'item_icecream',
   '🍊': 'item_tangerines',
   '💐': 'item_flowers',
+  '💧': 'item_water',
+  '🧃': 'item_juice',
+  '🥟': 'item_dumplings',
+  '🐟': 'item_fish',
+  '🧼': 'item_soap',
+  '🧴': 'item_detergent',
 };
-const ICON_RE = /(💰|🍞|🍎|🥔|🥛|🥩|📦|🍦|🍊|💐)/u;
+const ICON_RE = /(💰|🍞|🍎|🥔|🥛|🥩|📦|🍦|🍊|💐|💧|🧃|🥟|🐟|🧼|🧴)/u;
 
 /** Заменяет эмодзи денег и товаров на пиксельные картинки из игры. */
 export function pixelize(root: Node): void {

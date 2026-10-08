@@ -56,6 +56,7 @@ import {
   type BadBatchChoice,
   type ProductId,
   type StoreState,
+  shelfKindOpen,
 } from '../game/economy';
 import {
   canHaggle,
@@ -67,6 +68,7 @@ import {
   unitPrice,
   type Deal,
   type SupplierId,
+  supplierOpen,
 } from '../game/suppliers';
 import { guestsToday } from '../game/day';
 import {
@@ -428,7 +430,11 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
     ...autoOrderBox(state),
     ...reorderBox(state),
-    ...SUPPLIER_IDS.map((sid) => supplierBox(sid, state)),
+    // Оптовик появляется, когда в помещении можно поставить полку нового отдела.
+    ...SUPPLIER_IDS.filter((sid) => {
+      const req = SUPPLIERS[sid].requires;
+      return !Array.isArray(req) || req.some((k) => shelfKindOpen(state, k));
+    }).map((sid) => supplierBox(sid, state)),
     el('h3', '', t('tab.prices')),
     ...pricesTab(state),
   ];
@@ -439,8 +445,9 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const box = el('div', 'ui-box');
     box.append(who(sid, el('b', '', t(s.nameKey))), el('div', 'ui-quote', `«${t(quotes[sid])}»`));
 
-    if (s.requires && !state.shelves.some((sh) => sh.kind === s.requires)) {
-      box.append(el('div', 'ui-muted', t('buy.needShelf', { shelf: t(SHELF_KINDS[s.requires].nameKey) })));
+    if (!supplierOpen(s, state.shelves)) {
+      const kinds = Array.isArray(s.requires) ? s.requires.filter((k) => shelfKindOpen(state, k)) : [s.requires!];
+      box.append(el('div', 'ui-muted', t('buy.needShelf', { shelf: kinds.map((k) => t(SHELF_KINDS[k].nameKey)).join(' / ') })));
       return box;
     }
 
@@ -448,6 +455,8 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     for (const pid of PRODUCT_IDS) {
       const price = unitPrice(s, deal, pid);
       if (price === null || !productAvailable(pid, state.day)) continue;
+      // У оптовика — только то, для чего есть полка (иначе товар не продать).
+      if (Array.isArray(s.requires) && !state.shelves.some((sh) => canPlace(pid, sh))) continue;
       const chips: HTMLElement[] = [];
       for (const qty of [1, 5]) {
         chips.push(
@@ -669,7 +678,13 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       out.push(el('div', 'ui-muted', t('shelves.noRoom')));
     } else {
       for (const kind of CATEGORIES) {
-        const { nameKey, price } = SHELF_KINDS[kind];
+        const { nameKey, price, minLevel } = SHELF_KINDS[kind];
+        // Новые отделы — только в больших помещениях: пока закрыто, видно, где откроется.
+        if (!shelfKindOpen(state, kind)) {
+          if (minLevel === state.level + 1)
+            out.push(el('div', 'ui-muted', `🔒 ${t(nameKey)} — ${t('shelf.lockedLevel', { name: t(STORE_LEVELS[minLevel].nameKey) })}`));
+          continue;
+        }
         out.push(
           button(
             t('shelves.buy', { name: t(nameKey), cost: price }),
