@@ -73,7 +73,7 @@ import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 export const CANVAS_W = 720;
 export const CANVAS_H = 1280;
 /** Сверху интерфейс (деньги, товар), снизу подсказки — магазин рисуем между ними. */
-const HUD_TOP = 200;
+const HUD_TOP = 140;
 const HUD_BOTTOM = 80;
 /** Спрайты нарисованы с двойной детализацией (DETAIL в art/sprites.py): в мире они вдвое меньше своих пикселей. */
 const ART = 2;
@@ -299,6 +299,9 @@ export class StoreScene extends Phaser.Scene {
   /** Куда камера возвращается после осмотра квартала. */
   private home = { x: 0, y: 0 };
   private homeTimer?: Phaser.Time.TimerEvent;
+  private baseZoom = 1;
+  /** Щипок двумя пальцами: расстояние и зум в начале. */
+  private pinch: { dist: number; zoom: number } | null = null;
   /** Все люди на экране: для шагов и дыхания. */
   private people = new Set<Phaser.GameObjects.Container>();
   /** Насколько открыты двери: 0 — закрыты, 1 — открыты. */
@@ -461,10 +464,17 @@ export class StoreScene extends Phaser.Scene {
     const next = STORE_LEVELS[this.state.level + 1] ? layoutFor(this.state.level + 1) : this.layout;
     this.next = next;
     // Внизу кадра видна улица: тротуар и дорога с машинами.
-    const viewH = next.h + 24 + STREET_VIEW;
-    const zoom = Math.min(CANVAS_W / (next.w + 16), (CANVAS_H - HUD_TOP - HUD_BOTTOM) / viewH);
+    // Камера крупно показывает сам магазин (вывеска сверху, фасад снизу); участок под
+    // расширение и улицу видно краем, а весь квартал — свайпом или отдалив двумя пальцами.
+    const { w, h } = this.layout;
+    const viewW = w + 2 * WALL + 4;
+    const viewH = h + 40;
+    const zoom = Math.min(CANVAS_W / viewW, (CANVAS_H - HUD_TOP - HUD_BOTTOM) / viewH);
     const midY = HUD_TOP + (CANVAS_H - HUD_TOP - HUD_BOTTOM) / 2;
-    this.home = { x: next.w / 2, y: viewH / 2 - 12 + (CANVAS_H / 2 - midY) / zoom };
+    this.baseZoom = zoom;
+    // Если по высоте есть запас, вывеска прижимается под верхнюю панель — снизу видно больше улицы.
+    const centered = (h + 4) / 2 + (CANVAS_H / 2 - midY) / zoom;
+    this.home = { x: w / 2, y: Math.max(centered, -24 + (CANVAS_H / 2 - HUD_TOP) / zoom) };
     this.cameras.main.setZoom(zoom).centerOn(this.home.x, this.home.y);
     // Мягкая виньетка по краям кадра; к вечеру гуще.
     this.cameras.main.postFX?.clear();
@@ -805,7 +815,26 @@ export class StoreScene extends Phaser.Scene {
       this.dragged = false;
       this.dragStart = { x: p.x, y: p.y };
     });
+    this.input.addPointer(1);
+    const zoomTo = (z: number) => cam.setZoom(Phaser.Math.Clamp(z, this.baseZoom * 0.6, this.baseZoom * 2.2));
+    // Колёсико на компьютере.
+    this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      zoomTo(cam.zoom * (dy > 0 ? 0.9 : 1.1));
+      this.scheduleHome();
+    });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      const a = this.input.pointer1;
+      const b = this.input.pointer2;
+      if (a.isDown && b.isDown) {
+        // Два пальца: приближаем или отдаляем.
+        const dist = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
+        this.pinch ??= { dist, zoom: cam.zoom };
+        zoomTo(this.pinch.zoom * (dist / this.pinch.dist));
+        this.dragged = true;
+        this.homeTimer?.remove();
+        return;
+      }
+      this.pinch = null;
       if (!p.isDown) return;
       if (!this.dragged && Phaser.Math.Distance.Between(p.x, p.y, this.dragStart.x, this.dragStart.y) < 12) return;
       this.dragged = true;
@@ -817,9 +846,18 @@ export class StoreScene extends Phaser.Scene {
       cam.centerOn(cx, cy);
     });
     this.input.on('pointerup', () => {
-      if (!this.dragged) return;
-      this.homeTimer?.remove();
-      this.homeTimer = this.time.delayedCall(4000, () => cam.pan(this.home.x, this.home.y, 700, 'Sine.easeInOut'));
+      this.pinch = null;
+      if (this.dragged) this.scheduleHome();
+    });
+  }
+
+  /** Через несколько секунд после осмотра камера возвращается к магазину. */
+  private scheduleHome(): void {
+    const cam = this.cameras.main;
+    this.homeTimer?.remove();
+    this.homeTimer = this.time.delayedCall(4000, () => {
+      cam.pan(this.home.x, this.home.y, 700, 'Sine.easeInOut');
+      cam.zoomTo(this.baseZoom, 700, 'Sine.easeInOut');
     });
   }
 
