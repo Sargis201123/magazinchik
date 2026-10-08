@@ -16,7 +16,6 @@ import {
   moveToShelf,
   newGame,
   PRODUCT_IDS,
-  PRODUCTS,
   returnToShelf,
   shelfCapacity,
   shelfFor,
@@ -76,6 +75,8 @@ const HUD_TOP = 200;
 const HUD_BOTTOM = 80;
 /** Спрайты нарисованы с двойной детализацией (DETAIL в art/sprites.py): в мире они вдвое меньше своих пикселей. */
 const ART = 2;
+/** Сколько видов у каждого товара (item_bread_0…2 в art/sprites.py). */
+const ITEM_VARIANTS = 3;
 
 /** Терпение в очереди. Отсчёт начинается, когда покупатель дошёл до очереди. */
 const PATIENCE_MS = 20_000;
@@ -168,6 +169,9 @@ interface Worker {
 interface ShelfView {
   kind: Category;
   bg: Phaser.GameObjects.Image;
+  /** Кромки полок, борта ящиков, стекло — поверх товара. */
+  front: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Image;
   items: Phaser.GameObjects.Image[];
   pips: Phaser.GameObjects.Image[];
 }
@@ -189,6 +193,8 @@ export class StoreScene extends Phaser.Scene {
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
   private boxes: Phaser.GameObjects.Image[] = [];
+  /** Картинка товара на каждой коробке склада. */
+  private boxIcons: Phaser.GameObjects.Image[] = [];
   private customers = new Set<Customer>();
   private queue: Customer[] = [];
   private trash = new Set<Phaser.GameObjects.Image>();
@@ -311,6 +317,7 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.killAll();
     this.shelfViews = [];
     this.boxes = [];
+    this.boxIcons = [];
     this.trash.clear();
     this.layout = layoutFor(this.state.level);
     this.builtLevel = this.state.level;
@@ -358,6 +365,7 @@ export class StoreScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.cleanToilet());
 
+    this.art(counter.x + 2, counter.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(counter.y + 19);
     this.art(counter.x, counter.y, 'counter').setDepth(counter.y + 20);
     // Полоска пробивки над кассой.
     this.scanBar = this.add.rectangle(counter.x - 9, counter.y - 31, 18, 4, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
@@ -396,7 +404,11 @@ export class StoreScene extends Phaser.Scene {
   /** Плакаты на стене, растения и корзинки у входа — чтобы зал не выглядел пустым. */
   private buildDecor(): void {
     const { w, h, wallH, wc, door, warehouse, slots } = this.layout;
-    for (let x = 30; x < wc.x - 16; x += 64) this.art(x, 12, 'poster').setDepth(1);
+    // На стене по очереди плакаты и окна, между ними часы.
+    for (let x = 30, i = 0; x < wc.x - 16; x += 64, i++) this.art(x, 12, i % 2 ? 'window' : 'poster').setDepth(1);
+    if (62 < wc.x - 16) this.art(62, 11, 'clock').setDepth(1);
+    // Мягкая тень вдоль стены — пол уходит под неё.
+    this.add.rectangle(0, wallH, w, 3, 0x181425, 0.18).setOrigin(0).setDepth(1);
     this.art(door.x + 26, h - 8, 'baskets').setDepth(h - 8);
     // Растения в свободных углах: у правой стены и в левом углу над складом — не на пути покупателей.
     const spots = [
@@ -429,6 +441,8 @@ export class StoreScene extends Phaser.Scene {
       let view = this.shelfViews[i];
       if (!view || view.kind !== shelf.kind) {
         view?.bg.destroy();
+        view?.front.destroy();
+        view?.shadow.destroy();
         view?.items.forEach((img) => img.destroy());
         view?.pips.forEach((img) => img.destroy());
         view = this.buildShelf(i, shelf.kind);
@@ -443,9 +457,10 @@ export class StoreScene extends Phaser.Scene {
       view.items.forEach((img, n) => {
         const entry = units[n];
         img.setVisible(n < capacity && Boolean(entry));
-        img.setPosition(slot.x - 17 + step * ((n % perRow) + 0.5), slot.y - 6 + Math.floor(n / perRow) * 12);
+        img.setPosition(slot.x - 17 + step * ((n % perRow) + 0.5), slot.y - 5 + Math.floor(n / perRow) * 11);
         if (entry) {
-          img.setTexture(`item_${entry.id}`);
+          // Три вида каждого товара (батон, багет, булка…) — полка выглядит живой.
+          img.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id)) % ITEM_VARIANTS}`);
           img.setTint(entry.unit.markdown ? 0xffe08a : entry.unit.bad ? 0x9a8a80 : 0xffffff);
         }
       });
@@ -457,12 +472,14 @@ export class StoreScene extends Phaser.Scene {
   private buildShelf(index: number, kind: Category): ShelfView {
     const slot = this.layout.slots[index];
     const look = SHELF_LOOK[kind];
+    const shadow = this.art(slot.x, slot.y + 12, 'shadow_wide').setDepth(slot.y - 15);
     const bg = this.art(slot.x, slot.y, look.texture).setTint(look.tint).setDepth(slot.y - 14);
+    const front = this.art(slot.x, slot.y, `${look.texture}_front`).setDepth(slot.y - 12);
     bg.setInteractive({ useHandCursor: true }).on('pointerdown', () => this.restockShelf(index));
     const items = Array.from({ length: 16 }, () => this.art(slot.x, slot.y, 'item').setDepth(slot.y - 13));
     // Уровень улучшения — жёлтые точки над полкой.
-    const pips = [0, 1].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 15, 'pip').setDepth(slot.y - 13));
-    return { kind, bg, items, pips };
+    const pips = [0, 1].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 15, 'pip').setDepth(slot.y - 12));
+    return { kind, bg, front, shadow, items, pips };
   }
 
   private refreshWarehouse(): void {
@@ -471,12 +488,20 @@ export class StoreScene extends Phaser.Scene {
     const boxes = PRODUCT_IDS.flatMap((id) =>
       Array.from({ length: Math.ceil((this.state.warehouse[id]?.length ?? 0) / perBox) }, () => id),
     ).slice(0, 36);
-    while (this.boxes.length < boxes.length) this.boxes.push(this.art(0, 0, 'box').setDepth(this.layout.warehouse.y + 1));
+    while (this.boxes.length < boxes.length) {
+      this.boxes.push(this.art(0, 0, 'box').setDepth(this.layout.warehouse.y + 1));
+      this.boxIcons.push(this.art(0, 0, 'item').setScale(0.55 / ART).setDepth(this.layout.warehouse.y + 2));
+    }
     this.boxes.forEach((img, n) => {
       const id = boxes[n];
+      const icon = this.boxIcons[n];
       img.setVisible(Boolean(id));
+      icon.setVisible(Boolean(id));
       if (!id) return;
-      img.setPosition(this.layout.warehouse.x + 8 + (n % 6) * 9, this.layout.warehouse.y + 16 + Math.floor(n / 6) * 8).setTint(PRODUCTS[id].color);
+      const x = this.layout.warehouse.x + 8 + (n % 6) * 9;
+      const y = this.layout.warehouse.y + 16 + Math.floor(n / 6) * 8;
+      img.setPosition(x, y);
+      icon.setPosition(x, y + 1).setTexture(`item_${id}`);
     });
   }
 

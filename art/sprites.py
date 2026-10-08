@@ -165,6 +165,13 @@ def floor():
         c.px(0, i, "v")
         c.px(i, 16, "v")
         c.px(16, i, "v")
+    # Перекрестья затирки чуть темнее, линии между ними — мягче.
+    for i in range(32):
+        for x, y in ((i, 0), (0, i), (i, 16), (16, i)):
+            if x % 16 not in (0,) or y % 16 not in (0,):
+                c.px(x, y, "Q")
+    for x, y in ((0, 0), (16, 0), (0, 16), (16, 16)):
+        c.px(x, y, "v")
     c.save("floor")
 
 
@@ -237,130 +244,210 @@ def lot():
 
 
 # ---------------------------------------------------------------- мебель
-# Все стеллажи 80×52 (в мире 40×26). Товар в игре стоит на двух полках:
-# центры рядов на y≈14 и y≈38 пикселей, по ширине от 6 до 74.
+# Все стеллажи 80×52 (в мире 40×26). Товар в игре стоит в двух рядах:
+# центры рядов на y=16 и y=38 пикселей, по ширине от 6 до 74.
+# У каждого стеллажа есть «передний слой» (*_front): кромки полок, борта ящиков,
+# стекло холодильника. Он рисуется поверх товара — товар оказывается внутри.
+
+# Кромки полок перекрывают низ товара: ряд 1 — y 20..23, ряд 2 — y 42..45.
+LIPS = (20, 42)
+BACKS = ((4, 16), (24, 18))  # задняя стенка: (начало, высота)
 
 
-def shelf_frame(c, side, side_hi, side_lo, top, top_hi):
-    """Боковины, крышка и цоколь стеллажа."""
-    c.rect(0, 0, 80, 52, side)
-    c.rect(0, 0, 80, 4, top)
-    c.hline(1, 1, 78, top_hi)
-    c.rect(0, 46, 80, 6, side_lo)
-    c.hline(0, 46, 80, side)
-    c.vline(1, 4, 42, side_hi)
-    c.vline(78, 4, 42, side_lo)
+def cabinet(c, hi, base, lo):
+    """Корпус: крышка с бликом, боковины с фаской, цоколь."""
+    c.rect(0, 0, 80, 52, base)
+    c.hline(1, 1, 78, hi)
+    c.hline(1, 3, 78, lo)
+    for x, (l, r) in ((0, (hi, lo)), (76, (hi, lo))):
+        c.vline(x + 1, 4, 42, l)
+        c.vline(x + 3, 4, 42, r)
+    c.rect(0, 46, 80, 6, lo)
+    c.hline(0, 46, 80, base)
+    c.rect(4, 48, 72, 3, "k")
+    c.hline(4, 48, 72, lo)
     c.frame(0, 0, 80, 52, "k")
+
+
+def wood_lips(c, tags=True):
+    """Деревянные кромки полок с бумажными ценниками."""
+    for y in LIPS:
+        c.hline(4, y, 72, "N")
+        c.rect(4, y + 1, 72, 2, "n")
+        c.hline(4, y + 3, 72, "a")
+        if tags:
+            for x in range(9, 72, 17):
+                c.rect(x, y + 1, 6, 2, "w")
+                c.px(x + 1, y + 1, "R")
+                c.px(x + 3, y + 2, "K")
+                c.px(x + 4, y + 2, "K")
 
 
 def shelf():
-    """Хлебный стеллаж: тёплое дерево, две полки с задней стенкой и ценниками."""
+    """Хлебный стеллаж: тёплое дерево, стенка из досок с тенью от полки сверху."""
     c = Canvas(80, 52)
-    shelf_frame(c, "B", "n", "a", "n", "N")
-    for top in (5, 28):
-        # Задняя стенка с волокнами.
-        c.rect(3, top, 74, 17, "b")
-        c.hline(3, top, 74, "x")
-        for y in range(top + 3, top + 17, 4):
-            c.speckle(3, y, 74, 1, ["a"], 10, y)
-        # Полка: кромка и тень.
-        c.rect(3, top + 15, 74, 3, "n")
-        c.hline(3, top + 15, 74, "N")
-        c.hline(3, top + 18, 74, "a")
-        # Ценники.
-        for x in (10, 34, 58):
-            c.rect(x, top + 16, 6, 2, "w")
-            c.px(x + 1, top + 16, "R")
+    cabinet(c, "n", "B", "a")
+    for top, h in BACKS:
+        c.rect(4, top, 72, h, "b")
+        for x in range(4, 76, 9):
+            c.vline(x, top, h, "x")
+        c.speckle(4, top, 72, h, ["a"], 14, top)
+        c.rect(4, top, 72, 3, "x")
+    wood_lips(c)
     c.save("shelf")
+    f = Canvas(80, 52)
+    wood_lips(f)
+    f.vline(4, LIPS[0], 4, "k")
+    f.save("shelf_front")
+
+
+def crate_fronts(c):
+    """Передние борта ящиков: доски, тень между ящиками, меловые ценники."""
+    for y in LIPS:
+        c.rect(4, y, 72, 4, "B")
+        c.hline(4, y, 72, "n")
+        c.hline(4, y + 3, 72, "b")
+        for x in (28, 52):
+            c.vline(x, y, 4, "x")
+            c.vline(x + 1, y, 4, "n")
+        for x in (12, 37, 61):
+            c.rect(x, y, 7, 3, "K")
+            c.frame(x, y, 7, 3, "a")
+            c.px(x + 2, y + 1, "w")
+            c.px(x + 3, y + 1, "w")
+            c.px(x + 4, y + 1, "W")
 
 
 def stand():
-    """Овощной прилавок: зелёная рама, наклонные деревянные ящики, бумажные ценники."""
+    """Овощной прилавок: зелёная рама, внутри деревянные ящики."""
     c = Canvas(80, 52)
-    shelf_frame(c, "e", "E", "d", "E", "w")
-    for top in (5, 28):
-        c.rect(3, top, 74, 17, "d")
-        for x in (3, 28, 53):
-            c.rect(x, top + 2, 24, 15, "B")
-            c.frame(x, top + 2, 24, 15, "b")
-            c.hline(x + 1, top + 3, 22, "n")
-            c.hline(x + 1, top + 9, 22, "a")
-            c.vline(x + 1, top + 3, 13, "n")
-        c.rect(3, top + 17, 74, 1, "k")
-        for x in (12, 37, 62):
-            c.rect(x, top + 15, 6, 3, "N")
-            c.px(x + 1, top + 16, "e")
+    cabinet(c, "E", "e", "d")
+    for top, h in BACKS:
+        c.rect(4, top, 72, h, "a")
+        for y in range(top + 1, top + h, 3):
+            c.hline(4, y, 72, "B")
+        c.rect(4, top, 72, 2, "b")
+        for x in (28, 52):
+            c.vline(x, top, h, "b")
+    crate_fronts(c)
     c.save("stand")
+    f = Canvas(80, 52)
+    crate_fronts(f)
+    f.save("stand_front")
+
+
+GLASS = (215, 240, 255, 46)
+GLINT = (255, 255, 255, 150)
+FROST = (240, 250, 255, 110)
 
 
 def fridge():
-    """Холодильник-витрина: светлый корпус под тинт, лампа, стекло с бликами, решётка."""
+    """Холодильник-витрина: светлый корпус под тинт, подсветка, металлические полки."""
     c = Canvas(80, 52)
-    shelf_frame(c, "2", "1", "3", "1", "1")
-    # Световой короб сверху.
-    c.rect(3, 1, 74, 3, "c")
-    c.hline(3, 1, 74, "w")
-    for top in (5, 28):
-        c.rect(3, top, 74, 17, "l")
-        c.rect(3, top, 74, 2, "W")
-        # Металлическая решётка полки.
-        c.rect(3, top + 15, 74, 3, "W")
-        c.hline(3, top + 15, 74, "w")
-        for x in range(5, 77, 4):
-            c.px(x, top + 17, "G")
-        c.hline(3, top + 18, 74, "G")
-        # Блики на стекле — диагональные полосы.
-        for i in range(6):
-            c.px(8 + i, top + 12 - i * 2, "w")
-            c.px(9 + i, top + 12 - i * 2, "w")
-            c.px(58 + i, top + 12 - i * 2, "W")
-    # Стыки дверей.
-    c.vline(40, 5, 41, "3")
-    c.vline(41, 5, 41, "1")
-    # Решётка мотора внизу.
+    cabinet(c, "1", "2", "3")
+    # Подсветка в крышке.
+    c.hline(6, 2, 68, "c")
+    for top, h in BACKS:
+        c.rect(4, top, 72, h, "l")
+        c.rect(4, top, 72, 2, "w")
+        c.rect(4, top + 2, 72, 2, "W")
+        for x in range(10, 76, 12):
+            c.vline(x, top + 4, h - 4, "G")
+    fridge_rails(c)
     for x in range(6, 74, 3):
-        c.vline(x, 48, 3, "4")
-    c.frame(0, 0, 80, 52, "k")
+        c.vline(x, 48, 2, "4")
     c.save("fridge")
+
+    # Стекло, рамы дверей и ручки — поверх товара.
+    f = Canvas(80, 52)
+    f.rect(4, 4, 72, 42, GLASS)
+    for door_x in (4, 40):
+        for i in range(10):
+            f.px(door_x + 6 + i, 40 - i * 3, GLINT)
+            f.px(door_x + 7 + i, 40 - i * 3, GLINT)
+            f.px(door_x + 7 + i, 39 - i * 3, GLINT)
+        for i in range(4):
+            f.px(door_x + 22 + i, 16 - i * 3, GLINT)
+        f.rect(door_x + 1, 38, 6, 3, FROST)
+        f.rect(door_x + 1, 37, 3, 1, FROST)
+    fridge_rails(f)
+    for x in (3, 39, 40, 75, 76):
+        f.vline(x, 4, 42, "W")
+    f.vline(39, 4, 42, "w")
+    f.vline(4, 4, 42, "w")
+    for x in (35, 44):
+        f.rect(x, 26, 2, 12, "G")
+        f.vline(x, 26, 12, "l")
+    f.save("fridge_front")
+
+
+def fridge_rails(c):
+    """Металлические полки с жёлтыми ценниками."""
+    for y in LIPS:
+        c.hline(4, y + 1, 72, "w")
+        c.rect(4, y + 2, 72, 1, "W")
+        c.hline(4, y + 3, 72, "G")
+        for x in range(9, 72, 17):
+            c.rect(x, y + 1, 5, 2, "Y")
+            c.px(x + 1, y + 2, "K")
+            c.px(x + 2, y + 2, "K")
 
 
 def counter():
-    """Касса боком 32×104: стойка, лента с роликами, сканер, терминал и пакеты."""
+    """Касса боком 32×104: деревянный бок к покупателю, лента с разделителем, сканер,
+    монитор с денежным ящиком и пакеты в конце."""
     c = Canvas(32, 104)
-    # Корпус: светлая столешница, тёмный бок.
-    c.rect(0, 0, 32, 104, "g")
-    c.rect(2, 0, 26, 104, "W")
-    c.vline(2, 0, 104, "w")
-    c.vline(27, 0, 104, "l")
-    c.rect(28, 2, 4, 102, "G")
-    c.vline(31, 2, 102, "g")
+    # Бок к покупателю — дерево, столешница — светлая, край к продавцу — тёмный.
+    c.rect(0, 0, 6, 104, "B")
+    c.vline(1, 1, 102, "n")
+    c.vline(5, 1, 102, "a")
+    for y in range(12, 100, 22):
+        c.hline(1, y, 4, "a")
+    c.rect(6, 0, 22, 104, "W")
+    c.vline(6, 0, 104, "w")
+    c.rect(28, 0, 4, 104, "G")
+    c.vline(28, 0, 104, "l")
     # Лента.
-    c.rect(5, 4, 20, 58, "k")
-    c.rect(6, 5, 18, 56, "K")
-    for y in range(7, 60, 6):
-        c.hline(6, y, 18, "g")
-    c.hline(5, 4, 20, "G")
-    c.hline(5, 62, 20, "l")
-    # Сканер: стекло с красной линией.
-    c.rect(6, 64, 18, 8, "k")
-    c.rect(7, 65, 16, 6, "u")
-    c.hline(7, 68, 16, "R")
-    c.px(8, 66, "U")
-    c.px(9, 66, "U")
-    # Терминал с экраном.
-    c.rect(7, 74, 18, 16, "k")
-    c.rect(8, 75, 16, 14, "K")
-    c.rect(10, 77, 12, 6, "e")
-    c.hline(10, 77, 12, "E")
-    c.px(11, 79, "Y")
-    c.px(12, 79, "Y")
-    c.px(14, 79, "Y")
-    for x in range(10, 22, 3):
-        c.rect(x, 85, 2, 2, "l")
-    # Пакеты внизу.
-    c.rect(9, 93, 14, 8, "N")
-    c.frame(9, 93, 14, 8, "B")
-    c.hline(10, 94, 12, "w")
+    c.rect(8, 3, 18, 50, "l")
+    c.rect(9, 4, 16, 48, "K")
+    for y in range(6, 52, 5):
+        c.hline(9, y, 16, "g")
+    # Разделитель «следующий покупатель».
+    c.rect(10, 26, 14, 2, "y")
+    c.hline(10, 26, 14, "Y")
+    # Сканер со стеклом и красным лучом.
+    c.rect(8, 55, 18, 11, "k")
+    c.rect(9, 56, 16, 9, "u")
+    c.hline(9, 60, 16, "R")
+    c.vline(17, 56, 9, "R")
+    c.px(10, 57, "U")
+    c.px(11, 57, "U")
+    c.px(10, 58, "U")
+    # Тень от монитора на столешницу.
+    c.rect(12, 70, 16, 18, "l")
+    # Монитор и денежный ящик.
+    c.rect(9, 68, 16, 18, "k")
+    c.rect(10, 69, 14, 9, "K")
+    c.rect(11, 70, 12, 6, "e")
+    c.hline(11, 70, 12, "E")
+    c.hline(12, 72, 5, "Y")
+    c.hline(12, 74, 8, "E")
+    c.rect(10, 79, 14, 6, "g")
+    for x in range(11, 23, 3):
+        c.rect(x, 80, 2, 1, "W")
+        c.rect(x, 82, 2, 1, "W")
+    c.hline(10, 84, 14, "G")
+    # Лента чека.
+    c.rect(26, 72, 2, 6, "w")
+    # Пакеты.
+    for x, tone in ((8, "N"), (17, "n")):
+        c.rect(x, 90, 8, 10, tone)
+        c.hline(x, 90, 8, "w")
+        c.frame(x, 90, 8, 10, "a")
+        c.frame(x + 2, 87, 4, 4, "a")
+    # Передний торец.
+    c.rect(0, 101, 32, 3, "g")
+    c.hline(0, 101, 32, "G")
     c.frame(0, 0, 32, 104, "k")
     c.save("counter")
 
@@ -408,16 +495,15 @@ def door():
 
 
 def box():
-    """Коробка на складе 16×14: картон, скотч и наклейка (цвет товара — тинт)."""
+    """Коробка на складе 16×14: картон, скотч и белая наклейка — на неё игра кладёт картинку товара."""
     c = Canvas(16, 14)
     c.rect(0, 0, 16, 14, "B")
     c.rect(0, 0, 16, 4, "n")
     c.hline(0, 0, 16, "N")
     c.rect(7, 0, 2, 4, "N")
     c.hline(0, 4, 16, "a")
-    c.rect(4, 6, 8, 5, "w")
-    c.frame(4, 6, 8, 5, "W")
-    c.hline(5, 8, 6, "W")
+    c.rect(3, 6, 10, 7, "w")
+    c.hline(3, 12, 10, "W")
     c.vline(15, 1, 13, "a")
     c.frame(0, 0, 16, 14, "k")
     c.save("box")
@@ -437,74 +523,241 @@ def trash():
     c.save("trash")
 
 
+ITEMS = {
+    "bread": [
+        [  # батон с надрезами
+            "..........",
+            "..........",
+            "..........",
+            "...kkkk...",
+            ".kknNNnkk.",
+            "knNNnNNnnk",
+            "knnBnnBnBk",
+            "knBnnBnnBk",
+            "kBnnBnnBak",
+            "kaBBBBBBak",
+            ".kaaaaaak.",
+            "..kkkkkk..",
+        ],
+        [  # багет
+            "........kk",
+            ".......knk",
+            "......knNk",
+            ".....knNBk",
+            "....knNnk.",
+            "...knNBk..",
+            "..knnnk...",
+            ".knnBk....",
+            "knnBk.....",
+            "kBak......",
+            "kak.......",
+            "kk........",
+        ],
+        [  # булка с кунжутом
+            "..........",
+            "..........",
+            "...kkkk...",
+            "..knNNnk..",
+            ".knNwNnnk.",
+            "knNnnnwnnk",
+            "knwnNnnnBk",
+            "knnnnwnBBk",
+            "kBnnnnBBak",
+            ".kBBBBBak.",
+            "..kaaaak..",
+            "...kkkk...",
+        ],
+    ],
+    "apples": [
+        [
+            "....dd....",
+            ".....dE...",
+            "..kkkdkk..",
+            ".kRRRkRRk.",
+            "kRwwRRRRrk",
+            "kRwRRRRRrk",
+            "kRRRRRRRrk",
+            "kRRRRRRrrk",
+            ".kRRRRrrk.",
+            ".krrrrrrk.",
+            "..kkkkkk..",
+            "..........",
+        ],
+        [
+            "....bb....",
+            ".....b....",
+            "..kkkbkk..",
+            ".kEEEkEEk.",
+            "kEYYEEEEek",
+            "kEYEEEEEek",
+            "kEEEEEEEek",
+            "kEEEEEEeek",
+            ".kEEEEeek.",
+            ".keeeeeek.",
+            "..kkkkkk..",
+            "..........",
+        ],
+        [
+            "....bEE...",
+            "....bEEE..",
+            "..kkbkkk..",
+            ".krrrkrrk.",
+            "krssrrrrmk",
+            "krsrrrrrmk",
+            "krrrrrrrmk",
+            "krrrrrrmmk",
+            ".krrrrmmk.",
+            ".kmmmmmmk.",
+            "..kkkkkk..",
+            "..........",
+        ],
+    ],
+    "potatoes": [
+        [
+            "..........",
+            "..........",
+            "..........",
+            "...kkkkk..",
+            "..knNNnnk.",
+            ".knNnntnBk",
+            "knNnnnnnBk",
+            "kntnnnBnBk",
+            "knnnBtnBak",
+            ".kBnnBBak.",
+            "..kaaaak..",
+            "...kkkk...",
+        ],
+        [
+            "..........",
+            "..........",
+            "..........",
+            "..........",
+            ".kkk..kkk.",
+            "knNnk.kNnk",
+            "kNtnkknntk",
+            "knnBkknBBk",
+            "kBBakkBBak",
+            ".kkk..kkk.",
+            "..........",
+            "..........",
+        ],
+        [
+            "..........",
+            "..........",
+            "..........",
+            ".kkkkkkkk.",
+            "knNNnnnnnk",
+            "kNnntnnnBk",
+            "knnnnnnBtk",
+            "kntnnnBnBk",
+            "kBBBBBBBak",
+            ".kaaaaaak.",
+            "..........",
+            "..........",
+        ],
+    ],
+    "milk": [
+        [  # пакет
+            "....kk....",
+            "...kwWk...",
+            "..kwwwWk..",
+            ".kwwwwwWk.",
+            "kwwwwwwWWk",
+            "kUUUUUUUuk",
+            "kUwwwUUUuk",
+            "kUwUUwUUuk",
+            "kUUUUUUUuk",
+            "kwwwwwwwWk",
+            "kwwwwwwwWk",
+            ".kkkkkkkk.",
+        ],
+        [  # бутылка
+            "...kkkk...",
+            "...kUUk...",
+            "...kUUk...",
+            "...kwwk...",
+            "..kwwwWk..",
+            ".kwwwwwWk.",
+            "kwwwwwwwWk",
+            "kwUUUUUUWk",
+            "kwUwwUUUWk",
+            "kwUUUUUUWk",
+            "kWwwwwwWlk",
+            ".kkkkkkkk.",
+        ],
+        [  # кефир
+            "....kk....",
+            "...kwWk...",
+            "..kwwwWk..",
+            ".kwwwwwWk.",
+            "kwwwwwwWWk",
+            "kRRRRRRRrk",
+            "kRwwwRRRrk",
+            "kRwRRwRRrk",
+            "kRRRRRRRrk",
+            "kwwwwwwwWk",
+            "kwwwwwwwWk",
+            ".kkkkkkkk.",
+        ],
+    ],
+    "meat": [
+        [  # стейк на подложке
+            "..........",
+            "..........",
+            "..........",
+            "..........",
+            "kkkkkkkkkk",
+            "kWRRsRRRWk",
+            "kRswwRRRmk",
+            "kRRRwsRRmk",
+            "kRRRRRRmmk",
+            "kWmmmmmmWk",
+            "kWWWWWWWWk",
+            ".kkkkkkkk.",
+        ],
+        [  # сосиски
+            "..........",
+            "..........",
+            "..........",
+            ".kkkkkkkk.",
+            "kwssssssPk",
+            "kkkkkkkkkk",
+            "kwssssssPk",
+            "kkkkkkkkkk",
+            "kwssssssPk",
+            "kkkkkkkkkk",
+            "kWWWWWWWWk",
+            ".kkkkkkkk.",
+        ],
+        [  # фарш
+            "..........",
+            "..........",
+            "..........",
+            "..........",
+            "kkkkkkkkkk",
+            "kwRRsRsRRk",
+            "kRwRsRRsmk",
+            "kRsRRmRRmk",
+            "kRRmRRmmmk",
+            "kWWWWWWWWk",
+            "kWWWWWWWWk",
+            ".kkkkkkkk.",
+        ],
+    ],
+}
+
+
 def items():
-    """Товар 8×10 (в мире 4×5): у каждого своя форма, свет слева сверху."""
-    shapes = {
-        "item_bread": [
-            "........",
-            "..kkkk..",
-            ".knNNnk.",
-            "knNnNnnk",
-            "knnnnnBk",
-            "kBnBnBBk",
-            "kBBBBBak",
-            ".kaaaak.",
-            "..kkkk..",
-            "........",
-        ],
-        "item_apples": [
-            "....e...",
-            "...ke...",
-            ".kkkkkk.",
-            "kRwRRRRk",
-            "kRwRRRrk",
-            "kRRRRRrk",
-            "kRRRRrrk",
-            ".krrrrk.",
-            "..kkkk..",
-            "........",
-        ],
-        "item_potatoes": [
-            "........",
-            "........",
-            "..kkkk..",
-            ".knNnnk.",
-            "knNntnBk",
-            "kntnnnBk",
-            "knnBntBk",
-            ".kBBBak.",
-            "..kkkk..",
-            "........",
-        ],
-        "item_milk": [
-            "..kkkk..",
-            ".kWwwWk.",
-            "kwwwwwWk",
-            "kwUUUUWk",
-            "kwUwwUWk",
-            "kwUUUUWk",
-            "kwwwwwWk",
-            "kwwwwwWk",
-            "kWWWWWlk",
-            ".kkkkkk.",
-        ],
-        "item_meat": [
-            "........",
-            "........",
-            ".kkkkkk.",
-            "kRsRRRRk",
-            "kswwRRRk",
-            "kRwsRRmk",
-            "kRRRRmmk",
-            ".kmmmmk.",
-            "..kkkk..",
-            "........",
-        ],
-    }
-    for name, rows in shapes.items():
-        c = Canvas(8, 10)
-        c.stamp(rows)
-        c.save(name)
+    """Товар 10×12 (в мире 5×6), по три вида каждого: полка выглядит живой.
+    Низ товара прячется за кромкой полки."""
+    for product, variants in ITEMS.items():
+        for i, rows in enumerate(variants):
+            assert len(rows) == 12 and all(len(r) == 10 for r in rows), f"{product}_{i}"
+            c = Canvas(10, 12)
+            c.stamp(rows)
+            c.save(f"item_{product}_{i}")
+            if i == 0:
+                c.save(f"item_{product}")
 
 
 # ---------------------------------------------------------------- люди
@@ -703,6 +956,43 @@ def people():
 
 
 def decor():
+    # Мягкая тень под мебелью 88×12.
+    c = Canvas(88, 12)
+    for i, alpha in enumerate((28, 46, 62)):
+        c.round_rect(i * 2, i, 88 - i * 4, 12 - i * 2, (24, 20, 37, alpha), r=4 - i)
+    c.save("shadow_wide")
+
+    # Окно на стене 28×22: рама, небо, крыши напротив, блик.
+    c = Canvas(28, 22)
+    c.rect(0, 0, 28, 22, "N")
+    c.rect(2, 2, 24, 17, "c")
+    c.rect(2, 2, 24, 6, "U")
+    c.rect(2, 13, 24, 6, "l")
+    for x, h in ((3, 4), (9, 6), (16, 3), (21, 5)):
+        c.rect(x, 19 - h, 5, h, "G")
+        c.px(x + 2, 19 - h + 1, "Y")
+    c.vline(13, 2, 17, "N")
+    c.hline(2, 10, 24, "N")
+    for i in range(4):
+        c.px(5 + i, 7 - i, "w")
+    c.rect(0, 19, 28, 3, "n")
+    c.hline(0, 19, 28, "w")
+    c.frame(0, 0, 28, 22, "k")
+    c.save("window")
+
+    # Часы 14×14.
+    c = Canvas(14, 14)
+    c.ellipse(7, 7, 6.5, 6.5, "w")
+    c.ellipse(7, 7, 5.5, 5.5, "N")
+    c.ellipse(7, 7, 5, 5, "w")
+    c.vline(7, 3, 5, "k")
+    c.hline(7, 7, 3, "k")
+    for x, y in ((7, 2), (12, 7), (7, 12), (2, 7)):
+        c.px(x, y, "G")
+    c.px(7, 7, "R")
+    c.outline("k")
+    c.save("clock")
+
     # Растение в горшке 24×24.
     c = Canvas(24, 24)
     rnd = random.Random(4)
