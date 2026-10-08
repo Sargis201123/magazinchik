@@ -6,7 +6,6 @@ import {
   buyChance,
   buyShelf,
   buyStock,
-  CARRY,
   type Category,
   checkout,
   type DayStats,
@@ -68,7 +67,9 @@ import { finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
-import { buyUpgrade, hasUpgrade, UPGRADES, type UpgradeId } from './upgrades';
+import { buyUpgrade, carryOf, hasUpgrade, loyaltyTolerance, UPGRADES, type UpgradeId } from './upgrades';
+import { CARRY } from './economy';
+import { fairTolerance } from './fair';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { BREW_SECONDS, buyCups, COFFEE_PRICE, coffeeChance, useCup } from './coffee';
 import { AROMA_SECONDS, AROMA_TOLERANCE, OVEN_BATCH, startBatch, takeOutBread } from './bakery';
@@ -129,7 +130,7 @@ export interface SimOptions {
   ovenBurn?: number;
 }
 
-export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'register2';
+export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'register2' | 'cart' | 'loyalty';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy'];
@@ -265,6 +266,8 @@ export function simulate({
       ['oven', 'oven'],
       ['night', 'nightShift'],
       ['register2', 'register2'],
+      ['cart', 'cart'],
+      ['loyalty', 'loyalty'],
     ];
     for (const [feature, id] of wants) {
       if (!features[feature] || hasUpgrade(state, id) || state.money < UPGRADES[id].price + reserve) continue;
@@ -402,13 +405,14 @@ export function simulate({
       for (const id of sellable) {
         if (trips > 0 && onShelves(state, id) === 0 && warehouseOf(state, id) > 0) {
           const index = shelfFor(state, id);
-          state = moveToShelf(state, index, undefined, CARRY).state;
+          state = moveToShelf(state, index, undefined, carryOf(state)).state;
           trips--;
         }
       }
       const aroma = random() < aromaShare;
       const wanted = pickWanted(state, random, random() < AVG_WANTS - 1 ? 2 : 1, (p) => dayDemand(state, p, aroma));
-      const fair = (p: ProductId) => perceivedBase(state, p) * tolerance * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
+      const fair = (p: ProductId) =>
+        perceivedBase(state, p) * tolerance * fairTolerance(state.day) * loyaltyTolerance(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
       const cart: CartItem[] = [];
       let sawEmpty = false;
       let tooExpensive = false;

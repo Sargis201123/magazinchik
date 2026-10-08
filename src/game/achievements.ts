@@ -24,7 +24,16 @@ export type AchievementId =
   | 'staff'
   | 'rating_5'
   | 'album'
-  | 'story';
+  | 'story'
+  | 'burnt_bread'
+  | 'coffee_100'
+  | 'cat_mascot'
+  | 'night_owl'
+  | 'two_registers'
+  | 'courier_20'
+  | 'mouse_5'
+  | 'war_answer'
+  | 'fair_3';
 
 export type Tier = 'bronze' | 'silver' | 'gold';
 
@@ -63,6 +72,15 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'rating_5', tier: 'gold', progress: ({ state }) => flag(state.rating >= 4.95) },
   { id: 'album', tier: 'gold', progress: ({ state }) => count(state.album.length, RARE_GUESTS.length) },
   { id: 'story', tier: 'gold', progress: ({ state }) => count(state.story.chapter, CHAPTERS.length) },
+  { id: 'burnt_bread', tier: 'bronze', progress: ({ life }) => count(life.burnt ?? 0, 1) },
+  { id: 'coffee_100', tier: 'silver', progress: ({ life }) => count(life.coffees ?? 0, 100) },
+  { id: 'cat_mascot', tier: 'silver', progress: ({ state }) => flag(Boolean(state.cat?.beds.includes('house'))) },
+  { id: 'night_owl', tier: 'silver', progress: ({ life }) => count(life.nights ?? 0, 5) },
+  { id: 'two_registers', tier: 'bronze', progress: ({ state }) => flag((state.upgrades ?? []).includes('register2')) },
+  { id: 'courier_20', tier: 'silver', progress: ({ life }) => count(life.deliveries ?? 0, 20) },
+  { id: 'mouse_5', tier: 'bronze', progress: ({ life }) => count(life.mice ?? 0, 5) },
+  { id: 'war_answer', tier: 'bronze', progress: ({ life }) => count(life.wars ?? 0, 1) },
+  { id: 'fair_3', tier: 'bronze', progress: ({ life }) => count(life.fairs ?? 0, 3) },
 ];
 
 export const achievementName = (id: AchievementId): TextKey => `ach.${id}` as TextKey;
@@ -80,6 +98,13 @@ export function liveProgress(state: StoreState, today?: DayStats): Progress {
       bestCombo: Math.max(life.bestCombo, today?.bestCombo ?? 0),
       cleanDays: life.cleanDays,
       revenue: state.totalRevenue + (today?.revenue ?? 0),
+      coffees: (life.coffees ?? 0) + (today?.coffees ?? 0),
+      burnt: (life.burnt ?? 0) + (today?.burnt ?? 0),
+      nights: life.nights ?? 0,
+      deliveries: (life.deliveries ?? 0) + (today?.deliveries ?? 0),
+      mice: (life.mice ?? 0) + (today?.mice ?? 0),
+      fairs: life.fairs ?? 0,
+      wars: life.wars ?? 0,
     },
   };
 }
@@ -95,6 +120,13 @@ export function recordDay(state: StoreState, stats: DayStats): StoreState {
       trashCleaned: life.trashCleaned + stats.trashCleaned,
       bestCombo: Math.max(life.bestCombo, stats.bestCombo),
       cleanDays: life.cleanDays + (stats.complaints === 0 && stats.served >= 10 ? 1 : 0),
+      coffees: (life.coffees ?? 0) + (stats.coffees ?? 0),
+      burnt: (life.burnt ?? 0) + (stats.burnt ?? 0),
+      nights: (life.nights ?? 0) + (stats.nightRevenue !== undefined ? 1 : 0),
+      deliveries: (life.deliveries ?? 0) + (stats.deliveries ?? 0),
+      mice: (life.mice ?? 0) + (stats.mice ?? 0),
+      fairs: (life.fairs ?? 0) + (stats.fair ? 1 : 0),
+      wars: life.wars ?? 0,
     },
   };
 }

@@ -42,6 +42,8 @@ export const activeWar = (state: StoreState): War | undefined => (state.war && s
 /** Ответ на войну. null — не хватило денег на рекламу. */
 export function answerWar(state: StoreState, war: { product: ProductId; price: number; days: number }, answer: WarAnswer): StoreState | null {
   const base: War = { product: war.product, price: war.price, until: state.day + war.days - 1, answer };
+  // Ответ на войну (не «переждать») — в счётчик для достижения.
+  if (answer !== 'wait') state = { ...state, lifetime: { ...state.lifetime, wars: (state.lifetime.wars ?? 0) + 1 } };
   const plan = state.plan && { ...state.plan, decided: true };
   if (answer === 'match') {
     const oldPrice = state.prices[war.product];

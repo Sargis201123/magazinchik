@@ -40,6 +40,12 @@ export const ORDER_FAILED_RATING = 0.3;
 export const INSPECTION_PASS_RATING = 0.2;
 export const INSPECTION_FAIL_RATING = 0.3;
 export const RUSH_SECONDS = 20;
+/** Эдуард переманивает сотрудника (+25% к зарплате) или жалуется инспектору. */
+export const POACH_FROM_DAY = 15;
+export const POACH_CHANCE = 0.06;
+export const POACH_RAISE = 1.25;
+export const SNITCH_FROM_DAY = 14;
+export const SNITCH_CHANCE = 0.05;
 
 export type MorningEvent =
   | { kind: 'order'; client: ClientId; product: ProductId; qty: number; pay: number }
@@ -47,7 +53,9 @@ export type MorningEvent =
   | { kind: 'fridgeBroken'; shelf: number; cost: number }
   | { kind: 'sick'; role: StaffRole }
   | { kind: 'inspection' }
-  | { kind: 'priceWar'; product: ProductId; price: number; days: number };
+  | { kind: 'priceWar'; product: ProductId; price: number; days: number }
+  | { kind: 'poach'; role: StaffRole; wage: number }
+  | { kind: 'snitch' };
 
 /** План дня: утреннее событие и что произойдёт днём. */
 export interface DayPlan {
@@ -110,6 +118,14 @@ export function planDay(state: StoreState, chances: EventChances = { order: 0.15
     // Эдуард через дорогу снижает цену — отвечать или нет, решает игрок (war.ts).
     const war = makeWar(state, random);
     if (war) plan.event = { kind: 'priceWar', ...war };
+  } else if (state.day >= POACH_FROM_DAY && state.staff.length && random() < POACH_CHANCE) {
+    // Эдуард переманивает лучшего сотрудника: перебить его предложение или отпустить.
+    const best = [...state.staff].sort((a, b) => b.skill - a.skill || b.wage - a.wage)[0];
+    plan.event = { kind: 'poach', role: best.role, wage: Math.round((best.wage * POACH_RAISE) / 10) * 10 };
+  } else if (state.day >= SNITCH_FROM_DAY && random() < SNITCH_CHANCE) {
+    // Эдуард нажаловался — сегодня внеплановая проверка.
+    plan.inspection = true;
+    plan.event = { kind: 'snitch' };
   }
   return plan;
 }
@@ -155,6 +171,14 @@ export function answerEvent(state: StoreState, accept: boolean): StoreState | nu
       const qty = Math.min(event.qty, warehouseCapacity(state) - warehouseCount(state), Math.floor(state.money / event.price));
       const bought = qty > 0 ? buyStock(state, event.product, qty, event.price) : null;
       return bought ? { ...bought, plan: decided } : null;
+    }
+    case 'poach': {
+      // Согласиться — поднять зарплату до предложения Эдуарда; отказать — сотрудник уходит к нему.
+      if (accept) {
+        const staff = state.staff.map((m) => (m.role === event.role ? { ...m, wage: Math.max(m.wage, event.wage), raiseAsk: undefined, upset: false } : m));
+        return { ...state, staff, plan: decided };
+      }
+      return { ...state, staff: state.staff.filter((m) => m.role !== event.role), plan: decided };
     }
     case 'fridgeBroken': {
       const broken = breakShelf(state, event.shelf);
