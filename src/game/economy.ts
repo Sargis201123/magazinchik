@@ -359,6 +359,8 @@ export interface StoreState {
   lifetime: Lifetime;
   /** Подарок за ежедневный вход: когда забрали последний (дата YYYY-MM-DD) и какой по счёту день подряд. */
   gift: { lastDate: string; streak: number };
+  /** Постоянные покупатели: доверие (0…5) и до какого дня обиделись (regulars.ts). */
+  regulars?: Record<string, { loyalty: number; awayUntil: number }>;
   /** Купленные улучшения кассы (upgrades.ts). */
   upgrades?: string[];
   /** Реклама: какая и в какие дни (включительно) работает. */

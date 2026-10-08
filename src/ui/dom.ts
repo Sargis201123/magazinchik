@@ -107,6 +107,7 @@ const css = `
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }
 .ui-chip { white-space: nowrap; }
 .ui-ad-icon { font-size: 24px; text-align: center; }
+.ui-hearts { color: #e43b44; font-size: 13px; letter-spacing: 1px; white-space: nowrap; }
 /* Подарок за вход: семь коробочек серии, сегодняшняя подпрыгивает. */
 .ui-gift-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 4px 0 8px; }
 .ui-gift-day { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; border: 2px solid #2b2233;

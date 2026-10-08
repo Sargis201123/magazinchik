@@ -90,6 +90,7 @@ import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
 import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES } from '../game/upgrades';
+import { MAX_LOYALTY, met, REGULARS, regularState } from '../game/regulars';
 
 /** Высота «голоса» героев в диалогах. */
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
@@ -118,13 +119,13 @@ const TABS: [Tab, TextKey][] = [
 const productLabel = (id: ProductId) => `${PRODUCTS[id].icon} ${t(PRODUCTS[id].nameKey)}`;
 
 /** Строка товара: крупная пиксельная иконка, название (и ценник), подпись и кнопки справа. */
-function itemRow(pid: ProductId, opts: { price?: number; sub?: string; actions: HTMLElement[] }): HTMLElement {
+function itemRow(pid: ProductId, opts: { price?: number; sub?: string; actions: HTMLElement[]; name?: string }): HTMLElement {
   const row = el('div', 'ui-item');
   const icon = el('img', 'ui-item-icon');
   icon.src = `assets/item_${pid}_0.png`;
   icon.alt = '';
   const body = el('div');
-  const name = el('div', 'ui-item-name', t(PRODUCTS[pid].nameKey));
+  const name = el('div', 'ui-item-name', opts.name ?? t(PRODUCTS[pid].nameKey));
   if (opts.price !== undefined) name.append(el('span', 'ui-tag', `${opts.price} 💰`));
   body.append(name);
   if (opts.sub) body.append(el('div', 'ui-item-sub', opts.sub));
@@ -489,6 +490,20 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   };
 
   /** Оформление: по каждому виду — «как было», купленное (переставить) и что можно купить. */
+  /** Постоянные покупатели: любимый товар, привычка и доверие сердечками. */
+  const regularsBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('regular.title')), el('div', 'ui-muted', t('regular.note')));
+    for (const r of REGULARS) {
+      const known = met(state, r);
+      const { loyalty, awayUntil } = regularState(state, r.id);
+      const sub = !known ? t('regular.unknown') : awayUntil >= state.day ? t('regular.away', { n: awayUntil + 1 }) : t(r.habitKey);
+      const hearts = known ? el('span', 'ui-hearts', '❤'.repeat(loyalty) + '♡'.repeat(MAX_LOYALTY - loyalty)) : el('span');
+      box.append(itemRow(r.favorite, { sub, actions: [hearts], name: known ? t(r.nameKey) : '???' }));
+    }
+    return box;
+  };
+
   /** Улучшения кассы: терминал и касса самообслуживания. */
   const upgradesBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
@@ -872,7 +887,15 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const storeTab = (state: StoreState): HTMLElement[] => {
     const level = storeLevel(state);
     const next = nextStoreLevel(state);
-    const out: HTMLElement[] = [achievementsButton(state), adsBox(state), upgradesBox(state), rankBox(state), albumBox(state), decorBox(state)];
+    const out: HTMLElement[] = [
+      achievementsButton(state),
+      regularsBox(state),
+      adsBox(state),
+      upgradesBox(state),
+      rankBox(state),
+      albumBox(state),
+      decorBox(state),
+    ];
 
     const current = el('div', 'ui-box');
     current.append(

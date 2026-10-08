@@ -74,6 +74,7 @@ import { liveProgress, recordDay, unlockAchievements, type AchievementId } from 
 import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
 import { activeAd } from '../game/ads';
+import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
 import { hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
 import { activeDecor } from '../game/decor';
@@ -333,6 +334,9 @@ interface Customer {
   rare?: RareGuestId;
   /** Уже поскользнулся на луже (второй раз не падает). */
   slipped?: boolean;
+  /** Постоянный покупатель: кто и за чем пришёл. */
+  regular?: RegularId;
+  wants?: ProductId[];
 }
 
 type TrashKind = 'trash' | 'mud' | 'spill';
@@ -1189,6 +1193,52 @@ export class StoreScene extends Phaser.Scene {
     if (!this.sys.isActive()) return true;
     this.finishCheckout(c, { x: kiosk.x - 10, y: kiosk.y - 12 });
     return true;
+  }
+
+  /** Постоянные покупатели на сегодня: каждый заходит в своё случайное время. */
+  private scheduleRegulars(): void {
+    for (const r of regularsToday(this.state)) {
+      if (Math.random() >= r.every) continue;
+      this.time.delayedCall(Phaser.Math.FloatBetween(0.1, 0.75) * DAY_SECONDS * 1000, () => this.running && this.timeLeft > 0 && this.spawnRegular(r));
+    }
+  }
+
+  private spawnRegular(r: Regular): void {
+    const start = this.streetSpawn();
+    const sprite = this.makePerson(start.x, start.y, { ...r.look });
+    this.addUmbrella(sprite);
+    const bubble = this.art(0, -14, 'bubble').setVisible(false);
+    sprite.add(bubble);
+    // Любимый товар — всегда; иногда ещё что-нибудь.
+    const extra = Math.random() < 0.4 ? pickWanted(this.state, Math.random, 1).filter((id) => id !== r.favorite) : [];
+    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief: false, regular: r.id, wants: [r.favorite, ...extra] };
+    this.customers.add(customer);
+    void this.runCustomer(customer);
+  }
+
+  /** Постоянный покупатель нашёл любимое по своей цене — доверие растёт (и чаевые), нет — падает. */
+  private regularVerdict(c: Customer): void {
+    const r = regularById(c.regular!);
+    const happy = c.items.some((item) => item.id === r.favorite);
+    const { state, result } = recordVisit(this.state, r.id, happy);
+    this.state = state;
+    const name = t(r.nameKey);
+    const y = c.sprite.y - 24;
+    if (result === 'up') {
+      this.emote(c.sprite, 'emo_heart');
+      this.popup(c.sprite.x, y, t('regular.up', { name }), '#c8ffb0');
+      const total = c.items.reduce((sum, item) => sum + unitSalePrice(this.state, item.id, item.unit), 0);
+      const tip = tipFor(regularState(this.state, r.id).loyalty, total);
+      if (tip > 0) {
+        this.state = { ...this.state, money: this.state.money + tip };
+        this.time.delayedCall(900, () => this.popup(c.sprite.x, y - 8, t('regular.tip', { n: tip }), '#fee761'));
+      }
+    } else {
+      this.emote(c.sprite, 'emo_angry');
+      this.popup(c.sprite.x, y, t(result === 'left' ? 'regular.left' : 'regular.down', { name }), '#ffd0d0');
+      sound.bad();
+    }
+    saveGame(this.state);
   }
 
   /** Начало мини-события дня. */
@@ -3174,7 +3224,8 @@ export class StoreScene extends Phaser.Scene {
     const mud = [...this.trash].filter((piece) => piece.texture.key === 'mud').length;
     if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, 'mud');
 
-    const wanted = pickWanted(this.state, Math.random, Phaser.Math.Between(1, 2));
+    const wanted = c.wants ?? pickWanted(this.state, Math.random, Phaser.Math.Between(1, 2));
+    if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
     let disappointed = false;
     for (const id of wanted) {
       const index = shelfFor(this.state, id);
@@ -3192,6 +3243,7 @@ export class StoreScene extends Phaser.Scene {
     }
 
     if (Math.random() < TRASH_CHANCE) this.dropTrash(c.sprite.x, c.sprite.y);
+    if (c.regular) this.regularVerdict(c);
 
     if (c.items.length === 0) {
       // Не нашёл товар или всё слишком дорого — ушёл недовольным, это бьёт по рейтингу.
@@ -3226,7 +3278,10 @@ export class StoreScene extends Phaser.Scene {
     }
     const price = unitSalePrice(this.state, id, oldest);
     const fair = perceivedBase(this.state, id);
-    if (Math.random() >= buyChance(price, fair)) {
+    // Постоянный покупатель решает не по случаю, а по своей границе цены.
+    const regular = c.regular ? regularById(c.regular) : undefined;
+    const declines = regular?.favorite === id ? !acceptsPrice(this.state, regular, price) : Math.random() >= buyChance(price, fair);
+    if (declines) {
       if (price <= fair) return 'skipped';
       this.popup(c.sprite.x, c.sprite.y - 14, t('popup.expensive'), '#ffd0d0');
       return 'expensive';
@@ -3694,6 +3749,7 @@ export class StoreScene extends Phaser.Scene {
     this.lastSaleAt = -Infinity;
     if (this.awaitingBoxes > 0) void this.deliver();
     this.endLiveEvent();
+    this.scheduleRegulars();
     if (this.state.day >= LIVE_FROM_DAY && Math.random() < LIVE_CHANCE) {
       const kind = Phaser.Utils.Array.GetRandom([...LIVE_KINDS]);
       this.time.delayedCall(Phaser.Math.FloatBetween(0.2, 0.6) * DAY_SECONDS * 1000, () => this.running && this.startLiveEvent(kind));
