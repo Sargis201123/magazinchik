@@ -39,8 +39,10 @@ export class Hud {
     money.classList.add('ui-bump');
   }
 
-  setHint(text: string): void {
+  /** Подсказка внизу; в первые дни — яркая плашка, чтобы новичок точно заметил. */
+  setHint(text: string, tutorial = false): void {
     if (this.hint.textContent !== text) this.hint.textContent = text;
+    this.hint.classList.toggle('ui-hint-tip', tutorial && text !== '');
   }
 
   showSummary(

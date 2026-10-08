@@ -1862,6 +1862,18 @@ def decor_items():
     shadowed(c, 24, 33, 22, 2).save("aquarium")
 
 
+def tutorial_arrow():
+    """Стрелка обучения 16×18: жёлтая, смотрит вниз."""
+    c = Canvas(16, 18)
+    c.rect(5, 0, 6, 8, "Y")
+    for i in range(8):
+        c.hline(1 + i, 8 + i, 14 - 2 * i, "Y")
+    c.vline(5, 0, 8, "w")
+    c.hline(2, 9, 4, "w")
+    c.outline("k")
+    c.save("arrow")
+
+
 def environment2():
     building()
     lot2()
@@ -1873,6 +1885,7 @@ def environment2():
     neighborhood()
     construction()
     decor_items()
+    tutorial_arrow()
 
 
 # ---------------------------------------------------------------- люди

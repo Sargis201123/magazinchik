@@ -228,7 +228,8 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
               if (bad && next) pendingBad = { sid, pid, qty, price };
               update(next, bad ? 'error' : 'tap');
             },
-            'ui-chip',
+            // В первые дни кнопка «+5» у первого поставщика пульсирует — подсказка, с чего начать.
+            state.day <= 2 && sid === SUPPLIER_IDS[0] && qty === 5 && pid === 'bread' ? 'ui-chip ui-pulse' : 'ui-chip',
             qty > free || price * qty > state.money,
           ),
         );

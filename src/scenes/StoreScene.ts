@@ -79,6 +79,8 @@ const HUD_BOTTOM = 80;
 const ART = 2;
 /** Сколько улицы видно под зданием (в точках мира). */
 const STREET_VIEW = 40;
+/** Сколько первых дней показывать обучение: стрелки и яркую подсказку. */
+const TUTORIAL_DAYS = 3;
 /** Высота видимой крышки мебели (TOP в art/sprites.py, в точках мира). */
 const FURNITURE_TOP = 6;
 /** Насколько далеко можно отвести камеру от магазина пальцем. */
@@ -293,6 +295,7 @@ export class StoreScene extends Phaser.Scene {
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
   private boxes: Phaser.GameObjects.Image[] = [];
+  private arrow?: Phaser.GameObjects.Image;
   /** Палец двигал камеру — это не нажатие. */
   private dragged = false;
   private dragStart = { x: 0, y: 0 };
@@ -406,7 +409,8 @@ export class StoreScene extends Phaser.Scene {
     for (const c of this.queue) this.updateBubble(c);
     this.updateScanBar();
     this.callSellerIfNeeded();
-    this.hud.setHint(this.currentHint());
+    this.hud.setHint(this.currentHint(), this.state.day <= TUTORIAL_DAYS);
+    this.updateTutorialArrow();
     this.updateLighting();
     this.updateDoor();
     this.pulseHighlights();
@@ -436,6 +440,38 @@ export class StoreScene extends Phaser.Scene {
     if (this.state.day <= 4 && this.shelfNeedsRestock()) return t('hint.restock');
     if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
     return '';
+  }
+
+  /**
+   * Обучение первых дней: над тем, что нужно нажать сейчас, прыгает стрелка —
+   * касса, пустая полка, мусор или грязный туалет, вор.
+   */
+  private updateTutorialArrow(): void {
+    const target = this.state.day <= TUTORIAL_DAYS || this.inspector === 'here' ? this.tutorialTarget() : null;
+    if (!target) {
+      this.arrow?.setVisible(false);
+      return;
+    }
+    if (!this.arrow?.active) {
+      this.arrow = this.art(0, 0, 'arrow').setScale(1.3 / ART).setDepth(LIGHT_DEPTH + 20);
+    }
+    const bob = Math.sin(this.time.now / 160) * 2;
+    this.arrow.setVisible(true).setPosition(target.x, target.y - 12 + bob);
+  }
+
+  private tutorialTarget(): { x: number; y: number } | null {
+    const { counter, wc } = this.layout;
+    const thief = !this.workers.has('guard') ? [...this.customers].find((c) => c.thief && !c.gone) : undefined;
+    if (thief) return { x: thief.sprite.x, y: thief.sprite.y - 12 };
+    if (!this.workers.has('cashier') && this.queue.length > 0 && (this.sellerBusy || this.stats.served < 3)) return { x: counter.x, y: counter.y - 28 };
+    if (this.shelfNeedsRestock()) {
+      const index = this.shelfViews.findIndex((v) => v.needsStock);
+      if (index >= 0) return { x: this.layout.slots[index].x, y: this.layout.slots[index].y - 18 };
+    }
+    const trash = [...this.trash].find((piece) => !this.claimedTrash.has(piece));
+    if (trash) return { x: trash.x, y: trash.y - 2 };
+    if (this.toiletDirt >= TOILET_DIRTY) return { x: wc.x, y: wc.y - 14 };
+    return null;
   }
 
   /** Есть товар на складе, а на его полке он закончился. */

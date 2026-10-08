@@ -58,6 +58,12 @@ const css = `
 .ui-price-locked { background: #e6dcc4; filter: grayscale(1); opacity: .7; }
 .ui-bar { height: 6px; margin: 4px 0 2px; background: #e6dcc4; border: 1px solid #2b2233; border-radius: 3px; overflow: hidden; }
 .ui-bar-fill { height: 100%; }
+.ui-hint-tip { color: #2b2233; font-weight: 700; }
+.ui-hint.ui-hint-tip { background: #fee761; border: 2px solid #2b2233; border-radius: 8px; padding: 6px 10px;
+  width: fit-content; max-width: min(92vw, 52dvh); box-shadow: 0 3px 0 #2b2233; animation: ui-tip 1.2s ease-in-out infinite; }
+@keyframes ui-tip { 50% { transform: translateY(-3px); } }
+.ui-pulse { animation: ui-pulse 1s ease-in-out infinite; }
+@keyframes ui-pulse { 50% { transform: scale(1.12); background: #fee761; } }
 .ui-bump { display: inline-block; animation: ui-bump .35s ease-out; }
 @keyframes ui-bump { 40% { transform: scale(1.25); background: rgba(143, 209, 106, .85); } }
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }
