@@ -2094,6 +2094,18 @@ def uniforms():
     c = Canvas(24, 36)
     c.stamp(["YY", "yy"], 8, 19)
     c.save("acc_badge")
+    # Галстук Эдуарда и очки бабушки — видны только спереди.
+    c = Canvas(24, 36)
+    c.rect(11, 17, 2, 2, "R")
+    c.rect(11, 19, 2, 5, "R")
+    c.px(12, 21, "m")
+    c.px(11, 24, "m")
+    c.save("acc_tie")
+    c = Canvas(24, 36)
+    c.frame(6, 9, 4, 4, "G")
+    c.frame(14, 9, 4, 4, "G")
+    c.hline(10, 10, 4, "G")
+    c.save("acc_glasses")
 
 
 def emotes():

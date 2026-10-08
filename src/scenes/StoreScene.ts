@@ -40,7 +40,7 @@ import {
   type StoreState,
 } from '../game/economy';
 import { ensurePlan, inspectionDone, nightCycle, spawnIntervalToday } from '../game/day';
-import { inspect, RUSH_SECONDS, type InspectionResult } from '../game/events';
+import { inspect, RUSH_SECONDS, type InspectionResult , type ClientId } from '../game/events';
 import {
   ALBUM_REWARD,
   collectRareGuest,
@@ -164,7 +164,7 @@ const HAIR_COLORS = [0x4a2c1a, 0x181425, 0x733e39, 0xfeae34, 0xb86f50, 0x8b9bb4]
 const HAIR_STYLES = ['short', 'short', 'long', 'long', 'bald', 'ponytail', 'curly'] as const;
 type HairStyle = 'short' | 'long' | 'bun' | 'cap' | 'bald' | 'ponytail' | 'curly';
 /** Поверх одежды: фартук (красится), жилет грузчика, значок охранника. */
-type Accessory = 'apron' | 'vest' | 'badge';
+type Accessory = 'apron' | 'vest' | 'badge' | 'tie';
 type Facing = 'down' | 'up' | 'left' | 'right';
 const VIEW_SUFFIX: Record<Facing, string> = { down: '', up: '_b', left: '_s', right: '_s' };
 
@@ -178,6 +178,7 @@ interface Look {
   accTint?: number;
   /** Ребёнок — ростом поменьше. */
   kid?: boolean;
+  glasses?: boolean;
 }
 
 const randomLook = (shirt: number): Look => ({
@@ -215,7 +216,20 @@ const STAFF_SPEED = 60;
 /** Сколько кассир пробивает одного покупателя при обычной скорости. */
 const INSPECTOR_SHIRT = 0x222034;
 /** Соседка Валентина заходит раз в день — в вишнёвой кофте и с седыми волосами. */
-const VALYA: Look = { shirt: 0xb13e53, skin: 0xf2d3ab, pants: 0x68386c, hair: 0xd8d8e0, style: 'bun' };
+const VALYA: Look = { shirt: 0xa22633, skin: 0xeec39a, pants: 0x68386c, hair: 0xc0cbdc, style: 'curly' };
+/** Персонажи сюжета — как на портретах. */
+const GRANDMA: Look = { shirt: 0x68386c, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xd8d8e0, style: 'bun', glasses: true };
+const MARAT: Look = { shirt: 0xffffff, skin: 0xd9a066, pants: 0x262b44, hair: 0xffffff, style: 'cap' };
+const SCHOOL_COOK: Look = { shirt: 0x5fcde4, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xc0cbdc, style: 'cap', acc: 'apron' };
+const EDUARD: Look = { shirt: 0x3a4466, skin: 0xf2d3ab, pants: 0x262b44, hair: 0x181425, style: 'short', acc: 'tie' };
+/** Аксессуары, которые видны только спереди. */
+const FRONT_ONLY = new Set(['acc_badge', 'acc_tie', 'acc_glasses']);
+const GRANDMA_LINES_KEYS: TextKey[] = ['visit.grandma1', 'visit.grandma2', 'visit.grandma3'];
+const ORDER_GUESTS: Record<ClientId, [Look, TextKey]> = {
+  chef: [MARAT, 'who.marat'],
+  school: [SCHOOL_COOK, 'client.school'],
+  valya: [VALYA, 'who.valya'],
+};
 const OWNER: Look = { shirt: 0x8fd16a, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short' };
 const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cleaner: 'short', loader: 'short', guard: 'cap' };
 /** На какой секунде дня приходит инспектор. */
@@ -1132,7 +1146,13 @@ export class StoreScene extends Phaser.Scene {
       layers.push([acc, `acc_${look.acc}`]);
       parts.push(acc);
     }
-    parts.push(skin, hair);
+    parts.push(skin);
+    if (look.glasses) {
+      const glasses = this.art(0, 0, 'acc_glasses');
+      layers.push([glasses, 'acc_glasses']);
+      parts.push(glasses);
+    }
+    parts.push(hair);
     const person = this.add.container(x, y, parts).setDepth(y);
     const baseScale = look.kid ? 0.8 : 1;
     person.setScale(baseScale);
@@ -1155,7 +1175,7 @@ export class StoreScene extends Phaser.Scene {
     const suffix = VIEW_SUFFIX[facing];
     const layers = person.getData('layers') as [Phaser.GameObjects.Image, string][] | undefined;
     for (const [img, base] of layers ?? []) {
-      if (base === 'acc_badge') {
+      if (FRONT_ONLY.has(base)) {
         img.setVisible(facing === 'down');
         continue;
       }
@@ -1914,6 +1934,60 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
+  /** Кто из героев сюжета заглянет сегодня: бабушка, заказчик за заказом, Эдуард. */
+  private scheduleStoryGuests(): void {
+    const day = this.state.day;
+    const at = (share: number, fn: () => Promise<void>) =>
+      this.time.delayedCall(DAY_SECONDS * share * 1000, () => {
+        if (this.running) void fn();
+      });
+    if (day > 2 && day % 6 === 2) at(0.25, () => this.runVisitor(GRANDMA, t(Phaser.Utils.Array.GetRandom(GRANDMA_LINES_KEYS))));
+    const order = this.state.plan?.order;
+    if (order) {
+      const [look, name] = ORDER_GUESTS[order.client];
+      at(0.78, () => this.runVisitor(look, t('popup.orderPickup', { name: t(name) }), true));
+    }
+    if (this.state.story.chapter >= 2 && day % 5 === 1) at(0.5, () => this.runEduard());
+  }
+
+  /** Гость заходит к кассе, говорит фразу и уходит (заказчик уносит коробку). */
+  private async runVisitor(look: Look, line: string, carriesBox = false): Promise<void> {
+    const { door, sellerHome } = this.layout;
+    const start = this.streetSpawn();
+    const sprite = this.makePerson(start.x, start.y, look);
+    this.addUmbrella(sprite);
+    await this.walk(sprite, door.x, this.streetY);
+    await this.walk(sprite, door.x, door.y - 10);
+    await this.walk(sprite, sellerHome.x - 28, sellerHome.y - 12);
+    if (!sprite.active) return;
+    this.setFacing(sprite, 'right');
+    this.popup(sprite.x, sprite.y - 18, line, '#fff3b0');
+    this.emote(sprite, 'emo_heart');
+    await this.wait(2200);
+    if (carriesBox && sprite.active) sprite.add(this.art(0, 3, 'box'));
+    await this.walk(sprite, door.x, door.y - 10);
+    await this.walk(sprite, door.x, this.layout.h + 16);
+    void this.strollAway(sprite);
+  }
+
+  /** Эдуард подходит к витрине, присматривается и уходит в свой магазин по соседству. */
+  private async runEduard(): Promise<void> {
+    const { w, h } = this.layout;
+    const sprite = this.makePerson(this.next.w + 60, this.streetY, EDUARD);
+    await this.walk(sprite, w - 20, this.streetY);
+    await this.walk(sprite, w - 20, h + 15);
+    if (!sprite.active) return;
+    this.setFacing(sprite, 'up');
+    this.emote(sprite, 'emo_question');
+    this.popup(sprite.x, sprite.y - 18, t('popup.eduard'), '#d0e0ff');
+    await this.wait(2500);
+    const eduardDoor = this.next.w + 26 + 128 * 0.62;
+    await this.walk(sprite, w - 20, this.streetY);
+    await this.walk(sprite, eduardDoor, this.streetY);
+    await this.walk(sprite, eduardDoor, this.next.h - 2);
+    sprite.destroy();
+  }
+
   /** Откуда приходят с улицы: с тротуара слева или справа от входа. */
   private streetSpawn(): Phaser.Types.Math.Vector2Like {
     const side = Math.random() < 0.5 ? -1 : 1;
@@ -2028,6 +2102,7 @@ export class StoreScene extends Phaser.Scene {
     this.questsSeen = 0;
     this.valyaCame = false;
     this.syncStaff();
+    this.scheduleStoryGuests();
     const season = seasonFor(this.state.day);
     if (season) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
     this.stats = emptyDayStats();

@@ -94,6 +94,8 @@ const SPRITES = [
   ...['p_skin', 'p_shirt', 'p_legs0', 'p_legs1', 'acc_apron', 'acc_vest'].flatMap((k) => [k, `${k}_b`, `${k}_s`]),
   ...['short', 'long', 'bun', 'cap', 'bald', 'ponytail', 'curly'].flatMap((h) => ['', '_b', '_s'].map((v) => `p_hair_${h}${v}`)),
   'acc_badge',
+  'acc_tie',
+  'acc_glasses',
   'emo_angry',
   'emo_heart',
   'emo_question',
