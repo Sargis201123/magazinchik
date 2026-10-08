@@ -23,6 +23,7 @@ import {
   PRODUCT_IDS,
   resolveBadBatch,
   RETURN_REFUND,
+  sellableProducts,
   setPrice,
   SHELF_KINDS,
   SHELF_LEVELS,
@@ -32,13 +33,19 @@ import {
   shelfFree,
   shelfResale,
   storeLevel,
+  STORE_LEVELS,
+  productAvailable,
   upgradeCost,
   upgradeShelf,
   warehouseCapacity,
   warehouseCount,
   warehouseOf,
   answerRaise,
+  cashierScan,
   fire,
+  ownerLevel,
+  ownerNextLevelAt,
+  ownerScan,
   hire,
   STAFF_ROLE_IDS,
   staffLimit,
@@ -61,11 +68,38 @@ import {
   type SupplierId,
 } from '../game/suppliers';
 import { guestsToday } from '../game/day';
-import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type MorningEvent } from '../game/events';
+import {
+  ALBUM_REWARD,
+  ALL_QUESTS_RATING,
+  QUEST_TEXT,
+  RANK_GUESTS,
+  rankName,
+  rankOf,
+  rankThreshold,
+  RARE_GUESTS,
+  seasonFor,
+  type Quest,
+} from '../game/endless';
+import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
 import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
-import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter } from '../game/story';
+import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
+import { sound } from '../platform/sound';
+import { weatherFor } from '../game/weather';
+import { holidayFor } from '../game/calendar';
+import { dialogBox } from './dialog';
+import { achievementsButton } from './achievements';
+import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
+import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES } from '../game/upgrades';
+import { MAX_LOYALTY, met, REGULARS, regularState } from '../game/regulars';
+
+/** Высота «голоса» героев в диалогах. */
+const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
+import { buyDecor, DECOR, DECOR_KINDS, setDecor, type DecorItem, type DecorKind } from '../game/decor';
 import { haptic } from '../platform/telegram';
-import { button, el, openModal } from './dom';
+import { button, el, openModal, who } from './dom';
+
+/** Портрет заказчика: шеф — это Марат. */
+const CLIENT_PORTRAIT: Record<ClientId, string> = { chef: 'marat', school: 'school', valya: 'valya' };
 
 interface MorningOptions {
   getState: () => StoreState;
@@ -84,12 +118,31 @@ const TABS: [Tab, TextKey][] = [
 
 const productLabel = (id: ProductId) => `${PRODUCTS[id].icon} ${t(PRODUCTS[id].nameKey)}`;
 
+/** Строка товара: крупная пиксельная иконка, название (и ценник), подпись и кнопки справа. */
+function itemRow(pid: ProductId, opts: { price?: number; sub?: string; actions: HTMLElement[]; name?: string }): HTMLElement {
+  const row = el('div', 'ui-item');
+  const icon = el('img', 'ui-item-icon');
+  icon.src = `assets/item_${pid}_0.png`;
+  icon.alt = '';
+  const body = el('div');
+  const name = el('div', 'ui-item-name', opts.name ?? t(PRODUCTS[pid].nameKey));
+  if (opts.price !== undefined) name.append(el('span', 'ui-tag', `${opts.price} 💰`));
+  body.append(name);
+  if (opts.sub) body.append(el('div', 'ui-item-sub', opts.sub));
+  const actions = el('div', 'ui-item-actions');
+  actions.append(...opts.actions);
+  row.append(icon, body, actions);
+  return row;
+}
+
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
 export function showMorning({ getState, setState, onOpen }: MorningOptions): void {
   const { card, close } = openModal();
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
   let tab: Tab = 'buy';
+  /** Вкладку только что переключили — содержимое въезжает сбоку (при покупках не дёргается). */
+  let slideTab = false;
   /** Какая реплика сюжетного диалога сейчас на экране. */
   let storyLine = 0;
   /** Бракованная партия, по которой ждём решения игрока. */
@@ -99,6 +152,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     if (!next) return;
     setState(next);
     haptic[feedback]();
+    sound[feedback === 'tap' ? 'tap' : feedback === 'success' ? 'coin' : 'bad']();
     render();
   };
 
@@ -137,6 +191,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
           t(label),
           () => {
             tab = id;
+            slideTab = true;
             render();
           },
           `ui-tab${tab === id ? ' active' : ''}`,
@@ -144,14 +199,22 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       );
     }
 
-    const body = { buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, staff: staffTab, store: storeTab }[tab](state);
+    const body = el('div', slideTab ? 'ui-enter' : '');
+    body.append(...{ buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, staff: staffTab, store: storeTab }[tab](state));
+    slideTab = false;
     card.replaceChildren(
       title,
-      goalLine(state),
-      el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
-      billForecast(state),
+      infos(
+        goalLine(state),
+        ...seasonLine(state),
+        ...weatherLine(state),
+        ...holidayLine(state),
+        el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
+        billForecast(state),
+      ),
+      questsBox(state),
       tabs,
-      ...body,
+      body,
       button(t('morning.open'), () => {
         close();
         onOpen();
@@ -173,7 +236,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const s = SUPPLIERS[sid];
     const deal = deals[sid];
     const box = el('div', 'ui-box');
-    box.append(el('b', '', t(s.nameKey)), el('div', 'ui-quote', `«${t(quotes[sid])}»`));
+    box.append(who(sid, el('b', '', t(s.nameKey))), el('div', 'ui-quote', `«${t(quotes[sid])}»`));
 
     if (s.requires && !state.shelves.some((sh) => sh.kind === s.requires)) {
       box.append(el('div', 'ui-muted', t('buy.needShelf', { shelf: t(SHELF_KINDS[s.requires].nameKey) })));
@@ -183,16 +246,10 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const free = warehouseCapacity(state) - warehouseCount(state);
     for (const pid of PRODUCT_IDS) {
       const price = unitPrice(s, deal, pid);
-      if (price === null) continue;
-      const row = el('div', 'ui-row');
-      const info = el('span');
-      info.append(
-        el('span', '', `${productLabel(pid)} · ${price} 💰 `),
-        el('span', 'ui-muted', t('buy.inWarehouse', { n: warehouseOf(state, pid) })),
-      );
-      const chips = el('div', 'ui-chips');
+      if (price === null || !productAvailable(pid, state.day)) continue;
+      const chips: HTMLElement[] = [];
       for (const qty of [1, 5]) {
-        chips.append(
+        chips.push(
           button(
             `+${qty}`,
             () => {
@@ -201,22 +258,22 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
               if (bad && next) pendingBad = { sid, pid, qty, price };
               update(next, bad ? 'error' : 'tap');
             },
-            'ui-chip',
+            // В первые дни кнопка «+5» у первого поставщика пульсирует — подсказка, с чего начать.
+            state.day <= 2 && sid === SUPPLIER_IDS[0] && qty === 5 && pid === 'bread' ? 'ui-chip ui-pulse' : 'ui-chip',
             qty > free || price * qty > state.money,
           ),
         );
       }
-      row.append(info, chips);
-      box.append(row);
+      box.append(itemRow(pid, { price, sub: t('buy.inWarehouse', { n: warehouseOf(state, pid) }), actions: chips }));
     }
 
-    const haggleRow = el('div', 'ui-chips');
+    const haggleRow = el('div', 'ui-haggle');
     if (deal.discount > 0) {
-      haggleRow.append(el('span', 'ui-muted', t('buy.discount', { p: Math.round(deal.discount * 100) })));
+      haggleRow.append(el('b', '', t('buy.discount', { p: Math.round(deal.discount * 100) })));
     } else if (deal.angry) {
-      haggleRow.append(el('span', 'ui-muted', t('buy.angryNote')));
+      haggleRow.append(el('span', '', t('buy.angryNote')));
     } else {
-      haggleRow.append(el('span', 'ui-muted', t('buy.haggle')));
+      haggleRow.append(el('b', '', t('buy.haggle')));
       for (const ask of HAGGLE_ASKS) {
         haggleRow.append(
           button(
@@ -283,26 +340,18 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         .filter(Boolean)
         .join(', ');
 
-      const row = el('div', 'ui-row');
-      const info = el('span');
-      info.append(el('span', '', `${productLabel(pid)} ×${units.length} `), el('span', 'ui-muted', extra));
-
       const shelfIndex = state.shelves.findIndex((sh) => canPlace(pid, sh) && shelfFree(sh) > 0);
       const hasShelfKind = state.shelves.some((sh) => canPlace(pid, sh));
-      if (!hasShelfKind) {
-        row.append(info, el('span', 'ui-muted', t('warehouse.noShelf', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) })));
-      } else {
-        row.append(
-          info,
-          button(
+      const sub = [t('buy.inWarehouse', { n: units.length }), extra].filter(Boolean).join(' · ');
+      const action = hasShelfKind
+        ? button(
             shelfIndex >= 0 ? t('warehouse.toShelf') : t('warehouse.shelfFull'),
             () => update(moveToShelf(getState(), shelfIndex, pid).state),
             'ui-chip',
             shelfIndex < 0,
-          ),
-        );
-      }
-      box.append(row);
+          )
+        : el('span', 'ui-muted', t('warehouse.noShelf', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) }));
+      box.append(itemRow(pid, { sub, actions: [action] }));
     }
     out.push(
       box,
@@ -384,7 +433,207 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return out;
   };
 
+  // ---------- Бесконечная игра: сезон, задания, звание, альбом ----------
+
+  /** Погода дня — только если не ясно. */
+  const holidayLine = (state: StoreState): HTMLElement[] => {
+    const holiday = holidayFor(state.day);
+    return holiday === 'march8' || holiday === 'halloween' ? [el('div', 'ui-muted', t(`holiday.${holiday}`))] : [];
+  };
+
+  const weatherLine = (state: StoreState): HTMLElement[] => {
+    const weather = weatherFor(state.day);
+    return weather === 'clear' ? [] : [el('div', 'ui-muted', t(`weather.${weather}`))];
+  };
+
+  const seasonLine = (state: StoreState): HTMLElement[] => {
+    const season = seasonFor(state.day);
+    if (season) {
+      return [el('div', 'ui-note', t('season.banner', { icon: season.icon, name: t(season.nameKey), desc: t(season.descKey) }))];
+    }
+    for (let d = 1; d <= 3; d++) {
+      const next = seasonFor(state.day + d);
+      if (next) return [el('div', 'ui-muted', t('season.soon', { n: d, icon: next.icon, name: t(next.nameKey) }))];
+    }
+    return [];
+  };
+
+  const questText = (q: Quest) =>
+    t(QUEST_TEXT[q.kind], { n: q.target, product: q.product ? productLabel(q.product) : '' });
+
+  const questsBox = (state: StoreState) => {
+    const quests = state.plan?.quests ?? [];
+    const box = el('div', 'ui-box');
+    if (!quests.length) return el('div');
+    box.append(el('b', '', t('quest.title')));
+    for (const q of quests) {
+      const r = el('div', 'ui-row');
+      r.append(el('span', '', `• ${questText(q)}`), el('span', 'ui-muted', t('quest.reward', { n: q.reward })));
+      box.append(r);
+    }
+    box.append(el('div', 'ui-muted', t('quest.allBonus', { r: ALL_QUESTS_RATING })));
+    return box;
+  };
+
+  const rankBox = (state: StoreState) => {
+    const n = rankOf(state.totalRevenue);
+    const box = el('div', 'ui-box');
+    box.append(
+      el('b', '', t('rank.title', { name: rankName(n, t) })),
+      el(
+        'div',
+        'ui-muted',
+        t('rank.progress', { n: state.totalRevenue, next: rankThreshold(n + 1), bonus: Math.round(n * RANK_GUESTS * 100) }),
+      ),
+    );
+    return box;
+  };
+
+  /** Оформление: по каждому виду — «как было», купленное (переставить) и что можно купить. */
+  /** Постоянные покупатели: любимый товар, привычка и доверие сердечками. */
+  const regularsBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('regular.title')), el('div', 'ui-muted', t('regular.note')));
+    for (const r of REGULARS) {
+      const known = met(state, r);
+      const { loyalty, awayUntil } = regularState(state, r.id);
+      const sub = !known ? t('regular.unknown') : awayUntil >= state.day ? t('regular.away', { n: awayUntil + 1 }) : t(r.habitKey);
+      const hearts = known ? el('span', 'ui-hearts', '❤'.repeat(loyalty) + '♡'.repeat(MAX_LOYALTY - loyalty)) : el('span');
+      box.append(itemRow(r.favorite, { sub, actions: [hearts], name: known ? t(r.nameKey) : '???' }));
+    }
+    return box;
+  };
+
+  /** Улучшения кассы: терминал и касса самообслуживания. */
+  const upgradesBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('upgrade.title')));
+    for (const id of UPGRADE_IDS) {
+      const up = UPGRADES[id];
+      const owned = hasUpgrade(state, id);
+      const row = el('div', 'ui-item');
+      row.append(el('div', 'ui-ad-icon', up.icon));
+      const body = el('div');
+      const name = el('div', 'ui-item-name', t(up.nameKey));
+      if (!owned) name.append(el('span', 'ui-tag', `${up.price} 💰`));
+      const sub = state.level < up.minLevel ? t('upgrade.needLevel', { name: t(STORE_LEVELS[up.minLevel].nameKey) }) : t(up.descKey);
+      body.append(name, el('div', 'ui-item-sub', sub));
+      const actions = el('div', 'ui-item-actions');
+      actions.append(
+        owned
+          ? el('span', 'ui-tag', '✓')
+          : button(t('upgrade.buy'), () => update(buyUpgrade(getState(), id), 'success'), 'ui-chip', state.level < up.minLevel || state.money < up.price),
+      );
+      row.append(body, actions);
+      box.append(row);
+    }
+    return box;
+  };
+
+  /** Реклама: карточка на каждый вид — иконка, что даёт, цена и кнопка. */
+  const adsBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('ads.title')), el('div', 'ui-muted', t('ads.note')));
+    const running = activeAd(state);
+    for (const id of AD_IDS) {
+      const ad = ADS[id];
+      const row = el('div', 'ui-item');
+      row.append(el('div', 'ui-ad-icon', ad.icon));
+      const body = el('div');
+      const name = el('div', 'ui-item-name', t(ad.nameKey));
+      name.append(el('span', 'ui-tag', `${adPrice(state, id)} 💰`));
+      body.append(name, el('div', 'ui-item-sub', running?.id === id ? t('ads.active', { n: state.ads?.until ?? state.day }) : t(ad.descKey)));
+      const action = button(
+        running?.id === id ? '✓' : t('ads.order'),
+        () => update(buyAd(getState(), id), 'success'),
+        'ui-chip',
+        Boolean(running) || state.money < adPrice(state, id),
+      );
+      const actions = el('div', 'ui-item-actions');
+      actions.append(action);
+      row.append(body, actions);
+      box.append(row);
+    }
+    return box;
+  };
+
+  const decorBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('decor.title')), el('div', 'ui-muted', t('decor.note')));
+    for (const kind of DECOR_KINDS) {
+      box.append(el('div', 'ui-decor-kind', t(`decor.kind.${kind}` as TextKey)));
+      const grid = el('div', 'ui-decor-grid');
+      grid.append(decorCard(state, kind, null));
+      for (const item of DECOR.filter((d) => d.kind === kind)) grid.append(decorCard(state, kind, item));
+      box.append(grid);
+    }
+    return box;
+  };
+
+  /** Карточка оформления: превью, название и что будет по нажатию (купить, поставить, уже стоит). */
+  const decorCard = (state: StoreState, kind: DecorKind, item: DecorItem | null) => {
+    const owned = !item || state.decor.owned.includes(item.id);
+    const active = item ? state.decor.active[kind] === item.id : !state.decor.active[kind];
+    const premium = Boolean(item && item.price === undefined);
+    const canBuy = item?.price !== undefined && state.money >= item.price;
+    const card = button(
+      '',
+      () => {
+        if (active) return;
+        if (owned) update(setDecor(getState(), kind, item?.id ?? null));
+        else if (item) update(buyDecor(getState(), item.id), 'success');
+      },
+      `ui-decor${active ? ' active' : ''}${premium ? ' premium' : ''}`,
+      !owned && (premium || !canBuy),
+    );
+    const preview = el('div', 'ui-decor-preview');
+    if (!item) preview.textContent = '↺';
+    else if (item.color !== undefined) {
+      const hex = `#${item.color.toString(16).padStart(6, '0')}`;
+      preview.style.background = `url(assets/wall.png) 0 0 / 32px 32px, ${hex}`;
+      preview.style.backgroundBlendMode = 'multiply';
+    } else if (kind === 'floor') preview.style.backgroundImage = `url(assets/${item.texture}.png)`;
+    else {
+      const img = el('img');
+      img.src = `assets/${item.texture}.png`;
+      img.alt = '';
+      preview.append(img);
+    }
+    const status = active
+      ? `✓ ${t('decor.on')}`
+      : owned
+        ? t('decor.put')
+        : item?.price !== undefined
+          ? `${item.price} 💰`
+          : t('decor.starsSoon', { n: item?.stars ?? 0 });
+    card.append(preview, el('div', 'ui-decor-name', item ? t(item.nameKey) : t('decor.none')), el('div', 'ui-decor-status', status));
+    return card;
+  };
+
+
+  const albumBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(
+      el('b', '', t('album.title', { n: state.album.length, max: RARE_GUESTS.length })),
+      el('div', 'ui-muted', t('album.note', { money: ALBUM_REWARD.money, r: ALBUM_REWARD.rating })),
+    );
+    const grid = el('div', 'ui-chips');
+    for (const g of RARE_GUESTS) {
+      const got = state.album.includes(g.id);
+      grid.append(el('span', got ? 'ui-chip' : 'ui-chip ui-chip-off', got ? `${g.icon} ${t(g.nameKey)}` : `❔ ${t('album.unknown')}`));
+    }
+    box.append(grid);
+    return box;
+  };
+
   // ---------- Сюжет и события ----------
+
+  /** Сводка утра одной аккуратной плашкой. */
+  const infos = (...lines: HTMLElement[]) => {
+    const box = el('div', 'ui-infos');
+    box.append(...lines);
+    return box;
+  };
 
   const goalLine = (state: StoreState) => {
     const chapter = currentChapter(state);
@@ -397,15 +646,10 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const storyBox = (state: StoreState, kind: 'intro' | 'outro', chapter: Chapter) => {
     const lines = kind === 'intro' ? chapter.intro : chapter.outro;
     const current = lines[Math.min(storyLine, lines.length - 1)];
-    const who = CHARACTERS[current.who];
-    const box = el('div', 'ui-box');
-    box.append(
-      el('div', 'ui-muted', t('story.chapter', { n: state.story.chapter + 1, title: t(chapter.titleKey) })),
-      el('h3', '', `${who.icon} ${t(who.nameKey)}`),
-      el('p', '', `«${t(current.key)}»`),
-    );
+    const speaker = CHARACTERS[current.who];
     const last = storyLine >= lines.length - 1;
-    if (last && kind === 'intro') box.append(el('div', 'ui-note', `🎯 ${t(chapter.goalKey, chapter.progress(state))}`));
+    const after: HTMLElement[] = [];
+    if (last && kind === 'intro') after.push(el('div', 'ui-note', `🎯 ${t(chapter.goalKey, chapter.progress(state))}`));
     if (last && kind === 'outro') {
       const reward = [
         chapter.reward.money ? `+${chapter.reward.money} 💰` : '',
@@ -413,10 +657,20 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       ]
         .filter(Boolean)
         .join(' ');
-      box.append(el('div', 'ui-note', t('story.reward', { reward })));
+      after.push(el('div', 'ui-note', t('story.reward', { reward })));
     }
-    box.append(
-      button(t('story.next'), () => {
+    // Картинка — на первой реплике главы и на последней реплике финала.
+    const art = kind === 'intro' ? (storyLine === 0 ? chapter.introArt : undefined) : last ? chapter.outroArt : undefined;
+    return dialogBox({
+      caption: t('story.chapter', { n: state.story.chapter + 1, title: t(chapter.titleKey) }),
+      art,
+      portrait: `portrait_${current.who}${current.mood ? `_${current.mood}` : ''}`,
+      name: t(speaker.nameKey),
+      text: `«${t(current.key)}»`,
+      pitch: VOICE[current.who],
+      after,
+      nextLabel: t('story.next'),
+      onNext: () => {
         if (!last) {
           storyLine++;
           render();
@@ -424,9 +678,8 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         }
         storyLine = 0;
         update(kind === 'intro' ? finishIntro(getState()) : finishChapter(getState()), kind === 'outro' ? 'success' : 'tap');
-      }),
-    );
-    return box;
+      },
+    });
   };
 
   const eventBox = (state: StoreState, event: MorningEvent) => {
@@ -438,7 +691,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         const have = warehouseOf(state, event.product) + onShelves(state, event.product);
         box.append(
           el('h3', '', `🍽 ${t('event.order.title')}`),
-          el('b', '', t(client.nameKey)),
+          who(CLIENT_PORTRAIT[event.client], el('b', '', t(client.nameKey))),
           el('p', '', `«${t(client.askKey, { qty: event.qty, product: productLabel(event.product), pay: event.pay })}»`),
           el('div', 'ui-muted', `${t('buy.inWarehouse', { n: have })} · ${t('event.order.note')}`),
           button(t('event.order.accept'), () => answer(true)),
@@ -531,12 +784,28 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const traitLine = (m: StaffMember) => {
     const stars = '★'.repeat(m.skill).padEnd(3, '☆');
     const trait = m.trait ? ` · ${t(TRAITS[m.trait].nameKey)}: ${t(TRAITS[m.trait].descKey)}` : '';
-    return `${stars}${trait}`;
+    const speed = m.role === 'cashier' ? ` · ${t('staffTab.scanSpeed', { s: cashierScan(m).item.toFixed(2) })}` : '';
+    return `${stars}${speed}${trait}`;
   };
 
   const staffTab = (state: StoreState): HTMLElement[] => {
     const limit = staffLimit(state);
+    const lvl = ownerLevel(state.ownerServed);
+    const next = ownerNextLevelAt(state.ownerServed);
+    const scan = ownerScan(state.ownerServed);
+    const skill = el('div', 'ui-box');
+    skill.append(
+      el('b', '', `${t('staffTab.ownerSkill')} ${'★'.repeat(lvl).padEnd(5, '☆')}`),
+      el(
+        'div',
+        'ui-muted',
+        next === null
+          ? t('staffTab.ownerSkillMax', { s: scan.item.toFixed(2) })
+          : t('staffTab.ownerSkillNext', { n: state.ownerServed, next, s: scan.item.toFixed(2) }),
+      ),
+    );
     const out: HTMLElement[] = [
+      skill,
       el('div', 'ui-muted', t('staffTab.count', { n: state.staff.length, max: limit })),
       el('div', 'ui-note', t('staffTab.wageNote')),
     ];
@@ -618,7 +887,15 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const storeTab = (state: StoreState): HTMLElement[] => {
     const level = storeLevel(state);
     const next = nextStoreLevel(state);
-    const out: HTMLElement[] = [];
+    const out: HTMLElement[] = [
+      achievementsButton(state),
+      regularsBox(state),
+      adsBox(state),
+      upgradesBox(state),
+      rankBox(state),
+      albumBox(state),
+      decorBox(state),
+    ];
 
     const current = el('div', 'ui-box');
     current.append(
@@ -695,25 +972,45 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
 
   // ---------- Цены ----------
 
-  const pricesTab = (state: StoreState): HTMLElement[] =>
-    PRODUCT_IDS.map((pid) => {
+  /** Карточки цен: открытые товары — с ценой и полоской спроса, закрытые — серые, с подсказкой, как открыть. */
+  const pricesTab = (state: StoreState): HTMLElement[] => {
+    const sellable = sellableProducts(state);
+    return PRODUCT_IDS.map((pid) => {
+      const product = PRODUCTS[pid];
+      const card = el('div', 'ui-price');
+      const icon = el('img', 'ui-price-icon');
+      icon.src = `assets/item_${pid}.png`;
+      icon.alt = '';
+      const info = el('div', 'ui-price-info');
+      info.append(el('b', '', t(product.nameKey)));
+      if (!sellable.includes(pid)) {
+        card.classList.add('ui-price-locked');
+        // Сезонный товар вне сезона — «только летом», иначе — какая полка нужна.
+        const why = productAvailable(pid, state.day)
+          ? t('prices.locked', { shelf: t(SHELF_KINDS[product.category].nameKey) })
+          : t(`prices.season.${pid}` as TextKey);
+        info.append(el('div', 'ui-muted', `🔒 ${why}`));
+        card.append(icon, info);
+        return card;
+      }
       const price = state.prices[pid];
-      const row = el('div', 'ui-row');
+      const demand = buyChance(price, product.basePrice);
+      const bar = el('div', 'ui-bar');
+      const fill = el('div', 'ui-bar-fill');
+      fill.style.width = `${Math.min(100, Math.round(demand * 80))}%`;
+      fill.style.background = demand >= 0.7 ? '#63c74d' : demand >= 0.4 ? '#feae34' : '#e43b44';
+      bar.append(fill);
+      info.append(
+        bar,
+        el('div', 'ui-muted', `${t('prices.demand', { p: Math.round(demand * 100) })} · ${t('prices.base', { n: product.basePrice })}`),
+      );
       const change = (delta: number) => () => update(setPrice(getState(), pid, getState().prices[pid] + delta));
       const chips = el('div', 'ui-chips');
-      chips.append(
-        button('−', change(-PRICE_STEP), 'ui-chip'),
-        el('b', '', `${price} 💰`),
-        button('+', change(PRICE_STEP), 'ui-chip'),
-      );
-      const label = el('span');
-      label.append(
-        el('span', '', `${productLabel(pid)} `),
-        el('span', 'ui-muted', t('prices.demand', { p: Math.round(buyChance(price, PRODUCTS[pid].basePrice) * 100) })),
-      );
-      row.append(label, chips);
-      return row;
+      chips.append(button('−', change(-PRICE_STEP), 'ui-chip'), el('b', 'ui-price-value', `${price} 💰`), button('+', change(PRICE_STEP), 'ui-chip'));
+      card.append(icon, info, chips);
+      return card;
     });
+  };
 
   render();
 }

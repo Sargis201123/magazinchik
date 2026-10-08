@@ -11,9 +11,12 @@ import {
   type OrderResult,
 } from './events';
 import { storyChances, storyGuests } from './story';
+import { questsFor, rankGuests, rewardQuests, seasonFor } from './endless';
+import { adBoost } from './ads';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
+  quests: { earned: number; done: number; total: number };
 }
 
 export function nightCycle(state: StoreState, stats: DayStats, random: () => number = Math.random): NightSummary {
@@ -23,15 +26,24 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     s = order.state;
     if (order.delivered) s = { ...s, story: { ...s.story, ordersDone: s.story.ordersDone + 1 } };
   }
+  const quests = s.plan?.quests ?? [];
+  const rewarded = rewardQuests(s, quests, stats);
+  s = rewarded.state;
   const night = endDay(s, stats, random);
   const next = ensurePlan(night.state);
-  return { ...night, state: next, order: order && { delivered: order.delivered, earned: order.earned } };
+  return {
+    ...night,
+    state: next,
+    order: order && { delivered: order.delivered, earned: order.earned },
+    quests: { earned: rewarded.earned, done: rewarded.done, total: quests.length },
+  };
 }
 
 /** План на текущий день (если его ещё нет — например, в начале игры). */
 export function ensurePlan(state: StoreState): StoreState {
-  if (state.plan?.day === state.day) return state;
-  return { ...state, plan: planDay(state, storyChances(state)) };
+  if (state.plan?.day === state.day && state.plan.quests) return state;
+  const plan = planDay(state, storyChances(state));
+  return { ...state, plan: { ...plan, quests: questsFor(state, guestsToday(state)) } };
 }
 
 /** Итог проверки: штраф/рейтинг и счётчик для сюжета. */
@@ -41,7 +53,11 @@ export function inspectionDone(state: StoreState, result: InspectionResult): Sto
   return { ...s, story: { ...s.story, inspectionsPassed: s.story.inspectionsPassed + 1 } };
 }
 
-/** Секунд между гостями сегодня: рейтинг, помещение и сюжет (конкурент уводит часть гостей). */
-export const spawnIntervalToday = (state: StoreState): number => spawnInterval(state.rating, state.level) / storyGuests(state);
+/** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина и реклама. */
+export const guestFactor = (state: StoreState): number =>
+  storyGuests(state) * (seasonFor(state.day)?.guests ?? 1) * rankGuests(state) * adBoost(state);
 
-export const guestsToday = (state: StoreState): number => Math.round(expectedGuests(state.rating, state.level) * storyGuests(state));
+/** Секунд между гостями сегодня: рейтинг, помещение, сюжет, сезон и звание. */
+export const spawnIntervalToday = (state: StoreState): number => spawnInterval(state.rating, state.level) / guestFactor(state);
+
+export const guestsToday = (state: StoreState): number => Math.round(expectedGuests(state.rating, state.level) * guestFactor(state));

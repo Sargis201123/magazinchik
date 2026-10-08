@@ -29,6 +29,7 @@ import {
   returnToShelf,
   setPrice,
   sellableProducts,
+  seasonalDemand,
   SHELF_KINDS,
   SHELF_LEVELS,
   shelfCapacity,
@@ -53,12 +54,18 @@ import {
   thiefChance,
   type StaffRole,
   type StoreState,
+  cashierScan,
+  checkoutSeconds,
+  DAY_SECONDS,
+  ownerScan,
+  recordSale,
 } from './economy';
 import { ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { answerEvent, inspect } from './events';
 import { candidatesFor } from './staff';
 import { finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
+import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
 
 export { rng };
@@ -113,10 +120,22 @@ const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
   ['cleaner', (s) => s.level >= 3],
 ];
 
-/** Сколько покупателей за 90 секунд успевает пробить один человек, если ещё и бегает по делам. */
+/** Для решения «пора нанимать кассира»: примерно столько успевает один человек. */
 const SOLO_SERVE_CAP = 30;
-/** Сколько успевает кассир (хозяин помогает). */
-const CASHIER_SERVE_CAP = 100;
+/** Средняя корзина в штуках. */
+const AVG_BASKET = 1.4;
+/** Один игрок стоит за кассой не весь день: ещё бегает на склад и убирает — в большом магазине дел больше. */
+const ownerAtRegister = (level: number): number => 0.65 - 0.07 * level;
+/** Подойти к кассе и отойти — секунды на каждого покупателя. */
+const QUEUE_STEP_SECONDS = 0.3;
+
+/** Сколько покупателей реально пробить за день: пробивка занимает время и зависит от навыка. */
+function serveCapacity(state: StoreState): number {
+  const cashier = staffOf(state, 'cashier');
+  if (cashier) return Math.floor(DAY_SECONDS / (checkoutSeconds(cashierScan(cashier), AVG_BASKET) + QUEUE_STEP_SECONDS));
+  const owner = checkoutSeconds(ownerScan(state.ownerServed), AVG_BASKET) + QUEUE_STEP_SECONDS;
+  return Math.floor((DAY_SECONDS * ownerAtRegister(state.level)) / owner);
+}
 
 export function simulate({
   days,
@@ -186,7 +205,7 @@ export function simulate({
     for (const m of state.staff) if (m.raiseAsk) state = answerRaise(state, m.role, true);
     if (hireStaff) {
       const role = HIRE_WHEN.find(([r, need]) => !staffOf(state, r) && need(state))?.[0];
-      const candidate = role && candidatesFor(state.day, 0, role).find((c) => c.trait !== 'sticky');
+      const candidate = role && candidatesFor(state.day, 0, role).filter((c) => c.trait !== 'sticky').sort((a, b) => b.skill - a.skill)[0];
       if (candidate && state.staff.length < staffLimit(state) && state.money >= reserve + candidate.wage) {
         state = hire(state, candidate) ?? state;
       }
@@ -203,7 +222,10 @@ export function simulate({
       }),
     );
     for (const id of sellable) {
-      const demand = (guests * AVG_WANTS * buyChance(state.prices[id], PRODUCTS[id].basePrice)) / sellable.length;
+      // Доля спроса на товар: в сезон любимые товары берут чаще.
+      const weight = (p: ProductId) => (seasonFor(state.day)?.demand[p] ?? 1) * seasonalDemand(p, state.day);
+      const share = weight(id) / sellable.reduce((sum, p) => sum + weight(p), 0);
+      const demand = guests * AVG_WANTS * buyChance(state.prices[id], perceivedBase(state, id)) * share;
       const shelfRoom = state.shelves
         .filter((s) => s.kind === PRODUCTS[id].category)
         .reduce((sum, s) => sum + shelfCapacity(s), 0);
@@ -233,7 +255,7 @@ export function simulate({
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
     const lossInQueue = queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level);
-    const serveCap = has('cashier') ? CASHIER_SERVE_CAP : SOLO_SERVE_CAP;
+    const serveCap = serveCapacity(state);
     const dirtComplaint = has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level;
     const guard = staffOf(state, 'guard');
     for (let g = 0; g < dayGuests; g++) {
@@ -257,8 +279,7 @@ export function simulate({
           trips--;
         }
       }
-      const wants = Math.floor(random() * sellable.length);
-      const wanted = [sellable[wants], ...(random() < AVG_WANTS - 1 ? [sellable[(wants + 1) % sellable.length]] : [])];
+      const wanted = pickWanted(state, random, random() < AVG_WANTS - 1 ? 2 : 1);
       const cart: CartItem[] = [];
       let sawEmpty = false;
       let tooExpensive = false;
@@ -270,11 +291,11 @@ export function simulate({
           sawEmpty = true;
           continue;
         }
-        if (random() < buyChance(unitSalePrice(state, id, oldest), PRODUCTS[id].basePrice)) {
+        if (random() < buyChance(unitSalePrice(state, id, oldest), perceivedBase(state, id))) {
           const taken = takeFromShelf(state, index, id)!;
           state = taken.state;
           cart.push({ id, unit: taken.unit });
-        } else if (unitSalePrice(state, id, oldest) > PRODUCTS[id].basePrice) {
+        } else if (unitSalePrice(state, id, oldest) > perceivedBase(state, id)) {
           tooExpensive = true;
         }
       }
@@ -291,9 +312,13 @@ export function simulate({
       state = paid.state;
       stats.revenue += paid.total;
       stats.served++;
+      recordSale(stats, cart);
       if (hasUnmarkedBad(cart) && random() < BAD_COMPLAINT_CHANCE) stats.complaints++;
       if (random() < dirtComplaint) stats.complaints++;
     }
+
+    // Мусор: уборщик убирает всё, игрок — сколько успеет.
+    stats.trashCleaned = has('cleaner') ? 3 + state.level : Math.floor(random() * (3 + state.level));
 
     // Проверка: с уборщиком чисто почти всегда, в одиночку — как повезёт.
     if (state.plan?.inspection) {
@@ -302,6 +327,7 @@ export function simulate({
     }
 
     // ---------- Ночь ----------
+    if (!has('cashier')) state = { ...state, ownerServed: state.ownerServed + stats.served };
     const night = nightCycle(state, stats, random);
     state = night.state;
     const expenses = night.bill ? billTotal(night.bill) : 0;

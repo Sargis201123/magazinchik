@@ -31,7 +31,7 @@ const shop = (event?: MorningEvent, plan: Partial<DayPlan> = {}): StoreState => 
     { kind: 'bakery', level: 0, items: { bread: units(4) } },
     { kind: 'dairy', level: 0, items: { milk: units(3) } },
   ],
-  plan: { day: 10, decided: false, inspection: false, event, ...plan },
+  plan: { day: 10, decided: false, inspection: false, quests: [], event, ...plan },
 });
 
 describe('план дня', () => {

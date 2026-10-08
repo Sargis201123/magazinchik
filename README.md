@@ -17,7 +17,8 @@ python3 art/sprites.py  # перерисовать спрайты в public/asse
 
 - `src/game` — игровая логика без Phaser (экономика, сохранения), покрыта тестами.
 - `src/scenes` — сцены Phaser: `BootScene` (загрузка спрайтов), `StoreScene` (магазин), `layout.ts` (планировки помещений).
-- `art/sprites.py` — вся пиксельная графика: пиксельные карты и палитра, результат в `public/assets`.
+- `art/sprites.py` — вся пиксельная графика: пиксельные карты и палитра, результат в `public/assets`. Там же иконка `public/favicon.png` и `public/icon-512.png` (аватарка бота: BotFather → /setuserpic).
+- `src/platform/sound.ts` — звуки, синтезируются WebAudio (без файлов).
 - `src/ui` — интерфейс поверх canvas (HUD, окна).
 - `src/i18n` — переводы ru/en.
 - `src/platform/telegram.ts` — обёртка над Telegram WebApp API. Вне Telegram ничего не делает.

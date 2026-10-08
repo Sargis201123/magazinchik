@@ -23,8 +23,11 @@ describe('баланс экономики', () => {
   });
 
   it('первые дни — тяжёлые: бывают дни почти без прибыли', () => {
-    const early = simulate({ days: 10, seed: 3 }).days.slice(1);
-    expect(Math.min(...early.map((d) => d.profit))).toBeLessThan(120);
+    // Худший день из первых десяти, медиана по 10 прогонам: один сид слишком зависит от случая.
+    const worst = Array.from({ length: 10 }, (_, i) =>
+      Math.min(...simulate({ days: 10, seed: i + 1 }).days.slice(1).map((d) => d.profit)),
+    ).sort((a, b) => a - b);
+    expect(worst[5]).toBeLessThan(120);
   });
 });
 

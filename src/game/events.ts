@@ -19,6 +19,7 @@ import {
 } from './economy';
 import { rng } from './random';
 import { SUPPLIER_IDS, SUPPLIERS, type SupplierId } from './suppliers';
+import type { Quest } from './endless';
 
 /** Кто делает крупный заказ. */
 export type ClientId = 'chef' | 'school' | 'valya';
@@ -60,6 +61,8 @@ export interface DayPlan {
   rushAt?: number;
   /** Кто сегодня заболел. */
   sick?: StaffRole;
+  /** Задания дня. */
+  quests: Quest[];
 }
 
 export interface EventChances {
@@ -76,7 +79,7 @@ export const inspectionFine = (level: number): number => 150 + 100 * level;
  */
 export function planDay(state: StoreState, chances: EventChances = { order: 0.15, inspection: 0.1 }): DayPlan {
   const random = rng(state.day * 92821 + 7);
-  const plan: DayPlan = { day: state.day, decided: false, inspection: false };
+  const plan: DayPlan = { day: state.day, decided: false, inspection: false, quests: [] };
   if (state.day <= 3) return plan;
 
   if (random() < 0.3) plan.rushAt = 20 + Math.floor(random() * 45);

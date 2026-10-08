@@ -4,11 +4,12 @@
 import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
+import { newDecor, type DecorState } from './decor';
 
 /** Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу. */
 export type Category = 'bakery' | 'produce' | 'dairy' | 'meat';
 
-export type ProductId = 'bread' | 'apples' | 'potatoes' | 'milk' | 'meat';
+export type ProductId = 'bread' | 'apples' | 'potatoes' | 'milk' | 'meat' | 'icecream' | 'tangerines' | 'flowers';
 
 export interface Product {
   id: ProductId;
@@ -30,9 +31,31 @@ export const PRODUCTS: Record<ProductId, Product> = {
   potatoes: { id: 'potatoes', nameKey: 'product.potatoes', icon: '🥔', category: 'produce', cost: 10, basePrice: 20, shelfLife: 7, color: 0xa47a52 },
   milk: { id: 'milk', nameKey: 'product.milk', icon: '🥛', category: 'dairy', cost: 36, basePrice: 60, shelfLife: 3, color: 0xeef3f7 },
   meat: { id: 'meat', nameKey: 'product.meat', icon: '🥩', category: 'meat', cost: 90, basePrice: 150, shelfLife: 2, color: 0xb83a4b },
+  // Сезонные товары: продаются только в свои месяцы (см. SEASONAL).
+  icecream: { id: 'icecream', nameKey: 'product.icecream', icon: '🍦', category: 'dairy', cost: 30, basePrice: 55, shelfLife: 4, color: 0xf6c6d6 },
+  tangerines: { id: 'tangerines', nameKey: 'product.tangerines', icon: '🍊', category: 'produce', cost: 20, basePrice: 40, shelfLife: 6, color: 0xf77622 },
+  flowers: { id: 'flowers', nameKey: 'product.flowers', icon: '💐', category: 'produce', cost: 35, basePrice: 70, shelfLife: 3, color: 0xe43b44 },
 };
 
 export const PRODUCT_IDS = Object.keys(PRODUCTS) as ProductId[];
+
+/** Месяцев в игровом году (= YEAR_MONTHS в calendar.ts, проверяется тестом). */
+const YEAR_MONTHS = 16;
+/**
+ * Сезонные товары: в какие месяцы игрового года (0…15) их продают.
+ * Мороженое — летом, мандарины — перед Новым годом и в новогоднюю неделю, цветы — весной.
+ */
+export const SEASONAL: Partial<Record<ProductId, number[]>> = { icecream: [7, 8, 9, 10], tangerines: [2, 3], flowers: [4, 5, 6] };
+
+export const monthInYear = (day: number): number => (monthOf(day) - 1) % YEAR_MONTHS;
+export const productAvailable = (id: ProductId, day: number): boolean => SEASONAL[id]?.includes(monthInYear(day)) ?? true;
+
+/** Спрос на сезонный товар: в сезон берут охотно, на 8 Марта (первые два дня весны) цветы — нарасхват. */
+export function seasonalDemand(id: ProductId, day: number): number {
+  if (!SEASONAL[id]) return 1;
+  if (id === 'flowers' && monthInYear(day) === 4 && (day - 1) % MONTH_DAYS < 2) return 5;
+  return 1.5;
+}
 
 export interface ShelfKind {
   nameKey: TextKey;
@@ -98,6 +121,9 @@ export const STORE_LEVELS: StoreLevel[] = [
  * Игровой месяц — 7 дней (~15–20 минут игры). В конце месяца приходят счета:
  * аренда, коммуналка, электричество, зарплаты и платёж по кредиту.
  */
+/** Сколько последних дней помнить для графика выручки. */
+export const HISTORY_DAYS = 14;
+
 export const MONTH_DAYS = 7;
 /** Не хватило денег на счета — недостача уходит в долг, сверху пени. */
 export const LATE_PENALTY = 0.1;
@@ -234,6 +260,38 @@ export const thiefChance = (level: number): number => 0.05 + 0.015 * level;
 /** Шанс, что охранник поймает вора у выхода. */
 export const guardCatchChance = (m: StaffMember): number => Math.min(0.95, 0.6 * workSpeed(m));
 
+// ---------- Касса: пробивка занимает время ----------
+
+/** Навык кассы хозяина: сколько покупателей надо обслужить для каждого уровня (★1…★5). */
+export const OWNER_LEVELS = [0, 25, 70, 150, 300];
+/** Секунд на один товар у хозяина по уровням навыка. */
+const OWNER_SCAN = [1.0, 0.85, 0.72, 0.6, 0.48];
+/** Сколько секунд кассир с обычной скоростью тратит на товар и на оплату. */
+const CASHIER_SCAN = 0.7;
+const CASHIER_PAY = 0.5;
+
+export const ownerLevel = (served: number): number => OWNER_LEVELS.filter((n) => served >= n).length;
+
+/** Сколько осталось до следующего уровня навыка кассы (null — максимум). */
+export const ownerNextLevelAt = (served: number): number | null => OWNER_LEVELS[ownerLevel(served)] ?? null;
+
+export interface ScanTiming {
+  /** Секунд на один товар. */
+  item: number;
+  /** Секунд на оплату. */
+  pay: number;
+}
+
+export function ownerScan(served: number): ScanTiming {
+  const item = OWNER_SCAN[ownerLevel(served) - 1];
+  return { item, pay: item * 0.7 };
+}
+
+export const cashierScan = (m: StaffMember): ScanTiming => ({ item: CASHIER_SCAN / workSpeed(m), pay: CASHIER_PAY / workSpeed(m) });
+
+/** Сколько секунд пробивается корзина. */
+export const checkoutSeconds = (t: ScanTiming, items: number): number => t.item * items + t.pay;
+
 /** Сколько штук продавец уносит со склада за один поход. */
 export const CARRY = 6;
 
@@ -278,6 +336,12 @@ export interface StoreState {
   /** Долг: пока он есть, арендодатель не даёт расширяться. */
   debt: number;
   staff: StaffMember[];
+  /** Сколько покупателей хозяин обслужил сам — от этого растёт навык кассы. */
+  ownerServed: number;
+  /** Выручка за всё время — от неё растёт звание магазина. */
+  totalRevenue: number;
+  /** Редкие гости, которых уже обслужили (альбом). */
+  album: string[];
   /** Сегодняшнее объявление о вакансии и кандидаты по нему. */
   jobSearch?: { day: number; role: StaffRole; candidates: StaffMember[] };
   /** Кто уволился в конце месяца (показываем утром). */
@@ -285,6 +349,22 @@ export interface StoreState {
   /** План сегодняшнего дня: событие утра, проверка, час пик. */
   plan?: DayPlan;
   story: StoryState;
+  /** Оформление магазина. */
+  decor: DecorState;
+  /** Выручка последних дней — для графика в итогах дня. */
+  history: number[];
+  /** Открытые достижения (id из achievements.ts). */
+  achievements: string[];
+  /** Счётчики за всю игру — для достижений. */
+  lifetime: Lifetime;
+  /** Подарок за ежедневный вход: когда забрали последний (дата YYYY-MM-DD) и какой по счёту день подряд. */
+  gift: { lastDate: string; streak: number };
+  /** Постоянные покупатели: доверие (0…5) и до какого дня обиделись (regulars.ts). */
+  regulars?: Record<string, { loyalty: number; awayUntil: number }>;
+  /** Купленные улучшения кассы (upgrades.ts). */
+  upgrades?: string[];
+  /** Реклама: какая и в какие дни (включительно) работает. */
+  ads?: { id: 'flyers' | 'banner' | 'blogger'; from: number; until: number };
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -292,6 +372,17 @@ export interface StoreState {
   shelves: Shelf[];
   prices: Record<ProductId, number>;
 }
+
+export interface Lifetime {
+  served: number;
+  caught: number;
+  trashCleaned: number;
+  bestCombo: number;
+  /** Дней без единой жалобы (и хотя бы с 10 покупателями). */
+  cleanDays: number;
+}
+
+export const newLifetime = (): Lifetime => ({ served: 0, caught: 0, trashCleaned: 0, bestCombo: 0, cleanDays: 0 });
 
 export interface DayStats {
   revenue: number;
@@ -307,6 +398,17 @@ export interface DayStats {
   caught: number;
   /** Сколько унесли из кассы сотрудники «нечист на руку». */
   skimmed: number;
+  /** Продано штук каждого товара — для заданий дня. */
+  sold: Partial<Record<ProductId, number>>;
+  /** Сколько мусора убрали. */
+  trashCleaned: number;
+  /** Самая длинная серия: покупатели, обслуженные подряд без долгих пауз. */
+  bestCombo: number;
+}
+
+/** Учёт проданного (для заданий дня). */
+export function recordSale(stats: DayStats, items: CartItem[]): void {
+  for (const { id } of items) stats.sold[id] = (stats.sold[id] ?? 0) + 1;
 }
 
 export interface CartItem {
@@ -322,14 +424,22 @@ export const newGame = (): StoreState => ({
   level: 0,
   debt: START_DEBT,
   staff: [],
+  ownerServed: 0,
+  totalRevenue: 0,
+  album: [],
   story: { chapter: 0, introSeen: false, ordersDone: 0, inspectionsPassed: 0 },
+  decor: newDecor(),
+  history: [],
+  achievements: [],
+  lifetime: newLifetime(),
+  gift: { lastDate: '', streak: 0 },
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [
     { kind: 'bakery', level: 0, items: { bread: fresh(4) } },
     { kind: 'produce', level: 0, items: { apples: fresh(3), potatoes: fresh(3) } },
   ],
-  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150 },
+  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70 },
 });
 
 export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];
@@ -346,6 +456,9 @@ export const emptyDayStats = (): DayStats => ({
   stolen: 0,
   caught: 0,
   skimmed: 0,
+  sold: {},
+  trashCleaned: 0,
+  bestCombo: 0,
 });
 
 // ---------- Подсчёты ----------
@@ -371,7 +484,7 @@ export function shelfFor(state: StoreState, id: ProductId): number {
 
 /** Товары, для которых в магазине есть подходящая полка: только их и ищут покупатели. */
 export const sellableProducts = (state: StoreState): ProductId[] =>
-  PRODUCT_IDS.filter((id) => state.shelves.some((s) => canPlace(id, s)));
+  PRODUCT_IDS.filter((id) => productAvailable(id, state.day) && state.shelves.some((s) => canPlace(id, s)));
 
 // ---------- Цены и спрос ----------
 
@@ -672,6 +785,8 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
     ...state,
     day: state.day + 1,
     money: state.money - skimmed,
+    totalRevenue: state.totalRevenue + stats.revenue,
+    history: [...(state.history ?? []), stats.revenue].slice(-HISTORY_DAYS),
     rating: Math.round(rating * 100) / 100,
     warehouse: warehouse.stock,
     shelves,
