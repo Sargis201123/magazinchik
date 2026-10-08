@@ -11,7 +11,7 @@ export const CANDIDATES_PER_SEARCH = 3;
 export const JOB_AD_COST = 30;
 
 const TRAIT_ROLL: (Trait | undefined)[] = [undefined, undefined, undefined, 'hardworker', 'slowpoke', 'sticky'];
-const ROLE_SEED: Record<StaffRole, number> = { cashier: 1, cashier2: 5, cleaner: 2, loader: 3, guard: 4 };
+const ROLE_SEED: Record<StaffRole, number> = { cashier: 1, cashier2: 5, cashier3: 6, cashier4: 7, cleaner: 2, loader: 3, guard: 4 };
 
 export function candidatesFor(day: number, seed: number, role: StaffRole): StaffMember[] {
   const random = rng(day * 7919 + seed * 104729 + ROLE_SEED[role] * 31);

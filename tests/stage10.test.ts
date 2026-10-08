@@ -3,7 +3,6 @@ import { emptyDayStats, newGame, servePerDay, cashierScan, type StaffMember, typ
 import { lossAdvice, noteLost } from '../src/game/losses';
 import { applyReorder, previousOrder, recordPurchase, reorderPlan } from '../src/game/reorder';
 import { SLOWPOKE_FIX_COST, train, trainingCost, TRAINING_COST } from '../src/game/staff';
-import { buyUpgrade } from '../src/game/upgrades';
 
 const rich = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), money: 10000, level: 3, ...patch });
 const member = (patch: Partial<StaffMember> = {}): StaffMember => ({ role: 'cashier', name: 0, skill: 1, wage: 360, months: 0, ...patch });
@@ -32,11 +31,13 @@ describe('куда ушли покупатели', () => {
     noteLost(stats, 'queue');
     const key = (s: StoreState) => lossAdvice(stats, s)[0].key;
     expect(key(rich())).toBe('loss.queue.hire');
-    const withCashier = rich({ staff: [member()] });
-    expect(key(withCashier)).toBe('loss.queue.register');
-    const withRegister = buyUpgrade(withCashier, 'register2')!;
-    expect(key(withRegister)).toBe('loss.queue.hire2');
-    expect(key({ ...withRegister, staff: [member(), member({ role: 'cashier2' })] })).toBe('loss.queue.train');
+    // Ур. 3 (индекс 2): две кассы. Свободна вторая — нанять; обе заняты — расширяться (будет третья).
+    const two = rich({ level: 2, staff: [member()] });
+    expect(key(two)).toBe('loss.queue.hire2');
+    expect(key({ ...two, staff: [member(), member({ role: 'cashier2' })] })).toBe('loss.queue.register');
+    // Универмаг: четыре кассы, все с кассирами — остаётся учить.
+    const all = rich({ level: 4, staff: ['cashier', 'cashier2', 'cashier3', 'cashier4'].map((role) => member({ role: role as 'cashier' })) });
+    expect(key(all)).toBe('loss.queue.train');
   });
 });
 

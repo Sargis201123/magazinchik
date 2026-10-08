@@ -2,13 +2,11 @@
 // разбирают охотнее. Свой хлеб дешевле, чем у поставщика, но печь надо караулить:
 // если вовремя не вынуть, всё сгорит.
 
+import { ovenBatch, ovenBatchCost } from './gear';
 import { canPlace, shelfFree, warehouseCapacity, warehouseCount, type StoreState, type Unit } from './economy';
 
-/** Сколько буханок в одной закладке и сколько стоят мука и дрожжи на неё. */
-export const OVEN_BATCH = 6;
-export const OVEN_BATCH_COST = 60;
-/** Секунд печётся и сколько секунд готовый хлеб ждёт, прежде чем сгореть. */
-export const OVEN_BAKE_SECONDS = 14;
+/** Сколько буханок в закладке, почём мука и сколько печётся — зависит от модели печи (gear.ts). */
+/** Сколько секунд готовый хлеб ждёт, прежде чем сгореть. */
 export const OVEN_BURN_SECONDS = 10;
 /** Сколько секунд в зале пахнет хлебом. */
 export const AROMA_SECONDS = 25;
@@ -23,15 +21,15 @@ export const breadRoom = (state: StoreState): number =>
 
 /** Заложить противень: деньги за муку. null — не хватает денег или хлеб некуда положить. */
 export function startBatch(state: StoreState): StoreState | null {
-  if (state.money < OVEN_BATCH_COST || breadRoom(state) < OVEN_BATCH) return null;
-  return { ...state, money: state.money - OVEN_BATCH_COST };
+  if (state.money < ovenBatchCost(state) || breadRoom(state) < ovenBatch(state)) return null;
+  return { ...state, money: state.money - ovenBatchCost(state) };
 }
 
 /**
  * Свежий хлеб из печи: сразу на полки с хлебом (где есть место), остальное — на склад.
  * Склад может ненадолго переполниться: хлеб не выбрасывают.
  */
-export function takeOutBread(state: StoreState, qty = OVEN_BATCH): { state: StoreState; onShelves: number } {
+export function takeOutBread(state: StoreState, qty = ovenBatch(state)): { state: StoreState; onShelves: number } {
   let left = qty;
   let placed = 0;
   const fresh = (): Unit => ({ age: 0 });

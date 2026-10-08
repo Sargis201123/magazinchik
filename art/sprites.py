@@ -467,69 +467,143 @@ def fridge_rails(c):
             c.px(x + 2, y + 2, "K")
 
 
-def counter():
-    """Касса боком 32×104: деревянный бок к покупателю, лента с разделителем, сканер,
-    монитор с денежным ящиком и пакеты в конце."""
-    c = Canvas(32, 104)
-    # Бок к покупателю — дерево, столешница — светлая, край к продавцу — тёмный.
-    c.rect(0, 0, 6, 104, "B")
-    c.vline(1, 1, 102, "n")
-    c.vline(5, 1, 102, "a")
-    for y in range(12, 100, 22):
-        c.hline(1, y, 4, "a")
-    c.rect(6, 0, 22, 104, "W")
-    c.vline(6, 0, 104, "w")
-    c.rect(28, 0, 4, 104, "G")
-    c.vline(28, 0, 104, "l")
-    # Лента.
-    c.rect(8, 3, 18, 50, "l")
-    c.rect(9, 4, 16, 48, "K")
-    for y in range(6, 52, 5):
-        c.hline(9, y, 16, "g")
-    # Разделитель «следующий покупатель».
-    c.rect(10, 26, 14, 2, "y")
-    c.hline(10, 26, 14, "Y")
-    # Сканер со стеклом и красным лучом.
-    c.rect(8, 55, 18, 11, "k")
-    c.rect(9, 56, 16, 9, "u")
-    c.hline(9, 60, 16, "R")
-    c.vline(17, 56, 9, "R")
-    c.px(10, 57, "U")
-    c.px(11, 57, "U")
-    c.px(10, 58, "U")
-    # Тень от монитора на столешницу.
+def counter_device(c, tier):
+    """Что стоит на столе кассы — зависит от модели: кассовый аппарат, сканер с монитором,
+    POS-касса с весами, смарт-касса с арочным сканером над лентой."""
+    if tier == 0:
+        # Кассовый аппарат: бежевый корпус, клавиши, табло и денежный ящик.
+        c.rect(12, 58, 16, 30, "l")
+        c.rect(8, 56, 18, 30, "N")
+        c.vline(8, 56, 30, "F")
+        c.vline(25, 56, 30, "Q")
+        for y in range(58, 67, 3):
+            for x in range(10, 24, 3):
+                c.rect(x, y, 2, 2, "W" if (x + y) % 2 else "q")
+        c.px(22, 64, "R")
+        c.px(22, 65, "R")
+        # Табло: на этом месте экран светится при пробивке.
+        c.rect(10, 69, 14, 7, "k")
+        c.rect(11, 70, 12, 5, "d")
+        c.rect(10, 79, 14, 6, "v")
+        c.hline(10, 79, 14, "Q")
+        c.rect(15, 81, 4, 1, "a")
+        c.frame(8, 56, 18, 30, "a")
+        # Рулон чека сбоку.
+        c.rect(26, 60, 2, 8, "w")
+        return
+    if tier in (1, 2):
+        # Сканер со стеклом и красным лучом.
+        wide = tier == 2
+        c.rect(8, 55, 18, 11, "k")
+        c.rect(9, 56, 16, 9, "u")
+        c.hline(9, 60, 16, "R")
+        c.vline(17, 56, 9, "R")
+        c.px(10, 57, "U")
+        c.px(11, 57, "U")
+        c.px(10, 58, "U")
+        if wide:
+            # Весы-площадка у сканера.
+            c.rect(8, 48, 18, 5, "W")
+            c.hline(8, 48, 18, "w")
+            c.frame(8, 48, 18, 5, "G")
+        # Тень от монитора на столешницу.
+        c.rect(12, 70, 16, 18, "l")
+        c.rect(9, 68, 16, 18, "k")
+        c.rect(10, 69, 14, 9, "K")
+        if wide:
+            # Сенсорный экран POS: синий интерфейс с кнопками.
+            c.rect(11, 70, 12, 6, "u")
+            c.rect(12, 71, 4, 2, "U")
+            c.rect(17, 71, 5, 2, "c")
+            c.hline(12, 74, 10, "W")
+        else:
+            c.rect(11, 70, 12, 6, "e")
+            c.hline(11, 70, 12, "E")
+            c.hline(12, 72, 5, "Y")
+            c.hline(12, 74, 8, "E")
+        c.rect(10, 79, 14, 6, "g")
+        for x in range(11, 23, 3):
+            c.rect(x, 80, 2, 1, "W")
+            c.rect(x, 82, 2, 1, "W")
+        c.hline(10, 84, 14, "G")
+        c.rect(26, 72, 2, 6, "w")
+        if wide:
+            # Пин-пад у края.
+            c.rect(26, 64, 2, 4, "K")
+            c.px(26, 64, "E")
+        return
+    # Смарт-касса: белый корпус, арка-сканер над лентой, большой сенсорный экран.
+    c.rect(7, 18, 20, 4, "w")
+    c.rect(7, 18, 2, 12, "w")
+    c.rect(25, 18, 2, 12, "w")
+    c.hline(9, 21, 16, "c")
+    c.hline(9, 22, 16, "U")
+    c.frame(7, 18, 20, 12, "l")
+    c.rect(8, 55, 18, 11, "W")
+    c.rect(9, 56, 16, 9, "c")
+    c.hline(9, 60, 16, "w")
+    c.vline(17, 56, 9, "U")
     c.rect(12, 70, 16, 18, "l")
-    # Монитор и денежный ящик.
-    c.rect(9, 68, 16, 18, "k")
-    c.rect(10, 69, 14, 9, "K")
-    c.rect(11, 70, 12, 6, "e")
-    c.hline(11, 70, 12, "E")
-    c.hline(12, 72, 5, "Y")
-    c.hline(12, 74, 8, "E")
-    c.rect(10, 79, 14, 6, "g")
-    for x in range(11, 23, 3):
-        c.rect(x, 80, 2, 1, "W")
-        c.rect(x, 82, 2, 1, "W")
-    c.hline(10, 84, 14, "G")
-    # Лента чека.
-    c.rect(26, 72, 2, 6, "w")
-    # Пакеты.
-    for x, tone in ((8, "N"), (17, "n")):
-        c.rect(x, 90, 8, 10, tone)
-        c.hline(x, 90, 8, "w")
-        c.frame(x, 90, 8, 10, "a")
-        c.frame(x + 2, 87, 4, 4, "a")
-    c.frame(0, 0, 32, 104, "k")
-    # Передний торец стойки (вид «три четверти»): панель и цоколь.
-    full = Canvas(32, 104 + TOP)
-    full.img.alpha_composite(c.img)
-    full.rect(0, 104, 32, TOP, "G")
-    full.hline(0, 104, 32, "l")
-    full.rect(3, 106, 26, TOP - 6, "g")
-    full.hline(3, 106, 26, "K")
-    full.rect(0, 104 + TOP - 3, 32, 3, "K")
-    full.frame(0, 103, 32, TOP + 1, "k")
-    full.save("counter")
+    c.rect(8, 67, 18, 19, "W")
+    c.vline(8, 67, 19, "w")
+    c.rect(9, 68, 16, 11, "K")
+    c.rect(10, 69, 14, 9, "u")
+    c.rect(11, 70, 5, 3, "c")
+    c.rect(17, 70, 6, 3, "E")
+    c.rect(11, 74, 12, 3, "U")
+    c.hline(12, 75, 8, "w")
+    c.rect(10, 80, 14, 5, "w")
+    c.hline(10, 80, 14, "W")
+    c.rect(15, 82, 4, 1, "l")
+    c.rect(26, 70, 2, 6, "K")
+    c.px(26, 70, "c")
+
+
+def counter():
+    """Касса боком 32×104: деревянный бок к покупателю, лента с разделителем, а на столе —
+    аппарат той модели, что куплена (counter0–counter3), плюс пакеты в конце."""
+    for tier in range(4):
+        c = Canvas(32, 104)
+        # Бок к покупателю — дерево, столешница — светлая, край к продавцу — тёмный.
+        c.rect(0, 0, 6, 104, "B")
+        c.vline(1, 1, 102, "n")
+        c.vline(5, 1, 102, "a")
+        for y in range(12, 100, 22):
+            c.hline(1, y, 4, "a")
+        c.rect(6, 0, 22, 104, "W")
+        c.vline(6, 0, 104, "w")
+        c.rect(28, 0, 4, 104, "G")
+        c.vline(28, 0, 104, "l")
+        # Лента.
+        c.rect(8, 3, 18, 50 if tier < 2 else 44, "l")
+        c.rect(9, 4, 16, 48 if tier < 2 else 42, "K")
+        for y in range(6, 52 if tier < 2 else 46, 5):
+            c.hline(9, y, 16, "g")
+        # Разделитель «следующий покупатель».
+        c.rect(10, 26, 14, 2, "y")
+        c.hline(10, 26, 14, "Y")
+        counter_device(c, tier)
+        # Пакеты.
+        for x, tone in ((8, "N"), (17, "n")):
+            c.rect(x, 90, 8, 10, tone)
+            c.hline(x, 90, 8, "w")
+            c.frame(x, 90, 8, 10, "a")
+            c.frame(x + 2, 87, 4, 4, "a")
+        c.frame(0, 0, 32, 104, "k")
+        # Передний торец стойки (вид «три четверти»): панель и цоколь.
+        full = Canvas(32, 104 + TOP)
+        full.img.alpha_composite(c.img)
+        full.rect(0, 104, 32, TOP, "G")
+        full.hline(0, 104, 32, "l")
+        full.rect(3, 106, 26, TOP - 6, "g")
+        full.hline(3, 106, 26, "K")
+        full.rect(0, 104 + TOP - 3, 32, 3, "K")
+        full.frame(0, 103, 32, TOP + 1, "k")
+        full.save(f"counter{tier}")
+        # Значок для списка оборудования: аппарат крупно, без длинной ленты.
+        icon = Canvas(32, 40)
+        icon.img.alpha_composite(c.img.crop((0, 50, 32, 90)))
+        icon.save(f"counter_icon{tier}")
 
 
 def wc():
@@ -2354,6 +2428,65 @@ def bins():
         shadowed(c, 11, 28, 8, 2).save(f"bin{level}")
     for level in range(4):
         can(level)
+    # Модели мусорок (gear.ts): бак с педалью, большой бак, бак с прессом — 4 степени наполнения.
+    def heap(c, level, cx, top, width):
+        spots = {0: [], 1: [(0, 1, 4, 2)], 2: [(-2, 0, 4, 3), (3, 0, 3, 2.5)], 3: [(-3, -2, 4, 4), (2, -3, 4, 4), (0, -6, 3, 3)]}[level]
+        for i, (dx, dy, rx, ry) in enumerate(spots):
+            k = width / 16
+            c.ellipse(cx + dx * k, top + dy, rx * k, ry, ("N", "W", "n")[i % 3])
+        if level == 3:
+            c.rect(cx - 5, top - 4, 3, 2, "w")
+            c.rect(cx + 3, top - 5, 2, 3, "Y")
+
+    def pedal(level):
+        c = Canvas(22, 30)
+        heap(c, level, 11, 9, 16)
+        c.round_rect(3, 10, 16, 18, "U", r=3)
+        c.vline(4, 12, 14, "c")
+        c.vline(17, 12, 14, "u")
+        # Крышка приоткрыта, когда полон.
+        c.rect(2, 8 if level < 3 else 6, 18, 3, "W")
+        c.hline(2, 8 if level < 3 else 6, 18, "w")
+        c.rect(8, 27, 6, 2, "W")
+        c.outline("k")
+        return shadowed(c, 11, 28, 8, 2)
+
+    def big(level):
+        c = Canvas(24, 32)
+        heap(c, level, 12, 8, 18)
+        c.rect(3, 9, 18, 21, "e")
+        c.vline(4, 10, 19, "E")
+        c.vline(19, 10, 19, "d")
+        for y in (15, 21, 27):
+            c.hline(5, y, 14, "d")
+        c.rect(2, 7, 20, 3, "d")
+        c.hline(2, 7, 20, "E")
+        c.ellipse(6, 30, 2, 2, "K")
+        c.ellipse(18, 30, 2, 2, "K")
+        c.outline("k")
+        return shadowed(c, 12, 30, 9, 2)
+
+    def press(level):
+        c = Canvas(24, 34)
+        c.rect(3, 6, 18, 26, "W")
+        c.vline(4, 7, 24, "w")
+        c.vline(19, 7, 24, "l")
+        # Окошко загрузки и шкала наполнения.
+        c.rect(6, 9, 12, 7, "K")
+        c.rect(7, 10, 10, 5, "g")
+        heap(c, min(level, 2), 12, 13, 10)
+        for i in range(4):
+            c.rect(6 + i * 3, 19, 2, 2, ("E", "E", "Y", "R")[i] if i < max(1, level + 1) else "G")
+        c.rect(6, 24, 12, 5, "G")
+        c.hline(6, 24, 12, "l")
+        c.rect(3, 3, 18, 4, "G")
+        c.hline(3, 3, 18, "l")
+        c.outline("k")
+        return shadowed(c, 12, 32, 9, 2)
+
+    for tier, make in ((1, pedal), (2, big), (3, press)):
+        for level in range(4):
+            make(level).save(f"bin_t{tier}_{level}")
     # Мешок с мусором в руках.
     c = Canvas(14, 16)
     c.ellipse(7, 10, 6, 5.5, "K")
@@ -2622,6 +2755,91 @@ def stage9():
         c.px(x + 1, 2, "Y")
         c.px(x + 3, 3, "o")
     c.save("oven_bread")
+    # Модели кофемашины (gear.ts): рожковая — хром и два рожка, автомат-капучино — большой экран.
+    c = Canvas(24, 36)
+    c.round_rect(2, 6, 18, 28, "W", r=2)
+    c.vline(3, 7, 26, "w")
+    c.vline(19, 7, 26, "l")
+    c.rect(4, 8, 14, 4, "K")
+    c.px(6, 9, "R")
+    c.px(9, 9, "E")
+    c.px(12, 9, "E")
+    c.rect(4, 14, 14, 12, "g")
+    for x in (6, 13):
+        c.rect(x, 14, 3, 3, "K")
+        c.vline(x + 1, 17, 2, "l")
+    c.rect(5, 26, 12, 2, "G")
+    c.rect(2, 28, 18, 6, "G")
+    c.hline(3, 29, 16, "l")
+    c.rect(4, 2, 14, 4, "w")
+    for x in (5, 9, 13):
+        c.rect(x, 3, 3, 2, "N")
+    for i in range(4):
+        c.rect(20, 10 + i * 5, 3, 5, "w")
+        c.hline(20, 10 + i * 5, 3, "W")
+    c.outline("k")
+    shadowed(c, 12, 34, 10, 2).save("coffee_machine1")
+    c = Canvas(26, 38)
+    c.round_rect(2, 2, 20, 34, "k", r=2)
+    c.rect(3, 3, 18, 32, "K")
+    c.vline(4, 4, 30, "g")
+    c.rect(5, 5, 14, 9, "u")
+    c.rect(6, 6, 5, 3, "c")
+    c.rect(12, 6, 6, 3, "y")
+    c.rect(6, 10, 12, 3, "U")
+    c.hline(7, 11, 9, "w")
+    c.rect(5, 16, 14, 11, "z")
+    c.rect(9, 16, 6, 3, "W")
+    c.vline(11, 19, 2, "w")
+    c.vline(12, 19, 2, "w")
+    c.rect(6, 27, 12, 2, "W")
+    c.rect(3, 30, 18, 5, "g")
+    c.hline(4, 31, 16, "G")
+    c.px(17, 33, "c")
+    for i in range(4):
+        c.rect(22, 12 + i * 5, 3, 5, "w")
+        c.hline(22, 12 + i * 5, 3, "W")
+    c.outline("k")
+    shadowed(c, 13, 36, 11, 2).save("coffee_machine2")
+    # Модели печи: конвекционная (стальная, с вентилятором) и пекарский шкаф (два яруса).
+    c = Canvas(30, 38)
+    c.rect(1, 8, 28, 28, "W")
+    c.vline(2, 9, 26, "w")
+    c.vline(27, 9, 26, "l")
+    c.rect(1, 6, 28, 3, "G")
+    c.rect(3, 10, 24, 4, "K")
+    c.px(5, 11, "E")
+    c.px(8, 11, "y")
+    c.ellipse(22, 12, 1.5, 1.5, "l")
+    c.rect(4, 15, 22, 15, "G")
+    c.rect(5, 16, 20, 13, "g")
+    c.rect(7, 18, 16, 8, "x")
+    c.rect(8, 19, 14, 6, "k")
+    c.hline(5, 28, 20, "l")
+    c.rect(12, 26, 6, 2, "w")
+    c.rect(1, 33, 28, 3, "G")
+    c.outline("k")
+    shadowed(c, 15, 36, 13, 2).save("oven1")
+    c = Canvas(30, 38)
+    c.rect(1, 2, 28, 34, "l")
+    c.vline(2, 3, 32, "W")
+    c.vline(27, 3, 32, "G")
+    c.rect(3, 3, 24, 4, "K")
+    c.rect(4, 4, 6, 2, "o")
+    c.px(13, 4, "E")
+    c.px(16, 4, "E")
+    c.rect(4, 8, 22, 9, "g")
+    c.rect(6, 9, 18, 6, "k")
+    c.ellipse(15, 12, 7, 1.5, "x")
+    c.rect(4, 15, 22, 15, "G")
+    c.rect(5, 16, 20, 13, "g")
+    c.rect(7, 18, 16, 8, "x")
+    c.rect(8, 19, 14, 6, "k")
+    c.hline(5, 28, 20, "l")
+    c.rect(12, 26, 6, 2, "w")
+    c.rect(1, 33, 28, 3, "K")
+    c.outline("k")
+    shadowed(c, 15, 36, 13, 2).save("oven2")
     # Доска отзывов «Отзывы ★»: меловая доска на ножках.
     c = Canvas(26, 32)
     c.line(3, 31, 7, 4, "a")

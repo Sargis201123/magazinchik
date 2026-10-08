@@ -9,16 +9,18 @@ const runs = Number(process.argv[3] ?? 40);
 
 const scenarios: [string, Partial<SimOptions>][] = [
   ['кот', { features: { cat: true } }],
-  ['вторая касса', { features: { register2: true } }],
   ['тележка', { features: { cart: true } }],
   ['карта лояльности', { features: { loyalty: true } }],
   ['сладости у кассы', { features: { candy: true } }],
   ['кофе', { features: { coffee: true } }],
   ['печь', { features: { oven: true } }],
   ['ночная смена', { features: { night: true } }],
+  ['модели кассы', { features: { gear: true } }],
+  ['кофе + печь', { features: { coffee: true, oven: true } }],
+  ['кофе + печь + модели', { features: { coffee: true, oven: true, gear: true } }],
   ['война: сравнять цену', { war: 'match' }],
   ['война: реклама', { war: 'ad' }],
-  ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, register2: true, cart: true, loyalty: true }, war: 'match' }],
+  ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, cart: true, loyalty: true, gear: true }, war: 'match' }],
 ];
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;

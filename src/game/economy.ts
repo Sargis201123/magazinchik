@@ -8,6 +8,7 @@ import { newDecor, type DecorState } from './decor';
 import type { ReviewTopic, Review } from './reviews';
 import type { War } from './war';
 import type { ShopCat } from './cat';
+import type { GearId } from './gear';
 
 /** Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу. */
 export type Category = 'bakery' | 'produce' | 'dairy' | 'meat';
@@ -136,12 +137,14 @@ export const LATE_PENALTY = 0.1;
 export const START_DEBT = 500;
 export const DEBT_PAYMENT = 250;
 
-export type StaffRole = 'cashier' | 'cashier2' | 'cleaner' | 'loader' | 'guard';
+export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'cleaner' | 'loader' | 'guard';
 
 /** Сотрудники: каждый забирает у игрока одно ручное дело. Зарплата — базовая за месяц. */
 export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number }> = {
   cashier: { nameKey: 'staff.cashier', descKey: 'staff.cashier.desc', wage: 420 },
   cashier2: { nameKey: 'staff.cashier2', descKey: 'staff.cashier2.desc', wage: 420 },
+  cashier3: { nameKey: 'staff.cashier3', descKey: 'staff.cashier3.desc', wage: 420 },
+  cashier4: { nameKey: 'staff.cashier4', descKey: 'staff.cashier4.desc', wage: 420 },
   cleaner: { nameKey: 'staff.cleaner', descKey: 'staff.cleaner.desc', wage: 280 },
   loader: { nameKey: 'staff.loader', descKey: 'staff.loader.desc', wage: 350 },
   guard: { nameKey: 'staff.guard', descKey: 'staff.guard.desc', wage: 490 },
@@ -169,7 +172,7 @@ export const STICKY_SKIM = 0.04;
 /** Навык растёт каждые столько месяцев работы. */
 export const MONTHS_PER_SKILL = 2;
 /** Сколько сотрудников помещается в помещении каждого уровня. */
-export const STAFF_LIMIT = [1, 2, 4, 5, 5];
+export const STAFF_LIMIT = [1, 2, 4, 6, 7];
 
 export interface StaffMember {
   role: StaffRole;
@@ -397,6 +400,8 @@ export interface StoreState {
   weekly?: { month: number; challenges: { kind: string; target: number; product?: ProductId; progress: number; reward: number; done?: boolean }[] };
   /** Какие подсказки о новых механиках уже показаны (tips.ts). */
   seenTips?: string[];
+  /** Модели оборудования (номер модели; нет — начальная). */
+  gear?: Partial<Record<GearId, number>>;
   /** Утренние закупки последних дней — для «как в прошлый раз» (reorder.ts). */
   purchases?: { day: number; lines: { sid: string; pid: ProductId; qty: number }[] }[];
   /** 0..5 звёзд, влияет на поток покупателей. */
@@ -791,8 +796,9 @@ export function returnToShelf(state: StoreState, items: CartItem[]): StoreState 
   return next;
 }
 
-export function checkout(state: StoreState, items: CartItem[]): { state: StoreState; total: number } {
-  const total = items.reduce((sum, { id, unit, free }) => sum + (free ? 0 : unitSalePrice(state, id, unit)), 0);
+/** markup — ночная наценка (цена на ценнике × markup, округляя вверх). */
+export function checkout(state: StoreState, items: CartItem[], markup = 1): { state: StoreState; total: number } {
+  const total = items.reduce((sum, { id, unit, free }) => sum + (free ? 0 : Math.ceil(unitSalePrice(state, id, unit) * markup)), 0);
   return { state: { ...state, money: state.money + total }, total };
 }
 

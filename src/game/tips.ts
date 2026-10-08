@@ -4,6 +4,7 @@
 import { expiringCount, type StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
+import { registerCount } from './registers';
 
 export type TipId = 'promo' | 'contract' | 'markdown' | 'weekly' | 'fair' | 'cart' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
 
@@ -16,7 +17,7 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['cart', (s) => hasUpgrade(s, 'cart')],
   ['loyalty', (s) => hasUpgrade(s, 'loyalty')],
   ['delivery', (s) => hasUpgrade(s, 'delivery')],
-  ['register2', (s) => hasUpgrade(s, 'register2')],
+  ['register2', (s) => registerCount(s) >= 2],
   ['oven', (s) => hasUpgrade(s, 'oven')],
   ['coffee', (s) => hasUpgrade(s, 'coffee')],
   ['nightShift', (s) => hasUpgrade(s, 'nightShift')],
