@@ -209,6 +209,8 @@ export const ru = {
   'shelves.slots': 'Мест под полки: занято {n} из {max}',
   'shelves.sell': 'Продать за {n} 💰',
 
+  'prices.locked': 'откроется, когда купишь «{shelf}»',
+  'prices.base': 'обычно {n}',
   'prices.demand': 'спрос {p}%',
 
   'quality.title': 'Партия с браком!',

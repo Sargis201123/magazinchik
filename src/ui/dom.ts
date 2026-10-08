@@ -50,6 +50,14 @@ const css = `
 .ui-tab { flex: 1; padding: 8px 1px; font: 600 12px system-ui, sans-serif; border: 2px solid #2b2233;
   border-radius: 6px; background: #e6dcc4; color: #2b2233; }
 .ui-tab.active { background: #2b2233; color: #f4ecd8; }
+.ui-price { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 6px 0; border: 2px solid #2b2233;
+  border-radius: 6px; background: #fbf6ea; }
+.ui-price-icon { width: 30px; height: 36px; image-rendering: pixelated; flex: none; }
+.ui-price-info { flex: 1; min-width: 0; font-size: 14px; }
+.ui-price-value { min-width: 54px; text-align: center; }
+.ui-price-locked { background: #e6dcc4; filter: grayscale(1); opacity: .7; }
+.ui-bar { height: 6px; margin: 4px 0 2px; background: #e6dcc4; border: 1px solid #2b2233; border-radius: 3px; overflow: hidden; }
+.ui-bar-fill { height: 100%; }
 .ui-bump { display: inline-block; animation: ui-bump .35s ease-out; }
 @keyframes ui-bump { 40% { transform: scale(1.25); background: rgba(143, 209, 106, .85); } }
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }

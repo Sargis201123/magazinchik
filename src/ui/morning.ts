@@ -23,6 +23,7 @@ import {
   PRODUCT_IDS,
   resolveBadBatch,
   RETURN_REFUND,
+  sellableProducts,
   setPrice,
   SHELF_KINDS,
   SHELF_LEVELS,
@@ -794,25 +795,41 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
 
   // ---------- Цены ----------
 
-  const pricesTab = (state: StoreState): HTMLElement[] =>
-    PRODUCT_IDS.map((pid) => {
+  /** Карточки цен: открытые товары — с ценой и полоской спроса, закрытые — серые, с подсказкой, как открыть. */
+  const pricesTab = (state: StoreState): HTMLElement[] => {
+    const sellable = sellableProducts(state);
+    return PRODUCT_IDS.map((pid) => {
+      const product = PRODUCTS[pid];
+      const card = el('div', 'ui-price');
+      const icon = el('img', 'ui-price-icon');
+      icon.src = `assets/item_${pid}.png`;
+      icon.alt = '';
+      const info = el('div', 'ui-price-info');
+      info.append(el('b', '', t(product.nameKey)));
+      if (!sellable.includes(pid)) {
+        card.classList.add('ui-price-locked');
+        info.append(el('div', 'ui-muted', `🔒 ${t('prices.locked', { shelf: t(SHELF_KINDS[product.category].nameKey) })}`));
+        card.append(icon, info);
+        return card;
+      }
       const price = state.prices[pid];
-      const row = el('div', 'ui-row');
+      const demand = buyChance(price, product.basePrice);
+      const bar = el('div', 'ui-bar');
+      const fill = el('div', 'ui-bar-fill');
+      fill.style.width = `${Math.min(100, Math.round(demand * 80))}%`;
+      fill.style.background = demand >= 0.7 ? '#63c74d' : demand >= 0.4 ? '#feae34' : '#e43b44';
+      bar.append(fill);
+      info.append(
+        bar,
+        el('div', 'ui-muted', `${t('prices.demand', { p: Math.round(demand * 100) })} · ${t('prices.base', { n: product.basePrice })}`),
+      );
       const change = (delta: number) => () => update(setPrice(getState(), pid, getState().prices[pid] + delta));
       const chips = el('div', 'ui-chips');
-      chips.append(
-        button('−', change(-PRICE_STEP), 'ui-chip'),
-        el('b', '', `${price} 💰`),
-        button('+', change(PRICE_STEP), 'ui-chip'),
-      );
-      const label = el('span');
-      label.append(
-        el('span', '', `${productLabel(pid)} `),
-        el('span', 'ui-muted', t('prices.demand', { p: Math.round(buyChance(price, PRODUCTS[pid].basePrice) * 100) })),
-      );
-      row.append(label, chips);
-      return row;
+      chips.append(button('−', change(-PRICE_STEP), 'ui-chip'), el('b', 'ui-price-value', `${price} 💰`), button('+', change(PRICE_STEP), 'ui-chip'));
+      card.append(icon, info, chips);
+      return card;
     });
+  };
 
   render();
 }

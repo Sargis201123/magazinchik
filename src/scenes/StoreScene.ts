@@ -77,6 +77,19 @@ const HUD_BOTTOM = 80;
 const ART = 2;
 /** Сколько улицы видно под зданием (в точках мира). */
 const STREET_VIEW = 40;
+/** Толщина наружных стен и высота фасада (в точках мира). */
+const WALL = 6;
+const FACADE_H = 10;
+/** Пол по уровням помещения. */
+const FLOORS = ['floor', 'floor', 'floor2', 'floor2', 'floor3'];
+/** Машины на дороге: вид, цвет (null — свой, без перекраски), вес при выборе. */
+const CAR_TYPES: [string, number | null, number][] = [
+  ['car_sedan', 0, 35],
+  ['car_hatch', 0, 25],
+  ['car_taxi', 0xfee761, 10],
+  ['car_van', 0, 16],
+  ['car_truck', null, 14],
+];
 /** Слой света: выше людей и мебели, ниже всплывающих надписей (1000). */
 const LIGHT_DEPTH = 900;
 /** Цвет света на улице и в зале по ходу дня: [доля дня, цвет]. Умножается на картинку. */
@@ -249,6 +262,9 @@ export class StoreScene extends Phaser.Scene {
   private shelfViews: ShelfView[] = [];
   private boxes: Phaser.GameObjects.Image[] = [];
   private outdoorShades: Phaser.GameObjects.Rectangle[] = [];
+  private doorImg!: Phaser.GameObjects.Image;
+  /** Насколько вечер (0 — день, 1 — сумерки): фары машин горят сильнее. */
+  private evening = 0;
   private indoorShade?: Phaser.GameObjects.Rectangle;
   private lampGlows: Phaser.GameObjects.Image[] = [];
   private ceilingGlows: Phaser.GameObjects.Image[] = [];
@@ -340,6 +356,7 @@ export class StoreScene extends Phaser.Scene {
     this.callSellerIfNeeded();
     this.hud.setHint(this.currentHint());
     this.updateLighting();
+    this.updateDoor();
     this.hud.update(this.state, this.timeLeft, this.questsLine());
   }
 
@@ -411,17 +428,12 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private buildStore(): void {
-    const { w, h, wallH, door, wc, counter, sellerHome } = this.layout;
-    this.add.tileSprite(0, wallH, w, h - wallH, 'floor').setOrigin(0).setTileScale(1 / ART);
+    const { w, h, wallH, wc, counter, sellerHome } = this.layout;
+    // Пол богаче с каждым уровнем: тёплая плитка, прохладная плитка, мрамор.
+    const floor = FLOORS[Math.min(this.state.level, FLOORS.length - 1)];
+    this.add.tileSprite(0, wallH, w, h - wallH, floor).setOrigin(0).setTileScale(1 / ART);
     this.add.tileSprite(0, 0, w, wallH, 'wall').setOrigin(0).setTileScale(1 / ART);
-    const wallColor = 0x4a3b52;
-    this.add.rectangle(-3, 0, 3, h, wallColor).setOrigin(0);
-    this.add.rectangle(w, 0, 3, h, wallColor).setOrigin(0);
-    this.add.rectangle(-3, h, door.x - 16 + 3, 3, wallColor).setOrigin(0);
-    this.add.rectangle(door.x + 16, h, w - door.x - 16 + 3, 3, wallColor).setOrigin(0);
-    this.art(door.x, h + 1, 'door');
-    // Навес над входом: покупатели проходят под ним.
-    this.art(door.x, h + 5, 'awning').setDepth(h + 40);
+    this.buildShell();
     // Вывеска с названием на крыше.
     this.art(w / 2, -9, 'sign').setDepth(2);
     this.add
@@ -489,6 +501,13 @@ export class StoreScene extends Phaser.Scene {
     this.updateLighting(this.running ? undefined : 0);
   }
 
+  /** Двери разъезжаются, когда к ним подходят. */
+  private updateDoor(): void {
+    const { door, h } = this.layout;
+    const near = [...this.customers].some((c) => Math.abs(c.sprite.x - door.x) < 14 && Math.abs(c.sprite.y - h - 4) < 14);
+    this.doorImg.setTexture(near ? 'door_open' : 'door');
+  }
+
   /** Оттенок по ходу дня: тёплое утро, белый день, закат, сумерки. */
   private updateLighting(progress?: number): void {
     if (!this.indoorShade) return;
@@ -498,6 +517,7 @@ export class StoreScene extends Phaser.Scene {
     for (const r of this.outdoorShades) r.setFillStyle(outdoor);
     this.indoorShade.setFillStyle(indoor);
     const evening = Phaser.Math.Clamp((p - 0.6) / 0.4, 0, 1);
+    this.evening = evening;
     for (const g of this.lampGlows) g.setAlpha(0.7 * evening);
     for (const g of this.ceilingGlows) g.setAlpha(0.06 + 0.16 * evening);
   }
@@ -520,7 +540,9 @@ export class StoreScene extends Phaser.Scene {
     tile(left, top + 66, width, 22, 'paving');
     tile(left, top + 88, width, 300, 'grass');
     // Дорожка от двери до тротуара через пустой участок.
-    if (top > h + 3) tile(door.x - 12, h + 3, 24, top - h - 3, 'paving');
+    if (top > h + FACADE_H) tile(door.x - 12, h + FACADE_H, 24, top - h - FACADE_H, 'paving');
+    // Пешеходный переход напротив входа.
+    for (let y = top + 26; y < top + 62; y += 5) this.add.rectangle(door.x - 9, y, 18, 2.5, 0xe6e1d6).setOrigin(0).setDepth(-9);
 
     // Фонари вдоль тротуара (не на дорожке), скамейка и урна у входа.
     for (let x = -28; x < next.w + 40; x += 72) {
@@ -541,6 +563,57 @@ export class StoreScene extends Phaser.Scene {
     for (let x = 10; x < next.w; x += 34) this.art(x, -6, 'bush').setDepth(-6);
   }
 
+  /** Толстые стены с кирпичной крышкой и фасад с витринами, дверями и роллетом склада. */
+  private buildShell(): void {
+    const { w, h, door, warehouse } = this.layout;
+    const cap = (x: number, y: number, ww: number, hh: number) =>
+      this.add.tileSprite(x, y, ww, hh, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(2);
+    cap(-WALL, -4, w + 2 * WALL, 4);
+    cap(-WALL, 0, WALL, h);
+    cap(w, 0, WALL, h);
+    this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
+    // Роллет склада и раздвижные двери.
+    this.art(warehouse.x + warehouse.w / 2, h + 5.5, 'shutter').setDepth(h + 2);
+    this.doorImg = this.art(door.x, h + 5, 'door').setDepth(h + 2);
+    // Витрины с маленькими навесами между складом и дверью и справа от двери.
+    const segments: [number, number][] = [
+      [warehouse.x + warehouse.w + 8, door.x - 18],
+      [door.x + 18, w - 2],
+    ];
+    for (const [from, to] of segments) {
+      const n = Math.floor((to - from) / 24);
+      const start = (from + to) / 2 - ((n - 1) * 24) / 2;
+      for (let i = 0; i < n; i++) {
+        const x = start + i * 24;
+        this.art(x, h + 5.5, 'shopwin').setDepth(h + 2);
+        this.art(x, h + 1.5, 'awning_small').setDepth(h + 40);
+      }
+    }
+    // Главный навес над входом: покупатели проходят под ним.
+    this.art(door.x, h + 1, 'awning').setScale(1 / ART, 0.6 / ART).setDepth(h + 41);
+  }
+
+  /** На пустом участке растёт бурьян и лежит всякое: кирпичи, песок, конусы, шина, лужа. */
+  private scatterLot(next: Layout): void {
+    const { w, h, door } = this.layout;
+    const rnd = new Phaser.Math.RandomDataGenerator([`lot${this.state.level}`]);
+    const areas: { x: number; y: number; w: number; h: number }[] = [];
+    if (next.w > w) areas.push({ x: w + WALL + 6, y: 6, w: next.w - w - WALL - 14, h: next.h - 16 });
+    if (next.h > h) areas.push({ x: 8, y: h + FACADE_H + 6, w: w - 4, h: next.h - h - FACADE_H - 16 });
+    for (const a of areas) {
+      if (a.w < 10 || a.h < 10) continue;
+      const count = 2 + Math.round((a.w * a.h) / 1400);
+      for (let i = 0; i < count; i++) {
+        const x = a.x + rnd.frac() * a.w;
+        const y = a.y + rnd.frac() * a.h;
+        // Не на дорожке к двери.
+        if (Math.abs(x - door.x) < 20 && y > h) continue;
+        const key = rnd.weightedPick(['weeds', 'weeds', 'weeds', 'puddle', 'tire', 'cone', 'sand', 'bricks']);
+        this.art(x, y, key).setDepth(key === 'puddle' ? -7 : y);
+      }
+    }
+  }
+
   /** Пустая соседняя площадь «Сдаётся» за забором — туда магазин вырастет при расширении. */
   private buildForRent(next: Layout): void {
     const { w, h, door } = this.layout;
@@ -549,6 +622,7 @@ export class StoreScene extends Phaser.Scene {
       this.add.tileSprite(x, y, ww, hh, key).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
     if (next.w > w) tile(w + 3, 0, next.w - w - 3, next.h, 'lot', -8);
     if (next.h > h) tile(0, h + 3, w + 3, next.h - h - 3, 'lot', -8);
+    this.scatterLot(next);
     // Забор по краю участка, в нём проход к двери.
     if (next.w > w) {
       tile(w + 3, -5, next.w - w - 3, 7, 'fence_h');
@@ -583,6 +657,10 @@ export class StoreScene extends Phaser.Scene {
     // На стене по очереди плакаты и окна, между ними часы.
     for (let x = 30, i = 0; x < wc.x - 16; x += 64, i++) this.art(x, 12, i % 2 ? 'window' : 'poster').setDepth(1);
     if (62 < wc.x - 16) this.art(62, 11, 'clock').setDepth(1);
+    // Стойка со сладостями у кассы, в больших магазинах — тележки у входа.
+    const { counter } = this.layout;
+    this.art(counter.x, counter.y + 33, 'candy_rack').setDepth(counter.y + 40);
+    if (this.state.level >= 2) this.art(door.x + 46, h - 10, 'carts').setDepth(h - 4);
     // Коврик у входа и автомат с напитками у правой стены.
     this.art(door.x, h - 7, 'mat').setDepth(1);
     this.art(w - 8, wallH + 56, 'vending').setDepth(wallH + 66);
@@ -1456,11 +1534,21 @@ export class StoreScene extends Phaser.Scene {
     if (Math.random() < 0.3) {
       const toRight = Math.random() < 0.5;
       const y = this.streetY + (toRight ? 24 : 42);
-      const car = this.art(toRight ? left : right, y, 'car')
-        .setTint(Phaser.Utils.Array.GetRandom(CAR_COLORS))
-        .setFlipX(!toRight)
-        .setDepth(y);
-      this.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4000), onComplete: () => car.destroy() });
+      const total = CAR_TYPES.reduce((sum, [, , weight]) => sum + weight, 0);
+      let roll = Math.random() * total;
+      const [key, color] = CAR_TYPES.find(([, , weight]) => (roll -= weight) < 0) ?? CAR_TYPES[0];
+      const body = this.art(0, 0, key);
+      if (color !== null) body.setTint(color || Phaser.Utils.Array.GetRandom(CAR_COLORS));
+      const lights = this.art(0, 0, `${key}_lights`);
+      // Вечером фары светят вперёд.
+      const beam = this.art(body.displayWidth / 2 + 8, 0, 'glow')
+        .setScale(30 / 64, 16 / 64)
+        .setTint(0xfff0b0)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(0.8 * this.evening);
+      const car = this.add.container(toRight ? left : right, y, [body, lights, beam]).setDepth(y);
+      car.setScale(toRight ? 1 : -1, 1);
+      this.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
     }
   }
 

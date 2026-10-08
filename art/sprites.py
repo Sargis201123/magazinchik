@@ -1253,6 +1253,317 @@ def street():
     sign()
 
 
+# ---------------------------------------------------------------- здание и участок (2)
+
+
+def building():
+    """Толстые стены, кирпичный фасад, витрины, раздвижные двери, роллет склада."""
+    # Верх стены 16×16: тёмный бордюр с кирпичной крышкой.
+    c = Canvas(16, 16)
+    c.rect(0, 0, 16, 16, "z")
+    for y in range(0, 16, 4):
+        c.hline(0, y, 16, "p")
+        off = 0 if (y // 4) % 2 == 0 else 4
+        for x in range(off, 16, 8):
+            c.vline(x, y, 4, "p")
+    c.save("wall_cap")
+    # Фасад 32×20: кирпич, сверху крышка стены, снизу цоколь.
+    c = Canvas(32, 20)
+    c.rect(0, 0, 32, 20, "B")
+    for row, y in enumerate(range(4, 17, 3)):
+        c.hline(0, y, 32, "a")
+        for x in range(4 if row % 2 else 0, 32, 8):
+            c.vline(x, y, 3, "a")
+            c.px(x + 1, y + 1, "n")
+    c.rect(0, 0, 4 + 28, 4, "z")
+    c.hline(0, 3, 32, "k")
+    c.hline(0, 0, 32, "p")
+    c.rect(0, 17, 32, 3, "g")
+    c.hline(0, 17, 32, "G")
+    c.save("facade")
+    # Витрина 40×14 (в мире 20×7): рама, стекло с бликами, товар за стеклом.
+    c = Canvas(40, 14)
+    c.rect(0, 0, 40, 14, "W")
+    c.rect(2, 2, 36, 10, "u")
+    for x, tone in ((4, "Y"), (9, "R"), (15, "E"), (21, "w"), (27, "o"), (32, "R")):
+        c.rect(x, 7, 4, 5, tone)
+        c.hline(x, 7, 4, "w")
+    c.rect(2, 2, 36, 4, "U")
+    for i in range(4):
+        c.px(6 + i, 5 - i, "c")
+        c.px(24 + i, 5 - i, "c")
+    c.vline(20, 2, 10, "W")
+    c.frame(0, 0, 40, 14, "k")
+    c.save("shopwin")
+    # Маленький навес над витриной 44×10.
+    c = Canvas(44, 10)
+    for i, x in enumerate(range(0, 44, 6)):
+        tone = "E" if i % 2 == 0 else "w"
+        c.rect(x, 0, 6, 7, tone)
+        c.ellipse(x + 3, 7, 3, 2, tone)
+    c.hline(0, 0, 44, "d")
+    c.outline("k")
+    c.save("awning_small")
+    # Раздвижные двери 64×20: закрытые и открытые.
+    for name, gap in (("door", 0), ("door_open", 22)):
+        c = Canvas(64, 20)
+        c.rect(0, 0, 64, 20, "g")
+        c.rect(2, 2, 60, 16, "K")
+        half = 30 - gap
+        for x, w in ((2, half), (62 - half, half)):
+            if w <= 0:
+                continue
+            c.rect(x, 2, w, 16, "c")
+            c.rect(x, 2, w, 3, "w")
+            c.rect(x, 12, w, 6, "U")
+            for i in range(3):
+                c.px(x + 3 + i, 9 - i, "w")
+            c.frame(x, 2, w, 16, "G")
+        c.rect(0, 0, 64, 2, "l")
+        c.frame(0, 0, 64, 20, "k")
+        c.save(name)
+    # Роллет склада 48×20.
+    c = Canvas(48, 20)
+    c.rect(0, 0, 48, 20, "l")
+    for y in range(2, 19, 3):
+        c.hline(2, y, 44, "G")
+        c.hline(2, y + 1, 44, "W")
+    c.rect(20, 15, 8, 3, "y")
+    c.frame(0, 0, 48, 20, "k")
+    c.save("shutter")
+
+
+def lot2():
+    """Заросший участок: земля, трава клочьями, камешки."""
+    c = Canvas(32, 32)
+    c.rect(0, 0, 32, 32, "a")
+    c.speckle(0, 0, 32, 32, ["b", "B"], 18, 21)
+    rnd = random.Random(8)
+    for _ in range(5):
+        cx, cy = rnd.randrange(32), rnd.randrange(32)
+        for i in range(7):
+            x, y = (cx + rnd.randrange(-3, 4)) % 32, (cy + rnd.randrange(-2, 3)) % 32
+            c.px(x, y, rnd.choice(["i", "j", "J"]))
+            c.px(x, (y - 1) % 32, "J")
+    for x, y in ((6, 24), (25, 7), (14, 14)):
+        c.rect(x, y, 2, 1, "W")
+        c.px(x, y + 1, "G")
+    c.save("lot")
+
+
+def lot_props():
+    """Что лежит на пустом участке: бурьян, кирпичи, песок, конус, шина, лужа."""
+    c = Canvas(20, 16)
+    rnd = random.Random(3)
+    for i in range(14):
+        x = 2 + rnd.randrange(16)
+        h = 4 + rnd.randrange(9)
+        for y in range(15 - h, 15):
+            c.px(x + (1 if y < 15 - h // 2 and i % 2 else 0), y, rnd.choice(["i", "j", "J"]))
+    c.px(5, 3, "Y")
+    c.px(14, 5, "w")
+    c.save("weeds")
+    c = Canvas(32, 22)
+    c.rect(1, 17, 30, 4, "B")
+    c.hline(1, 17, 30, "n")
+    for row, y in enumerate((11, 5)):
+        for x in range(3 + row * 3, 28 - row * 3, 6):
+            c.rect(x, y, 5, 6, "r")
+            c.hline(x, y, 5, "R")
+            c.vline(x + 4, y + 1, 5, "m")
+    c.rect(4, 13, 25, 4, "r")
+    c.outline("k")
+    shadowed(c, 16, 20, 15, 2).save("bricks")
+    c = Canvas(28, 14)
+    c.ellipse(14, 9, 13, 5, "n")
+    c.ellipse(11, 7, 7, 3.5, "N")
+    c.speckle(3, 5, 22, 7, ["B"], 8, 4)
+    c.outline("k")
+    c.save("sand")
+    c = Canvas(10, 14)
+    c.rect(1, 11, 8, 3, "o")
+    for y, w in ((1, 2), (4, 4), (7, 6)):
+        c.rect(5 - w // 2, y, w, 4, "o")
+    c.hline(3, 5, 4, "w")
+    c.hline(2, 8, 6, "w")
+    c.outline("k")
+    c.save("cone")
+    c = Canvas(16, 10)
+    c.ellipse(8, 5, 7.5, 4.5, "K")
+    c.ellipse(8, 5, 4, 2.2, "a")
+    c.px(5, 3, "g")
+    c.outline("k")
+    c.save("tire")
+    c = Canvas(30, 14)
+    c.ellipse(15, 7, 14, 6, (90, 105, 136, 200))
+    c.ellipse(12, 6, 7, 2.5, (139, 155, 180, 200))
+    c.px(9, 5, "w")
+    c.save("puddle")
+
+
+def cars():
+    """Машины сверху 72×36 в перспективе: кузов под тинт, крыша, стёкла, фары. Смотрят вправо."""
+    def body(c, x0, x1, top, bottom):
+        c.round_rect(x0, top, x1 - x0, bottom - top, "1", r=4)
+        c.hline(x0 + 3, bottom - 2, x1 - x0 - 6, "3")
+        c.hline(x0 + 3, bottom - 1, x1 - x0 - 6, "4")
+        c.hline(x0 + 3, top + 1, x1 - x0 - 6, "1")
+
+    def wheels(c, xs, top, bottom):
+        for x in xs:
+            c.rect(x, top - 1, 9, 3, "k")
+            c.rect(x, bottom - 2, 9, 3, "k")
+
+    # Фары и стоп-сигналы — отдельной картинкой, чтобы тинт кузова их не перекрашивал.
+    lamps = {}
+
+    def lights(c, x0, x1, top, bottom):
+        lamp = Canvas(c.w, c.h)
+        lamp.rect(x1 - 2, top + 2, 2, 4, "Y")
+        lamp.rect(x1 - 2, bottom - 7, 2, 4, "Y")
+        lamp.rect(x0, top + 2, 2, 4, "R")
+        lamp.rect(x0, bottom - 7, 2, 4, "R")
+        lamps["current"] = lamp
+
+    def finish(c, name):
+        c.outline("k")
+        shadowed(c, 36, 32, 33, 3.5).save(name)
+        lamps.pop("current").save(f"{name}_lights")
+
+    # Седан.
+    c = Canvas(72, 36)
+    wheels(c, (12, 50), 6, 30)
+    body(c, 3, 69, 6, 30)
+    c.round_rect(22, 9, 30, 18, "2", r=3)
+    c.rect(44, 9, 8, 18, "u")
+    c.rect(22, 9, 6, 18, "u")
+    c.vline(46, 10, 5, "c")
+    c.hline(29, 9, 14, "U")
+    c.hline(29, 26, 14, "U")
+    lights(c, 3, 69, 6, 30)
+    finish(c, "car_sedan")
+    # Хэтчбек: короче, крыша до конца.
+    c = Canvas(72, 36)
+    wheels(c, (16, 46), 7, 29)
+    body(c, 10, 64, 7, 29)
+    c.round_rect(14, 10, 36, 16, "2", r=3)
+    c.rect(42, 10, 8, 16, "u")
+    c.rect(14, 10, 4, 16, "u")
+    c.vline(44, 11, 4, "c")
+    lights(c, 10, 64, 7, 29)
+    finish(c, "car_hatch")
+    # Такси: седан + шашечки и фонарь на крыше.
+    c = Canvas(72, 36)
+    wheels(c, (12, 50), 6, 30)
+    body(c, 3, 69, 6, 30)
+    c.round_rect(22, 9, 30, 18, "2", r=3)
+    c.rect(44, 9, 8, 18, "u")
+    c.rect(22, 9, 6, 18, "u")
+    for x in range(5, 67, 4):
+        c.rect(x, 6, 2, 2, "k")
+        c.rect(x + 2, 28, 2, 2, "k")
+    c.rect(33, 15, 6, 6, "w")
+    c.rect(34, 16, 4, 4, "R")
+    lights(c, 3, 69, 6, 30)
+    finish(c, "car_taxi")
+    # Фургон: высокая крыша во всю длину.
+    c = Canvas(72, 36)
+    wheels(c, (12, 52), 4, 32)
+    body(c, 2, 70, 4, 32)
+    c.round_rect(6, 7, 52, 22, "2", r=2)
+    c.rect(58, 7, 7, 22, "u")
+    c.vline(60, 8, 6, "c")
+    c.hline(10, 18, 44, "3")
+    lights(c, 2, 70, 4, 32)
+    finish(c, "car_van")
+    # Грузовик доставки: кабина и белый фургон с полосой.
+    c = Canvas(88, 38)
+    for x in (10, 26, 66):
+        c.rect(x, 3, 9, 3, "k")
+        c.rect(x, 32, 9, 3, "k")
+    c.rect(2, 4, 60, 30, "w")
+    c.hline(2, 32, 60, "W")
+    c.hline(2, 33, 60, "l")
+    c.rect(2, 16, 60, 6, "R")
+    c.hline(2, 16, 60, "s")
+    c.round_rect(63, 6, 22, 26, "1", r=3)
+    c.rect(76, 8, 6, 22, "u")
+    c.vline(78, 9, 6, "c")
+    c.outline("k")
+    shadowed(c, 44, 34, 42, 3.5).save("car_truck")
+    lamp = Canvas(88, 38)
+    lamp.rect(83, 8, 2, 4, "Y")
+    lamp.rect(83, 26, 2, 4, "Y")
+    lamp.rect(2, 6, 2, 4, "R")
+    lamp.rect(2, 28, 2, 4, "R")
+    lamp.save("car_truck_lights")
+
+
+def floors():
+    """Пол для больших уровней: прохладная плитка (3–4) и мрамор (5)."""
+    c = Canvas(32, 32)
+    light, dark, line, hi = (232, 238, 244, 255), (218, 226, 236, 255), (188, 198, 212, 255), (246, 249, 252, 255)
+    for ox, oy, base in ((0, 0, light), (16, 16, light), (16, 0, dark), (0, 16, dark)):
+        c.rect(ox, oy, 16, 16, base)
+        c.hline(ox + 1, oy + 1, 14, hi)
+        c.vline(ox + 1, oy + 1, 14, hi)
+        c.hline(ox + 1, oy + 15, 15, line)
+        c.vline(ox + 15, oy + 1, 15, line)
+    for i in range(32):
+        for x, y in ((i, 0), (0, i), (i, 16), (16, i)):
+            c.px(x, y, line)
+    c.save("floor2")
+    c = Canvas(32, 32)
+    c.rect(0, 0, 32, 32, (232, 226, 236, 255))
+    rnd = random.Random(14)
+    for _ in range(4):
+        x, y = rnd.randrange(32), rnd.randrange(32)
+        for i in range(10):
+            c.px((x + i) % 32, (y + i // 2 + rnd.randrange(2)) % 32, (196, 186, 206, 255))
+    for i in range(32):
+        c.px(i, 0, (180, 170, 190, 255))
+        c.px(0, i, (180, 170, 190, 255))
+        c.px(i, 16, (205, 197, 214, 255))
+        c.px(16, i, (205, 197, 214, 255))
+    c.save("floor3")
+
+
+def store_extras():
+    """Стойка со сладостями у кассы и тележки у входа."""
+    c = Canvas(26, 22)
+    c.rect(1, 2, 24, 18, "G")
+    c.rect(2, 3, 22, 16, "l")
+    for row, y in enumerate((4, 9, 14)):
+        for x in range(3, 22, 4):
+            tone = ("R", "Y", "U", "E", "P", "o")[(row * 2 + x // 4) % 6]
+            c.rect(x, y, 3, 4, tone)
+            c.px(x, y, "w")
+        c.hline(2, y + 4, 22, "G")
+    c.rect(0, 0, 26, 2, "R")
+    c.outline("k")
+    shadowed(c, 13, 20, 12, 2).save("candy_rack")
+    c = Canvas(34, 22)
+    for i, x in enumerate((2, 8, 14)):
+        c.frame(x, 3, 16, 12, "l")
+        for gx in range(x + 3, x + 15, 3):
+            c.vline(gx, 4, 10, "G")
+        c.hline(x, 9, 16, "G")
+        c.rect(x + 15, 1, 3, 3, "R")
+    for x in (4, 26):
+        c.rect(x, 17, 3, 3, "k")
+    c.outline("k")
+    shadowed(c, 17, 20, 15, 2).save("carts")
+
+
+def environment2():
+    building()
+    lot2()
+    lot_props()
+    cars()
+    floors()
+    store_extras()
+
+
 # ---------------------------------------------------------------- люди
 
 # Человек 24×36 (в мире 12×18) из слоёв: кожа (голова, шея, кисти), волосы,
@@ -2055,6 +2366,7 @@ def main():
     ui_frame()
     portraits()
     icon()
+    environment2()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
