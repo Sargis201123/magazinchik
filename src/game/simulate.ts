@@ -29,6 +29,7 @@ import {
   setPrice,
   sellableProducts,
   seasonalDemand,
+  markdownSurplus,
   SHELF_KINDS,
   SHELF_LEVELS,
   shelfCapacity,
@@ -67,7 +68,7 @@ import { finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
-import { buyUpgrade, carryOf, hasUpgrade, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
+import { buyUpgrade, carryOf, cartExtra, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
 import { CASHIER_ROLES, registerCount } from './registers';
@@ -133,7 +134,7 @@ export interface SimOptions {
   ovenBurn?: number;
 }
 
-export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear';
+export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy'];
@@ -279,6 +280,7 @@ export function simulate({
       ['night', 'nightShift'],
       ['cart', 'cart'],
       ['loyalty', 'loyalty'],
+      ['etags', 'eTags'],
     ];
     // Дорогое «для удобства» (ночная смена, новые модели) разумный игрок берёт, когда уже не копит на расширение.
     const nextLevel = nextStoreLevel(state);
@@ -451,7 +453,7 @@ export function simulate({
         }
       }
       const aroma = random() < aromaShare;
-      const wanted = pickWanted(state, random, random() < AVG_WANTS - 1 ? 2 : 1, (p) => dayDemand(state, p, aroma));
+      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + cartExtra(state, extraRandom), (p) => dayDemand(state, p, aroma));
       const fair = (p: ProductId) =>
         perceivedBase(state, p) * tolerance * fairTolerance(state.day) * loyaltyTolerance(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
       const cart: CartItem[] = [];
@@ -499,7 +501,13 @@ export function simulate({
     }
     };
     let nightRevenue = 0;
-    runGuests(dayGuests, 1, serveCap, false);
+    if (hasUpgrade(state, 'eTags')) {
+      // Электронные ценники: к вечеру то, что испортится ночью, уценяется само.
+      const evening = Math.round(dayGuests * ETAGS_EVENING);
+      runGuests(dayGuests - evening, 1, serveCap, false);
+      state = markdownSurplus(state, (id) => eveningSales(stats.sold[id] ?? 0)).state;
+      runGuests(evening, 1, serveCap, false);
+    } else runGuests(dayGuests, 1, serveCap, false);
     // Ночная смена: гостей меньше, к ценам терпимее, касса успевает пропорционально времени.
     let nightProfit = 0;
     if (features.night && hasUpgrade(state, 'nightShift')) {

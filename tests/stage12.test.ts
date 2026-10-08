@@ -158,3 +158,36 @@ describe('новые линейки оборудования', () => {
     expect(g.gearMaxed(lvl(4, { register: 3 }))).toBe(false);
   });
 });
+
+describe('автозаказ, ценники, тележки', () => {
+  it('автозаказ пополняет склад до списка, по обычной цене, и только когда включён', async () => {
+    const { autoOrderPlan, rememberAutoOrder, toggleAutoOrder, recordPurchase } = await import('../src/game/reorder');
+    let s: StoreState = { ...at(2), upgrades: ['autoOrder'], warehouse: { milk: [{ age: 0 }, { age: 0 }] } };
+    expect(rememberAutoOrder(s)).toBeNull();
+    s = recordPurchase(s, 'farmer', 'milk', 10);
+    s = rememberAutoOrder(s)!;
+    const price = () => 20;
+    const plan = autoOrderPlan(s, price)!;
+    expect(plan.lines).toEqual([{ sid: 'farmer', pid: 'milk', qty: 8, price: 20 }]);
+    expect(plan.total).toBe(160);
+    expect(autoOrderPlan(toggleAutoOrder(s)!, price)).toBeNull();
+    expect(autoOrderPlan({ ...s, upgrades: [] }, price)).toBeNull();
+  });
+
+  it('умные ценники уценяют только то, что не успеют купить', async () => {
+    const { markdownSurplus, PRODUCTS } = await import('../src/game/economy');
+    const old = PRODUCTS.milk.shelfLife - 1;
+    const s: StoreState = { ...at(2), warehouse: {}, shelves: [{ kind: 'dairy', level: 2, items: { milk: Array.from({ length: 6 }, () => ({ age: old })) } }] };
+    const r = markdownSurplus(s, () => 4);
+    expect(r.count).toBe(2);
+    expect(r.state.shelves[0].items.milk!.filter((u) => u.markdown)).toHaveLength(2);
+    expect(markdownSurplus(s, () => 10).count).toBe(0);
+  });
+
+  it('с тележками покупатель иногда берёт лишний товар', async () => {
+    const { cartExtra } = await import('../src/game/upgrades');
+    expect(cartExtra(at(1), () => 0)).toBe(0);
+    expect(cartExtra({ ...at(1), upgrades: ['cart'] }, () => 0.1)).toBe(1);
+    expect(cartExtra({ ...at(1), upgrades: ['cart'] }, () => 0.9)).toBe(0);
+  });
+});

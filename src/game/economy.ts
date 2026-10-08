@@ -400,6 +400,8 @@ export interface StoreState {
   weekly?: { month: number; challenges: { kind: string; target: number; product?: ProductId; progress: number; reward: number; done?: boolean }[] };
   /** Какие подсказки о новых механиках уже показаны (tips.ts). */
   seenTips?: string[];
+  /** Автозаказ: сколько чего держать на складе и включён ли он (reorder.ts). */
+  autoOrder?: { on: boolean; lines: { sid: string; pid: ProductId; qty: number }[] };
   /** Бабушкино обучение: false — показать (новая игра или «пройти заново»), нет поля — старое сохранение. */
   tourDone?: boolean;
   /** Модели оборудования (номер модели; нет — начальная). */
@@ -856,6 +858,42 @@ export function markdownExpiring(state: StoreState): { state: StoreState; count:
     return next;
   };
   const next = { ...state, warehouse: mark(state.warehouse), shelves: state.shelves.map((s) => ({ ...s, items: mark(s.items) })) };
+  return { state: count ? next : state, count };
+}
+
+/**
+ * Электронные ценники вечером: уценить из того, что испортится ночью, только лишнее — сверх того,
+ * что ещё успеют купить по полной цене (expected: сколько штук товара продадут до закрытия).
+ * Покупатели берут сначала старое, поэтому первые expected штук продадутся и так.
+ */
+export function markdownSurplus(state: StoreState, expected: (id: ProductId) => number): { state: StoreState; count: number } {
+  let count = 0;
+  const fresh = fridgeLife(state);
+  const expiring = (u: Unit, id: ProductId) => !u.markdown && !u.pending && u.age + 1 >= unitLife(id, u, fresh);
+  // Сколько уценить по каждому товару.
+  const quota: Partial<Record<ProductId, number>> = {};
+  for (const id of PRODUCT_IDS) {
+    const all = [...(state.warehouse[id] ?? []), ...state.shelves.flatMap((s) => s.items[id] ?? [])];
+    const n = all.filter((u) => expiring(u, id)).length - Math.ceil(expected(id));
+    if (n > 0) quota[id] = n;
+  }
+  const mark = (stock: Stock): Stock => {
+    const next: Stock = {};
+    for (const id of PRODUCT_IDS) {
+      const units = stock[id];
+      if (!units) continue;
+      next[id] = units.map((u) => {
+        if (!quota[id] || !expiring(u, id)) return u;
+        quota[id]!--;
+        count++;
+        return { ...u, markdown: true };
+      });
+    }
+    return next;
+  };
+  // Сначала полки (там уценку видно сразу), потом склад.
+  const shelves = state.shelves.map((s) => ({ ...s, items: mark(s.items) }));
+  const next = { ...state, shelves, warehouse: mark(state.warehouse) };
   return { state: count ? next : state, count };
 }
 
