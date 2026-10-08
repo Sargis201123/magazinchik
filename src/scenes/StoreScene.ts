@@ -65,6 +65,7 @@ import { Hud } from '../ui/hud';
 import { showMorning } from '../ui/morning';
 import { showTitle } from '../ui/title';
 import { weatherFor, type Weather } from '../game/weather';
+import { activeDecor } from '../game/decor';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 
 // Холст 720×1280 (9:16): на телефоне хватает пикселей для детальных спрайтов.
@@ -484,9 +485,14 @@ export class StoreScene extends Phaser.Scene {
   private buildStore(): void {
     const { w, h, wallH, wc, counter, sellerHome } = this.layout;
     // Пол богаче с каждым уровнем: тёплая плитка, прохладная плитка, мрамор.
-    const floor = FLOORS[Math.min(this.state.level, FLOORS.length - 1)];
+    // Пол и цвет стен можно сменить в «Оформлении».
+    const floor = activeDecor(this.state, 'floor')?.texture ?? FLOORS[Math.min(this.state.level, FLOORS.length - 1)];
     this.add.tileSprite(0, wallH, w, h - wallH, floor).setOrigin(0).setTileScale(1 / ART);
-    this.add.tileSprite(0, 0, w, wallH, 'wall').setOrigin(0).setTileScale(1 / ART);
+    this.add
+      .tileSprite(0, 0, w, wallH, 'wall')
+      .setOrigin(0)
+      .setTileScale(1 / ART)
+      .setTint(activeDecor(this.state, 'wall')?.color ?? 0xffffff);
     this.buildShell();
     // Вывеска с названием на крыше.
     this.art(w / 2, -9, 'sign').setDepth(2);
@@ -992,11 +998,45 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Плакаты на стене, растения и корзинки у входа — чтобы зал не выглядел пустым. */
+  /** Первое место, где вещь 26×20 не мешает полкам, кассе, складу и автомату. */
+  private freeSpot(candidates: { x: number; y: number }[]): { x: number; y: number } | null {
+    const { slots, counter, warehouse, w, wallH } = this.layout;
+    const blocked = [
+      ...slots.map((s) => ({ x: s.x - 22, y: s.y - 14, w: 44, h: 30 })),
+      { x: counter.x - 10, y: counter.y - 28, w: 20, h: 64 },
+      { x: warehouse.x, y: warehouse.y, w: warehouse.w + 6, h: warehouse.h },
+      { x: w - 16, y: wallH + 44, w: 16, h: 24 },
+    ];
+    return (
+      candidates.find((c) =>
+        blocked.every((b) => c.x + 13 < b.x || c.x - 13 > b.x + b.w || c.y + 10 < b.y || c.y - 10 > b.y + b.h),
+      ) ?? null
+    );
+  }
+
   private buildDecor(): void {
     const { w, h, wallH, wc, door, warehouse, slots } = this.layout;
     // На стене по очереди плакаты и окна, между ними часы.
-    for (let x = 30, i = 0; x < wc.x - 16; x += 64, i++) this.art(x, 12, i % 2 ? 'window' : 'poster').setDepth(1);
-    if (62 < wc.x - 16) this.art(62, 11, 'clock').setDepth(1);
+    // Вместо плакатов — купленная картина; вместо часов — неон «ОТКРЫТО».
+    const art = activeDecor(this.state, 'art')?.texture ?? 'poster';
+    for (let x = 30, i = 0; x < wc.x - 16; x += 64, i++) this.art(x, 12, i % 2 ? 'window' : art).setDepth(1);
+    if (62 < wc.x - 16) {
+      if (activeDecor(this.state, 'neon')) {
+        const glow = this.art(62, 14, 'glow').setScale(46 / 64, 24 / 64).setTint(0xf6757a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
+        this.tweens.add({ targets: glow, alpha: { from: 0.8, to: 0.4 }, duration: 900, yoyo: true, repeat: -1 });
+        this.art(62, 13, 'neon').setDepth(2);
+      } else this.art(62, 11, 'clock').setDepth(1);
+    }
+    // Ковёр в центре зала и аквариум в свободном месте.
+    if (activeDecor(this.state, 'rug')) this.art(w / 2, (wallH + h) / 2 + 6, 'rug').setDepth(1);
+    if (activeDecor(this.state, 'aquarium')) {
+      const spot = this.freeSpot([
+        { x: w - 16, y: wallH + 92 },
+        { x: 16, y: warehouse.y - 30 },
+        { x: w / 2, y: wallH + 74 },
+      ]);
+      if (spot) this.art(spot.x, spot.y, 'aquarium').setDepth(spot.y + 8);
+    }
     // Стойка со сладостями у кассы, в больших магазинах — тележки у входа.
     const { counter } = this.layout;
     this.art(counter.x, counter.y + 33, 'candy_rack').setDepth(counter.y + 40);
@@ -1014,7 +1054,7 @@ export class StoreScene extends Phaser.Scene {
     ];
     for (const p of spots) {
       const busy = slots.some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
-      if (!busy) this.art(p.x, p.y, 'plant').setDepth(p.y + 6);
+      if (!busy) this.art(p.x, p.y, activeDecor(this.state, 'plants') ? 'plant_big' : 'plant').setDepth(p.y + 6);
     }
   }
 
@@ -2081,10 +2121,11 @@ export class StoreScene extends Phaser.Scene {
       getState: () => this.state,
       setState: (s) => {
         const staffChanged = s.staff !== this.state.staff;
+        const decorChanged = s.decor !== this.state.decor;
         this.state = s;
         saveGame(s);
         if (s.level > this.builtLevel) void this.celebrateExpansion();
-        else if (s.level !== this.builtLevel) this.buildWorld();
+        else if (s.level !== this.builtLevel || decorChanged) this.buildWorld();
         else if (staffChanged) this.syncStaff();
         this.refreshShelves();
         this.refreshWarehouse();

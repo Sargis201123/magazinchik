@@ -4,6 +4,7 @@
 import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
+import { newDecor, type DecorState } from './decor';
 
 /** Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу. */
 export type Category = 'bakery' | 'produce' | 'dairy' | 'meat';
@@ -323,6 +324,8 @@ export interface StoreState {
   /** План сегодняшнего дня: событие утра, проверка, час пик. */
   plan?: DayPlan;
   story: StoryState;
+  /** Оформление магазина. */
+  decor: DecorState;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -373,6 +376,7 @@ export const newGame = (): StoreState => ({
   totalRevenue: 0,
   album: [],
   story: { chapter: 0, introSeen: false, ordersDone: 0, inspectionsPassed: 0 },
+  decor: newDecor(),
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [

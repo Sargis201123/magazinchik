@@ -1681,6 +1681,138 @@ def construction():
     c.save("confetti")
 
 
+def decor_items():
+    """Вещи для оформления магазина."""
+    # Паркет «ёлочкой» 32×32.
+    c = Canvas(32, 32)
+    c.rect(0, 0, 32, 32, "n")
+    for y in range(0, 32, 4):
+        for x in range(0, 32, 16):
+            off = 8 if (y // 4) % 2 else 0
+            c.rect((x + off) % 32, y, 8, 4, "B" if (y // 4 + x // 16) % 2 else "n")
+            c.hline((x + off) % 32, y, 8, "N")
+            c.vline((x + off + 7) % 32, y, 4, "a")
+    c.speckle(0, 0, 32, 32, ["a"], 10, 41)
+    c.save("floor_wood")
+    # Шахматка 32×32.
+    c = Canvas(32, 32)
+    for ox, oy, tone in ((0, 0, "w"), (16, 16, "w"), (16, 0, "K"), (0, 16, "K")):
+        c.rect(ox, oy, 16, 16, tone)
+        c.hline(ox + 1, oy + 1, 14, "W" if tone == "w" else "g")
+    c.save("floor_checker")
+    # Золотой мрамор.
+    c = Canvas(32, 32)
+    c.rect(0, 0, 32, 32, (250, 236, 200, 255))
+    rnd = random.Random(19)
+    for _ in range(5):
+        x, y = rnd.randrange(32), rnd.randrange(32)
+        for i in range(12):
+            c.px((x + i) % 32, (y + i // 3 + rnd.randrange(2)) % 32, (226, 188, 110, 255))
+    for i in range(32):
+        c.px(i, 0, (214, 170, 80, 255))
+        c.px(0, i, (214, 170, 80, 255))
+    c.save("floor_gold")
+
+    def frame(c):
+        c.frame(0, 0, 24, 18, "b")
+        c.frame(1, 1, 22, 16, "y")
+        c.outline("k")
+
+    c = Canvas(24, 18)
+    c.rect(2, 2, 20, 14, "U")
+    c.rect(2, 11, 20, 5, "e")
+    for x in (6, 12, 18):
+        c.vline(x, 8, 6, "d")
+        c.ellipse(x, 7, 2.4, 2.4, "Y")
+        c.px(x, 7, "a")
+    frame(c)
+    c.save("art_sunflowers")
+    c = Canvas(24, 18)
+    c.rect(2, 2, 20, 7, "c")
+    c.rect(2, 9, 20, 7, "u")
+    c.ellipse(16, 5, 2.4, 2.4, "Y")
+    for x in range(3, 21, 4):
+        c.hline(x, 10 + (x % 3), 3, "w")
+    c.stamp([".k.", "kwk"], 6, 7)
+    frame(c)
+    c.save("art_sea")
+    c = Canvas(24, 18)
+    c.rect(2, 2, 20, 14, "s")
+    c.ellipse(12, 11, 6, 4.5, "o")
+    c.ellipse(12, 7, 4, 3.5, "o")
+    c.stamp(["o...o", "oo.oo"], 10, 3)
+    c.px(10, 7, "k")
+    c.px(14, 7, "k")
+    c.px(12, 8, "R")
+    c.vline(18, 9, 5, "o")
+    frame(c)
+    c.save("art_cat")
+    # Ковёр 80×44.
+    c = Canvas(80, 44)
+    c.round_rect(0, 0, 80, 44, "m", r=3)
+    c.round_rect(3, 3, 74, 38, "R", r=2)
+    c.frame(7, 7, 66, 30, "Y")
+    for i in range(6):
+        c.ellipse(40, 22, 14 - i * 2, 8 - i, "m" if i % 2 else "s")
+    for x in range(2, 80, 4):
+        c.px(x, 0, "Y")
+        c.px(x, 43, "Y")
+    c.save("rug")
+    # Большой фикус 26×42.
+    c = Canvas(26, 42)
+    leaves = Canvas(26, 42)
+    for cx, cy, r in ((13, 10, 7), (7, 16, 6), (19, 15, 6), (11, 22, 6), (17, 24, 5), (13, 4, 4)):
+        leaves.ellipse(cx, cy, r, r * 0.8, "e")
+    for cx, cy, r in ((10, 8, 3), (17, 13, 3), (8, 18, 2), (14, 21, 2)):
+        leaves.ellipse(cx, cy, r, r * 0.8, "E")
+    leaves.outline("k")
+    c.img.alpha_composite(leaves.img)
+    c.rect(12, 26, 2, 6, "a")
+    c.rect(6, 31, 14, 10, "w")
+    c.rect(5, 30, 16, 3, "W")
+    c.vline(18, 33, 8, "W")
+    c.frame(5, 30, 16, 3, "k")
+    c.frame(6, 32, 14, 10, "k")
+    shadowed(c, 13, 41, 9, 2).save("plant_big")
+    # Неон «OPEN» 60×22.
+    c = Canvas(60, 22)
+    c.round_rect(0, 0, 60, 22, "K", r=3)
+    c.round_rect(2, 2, 56, 18, "k", r=2)
+    letters = [
+        ["www", "w.w", "w.w", "w.w", "www"],
+        ["www", "w.w", "www", "w..", "w.."],
+        ["www", "w..", "ww.", "w..", "www"],
+        ["w.w", "ww.w", "w.ww", "w..w", "w..w"],
+    ]
+    x = 9
+    for i, rows in enumerate(letters):
+        tone = ("s", "c", "Y", "E")[i]
+        for dy, row in enumerate(rows):
+            for dx, ch in enumerate(row):
+                if ch == "w":
+                    c.rect(x + dx * 2, 5 + dy * 2, 2, 2, tone)
+        x += 11
+    c.outline("k")
+    c.save("neon")
+    # Аквариум 48×34.
+    c = Canvas(48, 34)
+    c.rect(2, 4, 44, 22, (120, 200, 240, 200))
+    c.rect(2, 4, 44, 3, (200, 240, 255, 220))
+    c.rect(2, 22, 44, 4, "n")
+    for x, tone in ((10, "o"), (26, "Y"), (36, "R")):
+        c.ellipse(x, 14, 3, 2, tone)
+        c.px(x - 4, 14, tone)
+        c.px(x + 1, 13, "k")
+    for x in (6, 20, 40):
+        c.vline(x, 14, 8, "E")
+        c.vline(x + 1, 16, 6, "e")
+    c.frame(1, 3, 46, 24, "g")
+    c.rect(0, 26, 48, 8, "x")
+    c.hline(0, 26, 48, "b")
+    c.outline("k")
+    shadowed(c, 24, 33, 22, 2).save("aquarium")
+
+
 def environment2():
     building()
     lot2()
@@ -1691,6 +1823,7 @@ def environment2():
     weather_sprites()
     neighborhood()
     construction()
+    decor_items()
 
 
 # ---------------------------------------------------------------- люди

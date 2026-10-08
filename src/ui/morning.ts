@@ -83,6 +83,7 @@ import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter } from '../game/story';
 import { sound } from '../platform/sound';
 import { weatherFor } from '../game/weather';
+import { buyDecor, DECOR, DECOR_KINDS, setDecor } from '../game/decor';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, who } from './dom';
 
@@ -461,6 +462,30 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return box;
   };
 
+  /** Оформление: по каждому виду — «как было», купленное (переставить) и что можно купить. */
+  const decorBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('decor.title')), el('div', 'ui-muted', t('decor.note')));
+    for (const kind of DECOR_KINDS) {
+      const row = el('div', 'ui-chips');
+      row.append(el('span', 'ui-muted', `${t(`decor.kind.${kind}` as TextKey)}:`));
+      const active = state.decor.active[kind];
+      row.append(button(t('decor.none'), () => update(setDecor(getState(), kind, null)), `ui-chip${active ? '' : ' active'}`));
+      for (const item of DECOR.filter((d) => d.kind === kind)) {
+        const name = t(item.nameKey);
+        if (state.decor.owned.includes(item.id)) {
+          row.append(button(name, () => update(setDecor(getState(), kind, item.id)), `ui-chip${active === item.id ? ' active' : ''}`));
+        } else if (item.price !== undefined) {
+          row.append(button(`${name} · ${item.price} 💰`, () => update(buyDecor(getState(), item.id), 'success'), 'ui-chip', state.money < item.price));
+        } else {
+          row.append(button(`${name} · ${t('decor.starsSoon', { n: item.stars ?? 0 })}`, () => undefined, 'ui-chip ui-chip-off', true));
+        }
+      }
+      box.append(row);
+    }
+    return box;
+  };
+
   const albumBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     box.append(
@@ -726,7 +751,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const storeTab = (state: StoreState): HTMLElement[] => {
     const level = storeLevel(state);
     const next = nextStoreLevel(state);
-    const out: HTMLElement[] = [rankBox(state), albumBox(state)];
+    const out: HTMLElement[] = [rankBox(state), albumBox(state), decorBox(state)];
 
     const current = el('div', 'ui-box');
     current.append(
