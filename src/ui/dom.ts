@@ -106,6 +106,16 @@ const css = `
 @keyframes ui-bump { 40% { transform: scale(1.25); background: rgba(143, 209, 106, .85); } }
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }
 .ui-chip { white-space: nowrap; }
+/* Подарок за вход: семь коробочек серии, сегодняшняя подпрыгивает. */
+.ui-gift-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 4px 0 8px; }
+.ui-gift-day { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; border: 2px solid #2b2233;
+  border-radius: 6px; background: #fbf6ea; font-size: 10px; color: #6a5f58; }
+.ui-gift-day.done { background: #e3f5d6; color: #3e8948; }
+.ui-gift-day.today { background: #fee761; color: #2b2233; font-weight: 700; animation: ui-pulse 1s ease-in-out infinite; }
+.ui-gift-day.big .ui-gift-box { font-size: 20px; }
+.ui-gift-box { font-size: 16px; line-height: 1.2; }
+.ui-gift-reward { margin: 8px 0 2px; padding: 8px; text-align: center; font: 800 17px system-ui, sans-serif; background: #fee761;
+  border: 2px solid #2b2233; border-radius: 8px; }
 /* Сводка утра: каждая строка — отдельно, крупнее и темнее, без «простыни» серого текста. */
 .ui-infos { border: 2px solid #2b2233; border-radius: 8px; background: #fbf6ea; padding: 2px 10px; margin: 4px 0 8px; }
 .ui-infos > div { font-size: 13.5px; line-height: 1.3; color: #3a3046; padding: 5px 0; margin: 0; font-style: normal; }

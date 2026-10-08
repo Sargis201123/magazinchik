@@ -335,6 +335,8 @@ export interface StoreState {
   achievements: string[];
   /** Счётчики за всю игру — для достижений. */
   lifetime: Lifetime;
+  /** Подарок за ежедневный вход: когда забрали последний (дата YYYY-MM-DD) и какой по счёту день подряд. */
+  gift: { lastDate: string; streak: number };
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -402,6 +404,7 @@ export const newGame = (): StoreState => ({
   history: [],
   achievements: [],
   lifetime: newLifetime(),
+  gift: { lastDate: '', streak: 0 },
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [

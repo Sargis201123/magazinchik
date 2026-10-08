@@ -71,6 +71,8 @@ import { isWet, weatherFor, type Weather } from '../game/weather';
 import { holidayFor, yearTime } from '../game/calendar';
 import { liveProgress, recordDay, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
+import { claimGift, localDate } from '../game/gift';
+import { showGift } from '../ui/gift';
 import { activeDecor } from '../game/decor';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 
@@ -3220,6 +3222,13 @@ export class StoreScene extends Phaser.Scene {
   // ---------- День ----------
 
   private showMorning(): void {
+    // Подарок за ежедневный вход: деньги (и товар) сразу в состоянии, окно — поверх утра.
+    const claimed = claimGift(this.state, localDate(new Date()), Math.random);
+    if (claimed) {
+      this.state = claimed.state;
+      saveGame(this.state);
+      this.time.delayedCall(400, () => showGift(claimed.gift));
+    }
     // Старые сохранения сразу получают значки за то, что уже сделано.
     this.checkAchievements(false);
     this.hud.update(this.state, DAY_SECONDS);
