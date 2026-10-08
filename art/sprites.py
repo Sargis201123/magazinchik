@@ -2407,6 +2407,39 @@ def ad_things():
     c.save("flyer")
 
 
+def live_events():
+    """Мини-события: электрощиток, труба с течью, гаечный ключ."""
+    c = Canvas(16, 20)
+    c.round_rect(1, 1, 14, 18, "W", r=1)
+    c.rect(2, 2, 12, 16, "l")
+    c.rect(3, 3, 10, 14, "W")
+    c.stamp(["..YY", ".YY.", "YYYY", ".YY.", "YY.."], 6, 6)
+    c.px(12, 10, "k")
+    c.outline("k")
+    c.save("fusebox")
+    c = Canvas(24, 14)
+    c.rect(0, 2, 24, 4, "l")
+    c.hline(0, 2, 24, "W")
+    c.hline(0, 5, 24, "G")
+    c.rect(10, 1, 4, 6, "G")
+    for x, y in ((11, 8), (12, 10), (10, 12), (13, 12)):
+        c.px(x, y, "c")
+    c.px(12, 7, "U")
+    c.outline("k")
+    c.save("leak")
+    c = Canvas(8, 14)
+    c.rect(3, 4, 2, 10, "l")
+    c.rect(1, 0, 6, 4, "l")
+    c.rect(3, 0, 2, 2, (0, 0, 0, 0))
+    c.vline(3, 4, 10, "W")
+    c.outline("k")
+    c.save("wrench")
+    c = Canvas(10, 4)
+    for x in (1, 4, 7):
+        c.px(x, 1, "c")
+    c.save("drip")
+
+
 def environment2():
     building()
     lot2()
@@ -2429,6 +2462,7 @@ def environment2():
     badges()
     bins()
     ad_things()
+    live_events()
 
 
 # ---------------------------------------------------------------- люди
