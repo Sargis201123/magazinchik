@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { checkout, emptyDayStats, expiringCount, markdownExpiring, newGame, unitSalePrice, type StoreState } from '../src/game/economy';
 import { activePromo, promoDemand, setPromo } from '../src/game/promo';
 import { cancelContract, contractOf, deliverContracts, signContract } from '../src/game/contracts';
-import { daysToFair, isFairDay } from '../src/game/fair';
+import { daysToFair, isFairDay, stallSale, STALL_MARKUP } from '../src/game/fair';
 import { ensureWeekly, progressWeekly } from '../src/game/weekly';
 import { pendingTip, seeTip } from '../src/game/tips';
 import { answerEvent, planDay } from '../src/game/events';
@@ -64,7 +64,13 @@ describe('ярмарка', () => {
     expect(fairs.length).toBeGreaterThan(10);
     for (const d of fairs) expect(((d - 1) % 7) + 1).toBe(5);
     expect(daysToFair(fairs[1] - 2)).toBe(2);
-    expect(guestFactor(rich({ day: fairs[1] }))).toBeGreaterThan(guestFactor(rich({ day: fairs[1] + 1 })));
+    // Лишних гостей нет (касса и так не успевает) — зато лоток продаёт со склада с наценкой.
+    const s = rich({ day: fairs[1], warehouse: { bread: [{ age: 0 }] } });
+    const sale = stallSale(s, () => 0)!;
+    expect(sale.price).toBe(Math.round(40 * STALL_MARKUP));
+    expect(sale.state.warehouse.bread).toHaveLength(0);
+    expect(sale.state.money).toBe(s.money + sale.price);
+    expect(stallSale(sale.state, () => 0)).toBeNull();
   });
 });
 

@@ -99,7 +99,7 @@ import { CAT_BEDS, CAT_TIP, catHome, catPatience, catTipChance, fedToday } from 
 import { note, reviewsFor } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { lossAdvice, noteLost } from '../game/losses';
-import { fairTolerance, isFairDay } from '../game/fair';
+import { fairTolerance, isFairDay, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fair';
 import { DELIVERY_SECONDS, makeHomeOrder, ORDER_EVERY, ORDER_TIMEOUT, packHomeOrder, type HomeOrder } from '../game/delivery';
 import { showReviews } from '../ui/reviews';
 
@@ -592,8 +592,10 @@ export class StoreScene extends Phaser.Scene {
   private catHome = { x: 0, y: 0 };
   private catOut = false;
   private reviewStar?: Phaser.GameObjects.Text;
-  /** Флажки и шарики ярмарки. */
+  /** Флажки, шарики и лоток ярмарки; лоток продаёт со склада по таймеру. */
   private fairObjs: Phaser.GameObjects.GameObject[] = [];
+  private stall?: Phaser.GameObjects.Image;
+  private stallTimer?: Phaser.Time.TimerEvent;
   /** Доставка на дом: телефон у кассы, текущий заказ, курьер с велосипедом. */
   private phone?: Phaser.GameObjects.Image;
   private order: { data: HomeOrder; bubble: Phaser.GameObjects.Container; timer: Phaser.Time.TimerEvent } | null = null;
@@ -1234,6 +1236,7 @@ export class StoreScene extends Phaser.Scene {
   private applyFair(): void {
     for (const obj of this.fairObjs) obj.destroy();
     this.fairObjs = [];
+    this.stall = undefined;
     if (!isFairDay(this.state.day)) return;
     const { w, h, door } = this.layout;
     const keep = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
@@ -1256,6 +1259,34 @@ export class StoreScene extends Phaser.Scene {
         this.tweens.add({ targets: balloon, y: by - 1.5, duration: 900 + k * 150, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       }
     }
+    // Лоток слева от входа: торгует со склада мимо кассы.
+    const at = { x: door.x - 58, y: h + FACADE_H + 14 };
+    this.stall = keep(this.art(at.x, at.y, 'fair_stall').setOrigin(0.5, 1).setDepth(at.y));
+  }
+
+  /** Ярмарочный день: лоток раз в несколько секунд продаёт штуку со склада с наценкой. */
+  private startStall(): void {
+    this.stallTimer?.remove();
+    this.stallTimer = undefined;
+    if (!isFairDay(this.state.day)) return;
+    let sold = 0;
+    this.stallTimer = this.time.addEvent({
+      delay: STALL_EVERY_SECONDS * 1000,
+      loop: true,
+      callback: () => {
+        const stall = this.stall;
+        if (!this.running || !stall?.active || sold >= STALL_MAX) return;
+        const sale = stallSale(this.state, Math.random);
+        if (!sale) return;
+        sold++;
+        this.state = sale.state;
+        this.stats.revenue += sale.price;
+        this.refreshWarehouse();
+        sound.coin();
+        this.tweens.add({ targets: stall, scaleY: 1.06 / ART, duration: 90, yoyo: true });
+        this.popup(stall.x, stall.y - 18, `${PRODUCTS[sale.id].icon} +${sale.price} 💰`, '#c8ffb0');
+      },
+    });
   }
 
   /** Гирлянда по краю фасада: лампочки мигают по очереди. */
@@ -4747,6 +4778,7 @@ export class StoreScene extends Phaser.Scene {
     else if (isFairDay(this.state.day)) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, t('popup.fair'), '#fee761'));
     this.stats = emptyDayStats();
     if (isFairDay(this.state.day)) this.stats.fair = true;
+    this.startStall();
     this.setSpeed(1);
     this.scheduleOrder();
     // Вечером мусор выносят — утром ведро пустое.
@@ -4774,6 +4806,8 @@ export class StoreScene extends Phaser.Scene {
     this.running = false;
     this.night = false;
     this.setSpeed(1);
+    this.stallTimer?.remove();
+    this.stallTimer = undefined;
     if (this.order) {
       this.order.timer.remove();
       this.order.bubble.destroy();
