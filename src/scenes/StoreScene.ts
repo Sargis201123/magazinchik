@@ -31,6 +31,7 @@ import {
   ownerScan,
   type ScanTiming,
   warehouseCapacity,
+  warehouseCount,
   type CartItem,
   type Category,
   type DayStats,
@@ -415,6 +416,9 @@ export class StoreScene extends Phaser.Scene {
   private nightLights: NightLight[] = [];
   /** Мебель в зале (в координатах центра человека): люди обходят её. */
   private obstacles: Rect[] = [];
+  /** Утренняя закупка: сколько было на складе в начале утра и сколько коробок ещё ждут доставки. */
+  private morningStock = 0;
+  private awaitingBoxes = 0;
   /** Реклама на улице: промоутер с листовками, баннер на фасаде, блогер у входа. */
   private adObjs: { destroy: () => void }[] = [];
   /** Летучие мыши на Хэллоуин: видны только вечером. */
@@ -1118,6 +1122,56 @@ export class StoreScene extends Phaser.Scene {
         }
       });
     }
+  }
+
+  /** Сколько коробок закуплено этим утром (по разнице с началом утра). */
+  private boxesToDeliver(): number {
+    const added = warehouseCount(this.state) - this.morningStock;
+    return added > 0 ? Math.ceil(added / unitsPerBox(warehouseCapacity(this.state))) : 0;
+  }
+
+  /**
+   * Доставка закупки: фургон подъезжает к складу, водитель через проход в заборе носит коробки
+   * к роллету склада — и они по одной появляются на стеллаже. Потом фургон уезжает.
+   */
+  private async deliver(): Promise<void> {
+    const { warehouse, door, h } = this.layout;
+    const shutterX = warehouse.x + warehouse.w / 2;
+    const roadY = this.streetY + 24;
+    const back = h + FACADE_H + 6;
+    const vanX = shutterX + 14;
+    const body = this.art(0, 0, 'car_van').setTint(0xffffff);
+    const lights = this.art(0, 0, 'car_van_lights');
+    const van = this.add.container(-260, roadY, [body, lights]).setDepth(roadY);
+    ambience.carPass();
+    await new Promise<void>((done) => this.tweens.add({ targets: van, x: vanX, duration: 2200, ease: 'Sine.easeOut', onComplete: () => done() }));
+    if (!van.active) return;
+    const driver = this.makePerson(vanX, this.streetY + 10, { ...randomLook(0x0099db), style: 'cap', hair: 0x0099db });
+    const box = this.art(0, 3, 'box').setVisible(false);
+    driver.add(box);
+    const route = [
+      { x: door.x, y: this.streetY + 4 },
+      { x: door.x, y: back },
+      { x: shutterX, y: back },
+    ];
+    const trips = Math.min(this.awaitingBoxes, 4);
+    for (let trip = 0; trip < trips && driver.active; trip++) {
+      box.setVisible(true);
+      for (const p of route) await this.walk(driver, p.x, p.y, SELLER_SPEED);
+      if (!driver.active) return;
+      await this.wait(300);
+      box.setVisible(false);
+      // Каждый рейс открывает свою долю коробок (на последнем — все оставшиеся).
+      this.awaitingBoxes = trip === trips - 1 ? 0 : Math.max(0, this.awaitingBoxes - Math.ceil(this.awaitingBoxes / (trips - trip)));
+      this.refreshWarehouse();
+      sound.pop(trip);
+      if (trip < trips - 1) for (const p of [...route].reverse()) await this.walk(driver, p.x, p.y, SELLER_SPEED);
+    }
+    for (const p of [...route].reverse()) await this.walk(driver, p.x, p.y, SELLER_SPEED);
+    await this.walk(driver, vanX, this.streetY + 10, SELLER_SPEED);
+    driver.destroy();
+    if (!van.active) return;
+    this.tweens.add({ targets: van, x: this.next.w + 300, delay: 300, duration: 2600, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
   }
 
   /** Реклама видна на улице, пока работает. */
@@ -1933,6 +1987,8 @@ export class StoreScene extends Phaser.Scene {
     const boxes = PRODUCT_IDS.flatMap((id) =>
       Array.from({ length: Math.ceil((this.state.warehouse[id]?.length ?? 0) / perBox) }, () => id),
     ).slice(0, WAREHOUSE_COLS * this.layout.warehouse.rows);
+    // Купленное утром ещё едет: последние коробки появятся, когда водитель их занесёт.
+    boxes.length = Math.max(0, boxes.length - this.awaitingBoxes);
     while (this.boxes.length < boxes.length) this.boxes.push(this.art(0, 0, 'box'));
     this.boxes.forEach((img, n) => {
       const id = boxes[n];
@@ -3291,6 +3347,8 @@ export class StoreScene extends Phaser.Scene {
     }
     // Старые сохранения сразу получают значки за то, что уже сделано.
     this.checkAchievements(false);
+    this.morningStock = warehouseCount(this.state);
+    this.awaitingBoxes = 0;
     this.hud.update(this.state, DAY_SECONDS);
     if (weatherFor(this.state.day) !== this.weather) this.applyWeather();
     this.updateLighting(0);
@@ -3307,6 +3365,7 @@ export class StoreScene extends Phaser.Scene {
         else if (s.level !== this.builtLevel || decorChanged) this.buildWorld();
         else if (staffChanged) this.syncStaff();
         if (adsChanged) this.applyAds();
+        this.awaitingBoxes = this.boxesToDeliver();
         this.refreshShelves();
         this.refreshWarehouse();
         this.hud.update(s, DAY_SECONDS);
@@ -3332,6 +3391,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshBin();
     this.combo = 0;
     this.lastSaleAt = -Infinity;
+    if (this.awaitingBoxes > 0) void this.deliver();
     this.timeLeft = DAY_SECONDS;
     this.nextSpawn = 1;
     this.toiletDirt = 0;
