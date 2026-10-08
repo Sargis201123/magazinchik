@@ -2735,6 +2735,27 @@ def stage11():
         c.save(f"mouse{frame}")
 
 
+def fair_stall():
+    """Ярмарочный лоток: прилавок с ящиками фруктов и полосатый тент на стойках."""
+    c = Canvas(32, 30)
+    for x in (3, 28):
+        c.vline(x, 6, 22, "a")
+    for i in range(7):
+        c.rect(1 + i * 4, 3, 4, 5, "R" if i % 2 == 0 else "w")
+    c.hline(1, 8, 30, "r")
+    for i in range(7):
+        c.px(2 + i * 4, 9, "R" if i % 2 == 0 else "W")
+    c.rect(2, 18, 28, 9, "B")
+    c.hline(2, 18, 28, "n")
+    for x in range(4, 30, 6):
+        c.vline(x, 19, 8, "a")
+    for x, tone in ((6, "R"), (12, "o"), (18, "E"), (24, "y")):
+        c.ellipse(x, 16, 2.6, 2, tone)
+        c.px(x - 1, 15, "w")
+    c.outline("k")
+    shadowed(c, 16, 28, 13, 2).save("fair_stall")
+
+
 def environment2():
     building()
     lot2()
@@ -2762,6 +2783,7 @@ def environment2():
     seasonal_goods()
     stage9()
     stage11()
+    fair_stall()
 
 
 # ---------------------------------------------------------------- люди

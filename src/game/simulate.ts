@@ -69,7 +69,7 @@ import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
 import { buyUpgrade, carryOf, hasUpgrade, loyaltyTolerance, UPGRADES, type UpgradeId } from './upgrades';
 import { CARRY } from './economy';
-import { fairTolerance } from './fair';
+import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { BREW_SECONDS, buyCups, COFFEE_PRICE, coffeeChance, useCup } from './coffee';
 import { AROMA_SECONDS, AROMA_TOLERANCE, OVEN_BATCH, startBatch, takeOutBread } from './bakery';
@@ -314,6 +314,21 @@ export function simulate({
 
     // ---------- Утро: закупка ----------
     const sellable = sellableProducts(state);
+    // Ярмарка: докупить на склад под лоток и продать через него (мимо кассы).
+    let stallRevenue = 0;
+    if (isFairDay(state.day) && sellable.length) {
+      for (let n = 0; n < STALL_MAX; n++) {
+        const id = sellable[n % sellable.length];
+        const best = SUPPLIER_IDS.map((sid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), id)).filter((p): p is number => p !== null).sort((a, b) => a - b)[0];
+        const bought = best !== undefined && state.money > reserve + best ? buyStock(state, id, 1, best) : null;
+        if (!bought) break;
+        state = bought;
+        const sale = stallSale(state, () => n / STALL_MAX);
+        if (!sale) break;
+        state = sale.state;
+        stallRevenue += sale.price;
+      }
+    }
     const guests = guestsToday(state);
     let purchases = 0;
     const deals = Object.fromEntries(
@@ -470,6 +485,8 @@ export function simulate({
         nightProfit = nightRevenue;
       }
     }
+
+    stats.revenue += stallRevenue;
 
     // Мусор: уборщик убирает всё, игрок — сколько успеет.
     stats.trashCleaned = has('cleaner') ? 3 + state.level : Math.floor(random() * (3 + state.level));
