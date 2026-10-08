@@ -242,6 +242,9 @@ interface ShelfView {
   shadow: Phaser.GameObjects.Image;
   items: Phaser.GameObjects.Image[];
   pips: Phaser.GameObjects.Image[];
+  /** Подсветка: полка пустая, а на складе её товар есть — пора нести. */
+  glow?: Phaser.FX.Glow;
+  needsStock: boolean;
 }
 
 /** Шаг дела продавца: дойти до точки, подождать, сделать действие. */
@@ -263,6 +266,7 @@ export class StoreScene extends Phaser.Scene {
   private boxes: Phaser.GameObjects.Image[] = [];
   private outdoorShades: Phaser.GameObjects.Rectangle[] = [];
   private doorImg!: Phaser.GameObjects.Image;
+  private vignette?: Phaser.FX.Vignette;
   /** Насколько вечер (0 — день, 1 — сумерки): фары машин горят сильнее. */
   private evening = 0;
   private indoorShade?: Phaser.GameObjects.Rectangle;
@@ -357,6 +361,7 @@ export class StoreScene extends Phaser.Scene {
     this.hud.setHint(this.currentHint());
     this.updateLighting();
     this.updateDoor();
+    this.pulseHighlights();
     this.hud.update(this.state, this.timeLeft, this.questsLine());
   }
 
@@ -414,6 +419,9 @@ export class StoreScene extends Phaser.Scene {
     const zoom = Math.min(CANVAS_W / (next.w + 16), (CANVAS_H - HUD_TOP - HUD_BOTTOM) / viewH);
     const midY = HUD_TOP + (CANVAS_H - HUD_TOP - HUD_BOTTOM) / 2;
     this.cameras.main.setZoom(zoom).centerOn(next.w / 2, viewH / 2 - 12 + (CANVAS_H / 2 - midY) / zoom);
+    // Мягкая виньетка по краям кадра; к вечеру гуще.
+    this.cameras.main.postFX?.clear();
+    this.vignette = this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.2);
     this.buildStreet(next);
     if (next !== this.layout) this.buildForRent(next);
 
@@ -501,6 +509,16 @@ export class StoreScene extends Phaser.Scene {
     this.updateLighting(this.running ? undefined : 0);
   }
 
+  /** То, что можно нажать, мягко пульсирует подсветкой: пустые полки (есть товар на складе) и мусор. */
+  private pulseHighlights(): void {
+    const pulse = 1.5 + Math.sin(this.time.now / 260) * 1.2;
+    for (const view of this.shelfViews) if (view.glow) view.glow.outerStrength = view.needsStock ? pulse : 0;
+    for (const piece of this.trash) {
+      const glow = piece.getData('glow') as Phaser.FX.Glow | undefined;
+      if (glow) glow.outerStrength = pulse;
+    }
+  }
+
   /** Двери разъезжаются, когда к ним подходят. */
   private updateDoor(): void {
     const { door, h } = this.layout;
@@ -518,6 +536,10 @@ export class StoreScene extends Phaser.Scene {
     this.indoorShade.setFillStyle(indoor);
     const evening = Phaser.Math.Clamp((p - 0.6) / 0.4, 0, 1);
     this.evening = evening;
+    if (this.vignette) {
+      this.vignette.strength = 0.2 + 0.3 * evening;
+      this.vignette.radius = 0.95 - 0.12 * evening;
+    }
     for (const g of this.lampGlows) g.setAlpha(0.7 * evening);
     for (const g of this.ceilingGlows) g.setAlpha(0.06 + 0.16 * evening);
   }
@@ -736,6 +758,7 @@ export class StoreScene extends Phaser.Scene {
         }
       });
       view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
+      view.needsStock = !shelf.broken && units.length === 0 && PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id]?.length ?? 0) > 0);
       view.bg.setTint(shelf.broken ? BROKEN_TINT : SHELF_LOOK[shelf.kind].tint);
     });
   }
@@ -750,7 +773,8 @@ export class StoreScene extends Phaser.Scene {
     const items = Array.from({ length: 16 }, () => this.art(slot.x, slot.y, 'item').setDepth(slot.y - 13));
     // Уровень улучшения — жёлтые точки над полкой.
     const pips = [0, 1].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 15, 'pip').setDepth(slot.y - 12));
-    return { kind, bg, front, shadow, items, pips };
+    const glow = bg.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 8);
+    return { kind, bg, front, shadow, items, pips, glow, needsStock: false };
   }
 
   private refreshWarehouse(): void {
@@ -986,6 +1010,7 @@ export class StoreScene extends Phaser.Scene {
       .art(x + Phaser.Math.Between(-6, 6), y + Phaser.Math.Between(4, 8), Phaser.Utils.Array.GetRandom(['trash', 'trash', 'trash_banana', 'trash_cup']))
       .setDepth(1)
       .setInteractive(new Phaser.Geom.Rectangle(-5, -5, 16, 15), Phaser.Geom.Rectangle.Contains);
+    piece.setData('glow', piece.preFX?.addGlow(0xffffff, 1, 0, false, 0.1, 6));
     piece.on('pointerdown', () => {
       if (this.claimedTrash.has(piece) || this.sellerBusy) return;
       this.claimedTrash.add(piece);
@@ -1240,6 +1265,9 @@ export class StoreScene extends Phaser.Scene {
     const bubble = this.art(0, -14, 'bubble').setVisible(false);
     sprite.add(bubble);
     const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief, rare: rare?.id };
+    // Вора без охранника видно по красному контуру — его можно поймать касанием. Редкий гость — в золотом.
+    if (thief && !this.workers.has('guard')) sprite.postFX?.addGlow(0xe43b44, 3, 0, false, 0.1, 6);
+    if (rare) sprite.postFX?.addGlow(0xfee761, 3, 0, false, 0.1, 6);
     this.customers.add(customer);
     if (thief) {
       // Вора можно поймать касанием.
