@@ -1940,6 +1940,26 @@ def critters():
         c.save(name)
 
 
+def night_lights():
+    """Ночные огни: конус света фонаря и лужа света из витрины на тротуаре. Белые — цвет задаёт игра."""
+    def trapezoid(name, w, h, top_w, bottom_w, a_top, a_bottom, edge):
+        c = Canvas(w, h)
+        for y in range(h):
+            t = y / (h - 1)
+            half = (top_w + (bottom_w - top_w) * t) / 2
+            a = a_top + (a_bottom - a_top) * t
+            for x in range(w):
+                d = abs(x + 0.5 - w / 2)
+                if d > half:
+                    continue
+                soft = min(1.0, (half - d) / edge)
+                c.px(x, y, (255, 255, 255, int(255 * a * soft)))
+        c.save(name)
+
+    trapezoid("light_cone", 48, 48, 8, 46, 0.55, 0.12, 6)
+    trapezoid("light_spill", 48, 40, 34, 48, 0.75, 0.0, 6)
+
+
 def environment2():
     building()
     lot2()
@@ -1954,6 +1974,7 @@ def environment2():
     tutorial_arrow()
     thought()
     critters()
+    night_lights()
 
 
 # ---------------------------------------------------------------- люди

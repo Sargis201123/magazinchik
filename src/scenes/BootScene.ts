@@ -23,6 +23,8 @@ const SPRITES = [
   'pigeon0',
   'pigeon1',
   'pigeon_fly',
+  'light_cone',
+  'light_spill',
   'floor_wood',
   'floor_checker',
   'floor_gold',

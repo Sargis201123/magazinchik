@@ -108,8 +108,8 @@ const OUTDOOR_LIGHT: [number, number][] = [
   [0, 0xffeccc],
   [0.3, 0xffffff],
   [0.65, 0xffe2b8],
-  [0.85, 0xf2a878],
-  [1, 0x7a80b8],
+  [0.85, 0xe89c78],
+  [1, 0x5c64a8],
 ];
 const INDOOR_LIGHT: [number, number][] = [
   [0, 0xfff6e6],
@@ -283,6 +283,14 @@ interface ShelfView {
   needsStock: boolean;
 }
 
+interface NightLight {
+  obj: Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle;
+  /** Яркость к ночи. */
+  alpha: number;
+  /** Неон зажигается с мерцанием; у одной вывески общее число — мигает вся разом. */
+  neon?: number;
+}
+
 interface Pigeon {
   img: Phaser.GameObjects.Image;
   home: { x: number; y: number };
@@ -334,6 +342,10 @@ export class StoreScene extends Phaser.Scene {
   private indoorShade?: Phaser.GameObjects.Rectangle;
   private lampGlows: Phaser.GameObjects.Image[] = [];
   private ceilingGlows: Phaser.GameObjects.Image[] = [];
+  /** Ночные огни (витрины, лужи света, конусы фонарей, неон): сила растёт к вечеру. */
+  private nightLights: NightLight[] = [];
+  /** Где стоят фонари: от них падают тени прохожих. */
+  private lampXs: number[] = [];
   /** Поддон с водой или стойка «Акция» на местах, где полки ещё нет. */
   private slotDecor: Phaser.GameObjects.Image[] = [];
   /** Планировка следующего уровня: камера и улица рассчитаны на неё. */
@@ -513,6 +525,7 @@ export class StoreScene extends Phaser.Scene {
     this.boxes = [];
     this.slotDecor = [];
     this.shutters = [];
+    this.nightLights = [];
     this.trash.clear();
     this.layout = layoutFor(this.state.level);
     this.builtLevel = this.state.level;
@@ -571,6 +584,7 @@ export class StoreScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setResolution(4)
       .setDepth(3);
+    this.neonSign(w / 2, -9, t(storeLevel(this.state).nameKey), '7px', 0xfee761, 64);
     this.buildWarehouse();
     this.buildDecor();
 
@@ -627,8 +641,15 @@ export class StoreScene extends Phaser.Scene {
     const glow = (x: number, y: number, size: number, color: number) =>
       this.art(x, y, 'glow').setScale(size / 64).setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 1).setAlpha(0);
     this.lampGlows = [];
+    this.lampXs = [];
+    const top = next.h + 4;
     for (let x = -28; x < next.w + 40; x += 72) {
-      if (Math.abs(x - this.layout.door.x) > 20) this.lampGlows.push(glow(x, this.streetY - 2, 44, 0xffc860));
+      if (Math.abs(x - this.layout.door.x) <= 20) continue;
+      this.lampXs.push(x);
+      this.lampGlows.push(glow(x, this.streetY - 2, 44, 0xffc860));
+      // Конус света от плафона до земли и ореол вокруг лампы.
+      this.nightGlow(this.art(x, top - 19, 'light_cone').setOrigin(0.5, 0).setTint(0xffd27a), 0.6);
+      this.nightGlow(this.art(x, top - 19, 'glow').setScale(16 / 64).setTint(0xfff0b0), 0.9);
     }
     this.lampGlows.push(glow(this.layout.door.x, h + 8, 40, 0xffd890));
     this.ceilingGlows = [];
@@ -671,7 +692,21 @@ export class StoreScene extends Phaser.Scene {
       for (const img of (person.getData('upper') as Phaser.GameObjects.Image[]) ?? []) img.y = bob;
       const umbrella = person.getData('umbrella') as Phaser.GameObjects.Image | undefined;
       umbrella?.setVisible(person.y > this.layout.h + 2);
+      this.lampShadow(person);
     }
+  }
+
+  /** Вечером на улице тень вытягивается в сторону от ближайшего фонаря. */
+  private lampShadow(person: Phaser.GameObjects.Container): void {
+    const shadow = person.getData('shadow') as Phaser.GameObjects.Image | undefined;
+    if (!shadow) return;
+    let lean = 0;
+    if (this.evening > 0 && person.y > this.layout.h + FACADE_H && this.lampXs.length) {
+      const lamp = this.lampXs.reduce((a, b) => (Math.abs(b - person.x) < Math.abs(a - person.x) ? b : a));
+      lean = Phaser.Math.Clamp((person.x - lamp) / 5, -5, 5) * this.evening;
+    }
+    shadow.x = lean;
+    shadow.scaleX = (1 + Math.abs(lean) / 5) / ART;
   }
 
   /** Облачко-мысль с товаром над головой. */
@@ -745,6 +780,13 @@ export class StoreScene extends Phaser.Scene {
     }
     for (const g of this.lampGlows) g.setAlpha(0.7 * evening);
     for (const g of this.ceilingGlows) g.setAlpha(0.06 + 0.16 * evening);
+    const now = this.time.now;
+    for (const light of this.nightLights) {
+      let alpha = light.alpha * evening;
+      // Неон зажигается не сразу: пару секунд мигает.
+      if (light.neon !== undefined && evening < 0.18) alpha *= Math.sin((now + light.neon) / 41) + Math.sin((now + light.neon) / 97) > 0 ? 1 : 0.2;
+      light.obj.setAlpha(alpha);
+    }
   }
 
   /**
@@ -950,11 +992,11 @@ export class StoreScene extends Phaser.Scene {
    */
   private buildNeighbors(next: Layout): void {
     const bottom = next.h + 4;
-    const neighbors: { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number }[] = [
-      { x: -136, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0 },
-      { x: -268, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0 },
-      { x: next.w + 26, w: 128, h: 140, name: 'neighbor.eduard', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec },
-      { x: next.w + 170, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc },
+    const neighbors: { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number; neon: number }[] = [
+      { x: -136, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860 },
+      { x: -268, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0, neon: 0x7cff8a },
+      { x: next.w + 26, w: 128, h: 140, name: 'neighbor.eduard', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec, neon: 0x6cd8ff },
+      { x: next.w + 170, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc, neon: 0xff8ad8 },
     ];
     const rnd = new Phaser.Math.RandomDataGenerator(['neighbors']);
     for (const n of neighbors) {
@@ -972,6 +1014,7 @@ export class StoreScene extends Phaser.Scene {
       for (let x = n.x + 14; x < n.x + n.w - 10; x += 24) {
         if (Math.abs(x - doorX) < 22) continue;
         this.art(x, bottom - 4.5, 'shopwin').setDepth(bottom - 4);
+        this.windowLight(x, bottom - 4.5, bottom);
       }
       this.art(doorX, bottom - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(bottom + 40);
       // Вывеска на краю крыши.
@@ -981,6 +1024,7 @@ export class StoreScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setResolution(4)
         .setDepth(bottom - 2);
+      this.neonSign(n.x + n.w / 2, bottom - FACADE_H - 8, t(n.name), '6px', n.neon, 64);
     }
     // Остановка на тротуаре слева.
     this.art(-70, this.streetY - 4, 'bus_stop').setDepth(this.streetY);
@@ -1030,6 +1074,25 @@ export class StoreScene extends Phaser.Scene {
     this.greenery = [];
     for (const [x, y] of trees) this.greenery.push(this.art(x, y, 'tree').setOrigin(0.5, 0.9).setDepth(y));
     for (let x = 10; x < next.w; x += 34) this.greenery.push(this.art(x, -6, 'bush').setDepth(-6));
+  }
+
+  /** Светящийся слой поверх темноты: виден только вечером. */
+  private nightGlow<T extends NightLight['obj']>(obj: T, alpha: number, neon?: number): T {
+    obj.setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 1).setAlpha(0);
+    this.nightLights.push({ obj, alpha, neon });
+    return obj;
+  }
+
+  /** Вывеска-неон: ореол и светящиеся буквы поверх вечерней темноты. */
+  private neonSign(x: number, y: number, text: string, size: string, color: number, width: number): void {
+    const seed = Math.random() * 1000;
+    this.nightGlow(this.art(x, y, 'glow').setDisplaySize(width * 1.5, 34).setTint(color), 0.4, seed);
+    const css = `#${color.toString(16).padStart(6, '0')}`;
+    this.nightGlow(
+      this.add.text(x, y, text, { fontFamily: UI_FONT, fontSize: size, color: css }).setOrigin(0.5).setResolution(4),
+      0.85,
+      seed,
+    );
   }
 
   /** Кот спит на скамейке у входа, голуби клюют крошки на тротуаре. */
@@ -1143,10 +1206,19 @@ export class StoreScene extends Phaser.Scene {
         const x = start + i * 24;
         this.art(x, h + 5.5, 'shopwin').setDepth(h + 2);
         this.art(x, h + 1.5, 'awning_small').setDepth(h + 40);
+        this.windowLight(x, h + 5.5, h + 9);
       }
     }
+    // Из дверей свет падает дорожкой на тротуар.
+    this.nightGlow(this.art(door.x, h + 9, 'light_spill').setOrigin(0.5, 0).setScale(1.3 / ART, 1.4 / ART).setTint(0xffd890), 0.55);
     // Главный навес над входом: покупатели проходят под ним.
     this.art(door.x, h + 1, 'awning').setScale(1 / ART, 0.6 / ART).setDepth(h + 41);
+  }
+
+  /** Витрина вечером светится, и тёплый свет из неё ложится на тротуар. */
+  private windowLight(x: number, glassY: number, groundY: number): void {
+    this.nightGlow(this.add.rectangle(x, glassY, 18, 5, 0xffc870), 0.45);
+    this.nightGlow(this.art(x, groundY, 'light_spill').setOrigin(0.5, 0).setTint(0xffd08a), 0.45);
   }
 
   /** На пустом участке растёт бурьян и лежит всякое: кирпичи, песок, конусы, шина, лужа. */
@@ -1426,6 +1498,7 @@ export class StoreScene extends Phaser.Scene {
     const baseScale = look.kid ? 0.8 : 1;
     person.setScale(baseScale);
     person.setData('legs', legs);
+    person.setData('shadow', shadow);
     person.setData('layers', layers);
     person.setData('upper', layers.map(([img]) => img));
     person.setData('facing', 'down');
