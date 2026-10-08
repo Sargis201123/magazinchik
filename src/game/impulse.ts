@@ -14,16 +14,16 @@ export interface RackLevel {
 }
 
 export const RACK_LEVELS: RackLevel[] = [
-  { capacity: 12, chance: 0.25, cost: 0 },
-  { capacity: 24, chance: 0.33, cost: 400 },
-  { capacity: 40, chance: 0.42, cost: 1200 },
+  { capacity: 12, chance: 0.08, cost: 0 },
+  { capacity: 24, chance: 0.13, cost: 400 },
+  { capacity: 40, chance: 0.18, cost: 1200 },
 ];
 
 /** Закупочная цена и цена продажи одной шоколадки. */
-export const CANDY_COST = 8;
-export const CANDY_PRICE = 20;
+export const CANDY_COST = 9;
+export const CANDY_PRICE = 15;
 /** За каждого стоящего впереди шанс растёт: заскучал — потянулся к полке. */
-export const QUEUE_BONUS = 0.07;
+export const QUEUE_BONUS = 0.05;
 export const MAX_IMPULSE = 0.8;
 
 export interface Rack {

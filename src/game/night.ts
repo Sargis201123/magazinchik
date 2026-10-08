@@ -6,11 +6,11 @@ import type { StoreState } from './economy';
 
 export const NIGHT_SECONDS = 45;
 /** Поток гостей ночью от дневного. */
-export const NIGHT_GUESTS = 0.55;
+export const NIGHT_GUESTS = 0.5;
 /** Ночью «справедливая» цена в глазах покупателя выше. */
-export const NIGHT_TOLERANCE = 1.35;
-/** Свет и вывеска на одну ночь. */
-export const NIGHT_POWER = 40;
+export const NIGHT_TOLERANCE = 1.25;
+/** Свет, вывеска и сверхурочные на одну ночь. */
+export const NIGHT_POWER = 100;
 
 export const canWorkNight = (state: StoreState): boolean => hasUpgrade(state, 'nightShift');
 

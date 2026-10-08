@@ -3,14 +3,14 @@ import { emptyDayStats, newGame, PRODUCTS, type StoreState } from '../src/game/e
 import { CANDY_COST, impulseChance, rackOf, refillRack, returnCandy, takeCandy, upgradeRack, RACK_LEVELS } from '../src/game/impulse';
 import { buyCups, coffeeChance, CUP_COST, CUPS_MAX, useCup } from '../src/game/coffee';
 import { OVEN_BATCH, OVEN_BATCH_COST, startBatch, takeOutBread } from '../src/game/bakery';
-import { activeWar, answerWar, endWar, makeWar, warDemand, WAR_LOSE, WAR_WIN } from '../src/game/war';
-import { adoptCat, buyBed, CAT_AWAY_DAYS, catAway, catLuck, catOffer, CAT_FROM_DAY, declineCat, feedCat, FEED_COST } from '../src/game/cat';
+import { activeWar, answerWar, endWar, makeWar, warDemand, warLeaves, WAR_LEAVE, WAR_WIN } from '../src/game/war';
+import { adoptCat, buyBed, CAT_AWAY_DAYS, catAway, catLuck, catOffer, catPatience, catTipChance, CAT_FROM_DAY, declineCat, feedCat, FEED_COST } from '../src/game/cat';
 import { note, reviewsFor, isGood } from '../src/game/reviews';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../src/game/weather';
 import { yearTime } from '../src/game/calendar';
 import { startNight, NIGHT_POWER } from '../src/game/night';
 import { pickWanted } from '../src/game/endless';
-import { guestFactor, nightCycle } from '../src/game/day';
+import { nightCycle } from '../src/game/day';
 import { planDay } from '../src/game/events';
 
 const rich = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), money: 10000, level: 3, ...patch });
@@ -68,6 +68,12 @@ describe('печь', () => {
     expect(out.state.shelves[0].items.bread).toHaveLength(8);
     expect(out.state.warehouse.bread).toHaveLength((s.warehouse.bread?.length ?? 0) + OVEN_BATCH - 4);
   });
+
+  it('нельзя печь, если хлеб некуда положить', () => {
+    const full = rich({ warehouse: { potatoes: Array.from({ length: 80 }, () => ({ age: 0 })) } });
+    const shelves = full.shelves.map((sh) => (sh.kind === 'bakery' ? { ...sh, items: { bread: Array.from({ length: 8 }, () => ({ age: 0 })) } } : sh));
+    expect(startBatch({ ...full, shelves })).toBeNull();
+  });
 });
 
 describe('ценовая война', () => {
@@ -78,12 +84,14 @@ describe('ценовая война', () => {
     expect(war.price).toBeLessThan(PRODUCTS[war.product].basePrice);
   });
 
-  it('переждать — товар берут реже; сравнять — чаще, а цена потом возвращается', () => {
+  it('переждать — покупатели уходят к Эдуарду; сравнять — берут чаще, а цена потом возвращается', () => {
     const waited = answerWar(at, war, 'wait')!;
-    expect(warDemand(waited, war.product)).toBe(WAR_LOSE);
+    expect(warLeaves(waited, war.product)).toBe(WAR_LEAVE);
+    expect(warDemand(waited, war.product)).toBe(1);
     const matched = answerWar(at, war, 'match')!;
     expect(matched.prices[war.product]).toBe(war.price);
     expect(warDemand(matched, war.product)).toBe(WAR_WIN);
+    expect(warLeaves(matched, war.product)).toBe(0);
     const after = endWar({ ...matched, day: matched.war!.until + 1 });
     expect(after.war).toBeUndefined();
     expect(after.prices[war.product]).toBe(at.prices[war.product]);
@@ -93,7 +101,7 @@ describe('ценовая война', () => {
   it('реклама стоит денег и смягчает войну', () => {
     const ad = answerWar(at, war, 'ad')!;
     expect(ad.money).toBeLessThan(at.money);
-    expect(warDemand(ad, war.product)).toBeGreaterThan(WAR_LOSE);
+    expect(warLeaves(ad, war.product)).toBeLessThan(WAR_LEAVE);
     expect(answerWar({ ...at, money: 0 }, war, 'ad')).toBeNull();
   });
 
@@ -123,18 +131,20 @@ describe('кот', () => {
   it('сытый кот приносит удачу, голодный — меньше, ушедший — нет', () => {
     const s = adoptCat(rich({ day: 10 }), '  Барсик  ');
     expect(s.cat!.name).toBe('Барсик');
-    expect(catLuck(s)).toBeGreaterThan(1);
+    expect(catLuck(s)).toBeGreaterThan(0);
+    expect(catPatience(s)).toBeGreaterThan(1);
+    expect(catTipChance(s)).toBeGreaterThan(0);
     const tomorrow = { ...s, day: 11 };
     expect(catLuck(tomorrow)).toBeLessThan(catLuck(s));
-    expect(catLuck(tomorrow)).toBeGreaterThan(1);
+    expect(catLuck(tomorrow)).toBeGreaterThan(0);
     const away = { ...s, day: 10 + CAT_AWAY_DAYS };
     expect(catAway(away)).toBe(true);
-    expect(catLuck(away)).toBe(1);
+    expect(catLuck(away)).toBe(0);
+    expect(catPatience(away)).toBe(1);
     const fed = feedCat(away)!;
     expect(fed.money).toBe(away.money - FEED_COST);
     expect(catAway(fed)).toBe(false);
     expect(feedCat(fed)).toBeNull();
-    expect(guestFactor(fed)).toBeGreaterThan(guestFactor({ ...fed, cat: undefined }));
   });
 
   it('лежанка добавляет удачи', () => {

@@ -14,7 +14,6 @@ import { storyChances, storyGuests } from './story';
 import { questsFor, rankGuests, rewardQuests, seasonFor } from './endless';
 import { adBoost } from './ads';
 import { WEATHER_EFFECTS, weatherFor } from './weather';
-import { catLuck } from './cat';
 import { endWar } from './war';
 
 export interface NightSummary extends NightResult {
@@ -56,14 +55,13 @@ export function inspectionDone(state: StoreState, result: InspectionResult): Sto
   return { ...s, story: { ...s.story, inspectionsPassed: s.story.inspectionsPassed + 1 } };
 }
 
-/** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина, реклама, погода и кот. */
+/** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина, реклама и погода. */
 export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
   (seasonFor(state.day)?.guests ?? 1) *
   rankGuests(state) *
   adBoost(state) *
-  WEATHER_EFFECTS[weatherFor(state.day)].guests *
-  catLuck(state);
+  WEATHER_EFFECTS[weatherFor(state.day)].guests;
 
 /** Секунд между гостями сегодня: рейтинг, помещение, сюжет, сезон и звание. */
 export const spawnIntervalToday = (state: StoreState): number => spawnInterval(state.rating, state.level) / guestFactor(state);

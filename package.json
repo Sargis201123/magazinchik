@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "sim": "vite-node scripts/sim.ts"
+    "sim": "vite-node scripts/sim.ts",
+    "sim:features": "vite-node scripts/sim-features.ts"
   },
   "dependencies": {
     "phaser": "^3.90.0"

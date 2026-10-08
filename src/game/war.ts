@@ -10,11 +10,11 @@ export const WAR_CHANCE = 0.1;
 export const WAR_DAYS = 3;
 /** Эдуард продаёт на 20% дешевле справедливой цены. */
 export const WAR_DISCOUNT = 0.8;
-/** Пока у нас дороже, этот товар хотят реже; когда сравняли — чуть чаще (у нас ещё и рядом). */
-export const WAR_LOSE = 0.4;
+/** Пока у нас дороже, столько покупателей этого товара уходят к Эдуарду (с рекламой — меньше). */
+export const WAR_LEAVE = 0.6;
+export const WAR_LEAVE_AD = 0.25;
+/** Когда сравняли цену, товар берут чуть чаще (у нас ещё и рядом). */
 export const WAR_WIN = 1.15;
-/** С рекламой уходит меньше покупателей. */
-export const WAR_AD_KEEP = 0.75;
 
 export type WarAnswer = 'match' | 'ad' | 'wait';
 
@@ -59,12 +59,20 @@ export function answerWar(state: StoreState, war: { product: ProductId; price: n
   return { ...state, plan, war: base };
 }
 
-/** Насколько чаще (или реже) хотят этот товар у нас сегодня из-за войны. */
+/** Сравняли цену — товар у нас хотят чуть чаще. */
 export function warDemand(state: StoreState, id: ProductId): number {
   const war = activeWar(state);
-  if (!war || war.product !== id) return 1;
-  if (state.prices[id] <= war.price) return WAR_WIN;
-  return war.answer === 'ad' ? WAR_AD_KEEP : WAR_LOSE;
+  return war && war.product === id && state.prices[id] <= war.price ? WAR_WIN : 1;
+}
+
+/**
+ * Шанс, что покупатель за этим товаром развернётся и пойдёт к Эдуарду: у нас дороже.
+ * Именно уход, а не «возьмёт другое» — иначе войну можно было бы просто не замечать.
+ */
+export function warLeaves(state: StoreState, id: ProductId): number {
+  const war = activeWar(state);
+  if (!war || war.product !== id || state.prices[id] <= war.price) return 0;
+  return war.answer === 'ad' ? WAR_LEAVE_AD : WAR_LEAVE;
 }
 
 /** Война кончилась: возвращаем свою прежнюю цену, если её снижали. */

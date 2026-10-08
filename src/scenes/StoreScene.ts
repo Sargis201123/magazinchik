@@ -92,8 +92,9 @@ import {
   takeOutBread,
 } from '../game/bakery';
 import { canWorkNight, NIGHT_GUESTS, NIGHT_POWER, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from '../game/night';
-import { CAT_BEDS, catHome, fedToday } from '../game/cat';
+import { CAT_BEDS, CAT_TIP, catHome, catPatience, catTipChance, fedToday } from '../game/cat';
 import { note, reviewsFor } from '../game/reviews';
+import { warLeaves } from '../game/war';
 import { showReviews } from '../ui/reviews';
 
 // Холст 720×1280 (9:16): на телефоне хватает пикселей для детальных спрайтов.
@@ -366,6 +367,8 @@ interface Customer {
   extras?: { kind: 'candy' | 'coffee'; price: number }[];
   /** Уже погладил кота. */
   petted?: boolean;
+  /** Сколько готов ждать в очереди. */
+  patienceMs?: number;
 }
 
 /** Печь: что в ней и всё, что её рисует. */
@@ -1346,7 +1349,8 @@ export class StoreScene extends Phaser.Scene {
     if (oven.state === 'baking') return;
     const next = startBatch(this.state);
     if (!next) {
-      this.popup(oven.img.x - 10, oven.img.y - 18, t('popup.ovenMoney'), '#ffd0d0');
+      const why = this.state.money < OVEN_BATCH_COST ? t('popup.ovenMoney') : t('popup.ovenFull');
+      this.popup(oven.img.x - 10, oven.img.y - 18, why, '#ffd0d0');
       sound.bad();
       return;
     }
@@ -3634,10 +3638,6 @@ export class StoreScene extends Phaser.Scene {
       sprite.once('destroy', () => sparkles.destroy());
       this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.rareGuest', { name: `${rare.icon} ${t(rare.nameKey)}` }), '#fee761'));
     }
-    // Сытый кот приманивает гостей: иногда заходят именно к нему.
-    if (!thief && !rare && this.catImg?.active && this.state.cat && fedToday(this.state) && Math.random() < 0.08) {
-      this.time.delayedCall(1200, () => sprite.active && this.popup(sprite.x, sprite.y - 16, t('popup.catGuest'), '#fff3b0'));
-    }
     if (valya) {
       this.valyaCame = true;
       this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.valya'), '#fff3b0'));
@@ -3764,7 +3764,9 @@ export class StoreScene extends Phaser.Scene {
     if (!c.serving && Math.random() < impulseChance(this.state, this.queue.indexOf(c))) this.grabCandy(c);
     c.waitStart = this.time.now;
     c.bubble.setVisible(true);
-    c.patience = this.time.delayedCall(PATIENCE_MS, () => void this.giveUp(c));
+    // С котом рядом ждут дольше.
+    c.patienceMs = PATIENCE_MS * catPatience(this.state);
+    c.patience = this.time.delayedCall(c.patienceMs, () => void this.giveUp(c));
     this.layoutQueue();
   }
 
@@ -3791,6 +3793,12 @@ export class StoreScene extends Phaser.Scene {
       this.popup(c.sprite.x, c.sprite.y - 14, t('popup.noStock'), '#ffd0d0');
       note(this.stats, 'noStock');
       return 'empty';
+    }
+    // Ценовая война: у Эдуарда дешевле — часть покупателей уходит к нему.
+    if (Math.random() < warLeaves(this.state, id)) {
+      this.popup(c.sprite.x, c.sprite.y - 14, t('popup.toEduard'), '#ffd0d0');
+      note(this.stats, 'expensive');
+      return 'expensive';
     }
     const price = unitSalePrice(this.state, id, oldest);
     // Ночью к ценам не придираются; пока пахнет свежим хлебом, за него готовы платить больше.
@@ -3929,6 +3937,13 @@ export class StoreScene extends Phaser.Scene {
     const total = goods + extras;
     this.state = { ...state, money: state.money + extras };
     for (const e of c.extras ?? []) note(this.stats, e.kind);
+    // Чаевые «за котика».
+    if (catHome(this.state) && Math.random() < catTipChance(this.state)) {
+      this.state = { ...this.state, money: this.state.money + CAT_TIP };
+      this.stats.revenue += CAT_TIP;
+      note(this.stats, 'cat');
+      this.time.delayedCall(500, () => this.popup(c.sprite.x, c.sprite.y - 30, t('popup.catTip', { n: CAT_TIP }), '#fff3b0'));
+    }
     if (this.night) {
       this.stats.nightRevenue = (this.stats.nightRevenue ?? 0) + total;
       note(this.stats, 'night');
@@ -4136,7 +4151,7 @@ export class StoreScene extends Phaser.Scene {
 
   private updateBubble(c: Customer): void {
     if (!c.bubble.visible) return;
-    const left = 1 - (this.time.now - c.waitStart) / PATIENCE_MS;
+    const left = 1 - (this.time.now - c.waitStart) / (c.patienceMs ?? PATIENCE_MS);
     c.bubble.setTint(left > 0.6 ? 0x8fd16a : left > 0.3 ? 0xf2c14e : 0xd95763);
   }
 

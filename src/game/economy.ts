@@ -752,6 +752,12 @@ export const hasUnmarkedBad = (items: CartItem[]): boolean => items.some(({ unit
 
 // ---------- Конец дня ----------
 
+/**
+ * Сколько довольных нужно, чтобы рейтинг не падал. У звёздного магазина планка выше (0,7),
+ * у отстающего — ниже (0,55): иначе, раз упав, рейтинг уже не поднять (видно в симуляторе).
+ */
+export const ratingTarget = (rating: number): number => 0.55 + 0.03 * rating;
+
 /** 0..1: доля довольных посетителей. Жалоба считается за «полпокупателя». */
 export function satisfaction(stats: DayStats): number {
   const visitors = stats.served + stats.lost;
@@ -799,7 +805,7 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
     spoiled += aged.spoiled;
     return { ...shelf, items: aged.stock };
   });
-  const rating = Math.min(5, Math.max(0, state.rating + (satisfaction(stats) - 0.7) * 0.5));
+  const rating = Math.min(5, Math.max(0, state.rating + (satisfaction(stats) - ratingTarget(state.rating)) * 0.5));
   const skimmed = Math.min(Math.max(0, state.money), skimmedToday(state, stats.revenue));
   const aged = {
     ...state,
