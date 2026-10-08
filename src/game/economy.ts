@@ -87,6 +87,7 @@ export const SHELF_LEVELS = [
   { capacity: 8, cost: 0 },
   { capacity: 12, cost: 120 },
   { capacity: 16, cost: 250 },
+  { capacity: 24, cost: 500 },
 ] as const;
 
 /**
@@ -336,6 +337,8 @@ export interface Shelf {
   items: Stock;
   /** Сломанный холодильник: с него не продают и не раскладывают, товар портится быстрее. */
   broken?: boolean;
+  /** «В первую очередь»: грузчик пополняет такие полки раньше остальных. */
+  priority?: boolean;
 }
 
 export interface StoreState {
@@ -386,6 +389,14 @@ export interface StoreState {
   catAsk?: number;
   /** Отзывы за последний день (reviews.ts). */
   reviews?: Review[];
+  /** Акция дня на один товар (promo.ts). */
+  promo?: { day: number; product: ProductId; kind: 'discount' | 'bogo' };
+  /** Договоры с поставщиками: товар приезжает каждое утро сам (contracts.ts). */
+  contracts?: { sid: string; pid: ProductId; qty: number; until: number; last?: number }[];
+  /** Испытания недели (weekly.ts). */
+  weekly?: { month: number; challenges: { kind: string; target: number; product?: ProductId; progress: number; reward: number; done?: boolean }[] };
+  /** Какие подсказки о новых механиках уже показаны (tips.ts). */
+  seenTips?: string[];
   /** Утренние закупки последних дней — для «как в прошлый раз» (reorder.ts). */
   purchases?: { day: number; lines: { sid: string; pid: ProductId; qty: number }[] }[];
   /** 0..5 звёзд, влияет на поток покупателей. */
@@ -403,6 +414,14 @@ export interface Lifetime {
   bestCombo: number;
   /** Дней без единой жалобы (и хотя бы с 10 покупателями). */
   cleanDays: number;
+  /** Счётчики новых механик (для достижений; в старых сохранениях их нет). */
+  coffees?: number;
+  burnt?: number;
+  nights?: number;
+  deliveries?: number;
+  mice?: number;
+  fairs?: number;
+  wars?: number;
 }
 
 export const newLifetime = (): Lifetime => ({ served: 0, caught: 0, trashCleaned: 0, bestCombo: 0, cleanDays: 0 });
@@ -431,6 +450,12 @@ export interface DayStats {
   notes?: Partial<Record<ReviewTopic, number>>;
   /** Выручка ночной смены (входит в revenue). */
   nightRevenue?: number;
+  /** Счётчики новых механик за день. */
+  fair?: boolean;
+  coffees?: number;
+  burnt?: number;
+  deliveries?: number;
+  mice?: number;
   /** Почему ушли без покупки (losses.ts) и каких товаров не хватило или показались дорогими. */
   lostWhy?: Partial<Record<LostReason, number>>;
   missing?: Partial<Record<ProductId, number>>;
@@ -447,6 +472,8 @@ export function recordSale(stats: DayStats, items: CartItem[]): void {
 export interface CartItem {
   id: ProductId;
   unit: Unit;
+  /** Вторая штука по акции «2 по цене 1» — бесплатно. */
+  free?: boolean;
 }
 
 const fresh = (n: number): Unit[] => Array.from({ length: n }, () => ({ age: 0 }));
@@ -536,8 +563,15 @@ export function buyChance(price: number, basePrice: number): number {
 }
 
 /** Сколько реально заплатит покупатель за эту штуку. */
-export const unitSalePrice = (state: StoreState, id: ProductId, unit: Unit): number =>
-  unit.markdown ? Math.max(1, Math.round(state.prices[id] * MARKDOWN)) : state.prices[id];
+/** Акция «−20%» на товар сегодня (promo.ts). */
+export const PROMO_DISCOUNT = 0.8;
+export const promoKind = (state: StoreState, id: ProductId): 'discount' | 'bogo' | undefined =>
+  state.promo?.day === state.day && state.promo.product === id ? state.promo.kind : undefined;
+
+export const unitSalePrice = (state: StoreState, id: ProductId, unit: Unit): number => {
+  const price = promoKind(state, id) === 'discount' ? Math.max(1, Math.round(state.prices[id] * PROMO_DISCOUNT)) : state.prices[id];
+  return unit.markdown ? Math.max(1, Math.round(price * MARKDOWN)) : price;
+};
 
 export function setPrice(state: StoreState, id: ProductId, price: number): StoreState {
   const clamped = Math.max(PRICE_STEP, Math.min(PRODUCTS[id].basePrice * 3, price));
@@ -758,7 +792,7 @@ export function returnToShelf(state: StoreState, items: CartItem[]): StoreState 
 }
 
 export function checkout(state: StoreState, items: CartItem[]): { state: StoreState; total: number } {
-  const total = items.reduce((sum, { id, unit }) => sum + unitSalePrice(state, id, unit), 0);
+  const total = items.reduce((sum, { id, unit, free }) => sum + (free ? 0 : unitSalePrice(state, id, unit)), 0);
   return { state: { ...state, money: state.money + total }, total };
 }
 
@@ -782,6 +816,33 @@ export function satisfaction(stats: DayStats): number {
 
 /** Сколько дней проживёт штука: брак портится на день раньше. */
 export const unitLife = (id: ProductId, unit: Unit): number => Math.max(1, PRODUCTS[id].shelfLife - (unit.bad ? 1 : 0));
+
+/** Сколько штук испортится этой ночью (и ещё не уценено). */
+export function expiringCount(state: StoreState): number {
+  const count = (stock: Stock) =>
+    PRODUCT_IDS.reduce((sum, id) => sum + (stock[id] ?? []).filter((u) => !u.markdown && !u.pending && u.age + 1 >= unitLife(id, u)).length, 0);
+  return count(state.warehouse) + state.shelves.reduce((sum, s) => sum + count(s.items), 0);
+}
+
+/** «Уценить старое»: то, что испортится ночью, продаётся за полцены, а не выбрасывается. */
+export function markdownExpiring(state: StoreState): { state: StoreState; count: number } {
+  let count = 0;
+  const mark = (stock: Stock): Stock => {
+    const next: Stock = {};
+    for (const id of PRODUCT_IDS) {
+      const units = stock[id];
+      if (!units) continue;
+      next[id] = units.map((u) => {
+        if (u.markdown || u.pending || u.age + 1 < unitLife(id, u)) return u;
+        count++;
+        return { ...u, markdown: true };
+      });
+    }
+    return next;
+  };
+  const next = { ...state, warehouse: mark(state.warehouse), shelves: state.shelves.map((s) => ({ ...s, items: mark(s.items) })) };
+  return { state: count ? next : state, count };
+}
 
 function ageStock(stock: Stock): { stock: Stock; spoiled: number } {
   let spoiled = 0;

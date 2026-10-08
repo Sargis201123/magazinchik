@@ -83,6 +83,12 @@ import {
 } from '../game/endless';
 import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
 import { applyReorder, recordPurchase, reorderPlan } from '../game/reorder';
+import { activePromo, setPromo, type PromoKind } from '../game/promo';
+import { cancelContract, CONTRACT_QTYS, contractOf, contractPrice, deliverContracts, signContract, type Delivery } from '../game/contracts';
+import { daysToFair, isFairDay } from '../game/fair';
+import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
+import { pendingTip, seeTip, TIP_ICONS } from '../game/tips';
+import { expiringCount, markdownExpiring } from '../game/economy';
 import { currentCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
@@ -190,6 +196,12 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   let storyLine = 0;
   /** Бракованная партия, по которой ждём решения игрока. */
   let pendingBad: { sid: SupplierId; pid: ProductId; qty: number; price: number } | null = null;
+  /** Утром по договорам приехал товар — показать строкой в сводке. */
+  const morningDelivery = deliverContracts(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid));
+  const delivered: Delivery[] = morningDelivery.deliveries;
+  if (morningDelivery.deliveries.length) setState(morningDelivery.state);
+  /** Какой товар выбран для нового договора у каждого поставщика. */
+  const contractPick: Partial<Record<SupplierId, ProductId>> = {};
 
   const update = (next: StoreState | null, feedback: 'tap' | 'success' | 'error' = 'tap') => {
     if (!next) return;
@@ -251,17 +263,22 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     slideTab = false;
     card.replaceChildren(
       title,
+      ...tipBox(state),
+      todoBox(state),
       infos(
+        ...deliveryLine(),
+        ...fairLine(state),
+        ...promoLine(state),
         goalLine(state),
         ...seasonLine(state),
         ...weatherLine(state),
         ...warLine(state),
-        ...catLine(state),
         ...holidayLine(state),
         el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
         billForecast(state),
       ),
       questsBox(state),
+      ...weeklyBox(state),
       tabs,
       body,
       button(t('morning.open'), () => {
@@ -343,6 +360,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       box.append(itemRow(pid, { price, sub: t('buy.inWarehouse', { n: warehouseOf(state, pid) }), actions: chips }));
     }
 
+    box.append(contractRow(sid, state));
     const haggleRow = el('div', 'ui-haggle');
     if (deal.discount > 0) {
       haggleRow.append(el('b', '', t('buy.discount', { p: Math.round(deal.discount * 100) })));
@@ -369,6 +387,36 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       haggleRow.append(el('span', 'ui-muted', t('buy.attempts', { n: deal.attemptsLeft })));
     }
     box.append(haggleRow);
+    return box;
+  };
+
+  /** Договор на неделю с этим поставщиком: что везут, или выбрать товар и сколько в день. */
+  const contractRow = (sid: SupplierId, state: StoreState) => {
+    const s = SUPPLIERS[sid];
+    const box = el('div', 'ui-contract');
+    box.append(el('b', '', t('contract.title')));
+    const current = contractOf(state, sid);
+    if (current) {
+      const price = contractPrice(unitPrice(s, newDeal(s), current.pid) ?? 0);
+      box.append(
+        el('div', 'ui-muted', t('contract.active', { product: productLabel(current.pid), qty: current.qty, price, until: current.until })),
+        button(t('contract.cancel'), () => update(cancelContract(getState(), sid)), 'ui-chip'),
+      );
+      return box;
+    }
+    box.append(el('div', 'ui-muted', t('contract.note')));
+    const products = PRODUCT_IDS.filter((pid) => unitPrice(s, newDeal(s), pid) !== null && productAvailable(pid, state.day));
+    const pick = contractPick[sid] ?? products[0];
+    const chips = el('div', 'ui-chips');
+    for (const pid of products) {
+      chips.append(button(PRODUCTS[pid].icon, () => ((contractPick[sid] = pid), render()), `ui-chip${pid === pick ? ' active' : ''}`));
+    }
+    const qtys = el('div', 'ui-chips');
+    for (const qty of CONTRACT_QTYS) {
+      const price = contractPrice(unitPrice(s, newDeal(s), pick) ?? 0);
+      qtys.append(button(`${t('contract.sign')} ×${qty} · ${qty * price} 💰`, () => update(signContract(getState(), sid, pick, qty), 'success'), 'ui-chip'));
+    }
+    box.append(chips, qtys);
     return box;
   };
 
@@ -402,6 +450,15 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const out: HTMLElement[] = [
       el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
     ];
+    const expiring = expiringCount(state);
+    if (expiring) {
+      const box = el('div', 'ui-box');
+      box.append(
+        el('div', 'ui-note', t('markdown.note', { n: expiring })),
+        button(t('markdown.button', { n: expiring }), () => update(markdownExpiring(getState()).state, 'success'), 'ui-chip'),
+      );
+      out.push(box);
+    }
     const present = PRODUCT_IDS.filter((pid) => warehouseOf(state, pid) > 0);
     if (present.length === 0) {
       out.push(el('div', 'ui-note', t('warehouse.empty')));
@@ -466,6 +523,14 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       );
       const allowed = PRODUCT_IDS.filter((pid) => PRODUCTS[pid].category === shelf.kind).map(productLabel).join(', ');
       box.append(head, el('div', 'ui-muted', t('shelves.only', { list: allowed })));
+      // Звёздочка: грузчик пополняет такие полки в первую очередь.
+      box.append(
+        button(
+          shelf.priority ? t('shelf.priorityOn') : t('shelf.priority'),
+          () => update({ ...getState(), shelves: getState().shelves.map((sh, j) => (j === i ? { ...sh, priority: !sh.priority } : sh)) }),
+          `ui-chip${shelf.priority ? ' active' : ''}`,
+        ),
+      );
       if (shelf.broken) {
         const cost = fridgeRepairCost(state.level);
         box.append(
@@ -553,8 +618,6 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return [line];
   };
 
-  const catLine = (state: StoreState): HTMLElement[] =>
-    state.cat && !fedToday(state) ? [el('div', 'ui-muted', t('cat.hungryLine', { name: state.cat.name }))] : [];
 
   const seasonLine = (state: StoreState): HTMLElement[] => {
     const season = seasonFor(state.day);
@@ -866,6 +929,117 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return box;
   };
 
+  /** Карточка «Новое»: одна механика за раз, показывается один раз. */
+  const tipBox = (state: StoreState): HTMLElement[] => {
+    const tip = pendingTip(state);
+    if (!tip) return [];
+    const box = el('div', 'ui-box ui-tip');
+    box.append(
+      el('b', '', `${t('tip.new')}: ${TIP_ICONS[tip]} ${t(`tip.${tip}.title` as TextKey)}`),
+      el('div', '', t(`tip.${tip}.text` as TextKey)),
+      button(t('tip.ok'), () => update(seeTip(getState(), tip)), 'ui-chip'),
+    );
+    return [box];
+  };
+
+  /** «Главное на сегодня»: что нужно сделать утром — с кнопкой прямо в строке. */
+  const todoBox = (state: StoreState) => {
+    const box = el('div', 'ui-box ui-todo');
+    box.append(el('b', '', t('todo.title')));
+    const row = (text: string, action?: HTMLElement) => {
+      const r = el('div', 'ui-todo-row');
+      r.append(el('span', '', text));
+      if (action) r.append(action);
+      box.append(r);
+    };
+    const sellable = sellableProducts(state);
+    // Пустые полки, когда на складе есть их товар.
+    const emptyWithStock = sellable.filter((id) => onShelves(state, id) === 0 && warehouseOf(state, id) > 0 && state.shelves.some((sh) => canPlace(id, sh) && shelfFree(sh) > 0));
+    if (emptyWithStock.length) {
+      row(
+        t('todo.stock', { list: emptyWithStock.map((id) => PRODUCTS[id].icon).join('') }),
+        button(t('todo.stockBtn'), () => {
+          let next = getState();
+          next.shelves.forEach((_, i) => (next = moveToShelf(next, i).state));
+          update(next, 'success');
+        }, 'ui-chip'),
+      );
+    }
+    // Мало товара на сегодня: меньше, чем примерно разберут за день.
+    const perProduct = (guestsToday(state) * 1.5) / Math.max(1, sellable.length);
+    const low = sellable.filter((id) => onShelves(state, id) + warehouseOf(state, id) < perProduct * 0.6);
+    if (low.length) {
+      row(
+        t('todo.low', { list: low.map((id) => PRODUCTS[id].icon).join('') }),
+        button(t('todo.lowBtn'), () => {
+          tab = 'buy';
+          slideTab = true;
+          render();
+        }, 'ui-chip'),
+      );
+    }
+    const expiring = expiringCount(state);
+    if (expiring) row(t('todo.expiring', { n: expiring }), button(t('todo.expiringBtn'), () => update(markdownExpiring(getState()).state, 'success'), 'ui-chip'));
+    state.shelves.forEach((sh, i) => {
+      if (!sh.broken) return;
+      const cost = fridgeRepairCost(state.level);
+      row(t('todo.fridge', { shelf: t(SHELF_KINDS[sh.kind].nameKey) }), button(t('todo.fridgeBtn', { n: cost }), () => update(repairShelf(getState(), i), 'success'), 'ui-chip', state.money < cost));
+    });
+    if (state.cat && !fedToday(state)) {
+      row(t('todo.cat', { name: state.cat.name }), button(t('todo.catBtn', { n: FEED_COST }), () => update(feedCat(getState()), 'success'), 'ui-chip', state.money < FEED_COST));
+    }
+    const rack = rackOf(state);
+    const rackFree = rackCapacity(state) - rack.stock;
+    if (rack.stock <= rackCapacity(state) / 3 && rackFree > 0) {
+      row(t('todo.rack', { n: rack.stock }), button(t('todo.rackBtn', { n: rackFree * CANDY_COST }), () => update(refillRack(getState(), rackFree), 'success'), 'ui-chip', state.money < rackFree * CANDY_COST));
+    }
+    if (hasUpgrade(state, 'coffee') && cupsOf(state) < 8) {
+      const n = CUPS_MAX - cupsOf(state);
+      row(t('todo.cups', { n: cupsOf(state) }), button(t('todo.cupsBtn', { n, cost: n * CUP_COST }), () => update(buyCups(getState(), n), 'success'), 'ui-chip', state.money < n * CUP_COST));
+    }
+    if (box.children.length === 1) box.append(el('div', 'ui-muted', t('todo.done')));
+    return box;
+  };
+
+  const deliveryLine = (): HTMLElement[] => {
+    if (!delivered.length) return [];
+    const got = delivered.filter((d) => d.qty > 0);
+    const lines: HTMLElement[] = [];
+    if (got.length) {
+      lines.push(
+        el('div', 'ui-muted', t('contract.delivered', { list: got.map((d) => `${PRODUCTS[d.pid].icon}×${d.qty}`).join(' '), cost: got.reduce((sum, d) => sum + d.cost, 0) })),
+      );
+    }
+    if (delivered.some((d) => d.skipped)) lines.push(el('div', 'ui-note', t('contract.skipped')));
+    return lines;
+  };
+
+  const fairLine = (state: StoreState): HTMLElement[] => {
+    if (isFairDay(state.day)) return [el('div', 'ui-note', t('fair.today'))];
+    const n = daysToFair(state.day);
+    return n > 0 && n <= 2 ? [el('div', 'ui-muted', t('fair.soon', { n }))] : [];
+  };
+
+  const promoLine = (state: StoreState): HTMLElement[] => {
+    const promo = activePromo(state);
+    return promo ? [el('div', 'ui-muted', t('promo.active', { product: productLabel(promo.product), kind: t(`promo.kind.${promo.kind}` as TextKey) }))] : [];
+  };
+
+  /** Испытания недели: прогресс каждой цели и награда. */
+  const weeklyBox = (state: StoreState): HTMLElement[] => {
+    const weekly = state.weekly;
+    if (!weekly) return [];
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('weekly.title', { day: weeklyUntil(state) })));
+    for (const c of weekly.challenges as Challenge[]) {
+      const r = el('div', 'ui-row');
+      const text = t(WEEKLY_TEXT[c.kind], { n: c.target, product: c.product ? productLabel(c.product) : '' });
+      r.append(el('span', '', `${c.done ? '✅' : '•'} ${text}`), el('span', 'ui-muted', c.done ? `+${c.reward} 💰` : `${c.progress}/${c.target} · +${c.reward} 💰`));
+      box.append(r);
+    }
+    return [box];
+  };
+
   const goalLine = (state: StoreState) => {
     const chapter = currentChapter(state);
     const text = chapter
@@ -986,6 +1160,27 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         );
         break;
       }
+      case 'poach': {
+        const m = staffOf(state, event.role);
+        const name = m ? staffName(m.name) : '';
+        box.append(
+          el('h3', '', `🕴️ ${t('event.poach.title')}`),
+          who('eduard_happy', el('b', '', t(CHARACTERS.eduard.nameKey))),
+          el('p', '', t('event.poach.text', { name, wage: event.wage })),
+          el('div', 'ui-muted', t('event.poach.note', { name, role: t(STAFF_ROLES[event.role].nameKey), now: m?.wage ?? 0 })),
+          button(t('event.poach.keep', { wage: event.wage }), () => answer(true)),
+          button(t('event.poach.let'), () => answer(false), 'ui-btn secondary'),
+        );
+        break;
+      }
+      case 'snitch':
+        box.append(
+          el('h3', '', `📮 ${t('event.snitch.title')}`),
+          who('eduard_angry', el('b', '', t(CHARACTERS.eduard.nameKey))),
+          el('p', '', t('event.snitch.text')),
+          button(t('event.ok'), () => answer(true)),
+        );
+        break;
       case 'inspection':
         box.append(
           el('h3', '', `📋 ${t('event.inspection.title')}`),
@@ -1280,6 +1475,14 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         bar,
         el('div', 'ui-muted', `${t('prices.demand', { p: Math.round(demand * 100) })} · ${t('prices.base', { n: product.basePrice })}`),
       );
+      // Акция дня: −20% или «2 по цене 1» (одна на день; повторное нажатие отменяет).
+      const promo = activePromo(state);
+      const promoRow = el('div', 'ui-chips ui-promo');
+      for (const kind of ['discount', 'bogo'] as PromoKind[]) {
+        const on = promo?.product === pid && promo.kind === kind;
+        promoRow.append(button(`🏷 ${t(`promo.${kind}` as TextKey)}`, () => update(setPromo(getState(), pid, kind)), `ui-chip${on ? ' active' : ''}`));
+      }
+      info.append(promoRow);
       const change = (delta: number) => () => update(setPrice(getState(), pid, getState().prices[pid] + delta));
       const chips = el('div', 'ui-chips');
       chips.append(button('−', change(-PRICE_STEP), 'ui-chip'), el('b', 'ui-price-value', `${price} 💰`), button('+', change(PRICE_STEP), 'ui-chip'));

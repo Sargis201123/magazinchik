@@ -39,6 +39,9 @@ export class Hud {
   private readonly top = el('div', 'ui-hud');
   private readonly stock = el('div', 'ui-stock');
   private readonly hint = el('div', 'ui-hint');
+  /** Ускорение дня ×2 — когда магазин работает сам. */
+  private readonly speed = el('button', 'ui-speed');
+  onSpeed: () => void = () => {};
   private readonly money = el('span');
   private readonly moneyText = document.createTextNode('');
   private readonly clock = el('span');
@@ -55,7 +58,9 @@ export class Hud {
     coin.alt = '💰';
     this.money.append(coin, this.moneyText);
     this.top.append(this.money, this.clock, this.stars);
-    document.body.append(this.top, this.stock, this.hint);
+    this.speed.addEventListener('click', () => this.onSpeed());
+    this.speed.style.display = 'none';
+    document.body.append(this.top, this.stock, this.hint, this.speed);
   }
 
   update(state: StoreState, secondsLeft: number, quests = '', night = false): void {
@@ -101,6 +106,14 @@ export class Hud {
   private renderMoney(value: number): void {
     this.shownMoney = value;
     this.moneyText.nodeValue = ` ${value}`;
+  }
+
+  /** Кнопка ускорения: видна только днём; ×1 или ×2. */
+  showSpeed(visible: boolean, speed: number): void {
+    const text = speed > 1 ? '⏩ ×2' : '▶ ×1';
+    if (this.speed.textContent !== text) this.speed.textContent = text;
+    this.speed.style.display = visible ? '' : 'none';
+    this.speed.classList.toggle('on', speed > 1);
   }
 
   /** Счётчик денег подпрыгивает, когда в него «долетели» монетки. */

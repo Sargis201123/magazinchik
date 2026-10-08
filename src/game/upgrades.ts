@@ -3,9 +3,9 @@
 // кофейный уголок, своя печь и ночная смена.
 
 import type { TextKey } from '../i18n/ru';
-import type { ScanTiming, StoreState } from './economy';
+import { CARRY, type ScanTiming, type StoreState } from './economy';
 
-export type UpgradeId = 'terminal' | 'register2' | 'selfCheckout' | 'coffee' | 'oven' | 'nightShift';
+export type UpgradeId = 'terminal' | 'register2' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'coffee' | 'oven' | 'nightShift';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -20,6 +20,9 @@ export interface Upgrade {
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
   terminal: { id: 'terminal', icon: '💳', nameKey: 'upgrade.terminal', descKey: 'upgrade.terminal.desc', price: 600, minLevel: 1 },
   register2: { id: 'register2', icon: '🧾', nameKey: 'upgrade.register2', descKey: 'upgrade.register2.desc', price: 3000, minLevel: 2 },
+  cart: { id: 'cart', icon: '🛒', nameKey: 'upgrade.cart', descKey: 'upgrade.cart.desc', price: 700, minLevel: 1 },
+  loyalty: { id: 'loyalty', icon: '💳', nameKey: 'upgrade.loyalty', descKey: 'upgrade.loyalty.desc', price: 900, minLevel: 1 },
+  delivery: { id: 'delivery', icon: '🚲', nameKey: 'upgrade.delivery', descKey: 'upgrade.delivery.desc', price: 1500, minLevel: 1 },
   selfCheckout: { id: 'selfCheckout', icon: '🖥', nameKey: 'upgrade.selfCheckout', descKey: 'upgrade.selfCheckout.desc', price: 2500, minLevel: 2 },
   coffee: { id: 'coffee', icon: '☕', nameKey: 'upgrade.coffee', descKey: 'upgrade.coffee.desc', price: 1500, minLevel: 2 },
   oven: { id: 'oven', icon: '🥖', nameKey: 'upgrade.oven', descKey: 'upgrade.oven.desc', price: 1800, minLevel: 1 },
@@ -46,3 +49,15 @@ export function buyUpgrade(state: StoreState, id: UpgradeId): StoreState | null 
 /** Время пробивки с учётом терминала. */
 export const withUpgrades = (state: StoreState, timing: ScanTiming): ScanTiming =>
   hasUpgrade(state, 'terminal') ? { ...timing, pay: timing.pay * TERMINAL_PAY } : timing;
+
+/** Тележка: за один поход со склада несут вдвое больше. */
+export const CART_CARRY = 12;
+export const carryOf = (state: StoreState): number => (hasUpgrade(state, 'cart') ? CART_CARRY : CARRY);
+
+/**
+ * Карта лояльности: «свои» покупатели меньше придираются к ценам — берут то, что раньше
+ * сочли бы дорогим. Не «больше гостей» и не «больше в корзину»: касса и полки и так узкое
+ * место, лишние гости уходили злыми, а лишний товар портился (видно в симуляторе).
+ */
+export const LOYALTY_TOLERANCE = 1.1;
+export const loyaltyTolerance = (state: StoreState): number => (hasUpgrade(state, 'loyalty') ? LOYALTY_TOLERANCE : 1);

@@ -208,6 +208,20 @@ const css = `
 .ui-review-stars { color: #f77622; font-size: 14px; letter-spacing: 1px; }
 .ui-review-text { font-size: 14px; line-height: 1.3; color: #2b2233; margin: 2px 0; }
 .ui-review-who { font-size: 12px; color: #6a5f58; text-align: right; }
+.ui-speed { position: fixed; right: max(10px, calc((100vw - min(100vw, 56.25dvh)) / 2 + 10px)); bottom: calc(env(safe-area-inset-bottom) + 40px);
+  font: 800 14px system-ui, sans-serif; padding: 7px 10px; border: 2px solid #2b2233; border-radius: 8px; background: #f4ecd8;
+  color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
+.ui-speed.on { background: #fee761; }
+.ui-tip { background: #fff3b0; }
+.ui-tip > div { font-size: 14px; line-height: 1.35; margin: 4px 0 6px; color: #2b2233; }
+.ui-todo { background: #fbf6ea; }
+.ui-todo-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 0; font-size: 13.5px; }
+.ui-todo-row + .ui-todo-row { border-top: 1px dashed #d8ccb0; }
+.ui-todo-row .ui-chip { flex: none; padding: 6px 8px; font-size: 13px; }
+.ui-contract { margin-top: 8px; padding: 6px 8px; border: 2px dashed #b8a98a; border-radius: 8px; }
+.ui-contract .ui-chips { margin-top: 4px; }
+.ui-promo { margin-top: 4px; display: flex; flex-wrap: nowrap; gap: 4px; }
+.ui-promo .ui-chip { padding: 4px 6px; font-size: 12px; }
 .ui-loss-bar { display: flex; height: 14px; border: 2px solid #2b2233; border-radius: 6px; overflow: hidden; margin: 6px 0 2px; }
 .ui-loss-row { display: grid; grid-template-columns: 14px 1fr; gap: 6px; align-items: start; padding: 5px 0; }
 .ui-loss-row + .ui-loss-row { border-top: 1px dashed #d8ccb0; }

@@ -15,10 +15,15 @@ import { questsFor, rankGuests, rewardQuests, seasonFor } from './endless';
 import { adBoost } from './ads';
 import { WEATHER_EFFECTS, weatherFor } from './weather';
 import { endWar } from './war';
+import { promoGuests } from './promo';
+import { fairGuests } from './fair';
+import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
   quests: { earned: number; done: number; total: number };
+  /** Испытания недели, выполненные сегодня. */
+  weekly: { completed: Challenge[]; earned: number };
 }
 
 export function nightCycle(state: StoreState, stats: DayStats, random: () => number = Math.random): NightSummary {
@@ -31,6 +36,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const quests = s.plan?.quests ?? [];
   const rewarded = rewardQuests(s, quests, stats);
   s = rewarded.state;
+  const weekly = progressWeekly(s, stats);
+  s = weekly.state;
   const night = endDay(s, stats, random);
   const next = ensurePlan(endWar(night.state));
   return {
@@ -38,14 +45,16 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     state: next,
     order: order && { delivered: order.delivered, earned: order.earned },
     quests: { earned: rewarded.earned, done: rewarded.done, total: quests.length },
+    weekly: { completed: weekly.completed, earned: weekly.earned },
   };
 }
 
 /** План на текущий день (если его ещё нет — например, в начале игры). */
 export function ensurePlan(state: StoreState): StoreState {
-  if (state.plan?.day === state.day && state.plan.quests) return state;
-  const plan = planDay(state, storyChances(state));
-  return { ...state, plan: { ...plan, quests: questsFor(state, guestsToday(state)) } };
+  const weekly = ensureWeekly(state, guestsToday(state));
+  if (weekly.plan?.day === weekly.day && weekly.plan.quests) return weekly;
+  const plan = planDay(weekly, storyChances(weekly));
+  return { ...weekly, plan: { ...plan, quests: questsFor(weekly, guestsToday(weekly)) } };
 }
 
 /** Итог проверки: штраф/рейтинг и счётчик для сюжета. */
@@ -61,7 +70,9 @@ export const guestFactor = (state: StoreState): number =>
   (seasonFor(state.day)?.guests ?? 1) *
   rankGuests(state) *
   adBoost(state) *
-  WEATHER_EFFECTS[weatherFor(state.day)].guests;
+  WEATHER_EFFECTS[weatherFor(state.day)].guests *
+  promoGuests(state) *
+  fairGuests(state.day);
 
 /** Секунд между гостями сегодня: рейтинг, помещение, сюжет, сезон и звание. */
 export const spawnIntervalToday = (state: StoreState): number => spawnInterval(state.rating, state.level) / guestFactor(state);

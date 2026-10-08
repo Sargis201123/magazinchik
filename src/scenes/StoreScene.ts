@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 import {
   BAD_COMPLAINT_CHANCE,
   buyChance,
-  CARRY,
   canPlace,
+  promoKind,
+  PRODUCTS,
+  SHELF_LEVELS,
   checkout,
   DAY_SECONDS,
   emptyDayStats,
@@ -76,7 +78,7 @@ import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
 import { activeAd } from '../game/ads';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
-import { hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, UPGRADES, withUpgrades } from '../game/upgrades';
+import { carryOf, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, UPGRADES, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
 import { activeDecor } from '../game/decor';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
@@ -97,6 +99,8 @@ import { CAT_BEDS, CAT_TIP, catHome, catPatience, catTipChance, fedToday } from 
 import { note, reviewsFor } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { lossAdvice, noteLost } from '../game/losses';
+import { fairTolerance, isFairDay } from '../game/fair';
+import { DELIVERY_SECONDS, makeHomeOrder, ORDER_EVERY, ORDER_TIMEOUT, packHomeOrder, type HomeOrder } from '../game/delivery';
 import { showReviews } from '../ui/reviews';
 
 // Холст 720×1280 (9:16): на телефоне хватает пикселей для детальных спрайтов.
@@ -206,7 +210,10 @@ const SPILL_MOP_MS = 1700;
 /** Мини-события дня (свет, труба, голубь, курьер): с какого дня и как часто. */
 const LIVE_FROM_DAY = 4;
 const LIVE_CHANCE = 0.5;
-const LIVE_KINDS = ['blackout', 'leak', 'pigeon', 'courier'] as const;
+const LIVE_KINDS = ['blackout', 'leak', 'pigeon', 'courier', 'mouse'] as const;
+/** Мышь грызёт товар раз в столько секунд; сама уходит через столько. */
+const MOUSE_BITE_MS = 4000;
+const MOUSE_STAY_MS = 25_000;
 type LiveKind = (typeof LIVE_KINDS)[number];
 const FIX_MS = 1600;
 const LEAK_FIX_MS = 2200;
@@ -428,6 +435,8 @@ interface ShelfView {
   lights: Phaser.GameObjects.GameObject[];
   /** Табличка «Осталось 2» над почти пустой полкой. */
   low: Phaser.GameObjects.Text;
+  /** Ценник «АКЦИЯ», если товар этой полки — товар дня. */
+  promo: Phaser.GameObjects.Text;
   /** Подсветка: полка пустая, а на складе её товар есть — пора нести. */
   glow?: Phaser.FX.Glow;
   needsStock: boolean;
@@ -583,6 +592,17 @@ export class StoreScene extends Phaser.Scene {
   private catHome = { x: 0, y: 0 };
   private catOut = false;
   private reviewStar?: Phaser.GameObjects.Text;
+  /** Флажки и шарики ярмарки. */
+  private fairObjs: Phaser.GameObjects.GameObject[] = [];
+  /** Доставка на дом: телефон у кассы, текущий заказ, курьер с велосипедом. */
+  private phone?: Phaser.GameObjects.Image;
+  private order: { data: HomeOrder; bubble: Phaser.GameObjects.Container; timer: Phaser.Time.TimerEvent } | null = null;
+  private courier?: Phaser.GameObjects.Container;
+  private courierBike?: Phaser.GameObjects.Image;
+  private courierHome = { x: 0, y: 0 };
+  private courierBusy = false;
+  /** Ускорение дня (×1 или ×2). */
+  private speed = 1;
 
   constructor() {
     super('store');
@@ -592,6 +612,7 @@ export class StoreScene extends Phaser.Scene {
     const save = loadGame();
     this.state = ensurePlan(save ?? newGame());
     this.hud = new Hud();
+    this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
 
     this.buildWorld();
     this.hud.update(this.state, this.timeLeft);
@@ -615,6 +636,13 @@ export class StoreScene extends Phaser.Scene {
    * За титулом — живая улица на закате: горят фонари и неон, едут машины, идут люди,
    * камера медленно плывёт вдоль квартала. Возвращает функцию, которая вернёт камеру к магазину.
    */
+  /** Ускорение дня: время, движения и таймеры идут вдвое быстрее. */
+  private setSpeed(speed: number): void {
+    this.speed = speed;
+    this.time.timeScale = speed;
+    this.tweens.timeScale = speed;
+  }
+
   private titleShow(): () => void {
     const cam = this.cameras.main;
     this.updateLighting(0.88);
@@ -631,8 +659,9 @@ export class StoreScene extends Phaser.Scene {
   update(_time: number, deltaMs: number): void {
     this.scarePigeons();
     ambience.update(this.weather, this.evening, this.running);
+    this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     if (!this.running) return;
-    const dt = deltaMs / 1000;
+    const dt = (deltaMs / 1000) * this.speed;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
 
     const elapsed = DAY_SECONDS - this.timeLeft;
@@ -691,6 +720,7 @@ export class StoreScene extends Phaser.Scene {
   private currentHint(): string {
     if (this.liveEvent) return t(`hint.${this.liveEvent}` as TextKey);
     if (this.oven?.state === 'ready') return t('hint.ovenReady');
+    if (this.order) return t('hint.order');
     if (this.inspector === 'here') return t('hint.inspector');
     if (!this.workers.has('guard') && [...this.customers].some((c) => c.thief && !c.gone)) return t('hint.thief');
     if (this.sellerBusy && this.ownerRegister()) return t('hint.recall');
@@ -799,6 +829,8 @@ export class StoreScene extends Phaser.Scene {
     this.workers.clear();
     this.syncStaff();
     this.applyWeather();
+    this.fairObjs = [];
+    this.applyFair();
   }
 
   private buildStore(): void {
@@ -1195,6 +1227,37 @@ export class StoreScene extends Phaser.Scene {
     this.updateLighting(this.running ? undefined : 0);
   }
 
+  /**
+   * Ярмарка: флажки над фасадом и шарики у входа. Перерисовывается каждое утро
+   * (ярмарка — один день в месяц, погода при этом может не меняться).
+   */
+  private applyFair(): void {
+    for (const obj of this.fairObjs) obj.destroy();
+    this.fairObjs = [];
+    if (!isFairDay(this.state.day)) return;
+    const { w, h, door } = this.layout;
+    const keep = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
+      this.fairObjs.push(obj);
+      return obj;
+    };
+    // Флажки треугольниками по краю крыши.
+    const colors = [0xe43b44, 0xfee761, 0x0099db, 0x63c74d, 0xf77622];
+    for (let x = -WALL + 3, i = 0; x < w + WALL; x += 6, i++) {
+      const flag = keep(this.add.triangle(x, h + 3.5, 0, 0, 4, 0, 2, 4, colors[i % colors.length]).setDepth(h + 43));
+      this.tweens.add({ targets: flag, angle: { from: -6, to: 6 }, duration: 600 + (i % 3) * 120, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    // Связка шариков по обе стороны двери.
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 3; k++) {
+        const bx = door.x + side * (16 + k * 3);
+        const by = h + 2 - k * 4;
+        keep(this.add.line(0, 0, bx, by + 4, door.x + side * 15, h + FACADE_H + 2, 0x8b9bb4).setOrigin(0).setDepth(h + 44));
+        const balloon = keep(this.add.ellipse(bx, by, 5, 6, colors[(k + (side > 0 ? 2 : 0)) % colors.length]).setDepth(h + 45));
+        this.tweens.add({ targets: balloon, y: by - 1.5, duration: 900 + k * 150, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    }
+  }
+
   /** Гирлянда по краю фасада: лампочки мигают по очереди. */
   private garland(colors: number[], keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
     const { w, h } = this.layout;
@@ -1331,6 +1394,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.buildCoffee();
     this.buildOven();
+    this.buildDelivery();
     this.kiosk = undefined;
     this.kioskBusy = false;
     if (!hasUpgrade(this.state, 'selfCheckout')) return;
@@ -1338,6 +1402,226 @@ export class StoreScene extends Phaser.Scene {
     this.kiosk = this.art(at.x, at.y, 'kiosk').setDepth(at.y + 9);
     this.kioskScreen = this.add.rectangle(at.x, at.y - 9, 6, 4, 0x2ce8f5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(at.y + 10);
     this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
+  }
+
+  // ---------- Доставка на дом ----------
+
+  /** Телефон на кассе и курьер с велосипедом у входа (если доставка куплена). */
+  private buildDelivery(): void {
+    this.phone = undefined;
+    this.order = null;
+    this.courier = undefined;
+    this.courierBusy = false;
+    if (!hasUpgrade(this.state, 'delivery')) return;
+    const { counter, door, h } = this.layout;
+    this.phone = this.art(counter.x - 5, counter.y - 9, 'phone').setDepth(counter.y + 22);
+    this.phone.setInteractive(new Phaser.Geom.Rectangle(-6, -6, 22, 20), Phaser.Geom.Rectangle.Contains).on('pointerup', () => this.tap(() => this.acceptOrder()));
+    // Курьер ждёт у входа рядом со своим велосипедом.
+    const at = { x: door.x - 36, y: h + FACADE_H + 9 };
+    this.courierHome = at;
+    this.courierBike = this.art(at.x + 9, at.y + 2, 'bike').setDepth(at.y + 1);
+    this.courier = this.makePerson(at.x, at.y, { ...randomLook(0xf77622), style: 'cap', hair: 0xf77622, bag: 'backpack', bagTint: 0xe43b44 });
+  }
+
+  /** Звонок: заказ на пару товаров; над телефоном — облачко с тем, что просят. */
+  private scheduleOrder(): void {
+    if (!this.phone) return;
+    this.time.delayedCall(Phaser.Math.FloatBetween(ORDER_EVERY[0], ORDER_EVERY[1]) * 1000, () => this.ringPhone());
+  }
+
+  private ringPhone(): void {
+    const phone = this.phone;
+    if (!phone?.active || !this.running) return;
+    if (this.order || this.courierBusy) {
+      this.scheduleOrder();
+      return;
+    }
+    const data = makeHomeOrder(this.state, Math.random);
+    if (!data) {
+      this.scheduleOrder();
+      return;
+    }
+    sound.bell();
+    this.time.delayedCall(350, () => sound.bell());
+    haptic.tap();
+    this.popup(phone.x, phone.y - 14, t('popup.order'), '#fff3b0');
+    this.tweens.add({ targets: phone, angle: { from: -12, to: 12 }, duration: 70, yoyo: true, repeat: 7, onComplete: () => phone.setAngle(0) });
+    // Облачко: какие товары заказали.
+    const bubble = this.add.container(phone.x, phone.y - 16).setDepth(1000);
+    const width = 4 + data.items.length * 9;
+    bubble.add(this.add.rectangle(0, 0, width, 9, 0xffffff).setStrokeStyle(0.6, 0x181425));
+    data.items.forEach((item, i) => {
+      bubble.add(this.art(-width / 2 + 6.5 + i * 9, -0.5, `item_${item.id}`).setScale(1.3 / ART));
+      bubble.add(this.add.text(-width / 2 + 9.5 + i * 9, 2.5, String(item.qty), { fontFamily: UI_FONT, fontSize: '4px', fontStyle: 'bold', color: '#181425' }).setOrigin(0.5).setResolution(6));
+    });
+    this.tweens.add({ targets: bubble, y: bubble.y - 1.5, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const timer = this.time.delayedCall(ORDER_TIMEOUT * 1000, () => {
+      if (!this.order || this.order.bubble !== bubble) return;
+      this.order = null;
+      bubble.destroy();
+      sound.bad();
+      this.popup(phone.x, phone.y - 14, t('popup.orderMissed'), '#ffd0d0');
+      this.scheduleOrder();
+    });
+    this.order = { data, bubble, timer };
+  }
+
+  /** Нажали на телефон: собираем заказ, курьер уезжает и привозит деньги. */
+  private acceptOrder(): void {
+    const order = this.order;
+    const phone = this.phone;
+    if (!order || !phone) return;
+    order.timer.remove();
+    order.bubble.destroy();
+    this.order = null;
+    const packed = packHomeOrder(this.state, order.data);
+    if (!packed) {
+      sound.bad();
+      this.popup(phone.x, phone.y - 14, t('popup.orderNoStock'), '#ffd0d0');
+      this.scheduleOrder();
+      return;
+    }
+    this.state = packed;
+    this.refreshShelves();
+    this.refreshWarehouse();
+    haptic.success();
+    sound.tap();
+    this.popup(phone.x, phone.y - 14, t('popup.orderGo'), '#c8ffb0');
+    void this.rideCourier(order.data.pay);
+  }
+
+  /** Курьер садится на велосипед, уезжает по тротуару и возвращается с деньгами. */
+  private async rideCourier(pay: number): Promise<void> {
+    const courier = this.courier;
+    const bike = this.courierBike;
+    if (!courier?.active || !bike) return;
+    this.courierBusy = true;
+    const home = this.courierHome;
+    const ride = this.art(0, 3, 'bike').setOrigin(0.5);
+    courier.addAt(ride, 0);
+    bike.setVisible(false);
+    const road = this.streetY + 2;
+    const away = -80;
+    await this.walk(courier, home.x, road, 70);
+    await this.walk(courier, away, road, 70);
+    await this.wait((DELIVERY_SECONDS * 1000) / 3);
+    if (!courier.active) return;
+    await this.walk(courier, home.x, road, 70);
+    await this.walk(courier, home.x, home.y, 70);
+    if (!courier.active) return;
+    ride.destroy();
+    bike.setVisible(true);
+    this.setFacing(courier, 'down');
+    this.courierBusy = false;
+    this.state = { ...this.state, money: this.state.money + pay };
+    this.stats.revenue += pay;
+    this.stats.deliveries = (this.stats.deliveries ?? 0) + 1;
+    sound.coin();
+    this.popup(courier.x, courier.y - 16, t('popup.orderPaid', { n: pay }), '#c8ffb0');
+    this.scheduleOrder();
+  }
+
+  // ---------- Мышь на складе ----------
+
+  /**
+   * Мышь бегает по складу и раз в несколько секунд грызёт товар. Нажми на неё — убежит.
+   * Сытый кот сам прибегает и ловит её.
+   */
+  private mouseInWarehouse(keep: <T extends { destroy: () => void }>(obj: T) => T): void {
+    const { warehouse } = this.layout;
+    const point = () => ({ x: warehouse.x + 8 + Math.random() * (warehouse.w - 16), y: warehouse.y + 16 + Math.random() * Math.max(4, warehouse.h - 24) });
+    const start = point();
+    const mouse = keep(this.art(start.x, start.y, 'mouse0').setDepth(LIGHT_DEPTH - 3));
+    mouse.setInteractive(new Phaser.Geom.Circle(6, 3.5, 16), Phaser.Geom.Circle.Contains).on('pointerup', () => this.tap(() => this.mouseGone(mouse, false)));
+    const run = () => {
+      if (!mouse.active || mouse.getData('caught')) return;
+      const p = point();
+      mouse.setFlipX(p.x > mouse.x);
+      this.tweens.add({
+        targets: mouse,
+        x: p.x,
+        y: p.y,
+        duration: 500 + Math.random() * 400,
+        onUpdate: () => mouse.setTexture(Math.floor(this.time.now / 90) % 2 ? 'mouse0' : 'mouse1'),
+      });
+    };
+    keep(this.time.addEvent({ delay: 1100, loop: true, callback: run }));
+    // Грызёт: штука товара со склада пропадает.
+    keep(
+      this.time.addEvent({
+        delay: MOUSE_BITE_MS,
+        loop: true,
+        callback: () => {
+          if (!mouse.active || mouse.getData('caught')) return;
+          const id = PRODUCT_IDS.find((p) => (this.state.warehouse[p] ?? []).some((u) => !u.pending));
+          if (!id) return;
+          const units = this.state.warehouse[id]!;
+          const i = units.findIndex((u) => !u.pending);
+          this.state = { ...this.state, warehouse: { ...this.state.warehouse, [id]: units.filter((_, n) => n !== i) } };
+          this.stats.spoiled++;
+          this.refreshWarehouse();
+          sound.tap();
+          this.popup(mouse.x, mouse.y - 8, t('popup.mouseBite', { icon: PRODUCTS[id].icon }), '#ffd0d0');
+        },
+      }),
+    );
+    keep(this.time.delayedCall(MOUSE_STAY_MS, () => mouse.active && this.mouseGone(mouse, false, true)));
+    // Сытый кот чует мышь и прибегает.
+    if (this.catImg?.active && !this.catOut && this.state.cat && fedToday(this.state)) {
+      keep(this.time.delayedCall(3000, () => mouse.active && void this.catHunt(mouse)));
+    }
+  }
+
+  /** Мышь убежала (прогнали или сама ушла) или её поймал кот. */
+  private mouseGone(mouse: Phaser.GameObjects.Image, caught: boolean, timeout = false): void {
+    if (!mouse.active || mouse.getData('caught')) return;
+    mouse.setData('caught', true);
+    this.tweens.killTweensOf(mouse);
+    if (!timeout) this.stats.mice = (this.stats.mice ?? 0) + 1;
+    if (caught) {
+      sound.meow();
+      this.popup(mouse.x, mouse.y - 10, t('popup.mouseCaught', { name: this.state.cat?.name ?? '' }), '#c8ffb0');
+      this.time.delayedCall(300, () => this.endLiveEvent());
+      return;
+    }
+    if (!timeout) {
+      sound.good();
+      this.popup(mouse.x, mouse.y - 10, t('popup.mouseScared'), '#c8ffb0');
+    }
+    const { doorway } = this.layout.warehouse;
+    mouse.setFlipX(doorway.x > mouse.x);
+    this.tweens.add({ targets: mouse, x: doorway.x + 30, y: doorway.y + 20, alpha: 0, duration: 700, onComplete: () => this.endLiveEvent() });
+  }
+
+  /** Кот бежит на склад и ловит мышь. */
+  private async catHunt(mouse: Phaser.GameObjects.Image): Promise<void> {
+    const cat = this.catImg;
+    if (!cat?.active || this.catOut) return;
+    this.catOut = true;
+    this.tweens.killTweensOf(cat);
+    cat.setScale(1 / ART).setOrigin(0.5, 1).setTexture('cat_walk0');
+    sound.meow();
+    const { door, h, warehouse } = this.layout;
+    const route = [{ x: door.x + 6, y: this.catHome.y }, { x: door.x + 6, y: h - 6 }, { x: warehouse.doorway.x, y: warehouse.doorway.y + 6 }];
+    for (const p of route) {
+      await this.catStep(p.x, p.y);
+      if (!cat.active) return;
+    }
+    if (mouse.active && !mouse.getData('caught')) {
+      await this.catStep(mouse.x, mouse.y + 4);
+      if (mouse.active && !mouse.getData('caught')) {
+        this.mouseGone(mouse, true);
+        this.heartAt(cat.x, cat.y - 10);
+      }
+    }
+    const back = [{ x: warehouse.doorway.x, y: warehouse.doorway.y + 6 }, { x: door.x + 6, y: h - 6 }, { x: door.x + 6, y: this.catHome.y }, this.catHome];
+    for (const p of back) {
+      await this.catStep(p.x, p.y);
+      if (!cat.active) return;
+    }
+    cat.setTexture('cat').setFlipX(false).setDepth(this.catHome.y + 7.5);
+    this.tweens.add({ targets: cat, scaleY: 1.08 / ART, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.catOut = false;
   }
 
   /** Кофемашина у левой стены — напротив автомата с напитками. */
@@ -1374,6 +1658,7 @@ export class StoreScene extends Phaser.Scene {
     const cup = this.art(5, 1, 'cup');
     c.sprite.add(cup);
     c.extras = [...(c.extras ?? []), { kind: 'coffee', price: COFFEE_PRICE }];
+    this.stats.coffees = (this.stats.coffees ?? 0) + 1;
     sound.pop(2);
     this.popup(c.sprite.x, c.sprite.y - 18, t('popup.coffee', { n: COFFEE_PRICE }), '#fff3b0');
     if (cupsOf(this.state) === 0) this.time.delayedCall(900, () => this.popup(machine.x + 10, machine.y - 16, t('popup.noCups'), '#ffd0d0'));
@@ -1469,6 +1754,7 @@ export class StoreScene extends Phaser.Scene {
     const oven = this.oven;
     if (!oven?.img.active || oven.state !== 'ready') return;
     this.resetOven();
+    this.stats.burnt = (this.stats.burnt ?? 0) + 1;
     sound.bad();
     haptic.error();
     this.popup(oven.img.x - 10, oven.img.y - 20, t('popup.ovenBurnt'), '#ffd0d0');
@@ -1572,6 +1858,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.nightAsked = true;
     this.running = false;
+    this.setSpeed(1);
     const { card, close } = openModal();
     card.append(
       el('h2', '', t('night.title')),
@@ -1605,6 +1892,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.state = next;
     this.night = true;
+    this.stats.nightRevenue ??= 0;
     this.timeLeft = NIGHT_SECONDS;
     this.nextSpawn = 1;
     this.running = true;
@@ -1848,6 +2136,7 @@ export class StoreScene extends Phaser.Scene {
     if (kind === 'leak') this.startLeak(keep);
     if (kind === 'pigeon') this.pigeonInside(keep);
     if (kind === 'courier') void this.courierVisit(keep);
+    if (kind === 'mouse') this.mouseInWarehouse(keep);
   }
 
   private endLiveEvent(): void {
@@ -2846,6 +3135,7 @@ export class StoreScene extends Phaser.Scene {
         view?.items.forEach((img) => img.destroy());
         view?.pips.forEach((img) => img.destroy());
         view?.low.destroy();
+        view?.promo.destroy();
         view?.lights.forEach((obj) => obj.destroy());
         view = this.buildShelf(i, shelf.kind);
         this.shelfViews[i] = view;
@@ -2867,6 +3157,7 @@ export class StoreScene extends Phaser.Scene {
         }
       });
       view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
+      view.promo.setVisible(PRODUCT_IDS.some((id) => canPlace(id, shelf) && promoKind(this.state, id)));
       const few = !shelf.broken && units.length > 0 && units.length <= LOW_STOCK;
       if (few) view.low.setText(t('shelf.low', { n: units.length }));
       view.low.setVisible(few);
@@ -2883,9 +3174,18 @@ export class StoreScene extends Phaser.Scene {
     const bg = this.art(slot.x, slot.y - FURNITURE_TOP / 2, look.texture).setTint(look.tint).setDepth(slot.y - 14);
     const front = this.art(slot.x, slot.y - FURNITURE_TOP / 2, `${look.texture}_front`).setDepth(slot.y - 12);
     bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.restockShelf(index)));
-    const items = Array.from({ length: 16 }, () => this.art(slot.x, slot.y, 'item').setDepth(slot.y - 13));
+    const items = Array.from({ length: SHELF_LEVELS[SHELF_LEVELS.length - 1].capacity }, () => this.art(slot.x, slot.y, 'item').setDepth(slot.y - 13));
     // Уровень улучшения — жёлтые точки над полкой.
-    const pips = [0, 1].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 16, 'pip').setDepth(slot.y - 12));
+    const pips = [0, 1, 2].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 16, 'pip').setDepth(slot.y - 12));
+    // Красный ценник «АКЦИЯ» над полкой с товаром дня.
+    const promo = this.add
+      .text(slot.x - 12, slot.y - 22, t('shelf.promo'), { fontFamily: UI_FONT, fontSize: '5px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#e43b44', padding: { x: 2, y: 1 } })
+      .setOrigin(0.5)
+      .setResolution(6)
+      .setDepth(990)
+      .setAngle(-8)
+      .setVisible(false);
+    this.tweens.add({ targets: promo, angle: 8, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     const glow = bg.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 8);
     const low = this.add
       .text(slot.x + 6, slot.y - 22, '', {
@@ -2910,7 +3210,7 @@ export class StoreScene extends Phaser.Scene {
       spill.setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(0.4);
       lights.push(glass, spill);
     }
-    return { kind, bg, front, shadow, items, pips, lights, low, glow, needsStock: false };
+    return { kind, bg, front, shadow, items, pips, lights, low, promo, glow, needsStock: false };
   }
 
   private refreshWarehouse(): void {
@@ -3300,7 +3600,7 @@ export class StoreScene extends Phaser.Scene {
   private stockShelf(index: number, by: Phaser.GameObjects.Container): void {
     const view = this.shelfViews[index];
     const before = view ? view.items.filter((img) => img.visible).length : 0;
-    this.state = moveToShelf(this.state, index, undefined, CARRY).state;
+    this.state = moveToShelf(this.state, index, undefined, carryOf(this.state)).state;
     this.refreshShelves();
     this.refreshWarehouse();
     const items = this.shelfViews[index]?.items ?? [];
@@ -3644,9 +3944,10 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Полка, которую стоит пополнить: место есть, а на складе есть подходящий товар. */
+  /** Сначала полки со звёздочкой, потом те, где товар кончился, потом самые пустые. */
   private shelfToRestock(): number {
     let best = -1;
-    let bestFree = 0;
+    let bestScore = 0;
     this.state.shelves.forEach((shelf, i) => {
       if (shelf.broken) return;
       const free = shelfFree(shelf);
@@ -3654,7 +3955,9 @@ export class StoreScene extends Phaser.Scene {
       const runningOut = PRODUCT_IDS.some(
         (id) => canPlace(id, shelf) && (shelf.items[id]?.length ?? 0) === 0 && (this.state.warehouse[id]?.length ?? 0) > 0,
       );
-      if (hasGoods && (free >= 3 || (runningOut && free > 0)) && free > bestFree) [best, bestFree] = [i, free];
+      if (!hasGoods || !(free >= 3 || (runningOut && free > 0))) return;
+      const score = (shelf.priority ? 1000 : 0) + (runningOut ? 100 : 0) + free;
+      if (score > bestScore) [best, bestScore] = [i, score];
     });
     return best;
   }
@@ -3910,10 +4213,18 @@ export class StoreScene extends Phaser.Scene {
     }
     const price = unitSalePrice(this.state, id, oldest);
     // Ночью к ценам не придираются; пока пахнет свежим хлебом, за него готовы платить больше.
-    const fair = perceivedBase(this.state, id) * (this.night ? NIGHT_TOLERANCE : 1) * (id === 'bread' && this.aroma() ? AROMA_TOLERANCE : 1);
+    const fair =
+      perceivedBase(this.state, id) *
+      (this.night ? NIGHT_TOLERANCE : 1) *
+      (id === 'bread' && this.aroma() ? AROMA_TOLERANCE : 1) *
+      fairTolerance(this.state.day) *
+      loyaltyTolerance(this.state);
+    // «2 по цене 1»: за штуку выходит вдвое дешевле.
+    const bogo = promoKind(this.state, id) === 'bogo';
+    const perUnit = bogo ? price / 2 : price;
     // Постоянный покупатель решает не по случаю, а по своей границе цены.
     const regular = c.regular ? regularById(c.regular) : undefined;
-    const declines = regular?.favorite === id ? !acceptsPrice(this.state, regular, price) : Math.random() >= buyChance(price, fair);
+    const declines = regular?.favorite === id ? !acceptsPrice(this.state, regular, perUnit) : Math.random() >= buyChance(perUnit, fair);
     if (declines) {
       if (price <= fair) return 'skipped';
       this.popup(c.sprite.x, c.sprite.y - 14, t('popup.expensive'), '#ffd0d0');
@@ -3925,6 +4236,15 @@ export class StoreScene extends Phaser.Scene {
     if (id === 'bread' && this.aroma()) note(this.stats, 'fresh');
     this.state = taken.state;
     c.items.push({ id, unit: taken.unit });
+    // По акции «2 по цене 1» берут вторую штуку бесплатно.
+    if (bogo) {
+      const second = takeFromShelf(this.state, index, id);
+      if (second) {
+        this.state = second.state;
+        c.items.push({ id, unit: second.unit, free: true });
+        this.popup(c.sprite.x, c.sprite.y - 22, t('popup.bogo'), '#fee761');
+      }
+    }
     this.refreshShelves();
     return 'taken';
   }
@@ -4375,6 +4695,7 @@ export class StoreScene extends Phaser.Scene {
     this.checkAchievements(false);
     this.morningStock = warehouseCount(this.state);
     this.reviewStar?.setVisible(Boolean(this.state.reviews?.length));
+    this.applyFair();
     this.awaitingBoxes = 0;
     this.hud.update(this.state, DAY_SECONDS);
     if (weatherFor(this.state.day) !== this.weather) this.applyWeather();
@@ -4423,7 +4744,11 @@ export class StoreScene extends Phaser.Scene {
     this.scheduleStoryGuests();
     const season = seasonFor(this.state.day);
     if (season) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
+    else if (isFairDay(this.state.day)) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, t('popup.fair'), '#fee761'));
     this.stats = emptyDayStats();
+    if (isFairDay(this.state.day)) this.stats.fair = true;
+    this.setSpeed(1);
+    this.scheduleOrder();
     // Вечером мусор выносят — утром ведро пустое.
     this.binFill = 0;
     this.refreshBin();
@@ -4448,6 +4773,12 @@ export class StoreScene extends Phaser.Scene {
   private finishDay(): void {
     this.running = false;
     this.night = false;
+    this.setSpeed(1);
+    if (this.order) {
+      this.order.timer.remove();
+      this.order.bubble.destroy();
+      this.order = null;
+    }
     // Хлеб, оставшийся в печи к закрытию, продавец вынимает сам.
     if (this.oven && this.oven.state !== 'idle') {
       this.resetOven();
@@ -4456,9 +4787,10 @@ export class StoreScene extends Phaser.Scene {
     const finishedDay = this.state.day;
     const ratingBefore = this.state.rating;
     const rankBefore = rankOf(this.state.totalRevenue);
-    const { state, spoiled, bill, shortfall, skimmed, order, quests } = nightCycle(this.state, this.stats);
+    const { state, spoiled, bill, shortfall, skimmed, order, quests, weekly } = nightCycle(this.state, this.stats);
     const extra: [string, string][] = [];
     if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
+    if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
     const rankAfter = rankOf(state.totalRevenue);
     if (rankAfter > rankBefore) extra.push(['🏅', t('summary.rankUp', { name: rankName(rankAfter, t) })]);
     if (order) extra.push([t('summary.order'), order.delivered ? t('summary.orderDone', { n: order.earned }) : t('summary.orderFailed')]);
