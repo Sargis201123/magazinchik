@@ -79,6 +79,8 @@ const HUD_BOTTOM = 80;
 const ART = 2;
 /** Сколько улицы видно под зданием (в точках мира). */
 const STREET_VIEW = 40;
+/** Высота видимой крышки мебели (TOP в art/sprites.py, в точках мира). */
+const FURNITURE_TOP = 6;
 /** Насколько далеко можно отвести камеру от магазина пальцем. */
 const CAMERA_REACH = 200;
 /** Толщина наружных стен и высота фасада (в точках мира). */
@@ -516,7 +518,7 @@ export class StoreScene extends Phaser.Scene {
       .on('pointerup', () => this.tap(() => this.cleanToilet()));
 
     this.art(counter.x + 2, counter.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(counter.y + 19);
-    this.art(counter.x, counter.y, 'counter').setDepth(counter.y + 20);
+    this.art(counter.x, counter.y + FURNITURE_TOP / 2, 'counter').setDepth(counter.y + 20);
     // Полоска пробивки над кассой.
     this.scanBar = this.add.rectangle(counter.x - 9, counter.y - 31, 18, 4, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
     this.scanFill = this.add.rectangle(counter.x - 8, counter.y - 31, 0, 2, 0x63c74d).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
@@ -1039,7 +1041,7 @@ export class StoreScene extends Phaser.Scene {
     }
     // Стойка со сладостями у кассы, в больших магазинах — тележки у входа.
     const { counter } = this.layout;
-    this.art(counter.x, counter.y + 33, 'candy_rack').setDepth(counter.y + 40);
+    this.art(counter.x, counter.y + 39, 'candy_rack').setDepth(counter.y + 40);
     if (this.state.level >= 2) this.art(door.x + 46, h - 10, 'carts').setDepth(h - 4);
     // Коврик у входа и автомат с напитками у правой стены.
     this.art(door.x, h - 7, 'mat').setDepth(1);
@@ -1125,12 +1127,13 @@ export class StoreScene extends Phaser.Scene {
     const slot = this.layout.slots[index];
     const look = SHELF_LOOK[kind];
     const shadow = this.art(slot.x, slot.y + 12, 'shadow_wide').setDepth(slot.y - 15);
-    const bg = this.art(slot.x, slot.y, look.texture).setTint(look.tint).setDepth(slot.y - 14);
-    const front = this.art(slot.x, slot.y, `${look.texture}_front`).setDepth(slot.y - 12);
+    // Мебель в виде «три четверти»: над передней частью видна крышка высотой FURNITURE_TOP.
+    const bg = this.art(slot.x, slot.y - FURNITURE_TOP / 2, look.texture).setTint(look.tint).setDepth(slot.y - 14);
+    const front = this.art(slot.x, slot.y - FURNITURE_TOP / 2, `${look.texture}_front`).setDepth(slot.y - 12);
     bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.restockShelf(index)));
     const items = Array.from({ length: 16 }, () => this.art(slot.x, slot.y, 'item').setDepth(slot.y - 13));
     // Уровень улучшения — жёлтые точки над полкой.
-    const pips = [0, 1].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 15, 'pip').setDepth(slot.y - 12));
+    const pips = [0, 1].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 16, 'pip').setDepth(slot.y - 12));
     const glow = bg.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 8);
     return { kind, bg, front, shadow, items, pips, glow, needsStock: false };
   }

@@ -295,6 +295,49 @@ def wood_lips(c, tags=True):
                 c.px(x + 4, y + 2, "K")
 
 
+# Вид «три четверти»: над передней частью мебели видна верхняя грань (TOP пикселей).
+TOP = 12
+
+ICONS = {
+    "bread": ["..nn..", ".nNNn.", "nBnBnB", "BBBBBB"],
+    "apple": ["..e...", ".RRwR.", "RRRRRr", ".rrrr."],
+    "snow": ["..c..", "c.c.c", ".ccc.", "c.c.c", "..c.."],
+}
+
+
+def save_with_top(front, name, style):
+    """Склеивает верхнюю грань и переднюю часть в одну картинку 80×(52+TOP)."""
+    c = Canvas(80, 52 + TOP)
+    base, light, dark, speck = {
+        "wood": ("n", "N", "a", "B"),
+        "green": ("e", "E", "d", "E"),
+        "fridge": ("1", "1", "3", "2"),
+    }[style]
+    c.rect(0, 0, 80, TOP + 1, base)
+    c.hline(0, 1, 80, dark)
+    c.hline(0, TOP - 1, 80, light)
+    if style == "fridge":
+        for x in range(6, 74, 4):
+            c.vline(x, 3, TOP - 6, "2")
+    else:
+        c.speckle(1, 2, 78, TOP - 4, [speck], 18, len(name))
+    # Табличка категории посередине крышки.
+    icon = {"wood": "bread", "green": "apple", "fridge": "snow"}[style]
+    c.round_rect(32, 1, 16, TOP - 2, "w", r=1)
+    c.frame(32, 1, 16, TOP - 2, "G")
+    c.stamp(ICONS[icon], 37 if icon != "snow" else 38, 3)
+    c.frame(0, 0, 80, TOP + 1, "k")
+    c.img.alpha_composite(front.img, (0, TOP))
+    c.save(name)
+
+
+def save_overlay(front, name):
+    """Передний слой (кромки, стекло) того же размера, что и мебель с крышкой."""
+    c = Canvas(80, 52 + TOP)
+    c.img.alpha_composite(front.img, (0, TOP))
+    c.save(name)
+
+
 def shelf():
     """Хлебный стеллаж: тёплое дерево, стенка из досок с тенью от полки сверху."""
     c = Canvas(80, 52)
@@ -306,11 +349,11 @@ def shelf():
         c.speckle(4, top, 72, h, ["a"], 14, top)
         c.rect(4, top, 72, 3, "x")
     wood_lips(c)
-    c.save("shelf")
+    save_with_top(c, "shelf", "wood")
     f = Canvas(80, 52)
     wood_lips(f)
     f.vline(4, LIPS[0], 4, "k")
-    f.save("shelf_front")
+    save_overlay(f, "shelf_front")
 
 
 def crate_fronts(c):
@@ -342,10 +385,10 @@ def stand():
         for x in (28, 52):
             c.vline(x, top, h, "b")
     crate_fronts(c)
-    c.save("stand")
+    save_with_top(c, "stand", "green")
     f = Canvas(80, 52)
     crate_fronts(f)
-    f.save("stand_front")
+    save_overlay(f, "stand_front")
 
 
 GLASS = (215, 240, 255, 46)
@@ -368,7 +411,7 @@ def fridge():
     fridge_rails(c)
     for x in range(6, 74, 3):
         c.vline(x, 48, 2, "4")
-    c.save("fridge")
+    save_with_top(c, "fridge", "fridge")
 
     # Стекло, рамы дверей и ручки — поверх товара.
     f = Canvas(80, 52)
@@ -390,7 +433,7 @@ def fridge():
     for x in (35, 44):
         f.rect(x, 26, 2, 12, "G")
         f.vline(x, 26, 12, "l")
-    f.save("fridge_front")
+    save_overlay(f, "fridge_front")
 
 
 def fridge_rails(c):
@@ -457,11 +500,17 @@ def counter():
         c.hline(x, 90, 8, "w")
         c.frame(x, 90, 8, 10, "a")
         c.frame(x + 2, 87, 4, 4, "a")
-    # Передний торец.
-    c.rect(0, 101, 32, 3, "g")
-    c.hline(0, 101, 32, "G")
     c.frame(0, 0, 32, 104, "k")
-    c.save("counter")
+    # Передний торец стойки (вид «три четверти»): панель и цоколь.
+    full = Canvas(32, 104 + TOP)
+    full.img.alpha_composite(c.img)
+    full.rect(0, 104, 32, TOP, "G")
+    full.hline(0, 104, 32, "l")
+    full.rect(3, 106, 26, TOP - 6, "g")
+    full.hline(3, 106, 26, "K")
+    full.rect(0, 104 + TOP - 3, 32, 3, "K")
+    full.frame(0, 103, 32, TOP + 1, "k")
+    full.save("counter")
 
 
 def wc():
