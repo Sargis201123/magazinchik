@@ -75,6 +75,7 @@ export class Hud {
     if (stock === this.lastStock) return;
     this.lastStock = stock;
     this.stock.textContent = stock;
+    this.stock.classList.toggle('dense', shelves.length > 7);
     pixelize(this.stock);
   }
 

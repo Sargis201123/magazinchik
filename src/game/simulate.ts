@@ -30,6 +30,7 @@ import {
   sellableProducts,
   seasonalDemand,
   markdownSurplus,
+  shelfKindOpen,
   SHELF_KINDS,
   SHELF_LEVELS,
   shelfCapacity,
@@ -134,10 +135,12 @@ export interface SimOptions {
   ovenBurn?: number;
 }
 
-export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags';
+export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy'];
+/** С новыми отделами: напитки, заморозка и химия — как только помещение позволяет. */
+const SHELF_PRIORITY_DEPTS: Category[] = ['dairy', 'meat', 'drinks', 'produce', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat'];
 
 const AVG_WANTS = 1.5;
 
@@ -226,9 +229,11 @@ export function simulate({
       }
     }
 
+    const priority = features.departments ? SHELF_PRIORITY_DEPTS : SHELF_PRIORITY;
     while (freeSlots(state) > 0) {
-      const kind = SHELF_PRIORITY.find(
-        (k, i) => SHELF_PRIORITY.slice(0, i + 1).filter((x) => x === k).length > state.shelves.filter((s) => s.kind === k).length,
+      // Закрытый в этом помещении отдел пропускаем — берём следующую по списку полку.
+      const kind = priority.find(
+        (k, i) => shelfKindOpen(state, k) && priority.slice(0, i + 1).filter((x) => x === k).length > state.shelves.filter((s) => s.kind === k).length,
       );
       if (!kind || state.money < SHELF_KINDS[kind].price + reserve) break;
       investments += SHELF_KINDS[kind].price;
@@ -287,7 +292,7 @@ export function simulate({
     const canSplurge = (price: number) => !nextLevel || state.money - price >= nextLevel.cost + reserve;
     for (const [feature, id] of wants) {
       if (!features[feature] || hasUpgrade(state, id) || state.money < UPGRADES[id].price + reserve) continue;
-      if (id === 'nightShift' && !canSplurge(UPGRADES[id].price)) continue;
+      if ((id === 'nightShift' || id === 'eTags') && !canSplurge(UPGRADES[id].price)) continue;
       const bought = buyUpgrade(state, id);
       if (bought) {
         investments += UPGRADES[id].price;

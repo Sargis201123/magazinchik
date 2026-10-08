@@ -75,5 +75,9 @@ export const loyaltyTolerance = (state: StoreState): number => (hasUpgrade(state
  * по полной цене при сегодняшнем темпе продаж, уценяется само.
  */
 export const ETAGS_EVENING = 0.25;
-/** Сколько ещё продадут до закрытия при сегодняшнем темпе (к вечеру прошло 3/4 дня). */
-export const eveningSales = (soldToday: number): number => (soldToday * ETAGS_EVENING) / (1 - ETAGS_EVENING);
+/**
+ * Сколько ещё могут купить до закрытия: темп продаж за день (к вечеру прошло 3/4) с запасом ×2 —
+ * вечером бывает наплыв, а лишняя уценка отнимает продажи по полной цене (видно в симуляторе).
+ */
+export const ETAGS_CAUTION = 2;
+export const eveningSales = (soldToday: number): number => (soldToday * ETAGS_EVENING * ETAGS_CAUTION) / (1 - ETAGS_EVENING);

@@ -898,6 +898,21 @@ export const en: Record<TextKey, string> = {
   "auto.delivered": "🤖 Auto-order delivered: {list} for {cost} 💰",
   "auto.cut": "🤖 Auto-order: not enough money or space for everything",
   "popup.etags": "🏷 Marked down for the evening: {n}",
+  "product.water": "Water",
+  "product.juice": "Juice",
+  "product.dumplings": "Dumplings",
+  "product.fish": "Fish",
+  "product.soap": "Soap",
+  "product.detergent": "Detergent",
+  "shelf.drinks": "Drinks rack",
+  "shelf.frozen": "Chest freezer",
+  "shelf.household": "Household goods rack",
+  "shelf.lockedLevel": "Opens with “{name}” premises",
+  "supplier.wholesale": "Wholesaler Grisha",
+  "supplier.wholesale.hello": "Water, juice, dumplings, fish, soap, detergent — all wholesale, all from stock. What do you need?",
+  "supplier.wholesale.yes": "Fine, you talked me into it. Just don't tell anyone the price.",
+  "supplier.wholesale.no": "My price is already wholesale, how much lower can it go?",
+  "supplier.wholesale.angry": "Enough. Today it's list price plus extra.",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

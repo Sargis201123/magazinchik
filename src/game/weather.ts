@@ -40,11 +40,11 @@ export interface WeatherEffect {
 
 export const WEATHER_EFFECTS: Record<Weather, WeatherEffect> = {
   clear: { icon: '☀️', guests: 1, demand: {}, coffee: 1 },
-  rain: { icon: '🌧', guests: 0.9, demand: { bread: 1.4, milk: 1.4, flowers: 0.6, icecream: 0.5 }, coffee: 1.7 },
-  storm: { icon: '⛈', guests: 0.8, demand: { bread: 1.5, milk: 1.5, flowers: 0.4, icecream: 0.3 }, coffee: 2 },
-  snow: { icon: '❄️', guests: 0.95, demand: { meat: 1.5, potatoes: 1.4, tangerines: 1.4, icecream: 0.3 }, coffee: 1.8 },
+  rain: { icon: '🌧', guests: 0.9, demand: { bread: 1.4, milk: 1.4, flowers: 0.6, icecream: 0.5, dumplings: 1.3 }, coffee: 1.7 },
+  storm: { icon: '⛈', guests: 0.8, demand: { bread: 1.5, milk: 1.5, flowers: 0.4, icecream: 0.3, dumplings: 1.4 }, coffee: 2 },
+  snow: { icon: '❄️', guests: 0.95, demand: { meat: 1.5, potatoes: 1.4, tangerines: 1.4, icecream: 0.3, dumplings: 1.5, fish: 1.2 }, coffee: 1.8 },
   leaves: { icon: '🍂', guests: 1, demand: { apples: 1.3, potatoes: 1.2 }, coffee: 1.2 },
-  heat: { icon: '🥵', guests: 1.05, demand: { icecream: 2.5, milk: 1.3, meat: 0.6, bread: 0.8 }, coffee: 0.5 },
+  heat: { icon: '🥵', guests: 1.05, demand: { icecream: 2.5, milk: 1.3, meat: 0.6, bread: 0.8, water: 2.2, juice: 1.6, dumplings: 0.6 }, coffee: 0.5 },
 };
 
 export const weatherDemand = (weather: Weather, id: ProductId): number => WEATHER_EFFECTS[weather].demand[id] ?? 1;

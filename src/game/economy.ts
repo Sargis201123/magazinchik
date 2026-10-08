@@ -11,9 +11,23 @@ import type { ShopCat } from './cat';
 import { fridgeLife, fridgePower, lightsPower, warehouseRoom, type GearId } from './gear';
 
 /** Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу. */
-export type Category = 'bakery' | 'produce' | 'dairy' | 'meat';
+export type Category = 'bakery' | 'produce' | 'dairy' | 'meat' | 'drinks' | 'frozen' | 'household';
 
-export type ProductId = 'bread' | 'apples' | 'potatoes' | 'milk' | 'meat' | 'icecream' | 'tangerines' | 'flowers';
+export type ProductId =
+  | 'bread'
+  | 'apples'
+  | 'potatoes'
+  | 'milk'
+  | 'meat'
+  | 'icecream'
+  | 'tangerines'
+  | 'flowers'
+  | 'water'
+  | 'juice'
+  | 'dumplings'
+  | 'fish'
+  | 'soap'
+  | 'detergent';
 
 export interface Product {
   id: ProductId;
@@ -39,6 +53,13 @@ export const PRODUCTS: Record<ProductId, Product> = {
   icecream: { id: 'icecream', nameKey: 'product.icecream', icon: '🍦', category: 'dairy', cost: 30, basePrice: 55, shelfLife: 4, color: 0xf6c6d6 },
   tangerines: { id: 'tangerines', nameKey: 'product.tangerines', icon: '🍊', category: 'produce', cost: 20, basePrice: 40, shelfLife: 6, color: 0xf77622 },
   flowers: { id: 'flowers', nameKey: 'product.flowers', icon: '💐', category: 'produce', cost: 35, basePrice: 70, shelfLife: 3, color: 0xe43b44 },
+  // Новые отделы больших магазинов: напитки, заморозка, бытовая химия (полки — с уровня помещения).
+  water: { id: 'water', nameKey: 'product.water', icon: '💧', category: 'drinks', cost: 12, basePrice: 25, shelfLife: 30, color: 0x0099db },
+  juice: { id: 'juice', nameKey: 'product.juice', icon: '🧃', category: 'drinks', cost: 28, basePrice: 50, shelfLife: 8, color: 0xfeae34 },
+  dumplings: { id: 'dumplings', nameKey: 'product.dumplings', icon: '🥟', category: 'frozen', cost: 45, basePrice: 80, shelfLife: 20, color: 0xead4aa },
+  fish: { id: 'fish', nameKey: 'product.fish', icon: '🐟', category: 'frozen', cost: 60, basePrice: 110, shelfLife: 14, color: 0x8b9bb4 },
+  soap: { id: 'soap', nameKey: 'product.soap', icon: '🧼', category: 'household', cost: 15, basePrice: 35, shelfLife: 99, color: 0xb55088 },
+  detergent: { id: 'detergent', nameKey: 'product.detergent', icon: '🧴', category: 'household', cost: 55, basePrice: 99, shelfLife: 99, color: 0x5fcde4 },
 };
 
 export const PRODUCT_IDS = Object.keys(PRODUCTS) as ProductId[];
@@ -67,6 +88,8 @@ export interface ShelfKind {
   price: number;
   /** Холодильник: каждый день тратит электричество. */
   fridge: boolean;
+  /** С какого уровня помещения можно поставить (новые отделы — только в больших магазинах). */
+  minLevel?: number;
 }
 
 export const SHELF_KINDS: Record<Category, ShelfKind> = {
@@ -74,7 +97,20 @@ export const SHELF_KINDS: Record<Category, ShelfKind> = {
   produce: { nameKey: 'shelf.produce', price: 150, fridge: false },
   dairy: { nameKey: 'shelf.dairy', price: 300, fridge: true },
   meat: { nameKey: 'shelf.meat', price: 400, fridge: true },
+  drinks: { nameKey: 'shelf.drinks', price: 250, fridge: false, minLevel: 1 },
+  frozen: { nameKey: 'shelf.frozen', price: 450, fridge: true, minLevel: 2 },
+  household: { nameKey: 'shelf.household', price: 250, fridge: false, minLevel: 3 },
 };
+
+/** Новые отделы больших магазинов: за водой, пельменями и порошком заходят отдельно. */
+export const NEW_DEPARTMENTS: Category[] = ['drinks', 'frozen', 'household'];
+/** Каждый открытый новый отдел приводит столько гостей сверху. */
+export const DEPARTMENT_GUESTS = 0.06;
+export const departmentGuests = (state: StoreState): number =>
+  1 + DEPARTMENT_GUESTS * NEW_DEPARTMENTS.filter((k) => state.shelves.some((s) => s.kind === k && !s.broken)).length;
+
+/** Можно ли поставить полку такого типа в этом помещении. */
+export const shelfKindOpen = (state: StoreState, kind: Category): boolean => state.level >= (SHELF_KINDS[kind].minLevel ?? 0);
 
 /** Проданная полка возвращает часть цены. */
 export const SHELF_RESALE = 0.5;
@@ -510,7 +546,7 @@ export const newGame = (): StoreState => ({
     { kind: 'bakery', level: 0, items: { bread: fresh(4) } },
     { kind: 'produce', level: 0, items: { apples: fresh(3), potatoes: fresh(3) } },
   ],
-  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70 },
+  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70, water: 25, juice: 50, dumplings: 80, fish: 110, soap: 35, detergent: 99 },
 });
 
 export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];
@@ -679,7 +715,7 @@ export function upgradeShelf(state: StoreState, shelfIndex: number): StoreState 
 
 export function buyShelf(state: StoreState, kind: Category): StoreState | null {
   const price = SHELF_KINDS[kind].price;
-  if (freeSlots(state) <= 0 || price > state.money) return null;
+  if (freeSlots(state) <= 0 || price > state.money || !shelfKindOpen(state, kind)) return null;
   return { ...state, money: state.money - price, shelves: [...state.shelves, { kind, level: 0, items: {} }] };
 }
 
