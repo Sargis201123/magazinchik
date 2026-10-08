@@ -82,7 +82,7 @@ import {
   type Quest,
 } from '../game/endless';
 import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
-import { applyReorder, recordPurchase, reorderPlan } from '../game/reorder';
+import { applyReorder, autoOrderPlan, recordPurchase, rememberAutoOrder, reorderPlan, toggleAutoOrder } from '../game/reorder';
 import { activePromo, setPromo, type PromoKind } from '../game/promo';
 import { cancelContract, CONTRACT_QTYS, contractOf, contractPrice, deliverContracts, signContract, type Delivery } from '../game/contracts';
 import { daysToFair, isFairDay } from '../game/fair';
@@ -228,6 +228,9 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const morningDelivery = deliverContracts(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid));
   const delivered: Delivery[] = morningDelivery.deliveries;
   if (morningDelivery.deliveries.length) setState(morningDelivery.state);
+  /** Автозаказ: утром склад сам пополняется до списка (по обычной цене, без брака). */
+  const autoPlan = autoOrderPlan(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid));
+  if (autoPlan?.lines.length) setState(applyReorder(getState(), autoPlan, () => false).state);
   /** Какой товар выбран для нового договора у каждого поставщика. */
   const contractPick: Partial<Record<SupplierId, ProductId>> = {};
 
@@ -404,9 +407,26 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return [box];
   };
 
+  /** Автозаказ (если куплен): список, вкл/выкл и «запомнить закупку». */
+  const autoOrderBox = (state: StoreState): HTMLElement[] => {
+    if (!hasUpgrade(state, 'autoOrder')) return [];
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('auto.title')));
+    const auto = state.autoOrder;
+    const list = auto?.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' ') ?? '';
+    box.append(el('div', 'ui-muted', !auto ? t('auto.none') : auto.on ? t('auto.on', { list }) : t('auto.off', { list })));
+    const chips = el('div', 'ui-chips');
+    const canRemember = Boolean(rememberAutoOrder(state));
+    chips.append(button(t('auto.remember'), () => update(rememberAutoOrder(getState()), 'success'), 'ui-chip', !canRemember));
+    if (auto) chips.append(button(auto.on ? t('auto.disable') : t('auto.enable'), () => update(toggleAutoOrder(getState())), 'ui-chip'));
+    box.append(chips);
+    return [box];
+  };
+
   const buyTab = (state: StoreState): HTMLElement[] => [
     el('div', 'ui-note', t('buy.note')),
     el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
+    ...autoOrderBox(state),
     ...reorderBox(state),
     ...SUPPLIER_IDS.map((sid) => supplierBox(sid, state)),
     el('h3', '', t('tab.prices')),
@@ -1148,7 +1168,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   };
 
   const deliveryLine = (): HTMLElement[] => {
-    if (!delivered.length) return [];
+    if (!delivered.length) return autoLine();
     const got = delivered.filter((d) => d.qty > 0);
     const lines: HTMLElement[] = [];
     if (got.length) {
@@ -1157,6 +1177,15 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       );
     }
     if (delivered.some((d) => d.skipped)) lines.push(el('div', 'ui-note', t('contract.skipped')));
+    return [...lines, ...autoLine()];
+  };
+
+  const autoLine = (): HTMLElement[] => {
+    if (!autoPlan) return [];
+    const lines: HTMLElement[] = [];
+    if (autoPlan.lines.length)
+      lines.push(el('div', 'ui-muted', t('auto.delivered', { list: autoPlan.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: autoPlan.total })));
+    if (autoPlan.cut) lines.push(el('div', 'ui-note', t('auto.cut')));
     return lines;
   };
 

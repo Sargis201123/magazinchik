@@ -12,6 +12,7 @@ import {
   billTotal,
   guardCatchChance,
   staffOf,
+  markdownSurplus,
   SHELF_KINDS,
   thiefChance,
   workSpeed,
@@ -79,7 +80,7 @@ import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
 import { activeAd } from '../game/ads';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
-import { carryOf, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
+import { carryOf, cartExtra, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
 import { activeDecor } from '../game/decor';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
@@ -563,6 +564,8 @@ export class StoreScene extends Phaser.Scene {
   /** Смена номера останавливает циклы работы старых сотрудников. */
   private staffGen = 0;
   private toiletDirt = 0;
+  /** Электронные ценники сегодня уже уценили старое. */
+  private eveningMarkdown = false;
   private wcStink!: Phaser.GameObjects.Image;
   private wcDoor!: Phaser.GameObjects.Image;
   private wcBar!: Phaser.GameObjects.Image;
@@ -691,6 +694,16 @@ export class StoreScene extends Phaser.Scene {
     this.timeLeft = Math.max(0, this.timeLeft - dt);
 
     const elapsed = DAY_SECONDS - this.timeLeft;
+    // Электронные ценники: к вечеру то, что испортится ночью, уценяется само.
+    if (!this.night && !this.eveningMarkdown && hasUpgrade(this.state, 'eTags') && this.timeLeft <= DAY_SECONDS * ETAGS_EVENING) {
+      this.eveningMarkdown = true;
+      const marked = markdownSurplus(this.state, (id) => eveningSales(this.stats.sold[id] ?? 0));
+      if (marked.count) {
+        this.state = marked.state;
+        this.refreshShelves();
+        this.popup(this.layout.w / 2, this.layout.wallH + 30, t('popup.etags', { n: marked.count }), '#c8f0ff');
+      }
+    }
     const rushAt = this.state.plan?.rushAt;
     const rush = !this.night && rushAt !== undefined && elapsed >= rushAt && elapsed < rushAt + RUSH_SECONDS;
     if (rush && !this.rushAnnounced) {
@@ -3191,7 +3204,7 @@ export class StoreScene extends Phaser.Scene {
     // Стойка со сладостями у кассы, в больших магазинах — тележки у входа.
     const { counter } = this.layout;
     this.art(counter.x, counter.y + 39, 'candy_rack').setDepth(counter.y + 40);
-    if (this.state.level >= 2) this.art(door.x + 46, h - 10, 'carts').setDepth(h - 4);
+    if (this.state.level >= 2 || (this.state.level >= 1 && hasUpgrade(this.state, 'cart'))) this.art(door.x + 46, h - 10, 'carts').setDepth(h - 4);
     // Коврик у входа и автомат с напитками у правой стены.
     this.art(door.x, h - 7, gearTier(this.state, 'entrance') ? 'mat_grate' : 'mat').setDepth(1);
     this.art(w - 8, wallH + 56, 'vending').setDepth(wallH + 66);
@@ -4196,7 +4209,8 @@ export class StoreScene extends Phaser.Scene {
     const { door } = this.layout;
     await this.walk(c.sprite, door.x, this.streetY);
     await this.walk(c.sprite, door.x, door.y - 10);
-    const wanted = this.wanted(Phaser.Math.Between(1, 2));
+    // С тележкой у входа покупатель иногда берёт что-то сверх списка.
+    const wanted = this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random));
     for (const id of wanted) {
       const index = shelfFor(this.state, id);
       if (index < 0 || c.gone) continue;
@@ -4257,7 +4271,7 @@ export class StoreScene extends Phaser.Scene {
     const mud = [...this.trash].filter((piece) => piece.texture.key === 'mud').length;
     if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE * entranceMud(this.state)) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, 'mud');
 
-    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2));
+    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random));
     if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
     let disappointed = false;
     let why: { reason: LostReason; id: ProductId } | undefined;
@@ -4910,6 +4924,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.timeLeft = DAY_SECONDS;
     this.nextSpawn = 1;
+    this.eveningMarkdown = false;
     this.toiletDirt = 0;
     this.refreshToilet();
     for (const piece of this.trash) piece.destroy();

@@ -1,7 +1,9 @@
 // «Как в прошлый раз»: игра помнит утренние закупки и одной кнопкой повторяет последнюю —
 // по сегодняшним ценам, сколько влезет на склад и на сколько хватит денег.
+// Автозаказ: каждое утро склад сам пополняется до запомненного списка.
 
-import { buyStock, productAvailable, warehouseCapacity, warehouseCount, type ProductId, type StoreState } from './economy';
+import { buyStock, productAvailable, warehouseCapacity, warehouseCount, warehouseOf, type ProductId, type StoreState } from './economy';
+import { hasUpgrade } from './upgrades';
 import { SUPPLIERS, type SupplierId } from './suppliers';
 
 export interface OrderLine {
@@ -71,4 +73,49 @@ export function applyReorder(state: StoreState, plan: ReorderPlan, bad: (line: O
     next = recordPurchase(bought, line.sid, line.pid, line.qty);
   }
   return { state: next, badLine };
+}
+
+/** Шаблон автозаказа: сколько штук каждого товара держать на складе и у кого брать. */
+export interface AutoOrder {
+  on: boolean;
+  lines: OrderLine[];
+}
+
+/** Запомнить список: сегодняшняя закупка, а если сегодня ещё не закупались — прошлая. */
+export function rememberAutoOrder(state: StoreState): StoreState | null {
+  const today = (state.purchases ?? []).find((d) => d.day === state.day && d.lines.length);
+  const lines = (today?.lines as OrderLine[] | undefined) ?? previousOrder(state)?.lines;
+  if (!lines?.length) return null;
+  return { ...state, autoOrder: { on: true, lines: lines.map((l) => ({ ...l })) } };
+}
+
+export function toggleAutoOrder(state: StoreState): StoreState | null {
+  if (!state.autoOrder) return null;
+  return { ...state, autoOrder: { ...state.autoOrder, on: !state.autoOrder.on } };
+}
+
+/**
+ * Что привезёт автозаказ: по каждому товару — сколько не хватает на складе до списка, по обычной
+ * цене (без торга), в пределах склада и денег. null — автозаказа нет или он выключен.
+ */
+export function autoOrderPlan(state: StoreState, priceOf: (sid: SupplierId, pid: ProductId) => number | null): ReorderPlan | null {
+  const auto = state.autoOrder;
+  if (!auto?.on || !auto.lines.length || !hasUpgrade(state, 'autoOrder')) return null;
+  let room = warehouseCapacity(state) - warehouseCount(state);
+  let money = state.money;
+  let cut = false;
+  const lines: ReorderPlan['lines'] = [];
+  for (const line of auto.lines as OrderLine[]) {
+    const price = SUPPLIERS[line.sid] ? priceOf(line.sid, line.pid) : null;
+    if (price === null || !productAvailable(line.pid, state.day)) continue;
+    const need = line.qty - warehouseOf(state, line.pid);
+    if (need <= 0) continue;
+    const qty = Math.min(need, room, Math.floor(money / price));
+    if (qty < need) cut = true;
+    if (qty <= 0) continue;
+    room -= qty;
+    money -= qty * price;
+    lines.push({ ...line, qty, price });
+  }
+  return { lines, total: lines.reduce((sum, l) => sum + l.qty * l.price, 0), cut };
 }
