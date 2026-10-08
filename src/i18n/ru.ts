@@ -215,6 +215,7 @@ export const ru = {
   'neighbor.eduard': 'Эдуард-Маркет',
   'neighbor.bakery': 'Цветы',
   'weather.rain': '🌧 Сегодня дождь — прохожие с зонтами.',
+  'weather.storm': '⛈ Гроза — гремит гром, прохожие с зонтами и несут грязь на ногах.',
   'weather.snow': '❄️ Идёт снег.',
   'weather.leaves': '🍂 Листопад.',
   'prices.locked': 'откроется, когда купишь «{shelf}»',

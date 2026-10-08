@@ -64,6 +64,36 @@ function play(notes: Note[]): void {
   }
 }
 
+/** Белый шум: основа грома, дождя и шума улицы. */
+export function noiseBuffer(ac: AudioContext, seconds: number): AudioBuffer {
+  const buffer = ac.createBuffer(1, Math.floor(ac.sampleRate * seconds), ac.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  return buffer;
+}
+
+/** Гром: удар и долгий раскат — шум через фильтр, который всё сильнее глушит верха. */
+function thunder(): void {
+  const ac = audio();
+  if (!ac) return;
+  const now = ac.currentTime + 0.01;
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuffer(ac, 4);
+  const filter = ac.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(1100, now);
+  filter.frequency.exponentialRampToValueAtTime(90, now + 3.5);
+  const gain = ac.createGain();
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.32, now + 0.04);
+  gain.gain.exponentialRampToValueAtTime(0.1, now + 0.7);
+  gain.gain.linearRampToValueAtTime(0.18, now + 1.2);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.9);
+  src.connect(filter).connect(gain).connect(ac.destination);
+  src.start(now);
+  src.stop(now + 4);
+}
+
 export const sound = {
   /** Касание, начало дела. */
   tap: () => play([{ freq: 520, dur: 0.05, wave: 'triangle', vol: 0.05 }]),
@@ -99,6 +129,9 @@ export const sound = {
       { freq: 1047, at: 0.3, dur: 0.35, vol: 0.04 },
       { freq: 523, at: 0.3, dur: 0.35, wave: 'triangle', vol: 0.06 },
     ]),
+
+  /** Раскат грома в грозу. */
+  thunder,
 
   isMuted: (): boolean => muted,
   setMuted(next: boolean): void {

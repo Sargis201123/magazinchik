@@ -65,7 +65,7 @@ import { UI_FONT } from '../ui/dom';
 import { Hud } from '../ui/hud';
 import { showMorning } from '../ui/morning';
 import { showTitle } from '../ui/title';
-import { weatherFor, type Weather } from '../game/weather';
+import { isWet, weatherFor, type Weather } from '../game/weather';
 import { activeDecor } from '../game/decor';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 
@@ -119,7 +119,7 @@ const INDOOR_LIGHT: [number, number][] = [
 ];
 
 /** Погода приглушает свет на улице: в дождь серо-синий, в снег чуть холодный. */
-const WEATHER_LIGHT: Record<Weather, number> = { clear: 0xffffff, rain: 0xb4bed2, snow: 0xf0f4ff, leaves: 0xfff2e0 };
+const WEATHER_LIGHT: Record<Weather, number> = { clear: 0xffffff, rain: 0xb4bed2, storm: 0x9aa4c4, snow: 0xf0f4ff, leaves: 0xfff2e0 };
 
 /** Перемножение цветов (как тинт). */
 function mulColor(a: number, b: number): number {
@@ -150,6 +150,11 @@ const TRASH_CHANCE = 0.15;
 const MAX_TRASH = 8;
 /** Столько мусора на полу — и покупатели начинают жаловаться. */
 const TRASH_COMPLAINT = 3;
+/** В дождь, грозу и снег столько покупателей приносят грязь на ногах. */
+const MUD_CHANCE = 0.15;
+/** Больше двух грязных пятен разом не бывает — иначе гроза засыпает жалобами. */
+const MAX_MUD = 2;
+const MOP_MS = 1300;
 const TOILET_CHANCE = 0.25;
 const TOILET_DIRT_PER_VISIT = 20;
 const TOILET_DIRTY = 60;
@@ -796,6 +801,7 @@ export class StoreScene extends Phaser.Scene {
   private applyWeather(): void {
     for (const obj of this.weatherObjs) obj.destroy();
     this.weatherObjs = [];
+    this.nightLights = this.nightLights.filter((light) => light.obj.active);
     this.weather = weatherFor(this.state.day);
     // Камера ещё не пересчитала видимую область — берём её с запасом от планировки.
     const area = { x: -80, y: -140, w: this.next.w + 160, h: this.next.h + STREET_VIEW + 220 };
@@ -806,17 +812,20 @@ export class StoreScene extends Phaser.Scene {
     const tree = this.weather === 'snow' ? 0xdce6f2 : this.weather === 'leaves' ? 0xffb868 : 0xffffff;
     for (const g of this.greenery) g.setTint(tree);
 
-    if (this.weather === 'rain') {
+    if (isWet(this.weather)) {
+      const storm = this.weather === 'storm';
       keep(this.add.particles(0, 0, 'raindrop', {
         x: { min: area.x, max: area.x + area.w },
         y: area.y,
         speedY: { min: 240, max: 300 },
-        speedX: -30,
+        speedX: storm ? -60 : -30,
         scale: 1 / ART,
         lifespan: (area.h / 260) * 1000,
-        quantity: 3,
-        frequency: 25,
+        quantity: storm ? 4 : 3,
+        frequency: storm ? 18 : 25,
       })).setDepth(-5);
+      this.wetStreet(keep);
+      if (storm) this.lightning(keep);
       keep(this.add.particles(0, 0, 'splash', {
         x: { min: area.x, max: area.x + area.w },
         y: { min: area.y, max: area.y + area.h },
@@ -864,9 +873,66 @@ export class StoreScene extends Phaser.Scene {
     this.updateLighting(this.running ? undefined : 0);
   }
 
+  /** Мокрая улица: асфальт блестит, в нём отражаются фонари, по лужам идут круги. */
+  private wetStreet(keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
+    const top = this.next.h + 4;
+    keep(this.add.rectangle(-400, top, this.next.w + 800, 88, 0xa8c0f0).setOrigin(0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.06).setDepth(-8.9));
+    for (const x of this.lampXs) {
+      const streak = keep(this.nightGlow(this.art(x, top + 34, 'glow').setDisplaySize(9, 46).setTint(0xffd27a), 0.4));
+      this.tweens.add({ targets: streak, scaleX: streak.scaleX * 0.65, duration: Phaser.Math.Between(600, 1100), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    const rnd = new Phaser.Math.RandomDataGenerator([`puddles${this.state.day}`]);
+    const puddles: Phaser.Types.Math.Vector2Like[] = [];
+    for (let i = 0; i < 10; i++) {
+      const x = -120 + rnd.frac() * (this.next.w + 240);
+      if (Math.abs(x - this.layout.door.x) < 16) continue;
+      const y = rnd.pick([top + 17, top + 19, top + 74, top + 80]);
+      puddles.push({ x, y });
+      keep(this.art(x, y, 'puddle_wet').setDepth(-8.8));
+    }
+    if (!puddles.length) return;
+    const source = {
+      getRandomPoint: (point: Phaser.Types.Math.Vector2Like) => {
+        const at = Phaser.Utils.Array.GetRandom(puddles);
+        point.x = (at.x ?? 0) + Phaser.Math.FloatBetween(-6, 6);
+        point.y = (at.y ?? 0) + Phaser.Math.FloatBetween(-1.5, 1.5);
+      },
+    };
+    keep(this.add.particles(0, 0, 'ripple', {
+      emitZone: { type: 'random', source },
+      scale: { start: 0.15 / ART, end: 0.9 / ART },
+      alpha: { start: 0.8, end: 0 },
+      lifespan: 650,
+      frequency: 70,
+    })).setDepth(-8.7);
+  }
+
+  /** Гроза: время от времени вспышка молнии на весь квартал, через миг — раскат грома. */
+  private lightning(keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
+    const flash = keep(this.add.rectangle(-1200, -1200, 4000, 4000, 0xdde6ff).setOrigin(0).setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 5).setAlpha(0));
+    const strike = () => {
+      if (!flash.active) return;
+      if (this.running) {
+        this.tweens.chain({
+          targets: flash,
+          tweens: [
+            { alpha: 0.26, duration: 50 },
+            { alpha: 0.05, duration: 90 },
+            { alpha: 0.18, duration: 45 },
+            { alpha: 0, duration: 550 },
+          ],
+        });
+        this.cameras.main.shake(180, 0.0015);
+        this.time.delayedCall(Phaser.Math.Between(250, 1100), () => sound.thunder());
+      }
+      this.time.delayedCall(Phaser.Math.Between(7000, 15000), strike);
+    };
+    this.time.delayedCall(Phaser.Math.Between(2500, 5000), strike);
+  }
+
   /** Зонт над головой: только в дождь и только на улице. */
   private addUmbrella(person: Phaser.GameObjects.Container): void {
-    if (this.weather !== 'rain') return;
+    if (!isWet(this.weather)) return;
     const umbrella = this.art(0, -13, 'umbrella').setTint(Phaser.Utils.Array.GetRandom(CAR_COLORS));
     person.add(umbrella);
     person.setData('umbrella', umbrella);
@@ -1598,7 +1664,8 @@ export class StoreScene extends Phaser.Scene {
   private recallSeller(): void {
     if (!this.sellerBusy) return;
     this.choreId++;
-    this.carried.setVisible(false);
+    this.tweens.killTweensOf(this.carried);
+    this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
     haptic.tap();
     void this.returnSeller();
   }
@@ -1645,7 +1712,7 @@ export class StoreScene extends Phaser.Scene {
     const { doorway, pickup } = this.layout.warehouse;
     void this.doChore([
       { ...doorway },
-      { ...pickup, ms: PICKUP_MS, action: () => this.carried.setVisible(true) },
+      { ...pickup, ms: PICKUP_MS, action: () => this.carried.setTexture('box').setPosition(0, 3).setVisible(true) },
       { ...doorway },
       {
         x: slot.x,
@@ -1677,22 +1744,37 @@ export class StoreScene extends Phaser.Scene {
     ]);
   }
 
-  private dropTrash(x: number, y: number): void {
+  /** Мусор на полу; mud — грязные следы с улицы, их моют шваброй. */
+  private dropTrash(x: number, y: number, mud = false): void {
     if (this.trash.size >= MAX_TRASH) return;
+    const key = mud ? 'mud' : Phaser.Utils.Array.GetRandom(['trash', 'trash', 'trash_banana', 'trash_cup']);
+    const area = mud ? new Phaser.Geom.Rectangle(-2, -2, 30, 26) : new Phaser.Geom.Rectangle(-5, -5, 16, 15);
     const piece = this
-      .art(x + Phaser.Math.Between(-6, 6), y + Phaser.Math.Between(4, 8), Phaser.Utils.Array.GetRandom(['trash', 'trash', 'trash_banana', 'trash_cup']))
-      .setDepth(1)
-      .setInteractive(new Phaser.Geom.Rectangle(-5, -5, 16, 15), Phaser.Geom.Rectangle.Contains);
+      .art(x + Phaser.Math.Between(-6, 6), y + Phaser.Math.Between(4, 8), key)
+      .setDepth(mud ? 0.5 : 1)
+      .setInteractive(area, Phaser.Geom.Rectangle.Contains);
     piece.setData('glow', piece.preFX?.addGlow(0xffffff, 1, 0, false, 0.1, 6));
     piece.on('pointerup', () => {
-      if (this.dragged || this.claimedTrash.has(piece) || this.sellerBusy) return;
+      if (this.dragged || this.claimedTrash.has(piece) || this.sellerBusy || this.scanning?.byOwner) return;
       this.claimedTrash.add(piece);
+      if (!mud) {
+        void this.doChore([{ x: piece.x + 6, y: piece.y, ms: TRASH_CLEAN_MS, action: () => this.removeTrash(piece) }]);
+        return;
+      }
+      // Продавец берёт швабру и трёт пол туда-сюда.
+      this.carried.setTexture('mop').setPosition(5, -1).setVisible(true);
+      let scrub: Phaser.Tweens.Tween | undefined;
       void this.doChore([
+        { x: piece.x + 7, y: piece.y, action: () => (scrub = this.tweens.add({ targets: this.carried, x: 1, duration: 160, yoyo: true, repeat: -1 })) },
         {
-          x: piece.x + 6,
+          x: piece.x + 7,
           y: piece.y,
-          ms: TRASH_CLEAN_MS,
-          action: () => this.removeTrash(piece),
+          ms: MOP_MS,
+          action: () => {
+            scrub?.remove();
+            this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+            this.removeTrash(piece);
+          },
         },
       ]);
     });
@@ -1703,7 +1785,8 @@ export class StoreScene extends Phaser.Scene {
     if (this.trash.has(piece)) this.stats.trashCleaned++;
     this.trash.delete(piece);
     this.claimedTrash.delete(piece);
-    this.puff(piece.x, piece.y);
+    if (piece.texture.key === 'mud') this.bubbles(piece.x, piece.y);
+    else this.puff(piece.x, piece.y);
     piece.destroy();
   }
 
@@ -2013,6 +2096,10 @@ export class StoreScene extends Phaser.Scene {
   private async runCustomer(c: Customer): Promise<void> {
     await this.walk(c.sprite, this.layout.door.x, this.streetY);
     await this.walk(c.sprite, this.layout.door.x, this.layout.door.y - 10);
+    // В дождь и снег с улицы несут грязь.
+    const muddy = isWet(this.weather) || this.weather === 'snow';
+    const mud = [...this.trash].filter((piece) => piece.texture.key === 'mud').length;
+    if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, true);
 
     const wanted = pickWanted(this.state, Math.random, Phaser.Math.Between(1, 2));
     let disappointed = false;
@@ -2260,7 +2347,18 @@ export class StoreScene extends Phaser.Scene {
         .setTint(0xfff0b0)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setAlpha(0.8 * this.evening);
-      const car = this.add.container(toRight ? left : right, y, [body, lights, beam]).setDepth(y);
+      const parts = [body, lights, beam];
+      // На мокрой дороге фары отражаются бликом.
+      if (isWet(this.weather)) {
+        parts.push(
+          this.art(body.displayWidth / 2 + 6, 7, 'glow')
+            .setScale(28 / 64, 5 / 64)
+            .setTint(0xfff0b0)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setAlpha(0.2 + 0.5 * this.evening),
+        );
+      }
+      const car = this.add.container(toRight ? left : right, y, parts).setDepth(y);
       car.setScale(toRight ? 1 : -1, 1);
       this.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
     }

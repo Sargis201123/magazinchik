@@ -1960,6 +1960,39 @@ def night_lights():
     trapezoid("light_spill", 48, 40, 34, 48, 0.75, 0.0, 6)
 
 
+def wet_weather():
+    """Дождь: грязные следы на полу (их моют), круг на воде, швабра и лужа на тротуаре."""
+    c = Canvas(26, 22)
+    mud = (110, 78, 50, 165)
+    dark = (84, 58, 38, 190)
+    # Шаги: левый-правый вразнобой, носок — овал, каблук отдельно.
+    for i, (x, y) in enumerate(((5, 15), (11, 13), (14, 7), (20, 5))):
+        x += -1 if i % 2 else 1
+        c.ellipse(x, y, 1.7, 2.3, mud)
+        c.ellipse(x, y + 4.4, 1.3, 1.1, mud)
+        c.px(int(x), y - 1, dark)
+    c.save("mud")
+    c = Canvas(16, 8)
+    for y in range(8):
+        for x in range(16):
+            d = ((x - 7.5) / 7.5) ** 2 + ((y - 3.5) / 3.5) ** 2
+            if 0.5 < d < 1.0:
+                c.px(x, y, (255, 255, 255, 200))
+    c.save("ripple")
+    c = Canvas(10, 30)
+    c.rect(4, 0, 2, 24, "n")
+    c.vline(4, 0, 24, "B")
+    c.rect(0, 23, 10, 3, "u")
+    for x in range(0, 10, 2):
+        c.vline(x, 26, 4, "w")
+    c.outline("k")
+    c.save("mop")
+    c = Canvas(36, 12)
+    c.ellipse(18, 6, 17, 5.5, (70, 84, 120, 210))
+    c.ellipse(14, 5, 9, 2.2, (150, 170, 205, 170))
+    c.save("puddle_wet")
+
+
 def environment2():
     building()
     lot2()
@@ -1975,6 +2008,7 @@ def environment2():
     thought()
     critters()
     night_lights()
+    wet_weather()
 
 
 # ---------------------------------------------------------------- люди
