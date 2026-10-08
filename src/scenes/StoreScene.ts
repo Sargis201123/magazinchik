@@ -12,6 +12,7 @@ import {
   billTotal,
   guardCatchChance,
   staffOf,
+  SHELF_KINDS,
   thiefChance,
   workSpeed,
   hasUnmarkedBad,
@@ -85,7 +86,27 @@ import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
-import { binCapacity, binSprite, brewSeconds, coffeePrice, coffeeSprite, gearTier, ovenBake, ovenBatchCost, ovenSprite, registerSprite } from '../game/gear';
+import {
+  binCapacity,
+  binSprite,
+  brewSeconds,
+  cameraTheft,
+  climatePatience,
+  coffeePrice,
+  coffeeSprite,
+  entranceMud,
+  fridgeLeak,
+  gearTier,
+  type GearId,
+  ovenBake,
+  ovenBatchCost,
+  ovenSprite,
+  REGISTER_JAM_SECONDS,
+  registerJam,
+  registerSprite,
+  warehouseSpeed,
+  wcDirt,
+} from '../game/gear';
 import { CASHIER_ROLES, nextRegisterCount, registerCount, registerOfRole } from '../game/registers';
 import {
   AROMA_SECONDS,
@@ -1010,7 +1031,8 @@ export class StoreScene extends Phaser.Scene {
     this.lampGlows.push(glow(this.layout.door.x, h + 8, 40, 0xffd890));
     this.ceilingGlows = [];
     for (let y = this.layout.wallH + 40; y < h - 10; y += 64) {
-      for (let x = 34; x < w; x += 68) this.ceilingGlows.push(glow(x, y, 70, 0xfff0c8));
+      // LED светит белым, лампы накаливания — тёплым.
+      for (let x = 34; x < w; x += 68) this.ceilingGlows.push(glow(x, y, 70, gearTier(this.state, 'lights') ? 0xf4f8ff : 0xfff0c8));
     }
     this.updateLighting(this.running ? undefined : 0);
   }
@@ -1436,6 +1458,7 @@ export class StoreScene extends Phaser.Scene {
     const { counter, w, wallH } = this.layout;
     if (hasUpgrade(this.state, 'terminal')) this.art(counter.x + 3, counter.y - 4, 'card_terminal').setDepth(counter.y + 22);
     for (let i = 1; i < registerCount(this.state); i++) this.buildRegister(i);
+    this.buildGearProps();
     this.buildCoffee();
     this.buildOven();
     this.buildDelivery();
@@ -1446,6 +1469,51 @@ export class StoreScene extends Phaser.Scene {
     this.kiosk = this.art(at.x, at.y, 'kiosk').setDepth(at.y + 9);
     this.kioskScreen = this.add.rectangle(at.x, at.y - 9, 6, 4, 0x2ce8f5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(at.y + 10);
     this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
+  }
+
+  /**
+   * Оборудование, которое видно в зале: рохля, погрузчик или автосклад на складе, вентиляторы
+   * или кондиционер на стене, камеры под потолком, решётка и тепловая завеса у входа,
+   * экран на фасаде и датчик у туалета.
+   */
+  private buildGearProps(): void {
+    const { w, h, door, warehouse, wc } = this.layout;
+    const tier = (id: GearId) => gearTier(this.state, id);
+    const store = tier('warehouse');
+    if (store === 3) this.art(warehouse.x + warehouse.w - 13, warehouse.y + 12, 'autostore').setDepth(warehouse.y + 60);
+    else if (store) this.art(warehouse.x + 11, h - 11, store === 1 ? 'pallet_jack' : 'forklift').setDepth(h - 4);
+    const climate = tier('climate');
+    // На стене между постером, часами и окном (они висят через 32 от x = 30) — свободные места.
+    if (climate === 1) {
+      for (const x of [46, 78]) {
+        this.art(x, 13, 'fan_base').setDepth(4);
+        const blades = this.art(x, 13, 'fan_blades').setDepth(5);
+        this.tweens.add({ targets: blades, angle: 360, duration: 700, repeat: -1 });
+      }
+    } else if (climate === 2) {
+      const ac = this.art(126, 7, 'ac_wall').setDepth(4);
+      // Струйки холодного воздуха из кондиционера.
+      for (let i = 0; i < 3; i++) {
+        const puff = this.add.rectangle(ac.x - 8 + i * 8, ac.y + 6, 1, 3, 0xc8f0ff, 0.6).setDepth(5);
+        this.tweens.add({ targets: puff, y: ac.y + 14, alpha: 0, duration: 1100, delay: i * 300, repeat: -1 });
+      }
+    }
+    const cams = tier('cameras');
+    const camSpots = cams === 2 ? [{ x: w - 5, y: 3, flip: true }, { x: 5, y: 3, flip: false }, { x: w / 2, y: 3, flip: false }] : cams === 1 ? [{ x: w - 5, y: 3, flip: true }] : [];
+    for (const spot of camSpots) {
+      this.art(spot.x, spot.y, 'cam').setFlipX(spot.flip).setDepth(6);
+      const led = this.add.rectangle(spot.x + (spot.flip ? 2 : -2), spot.y + 1, 1, 1, 0xff4a4a).setDepth(7);
+      this.tweens.add({ targets: led, alpha: 0.1, duration: 600, yoyo: true, repeat: -1 });
+    }
+    if (tier('entrance') === 2) this.art(door.x, h - 2, 'air_curtain').setDepth(h + 3);
+    if (tier('lights') === 2) {
+      const screen = this.art(w / 2 + 50, -9, 'facade_screen0').setDepth(3);
+      this.time.addEvent({ delay: 1400, loop: true, callback: () => screen.active && screen.setTexture(screen.texture.key === 'facade_screen0' ? 'facade_screen1' : 'facade_screen0') });
+    }
+    if (tier('wc')) {
+      const sensor = this.add.rectangle(wc.x + 9, wc.y - 13, 2, 2, tier('wc') === 2 ? 0x2ce8f5 : 0x63c74d).setDepth(wc.y + 2);
+      this.tweens.add({ targets: sensor, alpha: 0.3, duration: 900, yoyo: true, repeat: -1 });
+    }
   }
 
   // ---------- Доставка на дом ----------
@@ -3125,7 +3193,7 @@ export class StoreScene extends Phaser.Scene {
     this.art(counter.x, counter.y + 39, 'candy_rack').setDepth(counter.y + 40);
     if (this.state.level >= 2) this.art(door.x + 46, h - 10, 'carts').setDepth(h - 4);
     // Коврик у входа и автомат с напитками у правой стены.
-    this.art(door.x, h - 7, 'mat').setDepth(1);
+    this.art(door.x, h - 7, gearTier(this.state, 'entrance') ? 'mat_grate' : 'mat').setDepth(1);
     this.art(w - 8, wallH + 56, 'vending').setDepth(wallH + 66);
     // Мягкая тень вдоль стены — пол уходит под неё.
     this.add.rectangle(0, wallH, w, 3, 0x181425, 0.18).setOrigin(0).setDepth(1);
@@ -3248,6 +3316,8 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.add({ targets: low, y: low.y - 1.5, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     const lights: Phaser.GameObjects.GameObject[] = [];
     if (look.texture === 'fridge') {
+      // Новые холодильники — с наклейкой класса энергосбережения.
+      if (gearTier(this.state, 'fridge')) lights.push(this.art(slot.x + 13, slot.y - 15, 'eco_label').setDepth(slot.y - 11));
       const cool = kind === 'meat' ? 0xffd8d8 : 0xc8f0ff;
       const glass = this.add.rectangle(slot.x, slot.y - 1.5, 36, 19, cool).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.1).setDepth(slot.y - 12.5);
       this.tweens.add({ targets: glass, alpha: 0.16, duration: 1800 + index * 130, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -3774,6 +3844,18 @@ export class StoreScene extends Phaser.Scene {
     this.popup(x, y - 16, t('popup.spill'), '#ffd0d0');
   }
 
+  /** Протёк холодильник: лужа перед ним (её моют, как пролитое). */
+  private fridgeLeaks(): void {
+    const fridges = this.state.shelves.map((s, i) => ({ s, i })).filter(({ s }) => SHELF_KINDS[s.kind].fridge);
+    if (!fridges.length) return;
+    const slot = this.layout.slots[Phaser.Utils.Array.GetRandom(fridges).i];
+    const piece = this.dropTrash(slot.x + Phaser.Math.Between(-8, 8), slot.y + 24, 'spill');
+    if (!piece) return;
+    piece.setTint(0xc8f0ff);
+    sound.bad();
+    this.popup(slot.x, slot.y + 8, t('popup.leak'), '#ffd0d0');
+  }
+
   /** Наступил в лужу — чуть не упал: настроение испорчено. */
   private checkSlips(): void {
     const spills = [...this.trash].filter((piece) => piece.getData('kind') === 'spill');
@@ -3863,11 +3945,16 @@ export class StoreScene extends Phaser.Scene {
 
   /** Шаг сотрудника с учётом его скорости. */
   private workerWalk(w: Worker, x: number, y: number): Promise<void> {
-    return this.walk(w.sprite, x, y, STAFF_SPEED * workSpeed(w.member));
+    return this.walk(w.sprite, x, y, STAFF_SPEED * this.workerPace(w));
   }
 
   private workerWait(w: Worker, ms: number): Promise<void> {
-    return this.wait(ms / workSpeed(w.member));
+    return this.wait(ms / this.workerPace(w));
+  }
+
+  /** Скорость сотрудника: его навык, а у грузчика — ещё и оборудование склада. */
+  private workerPace(w: Worker): number {
+    return workSpeed(w.member) * (w.member.role === 'loader' ? warehouseSpeed(this.state) : 1);
   }
 
   /** Кассир сам пробивает тех, кто подошёл к его кассе (второй кассир — ко второй). */
@@ -4047,7 +4134,7 @@ export class StoreScene extends Phaser.Scene {
   // ---------- Покупатели ----------
 
   private spawnCustomer(): void {
-    const thief = Math.random() < thiefChance(this.state.level);
+    const thief = Math.random() < thiefChance(this.state.level) * cameraTheft(this.state);
     const valya = !thief && !this.night && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
     const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
     // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще.
@@ -4168,7 +4255,7 @@ export class StoreScene extends Phaser.Scene {
     // В дождь и снег с улицы несут грязь.
     const muddy = isWet(this.weather) || this.weather === 'snow';
     const mud = [...this.trash].filter((piece) => piece.texture.key === 'mud').length;
-    if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, 'mud');
+    if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE * entranceMud(this.state)) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, 'mud');
 
     const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2));
     if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
@@ -4221,7 +4308,7 @@ export class StoreScene extends Phaser.Scene {
     c.waitStart = this.time.now;
     c.bubble.setVisible(true);
     // С котом рядом ждут дольше.
-    c.patienceMs = PATIENCE_MS * catPatience(this.state);
+    c.patienceMs = PATIENCE_MS * catPatience(this.state) * climatePatience(this.state, weatherFor(this.state.day));
     c.patience = this.time.delayedCall(c.patienceMs, () => void this.giveUp(c));
     this.layoutQueue();
   }
@@ -4309,7 +4396,7 @@ export class StoreScene extends Phaser.Scene {
     c.sprite.setVisible(false);
     await this.wait(1200);
     c.sprite.setVisible(true);
-    this.toiletDirt = Math.min(100, this.toiletDirt + TOILET_DIRT_PER_VISIT);
+    this.toiletDirt = Math.min(100, this.toiletDirt + TOILET_DIRT_PER_VISIT * wcDirt(this.state));
     this.refreshToilet();
   }
 
@@ -4346,6 +4433,15 @@ export class StoreScene extends Phaser.Scene {
       this.tweens.add({ targets: item, x: counter.x, y: counter.y - 14, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
       haptic.tap();
       sound.scan();
+    }
+    // Старая касса иногда заедает: пока продавец стучит по ней, очередь ждёт.
+    if (Math.random() < registerJam(this.state)) {
+      r.scan.total += REGISTER_JAM_SECONDS * 1000;
+      this.popup(counter.x, counter.y - 22, t('popup.jam'), '#ffd0d0');
+      haptic.error();
+      this.tweens.add({ targets: r.screen, alpha: 0, duration: 120, yoyo: true, repeat: 4 });
+      await this.wait(REGISTER_JAM_SECONDS * 1000);
+      if (!this.sys.isActive()) return;
     }
     await this.wait(timing.pay * 1000);
     r.scan = null;
@@ -4753,7 +4849,7 @@ export class StoreScene extends Phaser.Scene {
         const staffChanged = s.staff !== this.state.staff;
         const decorChanged = s.decor !== this.state.decor;
         const adsChanged = s.ads !== this.state.ads;
-        const upgradesChanged = s.upgrades !== this.state.upgrades;
+        const upgradesChanged = s.upgrades !== this.state.upgrades || s.gear !== this.state.gear;
         // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
         const was = this.state;
         const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was);
@@ -4804,6 +4900,10 @@ export class StoreScene extends Phaser.Scene {
     if (this.awaitingBoxes > 0) void this.deliver();
     this.endLiveEvent();
     this.scheduleRegulars();
+    // Старые холодильники иногда подтекают: лужа у одного из них посреди дня.
+    if (Math.random() < fridgeLeak(this.state)) {
+      this.time.delayedCall(Phaser.Math.FloatBetween(0.15, 0.7) * DAY_SECONDS * 1000, () => this.running && this.fridgeLeaks());
+    }
     if (this.state.day >= LIVE_FROM_DAY && Math.random() < LIVE_CHANCE) {
       const kind = Phaser.Utils.Array.GetRandom([...LIVE_KINDS]);
       this.time.delayedCall(Phaser.Math.FloatBetween(0.2, 0.6) * DAY_SECONDS * 1000, () => this.running && this.startLiveEvent(kind));

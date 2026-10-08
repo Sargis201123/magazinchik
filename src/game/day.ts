@@ -1,6 +1,7 @@
 // Смена дня целиком: заказ забирают, холодильники греются, товар портится, счета,
 // сюжетные счётчики и план на завтра. Этим пользуются и игра, и симулятор.
 
+import { lightsGuests } from './gear';
 import { endDay, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
 import {
   applyInspection,
@@ -72,7 +73,8 @@ export const guestFactor = (state: StoreState): number =>
   adBoost(state) *
   WEATHER_EFFECTS[weatherFor(state.day)].guests *
   promoGuests(state) *
-  fairGuests(state.day);
+  fairGuests(state.day) *
+  lightsGuests(state);
 
 /** Секунд между гостями сегодня: рейтинг, помещение, сюжет, сезон и звание. */
 export const spawnIntervalToday = (state: StoreState): number => spawnInterval(state.rating, state.level) / guestFactor(state);

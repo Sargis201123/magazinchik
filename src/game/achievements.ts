@@ -6,6 +6,7 @@ import { newLifetime, type DayStats, type Lifetime, type StoreState } from './ec
 import { RARE_GUESTS } from './endless';
 import { CHAPTERS } from './story';
 import { registerCount } from './registers';
+import { gearMaxed, gearUpgrades } from './gear';
 
 export type AchievementId =
   | 'first_day'
@@ -34,7 +35,11 @@ export type AchievementId =
   | 'courier_20'
   | 'mouse_5'
   | 'war_answer'
-  | 'fair_3';
+  | 'fair_3'
+  | 'gear_first'
+  | 'gear_10'
+  | 'gear_all'
+  | 'registers_4';
 
 export type Tier = 'bronze' | 'silver' | 'gold';
 
@@ -78,10 +83,15 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'cat_mascot', tier: 'silver', progress: ({ state }) => flag(Boolean(state.cat?.beds.includes('house'))) },
   { id: 'night_owl', tier: 'silver', progress: ({ life }) => count(life.nights ?? 0, 5) },
   { id: 'two_registers', tier: 'bronze', progress: ({ state }) => flag(registerCount(state) >= 2) },
+  { id: 'registers_4', tier: 'silver', progress: ({ state }) => count(registerCount(state), 4) },
   { id: 'courier_20', tier: 'silver', progress: ({ life }) => count(life.deliveries ?? 0, 20) },
   { id: 'mouse_5', tier: 'bronze', progress: ({ life }) => count(life.mice ?? 0, 5) },
   { id: 'war_answer', tier: 'bronze', progress: ({ life }) => count(life.wars ?? 0, 1) },
   { id: 'fair_3', tier: 'bronze', progress: ({ life }) => count(life.fairs ?? 0, 3) },
+  // Оборудование: первая новая модель, десять улучшений и всё лучших моделей.
+  { id: 'gear_first', tier: 'bronze', progress: ({ state }) => count(gearUpgrades(state), 1) },
+  { id: 'gear_10', tier: 'silver', progress: ({ state }) => count(gearUpgrades(state), 10) },
+  { id: 'gear_all', tier: 'gold', progress: ({ state }) => flag(gearMaxed(state)) },
 ];
 
 export const achievementName = (id: AchievementId): TextKey => `ach.${id}` as TextKey;

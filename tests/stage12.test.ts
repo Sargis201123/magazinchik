@@ -111,3 +111,50 @@ describe('бабушкино обучение', () => {
     expect((old as StoreState).tourDone).toBeUndefined();
   });
 });
+
+describe('новые линейки оборудования', () => {
+  const lvl = (level: number, gear: StoreState['gear'] = {}, patch: Partial<StoreState> = {}) => ({ ...at(level), gear, ...patch });
+
+  it('склад: больше мест', async () => {
+    const { warehouseCapacity } = await import('../src/game/economy');
+    expect(warehouseCapacity(lvl(2, { warehouse: 3 }))).toBe(Math.round(warehouseCapacity(lvl(2)) * 1.6));
+  });
+
+  it('холодильники: молочка и мясо живут дольше, хлеб — как был; свет дешевле', async () => {
+    const { unitLife, monthlyBill, PRODUCTS } = await import('../src/game/economy');
+    const { fridgeLife } = await import('../src/game/gear');
+    const s = lvl(2, { fridge: 2 });
+    expect(unitLife('milk', { age: 0 }, fridgeLife(s))).toBe(PRODUCTS.milk.shelfLife + 2);
+    expect(unitLife('bread', { age: 0 }, fridgeLife(s))).toBe(PRODUCTS.bread.shelfLife);
+    const shelves: StoreState['shelves'] = [{ kind: 'dairy', level: 0, items: {} }, { kind: 'meat', level: 0, items: {} }];
+    expect(monthlyBill({ ...s, shelves }).power).toBeLessThan(monthlyBill({ ...lvl(2), shelves }).power);
+  });
+
+  it('свет, климат, камеры, вход, туалет', async () => {
+    const g = await import('../src/game/gear');
+    expect(g.lightsGuests(lvl(3, { lights: 2 }))).toBeGreaterThan(1);
+    expect(g.climatePatience(lvl(2), 'heat')).toBeLessThan(1);
+    expect(g.climatePatience(lvl(2, { climate: 1 }), 'heat')).toBe(1);
+    expect(g.climatePatience(lvl(2, { climate: 1 }), 'snow')).toBeLessThan(1);
+    expect(g.climatePatience(lvl(2, { climate: 2 }), 'snow')).toBeGreaterThan(1);
+    expect(g.cameraTheft(lvl(2, { cameras: 2 }))).toBeLessThan(g.cameraTheft(lvl(2)));
+    expect(g.entranceMud(lvl(2, { entrance: 1 }))).toBe(0.5);
+    expect(g.wcDirt(lvl(2, { wc: 2 }))).toBeLessThan(0.5);
+  });
+
+  it('старое ломается, новое — нет', async () => {
+    const g = await import('../src/game/gear');
+    expect(g.registerJam(lvl(0))).toBeGreaterThan(0);
+    expect(g.registerJam(lvl(3, { register: 3 }))).toBe(0);
+    expect(g.fridgeLeak(lvl(0))).toBeGreaterThan(0);
+    expect(g.fridgeLeak(lvl(1, { fridge: 1 }))).toBe(0);
+  });
+
+  it('достижения за оборудование считают модели', async () => {
+    const g = await import('../src/game/gear');
+    expect(g.gearUpgrades(lvl(2, { register: 2, bin: 1 }))).toBe(3);
+    const max = Object.fromEntries(g.GEAR_IDS.map((id) => [id, g.GEAR[id].models.length - 1]));
+    expect(g.gearMaxed(lvl(4, max))).toBe(true);
+    expect(g.gearMaxed(lvl(4, { register: 3 }))).toBe(false);
+  });
+});
