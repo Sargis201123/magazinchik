@@ -1892,6 +1892,54 @@ def thought():
     c.save("cross")
 
 
+def critters():
+    """Спящий кот 20×12 и голубь: стоит, клюёт, летит."""
+    c = Canvas(20, 12)
+    c.ellipse(10, 7, 8.5, 4.5, "o")
+    c.ellipse(10, 8, 6, 3, "y")
+    c.ellipse(4, 6, 3.4, 3, "o")
+    c.stamp(["o.o", "ooo"], 2, 1)
+    c.hline(3, 6, 2, "k")
+    c.vline(17, 5, 4, "o")
+    c.vline(18, 7, 3, "o")
+    for x in (8, 12):
+        c.px(x, 5, "B")
+    c.outline("k")
+    c.save("cat")
+    for name, rows in {
+        "pigeon0": [
+            "...kk....",
+            "..kGWk...",
+            "..kGGkkk.",
+            ".kGlllGk.",
+            "kGlllGGk.",
+            ".kGGGGk..",
+            "..kyky...",
+        ],
+        "pigeon1": [
+            ".........",
+            ".........",
+            "..kkkk...",
+            ".kGlllkk.",
+            "kGlllGGGk",
+            ".kGGGGkWk",
+            "..kyk.ky.",
+        ],
+        "pigeon_fly": [
+            "kk.....kk",
+            "kGk...kGk",
+            ".kGkkkGk.",
+            "..kGlGk..",
+            "..kGGGk..",
+            "...kGk...",
+            "....k....",
+        ],
+    }.items():
+        c = Canvas(9, 7)
+        c.stamp(rows)
+        c.save(name)
+
+
 def environment2():
     building()
     lot2()
@@ -1905,6 +1953,7 @@ def environment2():
     decor_items()
     tutorial_arrow()
     thought()
+    critters()
 
 
 # ---------------------------------------------------------------- люди

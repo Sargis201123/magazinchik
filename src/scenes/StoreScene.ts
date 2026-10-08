@@ -82,6 +82,8 @@ const ART = 2;
 const STREET_VIEW = 40;
 /** Сколько первых дней показывать обучение: стрелки и яркую подсказку. */
 const TUTORIAL_DAYS = 3;
+/** Сколько штук на полке считается «почти пусто» — табличка «Осталось N». */
+const LOW_STOCK = 2;
 /** Высота видимой крышки мебели (TOP в art/sprites.py, в точках мира). */
 const FURNITURE_TOP = 6;
 /** Насколько далеко можно отвести камеру от магазина пальцем. */
@@ -274,9 +276,17 @@ interface ShelfView {
   shadow: Phaser.GameObjects.Image;
   items: Phaser.GameObjects.Image[];
   pips: Phaser.GameObjects.Image[];
+  /** Табличка «Осталось 2» над почти пустой полкой. */
+  low: Phaser.GameObjects.Text;
   /** Подсветка: полка пустая, а на складе её товар есть — пора нести. */
   glow?: Phaser.FX.Glow;
   needsStock: boolean;
+}
+
+interface Pigeon {
+  img: Phaser.GameObjects.Image;
+  home: { x: number; y: number };
+  away: boolean;
 }
 
 /** Шаг дела продавца: дойти до точки, подождать, сделать действие. */
@@ -359,6 +369,13 @@ export class StoreScene extends Phaser.Scene {
   private scanning: { start: number; total: number; byOwner: boolean } | null = null;
   private scanBar!: Phaser.GameObjects.Rectangle;
   private scanFill!: Phaser.GameObjects.Rectangle;
+  /** Экран кассы и луч сканера мигают, пока пробивают товар. */
+  private scanScreen!: Phaser.GameObjects.Rectangle;
+  private scanBeam!: Phaser.GameObjects.Rectangle;
+  /** Голуби на тротуаре: разлетаются, когда рядом проходит человек. */
+  private pigeons: Pigeon[] = [];
+  /** Таймеры кота и голубей: при перестройке мира старые останавливаются. */
+  private critterTimers: Phaser.Time.TimerEvent[] = [];
   private valyaCame = false;
   private nextSpawn = 1;
   private running = false;
@@ -382,6 +399,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   update(_time: number, deltaMs: number): void {
+    this.scarePigeons();
     if (!this.running) return;
     const dt = deltaMs / 1000;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
@@ -519,6 +537,7 @@ export class StoreScene extends Phaser.Scene {
     this.cameras.main.postFX?.clear();
     this.vignette = this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.2);
     this.buildStreet(next);
+    this.buildCritters(next);
     this.buildNeighbors(next);
     if (next !== this.layout) this.buildForRent(next);
 
@@ -571,6 +590,13 @@ export class StoreScene extends Phaser.Scene {
     // Полоска пробивки над кассой.
     this.scanBar = this.add.rectangle(counter.x - 9, counter.y - 31, 18, 4, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
     this.scanFill = this.add.rectangle(counter.x - 8, counter.y - 31, 0, 2, 0x63c74d).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
+    // Экран монитора и стекло сканера на спрайте кассы.
+    this.scanScreen = this.add.rectangle(counter.x + 0.5, counter.y + 10.5, 6, 3, 0xb6f58a).setDepth(counter.y + 21).setVisible(false);
+    this.scanBeam = this.add
+      .rectangle(counter.x + 0.5, counter.y + 4.2, 8, 4.5, 0xff4a4a)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(counter.y + 21)
+      .setVisible(false);
     void sellerHome;
     const home = this.ownerHome();
     this.seller = this.makePerson(home.x, home.y, OWNER);
@@ -1006,6 +1032,93 @@ export class StoreScene extends Phaser.Scene {
     for (let x = 10; x < next.w; x += 34) this.greenery.push(this.art(x, -6, 'bush').setDepth(-6));
   }
 
+  /** Кот спит на скамейке у входа, голуби клюют крошки на тротуаре. */
+  private buildCritters(next: Layout): void {
+    const { door } = this.layout;
+    const top = next.h + 4;
+    this.critterTimers.forEach((timer) => timer.remove());
+    this.critterTimers = [];
+    const cat = this.art(door.x + 47, top + 8.5, 'cat').setOrigin(0.5, 1).setDepth(top + 7.5);
+    this.tweens.add({ targets: cat, scaleY: 1.08 / ART, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const snore = () => {
+      const z = this.add
+        .text(cat.x - 3, cat.y - 6, 'z', { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#e8f0ff' })
+        .setOrigin(0.5)
+        .setResolution(4)
+        .setDepth(cat.depth + 1)
+        .setScale(0.6);
+      this.tweens.add({ targets: z, x: z.x - 4, y: z.y - 9, scale: 1, alpha: 0, duration: 1800, onComplete: () => z.destroy() });
+    };
+    this.critterTimers.push(this.time.addEvent({ delay: 2600, loop: true, callback: snore }));
+
+    this.pigeons = [];
+    // У края газона, подальше от прохожих: пугаются только тех, кто прошёл совсем рядом.
+    const spots: [number, number][] = [
+      [door.x - 64, top + 5],
+      [door.x - 55, top + 7],
+      [door.x - 47, top + 4],
+    ];
+    for (const [x, y] of spots) {
+      const img = this.art(x, y, 'pigeon0').setOrigin(0.5, 1).setDepth(y).setFlipX(Math.random() < 0.5);
+      const bird: Pigeon = { img, home: { x, y }, away: false };
+      this.pigeons.push(bird);
+      // Клюёт: наклоняется к земле и иногда разворачивается.
+      const peck = () => {
+        if (bird.away || Math.random() < 0.4) return;
+        img.setTexture('pigeon1');
+        this.time.delayedCall(220, () => !bird.away && img.active && img.setTexture('pigeon0'));
+        if (Math.random() < 0.25) img.setFlipX(!img.flipX);
+      };
+      this.critterTimers.push(this.time.addEvent({ delay: Phaser.Math.Between(500, 900), loop: true, callback: peck }));
+    }
+  }
+
+  /** Человек подошёл близко — голуби разлетаются и через десяток секунд возвращаются. */
+  private scarePigeons(): void {
+    for (const bird of this.pigeons) {
+      if (bird.away || !bird.img.active) continue;
+      // Ноги человека на 8 ниже центра спрайта.
+      const near = [...this.people].some((p) => Math.abs(p.x - bird.home.x) < 12 && Math.abs(p.y + 8 - bird.home.y) < 14);
+      if (!near) continue;
+      bird.away = true;
+      const { img, home } = bird;
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      img.setTexture('pigeon_fly').setFlipX(dir < 0).setDepth(LIGHT_DEPTH - 1);
+      const flap = this.time.addEvent({
+        delay: 110,
+        loop: true,
+        callback: () => img.active && img.setTexture(img.texture.key === 'pigeon_fly' ? 'pigeon0' : 'pigeon_fly'),
+      });
+      this.tweens.add({
+        targets: img,
+        x: home.x + dir * Phaser.Math.Between(60, 90),
+        y: home.y - Phaser.Math.Between(70, 100),
+        alpha: 0,
+        duration: 1400,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          flap.remove();
+          this.time.delayedCall(Phaser.Math.Between(5000, 8000), () => {
+            if (!img.active) return;
+            // Прилетает обратно сверху и садится на своё место.
+            img.setPosition(home.x - dir * 50, home.y - 60).setAlpha(1).setTexture('pigeon_fly').setFlipX(dir > 0);
+            this.tweens.add({
+              targets: img,
+              x: home.x,
+              y: home.y,
+              duration: 1200,
+              ease: 'Sine.easeOut',
+              onComplete: () => {
+                img.setTexture('pigeon0').setDepth(home.y);
+                bird.away = false;
+              },
+            });
+          });
+        },
+      });
+    }
+  }
+
   /** Толстые стены с кирпичной крышкой и фасад с витринами, дверями и роллетом склада. */
   private buildShell(): void {
     const { w, h, door, warehouse } = this.layout;
@@ -1193,6 +1306,7 @@ export class StoreScene extends Phaser.Scene {
         view?.shadow.destroy();
         view?.items.forEach((img) => img.destroy());
         view?.pips.forEach((img) => img.destroy());
+        view?.low.destroy();
         view = this.buildShelf(i, shelf.kind);
         this.shelfViews[i] = view;
       }
@@ -1213,6 +1327,9 @@ export class StoreScene extends Phaser.Scene {
         }
       });
       view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
+      const few = !shelf.broken && units.length > 0 && units.length <= LOW_STOCK;
+      if (few) view.low.setText(t('shelf.low', { n: units.length }));
+      view.low.setVisible(few);
       view.needsStock = !shelf.broken && units.length === 0 && PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id]?.length ?? 0) > 0);
       view.bg.setTint(shelf.broken ? BROKEN_TINT : SHELF_LOOK[shelf.kind].tint);
     });
@@ -1230,7 +1347,21 @@ export class StoreScene extends Phaser.Scene {
     // Уровень улучшения — жёлтые точки над полкой.
     const pips = [0, 1].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 16, 'pip').setDepth(slot.y - 12));
     const glow = bg.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 8);
-    return { kind, bg, front, shadow, items, pips, glow, needsStock: false };
+    const low = this.add
+      .text(slot.x + 6, slot.y - 22, '', {
+        fontFamily: UI_FONT,
+        fontSize: '5px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        backgroundColor: '#d95763',
+        padding: { x: 2, y: 1 },
+      })
+      .setOrigin(0.5)
+      .setResolution(6)
+      .setDepth(990)
+      .setVisible(false);
+    this.tweens.add({ targets: low, y: low.y - 1.5, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    return { kind, bg, front, shadow, items, pips, low, glow, needsStock: false };
   }
 
   private refreshWarehouse(): void {
@@ -1965,6 +2096,13 @@ export class StoreScene extends Phaser.Scene {
     this.scanBar.setVisible(Boolean(scan));
     this.scanFill.setVisible(Boolean(scan));
     if (scan) this.scanFill.width = 16 * Math.min(1, (this.time.now - scan.start) / scan.total);
+    this.scanScreen.setVisible(Boolean(scan));
+    this.scanBeam.setVisible(Boolean(scan));
+    if (scan) {
+      const blink = Math.floor(this.time.now / 140) % 2;
+      this.scanScreen.setAlpha(blink ? 0.95 : 0.45);
+      this.scanBeam.setAlpha(blink ? 0.15 : 0.6);
+    }
   }
 
   private finishCheckout(c: Customer): void {

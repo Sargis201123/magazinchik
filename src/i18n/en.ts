@@ -14,6 +14,7 @@ export const en: Record<TextKey, string> = {
   'shelf.produce': 'Produce stand',
   'shelf.dairy': 'Dairy fridge',
   'shelf.meat': 'Meat fridge',
+  'shelf.low': 'Only {n} left',
 
   'hint.serve': 'Tap the register to serve a customer',
   'hint.clean': 'Tap trash or the toilet to clean — but the register stays empty meanwhile',
