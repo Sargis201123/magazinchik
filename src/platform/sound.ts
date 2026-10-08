@@ -135,6 +135,8 @@ export const sound = {
       { freq: 523, at: 0.3, dur: 0.35, wave: 'triangle', vol: 0.06 },
     ]),
 
+  /** «Чпок» товара на полке; n — какой по счёту (каждый следующий чуть выше). */
+  pop: (n = 0) => play([{ freq: 660 + n * 40, dur: 0.05, wave: 'sine', vol: 0.05, slide: 990 + n * 50 }]),
   /** Раскат грома в грозу. */
   thunder,
 

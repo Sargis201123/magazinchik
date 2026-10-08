@@ -1726,12 +1726,47 @@ export class StoreScene extends Phaser.Scene {
         ms: PLACE_MS,
         action: () => {
           this.carried.setVisible(false);
-          this.state = moveToShelf(this.state, index, undefined, CARRY).state;
-          this.refreshShelves();
-          this.refreshWarehouse();
+          this.stockShelf(index, this.seller);
         },
       },
     ]);
+  }
+
+  /** Товар из коробки на полку: штуки вылетают по одной и встают на место с «чпок». */
+  private stockShelf(index: number, by: Phaser.GameObjects.Container): void {
+    const view = this.shelfViews[index];
+    const before = view ? view.items.filter((img) => img.visible).length : 0;
+    this.state = moveToShelf(this.state, index, undefined, CARRY).state;
+    this.refreshShelves();
+    this.refreshWarehouse();
+    const items = this.shelfViews[index]?.items ?? [];
+    const fresh = items.filter((img, n) => img.visible && n >= before);
+    fresh.forEach((img, n) => {
+      const { x, y } = img;
+      const scale = img.scaleX;
+      const from = { x: by.x, y: by.y - 4 };
+      img.setPosition(from.x, from.y).setScale(scale * 0.6).setAlpha(0);
+      // Летит дугой вверх из рук на своё место и подпрыгивает.
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay: n * 90,
+        duration: 280,
+        onStart: () => {
+          img.setAlpha(1);
+          if (n % 2 === 0) sound.pop(n);
+        },
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          img.setPosition(from.x + (x - from.x) * k, from.y + (y - from.y) * k - Math.sin(k * Math.PI) * 10);
+          img.setScale(scale * (0.6 + 0.4 * k));
+        },
+        onComplete: () => {
+          img.setPosition(x, y);
+          this.tweens.add({ targets: img, scale: { from: scale * 1.35, to: scale }, duration: 140, ease: 'Back.easeOut' });
+        },
+      });
+    });
   }
 
   private cleanToilet(): void {
@@ -1930,9 +1965,7 @@ export class StoreScene extends Phaser.Scene {
       await this.workerWait(w, PLACE_MS);
       if (!this.alive(gen)) return;
       w.carried.setVisible(false);
-      this.state = moveToShelf(this.state, index, undefined, CARRY).state;
-      this.refreshShelves();
-      this.refreshWarehouse();
+      this.stockShelf(index, w.sprite);
     }
   }
 
