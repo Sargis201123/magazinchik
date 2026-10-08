@@ -1998,9 +1998,15 @@ export class StoreScene extends Phaser.Scene {
     this.obstacles.push({ x: counter.x - 13, y: counter.y - 30, w: 26, h: 54 });
   }
 
-  /** Где стоит ведро (у прохода со склада) и уличный контейнер (у роллета склада). */
+  /** Где стоит ведро (в правом нижнем углу, за кассой) и уличный контейнер (у роллета склада). */
   private binSpot(): { x: number; y: number } {
-    return { x: this.layout.warehouse.w + 14, y: this.layout.h - 26 };
+    return { x: this.layout.w - 10, y: this.layout.h - 12 };
+  }
+
+  /** Куда встать, чтобы завязать мешок: ведро у правой стены, подходим слева. */
+  private binStand(): { x: number; y: number } {
+    const bin = this.binSpot();
+    return { x: bin.x - 16, y: bin.y + 2 };
   }
 
   private dumpSpot(): { x: number; y: number } {
@@ -2048,12 +2054,11 @@ export class StoreScene extends Phaser.Scene {
 
   /** Шаги «вынести мусор»: к ведру, завязать мешок, через дверь к контейнеру, бросить и вернуться. */
   private takeOutSteps(onBag: () => void, onDump: () => void): ChoreStep[] {
-    const bin = this.binSpot();
     const dump = this.dumpSpot();
     const { door, h } = this.layout;
     const outside = h + FACADE_H + 6;
     return [
-      { x: bin.x + 9, y: bin.y + 2, ms: BAG_MS, action: onBag },
+      { ...this.binStand(), ms: BAG_MS, action: onBag },
       { x: door.x, y: door.y - 8 },
       { x: door.x, y: outside },
       { x: dump.x + 15, y: dump.y + 3, ms: DUMP_MS, action: onDump },
@@ -2783,7 +2788,7 @@ export class StoreScene extends Phaser.Scene {
       }
       this.claimedTrash.add(piece);
       if (kind === 'trash') {
-        const bin = this.binSpot();
+        const stand = this.binStand();
         void this.doChore([
           {
             x: piece.x + 6,
@@ -2796,8 +2801,7 @@ export class StoreScene extends Phaser.Scene {
             },
           },
           {
-            x: bin.x + 9,
-            y: bin.y + 2,
+            ...stand,
             ms: BIN_DROP_MS,
             action: () => {
               this.carryingTrash = false;
@@ -2990,8 +2994,8 @@ export class StoreScene extends Phaser.Scene {
         }
         w.carried.setTexture(piece.texture.key).setVisible(true);
         this.removeTrash(piece);
-        const bin = this.binSpot();
-        await this.workerWalk(w, bin.x + 9, bin.y + 2);
+        const stand = this.binStand();
+        await this.workerWalk(w, stand.x, stand.y);
         if (!this.alive(gen)) return;
         await this.workerWait(w, BIN_DROP_MS);
         w.carried.setVisible(false).setTexture('box');
