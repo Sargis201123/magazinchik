@@ -296,6 +296,7 @@ export class StoreScene extends Phaser.Scene {
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
   private boxes: Phaser.GameObjects.Image[] = [];
+  private shutters: Phaser.GameObjects.Image[] = [];
   private arrow?: Phaser.GameObjects.Image;
   /** Палец двигал камеру — это не нажатие. */
   private dragged = false;
@@ -493,6 +494,7 @@ export class StoreScene extends Phaser.Scene {
     this.shelfViews = [];
     this.boxes = [];
     this.slotDecor = [];
+    this.shutters = [];
     this.trash.clear();
     this.layout = layoutFor(this.state.level);
     this.builtLevel = this.state.level;
@@ -2213,6 +2215,7 @@ export class StoreScene extends Phaser.Scene {
     this.hud.update(this.state, DAY_SECONDS);
     if (weatherFor(this.state.day) !== this.weather) this.applyWeather();
     this.updateLighting(0);
+    this.openShop();
     showMorning({
       getState: () => this.state,
       setState: (s) => {
@@ -2279,14 +2282,42 @@ export class StoreScene extends Phaser.Scene {
     this.refreshShelves();
     this.refreshWarehouse();
     this.hud.update(this.state, 0);
-    sound.fanfare();
-    this.hud.showSummary(
-      finishedDay,
-      this.stats,
-      { before: ratingBefore, after: state.rating },
-      { bill: bill && billTotal(bill), shortfall, total: state.money },
-      extra,
-      () => this.showMorning(),
-    );
+    // Магазин закрывается: опускаются роллеты, потом — итоги дня.
+    this.closeShop();
+    this.time.delayedCall(1500, () => {
+      sound.fanfare();
+      this.hud.showSummary(
+        finishedDay,
+        this.stats,
+        { before: ratingBefore, after: state.rating },
+        { bill: bill && billTotal(bill), shortfall, total: state.money },
+        extra,
+        this.state.history,
+        () => this.showMorning(),
+      );
+    });
+  }
+
+  /** Вечером на витрины, дверь и склад опускаются роллеты. */
+  private closeShop(): void {
+    const { h, door, w, warehouse } = this.layout;
+    const spots = [{ x: door.x, w: 32 }, { x: warehouse.x + warehouse.w / 2, w: 24 }];
+    for (let x = warehouse.x + warehouse.w + 8 + 10; x < w - 10; x += 24) {
+      if (Math.abs(x - door.x) > 24) spots.push({ x, w: 20 });
+    }
+    for (const spot of spots) {
+      const shutter = this.art(spot.x, h + 0.5, 'shutter').setOrigin(0.5, 0).setDepth(h + 3);
+      shutter.setDisplaySize(spot.w, 0.1);
+      this.tweens.add({ targets: shutter, displayHeight: FACADE_H - 1, duration: 900, ease: 'Bounce.easeOut', delay: Math.random() * 200 });
+      this.shutters.push(shutter);
+    }
+  }
+
+  /** Утром роллеты поднимаются. */
+  private openShop(): void {
+    for (const shutter of this.shutters) {
+      this.tweens.add({ targets: shutter, displayHeight: 0.1, duration: 600, ease: 'Quad.easeIn', onComplete: () => shutter.destroy() });
+    }
+    this.shutters = [];
   }
 }

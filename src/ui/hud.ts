@@ -51,18 +51,43 @@ export class Hud {
     rating: { before: number; after: number },
     money: { bill: number | null; shortfall: number; total: number },
     extra: [string, string][],
+    history: number[],
     onNext: () => void,
   ): void {
     const { card, close } = openModal();
     card.append(el('h2', '', t('summary.title', { n: day })));
+    // Главное — крупными плитками.
+    const arrowRating = rating.after > rating.before ? '▲' : rating.after < rating.before ? '▼' : '';
+    const tiles = el('div', 'ui-tiles');
+    const tile = (value: string, label: string, tone = '') => {
+      const box = el('div', `ui-tile ${tone}`);
+      box.append(el('b', '', value), el('span', '', label));
+      tiles.append(box);
+    };
+    tile(`💰 ${stats.revenue}`, t('summary.revenue'), 'good');
+    tile(`🙂 ${stats.served}`, t('summary.served'));
+    tile(`🚶 ${stats.lost}`, t('summary.lost'), stats.lost > stats.served / 3 ? 'bad' : '');
+    tile(`★ ${rating.after.toFixed(1)} ${arrowRating}`, t('summary.rating'), arrowRating === '▼' ? 'bad' : arrowRating ? 'good' : '');
+    card.append(tiles);
+    // Выручка за последние 7 дней: сегодня — жёлтым.
+    const week = history.slice(-7);
+    if (week.length > 1) {
+      const chart = el('div', 'ui-chart');
+      const max = Math.max(...week, 1);
+      week.forEach((value, i) => {
+        const col = el('div', 'ui-chart-col');
+        const bar = el('div', `ui-chart-bar${i === week.length - 1 ? ' today' : ''}`);
+        bar.style.height = `${Math.max(4, Math.round((value / max) * 100))}%`;
+        col.append(el('span', 'ui-chart-value', String(value)), bar, el('span', 'ui-chart-day', String(day - week.length + 1 + i)));
+        chart.append(col);
+      });
+      card.append(el('div', 'ui-muted', t('summary.week')), chart);
+    }
     const row = (label: string, value: string | number) => {
       const r = el('div', 'ui-row');
       r.append(el('span', '', label), el('b', '', String(value)));
       card.append(r);
     };
-    row(t('summary.revenue'), `💰 ${stats.revenue}`);
-    row(t('summary.served'), stats.served);
-    row(t('summary.lost'), stats.lost);
     row(t('summary.complaints'), stats.complaints);
     row(t('summary.spoiled'), stats.spoiled);
     if (stats.stolen) row(t('summary.stolen'), `−${stats.stolen} 💰`);
@@ -72,8 +97,7 @@ export class Hud {
     if (money.bill !== null) row(t('summary.bills'), `−${money.bill} 💰`);
     row(t('summary.money'), `${money.total} 💰`);
     if (money.shortfall > 0) card.append(el('div', 'ui-note', t('summary.shortfall', { n: money.shortfall })));
-    const arrow = rating.after > rating.before ? '▲' : rating.after < rating.before ? '▼' : '';
-    row(t('summary.rating'), `${rating.before.toFixed(1)} → ${rating.after.toFixed(1)}★ ${arrow}`);
+    row(t('summary.rating'), `${rating.before.toFixed(1)} → ${rating.after.toFixed(1)}★ ${arrowRating}`);
     card.append(
       button(t('summary.next'), () => {
         close();

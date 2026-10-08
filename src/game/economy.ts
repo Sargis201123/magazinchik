@@ -99,6 +99,9 @@ export const STORE_LEVELS: StoreLevel[] = [
  * Игровой месяц — 7 дней (~15–20 минут игры). В конце месяца приходят счета:
  * аренда, коммуналка, электричество, зарплаты и платёж по кредиту.
  */
+/** Сколько последних дней помнить для графика выручки. */
+export const HISTORY_DAYS = 14;
+
 export const MONTH_DAYS = 7;
 /** Не хватило денег на счета — недостача уходит в долг, сверху пени. */
 export const LATE_PENALTY = 0.1;
@@ -326,6 +329,8 @@ export interface StoreState {
   story: StoryState;
   /** Оформление магазина. */
   decor: DecorState;
+  /** Выручка последних дней — для графика в итогах дня. */
+  history: number[];
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -377,6 +382,7 @@ export const newGame = (): StoreState => ({
   album: [],
   story: { chapter: 0, introSeen: false, ordersDone: 0, inspectionsPassed: 0 },
   decor: newDecor(),
+  history: [],
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [
@@ -729,6 +735,7 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
     day: state.day + 1,
     money: state.money - skimmed,
     totalRevenue: state.totalRevenue + stats.revenue,
+    history: [...(state.history ?? []), stats.revenue].slice(-HISTORY_DAYS),
     rating: Math.round(rating * 100) / 100,
     warehouse: warehouse.stock,
     shelves,

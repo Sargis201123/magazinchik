@@ -64,6 +64,20 @@ const css = `
 @keyframes ui-tip { 50% { transform: translateY(-3px); } }
 .ui-pulse { animation: ui-pulse 1s ease-in-out infinite; }
 @keyframes ui-pulse { 50% { transform: scale(1.12); background: #fee761; } }
+.ui-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0 8px; }
+.ui-tile { border: 2px solid #2b2233; border-radius: 6px; background: #fbf6ea; padding: 6px 8px; display: flex;
+  flex-direction: column; }
+.ui-tile b { font-size: 20px; }
+.ui-tile span { font-size: 12px; color: #7a7066; }
+.ui-tile.good { background: #e3f5d6; }
+.ui-tile.bad { background: #fbe0dc; }
+.ui-chart { display: flex; align-items: flex-end; gap: 6px; height: 96px; margin: 4px 0 10px; padding: 4px;
+  border: 2px solid #2b2233; border-radius: 6px; background: #fbf6ea; }
+.ui-chart-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.ui-chart-bar { width: 100%; background: #8fd16a; border: 2px solid #2b2233; border-bottom: 0; border-radius: 3px 3px 0 0; }
+.ui-chart-bar.today { background: #fee761; }
+.ui-chart-value { font-size: 10px; color: #5a5048; }
+.ui-chart-day { font-size: 10px; color: #7a7066; }
 .ui-bump { display: inline-block; animation: ui-bump .35s ease-out; }
 @keyframes ui-bump { 40% { transform: scale(1.25); background: rgba(143, 209, 106, .85); } }
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }

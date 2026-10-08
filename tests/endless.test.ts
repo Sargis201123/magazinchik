@@ -139,9 +139,12 @@ describe('звание магазина', () => {
     expect(rankName(9, t)).toBe('rank.6 IV');
   });
 
-  it('выручка дня копится в общей выручке', () => {
-    const state = shop({ totalRevenue: 100 });
+  it('выручка дня копится в общей выручке и в истории для графика', () => {
+    const state = shop({ totalRevenue: 100, history: [10, 20] });
     const { state: next } = endDay(state, { ...emptyDayStats(), revenue: 250 }, rng(1));
     expect(next.totalRevenue).toBe(350);
+    expect(next.history).toEqual([10, 20, 250]);
+    const long = shop({ history: Array.from({ length: 14 }, (_, i) => i) });
+    expect(endDay(long, { ...emptyDayStats(), revenue: 99 }, rng(1)).state.history).toHaveLength(14);
   });
 });

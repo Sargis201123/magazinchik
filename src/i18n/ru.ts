@@ -365,6 +365,7 @@ export const ru = {
   'decor.aquarium': 'Аквариум с рыбками',
   'title.musicOn': '🎵 Музыка',
   'title.musicOff': '🎵 Без музыки',
+  'summary.week': 'Выручка за неделю',
   'popup.rush': "Час пик!",
   'popup.broken': "Холодильник сломан",
   'hint.inspector': "Инспектор в зале! Быстро убери мусор и туалет",

@@ -367,6 +367,7 @@ export const en: Record<TextKey, string> = {
   'decor.aquarium': 'Fish tank',
   'title.musicOn': '🎵 Music',
   'title.musicOff': '🎵 No music',
+  'summary.week': 'Revenue this week',
   'popup.rush': "Rush hour!",
   'popup.broken': "Fridge is broken",
   'hint.inspector': "The inspector is here! Quickly clean the trash and toilet",
