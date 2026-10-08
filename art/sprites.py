@@ -509,6 +509,126 @@ def box():
     c.save("box")
 
 
+# ---------------------------------------------------------------- склад
+# Тара 16×16 (в мире 8×8): у каждого товара своя, товар виден сверху.
+
+
+def crate_bread():
+    """Хлеб в картонном лотке."""
+    c = Canvas(16, 16)
+    for x in (1, 6, 10):
+        c.ellipse(x + 2.5, 7, 2.6, 2.2, "n")
+        c.px(x + 1, 6, "N")
+        c.px(x + 2, 6, "N")
+        c.px(x + 3, 7, "B")
+    c.rect(0, 9, 16, 6, "B")
+    c.hline(0, 9, 16, "n")
+    c.hline(0, 14, 16, "a")
+    c.rect(5, 11, 6, 2, "N")
+    c.outline("k")
+    c.save("crate_bread")
+
+
+def crate_apples():
+    """Яблоки в деревянном ящике."""
+    c = Canvas(16, 16)
+    for x, y in ((3, 7), (7, 6), (11, 7), (5, 5), (10, 5)):
+        c.ellipse(x + 0.5, y + 0.5, 2.1, 2.1, "R")
+        c.px(x - 1, y - 1, "w")
+        c.px(x + 1, y + 1, "r")
+    c.px(7, 3, "e")
+    c.px(10, 3, "e")
+    c.rect(0, 8, 16, 7, "B")
+    c.hline(0, 8, 16, "n")
+    c.hline(0, 11, 16, "a")
+    c.hline(0, 14, 16, "a")
+    c.vline(0, 8, 7, "a")
+    c.vline(15, 8, 7, "a")
+    c.outline("k")
+    c.save("crate_apples")
+
+
+def crate_potatoes():
+    """Картошка в мешке: мешковина, перевязанная горловина, картошка сверху."""
+    c = Canvas(16, 16)
+    c.ellipse(8, 11, 7, 4.6, "n")
+    c.ellipse(6, 10, 4, 3, "N")
+    c.ellipse(10.5, 12.5, 4, 2.2, "B")
+    c.speckle(2, 7, 12, 8, ["B", "a"], 10, 7)
+    c.rect(5, 5, 6, 3, "n")
+    c.vline(5, 5, 3, "N")
+    c.hline(5, 7, 6, "b")
+    c.px(11, 7, "b")
+    c.px(12, 8, "b")
+    c.ellipse(8, 4, 4.2, 1.6, "a")
+    for x, y in ((5.5, 3), (8.5, 2.5), (10.5, 3.5)):
+        c.ellipse(x, y, 1.7, 1.3, "B")
+        c.px(int(x) - 1, int(y) - 1, "n")
+    c.outline("k")
+    c.save("crate_potatoes")
+
+
+def crate_milk():
+    """Молоко в синем пластиковом ящике."""
+    c = Canvas(16, 16)
+    for i, x in enumerate((1, 5, 9, 12)):
+        top = 3 if i % 2 == 0 else 4
+        c.rect(x, top + 1, 3, 6, "w")
+        c.vline(x + 2, top + 1, 6, "W")
+        c.rect(x, top, 3, 1, "U" if i != 2 else "R")
+    c.rect(0, 8, 16, 7, "U")
+    c.hline(0, 8, 16, "c")
+    for x in range(2, 15, 3):
+        c.rect(x, 10, 2, 3, "u")
+    c.hline(0, 14, 16, "u")
+    c.outline("k")
+    c.save("crate_milk")
+
+
+def crate_meat():
+    """Мясо в пенопластовом термобоксе с приоткрытой крышкой."""
+    c = Canvas(16, 16)
+    c.rect(1, 6, 9, 3, "R")
+    c.px(2, 6, "s")
+    c.px(5, 7, "w")
+    c.px(7, 6, "s")
+    c.rect(0, 8, 16, 7, "W")
+    c.hline(0, 8, 16, "w")
+    c.hline(0, 14, 16, "l")
+    c.rect(5, 10, 6, 3, "w")
+    c.rect(6, 11, 4, 1, "R")
+    # Крышка сдвинута вправо.
+    c.rect(8, 4, 8, 3, "w")
+    c.hline(8, 6, 8, "W")
+    c.outline("k")
+    c.save("crate_meat")
+
+
+def rack():
+    """Секция складского стеллажа 120×19 (в мире 60×9,5): синие стойки, оранжевая балка."""
+    c = Canvas(120, 19)
+    for x in (2, 114):
+        c.rect(x, 0, 4, 19, "u")
+        c.vline(x, 0, 19, "U")
+        for y in range(2, 18, 4):
+            c.px(x + 2, y, "k")
+    c.rect(0, 16, 120, 3, "o")
+    c.hline(0, 16, 120, "Y")
+    c.hline(0, 18, 120, "r")
+    c.frame(2, 0, 4, 19, "k")
+    c.frame(114, 0, 4, 19, "k")
+    c.save("rack")
+
+
+def crates():
+    crate_bread()
+    crate_apples()
+    crate_potatoes()
+    crate_milk()
+    crate_meat()
+    rack()
+
+
 def trash():
     """Мусор 12×10: смятая бумажка и обёртка."""
     c = Canvas(12, 10)
@@ -1104,6 +1224,7 @@ def main():
     wc()
     door()
     box()
+    crates()
     trash()
     items()
     people()

@@ -98,6 +98,9 @@ const PICKUP_MS = 500;
 const PLACE_MS = 400;
 /** Одна коробка на складе изображает минимум столько штук товара. */
 const UNITS_PER_BOX = 3;
+/** Склад: стеллаж из 6 ярусов по 6 мест. */
+const WAREHOUSE_COLS = 6;
+const WAREHOUSE_ROWS = 6;
 
 const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
   bakery: { texture: 'shelf', tint: 0xffffff },
@@ -193,8 +196,6 @@ export class StoreScene extends Phaser.Scene {
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
   private boxes: Phaser.GameObjects.Image[] = [];
-  /** Картинка товара на каждой коробке склада. */
-  private boxIcons: Phaser.GameObjects.Image[] = [];
   private customers = new Set<Customer>();
   private queue: Customer[] = [];
   private trash = new Set<Phaser.GameObjects.Image>();
@@ -317,7 +318,6 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.killAll();
     this.shelfViews = [];
     this.boxes = [];
-    this.boxIcons = [];
     this.trash.clear();
     this.layout = layoutFor(this.state.level);
     this.builtLevel = this.state.level;
@@ -421,10 +421,20 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
+  /** Центр ряда тары на складе: ряды стоят на балках стеллажа. */
+  private warehouseRowY(row: number): number {
+    return this.layout.warehouse.y + 16 + row * 8;
+  }
+
   private buildWarehouse(): void {
     const { x, y, w, h, doorway } = this.layout.warehouse;
     const wallColor = 0x4a3b52;
     this.add.tileSprite(x, y, w, h, 'concrete').setOrigin(0).setTileScale(1 / ART);
+    // Складской стеллаж: на каждой балке — ряд тары.
+    for (let row = 0; row < WAREHOUSE_ROWS; row++) {
+      const rowY = this.warehouseRowY(row);
+      this.art(x, rowY - 4, 'rack').setOrigin(0).setDepth(rowY - 101);
+    }
     this.add.rectangle(x, y - 3, w + 4, 3, wallColor).setOrigin(0);
     // Правая стена с проёмом.
     this.add.rectangle(x + w, y, 4, doorway.y - 10 - y, wallColor).setOrigin(0);
@@ -487,21 +497,16 @@ export class StoreScene extends Phaser.Scene {
     const perBox = Math.max(UNITS_PER_BOX, Math.ceil(warehouseCapacity(this.state) / 30));
     const boxes = PRODUCT_IDS.flatMap((id) =>
       Array.from({ length: Math.ceil((this.state.warehouse[id]?.length ?? 0) / perBox) }, () => id),
-    ).slice(0, 36);
-    while (this.boxes.length < boxes.length) {
-      this.boxes.push(this.art(0, 0, 'box').setDepth(this.layout.warehouse.y + 1));
-      this.boxIcons.push(this.art(0, 0, 'item').setScale(0.55 / ART).setDepth(this.layout.warehouse.y + 2));
-    }
+    ).slice(0, WAREHOUSE_COLS * WAREHOUSE_ROWS);
+    while (this.boxes.length < boxes.length) this.boxes.push(this.art(0, 0, 'box'));
     this.boxes.forEach((img, n) => {
       const id = boxes[n];
-      const icon = this.boxIcons[n];
       img.setVisible(Boolean(id));
-      icon.setVisible(Boolean(id));
       if (!id) return;
-      const x = this.layout.warehouse.x + 8 + (n % 6) * 9;
-      const y = this.layout.warehouse.y + 16 + Math.floor(n / 6) * 8;
-      img.setPosition(x, y);
-      icon.setPosition(x, y + 1).setTexture(`item_${id}`);
+      // У каждого товара своя тара: лоток, ящик, мешок, пластиковый ящик, термобокс.
+      const row = Math.floor(n / WAREHOUSE_COLS);
+      const y = this.warehouseRowY(row);
+      img.setPosition(this.layout.warehouse.x + 8 + (n % WAREHOUSE_COLS) * 9, y).setTexture(`crate_${id}`).setDepth(y - 100);
     });
   }
 

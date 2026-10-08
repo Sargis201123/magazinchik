@@ -20,6 +20,8 @@ const SPRITES = [
   'wc',
   'door',
   'box',
+  'rack',
+  ...['bread', 'apples', 'potatoes', 'milk', 'meat'].map((id) => `crate_${id}`),
   'trash',
   'bubble',
   'pip',
