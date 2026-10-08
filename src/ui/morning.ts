@@ -33,6 +33,7 @@ import {
   shelfFree,
   shelfResale,
   storeLevel,
+  STORE_LEVELS,
   upgradeCost,
   upgradeShelf,
   warehouseCapacity,
@@ -87,6 +88,7 @@ import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
+import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES } from '../game/upgrades';
 
 /** Высота «голоса» героев в диалогах. */
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
@@ -486,6 +488,32 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   };
 
   /** Оформление: по каждому виду — «как было», купленное (переставить) и что можно купить. */
+  /** Улучшения кассы: терминал и касса самообслуживания. */
+  const upgradesBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('upgrade.title')));
+    for (const id of UPGRADE_IDS) {
+      const up = UPGRADES[id];
+      const owned = hasUpgrade(state, id);
+      const row = el('div', 'ui-item');
+      row.append(el('div', 'ui-ad-icon', up.icon));
+      const body = el('div');
+      const name = el('div', 'ui-item-name', t(up.nameKey));
+      if (!owned) name.append(el('span', 'ui-tag', `${up.price} 💰`));
+      const sub = state.level < up.minLevel ? t('upgrade.needLevel', { name: t(STORE_LEVELS[up.minLevel].nameKey) }) : t(up.descKey);
+      body.append(name, el('div', 'ui-item-sub', sub));
+      const actions = el('div', 'ui-item-actions');
+      actions.append(
+        owned
+          ? el('span', 'ui-tag', '✓')
+          : button(t('upgrade.buy'), () => update(buyUpgrade(getState(), id), 'success'), 'ui-chip', state.level < up.minLevel || state.money < up.price),
+      );
+      row.append(body, actions);
+      box.append(row);
+    }
+    return box;
+  };
+
   /** Реклама: карточка на каждый вид — иконка, что даёт, цена и кнопка. */
   const adsBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
@@ -843,7 +871,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const storeTab = (state: StoreState): HTMLElement[] => {
     const level = storeLevel(state);
     const next = nextStoreLevel(state);
-    const out: HTMLElement[] = [achievementsButton(state), adsBox(state), rankBox(state), albumBox(state), decorBox(state)];
+    const out: HTMLElement[] = [achievementsButton(state), adsBox(state), upgradesBox(state), rankBox(state), albumBox(state), decorBox(state)];
 
     const current = el('div', 'ui-box');
     current.append(

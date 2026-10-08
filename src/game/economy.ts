@@ -337,6 +337,8 @@ export interface StoreState {
   lifetime: Lifetime;
   /** Подарок за ежедневный вход: когда забрали последний (дата YYYY-MM-DD) и какой по счёту день подряд. */
   gift: { lastDate: string; streak: number };
+  /** Купленные улучшения кассы (upgrades.ts). */
+  upgrades?: string[];
   /** Реклама: какая и в какие дни (включительно) работает. */
   ads?: { id: 'flyers' | 'banner' | 'blogger'; from: number; until: number };
   /** 0..5 звёзд, влияет на поток покупателей. */

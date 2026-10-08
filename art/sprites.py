@@ -2440,6 +2440,34 @@ def live_events():
     c.save("drip")
 
 
+def checkout_upgrades():
+    """Терминал для карт на прилавке и касса самообслуживания у стены."""
+    c = Canvas(10, 12)
+    c.round_rect(1, 1, 8, 10, "K", r=1)
+    c.rect(2, 2, 6, 3, "E")
+    for y in (6, 8):
+        for x in (2, 4, 6):
+            c.px(x, y, "W")
+    c.outline("k")
+    c.save("card_terminal")
+    c = Canvas(24, 38)
+    c.round_rect(3, 2, 18, 34, "W", r=2)
+    c.vline(4, 3, 32, "w")
+    c.vline(20, 3, 32, "l")
+    c.rect(5, 4, 14, 11, "K")
+    c.rect(6, 5, 12, 9, "u")
+    c.hline(7, 7, 6, "c")
+    c.hline(7, 9, 9, "U")
+    c.hline(7, 11, 4, "c")
+    c.rect(6, 17, 12, 4, "G")
+    c.hline(7, 18, 10, "R")
+    c.rect(7, 23, 10, 6, "K")
+    c.rect(8, 24, 8, 2, "E")
+    c.rect(4, 32, 16, 3, "G")
+    c.outline("k")
+    shadowed(c, 12, 36, 9, 2).save("kiosk")
+
+
 def environment2():
     building()
     lot2()
@@ -2463,6 +2491,7 @@ def environment2():
     bins()
     ad_things()
     live_events()
+    checkout_upgrades()
 
 
 # ---------------------------------------------------------------- люди

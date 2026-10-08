@@ -57,6 +57,8 @@ const SPRITES = [
   'fusebox',
   'leak',
   'wrench',
+  'card_terminal',
+  'kiosk',
   'floor_wood',
   'floor_checker',
   'floor_gold',

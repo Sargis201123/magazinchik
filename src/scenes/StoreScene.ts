@@ -74,6 +74,7 @@ import { liveProgress, recordDay, unlockAchievements, type AchievementId } from 
 import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
 import { activeAd } from '../game/ads';
+import { hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
 import { activeDecor } from '../game/decor';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
@@ -423,6 +424,10 @@ export class StoreScene extends Phaser.Scene {
   private nightLights: NightLight[] = [];
   /** Мебель в зале (в координатах центра человека): люди обходят её. */
   private obstacles: Rect[] = [];
+  /** Касса самообслуживания (если куплена): картинка, экран и занята ли она. */
+  private kiosk?: Phaser.GameObjects.Image;
+  private kioskScreen?: Phaser.GameObjects.Rectangle;
+  private kioskBusy = false;
   /** Мини-событие дня: что сейчас происходит и всё, что его рисует. */
   private liveEvent: LiveKind | null = null;
   private liveObjs: { destroy: () => void }[] = [];
@@ -744,6 +749,7 @@ export class StoreScene extends Phaser.Scene {
     this.fuseBox = this.art(wc.x - 24, 18, 'fusebox').setDepth(3);
     this.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.fixFuse()));
     this.fuseGlow = this.fuseBox.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 6);
+    this.buildUpgrades();
     // Полоска пробивки над кассой.
     this.scanBar = this.add.rectangle(counter.x - 9, counter.y - 31, 18, 4, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
     this.scanFill = this.add.rectangle(counter.x - 8, counter.y - 31, 0, 2, 0x63c74d).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
@@ -1142,6 +1148,47 @@ export class StoreScene extends Phaser.Scene {
         }
       });
     }
+  }
+
+  /** Терминал на прилавке и касса самообслуживания у правой стены — если куплены. */
+  private buildUpgrades(): void {
+    const { counter, w, wallH } = this.layout;
+    if (hasUpgrade(this.state, 'terminal')) this.art(counter.x + 3, counter.y - 4, 'card_terminal').setDepth(counter.y + 22);
+    this.kiosk = undefined;
+    this.kioskBusy = false;
+    if (!hasUpgrade(this.state, 'selfCheckout')) return;
+    const at = { x: w - 8, y: wallH + 86 };
+    this.kiosk = this.art(at.x, at.y, 'kiosk').setDepth(at.y + 9);
+    this.kioskScreen = this.add.rectangle(at.x, at.y - 9, 6, 4, 0x2ce8f5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(at.y + 10);
+    this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
+  }
+
+  /** Покупатель с 1–2 товарами, пока у кассы очередь, пробивает себя сам. */
+  private async useKiosk(c: Customer): Promise<boolean> {
+    const kiosk = this.kiosk;
+    if (!kiosk?.active || this.kioskBusy || c.thief || c.items.length > KIOSK_MAX_ITEMS || this.queue.length === 0) return false;
+    this.kioskBusy = true;
+    await this.walk(c.sprite, kiosk.x - 14, kiosk.y + 4);
+    if (c.gone || !c.sprite.active) {
+      this.kioskBusy = false;
+      return true;
+    }
+    this.setFacing(c.sprite, 'right');
+    c.serving = true;
+    for (const { id } of c.items) {
+      await this.wait(KIOSK_ITEM_SECONDS * 1000);
+      if (!this.sys.isActive()) return true;
+      const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(1.5 / ART).setDepth(1000);
+      this.tweens.add({ targets: item, x: kiosk.x, y: kiosk.y - 6, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
+      sound.scan();
+      this.kioskScreen?.setAlpha(0.9);
+      this.time.delayedCall(150, () => this.kioskScreen?.setAlpha(0.3));
+    }
+    await this.wait(KIOSK_PAY_SECONDS * 1000);
+    this.kioskBusy = false;
+    if (!this.sys.isActive()) return true;
+    this.finishCheckout(c, { x: kiosk.x - 10, y: kiosk.y - 12 });
+    return true;
   }
 
   /** Начало мини-события дня. */
@@ -2847,7 +2894,7 @@ export class StoreScene extends Phaser.Scene {
         await this.wait(100);
         continue;
       }
-      await this.scanCustomer(front, cashierScan(w.member), false);
+      await this.scanCustomer(front, withUpgrades(this.state, cashierScan(w.member)), false);
     }
   }
 
@@ -3155,6 +3202,7 @@ export class StoreScene extends Phaser.Scene {
 
     if (Math.random() < TOILET_CHANCE) await this.visitToilet(c);
 
+    if (await this.useKiosk(c)) return;
     this.queue.push(c);
     await this.walk(c.sprite, this.layout.queue.x, this.queueSpotY(this.queue.length - 1));
     if (c.gone) return;
@@ -3217,7 +3265,7 @@ export class StoreScene extends Phaser.Scene {
     const c = this.queue[0];
     if (!c || c.serving || !this.isAtRegister(c)) return;
     haptic.tap();
-    void this.scanCustomer(c, ownerScan(this.state.ownerServed), true);
+    void this.scanCustomer(c, withUpgrades(this.state, ownerScan(this.state.ownerServed)), true);
   }
 
   /**
@@ -3294,7 +3342,7 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
-  private finishCheckout(c: Customer): void {
+  private finishCheckout(c: Customer, where?: { x: number; y: number }): void {
     this.queue = this.queue.filter((q) => q !== c);
 
     const { state, total } = checkout(this.state, c.items);
@@ -3307,12 +3355,13 @@ export class StoreScene extends Phaser.Scene {
     sound.coin();
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
-    this.popup(this.layout.sellerHome.x - 8, this.layout.sellerHome.y - 18, `+${total} 💰`, '#c8ffb0');
+    const at = where ?? { x: this.layout.sellerHome.x - 8, y: this.layout.sellerHome.y - 18 };
+    this.popup(at.x, at.y, `+${total} 💰`, '#c8ffb0');
     this.combo = this.time.now - this.lastSaleAt < COMBO_WINDOW_MS ? this.combo + 1 : 1;
     this.lastSaleAt = this.time.now;
     this.stats.bestCombo = Math.max(this.stats.bestCombo, this.combo);
     // В серии монет летит больше.
-    this.flyCoins(this.layout.counter.x, this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)) + Math.min(this.combo - 1, 5));
+    this.flyCoins(where?.x ?? this.layout.counter.x, where?.y ?? this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)) + Math.min(this.combo - 1, 5));
     if (this.combo >= 2) this.celebrateCombo(this.combo);
 
     const dirty = this.trash.size >= TRASH_COMPLAINT || this.binFull();
@@ -3610,10 +3659,11 @@ export class StoreScene extends Phaser.Scene {
         const staffChanged = s.staff !== this.state.staff;
         const decorChanged = s.decor !== this.state.decor;
         const adsChanged = s.ads !== this.state.ads;
+        const upgradesChanged = s.upgrades !== this.state.upgrades;
         this.state = s;
         saveGame(s);
         if (s.level > this.builtLevel) void this.celebrateExpansion();
-        else if (s.level !== this.builtLevel || decorChanged) this.buildWorld();
+        else if (s.level !== this.builtLevel || decorChanged || upgradesChanged) this.buildWorld();
         else if (staffChanged) this.syncStaff();
         if (adsChanged) this.applyAds();
         this.awaitingBoxes = this.boxesToDeliver();
