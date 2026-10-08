@@ -2,7 +2,7 @@
 // Это то, что раньше было видно только в симуляторе: где магазин теряет деньги.
 
 import { PRODUCTS, staffOf, type DayStats, type LostReason, type ProductId, type StoreState } from './economy';
-import { hasUpgrade } from './upgrades';
+import { CASHIER_ROLES, nextRegisterCount, registerCount } from './registers';
 import type { TextKey } from '../i18n/ru';
 
 export const LOST_REASONS: LostReason[] = ['queue', 'empty', 'expensive', 'eduard'];
@@ -36,12 +36,14 @@ export function lossAdvice(stats: DayStats, state: StoreState): LossAdvice[] {
     .map(({ reason, count }): LossAdvice => {
       switch (reason) {
         case 'queue': {
+          // Свободная касса без кассира → нанять; все заняты → расширить (будет ещё касса); дальше — учить.
+          const free = CASHIER_ROLES.slice(0, registerCount(state)).filter((r) => !staffOf(state, r)).length;
           const key: TextKey = !staffOf(state, 'cashier')
             ? 'loss.queue.hire'
-            : !hasUpgrade(state, 'register2')
-              ? 'loss.queue.register'
-              : !staffOf(state, 'cashier2')
-                ? 'loss.queue.hire2'
+            : free > 1
+              ? 'loss.queue.hire2'
+              : (nextRegisterCount(state) ?? 0) > registerCount(state)
+                ? 'loss.queue.register'
                 : 'loss.queue.train';
           return { reason, count, key, params: {} };
         }

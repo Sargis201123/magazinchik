@@ -78,18 +78,18 @@ import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
 import { activeAd } from '../game/ads';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
-import { carryOf, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, UPGRADES, withUpgrades } from '../game/upgrades';
+import { carryOf, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
 import { activeDecor } from '../game/decor';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
-import { BREW_SECONDS, COFFEE_PRICE, coffeeChance, cupsOf, useCup } from '../game/coffee';
+import { coffeeChance, cupsOf, useCup } from '../game/coffee';
+import { binCapacity, binSprite, brewSeconds, coffeePrice, coffeeSprite, ovenBake, ovenBatchCost, ovenSprite, registerSprite } from '../game/gear';
+import { CASHIER_ROLES, nextRegisterCount, registerCount, registerOfRole } from '../game/registers';
 import {
   AROMA_SECONDS,
   AROMA_TOLERANCE,
-  OVEN_BAKE_SECONDS,
-  OVEN_BATCH_COST,
   OVEN_BURN_SECONDS,
   startBatch,
   takeOutBread,
@@ -128,6 +128,8 @@ const TUTORIAL_DAYS = 3;
 const LOW_STOCK = 2;
 /** Высота видимой крышки мебели (TOP в art/sprites.py, в точках мира). */
 const FURNITURE_TOP = 6;
+/** На сколько выше по залу стоит следующая пара касс. */
+const REGISTER_ROW = 60;
 /** Насколько далеко можно отвести камеру от магазина пальцем. */
 const CAMERA_REACH = 200;
 /** Толщина наружных стен и высота фасада (в точках мира). */
@@ -198,7 +200,6 @@ const MUD_CHANCE = 0.15;
 const MAX_MUD = 2;
 const MOP_MS = 1300;
 /** Сколько мусора влезает в ведро. Полное ведро пахнет — покупатели жалуются, проверка снимает баллы. */
-const BIN_CAPACITY = 5;
 const BIN_DROP_MS = 250;
 /** Завязать мешок и бросить его в контейнер на улице. */
 const BAG_MS = 600;
@@ -319,6 +320,8 @@ function withCompanionItems(look: Look): Look {
 const STAFF_ACC: Record<StaffRole, { acc: Accessory; tint: number }> = {
   cashier: { acc: 'apron', tint: 0xffffff },
   cashier2: { acc: 'apron', tint: 0xffffff },
+  cashier3: { acc: 'apron', tint: 0xffffff },
+  cashier4: { acc: 'apron', tint: 0xffffff },
   cleaner: { acc: 'apron', tint: 0x5fcde4 },
   loader: { acc: 'vest', tint: 0xffffff },
   guard: { acc: 'badge', tint: 0xffffff },
@@ -328,7 +331,7 @@ const THIEF_SHIRT = 0x45444f;
 const CAR_COLORS = [0xe43b44, 0x0099db, 0x3e8948, 0xfeae34, 0xc0cbdc, 0x68386c, 0x262b44];
 const THIEF_SPEED = 52;
 /** Форма сотрудников. */
-const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082 };
+const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082 };
 const STAFF_SPEED = 60;
 /** Сколько кассир пробивает одного покупателя при обычной скорости. */
 const INSPECTOR_SHIRT = 0x222034;
@@ -348,7 +351,7 @@ const ORDER_GUESTS: Record<ClientId, [Look, TextKey]> = {
   valya: [VALYA, 'who.valya'],
 };
 const OWNER: Look = { shirt: 0x8fd16a, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short' };
-const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cleaner: 'short', loader: 'short', guard: 'cap' };
+const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap' };
 /** На какой секунде дня приходит инспектор. */
 const INSPECTOR_AT = 25;
 const BROKEN_TINT = 0x8a8a8a;
@@ -730,10 +733,11 @@ export class StoreScene extends Phaser.Scene {
     // Очередь растёт — подсказать, что поможет: кассир, вторая касса или встать за неё самому.
     if (this.queue.length >= 4 && this.state.day > TUTORIAL_DAYS) {
       if (!staffOf(this.state, 'cashier')) return t('hint.queueHire');
-      if (!this.registers[1] && this.state.level >= UPGRADES.register2.minLevel) return t('hint.queueRegister');
+      if (this.registers.every((_, i) => this.operator(i) !== null) && (nextRegisterCount(this.state) ?? 0) > this.registers.length)
+        return t('hint.queueRegister');
     }
-    if (this.registers[1] && this.operator(1) === 'owner' && this.registers[1].customer && !this.registers[1].customer.serving && !this.sellerBusy)
-      return t('hint.register2');
+    const extra = this.registers.findIndex((r, i) => i > 0 && this.operator(i) === 'owner' && r.customer && !r.customer.serving);
+    if (extra > 0 && !this.sellerBusy) return t('hint.register2');
     if (this.state.day <= 4 && this.shelfNeedsRestock()) return t('hint.restock');
     if (this.binFull() && !this.binBusy) return t('hint.bin');
     if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
@@ -870,7 +874,7 @@ export class StoreScene extends Phaser.Scene {
       .on('pointerup', () => this.tap(() => this.cleanToilet()));
 
     this.art(counter.x + 2, counter.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(counter.y + 19);
-    this.art(counter.x, counter.y + FURNITURE_TOP / 2, 'counter').setDepth(counter.y + 20);
+    this.art(counter.x, counter.y + FURNITURE_TOP / 2, registerSprite(this.state)).setDepth(counter.y + 20);
     this.buildShowcases();
     this.buildBin();
     // Электрощиток на стене: нужен, когда отключат свет.
@@ -878,7 +882,7 @@ export class StoreScene extends Phaser.Scene {
     this.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.fixFuse()));
     this.fuseGlow = this.fuseBox.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 6);
     this.registers = [];
-    this.registers.push(this.makeRegister(counter, false));
+    this.registers.push(this.makeRegister(counter, false, this.layout.queue, this.layout.sellerHome));
     this.buildUpgrades();
     void sellerHome;
     const home = this.ownerHome();
@@ -895,9 +899,7 @@ export class StoreScene extends Phaser.Scene {
    * Касса: полоска пробивки над столом, экран монитора и луч сканера. Вторая касса стоит
    * зеркально слева от очереди: её покупатель — второй в очереди, кассир — слева от стола.
    */
-  private makeRegister(counter: { x: number; y: number }, mirrored: boolean): Register {
-    const { queue, sellerHome } = this.layout;
-    const index = this.registers.length;
+  private makeRegister(counter: { x: number; y: number }, mirrored: boolean, spot: { x: number; y: number }, clerk: { x: number; y: number }): Register {
     const bar = this.add.rectangle(counter.x - 9, counter.y - 31, 18, 4, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
     const fill = this.add.rectangle(counter.x - 8, counter.y - 31, 0, 2, 0x63c74d).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
     const sx = counter.x + (mirrored ? -0.5 : 0.5);
@@ -909,8 +911,8 @@ export class StoreScene extends Phaser.Scene {
       .setVisible(false);
     return {
       counter,
-      spot: { x: queue.x, y: queue.y - index * queue.step },
-      clerk: mirrored ? { x: counter.x - 16, y: counter.y + 16 } : sellerHome,
+      spot,
+      clerk,
       customer: null,
       scan: null,
       bar,
@@ -922,10 +924,33 @@ export class StoreScene extends Phaser.Scene {
 
   /** Кто работает за кассой: нанятый кассир, сам хозяин (если основную взял кассир) или никто. */
   private operator(index: number): Worker | 'owner' | null {
-    const worker = this.workers.get(index === 0 ? 'cashier' : 'cashier2');
+    const worker = this.workers.get(CASHIER_ROLES[index]);
     if (worker) return worker;
-    if (index === 0) return 'owner';
-    return this.workers.has('cashier') ? 'owner' : null;
+    const free = this.registers.findIndex((_, i) => !this.workers.has(CASHIER_ROLES[i]));
+    return free === index ? 'owner' : null;
+  }
+
+  /**
+   * Касса номер index (с 1): нечётные — зеркально слева от очереди, чётные — справа;
+   * каждая следующая пара — выше по залу. Покупатель встаёт в колонку очереди рядом со столом.
+   */
+  private buildRegister(index: number): void {
+    const { counter, w, queue } = this.layout;
+    const left = index % 2 === 1;
+    const row = Math.floor(index / 2);
+    const at = { x: left ? w - 64 : counter.x, y: counter.y - REGISTER_ROW * row };
+    const shadowX = left ? at.x - 2 : at.x + 2;
+    this.art(shadowX, at.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(at.y + 19);
+    this.art(at.x, at.y + FURNITURE_TOP / 2, registerSprite(this.state)).setFlipX(left).setDepth(at.y + 20);
+    if (hasUpgrade(this.state, 'terminal')) this.art(at.x + (left ? -3 : 3), at.y - 4, 'card_terminal').setDepth(at.y + 22);
+    this.obstacles.push({ x: at.x - 13, y: at.y - 30, w: 26, h: 54 });
+    const spot = { x: queue.x, y: queue.y - REGISTER_ROW * row - (left ? queue.step : 0) };
+    const clerk = { x: at.x + (left ? -16 : 16), y: at.y + 16 };
+    this.registers.push(this.makeRegister(at, left, spot, clerk));
+    this.add
+      .zone(at.x + (left ? -6 : 6), at.y + 6, 40, 64)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => this.tap(() => this.serveNext()));
   }
 
   /** Хозяин сейчас пробивает кого-то. */
@@ -1410,19 +1435,7 @@ export class StoreScene extends Phaser.Scene {
   private buildUpgrades(): void {
     const { counter, w, wallH } = this.layout;
     if (hasUpgrade(this.state, 'terminal')) this.art(counter.x + 3, counter.y - 4, 'card_terminal').setDepth(counter.y + 22);
-    if (hasUpgrade(this.state, 'register2')) {
-      // Вторая касса — зеркально слева от очереди.
-      const at = { x: w - 64, y: counter.y };
-      this.art(at.x - 2, at.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(at.y + 19);
-      this.art(at.x, at.y + FURNITURE_TOP / 2, 'counter').setFlipX(true).setDepth(at.y + 20);
-      if (hasUpgrade(this.state, 'terminal')) this.art(at.x - 3, at.y - 4, 'card_terminal').setDepth(at.y + 22);
-      this.obstacles.push({ x: at.x - 13, y: at.y - 30, w: 26, h: 54 });
-      this.registers.push(this.makeRegister(at, true));
-      this.add
-        .zone(at.x - 6, at.y + 6, 40, 64)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerup', () => this.tap(() => this.serveNext()));
-    }
+    for (let i = 1; i < registerCount(this.state); i++) this.buildRegister(i);
     this.buildCoffee();
     this.buildOven();
     this.buildDelivery();
@@ -1661,7 +1674,7 @@ export class StoreScene extends Phaser.Scene {
     this.coffeeBusy = false;
     if (!hasUpgrade(this.state, 'coffee')) return;
     const at = { x: 9, y: this.layout.wallH + 56 };
-    this.coffeeImg = this.art(at.x, at.y, 'coffee_machine').setDepth(at.y + 9);
+    this.coffeeImg = this.art(at.x, at.y, coffeeSprite(this.state)).setDepth(at.y + 9);
     this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 13, h: 16 });
   }
 
@@ -1679,19 +1692,19 @@ export class StoreScene extends Phaser.Scene {
       return;
     }
     this.setFacing(c.sprite, 'left');
-    sound.hiss(BREW_SECONDS * 0.8, 2600, 0.035);
+    sound.hiss(brewSeconds(this.state) * 0.8, 2600, 0.035);
     // Пар над чашкой, пока варится.
-    const steam = this.time.addEvent({ delay: 260, repeat: Math.floor((BREW_SECONDS * 1000) / 260), callback: () => this.steamPuff(machine.x, machine.y - 4) });
-    await this.wait(BREW_SECONDS * 1000);
+    const steam = this.time.addEvent({ delay: 260, repeat: Math.floor((brewSeconds(this.state) * 1000) / 260), callback: () => this.steamPuff(machine.x, machine.y - 4) });
+    await this.wait(brewSeconds(this.state) * 1000);
     steam.remove();
     this.coffeeBusy = false;
     if (!this.sys.isActive() || c.gone || !c.sprite.active) return;
     const cup = this.art(5, 1, 'cup');
     c.sprite.add(cup);
-    c.extras = [...(c.extras ?? []), { kind: 'coffee', price: COFFEE_PRICE }];
+    c.extras = [...(c.extras ?? []), { kind: 'coffee', price: coffeePrice(this.state) }];
     this.stats.coffees = (this.stats.coffees ?? 0) + 1;
     sound.pop(2);
-    this.popup(c.sprite.x, c.sprite.y - 18, t('popup.coffee', { n: COFFEE_PRICE }), '#fff3b0');
+    this.popup(c.sprite.x, c.sprite.y - 18, t('popup.coffee', { n: coffeePrice(this.state) }), '#fff3b0');
     if (cupsOf(this.state) === 0) this.time.delayedCall(900, () => this.popup(machine.x + 10, machine.y - 16, t('popup.noCups'), '#ffd0d0'));
   }
 
@@ -1731,8 +1744,9 @@ export class StoreScene extends Phaser.Scene {
     this.oven = undefined;
     if (!hasUpgrade(this.state, 'oven')) return;
     const { w, counter } = this.layout;
-    const at = { x: w - 9, y: counter.y - 40 };
-    const img = this.art(at.x, at.y, 'oven').setDepth(at.y + 9);
+    // Над третьей кассой печь переезжает выше по стене.
+    const at = { x: w - 9, y: counter.y - (registerCount(this.state) >= 3 ? 100 : 40) };
+    const img = this.art(at.x, at.y, ovenSprite(this.state)).setDepth(at.y + 9);
     const glow = this.add.rectangle(at.x, at.y + 1.5, 7, 3, 0xf77622).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(at.y + 10);
     const bread = this.art(at.x, at.y + 1.5, 'oven_bread').setDepth(at.y + 11).setVisible(false);
     const bar = this.add.rectangle(at.x - 8, at.y - 13, 16, 3, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
@@ -1753,7 +1767,7 @@ export class StoreScene extends Phaser.Scene {
     if (oven.state === 'baking') return;
     const next = startBatch(this.state);
     if (!next) {
-      const why = this.state.money < OVEN_BATCH_COST ? t('popup.ovenMoney') : t('popup.ovenFull');
+      const why = this.state.money < ovenBatchCost(this.state) ? t('popup.ovenMoney') : t('popup.ovenFull');
       this.popup(oven.img.x - 10, oven.img.y - 18, why, '#ffd0d0');
       sound.bad();
       return;
@@ -1761,10 +1775,10 @@ export class StoreScene extends Phaser.Scene {
     this.state = next;
     haptic.tap();
     sound.hiss(0.5, 900, 0.04);
-    this.popup(oven.img.x - 10, oven.img.y - 18, t('popup.ovenStart', { n: OVEN_BATCH_COST }), '#fff3b0');
+    this.popup(oven.img.x - 10, oven.img.y - 18, t('popup.ovenStart', { n: ovenBatchCost(this.state) }), '#fff3b0');
     oven.state = 'baking';
     oven.start = this.time.now;
-    oven.timer = this.time.delayedCall(OVEN_BAKE_SECONDS * 1000, () => this.breadReady());
+    oven.timer = this.time.delayedCall(ovenBake(this.state) * 1000, () => this.breadReady());
   }
 
   private breadReady(): void {
@@ -1861,7 +1875,7 @@ export class StoreScene extends Phaser.Scene {
     if (!oven?.img.active) return;
     const now = this.time.now;
     if (oven.state === 'baking') {
-      const k = Math.min(1, (now - oven.start) / (OVEN_BAKE_SECONDS * 1000));
+      const k = Math.min(1, (now - oven.start) / (ovenBake(this.state) * 1000));
       oven.bar.setVisible(true);
       oven.fill.setVisible(true).setFillStyle(0xfeae34);
       oven.fill.width = 15 * k;
@@ -2923,7 +2937,7 @@ export class StoreScene extends Phaser.Scene {
     this.binBy = null;
     this.bagCarried = 0;
     this.art(dump.x, dump.y, 'dumpster').setDepth(dump.y + 8);
-    this.binImg = this.art(bin.x, bin.y, 'bin0').setDepth(bin.y + 6);
+    this.binImg = this.art(bin.x, bin.y, binSprite(this.state, 0)).setDepth(bin.y + 6);
     this.binImg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.takeOutTrash()));
     this.binGlow = this.binImg.preFX?.addGlow(0xe43b44, 0, 0, false, 0.1, 6);
     this.binStink = this.art(bin.x, bin.y - 14, 'stink').setDepth(bin.y + 30).setVisible(false);
@@ -2933,19 +2947,19 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private binFull(): boolean {
-    return this.binFill >= BIN_CAPACITY;
+    return this.binFill >= binCapacity(this.state);
   }
 
   private refreshBin(): void {
     if (!this.binImg?.active) return;
-    const level = this.binFill === 0 ? 0 : this.binFull() ? 3 : this.binFill >= BIN_CAPACITY / 2 ? 2 : 1;
-    this.binImg.setTexture(`bin${level}`);
+    const level = this.binFill === 0 ? 0 : this.binFull() ? 3 : this.binFill >= binCapacity(this.state) / 2 ? 2 : 1;
+    this.binImg.setTexture(binSprite(this.state, level));
     this.binStink?.setVisible(this.binFull());
   }
 
   /** Мусор в ведро: оно подпрыгивает. */
   private putInBin(): void {
-    this.binFill = Math.min(BIN_CAPACITY, this.binFill + 1);
+    this.binFill = Math.min(binCapacity(this.state), this.binFill + 1);
     this.refreshBin();
     sound.tap();
     if (this.binImg) this.tweens.add({ targets: this.binImg, scaleY: 1.15 / ART, duration: 90, yoyo: true });
@@ -3550,7 +3564,7 @@ export class StoreScene extends Phaser.Scene {
     if (this.carryingTrash) this.dropTrash(this.seller.x, this.seller.y - 6);
     this.carryingTrash = false;
     if (this.binBy === 'seller') {
-      this.binFill = Math.min(BIN_CAPACITY, this.binFill + this.bagCarried);
+      this.binFill = Math.min(binCapacity(this.state), this.binFill + this.bagCarried);
       this.bagCarried = 0;
       this.binBusy = false;
       this.binBy = null;
@@ -3576,10 +3590,9 @@ export class StoreScene extends Phaser.Scene {
   /** Где стоит хозяин (игрок): за кассой, а если нанят кассир — рядом с ним. */
   private ownerHome(): { x: number; y: number } {
     const { sellerHome } = this.layout;
-    if (!staffOf(this.state, 'cashier')) return sellerHome;
-    // Основную кассу взял кассир — хозяин встаёт за вторую (если она есть и на ней никого).
-    const second = this.registers[1];
-    if (second && !staffOf(this.state, 'cashier2')) return second.clerk;
+    // Хозяин встаёт за первую кассу, где нет кассира; все заняты — рядом с основной.
+    const free = this.registers.find((_, i) => !staffOf(this.state, CASHIER_ROLES[i]));
+    if (free) return free.clerk;
     return { x: sellerHome.x, y: sellerHome.y - 24 };
   }
 
@@ -3799,7 +3812,7 @@ export class StoreScene extends Phaser.Scene {
     this.workers.clear();
     this.claimedTrash.clear();
     if (this.binBy === 'cleaner') {
-      this.binFill = Math.min(BIN_CAPACITY, this.binFill + this.bagCarried);
+      this.binFill = Math.min(binCapacity(this.state), this.binFill + this.bagCarried);
       this.bagCarried = 0;
       this.binBusy = false;
       this.binBy = null;
@@ -3819,7 +3832,7 @@ export class StoreScene extends Phaser.Scene {
       sprite.add(carried);
       const worker: Worker = { member, sprite, carried, home };
       this.workers.set(member.role, worker);
-      const loop = { cashier: this.cashierLoop, cashier2: this.cashierLoop, cleaner: this.cleanerLoop, loader: this.loaderLoop, guard: null }[member.role];
+      const loop = { cashier: this.cashierLoop, cashier2: this.cashierLoop, cashier3: this.cashierLoop, cashier4: this.cashierLoop, cleaner: this.cleanerLoop, loader: this.loaderLoop, guard: null }[member.role];
       if (loop) void loop.call(this, worker, gen);
     }
     // Хозяин уступает место кассиру.
@@ -3831,9 +3844,10 @@ export class StoreScene extends Phaser.Scene {
     const { sellerHome, wc, warehouse, door } = this.layout;
     switch (role) {
       case 'cashier':
-        return sellerHome;
       case 'cashier2':
-        return this.registers[1]?.clerk ?? { x: sellerHome.x, y: sellerHome.y - 24 };
+      case 'cashier3':
+      case 'cashier4':
+        return this.registers[registerOfRole(role)]?.clerk ?? { x: sellerHome.x, y: sellerHome.y - 24 };
       case 'cleaner':
         return { x: wc.x - 18, y: wc.spotY + 8 };
       case 'loader':
@@ -3858,7 +3872,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Кассир сам пробивает тех, кто подошёл к его кассе (второй кассир — ко второй). */
   private async cashierLoop(w: Worker, gen: number): Promise<void> {
-    const index = w.member.role === 'cashier2' ? 1 : 0;
+    const index = registerOfRole(w.member.role);
     while (this.alive(gen)) {
       const r = this.registers[index];
       const front = r?.customer;
@@ -3878,7 +3892,7 @@ export class StoreScene extends Phaser.Scene {
   private async cleanerLoop(w: Worker, gen: number): Promise<void> {
     while (this.alive(gen)) {
       // Ведро почти полное — сначала вынести.
-      if (this.running && this.binFill >= BIN_CAPACITY - 1 && !this.binBusy) {
+      if (this.running && this.binFill >= binCapacity(this.state) - 1 && !this.binBusy) {
         this.binBusy = true;
         this.binBy = 'cleaner';
         for (const step of this.takeOutSteps(

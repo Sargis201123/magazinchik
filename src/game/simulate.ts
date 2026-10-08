@@ -67,12 +67,14 @@ import { finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
-import { buyUpgrade, carryOf, hasUpgrade, loyaltyTolerance, UPGRADES, type UpgradeId } from './upgrades';
+import { buyUpgrade, carryOf, hasUpgrade, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
+import { CASHIER_ROLES, registerCount } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
-import { BREW_SECONDS, buyCups, COFFEE_PRICE, coffeeChance, useCup } from './coffee';
-import { AROMA_SECONDS, AROMA_TOLERANCE, OVEN_BATCH, startBatch, takeOutBread } from './bakery';
+import { buyCups, coffeeChance, useCup } from './coffee';
+import { brewSeconds, coffeePrice, gearAvailable, nextGear, ovenBatch, upgradeGear, type GearId } from './gear';
+import { AROMA_SECONDS, AROMA_TOLERANCE, startBatch, takeOutBread } from './bakery';
 import { NIGHT_GUESTS, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
 import { answerWar, warLeaves, type WarAnswer } from './war';
@@ -130,7 +132,7 @@ export interface SimOptions {
   ovenBurn?: number;
 }
 
-export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'register2' | 'cart' | 'loyalty';
+export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy'];
@@ -144,8 +146,10 @@ const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
   ['loader', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
   ['guard', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
   ['cleaner', (s) => s.level >= 3 && Boolean(staffOf(s, 'cashier'))],
-  // Второй кассир — когда есть вторая касса и гостей больше, чем пробьёт один.
-  ['cashier2', (s) => hasUpgrade(s, 'register2') && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 2],
+  // Кассиры на остальные кассы — когда кассы есть и гостей больше, чем пробьют уже нанятые.
+  ['cashier2', (s) => registerCount(s) >= 2 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 2],
+  ['cashier3', (s) => registerCount(s) >= 3 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 3],
+  ['cashier4', (s) => registerCount(s) >= 4 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 4],
 ];
 
 /** Для решения «пора нанимать кассира»: примерно столько успевает один человек. */
@@ -159,15 +163,20 @@ const QUEUE_STEP_SECONDS = 0.3;
 
 /** Сколько покупателей реально пробить за день: пробивка занимает время и зависит от навыка. */
 function serveCapacity(state: StoreState): number {
-  const cashier = staffOf(state, 'cashier');
-  const owner = checkoutSeconds(ownerScan(state.ownerServed), AVG_BASKET) + QUEUE_STEP_SECONDS;
+  const owner = checkoutSeconds(withUpgrades(state, ownerScan(state.ownerServed)), AVG_BASKET) + QUEUE_STEP_SECONDS;
   const ownerCap = Math.floor((DAY_SECONDS * ownerAtRegister(state.level)) / owner);
-  if (!cashier) return ownerCap;
-  const main = Math.floor(DAY_SECONDS / (checkoutSeconds(cashierScan(cashier), AVG_BASKET) + QUEUE_STEP_SECONDS));
-  if (!hasUpgrade(state, 'register2')) return main;
-  // Вторая касса: второй кассир или сам хозяин (между другими делами).
-  const second = staffOf(state, 'cashier2');
-  return main + (second ? Math.floor(DAY_SECONDS / (checkoutSeconds(cashierScan(second), AVG_BASKET) + QUEUE_STEP_SECONDS)) : ownerCap);
+  // Каждая касса: свой кассир или (одна, первая свободная) — хозяин между другими делами.
+  let total = 0;
+  let ownerUsed = false;
+  for (const role of CASHIER_ROLES.slice(0, registerCount(state))) {
+    const m = staffOf(state, role);
+    if (m) total += Math.floor(DAY_SECONDS / (checkoutSeconds(withUpgrades(state, cashierScan(m)), AVG_BASKET) + QUEUE_STEP_SECONDS));
+    else if (!ownerUsed) {
+      total += ownerCap;
+      ownerUsed = true;
+    }
+  }
+  return total;
 }
 
 export function simulate({
@@ -265,7 +274,6 @@ export function simulate({
       ['coffee', 'coffee'],
       ['oven', 'oven'],
       ['night', 'nightShift'],
-      ['register2', 'register2'],
       ['cart', 'cart'],
       ['loyalty', 'loyalty'],
     ];
@@ -275,6 +283,15 @@ export function simulate({
       if (bought) {
         investments += UPGRADES[id].price;
         state = bought;
+      }
+    }
+    // Новые модели кассы, кофемашины и печи — когда хватает денег с запасом.
+    if (features.gear) {
+      for (const id of ['register', 'coffee', 'oven'] as GearId[]) {
+        const next = nextGear(state, id);
+        if (!next || !gearAvailable(state, id) || state.money < next.price + reserve * 2) continue;
+        investments += next.price;
+        state = upgradeGear(state, id) ?? state;
       }
     }
     if (features.cat) {
@@ -306,7 +323,7 @@ export function simulate({
         batches++;
         if (extraRandom() < ovenBurn) continue;
         state = takeOutBread(state).state;
-        breadBaked += OVEN_BATCH;
+        breadBaked += ovenBatch(state);
       }
     }
     // Доля дня, когда в зале пахнет хлебом.
@@ -379,7 +396,7 @@ export function simulate({
     let candy = 0;
     let coffee = 0;
     let coffees = 0;
-    const coffeeCap = Math.floor(DAY_SECONDS / (BREW_SECONDS + 3));
+    const coffeeCap = Math.floor(DAY_SECONDS / (brewSeconds(state) + 3));
     // Пробить покупателя: товар, а ещё шоколадка у кассы и кофе.
     const extras = (night: boolean): number => {
       let extra = 0;
@@ -396,8 +413,8 @@ export function simulate({
         if (next) {
           state = next;
           coffees++;
-          extra += COFFEE_PRICE;
-          coffee += COFFEE_PRICE;
+          extra += coffeePrice(state);
+          coffee += coffeePrice(state);
         }
       }
       return extra;

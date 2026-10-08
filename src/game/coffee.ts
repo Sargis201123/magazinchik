@@ -6,15 +6,12 @@ import type { StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
 import { WEATHER_EFFECTS, weatherFor } from './weather';
 
-/** Себестоимость стаканчика и цена кофе. */
+/** Себестоимость стаканчика (цена кофе и время варки — от модели кофемашины, gear.ts). */
 export const CUP_COST = 15;
-export const COFFEE_PRICE = 35;
 /** Сколько стаканчиков помещается в уголке. */
 export const CUPS_MAX = 30;
 /** Базовый шанс, что покупатель возьмёт кофе. */
 export const COFFEE_CHANCE = 0.12;
-/** Сколько секунд варится стаканчик. */
-export const BREW_SECONDS = 2.2;
 
 export const cupsOf = (state: StoreState): number => state.cups ?? 0;
 

@@ -5,6 +5,7 @@ import type { TextKey } from '../i18n/ru';
 import { newLifetime, type DayStats, type Lifetime, type StoreState } from './economy';
 import { RARE_GUESTS } from './endless';
 import { CHAPTERS } from './story';
+import { registerCount } from './registers';
 
 export type AchievementId =
   | 'first_day'
@@ -76,7 +77,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'coffee_100', tier: 'silver', progress: ({ life }) => count(life.coffees ?? 0, 100) },
   { id: 'cat_mascot', tier: 'silver', progress: ({ state }) => flag(Boolean(state.cat?.beds.includes('house'))) },
   { id: 'night_owl', tier: 'silver', progress: ({ life }) => count(life.nights ?? 0, 5) },
-  { id: 'two_registers', tier: 'bronze', progress: ({ state }) => flag((state.upgrades ?? []).includes('register2')) },
+  { id: 'two_registers', tier: 'bronze', progress: ({ state }) => flag(registerCount(state) >= 2) },
   { id: 'courier_20', tier: 'silver', progress: ({ life }) => count(life.deliveries ?? 0, 20) },
   { id: 'mouse_5', tier: 'bronze', progress: ({ life }) => count(life.mice ?? 0, 5) },
   { id: 'war_answer', tier: 'bronze', progress: ({ life }) => count(life.wars ?? 0, 1) },

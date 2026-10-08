@@ -86,7 +86,7 @@ describe('новые механики', () => {
   const base = money({});
 
   // Шесть прогонов — шумно (точнее: npm run sim:features), поэтому проверяем только «не ломает».
-  it.each([['cat'], ['candy'], ['coffee'], ['oven'], ['night'], ['register2']] as const)('%s — не в минус и не вдвое', (feature) => {
+  it.each([['cat'], ['candy'], ['coffee'], ['oven'], ['night']] as const)('%s — не в минус и не вдвое', (feature) => {
     const m = money({ [feature]: true });
     expect(m).toBeGreaterThan(base * 0.9);
     expect(m).toBeLessThan(base * 2);

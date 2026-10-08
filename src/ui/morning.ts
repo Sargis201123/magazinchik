@@ -1226,7 +1226,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   };
 
   /** Кассир: сколько покупателей в день пробьёт (с терминалом — быстрее). */
-  const isCashier = (m: StaffMember) => m.role === 'cashier' || m.role === 'cashier2';
+  const isCashier = (m: StaffMember) => isCashierRole(m.role);
   const perDay = (state: StoreState, m: StaffMember) => servePerDay(withUpgrades(state, cashierScan(m)));
   const traitLine = (m: StaffMember) => {
     const stars = '★'.repeat(m.skill).padEnd(3, '☆');
@@ -1299,13 +1299,15 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     out.push(el('h3', '', t('staffTab.search')), el('div', 'ui-muted', t('staffTab.searchNote', { cost: JOB_AD_COST })));
     const roles = el('div', 'ui-chips');
     for (const role of STAFF_ROLE_IDS) {
+      // Кассир на кассу, которой ещё нет в помещении, — не показываем.
+      if (isCashierRole(role) && registerOfRole(role) >= registerCount(state)) continue;
       const searched = state.jobSearch?.day === state.day && state.jobSearch.role === role;
       roles.append(
         button(
           t(STAFF_ROLES[role].nameKey),
           () => update(startJobSearch(getState(), role)),
           `ui-chip${searched ? ' active' : ''}`,
-          Boolean(staffOf(state, role)) || full || (!searched && state.money < JOB_AD_COST) || (role === 'cashier2' && !hasUpgrade(state, 'register2')),
+          Boolean(staffOf(state, role)) || full || (!searched && state.money < JOB_AD_COST)
         ),
       );
     }

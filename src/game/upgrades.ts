@@ -4,8 +4,9 @@
 
 import type { TextKey } from '../i18n/ru';
 import { CARRY, type ScanTiming, type StoreState } from './economy';
+import { registerScan } from './gear';
 
-export type UpgradeId = 'terminal' | 'register2' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'coffee' | 'oven' | 'nightShift';
+export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'coffee' | 'oven' | 'nightShift';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -19,7 +20,6 @@ export interface Upgrade {
 
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
   terminal: { id: 'terminal', icon: '💳', nameKey: 'upgrade.terminal', descKey: 'upgrade.terminal.desc', price: 600, minLevel: 1 },
-  register2: { id: 'register2', icon: '🧾', nameKey: 'upgrade.register2', descKey: 'upgrade.register2.desc', price: 3000, minLevel: 2 },
   cart: { id: 'cart', icon: '🛒', nameKey: 'upgrade.cart', descKey: 'upgrade.cart.desc', price: 700, minLevel: 1 },
   loyalty: { id: 'loyalty', icon: '💳', nameKey: 'upgrade.loyalty', descKey: 'upgrade.loyalty.desc', price: 900, minLevel: 1 },
   delivery: { id: 'delivery', icon: '🚲', nameKey: 'upgrade.delivery', descKey: 'upgrade.delivery.desc', price: 1500, minLevel: 1 },
@@ -46,9 +46,11 @@ export function buyUpgrade(state: StoreState, id: UpgradeId): StoreState | null 
   return { ...state, money: state.money - up.price, upgrades: [...(state.upgrades ?? []), id] };
 }
 
-/** Время пробивки с учётом терминала. */
-export const withUpgrades = (state: StoreState, timing: ScanTiming): ScanTiming =>
-  hasUpgrade(state, 'terminal') ? { ...timing, pay: timing.pay * TERMINAL_PAY } : timing;
+/** Время пробивки с учётом модели кассы и терминала. */
+export const withUpgrades = (state: StoreState, timing: ScanTiming): ScanTiming => ({
+  item: timing.item * registerScan(state),
+  pay: hasUpgrade(state, 'terminal') ? timing.pay * TERMINAL_PAY : timing.pay,
+});
 
 /** Тележка: за один поход со склада несут вдвое больше. */
 export const CART_CARRY = 12;
