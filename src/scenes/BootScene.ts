@@ -9,6 +9,7 @@ const SPRITES = [
   'lot',
   'grass',
   'mat',
+  'glow',
   'vending',
   'pallet_water',
   'promo',

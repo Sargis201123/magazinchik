@@ -77,6 +77,32 @@ const HUD_BOTTOM = 80;
 const ART = 2;
 /** Сколько улицы видно под зданием (в точках мира). */
 const STREET_VIEW = 40;
+/** Слой света: выше людей и мебели, ниже всплывающих надписей (1000). */
+const LIGHT_DEPTH = 900;
+/** Цвет света на улице и в зале по ходу дня: [доля дня, цвет]. Умножается на картинку. */
+const OUTDOOR_LIGHT: [number, number][] = [
+  [0, 0xffeccc],
+  [0.3, 0xffffff],
+  [0.65, 0xffe2b8],
+  [0.85, 0xf2a878],
+  [1, 0x7a80b8],
+];
+const INDOOR_LIGHT: [number, number][] = [
+  [0, 0xfff6e6],
+  [0.5, 0xffffff],
+  [0.85, 0xfff0dc],
+  [1, 0xe4d8ec],
+];
+
+/** Цвет между ключевыми точками. */
+function lerpKeys(keys: [number, number][], p: number): number {
+  const i = Math.max(0, keys.findIndex(([at]) => at >= p) - 1);
+  const [a, ca] = keys[i];
+  const [b, cb] = keys[Math.min(i + 1, keys.length - 1)];
+  const t = b === a ? 0 : (p - a) / (b - a);
+  const mix = (shift: number) => Math.round(((ca >> shift) & 255) + (((cb >> shift) & 255) - ((ca >> shift) & 255)) * t);
+  return (mix(16) << 16) | (mix(8) << 8) | mix(0);
+}
 /** Сколько видов у каждого товара (item_bread_0…2 в art/sprites.py). */
 const ITEM_VARIANTS = 3;
 
@@ -196,6 +222,10 @@ export class StoreScene extends Phaser.Scene {
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
   private boxes: Phaser.GameObjects.Image[] = [];
+  private outdoorShades: Phaser.GameObjects.Rectangle[] = [];
+  private indoorShade?: Phaser.GameObjects.Rectangle;
+  private lampGlows: Phaser.GameObjects.Image[] = [];
+  private ceilingGlows: Phaser.GameObjects.Image[] = [];
   /** Поддон с водой или стойка «Акция» на местах, где полки ещё нет. */
   private slotDecor: Phaser.GameObjects.Image[] = [];
   /** Планировка следующего уровня: камера и улица рассчитаны на неё. */
@@ -282,6 +312,7 @@ export class StoreScene extends Phaser.Scene {
     this.updateScanBar();
     this.callSellerIfNeeded();
     this.hud.setHint(this.currentHint());
+    this.updateLighting();
     this.hud.update(this.state, this.timeLeft, this.questsLine());
   }
 
@@ -343,6 +374,7 @@ export class StoreScene extends Phaser.Scene {
     if (next !== this.layout) this.buildForRent(next);
 
     this.buildStore();
+    this.buildLighting(next);
     this.refreshShelves();
     this.refreshWarehouse();
     this.refreshToilet();
@@ -395,6 +427,49 @@ export class StoreScene extends Phaser.Scene {
       .zone(counter.x + 6, counter.y + 6, 40, 64)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.serveNext());
+  }
+
+  /**
+   * Свет: на улицу и в зал ложится оттенок времени суток (умножением цвета),
+   * вечером загораются фонари и лампы в зале. Всё ниже всплывающих надписей.
+   */
+  private buildLighting(next: Layout): void {
+    const { w, h } = this.layout;
+    const far = 600;
+    const shade = (x: number, y: number, ww: number, hh: number) =>
+      this.add.rectangle(x, y, ww, hh, 0xffffff).setOrigin(0).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(LIGHT_DEPTH);
+    this.outdoorShades = [
+      shade(-far, -far, next.w + 2 * far, far - 3),
+      shade(-far, h + 3, next.w + 2 * far, far + next.h),
+      shade(-far, -3, far - 3, h + 6),
+      shade(w + 3, -3, next.w + far, h + 6),
+    ];
+    this.indoorShade = shade(-3, -3, w + 6, h + 6);
+    const glow = (x: number, y: number, size: number, color: number) =>
+      this.art(x, y, 'glow').setScale(size / 64).setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 1).setAlpha(0);
+    this.lampGlows = [];
+    for (let x = -28; x < next.w + 40; x += 72) {
+      if (Math.abs(x - this.layout.door.x) > 20) this.lampGlows.push(glow(x, this.streetY - 2, 44, 0xffc860));
+    }
+    this.lampGlows.push(glow(this.layout.door.x, h + 8, 40, 0xffd890));
+    this.ceilingGlows = [];
+    for (let y = this.layout.wallH + 40; y < h - 10; y += 64) {
+      for (let x = 34; x < w; x += 68) this.ceilingGlows.push(glow(x, y, 70, 0xfff0c8));
+    }
+    this.updateLighting(this.running ? undefined : 0);
+  }
+
+  /** Оттенок по ходу дня: тёплое утро, белый день, закат, сумерки. */
+  private updateLighting(progress?: number): void {
+    if (!this.indoorShade) return;
+    const p = progress ?? Phaser.Math.Clamp(1 - this.timeLeft / DAY_SECONDS, 0, 1);
+    const outdoor = lerpKeys(OUTDOOR_LIGHT, p);
+    const indoor = lerpKeys(INDOOR_LIGHT, p);
+    for (const r of this.outdoorShades) r.setFillStyle(outdoor);
+    this.indoorShade.setFillStyle(indoor);
+    const evening = Phaser.Math.Clamp((p - 0.6) / 0.4, 0, 1);
+    for (const g of this.lampGlows) g.setAlpha(0.7 * evening);
+    for (const g of this.ceilingGlows) g.setAlpha(0.06 + 0.16 * evening);
   }
 
   /** Улица вокруг здания: газон с деревьями, тротуар с фонарями и скамейкой, дорога. */
@@ -1333,6 +1408,7 @@ export class StoreScene extends Phaser.Scene {
 
   private showMorning(): void {
     this.hud.update(this.state, DAY_SECONDS);
+    this.updateLighting(0);
     showMorning({
       getState: () => this.state,
       setState: (s) => {
