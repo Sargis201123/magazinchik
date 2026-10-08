@@ -80,10 +80,14 @@ import {
 } from '../game/endless';
 import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
 import { currentCandidates, JOB_AD_COST, startJobSearch } from '../game/staff';
-import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter } from '../game/story';
+import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
 import { weatherFor } from '../game/weather';
 import { holidayFor } from '../game/calendar';
+import { dialogBox } from './dialog';
+
+/** Высота «голоса» героев в диалогах. */
+const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
 import { buyDecor, DECOR, DECOR_KINDS, setDecor } from '../game/decor';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, who } from './dom';
@@ -528,14 +532,9 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const lines = kind === 'intro' ? chapter.intro : chapter.outro;
     const current = lines[Math.min(storyLine, lines.length - 1)];
     const speaker = CHARACTERS[current.who];
-    const box = el('div', 'ui-box');
-    box.append(
-      el('div', 'ui-muted', t('story.chapter', { n: state.story.chapter + 1, title: t(chapter.titleKey) })),
-      who(current.who, el('h3', '', t(speaker.nameKey))),
-      el('p', '', `«${t(current.key)}»`),
-    );
     const last = storyLine >= lines.length - 1;
-    if (last && kind === 'intro') box.append(el('div', 'ui-note', `🎯 ${t(chapter.goalKey, chapter.progress(state))}`));
+    const after: HTMLElement[] = [];
+    if (last && kind === 'intro') after.push(el('div', 'ui-note', `🎯 ${t(chapter.goalKey, chapter.progress(state))}`));
     if (last && kind === 'outro') {
       const reward = [
         chapter.reward.money ? `+${chapter.reward.money} 💰` : '',
@@ -543,10 +542,17 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       ]
         .filter(Boolean)
         .join(' ');
-      box.append(el('div', 'ui-note', t('story.reward', { reward })));
+      after.push(el('div', 'ui-note', t('story.reward', { reward })));
     }
-    box.append(
-      button(t('story.next'), () => {
+    return dialogBox({
+      caption: t('story.chapter', { n: state.story.chapter + 1, title: t(chapter.titleKey) }),
+      portrait: `portrait_${current.who}${current.mood ? `_${current.mood}` : ''}`,
+      name: t(speaker.nameKey),
+      text: `«${t(current.key)}»`,
+      pitch: VOICE[current.who],
+      after,
+      nextLabel: t('story.next'),
+      onNext: () => {
         if (!last) {
           storyLine++;
           render();
@@ -554,9 +560,8 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         }
         storyLine = 0;
         update(kind === 'intro' ? finishIntro(getState()) : finishChapter(getState()), kind === 'outro' ? 'success' : 'tap');
-      }),
-    );
-    return box;
+      },
+    });
   };
 
   const eventBox = (state: StoreState, event: MorningEvent) => {

@@ -2917,8 +2917,9 @@ def shade(color, k):
     return tuple(max(0, min(255, int(v * k))) for v in color[:3]) + (255,)
 
 
-def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None):
-    """Портрет 32×32: голова и плечи на цветном фоне. Причёску и детали рисуют функции."""
+def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None, mood=None):
+    """Портрет 32×32: голова и плечи на цветном фоне. Причёску и детали рисуют функции.
+    mood — эмоция для диалогов (happy, sad, angry, surprised): брови и рот."""
     skin, hair, shirt, bg = rgb(skin), rgb(hair), rgb(shirt), rgb(bg)
     c = Canvas(32, 32)
     c.round_rect(0, 0, 32, 32, bg, r=4)
@@ -2938,13 +2939,37 @@ def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None):
         p.rect(x, 14, 2, 2, "k")
         p.px(x, 14, "w")
     p.px(16, 17, shade(skin, 0.8))
-    p.hline(15, 19, 3, shade(skin, 0.6))
-    p.px(11, 17, rgb("#f6757a"))
-    p.px(21, 17, rgb("#f6757a"))
+    mouth = shade(skin, 0.55)
+    brow = shade(hair, 0.75) if sum(hair[:3]) < 600 else rgb("#5a4a52")
+    if mood == "happy":
+        p.px(14, 19, mouth)
+        p.hline(15, 20, 3, mouth)
+        p.px(18, 19, mouth)
+        p.hline(16, 21, 1, rgb("#e43b44"))
+    elif mood == "sad":
+        p.px(14, 20, mouth)
+        p.hline(15, 19, 3, mouth)
+        p.px(18, 20, mouth)
+        for x, y in ((11, 12), (12, 12), (13, 11), (19, 11), (20, 12), (21, 12)):
+            p.px(x, y, brow)
+    elif mood == "angry":
+        p.hline(15, 20, 3, mouth)
+        for x, y in ((11, 11), (12, 11), (13, 12), (19, 12), (20, 11), (21, 11)):
+            p.px(x, y, brow)
+    elif mood == "surprised":
+        p.rect(15, 19, 3, 2, mouth)
+        p.px(16, 19, rgb("#a22633"))
+        p.hline(11, 11, 3, brow)
+        p.hline(19, 11, 3, brow)
+    else:
+        p.hline(15, 19, 3, shade(skin, 0.6))
+    blush = 2 if mood == "happy" else 1
+    for x in (11, 21):
+        p.rect(x - (blush - 1) * (x == 11), 17, blush, 1, rgb("#f6757a"))
     if extras:
         extras(p, skin, hair, shirt)
     c.img.alpha_composite(p.img)
-    c.save(f"portrait_{name}")
+    c.save(f"portrait_{name}" + (f"_{mood}" if mood else ""))
 
 
 def hair_bun(p, hair):
@@ -3044,11 +3069,13 @@ def apron(p, skin, hair, shirt):
 
 
 def portraits():
-    portrait("grandma", "#b55088", "#f2d3ab", "#d8d8e0", "#68386c", hair_bun, glasses)
-    portrait("valya", "#e43b44", "#eec39a", "#c0cbdc", "#a22633", hair_curly)
-    portrait("marat", "#feae34", "#d9a066", "#4a2c1a", "#ffffff", hair_chef, mustache)
-    portrait("eduard", "#262b44", "#f2d3ab", "#181425", "#3a4466", hair_slick, tie)
-    portrait("inspector", "#5a6988", "#eec39a", "#262b44", "#262b44", hair_cap, badge)
+    # Герои сюжета — ещё и с эмоциями для диалогов.
+    for mood in (None, "happy", "sad", "angry", "surprised"):
+        portrait("grandma", "#b55088", "#f2d3ab", "#d8d8e0", "#68386c", hair_bun, glasses, mood)
+        portrait("valya", "#e43b44", "#eec39a", "#c0cbdc", "#a22633", hair_curly, None, mood)
+        portrait("marat", "#feae34", "#d9a066", "#4a2c1a", "#ffffff", hair_chef, mustache, mood)
+        portrait("eduard", "#262b44", "#f2d3ab", "#181425", "#3a4466", hair_slick, tie, mood)
+        portrait("inspector", "#5a6988", "#eec39a", "#262b44", "#262b44", hair_cap, badge, mood)
     portrait("farmer", "#63c74d", "#e4a672", "#8b9bb4", "#3e8948", hair_straw, beard)
     portrait("dairy", "#0099db", "#f2d3ab", "#0099db", "#ffffff", hair_scarf)
     portrait("butcher", "#a22633", "#eec39a", "#733e39", "#c0cbdc", hair_bald, lambda p, *a: (mustache(p, *a), apron(p, *a)))

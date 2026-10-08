@@ -15,9 +15,13 @@ export const CHARACTERS: Record<CharacterId, { nameKey: TextKey; icon: string }>
   inspector: { nameKey: 'who.inspector', icon: '📋' },
 };
 
+/** Эмоция в диалоге: портрет с улыбкой, грустью, злостью или удивлением. */
+export type Mood = 'happy' | 'sad' | 'angry' | 'surprised';
+
 export interface Line {
   who: CharacterId;
   key: TextKey;
+  mood?: Mood;
 }
 
 export interface StoryState {
@@ -43,14 +47,14 @@ export interface Chapter {
   chances?: Partial<EventChances>;
 }
 
-const line = (who: CharacterId, key: TextKey): Line => ({ who, key });
+const line = (who: CharacterId, key: TextKey, mood?: Mood): Line => ({ who, key, mood });
 
 export const CHAPTERS: Chapter[] = [
   {
     titleKey: 'story.ch1.title',
     goalKey: 'story.ch1.goal',
-    intro: [line('grandma', 'story.ch1.intro1'), line('grandma', 'story.ch1.intro2'), line('valya', 'story.ch1.intro3')],
-    outro: [line('valya', 'story.ch1.outro1'), line('valya', 'story.ch1.outro2')],
+    intro: [line('grandma', 'story.ch1.intro1', 'happy'), line('grandma', 'story.ch1.intro2', 'sad'), line('valya', 'story.ch1.intro3', 'happy')],
+    outro: [line('valya', 'story.ch1.outro1', 'happy'), line('valya', 'story.ch1.outro2')],
     done: (s) => s.debt === 0,
     progress: (s) => ({ n: s.debt }),
     reward: { rating: 0.3 },
@@ -58,8 +62,8 @@ export const CHAPTERS: Chapter[] = [
   {
     titleKey: 'story.ch2.title',
     goalKey: 'story.ch2.goal',
-    intro: [line('marat', 'story.ch2.intro1'), line('marat', 'story.ch2.intro2')],
-    outro: [line('marat', 'story.ch2.outro1')],
+    intro: [line('marat', 'story.ch2.intro1', 'happy'), line('marat', 'story.ch2.intro2')],
+    outro: [line('marat', 'story.ch2.outro1', 'happy')],
     done: (s) => s.story.ordersDone >= 2 && s.staff.length >= 1,
     progress: (s) => ({ n: Math.min(2, s.story.ordersDone), staff: s.staff.length ? '✓' : '✗' }),
     reward: { money: 300 },
@@ -68,8 +72,8 @@ export const CHAPTERS: Chapter[] = [
   {
     titleKey: 'story.ch3.title',
     goalKey: 'story.ch3.goal',
-    intro: [line('eduard', 'story.ch3.intro1'), line('eduard', 'story.ch3.intro2'), line('valya', 'story.ch3.intro3')],
-    outro: [line('eduard', 'story.ch3.outro1')],
+    intro: [line('eduard', 'story.ch3.intro1'), line('eduard', 'story.ch3.intro2', 'angry'), line('valya', 'story.ch3.intro3', 'angry')],
+    outro: [line('eduard', 'story.ch3.outro1', 'surprised')],
     done: (s) => s.level >= 2 && s.rating >= 4,
     progress: (s) => ({ r: s.rating.toFixed(1) }),
     reward: { rating: 0.3 },
@@ -78,8 +82,8 @@ export const CHAPTERS: Chapter[] = [
   {
     titleKey: 'story.ch4.title',
     goalKey: 'story.ch4.goal',
-    intro: [line('inspector', 'story.ch4.intro1'), line('inspector', 'story.ch4.intro2'), line('valya', 'story.ch4.intro3')],
-    outro: [line('inspector', 'story.ch4.outro1'), line('valya', 'story.ch4.outro2')],
+    intro: [line('inspector', 'story.ch4.intro1'), line('inspector', 'story.ch4.intro2', 'angry'), line('valya', 'story.ch4.intro3', 'angry')],
+    outro: [line('inspector', 'story.ch4.outro1', 'happy'), line('valya', 'story.ch4.outro2', 'surprised')],
     done: (s) => s.story.inspectionsPassed >= 2,
     progress: (s) => ({ n: Math.min(2, s.story.inspectionsPassed) }),
     reward: { money: 1000 },
@@ -88,8 +92,8 @@ export const CHAPTERS: Chapter[] = [
   {
     titleKey: 'story.ch5.title',
     goalKey: 'story.ch5.goal',
-    intro: [line('eduard', 'story.ch5.intro1'), line('eduard', 'story.ch5.intro2')],
-    outro: [line('grandma', 'story.ch5.outro1'), line('valya', 'story.ch5.outro2'), line('grandma', 'story.ch5.outro3')],
+    intro: [line('eduard', 'story.ch5.intro1', 'sad'), line('eduard', 'story.ch5.intro2')],
+    outro: [line('grandma', 'story.ch5.outro1', 'happy'), line('valya', 'story.ch5.outro2', 'happy'), line('grandma', 'story.ch5.outro3', 'happy')],
     done: (s) => s.level >= 4,
     progress: () => ({}),
     reward: { rating: 0.5 },

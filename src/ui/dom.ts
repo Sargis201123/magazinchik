@@ -105,6 +105,25 @@ const css = `
 .ui-bump { display: inline-block; animation: ui-bump .35s ease-out; }
 @keyframes ui-bump { 40% { transform: scale(1.25); background: rgba(143, 209, 106, .85); } }
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }
+/* Диалог как в RPG: крупный портрет, табличка с именем, облако реплики с хвостиком. */
+.ui-dialog { margin: 4px 0; }
+.ui-dialog-row { display: flex; align-items: flex-end; gap: 10px; margin-top: 6px; }
+.ui-dialog-face { width: 88px; height: 88px; flex: none; image-rendering: pixelated; border: 3px solid #2b2233;
+  border-radius: 8px; box-shadow: 0 3px 0 #2b2233; background: #fbf6ea; animation: ui-pop .3s cubic-bezier(.3, 1.45, .5, 1); }
+.ui-dialog-face.talking { animation: ui-talk .32s ease-in-out infinite; }
+@keyframes ui-talk { 50% { transform: translateY(-2px) scale(1.02); } }
+.ui-dialog-speech { position: relative; flex: 1; min-height: 88px; background: #fff; border: 3px solid #2b2233;
+  border-radius: 10px; padding: 18px 10px 8px; box-shadow: 0 3px 0 #2b2233; cursor: pointer; }
+.ui-dialog-speech::before { content: ''; position: absolute; left: -11px; bottom: 16px; border: 8px solid transparent;
+  border-right-color: #2b2233; border-left: 0; }
+.ui-dialog-speech::after { content: ''; position: absolute; left: -6px; bottom: 18px; border: 6px solid transparent;
+  border-right-color: #fff; border-left: 0; }
+.ui-dialog-name { position: absolute; top: -12px; left: 10px; background: #fee761; border: 2px solid #2b2233;
+  border-radius: 6px; padding: 1px 8px; font: 700 13px system-ui, sans-serif; }
+.ui-dialog-text { margin: 0; font-size: 15px; line-height: 1.4; min-height: 3em; }
+.ui-dialog-caret { display: inline-block; margin-left: 4px; font-size: 10px; color: #b86f50; animation: ui-tip .8s ease-in-out infinite; }
+.ui-dialog-after { opacity: 0; transform: translateY(4px); transition: opacity .25s, transform .25s; }
+.ui-dialog-after.shown { opacity: 1; transform: none; }
 `;
 
 let styled = false;
