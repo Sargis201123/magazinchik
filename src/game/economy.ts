@@ -400,6 +400,8 @@ export interface StoreState {
   weekly?: { month: number; challenges: { kind: string; target: number; product?: ProductId; progress: number; reward: number; done?: boolean }[] };
   /** Какие подсказки о новых механиках уже показаны (tips.ts). */
   seenTips?: string[];
+  /** Бабушкино обучение: false — показать (новая игра или «пройти заново»), нет поля — старое сохранение. */
+  tourDone?: boolean;
   /** Модели оборудования (номер модели; нет — начальная). */
   gear?: Partial<Record<GearId, number>>;
   /** Утренние закупки последних дней — для «как в прошлый раз» (reorder.ts). */
@@ -493,6 +495,7 @@ export const newGame = (): StoreState => ({
   totalRevenue: 0,
   album: [],
   story: { chapter: 0, introSeen: false, ordersDone: 0, inspectionsPassed: 0 },
+  tourDone: false,
   decor: newDecor(),
   history: [],
   achievements: [],

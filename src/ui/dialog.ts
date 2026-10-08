@@ -66,15 +66,19 @@ export function dialogBox(o: DialogOptions): HTMLElement {
     face.classList.remove('talking');
     after.classList.add('shown');
   };
+  // Сколько букв показать — по прошедшему времени: на загруженном телефоне таймер тикает реже,
+  // а текст всё равно печатается с той же скоростью.
+  const start = performance.now();
   const timer = setInterval(() => {
     if (!box.isConnected && shown > 0) {
       clearInterval(timer);
       return;
     }
-    shown++;
+    const target = Math.min(chars.length, Math.max(shown + 1, Math.floor((performance.now() - start) / CHAR_MS)));
+    // Пищит не чаще раза за тик и только на букве (на пробелах и знаках — тишина).
+    if (target - shown >= 1 && /[\p{L}\p{N}]/u.test(chars[target - 1] ?? '') && target % 2 === 0) sound.voice(o.pitch);
+    shown = target;
     text.textContent = chars.slice(0, shown).join('');
-    // Пищит каждая вторая буква, на пробелах и знаках — тишина.
-    if (shown % 2 === 0 && /[\p{L}\p{N}]/u.test(chars[shown - 1] ?? '')) sound.voice(o.pitch);
     if (shown >= chars.length) finish();
   }, CHAR_MS);
   speech.addEventListener('click', finish);

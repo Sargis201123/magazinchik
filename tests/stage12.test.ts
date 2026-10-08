@@ -103,3 +103,11 @@ describe('ночная наценка', () => {
     expect(checkout(s, items, NIGHT_MARKUP).total).toBe(Math.ceil(day * 1.25));
   });
 });
+
+describe('бабушкино обучение', () => {
+  it('новая игра начинается с обучения, старые сохранения — без него', () => {
+    expect(newGame().tourDone).toBe(false);
+    const { tourDone: _, ...old } = newGame();
+    expect((old as StoreState).tourDone).toBeUndefined();
+  });
+});

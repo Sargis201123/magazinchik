@@ -146,6 +146,25 @@ const TABS: [Tab, TextKey][] = [
   ['store', 'tab.store'],
 ];
 
+/**
+ * Бабушкино обучение в первое утро: по шагу на каждую часть утреннего окна. Подсвечивается то,
+ * о чём она говорит (вкладка открывается сама), реплика — внизу экрана.
+ */
+type TourFocus = 'none' | 'title' | 'today' | 'tab' | 'open';
+const TOUR: { key: TextKey; focus: TourFocus; tab?: Tab; mood?: 'happy' | 'sad' }[] = [
+  { key: 'tour.hello', focus: 'none', mood: 'happy' },
+  { key: 'tour.top', focus: 'title' },
+  { key: 'tour.today', focus: 'today' },
+  { key: 'tour.buy', focus: 'tab', tab: 'buy' },
+  { key: 'tour.warehouse', focus: 'tab', tab: 'warehouse' },
+  { key: 'tour.shelves', focus: 'tab', tab: 'shelves' },
+  { key: 'tour.extras', focus: 'tab', tab: 'extras' },
+  { key: 'tour.staff', focus: 'tab', tab: 'staff' },
+  { key: 'tour.store', focus: 'tab', tab: 'store' },
+  { key: 'tour.open', focus: 'open' },
+  { key: 'tour.hall', focus: 'open', mood: 'happy' },
+];
+
 const productLabel = (id: ProductId) => `${PRODUCTS[id].icon} ${t(PRODUCTS[id].nameKey)}`;
 
 /** Строка товара: крупная пиксельная иконка, название (и ценник), подпись и кнопки справа. */
@@ -195,6 +214,14 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   let slideTab = false;
   /** Какая реплика сюжетного диалога сейчас на экране. */
   let storyLine = 0;
+  /** Шаг бабушкиного обучения и его реплика внизу экрана (пока идёт обучение). */
+  let tourStep = 0;
+  let tourEl: HTMLElement | null = null;
+  const endTour = () => {
+    tourEl?.remove();
+    tourEl = null;
+    card.classList.remove('touring');
+  };
   /** Бракованная партия, по которой ждём решения игрока. */
   let pendingBad: { sid: SupplierId; pid: ProductId; qty: number; price: number } | null = null;
   /** Утром по договорам приехал товар — показать строкой в сводке. */
@@ -244,6 +271,10 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       return;
     }
 
+    const touring = state.tourDone === false;
+    const step = touring ? TOUR[Math.min(tourStep, TOUR.length - 1)] : null;
+    if (step?.tab) tab = step.tab;
+
     const tabs = el('div', 'ui-tabs');
     for (const [id, label] of TABS) {
       tabs.append(
@@ -262,31 +293,88 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const body = el('div', slideTab ? 'ui-enter' : '');
     body.append(...{ buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, extras: extrasTab, staff: staffTab, store: storeTab }[tab](state));
     slideTab = false;
+    const today = todoBox(state);
+    const info = infos(
+      ...deliveryLine(),
+      ...fairLine(state),
+      ...promoLine(state),
+      goalLine(state),
+      ...seasonLine(state),
+      ...weatherLine(state),
+      ...warLine(state),
+      ...holidayLine(state),
+      el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
+      billForecast(state),
+    );
+    const openButton = button(t('morning.open'), () => {
+      endTour();
+      close();
+      onOpen();
+    });
     card.replaceChildren(
       title,
-      ...tipBox(state),
-      todoBox(state),
-      infos(
-        ...deliveryLine(),
-        ...fairLine(state),
-        ...promoLine(state),
-        goalLine(state),
-        ...seasonLine(state),
-        ...weatherLine(state),
-        ...warLine(state),
-        ...holidayLine(state),
-        el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
-        billForecast(state),
-      ),
+      ...(touring ? [] : tipBox(state)),
+      today,
+      info,
       questsBox(state),
       ...weeklyBox(state),
       tabs,
       body,
-      button(t('morning.open'), () => {
-        close();
-        onOpen();
+      openButton,
+    );
+    if (!step) {
+      endTour();
+      return;
+    }
+    const focus = {
+      none: null,
+      title,
+      today,
+      tab: tabs.querySelector<HTMLElement>('.ui-tab.active'),
+      open: openButton,
+    }[step.focus];
+    focus?.classList.add('ui-tour-focus');
+    // То, о чём рассказывают вместе с подсвеченным: содержимое вкладки, сводка дня.
+    const lit = { none: null, title: null, today: info, tab: body, open: null }[step.focus];
+    lit?.classList.add('ui-tour-lit');
+    showTour(step);
+    if (focus) requestAnimationFrame(() => focus.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    else card.scrollTo({ top: 0 });
+  };
+
+  /** Реплика бабушки внизу экрана: «Дальше» — следующий шаг, «Пропустить» — сразу к делу. */
+  const showTour = (step: (typeof TOUR)[number]) => {
+    card.classList.add('touring');
+    tourEl?.remove();
+    tourEl = el('div', 'ui-tour');
+    const last = tourStep >= TOUR.length - 1;
+    const finish = () => {
+      tourStep = 0;
+      endTour();
+      update({ ...getState(), tourDone: true }, last ? 'success' : 'tap');
+    };
+    const skip = button(t('tour.skip'), finish, 'ui-tour-skip');
+    tourEl.append(
+      el('div', 'ui-tour-head', t('tour.title', { n: tourStep + 1, total: TOUR.length })),
+      dialogBox({
+        portrait: `portrait_grandma${step.mood ? `_${step.mood}` : ''}`,
+        name: t(CHARACTERS.grandma.nameKey),
+        text: t(step.key),
+        pitch: VOICE.grandma,
+        nextLabel: last ? t('tour.done') : t('tour.next'),
+        onNext: () => {
+          if (last) {
+            finish();
+            return;
+          }
+          tourStep++;
+          slideTab = true;
+          render();
+        },
       }),
     );
+    if (!last) tourEl.append(skip);
+    document.body.append(tourEl);
   };
 
   // ---------- Закупка ----------
@@ -1396,8 +1484,17 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   const storeTab = (state: StoreState): HTMLElement[] => {
     const level = storeLevel(state);
     const next = nextStoreLevel(state);
+    const replay = el('div', 'ui-box');
+    replay.append(
+      el('div', 'ui-muted', t('tour.replayNote')),
+      button(`👵 ${t('tour.replay')}`, () => {
+        tourStep = 0;
+        update({ ...getState(), tourDone: false });
+      }, 'ui-btn secondary'),
+    );
     const out: HTMLElement[] = [
       achievementsButton(state),
+      replay,
       regularsBox(state),
       adsBox(state),
       rankBox(state),
@@ -1478,6 +1575,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     if (bill.debt) row(t('bills.debt'), bill.debt);
     row(t('bills.total'), billTotal(bill));
     const wages = (Object.keys(STAFF_ROLES) as (keyof typeof STAFF_ROLES)[])
+      .filter((r) => !isCashierRole(r) || registerOfRole(r) < registerCount(state))
       .map((r) => `${t(STAFF_ROLES[r].nameKey)} ${STAFF_ROLES[r].wage}`)
       .join(', ');
     costs.append(el('div', 'ui-muted', t('bills.staffPreview', { list: wages })));
