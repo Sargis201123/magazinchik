@@ -365,6 +365,8 @@ export const en: Record<TextKey, string> = {
   'decor.plants_big': 'Big ficus plants',
   'decor.neon_open': '“OPEN” neon',
   'decor.aquarium': 'Fish tank',
+  'title.musicOn': '🎵 Music',
+  'title.musicOff': '🎵 No music',
   'popup.rush': "Rush hour!",
   'popup.broken': "Fridge is broken",
   'hint.inspector': "The inspector is here! Quickly clean the trash and toilet",

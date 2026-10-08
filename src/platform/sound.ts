@@ -14,8 +14,8 @@ function readMuted(): boolean {
   }
 }
 
-function audio(): AudioContext | null {
-  if (muted) return null;
+/** Общий аудиоконтекст для звуков и музыки (создаётся по первому касанию). */
+export function audioContext(): AudioContext | null {
   if (!ctx) {
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return null;
@@ -25,8 +25,13 @@ function audio(): AudioContext | null {
   return ctx;
 }
 
+function audio(): AudioContext | null {
+  if (muted) return null;
+  return audioContext();
+}
+
 // Первое касание будит звук (особенно на iOS).
-document.addEventListener('pointerdown', () => audio(), { once: true });
+document.addEventListener('pointerdown', () => audioContext(), { once: true });
 
 interface Note {
   freq: number;
@@ -103,6 +108,6 @@ export const sound = {
     } catch {
       // Без хранилища настройка живёт до перезапуска.
     }
-    if (next) void ctx?.suspend();
+    // Музыка играет через тот же контекст — его не останавливаем.
   },
 };

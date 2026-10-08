@@ -59,6 +59,7 @@ import {
 import { loadGame, saveGame } from '../game/save';
 import { t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
+import { music } from '../platform/music';
 import { haptic } from '../platform/telegram';
 import { UI_FONT } from '../ui/dom';
 import { Hud } from '../ui/hud';
@@ -709,6 +710,7 @@ export class StoreScene extends Phaser.Scene {
     this.indoorShade.setFillStyle(indoor);
     const evening = Phaser.Math.Clamp((p - 0.6) / 0.4, 0, 1);
     this.evening = evening;
+    music.setMood(evening > 0.5 ? 'evening' : 'day');
     if (this.vignette) {
       this.vignette.strength = 0.2 + 0.3 * evening;
       this.vignette.radius = 0.95 - 0.12 * evening;

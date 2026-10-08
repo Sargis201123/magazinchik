@@ -3,6 +3,7 @@
 import { getLang, setLang, t, type Lang } from '../i18n';
 import { saveLang } from '../i18n/stored';
 import { sound } from '../platform/sound';
+import { music } from '../platform/music';
 import type { StoreState } from '../game/economy';
 import { button, el, injectStyles, pixelize } from './dom';
 
@@ -47,6 +48,7 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
 
     const play = button(save ? t('title.continue') : t('title.play'), () => {
       sound.coin();
+      music.start();
       root.remove();
       onPlay();
     });
@@ -69,6 +71,11 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
       render();
     }, 'ui-chip');
     langs.append(toggle);
+    const tunes = button(music.isMuted() ? t('title.musicOff') : t('title.musicOn'), () => {
+      music.setMuted(!music.isMuted());
+      render();
+    }, 'ui-chip');
+    langs.append(tunes);
 
     root.replaceChildren(sign, play, ...(progress ? [progress] : []), langs);
     pixelize(root);

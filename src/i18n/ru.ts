@@ -363,6 +363,8 @@ export const ru = {
   'decor.plants_big': 'Большие фикусы',
   'decor.neon_open': 'Неон «ОТКРЫТО»',
   'decor.aquarium': 'Аквариум с рыбками',
+  'title.musicOn': '🎵 Музыка',
+  'title.musicOff': '🎵 Без музыки',
   'popup.rush': "Час пик!",
   'popup.broken': "Холодильник сломан",
   'hint.inspector': "Инспектор в зале! Быстро убери мусор и туалет",
