@@ -17,6 +17,7 @@ export const en: Record<TextKey, string> = {
   'shelf.low': 'Only {n} left',
 
   'hint.serve': 'Tap the register to serve a customer',
+  'hint.bin': 'The trash bin is full — tap it and the clerk will take it out',
   'hint.clean': 'Tap trash or the toilet to clean — but the register stays empty meanwhile',
   'hint.recall': 'A customer is waiting! Tap the register — the seller will drop everything and come back',
   'hint.restock': 'A shelf is running low — tap it and the seller will bring goods from the storage',
@@ -414,6 +415,9 @@ export const en: Record<TextKey, string> = {
   'title.musicOff': '🎵 No music',
   'summary.week': 'Revenue this week',
   'popup.combo': 'Combo ×{n}!',
+  'popup.binFull': 'The bin is full — take out the trash!',
+  'popup.spill': 'Oops, a spill!',
+  'popup.slip': 'Slippery!',
   'popup.rush': "Rush hour!",
   'popup.broken': "Fridge is broken",
   'hint.inspector': "The inspector is here! Quickly clean the trash and toilet",

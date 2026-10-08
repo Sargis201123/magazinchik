@@ -168,6 +168,16 @@ const MUD_CHANCE = 0.15;
 /** Больше двух грязных пятен разом не бывает — иначе гроза засыпает жалобами. */
 const MAX_MUD = 2;
 const MOP_MS = 1300;
+/** Сколько мусора влезает в ведро. Полное ведро пахнет — покупатели жалуются, проверка снимает баллы. */
+const BIN_CAPACITY = 5;
+const BIN_DROP_MS = 250;
+/** Завязать мешок и бросить его в контейнер на улице. */
+const BAG_MS = 600;
+const DUMP_MS = 450;
+/** Покупатель иногда роняет покупку и разливает: молоко, сок, газировка. */
+const SPILL_CHANCE = 0.035;
+const SPILL_TINTS = [0xf4f8ff, 0xffb347, 0xb86f50];
+const SPILL_MOP_MS = 1700;
 /** Следующий покупатель обслужен за столько после предыдущего — серия продолжается. */
 const COMBO_WINDOW_MS = 7000;
 const COMBO_COLORS = ['#fee761', '#feae34', '#f77622', '#e43b44', '#b55088', '#2ce8f5'];
@@ -309,7 +319,11 @@ interface Customer {
   serving?: boolean;
   /** Редкий гость для альбома. */
   rare?: RareGuestId;
+  /** Уже поскользнулся на луже (второй раз не падает). */
+  slipped?: boolean;
 }
+
+type TrashKind = 'trash' | 'mud' | 'spill';
 
 interface Worker {
   member: StaffMember;
@@ -440,6 +454,17 @@ export class StoreScene extends Phaser.Scene {
   /** Экран кассы и луч сканера мигают, пока пробивают товар. */
   private scanScreen!: Phaser.GameObjects.Rectangle;
   private scanBeam!: Phaser.GameObjects.Rectangle;
+  /** Ведро с мусором в зале: сколько в нём, картинка, выносят ли его сейчас и сколько несут в мешке. */
+  private binFill = 0;
+  private binImg?: Phaser.GameObjects.Image;
+  private binGlow?: Phaser.FX.Glow;
+  private binStink?: Phaser.GameObjects.Image;
+  private binBusy = false;
+  /** Кто сейчас выносит мусор: продавец (его могут позвать к кассе) или уборщица. */
+  private binBy: 'seller' | 'cleaner' | null = null;
+  private bagCarried = 0;
+  /** Продавец несёт мусор к ведру (если позовут к кассе — мусор упадёт обратно на пол). */
+  private carryingTrash = false;
   /** Голуби на тротуаре: разлетаются, когда рядом проходит человек. */
   private pigeons: Pigeon[] = [];
   /** Таймеры кота и голубей: при перестройке мира старые останавливаются. */
@@ -525,6 +550,7 @@ export class StoreScene extends Phaser.Scene {
     }
 
     for (const c of this.queue) this.updateBubble(c);
+    this.checkSlips();
     this.updateScanBar();
     this.callSellerIfNeeded();
     this.hud.setHint(this.currentHint(), this.state.day <= TUTORIAL_DAYS);
@@ -556,6 +582,7 @@ export class StoreScene extends Phaser.Scene {
     if (this.sellerBusy && !this.workers.has('cashier') && this.queue.length > 0) return t('hint.recall');
     if (!this.workers.has('cashier') && this.queue.length > 0 && this.state.day <= 2 && this.stats.served < 3) return t('hint.serve');
     if (this.state.day <= 4 && this.shelfNeedsRestock()) return t('hint.restock');
+    if (this.binFull() && !this.binBusy) return t('hint.bin');
     if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
     return '';
   }
@@ -688,6 +715,7 @@ export class StoreScene extends Phaser.Scene {
     this.art(counter.x + 2, counter.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(counter.y + 19);
     this.art(counter.x, counter.y + FURNITURE_TOP / 2, 'counter').setDepth(counter.y + 20);
     this.buildShowcases();
+    this.buildBin();
     // Полоска пробивки над кассой.
     this.scanBar = this.add.rectangle(counter.x - 9, counter.y - 31, 18, 4, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
     this.scanFill = this.add.rectangle(counter.x - 8, counter.y - 31, 0, 2, 0x63c74d).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
@@ -852,6 +880,7 @@ export class StoreScene extends Phaser.Scene {
       const glow = piece.getData('glow') as Phaser.FX.Glow | undefined;
       if (glow) glow.outerStrength = pulse;
     }
+    if (this.binGlow) this.binGlow.outerStrength = this.binFull() && !this.binBusy ? pulse : 0;
   }
 
   /** Двери разъезжаются, когда к ним подходят. */
@@ -1509,6 +1538,104 @@ export class StoreScene extends Phaser.Scene {
     this.obstacles.push({ x: counter.x - 13, y: counter.y - 30, w: 26, h: 54 });
   }
 
+  /** Где стоит ведро (у прохода со склада) и уличный контейнер (у роллета склада). */
+  private binSpot(): { x: number; y: number } {
+    return { x: this.layout.warehouse.w + 14, y: this.layout.h - 26 };
+  }
+
+  private dumpSpot(): { x: number; y: number } {
+    const { warehouse, h } = this.layout;
+    return { x: warehouse.x + warehouse.w / 2 + 6, y: h + FACADE_H + 9 };
+  }
+
+  /** Ведро в зале (нажми — продавец вынесет мусор) и зелёный контейнер на улице. */
+  private buildBin(): void {
+    const bin = this.binSpot();
+    const dump = this.dumpSpot();
+    this.binFill = 0;
+    this.binBusy = false;
+    this.binBy = null;
+    this.bagCarried = 0;
+    this.art(dump.x, dump.y, 'dumpster').setDepth(dump.y + 8);
+    this.binImg = this.art(bin.x, bin.y, 'bin0').setDepth(bin.y + 6);
+    this.binImg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.takeOutTrash()));
+    this.binGlow = this.binImg.preFX?.addGlow(0xe43b44, 0, 0, false, 0.1, 6);
+    this.binStink = this.art(bin.x, bin.y - 14, 'stink').setDepth(bin.y + 30).setVisible(false);
+    this.tweens.add({ targets: this.binStink, y: bin.y - 19, alpha: { from: 1, to: 0.35 }, duration: 900, yoyo: true, repeat: -1 });
+    this.obstacles.push({ x: bin.x - 8, y: bin.y - 12, w: 16, h: 14 });
+    this.refreshBin();
+  }
+
+  private binFull(): boolean {
+    return this.binFill >= BIN_CAPACITY;
+  }
+
+  private refreshBin(): void {
+    if (!this.binImg?.active) return;
+    const level = this.binFill === 0 ? 0 : this.binFull() ? 3 : this.binFill >= BIN_CAPACITY / 2 ? 2 : 1;
+    this.binImg.setTexture(`bin${level}`);
+    this.binStink?.setVisible(this.binFull());
+  }
+
+  /** Мусор в ведро: оно подпрыгивает. */
+  private putInBin(): void {
+    this.binFill = Math.min(BIN_CAPACITY, this.binFill + 1);
+    this.refreshBin();
+    sound.tap();
+    if (this.binImg) this.tweens.add({ targets: this.binImg, scaleY: 1.15 / ART, duration: 90, yoyo: true });
+    if (this.binFull()) this.popup(this.binSpot().x, this.binSpot().y - 18, t('popup.binFull'), '#ffd0d0');
+  }
+
+  /** Шаги «вынести мусор»: к ведру, завязать мешок, через дверь к контейнеру, бросить и вернуться. */
+  private takeOutSteps(onBag: () => void, onDump: () => void): ChoreStep[] {
+    const bin = this.binSpot();
+    const dump = this.dumpSpot();
+    const { door, h } = this.layout;
+    const outside = h + FACADE_H + 6;
+    return [
+      { x: bin.x + 9, y: bin.y + 2, ms: BAG_MS, action: onBag },
+      { x: door.x, y: door.y - 8 },
+      { x: door.x, y: outside },
+      { x: dump.x + 15, y: dump.y + 3, ms: DUMP_MS, action: onDump },
+      { x: door.x, y: outside },
+      { x: door.x, y: door.y - 8 },
+    ];
+  }
+
+  private bagFromBin(): void {
+    this.bagCarried = this.binFill;
+    this.binFill = 0;
+    this.refreshBin();
+  }
+
+  private bagToDumpster(): void {
+    this.bagCarried = 0;
+    this.binBusy = false;
+    this.binBy = null;
+    sound.coin();
+    const dump = this.dumpSpot();
+    this.puff(dump.x, dump.y - 6);
+  }
+
+  /** Продавец выносит мусор: долго, касса в это время пустует. */
+  private takeOutTrash(): void {
+    if (!this.running || this.sellerBusy || this.scanning?.byOwner || this.binBusy || this.binFill === 0) return;
+    this.binBusy = true;
+    this.binBy = 'seller';
+    void this.doChore(
+      this.takeOutSteps(
+        () => {
+          this.bagFromBin();
+          this.carried.setTexture('trash_bag').setPosition(5, 1).setVisible(true);
+        },
+        () => {
+          this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+          this.bagToDumpster();
+        },
+      ),
+    );
+  }
+
   /** Витрина вечером светится, и тёплый свет из неё ложится на тротуар. */
   private windowLight(x: number, glassY: number, groundY: number): void {
     this.nightGlow(this.add.rectangle(x, glassY, 18, 5, 0xffc870), 0.45);
@@ -2040,6 +2167,16 @@ export class StoreScene extends Phaser.Scene {
     this.choreId++;
     this.tweens.killTweensOf(this.carried);
     this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+    // Несли мусор — роняем обратно; несли мешок — он «возвращается» в ведро.
+    if (this.carryingTrash) this.dropTrash(this.seller.x, this.seller.y - 6);
+    this.carryingTrash = false;
+    if (this.binBy === 'seller') {
+      this.binFill = Math.min(BIN_CAPACITY, this.binFill + this.bagCarried);
+      this.bagCarried = 0;
+      this.binBusy = false;
+      this.binBy = null;
+      this.refreshBin();
+    }
     haptic.tap();
     void this.returnSeller();
   }
@@ -2047,6 +2184,12 @@ export class StoreScene extends Phaser.Scene {
   private async returnSeller(): Promise<void> {
     const id = this.choreId;
     const home = this.ownerHome();
+    // С улицы — через дверь, а не сквозь стену.
+    if (this.seller.y > this.layout.h - 2) {
+      await this.walk(this.seller, this.layout.door.x, this.layout.h + FACADE_H + 6, SELLER_SPEED);
+      await this.walk(this.seller, this.layout.door.x, this.layout.door.y - 8, SELLER_SPEED);
+      if (id !== this.choreId) return;
+    }
     await this.walk(this.seller, home.x, home.y, SELLER_SPEED);
     if (id === this.choreId) this.sellerBusy = false;
   }
@@ -2153,21 +2296,54 @@ export class StoreScene extends Phaser.Scene {
     ]);
   }
 
-  /** Мусор на полу; mud — грязные следы с улицы, их моют шваброй. */
-  private dropTrash(x: number, y: number, mud = false): void {
-    if (this.trash.size >= MAX_TRASH) return;
-    const key = mud ? 'mud' : Phaser.Utils.Array.GetRandom(['trash', 'trash', 'trash_banana', 'trash_cup']);
-    const area = mud ? new Phaser.Geom.Rectangle(-2, -2, 30, 26) : new Phaser.Geom.Rectangle(-5, -5, 16, 15);
+  /**
+   * Мусор на полу. trash — фантики и стаканчики: подобрать и отнести в ведро;
+   * mud — грязные следы с улицы и spill — пролитое: их моют шваброй, это дольше.
+   */
+  private dropTrash(x: number, y: number, kind: TrashKind = 'trash'): Phaser.GameObjects.Image | undefined {
+    if (this.trash.size >= MAX_TRASH) return undefined;
+    const key = kind === 'trash' ? Phaser.Utils.Array.GetRandom(['trash', 'trash', 'trash_banana', 'trash_cup']) : kind;
+    const area =
+      kind === 'mud' ? new Phaser.Geom.Rectangle(-2, -2, 30, 26) : kind === 'spill' ? new Phaser.Geom.Rectangle(-2, -4, 32, 20) : new Phaser.Geom.Rectangle(-5, -5, 16, 15);
     const piece = this
       .art(x + Phaser.Math.Between(-6, 6), y + Phaser.Math.Between(4, 8), key)
-      .setDepth(mud ? 0.5 : 1)
+      .setDepth(kind === 'trash' ? 1 : 0.5)
       .setInteractive(area, Phaser.Geom.Rectangle.Contains);
+    piece.setData('kind', kind);
     piece.setData('glow', piece.preFX?.addGlow(0xffffff, 1, 0, false, 0.1, 6));
     piece.on('pointerup', () => {
       if (this.dragged || this.claimedTrash.has(piece) || this.sellerBusy || this.scanning?.byOwner) return;
+      if (kind === 'trash' && this.binFull()) {
+        // Ведро полное — сначала вынести.
+        this.popup(this.binSpot().x, this.binSpot().y - 18, t('popup.binFull'), '#ffd0d0');
+        sound.bad();
+        return;
+      }
       this.claimedTrash.add(piece);
-      if (!mud) {
-        void this.doChore([{ x: piece.x + 6, y: piece.y, ms: TRASH_CLEAN_MS, action: () => this.removeTrash(piece) }]);
+      if (kind === 'trash') {
+        const bin = this.binSpot();
+        void this.doChore([
+          {
+            x: piece.x + 6,
+            y: piece.y,
+            ms: TRASH_CLEAN_MS,
+            action: () => {
+              this.carried.setTexture(piece.texture.key).setPosition(5, 0).setVisible(true);
+              this.carryingTrash = true;
+              this.removeTrash(piece);
+            },
+          },
+          {
+            x: bin.x + 9,
+            y: bin.y + 2,
+            ms: BIN_DROP_MS,
+            action: () => {
+              this.carryingTrash = false;
+              this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+              this.putInBin();
+            },
+          },
+        ]);
         return;
       }
       // Продавец берёт швабру и трёт пол туда-сюда.
@@ -2178,7 +2354,7 @@ export class StoreScene extends Phaser.Scene {
         {
           x: piece.x + 7,
           y: piece.y,
-          ms: MOP_MS,
+          ms: kind === 'spill' ? SPILL_MOP_MS : MOP_MS,
           action: () => {
             scrub?.remove();
             this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
@@ -2188,14 +2364,42 @@ export class StoreScene extends Phaser.Scene {
       ]);
     });
     this.trash.add(piece);
+    return piece;
+  }
+
+  /** Покупатель уронил покупку: лужа и опрокинутый пакет. По луже скользко. */
+  private spill(x: number, y: number): void {
+    const piece = this.dropTrash(x, y, 'spill');
+    if (!piece) return;
+    piece.setTint(Phaser.Utils.Array.GetRandom(SPILL_TINTS));
+    const pack = this.art(piece.x + 9, piece.y - 3, 'spill_pack').setAngle(70).setDepth(0.6);
+    piece.once('destroy', () => pack.destroy());
+    sound.bad();
+    this.popup(x, y - 16, t('popup.spill'), '#ffd0d0');
+  }
+
+  /** Наступил в лужу — чуть не упал: настроение испорчено. */
+  private checkSlips(): void {
+    const spills = [...this.trash].filter((piece) => piece.getData('kind') === 'spill');
+    if (!spills.length) return;
+    for (const c of this.customers) {
+      if (c.slipped || c.gone || c.thief) continue;
+      const feetY = c.sprite.y + 8;
+      if (!spills.some((sp) => Math.abs(sp.x - c.sprite.x) < 7 && Math.abs(sp.y - feetY) < 4)) continue;
+      c.slipped = true;
+      c.unhappy = true;
+      this.tweens.add({ targets: c.sprite, angle: { from: -14, to: 12 }, duration: 110, yoyo: true, repeat: 1, onComplete: () => c.sprite.setAngle(0) });
+      this.emote(c.sprite, 'emo_angry');
+      this.popup(c.sprite.x, c.sprite.y - 18, t('popup.slip'), '#ffd0d0');
+    }
   }
 
   private removeTrash(piece: Phaser.GameObjects.Image): void {
     if (this.trash.has(piece)) this.stats.trashCleaned++;
     this.trash.delete(piece);
     this.claimedTrash.delete(piece);
-    if (piece.texture.key === 'mud') this.bubbles(piece.x, piece.y);
-    else this.puff(piece.x, piece.y);
+    if (piece.getData('kind') === 'trash') this.puff(piece.x, piece.y);
+    else this.bubbles(piece.x, piece.y);
     piece.destroy();
   }
 
@@ -2210,6 +2414,13 @@ export class StoreScene extends Phaser.Scene {
     }
     this.workers.clear();
     this.claimedTrash.clear();
+    if (this.binBy === 'cleaner') {
+      this.binFill = Math.min(BIN_CAPACITY, this.binFill + this.bagCarried);
+      this.bagCarried = 0;
+      this.binBusy = false;
+      this.binBy = null;
+      this.refreshBin();
+    }
     for (const member of this.state.staff) {
       if (this.state.plan?.sick === member.role) continue;
       const home = this.workerHome(member.role);
@@ -2278,13 +2489,51 @@ export class StoreScene extends Phaser.Scene {
   /** Уборщик подбирает мусор, а когда его нет — моет туалет. */
   private async cleanerLoop(w: Worker, gen: number): Promise<void> {
     while (this.alive(gen)) {
+      // Ведро почти полное — сначала вынести.
+      if (this.running && this.binFill >= BIN_CAPACITY - 1 && !this.binBusy) {
+        this.binBusy = true;
+        this.binBy = 'cleaner';
+        for (const step of this.takeOutSteps(
+          () => {
+            this.bagFromBin();
+            w.carried.setTexture('trash_bag').setVisible(true);
+          },
+          () => {
+            w.carried.setVisible(false).setTexture('box');
+            this.bagToDumpster();
+          },
+        )) {
+          await this.workerWalk(w, step.x, step.y);
+          if (!this.alive(gen)) return;
+          if (step.ms) await this.workerWait(w, step.ms);
+          step.action?.();
+        }
+        continue;
+      }
       const piece = this.running ? this.nearestTrash(w.sprite.x, w.sprite.y) : undefined;
       if (piece) {
+        const kind = piece.getData('kind') as TrashKind;
+        if (kind === 'trash' && this.binFull()) {
+          await this.wait(300);
+          continue;
+        }
         this.claimedTrash.add(piece);
         await this.workerWalk(w, piece.x + 6, piece.y);
         if (!this.alive(gen)) return;
-        await this.workerWait(w, TRASH_CLEAN_MS);
-        if (piece.active) this.removeTrash(piece);
+        await this.workerWait(w, kind === 'trash' ? TRASH_CLEAN_MS : kind === 'spill' ? SPILL_MOP_MS : MOP_MS);
+        if (!piece.active) continue;
+        if (kind !== 'trash') {
+          this.removeTrash(piece);
+          continue;
+        }
+        w.carried.setTexture(piece.texture.key).setVisible(true);
+        this.removeTrash(piece);
+        const bin = this.binSpot();
+        await this.workerWalk(w, bin.x + 9, bin.y + 2);
+        if (!this.alive(gen)) return;
+        await this.workerWait(w, BIN_DROP_MS);
+        w.carried.setVisible(false).setTexture('box');
+        this.putInBin();
         continue;
       }
       if (this.running && this.toiletDirt >= 40) {
@@ -2372,7 +2621,8 @@ export class StoreScene extends Phaser.Scene {
     await look(sellerHome.x - 30, sellerHome.y - 10);
     if (!this.sys.isActive()) return;
 
-    const result = inspect(this.state, { trash: this.trash.size, toiletDirt: this.toiletDirt });
+    // Переполненное ведро инспектор считает как две кучки мусора.
+    const result = inspect(this.state, { trash: this.trash.size + (this.binFull() ? 2 : 0), toiletDirt: this.toiletDirt });
     this.inspection = result;
     this.state = inspectionDone(this.state, result);
     if (result.passed) {
@@ -2508,7 +2758,7 @@ export class StoreScene extends Phaser.Scene {
     // В дождь и снег с улицы несут грязь.
     const muddy = isWet(this.weather) || this.weather === 'snow';
     const mud = [...this.trash].filter((piece) => piece.texture.key === 'mud').length;
-    if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, true);
+    if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, 'mud');
 
     const wanted = pickWanted(this.state, Math.random, Phaser.Math.Between(1, 2));
     let disappointed = false;
@@ -2522,6 +2772,7 @@ export class StoreScene extends Phaser.Scene {
       await this.wait(500);
       const result = this.tryTake(c, id);
       this.reachShelf(c, slot, result === 'taken' ? id : null);
+      if (result === 'taken' && Math.random() < SPILL_CHANCE) this.spill(c.sprite.x, c.sprite.y + 2);
       this.endThought(thought, result === 'empty' || result === 'expensive');
       if (result === 'empty' || result === 'expensive') disappointed = true;
     }
@@ -2695,7 +2946,7 @@ export class StoreScene extends Phaser.Scene {
     this.flyCoins(this.layout.counter.x, this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)) + Math.min(this.combo - 1, 5));
     if (this.combo >= 2) this.celebrateCombo(this.combo);
 
-    const dirty = this.trash.size >= TRASH_COMPLAINT;
+    const dirty = this.trash.size >= TRASH_COMPLAINT || this.binFull();
     const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
     if (c.unhappy || dirty || badGoods) {
       this.stats.complaints++;
@@ -3005,6 +3256,9 @@ export class StoreScene extends Phaser.Scene {
     const season = seasonFor(this.state.day);
     if (season) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
     this.stats = emptyDayStats();
+    // Вечером мусор выносят — утром ведро пустое.
+    this.binFill = 0;
+    this.refreshBin();
     this.combo = 0;
     this.lastSaleAt = -Infinity;
     this.timeLeft = DAY_SECONDS;

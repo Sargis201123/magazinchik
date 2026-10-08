@@ -2317,6 +2317,73 @@ def badges():
         c.save(f"badge_{name}")
 
 
+def bins():
+    """Ведро в зале (4 степени наполнения), мешок с мусором, уличный контейнер и лужа пролитого."""
+    def can(level):
+        c = Canvas(22, 30)
+        # Мусор торчит из ведра — тем выше, чем оно полнее.
+        heaps = {0: [], 1: [(11, 9, 4, 2)], 2: [(9, 8, 4, 3), (14, 8, 3, 2.5)], 3: [(8, 6, 4, 4), (13, 5, 4, 4), (11, 2, 3, 3)]}[level]
+        for i, (cx, cy, rx, ry) in enumerate(heaps):
+            c.ellipse(cx, cy, rx, ry, ("N", "W", "n")[i % 3])
+            c.px(int(cx) - 1, int(cy) - 1, "w")
+            c.px(int(cx) + 1, int(cy), "a")
+        if level == 3:
+            c.rect(6, 4, 3, 2, "w")
+            c.rect(14, 3, 2, 3, "Y")
+            c.px(10, 2, "R")
+        c.round_rect(3, 10, 16, 18, "G", r=2)
+        c.vline(4, 11, 16, "l")
+        c.vline(17, 11, 16, "g")
+        c.rect(2, 9, 18, 3, "W")
+        c.hline(2, 9, 18, "w")
+        for y in (15, 20, 25):
+            c.hline(5, y, 12, "g")
+        c.rect(8, 27, 6, 2, "K")
+        c.outline("k")
+        shadowed(c, 11, 28, 8, 2).save(f"bin{level}")
+    for level in range(4):
+        can(level)
+    # Мешок с мусором в руках.
+    c = Canvas(14, 16)
+    c.ellipse(7, 10, 6, 5.5, "K")
+    c.ellipse(5, 9, 2, 2, "g")
+    c.rect(5, 2, 4, 3, "K")
+    c.px(4, 1, "K")
+    c.px(9, 1, "K")
+    c.outline("k")
+    c.save("trash_bag")
+    # Уличный контейнер: зелёный бак с крышкой и колёсиками.
+    c = Canvas(48, 36)
+    c.rect(4, 10, 40, 20, "e")
+    c.rect(4, 10, 40, 3, "E")
+    c.vline(5, 13, 16, "E")
+    for x in range(10, 44, 8):
+        c.vline(x, 14, 14, "d")
+    c.rect(2, 4, 44, 7, "d")
+    c.hline(2, 4, 44, "e")
+    c.rect(18, 6, 12, 2, "E")
+    for x in (9, 38):
+        c.ellipse(x, 31, 3, 3, "K")
+        c.px(x, 31, "l")
+    c.outline("k")
+    shadowed(c, 24, 33, 21, 3).save("dumpster")
+    # Лужа пролитого: белая под тинт (молоко белое, сок рыжий), с бликом.
+    c = Canvas(28, 14)
+    c.ellipse(13, 7, 11, 5, (255, 255, 255, 215))
+    c.ellipse(21, 9, 4, 3, (255, 255, 255, 215))
+    c.ellipse(6, 10, 3, 2, (255, 255, 255, 215))
+    c.ellipse(11, 6, 4, 1.5, (255, 255, 255, 255))
+    c.px(9, 5, "w")
+    c.save("spill")
+    # Опрокинутый пакет рядом с лужей.
+    c = Canvas(10, 8)
+    c.rect(1, 2, 8, 5, "w")
+    c.rect(1, 2, 3, 5, "U")
+    c.hline(1, 4, 8, "W")
+    c.outline("k")
+    c.save("spill_pack")
+
+
 def environment2():
     building()
     lot2()
@@ -2337,6 +2404,7 @@ def environment2():
     bags_and_pets()
     seasonal()
     badges()
+    bins()
 
 
 # ---------------------------------------------------------------- люди
