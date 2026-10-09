@@ -100,6 +100,9 @@ import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, t
 import { sound } from '../platform/sound';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
 import { CANDY_COST, CANDY_PRICE, nextRack, rackCapacity, rackOf, refillRack, upgradeRack } from '../game/impulse';
+import { haggleBonus, learnSkill, nextLevelXp, ownerLevelOf, ownerTiming, ownerXp, SKILL_IDS, SKILL_MAX, skillLevel, skillPoints, SKILLS } from '../game/owner';
+import { LOAN_INTEREST, LOAN_MONTHS, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../game/bank';
+import { showReport } from './report';
 import { buyCups, COFFEE_CHANCE, CUP_COST, cupsOf, CUPS_MAX } from '../game/coffee';
 import { coffeePrice, coffeeSprite, GEAR, GEAR_IDS, gearAvailable, gearTier, nextGear, ovenBake, ovenBatch, ovenBatchCost, ovenSprite, upgradeGear, type GearId } from '../game/gear';
 import { isCashierRole, nextRegisterCount, registerCount, registerOfRole } from '../game/registers';
@@ -491,7 +494,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
           button(
             `−${Math.round(ask * 100)}%`,
             () => {
-              const result = haggle(s, deals[sid], ask, getState().rating, Math.random());
+              const result = haggle(s, deals[sid], ask, getState().rating, Math.random(), haggleBonus(getState()));
               deals[sid] = result.deal;
               quotes[sid] = result.success ? s.lines.yes : result.deal.angry ? s.lines.angry : s.lines.no;
               haptic[result.success ? 'success' : 'error']();
@@ -899,6 +902,27 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       );
       row.append(body, actions);
       box.append(row);
+    }
+    return box;
+  };
+
+  /** Банк: взять кредит (один за раз) или вернуть досрочно. */
+  const bankBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('bank.title')));
+    const loan = state.loan;
+    if (loan) {
+      box.append(el('div', 'ui-note', t('bank.current', { left: loan.left, pay: loan.payment })));
+      const chips = el('div', 'ui-chips');
+      for (const n of [...new Set([Math.min(500, loan.left), loan.left])]) {
+        chips.append(button(t('bank.repay', { n }), () => update(repayLoan(getState(), n), 'success'), 'ui-chip', state.money < n));
+      }
+      box.append(chips);
+      return box;
+    }
+    box.append(el('div', 'ui-muted', t('bank.note', { pct: Math.round(LOAN_INTEREST * 100), m: LOAN_MONTHS })));
+    for (const n of loanOptions(state)) {
+      box.append(button(t('bank.take', { n, total: loanTotal(n), pay: loanPayment(n) }), () => update(takeLoan(getState(), n), 'success'), 'ui-btn secondary'));
     }
     return box;
   };
@@ -1407,6 +1431,33 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return `${stars}${speed}${trait}`;
   };
 
+  /** Хозяин: уровень за обслуженных покупателей и навыки, в которые вкладывают очки. */
+  const ownerBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    const next = nextLevelXp(state);
+    const points = skillPoints(state);
+    box.append(
+      el('b', '', t('skill.title', { n: ownerLevelOf(state) })),
+      el('div', 'ui-muted', next === null ? t('skill.xpMax', { xp: ownerXp(state) }) : t('skill.xp', { xp: ownerXp(state), next })),
+    );
+    if (points) box.append(el('div', 'ui-note', t('skill.points', { n: points })));
+    for (const id of SKILL_IDS) {
+      const skill = SKILLS[id];
+      const lvl = skillLevel(state, id);
+      const row = el('div', 'ui-item');
+      row.append(el('div', 'ui-ad-icon', skill.icon));
+      const body = el('div');
+      const name = el('div', 'ui-item-name', `${t(skill.nameKey)} `);
+      name.append(el('span', 'ui-skill-pips', '●'.repeat(lvl) + '○'.repeat(SKILL_MAX - lvl)));
+      body.append(name, el('div', 'ui-item-sub', t(skill.descKey)));
+      const actions = el('div', 'ui-item-actions');
+      if (lvl < SKILL_MAX) actions.append(button(t('skill.learn'), () => update(learnSkill(getState(), id), 'success'), 'ui-chip', points <= 0));
+      row.append(body, actions);
+      box.append(row);
+    }
+    return box;
+  };
+
   const staffTab = (state: StoreState): HTMLElement[] => {
     const limit = staffLimit(state);
     const lvl = ownerLevel(state.ownerServed);
@@ -1422,9 +1473,10 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
           ? t('staffTab.ownerSkillMax', { s: scan.item.toFixed(2) })
           : t('staffTab.ownerSkillNext', { n: state.ownerServed, next, s: scan.item.toFixed(2) }),
       ),
-      el('div', 'ui-muted', t('staffTab.ownerPerDay', { n: servePerDay(withUpgrades(state, scan)) })),
+      el('div', 'ui-muted', t('staffTab.ownerPerDay', { n: servePerDay(withUpgrades(state, ownerTiming(state))) })),
     );
     const out: HTMLElement[] = [
+      ownerBox(state),
       skill,
       el('div', 'ui-muted', t('staffTab.count', { n: state.staff.length, max: limit })),
       el('div', 'ui-note', t('staffTab.wageNote')),
@@ -1563,7 +1615,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       el('b', '', t('store.current', { name: t(level.nameKey) })),
       el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: level.warehouse, r: registerCount(state), g: level.guests })),
     );
-    out.push(current, gearBox(state));
+    out.push(current, button(t('report.button'), () => showReport(getState()), 'ui-btn secondary'), gearBox(state), bankBox(state));
 
     const grow = el('div', 'ui-box');
     if (!next) {
@@ -1629,6 +1681,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     row(t('bills.power'), bill.power);
     row(t('bills.salaries'), state.staff.length ? bill.salaries : t('bills.noStaff'));
     if (bill.debt) row(t('bills.debt'), bill.debt);
+    if (bill.loan) row(t('bills.loan'), bill.loan);
     row(t('bills.total'), billTotal(bill));
     out.push(costs);
     return out;

@@ -221,6 +221,7 @@ describe('помещение, долг и расходы', () => {
       power: level.power + FRIDGE_POWER, // в empty() один молочный холодильник
       salaries: STAFF_ROLES.cashier.wage,
       debt: DEBT_PAYMENT,
+      loan: 0,
     });
     const night = endDay(s, emptyDayStats());
     expect(night.bill).toEqual(bill);

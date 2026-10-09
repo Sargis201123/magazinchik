@@ -230,6 +230,12 @@ const css = `
   color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
 .ui-speed.on { background: #fee761; }
 .ui-urgent { bottom: calc(env(safe-area-inset-bottom) + 92px); }
+.ui-report-chart { display: flex; align-items: flex-end; gap: 6px; height: 110px; margin: 10px 0; padding: 0 2px; }
+.ui-report-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.ui-report-bar { width: 100%; background: #63c74d; border: 2px solid #2b2233; border-radius: 4px 4px 0 0; }
+.ui-report-val { font-size: 10px; color: #6a5f58; margin-bottom: 2px; }
+.ui-report-day { font-size: 11px; color: #2b2233; margin-top: 2px; }
+.ui-skill-pips { color: #feae34; letter-spacing: 1px; }
 .ui-tip { background: #fff3b0; }
 .ui-tip > div { font-size: 14px; line-height: 1.35; margin: 4px 0 6px; color: #2b2233; }
 .ui-todo { background: #fbf6ea; }

@@ -8,6 +8,8 @@ import { newDecor, type DecorState } from './decor';
 import type { ReviewTopic, Review } from './reviews';
 import type { War } from './war';
 import type { ShopCat } from './cat';
+import type { DayReport } from './reports';
+import { afterLoanPayment, loanDue } from './bank';
 import { fridgeLife, fridgePower, lightsPower, warehouseRoom, type GearId } from './gear';
 
 /** Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу. */
@@ -471,6 +473,12 @@ export interface StoreState {
   weekly?: { month: number; challenges: { kind: string; target: number; product?: ProductId; progress: number; reward: number; done?: boolean }[] };
   /** Какие подсказки о новых механиках уже показаны (tips.ts). */
   seenTips?: string[];
+  /** Навыки хозяина: ступень каждого (owner.ts). */
+  skills?: Partial<Record<'hands' | 'haggle' | 'strong' | 'charm' | 'eye', number>>;
+  /** Кредит в банке: сколько осталось вернуть и платёж в месяц (bank.ts). */
+  loan?: { left: number; payment: number };
+  /** Отчёт по дням: последние REPORT_DAYS дней (reports.ts). */
+  reports?: DayReport[];
   /** Автозаказ: сколько чего держать на складе и включён ли он (reorder.ts). */
   autoOrder?: { on: boolean; lines: { sid: string; pid: ProductId; qty: number }[] };
   /** Бабушкино обучение: false — показать (новая игра или «пройти заново»), нет поля — старое сохранение. */
@@ -804,6 +812,8 @@ export interface Bill {
   salaries: number;
   /** Платёж по кредиту. */
   debt: number;
+  /** Платёж банку (bank.ts). */
+  loan?: number;
 }
 
 export function monthlyBill(state: StoreState): Bill {
@@ -816,10 +826,11 @@ export function monthlyBill(state: StoreState): Bill {
     power: Math.round(level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state)),
     salaries: state.staff.reduce((sum, m) => sum + m.wage, 0),
     debt: Math.min(DEBT_PAYMENT, state.debt),
+    loan: loanDue(state),
   };
 }
 
-export const billTotal = (b: Bill): number => b.rent + b.utilities + b.power + b.salaries + b.debt;
+export const billTotal = (b: Bill): number => b.rent + b.utilities + b.power + b.salaries + b.debt + (b.loan ?? 0);
 
 export const monthOf = (day: number): number => Math.ceil(day / MONTH_DAYS);
 /** Сколько дней до счетов: 0 — счета придут сегодня вечером. */
@@ -833,7 +844,8 @@ export function payBill(state: StoreState): { state: StoreState; bill: Bill; sho
   const shortfall = total - paid;
   const penalty = Math.round(shortfall * LATE_PENALTY);
   return {
-    state: { ...state, money: state.money - paid, debt: state.debt - bill.debt + shortfall + penalty },
+    // Платёж банку засчитан в любом случае: не хватило — недостача ушла в долг вместе со счетами.
+    state: afterLoanPayment({ ...state, money: state.money - paid, debt: state.debt - bill.debt + shortfall + penalty }, bill.loan ?? 0),
     bill,
     shortfall,
   };
@@ -968,7 +980,7 @@ export function markdownSurplus(state: StoreState, expected: (id: ProductId) => 
   return { state: count ? next : state, count };
 }
 
-function ageStock(stock: Stock, fresh: number): { stock: Stock; spoiled: number } {
+function ageStock(stock: Stock, fresh: number, by: Partial<Record<ProductId, number>> = {}): { stock: Stock; spoiled: number } {
   let spoiled = 0;
   const next: Stock = {};
   for (const id of PRODUCT_IDS) {
@@ -977,6 +989,7 @@ function ageStock(stock: Stock, fresh: number): { stock: Stock; spoiled: number 
     const aged = units.map((u) => ({ ...u, age: u.age + 1 }));
     const kept = aged.filter((u) => u.age < unitLife(id, u, fresh));
     spoiled += aged.length - kept.length;
+    if (aged.length > kept.length) by[id] = (by[id] ?? 0) + aged.length - kept.length;
     next[id] = kept;
   }
   return { stock: next, spoiled };
@@ -985,6 +998,8 @@ function ageStock(stock: Stock, fresh: number): { stock: Stock; spoiled: number 
 export interface NightResult {
   state: StoreState;
   spoiled: number;
+  /** Что именно испортилось (для отчёта). */
+  spoiledBy: Partial<Record<ProductId, number>>;
   /** Счета, если сегодня конец месяца. */
   bill: Bill | null;
   /** Сколько не хватило на счета (ушло в долг с пени). */
@@ -998,10 +1013,11 @@ export interface NightResult {
  * от довольства покупателей, в конце месяца приходят счета.
  */
 export function endDay(state: StoreState, stats: DayStats, random: () => number = Math.random): NightResult {
-  const warehouse = ageStock(state.warehouse, fridgeLife(state));
+  const spoiledBy: Partial<Record<ProductId, number>> = {};
+  const warehouse = ageStock(state.warehouse, fridgeLife(state), spoiledBy);
   let spoiled = warehouse.spoiled;
   const shelves = state.shelves.map((shelf) => {
-    const aged = ageStock(shelf.items, fridgeLife(state));
+    const aged = ageStock(shelf.items, fridgeLife(state), spoiledBy);
     spoiled += aged.spoiled;
     return { ...shelf, items: aged.stock };
   });
@@ -1017,12 +1033,12 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
     warehouse: warehouse.stock,
     shelves,
   };
-  if (daysUntilBill(state.day) !== 0) return { state: aged, spoiled, bill: null, shortfall: 0, skimmed };
+  if (daysUntilBill(state.day) !== 0) return { state: aged, spoiled, spoiledBy, bill: null, shortfall: 0, skimmed };
   const paid = payBill(aged);
   // Зарплату выплатили — сотрудники набираются опыта, просят прибавку или увольняются.
   const month = monthForStaff(paid.state.staff, random);
   const promoted = { ...paid.state, staff: month.staff, quitNotice: month.quit.length ? month.quit : undefined };
-  return { state: promoted, spoiled, bill: paid.bill, shortfall: paid.shortfall, skimmed };
+  return { state: promoted, spoiled, spoiledBy, bill: paid.bill, shortfall: paid.shortfall, skimmed };
 }
 
 /**

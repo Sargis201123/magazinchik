@@ -34,7 +34,6 @@ import {
   cashierScan,
   checkoutSeconds,
   ownerLevel,
-  ownerScan,
   type ScanTiming,
   warehouseCapacity,
   warehouseCount,
@@ -89,6 +88,7 @@ import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
+import { carryBonus, charmPatience, eyeTheft, ownerTiming } from '../game/owner';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
 import { showUrgent } from '../ui/urgent';
 import {
@@ -3749,7 +3749,7 @@ export class StoreScene extends Phaser.Scene {
     }
     // Одно касание — полка заполняется целиком: продавец ходит на склад, пока есть место и товар.
     const stock = PRODUCT_IDS.reduce((sum, id) => sum + (canPlace(id, shelf) ? (this.state.warehouse[id] ?? []).filter((u) => !u.pending).length : 0), 0);
-    const trips = Math.max(1, Math.ceil(Math.min(shelfFree(shelf), stock) / carryOf(this.state)));
+    const trips = Math.max(1, Math.ceil(Math.min(shelfFree(shelf), stock) / (carryOf(this.state) + carryBonus(this.state))));
     const { doorway, pickup } = this.layout.warehouse;
     const trip: ChoreStep[] = [
       { ...doorway },
@@ -3772,7 +3772,8 @@ export class StoreScene extends Phaser.Scene {
   private stockShelf(index: number, by: Phaser.GameObjects.Container): void {
     const view = this.shelfViews[index];
     const before = view ? view.items.filter((img) => img.visible).length : 0;
-    this.state = moveToShelf(this.state, index, undefined, carryOf(this.state)).state;
+    // Хозяин-силач носит больше (навык «Силач»), сотрудники — как обычно.
+    this.state = moveToShelf(this.state, index, undefined, carryOf(this.state) + (by === this.seller ? carryBonus(this.state) : 0)).state;
     this.refreshShelves();
     this.refreshWarehouse();
     const items = this.shelfViews[index]?.items ?? [];
@@ -4296,7 +4297,7 @@ export class StoreScene extends Phaser.Scene {
   // ---------- Покупатели ----------
 
   private spawnCustomer(): void {
-    const thief = Math.random() < thiefChance(this.state.level) * cameraTheft(this.state);
+    const thief = Math.random() < thiefChance(this.state.level) * cameraTheft(this.state) * eyeTheft(this.state);
     const valya = !thief && !this.night && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
     const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
     // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще.
@@ -4471,7 +4472,7 @@ export class StoreScene extends Phaser.Scene {
     c.waitStart = this.time.now;
     c.bubble.setVisible(true);
     // С котом рядом ждут дольше.
-    c.patienceMs = PATIENCE_MS * catPatience(this.state) * climatePatience(this.state, weatherFor(this.state.day));
+    c.patienceMs = PATIENCE_MS * catPatience(this.state) * climatePatience(this.state, weatherFor(this.state.day)) * charmPatience(this.state);
     c.patience = this.time.delayedCall(c.patienceMs, () => void this.giveUp(c));
     this.layoutQueue();
   }
@@ -4583,7 +4584,7 @@ export class StoreScene extends Phaser.Scene {
       this.sellerBusy = false;
       if (r.customer !== c || c.serving || c.gone) return;
     }
-    void this.scanCustomer(r, c, withUpgrades(this.state, ownerScan(this.state.ownerServed)), true);
+    void this.scanCustomer(r, c, withUpgrades(this.state, ownerTiming(this.state)), true);
   }
 
   /** Есть кассир — хозяину не нужно стоять у кассы: после дела он остаётся там, где закончил. */
