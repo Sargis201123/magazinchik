@@ -913,6 +913,18 @@ export const en: Record<TextKey, string> = {
   "supplier.wholesale.yes": "Fine, you talked me into it. Just don't tell anyone the price.",
   "supplier.wholesale.no": "My price is already wholesale, how much lower can it go?",
   "supplier.wholesale.angry": "Enough. Today it's list price plus extra.",
+  "popup.slotEmpty": "Room for a shelf — buy one in the morning, “Shelves” tab",
+  "event.bill.tax.title": "A letter from the tax office",
+  "event.bill.tax.text": "The tax office recalculated last quarter and wants {n} 💰 more. No point arguing.",
+  "event.bill.flood.title": "You flooded the neighbours!",
+  "event.bill.flood.text": "A hose under the sink leaked overnight and ruined the ceiling downstairs. Repairs — {n} 💰.",
+  "event.bill.fire.title": "Fire inspection",
+  "event.bill.fire.text": "The inspector found an expired extinguisher and a blocked aisle. Fine — {n} 💰.",
+  "event.bill.pipes.title": "A pipe burst",
+  "event.bill.pipes.text": "A pipe burst in the basement and the building manager sent a repair bill — {n} 💰.",
+  "event.bill.note": "Pay now or borrow from the neighbours — then the debt is paid off {p} 💰 at a time with the monthly bills.",
+  "event.bill.pay": "Pay {n} 💰",
+  "event.bill.debt": "Borrow from the neighbours",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

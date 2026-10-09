@@ -4,7 +4,8 @@ import { averageLevelDays, simulate } from '../src/game/simulate';
 // Баланс экономики: «разумный игрок» из симулятора должен расти не слишком быстро
 // и не слишком медленно. Если тест упал после правки цифр — запусти `npm run sim`.
 describe('баланс экономики', () => {
-  const days = averageLevelDays(120, 12);
+  // 24 прогона: на 12 интервалы плясали на день от шума погоды.
+  const days = averageLevelDays(120, 24);
 
   it('первое расширение — примерно через 8–15 дней', () => {
     expect(days[1]).toBeGreaterThanOrEqual(8);

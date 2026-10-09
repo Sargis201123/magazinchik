@@ -12,7 +12,6 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['weekly', (s) => Boolean(s.weekly)],
   ['markdown', (s) => s.day >= 3 && expiringCount(s) > 0],
   ['promo', (s) => s.day >= 5],
-  ['contract', (s) => s.day >= 8],
   ['fair', (s) => isFairDay(s.day)],
   ['cart', (s) => hasUpgrade(s, 'cart')],
   ['loyalty', (s) => hasUpgrade(s, 'loyalty')],

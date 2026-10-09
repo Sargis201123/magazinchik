@@ -806,19 +806,64 @@ def crate_meat():
 
 
 def rack():
-    """Секция складского стеллажа 120×19 (в мире 60×9,5): синие стойки, оранжевая балка."""
+    """Секция складского стеллажа 120×19 (в мире 60×9,5): сетчатая задняя стенка, синие стойки
+    с перфорацией, оранжевая балка и деревянный поддон, на котором стоит тара."""
     c = Canvas(120, 19)
+    # Сетка задней стенки.
+    c.rect(6, 0, 108, 14, "g")
+    for x in range(8, 114, 4):
+        c.vline(x, 0, 14, "K")
+    for y in range(2, 14, 4):
+        c.hline(6, y, 108, "K")
+    # Поддон: доски и тень под ними.
+    c.rect(6, 12, 108, 3, "B")
+    c.hline(6, 12, 108, "n")
+    for x in range(10, 112, 12):
+        c.rect(x, 13, 4, 2, "a")
+    # Балка.
+    c.rect(0, 15, 120, 3, "o")
+    c.hline(0, 15, 120, "Y")
+    c.hline(0, 17, 120, "r")
+    for x in range(14, 110, 24):
+        c.rect(x, 16, 6, 1, "w")
+    # Стойки с перфорацией.
     for x in (2, 114):
         c.rect(x, 0, 4, 19, "u")
         c.vline(x, 0, 19, "U")
-        for y in range(2, 18, 4):
+        for y in range(2, 18, 3):
             c.px(x + 2, y, "k")
-    c.rect(0, 16, 120, 3, "o")
-    c.hline(0, 16, 120, "Y")
-    c.hline(0, 18, 120, "r")
-    c.frame(2, 0, 4, 19, "k")
-    c.frame(114, 0, 4, 19, "k")
+        c.frame(x, 0, 4, 19, "k")
     c.save("rack")
+    # Пол склада: наливной серо-зелёный, со швами плит.
+    f = Canvas(32, 32)
+    f.rect(0, 0, 32, 32, "G")
+    f.speckle(0, 0, 32, 32, ["l", "g"], 10, 7)
+    f.hline(0, 31, 32, "g")
+    f.vline(31, 0, 32, "g")
+    f.hline(0, 0, 32, "l")
+    f.save("wh_floor")
+    # Разметка проезда: жёлто-чёрная полоса.
+    h = Canvas(16, 4)
+    for x in range(0, 16, 8):
+        for i in range(4):
+            h.rect(x + i, i, 4, 1, "Y")
+            h.rect(x + i + 4, i, 4, 1, "k")
+    h.save("hazard")
+    # Табличка «СКЛАД» (текст пишет игра).
+    p = Canvas(48, 14)
+    p.round_rect(0, 0, 48, 14, "K", r=2)
+    p.frame(1, 1, 46, 12, "y")
+    p.outline("k")
+    p.save("wh_sign")
+    # Огнетушитель на стене.
+    e = Canvas(8, 16)
+    e.rect(3, 0, 3, 2, "K")
+    e.rect(1, 2, 4, 2, "k")
+    e.round_rect(1, 3, 6, 12, "R", r=2)
+    e.vline(2, 4, 10, "s")
+    e.rect(1, 8, 6, 2, "w")
+    e.outline("k")
+    e.save("extinguisher")
 
 
 def crate_simple(name, base, light, dark, label):
@@ -3338,6 +3383,25 @@ def environment2():
     stage11()
     fair_stall()
     gear_props()
+    slot_empty()
+
+
+def slot_empty():
+    """Место под полку: пунктирная разметка на полу и плюс посередине (полку покупают утром)."""
+    c = Canvas(84, 40)
+    mark = (255, 255, 255, 150)
+    shade = (40, 30, 50, 40)
+    c.rect(2, 2, 80, 36, shade)
+    for x in range(2, 82, 6):
+        c.rect(x, 1, 3, 2, mark)
+        c.rect(x, 37, 3, 2, mark)
+    for y in range(1, 39, 6):
+        c.rect(1, y, 2, 3, mark)
+        c.rect(81, y, 2, 3, mark)
+    c.round_rect(34, 12, 16, 16, (255, 255, 255, 110), r=3)
+    c.rect(40, 15, 4, 10, (90, 105, 136, 230))
+    c.rect(37, 18, 10, 4, (90, 105, 136, 230))
+    c.save("slot_empty")
 
 
 def gear_props():

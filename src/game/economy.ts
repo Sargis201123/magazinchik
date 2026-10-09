@@ -153,7 +153,7 @@ export interface StoreLevel {
 export const STORE_LEVELS: StoreLevel[] = [
   { nameKey: 'store.l1', cost: 0, slots: 2, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 5 },
   { nameKey: 'store.l2', cost: 1000, slots: 4, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 7 },
-  { nameKey: 'store.l3', cost: 2500, slots: 6, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
+  { nameKey: 'store.l3', cost: 3200, slots: 6, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
   { nameKey: 'store.l4', cost: 6500, slots: 8, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
   { nameKey: 'store.l5', cost: 14000, slots: 10, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
 ];

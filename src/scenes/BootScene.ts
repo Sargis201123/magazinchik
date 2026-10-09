@@ -71,7 +71,7 @@ const SPRITES = [
   'leak',
   'wrench',
   'card_terminal',
-  'kiosk', 'candy', 'coffee_machine', 'coffee_machine1', 'coffee_machine2', 'cup', 'oven', 'oven1', 'oven2', 'oven_bread', 'review_board', 'cat_walk0', 'cat_walk1', 'cat_sit', 'cat_basket', 'cat_pillow', 'cat_house', 'phone', 'bike', 'mouse0', 'mouse1', 'fair_stall', 'eco_label', 'pallet_jack', 'forklift', 'autostore', 'fan_base', 'fan_blades', 'ac_wall', 'facade_screen0', 'facade_screen1', 'cam', 'mat_grate', 'air_curtain',
+  'kiosk', 'candy', 'coffee_machine', 'coffee_machine1', 'coffee_machine2', 'cup', 'oven', 'oven1', 'oven2', 'oven_bread', 'review_board', 'cat_walk0', 'cat_walk1', 'cat_sit', 'cat_basket', 'cat_pillow', 'cat_house', 'phone', 'bike', 'mouse0', 'mouse1', 'fair_stall', 'eco_label', 'pallet_jack', 'forklift', 'autostore', 'fan_base', 'fan_blades', 'ac_wall', 'facade_screen0', 'facade_screen1', 'cam', 'mat_grate', 'air_curtain', 'slot_empty', 'wh_floor', 'hazard', 'wh_sign', 'extinguisher',
   'floor_wood',
   'floor_checker',
   'floor_gold',
