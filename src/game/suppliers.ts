@@ -89,14 +89,15 @@ export const newDeal = (s: Supplier): Deal => ({ discount: 0, attemptsLeft: s.pa
 export const canHaggle = (deal: Deal): boolean => deal.discount === 0 && !deal.angry && deal.attemptsLeft > 0;
 
 /** Чем больше просишь, тем меньше шанс. Рейтинг магазина немного помогает. */
-export function haggleChance(s: Supplier, ask: number, rating: number): number {
-  return Math.min(0.95, Math.max(0.05, s.flexibility - ask * 2 + (rating - 3) * 0.03));
+/** bonus — навык хозяина «Торгаш» (owner.ts). */
+export function haggleChance(s: Supplier, ask: number, rating: number, bonus = 0): number {
+  return Math.min(0.95, Math.max(0.05, s.flexibility - ask * 2 + (rating - 3) * 0.03 + bonus));
 }
 
 /** roll — случайное число 0..1 (передаётся снаружи, чтобы торг можно было тестировать). */
-export function haggle(s: Supplier, deal: Deal, ask: number, rating: number, roll: number): { deal: Deal; success: boolean } {
+export function haggle(s: Supplier, deal: Deal, ask: number, rating: number, roll: number, bonus = 0): { deal: Deal; success: boolean } {
   if (!canHaggle(deal)) return { deal, success: false };
-  if (roll < haggleChance(s, ask, rating)) return { deal: { ...deal, discount: ask }, success: true };
+  if (roll < haggleChance(s, ask, rating, bonus)) return { deal: { ...deal, discount: ask }, success: true };
   const attemptsLeft = deal.attemptsLeft - 1;
   return { deal: { ...deal, attemptsLeft, angry: attemptsLeft === 0 }, success: false };
 }

@@ -61,7 +61,6 @@ import {
   workSpeed,
   checkoutSeconds,
   DAY_SECONDS,
-  ownerScan,
   recordSale,
 } from './economy';
 import { ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
@@ -84,6 +83,8 @@ import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight 
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
+import { recordDay } from './achievements';
+import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
 
 export { rng };
 
@@ -137,7 +138,7 @@ export interface SimOptions {
   ovenBurn?: number;
 }
 
-export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments';
+export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments' | 'skills';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy'];
@@ -173,7 +174,7 @@ const QUEUE_STEP_SECONDS = 0.3;
 function serveCapacity(state: StoreState): number {
   // Старая касса иногда заедает — в среднем столько секунд на покупателя.
   const jam = registerJam(state) * REGISTER_JAM_SECONDS;
-  const owner = checkoutSeconds(withUpgrades(state, ownerScan(state.ownerServed)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
+  const owner = checkoutSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
   const ownerCap = Math.floor((DAY_SECONDS * ownerAtRegister(state.level)) / owner);
   // Каждая касса: свой кассир или (одна, первая свободная) — хозяин между другими делами.
   let total = 0;
@@ -314,6 +315,12 @@ export function simulate({
         state = upgradeGear(state, id) ?? state;
       }
     }
+    // Навыки хозяина: очки — по кругу во все навыки.
+    if (features.skills) {
+      for (let i = 0; skillPoints(state) > 0 && i < SKILL_IDS.length * 3; i++) {
+        state = learnSkill(state, SKILL_IDS[i % SKILL_IDS.length]) ?? state;
+      }
+    }
     if (features.cat) {
       if (catOffer(state)) state = adoptCat(state, 'Барсик');
       state = feedCat(state) ?? state;
@@ -371,7 +378,7 @@ export function simulate({
     const deals = Object.fromEntries(
       SUPPLIER_IDS.map((sid) => {
         const s = SUPPLIERS[sid];
-        return [sid, haggle(s, newDeal(s), 0.05, state.rating, random()).deal];
+        return [sid, haggle(s, newDeal(s), 0.05, state.rating, random(), haggleBonus(state)).deal];
       }),
     );
     for (const id of sellable) {
@@ -410,7 +417,7 @@ export function simulate({
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
     // С котом в очереди ждут дольше — уходят реже.
     const lossInQueue =
-      (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day));
+      (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state);
     const serveCap = serveCapacity(state);
     // Грязь: уборщик, а ещё вход (грязь с улицы) и туалет (gear.ts).
     const dirtComplaint = (has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level) * (0.6 + 0.2 * entranceMud(state) + 0.2 * wcDirt(state));
@@ -443,7 +450,7 @@ export function simulate({
     };
     const runGuests = (count: number, tolerance: number, cap: number, night: boolean) => {
     for (let g = 0; g < count; g++) {
-      if (random() < thiefChance(state.level) * cameraTheft(state)) {
+      if (random() < thiefChance(state.level) * cameraTheft(state) * eyeTheft(state)) {
         // Вор берёт товар; его ловит охранник или, реже, сам игрок.
         const id = sellable[Math.floor(random() * sellable.length)];
         const index = shelfFor(state, id);
@@ -459,7 +466,7 @@ export function simulate({
       for (const id of sellable) {
         if (trips > 0 && onShelves(state, id) === 0 && warehouseOf(state, id) > 0) {
           const index = shelfFor(state, id);
-          state = moveToShelf(state, index, undefined, carryOf(state)).state;
+          state = moveToShelf(state, index, undefined, carryOf(state) + (has('loader') ? 0 : carryBonus(state))).state;
           trips--;
         }
       }
@@ -547,6 +554,7 @@ export function simulate({
 
     // ---------- Ночь ----------
     if (!has('cashier')) state = { ...state, ownerServed: state.ownerServed + stats.served };
+    state = recordDay(state, stats);
     const night = nightCycle(state, stats, random);
     state = night.state;
     const expenses = night.bill ? billTotal(night.bill) : 0;

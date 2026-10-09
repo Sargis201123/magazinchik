@@ -18,11 +18,12 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['печь', { features: { oven: true } }],
   ['ночная смена', { features: { night: true } }],
   ['всё оборудование', { features: { gear: true } }],
+  ['навыки хозяина', { features: { skills: true } }],
   ['кофе + печь', { features: { coffee: true, oven: true } }],
   ['кофе + печь + оборудование', { features: { coffee: true, oven: true, gear: true } }],
   ['война: сравнять цену', { war: 'match' }],
   ['война: реклама', { war: 'ad' }],
-  ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, cart: true, loyalty: true, gear: true, etags: true, departments: true }, war: 'match' }],
+  ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, cart: true, loyalty: true, gear: true, etags: true, departments: true, skills: true }, war: 'match' }],
 ];
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
