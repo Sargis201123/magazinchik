@@ -12,6 +12,8 @@ import {
   billTotal,
   guardCatchChance,
   staffOf,
+  isAbsent,
+  managerBoost,
   markdownSurplus,
   SHELF_KINDS,
   thiefChance,
@@ -87,6 +89,8 @@ import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
+import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
+import { showUrgent } from '../ui/urgent';
 import {
   binCapacity,
   binSprite,
@@ -353,13 +357,14 @@ const STAFF_ACC: Record<StaffRole, { acc: Accessory; tint: number }> = {
   cleaner: { acc: 'apron', tint: 0x5fcde4 },
   loader: { acc: 'vest', tint: 0xffffff },
   guard: { acc: 'badge', tint: 0xffffff },
+  manager: { acc: 'tie', tint: 0xffffff },
 };
 /** Тёмная кофта — так игрок может заметить вора. */
 const THIEF_SHIRT = 0x45444f;
 const CAR_COLORS = [0xe43b44, 0x0099db, 0x3e8948, 0xfeae34, 0xc0cbdc, 0x68386c, 0x262b44];
 const THIEF_SPEED = 52;
 /** Форма сотрудников. */
-const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082 };
+const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4 };
 const STAFF_SPEED = 60;
 /** Сколько кассир пробивает одного покупателя при обычной скорости. */
 const INSPECTOR_SHIRT = 0x222034;
@@ -379,7 +384,7 @@ const ORDER_GUESTS: Record<ClientId, [Look, TextKey]> = {
   valya: [VALYA, 'who.valya'],
 };
 const OWNER: Look = { shirt: 0x8fd16a, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short' };
-const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap' };
+const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short' };
 /** На какой секунде дня приходит инспектор. */
 const INSPECTOR_AT = 25;
 const BROKEN_TINT = 0x8a8a8a;
@@ -570,6 +575,9 @@ export class StoreScene extends Phaser.Scene {
   /** Смена номера останавливает циклы работы старых сотрудников. */
   private staffGen = 0;
   private toiletDirt = 0;
+  /** Срочный подвоз: что едет и занят ли фургон. */
+  private urgentOrders: { id: ProductId; qty: number }[] = [];
+  private urgentVanBusy = false;
   /** Электронные ценники сегодня уже уценили старое. */
   private eveningMarkdown = false;
   private wcStink!: Phaser.GameObjects.Image;
@@ -648,6 +656,7 @@ export class StoreScene extends Phaser.Scene {
     this.state = ensurePlan(save ?? newGame());
     this.hud = new Hud();
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
+    this.hud.onUrgent = () => this.openUrgent();
 
     this.buildWorld();
     this.hud.update(this.state, this.timeLeft);
@@ -695,6 +704,7 @@ export class StoreScene extends Phaser.Scene {
     this.scarePigeons();
     ambience.update(this.weather, this.evening, this.running);
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
+    this.hud.showUrgent(this.running && !this.night && this.state.day > TUTORIAL_DAYS);
     if (!this.running) return;
     const dt = (deltaMs / 1000) * this.speed;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
@@ -838,6 +848,7 @@ export class StoreScene extends Phaser.Scene {
     this.choreId++;
     this.sellerBusy = false;
     this.carryingTrash = false;
+    this.urgentVanBusy = false;
     this.shelfViews = [];
     this.boxes = [];
     this.slotDecor = [];
@@ -1989,6 +2000,8 @@ export class StoreScene extends Phaser.Scene {
 
   /** Вечер: если куплена ночная смена — спросить, работать ли ещё; иначе закрываемся. */
   private endOfDay(): void {
+    // Срочный заказ не успел доехать до закрытия — водитель всё равно выгрузил.
+    this.receiveUrgentOrders();
     if (this.night || this.nightAsked || !canWorkNight(this.state)) {
       this.finishDay();
       return;
@@ -3945,9 +3958,18 @@ export class StoreScene extends Phaser.Scene {
       this.binBy = null;
       this.refreshBin();
     }
+    // Кассир не вышел, а менеджер на месте — менеджер встаёт за его кассу.
+    const manager = this.state.staff.find((m) => m.role === 'manager' && !isAbsent(this.state, m));
+    const cover = manager
+      ? CASHIER_ROLES.slice(0, this.registers.length).find((role) => {
+          const m = staffOf(this.state, role);
+          return m && isAbsent(this.state, m);
+        })
+      : undefined;
     for (const member of this.state.staff) {
-      if (this.state.plan?.sick === member.role) continue;
-      const home = this.workerHome(member.role);
+      if (isAbsent(this.state, member)) continue;
+      const covering = member.role === 'manager' && cover ? cover : undefined;
+      const home = covering ? this.workerHome(covering) : this.workerHome(member.role);
       const sprite = this.makePerson(home.x, home.y, {
         ...randomLook(UNIFORMS[member.role]),
         style: STAFF_HAIR[member.role],
@@ -3959,7 +3981,21 @@ export class StoreScene extends Phaser.Scene {
       sprite.add(carried);
       const worker: Worker = { member, sprite, carried, home };
       this.workers.set(member.role, worker);
-      const loop = { cashier: this.cashierLoop, cashier2: this.cashierLoop, cashier3: this.cashierLoop, cashier4: this.cashierLoop, cleaner: this.cleanerLoop, loader: this.loaderLoop, guard: null }[member.role];
+      if (covering) {
+        this.workers.set(covering, worker);
+        void this.cashierLoop(worker, gen, registerOfRole(covering));
+        continue;
+      }
+      const loop = {
+        cashier: this.cashierLoop,
+        cashier2: this.cashierLoop,
+        cashier3: this.cashierLoop,
+        cashier4: this.cashierLoop,
+        cleaner: this.cleanerLoop,
+        loader: this.loaderLoop,
+        guard: null,
+        manager: this.managerLoop,
+      }[member.role];
       if (loop) void loop.call(this, worker, gen);
     }
     // Хозяин уступает место кассиру.
@@ -3981,6 +4017,8 @@ export class StoreScene extends Phaser.Scene {
         return { x: warehouse.doorway.x + 6, y: warehouse.doorway.y - 18 };
       case 'guard':
         return { x: door.x + 22, y: door.y - 14 };
+      case 'manager':
+        return { x: this.layout.w / 2, y: (this.layout.wallH + this.layout.h) / 2 };
     }
   }
 
@@ -3997,14 +4035,93 @@ export class StoreScene extends Phaser.Scene {
     return this.wait(ms / this.workerPace(w));
   }
 
-  /** Скорость сотрудника: его навык, а у грузчика — ещё и оборудование склада. */
+  /** Скорость сотрудника: его навык, менеджер на смене, а у грузчика — ещё и оборудование склада. */
   private workerPace(w: Worker): number {
-    return workSpeed(w.member) * (w.member.role === 'loader' ? warehouseSpeed(this.state) : 1);
+    return workSpeed(w.member) * managerBoost(this.state) * (w.member.role === 'loader' ? warehouseSpeed(this.state) : 1);
+  }
+
+  /**
+   * Менеджер обходит зал: заглядывает к полкам, а когда товар кончился и на полке, и на складе —
+   * сам звонит и заказывает срочный подвоз (если хватает денег).
+   */
+  private async managerLoop(w: Worker, gen: number): Promise<void> {
+    while (this.alive(gen)) {
+      if (!this.running) {
+        await this.wait(400);
+        continue;
+      }
+      const pick = managerPick(this.state);
+      if (pick && !this.urgentOrders.some((o) => o.id === pick)) {
+        const qty = URGENT_QTYS[0];
+        if (this.orderUrgentDelivery(pick, qty)) this.popup(w.sprite.x, w.sprite.y - 20, t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
+      }
+      const slot = Phaser.Utils.Array.GetRandom(this.layout.slots.slice(0, Math.max(1, this.state.shelves.length)));
+      if (slot) await this.workerWalk(w, slot.x + Phaser.Math.Between(-12, 12), slot.y + 22);
+      await this.workerWait(w, 2500);
+    }
+  }
+
+  // ---------- Срочный подвоз ----------
+
+  /** Сколько штук срочного заказа сейчас едет. */
+  private urgentOnTheWay(): number {
+    return this.urgentOrders.reduce((sum, o) => sum + o.qty, 0);
+  }
+
+  /** Оплатить срочный заказ и отправить фургон. false — нет денег, места или товара. */
+  private orderUrgentDelivery(id: ProductId, qty: number): boolean {
+    const next = orderUrgent(this.state, id, qty, this.urgentOnTheWay());
+    if (!next) return false;
+    this.state = next;
+    this.urgentOrders.push({ id, qty });
+    this.hud.update(this.state, this.timeLeft);
+    if (!this.urgentVanBusy) void this.urgentVan();
+    return true;
+  }
+
+  /** Фургон срочного подвоза: подъезжает к складу, товар — на стеллаж, уезжает. */
+  private async urgentVan(): Promise<void> {
+    this.urgentVanBusy = true;
+    const { warehouse } = this.layout;
+    const vanX = warehouse.x + warehouse.w / 2 + 14;
+    const roadY = this.streetY + 24;
+    const van = this.add.container(-260, roadY, [this.art(0, 0, 'car_van').setTint(0xffd27a), this.art(0, 0, 'car_van_lights')]).setDepth(roadY);
+    ambience.carPass();
+    await this.wait((URGENT_SECONDS * 1000) / Math.max(1, this.speed) - 1800);
+    await new Promise<void>((done) => this.tweens.add({ targets: van, x: vanX, duration: 1800, ease: 'Sine.easeOut', onComplete: () => done(), onStop: () => done() }));
+    this.receiveUrgentOrders();
+    if (van.active) this.tweens.add({ targets: van, x: this.next.w + 300, delay: 600, duration: 2400, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
+    this.urgentVanBusy = false;
+    if (this.urgentOrders.length) void this.urgentVan();
+  }
+
+  /** Всё, что едет, — на склад (и в конце дня, если фургон не успел). */
+  private receiveUrgentOrders(): void {
+    if (!this.urgentOrders.length) return;
+    const list = this.urgentOrders.map((o) => `${PRODUCTS[o.id].icon}×${o.qty}`).join(' ');
+    for (const o of this.urgentOrders) this.state = receiveUrgent(this.state, o.id, o.qty);
+    this.urgentOrders = [];
+    this.refreshWarehouse();
+    this.refreshShelves();
+    sound.pop(0);
+    const { warehouse } = this.layout;
+    this.popup(warehouse.x + warehouse.w / 2, warehouse.y - 4, t('popup.urgent', { list }), '#fff3b0');
+  }
+
+  private openUrgent(): void {
+    if (!this.running || this.night) return;
+    showUrgent({
+      getState: () => this.state,
+      onTheWay: () => this.urgentOnTheWay(),
+      onTheWayList: () => this.urgentOrders.map((o) => `${PRODUCTS[o.id].icon}×${o.qty}`).join(' '),
+      order: (id, qty) => {
+        if (this.orderUrgentDelivery(id, qty)) sound.coin();
+      },
+    });
   }
 
   /** Кассир сам пробивает тех, кто подошёл к его кассе (второй кассир — ко второй). */
-  private async cashierLoop(w: Worker, gen: number): Promise<void> {
-    const index = registerOfRole(w.member.role);
+  private async cashierLoop(w: Worker, gen: number, index = registerOfRole(w.member.role)): Promise<void> {
     while (this.alive(gen)) {
       const r = this.registers[index];
       const front = r?.customer;

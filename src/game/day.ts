@@ -2,7 +2,7 @@
 // сюжетные счётчики и план на завтра. Этим пользуются и игра, и симулятор.
 
 import { lightsGuests } from './gear';
-import { departmentGuests, endDay, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
+import { departmentGuests, endDay, restStaff, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
 import {
   applyInspection,
   fulfillOrder,
@@ -39,6 +39,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   s = rewarded.state;
   const weekly = progressWeekly(s, stats);
   s = weekly.state;
+  // Усталость считаем до смены плана: сегодняшний отгул обнуляет её.
+  s = restStaff(s);
   const night = endDay(s, stats, random);
   const next = ensurePlan(endWar(night.state));
   return {

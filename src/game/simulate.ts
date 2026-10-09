@@ -29,6 +29,8 @@ import {
   setPrice,
   sellableProducts,
   seasonalDemand,
+  giveDayOff,
+  isTired,
   markdownSurplus,
   shelfKindOpen,
   SHELF_KINDS,
@@ -155,6 +157,7 @@ const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
   ['cashier2', (s) => registerCount(s) >= 2 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 2],
   ['cashier3', (s) => registerCount(s) >= 3 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 3],
   ['cashier4', (s) => registerCount(s) >= 4 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 4],
+  ['manager', (s) => s.level >= 3 && s.staff.length >= 4],
 ];
 
 /** Для решения «пора нанимать кассира»: примерно столько успевает один человек. */
@@ -265,6 +268,9 @@ export function simulate({
 
     // Разумный игрок соглашается на прибавки: обиженный сотрудник работает хуже.
     for (const m of state.staff) if (m.raiseAsk) state = answerRaise(state, m.role, true);
+    // И даёт выходной тому, кто устал (по одному за раз).
+    const tired = state.staff.find((m) => isTired(m) && m.offDay !== state.day + 1);
+    if (tired) state = giveDayOff(state, tired.role) ?? state;
     if (hireStaff) {
       const role = HIRE_WHEN.find(([r, need]) => !staffOf(state, r) && need(state))?.[0];
       // Берём самого быстрого; «тормоз» за кассой навсегда упирает магазин в потолок.

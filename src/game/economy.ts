@@ -173,10 +173,10 @@ export const LATE_PENALTY = 0.1;
 export const START_DEBT = 500;
 export const DEBT_PAYMENT = 250;
 
-export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'cleaner' | 'loader' | 'guard';
+export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'cleaner' | 'loader' | 'guard' | 'manager';
 
 /** Сотрудники: каждый забирает у игрока одно ручное дело. Зарплата — базовая за месяц. */
-export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number }> = {
+export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number; minLevel?: number }> = {
   cashier: { nameKey: 'staff.cashier', descKey: 'staff.cashier.desc', wage: 420 },
   cashier2: { nameKey: 'staff.cashier2', descKey: 'staff.cashier2.desc', wage: 420 },
   cashier3: { nameKey: 'staff.cashier3', descKey: 'staff.cashier3.desc', wage: 420 },
@@ -184,7 +184,13 @@ export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey
   cleaner: { nameKey: 'staff.cleaner', descKey: 'staff.cleaner.desc', wage: 280 },
   loader: { nameKey: 'staff.loader', descKey: 'staff.loader.desc', wage: 350 },
   guard: { nameKey: 'staff.guard', descKey: 'staff.guard.desc', wage: 490 },
+  // Менеджер зала — только в супермаркете и больше: организует работу (все быстрее), сам
+  // заказывает срочный подвоз, когда товар кончился, и встаёт за кассу вместо отсутствующего.
+  manager: { nameKey: 'staff.manager', descKey: 'staff.manager.desc', wage: 650, minLevel: 3 },
 };
+
+/** Можно ли нанять на эту должность в этом помещении. */
+export const roleOpen = (state: StoreState, role: StaffRole): boolean => state.level >= (STAFF_ROLES[role].minLevel ?? 0);
 
 export const STAFF_ROLE_IDS = Object.keys(STAFF_ROLES) as StaffRole[];
 
@@ -208,7 +214,7 @@ export const STICKY_SKIM = 0.04;
 /** Навык растёт каждые столько месяцев работы. */
 export const MONTHS_PER_SKILL = 2;
 /** Сколько сотрудников помещается в помещении каждого уровня. */
-export const STAFF_LIMIT = [1, 2, 4, 6, 7];
+export const STAFF_LIMIT = [1, 2, 4, 7, 8];
 
 export interface StaffMember {
   role: StaffRole;
@@ -224,6 +230,10 @@ export interface StaffMember {
   raiseAsk?: number;
   /** Обиделся (отказали в прибавке): работает медленнее, может уволиться. */
   upset?: boolean;
+  /** Сколько дней подряд вышел на работу (усталость; выходной обнуляет). */
+  streak?: number;
+  /** В этот день не выйдет: выходной. */
+  offDay?: number;
 }
 
 export function wageFor(role: StaffRole, skill: number, trait?: Trait): number {
@@ -233,7 +243,32 @@ export function wageFor(role: StaffRole, skill: number, trait?: Trait): number {
 
 /** Множитель скорости работы: 1 — обычная. */
 export const workSpeed = (m: StaffMember): number =>
-  SKILL_SPEED[m.skill - 1] * (m.trait ? TRAITS[m.trait].speed : 1) * (m.upset ? UPSET_SPEED : 1);
+  SKILL_SPEED[m.skill - 1] * (m.trait ? TRAITS[m.trait].speed : 1) * (m.upset ? UPSET_SPEED : 1) * (isTired(m) ? TIRED_SPEED : 1);
+
+/** Без выходных столько дней подряд — устаёт и работает медленнее. */
+export const TIRED_DAYS = 6;
+export const TIRED_SPEED = 0.85;
+export const isTired = (m: StaffMember): boolean => (m.streak ?? 0) >= TIRED_DAYS;
+/** Сотрудник сегодня не на работе: заболел, отпросился или выходной. */
+export const isAbsent = (state: StoreState, m: StaffMember): boolean => state.plan?.sick === m.role || m.offDay === state.day;
+
+/** Дать выходной на завтра (сегодня он уже на работе). */
+export function giveDayOff(state: StoreState, role: StaffRole): StoreState | null {
+  const m = staffOf(state, role);
+  if (!m || m.offDay === state.day + 1) return null;
+  return { ...state, staff: state.staff.map((x) => (x.role === role ? { ...x, offDay: state.day + 1 } : x)) };
+}
+
+/** Менеджер зала на месте — все работают быстрее (и хозяин за кассой тоже). */
+export const MANAGER_BOOST = 1.1;
+export const managerBoost = (state: StoreState): number =>
+  state.staff.some((m) => m.role === 'manager' && !isAbsent(state, m)) ? MANAGER_BOOST : 1;
+
+/** Конец дня: кто работал — устаёт сильнее, кто отдыхал — отдохнул. */
+export const restStaff = (state: StoreState): StoreState => ({
+  ...state,
+  staff: state.staff.map((m) => ({ ...m, streak: isAbsent(state, m) ? 0 : (m.streak ?? 0) + 1 })),
+});
 
 /** Обиженный сотрудник работает медленнее. */
 export const UPSET_SPEED = 0.75;
