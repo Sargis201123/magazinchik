@@ -48,7 +48,7 @@ describe('план дня', () => {
       const e = planDay({ ...base, day }).event;
       if (e) kinds.add(e.kind);
     }
-    expect([...kinds].sort()).toEqual(['deal', 'fridgeBroken', 'inspection', 'order', 'poach', 'priceWar', 'sick', 'snitch']);
+    expect([...kinds].sort()).toEqual(['bill', 'deal', 'fridgeBroken', 'inspection', 'order', 'poach', 'priceWar', 'sick', 'snitch']);
   });
 });
 

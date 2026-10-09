@@ -36,7 +36,7 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
     id: 'dairy',
     nameKey: 'supplier.dairy',
     lines: { hello: 'supplier.dairy.hello', yes: 'supplier.dairy.yes', no: 'supplier.dairy.no', angry: 'supplier.dairy.angry' },
-    products: { milk: 1, bread: 1.15, icecream: 1 },
+    products: { milk: 1, icecream: 1 },
     flexibility: 0.6,
     patience: 2,
     badChance: 0.05,

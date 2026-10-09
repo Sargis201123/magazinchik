@@ -46,6 +46,17 @@ export const POACH_CHANCE = 0.06;
 export const POACH_RAISE = 1.25;
 export const SNITCH_FROM_DAY = 14;
 export const SNITCH_CHANCE = 0.05;
+/**
+ * Неожиданный счёт: доначислила налоговая, затопили соседей снизу, штраф пожарных, сломался
+ * кассовый аппарат по гарантии… Платишь сразу или берёшь в долг у соседей, как бабушка.
+ * Только когда прежний долг погашен — чтобы долги не копились снежным комом.
+ */
+export const BILL_FROM_DAY = 12;
+export const BILL_CHANCE = 0.05;
+export type BillReason = 'tax' | 'flood' | 'fire' | 'pipes';
+export const BILL_REASONS: BillReason[] = ['tax', 'flood', 'fire', 'pipes'];
+/** Сумма счёта по помещению: в универмаге и счета больше. */
+export const billAmount = (level: number, roll: number): number => Math.round((200 + 180 * level) * (0.8 + roll * 0.4) / 10) * 10;
 
 export type MorningEvent =
   | { kind: 'order'; client: ClientId; product: ProductId; qty: number; pay: number }
@@ -55,7 +66,8 @@ export type MorningEvent =
   | { kind: 'inspection' }
   | { kind: 'priceWar'; product: ProductId; price: number; days: number }
   | { kind: 'poach'; role: StaffRole; wage: number }
-  | { kind: 'snitch' };
+  | { kind: 'snitch' }
+  | { kind: 'bill'; reason: BillReason; amount: number };
 
 /** План дня: утреннее событие и что произойдёт днём. */
 export interface DayPlan {
@@ -126,6 +138,8 @@ export function planDay(state: StoreState, chances: EventChances = { order: 0.15
     // Эдуард нажаловался — сегодня внеплановая проверка.
     plan.inspection = true;
     plan.event = { kind: 'snitch' };
+  } else if (state.day >= BILL_FROM_DAY && state.debt === 0 && random() < BILL_CHANCE) {
+    plan.event = { kind: 'bill', reason: BILL_REASONS[Math.floor(random() * BILL_REASONS.length)], amount: billAmount(state.level, random()) };
   }
   return plan;
 }
@@ -180,6 +194,10 @@ export function answerEvent(state: StoreState, accept: boolean): StoreState | nu
       }
       return { ...state, staff: state.staff.filter((m) => m.role !== event.role), plan: decided };
     }
+    case 'bill':
+      // Заплатить сразу (если хватает) или в долг: его гасят вместе со счетами, как бабушкин.
+      if (accept) return state.money >= event.amount ? { ...state, money: state.money - event.amount, plan: decided } : null;
+      return { ...state, debt: state.debt + event.amount, plan: decided };
     case 'fridgeBroken': {
       const broken = breakShelf(state, event.shelf);
       if (!accept) return { ...broken, plan: decided };
