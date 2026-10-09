@@ -42,6 +42,9 @@ export class Hud {
   /** Ускорение дня ×2 — когда магазин работает сам. */
   private readonly speed = el('button', 'ui-speed');
   onSpeed: () => void = () => {};
+  /** Срочный подвоз: кнопка над ускорением. */
+  private readonly urgent = el('button', 'ui-speed ui-urgent', '🚚');
+  onUrgent: () => void = () => {};
   private readonly money = el('span');
   private readonly moneyText = document.createTextNode('');
   private readonly clock = el('span');
@@ -60,7 +63,9 @@ export class Hud {
     this.top.append(this.money, this.clock, this.stars);
     this.speed.addEventListener('click', () => this.onSpeed());
     this.speed.style.display = 'none';
-    document.body.append(this.top, this.stock, this.hint, this.speed);
+    this.urgent.addEventListener('click', () => this.onUrgent());
+    this.urgent.style.display = 'none';
+    document.body.append(this.top, this.stock, this.hint, this.speed, this.urgent);
   }
 
   update(state: StoreState, secondsLeft: number, quests = '', night = false): void {
@@ -110,6 +115,14 @@ export class Hud {
   }
 
   /** Кнопка ускорения: видна только днём; ×1 или ×2. */
+  showUrgent(visible: boolean): void {
+    const display = visible ? '' : 'none';
+    if (this.urgent.style.display !== display) {
+      this.urgent.style.display = display;
+      if (visible) pixelize(this.urgent);
+    }
+  }
+
   showSpeed(visible: boolean, speed: number): void {
     const text = speed > 1 ? '⏩ ×2' : '▶ ×1';
     if (this.speed.textContent !== text) this.speed.textContent = text;

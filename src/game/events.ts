@@ -9,6 +9,7 @@ import {
   sellableProducts,
   SHELF_KINDS,
   STAFF_ROLE_IDS,
+  isTired,
   staffOf,
   warehouseCapacity,
   warehouseCount,
@@ -51,6 +52,15 @@ export const SNITCH_CHANCE = 0.05;
  * кассовый аппарат по гарантии… Платишь сразу или берёшь в долг у соседей, как бабушка.
  * Только когда прежний долг погашен — чтобы долги не копились снежным комом.
  */
+/**
+ * Персонал — люди: просят выходной на завтра или отпроситься сегодня (дела дома). Уставшие
+ * (без выходных неделю) просят чаще. Отказать можно — но обидятся: медленнее и могут уволиться.
+ */
+export const PERSONAL_FROM_DAY = 6;
+export const PERSONAL_CHANCE = 0.08;
+/** Сколько вариантов причин (тексты event.dayOff.reasonN / event.goHome.reasonN). */
+export const DAY_OFF_REASONS = 4;
+export const GO_HOME_REASONS = 3;
 export const BILL_FROM_DAY = 12;
 export const BILL_CHANCE = 0.05;
 export type BillReason = 'tax' | 'flood' | 'fire' | 'pipes';
@@ -67,7 +77,9 @@ export type MorningEvent =
   | { kind: 'priceWar'; product: ProductId; price: number; days: number }
   | { kind: 'poach'; role: StaffRole; wage: number }
   | { kind: 'snitch' }
-  | { kind: 'bill'; reason: BillReason; amount: number };
+  | { kind: 'bill'; reason: BillReason; amount: number }
+  | { kind: 'dayOff'; role: StaffRole; reason: number }
+  | { kind: 'goHome'; role: StaffRole; reason: number };
 
 /** План дня: утреннее событие и что произойдёт днём. */
 export interface DayPlan {
@@ -119,6 +131,17 @@ export function planDay(state: StoreState, chances: EventChances = { order: 0.15
     const roles = STAFF_ROLE_IDS.filter((r) => staffOf(state, r));
     plan.sick = roles[Math.floor(random() * roles.length)];
     plan.event = { kind: 'sick', role: plan.sick };
+  } else if (state.day >= PERSONAL_FROM_DAY && state.staff.length && random() < PERSONAL_CHANCE * (state.staff.some(isTired) ? 2 : 1)) {
+    // Уставший просит выходной первым; иначе — кто-нибудь по семейным делам.
+    const tired = state.staff.filter(isTired);
+    const pool = tired.length ? tired : state.staff.filter((m) => m.offDay !== state.day + 1);
+    const m = pool[Math.floor(random() * pool.length)];
+    if (m) {
+      plan.event =
+        tired.length || random() < 0.6
+          ? { kind: 'dayOff', role: m.role, reason: Math.floor(random() * DAY_OFF_REASONS) }
+          : { kind: 'goHome', role: m.role, reason: Math.floor(random() * GO_HOME_REASONS) };
+    }
   } else if (inspectionRoll < chances.inspection) {
     plan.inspection = true;
     plan.event = { kind: 'inspection' };
@@ -194,6 +217,17 @@ export function answerEvent(state: StoreState, accept: boolean): StoreState | nu
       }
       return { ...state, staff: state.staff.filter((m) => m.role !== event.role), plan: decided };
     }
+    case 'dayOff':
+      // Отпустить завтра или отказать — тогда обида.
+      return {
+        ...state,
+        staff: state.staff.map((m) => (m.role !== event.role ? m : accept ? { ...m, offDay: state.day + 1 } : { ...m, upset: true })),
+        plan: decided,
+      };
+    case 'goHome':
+      // Отпустить сегодня — его не будет весь день; отказать — останется, но обидится.
+      if (accept) return { ...state, plan: { ...decided, sick: event.role } };
+      return { ...state, staff: state.staff.map((m) => (m.role === event.role ? { ...m, upset: true } : m)), plan: decided };
     case 'bill':
       // Заплатить сразу (если хватает) или в долг: его гасят вместе со счетами, как бабушкин.
       if (accept) return state.money >= event.amount ? { ...state, money: state.money - event.amount, plan: decided } : null;

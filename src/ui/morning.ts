@@ -57,6 +57,10 @@ import {
   type ProductId,
   type StoreState,
   shelfKindOpen,
+  giveDayOff,
+  isTired,
+  roleOpen,
+  isAbsent,
 } from '../game/economy';
 import {
   canHaggle,
@@ -1314,6 +1318,24 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         );
         break;
       }
+      case 'dayOff':
+      case 'goHome': {
+        const m = staffOf(state, event.role);
+        const name = m ? staffName(m.name) : '';
+        const role = t(STAFF_ROLES[event.role].nameKey);
+        const reason = t(`event.${event.kind}.reason${event.reason}` as TextKey);
+        box.append(
+          el('h3', '', `${event.kind === 'dayOff' ? '🏖' : '🏠'} ${t(`event.${event.kind}.title` as TextKey)}`),
+          el('p', '', t(`event.${event.kind}.text` as TextKey, { name, role, reason })),
+        );
+        if (event.kind === 'dayOff' && m && isTired(m)) box.append(el('div', 'ui-note', t('event.dayOff.tired', { n: m.streak ?? 0 })));
+        box.append(
+          el('div', 'ui-muted', t('event.personal.note')),
+          button(t(`event.${event.kind}.yes` as TextKey), () => answer(true)),
+          button(t(`event.${event.kind}.no` as TextKey), () => answer(false), 'ui-btn secondary'),
+        );
+        break;
+      }
       case 'bill':
         box.append(
           el('h3', '', `🧾 ${t(`event.bill.${event.reason}.title` as TextKey)}`),
@@ -1425,6 +1447,14 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         ),
       );
       if (m.upset) box.append(el('div', 'ui-note', t('staffTab.upset')));
+      // Люди устают: неделя без выходных — работают медленнее. Выходной можно дать заранее.
+      const streak = m.streak ?? 0;
+      if (isAbsent(state, m)) box.append(el('div', 'ui-note', t('staffTab.offToday')));
+      else if (m.offDay === state.day + 1) box.append(el('div', 'ui-note', t('staffTab.offTomorrow')));
+      else {
+        box.append(el('div', isTired(m) ? 'ui-note' : 'ui-muted', isTired(m) ? t('staffTab.tired', { n: streak }) : t('staffTab.streak', { n: streak })));
+        box.append(button(t('staffTab.giveOff'), () => update(giveDayOff(getState(), m.role)), 'ui-chip'));
+      }
       // «Тормоз» за кассой упирает весь магазин в потолок — предупредить и предложить курсы.
       if (isCashier(m) && m.trait === 'slowpoke') {
         const warn = el('div', 'ui-note', t('staffTab.slowWarn', { n: perDay(state, m) }));
@@ -1448,9 +1478,16 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const full = state.staff.length >= limit;
     out.push(el('h3', '', t('staffTab.search')), el('div', 'ui-muted', t('staffTab.searchNote', { cost: JOB_AD_COST })));
     const roles = el('div', 'ui-chips');
+    const locked: string[] = [];
     for (const role of STAFF_ROLE_IDS) {
       // Кассир на кассу, которой ещё нет в помещении, — не показываем.
       if (isCashierRole(role) && registerOfRole(role) >= registerCount(state)) continue;
+      // Менеджер — только в большом магазине: пока рано, подскажем, где появится.
+      if (!roleOpen(state, role)) {
+        const at = STAFF_ROLES[role].minLevel ?? 0;
+        locked.push(t('staffTab.lockedRole', { role: t(STAFF_ROLES[role].nameKey), name: t(STORE_LEVELS[at].nameKey) }));
+        continue;
+      }
       const searched = state.jobSearch?.day === state.day && state.jobSearch.role === role;
       roles.append(
         button(
@@ -1461,7 +1498,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
         ),
       );
     }
-    out.push(roles);
+    out.push(roles, ...locked.map((line) => el('div', 'ui-muted', `🔒 ${line}`)));
 
     const candidates = currentCandidates(state);
     if (state.jobSearch?.day === state.day) {

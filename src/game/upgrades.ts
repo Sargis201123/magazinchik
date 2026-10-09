@@ -4,7 +4,7 @@
 // кофейный уголок, своя печь и ночная смена.
 
 import type { TextKey } from '../i18n/ru';
-import { CARRY, type ScanTiming, type StoreState } from './economy';
+import { CARRY, managerBoost, type ScanTiming, type StoreState } from './economy';
 import { registerScan } from './gear';
 
 export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'autoOrder' | 'eTags' | 'coffee' | 'oven' | 'nightShift';
@@ -51,8 +51,8 @@ export function buyUpgrade(state: StoreState, id: UpgradeId): StoreState | null 
 
 /** Время пробивки с учётом модели кассы и терминала. */
 export const withUpgrades = (state: StoreState, timing: ScanTiming): ScanTiming => ({
-  item: timing.item * registerScan(state),
-  pay: hasUpgrade(state, 'terminal') ? timing.pay * TERMINAL_PAY : timing.pay,
+  item: (timing.item * registerScan(state)) / managerBoost(state),
+  pay: (hasUpgrade(state, 'terminal') ? timing.pay * TERMINAL_PAY : timing.pay) / managerBoost(state),
 });
 
 /** Тележки: за один поход со склада несут вдвое больше, а у входа — тележки для покупателей. */

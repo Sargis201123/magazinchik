@@ -229,6 +229,7 @@ const css = `
   font: 800 14px system-ui, sans-serif; padding: 7px 10px; border: 2px solid #2b2233; border-radius: 8px; background: #f4ecd8;
   color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
 .ui-speed.on { background: #fee761; }
+.ui-urgent { bottom: calc(env(safe-area-inset-bottom) + 92px); }
 .ui-tip { background: #fff3b0; }
 .ui-tip > div { font-size: 14px; line-height: 1.35; margin: 4px 0 6px; color: #2b2233; }
 .ui-todo { background: #fbf6ea; }
