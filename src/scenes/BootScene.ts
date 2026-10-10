@@ -106,6 +106,7 @@ const SPRITES = [
   'floor2',
   'floor3',
   'candy_rack',
+  'radio',
   'carts',
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),
   'mat',

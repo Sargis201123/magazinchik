@@ -2974,6 +2974,21 @@ def checkout_upgrades():
             c.px(x, y, "W")
     c.outline("k")
     c.save("card_terminal")
+    # Радиоприёмник на прилавке: деревянный корпус, решётка динамика, шкала и антенна.
+    c = Canvas(20, 18)
+    c.line(14, 6, 17, 0, "W")
+    c.round_rect(1, 6, 18, 11, "b", r=2)
+    c.hline(3, 7, 14, "B")
+    c.rect(3, 8, 7, 7, "x")
+    for y in (9, 11, 13):
+        for x in (4, 6, 8):
+            c.px(x, y, "a")
+    c.rect(11, 8, 6, 3, "N")
+    c.px(13, 9, "r")
+    c.px(12, 13, "Y")
+    c.px(15, 13, "Y")
+    c.outline("k")
+    c.save("radio")
     c = Canvas(24, 38)
     c.round_rect(3, 2, 18, 34, "W", r=2)
     c.vline(4, 3, 32, "w")

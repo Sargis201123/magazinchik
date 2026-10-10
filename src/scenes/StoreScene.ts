@@ -89,6 +89,8 @@ import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
 import { carryBonus, charmPatience, eyeTheft, ownerTiming } from '../game/owner';
+import { eduardLook, type EduardLook } from '../game/eduard';
+import { hasRadio, nextStation, radioExtra, radioPatience, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
 import { showUrgent } from '../ui/urgent';
 import {
@@ -505,6 +507,8 @@ export class StoreScene extends Phaser.Scene {
   private layout!: Layout;
   /** Для какого уровня помещения построен зал (при расширении перестраиваем). */
   private builtLevel = -1;
+  /** Каким было помещение Эдуарда, когда рисовали улицу. */
+  private builtEduard: EduardLook | null = null;
   private stats: DayStats = emptyDayStats();
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
@@ -613,6 +617,8 @@ export class StoreScene extends Phaser.Scene {
   private pigeons: Pigeon[] = [];
   /** Таймеры кота и голубей: при перестройке мира старые останавливаются. */
   private critterTimers: Phaser.Time.TimerEvent[] = [];
+  /** Ноты над радио, пока оно играет. */
+  private radioTimer?: Phaser.Time.TimerEvent;
   private valyaCame = false;
   /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
   private combo = 0;
@@ -1496,6 +1502,7 @@ export class StoreScene extends Phaser.Scene {
     this.buildGearProps();
     this.buildCoffee();
     this.buildOven();
+    this.buildRadio();
     this.buildDelivery();
     this.kiosk = undefined;
     this.kioskBusy = false;
@@ -1504,6 +1511,66 @@ export class StoreScene extends Phaser.Scene {
     this.kiosk = this.art(at.x, at.y, 'kiosk').setDepth(at.y + 9);
     this.kioskScreen = this.add.rectangle(at.x, at.y - 9, 6, 4, 0x2ce8f5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(at.y + 10);
     this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
+  }
+
+  /** Радио на прилавке: касание переключает волну, пока играет — над ним плывут ноты. */
+  private buildRadio(): void {
+    this.radioTimer?.remove();
+    this.radioTimer = undefined;
+    music.setStation(null);
+    if (!hasRadio(this.state)) return;
+    const { counter } = this.layout;
+    const at = { x: counter.x, y: counter.y + 24 };
+    const radio = this.art(at.x, at.y, 'radio').setDepth(counter.y + 22);
+    radio.setInteractive({ useHandCursor: true }).on('pointerup', () =>
+      this.tap(() => {
+        const next = setStation(this.state, nextStation(stationOf(this.state)));
+        if (!next) return;
+        this.state = next;
+        saveGame(next);
+        sound.tap();
+        this.tweens.add({ targets: radio, scaleX: radio.scaleX * 1.15, scaleY: radio.scaleY * 1.15, duration: 90, yoyo: true });
+        this.popup(at.x, at.y - 10, t('popup.radio', { name: t(STATION_INFO[stationOf(next)].nameKey) }), '#fee761');
+        this.applyRadio();
+      }),
+    );
+    this.radioTimer = this.time.addEvent({
+      delay: 900,
+      loop: true,
+      callback: () => {
+        const station = stationOf(this.state);
+        if (station === 'off') return;
+        const note = this.add
+          .text(at.x + Phaser.Math.Between(-3, 3), at.y - 6, Math.random() < 0.5 ? '♪' : '♫', {
+            fontFamily: UI_FONT,
+            fontSize: '7px',
+            color: station === 'hits' ? '#f6757a' : '#fee761',
+          })
+          .setOrigin(0.5)
+          .setResolution(4)
+          .setDepth(1000);
+        this.tweens.add({
+          targets: note,
+          y: note.y - 16,
+          x: note.x + Phaser.Math.Between(-6, 6),
+          alpha: 0,
+          duration: station === 'hits' ? 1100 : 1700,
+          onComplete: () => note.destroy(),
+        });
+      },
+    });
+    this.applyRadio();
+  }
+
+  /** Волна радио — в музыку. */
+  private applyRadio(): void {
+    const station = stationOf(this.state);
+    music.setStation(station === 'off' ? null : station);
+  }
+
+  /** Скорость покупателей: под бодрое радио ходят быстрее. */
+  private customerSpeed(): number {
+    return CUSTOMER_SPEED * radioSpeed(this.state);
   }
 
   /**
@@ -2784,10 +2851,21 @@ export class StoreScene extends Phaser.Scene {
    */
   private buildNeighbors(next: Layout): void {
     const bottom = next.h + 4;
-    const neighbors: { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number; neon: number }[] = [
+    type Neighbor = { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number; neon: number; dark?: boolean };
+    // Помещение Эдуарда: пустует, «МегаМарт» по сюжету, а после сюжета — его ларёк, маркет и молл.
+    const look = eduardLook(this.state);
+    this.builtEduard = look;
+    const eduard: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
+      vacant: { h: 130, name: 'eduard.stage0', sign: 0x5a6988, awning: 0x8b9bb4, roof: 0xc0cbdc, neon: 0, dark: true },
+      mega: { h: 140, name: 'eduard.mega', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec, neon: 0x6cd8ff },
+      kiosk: { h: 110, name: 'eduard.stage1', sign: 0x68386c, awning: 0xb55088, roof: 0xe0c8dc, neon: 0xff8ad8 },
+      market: { h: 145, name: 'eduard.stage2', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec, neon: 0x6cd8ff },
+      mall: { h: 190, name: 'eduard.stage3', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040 },
+    };
+    const neighbors: Neighbor[] = [
       { x: -136, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860 },
       { x: -268, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0, neon: 0x7cff8a },
-      { x: next.w + 26, w: 128, h: 140, name: 'neighbor.eduard', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec, neon: 0x6cd8ff },
+      { x: next.w + 26, w: 128, ...eduard[look] },
       { x: next.w + 170, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc, neon: 0xff8ad8 },
     ];
     const rnd = new Phaser.Math.RandomDataGenerator(['neighbors']);
@@ -2796,8 +2874,8 @@ export class StoreScene extends Phaser.Scene {
       this.add.tileSprite(n.x, top, n.w, n.h - FACADE_H, 'roof').setOrigin(0).setTileScale(1 / ART).setTint(n.roof).setDepth(-3);
       this.add.tileSprite(n.x - 2, top - 3, n.w + 4, 3, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(-3);
       this.add.tileSprite(n.x, bottom - FACADE_H, n.w, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(bottom - 5);
-      // Кондиционеры и окно в крыше.
-      for (let i = 0; i < 3; i++) {
+      // Кондиционеры и окна в крыше (у большого молла — больше).
+      for (let i = 0; i < Math.max(3, Math.round(n.h / 45)); i++) {
         this.art(n.x + 14 + rnd.frac() * (n.w - 28), top + 12 + rnd.frac() * (n.h - 40), i === 0 ? 'skylight' : 'ac_unit').setDepth(-2);
       }
       // Витрины, дверь и навес.
@@ -2805,8 +2883,10 @@ export class StoreScene extends Phaser.Scene {
       this.art(doorX, bottom - 5, 'door').setDepth(bottom - 4);
       for (let x = n.x + 14; x < n.x + n.w - 10; x += 24) {
         if (Math.abs(x - doorX) < 22) continue;
-        this.art(x, bottom - 4.5, 'shopwin').setDepth(bottom - 4);
-        this.windowLight(x, bottom - 4.5, bottom);
+        const win = this.art(x, bottom - 4.5, 'shopwin').setDepth(bottom - 4);
+        // Пустующее помещение — тёмные витрины без света.
+        if (n.dark) win.setTint(0x8b9bb4);
+        else this.windowLight(x, bottom - 4.5, bottom);
       }
       this.art(doorX, bottom - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(bottom + 40);
       // Вывеска на краю крыши.
@@ -2816,7 +2896,7 @@ export class StoreScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setResolution(4)
         .setDepth(bottom - 2);
-      this.neonSign(n.x + n.w / 2, bottom - FACADE_H - 8, t(n.name), '6px', n.neon, 64);
+      if (n.neon) this.neonSign(n.x + n.w / 2, bottom - FACADE_H - 8, t(n.name), '6px', n.neon, 64);
     }
     // Остановка на тротуаре слева.
     this.art(-70, this.streetY - 4, 'bus_stop').setDepth(this.streetY);
@@ -4360,7 +4440,7 @@ export class StoreScene extends Phaser.Scene {
     await this.walk(c.sprite, door.x, this.streetY);
     await this.walk(c.sprite, door.x, door.y - 10);
     // С тележкой у входа покупатель иногда берёт что-то сверх списка.
-    const wanted = this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random));
+    const wanted = this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random) + radioExtra(this.state, Math.random));
     for (const id of wanted) {
       const index = shelfFor(this.state, id);
       if (index < 0 || c.gone) continue;
@@ -4421,7 +4501,7 @@ export class StoreScene extends Phaser.Scene {
     const mud = [...this.trash].filter((piece) => piece.texture.key === 'mud').length;
     if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE * entranceMud(this.state)) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, 'mud');
 
-    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random));
+    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random) + radioExtra(this.state, Math.random));
     if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
     let disappointed = false;
     let why: { reason: LostReason; id: ProductId } | undefined;
@@ -4472,7 +4552,7 @@ export class StoreScene extends Phaser.Scene {
     c.waitStart = this.time.now;
     c.bubble.setVisible(true);
     // С котом рядом ждут дольше.
-    c.patienceMs = PATIENCE_MS * catPatience(this.state) * climatePatience(this.state, weatherFor(this.state.day)) * charmPatience(this.state);
+    c.patienceMs = PATIENCE_MS * catPatience(this.state) * climatePatience(this.state, weatherFor(this.state.day)) * charmPatience(this.state) * radioPatience(this.state);
     c.patience = this.time.delayedCall(c.patienceMs, () => void this.giveUp(c));
     this.layoutQueue();
   }
@@ -4841,7 +4921,7 @@ export class StoreScene extends Phaser.Scene {
       const [look, name] = ORDER_GUESTS[order.client];
       at(0.78, () => this.runVisitor(look, t('popup.orderPickup', { name: t(name) }), true));
     }
-    if (this.state.story.chapter >= 2 && day % 5 === 1) at(0.5, () => this.runEduard());
+    if (eduardLook(this.state) !== 'vacant' && day % 5 === 1) at(0.5, () => this.runEduard());
   }
 
   /** Гость заходит к кассе, говорит фразу и уходит (заказчик уносит коробку). */
@@ -4925,7 +5005,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Идёт к точке; в зале — в обход мебели, по нескольким отрезкам. Новый walk отменяет прежний. */
-  private walk(target: Phaser.GameObjects.Container, x: number, y: number, speed = CUSTOMER_SPEED): Promise<void> {
+  private walk(target: Phaser.GameObjects.Container, x: number, y: number, speed = this.customerSpeed()): Promise<void> {
     const gen = ((target.getData('walkGen') as number | undefined) ?? 0) + 1;
     target.setData('walkGen', gen);
     const indoor = target.y < this.layout.h - 2 && y < this.layout.h - 2;
@@ -5019,6 +5099,8 @@ export class StoreScene extends Phaser.Scene {
     this.awaitingBoxes = 0;
     this.hud.update(this.state, DAY_SECONDS);
     if (weatherFor(this.state.day) !== this.weather) this.applyWeather();
+    // Эдуард за ночь открыл магазин побольше — перерисовать улицу.
+    if (eduardLook(this.state) !== this.builtEduard) this.buildWorld();
     this.updateLighting(0);
     this.openShop();
     showMorning({
@@ -5027,16 +5109,19 @@ export class StoreScene extends Phaser.Scene {
         const staffChanged = s.staff !== this.state.staff;
         const decorChanged = s.decor !== this.state.decor;
         const adsChanged = s.ads !== this.state.ads;
-        const upgradesChanged = s.upgrades !== this.state.upgrades || s.gear !== this.state.gear;
+        // Купили приёмник — его надо поставить на прилавок; сменили волну — только музыка.
+        const upgradesChanged = s.upgrades !== this.state.upgrades || s.gear !== this.state.gear || hasRadio(s) !== hasRadio(this.state);
+        const radioChanged = s.radio !== this.state.radio;
         // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
         const was = this.state;
         const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was);
         this.state = s;
         saveGame(s);
         if (s.level > this.builtLevel) void this.celebrateExpansion();
-        else if (s.level !== this.builtLevel || decorChanged || upgradesChanged || catChanged) this.buildWorld();
+        else if (s.level !== this.builtLevel || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard) this.buildWorld();
         else if (staffChanged) this.syncStaff();
         if (adsChanged) this.applyAds();
+        if (radioChanged) this.applyRadio();
         this.awaitingBoxes = this.boxesToDeliver();
         this.refreshShelves();
         this.refreshWarehouse();

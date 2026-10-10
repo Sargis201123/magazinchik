@@ -479,6 +479,10 @@ export interface StoreState {
   loan?: { left: number; payment: number };
   /** Отчёт по дням: последние REPORT_DAYS дней (reports.ts). */
   reports?: DayReport[];
+  /** Радио: какая волна играет (radio.ts); нет поля — приёмник не куплен. */
+  radio?: 'off' | 'retro' | 'hits';
+  /** Эдуард после сюжета: стадия его магазина, с какого дня и какую новость уже видели (eduard.ts). */
+  eduard?: { stage: number; since: number; seen: number };
   /** Автозаказ: сколько чего держать на складе и включён ли он (reorder.ts). */
   autoOrder?: { on: boolean; lines: { sid: string; pid: ProductId; qty: number }[] };
   /** Бабушкино обучение: false — показать (новая игра или «пройти заново»), нет поля — старое сохранение. */

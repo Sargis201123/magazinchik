@@ -66,7 +66,7 @@ import {
 import { ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { answerEvent, inspect } from './events';
 import { candidatesFor } from './staff';
-import { finishChapter, finishIntro, pendingStory } from './story';
+import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
@@ -84,6 +84,7 @@ import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
 import { recordDay } from './achievements';
+import { buyRadio, hasRadio, radioExtra, radioPatience, RADIO_PRICE, setStation } from './radio';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
 
 export { rng };
@@ -116,6 +117,8 @@ export interface SimResult {
   days: SimDay[];
   /** На какой день достигнут каждый уровень магазина (индекс = уровень). */
   levelDay: (number | null)[];
+  /** С какого дня шла каждая глава сюжета (последний элемент — свободная игра). */
+  chapterDay: (number | null)[];
 }
 
 export interface SimOptions {
@@ -138,7 +141,7 @@ export interface SimOptions {
   ovenBurn?: number;
 }
 
-export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments' | 'skills';
+export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments' | 'skills' | 'radio';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy'];
@@ -210,6 +213,7 @@ export function simulate({
   for (const id of PRODUCT_IDS) state = setPrice(state, id, Math.round((PRODUCTS[id].basePrice * priceMult) / 5) * 5);
   const out: SimDay[] = [];
   const levelDay: (number | null)[] = STORE_LEVELS.map((_, i) => (i === 0 ? 1 : null));
+  const chapterDay: (number | null)[] = [...CHAPTERS, null].map((_, i) => (i === 0 ? 1 : null));
 
   for (let d = 0; d < days; d++) {
     const moneyStart = state.money;
@@ -256,14 +260,15 @@ export function simulate({
     // Сюжет: прочитать диалоги, получить награды.
     for (let story = pendingStory(state); story; story = pendingStory(state)) {
       state = story.kind === 'intro' ? finishIntro(state) : finishChapter(state);
+      chapterDay[state.story.chapter] ??= state.day;
     }
     // Утреннее событие: заказ — если товара хватает, партия — если есть деньги, холодильник — чинить.
     const event = state.plan?.event;
     if (event?.kind === 'priceWar' && !state.plan?.decided) {
       state = answerWar(state, event, war) ?? answerWar(state, event, 'wait')!;
     } else if (event && !state.plan?.decided) {
-      const accept =
-        event.kind !== 'order' || warehouseOf(state, event.product) + onShelves(state, event.product) >= event.qty;
+      // Заказ берём, если товар сейчас продаётся: под него докупим в закупке ниже.
+      const accept = event.kind !== 'order' || sellableProducts(state).includes(event.product);
       state = answerEvent(state, accept) ?? answerEvent(state, false) ?? state;
     }
 
@@ -314,6 +319,11 @@ export function simulate({
         investments += next.price;
         state = upgradeGear(state, id) ?? state;
       }
+    }
+    // Радио: купить, когда есть запас; со сладостями у кассы — хиты, иначе ретро.
+    if (features.radio) {
+      if (!hasRadio(state) && state.money >= RADIO_PRICE + reserve) state = buyRadio(state) ?? state;
+      if (hasRadio(state)) state = setStation(state, features.candy ? 'hits' : 'retro') ?? state;
     }
     // Навыки хозяина: очки — по кругу во все навыки.
     if (features.skills) {
@@ -391,7 +401,8 @@ export function simulate({
         .filter((s) => s.kind === PRODUCTS[id].category)
         .reduce((sum, s) => sum + shelfCapacity(s), 0);
       const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category).length;
-      const target = Math.ceil(Math.min(demand * 1.1, shareOfShelf + CARRY * 2));
+      const order = state.plan?.order?.product === id ? state.plan.order.qty : 0;
+      const target = Math.ceil(Math.min(demand * 1.1, shareOfShelf + CARRY * 2)) + order;
       const have = onShelves(state, id) + warehouseOf(state, id);
       let qty = Math.max(0, target - have);
       // Самый дешёвый поставщик этого товара.
@@ -417,7 +428,7 @@ export function simulate({
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
     // С котом в очереди ждут дольше — уходят реже.
     const lossInQueue =
-      (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state);
+      (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state) / radioPatience(state);
     const serveCap = serveCapacity(state);
     // Грязь: уборщик, а ещё вход (грязь с улицы) и туалет (gear.ts).
     const dirtComplaint = (has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level) * (0.6 + 0.2 * entranceMud(state) + 0.2 * wcDirt(state));
@@ -471,7 +482,7 @@ export function simulate({
         }
       }
       const aroma = random() < aromaShare;
-      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + cartExtra(state, extraRandom), (p) => dayDemand(state, p, aroma));
+      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + cartExtra(state, extraRandom) + radioExtra(state, extraRandom), (p) => dayDemand(state, p, aroma));
       const fair = (p: ProductId) =>
         perceivedBase(state, p) * tolerance * fairTolerance(state.day) * loyaltyTolerance(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
       const cart: CartItem[] = [];
@@ -580,7 +591,7 @@ export function simulate({
     });
     void moneyStart;
   }
-  return { days: out, levelDay };
+  return { days: out, levelDay, chapterDay };
 }
 
 
