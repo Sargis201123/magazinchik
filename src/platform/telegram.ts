@@ -37,6 +37,8 @@ interface TelegramWebApp {
   setHeaderColor?(color: string): void;
   setBackgroundColor?(color: string): void;
   initData: string;
+  /** Окно оплаты счёта (Telegram Stars): статус приходит в колбэк. */
+  openInvoice?(url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void;
   initDataUnsafe: { user?: { id: number; first_name?: string; language_code?: string } };
   HapticFeedback?: {
     impactOccurred(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft'): void;
@@ -55,6 +57,18 @@ const webApp = (): TelegramWebApp | undefined => (typeof window === 'undefined' 
 export const isInTelegram = (): boolean => Boolean(webApp()?.initData);
 
 const at = (version: string): boolean => Boolean(webApp()?.isVersionAtLeast?.(version));
+
+/** Подписанные Telegram данные запуска: по ним сервер узнаёт игрока (подделать нельзя). */
+export const telegramInitData = (): string => webApp()?.initData ?? '';
+
+export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending';
+
+/** Открыть счёт на оплату звёздами; вне Telegram (или в старом клиенте) — null. */
+export function openInvoice(url: string): Promise<InvoiceStatus> | null {
+  const app = webApp();
+  if (!app?.openInvoice || !at('6.1')) return null;
+  return new Promise((resolve) => app.openInvoice!(url, (status) => resolve(status)));
+}
 
 /** Игрок Telegram (id) — чтобы не подхватить чужое сохранение на общем телефоне. */
 export const telegramUserId = (): number | undefined => webApp()?.initDataUnsafe.user?.id;

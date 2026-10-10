@@ -1,4 +1,5 @@
 import { newGame, type StoreState } from './economy';
+import { normalizeDecor } from './decor';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId } from '../platform/telegram';
 
@@ -52,7 +53,7 @@ export function loadGame(): StoreState | null {
   if (!save) return null;
   // Новые товары появляются в старых сохранениях со своей ценой по умолчанию.
   const fresh = newGame();
-  return { ...fresh, ...save.state, prices: { ...fresh.prices, ...save.state.prices } };
+  return { ...fresh, ...save.state, prices: { ...fresh.prices, ...save.state.prices }, decor: normalizeDecor(save.state.decor) };
 }
 
 let pending: string | null = null;
