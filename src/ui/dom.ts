@@ -3,29 +3,34 @@
 
 /**
  * Шрифт интерфейса и надписей в игре. Пиксельные шрифты пробовали: кириллица и цифры
- * в них читаются плохо («5» похожа на «S»), поэтому — чёткий системный.
+ * в них читаются плохо («5» похожа на «S»). Системный шрифт на каждом телефоне свой
+ * (SF, Roboto, Segoe) — вёрстка «плыла». Поэтому свой округлый Nunito с кириллицей,
+ * он входит в сборку (main.ts); системный — только пока он грузится.
  */
-export const UI_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+export const UI_FONT = '"Nunito Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 const css = `
+/* Один шрифт везде; цифры одной ширины — суммы и счётчики не «прыгают» и встают ровно в столбик. */
+.ui-hud, .ui-stock, .ui-hint, .ui-card, .ui-toast, .ui-curtain { font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility; }
 /* Панели HUD — по ширине игры (холст 9:16), а не всего окна: на компьютере не разъезжаются по краям. */
 .ui-hud, .ui-stock, .ui-hint { max-width: min(100vw, 56.25dvh); margin: 0 auto; box-sizing: border-box; }
 .ui-hud span { background: rgba(24, 20, 37, .72); padding: 4px 8px; border-radius: 6px; }
 .ui-hud { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
-  padding: calc(var(--safe-top, env(safe-area-inset-top)) + 8px) 12px 8px; font: 600 15px/1.2 system-ui, sans-serif;
+  padding: calc(var(--safe-top, env(safe-area-inset-top)) + 8px) 12px 8px; font: 600 15px/1.2 ${UI_FONT};
   color: #fff; text-shadow: 0 1px 0 #000; pointer-events: none; }
 .ui-stock { position: fixed; left: 0; right: 0; top: calc(var(--safe-top, env(safe-area-inset-top)) + 32px); padding: 0 10px;
-  text-align: center; font: 13px/1.5 system-ui, sans-serif; color: #e6e1d6; pointer-events: none; }
+  text-align: center; font: 13px/1.5 ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
 /* С новыми отделами товаров много: мельче и в две строки, а не за край экрана. */
 .ui-stock.dense { font-size: 11px; }
 .ui-hint { position: fixed; left: 0; right: 0; padding: 0 12px; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 12px);
-  text-align: center; font: 13px system-ui, sans-serif; color: #e6e1d6; pointer-events: none; }
+  text-align: center; font: 13px ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
 .ui-modal { position: fixed; inset: 0; background: rgba(15, 12, 22, .78); display: flex; align-items: center;
   justify-content: center; padding: 16px; overflow-y: auto; }
 /* Окно в пиксельной рамке (assets/ui_frame.png, 9 частей по 8 пикселей). */
 .ui-card { color: #2b2233; border: 16px solid transparent; border-image: url(assets/ui_frame.png) 8 fill / 16px stretch;
   image-rendering: pixelated; padding: 2px 4px; max-width: 372px; width: 100%; max-height: calc(100dvh - 32px);
-  overflow-y: auto; box-sizing: border-box; font: 15px/1.4 system-ui, sans-serif;
+  overflow-y: auto; box-sizing: border-box; font: 15px/1.4 ${UI_FONT};
   filter: drop-shadow(0 4px 0 rgba(24, 20, 37, .6)); }
 /* Пиксельные иконки вместо эмодзи (монета, товары, коробка). */
 .ui-ico { height: 1.15em; width: auto; vertical-align: -0.22em; image-rendering: pixelated; }
@@ -35,10 +40,14 @@ const css = `
 .ui-card h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; }
 .ui-card h3 { margin: 14px 0 6px; font-size: 15px; }
 .ui-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0; }
+/* В строке «текст — значение» значение (награда, сумма, кнопка) не переносится, длинный текст слева
+   спокойно уходит на вторую строку. */
+.ui-row > :first-child:not(:last-child) { flex: 1 1 auto; min-width: 0; }
+.ui-row > :last-child:not(:first-child) { flex: none; white-space: nowrap; text-align: right; }
 .ui-muted { color: #7a7066; font-size: 13px; }
 .ui-quote { font-style: italic; font-size: 13px; margin: 2px 0 6px; }
 .ui-box { border: 2px solid #2b2233; border-radius: 6px; padding: 8px; margin: 6px 0; background: #fbf6ea; }
-.ui-btn { display: block; width: 100%; margin-top: 10px; padding: 12px; font: 600 15px system-ui, sans-serif;
+.ui-btn { display: block; width: 100%; margin-top: 10px; padding: 12px; font: 600 15px ${UI_FONT};
   border: 3px solid #2b2233; border-radius: 6px; background: #8fd16a; color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
 .ui-btn, .ui-chip, .ui-tab { transition: transform .18s cubic-bezier(.3, 1.8, .5, 1), box-shadow .1s;
   -webkit-tap-highlight-color: transparent; }
@@ -63,21 +72,21 @@ const css = `
   transition: transform .42s cubic-bezier(.55, 0, .35, 1.15); display: flex; align-items: center; justify-content: center; }
 .ui-curtain.down { transform: translateY(0); }
 .ui-curtain.up { transform: translateY(-101%); transition: transform .5s cubic-bezier(.6, -0.2, .7, 1); }
-.ui-curtain-label { font: 800 30px system-ui, sans-serif; color: #fee761; background: #2b2233; padding: 10px 22px;
+.ui-curtain-label { font: 800 30px ${UI_FONT}; color: #fee761; background: #2b2233; padding: 10px 22px;
   border: 3px solid #181425; border-radius: 8px; box-shadow: 0 4px 0 #181425; letter-spacing: 1px; }
 .ui-btn.secondary { background: #f2c14e; }
 .ui-btn.danger { background: #e43b44; color: #fff; }
 .ui-closed { text-align: center; }
 .ui-closed h2 { justify-content: center; }
 .ui-btn[disabled], .ui-chip[disabled] { background: #c9c0ad; color: #7a7066; }
-.ui-chip { padding: 5px 9px; font: 600 13px system-ui, sans-serif; border: 2px solid #2b2233; border-radius: 6px;
+.ui-chip { padding: 5px 9px; font: 600 13px ${UI_FONT}; border: 2px solid #2b2233; border-radius: 6px;
   background: #f2c14e; color: #2b2233; box-shadow: 0 2px 0 #2b2233; min-width: 34px; }
 .ui-chip.active { background: #2b2233; color: #f4ecd8; }
 .ui-chip-off { background: #e6dcc4; color: #7a7066; box-shadow: none; }
 .ui-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 /* Шесть вкладок — в две строки по три, чтобы ни одна не обрезалась на узком телефоне. */
 .ui-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 8px 0 6px; }
-.ui-tab { flex: 1; padding: 8px 1px; font: 600 12px system-ui, sans-serif; border: 2px solid #2b2233;
+.ui-tab { flex: 1; padding: 8px 1px; font: 600 12px ${UI_FONT}; border: 2px solid #2b2233;
   border-radius: 6px; background: #e6dcc4; color: #2b2233; }
 .ui-tab.active { background: #2b2233; color: #f4ecd8; }
 .ui-price { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 6px 0; border: 2px solid #2b2233;
@@ -122,7 +131,7 @@ const css = `
 .ui-gift-day.today { background: #fee761; color: #2b2233; font-weight: 700; animation: ui-pulse 1s ease-in-out infinite; }
 .ui-gift-day.big .ui-gift-box { font-size: 20px; }
 .ui-gift-box { font-size: 16px; line-height: 1.2; }
-.ui-gift-reward { margin: 8px 0 2px; padding: 8px; text-align: center; font: 800 17px system-ui, sans-serif; background: #fee761;
+.ui-gift-reward { margin: 8px 0 2px; padding: 8px; text-align: center; font: 800 17px ${UI_FONT}; background: #fee761;
   border: 2px solid #2b2233; border-radius: 8px; }
 /* Сводка утра: каждая строка — отдельно, крупнее и темнее, без «простыни» серого текста. */
 .ui-infos { border: 2px solid #2b2233; border-radius: 8px; background: #fbf6ea; padding: 2px 10px; margin: 4px 0 8px; }
@@ -142,16 +151,16 @@ const css = `
 .ui-item-actions { display: flex; gap: 6px; align-items: center; }
 .ui-item-actions .ui-chip { min-width: 46px; padding: 8px 6px; font-size: 14px; }
 .ui-tag { display: inline-flex; align-items: center; gap: 2px; background: #fee761; border: 2px solid #2b2233; border-radius: 6px;
-  padding: 0 5px; font: 800 13px system-ui, sans-serif; line-height: 1.5; }
+  padding: 0 5px; font: 800 13px ${UI_FONT}; line-height: 1.5; }
 .ui-haggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 8px;
   background: #f4ecd8; border-radius: 6px; }
 .ui-haggle b { font-size: 13px; }
 .ui-haggle .ui-muted { margin-left: auto; }
 /* Оформление: сетка карточек с превью. Поставленное — зелёное, премиум — с золотой рамкой. */
-.ui-decor-kind { font: 700 14px system-ui, sans-serif; margin: 12px 0 4px; }
+.ui-decor-kind { font: 700 14px ${UI_FONT}; margin: 12px 0 4px; }
 .ui-decor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .ui-decor { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; border: 2px solid #2b2233;
-  border-radius: 8px; background: #fbf6ea; color: #2b2233; box-shadow: 0 2px 0 #2b2233; font: 12px/1.2 system-ui, sans-serif; }
+  border-radius: 8px; background: #fbf6ea; color: #2b2233; box-shadow: 0 2px 0 #2b2233; font: 12px/1.2 ${UI_FONT}; }
 .ui-decor.active { background: #e3f5d6; border-color: #3e8948; box-shadow: 0 2px 0 #3e8948; }
 .ui-decor.premium { border-color: #feae34; }
 .ui-decor[disabled] { opacity: .65; }
@@ -169,7 +178,7 @@ const css = `
 /* Всплывашка «Новое достижение!» сверху: выезжает, висит и уезжает. */
 .ui-toast { position: fixed; z-index: 40; left: 50%; top: calc(var(--safe-top, env(safe-area-inset-top)) + 62px); display: flex; gap: 10px;
   align-items: center; padding: 8px 14px 8px 10px; background: #fbf6ea; color: #2b2233; border: 3px solid #2b2233;
-  border-radius: 10px; box-shadow: 0 4px 0 #2b2233; font: 13px/1.3 system-ui, sans-serif; pointer-events: none;
+  border-radius: 10px; box-shadow: 0 4px 0 #2b2233; font: 13px/1.3 ${UI_FONT}; pointer-events: none;
   transform: translate(-50%, -160%); transition: transform .45s cubic-bezier(.3, 1.4, .5, 1); max-width: 88vw; }
 .ui-toast.shown { transform: translate(-50%, 0); }
 .ui-toast img { width: 36px; height: 42px; image-rendering: pixelated; animation: ui-badge 1.2s ease-in-out infinite; }
@@ -202,7 +211,7 @@ const css = `
 .ui-dialog-speech::after { content: ''; position: absolute; left: -6px; bottom: 18px; border: 6px solid transparent;
   border-right-color: #fff; border-left: 0; }
 .ui-dialog-name { position: absolute; top: -12px; left: 10px; background: #fee761; border: 2px solid #2b2233;
-  border-radius: 6px; padding: 1px 8px; font: 700 13px system-ui, sans-serif; }
+  border-radius: 6px; padding: 1px 8px; font: 700 13px ${UI_FONT}; }
 .ui-dialog-text { margin: 0; font-size: 15px; line-height: 1.4; min-height: 3em; }
 .ui-dialog-caret { display: inline-block; margin-left: 4px; font-size: 10px; color: #b86f50; animation: ui-tip .8s ease-in-out infinite; }
 .ui-tour { position: fixed; left: 8px; right: 8px; bottom: 8px; max-width: 480px; margin: 0 auto; z-index: 50; color: #2b2233;
@@ -223,7 +232,7 @@ const css = `
 .ui-dialog-after { opacity: 0; transform: translateY(4px); transition: opacity .25s, transform .25s; }
 .ui-dialog-after.shown { opacity: 1; transform: none; }
 /* Поле ввода (имя кота) и пиксельная картинка в строке. */
-.ui-input { width: 100%; box-sizing: border-box; font: 700 16px system-ui, sans-serif; padding: 9px 10px; margin: 6px 0;
+.ui-input { width: 100%; box-sizing: border-box; font: 700 16px ${UI_FONT}; padding: 9px 10px; margin: 6px 0;
   border: 2px solid #2b2233; border-radius: 8px; background: #fff; color: #2b2233; }
 .ui-item-art { width: 32px; height: 32px; image-rendering: pixelated; object-fit: contain; justify-self: center; }
 /* Карточка отзыва: звёзды, текст, подпись; плохие — розовые, хорошие — зелёные. */
@@ -234,7 +243,7 @@ const css = `
 .ui-review-text { font-size: 14px; line-height: 1.3; color: #2b2233; margin: 2px 0; }
 .ui-review-who { font-size: 12px; color: #6a5f58; text-align: right; }
 .ui-speed { position: fixed; right: max(10px, calc((100vw - min(100vw, 56.25dvh)) / 2 + 10px)); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 40px);
-  font: 800 14px system-ui, sans-serif; padding: 7px 10px; border: 2px solid #2b2233; border-radius: 8px; background: #f4ecd8;
+  font: 800 14px ${UI_FONT}; padding: 7px 10px; border: 2px solid #2b2233; border-radius: 8px; background: #f4ecd8;
   color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
 .ui-speed.on { background: #fee761; }
 .ui-urgent { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 92px); }

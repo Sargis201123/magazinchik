@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+// Свой шрифт с кириллицей (лежит в сборке): текст одинаково ровный на iPhone, Android и компьютере.
+import '@fontsource-variable/nunito';
 import { BootScene } from './scenes/BootScene';
 import { CANVAS_H, CANVAS_W, StoreScene } from './scenes/StoreScene';
 import { initTelegram } from './platform/telegram';

@@ -221,7 +221,9 @@ export class BootScene extends Phaser.Scene {
     // Сначала сверить сохранение с облаком Telegram (не дольше пары секунд), потом — в магазин.
     const start = () => this.scene.isActive('boot') && this.scene.start('store');
     const timer = setTimeout(start, 4000);
-    void syncSave().finally(() => {
+    // Надписи на холсте рисуются один раз — дождаться шрифта, иначе останутся системным.
+    const font = document.fonts?.load(`600 16px "Nunito Variable"`).catch(() => []) ?? Promise.resolve([]);
+    void Promise.all([syncSave(), font]).finally(() => {
       clearTimeout(timer);
       start();
     });
