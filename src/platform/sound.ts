@@ -203,6 +203,19 @@ export const sound = {
   voice: (pitch: number) => play([{ freq: pitch * (0.9 + Math.random() * 0.25), dur: 0.035, wave: 'square', vol: 0.018 }]),
   /** Раскат грома в грозу. */
   thunder,
+  /** Позывные новостей: три сигнала вверх. */
+  news: () =>
+    play([
+      { freq: 784, dur: 0.12, wave: 'square', vol: 0.03 },
+      { freq: 988, at: 0.14, dur: 0.12, wave: 'square', vol: 0.03 },
+      { freq: 1319, at: 0.28, dur: 0.3, wave: 'square', vol: 0.03 },
+    ]),
+  /** Подземный толчок: низкий гул, проседающий вниз. */
+  rumble: () =>
+    play([
+      { freq: 70, dur: 0.9, wave: 'sawtooth', vol: 0.06, slide: 32 },
+      { freq: 52, at: 0.1, dur: 0.8, wave: 'triangle', vol: 0.08, slide: 28 },
+    ]),
 
   isMuted: (): boolean => muted,
   setMuted(next: boolean): void {

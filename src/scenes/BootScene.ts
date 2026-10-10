@@ -1,6 +1,7 @@
 import { PRODUCT_IDS } from '../game/economy';
 import Phaser from 'phaser';
 import { syncSave } from '../game/save';
+import { WARDROBE_TEXTURES } from './wardrobe';
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
 const SPRITES = [
@@ -214,7 +215,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    for (const key of SPRITES) this.load.image(key, `assets/${key}.png`);
+    for (const key of [...SPRITES, ...WARDROBE_TEXTURES]) this.load.image(key, `assets/${key}.png`);
   }
 
   create(): void {

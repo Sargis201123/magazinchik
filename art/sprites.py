@@ -4730,6 +4730,12 @@ def main():
     import icons
 
     icons.main()
+    # Гардероб покупателей и срочные новости особых дней.
+    import news
+    import wardrobe
+
+    wardrobe.main()
+    news.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

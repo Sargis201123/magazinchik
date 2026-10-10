@@ -72,6 +72,9 @@ import { findPath, type Rect } from './paths';
 import { ambience } from '../platform/ambience';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, UI_FONT } from '../ui/dom';
+import { BIG_DAYS, bigDayFor, CROWD_EXTRA_GUESTS, CROWD_PATIENCE, isCrowdDay, quakeBreak, type BigDayId } from '../game/bigday';
+import { dialogBox } from '../ui/dialog';
+import { BIG_LAYER_DY, type BackId, type FaceId, type HatId, type OutfitId, type PropId } from './wardrobe';
 import { Hud } from '../ui/hud';
 import { showMorning } from '../ui/morning';
 import { showTitle } from '../ui/title';
@@ -300,6 +303,16 @@ interface Look {
   stroller?: number;
   /** С собакой: окрас. Собаку привязывают у входа. */
   dog?: number;
+  /** Гардероб (wardrobe.ts): головной убор, одежда поверх рубашки, вещь в руках, на лице, на спине. */
+  hat?: HatId;
+  hatTint?: number;
+  outfit?: OutfitId;
+  outfitTint?: number;
+  prop?: PropId;
+  propTint?: number;
+  face?: FaceId;
+  back?: BackId;
+  backTint?: number;
 }
 
 const randomLook = (shirt: number): Look => ({
@@ -658,6 +671,8 @@ export class StoreScene extends Phaser.Scene {
   private reviewStar?: Phaser.GameObjects.Text;
   /** Флажки, шарики и лоток ярмарки; лоток продаёт со склада по таймеру. */
   private fairObjs: Phaser.GameObjects.GameObject[] = [];
+  /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
+  private bigObjs: { destroy: () => void }[] = [];
   private stall?: Phaser.GameObjects.Image;
   private stallTimer?: Phaser.Time.TimerEvent;
   /** Доставка на дом: телефон у кассы, текущий заказ, курьер с велосипедом. */
@@ -764,7 +779,7 @@ export class StoreScene extends Phaser.Scene {
 
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;
-      const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0);
+      const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0) + (isCrowdDay(this.state.day) && !this.night ? CROWD_EXTRA_GUESTS : 0);
       if (this.nextSpawn <= 0 && this.customers.size < maxCustomers) {
         this.spawnCustomer();
         const interval = spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS : 1);
@@ -1169,7 +1184,7 @@ export class StoreScene extends Phaser.Scene {
         bob = Math.sin((now + phase) / 650) > 0.35 ? -0.5 : 0;
       }
       if (legs && (legs.texture.key !== key || legs.flipX !== flip)) legs.setTexture(key).setFlipX(flip);
-      for (const img of (person.getData('upper') as Phaser.GameObjects.Image[]) ?? []) img.y = bob;
+      for (const img of (person.getData('upper') as Phaser.GameObjects.Image[]) ?? []) img.y = bob + ((img.getData('dy') as number | undefined) ?? 0);
       const umbrella = person.getData('umbrella') as Phaser.GameObjects.Image | undefined;
       umbrella?.setVisible(person.y > this.layout.h + 2);
       this.lampShadow(person);
@@ -3922,7 +3937,19 @@ export class StoreScene extends Phaser.Scene {
       [skin, 'p_skin'],
       [hair, hairBase],
     ];
-    const parts = [shadow, legs, shirt];
+    const parts: Phaser.GameObjects.Image[] = [shadow];
+    // Вещь из гардероба: слой поворачивается вместе с человеком; большие холсты стоят чуть выше.
+    const wear = (key: string, tint?: number, big = false): Phaser.GameObjects.Image => {
+      const img = this.art(0, big ? BIG_LAYER_DY : 0, key).setTint(tint ?? 0xffffff);
+      img.setData('dy', big ? BIG_LAYER_DY : 0);
+      layers.push([img, key]);
+      return img;
+    };
+    // На спине (веер, плащ, гитара): за телом, а когда человек отвернулся — поверх (setFacing).
+    const back = look.back ? wear(`w_back_${look.back}`, look.backTint, true) : undefined;
+    if (back) parts.push(back);
+    parts.push(legs, shirt);
+    if (look.outfit) parts.push(wear(`w_outfit_${look.outfit}`, look.outfitTint));
     if (look.acc) {
       const acc = this.art(0, 0, `acc_${look.acc}`).setTint(look.accTint ?? 0xffffff);
       layers.push([acc, `acc_${look.acc}`]);
@@ -3934,13 +3961,17 @@ export class StoreScene extends Phaser.Scene {
       parts.push(bag);
     }
     parts.push(skin);
+    if (look.face) parts.push(wear(`w_face_${look.face}`));
     if (look.glasses) {
       const glasses = this.art(0, 0, 'acc_glasses');
       layers.push([glasses, 'acc_glasses']);
       parts.push(glasses);
     }
     parts.push(hair);
+    if (look.hat) parts.push(wear(`w_hat_${look.hat}`, look.hatTint, true));
+    if (look.prop) parts.push(wear(`w_prop_${look.prop}`, look.propTint, true));
     const person = this.add.container(x, y, parts).setDepth(y);
+    if (back) person.setData('back', back);
     const baseScale = look.kid ? 0.8 : 1;
     person.setScale(baseScale);
     person.setData('legs', legs);
@@ -4067,6 +4098,11 @@ export class StoreScene extends Phaser.Scene {
     }
     const legs = person.getData('legs') as Phaser.GameObjects.Image | undefined;
     legs?.setTexture(`p_legs0${suffix}`).setFlipX(facing === 'left');
+    const back = person.getData('back') as Phaser.GameObjects.Image | undefined;
+    if (back) {
+      if (facing === 'up') person.bringToTop(back);
+      else person.moveTo(back, 1);
+    }
     this.placeStroller(person, facing);
   }
 
@@ -4978,7 +5014,13 @@ export class StoreScene extends Phaser.Scene {
     c.waitStart = this.time.now;
     c.bubble.setVisible(true);
     // С котом рядом ждут дольше.
-    c.patienceMs = PATIENCE_MS * catPatience(this.state) * climatePatience(this.state, weatherFor(this.state.day)) * charmPatience(this.state) * radioPatience(this.state);
+    c.patienceMs =
+      PATIENCE_MS *
+      catPatience(this.state) *
+      climatePatience(this.state, weatherFor(this.state.day)) *
+      charmPatience(this.state) *
+      radioPatience(this.state) *
+      (isCrowdDay(this.state.day) ? CROWD_PATIENCE : 1);
     c.patience = this.time.delayedCall(c.patienceMs, () => void this.giveUp(c));
     this.layoutQueue();
   }
@@ -5754,10 +5796,188 @@ export class StoreScene extends Phaser.Scene {
     for (const piece of this.trash) piece.destroy();
     this.trash.clear();
     this.running = true;
+    this.clearBigDay();
+    const big = bigDayFor(this.state.day);
+    if (big) this.announceBigDay(big);
+  }
+
+  /**
+   * Особый день: о нём узнают только сейчас, по новостям. Пока ведущая говорит, день стоит.
+   * Потом на улице начинается своё: жара, мороз, вода, толчки или шествие.
+   */
+  private announceBigDay(id: BigDayId): void {
+    const big = BIG_DAYS[id];
+    this.running = false;
+    this.time.paused = true;
+    sound.news();
+    haptic.tap();
+    const { card, close } = openModal();
+    // Заголовок одним куском: у h2 в окне flex по краям, иконка не должна уезжать влево.
+    const title = el('h2');
+    title.append(el('span', '', `${big.icon} ${t(`bigday.${id}.title` as TextKey)}`));
+    card.append(
+      title,
+      dialogBox({
+        caption: t('bigday.caption'),
+        art: `assets/news_${id}.png`,
+        portrait: big.crowd ? 'portrait_anchor_happy' : 'portrait_anchor_surprised',
+        name: t('bigday.anchor'),
+        text: t(`bigday.${id}.news` as TextKey),
+        pitch: 520,
+        after: [el('div', 'ui-note', t(`bigday.${id}.hint` as TextKey))],
+        nextLabel: t('bigday.ok'),
+        onNext: () => {
+          close();
+          this.time.paused = false;
+          this.running = true;
+          this.startBigDay(id);
+        },
+      }),
+    );
+  }
+
+  private clearBigDay(): void {
+    for (const obj of this.bigObjs) obj.destroy();
+    // Мороз красил деревья в иней — возвращаем цвет по погоде.
+    if (this.bigObjs.length) for (const g of this.greenery) g.setTint(this.weather === 'snow' ? 0xdce6f2 : this.weather === 'leaves' ? 0xffb868 : 0xffffff);
+    this.bigObjs = [];
+    if (this.time.paused) this.time.paused = false;
+    this.applyRadio();
+  }
+
+  private startBigDay(id: BigDayId): void {
+    this.clearBigDay();
+    const keep = <T extends { destroy: () => void }>(obj: T): T => {
+      this.bigObjs.push(obj);
+      return obj;
+    };
+    const { h } = this.layout;
+    const area = { x: -80, y: -140, w: this.next.w + 160, h: this.next.h + STREET_VIEW + 220 };
+    const top = this.streetY - 12;
+    // Заливки — с большим запасом: камеру можно отдалить и увести в сторону.
+    const wide = { x: -1200, y: -1200, w: this.next.w + 2400, h: this.next.h + 2400 };
+    const overlay = (color: number, alpha: number) =>
+      keep(this.add.rectangle(wide.x, wide.y, wide.w, wide.h, color).setOrigin(0).setAlpha(alpha).setDepth(LIGHT_DEPTH - 1));
+    if (id === 'heatwave') {
+      const glow = overlay(0xff9a3c, 0.12);
+      keep(this.tweens.add({ targets: glow, alpha: 0.2, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }));
+      keep(this.add.particles(0, 0, 'glow', {
+        x: { min: area.x, max: area.x + area.w },
+        y: { min: h + 8, max: area.y + area.h },
+        speedY: { min: -12, max: -5 },
+        scale: { start: 0.06, end: 0.2 },
+        alpha: { start: 0.2, end: 0 },
+        tint: 0xffd27a,
+        lifespan: 2400,
+        frequency: 40,
+        blendMode: Phaser.BlendModes.ADD,
+      })).setDepth(-5);
+    }
+    if (id === 'frost') {
+      overlay(0x9fd3ff, 0.13);
+      for (const g of this.greenery) g.setTint(0xdce6f2);
+      keep(this.add.particles(0, 0, 'snowflake', {
+        x: { min: area.x, max: area.x + area.w },
+        y: area.y,
+        speedY: { min: 18, max: 36 },
+        speedX: { min: -24, max: -6 },
+        scale: { min: 1.2 / ART, max: 2 / ART },
+        lifespan: (area.h / 20) * 1000,
+        frequency: 22,
+      })).setDepth(-5);
+    }
+    if (id === 'flood') {
+      // Вода стоит от крыльца до сквера за дорогой; по ней расходятся круги.
+      const water = keep(this.add.rectangle(wide.x, h + FACADE_H + 2, wide.w, top + 88 - h - FACADE_H - 2, 0x2f7fd8).setOrigin(0).setAlpha(0.5).setDepth(-5));
+      keep(this.tweens.add({ targets: water, alpha: 0.58, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }));
+      keep(this.add.particles(0, 0, 'splash', {
+        x: { min: area.x, max: area.x + area.w },
+        y: { min: h + FACADE_H + 4, max: top + 86 },
+        scale: { start: 0.3 / ART, end: 1.4 / ART },
+        alpha: { start: 0.8, end: 0 },
+        tint: 0xc4f4ff,
+        lifespan: 900,
+        frequency: 45,
+      })).setDepth(-4.9);
+      keep(this.add.particles(0, 0, 'raindrop', {
+        x: { min: area.x, max: area.x + area.w },
+        y: area.y,
+        speedY: { min: 240, max: 300 },
+        speedX: -30,
+        scale: 1 / ART,
+        lifespan: (area.h / 260) * 1000,
+        quantity: 2,
+        frequency: 30,
+      })).setDepth(-5);
+    }
+    if (id === 'quake') {
+      for (const at of [0.12, 0.42, 0.72]) keep(this.time.delayedCall(at * DAY_SECONDS * 1000, () => this.running && !this.night && this.tremor()));
+    }
+    if (BIG_DAYS[id].crowd) {
+      music.setStation(id === 'carnival' ? 'samba' : 'march');
+      const marchers = () => {
+        if (!this.running || this.night) return;
+        const n = Phaser.Math.Between(6, 8);
+        for (let i = 0; i < n; i++) this.marcher(id, i, area.x - 12 - Math.floor(i / 2) * 15, top + 34 + (i % 2) * 14, area.x + area.w + 20, keep);
+      };
+      marchers();
+      keep(this.time.addEvent({ delay: 9000, loop: true, callback: marchers }));
+      keep(this.add.particles(0, 0, 'confetti', {
+        x: { min: area.x, max: area.x + area.w },
+        y: { min: top - 20, max: top + 10 },
+        speedY: { min: 8, max: 20 },
+        speedX: { min: -8, max: 8 },
+        rotate: { min: 0, max: 360 },
+        tint: [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xb55088, 0x2ce8f5],
+        scale: 1 / ART,
+        lifespan: 3200,
+        frequency: 90,
+      })).setDepth(top + 70);
+    }
+  }
+
+  /** Участник шествия: идёт вдоль дороги слева направо и уходит за край. */
+  private marcher(id: BigDayId, i: number, x: number, y: number, toX: number, keep: <T extends { destroy: () => void }>(obj: T) => T): void {
+    const skin = Phaser.Utils.Array.GetRandom(SKINS);
+    const costume = Phaser.Utils.Array.GetRandom([0xb55088, 0xe43b44, 0x0099db, 0x63c74d, 0xfeae34]);
+    const look: Look =
+      id === 'carnival'
+        ? {
+            ...randomLook(costume),
+            skin,
+            pants: costume,
+            outfit: 'samba',
+            hat: 'feathers',
+            prop: i % 3 === 2 ? 'drum' : 'maracas',
+            back: i % 3 === 0 ? 'fan' : undefined,
+          }
+        : i < 6
+          ? { ...randomLook(0xe43b44), skin, pants: 0x262b44, outfit: 'band', hat: 'shako', prop: i % 2 ? 'drum' : 'trumpet' }
+          : { ...customerLook(Phaser.Utils.Array.GetRandom(SHIRTS)), prop: i % 2 ? 'flag' : 'balloon', propTint: Phaser.Utils.Array.GetRandom(HAT_COLORS) };
+    const person = keep(this.makePerson(x, y, look));
+    this.setFacing(person, 'right');
+    person.setData('walking', true);
+    keep(this.tweens.add({ targets: person, x: toX, duration: ((toX - x) / 16) * 1000, onComplete: () => person.destroy() }));
+    // Танцоры подпрыгивают в такт.
+    if (id === 'carnival') keep(this.tweens.add({ targets: person, y: y - 1.5, duration: 260, yoyo: true, repeat: -1, delay: i * 90 }));
+  }
+
+  /** Подземный толчок: камера трясётся, с полок падает и бьётся часть товара. */
+  private tremor(): void {
+    this.cameras.main.shake(800, 0.008);
+    sound.rumble();
+    haptic.error();
+    const { state, broken } = quakeBreak(this.state, Math.random);
+    this.state = state;
+    this.stats.spoiled += broken;
+    this.refreshShelves();
+    const { w, h } = this.layout;
+    this.popup(w / 2, h / 2 - 10, t('popup.quake', { n: broken }), '#ffb0a0');
   }
 
   private finishDay(): void {
     this.running = false;
+    this.clearBigDay();
     this.night = false;
     this.setSpeed(1);
     this.stallTimer?.remove();
@@ -5780,6 +6000,8 @@ export class StoreScene extends Phaser.Scene {
     const cafe = this.cafeToday;
     this.cafeToday = null;
     const extra: [string, string][] = [];
+    const big = bigDayFor(finishedDay);
+    if (big) extra.push([t('bigday.summary'), `${BIG_DAYS[big].icon} ${t(`bigday.${big}.title` as TextKey)}`]);
     if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
     if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
     const rankAfter = rankOf(state.totalRevenue);

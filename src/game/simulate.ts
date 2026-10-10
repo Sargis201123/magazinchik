@@ -64,7 +64,7 @@ import {
   DAY_SECONDS,
   recordSale,
 } from './economy';
-import { ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
+import { actualGuestsToday, ensurePlan, inspectionDone, nightCycle } from './day';
 import { answerEvent, inspect } from './events';
 import { candidatesFor } from './staff';
 import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
@@ -421,7 +421,7 @@ export function simulate({
         stallRevenue += sale.price;
       }
     }
-    const guests = guestsToday(state);
+    const guests = actualGuestsToday(state);
     let purchases = 0;
     const deals = Object.fromEntries(
       SUPPLIER_IDS.map((sid) => {

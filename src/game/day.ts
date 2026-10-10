@@ -23,6 +23,7 @@ import { cafeMorning } from './cafe';
 import { promoGuests } from './promo';
 import { fairGuests } from './fair';
 import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
+import { bigDayGuests } from './bigday';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -88,7 +89,14 @@ export const guestFactor = (state: StoreState): number =>
   departmentGuests(state) *
   eduardGuests(state);
 
-/** Секунд между гостями сегодня: рейтинг, помещение, сюжет, сезон и звание. */
-export const spawnIntervalToday = (state: StoreState): number => spawnInterval(state.rating, state.level) / guestFactor(state);
+/**
+ * Секунд между гостями сегодня: рейтинг, помещение, сюжет, сезон и звание. Особый день
+ * (bigday.ts) — только здесь: в утренний прогноз гостей он не входит, о нём ещё не знают.
+ */
+export const spawnIntervalToday = (state: StoreState): number =>
+  spawnInterval(state.rating, state.level) / guestFactor(state) / bigDayGuests(state.day);
+
+/** Сколько гостей придёт на самом деле — с особым днём (для симулятора). */
+export const actualGuestsToday = (state: StoreState): number => Math.round(guestsToday(state) * bigDayGuests(state.day));
 
 export const guestsToday = (state: StoreState): number => Math.round(expectedGuests(state.rating, state.level) * guestFactor(state));

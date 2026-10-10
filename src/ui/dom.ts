@@ -452,6 +452,11 @@ const ICONS: Record<string, string> = {
   '❔': 'ico_question',
   '📅': 'ico_calendar',
   '🚶': 'ico_walk',
+  '🌊': 'ico_wave',
+  '🌋': 'ico_quake',
+  '🎭': 'ico_mask',
+  '🎺': 'ico_trumpet',
+  '📺': 'ico_tv',
 };
 // Эмодзи из таблицы; знак-вариант U+FE0F после него («⚠️») съедается вместе с ним.
 const ICON_RE = new RegExp(`(${Object.keys(ICONS).join('|')})\uFE0F?`, 'u');
