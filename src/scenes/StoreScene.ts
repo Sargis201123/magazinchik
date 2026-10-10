@@ -3141,6 +3141,24 @@ export class StoreScene extends Phaser.Scene {
     this.greenery = [];
     for (const [x, y] of trees) this.greenery.push(this.art(x, y, 'tree').setOrigin(0.5, 0.9).setDepth(y));
     for (let x = 10; x < next.w; x += 34) this.greenery.push(this.art(x, -6, 'bush').setDepth(-6));
+    // Сквер за кварталом и за дорогой: деревья, кусты и клумбы — газон не пустует, когда отдаляешь камеру.
+    const rnd = new Phaser.Math.RandomDataGenerator(['park']);
+    const scatter = (y0: number, y1: number) => {
+      for (let y = y0; y < y1; y += 40) {
+        for (let x = left + 10; x < left + width - 10; x += 46) {
+          const px = x + rnd.between(-14, 14);
+          const py = y + rnd.between(-12, 12);
+          const roll = rnd.frac();
+          // За зданием глубина отрицательная — держим над газоном (-10), но под крышами соседей (-3).
+          const depth = py < 0 ? -9.5 + (py + 400) / 1000 : py;
+          if (roll < 0.34) this.greenery.push(this.art(px, py, 'tree').setOrigin(0.5, 0.9).setDepth(depth));
+          else if (roll < 0.52) this.greenery.push(this.art(px, py, 'bush').setDepth(depth));
+          else if (roll < 0.62) this.greenery.push(this.art(px, py, rnd.frac() < 0.5 ? 'flower' : 'tulips').setDepth(depth));
+        }
+      }
+    };
+    scatter(-380, Math.min(-40, top - 230));
+    scatter(top + 104, top + 300);
   }
 
   /** Фонарь не ставим на дорожку к двери и на подъезд к складу. */
