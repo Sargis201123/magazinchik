@@ -1,0 +1,13 @@
+// Cloudflare Workers: игра (dist) + серверная часть оплаты звёздами (worker/index.ts).
+// Секреты BOT_TOKEN и WEBHOOK_SECRET задаются в панели: Settings → Variables and Secrets (тип Secret).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "magazinchik",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-06-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true }
+}

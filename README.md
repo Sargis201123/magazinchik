@@ -33,19 +33,21 @@ python3 art/sprites.py  # перерисовать спрайты в public/asse
 
 Премиальное оформление продаётся за звёзды. Сервер — несколько маленьких функций без своей базы:
 что купил игрок, он узнаёт из платежей бота (`getStarTransactions`). Логика — в `api/_lib/`,
-обёртки для двух хостингов: `api/*.ts` (Vercel) и `functions/api/*.ts` (Cloudflare Pages).
+обёртки для двух хостингов: `api/*.ts` (Vercel) и `worker/index.ts` (Cloudflare Workers).
 
 Секреты (только в настройках хостинга, никогда в коде или чате):
 - `BOT_TOKEN` — токен бота из @BotFather;
 - `WEBHOOK_SECRET` — длинная случайная строка из латинских букв, цифр, `_` и `-`.
 
-### Cloudflare Pages (бесплатно)
+### Cloudflare Workers (бесплатно)
 
-1. dash.cloudflare.com → Workers & Pages → Create → Pages → Connect to Git → этот репозиторий.
-2. Build command: `npm run build`, Build output directory: `dist`. Node берётся из `.nvmrc` (22).
-3. Settings → Variables and Secrets → добавить `BOT_TOKEN` и `WEBHOOK_SECRET` (тип Secret, Production), затем Retry deployment.
-4. Один раз открыть `https://<проект>.pages.dev/api/stars-setup?key=<WEBHOOK_SECRET>` — вебхук бота переедет на Cloudflare.
-5. В @BotFather поменять адрес мини-приложения (и кнопки меню) на `https://<проект>.pages.dev/`.
+Настройки — в `wrangler.jsonc`: игра раздаётся из `dist`, запросы `/api/*` обрабатывает `worker/index.ts`.
+
+1. dash.cloudflare.com → Workers & Pages → Create → Import a repository → этот репозиторий.
+2. Build command: `npm run build`, Deploy command: `npx wrangler deploy` (так и предлагается по умолчанию).
+3. Settings → Variables and Secrets → добавить `BOT_TOKEN` и `WEBHOOK_SECRET` с типом Secret.
+4. Один раз открыть `https://<проект>.<аккаунт>.workers.dev/api/stars-setup?key=<WEBHOOK_SECRET>` — вебхук бота переедет на Cloudflare.
+5. В @BotFather поменять адрес мини-приложения (и кнопки меню) на адрес `workers.dev`.
 
 ### Vercel
 

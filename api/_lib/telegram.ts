@@ -1,4 +1,4 @@
-// Общее для серверных функций (Vercel — папка api/, Cloudflare Pages — папка functions/): проверка подписи Telegram, вызовы Bot API
+// Общее для серверных функций (Vercel — папка api/, Cloudflare Workers — worker/index.ts): проверка подписи Telegram, вызовы Bot API
 // и каталог того, что продаётся за звёзды. Клиенту не доверяем: цену и вещь знает только сервер,
 // а покупки потом проверяются по списку звёздных платежей самого бота (getStarTransactions) —
 // своя база данных не нужна.
@@ -13,7 +13,7 @@ export interface TgUser {
   language_code?: string;
 }
 
-/** Секреты сервера: на Vercel — из process.env, на Cloudflare Pages — из context.env. */
+/** Секреты сервера: на Vercel — из process.env, на Cloudflare — из env воркера. */
 export interface Env {
   BOT_TOKEN?: string;
   WEBHOOK_SECRET?: string;

@@ -1,5 +1,5 @@
 // Обработчики серверных функций. Не зависят от хостинга: секреты приходят параметром env,
-// а тонкие обёртки лежат в api/ (Vercel) и functions/api/ (Cloudflare Pages).
+// а тонкие обёртки лежат в api/ (Vercel) и worker/index.ts (Cloudflare Workers).
 
 import { bot, itemFromPayload, json, ownedFrom, payloadFor, STARS_CATALOG, verifyInitData, type Env, type StarTransaction } from './telegram.js';
 
