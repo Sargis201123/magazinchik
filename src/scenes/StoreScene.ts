@@ -5602,14 +5602,20 @@ export class StoreScene extends Phaser.Scene {
 
   // ---------- День ----------
 
-  private showMorning(): void {
-    // Подарок за ежедневный вход: деньги (и товар) сразу в состоянии, окно — поверх утра.
+  /** Подарок за ежедневный вход: деньги (и товар) сразу в состоянии, окно — поверх утра. */
+  private offerGift(): void {
     const claimed = claimGift(this.state, localDate(new Date()), Math.random);
-    if (claimed) {
-      this.state = claimed.state;
-      saveGame(this.state);
-      this.time.delayedCall(400, () => showGift(claimed.gift));
-    }
+    if (!claimed) return;
+    this.state = claimed.state;
+    saveGame(this.state);
+    this.hud.update(this.state, DAY_SECONDS);
+    this.refreshWarehouse();
+    this.time.delayedCall(400, () => showGift(claimed.gift));
+  }
+
+  private showMorning(): void {
+    // Подарок за ежедневный вход — но не во время бабушкиного обучения: его вручат, когда оно закончится.
+    if (this.state.tourDone !== false) this.offerGift();
     // Старые сохранения сразу получают значки за то, что уже сделано.
     this.checkAchievements(false);
     this.morningStock = warehouseCount(this.state);
@@ -5627,6 +5633,7 @@ export class StoreScene extends Phaser.Scene {
     this.updateLighting(0);
     this.openShop();
     showMorning({
+      onTourDone: () => this.offerGift(),
       getState: () => this.state,
       setState: (s) => {
         const staffChanged = s.staff !== this.state.staff;
