@@ -54,6 +54,7 @@ import {
   hire,
   staffLimit,
   staffOf,
+  roleOpen,
   thiefChance,
   type StaffRole,
   type StoreState,
@@ -78,7 +79,7 @@ import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRac
 import { buyCups, coffeeChance, useCup } from './coffee';
 import { weatherFor } from './weather';
 import { brewSeconds, cameraTheft, climatePatience, coffeePrice, entranceMud, fridgeLeak, GEAR_IDS, gearAvailable, nextGear, ovenBatch, REGISTER_JAM_SECONDS, registerJam, upgradeGear, wcDirt } from './gear';
-import { AROMA_SECONDS, AROMA_TOLERANCE, startBatch, takeOutBread } from './bakery';
+import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, startBatch, takeOutBread } from './bakery';
 import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
 import { answerWar, warLeaves, type WarAnswer } from './war';
@@ -147,9 +148,9 @@ export interface SimOptions {
 export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments' | 'skills' | 'radio';
 
 /** В каком порядке разумный игрок докупает полки. */
-const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy'];
+const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
 /** С новыми отделами: напитки, заморозка и химия — как только помещение позволяет. */
-const SHELF_PRIORITY_DEPTS: Category[] = ['dairy', 'meat', 'drinks', 'produce', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat'];
+const SHELF_PRIORITY_DEPTS: Category[] = ['dairy', 'meat', 'drinks', 'produce', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat', 'drinks', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat'];
 
 const AVG_WANTS = 1.5;
 
@@ -157,6 +158,9 @@ const AVG_WANTS = 1.5;
 // Кассир — первым: остальные места не занимаем, пока за кассой стоит сам хозяин.
 const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
   ['cashier', (s) => expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 1.2],
+  // Пекарь и бариста — как только есть печь и кофейня: без них флигель стоит.
+  ['baker', (s) => roleOpen(s, 'baker')],
+  ['barista', (s) => roleOpen(s, 'barista')],
   ['loader', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
   ['guard', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
   ['cleaner', (s) => s.level >= 3 && Boolean(staffOf(s, 'cashier'))],
@@ -357,8 +361,10 @@ export function simulate({
     // Печь: хлеб из своих закладок (часть сгорает — игрок не успел вынуть). Хлеб пойдёт в зачёт закупки.
     let breadBaked = 0;
     let batches = 0;
-    if (features.oven && hasUpgrade(state, 'oven') && sellableProducts(state).includes('bread')) {
+    // Печёт пекарь (без него пекарня стоит): закладки, пока на хлебных полках есть место; он не сжигает.
+    if (features.oven && bakeryWorking(state) && sellableProducts(state).includes('bread')) {
       for (let b = 0; b < ovenBatches; b++) {
+        if (!bakerShouldBake(state)) break;
         const next = startBatch(state);
         if (!next) break;
         state = next;

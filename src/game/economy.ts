@@ -153,11 +153,11 @@ export interface StoreLevel {
 }
 
 export const STORE_LEVELS: StoreLevel[] = [
-  { nameKey: 'store.l1', cost: 0, slots: 2, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 5 },
-  { nameKey: 'store.l2', cost: 1000, slots: 4, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 7 },
-  { nameKey: 'store.l3', cost: 3200, slots: 6, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
-  { nameKey: 'store.l4', cost: 6500, slots: 8, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
-  { nameKey: 'store.l5', cost: 14000, slots: 10, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
+  { nameKey: 'store.l1', cost: 0, slots: 3, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 5 },
+  { nameKey: 'store.l2', cost: 1000, slots: 7, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 7 },
+  { nameKey: 'store.l3', cost: 3200, slots: 9, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
+  { nameKey: 'store.l4', cost: 6500, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
+  { nameKey: 'store.l5', cost: 14000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
 ];
 
 /**
@@ -175,10 +175,10 @@ export const LATE_PENALTY = 0.1;
 export const START_DEBT = 500;
 export const DEBT_PAYMENT = 250;
 
-export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'cleaner' | 'loader' | 'guard' | 'manager';
+export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'cleaner' | 'loader' | 'guard' | 'manager' | 'baker' | 'barista';
 
 /** Сотрудники: каждый забирает у игрока одно ручное дело. Зарплата — базовая за месяц. */
-export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number; minLevel?: number }> = {
+export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number; minLevel?: number; needs?: 'oven' | 'coffee' }> = {
   cashier: { nameKey: 'staff.cashier', descKey: 'staff.cashier.desc', wage: 420 },
   cashier2: { nameKey: 'staff.cashier2', descKey: 'staff.cashier2.desc', wage: 420 },
   cashier3: { nameKey: 'staff.cashier3', descKey: 'staff.cashier3.desc', wage: 420 },
@@ -189,10 +189,16 @@ export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey
   // Менеджер зала — только в супермаркете и больше: организует работу (все быстрее), сам
   // заказывает срочный подвоз, когда товар кончился, и встаёт за кассу вместо отсутствующего.
   manager: { nameKey: 'staff.manager', descKey: 'staff.manager.desc', wage: 650, minLevel: 3 },
+  // Пекарь работает в пекарне во флигеле (нужна печь), бариста — в кофейне (нужен кофейный уголок).
+  baker: { nameKey: 'staff.baker', descKey: 'staff.baker.desc', wage: 380, needs: 'oven' },
+  barista: { nameKey: 'staff.barista', descKey: 'staff.barista.desc', wage: 360, needs: 'coffee' },
 };
 
 /** Можно ли нанять на эту должность в этом помещении. */
-export const roleOpen = (state: StoreState, role: StaffRole): boolean => state.level >= (STAFF_ROLES[role].minLevel ?? 0);
+export const roleOpen = (state: StoreState, role: StaffRole): boolean => {
+  const { minLevel = 0, needs } = STAFF_ROLES[role];
+  return state.level >= minLevel && (!needs || (state.upgrades ?? []).includes(needs));
+};
 
 export const STAFF_ROLE_IDS = Object.keys(STAFF_ROLES) as StaffRole[];
 
@@ -216,7 +222,7 @@ export const STICKY_SKIM = 0.04;
 /** Навык растёт каждые столько месяцев работы. */
 export const MONTHS_PER_SKILL = 2;
 /** Сколько сотрудников помещается в помещении каждого уровня. */
-export const STAFF_LIMIT = [1, 2, 4, 7, 8];
+export const STAFF_LIMIT = [1, 3, 5, 9, 11];
 
 export interface StaffMember {
   role: StaffRole;
@@ -282,6 +288,11 @@ export const RAISE_ASK_CHANCE = 0.2;
 export const RAISE_STEP = 0.1;
 
 export const staffOf = (state: StoreState, role: StaffRole): StaffMember | undefined => state.staff.find((m) => m.role === role);
+/** Сотрудник на этой должности есть и сегодня на работе. */
+export const onShift = (state: StoreState, role: StaffRole): boolean => {
+  const m = staffOf(state, role);
+  return Boolean(m) && !isAbsent(state, m!);
+};
 export const staffLimit = (state: StoreState): number => STAFF_LIMIT[state.level];
 
 /** Нанять: одна роль — один человек, не больше лимита помещения. */

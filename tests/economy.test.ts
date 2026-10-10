@@ -152,8 +152,10 @@ describe('полки по типам', () => {
     expect(sellableProducts(empty())).not.toContain('meat');
     const s = buyShelf({ ...empty(), money: 1000 }, 'meat')!;
     expect(sellableProducts(s)).toContain('meat');
-    expect(freeSlots(s)).toBe(0);
-    expect(buyShelf({ ...s, money: 1e6 }, 'bakery')).toBeNull();
+    // Свободные места кончились — больше полку не поставить.
+    let full = { ...s, money: 1e6 };
+    while (freeSlots(full) > 0) full = buyShelf(full, 'bakery')!;
+    expect(buyShelf(full, 'bakery')).toBeNull();
   });
 
   it('полку можно продать за половину цены, товар с неё уходит на склад', () => {
@@ -167,11 +169,11 @@ describe('полки по типам', () => {
 });
 
 describe('помещение, долг и расходы', () => {
-  it('в начале ларёк на 2 полки, с долгом', () => {
+  it('в начале ларёк на 3 полки (две уже стоят), с долгом', () => {
     const s = newGame();
-    expect(STORE_LEVELS[s.level].slots).toBe(2);
+    expect(STORE_LEVELS[s.level].slots).toBe(3);
     expect(s.shelves).toHaveLength(2);
-    expect(freeSlots(s)).toBe(0);
+    expect(freeSlots(s)).toBe(1);
     expect(s.debt).toBeGreaterThan(0);
   });
 
@@ -182,7 +184,7 @@ describe('помещение, долг и расходы', () => {
     expect(paid.debt).toBe(0);
     const bigger = expandStore(paid)!;
     expect(bigger.level).toBe(1);
-    expect(freeSlots(bigger)).toBe(2);
+    expect(freeSlots(bigger)).toBe(STORE_LEVELS[1].slots - paid.shelves.length);
     expect(bigger.money).toBe(paid.money - STORE_LEVELS[1].cost);
   });
 
