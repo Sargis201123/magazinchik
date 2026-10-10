@@ -187,7 +187,7 @@ export const en: Record<TextKey, string> = {
   'summary.bills': 'Monthly bills',
   'summary.shortfall': '{n} 💰 short — added to the debt with a 10% penalty',
 
-  'buy.note': 'Goods arrive at the storage room. Then put them on the shelves.',
+  'buy.note': "What you buy goes straight onto the shelves; whatever does not fit waits in storage. Overnight, storage tops the shelves up.",
   'buy.haggle': 'Haggle:',
   'buy.discount': '{p}% off today',
   'buy.angryNote': 'Offended: prices +10% today',
@@ -200,7 +200,6 @@ export const en: Record<TextKey, string> = {
   'warehouse.toShelf': 'To shelf',
   'warehouse.noShelf': 'Needs a “{shelf}”',
   'warehouse.shelfFull': 'Shelf is full',
-  'warehouse.fillAll': 'Put everything on shelves',
   'warehouse.bad': 'defective {n}',
   'warehouse.markdown': 'marked down {n}',
   'warehouse.label': 'STORAGE',
@@ -815,7 +814,7 @@ export const en: Record<TextKey, string> = {
   "tour.top": "At the top — today's day and your money. Mornings you prepare, days you trade, evenings you count the takings.",
   "tour.today": "Here's what matters today: what to do this morning, the weather, how many customers to expect and when rent and power are due.",
   "tour.buy": "“Buy” — get goods from suppliers here. Haggle, don't be shy! What you buy is delivered to the storage room.",
-  "tour.warehouse": "“Storage” — your stock. Goods go from here to the shelves; mark down whatever is about to spoil.",
+  "tour.warehouse": "“Storage” — stock that did not fit on the shelves. In the morning it fills the free spots by itself; mark down whatever is about to spoil.",
   "tour.shelves": "“Shelves” — what stands where and at what price. Too expensive — nobody buys; too cheap — you go broke. New shelves are bought here too.",
   "tour.extras": "“Corners” — sweets at the till, coffee, your own oven, a cat. For when the shop grows.",
   "tour.staff": "“Staff” — cashier, cleaner, loader, guard. At first you do everything yourself; when it gets busy, hire help.",
@@ -1159,12 +1158,6 @@ export const en: Record<TextKey, string> = {
   'decor.lucky_cat': "Lucky cat",
   'decor.fountain': "Fountain",
   'decor.jukebox': "Jukebox",
-  'buy.shelveTitle': "📦 Stock in the storeroom — {n} pcs fit on the shelves",
-  'buy.shelveText': "Customers only take goods from the shelves. Put them out — and free up storeroom space for more stock.",
-  'open.shelveTitle': "Goods left in the storeroom",
-  'open.shelveText': "There is still room for {n} pcs on the shelves. Customers only take from the shelves — put them out before opening?",
-  'open.shelveYes': "📦 Put out and open",
-  'open.shelveNo': "Open as is",
 
 };
 
