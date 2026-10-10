@@ -20,6 +20,7 @@ import {
   workSpeed,
   hasUnmarkedBad,
   moveToShelf,
+  shelveAll,
   newGame,
   PRODUCT_IDS,
   returnToShelf,
@@ -5639,7 +5640,8 @@ export class StoreScene extends Phaser.Scene {
   private offerGift(): void {
     const claimed = claimGift(this.state, localDate(new Date()), Math.random);
     if (!claimed) return;
-    this.state = claimed.state;
+    // Товар из гостинца сразу встаёт на полки, если есть место.
+    this.state = shelveAll(claimed.state);
     saveGame(this.state);
     this.hud.update(this.state, DAY_SECONDS);
     this.refreshWarehouse();
@@ -5647,6 +5649,8 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private showMorning(): void {
+    // За ночь склад доливает полки: утром всё, что влезает, уже стоит в зале (просрочку списали ночью).
+    this.state = shelveAll(this.state);
     // Подарок за ежедневный вход — но не во время бабушкиного обучения: его вручат, когда оно закончится.
     if (this.state.tourDone !== false) this.offerGift();
     // Старые сохранения сразу получают значки за то, что уже сделано.

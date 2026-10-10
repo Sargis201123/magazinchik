@@ -16,6 +16,7 @@ import {
   onShelves,
   freeSlots,
   moveToShelf,
+  shelveAll,
   nextStoreLevel,
   payDebt,
   PRICE_STEP,
@@ -145,7 +146,6 @@ import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, tryDecor, t
 import { buyWithStars, starsAvailable } from '../platform/stars';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, who } from './dom';
-import { showChoice } from './choice';
 
 /** Портрет заказчика: шеф — это Марат. */
 const CLIENT_PORTRAIT: Record<ClientId, string> = { chef: 'marat', school: 'school', valya: 'valya' };
@@ -258,7 +258,8 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   const update = (next: StoreState | null, feedback: 'tap' | 'success' | 'error' = 'tap') => {
     if (!next) return;
-    setState(next);
+    // Купленное сразу встаёт на полки, лишнее остаётся на складе.
+    setState(shelveAll(next));
     haptic[feedback]();
     sound[feedback === 'tap' ? 'tap' : feedback === 'success' ? 'coin' : 'bad']();
     render();
@@ -353,29 +354,10 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
       billForecast(state),
     );
-    const open = () => {
+    const openButton = button(t('morning.open'), () => {
       endTour();
       close();
       onOpen();
-    };
-    const openButton = button(t('morning.open'), () => {
-      // Товар остался на складе, хотя на полках есть место, — напомнить, прежде чем открыться.
-      const n = touring ? 0 : placeable(getState());
-      if (!n) {
-        open();
-        return;
-      }
-      showChoice({
-        title: t('open.shelveTitle'),
-        text: t('open.shelveText', { n }),
-        yes: t('open.shelveYes'),
-        no: t('open.shelveNo'),
-        onYes: () => {
-          update(fillShelves(getState()), 'success');
-          open();
-        },
-        onNo: open,
-      });
     });
     card.replaceChildren(
       title,
@@ -491,33 +473,10 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     return [box];
   };
 
-  /** Разложить со склада всё, что влезает на полки. */
-  const fillShelves = (state: StoreState): StoreState => {
-    let next = state;
-    next.shelves.forEach((_, i) => (next = moveToShelf(next, i).state));
-    return next;
-  };
-  /** Сколько штук со склада сейчас можно выложить на полки. */
-  const placeable = (state: StoreState): number => warehouseCount(state) - warehouseCount(fillShelves(state));
-
-  /** Подсказка прямо в закупке: товар лежит на складе, а на полках есть место — разложить одной кнопкой. */
-  const shelveHint = (state: StoreState): HTMLElement[] => {
-    const n = placeable(state);
-    if (!n) return [];
-    const box = el('div', 'ui-box ui-shelve-hint');
-    box.append(
-      el('b', '', t('buy.shelveTitle', { n })),
-      el('div', 'ui-muted', t('buy.shelveText')),
-      button(`📦 ${t('warehouse.fillAll')}`, () => update(fillShelves(getState()), 'success')),
-    );
-    return [box];
-  };
-
   const buyTab = (state: StoreState): HTMLElement[] => [
     ...cafeBox(state),
     el('div', 'ui-note', t('buy.note')),
     el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
-    ...shelveHint(state),
     ...autoOrderBox(state),
     ...reorderBox(state),
     // Оптовик появляется, когда в помещении можно поставить полку нового отдела.
@@ -663,14 +622,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
         : el('span', 'ui-muted', t('warehouse.noShelf', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) }));
       box.append(itemRow(pid, { sub, actions: [action] }));
     }
-    out.push(
-      box,
-      button(
-        t('warehouse.fillAll'),
-        () => update(fillShelves(getState()), 'success'),
-        'ui-btn secondary',
-      ),
-    );
+    out.push(box);
     return out;
   };
 

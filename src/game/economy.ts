@@ -718,7 +718,7 @@ export function setPrice(state: StoreState, id: ProductId, price: number): Store
 // ---------- Закупка и склад ----------
 
 /**
- * Покупка у поставщика: товар приезжает на склад. bad — партия оказалась бракованной,
+ * Покупка у поставщика: товар приезжает на склад (на полки его раскладывает shelveAll). bad — партия оказалась бракованной,
  * штуки ждут решения игрока (см. resolveBadBatch).
  * Возвращает null, если не хватает денег или места на складе.
  */
@@ -787,6 +787,17 @@ export function moveToShelf(
   if (moved === 0) return { state, moved };
   const shelves = state.shelves.map((s, i) => (i === shelfIndex ? { ...s, items } : s));
   return { state: { ...state, warehouse, shelves }, moved };
+}
+
+/**
+ * Разложить со склада всё, что влезает на полки (самое старое — первым). Так работает
+ * закупка (купленное сразу встаёт на полки, лишнее — на склад) и утро (за ночь склад
+ * доливает полки). Просроченное сюда не попадает: оно списывается ночью.
+ */
+export function shelveAll(state: StoreState): StoreState {
+  let next = state;
+  next.shelves.forEach((_, i) => (next = moveToShelf(next, i).state));
+  return next;
 }
 
 // ---------- Полки ----------

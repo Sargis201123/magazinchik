@@ -148,7 +148,6 @@ const css = `
 .ui-haggle b { font-size: 13px; }
 .ui-haggle .ui-muted { margin-left: auto; }
 /* Оформление: сетка карточек с превью. Поставленное — зелёное, премиум — с золотой рамкой. */
-.ui-shelve-hint { border-color: #f77622; background: #fff1dc; box-shadow: 0 2px 0 #f77622; display: flex; flex-direction: column; gap: 6px; }
 .ui-decor-kind { font: 700 14px system-ui, sans-serif; margin: 12px 0 4px; }
 .ui-decor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .ui-decor { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px; border: 2px solid #2b2233;
