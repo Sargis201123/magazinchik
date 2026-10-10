@@ -4610,6 +4610,32 @@ def wing_furniture():
     c.save("bread_tray")
 
 
+def veranda():
+    """Зонтик веранды кафе сверху: полосатый купол с фестонами и спицами."""
+    c = Canvas(32, 30)
+    c.ellipse(16, 13, 15, 12, "R")
+    for i in range(8):
+        import math
+        a0 = i * math.pi / 4
+        for r in range(2, 15):
+            x = 16 + math.cos(a0) * r * 1.0
+            y = 13 + math.sin(a0) * r * 0.8
+            if i % 2 == 0:
+                c.px(int(x), int(y), "w")
+    # Полосы: чередуем белые и красные доли.
+    for yy in range(1, 26):
+        for xx in range(1, 31):
+            if ((xx - 16) / 15) ** 2 + ((yy - 13) / 12) ** 2 <= 1:
+                import math
+                ang = math.atan2((yy - 13) / 0.8, xx - 16)
+                if int((ang + math.pi) / (math.pi / 4)) % 2 == 0:
+                    c.px(xx, yy, "w")
+    c.ellipse(16, 13, 2, 2, "y")
+    c.px(16, 13, "Y")
+    c.outline("k")
+    shadowed(c, 16, 27, 12, 2, alpha=50).save("umbrella")
+
+
 def main():
     floor()
     wall()
@@ -4638,6 +4664,7 @@ def main():
     icon()
     environment2()
     wing_furniture()
+    veranda()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

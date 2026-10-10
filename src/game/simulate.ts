@@ -85,6 +85,7 @@ import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
 import { recordDay } from './achievements';
+import { answerCafe, cafeDeliver } from './cafe';
 import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
 import { buyRadio, hasRadio, radioExtra, radioPatience, RADIO_PRICE, setStation } from './radio';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
@@ -146,7 +147,7 @@ export interface SimOptions {
   ovenBurn?: number;
 }
 
-export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments' | 'skills' | 'radio' | 'brand';
+export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments' | 'skills' | 'radio' | 'brand' | 'cafe';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -282,6 +283,8 @@ export function simulate({
       state = answerEvent(state, accept) ?? answerEvent(state, false) ?? state;
     }
 
+    // Кафе по соседству: договор на неделю — соглашаемся (и докупаем под него товар ниже).
+    if (features.cafe && state.cafe?.offer) state = answerCafe(state, state.money > reserve * 3);
     // Разумный игрок соглашается на прибавки: обиженный сотрудник работает хуже.
     for (const m of state.staff) if (m.raiseAsk) state = answerRaise(state, m.role, true);
     // И даёт выходной тому, кто устал (по одному за раз).
@@ -436,7 +439,7 @@ export function simulate({
         .filter((s) => s.kind === PRODUCTS[id].category)
         .reduce((sum, s) => sum + shelfCapacity(s), 0);
       const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category).length;
-      const order = state.plan?.order?.product === id ? state.plan.order.qty : 0;
+      const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0);
       const target = Math.ceil(Math.min(demand * 1.1, shareOfShelf + CARRY * 2)) + order;
       const have = onShelves(state, id) + warehouseOf(state, id);
       let qty = Math.max(0, target - have);
@@ -453,6 +456,9 @@ export function simulate({
       if (bad) state = resolveBadBatch(state, id, 'markdown', best.price);
       purchases += qty * best.price;
     }
+    // Кафе по соседству забирает заказ, как только магазин открылся.
+    const cafeRes = cafeDeliver(state);
+    state = cafeRes.state;
     state.shelves.forEach((_, i) => (state = moveToShelf(state, i).state));
 
     // ---------- День ----------

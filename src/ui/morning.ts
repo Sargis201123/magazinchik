@@ -129,6 +129,7 @@ import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
+import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeLoyalty, cafeOf } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
@@ -463,6 +464,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   };
 
   const buyTab = (state: StoreState): HTMLElement[] => [
+    ...cafeBox(state),
     el('div', 'ui-note', t('buy.note')),
     el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
     ...autoOrderBox(state),
@@ -849,6 +851,42 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     if (hasUpgrade(state, 'oven')) box.append(...staffNeed(state, 'baker', 'oven.noBaker'));
     if (hasUpgrade(state, 'oven')) box.append(...brandBox(state));
     return box;
+  };
+
+  /** Кафе «Пончик» по соседству: предложение договора на неделю или как идёт текущий. */
+  const cafeBox = (state: StoreState): HTMLElement[] => {
+    const cafe = cafeOf(state);
+    const list = (items: Partial<Record<ProductId, number>>) =>
+      Object.entries(items)
+        .map(([id, n]) => `${PRODUCTS[id as ProductId].icon}×${n}`)
+        .join(' ');
+    const box = el('div', 'ui-box');
+    if (cafe.offer) {
+      const loyal = cafeLoyalty(state);
+      box.append(
+        el('b', '', t('cafe.offerTitle')),
+        el('div', '', t('cafe.offer', { list: list(cafe.offer.items), pay: cafe.offer.pay, days: CAFE_DAYS })),
+        el('div', 'ui-muted', t('cafe.offerNote', { misses: CAFE_MISSES })),
+        ...(loyal ? [el('div', 'ui-note', t('cafe.loyal', { n: Math.round(loyal * 100) }))] : []),
+      );
+      const chips = el('div', 'ui-chips');
+      chips.append(
+        button(t('cafe.accept'), () => update(answerCafe(getState(), true), 'success'), 'ui-chip'),
+        button(t('cafe.decline'), () => update(answerCafe(getState(), false)), 'ui-chip'),
+      );
+      box.append(chips);
+      return [box];
+    }
+    if (!cafe.deal) return [];
+    const ok = cafeCanDeliver(state);
+    const status = el('div', 'ui-note', ok ? t('cafe.ready') : t('cafe.short'));
+    if (!ok) status.style.color = '#b13e53';
+    box.append(
+      el('b', '', t('cafe.dealTitle', { n: cafeDaysLeft(state) })),
+      el('div', 'ui-muted', t('cafe.deal', { list: list(cafe.deal.items), pay: cafe.deal.pay })),
+      status,
+    );
+    return [box];
   };
 
   /** Своя марка «От бабушки»: ступени с новыми рецептами (после лучшей печи). */

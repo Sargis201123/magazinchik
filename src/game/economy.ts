@@ -518,6 +518,8 @@ export interface StoreState {
   bankrupt?: boolean;
   /** Сколько игр начато заново. */
   runs?: number;
+  /** Договор с кафе «Пончик» по соседству (cafe.ts). */
+  cafe?: import('./cafe').CafeState;
   /** Ступень своей марки «От бабушки» (0 — нет, brand.ts). */
   brand?: number;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */
