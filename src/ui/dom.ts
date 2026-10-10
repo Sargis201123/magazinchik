@@ -152,10 +152,16 @@ const css = `
 .ui-item-actions .ui-chip { min-width: 46px; padding: 8px 6px; font-size: 14px; }
 .ui-tag { display: inline-flex; align-items: center; gap: 2px; background: #fee761; border: 2px solid #2b2233; border-radius: 6px;
   padding: 0 5px; font: 800 13px ${UI_FONT}; line-height: 1.5; }
-.ui-haggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 8px;
-  background: #f4ecd8; border-radius: 6px; }
-.ui-haggle b { font-size: 13px; }
-.ui-haggle .ui-muted { margin-left: auto; }
+.ui-haggle { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 7px 8px 7px 10px; background: #f4ecd8;
+  border: 2px dashed #d8ccb0; border-radius: 8px; }
+.ui-haggle-label { display: flex; flex-direction: column; flex: none; line-height: 1.15; }
+.ui-haggle-label b { font-size: 14px; white-space: nowrap; }
+.ui-haggle-pips { font-size: 12px; color: #e43b44; letter-spacing: 2px; }
+.ui-haggle-asks { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.ui-haggle-asks .ui-chip { width: 100%; padding: 7px 0; }
+.ui-haggle.done, .ui-haggle.angry { justify-content: center; text-align: center; font-size: 14px; padding: 9px 10px; }
+.ui-haggle.done { background: #e3f5d6; border: 2px solid #8fd16a; color: #2f6b2a; }
+.ui-haggle.angry { background: #fbe0dc; border: 2px solid #e8a9a2; color: #8a2a2a; }
 /* Оформление: сетка карточек с превью. Поставленное — зелёное, премиум — с золотой рамкой. */
 .ui-decor-kind { font: 700 14px ${UI_FONT}; margin: 12px 0 4px; }
 .ui-decor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }

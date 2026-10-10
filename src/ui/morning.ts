@@ -527,15 +527,23 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       box.append(itemRow(pid, { price, sub: t('buy.inWarehouse', { n: warehouseOf(state, pid) }), actions: chips }));
     }
 
+    // Торг одной строкой: слева «Торг» и сердечки терпения поставщика, справа три одинаковые кнопки.
     const haggleRow = el('div', 'ui-haggle');
     if (deal.discount > 0) {
-      haggleRow.append(el('b', '', t('buy.discount', { p: Math.round(deal.discount * 100) })));
+      haggleRow.classList.add('done');
+      haggleRow.append(el('b', '', `✅ ${t('buy.discount', { p: Math.round(deal.discount * 100) })}`));
     } else if (deal.angry) {
-      haggleRow.append(el('span', '', t('buy.angryNote')));
+      haggleRow.classList.add('angry');
+      haggleRow.append(el('b', '', `😤 ${t('buy.angryNote')}`));
     } else {
-      haggleRow.append(el('b', '', t('buy.haggle')));
+      const label = el('div', 'ui-haggle-label');
+      const hearts = '♥'.repeat(deal.attemptsLeft) + '♡'.repeat(Math.max(0, s.patience - deal.attemptsLeft));
+      const pips = el('span', 'ui-haggle-pips', hearts);
+      pips.title = t('buy.attempts', { n: deal.attemptsLeft });
+      label.append(el('b', '', `🤝 ${t('buy.haggle')}`), pips);
+      const asks = el('div', 'ui-haggle-asks');
       for (const ask of HAGGLE_ASKS) {
-        haggleRow.append(
+        asks.append(
           button(
             `−${Math.round(ask * 100)}%`,
             () => {
@@ -550,7 +558,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
           ),
         );
       }
-      haggleRow.append(el('span', 'ui-muted', t('buy.attempts', { n: deal.attemptsLeft })));
+      haggleRow.append(label, asks);
     }
     box.append(haggleRow);
     return box;
@@ -648,14 +656,6 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       );
       const allowed = PRODUCT_IDS.filter((pid) => PRODUCTS[pid].category === shelf.kind).map(productLabel).join(', ');
       box.append(head, el('div', 'ui-muted', t('shelves.only', { list: allowed })));
-      // Звёздочка: грузчик пополняет такие полки в первую очередь.
-      box.append(
-        button(
-          shelf.priority ? t('shelf.priorityOn') : t('shelf.priority'),
-          () => update({ ...getState(), shelves: getState().shelves.map((sh, j) => (j === i ? { ...sh, priority: !sh.priority } : sh)) }),
-          `ui-chip${shelf.priority ? ' active' : ''}`,
-        ),
-      );
       if (shelf.broken) {
         const cost = fridgeRepairCost(state.level);
         box.append(

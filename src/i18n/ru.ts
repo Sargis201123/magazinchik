@@ -186,10 +186,10 @@ export const ru = {
   'summary.shortfall': 'Не хватило {n} 💰 — ушло в долг, сверху пени 10%',
 
   'buy.note': "Купленное сразу встаёт на полки, а что не влезло — ждёт на складе. За ночь склад сам доливает полки.",
-  'buy.haggle': 'Торговаться:',
+  'buy.haggle': "Торг",
   'buy.discount': 'Скидка {p}% на сегодня',
   'buy.angryNote': 'Обиделся: цены +10% на сегодня',
-  'buy.attempts': 'попыток: {n}',
+  'buy.attempts': "Терпение поставщика: ещё {n} попытки",
   'buy.inWarehouse': 'на складе {n}',
   'buy.needShelf': 'Сначала купи «{shelf}» во вкладке «Полки»',
 
@@ -668,8 +668,6 @@ export const ru = {
   "contract.sign": "Подписать",
   "contract.delivered": "📃 По договорам привезли: {list} (−{cost} 💰)",
   "contract.skipped": "📃 Не всё привезли — не хватило денег или места",
-  "shelf.priority": "⭐ В первую очередь",
-  "shelf.priorityOn": "⭐ Первая в очереди у грузчика",
   "event.poach.title": "Эдуард переманивает!",
   "event.poach.text": "«{name}, переходи ко мне — буду платить {wage} 💰 в месяц!»",
   "event.poach.note": "{name} ({role}) сейчас получает {now} 💰 в месяц.",

@@ -4757,7 +4757,7 @@ export class StoreScene extends Phaser.Scene {
         (id) => canPlace(id, shelf) && (shelf.items[id]?.length ?? 0) === 0 && (this.state.warehouse[id]?.length ?? 0) > 0,
       );
       if (!hasGoods || !(free >= 3 || (runningOut && free > 0))) return;
-      const score = (shelf.priority ? 1000 : 0) + (runningOut ? 100 : 0) + free;
+      const score = (runningOut ? 100 : 0) + free;
       if (score > bestScore) [best, bestScore] = [i, score];
     });
     return best;
