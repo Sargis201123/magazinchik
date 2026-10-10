@@ -188,10 +188,10 @@ export const en: Record<TextKey, string> = {
   'summary.shortfall': '{n} 💰 short — added to the debt with a 10% penalty',
 
   'buy.note': "What you buy goes straight onto the shelves; whatever does not fit waits in storage. Overnight, storage tops the shelves up.",
-  'buy.haggle': 'Haggle:',
+  'buy.haggle': "Haggle",
   'buy.discount': '{p}% off today',
   'buy.angryNote': 'Offended: prices +10% today',
-  'buy.attempts': 'tries: {n}',
+  'buy.attempts': "Supplier patience: {n} tries left",
   'buy.inWarehouse': '{n} in storage',
   'buy.needShelf': 'Buy a “{shelf}” on the Shelves tab first',
 
@@ -670,8 +670,6 @@ export const en: Record<TextKey, string> = {
   "contract.sign": "Sign",
   "contract.delivered": "📃 Contract deliveries: {list} (−{cost} 💰)",
   "contract.skipped": "📃 Not everything arrived — not enough money or space",
-  "shelf.priority": "⭐ First in line",
-  "shelf.priorityOn": "⭐ The loader fills it first",
   "event.poach.title": "Eduard is poaching!",
   "event.poach.text": "\"{name}, come work for me — I'll pay {wage} 💰 a month!\"",
   "event.poach.note": "{name} ({role}) earns {now} 💰 a month now.",
