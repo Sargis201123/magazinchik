@@ -518,6 +518,8 @@ export interface StoreState {
   bankrupt?: boolean;
   /** Сколько игр начато заново. */
   runs?: number;
+  /** Сколько должна добрая бабушка, которой дали хлеба в долг (special.ts). */
+  grannyOwed?: number;
   /** Договор с кафе «Пончик» по соседству (cafe.ts). */
   cafe?: import('./cafe').CafeState;
   /** Ступень своей марки «От бабушки» (0 — нет, brand.ts). */
