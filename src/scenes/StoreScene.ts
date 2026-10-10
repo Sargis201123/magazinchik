@@ -477,6 +477,8 @@ interface ShelfView {
   front: Phaser.GameObjects.Image;
   shadow: Phaser.GameObjects.Image;
   items: Phaser.GameObjects.Image[];
+  /** Второй ряд в глубине полки: тот же товар потемнее — полка выглядит полной, а не редкой. */
+  backItems: Phaser.GameObjects.Image[];
   pips: Phaser.GameObjects.Image[];
   /** Свет холодильника: стекло светится, на пол ложится холодный отсвет. */
   lights: Phaser.GameObjects.GameObject[];
@@ -3763,6 +3765,7 @@ export class StoreScene extends Phaser.Scene {
         view?.front.destroy();
         view?.shadow.destroy();
         view?.items.forEach((img) => img.destroy());
+        view?.backItems.forEach((img) => img.destroy());
         view?.pips.forEach((img) => img.destroy());
         view?.low.destroy();
         view?.promo.destroy();
@@ -3785,6 +3788,13 @@ export class StoreScene extends Phaser.Scene {
           img.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id)) % ITEM_VARIANTS}`);
           img.setTint(entry.unit.markdown ? 0xffe08a : entry.unit.bad ? 0x9a8a80 : 0xffffff);
         }
+        // Позади — такой же товар чуть выше и в тени, между передними.
+        const back = view.backItems[n];
+        back.setVisible(img.visible);
+        if (entry) {
+          back.setPosition(Math.min(img.x + step / 2, slot.x + 15), img.y - 2);
+          back.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id) + 1) % ITEM_VARIANTS}`);
+        }
       });
       view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
       view.promo.setVisible(PRODUCT_IDS.some((id) => canPlace(id, shelf) && promoKind(this.state, id)));
@@ -3805,6 +3815,7 @@ export class StoreScene extends Phaser.Scene {
     const front = this.art(slot.x, slot.y - FURNITURE_TOP / 2, `${look.texture}_front`).setDepth(slot.y - 12);
     bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.restockShelf(index)));
     const items = Array.from({ length: SHELF_LEVELS[SHELF_LEVELS.length - 1].capacity }, () => this.art(slot.x, slot.y, 'item').setDepth(slot.y - 13));
+    const backItems = items.map(() => this.art(slot.x, slot.y, 'item').setDepth(slot.y - 13.5).setTint(0xa89a90).setVisible(false));
     // Уровень улучшения — жёлтые точки над полкой.
     const pips = [0, 1, 2].map((n) => this.art(slot.x - 17 + n * 4, slot.y - 16, 'pip').setDepth(slot.y - 12));
     // Красный ценник «АКЦИЯ» над полкой с товаром дня.
@@ -3842,7 +3853,7 @@ export class StoreScene extends Phaser.Scene {
       spill.setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(0.4);
       lights.push(glass, spill);
     }
-    return { kind, bg, front, shadow, items, pips, lights, low, promo, glow, needsStock: false };
+    return { kind, bg, front, shadow, items, backItems, pips, lights, low, promo, glow, needsStock: false };
   }
 
   private refreshWarehouse(): void {
@@ -4241,7 +4252,11 @@ export class StoreScene extends Phaser.Scene {
     this.refreshShelves();
     this.refreshWarehouse();
     const items = this.shelfViews[index]?.items ?? [];
+    const backs = this.shelfViews[index]?.backItems ?? [];
     const fresh = items.filter((img, n) => img.visible && n >= before);
+    // Задний ряд проявляется, когда штука долетела до полки.
+    backs.forEach((back, n) => n >= before && back.visible && back.setAlpha(0));
+    this.time.delayedCall(fresh.length * 90 + 300, () => backs.forEach((back) => back.active && back.alpha < 1 && this.tweens.add({ targets: back, alpha: 1, duration: 200 })));
     fresh.forEach((img, n) => {
       const { x, y } = img;
       const scale = img.scaleX;
