@@ -1289,6 +1289,96 @@ ICONS = {
         ],
         None,
     ),
+    # 🌊 волна.
+    "wave": (
+        [
+            "............",
+            "............",
+            "......UUU...",
+            "....UUcccU..",
+            "...UccUUwcU.",
+            "..UcU...Ucc.",
+            "..Uc....UU..",
+            ".UcUU.UUU...",
+            "UccccUcccUUU",
+            "UUUUUUUUUUUU",
+            "uuuuuuuuuuuu",
+            "............",
+        ],
+        None,
+    ),
+    # 🌋 толчки: треснувшая земля.
+    "quake": (
+        [
+            "............",
+            "............",
+            "...B....B...",
+            "..BBB..BBB..",
+            ".BnBBKBBnBB.",
+            "BBBBBKBBBBBB",
+            "BnBBKBBBBnBB",
+            "BBBBBKKBBBBB",
+            "aaaaKaaKaaaa",
+            "aaaKaaaaKaaa",
+            "............",
+            "............",
+        ],
+        None,
+    ),
+    # 🎭 карнавальная маска с перьями.
+    "mask": (
+        [
+            "..E.......U.",
+            "..EE.....UU.",
+            "...EE...UU..",
+            "....PPPPP...",
+            ".PPPPPPPPPP.",
+            "PPKKPPPPKKPP",
+            "PPKKPYYPKKPP",
+            ".PPPPYYPPPP.",
+            "..PPP..PPP..",
+            "............",
+            "............",
+            "............",
+        ],
+        None,
+    ),
+    # 🎺 труба.
+    "trumpet": (
+        [
+            "............",
+            "............",
+            "..........Y.",
+            ".........YY.",
+            "....yy..YYY.",
+            "YYYYYYYYYYYY",
+            "y...yy..YYY.",
+            "....yy...YY.",
+            "..........Y.",
+            "............",
+            "............",
+            "............",
+        ],
+        None,
+    ),
+    # 📺 телевизор.
+    "tv": (
+        [
+            "...K....K...",
+            "....K..K....",
+            ".....KK.....",
+            ".GGGGGGGGGG.",
+            ".GccccccRGG.",
+            ".GcwcccclGG.",
+            ".GccccccRGG.",
+            ".GccccccGGG.",
+            ".GGGGGGGGGG.",
+            "..l......l..",
+            "............",
+            "............",
+        ],
+        None,
+    ),
 }
 
 
