@@ -483,6 +483,14 @@ export interface StoreState {
   radio?: 'off' | 'retro' | 'hits';
   /** Эдуард после сюжета: стадия его магазина, с какого дня и какую новость уже видели (eduard.ts). */
   eduard?: { stage: number; since: number; seen: number };
+  /** Долг выше предела: банк предупредил (bankruptcy.ts). */
+  debtWarning?: { seen: boolean };
+  /** Бабушка уже выручила в этой игре: сколько погасила и видел ли игрок. */
+  grandmaRescue?: { paid: number; seen: boolean };
+  /** Магазин закрыт за долги — остаётся только начать заново. */
+  bankrupt?: boolean;
+  /** Сколько игр начато заново. */
+  runs?: number;
   /** Автозаказ: сколько чего держать на складе и включён ли он (reorder.ts). */
   autoOrder?: { on: boolean; lines: { sid: string; pid: ProductId; qty: number }[] };
   /** Бабушкино обучение: false — показать (новая игра или «пройти заново»), нет поля — старое сохранение. */
