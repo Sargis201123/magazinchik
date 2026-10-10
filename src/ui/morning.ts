@@ -141,7 +141,8 @@ import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../
 
 /** Высота «голоса» героев в диалогах. */
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
-import { buyDecor, DECOR, DECOR_KINDS, setDecor, type DecorItem, type DecorKind } from '../game/decor';
+import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, tryDecor, type DecorItem, type DecorKind } from '../game/decor';
+import { buyWithStars, starsAvailable } from '../platform/stars';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, who } from './dom';
 
@@ -1286,46 +1287,105 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     return box;
   };
 
-  /** Карточка оформления: превью, название и что будет по нажатию (купить, поставить, уже стоит). */
-  const decorCard = (state: StoreState, kind: DecorKind, item: DecorItem | null) => {
-    const owned = !item || state.decor.owned.includes(item.id);
-    const active = item ? state.decor.active[kind] === item.id : !state.decor.active[kind];
-    const premium = Boolean(item && item.price === undefined);
-    const canBuy = item?.price !== undefined && state.money >= item.price;
-    const card = button(
-      '',
-      () => {
-        if (active) return;
-        if (owned) update(setDecor(getState(), kind, item?.id ?? null));
-        else if (item) update(buyDecor(getState(), item.id), 'success');
-      },
-      `ui-decor${active ? ' active' : ''}${premium ? ' premium' : ''}`,
-      !owned && (premium || !canBuy),
-    );
-    const preview = el('div', 'ui-decor-preview');
+  /** Картинка вещи: краска, плитка пола/стены или сам предмет. */
+  const decorPreview = (item: DecorItem | null, kind: DecorKind, big = false) => {
+    const preview = el('div', `ui-decor-preview${big ? ' big' : ''}${item && kind === 'sign' ? ' wide' : ''}`);
     if (!item) preview.textContent = '↺';
     else if (item.color !== undefined) {
       const hex = `#${item.color.toString(16).padStart(6, '0')}`;
-      preview.style.background = `url(assets/wall.png) 0 0 / 32px 32px, ${hex}`;
+      preview.style.background = `url(assets/wall.png) 0 0 / 32px 64px, ${hex}`;
       preview.style.backgroundBlendMode = 'multiply';
-    } else if (kind === 'floor') preview.style.backgroundImage = `url(assets/${item.texture}.png)`;
-    else {
+    } else if (kind === 'floor' || kind === 'wall') {
+      preview.style.backgroundImage = `url(assets/${item.texture}.png)`;
+      if (kind === 'wall') preview.style.backgroundSize = big ? '64px 128px' : '32px 64px';
+      else if (big) preview.style.backgroundSize = item.id === 'floor_gold' || item.id === 'floor_noir' ? '128px 128px' : '64px 64px';
+    } else {
       const img = el('img');
       img.src = `assets/${item.texture}.png`;
       img.alt = '';
       preview.append(img);
     }
-    const status = active
-      ? `✓ ${t('decor.on')}`
-      : owned
-        ? t('decor.put')
-        : item?.price !== undefined
-          ? `${item.price} 💰`
-          : t('decor.starsSoon', { n: item?.stars ?? 0 });
-    card.append(preview, el('div', 'ui-decor-name', item ? t(item.nameKey) : t('decor.none')), el('div', 'ui-decor-status', status));
+    return preview;
+  };
+
+  /** Карточка оформления: превью, название и что будет по нажатию (купить, поставить, уже стоит). */
+  const decorCard = (state: StoreState, kind: DecorKind, item: DecorItem | null) => {
+    const owned = !item || state.decor.owned.includes(item.id);
+    const trying = Boolean(item && state.decor.trial?.id === item.id && state.decor.trial.day === state.day);
+    const active = trying || (item ? state.decor.active[kind] === item.id : !state.decor.active[kind]);
+    const premium = Boolean(item && item.stars !== undefined);
+    const canBuy = item?.price !== undefined && state.money >= item.price;
+    const card = button(
+      '',
+      () => {
+        if (item && premium && !owned) {
+          premiumDecorModal(item);
+          return;
+        }
+        if (active) return;
+        if (owned) update(setDecor(getState(), kind, item?.id ?? null));
+        else if (item) update(buyDecor(getState(), item.id), 'success');
+      },
+      `ui-decor${active ? ' active' : ''}${premium ? ' premium' : ''}`,
+      !owned && !premium && !canBuy,
+    );
+    const status = trying
+      ? `👀 ${t('decor.trying')}`
+      : active
+        ? `✓ ${t('decor.on')}`
+        : owned
+          ? t('decor.put')
+          : item?.price !== undefined
+            ? `${item.price} 💰`
+            : `⭐ ${item?.stars ?? 0}`;
+    card.append(decorPreview(item, kind), el('div', 'ui-decor-name', item ? t(item.nameKey) : t('decor.none')), el('div', 'ui-decor-status', status));
     return card;
   };
 
+  /** Премиальная вещь: крупно, цена в звёздах, «Купить» и бесплатная примерка на день. */
+  const premiumDecorModal = (item: DecorItem) => {
+    const { card: modal, close } = openModal();
+    const state = getState();
+    const note = el('div', 'ui-muted');
+    modal.append(
+      el('h2', '', t(item.nameKey)),
+      decorPreview(item, item.kind, true),
+      el('div', 'ui-muted', t('decor.premiumNote')),
+      note,
+    );
+    const buy = button(t('decor.buyStars', { n: item.stars ?? 0 }), () => {
+      buy.disabled = true;
+      note.textContent = t('decor.paying');
+      void buyWithStars(item.id).then(async (result) => {
+        if (result === 'paid') {
+          // Оплата прошла — вещь сразу в магазине; сервер подтвердит при следующем запуске.
+          close();
+          update(grantDecor(getState(), [item.id]), 'success');
+          void flushCloud();
+          return;
+        }
+        buy.disabled = false;
+        note.textContent = t(result === 'unavailable' ? 'decor.starsOff' : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
+        if (result === 'unavailable') haptic.error();
+      });
+    });
+    buy.classList.add('ui-btn-stars');
+    modal.append(buy);
+    if (canTry(state, item.id)) {
+      modal.append(
+        button(
+          t('decor.try'),
+          () => {
+            close();
+            update(tryDecor(getState(), item.id));
+          },
+          'ui-btn secondary',
+        ),
+      );
+    } else if ((state.decor.tried ?? []).includes(item.id)) modal.append(el('div', 'ui-muted', t('decor.triedAlready')));
+    modal.append(button(t('decor.close'), close, 'ui-btn secondary'));
+    if (!starsAvailable()) note.textContent = t('decor.starsOff');
+  };
 
   const albumBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
@@ -1867,13 +1927,13 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     );
     const out: HTMLElement[] = [
       achievementsButton(state),
+      decorBox(state),
       replay,
       adsBox(state),
       ...eduardBox(state),
       rankBox(state),
       recordsBox(state),
       albumBox(state),
-      decorBox(state),
     ];
 
     const current = el('div', 'ui-box');

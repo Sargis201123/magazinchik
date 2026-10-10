@@ -4665,6 +4665,10 @@ def main():
     environment2()
     wing_furniture()
     veranda()
+    # Премиальное оформление — после всего: перерисовывает аквариум и золотой мрамор.
+    import premium
+
+    premium.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

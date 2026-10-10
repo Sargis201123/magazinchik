@@ -158,6 +158,11 @@ const css = `
 .ui-decor-preview { width: 52px; height: 36px; border: 2px solid #2b2233; border-radius: 4px; image-rendering: pixelated;
   background-size: 32px 32px; display: flex; align-items: center; justify-content: center; font-size: 20px; background-color: #fff; }
 .ui-decor-preview img { max-width: 48px; max-height: 32px; image-rendering: pixelated; }
+.ui-decor-preview.wide img { max-width: 52px; }
+.ui-decor-preview.big { width: 100%; height: 120px; margin: 8px 0; background-color: #e9e1d2; border-radius: 8px; }
+.ui-decor-preview.big img { max-width: 90%; max-height: 104px; width: auto; height: 100%; object-fit: contain; }
+.ui-decor-preview.big.wide img { height: auto; width: 90%; }
+.ui-btn.ui-btn-stars { background: linear-gradient(#ffd75e, #f5a623); box-shadow: 0 3px 0 #a86a12; }
 .ui-decor-name { font-weight: 700; min-height: 2.4em; display: flex; align-items: center; text-align: center; }
 .ui-decor-status { font-size: 11.5px; font-weight: 700; color: #6a5f58; }
 .ui-decor.active .ui-decor-status { color: #3e8948; }

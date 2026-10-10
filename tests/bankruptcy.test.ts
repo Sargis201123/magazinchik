@@ -56,7 +56,7 @@ describe('начать заново', () => {
     level: 3,
     debt: 1200,
     achievements: ['firstDay', 'cat'],
-    decor: { owned: ['floor_gold', 'wall_mint', 'aquarium', 'neon_open'], active: { floor: 'floor_gold', wall: 'wall_mint', aquarium: 'aquarium' } },
+    decor: { owned: ['floor_gold', 'wall_mint', 'aquarium', 'neon_open'], active: { floor: 'floor_gold', wall: 'wall_mint', showpiece: 'aquarium' } },
     skills: { hands: 2 },
     bankrupt: true,
     gift: { lastDate: '2026-10-10', streak: 4 },
@@ -75,7 +75,7 @@ describe('начать заново', () => {
     // Премиальное (за звёзды) осталось и стоит на месте, купленное за монеты — нет.
     expect(premiumDecor(played)).toEqual(['floor_gold', 'aquarium', 'neon_open']);
     expect(s.decor.owned).toEqual(['floor_gold', 'aquarium', 'neon_open']);
-    expect(s.decor.active).toEqual({ floor: 'floor_gold', aquarium: 'aquarium' });
+    expect(s.decor.active).toEqual({ floor: 'floor_gold', showpiece: 'aquarium' });
     expect(s.achievements).toEqual(['firstDay', 'cat']);
     expect(s.gift).toEqual(played.gift);
     expect(s.tourDone).toBe(true);

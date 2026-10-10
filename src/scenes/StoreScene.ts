@@ -83,7 +83,8 @@ import { activeAd } from '../game/ads';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
 import { carryOf, cartExtra, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
-import { activeDecor } from '../game/decor';
+import { activeDecor, grantDecor, isDecorId } from '../game/decor';
+import { restorePurchases } from '../platform/stars';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
@@ -673,6 +674,15 @@ export class StoreScene extends Phaser.Scene {
   create(): void {
     const save = loadGame();
     this.state = ensurePlan(save ?? newGame());
+    // Покупки за звёзды — по данным Telegram: вернутся и на новом телефоне.
+    void restorePurchases().then((ids) => {
+      const owned = (ids ?? []).filter(isDecorId);
+      const next = grantDecor(this.state, owned, !save);
+      if (next === this.state) return;
+      this.state = next;
+      saveGame(next);
+      if (!save) this.buildWorld();
+    });
     this.hud = new Hud();
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
     this.hud.onUrgent = () => this.openUrgent();
@@ -924,20 +934,33 @@ export class StoreScene extends Phaser.Scene {
     // Пол и цвет стен можно сменить в «Оформлении».
     const floor = activeDecor(this.state, 'floor')?.texture ?? FLOORS[Math.min(this.state.level, FLOORS.length - 1)];
     this.add.tileSprite(0, wallH, w, h - wallH, floor).setOrigin(0).setTileScale(1 / ART);
+    // Стены: цветная краска за монеты или премиальная отделка (кирпич, плитка, обои) за звёзды.
+    const wallDecor = activeDecor(this.state, 'wall');
     this.add
-      .tileSprite(0, 0, w, wallH, 'wall')
+      .tileSprite(0, 0, w, wallH, wallDecor?.texture ?? 'wall')
       .setOrigin(0)
       .setTileScale(1 / ART)
-      .setTint(activeDecor(this.state, 'wall')?.color ?? 0xffffff);
+      .setTint(wallDecor?.color ?? 0xffffff);
     this.buildShell();
-    // Вывеска с названием на крыше.
-    this.art(w / 2, -9, 'sign').setDepth(2);
+    // Вывеска с названием на крыше; премиальная — своя доска и цвет букв.
+    const sign = activeDecor(this.state, 'sign');
+    const signColor = sign?.textColor ?? 0xfee761;
+    this.art(w / 2, -9, sign?.texture ?? 'sign').setDepth(2);
+    if (sign?.id === 'sign_marquee') {
+      // Лампочки «Бродвея» перемигиваются.
+      const lit = this.art(w / 2, -9, 'sign_marquee_lit').setDepth(2).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: lit, alpha: { from: 1, to: 0.25 }, duration: 520, yoyo: true, repeat: -1, ease: 'Stepped' });
+    }
     this.add
-      .text(w / 2, -9, t(storeLevel(this.state).nameKey), { fontFamily: UI_FONT, fontSize: '7px', color: '#fee761' })
+      .text(w / 2, -9, t(storeLevel(this.state).nameKey), {
+        fontFamily: UI_FONT,
+        fontSize: '7px',
+        color: `#${signColor.toString(16).padStart(6, '0')}`,
+      })
       .setOrigin(0.5)
       .setResolution(4)
       .setDepth(3);
-    this.neonSign(w / 2, -9, t(storeLevel(this.state).nameKey), '7px', 0xfee761, 64);
+    this.neonSign(w / 2, -9, t(storeLevel(this.state).nameKey), '7px', signColor, 64);
     this.buildWing();
     this.buildWarehouse();
     this.buildDecor();
@@ -3486,16 +3509,10 @@ export class StoreScene extends Phaser.Scene {
         this.art(62, 13, 'neon').setDepth(2);
       } else this.art(62, 11, 'clock').setDepth(1);
     }
-    // Ковёр в центре зала и аквариум в свободном месте.
+    // Ковёр в центре зала.
     if (activeDecor(this.state, 'rug')) this.art(w / 2, (wallH + h) / 2 + 6, 'rug').setDepth(1);
-    if (activeDecor(this.state, 'aquarium')) {
-      const spot = this.freeSpot([
-        { x: w - 16, y: wallH + 92 },
-        { x: w - 70, y: wallH + 40 },
-        { x: w / 2, y: this.layout.h - 30 },
-      ]);
-      if (spot) this.art(spot.x, spot.y, 'aquarium').setDepth(spot.y + 8);
-    }
+    this.buildLights();
+    this.buildShowpiece();
     // Стойка со сладостями у кассы, в больших магазинах — тележки у входа.
     const { counter } = this.layout;
     this.art(counter.x, counter.y + 39, 'candy_rack').setDepth(counter.y + 40);
@@ -3514,6 +3531,94 @@ export class StoreScene extends Phaser.Scene {
     for (const p of spots) {
       const busy = [...slots, ...this.layout.showcases].some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
       if (!busy) this.art(p.x, p.y, activeDecor(this.state, 'plants') ? 'plant_big' : 'plant').setDepth(p.y + 6);
+    }
+  }
+
+  /** Премиальный свет: бра, лампы, фонари или люстры между картинами, гирлянда — по всей стене. */
+  private buildLights(): void {
+    const light = activeDecor(this.state, 'light');
+    if (!light) return;
+    const { w, wallH, wc } = this.layout;
+    const warm = 0xffd27a;
+    if (light.id === 'light_garland') {
+      this.add.tileSprite(0, 0, w, 6, 'light_garland').setOrigin(0).setTileScale(1 / ART).setDepth(2);
+      const lit = this.add.tileSprite(0, 0, w, 6, 'light_garland_lit').setOrigin(0).setTileScale(1 / ART).setDepth(2);
+      lit.setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: lit, alpha: { from: 1, to: 0.35 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      return;
+    }
+    // Между плакатами и окнами (над часами место занято).
+    const hanging = light.id !== 'light_sconce';
+    const y = hanging ? (light.id === 'light_chandelier' ? 6 : 6.5) : 10;
+    // По бокам от часов и дальше — между плакатами и окнами.
+    const spots = [46, 78];
+    for (let x = 126; x < wc.x - 12; x += 64) spots.push(x);
+    for (const x of spots.filter((sx) => sx < wc.x - 12)) {
+      this.art(x, y, light.texture!).setDepth(2);
+      const bulb = this.art(x + (hanging ? 0.5 : 2), hanging ? y + 3 : y - 3, 'glow')
+        .setDisplaySize(light.id === 'light_chandelier' ? 30 : 18, 14)
+        .setTint(warm)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(0.45)
+        .setDepth(2);
+      this.tweens.add({ targets: bulb, alpha: { from: 0.45, to: 0.32 }, duration: 1600 + (x % 5) * 140, yoyo: true, repeat: -1 });
+      // Тёплое пятно на полу у стены — вечером ярче.
+      this.nightGlow(this.art(x, wallH + 6, 'glow').setDisplaySize(52, 22).setTint(warm), 0.35);
+      this.add.image(x, wallH + 6, 'glow').setScale(52 / 64, 22 / 64).setTint(warm).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.12).setDepth(1);
+    }
+  }
+
+  /** Украшение зала (аквариум, фонтан, автомат…) — в свободном месте, с маленькой анимацией. */
+  private buildShowpiece(): void {
+    const item = activeDecor(this.state, 'showpiece');
+    if (!item) return;
+    const { w, wallH, h } = this.layout;
+    const spot = this.freeSpot([
+      { x: w - 16, y: wallH + 92 },
+      { x: w - 70, y: wallH + 40 },
+      { x: w / 2, y: h - 30 },
+    ]);
+    if (!spot) return;
+    const img = this.art(spot.x, spot.y, item.texture!).setDepth(spot.y + 8);
+    const top = spot.y - img.displayHeight / 2;
+    if (item.id === 'lucky_cat') {
+      // Кот-удача машет лапкой.
+      let up = true;
+      this.tweens.add({
+        targets: img,
+        alpha: 1,
+        duration: 450,
+        repeat: -1,
+        onRepeat: () => {
+          up = !up;
+          img.setTexture(up ? 'lucky_cat' : 'lucky_cat2');
+        },
+      });
+    } else if (item.id === 'jukebox') {
+      // Музыкальный автомат играет: из него всплывают ноты.
+      const note = this.add
+        .text(spot.x + 4, top + 2, '♪', { fontFamily: UI_FONT, fontSize: '7px', color: '#fee761', stroke: '#181425', strokeThickness: 2 })
+        .setOrigin(0.5)
+        .setResolution(4)
+        .setDepth(spot.y + 9);
+      this.tweens.add({
+        targets: note,
+        y: top - 10,
+        x: spot.x + 8,
+        alpha: { from: 1, to: 0 },
+        duration: 1400,
+        repeat: -1,
+        repeatDelay: 500,
+        onRepeat: () => note.setText(Math.random() < 0.5 ? '♪' : '♫'),
+      });
+    } else if (item.id === 'fountain' || item.id === 'aquarium') {
+      // Блики на воде.
+      const glint = this.art(spot.x + (item.id === 'fountain' ? 0 : 6), item.id === 'fountain' ? top + 3 : spot.y - 4, 'glow')
+        .setDisplaySize(10, 10)
+        .setTint(0xc8fbff)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(spot.y + 9);
+      this.tweens.add({ targets: glint, alpha: { from: 0.7, to: 0.15 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
   }
 
@@ -5513,8 +5618,12 @@ export class StoreScene extends Phaser.Scene {
     this.awaitingBoxes = 0;
     this.hud.update(this.state, DAY_SECONDS);
     if (weatherFor(this.state.day) !== this.weather) this.applyWeather();
+    // Примерка премиальной вещи кончилась вчера — убрать её из зала.
+    const trial = this.state.decor.trial;
+    const trialOver = Boolean(trial && trial.day < this.state.day);
+    if (trialOver) this.state = { ...this.state, decor: { ...this.state.decor, trial: undefined } };
     // Эдуард за ночь открыл магазин побольше — перерисовать улицу.
-    if (eduardLook(this.state) !== this.builtEduard) this.buildWorld();
+    if (trialOver || eduardLook(this.state) !== this.builtEduard) this.buildWorld();
     this.updateLighting(0);
     this.openShop();
     showMorning({
