@@ -1068,6 +1068,11 @@ export const en: Record<TextKey, string> = {
   "wing.doorWarehouse": "📦 Storage",
   "oven.noBaker": "⚠️ No baker — the bakery is idle. Hire one in the Staff tab.",
   "coffee.noBarista": "⚠️ No barista — the coffee shop is closed. Hire one in the Staff tab.",
+  "popup.order1": "A cappuccino, please!",
+  "popup.order2": "Latte to go",
+  "popup.order3": "Americano!",
+  "popup.order4": "Hot chocolate, please",
+  "popup.coffeeReady": "☕ Ready!",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

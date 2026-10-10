@@ -1066,6 +1066,11 @@ export const ru = {
   "wing.doorWarehouse": "📦 Склад",
   "oven.noBaker": "⚠️ Нет пекаря — пекарня стоит. Найми во вкладке «Персонал».",
   "coffee.noBarista": "⚠️ Нет бариста — кофейня закрыта. Найми во вкладке «Персонал».",
+  "popup.order1": "Капучино, пожалуйста!",
+  "popup.order2": "Латте с собой",
+  "popup.order3": "Американо!",
+  "popup.order4": "Какао, если можно",
+  "popup.coffeeReady": "☕ Готово!",
 } as const;
 
 export type TextKey = keyof typeof ru;
