@@ -45,10 +45,12 @@ describe('сладости у кассы', () => {
 });
 
 describe('кофе', () => {
-  it('без кофемашины и стаканчиков кофе не берут', () => {
-    expect(coffeeChance(rich({ cups: 10 }))).toBe(0);
-    expect(coffeeChance(rich({ upgrades: ['coffee'], cups: 0 }))).toBe(0);
-    expect(coffeeChance(rich({ upgrades: ['coffee'], cups: 5 }))).toBeGreaterThan(0);
+  it('без кофейни, бариста и стаканчиков кофе не берут', () => {
+    const barista = [{ role: 'barista' as const, name: 0, skill: 2, wage: 360, months: 0 }];
+    expect(coffeeChance(rich({ cups: 10, staff: barista }))).toBe(0);
+    expect(coffeeChance(rich({ upgrades: ['coffee'], cups: 0, staff: barista }))).toBe(0);
+    expect(coffeeChance(rich({ upgrades: ['coffee'], cups: 5 }))).toBe(0);
+    expect(coffeeChance(rich({ upgrades: ['coffee'], cups: 5, staff: barista }))).toBeGreaterThan(0);
   });
 
   it('стаканчики докупают до предела', () => {

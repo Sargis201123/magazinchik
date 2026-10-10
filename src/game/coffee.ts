@@ -1,8 +1,8 @@
-// Кофейный уголок: кофемашина в зале. Покупатель после покупок может взять стаканчик —
-// машина варит сама, кофе оплачивают на кассе. Стаканчики (с кофе в зёрнах) докупают утром.
+// Кофейня во флигеле: варит бариста (его нанимают). Покупатель после покупок может зайти
+// за стаканчиком — кофе оплачивают на кассе. Зёрна и стаканчики докупают утром.
 // В дождь, снег и грозу кофе берут чаще, в жару — реже.
 
-import type { StoreState } from './economy';
+import { onShift, type StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
 import { WEATHER_EFFECTS, weatherFor } from './weather';
 
@@ -15,9 +15,12 @@ export const COFFEE_CHANCE = 0.12;
 
 export const cupsOf = (state: StoreState): number => state.cups ?? 0;
 
+/** Кофейня работает: уголок куплен и бариста сегодня на смене. */
+export const coffeeWorking = (state: StoreState): boolean => hasUpgrade(state, 'coffee') && onShift(state, 'barista');
+
 /** Шанс взять кофе сегодня: зависит от погоды. */
 export function coffeeChance(state: StoreState): number {
-  if (!hasUpgrade(state, 'coffee') || cupsOf(state) <= 0) return 0;
+  if (!coffeeWorking(state) || cupsOf(state) <= 0) return 0;
   return Math.min(0.6, COFFEE_CHANCE * WEATHER_EFFECTS[weatherFor(state.day)].coffee);
 }
 

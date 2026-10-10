@@ -84,7 +84,7 @@ import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, ti
 import { carryOf, cartExtra, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
 import { activeDecor } from '../game/decor';
-import { layoutFor, unitsPerBox, WAREHOUSE_COLS, type Layout } from './layout';
+import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
@@ -116,13 +116,7 @@ import {
   wcDirt,
 } from '../game/gear';
 import { CASHIER_ROLES, nextRegisterCount, registerCount, registerOfRole } from '../game/registers';
-import {
-  AROMA_SECONDS,
-  AROMA_TOLERANCE,
-  OVEN_BURN_SECONDS,
-  startBatch,
-  takeOutBread,
-} from '../game/bakery';
+import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, OVEN_BURN_SECONDS, startBatch, takeOutBread } from '../game/bakery';
 import { canWorkNight, NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from '../game/night';
 import { CAT_BEDS, CAT_TIP, catHome, catPatience, catTipChance, fedToday } from '../game/cat';
 import { note, reviewsFor } from '../game/reviews';
@@ -361,13 +355,15 @@ const STAFF_ACC: Record<StaffRole, { acc: Accessory; tint: number }> = {
   loader: { acc: 'vest', tint: 0xffffff },
   guard: { acc: 'badge', tint: 0xffffff },
   manager: { acc: 'tie', tint: 0xffffff },
+  baker: { acc: 'apron', tint: 0xffffff },
+  barista: { acc: 'apron', tint: 0x8f563b },
 };
 /** Тёмная кофта — так игрок может заметить вора. */
 const THIEF_SHIRT = 0x45444f;
 const CAR_COLORS = [0xe43b44, 0x0099db, 0x3e8948, 0xfeae34, 0xc0cbdc, 0x68386c, 0x262b44];
 const THIEF_SPEED = 52;
 /** Форма сотрудников. */
-const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4 };
+const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4, baker: 0xf4f4f4, barista: 0x3e8948 };
 const STAFF_SPEED = 60;
 /** Сколько кассир пробивает одного покупателя при обычной скорости. */
 const INSPECTOR_SHIRT = 0x222034;
@@ -387,7 +383,7 @@ const ORDER_GUESTS: Record<ClientId, [Look, TextKey]> = {
   valya: [VALYA, 'who.valya'],
 };
 const OWNER: Look = { shirt: 0x8fd16a, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short' };
-const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short' };
+const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short', baker: 'cap', barista: 'ponytail' };
 /** На какой секунде дня приходит инспектор. */
 const INSPECTOR_AT = 25;
 const BROKEN_TINT = 0x8a8a8a;
@@ -539,7 +535,7 @@ export class StoreScene extends Phaser.Scene {
   private vignette?: Phaser.FX.Vignette;
   /** Насколько вечер (0 — день, 1 — сумерки): фары машин горят сильнее. */
   private evening = 0;
-  private indoorShade?: Phaser.GameObjects.Rectangle;
+  private indoorShades: Phaser.GameObjects.Rectangle[] = [];
   private lampGlows: Phaser.GameObjects.Image[] = [];
   private ceilingGlows: Phaser.GameObjects.Image[] = [];
   /** Ночные огни (витрины, лужи света, конусы фонарей, неон): сила растёт к вечеру. */
@@ -872,14 +868,15 @@ export class StoreScene extends Phaser.Scene {
     // Камера крупно показывает сам магазин (вывеска сверху, фасад снизу); участок под
     // расширение и улицу видно краем, а весь квартал — свайпом или отдалив двумя пальцами.
     const { w, h } = this.layout;
-    const viewW = w + 2 * WALL + 4;
+    // В кадре и флигель слева: склад, пекарня, кофейня.
+    const viewW = w + WING_OUTER + 2 * WALL + 4;
     const viewH = h + 40;
     const zoom = Math.min(CANVAS_W / viewW, (CANVAS_H - HUD_TOP - HUD_BOTTOM) / viewH);
     const midY = HUD_TOP + (CANVAS_H - HUD_TOP - HUD_BOTTOM) / 2;
     this.baseZoom = zoom;
     // Если по высоте есть запас, вывеска прижимается под верхнюю панель — снизу видно больше улицы.
     const centered = (h + 4) / 2 + (CANVAS_H / 2 - midY) / zoom;
-    this.home = { x: w / 2, y: Math.max(centered, -24 + (CANVAS_H / 2 - HUD_TOP) / zoom) };
+    this.home = { x: (w - WING_OUTER) / 2, y: Math.max(centered, -24 + (CANVAS_H / 2 - HUD_TOP) / zoom) };
     this.cameras.main.setZoom(zoom).centerOn(this.home.x, this.home.y);
     // Мягкая виньетка по краям кадра; к вечеру гуще.
     this.cameras.main.postFX?.clear();
@@ -922,6 +919,7 @@ export class StoreScene extends Phaser.Scene {
       .setResolution(4)
       .setDepth(3);
     this.neonSign(w / 2, -9, t(storeLevel(this.state).nameKey), '7px', 0xfee761, 64);
+    this.buildWing();
     this.buildWarehouse();
     this.buildDecor();
 
@@ -1050,20 +1048,24 @@ export class StoreScene extends Phaser.Scene {
     const far = 600;
     const shade = (x: number, y: number, ww: number, hh: number) =>
       this.add.rectangle(x, y, ww, hh, 0xffffff).setOrigin(0).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(LIGHT_DEPTH);
+    // Снаружи темнее, внутри (зал и флигель) — светлее.
+    const wing = this.layout.wing;
+    const left = -WING_OUTER;
     this.outdoorShades = [
       shade(-far, -far, next.w + 2 * far, far - 3),
       shade(-far, h + 3, next.w + 2 * far, far + next.h),
-      shade(-far, -3, far - 3, h + 6),
+      shade(-far, -3, far + left - 3, h + 6),
+      shade(left - 3, -3, -left, wing.y - 4 + 3),
       shade(w + 3, -3, next.w + far, h + 6),
     ];
-    this.indoorShade = shade(-3, -3, w + 6, h + 6);
+    this.indoorShades = [shade(-3, -3, w + 6, h + 6), shade(left - 3, wing.y - 4, -left, h - wing.y + 7)];
     const glow = (x: number, y: number, size: number, color: number) =>
       this.art(x, y, 'glow').setScale(size / 64).setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 1).setAlpha(0);
     this.lampGlows = [];
     this.lampXs = [];
     const top = next.h + 4;
-    for (let x = -28; x < next.w + 40; x += 72) {
-      if (Math.abs(x - this.layout.door.x) <= 20) continue;
+    for (let x = -100; x < next.w + 40; x += 72) {
+      if (!this.lampAt(x)) continue;
       this.lampXs.push(x);
       this.lampGlows.push(glow(x, this.streetY - 2, 44, 0xffc860));
       // Конус света от плафона до земли и ореол вокруг лампы.
@@ -1201,13 +1203,13 @@ export class StoreScene extends Phaser.Scene {
 
   /** Оттенок по ходу дня: тёплое утро, белый день, закат, сумерки. */
   private updateLighting(progress?: number): void {
-    if (!this.indoorShade) return;
+    if (!this.indoorShades.length) return;
     const p = progress ?? Phaser.Math.Clamp(1 - this.timeLeft / DAY_SECONDS, 0, 1);
     const outdoor = mulColor(lerpKeys(OUTDOOR_LIGHT, p), WEATHER_LIGHT[this.weather]);
     // Свет отключили — в зале полумрак.
     const indoor = this.blackout ? mulColor(lerpKeys(INDOOR_LIGHT, p), 0x45456a) : lerpKeys(INDOOR_LIGHT, p);
     for (const r of this.outdoorShades) r.setFillStyle(outdoor);
-    this.indoorShade.setFillStyle(indoor);
+    for (const r of this.indoorShades) r.setFillStyle(indoor);
     const evening = Phaser.Math.Clamp((p - 0.6) / 0.4, 0, 1);
     this.evening = evening;
     music.setMood(evening > 0.5 ? 'evening' : 'day');
@@ -1803,9 +1805,9 @@ export class StoreScene extends Phaser.Scene {
       sound.good();
       this.popup(mouse.x, mouse.y - 10, t('popup.mouseScared'), '#c8ffb0');
     }
-    const { doorway } = this.layout.warehouse;
-    mouse.setFlipX(doorway.x > mouse.x);
-    this.tweens.add({ targets: mouse, x: doorway.x + 30, y: doorway.y + 20, alpha: 0, duration: 700, onComplete: () => this.endLiveEvent() });
+    const { x: wx, h: wh, y: wy } = this.layout.warehouse;
+    mouse.setFlipX(false);
+    this.tweens.add({ targets: mouse, x: wx + 2, y: wy + wh - 4, alpha: 0, duration: 700, onComplete: () => this.endLiveEvent() });
   }
 
   /** Кот бежит на склад и ловит мышь. */
@@ -1817,7 +1819,7 @@ export class StoreScene extends Phaser.Scene {
     cat.setScale(1 / ART).setOrigin(0.5, 1).setTexture('cat_walk0');
     sound.meow();
     const { door, h, warehouse } = this.layout;
-    const route = [{ x: door.x + 6, y: this.catHome.y }, { x: door.x + 6, y: h - 6 }, { x: warehouse.doorway.x, y: warehouse.doorway.y + 6 }];
+    const route = [{ x: door.x + 6, y: this.catHome.y }, { x: door.x + 6, y: h - 6 }, warehouse.doorway, warehouse.inside];
     for (const p of route) {
       await this.catStep(p.x, p.y);
       if (!cat.active) return;
@@ -1829,7 +1831,7 @@ export class StoreScene extends Phaser.Scene {
         this.heartAt(cat.x, cat.y - 10);
       }
     }
-    const back = [{ x: warehouse.doorway.x, y: warehouse.doorway.y + 6 }, { x: door.x + 6, y: h - 6 }, { x: door.x + 6, y: this.catHome.y }, this.catHome];
+    const back = [warehouse.inside, warehouse.doorway, { x: door.x + 6, y: h - 6 }, { x: door.x + 6, y: this.catHome.y }, this.catHome];
     for (const p of back) {
       await this.catStep(p.x, p.y);
       if (!cat.active) return;
@@ -1839,35 +1841,48 @@ export class StoreScene extends Phaser.Scene {
     this.catOut = false;
   }
 
-  /** Кофемашина у левой стены — напротив автомата с напитками. */
+  /** Кофейня во флигеле: кофемашина у стены, стойка, за ней бариста; в углу столик. */
   private buildCoffee(): void {
     this.coffeeImg = undefined;
     this.coffeeBusy = false;
-    if (!hasUpgrade(this.state, 'coffee')) return;
-    const at = { x: 9, y: this.layout.wallH + 56 };
-    this.coffeeImg = this.art(at.x, at.y, coffeeSprite(this.state)).setDepth(at.y + 9);
-    this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 13, h: 16 });
+    if (!this.coffeeOpen()) return;
+    const { x, y } = this.layout.coffee;
+    this.coffeeImg = this.art(x + 10, y + 19, coffeeSprite(this.state)).setDepth(y + 20);
+    this.art(x + 22, y + 28, 'coffee_bar').setDepth(y + 34);
+    this.art(x + 47, y + 49, 'cafe_table').setDepth(y + 55);
   }
 
-  /** Покупатель с покупками иногда берёт кофе: машина варит сама, платят на кассе. */
+  /** Где стоит покупатель у стойки кофейни. */
+  private coffeeSpot(): { x: number; y: number } {
+    const { x, y } = this.layout.coffee;
+    return { x: x + 26, y: y + 44 };
+  }
+
+  /** Покупатель с покупками иногда заходит в кофейню: бариста варит, платят на кассе. */
   private async buyCoffee(c: Customer): Promise<void> {
     const machine = this.coffeeImg;
-    if (!machine?.active || this.coffeeBusy || c.thief || c.items.length === 0 || Math.random() >= coffeeChance(this.state)) return;
+    const barista = this.workers.get('barista');
+    if (!machine?.active || !barista || this.coffeeBusy || c.thief || c.items.length === 0 || Math.random() >= coffeeChance(this.state)) return;
     const next = useCup(this.state);
     if (!next) return;
     this.state = next;
     this.coffeeBusy = true;
-    await this.walk(c.sprite, machine.x + 13, machine.y + 4);
+    const room = this.layout.coffee;
+    const spot = this.coffeeSpot();
+    const route = [room.doorway, room.inside, { x: room.inside.x - 4, y: spot.y }, spot];
+    for (const p of route) await this.walk(c.sprite, p.x, p.y);
     if (c.gone || !c.sprite.active || !machine.active) {
       this.coffeeBusy = false;
       return;
     }
-    this.setFacing(c.sprite, 'left');
+    this.setFacing(c.sprite, 'up');
+    // Бариста поворачивается к машине и варит; над машиной пар.
+    if (barista.sprite.active) this.setFacing(barista.sprite, 'left');
     sound.hiss(brewSeconds(this.state) * 0.8, 2600, 0.035);
-    // Пар над чашкой, пока варится.
-    const steam = this.time.addEvent({ delay: 260, repeat: Math.floor((brewSeconds(this.state) * 1000) / 260), callback: () => this.steamPuff(machine.x, machine.y - 4) });
-    await this.wait(brewSeconds(this.state) * 1000);
+    const steam = this.time.addEvent({ delay: 260, repeat: Math.floor((brewSeconds(this.state) * 1000) / 260), callback: () => this.steamPuff(machine.x, machine.y - 6) });
+    await this.wait((brewSeconds(this.state) * 1000) / this.workerPace(barista));
     steam.remove();
+    if (barista.sprite.active) this.setFacing(barista.sprite, 'down');
     this.coffeeBusy = false;
     if (!this.sys.isActive() || c.gone || !c.sprite.active) return;
     const cup = this.art(5, 1, 'cup');
@@ -1877,6 +1892,15 @@ export class StoreScene extends Phaser.Scene {
     sound.pop(2);
     this.popup(c.sprite.x, c.sprite.y - 18, t('popup.coffee', { n: coffeePrice(this.state) }), '#fff3b0');
     if (cupsOf(this.state) === 0) this.time.delayedCall(900, () => this.popup(machine.x + 10, machine.y - 16, t('popup.noCups'), '#ffd0d0'));
+    for (const p of [...route].reverse().slice(1)) await this.walk(c.sprite, p.x, p.y);
+  }
+
+  /** Бариста стоит за стойкой: варит, когда заходят покупатели (buyCoffee). */
+  private async baristaLoop(w: Worker, gen: number): Promise<void> {
+    while (this.alive(gen)) {
+      if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
+      await this.wait(800);
+    }
   }
 
   /** Облачко пара: поднимается и тает. */
@@ -1909,14 +1933,15 @@ export class StoreScene extends Phaser.Scene {
 
   // ---------- Печь ----------
 
-  /** Своя печь у правой стены за кассой: окошко светится, пока печётся; готовый хлеб виден в окошке. */
+  /** Печь в пекарне во флигеле: окошко светится, пока печётся; рядом стеллаж с хлебом и стол пекаря. */
   private buildOven(): void {
     this.oven?.timer?.remove();
     this.oven = undefined;
-    if (!hasUpgrade(this.state, 'oven')) return;
-    const { w, counter } = this.layout;
-    // Над третьей кассой печь переезжает выше по стене.
-    const at = { x: w - 9, y: counter.y - (registerCount(this.state) >= 3 ? 100 : 40) };
+    if (!this.bakeryOpen()) return;
+    const room = this.layout.bakery;
+    this.art(room.x + 31, room.y + 24, 'bread_rack').setDepth(room.y + 33);
+    this.art(room.x + 26, room.y + 44, 'baker_table').setDepth(room.y + 50);
+    const at = { x: room.x + 11, y: room.y + 25 };
     const img = this.art(at.x, at.y, ovenSprite(this.state)).setDepth(at.y + 9);
     const glow = this.add.rectangle(at.x, at.y + 1.5, 7, 3, 0xf77622).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(at.y + 10);
     const bread = this.art(at.x, at.y + 1.5, 'oven_bread').setDepth(at.y + 11).setVisible(false);
@@ -1925,17 +1950,20 @@ export class StoreScene extends Phaser.Scene {
     const fx = img.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 6);
     this.oven = { img, glow, bread, bar, fill, fx, state: 'idle', start: 0 };
     img.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.tapOven()));
-    this.obstacles.push({ x: at.x - 8, y: at.y - 12, w: 17, h: 16 });
   }
 
+  /** Печью занимается пекарь: без него пекарня стоит, касание подсказывает, что делать. */
   private tapOven(): void {
     const oven = this.oven;
     if (!oven || !this.running) return;
-    if (oven.state === 'ready') {
-      this.takeBread();
-      return;
-    }
-    if (oven.state === 'baking') return;
+    const why = bakeryWorking(this.state) ? t('popup.bakerWorks') : t('popup.needBaker');
+    this.popup(oven.img.x + 10, oven.img.y - 18, why, bakeryWorking(this.state) ? '#fff3b0' : '#ffd0d0');
+  }
+
+  /** Пекарь ставит противень: деньги за муку, через время хлеб готов. */
+  private startOven(): void {
+    const oven = this.oven;
+    if (!oven || oven.state !== 'idle') return;
     const next = startBatch(this.state);
     if (!next) {
       const why = this.state.money < ovenBatchCost(this.state) ? t('popup.ovenMoney') : t('popup.ovenFull');
@@ -1959,10 +1987,9 @@ export class StoreScene extends Phaser.Scene {
     oven.start = this.time.now;
     oven.bread.setVisible(true);
     sound.bell();
-    haptic.success();
     this.tweens.add({ targets: oven.img, scaleY: 1.08 / ART, duration: 120, yoyo: true, repeat: 1 });
-    this.popup(oven.img.x - 10, oven.img.y - 20, t('popup.ovenReady'), '#fee761');
-    oven.timer = this.time.delayedCall(OVEN_BURN_SECONDS * 1000, () => this.burnBread());
+    // Пекарь рядом и вынет сам; если он ушёл (заболел посреди дня) — хлеб может сгореть.
+    if (!this.workers.get('baker')) oven.timer = this.time.delayedCall(OVEN_BURN_SECONDS * 1000, () => this.burnBread());
   }
 
   /** Не вынули вовремя — хлеб сгорел, из печи валит чёрный дым. */
@@ -1989,43 +2016,75 @@ export class StoreScene extends Phaser.Scene {
     if (oven.fx) oven.fx.outerStrength = 0;
   }
 
-  /** Продавец достаёт противень: хлеб на полки и на склад, по залу идёт запах. */
-  private takeBread(): void {
-    const oven = this.oven;
-    if (!oven) return;
-    void this.doChore([
-      {
-        x: oven.img.x - 6,
-        y: oven.img.y + 14,
-        ms: 500,
-        action: () => {
-          if (oven.state !== 'ready') return;
-          this.resetOven();
-          this.freshBread();
-        },
-      },
-    ]);
+  /**
+   * Пекарь: ставит противень, когда на хлебных полках есть место, пока печётся — месит тесто,
+   * готовый хлеб выносит в зал на хлебную полку. По залу от двери пекарни идёт запах хлеба.
+   */
+  private async bakerLoop(w: Worker, gen: number): Promise<void> {
+    const room = this.layout.bakery;
+    while (this.alive(gen)) {
+      const oven = this.oven;
+      if (!this.running || !oven?.img.active) {
+        await this.wait(500);
+        continue;
+      }
+      const atOven = { x: oven.img.x + 10, y: oven.img.y + 12 };
+      if (oven.state === 'ready') {
+        await this.workerWalk(w, atOven.x, atOven.y);
+        await this.workerWait(w, 400);
+        if (!this.alive(gen)) return;
+        if (oven.state !== 'ready') continue;
+        this.resetOven();
+        w.carried.setTexture('bread_tray').setPosition(0, 1).setVisible(true);
+        const index = this.breadShelfIndex();
+        const slot = index >= 0 ? this.layout.slots[index] : null;
+        await this.workerWalk(w, room.inside.x, room.inside.y);
+        await this.workerWalk(w, room.doorway.x, room.doorway.y);
+        if (slot) await this.workerWalk(w, slot.x, slot.y + 20);
+        await this.workerWait(w, PLACE_MS);
+        if (!this.alive(gen)) return;
+        w.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+        this.freshBread(slot ? { x: slot.x, y: slot.y - 18 } : room.doorway);
+        await this.workerWalk(w, room.doorway.x, room.doorway.y);
+        await this.workerWalk(w, room.inside.x, room.inside.y);
+        continue;
+      }
+      if (oven.state === 'idle' && bakerShouldBake(this.state)) {
+        await this.workerWalk(w, atOven.x, atOven.y);
+        if (!this.alive(gen)) return;
+        this.startOven();
+        continue;
+      }
+      // Пока печётся — месит тесто у стола.
+      if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
+      this.setFacing(w.sprite, 'up');
+      await this.wait(600);
+    }
   }
 
-  private freshBread(): void {
-    const oven = this.oven;
-    if (!oven) return;
+  /** Хлебная полка, где есть место (первая по порядку); -1 — нет. */
+  private breadShelfIndex(): number {
+    return this.state.shelves.findIndex((s) => !s.broken && canPlace('bread', s) && shelfFree(s) > 0);
+  }
+
+  /** Свежий хлеб из печи — на полки (лишнее на склад); по залу от двери пекарни идёт запах. */
+  private freshBread(at: { x: number; y: number }): void {
     const out = takeOutBread(this.state);
     this.state = out.state;
     this.refreshShelves();
     this.refreshWarehouse();
     sound.hiss(0.6, 1400, 0.04);
     sound.good();
-    this.popup(oven.img.x - 12, oven.img.y - 18, t('popup.freshBread', { n: out.onShelves }), '#c8ffb0');
+    this.popup(at.x, at.y, t('popup.freshBread', { n: out.onShelves }), '#c8ffb0');
     this.time.delayedCall(900, () => this.popup(this.layout.w / 2, this.layout.wallH + 50, t('popup.aroma'), '#fff3b0'));
     this.aromaUntil = this.time.now + AROMA_SECONDS * 1000;
-    // Тёплые завитки запаха плывут от печи по залу.
-    const { w, wallH, h } = this.layout;
+    // Тёплые завитки запаха плывут из пекарни по залу.
+    const { w, wallH, h, bakery } = this.layout;
     this.time.addEvent({
       delay: 380,
       repeat: Math.floor((AROMA_SECONDS * 1000) / 380),
       callback: () => {
-        const wisp = this.art(oven.img.x - 4, oven.img.y - 6, 'glow').setScale(0.07).setTint(0xfeae34).setAlpha(0.5).setDepth(LIGHT_DEPTH - 2);
+        const wisp = this.art(bakery.doorway.x, bakery.doorway.y - 6, 'glow').setScale(0.07).setTint(0xfeae34).setAlpha(0.5).setDepth(LIGHT_DEPTH - 2);
         this.tweens.add({
           targets: wisp,
           x: Phaser.Math.Between(10, w - 20),
@@ -2574,7 +2633,7 @@ export class StoreScene extends Phaser.Scene {
    * к роллету склада — и они по одной появляются на стеллаже. Потом фургон уезжает.
    */
   private async deliver(): Promise<void> {
-    const { warehouse, door, h } = this.layout;
+    const { warehouse, h } = this.layout;
     const shutterX = warehouse.x + warehouse.w / 2;
     const roadY = this.streetY + 24;
     const back = h + FACADE_H + 6;
@@ -2588,9 +2647,9 @@ export class StoreScene extends Phaser.Scene {
     const driver = this.makePerson(vanX, this.streetY + 10, { ...randomLook(0x0099db), style: 'cap', hair: 0x0099db });
     const box = this.art(0, 3, 'box').setVisible(false);
     driver.add(box);
+    // С тротуара по подъезду к воротам склада во флигеле.
     const route = [
-      { x: door.x, y: this.streetY + 4 },
-      { x: door.x, y: back },
+      { x: shutterX, y: this.streetY + 4 },
       { x: shutterX, y: back },
     ];
     const trips = Math.min(this.awaitingBoxes, 4);
@@ -2864,8 +2923,8 @@ export class StoreScene extends Phaser.Scene {
       mall: { h: 190, name: 'eduard.stage3', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040 },
     };
     const neighbors: Neighbor[] = [
-      { x: -136, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860 },
-      { x: -268, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0, neon: 0x7cff8a },
+      { x: -136 - WING_OUTER, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860 },
+      { x: -268 - WING_OUTER, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0, neon: 0x7cff8a },
       { x: next.w + 26, w: 128, ...eduard[look] },
       { x: next.w + 170, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc, neon: 0xff8ad8 },
     ];
@@ -2900,7 +2959,7 @@ export class StoreScene extends Phaser.Scene {
       if (n.neon) this.neonSign(n.x + n.w / 2, bottom - FACADE_H - 8, t(n.name), '6px', n.neon, 64);
     }
     // Остановка на тротуаре слева.
-    this.art(-70, this.streetY - 4, 'bus_stop').setDepth(this.streetY);
+    this.art(-70 - WING_OUTER, this.streetY - 4, 'bus_stop').setDepth(this.streetY);
   }
 
   /** Улица вокруг здания: газон с деревьями, тротуар с фонарями и скамейкой, дорога. */
@@ -2930,15 +2989,15 @@ export class StoreScene extends Phaser.Scene {
     for (let y = top + 26; y < top + 62; y += 5) this.add.rectangle(door.x - 9, y, 18, 2.5, 0xe6e1d6).setOrigin(0).setDepth(-9);
 
     // Фонари вдоль тротуара (не на дорожке), скамейка и урна у входа.
-    for (let x = -28; x < next.w + 40; x += 72) {
-      if (Math.abs(x - door.x) > 20) this.art(x, top + 3, 'lamp').setOrigin(0.5, 0.95).setDepth(top + 3);
+    for (let x = -100; x < next.w + 40; x += 72) {
+      if (this.lampAt(x)) this.art(x, top + 3, 'lamp').setOrigin(0.5, 0.95).setDepth(top + 3);
     }
     this.art(door.x + 44, top + 7, 'bench').setDepth(top + 7);
     this.art(door.x - 32, top + 6, 'bin').setDepth(top + 6);
     // Деревья и кусты на газоне вокруг здания.
     const trees: [number, number][] = [
-      [-14, next.h * 0.35],
-      [-16, next.h * 0.8],
+      [-14 - WING_OUTER, next.h * 0.35],
+      [-16 - WING_OUTER, next.h * 0.8],
       [next.w + 14, next.h * 0.3],
       [next.w + 16, next.h * 0.75],
       [next.w * 0.25, -12],
@@ -2947,6 +3006,12 @@ export class StoreScene extends Phaser.Scene {
     this.greenery = [];
     for (const [x, y] of trees) this.greenery.push(this.art(x, y, 'tree').setOrigin(0.5, 0.9).setDepth(y));
     for (let x = 10; x < next.w; x += 34) this.greenery.push(this.art(x, -6, 'bush').setDepth(-6));
+  }
+
+  /** Фонарь не ставим на дорожку к двери и на подъезд к складу. */
+  private lampAt(x: number): boolean {
+    const { door, warehouse } = this.layout;
+    return Math.abs(x - door.x) > 20 && Math.abs(x - (warehouse.x + warehouse.w / 2)) > 18;
   }
 
   /** Светящийся слой поверх темноты: виден только вечером. */
@@ -3049,21 +3114,29 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
-  /** Толстые стены с кирпичной крышкой и фасад с витринами, дверями и роллетом склада. */
+  /** Толстые стены с кирпичной крышкой и фасад с витринами и дверями; в левой стене — двери во флигель. */
   private buildShell(): void {
-    const { w, h, door, warehouse } = this.layout;
+    const { w, h, door } = this.layout;
     const cap = (x: number, y: number, ww: number, hh: number) =>
       this.add.tileSprite(x, y, ww, hh, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(2);
     cap(-WALL, -4, w + 2 * WALL, 4);
-    cap(-WALL, 0, WALL, h);
+    // Левая стена с проёмами в открытые комнаты флигеля.
+    const gaps = this.openRooms()
+      .map((room) => room.doorway.y)
+      .sort((a, b) => a - b);
+    let from = 0;
+    for (const y of gaps) {
+      cap(-WALL, from, WALL, y - 8 - from);
+      this.buildWingDoor(y);
+      from = y + 8;
+    }
+    cap(-WALL, from, WALL, h - from);
     cap(w, 0, WALL, h);
     this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
-    // Роллет склада и раздвижные двери.
-    this.art(warehouse.x + warehouse.w / 2, h + 5.5, 'shutter').setDepth(h + 2);
     this.doorImg = this.art(door.x, h + 5, 'door').setDepth(h + 2);
-    // Витрины с маленькими навесами между складом и дверью и справа от двери.
+    // Витрины с маленькими навесами слева и справа от двери.
     const segments: [number, number][] = [
-      [warehouse.x + warehouse.w + 8, door.x - 18],
+      [8, door.x - 18],
       [door.x + 18, w - 2],
     ];
     for (const [from, to] of segments) {
@@ -3095,6 +3168,14 @@ export class StoreScene extends Phaser.Scene {
     // Места под полки обходят всегда: полку могут купить утром без перестройки зала.
     this.obstacles = slots.map(({ x, y }) => furniture(x, y));
     this.obstacles.push({ x: counter.x - 13, y: counter.y - 30, w: 26, h: 54 });
+    // Левая стена: вдоль неё не ходят, во флигель — только через двери.
+    const { h } = this.layout;
+    let from = -4;
+    for (const y of this.openRooms().map((room) => room.doorway.y).sort((a, b) => a - b)) {
+      this.obstacles.push({ x: -WALL - 2, y: from, w: WALL + 2, h: y - 8 - from });
+      from = y + 8;
+    }
+    this.obstacles.push({ x: -WALL - 2, y: from, w: WALL + 2, h: h - from });
   }
 
   /** Где стоит ведро (в правом нижнем углу, за кассой) и уличный контейнер (у роллета склада). */
@@ -3108,9 +3189,10 @@ export class StoreScene extends Phaser.Scene {
     return { x: bin.x - 16, y: bin.y + 2 };
   }
 
+  /** Контейнер у фасада слева от двери, на пути от двери не стоит. */
   private dumpSpot(): { x: number; y: number } {
-    const { warehouse, h } = this.layout;
-    return { x: warehouse.x + warehouse.w / 2 + 6, y: h + FACADE_H + 9 };
+    const { h } = this.layout;
+    return { x: 18, y: h + FACADE_H + 9 };
   }
 
   /** Ведро в зале (нажми — продавец вынесет мусор) и зелёный контейнер на улице. */
@@ -3268,11 +3350,10 @@ export class StoreScene extends Phaser.Scene {
   /** Плакаты на стене, растения и корзинки у входа — чтобы зал не выглядел пустым. */
   /** Первое место, где вещь 26×20 не мешает полкам, кассе, складу и автомату. */
   private freeSpot(candidates: { x: number; y: number }[]): { x: number; y: number } | null {
-    const { slots, counter, warehouse, w, wallH } = this.layout;
+    const { slots, counter, w, wallH } = this.layout;
     const blocked = [
       ...slots.map((s) => ({ x: s.x - 22, y: s.y - 14, w: 44, h: 30 })),
       { x: counter.x - 10, y: counter.y - 28, w: 20, h: 64 },
-      { x: warehouse.x, y: warehouse.y, w: warehouse.w + 6, h: warehouse.h },
       { x: w - 16, y: wallH + 44, w: 16, h: 24 },
     ];
     return (
@@ -3283,7 +3364,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private buildDecor(): void {
-    const { w, h, wallH, wc, door, warehouse, slots } = this.layout;
+    const { w, h, wallH, wc, door, slots } = this.layout;
     // На стене по очереди плакаты и окна, между ними часы.
     // Вместо плакатов — купленная картина; вместо часов — неон «ОТКРЫТО».
     const art = activeDecor(this.state, 'art')?.texture ?? 'poster';
@@ -3300,8 +3381,8 @@ export class StoreScene extends Phaser.Scene {
     if (activeDecor(this.state, 'aquarium')) {
       const spot = this.freeSpot([
         { x: w - 16, y: wallH + 92 },
-        { x: 16, y: warehouse.y - 30 },
-        { x: w / 2, y: wallH + 74 },
+        { x: w - 70, y: wallH + 40 },
+        { x: w / 2, y: this.layout.h - 30 },
       ]);
       if (spot) this.art(spot.x, spot.y, 'aquarium').setDepth(spot.y + 8);
     }
@@ -3315,15 +3396,107 @@ export class StoreScene extends Phaser.Scene {
     // Мягкая тень вдоль стены — пол уходит под неё.
     this.add.rectangle(0, wallH, w, 3, 0x181425, 0.18).setOrigin(0).setDepth(1);
     this.art(door.x + 26, h - 8, 'baskets').setDepth(h - 8);
-    // Растения в свободных углах: у правой стены и в левом углу над складом — не на пути покупателей.
+    // Растения в свободных углах у правой стены — не на пути покупателей.
     const spots = [
       { x: w - 9, y: wallH + 14 },
-      { x: 9, y: warehouse.y - 14 },
+      { x: w - 9, y: h - 40 },
     ];
     for (const p of spots) {
       const busy = [...slots, ...this.layout.showcases].some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
       if (!busy) this.art(p.x, p.y, activeDecor(this.state, 'plants') ? 'plant_big' : 'plant').setDepth(p.y + 6);
     }
+  }
+
+  // ---------- Флигель: склад, пекарня, кофейня ----------
+
+  /** Пекарня и кофейня открыты, когда куплены печь и кофейный уголок. */
+  private bakeryOpen(): boolean {
+    return hasUpgrade(this.state, 'oven');
+  }
+
+  private coffeeOpen(): boolean {
+    return hasUpgrade(this.state, 'coffee');
+  }
+
+  /** Комнаты флигеля, в которые есть дверь из зала. */
+  private openRooms(): Room[] {
+    const { warehouse, bakery, coffee } = this.layout;
+    return [warehouse, ...(this.bakeryOpen() ? [bakery] : []), ...(this.coffeeOpen() ? [coffee] : [])];
+  }
+
+  /**
+   * Флигель слева от зала: наружные стены, стены между комнатами, фасад склада с воротами
+   * и подъезд к ним с улицы. Пекарня и кофейня, пока не открыты, стоят тёмные и запертые.
+   */
+  private buildWing(): void {
+    const { h, wing, warehouse, bakery, coffee } = this.layout;
+    const cap = (x: number, y: number, ww: number, hh: number) =>
+      this.add.tileSprite(x, y, ww, hh, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(2);
+    const left = -WING_OUTER;
+    cap(left, wing.y - 4, WING_OUTER - WALL, 4);
+    cap(left, wing.y, WALL, h - wing.y);
+    cap(left + WALL, warehouse.y - WALL, wing.w, WALL);
+    cap(left + WALL, bakery.y - WALL, wing.w, WALL);
+    this.add.tileSprite(left, h, WING_OUTER - WALL, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
+    const gateX = warehouse.x + warehouse.w / 2;
+    this.art(gateX, h + 5.5, 'shutter').setDepth(h + 2);
+    // Подъезд от тротуара к воротам склада.
+    const top = this.next.h + 4;
+    if (top > h + FACADE_H) this.add.tileSprite(gateX - 12, h + FACADE_H, 24, top - h - FACADE_H, 'paving').setOrigin(0).setTileScale(1 / ART).setDepth(-9);
+    this.buildRoom(bakery, 'bakery', this.bakeryOpen());
+    this.buildRoom(coffee, 'coffee', this.coffeeOpen());
+  }
+
+  /**
+   * Дверь из зала во флигель: порог, деревянные косяки, створка открыта внутрь комнаты,
+   * коврик в зале и табличка над входом — куда ведёт.
+   */
+  private buildWingDoor(y: number): void {
+    const { warehouse, bakery, coffee } = this.layout;
+    const room = [warehouse, bakery, coffee].find((r) => r.doorway.y === y);
+    this.add.tileSprite(-WALL, y - 8, WALL, 16, 'wh_floor').setOrigin(0).setTileScale(1 / ART).setDepth(1);
+    // Косяки — сверху и снизу проёма.
+    for (const jy of [y - 9.5, y + 7.5]) this.add.rectangle(-WALL - 1, jy, WALL + 2, 2.5, 0x5a3a2a).setOrigin(0).setDepth(jy + 6);
+    // Створка распахнута внутрь комнаты.
+    this.add.rectangle(-WALL - 11, y - 8, 11, 2, 0xb86f50).setOrigin(0).setStrokeStyle(0.5, 0x3b2a35).setDepth(y - 2);
+    // Коврик со стороны зала.
+    this.add.rectangle(0.5, y - 6, 9, 12, room === warehouse ? 0x5a6988 : 0x9e2835, 0.85).setOrigin(0).setDepth(1);
+    const label = room === coffee ? t('wing.doorCoffee') : room === bakery ? t('wing.doorBakery') : t('wing.doorWarehouse');
+    const plate = this.add
+      .text(3, y - 15, label, { fontFamily: UI_FONT, fontSize: '5px', color: '#fee761', backgroundColor: '#2b2233', padding: { x: 2, y: 1 } })
+      .setOrigin(0, 0.5)
+      .setResolution(4)
+      .setDepth(y + 40);
+    plate.setAlpha(0.95);
+  }
+
+  /** Комната флигеля: пол, кусок стены с табличкой; закрытая — тёмная, с замком. */
+  private buildRoom(room: Room, kind: 'bakery' | 'coffee', open: boolean): void {
+    const { x, y, w, h } = room;
+    this.add.tileSprite(x, y, w, h, kind === 'bakery' ? 'floor2' : 'floor_wood').setOrigin(0).setTileScale(1 / ART);
+    this.add
+      .tileSprite(x, y, w, 14, 'wall')
+      .setOrigin(0)
+      .setTileScale(1 / ART)
+      .setTint(kind === 'bakery' ? 0xffe2d2 : 0xe6dcf6)
+      .setDepth(1);
+    this.add.rectangle(x, y + 14, w, 2, 0x181425, 0.18).setOrigin(0).setDepth(1);
+    this.art(x + w / 2, y + 7, 'wh_sign').setDepth(y + 5);
+    this.add
+      .text(x + w / 2, y + 7, t(`wing.${kind}`), { fontFamily: UI_FONT, fontSize: '5px', color: '#fee761' })
+      .setOrigin(0.5)
+      .setResolution(4)
+      .setDepth(y + 6);
+    if (open) {
+      this.nightGlow(this.art(x + w / 2, y + 26, 'glow').setScale(44 / 64).setTint(kind === 'bakery' ? 0xffd8a0 : 0xffe8c8), 0.5);
+      return;
+    }
+    this.add.rectangle(x, y + 16, w, h - 16, 0x1d1a26, 0.62).setOrigin(0).setDepth(y + h);
+    this.add
+      .text(x + w / 2, y + h / 2 + 6, `🔒\n${t(`wing.${kind}Locked`)}`, { fontFamily: UI_FONT, fontSize: '5px', color: '#c0cbdc', align: 'center' })
+      .setOrigin(0.5)
+      .setResolution(4)
+      .setDepth(y + h + 1);
   }
 
   /** Центр ряда тары на складе: ряды стоят на балках стеллажа. */
@@ -3333,7 +3506,6 @@ export class StoreScene extends Phaser.Scene {
 
   private buildWarehouse(): void {
     const { x, y, w, h, doorway } = this.layout.warehouse;
-    const wallColor = 0x4a3b52;
     this.add.tileSprite(x, y, w, h, 'wh_floor').setOrigin(0).setTileScale(1 / ART);
     // Складской стеллаж: на каждой балке — поддон и ряд тары.
     const rows = this.layout.warehouse.rows;
@@ -3345,10 +3517,6 @@ export class StoreScene extends Phaser.Scene {
     const laneY = this.warehouseRowY(rows - 1) + 7;
     this.add.tileSprite(x + 2, laneY, w - 4, 2, 'hazard').setOrigin(0).setTileScale(1 / ART).setDepth(laneY - 100);
     this.add.tileSprite(x + w - 2, doorway.y - 10, 2, 20, 'hazard').setOrigin(0).setTileScale(1 / ART).setDepth(doorway.y - 100);
-    this.add.rectangle(x, y - 3, w + 4, 3, wallColor).setOrigin(0);
-    // Правая стена с проёмом.
-    this.add.rectangle(x + w, y, 4, doorway.y - 10 - y, wallColor).setOrigin(0);
-    this.add.rectangle(x + w, doorway.y + 10, 4, y + h - doorway.y - 10, wallColor).setOrigin(0);
     // Огнетушитель у проёма и лампа под потолком.
     this.art(x + w - 4, doorway.y - 16, 'extinguisher').setDepth(doorway.y - 90);
     this.nightGlow(this.art(x + w / 2, y + 10, 'glow').setScale(40 / 64).setTint(0xfff0c8), 0.5);
@@ -4057,7 +4225,8 @@ export class StoreScene extends Phaser.Scene {
         style: STAFF_HAIR[member.role],
         acc: STAFF_ACC[member.role].acc,
         accTint: STAFF_ACC[member.role].tint,
-        hair: member.role === 'guard' ? UNIFORMS.guard : Phaser.Utils.Array.GetRandom(HAIR_COLORS),
+        // У охранника форменная кепка, у пекаря — белый колпак.
+        hair: member.role === 'guard' ? UNIFORMS.guard : member.role === 'baker' ? 0xffffff : Phaser.Utils.Array.GetRandom(HAIR_COLORS),
       });
       const carried = this.art(0, 3, 'box').setVisible(false);
       sprite.add(carried);
@@ -4077,6 +4246,8 @@ export class StoreScene extends Phaser.Scene {
         loader: this.loaderLoop,
         guard: null,
         manager: this.managerLoop,
+        baker: this.bakerLoop,
+        barista: this.baristaLoop,
       }[member.role];
       if (loop) void loop.call(this, worker, gen);
     }
@@ -4100,7 +4271,12 @@ export class StoreScene extends Phaser.Scene {
       case 'guard':
         return { x: door.x + 22, y: door.y - 14 };
       case 'manager':
-        return { x: this.layout.w / 2, y: (this.layout.wallH + this.layout.h) / 2 };
+        // Менеджер ходит у входа, где проход свободен.
+        return { x: door.x - 24, y: door.y - 30 };
+      case 'baker':
+        return { x: this.layout.bakery.x + 26, y: this.layout.bakery.y + 36 };
+      case 'barista':
+        return { x: this.layout.coffee.x + 26, y: this.layout.coffee.y + 19 };
     }
   }
 
@@ -5252,7 +5428,7 @@ export class StoreScene extends Phaser.Scene {
   private closeShop(): void {
     const { h, door, w, warehouse } = this.layout;
     const spots = [{ x: door.x, w: 32 }, { x: warehouse.x + warehouse.w / 2, w: 24 }];
-    for (let x = warehouse.x + warehouse.w + 8 + 10; x < w - 10; x += 24) {
+    for (let x = 18; x < w - 10; x += 24) {
       if (Math.abs(x - door.x) > 24) spots.push({ x, w: 20 });
     }
     for (const spot of spots) {

@@ -833,6 +833,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       button(t('coffee.buy', { n, cost: n * CUP_COST }), () => update(buyCups(getState(), n), 'success'), 'ui-chip', state.money < n * CUP_COST),
     );
     box.append(artRow(coffeeSprite(state), { name: t('coffee.cups', { n: cupsOf(state), max: CUPS_MAX }), actions }));
+    box.append(...staffNeed(state, 'barista', 'coffee.noBarista'));
     return box;
   };
 
@@ -842,7 +843,16 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     box.append(
       el('div', 'ui-muted', hasUpgrade(state, 'oven') ? t('oven.note', { n: ovenBatch(state), cost: ovenBatchCost(state), s: ovenBake(state) }) : t('oven.locked')),
     );
+    if (hasUpgrade(state, 'oven')) box.append(...staffNeed(state, 'baker', 'oven.noBaker'));
     return box;
+  };
+
+  /** Красная строка, если в пекарне или кофейне некому работать. */
+  const staffNeed = (state: StoreState, role: 'baker' | 'barista', key: TextKey): HTMLElement[] => {
+    if (staffOf(state, role)) return [];
+    const line = el('div', 'ui-note', t(key));
+    line.style.color = '#b13e53';
+    return [line];
   };
 
   /** Кот: сытость, удача, кормление и лежанки. */
@@ -1721,8 +1731,10 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       if (isCashierRole(role) && registerOfRole(role) >= registerCount(state)) continue;
       // Менеджер — только в большом магазине: пока рано, подскажем, где появится.
       if (!roleOpen(state, role)) {
-        const at = STAFF_ROLES[role].minLevel ?? 0;
-        locked.push(t('staffTab.lockedRole', { role: t(STAFF_ROLES[role].nameKey), name: t(STORE_LEVELS[at].nameKey) }));
+        const { minLevel = 0, needs, nameKey } = STAFF_ROLES[role];
+        // Пекарь и бариста — когда во флигеле открыты пекарня и кофейня.
+        if (state.level < minLevel) locked.push(t('staffTab.lockedRole', { role: t(nameKey), name: t(STORE_LEVELS[minLevel].nameKey) }));
+        else if (needs) locked.push(t(needs === 'oven' ? 'staffTab.needsOven' : 'staffTab.needsCoffee', { role: t(nameKey) }));
         continue;
       }
       const searched = state.jobSearch?.day === state.day && state.jobSearch.role === role;

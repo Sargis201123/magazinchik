@@ -4385,6 +4385,93 @@ def icon():
     c.img.resize((512, 512), Image.NEAREST).save(pub / "icon-512.png")
 
 
+def wing_furniture():
+    """Мебель флигеля: стойка бариста, столик с табуретами, стол пекаря и стеллаж с хлебом."""
+    # Стойка кофейни: деревянный фасад с филёнками, светлая столешница, витрина с пирожными.
+    c = Canvas(76, 30)
+    c.rect(1, 10, 74, 18, "a")
+    for x in range(4, 72, 12):
+        c.frame(x, 14, 9, 11, "b")
+        c.vline(x + 1, 15, 9, "B")
+    c.rect(0, 6, 76, 5, "N")
+    c.hline(0, 6, 76, "w")
+    c.hline(0, 10, 76, "t")
+    c.rect(1, 27, 74, 2, "x")
+    # Витрина с пирожными справа.
+    c.rect(50, 0, 22, 7, "c")
+    c.hline(50, 0, 22, "w")
+    for i, col in enumerate(("s", "y", "P", "N")):
+        c.rect(52 + i * 5, 3, 3, 3, col)
+        c.px(53 + i * 5, 2, "w")
+    c.outline("k")
+    shadowed(c, 38, 28, 36, 2).save("coffee_bar")
+    # Круглый столик с двумя табуретами.
+    c = Canvas(30, 22)
+    for x in (4, 25):
+        c.ellipse(x, 15, 3.2, 2.6, "b")
+        c.ellipse(x, 14, 3.2, 2.2, "B")
+        c.vline(x, 16, 4, "x")
+    c.vline(15, 10, 9, "x")
+    c.rect(12, 18, 7, 2, "x")
+    c.ellipse(15, 8, 8, 4, "N")
+    c.ellipse(15, 7, 8, 3.5, "w")
+    c.rect(12, 5, 3, 3, "w")
+    c.hline(11, 5, 5, "a")
+    c.px(13, 6, "B")
+    c.px(18, 6, "s")
+    c.outline("k")
+    shadowed(c, 15, 20, 13, 2).save("cafe_table")
+    # Стол пекаря: мука, тесто, скалка.
+    c = Canvas(52, 26)
+    c.rect(2, 8, 48, 6, "t")
+    c.hline(2, 8, 48, "n")
+    c.rect(2, 13, 48, 2, "a")
+    for x in (4, 46):
+        c.rect(x, 15, 3, 9, "a")
+        c.vline(x, 15, 9, "B")
+    c.rect(7, 19, 38, 2, "a")
+    # Мешок муки.
+    c.round_rect(30, 0, 12, 10, "W", r=2)
+    c.rect(31, 1, 10, 2, "w")
+    c.hline(33, 5, 6, "l")
+    c.px(35, 6, "l")
+    # Тесто и скалка.
+    c.ellipse(13, 9, 6, 2.6, "N")
+    c.ellipse(12, 8, 4, 1.6, "w")
+    c.line(20, 11, 28, 9, "B")
+    c.px(19, 11, "a")
+    c.px(29, 9, "a")
+    c.speckle(4, 8, 24, 3, ["w"], 10, 7)
+    c.outline("k")
+    shadowed(c, 26, 24, 24, 2).save("baker_table")
+    # Стеллаж со свежим хлебом: батоны и караваи на трёх полках.
+    c = Canvas(30, 40)
+    c.rect(1, 2, 28, 36, "a")
+    c.rect(3, 4, 24, 32, "x")
+    for i, y in enumerate((12, 23, 34)):
+        c.rect(1, y, 28, 2, "B")
+        c.hline(1, y, 28, "t")
+        for x in range(4, 24, 7):
+            if (x + i) % 3 == 0:
+                c.ellipse(x + 3, y - 3, 3.4, 2.4, "y")
+                c.px(x + 2, y - 4, "Y")
+            else:
+                c.round_rect(x, y - 5, 6, 4, "o", r=1)
+                c.hline(x + 1, y - 5, 4, "y")
+                c.px(x + 2, y - 3, "a")
+    c.outline("k")
+    shadowed(c, 15, 38, 13, 2).save("bread_rack")
+    # Противень со свежим хлебом в руках пекаря.
+    c = Canvas(14, 8)
+    c.rect(0, 5, 14, 2, "l")
+    c.hline(0, 5, 14, "W")
+    for x in (1, 5, 9):
+        c.round_rect(x, 1, 4, 4, "o", r=1)
+        c.hline(x + 1, 1, 2, "y")
+    c.outline("k")
+    c.save("bread_tray")
+
+
 def main():
     floor()
     wall()
@@ -4412,6 +4499,7 @@ def main():
     portraits()
     icon()
     environment2()
+    wing_furniture()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
