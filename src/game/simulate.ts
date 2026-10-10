@@ -119,6 +119,9 @@ export interface SimResult {
   levelDay: (number | null)[];
   /** С какого дня шла каждая глава сюжета (последний элемент — свободная игра). */
   chapterDay: (number | null)[];
+  /** В какой день бабушка выручила с долгами и в какой магазин закрыли за долги (null — не было). */
+  rescueDay: number | null;
+  bankruptDay: number | null;
 }
 
 export interface SimOptions {
@@ -213,6 +216,8 @@ export function simulate({
   for (const id of PRODUCT_IDS) state = setPrice(state, id, Math.round((PRODUCTS[id].basePrice * priceMult) / 5) * 5);
   const out: SimDay[] = [];
   const levelDay: (number | null)[] = STORE_LEVELS.map((_, i) => (i === 0 ? 1 : null));
+  let rescueDay: number | null = null;
+  let bankruptDay: number | null = null;
   const chapterDay: (number | null)[] = [...CHAPTERS, null].map((_, i) => (i === 0 ? 1 : null));
 
   for (let d = 0; d < days; d++) {
@@ -568,6 +573,8 @@ export function simulate({
     state = recordDay(state, stats);
     const night = nightCycle(state, stats, random);
     state = night.state;
+    if (state.grandmaRescue && rescueDay === null) rescueDay = state.day;
+    if (state.bankrupt && bankruptDay === null) bankruptDay = state.day;
     const expenses = night.bill ? billTotal(night.bill) : 0;
     out.push({
       day: state.day - 1,
@@ -591,7 +598,7 @@ export function simulate({
     });
     void moneyStart;
   }
-  return { days: out, levelDay, chapterDay };
+  return { days: out, levelDay, chapterDay, rescueDay, bankruptDay };
 }
 
 

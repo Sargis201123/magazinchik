@@ -18,6 +18,7 @@ import { adBoost } from './ads';
 import { WEATHER_EFFECTS, weatherFor } from './weather';
 import { endWar } from './war';
 import { eduardGuests, growEduard } from './eduard';
+import { afterBills } from './bankruptcy';
 import { promoGuests } from './promo';
 import { fairGuests } from './fair';
 import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
@@ -44,7 +45,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Усталость считаем до смены плана: сегодняшний отгул обнуляет её.
   s = restStaff(s);
   const day = s.day;
-  const night = endDay(s, stats, random);
+  const ended = endDay(s, stats, random);
+  // После счетов — проверка долга: предупреждение, бабушка или банкротство.
+  const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
   const next = ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy))));
   return {

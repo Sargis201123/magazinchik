@@ -127,6 +127,9 @@ import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
+import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
+import { premiumDecor, restartGame } from '../game/restart';
+import { saveGame } from '../game/save';
 import { buyRadio, hasRadio, RADIO_PRICE, setStation, STATION_INFO, STATIONS, stationOf } from '../game/radio';
 import { EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_MAX, EDUARD_STAGES, eduardNews, eduardPull, eduardStage, seeEduardNews } from '../game/eduard';
 import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../game/upgrades';
@@ -226,6 +229,8 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   let storyLine = 0;
   /** Шаг бабушкиного обучения и его реплика внизу экрана (пока идёт обучение). */
   let tourStep = 0;
+  /** Открыто подтверждение «Начать заново». */
+  let confirmRestart = false;
   let tourEl: HTMLElement | null = null;
   const endTour = () => {
     tourEl?.remove();
@@ -255,6 +260,22 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const title = el('h2');
     title.append(el('span', '', t('morning.title', { n: state.day })), el('span', '', t('morning.money', { n: state.money })));
 
+    if (state.bankrupt) {
+      card.replaceChildren(closedBox(state));
+      return;
+    }
+    if (confirmRestart) {
+      card.replaceChildren(title, restartBox(state));
+      return;
+    }
+    if (state.grandmaRescue && !state.grandmaRescue.seen) {
+      card.replaceChildren(rescueBox(state, state.grandmaRescue.paid));
+      return;
+    }
+    if (state.debtWarning && !state.debtWarning.seen) {
+      card.replaceChildren(title, bankLetterBox(state));
+      return;
+    }
     if (pendingBad) {
       card.replaceChildren(title, qualityBox(pendingBad));
       return;
@@ -315,6 +336,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       ...fairLine(state),
       ...promoLine(state),
       goalLine(state),
+      ...debtLine(state),
       ...seasonLine(state),
       ...weatherLine(state),
       ...warLine(state),
@@ -883,6 +905,87 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       input,
       button(t('cat.offer.yes'), () => update(adoptCat(getState(), input.value || names[0]), 'success')),
       button(t('cat.offer.no'), () => update(declineCat(getState())), 'ui-btn secondary'),
+    );
+    return box;
+  };
+
+  // ---------- Долги, банкротство и новая игра ----------
+
+  /** Новая игра: сохранить и перезапустить — сцена соберётся с нуля. */
+  const restart = () => {
+    saveGame(restartGame(getState()));
+    location.reload();
+  };
+
+  /** Что останется после новой игры. */
+  const keepsLine = (state: StoreState) =>
+    el('div', 'ui-note', t('restart.keeps', { decor: premiumDecor(state).length, ach: state.achievements.length }));
+
+  /** Красная строка утром, пока долг выше предела. */
+  const debtLine = (state: StoreState): HTMLElement[] => {
+    if (!state.debtWarning) return [];
+    const line = el('div', 'ui-note', t('bankrupt.line', { debt: state.debt, limit: debtLimit(state), n: daysUntilBill(state.day) }));
+    line.style.color = '#b13e53';
+    return [line];
+  };
+
+  const bankLetterBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(
+      el('h3', '', t('bankrupt.letter.title')),
+      el('p', '', t('bankrupt.letter.text', { debt: state.debt, limit: debtLimit(state), n: daysUntilBill(state.day) })),
+      el('div', 'ui-muted', t('bankrupt.letter.how')),
+      button(t('bankrupt.letter.ok'), () => update(seeDebtWarning(getState()))),
+    );
+    return box;
+  };
+
+  const rescueBox = (state: StoreState, paid: number) =>
+    dialogBox({
+      portrait: 'portrait_grandma_sad',
+      name: t(CHARACTERS.grandma.nameKey),
+      text: `«${t('bankrupt.grandma', { n: paid })}»`,
+      pitch: VOICE.grandma,
+      after: [el('div', 'ui-note', t('bankrupt.grandma.note', { debt: state.debt, limit: debtLimit(state) }))],
+      nextLabel: t('bankrupt.grandma.ok'),
+      onNext: () => update(seeGrandmaRescue(getState())),
+    });
+
+  /** Магазин закрыт за долги: итоги игры и кнопка «Начать заново». */
+  const closedBox = (state: StoreState) => {
+    const box = el('div', 'ui-box ui-closed');
+    box.append(
+      el('h2', '', t('bankrupt.closed.title')),
+      el('p', '', t('bankrupt.closed.text')),
+      el(
+        'div',
+        'ui-muted',
+        t('bankrupt.closed.stats', {
+          days: state.day,
+          revenue: state.totalRevenue,
+          served: state.lifetime?.served ?? 0,
+          name: t(STORE_LEVELS[state.level].nameKey),
+        }),
+      ),
+      keepsLine(state),
+      button(`🔄 ${t('restart.button')}`, restart),
+    );
+    return box;
+  };
+
+  /** Подтверждение новой игры по кнопке во вкладке «Магазин». */
+  const restartBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    const yes = button(t('restart.yes'), restart, 'ui-btn danger');
+    box.append(
+      el('h3', '', t('restart.title')),
+      el('p', '', t('restart.text')),
+      keepsLine(state),
+      yes,
+      button(t('restart.no'), () => {
+        confirmRestart = false;
+        render();
+      }, 'ui-btn secondary'),
     );
     return box;
   };
@@ -1704,7 +1807,11 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
-      debt.append(el('b', '', t('debt.title', { n: state.debt })), el('div', 'ui-muted', t('debt.note', { p: DEBT_PAYMENT })));
+      debt.append(
+        el('b', '', t('debt.title', { n: state.debt })),
+        el('div', 'ui-muted', t('debt.note', { p: DEBT_PAYMENT })),
+        el('div', 'ui-muted', t('debt.limit', { n: debtLimit(state) })),
+      );
       const chips = el('div', 'ui-chips');
       for (const amount of [100, state.debt]) {
         if (amount === 100 && state.debt <= 100) continue;
@@ -1717,6 +1824,16 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       debt.append(el('b', '', t('debt.none')));
     }
     out.push(debt);
+
+    // В самом низу — начать игру заново (с подтверждением).
+    const again = el('div', 'ui-box');
+    again.append(
+      el('div', 'ui-muted', t('restart.note')),
+      button(`🔄 ${t('restart.button')}`, () => {
+        confirmRestart = true;
+        render();
+      }, 'ui-btn secondary'),
+    );
 
     const bill = monthlyBill(state);
     const daysLeft = daysUntilBill(state.day);
@@ -1741,7 +1858,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     if (bill.debt) row(t('bills.debt'), bill.debt);
     if (bill.loan) row(t('bills.loan'), bill.loan);
     row(t('bills.total'), billTotal(bill));
-    out.push(costs);
+    out.push(costs, again);
     return out;
   };
 

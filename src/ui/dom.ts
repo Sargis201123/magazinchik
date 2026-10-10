@@ -66,6 +66,9 @@ const css = `
 .ui-curtain-label { font: 800 30px system-ui, sans-serif; color: #fee761; background: #2b2233; padding: 10px 22px;
   border: 3px solid #181425; border-radius: 8px; box-shadow: 0 4px 0 #181425; letter-spacing: 1px; }
 .ui-btn.secondary { background: #f2c14e; }
+.ui-btn.danger { background: #e43b44; color: #fff; }
+.ui-closed { text-align: center; }
+.ui-closed h2 { justify-content: center; }
 .ui-btn[disabled], .ui-chip[disabled] { background: #c9c0ad; color: #7a7066; }
 .ui-chip { padding: 5px 9px; font: 600 13px system-ui, sans-serif; border: 2px solid #2b2233; border-radius: 6px;
   background: #f2c14e; color: #2b2233; box-shadow: 0 2px 0 #2b2233; min-width: 34px; }
