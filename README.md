@@ -31,15 +31,27 @@ python3 art/sprites.py  # перерисовать спрайты в public/asse
 
 ## Покупки за звёзды (Telegram Stars)
 
-Премиальное оформление продаётся за звёзды. Серверная часть — функции Vercel в папке `api/`,
-своя база не нужна: что купил игрок, сервер узнаёт из платежей бота (`getStarTransactions`).
+Премиальное оформление продаётся за звёзды. Сервер — несколько маленьких функций без своей базы:
+что купил игрок, он узнаёт из платежей бота (`getStarTransactions`). Логика — в `api/_lib/`,
+обёртки для двух хостингов: `api/*.ts` (Vercel) и `functions/api/*.ts` (Cloudflare Pages).
 
-1. Деплой на Vercel из этого репозитория (папка `api/` подхватится сама).
-2. Vercel → Settings → Environment Variables:
-   - `BOT_TOKEN` — токен бота из @BotFather (только здесь, никогда в коде или чате);
-   - `WEBHOOK_SECRET` — любая длинная случайная строка.
-3. Сделать Redeploy, затем один раз открыть `https://<адрес игры>/api/stars-setup?key=<WEBHOOK_SECRET>` —
-   бот подключит вебхук (подтверждение оплаты, ответ на /start).
+Секреты (только в настройках хостинга, никогда в коде или чате):
+- `BOT_TOKEN` — токен бота из @BotFather;
+- `WEBHOOK_SECRET` — длинная случайная строка из латинских букв, цифр, `_` и `-`.
 
-Без этих настроек игра работает как раньше, а кнопка покупки честно пишет, что оплата недоступна.
+### Cloudflare Pages (бесплатно)
+
+1. dash.cloudflare.com → Workers & Pages → Create → Pages → Connect to Git → этот репозиторий.
+2. Build command: `npm run build`, Build output directory: `dist`. Node берётся из `.nvmrc` (22).
+3. Settings → Variables and Secrets → добавить `BOT_TOKEN` и `WEBHOOK_SECRET` (тип Secret, Production), затем Retry deployment.
+4. Один раз открыть `https://<проект>.pages.dev/api/stars-setup?key=<WEBHOOK_SECRET>` — вебхук бота переедет на Cloudflare.
+5. В @BotFather поменять адрес мини-приложения (и кнопки меню) на `https://<проект>.pages.dev/`.
+
+### Vercel
+
+1. Деплой из этого репозитория (папка `api/` подхватится сама).
+2. Settings → Environment Variables → `BOT_TOKEN`, `WEBHOOK_SECRET`, затем Redeploy.
+3. Один раз открыть `https://<адрес игры>/api/stars-setup?key=<WEBHOOK_SECRET>`.
+
+Без секретов игра работает как раньше, а кнопка покупки честно пишет, что оплата недоступна.
 Каждую премиальную вещь можно один раз бесплатно примерить на день.
