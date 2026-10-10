@@ -457,6 +457,24 @@ const ICONS: Record<string, string> = {
   '🎭': 'ico_mask',
   '🎺': 'ico_trumpet',
   '📺': 'ico_tv',
+  // Альбом редких гостей.
+  '🎸': 'ico_guitar',
+  '🎩': 'ico_tophat',
+  '🚀': 'ico_rocket',
+  '⚽': 'ico_ball',
+  '🎨': 'ico_palette',
+  '🕵': 'ico_magnifier',
+  '🎅': 'ico_santa',
+  '👑': 'ico_crown',
+  '🦜': 'ico_parrot',
+  '🤡': 'ico_clown',
+  '🛡': 'ico_shield',
+  '👽': 'ico_alien',
+  '🪄': 'ico_wand',
+  '🪓': 'ico_axe',
+  '🦸': 'ico_hero',
+  '🩰': 'ico_ballet',
+  '🥷': 'ico_ninja',
 };
 // Эмодзи из таблицы; знак-вариант U+FE0F после него («⚠️») съедается вместе с ним.
 const ICON_RE = new RegExp(`(${Object.keys(ICONS).join('|')})\uFE0F?`, 'u');

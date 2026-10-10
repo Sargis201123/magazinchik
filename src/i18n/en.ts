@@ -1180,6 +1180,16 @@ export const en: Record<TextKey, string> = {
   "bigday.parade.news": "It's City Day! A brass band parade marches down our street, followed by townsfolk with flags and balloons.",
   "bigday.parade.hint": "Almost twice as many people. Flowers, juice and water will sell well.",
   "popup.quake": "Tremor! Broken: {n}",
+  "rare.queen": "Queen",
+  "rare.pirate": "Pirate",
+  "rare.clown": "Clown",
+  "rare.knight": "Knight",
+  "rare.alien": "Alien",
+  "rare.magician": "Magician",
+  "rare.viking": "Viking",
+  "rare.superhero": "Superhero",
+  "rare.ballerina": "Ballerina",
+  "rare.ninja": "Ninja",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

@@ -1178,6 +1178,16 @@ export const ru = {
   "bigday.parade.news": "Сегодня День города! По нашей улице пройдёт парад духовых оркестров, а за ним — горожане с флажками и шарами.",
   "bigday.parade.hint": "Людей будет почти вдвое больше. Хорошо возьмут цветы, соки и воду.",
   "popup.quake": "Толчок! Упало и разбилось: {n}",
+  "rare.queen": "Королева",
+  "rare.pirate": "Пират",
+  "rare.clown": "Клоун",
+  "rare.knight": "Рыцарь",
+  "rare.alien": "Инопланетянин",
+  "rare.magician": "Фокусник",
+  "rare.viking": "Викинг",
+  "rare.superhero": "Супергерой",
+  "rare.ballerina": "Балерина",
+  "rare.ninja": "Ниндзя",
 } as const;
 
 export type TextKey = keyof typeof ru;

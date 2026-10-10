@@ -74,6 +74,7 @@ import { haptic } from '../platform/telegram';
 import { button, el, openModal, UI_FONT } from '../ui/dom';
 import { BIG_DAYS, bigDayFor, CROWD_EXTRA_GUESTS, CROWD_PATIENCE, isCrowdDay, quakeBreak, type BigDayId } from '../game/bigday';
 import { dialogBox } from '../ui/dialog';
+import { pickWear } from './archetypes';
 import { BIG_LAYER_DY, type BackId, type FaceId, type HatId, type OutfitId, type PropId } from './wardrobe';
 import { Hud } from '../ui/hud';
 import { showMorning } from '../ui/morning';
@@ -311,6 +312,8 @@ interface Look {
   prop?: PropId;
   propTint?: number;
   face?: FaceId;
+  /** Цвет бороды и усов (по умолчанию — как волосы). */
+  faceTint?: number;
   back?: BackId;
   backTint?: number;
 }
@@ -328,8 +331,12 @@ const HAT_COLORS = [0xe43b44, 0x0099db, 0x63c74d, 0xfeae34, 0xb55088, 0x2ce8f5, 
 const BAG_COLORS = [0x8f563b, 0x262b44, 0xe43b44, 0xc28569, 0x68386c];
 const DOG_COLORS = [0xc28569, 0xead4aa, 0x4a3b52, 0xffffff, 0xe4a672];
 
-function customerLook(shirt: number): Look {
+/** Доля покупателей в узнаваемом образе (archetypes.ts): пенсионер с тростью, повар, турист… */
+const ARCHETYPE_SHARE = 0.5;
+
+function customerLook(shirt: number, day = 0): Look {
   const look = randomLook(shirt);
+  if (day && Math.random() < ARCHETYPE_SHARE) return { ...look, ...pickWear(day, Math.random).wear };
   const roll = Math.random();
   // Школьники с рюкзаками.
   if (roll < 0.14) {
@@ -3961,7 +3968,10 @@ export class StoreScene extends Phaser.Scene {
       parts.push(bag);
     }
     parts.push(skin);
-    if (look.face) parts.push(wear(`w_face_${look.face}`));
+    if (look.face) {
+      const hairy = look.face === 'beard' || look.face === 'mustache';
+      parts.push(wear(`w_face_${look.face}`, look.faceTint ?? (hairy ? (look.hair ?? 0x4a2c1a) : undefined)));
+    }
     if (look.glasses) {
       const glasses = this.art(0, 0, 'acc_glasses');
       layers.push([glasses, 'acc_glasses']);
@@ -4009,7 +4019,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Вторая половинка пары идёт следом за первой — тем же путём, чуть позади. */
   private addCompanion(leader: Phaser.GameObjects.Container): void {
-    const companion = this.makePerson(leader.x - 8, leader.y + 1, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS)));
+    const companion = this.makePerson(leader.x - 8, leader.y + 1, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
     this.addUmbrella(companion);
     companion.setData('leader', leader);
     leader.setData('trail', [] as { x: number; y: number }[]);
@@ -4846,14 +4856,14 @@ export class StoreScene extends Phaser.Scene {
     const rareChance = rareGuestChance(this.state.level) * (activeAd(this.state)?.id === 'blogger' ? 2 : 1);
     const rare = !thief && !valya && !this.night && Math.random() < rareChance ? pickRareGuest(this.state, Math.random) : null;
     const look: Look = rare
-      ? rare.look
+      ? (rare.look as Look)
       : valya
         ? VALYA
         : thief
           ? { ...randomLook(shirt), style: 'long' as const, hair: THIEF_SHIRT }
           : this.night
             ? nightLook()
-            : withCompanionItems(customerLook(shirt));
+            : withCompanionItems(customerLook(shirt, this.state.day));
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, look);
     this.addUmbrella(sprite);
@@ -5320,7 +5330,7 @@ export class StoreScene extends Phaser.Scene {
     if (Math.random() < 0.45) {
       const fromLeft = Math.random() < 0.5;
       const y = this.streetY + Phaser.Math.Between(-5, 5);
-      const person = this.makePerson(fromLeft ? left : right, y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS))));
+      const person = this.makePerson(fromLeft ? left : right, y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)));
       this.addUmbrella(person);
       if (Math.random() < 0.1) this.addCompanion(person);
       void this.walk(person, fromLeft ? right : left, y, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1.1)).then(() => person.destroy());
