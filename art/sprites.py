@@ -2020,20 +2020,38 @@ def building():
 
 
 def lot2():
-    """Заросший участок: земля, трава клочьями, камешки."""
+    """Пустой участок 32×32 под расширение: подсохшая трава, песчаные проплешины, гравий, одуванчики.
+    Светлее и желтее газона — видно, что это отдельный участок, но без тёмного пятна у входа."""
     c = Canvas(32, 32)
-    c.rect(0, 0, 32, 32, "a")
-    c.speckle(0, 0, 32, 32, ["b", "B"], 18, 21)
+    base, light, dark = (166, 186, 98, 255), (186, 202, 116, 255), (134, 160, 78, 255)
+    sand, sand_hi, sand_lo = (214, 190, 140, 255), (228, 208, 162, 255), (190, 164, 116, 255)
+    c.rect(0, 0, 32, 32, base)
     rnd = random.Random(8)
-    for _ in range(5):
-        cx, cy = rnd.randrange(32), rnd.randrange(32)
-        for i in range(7):
-            x, y = (cx + rnd.randrange(-3, 4)) % 32, (cy + rnd.randrange(-2, 3)) % 32
-            c.px(x, y, rnd.choice(["i", "j", "J"]))
-            c.px(x, (y - 1) % 32, "J")
-    for x, y in ((6, 24), (25, 7), (14, 14)):
-        c.rect(x, y, 2, 1, "W")
-        c.px(x, y + 1, "G")
+    # Пятна тона травы.
+    for _ in range(40):
+        x, y = rnd.randrange(32), rnd.randrange(32)
+        c.px(x, y, light if rnd.random() < 0.6 else dark)
+    # Песчаные проплешины (замыкаются по краям плитки).
+    for cx, cy, rx, ry in ((8, 9, 5.5, 3.5), (24, 23, 6, 4), (27, 4, 3, 2)):
+        for y in range(int(cy - ry) - 1, int(cy + ry) + 2):
+            for x in range(int(cx - rx) - 1, int(cx + rx) + 2):
+                d = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2
+                if d <= 1 and rnd.random() > 0.08 * d:
+                    c.px(x % 32, y % 32, sand_lo if d > 0.7 else sand)
+        c.px(int(cx - rx / 2) % 32, int(cy - ry / 2) % 32, sand_hi)
+    # Гравий на песке.
+    for x, y in ((6, 9), (10, 8), (22, 22), (26, 24), (24, 21)):
+        c.px(x, y, (150, 150, 160, 255))
+        c.px(x + 1, y, (196, 196, 204, 255))
+    # Пучки травы и одуванчики.
+    for x, y in ((15, 15), (3, 27), (18, 4), (30, 13), (12, 28)):
+        c.px(x, y, "i")
+        c.px(x - 1, y - 1, "J")
+        c.px(x + 1, y - 1, "J")
+    for x, y in ((19, 17), (5, 20), (28, 30)):
+        c.px(x, y, "Y")
+        c.px(x, y + 1, "e")
+    c.px(14, 22, "w")
     c.save("lot")
 
 
