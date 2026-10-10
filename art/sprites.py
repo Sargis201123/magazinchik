@@ -4726,6 +4726,10 @@ def main():
     import premium
 
     premium.main()
+    # Значки меню вместо эмодзи.
+    import icons
+
+    icons.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
