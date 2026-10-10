@@ -158,24 +158,75 @@ export function rewardQuests(state: StoreState, quests: Quest[], stats: DayStats
 
 // ---------------------------------------------------------------- альбом редких гостей
 
-export type RareGuestId = 'blogger' | 'rockstar' | 'mayor' | 'astronaut' | 'footballer' | 'artist' | 'detective' | 'santa';
+export type RareGuestId =
+  | 'blogger'
+  | 'rockstar'
+  | 'mayor'
+  | 'astronaut'
+  | 'footballer'
+  | 'artist'
+  | 'detective'
+  | 'santa'
+  | 'queen'
+  | 'pirate'
+  | 'clown'
+  | 'knight'
+  | 'alien'
+  | 'magician'
+  | 'viking'
+  | 'superhero'
+  | 'ballerina'
+  | 'ninja';
+
+/**
+ * Внешность редкого гостя: цвета человечка и вещи из гардероба (src/scenes/wardrobe.ts) —
+ * корона, треуголка, латы, плащ… Имена вещей проверяет тест гардероба.
+ */
+export interface RareLook {
+  shirt: number;
+  pants: number;
+  hair: number;
+  skin: number;
+  style: 'short' | 'long' | 'bun' | 'cap' | 'bald' | 'ponytail' | 'curly' | 'beanie';
+  hat?: string;
+  hatTint?: number;
+  outfit?: string;
+  outfitTint?: number;
+  prop?: string;
+  propTint?: number;
+  face?: string;
+  faceTint?: number;
+  back?: string;
+  backTint?: number;
+  glasses?: boolean;
+}
 
 export interface RareGuest {
   id: RareGuestId;
   nameKey: TextKey;
   icon: string;
-  look: { shirt: number; pants: number; hair: number; style: 'short' | 'long' | 'bun' | 'cap' | 'bald'; skin: number };
+  look: RareLook;
 }
 
 export const RARE_GUESTS: RareGuest[] = [
-  { id: 'blogger', nameKey: 'rare.blogger', icon: '📱', look: { shirt: 0xf6757a, pants: 0x262b44, hair: 0xb55088, style: 'long', skin: 0xf2d3ab } },
-  { id: 'rockstar', nameKey: 'rare.rockstar', icon: '🎸', look: { shirt: 0x181425, pants: 0x181425, hair: 0xe43b44, style: 'long', skin: 0xeec39a } },
-  { id: 'mayor', nameKey: 'rare.mayor', icon: '🎩', look: { shirt: 0x262b44, pants: 0x262b44, hair: 0x8b9bb4, style: 'bald', skin: 0xf2d3ab } },
-  { id: 'astronaut', nameKey: 'rare.astronaut', icon: '🚀', look: { shirt: 0xffffff, pants: 0xc0cbdc, hair: 0xffffff, style: 'cap', skin: 0xd9a066 } },
-  { id: 'footballer', nameKey: 'rare.footballer', icon: '⚽', look: { shirt: 0x63c74d, pants: 0xffffff, hair: 0x181425, style: 'short', skin: 0x8f563b } },
-  { id: 'artist', nameKey: 'rare.artist', icon: '🎨', look: { shirt: 0xfeae34, pants: 0x124e89, hair: 0x733e39, style: 'bun', skin: 0xeec39a } },
-  { id: 'detective', nameKey: 'rare.detective', icon: '🕵️', look: { shirt: 0xb86f50, pants: 0x3a4466, hair: 0x4a2c1a, style: 'cap', skin: 0xf2d3ab } },
-  { id: 'santa', nameKey: 'rare.santa', icon: '🎅', look: { shirt: 0xe43b44, pants: 0xe43b44, hair: 0xffffff, style: 'cap', skin: 0xf2d3ab } },
+  { id: 'blogger', nameKey: 'rare.blogger', icon: '📱', look: { shirt: 0xf6757a, pants: 0x262b44, hair: 0xb55088, style: 'long', skin: 0xf2d3ab, hat: 'headphones', hatTint: 0xffffff, prop: 'camera', face: 'sunglasses' } },
+  { id: 'rockstar', nameKey: 'rare.rockstar', icon: '🎸', look: { shirt: 0x181425, pants: 0x181425, hair: 0xe43b44, style: 'long', skin: 0xeec39a, outfit: 'leather', back: 'guitar', face: 'sunglasses' } },
+  { id: 'mayor', nameKey: 'rare.mayor', icon: '🎩', look: { shirt: 0xffffff, pants: 0x262b44, hair: 0x8b9bb4, style: 'bald', skin: 0xf2d3ab, hat: 'tophat', outfit: 'suit', face: 'mustache', prop: 'briefcase', propTint: 0x733e39 } },
+  { id: 'astronaut', nameKey: 'rare.astronaut', icon: '🚀', look: { shirt: 0xffffff, pants: 0xc0cbdc, hair: 0xffffff, style: 'cap', skin: 0xd9a066, outfit: 'spacesuit' } },
+  { id: 'footballer', nameKey: 'rare.footballer', icon: '⚽', look: { shirt: 0xffffff, pants: 0xffffff, hair: 0x181425, style: 'short', skin: 0x8f563b, outfit: 'tracksuit', outfitTint: 0x63c74d, hat: 'headband', hatTint: 0xffffff, prop: 'bottle' } },
+  { id: 'artist', nameKey: 'rare.artist', icon: '🎨', look: { shirt: 0xfeae34, pants: 0x124e89, hair: 0x733e39, style: 'bun', skin: 0xeec39a, hat: 'beret', hatTint: 0xe43b44, prop: 'palette', face: 'mustache' } },
+  { id: 'detective', nameKey: 'rare.detective', icon: '🕵️', look: { shirt: 0xffffff, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short', skin: 0xf2d3ab, hat: 'flatcap', hatTint: 0xb86f50, outfit: 'cardigan', outfitTint: 0xc28569, prop: 'newspaper', face: 'mustache' } },
+  { id: 'santa', nameKey: 'rare.santa', icon: '🎅', look: { shirt: 0xe43b44, pants: 0xe43b44, hair: 0xffffff, style: 'bald', skin: 0xf2d3ab, hat: 'ushanka', hatTint: 0xe43b44, outfit: 'furcoat', face: 'beard', faceTint: 0xffffff, prop: 'cane' } },
+  { id: 'queen', nameKey: 'rare.queen', icon: '👑', look: { shirt: 0xb55088, pants: 0x68386c, hair: 0xfee761, style: 'long', skin: 0xf2d3ab, hat: 'crown', outfit: 'gown', back: 'mantle', prop: 'scepter' } },
+  { id: 'pirate', nameKey: 'rare.pirate', icon: '🦜', look: { shirt: 0xffffff, pants: 0x262b44, hair: 0x181425, style: 'long', skin: 0xd9a066, hat: 'tricorn', outfit: 'piratecoat', face: 'eyepatch', prop: 'parrot' } },
+  { id: 'clown', nameKey: 'rare.clown', icon: '🤡', look: { shirt: 0xfee761, pants: 0xfee761, hair: 0xf77622, style: 'bald', skin: 0xffffff, hat: 'clownwig', outfit: 'clownsuit', face: 'clownnose', prop: 'balloon', propTint: 0xe43b44 } },
+  { id: 'knight', nameKey: 'rare.knight', icon: '🛡️', look: { shirt: 0xc0cbdc, pants: 0xc0cbdc, hair: 0x733e39, style: 'short', skin: 0xeec39a, hat: 'knighthelmet', outfit: 'armor', prop: 'sword' } },
+  { id: 'alien', nameKey: 'rare.alien', icon: '👽', look: { shirt: 0xc0cbdc, pants: 0xc0cbdc, hair: 0x63c74d, style: 'bald', skin: 0x63c74d, hat: 'antennae', outfit: 'spacesuit', prop: 'raygun' } },
+  { id: 'magician', nameKey: 'rare.magician', icon: '🪄', look: { shirt: 0xffffff, pants: 0x181425, hair: 0x181425, style: 'short', skin: 0xf2d3ab, hat: 'tophat', outfit: 'suit', back: 'cape', backTint: 0x262b44, prop: 'wand', face: 'mustache' } },
+  { id: 'viking', nameKey: 'rare.viking', icon: '🪓', look: { shirt: 0x8f563b, pants: 0x733e39, hair: 0xe4a672, style: 'long', skin: 0xf2d3ab, hat: 'viking', outfit: 'vikingfur', face: 'beard', back: 'shield' } },
+  { id: 'superhero', nameKey: 'rare.superhero', icon: '🦸', look: { shirt: 0x0099db, pants: 0x0099db, hair: 0x181425, style: 'short', skin: 0xeec39a, outfit: 'herosuit', face: 'heromask', back: 'cape', backTint: 0xe43b44 } },
+  { id: 'ballerina', nameKey: 'rare.ballerina', icon: '🩰', look: { shirt: 0xf6757a, pants: 0xf6757a, hair: 0x4a2c1a, style: 'bun', skin: 0xf2d3ab, hat: 'tiara', outfit: 'tutu' } },
+  { id: 'ninja', nameKey: 'rare.ninja', icon: '🥷', look: { shirt: 0x181425, pants: 0x181425, hair: 0x181425, style: 'bald', skin: 0xeec39a, hat: 'ninjahood', outfit: 'ninja' } },
 ];
 
 /** Шанс, что зашёл редкий гость: в большом магазине чаще. */
