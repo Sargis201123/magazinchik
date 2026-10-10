@@ -639,8 +639,8 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       const head = el('div', 'ui-row');
       const title = el('span');
       title.append(
-        el('b', '', `${t(SHELF_KINDS[shelf.kind].nameKey)} `),
-        el('span', 'ui-muted', t('shelves.places', { n: shelfCount(shelf), max: shelfCapacity(shelf) })),
+        el('b', '', t(SHELF_KINDS[shelf.kind].nameKey)),
+        el('div', 'ui-muted', t('shelves.places', { n: shelfCount(shelf), max: shelfCapacity(shelf) })),
       );
       head.append(
         title,
