@@ -1038,6 +1038,19 @@ export const en: Record<TextKey, string> = {
   "restart.yes": "Yes, start over",
   "restart.no": "Cancel",
   "debt.limit": "Debt limit: {n} 💰 — above it the bank warns you, then closes the shop.",
+  "title.fullOn": "⛶ Full screen: on",
+  "title.fullOff": "⛶ Full screen: off",
+  "title.home": "📲 Add to home screen",
+  "records.title": "🏆 My records",
+  "records.empty": "Records appear after your first working day.",
+  "records.revenue": "Revenue in a day",
+  "records.served": "Shoppers in a day",
+  "records.combo": "Checkout streak",
+  "records.money": "Most money at once",
+  "records.days": "Longest game, days",
+  "records.value": "{n} (day {day})",
+  "records.runs": "Games started over: {n}. Your records stay with you.",
+  "records.broken": "New record: {name}!",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

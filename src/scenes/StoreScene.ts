@@ -90,6 +90,7 @@ import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impu
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
 import { carryBonus, charmPatience, eyeTheft, ownerTiming } from '../game/owner';
 import { eduardLook, type EduardLook } from '../game/eduard';
+import { updateRecords } from '../game/records';
 import { hasRadio, nextStation, radioExtra, radioPatience, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
 import { showUrgent } from '../ui/urgent';
@@ -5217,7 +5218,9 @@ export class StoreScene extends Phaser.Scene {
     const promoted = state.staff !== this.state.staff;
     // Вечером посетители пишут отзывы: они висят на доске у входа и видны в итогах дня.
     const reviews = reviewsFor(this.stats, finishedDay);
-    this.state = { ...recordDay(state, this.stats), reviews };
+    const best = updateRecords({ ...recordDay(state, this.stats), reviews }, this.stats, finishedDay);
+    this.state = best.state;
+    for (const id of best.broken) extra.push(['🏆', t('records.broken', { name: t(`records.${id}` as TextKey) })]);
     this.stats.spoiled = spoiled;
     this.stats.skimmed = skimmed;
     if (promoted) this.syncStaff();

@@ -4,12 +4,13 @@ import { getLang, setLang, t, type Lang } from '../i18n';
 import { saveLang } from '../i18n/stored';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
+import { addToHomeScreen, canFullscreen, homeScreenStatus, isFullscreen, setFullscreen } from '../platform/telegram';
 import type { StoreState } from '../game/economy';
 import { button, el, injectStyles, pixelize } from './dom';
 
 const css = `
 .ui-title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between;
-  gap: 14px; padding: calc(env(safe-area-inset-top) + 9vh) 24px calc(env(safe-area-inset-bottom) + 28px); box-sizing: border-box;
+  gap: 14px; padding: calc(var(--safe-top, env(safe-area-inset-top)) + 9vh) 24px calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 28px); box-sizing: border-box;
   background: linear-gradient(180deg, rgba(24,20,37,.8) 0%, rgba(24,20,37,.1) 38%, rgba(24,20,37,.1) 55%, rgba(24,20,37,.92) 82%);
   font: 15px/1.4 system-ui, sans-serif; color: #f4ecd8; text-align: center; }
 /* Пока открыт титул, верхняя панель и подсказка спрятаны. */
@@ -57,6 +58,12 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
   document.body.append(root);
   document.body.classList.add('ui-on-title');
 
+  let homeReady = false;
+  void homeScreenStatus().then((ok) => {
+    homeReady = ok;
+    if (ok && root.isConnected) render();
+  });
+
   const render = () => {
     const sign = el('div', 'ui-sign');
     sign.append(el('div', 'ui-awning'), el('h1', '', t('title.name')), el('p', '', t('title.tagline')), el('div', 'ui-bulbs'));
@@ -92,6 +99,24 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
       render();
     }, 'ui-chip');
     langs.append(tunes);
+    // В Telegram на телефоне — полный экран и ярлык на главный экран.
+    if (canFullscreen()) {
+      langs.append(
+        button(isFullscreen() ? t('title.fullOn') : t('title.fullOff'), () => {
+          setFullscreen(!isFullscreen());
+          setTimeout(render, 400);
+        }, 'ui-chip'),
+      );
+    }
+    if (homeReady) {
+      langs.append(
+        button(t('title.home'), () => {
+          addToHomeScreen();
+          homeReady = false;
+          render();
+        }, 'ui-chip'),
+      );
+    }
 
     const controls = el('div', 'ui-title-controls');
     controls.append(play, ...(progress ? [progress] : []), langs);

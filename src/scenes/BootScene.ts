@@ -1,5 +1,6 @@
 import { PRODUCT_IDS } from '../game/economy';
 import Phaser from 'phaser';
+import { syncSave } from '../game/save';
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
 const SPRITES = [
@@ -185,6 +186,12 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.scene.start('store');
+    // Сначала сверить сохранение с облаком Telegram (не дольше пары секунд), потом — в магазин.
+    const start = () => this.scene.isActive('boot') && this.scene.start('store');
+    const timer = setTimeout(start, 4000);
+    void syncSave().finally(() => {
+      clearTimeout(timer);
+      start();
+    });
   }
 }
