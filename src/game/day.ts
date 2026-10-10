@@ -17,6 +17,7 @@ import { questsFor, rankGuests, rewardQuests, seasonFor } from './endless';
 import { adBoost } from './ads';
 import { WEATHER_EFFECTS, weatherFor } from './weather';
 import { endWar } from './war';
+import { eduardGuests, growEduard } from './eduard';
 import { promoGuests } from './promo';
 import { fairGuests } from './fair';
 import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
@@ -45,7 +46,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const day = s.day;
   const night = endDay(s, stats, random);
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = ensurePlan(endWar(addReport(night.state, day, stats, night.spoiledBy)));
+  const next = ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy))));
   return {
     ...night,
     state: next,
@@ -70,7 +71,7 @@ export function inspectionDone(state: StoreState, result: InspectionResult): Sto
   return { ...s, story: { ...s.story, inspectionsPassed: s.story.inspectionsPassed + 1 } };
 }
 
-/** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина, реклама и погода. */
+/** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина, реклама, погода и Эдуард. */
 export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
   (seasonFor(state.day)?.guests ?? 1) *
@@ -80,7 +81,8 @@ export const guestFactor = (state: StoreState): number =>
   promoGuests(state) *
   fairGuests(state.day) *
   lightsGuests(state) *
-  departmentGuests(state);
+  departmentGuests(state) *
+  eduardGuests(state);
 
 /** Секунд между гостями сегодня: рейтинг, помещение, сюжет, сезон и звание. */
 export const spawnIntervalToday = (state: StoreState): number => spawnInterval(state.rating, state.level) / guestFactor(state);

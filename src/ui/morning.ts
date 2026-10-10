@@ -127,6 +127,8 @@ import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
+import { buyRadio, hasRadio, RADIO_PRICE, setStation, STATION_INFO, STATIONS, stationOf } from '../game/radio';
+import { EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_MAX, EDUARD_STAGES, eduardNews, eduardPull, eduardStage, seeEduardNews } from '../game/eduard';
 import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../game/upgrades';
 
 /** Высота «голоса» героев в диалогах. */
@@ -260,6 +262,11 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
     const story = pendingStory(state);
     if (story) {
       card.replaceChildren(storyBox(state, story.kind, story.chapter));
+      return;
+    }
+    const news = eduardNews(state);
+    if (news !== null) {
+      card.replaceChildren(eduardNewsBox(news));
       return;
     }
     if (state.quitNotice?.length) {
@@ -761,7 +768,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
 
   // ---------- Уголки: сладости, кофе, печь, кот и улучшения ----------
 
-  const extrasTab = (state: StoreState): HTMLElement[] => [rackBox(state), coffeeBox(state), ovenBox(state), catBox(state), upgradesBox(state)];
+  const extrasTab = (state: StoreState): HTMLElement[] => [rackBox(state), radioBox(state), coffeeBox(state), ovenBox(state), catBox(state), upgradesBox(state)];
 
   const rackBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
@@ -878,6 +885,56 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       button(t('cat.offer.no'), () => update(declineCat(getState())), 'ui-btn secondary'),
     );
     return box;
+  };
+
+  /** Радио: купить приёмник и выбрать волну. */
+  const radioBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('radio.title')), el('div', 'ui-muted', t('radio.note')));
+    if (!hasRadio(state)) {
+      box.append(button(t('radio.buy', { price: RADIO_PRICE }), () => update(buyRadio(getState()), 'success'), 'ui-btn secondary', state.money < RADIO_PRICE));
+      return box;
+    }
+    const now = stationOf(state);
+    const chips = el('div', 'ui-chips');
+    for (const id of STATIONS) {
+      const info = STATION_INFO[id];
+      chips.append(button(`${info.icon} ${t(info.nameKey)}`, () => update(setStation(getState(), id)), `ui-chip${now === id ? ' active' : ''}`));
+    }
+    box.append(chips, el('div', 'ui-note', t(STATION_INFO[now].descKey)));
+    return box;
+  };
+
+  /** Эдуард открыл магазин побольше: его реплика и что это значит для нас. */
+  const eduardNewsBox = (stage: number) => {
+    const info = EDUARD_STAGES[stage];
+    return dialogBox({
+      caption: t(info.nameKey),
+      portrait: stage === EDUARD_MAX ? 'portrait_eduard_happy' : 'portrait_eduard',
+      name: t('eduard.name'),
+      text: `«${t(info.lineKey)}»`,
+      pitch: VOICE.eduard,
+      after: [el('div', 'ui-note', t('eduard.effect', { n: Math.round(info.pull * 100), r: EDUARD_LOYAL_RATING }))],
+      nextLabel: t('eduard.ok'),
+      onNext: () => update(seeEduardNews(getState())),
+    });
+  };
+
+  /** Магазин Эдуарда по соседству (после сюжета): сколько гостей уводит и когда вырастет. */
+  const eduardBox = (state: StoreState): HTMLElement[] => {
+    const stage = eduardStage(state);
+    if (stage === null || stage === 0) return [];
+    const info = EDUARD_STAGES[stage];
+    const box = el('div', 'ui-box');
+    box.append(
+      el('b', '', t('eduard.title', { name: t(info.nameKey) })),
+      el('div', 'ui-muted', t(eduardPull(state) < info.pull ? 'eduard.box' : 'eduard.boxFull', { n: Math.round(eduardPull(state) * 100), r: EDUARD_LOYAL_RATING, max: Math.round(info.pull * 100) })),
+    );
+    const since = state.eduard?.since ?? state.day;
+    box.append(
+      el('div', 'ui-muted', stage < EDUARD_MAX ? t('eduard.next', { d: Math.max(1, since + EDUARD_GROWTH_DAYS - state.day) }) : t('eduard.top')),
+    );
+    return [box];
   };
 
   /** Улучшения магазина: касса, кофемашина, печь, ночная смена. */
@@ -1605,6 +1662,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       achievementsButton(state),
       replay,
       adsBox(state),
+      ...eduardBox(state),
       rankBox(state),
       albumBox(state),
       decorBox(state),

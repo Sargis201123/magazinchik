@@ -3,6 +3,7 @@
 // поменять на большую — больше места и заметнее.
 
 import type { StoreState } from './economy';
+import { radioImpulse } from './radio';
 
 export interface RackLevel {
   /** Сколько шоколадок помещается. */
@@ -38,7 +39,7 @@ export const rackCapacity = (state: StoreState): number => RACK_LEVELS[rackOf(st
 export function impulseChance(state: StoreState, ahead: number): number {
   const rack = rackOf(state);
   if (rack.stock <= 0) return 0;
-  return Math.min(MAX_IMPULSE, RACK_LEVELS[rack.level].chance + QUEUE_BONUS * ahead);
+  return Math.min(MAX_IMPULSE, RACK_LEVELS[rack.level].chance + QUEUE_BONUS * ahead + radioImpulse(state));
 }
 
 /** Пополнить стойку до qty штук сверху (сколько влезет и на сколько хватит денег). */

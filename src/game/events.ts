@@ -22,6 +22,7 @@ import { rng } from './random';
 import { SUPPLIER_IDS, SUPPLIERS, type SupplierId } from './suppliers';
 import type { Quest } from './endless';
 import { makeWar, WAR_CHANCE, WAR_FROM_DAY } from './war';
+import { eduardWar } from './eduard';
 
 /** Кто делает крупный заказ. */
 export type ClientId = 'chef' | 'school' | 'valya';
@@ -149,7 +150,7 @@ export function planDay(state: StoreState, chances: EventChances = { order: 0.15
     plan.event = makeOrder(state, random);
   } else if (dealRoll < 0.12) {
     plan.event = makeDeal(state, random);
-  } else if (state.day >= WAR_FROM_DAY && !state.war && random() < WAR_CHANCE) {
+  } else if (state.day >= WAR_FROM_DAY && !state.war && random() < WAR_CHANCE * eduardWar(state)) {
     // Эдуард через дорогу снижает цену — отвечать или нет, решает игрок (war.ts).
     const war = makeWar(state, random);
     if (war) plan.event = { kind: 'priceWar', ...war };
