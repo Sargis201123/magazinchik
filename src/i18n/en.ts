@@ -1159,6 +1159,12 @@ export const en: Record<TextKey, string> = {
   'decor.lucky_cat': "Lucky cat",
   'decor.fountain': "Fountain",
   'decor.jukebox': "Jukebox",
+  'buy.shelveTitle': "📦 Stock in the storeroom — {n} pcs fit on the shelves",
+  'buy.shelveText': "Customers only take goods from the shelves. Put them out — and free up storeroom space for more stock.",
+  'open.shelveTitle': "Goods left in the storeroom",
+  'open.shelveText': "There is still room for {n} pcs on the shelves. Customers only take from the shelves — put them out before opening?",
+  'open.shelveYes': "📦 Put out and open",
+  'open.shelveNo': "Open as is",
 
 };
 
