@@ -113,6 +113,7 @@ const SPRITES = [
   'baker_table',
   'bread_rack',
   'bread_tray',
+  'umbrella',
   'carts',
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),
   'mat',

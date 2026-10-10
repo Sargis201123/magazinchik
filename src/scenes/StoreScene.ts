@@ -91,6 +91,7 @@ import { coffeeChance, cupsOf, useCup } from '../game/coffee';
 import { carryBonus, charmPatience, eyeTheft, ownerTiming } from '../game/owner';
 import { eduardLook, type EduardLook } from '../game/eduard';
 import { updateRecords } from '../game/records';
+import { cafeDeliver, type CafeDelivery } from '../game/cafe';
 import { BRAND_BATCH, brandBatchCost, brandToBake, startBrandBatch } from '../game/brand';
 import { hasRadio, nextStation, radioExtra, radioPatience, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
@@ -366,6 +367,8 @@ const THIEF_SPEED = 52;
 /** Форма сотрудников. */
 const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4, baker: 0xf4f4f4, barista: 0x3e8948 };
 const STAFF_SPEED = 60;
+/** Глубина веранды перед кафе «Пончик». */
+const VERANDA_D = 28;
 /** Сколько человек может ждать кофе сразу и что заказывают у стойки. */
 const COFFEE_WAITING = 3;
 const COFFEE_ORDERS: TextKey[] = ['popup.order1', 'popup.order2', 'popup.order3', 'popup.order4'];
@@ -620,6 +623,8 @@ export class StoreScene extends Phaser.Scene {
   private pigeons: Pigeon[] = [];
   /** Таймеры кота и голубей: при перестройке мира старые останавливаются. */
   private critterTimers: Phaser.Time.TimerEvent[] = [];
+  /** Как кафе забрало утром заказ по договору — для итогов дня. */
+  private cafeToday: CafeDelivery | null = null;
   /** Ноты над радио, пока оно играет. */
   private radioTimer?: Phaser.Time.TimerEvent;
   private valyaCame = false;
@@ -2976,8 +2981,9 @@ export class StoreScene extends Phaser.Scene {
    * Крыши с кондиционерами, кирпичные фасады с витринами, вывески.
    */
   private buildNeighbors(next: Layout): void {
-    const bottom = next.h + 4;
-    type Neighbor = { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number; neon: number; dark?: boolean };
+    const base = next.h + 4;
+    // back — здание отступает от тротуара (у кафе перед ним веранда).
+    type Neighbor = { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number; neon: number; dark?: boolean; back?: number };
     // Помещение Эдуарда: пустует, «МегаМарт» по сюжету, а после сюжета — его ларёк, маркет и молл.
     const look = eduardLook(this.state);
     this.builtEduard = look;
@@ -2989,13 +2995,14 @@ export class StoreScene extends Phaser.Scene {
       mall: { h: 190, name: 'eduard.stage3', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040 },
     };
     const neighbors: Neighbor[] = [
-      { x: -136 - WING_OUTER, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860 },
+      { x: -136 - WING_OUTER, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860, back: VERANDA_D },
       { x: -268 - WING_OUTER, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0, neon: 0x7cff8a },
       { x: next.w + 26, w: 128, ...eduard[look] },
       { x: next.w + 170, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc, neon: 0xff8ad8 },
     ];
     const rnd = new Phaser.Math.RandomDataGenerator(['neighbors']);
     for (const n of neighbors) {
+      const bottom = base - (n.back ?? 0);
       const top = bottom - n.h;
       this.add.tileSprite(n.x, top, n.w, n.h - FACADE_H, 'roof').setOrigin(0).setTileScale(1 / ART).setTint(n.roof).setDepth(-3);
       this.add.tileSprite(n.x - 2, top - 3, n.w + 4, 3, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(-3);
@@ -3026,6 +3033,41 @@ export class StoreScene extends Phaser.Scene {
     }
     // Остановка на тротуаре слева.
     this.art(-70 - WING_OUTER, this.streetY - 4, 'bus_stop').setDepth(this.streetY);
+    this.buildVeranda(neighbors[0].x, neighbors[0].w, base);
+  }
+
+  /**
+   * Летняя веранда кафе «Пончик»: деревянный настил с перилами, столики под полосатыми
+   * зонтиками, за ними сидят посетители. Если с кафе договор — днём от него приходит
+   * официант за заказом.
+   */
+  private buildVeranda(x: number, w: number, base: number): void {
+    const top = base - VERANDA_D;
+    this.add.tileSprite(x, top, w, VERANDA_D, 'floor_wood').setOrigin(0).setTileScale(1 / ART).setTint(0xd8b48a).setDepth(-6);
+    // Перила по краю, проход посередине — к двери кафе.
+    const gap = x + w * 0.62;
+    const rail = (rx: number, rw: number) => {
+      this.add.rectangle(rx, base - 2, rw, 2, 0x733e39).setOrigin(0).setDepth(base);
+      for (let px = rx; px <= rx + rw; px += 8) this.add.rectangle(px, base - 5, 1.5, 5, 0x5a3a2a).setOrigin(0).setDepth(base);
+    };
+    rail(x, gap - 10 - x);
+    rail(gap + 10, x + w - gap - 10);
+    const looks = [0xe43b44, 0x0099db, 0x63c74d, 0xfeae34, 0xb55088];
+    const spots = [x + 18, x + 46, x + w - 18];
+    spots.forEach((tx, i) => {
+      const ty = top + 15;
+      this.art(tx, ty + 2, 'cafe_table').setDepth(ty + 6);
+      this.art(tx, ty - 3, 'umbrella').setDepth(ty + 30);
+      // За столиком кто-нибудь сидит (через раз — вдвоём).
+      const guest = this.makePerson(tx - 7, ty + 3, randomLook(looks[i % looks.length]));
+      this.people.delete(guest);
+      guest.setDepth(ty + 5);
+      if (i !== 1) {
+        const second = this.makePerson(tx + 7, ty + 3, randomLook(looks[(i + 2) % looks.length]));
+        this.people.delete(second);
+        second.setDepth(ty + 5);
+      }
+    });
   }
 
   /** Улица вокруг здания: газон с деревьями, тротуар с фонарями и скамейкой, дорога. */
@@ -5165,6 +5207,7 @@ export class StoreScene extends Phaser.Scene {
       at(0.78, () => this.runVisitor(look, t('popup.orderPickup', { name: t(name) }), true));
     }
     if (eduardLook(this.state) !== 'vacant' && day % 5 === 1) at(0.5, () => this.runEduard());
+    if (this.cafeToday) at(0.08, () => this.runCafeWaiter());
   }
 
   /** Гость заходит к кассе, говорит фразу и уходит (заказчик уносит коробку). */
@@ -5202,6 +5245,32 @@ export class StoreScene extends Phaser.Scene {
     await this.walk(sprite, w - 20, this.streetY);
     await this.walk(sprite, eduardDoor, this.streetY);
     await this.walk(sprite, eduardDoor, this.next.h - 2);
+    sprite.destroy();
+  }
+
+  /** Официант кафе «Пончик» приходит к магазину за заказом по договору и уносит коробку. */
+  private async runCafeWaiter(): Promise<void> {
+    const { door, h } = this.layout;
+    const cafeDoor = -136 - WING_OUTER + 112 * 0.62;
+    const sprite = this.makePerson(cafeDoor, this.next.h - 2, { ...randomLook(0x733e39), acc: 'apron', accTint: 0xffffff });
+    await this.walk(sprite, cafeDoor, this.streetY);
+    await this.walk(sprite, door.x, this.streetY);
+    await this.walk(sprite, door.x, h + 15);
+    if (!sprite.active) return;
+    this.setFacing(sprite, 'up');
+    this.popup(sprite.x, sprite.y - 18, t('popup.cafeWaiter'), '#fff3b0');
+    await this.wait(1500);
+    const result = this.cafeToday;
+    if (!sprite.active) return;
+    if (result?.delivered) {
+      sound.coin();
+      this.popup(sprite.x, sprite.y - 18, t('popup.cafePaid', { n: result.pay }), '#c8ffb0');
+      sprite.add(this.art(0, 3, 'box'));
+    } else this.popup(sprite.x, sprite.y - 18, t('popup.cafeShort'), '#ffd0d0');
+    await this.wait(900);
+    await this.walk(sprite, door.x, this.streetY);
+    await this.walk(sprite, cafeDoor, this.streetY);
+    await this.walk(sprite, cafeDoor, this.next.h - 2);
     sprite.destroy();
   }
 
@@ -5389,6 +5458,14 @@ export class StoreScene extends Phaser.Scene {
     this.questsSeen = 0;
     this.valyaCame = false;
     this.syncStaff();
+    // Кафе по соседству забирает свой заказ по договору — сразу, как открылись.
+    const cafe = cafeDeliver(this.state);
+    this.state = cafe.state;
+    this.cafeToday = cafe.result;
+    if (cafe.result) {
+      this.refreshShelves();
+      this.refreshWarehouse();
+    }
     this.scheduleStoryGuests();
     const season = seasonFor(this.state.day);
     if (season) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
@@ -5445,12 +5522,18 @@ export class StoreScene extends Phaser.Scene {
     const ratingBefore = this.state.rating;
     const rankBefore = rankOf(this.state.totalRevenue);
     const { state, spoiled, bill, shortfall, skimmed, order, quests, weekly } = nightCycle(this.state, this.stats);
+    const cafe = this.cafeToday;
+    this.cafeToday = null;
     const extra: [string, string][] = [];
     if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
     if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
     const rankAfter = rankOf(state.totalRevenue);
     if (rankAfter > rankBefore) extra.push(['🏅', t('summary.rankUp', { name: rankName(rankAfter, t) })]);
     if (order) extra.push([t('summary.order'), order.delivered ? t('summary.orderDone', { n: order.earned }) : t('summary.orderFailed')]);
+    if (cafe) {
+      const end = cafe.ended === 'done' ? ` · ${t('summary.cafeDone')}` : cafe.ended === 'canceled' ? ` · ${t('summary.cafeCanceled')}` : '';
+      extra.push([t('summary.cafe'), `${cafe.delivered ? t('summary.cafePaid', { n: cafe.pay }) : t('summary.cafeMissed')}${end}`]);
+    }
     if (this.inspection) {
       const r = this.inspection;
       extra.push([

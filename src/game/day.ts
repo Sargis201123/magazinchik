@@ -19,6 +19,7 @@ import { WEATHER_EFFECTS, weatherFor } from './weather';
 import { endWar } from './war';
 import { eduardGuests, growEduard } from './eduard';
 import { afterBills } from './bankruptcy';
+import { cafeMorning } from './cafe';
 import { promoGuests } from './promo';
 import { fairGuests } from './fair';
 import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
@@ -49,7 +50,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy))));
+  const next = cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random);
   return {
     ...night,
     state: next,
