@@ -365,6 +365,9 @@ const THIEF_SPEED = 52;
 /** Форма сотрудников. */
 const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4, baker: 0xf4f4f4, barista: 0x3e8948 };
 const STAFF_SPEED = 60;
+/** Сколько человек может ждать кофе сразу и что заказывают у стойки. */
+const COFFEE_WAITING = 3;
+const COFFEE_ORDERS: TextKey[] = ['popup.order1', 'popup.order2', 'popup.order3', 'popup.order4'];
 /** Сколько кассир пробивает одного покупателя при обычной скорости. */
 const INSPECTOR_SHIRT = 0x222034;
 /** Соседка Валентина заходит раз в день — в вишнёвой кофте и с седыми волосами. */
@@ -624,7 +627,10 @@ export class StoreScene extends Phaser.Scene {
   private running = false;
   /** Кофемашина (если куплена) и занята ли она. */
   private coffeeImg?: Phaser.GameObjects.Image;
-  private coffeeBusy = false;
+  /** Кто сейчас у стойки кофейни делает заказ или забирает. */
+  private coffeeCounter = false;
+  /** Заказы кофе по очереди: бариста варит и отдаёт (done). */
+  private coffeeOrders: { c: Customer; done: () => void }[] = [];
   private oven?: Oven;
   /** До какого времени в зале пахнет свежим хлебом. */
   private aromaUntil = 0;
@@ -850,6 +856,9 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.killAll();
     this.choreId++;
     this.sellerBusy = false;
+    // Кто ждал кофе — уже не дождётся: отпускаем, чтобы никто не застрял.
+    for (const o of this.coffeeOrders.splice(0)) o.done();
+    this.coffeeCounter = false;
     this.carryingTrash = false;
     this.urgentVanBusy = false;
     this.shelfViews = [];
@@ -1844,7 +1853,6 @@ export class StoreScene extends Phaser.Scene {
   /** Кофейня во флигеле: кофемашина у стены, стойка, за ней бариста; в углу столик. */
   private buildCoffee(): void {
     this.coffeeImg = undefined;
-    this.coffeeBusy = false;
     if (!this.coffeeOpen()) return;
     const { x, y } = this.layout.coffee;
     this.coffeeImg = this.art(x + 10, y + 19, coffeeSprite(this.state)).setDepth(y + 20);
@@ -1852,39 +1860,62 @@ export class StoreScene extends Phaser.Scene {
     this.art(x + 47, y + 49, 'cafe_table').setDepth(y + 55);
   }
 
-  /** Где стоит покупатель у стойки кофейни. */
-  private coffeeSpot(): { x: number; y: number } {
+  /** У стойки: где делают заказ и куда отходят ждать (у столика и у стены). */
+  private coffeeSpots(): { order: { x: number; y: number }; wait: { x: number; y: number }[] } {
     const { x, y } = this.layout.coffee;
-    return { x: x + 26, y: y + 44 };
+    return {
+      order: { x: x + 24, y: y + 43 },
+      wait: [
+        { x: x + 38, y: y + 45 },
+        { x: x + 10, y: y + 47 },
+        { x: x + 54, y: y + 40 },
+      ],
+    };
   }
 
-  /** Покупатель с покупками иногда заходит в кофейню: бариста варит, платят на кассе. */
+  /**
+   * Покупатель с покупками иногда заходит в кофейню: подходит к стойке, заказывает,
+   * отходит ждать; бариста варит заказы по очереди и зовёт — покупатель забирает стаканчик.
+   * Платят на кассе вместе с покупками.
+   */
   private async buyCoffee(c: Customer): Promise<void> {
     const machine = this.coffeeImg;
     const barista = this.workers.get('barista');
-    if (!machine?.active || !barista || this.coffeeBusy || c.thief || c.items.length === 0 || Math.random() >= coffeeChance(this.state)) return;
+    if (!machine?.active || !barista || this.coffeeOrders.length >= COFFEE_WAITING || c.thief || c.items.length === 0) return;
+    if (Math.random() >= coffeeChance(this.state)) return;
     const next = useCup(this.state);
     if (!next) return;
     this.state = next;
-    this.coffeeBusy = true;
     const room = this.layout.coffee;
-    const spot = this.coffeeSpot();
-    const route = [room.doorway, room.inside, { x: room.inside.x - 4, y: spot.y }, spot];
-    for (const p of route) await this.walk(c.sprite, p.x, p.y);
-    if (c.gone || !c.sprite.active || !machine.active) {
-      this.coffeeBusy = false;
+    const spots = this.coffeeSpots();
+    const alive = () => !c.gone && c.sprite.active;
+    for (const p of [room.doorway, room.inside]) await this.walk(c.sprite, p.x, p.y);
+    // К стойке по одному: пока там кто-то заказывает или забирает — подождать.
+    await this.waitCounter(c);
+    if (!alive()) return;
+    this.coffeeCounter = true;
+    await this.walk(c.sprite, spots.order.x, spots.order.y);
+    if (!alive()) {
+      this.coffeeCounter = false;
       return;
     }
     this.setFacing(c.sprite, 'up');
-    // Бариста поворачивается к машине и варит; над машиной пар.
-    if (barista.sprite.active) this.setFacing(barista.sprite, 'left');
-    sound.hiss(brewSeconds(this.state) * 0.8, 2600, 0.035);
-    const steam = this.time.addEvent({ delay: 260, repeat: Math.floor((brewSeconds(this.state) * 1000) / 260), callback: () => this.steamPuff(machine.x, machine.y - 6) });
-    await this.wait((brewSeconds(this.state) * 1000) / this.workerPace(barista));
-    steam.remove();
-    if (barista.sprite.active) this.setFacing(barista.sprite, 'down');
-    this.coffeeBusy = false;
-    if (!this.sys.isActive() || c.gone || !c.sprite.active) return;
+    this.popup(c.sprite.x, c.sprite.y - 18, t(Phaser.Utils.Array.GetRandom(COFFEE_ORDERS)), '#ffffff');
+    await this.wait(900);
+    this.coffeeCounter = false;
+    if (!alive()) return;
+    // Отходит ждать, пока сварят.
+    const spot = spots.wait[this.coffeeOrders.length % spots.wait.length];
+    const ready = new Promise<void>((done) => this.coffeeOrders.push({ c, done }));
+    await this.walk(c.sprite, spot.x, spot.y);
+    if (alive()) this.setFacing(c.sprite, 'up');
+    await ready;
+    if (!alive() || !this.sys.isActive()) return;
+    await this.waitCounter(c);
+    this.coffeeCounter = true;
+    await this.walk(c.sprite, spots.order.x + 6, spots.order.y);
+    this.coffeeCounter = false;
+    if (!alive()) return;
     const cup = this.art(5, 1, 'cup');
     c.sprite.add(cup);
     c.extras = [...(c.extras ?? []), { kind: 'coffee', price: coffeePrice(this.state) }];
@@ -1892,14 +1923,40 @@ export class StoreScene extends Phaser.Scene {
     sound.pop(2);
     this.popup(c.sprite.x, c.sprite.y - 18, t('popup.coffee', { n: coffeePrice(this.state) }), '#fff3b0');
     if (cupsOf(this.state) === 0) this.time.delayedCall(900, () => this.popup(machine.x + 10, machine.y - 16, t('popup.noCups'), '#ffd0d0'));
-    for (const p of [...route].reverse().slice(1)) await this.walk(c.sprite, p.x, p.y);
+    for (const p of [room.inside, room.doorway]) await this.walk(c.sprite, p.x, p.y);
   }
 
-  /** Бариста стоит за стойкой: варит, когда заходят покупатели (buyCoffee). */
+  /** Подождать, пока у стойки освободится место (не дольше 8 секунд). */
+  private async waitCounter(c: Customer): Promise<void> {
+    for (let i = 0; i < 32 && this.coffeeCounter && !c.gone; i++) await this.wait(250);
+  }
+
+  /** Бариста варит заказы по очереди: пар над машиной, «Готово!» — покупатель подходит за стаканчиком. */
   private async baristaLoop(w: Worker, gen: number): Promise<void> {
     while (this.alive(gen)) {
-      if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
-      await this.wait(800);
+      const order = this.coffeeOrders[0];
+      const machine = this.coffeeImg;
+      if (!order || !machine?.active) {
+        if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
+        this.setFacing(w.sprite, 'down');
+        await this.wait(300);
+        continue;
+      }
+      // К машине: варит, над машиной пар.
+      await this.workerWalk(w, machine.x + 7, w.home.y);
+      if (!this.alive(gen)) return;
+      this.setFacing(w.sprite, 'left');
+      sound.hiss(brewSeconds(this.state) * 0.8, 2600, 0.035);
+      const steam = this.time.addEvent({ delay: 260, repeat: Math.floor((brewSeconds(this.state) * 1000) / 260), callback: () => this.steamPuff(machine.x, machine.y - 6) });
+      await this.workerWait(w, brewSeconds(this.state) * 1000);
+      steam.remove();
+      if (!this.alive(gen)) return;
+      await this.workerWalk(w, w.home.x, w.home.y);
+      this.setFacing(w.sprite, 'down');
+      this.popup(w.sprite.x, w.sprite.y - 18, t('popup.coffeeReady'), '#c8ffb0');
+      if (this.coffeeOrders[0] === order) this.coffeeOrders.shift();
+      order.done();
+      await this.wait(500);
     }
   }
 
