@@ -1036,6 +1036,19 @@ export const ru = {
   "restart.yes": "Да, начать заново",
   "restart.no": "Отмена",
   "debt.limit": "Предел долга: {n} 💰 — выше банк предупредит, а потом закроет магазин.",
+  "title.fullOn": "⛶ Во весь экран: вкл",
+  "title.fullOff": "⛶ Во весь экран: выкл",
+  "title.home": "📲 На главный экран",
+  "records.title": "🏆 Мои рекорды",
+  "records.empty": "Рекорды появятся после первого рабочего дня.",
+  "records.revenue": "Выручка за день",
+  "records.served": "Покупателей за день",
+  "records.combo": "Серия у кассы",
+  "records.money": "Денег сразу",
+  "records.days": "Самая долгая игра, дней",
+  "records.value": "{n} (день {day})",
+  "records.runs": "Игр начато заново: {n}. Рекорды остаются с тобой.",
+  "records.broken": "Новый рекорд: {name}!",
 } as const;
 
 export type TextKey = keyof typeof ru;

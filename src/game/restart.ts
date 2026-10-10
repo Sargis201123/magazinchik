@@ -25,6 +25,7 @@ export function restartGame(old: StoreState): StoreState {
     decor: { owned, active },
     achievements: [...old.achievements],
     gift: old.gift,
+    records: old.records,
     tourDone: true,
     // Прошлые игры — для экрана «магазин закрыт» и будущих рекордов.
     runs: (old.runs ?? 0) + 1,

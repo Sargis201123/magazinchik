@@ -129,7 +129,8 @@ import { achievementsButton } from './achievements';
 import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
-import { saveGame } from '../game/save';
+import { RECORD_ICONS, RECORD_IDS } from '../game/records';
+import { flushCloud, saveGame } from '../game/save';
 import { buyRadio, hasRadio, RADIO_PRICE, setStation, STATION_INFO, STATIONS, stationOf } from '../game/radio';
 import { EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_MAX, EDUARD_STAGES, eduardNews, eduardPull, eduardStage, seeEduardNews } from '../game/eduard';
 import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../game/upgrades';
@@ -914,12 +915,36 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
   /** Новая игра: сохранить и перезапустить — сцена соберётся с нуля. */
   const restart = () => {
     saveGame(restartGame(getState()));
-    location.reload();
+    // Новую игру сразу в облако, иначе при запуске подхватилась бы старая.
+    const reload = () => location.reload();
+    setTimeout(reload, 3000);
+    void flushCloud().finally(reload);
   };
 
   /** Что останется после новой игры. */
   const keepsLine = (state: StoreState) =>
     el('div', 'ui-note', t('restart.keeps', { decor: premiumDecor(state).length, ach: state.achievements.length }));
+
+  /** Личные рекорды (переживают новую игру). */
+  const recordsBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('records.title')));
+    const records = state.records ?? {};
+    if (!Object.keys(records).length) {
+      box.append(el('div', 'ui-muted', t('records.empty')));
+      return box;
+    }
+    for (const id of RECORD_IDS) {
+      const best = records[id];
+      if (!best) continue;
+      const r = el('div', 'ui-row');
+      const value = best.day ? t('records.value', { n: best.n, day: best.day }) : String(best.n);
+      r.append(el('span', '', `${RECORD_ICONS[id]} ${t(`records.${id}` as TextKey)}`), el('b', '', value));
+      box.append(r);
+    }
+    if (state.runs) box.append(el('div', 'ui-muted', t('records.runs', { n: state.runs })));
+    return box;
+  };
 
   /** Красная строка утром, пока долг выше предела. */
   const debtLine = (state: StoreState): HTMLElement[] => {
@@ -1767,6 +1792,7 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       adsBox(state),
       ...eduardBox(state),
       rankBox(state),
+      recordsBox(state),
       albumBox(state),
       decorBox(state),
     ];

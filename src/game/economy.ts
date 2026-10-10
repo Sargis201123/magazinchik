@@ -491,6 +491,8 @@ export interface StoreState {
   bankrupt?: boolean;
   /** Сколько игр начато заново. */
   runs?: number;
+  /** Личные рекорды игрока (records.ts) — переживают новую игру. */
+  records?: import('./records').Records;
   /** Автозаказ: сколько чего держать на складе и включён ли он (reorder.ts). */
   autoOrder?: { on: boolean; lines: { sid: string; pid: ProductId; qty: number }[] };
   /** Бабушкино обучение: false — показать (новая игра или «пройти заново»), нет поля — старое сохранение. */

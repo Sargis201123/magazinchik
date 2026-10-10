@@ -12,13 +12,13 @@ const css = `
 .ui-hud, .ui-stock, .ui-hint { max-width: min(100vw, 56.25dvh); margin: 0 auto; box-sizing: border-box; }
 .ui-hud span { background: rgba(24, 20, 37, .72); padding: 4px 8px; border-radius: 6px; }
 .ui-hud { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
-  padding: calc(env(safe-area-inset-top) + 8px) 12px 8px; font: 600 15px/1.2 system-ui, sans-serif;
+  padding: calc(var(--safe-top, env(safe-area-inset-top)) + 8px) 12px 8px; font: 600 15px/1.2 system-ui, sans-serif;
   color: #fff; text-shadow: 0 1px 0 #000; pointer-events: none; }
-.ui-stock { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 32px); padding: 0 10px;
+.ui-stock { position: fixed; left: 0; right: 0; top: calc(var(--safe-top, env(safe-area-inset-top)) + 32px); padding: 0 10px;
   text-align: center; font: 13px/1.5 system-ui, sans-serif; color: #e6e1d6; pointer-events: none; }
 /* С новыми отделами товаров много: мельче и в две строки, а не за край экрана. */
 .ui-stock.dense { font-size: 11px; }
-.ui-hint { position: fixed; left: 0; right: 0; padding: 0 12px; bottom: calc(env(safe-area-inset-bottom) + 12px);
+.ui-hint { position: fixed; left: 0; right: 0; padding: 0 12px; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 12px);
   text-align: center; font: 13px system-ui, sans-serif; color: #e6e1d6; pointer-events: none; }
 .ui-modal { position: fixed; inset: 0; background: rgba(15, 12, 22, .78); display: flex; align-items: center;
   justify-content: center; padding: 16px; overflow-y: auto; }
@@ -162,7 +162,7 @@ const css = `
 .ui-decor-status { font-size: 11.5px; font-weight: 700; color: #6a5f58; }
 .ui-decor.active .ui-decor-status { color: #3e8948; }
 /* Всплывашка «Новое достижение!» сверху: выезжает, висит и уезжает. */
-.ui-toast { position: fixed; z-index: 40; left: 50%; top: calc(env(safe-area-inset-top) + 62px); display: flex; gap: 10px;
+.ui-toast { position: fixed; z-index: 40; left: 50%; top: calc(var(--safe-top, env(safe-area-inset-top)) + 62px); display: flex; gap: 10px;
   align-items: center; padding: 8px 14px 8px 10px; background: #fbf6ea; color: #2b2233; border: 3px solid #2b2233;
   border-radius: 10px; box-shadow: 0 4px 0 #2b2233; font: 13px/1.3 system-ui, sans-serif; pointer-events: none;
   transform: translate(-50%, -160%); transition: transform .45s cubic-bezier(.3, 1.4, .5, 1); max-width: 88vw; }
@@ -228,11 +228,11 @@ const css = `
 .ui-review-stars { color: #f77622; font-size: 14px; letter-spacing: 1px; }
 .ui-review-text { font-size: 14px; line-height: 1.3; color: #2b2233; margin: 2px 0; }
 .ui-review-who { font-size: 12px; color: #6a5f58; text-align: right; }
-.ui-speed { position: fixed; right: max(10px, calc((100vw - min(100vw, 56.25dvh)) / 2 + 10px)); bottom: calc(env(safe-area-inset-bottom) + 40px);
+.ui-speed { position: fixed; right: max(10px, calc((100vw - min(100vw, 56.25dvh)) / 2 + 10px)); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 40px);
   font: 800 14px system-ui, sans-serif; padding: 7px 10px; border: 2px solid #2b2233; border-radius: 8px; background: #f4ecd8;
   color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
 .ui-speed.on { background: #fee761; }
-.ui-urgent { bottom: calc(env(safe-area-inset-bottom) + 92px); }
+.ui-urgent { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 92px); }
 .ui-report-chart { display: flex; align-items: flex-end; gap: 6px; height: 110px; margin: 10px 0; padding: 0 2px; }
 .ui-report-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
 .ui-report-bar { width: 100%; background: #63c74d; border: 2px solid #2b2233; border-radius: 4px 4px 0 0; }
