@@ -1158,6 +1158,12 @@ export const ru = {
   'decor.lucky_cat': "Кот-удача",
   'decor.fountain': "Фонтан",
   'decor.jukebox': "Музыкальный автомат",
+  'buy.shelveTitle': "📦 На складе лежит товар — {n} шт. влезет на полки",
+  'buy.shelveText': "Покупатели берут только с полок. Разложи — и место на складе освободится для новой закупки.",
+  'open.shelveTitle': "Товар остался на складе",
+  'open.shelveText': "На полках есть место ещё для {n} шт. Покупатели берут только с полок — разложить перед открытием?",
+  'open.shelveYes': "📦 Разложить и открыть",
+  'open.shelveNo': "Открыть так",
 } as const;
 
 export type TextKey = keyof typeof ru;
