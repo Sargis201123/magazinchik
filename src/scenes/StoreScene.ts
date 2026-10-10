@@ -92,6 +92,8 @@ import { carryBonus, charmPatience, eyeTheft, ownerTiming } from '../game/owner'
 import { eduardLook, type EduardLook } from '../game/eduard';
 import { updateRecords } from '../game/records';
 import { cafeDeliver, type CafeDelivery } from '../game/cafe';
+import { answerSpecial, grannyRepays, makeSpecial, type SpecialKind, type SpecialVisit } from '../game/special';
+import { showChoice } from '../ui/choice';
 import { BRAND_BATCH, brandBatchCost, brandToBake, startBrandBatch } from '../game/brand';
 import { hasRadio, nextStation, radioExtra, radioPatience, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
@@ -5208,10 +5210,109 @@ export class StoreScene extends Phaser.Scene {
     }
     if (eduardLook(this.state) !== 'vacant' && day % 5 === 1) at(0.5, () => this.runEduard());
     if (this.cafeToday) at(0.08, () => this.runCafeWaiter());
+    // Особый гость с выбором (бизнесмен, бабушка без денег, ребёнок с мелочью).
+    const special = makeSpecial(this.state, Math.random);
+    if (special) at(Phaser.Math.FloatBetween(0.2, 0.6), () => this.runSpecial(special));
+    // Добрая бабушка возвращает долг.
+    if (this.state.grannyOwed && Math.random() < 0.5) at(0.35, () => this.runGrannyRepay());
+  }
+
+  /**
+   * Особый гость: заходит, встаёт у кассы, над ним «!». Нажми — окно выбора.
+   * Не ответил за 14 секунд — гость уходит сам.
+   */
+  private async runSpecial(visit: SpecialVisit): Promise<void> {
+    const { door, sellerHome } = this.layout;
+    const looks: Record<SpecialKind, Look> = {
+      business: { shirt: 0x262b44, skin: Phaser.Utils.Array.GetRandom(SKINS), pants: 0x181425, hair: 0x181425, style: 'short', acc: 'tie' },
+      granny: { shirt: 0x8f563b, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xd8d8e0, style: 'bun', glasses: true },
+      kid: { ...randomLook(Phaser.Utils.Array.GetRandom(HAT_COLORS)), kid: true, style: 'short', bag: 'backpack', bagTint: 0xe43b44 },
+    };
+    const start = this.streetSpawn();
+    const sprite = this.makePerson(start.x, start.y, looks[visit.kind]);
+    await this.walk(sprite, door.x, this.streetY);
+    await this.walk(sprite, door.x, door.y - 10);
+    await this.walk(sprite, sellerHome.x - 30, sellerHome.y - 16);
+    if (!sprite.active || !this.running) {
+      sprite.destroy();
+      return;
+    }
+    this.setFacing(sprite, 'right');
+    const item = PRODUCTS[visit.product];
+    this.popup(sprite.x, sprite.y - 18, t(`special.${visit.kind}.hello` as TextKey), '#fff3b0');
+    // «!» над головой мигает, пока не ответишь.
+    const mark = this.add.text(0, -24, '!', { fontFamily: UI_FONT, fontSize: '10px', color: '#fee761', stroke: '#181425', strokeThickness: 3 }).setOrigin(0.5).setResolution(4);
+    sprite.add(mark);
+    const blink = this.tweens.add({ targets: mark, y: -27, duration: 400, yoyo: true, repeat: -1 });
+    let answered: boolean | null = null;
+    let closeChoice: (() => void) | null = null;
+    const hit = this.add.zone(sprite.x, sprite.y - 6, 22, 30).setInteractive({ useHandCursor: true }).setDepth(2000);
+    const decided = new Promise<void>((resolve) => {
+      const finish = (yes: boolean | null) => {
+        if (answered !== null) return;
+        answered = yes;
+        resolve();
+      };
+      hit.on('pointerup', () =>
+        this.tap(() => {
+          if (closeChoice) return;
+          closeChoice = showChoice({
+            title: t(`special.${visit.kind}.title` as TextKey),
+            text: t(`special.${visit.kind}.text` as TextKey, { n: visit.qty, item: `${item.icon} ${t(item.nameKey)}`, pay: visit.pay, full: this.state.prices[visit.product] * visit.qty }),
+            note: t(`special.${visit.kind}.note` as TextKey),
+            yes: t(`special.${visit.kind}.yes` as TextKey),
+            no: t(`special.${visit.kind}.no` as TextKey),
+            onYes: () => finish(true),
+            onNo: () => finish(false),
+          });
+        }),
+      );
+      this.time.delayedCall(14000, () => {
+        closeChoice?.();
+        if (answered === null) answered = false;
+        resolve();
+      });
+    });
+    await decided;
+    hit.destroy();
+    blink.stop();
+    mark.destroy();
+    if (!sprite.active) return;
+    const yes = answered === true;
+    const res = answerSpecial(this.state, visit, yes);
+    this.state = res.state;
+    this.refreshShelves();
+    this.refreshWarehouse();
+    this.hud.update(this.state, this.timeLeft);
+    if (yes && res.money) {
+      sound.coin();
+      this.popup(sprite.x, sprite.y - 18, `+${res.money} 💰`, '#c8ffb0');
+    }
+    if (res.rating > 0) this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `★ +${res.rating}`, '#fee761'));
+    if (res.rating < 0) this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `★ ${res.rating}`, '#ffd0d0'));
+    this.emote(sprite, yes ? 'emo_heart' : 'emo_angry');
+    if (yes && visit.kind === 'business') sprite.add(this.art(0, 3, 'box'));
+    if (yes) sprite.add(this.art(5, 1, `item_${visit.product}`).setScale(1 / ART));
+    await this.wait(1200);
+    await this.walk(sprite, door.x, door.y - 10);
+    await this.strollAway(sprite);
+  }
+
+  /** Добрая бабушка возвращается с пирожками и отдаёт долг вдвое. */
+  private async runGrannyRepay(): Promise<void> {
+    const owed = grannyRepays(this.state).paid;
+    if (!owed) return;
+    const look: Look = { shirt: 0x8f563b, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xd8d8e0, style: 'bun', glasses: true };
+    // Деньги — когда бабушка дошла до кассы; не дошла (день кончился) — придёт в другой раз.
+    await this.runVisitor(look, t('special.granny.repay', { n: owed }), false, () => {
+      this.state = grannyRepays(this.state).state;
+      sound.coin();
+      this.hud.update(this.state, this.timeLeft);
+    });
   }
 
   /** Гость заходит к кассе, говорит фразу и уходит (заказчик уносит коробку). */
-  private async runVisitor(look: Look, line: string, carriesBox = false): Promise<void> {
+  private async runVisitor(look: Look, line: string, carriesBox = false, onArrive?: () => void): Promise<void> {
     const { door, sellerHome } = this.layout;
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, look);
@@ -5223,6 +5324,7 @@ export class StoreScene extends Phaser.Scene {
     this.setFacing(sprite, 'right');
     this.popup(sprite.x, sprite.y - 18, line, '#fff3b0');
     this.emote(sprite, 'emo_heart');
+    onArrive?.();
     await this.wait(2200);
     if (carriesBox && sprite.active) sprite.add(this.art(0, 3, 'box'));
     await this.walk(sprite, door.x, door.y - 10);
