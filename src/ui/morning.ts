@@ -153,6 +153,8 @@ interface MorningOptions {
   getState: () => StoreState;
   setState: (s: StoreState) => void;
   onOpen: () => void;
+  /** Бабушка закончила обучение — теперь можно вручить её гостинец. */
+  onTourDone?: () => void;
 }
 
 type Tab = 'buy' | 'warehouse' | 'shelves' | 'extras' | 'staff' | 'store';
@@ -224,7 +226,7 @@ function artRow(texture: string, opts: { name: string; price?: number; sub?: str
 const percent = (k: number): string => `${k >= 1 ? '+' : '−'}${Math.round(Math.abs(k - 1) * 100)}%`;
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen }: MorningOptions): void {
+export function showMorning({ getState, setState, onOpen, onTourDone }: MorningOptions): void {
   const { card, close } = openModal();
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
@@ -396,6 +398,11 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       tourStep = 0;
       endTour();
       update({ ...getState(), tourDone: true }, last ? 'success' : 'tap');
+      // Подарок — только после обучения: окно гостинца не мешает бабушкиным подсказкам.
+      if (onTourDone) {
+        onTourDone();
+        render();
+      }
     };
     const skip = button(t('tour.skip'), finish, 'ui-tour-skip');
     tourEl.append(
