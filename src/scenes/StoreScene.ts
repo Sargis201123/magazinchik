@@ -91,6 +91,7 @@ import { coffeeChance, cupsOf, useCup } from '../game/coffee';
 import { carryBonus, charmPatience, eyeTheft, ownerTiming } from '../game/owner';
 import { eduardLook, type EduardLook } from '../game/eduard';
 import { updateRecords } from '../game/records';
+import { BRAND_BATCH, brandBatchCost, brandToBake, startBrandBatch } from '../game/brand';
 import { hasRadio, nextStation, radioExtra, radioPatience, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
 import { showUrgent } from '../ui/urgent';
@@ -444,6 +445,8 @@ interface Oven {
   state: 'idle' | 'baking' | 'ready';
   start: number;
   timer?: Phaser.Time.TimerEvent;
+  /** Что в печи: хлеб или своя выпечка «От бабушки». */
+  product: ProductId;
 }
 
 /** Ночью заходят таксисты, студенты и полуночники — в тёмном. */
@@ -2005,7 +2008,7 @@ export class StoreScene extends Phaser.Scene {
     const bar = this.add.rectangle(at.x - 8, at.y - 13, 16, 3, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
     const fill = this.add.rectangle(at.x - 7.5, at.y - 13, 0, 2, 0xfeae34).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
     const fx = img.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 6);
-    this.oven = { img, glow, bread, bar, fill, fx, state: 'idle', start: 0 };
+    this.oven = { img, glow, bread, bar, fill, fx, state: 'idle', start: 0, product: 'bread' };
     img.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.tapOven()));
   }
 
@@ -2018,10 +2021,10 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Пекарь ставит противень: деньги за муку, через время хлеб готов. */
-  private startOven(): void {
+  private startOven(product: ProductId = 'bread'): void {
     const oven = this.oven;
     if (!oven || oven.state !== 'idle') return;
-    const next = startBatch(this.state);
+    const next = product === 'bread' ? startBatch(this.state) : startBrandBatch(this.state, product);
     if (!next) {
       const why = this.state.money < ovenBatchCost(this.state) ? t('popup.ovenMoney') : t('popup.ovenFull');
       this.popup(oven.img.x - 10, oven.img.y - 18, why, '#ffd0d0');
@@ -2031,7 +2034,9 @@ export class StoreScene extends Phaser.Scene {
     this.state = next;
     haptic.tap();
     sound.hiss(0.5, 900, 0.04);
-    this.popup(oven.img.x - 10, oven.img.y - 18, t('popup.ovenStart', { n: ovenBatchCost(this.state) }), '#fff3b0');
+    const cost = product === 'bread' ? ovenBatchCost(this.state) : brandBatchCost(product);
+    this.popup(oven.img.x - 10, oven.img.y - 18, `${PRODUCTS[product].icon} ${t('popup.ovenStart', { n: cost })}`, '#fff3b0');
+    oven.product = product;
     oven.state = 'baking';
     oven.start = this.time.now;
     oven.timer = this.time.delayedCall(ovenBake(this.state) * 1000, () => this.breadReady());
@@ -2091,9 +2096,10 @@ export class StoreScene extends Phaser.Scene {
         await this.workerWait(w, 400);
         if (!this.alive(gen)) return;
         if (oven.state !== 'ready') continue;
+        const product = oven.product;
         this.resetOven();
         w.carried.setTexture('bread_tray').setPosition(0, 1).setVisible(true);
-        const index = this.breadShelfIndex();
+        const index = this.breadShelfIndex(product);
         const slot = index >= 0 ? this.layout.slots[index] : null;
         await this.workerWalk(w, room.inside.x, room.inside.y);
         await this.workerWalk(w, room.doorway.x, room.doorway.y);
@@ -2101,15 +2107,17 @@ export class StoreScene extends Phaser.Scene {
         await this.workerWait(w, PLACE_MS);
         if (!this.alive(gen)) return;
         w.carried.setVisible(false).setTexture('box').setPosition(0, 3);
-        this.freshBread(slot ? { x: slot.x, y: slot.y - 18 } : room.doorway);
+        this.freshBread(slot ? { x: slot.x, y: slot.y - 18 } : room.doorway, product);
         await this.workerWalk(w, room.doorway.x, room.doorway.y);
         await this.workerWalk(w, room.inside.x, room.inside.y);
         continue;
       }
-      if (oven.state === 'idle' && bakerShouldBake(this.state)) {
+      // Сначала хлеб; когда хлеба хватает — своя выпечка «От бабушки».
+      const next = oven.state === 'idle' ? (bakerShouldBake(this.state) ? 'bread' : brandToBake(this.state)) : null;
+      if (next) {
         await this.workerWalk(w, atOven.x, atOven.y);
         if (!this.alive(gen)) return;
-        this.startOven();
+        this.startOven(next);
         continue;
       }
       // Пока печётся — месит тесто у стола.
@@ -2120,19 +2128,20 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Хлебная полка, где есть место (первая по порядку); -1 — нет. */
-  private breadShelfIndex(): number {
-    return this.state.shelves.findIndex((s) => !s.broken && canPlace('bread', s) && shelfFree(s) > 0);
+  private breadShelfIndex(product: ProductId = 'bread'): number {
+    return this.state.shelves.findIndex((s) => !s.broken && canPlace(product, s) && shelfFree(s) > 0);
   }
 
   /** Свежий хлеб из печи — на полки (лишнее на склад); по залу от двери пекарни идёт запах. */
-  private freshBread(at: { x: number; y: number }): void {
-    const out = takeOutBread(this.state);
+  private freshBread(at: { x: number; y: number }, product: ProductId = 'bread'): void {
+    const out = product === 'bread' ? takeOutBread(this.state) : takeOutBread(this.state, BRAND_BATCH, product);
     this.state = out.state;
     this.refreshShelves();
     this.refreshWarehouse();
     sound.hiss(0.6, 1400, 0.04);
     sound.good();
-    this.popup(at.x, at.y, t('popup.freshBread', { n: out.onShelves }), '#c8ffb0');
+    const text = product === 'bread' ? t('popup.freshBread', { n: out.onShelves }) : t('popup.freshOwn', { icon: PRODUCTS[product].icon, n: out.onShelves });
+    this.popup(at.x, at.y, text, '#c8ffb0');
     this.time.delayedCall(900, () => this.popup(this.layout.w / 2, this.layout.wallH + 50, t('popup.aroma'), '#fff3b0'));
     this.aromaUntil = this.time.now + AROMA_SECONDS * 1000;
     // Тёплые завитки запаха плывут из пекарни по залу.
@@ -5428,8 +5437,9 @@ export class StoreScene extends Phaser.Scene {
     }
     // Хлеб, оставшийся в печи к закрытию, продавец вынимает сам.
     if (this.oven && this.oven.state !== 'idle') {
+      const product = this.oven.product;
       this.resetOven();
-      this.state = takeOutBread(this.state).state;
+      this.state = (product === 'bread' ? takeOutBread(this.state) : takeOutBread(this.state, BRAND_BATCH, product)).state;
     }
     const finishedDay = this.state.day;
     const ratingBefore = this.state.rating;

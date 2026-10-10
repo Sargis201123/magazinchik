@@ -1073,6 +1073,21 @@ export const en: Record<TextKey, string> = {
   "popup.order3": "Americano!",
   "popup.order4": "Hot chocolate, please",
   "popup.coffeeReady": "☕ Ready!",
+  "product.pies": "Pies",
+  "product.buns": "Cinnamon buns",
+  "product.honeycake": "Honey cake",
+  "brand.title": "👵 Own brand “From Grandma”",
+  "brand.locked": "Upgrade the oven to the bakery cabinet (Store tab → Equipment) and the baker will start baking his own goods from Grandma's recipes.",
+  "brand.note": "The baker bakes your own goods when there's enough bread on the shelves. Suppliers don't have them, and each step makes them sell better (+{n}% per step).",
+  "brand.level1": "Step 1: pies",
+  "brand.level2": "Step 2: cinnamon buns",
+  "brand.level3": "Step 3: honey cake",
+  "brand.open": "Open — {cost} 💰",
+  "brand.done": "✓ open",
+  "brand.max": "All of Grandma's recipes are open!",
+  "popup.freshOwn": "{icon} From Grandma +{n}",
+  "brand.batch": "batch of {n} for {cost} 💰",
+  "prices.brand": "Own baking — open the recipe in Corners (“From Grandma” brand)",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

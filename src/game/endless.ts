@@ -4,6 +4,8 @@
 import type { TextKey } from '../i18n/ru';
 import {
   monthOf,
+  onShelves,
+  OWN_PRODUCTS,
   PRODUCTS,
   sellableProducts,
   seasonalDemand,
@@ -53,7 +55,11 @@ export function seasonFor(day: number): Season | null {
  */
 export function pickWanted(state: StoreState, random: () => number, count: number, demand: (id: ProductId) => number = () => 1): ProductId[] {
   const season = seasonFor(state.day);
-  const pool = sellableProducts(state).map((id) => ({ id, w: (season?.demand[id] ?? 1) * seasonalDemand(id, state.day) * demand(id) }));
+  // Свою выпечку «От бабушки» хотят, когда видят на полке: за ней не идут специально,
+  // и если пекарь не успел — никто не уходит ни с чем.
+  const pool = sellableProducts(state)
+    .filter((id) => !OWN_PRODUCTS.includes(id) || onShelves(state, id) > 0)
+    .map((id) => ({ id, w: (season?.demand[id] ?? 1) * seasonalDemand(id, state.day) * demand(id) }));
   const picked: ProductId[] = [];
   while (picked.length < count && pool.length) {
     const total = pool.reduce((s, p) => s + p.w, 0);

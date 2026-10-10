@@ -886,6 +886,9 @@ def crates():
     crate_simple("fish", "W", "w", "l", "c")
     crate_simple("soap", "B", "n", "a", "s")
     crate_simple("detergent", "B", "n", "a", "R")
+    crate_simple("pies", "B", "n", "a", "y")
+    crate_simple("buns", "B", "n", "a", "N")
+    crate_simple("honeycake", "W", "w", "l", "s")
     crate_bread()
     crate_apples()
     crate_potatoes()
@@ -1394,6 +1397,141 @@ ITEMS = {
         ],
     ],
 }
+
+
+# Своя выпечка «От бабушки»: пирожки, булочки с корицей и медовик.
+ITEMS["pies"] = [
+    [
+        "..........",
+        "..........",
+        "..........",
+        "..........",
+        "..kkkkkk..",
+        ".kyYYYyyk.",
+        "kyYyyyyyok",
+        "koyyyyyyok",
+        "kaooooooak",
+        ".kaaaaaak.",
+        "..kkkkkk..",
+        "..........",
+    ],
+    [
+        "..........",
+        "..........",
+        "...kkkkk..",
+        "..kyYYyyk.",
+        "..koyyyok.",
+        "..kkkkkkk.",
+        ".kyYYYyyyk",
+        "kyyyyyyyok",
+        "koyyyyyyak",
+        "kaoooooaak",
+        ".kkaaaakk.",
+        "..kkkkkk..",
+    ],
+    [
+        "..........",
+        "..........",
+        "..........",
+        "..........",
+        "..kkkkkk..",
+        ".kyYYYyyk.",
+        "kyYyEEyyok",
+        "koyEeEEyok",
+        "kaooEeooak",
+        ".kaaaaaak.",
+        "..kkkkkk..",
+        "..........",
+    ],
+]
+ITEMS["buns"] = [
+    [
+        "..........",
+        "..........",
+        "...kkkk...",
+        ".kkNNNNkk.",
+        ".kNnBBnNk.",
+        "kNnBnnBnNk",
+        "kNBnBBnBNk",
+        "kNBnBnnBNk",
+        "kNnBBBBnNk",
+        ".kNnnnnNk.",
+        ".kkNNNNkk.",
+        "...kkkk...",
+    ],
+    [
+        "..........",
+        "..........",
+        "...kkkk...",
+        ".kkNNNNkk.",
+        ".kNwBBwNk.",
+        "kNnBnnBnNk",
+        "kNBwBBwBNk",
+        "kNBnBnnBNk",
+        "kNwBBBBwNk",
+        ".kNnnnnNk.",
+        ".kkNNNNkk.",
+        "...kkkk...",
+    ],
+    [
+        "..........",
+        "..........",
+        "...kkkk...",
+        ".kkNNNNkk.",
+        ".kNnBBnNk.",
+        "kNnBanBnNk",
+        "kNBnBBnBNk",
+        "kNBnBnaBNk",
+        "kNnBBBBnNk",
+        ".kNnnnnNk.",
+        ".kkNNNNkk.",
+        "...kkkk...",
+    ],
+]
+ITEMS["honeycake"] = [
+    [
+        "..........",
+        "..........",
+        "..........",
+        ".kkkkkkkk.",
+        ".kNNNNNNk.",
+        ".kBBBBBBk.",
+        ".kNNNNNNk.",
+        ".kBBBBBBk.",
+        ".kNNNNNNk.",
+        ".kaaaaaak.",
+        ".kkkkkkkk.",
+        "..........",
+    ],
+    [
+        "..........",
+        "..........",
+        "....rr....",
+        ".kkkrrkkk.",
+        ".kNNNNNNk.",
+        ".kBBBBBBk.",
+        ".kNNNNNNk.",
+        ".kBBBBBBk.",
+        ".kNNNNNNk.",
+        ".kaaaaaak.",
+        ".kkkkkkkk.",
+        "..........",
+    ],
+    [
+        "..........",
+        "..........",
+        "...kkkk...",
+        ".kkNNNNkk.",
+        ".kNtNNtNk.",
+        "kNNNNNNNNk",
+        "kNtNNNNtNk",
+        "kBNNNNNNBk",
+        "kaBBBBBBak",
+        ".kaBBBBak.",
+        "..kkkkkk..",
+        "..........",
+    ],
+]
 
 
 def items():
