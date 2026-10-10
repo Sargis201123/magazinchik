@@ -29,9 +29,11 @@ const css = `
   justify-content: center; padding: 16px; overflow-y: auto; }
 /* Окно в пиксельной рамке (assets/ui_frame.png, 9 частей по 8 пикселей). */
 .ui-card { color: #2b2233; border: 16px solid transparent; border-image: url(assets/ui_frame.png) 8 fill / 16px stretch;
-  image-rendering: pixelated; padding: 2px 4px; max-width: 372px; width: 100%; max-height: calc(100dvh - 32px);
+  image-rendering: pixelated; padding: 2px 10px; max-width: 372px; width: 100%; max-height: calc(100dvh - 32px);
   overflow-y: auto; box-sizing: border-box; font: 15px/1.4 ${UI_FONT};
-  filter: drop-shadow(0 4px 0 rgba(24, 20, 37, .6)); }
+  filter: drop-shadow(0 4px 0 rgba(24, 20, 37, .6));
+  /* Полоса прокрутки тонкая и в цвет рамки; поля по бокам — чтобы цифры справа не налезали на неё. */
+  scrollbar-width: thin; scrollbar-color: #b9a47e transparent; }
 /* Пиксельные иконки вместо эмодзи (монета, товары, коробка). */
 .ui-ico { height: 1.15em; width: auto; vertical-align: -0.22em; image-rendering: pixelated; }
 .ui-portrait { width: 48px; height: 48px; image-rendering: pixelated; border-radius: 6px; flex: none; }
@@ -373,8 +375,86 @@ const ICONS: Record<string, string> = {
   '🐟': 'item_fish',
   '🧼': 'item_soap',
   '🧴': 'item_detergent',
+  // Значки меню (art/icons.py).
+  '☕': 'ico_coffee',
+  '🏷': 'ico_tag',
+  '👵': 'ico_granny',
+  '⚠': 'ico_warn',
+  '🥖': 'ico_baguette',
+  '⭐': 'ico_star',
+  '🌙': 'ico_moon',
+  '🔒': 'ico_lock',
+  '📋': 'ico_clipboard',
+  '📃': 'ico_page',
+  '📄': 'ico_page',
+  '🧾': 'ico_receipt',
+  '🏅': 'ico_medal',
+  '🏆': 'ico_trophy',
+  '🐱': 'ico_cat',
+  '🐭': 'ico_mouse',
+  '🎪': 'ico_tent',
+  '🚲': 'ico_bike',
+  '🤖': 'ico_robot',
+  '🚚': 'ico_truck',
+  '📖': 'ico_book',
+  '⚔': 'ico_swords',
+  '✅': 'ico_check',
+  '🟩': 'ico_square',
+  '💡': 'ico_bulb',
+  '🔧': 'ico_wrench',
+  '🛠': 'ico_wrench',
+  '🔨': 'ico_hammer',
+  '🏖': 'ico_beach',
+  '🏦': 'ico_bank',
+  '🔄': 'ico_cycle',
+  '🔁': 'ico_cycle',
+  '💳': 'ico_card',
+  '🎁': 'ico_gift',
+  '🎉': 'ico_party',
+  '🛒': 'ico_cart',
+  '❄': 'ico_snow',
+  '🍫': 'ico_choc',
+  '💸': 'ico_cash',
+  '🗓': 'ico_calendar',
+  '📊': 'ico_chart',
+  '📻': 'ico_radio',
+  '😤': 'ico_angry',
+  '🤝': 'ico_handshake',
+  '⏳': 'ico_hourglass',
+  '💬': 'ico_speech',
+  '📭': 'ico_mailbox',
+  '📮': 'ico_mailbox',
+  '📞': 'ico_phone',
+  '📱': 'ico_phone',
+  '📲': 'ico_phone',
+  '📣': 'ico_megaphone',
+  '🎯': 'ico_target',
+  '🗑': 'ico_trash',
+  '🎵': 'ico_note',
+  '💚': 'ico_heart_green',
+  '💔': 'ico_heart_broken',
+  '🏠': 'ico_house',
+  '🍰': 'ico_cake',
+  '🥐': 'ico_croissant',
+  '🥧': 'ico_pie',
+  '🧑': 'ico_person',
+  '🔊': 'ico_sound_on',
+  '🔇': 'ico_sound_off',
+  '☀': 'ico_sun',
+  '🌧': 'ico_rain',
+  '⛈': 'ico_storm',
+  '🍂': 'ico_leaf',
+  '🥵': 'ico_heat',
+  '📌': 'ico_pin',
+  '🪧': 'ico_sign',
+  '🔥': 'ico_fire',
+  '🙂': 'ico_smile',
+  '❔': 'ico_question',
+  '📅': 'ico_calendar',
+  '🚶': 'ico_walk',
 };
-const ICON_RE = /(💰|🍞|🍎|🥔|🥛|🥩|📦|🍦|🍊|💐|💧|🧃|🥟|🐟|🧼|🧴)/u;
+// Эмодзи из таблицы; знак-вариант U+FE0F после него («⚠️») съедается вместе с ним.
+const ICON_RE = new RegExp(`(${Object.keys(ICONS).join('|')})\uFE0F?`, 'u');
 
 /** Заменяет эмодзи денег и товаров на пиксельные картинки из игры. */
 export function pixelize(root: Node): void {
