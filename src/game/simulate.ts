@@ -85,6 +85,7 @@ import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
 import { recordDay } from './achievements';
+import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
 import { buyRadio, hasRadio, radioExtra, radioPatience, RADIO_PRICE, setStation } from './radio';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
 
@@ -145,7 +146,7 @@ export interface SimOptions {
   ovenBurn?: number;
 }
 
-export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments' | 'skills' | 'radio';
+export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments' | 'skills' | 'radio' | 'brand';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -329,6 +330,19 @@ export function simulate({
         state = upgradeGear(state, id) ?? state;
       }
     }
+    // Своя марка: печь до лучшей модели, потом рецепты «От бабушки» — когда есть запас.
+    if (features.brand && hasUpgrade(state, 'oven')) {
+      const oven = nextGear(state, 'oven');
+      if (oven && state.money >= oven.price + reserve * 2) {
+        investments += oven.price;
+        state = upgradeGear(state, 'oven') ?? state;
+      }
+      const cost = nextBrandCost(state);
+      if (cost !== null && brandAvailable(state) && state.money >= cost + reserve * 2) {
+        investments += cost;
+        state = buyBrandLevel(state) ?? state;
+      }
+    }
     // Радио: купить, когда есть запас; со сладостями у кассы — хиты, иначе ретро.
     if (features.radio) {
       if (!hasRadio(state) && state.money >= RADIO_PRICE + reserve) state = buyRadio(state) ?? state;
@@ -372,6 +386,16 @@ export function simulate({
         if (extraRandom() < ovenBurn) continue;
         state = takeOutBread(state).state;
         breadBaked += ovenBatch(state);
+      }
+    }
+    // Своя выпечка — когда хлеба хватает.
+    if (features.brand) {
+      for (let b = 0; b < ovenBatches; b++) {
+        const id = brandToBake(state);
+        const next = id && startBrandBatch(state, id);
+        if (!id || !next) break;
+        state = takeOutBread(next, BRAND_BATCH, id).state;
+        batches++;
       }
     }
     // Доля дня, когда в зале пахнет хлебом.

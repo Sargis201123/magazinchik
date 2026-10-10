@@ -29,7 +29,11 @@ export type ProductId =
   | 'dumplings'
   | 'fish'
   | 'soap'
-  | 'detergent';
+  | 'detergent'
+  // Своя выпечка «От бабушки» (brand.ts): печёт пекарь, у поставщиков её нет.
+  | 'pies'
+  | 'buns'
+  | 'honeycake';
 
 export interface Product {
   id: ProductId;
@@ -62,6 +66,18 @@ export const PRODUCTS: Record<ProductId, Product> = {
   fish: { id: 'fish', nameKey: 'product.fish', icon: '🐟', category: 'frozen', cost: 60, basePrice: 110, shelfLife: 14, color: 0x8b9bb4 },
   soap: { id: 'soap', nameKey: 'product.soap', icon: '🧼', category: 'household', cost: 15, basePrice: 35, shelfLife: 99, color: 0xb55088 },
   detergent: { id: 'detergent', nameKey: 'product.detergent', icon: '🧴', category: 'household', cost: 55, basePrice: 99, shelfLife: 99, color: 0x5fcde4 },
+  // Своя выпечка: cost — мука и начинка на штуку.
+  pies: { id: 'pies', nameKey: 'product.pies', icon: '🥧', category: 'bakery', cost: 16, basePrice: 45, shelfLife: 2, color: 0xfeae34 },
+  buns: { id: 'buns', nameKey: 'product.buns', icon: '🥐', category: 'bakery', cost: 14, basePrice: 40, shelfLife: 2, color: 0xead4aa },
+  honeycake: { id: 'honeycake', nameKey: 'product.honeycake', icon: '🍰', category: 'bakery', cost: 40, basePrice: 110, shelfLife: 3, color: 0xb86f50 },
+};
+
+/** Своя выпечка по ступеням марки «От бабушки»: первая ступень — пирожки, вторая — булочки, третья — медовик. */
+export const OWN_PRODUCTS: ProductId[] = ['pies', 'buns', 'honeycake'];
+/** Своя выпечка открыта на этой ступени марки (обычные товары — всегда). */
+export const ownProductOpen = (state: { brand?: number }, id: ProductId): boolean => {
+  const i = OWN_PRODUCTS.indexOf(id);
+  return i < 0 || i < (state.brand ?? 0);
 };
 
 export const PRODUCT_IDS = Object.keys(PRODUCTS) as ProductId[];
@@ -502,6 +518,8 @@ export interface StoreState {
   bankrupt?: boolean;
   /** Сколько игр начато заново. */
   runs?: number;
+  /** Ступень своей марки «От бабушки» (0 — нет, brand.ts). */
+  brand?: number;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */
   records?: import('./records').Records;
   /** Автозаказ: сколько чего держать на складе и включён ли он (reorder.ts). */
@@ -614,7 +632,7 @@ export const newGame = (): StoreState => ({
     { kind: 'bakery', level: 0, items: { bread: fresh(4) } },
     { kind: 'produce', level: 0, items: { apples: fresh(3), potatoes: fresh(3) } },
   ],
-  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70, water: 25, juice: 50, dumplings: 80, fish: 110, soap: 35, detergent: 99 },
+  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70, water: 25, juice: 50, dumplings: 80, fish: 110, soap: 35, detergent: 99, pies: 45, buns: 40, honeycake: 110 },
 });
 
 export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];
@@ -661,7 +679,7 @@ export function shelfFor(state: StoreState, id: ProductId): number {
 
 /** Товары, для которых в магазине есть подходящая полка: только их и ищут покупатели. */
 export const sellableProducts = (state: StoreState): ProductId[] =>
-  PRODUCT_IDS.filter((id) => productAvailable(id, state.day) && state.shelves.some((s) => canPlace(id, s)));
+  PRODUCT_IDS.filter((id) => productAvailable(id, state.day) && ownProductOpen(state, id) && state.shelves.some((s) => canPlace(id, s)));
 
 // ---------- Цены и спрос ----------
 

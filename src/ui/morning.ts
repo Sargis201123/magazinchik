@@ -34,6 +34,8 @@ import {
   shelfResale,
   storeLevel,
   STORE_LEVELS,
+  OWN_PRODUCTS,
+  ownProductOpen,
   productAvailable,
   upgradeCost,
   upgradeShelf,
@@ -127,6 +129,7 @@ import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
+import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
@@ -844,7 +847,33 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       el('div', 'ui-muted', hasUpgrade(state, 'oven') ? t('oven.note', { n: ovenBatch(state), cost: ovenBatchCost(state), s: ovenBake(state) }) : t('oven.locked')),
     );
     if (hasUpgrade(state, 'oven')) box.append(...staffNeed(state, 'baker', 'oven.noBaker'));
+    if (hasUpgrade(state, 'oven')) box.append(...brandBox(state));
     return box;
+  };
+
+  /** Своя марка «От бабушки»: ступени с новыми рецептами (после лучшей печи). */
+  const brandBox = (state: StoreState): HTMLElement[] => {
+    const out: HTMLElement[] = [el('h3', '', t('brand.title'))];
+    if (!brandAvailable(state)) return [...out, el('div', 'ui-muted', `🔒 ${t('brand.locked')}`)];
+    out.push(el('div', 'ui-muted', t('brand.note', { n: Math.round(BRAND_DEMAND_STEP * 100) })));
+    const level = brandLevel(state);
+    OWN_PRODUCTS.forEach((pid, i) => {
+      const open = i < level;
+      const next = i === level;
+      out.push(
+        artRow(`item_${pid}`, {
+          name: t(`brand.level${i + 1}` as TextKey),
+          sub: t('brand.batch', { n: BRAND_BATCH, cost: brandBatchCost(pid) }),
+          actions: open
+            ? [el('span', 'ui-tag', t('brand.done'))]
+            : next
+              ? [button(t('brand.open', { cost: BRAND_COSTS[i] }), () => update(buyBrandLevel(getState()), 'success'), 'ui-chip', state.money < BRAND_COSTS[i])]
+              : [],
+        }),
+      );
+    });
+    if (level >= BRAND_MAX) out.push(el('div', 'ui-note', t('brand.max')));
+    return out;
   };
 
   /** Красная строка, если в пекарне или кофейне некому работать. */
@@ -1916,9 +1945,11 @@ export function showMorning({ getState, setState, onOpen }: MorningOptions): voi
       if (!sellable.includes(pid)) {
         card.classList.add('ui-price-locked');
         // Сезонный товар вне сезона — «только летом», иначе — какая полка нужна.
-        const why = productAvailable(pid, state.day)
-          ? t('prices.locked', { shelf: t(SHELF_KINDS[product.category].nameKey) })
-          : t(`prices.season.${pid}` as TextKey);
+        const why = !ownProductOpen(state, pid)
+          ? t('prices.brand')
+          : productAvailable(pid, state.day)
+            ? t('prices.locked', { shelf: t(SHELF_KINDS[product.category].nameKey) })
+            : t(`prices.season.${pid}` as TextKey);
         info.append(el('div', 'ui-muted', `🔒 ${why}`));
         card.append(icon, info);
         return card;
