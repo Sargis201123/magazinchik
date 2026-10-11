@@ -13,10 +13,26 @@ export interface TgUser {
   language_code?: string;
 }
 
+/** База Cloudflare D1 — нужна только приглашениям и напоминаниям (social.ts); без неё они выключены. */
+export interface D1Statement {
+  bind(...values: unknown[]): D1Statement;
+  run(): Promise<{ meta?: { changes?: number } }>;
+  first<T>(): Promise<T | null>;
+  all<T>(): Promise<{ results: T[] }>;
+}
+export interface D1 {
+  prepare(sql: string): D1Statement;
+  exec(sql: string): Promise<unknown>;
+}
+
 /** Секреты сервера: на Vercel — из process.env, на Cloudflare — из env воркера. */
 export interface Env {
   BOT_TOKEN?: string;
   WEBHOOK_SECRET?: string;
+  /** База для приглашений и напоминаний (Cloudflare D1, привязка DB). */
+  DB?: D1;
+  /** Адрес игры — для кнопки «Играть» в напоминаниях (у cron нет запроса, чтобы его узнать). */
+  APP_URL?: string;
 }
 
 /** Переменные окружения Node (Vercel). */

@@ -39,6 +39,8 @@ interface TelegramWebApp {
   initData: string;
   /** Окно оплаты счёта (Telegram Stars): статус приходит в колбэк. */
   openInvoice?(url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void;
+  openTelegramLink?(url: string): void;
+  requestWriteAccess?(callback?: (granted: boolean) => void): void;
   initDataUnsafe: { user?: { id: number; first_name?: string; language_code?: string } };
   HapticFeedback?: {
     impactOccurred(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft'): void;
@@ -68,6 +70,20 @@ export function openInvoice(url: string): Promise<InvoiceStatus> | null {
   const app = webApp();
   if (!app?.openInvoice || !at('6.1')) return null;
   return new Promise((resolve) => app.openInvoice!(url, (status) => resolve(status)));
+}
+
+/** Открыть ссылку t.me внутри Telegram (например, окно «Поделиться»). */
+export function openTelegramLink(url: string): boolean {
+  const app = webApp();
+  if (!app?.openTelegramLink || !isInTelegram()) return false;
+  app.openTelegramLink(url);
+  return true;
+}
+
+/** Попросить разрешение боту писать игроку (Bot API 6.9+). Уже разрешено — Telegram не спросит. */
+export function requestWriteAccess(): void {
+  const app = webApp();
+  if (isInTelegram() && at('6.9')) app?.requestWriteAccess?.();
 }
 
 /** Игрок Telegram (id) — чтобы не подхватить чужое сохранение на общем телефоне. */

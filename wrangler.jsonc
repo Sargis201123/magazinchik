@@ -9,5 +9,8 @@
     "directory": "./dist",
     "binding": "ASSETS"
   },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Раз в час бот напоминает тем, кто давно не заходил (api/_lib/social.ts; нужна база DB).
+  "triggers": { "crons": ["15 * * * *"] },
+  "vars": { "APP_URL": "https://magazinchik.sargis-zsx.workers.dev/" }
 }

@@ -1255,6 +1255,14 @@ export const ru = {
   "giant.def.brand": "своя выпечка",
   "ach.giant": "Давид и Голиаф",
   "ach.giant.desc": "Победить гипермаркет «Гигант»",
+  "social.title": "Пригласи друзей",
+  "social.note": "За каждого друга, который начнёт играть, — {n} 💰. А друг получит {g} 💰 на старт.",
+  "social.count": "Друзей в игре: {n}",
+  "social.invite": "📨 Пригласить",
+  "social.claim": "Забрать награду: {n} × {r} = {sum} 💰",
+  "social.share": "Заходи в мой магазинчик! Помоги бабушке с торговлей — тебе подарок на старт 🎁",
+  "social.welcome": "Подарок от друга!",
+  "social.welcomeText": "Тебя пригласили — держи {n} 💰 на старт",
 } as const;
 
 export type TextKey = keyof typeof ru;
