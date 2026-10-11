@@ -1131,6 +1131,24 @@ def prop_rod(v):
     return c
 
 
+def prop_flashlight(v):
+    """Фонарик сторожа: тёмный корпус, жёлтое стекло."""
+    c = Big()
+    x, y = hand(v)
+    if v == "s":
+        c.rect(12, y, 5, 2, "K")
+        c.vline(17, y - 1, 4, "G")
+        c.vline(18, y - 1, 4, "Y")
+    elif v == "b":
+        c.rect(x - 1, y - 1, 2, 5, "K")
+    else:
+        c.rect(x - 1, y - 2, 3, 5, "K")
+        c.hline(x - 2, y + 3, 5, "G")
+        c.hline(x - 1, y + 4, 3, "Y")
+    c.outline("k")
+    return c
+
+
 def prop_camera(v):
     """Фотоаппарат на ремне у груди."""
     c = Big()
@@ -2159,6 +2177,7 @@ ITEMS = {
     "prop_briefcase": prop_briefcase,
     "prop_rod": prop_rod,
     "prop_camera": prop_camera,
+    "prop_flashlight": prop_flashlight,
     "prop_basket": prop_basket,
     "prop_newspaper": prop_newspaper,
     "prop_bouquet": prop_bouquet,

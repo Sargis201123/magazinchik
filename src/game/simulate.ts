@@ -81,6 +81,7 @@ import { weatherFor } from './weather';
 import { brewSeconds, cameraTheft, climatePatience, coffeePrice, entranceMud, fridgeLeak, GEAR_IDS, gearAvailable, nextGear, ovenBatch, REGISTER_JAM_SECONDS, registerJam, upgradeGear, wcDirt } from './gear';
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, startBatch, takeOutBread } from './bakery';
 import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
+import { adoptDog, DOG_FROM_DAY, DOG_PRICE, hasDog } from './watch';
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
@@ -365,6 +366,11 @@ export function simulate({
         investments += CAT_BEDS[bed].price;
         state = buyBed(state, bed) ?? state;
       }
+    }
+    // Бобик — как только по карману: ночные воры обходятся дороже корма.
+    if (!hasDog(state) && state.day >= DOG_FROM_DAY && state.money >= DOG_PRICE + reserve * 3) {
+      investments += DOG_PRICE;
+      state = adoptDog(state) ?? state;
     }
     if (features.candy) {
       const next = nextRack(state);

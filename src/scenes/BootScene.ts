@@ -5,6 +5,12 @@ import { WARDROBE_TEXTURES } from './wardrobe';
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
 const SPRITES = [
+  // Ночная охрана: пёс Бобик и его будка (art/security.py).
+  'bobik_lie',
+  'bobik_sit0',
+  'bobik_sit1',
+  'bobik_bark',
+  'kennel',
   // Гипермаркет «Гигант» за дорогой (art/giant.py).
   'giant_site',
   'giant_store',

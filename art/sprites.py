@@ -4746,6 +4746,9 @@ def main():
     news.main()
     street_props.main()
     giant.main()
+    import security
+
+    security.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

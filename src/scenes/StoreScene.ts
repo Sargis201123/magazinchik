@@ -113,6 +113,7 @@ import { carryOf, cartExtra, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM
 import { showGift } from '../ui/gift';
 import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
+import { DOG_DAY_CATCH, hasDog, hasWatchman } from '../game/watch';
 import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
@@ -343,6 +344,20 @@ interface Look {
   back?: BackId;
   backTint?: number;
 }
+
+/** Ночной сторож Михалыч: ушанка, ватник цвета хаки, седые усы, фонарик (как в art/security.py). */
+const WATCHMAN: Look = {
+  skin: 0xeec39a,
+  shirt: 0x5a6988,
+  pants: 0x262b44,
+  hair: 0xc0cbdc,
+  hat: 'ushanka',
+  hatTint: 0x8f563b,
+  outfit: 'cardigan',
+  outfitTint: 0x7a8a5a,
+  face: 'mustache',
+  prop: 'flashlight',
+};
 
 const randomLook = (shirt: number): Look => ({
   shirt,
@@ -712,6 +727,12 @@ export class StoreScene extends Phaser.Scene {
   private nightAsked = false;
   /** Кот у входа: картинка, где его лежанка и гуляет ли он сейчас по залу. */
   private catImg?: Phaser.GameObjects.Image;
+  /** Пёс Бобик у будки и таймер, который машет его хвостом. */
+  private bobik?: Phaser.GameObjects.Image;
+  private bobikWag?: Phaser.Time.TimerEvent;
+  /** Магазин закрыт на ночь (роллеты опущены): Бобик сидит настороже, у двери — сторож. */
+  private closed = false;
+  private nightWatch: Phaser.GameObjects.GameObject[] = [];
   private catHome = { x: 0, y: 0 };
   private catOut = false;
   private reviewStar?: Phaser.GameObjects.Text;
@@ -2392,6 +2413,64 @@ export class StoreScene extends Phaser.Scene {
     );
   }
 
+  // ---------- Пёс Бобик ----------
+
+  /** Будка у входа, Бобик спит рядом. Погладить — сядет и повиляет хвостом. */
+  private buildBobik(x: number, y: number): void {
+    this.bobik = undefined;
+    this.bobikWag?.remove();
+    if (!hasDog(this.state)) return;
+    // Бобик лежит перед будкой — слева от неё мусорный контейнер, справа ходят к двери.
+    this.art(x, y - 2, 'kennel').setOrigin(0.5, 1).setDepth(y + 4);
+    const dog = this.art(x + 1, y + 4, 'bobik_lie').setOrigin(0.5, 1).setDepth(y + 6);
+    this.bobik = dog;
+    if (this.closed) this.bobikSit(900);
+    else this.bobikRest();
+    dog.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.petBobik()));
+  }
+
+  /** Бобик ложится: дышит во сне, иногда «z». */
+  private bobikRest(): void {
+    this.bobikWag?.remove();
+    const dog = this.bobik;
+    if (!dog?.active) return;
+    this.tweens.killTweensOf(dog);
+    dog.setTexture('bobik_lie').setScale(1 / ART);
+    this.tweens.add({ targets: dog, scaleY: 1.07 / ART, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** Бобик сидит и виляет хвостом: pace — как часто машет. */
+  private bobikSit(pace: number): void {
+    const dog = this.bobik;
+    if (!dog?.active) return;
+    this.tweens.killTweensOf(dog);
+    this.bobikWag?.remove();
+    dog.setScale(1 / ART).setTexture('bobik_sit0');
+    this.bobikWag = this.time.addEvent({ delay: pace, loop: true, callback: () => dog.active && dog.setTexture(dog.texture.key === 'bobik_sit0' ? 'bobik_sit1' : 'bobik_sit0') });
+  }
+
+  private petBobik(): void {
+    const dog = this.bobik;
+    if (!dog?.active) return;
+    haptic.tap();
+    this.bobikSit(150);
+    this.heartAt(dog.x, dog.y - 12);
+    this.popup(dog.x, dog.y - 18, t('popup.dogWag'), '#fff3b0');
+    this.time.delayedCall(1800, () => !this.closed && this.bobikRest());
+  }
+
+  /** Гав! — на воришку. */
+  private bobikBark(): void {
+    const dog = this.bobik;
+    if (!dog?.active) return;
+    sound.bark();
+    this.bobikWag?.remove();
+    this.tweens.killTweensOf(dog);
+    dog.setScale(1 / ART).setTexture('bobik_bark');
+    this.tweens.add({ targets: dog, y: dog.y - 1.5, duration: 90, yoyo: true, repeat: 3 });
+    this.time.delayedCall(1400, () => !this.closed && this.bobikRest());
+  }
+
   /** Погладили кота: мурчит, сердечко. */
   private petCat(): void {
     const cat = this.catImg;
@@ -3282,6 +3361,7 @@ export class StoreScene extends Phaser.Scene {
     const atStreet = next === this.layout;
     const front = this.layout.h + FACADE_H;
     this.buildCat(door.x + 47, atStreet ? top + 8.5 : front + 10);
+    this.buildBobik(door.x - 24, atStreet ? top + 8.5 : front + 10);
     this.buildReviewBoard(door.x + 28, atStreet ? top + 13 : front + 13);
 
     this.pigeons = [];
@@ -4968,7 +5048,7 @@ export class StoreScene extends Phaser.Scene {
     this.customers.add(customer);
     if (thief) {
       // Вора можно поймать касанием.
-      sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.catchThief(customer, false)));
+      sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.catchThief(customer, 'owner')));
       void this.runThief(customer);
     } else {
       void this.runCustomer(customer);
@@ -5006,7 +5086,13 @@ export class StoreScene extends Phaser.Scene {
       void this.walk(guard.sprite, c.sprite.x + 10, c.sprite.y, STAFF_SPEED * 1.5).then(() =>
         this.walk(guard.sprite, guard.home.x, guard.home.y, STAFF_SPEED),
       );
-      this.catchThief(c, true);
+      this.catchThief(c, 'guard');
+      return;
+    }
+    // Бобик у входа лает — воришка с перепугу бросает товар.
+    if (this.bobik?.active && c.items.length && Math.random() < DOG_DAY_CATCH) {
+      this.bobikBark();
+      this.catchThief(c, 'dog');
       return;
     }
     if (c.items.length) {
@@ -5021,7 +5107,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Вора поймали: товар возвращается на полки, вор уходит ни с чем. */
-  private catchThief(c: Customer, byGuard: boolean): void {
+  private catchThief(c: Customer, by: 'owner' | 'guard' | 'dog'): void {
     if (c.gone || !this.running) return;
     c.sprite.disableInteractive();
     this.state = returnToShelf(this.state, c.items);
@@ -5031,7 +5117,7 @@ export class StoreScene extends Phaser.Scene {
     this.stats.caught++;
     haptic.success();
     sound.good();
-    this.popup(c.sprite.x, c.sprite.y - 14, byGuard ? t('popup.guardCaught') : t('popup.thiefCaught'), '#c8ffb0');
+    this.popup(c.sprite.x, c.sprite.y - 14, t(by === 'guard' ? 'popup.guardCaught' : by === 'dog' ? 'popup.dogCaught' : 'popup.thiefCaught'), '#c8ffb0');
     void this.leave(c);
   }
 
@@ -5807,7 +5893,7 @@ export class StoreScene extends Phaser.Scene {
         const radioChanged = s.radio !== this.state.radio;
         // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
         const was = this.state;
-        const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was);
+        const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was) || hasDog(s) !== hasDog(was);
         this.state = s;
         saveGame(s);
         if (s.level > this.builtLevel) void this.celebrateExpansion();
@@ -6293,10 +6379,32 @@ export class StoreScene extends Phaser.Scene {
       this.tweens.add({ targets: shutter, displayHeight: FACADE_H - 1, duration: 900, ease: 'Bounce.easeOut', delay: Math.random() * 200 });
       this.shutters.push(shutter);
     }
+    this.nightGuard();
+  }
+
+  /** Ночь: Бобик сидит настороже, к двери выходит сторож с фонариком. */
+  private nightGuard(): void {
+    this.closed = true;
+    this.bobikSit(900);
+    if (!hasWatchman(this.state)) return;
+    const { door } = this.layout;
+    const y = this.bobik?.y ?? this.layout.h + FACADE_H + 10;
+    const watchman = this.makePerson(door.x + 18, y - 9, WATCHMAN).setDepth(y + 2);
+    watchman.setAlpha(0);
+    this.tweens.add({ targets: watchman, alpha: 1, duration: 600 });
+    const beam = this.add.graphics({ x: door.x + 22, y: y - 6 }).setDepth(y + 1).setBlendMode(Phaser.BlendModes.ADD);
+    beam.fillStyle(0xfff3b0, 0.22);
+    beam.fillTriangle(0, 0, 22, 8, 16, 16);
+    this.tweens.add({ targets: beam, rotation: { from: -0.25, to: 0.35 }, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.nightWatch.push(watchman, beam);
   }
 
   /** Утром роллеты поднимаются. */
   private openShop(): void {
+    this.closed = false;
+    this.bobikRest();
+    this.nightWatch.forEach((o) => o.destroy());
+    this.nightWatch = [];
     for (const shutter of this.shutters) {
       this.tweens.add({ targets: shutter, displayHeight: 0.1, duration: 600, ease: 'Quad.easeIn', onComplete: () => shutter.destroy() });
     }

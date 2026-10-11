@@ -159,6 +159,21 @@ import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
 import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, tryDecor, type DecorItem, type DecorKind } from '../game/decor';
 import { buyWithStars, starsAvailable } from '../platform/stars';
+import {
+  adoptDog,
+  burglaryChance,
+  burglaryNews,
+  DOG_FOOD,
+  DOG_FROM_DAY,
+  DOG_PRICE,
+  hasWatchman,
+  securityOf,
+  seeBurglaryNews,
+  setWatchman,
+  WATCHMAN_BOUNTY,
+  WATCHMAN_WAGE,
+  type BurglaryNews,
+} from '../game/watch';
 import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, who } from './dom';
@@ -319,6 +334,11 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     const giantPhase = giantNews(state);
     if (giantPhase) {
       card.replaceChildren(giantNewsBox(state, giantPhase));
+      return;
+    }
+    const night = burglaryNews(state);
+    if (night) {
+      card.replaceChildren(burglaryBox(night));
       return;
     }
     if (state.quitNotice?.length) {
@@ -827,7 +847,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   // ---------- Уголки: сладости, кофе, печь, кот и улучшения ----------
 
-  const extrasTab = (state: StoreState): HTMLElement[] => [rackBox(state), radioBox(state), coffeeBox(state), ovenBox(state), catBox(state), upgradesBox(state)];
+  const extrasTab = (state: StoreState): HTMLElement[] => [rackBox(state), radioBox(state), coffeeBox(state), ovenBox(state), catBox(state), securityBox(state), upgradesBox(state)];
 
   const rackBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
@@ -1178,6 +1198,68 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       nextLabel: t(phase === 'won' ? 'giant.hooray' : 'bigday.ok'),
       onNext: () => update(seeGiantNews(getState()), phase === 'won' ? 'success' : 'tap'),
     });
+  };
+
+  /** Утро после ночных воров: участковый рассказывает, что случилось. */
+  const burglaryBox = (news: BurglaryNews) => {
+    const state = getState();
+    const lost = [
+      ...news.goods.map((g) => `${g.n}× ${productLabel(g.id)}`),
+      ...(news.cash ? [t('watch.stolen.cash', { n: news.cash })] : []),
+    ];
+    const after: HTMLElement[] = [];
+    if (news.outcome === 'stolen') {
+      if (news.dogSlept) after.push(el('div', 'ui-note', t('watch.stolen.dogSlept')));
+      else if (!hasWatchman(state)) after.push(el('div', 'ui-note', t('watch.stolen.hint')));
+    }
+    const art = { stolen: 'burglary', dog: 'dog', watchman: 'watchman' }[news.outcome];
+    return dialogBox({
+      art: `assets/news_${art}.png`,
+      portrait: news.outcome === 'stolen' ? 'portrait_police_surprised' : 'portrait_police_happy',
+      name: t('who.police'),
+      text:
+        news.outcome === 'stolen'
+          ? t('watch.stolen.news', { goods: lost.join(', ') || t('watch.stolen.nothing'), repair: news.repair })
+          : news.outcome === 'dog'
+            ? t('watch.dog.news')
+            : t('watch.watchman.news', { n: news.bounty }),
+      pitch: 300,
+      after,
+      nextLabel: t(news.outcome === 'stolen' ? 'watch.ok' : 'watch.hooray'),
+      onNext: () => update(seeBurglaryNews(getState()), news.outcome === 'stolen' ? 'tap' : 'success'),
+    });
+  };
+
+  /** Ночная охрана во вкладке «Уголки»: шанс воров, пёс Бобик и ночной сторож. */
+  const securityBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    const security = securityOf(state);
+    const chance = burglaryChance(state, state.day + 1);
+    box.append(el('b', '', `🐕 ${t('watch.title')}`));
+    box.append(el('div', 'ui-muted', state.day + 1 < DOG_FROM_DAY ? t('watch.calm') : t('watch.note', { p: Math.round(chance * 100) })));
+    if (gearTier(state, 'cameras') > 0) box.append(el('div', 'ui-muted', t('watch.cameras')));
+    const dog = security.dog;
+    box.append(
+      artRow('bobik_sit0', {
+        name: t('watch.dog.name'),
+        price: dog ? undefined : DOG_PRICE,
+        sub: dog ? t('watch.dog.home', { n: dog.since, k: security.scared ?? 0, f: DOG_FOOD }) : t('watch.dog.desc', { f: DOG_FOOD }),
+        actions: dog
+          ? [el('span', 'ui-tag', '✓')]
+          : [button(t('watch.dog.adopt'), () => update(adoptDog(getState()), 'success'), 'ui-chip', state.money < DOG_PRICE || state.day < DOG_FROM_DAY)],
+      }),
+    );
+    const on = hasWatchman(state);
+    box.append(
+      artRow('watchman_card', {
+        name: t('watch.watchman.name'),
+        sub: on
+          ? t('watch.watchman.on', { k: security.caught ?? 0, w: WATCHMAN_WAGE })
+          : t('watch.watchman.desc', { b: WATCHMAN_BOUNTY, w: WATCHMAN_WAGE }),
+        actions: [button(t(on ? 'watch.watchman.fire' : 'watch.watchman.hire'), () => update(setWatchman(getState(), !on)), 'ui-chip')],
+      }),
+    );
+    return box;
   };
 
   /** «Гигант» за дорогой: сколько до открытия, как идёт битва, что помогает удержать покупателей. */

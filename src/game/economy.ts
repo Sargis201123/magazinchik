@@ -524,6 +524,8 @@ export interface StoreState {
   cafe?: import('./cafe').CafeState;
   /** Гипермаркет «Гигант» за дорогой — после сюжета (giant.ts). */
   giant?: import('./giant').GiantState;
+  /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
+  security?: import('./watch').Security;
   /** Ступень своей марки «От бабушки» (0 — нет, brand.ts). */
   brand?: number;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */
