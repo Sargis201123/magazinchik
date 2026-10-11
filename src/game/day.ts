@@ -54,7 +54,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = contestNight(burglaryNight(giantNight(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), stats.revenue), stats.revenue), stats);
+  const next = contestNight(burglaryNight(giantNight(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), stats.revenue), stats.revenue, random), stats);
   return {
     ...night,
     state: next,

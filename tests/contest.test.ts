@@ -54,7 +54,7 @@ describe('конкурс «Лучший магазин района»', () => {
     const result = contestResult(after)!;
     expect(result.won).toBe(true);
     expect(result.passed).toEqual({ rating: true, revenue: true, happy: true, shelves: true });
-    expect(after.money).toBe(1000 + contestPrize(0));
+    expect(after.money).toBe(1000 + contestPrize(start, 0));
     expect(after.contest).toMatchObject({ phase: 'wait', tier: 1, wins: 1 });
     expect(contestGuests(after)).toBeCloseTo(1.03);
     expect(contestResult(seeResult(after))).toBeNull();
