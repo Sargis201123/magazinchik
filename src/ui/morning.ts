@@ -103,6 +103,20 @@ import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, t
 import { sound } from '../platform/sound';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
 import { BIG_DAYS, bigDayFor, bigDayKnown, bigDayProgress } from '../game/bigday';
+import {
+  GIANT_BATTLE_DAYS,
+  GIANT_BUILD_DAYS,
+  GIANT_FAME,
+  GIANT_RATING,
+  GIANT_REMATCH_DAYS,
+  giantDefense,
+  giantNews,
+  giantOf,
+  giantPull,
+  giantReward,
+  seeGiantNews,
+  type GiantPhase,
+} from '../game/giant';
 import { CANDY_COST, CANDY_PRICE, nextRack, rackCapacity, rackOf, refillRack, upgradeRack } from '../game/impulse';
 import { haggleBonus, learnSkill, nextLevelXp, ownerLevelOf, ownerTiming, ownerXp, SKILL_IDS, SKILL_MAX, skillLevel, skillPoints, SKILLS } from '../game/owner';
 import { LOAN_INTEREST, LOAN_MONTHS, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../game/bank';
@@ -301,6 +315,11 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       card.replaceChildren(eduardNewsBox(news));
       return;
     }
+    const giantPhase = giantNews(state);
+    if (giantPhase) {
+      card.replaceChildren(giantNewsBox(state, giantPhase));
+      return;
+    }
     if (state.quitNotice?.length) {
       card.replaceChildren(title, quitBox(state.quitNotice));
       return;
@@ -367,6 +386,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       today,
       info,
       questsBox(state),
+      ...giantBox(state),
       ...weeklyBox(state),
       tabs,
       body,
@@ -1133,6 +1153,60 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       nextLabel: t('eduard.ok'),
       onNext: () => update(seeEduardNews(getState())),
     });
+  };
+
+  /** Новости про «Гигант»: стройка, открытие, победа или поражение — ведущая и картинка «в эфире». */
+  const giantNewsBox = (state: StoreState, phase: GiantPhase) => {
+    const giant = giantOf(state)!;
+    const params = {
+      n: phase === 'build' ? GIANT_BUILD_DAYS : phase === 'lost' ? GIANT_REMATCH_DAYS : GIANT_BATTLE_DAYS,
+      target: giant.target,
+      revenue: giant.revenue,
+      reward: giantReward(state),
+      r: GIANT_RATING,
+      fame: Math.round((GIANT_FAME - 1) * 100),
+    };
+    return dialogBox({
+      caption: t('bigday.caption'),
+      art: `assets/news_giant_${phase}.png`,
+      portrait: phase === 'won' ? 'portrait_anchor_happy' : phase === 'lost' ? 'portrait_anchor_sad' : 'portrait_anchor_surprised',
+      name: t('bigday.anchor'),
+      text: t(`giant.${phase}.news` as TextKey, params),
+      pitch: 520,
+      after: [el('div', 'ui-note', t(`giant.${phase}.hint` as TextKey, params))],
+      nextLabel: t(phase === 'won' ? 'giant.hooray' : 'bigday.ok'),
+      onNext: () => update(seeGiantNews(getState()), phase === 'won' ? 'success' : 'tap'),
+    });
+  };
+
+  /** «Гигант» за дорогой: сколько до открытия, как идёт битва, что помогает удержать покупателей. */
+  const giantBox = (state: StoreState): HTMLElement[] => {
+    const giant = giantOf(state);
+    if (!giant || giant.phase === 'won') return [];
+    const box = el('div', 'ui-box');
+    if (giant.phase === 'build') {
+      const left = GIANT_BUILD_DAYS - (state.day - giant.since);
+      box.append(el('b', '', t('giant.box.build', { n: left })), el('div', 'ui-muted', t('giant.box.prepare')));
+      return [box];
+    }
+    if (giant.phase === 'lost') {
+      const left = GIANT_REMATCH_DAYS - (state.day - giant.since);
+      box.append(el('b', '', t('giant.box.lost', { p: Math.round(giantPull(state) * 100), n: left })), el('div', 'ui-muted', t('giant.box.prepare')));
+      return [box];
+    }
+    const dayN = state.day - giant.since + 1;
+    box.append(
+      el('b', '', t('giant.box.battle', { n: dayN, of: GIANT_BATTLE_DAYS })),
+      el('div', '', t('giant.box.revenue', { n: giant.revenue, target: giant.target })),
+      el('div', '', t('giant.box.rating', { r: state.rating.toFixed(1), need: GIANT_RATING })),
+      el('div', 'ui-muted', t('giant.box.pull', { p: Math.round(giantPull(state) * 100) })),
+    );
+    const d = giantDefense(state);
+    const chip = (ok: boolean, key: TextKey) => el('span', ok ? 'ui-chip' : 'ui-chip ui-chip-off', `${ok ? '✓' : '•'} ${t(key)}`);
+    const chips = el('div', 'ui-chips');
+    chips.append(chip(d.rating, 'giant.def.rating'), chip(d.ad, 'giant.def.ad'), chip(d.loyalty, 'giant.def.loyalty'), chip(d.brand, 'giant.def.brand'));
+    box.append(chips);
+    return [box];
   };
 
   /** Магазин Эдуарда по соседству (после сюжета): сколько гостей уводит и когда вырастет. */

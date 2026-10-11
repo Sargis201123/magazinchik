@@ -1878,6 +1878,42 @@ ICONS = {
         ],
         None,
     ),
+    # 🏗 стройка: башенный кран.
+    "crane": (
+        [
+            "YYYYYYYYYYY.",
+            "...Y....k...",
+            "...Y....k...",
+            "...Y....G...",
+            "...Y........",
+            "...Y..ooooo.",
+            "...Y..o.o.o.",
+            "...Y..ooooo.",
+            "...Y..o.o.o.",
+            "..YYY.ooooo.",
+            ".lllllllllll",
+            "............",
+        ],
+        None,
+    ),
+    # 🏬 гипермаркет.
+    "mall": (
+        [
+            "............",
+            ".RRRRRRRRRR.",
+            ".RwwwwwwwwR.",
+            ".RRRRRRRRRR.",
+            ".UUUUUUUUUU.",
+            ".UccUccUccU.",
+            ".UUUUUUUUUU.",
+            ".UccUKKUccU.",
+            ".UUUUKKUUUU.",
+            ".UUUUKKUUUU.",
+            "............",
+            "............",
+        ],
+        None,
+    ),
 }
 
 

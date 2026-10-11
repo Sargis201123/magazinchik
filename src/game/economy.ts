@@ -522,6 +522,8 @@ export interface StoreState {
   grannyOwed?: number;
   /** Договор с кафе «Пончик» по соседству (cafe.ts). */
   cafe?: import('./cafe').CafeState;
+  /** Гипермаркет «Гигант» за дорогой — после сюжета (giant.ts). */
+  giant?: import('./giant').GiantState;
   /** Ступень своей марки «От бабушки» (0 — нет, brand.ts). */
   brand?: number;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */
