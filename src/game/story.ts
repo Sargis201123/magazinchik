@@ -5,7 +5,7 @@ import type { TextKey } from '../i18n/ru';
 import type { EventChances } from './events';
 import type { StoreState } from './economy';
 
-export type CharacterId = 'grandma' | 'valya' | 'marat' | 'eduard' | 'inspector';
+export type CharacterId = 'grandma' | 'valya' | 'marat' | 'eduard' | 'inspector' | 'sonya' | 'father';
 
 export const CHARACTERS: Record<CharacterId, { nameKey: TextKey; icon: string }> = {
   grandma: { nameKey: 'who.grandma', icon: '👵' },
@@ -13,6 +13,9 @@ export const CHARACTERS: Record<CharacterId, { nameKey: TextKey; icon: string }>
   marat: { nameKey: 'who.marat', icon: '🧑‍🍳' },
   eduard: { nameKey: 'who.eduard', icon: '🕴️' },
   inspector: { nameKey: 'who.inspector', icon: '📋' },
+  // Сюжет «Папа и Соня» (drama.ts): дочка и сам игрок.
+  sonya: { nameKey: 'who.sonya', icon: '👧' },
+  father: { nameKey: 'who.father', icon: '👨' },
 };
 
 /** Эмоция в диалоге: портрет с улыбкой, грустью, злостью или удивлением. */
@@ -50,7 +53,7 @@ export interface Chapter {
   chances?: Partial<EventChances>;
 }
 
-const line = (who: CharacterId, key: TextKey, mood?: Mood): Line => ({ who, key, mood });
+export const line = (who: CharacterId, key: TextKey, mood?: Mood): Line => ({ who, key, mood });
 
 export const CHAPTERS: Chapter[] = [
   {

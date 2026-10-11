@@ -119,6 +119,7 @@ import {
   type ContestResult,
   type ContestState,
 } from '../game/contest';
+import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene } from '../game/drama';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
@@ -176,7 +177,7 @@ import { EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_MAX, EDUARD_STAGES, edu
 import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../game/upgrades';
 
 /** Высота «голоса» героев в диалогах. */
-const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
+const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420, sonya: 760, father: 300 };
 import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, tryDecor, type DecorItem, type DecorKind } from '../game/decor';
 import { buyWithStars, starsAvailable } from '../platform/stars';
 import {
@@ -289,6 +290,8 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   let storyLine = 0;
   /** Реплика финальной церемонии (0 — новость ведущей, дальше — герои). */
   let finaleLine = 0;
+  /** Реплика сцены «Папа и Соня». */
+  let dramaLine = 0;
   /** Шаг бабушкиного обучения и его реплика внизу экрана (пока идёт обучение). */
   let tourStep = 0;
   /** Открыто подтверждение «Начать заново». */
@@ -346,6 +349,11 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     const story = pendingStory(state);
     if (story) {
       card.replaceChildren(storyBox(state, story.kind, story.chapter));
+      return;
+    }
+    const drama = dramaScene(state);
+    if (drama) {
+      card.replaceChildren(dramaBox(drama));
       return;
     }
     const news = eduardNews(state);
@@ -1233,6 +1241,35 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     });
   };
 
+  // ---------- «Папа и Соня» ----------
+
+  /** Сцена сюжета: место действия, реплики по одной; в конце последней — слова благодарности. */
+  const dramaBox = (scene: DramaScene) => {
+    const line = scene.lines[Math.min(dramaLine, scene.lines.length - 1)];
+    const last = dramaLine >= scene.lines.length - 1;
+    const after = last && isLastScene(scene) ? [el('div', 'ui-note', t('drama.end'))] : [];
+    return dialogBox({
+      caption: t(scene.place),
+      art: scene.art && dramaLine === 0 ? `assets/${scene.art}.png` : undefined,
+      portrait: `portrait_${line.who}${line.mood ? `_${line.mood}` : ''}`,
+      name: t(CHARACTERS[line.who].nameKey),
+      // Мысли (в скобках) — без кавычек.
+      text: t(line.key).startsWith('(') || t(line.key) === '…' ? t(line.key) : `«${t(line.key)}»`,
+      pitch: VOICE[line.who],
+      after,
+      nextLabel: t('drama.next'),
+      onNext: () => {
+        if (!last) {
+          dramaLine++;
+          render();
+          return;
+        }
+        dramaLine = 0;
+        update(seeDrama(getState()));
+      },
+    });
+  };
+
   // ---------- Конкурсы «Лучший магазин…» ----------
 
   const contestName = (tier: number) => t(`contest.name.${tierKey(tier)}` as TextKey) + legendNumber(tier);
@@ -1293,9 +1330,13 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       finaleLine = 0;
       update(seeResult(getState()), r.won ? 'success' : 'tap');
     };
+    // Если история «Папа и Соня» рассказана — Соня тоже на церемонии, перед последними словами бабушки.
+    const lines = dramaDone(getState())
+      ? [...FINALE.slice(0, -1), { who: 'sonya' as const, key: 'contest.finale.sonya' as TextKey, mood: 'happy' as const }, FINALE[FINALE.length - 1]]
+      : FINALE;
     if (finale && finaleLine > 0) {
-      const line = FINALE[finaleLine - 1];
-      const last = finaleLine >= FINALE.length;
+      const line = lines[finaleLine - 1];
+      const last = finaleLine >= lines.length;
       return dialogBox({
         caption: t('contest.finale.caption'),
         art: last ? 'assets/news_contest_won.png' : undefined,
