@@ -37,6 +37,10 @@ const css = `
 /* Пиксельные иконки вместо эмодзи (монета, товары, коробка). */
 .ui-ico { height: 1.15em; width: auto; vertical-align: -0.22em; image-rendering: pixelated; }
 .ui-portrait { width: 48px; height: 48px; image-rendering: pixelated; border-radius: 6px; flex: none; }
+.ui-neighbor { border-top: 1px dashed #d8ccb0; padding: 8px 0 2px; margin-top: 6px; }
+.ui-neighbor .ui-who { margin: 0 0 4px; }
+.ui-neighbor-items { font: 600 15px ${UI_FONT}; margin: 2px 0; letter-spacing: .5px; }
+.ui-neighbor .ui-row .ui-btn { margin-top: 4px; flex: 1 1 auto; }
 .ui-who { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
 .ui-who b, .ui-who h3 { margin: 0; }
 .ui-card h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; }
@@ -468,6 +472,12 @@ const ICONS: Record<string, string> = {
   '🧪': 'ico_testtube',
   '💒': 'ico_wedding',
   '🦠': 'ico_virus',
+  // Соседи с заявками.
+  '🏫': 'ico_school',
+  '🏢': 'ico_dorm',
+  '🧸': 'ico_teddy',
+  '🏥': 'ico_hospital',
+  '💼': 'ico_briefcase',
   // Альбом редких гостей.
   '🎸': 'ico_guitar',
   '🎩': 'ico_tophat',
