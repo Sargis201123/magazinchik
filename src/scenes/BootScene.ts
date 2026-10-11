@@ -188,6 +188,8 @@ const SPRITES = [
   'paving',
   'tree',
   'bush',
+  'tree_snow',
+  'bush_snow',
   'lamp',
   'bench',
   'bin',
