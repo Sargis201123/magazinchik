@@ -528,6 +528,8 @@ export interface StoreState {
   security?: import('./watch').Security;
   /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */
   contest?: import('./contest').ContestState;
+  /** Сюжет «Папа и Соня»: сколько сцен показано (drama.ts). На экономику не влияет. */
+  drama?: import('./drama').DramaState;
   /** Ступень своей марки «От бабушки» (0 — нет, brand.ts). */
   brand?: number;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */

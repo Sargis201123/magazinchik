@@ -5,6 +5,8 @@ import { WARDROBE_TEXTURES } from './wardrobe';
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
 const SPRITES = [
+  // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
+  'sunflowers',
   // Кубки конкурсов «Лучший магазин…» (art/contest.py).
   'cup_district',
   'cup_city',

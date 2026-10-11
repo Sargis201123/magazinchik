@@ -4752,6 +4752,9 @@ def main():
     import contest
 
     contest.main()
+    import family
+
+    family.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

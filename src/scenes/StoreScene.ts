@@ -115,6 +115,7 @@ import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor'
 import { restorePurchases } from '../platform/stars';
 import { DOG_DAY_CATCH, hasDog, hasWatchman } from '../game/watch';
 import { contestOf, juryDay, tierKey } from '../game/contest';
+import { sonyaVisits, sunflowersPlanted } from '../game/drama';
 import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
@@ -470,6 +471,10 @@ const ownerLook = (state: StoreState): Look => {
 const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short', baker: 'cap', barista: 'ponytail' };
 /** На какой секунде дня приходит инспектор. */
 const INSPECTOR_AT = 25;
+/** Соня заходит после школы — на этой секунде дня. */
+const SONYA_AT = 18;
+/** Соня: каштановые волосы, сиреневая толстовка, жёлтый рюкзак (как на портрете, art/family.py). */
+const SONYA: Look = { shirt: 0xffffff, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x8f563b, style: 'long', outfit: 'hoodie', outfitTint: 0x68386c, bag: 'backpack', bagTint: 0xfee761 };
 /** Жюри конкурса приходит на этой секунде дня. */
 const JURY_AT = 40;
 /** Жюри: строгие костюмы, у одного портфель, у другого блокнот (как у инспектора). */
@@ -745,6 +750,8 @@ export class StoreScene extends Phaser.Scene {
   /** Сколько кубков стоит на прилавке; жюри конкурса сегодня: ждём, пришло, ушло. */
   private builtCup = 0;
   private jury: 'none' | 'pending' | 'here' | 'done' = 'none';
+  /** Соня сегодня заглянет в магазин (сюжет «Папа и Соня»). */
+  private sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
   private catHome = { x: 0, y: 0 };
   private catOut = false;
   private reviewStar?: Phaser.GameObjects.Text;
@@ -868,6 +875,7 @@ export class StoreScene extends Phaser.Scene {
     }
     if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void this.runInspector();
     if (!this.night && this.jury === 'pending' && elapsed >= JURY_AT) void this.runJury();
+    if (!this.night && this.sonya === 'pending' && elapsed >= SONYA_AT) void this.runSonya();
 
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;
@@ -877,7 +885,7 @@ export class StoreScene extends Phaser.Scene {
         const interval = spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
       }
-    } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here') {
+    } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here') {
       this.endOfDay();
     }
 
@@ -3387,6 +3395,11 @@ export class StoreScene extends Phaser.Scene {
     const front = this.layout.h + FACADE_H;
     this.buildCat(door.x + 47, atStreet ? top + 8.5 : front + 10);
     this.buildBobik(door.x - 24, atStreet ? top + 8.5 : front + 10);
+    // Подсолнухи, которые посадила Соня, — у самого входа.
+    if (sunflowersPlanted(this.state)) {
+      const y = atStreet ? top + 8.5 : front + 10;
+      this.art(door.x - 11, y + 2, 'sunflowers').setOrigin(0.5, 1).setDepth(y + 3);
+    }
     this.buildReviewBoard(door.x + 28, atStreet ? top + 13 : front + 13);
 
     this.pigeons = [];
@@ -5013,6 +5026,25 @@ export class StoreScene extends Phaser.Scene {
     this.inspector = 'done';
   }
 
+  /** Соня заходит после школы: стоит у прилавка рядом с папой, потом уходит. */
+  private async runSonya(): Promise<void> {
+    this.sonya = 'here';
+    const { door, sellerHome } = this.layout;
+    const start = this.streetSpawn();
+    const sprite = this.makePerson(start.x, start.y, SONYA);
+    await this.walk(sprite, door.x, this.streetY, 40);
+    await this.walk(sprite, door.x, door.y - 10, 40);
+    await this.walk(sprite, sellerHome.x - 18, sellerHome.y + 8, 40);
+    if (!this.sys.isActive()) return;
+    this.heartAt(sprite.x, sprite.y - 14);
+    this.popup(sprite.x, sprite.y - 20, t('drama.visit'), '#fff3b0');
+    await this.wait(9000);
+    await this.walk(sprite, door.x, door.y - 10, 40);
+    await this.walk(sprite, door.x, this.layout.h + 16, 40);
+    void this.strollAway(sprite);
+    this.sonya = 'done';
+  }
+
   /** Жюри конкурса: трое заходят вместе, обходят полки, что-то записывают и уходят. */
   private async runJury(): Promise<void> {
     this.jury = 'here';
@@ -5949,7 +5981,7 @@ export class StoreScene extends Phaser.Scene {
         const radioChanged = s.radio !== this.state.radio;
         // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
         const was = this.state;
-        const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was) || hasDog(s) !== hasDog(was);
+        const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was) || hasDog(s) !== hasDog(was) || sunflowersPlanted(s) !== sunflowersPlanted(was);
         this.state = s;
         saveGame(s);
         if (s.level > this.builtLevel) void this.celebrateExpansion();
@@ -5977,6 +6009,7 @@ export class StoreScene extends Phaser.Scene {
     this.resetOven();
     this.inspector = this.state.plan?.inspection ? 'pending' : 'none';
     this.jury = juryDay(this.state) ? 'pending' : 'none';
+    this.sonya = sonyaVisits(this.state) ? 'pending' : 'none';
     this.inspection = null;
     this.rushAnnounced = false;
     this.questsSeen = 0;
