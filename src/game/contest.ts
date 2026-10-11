@@ -68,8 +68,15 @@ export function contestTarget(state: StoreState, tier: number): number {
   return Math.max(2000, Math.round((avg * CONTEST_DAYS * (1 + 0.05 * tier)) / 100) * 100);
 }
 
-/** Приз: растёт со ступенью. */
-export const contestPrize = (tier: number): number => 2000 + 1500 * tier;
+/**
+ * Приз: растёт со ступенью и с магазином — не меньше двух средних дневных выручек (+50% за ступень),
+ * чтобы и у большого магазина награда была заметной.
+ */
+export function contestPrize(state: StoreState, tier: number): number {
+  const week = (state.history ?? []).slice(-7);
+  const avg = week.length ? week.reduce((a, b) => a + b, 0) / week.length : 0;
+  return Math.max(2000 + 1500 * tier, Math.round((avg * (2 + 0.5 * tier)) / 100) * 100);
+}
 
 /** День визита жюри (последний день недели конкурса). */
 export function juryDay(state: StoreState): boolean {
@@ -124,7 +131,7 @@ export function contestNight(state: StoreState, stats: DayStats): StoreState {
   if (day - c.since < CONTEST_DAYS) return { ...state, contest: week };
   const passed = judge(state, week);
   const won = CRITERIA.filter((k) => passed[k]).length >= CONTEST_NEED;
-  const prize = won ? contestPrize(week.tier) : 0;
+  const prize = won ? contestPrize(state, week.tier) : 0;
   const result: ContestResult = { won, tier: week.tier, passed, prize };
   const next: ContestState = { ...week, phase: 'wait', since: day, tier: won ? week.tier + 1 : week.tier, wins: week.wins + (won ? 1 : 0), last: result };
   return {

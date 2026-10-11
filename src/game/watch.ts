@@ -2,15 +2,14 @@
 // дорогое со склада и выручку из кассы. Защита — пёс Бобик из приюта (лает, вор чаще всего
 // убегает; днём лежит у входа и помогает ловить воришек) и ночной сторож Михалыч (ловит всех,
 // за пойманного полиция платит премию). Камеры отпугивают и ночных воров.
-// Ночь решает номер дня, а не общий генератор: перезапуск ничего не меняет, а остальная
-// случайность (симулятор, события) не сдвигается.
+// Шанс кидается общим генератором ночи (у каждого игрока свои ночи), а потери не больше части
+// денег в кассе — кража не загоняет новичка в долг.
 
 import { PRODUCTS, type ProductId, type StoreState } from './economy';
 import { cameraTheft } from './gear';
-import { rng } from './random';
 
 /** С какого дня возможны ночные кражи (до этого магазин никому не интересен). */
-export const BURGLARY_FROM_DAY = 8;
+export const BURGLARY_FROM_DAY = 12;
 /** После кражи (или попытки) воры затихают на столько дней. */
 export const BURGLARY_QUIET_DAYS = 5;
 /** Шанс за ночь: база и прибавка за каждый уровень помещения, верхняя граница. */
@@ -23,6 +22,9 @@ export const STOLEN_SHARE = 0.33;
 export const STOLEN_MAX_UNITS = 10;
 export const CASH_SHARE = 0.2;
 export const CASH_MAX = 300;
+/** Из кассы — не больше этой доли денег; новый замок — не дороже этой доли. */
+export const CASH_MONEY_SHARE = 0.15;
+export const REPAIR_MONEY_SHARE = 0.1;
 /** Новый замок после взлома. */
 export const LOCK_REPAIR = 80;
 
@@ -31,7 +33,8 @@ export const DOG_PRICE = 600;
 export const DOG_FOOD = 12;
 export const DOG_SCARE = 0.85;
 export const DOG_DAY_CATCH = 0.4;
-export const DOG_FROM_DAY = BURGLARY_FROM_DAY;
+/** Бобика можно взять заранее — до первых воров. */
+export const DOG_FROM_DAY = 8;
 
 /** Ночной сторож: плата за ночь и премия от полиции за пойманного. */
 export const WATCHMAN_WAGE = 45;
@@ -111,14 +114,13 @@ function steal(state: StoreState): { state: StoreState; goods: { id: ProductId; 
  * Ночь после закрытия: корм Бобику и плата сторожу, потом — полезут ли воры. state — уже
  * утро следующего дня (state.day — новый день), revenue — выручка прошедшего дня.
  */
-export function burglaryNight(state: StoreState, revenue: number): StoreState {
+export function burglaryNight(state: StoreState, revenue: number, random: () => number = Math.random): StoreState {
   let s = state;
   const security = { ...securityOf(s) };
   if (security.dog) s = { ...s, money: s.money - Math.min(Math.max(0, s.money), DOG_FOOD) };
   // Нечем заплатить сторожу — этой ночью он не выходит.
   const watchman = Boolean(security.watchman) && s.money >= WATCHMAN_WAGE;
   if (watchman) s = { ...s, money: s.money - WATCHMAN_WAGE };
-  const random = rng(s.day * 7907 + 13);
   if (random() >= burglaryChance(s)) return { ...s, security: { ...security, news: security.news?.seen ? undefined : security.news } };
   security.lastBurglary = s.day;
   const news: BurglaryNews = { day: s.day, outcome: 'stolen', goods: [], cash: 0, repair: 0, bounty: 0 };
@@ -134,8 +136,9 @@ export function burglaryNight(state: StoreState, revenue: number): StoreState {
     news.dogSlept = Boolean(security.dog);
     const robbed = steal(s);
     news.goods = robbed.goods;
-    news.cash = Math.min(CASH_MAX, Math.round(Math.max(0, revenue) * CASH_SHARE), Math.max(0, s.money));
-    news.repair = Math.min(LOCK_REPAIR, Math.max(0, s.money - news.cash));
+    const money = Math.max(0, s.money);
+    news.cash = Math.min(CASH_MAX, Math.round(Math.max(0, revenue) * CASH_SHARE), Math.round(money * CASH_MONEY_SHARE));
+    news.repair = Math.min(LOCK_REPAIR, Math.round(money * REPAIR_MONEY_SHARE));
     s = { ...robbed.state, money: s.money - news.cash - news.repair };
   }
   return { ...s, security: { ...security, news } };

@@ -126,6 +126,13 @@ export interface SimResult {
   /** В какой день бабушка выручила с долгами и в какой магазин закрыли за долги (null — не было). */
   rescueDay: number | null;
   bankruptDay: number | null;
+  /** Ночные воры: день, чем кончилось, во сколько обошлось (товар по закупке + касса + замок). */
+  burglaries: { day: number; outcome: string; loss: number }[];
+  /** Смены фаз «Гиганта» и итоги конкурсов — по дням. */
+  giant: { day: number; phase: string }[];
+  contests: { day: number; tier: number; won: boolean }[];
+  /** Состояние в конце прогона. */
+  final: StoreState;
 }
 
 export interface SimOptions {
@@ -226,6 +233,9 @@ export function simulate({
   let rescueDay: number | null = null;
   let bankruptDay: number | null = null;
   const chapterDay: (number | null)[] = [...CHAPTERS, null].map((_, i) => (i === 0 ? 1 : null));
+  const burglaries: SimResult['burglaries'] = [];
+  const giantLog: SimResult['giant'] = [];
+  const contests: SimResult['contests'] = [];
 
   for (let d = 0; d < days; d++) {
     const moneyStart = state.money;
@@ -614,7 +624,17 @@ export function simulate({
     if (!has('cashier')) state = { ...state, ownerServed: state.ownerServed + stats.served };
     state = recordDay(state, stats);
     const night = nightCycle(state, stats, random);
+    const before = night.state;
     state = night.state;
+    const news = before.security?.news;
+    if (news && news.day === state.day && !news.seen) {
+      const goods = news.goods.reduce((sum, g) => sum + g.n * PRODUCTS[g.id].cost, 0);
+      burglaries.push({ day: state.day, outcome: news.outcome, loss: goods + news.cash + news.repair - news.bounty });
+      state = { ...state, security: { ...state.security, news: { ...news, seen: true } } };
+    }
+    if (state.giant && state.giant.phase !== giantLog[giantLog.length - 1]?.phase) giantLog.push({ day: state.day, phase: state.giant.phase });
+    const contest = state.contest;
+    if (contest?.last && contest.phase === 'wait' && contest.since === state.day) contests.push({ day: state.day, tier: contest.last.tier, won: contest.last.won });
     if (state.grandmaRescue && rescueDay === null) rescueDay = state.day;
     if (state.bankrupt && bankruptDay === null) bankruptDay = state.day;
     const expenses = night.bill ? billTotal(night.bill) : 0;
@@ -640,7 +660,7 @@ export function simulate({
     });
     void moneyStart;
   }
-  return { days: out, levelDay, chapterDay, rescueDay, bankruptDay };
+  return { days: out, levelDay, chapterDay, rescueDay, bankruptDay, burglaries, giant: giantLog, contests, final: state };
 }
 
 

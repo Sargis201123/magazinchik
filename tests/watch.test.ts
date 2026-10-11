@@ -8,6 +8,7 @@ import {
   burglaryNews,
   burglaryNight,
   DOG_FOOD,
+  DOG_FROM_DAY,
   DOG_PRICE,
   LOCK_REPAIR,
   seeBurglaryNews,
@@ -16,6 +17,7 @@ import {
   WATCHMAN_BOUNTY,
   WATCHMAN_WAGE,
 } from '../src/game/watch';
+import { rng } from '../src/game/random';
 
 const units = (n: number) => Array.from({ length: n }, () => ({ age: 0 }));
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({
@@ -26,14 +28,9 @@ const shop = (patch: Partial<StoreState> = {}): StoreState => ({
   warehouse: { meat: units(6), bread: units(10), water: units(14) },
   ...patch,
 });
-/** Первая ночь, когда воры точно полезут (решает номер дня). */
-function burglaryDay(base: StoreState): number {
-  for (let day = 20; day < 400; day++) {
-    const s = burglaryNight({ ...base, day }, 0);
-    if (s.security?.news?.day === day) return day;
-  }
-  throw new Error('нет ночи с ворами');
-}
+/** Генератор ночи по списку значений: 0 — воры лезут и Бобик их прогоняет, 0.99 — тихо / Бобик проспал. */
+const rolls = (...xs: number[]) => () => xs.shift() ?? 0.5;
+const burglaryDay = (_: StoreState) => 20;
 
 describe('ночные воры', () => {
   it('в первые дни и сразу после кражи — тихо', () => {
@@ -45,10 +42,23 @@ describe('ночные воры', () => {
     expect(burglaryChance(shop({ gear: { ...shop().gear, cameras: 2 } }))).toBeLessThan(burglaryChance(shop()));
   });
 
+  it('у каждого игрока свои ночи: шанс кидается генератором ночи', () => {
+    expect(burglaryNews(burglaryNight(shop(), 1000, rolls(0.99)))).toBeNull();
+    expect(burglaryNews(burglaryNight(shop(), 1000, rolls(0)))?.outcome).toBe('stolen');
+  });
+
+  it('у бедного магазина воры не забирают последнее: касса и замок — доля денег', () => {
+    const after = burglaryNight(shop({ money: 300 }), 2000, rolls(0));
+    const news = burglaryNews(after)!;
+    expect(news.cash).toBeLessThanOrEqual(45);
+    expect(news.repair).toBeLessThanOrEqual(30);
+    expect(after.money).toBeGreaterThan(200);
+  });
+
   it('без охраны: уносят самое дорогое, деньги из кассы и ломают замок', () => {
     const day = burglaryDay(shop());
     const before = shop({ day });
-    const after = burglaryNight(before, 1000);
+    const after = burglaryNight(before, 1000, rolls(0));
     const news = burglaryNews(after)!;
     expect(news.outcome).toBe('stolen');
     expect(news.goods[0].id).toBe('meat');
@@ -65,28 +75,31 @@ describe('ночные воры', () => {
   it('сторож ловит вора: премия, ничего не пропало; плата — каждую ночь', () => {
     const base = setWatchman(shop(), true);
     const day = burglaryDay(base);
-    const after = burglaryNight({ ...base, day }, 1000);
+    const after = burglaryNight({ ...base, day }, 1000, rolls(0));
     expect(burglaryNews(after)?.outcome).toBe('watchman');
     expect(after.money).toBe(base.money - WATCHMAN_WAGE + WATCHMAN_BOUNTY);
     expect(after.warehouse).toEqual(base.warehouse);
     expect(after.security?.caught).toBe(1);
     // Нечем платить — сторож не выходит, и вор уносит товар.
-    const broke = burglaryNight({ ...base, day, money: WATCHMAN_WAGE - 1 }, 0);
+    const broke = burglaryNight({ ...base, day, money: WATCHMAN_WAGE - 1 }, 0, rolls(0));
     expect(burglaryNews(broke)?.outcome).toBe('stolen');
   });
 
   it('Бобик: берут из приюта, кормят каждую ночь, чаще всего прогоняет вора', () => {
-    expect(adoptDog(shop({ day: BURGLARY_FROM_DAY - 1 }))).toBeNull();
+    expect(adoptDog(shop({ day: DOG_FROM_DAY - 1 }))).toBeNull();
+    // Бобика можно взять заранее — до первых воров.
+    expect(DOG_FROM_DAY).toBeLessThan(BURGLARY_FROM_DAY);
     expect(adoptDog(shop({ money: DOG_PRICE - 1 }))).toBeNull();
     const withDog = adoptDog(shop())!;
     expect(withDog.money).toBe(2000 - DOG_PRICE);
     expect(adoptDog(withDog)).toBeNull();
-    const quiet = burglaryNight({ ...withDog, day: 21, security: { ...withDog.security, lastBurglary: 20 } }, 0);
+    const quiet = burglaryNight({ ...withDog, day: 21, security: { ...withDog.security, lastBurglary: 20 } }, 0, rolls(0));
     expect(quiet.money).toBe(withDog.money - DOG_FOOD);
     let scared = 0;
     let robbed = 0;
+    const random = rng(7);
     for (let day = 20; day < 2000; day++) {
-      const news = burglaryNews(burglaryNight({ ...withDog, day }, 0));
+      const news = burglaryNews(burglaryNight({ ...withDog, day }, 0, random));
       if (news?.outcome === 'dog') scared++;
       if (news?.outcome === 'stolen') {
         robbed++;

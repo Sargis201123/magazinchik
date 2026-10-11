@@ -208,3 +208,20 @@ describe('ночная смена', () => {
     expect(s.money).toBe(10000 - NIGHT_POWER);
   });
 });
+
+describe('кот: лежанки и имя', () => {
+  it('лежанку можно переставить только на купленную, имя — не пустое и не длинное', async () => {
+    const { renameCat, setBed, CAT_NAME_MAX } = await import('../src/game/cat');
+    const base = { ...newGame(), day: 10, money: 5000 };
+    expect(setBed(base, 'basket')).toBeNull();
+    expect(renameCat(base, 'Мурзик')).toBeNull();
+    const cat = adoptCat(base, '  Барсик  ');
+    expect(cat.cat?.name).toBe('Барсик');
+    expect(setBed(cat, 'basket')).toBeNull();
+    const bed = buyBed(cat, 'basket')!;
+    expect(setBed(bed, undefined)?.cat?.bed).toBeUndefined();
+    expect(setBed(bed, 'basket')?.cat?.bed).toBe('basket');
+    expect(renameCat(bed, '   ')).toBeNull();
+    expect(renameCat(bed, 'О'.repeat(40))?.cat?.name).toHaveLength(CAT_NAME_MAX);
+  });
+});
