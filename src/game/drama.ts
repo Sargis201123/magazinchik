@@ -2,7 +2,7 @@
 // беды в семье с головой ушёл в работу; дочка Соня, бабушка и соседи иногда заговаривают
 // с ним по утрам. Что случилось, раскрывается понемногу: сначала только намёки, правда —
 // ближе к концу, а потом — светлый финал.
-// Сцены привязаны к дням (не чаще одной за утро) и на экономику не влияют никак.
+// Сцены привязаны к дням (почти каждый день, но не больше одной за утро) и на экономику не влияют никак.
 
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
@@ -22,8 +22,10 @@ export interface DramaScene {
 }
 
 export interface DramaState {
-  /** Сколько сцен уже показано. */
-  seen: number;
+  /** День последней показанной сцены (по сценарию, а не по календарю игрока). */
+  upTo?: number;
+  /** Старые сохранения: сколько сцен показано (до того, как сцен стало больше). */
+  seen?: number;
   /** День, когда показали последнюю (вторую в то же утро не показываем). */
   last?: number;
   /** День, когда Соня заходит в магазин. */
@@ -32,11 +34,20 @@ export interface DramaState {
 
 export { SCENES };
 
-const seenOf = (state: StoreState): number => state.drama?.seen ?? 0;
+/** Дни сцен в первой версии сюжета — чтобы старое сохранение «N сцен показано» продолжилось с того же места. */
+const FIRST_VERSION_DAYS = [2, 4, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45, 48, 51, 54, 57, 60, 63, 66, 69, 72, 73, 76, 79, 82, 85, 88, 91];
+
+/** До какого дня сценария история уже рассказана. */
+function upToOf(state: StoreState): number {
+  const drama = state.drama;
+  if (drama?.upTo !== undefined) return drama.upTo;
+  return drama?.seen ? FIRST_VERSION_DAYS[Math.min(drama.seen, FIRST_VERSION_DAYS.length) - 1] : 0;
+}
 
 /** Сцена этого утра: следующая по порядку, если её день наступил. */
 export function dramaScene(state: StoreState): DramaScene | null {
-  const scene = SCENES[seenOf(state)];
+  const upTo = upToOf(state);
+  const scene = SCENES.find((s) => s.day > upTo);
   if (!scene || state.tourDone === false || state.day < scene.day || state.drama?.last === state.day) return null;
   return scene;
 }
@@ -44,19 +55,19 @@ export function dramaScene(state: StoreState): DramaScene | null {
 export function seeDrama(state: StoreState): StoreState {
   const scene = dramaScene(state);
   if (!scene) return state;
-  return { ...state, drama: { seen: seenOf(state) + 1, last: state.day, visit: scene.visit ? state.day : state.drama?.visit } };
+  return { ...state, drama: { upTo: scene.day, last: state.day, visit: scene.visit ? state.day : state.drama?.visit } };
 }
 
 /** История рассказана до конца. */
-export const dramaDone = (state: StoreState): boolean => seenOf(state) >= SCENES.length;
+export const dramaDone = (state: StoreState): boolean => upToOf(state) >= SCENES[SCENES.length - 1].day;
 export const isLastScene = (scene: DramaScene): boolean => scene === SCENES[SCENES.length - 1];
 
 /** Соня посадила подсолнухи у входа. */
-const PLANTED = SCENES.findIndex((s) => s.place === 'drama.place.entrance') + 1;
-export const sunflowersPlanted = (state: StoreState): boolean => seenOf(state) >= PLANTED;
+const PLANTED = SCENES.find((s) => s.place === 'drama.place.entrance')!.day;
+export const sunflowersPlanted = (state: StoreState): boolean => upToOf(state) >= PLANTED;
 
 /** После примирения Соня помогает по субботам (каждый седьмой день). */
-const HELPS = SCENES.findIndex((s) => s.visit && s.day >= 80) + 1;
+const HELPS = SCENES.find((s) => s.visit && s.day >= 80)!.day;
 
 /** Соня сегодня заходит в магазин: в день сцены «в магазине» или по субботам после примирения. */
-export const sonyaVisits = (state: StoreState): boolean => state.drama?.visit === state.day || (seenOf(state) >= HELPS && state.day % 7 === 6);
+export const sonyaVisits = (state: StoreState): boolean => state.drama?.visit === state.day || (upToOf(state) >= HELPS && state.day % 7 === 6);
