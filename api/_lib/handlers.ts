@@ -1,6 +1,7 @@
 // Обработчики серверных функций. Не зависят от хостинга: секреты приходят параметром env,
 // а тонкие обёртки лежат в api/ (Vercel) и worker/index.ts (Cloudflare Workers).
 
+import { commandReply, setupProfile } from './botProfile.js';
 import { recordReferral } from './social.js';
 import { bot, itemFromPayload, json, ownedFrom, payloadFor, STARS_CATALOG, verifyInitData, type Env, type StarTransaction } from './telegram.js';
 
@@ -28,6 +29,20 @@ export async function starsInvoice(request: Request, env: Env): Promise<Response
 const PAGE = 100;
 const MAX_PAGES = 50;
 
+/** Все платежи бота в звёздах (постранично). */
+async function allTransactions(token: string): Promise<StarTransaction[]> {
+  const all: StarTransaction[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { transactions } = await bot<{ transactions: StarTransaction[] }>(token, 'getStarTransactions', {
+      offset: page * PAGE,
+      limit: PAGE,
+    });
+    all.push(...transactions);
+    if (transactions.length < PAGE) break;
+  }
+  return all;
+}
+
 /**
  * POST /api/stars-owned { initData } → { items }: что игрок уже купил за звёзды.
  * Источник правды — платежи самого бота в Telegram, поэтому покупки возвращаются на любом телефоне.
@@ -38,16 +53,7 @@ export async function starsOwned(request: Request, env: Env): Promise<Response> 
   const body = (await request.json().catch(() => ({}))) as { initData?: string };
   const user = await verifyInitData(body.initData ?? '', token);
   if (!user) return json({ error: 'bad_init_data' }, 401);
-  const all: StarTransaction[] = [];
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const { transactions } = await bot<{ transactions: StarTransaction[] }>(token, 'getStarTransactions', {
-      offset: page * PAGE,
-      limit: PAGE,
-    });
-    all.push(...transactions);
-    if (transactions.length < PAGE) break;
-  }
-  return json({ items: ownedFrom(all, user.id) });
+  return json({ items: ownedFrom(await allTransactions(token), user.id) });
 }
 
 interface Update {
@@ -86,6 +92,9 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
         chat_id: message.chat.id,
         text: ru ? `Спасибо! ${name} — уже в твоём магазине ✨` : `Thank you! ${name} is already in your store ✨`,
       });
+    } else if (message.text && commandReply(message.text, ru)) {
+      // /paysupport и /terms — Telegram требует их от ботов, которые продают за звёзды.
+      await bot(token, 'sendMessage', { chat_id: message.chat.id, text: commandReply(message.text, ru, message.from?.id) });
     } else if (message.text?.startsWith('/start')) {
       // «/start ref_123» — друга пригласили по ссылке: записать, кто пригласил (social.ts).
       const payload = message.text.slice('/start'.length).trim();
@@ -110,5 +119,38 @@ export async function starsSetup(request: Request, env: Env): Promise<Response> 
   const hook = `https://${url.host}/api/telegram`;
   await bot(token, 'setWebhook', { url: hook, secret_token: secret, allowed_updates: ['message', 'pre_checkout_query'] });
   const info = await bot<{ url: string; pending_update_count: number }>(token, 'getWebhookInfo', {});
-  return json({ ok: true, webhook: info.url });
+  // Заодно — описание бота, команды и кнопка «Играть» в меню (не получилось — вебхук всё равно подключён).
+  const failed = await setupProfile(token, `https://${url.host}/`);
+  return json({ ok: true, webhook: info.url, profile: failed.length ? failed : 'ok' });
+}
+
+/**
+ * GET /api/stars-refund?key=WEBHOOK_SECRET&user=ID — платежи игрока (номер он видит в /paysupport);
+ * с &charge=ID — вернуть звёзды за этот платёж. Только для владельца: ключ — секрет вебхука.
+ */
+export async function starsRefund(request: Request, env: Env): Promise<Response> {
+  const token = env.BOT_TOKEN ?? '';
+  const secret = env.WEBHOOK_SECRET ?? '';
+  if (!token || !secret) return json({ error: 'not_configured' }, 503);
+  const url = new URL(request.url);
+  if (url.searchParams.get('key') !== secret) return json({ error: 'forbidden' }, 403);
+  const user = Number(url.searchParams.get('user'));
+  if (!Number.isSafeInteger(user) || user <= 0) return json({ error: 'user_required' }, 400);
+  const charge = url.searchParams.get('charge');
+  if (charge) {
+    await bot(token, 'refundStarPayment', { user_id: user, telegram_payment_charge_id: charge });
+    return json({ ok: true, refunded: charge });
+  }
+  const all = await allTransactions(token);
+  const refunded = new Set(all.filter((tx) => tx.receiver?.type === 'user').map((tx) => tx.id));
+  const payments = all
+    .filter((tx) => tx.source?.type === 'user' && tx.source.user?.id === user)
+    .map((tx) => ({
+      charge: tx.id,
+      item: itemFromPayload(tx.source?.invoice_payload) ?? null,
+      stars: tx.amount,
+      date: tx.date ? new Date(tx.date * 1000).toISOString() : null,
+      refunded: refunded.has(tx.id),
+    }));
+  return json({ user, payments });
 }
