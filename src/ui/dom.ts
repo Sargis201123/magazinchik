@@ -45,7 +45,9 @@ const css = `
 /* В строке «текст — значение» значение (награда, сумма, кнопка) не переносится, длинный текст слева
    спокойно уходит на вторую строку. */
 .ui-row > :first-child:not(:last-child) { flex: 1 1 auto; min-width: 0; }
-.ui-row > :last-child:not(:first-child) { flex: 0 1 auto; max-width: 60%; text-align: right; }
+.ui-row > :last-child:not(:first-child) { flex: none; white-space: nowrap; text-align: right; }
+/* Длинное текстовое значение (в счетах «платить некому») переносится и не сминает название строки. */
+.ui-row > span:last-child:not(:first-child) { flex: 0 1 auto; max-width: 60%; white-space: normal; }
 .ui-muted { color: #7a7066; font-size: 13px; }
 .ui-quote { font-style: italic; font-size: 13px; margin: 2px 0 6px; }
 .ui-box { border: 2px solid #2b2233; border-radius: 6px; padding: 8px; margin: 6px 0; background: #fbf6ea; }
@@ -156,12 +158,13 @@ const css = `
 .ui-item-actions .ui-chip { min-width: 46px; padding: 8px 6px; font-size: 14px; }
 .ui-tag { display: inline-flex; align-items: center; gap: 2px; background: #fee761; border: 2px solid #2b2233; border-radius: 6px;
   padding: 0 5px; font: 800 13px ${UI_FONT}; line-height: 1.5; }
-.ui-haggle { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 7px 8px 7px 10px; background: #f4ecd8;
+.ui-haggle { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; padding: 7px 8px 7px 10px; background: #f4ecd8;
   border: 2px dashed #d8ccb0; border-radius: 8px; }
 .ui-haggle-label { display: flex; flex-direction: column; flex: none; line-height: 1.15; }
 .ui-haggle-label b { font-size: 14px; white-space: nowrap; }
 .ui-haggle-pips { font-size: 12px; color: #e43b44; letter-spacing: 2px; }
-.ui-haggle-asks { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+/* На узком телефоне кнопки торга уходят под подпись, а не сжимаются. */
+.ui-haggle-asks { flex: 1 1 150px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .ui-haggle-asks .ui-chip { width: 100%; padding: 7px 0; }
 .ui-haggle.done, .ui-haggle.angry { justify-content: center; text-align: center; font-size: 14px; padding: 9px 10px; }
 .ui-haggle.done { background: #e3f5d6; border: 2px solid #8fd16a; color: #2f6b2a; }
