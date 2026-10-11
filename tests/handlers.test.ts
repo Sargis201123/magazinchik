@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { starsInvoice, starsOwned, starsSetup, telegramWebhook } from '../api/_lib/handlers';
+import { starsInvoice, starsOwned, starsRefund, starsSetup, telegramWebhook } from '../api/_lib/handlers';
+import { SUPPORT } from '../api/_lib/botProfile';
 import { payloadFor, STARS_CATALOG, type Env } from '../api/_lib/telegram';
 
 // Серверная часть оплаты звёздами: подпись Telegram, проверка цены перед оплатой,
@@ -98,11 +99,66 @@ describe('оплата звёздами (сервер)', () => {
     expect(String(calls[1].body.text)).toContain(STARS_CATALOG[ITEM].en);
   });
 
-  it('установка вебхука — только с ключом', async () => {
+  it('установка вебхука — только с ключом; заодно описание, команды и кнопка «Играть»', async () => {
     expect((await starsSetup(new Request('https://shop.example/api/stars-setup?key=nope'), env)).status).toBe(403);
     replies.getWebhookInfo = [{ url: 'https://shop.example/api/telegram', pending_update_count: 0 }];
     const res = await starsSetup(new Request(`https://shop.example/api/stars-setup?key=${SECRET}`), env);
-    expect(await res.json()).toEqual({ ok: true, webhook: 'https://shop.example/api/telegram' });
+    expect(await res.json()).toEqual({ ok: true, webhook: 'https://shop.example/api/telegram', profile: 'ok' });
     expect(calls[0].body).toMatchObject({ url: 'https://shop.example/api/telegram', secret_token: SECRET });
+    const methods = calls.map((c) => c.method);
+    for (const m of ['setMyDescription', 'setMyShortDescription', 'setMyCommands']) expect(methods.filter((x) => x === m)).toHaveLength(2);
+    const commands = calls.find((c) => c.method === 'setMyCommands' && c.body.language_code === 'ru')!.body.commands as { command: string }[];
+    expect(commands.map((c) => c.command)).toEqual(['start', 'paysupport', 'terms']);
+    const description = calls.find((c) => c.method === 'setMyDescription')!.body.description as string;
+    expect(description.length).toBeLessThanOrEqual(512);
+    for (const c of calls.filter((c) => c.method === 'setMyShortDescription')) expect(String(c.body.short_description).length).toBeLessThanOrEqual(120);
+    expect(calls.find((c) => c.method === 'setChatMenuButton')!.body).toMatchObject({ menu_button: { type: 'web_app', web_app: { url: 'https://shop.example/' } } });
+  });
+
+  it('профиль не заполнился — вебхук всё равно подключён, ошибка видна', async () => {
+    vi.stubGlobal('fetch', async (url: string, init: { body: string }) => {
+      const method = url.split('/').pop()!;
+      calls.push({ method, body: JSON.parse(init.body) });
+      if (method === 'setMyDescription') return new Response(JSON.stringify({ ok: false, description: 'Too Many Requests' }));
+      return new Response(JSON.stringify({ ok: true, result: method === 'getWebhookInfo' ? { url: 'u' } : true }));
+    });
+    const res = await starsSetup(new Request(`https://shop.example/api/stars-setup?key=${SECRET}`), env);
+    const body = (await res.json()) as { ok: boolean; profile: string[] };
+    expect(body.ok).toBe(true);
+    expect(body.profile).toHaveLength(2);
+    expect(body.profile[0]).toContain('setMyDescription');
+  });
+
+  it('/paysupport и /terms: ответ с контактом поддержки и номером покупателя (Telegram требует для оплаты звёздами)', async () => {
+    const msg = (text: string, lang = 'ru') => telegramWebhook(post({ message: { chat: { id: 5 }, text, from: { id: 5, language_code: lang } } }, { 'x-telegram-bot-api-secret-token': SECRET }), env);
+    await msg('/paysupport');
+    await msg('/terms@magazinchik_bot');
+    await msg('/paysupport', 'en');
+    expect(calls.map((c) => c.method)).toEqual(['sendMessage', 'sendMessage', 'sendMessage']);
+    const [support, terms, en] = calls.map((c) => String(c.body.text));
+    expect(support).toContain(SUPPORT);
+    expect(support).toContain('5');
+    expect(terms).toContain('30 дней');
+    expect(en).toContain('Help with Stars payments');
+    // Обычный текст — без ответа.
+    await msg('привет');
+    expect(calls).toHaveLength(3);
+  });
+
+  it('возврат звёзд: только с ключом; список платежей игрока, затем возврат по номеру платежа', async () => {
+    const get = (q: string) => starsRefund(new Request(`https://shop.example/api/stars-refund?${q}`), env);
+    expect((await get('key=nope&user=7')).status).toBe(403);
+    expect((await get(`key=${SECRET}`)).status).toBe(400);
+    expect(calls).toHaveLength(0);
+    const pay = (id: string, user: number) => ({ id, amount: PRICE, date: 1_700_000_000, source: { type: 'user', user: { id: user }, invoice_payload: payloadFor(ITEM) } });
+    replies.getStarTransactions = [{ transactions: [pay('a', 7), pay('b', 8), { id: 'a', amount: PRICE, receiver: { type: 'user', user: { id: 7 } } }, pay('c', 7)] }];
+    const list = (await (await get(`key=${SECRET}&user=7`)).json()) as { payments: { charge: string; item: string; refunded: boolean }[] };
+    expect(list.payments).toEqual([
+      { charge: 'a', item: ITEM, stars: PRICE, date: new Date(1_700_000_000_000).toISOString(), refunded: true },
+      { charge: 'c', item: ITEM, stars: PRICE, date: new Date(1_700_000_000_000).toISOString(), refunded: false },
+    ]);
+    calls = [];
+    expect(await (await get(`key=${SECRET}&user=7&charge=c`)).json()).toEqual({ ok: true, refunded: 'c' });
+    expect(calls[0]).toEqual({ method: 'refundStarPayment', body: { user_id: 7, telegram_payment_charge_id: 'c' } });
   });
 });

@@ -140,6 +140,8 @@ interface Partner {
 export interface StarTransaction {
   id: string;
   amount: number;
+  /** Когда (unix-время, секунды). */
+  date?: number;
   source?: Partner;
   receiver?: Partner;
 }

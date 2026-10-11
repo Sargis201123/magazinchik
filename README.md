@@ -55,6 +55,20 @@ python3 art/sprites.py  # перерисовать спрайты в public/asse
 2. Settings → Environment Variables → `BOT_TOKEN`, `WEBHOOK_SECRET`, затем Redeploy.
 3. Один раз открыть `https://<адрес игры>/api/stars-setup?key=<WEBHOOK_SECRET>`.
 
+Открытие `/api/stars-setup?key=…` заодно заполняет профиль бота: описание и короткое описание
+(ru/en), команды `/start`, `/paysupport`, `/terms` и кнопку меню «Играть». Аватарку бот поставить
+сам не может — её загружают в @BotFather (`/setuserpic`, файл `public/icon-512.png`).
+
+### Поддержка и возврат звёзд
+
+Telegram требует от ботов, которые продают за звёзды, команды `/paysupport` и `/terms` — они есть
+(`api/_lib/botProfile.ts`, контакт поддержки — `SUPPORT`). В ответ на `/paysupport` бот сообщает
+игроку его номер покупателя. По этому номеру:
+
+- `/api/stars-refund?key=<WEBHOOK_SECRET>&user=<номер>` — все платежи игрока (`charge`, вещь, дата, был ли возврат);
+- `/api/stars-refund?key=<WEBHOOK_SECRET>&user=<номер>&charge=<charge>` — вернуть звёзды за этот платёж
+  (вещь из игры пропадёт сама: купленное считается по платежам без возвратов).
+
 Без секретов игра работает как раньше, а кнопка покупки честно пишет, что оплата недоступна.
 Каждую премиальную вещь можно один раз бесплатно примерить на день.
 
