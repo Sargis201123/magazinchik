@@ -65,13 +65,13 @@ import {
   type RareGuestId,
 } from '../game/endless';
 import { loadGame, saveGame } from '../game/save';
-import { t, type TextKey } from '../i18n';
+import { getLang, t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { findPath, type Rect } from './paths';
 import { ambience } from '../platform/ambience';
 import { haptic } from '../platform/telegram';
-import { button, el, openModal, UI_FONT } from '../ui/dom';
+import { button, el, openModal, toast, UI_FONT } from '../ui/dom';
 import {
   BIG_DAYS,
   BLACKOUT_CHECKOUT,
@@ -113,6 +113,7 @@ import { carryOf, cartExtra, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM
 import { showGift } from '../ui/gift';
 import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
+import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
@@ -749,6 +750,14 @@ export class StoreScene extends Phaser.Scene {
       this.state = next;
       saveGame(next);
       if (!save) this.buildWorld();
+    });
+    // Игрок на месте — бот не будет напоминать. Пришёл по приглашению друга — подарок новичку.
+    void socialPing(getLang()).then((info) => {
+      if (!info?.welcome) return;
+      this.state = { ...this.state, money: this.state.money + WELCOME_GIFT };
+      saveGame(this.state);
+      this.hud.update(this.state, this.timeLeft);
+      toast('assets/ico_gift.png', t('social.welcome'), t('social.welcomeText', { n: WELCOME_GIFT }));
     });
     this.hud = new Hud();
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
@@ -5761,6 +5770,8 @@ export class StoreScene extends Phaser.Scene {
     this.hud.update(this.state, DAY_SECONDS);
     this.refreshWarehouse();
     this.time.delayedCall(400, () => showGift(claimed.gift));
+    // Со второго дня — один раз спросить, можно ли боту напоминать о магазине.
+    if (this.state.day > 1) this.time.delayedCall(4000, askWriteAccessOnce);
   }
 
   private showMorning(): void {

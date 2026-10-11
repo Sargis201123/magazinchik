@@ -1,6 +1,7 @@
 // Обработчики серверных функций. Не зависят от хостинга: секреты приходят параметром env,
 // а тонкие обёртки лежат в api/ (Vercel) и worker/index.ts (Cloudflare Workers).
 
+import { recordReferral } from './social.js';
 import { bot, itemFromPayload, json, ownedFrom, payloadFor, STARS_CATALOG, verifyInitData, type Env, type StarTransaction } from './telegram.js';
 
 /** POST /api/stars-invoice { initData, item } → { link }: счёт в звёздах на одну вещь оформления. */
@@ -54,7 +55,7 @@ interface Update {
   message?: {
     chat: { id: number };
     text?: string;
-    from?: { language_code?: string };
+    from?: { id: number; language_code?: string };
     successful_payment?: { invoice_payload: string };
   };
 }
@@ -86,6 +87,9 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
         text: ru ? `Спасибо! ${name} — уже в твоём магазине ✨` : `Thank you! ${name} is already in your store ✨`,
       });
     } else if (message.text?.startsWith('/start')) {
+      // «/start ref_123» — друга пригласили по ссылке: записать, кто пригласил (social.ts).
+      const payload = message.text.slice('/start'.length).trim();
+      if (payload && message.from) await recordReferral(env, message.from.id, payload).catch((e) => console.error(e));
       await bot(token, 'sendMessage', {
         chat_id: message.chat.id,
         text: ru ? 'Бабушкин магазинчик ждёт тебя! 🛒' : "Grandma's little shop is waiting for you! 🛒",

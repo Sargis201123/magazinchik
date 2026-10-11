@@ -1257,6 +1257,14 @@ export const en: Record<TextKey, string> = {
   "giant.def.brand": "own bakes",
   "ach.giant": "David and Goliath",
   "ach.giant.desc": "Defeat the Giant hypermarket",
+  "social.title": "Invite friends",
+  "social.note": "Get {n} 💰 for every friend who starts playing. Your friend gets {g} 💰 to start with.",
+  "social.count": "Friends playing: {n}",
+  "social.invite": "📨 Invite",
+  "social.claim": "Claim reward: {n} × {r} = {sum} 💰",
+  "social.share": "Come play my little shop! Help grandma run the store — there's a starter gift for you 🎁",
+  "social.welcome": "A gift from your friend!",
+  "social.welcomeText": "You were invited — here's {n} 💰 to start",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

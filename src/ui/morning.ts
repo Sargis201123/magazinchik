@@ -159,6 +159,7 @@ import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420 };
 import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, tryDecor, type DecorItem, type DecorKind } from '../game/decor';
 import { buyWithStars, starsAvailable } from '../platform/stars';
+import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, who } from './dom';
 
@@ -1357,6 +1358,27 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     return box;
   };
 
+  /** «Пригласи друзей»: ссылка через «Поделиться» Telegram, награда за каждого, кто начал играть. */
+  const inviteBox = (): HTMLElement[] => {
+    const info = socialInfo();
+    if (!info) return [];
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', `🤝 ${t('social.title')}`), el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT })));
+    if (info.friends) box.append(el('div', 'ui-muted', t('social.count', { n: info.friends })));
+    box.append(button(t('social.invite'), () => inviteFriends(t('social.share')), 'ui-btn'));
+    if (info.unclaimed) {
+      const claim = button(t('social.claim', { n: info.unclaimed, r: INVITE_REWARD, sum: info.unclaimed * INVITE_REWARD }), () => {
+        claim.disabled = true;
+        void claimFriends().then((n) => {
+          const now = getState();
+          update(n ? { ...now, money: now.money + n * INVITE_REWARD } : now, n ? 'success' : 'tap');
+        });
+      }, 'ui-btn');
+      box.append(claim);
+    }
+    return [box];
+  };
+
   const decorBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('decor.title')), el('div', 'ui-muted', t('decor.note')));
@@ -2010,6 +2032,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     );
     const out: HTMLElement[] = [
       achievementsButton(state),
+      ...inviteBox(),
       decorBox(state),
       replay,
       adsBox(state),
