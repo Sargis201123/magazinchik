@@ -4749,6 +4749,9 @@ def main():
     import security
 
     security.main()
+    import contest
+
+    contest.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

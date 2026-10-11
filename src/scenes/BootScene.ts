@@ -5,6 +5,12 @@ import { WARDROBE_TEXTURES } from './wardrobe';
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
 const SPRITES = [
+  // Кубки конкурсов «Лучший магазин…» (art/contest.py).
+  'cup_district',
+  'cup_city',
+  'cup_region',
+  'cup_country',
+  'cup_legend',
   // Ночная охрана: пёс Бобик и его будка (art/security.py).
   'bobik_lie',
   'bobik_sit0',

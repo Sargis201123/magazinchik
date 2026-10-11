@@ -99,6 +99,26 @@ import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
 import { pendingTip, seeTip, TIP_ICONS } from '../game/tips';
 import { expiringCount, markdownExpiring } from '../game/economy';
 import { currentCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
+import {
+  CONTEST_DAYS,
+  CONTEST_EMPTY,
+  CONTEST_EVERY_LOST,
+  CONTEST_EVERY_WON,
+  CONTEST_NEED,
+  CONTEST_UNHAPPY,
+  contestAnnounce,
+  contestOf,
+  contestRating,
+  contestResult,
+  CRITERIA,
+  juryDay,
+  legendNumber,
+  seeAnnounce,
+  seeResult,
+  tierKey,
+  type ContestResult,
+  type ContestState,
+} from '../game/contest';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
@@ -267,6 +287,8 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   let slideTab = false;
   /** Какая реплика сюжетного диалога сейчас на экране. */
   let storyLine = 0;
+  /** Реплика финальной церемонии (0 — новость ведущей, дальше — герои). */
+  let finaleLine = 0;
   /** Шаг бабушкиного обучения и его реплика внизу экрана (пока идёт обучение). */
   let tourStep = 0;
   /** Открыто подтверждение «Начать заново». */
@@ -334,6 +356,16 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     const giantPhase = giantNews(state);
     if (giantPhase) {
       card.replaceChildren(giantNewsBox(state, giantPhase));
+      return;
+    }
+    const result = contestResult(state);
+    if (result) {
+      card.replaceChildren(contestResultBox(result));
+      return;
+    }
+    const announce = contestAnnounce(state);
+    if (announce) {
+      card.replaceChildren(contestAnnounceBox(announce));
       return;
     }
     const night = burglaryNews(state);
@@ -408,6 +440,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       info,
       questsBox(state),
       ...giantBox(state),
+      ...contestBox(state),
       ...weeklyBox(state),
       tabs,
       body,
@@ -1198,6 +1231,120 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       nextLabel: t(phase === 'won' ? 'giant.hooray' : 'bigday.ok'),
       onNext: () => update(seeGiantNews(getState()), phase === 'won' ? 'success' : 'tap'),
     });
+  };
+
+  // ---------- Конкурсы «Лучший магазин…» ----------
+
+  const contestName = (tier: number) => t(`contest.name.${tierKey(tier)}` as TextKey) + legendNumber(tier);
+  const cupTexture = (tier: number) => `cup_${tierKey(tier)}`;
+
+  /** Ведущая объявляет конкурс: что оценят и сколько нужно. */
+  const contestAnnounceBox = (c: ContestState) =>
+    dialogBox({
+      caption: t('bigday.caption'),
+      art: 'assets/news_contest.png',
+      portrait: 'portrait_anchor_happy',
+      name: t('bigday.anchor'),
+      text: t('contest.announce', { name: contestName(c.tier) }),
+      pitch: 520,
+      after: [
+        el(
+          'div',
+          'ui-note',
+          t('contest.announce.hint', { r: contestRating(c.tier), target: c.target, p: Math.round(CONTEST_UNHAPPY * 100), e: CONTEST_EMPTY }),
+        ),
+      ],
+      nextLabel: t('contest.letsgo'),
+      onNext: () => update(seeAnnounce(getState()), 'success'),
+    });
+
+  /** Неделя конкурса: как идут дела по каждой оценке. */
+  const contestBox = (state: StoreState): HTMLElement[] => {
+    const c = contestOf(state);
+    if (!c || c.phase !== 'run') return [];
+    const box = el('div', 'ui-box');
+    const need = contestRating(c.tier);
+    const ok = (pass: boolean, text: string) => el('div', '', `${pass ? '✅' : '•'} ${text}`);
+    box.append(el('b', '', t('contest.box.title', { name: contestName(c.tier), n: state.day - c.since + 1, of: CONTEST_DAYS })));
+    if (juryDay(state)) box.append(el('div', 'ui-note', t('contest.box.jury')));
+    box.append(
+      ok(state.rating >= need, t('contest.box.rating', { r: state.rating.toFixed(1), need })),
+      ok(c.revenue >= c.target, t('contest.box.revenue', { n: c.revenue, target: c.target })),
+      ok(c.unhappy <= Math.max(3, Math.round(c.served * CONTEST_UNHAPPY)), t('contest.box.happy', { u: c.unhappy, s: c.served, p: Math.round(CONTEST_UNHAPPY * 100) })),
+      ok(c.empty <= CONTEST_EMPTY, t('contest.box.shelves', { n: c.empty, max: CONTEST_EMPTY })),
+      el('div', 'ui-muted', t('contest.box.need', { n: CONTEST_NEED })),
+    );
+    return [box];
+  };
+
+  /** Первая победа — финал истории: после новости по очереди говорят герои. */
+  const FINALE: { who: CharacterId; key: TextKey; mood: 'happy' | 'surprised' }[] = [
+    { who: 'grandma', key: 'contest.finale.1', mood: 'happy' },
+    { who: 'valya', key: 'contest.finale.2', mood: 'happy' },
+    { who: 'marat', key: 'contest.finale.3', mood: 'happy' },
+    { who: 'eduard', key: 'contest.finale.4', mood: 'surprised' },
+    { who: 'grandma', key: 'contest.finale.5', mood: 'happy' },
+  ];
+
+  /** Итоги конкурса: новость ведущей, оценки жюри, награда; первая победа — церемония. */
+  const contestResultBox = (r: ContestResult) => {
+    const finale = r.won && r.tier === 0;
+    const done = () => {
+      finaleLine = 0;
+      update(seeResult(getState()), r.won ? 'success' : 'tap');
+    };
+    if (finale && finaleLine > 0) {
+      const line = FINALE[finaleLine - 1];
+      const last = finaleLine >= FINALE.length;
+      return dialogBox({
+        caption: t('contest.finale.caption'),
+        art: last ? 'assets/news_contest_won.png' : undefined,
+        portrait: `portrait_${line.who}_${line.mood}`,
+        name: t(CHARACTERS[line.who].nameKey),
+        text: `«${t(line.key)}»`,
+        pitch: VOICE[line.who],
+        after: last ? [el('div', 'ui-note', t('contest.finale.end'))] : [],
+        nextLabel: last ? t('contest.thanks') : t('story.next'),
+        onNext: () => {
+          if (last) return done();
+          finaleLine++;
+          render();
+        },
+      });
+    }
+    const marks = el('div', 'ui-note');
+    marks.append(...CRITERIA.map((k) => el('div', '', `${r.passed[k] ? '✅' : '❌'} ${t(`contest.crit.${k}` as TextKey)}`)));
+    const after: HTMLElement[] = [marks];
+    if (r.won) {
+      after.push(el('div', 'ui-note', t('contest.won.reward', { prize: r.prize, next: contestName(r.tier + 1), n: CONTEST_EVERY_WON })));
+    }
+    return dialogBox({
+      caption: t('bigday.caption'),
+      art: `assets/news_contest_${r.won ? 'won' : 'lost'}.png`,
+      portrait: r.won ? 'portrait_anchor_happy' : 'portrait_anchor_sad',
+      name: t('bigday.anchor'),
+      text: t(r.won ? 'contest.won.news' : 'contest.lost.news', { name: contestName(r.tier), n: CONTEST_EVERY_LOST }),
+      pitch: 520,
+      after,
+      nextLabel: finale ? t('story.next') : t(r.won ? 'giant.hooray' : 'bigday.ok'),
+      onNext: () => {
+        if (!finale) return done();
+        finaleLine = 1;
+        render();
+      },
+    });
+  };
+
+  /** Кубки во вкладке «Магазин»: звание и все победы. */
+  const trophiesBox = (state: StoreState): HTMLElement[] => {
+    const wins = contestOf(state)?.wins ?? 0;
+    if (!wins) return [];
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('contest.trophies')), el('div', '', t('contest.title', { name: contestName(wins - 1) })));
+    for (let tier = wins - 1; tier >= 0; tier--) {
+      box.append(artRow(cupTexture(tier), { name: contestName(tier), sub: t('contest.trophy.sub'), actions: [] }));
+    }
+    return [box];
   };
 
   /** Утро после ночных воров: участковый рассказывает, что случилось. */
@@ -2120,6 +2267,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       adsBox(state),
       ...eduardBox(state),
       rankBox(state),
+      ...trophiesBox(state),
       recordsBox(state),
       albumBox(state),
     ];
