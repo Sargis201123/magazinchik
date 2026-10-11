@@ -2,6 +2,7 @@
 // сюжетные счётчики и план на завтра. Этим пользуются и игра, и симулятор.
 
 import { burglaryNight } from './watch';
+import { contestGuests, contestNight } from './contest';
 import { lightsGuests } from './gear';
 import { addReport } from './reports';
 import { departmentGuests, endDay, restStaff, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
@@ -53,7 +54,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = burglaryNight(giantNight(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), stats.revenue), stats.revenue);
+  const next = contestNight(burglaryNight(giantNight(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), stats.revenue), stats.revenue), stats);
   return {
     ...night,
     state: next,
@@ -91,6 +92,7 @@ export const guestFactor = (state: StoreState): number =>
   departmentGuests(state) *
   eduardGuests(state) *
   giantGuests(state) *
+  contestGuests(state) *
   knownBigDayGuests(state.day);
 
 /**

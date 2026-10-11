@@ -526,6 +526,8 @@ export interface StoreState {
   giant?: import('./giant').GiantState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
+  /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */
+  contest?: import('./contest').ContestState;
   /** Ступень своей марки «От бабушки» (0 — нет, brand.ts). */
   brand?: number;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */

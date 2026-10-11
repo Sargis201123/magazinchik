@@ -114,6 +114,7 @@ import { showGift } from '../ui/gift';
 import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
 import { DOG_DAY_CATCH, hasDog, hasWatchman } from '../game/watch';
+import { contestOf, juryDay, tierKey } from '../game/contest';
 import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
@@ -469,6 +470,14 @@ const ownerLook = (state: StoreState): Look => {
 const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short', baker: 'cap', barista: 'ponytail' };
 /** На какой секунде дня приходит инспектор. */
 const INSPECTOR_AT = 25;
+/** Жюри конкурса приходит на этой секунде дня. */
+const JURY_AT = 40;
+/** Жюри: строгие костюмы, у одного портфель, у другого блокнот (как у инспектора). */
+const JURY_LOOKS: Look[] = [
+  { shirt: 0xffffff, skin: 0xf2d3ab, pants: 0x262b44, hair: 0xc0cbdc, outfit: 'suit', outfitTint: 0x3a4466, prop: 'briefcase', propTint: 0x733e39 },
+  { shirt: 0xf6757a, skin: 0xeec39a, pants: 0x262b44, hair: 0x4a2c1a, style: 'long', outfit: 'suit', outfitTint: 0x68386c, face: 'sunglasses' },
+  { shirt: 0xffffff, skin: 0xd9a066, pants: 0x181425, hair: 0x181425, outfit: 'suit', outfitTint: 0x265c42, prop: 'newspaper' },
+];
 const BROKEN_TINT = 0x8a8a8a;
 const SKINS = [0xf2d3ab, 0xd9a066, 0x8f563b, 0xeec39a];
 
@@ -733,6 +742,9 @@ export class StoreScene extends Phaser.Scene {
   /** Магазин закрыт на ночь (роллеты опущены): Бобик сидит настороже, у двери — сторож. */
   private closed = false;
   private nightWatch: Phaser.GameObjects.GameObject[] = [];
+  /** Сколько кубков стоит на прилавке; жюри конкурса сегодня: ждём, пришло, ушло. */
+  private builtCup = 0;
+  private jury: 'none' | 'pending' | 'here' | 'done' = 'none';
   private catHome = { x: 0, y: 0 };
   private catOut = false;
   private reviewStar?: Phaser.GameObjects.Text;
@@ -855,6 +867,7 @@ export class StoreScene extends Phaser.Scene {
       this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.rush'), '#fff3b0');
     }
     if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void this.runInspector();
+    if (!this.night && this.jury === 'pending' && elapsed >= JURY_AT) void this.runJury();
 
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;
@@ -864,7 +877,7 @@ export class StoreScene extends Phaser.Scene {
         const interval = spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
       }
-    } else if (this.customers.size === 0 && this.inspector !== 'here') {
+    } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here') {
       this.endOfDay();
     }
 
@@ -1647,6 +1660,7 @@ export class StoreScene extends Phaser.Scene {
     this.buildCoffee();
     this.buildOven();
     this.buildRadio();
+    this.buildCup();
     this.buildDelivery();
     this.kiosk = undefined;
     this.kioskBusy = false;
@@ -1655,6 +1669,17 @@ export class StoreScene extends Phaser.Scene {
     this.kiosk = this.art(at.x, at.y, 'kiosk').setDepth(at.y + 9);
     this.kioskScreen = this.add.rectangle(at.x, at.y - 9, 6, 4, 0x2ce8f5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(at.y + 10);
     this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
+  }
+
+  /** Кубок последнего выигранного конкурса — на прилавке, слегка поблёскивает. */
+  private buildCup(): void {
+    const wins = contestOf(this.state)?.wins ?? 0;
+    this.builtCup = wins;
+    if (!wins) return;
+    const { counter } = this.layout;
+    const cup = this.art(counter.x - 11, counter.y - 3, `cup_${tierKey(wins - 1)}`).setOrigin(0.5, 1).setDepth(counter.y + 22);
+    const glint = this.add.rectangle(cup.x - 2, cup.y - 9, 1, 1, 0xffffff).setDepth(cup.depth + 1).setAlpha(0);
+    this.tweens.add({ targets: glint, alpha: { from: 0, to: 1 }, scale: { from: 1, to: 2.5 }, duration: 300, yoyo: true, repeat: -1, repeatDelay: 2600 });
   }
 
   /** Радио на прилавке: касание переключает волну, пока играет — над ним плывут ноты. */
@@ -4988,6 +5013,36 @@ export class StoreScene extends Phaser.Scene {
     this.inspector = 'done';
   }
 
+  /** Жюри конкурса: трое заходят вместе, обходят полки, что-то записывают и уходят. */
+  private async runJury(): Promise<void> {
+    this.jury = 'here';
+    const { door, slots, sellerHome } = this.layout;
+    const start = this.streetSpawn();
+    this.popup(door.x, door.y - 24, t('popup.jury'), '#fee761');
+    haptic.tap();
+    sound.bell();
+    const walkOne = async (look: Look, i: number) => {
+      await this.wait(i * 700);
+      const sprite = this.makePerson(start.x + i * 6, start.y, look);
+      const dx = (i - 1) * 9;
+      await this.walk(sprite, door.x + dx, this.streetY, 32);
+      await this.walk(sprite, door.x + dx, door.y - 10, 32);
+      const order = slots.map((_, k) => k).filter((k) => k % 3 === i % 3 || slots.length < 4);
+      for (const k of order.slice(0, 3)) {
+        await this.walk(sprite, slots[k].x + dx / 2, slots[k].y + 22, 32);
+        if (!this.sys.isActive()) return;
+        this.popup(sprite.x, sprite.y - 16, t('popup.juryNote'), '#ffffff');
+        await this.wait(900);
+      }
+      await this.walk(sprite, sellerHome.x - 24 + dx, sellerHome.y - 8, 32);
+      await this.wait(600);
+      await this.walk(sprite, door.x + dx, this.layout.h + 16, 32);
+      void this.strollAway(sprite);
+    };
+    await Promise.all(JURY_LOOKS.map((look, i) => walkOne(look, i)));
+    this.jury = 'done';
+  }
+
   // ---------- Покупатели ----------
 
   private spawnCustomer(forced?: { look: Look; at: Phaser.Types.Math.Vector2Like }): void {
@@ -5878,7 +5933,8 @@ export class StoreScene extends Phaser.Scene {
     const trialOver = Boolean(trial && trial.day < this.state.day);
     if (trialOver) this.state = { ...this.state, decor: { ...this.state.decor, trial: undefined } };
     // Эдуард за ночь открыл магазин побольше — перерисовать улицу.
-    if (trialOver || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant) this.buildWorld();
+    const cupChanged = (contestOf(this.state)?.wins ?? 0) !== this.builtCup;
+    if (trialOver || cupChanged || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant) this.buildWorld();
     this.updateLighting(0);
     this.openShop();
     showMorning({
@@ -5920,6 +5976,7 @@ export class StoreScene extends Phaser.Scene {
     this.aromaUntil = 0;
     this.resetOven();
     this.inspector = this.state.plan?.inspection ? 'pending' : 'none';
+    this.jury = juryDay(this.state) ? 'pending' : 'none';
     this.inspection = null;
     this.rushAnnounced = false;
     this.questsSeen = 0;
