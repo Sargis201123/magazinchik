@@ -65,7 +65,7 @@ python3 art/sprites.py  # перерисовать спрайты в public/asse
 - **Напоминания**: раз в час (cron в `wrangler.jsonc`) бот пишет тем, кто не заходил почти сутки, —
   днём, не чаще раза в день и не больше трёх раз подряд; заблокировавшим бота не пишет.
 
-Нужна база Cloudflare D1:
+Нужна база Cloudflare D1 (уже подключена в `wrangler.jsonc`; для своего форка — так):
 
 1. Cloudflare → Storage & Databases → D1 → Create, имя `magazinchik`; скопировать Database ID.
 2. Добавить в `wrangler.jsonc`:
