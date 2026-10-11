@@ -1235,21 +1235,6 @@ export const en: Record<TextKey, string> = {
   "decor.outfit_retro": "Retro shopkeeper",
   "decor.outfit_tuxedo": "Millionaire",
   "decor.outfit_cyber": "Cyber seller",
-  "neighbor.school": "School No. 5",
-  "neighbor.dorm": "Student hostel",
-  "neighbor.kindergarten": "Sunshine kindergarten",
-  "neighbor.hospital": "City hospital",
-  "neighbor.office": "Square business centre",
-  "neighbors.title": "📮 Neighbours' orders",
-  "neighbors.note": "Neighbours order ahead and pay above retail. Send before the deadline: your reputation grows, and so do their orders.",
-  "neighbors.due": "by day {day} · {n} day(s) left",
-  "neighbors.dueToday": "today is the last day!",
-  "neighbors.send": "Send · +{n} 💰",
-  "neighbors.short": "Not enough stock — buy more",
-  "neighbors.decline": "Decline",
-  "neighbors.rep": "Reputation: {stars}",
-  "neighbors.expired": "Missed order: {names} — reputation dropped",
-  "neighbors.todo": "Neighbour's order: {name} — {when}",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

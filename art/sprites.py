@@ -4731,7 +4731,6 @@ def main():
 
     icons.main()
     # Гардероб покупателей и срочные новости особых дней.
-    import neighbors
     import news
     import street_props
     import wardrobe
@@ -4742,7 +4741,6 @@ def main():
 
     costumes.main()
     news.main()
-    neighbors.main()
     street_props.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
