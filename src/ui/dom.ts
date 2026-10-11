@@ -45,7 +45,7 @@ const css = `
 /* В строке «текст — значение» значение (награда, сумма, кнопка) не переносится, длинный текст слева
    спокойно уходит на вторую строку. */
 .ui-row > :first-child:not(:last-child) { flex: 1 1 auto; min-width: 0; }
-.ui-row > :last-child:not(:first-child) { flex: none; white-space: nowrap; text-align: right; }
+.ui-row > :last-child:not(:first-child) { flex: 0 1 auto; max-width: 60%; text-align: right; }
 .ui-muted { color: #7a7066; font-size: 13px; }
 .ui-quote { font-style: italic; font-size: 13px; margin: 2px 0 6px; }
 .ui-box { border: 2px solid #2b2233; border-radius: 6px; padding: 8px; margin: 6px 0; background: #fbf6ea; }
@@ -82,7 +82,7 @@ const css = `
 .ui-closed h2 { justify-content: center; }
 .ui-btn[disabled], .ui-chip[disabled] { background: #c9c0ad; color: #7a7066; }
 .ui-chip { padding: 5px 9px; font: 600 13px ${UI_FONT}; border: 2px solid #2b2233; border-radius: 6px;
-  background: #f2c14e; color: #2b2233; box-shadow: 0 2px 0 #2b2233; min-width: 34px; }
+  background: #f2c14e; color: #2b2233; box-shadow: 0 2px 0 #2b2233; min-width: 36px; min-height: 36px; }
 .ui-chip.active { background: #2b2233; color: #f4ecd8; }
 .ui-chip-off { background: #e6dcc4; color: #7a7066; box-shadow: none; }
 .ui-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -91,10 +91,12 @@ const css = `
 .ui-tab { flex: 1; padding: 8px 1px; font: 600 12px ${UI_FONT}; border: 2px solid #2b2233;
   border-radius: 6px; background: #e6dcc4; color: #2b2233; }
 .ui-tab.active { background: #2b2233; color: #f4ecd8; }
-.ui-price { display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: 6px 0; border: 2px solid #2b2233;
+/* На узком телефоне кнопки цены уходят на вторую строку — подпись спроса не сжимается. */
+.ui-price { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 8px; margin: 6px 0; border: 2px solid #2b2233;
   border-radius: 6px; background: #fbf6ea; }
 .ui-price-icon { width: 30px; height: 36px; image-rendering: pixelated; flex: none; }
-.ui-price-info { flex: 1; min-width: 0; font-size: 14px; }
+.ui-price-info { flex: 1 1 150px; min-width: 0; font-size: 14px; }
+.ui-price > .ui-chips { margin-left: auto; }
 .ui-price-value { min-width: 54px; text-align: center; }
 .ui-price-locked { background: #e6dcc4; filter: grayscale(1); opacity: .7; }
 .ui-bar { height: 6px; margin: 4px 0 2px; background: #e6dcc4; border: 1px solid #2b2233; border-radius: 3px; overflow: hidden; }
@@ -128,7 +130,7 @@ const css = `
 /* Подарок за вход: семь коробочек серии, сегодняшняя подпрыгивает. */
 .ui-gift-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 4px 0 8px; }
 .ui-gift-day { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; border: 2px solid #2b2233;
-  border-radius: 6px; background: #fbf6ea; font-size: 10px; color: #6a5f58; }
+  border-radius: 6px; background: #fbf6ea; font-size: 11px; color: #6a5f58; letter-spacing: -0.2px; }
 .ui-gift-day.done { background: #e3f5d6; color: #3e8948; }
 .ui-gift-day.today { background: #fee761; color: #2b2233; font-weight: 700; animation: ui-pulse 1s ease-in-out infinite; }
 .ui-gift-day.big .ui-gift-box { font-size: 20px; }
@@ -230,8 +232,8 @@ const css = `
 .ui-tour .ui-dialog-speech { min-height: 64px; }
 .ui-tour .ui-dialog-text { font-size: 14px; min-height: 0; }
 .ui-tour-head { font-size: 12px; color: #8b6d5c; margin-bottom: 10px; }
-.ui-tour-skip { position: absolute; top: 4px; right: 8px; background: none; border: none; color: #8b6d5c; font-size: 12px;
-  text-decoration: underline; padding: 2px; cursor: pointer; }
+.ui-tour-skip { position: absolute; top: 0; right: 0; background: none; border: none; color: #8b6d5c; font-size: 13px;
+  text-decoration: underline; padding: 10px 12px; min-height: 40px; cursor: pointer; }
 .ui-card.touring { padding-bottom: 230px; }
 .ui-tour-focus { position: relative; z-index: 4; outline: 3px solid #fee761; outline-offset: 2px; border-radius: 6px;
   box-shadow: 0 0 0 6px #2b2233, 0 0 0 2000px rgba(15, 12, 22, .45); animation: ui-tour-pulse 1s ease-in-out infinite; }
@@ -269,8 +271,8 @@ const css = `
 .ui-todo-row .ui-chip { flex: none; padding: 6px 8px; font-size: 13px; }
 .ui-contract { margin-top: 8px; padding: 6px 8px; border: 2px dashed #b8a98a; border-radius: 8px; }
 .ui-contract .ui-chips { margin-top: 4px; }
-.ui-promo { margin-top: 4px; display: flex; flex-wrap: nowrap; gap: 4px; }
-.ui-promo .ui-chip { padding: 4px 6px; font-size: 12px; }
+.ui-promo { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; }
+.ui-promo .ui-chip { padding: 4px 8px; font-size: 12px; }
 .ui-loss-bar { display: flex; height: 14px; border: 2px solid #2b2233; border-radius: 6px; overflow: hidden; margin: 6px 0 2px; }
 .ui-loss-row { display: grid; grid-template-columns: 14px 1fr; gap: 6px; align-items: start; padding: 5px 0; }
 .ui-loss-row + .ui-loss-row { border-top: 1px dashed #d8ccb0; }
