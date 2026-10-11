@@ -23,7 +23,7 @@ export function audioContext(): AudioContext | null {
     if (!Ctor) return null;
     ctx = new Ctor();
   }
-  if (ctx.state === 'suspended') void ctx.resume();
+  if (ctx.state !== 'running' && ctx.state !== 'closed') void ctx.resume().catch(() => {});
   return ctx;
 }
 
@@ -37,8 +37,31 @@ function audio(): AudioContext | null {
   return audioContext();
 }
 
-// Первое касание будит звук (особенно на iOS).
-document.addEventListener('pointerdown', () => audioContext(), { once: true });
+/**
+ * Браузер включает звук только внутри касания. В Telegram (особенно на iPhone) не каждое событие
+ * считается касанием, а после сворачивания или звонка звук снова засыпает, — поэтому будим его
+ * на любом касании, пока не заиграет, и ещё раз, когда игра снова на экране.
+ */
+function unlock(): void {
+  if (ctx?.state === 'running') return;
+  const ac = audioContext();
+  if (!ac) return;
+  // iOS: беззвучный отсчёт, сыгранный прямо в касании, окончательно открывает звук.
+  try {
+    const src = ac.createBufferSource();
+    src.buffer = ac.createBuffer(1, 1, 22050);
+    src.connect(ac.destination);
+    src.start(0);
+  } catch {
+    // не страшно — попробуем на следующем касании
+  }
+}
+
+for (const type of ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'click', 'keydown'])
+  window.addEventListener(type, unlock, { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && ctx && ctx.state !== 'running') void ctx.resume().catch(() => {});
+});
 
 interface Note {
   freq: number;

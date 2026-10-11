@@ -197,6 +197,7 @@ import {
 } from '../game/watch';
 import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
 import { haptic } from '../platform/telegram';
+import { showReviews } from './reviews';
 import { button, el, openModal, who } from './dom';
 
 /** Портрет заказчика: шеф — это Марат. */
@@ -2318,7 +2319,8 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       el('b', '', t('store.current', { name: t(level.nameKey) })),
       el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: level.warehouse, r: registerCount(state), g: level.guests })),
     );
-    out.push(current, button(t('report.button'), () => showReport(getState()), 'ui-btn secondary'), gearBox(state), bankBox(state));
+    const reviews = state.reviews?.length ? [button(t('review.title'), () => showReviews(getState().reviews), 'ui-btn secondary')] : [];
+    out.push(current, button(t('report.button'), () => showReport(getState()), 'ui-btn secondary'), ...reviews, gearBox(state), bankBox(state));
 
     const grow = el('div', 'ui-box');
     if (!next) {
