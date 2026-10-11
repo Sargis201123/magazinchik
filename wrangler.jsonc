@@ -12,5 +12,7 @@
   "observability": { "enabled": true },
   // Раз в час бот напоминает тем, кто давно не заходил (api/_lib/social.ts; нужна база DB).
   "triggers": { "crons": ["15 * * * *"] },
-  "vars": { "APP_URL": "https://magazinchik.sargis-zsx.workers.dev/" }
+  "vars": { "APP_URL": "https://magazinchik.sargis-zsx.workers.dev/" },
+  // База для приглашений друзей и напоминаний; таблицы создаются сами (api/_lib/social.ts).
+  "d1_databases": [{ "binding": "DB", "database_name": "magazinchik", "database_id": "ecb33cdd-e25b-4c41-bf92-45a2ff10dd4b" }]
 }
