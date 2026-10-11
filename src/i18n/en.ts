@@ -1230,6 +1230,11 @@ export const en: Record<TextKey, string> = {
   "summary.weddingFull": "+{n} 💰, complete",
   "summary.weddingPart": "+{n} 💰, partly short",
   "summary.filming": "The shop was on screen: free advertising tomorrow",
+  "decor.kind.outfit": "Owner's outfit",
+  "decor.outfit_farmer": "Farmer",
+  "decor.outfit_retro": "Retro shopkeeper",
+  "decor.outfit_tuxedo": "Millionaire",
+  "decor.outfit_cyber": "Cyber seller",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

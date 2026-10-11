@@ -110,7 +110,7 @@ import { activeAd } from '../game/ads';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
 import { carryOf, cartExtra, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
-import { activeDecor, grantDecor, isDecorId } from '../game/decor';
+import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
@@ -438,6 +438,17 @@ const ORDER_GUESTS: Record<ClientId, [Look, TextKey]> = {
   valya: [VALYA, 'who.valya'],
 };
 const OWNER: Look = { shirt: 0x8fd16a, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short' };
+/** Наряды хозяина за звёзды (decor.ts, раздел «Наряд»). Должно совпадать с art/costumes.py. */
+const COSTUMES: Partial<Record<DecorId, Partial<Look>>> = {
+  outfit_farmer: { hat: 'straw', outfit: 'overalls', pants: 0x3b5a9a },
+  outfit_retro: { hat: 'papercap', outfit: 'soda', face: 'mustache', pants: 0x262b44 },
+  outfit_tuxedo: { hat: 'silkhat', outfit: 'tuxedo', face: 'monocle', back: 'tails', pants: 0x181425 },
+  outfit_cyber: { hat: 'cyberhelmet', outfit: 'cyber', back: 'jetpack', pants: 0x262b44 },
+};
+const ownerLook = (state: StoreState): Look => {
+  const outfit = activeDecor(state, 'outfit');
+  return { ...OWNER, ...(outfit ? COSTUMES[outfit.id] : {}) };
+};
 const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short', baker: 'cap', barista: 'ponytail' };
 /** На какой секунде дня приходит инспектор. */
 const INSPECTOR_AT = 25;
@@ -1042,7 +1053,9 @@ export class StoreScene extends Phaser.Scene {
     this.buildUpgrades();
     void sellerHome;
     const home = this.ownerHome();
-    this.seller = this.makePerson(home.x, home.y, OWNER);
+    this.seller = this.makePerson(home.x, home.y, ownerLook(this.state));
+    // Кибер-продавец светится неоном.
+    if (activeDecor(this.state, 'outfit')?.id === 'outfit_cyber') this.seller.postFX?.addGlow(0x2ce8f5, 2, 0, false, 0.1, 6);
     this.carried = this.art(0, 3, 'box').setVisible(false);
     this.seller.add(this.carried);
     this.add

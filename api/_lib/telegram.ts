@@ -76,6 +76,10 @@ export const json = (data: unknown, status = 200): Response =>
 
 /** Что продаётся за звёзды: цена и название для счёта. Должно совпадать с src/game/decor.ts (проверяет тест). */
 export const STARS_CATALOG: Record<string, { stars: number; ru: string; en: string }> = {
+  outfit_farmer: { stars: 30, ru: 'Наряд «Фермер»', en: 'Farmer outfit' },
+  outfit_retro: { stars: 50, ru: 'Наряд «Ретро-лавочник»', en: 'Retro shopkeeper outfit' },
+  outfit_tuxedo: { stars: 70, ru: 'Наряд «Миллионер»', en: 'Millionaire outfit' },
+  outfit_cyber: { stars: 100, ru: 'Наряд «Кибер-продавец»', en: 'Cyber seller outfit' },
   sign_wood: { stars: 50, ru: 'Вывеска «Деревенская»', en: 'Rustic wooden sign' },
   sign_neon: { stars: 75, ru: 'Вывеска «Неон»', en: 'Neon sign' },
   sign_candy: { stars: 75, ru: 'Вывеска «Кондитерская»', en: 'Candy shop sign' },
