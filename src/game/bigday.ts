@@ -337,13 +337,14 @@ export interface WeddingOrder {
   items: { product: ProductId; qty: number }[];
 }
 
-/** Свадебный заказ к вечеру: цветы, напитки и торт (или выпечка) — что продаётся в магазине. */
+/** Свадебный заказ к вечеру: цветы (или фрукты), напитки и торт (или выпечка) — что продаётся в магазине. */
 export function weddingOrder(state: StoreState): WeddingOrder {
   const sellable = sellableProducts(state);
   const pick = (options: ProductId[]) => options.find((id) => sellable.includes(id));
   const level = state.level;
   const items: WeddingOrder['items'] = [];
-  const flowers = pick(['flowers']);
+  // Цветы на столы, а если их не продают — фрукты к столу.
+  const flowers = pick(['flowers', 'tangerines', 'apples']);
   if (flowers) items.push({ product: flowers, qty: 6 + 2 * level });
   const drink = pick(['juice', 'water', 'milk']);
   if (drink) items.push({ product: drink, qty: 8 + 2 * level });
