@@ -2937,6 +2937,7 @@ BADGE_SYMBOLS = {
     "gear_10": ["...#.#...", ".#######.", ".##...##.", "###.#.###", ".#.###.#.", "###.#.###", ".##...##.", ".#######.", "...#.#..."],
     "gear_all": ["#.......#", "##.....##", "#########", "#.......#", "#.#####.#", "#.......#", "#.#####.#", "#.......#", "#########"],
     "registers_4": ["##.##.##.", "##.##.##.", "##.##.##.", ".........", "##.##.##.", "##.##.##.", "##.##.##.", ".........", "#########"],
+    "giant": ["#####....", "#.#.#....", "#####....", "#.#.#..#.", "#####.###", "#.#.#####", "#####.#.#", "#####.###", "#########"],
 }
 BADGE_TIERS = {
     "bronze": ("B", "n", "a"),
@@ -2951,6 +2952,7 @@ BADGE_TIER = {
     "burnt_bread": "bronze", "coffee_100": "silver", "cat_mascot": "silver", "night_owl": "silver", "two_registers": "bronze",
     "courier_20": "silver", "mouse_5": "bronze", "war_answer": "bronze", "fair_3": "bronze",
     "gear_first": "bronze", "gear_10": "silver", "gear_all": "gold", "registers_4": "silver",
+    "giant": "gold",
 }
 
 
@@ -4731,6 +4733,7 @@ def main():
 
     icons.main()
     # Гардероб покупателей и срочные новости особых дней.
+    import giant
     import news
     import street_props
     import wardrobe
@@ -4742,6 +4745,7 @@ def main():
     costumes.main()
     news.main()
     street_props.main()
+    giant.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

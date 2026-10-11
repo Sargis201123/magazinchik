@@ -468,6 +468,8 @@ const ICONS: Record<string, string> = {
   '🧪': 'ico_testtube',
   '💒': 'ico_wedding',
   '🦠': 'ico_virus',
+  '🏗': 'ico_crane',
+  '🏬': 'ico_mall',
   // Альбом редких гостей.
   '🎸': 'ico_guitar',
   '🎩': 'ico_tophat',

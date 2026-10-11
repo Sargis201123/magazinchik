@@ -5,6 +5,10 @@ import { WARDROBE_TEXTURES } from './wardrobe';
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
 const SPRITES = [
+  // Гипермаркет «Гигант» за дорогой (art/giant.py).
+  'giant_site',
+  'giant_store',
+  'giant_closed',
   // Особые дни: съёмки кино и ремонт дороги (art/street_props.py).
   'film_camera',
   'film_light',

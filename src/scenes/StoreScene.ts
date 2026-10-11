@@ -96,6 +96,7 @@ import {
   type WeddingOrder,
 } from '../game/bigday';
 import { dialogBox } from '../ui/dialog';
+import { giantLook, type GiantLook } from '../game/giant';
 import { pickWear, wearOf } from './archetypes';
 import { BIG_LAYER_DY, type BackId, type FaceId, type HatId, type OutfitId, type PropId } from './wardrobe';
 import { Hud } from '../ui/hud';
@@ -576,6 +577,8 @@ export class StoreScene extends Phaser.Scene {
   private builtLevel = -1;
   /** Каким было помещение Эдуарда, когда рисовали улицу. */
   private builtEduard: EduardLook | null = null;
+  /** Каким построен «Гигант» за дорогой (giant.ts): стройка, магазин, закрытый. */
+  private builtGiant: GiantLook = 'none';
   private stats: DayStats = emptyDayStats();
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
@@ -3207,11 +3210,20 @@ export class StoreScene extends Phaser.Scene {
     for (let x = 10; x < next.w; x += 34) this.greenery.push(this.art(x, -6, 'bush').setDepth(-6));
     // Сквер за кварталом и за дорогой: деревья, кусты и клумбы — газон не пустует, когда отдаляешь камеру.
     const rnd = new Phaser.Math.RandomDataGenerator(['park']);
+    // «Гигант» за дорогой: напротив входа, на месте сквера (giant.ts).
+    const giant = giantLook(this.state);
+    this.builtGiant = giant;
+    const giantArea = { x: door.x - 82, y: top + 86, w: 164, h: 112 };
+    if (giant !== 'none') {
+      const key = giant === 'site' ? 'giant_site' : giant === 'store' ? 'giant_store' : 'giant_closed';
+      this.art(door.x, top + 92, key).setOrigin(0.5, 0).setDepth(top + 92 + 88);
+    }
     const scatter = (y0: number, y1: number) => {
       for (let y = y0; y < y1; y += 40) {
         for (let x = left + 10; x < left + width - 10; x += 46) {
           const px = x + rnd.between(-14, 14);
           const py = y + rnd.between(-12, 12);
+          if (giant !== 'none' && px > giantArea.x && px < giantArea.x + giantArea.w && py > giantArea.y && py < giantArea.y + giantArea.h) continue;
           const roll = rnd.frac();
           // За зданием глубина отрицательная — держим над газоном (-10), но под крышами соседей (-3).
           const depth = py < 0 ? -9.5 + (py + 400) / 1000 : py;
@@ -5769,7 +5781,7 @@ export class StoreScene extends Phaser.Scene {
     const trialOver = Boolean(trial && trial.day < this.state.day);
     if (trialOver) this.state = { ...this.state, decor: { ...this.state.decor, trial: undefined } };
     // Эдуард за ночь открыл магазин побольше — перерисовать улицу.
-    if (trialOver || eduardLook(this.state) !== this.builtEduard) this.buildWorld();
+    if (trialOver || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant) this.buildWorld();
     this.updateLighting(0);
     this.openShop();
     showMorning({
@@ -5788,7 +5800,7 @@ export class StoreScene extends Phaser.Scene {
         this.state = s;
         saveGame(s);
         if (s.level > this.builtLevel) void this.celebrateExpansion();
-        else if (s.level !== this.builtLevel || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard) this.buildWorld();
+        else if (s.level !== this.builtLevel || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard || giantLook(s) !== this.builtGiant) this.buildWorld();
         else if (staffChanged) this.syncStaff();
         if (adsChanged) this.applyAds();
         if (radioChanged) this.applyRadio();

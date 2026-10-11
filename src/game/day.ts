@@ -20,6 +20,7 @@ import { endWar } from './war';
 import { eduardGuests, growEduard } from './eduard';
 import { afterBills } from './bankruptcy';
 import { cafeMorning } from './cafe';
+import { giantGuests, giantNight } from './giant';
 import { promoGuests } from './promo';
 import { fairGuests } from './fair';
 import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
@@ -51,7 +52,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random);
+  const next = giantNight(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), stats.revenue);
   return {
     ...night,
     state: next,
@@ -88,6 +89,7 @@ export const guestFactor = (state: StoreState): number =>
   lightsGuests(state) *
   departmentGuests(state) *
   eduardGuests(state) *
+  giantGuests(state) *
   knownBigDayGuests(state.day);
 
 /**
