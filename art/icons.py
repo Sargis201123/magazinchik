@@ -1878,6 +1878,96 @@ ICONS = {
         ],
         None,
     ),
+    # 🏫 школа.
+    "school": (
+        [
+            ".....R......",
+            ".....RR.....",
+            ".....k......",
+            "...rrrrr....",
+            "..rRRRRRr...",
+            ".rRRRRRRRr..",
+            ".NNNNNNNNN..",
+            ".NcNcNcNcN..",
+            ".NNNNBBNNN..",
+            ".NcNcBBNcN..",
+            ".NNNNBBNNN..",
+            "............",
+        ],
+        None,
+    ),
+    # 🏢 общежитие.
+    "dorm": (
+        [
+            "............",
+            "..GGGGGGG...",
+            "..GcGcGcG...",
+            "..GGGGGGG...",
+            "..GcGcGYG...",
+            "..GGGGGGG...",
+            "..GYGcGcG...",
+            "..GGGGGGG...",
+            "..GcGBBcG...",
+            "..GGGBBGG...",
+            "............",
+            "............",
+        ],
+        None,
+    ),
+    # 🧸 мишка.
+    "teddy": (
+        [
+            "............",
+            "..BB....BB..",
+            "..BnBBBBnB..",
+            "...BBBBBB...",
+            "...BkBBkB...",
+            "...BBnnBB...",
+            "....BnkB....",
+            "..BBBBBBBB..",
+            ".BB.BnnB.BB.",
+            "....BnnB....",
+            "...BB..BB...",
+            "............",
+        ],
+        None,
+    ),
+    # 🏥 больница.
+    "hospital": (
+        [
+            "............",
+            ".wwwwwwwwww.",
+            ".wwwwRRwwww.",
+            ".wwwRRRRwww.",
+            ".wwwwRRwwww.",
+            ".wwwwwwwwww.",
+            ".wcwcwwcwcw.",
+            ".wwwwwwwwww.",
+            ".wcwwBBwwcw.",
+            ".wwwwBBwwww.",
+            "............",
+            "............",
+        ],
+        None,
+    ),
+    # 💼 портфель.
+    "briefcase": (
+        [
+            "............",
+            "............",
+            "....bbbb....",
+            "....b..b....",
+            ".BBBBBBBBBB.",
+            ".BBBBBBBBBB.",
+            ".bbbbYYbbbb.",
+            ".BBBBBBBBBB.",
+            ".BBBBBBBBBB.",
+            ".bbbbbbbbbb.",
+            "............",
+            "............",
+        ],
+        None,
+    ),
 }
 
 
