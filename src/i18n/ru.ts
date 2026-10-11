@@ -1228,6 +1228,11 @@ export const ru = {
   "summary.weddingFull": "+{n} 💰, всё собрали",
   "summary.weddingPart": "+{n} 💰, не всего хватило",
   "summary.filming": "Магазин в кадре: завтра бесплатная реклама",
+  "decor.kind.outfit": "Наряд хозяина",
+  "decor.outfit_farmer": "Фермер",
+  "decor.outfit_retro": "Ретро-лавочник",
+  "decor.outfit_tuxedo": "Миллионер",
+  "decor.outfit_cyber": "Кибер-продавец",
 } as const;
 
 export type TextKey = keyof typeof ru;

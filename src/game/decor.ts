@@ -1,4 +1,4 @@
-// Оформление магазина: стены, пол, картины, ковёр, растения, неон, аквариум.
+// Оформление магазина: стены, пол, картины, ковёр, растения, неон, аквариум — и наряд хозяина.
 // Обычное покупается за монеты; премиальное — за Telegram Stars (platform/stars.ts),
 // его можно один раз бесплатно примерить на день. Купленное за звёзды остаётся навсегда,
 // даже после «Начать заново».
@@ -6,9 +6,13 @@
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
 
-export type DecorKind = 'sign' | 'wall' | 'floor' | 'light' | 'showpiece' | 'art' | 'rug' | 'plants' | 'neon';
+export type DecorKind = 'outfit' | 'sign' | 'wall' | 'floor' | 'light' | 'showpiece' | 'art' | 'rug' | 'plants' | 'neon';
 
 export type DecorId =
+  | 'outfit_farmer'
+  | 'outfit_retro'
+  | 'outfit_tuxedo'
+  | 'outfit_cyber'
   | 'wall_mint'
   | 'wall_peach'
   | 'wall_lilac'
@@ -81,6 +85,11 @@ const stars = (id: DecorId, kind: DecorKind, n: number, extra: Partial<DecorItem
 });
 
 export const DECOR: DecorItem[] = [
+  // Наряд хозяина: во что одет продавец за прилавком (StoreScene → COSTUMES).
+  stars('outfit_farmer', 'outfit', 30),
+  stars('outfit_retro', 'outfit', 50),
+  stars('outfit_tuxedo', 'outfit', 70),
+  stars('outfit_cyber', 'outfit', 100),
   stars('sign_wood', 'sign', 50, { textColor: 0xfff3d6 }),
   stars('sign_neon', 'sign', 75, { textColor: 0x7af7ff }),
   stars('sign_candy', 'sign', 75, { textColor: 0xffffff }),
@@ -121,7 +130,7 @@ export const DECOR: DecorItem[] = [
   stars('neon_open', 'neon', 30, { texture: 'neon' }),
 ];
 
-export const DECOR_KINDS: DecorKind[] = ['sign', 'wall', 'floor', 'light', 'showpiece', 'art', 'rug', 'plants', 'neon'];
+export const DECOR_KINDS: DecorKind[] = ['outfit', 'sign', 'wall', 'floor', 'light', 'showpiece', 'art', 'rug', 'plants', 'neon'];
 
 export interface DecorState {
   owned: DecorId[];

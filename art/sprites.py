@@ -4736,6 +4736,10 @@ def main():
     import wardrobe
 
     wardrobe.main()
+    # Превью нарядов хозяина собирается из слоёв гардероба — после него.
+    import costumes
+
+    costumes.main()
     news.main()
     street_props.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))

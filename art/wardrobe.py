@@ -1855,6 +1855,256 @@ def outfit_runner(v):
     c.px(14, 22, clear)
     return c
 
+# ---------------------------------------------------------------- наряды хозяина (за звёзды)
+# Свои цвета, без тинта: это витрина премиума, всё прорисовано с бликами и тенями.
+
+
+def outfit_overalls(v):
+    """Фермер: джинсовый комбинезон с латунными пуговицами поверх красной клетчатой рубашки, шейный платок."""
+    c = small()
+    plaid = lambda x, y: "R" if (x // 2 + y // 2) % 2 else ("m" if (x + y) % 2 else "r")
+    torso(c, v, "R", "r")
+    for y in range(17, 28):
+        for x in range(3, 23):
+            if c.get(x, y)[3]:
+                c.px(x, y, plaid(x, y))
+    if v == "s":
+        c.rect(9, 20, 7, 7, "u")
+        c.vline(9, 20, 7, "U")
+        c.line(11, 17, 13, 20, "u")
+        c.px(13, 21, "Y")
+        c.rect(12, 16, 3, 2, "Y")
+    else:
+        c.rect(8, 20, 9, 7, "u")
+        c.hline(8, 20, 9, "U")
+        c.vline(9, 17, 3, "u")
+        c.vline(15, 17, 3, "u")
+        if v == "f":
+            c.px(9, 20, "Y")
+            c.px(15, 20, "Y")
+            c.rect(10, 22, 5, 3, "U")
+            c.hline(10, 22, 5, "c")
+            c.rect(10, 16, 5, 2, "Y")
+            c.px(12, 18, "y")
+        else:
+            c.line(9, 17, 15, 21, "u")
+            c.line(15, 17, 9, 21, "u")
+    return finish(c, v)
+
+
+def hat_papercap(v):
+    """Ретро-лавочник: белая бумажная пилотка с красной полосой."""
+    c = Big()
+    if v == "s":
+        for i in range(4):
+            c.hline(7 + i, 2 + i, 11 - i, "w")
+        c.rect(7, 5, 11, 2, "w")
+        c.hline(7, 4, 11, "R")
+        c.hline(8, 2, 9, "W")
+    else:
+        for i in range(4):
+            c.hline(6 + i // 2, 1 + i, 12 - (i // 2) * 2, "w")
+        c.rect(5, 4, 14, 3, "w")
+        c.hline(5, 5, 14, "R")
+        c.vline(11, 1, 6, "W")
+        if v == "f":
+            c.rect(10, 4, 4, 1, "Y")
+    c.outline("k")
+    return c
+
+
+def outfit_soda(v):
+    """Ретро-лавочник: белая рубашка, красная бабочка, полосатый фартук, нарукавные резинки."""
+    c = small()
+    torso(c, v, "w", "W")
+    if v == "s":
+        c.rect(14, 19, 2, 8, "w")
+        for y in range(19, 27):
+            c.px(15, y, "R" if y % 2 else "w")
+        c.hline(12, 21, 3, "R")
+        c.hline(8, 23, 8, "R")
+    else:
+        c.rect(8, 19, 9, 8, "w")
+        for x in range(8, 17, 2):
+            c.vline(x, 19, 8, "R")
+        c.hline(8, 19, 9, "W")
+        c.hline(4, 21, 3, "R")
+        c.hline(19, 21, 3, "R")
+        if v == "f":
+            c.rect(10, 17, 5, 2, "R")
+            c.px(12, 17, "m")
+            c.px(12, 18, "m")
+            c.rect(11, 22, 3, 2, "W")
+        else:
+            c.line(9, 17, 15, 23, "R")
+            c.line(15, 17, 9, 23, "R")
+    return finish(c, v)
+
+
+def hat_silkhat(v):
+    """Миллионер: шёлковый цилиндр с золотой лентой и бликом."""
+    c = Big()
+    x, w = (9, 7) if v == "s" else (7, 10)
+    c.rect(x, -6, w, 11, "k")
+    c.rect(x, -6, w, 1, "K")
+    c.vline(x + 1, -5, 9, "g")
+    c.vline(x + 2, -4, 6, "G")
+    c.rect(x, 1, w, 2, "Y")
+    c.hline(x, 2, w, "y")
+    if v == "f":
+        c.px(x + w - 3, 1, "w")
+    c.rect(x - 3, 5, w + 6, 2, "k")
+    c.hline(x - 2, 5, w + 4, "K")
+    c.outline("k")
+    return c
+
+
+def outfit_tuxedo(v):
+    """Миллионер: фрак с атласными лацканами, белая манишка, золотая бабочка, цепочка часов, гвоздика."""
+    c = small()
+    torso(c, v, "K", "k")
+    if v == "f":
+        c.rect(10, 17, 5, 9, "w")
+        c.vline(12, 20, 6, "W")
+        for y in (20, 22, 24):
+            c.px(12, y, "Y")
+        c.rect(10, 17, 5, 2, "Y")
+        c.px(12, 17, "y")
+        c.px(12, 18, "y")
+        for i in range(6):
+            c.px(9 - i // 3, 17 + i, "g")
+            c.px(15 + i // 3, 17 + i, "g")
+        c.line(15, 23, 17, 24, "Y")
+        c.ellipse(8, 19, 1, 1, "R")
+        c.px(8, 20, "e")
+    elif v == "b":
+        c.vline(12, 22, 5, "k")
+        c.px(11, 22, "g")
+        c.px(13, 22, "g")
+    else:
+        c.rect(14, 17, 2, 7, "w")
+        c.px(15, 17, "Y")
+        c.vline(12, 19, 5, "g")
+    c.hline(4, 23, 3, "w") if v != "s" else c.hline(12, 24, 3, "w")
+    if v != "s":
+        c.hline(19, 23, 3, "w")
+    return finish(c, v)
+
+
+def face_monocle(v):
+    """Миллионер: золотой монокль на цепочке."""
+    c = small()
+    if v == "f":
+        c.frame(14, 9, 4, 4, "Y")
+        c.px(15, 10, "w")
+        c.line(17, 13, 18, 17, "Y")
+    elif v == "s":
+        c.frame(14, 9, 3, 3, "Y")
+        c.px(15, 10, "w")
+        c.line(15, 12, 13, 17, "Y")
+    return c
+
+
+def back_tails(v):
+    """Миллионер: фалды фрака — видны сзади и сбоку."""
+    c = Big()
+    if v == "s":
+        c.rect(5, 25, 4, 8, "K")
+        c.vline(5, 25, 8, "k")
+        c.px(5, 33, "K")
+    else:
+        c.rect(8, 25, 4, 8, "K")
+        c.rect(13, 25, 4, 8, "K")
+        c.vline(12, 25, 7, "k")
+        c.px(8, 33, "K")
+        c.px(16, 33, "K")
+        c.vline(9, 26, 6, "g")
+    c.outline("k")
+    return c
+
+
+def hat_cyberhelmet(v):
+    """Кибер-продавец: шлем с неоновым визором и антенной-огоньком."""
+    c = Big()
+    if v == "s":
+        c.round_rect(6, 1, 12, 12, "K", r=4)
+        c.round_rect(7, 2, 10, 4, "g", r=2)
+        c.rect(14, 7, 5, 3, "c")
+        c.px(17, 8, "w")
+        c.hline(6, 11, 10, "P")
+        c.vline(9, -3, 4, "G")
+        c.ellipse(9.5, -4, 1.4, 1.4, "P")
+    else:
+        c.round_rect(4, 1, 16, 12, "K", r=4)
+        c.round_rect(6, 2, 12, 3, "g", r=1)
+        c.vline(19, 3, 9, "k")
+        c.hline(4, 11, 16, "P")
+        if v == "f":
+            c.rect(5, 7, 14, 3, "c")
+            c.hline(6, 7, 6, "w")
+            c.px(17, 9, "U")
+        else:
+            c.rect(9, 5, 6, 4, "g")
+            c.px(11, 6, "c")
+            c.px(13, 6, "P")
+        c.vline(16, -3, 4, "G")
+        c.ellipse(16.5, -4, 1.4, 1.4, "P")
+    c.outline("k")
+    return c
+
+
+def outfit_cyber(v):
+    """Кибер-продавец: тёмный костюм с неоновыми полосами и светящимся ядром на груди."""
+    c = small()
+    torso(c, v, "g", "K")
+    if v == "f":
+        c.ellipse(12.5, 20.5, 2, 2, "c")
+        c.px(12, 20, "w")
+        c.line(8, 17, 10, 19, "P")
+        c.line(16, 17, 14, 19, "P")
+        c.vline(9, 22, 4, "c")
+        c.vline(15, 22, 4, "c")
+        c.hline(7, 25, 11, "P")
+    elif v == "b":
+        c.vline(12, 18, 8, "c")
+        c.hline(7, 25, 11, "P")
+    else:
+        c.vline(13, 18, 7, "c")
+        c.hline(8, 25, 8, "P")
+    if v != "s":
+        c.vline(5, 18, 6, "c")
+        c.vline(20, 18, 6, "P")
+    return finish(c, v)
+
+
+def back_jetpack(v):
+    """Кибер-продавец: реактивный ранец с двумя соплами и пламенем."""
+    c = Big()
+    if v == "s":
+        c.round_rect(1, 16, 7, 12, "W", r=2)
+        c.vline(1, 17, 10, "l")
+        c.rect(2, 28, 4, 2, "G")
+        c.px(4, 19, "c")
+        for i, col in enumerate(("Y", "o", "R")):
+            c.hline(2 + i // 2, 30 + i, 4 - i, col)
+    else:
+        for x in (5, 14):
+            c.round_rect(x, 15, 6, 13, "W", r=2)
+            c.vline(x, 16, 11, "l")
+            c.rect(x + 1, 28, 4, 2, "G")
+            c.px(x + 2, 18, "c")
+            c.px(x + 3, 18, "P")
+            for i, col in enumerate(("Y", "o", "R")):
+                c.hline(x + 1 + i // 2, 30 + i, 4 - i, col)
+        c.rect(11, 18, 3, 6, "l")
+    c.outline("k")
+    # Яркая сердцевина пламени — без контура.
+    for x in ((3,) if v == "s" else (7, 16)):
+        c.px(x, 30, "w")
+        c.px(x + (1 if v != "s" else 0), 31, "Y")
+    return c
+
+
 ITEMS = {
     "hat_feathers": hat_feathers,
     "hat_shako": hat_shako,
@@ -1951,6 +2201,16 @@ ITEMS = {
     "back_shield": back_shield,
     "face_medmask": face_medmask,
     "outfit_runner": outfit_runner,
+    "outfit_overalls": outfit_overalls,
+    "hat_papercap": hat_papercap,
+    "outfit_soda": outfit_soda,
+    "hat_silkhat": hat_silkhat,
+    "outfit_tuxedo": outfit_tuxedo,
+    "face_monocle": face_monocle,
+    "back_tails": back_tails,
+    "hat_cyberhelmet": hat_cyberhelmet,
+    "outfit_cyber": outfit_cyber,
+    "back_jetpack": back_jetpack,
 }
 
 SUFFIX = {"f": "", "b": "_b", "s": "_s"}
