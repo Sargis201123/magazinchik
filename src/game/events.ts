@@ -5,9 +5,9 @@
 import type { TextKey } from '../i18n/ru';
 import {
   buyStock,
+  fridgeOn,
   PRODUCTS,
   sellableProducts,
-  SHELF_KINDS,
   STAFF_ROLE_IDS,
   isTired,
   staffOf,
@@ -119,7 +119,7 @@ export function planDay(state: StoreState, chances: EventChances = { order: 0.15
 
   if (random() < 0.3) plan.rushAt = 20 + Math.floor(random() * 45);
 
-  const fridges = state.shelves.map((s, i) => ({ s, i })).filter(({ s }) => SHELF_KINDS[s.kind].fridge && !s.broken);
+  const fridges = state.shelves.map((s, i) => ({ s, i })).filter(({ s }) => fridgeOn(state, s) && !s.broken);
   const sickRoll = random();
   const inspectionRoll = random();
   const orderRoll = random();

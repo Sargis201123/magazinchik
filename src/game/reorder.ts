@@ -2,7 +2,7 @@
 // по сегодняшним ценам, сколько влезет на склад и на сколько хватит денег.
 // Автозаказ: каждое утро склад сам пополняется до запомненного списка.
 
-import { buyStock, productAvailable, warehouseCapacity, warehouseCount, warehouseOf, type ProductId, type StoreState } from './economy';
+import { buyStock, canPlace, productAvailable, PRODUCTS, SHELF_KINDS, warehouseCapacity, warehouseCount, warehouseOf, type ProductId, type StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
 import { SUPPLIERS, type SupplierId } from './suppliers';
 
@@ -40,6 +40,10 @@ export interface ReorderPlan {
   cut: boolean;
 }
 
+/** Есть ли куда поставить товар: мороженому нужен ларь (остальное — как раньше, без проверки). */
+const hasHome = (state: StoreState, pid: ProductId): boolean =>
+  !SHELF_KINDS[PRODUCTS[pid].category].fixture || state.shelves.some((sh) => canPlace(pid, sh));
+
 /** Что купим, если повторить: по сегодняшним ценам, в пределах склада и денег; несезонное пропускаем. */
 export function reorderPlan(state: StoreState, priceOf: (sid: SupplierId, pid: ProductId) => number | null): ReorderPlan | null {
   const order = previousOrder(state);
@@ -50,7 +54,8 @@ export function reorderPlan(state: StoreState, priceOf: (sid: SupplierId, pid: P
   const lines: ReorderPlan['lines'] = [];
   for (const line of order.lines) {
     const price = SUPPLIERS[line.sid] ? priceOf(line.sid, line.pid) : null;
-    if (price === null || !productAvailable(line.pid, state.day)) continue;
+    // Не сезон или мороженое без ларя — не покупаем.
+    if (price === null || !productAvailable(line.pid, state.day) || !hasHome(state, line.pid)) continue;
     const qty = Math.min(line.qty, room, Math.floor(money / price));
     if (qty < line.qty) cut = true;
     if (qty <= 0) continue;
@@ -107,7 +112,8 @@ export function autoOrderPlan(state: StoreState, priceOf: (sid: SupplierId, pid:
   const lines: ReorderPlan['lines'] = [];
   for (const line of auto.lines as OrderLine[]) {
     const price = SUPPLIERS[line.sid] ? priceOf(line.sid, line.pid) : null;
-    if (price === null || !productAvailable(line.pid, state.day)) continue;
+    // Не сезон или мороженое без ларя — не покупаем.
+    if (price === null || !productAvailable(line.pid, state.day) || !hasHome(state, line.pid)) continue;
     const need = line.qty - warehouseOf(state, line.pid);
     if (need <= 0) continue;
     const qty = Math.min(need, room, Math.floor(money / price));

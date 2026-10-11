@@ -4755,6 +4755,9 @@ def main():
     import family
 
     family.main()
+    import fixtures
+
+    fixtures.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

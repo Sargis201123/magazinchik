@@ -5,6 +5,8 @@ import {
   buyShelf,
   buyStock,
   canPlace,
+  daysUntilSeason,
+  SEASONAL,
   CATEGORIES,
   billTotal,
   daysUntilBill,
@@ -588,9 +590,19 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     const free = warehouseCapacity(state) - warehouseCount(state);
     for (const pid of PRODUCT_IDS) {
       const price = unitPrice(s, deal, pid);
-      if (price === null || !productAvailable(pid, state.day)) continue;
-      // У оптовика — только то, для чего есть полка (иначе товар не продать).
-      if (Array.isArray(s.requires) && !state.shelves.some((sh) => canPlace(pid, sh))) continue;
+      if (price === null) continue;
+      // Не сезон — строчкой: когда появится и где его продают.
+      if (!productAvailable(pid, state.day)) {
+        box.append(
+          el('div', 'ui-muted', `🗓 ${t('goods.offer', { name: productLabel(pid), when: t(`goods.when.${pid}` as TextKey), left: t('goods.in', { n: daysUntilSeason(pid, state.day) }) })}`),
+        );
+        continue;
+      }
+      // Без своей полки товар не продать: у оптовика его просто нет, у остальных — подсказка (мороженому нужен ларь).
+      if (!state.shelves.some((sh) => canPlace(pid, sh))) {
+        if (!Array.isArray(s.requires)) box.append(el('div', 'ui-muted', `🔒 ${productLabel(pid)}: ${t('prices.locked', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) })}`));
+        continue;
+      }
       const chips: HTMLElement[] = [];
       for (const qty of [1, 5]) {
         chips.push(
@@ -721,11 +733,34 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   // ---------- Полки ----------
 
+  /** Сезонные товары: когда и где продаются, сколько ждать; ларь для мороженого — купить прямо здесь. */
+  const seasonBox = (state: StoreState): HTMLElement => {
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('goods.title')));
+    for (const pid of Object.keys(SEASONAL) as ProductId[]) {
+      const left = daysUntilSeason(pid, state.day);
+      box.append(el('div', '', `${t(`goods.${pid}` as TextKey)} · ${left === 0 ? t('goods.now') : t('goods.in', { n: left })}`));
+      if (state.shelves.some((s) => canPlace(pid, s))) continue;
+      if (pid === 'icecream') {
+        const price = SHELF_KINDS.icebox.price;
+        box.append(
+          el('div', 'ui-muted', t('goods.noIcebox')),
+          button(t('shelves.buy', { name: t('shelf.icebox'), cost: price }), () => update(buyShelf(getState(), 'icebox'), 'success'), 'ui-btn secondary', price > state.money),
+        );
+      } else box.append(el('div', 'ui-muted', t('prices.locked', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) })));
+    }
+    return box;
+  };
+
+  /** Товар в списке «Только: …» — у сезонного подписано, когда его продают. */
+  const shelfGoodLabel = (pid: ProductId): string => (SEASONAL[pid] ? `${productLabel(pid)} (${t(`goods.when.${pid}` as TextKey)})` : productLabel(pid));
+
   const shelvesTab = (state: StoreState): HTMLElement[] => {
     const slots = storeLevel(state).slots;
     const out: HTMLElement[] = [
       el('div', 'ui-note', t('shelves.rule')),
-      el('div', 'ui-muted', t('shelves.slots', { n: state.shelves.length, max: slots })),
+      el('div', 'ui-muted', t('shelves.slots', { n: slots - freeSlots(state), max: slots })),
+      seasonBox(state),
     ];
     state.shelves.forEach((shelf, i) => {
       const box = el('div', 'ui-box');
@@ -735,12 +770,12 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
         el('b', '', t(SHELF_KINDS[shelf.kind].nameKey)),
         el('div', 'ui-muted', t('shelves.places', { n: shelfCount(shelf), max: shelfCapacity(shelf) })),
       );
-      head.append(
-        title,
-        button(t('shelves.sell', { n: shelfResale(shelf) }), () => update(sellShelf(getState(), i)), 'ui-chip'),
-      );
-      const allowed = PRODUCT_IDS.filter((pid) => PRODUCTS[pid].category === shelf.kind).map(productLabel).join(', ');
+      // Вёдра с цветами бесплатные — их не продают.
+      head.append(title, ...(SHELF_KINDS[shelf.kind].price ? [button(t('shelves.sell', { n: shelfResale(shelf) }), () => update(sellShelf(getState(), i)), 'ui-chip')] : []));
+      const allowed = PRODUCT_IDS.filter((pid) => PRODUCTS[pid].category === shelf.kind).map(shelfGoodLabel).join(', ');
       box.append(head, el('div', 'ui-muted', t('shelves.only', { list: allowed })));
+      if (shelf.kind === 'icebox') box.append(el('div', 'ui-muted', t('shelves.iceboxNote')));
+      if (shelf.kind === 'florist') box.append(el('div', 'ui-muted', t('shelves.floristNote')));
       if (shelf.broken) {
         const cost = fridgeRepairCost(state.level);
         box.append(
@@ -1855,6 +1890,12 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       const n = CUPS_MAX - cupsOf(state);
       row(t('todo.cups', { n: cupsOf(state) }), button(t('todo.cupsBtn', { n, cost: n * CUP_COST }), () => update(buyCups(getState(), n), 'success'), 'ui-chip', state.money < n * CUP_COST));
     }
+    // До лета неделя, а ларя нет — подсказка поставить его заранее.
+    const summerIn = daysUntilSeason('icecream', state.day);
+    if (summerIn <= 7 && !state.shelves.some((s) => s.kind === 'icebox')) {
+      const price = SHELF_KINDS.icebox.price;
+      row(t('goods.soon'), button(t('shelves.buy', { name: '🍦', cost: price }), () => update(buyShelf(getState(), 'icebox'), 'success'), 'ui-chip', state.money < price));
+    }
     if (box.children.length === 1) box.append(el('div', 'ui-muted', t('todo.done')));
     return box;
   };
@@ -2426,7 +2467,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
           ? t('prices.brand')
           : productAvailable(pid, state.day)
             ? t('prices.locked', { shelf: t(SHELF_KINDS[product.category].nameKey) })
-            : t(`prices.season.${pid}` as TextKey);
+            : `${t(`goods.${pid}` as TextKey)} · ${t('goods.in', { n: daysUntilSeason(pid, state.day) })}`;
         info.append(el('div', 'ui-muted', `🔒 ${why}`));
         card.append(icon, info);
         return card;

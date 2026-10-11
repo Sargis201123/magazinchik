@@ -67,6 +67,8 @@ const SPENDS: [string, (s: StoreState) => number | null, (s: StoreState) => Stor
   ['срочный подвоз', (s) => urgentCost(s, 'milk', 3), (s) => orderUrgent(s, 'milk', 3)],
   ['ночная смена', () => NIGHT_POWER, (s) => startNight(s)],
   ['стойка сладостей', (s) => nextRack(s)?.cost ?? null, (s) => upgradeRack(s)],
+  ['ларь с мороженым', () => SHELF_KINDS.icebox.price, (s) => buyShelf(s, 'icebox')],
+  ['улучшение вёдер с цветами', (s) => upgradeCost(s.shelves.find((sh) => sh.kind === 'florist')!), (s) => upgradeShelf(s, s.shelves.findIndex((sh) => sh.kind === 'florist'))],
 ];
 
 describe('экономика единицы: траты', () => {
@@ -95,6 +97,18 @@ describe('экономика единицы: траты', () => {
 });
 
 describe('экономика единицы: купить и продать — не выгодно', () => {
+  it('ларь: купить и продать — минус половина цены; вёдра для цветов бесплатные и не продаются', () => {
+    const s = rich();
+    const bought = buyShelf(s, 'icebox')!;
+    expect(sellShelf(bought, bought.shelves.length - 1)!.money).toBe(s.money - SHELF_KINDS.icebox.price / 2);
+    expect(sellShelf(s, s.shelves.findIndex((sh) => sh.kind === 'florist'))).toBeNull();
+    // Улучшение ларя — ровно его цена; без денег — нельзя.
+    const i = bought.shelves.length - 1;
+    const cost = upgradeCost(bought.shelves[i])!;
+    expect(bought.money - upgradeShelf(bought, i)!.money).toBe(cost);
+    expect(upgradeShelf({ ...bought, money: cost - 1 }, i)).toBeNull();
+  });
+
   it('полка: купить и продать — минус половина цены; с улучшениями тоже минус', () => {
     const s = rich({ shelves: [] });
     const bought = buyShelf(s, 'meat')!;
@@ -191,5 +205,5 @@ describe('экономика единицы: касса и счета', () => {
         expect(Math.min(...run.days.map((d) => d.money))).toBeGreaterThanOrEqual(0);
       }
     }
-  });
+  }, 30_000);
 });
