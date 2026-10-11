@@ -2270,8 +2270,8 @@ def weather_sprites():
     c.ellipse(4, 2, 3.6, 1.6, (220, 235, 255, 160))
     c.ellipse(4, 2, 2.2, 0.8, (0, 0, 0, 0))
     c.save("splash")
-    c = Canvas(4, 4)
-    c.stamp([".w..", "wWw.", ".w..", "...."])
+    c = Canvas(5, 5)
+    c.stamp(["..w..", ".wWw.", "wWwWw", ".wWw.", "..w.."])
     c.save("snowflake")
     c = Canvas(5, 4)
     c.stamp([".11.", "1111", "11.1", "...1"])
@@ -4758,6 +4758,9 @@ def main():
     import fixtures
 
     fixtures.main()
+    import snowy
+
+    snowy.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

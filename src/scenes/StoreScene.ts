@@ -216,6 +216,14 @@ const OUTDOOR_LIGHT: [number, number][] = [
   [0.85, 0xe89c78],
   [1, 0x5c64a8],
 ];
+/** В снег на улице свет холоднее: снег белый днём и голубой в сумерках, а не песочный. */
+const SNOW_OUTDOOR_LIGHT: [number, number][] = [
+  [0, 0xeef4ff],
+  [0.3, 0xffffff],
+  [0.65, 0xe4ecff],
+  [0.85, 0xa9b8ec],
+  [1, 0x5c64a8],
+];
 const INDOOR_LIGHT: [number, number][] = [
   [0, 0xfff6e6],
   [0.5, 0xffffff],
@@ -1384,7 +1392,7 @@ export class StoreScene extends Phaser.Scene {
   private updateLighting(progress?: number): void {
     if (!this.indoorShades.length) return;
     const p = progress ?? Phaser.Math.Clamp(1 - this.timeLeft / DAY_SECONDS, 0, 1);
-    const outdoor = mulColor(lerpKeys(OUTDOOR_LIGHT, p), WEATHER_LIGHT[this.weather]);
+    const outdoor = mulColor(lerpKeys(this.weather === 'snow' ? SNOW_OUTDOOR_LIGHT : OUTDOOR_LIGHT, p), WEATHER_LIGHT[this.weather]);
     // Свет отключили — в зале полумрак.
     const indoor = this.blackout || this.powerCut ? mulColor(lerpKeys(INDOOR_LIGHT, p), 0x45456a) : lerpKeys(INDOOR_LIGHT, p);
     for (const r of this.outdoorShades) r.setFillStyle(outdoor);
@@ -1424,8 +1432,14 @@ export class StoreScene extends Phaser.Scene {
       this.weatherObjs.push(obj);
       return obj;
     };
-    const tree = this.weather === 'snow' ? 0xdce6f2 : this.weather === 'leaves' ? 0xffb868 : 0xffffff;
-    for (const g of this.greenery) g.setTint(tree);
+    const tree = this.weather === 'leaves' ? 0xffb868 : 0xffffff;
+    for (const g of this.greenery) {
+      // В снег — деревья и кусты в снежных шапках (tree_snow, bush_snow).
+      const base = (g.getData('base') as string | undefined) ?? g.texture.key;
+      g.setData('base', base);
+      const snowy = `${base}_snow`;
+      g.setTexture(this.weather === 'snow' && this.textures.exists(snowy) ? snowy : base).setTint(tree);
+    }
 
     if (isWet(this.weather)) {
       const storm = this.weather === 'storm';
@@ -1459,9 +1473,10 @@ export class StoreScene extends Phaser.Scene {
         y: area.y,
         speedY: { min: 14, max: 30 },
         speedX: { min: -10, max: 10 },
-        scale: { min: 1.2 / ART, max: 2 / ART },
+        scale: { min: 1.2 / ART, max: 2.2 / ART },
         lifespan: (area.h / 18) * 1000,
-        frequency: 35,
+        quantity: 2,
+        frequency: 30,
       })).setDepth(-5);
       // Гирлянда на фасаде и ёлка в зале.
       const { w, wallH } = this.layout;
@@ -6203,7 +6218,7 @@ export class StoreScene extends Phaser.Scene {
   private clearBigDay(): void {
     for (const obj of this.bigObjs) obj.destroy();
     // Мороз красил деревья в иней — возвращаем цвет по погоде.
-    if (this.bigObjs.length) for (const g of this.greenery) g.setTint(this.weather === 'snow' ? 0xdce6f2 : this.weather === 'leaves' ? 0xffb868 : 0xffffff);
+    if (this.bigObjs.length) for (const g of this.greenery) g.setTint(this.weather === 'leaves' ? 0xffb868 : 0xffffff);
     this.bigObjs = [];
     if (this.time.paused) this.time.paused = false;
     if (this.powerCut) {
