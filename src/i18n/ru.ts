@@ -1233,21 +1233,6 @@ export const ru = {
   "decor.outfit_retro": "Ретро-лавочник",
   "decor.outfit_tuxedo": "Миллионер",
   "decor.outfit_cyber": "Кибер-продавец",
-  "neighbor.school": "Школа №5",
-  "neighbor.dorm": "Общежитие",
-  "neighbor.kindergarten": "Детский сад «Солнышко»",
-  "neighbor.hospital": "Городская больница",
-  "neighbor.office": "Бизнес-центр «Квадрат»",
-  "neighbors.title": "📮 Заявки соседей",
-  "neighbors.note": "Соседи заказывают заранее и платят дороже розницы. Отправь до срока — репутация растёт, и заказы становятся крупнее и выгоднее.",
-  "neighbors.due": "до дня {day} · осталось {n} дн.",
-  "neighbors.dueToday": "сегодня последний день!",
-  "neighbors.send": "Отправить · +{n} 💰",
-  "neighbors.short": "Не хватает товара — докупи",
-  "neighbors.decline": "Отказаться",
-  "neighbors.rep": "Репутация: {stars}",
-  "neighbors.expired": "Сорвана заявка: {names} — репутация упала",
-  "neighbors.todo": "Заявка соседей: {name} — {when}",
 } as const;
 
 export type TextKey = keyof typeof ru;

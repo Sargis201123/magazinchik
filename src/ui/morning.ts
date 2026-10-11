@@ -103,7 +103,6 @@ import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, t
 import { sound } from '../platform/sound';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
 import { BIG_DAYS, bigDayFor, bigDayKnown, bigDayProgress } from '../game/bigday';
-import { canSend, declineOrder, NEIGHBORS, neighborsOf, orderText, repOf, sendOrder } from '../game/neighbors';
 import { CANDY_COST, CANDY_PRICE, nextRack, rackCapacity, rackOf, refillRack, upgradeRack } from '../game/impulse';
 import { haggleBonus, learnSkill, nextLevelXp, ownerLevelOf, ownerTiming, ownerXp, SKILL_IDS, SKILL_MAX, skillLevel, skillPoints, SKILLS } from '../game/owner';
 import { LOAN_INTEREST, LOAN_MONTHS, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../game/bank';
@@ -369,7 +368,6 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       info,
       questsBox(state),
       ...weeklyBox(state),
-      ...neighborsBox(state),
       tabs,
       body,
       openButton,
@@ -1458,10 +1456,6 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
         }, 'ui-chip'),
       );
     }
-    // Заявка соседей, у которой сегодня последний день.
-    for (const order of neighborsOf(state).orders.filter((o) => o.due === state.day)) {
-      row(t('neighbors.todo', { name: t(NEIGHBORS[order.from].nameKey), when: t('neighbors.dueToday') }));
-    }
     // Мало товара на сегодня: меньше, чем примерно разберут за день.
     const perProduct = (guestsToday(state) * 1.5) / Math.max(1, sellable.length);
     const low = sellable.filter((id) => onShelves(state, id) + warehouseOf(state, id) < perProduct * 0.6);
@@ -1532,40 +1526,6 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   };
 
   /** Испытания недели: прогресс каждой цели и награда. */
-  /** Заявки соседей: от кого, что, до какого дня, сколько заплатят; «Отправить», если хватает товара. */
-  const neighborsBox = (state: StoreState): HTMLElement[] => {
-    const n = neighborsOf(state);
-    if (!n.orders.length && !n.expired?.length) return [];
-    const box = el('div', 'ui-box');
-    box.append(el('b', '', t('neighbors.title')), el('div', 'ui-muted', t('neighbors.note')));
-    if (n.expired?.length) box.append(el('div', 'ui-note', t('neighbors.expired', { names: n.expired.map((id) => t(NEIGHBORS[id].nameKey)).join(', ') })));
-    for (const order of n.orders) {
-      const neighbor = NEIGHBORS[order.from];
-      const rep = repOf(state, order.from);
-      const name = el('div');
-      name.append(
-        el('b', '', `${neighbor.icon} ${t(neighbor.nameKey)}`),
-        el('div', 'ui-muted', t('neighbors.rep', { stars: '★'.repeat(Math.round(rep / 2)).padEnd(5, '☆') })),
-      );
-      const left = order.due - state.day;
-      const ok = canSend(state, order);
-      const card = el('div', 'ui-neighbor');
-      card.append(
-        who(neighbor.portrait, name),
-        el('div', 'ui-neighbor-items', orderText(order)),
-        el('div', left === 0 ? 'ui-note' : 'ui-muted', left === 0 ? t('neighbors.dueToday') : t('neighbors.due', { day: order.due, n: left })),
-      );
-      const actions = el('div', 'ui-row');
-      actions.append(
-        button(ok ? t('neighbors.send', { n: order.pay }) : t('neighbors.short'), () => update(sendOrder(getState(), order.id), 'success'), 'ui-btn', !ok),
-        button(t('neighbors.decline'), () => update(declineOrder(getState(), order.id)), 'ui-chip'),
-      );
-      card.append(actions);
-      box.append(card);
-    }
-    return [box];
-  };
-
   const weeklyBox = (state: StoreState): HTMLElement[] => {
     const weekly = state.weekly;
     if (!weekly) return [];
