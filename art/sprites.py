@@ -4732,10 +4732,12 @@ def main():
     icons.main()
     # Гардероб покупателей и срочные новости особых дней.
     import news
+    import street_props
     import wardrobe
 
     wardrobe.main()
     news.main()
+    street_props.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

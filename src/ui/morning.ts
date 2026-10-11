@@ -102,6 +102,7 @@ import { currentCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } f
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
+import { BIG_DAYS, bigDayFor, bigDayKnown, bigDayProgress } from '../game/bigday';
 import { CANDY_COST, CANDY_PRICE, nextRack, rackCapacity, rackOf, refillRack, upgradeRack } from '../game/impulse';
 import { haggleBonus, learnSkill, nextLevelXp, ownerLevelOf, ownerTiming, ownerXp, SKILL_IDS, SKILL_MAX, skillLevel, skillPoints, SKILLS } from '../game/owner';
 import { LOAN_INTEREST, LOAN_MONTHS, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../game/bank';
@@ -347,6 +348,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       ...promoLine(state),
       goalLine(state),
       ...debtLine(state),
+      ...bigDayLine(state),
       ...seasonLine(state),
       ...weatherLine(state),
       ...warLine(state),
@@ -749,6 +751,15 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     return [line];
   };
 
+
+  /** Многодневный особый день (ремонт дороги, болезнь) со второго дня уже известен — видно утром. */
+  const bigDayLine = (state: StoreState): HTMLElement[] => {
+    const id = bigDayFor(state.day);
+    const progress = bigDayProgress(state.day);
+    if (!id || !progress || !bigDayKnown(state.day)) return [];
+    const title = t(`bigday.${id}.title` as TextKey);
+    return [el('div', 'ui-note', t('bigday.morning', { icon: BIG_DAYS[id].icon, title, n: progress.of - progress.n + 1 }))];
+  };
 
   const seasonLine = (state: StoreState): HTMLElement[] => {
     const season = seasonFor(state.day);

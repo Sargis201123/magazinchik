@@ -1813,6 +1813,48 @@ def back_shield(v):
     return c
 
 
+def face_medmask(v):
+    """Медицинская маска на резинках."""
+    c = small()
+    if v == "f":
+        c.round_rect(6, 11, 12, 5, "w", r=1)
+        for y in (12, 14):
+            c.hline(8, y, 8, "c")
+        c.line(5, 10, 6, 12, "W")
+        c.line(18, 10, 17, 12, "W")
+    elif v == "s":
+        c.round_rect(13, 11, 6, 5, "w", r=1)
+        c.hline(14, 13, 4, "c")
+        c.line(9, 10, 13, 12, "W")
+    else:
+        c.hline(5, 10, 2, "W")
+        c.hline(17, 10, 2, "W")
+    return c
+
+
+def outfit_runner(v):
+    """Майка бегуна с номером. Номер — прорезь, в ней белая рубашка бегуна и чёрные цифры."""
+    c = small()
+    clear = (0, 0, 0, 0)
+    if v == "s":
+        c.rect(8, 17, 8, 9, "1")
+        c.vline(8, 17, 9, "2")
+        c.outline("k")
+        c.rect(12, 20, 3, 3, clear)
+        c.px(13, 21, "k")
+        return c
+    c.rect(7, 17, 11, 9, "1")
+    c.vline(17 if v == "f" else 7, 17, 9, "2")
+    c.rect(7, 17, 2, 2, clear)
+    c.rect(16, 17, 2, 2, clear)
+    c.outline("k")
+    c.rect(9, 19, 7, 5, clear)
+    for x in (10, 11, 13, 14):
+        c.vline(x, 20, 3, "k")
+    c.px(10, 20, clear)
+    c.px(14, 22, clear)
+    return c
+
 ITEMS = {
     "hat_feathers": hat_feathers,
     "hat_shako": hat_shako,
@@ -1907,6 +1949,8 @@ ITEMS = {
     "back_mantle": back_mantle,
     "back_cape": back_cape,
     "back_shield": back_shield,
+    "face_medmask": face_medmask,
+    "outfit_runner": outfit_runner,
 }
 
 SUFFIX = {"f": "", "b": "_b", "s": "_s"}

@@ -292,3 +292,10 @@ export function pickWear(day: number, random: () => number): { id: string; wear:
   const pick = <T,>(items: readonly T[]): T => items[Math.floor(random() * items.length)];
   return { id: chosen.id, wear: chosen.wear(pick, (p) => random() < p) };
 }
+
+/** Образ по имени (рабочие на ремонте дороги, туристы из автобуса). */
+export function wearOf(id: string, random: () => number): Wear {
+  const archetype = ARCHETYPES.find((a) => a.id === id) ?? ARCHETYPES[0];
+  const pick = <T,>(items: readonly T[]): T => items[Math.floor(random() * items.length)];
+  return archetype.wear(pick, (p) => random() < p);
+}

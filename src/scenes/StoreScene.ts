@@ -72,9 +72,31 @@ import { findPath, type Rect } from './paths';
 import { ambience } from '../platform/ambience';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, UI_FONT } from '../ui/dom';
-import { BIG_DAYS, bigDayFor, CROWD_EXTRA_GUESTS, CROWD_PATIENCE, isCrowdDay, quakeBreak, type BigDayId } from '../game/bigday';
+import {
+  BIG_DAYS,
+  BLACKOUT_CHECKOUT,
+  BLACKOUT_UNTIL,
+  bigDayExtraItems,
+  bigDayFor,
+  bigDayNightGuests,
+  bigDayProgress,
+  blackoutWarm,
+  CROWD_EXTRA_GUESTS,
+  CROWD_PATIENCE,
+  filmingReward,
+  fulfillWedding,
+  isCrowdDay,
+  MASKS,
+  quakeBreak,
+  ROADWORKERS,
+  TOURISTS,
+  weddingOrder,
+  weddingText,
+  type BigDayId,
+  type WeddingOrder,
+} from '../game/bigday';
 import { dialogBox } from '../ui/dialog';
-import { pickWear } from './archetypes';
+import { pickWear, wearOf } from './archetypes';
 import { BIG_LAYER_DY, type BackId, type FaceId, type HatId, type OutfitId, type PropId } from './wardrobe';
 import { Hud } from '../ui/hud';
 import { showMorning } from '../ui/morning';
@@ -276,6 +298,8 @@ const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
   frozen: { texture: 'fridge', tint: 0xc4f4ff },
   household: { texture: 'chem', tint: 0xffffff },
 };
+/** Белая рубашка под майкой бегуна: номер на груди — прорезь, в ней видна рубашка. */
+const WHITE_SHIRT = 0xffffff;
 const SHIRTS = [0x5b6ee1, 0xd95763, 0x6abe30, 0xfbf236, 0x76428a, 0xdf7126, 0x37946e, 0xf6757a, 0x2ce8f5];
 const PANTS = [0x3a4466, 0x262b44, 0x5a6988, 0x733e39, 0x265c42];
 const HAIR_COLORS = [0x4a2c1a, 0x181425, 0x733e39, 0xfeae34, 0xb86f50, 0x8b9bb4];
@@ -680,6 +704,10 @@ export class StoreScene extends Phaser.Scene {
   private fairObjs: Phaser.GameObjects.GameObject[] = [];
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
   private bigObjs: { destroy: () => void }[] = [];
+  /** Блэкаут на весь район: темно, касса считает вручную (щиток не поможет). */
+  private powerCut = false;
+  /** Свадебный заказ: заберут вечером. */
+  private wedding: WeddingOrder | null = null;
   private stall?: Phaser.GameObjects.Image;
   private stallTimer?: Phaser.Time.TimerEvent;
   /** Доставка на дом: телефон у кассы, текущий заказ, курьер с велосипедом. */
@@ -789,7 +817,7 @@ export class StoreScene extends Phaser.Scene {
       const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0) + (isCrowdDay(this.state.day) && !this.night ? CROWD_EXTRA_GUESTS : 0);
       if (this.nextSpawn <= 0 && this.customers.size < maxCustomers) {
         this.spawnCustomer();
-        const interval = spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS : 1);
+        const interval = spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
       }
     } else if (this.customers.size === 0 && this.inspector !== 'here') {
@@ -1274,7 +1302,7 @@ export class StoreScene extends Phaser.Scene {
     const p = progress ?? Phaser.Math.Clamp(1 - this.timeLeft / DAY_SECONDS, 0, 1);
     const outdoor = mulColor(lerpKeys(OUTDOOR_LIGHT, p), WEATHER_LIGHT[this.weather]);
     // Свет отключили — в зале полумрак.
-    const indoor = this.blackout ? mulColor(lerpKeys(INDOOR_LIGHT, p), 0x45456a) : lerpKeys(INDOOR_LIGHT, p);
+    const indoor = this.blackout || this.powerCut ? mulColor(lerpKeys(INDOOR_LIGHT, p), 0x45456a) : lerpKeys(INDOOR_LIGHT, p);
     for (const r of this.outdoorShades) r.setFillStyle(outdoor);
     for (const r of this.indoorShades) r.setFillStyle(indoor);
     const evening = Phaser.Math.Clamp((p - 0.6) / 0.4, 0, 1);
@@ -1285,7 +1313,7 @@ export class StoreScene extends Phaser.Scene {
       this.vignette.radius = 0.95 - 0.12 * evening;
     }
     for (const g of this.lampGlows) g.setAlpha(0.7 * evening);
-    for (const g of this.ceilingGlows) g.setAlpha(this.blackout ? 0 : 0.06 + 0.16 * evening);
+    for (const g of this.ceilingGlows) g.setAlpha(this.blackout || this.powerCut ? 0 : 0.06 + 0.16 * evening);
     for (const bat of this.bats) bat.setAlpha(Phaser.Math.Clamp(evening * 1.5, 0, 1));
     const now = this.time.now;
     for (const light of this.nightLights) {
@@ -4848,14 +4876,16 @@ export class StoreScene extends Phaser.Scene {
 
   // ---------- Покупатели ----------
 
-  private spawnCustomer(): void {
-    const thief = Math.random() < thiefChance(this.state.level) * cameraTheft(this.state) * eyeTheft(this.state);
-    const valya = !thief && !this.night && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
+  private spawnCustomer(forced?: { look: Look; at: Phaser.Types.Math.Vector2Like }): void {
+    const thief = !forced && Math.random() < thiefChance(this.state.level) * cameraTheft(this.state) * eyeTheft(this.state);
+    const valya = !forced && !thief && !this.night && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
     const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
     // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще.
     const rareChance = rareGuestChance(this.state.level) * (activeAd(this.state)?.id === 'blogger' ? 2 : 1);
-    const rare = !thief && !valya && !this.night && Math.random() < rareChance ? pickRareGuest(this.state, Math.random) : null;
-    const look: Look = rare
+    const rare = !forced && !thief && !valya && !this.night && Math.random() < rareChance ? pickRareGuest(this.state, Math.random) : null;
+    let look: Look = forced
+      ? forced.look
+      : rare
       ? (rare.look as Look)
       : valya
         ? VALYA
@@ -4864,7 +4894,13 @@ export class StoreScene extends Phaser.Scene {
           : this.night
             ? nightLook()
             : withCompanionItems(customerLook(shirt, this.state.day));
-    const start = this.streetSpawn();
+    const big = bigDayFor(this.state.day);
+    if (!rare && !thief && !valya) {
+      // Ремонт дороги: рабочие в касках приходят за обедом. Болезнь: почти все в масках.
+      if (big === 'roadworks' && !forced && !this.night && Math.random() < ROADWORKERS) look = { ...look, ...wearOf('builder', Math.random) };
+      if (big && BIG_DAYS[big].masks && !look.face && Math.random() < MASKS) look = { ...look, face: 'medmask' };
+    }
+    const start = forced?.at ?? this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, look);
     this.addUmbrella(sprite);
     // Иногда приходят парой.
@@ -4912,7 +4948,7 @@ export class StoreScene extends Phaser.Scene {
     await this.walk(c.sprite, door.x, this.streetY);
     await this.walk(c.sprite, door.x, door.y - 10);
     // С тележкой у входа покупатель иногда берёт что-то сверх списка.
-    const wanted = this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random) + radioExtra(this.state, Math.random));
+    const wanted = this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random) + radioExtra(this.state, Math.random) + bigDayExtraItems(this.state.day));
     for (const id of wanted) {
       const index = shelfFor(this.state, id);
       if (index < 0 || c.gone) continue;
@@ -4973,7 +5009,7 @@ export class StoreScene extends Phaser.Scene {
     const mud = [...this.trash].filter((piece) => piece.texture.key === 'mud').length;
     if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE * entranceMud(this.state)) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, 'mud');
 
-    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random) + radioExtra(this.state, Math.random));
+    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random) + radioExtra(this.state, Math.random) + bigDayExtraItems(this.state.day));
     if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
     let disappointed = false;
     let why: { reason: LostReason; id: ProductId } | undefined;
@@ -5160,10 +5196,12 @@ export class StoreScene extends Phaser.Scene {
     c.bubble.setVisible(false);
     // Без света касса не работает — ждём.
     while (this.blackout && this.sys.isActive()) await this.wait(250);
-    r.scan = { start: this.time.now, total: checkoutSeconds(timing, c.items.length) * 1000, byOwner };
+    // В блэкаут на весь район касса считает вручную — медленнее.
+    const manual = this.powerCut ? BLACKOUT_CHECKOUT : 1;
+    r.scan = { start: this.time.now, total: checkoutSeconds(timing, c.items.length) * 1000 * manual, byOwner };
     const { counter } = r;
     for (const { id } of c.items) {
-      await this.wait(timing.item * 1000);
+      await this.wait(timing.item * 1000 * manual);
       if (!this.sys.isActive()) return;
       const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2 / ART).setDepth(1000);
       this.tweens.add({ targets: item, x: counter.x, y: counter.y - 14, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
@@ -5808,7 +5846,15 @@ export class StoreScene extends Phaser.Scene {
     this.running = true;
     this.clearBigDay();
     const big = bigDayFor(this.state.day);
-    if (big) this.announceBigDay(big);
+    const progress = bigDayProgress(this.state.day);
+    if (big && progress && progress.n > 1) {
+      // Второй и дальше день многодневного события: о нём уже знают — без новостей.
+      this.startBigDay(big);
+      const name = t(`bigday.${big}.title` as TextKey);
+      this.time.delayedCall(600, () =>
+        this.popup(this.layout.w / 2, this.layout.h / 2, t('bigday.dayOf', { icon: BIG_DAYS[big].icon, title: name, n: progress.n, of: progress.of }), '#fee761'),
+      );
+    } else if (big) this.announceBigDay(big);
   }
 
   /**
@@ -5821,6 +5867,8 @@ export class StoreScene extends Phaser.Scene {
     this.time.paused = true;
     sound.news();
     haptic.tap();
+    if (id === 'wedding') this.wedding = weddingOrder(this.state);
+    const params = { n: BIG_DAYS[id].days ?? TOURISTS, order: this.wedding ? weddingText(this.wedding) : '' };
     const { card, close } = openModal();
     // Заголовок одним куском: у h2 в окне flex по краям, иконка не должна уезжать влево.
     const title = el('h2');
@@ -5832,9 +5880,9 @@ export class StoreScene extends Phaser.Scene {
         art: `assets/news_${id}.png`,
         portrait: big.crowd ? 'portrait_anchor_happy' : 'portrait_anchor_surprised',
         name: t('bigday.anchor'),
-        text: t(`bigday.${id}.news` as TextKey),
+        text: t(`bigday.${id}.news` as TextKey, params),
         pitch: 520,
-        after: [el('div', 'ui-note', t(`bigday.${id}.hint` as TextKey))],
+        after: [el('div', 'ui-note', t(`bigday.${id}.hint` as TextKey, params))],
         nextLabel: t('bigday.ok'),
         onNext: () => {
           close();
@@ -5852,6 +5900,10 @@ export class StoreScene extends Phaser.Scene {
     if (this.bigObjs.length) for (const g of this.greenery) g.setTint(this.weather === 'snow' ? 0xdce6f2 : this.weather === 'leaves' ? 0xffb868 : 0xffffff);
     this.bigObjs = [];
     if (this.time.paused) this.time.paused = false;
+    if (this.powerCut) {
+      this.powerCut = false;
+      this.updateLighting();
+    }
     this.applyRadio();
   }
 
@@ -5923,15 +5975,16 @@ export class StoreScene extends Phaser.Scene {
     if (id === 'quake') {
       for (const at of [0.12, 0.42, 0.72]) keep(this.time.delayedCall(at * DAY_SECONDS * 1000, () => this.running && !this.night && this.tremor()));
     }
+    this.startBigDayScene(id, keep, top);
     if (BIG_DAYS[id].crowd) {
-      music.setStation(id === 'carnival' ? 'samba' : 'march');
+      music.setStation(id === 'carnival' ? 'samba' : id === 'marathon' ? 'hits' : 'march');
       const marchers = () => {
         if (!this.running || this.night) return;
         const n = Phaser.Math.Between(6, 8);
         for (let i = 0; i < n; i++) this.marcher(id, i, area.x - 12 - Math.floor(i / 2) * 15, top + 34 + (i % 2) * 14, area.x + area.w + 20, keep);
       };
       marchers();
-      keep(this.time.addEvent({ delay: 9000, loop: true, callback: marchers }));
+      keep(this.time.addEvent({ delay: id === 'marathon' ? 5000 : 9000, loop: true, callback: marchers }));
       keep(this.add.particles(0, 0, 'confetti', {
         x: { min: area.x, max: area.x + area.w },
         y: { min: top - 20, max: top + 10 },
@@ -5946,12 +5999,134 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
+  /** Необычный день на улице и в зале: свет, съёмки, автобус, звездопад, голуби, ремонт, проверка, свадьба. */
+  private startBigDayScene(
+    id: BigDayId,
+    keep: <T extends { destroy: () => void }>(obj: T) => T,
+    top: number,
+  ): void {
+    const { w, h, door } = this.layout;
+    const at = (share: number, fn: () => void) =>
+      keep(this.time.delayedCall(share * DAY_SECONDS * 1000, () => this.running && !this.night && fn()));
+    const road = top + 40;
+    if (id === 'blackout') {
+      this.powerCut = true;
+      this.updateLighting();
+      keep(
+        this.time.delayedCall(BLACKOUT_UNTIL * DAY_SECONDS * 1000, () => {
+          if (!this.powerCut) return;
+          this.powerCut = false;
+          this.updateLighting();
+          this.state = blackoutWarm(this.state).state;
+          this.refreshShelves();
+          sound.good();
+          this.popup(w / 2, h / 2 - 20, t('popup.lightOnDistrict'), '#c8ffb0');
+        }),
+      );
+    }
+    if (id === 'filming') {
+      const sx = door.x + 50;
+      keep(this.art(sx - 24, road, 'film_camera').setDepth(road + 8));
+      keep(this.art(sx - 36, road - 6, 'film_light').setDepth(road + 4));
+      keep(this.art(sx + 40, road - 6, 'film_light').setFlipX(true).setDepth(road + 4));
+      keep(this.art(sx - 40, road + 10, 'director_chair').setDepth(road + 14));
+      // Актёры в костюмах из альбома редких гостей, на тротуаре — зеваки.
+      ['knight', 'queen', 'pirate'].forEach((rid, i) => {
+        const guest = RARE_GUESTS.find((g) => g.id === rid);
+        if (!guest) return;
+        const actor = keep(this.makePerson(sx + 2 + i * 12, road + 2, guest.look as Look));
+        this.setFacing(actor, 'left');
+      });
+      for (let i = 0; i < 5; i++) keep(this.makePerson(door.x + 14 + i * 16, top + 14 + (i % 2) * 3, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)));
+      keep(
+        this.time.addEvent({
+          delay: 14000,
+          loop: true,
+          callback: () => {
+            if (!this.running || this.night) return;
+            sound.tap();
+            this.popup(sx + 14, road - 18, t('popup.action'), '#fff3b0');
+          },
+        }),
+      );
+    }
+    if (id === 'tourbus') at(0.3, () => this.tourBus(keep));
+    if (id === 'starfall') {
+      keep(
+        this.time.addEvent({
+          delay: 700,
+          loop: true,
+          callback: () => {
+            if (!this.night && this.timeLeft > DAY_SECONDS * 0.35) return;
+            const view = this.cameras.main.worldView;
+            const x = Phaser.Math.Between(view.x, view.x + view.width * 0.7);
+            const y = Phaser.Math.Between(view.y, view.y + view.height * 0.4);
+            const star = this.add.rectangle(x, y, 10, 0.8, 0xffffff).setOrigin(1, 0.5).setRotation(0.45).setDepth(LIGHT_DEPTH + 2).setBlendMode(Phaser.BlendModes.ADD);
+            this.tweens.add({ targets: star, x: x + 56, y: y + 27, alpha: 0, duration: 800, onComplete: () => star.destroy() });
+          },
+        }),
+      );
+    }
+    if (id === 'pigeons') for (const share of [0.1, 0.3, 0.5, 0.7]) at(share, () => this.pigeonInside(keep));
+    if (id === 'roadworks') {
+      keep(this.art(door.x + 44, road, 'road_pit').setDepth(road - 4));
+      keep(this.art(door.x + 100, road - 4, 'digger').setDepth(road + 8));
+      for (let x = door.x + 14; x < door.x + 134; x += 20) keep(this.art(x, road + 14, 'road_barrier').setDepth(road + 18));
+      for (const x of [door.x + 2, door.x + 140]) keep(this.art(x, road + 12, 'cone').setDepth(road + 16));
+      // Рабочие у раскопа: один копает (качается), другой смотрит.
+      [door.x + 30, door.x + 62].forEach((x, i) => {
+        const worker = keep(this.makePerson(x, road - 8, { ...randomLook(0x8f563b), ...wearOf('builder', Math.random) }));
+        if (i === 0) keep(this.tweens.add({ targets: worker, y: road - 7, duration: 400, yoyo: true, repeat: -1 }));
+      });
+    }
+    if (id === 'sanitary' && this.inspector === 'none') this.inspector = 'pending';
+    if (id === 'wedding') {
+      const car = keep(this.art(door.x - 90, road, 'car').setTint(0xffffff).setDepth(road + 6));
+      keep(this.tweens.add({ targets: car, y: road - 0.5, duration: 900, yoyo: true, repeat: -1 }));
+      at(0.8, () => {
+        sound.bell();
+        this.popup(w / 2, h / 2 - 20, t('popup.weddingSoon'), '#ffd0e0');
+      });
+    }
+  }
+
+  /** Автобус туристов: подъезжает к магазину, из него разом выходит толпа. */
+  private tourBus(keep: <T extends { destroy: () => void }>(obj: T) => T): void {
+    const { door } = this.layout;
+    const y = this.streetY + 25;
+    const body = this.art(0, 0, 'bus').setTint(0xfeae34);
+    const lights = this.art(0, 0, 'bus_lights');
+    const bus = keep(this.add.container(-140, y, [body, lights]).setDepth(y));
+    this.tweens.add({
+      targets: bus,
+      x: door.x,
+      duration: 3000,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        if (!bus.active) return;
+        sound.bell();
+        this.popup(door.x, this.streetY - 12, t('popup.tourists'), '#fee761');
+        for (let i = 0; i < TOURISTS; i++) {
+          this.time.delayedCall(i * 350, () => {
+            if (!this.running) return;
+            const look = { ...randomLook(Phaser.Utils.Array.GetRandom(SHIRTS)), ...wearOf('tourist', Math.random) };
+            this.spawnCustomer({ look, at: { x: door.x + Phaser.Math.Between(-24, 24), y: this.streetY + 4 } });
+          });
+        }
+        this.time.delayedCall(TOURISTS * 350 + 1500, () => bus.active && this.tweens.add({ targets: bus, x: this.next.w + 160, duration: 3200, ease: 'Sine.easeIn' }));
+      },
+    });
+  }
+
   /** Участник шествия: идёт вдоль дороги слева направо и уходит за край. */
   private marcher(id: BigDayId, i: number, x: number, y: number, toX: number, keep: <T extends { destroy: () => void }>(obj: T) => T): void {
     const skin = Phaser.Utils.Array.GetRandom(SKINS);
     const costume = Phaser.Utils.Array.GetRandom([0xb55088, 0xe43b44, 0x0099db, 0x63c74d, 0xfeae34]);
+    const shirtColor = Phaser.Utils.Array.GetRandom([0xe43b44, 0x0099db, 0x63c74d, 0xfeae34, 0xb55088, 0x2ce8f5]);
     const look: Look =
-      id === 'carnival'
+      id === 'marathon'
+        ? { ...randomLook(WHITE_SHIRT), skin, outfit: 'runner', outfitTint: shirtColor, hat: 'headband', hatTint: WHITE_SHIRT, pants: 0x262b44 }
+        : id === 'carnival'
         ? {
             ...randomLook(costume),
             skin,
@@ -5967,7 +6142,7 @@ export class StoreScene extends Phaser.Scene {
     const person = keep(this.makePerson(x, y, look));
     this.setFacing(person, 'right');
     person.setData('walking', true);
-    keep(this.tweens.add({ targets: person, x: toX, duration: ((toX - x) / 16) * 1000, onComplete: () => person.destroy() }));
+    keep(this.tweens.add({ targets: person, x: toX, duration: ((toX - x) / (id === 'marathon' ? 34 : 16)) * 1000, onComplete: () => person.destroy() }));
     // Танцоры подпрыгивают в такт.
     if (id === 'carnival') keep(this.tweens.add({ targets: person, y: y - 1.5, duration: 260, yoyo: true, repeat: -1, delay: i * 90 }));
   }
@@ -6003,6 +6178,12 @@ export class StoreScene extends Phaser.Scene {
       this.resetOven();
       this.state = (product === 'bread' ? takeOutBread(this.state) : takeOutBread(this.state, BRAND_BATCH, product)).state;
     }
+    // Особый день вечером: свадебный заказ забирают, после съёмок — реклама на завтра.
+    const wedding = this.wedding ? fulfillWedding(this.state, this.wedding) : null;
+    if (wedding) this.state = wedding.state;
+    this.wedding = null;
+    const filmed = bigDayFor(this.state.day) === 'filming';
+    if (filmed) this.state = filmingReward(this.state);
     const finishedDay = this.state.day;
     const ratingBefore = this.state.rating;
     const rankBefore = rankOf(this.state.totalRevenue);
@@ -6012,6 +6193,8 @@ export class StoreScene extends Phaser.Scene {
     const extra: [string, string][] = [];
     const big = bigDayFor(finishedDay);
     if (big) extra.push([t('bigday.summary'), `${BIG_DAYS[big].icon} ${t(`bigday.${big}.title` as TextKey)}`]);
+    if (wedding) extra.push([t('summary.wedding'), t(wedding.complete ? 'summary.weddingFull' : 'summary.weddingPart', { n: wedding.earned })]);
+    if (filmed) extra.push(['🎬', t('summary.filming')]);
     if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
     if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
     const rankAfter = rankOf(state.totalRevenue);
