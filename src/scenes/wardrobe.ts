@@ -12,7 +12,7 @@ export const HATS = [
 export const OUTFITS = [
   'samba', 'band', 'cardigan', 'hoodie', 'tracksuit', 'suit', 'labcoat', 'chefcoat', 'police', 'firecoat',
   'leather', 'fishvest', 'hawaii', 'telnyashka', 'dress', 'furcoat', 'gown', 'piratecoat', 'clownsuit',
-  'armor', 'spacesuit', 'vikingfur', 'herosuit', 'tutu', 'ninja',
+  'armor', 'spacesuit', 'vikingfur', 'herosuit', 'tutu', 'ninja', 'runner',
 ] as const;
 export const PROPS = [
   'maracas', 'trumpet', 'drum', 'flag', 'balloon', 'cane', 'stringbag', 'briefcase', 'rod', 'camera',
@@ -20,7 +20,7 @@ export const PROPS = [
   'sword', 'raygun', 'wand',
 ] as const;
 export const FACES = [
-  'beard', 'mustache', 'sunglasses', 'eyepatch', 'clownnose', 'heromask',
+  'beard', 'mustache', 'sunglasses', 'eyepatch', 'clownnose', 'heromask', 'medmask',
 ] as const;
 export const BACKS = [
   'fan', 'guitar', 'cube', 'yogamat', 'mantle', 'cape', 'shield',

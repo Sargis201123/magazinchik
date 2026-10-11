@@ -457,6 +457,17 @@ const ICONS: Record<string, string> = {
   '🎭': 'ico_mask',
   '🎺': 'ico_trumpet',
   '📺': 'ico_tv',
+  // Особые дни.
+  '🕯': 'ico_candle',
+  '🎬': 'ico_clapper',
+  '🏃': 'ico_runner',
+  '🚌': 'ico_bus',
+  '🌠': 'ico_shooting',
+  '🐦': 'ico_bird',
+  '🚧': 'ico_works',
+  '🧪': 'ico_testtube',
+  '💒': 'ico_wedding',
+  '🦠': 'ico_virus',
   // Альбом редких гостей.
   '🎸': 'ico_guitar',
   '🎩': 'ico_tophat',
