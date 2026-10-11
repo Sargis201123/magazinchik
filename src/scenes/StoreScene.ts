@@ -847,7 +847,7 @@ export class StoreScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     this.scarePigeons();
-    ambience.update(this.weather, this.evening, this.running);
+    ambience.update(this.weather, this.evening, this.running, yearTime(this.state.day));
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     this.hud.showUrgent(this.running && !this.night && this.state.day > TUTORIAL_DAYS);
     if (!this.running) return;
@@ -2927,7 +2927,7 @@ export class StoreScene extends Phaser.Scene {
     const body = this.art(0, 0, 'car_van').setTint(0xffffff);
     const lights = this.art(0, 0, 'car_van_lights');
     const van = this.add.container(-260, roadY, [body, lights]).setDepth(roadY);
-    ambience.carPass();
+    ambience.carPass(isWet(this.weather));
     await new Promise<void>((done) => this.tweens.add({ targets: van, x: vanX, duration: 2200, ease: 'Sine.easeOut', onComplete: () => done() }));
     if (!van.active) return;
     const driver = this.makePerson(vanX, this.streetY + 10, { ...randomLook(0x0099db), style: 'cap', hair: 0x0099db });
@@ -4819,7 +4819,7 @@ export class StoreScene extends Phaser.Scene {
     const vanX = warehouse.x + warehouse.w / 2 + 14;
     const roadY = this.streetY + 24;
     const van = this.add.container(-260, roadY, [this.art(0, 0, 'car_van').setTint(0xffd27a), this.art(0, 0, 'car_van_lights')]).setDepth(roadY);
-    ambience.carPass();
+    ambience.carPass(isWet(this.weather));
     await this.wait((URGENT_SECONDS * 1000) / Math.max(1, this.speed) - 1800);
     await new Promise<void>((done) => this.tweens.add({ targets: van, x: vanX, duration: 1800, ease: 'Sine.easeOut', onComplete: () => done(), onStop: () => done() }));
     this.receiveUrgentOrders();
@@ -5608,7 +5608,7 @@ export class StoreScene extends Phaser.Scene {
         );
       }
       const car = this.add.container(toRight ? left : right, y, parts).setDepth(y);
-      ambience.carPass();
+      ambience.carPass(isWet(this.weather));
       car.setScale(toRight ? 1 : -1, 1);
       this.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
     }
