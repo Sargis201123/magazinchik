@@ -49,6 +49,7 @@ import {
   BAD_COMPLAINT_CHANCE,
   hasUnmarkedBad,
   freeSlots,
+  daysUntilSeason,
   answerRaise,
   guardCatchChance,
   hire,
@@ -269,8 +270,20 @@ export function simulate({
       investments += SHELF_KINDS[kind].price;
       state = buyShelf(state, kind)!;
     }
+    // Ларь с мороженым у входа: разумный игрок ставит его к лету, когда уже есть молочный холодильник.
+    if (
+      !state.shelves.some((s) => s.kind === 'icebox') &&
+      state.shelves.some((s) => s.kind === 'dairy') &&
+      daysUntilSeason('icecream', state.day) <= 7 &&
+      state.money >= SHELF_KINDS.icebox.price + reserve
+    ) {
+      investments += SHELF_KINDS.icebox.price;
+      state = buyShelf(state, 'icebox')!;
+    }
 
     for (let i = 0; i < state.shelves.length; i++) {
+      // Ларь и вёдра нужны на один сезон — их разумный игрок не улучшает.
+      if (SHELF_KINDS[state.shelves[i].kind].fixture) continue;
       const cost = upgradeCost(state.shelves[i]);
       if (cost !== null && state.money >= cost + reserve * 3) {
         investments += cost;

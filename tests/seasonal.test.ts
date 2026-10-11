@@ -27,7 +27,7 @@ describe('seasonal goods', () => {
   it('вне сезона товар нельзя продать и его не хотят', () => {
     const summer = year.find((d) => yearTime(d) === 'summer')!;
     const winterless = year.find((d) => !productAvailable('icecream', d))!;
-    const withFridge = { ...newGame(), shelves: [...newGame().shelves, { kind: 'dairy' as const, level: 0, items: {} }] };
+    const withFridge = { ...newGame(), shelves: [...newGame().shelves, { kind: 'icebox' as const, level: 0, items: {} }] };
     expect(sellableProducts({ ...withFridge, day: summer })).toContain('icecream');
     expect(sellableProducts({ ...withFridge, day: winterless })).not.toContain('icecream');
     for (let i = 0; i < 50; i++) expect(pickWanted({ ...withFridge, day: winterless }, Math.random, 2)).not.toContain('icecream');

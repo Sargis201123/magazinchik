@@ -12,8 +12,12 @@ import type { DayReport } from './reports';
 import { afterLoanPayment, loanDue } from './bank';
 import { fridgeLife, fridgePower, lightsPower, warehouseRoom, type GearId } from './gear';
 
-/** Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу. */
-export type Category = 'bakery' | 'produce' | 'dairy' | 'meat' | 'drinks' | 'frozen' | 'household';
+/**
+ * Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу.
+ * Ларь с мороженым (у входа) и цветы у кассы — тоже «полки», но стоят на своих местах,
+ * а не на местах под полки в зале.
+ */
+export type Category = 'bakery' | 'produce' | 'dairy' | 'meat' | 'drinks' | 'frozen' | 'household' | 'icebox' | 'florist';
 
 export type ProductId =
   | 'bread'
@@ -56,9 +60,9 @@ export const PRODUCTS: Record<ProductId, Product> = {
   milk: { id: 'milk', nameKey: 'product.milk', icon: '🥛', category: 'dairy', cost: 36, basePrice: 60, shelfLife: 3, color: 0xeef3f7 },
   meat: { id: 'meat', nameKey: 'product.meat', icon: '🥩', category: 'meat', cost: 90, basePrice: 150, shelfLife: 2, color: 0xb83a4b },
   // Сезонные товары: продаются только в свои месяцы (см. SEASONAL).
-  icecream: { id: 'icecream', nameKey: 'product.icecream', icon: '🍦', category: 'dairy', cost: 30, basePrice: 55, shelfLife: 4, color: 0xf6c6d6 },
+  icecream: { id: 'icecream', nameKey: 'product.icecream', icon: '🍦', category: 'icebox', cost: 30, basePrice: 55, shelfLife: 4, color: 0xf6c6d6 },
   tangerines: { id: 'tangerines', nameKey: 'product.tangerines', icon: '🍊', category: 'produce', cost: 20, basePrice: 40, shelfLife: 6, color: 0xf77622 },
-  flowers: { id: 'flowers', nameKey: 'product.flowers', icon: '💐', category: 'produce', cost: 35, basePrice: 70, shelfLife: 3, color: 0xe43b44 },
+  flowers: { id: 'flowers', nameKey: 'product.flowers', icon: '💐', category: 'florist', cost: 35, basePrice: 70, shelfLife: 3, color: 0xe43b44 },
   // Новые отделы больших магазинов: напитки, заморозка, бытовая химия (полки — с уровня помещения).
   water: { id: 'water', nameKey: 'product.water', icon: '💧', category: 'drinks', cost: 12, basePrice: 25, shelfLife: 30, color: 0x0099db },
   juice: { id: 'juice', nameKey: 'product.juice', icon: '🧃', category: 'drinks', cost: 28, basePrice: 50, shelfLife: 8, color: 0xfeae34 },
@@ -93,6 +97,12 @@ export const SEASONAL: Partial<Record<ProductId, number[]>> = { icecream: [7, 8,
 export const monthInYear = (day: number): number => (monthOf(day) - 1) % YEAR_MONTHS;
 export const productAvailable = (id: ProductId, day: number): boolean => SEASONAL[id]?.includes(monthInYear(day)) ?? true;
 
+/** Через сколько дней начнётся сезон товара (0 — уже сезон или товар всегда в продаже). */
+export function daysUntilSeason(id: ProductId, day: number): number {
+  for (let n = 0; n <= YEAR_MONTHS * MONTH_DAYS; n++) if (productAvailable(id, day + n)) return n;
+  return 0;
+}
+
 /** Спрос на сезонный товар: в сезон берут охотно, на 8 Марта (первые два дня весны) цветы — нарасхват. */
 export function seasonalDemand(id: ProductId, day: number): number {
   if (!SEASONAL[id]) return 1;
@@ -108,6 +118,10 @@ export interface ShelfKind {
   fridge: boolean;
   /** С какого уровня помещения можно поставить (новые отделы — только в больших магазинах). */
   minLevel?: number;
+  /** Стоит на своём месте (ларь у входа, цветы у кассы), а не на месте под полку; такой — один. */
+  fixture?: boolean;
+  /** Холодильник работает только в сезон своего товара (ларь зимой выключен). */
+  seasonal?: ProductId;
 }
 
 export const SHELF_KINDS: Record<Category, ShelfKind> = {
@@ -118,7 +132,22 @@ export const SHELF_KINDS: Record<Category, ShelfKind> = {
   drinks: { nameKey: 'shelf.drinks', price: 250, fridge: false, minLevel: 1 },
   frozen: { nameKey: 'shelf.frozen', price: 450, fridge: true, minLevel: 2 },
   household: { nameKey: 'shelf.household', price: 250, fridge: false, minLevel: 3 },
+  icebox: { nameKey: 'shelf.icebox', price: 350, fridge: true, fixture: true, seasonal: 'icecream' },
+  florist: { nameKey: 'shelf.florist', price: 0, fridge: false, fixture: true },
 };
+
+/** Ларь с мороженым у входа и цветы у кассы: стоят на своих местах, мест под полки не занимают. */
+export const FIXTURE_KINDS = (Object.keys(SHELF_KINDS) as Category[]).filter((k) => SHELF_KINDS[k].fixture);
+export const isFixture = (shelf: Shelf): boolean => Boolean(SHELF_KINDS[shelf.kind].fixture);
+export const fixtureIndex = (state: StoreState, kind: Category): number => state.shelves.findIndex((s) => s.kind === kind);
+/**
+ * Номер места в зале для полки state.shelves[index]: считаются только обычные полки.
+ * Для ларя и цветов — −1 (у них свои места).
+ */
+export function slotOf(state: StoreState, index: number): number {
+  if (!state.shelves[index] || isFixture(state.shelves[index])) return -1;
+  return state.shelves.slice(0, index).filter((s) => !isFixture(s)).length;
+}
 
 /** Новые отделы больших магазинов: за водой, пельменями и порошком заходят отдельно. */
 export const NEW_DEPARTMENTS: Category[] = ['drinks', 'frozen', 'household'];
@@ -135,7 +164,8 @@ export const SHELF_RESALE = 0.5;
 /** Электричество одного холодильника за месяц. */
 export const FRIDGE_POWER = 100;
 
-export const CATEGORIES = Object.keys(SHELF_KINDS) as Category[];
+/** Обычные полки, которые покупают на свободные места в зале. */
+export const CATEGORIES = (Object.keys(SHELF_KINDS) as Category[]).filter((k) => !SHELF_KINDS[k].fixture);
 
 /** Уровни полки: вместимость и цена улучшения до этого уровня. */
 export const SHELF_LEVELS = [
@@ -643,6 +673,8 @@ export const newGame = (): StoreState => ({
   shelves: [
     { kind: 'bakery', level: 0, items: { bread: fresh(4) } },
     { kind: 'produce', level: 0, items: { apples: fresh(3), potatoes: fresh(3) } },
+    // Вёдра для цветов у кассы — с самого начала, весной в них ставят букеты.
+    { kind: 'florist', level: 0, items: {} },
   ],
   prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70, water: 25, juice: 50, dumplings: 80, fish: 110, soap: 35, detergent: 99, pies: 45, buns: 40, honeycake: 110 },
 });
@@ -651,7 +683,7 @@ export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.
 export const nextStoreLevel = (state: StoreState): StoreLevel | undefined => STORE_LEVELS[state.level + 1];
 /** Сколько мест на складе: по помещению и оборудованию склада (gear.ts). */
 export const warehouseCapacity = (state: StoreState): number => Math.round(storeLevel(state).warehouse * warehouseRoom(state));
-export const freeSlots = (state: StoreState): number => storeLevel(state).slots - state.shelves.length;
+export const freeSlots = (state: StoreState): number => storeLevel(state).slots - state.shelves.filter((s) => !isFixture(s)).length;
 
 export const emptyDayStats = (): DayStats => ({
   revenue: 0,
@@ -810,7 +842,11 @@ export function shelveAll(state: StoreState): StoreState {
 
 // ---------- Полки ----------
 
+/** Ларь и вёдра улучшаются только раз: товар в них сезонный, больше мест не окупится. */
+export const FIXTURE_MAX_LEVEL = 1;
+
 export function upgradeCost(shelf: Shelf): number | null {
+  if (SHELF_KINDS[shelf.kind].fixture && shelf.level >= FIXTURE_MAX_LEVEL) return null;
   return SHELF_LEVELS[shelf.level + 1]?.cost ?? null;
 }
 
@@ -824,8 +860,41 @@ export function upgradeShelf(state: StoreState, shelfIndex: number): StoreState 
 
 export function buyShelf(state: StoreState, kind: Category): StoreState | null {
   const price = SHELF_KINDS[kind].price;
-  if (freeSlots(state) <= 0 || price > state.money || !shelfKindOpen(state, kind)) return null;
+  // Ларь и цветы — по одному, на своём месте; обычной полке нужно свободное место в зале.
+  const room = SHELF_KINDS[kind].fixture ? fixtureIndex(state, kind) < 0 : freeSlots(state) > 0;
+  if (!room || price > state.money || !shelfKindOpen(state, kind)) return null;
   return { ...state, money: state.money - price, shelves: [...state.shelves, { kind, level: 0, items: {} }] };
+}
+
+/**
+ * Сохранения до ларя с мороженым: мороженое стояло в молочном холодильнике, цветы — на овощном
+ * прилавке. Переносим их в ларь и вёдра у кассы (что не влезло — на склад), вёдра ставим всем,
+ * а тем, у кого был молочный холодильник (legacy), — ещё и ларь, чтобы летом мороженое не пропало.
+ */
+export function normalizeShelves(state: StoreState, legacy = false): StoreState {
+  const shelves: Shelf[] = state.shelves.map((s) => ({ ...s, items: { ...s.items } }));
+  if (!shelves.some((s) => s.kind === 'florist')) shelves.push({ kind: 'florist', level: 0, items: {} });
+  if (legacy && !shelves.some((s) => s.kind === 'icebox') && shelves.some((s) => s.kind === 'dairy')) shelves.push({ kind: 'icebox', level: 0, items: {} });
+  const warehouse: Stock = { ...state.warehouse };
+  let moved = false;
+  for (const shelf of shelves) {
+    for (const id of PRODUCT_IDS) {
+      const units = shelf.items[id];
+      if (!units?.length || canPlace(id, shelf)) continue;
+      moved = true;
+      delete shelf.items[id];
+      let left = units;
+      const home = shelves.find((s) => canPlace(id, s));
+      if (home) {
+        const fit = left.slice(0, Math.max(0, shelfFree(home)));
+        home.items[id] = [...(home.items[id] ?? []), ...fit];
+        left = left.slice(fit.length);
+      }
+      if (left.length) warehouse[id] = [...(warehouse[id] ?? []), ...left];
+    }
+  }
+  if (!moved && shelves.length === state.shelves.length) return state;
+  return { ...state, shelves, warehouse };
 }
 
 /** Сколько вернут за полку: половина цены самой полки и её улучшений. */
@@ -837,7 +906,8 @@ export function shelfResale(shelf: Shelf): number {
 /** Продать полку, чтобы освободить место под другую. Товар с неё уходит на склад (что не влезло — пропадает). */
 export function sellShelf(state: StoreState, shelfIndex: number): StoreState | null {
   const shelf = state.shelves[shelfIndex];
-  if (!shelf) return null;
+  // Вёдра для цветов у кассы бесплатные — их не продают.
+  if (!shelf || (isFixture(shelf) && !SHELF_KINDS[shelf.kind].price)) return null;
   const warehouse: Stock = { ...state.warehouse };
   let room = warehouseCapacity(state) - warehouseCount(state);
   for (const id of PRODUCT_IDS) {
@@ -882,9 +952,15 @@ export interface Bill {
   loan?: number;
 }
 
+/** Холодильник включён: ларь с мороженым работает только летом, остальные — всегда. */
+export function fridgeOn(state: StoreState, shelf: Shelf): boolean {
+  const kind = SHELF_KINDS[shelf.kind];
+  return kind.fridge && (!kind.seasonal || productAvailable(kind.seasonal, state.day));
+}
+
 export function monthlyBill(state: StoreState): Bill {
   const level = storeLevel(state);
-  const fridges = state.shelves.filter((s) => SHELF_KINDS[s.kind].fridge).length;
+  const fridges = state.shelves.filter((s) => fridgeOn(state, s)).length;
   return {
     rent: level.rent,
     utilities: level.utilities,

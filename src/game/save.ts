@@ -1,4 +1,4 @@
-import { newGame, type StoreState } from './economy';
+import { newGame, normalizeShelves, type StoreState } from './economy';
 import { normalizeDecor } from './decor';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId } from '../platform/telegram';
@@ -6,7 +6,7 @@ import { telegramUserId } from '../platform/telegram';
 // Сохранение: сразу в память телефона и, чуть погодя, в облако Telegram (platform/cloud.ts) —
 // так прогресс и покупки за звёзды не пропадут, если очистить телефон или сменить его.
 const KEY = 'magazinchik.save';
-const VERSION = 10;
+const VERSION = 11;
 /** Старые сохранения с этой версии и новее подходят: недостающие поля берутся из новой игры. */
 const MIN_COMPATIBLE = 9;
 /** В облако пишем не чаще, чем раз в столько миллисекунд. */
@@ -53,7 +53,9 @@ export function loadGame(): StoreState | null {
   if (!save) return null;
   // Новые товары появляются в старых сохранениях со своей ценой по умолчанию.
   const fresh = newGame();
-  return { ...fresh, ...save.state, prices: { ...fresh.prices, ...save.state.prices }, decor: normalizeDecor(save.state.decor) };
+  const state = { ...fresh, ...save.state, prices: { ...fresh.prices, ...save.state.prices }, decor: normalizeDecor(save.state.decor) };
+  // До версии 11 мороженое и цветы стояли на обычных полках (теперь — ларь у входа и вёдра у кассы).
+  return normalizeShelves(state, save.version < 11);
 }
 
 let pending: string | null = null;

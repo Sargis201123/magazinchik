@@ -172,7 +172,9 @@ describe('помещение, долг и расходы', () => {
   it('в начале ларёк на 3 полки (две уже стоят), с долгом', () => {
     const s = newGame();
     expect(STORE_LEVELS[s.level].slots).toBe(3);
-    expect(s.shelves).toHaveLength(2);
+    // Две полки в зале и вёдра для цветов у кассы (место в зале они не занимают).
+    expect(s.shelves.filter((sh) => sh.kind !== 'florist')).toHaveLength(2);
+    expect(s.shelves.some((sh) => sh.kind === 'florist')).toBe(true);
     expect(freeSlots(s)).toBe(1);
     expect(s.debt).toBeGreaterThan(0);
   });
@@ -184,7 +186,7 @@ describe('помещение, долг и расходы', () => {
     expect(paid.debt).toBe(0);
     const bigger = expandStore(paid)!;
     expect(bigger.level).toBe(1);
-    expect(freeSlots(bigger)).toBe(STORE_LEVELS[1].slots - paid.shelves.length);
+    expect(freeSlots(bigger)).toBe(STORE_LEVELS[1].slots - paid.shelves.filter((sh) => sh.kind !== 'florist').length);
     expect(bigger.money).toBe(paid.money - STORE_LEVELS[1].cost);
   });
 
