@@ -151,6 +151,12 @@ export const sound = {
       { freq: 900, at: 0.12, dur: 0.22, wave: 'triangle', vol: 0.045, slide: 520 },
     ]),
   purr,
+  /** Гав-гав: два коротких хриплых тявка. */
+  bark: () =>
+    play([
+      { freq: 340, dur: 0.09, wave: 'sawtooth', vol: 0.05, slide: 220 },
+      { freq: 360, at: 0.17, dur: 0.1, wave: 'sawtooth', vol: 0.05, slide: 230 },
+    ]),
   /** Пар кофемашины и шипение печи. */
   hiss,
   /** Касание, начало дела. */

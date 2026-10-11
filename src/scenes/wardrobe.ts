@@ -18,7 +18,7 @@ export const OUTFITS = [
 export const PROPS = [
   'maracas', 'trumpet', 'drum', 'flag', 'balloon', 'cane', 'stringbag', 'briefcase', 'rod', 'camera',
   'basket', 'newspaper', 'bouquet', 'books', 'coffee', 'palette', 'flask', 'bottle', 'scepter', 'parrot',
-  'sword', 'raygun', 'wand',
+  'sword', 'raygun', 'wand', 'flashlight',
 ] as const;
 export const FACES = [
   'beard', 'mustache', 'sunglasses', 'eyepatch', 'clownnose', 'heromask', 'medmask', 'monocle',

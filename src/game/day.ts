@@ -1,6 +1,7 @@
 // Смена дня целиком: заказ забирают, холодильники греются, товар портится, счета,
 // сюжетные счётчики и план на завтра. Этим пользуются и игра, и симулятор.
 
+import { burglaryNight } from './watch';
 import { lightsGuests } from './gear';
 import { addReport } from './reports';
 import { departmentGuests, endDay, restStaff, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
@@ -52,7 +53,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = giantNight(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), stats.revenue);
+  const next = burglaryNight(giantNight(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), stats.revenue), stats.revenue);
   return {
     ...night,
     state: next,
