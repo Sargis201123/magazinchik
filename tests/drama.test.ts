@@ -44,6 +44,18 @@ describe('сюжет «Папа и Соня»', () => {
     expect(SCENES[SCENES.length - 1].art).toBe('drama_lake');
   });
 
+  it('старое сохранение (счётчик сцен первой версии) продолжается с того же места', () => {
+    // В первой версии 10-я сцена была на 27-й день — дальше идёт первая сцена после 27-го.
+    const next = dramaScene(shop({ day: 200, drama: { seen: 10 } }))!;
+    expect(next).toBe(SCENES.find((s) => s.day > 27));
+    expect(dramaDone(shop({ day: 200, drama: { seen: 32 } }))).toBe(true);
+  });
+
+  it('сцены почти каждые полтора дня, правда раскрывается ближе к концу', () => {
+    const span = SCENES[SCENES.length - 1].day - SCENES[0].day;
+    expect(span / (SCENES.length - 1)).toBeLessThan(1.6);
+  });
+
   it('на экономику не влияет: меняется только сам сюжет', () => {
     const before = shop({ day: 2 });
     const after = seeDrama(before);
@@ -52,11 +64,11 @@ describe('сюжет «Папа и Соня»', () => {
 
   it('Соня заходит в магазин в день своей сцены и по субботам после примирения', () => {
     const i = SCENES.findIndex((s) => s.visit);
-    let s = shop({ day: SCENES[i].day, drama: { seen: i } });
+    let s = shop({ day: SCENES[i].day, drama: { upTo: i ? SCENES[i - 1].day : 0 } });
     s = seeDrama(s);
     expect(sonyaVisits(s)).toBe(true);
     expect(sonyaVisits({ ...s, day: s.day + 1 })).toBe(false);
-    const done = shop({ day: 125, drama: { seen: SCENES.length } });
+    const done = shop({ day: 125, drama: { upTo: SCENES[SCENES.length - 1].day } });
     expect(sonyaVisits(done)).toBe(done.day % 7 === 6);
     expect(sonyaVisits({ ...done, day: 125 + ((6 - (125 % 7) + 7) % 7) })).toBe(true);
   });
