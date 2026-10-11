@@ -1,6 +1,8 @@
 // Звуки синтезируются WebAudio на лету: без файлов и чужих лицензий, ничего не весят.
 // Браузер разрешает звук только после касания, поэтому контекст создаётся на первом касании.
 
+import { brownNoise, seeded } from './ambienceSynth';
+
 const KEY = 'magazinchik.muted';
 
 let ctx: AudioContext | null = null;
@@ -77,26 +79,64 @@ export function noiseBuffer(ac: AudioContext, seconds: number): AudioBuffer {
   return buffer;
 }
 
-/** Гром: удар и долгий раскат — шум через фильтр, который всё сильнее глушит верха. */
+/** Буфер раската грома (бурый шум) — один на всю игру. */
+let rumbleBuffer: AudioBuffer | null = null;
+
+/**
+ * Гром: близкий — резкий треск и тяжёлый раскат, дальний — только глухое ворчание. Раскат
+ * катится волнами (несколько подъёмов громкости) и уходит из стороны в сторону.
+ */
 function thunder(): void {
   const ac = audio();
   if (!ac) return;
   const now = ac.currentTime + 0.01;
+  const near = Math.random();
+  if (!rumbleBuffer) {
+    const random = seeded(31);
+    const n = Math.floor(ac.sampleRate * 6);
+    rumbleBuffer = ac.createBuffer(1, n, ac.sampleRate);
+    rumbleBuffer.copyToChannel(brownNoise(n, random) as Float32Array<ArrayBuffer>, 0);
+  }
+  const panner = ac.createStereoPanner();
+  panner.pan.setValueAtTime(Math.random() * 1.2 - 0.6, now);
+  panner.pan.linearRampToValueAtTime(Math.random() * 1.2 - 0.6, now + 5);
+  panner.connect(ac.destination);
+  // Треск — только у близкого грома.
+  if (near > 0.45) {
+    const crack = ac.createBufferSource();
+    crack.buffer = noiseBuffer(ac, 0.4);
+    const hp = ac.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 1500;
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(0, now);
+    cg.gain.linearRampToValueAtTime(0.14 * near, now + 0.008);
+    cg.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    crack.connect(hp).connect(cg).connect(panner);
+    crack.start(now);
+    crack.stop(now + 0.4);
+  }
+  // Раскат: бурый шум, верха глохнут, громкость волнами.
   const src = ac.createBufferSource();
-  src.buffer = noiseBuffer(ac, 4);
-  const filter = ac.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(1100, now);
-  filter.frequency.exponentialRampToValueAtTime(90, now + 3.5);
+  src.buffer = rumbleBuffer;
+  const lp = ac.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(400 + 500 * near, now);
+  lp.frequency.exponentialRampToValueAtTime(70, now + 5);
   const gain = ac.createGain();
+  const delay = (1 - near) * 0.6;
+  const peak = 0.25 + 0.35 * near;
   gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.32, now + 0.04);
-  gain.gain.exponentialRampToValueAtTime(0.1, now + 0.7);
-  gain.gain.linearRampToValueAtTime(0.18, now + 1.2);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.9);
-  src.connect(filter).connect(gain).connect(ac.destination);
-  src.start(now);
-  src.stop(now + 4);
+  gain.gain.linearRampToValueAtTime(peak, now + delay + 0.12);
+  let t = now + delay + 0.12;
+  for (let i = 0; i < 3 + Math.floor(Math.random() * 3); i++) {
+    t += 0.35 + Math.random() * 0.6;
+    gain.gain.linearRampToValueAtTime(peak * (0.35 + Math.random() * 0.5) * (1 - i * 0.12), t);
+  }
+  gain.gain.exponentialRampToValueAtTime(0.0001, Math.max(t + 1.2, now + 4.5));
+  src.connect(lp).connect(gain).connect(panner);
+  src.start(now, Math.random() * 0.5);
+  src.stop(now + 6);
 }
 
 /** Шипение (пар кофемашины, противень из печи): шум через полосовой фильтр. */
