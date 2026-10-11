@@ -161,7 +161,6 @@ import { warLeaves } from '../game/war';
 import { lossAdvice, noteLost } from '../game/losses';
 import { fairTolerance, isFairDay, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fair';
 import { DELIVERY_SECONDS, makeHomeOrder, ORDER_EVERY, ORDER_TIMEOUT, packHomeOrder, type HomeOrder } from '../game/delivery';
-import { showReviews } from '../ui/reviews';
 
 // Холст 720×1280 (9:16): на телефоне хватает пикселей для детальных спрайтов.
 // Камера подбирает масштаб под размер магазина: ларёк крупно, универмаг мельче.
@@ -754,7 +753,6 @@ export class StoreScene extends Phaser.Scene {
   private sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
   private catHome = { x: 0, y: 0 };
   private catOut = false;
-  private reviewStar?: Phaser.GameObjects.Text;
   /** Флажки, шарики и лоток ярмарки; лоток продаёт со склада по таймеру. */
   private fairObjs: Phaser.GameObjects.GameObject[] = [];
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
@@ -2592,16 +2590,9 @@ export class StoreScene extends Phaser.Scene {
   // ---------- Доска отзывов ----------
 
   private buildReviewBoard(x: number, y: number): void {
-    const board = this.art(x, y, 'review_board').setOrigin(0.5, 1).setDepth(y);
-    board.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => showReviews(this.state.reviews)));
-    // Есть отзывы — звёздочка над доской мигает.
-    this.reviewStar = this.add
-      .text(x + 5, y - 17, '★', { fontFamily: UI_FONT, fontSize: '7px', color: '#fee761' })
-      .setOrigin(0.5)
-      .setResolution(4)
-      .setDepth(y + 1)
-      .setVisible(Boolean(this.state.reviews?.length));
-    this.tweens.add({ targets: this.reviewStar, y: y - 19, alpha: 0.4, duration: 700, yoyo: true, repeat: -1 });
+    // Доска у входа — просто украшение. Раньше нажатие на неё открывало отзывы, и они вылезали
+    // посреди дня от случайного касания у двери; теперь отзывы — в итогах дня и утром на вкладке «Магазин».
+    this.art(x, y, 'review_board').setOrigin(0.5, 1).setDepth(y);
   }
 
   /** Покупатель с 1–2 товарами, пока у кассы очередь, пробивает себя сам. */
@@ -5955,7 +5946,6 @@ export class StoreScene extends Phaser.Scene {
     // Старые сохранения сразу получают значки за то, что уже сделано.
     this.checkAchievements(false);
     this.morningStock = warehouseCount(this.state);
-    this.reviewStar?.setVisible(Boolean(this.state.reviews?.length));
     this.applyFair();
     this.awaitingBoxes = 0;
     this.hud.update(this.state, DAY_SECONDS);
