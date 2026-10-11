@@ -3,7 +3,7 @@
 // Лишних гостей нет: раньше было «+30% гостей», но касса и полки не успевали, лишние гости
 // уходили злыми, и ярмарочный день выходил хуже обычного (это видно в симуляторе).
 
-import { MONTH_DAYS, PRODUCT_IDS, type ProductId, type StoreState } from './economy';
+import { MONTH_DAYS, PRODUCT_IDS, PRODUCTS, type ProductId, type StoreState } from './economy';
 import { holidayFor } from './calendar';
 
 export const FAIR_DAY_IN_MONTH = 5;
@@ -27,6 +27,13 @@ export function daysToFair(day: number): number {
   return -1;
 }
 
+/**
+ * Цена на лотке: ярмарочная наценка к цене на ценнике, но не дороже обычной цены товара с наценкой —
+ * лоток продаёт мимо кассы, никто не торгуется, и задранный ценник не должен печатать деньги.
+ */
+export const stallPrice = (state: StoreState, id: ProductId): number =>
+  Math.round(Math.min(state.prices[id], PRODUCTS[id].basePrice) * STALL_MARKUP);
+
 /** Лоток продал штуку со склада (самую старую) с ярмарочной наценкой. null — склад пуст. */
 export function stallSale(state: StoreState, random: () => number): { state: StoreState; id: ProductId; price: number } | null {
   const options = PRODUCT_IDS.filter((id) => (state.warehouse[id] ?? []).some((u) => !u.pending));
@@ -34,7 +41,7 @@ export function stallSale(state: StoreState, random: () => number): { state: Sto
   const id = options[Math.floor(random() * options.length)];
   const units = state.warehouse[id]!;
   const index = units.findIndex((u) => !u.pending);
-  const price = Math.round(state.prices[id] * STALL_MARKUP);
+  const price = stallPrice(state, id);
   return {
     state: { ...state, money: state.money + price, warehouse: { ...state.warehouse, [id]: units.filter((_, i) => i !== index) } },
     id,
