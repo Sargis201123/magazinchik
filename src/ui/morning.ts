@@ -560,10 +560,17 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     return [box];
   };
 
+  /** Сколько товара стоит на полках и сколько всего мест (сломанные холодильники и ларь не в сезон не в счёт). */
+  const shelfSpace = (state: StoreState) => {
+    const working = state.shelves.filter((sh) => !sh.broken && PRODUCT_IDS.some((pid) => canPlace(pid, sh) && productAvailable(pid, state.day)));
+    return { s: working.reduce((a, sh) => a + shelfCount(sh), 0), smax: working.reduce((a, sh) => a + shelfCapacity(sh), 0) };
+  };
+
   const buyTab = (state: StoreState): HTMLElement[] => [
     ...cafeBox(state),
     el('div', 'ui-note', t('buy.note')),
-    el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
+    // Купленное сразу уходит на полки — показываем и полки, и склад, иначе кажется, что ничего не купил.
+    el('div', 'ui-muted', t('buy.space', { ...shelfSpace(state), n: warehouseCount(state), max: warehouseCapacity(state) })),
     ...autoOrderBox(state),
     ...reorderBox(state),
     // Оптовик появляется, когда в помещении можно поставить полку нового отдела.
@@ -621,7 +628,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
           ),
         );
       }
-      box.append(itemRow(pid, { price, sub: t('buy.inWarehouse', { n: warehouseOf(state, pid) }), actions: chips }));
+      box.append(itemRow(pid, { price, sub: t('buy.inWarehouse', { s: onShelves(state, pid), n: warehouseOf(state, pid) }), actions: chips }));
     }
 
     // Торг одной строкой: слева «Торг» и сердечки терпения поставщика, справа три одинаковые кнопки.
