@@ -207,7 +207,8 @@ export const ru = {
   'buy.discount': 'Скидка {p}% на сегодня',
   'buy.angryNote': 'Обиделся: цены +10% на сегодня',
   'buy.attempts': "Терпение поставщика: ещё {n} попытки",
-  'buy.inWarehouse': 'на складе {n}',
+  'buy.inWarehouse': 'полки {s} · склад {n}',
+  'buy.space': 'Полки: {s} из {smax} · Склад: {n} из {max}',
   'buy.needShelf': 'Сначала купи «{shelf}» во вкладке «Полки»',
 
   'warehouse.capacity': 'Склад: занято {n} из {max} мест',

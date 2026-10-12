@@ -209,7 +209,8 @@ export const en: Record<TextKey, string> = {
   'buy.discount': '{p}% off today',
   'buy.angryNote': 'Offended: prices +10% today',
   'buy.attempts': "Supplier patience: {n} tries left",
-  'buy.inWarehouse': '{n} in storage',
+  'buy.inWarehouse': 'shelves {s} · storage {n}',
+  'buy.space': 'Shelves: {s} of {smax} · Storage: {n} of {max}',
   'buy.needShelf': 'Buy a “{shelf}” on the Shelves tab first',
 
   'warehouse.capacity': 'Storage: {n} of {max} slots used',
