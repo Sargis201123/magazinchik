@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   BAD_COMPLAINT_CHANCE,
   buyChance,
+  CHEAP_RATIO,
   canPlace,
   promoKind,
   PRODUCTS,
@@ -5438,6 +5439,11 @@ export class StoreScene extends Phaser.Scene {
     const taken = takeFromShelf(this.state, index, id);
     if (!taken) return 'empty';
     if (id === 'bread' && this.aroma()) note(this.stats, 'fresh');
+    // Заметно дешевле, чем ждали, — запомнят и напишут в отзыве.
+    if (perUnit <= fair * CHEAP_RATIO) {
+      note(this.stats, 'cheap');
+      if (Math.random() < 0.25) this.popup(c.sprite.x, c.sprite.y - 14, t('popup.cheap'), '#d6f5c4');
+    }
     this.state = taken.state;
     c.items.push({ id, unit: taken.unit });
     // По акции «2 по цене 1» берут вторую штуку бесплатно.

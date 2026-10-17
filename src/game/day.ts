@@ -5,7 +5,7 @@ import { burglaryNight } from './watch';
 import { contestGuests, contestNight } from './contest';
 import { lightsGuests } from './gear';
 import { addReport } from './reports';
-import { departmentGuests, endDay, restStaff, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
+import { departmentGuests, endDay, priceAppeal, restStaff, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
 import {
   applyInspection,
   fulfillOrder,
@@ -79,9 +79,10 @@ export function inspectionDone(state: StoreState, result: InspectionResult): Sto
   return { ...s, story: { ...s.story, inspectionsPassed: s.story.inspectionsPassed + 1 } };
 }
 
-/** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина, реклама, погода и Эдуард. */
+/** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина, реклама, погода, цены и Эдуард. */
 export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
+  priceAppeal(state) *
   (seasonFor(state.day)?.guests ?? 1) *
   rankGuests(state) *
   adBoost(state) *
