@@ -262,6 +262,42 @@ function itemRow(pid: ProductId, opts: { price?: number; sub?: string; actions: 
 }
 
 /** Строка с картинкой из игры (стойка, кофемашина, лежанка): название, ценник, подпись, кнопки. */
+/** Какие сворачиваемые блоки игрок раскрыл (помним между утрами, если есть хранилище). */
+const OPEN_KEY = 'magazinchik.open';
+const openFolds: Set<string> = (() => {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]') as string[]);
+  } catch {
+    return new Set<string>();
+  }
+})();
+
+/** Блок со сворачиваемым содержимым: заголовок с ▸/▾, по умолчанию свёрнут. */
+function foldBox(id: string, title: string, fill: (body: HTMLElement) => void): HTMLElement {
+  const box = el('div', 'ui-box');
+  const head = el('button', 'ui-fold', '');
+  const body = el('div');
+  const render = () => {
+    const open = openFolds.has(id);
+    head.textContent = `${open ? '▾' : '▸'} ${title}`;
+    body.hidden = !open;
+    if (open && !body.childElementCount) fill(body);
+  };
+  head.addEventListener('click', () => {
+    if (openFolds.has(id)) openFolds.delete(id);
+    else openFolds.add(id);
+    try {
+      localStorage.setItem(OPEN_KEY, JSON.stringify([...openFolds]));
+    } catch {
+      // Без хранилища помним до перезапуска.
+    }
+    render();
+  });
+  render();
+  box.append(head, body);
+  return box;
+}
+
 function artRow(texture: string, opts: { name: string; price?: number; sub?: string; actions: HTMLElement[] }): HTMLElement {
   const row = el('div', 'ui-item');
   const img = el('img', 'ui-item-art');
@@ -1559,7 +1595,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       const actions = el('div', 'ui-item-actions');
       actions.append(
         owned
-          ? el('span', 'ui-tag', '✓')
+          ? el('span', 'ui-tag', t('upgrade.owned'))
           : button(t('upgrade.buy'), () => update(buyUpgrade(getState(), id), 'success'), 'ui-chip', state.level < up.minLevel || state.money < up.price),
       );
       row.append(body, actions);
@@ -1708,18 +1744,17 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     return [box];
   };
 
-  const decorBox = (state: StoreState) => {
-    const box = el('div', 'ui-box');
-    box.append(el('b', '', t('decor.title')), el('div', 'ui-muted', t('decor.note')));
-    for (const kind of DECOR_KINDS) {
-      box.append(el('div', 'ui-decor-kind', t(`decor.kind.${kind}` as TextKey)));
-      const grid = el('div', 'ui-decor-grid');
-      grid.append(decorCard(state, kind, null));
-      for (const item of DECOR.filter((d) => d.kind === kind)) grid.append(decorCard(state, kind, item));
-      box.append(grid);
-    }
-    return box;
-  };
+  const decorBox = (state: StoreState) =>
+    foldBox('decor', t('decor.title'), (box) => {
+      box.append(el('div', 'ui-muted', t('decor.note')));
+      for (const kind of DECOR_KINDS) {
+        box.append(el('div', 'ui-decor-kind', t(`decor.kind.${kind}` as TextKey)));
+        const grid = el('div', 'ui-decor-grid');
+        grid.append(decorCard(state, kind, null));
+        for (const item of DECOR.filter((d) => d.kind === kind)) grid.append(decorCard(state, kind, item));
+        box.append(grid);
+      }
+    });
 
   /** Картинка вещи: краска, плитка пола/стены или сам предмет. */
   const decorPreview = (item: DecorItem | null, kind: DecorKind, big = false) => {
@@ -1821,20 +1856,16 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     if (!starsAvailable()) note.textContent = t('decor.starsOff');
   };
 
-  const albumBox = (state: StoreState) => {
-    const box = el('div', 'ui-box');
-    box.append(
-      el('b', '', t('album.title', { n: state.album.length, max: RARE_GUESTS.length })),
-      el('div', 'ui-muted', t('album.note', { money: ALBUM_REWARD.money, r: ALBUM_REWARD.rating })),
-    );
-    const grid = el('div', 'ui-chips');
-    for (const g of RARE_GUESTS) {
-      const got = state.album.includes(g.id);
-      grid.append(el('span', got ? 'ui-chip' : 'ui-chip ui-chip-off', got ? `${g.icon} ${t(g.nameKey)}` : `❔ ${t('album.unknown')}`));
-    }
-    box.append(grid);
-    return box;
-  };
+  const albumBox = (state: StoreState) =>
+    foldBox('album', t('album.title', { n: state.album.length, max: RARE_GUESTS.length }), (box) => {
+      box.append(el('div', 'ui-muted', t('album.note', { money: ALBUM_REWARD.money, r: ALBUM_REWARD.rating })));
+      const grid = el('div', 'ui-chips');
+      for (const g of RARE_GUESTS) {
+        const got = state.album.includes(g.id);
+        grid.append(el('span', got ? 'ui-chip' : 'ui-chip ui-chip-off', got ? `${g.icon} ${t(g.nameKey)}` : `❔ ${t('album.unknown')}`));
+      }
+      box.append(grid);
+    });
 
   // ---------- Сюжет и события ----------
 
@@ -2475,7 +2506,9 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   /** Карточки цен: открытые товары — с ценой и полоской спроса, закрытые — серые, с подсказкой, как открыть. */
   const pricesTab = (state: StoreState): HTMLElement[] => {
     const sellable = sellableProducts(state);
-    return PRODUCT_IDS.map((pid) => {
+    // Сначала то, что сейчас продаётся; закрытые товары — внизу.
+    const order = [...PRODUCT_IDS.filter((pid) => sellable.includes(pid)), ...PRODUCT_IDS.filter((pid) => !sellable.includes(pid))];
+    return order.map((pid) => {
       const product = PRODUCTS[pid];
       const card = el('div', 'ui-price');
       const icon = el('img', 'ui-price-icon');

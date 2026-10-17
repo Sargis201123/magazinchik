@@ -224,13 +224,13 @@ export const sound = {
   hiss,
   /** Касание, начало дела. */
   tap: () => play([{ freq: 520, dur: 0.05, wave: 'triangle', vol: 0.05 }]),
-  /** Писк сканера на каждом товаре. */
-  scan: () => play([{ freq: 1760, dur: 0.06, vol: 0.025 }]),
-  /** Покупатель расплатился: «дзынь». */
+  /** Писк сканера на каждом товаре: тихий и пониже — касса пищит весь день и не должна резать слух. */
+  scan: () => play([{ freq: 1320, dur: 0.05, vol: 0.01 }]),
+  /** Покупатель расплатился: мягкое «дзынь». */
   coin: () =>
     play([
-      { freq: 988, dur: 0.08, vol: 0.04 },
-      { freq: 1319, at: 0.07, dur: 0.22, vol: 0.04 },
+      { freq: 988, dur: 0.08, vol: 0.02 },
+      { freq: 1319, at: 0.07, dur: 0.2, vol: 0.018 },
     ]),
   /** Хорошо: поймали вора, задание выполнено, проверка пройдена. */
   good: () =>
@@ -261,9 +261,9 @@ export const sound = {
   combo: (n: number) => {
     const base = 523 * 2 ** (Math.min(n - 2, 8) / 12);
     play([
-      { freq: base, dur: 0.07, wave: 'square', vol: 0.03 },
-      { freq: base * 1.26, at: 0.06, dur: 0.07, wave: 'square', vol: 0.03 },
-      { freq: base * 1.5, at: 0.12, dur: 0.16, wave: 'square', vol: 0.03 },
+      { freq: base, dur: 0.07, wave: 'square', vol: 0.018 },
+      { freq: base * 1.26, at: 0.06, dur: 0.07, wave: 'square', vol: 0.018 },
+      { freq: base * 1.5, at: 0.12, dur: 0.16, wave: 'square', vol: 0.018 },
     ]);
   },
   /** «Чпок» товара на полке; n — какой по счёту (каждый следующий чуть выше). */

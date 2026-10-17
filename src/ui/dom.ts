@@ -156,6 +156,8 @@ const css = `
 .ui-item-sub { font-size: 12.5px; color: #6a5f58; margin-top: 1px; }
 .ui-item-actions { display: flex; gap: 6px; align-items: center; }
 .ui-item-actions .ui-chip { min-width: 46px; padding: 8px 6px; font-size: 14px; }
+/* Заголовок сворачиваемого блока: вся строка — кнопка. */
+.ui-fold { all: unset; display: block; width: 100%; box-sizing: border-box; cursor: pointer; font: 700 15px ${UI_FONT}; color: #2b2233; }
 /* Несколько длинных кнопок — столбиком, чтобы не вылезали за рамку. */
 .ui-item-actions.stack { flex-direction: column; align-items: stretch; }
 .ui-tag { display: inline-flex; align-items: center; gap: 2px; background: #fee761; border: 2px solid #2b2233; border-radius: 6px;
