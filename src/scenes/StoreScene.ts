@@ -16,6 +16,8 @@ import {
   isAbsent,
   managerBoost,
   markdownSurplus,
+  markdownExpiring,
+  expiringIn,
   SHELF_KINDS,
   thiefChance,
   workSpeed,
@@ -602,6 +604,8 @@ interface ShelfView {
   lights: Phaser.GameObjects.GameObject[];
   /** Табличка «Осталось 2» над почти пустой полкой. */
   low: Phaser.GameObjects.Text;
+  /** «⏳ −50%?»: на полке товар, который испортится ночью; нажать — уценить всё такое. */
+  expire: Phaser.GameObjects.Text;
   /** Ценник «АКЦИЯ», если товар этой полки — товар дня. */
   promo: Phaser.GameObjects.Text;
   /** Подсветка: полка пустая, а на складе её товар есть — пора нести. */
@@ -4086,6 +4090,7 @@ export class StoreScene extends Phaser.Scene {
       const few = !shelf.broken && units.length > 0 && units.length <= LOW_STOCK;
       if (few) view.low.setText(t('shelf.low', { n: units.length }));
       view.low.setVisible(few);
+      view.expire.setVisible(!shelf.broken && expiringIn(this.state, shelf.items) > 0);
       view.needsStock = !shelf.broken && units.length === 0 && PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id]?.length ?? 0) > 0);
       view.bg.setTint(shelf.broken ? BROKEN_TINT : SHELF_LOOK[shelf.kind].tint);
     });
@@ -4135,6 +4140,13 @@ export class StoreScene extends Phaser.Scene {
       .setDepth(990)
       .setVisible(false);
     this.tweens.add({ targets: low, y: low.y - 1.5, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const expire = this.add
+      .text(slot.x, slot.y - 30, t('shelf.expiring'), { fontFamily: UI_FONT, fontSize: '5px', fontStyle: 'bold', color: '#2b2233', backgroundColor: '#fee761', padding: { x: 2, y: 1 } })
+      .setOrigin(0.5)
+      .setResolution(6)
+      .setDepth(991)
+      .setVisible(false);
+    expire.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.markdownNow(expire.x, expire.y)));
     const lights: Phaser.GameObjects.GameObject[] = [];
     if (look.texture === 'fridge') {
       // Новые холодильники — с наклейкой класса энергосбережения.
@@ -4146,11 +4158,22 @@ export class StoreScene extends Phaser.Scene {
       spill.setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(0.4);
       lights.push(glass, spill);
     }
-    return { kind, at: { x: slot.x, y: slot.y }, cover, bg, front, shadow, items, backItems, pips, lights, low, promo, glow, needsStock: false };
+    return { kind, at: { x: slot.x, y: slot.y }, cover, bg, front, shadow, items, backItems, pips, lights, low, expire, promo, glow, needsStock: false };
+  }
+
+  /** Уценить всё, что испортится ночью (на полках и складе), прямо в зале — по ценнику «⏳». */
+  private markdownNow(x: number, y: number): void {
+    const { state, count } = markdownExpiring(this.state);
+    if (!count) return;
+    this.state = state;
+    saveGame(state);
+    sound.coin();
+    this.popup(x, y - 6, t('popup.markdown', { n: count }), '#fff3b0');
+    this.refreshShelves();
   }
 
   private destroyShelfView(view: ShelfView): void {
-    for (const obj of [view.bg, view.front, view.shadow, view.low, view.promo, view.cover, ...view.items, ...view.backItems, ...view.pips, ...view.lights]) obj?.destroy();
+    for (const obj of [view.bg, view.front, view.shadow, view.low, view.expire, view.promo, view.cover, ...view.items, ...view.backItems, ...view.pips, ...view.lights]) obj?.destroy();
   }
 
   /** Сколько обычных полок стоит на местах в зале (ларь и вёдра — не в счёт). */

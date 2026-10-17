@@ -1,9 +1,11 @@
-// «Как в прошлый раз»: игра помнит утренние закупки и одной кнопкой повторяет последнюю —
+// «Как в прошлый раз»: игра помнит утренние закупки и одной кнопкой повторяет последнюю как есть —
 // по сегодняшним ценам, сколько влезет на склад и на сколько хватит денег.
-// Автозаказ: каждое утро склад сам пополняется до запомненного списка.
+// Автозаказ — умнее: каждое утро сам докупает товары из списка столько, сколько их обычно продают,
+// за вычетом того, что уже лежит на полках и складе (пока продаж не было — до количества из списка).
 
-import { buyStock, canPlace, productAvailable, PRODUCTS, SHELF_KINDS, warehouseCapacity, warehouseCount, warehouseOf, type ProductId, type StoreState } from './economy';
+import { buyStock, canPlace, productAvailable, PRODUCTS, SHELF_KINDS, warehouseCapacity, warehouseCount, type ProductId, type StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
+import { stockOf, usualSales } from './bakery';
 import { SUPPLIERS, type SupplierId } from './suppliers';
 
 export interface OrderLine {
@@ -99,9 +101,18 @@ export function toggleAutoOrder(state: StoreState): StoreState | null {
   return { ...state, autoOrder: { ...state.autoOrder, on: !state.autoOrder.on } };
 }
 
+/** Запас сверх обычных продаж — на день с наплывом. */
+export const AUTO_RESERVE = 1.2;
+
+/** Сколько штук автозаказ держит в магазине: обычные продажи с запасом, а без истории — как в списке. */
+export function autoTarget(state: StoreState, line: OrderLine): number {
+  const usual = usualSales(state, line.pid);
+  return usual === null ? line.qty : Math.ceil(usual * AUTO_RESERVE);
+}
+
 /**
- * Что привезёт автозаказ: по каждому товару — сколько не хватает на складе до списка, по обычной
- * цене (без торга), в пределах склада и денег. null — автозаказа нет или он выключен.
+ * Что привезёт автозаказ: по каждому товару — сколько не хватает до обычных продаж (на полках и складе
+ * вместе), по обычной цене (без торга), в пределах склада и денег. null — автозаказа нет или он выключен.
  */
 export function autoOrderPlan(state: StoreState, priceOf: (sid: SupplierId, pid: ProductId) => number | null): ReorderPlan | null {
   const auto = state.autoOrder;
@@ -114,7 +125,7 @@ export function autoOrderPlan(state: StoreState, priceOf: (sid: SupplierId, pid:
     const price = SUPPLIERS[line.sid] ? priceOf(line.sid, line.pid) : null;
     // Не сезон или мороженое без ларя — не покупаем.
     if (price === null || !productAvailable(line.pid, state.day) || !hasHome(state, line.pid)) continue;
-    const need = line.qty - warehouseOf(state, line.pid);
+    const need = autoTarget(state, line) - stockOf(state, line.pid);
     if (need <= 0) continue;
     const qty = Math.min(need, room, Math.floor(money / price));
     if (qty < need) cut = true;

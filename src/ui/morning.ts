@@ -101,7 +101,7 @@ import { deliverContracts, type Delivery } from '../game/contracts';
 import { daysToFair, isFairDay } from '../game/fair';
 import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
 import { pendingTip, seeTip, TIP_ICONS } from '../game/tips';
-import { expiringCount, markdownExpiring } from '../game/economy';
+import { expiringCount, markdownExpiring, toggleDonate } from '../game/economy';
 import { currentCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
 import {
   CONTEST_DAYS,
@@ -590,7 +590,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     box.append(el('b', '', t('auto.title')));
     const auto = state.autoOrder;
     const list = auto?.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' ') ?? '';
-    box.append(el('div', 'ui-muted', !auto ? t('auto.none') : auto.on ? t('auto.on', { list }) : t('auto.off', { list })));
+    box.append(el('div', 'ui-muted', !auto ? t('auto.none') : auto.on ? t('auto.on', { list }) : t('auto.off', { list })), el('div', 'ui-muted', t('auto.diff')));
     const chips = el('div', 'ui-chips');
     const canRemember = Boolean(rememberAutoOrder(state));
     chips.append(button(t('auto.remember'), () => update(rememberAutoOrder(getState()), 'success'), 'ui-chip', !canRemember));
@@ -734,6 +734,17 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   // ---------- Склад ----------
 
+  /** Просрочка: выбрасывать или отдавать в приют (за доброе дело растёт рейтинг). */
+  const donateBox = (state: StoreState): HTMLElement => {
+    const box = el('div', 'ui-box');
+    box.append(
+      el('b', '', t('donate.title')),
+      el('div', 'ui-muted', t(state.donate ? 'donate.on' : 'donate.off')),
+      button(t(state.donate ? 'donate.toggleOff' : 'donate.toggleOn'), () => update(toggleDonate(getState())), 'ui-chip'),
+    );
+    return box;
+  };
+
   const warehouseTab = (state: StoreState): HTMLElement[] => {
     const out: HTMLElement[] = [
       el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
@@ -747,6 +758,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       );
       out.push(box);
     }
+    out.push(donateBox(state));
     const present = PRODUCT_IDS.filter((pid) => warehouseOf(state, pid) > 0);
     if (present.length === 0) {
       out.push(el('div', 'ui-note', t('warehouse.empty')));
