@@ -1735,15 +1735,15 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.add({ targets: glint, alpha: { from: 0, to: 1 }, scale: { from: 1, to: 2.5 }, duration: 300, yoyo: true, repeat: -1, repeatDelay: 2600 });
   }
 
-  /** Радио на прилавке: касание переключает волну, пока играет — над ним плывут ноты. */
+  /** Радио на автомате с напитками — подальше от кассы, чтобы не задеть, пока пробиваешь. Касание переключает волну. */
   private buildRadio(): void {
     this.radioTimer?.remove();
     this.radioTimer = undefined;
     music.setStation(null);
     if (!hasRadio(this.state)) return;
-    const { counter } = this.layout;
-    const at = { x: counter.x, y: counter.y + 24 };
-    const radio = this.art(at.x, at.y, 'radio').setDepth(counter.y + 22);
+    const { w, wallH } = this.layout;
+    const at = { x: w - 8, y: wallH + 41 };
+    const radio = this.art(at.x, at.y, 'radio').setDepth(wallH + 67);
     radio.setInteractive({ useHandCursor: true }).on('pointerup', () =>
       this.tap(() => {
         const next = setStation(this.state, nextStation(stationOf(this.state)));
@@ -3926,7 +3926,7 @@ export class StoreScene extends Phaser.Scene {
 
   /**
    * Дверь из зала во флигель: порог, деревянные косяки, створка открыта внутрь комнаты,
-   * коврик в зале и табличка над входом — куда ведёт.
+   * коврик в зале. Куда ведёт дверь — видно по табличке внутри самой комнаты.
    */
   private buildWingDoor(y: number): void {
     const { warehouse, bakery, coffee } = this.layout;
@@ -3938,13 +3938,6 @@ export class StoreScene extends Phaser.Scene {
     this.add.rectangle(-WALL - 11, y - 8, 11, 2, 0xb86f50).setOrigin(0).setStrokeStyle(0.5, 0x3b2a35).setDepth(y - 2);
     // Коврик со стороны зала.
     this.add.rectangle(0.5, y - 6, 9, 12, room === warehouse ? 0x5a6988 : 0x9e2835, 0.85).setOrigin(0).setDepth(1);
-    const label = room === coffee ? t('wing.doorCoffee') : room === bakery ? t('wing.doorBakery') : t('wing.doorWarehouse');
-    const plate = this.add
-      .text(3, y - 15, label, { fontFamily: UI_FONT, fontSize: '5px', color: '#fee761', backgroundColor: '#2b2233', padding: { x: 2, y: 1 } })
-      .setOrigin(0, 0.5)
-      .setResolution(4)
-      .setDepth(y + 40);
-    plate.setAlpha(0.95);
   }
 
   /** Комната флигеля: пол, кусок стены с табличкой; закрытая — тёмная, с замком. */
