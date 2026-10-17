@@ -146,8 +146,9 @@ import { CANDY_COST, CANDY_PRICE, nextRack, rackCapacity, rackOf, refillRack, up
 import { haggleBonus, learnSkill, nextLevelXp, ownerLevelOf, ownerTiming, ownerXp, SKILL_IDS, SKILL_MAX, skillLevel, skillPoints, SKILLS } from '../game/owner';
 import { LOAN_INTEREST, LOAN_MONTHS, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../game/bank';
 import { showReport } from './report';
-import { buyCups, COFFEE_CHANCE, CUP_COST, cupsOf, CUPS_MAX } from '../game/coffee';
+import { buyCups, COFFEE_CHANCE, CUP_COST, cupsOf, CUPS_MAX, TABLES_COFFEE } from '../game/coffee';
 import { coffeePrice, coffeeSprite, GEAR, GEAR_IDS, gearAvailable, gearTier, nextGear, ovenBake, ovenBatch, ovenBatchCost, ovenSprite, upgradeGear, type GearId } from '../game/gear';
+import { BAKE_MODES, bakeModeOf, setBakeMode } from '../game/bakery';
 import { buyRegister, isCashierRole, nextRegisterCount, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from '../game/registers';
 import { activeWar, answerWar } from '../game/war';
 import {
@@ -1009,7 +1010,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       box.append(el('div', 'ui-muted', t('coffee.locked')));
       return box;
     }
-    const chance = Math.min(0.6, COFFEE_CHANCE * WEATHER_EFFECTS[weatherFor(state.day)].coffee);
+    const chance = Math.min(0.6, COFFEE_CHANCE * WEATHER_EFFECTS[weatherFor(state.day)].coffee * (hasUpgrade(state, 'coffeeTables') ? TABLES_COFFEE : 1));
     box.append(el('div', 'ui-muted', t('coffee.note', { price: coffeePrice(state), cost: CUP_COST, n: Math.max(2, Math.round(1 / chance)) })));
     const free = CUPS_MAX - cupsOf(state);
     const amounts = [...new Set([Math.min(10, free), free])].filter((n) => n > 0);
@@ -1029,9 +1030,17 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     box.append(
       el('div', 'ui-muted', hasUpgrade(state, 'oven') ? t('oven.note', { n: ovenBatch(state), cost: ovenBatchCost(state), s: ovenBake(state) }) : t('oven.locked')),
     );
-    if (hasUpgrade(state, 'oven')) box.append(...staffNeed(state, 'baker', 'oven.noBaker'));
+    if (hasUpgrade(state, 'oven')) box.append(...staffNeed(state, 'baker', 'oven.noBaker'), ...bakeModeBox(state));
     if (hasUpgrade(state, 'oven')) box.append(...brandBox(state));
     return box;
+  };
+
+  /** Сколько хлеба печь: по спросу (меньше порчи), сколько влезет или не печь — закупать самому. */
+  const bakeModeBox = (state: StoreState): HTMLElement[] => {
+    const mode = bakeModeOf(state);
+    const chips = el('div', 'ui-chips');
+    for (const m of BAKE_MODES) chips.append(button(t(`bake.${m}` as TextKey), () => update(setBakeMode(getState(), m)), `ui-chip${m === mode ? ' active' : ''}`));
+    return [el('h3', '', t('bake.title')), chips, el('div', 'ui-muted', t(`bake.${mode}Note` as TextKey))];
   };
 
   /** Кафе «Пончик» по соседству: предложение договора на неделю или как идёт текущий. */
@@ -1604,7 +1613,12 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       actions.append(
         owned
           ? el('span', 'ui-tag', t('upgrade.owned'))
-          : button(t('upgrade.buy'), () => update(buyUpgrade(getState(), id), 'success'), 'ui-chip', state.level < up.minLevel || state.money < up.price),
+          : button(
+              t('upgrade.buy'),
+              () => update(buyUpgrade(getState(), id), 'success'),
+              'ui-chip',
+              state.level < up.minLevel || state.money < up.price || Boolean(up.needs && !hasUpgrade(state, up.needs)),
+            ),
       );
       row.append(body, actions);
       box.append(row);

@@ -5,7 +5,7 @@
 
 import { gearTier, GEAR } from './gear';
 import { canPlace, OWN_PRODUCTS, onShelves, ownProductOpen, PRODUCTS, shelfFree, type ProductId, type StoreState } from './economy';
-import { bakeryWorking } from './bakery';
+import { bakeModeOf, bakeryWorking, needsBaking } from './bakery';
 
 export const BRAND_COSTS = [1000, 2000, 4000];
 export const BRAND_MAX = BRAND_COSTS.length;
@@ -39,10 +39,12 @@ export const brandBatchCost = (id: ProductId): number => PRODUCTS[id].cost * BRA
  * Что из своей выпечки поставить в печь: открытый товар, которого меньше всего на полках,
  * если на хлебных полках есть место под половину закладки и хватает денег. null — ничего.
  */
-export function brandToBake(state: StoreState): ProductId | null {
+export function brandToBake(state: StoreState, dayLeft = 1): ProductId | null {
   if (!bakeryWorking(state)) return null;
   const room = (id: ProductId) => state.shelves.reduce((sum, s) => sum + (!s.broken && canPlace(id, s) ? shelfFree(s) : 0), 0);
-  const options = OWN_PRODUCTS.filter((id) => ownProductOpen(state, id) && room(id) >= BRAND_BATCH / 2 && state.money >= brandBatchCost(id));
+  // «Сколько влезет» — как раньше; иначе своё тоже печём по спросу, чтобы не портилось.
+  const wanted = (id: ProductId) => bakeModeOf(state) === 'full' || needsBaking(state, id, BRAND_BATCH, dayLeft);
+  const options = OWN_PRODUCTS.filter((id) => ownProductOpen(state, id) && room(id) >= BRAND_BATCH / 2 && state.money >= brandBatchCost(id) && wanted(id));
   if (!options.length) return null;
   return options.sort((a, b) => onShelves(state, a) - onShelves(state, b))[0];
 }
