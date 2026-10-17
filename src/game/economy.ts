@@ -540,6 +540,8 @@ export interface StoreState {
   rack?: { level: number; stock: number };
   /** Своё зерно магазина: от него зависит расписание особых дней (у каждого игрока своё). */
   seed?: number;
+  /** Просрочку отдают в приют, а не выбрасывают: о магазине говорят хорошо (рейтинг). */
+  donate?: boolean;
   /** Сколько хлеба печёт пекарь (bakery.ts): по спросу, сколько влезет или не печь хлеб. */
   bakeMode?: 'auto' | 'full' | 'off';
   /** Сколько касс куплено (registers.ts). Нет поля — старое сохранение: кассы ставились сами. */
@@ -1104,11 +1106,13 @@ export function satisfaction(stats: DayStats): number {
 export const unitLife = (id: ProductId, unit: Unit, fresh = 0): number =>
   Math.max(1, PRODUCTS[id].shelfLife + (SHELF_KINDS[PRODUCTS[id].category].fridge ? fresh : 0) - (unit.bad ? 1 : 0));
 
+/** Сколько штук в этом запасе испортится этой ночью (и ещё не уценено). */
+export const expiringIn = (state: StoreState, stock: Stock): number =>
+  PRODUCT_IDS.reduce((sum, id) => sum + (stock[id] ?? []).filter((u) => !u.markdown && !u.pending && u.age + 1 >= unitLife(id, u, fridgeLife(state))).length, 0);
+
 /** Сколько штук испортится этой ночью (и ещё не уценено). */
 export function expiringCount(state: StoreState): number {
-  const count = (stock: Stock) =>
-    PRODUCT_IDS.reduce((sum, id) => sum + (stock[id] ?? []).filter((u) => !u.markdown && !u.pending && u.age + 1 >= unitLife(id, u, fridgeLife(state))).length, 0);
-  return count(state.warehouse) + state.shelves.reduce((sum, s) => sum + count(s.items), 0);
+  return expiringIn(state, state.warehouse) + state.shelves.reduce((sum, s) => sum + expiringIn(state, s.items), 0);
 }
 
 /** «Уценить старое»: то, что испортится ночью, продаётся за полцены, а не выбрасывается. */
@@ -1195,6 +1199,10 @@ export interface NightResult {
   skimmed: number;
 }
 
+/** Просрочка в приют: за каждые 10 штук +0.03 к рейтингу, но не больше 0.06 за ночь. */
+export const donationRating = (units: number): number => Math.min(0.06, Math.floor(units / 10) * 0.03);
+export const toggleDonate = (state: StoreState): StoreState => ({ ...state, donate: !state.donate });
+
 /**
  * Ночь: товар стареет и портится (и на складе, и на полках), рейтинг двигается
  * от довольства покупателей, в конце месяца приходят счета.
@@ -1208,7 +1216,8 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
     spoiled += aged.spoiled;
     return { ...shelf, items: aged.stock };
   });
-  const rating = Math.min(5, Math.max(0, state.rating + (satisfaction(stats) - ratingTarget(state.rating)) * 0.5));
+  const donated = state.donate ? spoiled : 0;
+  const rating = Math.min(5, Math.max(0, state.rating + (satisfaction(stats) - ratingTarget(state.rating)) * 0.5 + donationRating(donated)));
   const skimmed = Math.min(Math.max(0, state.money), skimmedToday(state, stats.revenue));
   const aged = {
     ...state,
