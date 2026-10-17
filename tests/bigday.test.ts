@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BAD_DAY_SOFTEN,
   BIG_DAY_FROM,
   BIG_DAY_GAP,
   BIG_DAYS,
@@ -60,9 +61,11 @@ describe('особые дни', () => {
       expect(bigDayFor(day + 1) ?? null).not.toBe(bigDayFor(day));
       // Прогноз — как в обычный день (тот же расчёт без особого дня).
       expect(guestsToday(s) / guestsToday(normal)).toBeCloseTo(1, 0);
-      expect(bigDayGuests(day)).toBe(BIG_DAYS[bigDayFor(day)!].guests);
+      // Плохие дни мягче, чем в таблице (BAD_DAY_SOFTEN): событий стало больше — не душим кассу.
+      const g = BIG_DAYS[bigDayFor(day)!].guests;
+      expect(bigDayGuests(day)).toBeCloseTo(g < 1 ? 1 - (1 - g) * BAD_DAY_SOFTEN : g);
     }
-    expect(spawnIntervalToday({ ...base, day: disaster })).toBeGreaterThan(spawnIntervalToday({ ...base, day: disaster - 1 }) * 1.5);
+    expect(spawnIntervalToday({ ...base, day: disaster })).toBeGreaterThan(spawnIntervalToday({ ...base, day: disaster - 1 }) * 1.3);
     expect(spawnIntervalToday({ ...base, day: crowd })).toBeLessThan(spawnIntervalToday({ ...base, day: crowd - 1 }) / 1.5);
   });
 

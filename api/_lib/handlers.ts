@@ -154,3 +154,20 @@ export async function starsRefund(request: Request, env: Env): Promise<Response>
     }));
   return json({ user, payments });
 }
+
+/**
+ * POST /api/client-error — ошибка из игры у игрока. Пишем в лог (Cloudflare → Observability),
+ * ничего не храним. Тело ограничено, лишние поля отбрасываются.
+ */
+export async function clientError(request: Request): Promise<Response> {
+  const text = (await request.text().catch(() => '')).slice(0, 4000);
+  let data: Record<string, unknown> = {};
+  try {
+    data = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return new Response(null, { status: 400 });
+  }
+  const pick = (k: string, n = 300) => (typeof data[k] === 'string' ? (data[k] as string).slice(0, n) : typeof data[k] === 'number' || typeof data[k] === 'boolean' ? data[k] : undefined);
+  console.error('client-error', JSON.stringify({ where: pick('where', 40), message: pick('message'), stack: pick('stack', 1500), day: pick('day'), level: pick('level'), running: pick('running'), ua: pick('ua', 120) }));
+  return new Response(null, { status: 204 });
+}

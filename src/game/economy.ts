@@ -513,6 +513,8 @@ export interface StoreState {
   ads?: { id: 'flyers' | 'banner' | 'blogger'; from: number; until: number };
   /** Стойка со сладостями у кассы (impulse.ts). */
   rack?: { level: number; stock: number };
+  /** Своё зерно магазина: от него зависит расписание особых дней (у каждого игрока своё). */
+  seed?: number;
   /** Стаканчики в кофейном уголке (coffee.ts). */
   cups?: number;
   /** Ценовая война с Эдуардом (war.ts). */

@@ -4,9 +4,11 @@ import '@fontsource-variable/nunito';
 import { BootScene } from './scenes/BootScene';
 import { CANVAS_H, CANVAS_W, StoreScene } from './scenes/StoreScene';
 import { initTelegram } from './platform/telegram';
+import { installErrorReporting } from './platform/errors';
 
 const BG = '#1d1a26';
 
+installErrorReporting();
 initTelegram(BG);
 
 const game = new Phaser.Game({

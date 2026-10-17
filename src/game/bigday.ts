@@ -214,11 +214,25 @@ function chances(day: number): [BigDayId, number][] {
   ];
 }
 
+/** Особые дни бывают чаще обычного в столько раз (раньше шли раз в ~9 дней — игроки скучали). */
+export const BIG_DAY_RATE = 1.6;
+
+/**
+ * Зерно расписания особых дней: у каждого магазина своё (state.seed), поэтому у разных игроков
+ * и в новой игре события идут в разные дни, а не «у всех землетрясение на 10-й день».
+ */
+let seed = 0;
+export function setBigDaySeed(value: number): void {
+  if (value === seed) return;
+  seed = value;
+  starts.clear();
+}
+
 function rawStart(day: number): BigDayId | null {
-  let roll = rng(day * 104729 + 17)();
+  let roll = rng(day * 104729 + 17 + seed * 7919)();
   for (const [id, chance] of chances(day)) {
-    if (roll < chance) return id;
-    roll -= chance;
+    if (roll < chance * BIG_DAY_RATE) return id;
+    roll -= chance * BIG_DAY_RATE;
   }
   return null;
 }
@@ -265,8 +279,13 @@ export const bigDayKnown = (day: number): boolean => (bigDayProgress(day)?.n ?? 
 /** Множитель гостей особого дня. */
 export const bigDayGuests = (day: number): number => {
   const id = bigDayFor(day);
-  return id ? BIG_DAYS[id].guests : 1;
+  if (!id) return 1;
+  // Событий стало больше — провалы мягче: в плохой день гостей меньше, но не втрое.
+  const g = BIG_DAYS[id].guests;
+  return g < 1 ? 1 - (1 - g) * BAD_DAY_SOFTEN : g;
 };
+/** Насколько смягчён провал гостей в плохой особый день (1 — как раньше). */
+export const BAD_DAY_SOFTEN = 0.5;
 
 /** Гости особого дня, о котором утром уже знают, — входят в утренний прогноз. */
 export const knownBigDayGuests = (day: number): number => (bigDayKnown(day) ? bigDayGuests(day) : 1);

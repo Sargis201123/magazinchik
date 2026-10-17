@@ -156,6 +156,8 @@ const css = `
 .ui-item-sub { font-size: 12.5px; color: #6a5f58; margin-top: 1px; }
 .ui-item-actions { display: flex; gap: 6px; align-items: center; }
 .ui-item-actions .ui-chip { min-width: 46px; padding: 8px 6px; font-size: 14px; }
+/* Несколько длинных кнопок — столбиком, чтобы не вылезали за рамку. */
+.ui-item-actions.stack { flex-direction: column; align-items: stretch; }
 .ui-tag { display: inline-flex; align-items: center; gap: 2px; background: #fee761; border: 2px solid #2b2233; border-radius: 6px;
   padding: 0 5px; font: 800 13px ${UI_FONT}; line-height: 1.5; }
 .ui-haggle { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; padding: 7px 8px 7px 10px; background: #f4ecd8;
