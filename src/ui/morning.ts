@@ -776,7 +776,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   // ---------- Полки ----------
 
-  /** Сезонные товары: когда и где продаются, сколько ждать; ларь для мороженого — купить прямо здесь. */
+  /** Сезонные товары: когда и где продаются, сколько ждать; плюс ларь для мороженого — купить прямо здесь. */
   const seasonBox = (state: StoreState): HTMLElement => {
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('goods.title')));
@@ -784,13 +784,18 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       const left = daysUntilSeason(pid, state.day);
       box.append(el('div', '', `${t(`goods.${pid}` as TextKey)} · ${left === 0 ? t('goods.now') : t('goods.in', { n: left })}`));
       if (state.shelves.some((s) => canPlace(pid, s))) continue;
-      if (pid === 'icecream') {
-        const price = SHELF_KINDS.icebox.price;
+      box.append(el('div', 'ui-muted', t('prices.locked', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) })));
+    }
+    // Мороженое — круглый год, но только из ларя: пока его нет — купить прямо здесь.
+    if (!state.shelves.some((s) => s.kind === 'icebox')) {
+      const price = SHELF_KINDS.icebox.price;
+      box.append(el('div', '', t('goods.icecream')));
+      if (!shelfKindOpen(state, 'icebox')) box.append(el('div', 'ui-muted', `🔒 ${t('shelf.lockedLevel', { name: t(STORE_LEVELS[1].nameKey) })}`));
+      else
         box.append(
           el('div', 'ui-muted', t('goods.noIcebox')),
           button(t('shelves.buy', { name: t('shelf.icebox'), cost: price }), () => update(buyShelf(getState(), 'icebox'), 'success'), 'ui-btn secondary', price > state.money),
         );
-      } else box.append(el('div', 'ui-muted', t('prices.locked', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) })));
     }
     return box;
   };
@@ -1944,9 +1949,8 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       const n = CUPS_MAX - cupsOf(state);
       row(t('todo.cups', { n: cupsOf(state) }), button(t('todo.cupsBtn', { n, cost: n * CUP_COST }), () => update(buyCups(getState(), n), 'success'), 'ui-chip', state.money < n * CUP_COST));
     }
-    // До лета неделя, а ларя нет — подсказка поставить его заранее.
-    const summerIn = daysUntilSeason('icecream', state.day);
-    if (summerIn <= 7 && !state.shelves.some((s) => s.kind === 'icebox')) {
+    // Молочка уже продаётся, а ларя нет — подсказка поставить ларь с мороженым.
+    if (state.level >= 1 && state.shelves.some((s) => s.kind === 'dairy') && !state.shelves.some((s) => s.kind === 'icebox')) {
       const price = SHELF_KINDS.icebox.price;
       row(t('goods.soon'), button(t('shelves.buy', { name: '🍦', cost: price }), () => update(buyShelf(getState(), 'icebox'), 'success'), 'ui-chip', state.money < price));
     }

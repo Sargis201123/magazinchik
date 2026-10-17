@@ -28,7 +28,6 @@ import {
   shelfFor,
   shelfFree,
   slotOf,
-  productAvailable,
   STORE_LEVELS,
   storeLevel,
   takeFromShelf,
@@ -3562,6 +3561,9 @@ export class StoreScene extends Phaser.Scene {
     // Места под полки обходят всегда: полку могут купить утром без перестройки зала.
     this.obstacles = slots.map(({ x, y }) => furniture(x, y));
     this.obstacles.push({ x: counter.x - 13, y: counter.y - 30, w: 26, h: 54 });
+    // Место ларя обходят всегда, как и места под полки: его могут поставить утром.
+    const ice = this.iceboxSpot();
+    this.obstacles.push({ x: ice.x - 16, y: ice.y - 10, w: 32, h: 18 });
     // Левая стена: вдоль неё не ходят, во флигель — только через двери.
     const { h } = this.layout;
     let from = -4;
@@ -4029,9 +4031,7 @@ export class StoreScene extends Phaser.Scene {
       const step = area.w / perRow;
       const slot = at;
       const units = PRODUCT_IDS.flatMap((id) => (shelf.items[id] ?? []).map((unit) => ({ id, unit })));
-      // Ларь не в сезон накрыт чехлом — товара не видно.
-      view.cover?.setVisible(!productAvailable('icecream', this.state.day));
-      const covered = Boolean(view.cover?.visible);
+      const covered = false;
       view.items.forEach((img, n) => {
         const entry = units[n];
         const florist = shelf.kind === 'florist';
@@ -4073,11 +4073,11 @@ export class StoreScene extends Phaser.Scene {
     const top = fixture ? 0 : FURNITURE_TOP / 2;
     const bg = this.art(slot.x, slot.y - top, look.texture).setTint(look.tint).setDepth(slot.y - 14);
     const front = this.art(slot.x, slot.y - top, `${look.texture}_front`).setDepth(slot.y - 12);
-    // Глубина по нижнему краю: полки в зале — как раньше, ларь на улице — поверх фасада и маркиз.
-    const d = kind === 'icebox' ? slot.y + 25 : slot.y;
+    // Глубина по нижнему краю: ларь ниже обычной полки, его край — на 10 точек ниже центра.
+    const d = kind === 'icebox' ? slot.y + 10 : slot.y;
     bg.setDepth(d - 14);
     front.setDepth(d - 12);
-    const cover = kind === 'icebox' ? this.art(slot.x, slot.y, 'icebox_closed').setDepth(d - 11.5).setVisible(false) : undefined;
+    const cover = undefined;
     bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.restockShelf(index)));
     const items = Array.from({ length: SHELF_LEVELS[SHELF_LEVELS.length - 1].capacity }, () => this.art(slot.x, slot.y, 'item').setDepth(d - 13));
     const backItems = items.map(() => this.art(slot.x, slot.y, 'item').setDepth(d - 13.5).setTint(0xa89a90).setVisible(false));
@@ -4130,7 +4130,7 @@ export class StoreScene extends Phaser.Scene {
     return this.state.shelves.filter((s) => !SHELF_KINDS[s.kind].fixture).length;
   }
 
-  /** Где стоит полка: на своём месте в зале, ларь — у входа на улице, вёдра с цветами — у кассы. */
+  /** Где стоит полка: на своём месте в зале, ларь — в зале слева от входа, вёдра с цветами — у кассы. */
   private spotOf(index: number): { x: number; y: number } {
     const kind = this.state.shelves[index]?.kind;
     if (kind === 'icebox') return this.iceboxSpot();
@@ -4138,28 +4138,28 @@ export class StoreScene extends Phaser.Scene {
     return this.layout.slots[Math.max(0, slotOf(this.state, index))];
   }
 
-  /** Куда встать, чтобы взять с полки: к полке — снизу, к ларю — со стороны улицы, к вёдрам — слева. */
+  /** Куда встать, чтобы взять с полки: к полке — снизу, к ларю — сверху (со стороны зала), к вёдрам — слева. */
   private standOf(index: number): { x: number; y: number } {
     const p = this.spotOf(index);
     const kind = this.state.shelves[index]?.kind;
-    if (kind === 'icebox') return { x: p.x, y: p.y + 14 };
+    if (kind === 'icebox') return { x: p.x, y: p.y - 16 };
     if (kind === 'florist') return { x: p.x - 14, y: p.y + 6 };
     return { x: p.x, y: p.y + 22 };
   }
 
-  /** Путь из зала к полке: к ларю на улице — через дверь. */
+  /** Путь из зала к полке. */
   private routeTo(index: number): { x: number; y: number }[] {
-    const stand = this.standOf(index);
-    if (this.state.shelves[index]?.kind !== 'icebox') return [stand];
-    const { door } = this.layout;
-    return [{ x: door.x, y: door.y - 10 }, { x: door.x, y: stand.y }, stand];
+    return [this.standOf(index)];
   }
 
-  /** Ларь с мороженым — у фасада справа от входа (в самом большом магазине — на тротуаре). */
+  /**
+   * Ларь с мороженым — в зале слева от входа, у нижней стены. В тесном помещении у стены места нет
+   * (там проход к двери склада) — ларь стоит чуть выше, у левой стены.
+   */
   private iceboxSpot(): { x: number; y: number } {
     const { door, h } = this.layout;
-    const base = this.next === this.layout ? this.next.h + 4 + 8.5 : h + FACADE_H + 10;
-    return { x: door.x + 76, y: base - 7 };
+    const x = door.x - 44;
+    return x >= 36 ? { x, y: h - 16 } : { x: 24, y: h - 38 };
   }
 
   /** Вёдра с цветами — у кассы, в углу у правой стены. */
@@ -5334,14 +5334,6 @@ export class StoreScene extends Phaser.Scene {
         why ??= { reason: result, id };
       }
     };
-    // Мороженое — из ларя у входа, ещё на улице; платят потом на кассе.
-    const outside = wanted.filter((id) => this.state.shelves[shelfFor(this.state, id)]?.kind === 'icebox');
-    for (const id of outside) {
-      const index = shelfFor(this.state, id);
-      await this.walk(c.sprite, door.x, this.standOf(index).y);
-      await visit(id, index);
-      await this.walk(c.sprite, door.x, this.standOf(index).y);
-    }
     await this.walk(c.sprite, door.x, door.y - 10);
     // В дождь и снег с улицы несут грязь.
     const muddy = isWet(this.weather) || this.weather === 'snow';
@@ -5350,7 +5342,6 @@ export class StoreScene extends Phaser.Scene {
 
     if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
     for (const id of wanted) {
-      if (outside.includes(id)) continue;
       const index = shelfFor(this.state, id);
       if (index < 0) continue;
       await visit(id, index);

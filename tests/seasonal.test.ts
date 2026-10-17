@@ -6,15 +6,18 @@ import { pickWanted } from '../src/game/endless';
 const year = Array.from({ length: YEAR_MONTHS * MONTH_DAYS }, (_, i) => i + 1);
 
 describe('seasonal goods', () => {
-  it('мороженое только летом, цветы только весной, мандарины к Новому году', () => {
+  it('мороженое круглый год (летом охотнее), цветы только весной, мандарины к Новому году', () => {
     for (const day of year) {
-      if (productAvailable('icecream', day)) expect(yearTime(day)).toBe('summer');
+      expect(productAvailable('icecream', day)).toBe(true);
       if (productAvailable('flowers', day)) expect(yearTime(day)).toBe('spring');
       if (holidayFor(day) === 'newyear') expect(productAvailable('tangerines', day)).toBe(true);
       expect(productAvailable('bread', day)).toBe(true);
     }
-    expect(year.some((d) => productAvailable('icecream', d))).toBe(true);
-    expect(year.some((d) => !productAvailable('icecream', d))).toBe(true);
+    const summer = year.find((d) => yearTime(d) === 'summer')!;
+    const newyear = year.find((d) => holidayFor(d) === 'newyear')!;
+    const autumn = year.find((d) => yearTime(d) === 'autumn')!;
+    expect(seasonalDemand('icecream', summer)).toBeGreaterThan(seasonalDemand('icecream', autumn));
+    expect(seasonalDemand('icecream', newyear)).toBeLessThan(seasonalDemand('icecream', autumn));
   });
 
   it('на 8 Марта цветы берут в разы чаще', () => {
@@ -25,11 +28,11 @@ describe('seasonal goods', () => {
   });
 
   it('вне сезона товар нельзя продать и его не хотят', () => {
-    const summer = year.find((d) => yearTime(d) === 'summer')!;
-    const winterless = year.find((d) => !productAvailable('icecream', d))!;
-    const withFridge = { ...newGame(), shelves: [...newGame().shelves, { kind: 'icebox' as const, level: 0, items: {} }] };
-    expect(sellableProducts({ ...withFridge, day: summer })).toContain('icecream');
-    expect(sellableProducts({ ...withFridge, day: winterless })).not.toContain('icecream');
-    for (let i = 0; i < 50; i++) expect(pickWanted({ ...withFridge, day: winterless }, Math.random, 2)).not.toContain('icecream');
+    const spring = year.find((d) => productAvailable('flowers', d))!;
+    const off = year.find((d) => !productAvailable('flowers', d))!;
+    const s = newGame();
+    expect(sellableProducts({ ...s, day: spring })).toContain('flowers');
+    expect(sellableProducts({ ...s, day: off })).not.toContain('flowers');
+    for (let i = 0; i < 50; i++) expect(pickWanted({ ...s, day: off }, Math.random, 2)).not.toContain('flowers');
   });
 });
