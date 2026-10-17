@@ -53,6 +53,9 @@ export interface Product {
   color: number;
 }
 
+/** Срок годности у товаров, которые не портятся: вода, сок в пачках, мыло, порошок. */
+const NEVER = Infinity;
+
 export const PRODUCTS: Record<ProductId, Product> = {
   bread: { id: 'bread', nameKey: 'product.bread', icon: '🍞', category: 'bakery', cost: 25, basePrice: 40, shelfLife: 2, color: 0xd9a066 },
   apples: { id: 'apples', nameKey: 'product.apples', icon: '🍎', category: 'produce', cost: 16, basePrice: 30, shelfLife: 5, color: 0xd04648 },
@@ -64,12 +67,12 @@ export const PRODUCTS: Record<ProductId, Product> = {
   tangerines: { id: 'tangerines', nameKey: 'product.tangerines', icon: '🍊', category: 'produce', cost: 20, basePrice: 40, shelfLife: 6, color: 0xf77622 },
   flowers: { id: 'flowers', nameKey: 'product.flowers', icon: '💐', category: 'florist', cost: 35, basePrice: 70, shelfLife: 3, color: 0xe43b44 },
   // Новые отделы больших магазинов: напитки, заморозка, бытовая химия (полки — с уровня помещения).
-  water: { id: 'water', nameKey: 'product.water', icon: '💧', category: 'drinks', cost: 12, basePrice: 25, shelfLife: 30, color: 0x0099db },
-  juice: { id: 'juice', nameKey: 'product.juice', icon: '🧃', category: 'drinks', cost: 28, basePrice: 50, shelfLife: 8, color: 0xfeae34 },
+  water: { id: 'water', nameKey: 'product.water', icon: '💧', category: 'drinks', cost: 12, basePrice: 25, shelfLife: NEVER, color: 0x0099db },
+  juice: { id: 'juice', nameKey: 'product.juice', icon: '🧃', category: 'drinks', cost: 28, basePrice: 50, shelfLife: NEVER, color: 0xfeae34 },
   dumplings: { id: 'dumplings', nameKey: 'product.dumplings', icon: '🥟', category: 'frozen', cost: 45, basePrice: 80, shelfLife: 20, color: 0xead4aa },
   fish: { id: 'fish', nameKey: 'product.fish', icon: '🐟', category: 'frozen', cost: 60, basePrice: 110, shelfLife: 14, color: 0x8b9bb4 },
-  soap: { id: 'soap', nameKey: 'product.soap', icon: '🧼', category: 'household', cost: 15, basePrice: 35, shelfLife: 99, color: 0xb55088 },
-  detergent: { id: 'detergent', nameKey: 'product.detergent', icon: '🧴', category: 'household', cost: 55, basePrice: 99, shelfLife: 99, color: 0x5fcde4 },
+  soap: { id: 'soap', nameKey: 'product.soap', icon: '🧼', category: 'household', cost: 15, basePrice: 35, shelfLife: NEVER, color: 0xb55088 },
+  detergent: { id: 'detergent', nameKey: 'product.detergent', icon: '🧴', category: 'household', cost: 55, basePrice: 99, shelfLife: NEVER, color: 0x5fcde4 },
   // Своя выпечка: cost — мука и начинка на штуку.
   pies: { id: 'pies', nameKey: 'product.pies', icon: '🥧', category: 'bakery', cost: 16, basePrice: 45, shelfLife: 2, color: 0xfeae34 },
   buns: { id: 'buns', nameKey: 'product.buns', icon: '🥐', category: 'bakery', cost: 14, basePrice: 40, shelfLife: 2, color: 0xead4aa },
@@ -92,7 +95,7 @@ const YEAR_MONTHS = 16;
  * Сезонные товары: в какие месяцы игрового года (0…15) их продают.
  * Мороженое — летом, мандарины — перед Новым годом и в новогоднюю неделю, цветы — весной.
  */
-export const SEASONAL: Partial<Record<ProductId, number[]>> = { icecream: [7, 8, 9, 10], tangerines: [2, 3], flowers: [4, 5, 6] };
+export const SEASONAL: Partial<Record<ProductId, number[]>> = { tangerines: [2, 3], flowers: [4, 5, 6] };
 
 export const monthInYear = (day: number): number => (monthOf(day) - 1) % YEAR_MONTHS;
 export const productAvailable = (id: ProductId, day: number): boolean => SEASONAL[id]?.includes(monthInYear(day)) ?? true;
@@ -103,8 +106,12 @@ export function daysUntilSeason(id: ProductId, day: number): number {
   return 0;
 }
 
+/** Летние месяцы (7…10) — мороженое продаётся круглый год, но летом его берут охотнее, в Новый год — реже. */
+const SUMMER_MONTHS = [7, 8, 9, 10];
+
 /** Спрос на сезонный товар: в сезон берут охотно, на 8 Марта (первые два дня весны) цветы — нарасхват. */
 export function seasonalDemand(id: ProductId, day: number): number {
+  if (id === 'icecream') return SUMMER_MONTHS.includes(monthInYear(day)) ? 1.5 : monthInYear(day) === 3 ? 0.6 : 1;
   if (!SEASONAL[id]) return 1;
   if (id === 'flowers' && monthInYear(day) === 4 && (day - 1) % MONTH_DAYS < 2) return 5;
   return 1.5;
@@ -120,7 +127,7 @@ export interface ShelfKind {
   minLevel?: number;
   /** Стоит на своём месте (ларь у входа, цветы у кассы), а не на месте под полку; такой — один. */
   fixture?: boolean;
-  /** Холодильник работает только в сезон своего товара (ларь зимой выключен). */
+  /** Холодильник работает только в сезон своего товара (сейчас таких нет: мороженое — круглый год). */
   seasonal?: ProductId;
 }
 
@@ -132,7 +139,7 @@ export const SHELF_KINDS: Record<Category, ShelfKind> = {
   drinks: { nameKey: 'shelf.drinks', price: 250, fridge: false, minLevel: 1 },
   frozen: { nameKey: 'shelf.frozen', price: 450, fridge: true, minLevel: 2 },
   household: { nameKey: 'shelf.household', price: 250, fridge: false, minLevel: 3 },
-  icebox: { nameKey: 'shelf.icebox', price: 350, fridge: true, fixture: true, seasonal: 'icecream' },
+  icebox: { nameKey: 'shelf.icebox', price: 350, fridge: true, fixture: true, minLevel: 1 },
   florist: { nameKey: 'shelf.florist', price: 0, fridge: false, fixture: true },
 };
 

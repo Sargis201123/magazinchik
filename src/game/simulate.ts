@@ -49,7 +49,6 @@ import {
   BAD_COMPLAINT_CHANCE,
   hasUnmarkedBad,
   freeSlots,
-  daysUntilSeason,
   answerRaise,
   guardCatchChance,
   hire,
@@ -270,11 +269,11 @@ export function simulate({
       investments += SHELF_KINDS[kind].price;
       state = buyShelf(state, kind)!;
     }
-    // Ларь с мороженым у входа: разумный игрок ставит его к лету, когда уже есть молочный холодильник.
+    // Ларь с мороженым: разумный игрок ставит его, когда уже есть молочный холодильник.
     if (
       !state.shelves.some((s) => s.kind === 'icebox') &&
       state.shelves.some((s) => s.kind === 'dairy') &&
-      daysUntilSeason('icecream', state.day) <= 7 &&
+      shelfKindOpen(state, 'icebox') &&
       state.money >= SHELF_KINDS.icebox.price + reserve
     ) {
       investments += SHELF_KINDS.icebox.price;

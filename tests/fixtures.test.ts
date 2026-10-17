@@ -25,14 +25,14 @@ import {
 import { YEAR_MONTHS } from '../src/game/calendar';
 import { planDay } from '../src/game/events';
 
-// Сезонные места: ларь с мороженым у входа и вёдра с цветами у кассы. Это «полки», но на своих
-// местах: мест под полки в зале не занимают, ларь — один, вёдра — бесплатные и есть у всех.
+// Особые места: ларь с мороженым в зале у входа и вёдра с цветами у кассы. Это «полки», но на своих
+// местах: мест под полки в зале не занимают, ларь — один (с «Магазинчика»), вёдра — бесплатные и есть у всех.
 const year = Array.from({ length: YEAR_MONTHS * MONTH_DAYS }, (_, i) => i + 1);
-const summer = year.find((d) => productAvailable('icecream', d))!;
-const winter = year.find((d) => !productAvailable('icecream', d))!;
 const spring = year.find((d) => productAvailable('flowers', d))!;
+const winter = year.find((d) => !productAvailable('flowers', d))!;
+const summer = winter;
 const units = (n: number): Unit[] => Array.from({ length: n }, () => ({ age: 0 }));
-const rich = (s: StoreState = newGame()): StoreState => ({ ...s, money: 1e6, debt: 0 });
+const rich = (s: StoreState = newGame()): StoreState => ({ ...s, money: 1e6, debt: 0, level: 1 });
 
 describe('ларь с мороженым и вёдра с цветами', () => {
   it('мороженое — только в ларе, цветы — только в вёдрах, мандарины — на овощном прилавке', () => {
@@ -54,10 +54,11 @@ describe('ларь с мороженым и вёдра с цветами', () =>
     expect(sellShelf(s, s.shelves.findIndex((sh) => sh.kind === 'florist'))).toBeNull();
   });
 
-  it('без ларя мороженое не продаётся даже летом; ларь — один и места в зале не занимает', () => {
+  it('без ларя мороженое не продаётся; ларь — один, места под полки не занимает, в ларьке его не поставить', () => {
+    expect(buyShelf({ ...rich(), level: 0 }, 'icebox')).toBeNull();
     let s = rich();
     expect(sellableProducts({ ...s, day: summer })).not.toContain('icecream');
-    // Занимаем все места в зале — ларь всё равно ставится (он на улице у входа).
+    // Занимаем все места в зале — ларь всё равно ставится (у него своё место у входа).
     while (freeSlots(s) > 0) s = buyShelf(s, 'bakery')!;
     expect(buyShelf(s, 'bakery')).toBeNull();
     const before = s.money;
@@ -66,8 +67,9 @@ describe('ларь с мороженым и вёдра с цветами', () =>
     expect(before - s.money).toBe(SHELF_KINDS.icebox.price);
     expect(freeSlots(s)).toBe(0);
     expect(buyShelf(s, 'icebox')).toBeNull();
+    // Мороженое — круглый год.
     expect(sellableProducts({ ...s, day: summer })).toContain('icecream');
-    expect(sellableProducts({ ...s, day: winter })).not.toContain('icecream');
+    expect(sellableProducts({ ...s, day: winter })).toContain('icecream');
     // Покупатель за мороженым идёт именно к ларю.
     expect(s.shelves[shelfFor(s, 'icecream')].kind).toBe('icebox');
   });
@@ -103,29 +105,27 @@ describe('ларь с мороженым и вёдра с цветами', () =>
     expect(freeSlots(more)).toBe(storeLevel(more).slots - 3);
   });
 
-  it('свет: ларь работает только летом, зимой выключен и денег не берёт', () => {
+  it('свет: ларь работает круглый год, как любой холодильник', () => {
     const s = buyShelf(rich(), 'icebox')!;
-    const base = newGame();
+    const base = { ...newGame(), level: 1 };
     const extra = (day: number) => monthlyBill({ ...s, day }).power - monthlyBill({ ...base, day }).power;
-    expect(extra(summer)).toBe(FRIDGE_POWER);
-    expect(extra(winter)).toBe(0);
+    expect(extra(spring)).toBe(FRIDGE_POWER);
+    expect(extra(winter)).toBe(FRIDGE_POWER);
   });
 
-  it('выключенный зимой ларь не «ломается», а летом может', () => {
-    // Из холодильников — только ларь: поломка возможна лишь в сезон.
+  it('ларь может сломаться в любое время года', () => {
     const s = buyShelf(rich(), 'icebox')!;
     const days = Array.from({ length: 3 * year.length }, (_, i) => i + 4);
-    const broke = days.filter((day) => planDay({ ...s, day }).event?.kind === 'fridgeBroken');
-    expect(broke.length).toBeGreaterThan(0);
-    for (const day of broke) expect(productAvailable('icecream', day)).toBe(true);
+    expect(days.some((day) => planDay({ ...s, day }).event?.kind === 'fridgeBroken')).toBe(true);
   });
 
   it('сколько ждать сезона: 0 — сезон сейчас, иначе через столько дней он начнётся', () => {
-    expect(daysUntilSeason('icecream', summer)).toBe(0);
-    const n = daysUntilSeason('icecream', winter);
+    expect(daysUntilSeason('flowers', spring)).toBe(0);
+    const n = daysUntilSeason('flowers', winter);
     expect(n).toBeGreaterThan(0);
-    expect(productAvailable('icecream', winter + n)).toBe(true);
-    expect(productAvailable('icecream', winter + n - 1)).toBe(false);
+    expect(productAvailable('flowers', winter + n)).toBe(true);
+    expect(productAvailable('flowers', winter + n - 1)).toBe(false);
+    expect(daysUntilSeason('icecream', winter)).toBe(0);
     expect(daysUntilSeason('bread', winter)).toBe(0);
   });
 });
