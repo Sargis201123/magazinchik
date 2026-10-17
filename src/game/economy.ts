@@ -751,7 +751,20 @@ export function buyChance(price: number, basePrice: number): number {
   return Math.min(1, Math.max(0.02, chance));
 }
 
-/** Сколько реально заплатит покупатель за эту штуку. */
+/** Цена считается «дешёвой» (хвалят в отзывах), если она ниже ожидаемой хотя бы на столько. */
+export const CHEAP_RATIO = 0.85;
+
+/**
+ * Слава о ценах: магазин, где в среднем дешевле обычного, зовёт больше гостей, дорогой — меньше.
+ * Средняя цена на 10% ниже обычной — гостей на 6% больше; в пределах ±15%.
+ */
+export function priceAppeal(state: StoreState): number {
+  const ids = sellableProducts(state);
+  if (!ids.length) return 1;
+  const avg = ids.reduce((sum, id) => sum + state.prices[id] / PRODUCTS[id].basePrice, 0) / ids.length;
+  return Math.min(1.15, Math.max(0.85, 1 + (1 - avg) * 0.6));
+}
+
 /** Акция «−20%» на товар сегодня (promo.ts). */
 export const PROMO_DISCOUNT = 0.8;
 export const promoKind = (state: StoreState, id: ProductId): 'discount' | 'bogo' | undefined =>

@@ -2,6 +2,7 @@ import { staffName, t } from '../i18n';
 import type { TextKey } from '../i18n/ru';
 import {
   buyChance,
+  priceAppeal,
   buyShelf,
   buyStock,
   canPlace,
@@ -615,6 +616,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       return !Array.isArray(req) || req.some((k) => shelfKindOpen(state, k));
     }).map((sid) => supplierBox(sid, state)),
     el('h3', '', t('tab.prices')),
+    el('div', 'ui-note', t('prices.note', { g: percent(priceAppeal(state)) })),
     ...pricesTab(state),
   ];
 
@@ -2541,7 +2543,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       bar.append(fill);
       info.append(
         bar,
-        el('div', 'ui-muted', `${t('prices.demand', { p: Math.round(demand * 100) })} · ${t('prices.base', { n: product.basePrice })}`),
+        el('div', 'ui-muted', t('prices.line', { p: Math.round(demand * 100), n: product.basePrice, m: price - product.cost })),
       );
       // Акция дня: −20% или «2 по цене 1» (одна на день; повторное нажатие отменяет).
       const promo = activePromo(state);
