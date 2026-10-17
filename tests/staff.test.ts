@@ -108,9 +108,21 @@ describe('опыт и прибавки', () => {
   });
 
   it('опытные иногда просят прибавку и без роста навыка', () => {
-    const veteran = member({ skill: 3, months: 4, wage: 500 });
-    expect(monthForStaff([veteran], always).staff[0].raiseAsk).toBe(550);
+    const wage = wageFor('cashier', 3);
+    const veteran = member({ skill: 3, months: 4, wage });
+    expect(monthForStaff([veteran], always).staff[0].raiseAsk).toBe(Math.round((wage * 1.1) / 10) * 10);
     expect(monthForStaff([veteran], never).staff[0].raiseAsk).toBeUndefined();
+  });
+
+  it('за месяц о прибавке просит только один; остальные — в следующие месяцы', () => {
+    const team = (['cashier', 'loader', 'cleaner'] as const).map((role) => member({ role, skill: 3, months: 4, wage: wageFor(role, 3) }));
+    let staff = monthForStaff(team, always).staff;
+    expect(staff.filter((m) => m.raiseAsk)).toHaveLength(1);
+    // Пока просьба висит — новых нет.
+    expect(monthForStaff(staff, always).staff.filter((m) => m.raiseAsk)).toHaveLength(1);
+    // Ответили — в следующем месяце попросит следующий.
+    staff = staff.map((m) => (m.raiseAsk ? { ...m, wage: m.raiseAsk, raiseAsk: undefined } : m));
+    expect(monthForStaff(staff, always).staff.filter((m) => m.raiseAsk)).toHaveLength(1);
   });
 
   it('согласился — зарплата выше', () => {

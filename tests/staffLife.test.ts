@@ -8,6 +8,8 @@ import {
   restStaff,
   roleOpen,
   TIRED_DAYS,
+  NIGHT_FATIGUE,
+  EXHAUSTED_DAYS,
   workSpeed,
   type StaffMember,
   type StoreState,
@@ -30,6 +32,16 @@ describe('персонал — люди', () => {
     expect(isAbsent(s, s.staff[0])).toBe(true);
     s = restStaff(s);
     expect(s.staff[0].streak).toBe(0);
+  });
+
+  it('ночная смена утомляет вдвое; вымотанный сам берёт выходной на завтра', () => {
+    let s = shop();
+    s = restStaff(s, true);
+    expect(s.staff[0].streak).toBe(NIGHT_FATIGUE);
+    for (let i = 0; s.staff[0].streak! < EXHAUSTED_DAYS; i++) s = restStaff({ ...s, day: s.day + 1 }, true);
+    expect(s.staff[0].offDay).toBe(s.day + 1);
+    s = { ...s, day: s.day + 1 };
+    expect(isAbsent(s, s.staff[0])).toBe(true);
   });
 
   it('просьба о выходном: отпустить — завтра не выйдет; отказать — обида', () => {

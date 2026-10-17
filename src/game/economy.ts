@@ -325,10 +325,22 @@ export const MANAGER_BOOST = 1.1;
 export const managerBoost = (state: StoreState): number =>
   state.staff.some((m) => m.role === 'manager' && !isAbsent(state, m)) ? MANAGER_BOOST : 1;
 
-/** Конец дня: кто работал — устаёт сильнее, кто отдыхал — отдохнул. */
-export const restStaff = (state: StoreState): StoreState => ({
+/** Ночная смена выматывает: за такой день усталость растёт вдвое. */
+export const NIGHT_FATIGUE = 2;
+/** Столько дней без выходных — вымотался и сам не выходит завтра. */
+export const EXHAUSTED_DAYS = 10;
+
+/**
+ * Конец дня: кто работал — устаёт (после ночной смены — вдвое), кто отдыхал — отдохнул.
+ * Совсем вымотанный (EXHAUSTED_DAYS) берёт выходной сам — пекарня или кофейня завтра без него.
+ */
+export const restStaff = (state: StoreState, night = false): StoreState => ({
   ...state,
-  staff: state.staff.map((m) => ({ ...m, streak: isAbsent(state, m) ? 0 : (m.streak ?? 0) + 1 })),
+  staff: state.staff.map((m) => {
+    if (isAbsent(state, m)) return { ...m, streak: 0 };
+    const streak = (m.streak ?? 0) + (night ? NIGHT_FATIGUE : 1);
+    return { ...m, streak, offDay: streak >= EXHAUSTED_DAYS && (m.offDay ?? 0) <= state.day ? state.day + 1 : m.offDay };
+  }),
 });
 
 /** Обиженный сотрудник работает медленнее. */
@@ -367,6 +379,8 @@ export function fire(state: StoreState, role: StaffRole): StoreState {
 export function monthForStaff(staff: StaffMember[], random: () => number): { staff: StaffMember[]; quit: StaffMember[] } {
   const quit: StaffMember[] = [];
   const kept: StaffMember[] = [];
+  // За месяц о прибавке заговаривает только один: остальные (даже с выросшим навыком) — в следующие месяцы.
+  let asked = staff.some((m) => m.raiseAsk);
   for (const m of staff) {
     if (m.upset && random() < UPSET_QUIT_CHANCE) {
       quit.push(m);
@@ -375,8 +389,12 @@ export function monthForStaff(staff: StaffMember[], random: () => number): { sta
     const months = m.months + 1;
     const skill = months % MONTHS_PER_SKILL === 0 ? Math.min(3, m.skill + 1) : m.skill;
     let raiseAsk = m.raiseAsk;
-    if (skill > m.skill) raiseAsk = Math.max(m.wage, wageFor(m.role, skill, m.trait));
-    else if (!raiseAsk && months >= 3 && random() < RAISE_ASK_CHANCE) raiseAsk = Math.round((m.wage * (1 + RAISE_STEP)) / 10) * 10;
+    if (!raiseAsk && !asked) {
+      // Навык вырос, а платят по-старому — просит по новому навыку; опытные иногда просят и просто так.
+      if (m.wage < wageFor(m.role, skill, m.trait)) raiseAsk = wageFor(m.role, skill, m.trait);
+      else if (months >= 3 && random() < RAISE_ASK_CHANCE) raiseAsk = Math.round((m.wage * (1 + RAISE_STEP)) / 10) * 10;
+      asked = Boolean(raiseAsk && raiseAsk > m.wage);
+    }
     kept.push({ ...m, months, skill, raiseAsk: raiseAsk && raiseAsk > m.wage ? raiseAsk : undefined, upset: false });
   }
   return { staff: kept, quit };

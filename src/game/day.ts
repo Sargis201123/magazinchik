@@ -47,8 +47,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   s = rewarded.state;
   const weekly = progressWeekly(s, stats);
   s = weekly.state;
-  // Усталость считаем до смены плана: сегодняшний отгул обнуляет её.
-  s = restStaff(s);
+  // Усталость считаем до смены плана: сегодняшний отгул обнуляет её, ночная смена — удваивает.
+  s = restStaff(s, (stats.nightRevenue ?? 0) > 0);
   const day = s.day;
   const ended = endDay(s, stats, random);
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
