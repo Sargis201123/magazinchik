@@ -27,6 +27,7 @@ import { promoGuests } from './promo';
 import { fairGuests } from './fair';
 import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
 import { hiddenBigDayGuests, knownBigDayGuests } from './bigday';
+import { coffeeTablesGuests } from './coffee';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -83,6 +84,7 @@ export function inspectionDone(state: StoreState, result: InspectionResult): Sto
 export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
   priceAppeal(state) *
+  coffeeTablesGuests(state) *
   (seasonFor(state.day)?.guests ?? 1) *
   rankGuests(state) *
   adBoost(state) *

@@ -7,7 +7,7 @@ import type { TextKey } from '../i18n/ru';
 import { CARRY, managerBoost, type ScanTiming, type StoreState } from './economy';
 import { registerScan } from './gear';
 
-export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'autoOrder' | 'eTags' | 'coffee' | 'oven' | 'nightShift';
+export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'autoOrder' | 'eTags' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -17,6 +17,8 @@ export interface Upgrade {
   price: number;
   /** С какого уровня помещения можно поставить. */
   minLevel: number;
+  /** Без чего не купить (поставки хлеба — без своей печи). */
+  needs?: UpgradeId;
 }
 
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
@@ -29,6 +31,8 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   selfCheckout: { id: 'selfCheckout', icon: '🖥', nameKey: 'upgrade.selfCheckout', descKey: 'upgrade.selfCheckout.desc', price: 2500, minLevel: 2 },
   coffee: { id: 'coffee', icon: '☕', nameKey: 'upgrade.coffee', descKey: 'upgrade.coffee.desc', price: 1500, minLevel: 2 },
   oven: { id: 'oven', icon: '🥖', nameKey: 'upgrade.oven', descKey: 'upgrade.oven.desc', price: 1800, minLevel: 1 },
+  coffeeTables: { id: 'coffeeTables', icon: '🪑', nameKey: 'upgrade.coffeeTables', descKey: 'upgrade.coffeeTables.desc', price: 2200, minLevel: 2, needs: 'coffee' },
+  wholesale: { id: 'wholesale', icon: '📦', nameKey: 'upgrade.wholesale', descKey: 'upgrade.wholesale.desc', price: 1200, minLevel: 1, needs: 'oven' },
   nightShift: { id: 'nightShift', icon: '🌙', nameKey: 'upgrade.nightShift', descKey: 'upgrade.nightShift.desc', price: 3500, minLevel: 3 },
 };
 
@@ -45,7 +49,7 @@ export const hasUpgrade = (state: StoreState, id: UpgradeId): boolean => (state.
 
 export function buyUpgrade(state: StoreState, id: UpgradeId): StoreState | null {
   const up = UPGRADES[id];
-  if (hasUpgrade(state, id) || state.level < up.minLevel || state.money < up.price) return null;
+  if (hasUpgrade(state, id) || state.level < up.minLevel || state.money < up.price || (up.needs && !hasUpgrade(state, up.needs))) return null;
   return { ...state, money: state.money - up.price, upgrades: [...(state.upgrades ?? []), id] };
 }
 

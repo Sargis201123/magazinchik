@@ -18,10 +18,15 @@ export const cupsOf = (state: StoreState): number => state.cups ?? 0;
 /** Кофейня работает: уголок куплен и бариста сегодня на смене. */
 export const coffeeWorking = (state: StoreState): boolean => hasUpgrade(state, 'coffee') && onShift(state, 'barista');
 
-/** Шанс взять кофе сегодня: зависит от погоды. */
+/** Столики в кофейне: посидеть с кофе заходят чаще, а ради кофейни приходят и новые гости. */
+export const TABLES_COFFEE = 1.4;
+export const TABLES_GUESTS = 1.05;
+export const coffeeTablesGuests = (state: StoreState): number => (hasUpgrade(state, 'coffeeTables') && coffeeWorking(state) ? TABLES_GUESTS : 1);
+
+/** Шанс взять кофе сегодня: зависит от погоды и от столиков. */
 export function coffeeChance(state: StoreState): number {
   if (!coffeeWorking(state) || cupsOf(state) <= 0) return 0;
-  return Math.min(0.6, COFFEE_CHANCE * WEATHER_EFFECTS[weatherFor(state.day)].coffee);
+  return Math.min(0.6, COFFEE_CHANCE * WEATHER_EFFECTS[weatherFor(state.day)].coffee * (hasUpgrade(state, 'coffeeTables') ? TABLES_COFFEE : 1));
 }
 
 export function buyCups(state: StoreState, qty: number): StoreState | null {

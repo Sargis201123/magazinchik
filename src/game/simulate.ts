@@ -78,8 +78,8 @@ import { buyRegister, CASHIER_ROLES, nextRegisterPrice, registerCount, registerO
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
 import { weatherFor } from './weather';
-import { brewSeconds, cameraTheft, climatePatience, coffeePrice, entranceMud, fridgeLeak, GEAR_IDS, gearAvailable, nextGear, ovenBatch, REGISTER_JAM_SECONDS, registerJam, upgradeGear, wcDirt } from './gear';
-import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, startBatch, takeOutBread } from './bakery';
+import { brewSeconds, cameraTheft, climatePatience, coffeePrice, entranceMud, fridgeLeak, GEAR_IDS, gearAvailable, nextGear, ovenBatch, ovenBatchCost, REGISTER_JAM_SECONDS, registerJam, upgradeGear, wcDirt } from './gear';
+import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from './bakery';
 import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
 import { adoptDog, DOG_FROM_DAY, DOG_PRICE, hasDog } from './watch';
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
@@ -337,13 +337,15 @@ export function simulate({
       ['cart', 'cart'],
       ['loyalty', 'loyalty'],
       ['etags', 'eTags'],
+      ['oven', 'wholesale'],
+      ['coffee', 'coffeeTables'],
     ];
     // Дорогое «для удобства» (ночная смена, новые модели) разумный игрок берёт, когда уже не копит на расширение.
     const nextLevel = nextStoreLevel(state);
     const canSplurge = (price: number) => !nextLevel || state.money - price >= nextLevel.cost + reserve;
     for (const [feature, id] of wants) {
       if (!features[feature] || hasUpgrade(state, id) || state.money < UPGRADES[id].price + reserve) continue;
-      if ((id === 'nightShift' || id === 'eTags') && !canSplurge(UPGRADES[id].price)) continue;
+      if ((id === 'nightShift' || id === 'eTags' || id === 'coffeeTables') && !canSplurge(UPGRADES[id].price)) continue;
       const bought = buyUpgrade(state, id);
       if (bought) {
         investments += UPGRADES[id].price;
@@ -420,6 +422,13 @@ export function simulate({
         if (extraRandom() < ovenBurn) continue;
         state = takeOutBread(state).state;
         breadBaked += ovenBatch(state);
+      }
+    }
+    // Противни для соседей — по договору, когда пекарь на смене.
+    if (features.oven) {
+      for (let b = 0; wholesaleToBake(state, b) && batches < ovenBatches; b++) {
+        state = sellWholesale({ ...state, money: state.money - ovenBatchCost(state) }).state;
+        batches++;
       }
     }
     // Своя выпечка — когда хлеба хватает.
