@@ -31,12 +31,14 @@ describe('куда ушли покупатели', () => {
     noteLost(stats, 'queue');
     const key = (s: StoreState) => lossAdvice(stats, s)[0].key;
     expect(key(rich())).toBe('loss.queue.hire');
-    // Ур. 3 (индекс 2): две кассы. Свободна вторая — нанять; обе заняты — расширяться (будет третья).
-    const two = rich({ level: 2, staff: [member()] });
+    // Ур. 3 (индекс 2): место под две кассы. Стоит одна — поставить вторую; вторая без кассира — нанять;
+    // обе заняты — расширяться (будет место под третью).
+    expect(key(rich({ level: 2, staff: [member()] }))).toBe('loss.queue.buy');
+    const two = rich({ level: 2, registers: 2, staff: [member()] });
     expect(key(two)).toBe('loss.queue.hire2');
     expect(key({ ...two, staff: [member(), member({ role: 'cashier2' })] })).toBe('loss.queue.register');
     // Универмаг: четыре кассы, все с кассирами — остаётся учить.
-    const all = rich({ level: 4, staff: ['cashier', 'cashier2', 'cashier3', 'cashier4'].map((role) => member({ role: role as 'cashier' })) });
+    const all = rich({ level: 4, registers: 4, staff: ['cashier', 'cashier2', 'cashier3', 'cashier4'].map((role) => member({ role: role as 'cashier' })) });
     expect(key(all)).toBe('loss.queue.train');
   });
 });

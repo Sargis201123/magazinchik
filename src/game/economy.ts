@@ -515,6 +515,8 @@ export interface StoreState {
   rack?: { level: number; stock: number };
   /** Своё зерно магазина: от него зависит расписание особых дней (у каждого игрока своё). */
   seed?: number;
+  /** Сколько касс куплено (registers.ts). Нет поля — старое сохранение: кассы ставились сами. */
+  registers?: number;
   /** Стаканчики в кофейном уголке (coffee.ts). */
   cups?: number;
   /** Ценовая война с Эдуардом (war.ts). */
@@ -670,6 +672,7 @@ export const newGame = (): StoreState => ({
   lifetime: newLifetime(),
   gift: { lastDate: '', streak: 0 },
   rack: { level: 0, stock: 6 },
+  registers: 1,
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [

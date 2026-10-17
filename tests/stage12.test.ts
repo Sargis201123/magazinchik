@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cashierScan, newGame, type StaffMember, type StoreState } from '../src/game/economy';
-import { nextRegisterCount, registerCount, registerOfRole } from '../src/game/registers';
+import { buyRegister, nextRegisterCount, nextRegisterPrice, registerCount, registerOfRole, registerSlots, REGISTER_PRICES } from '../src/game/registers';
 import {
   binCapacity,
   brewSeconds,
@@ -20,13 +20,31 @@ const at = (level: number, patch: Partial<StoreState> = {}): StoreState => ({ ..
 const member: StaffMember = { role: 'cashier', name: 0, skill: 1, wage: 360, months: 0 };
 
 describe('кассы растут вместе с помещением', () => {
-  it('1, 1, 2, 3, 4 кассы по уровням', () => {
-    expect([0, 1, 2, 3, 4].map((l) => registerCount(at(l)))).toEqual([1, 1, 2, 3, 4]);
+  it('места под кассы: 1, 1, 2, 3, 4 по уровням; сами кассы не появляются', () => {
+    expect([0, 1, 2, 3, 4].map((l) => registerSlots(at(l)))).toEqual([1, 1, 2, 3, 4]);
+    expect([0, 1, 2, 3, 4].map((l) => registerCount(at(l)))).toEqual([1, 1, 1, 1, 1]);
     expect(nextRegisterCount(at(1))).toBe(2);
     expect(nextRegisterCount(at(4))).toBeNull();
   });
 
-  it('старое сохранение с купленной второй кассой не теряет её', () => {
+  it('кассу покупают на свободное место, пока места есть', () => {
+    expect(nextRegisterPrice(at(1))).toBeNull();
+    expect(buyRegister(at(1))).toBeNull();
+    let s = at(4);
+    for (let n = 1; n < 4; n++) {
+      const before = s.money;
+      s = buyRegister(s)!;
+      expect(before - s.money).toBe(REGISTER_PRICES[n]);
+      expect(registerCount(s)).toBe(n + 1);
+    }
+    expect(buyRegister(s)).toBeNull();
+    expect(buyRegister(at(2, { money: 100 }))).toBeNull();
+  });
+
+  it('старые сохранения не теряют касс: поставленные при стройке и купленная вторая', () => {
+    const legacy = (level: number, patch: Partial<StoreState> = {}) => ({ ...at(level, patch), registers: undefined });
+    expect([0, 1, 2, 3, 4].map((l) => registerCount(legacy(l)))).toEqual([1, 1, 2, 3, 4]);
+    expect(registerCount(legacy(1, { upgrades: ['register2' as never] }))).toBe(2);
     expect(registerCount(at(1, { upgrades: ['register2' as never] }))).toBe(2);
   });
 

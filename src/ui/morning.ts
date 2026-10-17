@@ -146,7 +146,7 @@ import { LOAN_INTEREST, LOAN_MONTHS, loanOptions, loanPayment, loanTotal, repayL
 import { showReport } from './report';
 import { buyCups, COFFEE_CHANCE, CUP_COST, cupsOf, CUPS_MAX } from '../game/coffee';
 import { coffeePrice, coffeeSprite, GEAR, GEAR_IDS, gearAvailable, gearTier, nextGear, ovenBake, ovenBatch, ovenBatchCost, ovenSprite, upgradeGear, type GearId } from '../game/gear';
-import { isCashierRole, nextRegisterCount, registerCount, registerOfRole } from '../game/registers';
+import { buyRegister, isCashierRole, nextRegisterCount, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from '../game/registers';
 import { activeWar, answerWar } from '../game/war';
 import {
   adoptCat,
@@ -1603,6 +1603,20 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   };
 
   /** Оборудование: по строке на каждую линейку — что стоит, на что поменять, что это даст. */
+  /** Кассы: места под них даёт помещение, сами кассы — покупаются по одной, когда очередь того стоит. */
+  const registersBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    const n = registerCount(state);
+    const slots = registerSlots(state);
+    const price = nextRegisterPrice(state);
+    box.append(el('b', '', t('registers.title')), el('div', 'ui-muted', t('registers.note')));
+    const actions = price === null ? [] : [button(t('registers.buy', { cost: price }), () => update(buyRegister(getState()), 'success'), 'ui-chip', state.money < price)];
+    const model = GEAR.register.models[gearTier(state, 'register')];
+    const sub = `${t(model.nameKey)} · ${price !== null ? t('registers.free', { n: slots - n }) : nextRegisterCount(state) && (nextRegisterCount(state) ?? 0) > slots ? t('registers.full') : t('registers.max')}`;
+    box.append(artRow(gearArt(state, 'register', gearTier(state, 'register')) ?? 'counter0', { name: t('registers.count', { n, max: slots }), sub, actions }));
+    return box;
+  };
+
   const gearBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('gear.title')), el('div', 'ui-muted', t('gear.note')));
@@ -2370,7 +2384,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: level.warehouse, r: registerCount(state), g: level.guests })),
     );
     const reviews = state.reviews?.length ? [button(t('review.title'), () => showReviews(getState().reviews), 'ui-btn secondary')] : [];
-    out.push(current, button(t('report.button'), () => showReport(getState()), 'ui-btn secondary'), ...reviews, gearBox(state), bankBox(state));
+    out.push(current, button(t('report.button'), () => showReport(getState()), 'ui-btn secondary'), ...reviews, registersBox(state), gearBox(state), bankBox(state));
 
     const grow = el('div', 'ui-box');
     if (!next) {
@@ -2378,7 +2392,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     } else {
       grow.append(
         el('b', '', t('store.next', { name: t(next.nameKey) })),
-        el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, r: Math.max(registerCount(state), nextRegisterCount(state) ?? 0), g: next.guests, rent: next.rent })),
+        el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, r: nextRegisterCount(state) ?? registerSlots(state), g: next.guests, rent: next.rent })),
       );
       if (state.debt > 0) grow.append(el('div', 'ui-note', t('store.needNoDebt')));
       // После стройки может не хватить на счета по новой аренде — предупредить заранее.

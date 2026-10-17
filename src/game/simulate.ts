@@ -75,7 +75,7 @@ import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers
 import { buyUpgrade, carryOf, cartExtra, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
-import { CASHIER_ROLES, registerCount } from './registers';
+import { buyRegister, CASHIER_ROLES, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
 import { weatherFor } from './weather';
@@ -175,10 +175,10 @@ const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
   ['loader', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
   ['guard', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
   ['cleaner', (s) => s.level >= 3 && Boolean(staffOf(s, 'cashier'))],
-  // Кассиры на остальные кассы — когда кассы есть и гостей больше, чем пробьют уже нанятые.
-  ['cashier2', (s) => registerCount(s) >= 2 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 2],
-  ['cashier3', (s) => registerCount(s) >= 3 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 3],
-  ['cashier4', (s) => registerCount(s) >= 4 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 4],
+  // Кассиры на остальные кассы — когда есть место под кассу и гостей больше, чем пробьют уже нанятые.
+  ['cashier2', (s) => registerSlots(s) >= 2 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 2],
+  ['cashier3', (s) => registerSlots(s) >= 3 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 3],
+  ['cashier4', (s) => registerSlots(s) >= 4 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 4],
   ['manager', (s) => s.level >= 3 && s.staff.length >= 4],
 ];
 
@@ -316,6 +316,9 @@ export function simulate({
     if (tired) state = giveDayOff(state, tired.role) ?? state;
     if (hireStaff) {
       const role = HIRE_WHEN.find(([r, need]) => !staffOf(state, r) && need(state))?.[0];
+      // Под нового кассира сначала ставим кассу.
+      const price = nextRegisterPrice(state);
+      if (role && registerOfRole(role) >= registerCount(state) && price !== null && state.money >= reserve + price) state = buyRegister(state) ?? state;
       // Берём самого быстрого; «тормоз» за кассой навсегда упирает магазин в потолок.
       const candidate =
         role &&

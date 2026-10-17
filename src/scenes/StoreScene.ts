@@ -156,7 +156,7 @@ import {
   warehouseSpeed,
   wcDirt,
 } from '../game/gear';
-import { CASHIER_ROLES, nextRegisterCount, registerCount, registerOfRole } from '../game/registers';
+import { CASHIER_ROLES, nextRegisterCount, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from '../game/registers';
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, OVEN_BURN_SECONDS, startBatch, takeOutBread } from '../game/bakery';
 import { canWorkNight, NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from '../game/night';
 import { CAT_BEDS, CAT_TIP, catHome, catPatience, catTipChance, fedToday } from '../game/cat';
@@ -966,8 +966,10 @@ export class StoreScene extends Phaser.Scene {
     // Очередь растёт — подсказать, что поможет: кассир, вторая касса или встать за неё самому.
     if (this.queue.length >= 4 && this.state.day > TUTORIAL_DAYS) {
       if (!staffOf(this.state, 'cashier')) return t('hint.queueHire');
-      if (this.registers.every((_, i) => this.operator(i) !== null) && (nextRegisterCount(this.state) ?? 0) > this.registers.length)
-        return t('hint.queueRegister');
+      if (this.registers.every((_, i) => this.operator(i) !== null)) {
+        if (nextRegisterPrice(this.state) !== null) return t('hint.queueBuy');
+        if ((nextRegisterCount(this.state) ?? 0) > registerSlots(this.state)) return t('hint.queueRegister');
+      }
     }
     const extra = this.registers.findIndex((r, i) => i > 0 && this.operator(i) === 'owner' && r.customer && !r.customer.serving);
     if (extra > 0 && !this.sellerBusy) return t('hint.register2');
@@ -6097,7 +6099,7 @@ export class StoreScene extends Phaser.Scene {
         const decorChanged = s.decor !== this.state.decor;
         const adsChanged = s.ads !== this.state.ads;
         // Купили приёмник — его надо поставить на прилавок; сменили волну — только музыка.
-        const upgradesChanged = s.upgrades !== this.state.upgrades || s.gear !== this.state.gear || hasRadio(s) !== hasRadio(this.state);
+        const upgradesChanged = s.upgrades !== this.state.upgrades || s.registers !== this.state.registers || s.gear !== this.state.gear || hasRadio(s) !== hasRadio(this.state);
         const radioChanged = s.radio !== this.state.radio;
         // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
         const was = this.state;
