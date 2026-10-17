@@ -63,6 +63,7 @@ import {
   type ProductId,
   type StoreState,
   shelfKindOpen,
+  EXHAUSTED_DAYS,
   giveDayOff,
   isTired,
   roleOpen,
@@ -2301,7 +2302,8 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       // Люди устают: неделя без выходных — работают медленнее. Выходной можно дать заранее.
       const streak = m.streak ?? 0;
       if (isAbsent(state, m)) box.append(el('div', 'ui-note', t('staffTab.offToday')));
-      else if (m.offDay === state.day + 1) box.append(el('div', 'ui-note', t('staffTab.offTomorrow')));
+      else if (m.offDay === state.day + 1)
+        box.append(el('div', 'ui-note', t((m.streak ?? 0) >= EXHAUSTED_DAYS ? 'staffTab.exhausted' : 'staffTab.offTomorrow')));
       else {
         box.append(el('div', isTired(m) ? 'ui-note' : 'ui-muted', isTired(m) ? t('staffTab.tired', { n: streak }) : t('staffTab.streak', { n: streak })));
         box.append(button(t('staffTab.giveOff'), () => update(giveDayOff(getState(), m.role)), 'ui-chip'));
