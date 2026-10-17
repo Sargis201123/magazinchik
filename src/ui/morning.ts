@@ -972,7 +972,9 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     const actions = amounts.map((n) =>
       button(t('coffee.buy', { n, cost: n * CUP_COST }), () => update(buyCups(getState(), n), 'success'), 'ui-chip', state.money < n * CUP_COST),
     );
-    box.append(artRow(coffeeSprite(state), { name: t('coffee.cups', { n: cupsOf(state), max: CUPS_MAX }), actions }));
+    const row = artRow(coffeeSprite(state), { name: t('coffee.cups', { n: cupsOf(state), max: CUPS_MAX }), actions });
+    row.querySelector('.ui-item-actions')?.classList.add('stack');
+    box.append(row);
     box.append(...staffNeed(state, 'barista', 'coffee.noBarista'));
     return box;
   };

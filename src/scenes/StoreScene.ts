@@ -90,6 +90,7 @@ import {
   isCrowdDay,
   MASKS,
   quakeBreak,
+  setBigDaySeed,
   ROADWORKERS,
   TOURISTS,
   weddingOrder,
@@ -119,6 +120,7 @@ import { DOG_DAY_CATCH, hasDog, hasWatchman } from '../game/watch';
 import { contestOf, juryDay, tierKey } from '../game/contest';
 import { sonyaVisits, sunflowersPlanted } from '../game/drama';
 import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
+import { reportError, setErrorContext } from '../platform/errors';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
@@ -772,6 +774,10 @@ export class StoreScene extends Phaser.Scene {
   private bobikWag?: Phaser.Time.TimerEvent;
   /** Магазин закрыт на ночь (роллеты опущены): Бобик сидит настороже, у двери — сторож. */
   private closed = false;
+  /** Рабочий день идёт (от «Открыть магазин» до итогов) — для сторожа зависаний. */
+  private dayOpen = false;
+  /** Сколько мс день стоит без открытых окон — сторож запускает его дальше. */
+  private stallMs = 0;
   private nightWatch: Phaser.GameObjects.GameObject[] = [];
   /** Сколько кубков стоит на прилавке; жюри конкурса сегодня: ждём, пришло, ушло. */
   private builtCup = 0;
@@ -805,8 +811,12 @@ export class StoreScene extends Phaser.Scene {
   }
 
   create(): void {
+    setErrorContext(() => ({ day: this.state?.day, level: this.state?.level, running: this.running, ua: navigator.userAgent.slice(0, 120) }));
     const save = loadGame();
     this.state = ensurePlan(save ?? newGame());
+    // Своё расписание особых дней: зерно появляется у новой игры и у старых сохранений при первом запуске.
+    if (!this.state.seed) this.state = { ...this.state, seed: 1 + Math.floor(Math.random() * 1e9) };
+    setBigDaySeed(this.state.seed!);
     // Покупки за звёзды — по данным Telegram: вернутся и на новом телефоне.
     void restorePurchases().then((ids) => {
       const owned = (ids ?? []).filter(isDecorId);
@@ -871,6 +881,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   update(_time: number, deltaMs: number): void {
+    this.watchStall(deltaMs);
     this.scarePigeons();
     ambience.update(this.weather, this.evening, this.running, yearTime(this.state.day));
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
@@ -6107,7 +6118,44 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Сторож: магазин открыт, время не вышло, окон нет, а день стоит больше 3 секунд — значит,
+   * что-то не сняло паузу (окно закрылось не своей кнопкой). Запускаем день дальше и сообщаем.
+   */
+  private watchStall(deltaMs: number): void {
+    const stuck = this.dayOpen && !this.running && this.timeLeft > 0 && !document.querySelector('.ui-modal, .ui-dialog');
+    this.stallMs = stuck ? this.stallMs + deltaMs : 0;
+    if (this.stallMs < 3000) return;
+    this.stallMs = 0;
+    this.time.paused = false;
+    this.running = true;
+    reportError(new Error('day stalled, resumed'), 'watchdog');
+  }
+
   private startDay(): void {
+    this.dayOpen = true;
+    this.stallMs = 0;
+    try {
+      this.prepareDay();
+    } catch (error) {
+      // Что-то из утренних дел сломалось (редкое сочетание событий) — день всё равно начинается.
+      reportError(error, 'startDay');
+    }
+    this.timeLeft = DAY_SECONDS;
+    this.nextSpawn = 1;
+    this.running = true;
+    try {
+      this.startBigDayIfAny();
+    } catch (error) {
+      reportError(error, 'bigDay');
+      this.time.paused = false;
+      this.running = true;
+    }
+  }
+
+  /** Утренние дела перед открытием: персонал, события дня, гости сюжета. */
+  private prepareDay(): void {
+    this.stats = emptyDayStats();
     for (const r of this.registers) {
       r.scan = null;
       r.customer = null;
@@ -6136,7 +6184,6 @@ export class StoreScene extends Phaser.Scene {
     const season = seasonFor(this.state.day);
     if (season) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
     else if (isFairDay(this.state.day)) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, t('popup.fair'), '#fee761'));
-    this.stats = emptyDayStats();
     if (isFairDay(this.state.day)) this.stats.fair = true;
     this.startStall();
     this.setSpeed(1);
@@ -6157,14 +6204,15 @@ export class StoreScene extends Phaser.Scene {
       const kind = Phaser.Utils.Array.GetRandom([...LIVE_KINDS]);
       this.time.delayedCall(Phaser.Math.FloatBetween(0.2, 0.6) * DAY_SECONDS * 1000, () => this.running && this.startLiveEvent(kind));
     }
-    this.timeLeft = DAY_SECONDS;
-    this.nextSpawn = 1;
     this.eveningMarkdown = false;
     this.toiletDirt = 0;
     this.refreshToilet();
     for (const piece of this.trash) piece.destroy();
     this.trash.clear();
-    this.running = true;
+  }
+
+  /** Особый день: второй и дальше день — сразу, первый — сначала новость (день стоит, пока её читают). */
+  private startBigDayIfAny(): void {
     this.clearBigDay();
     const big = bigDayFor(this.state.day);
     const progress = bigDayProgress(this.state.day);
@@ -6482,6 +6530,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private finishDay(): void {
+    this.dayOpen = false;
     this.running = false;
     this.clearBigDay();
     this.night = false;

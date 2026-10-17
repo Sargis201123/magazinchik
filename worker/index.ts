@@ -3,7 +3,7 @@
 // то есть /api/*. Логика — в api/_lib/handlers.ts (та же, что на Vercel). Раз в час cron шлёт
 // напоминания от бота (api/_lib/social.ts, нужна база D1).
 
-import { starsInvoice, starsOwned, starsRefund, starsSetup, telegramWebhook } from '../api/_lib/handlers.js';
+import { clientError, starsInvoice, starsOwned, starsRefund, starsSetup, telegramWebhook } from '../api/_lib/handlers.js';
 import { sendReminders, socialClaim, socialPing } from '../api/_lib/social.js';
 import type { Env } from '../api/_lib/telegram.js';
 
@@ -17,6 +17,7 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   '/api/telegram': { method: 'POST', handler: telegramWebhook },
   '/api/stars-setup': { method: 'GET', handler: starsSetup },
   '/api/stars-refund': { method: 'GET', handler: starsRefund },
+  '/api/client-error': { method: 'POST', handler: clientError },
   '/api/social-ping': { method: 'POST', handler: socialPing },
   '/api/social-claim': { method: 'POST', handler: socialClaim },
 };
