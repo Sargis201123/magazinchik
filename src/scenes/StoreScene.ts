@@ -3302,15 +3302,16 @@ export class StoreScene extends Phaser.Scene {
     const base = next.h + 4;
     // back — здание отступает от тротуара (у кафе перед ним веранда).
     type Neighbor = { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number; neon: number; dark?: boolean; back?: number };
-    // Помещение Эдуарда: пустует, «МегаМарт» по сюжету, а после сюжета — его ларёк, маркет и молл.
+    // Помещение напротив: пустует, «МегаМарт» по сюжету, а после сюжета — боссы района по очереди.
     const look = eduardLook(this.state);
     this.builtEduard = look;
     const eduard: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
       vacant: { h: 130, name: 'eduard.stage0', sign: 0x5a6988, awning: 0x8b9bb4, roof: 0xc0cbdc, neon: 0, dark: true },
       mega: { h: 140, name: 'eduard.mega', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec, neon: 0x6cd8ff },
       kiosk: { h: 110, name: 'eduard.stage1', sign: 0x68386c, awning: 0xb55088, roof: 0xe0c8dc, neon: 0xff8ad8 },
-      market: { h: 145, name: 'eduard.stage2', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec, neon: 0x6cd8ff },
-      mall: { h: 190, name: 'eduard.stage3', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040 },
+      discount: { h: 145, name: 'eduard.stage2', sign: 0xb13e53, awning: 0xfee761, roof: 0xf2e6c8, neon: 0xffd040 },
+      farm: { h: 135, name: 'eduard.stage3', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd8e4c0, neon: 0x9cff7a },
+      mall: { h: 190, name: 'eduard.stage4', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040 },
     };
     const neighbors: Neighbor[] = [
       { x: -136 - WING_OUTER, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860, back: VERANDA_D },
