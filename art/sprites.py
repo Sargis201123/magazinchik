@@ -4764,6 +4764,9 @@ def main():
     import trolley
 
     trolley.main()
+    import boat
+
+    boat.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

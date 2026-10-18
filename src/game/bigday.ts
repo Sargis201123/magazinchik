@@ -21,6 +21,7 @@ export type BigDayId =
   | 'heatwave'
   | 'frost'
   | 'flood'
+  | 'robbery'
   | 'quake'
   | 'carnival'
   | 'parade'
@@ -76,6 +77,8 @@ export const BIG_DAYS: Record<BigDayId, BigDay> = {
     demand: { water: 3, bread: 1.6, soap: 1.5, detergent: 1.5, flowers: 0.2, icecream: 0.3 },
     crowd: false,
   },
+  // Ограбление с заложниками: магазин полдня стоит, вокруг полиция; после штурма — сочувствие района.
+  robbery: { id: 'robbery', icon: '🚨', guests: 0.7, demand: {}, crowd: false },
   quake: { id: 'quake', icon: '🌋', guests: 0.55, demand: { water: 2.2, bread: 1.4 }, crowd: false },
   carnival: {
     id: 'carnival',
@@ -164,6 +167,21 @@ const days = (id: BigDayId): number => BIG_DAYS[id].days ?? 1;
 
 /** Шанс начала каждого особого дня в своё время года (за один день). */
 function chances(day: number): [BigDayId, number][] {
+  // Ограбление — редкость и только в опытном магазине (не раньше ROBBERY_FROM).
+  const robbery: [BigDayId, number][] = day >= ROBBERY_FROM ? [['robbery', 0.006]] : [];
+  return [...seasonChances(day), ...robbery];
+}
+
+/** С какого дня возможно ограбление. */
+export const ROBBERY_FROM = 30;
+/** Ограбление по долям дня: захват, освобождение троих, штурм. */
+export const ROBBERY_AT = 0.15;
+export const ROBBERY_RELEASE = 0.42;
+export const ROBBERY_STORM = 0.8;
+/** После штурма о магазине говорит весь район — рейтинг немного растёт. */
+export const ROBBERY_RATING = 0.1;
+
+function seasonChances(day: number): [BigDayId, number][] {
   const time = yearTime(day);
   if (time === 'summer')
     return [

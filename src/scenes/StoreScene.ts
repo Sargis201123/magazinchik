@@ -80,6 +80,10 @@ import {
   BIG_DAYS,
   BLACKOUT_CHECKOUT,
   BLACKOUT_UNTIL,
+  ROBBERY_AT,
+  ROBBERY_RATING,
+  ROBBERY_RELEASE,
+  ROBBERY_STORM,
   bigDayExtraItems,
   bigDayFor,
   bigDayNightGuests,
@@ -772,6 +776,8 @@ export class StoreScene extends Phaser.Scene {
   private oven?: Oven;
   /** До какого времени в зале пахнет свежим хлебом. */
   private aromaUntil = 0;
+  /** Идёт захват магазина (особый день «ограбление»): новые покупатели не заходят. */
+  private siege = false;
   /** Сколько противней сегодня испекли для соседних магазинов. */
   private wholesaleBaked = 0;
   /** Идёт ночная смена; уже спрашивали про неё сегодня. */
@@ -930,7 +936,7 @@ export class StoreScene extends Phaser.Scene {
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;
       const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0) + (isCrowdDay(this.state.day) && !this.night ? CROWD_EXTRA_GUESTS : 0);
-      if (this.nextSpawn <= 0 && this.customers.size < maxCustomers) {
+      if (this.nextSpawn <= 0 && this.customers.size < maxCustomers && !this.siege) {
         this.spawnCustomer();
         const interval = spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
@@ -5447,6 +5453,11 @@ export class StoreScene extends Phaser.Scene {
       const thought = this.think(c.sprite, id);
       await this.walk(c.sprite, stand.x + Phaser.Math.Between(-8, 8) * (fixture ? 0.4 : 1), stand.y);
       await this.wait(500);
+      // Пока шёл — магазин захватили (или ушёл по другой причине): к полке уже не тянется.
+      if (c.gone) {
+        this.endThought(thought, false);
+        return;
+      }
       const result = this.tryTake(c, id);
       this.reachShelf(c, this.spotOf(index), result === 'taken' ? id : null);
       if (result === 'taken' && c.sprite.y < this.layout.h && Math.random() < SPILL_CHANCE) this.spill(c.sprite.x, c.sprite.y + 2);
@@ -5459,6 +5470,7 @@ export class StoreScene extends Phaser.Scene {
       }
     };
     await this.walk(c.sprite, door.x, door.y - 10);
+    if (c.gone) return;
     // В дождь и снег с улицы несут грязь.
     const muddy = isWet(this.weather) || this.weather === 'snow';
     const mud = [...this.trash].filter((piece) => piece.texture.key === 'mud').length;
@@ -5466,10 +5478,12 @@ export class StoreScene extends Phaser.Scene {
 
     if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
     for (const id of wanted) {
+      if (c.gone) return;
       const index = shelfFor(this.state, id);
       if (index < 0) continue;
       await visit(id, index);
     }
+    if (c.gone) return;
 
     if (Math.random() < TRASH_CHANCE) this.dropTrash(c.sprite.x, c.sprite.y);
     if (c.regular) this.regularVerdict(c);
@@ -5485,9 +5499,12 @@ export class StoreScene extends Phaser.Scene {
     }
 
     if (Math.random() < TOILET_CHANCE) await this.visitToilet(c);
+    if (c.gone) return;
     await this.buyCoffee(c);
+    if (c.gone) return;
 
     if (await this.useKiosk(c)) return;
+    if (c.gone) return;
     this.queue.push(c);
     this.layoutQueue();
     const spot = this.registerOf(c)?.spot ?? { x: this.layout.queue.x, y: this.queueSpotY(this.queue.indexOf(c)) };
@@ -5810,7 +5827,13 @@ export class StoreScene extends Phaser.Scene {
   private streetLife(): void {
     const left = -60;
     const right = this.next.w + 60;
-    if (Math.random() < 0.45) {
+    // Наводнение: машины не ходят, людей на улице мало — зато по воде плавают лодки.
+    const flood = this.bigObjs.length > 0 && bigDayFor(this.state.day) === 'flood';
+    if (flood) {
+      if (Math.random() < 0.12) this.rowBoat(left, right);
+      if (Math.random() >= 0.12) return;
+    }
+    if (Math.random() < (flood ? 1 : 0.45)) {
       const fromLeft = Math.random() < 0.5;
       const y = this.streetY + Phaser.Math.Between(-5, 5);
       const person = this.makePerson(fromLeft ? left : right, y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)));
@@ -5818,6 +5841,7 @@ export class StoreScene extends Phaser.Scene {
       if (Math.random() < 0.1) this.addCompanion(person);
       void this.walk(person, fromLeft ? right : left, y, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1.1)).then(() => person.destroy());
     }
+    if (flood) return;
     if (Math.random() < 0.04) this.driveBus();
     if (Math.random() < 0.3) {
       const toRight = Math.random() < 0.5;
@@ -5850,6 +5874,38 @@ export class StoreScene extends Phaser.Scene {
       car.setScale(toRight ? 1 : -1, 1);
       this.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
     }
+  }
+
+  /** Наводнение: по затопленной дороге проплывает лодка с гребцом (иногда — с пассажиром). */
+  private rowBoat(left: number, right: number): void {
+    const toRight = Math.random() < 0.5;
+    const y = this.streetY + Phaser.Math.Between(26, 40);
+    const hull = this.art(0, 4, 'boat');
+    const oar = this.art(4, 4, 'boat_oar').setOrigin(0.1, 0.2);
+    const rower = this.makePerson(4, -4, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
+    this.people.delete(rower);
+    rower.setScale(0.9);
+    const parts: Phaser.GameObjects.GameObject[] = [rower, oar, hull];
+    if (Math.random() < 0.4) {
+      const guest = this.makePerson(-10, -4, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
+      this.people.delete(guest);
+      guest.setScale(0.9);
+      parts.unshift(guest);
+    }
+    const boat = this.add.container(toRight ? left : right, y, parts).setDepth(y);
+    boat.setScale(toRight ? 1 : -1, 1);
+    this.tweens.add({ targets: oar, angle: { from: -18, to: 22 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: boat, y: y + 1.2, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({
+      targets: boat,
+      x: toRight ? right : left,
+      duration: Phaser.Math.Between(9000, 13000),
+      onComplete: () => {
+        this.tweens.killTweensOf(boat);
+        this.tweens.killTweensOf(oar);
+        boat.destroy();
+      },
+    });
   }
 
   /** Иногда по дороге едет автобус и останавливается на остановке. */
@@ -6437,6 +6493,8 @@ export class StoreScene extends Phaser.Scene {
       })).setDepth(-5);
     }
     if (id === 'flood') {
+      // Сразу по воде плывёт первая лодка: машины сегодня не ездят.
+      keep(this.time.delayedCall(1500, () => this.running && this.rowBoat(-60, this.next.w + 60)));
       // Вода стоит от крыльца до сквера за дорогой; по ней расходятся круги.
       const water = keep(this.add.rectangle(wide.x, h + FACADE_H + 2, wide.w, top + 88 - h - FACADE_H - 2, 0x2f7fd8).setOrigin(0).setAlpha(0.5).setDepth(-5));
       keep(this.tweens.add({ targets: water, alpha: 0.58, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }));
@@ -6568,6 +6626,7 @@ export class StoreScene extends Phaser.Scene {
       });
     }
     if (id === 'sanitary' && this.inspector === 'none') this.inspector = 'pending';
+    if (id === 'robbery') this.robbery(keep, at, road);
     if (id === 'wedding') {
       const car = keep(this.art(door.x - 90, road, 'car').setTint(0xffffff).setDepth(road + 6));
       keep(this.tweens.add({ targets: car, y: road - 0.5, duration: 900, yoyo: true, repeat: -1 }));
@@ -6576,6 +6635,132 @@ export class StoreScene extends Phaser.Scene {
         this.popup(w / 2, h / 2 - 20, t('popup.weddingSoon'), '#ffd0e0');
       });
     }
+  }
+
+  /**
+   * Ограбление с заложниками. Утром — тревожная новость; к полудню в магазин заходят пятеро в масках,
+   * всех — покупателей, персонал и хозяина — сгоняют в угол, торговля стоит. Снаружи — полиция и фургон
+   * ОМОНа, переговоры через мегафон; троих отпускают, грабители требуют вертолёт и деньги. Под вечер —
+   * штурм: вспышка, грабителей уводят в фургон, заложники свободны, работа продолжается.
+   */
+  private robbery(
+    keep: <T extends { destroy: () => void }>(obj: T) => T,
+    at: (share: number, fn: () => void) => void,
+    road: number,
+  ): void {
+    const { w, h, door, wallH } = this.layout;
+    const hostages: Phaser.GameObjects.Container[] = [];
+    const robbers: Phaser.GameObjects.Container[] = [];
+    const outside = h + FACADE_H + 12;
+    const say = (x: number, y: number, key: TextKey, color: string) => this.popup(x, y, t(key), color);
+    const corner = (i: number) => ({ x: 14 + (i % 5) * 10, y: wallH + 34 + Math.floor(i / 5) * 9 });
+    at(ROBBERY_AT, () => {
+      this.siege = true;
+      sound.bad();
+      haptic.error();
+      // Покупатели бросают корзины и идут в угол; очередь и кассы пустеют.
+      for (const c of [...this.customers]) {
+        c.gone = true;
+        c.patience?.remove();
+        c.bubble.setVisible(false);
+        this.customers.delete(c);
+        hostages.push(c.sprite);
+      }
+      this.queue = [];
+      for (const r of this.registers) {
+        r.customer = null;
+        r.scan = null;
+      }
+      // Персонал бросает работу (их циклы останавливаются) и тоже в угол; хозяин — с ними.
+      this.staffGen++;
+      this.managerOnFloor = false;
+      for (const worker of this.workers.values()) if (!hostages.includes(worker.sprite)) hostages.push(worker.sprite);
+      hostages.push(this.seller);
+      hostages.forEach((p, i) => {
+        this.tweens.killTweensOf(p);
+        const spot = corner(i);
+        void this.walk(p, spot.x, spot.y).then(() => {
+          if (p.active) this.setFacing(p, 'down');
+        });
+      });
+      // Пятеро в масках: двое у заложников, один у кассы, двое у входа.
+      const posts = [
+        { x: 66, y: wallH + 40 },
+        { x: 70, y: wallH + 56 },
+        { x: this.layout.counter.x - 14, y: this.layout.counter.y + 6 },
+        { x: door.x - 12, y: h - 14 },
+        { x: door.x + 12, y: h - 14 },
+      ];
+      posts.forEach((post, i) => {
+        const robber = keep(this.makePerson(door.x + (i - 2) * 6, outside, { shirt: 0x181425, pants: 0x262b44, skin: 0xf2d3ab, hair: 0x181425, style: 'beanie' }));
+        robbers.push(robber);
+        void this.walk(robber, door.x, h - 8).then(() => this.walk(robber, post.x, post.y));
+      });
+      say(w / 2, h / 2 - 20, 'robbery.enter', '#ffd0d0');
+    });
+    // Полиция: машина с мигалкой и фургон ОМОНа у входа, офицеры за машинами.
+    at(ROBBERY_AT + 0.03, () => {
+      sound.news();
+      const car = keep(this.add.container(door.x + 50, road, [this.art(0, 0, 'car_sedan').setTint(0xffffff), this.art(0, 0, 'car_sedan_lights')]).setDepth(road));
+      const blue = keep(this.add.rectangle(door.x + 46, road - 9, 4, 2, 0x0099db).setDepth(road + 1));
+      const red = keep(this.add.rectangle(door.x + 51, road - 9, 4, 2, 0xe43b44).setDepth(road + 1));
+      keep(this.time.addEvent({ delay: 300, loop: true, callback: () => { blue.setVisible(!blue.visible); red.setVisible(!blue.visible); } }));
+      keep(this.add.container(door.x - 60, road, [this.art(0, 0, 'car_van').setTint(0x3a4466), this.art(0, 0, 'car_van_lights')]).setDepth(road));
+      void car;
+      for (let i = 0; i < 4; i++) {
+        const cop = keep(this.makePerson(door.x - 40 + i * 26, road - 16, { shirt: 0x124e89, pants: 0x262b44, skin: 0xeec39a, hair: 0x124e89, style: 'cap' }));
+        this.setFacing(cop, 'up');
+      }
+    });
+    at(ROBBERY_AT + 0.07, () => say(door.x, outside + 6, 'robbery.police', '#d0e0ff'));
+    at(ROBBERY_AT + 0.13, () => robbers[0]?.active && say(robbers[0].x, robbers[0].y - 16, 'robbery.demand', '#ffd0d0'));
+    at(ROBBERY_AT + 0.21, () => say(door.x, outside + 6, 'robbery.deal', '#d0e0ff'));
+    // Троих покупателей отпускают: выходят и уходят по тротуару.
+    at(ROBBERY_RELEASE, () => {
+      const freed = hostages.filter((p) => p !== this.seller && ![...this.workers.values()].some((wk) => wk.sprite === p)).slice(0, 3);
+      for (const p of freed) {
+        hostages.splice(hostages.indexOf(p), 1);
+        void this.walk(p, door.x, h + 16).then(() => {
+          if (p.active) void this.strollAway(p);
+        });
+      }
+      sound.good();
+      say(door.x, h - 24, 'robbery.released', '#c8ffb0');
+    });
+    at(ROBBERY_RELEASE + 0.1, () => robbers[0]?.active && say(robbers[0].x, robbers[0].y - 16, 'robbery.where', '#ffd0d0'));
+    at(ROBBERY_RELEASE + 0.2, () => say(door.x, outside + 6, 'robbery.stall', '#d0e0ff'));
+    // ОМОН строится у входа.
+    at(ROBBERY_STORM - 0.08, () => {
+      for (let i = 0; i < 5; i++) {
+        const trooper = keep(this.makePerson(door.x - 24 + i * 12, outside + 4, { shirt: 0x262b44, pants: 0x181425, skin: 0xeec39a, hair: 0x181425, style: 'cap', acc: 'vest', accTint: 0x3a4466 }));
+        this.setFacing(trooper, 'up');
+      }
+      say(door.x, outside - 6, 'robbery.omon', '#d0e0ff');
+    });
+    // Штурм: вспышка и грохот, грабителей уводят, заложники свободны.
+    at(ROBBERY_STORM, () => {
+      const flash = this.add.rectangle(-1200, -1200, this.next.w + 2400, this.next.h + 2400, 0xffffff).setOrigin(0).setDepth(LIGHT_DEPTH + 5).setAlpha(0.9);
+      this.tweens.add({ targets: flash, alpha: 0, duration: 900, onComplete: () => flash.destroy() });
+      sound.rumble();
+      haptic.error();
+      this.cameras.main.shake(400, 0.006);
+      say(w / 2, h / 2 - 20, 'robbery.storm', '#c8ffb0');
+      for (const robber of robbers) void this.walk(robber, door.x, h + 16).then(() => {
+        if (robber.active) robber.setVisible(false);
+      });
+      for (const p of hostages) {
+        if (p === this.seller || [...this.workers.values()].some((wk) => wk.sprite === p)) continue;
+        void this.walk(p, door.x, h + 16).then(() => {
+          if (p.active) void this.strollAway(p);
+        });
+      }
+      this.siege = false;
+      this.state = { ...this.state, rating: Math.min(5, Math.round((this.state.rating + ROBBERY_RATING) * 100) / 100) };
+      const home = this.ownerHome();
+      void this.walk(this.seller, home.x, home.y);
+      this.syncStaff();
+      this.time.delayedCall(1500, () => this.popup(w / 2, h / 2 - 8, t('robbery.thanks', { r: ROBBERY_RATING }), '#fff3b0'));
+    });
   }
 
   /** Автобус туристов: подъезжает к магазину, из него разом выходит толпа. */
@@ -6650,6 +6835,11 @@ export class StoreScene extends Phaser.Scene {
 
   private finishDay(): void {
     this.dayOpen = false;
+    // Захват не успел закончиться (день досрочно закрыт) — персонал возвращается к работе.
+    if (this.siege) {
+      this.siege = false;
+      this.syncStaff();
+    }
     this.running = false;
     this.clearBigDay();
     this.night = false;
