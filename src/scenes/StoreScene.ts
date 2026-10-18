@@ -1402,13 +1402,22 @@ export class StoreScene extends Phaser.Scene {
   /** То, что можно нажать, мягко пульсирует подсветкой: пустые полки (есть товар на складе) и мусор. */
   private pulseHighlights(): void {
     const pulse = 1.5 + Math.sin(this.time.now / 260) * 1.2;
-    for (const view of this.shelfViews) if (view.glow) view.glow.outerStrength = view.needsStock ? pulse : 0;
-    for (const piece of this.trash) {
-      const glow = piece.getData('glow') as Phaser.FX.Glow | undefined;
-      if (glow) glow.outerStrength = pulse;
-    }
-    if (this.binGlow) this.binGlow.outerStrength = this.binFull() && !this.binBusy ? pulse : 0;
-    if (this.fuseGlow) this.fuseGlow.outerStrength = this.blackout ? pulse : 0;
+    for (const view of this.shelfViews) this.glowOn(view.bg, view.glow, view.needsStock ? pulse : 0);
+    for (const piece of this.trash) this.glowOn(piece, piece.getData('glow') as Phaser.FX.Glow | undefined, pulse);
+    if (this.binImg) this.glowOn(this.binImg, this.binGlow, this.binFull() && !this.binBusy ? pulse : 0);
+    if (this.fuseBox) this.glowOn(this.fuseBox, this.fuseGlow, this.blackout ? pulse : 0);
+  }
+
+  /**
+   * Подсветка «нажми сюда». Погасшую выключаем целиком: даже с нулевой силой эффект перерисовывал
+   * объект через отдельный буфер каждый кадр — на телефоне это заметно садило FPS.
+   */
+  private glowOn(obj: Phaser.GameObjects.Image, glow: Phaser.FX.Glow | undefined, strength: number): void {
+    if (!glow || !obj.preFX) return;
+    if (strength > 0) {
+      if (!obj.preFX.enabled) obj.preFX.enable();
+      glow.outerStrength = strength;
+    } else if (obj.preFX.enabled) obj.preFX.disable();
   }
 
   /** Двери разъезжаются, когда к ним подходят. */
@@ -1447,6 +1456,21 @@ export class StoreScene extends Phaser.Scene {
       if (light.neon !== undefined && evening < 0.18) alpha *= Math.sin((now + light.neon) / 41) + Math.sin((now + light.neon) / 97) > 0 ? 1 : 0.2;
       light.obj.setAlpha(alpha);
     }
+  }
+
+  /** Много мелких цветных квадратиков — одной картинкой (вдвое чётче мира, чтобы не мылились). */
+  private bakeSpots(list: { x: number; y: number; size: number; color: number }[]): Phaser.GameObjects.RenderTexture {
+    const K = 2;
+    const minX = Math.min(...list.map((p) => p.x - p.size / 2)) - 1;
+    const minY = Math.min(...list.map((p) => p.y - p.size / 2)) - 1;
+    const maxX = Math.max(...list.map((p) => p.x + p.size / 2)) + 1;
+    const maxY = Math.max(...list.map((p) => p.y + p.size / 2)) + 1;
+    const g = this.make.graphics({}, false);
+    for (const p of list) g.fillStyle(p.color, 1).fillRect((p.x - p.size / 2 - minX) * K, (p.y - p.size / 2 - minY) * K, p.size * K, p.size * K);
+    const rt = this.add.renderTexture(minX, minY, Math.ceil((maxX - minX) * K), Math.ceil((maxY - minY) * K)).setOrigin(0).setScale(1 / K);
+    rt.draw(g);
+    g.destroy();
+    return rt;
   }
 
   /**
@@ -1642,24 +1666,28 @@ export class StoreScene extends Phaser.Scene {
         placed++;
       }
     };
+    // Пятна листвы и цвета на кронах — тысячи крошечных квадратиков. Отдельными объектами они съедали
+    // кадр на телефоне, поэтому рисуем их один раз в картинку (по одной на слой глубины).
+    const spots = new Map<number, { x: number; y: number; size: number; color: number }[]>();
+    const spot = (depth: number, x: number, y: number, size: number, color: number) => {
+      if (!spots.has(depth)) spots.set(depth, []);
+      spots.get(depth)!.push({ x, y, size, color });
+    };
     if (this.weather !== 'leaves' && this.weather !== 'snow') {
       trees.forEach((tree, i) => {
         // Осенью кроны в рыжих и жёлтых пятнах листвы.
         if (time === 'autumn') {
           tree.setTint(i % 3 === 2 ? 0xffffff : 0xffe0a0);
           const tones = i % 3 === 2 ? [0xfeae34] : [0xf77622, 0xfeae34, 0xfee761, 0xe43b44];
-          for (let n = 0; n < (i % 3 === 2 ? 5 : 22); n++) {
-            keep(this.add.rectangle(tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 2.4, 2.4, rnd.pick(tones)).setDepth(tree.depth + 0.5));
-          }
+          for (let n = 0; n < (i % 3 === 2 ? 5 : 22); n++) spot(tree.depth + 0.5, tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 2.4, rnd.pick(tones));
         }
         // Весной кроны в розово-белом цвету.
         if (time === 'spring') {
-          for (let n = 0; n < 14; n++) {
-            keep(this.add.rectangle(tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 1.6, 1.6, rnd.pick([0xffd2e2, 0xffffff, 0xf6a5c0])).setDepth(tree.depth + 0.5));
-          }
+          for (let n = 0; n < 14; n++) spot(tree.depth + 0.5, tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 1.6, rnd.pick([0xffd2e2, 0xffffff, 0xf6a5c0]));
         }
       });
     }
+    for (const [depth, list] of spots) keep(this.bakeSpots(list).setDepth(depth));
     const flowers = [0xffffff, 0xf6757a, 0xfee761, 0xb55088, 0xe43b44, 0x2ce8f5];
     if (time === 'spring' || time === 'summer') {
       scatter(time === 'spring' ? 160 : 70, (x, y) => keep(this.art(x, y, 'flower').setTint(rnd.pick(flowers)).setDepth(-9)));
@@ -2338,7 +2366,7 @@ export class StoreScene extends Phaser.Scene {
     oven.glow.setAlpha(0);
     oven.bar.setVisible(false);
     oven.fill.setVisible(false);
-    if (oven.fx) oven.fx.outerStrength = 0;
+    if (oven.fx) this.glowOn(oven.img, oven.fx, 0);
   }
 
   /**
@@ -2462,7 +2490,7 @@ export class StoreScene extends Phaser.Scene {
       oven.fill.setVisible(true).setFillStyle(k > 0.4 ? 0x63c74d : 0xe43b44);
       oven.fill.width = 15 * k;
       oven.glow.setAlpha(Math.floor(now / 250) % 2 ? 0.7 : 0.3);
-      if (oven.fx) oven.fx.outerStrength = 2 + 2 * Math.sin(now / 120);
+      if (oven.fx) this.glowOn(oven.img, oven.fx, 2 + 2 * Math.sin(now / 120));
       if (Math.random() < 0.06) this.steamPuff(oven.img.x, oven.img.y - 6);
     }
   }
