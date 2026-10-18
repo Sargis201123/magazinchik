@@ -202,11 +202,10 @@ describe('автозаказ, ценники, тележки', () => {
     expect(markdownSurplus(s, () => 10).count).toBe(0);
   });
 
-  it('с тележками покупатель иногда берёт лишний товар', async () => {
-    const { cartExtra } = await import('../src/game/upgrades');
-    expect(cartExtra(at(1), () => 0)).toBe(0);
-    expect(cartExtra({ ...at(1), upgrades: ['cart'] }, () => 0.1)).toBe(1);
-    expect(cartExtra({ ...at(1), upgrades: ['cart'] }, () => 0.9)).toBe(0);
+  it('с тележками в очереди ждут дольше', async () => {
+    const { cartPatience } = await import('../src/game/upgrades');
+    expect(cartPatience(at(1))).toBe(1);
+    expect(cartPatience({ ...at(1), upgrades: ['cart'] })).toBeGreaterThan(1);
   });
 });
 

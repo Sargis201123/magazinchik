@@ -71,8 +71,8 @@ import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
-import { buyUpgrade, carryOf, cartExtra, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
-import { CARRY } from './economy';
+import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
+import { CARRY, OWN_PRODUCTS } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
 import { buyRegister, CASHIER_ROLES, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
@@ -88,7 +88,7 @@ import { dayDemand } from './demand';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
 import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
-import { buyRadio, hasRadio, radioExtra, radioPatience, RADIO_PRICE, setStation } from './radio';
+import { buyRadio, hasRadio, radioPatience, RADIO_PRICE, radioTolerance, setStation } from './radio';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
 
 export { rng };
@@ -469,16 +469,24 @@ export function simulate({
         return [sid, haggle(s, newDeal(s), 0.05, state.rating, random(), haggleBonus(state)).deal];
       }),
     );
+    // Доля спроса на товар: в сезон любимые товары берут чаще.
+    const weight = (p: ProductId) =>
+      (seasonFor(state.day)?.demand[p] ?? 1) * seasonalDemand(p, state.day) * dayDemand(state, p, aromaShare > 0.5);
+    const totalWeight = sellable.reduce((sum, p) => sum + weight(p), 0);
+    const itemWants = guests * AVG_WANTS;
+    // Свою выпечку хотят, только пока она на полке: раскупили — хотят другое.
+    const ownWanted = OWN_PRODUCTS.filter((p) => sellable.includes(p)).reduce(
+      (sum, p) => sum + Math.min(onShelves(state, p), (itemWants * weight(p)) / totalWeight),
+      0,
+    );
+    const otherWeight = sellable.filter((p) => !OWN_PRODUCTS.includes(p)).reduce((sum, p) => sum + weight(p), 0);
     for (const id of sellable) {
-      // Доля спроса на товар: в сезон любимые товары берут чаще.
-      const weight = (p: ProductId) =>
-        (seasonFor(state.day)?.demand[p] ?? 1) * seasonalDemand(p, state.day) * dayDemand(state, p, aromaShare > 0.5);
-      const share = weight(id) / sellable.reduce((sum, p) => sum + weight(p), 0);
-      const demand = guests * AVG_WANTS * buyChance(state.prices[id], perceivedBase(state, id)) * share;
+      if (OWN_PRODUCTS.includes(id)) continue;
+      const demand = (itemWants - ownWanted) * buyChance(state.prices[id], perceivedBase(state, id)) * (weight(id) / otherWeight);
       const shelfRoom = state.shelves
         .filter((s) => s.kind === PRODUCTS[id].category)
         .reduce((sum, s) => sum + shelfCapacity(s), 0);
-      const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category).length;
+      const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category && !OWN_PRODUCTS.includes(p)).length;
       const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0);
       const target = Math.ceil(Math.min(demand * 1.1, shareOfShelf + CARRY * 2)) + order;
       const have = onShelves(state, id) + warehouseOf(state, id);
@@ -499,17 +507,20 @@ export function simulate({
     // Кафе по соседству забирает заказ, как только магазин открылся.
     const cafeRes = cafeDeliver(state);
     state = cafeRes.state;
+    const cafeIncome = cafeRes.result?.pay ?? 0;
     state.shelves.forEach((_, i) => (state = moveToShelf(state, i).state));
 
     // ---------- День ----------
     const stats: DayStats = emptyDayStats();
+    // Оплата кафе — тоже выручка дня (деньги уже зачислены при отгрузке).
+    stats.revenue += cafeIncome;
     const dayGuests = Math.max(0, Math.round(guests * (0.85 + random() * 0.3)));
     // Один игрок не успевает всё: чем больше магазин, тем больше теряется без персонала.
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
     // С котом в очереди ждут дольше — уходят реже.
     const lossInQueue =
-      (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state) / radioPatience(state) / signagePatience(state);
+      (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state) / radioPatience(state) / signagePatience(state) / cartPatience(state);
     const serveCap = serveCapacity(state);
     // Грязь: уборщик, а ещё вход (грязь с улицы) и туалет (gear.ts).
     const dirtComplaint = (has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level) * (0.6 + 0.2 * entranceMud(state) + 0.2 * wcDirt(state));
@@ -563,9 +574,9 @@ export function simulate({
         }
       }
       const aroma = random() < aromaShare;
-      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + cartExtra(state, extraRandom) + radioExtra(state, extraRandom), (p) => dayDemand(state, p, aroma));
+      const wanted = pickWanted(state, random, random() < AVG_WANTS - 1 ? 2 : 1, (p) => dayDemand(state, p, aroma));
       const fair = (p: ProductId) =>
-        perceivedBase(state, p) * tolerance * fairTolerance(state.day) * loyaltyTolerance(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
+        perceivedBase(state, p) * tolerance * fairTolerance(state.day) * loyaltyTolerance(state) * radioTolerance(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
       const cart: CartItem[] = [];
       let sawEmpty = false;
       let tooExpensive = false;
@@ -591,12 +602,13 @@ export function simulate({
         }
       }
       if (cart.length === 0) {
-        if (sawEmpty || tooExpensive) stats.lost++;
+        // Ночные гости рейтинг не роняют (как в игре): после дня полки полупустые — это норма.
+        if ((sawEmpty || tooExpensive) && !night) stats.lost++;
         continue;
       }
       if (random() < lossInQueue || stats.served >= cap) {
         state = returnToShelf(state, cart);
-        stats.lost++;
+        if (!night) stats.lost++;
         continue;
       }
       const paid = checkout(state, cart, night ? NIGHT_MARKUP : 1);
