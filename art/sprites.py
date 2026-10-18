@@ -4761,6 +4761,9 @@ def main():
     import snowy
 
     snowy.main()
+    import trolley
+
+    trolley.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
