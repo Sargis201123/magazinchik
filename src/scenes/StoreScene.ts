@@ -152,6 +152,7 @@ import {
   ovenBake,
   ovenBatch,
   ovenBatchCost,
+  signagePatience,
   ovenSprite,
   REGISTER_JAM_SECONDS,
   registerJam,
@@ -812,6 +813,10 @@ export class StoreScene extends Phaser.Scene {
   private courierBike?: Phaser.GameObjects.Image;
   private courierHome = { x: 0, y: 0 };
   private courierBusy = false;
+  /** Принятый заказ на дом ждёт, пока менеджер соберёт посылку и вынесет курьеру (деньги за заказ). */
+  private parcel: number | null = null;
+  /** Менеджер сейчас ходит по залу (а не стоит за кассой вместо кассира) — ему можно поручить посылку. */
+  private managerOnFloor = false;
   /** Ускорение дня (×1 или ×2). */
   private speed = 1;
 
@@ -1877,7 +1882,7 @@ export class StoreScene extends Phaser.Scene {
   private ringPhone(): void {
     const phone = this.phone;
     if (!phone?.active || !this.running) return;
-    if (this.order || this.courierBusy) {
+    if (this.order || this.courierBusy || this.parcel !== null) {
       this.scheduleOrder();
       return;
     }
@@ -1931,8 +1936,37 @@ export class StoreScene extends Phaser.Scene {
     this.refreshWarehouse();
     haptic.success();
     sound.tap();
+    // Менеджер на месте — он соберёт посылку и вынесет её курьеру к входу; иначе курьер едет сразу.
+    if (this.managerOnFloor) {
+      this.parcel = order.data.pay;
+      this.popup(phone.x, phone.y - 14, t('popup.orderPack'), '#c8ffb0');
+      return;
+    }
     this.popup(phone.x, phone.y - 14, t('popup.orderGo'), '#c8ffb0');
     void this.rideCourier(order.data.pay);
+  }
+
+  /** Менеджер собирает посылку на складе, несёт к входу и отдаёт курьеру — тот уезжает с заказом. */
+  private async packParcel(w: Worker, gen: number): Promise<void> {
+    const pay = this.parcel;
+    if (pay === null) return;
+    const { warehouse, door } = this.layout;
+    await this.workerWalk(w, warehouse.doorway.x, warehouse.doorway.y);
+    await this.workerWait(w, 900);
+    if (!this.alive(gen)) return;
+    w.carried.setTexture('box').setPosition(0, 3).setVisible(true);
+    this.popup(w.sprite.x, w.sprite.y - 18, t('popup.parcel'), '#fff3b0');
+    // К входу; курьер подходит с улицы навстречу.
+    const courier = this.courier;
+    if (courier?.active) void this.walk(courier, door.x + 10, door.y + 8, 40);
+    await this.workerWalk(w, door.x, door.y - 8);
+    await this.workerWait(w, 500);
+    if (!this.alive(gen)) return;
+    w.carried.setVisible(false);
+    this.parcel = null;
+    this.popup(door.x, door.y - 22, t('popup.parcelGiven'), '#c8ffb0');
+    if (courier?.active) await this.walk(courier, this.courierHome.x, this.courierHome.y, 40);
+    void this.rideCourier(pay);
   }
 
   /** Курьер садится на велосипед, уезжает по тротуару и возвращается с деньгами. */
@@ -4399,18 +4433,40 @@ export class StoreScene extends Phaser.Scene {
     dog.setDepth(dog.y + 3);
   }
 
-  /** Коляска всегда впереди мамы: снизу, сверху (за ней) или сбоку. */
+  /** Тележки стоят у входа: в большом магазине всегда, в «Магазинчике» — если куплены. */
+  private cartsAtDoor(): boolean {
+    return this.state.level >= 2 || (this.state.level >= 1 && hasUpgrade(this.state, 'cart'));
+  }
+
+  /** Покупатель берёт тележку у входа и катит её перед собой (как коляску). */
+  private giveTrolley(person: Phaser.GameObjects.Container): void {
+    const trolley = this.art(0, 9, 'trolley');
+    person.add(trolley);
+    person.setData('stroller', trolley);
+    person.setData('push', 'trolley');
+  }
+
+  /** У выхода тележку оставляют. */
+  private dropTrolley(person: Phaser.GameObjects.Container): void {
+    if (person.getData('push') !== 'trolley') return;
+    (person.getData('stroller') as Phaser.GameObjects.Image | undefined)?.destroy();
+    person.setData('stroller', undefined);
+    person.setData('push', undefined);
+  }
+
+  /** Коляска (или тележка) всегда впереди: снизу, сверху (за человеком) или сбоку. */
   private placeStroller(person: Phaser.GameObjects.Container, facing: Facing): void {
     const stroller = person.getData('stroller') as Phaser.GameObjects.Image | undefined;
     if (!stroller) return;
+    const tex = (person.getData('push') as string | undefined) ?? 'stroller';
     if (facing === 'down') {
-      stroller.setTexture('stroller').setPosition(0, 9).setFlipX(false);
+      stroller.setTexture(tex).setPosition(0, 9).setFlipX(false);
       person.bringToTop(stroller);
     } else if (facing === 'up') {
-      stroller.setTexture('stroller').setPosition(0, -5).setFlipX(false);
+      stroller.setTexture(tex).setPosition(0, -5).setFlipX(false);
       person.sendToBack(stroller);
     } else {
-      stroller.setTexture('stroller_s').setPosition(facing === 'right' ? 11 : -11, 3).setFlipX(facing === 'left');
+      stroller.setTexture(`${tex}_s`).setPosition(facing === 'right' ? 11 : -11, 3).setFlipX(facing === 'left');
       person.bringToTop(stroller);
     }
   }
@@ -4823,6 +4879,7 @@ export class StoreScene extends Phaser.Scene {
       w.sprite.destroy();
     }
     this.workers.clear();
+    this.managerOnFloor = false;
     this.claimedTrash.clear();
     if (this.binBy === 'cleaner') {
       this.binFill = Math.min(binCapacity(this.state), this.binFill + this.bagCarried);
@@ -4926,15 +4983,27 @@ export class StoreScene extends Phaser.Scene {
    * сам звонит и заказывает срочный подвоз (если хватает денег).
    */
   private async managerLoop(w: Worker, gen: number): Promise<void> {
+    this.managerOnFloor = true;
     while (this.alive(gen)) {
       if (!this.running) {
         await this.wait(400);
         continue;
       }
+      // Заказ на дом: звонит телефон — менеджер берёт трубку сам; принятый — собирает и несёт курьеру.
+      if (this.parcel !== null && !this.courierBusy) {
+        await this.packParcel(w, gen);
+        continue;
+      }
+      if (this.order && this.phone && !this.courierBusy) {
+        await this.workerWalk(w, this.phone.x - 10, this.phone.y + 14);
+        if (!this.alive(gen)) return;
+        if (this.order) this.acceptOrder();
+        continue;
+      }
       const pick = managerPick(this.state);
       if (pick && !this.urgentOrders.some((o) => o.id === pick)) {
         const qty = URGENT_QTYS[0];
-        if (this.orderUrgentDelivery(pick, qty)) this.popup(w.sprite.x, w.sprite.y - 20, t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
+        if (this.orderUrgentDelivery(pick, qty, true)) this.popup(w.sprite.x, w.sprite.y - 20, t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
       }
       const slot = Phaser.Utils.Array.GetRandom(this.layout.slots.slice(0, Math.max(1, this.state.shelves.length)));
       if (slot) await this.workerWalk(w, slot.x + Phaser.Math.Between(-12, 12), slot.y + 22);
@@ -4950,8 +5019,8 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Оплатить срочный заказ и отправить фургон. false — нет денег, места или товара. */
-  private orderUrgentDelivery(id: ProductId, qty: number): boolean {
-    const next = orderUrgent(this.state, id, qty, this.urgentOnTheWay());
+  private orderUrgentDelivery(id: ProductId, qty: number, byManager = false): boolean {
+    const next = orderUrgent(this.state, id, qty, this.urgentOnTheWay(), byManager);
     if (!next) return false;
     this.state = next;
     this.urgentOrders.push({ id, qty });
@@ -5363,7 +5432,10 @@ export class StoreScene extends Phaser.Scene {
   private async runCustomer(c: Customer): Promise<void> {
     const { door } = this.layout;
     await this.walk(c.sprite, door.x, this.streetY);
-    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random) + radioExtra(this.state, Math.random) + bigDayExtraItems(this.state.day));
+    // С тележкой берут товар сверх списка; тележки у входа берут и просто так — кому удобнее.
+    const cart = cartExtra(this.state, Math.random);
+    if ((cart || (this.cartsAtDoor() && Math.random() < 0.15)) && !c.sprite.getData('stroller') && !c.thief) this.giveTrolley(c.sprite);
+    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + cart + radioExtra(this.state, Math.random) + bigDayExtraItems(this.state.day));
     let disappointed = false;
     let why: { reason: LostReason; id: ProductId } | undefined;
     // Подойти, поискать глазами, взять: к полке в зале, к ларю у входа и к вёдрам у кассы — одинаково.
@@ -5431,6 +5503,7 @@ export class StoreScene extends Phaser.Scene {
       climatePatience(this.state, weatherFor(this.state.day)) *
       charmPatience(this.state) *
       radioPatience(this.state) *
+      signagePatience(this.state) *
       (isCrowdDay(this.state.day) ? CROWD_PATIENCE : 1);
     c.patience = this.time.delayedCall(c.patienceMs, () => void this.giveUp(c));
     this.layoutQueue();
@@ -5727,6 +5800,7 @@ export class StoreScene extends Phaser.Scene {
     c.gone = true;
     if (pastCounter) await this.walk(c.sprite, this.layout.queue.x, this.layout.counter.y + 40);
     await this.walk(c.sprite, this.layout.door.x, this.layout.h + 16);
+    this.dropTrolley(c.sprite);
     this.customers.delete(c);
     void this.strollAway(c.sprite);
   }
@@ -6206,6 +6280,7 @@ export class StoreScene extends Phaser.Scene {
     this.nightAsked = false;
     this.aromaUntil = 0;
     this.wholesaleBaked = 0;
+    this.parcel = null;
     this.resetOven();
     this.inspector = this.state.plan?.inspection ? 'pending' : 'none';
     this.jury = juryDay(this.state) ? 'pending' : 'none';
@@ -6584,6 +6659,12 @@ export class StoreScene extends Phaser.Scene {
       this.order.timer.remove();
       this.order.bubble.destroy();
       this.order = null;
+    }
+    // Посылку, которую не успели вынести, курьер отвозит после закрытия.
+    if (this.parcel !== null) {
+      this.state = { ...this.state, money: this.state.money + this.parcel };
+      this.stats.revenue += this.parcel;
+      this.parcel = null;
     }
     // Хлеб, оставшийся в печи к закрытию, продавец вынимает сам.
     if (this.oven && this.oven.state !== 'idle') {

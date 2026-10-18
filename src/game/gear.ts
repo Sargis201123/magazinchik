@@ -19,7 +19,9 @@ export type GearId =
   | 'lights'
   | 'cameras'
   | 'entrance'
-  | 'wc';
+  | 'wc'
+  | 'signage'
+  | 'solar';
 
 export interface GearModel {
   nameKey: TextKey;
@@ -158,11 +160,31 @@ export const GEAR: Record<GearId, Gear> = {
       model('gear.wc.2', 2000, 2, 'gear.wc.2.fx'),
     ],
   },
+  signage: {
+    id: 'signage',
+    icon: '🪧',
+    nameKey: 'gear.signage',
+    models: [
+      model('gear.signage.0', 0, 0, 'gear.signage.0.fx'),
+      model('gear.signage.1', 600, 1, 'gear.signage.1.fx'),
+      model('gear.signage.2', 2500, 3, 'gear.signage.2.fx'),
+    ],
+  },
+  solar: {
+    id: 'solar',
+    icon: '☀️',
+    nameKey: 'gear.solar',
+    models: [
+      model('gear.solar.0', 0, 0, 'gear.solar.0.fx'),
+      model('gear.solar.1', 2500, 2, 'gear.solar.1.fx'),
+      model('gear.solar.2', 6000, 3, 'gear.solar.2.fx'),
+    ],
+  },
 };
 
 
 /** Порядок в списке: сначала то, что влияет на торговлю, потом удобства. */
-export const GEAR_IDS: GearId[] = ['register', 'fridge', 'warehouse', 'bin', 'coffee', 'oven', 'climate', 'lights', 'cameras', 'entrance', 'wc'];
+export const GEAR_IDS: GearId[] = ['register', 'fridge', 'warehouse', 'bin', 'coffee', 'oven', 'climate', 'lights', 'signage', 'cameras', 'entrance', 'wc', 'solar'];
 
 /** Какая модель стоит сейчас (номер в списке моделей). */
 export const gearTier = (state: StoreState, id: GearId): number => Math.min(state.gear?.[id] ?? 0, GEAR[id].models.length - 1);
@@ -277,6 +299,15 @@ export const entranceMud = (state: StoreState): number => ENTRANCE_MUD[gearTier(
 /** Во сколько раз медленнее пачкается туалет. */
 export const WC_DIRT = [1, 0.6, 0.25];
 export const wcDirt = (state: StoreState): number => WC_DIRT[gearTier(state, 'wc')];
+
+// ---------- Указатели и солнечные панели ----------
+
+/** Указатели над рядами: нужное находят сразу — в очереди ждут спокойнее. */
+export const SIGNAGE_PATIENCE = [1, 1.08, 1.15];
+export const signagePatience = (state: StoreState): number => SIGNAGE_PATIENCE[gearTier(state, 'signage')];
+/** Солнечные панели на крыше: такая доля счёта за свет остаётся. */
+export const SOLAR_POWER = [1, 0.7, 0.45];
+export const solarPower = (state: StoreState): number => SOLAR_POWER[gearTier(state, 'solar')];
 
 /** Сколько всего новых моделей поставлено (для достижений). */
 export const gearUpgrades = (state: StoreState): number => GEAR_IDS.reduce((sum, id) => sum + gearTier(state, id), 0);

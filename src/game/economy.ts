@@ -10,7 +10,7 @@ import type { War } from './war';
 import type { ShopCat } from './cat';
 import type { DayReport } from './reports';
 import { afterLoanPayment, loanDue } from './bank';
-import { fridgeLife, fridgePower, lightsPower, warehouseRoom, type GearId } from './gear';
+import { fridgeLife, fridgePower, lightsPower, solarPower, warehouseRoom, type GearId } from './gear';
 
 /**
  * Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу.
@@ -1011,8 +1011,8 @@ export function monthlyBill(state: StoreState): Bill {
   return {
     rent: level.rent,
     utilities: level.utilities,
-    // Свет в зале дешевле с LED, холодильники — с новыми моделями (gear.ts).
-    power: Math.round(level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state)),
+    // Свет в зале дешевле с LED, холодильники — с новыми моделями, всё вместе — с солнечными панелями (gear.ts).
+    power: Math.round((level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state)) * solarPower(state)),
     salaries: state.staff.reduce((sum, m) => sum + m.wage, 0),
     debt: Math.min(DEBT_PAYMENT, state.debt),
     loan: loanDue(state),

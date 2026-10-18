@@ -160,6 +160,8 @@ const SPRITES = [
   'floor3',
   'candy_rack',
   'icebox',
+  'trolley',
+  'trolley_s',
   'icebox_front',
   'icebox_closed',
   'florist',

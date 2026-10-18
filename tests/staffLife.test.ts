@@ -79,6 +79,12 @@ describe('срочный подвоз', () => {
     expect(receiveUrgent(paid, 'milk', 6).warehouse.milk).toHaveLength(6);
   });
 
+  it('менеджер заказывает дешевле: меньше наценка и без платы за выезд', () => {
+    const s = shop({ warehouse: {}, shelves: [{ kind: 'dairy', level: 0, items: {} }] });
+    expect(urgentCost(s, 'milk', 6, true)!).toBeLessThan(urgentCost(s, 'milk', 6)! - URGENT_FEE);
+    expect(orderUrgent(s, 'milk', 6, 0, true)!.money).toBe(s.money - urgentCost(s, 'milk', 6, true)!);
+  });
+
   it('нет денег — не заказать; менеджер видит, что кончилось', () => {
     const s = shop({ money: 10, warehouse: {}, shelves: [{ kind: 'dairy', level: 0, items: {} }] });
     expect(orderUrgent(s, 'milk', 6)).toBeNull();
