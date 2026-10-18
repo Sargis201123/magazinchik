@@ -170,6 +170,39 @@ def news_burglary():
     c.save("news_burglary")
 
 
+def news_robbery():
+    """Ограбление с заложниками: у магазина полиция с мигалками и тёмный фургон ОМОНа, в витрине — грабители."""
+    c = Canvas(W, H)
+    night_street(c, 59)
+    shop_front(c, 6)
+    # Грабители в масках за витриной.
+    thief(c, 22, 30)
+    thief(c, 40, 30)
+    # Фургон ОМОНа: тёмный, с решёткой на окнах.
+    c.rect(66, 40, 34, 16, C("#3a4466"))
+    c.rect(70, 33, 18, 8, C("#3a4466"))
+    c.rect(72, 35, 6, 4, C("#8b9bb4"))
+    c.rect(80, 35, 6, 4, C("#8b9bb4"))
+    for x in range(73, 86, 2):
+        c.vline(x, 35, 4, C("#262b44"))
+    c.hline(66, 47, 34, C("#fee761"))
+    for x in (72, 94):
+        c.ellipse(x, 56, 3.5, 3.5, C("#181425"))
+    # Полицейская машина с мигалкой.
+    c.rect(98, 46, 30, 10, C("#ffffff"))
+    c.rect(103, 39, 20, 8, C("#ffffff"))
+    c.rect(105, 41, 7, 5, C("#5a6988"))
+    c.rect(114, 41, 7, 5, C("#5a6988"))
+    c.hline(98, 50, 30, C("#124e89"))
+    c.ellipse(110, 35, 9, 3.5, mix(C("#0099db"), C("#3a4466"), 0.6))
+    c.ellipse(116, 35, 9, 3.5, mix(C("#e43b44"), C("#3a4466"), 0.65))
+    c.rect(109, 36, 4, 3, C("#0099db"))
+    c.rect(113, 36, 4, 3, C("#e43b44"))
+    for x in (104, 122):
+        c.ellipse(x, 56, 3.5, 3.5, C("#181425"))
+    c.save("news_robbery")
+
+
 def news_dog():
     """Бобик лает у будки, вор удирает через забор, бросив мешок."""
     c = Canvas(W, H)
@@ -260,6 +293,7 @@ def main():
     for mood in (None, "happy", "sad", "surprised"):
         portrait("police", "#124e89", "#eec39a", "#262b44", "#3a4466", police_cap, police_extras, mood)
     news_burglary()
+    news_robbery()
     news_dog()
     news_watchman()
 
