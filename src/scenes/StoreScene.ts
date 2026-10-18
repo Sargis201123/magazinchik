@@ -118,7 +118,7 @@ import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
 import { activeAd } from '../game/ads';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
-import { carryOf, cartExtra, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
+import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
 import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
@@ -138,7 +138,7 @@ import { cafeDeliver, type CafeDelivery } from '../game/cafe';
 import { answerSpecial, grannyRepays, makeSpecial, type SpecialKind, type SpecialVisit } from '../game/special';
 import { showChoice } from '../ui/choice';
 import { BRAND_BATCH, brandBatchCost, brandToBake, startBrandBatch } from '../game/brand';
-import { hasRadio, nextStation, radioExtra, radioPatience, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
+import { hasRadio, nextStation, radioPatience, radioTolerance, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
 import { showUrgent } from '../ui/urgent';
 import {
@@ -5404,7 +5404,7 @@ export class StoreScene extends Phaser.Scene {
     await this.walk(c.sprite, door.x, this.streetY);
     await this.walk(c.sprite, door.x, door.y - 10);
     // С тележкой у входа покупатель иногда берёт что-то сверх списка.
-    const wanted = this.wanted(Phaser.Math.Between(1, 2) + cartExtra(this.state, Math.random) + radioExtra(this.state, Math.random) + bigDayExtraItems(this.state.day));
+    const wanted = this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day));
     for (const id of wanted) {
       const index = shelfFor(this.state, id);
       // Ларь у входа на виду — вор туда не идёт.
@@ -5467,10 +5467,9 @@ export class StoreScene extends Phaser.Scene {
   private async runCustomer(c: Customer): Promise<void> {
     const { door } = this.layout;
     await this.walk(c.sprite, door.x, this.streetY);
-    // С тележкой берут товар сверх списка; тележки у входа берут и просто так — кому удобнее.
-    const cart = cartExtra(this.state, Math.random);
-    if ((cart || (this.cartsAtDoor() && Math.random() < 0.15)) && !c.sprite.getData('stroller') && !c.thief) this.giveTrolley(c.sprite);
-    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + cart + radioExtra(this.state, Math.random) + bigDayExtraItems(this.state.day));
+    // Тележки у входа: часть покупателей берёт их — кому удобнее.
+    if (this.cartsAtDoor() && Math.random() < CART_SHARE && !c.sprite.getData('stroller') && !c.thief) this.giveTrolley(c.sprite);
+    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day));
     let disappointed = false;
     let why: { reason: LostReason; id: ProductId } | undefined;
     // Подойти, поискать глазами, взять: к полке в зале, к ларю у входа и к вёдрам у кассы — одинаково.
@@ -5518,7 +5517,8 @@ export class StoreScene extends Phaser.Scene {
 
     if (c.items.length === 0) {
       // Не нашёл товар или всё слишком дорого — ушёл недовольным, это бьёт по рейтингу.
-      if (disappointed) {
+      // Ночью после рабочего дня полупустые полки — норма: ночные гости рейтинг не роняют.
+      if (disappointed && !this.night) {
         this.stats.lost++;
         if (why) noteLost(this.stats, why.reason, why.id);
       }
@@ -5550,6 +5550,7 @@ export class StoreScene extends Phaser.Scene {
       charmPatience(this.state) *
       radioPatience(this.state) *
       signagePatience(this.state) *
+      cartPatience(this.state) *
       (isCrowdDay(this.state.day) ? CROWD_PATIENCE : 1);
     c.patience = this.time.delayedCall(c.patienceMs, () => void this.giveUp(c));
     this.layoutQueue();
@@ -5592,7 +5593,8 @@ export class StoreScene extends Phaser.Scene {
       (this.night ? NIGHT_TOLERANCE : 1) *
       (id === 'bread' && this.aroma() ? AROMA_TOLERANCE : 1) *
       fairTolerance(this.state.day) *
-      loyaltyTolerance(this.state);
+      loyaltyTolerance(this.state) *
+      radioTolerance(this.state);
     // «2 по цене 1»: за штуку выходит вдвое дешевле.
     const bogo = promoKind(this.state, id) === 'bogo';
     const perUnit = bogo ? price / 2 : price;
@@ -5830,7 +5832,7 @@ export class StoreScene extends Phaser.Scene {
     c.extras = [];
     this.refreshShelves();
     this.refreshWarehouse();
-    this.stats.lost++;
+    if (!this.night) this.stats.lost++;
     note(this.stats, 'queue');
     noteLost(this.stats, 'queue');
     this.combo = 0;

@@ -17,7 +17,7 @@ import {
   growEduard,
   seeEduardNews,
 } from '../src/game/eduard';
-import { buyRadio, nextStation, RADIO_PRICE, radioExtra, radioPatience, radioSpeed, setStation, stationOf } from '../src/game/radio';
+import { buyRadio, nextStation, RADIO_PRICE, radioPatience, radioTolerance, radioSpeed, setStation, stationOf } from '../src/game/radio';
 import { impulseChance } from '../src/game/impulse';
 
 const free = (patch: Partial<StoreState> = {}): StoreState => ({
@@ -117,7 +117,7 @@ describe('радио', () => {
     expect(nextStation('hits')).toBe('off');
   });
 
-  it('ретро — терпение и лишний товар, хиты — быстрее и сладкое у кассы', () => {
+  it('ретро — терпение и цены дороже, хиты — быстрее и сладкое у кассы', () => {
     const base = { ...newGame(), money: 1000 };
     const retro = buyRadio(base)!;
     const hits = setStation(retro, 'hits')!;
@@ -127,8 +127,8 @@ describe('радио', () => {
     expect(radioPatience(off)).toBe(1);
     expect(radioSpeed(hits)).toBeGreaterThan(1);
     expect(radioSpeed(retro)).toBe(1);
-    expect(radioExtra(retro, () => 0)).toBe(1);
-    expect(radioExtra(hits, () => 0)).toBe(0);
+    expect(radioTolerance(retro)).toBeGreaterThan(1);
+    expect(radioTolerance(hits)).toBe(1);
     expect(impulseChance(hits, 0)).toBeGreaterThan(impulseChance(off, 0));
   });
 });

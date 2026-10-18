@@ -10,8 +10,8 @@ import { onShelves, PRODUCTS, SEASONAL, sellableProducts, warehouseOf, type Prod
 export const CAFE_FROM_DAY = 6;
 export const CAFE_DAYS = 7;
 export const CAFE_MISSES = 2;
-/** Кафе платит розничную цену: товар уходит гарантированно, без порчи на полке. */
-export const CAFE_PAY = 1;
+/** Кафе платит на 30% дороже обычной цены: за гарантированную поставку каждое утро. */
+export const CAFE_PAY = 1.3;
 /** За неделю без срывов — +5% к оплате в следующем договоре (до +25%). */
 export const CAFE_LOYALTY_STEP = 0.05;
 export const CAFE_LOYALTY_MAX = 0.25;

@@ -62,9 +62,14 @@ export const withUpgrades = (state: StoreState, timing: ScanTiming): ScanTiming 
 /** Тележки: за один поход со склада несут вдвое больше, а у входа — тележки для покупателей. */
 export const CART_CARRY = 12;
 export const carryOf = (state: StoreState): number => (hasUpgrade(state, 'cart') ? CART_CARRY : CARRY);
-/** С тележкой покупатель иногда берёт ещё один товар. */
-export const CART_EXTRA = 0.25;
-export const cartExtra = (state: StoreState, random: () => number): number => (hasUpgrade(state, 'cart') && random() < CART_EXTRA ? 1 : 0);
+/**
+ * Тележки у входа: с тележкой в очереди стоять удобнее — ждут на 10% дольше. Раньше тележка давала
+ * «товар сверх списка», но лишняя покупка опустошала полки и следующие уходили ни с чем (симулятор).
+ */
+export const CART_PATIENCE = 1.1;
+export const cartPatience = (state: StoreState): number => (hasUpgrade(state, 'cart') ? CART_PATIENCE : 1);
+/** Какая доля покупателей катит тележку (только для вида). */
+export const CART_SHARE = 0.3;
 
 /**
  * Карта лояльности: «свои» меньше придираются к ценам. Не «больше гостей»: в большом магазине

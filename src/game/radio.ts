@@ -36,10 +36,9 @@ export const nextStation = (station: Station): Station => STATIONS[(STATIONS.ind
 
 /** Ретро: в очереди ждут на 12% дольше; хиты: на 5% меньше. */
 export const radioPatience = (state: StoreState): number => ({ off: 1, retro: 1.12, hits: 0.95 })[stationOf(state)];
-/** Ретро: покупатель не спешит и с шансом 10% берёт ещё один товар. */
-export const RETRO_EXTRA = 0.1;
-export const radioExtra = (state: StoreState, random: () => number): number =>
-  stationOf(state) === 'retro' && random() < RETRO_EXTRA ? 1 : 0;
+/** Ретро: под спокойную музыку к ценам терпимее — готовы платить на 5% дороже. */
+export const RETRO_TOLERANCE = 1.05;
+export const radioTolerance = (state: StoreState): number => (stationOf(state) === 'retro' ? RETRO_TOLERANCE : 1);
 /** Хиты: покупатели ходят по залу на 20% быстрее. */
 export const radioSpeed = (state: StoreState): number => (stationOf(state) === 'hits' ? 1.2 : 1);
 /** Хиты: шанс схватить сладкое у кассы +5%. */
