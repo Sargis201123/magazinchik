@@ -178,7 +178,7 @@ import { premiumDecor, restartGame } from '../game/restart';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
 import { flushCloud, saveGame } from '../game/save';
 import { buyRadio, hasRadio, RADIO_PRICE, setStation, STATION_INFO, STATIONS, stationOf } from '../game/radio';
-import { EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_MAX, EDUARD_STAGES, eduardNews, eduardPull, eduardStage, seeEduardNews } from '../game/eduard';
+import { BOSS_DAYS, bossActive, EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_MAX, EDUARD_STAGES, eduardNews, eduardPull, eduardStage, seeEduardNews, type EduardNews } from '../game/eduard';
 import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../game/upgrades';
 
 /** Высота «голоса» героев в диалогах. */
@@ -1312,18 +1312,32 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     return box;
   };
 
-  /** Эдуард открыл магазин побольше: его реплика и что это значит для нас. */
-  const eduardNewsBox = (stage: number) => {
-    const info = EDUARD_STAGES[stage];
+  /** Напротив открылся новый конкурент (Эдуард — своей репликой, остальные — в новостях района) или мы его победили. */
+  const eduardNewsBox = (news: EduardNews) => {
+    const info = EDUARD_STAGES[news.stage];
+    const name = t(info.nameKey);
+    const onNext = () => update(seeEduardNews(getState()), news.kind === 'beaten' ? 'success' : 'tap');
+    if (news.kind === 'beaten')
+      return dialogBox({
+        caption: t('boss.news'),
+        portrait: info.eduard ? 'portrait_eduard_sad' : 'portrait_anchor_happy',
+        name: info.eduard ? t('eduard.name') : t('bigday.anchor'),
+        text: t('boss.beaten', { name, reward: info.reward }),
+        pitch: info.eduard ? VOICE.eduard : 520,
+        after: [el('div', 'ui-note', t('boss.beatenHint'))],
+        nextLabel: t('boss.hooray'),
+        onNext,
+      });
+    const effect = t('eduard.effect', { n: Math.round(info.pull * 100), r: EDUARD_LOYAL_RATING, goal: info.rating, d: BOSS_DAYS, reward: info.reward });
     return dialogBox({
-      caption: t(info.nameKey),
-      portrait: stage === EDUARD_MAX ? 'portrait_eduard_happy' : 'portrait_eduard',
-      name: t('eduard.name'),
-      text: `«${t(info.lineKey)}»`,
-      pitch: VOICE.eduard,
-      after: [el('div', 'ui-note', t('eduard.effect', { n: Math.round(info.pull * 100), r: EDUARD_LOYAL_RATING }))],
+      caption: info.eduard ? name : t('boss.news'),
+      portrait: info.eduard ? (news.stage === EDUARD_MAX ? 'portrait_eduard_happy' : 'portrait_eduard') : 'portrait_anchor_surprised',
+      name: info.eduard ? t('eduard.name') : t('bigday.anchor'),
+      text: info.eduard ? `«${t(info.lineKey)}»` : t(info.lineKey),
+      pitch: info.eduard ? VOICE.eduard : 520,
+      after: [el('div', 'ui-note', effect)],
       nextLabel: t('eduard.ok'),
-      onNext: () => update(seeEduardNews(getState())),
+      onNext,
     });
   };
 
@@ -1593,16 +1607,19 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   /** Магазин Эдуарда по соседству (после сюжета): сколько гостей уводит и когда вырастет. */
   const eduardBox = (state: StoreState): HTMLElement[] => {
     const stage = eduardStage(state);
-    if (stage === null || stage === 0) return [];
-    const info = EDUARD_STAGES[stage];
+    if (stage === null) return [];
     const box = el('div', 'ui-box');
+    const since = state.eduard?.since ?? state.day;
+    // Напротив пусто: скоро новый конкурент — или всех уже победили.
+    if (!bossActive(state)) {
+      box.append(el('div', 'ui-muted', stage < EDUARD_MAX ? t('eduard.next', { d: Math.max(1, since + EDUARD_GROWTH_DAYS - state.day) }) : t('eduard.top')));
+      return [box];
+    }
+    const info = EDUARD_STAGES[stage];
     box.append(
       el('b', '', t('eduard.title', { name: t(info.nameKey) })),
       el('div', 'ui-muted', t(eduardPull(state) < info.pull ? 'eduard.box' : 'eduard.boxFull', { n: Math.round(eduardPull(state) * 100), r: EDUARD_LOYAL_RATING, max: Math.round(info.pull * 100) })),
-    );
-    const since = state.eduard?.since ?? state.day;
-    box.append(
-      el('div', 'ui-muted', stage < EDUARD_MAX ? t('eduard.next', { d: Math.max(1, since + EDUARD_GROWTH_DAYS - state.day) }) : t('eduard.top')),
+      el('div', 'ui-note', t('boss.goal', { goal: info.rating, d: BOSS_DAYS, n: state.eduard?.streak ?? 0 })),
     );
     return [box];
   };

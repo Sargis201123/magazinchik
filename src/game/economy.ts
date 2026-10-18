@@ -571,8 +571,11 @@ export interface StoreState {
   reports?: DayReport[];
   /** Радио: какая волна играет (radio.ts); нет поля — приёмник не куплен. */
   radio?: 'off' | 'retro' | 'hits';
-  /** Эдуард после сюжета: стадия его магазина, с какого дня и какую новость уже видели (eduard.ts). */
-  eduard?: { stage: number; since: number; seen: number };
+  /**
+   * Конкурент напротив после сюжета (eduard.ts): какой по счёту, с какого дня, какую новость видели,
+   * сколько вечеров подряд держим его планку рейтинга и побеждён ли он.
+   */
+  eduard?: { stage: number; since: number; seen: number; streak?: number; beaten?: boolean; beatenSeen?: number };
   /** Долг выше предела: банк предупредил (bankruptcy.ts). */
   debtWarning?: { seen: boolean };
   /** Бабушка уже выручила в этой игре: сколько погасила и видел ли игрок. */
