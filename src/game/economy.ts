@@ -1240,12 +1240,17 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
   return { state: promoted, spoiled, spoiledBy, bill: paid.bill, shortfall: paid.shortfall, skimmed };
 }
 
+/** Гостей за день в ларьке при 3★ — с этого рейтинга начинается игра. */
+export const BASE_GUESTS = 20;
+/** Каждая звезда рейтинга — в e^0.46 ≈ 1.6 раза больше гостей. */
+export const RATING_GUESTS = 0.46;
+
 /**
- * Секунд между появлениями покупателей. Рейтинг сильно влияет на поток
- * (в ларьке: 0★ — раз в 7.5 с, 3★ — раз в 4.2 с, 5★ — раз в 2 с),
- * большой магазин привлекает больше гостей.
+ * Секунд между появлениями покупателей. Рейтинг решает очень многое: в ларьке при 2★ — ~12
+ * гостей за день, при 3★ — 20, при 4★ — ~35, при 5★ — ~60; большой магазин привлекает больше.
  */
-export const spawnInterval = (rating: number, level = 0): number => (7.5 - rating * 1.1) / STORE_LEVELS[level].guests;
+export const spawnInterval = (rating: number, level = 0): number =>
+  DAY_SECONDS / (BASE_GUESTS * Math.exp(RATING_GUESTS * (rating - 3)) * STORE_LEVELS[level].guests);
 
 /** Примерно столько гостей придёт за день. */
 export const expectedGuests = (rating: number, level = 0): number => Math.round(DAY_SECONDS / spawnInterval(rating, level));
