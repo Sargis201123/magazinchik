@@ -178,6 +178,7 @@ import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
 import { claimPass, grantPass, passCoins, passDecor, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { rushPrize } from '../game/rush';
+import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { canCook, cook, DISHES, DISH_IDS, kitchenOpen, portionsOf, portionsTotal, PORTIONS_MAX } from '../game/kitchen';
 import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
@@ -504,6 +505,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       ...giftsBox(),
       ...rushBox(state),
       ...passBox(state),
+      ...staffEventBox(state),
       ...taleBox(state),
       ...guildClaimBox(state),
       ...duelBox(state),
@@ -1047,6 +1049,24 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       card.replaceChildren(...head, rows, button(t('board.close'), close, 'ui-btn secondary'));
     };
     render2();
+  };
+
+  /** История с сотрудниками: просьба или ситуация и два решения (staffEvents.ts). */
+  const staffEventBox = (state: StoreState): HTMLElement[] => {
+    const event = state.staffEvent;
+    if (!event) return [];
+    const [a, b] = event.roles.map((r) => state.staff.find((m) => m.role === r));
+    if (!a) return [];
+    const cost = eventCost(event);
+    const params = { name: staffName(a.name), name2: b ? staffName(b.name) : '', n: cost };
+    const box = el('div', 'ui-box ui-tale');
+    box.append(
+      el('b', '', t('staffEvent.title', { name: staffName(a.name), role: t(STAFF_ROLES[a.role].nameKey) })),
+      el('p', '', t(`staffEvent.${event.kind}.text` as TextKey, params)),
+      button(t(`staffEvent.${event.kind}.yes` as TextKey, params), () => update(answerStaffEvent(getState(), true), 'success'), 'ui-btn', state.money < cost),
+      button(t(`staffEvent.${event.kind}.no` as TextKey, params), () => update(answerStaffEvent(getState(), false)), 'ui-btn secondary'),
+    );
+    return [box];
   };
 
   /** Подарки друзей: «угостили кофе» — забрать монеты. */
