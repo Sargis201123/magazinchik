@@ -221,6 +221,25 @@ const CAR_TYPES: [string, number | null, number][] = [
   ['car_van', 0, 16],
   ['car_truck', null, 14],
 ];
+/** Всплывающая надпись и сколько раз подряд она повторилась. */
+type Popup = { label: Phaser.GameObjects.Text; text: string; count: number; fade?: Phaser.Tweens.Tween };
+
+/** Здание по соседству; back — отступ от тротуара (у кафе перед ним веранда). */
+type Neighbor = { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number; neon: number; dark?: boolean; back?: number };
+
+/** Помещение конкурента: пустует, «МегаМарт» по сюжету, а после сюжета — боссы района по очереди. */
+const RIVAL_LOOKS: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
+  vacant: { h: 130, name: 'eduard.stage0', sign: 0x5a6988, awning: 0x8b9bb4, roof: 0xc0cbdc, neon: 0, dark: true },
+  mega: { h: 140, name: 'eduard.mega', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec, neon: 0x6cd8ff },
+  kiosk: { h: 110, name: 'eduard.stage1', sign: 0x68386c, awning: 0xb55088, roof: 0xe0c8dc, neon: 0xff8ad8 },
+  discount: { h: 145, name: 'eduard.stage2', sign: 0xb13e53, awning: 0xfee761, roof: 0xf2e6c8, neon: 0xffd040 },
+  farm: { h: 135, name: 'eduard.stage3', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd8e4c0, neon: 0x9cff7a },
+  mall: { h: 190, name: 'eduard.stage4', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040 },
+};
+
+/** Высота здания босса за дорогой: умещается на месте «Гиганта». */
+const RIVAL_ACROSS_H = 106;
+
 /** Слой света: выше людей и мебели, ниже всплывающих надписей (1000). */
 const LIGHT_DEPTH = 900;
 /** Цвет света на улице и в зале по ходу дня: [доля дня, цвет]. Умножается на картинку. */
@@ -335,6 +354,18 @@ const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
   // Ларь с мороженым у входа и вёдра с цветами у кассы — свои картинки и свои места.
   icebox: { texture: 'icebox', tint: 0xffffff },
   florist: { texture: 'florist', tint: 0xffffff },
+};
+/** Цвет плитки отдела под полкой. */
+const DEPT_FLOOR: Record<Category, number> = {
+  bakery: 0xe8a65a,
+  produce: 0x63c74d,
+  dairy: 0x5fb4f0,
+  meat: 0xe4606a,
+  drinks: 0x2ea8e0,
+  frozen: 0x9ad8ff,
+  household: 0xb27ae0,
+  icebox: 0x9ad8ff,
+  florist: 0xf6757a,
 };
 /** Где на картинке лежит товар (относительно центра места): x, ширина, верхний ряд, шаг рядов. */
 const ITEM_AREA: Partial<Record<Category, { x: number; w: number; y: number; row: number }>> = {
@@ -658,6 +689,10 @@ export class StoreScene extends Phaser.Scene {
   private builtLevel = -1;
   /** Каким было помещение Эдуарда, когда рисовали улицу. */
   private builtEduard: EduardLook | null = null;
+  /** Всплывающие надписи на экране: чтобы не налезали друг на друга и склеивались. */
+  private popups: Popup[] = [];
+  /** Магазин босса района стоит за дорогой (на месте «Гиганта»), а не сбоку. */
+  private rivalAcross = false;
   /** Каким построен «Гигант» за дорогой (giant.ts): стройка, магазин, закрытый. */
   private builtGiant: GiantLook = 'none';
   private stats: DayStats = emptyDayStats();
@@ -3352,59 +3387,62 @@ export class StoreScene extends Phaser.Scene {
    */
   private buildNeighbors(next: Layout): void {
     const base = next.h + 4;
-    // back — здание отступает от тротуара (у кафе перед ним веранда).
-    type Neighbor = { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number; neon: number; dark?: boolean; back?: number };
-    // Помещение напротив: пустует, «МегаМарт» по сюжету, а после сюжета — боссы района по очереди.
     const look = eduardLook(this.state);
     this.builtEduard = look;
-    const eduard: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
-      vacant: { h: 130, name: 'eduard.stage0', sign: 0x5a6988, awning: 0x8b9bb4, roof: 0xc0cbdc, neon: 0, dark: true },
-      mega: { h: 140, name: 'eduard.mega', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec, neon: 0x6cd8ff },
-      kiosk: { h: 110, name: 'eduard.stage1', sign: 0x68386c, awning: 0xb55088, roof: 0xe0c8dc, neon: 0xff8ad8 },
-      discount: { h: 145, name: 'eduard.stage2', sign: 0xb13e53, awning: 0xfee761, roof: 0xf2e6c8, neon: 0xffd040 },
-      farm: { h: 135, name: 'eduard.stage3', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd8e4c0, neon: 0x9cff7a },
-      mall: { h: 190, name: 'eduard.stage4', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040 },
-    };
+    // Босс района открывается за дорогой, на месте закрытого «Гиганта»; сбоку тогда — хозтовары.
+    const side: Omit<Neighbor, 'x' | 'w'> = this.rivalAcross
+      ? { h: 120, name: 'neighbor.hardware', sign: 0x5a6988, awning: 0x8b9bb4, roof: 0xd6dce8, neon: 0x9cd8ff }
+      : RIVAL_LOOKS[look];
     const neighbors: Neighbor[] = [
       { x: -136 - WING_OUTER, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860, back: VERANDA_D },
       { x: -268 - WING_OUTER, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0, neon: 0x7cff8a },
-      { x: next.w + 26, w: 128, ...eduard[look] },
+      { x: next.w + 26, w: 128, ...side },
       { x: next.w + 170, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc, neon: 0xff8ad8 },
     ];
     const rnd = new Phaser.Math.RandomDataGenerator(['neighbors']);
-    for (const n of neighbors) {
-      const bottom = base - (n.back ?? 0);
-      const top = bottom - n.h;
-      this.add.tileSprite(n.x, top, n.w, n.h - FACADE_H, 'roof').setOrigin(0).setTileScale(1 / ART).setTint(n.roof).setDepth(-3);
-      this.add.tileSprite(n.x - 2, top - 3, n.w + 4, 3, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(-3);
-      this.add.tileSprite(n.x, bottom - FACADE_H, n.w, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(bottom - 5);
-      // Кондиционеры и окна в крыше (у большого молла — больше).
-      for (let i = 0; i < Math.max(3, Math.round(n.h / 45)); i++) {
-        this.art(n.x + 14 + rnd.frac() * (n.w - 28), top + 12 + rnd.frac() * (n.h - 40), i === 0 ? 'skylight' : 'ac_unit').setDepth(-2);
-      }
-      // Витрины, дверь и навес.
-      const doorX = n.x + n.w * 0.62;
-      this.art(doorX, bottom - 5, 'door').setDepth(bottom - 4);
-      for (let x = n.x + 14; x < n.x + n.w - 10; x += 24) {
-        if (Math.abs(x - doorX) < 22) continue;
-        const win = this.art(x, bottom - 4.5, 'shopwin').setDepth(bottom - 4);
-        // Пустующее помещение — тёмные витрины без света.
-        if (n.dark) win.setTint(0x8b9bb4);
-        else this.windowLight(x, bottom - 4.5, bottom);
-      }
-      this.art(doorX, bottom - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(bottom + 40);
-      // Вывеска на краю крыши.
-      this.art(n.x + n.w / 2, bottom - FACADE_H - 8, 'sign').setTint(n.sign).setDepth(bottom - 3);
-      this.add
-        .text(n.x + n.w / 2, bottom - FACADE_H - 8, t(n.name), { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
-        .setOrigin(0.5)
-        .setResolution(4)
-        .setDepth(bottom - 2);
-      if (n.neon) this.neonSign(n.x + n.w / 2, bottom - FACADE_H - 8, t(n.name), '6px', n.neon, 64);
-    }
+    for (const n of neighbors) this.drawNeighbor(n, base - (n.back ?? 0), rnd);
     // Остановка на тротуаре слева.
     this.art(-70 - WING_OUTER, this.streetY - 4, 'bus_stop').setDepth(this.streetY);
     this.buildVeranda(neighbors[0].x, neighbors[0].w, base);
+  }
+
+  /**
+   * Здание с крышей, витринами, дверью, навесом и вывеской. across — за дорогой: вывеска
+   * на краю крыши у дороги, чтобы читалась с нашей стороны.
+   */
+  private drawNeighbor(n: Neighbor, bottom: number, rnd: Phaser.Math.RandomDataGenerator, across = false): void {
+    const top = bottom - n.h;
+    // За дорогой витрины смотрят на дорогу: фасад сверху, крыша за ним.
+    const roofY = across ? top + FACADE_H : top;
+    const front = across ? top + FACADE_H : bottom;
+    this.add.tileSprite(n.x, roofY, n.w, n.h - FACADE_H, 'roof').setOrigin(0).setTileScale(1 / ART).setTint(n.roof).setDepth(-3);
+    this.add.tileSprite(n.x - 2, (across ? bottom : top) - 3, n.w + 4, 3, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(-3);
+    this.add.tileSprite(n.x, front - FACADE_H, n.w, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(front - 5);
+    // Кондиционеры и окна в крыше (у большого молла — больше).
+    for (let i = 0; i < Math.max(3, Math.round(n.h / 45)); i++) {
+      this.art(n.x + 14 + rnd.frac() * (n.w - 28), roofY + 12 + rnd.frac() * (n.h - 40), i === 0 ? 'skylight' : 'ac_unit').setDepth(-2);
+    }
+    // Витрины, дверь и навес.
+    const doorX = across ? n.x + n.w / 2 : n.x + n.w * 0.62;
+    this.art(doorX, front - 5, 'door').setDepth(front - 4);
+    for (let x = n.x + 14; x < n.x + n.w - 10; x += 24) {
+      if (Math.abs(x - doorX) < 22) continue;
+      const win = this.art(x, front - 4.5, 'shopwin').setDepth(front - 4);
+      // Пустующее помещение — тёмные витрины без света.
+      if (n.dark) win.setTint(0x8b9bb4);
+      else this.windowLight(x, front - 4.5, front);
+    }
+    this.art(doorX, front - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(front + 40);
+    // Вывеска на краю крыши (за дорогой — над витринами, у самой дороги).
+    const signY = across ? top - 12 : bottom - FACADE_H - 8;
+    const signDepth = across ? front + 41 : front - 3;
+    this.art(n.x + n.w / 2, signY, 'sign').setTint(n.sign).setDepth(signDepth);
+    this.add
+      .text(n.x + n.w / 2, signY, t(n.name), { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
+      .setOrigin(0.5)
+      .setResolution(4)
+      .setDepth(signDepth + 1);
+    if (n.neon) this.neonSign(n.x + n.w / 2, signY, t(n.name), '6px', n.neon, 64);
   }
 
   /**
@@ -3491,7 +3529,14 @@ export class StoreScene extends Phaser.Scene {
     const giant = giantLook(this.state);
     this.builtGiant = giant;
     const giantArea = { x: door.x - 82, y: top + 86, w: 164, h: 112 };
-    if (giant !== 'none') {
+    // Босс района (eduard.ts) — за дорогой напротив входа, когда «Гиганта» там нет или он закрылся.
+    const look = eduardLook(this.state);
+    this.rivalAcross = look !== 'vacant' && look !== 'mega' && (giant === 'none' || giant === 'closed');
+    if (this.rivalAcross) {
+      const rival = RIVAL_LOOKS[look];
+      const h = Math.min(rival.h, RIVAL_ACROSS_H);
+      this.drawNeighbor({ ...rival, x: door.x - 64, w: 128, h }, top + 92 + h, new Phaser.Math.RandomDataGenerator(['rival']), true);
+    } else if (giant !== 'none') {
       const key = giant === 'site' ? 'giant_site' : giant === 'store' ? 'giant_store' : 'giant_closed';
       this.art(door.x, top + 92, key).setOrigin(0.5, 0).setDepth(top + 92 + 88);
     }
@@ -3500,7 +3545,7 @@ export class StoreScene extends Phaser.Scene {
         for (let x = left + 10; x < left + width - 10; x += 46) {
           const px = x + rnd.between(-14, 14);
           const py = y + rnd.between(-12, 12);
-          if (giant !== 'none' && px > giantArea.x && px < giantArea.x + giantArea.w && py > giantArea.y && py < giantArea.y + giantArea.h) continue;
+          if ((giant !== 'none' || this.rivalAcross) && px > giantArea.x && px < giantArea.x + giantArea.w && py > giantArea.y && py < giantArea.y + giantArea.h) continue;
           const roll = rnd.frac();
           // За зданием глубина отрицательная — держим над газоном (-10), но под крышами соседей (-3).
           const depth = py < 0 ? -9.5 + (py + 400) / 1000 : py;
@@ -4072,12 +4117,7 @@ export class StoreScene extends Phaser.Scene {
       .setTint(kind === 'bakery' ? 0xffe2d2 : 0xe6dcf6)
       .setDepth(1);
     this.add.rectangle(x, y + 14, w, 2, 0x181425, 0.18).setOrigin(0).setDepth(1);
-    this.art(x + w / 2, y + 7, 'wh_sign').setDepth(y + 5);
-    this.add
-      .text(x + w / 2, y + 7, t(`wing.${kind}`), { fontFamily: UI_FONT, fontSize: '5px', color: '#fee761' })
-      .setOrigin(0.5)
-      .setResolution(4)
-      .setDepth(y + 6);
+    this.roomSign(x, y + 7, w, t(`wing.${kind}`));
     if (open) {
       this.nightGlow(this.art(x + w / 2, y + 26, 'glow').setScale(44 / 64).setTint(kind === 'bakery' ? 0xffd8a0 : 0xffe8c8), 0.5);
       return;
@@ -4088,6 +4128,18 @@ export class StoreScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setResolution(4)
       .setDepth(y + h + 1);
+  }
+
+  /**
+   * Табличка комнаты флигеля по ширине надписи — у двери в зал (справа): её видно,
+   * даже когда флигель в кадре краем.
+   */
+  private roomSign(x: number, y: number, w: number, text: string): void {
+    const label = this.add.text(0, y, text, { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#fee761' }).setOrigin(0.5).setResolution(4);
+    const plateW = Math.min(w - 4, label.width + 6);
+    const cx = x + w - 2 - plateW / 2;
+    label.setX(cx).setDepth(y + 61);
+    this.add.rectangle(cx, y, plateW, 9, 0x3b2a35).setStrokeStyle(1, 0xb86f50).setDepth(y + 60);
   }
 
   /** Центр ряда тары на складе: ряды стоят на балках стеллажа. */
@@ -4111,12 +4163,7 @@ export class StoreScene extends Phaser.Scene {
     // Огнетушитель у проёма и лампа под потолком.
     this.art(x + w - 4, doorway.y - 16, 'extinguisher').setDepth(doorway.y - 90);
     this.nightGlow(this.art(x + w / 2, y + 10, 'glow').setScale(40 / 64).setTint(0xfff0c8), 0.5);
-    this.art(x + w / 2, y + 6, 'wh_sign').setDepth(y + 5);
-    this.add
-      .text(x + w / 2, y + 6, t('warehouse.label'), { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
-      .setOrigin(0.5)
-      .setResolution(4)
-      .setDepth(y + 6);
+    this.roomSign(x, y + 7, w, t('warehouse.label'));
   }
 
   /** Создаёт картинки для новых полок и обновляет товар на всех. */
@@ -4235,12 +4282,15 @@ export class StoreScene extends Phaser.Scene {
       .setVisible(false);
     expire.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.markdownNow(expire.x, expire.y)));
     const lights: Phaser.GameObjects.GameObject[] = [];
+    // Цветная плитка отдела под полкой и перед ней: отделы видно издалека.
+    if (!fixture) lights.push(this.add.rectangle(slot.x, slot.y + 4, 50, 30, DEPT_FLOOR[kind]).setAlpha(0.3).setStrokeStyle(1, DEPT_FLOOR[kind], 0.7).setDepth(0.3));
     if (look.texture === 'fridge') {
       // Новые холодильники — с наклейкой класса энергосбережения.
       if (gearTier(this.state, 'fridge')) lights.push(this.art(slot.x + 13, slot.y - 15, 'eco_label').setDepth(slot.y - 11));
       const cool = kind === 'meat' ? 0xffd8d8 : 0xc8f0ff;
-      const glass = this.add.rectangle(slot.x, slot.y - 1.5, 36, 19, cool).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.1).setDepth(slot.y - 12.5);
-      this.tweens.add({ targets: glass, alpha: 0.16, duration: 1800 + index * 130, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      // Блик на стекле — лёгкий: товар за ним должен быть хорошо виден.
+      const glass = this.add.rectangle(slot.x, slot.y - 1.5, 36, 19, cool).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.03).setDepth(slot.y - 12.5);
+      this.tweens.add({ targets: glass, alpha: 0.07, duration: 1800 + index * 130, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       const spill = this.art(slot.x, slot.y + 13, 'light_spill').setOrigin(0.5, 0).setScale(1.4 / ART, 0.5 / ART).setTint(cool);
       spill.setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(0.4);
       lights.push(glass, spill);
@@ -6121,10 +6171,16 @@ export class StoreScene extends Phaser.Scene {
     this.emote(sprite, 'emo_question');
     this.popup(sprite.x, sprite.y - 18, t('popup.eduard'), '#d0e0ff');
     await this.wait(2500);
-    const eduardDoor = this.next.w + 26 + 128 * 0.62;
     await this.walk(sprite, w - 20, this.streetY);
-    await this.walk(sprite, eduardDoor, this.streetY);
-    await this.walk(sprite, eduardDoor, this.next.h - 2);
+    if (this.rivalAcross) {
+      // Его магазин за дорогой, напротив входа: переходит по зебре.
+      await this.walk(sprite, this.layout.door.x, this.streetY);
+      await this.walk(sprite, this.layout.door.x, this.streetY + 82);
+    } else {
+      const eduardDoor = this.next.w + 26 + 128 * 0.62;
+      await this.walk(sprite, eduardDoor, this.streetY);
+      await this.walk(sprite, eduardDoor, this.next.h - 2);
+    }
     sprite.destroy();
   }
 
@@ -6243,6 +6299,18 @@ export class StoreScene extends Phaser.Scene {
 
   /** Всплывающая надпись: жирная, на тёмной плашке, выпрыгивает, потом поднимается и тает. */
   private popup(x: number, y: number, text: string, color: string): void {
+    this.popups = this.popups.filter((p) => p.label.active);
+    const hold = Math.min(1800, 500 + 40 * text.length);
+    // Та же фраза ещё висит — не новая надпись, а счётчик: «Ушёл без покупки! ×3».
+    const same = this.popups.find((p) => p.text === text);
+    if (same) {
+      same.count++;
+      same.label.setText(`${text} ×${same.count}`).setAlpha(1);
+      same.fade?.remove();
+      this.tweens.add({ targets: same.label, scale: { from: 1.2, to: 1 }, duration: 180, ease: 'Back.easeOut' });
+      this.fadePopup(same, hold);
+      return;
+    }
     const label = this.add
       .text(x, y, text, {
         fontFamily: UI_FONT,
@@ -6262,14 +6330,32 @@ export class StoreScene extends Phaser.Scene {
     // Длинная надпись не должна вылезать за край магазина; и висит дольше, чтобы успеть прочитать.
     const half = label.width / 2 + 2;
     label.x = Phaser.Math.Clamp(x, half, Math.max(half, this.layout.w - half));
-    const hold = Math.min(1800, 500 + 40 * text.length);
-    this.tweens.add({
+    // Не налезать на другие надписи: если место занято — встаём над ними.
+    const box = (l: Phaser.GameObjects.Text) => new Phaser.Geom.Rectangle(l.x - l.width / 2, l.y - l.height / 2, l.width, l.height);
+    for (let i = 0; i < 6; i++) {
+      const hit = this.popups.find((p) => Phaser.Geom.Intersects.RectangleToRectangle(box(label), box(p.label)));
+      if (!hit) break;
+      label.y = hit.label.y - hit.label.height / 2 - label.height / 2 - 1;
+    }
+    const entry: Popup = { label, text, count: 1 };
+    this.popups.push(entry);
+    this.tweens.add({ targets: label, scale: 1, duration: 220, ease: 'Back.easeOut', onComplete: () => this.fadePopup(entry, hold) });
+  }
+
+  /** Надпись повисит и уплывёт вверх, растворяясь. */
+  private fadePopup(entry: Popup, hold: number): void {
+    const { label } = entry;
+    entry.fade = this.tweens.add({
       targets: label,
-      scale: 1,
-      duration: 220,
-      ease: 'Back.easeOut',
-      onComplete: () =>
-        this.tweens.add({ targets: label, y: y - 12, alpha: 0, delay: hold, duration: 600, ease: 'Quad.easeIn', onComplete: () => label.destroy() }),
+      y: label.y - 12,
+      alpha: 0,
+      delay: hold,
+      duration: 600,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        label.destroy();
+        this.popups = this.popups.filter((p) => p !== entry);
+      },
     });
   }
 

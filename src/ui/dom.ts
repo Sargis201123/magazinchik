@@ -263,10 +263,11 @@ const css = `
 .ui-review-text { font-size: 14px; line-height: 1.3; color: #2b2233; margin: 2px 0; }
 .ui-review-who { font-size: 12px; color: #6a5f58; text-align: right; }
 .ui-speed { position: fixed; right: max(10px, calc((100vw - var(--game-w, min(100vw, 56.25dvh))) / 2 + 10px)); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 40px);
-  font: 800 14px ${UI_FONT}; padding: 7px 10px; border: 2px solid #2b2233; border-radius: 8px; background: #f4ecd8;
-  color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
-.ui-speed.on { background: #fee761; }
-.ui-urgent { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 92px); }
+  font: 800 13px ${UI_FONT}; padding: 6px 9px; border: 2px solid rgba(254, 231, 97, .55); border-radius: 8px;
+  background: rgba(24, 20, 37, .72); color: #fff; text-shadow: 0 1px 0 #000; box-shadow: 0 2px 0 rgba(0, 0, 0, .45); }
+.ui-speed:active { transform: translateY(1px); box-shadow: none; }
+.ui-speed.on { background: rgba(254, 231, 97, .92); color: #2b2233; text-shadow: none; border-color: #2b2233; }
+.ui-urgent { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 84px); }
 .ui-report-chart { display: flex; align-items: flex-end; gap: 6px; height: 110px; margin: 10px 0; padding: 0 2px; }
 .ui-report-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
 .ui-report-bar { width: 100%; background: #63c74d; border: 2px solid #2b2233; border-radius: 4px 4px 0 0; }
