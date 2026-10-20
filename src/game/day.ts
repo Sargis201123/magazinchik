@@ -34,6 +34,7 @@ import { addPassXp } from './pass';
 import { rushGuests } from './rush';
 import { spoilDishes } from './kitchen';
 import { staffMorning } from './staffEvents';
+import { districtGuests } from './district';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -106,6 +107,7 @@ export const guestFactor = (state: StoreState): number =>
   lightsGuests(state) *
   departmentGuests(state) *
   eduardGuests(state) *
+  districtGuests(state) *
   giantGuests(state) *
   contestGuests(state) *
   knownBigDayGuests(state.day);

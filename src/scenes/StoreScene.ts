@@ -32,6 +32,7 @@ import {
   shelfFree,
   slotOf,
   STORE_LEVELS,
+  sellableProducts,
   storeLevel,
   takeFromShelf,
   recordSale,
@@ -132,6 +133,7 @@ import { duelInfo, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } 
 import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
 import { DISHES, DISH_IDS, kitchenOpen, portionsOf, sellDish } from '../game/kitchen';
+import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
@@ -712,6 +714,8 @@ export class StoreScene extends Phaser.Scene {
   private rivalAcross = false;
   /** Каким построен «Гигант» за дорогой (giant.ts): стройка, магазин, закрытый. */
   private builtGiant: GiantLook = 'none';
+  /** Какие здания района стояли, когда рисовали улицу (district.ts). */
+  private builtDistrict = '';
   private stats: DayStats = emptyDayStats();
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
@@ -3606,12 +3610,16 @@ export class StoreScene extends Phaser.Scene {
       const key = giant === 'site' ? 'giant_site' : giant === 'store' ? 'giant_store' : 'giant_closed';
       this.art(door.x, top + 92, key).setOrigin(0.5, 0).setDepth(top + 92 + 88);
     }
+    // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
+    const districtAreas = this.buildDistrict(next, top);
+    const inArea = (px: number, py: number, a: { x: number; y: number; w: number; h: number }) => px > a.x - 6 && px < a.x + a.w + 6 && py > a.y - 6 && py < a.y + a.h + 14;
     const scatter = (y0: number, y1: number) => {
       for (let y = y0; y < y1; y += 40) {
         for (let x = left + 10; x < left + width - 10; x += 46) {
           const px = x + rnd.between(-14, 14);
           const py = y + rnd.between(-12, 12);
           if ((giant !== 'none' || this.rivalAcross) && px > giantArea.x && px < giantArea.x + giantArea.w && py > giantArea.y && py < giantArea.y + giantArea.h) continue;
+          if (districtAreas.some((a) => inArea(px, py, a))) continue;
           const roll = rnd.frac();
           // За зданием глубина отрицательная — держим над газоном (-10), но под крышами соседей (-3).
           const depth = py < 0 ? -9.5 + (py + 400) / 1000 : py;
@@ -3623,6 +3631,125 @@ export class StoreScene extends Phaser.Scene {
     };
     scatter(-380, Math.min(-40, top - 230));
     scatter(top + 104, top + 300);
+  }
+
+  /**
+   * Район растёт (district.ts): за дорогой — поликлиника, общежитие и школа слева от конкурента,
+   * бизнес-центр и стадион справа. Пока строят — забор, кран и табличка «Скоро». Возвращает,
+   * где стоят здания, чтобы сквер не сажал на них деревья.
+   */
+  private buildDistrict(next: Layout, top: number): { x: number; y: number; w: number; h: number }[] {
+    this.builtDistrict = districtKey(this.state);
+    const d = this.layout.door.x;
+    const across = top + 92;
+    // Слева от конкурента — три здания, справа — бизнес-центр и стадион; ширина — по месту.
+    const leftEdge = -395;
+    const w3 = Math.min(130, Math.floor((d - 88 - leftEdge - 20) / 3));
+    const stadiumX = d + 222;
+    const spots: Record<BuildingId, { x: number; y: number; w: number; h: number; across: boolean }> = {
+      clinic: { x: leftEdge, y: across, w: w3, h: 116, across: true },
+      dorm: { x: leftEdge + w3 + 10, y: across, w: w3, h: 124, across: true },
+      school: { x: leftEdge + 2 * (w3 + 10), y: across, w: w3, h: 104, across: true },
+      office: { x: d + 90, y: across, w: 120, h: 130, across: true },
+      stadium: { x: stadiumX, y: across, w: Math.min(180, next.w + 395 - stadiumX), h: 128, across: true },
+    };
+    const looks: Record<Exclude<BuildingId, 'stadium'>, Omit<Neighbor, 'x' | 'w' | 'h' | 'name'>> = {
+      school: { sign: 0x3b5dc9, awning: 0xfeae34, roof: 0xf2d8a0, neon: 0xffe080 },
+      office: { sign: 0x262b44, awning: 0x5fcde4, roof: 0xb8c8d8, neon: 0x9cd8ff },
+      dorm: { sign: 0x733e39, awning: 0xc28569, roof: 0xe0c0a8, neon: 0xffb860 },
+      clinic: { sign: 0xe43b44, awning: 0xffffff, roof: 0xe8f0f0, neon: 0xff6070 },
+    };
+    const rnd = new Phaser.Math.RandomDataGenerator(['district']);
+    const areas: { x: number; y: number; w: number; h: number }[] = [];
+    for (const id of BUILDING_IDS) {
+      const stage = buildingStage(this.state, id);
+      if (stage === 'none') continue;
+      const spot = spots[id];
+      areas.push(spot);
+      const name = t(`district.${id}` as TextKey);
+      if (stage === 'site') {
+        this.buildSite(spot, name);
+        continue;
+      }
+      if (id === 'stadium') {
+        this.buildStadium(spot, name);
+        continue;
+      }
+      this.drawNeighbor({ ...looks[id], x: spot.x, w: spot.w, h: spot.h, name: 'district.school', label: `${BUILDINGS[id].icon} ${name}` }, spot.y + spot.h, rnd, true);
+    }
+    return areas;
+  }
+
+  /** Стройка: забор, котлован, кран и табличка «Скоро: …». */
+  private buildSite(a: { x: number; y: number; w: number; h: number; across: boolean }, name: string): void {
+    const base = a.y + a.h;
+    this.add.rectangle(a.x, a.y, a.w, a.h, 0x8f563b).setOrigin(0).setDepth(-8);
+    for (let i = 0; i < 6; i++) this.add.rectangle(a.x + 10 + rnd(a.w - 30), a.y + 10 + rnd(a.h - 30), 14 + rnd(10), 8 + rnd(6), 0x733e39).setOrigin(0).setDepth(-7.9);
+    // Забор по краю со стороны дороги и по бокам.
+    const fenceY = a.across ? a.y : base - 6;
+    for (let x = a.x; x < a.x + a.w; x += 6) this.add.rectangle(x, fenceY, 5, 6, (x / 6) % 2 ? 0xc0cbdc : 0x8b9bb4).setOrigin(0).setDepth(fenceY + 6);
+    this.add.rectangle(a.x, a.y, 3, a.h, 0x8b9bb4).setOrigin(0).setDepth(a.y + a.h);
+    this.add.rectangle(a.x + a.w - 3, a.y, 3, a.h, 0x8b9bb4).setOrigin(0).setDepth(a.y + a.h);
+    // Кран: мачта, стрела и груз.
+    const cx = a.x + a.w * 0.7;
+    const cy = a.y + a.h * 0.75;
+    this.add.rectangle(cx, cy - 70, 4, 70, 0xfeae34).setOrigin(0).setDepth(cy + 1);
+    this.add.rectangle(cx - 46, cy - 72, 64, 4, 0xfeae34).setOrigin(0).setDepth(cy + 1);
+    this.add.rectangle(cx - 40, cy - 68, 1, 22, 0x262b44).setOrigin(0).setDepth(cy + 1);
+    this.add.rectangle(cx - 44, cy - 46, 9, 6, 0x5a6988).setOrigin(0).setDepth(cy + 1);
+    // Каркас будущего здания.
+    for (let i = 0; i < 3; i++) this.add.rectangle(a.x + 16 + i * 22, a.y + a.h * 0.35, 3, a.h * 0.45, 0xc0cbdc).setOrigin(0).setDepth(a.y + a.h * 0.8);
+    this.add.rectangle(a.x + 14, a.y + a.h * 0.35, 50, 3, 0xc0cbdc).setOrigin(0).setDepth(a.y + a.h * 0.8);
+    const signY = a.across ? a.y - 6 : base + 4;
+    this.add.rectangle(a.x + a.w / 2, signY, 70, 11, 0xfee761).setDepth(signY + 20);
+    this.add
+      .text(a.x + a.w / 2, signY, t('district.soon', { name }), { fontFamily: UI_FONT, fontSize: '5px', color: '#262b44' })
+      .setOrigin(0.5)
+      .setResolution(4)
+      .setDepth(signY + 21);
+    function rnd(n: number): number {
+      return Math.floor(Math.random() * Math.max(1, n));
+    }
+  }
+
+  /** Стадион: трибуны, поле с разметкой, прожекторы; в день матча — болельщики на трибунах. */
+  private buildStadium(a: { x: number; y: number; w: number; h: number }, name: string): void {
+    const depth = -7.5;
+    this.add.rectangle(a.x, a.y, a.w, a.h, 0x8b9bb4).setOrigin(0).setDepth(depth);
+    const field = { x: a.x + 16, y: a.y + 18, w: a.w - 32, h: a.h - 36 };
+    this.add.rectangle(field.x, field.y, field.w, field.h, 0x3e8948).setOrigin(0).setDepth(depth + 0.01);
+    for (let x = field.x; x < field.x + field.w; x += 16) this.add.rectangle(x, field.y, 8, field.h, 0x4a9c52).setOrigin(0).setDepth(depth + 0.02);
+    const line = (x: number, y: number, w: number, h: number) => this.add.rectangle(x, y, w, h, 0xffffff, 0.85).setOrigin(0).setDepth(depth + 0.03);
+    line(field.x + 3, field.y + 3, field.w - 6, 1);
+    line(field.x + 3, field.y + field.h - 4, field.w - 6, 1);
+    line(field.x + 3, field.y + 3, 1, field.h - 6);
+    line(field.x + field.w - 4, field.y + 3, 1, field.h - 6);
+    line(field.x + field.w / 2, field.y + 3, 1, field.h - 6);
+    this.add.circle(field.x + field.w / 2, field.y + field.h / 2, 10).setStrokeStyle(1, 0xffffff, 0.85).setDepth(depth + 0.03);
+    // Трибуны рядами; в день матча на них болельщики.
+    const match = isMatchDay(this.state);
+    const colors = [0xe43b44, 0x0099db, 0xfee761, 0xffffff, 0x63c74d];
+    for (const [sx, sy, sw] of [
+      [a.x, a.y, a.w],
+      [a.x, a.y + a.h - 16, a.w],
+    ] as const) {
+      for (let r = 0; r < 4; r++) this.add.rectangle(sx, sy + r * 4, sw, 3, r % 2 ? 0x5a6988 : 0x6a7898).setOrigin(0).setDepth(depth + 0.04);
+      if (match) for (let i = 0; i < sw / 3; i++) this.add.rectangle(sx + 1 + i * 3, sy + 1 + (i % 4) * 4, 2, 2, colors[i % colors.length]).setOrigin(0).setDepth(depth + 0.05);
+    }
+    // Прожекторы по углам.
+    for (const [px, py] of [
+      [a.x + 4, a.y + 2],
+      [a.x + a.w - 6, a.y + 2],
+    ] as const) {
+      this.add.rectangle(px, py - 26, 2, 28, 0x3a4466).setOrigin(0).setDepth(a.y + a.h);
+      this.add.rectangle(px - 3, py - 30, 8, 5, 0xe6e1d6).setOrigin(0).setDepth(a.y + a.h);
+    }
+    this.art(a.x + a.w / 2, a.y - 10, 'sign').setTint(0x3e8948).setDepth(a.y + a.h + 1);
+    this.add
+      .text(a.x + a.w / 2, a.y - 10, `${BUILDINGS.stadium.icon} ${name}`, { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
+      .setOrigin(0.5)
+      .setResolution(4)
+      .setDepth(a.y + a.h + 2);
   }
 
   /** Фонарь не ставим на дорожку к двери и на подъезд к складу. */
@@ -5517,6 +5644,17 @@ export class StoreScene extends Phaser.Scene {
       if (big === 'roadworks' && !forced && !this.night && Math.random() < ROADWORKERS) look = { ...look, ...wearOf('builder', Math.random) };
       if (big && BIG_DAYS[big].masks && !look.face && Math.random() < MASKS) look = { ...look, face: 'medmask' };
     }
+    // Гость из здания района: свой образ и свой список покупок (district.ts).
+    let wants: ProductId[] | undefined;
+    const fromDistrict = !forced && !rare && !thief && !valya && !this.night ? districtGuest(this.state, Math.random) : null;
+    if (fromDistrict) {
+      const sellable = sellableProducts(this.state);
+      const pool = fromDistrict.wants.filter((id) => sellable.includes(id));
+      if (pool.length) {
+        look = { ...look, ...wearOf(fromDistrict.look, Math.random) };
+        wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
+      }
+    }
     const start = forced?.at ?? this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, look);
     this.addUmbrella(sprite);
@@ -5544,7 +5682,7 @@ export class StoreScene extends Phaser.Scene {
     }
     const bubble = this.art(0, -14, 'bubble').setVisible(false);
     sprite.add(bubble);
-    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief, rare: rare?.id };
+    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief, rare: rare?.id, wants };
     // Вора без охранника видно по красному контуру — его можно поймать касанием. Редкий гость — в золотом.
     if (thief && !this.workers.has('guard')) sprite.postFX?.addGlow(0xe43b44, 3, 0, false, 0.1, 6);
     if (rare) sprite.postFX?.addGlow(0xfee761, 3, 0, false, 0.1, 6);
@@ -6503,7 +6641,7 @@ export class StoreScene extends Phaser.Scene {
     if (trialOver) this.state = { ...this.state, decor: { ...this.state.decor, trial: undefined } };
     // Эдуард за ночь открыл магазин побольше — перерисовать улицу.
     const cupChanged = (contestOf(this.state)?.wins ?? 0) !== this.builtCup;
-    if (trialOver || cupChanged || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant) this.buildWorld();
+    if (trialOver || cupChanged || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant || districtKey(this.state) !== this.builtDistrict) this.buildWorld();
     this.updateLighting(0);
     this.openShop();
     showMorning({
