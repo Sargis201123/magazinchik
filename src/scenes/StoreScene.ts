@@ -451,6 +451,8 @@ interface Look {
   faceTint?: number;
   back?: BackId;
   backTint?: number;
+  /** Узор на рубашке: полоски или сердечко на груди. */
+  pattern?: 'stripes' | 'print';
 }
 
 /** Ночной сторож Михалыч: ушанка, ватник цвета хаки, седые усы, фонарик (как в art/security.py). */
@@ -484,6 +486,13 @@ const DOG_COLORS = [0xc28569, 0xead4aa, 0x4a3b52, 0xffffff, 0xe4a672];
 const ARCHETYPE_SHARE = 0.5;
 
 function customerLook(shirt: number, day = 0): Look {
+  // Каждый пятый — в полоску, каждый восьмой — с сердечком на груди.
+  const roll = Math.random();
+  const pattern: Partial<Look> = roll < 0.2 ? { pattern: 'stripes' } : roll < 0.32 ? { pattern: 'print' } : {};
+  return { ...plainLook(shirt, day), ...pattern };
+}
+
+function plainLook(shirt: number, day: number): Look {
   const look = randomLook(shirt);
   if (day && Math.random() < ARCHETYPE_SHARE) return { ...look, ...pickWear(day, Math.random).wear };
   const roll = Math.random();
@@ -579,7 +588,7 @@ const MARAT: Look = { shirt: 0xffffff, skin: 0xd9a066, pants: 0x262b44, hair: 0x
 const SCHOOL_COOK: Look = { shirt: 0x5fcde4, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xc0cbdc, style: 'cap', acc: 'apron' };
 const EDUARD: Look = { shirt: 0x3a4466, skin: 0xf2d3ab, pants: 0x262b44, hair: 0x181425, style: 'short', acc: 'tie' };
 /** Аксессуары, которые видны только спереди. */
-const FRONT_ONLY = new Set(['acc_badge', 'acc_tie', 'acc_glasses']);
+const FRONT_ONLY = new Set(['acc_badge', 'acc_tie', 'acc_glasses', 'p_pat_print']);
 const GRANDMA_LINES_KEYS: TextKey[] = ['visit.grandma1', 'visit.grandma2', 'visit.grandma3'];
 const ORDER_GUESTS: Record<ClientId, [Look, TextKey]> = {
   chef: [MARAT, 'who.marat'],
@@ -1431,6 +1440,10 @@ export class StoreScene extends Phaser.Scene {
     for (let y = this.layout.wallH + 40; y < h - 10; y += 64) {
       // LED светит белым, лампы накаливания — тёплым.
       for (let x = 34; x < w; x += 68) this.ceilingGlows.push(glow(x, y, 70, gearTier(this.state, 'lights') ? 0xf4f8ff : 0xfff0c8));
+    }
+    // Флигель светится так же, как зал: в каждой открытой комнате и на складе — свой плафон.
+    for (const room of this.openRooms()) {
+      this.ceilingGlows.push(glow(room.x + room.w / 2, room.y + room.h / 2 + 4, Math.max(room.w, room.h) * 1.3, 0xfff0c8));
     }
     this.updateLighting(this.running ? undefined : 0);
   }
@@ -4793,6 +4806,10 @@ export class StoreScene extends Phaser.Scene {
     this.roomSign(x, y + 7, w, t(`wing.${kind}`));
     if (open) {
       this.nightGlow(this.art(x + w / 2, y + 26, 'glow').setScale(44 / 64).setTint(kind === 'bakery' ? 0xffd8a0 : 0xffe8c8), 0.5);
+      // Мелочи: на стене слева от таблички — меню, банки или сковородки; у двери — коврик.
+      this.art(x + 13, y + 7, kind === 'coffee' ? 'menu_chalk' : kind === 'bakery' ? 'jar_shelf' : 'pot_rack').setDepth(2);
+      if (kind === 'bakery') this.art(x + w - 8, y + h - 8, 'flour_sacks').setDepth(y + h - 2);
+      this.add.rectangle(x + w - 3, room.doorway.y, 4, 14, 0x9e5b33).setStrokeStyle(1, 0x5a3420).setDepth(1.5);
       return;
     }
     this.add.rectangle(x, y + 16, w, h - 16, 0x1d1a26, 0.62).setOrigin(0).setDepth(y + h);
@@ -5090,6 +5107,15 @@ export class StoreScene extends Phaser.Scene {
     const back = look.back ? wear(`w_back_${look.back}`, look.backTint, true) : undefined;
     if (back) parts.push(back);
     parts.push(legs, shirt);
+    if (look.pattern) {
+      // Светлая рубашка — тёмный узор, тёмная — светлый.
+      const c = Phaser.Display.Color.IntegerToColor(look.shirt);
+      const light = (c.red * 299 + c.green * 587 + c.blue * 114) / 1000 > 150;
+      const tint = look.pattern === 'print' ? (light ? 0xe43b44 : 0xfee761) : light ? 0x262b44 : 0xffffff;
+      const pat = this.art(0, 0, `p_pat_${look.pattern}`).setTint(tint).setAlpha(look.pattern === 'print' ? 1 : 0.45);
+      layers.push([pat, `p_pat_${look.pattern}`]);
+      parts.push(pat);
+    }
     if (look.outfit) parts.push(wear(`w_outfit_${look.outfit}`, look.outfitTint));
     if (look.acc) {
       const acc = this.art(0, 0, `acc_${look.acc}`).setTint(look.accTint ?? 0xffffff);
@@ -6577,6 +6603,13 @@ export class StoreScene extends Phaser.Scene {
     sound.coin();
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
+    // Покупки — в бумажный пакет: с ним покупатель и уходит (с тележкой — нет, товар в ней).
+    if (c.items.length && c.sprite.getData('push') !== 'trolley') {
+      const bag = this.art(6, 3, 'paper_bag').setScale(0);
+      const size = 0.85 / ART;
+      c.sprite.add(bag);
+      this.tweens.add({ targets: bag, scale: size, duration: 220, ease: 'Back.easeOut' });
+    }
     const shown = where ?? (at ? { x: at.counter.x + (at === this.registers[0] ? 8 : -8), y: at.counter.y + 0 } : { x: this.layout.sellerHome.x - 8, y: this.layout.sellerHome.y - 18 });
     this.popup(shown.x, shown.y, `+${total} 💰`, '#c8ffb0');
     this.combo = this.time.now - this.lastSaleAt < COMBO_WINDOW_MS ? this.combo + 1 : 1;
