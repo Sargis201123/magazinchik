@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { recordReferral, socialPing } from '../api/_lib/social';
+import { recordReferral, recordSource, socialPing, sourceOf } from '../api/_lib/social';
 import { leaderboard, progress, stats } from '../api/_lib/stats';
 import type { D1, D1Statement, Env } from '../api/_lib/telegram';
 
@@ -27,8 +27,9 @@ const TOKEN = '123456:TEST-token';
 const enc = new TextEncoder();
 const hmac = async (key: BufferSource, data: string) =>
   crypto.subtle.sign('HMAC', await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']), enc.encode(data));
-async function initData(id: number): Promise<string> {
-  const fields = { auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id, first_name: 'Тест' }) };
+async function initData(id: number, startParam?: string): Promise<string> {
+  const fields: Record<string, string> = { auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id, first_name: 'Тест' }) };
+  if (startParam) fields.start_param = startParam;
   const check = Object.entries(fields).map(([k, v]) => `${k}=${v}`).sort().join('\n');
   const secret = await hmac(enc.encode('WebAppData'), TOKEN);
   const hash = [...new Uint8Array(await hmac(secret, check))].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -84,5 +85,32 @@ describe.skipIf(!Database)('рейтинг и аналитика (сервер)'
     const s = (await (await stats(new Request('https://x/api/stats?key=sekret'), env)).json()) as { funnel: Record<string, number>; eventsWeek: { kind: string; n: number }[] };
     expect(s.funnel).toMatchObject({ day1: 2, day2: 2, day3: 1, day10: 1, day15: 0 });
     expect(s.eventsWeek).toEqual([{ kind: 'day_end', n: 1, players: 1 }]);
+  });
+
+  it('рекламные метки: канал нового игрока, приглашения, прямые ссылки; в сводке — по каналам', async () => {
+    expect(sourceOf('src_TGAds')).toBe('tgads');
+    expect(sourceOf('ref_42')).toBe('ref');
+    expect(sourceOf('guild_ABC')).toBeNull();
+    expect(sourceOf('src_' + 'x'.repeat(30))).toBeNull();
+    const env: Env = { BOT_TOKEN: TOKEN, WEBHOOK_SECRET: 'sekret', DB: d1() };
+    // Через бота: /start src_telega, потом открыл игру.
+    await recordSource(env, 1, 'src_telega');
+    await socialPing(await post(1), env);
+    // Прямая ссылка в игру: ?startapp=src_tgads.
+    const direct = new Request('https://x/api', { method: 'POST', body: JSON.stringify({ initData: await initData(2, 'src_tgads'), lang: 'ru' }) });
+    await socialPing(direct, env);
+    // Уже игравший пришёл по рекламе — не новый, не считаем.
+    await socialPing(await post(3), env);
+    await recordSource(env, 3, 'src_telega');
+    // Нажал «Старт» по рекламе, но игру не открыл — в сводку не попадает.
+    await recordSource(env, 4, 'src_telega');
+    await progress(await post(1, { day: 8 }), env);
+    await progress(await post(2, { day: 2 }), env);
+    const s = (await (await stats(new Request('https://x/api/stats?key=sekret'), env)).json()) as { sources: { source: string; players: number; day3: number | null; day7: number | null }[] };
+    expect(s.sources).toEqual([
+      { source: 'telega', players: 1, day3: 1, day7: 1 },
+      { source: 'tgads', players: 1, day3: 0, day7: 0 },
+      { source: 'organic', players: 1, day3: null, day7: null },
+    ]);
   });
 });

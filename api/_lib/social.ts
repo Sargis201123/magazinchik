@@ -29,6 +29,8 @@ const SCHEMA = [
   // Последняя выручка, которую прислала игра (от неё считается прирост, stats.ts).
   'CREATE TABLE IF NOT EXISTS reported (id INTEGER PRIMARY KEY, raw INTEGER)',
   'CREATE TABLE IF NOT EXISTS events (id INTEGER, at INTEGER, kind TEXT, day INTEGER, value INTEGER)',
+  // Откуда пришёл новый игрок: рекламная ссылка src_<канал> или приглашение друга (только первый раз).
+  'CREATE TABLE IF NOT EXISTS sources (id INTEGER PRIMARY KEY, source TEXT, at INTEGER)',
   'CREATE INDEX IF NOT EXISTS events_kind ON events (kind, at)',
   // Торговая неделя с другом и гильдии района (guild.ts).
   'CREATE TABLE IF NOT EXISTS week_start (id INTEGER, week INTEGER, revenue INTEGER, PRIMARY KEY (id, week))',
@@ -80,6 +82,28 @@ export async function recordReferral(env: Env, invitee: number, payload: string)
   await db.prepare('INSERT OR IGNORE INTO referrals (invitee, inviter, at, claimed) VALUES (?, ?, ?, 0)').bind(invitee, inviter, Date.now()).run();
 }
 
+/**
+ * Рекламная метка ссылки: t.me/<бот>?start=src_<канал> (через бота) или
+ * t.me/<бот>/<приложение>?startapp=src_<канал> (сразу в игру). Приглашение друга — «ref».
+ */
+export function sourceOf(payload: string): string | null {
+  const text = payload.trim();
+  const src = /^src_([a-z0-9_]{1,24})$/i.exec(text);
+  if (src) return src[1].toLowerCase();
+  return /^ref_\d+$/.test(text) ? 'ref' : null;
+}
+
+/** Запомнить, откуда пришёл игрок, — только если он новый и источник ещё не записан. */
+export async function recordSource(env: Env, id: number, payload: string, now = Date.now()): Promise<void> {
+  const db = env.DB;
+  const source = sourceOf(payload);
+  if (!db || !source) return;
+  await ready(db);
+  const known = await db.prepare('SELECT id FROM players WHERE id = ?').bind(id).first<{ id: number }>();
+  if (known) return;
+  await db.prepare('INSERT OR IGNORE INTO sources (id, source, at) VALUES (?, ?, ?)').bind(id, source, now).run();
+}
+
 /** Сколько приглашённых уже играют и сколько из них ещё не забраны. */
 async function friends(db: D1, inviter: number): Promise<{ total: number; unclaimed: number }> {
   const row = await db
@@ -106,6 +130,9 @@ export async function socialPing(request: Request, env: Env): Promise<Response> 
   if (!user) return json({ error: 'bad_init_data' }, 401);
   await ready(db);
   const now = Date.now();
+  // Открыли игру прямой ссылкой ?startapp=src_<канал> — запомнить источник до первой записи игрока.
+  const startParam = new URLSearchParams(body.initData ?? '').get('start_param');
+  if (startParam) await recordSource(env, user.id, startParam, now).catch((e) => console.error(e));
   await db
     .prepare(
       'INSERT INTO players (id, lang, joined, last_seen, misses) VALUES (?, ?, ?, ?, 0) ON CONFLICT(id) DO UPDATE SET lang = excluded.lang, last_seen = excluded.last_seen, misses = 0',

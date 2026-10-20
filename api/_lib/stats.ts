@@ -4,7 +4,7 @@
 // и несколько событий (закончил день, обучение, банкротство…). Из прогресса строится рейтинг:
 // весь Telegram и «свои» — кого игрок пригласил, кто пригласил его и кого пригласил тот же друг.
 // Сводка для владельца — GET /api/stats?key=WEBHOOK_SECRET: сколько игроков, на каком дне бросают,
-// сколько возвращаются на следующий день и через неделю.
+// сколько возвращаются на следующий день и через неделю, откуда пришли (рекламные метки src_<канал>).
 
 import { markWeek } from './guild.js';
 import { markWeekend } from './weekend.js';
@@ -146,5 +146,15 @@ export async function stats(request: Request, env: Env, now = Date.now()): Promi
   for (const d of FUNNEL_DAYS) funnel[`day${d}`] = await n('SELECT COUNT(*) AS n FROM progress WHERE day >= ?', d);
   const levels = (await db.prepare('SELECT level, COUNT(*) AS n FROM progress GROUP BY level ORDER BY level').all<{ level: number; n: number }>()).results;
   const events = (await db.prepare('SELECT kind, COUNT(*) AS n, COUNT(DISTINCT id) AS players FROM events WHERE at > ? GROUP BY kind ORDER BY n DESC').bind(now - 7 * DAY).all<{ kind: string; n: number; players: number }>()).results;
-  return json({ players, active, retention: { d1: await retention(1), d7: await retention(7) }, funnel, levels, eventsWeek: events });
+  // Рекламные каналы: сколько пришло и сколько из них дошли до 3-го и 7-го дня; без метки — «organic».
+  const tagged = (
+    await db
+      .prepare(
+        'SELECT s.source AS source, COUNT(*) AS players, SUM(CASE WHEN p.day >= 3 THEN 1 ELSE 0 END) AS day3, SUM(CASE WHEN p.day >= 7 THEN 1 ELSE 0 END) AS day7 FROM sources s JOIN players pl ON pl.id = s.id LEFT JOIN progress p ON p.id = s.id GROUP BY s.source ORDER BY players DESC, source',
+      )
+      .all<{ source: string; players: number; day3: number | null; day7: number | null }>()
+  ).results.map((r) => ({ ...r, day3: r.day3 ?? 0, day7: r.day7 ?? 0 }));
+  const organic = players - tagged.reduce((sum, r) => sum + r.players, 0);
+  const sources = [...tagged, { source: 'organic', players: Math.max(0, organic), day3: null, day7: null }];
+  return json({ players, active, retention: { d1: await retention(1), d7: await retention(7) }, funnel, levels, sources, eventsWeek: events });
 }
