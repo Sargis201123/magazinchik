@@ -178,7 +178,7 @@ import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
 import { claimPass, grantPass, passCoins, passDecor, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { rushPrize } from '../game/rush';
-import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo } from '../platform/multiplayer';
+import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
 import { flushCloud, saveGame } from '../game/save';
@@ -500,6 +500,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     card.replaceChildren(
       title,
       ...(touring ? [] : tipBox(state)),
+      ...giftsBox(),
       ...rushBox(state),
       ...passBox(state),
       ...taleBox(state),
@@ -1045,6 +1046,20 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       card.replaceChildren(...head, rows, button(t('board.close'), close, 'ui-btn secondary'));
     };
     render2();
+  };
+
+  /** Подарки друзей: «угостили кофе» — забрать монеты. */
+  const giftsBox = (): HTMLElement[] => {
+    const gifts = visitsInfo()?.gifts ?? [];
+    if (!gifts.length) return [];
+    const total = gifts.reduce((sum, g) => sum + g.amount, 0);
+    const box = el('div', 'ui-box ui-duel');
+    const claim = button(t('visit.claim', { n: total }), () => {
+      claim.disabled = true;
+      void claimGifts().then((n) => update({ ...getState(), money: getState().money + n }, n ? 'success' : 'tap'));
+    });
+    box.append(el('div', 'ui-note', t('visit.gifts', { names: [...new Set(gifts.map((g) => g.name))].join(', ') })), claim);
+    return [box];
   };
 
   /** «Чёрная пятница района»: общий счётчик и место в выходные, приз — после. */

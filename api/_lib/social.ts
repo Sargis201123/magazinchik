@@ -39,6 +39,9 @@ const SCHEMA = [
   // «Чёрная пятница района» по выходным (weekend.ts): выручка за выходные.
   'CREATE TABLE IF NOT EXISTS weekend (id INTEGER, week INTEGER, start INTEGER, last INTEGER, PRIMARY KEY (id, week))',
   'CREATE INDEX IF NOT EXISTS weekend_week ON weekend (week)',
+  // Друзья в гостях: угостить кофе (visits.ts).
+  'CREATE TABLE IF NOT EXISTS gifts (sender INTEGER, receiver INTEGER, day INTEGER, amount INTEGER, claimed INTEGER DEFAULT 0, PRIMARY KEY (sender, receiver, day))',
+  'CREATE INDEX IF NOT EXISTS gifts_receiver ON gifts (receiver, claimed)',
 ].join(';\n');
 
 /** Таблицы создаются сами при первом обращении к базе. */

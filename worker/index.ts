@@ -8,6 +8,7 @@ import { sendReminders, socialClaim, socialPing } from '../api/_lib/social.js';
 import { leaderboard, progress, stats } from '../api/_lib/stats.js';
 import { duel, guild } from '../api/_lib/guild.js';
 import { weekend } from '../api/_lib/weekend.js';
+import { visits } from '../api/_lib/visits.js';
 import type { Env } from '../api/_lib/telegram.js';
 
 interface WorkerEnv extends Env {
@@ -29,6 +30,7 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   '/api/duel': { method: 'POST', handler: duel },
   '/api/guild': { method: 'POST', handler: guild },
   '/api/weekend': { method: 'POST', handler: weekend },
+  '/api/visits': { method: 'POST', handler: visits },
 };
 
 export default {

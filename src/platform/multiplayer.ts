@@ -89,6 +89,43 @@ export const guildReward = (level: number): number => 500 + 500 * level;
 
 /** При запуске: торговая неделя и гильдия; когда пришло — событие MP_EVENT. */
 export async function loadMultiplayer(): Promise<void> {
-  await Promise.all([fetchDuel(), guildAction('status'), fetchWeekend()]);
+  await Promise.all([fetchDuel(), guildAction('status'), fetchWeekend(), fetchVisits()]);
   window.dispatchEvent(new Event(MP_EVENT));
+}
+
+export interface VisitFriend {
+  id: number;
+  name: string;
+  level: number;
+  treated: boolean;
+}
+
+let visitsCache: { friends: VisitFriend[]; gifts: { name: string; amount: number }[] } | null = null;
+/** Друзья, которые заходят в гости, и подарки от них, ещё не забранные. */
+export const visitsInfo = () => visitsCache;
+
+export async function fetchVisits(): Promise<void> {
+  const initData = telegramInitData();
+  if (!initData) return;
+  const res = await post<{ enabled?: boolean; friends?: VisitFriend[]; gifts?: { name: string; amount: number }[] }>('/api/visits', { initData, action: 'list' });
+  visitsCache = res?.enabled ? { friends: res.friends ?? [], gifts: res.gifts ?? [] } : null;
+}
+
+/** Угостить друга кофе: он получит монеты при следующем запуске. */
+export async function treatFriend(id: number): Promise<boolean> {
+  const initData = telegramInitData();
+  if (!initData) return false;
+  const res = await post<{ ok?: boolean }>('/api/visits', { initData, action: 'gift', to: id });
+  const ok = Boolean(res?.ok);
+  if (ok && visitsCache) visitsCache = { ...visitsCache, friends: visitsCache.friends.map((f) => (f.id === id ? { ...f, treated: true } : f)) };
+  return ok;
+}
+
+/** Забрать подарки друзей: сколько монет. */
+export async function claimGifts(): Promise<number> {
+  const initData = telegramInitData();
+  if (!initData) return 0;
+  const res = await post<{ amount?: number }>('/api/visits', { initData, action: 'claim' });
+  if (visitsCache) visitsCache = { ...visitsCache, gifts: [] };
+  return res?.amount ?? 0;
 }
