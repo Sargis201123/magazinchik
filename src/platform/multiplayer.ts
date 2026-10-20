@@ -1,5 +1,5 @@
 // Торговая неделя с другом и гильдия района (api/_lib/guild.ts). Данные приходят при запуске
-// игры и лежат здесь; утро и вкладка «Магазин» берут их отсюда. Без Telegram или базы — null.
+// игры и лежат здесь; утро и профиль берут их отсюда. Без Telegram или базы — null.
 
 import { openTelegramLink, telegramInitData } from './telegram';
 import { post, socialInfo } from './social';

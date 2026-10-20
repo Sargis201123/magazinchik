@@ -48,9 +48,19 @@ export function showAchievements(state: StoreState): void {
   card.append(grid, button(t('ach.close'), close));
 }
 
-/** «Новое достижение!» — всплывашка со значком. */
+/** Достижения, открытые почти одновременно (утром их бывает несколько), — одной всплывашкой. */
+let pending: AchievementId[] = [];
+
+/** «Новое достижение!» — всплывашка со значком; несколько сразу — «Новых достижений: 3». */
 export function announceAchievement(id: AchievementId): void {
-  sound.good();
-  setTimeout(() => sound.medal(), 750);
-  toast(badgeSrc(id), t('ach.unlocked'), t(achievementName(id)), true);
+  pending.push(id);
+  if (pending.length > 1) return;
+  setTimeout(() => {
+    const ids = pending;
+    pending = [];
+    sound.good();
+    setTimeout(() => sound.medal(), 750);
+    const names = ids.map((a) => t(achievementName(a))).join(', ');
+    toast(badgeSrc(ids[0]), ids.length > 1 ? t('ach.unlockedMany', { n: ids.length }) : t('ach.unlocked'), names, true);
+  }, 1500);
 }

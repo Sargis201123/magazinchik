@@ -193,7 +193,7 @@ function makeDeal(state: StoreState, random: () => number): MorningEvent | undef
 
 /**
  * Ответ на утреннее событие. Заказ: принять — вечером его заберут. Партия: купить
- * на склад. Холодильник: починить сейчас (или потом во вкладке «Полки»).
+ * на склад. Холодильник: починить сейчас (или потом во вкладке «Зал»).
  * Проверка и болезнь — просто уведомления.
  */
 export function answerEvent(state: StoreState, accept: boolean): StoreState | null {
