@@ -7,6 +7,12 @@ const at = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day
 const withEvent = (kind: NonNullable<StoreState['staffEvent']>['kind'], roles: StaffMember['role'][] = ['cashier']) => at({ staffEvent: { kind, roles, day: 20 } });
 
 describe('персонал с характером', () => {
+  it('сотрудник уволился, пока ждал ответа — денег не берём', () => {
+    const s = answerStaffEvent({ ...withEvent('course'), staff: [member('loader')] }, true)!;
+    expect(s.money).toBe(5000);
+    expect(s.staffEvent).toBeUndefined();
+  });
+
   it('история случается не раньше 10-го дня и только при двух сотрудниках', () => {
     expect(staffMorning(at({ day: 5 }), () => 0).staffEvent).toBeUndefined();
     expect(staffMorning(at({ staff: [member('cashier')] }), () => 0).staffEvent).toBeUndefined();

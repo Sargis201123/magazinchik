@@ -54,9 +54,9 @@ export function answerStaffEvent(state: StoreState, yes: boolean): StoreState | 
   if (!event) return null;
   const cost = eventCost(event);
   if (yes && state.money < cost) return null;
+  // Сотрудник мог уволиться, пока ждал ответа: просьба снимается, денег не берём.
+  if (!event.roles.every((r) => state.staff.some((m) => m.role === r))) return { ...state, staffEvent: undefined };
   let s: StoreState = { ...state, staffEvent: undefined, money: state.money - (yes ? cost : 0) };
-  // Сотрудник мог уволиться, пока ждал ответа.
-  if (!event.roles.every((r) => s.staff.some((m) => m.role === r))) return s;
   const [a, b] = event.roles;
   switch (event.kind) {
     case 'wedding':

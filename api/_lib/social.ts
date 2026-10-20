@@ -26,6 +26,8 @@ const SCHEMA = [
   // Прогресс магазина — для рейтинга и сводки (stats.ts) — и события игры для воронки.
   'CREATE TABLE IF NOT EXISTS progress (id INTEGER PRIMARY KEY, name TEXT, day INTEGER, level INTEGER, rating REAL, revenue INTEGER, money INTEGER, chapter INTEGER, updated INTEGER)',
   'CREATE INDEX IF NOT EXISTS progress_revenue ON progress (revenue)',
+  // Последняя выручка, которую прислала игра (от неё считается прирост, stats.ts).
+  'CREATE TABLE IF NOT EXISTS reported (id INTEGER PRIMARY KEY, raw INTEGER)',
   'CREATE TABLE IF NOT EXISTS events (id INTEGER, at INTEGER, kind TEXT, day INTEGER, value INTEGER)',
   'CREATE INDEX IF NOT EXISTS events_kind ON events (kind, at)',
   // Торговая неделя с другом и гильдии района (guild.ts).
@@ -36,6 +38,8 @@ const SCHEMA = [
   'CREATE INDEX IF NOT EXISTS guild_members_guild ON guild_members (guild)',
   'CREATE TABLE IF NOT EXISTS guild_invites (player INTEGER PRIMARY KEY, guild INTEGER, at INTEGER)',
   'CREATE TABLE IF NOT EXISTS guild_weeks (guild INTEGER, week INTEGER, target INTEGER, PRIMARY KEY (guild, week))',
+  // Выполнила ли гильдия цель недели: записывается один раз, когда неделя кончилась.
+  'CREATE TABLE IF NOT EXISTS guild_results (guild INTEGER, week INTEGER, reached INTEGER, PRIMARY KEY (guild, week))',
   // «Чёрная пятница района» по выходным (weekend.ts): выручка за выходные.
   'CREATE TABLE IF NOT EXISTS weekend (id INTEGER, week INTEGER, start INTEGER, last INTEGER, PRIMARY KEY (id, week))',
   'CREATE INDEX IF NOT EXISTS weekend_week ON weekend (week)',

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordReferral, socialPing } from '../api/_lib/social';
-import { progress } from '../api/_lib/stats';
+import { progress, REVENUE_PER_MINUTE } from '../api/_lib/stats';
 import { duel, guild, markWeek, recordGuildInvite, weekOf, GUILD_MIN } from '../api/_lib/guild';
 import type { D1, D1Statement, Env } from '../api/_lib/telegram';
 
@@ -78,6 +78,14 @@ describe.skipIf(!Database)('торговая неделя и гильдии (с�
     const d = await json<{ rival: { name: string; mine: number; theirs: number }; last: { won: boolean; mine: number; theirs: number } }>(duel(await post(1), env, now));
     expect(d.rival).toMatchObject({ mine: 1000, theirs: 0 });
     expect(d.last).toMatchObject({ won: true, mine: 5000, theirs: 3000 });
+    // Выручку считает сервер: прыжок до триллиона и откат к нулю ничего не дают.
+    await db.prepare('UPDATE progress SET updated = updated - 10000').run();
+    await progress(await post(1, { revenue: 1e12 }), env);
+    const capped = (await db.prepare('SELECT revenue FROM progress WHERE id = 1').first<{ revenue: number }>())!.revenue;
+    expect(capped).toBeLessThanOrEqual(16000 + REVENUE_PER_MINUTE);
+    await db.prepare('UPDATE progress SET updated = updated - 10000').run();
+    await progress(await post(1, { revenue: 0 }), env);
+    expect((await db.prepare('SELECT revenue FROM progress WHERE id = 1').first<{ revenue: number }>())!.revenue).toBe(capped);
     // Без друзей — соперника нет.
     const lonely = await json<{ rival?: unknown }>(duel(await post(9), env, now));
     expect(lonely.rival).toBeUndefined();
@@ -95,9 +103,31 @@ describe.skipIf(!Database)('торговая неделя и гильдии (с�
     await recordGuildInvite(env, 3, `guild_${code}`);
     const byLink = await json<G>(guild(await post(3, { action: 'status' }), env));
     expect(byLink.guild!.members).toHaveLength(3);
-    // Цель недели зафиксирована при первом запросе — не растёт от новых участников.
-    expect(byLink.guild!.target).toBe(GUILD_MIN);
+    // Новичок добавляет свою долю к цели (создать гильдию одному и позвать всех — не выйдет)…
+    expect(byLink.guild!.target).toBe(3 * GUILD_MIN);
     const left = await json<G>(guild(await post(3, { action: 'leave' }), env));
     expect(left.guild).toBeUndefined();
+    // …а ушедший цель не снижает.
+    expect((await json<G>(guild(await post(1), env))).guild!.target).toBe(3 * GUILD_MIN);
+  });
+
+  it('итог прошлой недели: новички его не меняют, и он запоминается', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
+    const db = env.DB!;
+    const now = Date.now();
+    const week = weekOf(now);
+    await guild(await post(1, { action: 'create', name: 'Район' }), env, now - 7 * DAY);
+    const g = (await db.prepare('SELECT id, code FROM guilds').first<{ id: number; code: string }>())!;
+    // Прошлая неделя: у 1-го +1000 при цели 5000 — не выполнена. 2-й заработал 10 000, но вступил только сейчас.
+    await markWeek(db, 1, 0, now - 7 * DAY);
+    await markWeek(db, 1, 1000, now);
+    await markWeek(db, 2, 0, now - 7 * DAY);
+    await markWeek(db, 2, 10000, now);
+    await db.prepare('INSERT OR REPLACE INTO guild_weeks (guild, week, target) VALUES (?, ?, 5000)').bind(g.id, week - 1).run();
+    await guild(await post(2, { action: 'join', code: g.code }), env, now);
+    type G = { guild?: { last?: { reached: boolean } } };
+    expect((await json<G>(guild(await post(1), env, now))).guild!.last).toMatchObject({ reached: false });
+    await db.prepare('UPDATE guild_members SET joined = 0').run();
+    expect((await json<G>(guild(await post(1), env, now))).guild!.last).toMatchObject({ reached: false });
   });
 });

@@ -103,15 +103,37 @@ async function guildOf(db: D1, user: number): Promise<{ id: number; code: string
 const membersOf = async (db: D1, guild: number): Promise<number[]> =>
   (await db.prepare('SELECT player FROM guild_members WHERE guild = ? ORDER BY joined').bind(guild).all<{ player: number }>()).results.map((r) => r.player);
 
-/** Цель недели: считается один раз, когда неделя началась. */
+/**
+ * Цель недели: прошлая неделя участников с запасом. Кто вступил посреди недели, добавляет свою
+ * долю; ушедшие цель не снижают (иначе — создать гильдию одному с целью 5000 и позвать всех).
+ */
 async function targetOf(db: D1, guild: number, week: number, members: number[]): Promise<number> {
   const fixed = await db.prepare('SELECT target FROM guild_weeks WHERE guild = ? AND week = ?').bind(guild, week).first<{ target: number }>();
-  if (fixed) return fixed.target;
   let target = 0;
   for (const id of members) target += Math.max(GUILD_MIN, Math.round((await weekRevenue(db, id, week - 1)) * GUILD_STRETCH));
-  target = Math.round(target / 1000) * 1000;
-  await db.prepare('INSERT OR IGNORE INTO guild_weeks (guild, week, target) VALUES (?, ?, ?)').bind(guild, week, target).run();
+  target = Math.max(fixed?.target ?? 0, Math.round(target / 1000) * 1000);
+  if (target !== fixed?.target) await db.prepare('INSERT OR REPLACE INTO guild_weeks (guild, week, target) VALUES (?, ?, ?)').bind(guild, week, target).run();
   return target;
+}
+
+/** Начало недели (мс). */
+const weekStart = (week: number): number => (week * 7 - 3) * DAY;
+
+/**
+ * Выполнена ли цель прошлой недели: считается один раз и запоминается. Считаются только те,
+ * кто был в гильдии до конца той недели, — новички в понедельник прошлую неделю не «доделают».
+ */
+async function lastResult(db: D1, guild: number, week: number): Promise<boolean | null> {
+  const saved = await db.prepare('SELECT reached FROM guild_results WHERE guild = ? AND week = ?').bind(guild, week).first<{ reached: number }>();
+  if (saved) return saved.reached === 1;
+  const target = await db.prepare('SELECT target FROM guild_weeks WHERE guild = ? AND week = ?').bind(guild, week).first<{ target: number }>();
+  if (!target) return null;
+  const ids = (await db.prepare('SELECT player FROM guild_members WHERE guild = ? AND joined < ?').bind(guild, weekStart(week + 1)).all<{ player: number }>()).results;
+  let sum = 0;
+  for (const { player } of ids) sum += await weekRevenue(db, player, week);
+  const reached = sum >= target.target;
+  await db.prepare('INSERT OR IGNORE INTO guild_results (guild, week, reached) VALUES (?, ?, ?)').bind(guild, week, reached ? 1 : 0).run();
+  return reached;
 }
 
 /** Вступить по приглашению из ссылки (вебхук записал его при /start guild_<код>). */
@@ -179,12 +201,7 @@ export async function guild(request: Request, env: Env, now = Date.now()): Promi
   }
   members.sort((x, y) => y.week - x.week);
   const target = await targetOf(db, g.id, week, ids);
-  const lastTarget = await db.prepare('SELECT target FROM guild_weeks WHERE guild = ? AND week = ?').bind(g.id, week - 1).first<{ target: number }>();
-  let last;
-  if (lastTarget) {
-    let sum = 0;
-    for (const id of ids) sum += await weekRevenue(db, id, week - 1);
-    last = { week: week - 1, reached: sum >= lastTarget.target };
-  }
+  const reached = await lastResult(db, g.id, week - 1);
+  const last = reached === null ? undefined : { week: week - 1, reached };
   return json({ enabled: true, error, guild: { name: g.name, code: g.code, owner: g.owner === user, members, target, total, daysLeft: daysLeft(now), week, last } });
 }

@@ -12,12 +12,12 @@ const DAY = 24 * 3600_000;
 /** Выходные сейчас (суббота или воскресенье по UTC). */
 export const isWeekend = (now: number): boolean => [0, 6].includes(new Date(now).getUTCDay());
 
-/** Прогресс в выходные: запомнить выручку на начало и обновить последнюю. */
-export async function markWeekend(db: D1, id: number, revenue: number, now: number): Promise<void> {
+/** Прогресс в выходные: запомнить выручку на начало (до первого отчёта) и обновить последнюю. */
+export async function markWeekend(db: D1, id: number, before: number, revenue: number, now: number): Promise<void> {
   if (!isWeekend(now)) return;
   await db
     .prepare('INSERT INTO weekend (id, week, start, last) VALUES (?, ?, ?, ?) ON CONFLICT(id, week) DO UPDATE SET last = excluded.last')
-    .bind(id, weekOf(now), revenue, revenue)
+    .bind(id, weekOf(now), before, revenue)
     .run();
 }
 

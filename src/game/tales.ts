@@ -39,7 +39,7 @@ export const TALES: Record<TaleId, Tale> = {
     from: 8,
     episodes: [
       [{ effect: { take: ['bread', 1], rating: 0.03 }, next: [1, 3] }, { effect: {} }],
-      [{ effect: { money: -300 }, next: [2, 6] }, { effect: {}, next: [3, 6] }],
+      [{ effect: { money: -300 }, require: { money: 300 }, next: [2, 6] }, { effect: {}, next: [3, 6] }],
       [{ effect: { money: 600, boost: [0.15, 4] }, next: [4, 10] }],
       [{ effect: { boost: [0.08, 3] }, next: [4, 10] }],
       [{ effect: { boost: [0.1, 10], rating: 0.05 } }],
@@ -49,7 +49,7 @@ export const TALES: Record<TaleId, Tale> = {
     icon: '💍',
     from: 15,
     episodes: [
-      [{ effect: { money: -200, rating: 0.05 }, next: [1, 2] }, { effect: { rating: -0.02 } }],
+      [{ effect: { money: -200, rating: 0.05 }, require: { money: 200 }, next: [1, 2] }, { effect: { rating: -0.02 } }],
       [{ effect: {}, next: [2, 5] }, { effect: {} }],
       [{ effect: { sell: ['bread', 30, 2], rating: 0.1 }, require: { product: ['bread', 30] }, next: [3, 14] }, { effect: { rating: -0.15 } }],
       [{ effect: { boost: [0.1, 7] } }],

@@ -50,9 +50,9 @@ export async function visits(request: Request, env: Env, now = Date.now()): Prom
     return json({ ok: (res.meta?.changes ?? 0) > 0 });
   }
   if (body.action === 'claim') {
-    const row = await db.prepare('SELECT COALESCE(SUM(amount), 0) AS amount FROM gifts WHERE receiver = ? AND claimed = 0').bind(user.id).first<{ amount: number }>();
-    await db.prepare('UPDATE gifts SET claimed = 1 WHERE receiver = ? AND claimed = 0').bind(user.id).run();
-    return json({ amount: row?.amount ?? 0 });
+    // Одним запросом: два одновременных «забрать» не получат одни и те же подарки дважды.
+    const rows = (await db.prepare('UPDATE gifts SET claimed = 1 WHERE receiver = ? AND claimed = 0 RETURNING amount').bind(user.id).all<{ amount: number }>()).results;
+    return json({ amount: rows.reduce((sum, r) => sum + r.amount, 0) });
   }
   const treated = new Set(
     (await db.prepare('SELECT receiver FROM gifts WHERE sender = ? AND day = ?').bind(user.id, today(now)).all<{ receiver: number }>()).results.map((r) => r.receiver),

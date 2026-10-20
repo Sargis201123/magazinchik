@@ -18,6 +18,15 @@ const KIND_RE = /^[a-z_]{1,24}$/;
 /** До какого дня считаем воронку «дошли до дня N». */
 export const FUNNEL_DAYS = [1, 2, 3, 5, 7, 10, 15, 20, 30, 45, 60, 90, 120];
 
+/**
+ * Выручку считает сервер, а не игра: из отчёта берём только прирост с прошлого раза (после
+ * «Начать заново» отчёт меньше — прирост ноль, а счёт не падает) и не больше, чем можно
+ * заработать за прошедшее время (лучший магазин — около 20 000 за полторы минуты дня).
+ */
+export const REVENUE_PER_MINUTE = 30000;
+/** События из отчётов чаще раза в столько миллисекунд не пишем (защита базы от потока запросов). */
+export const MIN_REPORT_GAP = 3000;
+
 const int = (v: unknown, max = 1e12): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(max, Math.round(v))) : 0);
 
 export interface BoardRow {
@@ -44,16 +53,30 @@ export async function progress(request: Request, env: Env): Promise<Response> {
   const now = Date.now();
   const name = (user.first_name ?? '').trim().slice(0, 20) || '—';
   const rating = Math.max(0, Math.min(5, Number(body.rating) || 0));
+  const prev = await db
+    .prepare('SELECT p.revenue AS revenue, p.updated AS updated, r.raw AS raw FROM progress p LEFT JOIN reported r ON r.id = p.id WHERE p.id = ?')
+    .bind(user.id)
+    .first<{ revenue: number; updated: number; raw: number | null }>();
+  // Слишком частые отчёты: прогресс обновим, а события пусть игра пришлёт в следующий раз.
+  const throttled = !!prev && now - prev.updated < MIN_REPORT_GAP;
+  const reported = int(body.revenue);
+  const before = prev?.revenue ?? 0;
+  const minutes = prev ? Math.max(1, (now - prev.updated) / 60000) : 1;
+  const gain = Math.max(0, Math.min(reported - (prev ? (prev.raw ?? prev.revenue) : 0), Math.round(REVENUE_PER_MINUTE * minutes)));
+  const revenue = before + gain;
   await db
     .prepare(
       `INSERT INTO progress (id, name, day, level, rating, revenue, money, chapter, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, day = excluded.day, level = excluded.level, rating = excluded.rating,
        revenue = excluded.revenue, money = excluded.money, chapter = excluded.chapter, updated = excluded.updated`,
     )
-    .bind(user.id, name, int(body.day, 100000), int(body.level, 10), rating, int(body.revenue), int(body.money), int(body.chapter, 100), now)
+    .bind(user.id, name, int(body.day, 100000), int(body.level, 10), rating, revenue, int(body.money), int(body.chapter, 100), now)
     .run();
-  await markWeek(db, user.id, int(body.revenue), now);
-  await markWeekend(db, user.id, int(body.revenue), now);
+  await db.prepare('INSERT OR REPLACE INTO reported (id, raw) VALUES (?, ?)').bind(user.id, reported).run();
+  // Начало недели и выходных — по счёту сервера до этого отчёта.
+  await markWeek(db, user.id, before, now);
+  await markWeekend(db, user.id, before, revenue, now);
+  if (throttled) return json({ ok: false, error: 'too_often' });
   const events = Array.isArray(body.events) ? body.events.slice(0, MAX_EVENTS) : [];
   for (const e of events as Record<string, unknown>[]) {
     const kind = String(e?.kind ?? '');
