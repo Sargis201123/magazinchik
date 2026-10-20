@@ -14,15 +14,18 @@ const css = `
 .ui-hud, .ui-stock, .ui-hint, .ui-card, .ui-toast, .ui-curtain { font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility; }
 /* Панели HUD — по ширине игры (холст 9:16), а не всего окна: на компьютере не разъезжаются по краям. */
-.ui-hud, .ui-stock, .ui-hint { max-width: min(100vw, 56.25dvh); margin: 0 auto; box-sizing: border-box; }
+.ui-hud, .ui-stock, .ui-hint { max-width: var(--game-w, min(100vw, 56.25dvh)); margin: 0 auto; box-sizing: border-box; }
 .ui-hud span { background: rgba(24, 20, 37, .72); padding: 4px 8px; border-radius: 6px; }
 .ui-hud { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
   padding: calc(var(--safe-top, env(safe-area-inset-top)) + 8px) 12px 8px; font: 600 15px/1.2 ${UI_FONT};
   color: #fff; text-shadow: 0 1px 0 #000; pointer-events: none; }
 .ui-stock { position: fixed; left: 0; right: 0; top: calc(var(--safe-top, env(safe-area-inset-top)) + 32px); padding: 0 10px;
   text-align: center; font: 13px/1.5 ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
-/* С новыми отделами товаров много: мельче и в две строки, а не за край экрана. */
-.ui-stock.dense { font-size: 11px; }
+/* Склад и только кончающиеся на полках товары — плашками. */
+.ui-stock { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.ui-stock span { background: rgba(24, 20, 37, .72); padding: 1px 7px; border-radius: 6px; white-space: nowrap; }
+.ui-stock .ui-stock-low { color: #fee761; }
+.ui-stock .ui-stock-out { color: #fff; background: rgba(228, 59, 68, .85); }
 .ui-hint { position: fixed; left: 0; right: 0; padding: 0 12px; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 12px);
   text-align: center; font: 13px ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
 .ui-modal { position: fixed; inset: 0; background: rgba(15, 12, 22, .78); display: flex; align-items: center;
@@ -259,7 +262,7 @@ const css = `
 .ui-review-stars { color: #f77622; font-size: 14px; letter-spacing: 1px; }
 .ui-review-text { font-size: 14px; line-height: 1.3; color: #2b2233; margin: 2px 0; }
 .ui-review-who { font-size: 12px; color: #6a5f58; text-align: right; }
-.ui-speed { position: fixed; right: max(10px, calc((100vw - min(100vw, 56.25dvh)) / 2 + 10px)); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 40px);
+.ui-speed { position: fixed; right: max(10px, calc((100vw - var(--game-w, min(100vw, 56.25dvh))) / 2 + 10px)); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 40px);
   font: 800 14px ${UI_FONT}; padding: 7px 10px; border: 2px solid #2b2233; border-radius: 8px; background: #f4ecd8;
   color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
 .ui-speed.on { background: #fee761; }
