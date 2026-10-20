@@ -453,6 +453,9 @@ interface Look {
   backTint?: number;
   /** Узор на рубашке: полоски или сердечко на груди. */
   pattern?: 'stripes' | 'print';
+  /** Пуховик (цвет) и шарф (цвет) — зимой и в холодное межсезонье. */
+  coat?: number;
+  scarf?: number;
 }
 
 /** Ночной сторож Михалыч: ушанка, ватник цвета хаки, седые усы, фонарик (как в art/security.py). */
@@ -489,7 +492,31 @@ function customerLook(shirt: number, day = 0): Look {
   // Каждый пятый — в полоску, каждый восьмой — с сердечком на груди.
   const roll = Math.random();
   const pattern: Partial<Look> = roll < 0.2 ? { pattern: 'stripes' } : roll < 0.32 ? { pattern: 'print' } : {};
-  return { ...plainLook(shirt, day), ...pattern };
+  return seasonalLook({ ...plainLook(shirt, day), ...pattern }, day);
+}
+
+const COAT_COLORS = [0x262b44, 0xe43b44, 0x3e8948, 0x5a6988, 0xb86f50, 0x68386c, 0x0099db, 0xc0cbdc];
+
+/** Одежда по погоде: зимой пуховики, шарфы и шапки, летом панамы и тёмные очки. */
+function seasonalLook(look: Look, day: number): Look {
+  if (!day) return look;
+  const time = yearTime(day);
+  const pick = <T,>(items: readonly T[]): T => Phaser.Utils.Array.GetRandom(items as T[]);
+  const free = !look.hat && look.style !== 'cap' && look.style !== 'beanie';
+  const out = { ...look };
+  const cold = time === 'winter' ? 1 : time === 'autumn' ? 0.45 : time === 'spring' ? 0.2 : 0;
+  if (cold && !look.outfit && Math.random() < 0.7 * cold) out.coat = pick(COAT_COLORS);
+  if (cold && Math.random() < 0.55 * cold) out.scarf = pick(HAT_COLORS);
+  if (time === 'winter' && free) {
+    const r = Math.random();
+    if (r < 0.35) Object.assign(out, { style: 'beanie', hair: pick(HAT_COLORS) });
+    else if (r < 0.45) Object.assign(out, { hat: 'ushanka', hatTint: pick([0x8f563b, 0x262b44, 0x5a6988]) });
+  }
+  if (time === 'summer') {
+    if (free && Math.random() < 0.25) Object.assign(out, { hat: pick(['bucket', 'sunhat', 'straw'] as const), hatTint: pick([0xffffff, 0xfee761, 0x9cd8ff, 0xf6757a]) });
+    if (!look.face && Math.random() < 0.15) out.face = 'sunglasses';
+  }
+  return out;
 }
 
 function plainLook(shirt: number, day: number): Look {
@@ -1532,6 +1559,8 @@ export class StoreScene extends Phaser.Scene {
   private reachShelf(c: Customer, slot: { x: number; y: number }, id: ProductId | null): void {
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.07, duration: 140, yoyo: true, onComplete: () => c.sprite.setScale(base) });
+    // Нашёл — улыбается, полка пустая — хмурится.
+    this.setMood(c.sprite, id ? 'happy' : 'frown', id ? 1400 : 1200);
     if (!id) return;
     const item = this.art(slot.x + Phaser.Math.Between(-12, 12), slot.y - 5, `item_${id}_0`).setDepth(c.sprite.y + 1);
     this.tweens.add({
@@ -5107,7 +5136,11 @@ export class StoreScene extends Phaser.Scene {
     const back = look.back ? wear(`w_back_${look.back}`, look.backTint, true) : undefined;
     if (back) parts.push(back);
     parts.push(legs, shirt);
-    if (look.pattern) {
+    if (look.coat !== undefined) {
+      const coat = this.art(0, 0, 'p_coat').setTint(look.coat);
+      layers.push([coat, 'p_coat']);
+      parts.push(coat);
+    } else if (look.pattern) {
       // Светлая рубашка — тёмный узор, тёмная — светлый.
       const c = Phaser.Display.Color.IntegerToColor(look.shirt);
       const light = (c.red * 299 + c.green * 587 + c.blue * 114) / 1000 > 150;
@@ -5128,6 +5161,11 @@ export class StoreScene extends Phaser.Scene {
       parts.push(bag);
     }
     parts.push(skin);
+    if (look.scarf !== undefined) {
+      const scarf = this.art(0, 0, 'p_scarf').setTint(look.scarf);
+      layers.push([scarf, 'p_scarf']);
+      parts.push(scarf);
+    }
     if (look.face) {
       const hairy = look.face === 'beard' || look.face === 'mustache';
       parts.push(wear(`w_face_${look.face}`, look.faceTint ?? (hairy ? (look.hair ?? 0x4a2c1a) : undefined)));
@@ -5276,6 +5314,23 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Поворот: спереди, со спины или боком (левый бок — зеркальный правый). Значок охранника виден только спереди. */
+  /**
+   * Настроение на лице: радуется найденному товару, хмурится в долгой очереди.
+   * С ms — через столько вернётся обычное лицо (если за это время его не сменили).
+   */
+  private setMood(person: Phaser.GameObjects.Container, mood: 'happy' | 'frown' | null, ms?: number): void {
+    const layers = person.getData('layers') as [Phaser.GameObjects.Image, string][] | undefined;
+    const entry = layers?.find(([, base]) => base.startsWith('p_skin'));
+    if (!entry || !person.active) return;
+    const base = mood ? `p_skin_${mood}` : 'p_skin';
+    const token = ((person.getData('moodToken') as number | undefined) ?? 0) + 1;
+    person.setData('moodToken', token);
+    person.setData('mood', mood);
+    entry[1] = base;
+    entry[0].setTexture(base + VIEW_SUFFIX[(person.getData('facing') as Facing | undefined) ?? 'down']);
+    if (ms) this.time.delayedCall(ms, () => person.getData('moodToken') === token && this.setMood(person, null));
+  }
+
   private setFacing(person: Phaser.GameObjects.Container, facing: Facing): void {
     if (person.getData('facing') === facing) return;
     person.setData('facing', facing);
@@ -6490,11 +6545,30 @@ export class StoreScene extends Phaser.Scene {
     const manual = this.powerCut ? BLACKOUT_CHECKOUT : 1;
     r.scan = { start: this.time.now, total: checkoutSeconds(timing, c.items.length) * 1000 * manual, byOwner };
     const { counter } = r;
+    const index = this.registers.indexOf(r);
+    const clerk = byOwner ? this.seller : (this.operator(index) as Worker | null)?.sprite;
     for (const { id } of c.items) {
       await this.wait(timing.item * 1000 * manual);
       if (!this.sys.isActive()) return;
+      // Товар — на ленту, под красный луч сканера (вспышка), и дальше к кассиру в пакет.
       const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2 / ART).setDepth(1000);
-      this.tweens.add({ targets: item, x: counter.x, y: counter.y - 14, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
+      this.tweens.chain({
+        targets: item,
+        tweens: [
+          { x: counter.x, y: counter.y - 8, duration: 180, ease: 'Quad.easeOut' },
+          { x: r.clerk.x, y: r.clerk.y - 8, scale: 1 / ART, alpha: 0.3, duration: 160, ease: 'Quad.easeIn' },
+        ],
+        onComplete: () => item.destroy(),
+      });
+      this.time.delayedCall(170, () => {
+        const flash = this.add.rectangle(counter.x, counter.y - 8, 10, 3, 0xff4a4a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1001);
+        this.tweens.add({ targets: flash, alpha: 0, scaleX: 1.6, duration: 160, onComplete: () => flash.destroy() });
+      });
+      // Кассир берёт товар: короткий кивок-подпрыгивание.
+      if (clerk?.active) {
+        const base = (clerk.getData('baseScale') as number) ?? 1;
+        this.tweens.add({ targets: clerk, scaleY: base * 1.06, duration: 90, yoyo: true, onComplete: () => clerk.setScale(base) });
+      }
       haptic.tap();
       sound.scan();
     }
@@ -6510,6 +6584,25 @@ export class StoreScene extends Phaser.Scene {
     await this.wait(timing.pay * 1000);
     r.scan = null;
     if (!this.sys.isActive()) return;
+    // Кассир отдаёт пакет из рук в руки (с тележкой — товар уже в ней).
+    if (c.items.length && c.sprite.getData('push') !== 'trolley' && c.sprite.active) {
+      const bag = this.art(r.clerk.x, r.clerk.y - 6, 'paper_bag').setScale(0.85 / ART).setDepth(1000);
+      await new Promise<void>((done) =>
+        this.tweens.add({
+          targets: bag,
+          x: c.sprite.x + 6,
+          y: c.sprite.y + 3,
+          duration: 260,
+          ease: 'Sine.easeInOut',
+          onUpdate: (tw) => bag.setY(Phaser.Math.Linear(r.clerk.y - 6, c.sprite.y + 3, tw.progress) - Math.sin(tw.progress * Math.PI) * 8),
+          onComplete: () => {
+            bag.destroy();
+            done();
+          },
+        }),
+      );
+      if (!this.sys.isActive()) return;
+    }
     this.finishCheckout(c);
     if (byOwner) this.ownerServedOne();
   }
@@ -6603,12 +6696,9 @@ export class StoreScene extends Phaser.Scene {
     sound.coin();
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
-    // Покупки — в бумажный пакет: с ним покупатель и уходит (с тележкой — нет, товар в ней).
+    // Пакет, который передал кассир, теперь в руке: с ним покупатель и уходит.
     if (c.items.length && c.sprite.getData('push') !== 'trolley') {
-      const bag = this.art(6, 3, 'paper_bag').setScale(0);
-      const size = 0.85 / ART;
-      c.sprite.add(bag);
-      this.tweens.add({ targets: bag, scale: size, duration: 220, ease: 'Back.easeOut' });
+      c.sprite.add(this.art(6, 3, 'paper_bag').setScale(0.85 / ART));
     }
     const shown = where ?? (at ? { x: at.counter.x + (at === this.registers[0] ? 8 : -8), y: at.counter.y + 0 } : { x: this.layout.sellerHome.x - 8, y: this.layout.sellerHome.y - 18 });
     this.popup(shown.x, shown.y, `+${total} 💰`, '#c8ffb0');
@@ -6628,8 +6718,10 @@ export class StoreScene extends Phaser.Scene {
       const why = badGoods ? t('popup.badProduct') : dirty ? t('popup.dirty') : '😣';
       this.popup(c.sprite.x, c.sprite.y - 26, why, '#ffd0d0');
       this.emote(c.sprite, 'emo_angry');
-    } else if (Math.random() < 0.5) {
-      this.emote(c.sprite, 'emo_heart');
+      this.setMood(c.sprite, 'frown');
+    } else {
+      this.setMood(c.sprite, 'happy', 2500);
+      if (Math.random() < 0.5) this.emote(c.sprite, 'emo_heart');
     }
     this.layoutQueue();
     void this.leave(c, true);
@@ -6655,6 +6747,7 @@ export class StoreScene extends Phaser.Scene {
     sound.bad();
     this.popup(c.sprite.x, c.sprite.y - 14, t('popup.leftAngry'), '#ffd0d0');
     this.emote(c.sprite, 'emo_angry');
+    this.setMood(c.sprite, 'frown');
     this.layoutQueue();
     await this.leave(c);
   }
@@ -6986,6 +7079,8 @@ export class StoreScene extends Phaser.Scene {
     if (!c.bubble.visible) return;
     const left = 1 - (this.time.now - c.waitStart) / (c.patienceMs ?? PATIENCE_MS);
     c.bubble.setTint(left > 0.6 ? 0x8fd16a : left > 0.3 ? 0xf2c14e : 0xd95763);
+    // Терпение кончается — человек в очереди хмурится.
+    if (left <= 0.3 && c.sprite.getData('mood') !== 'frown') this.setMood(c.sprite, 'frown');
   }
 
   // ---------- Утилиты ----------
