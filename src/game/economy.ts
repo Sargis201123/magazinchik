@@ -3,6 +3,7 @@
 
 import { legacyMentor, legacyPurchase, type Legacy } from './legacy';
 import type { TalesState } from './tales';
+import type { PassState } from './pass';
 import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
@@ -591,6 +592,8 @@ export interface StoreState {
   /** За какую неделю уже забрана награда торговой недели и гильдии (platform/multiplayer.ts). */
   duelClaimed?: number;
   guildClaimed?: number;
+  /** Сезонный пропуск (pass.ts). */
+  pass?: PassState;
   /** Истории постоянных покупателей (tales.ts). */
   tales?: TalesState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */

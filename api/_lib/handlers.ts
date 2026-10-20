@@ -4,7 +4,7 @@
 import { commandReply, setupProfile } from './botProfile.js';
 import { recordReferral } from './social.js';
 import { recordGuildInvite } from './guild.js';
-import { bot, itemFromPayload, json, ownedFrom, payloadFor, STARS_CATALOG, verifyInitData, type Env, type StarTransaction } from './telegram.js';
+import { bot, itemFromPayload, json, catalogItem, ownedFrom, payloadFor, verifyInitData, type Env, type StarTransaction } from './telegram.js';
 
 /** POST /api/stars-invoice { initData, item } → { link }: счёт в звёздах на одну вещь оформления. */
 export async function starsInvoice(request: Request, env: Env): Promise<Response> {
@@ -13,13 +13,19 @@ export async function starsInvoice(request: Request, env: Env): Promise<Response
   const body = (await request.json().catch(() => ({}))) as { initData?: string; item?: string };
   const user = await verifyInitData(body.initData ?? '', token);
   if (!user) return json({ error: 'bad_init_data' }, 401);
-  const item = body.item ? STARS_CATALOG[body.item] : undefined;
+  const item = body.item ? catalogItem(body.item) : undefined;
   if (!item) return json({ error: 'unknown_item' }, 400);
   const ru = (user.language_code ?? 'ru').startsWith('ru') || !user.language_code;
   const title = ru ? item.ru : item.en;
   const link = await bot<string>(token, 'createInvoiceLink', {
     title,
-    description: ru ? `${title} — для твоего магазина. Остаётся навсегда.` : `${title} for your store. Yours forever.`,
+    description: body.item!.startsWith('pass_')
+      ? ru
+        ? `${title}: открывает премиальные награды сезона — звёздный декор и двойные монеты.`
+        : `${title}: unlocks the season's premium rewards — star decor and double coins.`
+      : ru
+        ? `${title} — для твоего магазина. Остаётся навсегда.`
+        : `${title} for your store. Yours forever.`,
     payload: payloadFor(body.item!),
     currency: 'XTR',
     prices: [{ label: title, amount: item.stars }],
@@ -78,7 +84,7 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
   const query = update.pre_checkout_query;
   if (query) {
     const id = itemFromPayload(query.invoice_payload);
-    const ok = Boolean(id) && query.currency === 'XTR' && query.total_amount === STARS_CATALOG[id!].stars;
+    const ok = Boolean(id) && query.currency === 'XTR' && query.total_amount === catalogItem(id!)!.stars;
     await bot(token, 'answerPreCheckoutQuery', ok ? { pre_checkout_query_id: query.id, ok: true } : { pre_checkout_query_id: query.id, ok: false, error_message: 'Item is not available' });
     return new Response('ok');
   }
@@ -88,7 +94,7 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
     const app = `https://${new URL(request.url).host}/`;
     if (message.successful_payment) {
       const id = itemFromPayload(message.successful_payment.invoice_payload);
-      const name = id ? STARS_CATALOG[id][ru ? 'ru' : 'en'] : '';
+      const name = id ? catalogItem(id)![ru ? 'ru' : 'en'] : '';
       await bot(token, 'sendMessage', {
         chat_id: message.chat.id,
         text: ru ? `Спасибо! ${name} — уже в твоём магазине ✨` : `Thank you! ${name} is already in your store ✨`,

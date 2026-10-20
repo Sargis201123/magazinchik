@@ -30,6 +30,7 @@ import { hiddenBigDayGuests, knownBigDayGuests } from './bigday';
 import { coffeeTablesGuests } from './coffee';
 import { legacyGuests } from './legacy';
 import { taleGuests, talesMorning } from './tales';
+import { addPassXp } from './pass';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -50,6 +51,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   s = rewarded.state;
   const weekly = progressWeekly(s, stats);
   s = weekly.state;
+  s = addPassXp(s, rewarded.done, weekly.completed.length);
   // Усталость считаем до смены плана: сегодняшний отгул обнуляет её, ночная смена — удваивает.
   s = restStaff(s, (stats.nightRevenue ?? 0) > 0);
   const day = s.day;

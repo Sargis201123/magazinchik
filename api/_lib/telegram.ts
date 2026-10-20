@@ -124,11 +124,22 @@ export const STARS_CATALOG: Record<string, { stars: number; ru: string; en: stri
   neon_open: { stars: 30, ru: 'Неон «ОТКРЫТО»', en: 'OPEN neon' },
 };
 
+/** Сезонный пропуск (src/game/pass.ts): у каждого сезона свой номер, цена одна (совпадает с pass.ts — проверяет тест). */
+export const PASS_STARS = 100;
+const PASS_RE = /^pass_(\d{1,4})$/;
+
+/** Вещь из каталога или пропуск сезона. */
+export function catalogItem(id: string): { stars: number; ru: string; en: string } | undefined {
+  if (STARS_CATALOG[id]) return STARS_CATALOG[id];
+  const season = PASS_RE.exec(id)?.[1];
+  return season ? { stars: PASS_STARS, ru: `Сезонный пропуск №${season}`, en: `Season pass #${season}` } : undefined;
+}
+
 /** Полезная нагрузка счёта: по ней видно, какую вещь купили. */
 export const payloadFor = (id: string): string => `decor:${id}`;
 export const itemFromPayload = (payload: string | undefined): string | null => {
   const id = payload?.startsWith('decor:') ? payload.slice(6) : null;
-  return id && STARS_CATALOG[id] ? id : null;
+  return id && catalogItem(id) ? id : null;
 };
 
 interface Partner {
@@ -156,7 +167,7 @@ export function ownedFrom(transactions: StarTransaction[], userId: number): stri
   for (const tx of transactions) {
     if (tx.source?.type !== 'user' || tx.source.user?.id !== userId || refunded.has(tx.id)) continue;
     const id = itemFromPayload(tx.source.invoice_payload);
-    if (id && tx.amount >= STARS_CATALOG[id].stars) items.add(id);
+    if (id && tx.amount >= catalogItem(id)!.stars) items.add(id);
   }
   return [...items];
 }

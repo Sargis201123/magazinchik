@@ -128,6 +128,7 @@ import { sonyaVisits, sunflowersPlanted } from '../game/drama';
 import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
 import { reportProgress, track } from '../platform/analytics';
 import { duelInfo, loadMultiplayer } from '../platform/multiplayer';
+import { ensureSeason, grantPass } from '../game/pass';
 import { reportError, setErrorContext } from '../platform/errors';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
@@ -883,7 +884,7 @@ export class StoreScene extends Phaser.Scene {
   create(): void {
     setErrorContext(() => ({ day: this.state?.day, level: this.state?.level, running: this.running, ua: navigator.userAgent.slice(0, 120) }));
     const save = loadGame();
-    this.state = ensurePlan(save ?? newGame());
+    this.state = ensureSeason(ensurePlan(save ?? newGame()), Date.now());
     if (!save) track('new_game', 1);
     // Игра открылась — прогресс и накопленные события на сервер (рейтинг и аналитика).
     void reportProgress(this.state);
@@ -893,7 +894,7 @@ export class StoreScene extends Phaser.Scene {
     // Покупки за звёзды — по данным Telegram: вернутся и на новом телефоне.
     void restorePurchases().then((ids) => {
       const owned = (ids ?? []).filter(isDecorId);
-      const next = grantDecor(this.state, owned, !save);
+      const next = grantPass(grantDecor(this.state, owned, !save), ids ?? []);
       if (next === this.state) return;
       this.state = next;
       saveGame(next);

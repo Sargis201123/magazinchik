@@ -176,6 +176,7 @@ import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable,
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
+import { claimPass, grantPass, passCoins, passDecor, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
@@ -186,7 +187,7 @@ import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../
 
 /** Высота «голоса» героев в диалогах. */
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420, sonya: 760, father: 300 };
-import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, tryDecor, type DecorItem, type DecorKind } from '../game/decor';
+import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, tryDecor, type DecorItem, type DecorKind, decorItem } from '../game/decor';
 import { buyWithStars, starsAvailable } from '../platform/stars';
 import {
   adoptDog,
@@ -498,6 +499,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     card.replaceChildren(
       title,
       ...(touring ? [] : tipBox(state)),
+      ...passBox(state),
       ...taleBox(state),
       ...guildClaimBox(state),
       ...duelBox(state),
@@ -972,6 +974,89 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   const questText = (q: Quest) =>
     t(QUEST_TEXT[q.kind], { n: q.target, product: q.product ? productLabel(q.product) : '' });
+
+  /** Окно пропуска: уровни с наградами двух дорожек и покупка звёздного пропуска. */
+  const passModal = () => {
+    const { card, close } = openModal();
+    const render2 = () => {
+      const state = getState();
+      const pass = state.pass;
+      if (!pass) return close();
+      const level = passLevel(pass);
+      const rows = el('div', 'ui-box');
+      for (let l = 1; l <= PASS_LEVELS; l++) {
+        const row = el('div', `ui-pass-row${l <= level ? ' open' : ''}`);
+        const decor = passDecor(state, l);
+        const cell = (track: 'free' | 'premium', label: string) => {
+          const got = pass[track].includes(l);
+          const can = l <= level && !got && (track === 'free' || pass.paid);
+          const b = button(got ? t('pass.done') : can ? `${label}` : `${t('pass.locked')} ${label}`, () => {
+            const next = claimPass(getState(), l, track);
+            if (next) {
+              setState(next);
+              haptic.success();
+              sound.coin();
+              render2();
+              render();
+            }
+          }, `ui-chip${track === 'premium' ? ' premium' : ''}`, !can);
+          return b;
+        };
+        row.append(
+          el('b', 'ui-pass-level', t('pass.level', { n: l })),
+          cell('free', t('pass.free', { n: passCoins(state, l) })),
+          cell('premium', `${t('pass.premium', { n: passCoins(state, l) * 2 })}${decor ? ` + ${t(decorItem(decor).nameKey)}` : ''}`),
+        );
+        rows.append(row);
+      }
+      const bar = el('div', 'ui-goal-bar');
+      const fill = el('div');
+      fill.style.width = `${level >= PASS_LEVELS ? 100 : Math.round(((pass.xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100)}%`;
+      bar.append(fill);
+      const head: HTMLElement[] = [
+        el('h2', '', t('pass.title', { n: pass.season })),
+        el('div', '', t('pass.xp', { xp: pass.xp, l: level, max: PASS_LEVELS })),
+        bar,
+        el('div', 'ui-muted', t('pass.note', { d: XP_DAY, q: XP_QUEST, w: XP_WEEKLY, x: XP_PER_LEVEL, days: PASS_DAYS })),
+      ];
+      if (pass.paid) head.push(el('div', 'ui-note', t('pass.paid')));
+      else {
+        const note = el('div', 'ui-muted', t('pass.buyNote'));
+        const buy = button(t('pass.buy', { n: PASS_STARS }), () => {
+          buy.disabled = true;
+          note.textContent = t('decor.paying');
+          void buyWithStars(passItem(pass.season)).then((result) => {
+            if (result === 'paid') {
+              setState(grantPass(getState(), [passItem(pass.season)]));
+              void flushCloud();
+              haptic.success();
+              render2();
+              render();
+              return;
+            }
+            buy.disabled = false;
+            note.textContent = t(result === 'unavailable' ? 'decor.starsOff' : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
+          });
+        }, 'ui-btn');
+        head.push(buy, note);
+      }
+      card.replaceChildren(...head, rows, button(t('board.close'), close, 'ui-btn secondary'));
+    };
+    render2();
+  };
+
+  /** Строка сезона сверху утра: уровень, дни до конца, сколько наград ждёт. */
+  const passBox = (state: StoreState): HTMLElement[] => {
+    const pass = state.pass;
+    if (!pass) return [];
+    const ready = passReady(state);
+    const box = el('div', 'ui-box ui-pass');
+    box.append(
+      el('b', '', t('pass.line', { n: pass.season, l: passLevel(pass), max: PASS_LEVELS, d: seasonDaysLeft(Date.now()) })),
+      button(ready ? t('pass.ready', { n: ready }) : t('pass.open'), passModal, ready ? 'ui-btn' : 'ui-btn secondary'),
+    );
+    return [box];
+  };
 
   const money = (n: number) => n.toLocaleString('ru-RU');
 
