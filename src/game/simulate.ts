@@ -73,13 +73,14 @@ import {
   DAY_SECONDS,
   recordSale,
 } from './economy';
-import { actualGuestsToday, ensurePlan, inspectionDone, nightCycle } from './day';
+import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
+import { restockPlan } from './restock';
 import { answerEvent, inspect } from './events';
 import { candidatesFor } from './staff';
 import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
-import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
+import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } from './suppliers';
 import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY, OWN_PRODUCTS } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
@@ -162,6 +163,11 @@ export interface SimOptions {
   /** Сколько закладок в печь игрок успевает за день и как часто забывает вынуть. */
   ovenBatches?: number;
   ovenBurn?: number;
+  /**
+   * Как игрок закупается утром: 'smart' — знает спрос дня точно (как раньше); 'restock' — жмёт
+   * «Закупить нужное» (restock.ts); 'naive' — новичок: держит всего поровну, по 8 штук.
+   */
+  buyMode?: 'smart' | 'restock' | 'naive';
 }
 
 export type Feature =
@@ -188,6 +194,8 @@ const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy
 const SHELF_PRIORITY_DEPTS: Category[] = ['dairy', 'meat', 'drinks', 'produce', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat', 'drinks', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat'];
 
 const AVG_WANTS = 1.5;
+/** Сколько штук каждого товара держит новичок (buyMode: 'naive'). */
+const NAIVE_STOCK = 8;
 
 /** Когда разумный игрок нанимает людей: по мере того, как один не справляется. */
 // Кассир — первым: остальные места не занимаем, пока за кассой стоит сам хозяин.
@@ -241,6 +249,7 @@ export function simulate({
   queueLoss,
   tripsPerDay,
   priceMult = 1,
+  buyMode = 'smart',
   hireStaff = true,
   features = {},
   war = 'wait',
@@ -531,8 +540,30 @@ export function simulate({
       0,
     );
     const otherWeight = sellable.filter((p) => !OWN_PRODUCTS.includes(p)).reduce((sum, p) => sum + weight(p), 0);
-    for (const id of sellable) {
+    if (buyMode === 'restock') {
+      const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state));
+      for (const line of plan.lines) {
+        const bad = random() < SUPPLIERS[line.sid].badChance;
+        state = buyStock(state, line.pid, line.qty, line.price, bad) ?? state;
+        if (bad) state = resolveBadBatch(state, line.pid, 'markdown', line.price);
+        purchases += line.qty * line.price;
+      }
+    }
+    for (const id of buyMode === 'smart' || buyMode === 'naive' ? sellable : []) {
       if (OWN_PRODUCTS.includes(id)) continue;
+      if (buyMode === 'naive') {
+        // Новичок: всего поровну, у первого же поставщика, у кого товар есть.
+        const sid = SUPPLIER_IDS.find((x) => supplierOpen(SUPPLIERS[x], state.shelves) && unitPrice(SUPPLIERS[x], deals[x], id) !== null);
+        if (!sid) continue;
+        const price = unitPrice(SUPPLIERS[sid], deals[sid], id)!;
+        const qty = Math.min(Math.max(0, NAIVE_STOCK - onShelves(state, id) - warehouseOf(state, id)), Math.floor(state.money / price), warehouseCapacity(state) - warehouseCount(state));
+        if (qty <= 0) continue;
+        const bad = random() < SUPPLIERS[sid].badChance;
+        state = buyStock(state, id, qty, price, bad) ?? state;
+        if (bad) state = resolveBadBatch(state, id, 'markdown', price);
+        purchases += qty * price;
+        continue;
+      }
       const demand = (itemWants - ownWanted) * buyChance(state.prices[id], perceivedBase(state, id)) * (weight(id) / otherWeight);
       const shelfRoom = state.shelves
         .filter((s) => s.kind === PRODUCTS[id].category)
@@ -637,6 +668,8 @@ export function simulate({
         perceivedBase(state, p) * tolerance * fairTolerance(state.day) * loyaltyTolerance(state) * radioTolerance(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
       const cart: CartItem[] = [];
       let sawEmpty = false;
+      // Чего не хватило — записываем в отчёт дня (по нему «Закупить нужное» и печь считают спрос).
+      let emptyId: ProductId | undefined;
       let tooExpensive = false;
       for (const id of new Set(wanted)) {
         const index = shelfFor(state, id);
@@ -644,6 +677,7 @@ export function simulate({
         const oldest = shelf && !shelf.broken ? shelf.items[id]?.[0] : undefined;
         if (!oldest) {
           sawEmpty = true;
+          emptyId ??= id;
           continue;
         }
         if (warLeaves(state, id) > 0 && extraRandom() < warLeaves(state, id)) {
@@ -663,7 +697,7 @@ export function simulate({
         // Ночные гости рейтинг не роняют (как в игре): после дня полки полупустые — это норма.
         if ((sawEmpty || tooExpensive) && !night) {
           stats.lost++;
-          noteLost(stats, sawEmpty ? 'empty' : 'expensive');
+          noteLost(stats, sawEmpty ? 'empty' : 'expensive', sawEmpty ? emptyId : undefined);
         }
         continue;
       }

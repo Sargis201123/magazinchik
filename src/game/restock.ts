@@ -2,7 +2,10 @@
 // истории — поровну от числа гостей) с запасом, минус то, что уже есть на полках и складе.
 // Берём у того поставщика, у кого сегодня дешевле. Сначала — то, чего меньше всего.
 
-import { canPlace, productAvailable, sellableProducts, warehouseCapacity, warehouseCount, type ProductId, type StoreState } from './economy';
+import { buyChance, canPlace, CARRY, OWN_PRODUCTS, PRODUCTS, shelfCapacity, productAvailable, seasonalDemand, sellableProducts, warehouseCapacity, warehouseCount, type ProductId, type StoreState } from './economy';
+import { perceivedBase, seasonFor } from './endless';
+import { dayDemand } from './demand';
+import { bigDayDemand } from './bigday';
 import { stockOf, usualSales } from './bakery';
 import { AUTO_RESERVE, type ReorderPlan } from './reorder';
 import { SUPPLIER_IDS, SUPPLIERS, supplierOpen, type SupplierId } from './suppliers';
@@ -25,12 +28,26 @@ export function bestOffer(
   return best;
 }
 
-/** Сколько штук держать к открытию: обычные продажи с запасом; без истории — доля от гостей дня. */
+/**
+ * Сколько штук держать к открытию — по той же модели спроса, по которой покупатели выбирают товар:
+ * сезон, погода, акции, ценовая война, своя марка, здания района, и насколько им нравится цена.
+ * Особый день не учитываем: о нём узнают только при открытии. Продажи прошлых дней занижают спрос
+ * (чего не было на полке, того и не продали), поэтому из модели и истории берём большее.
+ */
 export function restockTarget(state: StoreState, pid: ProductId, guests: number): number {
-  const usual = usualSales(state, pid);
-  if (usual !== null) return Math.ceil(usual * AUTO_RESERVE);
-  const kinds = Math.max(1, sellableProducts(state).length);
-  return Math.ceil(((guests * ITEMS_PER_GUEST) / kinds) * AUTO_RESERVE);
+  const weight = (id: ProductId) =>
+    (seasonFor(state.day)?.demand[id] ?? 1) * seasonalDemand(id, state.day) * (dayDemand(state, id) / bigDayDemand(state.day, id));
+  // Свою выпечку специально не ищут — она не делит спрос с остальным.
+  const pool = sellableProducts(state).filter((id) => !OWN_PRODUCTS.includes(id));
+  const total = pool.reduce((sum, id) => sum + weight(id), 0) || 1;
+  const modelled = guests * ITEMS_PER_GUEST * (weight(pid) / total) * buyChance(state.prices[pid], perceivedBase(state, pid));
+  const usual = usualSales(state, pid) ?? 0;
+  // Больше, чем встанет на полки (плюс пара походов со склада), не берём: лишнее лежит и портится,
+  // а деньги нужны на расширение.
+  const category = PRODUCTS[pid].category;
+  const room = state.shelves.filter((sh) => sh.kind === category).reduce((sum, sh) => sum + shelfCapacity(sh), 0);
+  const neighbours = Math.max(1, pool.filter((id) => PRODUCTS[id].category === category).length);
+  return Math.ceil(Math.min(Math.max(usual, modelled) * AUTO_RESERVE, room / neighbours + CARRY * 2));
 }
 
 /** Товар можно закупить сегодня: сезон, есть полка, кто-то продаёт. */
@@ -45,7 +62,9 @@ export function restockPlan(state: StoreState, priceOf: (sid: SupplierId, pid: P
   const wants = sellableProducts(state)
     .filter((pid) => canStock(state, pid))
     .map((pid) => {
-      const target = restockTarget(state, pid, guests);
+      // Сверху — то, что сегодня заберут по заказу и по договору с кафе: иначе полки опустеют к открытию.
+      const reserved = (state.plan?.order?.product === pid ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[pid] ?? 0);
+      const target = restockTarget(state, pid, guests) + reserved;
       const have = stockOf(state, pid);
       return { pid, need: target - have, fill: have / Math.max(1, target), offer: bestOffer(state, pid, priceOf) };
     })
