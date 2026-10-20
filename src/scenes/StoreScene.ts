@@ -233,6 +233,18 @@ const CAMERA_REACH = 200;
 /** Толщина наружных стен и высота фасада (в точках мира). */
 const WALL = 6;
 const FACADE_H = 10;
+/**
+ * Вид фасада по уровню магазина: ларёк в досках, кирпич, светлая плитка и стеклянный
+ * супермаркет. У двух старших вместо навесиков над окнами — сплошной козырёк фирменного
+ * цвета (у супермаркета — с подсветкой), главный навес над входом того же цвета.
+ */
+const FACADE_STYLES: { texture: string; awning?: number; canopy?: number; led?: boolean }[] = [
+  { texture: 'facade_wood', awning: 0x8fd16a },
+  { texture: 'facade' },
+  { texture: 'facade', awning: 0xfee761 },
+  { texture: 'facade_tile', canopy: 0x3e8948 },
+  { texture: 'facade_glass', canopy: 0x262b44, led: true },
+];
 /** Пол по уровням помещения. */
 const FLOORS = ['floor', 'floor', 'floor2', 'floor2', 'floor3'];
 /** Машины на дороге: вид, цвет (null — свой, без перекраски), вес при выборе. */
@@ -4476,7 +4488,8 @@ export class StoreScene extends Phaser.Scene {
     }
     cap(-WALL, from, WALL, h - from);
     cap(w, 0, WALL, h);
-    this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
+    const style = this.facadeStyle();
+    this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, style.texture).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
     this.doorImg = this.art(door.x, h + 5, 'door').setDepth(h + 2);
     this.doorSign = this.art(door.x + 11, h + 8, this.running ? 'door_sign_open' : 'door_sign_closed').setDepth(h + 42);
     // Витрины с маленькими навесами слева и справа от двери.
@@ -4490,14 +4503,27 @@ export class StoreScene extends Phaser.Scene {
       for (let i = 0; i < n; i++) {
         const x = start + i * 24;
         this.art(x, h + 5.5, 'shopwin').setDepth(h + 2);
-        this.art(x, h + 1.5, 'awning_small').setDepth(h + 40);
+        if (!style.canopy) this.art(x, h + 1.5, 'awning_small').setTint(style.awning ?? 0xffffff).setDepth(h + 40);
         this.windowLight(x, h + 5.5, h + 9);
       }
     }
     // Из дверей свет падает дорожкой на тротуар.
     this.nightGlow(this.art(door.x, h + 9, 'light_spill').setOrigin(0.5, 0).setScale(1.3 / ART, 1.4 / ART).setTint(0xffd890), 0.55);
     // Главный навес над входом: покупатели проходят под ним.
-    this.art(door.x, h + 1, 'awning').setScale(1 / ART, 0.6 / ART).setDepth(h + 41);
+    this.art(door.x, h + 1, 'awning').setScale(1 / ART, 0.6 / ART).setTint(style.canopy ?? style.awning ?? 0xffffff).setDepth(h + 41);
+    if (style.canopy) {
+      // Сплошной козырёк над витринами; у супермаркета снизу светится полоса.
+      this.add.rectangle(-WALL, h - 1, w + 2 * WALL, 3, style.canopy).setOrigin(0).setStrokeStyle(0.5, 0x181425).setDepth(h + 40);
+      this.add.rectangle(-WALL, h + 2, w + 2 * WALL, 1, 0x181425, 0.25).setOrigin(0).setDepth(h + 40);
+      if (style.led) {
+        this.add.rectangle(-WALL, h + 1.5, w + 2 * WALL, 0.6, 0x9cd8ff).setOrigin(0).setDepth(h + 40.5);
+        this.nightGlow(this.add.rectangle(-WALL, h + 1, w + 2 * WALL, 3, 0x9cd8ff).setOrigin(0), 0.6);
+      }
+    }
+  }
+
+  private facadeStyle(): (typeof FACADE_STYLES)[number] {
+    return FACADE_STYLES[Math.min(this.state.level, FACADE_STYLES.length - 1)];
   }
 
   /**
@@ -4871,7 +4897,7 @@ export class StoreScene extends Phaser.Scene {
     cap(left + WALL, warehouse.y - WALL, wing.w, WALL);
     cap(left + WALL, bakery.y - WALL, wing.w, WALL);
     if (this.layout.kitchen) cap(left + WALL, this.layout.coffee.y - WALL, wing.w, WALL);
-    this.add.tileSprite(left, h, WING_OUTER - WALL, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
+    this.add.tileSprite(left, h, WING_OUTER - WALL, FACADE_H, this.facadeStyle().texture).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
     const gateX = warehouse.x + warehouse.w / 2;
     this.art(gateX, h + 5.5, 'shutter').setDepth(h + 2);
     // Подъезд от тротуара к воротам склада.
@@ -5016,6 +5042,8 @@ export class StoreScene extends Phaser.Scene {
       const perRow = capacity / 2;
       const area = ITEM_AREA[shelf.kind] ?? { x: -17, w: 34, y: -5, row: 11 };
       const step = area.w / perRow;
+      // Где на полке просторно, товар крупнее — его лучше видно; плотная полка — обычный размер.
+      const size = (shelf.kind === 'florist' ? 1 : Phaser.Math.Clamp(step / 4, 1, 1.3)) / ART;
       const slot = at;
       const units = PRODUCT_IDS.flatMap((id) => (shelf.items[id] ?? []).map((unit) => ({ id, unit })));
       const covered = false;
@@ -5029,7 +5057,7 @@ export class StoreScene extends Phaser.Scene {
         } else img.setPosition(slot.x + area.x + step * ((n % perRow) + 0.5), slot.y + area.y + Math.floor(n / perRow) * area.row);
         if (entry) {
           // Три вида каждого товара (батон, багет, булка…) — полка выглядит живой.
-          img.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id)) % ITEM_VARIANTS}`);
+          img.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id)) % ITEM_VARIANTS}`).setScale(size);
           img.setTint(entry.unit.markdown ? 0xffe08a : entry.unit.bad ? 0x9a8a80 : 0xffffff);
         }
         // Позади — такой же товар чуть выше и в тени, между передними.
@@ -5037,7 +5065,7 @@ export class StoreScene extends Phaser.Scene {
         back.setVisible(img.visible && shelf.kind !== 'florist');
         if (entry) {
           back.setPosition(Math.min(img.x + step / 2, slot.x + area.x + area.w - 2), img.y - 2);
-          back.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id) + 1) % ITEM_VARIANTS}`);
+          back.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id) + 1) % ITEM_VARIANTS}`).setScale(size);
         }
       });
       view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
@@ -5068,7 +5096,7 @@ export class StoreScene extends Phaser.Scene {
     const cover = undefined;
     bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.restockShelf(index)));
     const items = Array.from({ length: SHELF_LEVELS[SHELF_LEVELS.length - 1].capacity }, () => this.art(slot.x, slot.y, 'item').setDepth(d - 13));
-    const backItems = items.map(() => this.art(slot.x, slot.y, 'item').setDepth(d - 13.5).setTint(0xa89a90).setVisible(false));
+    const backItems = items.map(() => this.art(slot.x, slot.y, 'item').setDepth(d - 13.5).setTint(0x8f8278).setVisible(false));
     // Уровень улучшения — жёлтые точки над полкой.
     const pips = [0, 1, 2].map((n) => this.art(slot.x + (fixture ? -6 : -17) + n * 4, slot.y - (kind === 'florist' ? 18 : 16), 'pip').setDepth(d - 12));
     // Красный ценник «АКЦИЯ» над полкой с товаром дня.

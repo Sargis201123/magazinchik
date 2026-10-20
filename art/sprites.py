@@ -4370,12 +4370,16 @@ def shade(color, k):
 
 
 def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None, mood=None):
-    """Портрет 32×32: голова и плечи на цветном фоне. Причёску и детали рисуют функции.
-    mood — эмоция для диалогов (happy, sad, angry, surprised): брови и рот."""
+    """Портрет 64×64: голова и плечи на цветном фоне. Силуэт, причёска и детали рисуются
+    в сетке 32×32 (функции причёсок и деталей общие) и увеличиваются вдвое, а лицо —
+    глаза с радужкой и бликом, брови, нос, рот и румянец — рисуется в полном размере.
+    mood — эмоция для диалогов (happy, sad, angry, surprised)."""
     skin, hair, shirt, bg = rgb(skin), rgb(hair), rgb(shirt), rgb(bg)
-    c = Canvas(32, 32)
-    c.round_rect(0, 0, 32, 32, bg, r=4)
-    c.ellipse(16, 10, 13, 9, shade(bg, 1.12))
+    S = 64
+    c = Canvas(S, S)
+    c.round_rect(0, 0, S, S, bg, r=7)
+    c.ellipse(32, 20, 27, 18, shade(bg, 1.1))
+    c.ellipse(32, 18, 21, 13, shade(bg, 1.17))
     p = Canvas(32, 32)
     p.ellipse(16, 32, 13, 7.5, shirt)
     p.ellipse(19, 33, 9, 6, shade(shirt, 0.82))
@@ -4385,43 +4389,101 @@ def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None, mood=None):
     p.px(8, 14, skin)
     p.px(24, 14, shade(skin, 0.9))
     draw_hair(p, hair)
-    p.outline("k")
-    # Лицо.
-    for x in (12, 19):
-        p.rect(x, 14, 2, 2, "k")
-        p.px(x, 14, "w")
-    p.px(16, 17, shade(skin, 0.8))
-    mouth = shade(skin, 0.55)
-    brow = shade(hair, 0.75) if sum(hair[:3]) < 600 else rgb("#5a4a52")
-    if mood == "happy":
-        p.px(14, 19, mouth)
-        p.hline(15, 20, 3, mouth)
-        p.px(18, 19, mouth)
-        p.hline(16, 21, 1, rgb("#e43b44"))
-    elif mood == "sad":
-        p.px(14, 20, mouth)
-        p.hline(15, 19, 3, mouth)
-        p.px(18, 20, mouth)
-        for x, y in ((11, 12), (12, 12), (13, 11), (19, 11), (20, 12), (21, 12)):
-            p.px(x, y, brow)
-    elif mood == "angry":
-        p.hline(15, 20, 3, mouth)
-        for x, y in ((11, 11), (12, 11), (13, 12), (19, 12), (20, 11), (21, 11)):
-            p.px(x, y, brow)
-    elif mood == "surprised":
-        p.rect(15, 19, 3, 2, mouth)
-        p.px(16, 19, rgb("#a22633"))
-        p.hline(11, 11, 3, brow)
-        p.hline(19, 11, 3, brow)
-    else:
-        p.hline(15, 19, 3, shade(skin, 0.6))
-    blush = 2 if mood == "happy" else 1
-    for x in (11, 21):
-        p.rect(x - (blush - 1) * (x == 11), 17, blush, 1, rgb("#f6757a"))
+    big = Canvas(S, S)
+    big.img = p.img.resize((S, S), Image.NEAREST)
+    big.outline("k")
+    # Блик на лбу и щеке — кожа объёмная.
+    for x, y in ((25, 22), (26, 22), (25, 23), (22, 34)):
+        if big.get(x, y) == skin:
+            big.px(x, y, shade(skin, 1.07))
+    face(big, skin, hair, mood)
+    c.img.alpha_composite(big.img)
     if extras:
-        extras(p, skin, hair, shirt)
-    c.img.alpha_composite(p.img)
+        e = Canvas(32, 32)
+        e.img = p.img.copy()
+        before = e.img.copy()
+        extras(e, skin, hair, shirt)
+        # Берём только то, что нарисовали детали, и увеличиваем вдвое.
+        diff = Image.new("RGBA", (32, 32))
+        for y in range(32):
+            for x in range(32):
+                if e.img.getpixel((x, y)) != before.getpixel((x, y)):
+                    diff.putpixel((x, y), e.img.getpixel((x, y)))
+        c.img.alpha_composite(diff.resize((S, S), Image.NEAREST))
     c.save(f"portrait_{name}" + (f"_{mood}" if mood else ""))
+
+
+def face(p, skin, hair, mood):
+    """Лицо портрета в сетке 64×64: глаза 4×5 с радужкой и бликом, брови по настроению,
+    нос, рот и румянец."""
+    ink = rgba("k")
+    white = rgb("#ffffff")
+    iris = shade(hair, 0.9) if sum(hair[:3]) < 450 else rgb("#5a4a3c")
+    mouth = shade(skin, 0.5)
+    lip = rgb("#c8505a")
+    brow = shade(hair, 0.7) if sum(hair[:3]) < 600 else rgb("#5a4a52")
+    eyes = (24, 38)
+    for ex in eyes:
+        if mood == "happy":
+            # Прищур от улыбки: глаза-дужки.
+            p.hline(ex, 30, 4, ink)
+            p.px(ex - 1, 31, ink)
+            p.px(ex + 4, 31, ink)
+            continue
+        top = 27 if mood == "surprised" else 28
+        p.rect(ex, top, 4, 32 - top, white)
+        p.rect(ex + 1, top + 1, 2, 31 - top, iris)
+        p.px(ex + 1, 31, ink)
+        p.px(ex + 2, 31, ink)
+        p.px(ex + 1, top + 1, white)
+        p.hline(ex - 1, top - 1, 6, ink)
+        p.hline(ex, 32, 4, shade(skin, 0.85))
+    # Брови: (левая внешняя, левая внутренняя, правая внутренняя, правая внешняя) — высоты.
+    lift = {"happy": (24, 24, 24, 24), "sad": (26, 23, 23, 26), "angry": (23, 26, 26, 23), "surprised": (22, 22, 22, 22)}.get(mood, (25, 24, 24, 25))
+    for (x0, x1), (y0, y1) in (((23, 28), lift[:2]), ((37, 42), lift[2:])):
+        for i, x in enumerate(range(x0, x1)):
+            y = round(y0 + (y1 - y0) * i / (x1 - x0 - 1))
+            p.px(x, y, brow)
+            p.px(x, y + 1, shade(brow, 1.15))
+    # Нос: тень и блик.
+    p.px(33, 33, shade(skin, 0.78))
+    p.px(33, 34, shade(skin, 0.78))
+    p.px(32, 34, shade(skin, 0.86))
+    p.px(31, 32, shade(skin, 1.06))
+    # Рот.
+    if mood == "happy":
+        p.hline(28, 38, 9, ink)
+        p.hline(28, 39, 9, mouth)
+        p.hline(29, 39, 7, white)
+        p.hline(29, 40, 7, mouth)
+        p.hline(30, 41, 5, lip)
+        p.hline(30, 42, 5, ink)
+        p.px(27, 37, ink)
+        p.px(37, 37, ink)
+    elif mood == "sad":
+        p.hline(30, 39, 5, mouth)
+        p.px(29, 40, mouth)
+        p.px(35, 40, mouth)
+        # Слезинка.
+        p.px(40, 33, rgb("#9cd8ff"))
+        p.px(40, 34, rgb("#5fb4f0"))
+    elif mood == "angry":
+        p.hline(29, 40, 7, mouth)
+        p.hline(30, 39, 5, white)
+        p.px(28, 41, mouth)
+        p.px(36, 41, mouth)
+    elif mood == "surprised":
+        p.rect(30, 38, 5, 5, ink)
+        p.rect(31, 39, 3, 3, rgb("#7a2a35"))
+        p.px(32, 41, lip)
+    else:
+        p.hline(29, 39, 7, mouth)
+        p.px(28, 38, mouth)
+        p.px(36, 38, mouth)
+    blush = (232, 120, 130, 255) if mood == "happy" else (240, 150, 150, 255)
+    for cx in (21, 43):
+        for dx in range(-2 if mood == "happy" else -1, 2):
+            p.px(cx + dx, 35, blush)
 
 
 def hair_bun(p, hair):

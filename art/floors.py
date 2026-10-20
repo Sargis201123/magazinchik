@@ -85,10 +85,53 @@ def queue_mark():
     c.save("queue_mark")
 
 
+def facades():
+    """Фасад магазина по уровням (32×20, как facade): ларёк — доски, потом кирпич,
+    дальше светлая плитка и стеклянный фасад супермаркета. Карниз и цоколь — как у кирпича."""
+    from PIL import Image
+    from sprites import OUT
+
+    brick = Image.open(OUT / "facade.png").convert("RGBA")
+
+    def build(name, paint):
+        c = Canvas(32, 20)
+        c.img = brick.copy()
+        for y in range(4, 17):
+            for x in range(32):
+                c.px(x, y, paint(x, y))
+        c.save(name)
+
+    def wood(x, y):
+        row = (y - 4) // 3
+        seam = (y - 4) % 3 == 2
+        end = (x + row * 11) % 16 == 0
+        if seam or end:
+            return H("#6e4426")
+        return H("#a8693f") if row % 2 else H("#b97a4a")
+
+    def tile(x, y):
+        if (y - 4) % 6 == 5 or (x + ((y - 4) // 6) * 4) % 8 == 7:
+            return H("#c4bba8")
+        return H("#ece4d4") if ((x // 8) + (y - 4) // 6) % 2 else H("#e2d9c6")
+
+    def glass(x, y):
+        if x % 16 in (0, 1):
+            return H("#9aa6bc") if x % 16 == 0 else H("#6c7894")
+        shine = (x - (y - 4)) % 16 in (3, 4, 5)
+        if shine:
+            return H("#7fa8d8")
+        return H("#3d5a8c") if y > 10 else H("#4a6a9c")
+
+    build("facade_wood", wood)
+    build("facade_tile", tile)
+    build("facade_glass", glass)
+
+
 def main():
     tiles("floor", [H("#f2dfba"), H("#eed8b0"), H("#f0dcb5"), H("#ebd4a9")], H("#d6bd93"), 7)
     tiles("floor2", [H("#eaeff5"), H("#e4eaf1"), H("#e7edf3"), H("#e0e7ef")], H("#cbd4e0"), 11)
     queue_mark()
+    facades()
     stone("floor3", H("#f5f1f6"), H("#e2dbe8"), H("#b4a7c0"), H("#d3cadd"), 14)
 
 
