@@ -4246,9 +4246,11 @@ def people():
     side_legs()
     uniforms()
     emotes()
-    # Тень под ногами.
-    c = Canvas(20, 8)
-    c.ellipse(10, 4, 9, 3.2, (24, 20, 37, 90))
+    # Тень под ногами: мягкий край и плотная середина — человек стоит на полу, а не парит.
+    c = Canvas(22, 9)
+    c.ellipse(11, 4.5, 10.5, 4, (24, 20, 37, 52))
+    c.ellipse(11, 4.5, 8, 3, (24, 20, 37, 92))
+    c.ellipse(11, 4.5, 5, 2, (24, 20, 37, 120))
     c.save("shadow")
 
 
@@ -4774,6 +4776,9 @@ def main():
     import flora
 
     flora.main()
+    import floors
+
+    floors.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
