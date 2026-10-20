@@ -127,7 +127,7 @@ import { contestOf, juryDay, tierKey } from '../game/contest';
 import { sonyaVisits, sunflowersPlanted } from '../game/drama';
 import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
 import { reportProgress, track } from '../platform/analytics';
-import { duelInfo, loadMultiplayer } from '../platform/multiplayer';
+import { duelInfo, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
 import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
 import { reportError, setErrorContext } from '../platform/errors';
@@ -240,6 +240,11 @@ const RIVAL_LOOKS: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
   farm: { h: 135, name: 'eduard.stage3', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd8e4c0, neon: 0x9cff7a },
   mall: { h: 190, name: 'eduard.stage4', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040 },
 };
+
+/** Друзья в гостях: сколько за день, чаевые за уровень их магазина, подарок за угощение (как на сервере). */
+const FRIEND_VISITS = 2;
+const FRIEND_TIP = 40;
+const FRIEND_GIFT = 300;
 
 /** Высота здания босса за дорогой: умещается на месте «Гиганта». */
 const RIVAL_ACROSS_H = 106;
@@ -582,6 +587,8 @@ interface Customer {
   slipped?: boolean;
   /** Постоянный покупатель: кто и за чем пришёл. */
   regular?: RegularId;
+  /** Друг из Telegram зашёл в гости (platform/multiplayer.ts → visits). */
+  friend?: VisitFriend;
   wants?: ProductId[];
   /** Шоколадка со стойки и кофе — оплачиваются на кассе вместе с товаром. */
   extras?: { kind: 'candy' | 'coffee'; price: number }[];
@@ -2841,6 +2848,39 @@ export class StoreScene extends Phaser.Scene {
       if (Math.random() >= r.every) continue;
       this.time.delayedCall(Phaser.Math.FloatBetween(0.1, 0.75) * DAY_SECONDS * 1000, () => this.running && this.timeLeft > 0 && this.spawnRegular(r));
     }
+  }
+
+  /** Друзья в гостях: до FRIEND_VISITS друзей за день, каждый в своё время. */
+  private scheduleFriends(): void {
+    const friends = Phaser.Utils.Array.Shuffle([...(visitsInfo()?.friends ?? [])]).slice(0, FRIEND_VISITS);
+    for (const f of friends) {
+      this.time.delayedCall(Phaser.Math.FloatBetween(0.15, 0.7) * DAY_SECONDS * 1000, () => this.running && this.timeLeft > 0 && this.spawnFriend(f));
+    }
+  }
+
+  private spawnFriend(f: VisitFriend): void {
+    const start = this.streetSpawn();
+    const sprite = this.makePerson(start.x, start.y, customerLook(SHIRTS[f.id % SHIRTS.length], this.state.day));
+    this.addUmbrella(sprite);
+    const bubble = this.art(0, -14, 'bubble').setVisible(false);
+    // Имя над головой — видно, что это друг.
+    const tag = this.add
+      .text(0, -24, `👋 ${f.name}`, { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#fee761', backgroundColor: 'rgba(24, 20, 37, 0.75)', padding: { x: 2, y: 1 } })
+      .setOrigin(0.5)
+      .setResolution(5);
+    sprite.add([bubble, tag]);
+    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief: false, friend: f, wants: this.wanted(2) };
+    // Нажми на друга — угостить кофе: он получит монеты при следующем запуске.
+    sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () =>
+      this.tap(() => {
+        if (customer.friend!.treated) return this.popup(sprite.x, sprite.y - 30, t('visit.treated', { name: f.name }), '#fff3b0');
+        customer.friend = { ...customer.friend!, treated: true };
+        void treatFriend(f.id).then((ok) => ok && sprite.active && this.popup(sprite.x, sprite.y - 30, t('visit.treat', { name: f.name, n: FRIEND_GIFT }), '#c8ffb0'));
+        this.emote(sprite, 'emo_heart');
+      }),
+    );
+    this.customers.add(customer);
+    void this.runCustomer(customer);
   }
 
   private spawnRegular(r: Regular): void {
@@ -5592,6 +5632,7 @@ export class StoreScene extends Phaser.Scene {
     if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE * entranceMud(this.state)) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, 'mud');
 
     if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
+    if (c.friend) this.popup(c.sprite.x, c.sprite.y - 20, t('visit.hello', { name: c.friend.name }), '#fee761');
     for (const id of wanted) {
       if (c.gone) return;
       const index = shelfFor(this.state, id);
@@ -5602,6 +5643,12 @@ export class StoreScene extends Phaser.Scene {
 
     if (Math.random() < TRASH_CHANCE) this.dropTrash(c.sprite.x, c.sprite.y);
     if (c.regular) this.regularVerdict(c);
+    // Друг оставляет чаевые — больше, если у него самого магазин побольше.
+    if (c.friend && c.items.length) {
+      const tip = FRIEND_TIP * (c.friend.level + 1);
+      this.state = { ...this.state, money: this.state.money + tip };
+      this.popup(c.sprite.x, c.sprite.y - 28, t('visit.tip', { name: c.friend.name, n: tip }), '#fee761');
+    }
 
     if (c.items.length === 0) {
       // Не нашёл товар или всё слишком дорого — ушёл недовольным, это бьёт по рейтингу.
@@ -6526,6 +6573,7 @@ export class StoreScene extends Phaser.Scene {
     if (this.awaitingBoxes > 0) void this.deliver();
     this.endLiveEvent();
     this.scheduleRegulars();
+    this.scheduleFriends();
     // Старые холодильники иногда подтекают: лужа у одного из них посреди дня.
     if (Math.random() < fridgeLeak(this.state)) {
       this.time.delayedCall(Phaser.Math.FloatBetween(0.15, 0.7) * DAY_SECONDS * 1000, () => this.running && this.fridgeLeaks());
