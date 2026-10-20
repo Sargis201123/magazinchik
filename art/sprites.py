@@ -4779,6 +4779,9 @@ def main():
     import floors
 
     floors.main()
+    import badges
+
+    badges.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

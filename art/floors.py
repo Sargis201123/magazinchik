@@ -73,9 +73,22 @@ def stone(name, base, dark, vein, joint, seed):
     c.save(name)
 
 
+def queue_mark():
+    """Разметка на полу «стойте здесь»: жёлтая рамка из ленты и два следа, внутри — пол."""
+    c = Canvas(20, 12)
+    tape, foot = H("#f2b33a"), H("#7a6a5c")
+    c.frame(0, 0, 20, 12, tape)
+    c.frame(1, 1, 18, 10, H("#f7cf72"))
+    for x in (6, 11):
+        c.rect(x, 3, 3, 3, foot)
+        c.rect(x, 7, 3, 2, foot)
+    c.save("queue_mark")
+
+
 def main():
     tiles("floor", [H("#f2dfba"), H("#eed8b0"), H("#f0dcb5"), H("#ebd4a9")], H("#d6bd93"), 7)
     tiles("floor2", [H("#eaeff5"), H("#e4eaf1"), H("#e7edf3"), H("#e0e7ef")], H("#cbd4e0"), 11)
+    queue_mark()
     stone("floor3", H("#f5f1f6"), H("#e2dbe8"), H("#b4a7c0"), H("#d3cadd"), 14)
 
 
