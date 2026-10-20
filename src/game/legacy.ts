@@ -48,8 +48,15 @@ export const perkLevel = (state: StoreState, id: PerkId): number => Math.min(PER
 /** Продать можно универмаг после сюжета. */
 export const canSell = (state: StoreState): boolean => state.level >= STORE_LEVELS.length - 1 && state.story.chapter >= CHAPTERS.length;
 
-/** Очки за продажу: корень из выручки за всё время (1 млн — 10 очков, 4 млн — 20). */
-export const salePoints = (state: StoreState): number => Math.floor(Math.sqrt(state.totalRevenue / 10000));
+/**
+ * Деньги в кассе при продаже идут в зачёт вдвое: в конце игры деньгам иначе некуда деться
+ * (в симуляторе к 180-му дню у обычного игрока 200 тыс., у опытного — больше миллиона).
+ */
+export const SALE_CASH_WEIGHT = 2;
+
+/** Очки за продажу: корень из выручки за всё время и денег в кассе (1 млн — 10 очков, 4 млн — 20). */
+export const salePoints = (state: StoreState): number =>
+  Math.floor(Math.sqrt((state.totalRevenue + SALE_CASH_WEIGHT * Math.max(0, state.money)) / 10000));
 
 /** Следующая ступень бонуса стоит столько очков, какая это ступень (1, 2, 3…). */
 export const perkCost = (state: StoreState, id: PerkId): number | null => {

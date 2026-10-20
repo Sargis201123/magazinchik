@@ -2,6 +2,12 @@
 // Нужен для баланса: на какой день игрок расширяет магазин, сколько зарабатывает, где застревает.
 // Запуск: npm run sim
 
+import { noteLost } from './losses';
+import { isBroke } from './tips';
+import { loanOptions, takeLoan } from './bank';
+import { cook, DISHES, DISH_IDS, sellDish } from './kitchen';
+import { answerStaffEvent, eventCost } from './staffEvents';
+import { answerTale, taleToday } from './tales';
 import {
   buyChance,
   buyShelf,
@@ -155,7 +161,23 @@ export interface SimOptions {
   ovenBurn?: number;
 }
 
-export type Feature = 'candy' | 'coffee' | 'oven' | 'night' | 'cat' | 'cart' | 'loyalty' | 'gear' | 'etags' | 'departments' | 'skills' | 'radio' | 'brand' | 'cafe';
+export type Feature =
+  | 'candy'
+  | 'coffee'
+  | 'oven'
+  | 'night'
+  | 'cat'
+  | 'cart'
+  | 'loyalty'
+  | 'gear'
+  | 'etags'
+  | 'departments'
+  | 'skills'
+  | 'radio'
+  | 'brand'
+  | 'cafe'
+  | 'kitchen'
+  | 'rush';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -245,6 +267,8 @@ export function simulate({
     const reserve = 150 + 100 * state.level + Math.round(bill * (1 - daysUntilBill(state.day) / MONTH_DAYS));
 
     // ---------- Утро: долг, расширение, полки ----------
+    // Касса пуста и товара нет — берёт кредит на закупку (как советует подсказка).
+    if (isBroke(state)) state = takeLoan(state, loanOptions(state)[0]) ?? state;
     if (state.debt > 0 && state.money - state.debt >= reserve) state = payDebt(state, state.debt) ?? state;
 
     const next = nextStoreLevel(state);
@@ -339,13 +363,14 @@ export function simulate({
       ['etags', 'eTags'],
       ['oven', 'wholesale'],
       ['coffee', 'coffeeTables'],
+      ['kitchen', 'kitchen'],
     ];
     // Дорогое «для удобства» (ночная смена, новые модели) разумный игрок берёт, когда уже не копит на расширение.
     const nextLevel = nextStoreLevel(state);
     const canSplurge = (price: number) => !nextLevel || state.money - price >= nextLevel.cost + reserve;
     for (const [feature, id] of wants) {
       if (!features[feature] || hasUpgrade(state, id) || state.money < UPGRADES[id].price + reserve) continue;
-      if ((id === 'nightShift' || id === 'eTags' || id === 'coffeeTables') && !canSplurge(UPGRADES[id].price)) continue;
+      if ((id === 'nightShift' || id === 'eTags' || id === 'coffeeTables' || id === 'kitchen') && !canSplurge(UPGRADES[id].price)) continue;
       const bought = buyUpgrade(state, id);
       if (bought) {
         investments += UPGRADES[id].price;
@@ -410,6 +435,13 @@ export function simulate({
       state = refillRack(state, 999) ?? state;
     }
     if (features.coffee && hasUpgrade(state, 'coffee')) state = buyCups(state, 999) ?? state;
+    // Кухня: по закладке каждого блюда, на что хватает продуктов.
+    if (features.kitchen) for (const id of DISH_IDS) state = cook(state, id) ?? state;
+    // «Чёрная пятница района» — каждые 6-й и 7-й дни недели (как суббота и воскресенье).
+    state = { ...state, rush: (features.rush && state.day % 7 >= 5) || undefined };
+    // Просьбы сотрудников и истории покупателей: соглашается, если деньги есть с запасом.
+    if (state.staffEvent) state = answerStaffEvent(state, state.money >= eventCost(state.staffEvent) + reserve * 2) ?? answerStaffEvent(state, false) ?? state;
+    if (taleToday(state)) state = answerTale(state, 0) ?? answerTale(state, 1) ?? state;
     // Печь: хлеб из своих закладок (часть сгорает — игрок не успел вынуть). Хлеб пойдёт в зачёт закупки.
     let breadBaked = 0;
     let batches = 0;
@@ -551,6 +583,13 @@ export function simulate({
           coffee += coffeePrice(state);
         }
       }
+      if (features.kitchen && !night) {
+        const dish = sellDish(state, extraRandom);
+        if (dish) {
+          state = dish.state;
+          extra += DISHES[dish.dish].price;
+        }
+      }
       return extra;
     };
     const runGuests = (count: number, tolerance: number, cap: number, night: boolean) => {
@@ -605,7 +644,10 @@ export function simulate({
       }
       if (cart.length === 0) {
         // Ночные гости рейтинг не роняют (как в игре): после дня полки полупустые — это норма.
-        if ((sawEmpty || tooExpensive) && !night) stats.lost++;
+        if ((sawEmpty || tooExpensive) && !night) {
+          stats.lost++;
+          noteLost(stats, sawEmpty ? 'empty' : 'expensive');
+        }
         continue;
       }
       if (random() < lossInQueue || stats.served >= cap) {
