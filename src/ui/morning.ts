@@ -494,6 +494,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       ...warLine(state),
       ...districtLines(state),
       ...trickLines(state),
+      ...nightGuestLines(state),
       ...holidayLine(state),
       el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
       billForecast(state),
@@ -1055,6 +1056,15 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       card.replaceChildren(...head, rows, button(t('board.close'), close, 'ui-btn secondary'));
     };
     render2();
+  };
+
+  /** Новости от ночных гостей: студент вернул долг, таксист рассказал о нас (nightGuests.ts). */
+  const nightGuestLines = (state: StoreState): HTMLElement[] => {
+    const night = state.nightGuests;
+    const out: HTMLElement[] = [];
+    if (night?.news) out.push(el('div', night.news === 'repaid' ? 'ui-note' : 'ui-muted', t(`nightNews.${night.news}` as TextKey, { n: night.newsAmount ?? 0 })));
+    if (night?.boost === state.day) out.push(el('div', 'ui-muted', t('nightNews.taxi')));
+    return out;
   };
 
   /** Кто напротив пакостит: босс района или сам Эдуард. */
