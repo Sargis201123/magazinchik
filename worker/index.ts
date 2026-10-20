@@ -10,6 +10,7 @@ import { duel, guild } from '../api/_lib/guild.js';
 import { weekend } from '../api/_lib/weekend.js';
 import { visits } from '../api/_lib/visits.js';
 import { sendNewspapers } from '../api/_lib/newspaper.js';
+import { card, cardImage, cleanCards } from '../api/_lib/card.js';
 import type { Env } from '../api/_lib/telegram.js';
 
 interface WorkerEnv extends Env {
@@ -32,11 +33,16 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   '/api/guild': { method: 'POST', handler: guild },
   '/api/weekend': { method: 'POST', handler: weekend },
   '/api/visits': { method: 'POST', handler: visits },
+  '/api/card': { method: 'POST', handler: card },
 };
 
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
-    const route = ROUTES[new URL(request.url).pathname];
+    const path = new URL(request.url).pathname;
+    // Картинка карточки для сторис: /api/card/<id>.jpg (card.ts).
+    const cardPath = /^\/api\/card\/([a-z0-9]+)\.jpg$/.exec(path);
+    if (cardPath && request.method === 'GET') return cardImage(env, cardPath[1]);
+    const route = ROUTES[path];
     if (!route) return env.ASSETS.fetch(request);
     if (request.method !== route.method) return new Response('method not allowed', { status: 405 });
     try {
@@ -50,5 +56,6 @@ export default {
   async scheduled(_event: unknown, env: WorkerEnv): Promise<void> {
     await sendReminders(env);
     await sendNewspapers(env);
+    await cleanCards(env.DB);
   },
 };

@@ -127,6 +127,7 @@ import { contestOf, juryDay, tierKey } from '../game/contest';
 import { sonyaVisits, sunflowersPlanted } from '../game/drama';
 import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
 import { reportProgress, track } from '../platform/analytics';
+import { shareDay } from '../platform/shareCard';
 import { duelInfo, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
 import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
@@ -736,6 +737,8 @@ export class StoreScene extends Phaser.Scene {
   private weatherObjs: Phaser.GameObjects.GameObject[] = [];
   private lawns: { x: number; y: number; w: number; h: number }[] = [];
   private greenery: Phaser.GameObjects.Image[] = [];
+  /** Снимок зала перед закрытием — для карточки итогов дня. */
+  private dayShot: HTMLImageElement | null = null;
   private doorImg!: Phaser.GameObjects.Image;
   private vignette?: Phaser.FX.Vignette;
   /** Насколько вечер (0 — день, 1 — сумерки): фары машин горят сильнее. */
@@ -7159,6 +7162,11 @@ export class StoreScene extends Phaser.Scene {
     this.refreshShelves();
     this.refreshWarehouse();
     this.hud.update(this.state, 0);
+    // Снимок зала до роллет — для карточки итогов (shareCard.ts).
+    this.dayShot = null;
+    this.game.renderer.snapshot((image) => {
+      this.dayShot = image instanceof HTMLImageElement ? image : null;
+    });
     // Магазин закрывается: опускаются роллеты, потом — итоги дня.
     this.closeShop();
     this.time.delayedCall(1500, () => {
@@ -7173,8 +7181,34 @@ export class StoreScene extends Phaser.Scene {
         lossAdvice(this.stats, this.state),
         reviews,
         () => this.showMorning(),
+        (button) => void this.shareDay(button, finishedDay),
       );
     });
+  }
+
+  /** «Поделиться итогами»: карточка в историю Telegram или в чат с ботом. */
+  private async shareDay(button: HTMLButtonElement, day: number): Promise<void> {
+    if (button.disabled) return;
+    button.disabled = true;
+    const label = button.textContent;
+    button.textContent = t('share.wait');
+    const history = this.state.history;
+    const result = await shareDay(
+      {
+        day,
+        shop: t(STORE_LEVELS[this.state.level].nameKey),
+        revenue: this.stats.revenue,
+        week: history.slice(-7).reduce((sum, n) => sum + n, 0),
+        served: this.stats.served,
+        rating: this.state.rating,
+      },
+      this.dayShot,
+    );
+    button.textContent = label;
+    button.disabled = false;
+    track('share', day, result === 'failed' ? 0 : 1);
+    if (result === 'chat') toast('assets/ico_phone.png', t('share.chat.title'), t('share.chat.text'));
+    if (result === 'failed') toast('assets/ico_phone.png', '📸', t('share.failed'));
   }
 
   /** Вечером на витрины, дверь и склад опускаются роллеты. */

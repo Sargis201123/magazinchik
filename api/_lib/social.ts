@@ -46,6 +46,9 @@ const SCHEMA = [
   // Друзья в гостях: угостить кофе (visits.ts).
   // Газета района: кому какой номер уже отправлен (newspaper.ts).
   'CREATE TABLE IF NOT EXISTS newspaper (id INTEGER, week INTEGER, PRIMARY KEY (id, week))',
+  // Карточки итогов для сторис: картинка в base64, живёт пару дней (card.ts).
+  'CREATE TABLE IF NOT EXISTS cards (id TEXT PRIMARY KEY, owner INTEGER, at INTEGER, data TEXT)',
+  'CREATE INDEX IF NOT EXISTS cards_owner ON cards (owner, at)',
   'CREATE TABLE IF NOT EXISTS gifts (sender INTEGER, receiver INTEGER, day INTEGER, amount INTEGER, claimed INTEGER DEFAULT 0, PRIMARY KEY (sender, receiver, day))',
   'CREATE INDEX IF NOT EXISTS gifts_receiver ON gifts (receiver, claimed)',
 ].join(';\n');
