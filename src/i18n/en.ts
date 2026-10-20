@@ -1131,6 +1131,8 @@ export const en: Record<TextKey, string> = {
   "title.fullOn": "⛶ Full screen: on",
   "title.fullOff": "⛶ Full screen: off",
   "title.home": "📲 Add to home screen",
+  "boot.loading": "Grandma is opening the shop…",
+  "boot.sync": "Checking your save…",
   "records.title": "🏆 My records",
   "records.empty": "Records appear after your first working day.",
   "records.revenue": "Revenue in a day",

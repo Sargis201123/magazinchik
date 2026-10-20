@@ -3877,6 +3877,22 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Начало дня: камера сначала показывает весь квартал сверху-сбоку (улица, соседи), потом
+   * плавно подлетает к магазину. Если игрок сам двигает камеру — не мешаем.
+   */
+  private flyIn(): void {
+    const cam = this.cameras.main;
+    if (this.input.pointer1.isDown || this.input.pointer2.isDown) return;
+    this.homeTimer?.remove();
+    const wide = this.baseZoom * 0.55;
+    const x = Phaser.Math.Clamp(this.home.x + 70, -CAMERA_REACH, this.next.w + CAMERA_REACH);
+    const y = Phaser.Math.Clamp(this.home.y + 30, -CAMERA_REACH / 2, this.next.h + CAMERA_REACH / 2);
+    cam.setZoom(wide).centerOn(x, y);
+    cam.pan(this.home.x, this.home.y, 1600, 'Sine.easeInOut', true);
+    cam.zoomTo(this.baseZoom, 1600, 'Cubic.easeInOut', true);
+  }
+
   /** Через несколько секунд после осмотра камера возвращается к магазину. */
   private scheduleHome(): void {
     const cam = this.cameras.main;
@@ -7730,6 +7746,7 @@ export class StoreScene extends Phaser.Scene {
 
   private startDay(): void {
     this.dayOpen = true;
+    this.flyIn();
     this.flipDoorSign(true);
     this.morningCrew();
     // Утром рассказали, чем кончился вчерашний «проверяющий» (tricks.ts) — больше не показываем.

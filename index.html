@@ -10,10 +10,20 @@
       html, body { margin: 0; padding: 0; height: 100%; background: #1d1a26; overflow: hidden; overscroll-behavior: none; touch-action: none; }
       #game { width: 100vw; height: 100vh; height: 100dvh; }
       canvas { image-rendering: pixelated; }
+      /* Заставка, пока грузится игра: бабушка кивает, полоска ползёт (BootScene двигает --p и убирает её). */
+      #splash { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: radial-gradient(circle at 50% 42%, #3a2f4a 0, #1d1a26 70%); transition: opacity .4s; }
+      #splash.gone { opacity: 0; pointer-events: none; }
+      #splash .frame { width: 192px; height: 192px; padding: 6px; background: #f6e7c8; border: 4px solid #5a3b2a; box-shadow: 0 6px 0 #2a1d26, inset 0 0 0 4px #e8c98f; }
+      #splash .frame img { width: 192px; height: 192px; image-rendering: pixelated; display: block; animation: splash-nod 1.2s steps(2) infinite; }
+      #splash .bar { width: 200px; height: 14px; background: #2a2433; border: 3px solid #5a3b2a; box-shadow: 0 3px 0 #120f18; }
+      #splash .bar i { display: block; height: 100%; width: calc(8% + 92% * var(--p, 0)); background: repeating-linear-gradient(90deg, #f2b84b 0 8px, #e39a2f 8px 16px); transition: width .2s; }
+      #splash .txt { min-height: 20px; color: #f6e7c8; font: 600 15px system-ui, sans-serif; letter-spacing: .5px; text-shadow: 0 2px 0 #000; }
+      @keyframes splash-nod { 50% { transform: translateY(4px); } }
     </style>
   </head>
   <body>
     <div id="game"></div>
+    <div id="splash"><div class="frame"><img src="assets/portrait_grandma_happy.png" alt="" /></div><div class="bar"><i></i></div><div class="txt"></div></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
