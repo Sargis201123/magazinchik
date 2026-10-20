@@ -44,6 +44,11 @@ const css = `
 .ui-who b, .ui-who h3 { margin: 0; }
 .ui-card h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; }
 .ui-card h3 { margin: 14px 0 6px; font-size: 15px; }
+.ui-box.ui-pass { background: #efe4ff; border-color: #9a6bd8; }
+.ui-pass-row { display: grid; grid-template-columns: 48px 1fr 1.4fr; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px dashed rgba(43, 34, 51, .15); opacity: .55; }
+.ui-pass-row.open { opacity: 1; }
+.ui-pass-row .ui-chip { font-size: 12px; padding: 6px 4px; white-space: normal; }
+.ui-chip.premium { background: #e6d4ff; }
 .ui-box.ui-duel { background: #ffe8e0; border-color: #e4606a; }
 .ui-duel-bar { height: 8px; border-radius: 4px; background: #e4606a; overflow: hidden; margin: 4px 0; }
 .ui-duel-bar > div { height: 100%; background: #3e8948; }
