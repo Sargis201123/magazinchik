@@ -4788,6 +4788,9 @@ def main():
     import patterns
 
     patterns.main()
+    import faces
+
+    faces.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
