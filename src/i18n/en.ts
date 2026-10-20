@@ -1795,6 +1795,23 @@ export const en: Record<TextKey, string> = {
   "share.chat.title": "Card in your chat",
   "share.chat.text": "The bot sent it to your chat — forward it to friends or post it to your story.",
   "share.failed": "That didn't work — please try again a bit later.",
+  "district.school": "School No. 5",
+  "district.office": "Business Center",
+  "district.stadium": "Stadium",
+  "district.dorm": "Dormitory",
+  "district.clinic": "Clinic",
+  "district.school.open": "Pupils and teachers drop by before and after classes: buns, pies, juice, ice cream and apples. Summer is a holiday.",
+  "district.office.open": "Office workers come for lunch: water, juice, pies, dumplings — and honey cake for birthdays.",
+  "district.stadium.open": "Once a week there's a match: fans flock in for water, juice and ice cream. Match days bring many more guests.",
+  "district.dorm.open": "Students from the dorm buy dumplings, potatoes, bread, juice and soap — cheap and plenty.",
+  "district.clinic.open": "Doctors, nurses and patients stop by for apples, juice, milk and flowers for the sick.",
+  "district.title": "{icon} New in the neighbourhood: {name}",
+  "district.gift": "🎁 Congratulate the neighbours (−{n} 💰): +0.1★ and twice as many of their guests for {d} days",
+  "district.skip": "Welcome!",
+  "district.site": "🏗 Being built across the road: {icon} {name} — opens in {n} days",
+  "district.match": "⚽ Match day at the stadium — fans will buy up water, juice and ice cream",
+  "district.soon": "Coming soon: {name}",
+  "district.boost": "{icon} {name}: after the opening party, twice as many of their guests for {n} more days",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

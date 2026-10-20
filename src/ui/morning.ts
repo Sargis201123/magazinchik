@@ -179,6 +179,7 @@ import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
 import { claimPass, grantPass, passCoins, passDecor, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { rushPrize } from '../game/rush';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
+import { answerOpening, BUILDINGS, districtNews, districtSite, isMatchDay, OPENING_DAYS, type BuildingId } from '../game/district';
 import { canCook, cook, DISHES, DISH_IDS, kitchenOpen, portionsOf, portionsTotal, PORTIONS_MAX } from '../game/kitchen';
 import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
@@ -490,6 +491,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       ...seasonLine(state),
       ...weatherLine(state),
       ...warLine(state),
+      ...districtLines(state),
       ...holidayLine(state),
       el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
       billForecast(state),
@@ -506,6 +508,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       ...rushBox(state),
       ...passBox(state),
       ...staffEventBox(state),
+      ...districtBox(state),
       ...taleBox(state),
       ...guildClaimBox(state),
       ...duelBox(state),
@@ -1049,6 +1052,34 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       card.replaceChildren(...head, rows, button(t('board.close'), close, 'ui-btn secondary'));
     };
     render2();
+  };
+
+  /** В районе открылось новое здание: кто теперь будет заходить и поздравить ли (district.ts). */
+  const districtBox = (state: StoreState): HTMLElement[] => {
+    const id = districtNews(state);
+    if (!id) return [];
+    const b = BUILDINGS[id];
+    const name = t(`district.${id}` as TextKey);
+    const box = el('div', 'ui-box ui-tale');
+    box.append(
+      el('b', '', t('district.title', { icon: b.icon, name })),
+      el('p', '', t(`district.${id}.open` as TextKey)),
+      button(t('district.gift', { n: b.gift, d: OPENING_DAYS }), () => update(answerOpening(getState(), id, true), 'success'), 'ui-btn', state.money < b.gift),
+      button(t('district.skip'), () => update(answerOpening(getState(), id, false)), 'ui-btn secondary'),
+    );
+    return [box];
+  };
+
+  /** Строки утра про район: что строят, матч сегодня, праздник открытия. */
+  const districtLines = (state: StoreState): HTMLElement[] => {
+    const out: HTMLElement[] = [];
+    const site = districtSite(state);
+    const named = (id: BuildingId) => ({ icon: BUILDINGS[id].icon, name: t(`district.${id}` as TextKey) });
+    if (site) out.push(el('div', 'ui-muted', t('district.site', { ...named(site.id), n: site.days })));
+    if (isMatchDay(state)) out.push(el('div', 'ui-note', t('district.match')));
+    const boost = state.district?.boost;
+    if (boost && boost.until >= state.day) out.push(el('div', 'ui-muted', t('district.boost', { ...named(boost.id), n: boost.until - state.day + 1 })));
+    return out;
   };
 
   /** История с сотрудниками: просьба или ситуация и два решения (staffEvents.ts). */

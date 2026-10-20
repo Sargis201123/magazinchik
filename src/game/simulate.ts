@@ -8,6 +8,7 @@ import { loanOptions, takeLoan } from './bank';
 import { cook, DISHES, DISH_IDS, sellDish } from './kitchen';
 import { answerStaffEvent, eventCost } from './staffEvents';
 import { answerTale, taleToday } from './tales';
+import { answerOpening, BUILDINGS, districtNews } from './district';
 import {
   buyChance,
   buyShelf,
@@ -442,6 +443,13 @@ export function simulate({
     // Просьбы сотрудников и истории покупателей: соглашается, если деньги есть с запасом.
     if (state.staffEvent) state = answerStaffEvent(state, state.money >= eventCost(state.staffEvent) + reserve * 2) ?? answerStaffEvent(state, false) ?? state;
     if (taleToday(state)) state = answerTale(state, 0) ?? answerTale(state, 1) ?? state;
+    // Открылось здание в районе — поздравляет, если деньги есть с запасом и не копит на расширение.
+    const opened = districtNews(state);
+    if (opened) {
+      const saving = nextStoreLevel(state);
+      const spare = state.money - BUILDINGS[opened].gift - reserve * 2 - (saving ? saving.cost : 0);
+      state = answerOpening(state, opened, spare >= 0) ?? answerOpening(state, opened, false) ?? state;
+    }
     // Печь: хлеб из своих закладок (часть сгорает — игрок не успел вынуть). Хлеб пойдёт в зачёт закупки.
     let breadBaked = 0;
     let batches = 0;

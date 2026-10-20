@@ -6,6 +6,7 @@ import type { TalesState } from './tales';
 import type { PassState } from './pass';
 import type { DishId } from './kitchen';
 import type { StaffEvent } from './staffEvents';
+import type { DistrictState } from './district';
 import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
@@ -602,6 +603,8 @@ export interface StoreState {
   guildClaimed?: number;
   /** Ситуация с сотрудниками, ждущая решения (staffEvents.ts). */
   staffEvent?: StaffEvent;
+  /** Район: о каких открытиях рассказали и кого поздравили (district.ts). */
+  district?: DistrictState;
   /** Готовые порции на кухне (kitchen.ts). */
   kitchen?: Partial<Record<DishId, number>>;
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */

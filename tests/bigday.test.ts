@@ -1,3 +1,4 @@
+import { districtGuests } from '../src/game/district';
 import { describe, expect, it } from 'vitest';
 import {
   BAD_DAY_SOFTEN,
@@ -99,7 +100,9 @@ describe('особые дни', () => {
       expect(bigDayFor(start + len)).toBeNull();
       // Известный день входит в прогноз гостей.
       const base = { ...newGame(), rating: 3 };
-      expect(guestsToday({ ...base, day: start + 1 })).toBeLessThan(guestsToday({ ...base, day: start }));
+      // (здания района — district.ts — в эти дни могут открыться или устроить матч: их вклад убираем)
+      const own = (day: number) => guestsToday({ ...base, day }) / districtGuests({ ...base, day });
+      expect(own(start + 1)).toBeLessThan(own(start));
     }
   });
 
