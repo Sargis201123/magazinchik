@@ -266,6 +266,9 @@ const FRIEND_VISITS = 2;
 const FRIEND_TIP = 40;
 const FRIEND_GIFT = 300;
 
+/** Деревья сквера: обычное чаще, остальные для разнообразия. */
+const PARK_TREES = ['tree', 'tree', 'tree_round', 'tree_birch', 'tree_pine'];
+
 /** Высота здания босса за дорогой: умещается на месте «Гиганта». */
 const RIVAL_ACROSS_H = 106;
 
@@ -756,6 +759,8 @@ export class StoreScene extends Phaser.Scene {
   private builtGiant: GiantLook = 'none';
   /** Какие здания района стояли, когда рисовали улицу (district.ts). */
   private builtDistrict = '';
+  /** Снежные покрывала на крышах соседей: видны в снегопад. */
+  private roofSnow: Phaser.GameObjects.Rectangle[] = [];
   /** Козни конкурента на улице сегодня (tricks.ts): промоутеры, перетяжки, их таймеры. */
   private trickObjs: Phaser.GameObjects.GameObject[] = [];
   private trickTimers: Phaser.Time.TimerEvent[] = [];
@@ -1619,6 +1624,8 @@ export class StoreScene extends Phaser.Scene {
       return obj;
     };
     const tree = this.weather === 'leaves' ? 0xffb868 : 0xffffff;
+    this.roofSnow = this.roofSnow.filter((r) => r.active);
+    for (const r of this.roofSnow) r.setVisible(this.weather === 'snow');
     for (const g of this.greenery) {
       // В снег — деревья и кусты в снежных шапках (tree_snow, bush_snow).
       const base = (g.getData('base') as string | undefined) ?? g.texture.key;
@@ -1782,7 +1789,8 @@ export class StoreScene extends Phaser.Scene {
     const { door, h } = this.layout;
     const front = h + FACADE_H;
     const top = this.next.h + 4;
-    const trees = this.greenery.filter((g) => g.texture.key === 'tree');
+    // Лиственные деревья (ель осенью не желтеет и весной не цветёт).
+    const trees = this.greenery.filter((g) => ['tree', 'tree_round', 'tree_birch'].includes((g.getData('base') as string | undefined) ?? g.texture.key));
     // По всему газону вокруг: не на здании, участке «Сдаётся», соседях и улице.
     const scatter = (count: number, make: (x: number, y: number) => void) => {
       for (let placed = 0, tries = 0; placed < count && tries < count * 5; tries++) {
@@ -3676,6 +3684,8 @@ export class StoreScene extends Phaser.Scene {
     edge(x, y, 3, h, light);
     edge(x, y + h - 3, w, 3, dark);
     edge(x + w - 3, y, 3, h, dark);
+    // Снег на кровле — виден только в снегопад (applyWeather).
+    this.roofSnow.push(this.add.rectangle(x + 3, y + 3, w - 6, h - 6, 0xf4f8ff, 0.7).setOrigin(0).setDepth(-2.97).setVisible(this.weather === 'snow'));
     // Тень от парапета на кровле.
     this.add.rectangle(x + 3, y + 3, w - 6, 2, 0x181425, 0.12).setOrigin(0).setDepth(-2.94);
     this.add.rectangle(x + 3, y + 3, 2, h - 6, 0x181425, 0.12).setOrigin(0).setDepth(-2.94);
@@ -3823,14 +3833,17 @@ export class StoreScene extends Phaser.Scene {
           const roll = rnd.frac();
           // За зданием глубина отрицательная — держим над газоном (-10), но под крышами соседей (-3).
           const depth = py < 0 ? -9.5 + (py + 400) / 1000 : py;
-          if (roll < 0.34) this.greenery.push(this.art(px, py, 'tree').setOrigin(0.5, 0.9).setDepth(depth));
-          else if (roll < 0.52) this.greenery.push(this.art(px, py, 'bush').setDepth(depth));
+          // Сквер пёстрый: липы, берёзы, ели и цветущие кусты (art/flora.py).
+          if (roll < 0.34) this.greenery.push(this.art(px, py, rnd.pick(PARK_TREES)).setOrigin(0.5, 0.9).setDepth(depth));
+          else if (roll < 0.52) this.greenery.push(this.art(px, py, rnd.frac() < 0.3 ? 'bush_flower' : 'bush').setDepth(depth));
           else if (roll < 0.62) this.greenery.push(this.art(px, py, rnd.frac() < 0.5 ? 'flower' : 'tulips').setDepth(depth));
         }
       }
     };
     scatter(-380, Math.min(-40, top - 230));
     scatter(top + 104, top + 470);
+    // Парк за аллеей гуще — второй проход (деревья не встают на пруд, клумбы и дорожку).
+    scatter(top + 290, top + 470);
   }
 
   /**
@@ -3896,6 +3909,9 @@ export class StoreScene extends Phaser.Scene {
     areas.push({ x: -560, y: alley - 4, w: next.w + 1120, h: 20 });
     for (let x = -520; x < next.w + 520; x += 96) {
       this.art(x, alley + 2, 'lamp').setOrigin(0.5, 0.95).setDepth(alley + 2);
+      // Вечером фонари аллеи светят, как уличные.
+      this.nightGlow(this.art(x, alley - 20, 'light_cone').setOrigin(0.5, 0).setTint(0xffd27a), 0.5);
+      this.nightGlow(this.art(x, alley - 20, 'glow').setScale(16 / 64).setTint(0xfff0b0), 0.9);
       this.art(x + 40, alley + 1, 'bench').setDepth(alley + 1);
     }
     // Пруд: берег, вода, блики, камыш и утки. Всё — над снегом на газоне (-9.5).
@@ -3938,7 +3954,9 @@ export class StoreScene extends Phaser.Scene {
       const by = alley + 26;
       this.add.rectangle(bx, by, 64, 22, 0x8f563b).setOrigin(0).setDepth(-9.46);
       this.add.rectangle(bx + 2, by + 2, 60, 18, 0x733e39).setOrigin(0).setDepth(-9.45);
-      for (let i = 0; i < 9; i++) {
+      // Зимой клумбы под снегом.
+      if (frozen) this.add.rectangle(bx + 2, by + 2, 60, 18, 0xf4f8ff).setOrigin(0).setDepth(-9.44);
+      for (let i = 0; i < (frozen ? 0 : 9); i++) {
         this.art(bx + 7 + (i % 5) * 12 + rnd.between(-2, 2), by + 7 + Math.floor(i / 5) * 9, rnd.frac() < 0.6 ? 'flower' : 'tulips')
           .setTint(rnd.pick(flowers))
           .setDepth(by + 10);

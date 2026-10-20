@@ -4771,6 +4771,9 @@ def main():
     import rooftops
 
     rooftops.main()
+    import flora
+
+    flora.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
