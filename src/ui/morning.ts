@@ -210,7 +210,7 @@ import {
 import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
 import { track } from '../platform/analytics';
 import { showLeaderboard } from './leaderboard';
-import { haptic } from '../platform/telegram';
+import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { button, el, openModal, who } from './dom';
 
@@ -1113,7 +1113,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     const ready = passReady(state);
     const box = el('div', 'ui-box ui-pass');
     box.append(
-      el('b', '', t('pass.line', { n: pass.season, l: passLevel(pass), max: PASS_LEVELS, d: seasonDaysLeft(Date.now()) })),
+      el('b', '', t('pass.line', { n: pass.season, l: passLevel(pass), max: PASS_LEVELS, d: seasonDaysLeft(trustedNow()) })),
       button(ready ? t('pass.ready', { n: ready }) : t('pass.open'), passModal, ready ? 'ui-btn' : 'ui-btn secondary'),
     );
     return [box];
