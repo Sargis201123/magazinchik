@@ -3,7 +3,8 @@
 //
 // Зал заставлен полками: вдоль задней стены и рядами-островами, между рядами — проходы.
 // Слева к зданию пристроен флигель из трёх комнат, у каждой своя дверь в зал через левую стену:
-// внизу склад (ворота на улицу для подвоза), над ним пекарня, выше кофейня.
+// внизу склад (ворота на улицу для подвоза), над ним пекарня, выше кофейня, в больших помещениях
+// над кофейней ещё кухня.
 
 import { STORE_LEVELS } from '../game/economy';
 
@@ -35,6 +36,8 @@ export interface Layout {
   /** Пекарня и кофейня во флигеле над складом. */
   bakery: Room;
   coffee: Room;
+  /** Кухня над кофейней — только в больших помещениях (KITCHEN_FROM), где она помещается по высоте. */
+  kitchen?: Room;
   /** Флигель целиком (внутренняя часть комнат, без наружных стен). */
   wing: { x: number; y: number; w: number; h: number };
 }
@@ -81,6 +84,9 @@ export const WING_WALL = 6;
 export const WING_W = 60;
 const BAKERY_H = 52;
 const COFFEE_H = 60;
+const KITCHEN_H = 52;
+/** С какого помещения во флигеле есть кухня (улучшение «Кухня» — с того же уровня). */
+export const KITCHEN_FROM = 3;
 /** Сколько занимает флигель слева от зала вместе со стенами. */
 export const WING_OUTER = WING_W + 2 * WING_WALL;
 
@@ -125,6 +131,8 @@ export function layoutFor(level: number): Layout {
   const bakery = room(bakeryY, BAKERY_H);
   const coffeeY = bakeryY - WING_WALL - COFFEE_H;
   const coffee = room(coffeeY, COFFEE_H);
+  const kitchenY = coffeeY - WING_WALL - KITCHEN_H;
+  const kitchen = level >= KITCHEN_FROM ? room(kitchenY, KITCHEN_H) : undefined;
   const showcases: Point[] = [];
   return {
     w,
@@ -140,7 +148,8 @@ export function layoutFor(level: number): Layout {
     warehouse: { ...store, rows, pickup: { x: roomX + whW / 2, y: h - 8 } },
     bakery,
     coffee,
-    wing: { x: roomX, y: coffeeY, w: whW, h: h - coffeeY },
+    kitchen,
+    wing: { x: roomX, y: kitchen ? kitchenY : coffeeY, w: whW, h: h - (kitchen ? kitchenY : coffeeY) },
   };
 }
 

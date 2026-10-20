@@ -7,7 +7,7 @@ import type { TextKey } from '../i18n/ru';
 import { CARRY, managerBoost, type ScanTiming, type StoreState } from './economy';
 import { registerScan } from './gear';
 
-export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'autoOrder' | 'eTags' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables';
+export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'autoOrder' | 'eTags' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables' | 'kitchen';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -33,6 +33,7 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   oven: { id: 'oven', icon: '🥖', nameKey: 'upgrade.oven', descKey: 'upgrade.oven.desc', price: 1800, minLevel: 1 },
   coffeeTables: { id: 'coffeeTables', icon: '🪑', nameKey: 'upgrade.coffeeTables', descKey: 'upgrade.coffeeTables.desc', price: 2200, minLevel: 2, needs: 'coffee' },
   wholesale: { id: 'wholesale', icon: '📦', nameKey: 'upgrade.wholesale', descKey: 'upgrade.wholesale.desc', price: 1200, minLevel: 1, needs: 'oven' },
+  kitchen: { id: 'kitchen', icon: '🍲', nameKey: 'upgrade.kitchen', descKey: 'upgrade.kitchen.desc', price: 3000, minLevel: 3 },
   nightShift: { id: 'nightShift', icon: '🌙', nameKey: 'upgrade.nightShift', descKey: 'upgrade.nightShift.desc', price: 3500, minLevel: 3 },
 };
 
