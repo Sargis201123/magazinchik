@@ -6,6 +6,7 @@
 import { clientError, starsInvoice, starsOwned, starsRefund, starsSetup, telegramWebhook } from '../api/_lib/handlers.js';
 import { sendReminders, socialClaim, socialPing } from '../api/_lib/social.js';
 import { leaderboard, progress, stats } from '../api/_lib/stats.js';
+import { duel, guild } from '../api/_lib/guild.js';
 import type { Env } from '../api/_lib/telegram.js';
 
 interface WorkerEnv extends Env {
@@ -24,6 +25,8 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   '/api/progress': { method: 'POST', handler: progress },
   '/api/leaderboard': { method: 'POST', handler: leaderboard },
   '/api/stats': { method: 'GET', handler: stats },
+  '/api/duel': { method: 'POST', handler: duel },
+  '/api/guild': { method: 'POST', handler: guild },
 };
 
 export default {

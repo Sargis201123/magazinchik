@@ -44,6 +44,10 @@ const css = `
 .ui-who b, .ui-who h3 { margin: 0; }
 .ui-card h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; }
 .ui-card h3 { margin: 14px 0 6px; font-size: 15px; }
+.ui-box.ui-duel { background: #ffe8e0; border-color: #e4606a; }
+.ui-duel-bar { height: 8px; border-radius: 4px; background: #e4606a; overflow: hidden; margin: 4px 0; }
+.ui-duel-bar > div { height: 100%; background: #3e8948; }
+.ui-me { font-weight: 800; color: #2b2233; }
 .ui-box.ui-tale { background: #e8f4ff; border-color: #5fb4f0; }
 .ui-tale p { margin: 6px 0 8px; line-height: 1.35; }
 .ui-box.ui-goals { background: #fff3b0; border-color: #f7c948; }
