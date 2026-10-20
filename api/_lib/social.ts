@@ -28,6 +28,14 @@ const SCHEMA = [
   'CREATE INDEX IF NOT EXISTS progress_revenue ON progress (revenue)',
   'CREATE TABLE IF NOT EXISTS events (id INTEGER, at INTEGER, kind TEXT, day INTEGER, value INTEGER)',
   'CREATE INDEX IF NOT EXISTS events_kind ON events (kind, at)',
+  // Торговая неделя с другом и гильдии района (guild.ts).
+  'CREATE TABLE IF NOT EXISTS week_start (id INTEGER, week INTEGER, revenue INTEGER, PRIMARY KEY (id, week))',
+  'CREATE TABLE IF NOT EXISTS duels (id INTEGER, week INTEGER, rival INTEGER, PRIMARY KEY (id, week))',
+  'CREATE TABLE IF NOT EXISTS guilds (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE, name TEXT, owner INTEGER, created INTEGER)',
+  'CREATE TABLE IF NOT EXISTS guild_members (player INTEGER PRIMARY KEY, guild INTEGER, joined INTEGER)',
+  'CREATE INDEX IF NOT EXISTS guild_members_guild ON guild_members (guild)',
+  'CREATE TABLE IF NOT EXISTS guild_invites (player INTEGER PRIMARY KEY, guild INTEGER, at INTEGER)',
+  'CREATE TABLE IF NOT EXISTS guild_weeks (guild INTEGER, week INTEGER, target INTEGER, PRIMARY KEY (guild, week))',
 ].join(';\n');
 
 /** Таблицы создаются сами при первом обращении к базе. */

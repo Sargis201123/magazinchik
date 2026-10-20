@@ -127,6 +127,7 @@ import { contestOf, juryDay, tierKey } from '../game/contest';
 import { sonyaVisits, sunflowersPlanted } from '../game/drama';
 import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
 import { reportProgress, track } from '../platform/analytics';
+import { duelInfo, loadMultiplayer } from '../platform/multiplayer';
 import { reportError, setErrorContext } from '../platform/errors';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
@@ -226,7 +227,7 @@ const CAR_TYPES: [string, number | null, number][] = [
 type Popup = { label: Phaser.GameObjects.Text; text: string; count: number; fade?: Phaser.Tweens.Tween };
 
 /** Здание по соседству; back — отступ от тротуара (у кафе перед ним веранда). */
-type Neighbor = { x: number; w: number; h: number; name: TextKey; sign: number; awning: number; roof: number; neon: number; dark?: boolean; back?: number };
+type Neighbor = { x: number; w: number; h: number; name: TextKey; label?: string; sign: number; awning: number; roof: number; neon: number; dark?: boolean; back?: number };
 
 /** Помещение конкурента: пустует, «МегаМарт» по сюжету, а после сюжета — боссы района по очереди. */
 const RIVAL_LOOKS: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
@@ -692,6 +693,8 @@ export class StoreScene extends Phaser.Scene {
   private builtEduard: EduardLook | null = null;
   /** Всплывающие надписи на экране: чтобы не налезали друг на друга и склеивались. */
   private popups: Popup[] = [];
+  /** Чей магазин друга нарисован сбоку (торговая неделя). */
+  private builtFriend?: string;
   /** Магазин босса района стоит за дорогой (на месте «Гиганта»), а не сбоку. */
   private rivalAcross = false;
   /** Каким построен «Гигант» за дорогой (giant.ts): стройка, магазин, закрытый. */
@@ -898,6 +901,10 @@ export class StoreScene extends Phaser.Scene {
     });
     // Игрок на месте — бот не будет напоминать. Пришёл по приглашению друга — подарок новичку.
     void socialPing(getLang()).then((info) => {
+      // Торговая неделя и гильдия: магазин друга появится на улице, если соперник есть.
+      void loadMultiplayer().then(() => {
+        if (!this.running && (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend) this.buildWorld();
+      });
       if (!info?.welcome) return;
       this.state = { ...this.state, money: this.state.money + WELCOME_GIFT };
       saveGame(this.state);
@@ -3394,9 +3401,16 @@ export class StoreScene extends Phaser.Scene {
     const look = eduardLook(this.state);
     this.builtEduard = look;
     // Босс района открывается за дорогой, на месте закрытого «Гиганта»; сбоку тогда — хозтовары.
-    const side: Omit<Neighbor, 'x' | 'w'> = this.rivalAcross
-      ? { h: 120, name: 'neighbor.hardware', sign: 0x5a6988, awning: 0x8b9bb4, roof: 0xd6dce8, neon: 0x9cd8ff }
-      : RIVAL_LOOKS[look];
+    // Сбоку, когда босс за дорогой, — магазин друга по торговой неделе (или хозтовары).
+    // Пустующее помещение тоже занимает друг.
+    const free = this.rivalAcross || look === 'vacant';
+    const friend = free ? duelInfo()?.rival?.name : undefined;
+    this.builtFriend = friend;
+    const side: Omit<Neighbor, 'x' | 'w'> = friend
+      ? { h: 125, name: 'neighbor.friend', label: t('neighbor.friend', { name: friend }), sign: 0x3e8948, awning: 0xfee761, roof: 0xe8dcc0, neon: 0xfee761 }
+      : this.rivalAcross
+        ? { h: 120, name: 'neighbor.hardware', sign: 0x5a6988, awning: 0x8b9bb4, roof: 0xd6dce8, neon: 0x9cd8ff }
+        : RIVAL_LOOKS[look];
     const neighbors: Neighbor[] = [
       { x: -136 - WING_OUTER, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860, back: VERANDA_D },
       { x: -268 - WING_OUTER, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0, neon: 0x7cff8a },
@@ -3442,11 +3456,11 @@ export class StoreScene extends Phaser.Scene {
     const signDepth = across ? front + 41 : front - 3;
     this.art(n.x + n.w / 2, signY, 'sign').setTint(n.sign).setDepth(signDepth);
     this.add
-      .text(n.x + n.w / 2, signY, t(n.name), { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
+      .text(n.x + n.w / 2, signY, n.label ?? t(n.name), { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
       .setOrigin(0.5)
       .setResolution(4)
       .setDepth(signDepth + 1);
-    if (n.neon) this.neonSign(n.x + n.w / 2, signY, t(n.name), '6px', n.neon, 64);
+    if (n.neon) this.neonSign(n.x + n.w / 2, signY, n.label ?? t(n.name), '6px', n.neon, 64);
   }
 
   /**

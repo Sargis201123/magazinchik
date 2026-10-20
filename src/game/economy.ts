@@ -588,6 +588,9 @@ export interface StoreState {
   bankrupt?: boolean;
   /** Сколько игр начато заново. */
   runs?: number;
+  /** За какую неделю уже забрана награда торговой недели и гильдии (platform/multiplayer.ts). */
+  duelClaimed?: number;
+  guildClaimed?: number;
   /** Истории постоянных покупателей (tales.ts). */
   tales?: TalesState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */

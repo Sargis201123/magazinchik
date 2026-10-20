@@ -176,6 +176,7 @@ import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable,
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
+import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
 import { flushCloud, saveGame } from '../game/save';
@@ -358,6 +359,13 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   const autoPlan = autoOrderPlan(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid));
   if (autoPlan?.lines.length) setState(applyReorder(getState(), autoPlan, () => false).state);
 
+  // Торговая неделя и гильдия приходят с сервера чуть позже — перерисовать утро, когда пришли.
+  const onMultiplayer = () => {
+    if (!card.isConnected) window.removeEventListener(MP_EVENT, onMultiplayer);
+    else render();
+  };
+  window.addEventListener(MP_EVENT, onMultiplayer);
+
   const update = (next: StoreState | null, feedback: 'tap' | 'success' | 'error' = 'tap') => {
     if (!next) return;
     // Купленное сразу встаёт на полки, лишнее остаётся на складе.
@@ -491,6 +499,8 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       title,
       ...(touring ? [] : tipBox(state)),
       ...taleBox(state),
+      ...guildClaimBox(state),
+      ...duelBox(state),
       ...goalsBox(state),
       today,
       info,
@@ -962,6 +972,97 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   const questText = (q: Quest) =>
     t(QUEST_TEXT[q.kind], { n: q.target, product: q.product ? productLabel(q.product) : '' });
+
+  const money = (n: number) => n.toLocaleString('ru-RU');
+
+  /** Торговая неделя с другом: счёт этой недели и награда за прошлую. */
+  const duelBox = (state: StoreState): HTMLElement[] => {
+    const duel = duelInfo();
+    if (!duel?.rival && !duel?.last) return [];
+    const box = el('div', 'ui-box ui-duel');
+    if (duel.last && state.duelClaimed !== duel.last.week) {
+      const { won, mine, theirs, name } = duel.last;
+      const reward = duelReward(state.level, won);
+      box.append(
+        el('div', 'ui-note', t(won ? 'duel.won' : 'duel.lost', { name, mine: money(mine), theirs: money(theirs) })),
+        button(t('duel.claim', { n: reward }), () => update({ ...getState(), money: getState().money + reward, duelClaimed: duel.last!.week }, 'success')),
+      );
+    }
+    if (duel.rival) {
+      const { name, mine, theirs } = duel.rival;
+      const bar = el('div', 'ui-duel-bar');
+      const fill = el('div');
+      fill.style.width = `${Math.round((mine / Math.max(1, mine + theirs)) * 100)}%`;
+      bar.append(fill);
+      box.append(
+        el('b', '', t('duel.title', { name })),
+        el('div', '', t('duel.score', { name, mine: money(mine), theirs: money(theirs) })),
+        bar,
+        el('div', 'ui-muted', t('duel.left', { n: duel.daysLeft, r: duelReward(state.level, true) })),
+      );
+    }
+    return box.childElementCount ? [box] : [];
+  };
+
+  /** Награда гильдии за выполненную цель прошлой недели — сверху утра. */
+  const guildClaimBox = (state: StoreState): HTMLElement[] => {
+    const g = guildInfo();
+    if (!g?.last?.reached || state.guildClaimed === g.last.week) return [];
+    const reward = guildReward(state.level);
+    const box = el('div', 'ui-box ui-duel');
+    box.append(
+      el('div', 'ui-note', t('guild.reached', { name: g.name })),
+      button(t('guild.claim', { n: reward }), () => update({ ...getState(), money: getState().money + reward, guildClaimed: g.last!.week }, 'success')),
+    );
+    return [box];
+  };
+
+  /** Гильдия во вкладке «Магазин»: основать, вступить, участники и цель недели. */
+  let guildError = '';
+  const guildBox = (state: StoreState): HTMLElement[] => {
+    if (!guildsEnabled()) return [];
+    const box = el('div', 'ui-box');
+    const act = (action: 'create' | 'join' | 'leave', extra: { name?: string; code?: string } = {}) =>
+      void guildAction(action, extra).then((res) => {
+        guildError = res.error ? t(`guild.err.${res.error}` as TextKey) : '';
+        update(getState(), res.error ? 'error' : 'success');
+      });
+    const g = guildInfo();
+    if (!g) {
+      const name = el('input', 'ui-input');
+      name.placeholder = t('guild.namePlaceholder');
+      name.maxLength = 24;
+      const code = el('input', 'ui-input');
+      code.placeholder = t('guild.codePlaceholder');
+      code.maxLength = 6;
+      box.append(
+        el('b', '', t('guild.title')),
+        el('div', 'ui-muted', t('guild.note')),
+        name,
+        button(t('guild.create'), () => act('create', { name: name.value }), 'ui-btn'),
+        code,
+        button(t('guild.join'), () => act('join', { code: code.value }), 'ui-btn secondary'),
+      );
+      if (guildError) box.append(el('div', 'ui-note', guildError));
+      return [box];
+    }
+    const bar = el('div', 'ui-goal-bar');
+    const fill = el('div');
+    fill.style.width = `${Math.min(100, Math.round((g.total / Math.max(1, g.target)) * 100))}%`;
+    bar.append(fill);
+    box.append(
+      el('b', '', t('guild.head', { name: g.name, code: g.code })),
+      el('div', '', t('guild.goal', { total: money(g.total), target: money(g.target), n: g.daysLeft })),
+      bar,
+      el('div', 'ui-muted', t('guild.reward', { r: guildReward(state.level) })),
+    );
+    for (const m of g.members) box.append(el('div', `ui-item-sub${m.me ? ' ui-me' : ''}`, t('guild.member', { name: m.name, n: money(m.week) })));
+    box.append(
+      button(t('guild.invite'), () => inviteToGuild(g.code, t('guild.share')), 'ui-btn'),
+      button(t('guild.leave'), () => act('leave'), 'ui-btn secondary'),
+    );
+    return [box];
+  };
 
   /** История постоянного покупателя: эпизод дня и выбор (tales.ts). */
   const taleBox = (state: StoreState): HTMLElement[] => {
@@ -2554,6 +2655,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       achievementsButton(state),
       ...legacyBox(state),
       ...inviteBox(),
+      ...guildBox(state),
       decorBox(state),
       replay,
       adsBox(state),
