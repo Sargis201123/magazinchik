@@ -5,6 +5,7 @@ import { legacyMentor, legacyPurchase, type Legacy } from './legacy';
 import type { TalesState } from './tales';
 import type { PassState } from './pass';
 import type { DishId } from './kitchen';
+import type { StaffEvent } from './staffEvents';
 import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
@@ -299,7 +300,12 @@ export interface StaffMember {
   streak?: number;
   /** В этот день не выйдет: выходной. */
   offDay?: number;
+  /** Воодушевлён (поддержали, похвалили): столько дней работает быстрее (staffEvents.ts). */
+  inspired?: number;
 }
+
+/** Воодушевлённый сотрудник работает быстрее. */
+export const INSPIRED_SPEED = 1.15;
 
 export function wageFor(role: StaffRole, skill: number, trait?: Trait): number {
   const pay = SKILL_PAY[skill - 1] * (trait ? TRAITS[trait].pay : 1);
@@ -308,7 +314,7 @@ export function wageFor(role: StaffRole, skill: number, trait?: Trait): number {
 
 /** Множитель скорости работы: 1 — обычная. */
 export const workSpeed = (m: StaffMember): number =>
-  SKILL_SPEED[m.skill - 1] * (m.trait ? TRAITS[m.trait].speed : 1) * (m.upset ? UPSET_SPEED : 1) * (isTired(m) ? TIRED_SPEED : 1);
+  SKILL_SPEED[m.skill - 1] * (m.trait ? TRAITS[m.trait].speed : 1) * (m.upset ? UPSET_SPEED : 1) * (isTired(m) ? TIRED_SPEED : 1) * (m.inspired ? INSPIRED_SPEED : 1);
 
 /** Без выходных столько дней подряд — устаёт и работает медленнее. */
 export const TIRED_DAYS = 6;
@@ -341,9 +347,10 @@ export const EXHAUSTED_DAYS = 10;
 export const restStaff = (state: StoreState, night = false): StoreState => ({
   ...state,
   staff: state.staff.map((m) => {
-    if (isAbsent(state, m)) return { ...m, streak: 0 };
+    const inspired = m.inspired ? m.inspired - 1 || undefined : undefined;
+    if (isAbsent(state, m)) return { ...m, streak: 0, inspired };
     const streak = (m.streak ?? 0) + (night ? NIGHT_FATIGUE : 1);
-    return { ...m, streak, offDay: streak >= EXHAUSTED_DAYS && (m.offDay ?? 0) <= state.day ? state.day + 1 : m.offDay };
+    return { ...m, streak, inspired, offDay: streak >= EXHAUSTED_DAYS && (m.offDay ?? 0) <= state.day ? state.day + 1 : m.offDay };
   }),
 });
 
@@ -593,6 +600,8 @@ export interface StoreState {
   /** За какую неделю уже забрана награда торговой недели и гильдии (platform/multiplayer.ts). */
   duelClaimed?: number;
   guildClaimed?: number;
+  /** Ситуация с сотрудниками, ждущая решения (staffEvents.ts). */
+  staffEvent?: StaffEvent;
   /** Готовые порции на кухне (kitchen.ts). */
   kitchen?: Partial<Record<DishId, number>>;
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */

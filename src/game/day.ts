@@ -33,6 +33,7 @@ import { taleGuests, talesMorning } from './tales';
 import { addPassXp } from './pass';
 import { rushGuests } from './rush';
 import { spoilDishes } from './kitchen';
+import { staffMorning } from './staffEvents';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -63,7 +64,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = contestNight(burglaryNight(giantNight(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), random), stats.revenue), stats.revenue, random), stats);
+  const next = contestNight(burglaryNight(giantNight(staffMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), random), random), stats.revenue), stats.revenue, random), stats);
   return {
     ...night,
     state: next,
