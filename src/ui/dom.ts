@@ -44,6 +44,18 @@ const css = `
 .ui-who b, .ui-who h3 { margin: 0; }
 .ui-card h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; }
 .ui-card h3 { margin: 14px 0 6px; font-size: 15px; }
+.ui-box.ui-goals { background: #fff3b0; border-color: #f7c948; }
+.ui-goals .ui-goals-week { display: block; margin-top: 8px; }
+.ui-goal-reward { color: #3e8948; white-space: nowrap; }
+.ui-goal-bar { height: 6px; border-radius: 3px; background: rgba(43, 34, 51, .12); overflow: hidden; margin: 2px 0 0; }
+.ui-goal-bar > div { height: 100%; background: #63c74d; }
+.ui-board { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; }
+.ui-board-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; background: rgba(43, 34, 51, .06); }
+.ui-board-row.me { background: #fee761; }
+.ui-board-place { width: 26px; text-align: center; font-weight: 800; }
+.ui-board-who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.ui-board-who b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-board-sum { white-space: nowrap; }
 .ui-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0; }
 /* В строке «текст — значение» значение (награда, сумма, кнопка) не переносится, длинный текст слева
    спокойно уходит на вторую строку. */

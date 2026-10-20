@@ -71,7 +71,7 @@ import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
-import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
+import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY, OWN_PRODUCTS } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
 import { buyRegister, CASHIER_ROLES, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from './registers';
@@ -350,6 +350,8 @@ export function simulate({
       if (bought) {
         investments += UPGRADES[id].price;
         state = bought;
+        // С картой лояльности к ценам терпимее — игрок чуть поднимает их (как советует подсказка), с небольшим запасом.
+        if (id === 'loyalty') for (const p of PRODUCT_IDS) state = setPrice(state, p, Math.round((state.prices[p] * (1 + (LOYALTY_TOLERANCE - 1) * 0.8)) / 5) * 5);
       }
     }
     // Новые модели оборудования — когда хватает денег с запасом и не копит на расширение.

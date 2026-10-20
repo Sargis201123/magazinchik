@@ -1096,11 +1096,17 @@ export const hasUnmarkedBad = (items: CartItem[]): boolean => items.some(({ unit
 export const ratingTarget = (rating: number): number => 0.55 + 0.03 * rating;
 
 /** 0..1: доля довольных посетителей. Жалоба считается за «полпокупателя». */
-export function satisfaction(stats: DayStats): number {
-  const visitors = stats.served + stats.lost;
+export function satisfaction(stats: DayStats, lostWeight = 1): number {
+  const visitors = stats.served + stats.lost * lostWeight;
   if (visitors === 0) return 0.5;
   return Math.max(0, (stats.served - stats.complaints * 0.5) / visitors);
 }
+
+/**
+ * С картой лояльности «свои», ушедшие ни с чем, прощают: в рейтинг они идут на треть легче —
+ * завтра вернутся (upgrades.ts → loyalty).
+ */
+export const LOYALTY_FORGIVE = 0.65;
 
 /**
  * Сколько дней проживёт штука: брак портится на день раньше, а молочка и мясо в хороших
@@ -1220,7 +1226,7 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
     return { ...shelf, items: aged.stock };
   });
   const donated = state.donate ? spoiled : 0;
-  const rating = Math.min(5, Math.max(0, state.rating + (satisfaction(stats) - ratingTarget(state.rating)) * 0.5 + donationRating(donated)));
+  const rating = Math.min(5, Math.max(0, state.rating + (satisfaction(stats, state.upgrades?.includes('loyalty') ? LOYALTY_FORGIVE : 1) - ratingTarget(state.rating)) * 0.5 + donationRating(donated)));
   const skimmed = Math.min(Math.max(0, state.money), skimmedToday(state, stats.revenue));
   const aged = {
     ...state,

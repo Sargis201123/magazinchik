@@ -75,7 +75,7 @@ export const CART_SHARE = 0.3;
  * Карта лояльности: «свои» меньше придираются к ценам. Не «больше гостей»: в большом магазине
  * упираешься в товар, а не в гостей — лишние уходят ни с чем и роняют рейтинг (видно в симуляторе).
  */
-export const LOYALTY_TOLERANCE = 1.1;
+export const LOYALTY_TOLERANCE = 1.06;
 export const loyaltyTolerance = (state: StoreState): number => (hasUpgrade(state, 'loyalty') ? LOYALTY_TOLERANCE : 1);
 
 

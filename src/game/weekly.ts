@@ -29,7 +29,8 @@ export const WEEKLY_TEXT: Record<ChallengeKind, TextKey> = {
   delivery: 'weekly.delivery',
 };
 
-export const weeklyReward = (level: number): number => 120 + 80 * level;
+/** Награда за испытание растёт с магазином: в ларьке ~100, в универмаге ~800. */
+export const weeklyReward = (level: number): number => Math.round((120 + 100 * level ** 1.4) / 50) * 50;
 
 /** Три испытания на месяц: цели — от потока гостей, за пять удачных дней из семи. */
 export function weeklyFor(state: StoreState, guests: number): NonNullable<StoreState['weekly']> {

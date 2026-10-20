@@ -94,7 +94,8 @@ export const QUEST_TEXT: Record<QuestKind, TextKey> = {
   cleanTrash: 'quest.cleanTrash',
 };
 
-export const questReward = (level: number): number => 10 + 15 * level;
+/** Награда за задание дня растёт с магазином: в ларьке 15, в универмаге ~120. */
+export const questReward = (level: number): number => Math.round((15 + 15 * level ** 1.4) / 5) * 5;
 /** Все три задания за день — бонус к рейтингу. */
 export const ALL_QUESTS_RATING = 0.1;
 

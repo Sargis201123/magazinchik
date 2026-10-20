@@ -17,7 +17,7 @@ export interface SocialInfo {
 
 let info: SocialInfo | null = null;
 
-async function post<T>(path: string, body: unknown): Promise<T | null> {
+export async function post<T>(path: string, body: unknown): Promise<T | null> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10000);
   try {

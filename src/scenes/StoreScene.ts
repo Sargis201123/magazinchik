@@ -126,6 +126,7 @@ import { DOG_DAY_CATCH, hasDog, hasWatchman } from '../game/watch';
 import { contestOf, juryDay, tierKey } from '../game/contest';
 import { sonyaVisits, sunflowersPlanted } from '../game/drama';
 import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
+import { reportProgress, track } from '../platform/analytics';
 import { reportError, setErrorContext } from '../platform/errors';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
@@ -880,6 +881,9 @@ export class StoreScene extends Phaser.Scene {
     setErrorContext(() => ({ day: this.state?.day, level: this.state?.level, running: this.running, ua: navigator.userAgent.slice(0, 120) }));
     const save = loadGame();
     this.state = ensurePlan(save ?? newGame());
+    if (!save) track('new_game', 1);
+    // Игра открылась — прогресс и накопленные события на сервер (рейтинг и аналитика).
+    void reportProgress(this.state);
     // Своё расписание особых дней: зерно появляется у новой игры и у старых сохранений при первом запуске.
     if (!this.state.seed) this.state = { ...this.state, seed: 1 + Math.floor(Math.random() * 1e9) };
     setBigDaySeed(this.state.seed!);
@@ -7044,6 +7048,9 @@ export class StoreScene extends Phaser.Scene {
     const unlocked = this.checkAchievements(false);
     if (unlocked.length) extra.push([t('ach.summary'), unlocked.map((id) => t(`ach.${id}` as TextKey)).join(', ')]);
     saveGame(this.state);
+    track('day_end', finishedDay, this.stats.revenue);
+    if (this.state.bankrupt) track('bankrupt', finishedDay);
+    void reportProgress(this.state);
     this.refreshShelves();
     this.refreshWarehouse();
     this.hud.update(this.state, 0);

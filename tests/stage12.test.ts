@@ -111,14 +111,14 @@ describe('модели оборудования', () => {
 });
 
 describe('ночная наценка', () => {
-  it('ночью товар пробивается на 25% дороже (с округлением вверх)', async () => {
+  it('ночью товар пробивается на 40% дороже (с округлением вверх)', async () => {
     const { checkout, PRODUCTS } = await import('../src/game/economy');
     const { NIGHT_MARKUP } = await import('../src/game/night');
     const s = at(3);
     const items = [{ id: 'milk' as const, unit: { age: 0 } }];
     const day = checkout(s, items).total;
     expect(day).toBe(s.prices.milk ?? PRODUCTS.milk.basePrice);
-    expect(checkout(s, items, NIGHT_MARKUP).total).toBe(Math.ceil(day * 1.25));
+    expect(checkout(s, items, NIGHT_MARKUP).total).toBe(Math.ceil(day * 1.4));
   });
 });
 
