@@ -134,6 +134,19 @@ import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
 import { DISHES, DISH_IDS, kitchenOpen, portionsOf, sellDish } from '../game/kitchen';
 import { activeTrick, seeTrickResult, trickResult } from '../game/tricks';
+import {
+  answerNightStory,
+  BUSKER_GUESTS,
+  DEBT_UNITS,
+  debtLabel,
+  debtProduct,
+  NIGHT_GUEST_TYPES,
+  nightStory,
+  pickNightGuest,
+  STORY_GUEST,
+  type NightGuestId,
+  type NightStoryId,
+} from '../game/nightGuests';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
@@ -493,6 +506,30 @@ function nightLook(): Look {
   return look;
 }
 
+/** Ночной гость с характером (nightGuests.ts): таксист, студент, врач, охранник… */
+function nightGuestLook(id: NightGuestId): Look {
+  const base = randomLook(Phaser.Utils.Array.GetRandom(NIGHT_SHIRTS));
+  const pick = <T,>(items: readonly T[]): T => Phaser.Utils.Array.GetRandom(items as T[]);
+  switch (id) {
+    case 'taxi':
+      return { ...base, style: 'cap', hair: 0xfee761, outfit: 'leather', outfitTint: 0x262b44, prop: 'coffee' };
+    case 'student':
+      return { ...base, outfit: 'hoodie', outfitTint: pick(HAT_COLORS), hat: 'headphones', hatTint: 0x262b44, bag: 'backpack', bagTint: pick(BAG_COLORS) };
+    case 'doctor':
+      return { ...base, outfit: 'labcoat', outfitTint: 0xffffff, face: Math.random() < 0.5 ? 'medmask' : undefined, hat: Math.random() < 0.4 ? 'nursecap' : undefined };
+    case 'guard':
+      return { ...base, outfit: 'leather', outfitTint: 0x181425, acc: 'badge', accTint: 0xfee761, hat: 'policecap', hatTint: 0x262b44 };
+    case 'musician':
+      return { ...base, back: 'guitar', backTint: pick([0x8f563b, 0xe43b44, 0x262b44]), hat: 'beret', hatTint: pick(HAT_COLORS) };
+    case 'insomniac':
+      return { ...base, outfit: 'cardigan', outfitTint: 0x5a6988, hat: 'flatcap', hatTint: 0x4a3b52, prop: 'newspaper', glasses: true, hair: 0xc0cbdc };
+    case 'lovers':
+      return { ...base, style: pick(['long', 'ponytail'] as const), prop: 'bouquet', propTint: pick([0xe43b44, 0xf6757a, 0xfee761]) };
+    case 'vampire':
+      return { ...base, back: 'cape', backTint: 0x181425, outfit: 'suit', outfitTint: 0x181425, face: 'sunglasses', hair: 0x181425, style: 'short', skin: 0xeec39a };
+  }
+}
+
 /** Иногда покупатель приходит с коляской или с собакой. */
 function withCompanionItems(look: Look): Look {
   if (look.kid) return look;
@@ -720,6 +757,8 @@ export class StoreScene extends Phaser.Scene {
   /** Козни конкурента на улице сегодня (tricks.ts): промоутеры, перетяжки, их таймеры. */
   private trickObjs: Phaser.GameObjects.GameObject[] = [];
   private trickTimers: Phaser.Time.TimerEvent[] = [];
+  /** Ночью у входа играет музыкант — ночных гостей больше (nightGuests.ts). */
+  private busker = false;
   private stats: DayStats = emptyDayStats();
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
@@ -1018,7 +1057,8 @@ export class StoreScene extends Phaser.Scene {
       const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0) + (isCrowdDay(this.state.day) && !this.night ? CROWD_EXTRA_GUESTS : 0);
       if (this.nextSpawn <= 0 && this.customers.size < maxCustomers && !this.siege) {
         this.spawnCustomer();
-        const interval = spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) : 1);
+        const interval =
+          spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
       }
     } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here') {
@@ -2635,6 +2675,105 @@ export class StoreScene extends Phaser.Scene {
     music.setMood('evening');
     sound.bell();
     this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.night'), '#2ce8f5');
+    // Ночная история с выбором (nightGuests.ts) — где-то в первой половине смены.
+    this.busker = false;
+    const story = nightStory(Math.random);
+    if (story && (story !== 'studentDebt' || debtProduct(this.state))) {
+      this.trickTimers.push(this.time.delayedCall(NIGHT_SECONDS * 1000 * Phaser.Math.FloatBetween(0.12, 0.45), () => this.running && this.night && void this.runNightStory(story)));
+    }
+  }
+
+  /** Ночной гость с историей: встаёт у кассы с «!», нажми — выбор; не ответил — уходит. */
+  private async runNightStory(story: NightStoryId): Promise<void> {
+    const { door, sellerHome } = this.layout;
+    const start = this.streetSpawn();
+    const sprite = this.makePerson(start.x, start.y, nightGuestLook(STORY_GUEST[story]));
+    await this.walk(sprite, door.x, this.streetY);
+    await this.walk(sprite, door.x, door.y - 10);
+    await this.walk(sprite, sellerHome.x - 30, sellerHome.y - 16);
+    if (!sprite.active || !this.running) {
+      sprite.destroy();
+      return;
+    }
+    this.setFacing(sprite, 'right');
+    const mark = this.add.text(0, -24, '!', { fontFamily: UI_FONT, fontSize: '10px', color: '#2ce8f5', stroke: '#181425', strokeThickness: 3 }).setOrigin(0.5).setResolution(4);
+    sprite.add(mark);
+    const blink = this.tweens.add({ targets: mark, y: -27, duration: 400, yoyo: true, repeat: -1 });
+    // Уснувший врач сопит.
+    const snore = story === 'sleepyDoctor' ? this.time.addEvent({ delay: 1400, loop: true, callback: () => sprite.active && this.popup(sprite.x + 6, sprite.y - 20, 'z z z', '#cfe8ff') }) : null;
+    const product = debtProduct(this.state);
+    let answered: boolean | null = null;
+    let closeChoice: (() => void) | null = null;
+    const hit = this.add.zone(sprite.x, sprite.y - 6, 22, 30).setInteractive({ useHandCursor: true }).setDepth(2000);
+    await new Promise<void>((resolve) => {
+      const finish = (yes: boolean) => {
+        if (answered !== null) return;
+        answered = yes;
+        resolve();
+      };
+      hit.on('pointerup', () =>
+        this.tap(() => {
+          if (closeChoice) return;
+          const item = product ? `${debtLabel(product)} ${t(PRODUCTS[product].nameKey)}` : '';
+          closeChoice = showChoice({
+            title: t(`nightStory.${story}.title` as TextKey),
+            text: t(`nightStory.${story}.text` as TextKey, { item }),
+            note: t(`nightStory.${story}.note` as TextKey),
+            yes: t(`nightStory.${story}.yes` as TextKey),
+            no: t(`nightStory.${story}.no` as TextKey),
+            onYes: () => finish(true),
+            onNo: () => finish(false),
+          });
+        }),
+      );
+      this.time.delayedCall(12000, () => {
+        closeChoice?.();
+        if (answered === null) answered = false;
+        resolve();
+      });
+    });
+    hit.destroy();
+    blink.stop();
+    mark.destroy();
+    snore?.remove();
+    if (!sprite.active) return;
+    const yes = answered === true;
+    // Студенту — товар с полок в долг.
+    if (yes && story === 'studentDebt' && product) {
+      for (let i = 0; i < DEBT_UNITS; i++) {
+        const index = shelfFor(this.state, product);
+        const taken = index >= 0 ? takeFromShelf(this.state, index, product) : null;
+        if (taken) this.state = taken.state;
+      }
+      this.refreshShelves();
+      sprite.add(this.art(5, 1, `item_${product}`).setScale(1 / ART));
+    }
+    const avgCheck = this.stats.served ? this.stats.revenue / this.stats.served : 100;
+    const res = answerNightStory(this.state, story, yes, avgCheck);
+    this.state = res.state;
+    this.hud.update(this.state, this.timeLeft);
+    this.emote(sprite, yes ? 'emo_heart' : 'emo_angry');
+    if (yes) this.popup(sprite.x, sprite.y - 18, t('nightStory.thanks'), '#c8ffb0');
+    if (res.money) {
+      sound.coin();
+      this.stats.revenue += res.money;
+      this.stats.nightRevenue = (this.stats.nightRevenue ?? 0) + res.money;
+      this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `+${res.money} 💰`, '#c8ffb0'));
+    }
+    if (res.rating > 0) this.time.delayedCall(900, () => this.popup(sprite.x, sprite.y - 34, `★ +${res.rating}`, '#fee761'));
+    await this.wait(1100);
+    // Музыкант остаётся играть у входа до конца смены — ночных гостей больше.
+    if (yes && story === 'busker') {
+      this.busker = true;
+      await this.walk(sprite, door.x, door.y - 10);
+      await this.walk(sprite, door.x - 24, this.streetY - 2);
+      this.people.delete(sprite);
+      this.trickObjs.push(sprite);
+      this.trickTimers.push(this.time.addEvent({ delay: 1800, loop: true, callback: () => sprite.active && this.popup(sprite.x, sprite.y - 20, t('popup.busker'), '#fee761') }));
+      return;
+    }
+    await this.walk(sprite, door.x, door.y - 10);
+    await this.strollAway(sprite);
   }
 
   // ---------- Кот ----------
@@ -3759,6 +3898,7 @@ export class StoreScene extends Phaser.Scene {
   // ---------- Козни конкурента (tricks.ts) ----------
 
   private clearTrick(): void {
+    this.busker = false;
     this.trickTimers.forEach((e) => e.remove());
     this.trickTimers = [];
     this.trickObjs.forEach((o) => o.destroy());
@@ -5735,6 +5875,9 @@ export class StoreScene extends Phaser.Scene {
           : this.night
             ? nightLook()
             : withCompanionItems(customerLook(shirt, this.state.day));
+    // Ночью — гость с характером: свой образ, свой список и реплика у входа (nightGuests.ts).
+    const nightGuest = this.night && !forced && !thief && !rare && !valya ? pickNightGuest(Math.random) : null;
+    if (nightGuest) look = nightGuestLook(nightGuest);
     const big = bigDayFor(this.state.day);
     if (!rare && !thief && !valya) {
       // Ремонт дороги: рабочие в касках приходят за обедом. Болезнь: почти все в масках.
@@ -5744,6 +5887,11 @@ export class StoreScene extends Phaser.Scene {
     // Гость из здания района: свой образ и свой список покупок (district.ts).
     let wants: ProductId[] | undefined;
     const fromDistrict = !forced && !rare && !thief && !valya && !this.night ? districtGuest(this.state, Math.random) : null;
+    if (nightGuest) {
+      const sellable = sellableProducts(this.state);
+      const pool = NIGHT_GUEST_TYPES[nightGuest].wants.filter((id) => sellable.includes(id));
+      if (pool.length) wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
+    }
     if (fromDistrict) {
       const sellable = sellableProducts(this.state);
       const pool = fromDistrict.wants.filter((id) => sellable.includes(id));
@@ -5772,6 +5920,10 @@ export class StoreScene extends Phaser.Scene {
       sparkles.startFollow(sprite).setDepth(LIGHT_DEPTH - 1);
       sprite.once('destroy', () => sparkles.destroy());
       this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.rareGuest', { name: `${rare.icon} ${t(rare.nameKey)}` }), '#fee761'));
+    }
+    if (nightGuest && Math.random() < 0.45) {
+      const line = t(`nightGuest.${nightGuest}.${Phaser.Math.Between(0, NIGHT_GUEST_TYPES[nightGuest].lines - 1)}` as TextKey);
+      this.time.delayedCall(1300, () => sprite.active && this.popup(sprite.x, sprite.y - 16, line, '#cfe8ff'));
     }
     if (valya) {
       this.valyaCame = true;

@@ -10,6 +10,7 @@ import { answerStaffEvent, eventCost } from './staffEvents';
 import { answerTale, taleToday } from './tales';
 import { answerOpening, BUILDINGS, districtNews } from './district';
 import { answerTrick, counterCost, trickToday } from './tricks';
+import { answerNightStory, nightStory } from './nightGuests';
 import {
   buyChance,
   buyShelf,
@@ -699,6 +700,14 @@ export function simulate({
         const before = stats.served;
         const nightGuests = Math.round(((guests * NIGHT_SECONDS) / DAY_SECONDS) * NIGHT_GUESTS * (0.85 + random() * 0.3));
         runGuests(nightGuests, NIGHT_TOLERANCE, before + Math.floor((serveCap * NIGHT_SECONDS) / DAY_SECONDS), true);
+        // Ночная история (nightGuests.ts): соглашается; товар студенту в долг — как продажа в минус.
+        const story = nightStory(extraRandom);
+        if (story) {
+          const avgCheck = stats.served ? stats.revenue / stats.served : 100;
+          const answered = answerNightStory(state, story, true, avgCheck);
+          state = answered.state;
+          nightRevenue += answered.money;
+        }
         nightProfit = nightRevenue;
       }
     }

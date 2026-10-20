@@ -8,6 +8,7 @@ import type { DishId } from './kitchen';
 import type { StaffEvent } from './staffEvents';
 import type { DistrictState } from './district';
 import type { Trick } from './tricks';
+import type { NightState } from './nightGuests';
 import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
@@ -608,6 +609,8 @@ export interface StoreState {
   district?: DistrictState;
   /** Козни конкурента на улице (tricks.ts). */
   trick?: Trick;
+  /** Ночные гости: долг студента, таксист рассказал о нас (nightGuests.ts). */
+  nightGuests?: NightState;
   /** Готовые порции на кухне (kitchen.ts). */
   kitchen?: Partial<Record<DishId, number>>;
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */

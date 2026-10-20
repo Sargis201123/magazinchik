@@ -36,6 +36,7 @@ import { spoilDishes } from './kitchen';
 import { staffMorning } from './staffEvents';
 import { districtGuests } from './district';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
+import { nightBoostGuests, nightMorning } from './nightGuests';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -68,7 +69,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = contestNight(burglaryNight(giantNight(tricksMorning(staffMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), random), random), random), stats.revenue), stats.revenue, random), stats);
+  const next = contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(staffMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), random), random), random), random), stats.revenue), stats.revenue, random), stats);
   return {
     ...night,
     state: next,
@@ -112,6 +113,7 @@ export const guestFactor = (state: StoreState): number =>
   eduardGuests(state) *
   districtGuests(state) *
   trickGuests(state) *
+  nightBoostGuests(state) *
   giantGuests(state) *
   contestGuests(state) *
   knownBigDayGuests(state.day);
