@@ -1,12 +1,13 @@
 import { detectLang, type Lang } from './detect';
-import { en, enNames } from './en';
 import { ru, ruNames, type TextKey } from './ru';
 import { telegramLanguage } from '../platform/telegram';
 import { storedLang } from './stored';
 
 export type { Lang, TextKey };
 
-const dictionaries: Record<Lang, Record<TextKey, string>> = { ru, en };
+// Английский словарь грузится отдельным файлом, только если он нужен (loadLang): русским
+// игрокам — а их большинство — не качать лишние ~30 КБ. Пока не загружен — текст по-русски.
+const dictionaries: Partial<Record<Lang, Record<TextKey, string>>> = { ru };
 
 let lang: Lang = detectLang(
   new URLSearchParams(location.search).get('lang'),
@@ -21,9 +22,20 @@ export const setLang = (next: Lang): void => {
 };
 
 export function t(key: TextKey, params: Record<string, string | number> = {}): string {
-  const template = dictionaries[lang][key] ?? ru[key];
+  const template = dictionaries[lang]?.[key] ?? ru[key];
   return template.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? `{${name}}`));
 }
 
-const names: Record<Lang, string[]> = { ru: ruNames, en: enNames };
-export const staffName = (index: number): string => names[lang][index % names[lang].length];
+const names: Partial<Record<Lang, string[]>> = { ru: ruNames };
+export const staffName = (index: number): string => {
+  const list = names[lang] ?? ruNames;
+  return list[index % list.length];
+};
+
+/** Загрузить словарь текущего языка (до запуска игры, main.ts). */
+export async function loadLang(): Promise<void> {
+  if (lang !== 'en' || dictionaries.en) return;
+  const { en, enNames } = await import('./en');
+  dictionaries.en = en;
+  names.en = enNames;
+}

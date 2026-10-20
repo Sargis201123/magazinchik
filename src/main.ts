@@ -6,6 +6,7 @@ import { ASPECT, CANVAS_H, CANVAS_W, StoreScene } from './scenes/StoreScene';
 
 import { initTelegram } from './platform/telegram';
 import { installErrorReporting } from './platform/errors';
+import { loadLang } from './i18n';
 
 const BG = '#1d1a26';
 // Панели интерфейса — по ширине холста (на компьютере он уже окна).
@@ -14,20 +15,24 @@ document.documentElement.style.setProperty('--game-w', `min(100vw, ${(100 / ASPE
 installErrorReporting();
 initTelegram(BG);
 
-const game = new Phaser.Game({
-  type: Phaser.AUTO,
-  parent: 'game',
-  backgroundColor: BG,
-  pixelArt: true,
-  roundPixels: true,
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: CANVAS_W,
-    height: CANVAS_H,
-  },
-  scene: [BootScene, StoreScene],
-});
+// Словарь языка — до запуска: сцены строят надписи сразу.
+void loadLang().catch(() => undefined).then(start);
 
-// Отладка: ?debug открывает доступ к игре из консоли браузера.
-if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { game });
+function start(): void {
+  const game = new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game',
+    backgroundColor: BG,
+    pixelArt: true,
+    roundPixels: true,
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: CANVAS_W,
+      height: CANVAS_H,
+    },
+    scene: [BootScene, StoreScene],
+  });
+  // Отладка: ?debug открывает доступ к игре из консоли браузера.
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { game });
+}
