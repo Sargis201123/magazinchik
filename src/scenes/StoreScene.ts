@@ -849,6 +849,8 @@ export class StoreScene extends Phaser.Scene {
   private rainStopped = false;
   /** Доля прошедшего дня (0 — утро, 1 — конец смены): солнце, туман, тени. */
   private dayProgress = 0;
+  /** Мусорный контейнер на улице (его трясёт мусоровоз). */
+  private dumpImg?: Phaser.GameObjects.Image;
   /** Пол блестит (мрамор): в нём отражаются полки. */
   private glossyFloor = false;
   /** Пруд в парке: рядом летают светлячки. */
@@ -1062,6 +1064,8 @@ export class StoreScene extends Phaser.Scene {
     // Живая очередь и продавец без дела: кто-то вздыхает, смотрит на часы, продавец протирает прилавок.
     this.time.addEvent({ delay: 1300, loop: true, callback: () => this.running && this.queueIdle() });
     this.time.addEvent({ delay: 4200, loop: true, callback: () => this.running && this.sellerIdle() });
+    // Пока пахнет свежей выпечкой, из пекарни в зал тянутся волны запаха.
+    this.time.addEvent({ delay: 650, loop: true, callback: () => this.running && this.time.now < this.aromaUntil && this.aromaWisp() });
     // Достижения проверяются и посреди дня: серия, сотый покупатель — сразу всплывашка.
     this.time.addEvent({ delay: 1000, loop: true, callback: () => this.running && this.checkAchievements(true) });
     // Сначала вывеска, потом утро. Первая встреча с сюжетом (письмо бабушки) — на утреннем экране.
@@ -1346,6 +1350,7 @@ export class StoreScene extends Phaser.Scene {
       .setResolution(4)
       .setDepth(3);
     this.neonSign(w / 2, -9, t(storeLevel(this.state).nameKey), '7px', signColor, 64);
+    if (!sign) this.signLights(w / 2, -9);
     this.buildWing();
     this.buildWarehouse();
     this.buildDecor();
@@ -4685,7 +4690,7 @@ export class StoreScene extends Phaser.Scene {
     this.binBusy = false;
     this.binBy = null;
     this.bagCarried = 0;
-    this.art(dump.x, dump.y, 'dumpster').setDepth(dump.y + 8);
+    this.dumpImg = this.art(dump.x, dump.y, 'dumpster').setDepth(dump.y + 8);
     this.binImg = this.art(bin.x, bin.y, binSprite(this.state, 0)).setDepth(bin.y + 6);
     this.binImg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.takeOutTrash()));
     this.binGlow = this.binImg.preFX?.addGlow(0xe43b44, 0, 0, false, 0.1, 6);
@@ -5677,7 +5682,15 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
-  /** Эмоция над головой: всплывает и тает. */
+  /** Волна запаха выпечки: три тёплые точки змейкой плывут из двери пекарни в зал. */
+  private aromaWisp(): void {
+    const door = this.layout.bakery.doorway;
+    const wisp = this.add.container(door.x + 2, door.y - 6).setDepth(LIGHT_DEPTH - 2);
+    for (let i = 0; i < 3; i++) wisp.add(this.add.rectangle(i * 3, Math.sin(i * 2) * 1.5, 2, 1, 0xfeae34, 0.85));
+    this.tweens.add({ targets: wisp, x: wisp.x + Phaser.Math.Between(30, 60), y: wisp.y - Phaser.Math.Between(10, 24), alpha: 0, duration: 2200, onComplete: () => wisp.destroy() });
+    this.tweens.add({ targets: wisp.list, y: '+=2', duration: 300, yoyo: true, repeat: 3, ease: 'Sine.easeInOut' });
+  }
+
   /** Сколько терпения осталось у ждущего покупателя (1 — только встал, 0 — уходит). */
   private patienceLeft(c: Customer): number {
     return 1 - (this.time.now - c.waitStart) / (c.patienceMs ?? PATIENCE_MS);
@@ -5758,6 +5771,7 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
+  /** Эмоция над головой: всплывает и тает. */
   private emote(person: Phaser.GameObjects.Container, key: EmoteKey): void {
     if (!person.active) return;
     const icon = this.art(0, -17, key);
@@ -5924,9 +5938,22 @@ export class StoreScene extends Phaser.Scene {
         onComplete: () => {
           img.setPosition(x, y);
           this.tweens.add({ targets: img, scale: { from: scale * 1.35, to: scale }, duration: 140, ease: 'Back.easeOut' });
+          // Свежий товар поблёскивает; из коробки сыплется пыль.
+          if (n === fresh.length - 1) this.freshShine(index);
         },
       });
     });
+  }
+
+  private freshShine(index: number): void {
+    const view = this.shelfViews[index];
+    if (!view) return;
+    const { x, y } = view.at;
+    for (let i = 0; i < 3; i++) {
+      const spark = this.art(x + Phaser.Math.Between(-15, 15), y - Phaser.Math.Between(2, 12), 'spark').setScale(0.4 / ART).setDepth(y + 5);
+      this.tweens.add({ targets: spark, scale: 1 / ART, angle: 90, alpha: 0, delay: i * 120, duration: 450, onComplete: () => spark.destroy() });
+    }
+    for (let i = 0; i < 3; i++) this.steamPuff(x + Phaser.Math.Between(-10, 10), y + 12, 0xc8b8a0);
   }
 
   private cleanToilet(): void {
@@ -7119,6 +7146,7 @@ export class StoreScene extends Phaser.Scene {
       void this.walk(person, fromLeft ? right : left, y, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1.1)).then(() => person.destroy());
     }
     if (flood) return;
+    if (Math.random() < 0.14) this.passerby();
     if (Math.random() < 0.04) this.driveBus();
     if (Math.random() < 0.3) {
       const toRight = Math.random() < 0.5;
@@ -7151,6 +7179,31 @@ export class StoreScene extends Phaser.Scene {
       car.setScale(toRight ? 1 : -1, 1);
       this.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
     }
+  }
+
+  /** Прохожие повеселее: велосипедист у края дороги, бегун, хозяин с собакой. */
+  private passerby(): void {
+    const left = -60;
+    const right = this.next.w + 60;
+    const fromLeft = Math.random() < 0.5;
+    const roll = Math.random();
+    const base = customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day);
+    if (roll < 0.4) {
+      const y = this.streetY + 12;
+      const rider = this.makePerson(fromLeft ? left : right, y, { ...base, hat: Math.random() < 0.5 ? 'bikehelmet' : base.hat, hatTint: 0xe43b44 });
+      rider.addAt(this.art(0, 3, 'bike').setOrigin(0.5), 0);
+      void this.walk(rider, fromLeft ? right : left, y, 70).then(() => rider.destroy());
+      return;
+    }
+    const y = this.streetY + Phaser.Math.Between(-5, 5);
+    if (roll < 0.7) {
+      const runner = this.makePerson(fromLeft ? left : right, y, { ...base, outfit: 'runner', outfitTint: Phaser.Utils.Array.GetRandom(HAT_COLORS), hat: 'headband', hatTint: 0xffffff, coat: undefined, scarf: undefined });
+      void this.walk(runner, fromLeft ? right : left, y, CUSTOMER_SPEED * 2.4).then(() => runner.destroy());
+      return;
+    }
+    const walker = this.makePerson(fromLeft ? left : right, y, { ...base, dog: Phaser.Utils.Array.GetRandom(DOG_COLORS) });
+    this.addUmbrella(walker);
+    void this.walk(walker, fromLeft ? right : left, y, CUSTOMER_SPEED * 0.8).then(() => walker.destroy());
   }
 
   /** Наводнение: по затопленной дороге проплывает лодка с гребцом (иногда — с пассажиром). */
@@ -7197,9 +7250,63 @@ export class StoreScene extends Phaser.Scene {
       x: stopX,
       duration: 2600,
       ease: 'Sine.easeOut',
-      onComplete: () =>
-        this.tweens.add({ targets: bus, x: this.next.w + 140, delay: 1800, duration: 3200, ease: 'Sine.easeIn', onComplete: () => bus.destroy() }),
+      onComplete: () => {
+        // На остановке выходят пассажиры и расходятся по тротуару.
+        const out = Phaser.Math.Between(1, 3);
+        for (let i = 0; i < out; i++) {
+          this.time.delayedCall(300 + i * 350, () => {
+            const y = this.streetY + Phaser.Math.Between(-4, 4);
+            const p = this.makePerson(stopX + Phaser.Math.Between(-8, 8), this.streetY + 10, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
+            this.addUmbrella(p);
+            const to = Math.random() < 0.5 ? -100 : this.next.w + 100;
+            void this.walk(p, p.x, y).then(() => this.walk(p, to, y, CUSTOMER_SPEED * 0.9)).then(() => p.destroy());
+          });
+        }
+        this.tweens.add({ targets: bus, x: this.next.w + 140, delay: 1800, duration: 3200, ease: 'Sine.easeIn', onComplete: () => bus.destroy() });
+      },
     });
+  }
+
+  /**
+   * Утро района: через день дворник метёт тротуар (за ним клубится пыль), раз в три дня
+   * к мусорному контейнеру подъезжает мусоровоз.
+   */
+  private morningCrew(): void {
+    const day = this.state.day;
+    if (day % 2 === 0) {
+      this.time.delayedCall(DAY_SECONDS * 30, () => {
+        if (!this.running) return;
+        const y = this.streetY + 2;
+        const sweeper = this.makePerson(-60, y, { ...randomLook(0xf77622), acc: 'vest', accTint: 0xfee761, style: 'cap', hair: 0xf77622 });
+        const broom = this.add.container(6, 2, [this.add.rectangle(0, -3, 1, 8, 0x8f563b), this.add.rectangle(0, 2, 4, 2, 0xfeae34)]);
+        sweeper.add(broom);
+        this.tweens.add({ targets: broom, angle: { from: -25, to: 25 }, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+        const dust = this.time.addEvent({ delay: 420, loop: true, callback: () => sweeper.active && this.steamPuff(sweeper.x + 7, sweeper.y + 6, 0xc8b8a0) });
+        void this.walk(sweeper, this.next.w + 60, y, CUSTOMER_SPEED * 0.45).then(() => {
+          dust.remove();
+          sweeper.destroy();
+        });
+      });
+    }
+    if (day % 3 === 0) {
+      this.time.delayedCall(DAY_SECONDS * 60, () => {
+        if (!this.running) return;
+        const dump = this.dumpSpot();
+        const y = this.streetY + 24;
+        const truck = this.add.container(-140, y, [this.art(0, 0, 'car_truck').setTint(0x3e8948), this.art(0, 0, 'car_truck_lights')]).setDepth(y);
+        ambience.carPass(isWet(this.weather));
+        this.tweens.add({
+          targets: truck,
+          x: dump.x + 10,
+          duration: 2600,
+          ease: 'Sine.easeOut',
+          onComplete: () => {
+            if (this.dumpImg?.active) this.tweens.add({ targets: this.dumpImg, angle: { from: -6, to: 6 }, duration: 90, yoyo: true, repeat: 5, onComplete: () => this.dumpImg?.setAngle(0) });
+            this.tweens.add({ targets: truck, x: this.next.w + 160, delay: 2200, duration: 3200, ease: 'Sine.easeIn', onComplete: () => truck.destroy() });
+          },
+        });
+      });
+    }
   }
 
   /** Кто из героев сюжета заглянет сегодня: бабушка, заказчик за заказом, Эдуард. */
@@ -7624,6 +7731,7 @@ export class StoreScene extends Phaser.Scene {
   private startDay(): void {
     this.dayOpen = true;
     this.flipDoorSign(true);
+    this.morningCrew();
     // Утром рассказали, чем кончился вчерашний «проверяющий» (tricks.ts) — больше не показываем.
     if (trickResult(this.state)) this.state = seeTrickResult(this.state);
     this.stallMs = 0;
@@ -8290,6 +8398,39 @@ export class StoreScene extends Phaser.Scene {
     track('share', day, result === 'failed' ? 0 : 1);
     if (result === 'chat') toast('assets/ico_phone.png', t('share.chat.title'), t('share.chat.text'));
     if (result === 'failed') toast('assets/ico_phone.png', '📸', t('share.failed'));
+  }
+
+  /**
+   * Вывеска растёт с магазином: с третьего уровня по краю бегут огоньки, у супермаркета под
+   * буквами переливается светодиодная лента.
+   */
+  private signLights(x: number, y: number): void {
+    const level = this.state.level;
+    if (level < 2) return;
+    const bulbs: Phaser.GameObjects.Rectangle[] = [];
+    for (let i = 0; i < 16; i++) {
+      bulbs.push(this.add.rectangle(x - 30 + i * 4, y - 6.5, 1.4, 1.4, 0xfee761).setDepth(4));
+      bulbs.push(this.add.rectangle(x + 30 - i * 4, y + 6.5, 1.4, 1.4, 0xfee761).setDepth(4));
+    }
+    let step = 0;
+    this.time.addEvent({
+      delay: 160,
+      loop: true,
+      callback: () => {
+        step++;
+        bulbs.forEach((b, i) => b.active && b.setFillStyle(Math.floor(i / 2) % 3 === step % 3 ? 0xfff6c8 : 0xb8860b));
+      },
+    });
+    if (level < 4) return;
+    const led = this.add.rectangle(x, y + 8.5, 60, 1.6, 0x9cd8ff).setDepth(4);
+    this.tweens.addCounter({
+      from: 0,
+      to: 360,
+      duration: 3000,
+      repeat: -1,
+      onUpdate: (tw) => led.active && led.setFillStyle(Phaser.Display.Color.HSVToRGB(((tw.getValue() ?? 0) % 360) / 360, 0.45, 1).color),
+    });
+    this.nightGlow(this.art(x, y + 9, 'glow').setDisplaySize(80, 12).setTint(0x9cd8ff), 0.5);
   }
 
   /** Табличку на двери переворачивают: «Открыто» утром, «Закрыто» вечером. */
