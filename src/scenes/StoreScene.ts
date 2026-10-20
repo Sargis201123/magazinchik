@@ -1243,6 +1243,7 @@ export class StoreScene extends Phaser.Scene {
     // Пол и цвет стен можно сменить в «Оформлении».
     const floor = activeDecor(this.state, 'floor')?.texture ?? FLOORS[Math.min(this.state.level, FLOORS.length - 1)];
     this.add.tileSprite(0, wallH, w, h - wallH, floor).setOrigin(0).setTileScale(1 / ART);
+    this.floorLight(w, h, wallH);
     // Стены: цветная краска за монеты или премиальная отделка (кирпич, плитка, обои) за звёзды.
     const wallDecor = activeDecor(this.state, 'wall');
     this.add
@@ -4271,6 +4272,18 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Толстые стены с кирпичной крышкой и фасад с витринами и дверями; в левой стене — двери во флигель. */
+  /** Объём зала: у стен пол чуть темнее — туда меньше света, и зал не выглядит плоской заливкой. */
+  private floorLight(w: number, h: number, wallH: number): void {
+    const g = this.add.graphics().setDepth(0.5);
+    const ink = 0x181425;
+    g.fillGradientStyle(ink, ink, ink, ink, 0.26, 0.26, 0, 0);
+    g.fillRect(0, wallH, w, 14);
+    g.fillGradientStyle(ink, ink, ink, ink, 0.16, 0, 0.16, 0);
+    g.fillRect(0, wallH, 10, h - wallH);
+    g.fillGradientStyle(ink, ink, ink, ink, 0, 0.16, 0, 0.16);
+    g.fillRect(w - 10, wallH, 10, h - wallH);
+  }
+
   private buildShell(): void {
     const { w, h, door } = this.layout;
     const cap = (x: number, y: number, ww: number, hh: number) =>
