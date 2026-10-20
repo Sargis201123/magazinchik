@@ -74,7 +74,7 @@ import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { findPath, type Rect } from './paths';
 import { ambience } from '../platform/ambience';
-import { haptic } from '../platform/telegram';
+import { haptic, trustedNow } from '../platform/telegram';
 import { button, el, openModal, toast, UI_FONT } from '../ui/dom';
 import {
   BIG_DAYS,
@@ -895,7 +895,7 @@ export class StoreScene extends Phaser.Scene {
   create(): void {
     setErrorContext(() => ({ day: this.state?.day, level: this.state?.level, running: this.running, ua: navigator.userAgent.slice(0, 120) }));
     const save = loadGame();
-    this.state = ensureRush(ensureSeason(ensurePlan(save ?? newGame()), Date.now()), Date.now());
+    this.state = ensureRush(ensureSeason(ensurePlan(save ?? newGame()), trustedNow()), trustedNow());
     if (!save) track('new_game', 1);
     // Игра открылась — прогресс и накопленные события на сервер (рейтинг и аналитика).
     void reportProgress(this.state);
@@ -6484,7 +6484,7 @@ export class StoreScene extends Phaser.Scene {
   private showMorning(): void {
     // За ночь склад доливает полки: утром всё, что влезает, уже стоит в зале (просрочку списали ночью).
     // По настоящим часам: новый сезон пропуска и выходные «Чёрной пятницы района».
-    this.state = ensureRush(ensureSeason(shelveAll(this.state), Date.now()), Date.now());
+    this.state = ensureRush(ensureSeason(shelveAll(this.state), trustedNow()), trustedNow());
     // Подарок за ежедневный вход — но не во время бабушкиного обучения: его вручат, когда оно закончится.
     if (this.state.tourDone !== false) this.offerGift();
     // Старые сохранения сразу получают значки за то, что уже сделано.

@@ -814,6 +814,8 @@ export const en: Record<TextKey, string> = {
   "tip.coffee.text": "A coffee shop opened in the side wing. Hire a barista in the Staff tab and keep an eye on beans and cups in the Corners tab — coffee sells more in the rain.",
   "tip.broke.title": "Empty till",
   "tip.broke.text": "No money and bare shelves — that means no sales either. The bank will lend you money for stock: Store tab → Bank. You repay it in parts with the bills.",
+  "tip.alone.title": "You can't do it alone",
+  "tip.alone.text": "The shop has grown, but the till, shelves and storage are all on you: guests leave and the rating stalls. Hire a cashier in the Staff tab — you won't get further without help.",
   "tip.nightShift.title": "Night shift",
   "tip.nightShift.text": "In the evening you can work 45 more seconds: fewer guests, but nobody haggles.",
   "popup.order": "📞 Order!",

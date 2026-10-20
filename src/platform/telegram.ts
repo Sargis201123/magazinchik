@@ -63,6 +63,21 @@ const at = (version: string): boolean => Boolean(webApp()?.isVersionAtLeast?.(ve
 /** Подписанные Telegram данные запуска: по ним сервер узнаёт игрока (подделать нельзя). */
 export const telegramInitData = (): string => webApp()?.initData ?? '';
 
+/**
+ * Время, которое не подделать часами телефона: момент запуска из подписанных Telegram данных
+ * (auth_date) плюс сколько прошло с тех пор. Выходные «Чёрной пятницы» и сезоны пропуска
+ * считаются по нему. Если часы телефона расходятся меньше чем на 10 минут — берём их
+ * (точнее, если телефон спал); вне Telegram — просто часы.
+ */
+const startedAt = typeof performance !== 'undefined' ? performance.now() : 0;
+export function trustedNow(): number {
+  const now = Date.now();
+  const auth = Number(new URLSearchParams(telegramInitData()).get('auth_date'));
+  if (!auth) return now;
+  const trusted = auth * 1000 + (performance.now() - startedAt);
+  return Math.abs(now - trusted) < 10 * 60_000 ? now : trusted;
+}
+
 export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending';
 
 /** Открыть счёт на оплату звёздами; вне Telegram (или в старом клиенте) — null. */
