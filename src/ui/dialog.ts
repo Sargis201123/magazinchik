@@ -23,6 +23,82 @@ export interface DialogOptions {
 
 const CHAR_MS = 26;
 
+/** Глаза портрета (art/sprites.py, face): левый край, верх и низ в сетке 64×64. */
+const EYES = [24, 38];
+const EYE_TOP = 28;
+
+/**
+ * Живой портрет на холсте 64×64: моргает раз в несколько секунд, а пока печатается текст —
+ * открывает и закрывает рот. Лицо у всех портретов в одной сетке, цвет век — кожа под глазом.
+ */
+export function liveFace(src: string, talking: () => boolean, className = 'ui-dialog-face'): HTMLCanvasElement {
+  const canvas = el('canvas', className);
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  const img = new Image();
+  img.src = src;
+  // Улыбка и удивление — глаза-дужки или широко открытые, рот уже открыт: не трогаем.
+  const mood = /_(happy|sad|angry|surprised)$/.exec(src.replace(/\.png$/, ''))?.[1];
+  let lids: string[] = [];
+  let blinkUntil = 0;
+  let nextBlink = performance.now() + 1200 + Math.random() * 1500;
+  const draw = (now: number) => {
+    if (!ctx || !img.complete || !img.naturalWidth) return;
+    ctx.clearRect(0, 0, 64, 64);
+    ctx.drawImage(img, 0, 0, 64, 64);
+    if (mood !== 'happy' && now < blinkUntil) {
+      EYES.forEach((x, i) => {
+        ctx.fillStyle = lids[i] ?? '#f2d3ab';
+        ctx.fillRect(x, EYE_TOP - 1, 4, 5);
+        ctx.fillStyle = '#181425';
+        ctx.fillRect(x, 31, 4, 1);
+      });
+    }
+    // Рот: каждые 120 мс то открыт, то закрыт.
+    if (talking() && mood !== 'happy' && mood !== 'surprised' && Math.floor(now / 120) % 2 === 0) {
+      ctx.fillStyle = '#181425';
+      ctx.fillRect(30, 38, 5, 3);
+      ctx.fillStyle = '#7a2a35';
+      ctx.fillRect(31, 39, 3, 1);
+    }
+  };
+  img.addEventListener('load', () => {
+    if (!ctx) return;
+    // Цвет кожи у каждого глаза: под глазом, над бровью или сбоку (борода, очки — пропускаем).
+    const probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    if (probe) {
+      probe.canvas.width = 64;
+      probe.canvas.height = 64;
+      probe.drawImage(img, 0, 0);
+      lids = EYES.map((x) => {
+        for (const [px, py] of [[x + 1, 34], [x + 1, 26], [x - 2, 30]]) {
+          const [r, g, b] = probe.getImageData(px, py, 1, 1).data;
+          if (r - b > 40) return `rgb(${r},${g},${b})`;
+        }
+        return '#f2d3ab';
+      });
+    }
+    draw(performance.now());
+  });
+  // Крутится, пока портрет на экране; окно закрыли (или так и не показали) — останавливается.
+  const born = performance.now();
+  let shown = false;
+  const tick = (now: number) => {
+    if (canvas.isConnected) shown = true;
+    else if (shown || now - born > 5000) return;
+    if (now > nextBlink) {
+      blinkUntil = now + 130;
+      // Иногда моргает дважды подряд.
+      nextBlink = now + (Math.random() < 0.2 ? 260 : 2200 + Math.random() * 2600);
+    }
+    draw(now);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return canvas;
+}
+
 export function dialogBox(o: DialogOptions): HTMLElement {
   const box = el('div', 'ui-dialog');
   if (o.caption) box.append(el('div', 'ui-muted', o.caption));
@@ -34,9 +110,8 @@ export function dialogBox(o: DialogOptions): HTMLElement {
     box.append(art);
   }
   const row = el('div', 'ui-dialog-row');
-  const face = el('img', 'ui-dialog-face talking');
-  face.src = `assets/${o.portrait}.png`;
-  face.alt = '';
+  const face = liveFace(`assets/${o.portrait}.png`, () => !done);
+  face.classList.add('talking');
   const speech = el('div', 'ui-dialog-speech');
   const name = el('div', 'ui-dialog-name', o.name);
   const text = el('p', 'ui-dialog-text');

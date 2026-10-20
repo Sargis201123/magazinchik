@@ -247,6 +247,12 @@ export const sound = {
       { freq: 1175, dur: 0.25, wave: 'sine', vol: 0.08 },
       { freq: 880, at: 0.18, dur: 0.4, wave: 'sine', vol: 0.08 },
     ]),
+  /** Медаль достижения упала в рамку: высокий звон с отзвуком. */
+  medal: () =>
+    play([
+      { freq: 1568, dur: 0.12, wave: 'triangle', vol: 0.05 },
+      { freq: 2093, at: 0.08, dur: 0.35, wave: 'sine', vol: 0.035 },
+    ]),
   /** Большое событие: редкий гость, новое звание, конец дня. */
   fanfare: () =>
     play([

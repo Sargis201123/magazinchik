@@ -3,6 +3,7 @@ import { onShelves, PRODUCTS, sellableProducts, warehouseCapacity, warehouseCoun
 import { button, curtain, el, injectStyles, openModal, pixelize } from './dom';
 import type { Review } from '../game/reviews';
 import { reviewCards } from './reviews';
+import { liveFace } from './dialog';
 import type { LossAdvice } from '../game/losses';
 
 /** Сколько штук на полках считается «мало» и сколько таких товаров показывать в панели. */
@@ -77,7 +78,17 @@ export class Hud {
     const clock = `${night ? t('hud.night') : t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
     if (this.clock.textContent !== clock) this.clock.textContent = clock;
     const stars = '★'.repeat(Math.round(state.rating)).padEnd(5, '☆');
-    if (this.stars.textContent !== stars) this.stars.textContent = stars;
+    if (this.stars.textContent !== stars) {
+      // Звезда прибавилась — строка звёзд вспыхивает.
+      const count = (text: string) => [...text].filter((c) => c === '★').length;
+      const up = this.stars.textContent !== '' && count(stars) > count(this.stars.textContent);
+      this.stars.textContent = stars;
+      if (up) {
+        this.stars.classList.remove('ui-shine');
+        void this.stars.offsetWidth;
+        this.stars.classList.add('ui-shine');
+      }
+    }
     // Только то, что на полках кончается: пусто — красным, мало — жёлтым. Остальное — в закупке.
     const low = sellableProducts(state)
       .map((id) => ({ id, n: onShelves(state, id) }))
@@ -183,7 +194,7 @@ export class Hud {
     tile(`🙂 ${stats.served}`, t('summary.served'));
     tile(`🚶 ${stats.lost}`, t('summary.lost'), stats.lost > stats.served / 3 ? 'bad' : '');
     tile(`★ ${rating.after.toFixed(1)} ${arrowRating}`, t('summary.rating'), arrowRating === '▼' ? 'bad' : arrowRating ? 'good' : '');
-    card.append(tiles);
+    card.append(tiles, grannySays(day, stats, rating, history));
     // Карточка итогов для сторис или чата (platform/shareCard.ts).
     if (onShare) {
       const share: HTMLButtonElement = button(t('share.button'), () => onShare(share), 'ui-btn secondary');
@@ -198,10 +209,12 @@ export class Hud {
         const col = el('div', 'ui-chart-col');
         const bar = el('div', `ui-chart-bar${i === week.length - 1 ? ' today' : ''}`);
         bar.style.height = `${Math.max(4, Math.round((value / max) * 100))}%`;
+        bar.style.animationDelay = `${i * 70}ms`;
         col.append(el('span', 'ui-chart-value', String(value)), bar, el('span', 'ui-chart-day', String(day - week.length + 1 + i)));
         chart.append(col);
       });
       card.append(el('div', 'ui-muted', t('summary.week')), chart);
+      requestAnimationFrame(() => drawChartLine(chart));
     }
     const row = (label: string, value: string | number) => {
       const r = el('div', 'ui-row');
@@ -232,4 +245,63 @@ export class Hud {
       }),
     );
   }
+}
+
+type GrannyMood = 'great' | 'good' | 'slow' | 'lost' | 'down';
+const GRANNY_FACE: Record<GrannyMood, string> = { great: '_happy', good: '', slow: '_sad', lost: '_surprised', down: '_sad' };
+
+/** Бабушка одной фразой оценивает день: по выручке против недели, ушедшим и рейтингу. */
+function grannySays(day: number, stats: DayStats, rating: { before: number; after: number }, history: number[]): HTMLElement {
+  const earlier = history.slice(-8, -1);
+  const avg = earlier.length ? earlier.reduce((a, b) => a + b, 0) / earlier.length : stats.revenue;
+  const mood: GrannyMood =
+    stats.lost > Math.max(3, stats.served / 3)
+      ? 'lost'
+      : rating.after < rating.before - 0.05
+        ? 'down'
+        : stats.revenue >= avg * 1.15 && earlier.length
+          ? 'great'
+          : stats.revenue < avg * 0.8
+            ? 'slow'
+            : 'good';
+  const box = el('div', 'ui-granny');
+  const started = performance.now();
+  box.append(
+    liveFace(`assets/portrait_grandma${GRANNY_FACE[mood]}.png`, () => performance.now() - started < 1600, 'ui-granny-face'),
+    el('p', '', t(`summary.granny.${mood}.${day % 2}` as TextKey)),
+  );
+  return box;
+}
+
+/** Линия по верхушкам столбиков недели: рисуется слева направо, на каждом дне — точка. */
+function drawChartLine(chart: HTMLElement): void {
+  const bars = [...chart.querySelectorAll<HTMLElement>('.ui-chart-bar')];
+  if (bars.length < 2 || !chart.isConnected) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.classList.add('ui-chart-line');
+  svg.setAttribute('width', String(chart.clientWidth));
+  svg.setAttribute('height', String(chart.clientHeight));
+  // offsetTop/offsetHeight не зависят от анимации scaleY — берём уже итоговые верхушки.
+  const points = bars.map((bar) => {
+    const col = bar.parentElement as HTMLElement;
+    return { x: col.offsetLeft + col.offsetWidth / 2, y: bar.offsetTop };
+  });
+  const line = document.createElementNS(NS, 'polyline');
+  line.setAttribute('points', points.map((p) => `${p.x},${p.y}`).join(' '));
+  let len = 0;
+  for (let i = 1; i < points.length; i++) len += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+  line.style.strokeDasharray = String(len);
+  line.style.setProperty('--len', String(len));
+  svg.append(line);
+  points.forEach((p, i) => {
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', String(p.x));
+    dot.setAttribute('cy', String(p.y));
+    dot.setAttribute('r', '2.5');
+    dot.style.transformOrigin = `${p.x}px ${p.y}px`;
+    dot.style.animationDelay = `${600 + (900 * i) / (points.length - 1)}ms`;
+    svg.append(dot);
+  });
+  chart.append(svg);
 }

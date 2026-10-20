@@ -306,6 +306,8 @@ const SPRITES = [
   'plant',
   'poster',
   'baskets',
+  // Циферблат без стрелок: стрелки идут по ходу смены (art/clockface.py).
+  'clock_face',
 ];
 
 export class BootScene extends Phaser.Scene {

@@ -145,8 +145,21 @@ const css = `
 .ui-tile span { font-size: 12px; color: #7a7066; }
 .ui-tile.good { background: #e3f5d6; }
 .ui-tile.bad { background: #fbe0dc; }
-.ui-chart { display: flex; align-items: flex-end; gap: 6px; height: 96px; margin: 4px 0 10px; padding: 4px;
+.ui-chart { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 96px; margin: 4px 0 10px; padding: 4px;
   border: 2px solid #2b2233; border-radius: 6px; background: #fbf6ea; }
+/* Итоги «по-живому»: столбики вырастают по очереди, по их верхушкам рисуется линия. */
+.ui-chart-bar { transform-origin: bottom; animation: ui-grow .5s cubic-bezier(.3, 1.4, .5, 1) both; }
+@keyframes ui-grow { from { transform: scaleY(0); } }
+.ui-chart-line { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.ui-chart-line polyline { fill: none; stroke: #b86f50; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round;
+  animation: ui-draw .9s ease-in-out .6s both; }
+.ui-chart-line circle { fill: #fbf6ea; stroke: #b86f50; stroke-width: 1.5; animation: ui-fade .2s ease-out both; }
+@keyframes ui-draw { from { stroke-dashoffset: var(--len); } to { stroke-dashoffset: 0; } }
+@keyframes ui-fade { from { opacity: 0; transform: scale(0); } }
+.ui-granny { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; animation: ui-pop .35s cubic-bezier(.3, 1.45, .5, 1) .3s both; }
+.ui-granny-face { width: 52px; height: 52px; flex: none; image-rendering: pixelated; border: 2px solid #2b2233; border-radius: 6px; }
+.ui-granny p { position: relative; flex: 1; margin: 0; padding: 6px 9px; background: #fff; border: 2px solid #2b2233; border-radius: 8px;
+  font-size: 13px; line-height: 1.35; }
 .ui-chart-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
 .ui-chart-bar { width: 100%; background: #8fd16a; border: 2px solid #2b2233; border-bottom: 0; border-radius: 3px 3px 0 0; }
 .ui-chart-bar.today { background: #fee761; }
@@ -229,6 +242,14 @@ const css = `
 .ui-toast.shown { transform: translate(-50%, 0); }
 .ui-toast img { width: 36px; height: 42px; image-rendering: pixelated; animation: ui-badge 1.2s ease-in-out infinite; }
 @keyframes ui-badge { 50% { transform: rotate(-8deg) scale(1.08); } }
+.ui-toast-medal img { animation: ui-medal-drop .7s cubic-bezier(.3, 1.6, .5, 1) .25s both, ui-badge 1.2s ease-in-out 1s infinite; }
+@keyframes ui-medal-drop { from { transform: translateY(-70px) rotate(-30deg); opacity: 0; } 60% { opacity: 1; } }
+.ui-toast-medal::after { content: ''; position: absolute; left: 28px; top: 50%; width: 10px; height: 10px; margin: -5px;
+  border-radius: 50%; box-shadow: 0 0 0 2px #fee761; opacity: 0; animation: ui-medal-ring .6s ease-out .75s; }
+@keyframes ui-medal-ring { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(5); } }
+/* Звёзды рейтинга блестят, когда рейтинг вырос. */
+.ui-shine { display: inline-block; animation: ui-shine 1.1s ease-out; }
+@keyframes ui-shine { 0% { filter: none; } 30% { transform: scale(1.3); filter: drop-shadow(0 0 6px #fee761) brightness(1.4); } 100% { filter: none; } }
 .ui-toast b { display: block; font-size: 12px; color: #b86f50; text-transform: uppercase; letter-spacing: .5px; }
 /* Книга достижений: сетка значков; закрытые — серые, с полоской прогресса. */
 .ui-badges { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 8px 0; }
@@ -394,9 +415,10 @@ export function curtain(label: string, middle: () => void): void {
 }
 
 /** Всплывашка сверху на пару секунд: картинка, заголовок, текст. */
-export function toast(image: string, title: string, text: string): void {
+export function toast(image: string, title: string, text: string, medal = false): void {
   injectStyles();
-  const box = el('div', 'ui-toast');
+  // Медаль достижения падает сверху в рамку и звенит; вокруг — искры.
+  const box = el('div', medal ? 'ui-toast ui-toast-medal' : 'ui-toast');
   const img = el('img');
   img.src = image;
   img.alt = '';

@@ -874,6 +874,10 @@ export class StoreScene extends Phaser.Scene {
   private ceilingGlows: Phaser.GameObjects.Image[] = [];
   /** Ночные огни (витрины, лужи света, конусы фонарей, неон): сила растёт к вечеру. */
   private nightLights: NightLight[] = [];
+  /** Ночь между днями: какая доля окон в домах уже погасла (0 — все горят). */
+  private lightsOut = 0;
+  /** Стрелки настенных часов: идут по ходу смены с 8:00 до 20:00. */
+  private clockHands?: Phaser.GameObjects.Graphics;
   /** Мебель в зале (в координатах центра человека): люди обходят её. */
   private obstacles: Rect[] = [];
   /** Касса самообслуживания (если куплена): картинка, экран и занята ли она. */
@@ -955,6 +959,8 @@ export class StoreScene extends Phaser.Scene {
   private valyaCame = false;
   /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
   private combo = 0;
+  /** Камера не акцентирует события чаще раза в 10 секунд (focusMoment). */
+  private focusUntil = 0;
   private lastSaleAt = -Infinity;
   private nextSpawn = 1;
   private running = false;
@@ -1061,6 +1067,8 @@ export class StoreScene extends Phaser.Scene {
     this.setupCameraDrag();
     // Улица живёт своей жизнью: прохожие и машины.
     this.time.addEvent({ delay: 1800, loop: true, callback: () => this.streetLife() });
+    // Над кварталом плывут тени облаков, иногда пролетает стайка птиц.
+    this.time.addEvent({ delay: 6000, loop: true, callback: () => this.skyLife() });
     // Живая очередь и продавец без дела: кто-то вздыхает, смотрит на часы, продавец протирает прилавок.
     this.time.addEvent({ delay: 1300, loop: true, callback: () => this.running && this.queueIdle() });
     this.time.addEvent({ delay: 4200, loop: true, callback: () => this.running && this.sellerIdle() });
@@ -1266,6 +1274,7 @@ export class StoreScene extends Phaser.Scene {
     this.boxes = [];
     this.slotDecor = [];
     this.shutters = [];
+    this.clockHands = undefined;
     this.nightLights = [];
     this.trash.clear();
     this.layout = layoutFor(this.state.level);
@@ -1699,11 +1708,29 @@ export class StoreScene extends Phaser.Scene {
       if (light.neon !== undefined && evening < 0.18) alpha *= Math.sin((now + light.neon) / 41) + Math.sin((now + light.neon) / 97) > 0 ? 1 : 0.2;
       // Окна в домах вокруг загораются по одному.
       if (light.from !== undefined) alpha *= Phaser.Math.Clamp((evening - light.from) / 0.08, 0, 1);
+      // Глубокой ночью окна гаснут по одному — в том же порядке, в каком зажигались.
+      if (light.from !== undefined && this.lightsOut > light.from * 1.6) alpha = 0;
       if (light.twinkle !== undefined) alpha *= 0.55 + 0.45 * Math.sin(now / 260 + light.twinkle);
       light.obj.setAlpha(alpha);
     }
     this.dayProgress = p;
     this.updateDaylight(p);
+    this.drawClock(p);
+  }
+
+  /** Часы на стене: часовая стрелка проходит 8:00 → 20:00, минутная крутится каждый час. */
+  private drawClock(p: number): void {
+    const g = this.clockHands;
+    if (!g?.active) return;
+    const hours = 8 + 12 * p;
+    const hour = (hours / 12) * Math.PI * 2 - Math.PI / 2;
+    const minute = (hours % 1) * Math.PI * 2 - Math.PI / 2;
+    g.clear();
+    g.lineStyle(0.7, 0x262b44, 1);
+    g.lineBetween(0, 0, Math.cos(minute) * 2.6, Math.sin(minute) * 2.6);
+    g.lineStyle(0.9, 0x181425, 1);
+    g.lineBetween(0, 0, Math.cos(hour) * 1.7, Math.sin(hour) * 1.7);
+    g.fillStyle(0xe43b44, 1).fillRect(-0.4, -0.4, 0.8, 0.8);
   }
 
   /**
@@ -3058,6 +3085,7 @@ export class StoreScene extends Phaser.Scene {
       return;
     }
     // Муха кружит над котом, кот поворачивается за ней и в конце подпрыгивает.
+    this.petEmote(cat, 'emo_question');
     const fly = this.add.rectangle(cat.x, cat.y - 10, 1.2, 1.2, 0x181425).setDepth(cat.depth + 2);
     const t0 = this.time.now;
     const buzz = this.time.addEvent({
@@ -3090,6 +3118,10 @@ export class StoreScene extends Phaser.Scene {
     if (this.closed) this.bobikSit(900);
     else this.bobikRest();
     dog.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.petBobik()));
+    // Днём Бобик дремлет — иногда над ним «z-z-z».
+    this.critterTimers.push(
+      this.time.addEvent({ delay: 11000, loop: true, callback: () => !this.closed && dog.texture.key === 'bobik_lie' && Math.random() < 0.5 && this.petEmote(dog, 'emo_zzz') }),
+    );
   }
 
   /** Бобик ложится: дышит во сне, иногда «z». */
@@ -3118,6 +3150,7 @@ export class StoreScene extends Phaser.Scene {
     haptic.tap();
     this.bobikSit(150);
     this.heartAt(dog.x, dog.y - 12);
+    this.petEmote(dog, 'emo_heart');
     this.popup(dog.x, dog.y - 18, t('popup.dogWag'), '#fff3b0');
     this.time.delayedCall(1800, () => !this.closed && this.bobikRest());
   }
@@ -3130,6 +3163,7 @@ export class StoreScene extends Phaser.Scene {
     this.bobikWag?.remove();
     this.tweens.killTweensOf(dog);
     dog.setScale(1 / ART).setTexture('bobik_bark');
+    this.petEmote(dog, 'emo_alert');
     this.tweens.add({ targets: dog, y: dog.y - 1.5, duration: 90, yoyo: true, repeat: 3 });
     this.time.delayedCall(1400, () => !this.closed && this.bobikRest());
   }
@@ -3141,7 +3175,38 @@ export class StoreScene extends Phaser.Scene {
     sound.purr();
     haptic.tap();
     this.heartAt(cat.x, cat.y - 10);
+    this.rub(cat);
     this.popup(cat.x, cat.y - 16, t('popup.catPurr', { name: this.state.cat.name }), '#fff3b0');
+  }
+
+  /** Облачко с эмоцией над котом или Бобиком: всплывает и тает. */
+  private petEmote(pet: Phaser.GameObjects.Image, key: EmoteKey): void {
+    if (!pet.active) return;
+    const icon = this.art(pet.x, pet.y - 12, key).setDepth(pet.depth + 2).setScale(0.8 / ART);
+    this.tweens.add({
+      targets: icon,
+      y: icon.y - 4,
+      scale: 1 / ART,
+      duration: 450,
+      ease: 'Back.easeOut',
+      onComplete: () => this.tweens.add({ targets: icon, alpha: 0, delay: 900, duration: 300, onComplete: () => icon.destroy() }),
+    });
+  }
+
+  /** Ласкается: покачивается из стороны в сторону. */
+  private rub(pet: Phaser.GameObjects.Image): void {
+    if (!pet.active) return;
+    this.tweens.add({ targets: pet, angle: { from: -8, to: 8 }, duration: 160, yoyo: true, repeat: 2, onComplete: () => pet.setAngle(0) });
+  }
+
+  /** Гром: кот вздрагивает, Бобик настораживается. */
+  private petsStartled(): void {
+    const cat = this.catImg;
+    if (cat?.active) {
+      this.petEmote(cat, 'emo_alert');
+      this.tweens.add({ targets: cat, y: cat.y - 3, duration: 110, yoyo: true, ease: 'Quad.easeOut' });
+    }
+    if (this.bobik?.active) this.petEmote(this.bobik, 'emo_alert');
   }
 
   private heartAt(x: number, y: number): void {
@@ -3215,6 +3280,9 @@ export class StoreScene extends Phaser.Scene {
       note(this.stats, 'cat');
       this.emote(c.sprite, 'emo_heart');
       this.heartAt(cat.x, cat.y - 10);
+      // Кот трётся о ноги: поворачивается к покупателю и покачивается.
+      cat.setFlipX(c.sprite.x > cat.x);
+      this.rub(cat);
       if (Math.random() < 0.5) sound.purr();
     }
   }
@@ -3758,7 +3826,10 @@ export class StoreScene extends Phaser.Scene {
           ],
         });
         this.cameras.main.shake(180, 0.0015);
-        this.time.delayedCall(Phaser.Math.Between(250, 1100), () => sound.thunder());
+        this.time.delayedCall(Phaser.Math.Between(250, 1100), () => {
+          sound.thunder();
+          this.petsStartled();
+        });
       }
       this.time.delayedCall(Phaser.Math.Between(7000, 15000), strike);
     };
@@ -4888,7 +4959,10 @@ export class StoreScene extends Phaser.Scene {
         const glow = this.art(62, 14, 'glow').setScale(46 / 64, 24 / 64).setTint(0xf6757a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
         this.tweens.add({ targets: glow, alpha: { from: 0.8, to: 0.4 }, duration: 900, yoyo: true, repeat: -1 });
         this.art(62, 13, 'neon').setDepth(2);
-      } else this.art(62, 11, 'clock').setDepth(1);
+      } else {
+        this.art(62, 11, 'clock_face').setDepth(1);
+        this.clockHands = this.add.graphics({ x: 62, y: 11 }).setDepth(1.1);
+      }
     }
     // Ковёр в центре зала.
     if (activeDecor(this.state, 'rug')) this.art(w / 2, (wallH + h) / 2 + 6, 'rug').setDepth(1);
@@ -5651,8 +5725,30 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Лёгкий акцент камеры: чуть ближе и чуть в сторону события, через секунду — обратно.
+   * Не чаще раза в 10 секунд и не тогда, когда игрок сам двигает камеру.
+   */
+  private focusMoment(x: number, y: number): void {
+    const cam = this.cameras.main;
+    if (this.time.now < this.focusUntil || this.input.pointer1.isDown) return;
+    // Игрок осматривает квартал (камера не у магазина) — не дёргаем.
+    if (Math.abs(cam.zoom - this.baseZoom) > 0.01 || Phaser.Math.Distance.Between(cam.midPoint.x, cam.midPoint.y, this.home.x, this.home.y) > 4) return;
+    this.focusUntil = this.time.now + 10000;
+    const tx = this.home.x + (x - this.home.x) * 0.25;
+    const ty = this.home.y + (y - this.home.y) * 0.25;
+    cam.pan(tx, ty, 500, 'Sine.easeInOut');
+    cam.zoomTo(this.baseZoom * 1.08, 500, 'Sine.easeInOut');
+    this.time.delayedCall(1700, () => {
+      if (this.input.pointer1.isDown) return;
+      cam.pan(this.home.x, this.home.y, 700, 'Sine.easeInOut');
+      cam.zoomTo(this.baseZoom, 700, 'Sine.easeInOut');
+    });
+  }
+
   /** «Серия ×3!» над кассой: крупная цифра, звёздочки, нота всё выше. */
   private celebrateCombo(n: number): void {
+    if (n === 3 || n === 10) this.focusMoment(this.layout.counter.x, this.layout.counter.y);
     const { counter } = this.layout;
     const color = COMBO_COLORS[Math.min(n - 2, COMBO_COLORS.length - 1)];
     const label = this.add
@@ -6597,7 +6693,10 @@ export class StoreScene extends Phaser.Scene {
       });
       sparkles.startFollow(sprite).setDepth(LIGHT_DEPTH - 1);
       sprite.once('destroy', () => sparkles.destroy());
-      this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.rareGuest', { name: `${rare.icon} ${t(rare.nameKey)}` }), '#fee761'));
+      this.time.delayedCall(1500, () => {
+        this.popup(sprite.x, sprite.y - 16, t('popup.rareGuest', { name: `${rare.icon} ${t(rare.nameKey)}` }), '#fee761');
+        if (sprite.active) this.focusMoment(sprite.x, sprite.y);
+      });
     }
     if (nightGuest && Math.random() < 0.45) {
       const line = t(`nightGuest.${nightGuest}.${Phaser.Math.Between(0, NIGHT_GUEST_TYPES[nightGuest].lines - 1)}` as TextKey);
@@ -6678,6 +6777,7 @@ export class StoreScene extends Phaser.Scene {
   /** Вора поймали: товар возвращается на полки, вор уходит ни с чем. */
   private catchThief(c: Customer, by: 'owner' | 'guard' | 'dog'): void {
     if (c.gone || !this.running) return;
+    this.focusMoment(c.sprite.x, c.sprite.y);
     c.sprite.disableInteractive();
     this.state = returnToShelf(this.state, c.items);
     c.items = [];
@@ -8386,7 +8486,7 @@ export class StoreScene extends Phaser.Scene {
         this.state.history,
         lossAdvice(this.stats, this.state),
         reviews,
-        () => this.showMorning(),
+        () => this.nightPass(() => this.showMorning()),
         (button) => void this.shareDay(button, finishedDay),
       );
     });
@@ -8448,6 +8548,117 @@ export class StoreScene extends Phaser.Scene {
       onUpdate: (tw) => led.active && led.setFillStyle(Phaser.Display.Color.HSVToRGB(((tw.getValue() ?? 0) % 360) / 360, 0.45, 1).color),
     });
     this.nightGlow(this.art(x, y + 9, 'glow').setDisplaySize(80, 12).setTint(0x9cd8ff), 0.5);
+  }
+
+  /**
+   * Ночь между днями (пока игрок не нажал «Дальше» в итогах — не начинается): становится темно,
+   * по небу проходит луна, в домах по одному гаснут окна, проезжает ночное такси, потом
+   * розовый рассвет — и утро. Касание экрана пропускает.
+   */
+  private nightPass(done: () => void): void {
+    const cam = this.cameras.main;
+    const v = cam.worldView;
+    const objs: Phaser.GameObjects.GameObject[] = [];
+    const keep = <T extends Phaser.GameObjects.GameObject>(o: T): T => {
+      objs.push(o);
+      return o;
+    };
+    const pad = 300;
+    // Небо поверх всего мира: умножение на цвет — ночью синее, на рассвете розовое.
+    const sky = keep(this.add.rectangle(v.x - pad, v.y - pad, v.width + 2 * pad, v.height + 2 * pad, 0xffffff).setOrigin(0));
+    sky.setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(LIGHT_DEPTH + 2);
+    const moonGlow = keep(this.art(0, 0, 'glow').setScale(34 / 64).setTint(0xdfe8ff).setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 3));
+    // Луна: светлый диск с парой «морей».
+    const moon = keep(this.add.container(0, 0, [this.add.circle(0, 0, 5, 0xf6f0d6), this.add.circle(-1.5, -1, 1.3, 0xd8cfae), this.add.circle(1.8, 1.6, 1, 0xd8cfae)]));
+    moon.setDepth(LIGHT_DEPTH + 4);
+    const stars = Array.from({ length: 14 }, () =>
+      keep(this.add.rectangle(v.x + Math.random() * v.width, v.y + Math.random() * v.height * 0.4, 0.9, 0.9, 0xfff6c8).setDepth(LIGHT_DEPTH + 3).setAlpha(0)),
+    );
+    // Ночное такси с фарами.
+    const roadY = this.streetY + 24;
+    const taxi = keep(this.add.container(v.x - 60, roadY, [this.art(0, 0, 'car_taxi').setTint(0xfee761), this.art(0, 0, 'car_taxi_lights')]).setDepth(roadY));
+    const beam = keep(this.art(v.x - 30, roadY, 'glow').setScale(40 / 64, 14 / 64).setTint(0xfff3b0).setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 3).setAlpha(0.8));
+    const NIGHT = Phaser.Display.Color.ValueToColor(0x4a5aa0);
+    const DAWN = Phaser.Display.Color.ValueToColor(0xffb8a8);
+    const WHITE = Phaser.Display.Color.ValueToColor(0xffffff);
+    const mix = (a: Phaser.Display.Color, b: Phaser.Display.Color, k: number) => {
+      const c = Phaser.Display.Color.Interpolate.ColorWithColor(a, b, 100, k * 100);
+      return Phaser.Display.Color.GetColor(c.r, c.g, c.b);
+    };
+    const DURATION = 3600;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      counter.remove();
+      this.input.off('pointerdown', finish);
+      objs.forEach((o) => o.destroy());
+      this.lightsOut = 0;
+      done();
+    };
+    this.input.once('pointerdown', finish);
+    ambience.carPass(isWet(this.weather));
+    const counter = this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: DURATION,
+      onUpdate: (tw) => {
+        const k = tw.getValue() ?? 0;
+        // 0–0.2 темнеет, 0.2–0.7 ночь, 0.7–0.85 рассвет, 0.85–1 светлеет.
+        const color =
+          k < 0.2 ? mix(WHITE, NIGHT, k / 0.2) : k < 0.7 ? NIGHT.color : k < 0.85 ? mix(NIGHT, DAWN, (k - 0.7) / 0.15) : mix(DAWN, WHITE, (k - 0.85) / 0.15);
+        sky.setFillStyle(color);
+        const night = k < 0.7 ? Phaser.Math.Clamp(k / 0.2, 0, 1) : Phaser.Math.Clamp(1 - (k - 0.7) / 0.15, 0, 1);
+        // Луна дугой слева направо по верху кадра.
+        const m = Phaser.Math.Clamp((k - 0.05) / 0.75, 0, 1);
+        moon.setPosition(v.x + v.width * (0.12 + 0.76 * m), v.y + v.height * (0.16 - 0.08 * Math.sin(m * Math.PI))).setAlpha(night);
+        moonGlow.setPosition(moon.x, moon.y).setAlpha(0.7 * night);
+        stars.forEach((st, i) => st.setAlpha(night * (0.5 + 0.5 * Math.sin(this.time.now / 300 + i * 1.7))));
+        // Окна гаснут посреди ночи; к рассвету фонари и вывески выключаются (вечер идёт назад).
+        this.lightsOut = Phaser.Math.Clamp((k - 0.2) / 0.4, 0, 1);
+        this.updateLighting(k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3);
+        const tx = v.x - 60 + (v.width + 120) * Phaser.Math.Clamp((k - 0.25) / 0.4, 0, 1);
+        taxi.x = tx;
+        beam.setPosition(tx + 30, roadY).setAlpha(k > 0.25 && k < 0.65 ? 0.8 : 0);
+      },
+      onComplete: finish,
+    });
+  }
+
+  /**
+   * Небо днём: по кварталу медленно ползёт тень облака (в ясную погоду), иногда пролетает
+   * стайка птиц. Вечером и ночью — нет.
+   */
+  private skyLife(): void {
+    if (!this.running || this.night || this.evening > 0.5) return;
+    const v = this.cameras.main.worldView;
+    const sunny = this.weather === 'clear' || this.weather === 'heat' || this.weather === 'leaves';
+    if (sunny && Math.random() < 0.45) {
+      const y = v.y + Math.random() * v.height;
+      const cloud = this.art(v.x - 120, y, 'glow').setScale(220 / 64, 120 / 64).setTint(0x1a1f3a).setAlpha(0.14).setDepth(LIGHT_DEPTH - 1);
+      this.tweens.add({ targets: cloud, x: v.right + 120, y: y + 30, duration: 26000, onComplete: () => cloud.destroy() });
+    }
+    if (Math.random() < 0.25) {
+      const fromLeft = Math.random() < 0.5;
+      const y0 = v.y + v.height * (0.2 + Math.random() * 0.5);
+      const flock = this.add.container(fromLeft ? v.x - 20 : v.right + 20, y0).setDepth(LIGHT_DEPTH - 0.5);
+      const n = Phaser.Math.Between(3, 6);
+      for (let i = 0; i < n; i++) {
+        // Птица — галочка из двух крыльев; крылья машут вверх-вниз.
+        const bird = this.add.graphics({ x: -i * 6 * (fromLeft ? 1 : -1) + Math.random() * 3, y: (i % 2 ? 4 : -3) * Math.ceil(i / 2) });
+        bird.lineStyle(0.8, 0x262b44, 1);
+        bird.lineBetween(-2, -1, 0, 0.6).lineBetween(0, 0.6, 2, -1);
+        this.tweens.add({ targets: bird, scaleY: { from: 1, to: -0.6 }, duration: 160 + i * 13, yoyo: true, repeat: -1 });
+        flock.add(bird);
+      }
+      this.tweens.add({
+        targets: flock,
+        x: fromLeft ? v.right + 40 : v.x - 40,
+        y: y0 - 40 + Math.random() * 30,
+        duration: 7000,
+        onComplete: () => flock.destroy(true),
+      });
+    }
   }
 
   /** Табличку на двери переворачивают: «Открыто» утром, «Закрыто» вечером. */
