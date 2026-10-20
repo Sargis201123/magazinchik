@@ -234,6 +234,7 @@ export const ru = {
   'neighbor.cafe': 'Кафе «Пончик»',
   'neighbor.pharmacy': 'Аптека',
   'neighbor.eduard': 'Эдуард-Маркет',
+  'neighbor.hardware': 'Хозтовары',
   'neighbor.bakery': 'Цветы',
   'holiday.march8': '🌷 8 Марта — праздник: у входа тюльпаны и розовая гирлянда.',
   'holiday.halloween': '🎃 Хэллоуин — у входа тыквы, вечером летают летучие мыши.',
