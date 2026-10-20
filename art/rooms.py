@@ -77,12 +77,55 @@ def paper_bag():
     c.save("paper_bag")
 
 
+def hand_truck():
+    """Тележка-рохля водителя с двумя коробками."""
+    c = Canvas(16, 22)
+    c.vline(2, 1, 18, INK)
+    c.vline(3, 1, 18, H("#8b9bb4"))
+    c.hline(2, 19, 11, INK)
+    c.hline(3, 18, 10, H("#8b9bb4"))
+    for y in (2, 10):
+        c.rect(4, y, 10, 8, INK)
+        c.rect(5, y + 1, 8, 6, H("#c8955a"))
+        c.hline(5, y + 1, 8, H("#e0b47c"))
+        c.vline(9, y + 1, 6, H("#a87542"))
+    c.ellipse(4, 20, 2, 2, INK)
+    c.px(4, 20, H("#8b9bb4"))
+    c.save("hand_truck")
+
+
+def door_sign():
+    """Табличка на двери: зелёная «ОТКРЫТО» и красная «ЗАКРЫТО» (буквы — полосками)."""
+    for name, tone in (("door_sign_open", H("#3e8948")), ("door_sign_closed", H("#e43b44"))):
+        c = Canvas(14, 9)
+        c.line(4, 0, 2, 2, INK)
+        c.line(9, 0, 11, 2, INK)
+        c.round_rect(0, 2, 14, 7, INK, r=1)
+        c.round_rect(1, 3, 12, 5, tone, r=1)
+        for x in range(2, 12, 2):
+            c.vline(x, 4, 3, H("#ffffff"))
+        c.save(name)
+
+
+def frost():
+    """Изморозь в углу стекла холодильника: белые кристаллы, полупрозрачные."""
+    c = Canvas(16, 10)
+    pts = [(0, 0), (1, 0), (2, 0), (3, 0), (5, 0), (0, 1), (1, 1), (2, 1), (0, 2), (1, 2), (0, 3), (0, 5),
+           (4, 1), (2, 3), (6, 1), (3, 2), (1, 4), (8, 0), (0, 7), (11, 0), (4, 3), (2, 5)]
+    for i, (x, y) in enumerate(pts):
+        c.px(x, y, (255, 255, 255, 200 if i < 10 else 130))
+    c.save("frost")
+
+
 def main():
     menu_chalk()
     jar_shelf()
     pot_rack()
     flour_sacks()
     paper_bag()
+    hand_truck()
+    door_sign()
+    frost()
 
 
 if __name__ == "__main__":

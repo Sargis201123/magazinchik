@@ -827,6 +827,12 @@ export class StoreScene extends Phaser.Scene {
   /** Погода дня и всё, что её рисует (частицы, снег на газоне, гирлянда, ёлка). */
   private weather: Weather = 'clear';
   private weatherObjs: Phaser.GameObjects.GameObject[] = [];
+  /** Дождь дня: капли, брызги, круги и лужи — разгоняется утром и в иные дни к вечеру кончается. */
+  private rainFx?: { rain: Phaser.GameObjects.Particles.ParticleEmitter; splash: Phaser.GameObjects.Particles.ParticleEmitter; base: number; puddles: Phaser.GameObjects.Image[]; ripple?: Phaser.GameObjects.Particles.ParticleEmitter; sheen?: Phaser.GameObjects.Rectangle };
+  /** Дождь сегодня уже кончился: зонты закрыты, лужи сохнут. */
+  private rainStopped = false;
+  /** Табличка «Открыто / Закрыто» на двери. */
+  private doorSign?: Phaser.GameObjects.Image;
   private lawns: { x: number; y: number; w: number; h: number }[] = [];
   private greenery: Phaser.GameObjects.Image[] = [];
   /** Снимок зала перед закрытием — для карточки итогов дня. */
@@ -1070,7 +1076,8 @@ export class StoreScene extends Phaser.Scene {
   update(_time: number, deltaMs: number): void {
     this.watchStall(deltaMs);
     this.scarePigeons();
-    ambience.update(this.weather, this.evening, this.running, yearTime(this.state.day));
+    ambience.update(this.rainStopped ? 'clear' : this.weather, this.evening, this.running, yearTime(this.state.day));
+    this.updateRain();
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     this.hud.showUrgent(this.running && !this.night && this.state.day > TUTORIAL_DAYS);
     if (!this.running) return;
@@ -1525,7 +1532,15 @@ export class StoreScene extends Phaser.Scene {
       if (legs && (legs.texture.key !== key || legs.flipX !== flip)) legs.setTexture(key).setFlipX(flip);
       for (const img of (person.getData('upper') as Phaser.GameObjects.Image[]) ?? []) img.y = bob + ((img.getData('dy') as number | undefined) ?? 0);
       const umbrella = person.getData('umbrella') as Phaser.GameObjects.Image | undefined;
-      umbrella?.setVisible(person.y > this.layout.h + 2);
+      // Зонт раскрывается на выходе из магазина и закрывается, когда дождь кончился.
+      const open = person.y > this.layout.h + 2 && !this.rainStopped;
+      if (umbrella && umbrella.visible !== open) {
+        umbrella.setVisible(open);
+        if (open) {
+          umbrella.setScale(umbrella.scaleX, 0.1 / ART);
+          this.tweens.add({ targets: umbrella, scaleY: 1 / ART, duration: 220, ease: 'Back.easeOut' });
+        }
+      }
       this.lampShadow(person);
     }
   }
@@ -1609,6 +1624,19 @@ export class StoreScene extends Phaser.Scene {
     this.doorOpen = Phaser.Math.Clamp(this.doorOpen + (near ? 0.12 : -0.06), 0, 1);
     const key = this.doorOpen < 0.34 ? 'door' : this.doorOpen < 0.67 ? 'door_half' : 'door_open';
     if (this.doorImg.texture.key !== key) this.doorImg.setTexture(key);
+    // В снегопад в открытые двери залетают снежинки и тают у входа.
+    if (this.weather === 'snow' && this.doorOpen > 0.6 && Math.random() < 0.3) {
+      const flake = this.art(door.x + Phaser.Math.Between(-8, 8), h + 6, 'snowflake').setScale(1.4 / ART).setDepth(h + 4);
+      this.tweens.add({
+        targets: flake,
+        x: flake.x + Phaser.Math.Between(-6, 6),
+        y: h - Phaser.Math.Between(8, 22),
+        alpha: 0,
+        duration: Phaser.Math.Between(700, 1200),
+        ease: 'Sine.easeOut',
+        onComplete: () => flake.destroy(),
+      });
+    }
   }
 
   /** Оттенок по ходу дня: тёплое утро, белый день, закат, сумерки. */
@@ -1682,9 +1710,11 @@ export class StoreScene extends Phaser.Scene {
       g.setTexture(this.weather === 'snow' && this.textures.exists(snowy) ? snowy : base).setTint(tree);
     }
 
+    this.rainFx = undefined;
+    this.rainStopped = false;
     if (isWet(this.weather)) {
       const storm = this.weather === 'storm';
-      keep(this.add.particles(0, 0, 'raindrop', {
+      const rain = keep(this.add.particles(0, 0, 'raindrop', {
         x: { min: area.x, max: area.x + area.w },
         y: area.y,
         speedY: { min: 240, max: 300 },
@@ -1694,9 +1724,10 @@ export class StoreScene extends Phaser.Scene {
         quantity: storm ? 4 : 3,
         frequency: storm ? 18 : 25,
       })).setDepth(-5);
+      this.rainFx = { rain, splash: rain, base: storm ? 18 : 25, puddles: [] };
       this.wetStreet(keep);
       if (storm) this.lightning(keep);
-      keep(this.add.particles(0, 0, 'splash', {
+      this.rainFx.splash = keep(this.add.particles(0, 0, 'splash', {
         x: { min: area.x, max: area.x + area.w },
         y: { min: area.y, max: area.y + area.h },
         scale: { start: 0.3 / ART, end: 1 / ART },
@@ -3444,8 +3475,15 @@ export class StoreScene extends Phaser.Scene {
     ambience.carPass(isWet(this.weather));
     await new Promise<void>((done) => this.tweens.add({ targets: van, x: vanX, duration: 2200, ease: 'Sine.easeOut', onComplete: () => done() }));
     if (!van.active) return;
+    // Задние двери распахиваются: внутри темно и видны коробки.
+    const hold = this.add.rectangle(-body.displayWidth / 2 + 1, 0, 0.1, 10, 0x262b44).setOrigin(0, 0.5);
+    const cargo = this.art(-body.displayWidth / 2 + 5, 1, 'box').setScale(0.7 / ART).setAlpha(0);
+    van.add([hold, cargo]);
+    this.tweens.add({ targets: hold, width: 9, x: hold.x - 1, duration: 300, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: cargo, alpha: 1, delay: 200, duration: 200 });
     const driver = this.makePerson(vanX, this.streetY + 10, { ...randomLook(0x0099db), style: 'cap', hair: 0x0099db });
-    const box = this.art(0, 3, 'box').setVisible(false);
+    // Водитель катит тележку с двумя коробками.
+    const box = this.art(7, 1, 'hand_truck').setVisible(false);
     driver.add(box);
     // С тротуара по подъезду к воротам склада во флигеле.
     const route = [
@@ -3469,6 +3507,9 @@ export class StoreScene extends Phaser.Scene {
     await this.walk(driver, vanX, this.streetY + 10, SELLER_SPEED);
     driver.destroy();
     if (!van.active) return;
+    // Двери закрываются — и в путь.
+    cargo.destroy();
+    this.tweens.add({ targets: hold, width: 0.1, x: hold.x + 1, duration: 250 });
     this.tweens.add({ targets: van, x: this.next.w + 300, delay: 300, duration: 2600, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
   }
 
@@ -3529,7 +3570,8 @@ export class StoreScene extends Phaser.Scene {
   /** Мокрая улица: асфальт блестит, в нём отражаются фонари, по лужам идут круги. */
   private wetStreet(keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
     const top = this.next.h + 4;
-    keep(this.add.rectangle(-400, top, this.next.w + 800, 88, 0xa8c0f0).setOrigin(0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.06).setDepth(-8.9));
+    const sheen = keep(this.add.rectangle(-400, top, this.next.w + 800, 88, 0xa8c0f0).setOrigin(0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.06).setDepth(-8.9));
+    if (this.rainFx) this.rainFx.sheen = sheen;
     for (const x of this.lampXs) {
       const streak = keep(this.nightGlow(this.art(x, top + 34, 'glow').setDisplaySize(9, 46).setTint(0xffd27a), 0.4));
       this.tweens.add({ targets: streak, scaleX: streak.scaleX * 0.65, duration: Phaser.Math.Between(600, 1100), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -3541,7 +3583,8 @@ export class StoreScene extends Phaser.Scene {
       if (Math.abs(x - this.layout.door.x) < 16) continue;
       const y = rnd.pick([top + 17, top + 19, top + 74, top + 80]);
       puddles.push({ x, y });
-      keep(this.art(x, y, 'puddle_wet').setDepth(-8.8));
+      const puddle = keep(this.art(x, y, 'puddle_wet').setDepth(-8.8));
+      this.rainFx?.puddles.push(puddle);
     }
     if (!puddles.length) return;
     const source = {
@@ -3551,13 +3594,36 @@ export class StoreScene extends Phaser.Scene {
         point.y = (at.y ?? 0) + Phaser.Math.FloatBetween(-1.5, 1.5);
       },
     };
-    keep(this.add.particles(0, 0, 'ripple', {
+    const ripple = keep(this.add.particles(0, 0, 'ripple', {
       emitZone: { type: 'random', source },
       scale: { start: 0.15 / ART, end: 0.9 / ART },
       alpha: { start: 0.8, end: 0 },
       lifespan: 650,
       frequency: 70,
     })).setDepth(-8.7);
+    if (this.rainFx) this.rainFx.ripple = ripple;
+  }
+
+  /**
+   * Дождь не включается рывком: первые секунды дня редкие капли, потом ливень. В обычный дождь
+   * через день к вечеру он кончается: зонты закрываются, лужи сохнут.
+   */
+  private updateRain(): void {
+    const fx = this.rainFx;
+    if (!fx || this.rainStopped || !this.running || !fx.rain.active) return;
+    const p = Phaser.Math.Clamp(1 - this.timeLeft / DAY_SECONDS, 0, 1);
+    const strength = Phaser.Math.Clamp(p / 0.08, 0.12, 1);
+    fx.rain.frequency = fx.base / strength;
+    fx.splash.frequency = 30 / strength;
+    if (this.weather !== 'rain' || this.state.day % 2 !== 0 || p < 0.72) return;
+    this.rainStopped = true;
+    fx.rain.stop();
+    fx.splash.stop();
+    fx.ripple?.stop();
+    if (fx.sheen) this.tweens.add({ targets: fx.sheen, alpha: 0, duration: 20000 });
+    for (const puddle of fx.puddles) {
+      this.tweens.add({ targets: puddle, scaleX: puddle.scaleX * 0.4, scaleY: puddle.scaleY * 0.4, alpha: 0, delay: Phaser.Math.Between(2000, 9000), duration: 15000 });
+    }
   }
 
   /** Гроза: время от времени вспышка молнии на весь квартал, через миг — раскат грома. */
@@ -3585,7 +3651,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Зонт над головой: только в дождь и только на улице. */
   private addUmbrella(person: Phaser.GameObjects.Container): void {
-    if (!isWet(this.weather)) return;
+    if (!isWet(this.weather) || this.rainStopped) return;
     const umbrella = this.art(0, -13, 'umbrella').setTint(Phaser.Utils.Array.GetRandom(CAR_COLORS));
     person.add(umbrella);
     person.setData('umbrella', umbrella);
@@ -4412,6 +4478,7 @@ export class StoreScene extends Phaser.Scene {
     cap(w, 0, WALL, h);
     this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
     this.doorImg = this.art(door.x, h + 5, 'door').setDepth(h + 2);
+    this.doorSign = this.art(door.x + 11, h + 8, this.running ? 'door_sign_open' : 'door_sign_closed').setDepth(h + 42);
     // Витрины с маленькими навесами слева и справа от двери.
     const segments: [number, number][] = [
       [8, door.x - 18],
@@ -5046,6 +5113,9 @@ export class StoreScene extends Phaser.Scene {
       const cool = kind === 'meat' ? 0xffd8d8 : 0xc8f0ff;
       // Блик на стекле — лёгкий: товар за ним должен быть хорошо виден.
       const glass = this.add.rectangle(slot.x, slot.y - 1.5, 36, 19, cool).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.03).setDepth(slot.y - 12.5);
+      // Изморозь в углу стекла; у морозильника — в двух углах.
+      lights.push(this.art(slot.x - 17, slot.y - 10.5, 'frost').setOrigin(0).setScale(1.3 / ART).setDepth(slot.y - 12.4));
+      if (kind === 'frozen') lights.push(this.art(slot.x + 17, slot.y + 7.5, 'frost').setOrigin(0).setScale(1.3 / ART).setAngle(180).setDepth(slot.y - 12.4));
       this.tweens.add({ targets: glass, alpha: 0.07, duration: 1800 + index * 130, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       const spill = this.art(slot.x, slot.y + 13, 'light_spill').setOrigin(0.5, 0).setScale(1.4 / ART, 0.5 / ART).setTint(cool);
       spill.setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(0.4);
@@ -7402,6 +7472,7 @@ export class StoreScene extends Phaser.Scene {
 
   private startDay(): void {
     this.dayOpen = true;
+    this.flipDoorSign(true);
     // Утром рассказали, чем кончился вчерашний «проверяющий» (tricks.ts) — больше не показываем.
     if (trickResult(this.state)) this.state = seeTrickResult(this.state);
     this.stallMs = 0;
@@ -8070,8 +8141,26 @@ export class StoreScene extends Phaser.Scene {
     if (result === 'failed') toast('assets/ico_phone.png', '📸', t('share.failed'));
   }
 
+  /** Табличку на двери переворачивают: «Открыто» утром, «Закрыто» вечером. */
+  private flipDoorSign(open: boolean): void {
+    const sign = this.doorSign;
+    const key = open ? 'door_sign_open' : 'door_sign_closed';
+    if (!sign?.active || sign.texture.key === key) return;
+    const sx = sign.scaleX;
+    this.tweens.add({
+      targets: sign,
+      scaleX: 0,
+      duration: 160,
+      yoyo: true,
+      onYoyo: () => sign.setTexture(key),
+      onComplete: () => sign.setScale(sx, sign.scaleY),
+    });
+    this.tweens.add({ targets: sign, angle: { from: -12, to: 0 }, delay: 320, duration: 700, ease: 'Elastic.easeOut' });
+  }
+
   /** Вечером на витрины, дверь и склад опускаются роллеты. */
   private closeShop(): void {
+    this.flipDoorSign(false);
     const { h, door, w, warehouse } = this.layout;
     const spots = [{ x: door.x, w: 32 }, { x: warehouse.x + warehouse.w / 2, w: 24 }];
     for (let x = 18; x < w - 10; x += 24) {
