@@ -216,12 +216,19 @@ export class Hud {
       card.append(el('div', 'ui-muted', t('summary.week')), chart);
       requestAnimationFrame(() => drawChartLine(chart));
     }
-    const row = (label: string, value: string | number) => {
+    // Главное — плитки, бабушка, график и деньги; остальное — под «Подробнее».
+    const more = el('details', 'ui-more');
+    more.append(el('summary', '', t('summary.more')));
+    const row = (label: string, value: string | number, target: HTMLElement = more) => {
       const r = el('div', 'ui-row');
       r.append(el('span', '', label), el('b', '', String(value)));
-      card.append(r);
+      target.append(r);
     };
+    row(t('summary.money'), `${money.total} 💰`, card);
+    if (money.shortfall > 0) card.append(el('div', 'ui-note', t('summary.shortfall', { n: money.shortfall })));
+    // Почему уходили покупатели — подсказка на завтра, её видно сразу.
     if (losses.length) card.append(lossBox(stats.served, losses));
+    card.append(more);
     row(t('summary.complaints'), stats.complaints);
     row(t('summary.spoiled'), stats.spoiled);
     if (stats.nightRevenue) row(t('summary.night'), `+${stats.nightRevenue} 💰`);
@@ -230,11 +237,9 @@ export class Hud {
     if (stats.skimmed) row(t('summary.skimmed'), `−${stats.skimmed} 💰`);
     for (const [label, value] of extra) row(label, value);
     if (money.bill !== null) row(t('summary.bills'), `−${money.bill} 💰`);
-    row(t('summary.money'), `${money.total} 💰`);
-    if (money.shortfall > 0) card.append(el('div', 'ui-note', t('summary.shortfall', { n: money.shortfall })));
     row(t('summary.rating'), `${rating.before.toFixed(1)} → ${rating.after.toFixed(1)}★ ${arrowRating}`);
     // Что написали посетители — сразу видно, что исправить завтра.
-    if (reviews.length) card.append(el('h3', '', t('summary.reviews')), ...reviewCards(reviews));
+    if (reviews.length) more.append(el('h3', '', t('summary.reviews')), ...reviewCards(reviews));
     card.append(
       button(t('summary.next'), () => {
         // Роллет опускается с номером нового дня — и поднимается уже утром.

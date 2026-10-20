@@ -230,6 +230,27 @@ const css = `
 .ui-shelf-card.broken { border-color: #b13e53; }
 .ui-shelf-meta { font-size: 11.5px; color: #5a5048; }
 .ui-shelf-span { grid-column: 1 / -1; margin: 0; }
+.ui-help-inline { display: inline-block; width: 20px; height: 20px; line-height: 20px; margin-left: 6px; vertical-align: middle; font-size: 11px; }
+/* Плитки «Уголков»: значок слева, название и состояние справа. */
+.ui-tile-card { flex-direction: row; align-items: center; gap: 7px; }
+.ui-tile-icon { font-size: 22px; line-height: 1; flex: none; }
+.ui-tile-icon .ui-ico { height: 24px; vertical-align: 0; }
+.ui-tile-img { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: none; }
+.ui-tile-text { display: flex; flex-direction: column; min-width: 0; }
+/* Персонал: строка сотрудника и навыки хозяина. */
+.ui-staff { padding: 6px 8px; }
+.ui-staff-head { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: 1fr 54px; gap: 2px 8px; align-items: center; width: 100%; font: 14px/1.3 ${UI_FONT}; }
+.ui-staff-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-staff-bar { height: 7px; }
+.ui-staff-tags { grid-column: 1 / -1; font-size: 12px; color: #b13e53; }
+.ui-skill-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 6px; }
+.ui-skill-chip { padding: 5px 2px; font-size: 11px; letter-spacing: -0.5px; }
+.ui-skill-chip.hot { background: #fee761; }
+.ui-skill-detail { margin-top: 6px; padding: 6px 8px; background: #fff8e0; border-radius: 6px; }
+/* Итоги дня: «Подробнее» свёрнуто. */
+.ui-more { border: 2px solid #2b2233; border-radius: 6px; background: #fbf6ea; padding: 6px 8px; margin: 6px 0; }
+.ui-more summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+.ui-more[open] summary { margin-bottom: 4px; }
 .ui-card h3 { font-size: 16px; border-bottom: 2px solid #2b2233; padding-bottom: 2px; }
 /* Строка товара: крупная иконка, название с жёлтым ценником, подпись, кнопки справа — ничего не переносится. */
 .ui-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 8px; align-items: center; padding: 7px 0; }

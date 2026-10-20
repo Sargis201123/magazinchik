@@ -335,6 +335,63 @@ function artRow(texture: string, opts: { name: string; price?: number; sub?: str
 const percent = (k: number): string => `${k >= 1 ? '+' : '−'}${Math.round(Math.abs(k - 1) * 100)}%`;
 
 /** Заголовок с «❔»: длинное пояснение спрятано и открывается по нажатию. */
+/**
+ * Длинные пояснения в карточке прячутся за «❔» рядом с заголовком: видны цифры и кнопки,
+ * а «как это работает» — по нажатию.
+ */
+function tuckNotes(box: HTMLElement): HTMLElement {
+  const notes = [...box.children].filter((c): c is HTMLElement => c instanceof HTMLElement && c.classList.contains('ui-muted') && (c.textContent?.length ?? 0) > 70);
+  if (!notes.length) return box;
+  for (const n of notes) {
+    n.hidden = true;
+    n.classList.add('ui-help-text');
+  }
+  const toggle = button('❔', () => {
+    const show = notes[0].hidden;
+    for (const n of notes) n.hidden = !show;
+    toggle.classList.toggle('active', show);
+  }, 'ui-help-btn ui-help-inline');
+  const head = box.querySelector(':scope > b, :scope > h3');
+  if (head) head.after(toggle);
+  else box.prepend(toggle);
+  return box;
+}
+
+/** То же для списка блоков вкладки. */
+const tuckAll = (items: HTMLElement[]): HTMLElement[] => items.map((e) => (e.classList.contains('ui-box') ? tuckNotes(e) : e));
+
+/** Плитка сетки: значок (эмодзи или картинка), название, состояние; красная — нужно внимание. */
+interface Tile {
+  id: string;
+  icon: string;
+  title: string;
+  status: string;
+  alert?: boolean;
+  details: () => HTMLElement[];
+}
+
+function tileGrid(tiles: Tile[], open: string | null, toggle: (id: string) => void): HTMLElement {
+  const grid = el('div', 'ui-shelf-grid');
+  for (const tile of tiles) {
+    const cell = button('', () => toggle(tile.id), `ui-shelf-card ui-tile-card${open === tile.id ? ' active' : ''}${tile.alert ? ' broken' : ''}`);
+    const icon = tile.icon.startsWith('assets/') ? el('img', 'ui-tile-img') : el('span', 'ui-tile-icon', tile.icon);
+    if (icon instanceof HTMLImageElement) {
+      icon.src = tile.icon;
+      icon.alt = '';
+    }
+    const text = el('span', 'ui-tile-text');
+    text.append(el('b', '', tile.title), el('span', 'ui-shelf-meta', tile.status));
+    cell.append(icon, text);
+    grid.append(cell);
+    if (open === tile.id) {
+      const details = el('div', 'ui-shelf-span');
+      details.append(...tuckAll(tile.details()));
+      grid.append(details);
+    }
+  }
+  return grid;
+}
+
 function helpRow(title: HTMLElement | string, text: string): HTMLElement {
   const wrap = el('div', 'ui-help');
   const head = el('div', 'ui-help-head');
@@ -359,6 +416,10 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   let buyFilter: 'low' | 'all' | 'season' = 'low';
   /** Какая полка во вкладке «Зал» раскрыта (улучшить, продать, починить). */
   let openShelf = -1;
+  /** Какая плитка «Уголков» раскрыта, чей ряд в «Персонале» и какой навык хозяина. */
+  let openCorner: string | null = null;
+  let openStaff: string | null = null;
+  let openSkill: string | null = null;
   /** Вкладку только что переключили — содержимое въезжает сбоку (при покупках не дёргается). */
   let slideTab = false;
   /** Какая реплика сюжетного диалога сейчас на экране. */
@@ -506,7 +567,9 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
     const body = el('div', slideTab ? 'ui-enter' : '');
     if (tab === 'profile') body.append(el('h3', '', `🏆 ${t('tab.profile')}`));
-    body.append(...{ buy: buyTab, hall: hallTab, extras: extrasTab, staff: staffTab, grow: growTab, profile: profileTab }[tab](state));
+    const content = { buy: buyTab, hall: hallTab, extras: extrasTab, staff: staffTab, grow: growTab, profile: profileTab }[tab](state);
+    // В «Персонале», «Развитии» и профиле длинные пояснения карточек — за «❔».
+    body.append(...(tab === 'staff' || tab === 'grow' || tab === 'profile' ? tuckAll(content) : content));
     slideTab = false;
     const today = todoBox(state);
     const info = infos(
@@ -1511,7 +1574,65 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   // ---------- Уголки: сладости, кофе, печь, кот и улучшения ----------
 
-  const extrasTab = (state: StoreState): HTMLElement[] => [rackBox(state), radioBox(state), coffeeBox(state), ovenBox(state), ...kitchenBox(state), catBox(state), securityBox(state), upgradesBox(state)];
+  /** «Уголки» — сеткой плиток: состояние видно сразу, подробности и покупки — по нажатию. */
+  const extrasTab = (state: StoreState): HTMLElement[] => {
+    const rack = rackOf(state);
+    const cap = rackCapacity(state);
+    const coffee = hasUpgrade(state, 'coffee');
+    const oven = hasUpgrade(state, 'oven');
+    const owned = UPGRADE_IDS.filter((id) => hasUpgrade(state, id)).length;
+    const tiles: Tile[] = [
+      { id: 'rack', icon: 'assets/candy_rack.png', title: t('rack.title'), status: `${rack.stock}/${cap}`, alert: rack.stock <= cap / 3, details: () => [rackBox(getState())] },
+      {
+        id: 'radio',
+        icon: '📻',
+        title: t('radio.title'),
+        status: hasRadio(state) ? `${STATION_INFO[stationOf(state)].icon} ${t(STATION_INFO[stationOf(state)].nameKey)}` : `${RADIO_PRICE} 💰`,
+        details: () => [radioBox(getState())],
+      },
+      {
+        id: 'coffee',
+        icon: '☕',
+        title: t('coffee.title'),
+        status: coffee ? t('corner.cups', { n: cupsOf(state), max: CUPS_MAX }) : '🔒',
+        alert: coffee && (cupsOf(state) < 8 || !staffOf(state, 'barista')),
+        details: () => [coffeeBox(getState())],
+      },
+      {
+        id: 'oven',
+        icon: '🍞',
+        title: t('oven.title'),
+        status: oven ? t(`bake.${bakeModeOf(state)}` as TextKey) : '🔒',
+        alert: oven && !staffOf(state, 'baker'),
+        details: () => [ovenBox(getState())],
+      },
+      ...(kitchenOpen(state)
+        ? [{ id: 'kitchen', icon: '🍲', title: t('kitchen.title'), status: `${portionsTotal(state)}/${PORTIONS_MAX}`, details: () => kitchenBox(getState()) }]
+        : []),
+      {
+        id: 'cat',
+        icon: '🐱',
+        title: state.cat?.name ?? t('corner.cat'),
+        status: !state.cat ? '—' : catAway(state) ? t('corner.catAway') : fedToday(state) ? t('corner.catFed') : t('corner.catHungry'),
+        alert: Boolean(state.cat) && !catAway(state) && !fedToday(state),
+        details: () => [catBox(getState())],
+      },
+      {
+        id: 'watch',
+        icon: '🐕',
+        title: t('watch.title'),
+        status: [securityOf(state).dog ? '🐕' : '', hasWatchman(state) ? '🔦' : ''].join(' ').trim() || '—',
+        details: () => [securityBox(getState())],
+      },
+      { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${UPGRADE_IDS.length}`, details: () => [upgradesBox(getState())] },
+    ];
+    return [
+      tileGrid(tiles, openCorner, (id) => {
+        openCorner = openCorner === id ? null : id;
+        render();
+      }),
+    ];
+  };
 
   /** Кухня: что приготовить из продуктов со склада (kitchen.ts). */
   const kitchenBox = (state: StoreState): HTMLElement[] => {
@@ -2876,104 +2997,117 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   };
 
   /** Хозяин: уровень за обслуженных покупателей и навыки, в которые вкладывают очки. */
+  /** Хозяин: уровень, навыки рядом значков (нажать — описание и «Изучить»), скорость за кассой. */
   const ownerBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     const next = nextLevelXp(state);
     const points = skillPoints(state);
+    const lvl = ownerLevel(state.ownerServed);
+    const scanNext = ownerNextLevelAt(state.ownerServed);
+    const scan = ownerScan(state.ownerServed);
     box.append(
       el('b', '', t('skill.title', { n: ownerLevelOf(state) })),
+      el('div', 'ui-item-sub', `${t('staffTab.ownerSkill')} ${'★'.repeat(lvl).padEnd(5, '☆')} · ${t('staffTab.ownerPerDay', { n: servePerDay(withUpgrades(state, ownerTiming(state))) })}`),
       el('div', 'ui-muted', next === null ? t('skill.xpMax', { xp: ownerXp(state) }) : t('skill.xp', { xp: ownerXp(state), next })),
+      el(
+        'div',
+        'ui-muted',
+        scanNext === null
+          ? t('staffTab.ownerSkillMax', { s: scan.item.toFixed(2) })
+          : t('staffTab.ownerSkillNext', { n: state.ownerServed, next: scanNext, s: scan.item.toFixed(2) }),
+      ),
     );
     if (points) box.append(el('div', 'ui-note', t('skill.points', { n: points })));
+    const row = el('div', 'ui-skill-row');
     for (const id of SKILL_IDS) {
       const skill = SKILLS[id];
-      const lvl = skillLevel(state, id);
-      const row = el('div', 'ui-item');
-      row.append(el('div', 'ui-ad-icon', skill.icon));
-      const body = el('div');
-      const name = el('div', 'ui-item-name', `${t(skill.nameKey)} `);
-      name.append(el('span', 'ui-skill-pips', '●'.repeat(lvl) + '○'.repeat(SKILL_MAX - lvl)));
-      body.append(name, el('div', 'ui-item-sub', t(skill.descKey)));
-      const actions = el('div', 'ui-item-actions');
-      if (lvl < SKILL_MAX) actions.append(button(t('skill.learn'), () => update(learnSkill(getState(), id), 'success'), 'ui-chip', points <= 0));
-      row.append(body, actions);
-      box.append(row);
+      const level = skillLevel(state, id);
+      row.append(
+        button(`${skill.icon}${'●'.repeat(level)}${'○'.repeat(SKILL_MAX - level)}`, () => {
+          openSkill = openSkill === id ? null : id;
+          render();
+        }, `ui-chip ui-skill-chip${openSkill === id ? ' active' : ''}${points && level < SKILL_MAX ? ' hot' : ''}`),
+      );
     }
+    box.append(row);
+    const open = SKILL_IDS.find((id) => id === openSkill);
+    if (open) {
+      const skill = SKILLS[open];
+      const level = skillLevel(state, open);
+      const detail = el('div', 'ui-skill-detail');
+      detail.append(el('b', '', t(skill.nameKey)), el('div', 'ui-item-sub', t(skill.descKey)));
+      if (level < SKILL_MAX) detail.append(button(t('skill.learn'), () => update(learnSkill(getState(), open), 'success'), 'ui-chip', points <= 0));
+      box.append(detail);
+    }
+    return box;
+  };
+
+  /** Сотрудник одной строкой: роль, имя, полоска усталости, метки; действия — по нажатию. */
+  const staffRow = (state: StoreState, m: StaffMember): HTMLElement => {
+    const box = el('div', 'ui-box ui-staff');
+    const streak = m.streak ?? 0;
+    const tags: string[] = [];
+    if (isAbsent(state, m)) tags.push(t('staffTab.tagOff'));
+    else if (isTired(m)) tags.push(t('staffTab.tagTired'));
+    if (m.upset) tags.push(t('staffTab.tagUpset'));
+    if (isCashier(m) && m.trait === 'slowpoke') tags.push(t('staffTab.tagSlow'));
+    const head = button('', () => {
+      openStaff = openStaff === m.role ? null : m.role;
+      render();
+    }, 'ui-staff-head');
+    const bar = el('div', 'ui-bar ui-staff-bar');
+    const fill = el('div', 'ui-bar-fill');
+    const tired = Math.min(1, streak / EXHAUSTED_DAYS);
+    fill.style.width = `${Math.round(tired * 100)}%`;
+    fill.style.background = tired >= 1 ? '#e43b44' : isTired(m) ? '#feae34' : '#63c74d';
+    bar.append(fill);
+    const name = el('span', 'ui-staff-name');
+    name.append(el('b', '', staffName(m.name)), el('span', 'ui-item-sub', ` · ${t(STAFF_ROLES[m.role].nameKey)} · ${t('staffTab.wage', { n: m.wage })}`));
+    head.append(name, bar, ...(tags.length ? [el('span', 'ui-staff-tags', tags.join(' '))] : []));
+    box.append(head);
+    if (openStaff !== m.role) return box;
+    box.append(
+      el('div', 'ui-muted', t(STAFF_ROLES[m.role].descKey)),
+      el('div', 'ui-item-sub', traitLine(m)),
+      el('div', 'ui-item-sub', m.months ? t('staffTab.months', { n: m.months }) : t('staffTab.new')),
+    );
+    if (m.upset) box.append(el('div', 'ui-note', t('staffTab.upset')));
+    const actions = el('div', 'ui-chips');
+    // Люди устают: неделя без выходных — работают медленнее. Выходной можно дать заранее.
+    if (isAbsent(state, m)) box.append(el('div', 'ui-note', t('staffTab.offToday')));
+    else if (m.offDay === state.day + 1) box.append(el('div', 'ui-note', t(streak >= EXHAUSTED_DAYS ? 'staffTab.exhausted' : 'staffTab.offTomorrow')));
+    else {
+      box.append(el('div', isTired(m) ? 'ui-note' : 'ui-item-sub', isTired(m) ? t('staffTab.tired', { n: streak }) : t('staffTab.streak', { n: streak })));
+      actions.append(button(t('staffTab.giveOff'), () => update(giveDayOff(getState(), m.role)), 'ui-chip'));
+    }
+    // «Тормоз» за кассой упирает весь магазин в потолок — предупредить и предложить курсы.
+    if (isCashier(m) && m.trait === 'slowpoke') {
+      const warn = el('div', 'ui-note', t('staffTab.slowWarn', { n: perDay(state, m) }));
+      warn.style.color = '#b13e53';
+      box.append(warn);
+    }
+    const cost = trainingCost(m);
+    if (cost !== null)
+      actions.append(button(m.skill < 3 ? t('staffTab.train', { n: cost }) : t('staffTab.fixSlow', { n: cost }), () => update(train(getState(), m.role), 'success'), 'ui-chip', state.money < cost));
+    actions.append(button(t('staffTab.fire'), () => {
+      openStaff = null;
+      update(fire(getState(), m.role));
+    }, 'ui-chip'));
+    box.append(actions);
     return box;
   };
 
   const staffTab = (state: StoreState): HTMLElement[] => {
     const limit = staffLimit(state);
-    const lvl = ownerLevel(state.ownerServed);
-    const next = ownerNextLevelAt(state.ownerServed);
-    const scan = ownerScan(state.ownerServed);
-    const skill = el('div', 'ui-box');
-    skill.append(
-      el('b', '', `${t('staffTab.ownerSkill')} ${'★'.repeat(lvl).padEnd(5, '☆')}`),
-      el(
-        'div',
-        'ui-muted',
-        next === null
-          ? t('staffTab.ownerSkillMax', { s: scan.item.toFixed(2) })
-          : t('staffTab.ownerSkillNext', { n: state.ownerServed, next, s: scan.item.toFixed(2) }),
-      ),
-      el('div', 'ui-muted', t('staffTab.ownerPerDay', { n: servePerDay(withUpgrades(state, ownerTiming(state))) })),
-    );
     const out: HTMLElement[] = [
       ownerBox(state),
-      skill,
-      el('div', 'ui-muted', t('staffTab.count', { n: state.staff.length, max: limit })),
-      el('div', 'ui-note', t('staffTab.wageNote')),
+      helpRow(`👥 ${t('staffTab.count', { n: state.staff.length, max: limit })}`, t('staffTab.wageNote')),
     ];
     if (state.staff.length === 0) out.push(el('div', 'ui-note', t('staffTab.none')));
-    for (const m of state.staff) {
-      const box = el('div', 'ui-box');
-      const head = el('div', 'ui-row');
-      const title = el('span');
-      title.append(el('b', '', `${staffName(m.name)} — ${t(STAFF_ROLES[m.role].nameKey)} `));
-      head.append(title, button(t('staffTab.fire'), () => update(fire(getState(), m.role)), 'ui-chip'));
-      box.append(
-        head,
-        el('div', 'ui-muted', t(STAFF_ROLES[m.role].descKey)),
-        el('div', 'ui-muted', traitLine(m)),
-        el(
-          'div',
-          'ui-muted',
-          `${t('staffTab.wage', { n: m.wage })} · ${m.months ? t('staffTab.months', { n: m.months }) : t('staffTab.new')}`,
-        ),
-      );
-      if (m.upset) box.append(el('div', 'ui-note', t('staffTab.upset')));
-      // Люди устают: неделя без выходных — работают медленнее. Выходной можно дать заранее.
-      const streak = m.streak ?? 0;
-      if (isAbsent(state, m)) box.append(el('div', 'ui-note', t('staffTab.offToday')));
-      else if (m.offDay === state.day + 1)
-        box.append(el('div', 'ui-note', t((m.streak ?? 0) >= EXHAUSTED_DAYS ? 'staffTab.exhausted' : 'staffTab.offTomorrow')));
-      else {
-        box.append(el('div', isTired(m) ? 'ui-note' : 'ui-muted', isTired(m) ? t('staffTab.tired', { n: streak }) : t('staffTab.streak', { n: streak })));
-        box.append(button(t('staffTab.giveOff'), () => update(giveDayOff(getState(), m.role)), 'ui-chip'));
-      }
-      // «Тормоз» за кассой упирает весь магазин в потолок — предупредить и предложить курсы.
-      if (isCashier(m) && m.trait === 'slowpoke') {
-        const warn = el('div', 'ui-note', t('staffTab.slowWarn', { n: perDay(state, m) }));
-        warn.style.color = '#b13e53';
-        box.append(warn);
-      }
-      const cost = trainingCost(m);
-      if (cost !== null) {
-        box.append(
-          button(
-            m.skill < 3 ? t('staffTab.train', { n: cost }) : t('staffTab.fixSlow', { n: cost }),
-            () => update(train(getState(), m.role), 'success'),
-            'ui-chip',
-            state.money < cost,
-          ),
-        );
-      }
-      out.push(box);
-    }
+    for (const m of state.staff) out.push(staffRow(state, m));
 
     const full = state.staff.length >= limit;
-    out.push(el('h3', '', t('staffTab.search')), el('div', 'ui-muted', t('staffTab.searchNote', { cost: JOB_AD_COST })));
+    const hiring: HTMLElement[] = [helpRow(t('staffTab.searchShort', { cost: JOB_AD_COST }), t('staffTab.searchNote', { cost: JOB_AD_COST }))];
     const roles = el('div', 'ui-chips');
     const locked: string[] = [];
     for (const role of STAFF_ROLE_IDS) {
@@ -2997,7 +3131,8 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
         ),
       );
     }
-    out.push(roles, ...locked.map((line) => el('div', 'ui-muted', `🔒 ${line}`)));
+    hiring.push(roles, ...locked.map((line) => el('div', 'ui-muted', `🔒 ${line}`)));
+    out.push(foldBox('hire', `➕ ${t('staffTab.search')}`, (body) => body.append(...hiring)));
 
     const candidates = currentCandidates(state);
     if (state.jobSearch?.day === state.day) {
