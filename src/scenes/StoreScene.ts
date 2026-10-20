@@ -419,6 +419,8 @@ type HairStyle = 'short' | 'long' | 'bun' | 'cap' | 'bald' | 'ponytail' | 'curly
 /** Поверх одежды: фартук (красится), жилет грузчика, значок охранника. */
 type Accessory = 'apron' | 'vest' | 'badge' | 'tie';
 type Facing = 'down' | 'up' | 'left' | 'right';
+type EmoteKey = 'emo_angry' | 'emo_heart' | 'emo_question' | 'emo_clock' | 'emo_sigh' | 'emo_pricey' | 'emo_alert' | 'emo_zzz' | 'emo_star';
+
 const VIEW_SUFFIX: Record<Facing, string> = { down: '', up: '_b', left: '_s', right: '_s' };
 
 interface Look {
@@ -1025,6 +1027,9 @@ export class StoreScene extends Phaser.Scene {
     this.setupCameraDrag();
     // Улица живёт своей жизнью: прохожие и машины.
     this.time.addEvent({ delay: 1800, loop: true, callback: () => this.streetLife() });
+    // Живая очередь и продавец без дела: кто-то вздыхает, смотрит на часы, продавец протирает прилавок.
+    this.time.addEvent({ delay: 1300, loop: true, callback: () => this.running && this.queueIdle() });
+    this.time.addEvent({ delay: 4200, loop: true, callback: () => this.running && this.sellerIdle() });
     // Достижения проверяются и посреди дня: серия, сотый покупатель — сразу всплывашка.
     this.time.addEvent({ delay: 1000, loop: true, callback: () => this.running && this.checkAchievements(true) });
     // Сначала вывеска, потом утро. Первая встреча с сюжетом (письмо бабушки) — на утреннем экране.
@@ -2886,6 +2891,8 @@ export class StoreScene extends Phaser.Scene {
       this.tweens.add({ targets: z, x: z.x - 4, y: z.y - 9, scale: 1, alpha: 0, duration: 1800, onComplete: () => z.destroy() });
     };
     this.critterTimers.push(this.time.addEvent({ delay: 2600, loop: true, callback: snore }));
+    // Иногда просыпается: потягивается или следит за мухой.
+    this.critterTimers.push(this.time.addEvent({ delay: 9000, loop: true, callback: () => !this.catOut && cat.active && this.catWake(cat) }));
     if (!own) return;
     cat.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.petCat()));
     this.critterTimers.push(
@@ -2897,6 +2904,30 @@ export class StoreScene extends Phaser.Scene {
         },
       }),
     );
+  }
+
+  private catWake(cat: Phaser.GameObjects.Image): void {
+    if (Math.random() < 0.5) {
+      this.tweens.add({ targets: cat, scaleX: 1.3 / ART, duration: 420, yoyo: true, hold: 300, ease: 'Sine.easeInOut' });
+      return;
+    }
+    // Муха кружит над котом, кот поворачивается за ней и в конце подпрыгивает.
+    const fly = this.add.rectangle(cat.x, cat.y - 10, 1.2, 1.2, 0x181425).setDepth(cat.depth + 2);
+    const t0 = this.time.now;
+    const buzz = this.time.addEvent({
+      delay: 50,
+      repeat: 50,
+      callback: () => {
+        const k = (this.time.now - t0) / 260;
+        fly.setPosition(cat.x + Math.cos(k) * 7, cat.y - 9 + Math.sin(k * 1.7) * 3);
+        cat.setFlipX(fly.x < cat.x);
+      },
+    });
+    this.time.delayedCall(2600, () => {
+      buzz.remove();
+      if (cat.active) this.tweens.add({ targets: cat, y: cat.y - 3, duration: 140, yoyo: true, ease: 'Quad.easeOut' });
+      this.tweens.add({ targets: fly, x: fly.x + 20, y: fly.y - 20, alpha: 0, duration: 500, onComplete: () => fly.destroy() });
+    });
   }
 
   // ---------- Пёс Бобик ----------
@@ -3175,6 +3206,9 @@ export class StoreScene extends Phaser.Scene {
       // Если не починить — через 20 секунд свет дадут сами.
       keep(this.time.delayedCall(20000, () => this.restoreLight()));
     }
+    // Что-то стряслось — покупатели оглядываются, продавец настораживается.
+    this.everyoneLooks(w / 2, h / 2, kind === 'pigeon' || kind === 'mouse' ? 'emo_question' : 'emo_alert', 0.3);
+    if (this.seller?.active) this.emote(this.seller, 'emo_alert');
     if (kind === 'leak') this.startLeak(keep);
     if (kind === 'pigeon') this.pigeonInside(keep);
     if (kind === 'courier') void this.courierVisit(keep);
@@ -3195,6 +3229,7 @@ export class StoreScene extends Phaser.Scene {
   private fixFuse(): void {
     if (!this.blackout || this.sellerBusy || this.ownerScanning() || !this.fuseBox) return;
     this.carried.setTexture('wrench').setPosition(5, -1).setVisible(true);
+    this.emote(this.seller, 'emo_alert');
     void this.doChore([
       {
         x: this.fuseBox.x,
@@ -5422,7 +5457,87 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Эмоция над головой: всплывает и тает. */
-  private emote(person: Phaser.GameObjects.Container, key: 'emo_angry' | 'emo_heart' | 'emo_question'): void {
+  /** Сколько терпения осталось у ждущего покупателя (1 — только встал, 0 — уходит). */
+  private patienceLeft(c: Customer): number {
+    return 1 - (this.time.now - c.waitStart) / (c.patienceMs ?? PATIENCE_MS);
+  }
+
+  /**
+   * Очередь не стоит столбом: один из ждущих переминается, оглядывается, а когда ждать
+   * надоело — смотрит на часы и вздыхает. Дети подпрыгивают на месте.
+   */
+  private queueIdle(): void {
+    const waiting = [...this.queue, ...this.registers.map((r) => r.customer).filter((c): c is Customer => Boolean(c))].filter(
+      (c) => !c.serving && !c.gone && c.sprite.active && !c.sprite.getData('walking'),
+    );
+    if (!waiting.length) return;
+    const c = Phaser.Utils.Array.GetRandom(waiting);
+    const p = c.sprite;
+    const left = this.patienceLeft(c);
+    const base = (p.getData('baseScale') as number) ?? 1;
+    if (base < 1) {
+      this.tweens.add({ targets: p, y: p.y - 2, duration: 120, yoyo: true, repeat: 1, ease: 'Quad.easeOut' });
+      return;
+    }
+    if (left < 0.6 && Math.random() < 0.6) {
+      this.emote(p, Math.random() < 0.55 ? 'emo_clock' : 'emo_sigh');
+      return;
+    }
+    if (Math.random() < 0.5) {
+      // Переминается с ноги на ногу.
+      this.tweens.add({ targets: p, x: p.x + 0.7, duration: 160, yoyo: true, repeat: 2, ease: 'Sine.easeInOut' });
+      return;
+    }
+    // Оглядывается по сторонам и снова смотрит вперёд.
+    const facing = (p.getData('facing') as Facing | undefined) ?? 'up';
+    this.setFacing(p, 'left');
+    this.time.delayedCall(450, () => p.active && !p.getData('walking') && this.setFacing(p, 'right'));
+    this.time.delayedCall(900, () => p.active && !p.getData('walking') && this.setFacing(p, facing));
+  }
+
+  /** Продавец без покупателей: протирает прилавок, к вечеру зевает. */
+  private sellerIdle(): void {
+    const s = this.seller;
+    if (!s?.active || this.sellerBusy || this.ownerScanning() || s.getData('walking') || this.waiting() > 0) return;
+    const { counter } = this.layout;
+    if (Math.hypot(s.x - counter.x, s.y - counter.y) > 40) return;
+    if (this.evening > 0.4 && Math.random() < 0.45) {
+      this.emote(s, 'emo_zzz');
+      this.setMood(s, 'frown', 1200);
+      return;
+    }
+    // Тряпка ходит по прилавку, на чистом поблёскивает.
+    const rag = this.add.rectangle(counter.x - 5, counter.y - 6, 4, 2, 0x9cd8ff).setStrokeStyle(0.5, 0x3a4466).setDepth(counter.y + 25);
+    this.tweens.add({
+      targets: rag,
+      x: counter.x + 5,
+      duration: 260,
+      yoyo: true,
+      repeat: 2,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        rag.destroy();
+        const shine = this.art(counter.x + 3, counter.y - 8, 'spark').setScale(0.6 / ART).setDepth(counter.y + 26);
+        this.tweens.add({ targets: shine, alpha: 0, scale: 1.2 / ART, angle: 90, duration: 500, onComplete: () => shine.destroy() });
+      },
+    });
+    const base = (s.getData('baseScale') as number) ?? 1;
+    this.tweens.add({ targets: s, scaleY: base * 1.04, duration: 130, yoyo: true, repeat: 2, onComplete: () => s.setScale(base) });
+  }
+
+  /** Все в зале оборачиваются на кассу: что-то случилось (серия, рекорд). */
+  private everyoneLooks(x: number, y: number, key: EmoteKey, share = 0.35): void {
+    for (const c of this.customers) {
+      const p = c.sprite;
+      if (!p.active || c.gone || p.getData('walking') || p.y > this.layout.h) continue;
+      const dx = x - p.x;
+      const dy = y - p.y;
+      this.setFacing(p, Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down');
+      if (Math.random() < share) this.time.delayedCall(Phaser.Math.Between(0, 300), () => this.emote(p, key));
+    }
+  }
+
+  private emote(person: Phaser.GameObjects.Container, key: EmoteKey): void {
     if (!person.active) return;
     const icon = this.art(0, -17, key);
     person.add(icon);
@@ -6458,6 +6573,7 @@ export class StoreScene extends Phaser.Scene {
     if (declines) {
       if (price <= fair) return 'skipped';
       this.popup(c.sprite.x, c.sprite.y - 14, t('popup.expensive'), '#ffd0d0');
+      this.emote(c.sprite, 'emo_pricey');
       note(this.stats, 'expensive');
       return 'expensive';
     }
@@ -6708,6 +6824,8 @@ export class StoreScene extends Phaser.Scene {
     // В серии монет летит больше.
     this.flyCoins(where?.x ?? at?.counter.x ?? this.layout.counter.x, where?.y ?? at?.counter.y ?? this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)) + Math.min(this.combo - 1, 5));
     if (this.combo >= 2) this.celebrateCombo(this.combo);
+    // Серия от пяти — весь зал оборачивается на кассу.
+    if (this.combo === 5 || this.combo === 10) this.everyoneLooks(this.layout.counter.x, this.layout.counter.y, 'emo_star');
 
     const dirty = this.trash.size >= TRASH_COMPLAINT || this.binFull();
     const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
