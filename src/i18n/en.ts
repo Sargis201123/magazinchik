@@ -1783,6 +1783,18 @@ export const en: Record<TextKey, string> = {
   "drama.61.3": "The three of us, Sonya. She's with us.",
   "drama.61.4": "I love you, Dad.",
   "drama.61.5": "I love you too. More than anything in the world.",
+  "share.button": "📸 Share results",
+  "share.card.sub": "{shop} · day {n}",
+  "share.card.revenue": "today's revenue",
+  "share.card.week": "this week",
+  "share.card.served": "happy customers",
+  "share.card.rating": "rating",
+  "share.card.call": "Play and beat my shop!",
+  "share.story": "My shop in Corner Shop 🏪 Play and beat me: {link}",
+  "share.wait": "Drawing the card…",
+  "share.chat.title": "Card in your chat",
+  "share.chat.text": "The bot sent it to your chat — forward it to friends or post it to your story.",
+  "share.failed": "That didn't work — please try again a bit later.",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

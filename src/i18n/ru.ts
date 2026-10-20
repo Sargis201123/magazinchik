@@ -1781,6 +1781,18 @@ export const ru = {
   "drama.61.3": "Втроём, Сонь. Она с нами.",
   "drama.61.4": "Я тебя люблю, пап.",
   "drama.61.5": "И я тебя. Больше всего на свете.",
+  "share.button": "📸 Поделиться итогами",
+  "share.card.sub": "{shop} · день {n}",
+  "share.card.revenue": "выручка за день",
+  "share.card.week": "за неделю",
+  "share.card.served": "довольных гостей",
+  "share.card.rating": "рейтинг",
+  "share.card.call": "Сыграй и обгони мой магазин!",
+  "share.story": "Мой магазин в «Магазинчике» 🏪 Сыграй и обгони меня: {link}",
+  "share.wait": "Рисую карточку…",
+  "share.chat.title": "Карточка в чате",
+  "share.chat.text": "Бот прислал её в чат — перешли друзьям или выложи в историю.",
+  "share.failed": "Не получилось — попробуй ещё раз чуть позже.",
 } as const;
 
 export type TextKey = keyof typeof ru;

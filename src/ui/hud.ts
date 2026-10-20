@@ -167,6 +167,7 @@ export class Hud {
     losses: LossAdvice[],
     reviews: Review[],
     onNext: () => void,
+    onShare?: (button: HTMLButtonElement) => void,
   ): void {
     const { card, close } = openModal();
     card.append(el('h2', '', t('summary.title', { n: day })));
@@ -183,6 +184,11 @@ export class Hud {
     tile(`🚶 ${stats.lost}`, t('summary.lost'), stats.lost > stats.served / 3 ? 'bad' : '');
     tile(`★ ${rating.after.toFixed(1)} ${arrowRating}`, t('summary.rating'), arrowRating === '▼' ? 'bad' : arrowRating ? 'good' : '');
     card.append(tiles);
+    // Карточка итогов для сторис или чата (platform/shareCard.ts).
+    if (onShare) {
+      const share: HTMLButtonElement = button(t('share.button'), () => onShare(share), 'ui-btn secondary');
+      card.append(share);
+    }
     // Выручка за последние 7 дней: сегодня — жёлтым.
     const week = history.slice(-7);
     if (week.length > 1) {

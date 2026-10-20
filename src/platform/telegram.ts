@@ -40,6 +40,8 @@ interface TelegramWebApp {
   /** Окно оплаты счёта (Telegram Stars): статус приходит в колбэк. */
   openInvoice?(url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void;
   openTelegramLink?(url: string): void;
+  /** Опубликовать историю с картинкой по ссылке (Bot API 7.8+). */
+  shareToStory?(mediaUrl: string, params?: { text?: string }): void;
   requestWriteAccess?(callback?: (granted: boolean) => void): void;
   initDataUnsafe: { user?: { id: number; first_name?: string; language_code?: string } };
   HapticFeedback?: {
@@ -102,6 +104,17 @@ export function requestWriteAccess(): void {
 }
 
 /** Игрок Telegram (id) — чтобы не подхватить чужое сохранение на общем телефоне. */
+/** Можно ли выложить историю прямо из игры (Telegram 7.8+, только в мобильном приложении). */
+export const canShareStory = (): boolean => Boolean(webApp()?.shareToStory) && at('7.8');
+
+/** Открыть редактор истории Telegram с картинкой по ссылке. */
+export function shareStory(mediaUrl: string, text: string): boolean {
+  const app = webApp();
+  if (!app?.shareToStory || !canShareStory()) return false;
+  app.shareToStory(mediaUrl, { text });
+  return true;
+}
+
 export const telegramUserId = (): number | undefined => webApp()?.initDataUnsafe.user?.id;
 
 /** Облако Telegram (Bot API 6.9+), вне Telegram — нет. */
