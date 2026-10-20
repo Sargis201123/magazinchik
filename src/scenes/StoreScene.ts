@@ -174,21 +174,26 @@ import { lossAdvice, noteLost } from '../game/losses';
 import { fairTolerance, isFairDay, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fair';
 import { DELIVERY_SECONDS, makeHomeOrder, ORDER_EVERY, ORDER_TIMEOUT, packHomeOrder, type HomeOrder } from '../game/delivery';
 
-// Холст 720×1280 (9:16): на телефоне хватает пикселей для детальных спрайтов.
-// Камера подбирает масштаб под размер магазина: ларёк крупно, универмаг мельче.
+// Холст шириной 720 и высотой под экран телефона: от 9:16 до 9:20 — на вытянутых телефонах
+// картинка во весь экран, без пустых полос сверху и снизу. Камера подбирает масштаб под магазин.
+export const ASPECT = Phaser.Math.Clamp(window.innerHeight / Math.max(1, window.innerWidth), 16 / 9, 20 / 9);
 /**
- * Во сколько раз холст плотнее базовых 720×1280: под экран телефона (ширина × devicePixelRatio),
+ * Во сколько раз холст плотнее базовых 720 точек по ширине: под экран телефона (ширина × devicePixelRatio),
  * от 1 до 1,5 с шагом 0,25 (больше — тяжело слабым телефонам). Пиксель-арт и надписи не мылятся.
  */
 export const RES = (() => {
-  const cssWidth = Math.min(window.innerWidth, (window.innerHeight * 9) / 16);
+  const cssWidth = Math.min(window.innerWidth, window.innerHeight / ASPECT);
   return Phaser.Math.Clamp(Math.round(((cssWidth * (window.devicePixelRatio || 1)) / 720) * 4) / 4, 1, 1.5);
 })();
 export const CANVAS_W = Math.round(720 * RES);
-export const CANVAS_H = Math.round(1280 * RES);
+export const CANVAS_H = Math.round(720 * ASPECT * RES);
 /** Сверху интерфейс (деньги, товар), снизу подсказки — магазин рисуем между ними. */
 const HUD_TOP = 140 * RES;
 const HUD_BOTTOM = 80 * RES;
+/** Насколько ближе стартовый кадр, чем «весь магазин с флигелем по ширине». */
+const HOME_ZOOM = 1.1;
+/** Верх вывески над стеной магазина: под верхнюю панель — без полосы пустого газона. */
+const SIGN_TOP = -16;
 /** Спрайты нарисованы с двойной детализацией (DETAIL в art/sprites.py): в мире они вдвое меньше своих пикселей. */
 const ART = 2;
 /** Сколько улицы видно под зданием (в точках мира). */
@@ -220,26 +225,32 @@ const CAR_TYPES: [string, number | null, number][] = [
 const LIGHT_DEPTH = 900;
 /** Цвет света на улице и в зале по ходу дня: [доля дня, цвет]. Умножается на картинку. */
 const OUTDOOR_LIGHT: [number, number][] = [
-  [0, 0xffeccc],
-  [0.3, 0xffffff],
-  [0.65, 0xffe2b8],
-  [0.85, 0xe89c78],
+  [0, 0xfff2dc],
+  [0.15, 0xffffff],
+  [0.7, 0xffffff],
+  [0.82, 0xffe2b8],
+  [0.92, 0xe89c78],
   [1, 0x5c64a8],
 ];
 /** В снег на улице свет холоднее: снег белый днём и голубой в сумерках, а не песочный. */
 const SNOW_OUTDOOR_LIGHT: [number, number][] = [
   [0, 0xeef4ff],
-  [0.3, 0xffffff],
-  [0.65, 0xe4ecff],
-  [0.85, 0xa9b8ec],
+  [0.15, 0xffffff],
+  [0.7, 0xffffff],
+  [0.82, 0xe4ecff],
+  [0.92, 0xa9b8ec],
   [1, 0x5c64a8],
 ];
 const INDOOR_LIGHT: [number, number][] = [
-  [0, 0xfff6e6],
-  [0.5, 0xffffff],
-  [0.85, 0xfff0dc],
+  [0, 0xfffaf0],
+  [0.15, 0xffffff],
+  [0.75, 0xffffff],
+  [0.9, 0xfff0dc],
   [1, 0xe4d8ec],
 ];
+
+/** С какой доли дня начинается вечер. */
+const EVENING_FROM = 0.72;
 
 /** Погода приглушает свет на улице: в дождь серо-синий, в снег чуть холодный. */
 const WEATHER_LIGHT: Record<Weather, number> = { clear: 0xffffff, heat: 0xfff4e0, rain: 0xb4bed2, storm: 0x9aa4c4, snow: 0xf0f4ff, leaves: 0xfff2e0 };
@@ -1076,16 +1087,22 @@ export class StoreScene extends Phaser.Scene {
     // В кадре и флигель слева: склад, пекарня, кофейня.
     const viewW = w + WING_OUTER + 2 * WALL + 4;
     const viewH = h + 40;
-    const zoom = Math.min(CANVAS_W / viewW, (CANVAS_H - HUD_TOP - HUD_BOTTOM) / viewH);
+    // Магазин шире, чем выше: если по высоте есть запас, камера подходит ближе (до HOME_ZOOM) —
+    // люди и товар крупнее, флигель слева виден краем, а пустой газон над вывеской — нет.
+    const fitW = CANVAS_W / viewW;
+    const zoom = Math.min(fitW * HOME_ZOOM, (CANVAS_H - HUD_TOP - HUD_BOTTOM) / viewH);
     const midY = HUD_TOP + (CANVAS_H - HUD_TOP - HUD_BOTTOM) / 2;
     this.baseZoom = zoom;
     // Если по высоте есть запас, вывеска прижимается под верхнюю панель — снизу видно больше улицы.
     const centered = (h + 4) / 2 + (CANVAS_H / 2 - midY) / zoom;
-    this.home = { x: (w - WING_OUTER) / 2, y: Math.max(centered, -24 + (CANVAS_H / 2 - HUD_TOP) / zoom) };
+    const signUnderHud = SIGN_TOP + (CANVAS_H / 2 - HUD_TOP) / zoom;
+    // Правая стена — у края экрана; не влезает слева только часть флигеля.
+    const homeX = Math.max((w - WING_OUTER) / 2, w + WALL + 2 - CANVAS_W / zoom / 2);
+    this.home = { x: homeX, y: Math.max(centered, signUnderHud) };
     this.cameras.main.setZoom(zoom).centerOn(this.home.x, this.home.y);
     // Мягкая виньетка по краям кадра; к вечеру гуще.
     this.cameras.main.postFX?.clear();
-    this.vignette = this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.2);
+    this.vignette = this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.1);
     this.buildStreet(next);
     this.buildCritters(next);
     this.buildNeighbors(next);
@@ -1439,11 +1456,12 @@ export class StoreScene extends Phaser.Scene {
     const indoor = this.blackout || this.powerCut ? mulColor(lerpKeys(INDOOR_LIGHT, p), 0x45456a) : lerpKeys(INDOOR_LIGHT, p);
     for (const r of this.outdoorShades) r.setFillStyle(outdoor);
     for (const r of this.indoorShades) r.setFillStyle(indoor);
-    const evening = Phaser.Math.Clamp((p - 0.6) / 0.4, 0, 1);
+    // Днём светло; вечер — последняя четверть смены: фонари, неон, тёплый свет.
+    const evening = Phaser.Math.Clamp((p - EVENING_FROM) / (1 - EVENING_FROM), 0, 1);
     this.evening = evening;
     music.setMood(evening > 0.5 ? 'evening' : 'day');
     if (this.vignette) {
-      this.vignette.strength = 0.2 + 0.3 * evening;
+      this.vignette.strength = 0.1 + 0.4 * evening;
       this.vignette.radius = 0.95 - 0.12 * evening;
     }
     for (const g of this.lampGlows) g.setAlpha(0.7 * evening);
@@ -3283,7 +3301,7 @@ export class StoreScene extends Phaser.Scene {
       this.dragStart = { x: p.x, y: p.y };
     });
     this.input.addPointer(1);
-    const zoomTo = (z: number) => cam.setZoom(Phaser.Math.Clamp(z, this.baseZoom * 0.6, this.baseZoom * 2.2));
+    const zoomTo = (z: number) => cam.setZoom(Phaser.Math.Clamp(z, this.baseZoom * 0.5, this.baseZoom * 2.2));
     // Колёсико на компьютере.
     this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       zoomTo(cam.zoom * (dy > 0 ? 0.9 : 1.1));

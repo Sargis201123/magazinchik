@@ -1,9 +1,13 @@
 import { t, type TextKey } from '../i18n';
-import { onShelves, PRODUCTS, sellableProducts, warehouseCount, type DayStats, type StoreState } from '../game/economy';
+import { onShelves, PRODUCTS, sellableProducts, warehouseCapacity, warehouseCount, type DayStats, type StoreState } from '../game/economy';
 import { button, curtain, el, injectStyles, openModal, pixelize } from './dom';
 import type { Review } from '../game/reviews';
 import { reviewCards } from './reviews';
 import type { LossAdvice } from '../game/losses';
+
+/** Сколько штук на полках считается «мало» и сколько таких товаров показывать в панели. */
+const LOW_ON_SHELF = 3;
+const LOW_SHOWN = 6;
 
 /** Цвета причин ухода — те же, что в полоске. */
 const LOSS_COLORS = { queue: '#f77622', empty: '#8b9bb4', expensive: '#e43b44', eduard: '#68386c' } as const;
@@ -74,13 +78,21 @@ export class Hud {
     if (this.clock.textContent !== clock) this.clock.textContent = clock;
     const stars = '★'.repeat(Math.round(state.rating)).padEnd(5, '☆');
     if (this.stars.textContent !== stars) this.stars.textContent = stars;
-    const shelves = sellableProducts(state).map((id) => `${PRODUCTS[id].icon}${onShelves(state, id)}`);
-    const stock = `${shelves.join('  ')}   📦${warehouseCount(state)}${quests ? `   ${quests}` : ''}`;
+    // Только то, что на полках кончается: пусто — красным, мало — жёлтым. Остальное — в закупке.
+    const low = sellableProducts(state)
+      .map((id) => ({ id, n: onShelves(state, id) }))
+      .filter((p) => p.n <= LOW_ON_SHELF)
+      .sort((a, b) => a.n - b.n);
+    const shown = low.slice(0, LOW_SHOWN);
+    const key = `${shown.map((p) => `${p.id}${p.n}`).join()}|${low.length}|${warehouseCount(state)}/${warehouseCapacity(state)}|${quests}`;
     // Перерисовываем только когда что-то изменилось: update зовётся каждый кадр.
-    if (stock === this.lastStock) return;
-    this.lastStock = stock;
-    this.stock.textContent = stock;
-    this.stock.classList.toggle('dense', shelves.length > 7);
+    if (key === this.lastStock) return;
+    this.lastStock = key;
+    const parts: HTMLElement[] = [el('span', 'ui-stock-wh', `📦 ${warehouseCount(state)}/${warehouseCapacity(state)}`)];
+    for (const p of shown) parts.push(el('span', p.n === 0 ? 'ui-stock-out' : 'ui-stock-low', `${PRODUCTS[p.id].icon}${p.n}`));
+    if (low.length > shown.length) parts.push(el('span', 'ui-stock-low', `+${low.length - shown.length}`));
+    if (quests) parts.push(el('span', 'ui-stock-wh', quests));
+    this.stock.replaceChildren(...parts);
     pixelize(this.stock);
   }
 
