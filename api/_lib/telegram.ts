@@ -126,7 +126,22 @@ export const STARS_CATALOG: Record<string, { stars: number; ru: string; en: stri
 
 /** Сезонный пропуск (src/game/pass.ts): у каждого сезона свой номер, цена одна (совпадает с pass.ts — проверяет тест). */
 export const PASS_STARS = 100;
-const PASS_RE = /^pass_(\d{1,4})$/;
+const PASS_RE = /^pass_([1-9]\d{0,3})$/;
+
+/** Сезоны пропуска (как в src/game/pass.ts — проверяется тестом): с 19 октября 2026 по 28 дней. */
+export const PASS_EPOCH = Date.UTC(2026, 9, 19);
+export const PASS_SEASON_DAYS = 28;
+export const passSeason = (now: number): number => Math.max(1, Math.floor((now - PASS_EPOCH) / (PASS_SEASON_DAYS * 24 * 3600_000)) + 1);
+
+/**
+ * Что можно купить сейчас: вещь из каталога или пропуск текущего сезона (и прошлого — если сезон
+ * сменился, пока открыт экран). Старые пропуска остаются в catalogItem — для восстановления покупок.
+ */
+export function canBuy(id: string, now = Date.now()): boolean {
+  if (STARS_CATALOG[id]) return true;
+  const season = passSeason(now);
+  return id === `pass_${season}` || (season > 1 && id === `pass_${season - 1}`);
+}
 
 /** Вещь из каталога или пропуск сезона. */
 export function catalogItem(id: string): { stars: number; ru: string; en: string } | undefined {

@@ -43,6 +43,13 @@ describe('наследие: продать бизнес и начать зано
     expect(legacyOf(fresh)).toMatchObject({ gen: 1, points: 6 });
   });
 
+  it('новый магазин не даёт забрать награды недели второй раз и не теряет пропуск', () => {
+    const pass = { season: 1, xp: 420, free: [1, 2], premium: [] as number[], paid: true };
+    const fresh = restartGame({ ...done(), duelClaimed: 30, guildClaimed: 30, rushClaimed: 29, pass } as StoreState);
+    expect(fresh).toMatchObject({ duelClaimed: 30, guildClaimed: 30, rushClaimed: 29 });
+    expect(fresh.pass).toEqual(pass);
+  });
+
   it('не хватает очков — нельзя', () => {
     const s = { ...done(), legacy: { gen: 1, points: 0, perks: {} } };
     expect(buyPerk(s, 'crowd')).toBeNull();

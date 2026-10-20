@@ -4,7 +4,7 @@
 import { commandReply, setupProfile } from './botProfile.js';
 import { recordReferral } from './social.js';
 import { recordGuildInvite } from './guild.js';
-import { bot, itemFromPayload, json, catalogItem, ownedFrom, payloadFor, verifyInitData, type Env, type StarTransaction } from './telegram.js';
+import { bot, canBuy, itemFromPayload, json, catalogItem, ownedFrom, payloadFor, verifyInitData, type Env, type StarTransaction } from './telegram.js';
 
 /** POST /api/stars-invoice { initData, item } → { link }: счёт в звёздах на одну вещь оформления. */
 export async function starsInvoice(request: Request, env: Env): Promise<Response> {
@@ -13,7 +13,7 @@ export async function starsInvoice(request: Request, env: Env): Promise<Response
   const body = (await request.json().catch(() => ({}))) as { initData?: string; item?: string };
   const user = await verifyInitData(body.initData ?? '', token);
   if (!user) return json({ error: 'bad_init_data' }, 401);
-  const item = body.item ? catalogItem(body.item) : undefined;
+  const item = body.item && canBuy(body.item) ? catalogItem(body.item) : undefined;
   if (!item) return json({ error: 'unknown_item' }, 400);
   const ru = (user.language_code ?? 'ru').startsWith('ru') || !user.language_code;
   const title = ru ? item.ru : item.en;
@@ -36,8 +36,16 @@ export async function starsInvoice(request: Request, env: Env): Promise<Response
 const PAGE = 100;
 const MAX_PAGES = 50;
 
-/** Все платежи бота в звёздах (постранично). */
+/** Список платежей держим в памяти воркера минуту: игра спрашивает его при каждом запуске. */
+const CACHE_MS = 60_000;
+let cache: { at: number; list: StarTransaction[] } | null = null;
+export const resetStarsCache = (): void => {
+  cache = null;
+};
+
+/** Все платежи бота в звёздах (постранично, с кэшем на минуту). */
 async function allTransactions(token: string): Promise<StarTransaction[]> {
+  if (cache && Date.now() - cache.at < CACHE_MS) return cache.list;
   const all: StarTransaction[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
     const { transactions } = await bot<{ transactions: StarTransaction[] }>(token, 'getStarTransactions', {
@@ -47,6 +55,7 @@ async function allTransactions(token: string): Promise<StarTransaction[]> {
     all.push(...transactions);
     if (transactions.length < PAGE) break;
   }
+  cache = { at: Date.now(), list: all };
   return all;
 }
 
@@ -93,6 +102,8 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
     const ru = (message.from?.language_code ?? 'ru').startsWith('ru');
     const app = `https://${new URL(request.url).host}/`;
     if (message.successful_payment) {
+      // Новая покупка: при следующем восстановлении перечитать платежи.
+      resetStarsCache();
       const id = itemFromPayload(message.successful_payment.invoice_payload);
       const name = id ? catalogItem(id)![ru ? 'ru' : 'en'] : '';
       await bot(token, 'sendMessage', {

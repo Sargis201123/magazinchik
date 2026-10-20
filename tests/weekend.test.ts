@@ -74,11 +74,11 @@ describe.skipIf(!Database)('«Чёрная пятница района» (сер
     await progress(await post(1, { revenue: 0 }), env);
     await progress(await post(2, { revenue: 0 }), env);
     await progress(await post(3, { revenue: 0 }), env);
-    await markWeekend(db, 1, 10000, SAT);
-    await markWeekend(db, 2, 5000, SAT);
-    await markWeekend(db, 1, 18000, SAT + DAY);
-    await markWeekend(db, 2, 11000, SAT + DAY);
-    await markWeekend(db, 1, 99999, MON); // в будни не считается
+    await markWeekend(db, 1, 10000, 10000, SAT);
+    await markWeekend(db, 2, 5000, 5000, SAT);
+    await markWeekend(db, 1, 18000, 18000, SAT + DAY);
+    await markWeekend(db, 2, 11000, 11000, SAT + DAY);
+    await markWeekend(db, 1, 99999, 99999, MON); // в будни не считается
     type W = { active: boolean; total: number; players: number; me: { revenue: number; rank: number }; top: { revenue: number; me?: boolean }[]; last?: { rank: number; revenue: number; players: number } };
     const live = await json<W>(weekend(await post(2), env, SAT + DAY));
     expect(live).toMatchObject({ active: true, total: 14000, players: 2, me: { revenue: 6000, rank: 2 } });

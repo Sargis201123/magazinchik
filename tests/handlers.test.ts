@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { starsInvoice, starsOwned, starsRefund, starsSetup, telegramWebhook } from '../api/_lib/handlers';
+import { resetStarsCache, starsInvoice, starsOwned, starsRefund, starsSetup, telegramWebhook } from '../api/_lib/handlers';
 import { SUPPORT } from '../api/_lib/botProfile';
 import { payloadFor, STARS_CATALOG, type Env } from '../api/_lib/telegram';
 
@@ -26,6 +26,7 @@ const post = (body: unknown, headers: Record<string, string> = {}) =>
 let calls: { method: string; body: Record<string, unknown> }[] = [];
 let replies: Record<string, unknown[]> = {};
 beforeEach(() => {
+  resetStarsCache();
   calls = [];
   replies = {};
   vi.stubGlobal('fetch', async (url: string, init: { body: string }) => {

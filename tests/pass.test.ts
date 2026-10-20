@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { newGame, type StoreState } from '../src/game/economy';
 import { addPassXp, claimPass, ensureSeason, grantPass, passCoins, passDecor, passItem, passLevel, passReady, PASS_STARS, seasonDaysLeft, seasonOf, XP_PER_LEVEL } from '../src/game/pass';
-import { catalogItem, PASS_STARS as SERVER_PASS_STARS, itemFromPayload, ownedFrom } from '../api/_lib/telegram';
+import { canBuy, catalogItem, passSeason, PASS_STARS as SERVER_PASS_STARS, itemFromPayload, ownedFrom } from '../api/_lib/telegram';
 
 const DAY = 24 * 3600_000;
 const START = Date.UTC(2026, 9, 19);
@@ -47,5 +47,16 @@ describe('сезонный пропуск', () => {
     expect(itemFromPayload('decor:pass_3')).toBe('pass_3');
     const tx = { id: 'a', amount: PASS_STARS, source: { type: 'user', user: { id: 7 }, invoice_payload: 'decor:pass_3' } };
     expect(ownedFrom([tx], 7)).toEqual(['pass_3']);
+  });
+
+  it('продаётся только пропуск текущего сезона (и прошлого на стыке)', () => {
+    const now = Date.UTC(2026, 11, 1);
+    expect(passSeason(now)).toBe(seasonOf(now));
+    const season = seasonOf(now);
+    expect(canBuy(`pass_${season}`, now)).toBe(true);
+    expect(canBuy(`pass_${season - 1}`, now)).toBe(true);
+    expect(canBuy(`pass_${season + 1}`, now)).toBe(false);
+    expect(canBuy(`pass_0${season}`, now)).toBe(false);
+    expect(canBuy('pass_0', now)).toBe(false);
   });
 });
