@@ -4791,6 +4791,9 @@ def main():
     import faces
 
     faces.main()
+    import emotes2
+
+    emotes2.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
