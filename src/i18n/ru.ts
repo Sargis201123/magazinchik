@@ -1129,6 +1129,8 @@ export const ru = {
   "title.fullOn": "⛶ Во весь экран: вкл",
   "title.fullOff": "⛶ Во весь экран: выкл",
   "title.home": "📲 На главный экран",
+  "boot.loading": "Бабушка открывает магазин…",
+  "boot.sync": "Сверяем сохранение…",
   "records.title": "🏆 Мои рекорды",
   "records.empty": "Рекорды появятся после первого рабочего дня.",
   "records.revenue": "Выручка за день",

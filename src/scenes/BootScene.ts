@@ -1,6 +1,7 @@
 import { PRODUCT_IDS } from '../game/economy';
 import Phaser from 'phaser';
 import { syncSave } from '../game/save';
+import { t } from '../i18n';
 import { WARDROBE_TEXTURES } from './wardrobe';
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
@@ -313,12 +314,26 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    const splash = document.getElementById('splash');
+    const bar = splash?.querySelector<HTMLElement>('.bar');
+    const txt = splash?.querySelector('.txt');
+    if (txt) txt.textContent = t('boot.loading');
+    this.load.on('progress', (p: number) => bar?.style.setProperty('--p', p.toFixed(3)));
     for (const key of [...SPRITES, ...WARDROBE_TEXTURES]) this.load.image(key, `assets/${key}.png`);
   }
 
   create(): void {
     // Сначала сверить сохранение с облаком Telegram (не дольше пары секунд), потом — в магазин.
-    const start = () => this.scene.isActive('boot') && this.scene.start('store');
+    const splash = document.getElementById('splash');
+    const txt = splash?.querySelector('.txt');
+    if (txt) txt.textContent = t('boot.sync');
+    const start = () => {
+      if (!this.scene.isActive('boot')) return;
+      this.scene.start('store');
+      // Заставка тает, когда магазин уже нарисован.
+      splash?.classList.add('gone');
+      setTimeout(() => splash?.remove(), 500);
+    };
     const timer = setTimeout(start, 4000);
     // Надписи на холсте рисуются один раз — дождаться шрифта, иначе останутся системным.
     const font = document.fonts?.load(`600 16px "Nunito Variable"`).catch(() => []) ?? Promise.resolve([]);
