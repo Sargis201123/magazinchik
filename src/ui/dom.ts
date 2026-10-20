@@ -44,6 +44,8 @@ const css = `
 .ui-who b, .ui-who h3 { margin: 0; }
 .ui-card h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; }
 .ui-card h3 { margin: 14px 0 6px; font-size: 15px; }
+.ui-box.ui-tale { background: #e8f4ff; border-color: #5fb4f0; }
+.ui-tale p { margin: 6px 0 8px; line-height: 1.35; }
 .ui-box.ui-goals { background: #fff3b0; border-color: #f7c948; }
 .ui-goals .ui-goals-week { display: block; margin-top: 8px; }
 .ui-goal-reward { color: #3e8948; white-space: nowrap; }
