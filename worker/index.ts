@@ -9,6 +9,7 @@ import { leaderboard, progress, stats } from '../api/_lib/stats.js';
 import { duel, guild } from '../api/_lib/guild.js';
 import { weekend } from '../api/_lib/weekend.js';
 import { visits } from '../api/_lib/visits.js';
+import { sendNewspapers } from '../api/_lib/newspaper.js';
 import type { Env } from '../api/_lib/telegram.js';
 
 interface WorkerEnv extends Env {
@@ -45,8 +46,9 @@ export default {
       return new Response(JSON.stringify({ error: 'server_error' }), { status: 500, headers: { 'content-type': 'application/json' } });
     }
   },
-  /** Cron (wrangler.jsonc → triggers): раз в час — напоминания тем, кто давно не заходил. */
+  /** Cron (wrangler.jsonc → triggers): раз в час — напоминания и, по понедельникам, газета района. */
   async scheduled(_event: unknown, env: WorkerEnv): Promise<void> {
     await sendReminders(env);
+    await sendNewspapers(env);
   },
 };

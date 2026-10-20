@@ -30,7 +30,7 @@ export async function markWeek(db: D1, id: number, revenue: number, now: number)
 }
 
 /** Выручка игрока за неделю: от начала этой недели до начала следующей (или до сейчас). */
-async function weekRevenue(db: D1, id: number, week: number): Promise<number> {
+export async function weekRevenue(db: D1, id: number, week: number): Promise<number> {
   const start = await db.prepare('SELECT revenue FROM week_start WHERE id = ? AND week = ?').bind(id, week).first<{ revenue: number }>();
   if (!start) return 0;
   const next = await db.prepare('SELECT revenue FROM week_start WHERE id = ? AND week = ?').bind(id, week + 1).first<{ revenue: number }>();
@@ -38,7 +38,7 @@ async function weekRevenue(db: D1, id: number, week: number): Promise<number> {
   return Math.max(0, (end?.revenue ?? start.revenue) - start.revenue);
 }
 
-const nameOf = async (db: D1, id: number): Promise<string> =>
+export const nameOf = async (db: D1, id: number): Promise<string> =>
   (await db.prepare('SELECT name FROM progress WHERE id = ?').bind(id).first<{ name: string }>())?.name ?? '—';
 
 async function auth(request: Request, env: Env): Promise<{ db: D1; user: number; body: Record<string, unknown> } | Response> {
@@ -93,7 +93,7 @@ export async function duel(request: Request, env: Env, now = Date.now()): Promis
   return json({ enabled: true, week, daysLeft: daysLeft(now), rival, last });
 }
 
-async function guildOf(db: D1, user: number): Promise<{ id: number; code: string; name: string; owner: number } | null> {
+export async function guildOf(db: D1, user: number): Promise<{ id: number; code: string; name: string; owner: number } | null> {
   return db
     .prepare('SELECT g.id, g.code, g.name, g.owner FROM guild_members m JOIN guilds g ON g.id = m.guild WHERE m.player = ?')
     .bind(user)
@@ -123,7 +123,7 @@ const weekStart = (week: number): number => (week * 7 - 3) * DAY;
  * Выполнена ли цель прошлой недели: считается один раз и запоминается. Считаются только те,
  * кто был в гильдии до конца той недели, — новички в понедельник прошлую неделю не «доделают».
  */
-async function lastResult(db: D1, guild: number, week: number): Promise<boolean | null> {
+export async function lastResult(db: D1, guild: number, week: number): Promise<boolean | null> {
   const saved = await db.prepare('SELECT reached FROM guild_results WHERE guild = ? AND week = ?').bind(guild, week).first<{ reached: number }>();
   if (saved) return saved.reached === 1;
   const target = await db.prepare('SELECT target FROM guild_weeks WHERE guild = ? AND week = ?').bind(guild, week).first<{ target: number }>();

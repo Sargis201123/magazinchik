@@ -26,14 +26,14 @@ interface Standing {
   rank: number | null;
 }
 
-async function standing(db: D1, id: number, week: number): Promise<Standing> {
+export async function standing(db: D1, id: number, week: number): Promise<Standing> {
   const me = await db.prepare('SELECT last - start AS revenue FROM weekend WHERE id = ? AND week = ?').bind(id, week).first<{ revenue: number }>();
   if (!me) return { revenue: 0, rank: null };
   const above = await db.prepare('SELECT COUNT(*) AS n FROM weekend WHERE week = ? AND last - start > ?').bind(week, me.revenue).first<{ n: number }>();
   return { revenue: me.revenue, rank: (above?.n ?? 0) + 1 };
 }
 
-async function summary(db: D1, week: number): Promise<{ total: number; players: number }> {
+export async function summary(db: D1, week: number): Promise<{ total: number; players: number }> {
   const row = await db.prepare('SELECT COALESCE(SUM(last - start), 0) AS total, COUNT(*) AS players FROM weekend WHERE week = ? AND last > start').bind(week).first<{ total: number; players: number }>();
   return { total: row?.total ?? 0, players: row?.players ?? 0 };
 }
