@@ -36,6 +36,18 @@ const css = `
 .ui-sign p { margin: 0; padding: 0 12px 16px; color: #c0cbdc; font-size: 14px; }
 .ui-title .ui-btn { max-width: 300px; font-size: 18px; padding: 14px; }
 .ui-title .ui-chips { justify-content: center; }
+/* «Играть» — главная кнопка: объёмная, с бликом, мягко дышит и зовёт нажать. */
+.ui-title .ui-btn.ui-play { position: relative; overflow: hidden; font-size: 22px; font-weight: 800; letter-spacing: .5px; color: #fff;
+  text-shadow: 0 2px 0 #2b2233; background: linear-gradient(#a8e283 0 50%, #7fc659 50%); border-width: 4px; border-radius: 8px;
+  box-shadow: inset 0 3px 0 rgba(255,255,255,.5), inset 0 -4px 0 rgba(43,34,51,.18), 0 5px 0 #2b2233, 0 0 26px rgba(143,209,106,.35);
+  animation: ui-play-breathe 2.4s ease-in-out 1.2s infinite; }
+.ui-title .ui-btn.ui-play::after { content: ''; position: absolute; top: -20%; bottom: -20%; left: -40%; width: 28%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); transform: skewX(-20deg);
+  animation: ui-play-shine 3.2s ease-in-out 1.6s infinite; pointer-events: none; }
+.ui-title .ui-btn.ui-play:active { animation: none; transform: translateY(3px) scale(.98); box-shadow: inset 0 3px 0 rgba(255,255,255,.5), 0 2px 0 #2b2233; }
+@keyframes ui-play-breathe { 50% { transform: scale(1.03); } }
+@keyframes ui-play-shine { 0% { left: -40%; } 45%, 100% { left: 120%; } }
+@media (prefers-reduced-motion: reduce) { .ui-title .ui-btn.ui-play, .ui-title .ui-btn.ui-play::after { animation: none; } }
 .ui-title .ui-muted { color: #8b9bb4; }
 `;
 
@@ -74,7 +86,7 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
       root.remove();
       document.body.classList.remove('ui-on-title');
       onPlay();
-    });
+    }, 'ui-btn ui-play');
     const progress = save ? el('div', 'ui-muted', t('title.progress', { day: save.day, money: save.money })) : null;
 
     const langs = el('div', 'ui-chips');
