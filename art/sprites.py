@@ -4767,6 +4767,10 @@ def main():
     import boat
 
     boat.main()
+    # Детали крыш и крупный газон (перерисовывает grass) — последними.
+    import rooftops
+
+    rooftops.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

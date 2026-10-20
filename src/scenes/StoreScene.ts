@@ -247,7 +247,9 @@ const CAR_TYPES: [string, number | null, number][] = [
 type Popup = { label: Phaser.GameObjects.Text; text: string; count: number; fade?: Phaser.Tweens.Tween };
 
 /** Здание по соседству; back — отступ от тротуара (у кафе перед ним веранда). */
-type Neighbor = { x: number; w: number; h: number; name: TextKey; label?: string; sign: number; awning: number; roof: number; neon: number; dark?: boolean; back?: number };
+/** Особая крыша: вертолётная площадка, красный крест, бельё, солнечные панели (art/rooftops.py). */
+type RoofKit = 'office' | 'clinic' | 'dorm' | 'school';
+type Neighbor = { x: number; w: number; h: number; name: TextKey; label?: string; sign: number; awning: number; roof: number; neon: number; dark?: boolean; back?: number; roofKit?: RoofKit };
 
 /** Помещение конкурента: пустует, «МегаМарт» по сюжету, а после сюжета — боссы района по очереди. */
 const RIVAL_LOOKS: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
@@ -256,7 +258,7 @@ const RIVAL_LOOKS: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
   kiosk: { h: 110, name: 'eduard.stage1', sign: 0x68386c, awning: 0xb55088, roof: 0xe0c8dc, neon: 0xff8ad8 },
   discount: { h: 145, name: 'eduard.stage2', sign: 0xb13e53, awning: 0xfee761, roof: 0xf2e6c8, neon: 0xffd040 },
   farm: { h: 135, name: 'eduard.stage3', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd8e4c0, neon: 0x9cff7a },
-  mall: { h: 190, name: 'eduard.stage4', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040 },
+  mall: { h: 190, name: 'eduard.stage4', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040, roofKit: 'office' },
 };
 
 /** Друзья в гостях: сколько за день, чаевые за уровень их магазина, подарок за угощение (как на сервере). */
@@ -3631,10 +3633,7 @@ export class StoreScene extends Phaser.Scene {
     this.add.tileSprite(n.x, roofY, n.w, n.h - FACADE_H, 'roof').setOrigin(0).setTileScale(1 / ART).setTint(n.roof).setDepth(-3);
     this.add.tileSprite(n.x - 2, (across ? bottom : top) - 3, n.w + 4, 3, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(-3);
     this.add.tileSprite(n.x, front - FACADE_H, n.w, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(front - 5);
-    // Кондиционеры и окна в крыше (у большого молла — больше).
-    for (let i = 0; i < Math.max(3, Math.round(n.h / 45)); i++) {
-      this.art(n.x + 14 + rnd.frac() * (n.w - 28), roofY + 12 + rnd.frac() * (n.h - 40), i === 0 ? 'skylight' : 'ac_unit').setDepth(-2);
-    }
+    this.dressRoof(n, roofY, n.h - FACADE_H, across, rnd);
     // Витрины, дверь и навес.
     const doorX = across ? n.x + n.w / 2 : n.x + n.w * 0.62;
     this.art(doorX, front - 5, 'door').setDepth(front - 4);
@@ -3656,6 +3655,57 @@ export class StoreScene extends Phaser.Scene {
       .setResolution(4)
       .setDepth(signDepth + 1);
     if (n.neon) this.neonSign(n.x + n.w / 2, signY, n.label ?? t(n.name), '6px', n.neon, 64);
+  }
+
+  /**
+   * Крыша сверху: тень здания на газоне, парапет по краю (светлый к солнцу, тёмный в тень)
+   * и что стоит на кровле — вытяжки, кондиционеры, люки, тарелки, баки, трубы. У зданий района
+   * своё: вертолётная площадка, красный крест, бельё на верёвках, солнечные панели.
+   */
+  private dressRoof(n: Neighbor, y: number, h: number, across: boolean, rnd: Phaser.Math.RandomDataGenerator): void {
+    const { x, w } = n;
+    // Тень — вправо и (у зданий за дорогой) вниз, на газон.
+    this.add.rectangle(x + w, y + 6, 6, h + (across ? FACADE_H - 6 : -6), 0x181425, 0.16).setOrigin(0).setDepth(-9.4);
+    if (across) this.add.rectangle(x + 6, y + h, w, 6, 0x181425, 0.16).setOrigin(0).setDepth(-9.4);
+    // Парапет.
+    const tone = Phaser.Display.Color.ValueToColor(n.roof);
+    const light = tone.clone().lighten(14).color;
+    const dark = tone.clone().darken(26).color;
+    const edge = (ex: number, ey: number, ew: number, eh: number, color: number) => this.add.rectangle(ex, ey, ew, eh, color).setOrigin(0).setDepth(-2.95);
+    edge(x, y, w, 3, light);
+    edge(x, y, 3, h, light);
+    edge(x, y + h - 3, w, 3, dark);
+    edge(x + w - 3, y, 3, h, dark);
+    // Тень от парапета на кровле.
+    this.add.rectangle(x + 3, y + 3, w - 6, 2, 0x181425, 0.12).setOrigin(0).setDepth(-2.94);
+    this.add.rectangle(x + 3, y + 3, 2, h - 6, 0x181425, 0.12).setOrigin(0).setDepth(-2.94);
+    // Особая крыша — в середине; остальное — по клеткам вокруг, без наложений.
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    const busy: { x: number; y: number; r: number }[] = [];
+    // Кровельные предметы крупнее обычного спрайта: крыши видно с высоты, мелочь там теряется.
+    const put = (px: number, py: number, key: string, r: number, scale = 1.4) => {
+      this.art(px, py, key).setScale(scale / ART).setDepth(-2);
+      busy.push({ x: px, y: py, r });
+    };
+    if (n.roofKit === 'office' && w >= 70 && h >= 60) put(cx, cy, 'roof_helipad', 32, 2.6);
+    if (n.roofKit === 'clinic') put(cx, cy, 'roof_cross', 26, 3);
+    if (n.roofKit === 'dorm') {
+      put(cx - 6, cy - 12, 'roof_laundry', 30, 1.8);
+      put(x + w - 22, y + h - 24, 'roof_tank', 16, 1.6);
+    }
+    if (n.roofKit === 'school') {
+      for (const dx of [-26, 0, 26]) put(cx + dx, cy - 8, 'roof_solar', 18, 1.6);
+    }
+    const kinds = ['roof_vent', 'ac_unit', 'roof_hatch', 'ac_unit', 'roof_dish', 'skylight', 'roof_vent', 'roof_pipe', 'roof_tank', 'ac_unit'];
+    const count = Math.max(4, Math.round((w * h) / 1500));
+    for (let i = 0, tries = 0; i < count && tries < count * 10; tries++) {
+      const px = x + 14 + rnd.frac() * (w - 28);
+      const py = y + 14 + rnd.frac() * (h - 28);
+      if (busy.some((b) => Math.hypot(b.x - px, b.y - py) < b.r + 11)) continue;
+      put(px, py, kinds[rnd.between(0, kinds.length - 1)], 10);
+      i++;
+    }
   }
 
   /**
@@ -3700,10 +3750,17 @@ export class StoreScene extends Phaser.Scene {
     const left = -400;
     const width = next.w + 800;
     const top = next.h + 4;
+    // Газон с запасом за краями квартала: когда отдаляешь камеру, мир не обрывается в темноту.
+    tile(left - 400, -800, width + 800, top + 1600, 'grass');
     this.streetY = top + 12;
     this.lawns = [
       { x: left, y: -400, w: width, h: top + 400 },
       { x: left, y: top + 88, w: width, h: 300 },
+      // Газон за краями квартала (снег зимой — и там).
+      { x: left - 400, y: -800, w: width + 800, h: 400 },
+      { x: left - 400, y: top + 388, w: width + 800, h: 412 },
+      { x: left - 400, y: -400, w: 400, h: top + 788 },
+      { x: left + width, y: -400, w: 400, h: top + 788 },
     ];
     tile(left, -400, width, top + 400, 'grass');
     tile(left, top, width, 22, 'paving');
@@ -3754,7 +3811,7 @@ export class StoreScene extends Phaser.Scene {
       this.art(door.x, top + 92, key).setOrigin(0.5, 0).setDepth(top + 92 + 88);
     }
     // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
-    const districtAreas = this.buildDistrict(next, top);
+    const districtAreas = [...this.buildDistrict(next, top), ...this.buildPark(next, top), this.buildParking(next)];
     const inArea = (px: number, py: number, a: { x: number; y: number; w: number; h: number }) => px > a.x - 6 && px < a.x + a.w + 6 && py > a.y - 6 && py < a.y + a.h + 14;
     const scatter = (y0: number, y1: number) => {
       for (let y = y0; y < y1; y += 40) {
@@ -3773,7 +3830,7 @@ export class StoreScene extends Phaser.Scene {
       }
     };
     scatter(-380, Math.min(-40, top - 230));
-    scatter(top + 104, top + 300);
+    scatter(top + 104, top + 470);
   }
 
   /**
@@ -3818,9 +3875,103 @@ export class StoreScene extends Phaser.Scene {
         this.buildStadium(spot, name);
         continue;
       }
-      this.drawNeighbor({ ...looks[id], x: spot.x, w: spot.w, h: spot.h, name: 'district.school', label: `${BUILDINGS[id].icon} ${name}` }, spot.y + spot.h, rnd, true);
+      this.drawNeighbor({ ...looks[id], x: spot.x, w: spot.w, h: spot.h, name: 'district.school', label: `${BUILDINGS[id].icon} ${name}`, roofKit: id }, spot.y + spot.h, rnd, true);
+      // У школы на тротуаре — флагшток.
+      if (id === 'school') this.art(spot.x + 8, spot.y + 4, 'flagpole').setOrigin(0.5, 1).setDepth(spot.y + 44);
     }
     return areas;
+  }
+
+  /**
+   * Парк за домами напротив: аллея с фонарями и скамейками, пруд с утками и камышом, клумбы.
+   * Возвращает занятые места — сквер не сажает туда деревья.
+   */
+  private buildPark(next: Layout, top: number): { x: number; y: number; w: number; h: number }[] {
+    const d = this.layout.door.x;
+    const areas: { x: number; y: number; w: number; h: number }[] = [];
+    // Аллея поперёк парка.
+    const alley = top + 268;
+    this.add.tileSprite(-560, alley, next.w + 1120, 12, 'paving').setOrigin(0).setTileScale(1 / ART).setDepth(-9.46);
+    this.add.rectangle(-560, alley + 12, next.w + 1120, 1, 0x181425, 0.15).setOrigin(0).setDepth(-9.45);
+    areas.push({ x: -560, y: alley - 4, w: next.w + 1120, h: 20 });
+    for (let x = -520; x < next.w + 520; x += 96) {
+      this.art(x, alley + 2, 'lamp').setOrigin(0.5, 0.95).setDepth(alley + 2);
+      this.art(x + 40, alley + 1, 'bench').setDepth(alley + 1);
+    }
+    // Пруд: берег, вода, блики, камыш и утки. Всё — над снегом на газоне (-9.5).
+    const px = d + 90;
+    const py = alley + 70;
+    this.add.ellipse(px, py, 172, 78, 0xd8b88a).setDepth(-9.46);
+    // Зимой пруд замерзает: лёд с трещинками, уток нет.
+    const frozen = this.weather === 'snow' || yearTime(this.state.day) === 'winter';
+    this.add.ellipse(px, py, 160, 68, frozen ? 0xa8cce4 : 0x3b8fc8).setDepth(-9.45);
+    this.add.ellipse(px - 6, py - 4, 136, 50, frozen ? 0xd8ecf8 : 0x4aa3df).setDepth(-9.44);
+    for (const [bx, by, bw] of [
+      [-40, -14, 22],
+      [18, 6, 30],
+      [-8, 14, 14],
+    ] as const) {
+      this.add.rectangle(px + bx, py + by, bw, 1.5, 0xbfe8ff, 0.8).setDepth(-9.43);
+    }
+    for (const [rx, ry] of [
+      [-74, -6],
+      [-70, 6],
+      [72, -10],
+      [76, 2],
+    ] as const) {
+      for (let i = 0; i < 4; i++) this.add.rectangle(px + rx + i * 2, py + ry - (i % 2) * 3, 1.2, 7 + (i % 2) * 3, 0x3e8948).setOrigin(0.5, 1).setDepth(py + ry);
+    }
+    for (const [ux, uy] of frozen ? [] : ([
+      [-22, -6],
+      [-12, 2],
+      [30, -2],
+    ] as const)) {
+      const duck = this.add.container(px + ux, py + uy).setDepth(-9.42);
+      duck.add([this.add.ellipse(0, 0, 7, 4, 0xffffff), this.add.circle(3, -2, 1.6, 0xffffff), this.add.rectangle(5, -2, 2, 1, 0xfeae34)]);
+      this.tweens.add({ targets: duck, x: duck.x + Phaser.Math.Between(-14, 14), duration: Phaser.Math.Between(5000, 8000), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    areas.push({ x: px - 92, y: py - 44, w: 184, h: 88 });
+    // Клумбы вдоль аллеи.
+    const flowers = [0xffffff, 0xf6757a, 0xfee761, 0xb55088, 0xe43b44];
+    const rnd = new Phaser.Math.RandomDataGenerator(['park-beds']);
+    for (const bx of [d - 260, d - 120, d + 250]) {
+      const by = alley + 26;
+      this.add.rectangle(bx, by, 64, 22, 0x8f563b).setOrigin(0).setDepth(-9.46);
+      this.add.rectangle(bx + 2, by + 2, 60, 18, 0x733e39).setOrigin(0).setDepth(-9.45);
+      for (let i = 0; i < 9; i++) {
+        this.art(bx + 7 + (i % 5) * 12 + rnd.between(-2, 2), by + 7 + Math.floor(i / 5) * 9, rnd.frac() < 0.6 ? 'flower' : 'tulips')
+          .setTint(rnd.pick(flowers))
+          .setDepth(by + 10);
+      }
+      areas.push({ x: bx, y: by, w: 64, h: 22 });
+    }
+    return areas;
+  }
+
+  /** Парковка за магазином: разметка, машины соседей и наших покупателей. */
+  private buildParking(next: Layout): { x: number; y: number; w: number; h: number } {
+    const w = 210;
+    const h = 96;
+    const x = next.w / 2 - w / 2;
+    const y = -160;
+    this.add.tileSprite(x, y, w, h, 'asphalt').setOrigin(0).setTileScale(1 / ART).setDepth(-9.46);
+    this.add.rectangle(x, y, w, 2, 0x8b9bb4).setOrigin(0).setDepth(-9.45);
+    this.add.rectangle(x, y + h - 2, w, 2, 0x8b9bb4).setOrigin(0).setDepth(-9.45);
+    const rnd = new Phaser.Math.RandomDataGenerator(['parking']);
+    // Два ряда мест: машины стоят носом к проезду посередине.
+    for (const row of [0, 1]) {
+      const ry = row === 0 ? y + 4 : y + h - 30;
+      for (let i = 0; i <= 5; i++) this.add.rectangle(x + 6 + i * 33, ry, 1.5, 26, 0xe6e1d6).setOrigin(0).setDepth(-9.45);
+      for (let i = 0; i < 5; i++) {
+        if (rnd.frac() < 0.3) continue;
+        const [key, color] = rnd.pick(CAR_TYPES.filter(([k]) => k !== 'car_truck'));
+        // За зданием глубина отрицательная: над асфальтом, но под крышами (как сквер).
+        const car = this.art(x + 22 + i * 33, ry + 13, key).setAngle(90).setDepth(-9.41 + row * 0.001);
+        if (color !== null) car.setTint(color || rnd.pick(CAR_COLORS));
+      }
+    }
+    this.add.text(x + w / 2, y + h / 2, 'P', { fontFamily: UI_FONT, fontSize: '10px', color: '#e6e1d6', fontStyle: 'bold' }).setOrigin(0.5).setResolution(4).setDepth(-9.44).setAlpha(0.7);
+    return { x: x - 8, y: y - 8, w: w + 16, h: h + 16 };
   }
 
   /** Стройка: забор, котлован, кран и табличка «Скоро: …». */
