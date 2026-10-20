@@ -592,6 +592,9 @@ export interface StoreState {
   /** За какую неделю уже забрана награда торговой недели и гильдии (platform/multiplayer.ts). */
   duelClaimed?: number;
   guildClaimed?: number;
+  /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */
+  rush?: boolean;
+  rushClaimed?: number;
   /** Сезонный пропуск (pass.ts). */
   pass?: PassState;
   /** Истории постоянных покупателей (tales.ts). */

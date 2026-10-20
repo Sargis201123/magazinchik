@@ -177,7 +177,8 @@ import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy'
 import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
 import { claimPass, grantPass, passCoins, passDecor, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
-import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild } from '../platform/multiplayer';
+import { rushPrize } from '../game/rush';
+import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
 import { flushCloud, saveGame } from '../game/save';
@@ -499,6 +500,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     card.replaceChildren(
       title,
       ...(touring ? [] : tipBox(state)),
+      ...rushBox(state),
       ...passBox(state),
       ...taleBox(state),
       ...guildClaimBox(state),
@@ -1043,6 +1045,29 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       card.replaceChildren(...head, rows, button(t('board.close'), close, 'ui-btn secondary'));
     };
     render2();
+  };
+
+  /** «Чёрная пятница района»: общий счётчик и место в выходные, приз — после. */
+  const rushBox = (state: StoreState): HTMLElement[] => {
+    const w = weekendInfo();
+    if (!w) return [];
+    const box = el('div', 'ui-box ui-rush');
+    if (w.last && state.rushClaimed !== w.last.week) {
+      const prize = rushPrize(state.level, w.last.rank, w.last.players);
+      box.append(
+        el('div', 'ui-note', t('rush.result', { rank: w.last.rank, players: w.last.players, revenue: money(w.last.revenue) })),
+        button(t('rush.claim', { n: prize }), () => update({ ...getState(), money: getState().money + prize, rushClaimed: w.last!.week }, 'success')),
+      );
+    }
+    if (w.active) {
+      box.append(
+        el('b', '', t('rush.title')),
+        el('div', '', t('rush.text', { total: money(w.total), players: w.players })),
+        el('div', 'ui-muted', w.me.rank ? t('rush.me', { rank: w.me.rank, revenue: money(w.me.revenue), h: w.endsIn }) : t('rush.meNone', { h: w.endsIn })),
+        ...w.top.slice(0, 3).map((r, i) => el('div', `ui-item-sub${r.me ? ' ui-me' : ''}`, t('rush.top', { place: i + 1, name: r.name, revenue: money(r.revenue) }))),
+      );
+    }
+    return box.childElementCount ? [box] : [];
   };
 
   /** Строка сезона сверху утра: уровень, дни до конца, сколько наград ждёт. */

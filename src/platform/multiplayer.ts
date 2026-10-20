@@ -26,6 +26,28 @@ export interface GuildInfo {
 /** Событие окна: данные торговой недели и гильдии пришли (утро перерисовывается). */
 export const MP_EVENT = 'magazinchik:multiplayer';
 
+export interface WeekendInfo {
+  active: boolean;
+  week: number;
+  total: number;
+  players: number;
+  me: { revenue: number; rank: number | null };
+  top: { name: string; revenue: number; me?: boolean }[];
+  endsIn: number;
+  last?: { week: number; revenue: number; rank: number; total: number; players: number };
+}
+
+let weekendCache: WeekendInfo | null = null;
+export const weekendInfo = (): WeekendInfo | null => weekendCache;
+
+export async function fetchWeekend(): Promise<WeekendInfo | null> {
+  const initData = telegramInitData();
+  if (!initData) return null;
+  const res = await post<WeekendInfo & { enabled?: boolean }>('/api/weekend', { initData });
+  weekendCache = res?.enabled ? res : null;
+  return weekendCache;
+}
+
 let duelCache: DuelInfo | null = null;
 let guildCache: GuildInfo | null = null;
 let guildEnabled = false;
@@ -67,6 +89,6 @@ export const guildReward = (level: number): number => 500 + 500 * level;
 
 /** При запуске: торговая неделя и гильдия; когда пришло — событие MP_EVENT. */
 export async function loadMultiplayer(): Promise<void> {
-  await Promise.all([fetchDuel(), guildAction('status')]);
+  await Promise.all([fetchDuel(), guildAction('status'), fetchWeekend()]);
   window.dispatchEvent(new Event(MP_EVENT));
 }

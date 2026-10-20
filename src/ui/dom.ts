@@ -44,6 +44,9 @@ const css = `
 .ui-who b, .ui-who h3 { margin: 0; }
 .ui-card h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; }
 .ui-card h3 { margin: 14px 0 6px; font-size: 15px; }
+.ui-box.ui-rush { background: #2b2233; color: #fee761; border-color: #fee761; }
+.ui-rush .ui-muted, .ui-rush .ui-item-sub { color: #e6e1d6; }
+.ui-rush .ui-note { color: #fee761; background: rgba(254, 231, 97, .12); }
 .ui-box.ui-pass { background: #efe4ff; border-color: #9a6bd8; }
 .ui-pass-row { display: grid; grid-template-columns: 48px 1fr 1.4fr; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px dashed rgba(43, 34, 51, .15); opacity: .55; }
 .ui-pass-row.open { opacity: 1; }
