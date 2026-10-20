@@ -1890,11 +1890,41 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Мелочи большого зала (когда кассы уже стоят): наклейки «стойте здесь» на местах очереди
+   * и растения в кадках вдоль правой стены и в нижнем левом углу. Кадки — препятствия:
+   * их обходят и покупатели, и продавец.
+   */
+  private buildHallDecor(): void {
+    const { w, h, wallH, queue } = this.layout;
+    const marks = [...this.registers.map((r) => r.spot.y)];
+    const top = (marks.length ? Math.min(...marks) : queue.y + queue.step) - queue.step;
+    for (let i = 0; i < 6 && top - i * queue.step >= queue.minY; i++) marks.push(top - i * queue.step);
+    for (const y of marks) this.art(queue.x, y + 7, 'queue_mark').setAlpha(0.85).setDepth(1);
+    if (this.state.level < 2) return;
+    const clerks = this.registers.map((r) => r.clerk);
+    const free = (x: number, y: number) =>
+      this.obstacles.every((o) => x < o.x - 10 || x > o.x + o.w + 10 || y < o.y - 12 || y > o.y + o.h + 12) &&
+      clerks.every((c) => Math.hypot(c.x - x, c.y - y) > 22);
+    const spots: { x: number; y: number }[] = [];
+    for (let y = wallH + 116; y < h - 70; y += 46) spots.push({ x: w - 9, y });
+    const ice = this.iceboxSpot();
+    if (ice.x >= 36) spots.push({ x: 12, y: h - 14 });
+    const big = Boolean(activeDecor(this.state, 'plants'));
+    spots.forEach((p, i) => {
+      if (!free(p.x, p.y)) return;
+      this.art(p.x, p.y + 3, 'shadow').setScale(0.7 / ART).setDepth(p.y - 1);
+      this.art(p.x, p.y, big || i % 2 ? 'plant_big' : 'plant').setDepth(p.y + 6);
+      this.obstacles.push({ x: p.x - 7, y: p.y - 10, w: 14, h: 14 });
+    });
+  }
+
   /** Терминал на прилавке и касса самообслуживания у правой стены — если куплены. */
   private buildUpgrades(): void {
     const { counter, w, wallH } = this.layout;
     if (hasUpgrade(this.state, 'terminal')) this.art(counter.x + 3, counter.y - 4, 'card_terminal').setDepth(counter.y + 22);
     for (let i = 1; i < registerCount(this.state); i++) this.buildRegister(i);
+    this.buildHallDecor();
     this.buildGearProps();
     this.buildCoffee();
     this.buildOven();
@@ -3651,7 +3681,7 @@ export class StoreScene extends Phaser.Scene {
       const win = this.art(x, front - 4.5, 'shopwin').setDepth(front - 4);
       // Пустующее помещение — тёмные витрины без света.
       if (n.dark) win.setTint(0x8b9bb4);
-      else this.windowLight(x, front - 4.5, front);
+      else this.windowLight(x, front - 4.5, across ? top : front, across);
     }
     this.art(doorX, front - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(front + 40);
     // Вывеска на краю крыши (за дорогой — над витринами, у самой дороги).
@@ -3698,6 +3728,8 @@ export class StoreScene extends Phaser.Scene {
     const put = (px: number, py: number, key: string, r: number, scale = 1.4) => {
       this.art(px, py, key).setScale(scale / ART).setDepth(-2);
       busy.push({ x: px, y: py, r });
+      // Вечером в световых окнах кровли горит тёплый свет — внутри работают.
+      if (key === 'skylight') this.nightGlow(this.art(px, py, 'glow').setDisplaySize(26, 20).setTint(0xffd890), 0.7);
     };
     if (n.roofKit === 'office' && w >= 70 && h >= 60) put(cx, cy, 'roof_helipad', 32, 2.6);
     if (n.roofKit === 'clinic') put(cx, cy, 'roof_cross', 26, 3);
@@ -4455,9 +4487,11 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Витрина вечером светится, и тёплый свет из неё ложится на тротуар. */
-  private windowLight(x: number, glassY: number, groundY: number): void {
-    this.nightGlow(this.add.rectangle(x, glassY, 18, 5, 0xffc870), 0.45);
-    this.nightGlow(this.art(x, groundY, 'light_spill').setOrigin(0.5, 0).setTint(0xffd08a), 0.45);
+  private windowLight(x: number, glassY: number, groundY: number, up = false): void {
+    this.nightGlow(this.add.rectangle(x, glassY, 18, 5, 0xffc870), 0.5);
+    // У зданий за дорогой витрины смотрят вверх, на их тротуар.
+    const spill = this.art(x, groundY, 'light_spill').setOrigin(0.5, up ? 1 : 0).setFlipY(up).setTint(0xffd08a);
+    this.nightGlow(spill, 0.6);
   }
 
   /** На пустом участке растёт бурьян и лежит всякое: кирпичи, песок, конусы, шина, лужа. */
@@ -4923,6 +4957,8 @@ export class StoreScene extends Phaser.Scene {
     const lights: Phaser.GameObjects.GameObject[] = [];
     // Цветная плитка отдела под полкой и перед ней: отделы видно издалека.
     if (!fixture) lights.push(this.add.rectangle(slot.x, slot.y + 4, 50, 30, DEPT_FLOOR[kind]).setAlpha(0.3).setStrokeStyle(1, DEPT_FLOOR[kind], 0.7).setDepth(0.3));
+    // Крупный значок отдела поверх таблички на шапке: молоко, мясо и заморозку не спутать.
+    if (!fixture) lights.push(this.art(slot.x, slot.y - top - 13, `dept_${kind}`).setDepth(d - 11.9));
     if (look.texture === 'fridge') {
       // Новые холодильники — с наклейкой класса энергосбережения.
       if (gearTier(this.state, 'fridge')) lights.push(this.art(slot.x + 13, slot.y - 15, 'eco_label').setDepth(slot.y - 11));
