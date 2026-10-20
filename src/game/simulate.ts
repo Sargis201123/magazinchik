@@ -9,6 +9,7 @@ import { cook, DISHES, DISH_IDS, sellDish } from './kitchen';
 import { answerStaffEvent, eventCost } from './staffEvents';
 import { answerTale, taleToday } from './tales';
 import { answerOpening, BUILDINGS, districtNews } from './district';
+import { answerTrick, counterCost, trickToday } from './tricks';
 import {
   buyChance,
   buyShelf,
@@ -444,6 +445,13 @@ export function simulate({
     if (state.staffEvent) state = answerStaffEvent(state, state.money >= eventCost(state.staffEvent) + reserve * 2) ?? answerStaffEvent(state, false) ?? state;
     if (taleToday(state)) state = answerTale(state, 0) ?? answerTale(state, 1) ?? state;
     // Открылось здание в районе — поздравляет, если деньги есть с запасом и не копит на расширение.
+    // Козни конкурента: отвечает, если деньги есть с запасом и не копит на расширение; иначе жалуется (или молчит).
+    const trick = trickToday(state);
+    if (trick) {
+      const saving = nextStoreLevel(state);
+      const afford = state.money >= counterCost(trick.kind, state.level) + reserve * 2 + (saving ? saving.cost : 0);
+      state = answerTrick(state, afford ? 'counter' : trick.kind === 'banner' ? 'ignore' : 'complain', extraRandom) ?? answerTrick(state, 'ignore') ?? state;
+    }
     const opened = districtNews(state);
     if (opened) {
       const saving = nextStoreLevel(state);

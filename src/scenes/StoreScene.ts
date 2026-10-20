@@ -133,6 +133,7 @@ import { duelInfo, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } 
 import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
 import { DISHES, DISH_IDS, kitchenOpen, portionsOf, sellDish } from '../game/kitchen';
+import { activeTrick, seeTrickResult, trickResult } from '../game/tricks';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
@@ -716,6 +717,9 @@ export class StoreScene extends Phaser.Scene {
   private builtGiant: GiantLook = 'none';
   /** Какие здания района стояли, когда рисовали улицу (district.ts). */
   private builtDistrict = '';
+  /** Козни конкурента на улице сегодня (tricks.ts): промоутеры, перетяжки, их таймеры. */
+  private trickObjs: Phaser.GameObjects.GameObject[] = [];
+  private trickTimers: Phaser.Time.TimerEvent[] = [];
   private stats: DayStats = emptyDayStats();
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
@@ -3752,6 +3756,99 @@ export class StoreScene extends Phaser.Scene {
       .setDepth(a.y + a.h + 2);
   }
 
+  // ---------- Козни конкурента (tricks.ts) ----------
+
+  private clearTrick(): void {
+    this.trickTimers.forEach((e) => e.remove());
+    this.trickTimers = [];
+    this.trickObjs.forEach((o) => o.destroy());
+    this.trickObjs = [];
+  }
+
+  /** Утром выбрали ответ — днём это видно на улице: промоутеры, перетяжки, «проверяющий». */
+  private setupTrick(): void {
+    this.clearTrick();
+    const trick = activeTrick(this.state);
+    if (!trick) return;
+    const { door } = this.layout;
+    const sidewalk = this.streetY - 2;
+    const every = (ms: number, fn: () => void) => this.trickTimers.push(this.time.addEvent({ delay: ms, loop: true, callback: fn }));
+    if (trick.kind === 'promoter') {
+      const ours = trick.answer === 'counter';
+      if (!ours && trick.stopped) return;
+      const look: Look = ours
+        ? { ...randomLook(0x63c74d), acc: 'apron', accTint: 0xffffff, prop: 'balloon', propTint: 0x63c74d }
+        : { ...randomLook(0xe43b44), acc: 'vest', accTint: 0xfee761, hat: 'papercap', hatTint: 0xe43b44, prop: 'balloon', propTint: 0xe43b44 };
+      const promoter = this.makePerson(door.x + 24, sidewalk, look);
+      this.people.delete(promoter);
+      this.trickObjs.push(promoter);
+      every(5200, () => this.running && this.popup(promoter.x, promoter.y - 22, t(ours ? 'popup.ownPromoter' : 'popup.rivalPromoter'), ours ? '#c8ffb0' : '#ffd0d0'));
+      // Чужой промоутер уводит прохожих через дорогу — видно, куда уходят гости.
+      if (!ours) every(6500, () => this.running && void this.lureAway(promoter));
+      return;
+    }
+    if (trick.kind === 'banner') {
+      const ours = trick.answer === 'counter';
+      const top = this.next.h + 4;
+      // Чужая — над тротуаром за дорогой, своя — над нашим тротуаром.
+      const y = ours ? this.streetY - 18 : top + 66;
+      const color = ours ? 0x3e8948 : 0xe43b44;
+      // Поверх вывески конкурента — её видно с нашей стороны улицы.
+      const depth = top + 200;
+      for (const dx of [-62, 62]) this.trickObjs.push(this.add.rectangle(door.x + dx, y + 6, 2, 20, 0x3a4466).setDepth(depth));
+      this.trickObjs.push(this.add.rectangle(door.x, y, 128, 11, color).setStrokeStyle(1, 0xffffff).setDepth(depth + 1));
+      this.trickObjs.push(
+        this.add
+          .text(door.x, y, t(ours ? 'trick.banner.own' : 'trick.banner.sign'), { fontFamily: UI_FONT, fontSize: '7px', color: '#ffffff', fontStyle: 'bold' })
+          .setOrigin(0.5)
+          .setResolution(4)
+          .setDepth(depth + 2),
+      );
+      return;
+    }
+    // «Проверяющий» заходит, когда прошла треть дня.
+    if (trick.kind === 'inspector' && trick.day === this.state.day) {
+      this.trickTimers.push(this.time.delayedCall((DAY_SECONDS * 1000) / 3, () => this.running && void this.fakeInspector()));
+    }
+  }
+
+  /** Прохожий идёт к промоутеру конкурента и уходит через дорогу к нему в магазин. */
+  private async lureAway(promoter: Phaser.GameObjects.Container): Promise<void> {
+    const start = this.streetSpawn();
+    const person = this.makePerson(start.x, start.y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)));
+    this.people.delete(person);
+    this.trickObjs.push(person);
+    await this.walk(person, promoter.x + 8, promoter.y + 2);
+    if (!person.active) return;
+    this.popup(person.x, person.y - 18, '🤔', '#ffffff');
+    await this.wait(600);
+    await this.walk(person, this.layout.door.x + Phaser.Math.Between(-30, 30), this.streetY + 74);
+    if (person.active) this.tweens.add({ targets: person, alpha: 0, duration: 400, onComplete: () => person.destroy() });
+  }
+
+  /** Подставной «проверяющий»: проходит по залу с портфелем, цокает и уходит. */
+  private async fakeInspector(): Promise<void> {
+    const { door } = this.layout;
+    const look: Look = { ...randomLook(0x262b44), outfit: 'suit', outfitTint: 0x3a4466, prop: 'briefcase', glasses: true, face: 'mustache' };
+    const start = this.streetSpawn();
+    const man = this.makePerson(start.x, start.y, look);
+    this.people.delete(man);
+    this.trickObjs.push(man);
+    await this.walk(man, door.x, this.streetY);
+    await this.walk(man, door.x, door.y - 10);
+    for (let i = 0; i < 3 && man.active; i++) {
+      const index = Phaser.Math.Between(0, Math.max(0, this.state.shelves.length - 1));
+      const stand = this.standOf(index);
+      await this.walk(man, stand.x, stand.y);
+      if (!man.active) return;
+      this.popup(man.x, man.y - 20, t('popup.fakeInspector'), '#fff3b0');
+      await this.wait(900);
+    }
+    if (!man.active) return;
+    await this.walk(man, door.x, this.layout.h + 16);
+    void this.strollAway(man);
+  }
+
   /** Фонарь не ставим на дорожку к двери и на подъезд к складу. */
   private lampAt(x: number): boolean {
     const { door, warehouse } = this.layout;
@@ -6689,6 +6786,8 @@ export class StoreScene extends Phaser.Scene {
 
   private startDay(): void {
     this.dayOpen = true;
+    // Утром рассказали, чем кончился вчерашний «проверяющий» (tricks.ts) — больше не показываем.
+    if (trickResult(this.state)) this.state = seeTrickResult(this.state);
     this.stallMs = 0;
     try {
       this.prepareDay();
@@ -6699,6 +6798,11 @@ export class StoreScene extends Phaser.Scene {
     this.timeLeft = DAY_SECONDS;
     this.nextSpawn = 1;
     this.running = true;
+    try {
+      this.setupTrick();
+    } catch (error) {
+      reportError(error, 'trick');
+    }
     try {
       this.startBigDayIfAny();
     } catch (error) {
@@ -7305,6 +7409,7 @@ export class StoreScene extends Phaser.Scene {
     this.game.renderer.snapshot((image) => {
       this.dayShot = image instanceof HTMLImageElement ? image : null;
     });
+    this.clearTrick();
     // Магазин закрывается: опускаются роллеты, потом — итоги дня.
     this.closeShop();
     this.time.delayedCall(1500, () => {

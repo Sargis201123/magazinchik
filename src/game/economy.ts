@@ -7,6 +7,7 @@ import type { PassState } from './pass';
 import type { DishId } from './kitchen';
 import type { StaffEvent } from './staffEvents';
 import type { DistrictState } from './district';
+import type { Trick } from './tricks';
 import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
@@ -605,6 +606,8 @@ export interface StoreState {
   staffEvent?: StaffEvent;
   /** Район: о каких открытиях рассказали и кого поздравили (district.ts). */
   district?: DistrictState;
+  /** Козни конкурента на улице (tricks.ts). */
+  trick?: Trick;
   /** Готовые порции на кухне (kitchen.ts). */
   kitchen?: Partial<Record<DishId, number>>;
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */

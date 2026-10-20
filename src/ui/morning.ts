@@ -179,6 +179,7 @@ import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
 import { claimPass, grantPass, passCoins, passDecor, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { rushPrize } from '../game/rush';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
+import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
 import { answerOpening, BUILDINGS, districtNews, districtSite, isMatchDay, OPENING_DAYS, type BuildingId } from '../game/district';
 import { canCook, cook, DISHES, DISH_IDS, kitchenOpen, portionsOf, portionsTotal, PORTIONS_MAX } from '../game/kitchen';
 import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
@@ -492,6 +493,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       ...weatherLine(state),
       ...warLine(state),
       ...districtLines(state),
+      ...trickLines(state),
       ...holidayLine(state),
       el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
       billForecast(state),
@@ -509,6 +511,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       ...passBox(state),
       ...staffEventBox(state),
       ...districtBox(state),
+      ...trickBox(state),
       ...taleBox(state),
       ...guildClaimBox(state),
       ...duelBox(state),
@@ -1052,6 +1055,51 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       card.replaceChildren(...head, rows, button(t('board.close'), close, 'ui-btn secondary'));
     };
     render2();
+  };
+
+  /** Кто напротив пакостит: босс района или сам Эдуард. */
+  const rivalName = (state: StoreState): string => {
+    const stage = eduardStage(state);
+    return bossActive(state) && stage !== null ? t(EDUARD_STAGES[stage].nameKey) : t('eduard.name');
+  };
+
+  /** Козни конкурента: промоутер, перетяжка или «проверяющий» — и чем ответить (tricks.ts). */
+  const trickBox = (state: StoreState): HTMLElement[] => {
+    const trick = trickToday(state);
+    if (!trick) return [];
+    const rival = rivalName(state);
+    const cost = counterCost(trick.kind, state.level);
+    const answer = (a: TrickAnswer) => () => update(answerTrick(getState(), a), a === 'counter' ? 'success' : undefined);
+    const box = el('div', 'ui-box ui-tale');
+    box.append(
+      el('b', '', t(`trick.${trick.kind}.title` as TextKey, { rival })),
+      el('p', '', t(`trick.${trick.kind}.text` as TextKey, { rival })),
+      button(t(`trick.${trick.kind}.counter` as TextKey, { n: cost }), answer('counter'), 'ui-btn', state.money < cost),
+    );
+    if (trick.kind !== 'banner') box.append(button(t(`trick.${trick.kind}.complain` as TextKey), answer('complain'), 'ui-btn secondary'));
+    box.append(button(t('trick.ignore'), answer('ignore'), 'ui-btn secondary'));
+    return [box];
+  };
+
+  /** Строки утра: что сейчас делает конкурент и чем кончился вчерашний «проверяющий». */
+  const trickLines = (state: StoreState): HTMLElement[] => {
+    const out: HTMLElement[] = [];
+    const done = trickResult(state);
+    if (done?.result) {
+      out.push(el('div', done.result === 'fined' ? 'ui-note' : 'ui-muted', t(`trick.result.${done.result}` as TextKey, { n: done.fine ?? 0, rival: rivalName(state) })));
+    }
+    const trick = activeTrick(state);
+    if (!trick || !trick.answer) return out;
+    const left = trick.until - state.day + 1;
+    if (trick.kind === 'promoter') {
+      const key = trick.answer === 'counter' ? 'counter' : trick.answer === 'complain' ? (trick.stopped ? 'stopped' : 'failed') : 'ignore';
+      out.push(el('div', 'ui-muted', t(`trick.line.promoter.${key}` as TextKey)));
+    } else if (trick.kind === 'banner') {
+      out.push(el('div', 'ui-muted', t(trick.answer === 'counter' ? 'trick.line.banner.counter' : 'trick.line.banner.ignore', { n: left })));
+    } else if (trick.day === state.day) {
+      out.push(el('div', 'ui-muted', t('trick.line.inspector')));
+    }
+    return out;
   };
 
   /** В районе открылось новое здание: кто теперь будет заходить и поздравить ли (district.ts). */
