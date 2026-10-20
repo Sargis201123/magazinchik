@@ -2,6 +2,7 @@
 // на сервере (проверка сохранений, расчёт дохода офлайн).
 
 import { legacyMentor, legacyPurchase, type Legacy } from './legacy';
+import type { TalesState } from './tales';
 import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
@@ -587,6 +588,8 @@ export interface StoreState {
   bankrupt?: boolean;
   /** Сколько игр начато заново. */
   runs?: number;
+  /** Истории постоянных покупателей (tales.ts). */
+  tales?: TalesState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */
   legacy?: Legacy;
   /** Сколько должна добрая бабушка, которой дали хлеба в долг (special.ts). */

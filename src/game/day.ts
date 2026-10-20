@@ -29,6 +29,7 @@ import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
 import { hiddenBigDayGuests, knownBigDayGuests } from './bigday';
 import { coffeeTablesGuests } from './coffee';
 import { legacyGuests } from './legacy';
+import { taleGuests, talesMorning } from './tales';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -56,7 +57,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = contestNight(burglaryNight(giantNight(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), stats.revenue), stats.revenue, random), stats);
+  const next = contestNight(burglaryNight(giantNight(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), random), stats.revenue), stats.revenue, random), stats);
   return {
     ...night,
     state: next,
@@ -85,6 +86,7 @@ export function inspectionDone(state: StoreState, result: InspectionResult): Sto
 export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
   legacyGuests(state) *
+  taleGuests(state) *
   priceAppeal(state) *
   coffeeTablesGuests(state) *
   (seasonFor(state.day)?.guests ?? 1) *

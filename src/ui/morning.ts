@@ -175,6 +175,7 @@ import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeL
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
+import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
 import { flushCloud, saveGame } from '../game/save';
@@ -489,6 +490,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     card.replaceChildren(
       title,
       ...(touring ? [] : tipBox(state)),
+      ...taleBox(state),
       ...goalsBox(state),
       today,
       info,
@@ -960,6 +962,27 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   const questText = (q: Quest) =>
     t(QUEST_TEXT[q.kind], { n: q.target, product: q.product ? productLabel(q.product) : '' });
+
+  /** История постоянного покупателя: эпизод дня и выбор (tales.ts). */
+  const taleBox = (state: StoreState): HTMLElement[] => {
+    const today = taleToday(state);
+    if (!today) return [];
+    const tale = TALES[today.id];
+    const box = el('div', 'ui-box ui-tale');
+    box.append(
+      el('b', '', t('tale.title', { icon: tale.icon, name: t(`tale.${today.id}.name` as TextKey), n: today.ep + 1, of: tale.episodes.length })),
+      el('p', '', t(`tale.${today.id}.${today.ep}.text` as TextKey)),
+    );
+    tale.episodes[today.ep].forEach((choice, i) => {
+      const ok = canChoose(state, choice);
+      const need = choice.require;
+      const label = t(`tale.${today.id}.${today.ep}.${i}` as TextKey);
+      box.append(button(label, () => update(answerTale(getState(), i), 'success'), i === 0 ? 'ui-btn' : 'ui-btn secondary', !ok));
+      if (!ok && need?.money) box.append(el('div', 'ui-item-sub', t('tale.need.money', { n: need.money })));
+      if (!ok && need?.product) box.append(el('div', 'ui-item-sub', `${PRODUCTS[need.product[0]].icon} ${t('tale.need.product', { n: need.product[1] })}`));
+    });
+    return [box];
+  };
 
   /** Цели дня и испытания — одной яркой карточкой сверху: что сделать сегодня и за что награда. */
   const goalsBox = (state: StoreState): HTMLElement[] => {
