@@ -5,7 +5,7 @@ import { burglaryNight } from './watch';
 import { contestGuests, contestNight } from './contest';
 import { lightsGuests } from './gear';
 import { addReport } from './reports';
-import { departmentGuests, endDay, priceAppeal, restStaff, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
+import { departmentGuests, endDay, priceAppeal, restStaff, staffOf, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
 import {
   applyInspection,
   fulfillOrder,
@@ -35,6 +35,7 @@ import { rushGuests } from './rush';
 import { spoilDishes } from './kitchen';
 import { staffMorning } from './staffEvents';
 import { districtGuests } from './district';
+import { trickGuests, trickNight, tricksMorning } from './tricks';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -60,12 +61,14 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   s = spoilDishes(s).state;
   // Усталость считаем до смены плана: сегодняшний отгул обнуляет её, ночная смена — удваивает.
   s = restStaff(s, (stats.nightRevenue ?? 0) > 0);
+  // «Проверяющий» от конкурента: штраф, ушёл ни с чем или разоблачили (tricks.ts).
+  s = trickNight(s, random, Boolean(staffOf(s, 'cleaner')));
   const day = s.day;
   const ended = endDay(s, stats, random);
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = contestNight(burglaryNight(giantNight(staffMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), random), random), stats.revenue), stats.revenue, random), stats);
+  const next = contestNight(burglaryNight(giantNight(tricksMorning(staffMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), random), random), random), stats.revenue), stats.revenue, random), stats);
   return {
     ...night,
     state: next,
@@ -108,6 +111,7 @@ export const guestFactor = (state: StoreState): number =>
   departmentGuests(state) *
   eduardGuests(state) *
   districtGuests(state) *
+  trickGuests(state) *
   giantGuests(state) *
   contestGuests(state) *
   knownBigDayGuests(state.day);
