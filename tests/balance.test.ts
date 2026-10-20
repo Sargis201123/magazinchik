@@ -94,3 +94,17 @@ describe('новые механики', () => {
   });
 
 });
+
+describe('кнопка «Закупить нужное»', () => {
+  // Игрок, который каждое утро жмёт одну кнопку, должен торговать не хуже новичка, берущего всего
+  // поровну. Деньги на конкретный день шумят (их съедают расширения) — сравниваем выручку за 45 дней.
+  const revenue = (buyMode: 'restock' | 'naive') => {
+    let sum = 0;
+    for (let seed = 1; seed <= 8; seed++) sum += simulate({ days: 45, seed, buyMode, hireStaff: true }).final.totalRevenue;
+    return sum / 8;
+  };
+
+  it('с ней выручка за 45 дней больше, чем у новичка', () => {
+    expect(revenue('restock')).toBeGreaterThan(revenue('naive'));
+  });
+});
