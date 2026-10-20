@@ -130,6 +130,7 @@ import { reportProgress, track } from '../platform/analytics';
 import { duelInfo, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
 import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
+import { DISHES, DISH_IDS, kitchenOpen, portionsOf, sellDish } from '../game/kitchen';
 import { reportError, setErrorContext } from '../platform/errors';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
@@ -591,7 +592,7 @@ interface Customer {
   friend?: VisitFriend;
   wants?: ProductId[];
   /** Шоколадка со стойки и кофе — оплачиваются на кассе вместе с товаром. */
-  extras?: { kind: 'candy' | 'coffee'; price: number }[];
+  extras?: { kind: 'candy' | 'coffee' | 'dish'; price: number }[];
   /** Уже погладил кота. */
   petted?: boolean;
   /** Сколько готов ждать в очереди. */
@@ -702,6 +703,8 @@ export class StoreScene extends Phaser.Scene {
   private builtEduard: EduardLook | null = null;
   /** Всплывающие надписи на экране: чтобы не налезали друг на друга и склеивались. */
   private popups: Popup[] = [];
+  /** Табличка с порциями на кухне. */
+  private kitchenLabel?: Phaser.GameObjects.Text;
   /** Чей магазин друга нарисован сбоку (торговая неделя). */
   private builtFriend?: string;
   /** Магазин босса района стоит за дорогой (на месте «Гиганта»), а не сбоку. */
@@ -4123,8 +4126,8 @@ export class StoreScene extends Phaser.Scene {
 
   /** Комнаты флигеля, в которые есть дверь из зала. */
   private openRooms(): Room[] {
-    const { warehouse, bakery, coffee } = this.layout;
-    return [warehouse, ...(this.bakeryOpen() ? [bakery] : []), ...(this.coffeeOpen() ? [coffee] : [])];
+    const { warehouse, bakery, coffee, kitchen } = this.layout;
+    return [warehouse, ...(this.bakeryOpen() ? [bakery] : []), ...(this.coffeeOpen() ? [coffee] : []), ...(kitchen && kitchenOpen(this.state) ? [kitchen] : [])];
   }
 
   /**
@@ -4140,6 +4143,7 @@ export class StoreScene extends Phaser.Scene {
     cap(left, wing.y, WALL, h - wing.y);
     cap(left + WALL, warehouse.y - WALL, wing.w, WALL);
     cap(left + WALL, bakery.y - WALL, wing.w, WALL);
+    if (this.layout.kitchen) cap(left + WALL, this.layout.coffee.y - WALL, wing.w, WALL);
     this.add.tileSprite(left, h, WING_OUTER - WALL, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
     const gateX = warehouse.x + warehouse.w / 2;
     this.art(gateX, h + 5.5, 'shutter').setDepth(h + 2);
@@ -4148,6 +4152,32 @@ export class StoreScene extends Phaser.Scene {
     if (top > h + FACADE_H) this.add.tileSprite(gateX - 12, h + FACADE_H, 24, top - h - FACADE_H, 'paving').setOrigin(0).setTileScale(1 / ART).setDepth(-9);
     this.buildRoom(bakery, 'bakery', this.bakeryOpen());
     this.buildRoom(coffee, 'coffee', this.coffeeOpen());
+    if (this.layout.kitchen) this.buildRoom(this.layout.kitchen, 'kitchen', kitchenOpen(this.state));
+    this.buildKitchen();
+  }
+
+  /** Кухня: плита, стол с готовыми блюдами и табличка, сколько порций осталось. */
+  private buildKitchen(): void {
+    this.kitchenLabel = undefined;
+    const room = this.layout.kitchen;
+    if (!room || !kitchenOpen(this.state)) return;
+    this.art(room.x + 11, room.y + 26, 'oven1').setTint(0xd8dce8).setDepth(room.y + 35);
+    this.art(room.x + 30, room.y + 40, 'baker_table').setDepth(room.y + 46);
+    this.kitchenLabel = this.add
+      .text(room.x + 30, room.y + 31, '', { fontFamily: UI_FONT, fontSize: '5px', fontStyle: 'bold', color: '#2b2233', backgroundColor: 'rgba(255, 246, 200, 0.9)', padding: { x: 1.5, y: 0.5 } })
+      .setOrigin(0.5)
+      .setResolution(5)
+      .setDepth(room.y + 47);
+    this.refreshKitchen();
+  }
+
+  /** Сколько каких порций на кухне — на табличке у стола. */
+  private refreshKitchen(): void {
+    if (!this.kitchenLabel?.active) return;
+    const text = DISH_IDS.filter((id) => portionsOf(this.state, id) > 0)
+      .map((id) => `${DISHES[id].icon}${portionsOf(this.state, id)}`)
+      .join(' ');
+    this.kitchenLabel.setText(text).setVisible(text !== '');
   }
 
   /**
@@ -4167,14 +4197,14 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Комната флигеля: пол, кусок стены с табличкой; закрытая — тёмная, с замком. */
-  private buildRoom(room: Room, kind: 'bakery' | 'coffee', open: boolean): void {
+  private buildRoom(room: Room, kind: 'bakery' | 'coffee' | 'kitchen', open: boolean): void {
     const { x, y, w, h } = room;
-    this.add.tileSprite(x, y, w, h, kind === 'bakery' ? 'floor2' : 'floor_wood').setOrigin(0).setTileScale(1 / ART);
+    this.add.tileSprite(x, y, w, h, kind === 'coffee' ? 'floor_wood' : 'floor2').setOrigin(0).setTileScale(1 / ART);
     this.add
       .tileSprite(x, y, w, 14, 'wall')
       .setOrigin(0)
       .setTileScale(1 / ART)
-      .setTint(kind === 'bakery' ? 0xffe2d2 : 0xe6dcf6)
+      .setTint(kind === 'bakery' ? 0xffe2d2 : kind === 'kitchen' ? 0xd8f0d8 : 0xe6dcf6)
       .setDepth(1);
     this.add.rectangle(x, y + 14, w, 2, 0x181425, 0.18).setOrigin(0).setDepth(1);
     this.roomSign(x, y + 7, w, t(`wing.${kind}`));
@@ -5905,12 +5935,21 @@ export class StoreScene extends Phaser.Scene {
     const at = this.registerOf(c);
     if (at) at.customer = null;
 
+    // С кухни на кассе докупают порцию готовой еды.
+    const dish = c.thief || !c.items.length ? null : sellDish(this.state, Math.random);
+    if (dish) {
+      this.state = dish.state;
+      const d = DISHES[dish.dish];
+      c.extras = [...(c.extras ?? []), { kind: 'dish', price: d.price }];
+      this.popup(c.sprite.x, c.sprite.y - 26, t('popup.dish', { icon: d.icon, name: t(`dish.${dish.dish}` as TextKey), n: d.price }), '#c8ffb0');
+      this.refreshKitchen();
+    }
     const { state, total: goods } = checkout(this.state, c.items, this.night ? NIGHT_MARKUP : 1);
     // Шоколадка и кофе — сверху к товару.
     const extras = (c.extras ?? []).reduce((sum, e) => sum + e.price, 0);
     const total = goods + extras;
     this.state = { ...state, money: state.money + extras };
-    for (const e of c.extras ?? []) note(this.stats, e.kind);
+    for (const e of c.extras ?? []) if (e.kind !== 'dish') note(this.stats, e.kind);
     // Чаевые «за котика».
     if (catHome(this.state) && Math.random() < catTipChance(this.state)) {
       this.state = { ...this.state, money: this.state.money + CAT_TIP };
@@ -6574,6 +6613,7 @@ export class StoreScene extends Phaser.Scene {
     this.endLiveEvent();
     this.scheduleRegulars();
     this.scheduleFriends();
+    this.refreshKitchen();
     // Старые холодильники иногда подтекают: лужа у одного из них посреди дня.
     if (Math.random() < fridgeLeak(this.state)) {
       this.time.delayedCall(Phaser.Math.FloatBetween(0.15, 0.7) * DAY_SECONDS * 1000, () => this.running && this.fridgeLeaks());

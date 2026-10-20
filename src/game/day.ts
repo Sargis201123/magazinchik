@@ -32,6 +32,7 @@ import { legacyGuests } from './legacy';
 import { taleGuests, talesMorning } from './tales';
 import { addPassXp } from './pass';
 import { rushGuests } from './rush';
+import { spoilDishes } from './kitchen';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -53,6 +54,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const weekly = progressWeekly(s, stats);
   s = weekly.state;
   s = addPassXp(s, rewarded.done, weekly.completed.length);
+  // Непроданное с кухни ночью списывается.
+  s = spoilDishes(s).state;
   // Усталость считаем до смены плана: сегодняшний отгул обнуляет её, ночная смена — удваивает.
   s = restStaff(s, (stats.nightRevenue ?? 0) > 0);
   const day = s.day;

@@ -178,6 +178,7 @@ import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
 import { claimPass, grantPass, passCoins, passDecor, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { rushPrize } from '../game/rush';
+import { canCook, cook, DISHES, DISH_IDS, kitchenOpen, portionsOf, portionsTotal, PORTIONS_MAX } from '../game/kitchen';
 import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
@@ -1260,7 +1261,28 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   // ---------- Уголки: сладости, кофе, печь, кот и улучшения ----------
 
-  const extrasTab = (state: StoreState): HTMLElement[] => [rackBox(state), radioBox(state), coffeeBox(state), ovenBox(state), catBox(state), securityBox(state), upgradesBox(state)];
+  const extrasTab = (state: StoreState): HTMLElement[] => [rackBox(state), radioBox(state), coffeeBox(state), ovenBox(state), ...kitchenBox(state), catBox(state), securityBox(state), upgradesBox(state)];
+
+  /** Кухня: что приготовить из продуктов со склада (kitchen.ts). */
+  const kitchenBox = (state: StoreState): HTMLElement[] => {
+    if (!kitchenOpen(state)) return [];
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', t('kitchen.title')), el('div', 'ui-muted', t('kitchen.note', { n: portionsTotal(state), max: PORTIONS_MAX })));
+    for (const id of DISH_IDS) {
+      const d = DISHES[id];
+      const row = el('div', 'ui-item');
+      const body = el('div');
+      const name = el('div', 'ui-item-name', t(`dish.${id}` as TextKey));
+      name.append(el('span', 'ui-tag', `${d.price} 💰`));
+      const needs = Object.entries(d.needs).map(([p, n]) => `${PRODUCTS[p as ProductId].icon}×${n}`).join(' ');
+      body.append(name, el('div', 'ui-item-sub', `${needs} → ${d.portions} · ${t('kitchen.ready', { n: portionsOf(state, id) })}`));
+      const actions = el('div', 'ui-item-actions');
+      actions.append(button(t('kitchen.cook', { n: d.portions }), () => update(cook(getState(), id), 'success'), 'ui-chip', !canCook(state, id)));
+      row.append(el('div', 'ui-ad-icon', d.icon), body, actions);
+      box.append(row);
+    }
+    return [box];
+  };
 
   const rackBox = (state: StoreState) => {
     const box = el('div', 'ui-box');

@@ -4,6 +4,7 @@
 import { legacyMentor, legacyPurchase, type Legacy } from './legacy';
 import type { TalesState } from './tales';
 import type { PassState } from './pass';
+import type { DishId } from './kitchen';
 import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
@@ -592,6 +593,8 @@ export interface StoreState {
   /** За какую неделю уже забрана награда торговой недели и гильдии (platform/multiplayer.ts). */
   duelClaimed?: number;
   guildClaimed?: number;
+  /** Готовые порции на кухне (kitchen.ts). */
+  kitchen?: Partial<Record<DishId, number>>;
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */
   rush?: boolean;
   rushClaimed?: number;
