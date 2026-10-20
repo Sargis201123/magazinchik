@@ -314,6 +314,18 @@ const css = `
 .ui-loss-row { display: grid; grid-template-columns: 14px 1fr; gap: 6px; align-items: start; padding: 5px 0; }
 .ui-loss-row + .ui-loss-row { border-top: 1px dashed #d8ccb0; }
 .ui-loss-dot { width: 12px; height: 12px; border: 2px solid #2b2233; border-radius: 3px; margin-top: 3px; box-sizing: border-box; }
+/* Объём как у «Играть»: блик сверху, тень снизу, кнопка «нажимается». Цвет — из основных правил выше. */
+.ui-btn:not([disabled]):not(.ui-btn-stars) { font-weight: 700; background-image: linear-gradient(rgba(255,255,255,.28) 0 50%, rgba(255,255,255,0) 50%);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.55), inset 0 -3px 0 rgba(43,34,51,.16), 0 3px 0 #2b2233; }
+.ui-btn.danger:not([disabled]) { text-shadow: 0 1px 0 rgba(43,34,51,.6); }
+.ui-btn:not([disabled]):active { box-shadow: inset 0 2px 0 rgba(255,255,255,.4), 0 1px 0 #2b2233; }
+.ui-btn.ui-btn-stars { box-shadow: inset 0 2px 0 rgba(255,255,255,.6), 0 3px 0 #a86a12; text-shadow: 0 1px 0 rgba(255,255,255,.4); }
+.ui-chip:not(.active):not([disabled]):not(.ui-chip-off) { box-shadow: inset 0 2px 0 rgba(255,255,255,.45), 0 2px 0 #2b2233; }
+.ui-tab.active { box-shadow: inset 0 -3px 0 #fee761; }
+/* Блоки в окнах — как карточки: светлый край сверху и мягкая тень снизу. */
+.ui-box { box-shadow: inset 0 2px 0 rgba(255,255,255,.6), 0 2px 0 rgba(43,34,51,.18); }
+/* Заголовок окна — с пиксельной полосой-подчёркиванием. */
+.ui-card h2 { padding-bottom: 6px; background: linear-gradient(90deg, #2b2233 0 2px, transparent 2px) bottom left / 6px 2px repeat-x; }
 `;
 let styled = false;
 export function injectStyles(): void {

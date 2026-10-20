@@ -4782,6 +4782,12 @@ def main():
     import badges
 
     badges.main()
+    import rooms
+
+    rooms.main()
+    import patterns
+
+    patterns.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
