@@ -1125,9 +1125,17 @@ export const hasUnmarkedBad = (items: CartItem[]): boolean => items.some(({ unit
  */
 export const ratingTarget = (rating: number): number => 0.55 + 0.03 * rating;
 
+/**
+ * Ушедший из-за цены злится вдвое меньше, чем не нашедший товар: «дороговато» — не «пусто».
+ * Иначе цена чуть выше разумной запускала спираль: ушли — рейтинг упал — гостей меньше — магазин
+ * закрылся (в симуляторе: +10% к ценам — богаче всех, +20% — рейтинг 0,2 и банкротства).
+ */
+export const PRICE_FORGIVE = 0.5;
+
 /** 0..1: доля довольных посетителей. Жалоба считается за «полпокупателя». */
 export function satisfaction(stats: DayStats, lostWeight = 1): number {
-  const visitors = stats.served + stats.lost * lostWeight;
+  const lost = Math.max(0, stats.lost - Math.min(stats.lost, stats.lostWhy?.expensive ?? 0) * (1 - PRICE_FORGIVE));
+  const visitors = stats.served + lost * lostWeight;
   if (visitors === 0) return 0.5;
   return Math.max(0, (stats.served - stats.complaints * 0.5) / visitors);
 }

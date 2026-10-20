@@ -1,14 +1,19 @@
 // Карточки «Новое!»: при первом появлении механики утро объясняет её в двух словах.
 // Каждую показываем один раз (seenTips в сохранении).
 
-import { expiringCount, type StoreState } from './economy';
+import { expiringCount, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount } from './registers';
 
-export type TipId = 'promo' | 'contract' | 'markdown' | 'weekly' | 'fair' | 'cart' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
+export type TipId = 'broke' | 'promo' | 'contract' | 'markdown' | 'weekly' | 'fair' | 'cart' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
+
+/** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
+export const isBroke = (s: StoreState): boolean =>
+  s.money < 100 && !s.loan && PRODUCT_IDS.every((id) => warehouseOf(s, id) + onShelves(s, id) === 0);
 
 const WHEN: [TipId, (s: StoreState) => boolean][] = [
+  ['broke', isBroke],
   ['weekly', (s) => Boolean(s.weekly)],
   ['markdown', (s) => s.day >= 3 && expiringCount(s) > 0],
   ['promo', (s) => s.day >= 5],
@@ -23,6 +28,7 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
+  broke: '🏦',
   promo: '🏷',
   contract: '📃',
   markdown: '🏷',

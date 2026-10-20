@@ -7,7 +7,7 @@ import { simulate, type Feature, type SimOptions, type SimResult } from '../src/
 const DAYS = Number(process.argv[2] ?? 180);
 const RUNS = Number(process.argv[3] ?? 40);
 const ALL: Partial<Record<Feature, boolean>> = Object.fromEntries(
-  (['candy', 'coffee', 'oven', 'night', 'cat', 'cart', 'loyalty', 'gear', 'etags', 'departments', 'skills', 'radio', 'brand', 'cafe'] as Feature[]).map((f) => [f, true]),
+  (['candy', 'coffee', 'oven', 'night', 'cat', 'cart', 'loyalty', 'gear', 'etags', 'departments', 'skills', 'radio', 'brand', 'cafe', 'kitchen', 'rush'] as Feature[]).map((f) => [f, true]),
 );
 
 const PROFILES: { name: string; opts: Omit<SimOptions, 'days' | 'seed'> }[] = [

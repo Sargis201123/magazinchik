@@ -25,6 +25,8 @@ describe('наследие: продать бизнес и начать зано
   it('очки: корень из выручки за всё время; поколение растёт', () => {
     expect(salePoints(done())).toBe(10);
     expect(salePoints(done({ totalRevenue: 4_000_000 }))).toBe(20);
+    // Деньги в кассе — вдвое: накопленное в конце игры не пропадает.
+    expect(salePoints(done({ money: 1_500_000 }))).toBe(20);
     const sold = sellBusiness(done())!;
     expect(legacyOf(sold)).toMatchObject({ gen: 1, points: 10 });
   });
