@@ -23,11 +23,16 @@ const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS players (id INTEGER PRIMARY KEY, lang TEXT, joined INTEGER, last_seen INTEGER, reminded_at INTEGER, misses INTEGER DEFAULT 0)',
   'CREATE TABLE IF NOT EXISTS referrals (invitee INTEGER PRIMARY KEY, inviter INTEGER NOT NULL, at INTEGER, claimed INTEGER DEFAULT 0, welcomed INTEGER DEFAULT 0)',
   'CREATE INDEX IF NOT EXISTS referrals_inviter ON referrals (inviter)',
+  // Прогресс магазина — для рейтинга и сводки (stats.ts) — и события игры для воронки.
+  'CREATE TABLE IF NOT EXISTS progress (id INTEGER PRIMARY KEY, name TEXT, day INTEGER, level INTEGER, rating REAL, revenue INTEGER, money INTEGER, chapter INTEGER, updated INTEGER)',
+  'CREATE INDEX IF NOT EXISTS progress_revenue ON progress (revenue)',
+  'CREATE TABLE IF NOT EXISTS events (id INTEGER, at INTEGER, kind TEXT, day INTEGER, value INTEGER)',
+  'CREATE INDEX IF NOT EXISTS events_kind ON events (kind, at)',
 ].join(';\n');
 
 /** Таблицы создаются сами при первом обращении к базе. */
 const schemaReady = new WeakSet<D1>();
-async function ready(db: D1): Promise<void> {
+export async function ready(db: D1): Promise<void> {
   if (schemaReady.has(db)) return;
   for (const sql of SCHEMA.split(';\n')) await db.prepare(sql).run();
   schemaReady.add(db);

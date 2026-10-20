@@ -5,6 +5,7 @@
 
 import { clientError, starsInvoice, starsOwned, starsRefund, starsSetup, telegramWebhook } from '../api/_lib/handlers.js';
 import { sendReminders, socialClaim, socialPing } from '../api/_lib/social.js';
+import { leaderboard, progress, stats } from '../api/_lib/stats.js';
 import type { Env } from '../api/_lib/telegram.js';
 
 interface WorkerEnv extends Env {
@@ -20,6 +21,9 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   '/api/client-error': { method: 'POST', handler: clientError },
   '/api/social-ping': { method: 'POST', handler: socialPing },
   '/api/social-claim': { method: 'POST', handler: socialClaim },
+  '/api/progress': { method: 'POST', handler: progress },
+  '/api/leaderboard': { method: 'POST', handler: leaderboard },
+  '/api/stats': { method: 'GET', handler: stats },
 };
 
 export default {

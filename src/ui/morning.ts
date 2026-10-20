@@ -201,6 +201,8 @@ import {
   type BurglaryNews,
 } from '../game/watch';
 import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
+import { track } from '../platform/analytics';
+import { showLeaderboard } from './leaderboard';
 import { haptic } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { button, el, openModal, who } from './dom';
@@ -486,12 +488,11 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     card.replaceChildren(
       title,
       ...(touring ? [] : tipBox(state)),
+      ...goalsBox(state),
       today,
       info,
-      questsBox(state),
       ...giantBox(state),
       ...contestBox(state),
-      ...weeklyBox(state),
       tabs,
       body,
       openButton,
@@ -525,6 +526,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     const finish = () => {
       tourStep = 0;
       endTour();
+      track(last ? 'tour_done' : 'tour_skip', getState().day);
       update({ ...getState(), tourDone: true }, last ? 'success' : 'tap');
       // Подарок — только после обучения: окно гостинца не мешает бабушкиным подсказкам.
       if (onTourDone) {
@@ -958,18 +960,38 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   const questText = (q: Quest) =>
     t(QUEST_TEXT[q.kind], { n: q.target, product: q.product ? productLabel(q.product) : '' });
 
-  const questsBox = (state: StoreState) => {
+  /** Цели дня и испытания — одной яркой карточкой сверху: что сделать сегодня и за что награда. */
+  const goalsBox = (state: StoreState): HTMLElement[] => {
     const quests = state.plan?.quests ?? [];
-    const box = el('div', 'ui-box');
-    if (!quests.length) return el('div');
-    box.append(el('b', '', t('quest.title')));
-    for (const q of quests) {
-      const r = el('div', 'ui-row');
-      r.append(el('span', '', `• ${questText(q)}`), el('span', 'ui-muted', t('quest.reward', { n: q.reward })));
-      box.append(r);
+    const weekly = state.weekly;
+    if (!quests.length && !weekly) return [];
+    const box = el('div', 'ui-box ui-goals');
+    if (quests.length) {
+      box.append(el('b', '', t('quest.title')));
+      for (const q of quests) {
+        const r = el('div', 'ui-row');
+        r.append(el('span', '', `• ${questText(q)}`), el('b', 'ui-goal-reward', `+${q.reward} 💰`));
+        box.append(r);
+      }
+      box.append(el('div', 'ui-muted', t('quest.allBonus', { r: ALL_QUESTS_RATING })));
     }
-    box.append(el('div', 'ui-muted', t('quest.allBonus', { r: ALL_QUESTS_RATING })));
-    return box;
+    if (weekly) {
+      box.append(el('b', 'ui-goals-week', t('weekly.title', { day: weeklyUntil(state) })));
+      for (const c of weekly.challenges as Challenge[]) {
+        const text = t(WEEKLY_TEXT[c.kind], { n: c.target, product: c.product ? productLabel(c.product) : '' });
+        const r = el('div', 'ui-row');
+        r.append(el('span', '', `${c.done ? '✅' : '•'} ${text}`), el('b', 'ui-goal-reward', `+${c.reward} 💰`));
+        box.append(r);
+        if (!c.done) {
+          const bar = el('div', 'ui-goal-bar');
+          const fill = el('div');
+          fill.style.width = `${Math.min(100, Math.round((c.progress / Math.max(1, c.target)) * 100))}%`;
+          bar.append(fill);
+          box.append(bar, el('div', 'ui-item-sub', `${c.progress} / ${c.target}`));
+        }
+      }
+    }
+    return [box];
   };
 
   const rankBox = (state: StoreState) => {
@@ -1193,6 +1215,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   /** Новая игра: сохранить и перезапустить — сцена соберётся с нуля. */
   const restart = () => {
+    track('restart', getState().day);
     saveGame(restartGame(getState()));
     // Новую игру сразу в облако, иначе при запуске подхватилась бы старая.
     const reload = () => location.reload();
@@ -1778,6 +1801,8 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   const inviteBox = (): HTMLElement[] => {
     const info = socialInfo();
     if (!info) return [];
+    const board = el('div', 'ui-box');
+    board.append(button(t('board.open'), showLeaderboard, 'ui-btn'));
     const box = el('div', 'ui-box');
     box.append(el('b', '', `🤝 ${t('social.title')}`), el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT })));
     if (info.friends) box.append(el('div', 'ui-muted', t('social.count', { n: info.friends })));
@@ -1792,7 +1817,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       }, 'ui-btn');
       box.append(claim);
     }
-    return [box];
+    return [board, box];
   };
 
   const decorBox = (state: StoreState) =>
@@ -2038,20 +2063,6 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   };
 
   /** Испытания недели: прогресс каждой цели и награда. */
-  const weeklyBox = (state: StoreState): HTMLElement[] => {
-    const weekly = state.weekly;
-    if (!weekly) return [];
-    const box = el('div', 'ui-box');
-    box.append(el('b', '', t('weekly.title', { day: weeklyUntil(state) })));
-    for (const c of weekly.challenges as Challenge[]) {
-      const r = el('div', 'ui-row');
-      const text = t(WEEKLY_TEXT[c.kind], { n: c.target, product: c.product ? productLabel(c.product) : '' });
-      r.append(el('span', '', `${c.done ? '✅' : '•'} ${text}`), el('span', 'ui-muted', c.done ? `+${c.reward} 💰` : `${c.progress}/${c.target} · +${c.reward} 💰`));
-      box.append(r);
-    }
-    return [box];
-  };
-
   const goalLine = (state: StoreState) => {
     const chapter = currentChapter(state);
     const text = chapter
@@ -2487,7 +2498,11 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       grow.append(
         button(
           t('store.expand', { cost: next.cost }),
-          () => update(expandStore(getState()), 'success'),
+          () => {
+            const grown = expandStore(getState());
+            if (grown) track('level_up', grown.day, grown.level);
+            update(grown, 'success');
+          },
           'ui-btn secondary',
           state.debt > 0 || next.cost > state.money,
         ),
