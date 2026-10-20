@@ -2,7 +2,7 @@
 // а тонкие обёртки лежат в api/ (Vercel) и worker/index.ts (Cloudflare Workers).
 
 import { commandReply, setupProfile } from './botProfile.js';
-import { recordReferral } from './social.js';
+import { recordReferral, recordSource } from './social.js';
 import { recordGuildInvite } from './guild.js';
 import { bot, canBuy, itemFromPayload, json, catalogItem, ownedFrom, payloadFor, verifyInitData, type Env, type StarTransaction } from './telegram.js';
 
@@ -117,6 +117,8 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
       // «/start ref_123» — друга пригласили по ссылке: записать, кто пригласил (social.ts).
       const payload = message.text.slice('/start'.length).trim();
       if (payload && message.from) await recordReferral(env, message.from.id, payload).catch((e) => console.error(e));
+      // «/start src_tgads» — пришёл по рекламной ссылке: запомнить канал (social.ts).
+      if (payload && message.from) await recordSource(env, message.from.id, payload).catch((e) => console.error(e));
       // «/start guild_ABC123» — приглашение в гильдию района (guild.ts).
       if (payload && message.from) await recordGuildInvite(env, message.from.id, payload).catch((e) => console.error(e));
       await bot(token, 'sendMessage', {
