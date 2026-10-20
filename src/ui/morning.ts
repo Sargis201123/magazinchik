@@ -175,6 +175,7 @@ import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeL
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
+import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
 import { flushCloud, saveGame } from '../game/save';
 import { buyRadio, hasRadio, RADIO_PRICE, setStation, STATION_INFO, STATIONS, stationOf } from '../game/radio';
@@ -1221,6 +1222,74 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     const reload = () => location.reload();
     setTimeout(reload, 3000);
     void flushCloud().finally(reload);
+  };
+
+  /** Бонусы наследия: уровень каждого и что даёт; в окне продажи — кнопки «+1». */
+  const perkRows = (state: StoreState, onBuy?: (id: PerkId) => void): HTMLElement[] =>
+    PERK_IDS.map((id) => {
+      const level = perkLevel(state, id);
+      const value = { capital: level * CAPITAL_STEP, fame: (level * FAME_STEP).toFixed(1), suppliers: Math.round(level * SUPPLIERS_STEP * 100), crowd: Math.round(level * CROWD_STEP * 100), mentor: level }[id];
+      const row = el('div', 'ui-item');
+      const body = el('div');
+      const name = el('div', 'ui-item-name', t(`legacy.perk.${id}` as TextKey));
+      name.append(el('span', 'ui-tag', `${level}/${PERKS[id].max}`));
+      body.append(name, el('div', 'ui-item-sub', level ? t(`legacy.perk.${id}.desc` as TextKey, { n: value }) : '—'));
+      row.append(el('div', 'ui-ad-icon', PERKS[id].icon), body);
+      if (onBuy) {
+        const cost = perkCost(state, id);
+        const actions = el('div', 'ui-item-actions');
+        actions.append(button(cost === null ? t('legacy.max') : t('legacy.buy', { n: cost }), () => onBuy(id), 'ui-chip', cost === null || legacyOf(state).points < cost));
+        row.append(actions);
+      }
+      return row;
+    });
+
+  /** Продажа: окно с бонусами наследия, потом — новый магазин с нуля. */
+  const sellFlow = () => {
+    let sold = sellBusiness(getState());
+    if (!sold) return;
+    track('sell', sold.day, salePoints(sold));
+    const { card, close } = openModal();
+    const render = () => {
+      const list = el('div', 'ui-box');
+      list.append(
+        ...perkRows(sold!, (id) => {
+          sold = buyPerk(sold!, id) ?? sold;
+          render();
+        }),
+      );
+      card.replaceChildren(
+        el('h2', '', t('legacy.shop.title')),
+        el('div', 'ui-note', t('legacy.points', { n: legacyOf(sold!).points })),
+        el('div', 'ui-muted', t('legacy.shop.note')),
+        list,
+        button(t('legacy.shop.start'), () => {
+          close();
+          saveGame(restartGame(sold!));
+          const reload = () => location.reload();
+          setTimeout(reload, 3000);
+          void flushCloud().finally(reload);
+        }),
+        button(t('legacy.shop.cancel'), close, 'ui-btn secondary'),
+      );
+    };
+    render();
+  };
+
+  /** «Наследие» во вкладке «Магазин»: поколение и бонусы; универмаг после сюжета можно продать. */
+  const legacyBox = (state: StoreState): HTMLElement[] => {
+    const legacy = legacyOf(state);
+    if (!legacy.gen && !canSell(state)) return [];
+    const box = el('div', 'ui-box');
+    if (legacy.gen) box.append(el('b', '', t('legacy.title', { n: legacy.gen + 1 })), ...perkRows(state), el('div', 'ui-muted', t('legacy.points', { n: legacy.points })));
+    if (canSell(state)) {
+      box.append(
+        el('h3', '', t('legacy.sell.title')),
+        el('div', 'ui-muted', t('legacy.sell.note', { n: salePoints(state) })),
+        button(t('legacy.sell.button', { n: salePoints(state) }), sellFlow, 'ui-btn'),
+      );
+    }
+    return [box];
   };
 
   /** Что останется после новой игры. */
@@ -2460,6 +2529,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     );
     const out: HTMLElement[] = [
       achievementsButton(state),
+      ...legacyBox(state),
       ...inviteBox(),
       decorBox(state),
       replay,

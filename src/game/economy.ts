@@ -1,6 +1,7 @@
 // Чистая игровая логика без Phaser: её легко тестировать и потом переиспользовать
 // на сервере (проверка сохранений, расчёт дохода офлайн).
 
+import { legacyMentor, legacyPurchase, type Legacy } from './legacy';
 import type { TextKey } from '../i18n/ru';
 import type { DayPlan } from './events';
 import type { StoryState } from './story';
@@ -364,7 +365,9 @@ export const staffLimit = (state: StoreState): number => STAFF_LIMIT[state.level
 export function hire(state: StoreState, member: StaffMember): StoreState | null {
   if (staffOf(state, member.role) || state.staff.length >= staffLimit(state)) return null;
   const jobSearch = state.jobSearch && { ...state.jobSearch, candidates: state.jobSearch.candidates.filter((c) => c !== member) };
-  return { ...state, staff: [...state.staff, member], jobSearch };
+  // Опытные знакомые (наследие): новичок приходит на ступень-две опытнее.
+  const hired = legacyMentor(state) ? { ...member, skill: Math.min(3, member.skill + legacyMentor(state)) } : member;
+  return { ...state, staff: [...state.staff, hired], jobSearch };
 }
 
 export function fire(state: StoreState, role: StaffRole): StoreState {
@@ -584,6 +587,8 @@ export interface StoreState {
   bankrupt?: boolean;
   /** Сколько игр начато заново. */
   runs?: number;
+  /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */
+  legacy?: Legacy;
   /** Сколько должна добрая бабушка, которой дали хлеба в долг (special.ts). */
   grannyOwed?: number;
   /** Договор с кафе «Пончик» по соседству (cafe.ts). */
@@ -813,7 +818,8 @@ export function setPrice(state: StoreState, id: ProductId, price: number): Store
  * Возвращает null, если не хватает денег или места на складе.
  */
 export function buyStock(state: StoreState, id: ProductId, qty: number, unitPrice: number, bad = false): StoreState | null {
-  const total = qty * unitPrice;
+  // Старые связи с поставщиками (наследие) — скидка на всю закупку.
+  const total = Math.round(qty * unitPrice * legacyPurchase(state));
   if (qty <= 0 || total > state.money || warehouseCount(state) + qty > warehouseCapacity(state)) return null;
   const units: Unit[] = Array.from({ length: qty }, () => (bad ? { age: 0, bad: true, pending: true } : { age: 0 }));
   return {

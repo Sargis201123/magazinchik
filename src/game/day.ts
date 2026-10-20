@@ -28,6 +28,7 @@ import { fairGuests } from './fair';
 import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
 import { hiddenBigDayGuests, knownBigDayGuests } from './bigday';
 import { coffeeTablesGuests } from './coffee';
+import { legacyGuests } from './legacy';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -83,6 +84,7 @@ export function inspectionDone(state: StoreState, result: InspectionResult): Sto
 /** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина, реклама, погода, цены и Эдуард. */
 export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
+  legacyGuests(state) *
   priceAppeal(state) *
   coffeeTablesGuests(state) *
   (seasonFor(state.day)?.guests ?? 1) *

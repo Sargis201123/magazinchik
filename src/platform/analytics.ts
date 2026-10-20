@@ -3,6 +3,7 @@
 // когда у сервера есть база; иначе события просто копятся (не больше MAX_QUEUE) и не мешают.
 
 import type { StoreState } from '../game/economy';
+import { lifetimeRevenue } from '../game/legacy';
 import { telegramInitData } from './telegram';
 import { post } from './social';
 
@@ -46,7 +47,7 @@ export async function reportProgress(state: StoreState): Promise<void> {
     day: state.day,
     level: state.level,
     rating: state.rating,
-    revenue: state.totalRevenue,
+    revenue: lifetimeRevenue(state),
     money: state.money,
     chapter: state.story.chapter,
     events,

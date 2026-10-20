@@ -3,10 +3,12 @@
 // принадлежит игроку, а не магазину:
 // - всё купленное за Telegram Stars (премиальный декор; новые покупки за звёзды добавлять сюда);
 // - открытые достижения;
-// - бабушкина экскурсия уже пройдена, серия ежедневных подарков не сбрасывается.
+// - бабушкина экскурсия уже пройдена, серия ежедневных подарков не сбрасывается;
+// - наследие проданных магазинов (legacy.ts): очки и бонусы, стартовые — сразу в новом магазине.
 
 import { DECOR, type DecorId, type DecorKind } from './decor';
 import { newGame, type StoreState } from './economy';
+import { applyLegacyStart } from './legacy';
 
 /** Премиальные (за Stars) вещи оформления, которые игрок уже купил. */
 export function premiumDecor(state: StoreState): DecorId[] {
@@ -20,7 +22,7 @@ export function restartGame(old: StoreState): StoreState {
   const active = Object.fromEntries(
     Object.entries(old.decor.active).filter(([, id]) => id && owned.includes(id)),
   ) as Partial<Record<DecorKind, DecorId>>;
-  return {
+  return applyLegacyStart({
     ...fresh,
     decor: { owned, active },
     achievements: [...old.achievements],
@@ -29,5 +31,6 @@ export function restartGame(old: StoreState): StoreState {
     tourDone: true,
     // Прошлые игры — для экрана «магазин закрыт» и будущих рекордов.
     runs: (old.runs ?? 0) + 1,
-  };
+    legacy: old.legacy,
+  });
 }
