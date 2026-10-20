@@ -51,5 +51,6 @@ export function showAchievements(state: StoreState): void {
 /** «Новое достижение!» — всплывашка со значком. */
 export function announceAchievement(id: AchievementId): void {
   sound.good();
-  toast(badgeSrc(id), t('ach.unlocked'), t(achievementName(id)));
+  setTimeout(() => sound.medal(), 750);
+  toast(badgeSrc(id), t('ach.unlocked'), t(achievementName(id)), true);
 }

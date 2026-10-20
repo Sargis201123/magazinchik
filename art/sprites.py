@@ -4859,6 +4859,9 @@ def main():
     import icons2
 
     icons2.main()
+    import clockface
+
+    clockface.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
