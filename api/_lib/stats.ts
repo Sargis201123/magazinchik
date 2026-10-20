@@ -7,6 +7,7 @@
 // сколько возвращаются на следующий день и через неделю.
 
 import { markWeek } from './guild.js';
+import { markWeekend } from './weekend.js';
 import { ready } from './social.js';
 import { json, verifyInitData, type Env } from './telegram.js';
 
@@ -52,6 +53,7 @@ export async function progress(request: Request, env: Env): Promise<Response> {
     .bind(user.id, name, int(body.day, 100000), int(body.level, 10), rating, int(body.revenue), int(body.money), int(body.chapter, 100), now)
     .run();
   await markWeek(db, user.id, int(body.revenue), now);
+  await markWeekend(db, user.id, int(body.revenue), now);
   const events = Array.isArray(body.events) ? body.events.slice(0, MAX_EVENTS) : [];
   for (const e of events as Record<string, unknown>[]) {
     const kind = String(e?.kind ?? '');

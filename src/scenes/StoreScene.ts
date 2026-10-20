@@ -129,6 +129,7 @@ import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social
 import { reportProgress, track } from '../platform/analytics';
 import { duelInfo, loadMultiplayer } from '../platform/multiplayer';
 import { ensureSeason, grantPass } from '../game/pass';
+import { ensureRush } from '../game/rush';
 import { reportError, setErrorContext } from '../platform/errors';
 import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
@@ -884,7 +885,7 @@ export class StoreScene extends Phaser.Scene {
   create(): void {
     setErrorContext(() => ({ day: this.state?.day, level: this.state?.level, running: this.running, ua: navigator.userAgent.slice(0, 120) }));
     const save = loadGame();
-    this.state = ensureSeason(ensurePlan(save ?? newGame()), Date.now());
+    this.state = ensureRush(ensureSeason(ensurePlan(save ?? newGame()), Date.now()), Date.now());
     if (!save) track('new_game', 1);
     // Игра открылась — прогресс и накопленные события на сервер (рейтинг и аналитика).
     void reportProgress(this.state);
@@ -6396,7 +6397,8 @@ export class StoreScene extends Phaser.Scene {
 
   private showMorning(): void {
     // За ночь склад доливает полки: утром всё, что влезает, уже стоит в зале (просрочку списали ночью).
-    this.state = shelveAll(this.state);
+    // По настоящим часам: новый сезон пропуска и выходные «Чёрной пятницы района».
+    this.state = ensureRush(ensureSeason(shelveAll(this.state), Date.now()), Date.now());
     // Подарок за ежедневный вход — но не во время бабушкиного обучения: его вручат, когда оно закончится.
     if (this.state.tourDone !== false) this.offerGift();
     // Старые сохранения сразу получают значки за то, что уже сделано.

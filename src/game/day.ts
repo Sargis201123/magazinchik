@@ -31,6 +31,7 @@ import { coffeeTablesGuests } from './coffee';
 import { legacyGuests } from './legacy';
 import { taleGuests, talesMorning } from './tales';
 import { addPassXp } from './pass';
+import { rushGuests } from './rush';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -89,6 +90,7 @@ export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
   legacyGuests(state) *
   taleGuests(state) *
+  rushGuests(state) *
   priceAppeal(state) *
   coffeeTablesGuests(state) *
   (seasonFor(state.day)?.guests ?? 1) *

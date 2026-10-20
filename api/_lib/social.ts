@@ -36,6 +36,9 @@ const SCHEMA = [
   'CREATE INDEX IF NOT EXISTS guild_members_guild ON guild_members (guild)',
   'CREATE TABLE IF NOT EXISTS guild_invites (player INTEGER PRIMARY KEY, guild INTEGER, at INTEGER)',
   'CREATE TABLE IF NOT EXISTS guild_weeks (guild INTEGER, week INTEGER, target INTEGER, PRIMARY KEY (guild, week))',
+  // «Чёрная пятница района» по выходным (weekend.ts): выручка за выходные.
+  'CREATE TABLE IF NOT EXISTS weekend (id INTEGER, week INTEGER, start INTEGER, last INTEGER, PRIMARY KEY (id, week))',
+  'CREATE INDEX IF NOT EXISTS weekend_week ON weekend (week)',
 ].join(';\n');
 
 /** Таблицы создаются сами при первом обращении к базе. */
