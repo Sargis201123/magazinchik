@@ -96,6 +96,8 @@ import {
 } from '../game/endless';
 import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
 import { applyReorder, autoOrderPlan, recordPurchase, rememberAutoOrder, reorderPlan, toggleAutoOrder } from '../game/reorder';
+import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
+import { stockOf } from '../game/bakery';
 import { activePromo, setPromo, type PromoKind } from '../game/promo';
 import { deliverContracts, type Delivery } from '../game/contracts';
 import { daysToFair, isFairDay } from '../game/fair';
@@ -227,14 +229,15 @@ interface MorningOptions {
   onTourDone?: () => void;
 }
 
-type Tab = 'buy' | 'warehouse' | 'shelves' | 'extras' | 'staff' | 'store';
-const TABS: [Tab, TextKey][] = [
-  ['buy', 'tab.buy'],
-  ['warehouse', 'tab.warehouse'],
-  ['shelves', 'tab.shelves'],
-  ['extras', 'tab.extras'],
-  ['staff', 'tab.staff'],
-  ['store', 'tab.store'],
+// Вкладки в одну строку: значок и короткая подпись. Профиль (достижения, наследие, настройки) —
+// кнопкой в углу заголовка, не вкладкой.
+type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
+const TABS: [Tab, string, TextKey][] = [
+  ['buy', '🛒', 'tab.buy'],
+  ['hall', '🏪', 'tab.hall'],
+  ['extras', '☕', 'tab.extras'],
+  ['staff', '👥', 'tab.staff'],
+  ['grow', '🏗', 'tab.grow'],
 ];
 
 /**
@@ -247,11 +250,11 @@ const TOUR: { key: TextKey; focus: TourFocus; tab?: Tab; mood?: 'happy' | 'sad' 
   { key: 'tour.top', focus: 'title' },
   { key: 'tour.today', focus: 'today' },
   { key: 'tour.buy', focus: 'tab', tab: 'buy' },
-  { key: 'tour.warehouse', focus: 'tab', tab: 'warehouse' },
-  { key: 'tour.shelves', focus: 'tab', tab: 'shelves' },
+  { key: 'tour.warehouse', focus: 'tab', tab: 'hall' },
+  { key: 'tour.shelves', focus: 'tab', tab: 'hall' },
   { key: 'tour.extras', focus: 'tab', tab: 'extras' },
   { key: 'tour.staff', focus: 'tab', tab: 'staff' },
-  { key: 'tour.store', focus: 'tab', tab: 'store' },
+  { key: 'tour.store', focus: 'tab', tab: 'grow' },
   { key: 'tour.open', focus: 'open' },
   { key: 'tour.hall', focus: 'open', mood: 'happy' },
 ];
@@ -331,12 +334,31 @@ function artRow(texture: string, opts: { name: string; price?: number; sub?: str
 /** «+10%» / «−20%» для множителя. */
 const percent = (k: number): string => `${k >= 1 ? '+' : '−'}${Math.round(Math.abs(k - 1) * 100)}%`;
 
+/** Заголовок с «❔»: длинное пояснение спрятано и открывается по нажатию. */
+function helpRow(title: HTMLElement | string, text: string): HTMLElement {
+  const wrap = el('div', 'ui-help');
+  const head = el('div', 'ui-help-head');
+  const note = el('div', 'ui-help-text', text);
+  note.hidden = true;
+  const toggle = button('❔', () => {
+    note.hidden = !note.hidden;
+    toggle.classList.toggle('active', !note.hidden);
+  }, 'ui-help-btn');
+  head.append(typeof title === 'string' ? el('span', 'ui-muted', title) : title, toggle);
+  wrap.append(head, note);
+  return wrap;
+}
+
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
 export function showMorning({ getState, setState, onOpen, onTourDone }: MorningOptions): void {
   const { card, close } = openModal();
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
   let tab: Tab = 'buy';
+  /** Какие товары показывать в закупке: заканчивающиеся, все или сезонные. */
+  let buyFilter: 'low' | 'all' | 'season' = 'low';
+  /** Какая полка во вкладке «Зал» раскрыта (улучшить, продать, починить). */
+  let openShelf = -1;
   /** Вкладку только что переключили — содержимое въезжает сбоку (при покупках не дёргается). */
   let slideTab = false;
   /** Какая реплика сюжетного диалога сейчас на экране. */
@@ -464,22 +486,27 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     if (step?.tab) tab = step.tab;
 
     const tabs = el('div', 'ui-tabs');
-    for (const [id, label] of TABS) {
-      tabs.append(
-        button(
-          t(label),
-          () => {
-            tab = id;
-            slideTab = true;
-            render();
-          },
-          `ui-tab${tab === id ? ' active' : ''}`,
-        ),
-      );
+    const badges = tabBadges(state);
+    const go = (id: Tab) => () => {
+      tab = id;
+      slideTab = true;
+      render();
+      // Вкладку сменили, а список прокручен далеко вниз — показываем её начало.
+      requestAnimationFrame(() => card.querySelector('.ui-tabs')?.scrollIntoView({ block: 'start' }));
+    };
+    for (const [id, icon, label] of TABS) {
+      const b = button('', go(id), `ui-tab${tab === id ? ' active' : ''}`);
+      b.append(el('span', 'ui-tab-icon', icon), el('span', 'ui-tab-label', t(label)));
+      if (badges[id]) b.append(el('span', 'ui-tab-dot', String(badges[id])));
+      tabs.append(b);
     }
+    const profile = button('🏆', go('profile'), `ui-chip ui-profile-btn${tab === 'profile' ? ' active' : ''}`);
+    profile.title = t('tab.profile');
+    title.append(profile);
 
     const body = el('div', slideTab ? 'ui-enter' : '');
-    body.append(...{ buy: buyTab, warehouse: warehouseTab, shelves: shelvesTab, extras: extrasTab, staff: staffTab, store: storeTab }[tab](state));
+    if (tab === 'profile') body.append(el('h3', '', `🏆 ${t('tab.profile')}`));
+    body.append(...{ buy: buyTab, hall: hallTab, extras: extrasTab, staff: staffTab, grow: growTab, profile: profileTab }[tab](state));
     slideTab = false;
     const today = todoBox(state);
     const info = infos(
@@ -504,26 +531,24 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       close();
       onOpen();
     });
+    // Кнопка «Открыть магазин» всегда внизу окна — не нужно листать до конца списка.
+    const openBar = el('div', 'ui-open-bar');
+    openBar.append(openButton);
+    // Сверху — только то, где нужно решить или забрать; остальное утро — в свёрнутой карточке «Сегодня».
     card.replaceChildren(
       title,
       ...(touring ? [] : tipBox(state)),
       ...giftsBox(),
-      ...rushBox(state),
-      ...passBox(state),
       ...staffEventBox(state),
       ...districtBox(state),
       ...trickBox(state),
       ...taleBox(state),
       ...guildClaimBox(state),
-      ...duelBox(state),
-      ...goalsBox(state),
       today,
-      info,
-      ...giantBox(state),
-      ...contestBox(state),
+      todayCard(state, touring, [...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),
       tabs,
       body,
-      openButton,
+      openBar,
     );
     if (!step) {
       endTour();
@@ -543,6 +568,55 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     showTour(step);
     if (focus) requestAnimationFrame(() => focus.scrollIntoView({ block: 'center', behavior: 'smooth' }));
     else card.scrollTo({ top: 0 });
+  };
+
+  /** Красные цифры на вкладках: где утром нужно что-то сделать. */
+  const tabBadges = (state: StoreState): Partial<Record<Tab, number>> => {
+    const empty = sellableProducts(state).filter((pid) => canStock(state, pid) && stockOf(state, pid) === 0).length;
+    const broken = state.shelves.filter((sh) => sh.broken).length + (expiringCount(state) ? 1 : 0);
+    const rack = rackOf(state);
+    const extras = (state.cat && !fedToday(state) ? 1 : 0) + (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0);
+    const next = nextStoreLevel(state);
+    const grow = next && state.debt === 0 && state.money >= next.cost ? 1 : 0;
+    return { buy: empty, hall: broken, extras, grow };
+  };
+
+  /**
+   * «Сегодня»: строка значков (рейтинг, гости, задания, неделя, сезон) — по нажатию раскрываются
+   * подробности: новости района, задания, испытания, погода, счета.
+   */
+  const todayCard = (state: StoreState, touring: boolean, details: HTMLElement[]): HTMLElement => {
+    const box = el('div', 'ui-box ui-today');
+    const open = touring || openFolds.has('today');
+    const head = el('button', 'ui-today-head');
+    const chips = el('div', 'ui-today-chips');
+    const chip = (text: string, hot = false) => chips.append(el('span', `ui-today-chip${hot ? ' hot' : ''}`, text));
+    chip(`★ ${state.rating.toFixed(1)}`);
+    chip(`👥 ~${guestsToday(state)}`);
+    const quests = state.plan?.quests ?? [];
+    if (quests.length) chip(`🎯 ${quests.length}`);
+    const weekly = state.weekly?.challenges as Challenge[] | undefined;
+    if (weekly?.length) chip(`📅 ${weekly.filter((c) => c.done).length}/${weekly.length}`);
+    const ready = state.pass ? passReady(state) : 0;
+    if (state.pass) chip(`🎫 ${passLevel(state.pass)}${ready ? ` · 🎁${ready}` : ''}`, ready > 0);
+    head.append(el('b', '', `${open ? '▾' : '▸'} ${t('today.title')}`), chips);
+    head.addEventListener('click', () => {
+      if (openFolds.has('today')) openFolds.delete('today');
+      else openFolds.add('today');
+      try {
+        localStorage.setItem(OPEN_KEY, JSON.stringify([...openFolds]));
+      } catch {
+        // Без хранилища помним до перезапуска.
+      }
+      render();
+    });
+    box.append(head);
+    if (open) {
+      const more = el('div', 'ui-today-more');
+      more.append(...details);
+      box.append(more);
+    }
+    return box;
   };
 
   /** Реплика бабушки внизу экрана: «Дальше» — следующий шаг, «Пропустить» — сразу к делу. */
@@ -635,22 +709,108 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     return { s: working.reduce((a, sh) => a + shelfCount(sh), 0), smax: working.reduce((a, sh) => a + shelfCapacity(sh), 0) };
   };
 
-  const buyTab = (state: StoreState): HTMLElement[] => [
-    ...cafeBox(state),
-    el('div', 'ui-note', t('buy.note')),
-    // Купленное сразу уходит на полки — показываем и полки, и склад, иначе кажется, что ничего не купил.
-    el('div', 'ui-muted', t('buy.space', { ...shelfSpace(state), n: warehouseCount(state), max: warehouseCapacity(state) })),
-    ...autoOrderBox(state),
-    ...reorderBox(state),
+  const priceOf = (sid: SupplierId, pid: ProductId) => unitPrice(SUPPLIERS[sid], deals[sid], pid);
+
+  /** Купить у поставщика: брак — с той же вероятностью, что и раньше; покупка запоминается для «как в прошлый раз». */
+  const buyFrom = (sid: SupplierId, pid: ProductId, qty: number, price: number) => {
+    const bad = Math.random() < SUPPLIERS[sid].badChance;
+    const bought = buyStock(getState(), pid, qty, price, bad);
+    const next = bought && recordPurchase(bought, sid, pid, qty);
+    if (bad && next) pendingBad = { sid, pid, qty, price };
+    update(next, bad ? 'error' : 'tap');
+  };
+
+  /** «Закупить нужное»: одна кнопка — всё, чего не хватит на день, у самых дешёвых поставщиков. */
+  const restockBox = (state: StoreState): HTMLElement => {
+    const plan = restockPlan(state, priceOf, guestsToday(state));
+    const box = el('div', 'ui-box ui-restock');
+    if (!plan.lines.length) {
+      box.append(el('b', '', `✅ ${t('restock.enough')}`));
+      if (plan.cut) box.append(el('div', 'ui-note', t('restock.noRoom')));
+      return box;
+    }
+    const list = plan.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' ');
+    box.append(
+      button(t('restock.buy', { n: plan.total }), () => {
+        const fresh = restockPlan(getState(), priceOf, guestsToday(getState()));
+        if (!fresh.lines.length) return;
+        const result = applyReorder(getState(), fresh, (line) => Math.random() < SUPPLIERS[line.sid].badChance);
+        if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
+        update(result.state, result.badLine ? 'error' : 'success');
+      }, state.day <= 2 ? 'ui-btn ui-pulse' : 'ui-btn'),
+      el('div', 'ui-muted', list),
+    );
+    if (plan.cut) box.append(el('div', 'ui-note', t('restock.cut')));
+    return box;
+  };
+
+  /** Список по товарам: остаток, сколько нужно на день, лучшая цена и у кого, «+1» / «+5». */
+  const productRows = (state: StoreState): HTMLElement[] => {
+    const guests = guestsToday(state);
+    const free = warehouseCapacity(state) - warehouseCount(state);
+    const seasonal = (pid: ProductId) => Boolean(SEASONAL[pid]);
+    const shown = PRODUCT_IDS.filter((pid) => {
+      if (buyFilter === 'season') return seasonal(pid);
+      if (!canStock(state, pid) || !bestOffer(state, pid, priceOf)) return false;
+      return buyFilter === 'all' || stockOf(state, pid) < restockTarget(state, pid, guests) * 0.6;
+    });
+    const box = el('div', 'ui-box');
+    for (const pid of shown) {
+      if (!productAvailable(pid, state.day)) {
+        box.append(el('div', 'ui-muted', `🗓 ${t('goods.offer', { name: productLabel(pid), when: t(`goods.when.${pid}` as TextKey), left: t('goods.in', { n: daysUntilSeason(pid, state.day) }) })}`));
+        continue;
+      }
+      const offer = bestOffer(state, pid, priceOf);
+      if (!offer || !canStock(state, pid)) {
+        box.append(el('div', 'ui-muted', `🔒 ${productLabel(pid)}: ${t('prices.locked', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) })}`));
+        continue;
+      }
+      const { sid, price } = offer;
+      const chips = [1, 5].map((qty) =>
+        button(
+          `+${qty}`,
+          () => buyFrom(sid, pid, qty, price),
+          // В первые дни «+5» у хлеба пульсирует — подсказка, с чего начать.
+          state.day <= 2 && qty === 5 && pid === 'bread' ? 'ui-chip ui-pulse' : 'ui-chip',
+          qty > free || price * qty > state.money,
+        ),
+      );
+      const need = restockTarget(state, pid, guests);
+      const sub = `${t('buy.inWarehouse', { s: onShelves(state, pid), n: warehouseOf(state, pid) })} · ${t('restock.need', { n: need })} · ${t(SUPPLIERS[sid].nameKey)}`;
+      box.append(itemRow(pid, { price, sub, actions: chips }));
+    }
+    if (!box.childElementCount) box.append(el('div', 'ui-muted', t(buyFilter === 'low' ? 'restock.noneLow' : 'restock.none')));
+    return [box];
+  };
+
+  const buyTab = (state: StoreState): HTMLElement[] => {
+    const filters = el('div', 'ui-chips ui-filter');
+    for (const id of ['low', 'all', 'season'] as const) {
+      filters.append(
+        button(t(`restock.filter.${id}` as TextKey), () => {
+          buyFilter = id;
+          render();
+        }, `ui-chip${buyFilter === id ? ' active' : ''}`),
+      );
+    }
     // Оптовик появляется, когда в помещении можно поставить полку нового отдела.
-    ...SUPPLIER_IDS.filter((sid) => {
+    const suppliers = SUPPLIER_IDS.filter((sid) => {
       const req = SUPPLIERS[sid].requires;
       return !Array.isArray(req) || req.some((k) => shelfKindOpen(state, k));
-    }).map((sid) => supplierBox(sid, state)),
-    el('h3', '', t('tab.prices')),
-    el('div', 'ui-note', t('prices.note', { g: percent(priceAppeal(state)) })),
-    ...pricesTab(state),
-  ];
+    });
+    const extra = [...autoOrderBox(state), ...reorderBox(state)];
+    return [
+      ...cafeBox(state),
+      // Купленное сразу уходит на полки — показываем и полки, и склад, иначе кажется, что ничего не купил.
+      helpRow(t('buy.space', { ...shelfSpace(state), n: warehouseCount(state), max: warehouseCapacity(state) }), t('buy.note')),
+      restockBox(state),
+      filters,
+      ...productRows(state),
+      foldBox('suppliers', `🤝 ${t('restock.suppliers')}`, (body) => body.append(...suppliers.map((sid) => supplierBox(sid, getState())))),
+      ...(extra.length ? [foldBox('reorder', `🔁 ${t('restock.more')}`, (body) => body.append(...extra))] : []),
+      foldBox('prices', `🏷 ${t('tab.prices')}`, (body) => body.append(helpRow(t('prices.title'), t('prices.note', { g: percent(priceAppeal(getState())) })), ...pricesTab(getState()))),
+    ];
+  };
 
   const supplierBox = (sid: SupplierId, state: StoreState) => {
     const s = SUPPLIERS[sid];
@@ -664,42 +824,11 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       return box;
     }
 
-    const free = warehouseCapacity(state) - warehouseCount(state);
-    for (const pid of PRODUCT_IDS) {
-      const price = unitPrice(s, deal, pid);
-      if (price === null) continue;
-      // Не сезон — строчкой: когда появится и где его продают.
-      if (!productAvailable(pid, state.day)) {
-        box.append(
-          el('div', 'ui-muted', `🗓 ${t('goods.offer', { name: productLabel(pid), when: t(`goods.when.${pid}` as TextKey), left: t('goods.in', { n: daysUntilSeason(pid, state.day) }) })}`),
-        );
-        continue;
-      }
-      // Без своей полки товар не продать: у оптовика его просто нет, у остальных — подсказка (мороженому нужен ларь).
-      if (!state.shelves.some((sh) => canPlace(pid, sh))) {
-        if (!Array.isArray(s.requires)) box.append(el('div', 'ui-muted', `🔒 ${productLabel(pid)}: ${t('prices.locked', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) })}`));
-        continue;
-      }
-      const chips: HTMLElement[] = [];
-      for (const qty of [1, 5]) {
-        chips.push(
-          button(
-            `+${qty}`,
-            () => {
-              const bad = Math.random() < s.badChance;
-              const bought = buyStock(getState(), pid, qty, price, bad);
-              const next = bought && recordPurchase(bought, sid, pid, qty);
-              if (bad && next) pendingBad = { sid, pid, qty, price };
-              update(next, bad ? 'error' : 'tap');
-            },
-            // В первые дни кнопка «+5» у первого поставщика пульсирует — подсказка, с чего начать.
-            state.day <= 2 && sid === SUPPLIER_IDS[0] && qty === 5 && pid === 'bread' ? 'ui-chip ui-pulse' : 'ui-chip',
-            qty > free || price * qty > state.money,
-          ),
-        );
-      }
-      box.append(itemRow(pid, { price, sub: t('buy.inWarehouse', { s: onShelves(state, pid), n: warehouseOf(state, pid) }), actions: chips }));
-    }
+    // Что у него есть сегодня и почём; покупать — в списке выше (там сразу самая низкая цена).
+    const offers = PRODUCT_IDS.filter((pid) => canStock(state, pid))
+      .map((pid) => ({ pid, price: unitPrice(s, deal, pid) }))
+      .filter((o): o is { pid: ProductId; price: number } => o.price !== null);
+    box.append(el('div', 'ui-item-sub', offers.map((o) => `${PRODUCTS[o.pid].icon}${o.price}`).join('  ')));
 
     // Торг одной строкой: слева «Торг» и сердечки терпения поставщика, справа три одинаковые кнопки.
     const haggleRow = el('div', 'ui-haggle');
@@ -764,21 +893,9 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   // ---------- Склад ----------
 
-  /** Просрочка: выбрасывать или отдавать в приют (за доброе дело растёт рейтинг). */
-  const donateBox = (state: StoreState): HTMLElement => {
-    const box = el('div', 'ui-box');
-    box.append(
-      el('b', '', t('donate.title')),
-      el('div', 'ui-muted', t(state.donate ? 'donate.on' : 'donate.off')),
-      button(t(state.donate ? 'donate.toggleOff' : 'donate.toggleOn'), () => update(toggleDonate(getState())), 'ui-chip'),
-    );
-    return box;
-  };
-
-  const warehouseTab = (state: StoreState): HTMLElement[] => {
-    const out: HTMLElement[] = [
-      el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
-    ];
+  /** Склад во вкладке «Зал»: что не влезло на полки — строкой значков; разложить одной кнопкой. */
+  const stockBox = (state: StoreState): HTMLElement[] => {
+    const out: HTMLElement[] = [];
     const expiring = expiringCount(state);
     if (expiring) {
       const box = el('div', 'ui-box');
@@ -788,34 +905,33 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       );
       out.push(box);
     }
-    out.push(donateBox(state));
     const present = PRODUCT_IDS.filter((pid) => warehouseOf(state, pid) > 0);
-    if (present.length === 0) {
-      out.push(el('div', 'ui-note', t('warehouse.empty')));
-      return out;
-    }
     const box = el('div', 'ui-box');
-    for (const pid of present) {
-      const units = state.warehouse[pid] ?? [];
-      const bad = units.filter((u) => u.bad && !u.markdown).length;
-      const markdown = units.filter((u) => u.markdown).length;
-      const extra = [bad ? t('warehouse.bad', { n: bad }) : '', markdown ? t('warehouse.markdown', { n: markdown }) : '']
-        .filter(Boolean)
-        .join(', ');
-
-      const shelfIndex = state.shelves.findIndex((sh) => canPlace(pid, sh) && shelfFree(sh) > 0);
-      const hasShelfKind = state.shelves.some((sh) => canPlace(pid, sh));
-      const sub = [t('buy.inWarehouse', { n: units.length }), extra].filter(Boolean).join(' · ');
-      const action = hasShelfKind
-        ? button(
-            shelfIndex >= 0 ? t('warehouse.toShelf') : t('warehouse.shelfFull'),
-            () => update(moveToShelf(getState(), shelfIndex, pid).state),
-            'ui-chip',
-            shelfIndex < 0,
-          )
-        : el('span', 'ui-muted', t('warehouse.noShelf', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) }));
-      box.append(itemRow(pid, { sub, actions: [action] }));
+    box.append(el('b', '', `📦 ${t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })}`));
+    if (!present.length) {
+      box.append(el('div', 'ui-muted', t('warehouse.empty')));
+    } else {
+      const line = present.map((pid) => {
+        const units = state.warehouse[pid] ?? [];
+        const bad = units.filter((u) => u.bad && !u.markdown).length;
+        return `${PRODUCTS[pid].icon}${units.length}${bad ? `(⚠${bad})` : ''}`;
+      });
+      box.append(el('div', 'ui-stock-line', line.join('  ')));
+      // Есть что поставить на свободное место — одна кнопка вместо кнопки у каждого товара.
+      const movable = present.some((pid) => state.shelves.some((sh) => canPlace(pid, sh) && shelfFree(sh) > 0));
+      if (movable)
+        box.append(
+          button(t('todo.stockBtn'), () => {
+            let next = getState();
+            next.shelves.forEach((_, i) => (next = moveToShelf(next, i).state));
+            update(next, 'success');
+          }, 'ui-chip'),
+        );
+      const noShelf = present.filter((pid) => !state.shelves.some((sh) => canPlace(pid, sh)));
+      for (const pid of noShelf) box.append(el('div', 'ui-muted', `${productLabel(pid)}: ${t('warehouse.noShelf', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) })}`));
     }
+    box.append(helpRow(t(state.donate ? 'donate.on' : 'donate.off'), t('donate.title')));
+    box.append(button(t(state.donate ? 'donate.toggleOff' : 'donate.toggleOn'), () => update(toggleDonate(getState())), 'ui-chip'));
     out.push(box);
     return out;
   };
@@ -849,51 +965,76 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   /** Товар в списке «Только: …» — у сезонного подписано, когда его продают. */
   const shelfGoodLabel = (pid: ProductId): string => (SEASONAL[pid] ? `${productLabel(pid)} (${t(`goods.when.${pid}` as TextKey)})` : productLabel(pid));
 
-  const shelvesTab = (state: StoreState): HTMLElement[] => {
-    const slots = storeLevel(state).slots;
-    const out: HTMLElement[] = [
-      el('div', 'ui-note', t('shelves.rule')),
-      el('div', 'ui-muted', t('shelves.slots', { n: slots - freeSlots(state), max: slots })),
-      seasonBox(state),
-    ];
-    state.shelves.forEach((shelf, i) => {
-      const box = el('div', 'ui-box');
-      const head = el('div', 'ui-row');
-      const title = el('span');
-      title.append(
-        el('b', '', t(SHELF_KINDS[shelf.kind].nameKey)),
-        el('div', 'ui-muted', t('shelves.places', { n: shelfCount(shelf), max: shelfCapacity(shelf) })),
-      );
+  /** Подробности полки под сеткой: что на ней можно, улучшить, починить, продать. */
+  const shelfDetails = (state: StoreState, i: number): HTMLElement => {
+    const shelf = state.shelves[i];
+    const box = el('div', 'ui-box ui-shelf-details');
+    const head = el('div', 'ui-row');
+    head.append(
+      el('b', '', t(SHELF_KINDS[shelf.kind].nameKey)),
       // Вёдра с цветами бесплатные — их не продают.
-      head.append(title, ...(SHELF_KINDS[shelf.kind].price ? [button(t('shelves.sell', { n: shelfResale(shelf) }), () => update(sellShelf(getState(), i)), 'ui-chip')] : []));
-      const allowed = PRODUCT_IDS.filter((pid) => PRODUCTS[pid].category === shelf.kind).map(shelfGoodLabel).join(', ');
-      box.append(head, el('div', 'ui-muted', t('shelves.only', { list: allowed })));
-      if (shelf.kind === 'icebox') box.append(el('div', 'ui-muted', t('shelves.iceboxNote')));
-      if (shelf.kind === 'florist') box.append(el('div', 'ui-muted', t('shelves.floristNote')));
-      if (shelf.broken) {
-        const cost = fridgeRepairCost(state.level);
-        box.append(
-          el('div', 'ui-note', `🔧 ${t('shelves.broken')}`),
-          button(t('shelves.repair', { cost }), () => update(repairShelf(getState(), i), 'success'), 'ui-btn', state.money < cost),
-        );
-      }
+      ...(SHELF_KINDS[shelf.kind].price ? [button(t('shelves.sell', { n: shelfResale(shelf) }), () => {
+        openShelf = -1;
+        update(sellShelf(getState(), i));
+      }, 'ui-chip')] : []),
+    );
+    const allowed = PRODUCT_IDS.filter((pid) => PRODUCTS[pid].category === shelf.kind).map(shelfGoodLabel).join(', ');
+    box.append(head, el('div', 'ui-muted', t('shelves.only', { list: allowed })));
+    if (shelf.kind === 'icebox') box.append(el('div', 'ui-muted', t('shelves.iceboxNote')));
+    if (shelf.kind === 'florist') box.append(el('div', 'ui-muted', t('shelves.floristNote')));
+    if (shelf.broken) {
+      const cost = fridgeRepairCost(state.level);
+      box.append(
+        el('div', 'ui-note', `🔧 ${t('shelves.broken')}`),
+        button(t('shelves.repair', { cost }), () => update(repairShelf(getState(), i), 'success'), 'ui-btn', state.money < cost),
+      );
+    }
+    const cost = upgradeCost(shelf);
+    if (cost === null) box.append(el('div', 'ui-muted', t('shelves.maxLevel')));
+    else
+      box.append(
+        button(t('shelves.upgrade', { cap: SHELF_LEVELS[shelf.level + 1].capacity, cost }), () => update(upgradeShelf(getState(), i), 'success'), 'ui-btn secondary', cost > state.money),
+      );
+    return box;
+  };
 
-      const cost = upgradeCost(shelf);
-      if (cost === null) {
-        box.append(el('div', 'ui-muted', t('shelves.maxLevel')));
-      } else {
-        box.append(
-          button(
-            t('shelves.upgrade', { cap: SHELF_LEVELS[shelf.level + 1].capacity, cost }),
-            () => update(upgradeShelf(getState(), i), 'success'),
-            'ui-btn secondary',
-            cost > state.money,
-          ),
-        );
+  /** «Зал»: склад одной карточкой, полки — сеткой (нажать — подробности), покупка новых полок. */
+  const hallTab = (state: StoreState): HTMLElement[] => {
+    const slots = storeLevel(state).slots;
+    const space = shelfSpace(state);
+    const out: HTMLElement[] = [
+      helpRow(`🗄 ${t('shelves.slots', { n: slots - freeSlots(state), max: slots })} · ${t('hall.goods', { n: space.s, max: space.smax })}`, t('shelves.rule')),
+      ...stockBox(state),
+    ];
+    if (openShelf >= state.shelves.length) openShelf = -1;
+    const grid = el('div', 'ui-shelf-grid');
+    state.shelves.forEach((shelf, i) => {
+      const n = shelfCount(shelf);
+      const max = shelfCapacity(shelf);
+      const cell = button('', () => {
+        openShelf = openShelf === i ? -1 : i;
+        render();
+      }, `ui-shelf-card${openShelf === i ? ' active' : ''}${shelf.broken ? ' broken' : ''}`);
+      const bar = el('div', 'ui-bar');
+      const fill = el('div', 'ui-bar-fill');
+      fill.style.width = `${Math.round((n / Math.max(1, max)) * 100)}%`;
+      fill.style.background = shelf.broken ? '#e43b44' : n / Math.max(1, max) < 0.25 ? '#feae34' : '#63c74d';
+      bar.append(fill);
+      const icons = PRODUCT_IDS.filter((pid) => (shelf.items[pid]?.length ?? 0) > 0).slice(0, 3).map((pid) => PRODUCTS[pid].icon).join('');
+      cell.append(
+        el('b', '', `${shelf.broken ? '🔧 ' : ''}${t(SHELF_KINDS[shelf.kind].nameKey)}`),
+        el('span', 'ui-shelf-meta', `${icons} ${n}/${max} · ${'★'.repeat(shelf.level + 1)}`),
+        bar,
+      );
+      grid.append(cell);
+      // Подробности — сразу под строкой с выбранной полкой.
+      if (openShelf === i) {
+        const details = shelfDetails(state, i);
+        details.classList.add('ui-shelf-span');
+        grid.append(details);
       }
-      out.push(box);
     });
-
+    out.push(grid, foldBox('season', `🗓 ${t('goods.title')}`, (body) => body.append(seasonBox(getState()))));
     out.push(el('h3', '', t('shelves.buyTitle')));
     if (freeSlots(state) <= 0) {
       out.push(el('div', 'ui-muted', t('shelves.noRoom')));
@@ -1252,7 +1393,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     return [box];
   };
 
-  /** Гильдия во вкладке «Магазин»: основать, вступить, участники и цель недели. */
+  /** Гильдия в профиле: основать, вступить, участники и цель недели. */
   let guildError = '';
   const guildBox = (state: StoreState): HTMLElement[] => {
     if (!guildsEnabled()) return [];
@@ -1656,7 +1797,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     render();
   };
 
-  /** «Наследие» во вкладке «Магазин»: поколение и бонусы; универмаг после сюжета можно продать. */
+  /** «Наследие» в профиле: поколение и бонусы; универмаг после сюжета можно продать. */
   const legacyBox = (state: StoreState): HTMLElement[] => {
     const legacy = legacyOf(state);
     if (!legacy.gen && !canSell(state)) return [];
@@ -1749,7 +1890,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     return box;
   };
 
-  /** Подтверждение новой игры по кнопке во вкладке «Магазин». */
+  /** Подтверждение новой игры по кнопке в профиле. */
   const restartBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     const yes = button(t('restart.yes'), restart, 'ui-btn danger');
@@ -1972,7 +2113,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     });
   };
 
-  /** Кубки во вкладке «Магазин»: звание и все победы. */
+  /** Кубки в профиле: звание и все победы. */
   const trophiesBox = (state: StoreState): HTMLElement[] => {
     const wins = contestOf(state)?.wins ?? 0;
     if (!wins) return [];
@@ -2896,31 +3037,45 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
 
   // ---------- Магазин: помещение, долг, расходы ----------
 
-  const storeTab = (state: StoreState): HTMLElement[] => {
-    const level = storeLevel(state);
-    const next = nextStoreLevel(state);
+  /** Профиль (кнопка 🏆 в заголовке): достижения, звание, наследие, друзья, альбом, настройки. */
+  const profileTab = (state: StoreState): HTMLElement[] => {
     const replay = el('div', 'ui-box');
     replay.append(
-      el('div', 'ui-muted', t('tour.replayNote')),
+      helpRow(t('tour.replayTitle'), t('tour.replayNote')),
       button(`👵 ${t('tour.replay')}`, () => {
         tourStep = 0;
+        tab = 'buy';
         update({ ...getState(), tourDone: false });
       }, 'ui-btn secondary'),
     );
-    const out: HTMLElement[] = [
+    // В самом низу — начать игру заново (с подтверждением).
+    const again = el('div', 'ui-box');
+    again.append(
+      helpRow(t('restart.button'), t('restart.note')),
+      button(`🔄 ${t('restart.button')}`, () => {
+        confirmRestart = true;
+        render();
+      }, 'ui-btn secondary'),
+    );
+    return [
       achievementsButton(state),
+      rankBox(state),
       ...legacyBox(state),
       ...inviteBox(),
       ...guildBox(state),
-      decorBox(state),
-      replay,
-      adsBox(state),
-      ...eduardBox(state),
-      rankBox(state),
       ...trophiesBox(state),
       recordsBox(state),
       albumBox(state),
+      replay,
+      again,
     ];
+  };
+
+  /** Развитие: помещение и расширение, кассы, оборудование, реклама, оформление, банк, счета. */
+  const growTab = (state: StoreState): HTMLElement[] => {
+    const level = storeLevel(state);
+    const next = nextStoreLevel(state);
+    const out: HTMLElement[] = [];
 
     const current = el('div', 'ui-box');
     current.append(
@@ -2928,7 +3083,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: level.warehouse, r: registerCount(state), g: level.guests })),
     );
     const reviews = state.reviews?.length ? [button(t('review.title'), () => showReviews(getState().reviews), 'ui-btn secondary')] : [];
-    out.push(current, button(t('report.button'), () => showReport(getState()), 'ui-btn secondary'), ...reviews, registersBox(state), gearBox(state), bankBox(state));
+    out.push(current, button(t('report.button'), () => showReport(getState()), 'ui-btn secondary'), ...reviews);
 
     const grow = el('div', 'ui-box');
     if (!next) {
@@ -2959,7 +3114,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
         ),
       );
     }
-    out.push(grow);
+    out.push(grow, registersBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
@@ -2980,16 +3135,6 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       debt.append(el('b', '', t('debt.none')));
     }
     out.push(debt);
-
-    // В самом низу — начать игру заново (с подтверждением).
-    const again = el('div', 'ui-box');
-    again.append(
-      el('div', 'ui-muted', t('restart.note')),
-      button(`🔄 ${t('restart.button')}`, () => {
-        confirmRestart = true;
-        render();
-      }, 'ui-btn secondary'),
-    );
 
     const bill = monthlyBill(state);
     const daysLeft = daysUntilBill(state.day);
@@ -3014,7 +3159,7 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
     if (bill.debt) row(t('bills.debt'), bill.debt);
     if (bill.loan) row(t('bills.loan'), bill.loan);
     row(t('bills.total'), billTotal(bill));
-    out.push(costs, again);
+    out.push(costs);
     return out;
   };
 

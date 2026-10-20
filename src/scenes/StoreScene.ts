@@ -3291,7 +3291,7 @@ export class StoreScene extends Phaser.Scene {
 
   private buildReviewBoard(x: number, y: number): void {
     // Доска у входа — просто украшение. Раньше нажатие на неё открывало отзывы, и они вылезали
-    // посреди дня от случайного касания у двери; теперь отзывы — в итогах дня и утром на вкладке «Магазин».
+    // посреди дня от случайного касания у двери; теперь отзывы — в итогах дня и утром на вкладке «Развитие».
     this.art(x, y, 'review_board').setOrigin(0.5, 1).setDepth(y);
   }
 
@@ -5228,7 +5228,7 @@ export class StoreScene extends Phaser.Scene {
   /** Создаёт картинки для новых полок и обновляет товар на всех. */
   private refreshShelves(): void {
     this.layout.slots.forEach((slot, i) => {
-      // Свободное место под полку — разметка на полу: полку покупают утром во вкладке «Полки».
+      // Свободное место под полку — разметка на полу: полку покупают утром во вкладке «Зал».
       if (!this.slotDecor[i]) {
         const mark = this.art(slot.x, slot.y + 2, 'slot_empty').setDepth(1.5);
         mark.setInteractive({ useHandCursor: true }).on('pointerup', () =>

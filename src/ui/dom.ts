@@ -189,6 +189,47 @@ const css = `
 .ui-card .ui-tabs { position: sticky; top: -2px; z-index: 3; background: #f4ecd8; padding: 6px 0; margin: 4px 0 6px;
   box-shadow: 0 6px 6px -6px rgba(43, 34, 51, .35); }
 .ui-tab { font-size: 12.5px; }
+.ui-card .ui-tabs { grid-template-columns: repeat(5, 1fr); }
+.ui-tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 0 4px; }
+.ui-tab-icon { font-size: 16px; line-height: 1; }
+.ui-tab-icon .ui-ico { height: 18px; vertical-align: 0; }
+.ui-tab-label { font-size: 10.5px; line-height: 1.1; white-space: nowrap; }
+.ui-tab-dot { position: absolute; top: -6px; right: -4px; min-width: 16px; height: 16px; padding: 0 3px; box-sizing: border-box;
+  border-radius: 8px; background: #e43b44; color: #fff; border: 2px solid #2b2233; font: 700 10px/12px ${UI_FONT}; }
+.ui-profile-btn { margin-left: 6px; padding: 2px 6px; }
+.ui-card h2 { align-items: center; }
+.ui-card h2 > span:nth-child(2) { margin-left: auto; }
+/* «Открыть магазин» прилипает к низу окна. */
+.ui-open-bar { position: sticky; bottom: -2px; z-index: 3; background: #f4ecd8; padding: 8px 0 4px; margin-top: 8px;
+  box-shadow: 0 -6px 6px -6px rgba(43, 34, 51, .35); }
+.ui-open-bar .ui-btn { margin: 0; }
+/* «Сегодня»: строка значков, по нажатию — подробности. */
+.ui-today { padding: 6px 8px; }
+.ui-today-head { all: unset; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; cursor: pointer; font: 700 14px ${UI_FONT}; }
+.ui-today-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.ui-today-chip { font: 600 12px ${UI_FONT}; padding: 2px 6px; border: 1.5px solid #2b2233; border-radius: 10px; background: #fff; }
+.ui-today-chip.hot { background: #fee761; }
+.ui-today-more { margin-top: 6px; }
+/* Пояснения за «❔». */
+.ui-help { margin: 4px 0; }
+.ui-help-head { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.ui-help-btn { all: unset; cursor: pointer; flex: none; width: 22px; height: 22px; text-align: center; border-radius: 50%; border: 1.5px solid #2b2233; background: #fff; font-size: 12px; line-height: 22px; }
+.ui-help-btn.active { background: #fee761; }
+.ui-help-text { font-size: 12.5px; color: #5a5048; background: #fff8e0; border-radius: 6px; padding: 6px 8px; margin-top: 4px; }
+/* Закупка: большая кнопка «Закупить нужное», фильтры. */
+.ui-restock .ui-btn { margin: 0 0 4px; }
+.ui-filter { margin: 8px 0 2px; }
+.ui-chip.active { background: #2b2233; color: #f4ecd8; }
+/* Зал: склад строкой, полки сеткой. */
+.ui-stock-line { font-size: 14px; margin: 4px 0 6px; line-height: 1.6; }
+.ui-shelf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0; }
+.ui-shelf-card { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 3px; padding: 6px 7px;
+  border: 2px solid #2b2233; border-radius: 6px; background: #fbf6ea; font: 13px/1.25 ${UI_FONT}; min-width: 0; }
+.ui-shelf-card b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-shelf-card.active { background: #fee761; }
+.ui-shelf-card.broken { border-color: #b13e53; }
+.ui-shelf-meta { font-size: 11.5px; color: #5a5048; }
+.ui-shelf-span { grid-column: 1 / -1; margin: 0; }
 .ui-card h3 { font-size: 16px; border-bottom: 2px solid #2b2233; padding-bottom: 2px; }
 /* Строка товара: крупная иконка, название с жёлтым ценником, подпись, кнопки справа — ничего не переносится. */
 .ui-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 8px; align-items: center; padding: 7px 0; }
@@ -240,6 +281,8 @@ const css = `
   border-radius: 10px; box-shadow: 0 4px 0 #2b2233; font: 13px/1.3 ${UI_FONT}; pointer-events: none;
   transform: translate(-50%, -160%); transition: transform .45s cubic-bezier(.3, 1.4, .5, 1); max-width: 88vw; }
 .ui-toast.shown { transform: translate(-50%, 0); }
+.ui-toast-low { top: auto; bottom: calc(env(safe-area-inset-bottom) + 92px); transform: translate(-50%, 260%); }
+.ui-toast-low.shown { transform: translate(-50%, 0); }
 .ui-toast img { width: 36px; height: 42px; image-rendering: pixelated; animation: ui-badge 1.2s ease-in-out infinite; }
 @keyframes ui-badge { 50% { transform: rotate(-8deg) scale(1.08); } }
 .ui-toast-medal img { animation: ui-medal-drop .7s cubic-bezier(.3, 1.6, .5, 1) .25s both, ui-badge 1.2s ease-in-out 1s infinite; }
@@ -292,6 +335,8 @@ const css = `
 .ui-tour-skip { position: absolute; top: 0; right: 0; background: none; border: none; color: #8b6d5c; font-size: 13px;
   text-decoration: underline; padding: 10px 12px; min-height: 40px; cursor: pointer; }
 .ui-card.touring { padding-bottom: 230px; }
+/* Пока идёт обучение, низ окна закрыт репликой бабушки — кнопка «Открыть» стоит на своём месте в списке. */
+.ui-card.touring .ui-open-bar { position: static; box-shadow: none; }
 .ui-tour-focus { position: relative; z-index: 4; outline: 3px solid #fee761; outline-offset: 2px; border-radius: 6px;
   box-shadow: 0 0 0 6px #2b2233, 0 0 0 2000px rgba(15, 12, 22, .45); animation: ui-tour-pulse 1s ease-in-out infinite; }
 @keyframes ui-tour-pulse { 50% { outline-color: #feae34; } }
@@ -415,10 +460,27 @@ export function curtain(label: string, middle: () => void): void {
 }
 
 /** Всплывашка сверху на пару секунд: картинка, заголовок, текст. */
+/** Всплывашки идут по очереди, а не стопкой друг на друге. */
+const toastQueue: (() => void)[] = [];
+let toastBusy = false;
+
 export function toast(image: string, title: string, text: string, medal = false): void {
   injectStyles();
+  toastQueue.push(() => showToast(image, title, text, medal));
+  if (!toastBusy) nextToast();
+}
+
+function nextToast(): void {
+  const show = toastQueue.shift();
+  toastBusy = Boolean(show);
+  show?.();
+}
+
+function showToast(image: string, title: string, text: string, medal: boolean): void {
   // Медаль достижения падает сверху в рамку и звенит; вокруг — искры.
   const box = el('div', medal ? 'ui-toast ui-toast-medal' : 'ui-toast');
+  // Открыто окно (утро, итоги) — всплывашка снизу, чтобы не закрывать заголовок и вкладки.
+  if (document.querySelector('.ui-modal')) box.classList.add('ui-toast-low');
   const img = el('img');
   img.src = image;
   img.alt = '';
@@ -428,7 +490,10 @@ export function toast(image: string, title: string, text: string, medal = false)
   document.body.append(box);
   requestAnimationFrame(() => requestAnimationFrame(() => box.classList.add('shown')));
   setTimeout(() => box.classList.remove('shown'), 3200);
-  setTimeout(() => box.remove(), 3800);
+  setTimeout(() => {
+    box.remove();
+    nextToast();
+  }, 3700);
 }
 
 const ICONS: Record<string, string> = {
