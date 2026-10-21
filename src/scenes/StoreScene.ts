@@ -131,6 +131,7 @@ import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social
 import { reportProgress, track } from '../platform/analytics';
 import { shareDay } from '../platform/shareCard';
 import { duelInfo, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
+import { friendsAtWork } from '../game/staff';
 import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
 import { DISHES, DISH_IDS, kitchenOpen, portionsOf, sellDish } from '../game/kitchen';
@@ -8662,6 +8663,8 @@ export class StoreScene extends Phaser.Scene {
     if (unlocked.length) extra.push([t('ach.summary'), unlocked.map((id) => t(`ach.${id}` as TextKey)).join(', ')]);
     saveGame(this.state);
     track('day_end', finishedDay, this.stats.revenue);
+    // Друзья на работе раз в неделю получают свою долю — монеты в своей игре (через «угощение»).
+    if (finishedDay % 7 === 0) for (const m of friendsAtWork(state)) void treatFriend(m.friend!.id);
     const fps = fpsSummary(this.fpsSamples);
     if (fps) {
       track('fps', finishedDay, fps.median);

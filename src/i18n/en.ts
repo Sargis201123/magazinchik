@@ -120,6 +120,8 @@ export const en: Record<TextKey, string> = {
   'tab.prices': 'Prices',
   'away.title': 'While you were away',
   'away.text': 'Your cashier traded for {h} h: sold {n} items for {sum} 💰. Check what ran out on the shelves.',
+  'staffTab.friend': 'Your Telegram friend: an experienced hard worker, 30% cheaper as a favour. Gets a weekly share (300 💰 in their own game).',
+  'staffTab.noFriends': 'Friends can work for you too — invite them to the game.',
   'arrange.open': "Rearrange shelves",
   'arrange.hint': "Drag shelves and the register (it slides along the wall with its queue). Green — OK, red — not allowed.",
   'arrange.bad': "Bad spots: {n}. Move the red shelves so people can walk up to them.",
