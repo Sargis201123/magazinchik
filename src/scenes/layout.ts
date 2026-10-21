@@ -168,7 +168,7 @@ export const REGISTER_ROW = 60;
 export function registerSpot(layout: Layout, index: number): Point & { left: boolean } {
   const left = index % 2 === 1;
   const row = Math.floor(index / 2);
-  return { x: left ? layout.w - 64 : layout.counter.x, y: layout.counter.y - REGISTER_ROW * row, left };
+  return { x: left ? layout.counter.x - 34 : layout.counter.x, y: layout.counter.y - REGISTER_ROW * row, left };
 }
 
 /** Ларь с мороженым на месте (x, y): рамка вместе с крышкой и витриной. */

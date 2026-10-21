@@ -149,7 +149,7 @@ import {
 } from '../game/nightGuests';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
-import { bodyRect, iceboxFits, slotIssues, slotPosFor, snap, withSlots } from './placement';
+import { bodyRect, clampTill, iceboxFits, overlapsRect, slotIssues, slotPosFor, snap, tillZones, withSlots, withTill } from './placement';
 import { iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
@@ -1294,7 +1294,7 @@ export class StoreScene extends Phaser.Scene {
     this.nightLights = [];
     this.trash.clear();
     // Своя расстановка мест под полки (placement.ts) — если игрок переставлял в этом помещении.
-    this.layout = withSlots(layoutFor(this.state.level), this.state.slotPos, this.state.level);
+    this.layout = withTill(withSlots(layoutFor(this.state.level), this.state.slotPos, this.state.level), this.state.tillPos, this.state.level);
     this.builtLevel = this.state.level;
 
     // Камера показывает и соседнюю площадь, куда магазин вырастет: ларёк выглядит маленьким.
@@ -1712,8 +1712,14 @@ export class StoreScene extends Phaser.Scene {
     if (this.arranging) return;
     this.arranging = true;
     const { w, h } = this.layout;
-    const defaults = layoutFor(this.state.level).slots;
+    const level = this.state.level;
+    const plain = layoutFor(level);
+    const defaults = plain.slots;
+    const registers = registerSlots(this.state);
     let at = this.layout.slots.map((p) => ({ ...p }));
+    // Касса переезжает целиком вдоль нижней стены: сдвиг от стандартного места.
+    let tillDx = this.state.tillPos?.level === level ? this.state.tillPos.dx : 0;
+    const placed = () => withTill(plain, { level, dx: tillDx }, level);
     // Настоящие полки и разметку прячем — вместо них «призраки».
     for (const view of this.shelfViews.splice(0)) this.destroyShelfView(view);
     for (const mark of this.slotDecor) mark?.setVisible(false);
@@ -1736,12 +1742,28 @@ export class StoreScene extends Phaser.Scene {
       ghost.setData('frame', frame);
       return ghost;
     });
+    // Касса — тоже «призрак»: тянется только влево-вправо, вместе с очередью и всем, что при ней.
+    const tillFrame = this.add.graphics();
+    const tillImg = this.art(0, FURNITURE_TOP / 2, registerSprite(this.state));
+    const till = this.add.container(this.layout.counter.x, this.layout.counter.y, [tillFrame, tillImg]).setDepth(LIGHT_DEPTH + 11);
+    till.setSize(32, 62).setInteractive({ draggable: true, useHandCursor: true });
+    const drawTill = (bad: boolean) => {
+      const lay = placed();
+      tillFrame.clear();
+      for (const z of tillZones(lay, registers)) {
+        const r = { x: z.x - lay.counter.x, y: z.y - lay.counter.y, w: z.w, h: z.h };
+        tillFrame.fillStyle(bad ? 0xe43b44 : 0x2ce8f5, 0.18).fillRect(r.x, r.y, r.w, r.h);
+        tillFrame.lineStyle(1, bad ? 0xe43b44 : 0x0099db, 0.9).strokeRect(r.x, r.y, r.w, r.h);
+      }
+    };
     const bar = el('div', 'ui-arrange');
     const hint = el('div', 'ui-arrange-hint', t('arrange.hint'));
     const done = button(t('arrange.done'), () => finish(true), 'ui-btn');
     const reset = button(t('arrange.reset'), () => {
       at = defaults.map((p) => ({ ...p }));
       ghosts.forEach((g, i) => g.setPosition(at[i].x, at[i].y));
+      tillDx = 0;
+      till.setPosition(plain.counter.x, plain.counter.y);
       check();
     }, 'ui-btn secondary');
     const cancel = button(t('arrange.cancel'), () => finish(false), 'ui-btn secondary');
@@ -1750,7 +1772,10 @@ export class StoreScene extends Phaser.Scene {
     bar.append(hint, row);
     document.body.append(bar);
     const check = () => {
-      const bad = slotIssues(this.layout, at, defaults, registerSlots(this.state));
+      const lay = placed();
+      const bad = slotIssues(lay, at, defaults, registers);
+      // Кассу подсвечиваем красным, если на её месте или в очереди стоит красная полка.
+      drawTill(tillZones(lay, registers).some((z) => at.some((p, i) => bad.has(i) && overlapsRect(bodyRect(p), z))));
       ghosts.forEach((g, i) => {
         const frame = g.getData('frame') as Phaser.GameObjects.Graphics;
         const r = bodyRect({ x: 0, y: 0 });
@@ -1759,12 +1784,18 @@ export class StoreScene extends Phaser.Scene {
         frame.lineStyle(1, bad.has(i) ? 0xe43b44 : 0x3e8948, 1).strokeRect(r.x, r.y, r.w, r.h);
       });
       // Ларь ищет место сам — после перестановки ему должно найтись место у стены.
-      const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(this.layout, at);
+      const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(lay, at);
       done.disabled = bad.size > 0 || iceless;
       hint.textContent = bad.size ? t('arrange.bad', { n: bad.size }) : iceless ? t('arrange.icebox') : t('arrange.hint');
       return iceless ? new Set([...bad, -1]) : bad;
     };
     const onDrag = (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject, x: number, y: number) => {
+      if (obj === till) {
+        tillDx = clampTill(plain, registers, x - plain.counter.x);
+        till.setPosition(plain.counter.x + tillDx, plain.counter.y);
+        check();
+        return;
+      }
       const i = ghosts.indexOf(obj as Phaser.GameObjects.Container);
       if (i < 0) return;
       at[i] = { x: Phaser.Math.Clamp(snap(x), 22, w - 22), y: Phaser.Math.Clamp(snap(y), this.layout.wallH + 12, h - 28) };
@@ -1785,9 +1816,10 @@ export class StoreScene extends Phaser.Scene {
       bar.remove();
       grid.destroy();
       ghosts.forEach((g) => g.destroy());
+      till.destroy();
       this.arranging = false;
       if (save) {
-        this.state = { ...this.state, slotPos: slotPosFor(this.state.level, at) };
+        this.state = { ...this.state, slotPos: slotPosFor(level, at), tillPos: tillDx ? { level, dx: tillDx } : undefined };
         saveGame(this.state);
         track('arrange', this.state.day, at.length);
       }
@@ -2295,7 +2327,7 @@ export class StoreScene extends Phaser.Scene {
    * их обходят и покупатели, и продавец.
    */
   private buildHallDecor(): void {
-    const { w, h, wallH, queue } = this.layout;
+    const { h, wallH, queue } = this.layout;
     const marks = [...this.registers.map((r) => r.spot.y)];
     const top = (marks.length ? Math.min(...marks) : queue.y + queue.step) - queue.step;
     for (let i = 0; i < 6 && top - i * queue.step >= queue.minY; i++) marks.push(top - i * queue.step);
@@ -2306,7 +2338,7 @@ export class StoreScene extends Phaser.Scene {
       this.obstacles.every((o) => x < o.x - 10 || x > o.x + o.w + 10 || y < o.y - 12 || y > o.y + o.h + 12) &&
       clerks.every((c) => Math.hypot(c.x - x, c.y - y) > 22);
     const spots: { x: number; y: number }[] = [];
-    for (let y = wallH + 116; y < h - 70; y += 46) spots.push({ x: w - 9, y });
+    for (let y = wallH + 116; y < h - 70; y += 46) spots.push({ x: this.layout.counter.x + 21, y });
     const ice = this.iceboxSpot();
     if (ice.x >= 36) spots.push({ x: 12, y: h - 14 });
     const big = Boolean(activeDecor(this.state, 'plants'));
@@ -2320,7 +2352,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Терминал на прилавке и касса самообслуживания у правой стены — если куплены. */
   private buildUpgrades(): void {
-    const { counter, w, wallH } = this.layout;
+    const { counter, wallH } = this.layout;
     if (hasUpgrade(this.state, 'terminal')) this.art(counter.x + 3, counter.y - 4, 'card_terminal').setDepth(counter.y + 22);
     for (let i = 1; i < registerCount(this.state); i++) this.buildRegister(i);
     this.buildHallDecor();
@@ -2333,7 +2365,8 @@ export class StoreScene extends Phaser.Scene {
     this.kiosk = undefined;
     this.kioskBusy = false;
     if (!hasUpgrade(this.state, 'selfCheckout')) return;
-    const at = { x: w - 8, y: wallH + 86 };
+    // Касса самообслуживания — у очереди, справа от основной кассы (вместе с ней переезжает).
+    const at = { x: this.layout.counter.x + 22, y: wallH + 86 };
     this.kiosk = this.art(at.x, at.y, 'kiosk').setDepth(at.y + 9);
     this.kioskScreen = this.add.rectangle(at.x, at.y - 9, 6, 4, 0x2ce8f5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(at.y + 10);
     this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
@@ -4936,7 +4969,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Где стоит ведро (в правом нижнем углу, за кассой) и уличный контейнер (у роллета склада). */
   private binSpot(): { x: number; y: number } {
-    return { x: this.layout.w - 10, y: this.layout.h - 12 };
+    return { x: this.layout.counter.x + 20, y: this.layout.h - 12 };
   }
 
   /** Куда встать, чтобы завязать мешок: ведро у правой стены, подходим слева. */
@@ -5164,7 +5197,7 @@ export class StoreScene extends Phaser.Scene {
     const spots = [
       { x: w - 9, y: wallH + 14 },
       // В нижнем углу у кассы — вёдра с цветами, растение туда не ставим.
-      ...(this.state.shelves.some((s) => s.kind === 'florist') ? [] : [{ x: w - 9, y: h - 40 }]),
+      ...(this.state.shelves.some((s) => s.kind === 'florist') ? [] : [{ x: this.layout.counter.x + 21, y: h - 40 }]),
     ];
     for (const p of spots) {
       const busy = [...slots, ...this.layout.showcases].some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
@@ -5604,8 +5637,8 @@ export class StoreScene extends Phaser.Scene {
 
   /** Вёдра с цветами — у кассы, в углу у правой стены. */
   private floristSpot(): { x: number; y: number } {
-    const { w, h } = this.layout;
-    return { x: w - 10, y: h - 40 };
+    const { counter, h } = this.layout;
+    return { x: counter.x + 20, y: h - 40 };
   }
 
   private refreshWarehouse(): void {
@@ -7969,7 +8002,7 @@ export class StoreScene extends Phaser.Scene {
         // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
         const was = this.state;
         // Убрали или продали полку — остальные остались на местах, но сами места переставлены.
-        const placesChanged = s.slotPos !== was.slotPos;
+        const placesChanged = s.slotPos !== was.slotPos || s.tillPos !== was.tillPos;
         const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was) || hasDog(s) !== hasDog(was) || sunflowersPlanted(s) !== sunflowersPlanted(was);
         this.state = s;
         saveGame(s);
