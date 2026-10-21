@@ -221,6 +221,7 @@ import { showLeaderboard } from './leaderboard';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { button, el, openModal, who } from './dom';
+import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
 import { keepPlaces } from '../scenes/placement';
 
 /** Портрет заказчика: шеф — это Марат. */
@@ -616,6 +617,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...giftsBox(),
       ...staffEventBox(state),
       ...districtBox(state),
+      ...lifeBox(state),
       ...trickBox(state),
       ...taleBox(state),
       ...guildClaimBox(state),
@@ -1414,6 +1416,20 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       void claimGifts().then((n) => update({ ...getState(), money: getState().money + n }, n ? 'success' : 'tap'));
     });
     box.append(el('div', 'ui-note', t('visit.gifts', { names: [...new Set(gifts.map((g) => g.name))].join(', ') })), claim);
+    return [box];
+  };
+
+  /** Жизнь района: свадьба, малыш, пенсия у постоянных — подарок или поздравить. */
+  const lifeBox = (state: StoreState): HTMLElement[] => {
+    const news = lifeNews(state);
+    if (!news) return [];
+    const box = el('div', 'ui-box ui-duel');
+    box.append(
+      el('b', '', t('life.title')),
+      el('p', '', t(news.textKey)),
+      button(t('life.gift', { n: LIFE_GIFT }), () => update(answerLife(getState(), news, true), 'success'), 'ui-btn', state.money < LIFE_GIFT),
+      button(t('life.congrats'), () => update(answerLife(getState(), news, false)), 'ui-btn secondary'),
+    );
     return [box];
   };
 
