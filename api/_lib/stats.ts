@@ -38,6 +38,9 @@ export interface BoardRow {
   me?: boolean;
 }
 
+/** Самый большой снимок магазина (символов), который сохраняем. */
+export const SHOP_MAX = 16_000;
+
 /**
  * POST /api/progress { initData, day, level, rating, revenue, money, chapter, events: [{ kind, day, value }] } → { ok }:
  * прогресс магазина (для рейтинга) и события игры (для воронки).
@@ -73,6 +76,11 @@ export async function progress(request: Request, env: Env): Promise<Response> {
     .bind(user.id, name, int(body.day, 100000), int(body.level, 10), rating, revenue, int(body.money), int(body.chapter, 100), now)
     .run();
   await db.prepare('INSERT OR REPLACE INTO reported (id, raw) VALUES (?, ?)').bind(user.id, reported).run();
+  // Снимок магазина для друзей в гостях: только объект и не больше SHOP_MAX символов.
+  if (body.shop && typeof body.shop === 'object') {
+    const data = JSON.stringify(body.shop);
+    if (data.length <= SHOP_MAX) await db.prepare('INSERT OR REPLACE INTO shops (id, data, updated) VALUES (?, ?, ?)').bind(user.id, data, now).run();
+  }
   // Начало недели и выходных — по счёту сервера до этого отчёта.
   await markWeek(db, user.id, before, now);
   await markWeekend(db, user.id, before, revenue, now);
