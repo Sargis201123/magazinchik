@@ -69,7 +69,8 @@ import {
   seasonFor,
   type RareGuestId,
 } from '../game/endless';
-import { loadGame, saveGame } from '../game/save';
+import { lastSavedAt, loadGame, saveGame } from '../game/save';
+import { awayTrade } from '../game/away';
 import { getLang, t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
@@ -1042,9 +1043,17 @@ export class StoreScene extends Phaser.Scene {
 
   create(): void {
     setErrorContext(() => ({ day: this.state?.day, level: this.state?.level, running: this.running, ua: navigator.userAgent.slice(0, 120) }));
+    const savedAt = lastSavedAt();
     const save = loadGame();
     this.state = ensureRush(ensureSeason(ensurePlan(save ?? newGame()), trustedNow()), trustedNow());
     if (!save) track('new_game', 1);
+    // Пока игрока не было, кассир торговал: деньги — в кассу, полки чуть пустеют.
+    const away = save && savedAt ? awayTrade(this.state, trustedNow() - savedAt) : null;
+    if (away) {
+      this.state = away.state;
+      saveGame(this.state);
+      track('away', this.state.day, away.revenue);
+    }
     // Игра открылась — прогресс и накопленные события на сервер (рейтинг и аналитика).
     void reportProgress(this.state);
     // Своё расписание особых дней: зерно появляется у новой игры и у старых сохранений при первом запуске.
@@ -1072,6 +1081,7 @@ export class StoreScene extends Phaser.Scene {
       toast('assets/ico_gift.png', t('social.welcome'), t('social.welcomeText', { n: WELCOME_GIFT }));
     });
     this.hud = new Hud();
+    if (away) toast('assets/ico_cash.png', t('away.title'), t('away.text', { h: Math.floor(away.hours), n: away.units, sum: away.revenue }));
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
     this.hud.onUrgent = () => this.openUrgent();
 

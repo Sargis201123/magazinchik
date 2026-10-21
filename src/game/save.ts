@@ -48,6 +48,11 @@ function writeLocal(text: string): void {
   }
 }
 
+/** Когда игра сохранялась в последний раз (мс) — отсюда считаем, сколько игрока не было. */
+export function lastSavedAt(): number | null {
+  return parse(readLocal())?.savedAt ?? null;
+}
+
 export function loadGame(): StoreState | null {
   const save = parse(readLocal());
   if (!save) return null;
