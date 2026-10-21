@@ -232,6 +232,8 @@ interface MorningOptions {
   onOpen: () => void;
   /** «Переставить полки»: утро закрывается, в зале — перестановка; потом утро откроется снова. */
   onArrange?: () => void;
+  /** Зайти в гости в магазин друга (id в Telegram, имя). */
+  onVisit?: (id: number, name: string) => void;
   /** Бабушка закончила обучение — теперь можно вручить её гостинец. */
   onTourDone?: () => void;
 }
@@ -417,7 +419,7 @@ function helpRow(title: HTMLElement | string, text: string): HTMLElement {
 }
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen, onArrange, onTourDone }: MorningOptions): void {
+export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onTourDone }: MorningOptions): void {
   const { card, close } = openModal();
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
@@ -618,7 +620,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
       ...taleBox(state),
       ...guildClaimBox(state),
       today,
-      todayCard(state, touring, [...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),
+      todayCard(state, touring, [...friendShopsBox(), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),
       tabs,
       body,
       openBar,
@@ -1412,6 +1414,27 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
       void claimGifts().then((n) => update({ ...getState(), money: getState().money + n }, n ? 'success' : 'tap'));
     });
     box.append(el('div', 'ui-note', t('visit.gifts', { names: [...new Set(gifts.map((g) => g.name))].join(', ') })), claim);
+    return [box];
+  };
+
+  /** Магазины друзей: зайти в гости — посмотреть, как у них всё устроено. */
+  const friendShopsBox = (): HTMLElement[] => {
+    const friends = visitsInfo()?.friends ?? [];
+    if (!friends.length || !onVisit) return [];
+    const box = el('div', 'ui-box');
+    box.append(el('b', '', `🏠 ${t('visitShop.title')}`));
+    for (const f of friends.slice(0, 6)) {
+      const row = el('div', 'ui-row');
+      row.append(
+        el('span', '', `${f.name} · ${t(STORE_LEVELS[Math.min(f.level, STORE_LEVELS.length - 1)].nameKey)}`),
+        button(t('visitShop.go'), () => {
+          endTour();
+          close();
+          onVisit(f.id, f.name);
+        }, 'ui-chip'),
+      );
+      box.append(row);
+    }
     return [box];
   };
 

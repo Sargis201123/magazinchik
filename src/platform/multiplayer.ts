@@ -129,3 +129,11 @@ export async function claimGifts(): Promise<number> {
   if (visitsCache) visitsCache = { ...visitsCache, gifts: [] };
   return res?.amount ?? 0;
 }
+
+/** Магазин друга (снимок с сервера, ещё не проверенный) и его имя. null — недоступно. */
+export async function fetchFriendShop(id: number): Promise<{ shop: unknown; name: string } | null> {
+  const initData = telegramInitData();
+  if (!initData) return null;
+  const res = await post<{ shop?: unknown; name?: string }>('/api/visits', { initData, action: 'shop', to: id });
+  return res?.shop ? { shop: res.shop, name: String(res.name ?? '') } : null;
+}

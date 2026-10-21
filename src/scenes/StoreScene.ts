@@ -69,7 +69,8 @@ import {
   seasonFor,
   type RareGuestId,
 } from '../game/endless';
-import { lastSavedAt, loadGame, saveGame } from '../game/save';
+import { lastSavedAt, loadGame, pauseSaving, saveGame } from '../game/save';
+import { friendState } from '../game/friendShop';
 import { awayTrade } from '../game/away';
 import { getLang, t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
@@ -130,7 +131,7 @@ import { sonyaVisits, sunflowersPlanted } from '../game/drama';
 import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
 import { reportProgress, track } from '../platform/analytics';
 import { shareDay } from '../platform/shareCard';
-import { duelInfo, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
+import { duelInfo, fetchFriendShop, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
 import { friendsAtWork } from '../game/staff';
 import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
@@ -1712,6 +1713,38 @@ export class StoreScene extends Phaser.Scene {
   /** Название на вывеске: своё, если игрок назвал магазин, иначе — по помещению. */
   private shopTitle(): string {
     return this.state.shopName?.trim() || t(storeLevel(this.state).nameKey);
+  }
+
+  /**
+   * В гостях у друга: на экране его магазин по снимку с сервера (только смотреть). Свой магазин
+   * не сохраняется, пока мы в гостях; «Домой» — вернуть свой и утро.
+   */
+  private async visitFriend(id: number, name: string): Promise<void> {
+    const res = await fetchFriendShop(id);
+    const home = this.state;
+    const guest = res && friendState(res.shop, home);
+    if (!guest) {
+      toast('assets/ico_cross.png', t('visitShop.title'), t('visitShop.none', { name }));
+      this.showMorning();
+      return;
+    }
+    pauseSaving(true);
+    this.state = guest;
+    this.buildWorld();
+    track('visit_shop', home.day);
+    const bar = el('div', 'ui-arrange');
+    const shop = guest.shopName?.trim() || t(storeLevel(guest).nameKey);
+    bar.append(
+      el('div', 'ui-arrange-hint', t('visitShop.bar', { name: res!.name || name, shop, rating: guest.rating.toFixed(1), day: guest.day })),
+      button(`🏠 ${t('visitShop.home')}`, () => {
+        bar.remove();
+        this.state = home;
+        pauseSaving(false);
+        this.buildWorld();
+        this.showMorning();
+      }, 'ui-btn'),
+    );
+    document.body.append(bar);
   }
 
   /**
@@ -8001,6 +8034,7 @@ export class StoreScene extends Phaser.Scene {
     this.openShop();
     showMorning({
       onArrange: () => this.arrange(),
+      onVisit: (id, name) => void this.visitFriend(id, name),
       onTourDone: () => this.offerGift(),
       getState: () => this.state,
       setState: (s) => {

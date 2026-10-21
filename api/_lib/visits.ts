@@ -30,9 +30,9 @@ async function network(db: D1, me: number, since: number): Promise<{ id: number;
 }
 
 /**
- * POST /api/visits { initData, action: 'list' | 'gift' | 'claim', to? } →
+ * POST /api/visits { initData, action: 'list' | 'gift' | 'claim' | 'shop', to? } →
  * list: { enabled, friends: [{ id, name, level, treated }], gifts: [{ name, amount }] };
- * gift: { ok }; claim: { amount }.
+ * gift: { ok }; claim: { amount }; shop: { shop, name } — снимок магазина друга (null — нет).
  */
 export async function visits(request: Request, env: Env, now = Date.now()): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
@@ -48,6 +48,20 @@ export async function visits(request: Request, env: Env, now = Date.now()): Prom
     if (!friends.some((f) => f.id === to)) return json({ ok: false });
     const res = await db.prepare('INSERT OR IGNORE INTO gifts (sender, receiver, day, amount) VALUES (?, ?, ?, ?)').bind(user.id, to, today(now), GIFT).run();
     return json({ ok: (res.meta?.changes ?? 0) > 0 });
+  }
+  if (body.action === 'shop') {
+    // Магазин друга — только из своей сети друзей.
+    const to = Number(body.to);
+    const friend = friends.find((f) => f.id === to);
+    if (!friend) return json({ shop: null });
+    const row = await db.prepare('SELECT data FROM shops WHERE id = ?').bind(to).first<{ data: string }>();
+    let shop: unknown = null;
+    try {
+      shop = row ? JSON.parse(row.data) : null;
+    } catch {
+      shop = null;
+    }
+    return json({ shop, name: friend.name });
   }
   if (body.action === 'claim') {
     // Одним запросом: два одновременных «забрать» не получат одни и те же подарки дважды.

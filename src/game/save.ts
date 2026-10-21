@@ -76,7 +76,14 @@ export async function flushCloud(): Promise<void> {
   if (text) await writeCloud(text, pendingAt);
 }
 
+/** Пока игрок в гостях у друга, на экране чужой магазин — его не сохраняем. */
+let paused = false;
+export const pauseSaving = (on: boolean): void => {
+  paused = on;
+};
+
 export function saveGame(state: StoreState): void {
+  if (paused) return;
   const savedAt = Date.now();
   const text = JSON.stringify({ version: VERSION, state, savedAt, user: telegramUserId() } satisfies SaveFile);
   writeLocal(text);

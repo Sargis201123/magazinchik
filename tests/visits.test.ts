@@ -74,4 +74,21 @@ describe.skipIf(!Database)('друзья в гостях (сервер)', () => 
     expect(await json<{ amount: number }>(visits(await post(2, { action: 'claim' }), env))).toEqual({ amount: GIFT });
     expect(await json<{ amount: number }>(visits(await post(2, { action: 'claim' }), env))).toEqual({ amount: 0 });
   });
+
+  it('магазин друга: виден только своим, большой снимок не сохраняется', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
+    await socialPing(await post(1), env);
+    await recordReferral(env, 2, 'ref_1');
+    const shop = { level: 2, day: 40, rating: 4.2, shelves: [{ kind: 'bakery', level: 1, items: { bread: 5 } }] };
+    await progress(await post(2, { level: 2, revenue: 100, shop }), env);
+    await progress(await post(3, { level: 2, revenue: 100, shop }), env);
+    await progress(await post(1, { level: 2, revenue: 100 }), env);
+    type S = { shop: unknown; name?: string };
+    expect(await json<S>(visits(await post(1, { action: 'shop', to: 2 }), env))).toEqual({ shop, name: 'Тест' });
+    // Не друг — не показываем.
+    expect((await json<S>(visits(await post(1, { action: 'shop', to: 3 }), env))).shop).toBeNull();
+    // Слишком большой снимок не заменяет прежний (и отчёты не чаще раза в минуту не мешают снимку).
+    await progress(await post(2, { level: 2, revenue: 100, shop: { junk: 'x'.repeat(20_000) } }), env);
+    expect((await json<S>(visits(await post(1, { action: 'shop', to: 2 }), env))).shop).toEqual(shop);
+  });
 });

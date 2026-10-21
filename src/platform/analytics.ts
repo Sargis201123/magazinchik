@@ -4,6 +4,7 @@
 
 import type { StoreState } from '../game/economy';
 import { lifetimeRevenue } from '../game/legacy';
+import { shopSnapshot } from '../game/friendShop';
 import { telegramInitData } from './telegram';
 import { post } from './social';
 
@@ -50,6 +51,8 @@ export async function reportProgress(state: StoreState): Promise<void> {
     revenue: lifetimeRevenue(state),
     money: state.money,
     chapter: state.story.chapter,
+    // Как выглядит магазин — для друзей, которые зайдут в гости.
+    shop: shopSnapshot(state),
     events,
   });
   if (res?.ok) store(load().slice(events.length));
