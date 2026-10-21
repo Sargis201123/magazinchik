@@ -158,6 +158,19 @@ STORE_LEVELS.forEach((l, i) => {
   if (layoutFor(i).slots.length !== l.slots) throw new Error(`layout ${i}: ${layoutFor(i).slots.length} slots, expected ${l.slots}`);
 });
 
+/** Шаг между рядами касс (каждая следующая пара — выше по залу). */
+export const REGISTER_ROW = 60;
+
+/**
+ * Где стоит касса номер index (с 0): нечётные — зеркально слева от очереди, чётные — справа;
+ * каждая следующая пара — выше по залу.
+ */
+export function registerSpot(layout: Layout, index: number): Point & { left: boolean } {
+  const left = index % 2 === 1;
+  const row = Math.floor(index / 2);
+  return { x: left ? layout.w - 64 : layout.counter.x, y: layout.counter.y - REGISTER_ROW * row, left };
+}
+
 /** Ларь с мороженым на месте (x, y): рамка вместе с крышкой и витриной. */
 export const iceboxRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 15, y: y - 24, w: 30, h: 30 });
 

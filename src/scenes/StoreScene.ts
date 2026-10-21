@@ -150,7 +150,7 @@ import {
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { bodyRect, iceboxFits, slotIssues, slotPosFor, snap, withSlots } from './placement';
-import { iceboxSpotFor, layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
+import { iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
@@ -230,7 +230,6 @@ const LOW_STOCK = 2;
 /** Высота видимой крышки мебели (TOP в art/sprites.py, в точках мира). */
 const FURNITURE_TOP = 6;
 /** На сколько выше по залу стоит следующая пара касс. */
-const REGISTER_ROW = 60;
 /** Насколько далеко можно отвести камеру от магазина пальцем. */
 const CAMERA_REACH = 200;
 /** Толщина наружных стен и высота фасада (в точках мира). */
@@ -1458,10 +1457,9 @@ export class StoreScene extends Phaser.Scene {
    * каждая следующая пара — выше по залу. Покупатель встаёт в колонку очереди рядом со столом.
    */
   private buildRegister(index: number): void {
-    const { counter, w, queue } = this.layout;
-    const left = index % 2 === 1;
+    const { queue } = this.layout;
+    const { left, ...at } = registerSpot(this.layout, index);
     const row = Math.floor(index / 2);
-    const at = { x: left ? w - 64 : counter.x, y: counter.y - REGISTER_ROW * row };
     const shadowX = left ? at.x - 2 : at.x + 2;
     this.art(shadowX, at.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(at.y + 19);
     this.art(at.x, at.y + FURNITURE_TOP / 2, registerSprite(this.state)).setFlipX(left).setDepth(at.y + 20);
@@ -1752,7 +1750,7 @@ export class StoreScene extends Phaser.Scene {
     bar.append(hint, row);
     document.body.append(bar);
     const check = () => {
-      const bad = slotIssues(this.layout, at, defaults);
+      const bad = slotIssues(this.layout, at, defaults, registerSlots(this.state));
       ghosts.forEach((g, i) => {
         const frame = g.getData('frame') as Phaser.GameObjects.Graphics;
         const r = bodyRect({ x: 0, y: 0 });
