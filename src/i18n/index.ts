@@ -32,6 +32,9 @@ export const staffName = (index: number): string => {
   return list[index % list.length];
 };
 
+/** Имя сотрудника: у друга из Telegram — его имя. */
+export const memberName = (m: { name: number; friend?: { name: string } }): string => (m.friend ? `👋 ${m.friend.name}` : staffName(m.name));
+
 /** Загрузить словарь текущего языка (до запуска игры, main.ts). */
 export async function loadLang(): Promise<void> {
   if (lang !== 'en' || dictionaries.en) return;

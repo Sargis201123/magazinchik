@@ -305,6 +305,8 @@ export interface StaffMember {
   offDay?: number;
   /** Воодушевлён (поддержали, похвалили): столько дней работает быстрее (staffEvents.ts). */
   inspired?: number;
+  /** Друг из Telegram (staff.ts): работает под своим именем, раз в неделю получает долю. */
+  friend?: { id: number; name: string };
 }
 
 /** Воодушевлённый сотрудник работает быстрее. */

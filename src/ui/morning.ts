@@ -1,4 +1,4 @@
-import { staffName, t } from '../i18n';
+import { memberName, t } from '../i18n';
 import type { TextKey } from '../i18n/ru';
 import {
   buyChance,
@@ -107,7 +107,7 @@ import { daysToFair, isFairDay } from '../game/fair';
 import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
 import { pendingTip, seeTip, TIP_ICONS } from '../game/tips';
 import { expiringCount, markdownExpiring, toggleDonate } from '../game/economy';
-import { currentCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
+import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
 import {
   CONTEST_DAYS,
   CONTEST_EMPTY,
@@ -1390,10 +1390,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
     const [a, b] = event.roles.map((r) => state.staff.find((m) => m.role === r));
     if (!a) return [];
     const cost = eventCost(event);
-    const params = { name: staffName(a.name), name2: b ? staffName(b.name) : '', n: cost };
+    const params = { name: memberName(a), name2: b ? memberName(b) : '', n: cost };
     const box = el('div', 'ui-box ui-tale');
     box.append(
-      el('b', '', t('staffEvent.title', { name: staffName(a.name), role: t(STAFF_ROLES[a.role].nameKey) })),
+      el('b', '', t('staffEvent.title', { name: memberName(a), role: t(STAFF_ROLES[a.role].nameKey) })),
       el('p', '', t(`staffEvent.${event.kind}.text` as TextKey, params)),
       button(t(`staffEvent.${event.kind}.yes` as TextKey, params), () => update(answerStaffEvent(getState(), true), 'success'), 'ui-btn', state.money < cost),
       button(t(`staffEvent.${event.kind}.no` as TextKey, params), () => update(answerStaffEvent(getState(), false)), 'ui-btn secondary'),
@@ -2910,7 +2910,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
         const m = staffOf(state, event.role);
         box.append(
           el('h3', '', `🤒 ${t('event.sick.title')}`),
-          el('p', '', t('event.sick.text', { name: m ? staffName(m.name) : '', role: t(STAFF_ROLES[event.role].nameKey) })),
+          el('p', '', t('event.sick.text', { name: m ? memberName(m) : '', role: t(STAFF_ROLES[event.role].nameKey) })),
           button(t('event.ok'), () => answer(true)),
         );
         break;
@@ -2935,7 +2935,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
       }
       case 'poach': {
         const m = staffOf(state, event.role);
-        const name = m ? staffName(m.name) : '';
+        const name = m ? memberName(m) : '';
         box.append(
           el('h3', '', `🕴️ ${t('event.poach.title')}`),
           who('eduard_happy', el('b', '', t(CHARACTERS.eduard.nameKey))),
@@ -2949,7 +2949,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
       case 'dayOff':
       case 'goHome': {
         const m = staffOf(state, event.role);
-        const name = m ? staffName(m.name) : '';
+        const name = m ? memberName(m) : '';
         const role = t(STAFF_ROLES[event.role].nameKey);
         const reason = t(`event.${event.kind}.reason${event.reason}` as TextKey);
         box.append(
@@ -2997,7 +2997,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
   const quitBox = (quit: StaffMember[]) => {
     const box = el('div', 'ui-box');
     box.append(el('h3', '', `😤 ${t('staffTab.quitTitle')}`));
-    for (const m of quit) box.append(el('p', '', t('staffTab.quitText', { name: staffName(m.name), role: t(STAFF_ROLES[m.role].nameKey) })));
+    for (const m of quit) box.append(el('p', '', t('staffTab.quitText', { name: memberName(m), role: t(STAFF_ROLES[m.role].nameKey) })));
     box.append(button(t('staffTab.ok'), () => update({ ...getState(), quitNotice: undefined })));
     return box;
   };
@@ -3010,7 +3010,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
         'p',
         '',
         t('staffTab.raiseText', {
-          name: staffName(m.name),
+          name: memberName(m),
           role: t(STAFF_ROLES[m.role].nameKey),
           from: m.wage,
           to: m.raiseAsk ?? m.wage,
@@ -3101,7 +3101,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
     fill.style.background = tired >= 1 ? '#e43b44' : isTired(m) ? '#feae34' : '#63c74d';
     bar.append(fill);
     const name = el('span', 'ui-staff-name');
-    name.append(el('b', '', staffName(m.name)), el('span', 'ui-item-sub', ` · ${t(STAFF_ROLES[m.role].nameKey)} · ${t('staffTab.wage', { n: m.wage })}`));
+    name.append(el('b', '', memberName(m)), el('span', 'ui-item-sub', ` · ${t(STAFF_ROLES[m.role].nameKey)} · ${t('staffTab.wage', { n: m.wage })}`));
     head.append(name, bar, ...(tags.length ? [el('span', 'ui-staff-tags', tags.join(' '))] : []));
     box.append(head);
     if (openStaff !== m.role) return box;
@@ -3173,17 +3173,20 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
     hiring.push(roles, ...locked.map((line) => el('div', 'ui-muted', `🔒 ${line}`)));
     out.push(foldBox('hire', `➕ ${t('staffTab.search')}`, (body) => body.append(...hiring)));
 
-    const candidates = currentCandidates(state);
+    // Друзья из Telegram (кто играет и связан приглашениями) — тоже кандидаты: опытнее и дешевле.
+    const friendsOpen = state.jobSearch?.day === state.day ? friendCandidates(state, state.jobSearch.role, visitsInfo()?.friends ?? []) : [];
+    const candidates = [...friendsOpen, ...currentCandidates(state)];
     if (state.jobSearch?.day === state.day) {
       out.push(el('h3', '', t('staffTab.candidates', { role: t(STAFF_ROLES[state.jobSearch.role].nameKey) })));
       if (candidates.length === 0) out.push(el('div', 'ui-note', t('staffTab.noCandidates')));
+      if (!friendsOpen.length && !friendCandidates(state, state.jobSearch.role, visitsInfo()?.friends ?? []).length) out.push(el('div', 'ui-muted', t('staffTab.noFriends')));
     }
     for (const c of candidates) {
       const box = el('div', 'ui-box');
       const head = el('div', 'ui-row');
       const taken = Boolean(staffOf(state, c.role));
       head.append(
-        el('b', '', staffName(c.name)),
+        el('b', '', memberName(c)),
         button(
           taken ? t('staffTab.roleTaken') : full ? t('staffTab.full') : t('staffTab.hire'),
           () => update(hire(getState(), c), 'success'),
@@ -3191,7 +3194,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onTourDone 
           taken || full,
         ),
       );
-      box.append(head, el('div', 'ui-muted', traitLine(c)), el('div', '', t('staffTab.wage', { n: c.wage })));
+      box.append(head, el('div', 'ui-muted', c.friend ? t('staffTab.friend') : traitLine(c)), el('div', '', t('staffTab.wage', { n: c.wage })));
       out.push(box);
     }
     return out;

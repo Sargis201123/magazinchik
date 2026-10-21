@@ -64,3 +64,31 @@ export function train(state: StoreState, role: StaffRole): StoreState | null {
   const trained: StaffMember = { ...m, skill, trait, wage: Math.max(m.wage, wageFor(role, skill, trait)) };
   return { ...state, money: state.money - cost, staff: state.staff.map((s) => (s.role === role ? trained : s)) };
 }
+
+// ---------- Друзья на работе ----------
+
+/** Друг просит меньше обычного: работает «по-дружески». */
+export const FRIEND_WAGE = 0.7;
+
+/**
+ * Друг как кандидат на роль: опытнее новичка (2★, трудяга), зарплата на 30% ниже.
+ * Один друг — на одном месте: кто уже работает, второй раз не предлагается.
+ */
+export function friendCandidates(state: StoreState, role: StaffRole, friends: { id: number; name: string }[]): StaffMember[] {
+  const busy = new Set(state.staff.map((m) => m.friend?.id).filter(Boolean));
+  return friends
+    .filter((f) => !busy.has(f.id))
+    .slice(0, 3)
+    .map((f) => ({
+      role,
+      name: 0,
+      skill: 2,
+      trait: 'hardworker' as Trait,
+      wage: Math.round((wageFor(role, 2, 'hardworker') * FRIEND_WAGE) / 10) * 10,
+      months: 0,
+      friend: { id: f.id, name: f.name.slice(0, 24) },
+    }));
+}
+
+/** Друзья, работающие в магазине. */
+export const friendsAtWork = (state: StoreState): StaffMember[] => state.staff.filter((m) => m.friend);
