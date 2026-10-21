@@ -3,7 +3,7 @@
 // и можно ли от входа подойти к каждой полке, к кассе и в очередь. Сохраняется в StoreState.slotPos.
 
 import { isFixture, slotOf, type StoreState } from '../game/economy';
-import { iceboxRect, iceboxSpotFor, layoutFor, shelfRect, type Layout, type Point } from './layout';
+import { iceboxRect, iceboxSpotFor, layoutFor, registerSpot, shelfRect, type Layout, type Point } from './layout';
 import { reachable, type Rect } from './paths';
 
 /** Шаг сетки, по которой встают полки. */
@@ -31,8 +31,12 @@ export const bodyRect = ({ x, y }: Point): Rect => ({ x: x - 22, y: y - 16, w: 4
 const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 const grow = (r: Rect, d: number): Rect => ({ x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d });
 
-/** То, что двигать нельзя и чему полки не должны мешать: касса с очередью, вход, двери флигеля, автомат. */
-export function fixedZones(layout: Layout): Rect[] {
+/**
+ * То, что двигать нельзя и чему полки не должны мешать: касса с очередью, вход, двери флигеля, автомат,
+ * места под остальные кассы (registers — сколько их можно поставить в этом помещении, вместе с
+ * кассиром), касса самообслуживания, цветы и ведро у кассы.
+ */
+export function fixedZones(layout: Layout, registers = 1): Rect[] {
   const { w, h, wallH, door, counter, queue } = layout;
   return [
     { x: counter.x - 16, y: counter.y - 34, w: 32, h: 62 },
@@ -43,6 +47,11 @@ export function fixedZones(layout: Layout): Rect[] {
       .filter((r): r is NonNullable<typeof r> => Boolean(r))
       .map((r) => ({ x: 0, y: r.doorway.y - 14, w: 26, h: 28 })),
     ...layout.showcases.map(shelfRect),
+    ...Array.from({ length: Math.max(0, registers - 1) }, (_, k) => registerSpot(layout, k + 1)).map(({ x, y, left }) =>
+      left ? { x: x - 18, y: y - 30, w: 31, h: 54 } : { x: x - 13, y: y - 30, w: 31, h: 54 },
+    ),
+    { x: w - 16, y: wallH + 72, w: 16, h: 20 },
+    { x: w - 20, y: h - 52, w: 20, h: 52 },
   ];
 }
 
@@ -58,11 +67,11 @@ const walls = (layout: Layout): Rect[] => [
  * Какие места поставлены неправильно (их номера): за пределами зала, друг на друге, в запретной зоне
  * или так, что к полке не подойти. Если неправильных нет — расстановку можно сохранять.
  */
-export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = layout.slots): Set<number> {
+export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = layout.slots, registers = 1): Set<number> {
   const bad = new Set<number>();
   const rects = slots.map(bodyRect);
   // Зона, которую занимает и стандартная расстановка (дверь в ещё закрытую комнату флигеля), — не запретная.
-  const zones = fixedZones(layout).filter((z, k) => k === 0 || !defaults.some((d) => overlaps(bodyRect(d), z)));
+  const zones = fixedZones(layout, registers).filter((z, k) => k === 0 || !defaults.some((d) => overlaps(bodyRect(d), z)));
   rects.forEach((r, i) => {
     const stand = standPoint(slots[i]);
     // У задней стены полка краем заходит на стену — так стоят и стандартные.

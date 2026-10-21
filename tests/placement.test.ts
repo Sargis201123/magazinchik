@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { layoutFor } from '../src/scenes/layout';
 import { keepPlaces, slotIssues, withSlots } from '../src/scenes/placement';
+import { REGISTERS_BY_LEVEL } from '../src/game/registers';
+import { registerSpot } from '../src/scenes/layout';
 import { newGame, placeStored, storeShelf, type Shelf, type StoreState } from '../src/game/economy';
 
 describe('своя расстановка полок', () => {
   it('стандартная расстановка на всех уровнях правильная', () => {
     for (let level = 0; level <= 4; level++) {
       const layout = layoutFor(level);
-      expect([...slotIssues(layout, layout.slots)], `уровень ${level}`).toEqual([]);
+      expect([...slotIssues(layout, layout.slots, layout.slots, REGISTERS_BY_LEVEL[level])], `уровень ${level}`).toEqual([]);
     }
   });
 
@@ -92,4 +94,14 @@ describe('запас полок', () => {
     expect(storeShelf({ ...s, warehouse: { bread: Array.from({ length: 200 }, () => ({ age: 0 })) } as StoreState['warehouse'] }, 0)).toBeNull();
     expect(storeShelf({ ...s, shelves: [...s.shelves, { kind: 'icebox', level: 0, items: {} }] }, 3)).toBeNull();
   });
+});
+
+it('на место будущей кассы и у цветов с ведром полку не поставить', () => {
+  const layout = layoutFor(4);
+  const reg = registerSpot(layout, 3);
+  const slots = layout.slots.map((p) => ({ ...p }));
+  slots[0] = { x: reg.x, y: reg.y };
+  expect(slotIssues(layout, slots, layout.slots, 4).has(0)).toBe(true);
+  slots[0] = { x: layout.w - 22, y: layout.h - 40 };
+  expect(slotIssues(layout, slots, layout.slots, 4).has(0)).toBe(true);
 });
