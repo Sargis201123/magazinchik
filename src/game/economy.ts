@@ -518,6 +518,8 @@ export interface Shelf {
 export interface StoreState {
   /** Своя расстановка мест под полки в этом помещении (scenes/placement.ts); после расширения — стандартная. */
   slotPos?: { level: number; at: { x: number; y: number }[] };
+  /** Касса (с очередью и всем, что при ней) сдвинута вдоль нижней стены (scenes/placement.ts). */
+  tillPos?: { level: number; dx: number };
   /** Полки, убранные из зала в запас: стоят без товара, их можно поставить обратно бесплатно. */
   storedShelves?: Shelf[];
   /** Своё название магазина на вывеске (иначе — название уровня). */

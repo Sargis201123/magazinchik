@@ -11,6 +11,34 @@ export const SNAP = 4;
 /** Сколько свободного места нужно человеку, чтобы пройти между полками. */
 export const PASS = 8;
 
+/** Касса вместе с очередью, кассирами и всем, что при ней, сдвинута вдоль нижней стены на dx. */
+export interface TillPosition {
+  level: number;
+  dx: number;
+}
+
+/** Планировка со сдвинутой кассой (дверь остаётся на месте). */
+export function withTill(layout: Layout, till: TillPosition | undefined, level: number): Layout {
+  if (!till || till.level !== level || !till.dx) return layout;
+  const { dx } = till;
+  return {
+    ...layout,
+    counter: { x: layout.counter.x + dx, y: layout.counter.y },
+    sellerHome: { x: layout.sellerHome.x + dx, y: layout.sellerHome.y },
+    queue: { ...layout.queue, x: layout.queue.x + dx },
+  };
+}
+
+/** Насколько кассу можно сдвинуть влево: весь блок (с левыми кассами и кассиром) — правее входа. */
+export function tillMinDx(layout: Layout, registers: number): number {
+  const left = registers > 1 ? layout.counter.x - 34 - 22 : layout.queue.x - 12;
+  return Math.min(0, layout.door.x + 22 - left);
+}
+
+/** Сдвиг кассы на сетке и в пределах: от входа до правой стены. */
+export const clampTill = (layout: Layout, registers: number, dx: number): number =>
+  Math.max(tillMinDx(layout, registers), Math.min(0, snap(dx)));
+
 export interface SlotPositions {
   level: number;
   at: Point[];
@@ -28,32 +56,43 @@ export function withSlots(layout: Layout, custom: SlotPositions | undefined, lev
 /** Сама мебель (без запаса на обход): 44 точки в ширину — стандартные места стоят с шагом 46. */
 export const bodyRect = ({ x, y }: Point): Rect => ({ x: x - 22, y: y - 16, w: 44, h: 24 });
 
-const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+export const overlapsRect = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+const overlaps = overlapsRect;
 const grow = (r: Rect, d: number): Rect => ({ x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d });
 
 /**
- * То, что двигать нельзя и чему полки не должны мешать: касса с очередью, вход, двери флигеля, автомат,
- * места под остальные кассы (registers — сколько их можно поставить в этом помещении, вместе с
- * кассиром), касса самообслуживания, цветы и ведро у кассы.
+ * Касса со всем, что при ней (переезжает целиком): стол, очередь, места под остальные кассы (registers —
+ * сколько их можно поставить в этом помещении, вместе с кассиром), касса самообслуживания, цветы и ведро.
+ * Первый прямоугольник — сам стол: к нему подходят вплотную, проход к нему не проверяем.
  */
-export function fixedZones(layout: Layout, registers = 1): Rect[] {
-  const { w, h, wallH, door, counter, queue } = layout;
+export function tillZones(layout: Layout, registers = 1): Rect[] {
+  const { h, wallH, counter, queue } = layout;
   return [
     { x: counter.x - 16, y: counter.y - 34, w: 32, h: 62 },
     { x: queue.x - 10, y: queue.minY - 10, w: 20, h: queue.y - queue.minY + 22 },
+    ...Array.from({ length: Math.max(0, registers - 1) }, (_, k) => registerSpot(layout, k + 1)).map(({ x, y, left }) =>
+      left ? { x: x - 18, y: y - 30, w: 31, h: 54 } : { x: x - 13, y: y - 30, w: 31, h: 54 },
+    ),
+    { x: counter.x + 14, y: wallH + 72, w: 16, h: 20 },
+    { x: counter.x + 10, y: h - 52, w: 20, h: 52 },
+  ];
+}
+
+/** То, что не переезжает: вход, автомат, двери флигеля, витрины. */
+function roomZones(layout: Layout): Rect[] {
+  const { w, h, wallH, door } = layout;
+  return [
     { x: door.x - 16, y: h - 34, w: 32, h: 34 },
     { x: w - 18, y: wallH + 40, w: 18, h: 30 },
     ...[layout.warehouse, layout.bakery, layout.coffee, layout.kitchen]
       .filter((r): r is NonNullable<typeof r> => Boolean(r))
       .map((r) => ({ x: 0, y: r.doorway.y - 14, w: 26, h: 28 })),
     ...layout.showcases.map(shelfRect),
-    ...Array.from({ length: Math.max(0, registers - 1) }, (_, k) => registerSpot(layout, k + 1)).map(({ x, y, left }) =>
-      left ? { x: x - 18, y: y - 30, w: 31, h: 54 } : { x: x - 13, y: y - 30, w: 31, h: 54 },
-    ),
-    { x: w - 16, y: wallH + 72, w: 16, h: 20 },
-    { x: w - 20, y: h - 52, w: 20, h: 52 },
   ];
 }
+
+/** Всё, чему полки не должны мешать: касса со всем, что при ней, и то, что не переезжает. */
+export const fixedZones = (layout: Layout, registers = 1): Rect[] => [...tillZones(layout, registers), ...roomZones(layout)];
 
 /** Стены зала как препятствия: путь не может обойти полку снаружи здания. */
 const walls = (layout: Layout): Rect[] => [
@@ -71,7 +110,8 @@ export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = l
   const bad = new Set<number>();
   const rects = slots.map(bodyRect);
   // Зона, которую занимает и стандартная расстановка (дверь в ещё закрытую комнату флигеля), — не запретная.
-  const zones = fixedZones(layout, registers).filter((z, k) => k === 0 || !defaults.some((d) => overlaps(bodyRect(d), z)));
+  // Касса переезжает — её зоны запретны всегда.
+  const zones = [...tillZones(layout, registers), ...roomZones(layout).filter((z) => !defaults.some((d) => overlaps(bodyRect(d), z)))];
   rects.forEach((r, i) => {
     const stand = standPoint(slots[i]);
     // У задней стены полка краем заходит на стену — так стоят и стандартные.

@@ -119,7 +119,7 @@ export const en: Record<TextKey, string> = {
   'tab.shelves': 'Shelves',
   'tab.prices': 'Prices',
   'arrange.open': "Rearrange shelves",
-  'arrange.hint': "Drag a shelf with your finger. Green — OK, red — not allowed (no aisle, register, door).",
+  'arrange.hint': "Drag shelves and the register (it slides along the wall with its queue). Green — OK, red — not allowed.",
   'arrange.bad': "Bad spots: {n}. Move the red shelves so people can walk up to them.",
   'arrange.done': "Done",
   'arrange.reset': "Reset",

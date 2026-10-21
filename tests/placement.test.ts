@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { layoutFor } from '../src/scenes/layout';
-import { keepPlaces, slotIssues, withSlots } from '../src/scenes/placement';
+import { clampTill, keepPlaces, slotIssues, tillMinDx, withSlots, withTill } from '../src/scenes/placement';
 import { REGISTERS_BY_LEVEL } from '../src/game/registers';
 import { registerSpot } from '../src/scenes/layout';
 import { newGame, placeStored, storeShelf, type Shelf, type StoreState } from '../src/game/economy';
@@ -104,4 +104,32 @@ it('на место будущей кассы и у цветов с ведром
   expect(slotIssues(layout, slots, layout.slots, 4).has(0)).toBe(true);
   slots[0] = { x: layout.w - 22, y: layout.h - 40 };
   expect(slotIssues(layout, slots, layout.slots, 4).has(0)).toBe(true);
+});
+
+describe('перенос кассы', () => {
+  it('касса переезжает с очередью, дверь остаётся; влево — не дальше входа', () => {
+    const plain = layoutFor(3);
+    const min = tillMinDx(plain, 3);
+    expect(min).toBeLessThan(0);
+    const moved = withTill(plain, { level: 3, dx: -40 }, 3);
+    expect(moved.counter.x).toBe(plain.counter.x - 40);
+    expect(moved.queue.x).toBe(plain.queue.x - 40);
+    expect(moved.door).toEqual(plain.door);
+    expect(clampTill(plain, 3, -1000)).toBe(min);
+    expect(clampTill(plain, 3, 50)).toBe(0);
+    // Другой уровень — касса на стандартном месте.
+    expect(withTill(plain, { level: 2, dx: -40 }, 3)).toBe(plain);
+  });
+
+  it('касса, наехавшая на полку, делает полку красной; освободившееся место у стены можно занять', () => {
+    const plain = layoutFor(3);
+    const dx = tillMinDx(plain, 3);
+    const moved = withTill(plain, { level: 3, dx }, 3);
+    const bad = slotIssues(moved, plain.slots, plain.slots, 3);
+    expect(bad.size).toBeGreaterThan(0);
+    // Вернём кассу на место и поставим полку в правый нижний угол, где она стояла, — нельзя (там касса).
+    const slots = plain.slots.map((p) => ({ ...p }));
+    slots[0] = { x: plain.counter.x, y: plain.counter.y - 70 };
+    expect(slotIssues(plain, slots, plain.slots, 3).has(0)).toBe(true);
+  });
 });
