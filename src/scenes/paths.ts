@@ -87,3 +87,36 @@ export function findPath(from: Point, to: Point, obstacles: Rect[]): Point[] {
   for (let i = end; i > 0; i = prev[i]) path.unshift(nodes[i]);
   return path;
 }
+
+/**
+ * Можно ли пройти от from до to, обходя препятствия (тот же граф углов, что и в findPath, только
+ * без «иди напрямик», если пути нет). Для проверки расстановки полок.
+ */
+export function reachable(from: Point, to: Point, obstacles: Rect[]): boolean {
+  if (obstacles.some((r) => inside(from, r) || inside(to, r))) return false;
+  const clear = (a: Point, b: Point) => obstacles.every((r) => !crosses(a, b, r));
+  if (clear(from, to)) return true;
+  const pad = 0.5;
+  const corners: Point[] = obstacles
+    .flatMap((r) => [
+      { x: r.x - pad, y: r.y - pad },
+      { x: r.x + r.w + pad, y: r.y - pad },
+      { x: r.x - pad, y: r.y + r.h + pad },
+      { x: r.x + r.w + pad, y: r.y + r.h + pad },
+    ])
+    .filter((c) => obstacles.every((r) => !inside(c, r)));
+  const nodes = [from, ...corners, to];
+  const seen = nodes.map(() => false);
+  const stack = [0];
+  seen[0] = true;
+  while (stack.length) {
+    const u = stack.pop()!;
+    if (u === nodes.length - 1) return true;
+    for (let v = 0; v < nodes.length; v++) {
+      if (seen[v] || !clear(nodes[u], nodes[v])) continue;
+      seen[v] = true;
+      stack.push(v);
+    }
+  }
+  return false;
+}

@@ -230,6 +230,11 @@ const css = `
 .ui-shelf-card.broken { border-color: #b13e53; }
 .ui-shelf-meta { font-size: 11.5px; color: #5a5048; }
 .ui-shelf-span { grid-column: 1 / -1; margin: 0; }
+.ui-arrange { position: fixed; z-index: 30; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 10px); transform: translateX(-50%);
+  width: min(94vw, 372px); box-sizing: border-box; background: #fbf6ea; border: 3px solid #2b2233; border-radius: 10px;
+  box-shadow: 0 4px 0 #2b2233; padding: 8px 10px; font: 13px/1.35 ${UI_FONT}; color: #2b2233; }
+.ui-arrange-row { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 6px; margin-top: 6px; }
+.ui-arrange-row .ui-btn { margin: 0; padding: 9px 4px; font-size: 13px; }
 .ui-help-inline { display: inline-block; width: 20px; height: 20px; line-height: 20px; margin-left: 6px; vertical-align: middle; font-size: 11px; }
 /* Плитки «Уголков»: значок слева, название и состояние справа. */
 .ui-tile-card { flex-direction: row; align-items: center; gap: 7px; }
