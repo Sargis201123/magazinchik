@@ -87,6 +87,19 @@ describe.skipIf(!Database)('рейтинг и аналитика (сервер)'
     expect(s.eventsWeek).toEqual([{ kind: 'day_end', n: 1, players: 1 }]);
   });
 
+  it('плавность: у каждого игрока — последний замер FPS, по корзинам', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, WEBHOOK_SECRET: 'sekret', DB: d1() };
+    // У первого два дня в одной пачке: в счёт идёт последний (58), а не первый (20).
+    await progress(await post(1, { day: 5, events: [{ kind: 'fps', day: 4, value: 20 }, { kind: 'fps', day: 5, value: 58 }] }), env);
+    await progress(await post(2, { day: 3, events: [{ kind: 'fps', day: 3, value: 33 }] }), env);
+    await progress(await post(3, { day: 3, events: [{ kind: 'fps', day: 3, value: 61 }] }), env);
+    const s = (await (await stats(new Request('https://x/api/stats?key=sekret'), env)).json()) as { fps: { bucket: string; players: number }[] };
+    expect(s.fps).toEqual([
+      { bucket: '55+', players: 2 },
+      { bucket: '30-44', players: 1 },
+    ]);
+  });
+
   it('рекламные метки: канал нового игрока, приглашения, прямые ссылки; в сводке — по каналам', async () => {
     expect(sourceOf('src_TGAds')).toBe('tgads');
     expect(sourceOf('ref_42')).toBe('ref');

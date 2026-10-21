@@ -172,6 +172,7 @@ import {
 import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
+import { liteMode, setLiteMode } from '../platform/quality';
 import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
 import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeLoyalty, cafeOf } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
@@ -3192,8 +3193,21 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
         render();
       }, 'ui-btn secondary'),
     );
+    // Графика: обычная или лёгкая (для слабых телефонов). Холст меняется со следующего запуска.
+    const gfx = el('div', 'ui-box');
+    const lite = liteMode();
+    const chips = el('div', 'ui-chips');
+    for (const on of [false, true])
+      chips.append(
+        button(t(on ? 'lite.on' : 'lite.off'), () => {
+          setLiteMode(on);
+          render();
+        }, `ui-chip${lite === on ? ' active' : ''}`),
+      );
+    gfx.append(el('b', '', `🖥 ${t('lite.title')}`), el('div', 'ui-muted', t('lite.note')), chips);
     return [
       achievementsButton(state),
+      gfx,
       rankBox(state),
       ...legacyBox(state),
       ...inviteBox(),
