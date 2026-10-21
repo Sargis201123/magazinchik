@@ -120,6 +120,7 @@ import { liveProgress, recordDay, unlockAchievements, type AchievementId } from 
 import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
 import { activeAd } from '../game/ads';
+import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
 import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
@@ -3581,8 +3582,11 @@ export class StoreScene extends Phaser.Scene {
 
   /** Постоянные покупатели на сегодня: каждый заходит в своё случайное время. */
   private scheduleRegulars(): void {
-    for (const r of regularsToday(this.state)) {
-      if (Math.random() >= r.every) continue;
+    const coming = regularsToday(this.state).filter((r) => Math.random() < livedRegular(this.state, r).every);
+    for (const r of coming) {
+      // Пара (life.ts) приходит вместе: второй — спутником первого, отдельно не приходит.
+      const partner = companionOf(this.state, r.id)?.regular;
+      if (partner && coming.indexOf(regularById(partner)) < coming.indexOf(r)) continue;
       this.time.delayedCall(Phaser.Math.FloatBetween(0.1, 0.75) * DAY_SECONDS * 1000, () => this.running && this.timeLeft > 0 && this.spawnRegular(r));
     }
   }
@@ -3622,10 +3626,13 @@ export class StoreScene extends Phaser.Scene {
 
   private spawnRegular(r: Regular): void {
     const start = this.streetSpawn();
-    const sprite = this.makePerson(start.x, start.y, { ...r.look });
+    const sprite = this.makePerson(start.x, start.y, { ...livedRegular(this.state, r).look });
     this.addUmbrella(sprite);
     const bubble = this.art(0, -14, 'bubble').setVisible(false);
     sprite.add(bubble);
+    // Жизнь района: Пётр Ильич с Ольгой Николаевной, Костя с женой — вдвоём.
+    const companion = companionOf(this.state, r.id);
+    if (companion) this.addCompanion(sprite, companion.look);
     // Любимый товар — всегда; иногда ещё что-нибудь.
     const extra = Math.random() < 0.4 ? this.wanted(1).filter((id) => id !== r.favorite) : [];
     const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief: false, regular: r.id, wants: [r.favorite, ...extra] };
@@ -5824,8 +5831,8 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Вторая половинка пары идёт следом за первой — тем же путём, чуть позади. */
-  private addCompanion(leader: Phaser.GameObjects.Container): void {
-    const companion = this.makePerson(leader.x - 8, leader.y + 1, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
+  private addCompanion(leader: Phaser.GameObjects.Container, look?: Look): void {
+    const companion = this.makePerson(leader.x - 8, leader.y + 1, look ?? customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
     this.addUmbrella(companion);
     companion.setData('leader', leader);
     leader.setData('trail', [] as { x: number; y: number }[]);
@@ -7164,7 +7171,7 @@ export class StoreScene extends Phaser.Scene {
     const perUnit = bogo ? price / 2 : price;
     // Постоянный покупатель решает не по случаю, а по своей границе цены.
     const regular = c.regular ? regularById(c.regular) : undefined;
-    const declines = regular?.favorite === id ? !acceptsPrice(this.state, regular, perUnit) : Math.random() >= buyChance(perUnit, fair);
+    const declines = regular?.favorite === id ? !acceptsPrice(this.state, livedRegular(this.state, regular), perUnit) : Math.random() >= buyChance(perUnit, fair);
     if (declines) {
       if (price <= fair) return 'skipped';
       this.popup(c.sprite.x, c.sprite.y - 14, t('popup.expensive'), '#ffd0d0');

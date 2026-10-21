@@ -558,6 +558,8 @@ export interface StoreState {
   gift: { lastDate: string; streak: number };
   /** Постоянные покупатели: доверие (0…5) и до какого дня обиделись (regulars.ts). */
   regulars?: Record<string, { loyalty: number; awayUntil: number }>;
+  /** Новости жизни района, которые игрок уже видел (life.ts). */
+  lifeSeen?: string[];
   /** Купленные улучшения кассы (upgrades.ts). */
   upgrades?: string[];
   /** Реклама: какая и в какие дни (включительно) работает. */

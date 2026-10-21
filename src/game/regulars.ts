@@ -7,7 +7,7 @@ import type { TextKey } from '../i18n/ru';
 import { perceivedBase } from './endless';
 import { sellableProducts, type ProductId, type StoreState } from './economy';
 
-export type RegularId = 'petr' | 'sveta' | 'kostya' | 'akhmed' | 'olga';
+export type RegularId = 'petr' | 'sveta' | 'kostya' | 'akhmed' | 'olga' | 'misha';
 
 export interface RegularLook {
   shirt: number;
@@ -18,6 +18,10 @@ export interface RegularLook {
   glasses?: boolean;
   bag?: 'bag' | 'backpack';
   bagTint?: number;
+  /** Ребёнок — ростом поменьше. */
+  kid?: boolean;
+  /** Катит коляску (life.ts). */
+  stroller?: number;
 }
 
 export interface Regular {
@@ -84,6 +88,17 @@ export const REGULARS: Regular[] = [
     every: 0.6,
     from: 12,
     look: { shirt: 0x3e8948, skin: 0xf2d3ab, pants: 0x5a6988, hair: 0xb86f50, style: 'bun', glasses: true },
+  },
+  {
+    // Старший сын Светы: подрос и ходит сам (life.ts — появляется в районе позже).
+    id: 'misha',
+    nameKey: 'regular.misha',
+    habitKey: 'regular.misha.habit',
+    favorite: 'juice',
+    tolerance: 1.2,
+    every: 0.6,
+    from: 180,
+    look: { shirt: 0xfeae34, skin: 0xeec39a, pants: 0x3a4466, hair: 0x733e39, style: 'short', kid: true, bag: 'backpack', bagTint: 0xe43b44 },
   },
 ];
 
