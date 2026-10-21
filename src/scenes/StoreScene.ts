@@ -194,6 +194,7 @@ import { note, reviewsFor } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { lossAdvice, noteLost } from '../game/losses';
 import { fairTolerance, isFairDay, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fair';
+import { fpsSummary, LITE_FPS, liteMode, setLiteMode } from '../platform/quality';
 import { DELIVERY_SECONDS, makeHomeOrder, ORDER_EVERY, ORDER_TIMEOUT, packHomeOrder, type HomeOrder } from '../game/delivery';
 
 // Холст шириной 720 и высотой под экран телефона: от 9:16 до 9:20 — на вытянутых телефонах
@@ -205,7 +206,8 @@ export const ASPECT = Phaser.Math.Clamp(window.innerHeight / Math.max(1, window.
  */
 export const RES = (() => {
   const cssWidth = Math.min(window.innerWidth, window.innerHeight / ASPECT);
-  return Phaser.Math.Clamp(Math.round(((cssWidth * (window.devicePixelRatio || 1)) / 720) * 4) / 4, 1, 1.5);
+  // Лёгкая графика (platform/quality.ts) — без повышенной плотности: вдвое меньше пикселей.
+  return Phaser.Math.Clamp(Math.round(((cssWidth * (window.devicePixelRatio || 1)) / 720) * 4) / 4, 1, liteMode() ? 1 : 1.5);
 })();
 export const CANVAS_W = Math.round(720 * RES);
 export const CANVAS_H = Math.round(720 * ASPECT * RES);
@@ -874,6 +876,17 @@ export class StoreScene extends Phaser.Scene {
   private ceilingGlows: Phaser.GameObjects.Image[] = [];
   /** Ночные огни (витрины, лужи света, конусы фонарей, неон): сила растёт к вечеру. */
   private nightLights: NightLight[] = [];
+  /** Неподвижные картинки мира (деревья, дома, клумбы) с их рамками — для отсечения за краем экрана. */
+  private cullables: { obj: Phaser.GameObjects.GameObject & { cameraFilter: number }; box: Phaser.Geom.Rectangle }[] = [];
+  /** Мир перестроен — список для отсечения собрать заново (на следующем кадре, когда всё уже на месте). */
+  private cullDirty = true;
+  /** Лёгкая графика: без виньетки и облаков (холст поменьше — со следующего запуска). */
+  private lite = liteMode();
+  /** Посекундные замеры FPS за день: медиана уходит в аналитику, при тормозах — лёгкая графика. */
+  private fpsSamples: number[] = [];
+  private fpsFrames = 0;
+  private fpsMs = 0;
+  private cullAt = '';
   /** Ночь между днями: какая доля окон в домах уже погасла (0 — все горят). */
   private lightsOut = 0;
   /** Стрелки настенных часов: идут по ходу смены с 8:00 до 20:00. */
@@ -1112,6 +1125,8 @@ export class StoreScene extends Phaser.Scene {
   }
 
   update(_time: number, deltaMs: number): void {
+    this.cullView();
+    this.measureFps(deltaMs);
     this.watchStall(deltaMs);
     this.scarePigeons();
     ambience.update(this.rainStopped ? 'clear' : this.weather, this.evening, this.running, yearTime(this.state.day));
@@ -1260,6 +1275,7 @@ export class StoreScene extends Phaser.Scene {
   /** Строит зал под текущий уровень помещения. При расширении зал строится заново. */
   private buildWorld(): void {
     this.children.removeAll(true);
+    this.cullDirty = true;
     // killAll не вызывает onStop: незаконченный шаг продавца никогда не завершится, и он
     // навсегда остался бы «занят» (не убирал бы мусор и не носил товар). Начинаем его дела заново.
     this.tweens.killAll();
@@ -1305,7 +1321,8 @@ export class StoreScene extends Phaser.Scene {
     this.cameras.main.setZoom(zoom).centerOn(this.home.x, this.home.y);
     // Мягкая виньетка по краям кадра; к вечеру гуще.
     this.cameras.main.postFX?.clear();
-    this.vignette = this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.1);
+    // Виньетка — лишний проход по всему экрану: в лёгкой графике без неё.
+    this.vignette = this.lite ? undefined : this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.1);
     this.buildStreet(next);
     this.buildCritters(next);
     this.buildNeighbors(next);
@@ -1681,6 +1698,68 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Отсечение: то, что не двигается и сейчас за краем экрана, камера не рисует (через cameraFilter —
+   * собственную видимость объектов не трогаем). В большом магазине за кадром ~800 деревьев, кустов
+   * и домов — на слабом телефоне это треть времени отрисовки.
+   */
+  private cullView(): void {
+    const cam = this.cameras.main;
+    if (this.cullDirty) {
+      this.cullDirty = false;
+      this.cullAt = '';
+      // Люди и звери (контейнеры, кот, Бобик) ходят, частицы летают — их не трогаем.
+      const moving = new Set<unknown>([this.catImg, this.bobik]);
+      this.cullables = [];
+      for (const obj of this.children.list) {
+        if (obj.type === 'Container' || obj.type === 'ParticleEmitter' || moving.has(obj)) continue;
+        const shape = obj as unknown as Phaser.GameObjects.Components.GetBounds & { cameraFilter: number };
+        if (typeof shape.getBounds !== 'function') continue;
+        this.cullables.push({ obj: obj as Phaser.GameObjects.GameObject & { cameraFilter: number }, box: shape.getBounds() });
+      }
+    }
+    // Пересчитываем, только когда камера сдвинулась или приблизилась.
+    const key = `${Math.round(cam.scrollX)}|${Math.round(cam.scrollY)}|${cam.zoom.toFixed(3)}|${this.cullables.length}`;
+    if (key === this.cullAt) return;
+    this.cullAt = key;
+    const margin = 24;
+    const v = cam.worldView;
+    const view = new Phaser.Geom.Rectangle(v.x - margin, v.y - margin, v.width + margin * 2, v.height + margin * 2);
+    for (const c of this.cullables) {
+      if (!c.obj.active) continue;
+      c.obj.cameraFilter = Phaser.Geom.Rectangle.Overlaps(view, c.box) ? 0 : cam.id;
+    }
+  }
+
+  /**
+   * FPS по секундам, пока идёт день и вкладка на экране. Если игра заметно тормозит (медиана меньше
+   * LITE_FPS за полминуты) — включаем лёгкую графику и один раз говорим об этом.
+   */
+  private measureFps(deltaMs: number): void {
+    // Свернули вкладку или окно утра поверх — такие кадры не в счёт.
+    if (!this.running || document.hidden || deltaMs > 250) {
+      this.fpsFrames = 0;
+      this.fpsMs = 0;
+      return;
+    }
+    this.fpsFrames++;
+    this.fpsMs += deltaMs;
+    if (this.fpsMs < 1000) return;
+    this.fpsSamples.push((this.fpsFrames * 1000) / this.fpsMs);
+    if (this.fpsSamples.length > 600) this.fpsSamples.shift();
+    this.fpsFrames = 0;
+    this.fpsMs = 0;
+    if (this.lite || this.fpsSamples.length < 30) return;
+    const summary = fpsSummary(this.fpsSamples.slice(-30));
+    if (!summary || summary.median >= LITE_FPS) return;
+    this.lite = true;
+    setLiteMode(true);
+    track('lite_auto', this.state.day, summary.median);
+    if (this.vignette) this.cameras.main.postFX?.remove(this.vignette);
+    this.vignette = undefined;
+    toast('assets/ico_phone.png', t('lite.autoTitle'), t('lite.autoText'));
+  }
+
   /** Оттенок по ходу дня: тёплое утро, белый день, закат, сумерки. */
   private updateLighting(progress?: number): void {
     if (!this.indoorShades.length) return;
@@ -1770,6 +1849,7 @@ export class StoreScene extends Phaser.Scene {
    * листопад (рыжие деревья). Частицы падают только снаружи: здание рисуется поверх них.
    */
   private applyWeather(): void {
+    this.cullDirty = true;
     for (const obj of this.weatherObjs) obj.destroy();
     this.weatherObjs = [];
     this.nightLights = this.nightLights.filter((light) => light.obj.active);
@@ -8462,6 +8542,12 @@ export class StoreScene extends Phaser.Scene {
     if (unlocked.length) extra.push([t('ach.summary'), unlocked.map((id) => t(`ach.${id}` as TextKey)).join(', ')]);
     saveGame(this.state);
     track('day_end', finishedDay, this.stats.revenue);
+    const fps = fpsSummary(this.fpsSamples);
+    if (fps) {
+      track('fps', finishedDay, fps.median);
+      track('fps_low', finishedDay, fps.low);
+    }
+    this.fpsSamples = [];
     if (this.state.bankrupt) track('bankrupt', finishedDay);
     void reportProgress(this.state);
     this.refreshShelves();
@@ -8630,7 +8716,7 @@ export class StoreScene extends Phaser.Scene {
    * стайка птиц. Вечером и ночью — нет.
    */
   private skyLife(): void {
-    if (!this.running || this.night || this.evening > 0.5) return;
+    if (this.lite || !this.running || this.night || this.evening > 0.5) return;
     const v = this.cameras.main.worldView;
     const sunny = this.weather === 'clear' || this.weather === 'heat' || this.weather === 'leaves';
     if (sunny && Math.random() < 0.45) {

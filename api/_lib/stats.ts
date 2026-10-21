@@ -156,5 +156,16 @@ export async function stats(request: Request, env: Env, now = Date.now()): Promi
   ).results.map((r) => ({ ...r, day3: r.day3 ?? 0, day7: r.day7 ?? 0 }));
   const organic = players - tagged.reduce((sum, r) => sum + r.players, 0);
   const sources = [...tagged, { source: 'organic', players: Math.max(0, organic), day3: null, day7: null }];
-  return json({ players, active, retention: { d1: await retention(1), d7: await retention(7) }, funnel, levels, sources, eventsWeek: events });
+  // Плавность у игроков за неделю: последний замер FPS каждого (медиана его дня) — по корзинам.
+  const fps = (
+    await db
+      .prepare(
+        `SELECT CASE WHEN value >= 55 THEN '55+' WHEN value >= 45 THEN '45-54' WHEN value >= 30 THEN '30-44' ELSE '<30' END AS bucket, COUNT(*) AS players
+         FROM (SELECT id, value FROM events e WHERE kind = 'fps' AND at > ? AND rowid = (SELECT MAX(rowid) FROM events WHERE id = e.id AND kind = 'fps'))
+         GROUP BY bucket ORDER BY MIN(value) DESC`,
+      )
+      .bind(now - 7 * DAY)
+      .all<{ bucket: string; players: number }>()
+  ).results;
+  return json({ players, active, retention: { d1: await retention(1), d7: await retention(7) }, funnel, levels, sources, fps, eventsWeek: events });
 }
