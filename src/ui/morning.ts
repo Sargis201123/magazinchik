@@ -32,6 +32,9 @@ import {
   SHELF_KINDS,
   SHELF_LEVELS,
   sellShelf,
+  storeShelf,
+  placeStored,
+  isFixture,
   shelfCapacity,
   shelfCount,
   shelfFree,
@@ -218,6 +221,7 @@ import { showLeaderboard } from './leaderboard';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { button, el, openModal, who } from './dom';
+import { keepPlaces } from '../scenes/placement';
 
 /** Портрет заказчика: шеф — это Марат. */
 const CLIENT_PORTRAIT: Record<ClientId, string> = { chef: 'marat', school: 'school', valya: 'valya' };
@@ -226,6 +230,8 @@ interface MorningOptions {
   getState: () => StoreState;
   setState: (s: StoreState) => void;
   onOpen: () => void;
+  /** «Переставить полки»: утро закрывается, в зале — перестановка; потом утро откроется снова. */
+  onArrange?: () => void;
   /** Бабушка закончила обучение — теперь можно вручить её гостинец. */
   onTourDone?: () => void;
 }
@@ -333,6 +339,9 @@ function artRow(texture: string, opts: { name: string; price?: number; sub?: str
 }
 
 /** «+10%» / «−20%» для множителя. */
+/** Название на вывеске — до 16 букв: длиннее не влезает на доску. */
+const SHOP_NAME_MAX = 16;
+
 const percent = (k: number): string => `${k >= 1 ? '+' : '−'}${Math.round(Math.abs(k - 1) * 100)}%`;
 
 /** Заголовок с «❔»: длинное пояснение спрятано и открывается по нажатию. */
@@ -408,7 +417,7 @@ function helpRow(title: HTMLElement | string, text: string): HTMLElement {
 }
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen, onTourDone }: MorningOptions): void {
+export function showMorning({ getState, setState, onOpen, onArrange, onTourDone }: MorningOptions): void {
   const { card, close } = openModal();
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
@@ -1039,9 +1048,15 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       // Вёдра с цветами бесплатные — их не продают.
       ...(SHELF_KINDS[shelf.kind].price ? [button(t('shelves.sell', { n: shelfResale(shelf) }), () => {
         openShelf = -1;
-        update(sellShelf(getState(), i));
+        update(keepPlaces(getState(), sellShelf(getState(), i), i));
       }, 'ui-chip')] : []),
+      // Обычную полку можно убрать в запас (товар — на склад) и поставить потом обратно бесплатно.
+      ...(isFixture(shelf) ? [] : [button(`📦 ${t('shelves.store')}`, () => {
+        openShelf = -1;
+        update(keepPlaces(getState(), storeShelf(getState(), i), i));
+      }, 'ui-chip', !storeShelf(state, i))]),
     );
+    if (!isFixture(shelf) && !storeShelf(state, i)) box.append(el('div', 'ui-muted', t('shelves.storeFull')));
     const allowed = PRODUCT_IDS.filter((pid) => PRODUCTS[pid].category === shelf.kind).map(shelfGoodLabel).join(', ');
     box.append(head, el('div', 'ui-muted', t('shelves.only', { list: allowed })));
     if (shelf.kind === 'icebox') box.append(el('div', 'ui-muted', t('shelves.iceboxNote')));
@@ -1066,8 +1081,18 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
   const hallTab = (state: StoreState): HTMLElement[] => {
     const slots = storeLevel(state).slots;
     const space = shelfSpace(state);
+    const arrange = onArrange
+      ? [
+          button(`🔧 ${t('arrange.open')}`, () => {
+            endTour();
+            close();
+            onArrange();
+          }, 'ui-btn secondary'),
+        ]
+      : [];
     const out: HTMLElement[] = [
       helpRow(`🗄 ${t('shelves.slots', { n: slots - freeSlots(state), max: slots })} · ${t('hall.goods', { n: space.s, max: space.smax })}`, t('shelves.rule')),
+      ...arrange,
       ...stockBox(state),
     ];
     if (openShelf >= state.shelves.length) openShelf = -1;
@@ -1099,6 +1124,19 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
       }
     });
     out.push(grid, foldBox('season', `🗓 ${t('goods.title')}`, (body) => body.append(seasonBox(getState()))));
+    // Запас: убранные полки ставятся обратно на первое свободное место бесплатно.
+    if (state.storedShelves?.length) {
+      out.push(el('h3', '', `📦 ${t('shelves.storedTitle')}`));
+      state.storedShelves.forEach((shelf, k) => {
+        const open = shelfKindOpen(state, shelf.kind);
+        out.push(button(
+          t('shelves.place', { name: `${t(SHELF_KINDS[shelf.kind].nameKey)} ${'★'.repeat(shelf.level + 1)}` }),
+          () => update(placeStored(getState(), k), 'success'),
+          'ui-btn secondary',
+          freeSlots(state) <= 0 || !open,
+        ));
+      });
+    }
     out.push(el('h3', '', t('shelves.buyTitle')));
     if (freeSlots(state) <= 0) {
       out.push(el('div', 'ui-muted', t('shelves.noRoom')));
@@ -3205,8 +3243,20 @@ export function showMorning({ getState, setState, onOpen, onTourDone }: MorningO
         }, `ui-chip${lite === on ? ' active' : ''}`),
       );
     gfx.append(el('b', '', `🖥 ${t('lite.title')}`), el('div', 'ui-muted', t('lite.note')), chips);
+    // Своё название магазина — на вывеске на крыше.
+    const named = el('div', 'ui-box');
+    const input = el('input', 'ui-input');
+    input.maxLength = SHOP_NAME_MAX;
+    input.placeholder = t(STORE_LEVELS[state.level].nameKey);
+    input.value = state.shopName ?? '';
+    named.append(
+      el('b', '', `🪧 ${t('shopName.title')}`),
+      input,
+      button(t('shopName.save'), () => update({ ...getState(), shopName: input.value.trim().slice(0, SHOP_NAME_MAX) || undefined }, 'success'), 'ui-chip'),
+    );
     return [
       achievementsButton(state),
+      named,
       gfx,
       rankBox(state),
       ...legacyBox(state),

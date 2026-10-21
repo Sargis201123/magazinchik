@@ -149,6 +149,7 @@ import {
 } from '../game/nightGuests';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
+import { bodyRect, iceboxFits, slotIssues, slotPosFor, snap, withSlots } from './placement';
 import { iceboxSpotFor, layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
@@ -880,6 +881,8 @@ export class StoreScene extends Phaser.Scene {
   private cullables: { obj: Phaser.GameObjects.GameObject & { cameraFilter: number }; box: Phaser.Geom.Rectangle }[] = [];
   /** Мир перестроен — список для отсечения собрать заново (на следующем кадре, когда всё уже на месте). */
   private cullDirty = true;
+  /** Идёт перестановка полок: камера не ездит, полки — «призраки», которые тянут пальцем. */
+  private arranging = false;
   /** Лёгкая графика: без виньетки и облаков (холст поменьше — со следующего запуска). */
   private lite = liteMode();
   /** Посекундные замеры FPS за день: медиана уходит в аналитику, при тормозах — лёгкая графика. */
@@ -1291,7 +1294,8 @@ export class StoreScene extends Phaser.Scene {
     this.clockHands = undefined;
     this.nightLights = [];
     this.trash.clear();
-    this.layout = layoutFor(this.state.level);
+    // Своя расстановка мест под полки (placement.ts) — если игрок переставлял в этом помещении.
+    this.layout = withSlots(layoutFor(this.state.level), this.state.slotPos, this.state.level);
     this.builtLevel = this.state.level;
 
     // Камера показывает и соседнюю площадь, куда магазин вырастет: ларёк выглядит маленьким.
@@ -1365,7 +1369,7 @@ export class StoreScene extends Phaser.Scene {
       this.tweens.add({ targets: lit, alpha: { from: 1, to: 0.25 }, duration: 520, yoyo: true, repeat: -1, ease: 'Stepped' });
     }
     this.add
-      .text(w / 2, -9, t(storeLevel(this.state).nameKey), {
+      .text(w / 2, -9, this.shopTitle(), {
         fontFamily: UI_FONT,
         fontSize: '7px',
         color: `#${signColor.toString(16).padStart(6, '0')}`,
@@ -1373,7 +1377,7 @@ export class StoreScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setResolution(4)
       .setDepth(3);
-    this.neonSign(w / 2, -9, t(storeLevel(this.state).nameKey), '7px', signColor, 64);
+    this.neonSign(w / 2, -9, this.shopTitle(), '7px', signColor, 64);
     if (!sign) this.signLights(w / 2, -9);
     this.buildWing();
     this.buildWarehouse();
@@ -1694,6 +1698,105 @@ export class StoreScene extends Phaser.Scene {
         onComplete: () => flake.destroy(),
       });
     }
+  }
+
+  /** Название на вывеске: своё, если игрок назвал магазин, иначе — по помещению. */
+  private shopTitle(): string {
+    return this.state.shopName?.trim() || t(storeLevel(this.state).nameKey);
+  }
+
+  /**
+   * Перестановка полок утром: зал целиком в кадре, каждое место под полку — «призрак», который тянут
+   * пальцем по сетке. Место, куда ставить нельзя (вплотную к проходу, на кассе, у двери, так, что к
+   * полке не подойти), — красное; «Готово» — только когда красных нет.
+   */
+  private arrange(): void {
+    if (this.arranging) return;
+    this.arranging = true;
+    const { w, h } = this.layout;
+    const defaults = layoutFor(this.state.level).slots;
+    let at = this.layout.slots.map((p) => ({ ...p }));
+    // Настоящие полки и разметку прячем — вместо них «призраки».
+    for (const view of this.shelfViews.splice(0)) this.destroyShelfView(view);
+    for (const mark of this.slotDecor) mark?.setVisible(false);
+    const cam = this.cameras.main;
+    cam.setZoom(Math.min(CANVAS_W / (w + 24), (CANVAS_H - HUD_TOP - 120 * RES) / (h + 24))).centerOn(w / 2, h / 2 + 10);
+    const grid = this.add.graphics().setDepth(LIGHT_DEPTH + 10);
+    grid.lineStyle(0.4, 0x2b2233, 0.18);
+    for (let x = 0; x <= w; x += 8) grid.lineBetween(x, this.layout.wallH, x, h);
+    for (let y = this.layout.wallH; y <= h; y += 8) grid.lineBetween(0, y, w, y);
+    // Какая полка в каком месте: обычные полки занимают места по порядку покупки.
+    const kinds = this.state.shelves.filter((sh) => !SHELF_KINDS[sh.kind].fixture).map((sh) => sh.kind);
+    const ghosts = at.map((p, i) => {
+      const kind = kinds[i];
+      const look = kind ? SHELF_LOOK[kind] : null;
+      const img = look ? this.art(0, -FURNITURE_TOP / 2, look.texture).setTint(look.tint) : this.art(0, 2, 'slot_empty');
+      const frame = this.add.graphics();
+      const ghost = this.add.container(p.x, p.y, [img, frame]).setDepth(LIGHT_DEPTH + 11);
+      ghost.setSize(44, 30);
+      ghost.setInteractive({ draggable: true, useHandCursor: true });
+      ghost.setData('frame', frame);
+      return ghost;
+    });
+    const bar = el('div', 'ui-arrange');
+    const hint = el('div', 'ui-arrange-hint', t('arrange.hint'));
+    const done = button(t('arrange.done'), () => finish(true), 'ui-btn');
+    const reset = button(t('arrange.reset'), () => {
+      at = defaults.map((p) => ({ ...p }));
+      ghosts.forEach((g, i) => g.setPosition(at[i].x, at[i].y));
+      check();
+    }, 'ui-btn secondary');
+    const cancel = button(t('arrange.cancel'), () => finish(false), 'ui-btn secondary');
+    const row = el('div', 'ui-arrange-row');
+    row.append(cancel, reset, done);
+    bar.append(hint, row);
+    document.body.append(bar);
+    const check = () => {
+      const bad = slotIssues(this.layout, at, defaults);
+      ghosts.forEach((g, i) => {
+        const frame = g.getData('frame') as Phaser.GameObjects.Graphics;
+        const r = bodyRect({ x: 0, y: 0 });
+        frame.clear();
+        frame.fillStyle(bad.has(i) ? 0xe43b44 : 0x63c74d, 0.28).fillRect(r.x, r.y, r.w, r.h);
+        frame.lineStyle(1, bad.has(i) ? 0xe43b44 : 0x3e8948, 1).strokeRect(r.x, r.y, r.w, r.h);
+      });
+      // Ларь ищет место сам — после перестановки ему должно найтись место у стены.
+      const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(this.layout, at);
+      done.disabled = bad.size > 0 || iceless;
+      hint.textContent = bad.size ? t('arrange.bad', { n: bad.size }) : iceless ? t('arrange.icebox') : t('arrange.hint');
+      return iceless ? new Set([...bad, -1]) : bad;
+    };
+    const onDrag = (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject, x: number, y: number) => {
+      const i = ghosts.indexOf(obj as Phaser.GameObjects.Container);
+      if (i < 0) return;
+      at[i] = { x: Phaser.Math.Clamp(snap(x), 22, w - 22), y: Phaser.Math.Clamp(snap(y), this.layout.wallH + 12, h - 28) };
+      ghosts[i].setPosition(at[i].x, at[i].y).setDepth(LIGHT_DEPTH + 12);
+      check();
+    };
+    const onDragEnd = (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => {
+      (obj as Phaser.GameObjects.Container).setDepth?.(LIGHT_DEPTH + 11);
+      haptic.tap();
+    };
+    this.input.on('drag', onDrag);
+    this.input.on('dragend', onDragEnd);
+    check();
+    const finish = (save: boolean) => {
+      if (save && check().size) return;
+      this.input.off('drag', onDrag);
+      this.input.off('dragend', onDragEnd);
+      bar.remove();
+      grid.destroy();
+      ghosts.forEach((g) => g.destroy());
+      this.arranging = false;
+      if (save) {
+        this.state = { ...this.state, slotPos: slotPosFor(this.state.level, at) };
+        saveGame(this.state);
+        track('arrange', this.state.day, at.length);
+      }
+      // Всё пересобираем по новым местам (обход, ларь, растения) и возвращаемся к утру.
+      this.buildWorld();
+      this.showMorning();
+    };
   }
 
   /**
@@ -3994,10 +4097,13 @@ export class StoreScene extends Phaser.Scene {
     const zoomTo = (z: number) => cam.setZoom(Phaser.Math.Clamp(z, this.baseZoom * 0.5, this.baseZoom * 2.2));
     // Колёсико на компьютере.
     this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      if (this.arranging) return;
       zoomTo(cam.zoom * (dy > 0 ? 0.9 : 1.1));
       this.scheduleHome();
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      // Пока переставляют полки, палец двигает полку, а не камеру.
+      if (this.arranging) return;
       const a = this.input.pointer1;
       const b = this.input.pointer2;
       if (a.isDown && b.isDown) {
@@ -7852,6 +7958,7 @@ export class StoreScene extends Phaser.Scene {
     this.updateLighting(0);
     this.openShop();
     showMorning({
+      onArrange: () => this.arrange(),
       onTourDone: () => this.offerGift(),
       getState: () => this.state,
       setState: (s) => {
@@ -7863,11 +7970,13 @@ export class StoreScene extends Phaser.Scene {
         const radioChanged = s.radio !== this.state.radio;
         // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
         const was = this.state;
+        // Убрали или продали полку — остальные остались на местах, но сами места переставлены.
+        const placesChanged = s.slotPos !== was.slotPos;
         const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was) || hasDog(s) !== hasDog(was) || sunflowersPlanted(s) !== sunflowersPlanted(was);
         this.state = s;
         saveGame(s);
         if (s.level > this.builtLevel) void this.celebrateExpansion();
-        else if (s.level !== this.builtLevel || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard || giantLook(s) !== this.builtGiant) this.buildWorld();
+        else if (s.level !== this.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard || giantLook(s) !== this.builtGiant) this.buildWorld();
         else if (staffChanged) this.syncStaff();
         if (adsChanged) this.applyAds();
         if (radioChanged) this.applyRadio();
@@ -8558,7 +8667,7 @@ export class StoreScene extends Phaser.Scene {
     const result = await shareDay(
       {
         day,
-        shop: t(STORE_LEVELS[this.state.level].nameKey),
+        shop: this.shopTitle(),
         revenue: this.stats.revenue,
         week: history.slice(-7).reduce((sum, n) => sum + n, 0),
         served: this.stats.served,

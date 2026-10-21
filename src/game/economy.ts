@@ -516,6 +516,12 @@ export interface Shelf {
 }
 
 export interface StoreState {
+  /** Своя расстановка мест под полки в этом помещении (scenes/placement.ts); после расширения — стандартная. */
+  slotPos?: { level: number; at: { x: number; y: number }[] };
+  /** Полки, убранные из зала в запас: стоят без товара, их можно поставить обратно бесплатно. */
+  storedShelves?: Shelf[];
+  /** Своё название магазина на вывеске (иначе — название уровня). */
+  shopName?: string;
   day: number;
   money: number;
   /** Уровень помещения — индекс в STORE_LEVELS. */
@@ -1011,6 +1017,36 @@ export function sellShelf(state: StoreState, shelfIndex: number): StoreState | n
     warehouse,
     shelves: state.shelves.filter((_, i) => i !== shelfIndex),
   };
+}
+
+/**
+ * Убрать полку в запас: товар с неё уходит на склад. Если на складе не хватит места — нельзя
+ * (товар не выбрасываем). Ларь и цветы стоят на своих местах — их не убирают.
+ */
+export function storeShelf(state: StoreState, shelfIndex: number): StoreState | null {
+  const shelf = state.shelves[shelfIndex];
+  if (!shelf || isFixture(shelf)) return null;
+  const units = PRODUCT_IDS.reduce((sum, id) => sum + (shelf.items[id]?.length ?? 0), 0);
+  if (units > warehouseCapacity(state) - warehouseCount(state)) return null;
+  const warehouse: Stock = { ...state.warehouse };
+  for (const id of PRODUCT_IDS) {
+    const moved = shelf.items[id] ?? [];
+    if (moved.length) warehouse[id] = [...(warehouse[id] ?? []), ...moved];
+  }
+  return {
+    ...state,
+    warehouse,
+    shelves: state.shelves.filter((_, i) => i !== shelfIndex),
+    storedShelves: [...(state.storedShelves ?? []), { kind: shelf.kind, level: shelf.level, items: {}, ...(shelf.broken ? { broken: true } : {}) }],
+  };
+}
+
+/** Поставить полку из запаса на свободное место в зале. */
+export function placeStored(state: StoreState, k: number): StoreState | null {
+  const shelf = state.storedShelves?.[k];
+  if (!shelf || freeSlots(state) <= 0 || !shelfKindOpen(state, shelf.kind)) return null;
+  const rest = state.storedShelves!.filter((_, i) => i !== k);
+  return { ...state, shelves: [...state.shelves, shelf], storedShelves: rest.length ? rest : undefined };
 }
 
 // ---------- Помещение и долг ----------
