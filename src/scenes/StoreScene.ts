@@ -149,7 +149,7 @@ import {
 } from '../game/nightGuests';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
-import { layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
+import { iceboxSpotFor, layoutFor, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
@@ -972,8 +972,6 @@ export class StoreScene extends Phaser.Scene {
   private valyaCame = false;
   /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
   private combo = 0;
-  /** Камера не акцентирует события чаще раза в 10 секунд (focusMoment). */
-  private focusUntil = 0;
   private lastSaleAt = -Infinity;
   private nextSpawn = 1;
   private running = false;
@@ -5493,13 +5491,11 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Ларь с мороженым — в зале слева от входа, у нижней стены. В тесном помещении у стены места нет
-   * (там проход к двери склада) — ларь стоит чуть выше, у левой стены.
+   * Ларь с мороженым — у нижней стены рядом со входом или у левой стены, там, где он не задевает
+   * места под полки (layout.ts, iceboxSpotFor).
    */
   private iceboxSpot(): { x: number; y: number } {
-    const { door, h } = this.layout;
-    const x = door.x - 44;
-    return x >= 36 ? { x, y: h - 16 } : { x: 24, y: h - 38 };
+    return iceboxSpotFor(this.layout);
   }
 
   /** Вёдра с цветами — у кассы, в углу у правой стены. */
@@ -5805,30 +5801,8 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Лёгкий акцент камеры: чуть ближе и чуть в сторону события, через секунду — обратно.
-   * Не чаще раза в 10 секунд и не тогда, когда игрок сам двигает камеру.
-   */
-  private focusMoment(x: number, y: number): void {
-    const cam = this.cameras.main;
-    if (this.time.now < this.focusUntil || this.input.pointer1.isDown) return;
-    // Игрок осматривает квартал (камера не у магазина) — не дёргаем.
-    if (Math.abs(cam.zoom - this.baseZoom) > 0.01 || Phaser.Math.Distance.Between(cam.midPoint.x, cam.midPoint.y, this.home.x, this.home.y) > 4) return;
-    this.focusUntil = this.time.now + 10000;
-    const tx = this.home.x + (x - this.home.x) * 0.25;
-    const ty = this.home.y + (y - this.home.y) * 0.25;
-    cam.pan(tx, ty, 500, 'Sine.easeInOut');
-    cam.zoomTo(this.baseZoom * 1.08, 500, 'Sine.easeInOut');
-    this.time.delayedCall(1700, () => {
-      if (this.input.pointer1.isDown) return;
-      cam.pan(this.home.x, this.home.y, 700, 'Sine.easeInOut');
-      cam.zoomTo(this.baseZoom, 700, 'Sine.easeInOut');
-    });
-  }
-
   /** «Серия ×3!» над кассой: крупная цифра, звёздочки, нота всё выше. */
   private celebrateCombo(n: number): void {
-    if (n === 3 || n === 10) this.focusMoment(this.layout.counter.x, this.layout.counter.y);
     const { counter } = this.layout;
     const color = COMBO_COLORS[Math.min(n - 2, COMBO_COLORS.length - 1)];
     const label = this.add
@@ -6773,10 +6747,7 @@ export class StoreScene extends Phaser.Scene {
       });
       sparkles.startFollow(sprite).setDepth(LIGHT_DEPTH - 1);
       sprite.once('destroy', () => sparkles.destroy());
-      this.time.delayedCall(1500, () => {
-        this.popup(sprite.x, sprite.y - 16, t('popup.rareGuest', { name: `${rare.icon} ${t(rare.nameKey)}` }), '#fee761');
-        if (sprite.active) this.focusMoment(sprite.x, sprite.y);
-      });
+      this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.rareGuest', { name: `${rare.icon} ${t(rare.nameKey)}` }), '#fee761'));
     }
     if (nightGuest && Math.random() < 0.45) {
       const line = t(`nightGuest.${nightGuest}.${Phaser.Math.Between(0, NIGHT_GUEST_TYPES[nightGuest].lines - 1)}` as TextKey);
@@ -6857,7 +6828,6 @@ export class StoreScene extends Phaser.Scene {
   /** Вора поймали: товар возвращается на полки, вор уходит ни с чем. */
   private catchThief(c: Customer, by: 'owner' | 'guard' | 'dog'): void {
     if (c.gone || !this.running) return;
-    this.focusMoment(c.sprite.x, c.sprite.y);
     c.sprite.disableInteractive();
     this.state = returnToShelf(this.state, c.items);
     c.items = [];

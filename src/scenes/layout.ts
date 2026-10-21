@@ -157,3 +157,40 @@ export function layoutFor(level: number): Layout {
 STORE_LEVELS.forEach((l, i) => {
   if (layoutFor(i).slots.length !== l.slots) throw new Error(`layout ${i}: ${layoutFor(i).slots.length} slots, expected ${l.slots}`);
 });
+
+/** Ларь с мороженым на месте (x, y): рамка вместе с крышкой и витриной. */
+export const iceboxRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 15, y: y - 24, w: 30, h: 30 });
+
+/**
+ * Куда поставить ларь с мороженым: у нижней стены слева от входа, если там тесно — справа от входа
+ * (до кассы), потом вдоль левой стены. Место не должно задевать ни одно место под полку (даже пустое —
+ * полку могут купить завтра), островные витрины, кассу и проход к двери.
+ */
+export function iceboxSpotFor(layout: Layout): Point {
+  const { w, h, door, counter } = layout;
+  const pad = 2;
+  const blocked = [
+    ...layout.slots.map(shelfRect),
+    ...layout.showcases.map(shelfRect),
+    { x: counter.x - 16, y: counter.y - 34, w: 32, h: 62 },
+    // Проход к двери: полоса шириной в два шага над входом.
+    { x: door.x - 14, y: h - 40, w: 28, h: 40 },
+    // Очередь к кассе: от начала вверх до самого высокого места.
+    { x: layout.queue.x - 12, y: layout.queue.minY - 12, w: 24, h: layout.queue.y - layout.queue.minY + 26 },
+    // Двери во флигель у левой стены (склад, пекарня, кофейня, кухня) — к ним тоже ходят.
+    ...[layout.warehouse, layout.bakery, layout.coffee, layout.kitchen].filter((r): r is Room => Boolean(r)).map((r) => ({ x: -2, y: r.doorway.y - 16, w: 34, h: 32 })),
+  ];
+  const free = (p: Point) => {
+    const r = iceboxRect(p);
+    if (r.x < 2 || r.x + r.w > w - 2 || r.y < layout.wallH + 6 || r.y + r.h > h + 4) return false;
+    return blocked.every((b) => r.x + r.w + pad <= b.x || b.x + b.w + pad <= r.x || r.y + r.h + pad <= b.y || b.y + b.h + pad <= r.y);
+  };
+  // Сначала нижняя стена — ближе всего к привычному месту слева от входа, потом левая стена снизу вверх.
+  const y = h - 16;
+  const bottom: Point[] = [];
+  for (let x = 18; x <= w - 18; x += 2) bottom.push({ x, y });
+  bottom.sort((a, b) => Math.abs(a.x - (door.x - 44)) - Math.abs(b.x - (door.x - 44)));
+  const candidates: Point[] = [...bottom];
+  for (let cy = h - 38; cy >= layout.wallH + 40; cy -= 2) candidates.push({ x: 18, y: cy });
+  return candidates.find(free) ?? (door.x - 44 >= 36 ? { x: door.x - 44, y } : { x: 24, y: h - 38 });
+}
