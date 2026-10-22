@@ -62,7 +62,7 @@ const grow = (r: Rect, d: number): Rect => ({ x: r.x - d, y: r.y - d, w: r.w + 2
 
 /**
  * Касса со всем, что при ней (переезжает целиком): стол, очередь, места под остальные кассы (registers —
- * сколько их можно поставить в этом помещении, вместе с кассиром), касса самообслуживания, цветы и ведро.
+ * сколько их можно поставить в этом помещении, вместе с кассиром), касса самообслуживания и цветы.
  * Первый прямоугольник — сам стол: к нему подходят вплотную, проход к нему не проверяем.
  */
 export function tillZones(layout: Layout, registers = 1): Rect[] {
@@ -74,16 +74,16 @@ export function tillZones(layout: Layout, registers = 1): Rect[] {
       left ? { x: x - 18, y: y - 30, w: 31, h: 54 } : { x: x - 13, y: y - 30, w: 31, h: 54 },
     ),
     { x: counter.x + 14, y: wallH + 72, w: 16, h: 20 },
-    { x: counter.x + 10, y: h - 52, w: 20, h: 52 },
+    // Цветы у кассы.
+    { x: counter.x + 10, y: h - 52, w: 20, h: 26 },
   ];
 }
 
-/** То, что не переезжает: вход, автомат, двери флигеля, витрины. */
+/** То, что не переезжает: вход, двери флигеля, витрины. */
 function roomZones(layout: Layout): Rect[] {
-  const { w, h, wallH, door } = layout;
+  const { h, door } = layout;
   return [
     { x: door.x - 16, y: h - 34, w: 32, h: 34 },
-    { x: w - 18, y: wallH + 40, w: 18, h: 30 },
     ...[layout.warehouse, layout.bakery, layout.coffee, layout.kitchen]
       .filter((r): r is NonNullable<typeof r> => Boolean(r))
       .map((r) => ({ x: 0, y: r.doorway.y - 14, w: 26, h: 28 })),
@@ -106,12 +106,12 @@ const walls = (layout: Layout): Rect[] => [
  * Какие места поставлены неправильно (их номера): за пределами зала, друг на друге, в запретной зоне
  * или так, что к полке не подойти. Если неправильных нет — расстановку можно сохранять.
  */
-export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = layout.slots, registers = 1): Set<number> {
+export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = layout.slots, registers = 1, props: Rect[] = []): Set<number> {
   const bad = new Set<number>();
   const rects = slots.map(bodyRect);
   // Зона, которую занимает и стандартная расстановка (дверь в ещё закрытую комнату флигеля), — не запретная.
   // Касса переезжает — её зоны запретны всегда.
-  const zones = [...tillZones(layout, registers), ...roomZones(layout).filter((z) => !defaults.some((d) => overlaps(bodyRect(d), z)))];
+  const zones = [...tillZones(layout, registers), ...roomZones(layout).filter((z) => !defaults.some((d) => overlaps(bodyRect(d), z))), ...props];
   rects.forEach((r, i) => {
     const stand = standPoint(slots[i]);
     // У задней стены полка стоит вплотную и заходит на нижнюю панель стены — так стоят и стандартные.
@@ -122,7 +122,8 @@ export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = l
     });
   });
   // Проходы: полки и касса «толще» на полпрохода с каждой стороны — щель уже PASS непроходима.
-  const solid = [...rects, ...zones.slice(0, 1), ...layout.showcases.map(shelfRect)].map((r) => grow(r, PASS / 2));
+  // Вещи (автомат, ведро, растения) — тоже препятствия: проход мимо них должен оставаться.
+  const solid = [...rects, ...zones.slice(0, 1), ...layout.showcases.map(shelfRect), ...props].map((r) => grow(r, PASS / 2));
   const blockers = [...solid, ...walls(layout)];
   const entry = { x: layout.door.x, y: layout.h - 10 };
   slots.forEach((slot, i) => {
@@ -134,7 +135,7 @@ export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = l
   // Если пути нет, виноваты те полки, без которых он появляется.
   const queue = { x: layout.queue.x, y: layout.queue.y };
   const showcases = layout.showcases.map(shelfRect).map((r) => grow(r, PASS / 2));
-  const toQueue = (skip: number) => [...rects.filter((_, j) => j !== skip).map((r) => grow(r, PASS / 2)), ...showcases, ...walls(layout)];
+  const toQueue = (skip: number) => [...rects.filter((_, j) => j !== skip), ...props].map((r) => grow(r, PASS / 2)).concat(showcases, walls(layout));
   if (!reachable(entry, queue, toQueue(-1))) {
     rects.forEach((_, i) => {
       if (reachable(entry, queue, toQueue(i))) bad.add(i);
@@ -170,4 +171,50 @@ export function keepPlaces(before: StoreState, after: StoreState | null, index: 
   const [freed] = at.splice(slot, 1);
   at.splice(before.shelves.filter((sh) => !isFixture(sh)).length - 1, 0, freed);
   return { ...after, slotPos: slotPosFor(before.level, at) };
+}
+
+/**
+ * Вещи в зале, которые тоже можно двигать: автомат с напитками, ведро, растения. Место хранится
+ * по id в StoreState.propPos (для этого помещения); fp — «след» на полу относительно точки вещи.
+ */
+export interface Prop {
+  id: string;
+  x: number;
+  y: number;
+  fp: Rect;
+}
+
+export const propRect = (p: Prop): Rect => ({ x: p.x + p.fp.x, y: p.y + p.fp.y, w: p.fp.w, h: p.fp.h });
+
+/** Автомат у боковой стены стоит боком (лицом в зал), в зале — лицом к игроку. */
+export const vendingSide = (layout: Layout, x: number): boolean => x >= layout.w - 16 || x <= 16;
+export const vendingFootprint = (side: boolean): Rect => (side ? { x: -5, y: -16, w: 10, h: 30 } : { x: -12, y: -16, w: 24, h: 30 });
+
+/**
+ * Какие вещи стоят неправильно (их id): за пределами зала, на полке, на кассе с очередью,
+ * у входа, в дверях флигеля или друг на друге.
+ */
+export function propIssues(layout: Layout, slots: Point[], props: Prop[], registers = 1): Set<string> {
+  const bad = new Set<string>();
+  const zones = [...tillZones(layout, registers), ...roomZones(layout)];
+  const rects = props.map(propRect);
+  rects.forEach((r, i) => {
+    const id = props[i].id;
+    if (r.x < 0 || r.x + r.w > layout.w || r.y < layout.wallH - 8 || r.y + r.h > layout.h - 1) bad.add(id);
+    if (zones.some((z) => overlaps(r, z)) || slots.some((s) => overlaps(r, bodyRect(s)))) bad.add(id);
+    rects.forEach((o, j) => {
+      if (j !== i && overlaps(r, o)) bad.add(id);
+    });
+  });
+  return bad;
+}
+
+/** Расстановка вещей для сохранения: только то, что сдвинуто со стандартного места. */
+export function propPosFor(level: number, props: Prop[], defaults: Record<string, Point>): { level: number; at: Record<string, Point> } | undefined {
+  const at: Record<string, Point> = {};
+  for (const p of props) {
+    const d = defaults[p.id];
+    if (!d || d.x !== p.x || d.y !== p.y) at[p.id] = { x: p.x, y: p.y };
+  }
+  return Object.keys(at).length ? { level, at } : undefined;
 }
