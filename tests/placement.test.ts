@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { layoutFor } from '../src/scenes/layout';
-import { clampTill, keepPlaces, slotIssues, tillMinDx, withSlots, withTill } from '../src/scenes/placement';
+import { clampTill, keepPlaces, propIssues, propRect, slotIssues, tillMinDx, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from '../src/scenes/placement';
 import { REGISTERS_BY_LEVEL } from '../src/game/registers';
 import { registerSpot } from '../src/scenes/layout';
 import { newGame, placeStored, storeShelf, type Shelf, type StoreState } from '../src/game/economy';
@@ -131,5 +131,29 @@ describe('перенос кассы', () => {
     const slots = plain.slots.map((p) => ({ ...p }));
     slots[0] = { x: plain.counter.x, y: plain.counter.y - 70 };
     expect(slotIssues(plain, slots, plain.slots, 3).has(0)).toBe(true);
+  });
+});
+
+describe('вещи зала двигаются', () => {
+  const props = (l: ReturnType<typeof layoutFor>, vending = { x: l.w - 8, y: l.wallH + 56 }): Prop[] => [
+    { id: 'vending', ...vending, fp: vendingFootprint(vendingSide(l, vending.x)) },
+    { id: 'bin', x: l.w - 10, y: l.h - 12, fp: { x: -8, y: -12, w: 16, h: 14 } },
+  ];
+
+  it('стандартные места автомата и ведра правильные на всех уровнях', () => {
+    for (let level = 0; level <= 4; level++) {
+      const l = layoutFor(level);
+      const r = REGISTERS_BY_LEVEL[level];
+      expect([...propIssues(l, l.slots, props(l), r)], `уровень ${level}`).toEqual([]);
+      expect([...slotIssues(l, l.slots, l.slots, r, props(l).map(propRect))], `уровень ${level}`).toEqual([]);
+    }
+  });
+
+  it('вещь на полке — красная; автомат у стены — боком, в зале — лицом', () => {
+    const l = layoutFor(3);
+    const onShelf = props(l, { x: l.slots[6].x, y: l.slots[6].y });
+    expect(propIssues(l, l.slots, onShelf, 3).has('vending')).toBe(true);
+    expect(vendingSide(l, l.w - 8)).toBe(true);
+    expect(vendingSide(l, l.w / 2)).toBe(false);
   });
 });

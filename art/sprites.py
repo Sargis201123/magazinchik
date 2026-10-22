@@ -1618,6 +1618,28 @@ def vending():
     shadowed(c, 13, 42, 12, 2.5).save("vending")
 
 
+def vending_side():
+    """Автомат с напитками боком у правой стены 12×44: красный бок, к залу — узкая полоска
+    стекла с бутылками и кнопками (лицом он смотрит в зал, влево)."""
+    c = Canvas(12, 44)
+    c.rect(0, 0, 12, 44, "R")
+    c.rect(4, 3, 8, 40, "r")
+    c.vline(4, 3, 40, "m")
+    # Торец со стеклом — смотрит в зал.
+    c.rect(0, 4, 3, 26, "K")
+    for y in range(6, 29, 6):
+        c.px(1, y, ("U", "E", "Y", "w")[(y // 6) % 4])
+        c.px(1, y + 1, "w")
+    c.rect(0, 33, 3, 6, "k")
+    c.rect(0, 0, 12, 3, "m")
+    c.hline(1, 1, 10, "w")
+    # Логотип на боку.
+    c.rect(6, 12, 4, 10, "s")
+    c.vline(7, 13, 8, "w")
+    c.outline("k")
+    shadowed(c, 6, 42, 6, 2.5).save("vending_side")
+
+
 def pallet_water():
     """Поддон с упаковками воды 80×52 — стоит на месте будущей полки."""
     c = Canvas(80, 52)
@@ -1729,6 +1751,7 @@ def effects():
 def interior():
     mat()
     vending()
+    vending_side()
     pallet_water()
     promo()
     glow()

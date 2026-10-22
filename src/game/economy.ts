@@ -522,6 +522,8 @@ export interface StoreState {
   slotPos?: { level: number; at: { x: number; y: number }[] };
   /** Касса (с очередью и всем, что при ней) сдвинута вдоль нижней стены (scenes/placement.ts). */
   tillPos?: { level: number; dx: number };
+  /** Вещи зала, сдвинутые при перестановке: автомат, ведро, растения (scenes/placement.ts). */
+  propPos?: { level: number; at: Record<string, { x: number; y: number }> };
   /** Полки, убранные из зала в запас: стоят без товара, их можно поставить обратно бесплатно. */
   storedShelves?: Shelf[];
   /** Своё название магазина на вывеске (иначе — название уровня). */

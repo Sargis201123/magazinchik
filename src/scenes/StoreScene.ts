@@ -153,8 +153,8 @@ import {
 } from '../game/nightGuests';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
-import { bodyRect, clampTill, iceboxFits, overlapsRect, slotIssues, slotPosFor, snap, tillZones, withSlots, withTill } from './placement';
-import { iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
+import { bodyRect, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
+import { iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
@@ -886,6 +886,12 @@ export class StoreScene extends Phaser.Scene {
   private cullDirty = true;
   /** Идёт перестановка полок: камера не ездит, полки — «призраки», которые тянут пальцем. */
   private arranging = false;
+  /** Вещи зала, которые двигают при перестановке (автомат, ведро, растения): место и «след» на полу. */
+  private propList: (Prop & { tex: string })[] = [];
+  /** Стандартные места вещей зала (для «Как было» и чтобы не хранить несдвинутое). */
+  private propDefaults: Record<string, { x: number; y: number }> = {};
+  /** Где сейчас стоит автомат с напитками (на нём радио). */
+  private vendingAt = { x: 0, y: 0 };
   /** Лёгкая графика: без виньетки и облаков (холст поменьше — со следующего запуска). */
   private lite = liteMode();
   /** Посекундные замеры FPS за день: медиана уходит в аналитику, при тормозах — лёгкая графика. */
@@ -1300,6 +1306,8 @@ export class StoreScene extends Phaser.Scene {
     this.carryingTrash = false;
     this.urgentVanBusy = false;
     this.shelfViews = [];
+    this.propList = [];
+    this.propDefaults = {};
     this.boxes = [];
     this.slotDecor = [];
     this.shutters = [];
@@ -1801,6 +1809,17 @@ export class StoreScene extends Phaser.Scene {
         tillFrame.lineStyle(1, bad ? 0xe43b44 : 0x0099db, 0.9).strokeRect(r.x, r.y, r.w, r.h);
       }
     };
+    // Вещи зала (автомат, ведро, растения) — тоже «призраки», их тянут свободно.
+    const props: (Prop & { tex: string })[] = this.propList.map((p) => ({ ...p, fp: { ...p.fp } }));
+    const propGhosts = props.map((p) => {
+      const img = this.art(0, 0, p.tex);
+      const frame = this.add.graphics();
+      const ghost = this.add.container(p.x, p.y, [frame, img]).setDepth(LIGHT_DEPTH + 11);
+      ghost.setSize(Math.max(16, p.fp.w), Math.max(16, p.fp.h)).setInteractive({ draggable: true, useHandCursor: true });
+      ghost.setData('frame', frame).setData('img', img);
+      return ghost;
+    });
+    const propDefault = (id: string) => this.propDefaults[id];
     const bar = el('div', 'ui-arrange');
     const hint = el('div', 'ui-arrange-hint', t('arrange.hint'));
     const done = button(t('arrange.done'), () => finish(true), 'ui-btn');
@@ -1809,6 +1828,10 @@ export class StoreScene extends Phaser.Scene {
       ghosts.forEach((g, i) => g.setPosition(at[i].x, at[i].y));
       tillDx = 0;
       till.setPosition(plain.counter.x, plain.counter.y);
+      props.forEach((p, i) => {
+        const d = propDefault(p.id);
+        if (d) movePropTo(i, d.x, d.y);
+      });
       check();
     }, 'ui-btn secondary');
     const cancel = button(t('arrange.cancel'), () => finish(false), 'ui-btn secondary');
@@ -1816,9 +1839,42 @@ export class StoreScene extends Phaser.Scene {
     row.append(cancel, reset, done);
     bar.append(hint, row);
     document.body.append(bar);
+    // Автомат у боковой стены разворачивается боком.
+    const movePropTo = (i: number, x: number, y: number) => {
+      const p = props[i];
+      p.x = x;
+      p.y = y;
+      if (p.id === 'vending') {
+        const side = vendingSide(plain, x);
+        p.tex = side ? 'vending_side' : 'vending';
+        p.fp = vendingFootprint(side);
+        (propGhosts[i].getData('img') as Phaser.GameObjects.Image).setTexture(p.tex).setFlipX(side && x < w / 2);
+      }
+      propGhosts[i].setPosition(x, y);
+    };
     const check = () => {
       const lay = placed();
-      const bad = slotIssues(lay, at, defaults, registers);
+      const bad = slotIssues(lay, at, defaults, registers, props.map(propRect));
+      const badProps = propIssues(lay, at, props, registers);
+      // Вещь на своём стандартном месте игра поставила сама так, чтобы не мешать (растение у будущей
+      // кассы, у двери склада) — красной она становится, только если на неё поставили полку.
+      for (const p of props) {
+        const d = propDefault(p.id);
+        if (d && d.x === p.x && d.y === p.y && !at.some((s) => overlapsRect(bodyRect(s), propRect(p)))) badProps.delete(p.id);
+      }
+      // Ларь ищет место сам — вещь не должна занять его место.
+      if (this.state.shelves.some((sh) => sh.kind === 'icebox')) {
+        const ice = iceboxRect(iceboxSpotFor({ ...lay, slots: at }));
+        for (const p of props) if (overlapsRect(propRect(p), ice)) badProps.add(p.id);
+      }
+      propGhosts.forEach((g, i) => {
+        const frame = g.getData('frame') as Phaser.GameObjects.Graphics;
+        const { fp, id } = props[i];
+        const red = badProps.has(id);
+        frame.clear();
+        frame.fillStyle(red ? 0xe43b44 : 0xfee761, 0.3).fillRect(fp.x, fp.y, fp.w, fp.h);
+        frame.lineStyle(1, red ? 0xe43b44 : 0xb86f50, 1).strokeRect(fp.x, fp.y, fp.w, fp.h);
+      });
       // Кассу подсвечиваем красным, если на её месте или в очереди стоит красная полка.
       drawTill(tillZones(lay, registers).some((z) => at.some((p, i) => bad.has(i) && overlapsRect(bodyRect(p), z))));
       ghosts.forEach((g, i) => {
@@ -1830,14 +1886,21 @@ export class StoreScene extends Phaser.Scene {
       });
       // Ларь ищет место сам — после перестановки ему должно найтись место у стены.
       const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(lay, at);
-      done.disabled = bad.size > 0 || iceless;
-      hint.textContent = bad.size ? t('arrange.bad', { n: bad.size }) : iceless ? t('arrange.icebox') : t('arrange.hint');
-      return iceless ? new Set([...bad, -1]) : bad;
+      done.disabled = bad.size > 0 || badProps.size > 0 || iceless;
+      hint.textContent = bad.size || badProps.size ? t('arrange.bad', { n: bad.size + badProps.size }) : iceless ? t('arrange.icebox') : t('arrange.hint');
+      return iceless || badProps.size ? new Set([...bad, -1]) : bad;
     };
     const onDrag = (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject, x: number, y: number) => {
       if (obj === till) {
         tillDx = clampTill(plain, registers, x - plain.counter.x);
         till.setPosition(plain.counter.x + tillDx, plain.counter.y);
+        check();
+        return;
+      }
+      const k = propGhosts.indexOf(obj as Phaser.GameObjects.Container);
+      if (k >= 0) {
+        movePropTo(k, Phaser.Math.Clamp(snap(x), 6, w - 6), Phaser.Math.Clamp(snap(y), this.layout.wallH + 8, h - 8));
+        propGhosts[k].setDepth(LIGHT_DEPTH + 12);
         check();
         return;
       }
@@ -1861,10 +1924,16 @@ export class StoreScene extends Phaser.Scene {
       bar.remove();
       grid.destroy();
       ghosts.forEach((g) => g.destroy());
+      propGhosts.forEach((g) => g.destroy());
       till.destroy();
       this.arranging = false;
       if (save) {
-        this.state = { ...this.state, slotPos: slotPosFor(level, at), tillPos: tillDx ? { level, dx: tillDx } : undefined };
+        this.state = {
+          ...this.state,
+          slotPos: slotPosFor(level, at),
+          tillPos: tillDx ? { level, dx: tillDx } : undefined,
+          propPos: propPosFor(level, props, this.propDefaults),
+        };
         saveGame(this.state);
         track('arrange', this.state.day, at.length);
       }
@@ -2382,11 +2451,15 @@ export class StoreScene extends Phaser.Scene {
     const ice = this.iceboxSpot();
     if (ice.x >= 36) spots.push({ x: 12, y: h - 14 });
     const big = Boolean(activeDecor(this.state, 'plants'));
-    spots.forEach((p, i) => {
-      if (!free(p.x, p.y)) return;
+    spots.forEach((def, i) => {
+      const id = `hall${i}`;
+      const p = this.propAt(id, def);
+      if (p === def && !free(p.x, p.y)) return;
+      const tex = big || i % 2 ? 'plant_big' : 'plant';
       this.art(p.x, p.y + 3, 'shadow').setScale(0.7 / ART).setDepth(p.y - 1);
-      this.art(p.x, p.y, big || i % 2 ? 'plant_big' : 'plant').setDepth(p.y + 6);
+      this.art(p.x, p.y, tex).setDepth(p.y + 6);
       this.obstacles.push({ x: p.x - 7, y: p.y - 10, w: 14, h: 14 });
+      this.registerProp(id, p, tex, { x: -7, y: -10, w: 14, h: 14 });
     });
   }
 
@@ -2429,9 +2502,9 @@ export class StoreScene extends Phaser.Scene {
     this.radioTimer = undefined;
     music.setStation(null);
     if (!hasRadio(this.state)) return;
-    const { w, wallH } = this.layout;
-    const at = { x: w - 8, y: wallH + 41 };
-    const radio = this.art(at.x, at.y, 'radio').setDepth(wallH + 67);
+    // Радио стоит на автомате с напитками — и переезжает вместе с ним.
+    const at = { x: this.vendingAt.x, y: this.vendingAt.y - 15 };
+    const radio = this.art(at.x, at.y, 'radio').setDepth(this.vendingAt.y + 11);
     radio.setInteractive({ useHandCursor: true }).on('pointerup', () =>
       this.tap(() => {
         const next = setStation(this.state, nextStation(stationOf(this.state)));
@@ -5010,17 +5083,36 @@ export class StoreScene extends Phaser.Scene {
       from = y + 8;
     }
     this.obstacles.push({ x: -WALL - 2, y: from, w: WALL + 2, h: h - from });
+    // Вещи, поставленные раньше (автомат, растения), — тоже препятствия.
+    for (const prop of this.propList) this.obstacles.push(propRect(prop));
   }
 
-  /** Где стоит ведро (в правом нижнем углу, за кассой) и уличный контейнер (у роллета склада). */
+  /** Место вещи зала: своё (перестановка в этом помещении) или стандартное. */
+  private propAt(id: string, def: { x: number; y: number }): { x: number; y: number } {
+    this.propDefaults[id] = def;
+    const custom = this.state.propPos?.level === this.state.level ? this.state.propPos.at[id] : undefined;
+    return custom ? { x: custom.x, y: custom.y } : def;
+  }
+
+  /** Вещь зала, которую можно двигать при перестановке; её «след» — препятствие для обхода. */
+  private registerProp(id: string, at: { x: number; y: number }, tex: string, fp: Rect): void {
+    this.propList.push({ id, x: at.x, y: at.y, fp, tex });
+  }
+
+  /** Стандартное место ведра: правый нижний угол зала (двигается отдельно от кассы). */
+  private binDefault(): { x: number; y: number } {
+    return { x: this.layout.w - 10, y: this.layout.h - 12 };
+  }
+
+  /** Где стоит ведро и уличный контейнер (у роллета склада). */
   private binSpot(): { x: number; y: number } {
-    return { x: this.layout.counter.x + 20, y: this.layout.h - 12 };
+    return this.propAt('bin', this.binDefault());
   }
 
-  /** Куда встать, чтобы завязать мешок: ведро у правой стены, подходим слева. */
+  /** Куда встать, чтобы завязать мешок: со стороны зала. */
   private binStand(): { x: number; y: number } {
     const bin = this.binSpot();
-    return { x: bin.x - 16, y: bin.y + 2 };
+    return { x: bin.x + (bin.x < this.layout.w / 2 ? 16 : -16), y: bin.y + 2 };
   }
 
   /** Контейнер у фасада слева от двери, на пути от двери не стоит. */
@@ -5044,6 +5136,7 @@ export class StoreScene extends Phaser.Scene {
     this.binStink = this.art(bin.x, bin.y - 14, 'stink').setDepth(bin.y + 30).setVisible(false);
     this.tweens.add({ targets: this.binStink, y: bin.y - 19, alpha: { from: 1, to: 0.35 }, duration: 900, yoyo: true, repeat: -1 });
     this.obstacles.push({ x: bin.x - 8, y: bin.y - 12, w: 16, h: 14 });
+    this.registerProp('bin', bin, binSprite(this.state, 0), { x: -8, y: -12, w: 16, h: 14 });
     this.refreshBin();
   }
 
@@ -5186,11 +5279,11 @@ export class StoreScene extends Phaser.Scene {
   /** Плакаты на стене, растения и корзинки у входа — чтобы зал не выглядел пустым. */
   /** Первое место, где вещь 26×20 не мешает полкам, кассе, складу и автомату. */
   private freeSpot(candidates: { x: number; y: number }[]): { x: number; y: number } | null {
-    const { slots, counter, w, wallH } = this.layout;
+    const { slots, counter } = this.layout;
     const blocked = [
       ...slots.map((s) => ({ x: s.x - 22, y: s.y - 14, w: 44, h: 30 })),
       { x: counter.x - 10, y: counter.y - 28, w: 20, h: 64 },
-      { x: w - 16, y: wallH + 44, w: 16, h: 24 },
+      ...this.propList.map(propRect),
     ];
     return (
       candidates.find((c) =>
@@ -5235,7 +5328,13 @@ export class StoreScene extends Phaser.Scene {
     if (this.state.level >= 2 || (this.state.level >= 1 && hasUpgrade(this.state, 'cart'))) this.art(door.x + 46, h - 10, 'carts').setDepth(h - 4);
     // Коврик у входа и автомат с напитками у правой стены.
     this.art(door.x, h - 7, gearTier(this.state, 'entrance') ? 'mat_grate' : 'mat').setDepth(1);
-    this.art(w - 8, wallH + 56, 'vending').setDepth(wallH + 66);
+    // Автомат: у боковой стены — боком (лицом в зал), в зале — лицом к игроку. Его можно двигать.
+    const vending = this.propAt('vending', { x: w - 8, y: wallH + 56 });
+    const side = vendingSide(this.layout, vending.x);
+    const vendingTex = side ? 'vending_side' : 'vending';
+    this.art(vending.x, vending.y, vendingTex).setFlipX(side && vending.x < w / 2).setDepth(vending.y + 10);
+    this.vendingAt = vending;
+    this.registerProp('vending', vending, vendingTex, vendingFootprint(side));
     // Мягкая тень вдоль стены — пол уходит под неё.
     this.add.rectangle(0, wallH, w, 3, 0x181425, 0.18).setOrigin(0).setDepth(1);
     this.art(door.x + 26, h - 8, 'baskets').setDepth(h - 8);
@@ -5245,10 +5344,15 @@ export class StoreScene extends Phaser.Scene {
       // В нижнем углу у кассы — вёдра с цветами, растение туда не ставим.
       ...(this.state.shelves.some((s) => s.kind === 'florist') ? [] : [{ x: this.layout.counter.x + 21, y: h - 40 }]),
     ];
-    for (const p of spots) {
-      const busy = [...slots, ...this.layout.showcases].some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
-      if (!busy) this.art(p.x, p.y, activeDecor(this.state, 'plants') ? 'plant_big' : 'plant').setDepth(p.y + 6);
-    }
+    spots.forEach((def, i) => {
+      const id = `plant${i}`;
+      const p = this.propAt(id, def);
+      const busy = p === def && [...slots, ...this.layout.showcases].some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
+      if (busy) return;
+      const tex = activeDecor(this.state, 'plants') ? 'plant_big' : 'plant';
+      this.art(p.x, p.y, tex).setDepth(p.y + 6);
+      this.registerProp(id, p, tex, { x: -7, y: -10, w: 14, h: 14 });
+    });
   }
 
   /** Премиальный свет: бра, лампы, фонари или люстры между картинами, гирлянда — по всей стене. */
@@ -8046,7 +8150,7 @@ export class StoreScene extends Phaser.Scene {
         // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
         const was = this.state;
         // Убрали или продали полку — остальные остались на местах, но сами места переставлены.
-        const placesChanged = s.slotPos !== was.slotPos || s.tillPos !== was.tillPos;
+        const placesChanged = s.slotPos !== was.slotPos || s.tillPos !== was.tillPos || s.propPos !== was.propPos;
         const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was) || hasDog(s) !== hasDog(was) || sunflowersPlanted(s) !== sunflowersPlanted(was);
         this.state = s;
         saveGame(s);

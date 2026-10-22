@@ -250,6 +250,7 @@ const SPRITES = [
   'trash_banana',
   'trash_cup',
   'vending',
+  'vending_side',
   'pallet_water',
   'promo',
   'paving',
