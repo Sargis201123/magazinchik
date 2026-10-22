@@ -288,6 +288,8 @@ const FRIEND_TIP = 40;
 const FRIEND_GIFT = 300;
 
 /** Деревья сквера: обычное чаще, остальные для разнообразия. */
+/** Слои, у которых есть кадры взмаха рук при ходьбе (art/walk.py). */
+const SWING_LAYERS = new Set(['p_shirt', 'p_skin', 'p_skin_happy', 'p_skin_frown']);
 const PARK_TREES = ['tree', 'tree', 'tree_round', 'tree_birch', 'tree_pine'];
 
 /** Высота здания босса за дорогой: умещается на месте «Гиганта». */
@@ -1623,8 +1625,11 @@ export class StoreScene extends Phaser.Scene {
       let key = `p_legs0${suffix}`;
       let flip = facing === 'left';
       let bob = 0;
+      // Руки на шаге: кадры взмаха у рубашки и кожи (art/walk.py), в такт ногам.
+      let arms = '';
       if (person.getData('walking')) {
         const frame = Math.floor((now + phase) / 110) % 4;
+        arms = frame === 1 ? '_w1' : frame === 3 ? '_w2' : '';
         if (frame === 1) key = `p_legs1${suffix}`;
         if (frame === 3) {
           if (suffix === '_s') key = 'p_legs2_s';
@@ -1641,6 +1646,11 @@ export class StoreScene extends Phaser.Scene {
         bob = Math.sin((now + phase) / 650) > 0.35 ? -0.5 : 0;
       }
       if (legs && (legs.texture.key !== key || legs.flipX !== flip)) legs.setTexture(key).setFlipX(flip);
+      for (const [img, base] of (person.getData('layers') as [Phaser.GameObjects.Image, string][] | undefined) ?? []) {
+        if (!SWING_LAYERS.has(base)) continue;
+        const want = base + suffix + arms;
+        if (img.texture.key !== want) img.setTexture(want);
+      }
       for (const img of (person.getData('upper') as Phaser.GameObjects.Image[]) ?? []) img.y = bob + ((img.getData('dy') as number | undefined) ?? 0);
       const umbrella = person.getData('umbrella') as Phaser.GameObjects.Image | undefined;
       // Зонт раскрывается на выходе из магазина и закрывается, когда дождь кончился.
@@ -4675,6 +4685,32 @@ export class StoreScene extends Phaser.Scene {
     this.add.rectangle(left, top + 22, width, 2, 0x8b9bb4).setOrigin(0).setDepth(-9);
     tile(left, top + 24, width, 40, 'asphalt');
     for (let x = left; x < left + width; x += 24) this.add.rectangle(x, top + 43.5, 12, 1.5, 0xe6e1d6).setOrigin(0).setDepth(-9);
+    // Дорога живая: люки, заплаты и трещины (не на переходе).
+    const road = this.add.graphics().setDepth(-9.05);
+    const roadRnd = new Phaser.Math.RandomDataGenerator(['road']);
+    for (let x = left + 30; x < left + width - 30; x += roadRnd.between(60, 110)) {
+      if (Math.abs(x - door.x) < 22) continue;
+      const ry = top + 24 + roadRnd.between(6, 34);
+      const roll = roadRnd.frac();
+      if (roll < 0.3) {
+        road.fillStyle(0x5a6988, 1).fillCircle(x, ry, 3.2);
+        road.lineStyle(0.7, 0x8b9bb4, 1).strokeCircle(x, ry, 3.2);
+        road.lineStyle(0.5, 0x3a4466, 1).lineBetween(x - 2, ry, x + 2, ry).lineBetween(x, ry - 2, x, ry + 2);
+      } else if (roll < 0.6) {
+        road.fillStyle(0x4a4f66, 0.55).fillRect(x, ry - 3, roadRnd.between(8, 16), roadRnd.between(4, 7));
+      } else {
+        road.lineStyle(0.7, 0x0b0c16, 1);
+        let cx = x;
+        let cy = ry;
+        for (let k = 0; k < 4; k++) {
+          const nx = cx + roadRnd.between(2, 5);
+          const ny = cy + roadRnd.between(-2, 2);
+          road.lineBetween(cx, cy, nx, ny);
+          cx = nx;
+          cy = ny;
+        }
+      }
+    }
     this.add.rectangle(left, top + 64, width, 2, 0x8b9bb4).setOrigin(0).setDepth(-9);
     tile(left, top + 66, width, 22, 'paving');
     tile(left, top + 88, width, 300, 'grass');
@@ -4907,16 +4943,42 @@ export class StoreScene extends Phaser.Scene {
     const h = 96;
     const x = next.w / 2 - w / 2;
     const y = -160;
+    // Бордюр вокруг площадки и тень от него на асфальт.
+    this.add.rectangle(x - 3, y - 3, w + 6, h + 6, 0xc0cbdc).setOrigin(0).setDepth(-9.47);
+    this.add.rectangle(x - 3, y - 3, w + 6, 1, 0xe8edf4).setOrigin(0).setDepth(-9.47);
     this.add.tileSprite(x, y, w, h, 'asphalt').setOrigin(0).setTileScale(1 / ART).setDepth(-9.46);
-    this.add.rectangle(x, y, w, 2, 0x8b9bb4).setOrigin(0).setDepth(-9.45);
-    this.add.rectangle(x, y + h - 2, w, 2, 0x8b9bb4).setOrigin(0).setDepth(-9.45);
+    this.add.rectangle(x, y, w, 2, 0x181425, 0.25).setOrigin(0).setDepth(-9.45);
+    this.add.rectangle(x, y, 2, h, 0x181425, 0.2).setOrigin(0).setDepth(-9.45);
     const rnd = new Phaser.Math.RandomDataGenerator(['parking']);
+    // Островки с газоном в конце площадки (проезд посередине свободен — по нему ездят и ходят):
+    // сверху дерево, снизу клумба с фонарём.
+    const ix = x + 180;
+    const isle = (iy: number, ih: number) => {
+      this.add.rectangle(ix - 1, iy, 26, ih, 0xc0cbdc).setOrigin(0).setDepth(-9.44);
+      this.add.tileSprite(ix + 1, iy + 2, 22, ih - 4, 'grass').setOrigin(0).setTileScale(1 / ART).setDepth(-9.435);
+    };
+    isle(y + 6, h / 2 - 16);
+    isle(y + h / 2 + 10, h / 2 - 16);
+    this.add.image(ix + 17, y + h / 2 - 14, 'shadow').setScale(2.1 / ART, 1.5 / ART).setAlpha(0.75).setDepth(-9.43);
+    this.art(ix + 12, y + h / 2 - 14, 'tree_round').setOrigin(0.5, 0.9).setDepth(-9.42);
+    this.art(ix + 7, y + h - 18, 'bush_flower').setDepth(-9.42);
+    this.art(ix + 18, y + h - 12, 'lamp').setOrigin(0.5, 0.95).setDepth(-9.42);
+    // Стрелки проезда и упоры для колёс на каждом месте.
+    const arrows = this.add.graphics().setDepth(-9.45);
+    arrows.fillStyle(0xe6e1d6, 0.75);
+    for (const [ax, dir] of [[x + 50, 1], [x + 130, -1]] as const) {
+      const ay = y + h / 2;
+      arrows.fillRect(ax - 7 * dir, ay - 0.75, 10 * dir, 1.5);
+      arrows.fillTriangle(ax + 3 * dir, ay - 3, ax + 3 * dir, ay + 3, ax + 7 * dir, ay);
+    }
     // Два ряда мест: машины стоят носом к проезду посередине. Днём одни приезжают, другие уезжают.
     const spots: ParkSpot[] = [];
     for (const row of [0, 1]) {
       const ry = row === 0 ? y + 4 : y + h - 30;
       for (let i = 0; i <= 5; i++) this.add.rectangle(x + 6 + i * 33, ry, 1.5, 26, 0xe6e1d6).setOrigin(0).setDepth(-9.45);
       for (let i = 0; i < 5; i++) {
+        // Упор для колёс у дальнего края места.
+        this.add.rectangle(x + 22 + i * 33, row === 0 ? ry + 3 : ry + 23, 12, 2, 0xa8a8a8).setStrokeStyle(0.5, 0x5a6988).setDepth(-9.445);
         const spot: ParkSpot = { x: x + 22 + i * 33, y: ry + 13, angle: row === 0 ? 90 : -90, car: null };
         spots.push(spot);
         if (rnd.frac() >= 0.35) spot.car = this.parkedCar(spot, rnd.pick(CAR_TYPES.filter(([k]) => k !== 'car_truck')));
@@ -4933,7 +4995,9 @@ export class StoreScene extends Phaser.Scene {
   private parkedCar(spot: ParkSpot, [key, color]: [string, number | null, number], at?: { x: number; y: number; angle: number }): Phaser.GameObjects.Container {
     const body = this.art(0, 0, key);
     if (color !== null) body.setTint(color || Phaser.Utils.Array.GetRandom(CAR_COLORS));
-    const car = this.add.container(at?.x ?? spot.x, at?.y ?? spot.y, [body]).setAngle(at?.angle ?? spot.angle).setDepth(-9.41);
+    // Тень под машиной — чуть в сторону от света.
+    const shade = this.add.rectangle(1.2, 1.2, body.displayWidth - 1, body.displayHeight - 1, 0x181425, 0.28);
+    const car = this.add.container(at?.x ?? spot.x, at?.y ?? spot.y, [shade, body]).setAngle(at?.angle ?? spot.angle).setDepth(-9.41);
     return car;
   }
 
