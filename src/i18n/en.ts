@@ -173,6 +173,7 @@ export const en: Record<TextKey, string> = {
   'popup.bargainNone': 'Nothing to mark down: all fresh',
   'popup.bargainFull': 'Bargain shelf is full',
   'popup.bargainTake': '−50%, I\'ll take it!',
+  'shelf.empty': 'empty',
   'popup.pair': '+ {name} too',
   'arrange.intro.title': '🧱 Rearranging',
   'arrange.intro.drag': 'Drag shelves, the register, the vending machine, the bin, plants and the bargain shelf.',
