@@ -418,7 +418,9 @@ const css = `
 .ui-chip:not(.active):not([disabled]):not(.ui-chip-off) { box-shadow: inset 0 2px 0 rgba(255,255,255,.45), 0 2px 0 #2b2233; }
 .ui-tab.active { box-shadow: inset 0 -3px 0 #fee761; }
 /* Блоки в окнах — как карточки: светлый край сверху и мягкая тень снизу. */
-.ui-box { box-shadow: inset 0 2px 0 rgba(255,255,255,.6), 0 2px 0 rgba(43,34,51,.18); }
+.ui-box { box-shadow: inset 0 2px 0 rgba(255,255,255,.6), 0 2px 0 rgba(43,34,51,.18);
+  /* Еле заметная фактура бумаги: блоки не плоские, текст читается как прежде. */
+  background-image: radial-gradient(rgba(43,34,51,.045) 1px, transparent 1.2px); background-size: 5px 5px; }
 /* Заголовок окна — с пиксельной полосой-подчёркиванием. */
 .ui-card h2 { padding-bottom: 6px; background: linear-gradient(90deg, #2b2233 0 2px, transparent 2px) bottom left / 6px 2px repeat-x; }
 `;
