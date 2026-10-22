@@ -111,7 +111,7 @@ export function doorY(room: { y: number; h: number }, slots: Point[], prefer?: n
 export function layoutFor(level: number): Layout {
   const { w, h, wall, cols, rows: islandRows } = SHAPES[Math.min(level, SHAPES.length - 1)];
   const slots: Point[] = [
-    ...Array.from({ length: wall }, (_, i) => ({ x: 24 + SHELF_STEP * i, y: WALL_H + 14 })),
+    ...Array.from({ length: wall }, (_, i) => ({ x: 24 + SHELF_STEP * i, y: WALL_H + 4 })),
     ...Array.from({ length: islandRows * cols }, (_, i) => ({ x: ISLAND_X + SHELF_STEP * (i % cols), y: ISLAND_Y + ROW_STEP * Math.floor(i / cols) })),
   ];
   const whW = WING_W;

@@ -114,8 +114,8 @@ export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = l
   const zones = [...tillZones(layout, registers), ...roomZones(layout).filter((z) => !defaults.some((d) => overlaps(bodyRect(d), z)))];
   rects.forEach((r, i) => {
     const stand = standPoint(slots[i]);
-    // У задней стены полка краем заходит на стену — так стоят и стандартные.
-    if (r.x < 0 || r.x + r.w > layout.w || r.y < layout.wallH - 4 || stand.y > layout.h - 6) bad.add(i);
+    // У задней стены полка стоит вплотную и заходит на нижнюю панель стены — так стоят и стандартные.
+    if (r.x < 0 || r.x + r.w > layout.w || r.y < layout.wallH - 12 || stand.y > layout.h - 6) bad.add(i);
     if (zones.some((z) => overlaps(r, z))) bad.add(i);
     rects.forEach((o, j) => {
       if (j !== i && overlaps(r, o)) bad.add(i);
