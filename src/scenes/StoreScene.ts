@@ -881,6 +881,9 @@ export class StoreScene extends Phaser.Scene {
   private dayShot: HTMLImageElement | null = null;
   private doorImg!: Phaser.GameObjects.Image;
   private vignette?: Phaser.FX.Vignette;
+  /** Тёплый «ламповый» тон всей картинки; к вечеру теплее. */
+  private warmth?: Phaser.FX.ColorMatrix;
+  private warmAt = -1;
   /** Насколько вечер (0 — день, 1 — сумерки): фары машин горят сильнее. */
   private evening = 0;
   private indoorShades: Phaser.GameObjects.Rectangle[] = [];
@@ -1356,6 +1359,10 @@ export class StoreScene extends Phaser.Scene {
     this.cameras.main.postFX?.clear();
     // Виньетка — лишний проход по всему экрану: в лёгкой графике без неё.
     this.vignette = this.lite ? undefined : this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.1);
+    // Ламповый тон: чуть теплее и мягче по цвету, к вечеру — как от ламп накаливания.
+    this.warmth = this.lite ? undefined : this.cameras.main.postFX?.addColorMatrix();
+    this.warmAt = -1;
+    this.setWarmth(0);
     this.buildStreet(next);
     this.buildCritters(next);
     this.buildNeighbors(next);
@@ -1363,6 +1370,7 @@ export class StoreScene extends Phaser.Scene {
 
     this.buildStore();
     this.buildLighting(next);
+    this.buildDust();
     this.applyAds();
     this.refreshShelves();
     this.refreshWarehouse();
@@ -2013,7 +2021,44 @@ export class StoreScene extends Phaser.Scene {
     track('lite_auto', this.state.day, summary.median);
     if (this.vignette) this.cameras.main.postFX?.remove(this.vignette);
     this.vignette = undefined;
+    if (this.warmth) this.cameras.main.postFX?.remove(this.warmth as unknown as Phaser.FX.Controller);
+    this.warmth = undefined;
     toast('assets/ico_phone.png', t('lite.autoTitle'), t('lite.autoText'));
+  }
+
+  /** Тёплые пылинки медленно плывут в свете зала — уютно; в лёгкой графике их нет. */
+  private buildDust(): void {
+    if (this.lite) return;
+    const { w, h, wallH } = this.layout;
+    this.add
+      .particles(0, 0, 'glow', {
+        x: { min: 8, max: w - 8 },
+        y: { min: wallH + 12, max: h - 12 },
+        speedX: { min: -2, max: 2 },
+        speedY: { min: -3, max: -1 },
+        scale: { start: 2.5 / 64, end: 1.5 / 64 },
+        alpha: { start: 0.35, end: 0 },
+        tint: 0xffe2a0,
+        blendMode: Phaser.BlendModes.ADD,
+        lifespan: 7000,
+        frequency: 650,
+        quantity: 1,
+      })
+      .setDepth(LIGHT_DEPTH - 1);
+  }
+
+  /** Тёплый тон картинки: красный чуть сильнее, синий слабее, цвета мягче; e — насколько вечер. */
+  private setWarmth(e: number): void {
+    if (!this.warmth) return;
+    const step = Math.round(e * 20) / 20;
+    if (step === this.warmAt) return;
+    this.warmAt = step;
+    const r = 1.04 + 0.05 * step;
+    const g = 1.0 + 0.01 * step;
+    const b = 0.92 - 0.07 * step;
+    this.warmth.reset();
+    this.warmth.set([r, 0, 0, 0, 0, 0, g, 0, 0, 0, 0, 0, b, 0, 0, 0, 0, 0, 1, 0]);
+    this.warmth.saturate(-0.06, true);
   }
 
   /** Оттенок по ходу дня: тёплое утро, белый день, закат, сумерки. */
@@ -2033,6 +2078,7 @@ export class StoreScene extends Phaser.Scene {
       this.vignette.strength = 0.1 + 0.4 * evening;
       this.vignette.radius = 0.95 - 0.12 * evening;
     }
+    this.setWarmth(evening);
     for (const g of this.lampGlows) g.setAlpha(0.7 * evening);
     for (const g of this.ceilingGlows) g.setAlpha(this.blackout || this.powerCut ? 0 : 0.06 + 0.16 * evening);
     for (const bat of this.bats) bat.setAlpha(Phaser.Math.Clamp(evening * 1.5, 0, 1));
