@@ -1843,7 +1843,7 @@ export class StoreScene extends Phaser.Scene {
       }
       const i = ghosts.indexOf(obj as Phaser.GameObjects.Container);
       if (i < 0) return;
-      at[i] = { x: Phaser.Math.Clamp(snap(x), 22, w - 22), y: Phaser.Math.Clamp(snap(y), this.layout.wallH + 12, h - 28) };
+      at[i] = { x: Phaser.Math.Clamp(snap(x), 22, w - 22), y: Phaser.Math.Clamp(snap(y), this.layout.wallH + 4, h - 28) };
       ghosts[i].setPosition(at[i].x, at[i].y).setDepth(LIGHT_DEPTH + 12);
       check();
     };
@@ -2367,16 +2367,11 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Мелочи большого зала (когда кассы уже стоят): наклейки «стойте здесь» на местах очереди
-   * и растения в кадках вдоль правой стены и в нижнем левом углу. Кадки — препятствия:
+   * Мелочи большого зала (когда кассы уже стоят): растения в кадках вдоль правой стены и в нижнем левом углу. Кадки — препятствия:
    * их обходят и покупатели, и продавец.
    */
   private buildHallDecor(): void {
-    const { h, wallH, queue } = this.layout;
-    const marks = [...this.registers.map((r) => r.spot.y)];
-    const top = (marks.length ? Math.min(...marks) : queue.y + queue.step) - queue.step;
-    for (let i = 0; i < 6 && top - i * queue.step >= queue.minY; i++) marks.push(top - i * queue.step);
-    for (const y of marks) this.art(queue.x, y + 7, 'queue_mark').setAlpha(0.85).setDepth(1);
+    const { h, wallH } = this.layout;
     if (this.state.level < 2) return;
     const clerks = this.registers.map((r) => r.clerk);
     const free = (x: number, y: number) =>
@@ -2503,8 +2498,8 @@ export class StoreScene extends Phaser.Scene {
     // На стене между постером, часами и окном (они висят через 32 от x = 30) — свободные места.
     if (climate === 1) {
       for (const x of [46, 78]) {
-        this.art(x, 13, 'fan_base').setDepth(4);
-        const blades = this.art(x, 13, 'fan_blades').setDepth(5);
+        this.art(x, 10, 'fan_base').setDepth(4);
+        const blades = this.art(x, 10, 'fan_blades').setDepth(5);
         this.tweens.add({ targets: blades, angle: 360, duration: 700, repeat: -1 });
       }
     } else if (climate === 2) {
@@ -5212,7 +5207,8 @@ export class StoreScene extends Phaser.Scene {
     const art = activeDecor(this.state, 'art')?.texture ?? 'poster';
     this.sunPatches = [];
     for (let x = 30, i = 0; x < wc.x - 16; x += 64, i++) {
-      this.art(x, 12, i % 2 ? 'window' : art).setDepth(1);
+      // Повыше на стене: полки стоят вплотную к стене и закрывают её низ.
+      this.art(x, 9, i % 2 ? 'window' : art).setDepth(1);
       // Из окна на пол ложится солнечное пятно (updateDaylight).
       if (i % 2) {
         const patch = this.art(x, wallH + 2, 'light_spill').setOrigin(0.5, 0).setScale(1 / ART, 1.5 / ART).setTint(0xffe9a8).setAlpha(0).setDepth(0.45);
@@ -5222,12 +5218,12 @@ export class StoreScene extends Phaser.Scene {
     }
     if (62 < wc.x - 16) {
       if (activeDecor(this.state, 'neon')) {
-        const glow = this.art(62, 14, 'glow').setScale(46 / 64, 24 / 64).setTint(0xf6757a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
+        const glow = this.art(62, 11, 'glow').setScale(46 / 64, 24 / 64).setTint(0xf6757a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
         this.tweens.add({ targets: glow, alpha: { from: 0.8, to: 0.4 }, duration: 900, yoyo: true, repeat: -1 });
-        this.art(62, 13, 'neon').setDepth(2);
+        this.art(62, 10, 'neon').setDepth(2);
       } else {
-        this.art(62, 11, 'clock_face').setDepth(1);
-        this.clockHands = this.add.graphics({ x: 62, y: 11 }).setDepth(1.1);
+        this.art(62, 9, 'clock_face').setDepth(1);
+        this.clockHands = this.add.graphics({ x: 62, y: 9 }).setDepth(1.1);
       }
     }
     // Ковёр в центре зала.
