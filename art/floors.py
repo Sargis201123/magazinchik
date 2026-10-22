@@ -28,7 +28,7 @@ def tiles(name, tones, joint, seed):
                 px = lit(px, -0.06)
             lx, ly = x % S, y % S
             if ly == 1 or lx == 1:
-                px = lit(px, 0.35)
+                px = lit(px, 0.2)
             elif ly == S - 1 or lx == S - 1:
                 px = mix(px, joint, 0.35)
             c.px(x, y, px)
@@ -48,7 +48,8 @@ def stone(name, base, dark, vein, joint, seed):
     rnd = random.Random(seed)
     tau = 2 * math.pi
     waves = [(rnd.randint(1, 3), rnd.randint(-3, 3), rnd.uniform(0, tau), w) for w in (0.5, 0.3, 0.2)]
-    slab = {(i, j): rnd.uniform(-0.12, 0.12) for i in range(N // S) for j in range(N // S)}
+    # Плиты в шахматку чуть светлее и темнее: пол читается как плиты, а не как сетка линий.
+    slab = {(i, j): rnd.uniform(-0.06, 0.06) + (0.1 if (i + j) % 2 else -0.06) for i in range(N // S) for j in range(N // S)}
     for y in range(N):
         for x in range(N):
             v = 0.5 + sum(w * math.sin(tau * (a * x + b * y) / N + ph) for a, b, ph, w in waves) * 0.5
@@ -68,8 +69,11 @@ def stone(name, base, dark, vein, joint, seed):
             c.px(i, g, joint)
             c.px(g, i, joint)
             if i % S:
-                c.px(i, g + 1, lit(c.get(i, g + 1), 0.4))
-                c.px(g + 1, i, lit(c.get(g + 1, i), 0.4))
+                # Фаска: светлый край сверху и слева, тень снизу и справа — плиты чуть объёмные.
+                c.px(i, g + 1, lit(c.get(i, g + 1), 0.18))
+                c.px(g + 1, i, lit(c.get(g + 1, i), 0.18))
+                c.px(i, (g - 1) % N, mix(c.get(i, (g - 1) % N), joint, 0.45))
+                c.px((g - 1) % N, i, mix(c.get((g - 1) % N, i), joint, 0.45))
     c.save(name)
 
 
@@ -132,7 +136,7 @@ def main():
     tiles("floor2", [H("#eaeff5"), H("#e4eaf1"), H("#e7edf3"), H("#e0e7ef")], H("#cbd4e0"), 11)
     queue_mark()
     facades()
-    stone("floor3", H("#f5f1f6"), H("#e2dbe8"), H("#b4a7c0"), H("#d3cadd"), 14)
+    stone("floor3", H("#f6efe6"), H("#e3d6c8"), H("#b9a691"), H("#cdbfae"), 14)
 
 
 if __name__ == "__main__":
