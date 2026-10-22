@@ -19,6 +19,8 @@ from pathlib import Path
 from PIL import Image
 
 OUT = Path(__file__).resolve().parent.parent / "public" / "assets"
+# Герои портретов без подложки (для иллюстраций сюжета) — рабочая папка, не в игре.
+FIGURES = Path(__file__).resolve().parent / "build" / "figures"
 
 # Во сколько раз пикселей в спрайте больше, чем точек мира. Должно совпадать с ART в StoreScene.
 DETAIL = 2
@@ -4536,6 +4538,12 @@ def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None, mood=None):
                     diff.putpixel((x, y), e.img.getpixel((x, y)))
         c.img.alpha_composite(diff.resize((S, S), Image.NEAREST))
     c.save(f"portrait_{name}" + (f"_{mood}" if mood else ""))
+    # Тот же герой без подложки — для иллюстраций сюжета (art/story_scenes.py), в игру не идёт.
+    fig = big.img.copy()
+    if extras:
+        fig.alpha_composite(diff.resize((S, S), Image.NEAREST))
+    FIGURES.mkdir(parents=True, exist_ok=True)
+    fig.save(FIGURES / (f"{name}" + (f"_{mood}" if mood else "") + ".png"))
 
 
 def face(p, skin, hair, mood):
