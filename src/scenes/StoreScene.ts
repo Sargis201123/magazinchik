@@ -615,6 +615,14 @@ const STAFF_ACC: Record<StaffRole, { acc: Accessory; tint: number }> = {
 };
 /** Тёмная кофта — так игрок может заметить вора. */
 const THIEF_SHIRT = 0x45444f;
+/** Место на парковке: где стоит машина и куда смотрит носом. */
+interface ParkSpot {
+  x: number;
+  y: number;
+  angle: number;
+  car: Phaser.GameObjects.Container | null;
+}
+
 const CAR_COLORS = [0xe43b44, 0x0099db, 0x3e8948, 0xfeae34, 0xc0cbdc, 0x68386c, 0x262b44];
 const THIEF_SPEED = 52;
 /** Форма сотрудников. */
@@ -886,6 +894,9 @@ export class StoreScene extends Phaser.Scene {
   private cullDirty = true;
   /** Идёт перестановка полок: камера не ездит, полки — «призраки», которые тянут пальцем. */
   private arranging = false;
+  /** Парковка за магазином: места и машины на них (живая днём). */
+  private parking: { spots: ParkSpot[]; x: number; w: number; aisleY: number } | null = null;
+  private parkingTimer?: Phaser.Time.TimerEvent;
   /** Вещи зала, которые двигают при перестановке (автомат, ведро, растения): место и «след» на полу. */
   private propList: (Prop & { tex: string })[] = [];
   /** Стандартные места вещей зала (для «Как было» и чтобы не хранить несдвинутое). */
@@ -4697,20 +4708,93 @@ export class StoreScene extends Phaser.Scene {
     this.add.rectangle(x, y, w, 2, 0x8b9bb4).setOrigin(0).setDepth(-9.45);
     this.add.rectangle(x, y + h - 2, w, 2, 0x8b9bb4).setOrigin(0).setDepth(-9.45);
     const rnd = new Phaser.Math.RandomDataGenerator(['parking']);
-    // Два ряда мест: машины стоят носом к проезду посередине.
+    // Два ряда мест: машины стоят носом к проезду посередине. Днём одни приезжают, другие уезжают.
+    const spots: ParkSpot[] = [];
     for (const row of [0, 1]) {
       const ry = row === 0 ? y + 4 : y + h - 30;
       for (let i = 0; i <= 5; i++) this.add.rectangle(x + 6 + i * 33, ry, 1.5, 26, 0xe6e1d6).setOrigin(0).setDepth(-9.45);
       for (let i = 0; i < 5; i++) {
-        if (rnd.frac() < 0.3) continue;
-        const [key, color] = rnd.pick(CAR_TYPES.filter(([k]) => k !== 'car_truck'));
-        // За зданием глубина отрицательная: над асфальтом, но под крышами (как сквер).
-        const car = this.art(x + 22 + i * 33, ry + 13, key).setAngle(90).setDepth(-9.41 + row * 0.001);
-        if (color !== null) car.setTint(color || rnd.pick(CAR_COLORS));
+        const spot: ParkSpot = { x: x + 22 + i * 33, y: ry + 13, angle: row === 0 ? 90 : -90, car: null };
+        spots.push(spot);
+        if (rnd.frac() >= 0.35) spot.car = this.parkedCar(spot, rnd.pick(CAR_TYPES.filter(([k]) => k !== 'car_truck')));
       }
     }
+    this.parking = { spots, x, w, aisleY: y + h / 2 };
+    this.parkingTimer?.remove();
+    this.parkingTimer = this.time.addEvent({ delay: 4000, loop: true, callback: () => this.parkingTick() });
     this.add.text(x + w / 2, y + h / 2, 'P', { fontFamily: UI_FONT, fontSize: '10px', color: '#e6e1d6', fontStyle: 'bold' }).setOrigin(0.5).setResolution(4).setDepth(-9.44).setAlpha(0.7);
     return { x: x - 8, y: y - 8, w: w + 16, h: h + 16 };
+  }
+
+  /** Машина на парковке (или подъезжающая): за зданием глубина отрицательная — над асфальтом, под крышами. */
+  private parkedCar(spot: ParkSpot, [key, color]: [string, number | null, number], at?: { x: number; y: number; angle: number }): Phaser.GameObjects.Container {
+    const body = this.art(0, 0, key);
+    if (color !== null) body.setTint(color || Phaser.Utils.Array.GetRandom(CAR_COLORS));
+    const car = this.add.container(at?.x ?? spot.x, at?.y ?? spot.y, [body]).setAngle(at?.angle ?? spot.angle).setDepth(-9.41);
+    return car;
+  }
+
+  /**
+   * Живая парковка: пока магазин открыт, машин тем больше, чем больше покупателей в зале; к вечеру
+   * пустеет. Приехавшая машина заезжает с проезда на место, водитель идёт в сторону магазина.
+   */
+  private parkingTick(): void {
+    const lot = this.parking;
+    if (!lot || !this.running || this.arranging) return;
+    const busy = lot.spots.filter((s) => s.car);
+    const load = Math.min(1, this.customers.size / Math.max(1, storeLevel(this.state).maxCustomers));
+    const target = Math.round(lot.spots.length * Math.min(0.9, 0.25 + 0.6 * load) * (1 - 0.5 * this.evening));
+    if (busy.length < target && Math.random() < 0.6) {
+      const free = lot.spots.filter((s) => !s.car);
+      if (free.length) this.parkArrive(Phaser.Utils.Array.GetRandom(free));
+    } else if (busy.length > target && Math.random() < 0.5) {
+      this.parkLeave(Phaser.Utils.Array.GetRandom(busy));
+    }
+  }
+
+  private parkArrive(spot: ParkSpot): void {
+    const lot = this.parking!;
+    const total = CAR_TYPES.reduce((sum, [, , weight]) => sum + weight, 0);
+    let roll = Math.random() * total;
+    const type = CAR_TYPES.filter(([k]) => k !== 'car_truck').find(([, , weight]) => (roll -= weight) < 0) ?? CAR_TYPES[0];
+    const car = this.parkedCar(spot, type, { x: lot.x - 30, y: lot.aisleY, angle: 0 });
+    spot.car = car;
+    this.tweens.chain({
+      targets: car,
+      tweens: [
+        { x: spot.x, duration: 1400 + Math.abs(spot.x - lot.x) * 8, ease: 'Sine.easeOut' },
+        { angle: spot.angle, y: spot.y, duration: 700, ease: 'Sine.easeInOut' },
+      ],
+      onComplete: () => {
+        if (!car.active) return;
+        // Водитель выходит и идёт к магазину (за угол здания).
+        const driver = this.makePerson(spot.x + 10, spot.y, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)).setDepth(-9.39);
+        this.setFacing(driver, 'right');
+        driver.setData('walking', true);
+        this.tweens.add({
+          targets: driver,
+          x: lot.x + lot.w + 24,
+          y: lot.aisleY,
+          duration: 2600 + (lot.x + lot.w - spot.x) * 12,
+          onComplete: () => driver.destroy(),
+        });
+      },
+    });
+  }
+
+  private parkLeave(spot: ParkSpot): void {
+    const lot = this.parking!;
+    const car = spot.car;
+    spot.car = null;
+    if (!car?.active) return;
+    this.tweens.chain({
+      targets: car,
+      tweens: [
+        { y: lot.aisleY, angle: 0, duration: 800, ease: 'Sine.easeInOut' },
+        { x: lot.x + lot.w + 40, duration: 1400 + Math.abs(lot.x + lot.w - spot.x) * 8, ease: 'Sine.easeIn' },
+      ],
+      onComplete: () => car.destroy(),
+    });
   }
 
   /** Стройка: забор, котлован, кран и табличка «Скоро: …». */
