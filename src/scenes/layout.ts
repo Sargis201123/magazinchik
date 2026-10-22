@@ -133,11 +133,13 @@ export function layoutFor(level: number): Layout {
   };
   const store = room(whY, whH, h - 12);
   const bakeryY = whY - WING_WALL - BAKERY_H;
-  const bakery = room(bakeryY, BAKERY_H);
+  // Двери пекарни и кухни — у нижнего края комнаты, кофейни — у верхнего: между дверями остаётся
+  // кусок стены, куда встаёт полка боком.
+  const bakery = room(bakeryY, BAKERY_H, bakeryY + BAKERY_H - 7);
   const coffeeY = bakeryY - WING_WALL - COFFEE_H;
-  const coffee = room(coffeeY, COFFEE_H);
+  const coffee = room(coffeeY, COFFEE_H, coffeeY + 9);
   const kitchenY = coffeeY - WING_WALL - KITCHEN_H;
-  const kitchen = level >= KITCHEN_FROM ? room(kitchenY, KITCHEN_H) : undefined;
+  const kitchen = level >= KITCHEN_FROM ? room(kitchenY, KITCHEN_H, kitchenY + KITCHEN_H - 7) : undefined;
   const showcases: Point[] = [];
   return {
     w,
