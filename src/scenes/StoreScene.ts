@@ -2086,12 +2086,14 @@ export class StoreScene extends Phaser.Scene {
         this.cullables.push({ obj: obj as Phaser.GameObjects.GameObject & { cameraFilter: number }, box: shape.getBounds() });
       }
     }
-    // Пересчитываем, только когда камера сдвинулась или приблизилась.
-    const key = `${Math.round(cam.scrollX)}|${Math.round(cam.scrollY)}|${cam.zoom.toFixed(3)}|${this.cullables.length}`;
+    // Пересчитываем, только когда видимая область сдвинулась или приблизилась. Ключ — по самой
+    // видимой области (worldView), а не по scroll: после прыжка камеры worldView обновляется лишь
+    // к следующему кадру, и по scroll отсечение застряло бы со старым видом — пропадали дома и деревья.
+    const v = cam.worldView;
+    const key = `${Math.round(v.x)}|${Math.round(v.y)}|${Math.round(v.width)}|${this.cullables.length}`;
     if (key === this.cullAt) return;
     this.cullAt = key;
     const margin = 24;
-    const v = cam.worldView;
     const view = new Phaser.Geom.Rectangle(v.x - margin, v.y - margin, v.width + margin * 2, v.height + margin * 2);
     for (const c of this.cullables) {
       if (!c.obj.active) continue;
@@ -4680,7 +4682,12 @@ export class StoreScene extends Phaser.Scene {
       [next.w * 0.75, -16],
     ];
     this.greenery = [];
-    for (const [x, y] of trees) this.greenery.push(this.art(x, y, 'tree').setOrigin(0.5, 0.9).setDepth(y));
+    // Дерево с тенью на газоне: свет сверху слева — тень ложится вправо-вниз от ствола.
+    const plant = (key: string, x: number, y: number, depth: number) => {
+      this.add.image(x + 5, y + 1, 'shadow').setScale(2.1 / ART, 1.5 / ART).setAlpha(0.75).setDepth(depth - 0.01);
+      this.greenery.push(this.art(x, y, key).setOrigin(0.5, 0.9).setDepth(depth));
+    };
+    for (const [x, y] of trees) plant('tree', x, y, y);
     for (let x = 10; x < next.w; x += 34) this.greenery.push(this.art(x, -6, 'bush').setDepth(-6));
     // Сквер за кварталом и за дорогой: деревья, кусты и клумбы — газон не пустует, когда отдаляешь камеру.
     const rnd = new Phaser.Math.RandomDataGenerator(['park']);
@@ -4713,7 +4720,7 @@ export class StoreScene extends Phaser.Scene {
           // За зданием глубина отрицательная — держим над газоном (-10), но под крышами соседей (-3).
           const depth = py < 0 ? -9.5 + (py + 400) / 1000 : py;
           // Сквер пёстрый: липы, берёзы, ели и цветущие кусты (art/flora.py).
-          if (roll < 0.34) this.greenery.push(this.art(px, py, rnd.pick(PARK_TREES)).setOrigin(0.5, 0.9).setDepth(depth));
+          if (roll < 0.34) plant(rnd.pick(PARK_TREES), px, py, depth);
           else if (roll < 0.52) this.greenery.push(this.art(px, py, rnd.frac() < 0.3 ? 'bush_flower' : 'bush').setDepth(depth));
           else if (roll < 0.62) this.greenery.push(this.art(px, py, rnd.frac() < 0.5 ? 'flower' : 'tulips').setDepth(depth));
         }
@@ -4721,6 +4728,29 @@ export class StoreScene extends Phaser.Scene {
     };
     scatter(-380, Math.min(-40, top - 230));
     scatter(top + 104, top + 470);
+    // Газон слева и справа от магазина: полосы стриженой травы, кусты и клумбы — не пустое поле.
+    const sides = [
+      { x0: left + 10, x1: -WING_OUTER - 28 },
+      { x0: next.w + 26, x1: left + width - 10 },
+    ];
+    for (const { x0, x1 } of sides) {
+      if (x1 - x0 < 20) continue;
+      for (let y = -36; y < top - 160 - VERANDA_D; y += 16) {
+        if ((y / 16) % 2) this.add.rectangle(x0 - 10, y, x1 - x0 + 20, 8, 0x3e8948, 0.07).setOrigin(0).setDepth(-9.6);
+      }
+      // Ниже — соседние дома вдоль улицы (buildNeighbors): самый высокий с верандой — до 150 + VERANDA_D.
+      for (let y = 6; y < top - 162 - VERANDA_D; y += 34) {
+        for (let x = x0; x < x1; x += 38) {
+          const px = x + rnd.between(-10, 10);
+          const py = y + rnd.between(-8, 8);
+          if (districtAreas.some((a) => inArea(px, py, a)) || trees.some(([tx, ty]) => Math.abs(tx - px) < 22 && Math.abs(ty - py) < 26)) continue;
+          const roll = rnd.frac();
+          if (roll < 0.22) plant(rnd.pick(PARK_TREES), px, py, py);
+          else if (roll < 0.45) this.greenery.push(this.art(px, py, rnd.frac() < 0.4 ? 'bush_flower' : 'bush').setDepth(py));
+          else if (roll < 0.62) this.greenery.push(this.art(px, py, rnd.frac() < 0.5 ? 'flower' : 'tulips').setDepth(py));
+        }
+      }
+    }
     // Парк за аллеей гуще — второй проход (деревья не встают на пруд, клумбы и дорожку).
     scatter(top + 290, top + 470);
   }
@@ -5267,6 +5297,11 @@ export class StoreScene extends Phaser.Scene {
     }
     cap(-WALL, from, WALL, h - from);
     cap(w, 0, WALL, h);
+    // Тень здания на газон справа: магазин стоит на земле, а не наклеен на траву.
+    const ink = 0x181425;
+    const shade = this.add.graphics().setDepth(-9.4);
+    shade.fillGradientStyle(ink, ink, ink, ink, 0.22, 0, 0.22, 0);
+    shade.fillRect(w + WALL, 2, 12, h + FACADE_H - 4);
     const style = this.facadeStyle();
     this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, style.texture).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
     this.doorImg = this.art(door.x, h + 5, 'door').setDepth(h + 2);
