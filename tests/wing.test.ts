@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { newGame, roleOpen, STORE_LEVELS, type StaffMember, type StoreState } from '../src/game/economy';
 import { bakerShouldBake, bakeryWorking, breadShelfRoom } from '../src/game/bakery';
 import { coffeeWorking } from '../src/game/coffee';
-import { doorY, layoutFor, shelfRect } from '../src/scenes/layout';
+import { doorY, layoutFor } from '../src/scenes/layout';
+import { bodyRect } from '../src/scenes/placement';
 
 const baker: StaffMember = { role: 'baker', name: 0, skill: 2, wage: 380, months: 0 };
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 20, money: 5000, level: 2, ...patch });
@@ -23,9 +24,9 @@ describe('флигель: склад, пекарня, кофейня', () => {
       expect(L.coffee.y + L.coffee.h).toBeLessThanOrEqual(L.bakery.y);
       expect(L.bakery.y + L.bakery.h).toBeLessThanOrEqual(L.warehouse.y);
       expect(L.warehouse.x + L.warehouse.w).toBeLessThan(0);
-      // Полки не налезают друг на друга.
-      const rects = L.slots.map(shelfRect);
-      rects.forEach((a, i) => rects.slice(i + 1).forEach((b) => expect(a.x + a.w <= b.x + 4 || b.x + b.w <= a.x + 4 || a.y + a.h <= b.y || b.y + b.h <= a.y).toBe(true)));
+      // Полки не налезают друг на друга (у стены — стоят вплотную).
+      const rects = L.slots.map(bodyRect);
+      rects.forEach((a, i) => rects.slice(i + 1).forEach((b) => expect(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y).toBe(true)));
     });
   });
 

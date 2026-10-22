@@ -16,9 +16,9 @@ describe('своя расстановка полок', () => {
   it('полку можно поставить вплотную к соседней сбоку', () => {
     const layout = layoutFor(2);
     const slots = layout.slots.map((s) => ({ ...s }));
-    // Последнюю полку — вплотную справа к предпоследней (ширина мебели 44).
+    // Последнюю полку — вплотную справа к предпоследней (ширина мебели 40).
     const a = slots[slots.length - 2];
-    slots[slots.length - 1] = { x: a.x + 44, y: a.y };
+    slots[slots.length - 1] = { x: a.x + 40, y: a.y };
     expect(slotIssues(layout, slots).has(slots.length - 1)).toBe(false);
   });
 

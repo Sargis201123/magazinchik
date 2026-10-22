@@ -74,6 +74,8 @@ const warehouseRows = (capacity: number): number =>
 
 const WALL_H = 32;
 const SHELF_STEP = 46;
+/** Шаг полок у задней стены: вплотную, по ширине полки. */
+const WALL_STEP = 40;
 /** Ряды островов: первый ряд и шаг между рядами (полка 24 + проход 32); левый край — после прохода у стены. */
 const ISLAND_X = 50;
 const ISLAND_Y = 116;
@@ -111,7 +113,8 @@ export function doorY(room: { y: number; h: number }, slots: Point[], prefer?: n
 export function layoutFor(level: number): Layout {
   const { w, h, wall, cols, rows: islandRows } = SHAPES[Math.min(level, SHAPES.length - 1)];
   const slots: Point[] = [
-    ...Array.from({ length: wall }, (_, i) => ({ x: 24 + SHELF_STEP * i, y: WALL_H + 4 })),
+    // У задней стены полки стоят вплотную друг к другу (шаг — ширина полки), без щелей.
+    ...Array.from({ length: wall }, (_, i) => ({ x: 20 + WALL_STEP * i, y: WALL_H + 4 })),
     ...Array.from({ length: islandRows * cols }, (_, i) => ({ x: ISLAND_X + SHELF_STEP * (i % cols), y: ISLAND_Y + ROW_STEP * Math.floor(i / cols) })),
   ];
   const whW = WING_W;
