@@ -316,6 +316,7 @@ const SPRITES = [
   'baskets',
   'bargain_bin',
   'wet_sign',
+  'butterfly0',
   // Циферблат без стрелок: стрелки идут по ходу смены (art/clockface.py).
   'clock_face',
 ];

@@ -5052,3 +5052,10 @@ def wet_sign():
     c.hline(5, 18, 10, "k")
     c.hline(6, 20, 8, "k")
     c.save("wet_sign")
+
+
+def butterflies():
+    """Бабочка 8×6 (в мире 4×3), белая — под тинт. Крыльями машет сцена (сжатием по ширине)."""
+    c = Canvas(8, 6)
+    c.stamp(["kk....kk", "k11kk11k", ".k1kk1k.", ".k12k1k.", "..kkkk..", "........"])
+    c.save("butterfly0")

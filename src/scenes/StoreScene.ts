@@ -909,6 +909,10 @@ export class StoreScene extends Phaser.Scene {
   /** Парковка за магазином: места и машины на них (живая днём). */
   private parking: { spots: ParkSpot[]; x: number; w: number; aisleY: number } | null = null;
   private parkingTimer?: Phaser.Time.TimerEvent;
+  /** Стаи птиц над кварталом (buildAmbient). */
+  private flockTimer?: Phaser.Time.TimerEvent;
+  /** Дневная живность и тени облаков: к вечеру исчезают (updateLighting). */
+  private dayLife: { obj: Phaser.GameObjects.Image; alpha: number }[] = [];
   /** Вещи зала, которые двигают при перестановке (автомат, ведро, растения): место и «след» на полу. */
   private propList: (Prop & { tex: string })[] = [];
   /** Стандартные места вещей зала (для «Как было» и чтобы не хранить несдвинутое). */
@@ -2210,8 +2214,12 @@ export class StoreScene extends Phaser.Scene {
       // Глубокой ночью окна гаснут по одному — в том же порядке, в каком зажигались.
       if (light.from !== undefined && this.lightsOut > light.from * 1.6) alpha = 0;
       if (light.twinkle !== undefined) alpha *= 0.55 + 0.45 * Math.sin(now / 260 + light.twinkle);
+      // Кто-то щёлкнул выключателем: окно иногда гаснет на несколько секунд и загорается снова.
+      if (light.from !== undefined && Math.sin(now / 5300 + light.from * 97) > 0.93) alpha = 0;
       light.obj.setAlpha(alpha);
     }
+    // Дневная живность и тени облаков к вечеру исчезают.
+    for (const life of this.dayLife) if (life.obj.active) life.obj.setAlpha(life.alpha * Phaser.Math.Clamp(1 - evening * 2.5, 0, 1));
     this.dayProgress = p;
     this.updateDaylight(p);
     this.drawClock(p);
@@ -4786,6 +4794,7 @@ export class StoreScene extends Phaser.Scene {
     };
     scatter(-380, Math.min(-40, top - 230));
     scatter(top + 104, top + 470);
+    this.buildAmbient(next, top, left, width);
     // Газон слева и справа от магазина: полосы стриженой травы, кусты и клумбы — не пустое поле.
     const sides = [
       { x0: left + 10, x1: -WING_OUTER - 28 },
@@ -4811,6 +4820,73 @@ export class StoreScene extends Phaser.Scene {
     }
     // Парк за аллеей гуще — второй проход (деревья не встают на пруд, клумбы и дорожку).
     scatter(top + 290, top + 470);
+  }
+
+  /**
+   * Живой воздух над кварталом: бабочки над газоном, тени облаков ползут по крышам и траве,
+   * время от времени пролетает стая птиц. Всё дневное — к вечеру гаснет (updateLighting).
+   * В лёгком режиме — ничего из этого.
+   */
+  private buildAmbient(next: Layout, top: number, left: number, width: number): void {
+    this.dayLife = [];
+    this.flockTimer?.remove();
+    if (this.lite) return;
+    // Погоду берём по дню: при сборке квартала this.weather ещё вчерашняя (applyWeather — позже).
+    const weather = weatherFor(this.state.day);
+    const sunny = weather === 'clear' || weather === 'heat' || weather === 'leaves';
+    // Тени облаков: мягкие тёмные пятна медленно плывут через квартал.
+    if (sunny) {
+      for (let k = 0; k < 3; k++) {
+        const y = -260 + k * 230;
+        const cloud = this.add.image(left + k * 260, y, 'glow').setDisplaySize(240, 120).setTint(0x181425).setDepth(LIGHT_DEPTH - 3);
+        this.dayLife.push({ obj: cloud, alpha: 0.16 });
+        this.tweens.add({ targets: cloud, x: left + width + 200, duration: 110000 + k * 23000, repeat: -1, onRepeat: () => cloud.setX(left - 200) });
+      }
+    }
+    // Бабочки над газоном у магазина: порхают и перелетают с места на место.
+    if (weather === 'clear' || weather === 'heat') {
+      const spots = [
+        { x: -WING_OUTER - 40, y: 40 },
+        { x: next.w + 40, y: 60 },
+        { x: next.w + 70, y: -60 },
+        { x: next.w / 2 - 70, y: -40 },
+      ];
+      const tints = [0xfee761, 0xf6757a, 0xffffff, 0x8fd3ff];
+      spots.forEach((p, k) => {
+        const fly = this.art(p.x, p.y, 'butterfly0').setTint(tints[k % tints.length]).setDepth(top + 5);
+        this.dayLife.push({ obj: fly, alpha: 1 });
+        // Взмахи крыльями — твином (его убирает пересборка мира, таймер бы копился).
+        this.tweens.add({ targets: fly, scaleX: 0.35 / ART, duration: 130 + k * 15, yoyo: true, repeat: -1 });
+        const hop = () => {
+          if (!fly.active) return;
+          this.tweens.add({
+            targets: fly,
+            x: p.x + Phaser.Math.Between(-28, 28),
+            y: p.y + Phaser.Math.Between(-20, 20),
+            duration: Phaser.Math.Between(1400, 2600),
+            ease: 'Sine.easeInOut',
+            onComplete: hop,
+          });
+        };
+        hop();
+      });
+    }
+    // Стая птиц клином пролетает над кварталом раз в полминуты-минуту.
+    this.flockTimer = this.time.addEvent({
+      delay: 38000,
+      loop: true,
+      callback: () => {
+        if (this.night || !this.sys.isActive()) return;
+        const y0 = Phaser.Math.Between(-300, top);
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        const x0 = dir > 0 ? left - 60 : left + width + 60;
+        for (let k = 0; k < 5; k++) {
+          const bird = this.art(x0 - dir * Math.abs(k - 2) * 9, y0 + (k - 2) * 7, 'pigeon_fly').setScale(0.9 / ART).setTint(0x3a4466).setFlipX(dir < 0).setDepth(LIGHT_DEPTH - 2);
+          this.tweens.add({ targets: bird, x: bird.x + dir * (width + 120), y: bird.y - 60, duration: 16000, onComplete: () => bird.destroy() });
+          this.tweens.add({ targets: bird, scaleY: 0.6 / ART, duration: 220, yoyo: true, repeat: -1 });
+        }
+      },
+    });
   }
 
   /**
