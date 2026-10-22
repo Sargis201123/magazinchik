@@ -106,12 +106,21 @@ function roomZones(layout: Layout): Rect[] {
   const { h, door } = layout;
   return [
     { x: door.x - 16, y: h - 34, w: 32, h: 34 },
+    // Электрощиток на задней стене: когда отключат свет, продавец подходит к нему и включает.
+    { x: layout.wc.x - 34, y: layout.wallH - 10, w: 20, h: 30 },
     ...[layout.warehouse, layout.bakery, layout.coffee, layout.kitchen]
       .filter((r): r is NonNullable<typeof r> => Boolean(r))
       .map((r) => ({ x: 0, y: r.doorway.y - 14, w: 26, h: 28 })),
     ...layout.showcases.map(shelfRect),
   ];
 }
+
+/**
+ * Куда полку ставить нельзя (вход, двери флигеля, щиток, витрины) — их показываем в перестановке.
+ * Зона, которую занимает и стандартная расстановка (дверь в ещё закрытую комнату), — не запретная.
+ */
+export const blockedZones = (layout: Layout, defaults: Point[] = layout.slots): Rect[] =>
+  roomZones(layout).filter((z) => !defaults.some((d) => overlaps(bodyRect(d), z)));
 
 /** Всё, чему полки не должны мешать: касса со всем, что при ней, и то, что не переезжает. */
 export const fixedZones = (layout: Layout, registers = 1): Rect[] => [...tillZones(layout, registers), ...roomZones(layout)];
@@ -133,7 +142,7 @@ export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = l
   const rects = slots.map((p) => slotRect(layout, p));
   // Зона, которую занимает и стандартная расстановка (дверь в ещё закрытую комнату флигеля), — не запретная.
   // Касса переезжает — её зоны запретны всегда.
-  const zones = [...tillZones(layout, registers), ...roomZones(layout).filter((z) => !defaults.some((d) => overlaps(bodyRect(d), z))), ...props];
+  const zones = [...tillZones(layout, registers), ...blockedZones(layout, defaults), ...props];
   rects.forEach((r, i) => {
     const stand = standFor(layout, slots[i]);
     // У задней стены полка стоит вплотную и заходит на нижнюю панель стены — так стоят и стандартные.
