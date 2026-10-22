@@ -4041,7 +4041,7 @@ def back_skin():
 
 
 def back_shirt():
-    g = grid(SHIRT)
+    g = grid(shade_shirt(SHIRT, buttons=False))
     g[16] = list("......kkkkkkkkkkkk......")
     g[17][11] = "1"
     g[17][13] = "1"
@@ -4119,7 +4119,9 @@ def side_shirt():
     c.vline(11, 18, 7, "k")
     c.rect(12, 18, 3, 7, "1")
     c.vline(14, 19, 6, "2")
+    c.hline(12, 24, 3, "3")
     c.hline(12, 25, 3, "k")
+    c.vline(15, 19, 7, "2")
     c.save("p_shirt_s")
 
 
@@ -4128,6 +4130,7 @@ def side_legs():
     c.rect(9, 27, 6, 6, "1")
     c.vline(14, 27, 6, "2")
     c.rect(9, 33, 8, 2, "K")
+    c.px(16, 33, "G")
     c.outline("k")
     c.save("p_legs0_s")
     c = Canvas(24, 36)
@@ -4304,16 +4307,55 @@ def emotes():
         c.save(name)
 
 
+def shade_shirt(rows, buttons=True):
+    """Светотень рубашки (свет сверху слева): правый бок и низ темнее, под руками тень,
+    у манжет полоска, спереди — планка с пуговицами. Силуэт не меняется, поэтому фартук,
+    жилет и анимации ложатся как раньше."""
+    g = [list(r) for r in rows]
+    for y, row in enumerate(g):
+        for x, ch in enumerate(row):
+            if ch != "1":
+                continue
+            torso = 7 <= x <= 18 and 19 <= y <= 25
+            if torso and x >= 16:
+                g[y][x] = "2"
+            if x == 7 and 20 <= y <= 23:
+                g[y][x] = "2"
+            if y == 25 and x >= 12:
+                g[y][x] = "2"
+            if buttons and x == 12 and 18 <= y <= 24:
+                g[y][x] = "3" if y in (20, 23) else "2"
+            # Рукава: низ в тени, у кисти — манжета.
+            if x in (5, 20) and 21 <= y <= 22:
+                g[y][x] = "2"
+            if x in (4, 5, 20, 21) and y == 23:
+                g[y][x] = "3"
+        for x, ch in enumerate(row):
+            if ch == "2" and x in (20, 21) and 20 <= y <= 23:
+                g[y][x] = "3"
+    return ["".join(r) for r in g]
+
+
+def shade_legs(rows):
+    """Брюки: стрелка-складка на правой штанине, обувь с бликом на носке."""
+    g = [list(r) for r in rows]
+    for y, row in enumerate(g):
+        for x, ch in enumerate(row):
+            if ch == "K" and x > 0 and row[x - 1] == "k":
+                g[y][x] = "G"
+    return ["".join(r) for r in g]
+
+
 def people():
     c = Canvas(24, 36)
     c.stamp(SKIN)
     c.save("p_skin")
     c = Canvas(24, 36)
-    c.stamp(SHIRT)
+    c.stamp(shade_shirt(SHIRT))
     c.save("p_shirt")
     for i, rows in enumerate(LEGS):
         c = Canvas(24, 36)
-        c.stamp(rows, 0, 27)
+        c.stamp(shade_legs(rows), 0, 27)
         c.save(f"p_legs{i}")
         c.save(f"p_legs{i}_b")
     for style, rows in HAIR.items():
