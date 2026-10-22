@@ -12,7 +12,7 @@ export interface ShopSnapshot {
   shopName?: string;
   shelves: { kind: string; level: number; items: Record<string, number>; broken?: boolean }[];
   slotPos?: { level: number; at: { x: number; y: number }[] };
-  tillPos?: { level: number; dx: number };
+  tillPos?: { level: number; dx: number; short?: boolean };
   decor?: { owned: string[]; active: Record<string, string> };
   registers?: number;
 }
@@ -75,7 +75,7 @@ export function friendState(raw: unknown, home: StoreState): StoreState | null {
     shelves,
     ...(shopName ? { shopName } : {}),
     ...(slotAt ? { slotPos: { level: int(snap.slotPos!.level, 0, 9), at: slotAt } } : {}),
-    ...(snap.tillPos ? { tillPos: { level: int(snap.tillPos.level, 0, 9), dx: int(snap.tillPos.dx, -200, 0, 0) } } : {}),
+    ...(snap.tillPos ? { tillPos: { level: int(snap.tillPos.level, 0, 9), dx: int(snap.tillPos.dx, -200, 0, 0), ...(snap.tillPos.short === true ? { short: true } : {}) } } : {}),
     decor: normalizeDecor({
       owned: Array.isArray(snap.decor?.owned) ? snap.decor.owned.filter((id): id is DecorId => typeof id === 'string' && isDecorId(id)) : [],
       active: snap.decor?.active && typeof snap.decor.active === 'object' ? (Object.fromEntries(Object.entries(snap.decor.active).filter(([, id]) => typeof id === 'string' && isDecorId(id))) as StoreState['decor']['active']) : {},

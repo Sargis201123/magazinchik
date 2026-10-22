@@ -235,6 +235,9 @@ const css = `
   box-shadow: 0 4px 0 #2b2233; padding: 8px 10px; font: 13px/1.35 ${UI_FONT}; color: #2b2233; }
 .ui-arrange-row { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 6px; margin-top: 6px; }
 .ui-arrange-row .ui-btn { margin: 0; padding: 9px 4px; font-size: 13px; }
+.ui-arrange-queue { width: 100%; margin: 6px 0 0; padding: 7px 4px; font-size: 12px; }
+.ui-arrange-intro { margin: 6px 0 10px; padding-left: 18px; text-align: left; font-size: 13px; line-height: 1.35; }
+.ui-arrange-intro li { margin: 5px 0; }
 .ui-help-inline { display: inline-block; width: 20px; height: 20px; line-height: 20px; margin-left: 6px; vertical-align: middle; font-size: 11px; }
 /* Плитки «Уголков»: значок слева, название и состояние справа. */
 .ui-tile-card { flex-direction: row; align-items: center; gap: 7px; }

@@ -15,17 +15,26 @@ export const PASS = 8;
 export interface TillPosition {
   level: number;
   dx: number;
+  /** Короткая очередь: стоят плотнее, верх зала у правой стены свободен под полки. */
+  short?: boolean;
 }
 
-/** Планировка со сдвинутой кассой (дверь остаётся на месте). */
+/** Короткая очередь занимает столько точек вверх от кассы (длинная — до самой задней стены). */
+export const SHORT_QUEUE = 150;
+
+/** Очередь можно укоротить: в этом помещении от этого освобождается место. */
+export const canShortenQueue = (layout: Layout): boolean => layout.queue.y - SHORT_QUEUE > layout.queue.minY + 20;
+
+/** Планировка со сдвинутой кассой (дверь остаётся на месте) и, если выбрано, короткой очередью. */
 export function withTill(layout: Layout, till: TillPosition | undefined, level: number): Layout {
-  if (!till || till.level !== level || !till.dx) return layout;
+  if (!till || till.level !== level || (!till.dx && !till.short)) return layout;
   const { dx } = till;
+  const minY = till.short && canShortenQueue(layout) ? layout.queue.y - SHORT_QUEUE : layout.queue.minY;
   return {
     ...layout,
     counter: { x: layout.counter.x + dx, y: layout.counter.y },
     sellerHome: { x: layout.sellerHome.x + dx, y: layout.sellerHome.y },
-    queue: { ...layout.queue, x: layout.queue.x + dx },
+    queue: { ...layout.queue, x: layout.queue.x + dx, minY },
   };
 }
 
