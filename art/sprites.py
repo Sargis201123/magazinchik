@@ -361,6 +361,46 @@ def save_with_top(front, name, style):
     c.save(name)
 
 
+def save_side(name, style):
+    """Та же полка, поставленная боком к стене 32×88: сверху видна длинная полка с отсеками
+    (товар раскладывает игра), снизу — торец, обращённый к нам. Цвета — как у полки отдела."""
+    base, light, dark, speck = {
+        "wood": ("n", "N", "a", "B"),
+        "green": ("e", "E", "d", "E"),
+        "fridge": ("1", "1", "3", "2"),
+        "drinks": ("U", "c", "u", "c"),
+        "chem": ("P", "s", "p", "s"),
+    }[style]
+    tray = {"wood": "a", "green": "a", "fridge": "2", "drinks": "W", "chem": "w"}[style]
+    c = Canvas(32, 88)
+    # Верх: рама и лоток с отсеками.
+    c.rect(0, 0, 32, 70, base)
+    c.vline(1, 1, 68, light)
+    c.vline(30, 1, 68, dark)
+    c.rect(4, 4, 24, 62, tray)
+    c.frame(4, 4, 24, 62, dark)
+    for y in range(19, 66, 15):
+        c.hline(4, y, 24, base)
+        c.hline(4, y + 1, 24, dark)
+    if style == "fridge":
+        for y in range(6, 64, 5):
+            c.px(26, y, "w")
+    elif style == "green":
+        for y in range(6, 64, 3):
+            c.hline(5, y, 22, "B")
+    # Табличка отдела на верхнем торце.
+    c.rect(10, 0, 12, 4, "w")
+    c.frame(10, 0, 12, 4, "G")
+    # Нижний торец — к нам.
+    c.rect(0, 70, 32, 18, dark)
+    c.hline(0, 70, 32, light)
+    c.rect(3, 73, 26, 12, base)
+    c.hline(3, 73, 26, light)
+    c.hline(0, 87, 32, "k")
+    c.frame(0, 0, 32, 88, "k")
+    c.save(name + "_side")
+
+
 def save_overlay(front, name):
     """Передний слой (кромки, стекло) того же размера, что и мебель с крышкой."""
     c = Canvas(80, 52 + TOP)
@@ -384,6 +424,7 @@ def shelf():
         c.speckle(4, top + 3, 72, h - 3, [(112, 66, 48, 255)], 10, top)
     wood_lips(c)
     save_with_top(c, "shelf", "wood")
+    save_side("shelf", "wood")
     f = Canvas(80, 52)
     wood_lips(f)
     f.vline(4, LIPS[0], 4, "k")
@@ -420,6 +461,7 @@ def stand():
             c.vline(x, top, h, "b")
     crate_fronts(c)
     save_with_top(c, "stand", "green")
+    save_side("stand", "green")
     f = Canvas(80, 52)
     crate_fronts(f)
     save_overlay(f, "stand_front")
@@ -448,6 +490,7 @@ def drinks_rack():
             c.vline(x, top + 2, h - 2, "w")
     wire_lips(c, "Y")
     save_with_top(c, "drinks", "drinks")
+    save_side("drinks", "drinks")
     f = Canvas(80, 52)
     wire_lips(f, "Y")
     save_overlay(f, "drinks_front")
@@ -463,6 +506,7 @@ def chem_rack():
         c.speckle(4, top + 2, 72, h - 2, ["W"], 10, top)
     wire_lips(c, "s")
     save_with_top(c, "chem", "chem")
+    save_side("chem", "chem")
     f = Canvas(80, 52)
     wire_lips(f, "s")
     save_overlay(f, "chem_front")
@@ -491,6 +535,7 @@ def fridge():
     for x in range(6, 74, 3):
         c.vline(x, 48, 2, "4")
     save_with_top(c, "fridge", "fridge")
+    save_side("fridge", "fridge")
 
     # Стекло, рамы дверей и ручки — поверх товара.
     f = Canvas(80, 52)
