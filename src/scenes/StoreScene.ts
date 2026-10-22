@@ -3024,6 +3024,14 @@ export class StoreScene extends Phaser.Scene {
     this.coffeeImg = this.art(x + 10, y + 19, coffeeSprite(this.state)).setDepth(y + 20);
     this.art(x + 22, y + 28, 'coffee_bar').setDepth(y + 34);
     this.art(x + 47, y + 49, 'cafe_table').setDepth(y + 55);
+    // Уют: фикус в углу и пар над кофемашиной.
+    this.art(x + 6, y + 52, 'plant').setDepth(y + 57);
+    if (!this.lite) {
+      for (let k = 0; k < 3; k++) {
+        const steam = this.add.image(x + 8 + k * 1.5, y + 9, 'glow').setDisplaySize(6, 6).setTint(0xffffff).setAlpha(0).setDepth(y + 22);
+        this.tweens.add({ targets: steam, y: y + 1, alpha: { from: 0.5, to: 0 }, scale: steam.scale * 1.8, duration: 1700, delay: k * 600, repeat: -1, repeatDelay: 900, ease: 'Sine.easeOut' });
+      }
+    }
     // Столики (улучшение): ещё два столика у окна — за ними пьют кофе.
     if (hasUpgrade(this.state, 'coffeeTables')) for (const tx of [12, 30]) this.art(x + tx, y + 52, 'cafe_table').setDepth(y + 58);
   }
@@ -3173,6 +3181,15 @@ export class StoreScene extends Phaser.Scene {
     const bar = this.add.rectangle(at.x - 8, at.y - 13, 16, 3, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
     const fill = this.add.rectangle(at.x - 7.5, at.y - 13, 0, 2, 0xfeae34).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
     const fx = img.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 6);
+    // Тёплый отсвет печи на полу и мука, взлетающая со стола пекаря.
+    const warm = this.add.image(at.x + 2, at.y + 13, 'glow').setDisplaySize(34, 14).setTint(0xffb060).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.14).setDepth(room.y + 26);
+    this.tweens.add({ targets: warm, alpha: 0.22, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    if (!this.lite) {
+      for (let k = 0; k < 4; k++) {
+        const dust = this.add.rectangle(room.x + 20 + k * 4, room.y + 41, 1, 1, 0xffffff, 0.8).setDepth(room.y + 52);
+        this.tweens.add({ targets: dust, y: room.y + 33, x: dust.x + (k % 2 ? 2 : -2), alpha: { from: 0.8, to: 0 }, duration: 1300, delay: k * 450, repeat: -1, repeatDelay: 2600 });
+      }
+    }
     this.oven = { img, glow, bread, bar, fill, fx, state: 'idle', start: 0, product: 'bread' };
     img.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.tapOven()));
   }
