@@ -5242,6 +5242,12 @@ export class StoreScene extends Phaser.Scene {
     g.fillRect(0, wallH, 10, h - wallH);
     g.fillGradientStyle(ink, ink, ink, ink, 0, 0.16, 0, 0.16);
     g.fillRect(w - 10, wallH, 10, h - wallH);
+    // Свет потолочных ламп: тёплые пятна на полу рядами — зал не плоский, а освещённый.
+    for (let y = wallH + 46; y < h - 20; y += 62) {
+      for (let x = 34 + ((y / 62) % 2) * 20; x < w - 20; x += 66) {
+        this.add.image(x, y, 'glow').setDisplaySize(84, 46).setTint(0xfff0cf).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.09).setDepth(0.45);
+      }
+    }
   }
 
   private buildShell(): void {
@@ -6031,11 +6037,12 @@ export class StoreScene extends Phaser.Scene {
     // Цветная плитка отдела под полкой и перед ней, шириной с полку: соседние плитки стыкуются без щелей.
     // У задней стены плитка начинается от плинтуса — на стену не заходит.
     const tileTop = Math.max(slot.y - 11, this.layout.wallH);
-    if (!fixture) lights.push(this.add.rectangle(slot.x, (tileTop + slot.y + 19) / 2, 40, slot.y + 19 - tileTop, DEPT_FLOOR[kind]).setAlpha(0.3).setStrokeStyle(1, DEPT_FLOOR[kind], 0.7).setDepth(0.3));
+    if (!fixture) lights.push(this.add.rectangle(slot.x, (tileTop + slot.y + 19) / 2, 40, slot.y + 19 - tileTop, DEPT_FLOOR[kind]).setAlpha(0.2).setStrokeStyle(1, DEPT_FLOOR[kind], 0.35).setDepth(0.3));
     // На мраморе низ полки отражается в полу — бледно и перевёрнуто.
     if (!fixture && this.glossyFloor) {
-      const mirror = this.art(slot.x, slot.y - top + 32, look.texture).setTint(look.tint).setFlipY(true).setAlpha(0.13).setDepth(0.6);
-      mirror.setCrop(0, 40, 80, 24);
+      // Только самый низ полки и коротко: блик у основания, а не призрачная копия полки.
+      const mirror = this.art(slot.x, slot.y - top + 32, look.texture).setTint(look.tint).setFlipY(true).setAlpha(0.1).setDepth(0.6);
+      mirror.setCrop(0, 50, 80, 14);
       lights.push(mirror);
     }
     // Крупный значок отдела поверх таблички на шапке: молоко, мясо и заморозку не спутать.
