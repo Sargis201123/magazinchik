@@ -153,7 +153,7 @@ import {
 } from '../game/nightGuests';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
-import { bodyRect, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
+import { slotRect, slotSide, standFor, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
 import { iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
@@ -1803,15 +1803,27 @@ export class StoreScene extends Phaser.Scene {
     for (let y = this.layout.wallH; y <= h; y += 8) grid.lineBetween(0, y, w, y);
     // Какая полка в каком месте: обычные полки занимают места по порядку покупки.
     const kinds = this.state.shelves.filter((sh) => !SHELF_KINDS[sh.kind].fixture).map((sh) => sh.kind);
-    const ghosts = at.map((p, i) => {
+    // Полка у боковой стены — боком: картинка и место на полу другие.
+    const styleGhost = (ghost: Phaser.GameObjects.Container, i: number) => {
       const kind = kinds[i];
       const look = kind ? SHELF_LOOK[kind] : null;
-      const img = look ? this.art(0, -FURNITURE_TOP / 2, look.texture).setTint(look.tint) : this.art(0, 2, 'slot_empty');
+      const side = slotSide(this.layout, at[i]);
+      const img = ghost.getData('img') as Phaser.GameObjects.Image;
+      if (side) img.setTexture(look ? `${look.texture}_side` : 'slot_empty').setPosition(0, 0).setAngle(look ? 0 : 90).setFlipX(side === 'right');
+      else img.setTexture(look ? look.texture : 'slot_empty').setPosition(0, look ? -FURNITURE_TOP / 2 : 2).setAngle(0).setFlipX(false);
+      if (look) img.setTint(look.tint);
+      const r = slotRect(this.layout, at[i]);
+      ghost.setSize(Math.max(20, r.w + 4), Math.max(30, r.h + 6));
+      ghost.input?.hitArea.setTo(0, 0, ghost.width, ghost.height);
+    };
+    const ghosts = at.map((p, i) => {
+      const img = this.art(0, 0, 'slot_empty');
       const frame = this.add.graphics();
       const ghost = this.add.container(p.x, p.y, [img, frame]).setDepth(LIGHT_DEPTH + 11);
+      ghost.setData('frame', frame).setData('img', img);
       ghost.setSize(44, 30);
       ghost.setInteractive({ draggable: true, useHandCursor: true });
-      ghost.setData('frame', frame);
+      styleGhost(ghost, i);
       return ghost;
     });
     // Касса — тоже «призрак»: тянется только влево-вправо, вместе с очередью и всем, что при ней.
@@ -1844,7 +1856,10 @@ export class StoreScene extends Phaser.Scene {
     const done = button(t('arrange.done'), () => finish(true), 'ui-btn');
     const reset = button(t('arrange.reset'), () => {
       at = defaults.map((p) => ({ ...p }));
-      ghosts.forEach((g, i) => g.setPosition(at[i].x, at[i].y));
+      ghosts.forEach((g, i) => {
+        g.setPosition(at[i].x, at[i].y);
+        styleGhost(g, i);
+      });
       tillDx = 0;
       till.setPosition(plain.counter.x, plain.counter.y);
       props.forEach((p, i) => {
@@ -1879,7 +1894,7 @@ export class StoreScene extends Phaser.Scene {
       // кассы, у двери склада) — красной она становится, только если на неё поставили полку.
       for (const p of props) {
         const d = propDefault(p.id);
-        if (d && d.x === p.x && d.y === p.y && !at.some((s) => overlapsRect(bodyRect(s), propRect(p)))) badProps.delete(p.id);
+        if (d && d.x === p.x && d.y === p.y && !at.some((s) => overlapsRect(slotRect(lay, s), propRect(p)))) badProps.delete(p.id);
       }
       // Ларь ищет место сам — вещь не должна занять его место.
       if (this.state.shelves.some((sh) => sh.kind === 'icebox')) {
@@ -1895,10 +1910,11 @@ export class StoreScene extends Phaser.Scene {
         frame.lineStyle(1, red ? 0xe43b44 : 0xb86f50, 1).strokeRect(fp.x, fp.y, fp.w, fp.h);
       });
       // Кассу подсвечиваем красным, если на её месте или в очереди стоит красная полка.
-      drawTill(tillZones(lay, registers).some((z) => at.some((p, i) => bad.has(i) && overlapsRect(bodyRect(p), z))));
+      drawTill(tillZones(lay, registers).some((z) => at.some((p, i) => bad.has(i) && overlapsRect(slotRect(lay, p), z))));
       ghosts.forEach((g, i) => {
         const frame = g.getData('frame') as Phaser.GameObjects.Graphics;
-        const r = bodyRect({ x: 0, y: 0 });
+        const abs = slotRect(lay, at[i]);
+        const r = { x: abs.x - at[i].x, y: abs.y - at[i].y, w: abs.w, h: abs.h };
         frame.clear();
         frame.fillStyle(bad.has(i) ? 0xe43b44 : 0x63c74d, 0.28).fillRect(r.x, r.y, r.w, r.h);
         frame.lineStyle(1, bad.has(i) ? 0xe43b44 : 0x3e8948, 1).strokeRect(r.x, r.y, r.w, r.h);
@@ -1925,8 +1941,13 @@ export class StoreScene extends Phaser.Scene {
       }
       const i = ghosts.indexOf(obj as Phaser.GameObjects.Container);
       if (i < 0) return;
-      at[i] = { x: Phaser.Math.Clamp(snap(x), 20, w - 20), y: Phaser.Math.Clamp(snap(y), this.layout.wallH + 4, h - 28) };
+      // У боковой стены полка «прилипает» к ней и разворачивается боком.
+      let gx = snap(x);
+      gx = gx < 20 ? SIDE_X : gx > w - 20 ? w - SIDE_X : gx;
+      const sideNow = gx === SIDE_X || gx === w - SIDE_X;
+      at[i] = { x: gx, y: Phaser.Math.Clamp(snap(y), this.layout.wallH + (sideNow ? 22 : 4), h - (sideNow ? 24 : 28)) };
       ghosts[i].setPosition(at[i].x, at[i].y).setDepth(LIGHT_DEPTH + 12);
+      styleGhost(ghosts[i], i);
       check();
     };
     const onDragEnd = (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => {
@@ -3178,7 +3199,10 @@ export class StoreScene extends Phaser.Scene {
         const slot = index >= 0 ? this.spotOf(index) : null;
         await this.workerWalk(w, room.inside.x, room.inside.y);
         await this.workerWalk(w, room.doorway.x, room.doorway.y);
-        if (slot) await this.workerWalk(w, slot.x, slot.y + 20);
+        if (slot) {
+          const stand = standFor(this.layout, slot);
+          await this.workerWalk(w, stand.x, stand.y - 2);
+        }
         await this.workerWait(w, PLACE_MS);
         if (!this.alive(gen)) return;
         w.carried.setVisible(false).setTexture('box').setPosition(0, 3);
@@ -5201,7 +5225,7 @@ export class StoreScene extends Phaser.Scene {
     const { slots, counter } = this.layout;
     const furniture = (x: number, y: number): Rect => ({ x: x - 25, y: y - 16, w: 50, h: 24 });
     // Места под полки обходят всегда: полку могут купить утром без перестройки зала.
-    this.obstacles = slots.map(({ x, y }) => furniture(x, y));
+    this.obstacles = slots.map((p) => (slotSide(this.layout, p) ? { x: p.x - 10, y: p.y - 24, w: 20, h: 48 } : furniture(p.x, p.y)));
     this.obstacles.push({ x: counter.x - 13, y: counter.y - 30, w: 26, h: 54 });
     // Место ларя обходят всегда, как и места под полки: его могут поставить утром.
     const ice = this.iceboxSpot();
@@ -5726,7 +5750,7 @@ export class StoreScene extends Phaser.Scene {
     this.layout.slots.forEach((slot, i) => {
       // Свободное место под полку — разметка на полу: полку покупают утром во вкладке «Зал».
       if (!this.slotDecor[i]) {
-        const mark = this.art(slot.x, slot.y + 2, 'slot_empty').setDepth(1.5);
+        const mark = this.art(slot.x, slot.y + 2, 'slot_empty').setDepth(1.5).setAngle(slotSide(this.layout, slot) ? 90 : 0);
         mark.setInteractive({ useHandCursor: true }).on('pointerup', () =>
           this.tap(() => i >= this.regularShelves() && this.popup(slot.x, slot.y - 8, t('popup.slotEmpty'), '#fff3b0')),
         );
@@ -5753,6 +5777,7 @@ export class StoreScene extends Phaser.Scene {
       // Где на полке просторно, товар крупнее — его лучше видно; плотная полка — обычный размер.
       const size = (shelf.kind === 'florist' ? 1 : Phaser.Math.Clamp(step / 4, 1, 1.3)) / ART;
       const slot = at;
+      const side = shelf.kind !== 'florist' && shelf.kind !== 'icebox' && slotSide(this.layout, slot) !== null;
       const units = PRODUCT_IDS.flatMap((id) => (shelf.items[id] ?? []).map((unit) => ({ id, unit })));
       const covered = false;
       view.items.forEach((img, n) => {
@@ -5762,15 +5787,19 @@ export class StoreScene extends Phaser.Scene {
         if (florist) {
           const [dx, dy] = FLORIST_SPOTS[n % FLORIST_SPOTS.length];
           img.setPosition(slot.x + dx, slot.y + dy);
+        } else if (side) {
+          // Боковая полка: товар двумя столбиками вдоль полки, сверху вниз.
+          const rows = Math.ceil(capacity / 2);
+          img.setPosition(slot.x + (n % 2 ? 3 : -3), slot.y - 18 + (32 / rows) * (Math.floor(n / 2) + 0.5));
         } else img.setPosition(slot.x + area.x + step * ((n % perRow) + 0.5), slot.y + area.y + Math.floor(n / perRow) * area.row);
         if (entry) {
           // Три вида каждого товара (батон, багет, булка…) — полка выглядит живой.
-          img.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id)) % ITEM_VARIANTS}`).setScale(size);
+          img.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id)) % ITEM_VARIANTS}`).setScale(side ? 0.85 / ART : size);
           img.setTint(entry.unit.markdown ? 0xffe08a : entry.unit.bad ? 0x9a8a80 : 0xffffff);
         }
         // Позади — такой же товар чуть выше и в тени, между передними.
         const back = view.backItems[n];
-        back.setVisible(img.visible && shelf.kind !== 'florist');
+        back.setVisible(img.visible && shelf.kind !== 'florist' && !side);
         if (entry) {
           back.setPosition(Math.min(img.x + step / 2, slot.x + area.x + area.w - 2), img.y - 2);
           back.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id) + 1) % ITEM_VARIANTS}`).setScale(size);
@@ -5791,6 +5820,7 @@ export class StoreScene extends Phaser.Scene {
     const slot = this.spotOf(index);
     const look = SHELF_LOOK[kind];
     const fixture = SHELF_KINDS[kind].fixture;
+    if (!fixture && slotSide(this.layout, slot)) return this.buildSideShelf(index, kind, slot);
     // У ларя и вёдер тень нарисована в самой картинке.
     const shadow = this.art(slot.x, slot.y + 12, 'shadow_wide').setDepth(slot.y - 15).setVisible(!fixture);
     // Мебель в виде «три четверти»: над передней частью видна крышка высотой FURNITURE_TOP.
@@ -5866,6 +5896,40 @@ export class StoreScene extends Phaser.Scene {
     return { kind, at: { x: slot.x, y: slot.y }, cover, bg, front, shadow, items, backItems, pips, lights, low, expire, promo, glow, needsStock: false };
   }
 
+  /**
+   * Полка боком у боковой стены: сверху видна длинная полка с отсеками, к нам — торец; товар
+   * раскладывается столбиками, покупатель подходит сбоку. У правой стены — зеркально.
+   */
+  private buildSideShelf(index: number, kind: Category, slot: { x: number; y: number }): ShelfView {
+    const look = SHELF_LOOK[kind];
+    const right = slotSide(this.layout, slot) === 'right';
+    const d = slot.y + 18;
+    const shadow = this.art(slot.x, slot.y + 2, 'shadow_wide').setScale(0.5 / ART, 1.2 / ART).setAngle(90).setDepth(slot.y - 30);
+    const bg = this.art(slot.x, slot.y, `${look.texture}_side`).setTint(look.tint).setFlipX(right).setDepth(d - 14);
+    const front = this.art(slot.x, slot.y, 'item').setVisible(false);
+    bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.restockShelf(index)));
+    const items = Array.from({ length: SHELF_LEVELS[SHELF_LEVELS.length - 1].capacity }, () => this.art(slot.x, slot.y, 'item').setDepth(d - 13));
+    const backItems = items.map(() => this.art(slot.x, slot.y, 'item').setVisible(false));
+    const pips = [0, 1, 2].map((n) => this.art(slot.x - 4 + n * 4, slot.y - 26, 'pip').setDepth(d - 12));
+    const label = (text: string, dy: number, bgColor: string, color = '#ffffff') =>
+      this.add
+        .text(slot.x + (right ? -10 : 10), slot.y + dy, text, { fontFamily: UI_FONT, fontSize: '5px', fontStyle: 'bold', color, backgroundColor: bgColor, padding: { x: 2, y: 1 } })
+        .setOrigin(0.5)
+        .setResolution(6)
+        .setDepth(990)
+        .setVisible(false);
+    const promo = label(t('shelf.promo'), -26, '#e43b44');
+    const low = label('', -18, '#d95763');
+    const expire = label(t('shelf.expiring'), -34, '#fee761', '#2b2233');
+    expire.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.markdownNow(expire.x, expire.y)));
+    const glow = bg.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 8);
+    const lights: Phaser.GameObjects.GameObject[] = [
+      this.add.rectangle(slot.x + (right ? -6 : 6), slot.y, 30, 50, DEPT_FLOOR[kind]).setAlpha(0.3).setStrokeStyle(1, DEPT_FLOOR[kind], 0.7).setDepth(0.3),
+      this.art(slot.x, slot.y - 24, `dept_${kind}`).setScale(0.7 / ART).setDepth(d - 11.9),
+    ];
+    return { kind, at: { x: slot.x, y: slot.y }, cover: undefined, bg, front, shadow, items, backItems, pips, lights, low, expire, promo, glow, needsStock: false };
+  }
+
   /** Уценить всё, что испортится ночью (на полках и складе), прямо в зале — по ценнику «⏳». */
   private markdownNow(x: number, y: number): void {
     const { state, count } = markdownExpiring(this.state);
@@ -5900,7 +5964,8 @@ export class StoreScene extends Phaser.Scene {
     const kind = this.state.shelves[index]?.kind;
     if (kind === 'icebox') return { x: p.x, y: p.y - 16 };
     if (kind === 'florist') return { x: p.x - 14, y: p.y + 6 };
-    return { x: p.x, y: p.y + 22 };
+    // Обычная полка — снизу, боковая у стены — сбоку (placement.ts).
+    return standFor(this.layout, p);
   }
 
   /** Путь из зала к полке. */
@@ -6642,7 +6707,8 @@ export class StoreScene extends Phaser.Scene {
     const fridges = this.state.shelves.map((s, i) => ({ s, i })).filter(({ s }) => SHELF_KINDS[s.kind].fridge && !SHELF_KINDS[s.kind].fixture);
     if (!fridges.length) return;
     const slot = this.spotOf(Phaser.Utils.Array.GetRandom(fridges).i);
-    const piece = this.dropTrash(slot.x + Phaser.Math.Between(-8, 8), slot.y + 24, 'spill');
+    const front = standFor(this.layout, slot);
+    const piece = this.dropTrash(front.x + Phaser.Math.Between(-6, 6), front.y + 2, 'spill');
     if (!piece) return;
     piece.setTint(0xc8f0ff);
     sound.bad();
@@ -6812,7 +6878,10 @@ export class StoreScene extends Phaser.Scene {
         if (this.orderUrgentDelivery(pick, qty, true)) this.popup(w.sprite.x, w.sprite.y - 20, t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
       }
       const slot = Phaser.Utils.Array.GetRandom(this.layout.slots.slice(0, Math.max(1, this.state.shelves.length)));
-      if (slot) await this.workerWalk(w, slot.x + Phaser.Math.Between(-12, 12), slot.y + 22);
+      if (slot) {
+        const stand = standFor(this.layout, slot);
+        await this.workerWalk(w, stand.x + (slotSide(this.layout, slot) ? 0 : Phaser.Math.Between(-12, 12)), stand.y);
+      }
       await this.workerWait(w, 2500);
     }
   }
@@ -7086,7 +7155,8 @@ export class StoreScene extends Phaser.Scene {
       await this.walk(sprite, door.x + dx, door.y - 10, 32);
       const order = slots.map((_, k) => k).filter((k) => k % 3 === i % 3 || slots.length < 4);
       for (const k of order.slice(0, 3)) {
-        await this.walk(sprite, slots[k].x + dx / 2, slots[k].y + 22, 32);
+        const stand = standFor(this.layout, slots[k]);
+        await this.walk(sprite, stand.x + dx / 2, stand.y, 32);
         if (!this.sys.isActive()) return;
         this.popup(sprite.x, sprite.y - 16, t('popup.juryNote'), '#ffffff');
         await this.wait(900);
@@ -7271,7 +7341,10 @@ export class StoreScene extends Phaser.Scene {
       const fixture = SHELF_KINDS[this.state.shelves[index].kind].fixture;
       // Над головой облачко: что покупатель ищет.
       const thought = this.think(c.sprite, id);
-      await this.walk(c.sprite, stand.x + Phaser.Math.Between(-8, 8) * (fixture ? 0.4 : 1), stand.y);
+      // У боковой полки встают вдоль неё (по вертикали), у обычной — вдоль по горизонтали.
+      const along = !fixture && slotSide(this.layout, this.spotOf(index)) ? 'y' : 'x';
+      const jitter = Phaser.Math.Between(-8, 8) * (fixture ? 0.4 : 1);
+      await this.walk(c.sprite, stand.x + (along === 'x' ? jitter : 0), stand.y + (along === 'y' ? jitter : 0));
       await this.wait(500);
       // Пока шёл — магазин захватили (или ушёл по другой причине): к полке уже не тянется.
       if (c.gone) {

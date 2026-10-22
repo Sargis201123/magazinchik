@@ -47,6 +47,24 @@ export interface SlotPositions {
 /** Где покупатель стоит, когда берёт товар с полки (как standOf в сцене). */
 export const standPoint = (slot: Point): Point => ({ x: slot.x, y: slot.y + 22 });
 
+/** Полка вплотную к боковой стене стоит боком: лицом в зал. Её центр — в SIDE_X от стены. */
+export const SIDE_X = 8;
+export type SlotSide = 'left' | 'right' | null;
+export const slotSide = (layout: { w: number }, p: Point): SlotSide => (p.x <= SIDE_X ? 'left' : p.x >= layout.w - SIDE_X ? 'right' : null);
+
+/** Место полки на полу: обычная — 40×24, боком у стены — 16×44. */
+export function slotRect(layout: { w: number }, p: Point): Rect {
+  return slotSide(layout, p) ? { x: p.x - 8, y: p.y - 22, w: 16, h: 44 } : bodyRect(p);
+}
+
+/** Где покупатель берёт товар: у обычной полки — снизу, у боковой — сбоку, со стороны зала. */
+export function standFor(layout: { w: number }, p: Point): Point {
+  const side = slotSide(layout, p);
+  if (side === 'left') return { x: p.x + 18, y: p.y + 4 };
+  if (side === 'right') return { x: p.x - 18, y: p.y + 4 };
+  return standPoint(p);
+}
+
 /** Планировка со своей расстановкой: только если она для этого помещения и мест столько же. */
 export function withSlots(layout: Layout, custom: SlotPositions | undefined, level: number): Layout {
   if (!custom || custom.level !== level || custom.at.length !== layout.slots.length) return layout;
@@ -108,12 +126,12 @@ const walls = (layout: Layout): Rect[] => [
  */
 export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = layout.slots, registers = 1, props: Rect[] = []): Set<number> {
   const bad = new Set<number>();
-  const rects = slots.map(bodyRect);
+  const rects = slots.map((p) => slotRect(layout, p));
   // Зона, которую занимает и стандартная расстановка (дверь в ещё закрытую комнату флигеля), — не запретная.
   // Касса переезжает — её зоны запретны всегда.
   const zones = [...tillZones(layout, registers), ...roomZones(layout).filter((z) => !defaults.some((d) => overlaps(bodyRect(d), z))), ...props];
   rects.forEach((r, i) => {
-    const stand = standPoint(slots[i]);
+    const stand = standFor(layout, slots[i]);
     // У задней стены полка стоит вплотную и заходит на нижнюю панель стены — так стоят и стандартные.
     if (r.x < 0 || r.x + r.w > layout.w || r.y < layout.wallH - 12 || stand.y > layout.h - 6) bad.add(i);
     if (zones.some((z) => overlaps(r, z))) bad.add(i);
@@ -128,7 +146,7 @@ export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = l
   const entry = { x: layout.door.x, y: layout.h - 10 };
   slots.forEach((slot, i) => {
     if (bad.has(i)) return;
-    if (!reachable(entry, standPoint(slot), blockers)) bad.add(i);
+    if (!reachable(entry, standFor(layout, slot), blockers)) bad.add(i);
   });
   // Касса: к началу очереди тоже должен вести путь. Иначе виноваты все — подсветим ближайшие к ней.
   // Касса: к началу очереди должен вести путь. Сама касса здесь не препятствие — очередь стоит вплотную.
@@ -147,7 +165,7 @@ export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = l
 /** Ларь всё ещё находит себе место при такой расстановке. */
 export function iceboxFits(layout: Layout, slots: Point[]): boolean {
   const ice = iceboxRect(iceboxSpotFor({ ...layout, slots }));
-  return slots.every((s) => !overlaps(ice, bodyRect(s)));
+  return slots.every((s) => !overlaps(ice, slotRect(layout, s)));
 }
 
 export const snap = (v: number): number => Math.round(v / SNAP) * SNAP;
@@ -202,7 +220,7 @@ export function propIssues(layout: Layout, slots: Point[], props: Prop[], regist
     const id = props[i].id;
     // Вещь может стоять вплотную к стенам (ведро в углу чуть заходит на нижнюю стену).
     if (r.x < -2 || r.x + r.w > layout.w + 2 || r.y < layout.wallH - 8 || r.y + r.h > layout.h + 4) bad.add(id);
-    if (zones.some((z) => overlaps(r, z)) || slots.some((s) => overlaps(r, bodyRect(s)))) bad.add(id);
+    if (zones.some((z) => overlaps(r, z)) || slots.some((s) => overlaps(r, slotRect(layout, s)))) bad.add(id);
     rects.forEach((o, j) => {
       if (j !== i && overlaps(r, o)) bad.add(id);
     });

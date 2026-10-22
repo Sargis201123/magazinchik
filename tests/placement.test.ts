@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { layoutFor } from '../src/scenes/layout';
-import { clampTill, keepPlaces, propIssues, propRect, slotIssues, tillMinDx, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from '../src/scenes/placement';
+import { clampTill, keepPlaces, propIssues, propRect, slotIssues, slotRect, slotSide, standFor, tillMinDx, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from '../src/scenes/placement';
 import { REGISTERS_BY_LEVEL } from '../src/game/registers';
 import { registerSpot } from '../src/scenes/layout';
 import { newGame, placeStored, storeShelf, type Shelf, type StoreState } from '../src/game/economy';
@@ -155,5 +155,24 @@ describe('вещи зала двигаются', () => {
     expect(propIssues(l, l.slots, onShelf, 3).has('vending')).toBe(true);
     expect(vendingSide(l, l.w - 8)).toBe(true);
     expect(vendingSide(l, l.w / 2)).toBe(false);
+  });
+});
+
+describe('полка боком у боковой стены', () => {
+  it('у стены — боком: узкая и длинная, к ней подходят сбоку', () => {
+    const l = layoutFor(4);
+    expect(slotSide(l, { x: 8, y: 100 })).toBe('left');
+    expect(slotSide(l, { x: l.w - 8, y: 100 })).toBe('right');
+    expect(slotSide(l, { x: 60, y: 100 })).toBeNull();
+    expect(slotRect(l, { x: 8, y: 100 })).toEqual({ x: 0, y: 78, w: 16, h: 44 });
+    expect(standFor(l, { x: 8, y: 100 }).x).toBeGreaterThan(20);
+  });
+
+  it('островную полку можно переставить к левой стене боком', () => {
+    const l = layoutFor(4);
+    const slots = l.slots.map((p) => ({ ...p }));
+    // Последняя островная полка — к левой стене между полками у задней стены и первым рядом островов.
+    slots[slots.length - 1] = { x: 8, y: l.wallH + 52 };
+    expect(slotIssues(l, slots, l.slots, 4).has(slots.length - 1)).toBe(false);
   });
 });
