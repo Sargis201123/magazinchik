@@ -350,7 +350,9 @@ const css = `
 .ui-dialog-speech::after { content: ''; position: absolute; left: -6px; bottom: 18px; border: 6px solid transparent;
   border-right-color: #fff; border-left: 0; }
 .ui-dialog-name { position: absolute; top: -12px; left: 10px; background: #fee761; border: 2px solid #2b2233;
-  border-radius: 6px; padding: 1px 8px; font: 700 13px ${UI_FONT}; }
+  border-radius: 6px; padding: 1px 8px; font: 700 13px ${UI_FONT};
+  /* Длинное имя («Эдуард, директор «МегаМарта») — в одну строку, иначе ярлык закрывает реплику. */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 24px); box-sizing: border-box; }
 .ui-dialog-text { margin: 0; font-size: 15px; line-height: 1.4; min-height: 3em; }
 .ui-dialog-caret { display: inline-block; margin-left: 4px; font-size: 10px; color: #b86f50; animation: ui-tip .8s ease-in-out infinite; }
 .ui-tour { position: fixed; left: 8px; right: 8px; bottom: 8px; max-width: 480px; margin: 0 auto; z-index: 50; color: #2b2233;
