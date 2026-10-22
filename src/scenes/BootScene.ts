@@ -301,6 +301,8 @@ const SPRITES = [
   ...PRODUCT_IDS.map((id) => `item_${id}`),
   ...PRODUCT_IDS.flatMap((id) => [0, 1, 2].map((v) => `item_${id}_${v}`)),
   ...['p_skin', 'p_shirt', 'p_legs0', 'p_legs1', 'acc_apron', 'acc_vest'].flatMap((k) => [k, `${k}_b`, `${k}_s`]),
+  // Взмах рук при ходьбе (art/walk.py).
+  ...['p_shirt', 'p_skin', 'p_skin_happy', 'p_skin_frown'].flatMap((k) => ['', '_b', '_s'].flatMap((v) => [`${k}${v}_w1`, `${k}${v}_w2`])),
   ...['short', 'long', 'bun', 'cap', 'bald', 'ponytail', 'curly', 'beanie'].flatMap((h) => ['', '_b', '_s'].map((v) => `p_hair_${h}${v}`)),
   'acc_badge',
   'acc_tie',
