@@ -37,6 +37,27 @@ function audio(): AudioContext | null {
   return audioContext();
 }
 
+/** Общая громкость эффектов: заметно тише музыки и погоды, чтобы не перебивать атмосферу. */
+const FX_VOLUME = 0.55;
+let fxBus: GainNode | null = null;
+function fxOut(ac: AudioContext): AudioNode {
+  if (!fxBus || fxBus.context !== ac) {
+    fxBus = ac.createGain();
+    fxBus.gain.value = FX_VOLUME;
+    fxBus.connect(ac.destination);
+  }
+  return fxBus;
+}
+
+/** Частые звуки (касса, монетка) — не чаще раза в столько миллисекунд, а не очередью. */
+const lastPlayed: Record<string, number> = {};
+function throttled(key: string, ms: number): boolean {
+  const now = performance.now();
+  if (now - (lastPlayed[key] ?? -Infinity) < ms) return true;
+  lastPlayed[key] = now;
+  return false;
+}
+
 /**
  * Браузер включает звук только внутри касания. В Telegram (особенно на iPhone) не каждое событие
  * считается касанием, а после сворачивания или звонка звук снова засыпает, — поэтому будим его
@@ -88,7 +109,7 @@ function play(notes: Note[]): void {
     gain.gain.setValueAtTime(0, now + at);
     gain.gain.linearRampToValueAtTime(vol, now + at + 0.008);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
-    osc.connect(gain).connect(ac.destination);
+    osc.connect(gain).connect(fxOut(ac));
     osc.start(now + at);
     osc.stop(now + at + dur + 0.02);
   }
@@ -123,7 +144,7 @@ function thunder(): void {
   const panner = ac.createStereoPanner();
   panner.pan.setValueAtTime(Math.random() * 1.2 - 0.6, now);
   panner.pan.linearRampToValueAtTime(Math.random() * 1.2 - 0.6, now + 5);
-  panner.connect(ac.destination);
+  panner.connect(fxOut(ac));
   // Треск — только у близкого грома.
   if (near > 0.45) {
     const crack = ac.createBufferSource();
@@ -176,7 +197,7 @@ function hiss(seconds = 0.9, freq = 3200, vol = 0.05): void {
   gain.gain.setValueAtTime(0, now);
   gain.gain.linearRampToValueAtTime(vol, now + 0.08);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
-  src.connect(filter).connect(gain).connect(ac.destination);
+  src.connect(filter).connect(gain).connect(fxOut(ac));
   src.start(now);
   src.stop(now + seconds);
 }
@@ -199,7 +220,7 @@ function purr(): void {
   gain.gain.setValueAtTime(0.035, now + 1);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
   lfo.connect(depth).connect(gain.gain);
-  osc.connect(gain).connect(ac.destination);
+  osc.connect(gain).connect(fxOut(ac));
   osc.start(now);
   lfo.start(now);
   osc.stop(now + 1.45);
@@ -224,13 +245,14 @@ export const sound = {
   hiss,
   /** Касание, начало дела. */
   tap: () => play([{ freq: 520, dur: 0.05, wave: 'triangle', vol: 0.05 }]),
-  /** Писк сканера на каждом товаре: тихий и пониже — касса пищит весь день и не должна резать слух. */
-  scan: () => play([{ freq: 1320, dur: 0.05, vol: 0.01 }]),
-  /** Покупатель расплатился: мягкое «дзынь». */
+  /** Сканер: еле слышный низкий «тук» — касса работает весь день и не должна перебивать погоду и музыку. */
+  scan: () => !throttled('scan', 120) && play([{ freq: 740, dur: 0.04, wave: 'sine', vol: 0.006 }]),
+  /** Покупатель расплатился: тихий мягкий «дзынь» (не чаще пары раз в секунду). */
   coin: () =>
+    !throttled('coin', 450) &&
     play([
-      { freq: 988, dur: 0.08, vol: 0.02 },
-      { freq: 1319, at: 0.07, dur: 0.2, vol: 0.018 },
+      { freq: 659, dur: 0.09, wave: 'sine', vol: 0.012 },
+      { freq: 880, at: 0.06, dur: 0.22, wave: 'sine', vol: 0.009 },
     ]),
   /** Хорошо: поймали вора, задание выполнено, проверка пройдена. */
   good: () =>
@@ -263,13 +285,14 @@ export const sound = {
       { freq: 523, at: 0.3, dur: 0.35, wave: 'triangle', vol: 0.06 },
     ]),
 
-  /** Серия обслуживания: короткое арпеджио, с каждой ступенью выше. */
+  /** Серия обслуживания: мягкое арпеджио только на вехах (3, 5, 10, 15…), а не на каждом покупателе. */
   combo: (n: number) => {
-    const base = 523 * 2 ** (Math.min(n - 2, 8) / 12);
+    if (n !== 3 && n % 5 !== 0) return;
+    const base = 392 * 2 ** (Math.min(n / 5, 6) / 12);
     play([
-      { freq: base, dur: 0.07, wave: 'square', vol: 0.018 },
-      { freq: base * 1.26, at: 0.06, dur: 0.07, wave: 'square', vol: 0.018 },
-      { freq: base * 1.5, at: 0.12, dur: 0.16, wave: 'square', vol: 0.018 },
+      { freq: base, dur: 0.09, wave: 'sine', vol: 0.012 },
+      { freq: base * 1.26, at: 0.08, dur: 0.09, wave: 'sine', vol: 0.012 },
+      { freq: base * 1.5, at: 0.16, dur: 0.22, wave: 'sine', vol: 0.011 },
     ]);
   },
   /** «Чпок» товара на полке; n — какой по счёту (каждый следующий чуть выше). */

@@ -1,6 +1,6 @@
 // Звуки окружения: дождь и ливень (из отдельных капель), ветер, капель с водостока, птицы днём,
-// сверчки летними вечерами, гул улицы, проезжающие машины, гул холодильников, шаги продавца
-// и колокольчик на двери. Всё синтезируется WebAudio; дождь и шум ветра — заранее, в буферы
+// сверчки летними вечерами, гул холодильников, шаги продавца и колокольчик на двери. Шума улицы
+// и проезжающих машин нет: вместе они звучали как прибой и сбивали спокойную атмосферу. Всё синтезируется WebAudio; дождь и шум ветра — заранее, в буферы
 // (ambienceSynth.ts). Выключаются вместе со звуками.
 
 import type { YearTime } from '../game/calendar';
@@ -12,7 +12,7 @@ interface Bed {
   gain: GainNode;
 }
 
-type BedId = 'rain' | 'downpour' | 'wind' | 'street' | 'hum';
+type BedId = 'rain' | 'downpour' | 'wind' | 'hum';
 
 let master: GainNode | null = null;
 let beds: Record<BedId, Bed> | null = null;
@@ -84,22 +84,6 @@ function windBed(ac: AudioContext): Bed {
   return { gain };
 }
 
-/** Петля шума через фильтр: гул улицы. */
-function noiseBed(ac: AudioContext, type: BiquadFilterType, freq: number, q = 0.7): Bed {
-  const src = ac.createBufferSource();
-  src.buffer = noise!;
-  src.loop = true;
-  const filter = ac.createBiquadFilter();
-  filter.type = type;
-  filter.frequency.value = freq;
-  filter.Q.value = q;
-  const gain = ac.createGain();
-  gain.gain.value = 0;
-  src.connect(filter).connect(gain).connect(master!);
-  src.start();
-  return { gain };
-}
-
 /** Ровный гул холодильников: две низкие ноты чуть врозь — «живое» биение. */
 function humBed(ac: AudioContext): Bed {
   const gain = ac.createGain();
@@ -127,7 +111,6 @@ function build(ac: AudioContext): void {
     rain: loopBed(ac, stereoBuffer(ac, light.left, light.right), 'lowpass', 8500, 0.5, [0.09, 0.22]),
     downpour: loopBed(ac, stereoBuffer(ac, heavy.left, heavy.right), 'lowpass', 5200, 0.5, [0.15, 0.3]),
     wind: windBed(ac),
-    street: noiseBed(ac, 'lowpass', 380),
     hum: humBed(ac),
   };
 }
@@ -234,36 +217,11 @@ export const ambience = {
     const muted = sound.isMuted();
     fade(beds!.rain, ac, muted || weather !== 'rain' ? 0 : 0.11);
     fade(beds!.downpour, ac, muted || weather !== 'storm' ? 0 : 0.16);
-    const windy = weather === 'storm' ? 0.07 : weather === 'snow' ? 0.05 : weather === 'leaves' ? 0.03 : 0;
+    // В снегопад и листопад — едва слышный ветер: тихая погода, а не буря.
+    const windy = weather === 'storm' ? 0.06 : weather === 'snow' ? 0.018 : weather === 'leaves' ? 0.012 : 0;
     fade(beds!.wind, ac, muted ? 0 : windy);
-    fade(beds!.street, ac, muted || !open ? 0 : 0.03 * (1 - 0.6 * evening));
     fade(beds!.hum, ac, muted || !open ? 0 : 0.006);
     if (!muted) schedule(ac, weather, evening, season);
-  },
-
-  /** Мимо проехала машина: шум нарастает и спадает; в дождь — шуршит по лужам. */
-  carPass(wet = false): void {
-    blip((ac, out) => {
-      const now = ac.currentTime;
-      const src = ac.createBufferSource();
-      src.buffer = noise;
-      const filter = ac.createBiquadFilter();
-      filter.type = 'bandpass';
-      const peak = wet ? 2400 : 900;
-      filter.frequency.setValueAtTime(wet ? 900 : 300, now);
-      filter.frequency.linearRampToValueAtTime(peak, now + 1.2);
-      filter.frequency.linearRampToValueAtTime(wet ? 700 : 250, now + 2.6);
-      const gain = ac.createGain();
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(wet ? 0.06 : 0.05, now + 1.2);
-      gain.gain.linearRampToValueAtTime(0, now + 2.6);
-      const panner = ac.createStereoPanner();
-      panner.pan.setValueAtTime(-0.8, now);
-      panner.pan.linearRampToValueAtTime(0.8, now + 2.6);
-      src.connect(filter).connect(gain).connect(panner).connect(out);
-      src.start(now);
-      src.stop(now + 2.7);
-    });
   },
 
   /** Шаг продавца: короткий глухой стук. */
