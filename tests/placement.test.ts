@@ -175,4 +175,17 @@ describe('полка боком у боковой стены', () => {
     slots[slots.length - 1] = { x: 8, y: l.wallH + 52 };
     expect(slotIssues(l, slots, l.slots, 4).has(slots.length - 1)).toBe(false);
   });
+
+  it('у задней стены полка стоит вплотную: старые сохранения подтягиваются к стене', () => {
+    const l = layoutFor(4);
+    const wallRow = l.slots.filter((p) => p.y < l.wallH);
+    expect(wallRow.length).toBeGreaterThan(0);
+    // Задний край полки (низ рисунка минус крышка) — на плинтусе, без полоски пола.
+    wallRow.forEach((p) => expect(p.y).toBe(l.wallH - 6));
+    const old = l.slots.map((p) => (p.y < l.wallH ? { ...p, y: l.wallH + 4 } : p));
+    const back = withSlots(l, { level: 4, at: old }, 4).slots;
+    expect(back.filter((p) => p.y === l.wallH - 6)).toHaveLength(wallRow.length);
+    // Боковые полки не трогаем.
+    expect(withSlots(l, { level: 4, at: old.map((p, i) => (i === old.length - 1 ? { x: 8, y: l.wallH + 30 } : p)) }, 4).slots.at(-1)).toEqual({ x: 8, y: l.wallH + 30 });
+  });
 });
