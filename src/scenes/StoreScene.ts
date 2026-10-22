@@ -6060,6 +6060,28 @@ export class StoreScene extends Phaser.Scene {
       const spill = this.art(slot.x, slot.y + 13, 'light_spill').setOrigin(0.5, 0).setScale(1.4 / ART, 0.5 / ART).setTint(cool);
       spill.setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(0.4);
       lights.push(glass, spill);
+      // Время от времени по стеклу пробегает блик — холодильник выглядит стеклянным, а не нарисованным.
+      if (!this.lite) {
+        const glint = this.add.rectangle(slot.x - 15, slot.y - 2, 2, 17, 0xffffff, 0.5).setAngle(18).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(slot.y - 12.3);
+        this.tweens.add({
+          targets: glint,
+          x: slot.x + 15,
+          alpha: { from: 0.55, to: 0 },
+          duration: 900,
+          delay: 2500 + ((index * 1700) % 5000),
+          repeatDelay: 7000 + ((index * 911) % 5000),
+          repeat: -1,
+          ease: 'Sine.easeIn',
+        });
+        lights.push(glint);
+      }
+    }
+    // Тень от полки на пол: свет сверху слева — тень ложится вниз и вправо, полка «стоит», а не нарисована на полу.
+    if (!fixture) {
+      lights.push(this.add.rectangle(slot.x + 2, slot.y + 15, 40, 4, 0x181425, 0.16).setDepth(0.62));
+      // Сбоку — только по полу: у задней стены тень не залезает на стену.
+      const sideTop = Math.max(slot.y - 14, this.layout.wallH);
+      lights.push(this.add.rectangle(slot.x + 21.5, (sideTop + slot.y + 16) / 2, 3, slot.y + 16 - sideTop, 0x181425, 0.12).setDepth(0.62));
     }
     return { kind, at: { x: slot.x, y: slot.y }, cover, bg, front, shadow, items, backItems, pips, lights, low, expire, promo, glow, needsStock: false };
   }
