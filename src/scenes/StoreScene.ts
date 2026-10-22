@@ -1925,7 +1925,7 @@ export class StoreScene extends Phaser.Scene {
       }
       const i = ghosts.indexOf(obj as Phaser.GameObjects.Container);
       if (i < 0) return;
-      at[i] = { x: Phaser.Math.Clamp(snap(x), 22, w - 22), y: Phaser.Math.Clamp(snap(y), this.layout.wallH + 4, h - 28) };
+      at[i] = { x: Phaser.Math.Clamp(snap(x), 20, w - 20), y: Phaser.Math.Clamp(snap(y), this.layout.wallH + 4, h - 28) };
       ghosts[i].setPosition(at[i].x, at[i].y).setDepth(LIGHT_DEPTH + 12);
       check();
     };
@@ -2215,9 +2215,10 @@ export class StoreScene extends Phaser.Scene {
         frequency: 30,
       })).setDepth(-5);
       // Гирлянда на фасаде и ёлка в зале.
-      const { w, wallH } = this.layout;
       this.garland([0xe43b44, 0xfee761, 0x63c74d, 0x0099db], keep);
-      keep(this.art(w - 11, wallH + 14, 'xmas_tree').setDepth(wallH + 25));
+      // Ёлка — на улице у входа, чтобы не занимать место в зале.
+      const { door, h } = this.layout;
+      keep(this.art(door.x - 26, h + 12, 'xmas_tree').setDepth(h + 30));
     }
     if (this.weather === 'leaves') {
       keep(this.add.particles(0, 0, 'leaf', {
@@ -2497,14 +2498,14 @@ export class StoreScene extends Phaser.Scene {
    * их обходят и покупатели, и продавец.
    */
   private buildHallDecor(): void {
-    const { h, wallH } = this.layout;
+    const { h } = this.layout;
     if (this.state.level < 2) return;
     const clerks = this.registers.map((r) => r.clerk);
     const free = (x: number, y: number) =>
       this.obstacles.every((o) => x < o.x - 10 || x > o.x + o.w + 10 || y < o.y - 12 || y > o.y + o.h + 12) &&
       clerks.every((c) => Math.hypot(c.x - x, c.y - y) > 22);
     const spots: { x: number; y: number }[] = [];
-    for (let y = wallH + 116; y < h - 70; y += 46) spots.push({ x: this.layout.counter.x + 21, y });
+    // Вдоль правой стены растений больше нет — там автомат, касса и проход; остался угол у склада.
     const ice = this.iceboxSpot();
     if (ice.x >= 36) spots.push({ x: 12, y: h - 14 });
     const big = Boolean(activeDecor(this.state, 'plants'));
@@ -5469,8 +5470,8 @@ export class StoreScene extends Phaser.Scene {
     this.add.rectangle(0, wallH, w, 3, 0x181425, 0.18).setOrigin(0).setDepth(1);
     this.art(door.x + 26, h - 8, 'baskets').setDepth(h - 8);
     // Растения в свободных углах у правой стены — не на пути покупателей.
+    // Растение у туалета убрано: угол у правой стены оставляем свободным.
     const spots = [
-      { x: w - 9, y: wallH + 14 },
       // В нижнем углу у кассы — вёдра с цветами, растение туда не ставим.
       ...(this.state.shelves.some((s) => s.kind === 'florist') ? [] : [{ x: this.layout.counter.x + 21, y: h - 40 }]),
     ];

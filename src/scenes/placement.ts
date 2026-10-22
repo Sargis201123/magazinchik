@@ -53,8 +53,8 @@ export function withSlots(layout: Layout, custom: SlotPositions | undefined, lev
   return { ...layout, slots: custom.at.map((p) => ({ x: p.x, y: p.y })) };
 }
 
-/** Сама мебель (без запаса на обход): 44 точки в ширину — стандартные места стоят с шагом 46. */
-export const bodyRect = ({ x, y }: Point): Rect => ({ x: x - 22, y: y - 16, w: 44, h: 24 });
+/** Сама мебель (без запаса на обход): 40 точек в ширину, как рисунок полки, — вплотную полки стоят с шагом 40. */
+export const bodyRect = ({ x, y }: Point): Rect => ({ x: x - 20, y: y - 16, w: 40, h: 24 });
 
 export const overlapsRect = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 const overlaps = overlapsRect;
@@ -200,7 +200,8 @@ export function propIssues(layout: Layout, slots: Point[], props: Prop[], regist
   const rects = props.map(propRect);
   rects.forEach((r, i) => {
     const id = props[i].id;
-    if (r.x < 0 || r.x + r.w > layout.w || r.y < layout.wallH - 8 || r.y + r.h > layout.h - 1) bad.add(id);
+    // Вещь может стоять вплотную к стенам (ведро в углу чуть заходит на нижнюю стену).
+    if (r.x < -2 || r.x + r.w > layout.w + 2 || r.y < layout.wallH - 8 || r.y + r.h > layout.h + 4) bad.add(id);
     if (zones.some((z) => overlaps(r, z)) || slots.some((s) => overlaps(r, bodyRect(s)))) bad.add(id);
     rects.forEach((o, j) => {
       if (j !== i && overlaps(r, o)) bad.add(id);
