@@ -131,6 +131,7 @@ import {
 import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene } from '../game/drama';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
+import { music } from '../platform/music';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
 import { BIG_DAYS, bigDayFor, bigDayKnown, bigDayProgress } from '../game/bigday';
 import {
@@ -243,7 +244,7 @@ interface MorningOptions {
 // кнопкой в углу заголовка, не вкладкой.
 type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
 /** Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. */
-const WHATS_NEW = 1;
+const WHATS_NEW = 2;
 
 const TABS: [Tab, string, TextKey][] = [
   ['buy', '🛒', 'tab.buy'],
@@ -2651,7 +2652,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if ((state.whatsNew ?? 0) >= WHATS_NEW) return [];
     const box = el('div', 'ui-box ui-duel');
     box.append(el('b', '', `✨ ${t('news.title')}`));
-    for (const key of ['news.arrange', 'news.store', 'news.name', 'news.away', 'news.friends', 'news.life'] as TextKey[]) box.append(el('div', '', t(key)));
+    for (const key of ['news.sound', 'news.arrange', 'news.store', 'news.name', 'news.away', 'news.friends', 'news.life'] as TextKey[]) box.append(el('div', '', t(key)));
     const row = el('div', 'ui-row');
     if (onArrange) {
       row.append(button(`🔧 ${t('arrange.open')}`, () => {
@@ -3368,6 +3369,20 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         }, `ui-chip${lite === on ? ' active' : ''}`),
       );
     gfx.append(el('b', '', `🖥 ${t('lite.title')}`), el('div', 'ui-muted', t('lite.note')), chips);
+    // Звук: музыка и звуки игры (касса, монетки, погода) выключаются отдельно.
+    const audioBox = el('div', 'ui-box');
+    const audioChips = el('div', 'ui-chips');
+    audioChips.append(
+      button(music.isMuted() ? t('title.musicOff') : t('title.musicOn'), () => {
+        music.setMuted(!music.isMuted());
+        render();
+      }, `ui-chip${music.isMuted() ? '' : ' active'}`),
+      button(sound.isMuted() ? t('title.soundOff') : t('title.soundOn'), () => {
+        sound.setMuted(!sound.isMuted());
+        render();
+      }, `ui-chip${sound.isMuted() ? '' : ' active'}`),
+    );
+    audioBox.append(el('b', '', `🔊 ${t('audio.title')}`), el('div', 'ui-muted', t('audio.note')), audioChips);
     // Своё название магазина — на вывеске на крыше.
     const named = el('div', 'ui-box');
     const input = el('input', 'ui-input');
@@ -3383,6 +3398,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       achievementsButton(state),
       ...friendsBox(),
       named,
+      audioBox,
       gfx,
       rankBox(state),
       ...legacyBox(state),
