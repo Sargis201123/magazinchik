@@ -851,6 +851,10 @@ export class StoreScene extends Phaser.Scene {
   private arrow?: Phaser.GameObjects.Image;
   /** Палец двигал камеру — это не нажатие. */
   private dragged = false;
+  /** Сколько звёзд рейтинга уже отпраздновали волной искр (-1 — ещё не знаем). */
+  private starsCheered = -1;
+  /** Рекорд выручки сегодня уже отметили конфетти. */
+  private recordCheered = false;
   private dragStart = { x: 0, y: 0 };
   /** Куда камера возвращается после осмотра квартала. */
   private home = { x: 0, y: 0 };
@@ -1239,6 +1243,7 @@ export class StoreScene extends Phaser.Scene {
     this.animatePeople();
     this.updateOven();
     this.petCatNearby();
+    this.cheerProgress();
     this.hud.update(this.state, this.timeLeft, this.questsLine(), this.night);
   }
 
@@ -7194,6 +7199,7 @@ export class StoreScene extends Phaser.Scene {
           this.toiletDirt = 0;
           this.refreshToilet();
           this.bubbles(this.layout.wc.x, this.layout.wc.y);
+          this.cleanSparkle(this.layout.wc.x, this.layout.wc.spotY - 4, 20);
         },
       },
     ]);
@@ -7261,6 +7267,7 @@ export class StoreScene extends Phaser.Scene {
             scrub?.remove();
             this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
             if (kind === 'spill') this.wetSign(piece.x, piece.y);
+            this.cleanSparkle(piece.x, piece.y, 16);
             this.removeTrash(piece);
           },
         },
@@ -7268,6 +7275,76 @@ export class StoreScene extends Phaser.Scene {
     });
     this.trash.add(piece);
     return piece;
+  }
+
+  /** Чисто! Звёздочки на вымытом месте и блик, пробегающий по полу. */
+  private cleanSparkle(x: number, y: number, w: number): void {
+    if (this.lite) return;
+    for (let i = 0; i < 4; i++) {
+      const spark = this.art(x + Phaser.Math.Between(-w / 2, w / 2), y + Phaser.Math.Between(-4, 3), 'spark').setScale(0.2 / ART).setDepth(y + 4);
+      this.tweens.add({ targets: spark, scale: 0.8 / ART, angle: 90, alpha: 0, delay: i * 110, duration: 420, ease: 'Quad.easeOut', onComplete: () => spark.destroy() });
+    }
+    const glint = this.add.rectangle(x - w / 2, y + 1, 3, 6, 0xffffff, 0.55).setAngle(25).setBlendMode(Phaser.BlendModes.ADD).setDepth(0.58);
+    this.tweens.add({ targets: glint, x: x + w / 2, alpha: 0, duration: 380, ease: 'Sine.easeIn', onComplete: () => glint.destroy() });
+  }
+
+  /** Прибавилась звезда рейтинга — по залу волной бегут золотые искры; побит рекорд выручки — конфетти. */
+  private cheerProgress(): void {
+    const stars = Math.round(this.state.rating);
+    if (this.starsCheered < 0 || stars < this.starsCheered) this.starsCheered = stars;
+    if (stars > this.starsCheered) {
+      this.starsCheered = stars;
+      this.starWave();
+    }
+    const best = this.state.records?.revenue?.n;
+    if (!this.recordCheered && this.running && !this.night && best && this.stats.revenue > best) {
+      this.recordCheered = true;
+      this.recordConfetti();
+    }
+  }
+
+  private starWave(): void {
+    sound.medal();
+    if (this.lite) return;
+    const { w, h } = this.layout;
+    for (let i = 0; i < 18; i++) {
+      const x = 8 + (i / 17) * (w - 16);
+      const y = Phaser.Math.Between(20, h - 20);
+      const spark = this.art(x, y, 'spark').setTint(0xfee761).setScale(0).setDepth(LIGHT_DEPTH + 12).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: spark,
+        scale: { from: 0.2 / ART, to: 1.1 / ART },
+        y: y - 10,
+        angle: 120,
+        alpha: { from: 1, to: 0 },
+        delay: i * 45,
+        duration: 600,
+        ease: 'Quad.easeOut',
+        onComplete: () => spark.destroy(),
+      });
+    }
+  }
+
+  private recordConfetti(): void {
+    const { w } = this.layout;
+    this.popup(w / 2, 40, t('records.broken', { name: t('records.revenue') }), '#fee761');
+    sound.fanfare();
+    haptic.success();
+    if (this.lite) return;
+    // Короткая тёплая вспышка света — без тряски.
+    this.cameras.main.flash(220, 255, 246, 210);
+    const confetti = this.add.particles(w / 2, 10, 'confetti', {
+      speed: { min: 50, max: 150 },
+      angle: { min: 30, max: 150 },
+      gravityY: 140,
+      rotate: { min: 0, max: 360 },
+      scale: 1 / ART,
+      lifespan: 1700,
+      tint: [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xb55088],
+      emitting: false,
+    });
+    confetti.setDepth(LIGHT_DEPTH + 10).explode(50);
+    this.time.delayedCall(1900, () => confetti.destroy());
   }
 
   /** После мытья — табличка «Мокрый пол» и влажный блеск, пока пол сохнет. */
@@ -9026,6 +9103,7 @@ export class StoreScene extends Phaser.Scene {
   /** Утренние дела перед открытием: персонал, события дня, гости сюжета. */
   private prepareDay(): void {
     this.stats = emptyDayStats();
+    this.recordCheered = false;
     for (const r of this.registers) {
       r.scan = null;
       r.customer = null;
