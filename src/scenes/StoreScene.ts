@@ -30,6 +30,7 @@ import {
   shelfCapacity,
   shelfFor,
   shelfFree,
+  isFixture,
   slotOf,
   STORE_LEVELS,
   sellableProducts,
@@ -153,8 +154,8 @@ import {
 } from '../game/nightGuests';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
-import { slotRect, slotSide, standFor, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
-import { iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
+import { slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
+import { iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
@@ -1945,7 +1946,9 @@ export class StoreScene extends Phaser.Scene {
       let gx = snap(x);
       gx = gx < 20 ? SIDE_X : gx > w - 20 ? w - SIDE_X : gx;
       const sideNow = gx === SIDE_X || gx === w - SIDE_X;
-      at[i] = { x: gx, y: Phaser.Math.Clamp(snap(y), this.layout.wallH + (sideNow ? 22 : 4), h - (sideNow ? 24 : 28)) };
+      // У задней стены — «прилипает» к ней вплотную.
+      const gy = Phaser.Math.Clamp(snap(y), this.layout.wallH + (sideNow ? 22 : 4), h - (sideNow ? 24 : 28));
+      at[i] = { x: gx, y: wallSnap(this.layout, { x: gx, y: gy }) };
       ghosts[i].setPosition(at[i].x, at[i].y).setDepth(LIGHT_DEPTH + 12);
       styleGhost(ghosts[i], i);
       check();
@@ -2649,15 +2652,17 @@ export class StoreScene extends Phaser.Scene {
     const climate = tier('climate');
     // На стене между постером, часами и окном (они висят через 32 от x = 30) — свободные места.
     if (climate === 1) {
-      for (const x of [46, 78]) {
+      for (const x of [46, 78].filter((fx) => !this.behindShelf(fx))) {
         this.art(x, 10, 'fan_base').setDepth(4);
         const blades = this.art(x, 10, 'fan_blades').setDepth(5);
         this.tweens.add({ targets: blades, angle: 360, duration: 700, repeat: -1 });
       }
     } else if (climate === 2) {
-      const ac = this.art(126, 7, 'ac_wall').setDepth(4);
+      // Кондиционер — между картинами и окнами, на куске стены, не закрытом полкой.
+      const acX = [126, 190].find((x) => x < wc.x - 16 && !this.behindShelf(x, 10));
+      const ac = acX === undefined ? null : this.art(acX, 7, 'ac_wall').setDepth(4);
       // Струйки холодного воздуха из кондиционера.
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; ac && i < 3; i++) {
         const puff = this.add.rectangle(ac.x - 8 + i * 8, ac.y + 6, 1, 3, 0xc8f0ff, 0.6).setDepth(5);
         this.tweens.add({ targets: puff, y: ac.y + 14, alpha: 0, duration: 1100, delay: i * 300, repeat: -1 });
       }
@@ -5454,7 +5459,8 @@ export class StoreScene extends Phaser.Scene {
     const art = activeDecor(this.state, 'art')?.texture ?? 'poster';
     this.sunPatches = [];
     for (let x = 30, i = 0; x < wc.x - 16; x += 64, i++) {
-      // Повыше на стене: полки стоят вплотную к стене и закрывают её низ.
+      // Полки стоят вплотную к стене и закрывают её: за полкой картину и окно не вешаем.
+      if (this.behindShelf(x, 10)) continue;
       this.art(x, 9, i % 2 ? 'window' : art).setDepth(1);
       // Из окна на пол ложится солнечное пятно (updateDaylight).
       if (i % 2) {
@@ -5463,7 +5469,7 @@ export class StoreScene extends Phaser.Scene {
         this.sunPatches.push(patch);
       }
     }
-    if (62 < wc.x - 16) {
+    if (62 < wc.x - 16 && !this.behindShelf(62, 8)) {
       if (activeDecor(this.state, 'neon')) {
         const glow = this.art(62, 11, 'glow').setScale(46 / 64, 24 / 64).setTint(0xf6757a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
         this.tweens.add({ targets: glow, alpha: { from: 0.8, to: 0.4 }, duration: 900, yoyo: true, repeat: -1 });
@@ -5529,7 +5535,7 @@ export class StoreScene extends Phaser.Scene {
     // По бокам от часов и дальше — между плакатами и окнами.
     const spots = [46, 78];
     for (let x = 126; x < wc.x - 12; x += 64) spots.push(x);
-    for (const x of spots.filter((sx) => sx < wc.x - 12)) {
+    for (const x of spots.filter((sx) => sx < wc.x - 12 && !this.behindShelf(sx, 4))) {
       this.art(x, y, light.texture!).setDepth(2);
       const bulb = this.art(x + (hanging ? 0.5 : 2), hanging ? y + 3 : y - 3, 'glow')
         .setDisplaySize(light.id === 'light_chandelier' ? 30 : 18, 14)
@@ -5869,8 +5875,10 @@ export class StoreScene extends Phaser.Scene {
       .setVisible(false);
     expire.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.markdownNow(expire.x, expire.y)));
     const lights: Phaser.GameObjects.GameObject[] = [];
-    // Цветная плитка отдела под полкой и перед ней: отделы видно издалека.
-    if (!fixture) lights.push(this.add.rectangle(slot.x, slot.y + 4, 50, 30, DEPT_FLOOR[kind]).setAlpha(0.3).setStrokeStyle(1, DEPT_FLOOR[kind], 0.7).setDepth(0.3));
+    // Цветная плитка отдела под полкой и перед ней, шириной с полку: соседние плитки стыкуются без щелей.
+    // У задней стены плитка начинается от плинтуса — на стену не заходит.
+    const tileTop = Math.max(slot.y - 11, this.layout.wallH);
+    if (!fixture) lights.push(this.add.rectangle(slot.x, (tileTop + slot.y + 19) / 2, 40, slot.y + 19 - tileTop, DEPT_FLOOR[kind]).setAlpha(0.3).setStrokeStyle(1, DEPT_FLOOR[kind], 0.7).setDepth(0.3));
     // На мраморе низ полки отражается в полу — бледно и перевёрнуто.
     if (!fixture && this.glossyFloor) {
       const mirror = this.art(slot.x, slot.y - top + 32, look.texture).setTint(look.tint).setFlipY(true).setAlpha(0.13).setDepth(0.6);
@@ -5951,6 +5959,12 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Где стоит полка: на своём месте в зале, ларь — в зале слева от входа, вёдра с цветами — у кассы. */
+  /** Вещь на стене (центр x, полуширина half) целиком за полкой у задней стены — её не вешаем, чтобы не торчал краешек. */
+  private behindShelf(x: number, half = 6): boolean {
+    const n = this.state.shelves.filter((sh) => !isFixture(sh)).length;
+    return this.layout.slots.slice(0, n).some((p) => p.y === WALL_ROW_Y && Math.abs(p.x - x) < 20 + half);
+  }
+
   private spotOf(index: number): { x: number; y: number } {
     const kind = this.state.shelves[index]?.kind;
     if (kind === 'icebox') return this.iceboxSpot();

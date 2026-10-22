@@ -3,7 +3,7 @@
 // и можно ли от входа подойти к каждой полке, к кассе и в очередь. Сохраняется в StoreState.slotPos.
 
 import { isFixture, slotOf, type StoreState } from '../game/economy';
-import { iceboxRect, iceboxSpotFor, layoutFor, registerSpot, shelfRect, type Layout, type Point } from './layout';
+import { iceboxRect, iceboxSpotFor, layoutFor, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
 import { reachable, type Rect } from './paths';
 
 /** Шаг сетки, по которой встают полки. */
@@ -68,8 +68,12 @@ export function standFor(layout: { w: number }, p: Point): Point {
 /** Планировка со своей расстановкой: только если она для этого помещения и мест столько же. */
 export function withSlots(layout: Layout, custom: SlotPositions | undefined, level: number): Layout {
   if (!custom || custom.level !== level || custom.at.length !== layout.slots.length) return layout;
-  return { ...layout, slots: custom.at.map((p) => ({ x: p.x, y: p.y })) };
+  // Старые сохранения: ряд у задней стены стоял ниже, с полоской пола между полкой и стеной.
+  return { ...layout, slots: custom.at.map((p) => ({ x: p.x, y: wallSnap(layout, p) })) };
 }
+
+/** Полку, поставленную у задней стены, прижимаем к ней вплотную (боковые полки не трогаем). */
+export const wallSnap = (layout: Layout, p: Point): number => (!slotSide(layout, p) && p.y < layout.wallH + 10 ? WALL_ROW_Y : p.y);
 
 /** Сама мебель (без запаса на обход): 40 точек в ширину, как рисунок полки, — вплотную полки стоят с шагом 40. */
 export const bodyRect = ({ x, y }: Point): Rect => ({ x: x - 20, y: y - 16, w: 40, h: 24 });
@@ -133,7 +137,7 @@ export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = l
   rects.forEach((r, i) => {
     const stand = standFor(layout, slots[i]);
     // У задней стены полка стоит вплотную и заходит на нижнюю панель стены — так стоят и стандартные.
-    if (r.x < 0 || r.x + r.w > layout.w || r.y < layout.wallH - 12 || stand.y > layout.h - 6) bad.add(i);
+    if (r.x < 0 || r.x + r.w > layout.w || r.y < WALL_ROW_Y - 16 || stand.y > layout.h - 6) bad.add(i);
     if (zones.some((z) => overlaps(r, z))) bad.add(i);
     rects.forEach((o, j) => {
       if (j !== i && overlaps(r, o)) bad.add(i);
