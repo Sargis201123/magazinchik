@@ -55,6 +55,8 @@ const SCHEMA = [
   'CREATE INDEX IF NOT EXISTS gifts_receiver ON gifts (receiver, claimed)',
   // Как выглядит магазин (для «в гости к другу», visits.ts): снимок от игры, JSON.
   'CREATE TABLE IF NOT EXISTS shops (id INTEGER PRIMARY KEY, data TEXT, updated INTEGER)',
+  // Друзья, добавленные по коду (visits.ts): в обе стороны, даже если оба уже играли.
+  'CREATE TABLE IF NOT EXISTS friends (a INTEGER, b INTEGER, at INTEGER, PRIMARY KEY (a, b))',
 ].join(';\n');
 
 /** Таблицы создаются сами при первом обращении к базе. */
