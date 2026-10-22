@@ -256,6 +256,8 @@ const FACADE_STYLES: { texture: string; awning?: number; canopy?: number; led?: 
 ];
 /** Пол по уровням помещения. */
 const FLOORS = ['floor', 'floor', 'floor2', 'floor2', 'floor3'];
+/** Яркость пятен света от потолочных ламп на полу. */
+const LAMP_POOL_ALPHA = 0.09;
 /** Машины на дороге: вид, цвет (null — свой, без перекраски), вес при выборе. */
 const CAR_TYPES: [string, number | null, number][] = [
   ['car_sedan', 0, 35],
@@ -880,6 +882,10 @@ export class StoreScene extends Phaser.Scene {
   private dumpImg?: Phaser.GameObjects.Image;
   /** Пол блестит (мрамор): в нём отражаются полки. */
   private glossyFloor = false;
+  /** Мороз: на улице изо рта идёт пар. */
+  private coldAir = false;
+  /** Пятна света от потолочных ламп с номером ряда: утром включаются ряд за рядом. */
+  private lampPools: { img: Phaser.GameObjects.Image; row: number }[] = [];
   /** Пруд в парке: рядом летают светлячки. */
   private parkPond?: { x: number; y: number };
   /** Солнечные пятна от окон на полу зала. */
@@ -1414,6 +1420,7 @@ export class StoreScene extends Phaser.Scene {
     const floor = activeDecor(this.state, 'floor')?.texture ?? FLOORS[Math.min(this.state.level, FLOORS.length - 1)];
     this.add.tileSprite(0, wallH, w, h - wallH, floor).setOrigin(0).setTileScale(1 / ART);
     this.glossyFloor = ['floor3', 'floor_gold', 'floor_noir'].includes(floor);
+    this.coldAir = yearTime(this.state.day) === 'winter' || weatherFor(this.state.day) === 'snow';
     this.floorLight(w, h, wallH);
     // Стены: цветная краска за монеты или премиальная отделка (кирпич, плитка, обои) за звёзды.
     const wallDecor = activeDecor(this.state, 'wall');
@@ -1658,11 +1665,17 @@ export class StoreScene extends Phaser.Scene {
           }
         }
         bob = frame % 2 === 0 ? -0.5 : 0;
+        person.setData('idleAt', undefined);
         // Шаги слышно только у продавца — остальных было бы слишком много.
         if (person === this.seller && frame % 2 === 0 && person.getData('stepFrame') !== frame) ambience.step();
         person.setData('stepFrame', frame);
       } else {
         bob = Math.sin((now + phase) / 650) > 0.35 ? -0.5 : 0;
+        // Ожидание: переминается с ноги на ногу, поправляет сумку (idle).
+        if (now < ((person.getData('shiftUntil') as number | undefined) ?? 0)) key = `p_legs1${suffix}`;
+        const hitch = ((person.getData('hitchUntil') as number | undefined) ?? 0) - now;
+        if (hitch > 0) bob -= Math.floor(hitch / 120) % 2;
+        this.idle(person, now, facing);
       }
       if (legs && (legs.texture.key !== key || legs.flipX !== flip)) legs.setTexture(key).setFlipX(flip);
       for (const [img, base] of (person.getData('layers') as [Phaser.GameObjects.Image, string][] | undefined) ?? []) {
@@ -1682,7 +1695,74 @@ export class StoreScene extends Phaser.Scene {
         }
       }
       this.lampShadow(person);
+      this.reflect(person);
+      this.breathe(person, now, facing);
     }
+  }
+
+  /** Стоит без дела: раз в несколько секунд — переступить, глянуть в телефон, потянуться, поправить сумку. */
+  private idle(person: Phaser.GameObjects.Container, now: number, facing: Facing): void {
+    if (this.lite || person === this.seller) return;
+    const at = person.getData('idleAt') as number | undefined;
+    if (at === undefined) {
+      person.setData('idleAt', now + Phaser.Math.Between(2500, 7000));
+      return;
+    }
+    if (now < at) return;
+    person.setData('idleAt', now + Phaser.Math.Between(5000, 11000));
+    const kind = Phaser.Math.Between(0, 3);
+    if (kind === 0) person.setData('shiftUntil', now + 450);
+    else if (kind === 3) person.setData('hitchUntil', now + 480);
+    else if (kind === 1 && facing !== 'up') {
+      // Телефон в руке: тёмный корпус и голубой экран.
+      const side = facing === 'left' ? -3 : 3;
+      const phone = [this.add.rectangle(side, 1.5, 2, 3, 0x262b44), this.add.rectangle(side, 1, 1.2, 1.6, 0x9fd8f0)];
+      person.add(phone);
+      this.time.delayedCall(Phaser.Math.Between(1800, 3000), () => phone.forEach((o) => o.destroy()));
+    } else if (!this.tweens.isTweening(person)) {
+      // Потянуться (зевнуть): медленно вытянуться и опуститься.
+      const base = (person.getData('baseScale') as number | undefined) ?? 1;
+      this.tweens.add({ targets: person, scaleY: base * 1.06, scaleX: base * 0.97, duration: 380, hold: 260, yoyo: true, ease: 'Sine.easeInOut', onComplete: () => person.setScale(base) });
+    }
+  }
+
+  /** Бледное отражение на мраморе: ноги и рубашка, перевёрнутые под ступнями. */
+  private reflect(person: Phaser.GameObjects.Container): void {
+    if (!this.glossyFloor || this.lite) return;
+    const legs = person.getData('legs') as Phaser.GameObjects.Image | undefined;
+    const shirt = (person.getData('layers') as [Phaser.GameObjects.Image, string][] | undefined)?.find(([, base]) => base === 'p_shirt')?.[0];
+    if (!legs || !shirt) return;
+    let mirror = person.getData('mirror') as Phaser.GameObjects.Container | undefined;
+    if (!mirror?.active) {
+      const made = this.add
+        .container(0, 0, [this.art(0, 0, legs.texture.key).setTint(legs.tintTopLeft).setFlipY(true), this.art(0, 0, shirt.texture.key).setTint(shirt.tintTopLeft).setFlipY(true)])
+        .setAlpha(0.13)
+        .setDepth(0.6);
+      person.setData('mirror', made);
+      person.once('destroy', () => made.destroy());
+      mirror = made;
+    }
+    const { w, h, wallH } = this.layout;
+    const inside = person.visible && person.y > wallH && person.y < h - 4 && person.x > 0 && person.x < w;
+    mirror.setVisible(inside);
+    if (!inside) return;
+    mirror.setPosition(person.x, person.y + 15 * person.scaleY).setScale(person.scaleX, person.scaleY);
+    const [ml, ms] = mirror.list as Phaser.GameObjects.Image[];
+    if (ml.texture.key !== legs.texture.key || ml.flipX !== legs.flipX) ml.setTexture(legs.texture.key).setFlipX(legs.flipX);
+    if (ms.texture.key !== shirt.texture.key) ms.setTexture(shirt.texture.key);
+  }
+
+  /** Мороз: на улице изо рта облачко пара, раз в пару секунд. */
+  private breathe(person: Phaser.GameObjects.Container, now: number, facing: Facing): void {
+    if (!this.coldAir || this.lite || !person.visible || facing === 'up') return;
+    if (person.y < this.layout.h + 4 && person.x > 0 && person.x < this.layout.w) return;
+    const next = (person.getData('breathAt') as number | undefined) ?? 0;
+    if (now < next) return;
+    person.setData('breathAt', now + Phaser.Math.Between(1800, 2800));
+    if (next === 0) return;
+    const dx = facing === 'left' ? -3 : facing === 'right' ? 3 : 1;
+    const puff = this.add.circle(person.x + dx * person.scaleX, person.y - 7 * person.scaleY, 1.2, 0xffffff, 0.55).setDepth(person.depth + 1);
+    this.tweens.add({ targets: puff, x: puff.x + dx, y: puff.y - 4, scale: 2.4, alpha: 0, duration: 750, ease: 'Sine.easeOut', onComplete: () => puff.destroy() });
   }
 
   /** Вечером на улице тень вытягивается в сторону от ближайшего фонаря. */
@@ -4863,9 +4943,17 @@ export class StoreScene extends Phaser.Scene {
     ];
     this.greenery = [];
     // Дерево с тенью на газоне: свет сверху слева — тень ложится вправо-вниз от ствола.
+    // Летом в ясный день тень кроны пятнистая и чуть колышется на ветру.
+    const dapple = !this.lite && yearTime(this.state.day) === 'summer' && !isWet(weatherFor(this.state.day));
     const plant = (key: string, x: number, y: number, depth: number) => {
       this.add.image(x + 5, y + 1, 'shadow').setScale(2.1 / ART, 1.5 / ART).setAlpha(0.75).setDepth(depth - 0.01);
       this.greenery.push(this.art(x, y, key).setOrigin(0.5, 0.9).setDepth(depth));
+      if (!dapple || key !== 'tree') return;
+      const spots = [-7, -2, 4, 9].map((dx, i) =>
+        this.add.image(dx, (i % 2 ? 3 : -2) + Phaser.Math.Between(-1, 1), 'glow').setDisplaySize(Phaser.Math.Between(6, 9), 4).setTint(0x181425).setAlpha(0.22),
+      );
+      const leaves = this.add.container(x + 5, y + 1, spots).setDepth(depth - 0.009);
+      this.tweens.add({ targets: leaves, x: x + 6.5, duration: Phaser.Math.Between(1700, 2600), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     };
     for (const [x, y] of trees) plant('tree', x, y, y);
     for (let x = 10; x < next.w; x += 34) this.greenery.push(this.art(x, -6, 'bush').setDepth(-6));
@@ -5549,10 +5637,27 @@ export class StoreScene extends Phaser.Scene {
     g.fillGradientStyle(ink, ink, ink, ink, 0, 0.16, 0, 0.16);
     g.fillRect(w - 10, wallH, 10, h - wallH);
     // Свет потолочных ламп: тёплые пятна на полу рядами — зал не плоский, а освещённый.
-    for (let y = wallH + 46; y < h - 20; y += 62) {
+    this.lampPools = [];
+    for (let y = wallH + 46, row = 0; y < h - 20; y += 62, row++) {
       for (let x = 34 + ((y / 62) % 2) * 20; x < w - 20; x += 66) {
-        this.add.image(x, y, 'glow').setDisplaySize(84, 46).setTint(0xfff0cf).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.09).setDepth(0.45);
+        const img = this.add.image(x, y, 'glow').setDisplaySize(84, 46).setTint(0xfff0cf).setBlendMode(Phaser.BlendModes.ADD).setAlpha(LAMP_POOL_ALPHA).setDepth(0.45);
+        this.lampPools.push({ img, row });
       }
+    }
+  }
+
+  /** Утро: лампы в зале загораются ряд за рядом, от двери вглубь, — с коротким ярким «щелчком». */
+  private lightsOn(): void {
+    const rows = Math.max(0, ...this.lampPools.map((p) => p.row));
+    for (const { img, row } of this.lampPools) {
+      img.setAlpha(0);
+      this.tweens.chain({
+        targets: img,
+        tweens: [
+          { alpha: LAMP_POOL_ALPHA * 2, duration: 90, delay: 700 + (rows - row) * 260 },
+          { alpha: LAMP_POOL_ALPHA, duration: 260, ease: 'Sine.easeOut' },
+        ],
+      });
     }
   }
 
@@ -9070,6 +9175,7 @@ export class StoreScene extends Phaser.Scene {
   private startDay(): void {
     this.dayOpen = true;
     this.flyIn();
+    this.lightsOn();
     this.flipDoorSign(true);
     this.morningCrew();
     // Утром рассказали, чем кончился вчерашний «проверяющий» (tricks.ts) — больше не показываем.
