@@ -521,7 +521,7 @@ export interface StoreState {
   /** Своя расстановка мест под полки в этом помещении (scenes/placement.ts); после расширения — стандартная. */
   slotPos?: { level: number; at: { x: number; y: number }[] };
   /** Касса (с очередью и всем, что при ней) сдвинута вдоль нижней стены (scenes/placement.ts). */
-  tillPos?: { level: number; dx: number };
+  tillPos?: { level: number; dx: number; short?: boolean };
   /** Вещи зала, сдвинутые при перестановке: автомат, ведро, растения (scenes/placement.ts). */
   propPos?: { level: number; at: Record<string, { x: number; y: number }> };
   /** Полки, убранные из зала в запас: стоят без товара, их можно поставить обратно бесплатно. */
@@ -570,6 +570,10 @@ export interface StoreState {
   ads?: { id: 'flyers' | 'banner' | 'blogger'; from: number; until: number };
   /** Стойка со сладостями у кассы (impulse.ts). */
   rack?: { level: number; stock: number };
+  /** Подсказку к перестановке уже показали (в первый раз). */
+  arrangeIntro?: boolean;
+  /** Полка «Уценка» у входа (bargain.ts): товар, который испортится этой ночью, — за полцены. */
+  bargain?: Stock;
   /** Своё зерно магазина: от него зависит расписание особых дней (у каждого игрока своё). */
   seed?: number;
   /** Просрочку отдают в приют, а не выбрасывают: о магазине говорят хорошо (рейтинг). */
@@ -1318,6 +1322,9 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
     spoiled += aged.spoiled;
     return { ...shelf, items: aged.stock };
   });
+  // Полка уценки тоже стареет: что не купили — портится.
+  const bargain = state.bargain ? ageStock(state.bargain, fridgeLife(state), spoiledBy) : null;
+  if (bargain) spoiled += bargain.spoiled;
   const donated = state.donate ? spoiled : 0;
   const rating = Math.min(5, Math.max(0, state.rating + (satisfaction(stats, state.upgrades?.includes('loyalty') ? LOYALTY_FORGIVE : 1) - ratingTarget(state.rating)) * 0.5 + donationRating(donated)));
   const skimmed = Math.min(Math.max(0, state.money), skimmedToday(state, stats.revenue));
@@ -1330,6 +1337,7 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
     rating: Math.round(rating * 100) / 100,
     warehouse: warehouse.stock,
     shelves,
+    ...(bargain ? { bargain: bargain.stock } : {}),
   };
   if (daysUntilBill(state.day) !== 0) return { state: aged, spoiled, spoiledBy, bill: null, shortfall: 0, skimmed };
   const paid = payBill(aged);

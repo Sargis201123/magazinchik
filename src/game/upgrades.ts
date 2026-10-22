@@ -7,7 +7,7 @@ import type { TextKey } from '../i18n/ru';
 import { CARRY, managerBoost, type ScanTiming, type StoreState } from './economy';
 import { registerScan } from './gear';
 
-export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'autoOrder' | 'eTags' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables' | 'kitchen';
+export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'autoOrder' | 'eTags' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables' | 'kitchen' | 'bargain';
 
 export interface Upgrade {
   id: UpgradeId;
@@ -27,6 +27,7 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   loyalty: { id: 'loyalty', icon: '💳', nameKey: 'upgrade.loyalty', descKey: 'upgrade.loyalty.desc', price: 500, minLevel: 1 },
   delivery: { id: 'delivery', icon: '🚲', nameKey: 'upgrade.delivery', descKey: 'upgrade.delivery.desc', price: 1500, minLevel: 1 },
   autoOrder: { id: 'autoOrder', icon: '🤖', nameKey: 'upgrade.autoOrder', descKey: 'upgrade.autoOrder.desc', price: 1200, minLevel: 1 },
+  bargain: { id: 'bargain', icon: '🏷', nameKey: 'upgrade.bargain', descKey: 'upgrade.bargain.desc', price: 400, minLevel: 0 },
   eTags: { id: 'eTags', icon: '🏷', nameKey: 'upgrade.eTags', descKey: 'upgrade.eTags.desc', price: 800, minLevel: 1 },
   selfCheckout: { id: 'selfCheckout', icon: '🖥', nameKey: 'upgrade.selfCheckout', descKey: 'upgrade.selfCheckout.desc', price: 2500, minLevel: 2 },
   coffee: { id: 'coffee', icon: '☕', nameKey: 'upgrade.coffee', descKey: 'upgrade.coffee.desc', price: 1500, minLevel: 2 },

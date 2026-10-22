@@ -154,9 +154,11 @@ import {
 } from '../game/nightGuests';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
-import { blockedZones, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
+import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
 import { iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
+import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
+import { BARGAIN_CAPACITY, BARGAIN_CHANCE, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
 import { carryBonus, charmPatience, eyeTheft, ownerTiming } from '../game/owner';
@@ -982,6 +984,9 @@ export class StoreScene extends Phaser.Scene {
   /** Ведро с мусором в зале: сколько в нём, картинка, выносят ли его сейчас и сколько несут в мешке. */
   private binFill = 0;
   private binImg?: Phaser.GameObjects.Image;
+  /** Полка «Уценка» (bargain.ts): где стоит и картинки товара на ней. */
+  private bargainAt: { x: number; y: number } | null = null;
+  private bargainItems: Phaser.GameObjects.Image[] = [];
   private binGlow?: Phaser.FX.Glow;
   private binStink?: Phaser.GameObjects.Image;
   private binBusy = false;
@@ -1183,6 +1188,8 @@ export class StoreScene extends Phaser.Scene {
         this.refreshShelves();
         this.popup(this.layout.w / 2, this.layout.wallH + 30, t('popup.etags', { n: marked.count }), '#c8f0ff');
       }
+      // Уценённое — на полку «Уценка», пока есть место.
+      this.sendToBargain();
     }
     const rushAt = this.state.plan?.rushAt;
     const rush = !this.night && rushAt !== undefined && elapsed >= rushAt && elapsed < rushAt + RUSH_SECONDS;
@@ -1440,6 +1447,7 @@ export class StoreScene extends Phaser.Scene {
     this.art(counter.x, counter.y + FURNITURE_TOP / 2, registerSprite(this.state)).setDepth(counter.y + 20);
     this.buildShowcases();
     this.buildBin();
+    this.buildBargain();
     // Электрощиток на стене: нужен, когда отключат свет. Перестановка не даёт закрыть его полкой
     // (placement.ts), а если в старом сохранении полка уже стоит там — щиток висит левее, на открытой стене.
     const fuseX = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12).find((x) => x > 10 && !this.behindShelf(x, 6)) ?? wc.x - 24;
@@ -1796,7 +1804,9 @@ export class StoreScene extends Phaser.Scene {
     let at = this.layout.slots.map((p) => ({ ...p }));
     // Касса переезжает целиком вдоль нижней стены: сдвиг от стандартного места.
     let tillDx = this.state.tillPos?.level === level ? this.state.tillPos.dx : 0;
-    const placed = () => withTill(plain, { level, dx: tillDx }, level);
+    // Короткая очередь освобождает верх зала у правой стены.
+    let shortQueue = this.state.tillPos?.level === level && Boolean(this.state.tillPos.short);
+    const placed = () => withTill(plain, { level, dx: tillDx, short: shortQueue }, level);
     // Настоящие полки и разметку прячем — вместо них «призраки».
     for (const view of this.shelfViews.splice(0)) this.destroyShelfView(view);
     for (const mark of this.slotDecor) mark?.setVisible(false);
@@ -1815,6 +1825,8 @@ export class StoreScene extends Phaser.Scene {
       grid.fillStyle(0xe43b44, 0.12).fillRect(r.x, r.y, r.w, r.h);
       grid.lineStyle(0.6, 0xe43b44, 0.45).strokeRect(r.x, r.y, r.w, r.h);
     }
+    // Соседство отделов: зелёная связь — пара (берут вместе), красная — химия рядом с едой.
+    const linkG = this.add.graphics().setDepth(LIGHT_DEPTH + 13);
     // Какая полка в каком месте: обычные полки занимают места по порядку покупки.
     const kinds = this.state.shelves.filter((sh) => !SHELF_KINDS[sh.kind].fixture).map((sh) => sh.kind);
     // Полка у боковой стены — боком: картинка и место на полу другие.
@@ -1875,6 +1887,8 @@ export class StoreScene extends Phaser.Scene {
         styleGhost(g, i);
       });
       tillDx = 0;
+      shortQueue = false;
+      queueBtn.textContent = t('arrange.queueShort');
       till.setPosition(plain.counter.x, plain.counter.y);
       props.forEach((p, i) => {
         const d = propDefault(p.id);
@@ -1885,7 +1899,14 @@ export class StoreScene extends Phaser.Scene {
     const cancel = button(t('arrange.cancel'), () => finish(false), 'ui-btn secondary');
     const row = el('div', 'ui-arrange-row');
     row.append(cancel, reset, done);
-    bar.append(hint, row);
+    // Длинная очередь тянется до задней стены, короткая — стоит плотнее и освобождает верх зала.
+    const queueBtn = button(t(shortQueue ? 'arrange.queueLong' : 'arrange.queueShort'), () => {
+      shortQueue = !shortQueue;
+      queueBtn.textContent = t(shortQueue ? 'arrange.queueLong' : 'arrange.queueShort');
+      check();
+    }, 'ui-btn secondary ui-arrange-queue');
+    if (canShortenQueue(plain)) bar.append(hint, queueBtn, row);
+    else bar.append(hint, row);
     document.body.append(bar);
     // Автомат у боковой стены разворачивается боком.
     const movePropTo = (i: number, x: number, y: number) => {
@@ -1933,6 +1954,14 @@ export class StoreScene extends Phaser.Scene {
         frame.fillStyle(bad.has(i) ? 0xe43b44 : 0x63c74d, 0.28).fillRect(r.x, r.y, r.w, r.h);
         frame.lineStyle(1, bad.has(i) ? 0xe43b44 : 0x3e8948, 1).strokeRect(r.x, r.y, r.w, r.h);
       });
+      linkG.clear();
+      for (const link of shelfLinks(at.map((p) => slotRect(lay, p)), at.map((_, i) => kinds[i]))) {
+        const [a, b] = [at[link.a], at[link.b]];
+        const color = link.kind === 'pair' ? 0x63c74d : 0xe43b44;
+        linkG.lineStyle(1.5, color, 0.95).lineBetween(a.x, a.y - 4, b.x, b.y - 4);
+        linkG.fillStyle(0xffffff, 1).fillCircle((a.x + b.x) / 2, (a.y + b.y) / 2 - 4, 2.6);
+        linkG.fillStyle(color, 1).fillCircle((a.x + b.x) / 2, (a.y + b.y) / 2 - 4, 1.8);
+      }
       // Ларь ищет место сам — после перестановки ему должно найтись место у стены.
       const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(lay, at);
       done.disabled = bad.size > 0 || badProps.size > 0 || iceless;
@@ -1993,6 +2022,18 @@ export class StoreScene extends Phaser.Scene {
       }
       check();
     };
+    // В первый раз — коротко, что можно делать в перестановке.
+    if (!this.state.arrangeIntro) {
+      this.state = { ...this.state, arrangeIntro: true };
+      saveGame(this.state);
+      const { card, close } = openModal();
+      const list = el('ul', 'ui-arrange-intro');
+      for (const key of ['arrange.intro.drag', 'arrange.intro.side', 'arrange.intro.swap', 'arrange.intro.red', 'arrange.intro.links', 'arrange.intro.queue'] as const) {
+        if (key === 'arrange.intro.queue' && !canShortenQueue(plain)) continue;
+        list.append(el('li', '', t(key)));
+      }
+      card.append(el('h2', '', t('arrange.intro.title')), list, button(t('arrange.intro.ok'), close, 'ui-btn'));
+    }
     this.input.on('dragstart', onDragStart);
     this.input.on('drag', onDrag);
     this.input.on('dragend', onDragEnd);
@@ -2004,6 +2045,7 @@ export class StoreScene extends Phaser.Scene {
       this.input.off('dragend', onDragEnd);
       bar.remove();
       grid.destroy();
+      linkG.destroy();
       ghosts.forEach((g) => g.destroy());
       propGhosts.forEach((g) => g.destroy());
       till.destroy();
@@ -2012,7 +2054,7 @@ export class StoreScene extends Phaser.Scene {
         this.state = {
           ...this.state,
           slotPos: slotPosFor(level, at),
-          tillPos: tillDx ? { level, dx: tillDx } : undefined,
+          tillPos: tillDx || shortQueue ? { level, dx: tillDx, ...(shortQueue ? { short: true } : {}) } : undefined,
           propPos: propPosFor(level, props, this.propDefaults),
         };
         saveGame(this.state);
@@ -5338,6 +5380,78 @@ export class StoreScene extends Phaser.Scene {
     this.refreshBin();
   }
 
+  /**
+   * Полка «Уценка»: у входа, на свободном месте у нижней стены (или где поставили при перестановке).
+   * Нажать — снести на неё то, что испортится ночью.
+   */
+  private buildBargain(): void {
+    this.bargainAt = null;
+    this.bargainItems = [];
+    if (!hasBargain(this.state)) return;
+    const { door, h, w } = this.layout;
+    const fp = { x: -13, y: -8, w: 26, h: 12 };
+    const zones = [...tillZones(this.layout, registerSlots(this.state)), ...blockedZones(this.layout)];
+    const free = (p: { x: number; y: number }) => {
+      const r = { x: p.x + fp.x - 3, y: p.y + fp.y - 16, w: fp.w + 6, h: fp.h + 19 };
+      return r.x > 2 && r.x + r.w < w - 2 && ![...this.obstacles, ...zones].some((o) => overlapsRect(r, o));
+    };
+    const candidates = [-44, -72, 44, 72, -100, 100, -128, 128].map((dx) => ({ x: door.x + dx, y: h - 12 }));
+    const def = candidates.find(free) ?? { x: door.x - 44, y: h - 12 };
+    const at = this.propAt('bargain', def);
+    this.bargainAt = at;
+    const img = this.art(at.x, at.y - 2, 'bargain_bin').setDepth(at.y + 4);
+    img.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.sendToBargain(true)));
+    this.bargainItems = Array.from({ length: 8 }, (_, n) => this.art(at.x - 8 + (n % 4) * 5.5, at.y - 6 + Math.floor(n / 4) * 2.5, 'item').setDepth(at.y + 3).setVisible(false));
+    this.obstacles.push({ x: at.x + fp.x, y: at.y + fp.y, w: fp.w, h: fp.h });
+    this.registerProp('bargain', at, 'bargain_bin', fp);
+    this.refreshBargain();
+  }
+
+  /** Товар на полке уценки: до восьми штук видно в корзине. */
+  private refreshBargain(): void {
+    const units = PRODUCT_IDS.flatMap((id) => (this.state.bargain?.[id] ?? []).map(() => id));
+    this.bargainItems.forEach((img, n) => {
+      if (!img.active) return;
+      const id = units[n];
+      img.setVisible(Boolean(id));
+      if (id) img.setTexture(`item_${id}_${n % ITEM_VARIANTS}`).setScale(0.7 / ART);
+    });
+  }
+
+  /** Снести на полку уценки то, что испортится ночью (по нажатию — с подсказкой, если нечего). */
+  private sendToBargain(byTap = false): void {
+    if (!this.bargainAt) return;
+    const moved = fillBargain(this.state);
+    if (moved.count) {
+      this.state = moved.state;
+      saveGame(this.state);
+      sound.tap();
+      this.popup(this.bargainAt.x, this.bargainAt.y - 18, t('popup.bargain', { n: moved.count }), '#ffd0d0');
+      this.refreshShelves();
+      this.refreshWarehouse();
+    } else if (byTap) {
+      const full = bargainCount(this.state) >= BARGAIN_CAPACITY;
+      this.popup(this.bargainAt.x, this.bargainAt.y - 18, t(full ? 'popup.bargainFull' : 'popup.bargainNone'), '#fff3b0');
+    }
+    this.refreshBargain();
+  }
+
+  /** Покупатель по пути заглядывает на полку уценки и берёт одну штуку сверх списка. */
+  private async visitBargain(c: Customer): Promise<void> {
+    const at = this.bargainAt;
+    if (!at || c.thief || !bargainCount(this.state) || Math.random() >= BARGAIN_CHANCE) return;
+    await this.walk(c.sprite, at.x + Phaser.Math.Between(-6, 6), at.y - 16);
+    await this.wait(400);
+    if (c.gone) return;
+    const taken = takeBargain(this.state);
+    if (!taken) return;
+    this.state = taken.state;
+    c.items.push({ id: taken.id, unit: taken.unit });
+    this.reachShelf(c, { x: at.x, y: at.y - 6 }, taken.id);
+    if (Math.random() < 0.5) this.popup(c.sprite.x, c.sprite.y - 18, t('popup.bargainTake'), '#ffd0d0');
+    this.refreshBargain();
+  }
+
   private binFull(): boolean {
     return this.binFill >= binCapacity(this.state);
   }
@@ -5993,6 +6107,11 @@ export class StoreScene extends Phaser.Scene {
 
   /** Уценить всё, что испортится ночью (на полках и складе), прямо в зале — по ценнику «⏳». */
   private markdownNow(x: number, y: number): void {
+    // Есть полка уценки — старое уходит туда, под табличку «АКЦИЯ».
+    if (this.bargainAt && fillBargain(this.state).count) {
+      this.sendToBargain();
+      return;
+    }
     const { state, count } = markdownExpiring(this.state);
     if (!count) return;
     this.state = state;
@@ -6012,6 +6131,38 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Где стоит полка: на своём месте в зале, ларь — в зале слева от входа, вёдра с цветами — у кассы. */
+  /** Связи соседних полок (пары и неудачное соседство) — по номерам мест. */
+  private links(): Link[] {
+    const kinds = this.state.shelves.filter((sh) => !isFixture(sh)).map((sh) => sh.kind);
+    return shelfLinks(this.layout.slots.slice(0, kinds.length).map((p) => slotRect(this.layout, p)), kinds);
+  }
+
+  /** Номер полки (в state.shelves) на месте slot. */
+  private shelfAtSlot(slot: number): number {
+    return this.state.shelves.findIndex((_, i) => slotOf(this.state, i) === slot);
+  }
+
+  /** Рядом с этой полкой еды стоит химия. */
+  private clashes(index: number): boolean {
+    const slot = slotOf(this.state, index);
+    if (slot < 0 || this.state.shelves[index].kind === 'household') return false;
+    return this.links().some((l) => l.kind === 'clash' && (l.a === slot || l.b === slot));
+  }
+
+  /** Что прихватить заодно с соседней полки-пары (или ничего). */
+  private pairPick(index: number, wanted: ProductId[]): { id: ProductId; index: number } | null {
+    const slot = slotOf(this.state, index);
+    if (slot < 0 || Math.random() >= PAIR_CHANCE) return null;
+    const partners = this.links()
+      .filter((l) => l.kind === 'pair' && (l.a === slot || l.b === slot))
+      .map((l) => this.shelfAtSlot(l.a === slot ? l.b : l.a))
+      .filter((i) => i >= 0 && !this.state.shelves[i].broken);
+    const options = partners.flatMap((i) =>
+      PRODUCT_IDS.filter((id) => !wanted.includes(id) && (this.state.shelves[i].items[id]?.length ?? 0) > 0).map((id) => ({ id, index: i })),
+    );
+    return options.length ? options[Math.floor(Math.random() * options.length)] : null;
+  }
+
   /** Вещь на стене (центр x, полуширина half) целиком за полкой у задней стены — её не вешаем, чтобы не торчал краешек. */
   private behindShelf(x: number, half = 6): boolean {
     const n = this.state.shelves.filter((sh) => !isFixture(sh)).length;
@@ -7403,7 +7554,7 @@ export class StoreScene extends Phaser.Scene {
     let disappointed = false;
     let why: { reason: LostReason; id: ProductId } | undefined;
     // Подойти, поискать глазами, взять: к полке в зале, к ларю у входа и к вёдрам у кассы — одинаково.
-    const visit = async (id: ProductId, index: number) => {
+    const visit = async (id: ProductId, index: number): Promise<ReturnType<StoreScene['tryTake']> | null> => {
       const stand = this.standOf(index);
       const fixture = SHELF_KINDS[this.state.shelves[index].kind].fixture;
       // Над головой облачко: что покупатель ищет.
@@ -7416,7 +7567,7 @@ export class StoreScene extends Phaser.Scene {
       // Пока шёл — магазин захватили (или ушёл по другой причине): к полке уже не тянется.
       if (c.gone) {
         this.endThought(thought, false);
-        return;
+        return null;
       }
       const result = this.tryTake(c, id);
       this.reachShelf(c, this.spotOf(index), result === 'taken' ? id : null);
@@ -7428,6 +7579,7 @@ export class StoreScene extends Phaser.Scene {
         // Первая неудача — причина ухода, если покупатель так ничего и не возьмёт.
         why ??= { reason: result, id };
       }
+      return result;
     };
     await this.walk(c.sprite, door.x, door.y - 10);
     if (c.gone) return;
@@ -7438,13 +7590,23 @@ export class StoreScene extends Phaser.Scene {
 
     if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
     if (c.friend) this.popup(c.sprite.x, c.sprite.y - 20, t('visit.hello', { name: c.friend.name }), '#fee761');
+    await this.visitBargain(c);
+    if (c.gone) return;
+    // Соседняя полка-пара: взяв хлеб, заодно берут и молоко (один раз за покупку).
+    let extra: { id: ProductId; index: number } | null = null;
     for (const id of wanted) {
       if (c.gone) return;
       const index = shelfFor(this.state, id);
       if (index < 0) continue;
-      await visit(id, index);
+      const result = await visit(id, index);
+      if (result === 'taken' && !extra && !c.thief) extra = this.pairPick(index, wanted);
     }
     if (c.gone) return;
+    if (extra) {
+      this.popup(c.sprite.x, c.sprite.y - 20, t('popup.pair', { name: t(PRODUCTS[extra.id].nameKey) }), '#d6f5c4');
+      await visit(extra.id, extra.index);
+      if (c.gone) return;
+    }
 
     if (Math.random() < TRASH_CHANCE) this.dropTrash(c.sprite.x, c.sprite.y);
     if (c.regular) this.regularVerdict(c);
@@ -7534,7 +7696,9 @@ export class StoreScene extends Phaser.Scene {
       (id === 'bread' && this.aroma() ? AROMA_TOLERANCE : 1) *
       fairTolerance(this.state.day) *
       loyaltyTolerance(this.state) *
-      radioTolerance(this.state);
+      radioTolerance(this.state) *
+      // Химия рядом с едой — к еде с этой полки придираются сильнее.
+      (this.clashes(index) ? CLASH_FACTOR : 1);
     // «2 по цене 1»: за штуку выходит вдвое дешевле.
     const bogo = promoKind(this.state, id) === 'bogo';
     const perUnit = bogo ? price / 2 : price;
@@ -8467,6 +8631,8 @@ export class StoreScene extends Phaser.Scene {
       // Что-то из утренних дел сломалось (редкое сочетание событий) — день всё равно начинается.
       reportError(error, 'startDay');
     }
+    // Утром то, что испортится к ночи, само уходит на полку уценки.
+    this.sendToBargain();
     this.timeLeft = DAY_SECONDS;
     this.nextSpawn = 1;
     this.running = true;
