@@ -171,6 +171,7 @@ export const ru = {
   'popup.bargainNone': 'Нечего уценять: всё свежее',
   'popup.bargainFull': 'Полка уценки полна',
   'popup.bargainTake': '−50%, беру!',
+  'shelf.empty': 'пусто',
   'popup.pair': '+ {name} заодно',
   'arrange.intro.title': '🧱 Перестановка',
   'arrange.intro.drag': 'Тяни пальцем полки, кассу, автомат, ведро, растения и полку уценки.',

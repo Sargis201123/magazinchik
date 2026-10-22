@@ -878,6 +878,8 @@ export class StoreScene extends Phaser.Scene {
   private parkPond?: { x: number; y: number };
   /** Солнечные пятна от окон на полу зала. */
   private sunPatches: Phaser.GameObjects.Image[] = [];
+  /** Вечернее солнце из окон правой стены (updateDaylight). */
+  private sideSun: Phaser.GameObjects.Image[] = [];
   /** Утренний туман над улицей и газонами. */
   private fogs: Phaser.GameObjects.Image[] = [];
   /** Табличка «Открыто / Закрыто» на двери. */
@@ -2243,6 +2245,9 @@ export class StoreScene extends Phaser.Scene {
       patch.x = (patch.getData('x') as number) + (p - 0.2) * 24;
       patch.setAngle(-24 + p * 50);
     }
+    // К вечеру солнце уходит на другую сторону — свет ложится из окон правой стены.
+    const late = Phaser.Math.Clamp((p - 0.45) / 0.25, 0, 1) * Phaser.Math.Clamp((0.95 - p) / 0.15, 0, 1) * (sunny ? 1 : 0.25);
+    for (const patch of this.sideSun) if (patch.active) patch.setAlpha(0.3 * late);
     const fog = Phaser.Math.Clamp(1 - p / 0.22, 0, 1);
     for (const f of this.fogs) if (f.active) f.setAlpha(0.7 * fog);
   }
@@ -5378,6 +5383,14 @@ export class StoreScene extends Phaser.Scene {
     }
     cap(-WALL, from, WALL, h - from);
     cap(w, 0, WALL, h);
+    // Окна в правой стене: стекло в толще стены, вечером через них на пол падает солнце.
+    this.sideSun = [];
+    for (let y = this.layout.wallH + 50; y < h - 70; y += 72) {
+      this.add.rectangle(w + 1, y, WALL - 2, 22, 0x9fd8f0).setOrigin(0).setStrokeStyle(0.6, 0x3a4466).setDepth(2.1);
+      this.add.rectangle(w + 2, y + 2, 1, 18, 0xe8f8ff).setOrigin(0).setDepth(2.11);
+      const sun = this.art(w - 2, y + 11, 'light_spill').setOrigin(0.5, 0).setAngle(90).setScale(1 / ART, 1.3 / ART).setTint(0xffd6a0).setAlpha(0).setDepth(0.45);
+      this.sideSun.push(sun);
+    }
     // Тень здания на газон справа: магазин стоит на земле, а не наклеен на траву.
     const ink = 0x181425;
     const shade = this.add.graphics().setDepth(-9.4);
@@ -5728,6 +5741,16 @@ export class StoreScene extends Phaser.Scene {
 
   private buildDecor(): void {
     const { w, h, wallH, wc, door, slots } = this.layout;
+    // От входа вглубь зала — наклейки-стрелки на полу (только там, где не стоят полки и касса).
+    const arrows = this.add.graphics().setDepth(0.42);
+    const blocked = [...slots.map((p) => slotRect(this.layout, p)), ...tillZones(this.layout, registerSlots(this.state))];
+    for (const ay of [h - 44, h - 60]) {
+      if (blocked.some((r) => overlapsRect(r, { x: door.x - 6, y: ay - 4, w: 12, h: 8 }))) continue;
+      arrows.fillStyle(0x0099db, 0.32);
+      arrows.fillTriangle(door.x - 5, ay + 3, door.x + 5, ay + 3, door.x, ay - 3);
+      arrows.fillStyle(0xffffff, 0.35);
+      arrows.fillTriangle(door.x - 2.5, ay + 2, door.x + 2.5, ay + 2, door.x, ay - 1);
+    }
     // На стене по очереди плакаты и окна, между ними часы.
     // Вместо плакатов — купленная картина; вместо часов — неон «ОТКРЫТО».
     const art = activeDecor(this.state, 'art')?.texture ?? 'poster';
@@ -6088,8 +6111,11 @@ export class StoreScene extends Phaser.Scene {
       view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
       view.promo.setVisible(PRODUCT_IDS.some((id) => canPlace(id, shelf) && promoKind(this.state, id)));
       const few = !shelf.broken && units.length > 0 && units.length <= LOW_STOCK;
-      if (few) view.low.setText(t('shelf.low', { n: units.length }));
-      view.low.setVisible(few);
+      // Пустая полка — серая табличка «пусто»: видно, что кончился товар, а не что полка сломана.
+      const empty = !shelf.broken && units.length === 0 && shelf.kind !== 'florist';
+      if (few) view.low.setText(t('shelf.low', { n: units.length })).setBackgroundColor('#d95763');
+      else if (empty) view.low.setText(t('shelf.empty')).setBackgroundColor('#5a6988');
+      view.low.setVisible(few || empty);
       if (view.meter) this.drawMeter(view.meter, units.length, capacity, Boolean(shelf.broken));
       view.expire.setVisible(!shelf.broken && expiringIn(this.state, shelf.items) > 0);
       view.needsStock = !shelf.broken && units.length === 0 && PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id]?.length ?? 0) > 0);
@@ -7045,6 +7071,7 @@ export class StoreScene extends Phaser.Scene {
           action: () => {
             scrub?.remove();
             this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+            if (kind === 'spill') this.wetSign(piece.x, piece.y);
             this.removeTrash(piece);
           },
         },
@@ -7052,6 +7079,16 @@ export class StoreScene extends Phaser.Scene {
     });
     this.trash.add(piece);
     return piece;
+  }
+
+  /** После мытья — табличка «Мокрый пол» и влажный блеск, пока пол сохнет. */
+  private wetSign(x: number, y: number): void {
+    const sheen = this.add.ellipse(x, y + 1, 18, 7, 0xc8f0ff, 0.35).setDepth(0.55);
+    const sign = this.art(x + 7, y - 5, 'wet_sign').setDepth(y + 3);
+    this.time.delayedCall(7000, () => {
+      if (!sign.active) return;
+      this.tweens.add({ targets: [sign, sheen], alpha: 0, duration: 600, onComplete: () => [sign, sheen].forEach((o) => o.destroy()) });
+    });
   }
 
   /** Покупатель уронил покупку: лужа и опрокинутый пакет. По луже скользко. */
