@@ -154,7 +154,7 @@ import {
 } from '../game/nightGuests';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
-import { slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
+import { blockedZones, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
 import { iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { dayDemand } from '../game/demand';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
@@ -781,6 +781,8 @@ interface ShelfView {
   /** Подсветка: полка пустая, а на складе её товар есть — пора нести. */
   glow?: Phaser.FX.Glow;
   needsStock: boolean;
+  /** Шкала запаса у боковой полки: товар на ней сбоку не разглядеть, а шкалу видно сразу. */
+  meter?: Phaser.GameObjects.Graphics;
 }
 
 interface NightLight {
@@ -1438,8 +1440,10 @@ export class StoreScene extends Phaser.Scene {
     this.art(counter.x, counter.y + FURNITURE_TOP / 2, registerSprite(this.state)).setDepth(counter.y + 20);
     this.buildShowcases();
     this.buildBin();
-    // Электрощиток на стене: нужен, когда отключат свет.
-    this.fuseBox = this.art(wc.x - 24, 18, 'fusebox').setDepth(3);
+    // Электрощиток на стене: нужен, когда отключат свет. Перестановка не даёт закрыть его полкой
+    // (placement.ts), а если в старом сохранении полка уже стоит там — щиток висит левее, на открытой стене.
+    const fuseX = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12).find((x) => x > 10 && !this.behindShelf(x, 6)) ?? wc.x - 24;
+    this.fuseBox = this.art(fuseX, 18, 'fusebox').setDepth(3);
     this.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.fixFuse()));
     this.fuseGlow = this.fuseBox.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 6);
     this.registers = [];
@@ -1802,6 +1806,15 @@ export class StoreScene extends Phaser.Scene {
     grid.lineStyle(0.4, 0x2b2233, 0.18);
     for (let x = 0; x <= w; x += 8) grid.lineBetween(x, this.layout.wallH, x, h);
     for (let y = this.layout.wallH; y <= h; y += 8) grid.lineBetween(0, y, w, y);
+    // Где полку не поставить (вход, двери флигеля, щиток) — видно сразу, а не только когда полка краснеет.
+    for (const z of blockedZones(this.layout, defaults)) {
+      const r = { x: Math.max(0, z.x), y: Math.max(this.layout.wallH, z.y), w: 0, h: 0 };
+      r.w = Math.min(w, z.x + z.w) - r.x;
+      r.h = Math.min(h, z.y + z.h) - r.y;
+      if (r.w <= 0 || r.h <= 0) continue;
+      grid.fillStyle(0xe43b44, 0.12).fillRect(r.x, r.y, r.w, r.h);
+      grid.lineStyle(0.6, 0xe43b44, 0.45).strokeRect(r.x, r.y, r.w, r.h);
+    }
     // Какая полка в каком месте: обычные полки занимают места по порядку покупки.
     const kinds = this.state.shelves.filter((sh) => !SHELF_KINDS[sh.kind].fixture).map((sh) => sh.kind);
     // Полка у боковой стены — боком: картинка и место на полу другие.
@@ -1953,15 +1966,40 @@ export class StoreScene extends Phaser.Scene {
       styleGhost(ghosts[i], i);
       check();
     };
+    // Откуда взяли полку: если бросить её на другую полку или на пустое место, они меняются местами.
+    let dragFrom: { x: number; y: number } | null = null;
+    const onDragStart = (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => {
+      const i = ghosts.indexOf(obj as Phaser.GameObjects.Container);
+      dragFrom = i >= 0 ? { ...at[i] } : null;
+    };
     const onDragEnd = (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => {
       (obj as Phaser.GameObjects.Container).setDepth?.(LIGHT_DEPTH + 11);
       haptic.tap();
+      const i = ghosts.indexOf(obj as Phaser.GameObjects.Container);
+      if (i < 0 || !dragFrom) return;
+      const mine = slotRect(this.layout, at[i]);
+      const area = (j: number) => {
+        const o = slotRect(this.layout, at[j]);
+        return Math.max(0, Math.min(mine.x + mine.w, o.x + o.w) - Math.max(mine.x, o.x)) * Math.max(0, Math.min(mine.y + mine.h, o.y + o.h) - Math.max(mine.y, o.y));
+      };
+      const others = at.map((_, j) => j).filter((j) => j !== i && area(j) > 0);
+      if (!others.length) return;
+      const j = others.reduce((a, b) => (area(b) > area(a) ? b : a));
+      at[i] = { ...at[j] };
+      at[j] = dragFrom;
+      for (const k of [i, j]) {
+        ghosts[k].setPosition(at[k].x, at[k].y);
+        styleGhost(ghosts[k], k);
+      }
+      check();
     };
+    this.input.on('dragstart', onDragStart);
     this.input.on('drag', onDrag);
     this.input.on('dragend', onDragEnd);
     check();
     const finish = (save: boolean) => {
       if (save && check().size) return;
+      this.input.off('dragstart', onDragStart);
       this.input.off('drag', onDrag);
       this.input.off('dragend', onDragEnd);
       bar.remove();
@@ -5816,6 +5854,7 @@ export class StoreScene extends Phaser.Scene {
       const few = !shelf.broken && units.length > 0 && units.length <= LOW_STOCK;
       if (few) view.low.setText(t('shelf.low', { n: units.length }));
       view.low.setVisible(few);
+      if (view.meter) this.drawMeter(view.meter, units.length, capacity, Boolean(shelf.broken));
       view.expire.setVisible(!shelf.broken && expiringIn(this.state, shelf.items) > 0);
       view.needsStock = !shelf.broken && units.length === 0 && PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id]?.length ?? 0) > 0);
       view.bg.setTint(shelf.broken ? BROKEN_TINT : SHELF_LOOK[shelf.kind].tint);
@@ -5935,7 +5974,21 @@ export class StoreScene extends Phaser.Scene {
       this.add.rectangle(slot.x + (right ? -6 : 6), slot.y, 30, 50, DEPT_FLOOR[kind]).setAlpha(0.3).setStrokeStyle(1, DEPT_FLOOR[kind], 0.7).setDepth(0.3),
       this.art(slot.x, slot.y - 24, `dept_${kind}`).setScale(0.7 / ART).setDepth(d - 11.9),
     ];
-    return { kind, at: { x: slot.x, y: slot.y }, cover: undefined, bg, front, shadow, items, backItems, pips, lights, low, expire, promo, glow, needsStock: false };
+    const meter = this.add.graphics({ x: slot.x + (right ? -12 : 12), y: slot.y }).setDepth(d - 11);
+    return { kind, at: { x: slot.x, y: slot.y }, cover: undefined, bg, front, shadow, items, backItems, pips, lights, low, expire, promo, glow, needsStock: false, meter };
+  }
+
+  /** Шкала запаса боковой полки: зелёная — полно, жёлтая — половина, красная — пора нести товар. */
+  private drawMeter(meter: Phaser.GameObjects.Graphics, units: number, capacity: number, broken: boolean): void {
+    const H = 36;
+    const share = capacity > 0 ? Math.min(1, units / capacity) : 0;
+    const color = broken ? 0x8b9bb4 : share > 0.5 ? 0x63c74d : share > 0.2 ? 0xfee761 : 0xe43b44;
+    const fill = Math.round(H * share);
+    meter.clear();
+    meter.fillStyle(0x2b2233, 0.75).fillRect(-1.5, -H / 2 - 1, 3, H + 2);
+    if (fill > 0) meter.fillStyle(color, 1).fillRect(-0.5, H / 2 - fill, 1, fill);
+    // Пустая полка — красная точка внизу шкалы, чтобы было видно издалека.
+    else if (!broken) meter.fillStyle(0xe43b44, 1).fillRect(-1, H / 2 - 2, 2, 2);
   }
 
   /** Уценить всё, что испортится ночью (на полках и складе), прямо в зале — по ценнику «⏳». */
@@ -5950,7 +6003,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private destroyShelfView(view: ShelfView): void {
-    for (const obj of [view.bg, view.front, view.shadow, view.low, view.expire, view.promo, view.cover, ...view.items, ...view.backItems, ...view.pips, ...view.lights]) obj?.destroy();
+    for (const obj of [view.bg, view.front, view.shadow, view.low, view.expire, view.promo, view.cover, view.meter, ...view.items, ...view.backItems, ...view.pips, ...view.lights]) obj?.destroy();
   }
 
   /** Сколько обычных полок стоит на местах в зале (ларь и вёдра — не в счёт). */
@@ -7603,7 +7656,7 @@ export class StoreScene extends Phaser.Scene {
         const base = (clerk.getData('baseScale') as number) ?? 1;
         this.tweens.add({ targets: clerk, scaleY: base * 1.06, duration: 90, yoyo: true, onComplete: () => clerk.setScale(base) });
       }
-      haptic.tap();
+      // Без вибрации на каждый товар: на телефоне она щёлкает громче самого сканера.
       sound.scan();
     }
     // Старая касса иногда заедает: пока продавец стучит по ней, очередь ждёт.

@@ -93,13 +93,15 @@ interface Note {
   vol?: number;
   /** Частота в конце ноты — скольжение вверх или вниз. */
   slide?: number;
+  /** Нарастание громкости, секунды: длиннее — мягче, без «тика» в начале. */
+  attack?: number;
 }
 
 function play(notes: Note[]): void {
   const ac = audio();
   if (!ac) return;
   const now = ac.currentTime + 0.01;
-  for (const { freq, at = 0, dur, wave = 'square', vol = 0.05, slide } of notes) {
+  for (const { freq, at = 0, dur, wave = 'square', vol = 0.05, slide, attack = 0.008 } of notes) {
     const osc = ac.createOscillator();
     const gain = ac.createGain();
     osc.type = wave;
@@ -107,7 +109,7 @@ function play(notes: Note[]): void {
     if (slide) osc.frequency.exponentialRampToValueAtTime(slide, now + at + dur);
     // Короткая атака и затухание — без щелчков.
     gain.gain.setValueAtTime(0, now + at);
-    gain.gain.linearRampToValueAtTime(vol, now + at + 0.008);
+    gain.gain.linearRampToValueAtTime(vol, now + at + attack);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
     osc.connect(gain).connect(fxOut(ac));
     osc.start(now + at);
@@ -245,8 +247,11 @@ export const sound = {
   hiss,
   /** Касание, начало дела. */
   tap: () => play([{ freq: 520, dur: 0.05, wave: 'triangle', vol: 0.05 }]),
-  /** Сканер: еле слышный низкий «тук» — касса работает весь день и не должна перебивать погоду и музыку. */
-  scan: () => !throttled('scan', 120) && play([{ freq: 740, dur: 0.04, wave: 'sine', vol: 0.006 }]),
+  /**
+   * Сканер: нежное, еле слышное «пим» с мягким нарастанием — касса работает весь день и не должна
+   * перебивать погоду и музыку. Не чаще раза в 0,7 с: на большой корзине не превращается в трель.
+   */
+  scan: () => !throttled('scan', 700) && play([{ freq: 587, dur: 0.12, wave: 'sine', vol: 0.0035, attack: 0.03 }]),
   /** Покупатель расплатился: тихий мягкий «дзынь» (не чаще пары раз в секунду). */
   coin: () =>
     !throttled('coin', 450) &&

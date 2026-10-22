@@ -167,7 +167,7 @@ export const en: Record<TextKey, string> = {
   'audio.note': 'Music and game sounds (register, coins, weather) can be turned off separately.',
   'news.sound': '🔊 Softer, quieter sounds and no more traffic noise. Turn music or sounds off: 🏆 in the corner → "Sound".',
   'arrange.open': "Rearrange shelves",
-  'arrange.hint': "Drag shelves, the register, the vending machine, the bin and plants. Green — OK, red — not allowed.",
+  'arrange.hint': "Drag shelves, the register, the vending machine, the bin and plants. Green — OK, red — not allowed. Drop a shelf on another one or on an empty spot to swap them.",
   'arrange.bad': "Bad spots: {n}. Move the red ones — every aisle must stay open.",
   'arrange.done': "Done",
   'arrange.reset': "Reset",
