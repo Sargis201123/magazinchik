@@ -188,7 +188,7 @@ import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
 import { answerOpening, BUILDINGS, districtNews, districtSite, isMatchDay, OPENING_DAYS, type BuildingId } from '../game/district';
 import { canCook, cook, DISHES, DISH_IDS, kitchenOpen, portionsOf, portionsTotal, PORTIONS_MAX } from '../game/kitchen';
-import { duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
+import { addFriend, duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
 import { flushCloud, saveGame } from '../game/save';
@@ -242,6 +242,9 @@ interface MorningOptions {
 // Вкладки в одну строку: значок и короткая подпись. Профиль (достижения, наследие, настройки) —
 // кнопкой в углу заголовка, не вкладкой.
 type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
+/** Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. */
+const WHATS_NEW = 1;
+
 const TABS: [Tab, string, TextKey][] = [
   ['buy', '🛒', 'tab.buy'],
   ['hall', '🏪', 'tab.hall'],
@@ -613,6 +616,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     // Сверху — только то, где нужно решить или забрать; остальное утро — в свёрнутой карточке «Сегодня».
     card.replaceChildren(
       title,
+      ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
       ...giftsBox(),
       ...staffEventBox(state),
@@ -2586,6 +2590,85 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return box;
   };
 
+  /**
+   * Друзья в игре: кто они, твой код, добавить друга по коду (подходит и тем, кто уже играл),
+   * пригласить новичка. С друзьями: заходят покупателями, работают у тебя, ходишь к ним в гости.
+   */
+  let friendMsg = '';
+  const friendsBox = (): HTMLElement[] => {
+    const info = visitsInfo();
+    const box = el('div', 'ui-box ui-friends');
+    box.append(el('b', '', `🏠 ${t('friends.title')}`), el('div', '', t('friends.what')));
+    if (!info) {
+      box.append(el('div', 'ui-note', t('friends.offline')));
+      return [box];
+    }
+    if (!info.friends.length) box.append(el('div', 'ui-note', t('friends.none')));
+    for (const f of info.friends.slice(0, 10)) {
+      const row = el('div', 'ui-row');
+      row.append(
+        el('span', '', `👋 ${f.name} · ${t(STORE_LEVELS[Math.min(f.level, STORE_LEVELS.length - 1)].nameKey)}`),
+        ...(onVisit ? [button(t('visitShop.go'), () => {
+          close();
+          onVisit(f.id, f.name);
+        }, 'ui-chip')] : []),
+      );
+      box.append(row);
+    }
+    // Свой код — продиктовать или переслать другу.
+    const mine = el('div', 'ui-row');
+    mine.append(
+      el('span', '', t('friends.code', { code: info.code })),
+      button(t('friends.copy'), () => {
+        void navigator.clipboard?.writeText(info.code).then(() => {
+          friendMsg = t('friends.copied');
+          render();
+        }).catch(() => undefined);
+      }, 'ui-chip'),
+    );
+    const input = el('input', 'ui-input');
+    input.placeholder = t('friends.enter');
+    input.maxLength = 12;
+    const add = button(t('friends.add'), () => {
+      const code = input.value.trim();
+      if (!code) return;
+      add.disabled = true;
+      void addFriend(code).then((res) => {
+        friendMsg = res.ok ? t('friends.added', { name: res.name ?? '' }) : t(`friends.err.${res.error ?? 'offline'}` as TextKey);
+        update(getState(), res.ok ? 'success' : 'error');
+      });
+    }, 'ui-chip');
+    const adding = el('div', 'ui-row');
+    adding.append(input, add);
+    box.append(mine, adding);
+    if (friendMsg) box.append(el('div', 'ui-note', friendMsg));
+    box.append(button(`📨 ${t('friends.invite')}`, () => inviteFriends(t('social.share')), 'ui-btn secondary'));
+    return [box];
+  };
+
+  /** Что нового в игре: один раз, с кнопками прямо к новинкам. */
+  const whatsNewBox = (state: StoreState): HTMLElement[] => {
+    if ((state.whatsNew ?? 0) >= WHATS_NEW) return [];
+    const box = el('div', 'ui-box ui-duel');
+    box.append(el('b', '', `✨ ${t('news.title')}`));
+    for (const key of ['news.arrange', 'news.store', 'news.name', 'news.away', 'news.friends', 'news.life'] as TextKey[]) box.append(el('div', '', t(key)));
+    const row = el('div', 'ui-row');
+    if (onArrange) {
+      row.append(button(`🔧 ${t('arrange.open')}`, () => {
+        update({ ...getState(), whatsNew: WHATS_NEW });
+        close();
+        onArrange();
+      }, 'ui-chip'));
+    }
+    row.append(button(`🏠 ${t('friends.title')}`, () => {
+      tab = 'profile';
+      update({ ...getState(), whatsNew: WHATS_NEW });
+      requestAnimationFrame(() => card.querySelector('.ui-friends')?.scrollIntoView({ block: 'start' }));
+    }, 'ui-chip'));
+    box.append(row, button(t('news.ok'), () => update({ ...getState(), whatsNew: WHATS_NEW }), 'ui-btn secondary'));
+    return [box];
+  };
+
   /** «Пригласи друзей»: ссылка через «Поделиться» Telegram, награда за каждого, кто начал играть. */
   const inviteBox = (): HTMLElement[] => {
     const info = socialInfo();
@@ -3298,6 +3381,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     );
     return [
       achievementsButton(state),
+      ...friendsBox(),
       named,
       gfx,
       rankBox(state),

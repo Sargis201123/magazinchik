@@ -100,15 +100,15 @@ export interface VisitFriend {
   treated: boolean;
 }
 
-let visitsCache: { friends: VisitFriend[]; gifts: { name: string; amount: number }[] } | null = null;
+let visitsCache: { code: string; friends: VisitFriend[]; gifts: { name: string; amount: number }[] } | null = null;
 /** Друзья, которые заходят в гости, и подарки от них, ещё не забранные. */
 export const visitsInfo = () => visitsCache;
 
 export async function fetchVisits(): Promise<void> {
   const initData = telegramInitData();
   if (!initData) return;
-  const res = await post<{ enabled?: boolean; friends?: VisitFriend[]; gifts?: { name: string; amount: number }[] }>('/api/visits', { initData, action: 'list' });
-  visitsCache = res?.enabled ? { friends: res.friends ?? [], gifts: res.gifts ?? [] } : null;
+  const res = await post<{ enabled?: boolean; code?: string; friends?: VisitFriend[]; gifts?: { name: string; amount: number }[] }>('/api/visits', { initData, action: 'list' });
+  visitsCache = res?.enabled ? { code: res.code ?? '', friends: res.friends ?? [], gifts: res.gifts ?? [] } : null;
 }
 
 /** Угостить друга кофе: он получит монеты при следующем запуске. */
@@ -136,4 +136,14 @@ export async function fetchFriendShop(id: number): Promise<{ shop: unknown; name
   if (!initData) return null;
   const res = await post<{ shop?: unknown; name?: string }>('/api/visits', { initData, action: 'shop', to: id });
   return res?.shop ? { shop: res.shop, name: String(res.name ?? '') } : null;
+}
+
+/** Добавить друга по его коду: ok и имя, либо причина (bad_code, not_found, too_many, offline). */
+export async function addFriend(code: string): Promise<{ ok: boolean; name?: string; error?: string }> {
+  const initData = telegramInitData();
+  if (!initData) return { ok: false, error: 'offline' };
+  const res = await post<{ ok?: boolean; name?: string; error?: string }>('/api/visits', { initData, action: 'add', code });
+  if (!res) return { ok: false, error: 'offline' };
+  if (res.ok) await fetchVisits();
+  return { ok: Boolean(res.ok), name: res.name, error: res.error };
 }

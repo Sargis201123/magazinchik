@@ -91,4 +91,20 @@ describe.skipIf(!Database)('друзья в гостях (сервер)', () => 
     await progress(await post(2, { level: 2, revenue: 100, shop: { junk: 'x'.repeat(20_000) } }), env);
     expect((await json<S>(visits(await post(1, { action: 'shop', to: 2 }), env))).shop).toEqual(shop);
   });
+
+  it('друг по коду: оба уже играли, связь в обе стороны', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
+    for (const id of [10, 20]) await progress(await post(id, { level: 1, revenue: 50 }), env);
+    type L = { code: string; friends: { id: number }[] };
+    const mine = await json<L>(visits(await post(10, { action: 'list' }), env));
+    expect(mine.friends).toEqual([]);
+    const theirs = await json<L>(visits(await post(20, { action: 'list' }), env));
+    type A = { ok: boolean; name?: string; error?: string };
+    expect(await json<A>(visits(await post(10, { action: 'add', code: 'нет' }), env))).toEqual({ ok: false, error: 'bad_code' });
+    expect(await json<A>(visits(await post(10, { action: 'add', code: mine.code }), env))).toEqual({ ok: false, error: 'bad_code' });
+    expect((await json<A>(visits(await post(10, { action: 'add', code: 'ZZZZ' }), env))).error).toBe('not_found');
+    expect(await json<A>(visits(await post(10, { action: 'add', code: theirs.code.toLowerCase() }), env))).toEqual({ ok: true, name: 'Тест' });
+    expect((await json<L>(visits(await post(10, { action: 'list' }), env))).friends.map((f) => f.id)).toEqual([20]);
+    expect((await json<L>(visits(await post(20, { action: 'list' }), env))).friends.map((f) => f.id)).toEqual([10]);
+  });
 });

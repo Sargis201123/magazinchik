@@ -1,0 +1,8 @@
+# Cloudflare: страницу игры не кэшировать — Telegram сразу получает новую версию.
+# Файлы сборки (assets/) с хэшем в имени — кэшировать надолго.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
