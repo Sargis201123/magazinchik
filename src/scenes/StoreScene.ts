@@ -299,6 +299,17 @@ const RIVAL_ACROSS_H = 106;
 
 /** Слой света: выше людей и мебели, ниже всплывающих надписей (1000). */
 const LIGHT_DEPTH = 900;
+/** Толчок: дрожь доходит до полки через x·QUAKE_WAVE_MS мс (слева направо), полка дрожит QUAKE_SHAKE_MS мс на ±QUAKE_SHAKE_PX. */
+const QUAKE_WAVE_MS = 1.5;
+const QUAKE_SHAKE_MS = 560;
+const QUAKE_SHAKE_PX = 0.8;
+/** После волны: осколки улеглись — полки перерисовываются. */
+const QUAKE_SETTLE_MS = 700;
+/** У скольких упавших штук самое большее разлетаются осколки (остальные просто бьются). */
+const QUAKE_SHATTER_MAX = 20;
+/** Цвет пыли и штукатурки; крошки потемнее — их видно и на светлом полу. */
+const QUAKE_DUST = 0xc8b8a0;
+const QUAKE_GRIT = 0x8f7f6a;
 /** Цвет света на улице и в зале по ходу дня: [доля дня, цвет]. Умножается на картинку. */
 const OUTDOOR_LIGHT: [number, number][] = [
   [0, 0xfff2dc],
@@ -793,6 +804,16 @@ interface ShelfView {
   meter?: Phaser.GameObjects.Graphics;
 }
 
+/** Штука, которую разбил толчок: какая картинка на полке и как она выглядела. */
+interface QuakeFall {
+  img: Phaser.GameObjects.Image;
+  key: string;
+  x: number;
+  y: number;
+  scale: number;
+  tint: number;
+}
+
 interface NightLight {
   obj: Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse;
   /** Яркость к ночи. */
@@ -848,6 +869,8 @@ export class StoreScene extends Phaser.Scene {
   private stats: DayStats = emptyDayStats();
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
+  /** Сколько раз перерисовывали полки: толчок по нему узнаёт, что товар на картинках уже другой. */
+  private shelvesDrawn = 0;
   private boxes: Phaser.GameObjects.Image[] = [];
   private shutters: Phaser.GameObjects.Image[] = [];
   private arrow?: Phaser.GameObjects.Image;
@@ -886,6 +909,10 @@ export class StoreScene extends Phaser.Scene {
   private coldAir = false;
   /** Пятна света от потолочных ламп с номером ряда: утром включаются ряд за рядом. */
   private lampPools: { img: Phaser.GameObjects.Image; row: number }[] = [];
+  /** Подвесные лампы (декор «Свет») с пятном света под ними: от подземного толчка качаются. */
+  private hangingLamps: { lamp: Phaser.GameObjects.Image; bulb: Phaser.GameObjects.Image }[] = [];
+  /** Цвета осколков разбитого товара по картинке — чтобы не читать пиксели каждый раз. */
+  private shardColors = new Map<string, number[]>();
   /** Пруд в парке: рядом летают светлячки. */
   private parkPond?: { x: number; y: number };
   /** Солнечные пятна от окон на полу зала. */
@@ -1892,6 +1919,51 @@ export class StoreScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
       onComplete: () => parts.forEach((p) => p.setData('hopping', false)),
     });
+  }
+
+  /**
+   * Дрожь по залу от толчка: волна бежит по полкам слева направо — каждая полка вместе с товаром
+   * мелко ходит из стороны в сторону и затихает. Когда волна доходит до полки, зовётся onShelf.
+   * Возвращает, через сколько мс волна пройдёт весь зал.
+   */
+  private quakeWave(onShelf: (view: ShelfView, index: number) => void): number {
+    type Part = Phaser.GameObjects.GameObject & { x: number; visible: boolean; depth: number };
+    let end = 0;
+    this.shelfViews.forEach((view, index) => {
+      const delay = Math.max(0, view.at.x) * QUAKE_WAVE_MS;
+      end = Math.max(end, delay + QUAKE_SHAKE_MS);
+      let parts: { obj: Part; base: number; set: number }[] = [];
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay,
+        duration: QUAKE_SHAKE_MS,
+        onStart: () => {
+          if (!view.bg.active) return;
+          onShelf(view, index);
+          // Толчок снизу: полка коротко подскакивает, дальше дрожит.
+          this.hopShelf(view, 1);
+          // Полка, кромка, товар, значок отдела; плитка, тени и отсветы на полу стоят на месте.
+          const all = [view.bg, view.front, view.cover, view.meter, ...view.items, ...view.backItems, ...view.pips, ...(view.lights as unknown as Part[])];
+          parts = all.filter((o): o is Part => Boolean(o?.active && o.visible && o.depth > 1)).map((obj) => ({ obj, base: obj.x, set: NaN }));
+        },
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          // Несколько качаний, к концу всё тише.
+          const off = Math.sin(k * Math.PI * 8) * QUAKE_SHAKE_PX * (1 - k);
+          for (const p of parts) {
+            if (!p.obj.active) continue;
+            // Предмет переставили (полку перерисовали, штука летит из коробки) — качаем от нового места.
+            if (p.obj.x !== p.set) p.base = p.obj.x;
+            p.obj.x = p.set = p.base + off;
+          }
+        },
+        onComplete: () => {
+          for (const p of parts) if (p.obj.active && p.obj.x === p.set) p.obj.x = p.base;
+        },
+      });
+    });
+    return end;
   }
 
   /** Круг от пальца: показывает, куда пришлось касание, и что нажатие засчитано. */
@@ -4557,7 +4629,6 @@ export class StoreScene extends Phaser.Scene {
             { alpha: 0, duration: 550 },
           ],
         });
-        this.cameras.main.shake(180, 0.0015);
         this.time.delayedCall(Phaser.Math.Between(250, 1100), () => {
           sound.thunder();
           this.petsStartled();
@@ -6110,6 +6181,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Премиальный свет: бра, лампы, фонари или люстры между картинами, гирлянда — по всей стене. */
   private buildLights(): void {
+    this.hangingLamps = [];
     const light = activeDecor(this.state, 'light');
     if (!light) return;
     const { w, wallH, wc } = this.layout;
@@ -6128,13 +6200,18 @@ export class StoreScene extends Phaser.Scene {
     const spots = [46, 78];
     for (let x = 126; x < wc.x - 12; x += 64) spots.push(x);
     for (const x of spots.filter((sx) => sx < wc.x - 12 && !this.behindShelf(sx, 4))) {
-      this.art(x, y, light.texture!).setDepth(2);
+      const lamp = this.art(x, y, light.texture!).setDepth(2);
       const bulb = this.art(x + (hanging ? 0.5 : 2), hanging ? y + 3 : y - 3, 'glow')
         .setDisplaySize(light.id === 'light_chandelier' ? 30 : 18, 14)
         .setTint(warm)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setAlpha(0.45)
         .setDepth(2);
+      // Подвесная лампа висит на шнуре: точка подвеса — верхний край, вокруг неё она и качается.
+      if (hanging) {
+        lamp.setOrigin(0.5, 0).setY(y - lamp.displayHeight / 2);
+        this.hangingLamps.push({ lamp, bulb });
+      }
       this.tweens.add({ targets: bulb, alpha: { from: 0.45, to: 0.32 }, duration: 1600 + (x % 5) * 140, yoyo: true, repeat: -1 });
       // Тёплое пятно на полу у стены — вечером ярче.
       this.nightGlow(this.art(x, wallH + 6, 'glow').setDisplaySize(52, 22).setTint(warm), 0.35);
@@ -6345,6 +6422,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Создаёт картинки для новых полок и обновляет товар на всех. */
   private refreshShelves(): void {
+    this.shelvesDrawn++;
     this.layout.slots.forEach((slot, i) => {
       // Свободное место под полку — разметка на полу: полку покупают утром во вкладке «Зал».
       if (!this.slotDecor[i]) {
@@ -9626,7 +9704,8 @@ export class StoreScene extends Phaser.Scene {
       this.tweens.add({ targets: flash, alpha: 0, duration: 900, onComplete: () => flash.destroy() });
       sound.rumble();
       haptic.error();
-      this.cameras.main.shake(400, 0.006);
+      // Вместо тряски — дым от светошумовой: у двери расползается облако.
+      this.smokeCloud(door.x, door.y + 2);
       say(w / 2, h / 2 - 20, 'robbery.storm', '#c8ffb0');
       for (const robber of robbers) void this.walk(robber, door.x, h + 16).then(() => {
         if (robber.active) robber.setVisible(false);
@@ -9703,17 +9782,258 @@ export class StoreScene extends Phaser.Scene {
     if (id === 'carnival') keep(this.tweens.add({ targets: person, y: y - 1.5, duration: 260, yoyo: true, repeat: -1, delay: i * 90 }));
   }
 
-  /** Подземный толчок: камера трясётся, с полок падает и бьётся часть товара. */
+  /**
+   * Подземный толчок: экран не трясётся — дрожит сам магазин. По полкам слева направо бежит дрожь,
+   * разбитый товар падает с полки на пол, с потолка сыплется пыль, подвесные лампы качаются.
+   */
   private tremor(): void {
-    this.cameras.main.shake(800, 0.008);
     sound.rumble();
     haptic.error();
+    const before = this.state.shelves;
     const { state, broken } = quakeBreak(this.state, Math.random);
     this.state = state;
     this.stats.spoiled += broken;
-    this.refreshShelves();
+    // Что упадёт — запоминаем по картинкам сейчас: до прихода волны полку могут перерисовать.
+    const drawn = this.shelvesDrawn;
+    const falls = this.shelfViews.map((view, i) => this.brokenOnShelf(view, before[i], state.shelves[i]));
+    // Осколки — не больше чем у ~20 штук: в большом магазине разбивается и по 40.
+    const every = Math.max(1, Math.ceil(falls.flat().length / QUAKE_SHATTER_MAX));
+    let n = 0;
+    const end = this.quakeWave((view, i) => {
+      for (const fall of falls[i] ?? []) {
+        // Полку ещё не перерисовывали — разбитая штука на ней: прячем, вместо неё падает копия.
+        if (this.shelvesDrawn === drawn && fall.img.active) fall.img.setVisible(false);
+        this.dropItem(view, fall, n++ % every === 0);
+      }
+    });
+    // Волна прошла, осколки улеглись — оставшийся товар встаёт по местам, таблички «пусто» обновляются.
+    this.time.delayedCall(end + QUAKE_SETTLE_MS, () => this.refreshShelves());
+    if (!this.lite) {
+      this.ceilingDust();
+      this.swingLamps();
+    }
     const { w, h } = this.layout;
     this.popup(w / 2, h / 2 - 10, t('popup.quake', { n: broken }), '#ffb0a0');
+  }
+
+  /** Какие картинки на полке показывают товар, который толчок разбил (сравнение полки до и после). */
+  private brokenOnShelf(view: ShelfView, before?: StoreState['shelves'][number], after?: StoreState['shelves'][number]): QuakeFall[] {
+    if (!before || !after) return [];
+    // Порядок — как в refreshShelves: картинка n показывает n-ю штуку по списку товаров.
+    const units = PRODUCT_IDS.flatMap((id) => before.items[id] ?? []);
+    const kept = new Set(PRODUCT_IDS.flatMap((id) => after.items[id] ?? []));
+    const falls: QuakeFall[] = [];
+    units.forEach((unit, n) => {
+      const img = view.items[n];
+      if (kept.has(unit) || !img?.visible) return;
+      falls.push({ img, key: img.texture.key, x: img.x, y: img.y, scale: img.scaleX, tint: img.tintTopLeft });
+    });
+    return falls;
+  }
+
+  /**
+   * Штука срывается с полки: подскок, дуга с кувырком на пол перед полкой, там — облачко пыли
+   * и осколки цвета самого товара; разбитое тускнеет и исчезает.
+   */
+  private dropItem(view: ShelfView, fall: QuakeFall, shards: boolean): void {
+    const side = view.meter ? slotSide(this.layout, view.at) : null;
+    const dir = side === 'right' ? -1 : side === 'left' ? 1 : Phaser.Math.RND.sign();
+    // С боковой полки — в проход рядом с ней, с обычной — на пол перед полкой.
+    const to = side
+      ? { x: view.at.x + dir * Phaser.Math.Between(11, 16), y: fall.y + Phaser.Math.Between(2, 6) }
+      : { x: fall.x + dir * Phaser.Math.Between(2, 7), y: view.at.y + Phaser.Math.Between(17, 22) };
+    // Летит перед полкой: с боковой — поверх её торца, а не за ним.
+    const piece = this.add.image(fall.x, fall.y, fall.key).setScale(fall.scale).setTint(fall.tint).setDepth(Math.max(to.y, view.at.y + 20) + 2);
+    const spin = dir * Phaser.Math.Between(100, 200);
+    const hop = Phaser.Math.Between(4, 7);
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      delay: Phaser.Math.Between(0, 140),
+      duration: Phaser.Math.Between(340, 420),
+      onUpdate: (tween) => {
+        const k = tween.getValue() ?? 0;
+        // Сначала вверх с полки, потом всё быстрее вниз — как брошенное.
+        piece.setPosition(fall.x + (to.x - fall.x) * k, fall.y + (to.y - fall.y) * k * k - hop * Math.sin(k * Math.PI));
+        piece.setAngle(spin * k);
+      },
+      onComplete: () => {
+        if (!piece.active) return;
+        piece.setPosition(to.x, to.y).setTint(0xc8b4a8);
+        // Удар о пол: штука сминается (но узнаётся), тускнеет и пропадает.
+        this.tweens.add({ targets: piece, scaleY: fall.scale * 0.7, scaleX: fall.scale * 1.15, duration: 70, ease: 'Quad.easeOut' });
+        this.tweens.add({ targets: piece, alpha: 0, delay: 650, duration: 450, onComplete: () => piece.destroy() });
+        if (shards && !this.lite) this.shatter(to.x, to.y, fall.key);
+      },
+    });
+  }
+
+  /** Осколки и пыль от разбитой штуки: облачко и кусочки её цвета разлетаются по полу. */
+  private shatter(x: number, y: number, key: string): void {
+    const dust = this.art(x, y - 1, 'puff').setTint(QUAKE_DUST).setScale(0.6 / ART).setAlpha(0.9).setDepth(y + 3);
+    this.tweens.add({ targets: dust, y: y - 6, scale: 1.1 / ART, alpha: 0, duration: 600, ease: 'Quad.easeOut', onComplete: () => dust.destroy() });
+    // Цвет осколков — с самой картинки товара (середина и чуть ниже), иначе светлое стекло. Один раз на картинку.
+    let colors = this.shardColors.get(key);
+    if (!colors) {
+      const frame = this.textures.getFrame(key);
+      const colorAt = (fy: number) => {
+        const c = frame ? this.textures.getPixel(Math.floor(frame.width / 2), Math.floor(frame.height * fy), key) : null;
+        return c && c.alpha > 0 ? c.color : 0xe8f4ff;
+      };
+      colors = [colorAt(0.5), colorAt(0.7), 0xffffff];
+      this.shardColors.set(key, colors);
+    }
+    for (let i = 0; i < 4; i++) {
+      const bit = this.add.rectangle(x, y, i % 2 ? 1 : 1.5, 1, colors[i % colors.length]).setDepth(y + 3);
+      const dx = Phaser.Math.Between(-9, 9);
+      this.tweens.add({ targets: bit, x: x + dx, angle: dx * 20, duration: 320, ease: 'Quad.easeOut' });
+      this.tweens.chain({
+        targets: bit,
+        tweens: [
+          { y: y - Phaser.Math.Between(2, 5), duration: 140, ease: 'Quad.easeOut' },
+          { y: y + Phaser.Math.Between(0, 3), duration: 180, ease: 'Quad.easeIn' },
+          { alpha: 0, delay: 500, duration: 400, onComplete: () => bit.destroy() },
+        ],
+      });
+    }
+  }
+
+  /** С потолка от толчка сыплется пыль: комки штукатурки и крошки вдоль задней стены, крошки над залом — вслед за волной. */
+  private ceilingDust(): void {
+    const { w, h, wallH } = this.layout;
+    // Пыль сыплется перед полками у задней стены, а не за ними.
+    const front = wallH + 24;
+    for (let x = 5; x < w - 3; x += Phaser.Math.Between(8, 13)) {
+      const delay = x * QUAKE_WAVE_MS + Phaser.Math.Between(0, 150);
+      // Комок у самого потолка: срывается, раздувается и тает, опускаясь.
+      const size = Phaser.Math.FloatBetween(0.6, 1);
+      const clump = this.art(x, 2, 'puff').setTint(QUAKE_DUST).setScale((0.5 * size) / ART).setFlipX(Math.random() < 0.5).setAlpha(0).setDepth(front);
+      this.tweens.chain({
+        targets: clump,
+        tweens: [
+          { alpha: 0.95, scale: (0.8 * size) / ART, delay, duration: 120, ease: 'Quad.easeOut' },
+          { alpha: 0, y: Phaser.Math.Between(8, 12), scale: (1.2 * size) / ART, duration: 900, ease: 'Sine.easeOut', onComplete: () => clump.destroy() },
+        ],
+      });
+      // Крошки струйкой вниз, до пола перед полками.
+      for (let i = 0; i < 3; i++) {
+        const size = i % 2 ? 1 : 1.5;
+        const speck = this.add.rectangle(x + Phaser.Math.FloatBetween(-2.5, 2.5), 3, size, size, i % 2 ? QUAKE_DUST : QUAKE_GRIT).setAlpha(0).setDepth(front);
+        this.tweens.chain({
+          targets: speck,
+          tweens: [
+            { alpha: 1, delay: delay + 40 + i * 90, duration: 60 },
+            { y: wallH + Phaser.Math.Between(-8, 10), x: speck.x + Phaser.Math.FloatBetween(-1.5, 1.5), duration: Phaser.Math.Between(600, 850), ease: 'Quad.easeIn' },
+            { alpha: 0, duration: 250, onComplete: () => speck.destroy() },
+          ],
+        });
+      }
+    }
+    // Над залом сверху, из-под потолка, падают редкие крошки.
+    for (let i = 0; i < 22; i++) {
+      const x = Phaser.Math.Between(6, w - 6);
+      const y = Phaser.Math.Between(wallH + 4, h - 30);
+      const mote = this.add.rectangle(x, y, 1, 1, i % 3 ? QUAKE_GRIT : QUAKE_DUST).setAlpha(0).setDepth(LIGHT_DEPTH - 2);
+      this.tweens.chain({
+        targets: mote,
+        tweens: [
+          { alpha: 0.9, delay: x * QUAKE_WAVE_MS + Phaser.Math.Between(0, 400), duration: 120 },
+          { y: y + Phaser.Math.Between(14, 22), x: x + Phaser.Math.FloatBetween(-2, 2), duration: Phaser.Math.Between(700, 1000), ease: 'Quad.easeIn' },
+          { alpha: 0, duration: 300, onComplete: () => mote.destroy() },
+        ],
+      });
+    }
+  }
+
+  /** Толчок раскачивает подвесные лампы, а пятна света от потолочных ламп ходят по полу. */
+  private swingLamps(): void {
+    for (const { lamp, bulb } of this.hangingLamps) {
+      if (!lamp.active) continue;
+      // Свет висит под лампой: при качании он описывает дугу вокруг точки подвеса.
+      const pivot = { x: lamp.x, y: lamp.y };
+      const arm = { x: bulb.x - pivot.x, y: bulb.y - pivot.y };
+      const swing = Phaser.Math.FloatBetween(9, 13) * Phaser.Math.RND.sign();
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay: pivot.x * QUAKE_WAVE_MS,
+        duration: 2600,
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          const a = Phaser.Math.DegToRad(swing * Math.sin(k * Math.PI * 7) * (1 - k) ** 1.5);
+          lamp.setRotation(a);
+          bulb.setPosition(pivot.x + arm.x * Math.cos(a) - arm.y * Math.sin(a), pivot.y + arm.x * Math.sin(a) + arm.y * Math.cos(a));
+        },
+        onComplete: () => {
+          lamp.setRotation(0);
+          bulb.setPosition(pivot.x + arm.x, pivot.y + arm.y);
+        },
+      });
+    }
+    for (const { img } of this.lampPools) {
+      const x = img.x;
+      const sway = Phaser.Math.FloatBetween(2.5, 4) * Phaser.Math.RND.sign();
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay: x * QUAKE_WAVE_MS,
+        duration: 2400,
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          img.x = x + sway * Math.sin(k * Math.PI * 6) * (1 - k);
+        },
+        onComplete: () => (img.x = x),
+      });
+    }
+  }
+
+  /** Дым после штурма: от двери в обе стороны расползается серое облако и медленно тает. */
+  private smokeCloud(x: number, y: number): void {
+    const n = this.lite ? 6 : 16;
+    for (let i = 0; i < n; i++) {
+      const dir = i % 2 ? 1 : -1;
+      const reach = Phaser.Math.FloatBetween(0.1, 1);
+      const blob = this.art(x + Phaser.Math.Between(-4, 4), y + Phaser.Math.Between(-3, 3), 'glow')
+        .setScale(0.15)
+        .setTint(Phaser.Utils.Array.GetRandom([0xa8acb8, 0xc4c6ce, 0x8e92a0]))
+        .setAlpha(0)
+        .setDepth(LIGHT_DEPTH - 3);
+      // Клубы расходятся вдоль фасада шире, чем вглубь, растут и поднимаются.
+      this.tweens.add({
+        targets: blob,
+        x: x + dir * reach * 58 + Phaser.Math.Between(-5, 5),
+        y: y + Phaser.Math.Between(-32, 16),
+        scale: Phaser.Math.FloatBetween(0.55, 0.85),
+        duration: Phaser.Math.Between(2600, 3400),
+        ease: 'Cubic.easeOut',
+      });
+      this.tweens.chain({
+        targets: blob,
+        tweens: [
+          { alpha: Phaser.Math.FloatBetween(0.7, 0.85), delay: i * 25, duration: 180 },
+          { alpha: 0, delay: Phaser.Math.Between(1200, 2000), duration: Phaser.Math.Between(2200, 3000), ease: 'Sine.easeIn', onComplete: () => blob.destroy() },
+        ],
+      });
+    }
+    if (this.lite) return;
+    // Поверх мягких клубов — пиксельные облачка: дым читается как дым, а не как туман.
+    for (let i = 0; i < 14; i++) {
+      const dir = i % 2 ? 1 : -1;
+      // Часть клубов вываливается наружу, на тротуар.
+      const clump = this.art(x + dir * Phaser.Math.Between(2, 12), y + Phaser.Math.Between(-8, 10), 'puff')
+        .setTint(Phaser.Utils.Array.GetRandom([0xb0b4bc, 0xd0d2d8]))
+        .setFlipX(Math.random() < 0.5)
+        .setAlpha(0)
+        .setDepth(LIGHT_DEPTH - 2);
+      this.tweens.add({ targets: clump, x: clump.x + dir * Phaser.Math.Between(12, 50), y: clump.y - Phaser.Math.Between(6, 26), scale: Phaser.Math.FloatBetween(1.8, 2.8) / ART, duration: 2800, ease: 'Cubic.easeOut' });
+      this.tweens.chain({
+        targets: clump,
+        tweens: [
+          { alpha: 0.95, delay: 80 + i * 50, duration: 160 },
+          { alpha: 0, delay: Phaser.Math.Between(800, 1400), duration: 1800, onComplete: () => clump.destroy() },
+        ],
+      });
+    }
   }
 
   private finishDay(): void {
