@@ -1,8 +1,10 @@
 // Приглашения друзей и напоминания от бота. Нужна база Cloudflare D1 (привязка DB): без неё
 // всё выключено, игра работает как раньше.
 //
-// Приглашение: игрок делится ссылкой t.me/<бот>?start=ref_<его id>. Друг нажимает «Старт» —
-// вебхук записывает, кто его пригласил (только если друг здесь впервые). Когда друг откроет игру,
+// Приглашение: игрок делится ссылкой t.me/<бот>?startapp=ref_<его id> — она открывает игру сразу,
+// без чата с ботом; при запуске сервер видит метку в подписанных данных (start_param) и записывает,
+// кто пригласил (только если друг здесь впервые). Старые ссылки t.me/<бот>?start=ref_<id> работают
+// как раньше: метку записывает вебхук, когда друг нажмёт «Старт». Когда друг откроет игру,
 // пригласивший может забрать награду, а друг получает подарок при первом запуске.
 //
 // Напоминание: раз в час cron смотрит, кто не заходил почти сутки, и бот пишет ему одно доброе
@@ -57,6 +59,12 @@ const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS shops (id INTEGER PRIMARY KEY, data TEXT, updated INTEGER)',
   // Друзья, добавленные по коду (visits.ts): в обе стороны, даже если оба уже играли.
   'CREATE TABLE IF NOT EXISTS friends (a INTEGER, b INTEGER, at INTEGER, PRIMARY KEY (a, b))',
+  // «Позвать на помощь» (share.ts): кто звал и когда; кто помог кому (один раз в день каждому).
+  'CREATE TABLE IF NOT EXISTS help_asks (id INTEGER PRIMARY KEY, at INTEGER)',
+  'CREATE TABLE IF NOT EXISTS helps (helper INTEGER, receiver INTEGER, day INTEGER, at INTEGER, claimed INTEGER DEFAULT 0, PRIMARY KEY (helper, receiver, day))',
+  'CREATE INDEX IF NOT EXISTS helps_receiver ON helps (receiver, claimed)',
+  // Когда игрок последний раз готовил сообщение для окна «Поделиться» (share.ts): не чаще раза в несколько секунд.
+  'CREATE TABLE IF NOT EXISTS shares (id INTEGER PRIMARY KEY, at INTEGER)',
 ].join(';\n');
 
 /** Таблицы создаются сами при первом обращении к базе. */
@@ -68,15 +76,19 @@ export async function ready(db: D1): Promise<void> {
 }
 
 let botName: string | null = null;
-async function username(token: string): Promise<string> {
+/** Имя бота (@…) — для ссылок t.me/<бот>?startapp=… (getMe, один раз на воркер). */
+export async function username(token: string): Promise<string> {
   if (!botName) botName = (await bot<{ username: string }>(token, 'getMe', {})).username;
   return botName;
 }
 
-/** Друг нажал «Старт» по ссылке ref_<id>: записать приглашение, если он здесь впервые. */
+/**
+ * Друг пришёл по ссылке ref_<id> (или откликнулся на «Помоги!» — help_<id>): записать приглашение,
+ * если он здесь впервые. Метка приходит из вебхука (/start) или из start_param при запуске игры.
+ */
 export async function recordReferral(env: Env, invitee: number, payload: string): Promise<void> {
   const db = env.DB;
-  const match = /^ref_(\d+)$/.exec(payload.trim());
+  const match = /^(?:ref|help)_(\d+)$/.exec(payload.trim());
   if (!db || !match) return;
   const inviter = Number(match[1]);
   if (!inviter || inviter === invitee) return;
@@ -88,12 +100,13 @@ export async function recordReferral(env: Env, invitee: number, payload: string)
 
 /**
  * Рекламная метка ссылки: t.me/<бот>?start=src_<канал> (через бота) или
- * t.me/<бот>/<приложение>?startapp=src_<канал> (сразу в игру). Приглашение друга — «ref».
+ * t.me/<бот>?startapp=src_<канал> (сразу в игру). Приглашение друга — «ref», просьба о помощи — «help».
  */
 export function sourceOf(payload: string): string | null {
   const text = payload.trim();
   const src = /^src_([a-z0-9_]{1,24})$/i.exec(text);
   if (src) return src[1].toLowerCase();
+  if (/^help_\d+$/.test(text)) return 'help';
   return /^ref_\d+$/.test(text) ? 'ref' : null;
 }
 
@@ -120,10 +133,10 @@ async function friends(db: D1, inviter: number): Promise<{ total: number; unclai
 }
 
 /**
- * POST /api/social-ping { initData, lang } → { enabled, bot, friends, unclaimed, welcome }:
+ * POST /api/social-ping { initData, lang } → { enabled, bot, friends, unclaimed, welcome, helped }:
  * игра открылась — игрок «на месте» (напоминания обнуляются), и что с приглашениями.
  * welcome — друга пригласили, и подарок новичку ещё не вручали (вручается один раз, даже после
- * «Начать заново»).
+ * «Начать заново»); helped — сколько друзей прислали подмогу и она ещё не забрана (share.ts).
  */
 export async function socialPing(request: Request, env: Env): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
@@ -134,9 +147,13 @@ export async function socialPing(request: Request, env: Env): Promise<Response> 
   if (!user) return json({ error: 'bad_init_data' }, 401);
   await ready(db);
   const now = Date.now();
-  // Открыли игру прямой ссылкой ?startapp=src_<канал> — запомнить источник до первой записи игрока.
+  // Открыли игру прямой ссылкой ?startapp=src_<канал> или ref_<id> — запомнить источник и того, кто
+  // пригласил, до первой записи игрока (потом он уже не новичок).
   const startParam = new URLSearchParams(body.initData ?? '').get('start_param');
-  if (startParam) await recordSource(env, user.id, startParam, now).catch((e) => console.error(e));
+  if (startParam) {
+    await recordReferral(env, user.id, startParam).catch((e) => console.error(e));
+    await recordSource(env, user.id, startParam, now).catch((e) => console.error(e));
+  }
   await db
     .prepare(
       'INSERT INTO players (id, lang, joined, last_seen, misses) VALUES (?, ?, ?, ?, 0) ON CONFLICT(id) DO UPDATE SET lang = excluded.lang, last_seen = excluded.last_seen, misses = 0',
@@ -145,7 +162,15 @@ export async function socialPing(request: Request, env: Env): Promise<Response> 
     .run();
   const welcome = await db.prepare('UPDATE referrals SET welcomed = 1 WHERE invitee = ? AND welcomed = 0').bind(user.id).run();
   const mine = await friends(db, user.id);
-  return json({ enabled: true, bot: await username(token), friends: mine.total, unclaimed: mine.unclaimed, welcome: (welcome.meta?.changes ?? 0) > 0 });
+  const helped = await db.prepare('SELECT COUNT(*) AS n FROM helps WHERE receiver = ? AND claimed = 0').bind(user.id).first<{ n: number }>();
+  return json({
+    enabled: true,
+    bot: await username(token),
+    friends: mine.total,
+    unclaimed: mine.unclaimed,
+    welcome: (welcome.meta?.changes ?? 0) > 0,
+    helped: helped?.n ?? 0,
+  });
 }
 
 /** POST /api/social-claim { initData } → { claimed }: забрать награду за пришедших друзей. */

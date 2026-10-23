@@ -636,6 +636,9 @@ export interface StoreState {
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */
   rush?: boolean;
   rushClaimed?: number;
+  /** «Позвать на помощь» (help.ts): в какой день друзья на подмоге и в какой день уже звал. */
+  helpDay?: number;
+  helpAsked?: number;
   /** Сезонный пропуск (pass.ts). */
   pass?: PassState;
   /** Истории постоянных покупателей (tales.ts). */

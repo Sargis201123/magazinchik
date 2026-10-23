@@ -12,8 +12,8 @@ export const GIFT = 300;
 const ACTIVE_DAYS = 7;
 
 const today = (now: number): number => Math.floor(now / DAY);
-/** Больше стольких друзей по коду не добавить. */
-const MAX_FRIENDS = 50;
+/** Больше стольких друзей по коду (и по «Помоги!», share.ts) не добавить. */
+export const MAX_FRIENDS = 50;
 /** Код игрока для друзей: его номер в Telegram в 36-ричной записи. */
 export const friendCode = (id: number): string => id.toString(36).toUpperCase();
 const fromCode = (code: string): number => (/^[0-9A-Z]{1,12}$/i.test(code) ? parseInt(code, 36) : 0);

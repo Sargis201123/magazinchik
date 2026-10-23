@@ -2658,7 +2658,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     adding.append(input, add);
     box.append(mine, adding);
     if (friendMsg) box.append(el('div', 'ui-note', friendMsg));
-    box.append(button(`📨 ${t('friends.invite')}`, () => inviteFriends(t('social.share')), 'ui-btn secondary'));
+    box.append(button(`📨 ${t('friends.invite')}`, () => void inviteFriends(t('social.share')), 'ui-btn secondary'));
     return [box];
   };
 
@@ -2694,7 +2694,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const box = el('div', 'ui-box');
     box.append(el('b', '', `🤝 ${t('social.title')}`), el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT })));
     if (info.friends) box.append(el('div', 'ui-muted', t('social.count', { n: info.friends })));
-    box.append(button(t('social.invite'), () => inviteFriends(t('social.share')), 'ui-btn'));
+    box.append(button(t('social.invite'), () => void inviteFriends(t('social.share')), 'ui-btn'));
     if (info.unclaimed) {
       const claim = button(t('social.claim', { n: info.unclaimed, r: INVITE_REWARD, sum: info.unclaimed * INVITE_REWARD }), () => {
         claim.disabled = true;

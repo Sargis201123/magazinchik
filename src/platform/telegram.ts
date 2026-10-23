@@ -42,8 +42,10 @@ interface TelegramWebApp {
   openTelegramLink?(url: string): void;
   /** Опубликовать историю с картинкой по ссылке (Bot API 7.8+). */
   shareToStory?(mediaUrl: string, params?: { text?: string }): void;
+  /** Окно «Поделиться» с сообщением, которое подготовил бот (Bot API 8.0+): в колбэк — отправил ли. */
+  shareMessage?(msgId: string, callback?: (sent: boolean) => void): void;
   requestWriteAccess?(callback?: (granted: boolean) => void): void;
-  initDataUnsafe: { user?: { id: number; first_name?: string; language_code?: string } };
+  initDataUnsafe: { user?: { id: number; first_name?: string; language_code?: string }; start_param?: string };
   HapticFeedback?: {
     impactOccurred(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft'): void;
     notificationOccurred(type: 'error' | 'success' | 'warning'): void;
@@ -116,6 +118,33 @@ export function shareStory(mediaUrl: string, text: string): boolean {
 }
 
 export const telegramUserId = (): number | undefined => webApp()?.initDataUnsafe.user?.id;
+
+/** Метка ссылки, по которой открыли игру: t.me/<бот>?startapp=<метка> (ref_…, help_…, src_…). */
+export const startParam = (): string => webApp()?.initDataUnsafe.start_param ?? '';
+
+/** Есть окно «Поделиться» с готовым сообщением от бота (Telegram 8.0+). */
+export const canShareMessage = (): boolean => isInTelegram() && at('8.0') && Boolean(webApp()?.shareMessage);
+
+/** Сколько ждать ответа окна «Поделиться»: колбэк может и не прийти — тогда считаем, что поделился. */
+const SHARE_WAIT_MS = 90_000;
+
+/** Открыть окно «Поделиться» с подготовленным сообщением; true — отправил (или окно молчит слишком долго). */
+export function shareMessage(id: string): Promise<boolean> {
+  const app = webApp();
+  if (!app?.shareMessage || !canShareMessage()) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(true), SHARE_WAIT_MS);
+    try {
+      app.shareMessage!(id, (sent) => {
+        clearTimeout(timer);
+        resolve(Boolean(sent));
+      });
+    } catch {
+      clearTimeout(timer);
+      resolve(false);
+    }
+  });
+}
 
 /** Облако Telegram (Bot API 6.9+), вне Telegram — нет. */
 export const cloudStorage = (): CloudStorage | undefined => (isInTelegram() && at('6.9') ? webApp()?.CloudStorage : undefined);

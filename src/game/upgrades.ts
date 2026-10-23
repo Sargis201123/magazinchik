@@ -6,6 +6,7 @@
 import type { TextKey } from '../i18n/ru';
 import { CARRY, managerBoost, type ScanTiming, type StoreState } from './economy';
 import { registerScan } from './gear';
+import { helpScan } from './help';
 
 export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'autoOrder' | 'eTags' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables' | 'kitchen' | 'bargain';
 
@@ -55,10 +56,10 @@ export function buyUpgrade(state: StoreState, id: UpgradeId): StoreState | null 
   return { ...state, money: state.money - up.price, upgrades: [...(state.upgrades ?? []), id] };
 }
 
-/** Время пробивки с учётом модели кассы и терминала. */
+/** Время пробивки с учётом модели кассы, терминала, менеджера и подмоги друзей (help.ts). */
 export const withUpgrades = (state: StoreState, timing: ScanTiming): ScanTiming => ({
-  item: (timing.item * registerScan(state)) / managerBoost(state),
-  pay: (hasUpgrade(state, 'terminal') ? timing.pay * TERMINAL_PAY : timing.pay) / managerBoost(state),
+  item: (timing.item * registerScan(state)) / managerBoost(state) / helpScan(state),
+  pay: (hasUpgrade(state, 'terminal') ? timing.pay * TERMINAL_PAY : timing.pay) / managerBoost(state) / helpScan(state),
 });
 
 /** Тележки: за один поход со склада несут вдвое больше, а у входа — тележки для покупателей. */
