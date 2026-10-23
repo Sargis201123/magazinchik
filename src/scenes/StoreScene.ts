@@ -297,6 +297,11 @@ const PARK_TREES = ['tree', 'tree', 'tree_round', 'tree_birch', 'tree_pine'];
 /** Высота здания босса за дорогой: умещается на месте «Гиганта». */
 const RIVAL_ACROSS_H = 106;
 
+/** Порыв ветра: как быстро волна идёт по кварталу (px/с), сколько длится наклон дерева и на сколько градусов. */
+const GUST_SPEED = 140;
+const GUST_MS = 1400;
+const GUST_TILT = 4;
+
 /** Слой света: выше людей и мебели, ниже всплывающих надписей (1000). */
 const LIGHT_DEPTH = 900;
 /** Толчок: дрожь доходит до полки через x·QUAKE_WAVE_MS мс (слева направо), полка дрожит QUAKE_SHAKE_MS мс на ±QUAKE_SHAKE_PX. */
@@ -856,6 +861,13 @@ interface TakenSpot {
   tint: number;
 }
 
+/** Украшение кроны дерева и где оно относительно основания дерева. */
+interface CrownPart {
+  obj: Phaser.GameObjects.RenderTexture | Phaser.GameObjects.Rectangle;
+  dx: number;
+  dy: number;
+}
+
 interface NightLight {
   obj: Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse;
   /** Яркость к ночи. */
@@ -1039,6 +1051,21 @@ export class StoreScene extends Phaser.Scene {
   private parkingTimer?: Phaser.Time.TimerEvent;
   /** Стаи птиц над кварталом (buildAmbient). */
   private flockTimer?: Phaser.Time.TimerEvent;
+  /** Порывы ветра (windGust): таймер, деревья с кронами и навесы соседей с зонтиками веранды. */
+  private windTimer?: Phaser.Time.TimerEvent;
+  private windTrees: Phaser.GameObjects.Image[] = [];
+  private awnings: Phaser.GameObjects.Image[] = [];
+  /** Часы грозового качания (мс, идут с ускорением игры). */
+  private windClock = 0;
+  /**
+   * Последний порыв: сколько мс прошло (по часам твинов — чтобы деревья гнулись в такт с кустами
+   * и листьями), от какого края кадра пошла волна и дует ли ещё.
+   */
+  private gust = { t: 0, x: 0, on: false };
+  /** Сила грозового качания (0…1): нарастает и стихает плавно — гроза кончилась, деревья не замирают рывком. */
+  private windSway = 0;
+  /** Деревья стоят ровно — каждый кадр их не трогаем. */
+  private windStill = true;
   /** Дневная живность и тени облаков: к вечеру исчезают (updateLighting). */
   private dayLife: { obj: Phaser.GameObjects.Image; alpha: number }[] = [];
   /** Вещи зала, которые двигают при перестановке (автомат, ведро, растения): место и «след» на полу. */
@@ -1314,6 +1341,7 @@ export class StoreScene extends Phaser.Scene {
     this.scarePigeons();
     ambience.update(this.rainStopped ? 'clear' : this.weather, this.evening, this.running, yearTime(this.state.day));
     this.updateRain();
+    this.windTick(deltaMs);
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     this.hud.showUrgent(this.running && !this.night && this.state.day > TUTORIAL_DAYS);
     if (!this.running) return;
@@ -3314,11 +3342,18 @@ export class StoreScene extends Phaser.Scene {
       }
     };
     // Пятна листвы и цвета на кронах — тысячи крошечных квадратиков. Отдельными объектами они съедали
-    // кадр на телефоне, поэтому рисуем их один раз в картинку (по одной на слой глубины).
-    const spots = new Map<number, { x: number; y: number; size: number; color: number }[]>();
-    const spot = (depth: number, x: number, y: number, size: number, color: number) => {
-      if (!spots.has(depth)) spots.set(depth, []);
-      spots.get(depth)!.push({ x, y, size, color });
+    // кадр на телефоне, поэтому рисуем их один раз в картинку (по одной на дерево: ветер её качает с кроной).
+    const spots = new Map<Phaser.GameObjects.Image, { x: number; y: number; size: number; color: number }[]>();
+    const spot = (tree: Phaser.GameObjects.Image, x: number, y: number, size: number, color: number) => {
+      if (!spots.has(tree)) spots.set(tree, []);
+      spots.get(tree)!.push({ x, y, size, color });
+    };
+    // Украшение кроны (пятна, огоньки) запоминаем на дереве: windTick качает его вместе с деревом.
+    for (const tree of trees) tree.setData('crown', undefined);
+    const crown = (tree: Phaser.GameObjects.Image, obj: CrownPart['obj']) => {
+      const list = (tree.getData('crown') as CrownPart[] | undefined) ?? [];
+      list.push({ obj, dx: obj.x - tree.x, dy: obj.y - tree.y });
+      tree.setData('crown', list);
     };
     if (this.weather !== 'leaves' && this.weather !== 'snow') {
       trees.forEach((tree, i) => {
@@ -3326,15 +3361,20 @@ export class StoreScene extends Phaser.Scene {
         if (time === 'autumn') {
           tree.setTint(i % 3 === 2 ? 0xffffff : 0xffe0a0);
           const tones = i % 3 === 2 ? [0xfeae34] : [0xf77622, 0xfeae34, 0xfee761, 0xe43b44];
-          for (let n = 0; n < (i % 3 === 2 ? 5 : 22); n++) spot(tree.depth + 0.5, tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 2.4, rnd.pick(tones));
+          for (let n = 0; n < (i % 3 === 2 ? 5 : 22); n++) spot(tree, tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 2.4, rnd.pick(tones));
         }
         // Весной кроны в розово-белом цвету.
         if (time === 'spring') {
-          for (let n = 0; n < 14; n++) spot(tree.depth + 0.5, tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 1.6, rnd.pick([0xffd2e2, 0xffffff, 0xf6a5c0]));
+          for (let n = 0; n < 14; n++) spot(tree, tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 1.6, rnd.pick([0xffd2e2, 0xffffff, 0xf6a5c0]));
         }
       });
     }
-    for (const [depth, list] of spots) keep(this.bakeSpots(list).setDepth(depth));
+    for (const [tree, list] of spots) {
+      const rt = keep(this.bakeSpots(list).setDepth(tree.depth + 0.5));
+      // Ось вращения — у основания дерева, как у самой картинки дерева.
+      rt.setOrigin((tree.x - rt.x) / rt.displayWidth, (tree.y - rt.y) / rt.displayHeight).setPosition(tree.x, tree.y);
+      crown(tree, rt);
+    }
     const flowers = [0xffffff, 0xf6757a, 0xfee761, 0xb55088, 0xe43b44, 0x2ce8f5];
     if (time === 'spring' || time === 'summer') {
       scatter(time === 'spring' ? 160 : 70, (x, y) => keep(this.art(x, y, 'flower').setTint(rnd.pick(flowers)).setDepth(-9)));
@@ -3394,6 +3434,7 @@ export class StoreScene extends Phaser.Scene {
         for (let i = 0; i < 6; i++) {
           const bulb = keep(this.add.rectangle(tree.x + rnd.between(-8, 8), tree.y - rnd.between(6, 22), 1.4, 1.4, rnd.pick(colors)).setDepth(tree.depth + 1));
           this.tweens.add({ targets: bulb, alpha: 0.2, duration: rnd.between(400, 900), yoyo: true, repeat: -1 });
+          crown(tree, bulb);
         }
       });
     }
@@ -5440,7 +5481,7 @@ export class StoreScene extends Phaser.Scene {
       if (n.dark) win.setTint(0x8b9bb4);
       else this.windowLight(x, front - 4.5, across ? top : front, across, rnd.frac() * 0.5);
     }
-    this.art(doorX, front - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(front + 40);
+    this.awnings.push(this.art(doorX, front - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(front + 40));
     // Вывеска на краю крыши (за дорогой — над витринами, у самой дороги).
     const signY = across ? top - 12 : bottom - FACADE_H - 8;
     const signDepth = across ? front + 41 : front - 3;
@@ -5529,7 +5570,7 @@ export class StoreScene extends Phaser.Scene {
     spots.forEach((tx, i) => {
       const ty = top + 15;
       this.art(tx, ty + 2, 'cafe_table').setDepth(ty + 6);
-      this.art(tx, ty - 3, 'umbrella').setDepth(ty + 30);
+      this.awnings.push(this.art(tx, ty - 3, 'umbrella').setDepth(ty + 30));
       // За столиком кто-нибудь сидит (через раз — вдвоём).
       const guest = this.makePerson(tx - 7, ty + 3, randomLook(looks[i % looks.length]));
       this.people.delete(guest);
@@ -5617,12 +5658,19 @@ export class StoreScene extends Phaser.Scene {
       [next.w * 0.75, -16],
     ];
     this.greenery = [];
+    // Что качает ветер (windGust): деревья отсюда и с парковки, навесы соседей (drawNeighbor) и зонтики веранды.
+    this.windTrees = [];
+    this.awnings = [];
+    // Пересборка убила твин порыва (killAll не зовёт onComplete) — новые деревья не должны застыть в наклоне.
+    this.gust = { t: 0, x: 0, on: false };
     // Дерево с тенью на газоне: свет сверху слева — тень ложится вправо-вниз от ствола.
     // Летом в ясный день тень кроны пятнистая и чуть колышется на ветру.
     const dapple = !this.lite && yearTime(this.state.day) === 'summer' && !isWet(weatherFor(this.state.day));
     const plant = (key: string, x: number, y: number, depth: number) => {
       this.add.image(x + 5, y + 1, 'shadow').setScale(2.1 / ART, 1.5 / ART).setAlpha(0.75).setDepth(depth - 0.01);
-      this.greenery.push(this.art(x, y, key).setOrigin(0.5, 0.9).setDepth(depth));
+      const tree = this.art(x, y, key).setOrigin(0.5, 0.9).setDepth(depth);
+      this.greenery.push(tree);
+      this.windTrees.push(tree);
       if (!dapple || key !== 'tree') return;
       const spots = [-7, -2, 4, 9].map((dx, i) =>
         this.add.image(dx, (i % 2 ? 3 : -2) + Phaser.Math.Between(-1, 1), 'glow').setDisplaySize(Phaser.Math.Between(6, 9), 4).setTint(0x181425).setAlpha(0.22),
@@ -5707,6 +5755,8 @@ export class StoreScene extends Phaser.Scene {
   private buildAmbient(next: Layout, top: number, left: number, width: number): void {
     this.dayLife = [];
     this.flockTimer?.remove();
+    this.windTimer?.remove();
+    this.windTimer = undefined;
     if (this.lite) return;
     // Погоду берём по дню: при сборке квартала this.weather ещё вчерашняя (applyWeather — позже).
     const weather = weatherFor(this.state.day);
@@ -5764,6 +5814,183 @@ export class StoreScene extends Phaser.Scene {
         }
       },
     });
+    // Ветер: раз в полминуты через квартал проходит порыв, в грозу — вдвое чаще. Погоду смотрим
+    // в момент порыва: она меняется и без пересборки мира (утром, когда кончилась гроза).
+    let ticks = 0;
+    this.windTimer = this.time.addEvent({
+      delay: 6000,
+      loop: true,
+      callback: () => {
+        ticks++;
+        if (ticks % (this.weather === 'storm' && !this.rainStopped ? 2 : 5) === 0) this.windGust();
+      },
+    });
+  }
+
+  /**
+   * Порыв ветра: волна идёт через кадр слева направо — деревья по очереди клонятся и выпрямляются
+   * (windTick), кусты приминаются, навесы соседей вздуваются, зонтики веранды вздрагивают, а с крон
+   * срывает несколько листьев (весной — лепестков, с заснеженных — снега). Экран неподвижен, и трогаем
+   * только то, что в кадре: за краем порыв всё равно никто не увидит.
+   */
+  private windGust(): void {
+    if (this.lite || !this.sys.isActive()) return;
+    const v = this.cameras.main.worldView;
+    const seen = (obj: Phaser.GameObjects.Image) =>
+      obj.active && obj.x + obj.displayWidth / 2 > v.x && obj.x - obj.displayWidth / 2 < v.right && obj.y + obj.displayHeight / 2 > v.y && obj.y - obj.displayHeight < v.bottom;
+    // Когда волна дойдёт до этой точки (мс от начала порыва).
+    const reach = (x: number) => (Math.max(0, x - v.x) / GUST_SPEED) * 1000;
+    const gust = { t: 0, x: v.x, on: true };
+    this.gust = gust;
+    const span = reach(v.right) + GUST_MS;
+    this.tweens.addCounter({
+      from: 0,
+      to: span,
+      duration: span,
+      onUpdate: (tw) => {
+        gust.t = tw.getValue() ?? span;
+      },
+      onComplete: () => {
+        gust.on = false;
+      },
+    });
+    for (const bush of this.greenery) {
+      const key = (bush.getData('base') as string | undefined) ?? bush.texture.key;
+      // Прошлый порыв ещё не отпустил куст — второй твин запомнил бы его примятым навсегда.
+      if (!key.startsWith('bush') || !seen(bush) || this.tweens.isTweening(bush)) continue;
+      // Куст приминает к земле: ниже и шире, чуть клонится по ветру — низ стоит на месте.
+      this.tweens.add({
+        targets: bush,
+        scaleX: 1.08 / ART,
+        scaleY: 0.82 / ART,
+        y: bush.y + bush.displayHeight * 0.09,
+        angle: 4,
+        duration: 260,
+        delay: reach(bush.x) + 140,
+        yoyo: true,
+        ease: 'Sine.easeOut',
+      });
+    }
+    for (const awning of this.awnings) {
+      if (!seen(awning) || this.tweens.isTweening(awning)) continue;
+      const umbrella = awning.texture.key === 'umbrella';
+      // Навес хлопает парусом дважды, зонтик вздрагивает по ветру.
+      this.tweens.add({
+        targets: awning,
+        ...(umbrella ? { angle: 6 } : { scaleY: 0.8 / ART }),
+        duration: 190,
+        delay: reach(awning.x) + 60,
+        yoyo: true,
+        repeat: 1,
+        ease: 'Sine.easeOut',
+      });
+    }
+    // Что срывает с кроны: весной лепестки, осенью рыжие листья, с заснеженных — снег, летом — зелёные.
+    const time = yearTime(this.state.day);
+    const autumn = time === 'autumn' || this.weather === 'leaves';
+    // Сквозь стены листья в зал не залетают.
+    const { w, h } = this.layout;
+    const indoors = (x: number, y: number) => x > -WING_OUTER - WALL - 2 && x < w + WALL + 2 && y > -WALL - 2 && y < h + FACADE_H + 2;
+    let torn = 0;
+    for (const tree of this.windTrees) {
+      if (torn >= 30 || !seen(tree)) continue;
+      const key = tree.texture.key;
+      const snowy = key.endsWith('_snow');
+      // Хвоя не облетает — с ели только снег.
+      if (key.startsWith('tree_pine') && !snowy) continue;
+      const look = snowy
+        ? { tex: 'snowflake', tints: [0xffffff, 0xe4ecff], scale: 1.4 }
+        : time === 'spring'
+          ? { tex: 'leaf', tints: [0xffd2e2, 0xffffff, 0xf6a5c0], scale: 1.2 }
+          : autumn
+            ? { tex: 'leaf', tints: [0xf77622, 0xfeae34, 0xb86f50, 0xe43b44], scale: 1.8 }
+            : { tex: 'leaf', tints: [0x265c42, 0x3e8948, 0xa8e05a], scale: 1.8 };
+      // С заснеженной кроны ещё и сдувает облачко снежной пыли.
+      if (snowy && !indoors(tree.x + 16, tree.y - 12)) {
+        const dust = this.art(tree.x + 2, tree.y - 18, 'glow').setScale(0.14, 0.1).setTint(0xffffff).setAlpha(0).setDepth(tree.depth + 0.6);
+        this.tweens.add({
+          targets: dust,
+          x: dust.x + 14,
+          y: dust.y + 6,
+          scaleX: 0.42,
+          scaleY: 0.26,
+          alpha: { value: 0.8, ease: (k: number) => Math.sin(Math.PI * k) },
+          duration: 1300,
+          delay: reach(tree.x) + GUST_MS * 0.15,
+          ease: 'Quad.easeOut',
+          onComplete: () => dust.destroy(),
+        });
+      }
+      for (let n = Phaser.Math.Between(snowy ? 2 : 1, snowy ? 4 : 3); n > 0 && torn < 30; n--) {
+        const x = tree.x + Phaser.Math.Between(-8, 8);
+        const y = tree.y - Phaser.Math.Between(12, 26);
+        const dx = Phaser.Math.Between(30, 60) * (snowy ? 0.4 : 1);
+        const dy = Phaser.Math.Between(16, 30);
+        if (indoors(x, y) || indoors(x + dx, y + dy)) continue;
+        torn++;
+        const leaf = this.art(x, y, look.tex)
+          .setScale(look.scale / ART)
+          .setTint(Phaser.Utils.Array.GetRandom(look.tints))
+          .setAngle(Phaser.Math.Between(0, 359))
+          .setDepth(tree.depth + 0.6)
+          .setVisible(false);
+        const duration = Phaser.Math.Between(1700, 2500);
+        // Ветер несёт вправо и стихает, лист падает всё быстрее и под конец тает. Снег сыплется почти отвесно.
+        this.tweens.add({
+          targets: leaf,
+          x: { value: x + dx, ease: 'Quad.easeOut' },
+          y: { value: y + dy, ease: 'Sine.easeIn' },
+          angle: leaf.angle + Phaser.Math.Between(240, 520),
+          alpha: { value: 0, ease: (k: number) => Math.max(0, (k - 0.6) / 0.4) },
+          duration,
+          delay: reach(tree.x) + GUST_MS * 0.12 + n * 110,
+          onStart: () => leaf.setVisible(true),
+          onComplete: () => leaf.destroy(),
+        });
+      }
+    }
+  }
+
+  /**
+   * Деревья на ветру: порыв (windGust) идёт волной слева направо — каждое дерево клонится по ветру,
+   * пружинит назад и выпрямляется; в грозу кроны ещё и всё время качаются. Каждый кадр, но только пока
+   * дует, и только деревья в кадре. Ели жёстче — клонятся меньше.
+   */
+  private windTick(deltaMs: number): void {
+    const dt = deltaMs * this.tweens.timeScale;
+    this.windClock += dt;
+    const storm = !this.lite && this.weather === 'storm' && !this.rainStopped;
+    this.windSway += ((storm ? 1 : 0) - this.windSway) * Math.min(1, dt / 1500);
+    if (!storm && this.windSway < 0.02) this.windSway = 0;
+    const gusting = !this.lite && this.gust.on;
+    if (!this.windSway && !gusting) {
+      if (!this.windStill) for (const tree of this.windTrees) if (tree.active) this.tiltTree(tree, 0);
+      this.windStill = true;
+      return;
+    }
+    this.windStill = false;
+    const v = this.cameras.main.worldView;
+    for (const tree of this.windTrees) {
+      if (!tree.active || tree.x < v.x - 16 || tree.x > v.right + 16 || tree.y < v.y - 8 || tree.y - 32 > v.bottom) continue;
+      let tilt = this.windSway * (1.2 + Math.sin(this.windClock / 320 - tree.x / 28) * 1.6);
+      if (gusting) {
+        // 0 → +4° → −1.6° → 0: резко клонится, пружинит назад и успокаивается.
+        const k = (this.gust.t - ((tree.x - this.gust.x) / GUST_SPEED) * 1000) / GUST_MS;
+        if (k > 0 && k < 1) tilt += GUST_TILT * 1.27 * Math.sin(k * Math.PI * 2) * Math.pow(1 - k, 0.83);
+      }
+      this.tiltTree(tree, tree.texture.key.startsWith('tree_pine') ? tilt * 0.6 : tilt);
+    }
+  }
+
+  /** Дерево клонится на ветру — вместе с украшением кроны (осенние пятна, весенний цвет, огоньки). */
+  private tiltTree(tree: Phaser.GameObjects.Image, angle: number): void {
+    tree.setAngle(angle);
+    const parts = tree.getData('crown') as CrownPart[] | undefined;
+    if (!parts) return;
+    const r = Phaser.Math.DegToRad(angle);
+    const cos = Math.cos(r);
+    const sin = Math.sin(r);
+    for (const { obj, dx, dy } of parts) if (obj.active) obj.setPosition(tree.x + dx * cos - dy * sin, tree.y + dx * sin + dy * cos).setAngle(angle);
   }
 
   /**
@@ -5917,7 +6144,10 @@ export class StoreScene extends Phaser.Scene {
     isle(y + 6, h / 2 - 16);
     isle(y + h / 2 + 10, h / 2 - 16);
     this.add.image(ix + 17, y + h / 2 - 14, 'shadow').setScale(2.1 / ART, 1.5 / ART).setAlpha(0.75).setDepth(-9.43);
-    this.art(ix + 12, y + h / 2 - 14, 'tree_round').setOrigin(0.5, 0.9).setDepth(-9.42);
+    // Дерево — как в сквере: в снегу в шапке, осенью рыжее, на ветру качается.
+    const tree = this.art(ix + 12, y + h / 2 - 14, 'tree_round').setOrigin(0.5, 0.9).setDepth(-9.42);
+    this.greenery.push(tree);
+    this.windTrees.push(tree);
     this.art(ix + 7, y + h - 18, 'bush_flower').setDepth(-9.42);
     this.art(ix + 18, y + h - 12, 'lamp').setOrigin(0.5, 0.95).setDepth(-9.42);
     // Фонарь парковки загорается первым — у него датчик сумерек; под ним на асфальте — пятно света.
