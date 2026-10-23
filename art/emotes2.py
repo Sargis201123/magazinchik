@@ -1,5 +1,5 @@
 """Ещё эмоции над головой 12×12: часы (долго жду), вздох, «дорого», тревога «!»,
-сон «z» и звезда (рекорд)."""
+сон «z» и звезда (рекорд). И облачко 16×15, в котором любая эмоция всплывает над головой."""
 
 from sprites import Canvas
 
@@ -103,9 +103,29 @@ EMOTES = {
 }
 
 
+# Белое облачко с хвостиком вниз; нижний ряд в лёгкой тени — облачко выглядит пухлым.
+BUBBLE = [
+    "..kkkkkkkkkkkk..",
+    ".kwwwwwwwwwwwwk.",
+    "kwwwwwwwwwwwwwwk",
+    "kwwwwwwwwwwwwwwk",
+    "kwwwwwwwwwwwwwwk",
+    "kwwwwwwwwwwwwwwk",
+    "kwwwwwwwwwwwwwwk",
+    "kwwwwwwwwwwwwwwk",
+    "kwwwwwwwwwwwwwwk",
+    "kwwwwwwwwwwwwwwk",
+    "kwwwwwwwwwwwwwwk",
+    ".kggggggggggggk.",
+    "..kkkkkgggkkkk..",
+    ".....kggk.......",
+    ".....kk.........",
+]
+
+
 def main():
-    for name, rows in EMOTES.items():
-        c = Canvas(12, 12)
+    for name, rows in {**EMOTES, "emo_bubble": BUBBLE}.items():
+        c = Canvas(len(rows[0]), len(rows))
         for y, row in enumerate(rows):
             for x, ch in enumerate(row):
                 if ch in P:

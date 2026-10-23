@@ -765,6 +765,10 @@ const NIGHT_SHIRTS = [0x262b44, 0x3a4466, 0x45444f, 0x68386c, 0x124e89, 0x5a6988
 /** Кот гуляет по залу раз в столько секунд (если захочет). */
 const CAT_WALK_EVERY = 18_000;
 const CAT_SPEED = 26;
+/** Кот в зале живёт тиками по 130 мс: хвост, моргание, умывание. */
+const CAT_TICK = 130;
+/** Кадры походки кота: лапы врозь, проходят мимо, врозь наоборот, снова мимо. */
+const CAT_WALK = ['cat_walk0', 'cat_walk2', 'cat_walk1', 'cat_walk3'];
 
 type TrashKind = 'trash' | 'mud' | 'spill';
 
@@ -1102,6 +1106,10 @@ export class StoreScene extends Phaser.Scene {
   private sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
   private catHome = { x: 0, y: 0 };
   private catOut = false;
+  /** Кот сидит посреди зала: таймер, который водит его хвостом, моргает и умывает (есть, пока сидит). */
+  private catSitTimer?: Phaser.Time.TimerEvent;
+  /** Сколько ещё тиков кот жмурится (погладили — медленно моргает). */
+  private catBlink = 0;
   /** Флажки, шарики и лоток ярмарки; лоток продаёт со склада по таймеру. */
   private fairObjs: Phaser.GameObjects.GameObject[] = [];
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
@@ -3913,6 +3921,8 @@ export class StoreScene extends Phaser.Scene {
   private buildCat(x: number, y: number): void {
     this.catImg = undefined;
     this.catOut = false;
+    this.catSitTimer?.remove();
+    this.catSitTimer = undefined;
     const own = this.state.cat;
     if (own && !catHome(this.state)) return;
     this.catHome = { x, y };
@@ -3931,6 +3941,24 @@ export class StoreScene extends Phaser.Scene {
       this.tweens.add({ targets: z, x: z.x - 4, y: z.y - 9, scale: 1, alpha: 0, duration: 1800, onComplete: () => z.destroy() });
     };
     this.critterTimers.push(this.time.addEvent({ delay: 2600, loop: true, callback: snore }));
+    // Во сне изредка дёргает кончиком хвоста: дёрг-дёрг.
+    this.critterTimers.push(
+      this.time.addEvent({
+        delay: 2300,
+        loop: true,
+        callback: () => {
+          if (this.catOut || !cat.active || cat.texture.key !== 'cat' || Math.random() > 0.3) return;
+          this.time.addEvent({
+            delay: 130,
+            repeat: 3,
+            callback: () => {
+              if (this.catOut || !cat.active || !['cat', 'cat_flick'].includes(cat.texture.key)) return;
+              cat.setTexture(cat.texture.key === 'cat' ? 'cat_flick' : 'cat');
+            },
+          });
+        },
+      }),
+    );
     // Иногда просыпается: потягивается или следит за мухой.
     this.critterTimers.push(this.time.addEvent({ delay: 9000, loop: true, callback: () => !this.catOut && cat.active && this.catWake(cat) }));
     if (!own) return;
@@ -4043,21 +4071,19 @@ export class StoreScene extends Phaser.Scene {
     haptic.tap();
     this.heartAt(cat.x, cat.y - 10);
     this.rub(cat);
+    this.catSlowBlink();
     this.popup(cat.x, cat.y - 16, t('popup.catPurr', { name: this.state.cat.name }), '#fff3b0');
   }
 
-  /** Облачко с эмоцией над котом или Бобиком: всплывает и тает. */
+  /**
+   * Облачко с эмоцией над котом или Бобиком — как у людей, только поменьше. Поверх всего, кроме
+   * ночного затемнения: у входа облачко иначе пряталось бы за карнизом фасада.
+   */
   private petEmote(pet: Phaser.GameObjects.Image, key: EmoteKey): void {
     if (!pet.active) return;
-    const icon = this.art(pet.x, pet.y - 12, key).setDepth(pet.depth + 2).setScale(0.8 / ART);
-    this.tweens.add({
-      targets: icon,
-      y: icon.y - 4,
-      scale: 1 / ART,
-      duration: 450,
-      ease: 'Back.easeOut',
-      onComplete: () => this.tweens.add({ targets: icon, alpha: 0, delay: 900, duration: 300, onComplete: () => icon.destroy() }),
-    });
+    this.dropEmote(pet);
+    const box = this.emoteBox(key, 0.8).setPosition(pet.x + 1, pet.y - pet.displayHeight - 0.5).setDepth(LIGHT_DEPTH - 1);
+    pet.setData('emote', box);
   }
 
   /** Ласкается: покачивается из стороны в сторону. */
@@ -4081,7 +4107,7 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.add({ targets: heart, y: y - 8, scale: 1 / ART, alpha: { from: 1, to: 0 }, duration: 1000, ease: 'Quad.easeOut', onComplete: () => heart.destroy() });
   }
 
-  /** Кот идёт: перебирает лапами и смотрит туда, куда идёт (спрайт смотрит влево). */
+  /** Кот идёт: перебирает лапами (4 кадра: врозь, мимо, врозь, мимо) и смотрит туда, куда идёт (спрайт смотрит влево). */
   private catStep(x: number, y: number): Promise<void> {
     const cat = this.catImg;
     if (!cat?.active) return Promise.resolve();
@@ -4095,7 +4121,8 @@ export class StoreScene extends Phaser.Scene {
         duration: (distance / CAT_SPEED) * 1000,
         onUpdate: () => {
           cat.setDepth(cat.y);
-          cat.setTexture(Math.floor(this.time.now / 140) % 2 ? 'cat_walk0' : 'cat_walk1');
+          const frame = CAT_WALK[Math.floor(this.time.now / 90) % CAT_WALK.length];
+          if (cat.texture.key !== frame) cat.setTexture(frame);
         },
         onComplete: () => resolve(),
         onStop: () => resolve(),
@@ -4122,9 +4149,10 @@ export class StoreScene extends Phaser.Scene {
       await this.catStep(p.x, p.y);
       if (!cat.active) return;
     }
-    cat.setTexture('cat_sit').setFlipX(false);
+    this.catSit(cat);
     await this.wait(Phaser.Math.Between(9000, 13000));
     if (!cat.active) return;
+    this.catStand();
     sound.meow();
     const back = [...findPath({ x: cat.x, y: cat.y }, { x: door.x + 6, y: h - 6 }, this.obstacles), { x: door.x + 6, y: this.catHome.y }, this.catHome];
     for (const p of back) {
@@ -4139,7 +4167,7 @@ export class StoreScene extends Phaser.Scene {
   /** Покупатель проходит мимо кота в зале — гладит (сердечко, кот мурчит). Это попадёт в отзывы. */
   private petCatNearby(): void {
     const cat = this.catImg;
-    if (!this.catOut || !cat?.active || cat.texture.key !== 'cat_sit') return;
+    if (!this.catOut || !cat?.active || !this.catSitTimer) return;
     for (const c of this.customers) {
       if (c.petted || c.gone || c.thief) continue;
       if (Math.abs(c.sprite.x - cat.x) > 14 || Math.abs(c.sprite.y + 8 - cat.y) > 10) continue;
@@ -4147,11 +4175,76 @@ export class StoreScene extends Phaser.Scene {
       note(this.stats, 'cat');
       this.emote(c.sprite, 'emo_heart');
       this.heartAt(cat.x, cat.y - 10);
-      // Кот трётся о ноги: поворачивается к покупателю и покачивается.
+      // Кот трётся о ноги: поворачивается к покупателю, покачивается и довольно жмурится.
       cat.setFlipX(c.sprite.x > cat.x);
       this.rub(cat);
+      this.catSlowBlink();
       if (Math.random() < 0.5) sound.purr();
     }
+  }
+
+  /**
+   * Кот сидит посреди зала и живёт: лениво водит хвостом (вниз — посередине — вверх — посередине,
+   * по 260 мс), раз в 3–6 с моргает, раз в 6–10 с умывается лапой. Моргание и умывание начинаются,
+   * когда хвост посередине, — кадры сменяются без рывка. Всё считается в тиках таймера, поэтому
+   * на ускорении ×2 кот живёт вдвое быстрее, а на паузе замирает.
+   */
+  private catSit(cat: Phaser.GameObjects.Image): void {
+    this.catSitTimer?.remove();
+    cat.setTexture('cat_sit1').setFlipX(false);
+    const ticks = (min: number, max: number) => Math.round(Phaser.Math.Between(min, max) / CAT_TICK);
+    const tail = [0, 1, 2, 1];
+    let step = 1;
+    let tick = 0;
+    let groomLeft = 0;
+    let blinkIn = ticks(3000, 6000);
+    let groomIn = ticks(6000, 10000);
+    this.catBlink = 0;
+    const timer = this.time.addEvent({
+      delay: CAT_TICK,
+      loop: true,
+      callback: () => {
+        if (!cat.active) return void timer.remove();
+        tick++;
+        blinkIn--;
+        groomIn--;
+        let frame: string;
+        if (this.catBlink > 0) {
+          this.catBlink--;
+          frame = 'cat_sit_blink';
+        } else if (groomLeft > 0) {
+          groomLeft--;
+          frame = Math.floor(groomLeft / 2) % 2 ? 'cat_groom1' : 'cat_groom0';
+        } else if (tail[step] === 1 && groomIn <= 0) {
+          // Лижет лапу и трёт ею мордочку.
+          groomLeft = ticks(1300, 1900);
+          groomIn = groomLeft + ticks(6000, 10000);
+          frame = 'cat_groom0';
+        } else if (tail[step] === 1 && blinkIn <= 0) {
+          blinkIn = ticks(3000, 6000);
+          frame = 'cat_sit_blink';
+        } else {
+          if (tick % 2 === 0) step = (step + 1) % tail.length;
+          frame = `cat_sit${tail[step]}`;
+        }
+        if (cat.texture.key !== frame) cat.setTexture(frame);
+      },
+    });
+    this.catSitTimer = timer;
+  }
+
+  /** Кот встаёт: хвост и моргание больше не нужны. */
+  private catStand(): void {
+    this.catSitTimer?.remove();
+    this.catSitTimer = undefined;
+  }
+
+  /** Погладили сидящего кота — медленно и довольно жмурится. */
+  private catSlowBlink(): void {
+    const cat = this.catImg;
+    if (!cat?.active || !this.catSitTimer) return;
+    this.catBlink = Math.round(600 / CAT_TICK);
+    cat.setTexture('cat_sit_blink');
   }
 
   // ---------- Доска отзывов ----------
@@ -7272,18 +7365,135 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
-  /** Эмоция над головой: всплывает и тает. */
+  /** Эмоция над головой: облачко выпрыгивает над макушкой (над шляпой — повыше). Новая эмоция сменяет прежнюю. */
   private emote(person: Phaser.GameObjects.Container, key: EmoteKey): void {
     if (!person.active) return;
-    const icon = this.art(0, -17, key);
-    person.add(icon);
-    this.tweens.add({
-      targets: icon,
-      y: -21,
-      duration: 500,
-      ease: 'Back.easeOut',
-      onComplete: () => this.tweens.add({ targets: icon, alpha: 0, delay: 800, duration: 300, onComplete: () => icon.destroy() }),
-    });
+    this.dropEmote(person);
+    const hat = person.list.some((o) => (o as Phaser.GameObjects.Image).texture?.key.startsWith('w_hat_'));
+    const box = this.emoteBox(key, 1).setPosition(1.5, hat ? -14 : -10.5);
+    person.add(box);
+    person.setData('emote', box);
+  }
+
+  /** Убирает облачко, которое ещё висит над человеком или зверем, вместе с его анимациями. */
+  private dropEmote(owner: Phaser.GameObjects.GameObject): void {
+    const old = owner.getData('emote') as Phaser.GameObjects.Container | undefined;
+    if (!old?.active) return;
+    this.tweens.killTweensOf([old, ...old.list]);
+    old.destroy();
+  }
+
+  /**
+   * Белое облачко с хвостиком (хвостик — в точке 0, 0) и значком внутри. Выпрыгивает с пружинкой,
+   * значок двигается по-своему (emoteMotion), через полторы секунды облачко тает.
+   */
+  private emoteBox(key: EmoteKey, scale: number): Phaser.GameObjects.Container {
+    const bubble = this.art(0, 0, 'emo_bubble').setOrigin(0.375, 1);
+    const icon = this.art(1.2, -4, key).setScale(0.85 / ART);
+    const box = this.add.container(0, 0, [bubble, icon]).setScale(0).setAngle(-10);
+    this.tweens.add({ targets: box, scale, angle: 0, duration: 220, ease: 'Back.easeOut', easeParams: [2.5] });
+    this.tweens.add({ targets: box, alpha: 0, delay: 1350, duration: 300, onComplete: () => box.destroy() });
+    this.emoteMotion(box, icon, key);
+    return box;
+  }
+
+  /**
+   * У каждой эмоции своё движение: сердечко бьётся, злость краснеет и пыхтит паром, «z» плывут
+   * волной, вопрос качается маятником, звезда крутится с искрами, часы тикают, вздох оседает,
+   * «дорого» подпрыгивает, «!» вздрагивает. Мини-сердечки, искры и пар — не на слабом телефоне.
+   */
+  private emoteMotion(box: Phaser.GameObjects.Container, icon: Phaser.GameObjects.Image, key: EmoteKey): void {
+    const { x, y } = icon;
+    const s = icon.scaleX;
+    const fx = !this.lite;
+    // Значок оживает, когда облачко уже выпрыгнуло.
+    const delay = 200;
+    switch (key) {
+      case 'emo_heart':
+        // Тук-тук: на каждом ударе из облачка вылетает маленькое сердечко.
+        this.tweens.add({
+          targets: icon,
+          scale: s * 1.3,
+          delay,
+          duration: 110,
+          yoyo: true,
+          repeat: 3,
+          repeatDelay: 140,
+          ease: 'Quad.easeOut',
+          onYoyo: () => fx && this.emoteBit(box, 'emo_heart', x + Phaser.Math.FloatBetween(-3, 4), y - 2),
+        });
+        break;
+      case 'emo_angry': {
+        // Облачко наливается красным, значок пыхтит, из-под облачка — клубы пара.
+        const flush = this.art(0, 0, 'emo_bubble').setOrigin(0.375, 1).setTint(0xff7070).setAlpha(0);
+        box.addAt(flush, 1);
+        this.tweens.add({ targets: flush, alpha: 0.9, delay, duration: 350, ease: 'Sine.easeOut' });
+        let side = 1;
+        this.tweens.add({
+          targets: icon,
+          scale: s * 1.18,
+          delay,
+          duration: 100,
+          yoyo: true,
+          repeat: 3,
+          repeatDelay: 160,
+          onYoyo: () => {
+            side = -side;
+            if (fx) this.emoteBit(box, 'puff', x + side * 4.5, y - 3, side);
+          },
+        });
+        break;
+      }
+      case 'emo_zzz':
+        // Плывут волной: вверх-вниз и чуть вбок со сдвигом по фазе.
+        this.tweens.add({ targets: icon, y: y - 1.2, delay, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: icon, x: x + 0.8, angle: 8, delay: delay + 150, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut' });
+        break;
+      case 'emo_question':
+        // Маятник: подвешен за макушку, качается и затихает.
+        icon.setOrigin(0.5, 0).setY(y - 6 * s).setAngle(-18);
+        this.tweens.add({ targets: icon, angle: 0, delay: 100, duration: 1300, ease: (t: number) => 1 - Math.cos(Math.PI * 4 * t) * (1 - t) });
+        break;
+      case 'emo_star':
+        // Крутится, замедляясь, а по краям облачка вспыхивают искры.
+        this.tweens.add({ targets: icon, angle: 360, delay: 120, duration: 900, ease: 'Cubic.easeOut' });
+        if (fx) [[-2.5, -7.5], [5.5, -6], [-3.5, -2]].forEach(([sx, sy], i) => this.emoteBit(box, 'spark', sx, sy, 0, delay + i * 150));
+        break;
+      case 'emo_clock':
+        // Тик-так: качнётся и замрёт, качнётся обратно.
+        this.tweens.add({ targets: icon, angle: { from: -10, to: 10 }, delay, duration: 90, hold: 200, yoyo: true, repeat: 1, repeatDelay: 200, ease: 'Back.easeOut' });
+        break;
+      case 'emo_sigh':
+        // Выдох: значок оседает и расплывается.
+        this.tweens.add({ targets: icon, y: y + 1, scaleX: s * 1.15, scaleY: s * 0.88, delay: delay + 100, duration: 520, hold: 200, yoyo: true, ease: 'Sine.easeInOut' });
+        break;
+      case 'emo_pricey':
+        // Цена прыгает вверх.
+        this.tweens.add({ targets: icon, y: y - 1.3, delay, duration: 130, yoyo: true, repeat: 2, repeatDelay: 120, ease: 'Quad.easeOut' });
+        break;
+      case 'emo_alert':
+        // Вздрагивает: вытягивается вверх.
+        this.tweens.add({ targets: icon, y: y - 0.8, scaleX: s * 0.85, scaleY: s * 1.25, delay, duration: 80, yoyo: true, repeat: 2, repeatDelay: 220 });
+        break;
+    }
+  }
+
+  /** Мелочь вокруг облачка: мини-сердечко, клуб пара (dir — в какую сторону) или искра. Живёт внутри облачка. */
+  private emoteBit(box: Phaser.GameObjects.Container, key: 'emo_heart' | 'puff' | 'spark', x: number, y: number, dir = 0, delay = 0): void {
+    if (!box.active) return;
+    const bit = this.art(x, y, key).setAlpha(0);
+    box.add(bit);
+    const done = () => bit.destroy();
+    if (key === 'emo_heart') {
+      bit.setScale(0.4 / ART);
+      this.tweens.add({ targets: bit, y: y - 6, scale: 0.6 / ART, alpha: { from: 1, to: 0 }, delay, duration: 600, ease: 'Quad.easeOut', onComplete: done });
+    } else if (key === 'puff') {
+      bit.setScale(0.4 / ART).setFlipX(dir < 0);
+      this.tweens.add({ targets: bit, x: x + dir * 2.5, y: y - 3, scale: 0.7 / ART, alpha: { from: 1, to: 0 }, delay, duration: 450, ease: 'Sine.easeOut', onComplete: done });
+    } else {
+      bit.setScale(0.3 / ART);
+      this.tweens.add({ targets: bit, scale: 1 / ART, angle: 90, alpha: { from: 1, to: 0 }, delay, duration: 420, ease: 'Quad.easeOut', onComplete: done });
+    }
   }
 
   // ---------- Продавец: уборка и выкладка ----------
