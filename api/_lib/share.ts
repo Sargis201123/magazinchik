@@ -82,7 +82,8 @@ export const langOf = (lang: unknown): Lang => (lang === 'en' ? 'en' : 'ru');
 
 /**
  * POST /api/share { initData, kind: 'invite' | 'help', lang? } → { id } — номер подготовленного
- * сообщения для WebApp.shareMessage; { error } — пусть игра поделится по-старому, ссылкой.
+ * сообщения для WebApp.shareMessage; { error: 'too_often' } — делился только что (второе касание):
+ * игра его пропускает; другая { error } — пусть игра поделится по-старому, ссылкой.
  * Картинки карточек — public/promo/<kind>_<lang>.jpg (карточка итогов дня готовится в card.ts).
  */
 export async function share(request: Request, env: Env, now = Date.now()): Promise<Response> {
@@ -96,7 +97,8 @@ export async function share(request: Request, env: Env, now = Date.now()): Promi
   if (!kind) return json({ error: 'bad_kind' }, 400);
   await ready(db);
   const last = await db.prepare('SELECT at FROM shares WHERE id = ?').bind(user.id).first<{ at: number }>();
-  if (last && now - last.at < SHARE_GAP) return json({ error: 'too_often' }, 429);
+  // Без 429: игра отличает «только что делился» от сбоя и не открывает вдобавок старое окно со ссылкой.
+  if (last && now - last.at < SHARE_GAP) return json({ error: 'too_often' });
   await db.prepare('INSERT OR REPLACE INTO shares (id, at) VALUES (?, ?)').bind(user.id, now).run();
   const lang = langOf(body.lang);
   try {

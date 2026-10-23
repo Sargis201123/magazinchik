@@ -72,18 +72,35 @@ export function inviteLink(): string {
 /** Чем кончилось «Поделиться»: отправил из окна Telegram, закрыл окно, открыли старое окно со ссылкой, не вышло. */
 export type ShareOutcome = 'sent' | 'cancelled' | 'link' | 'failed';
 
-/** Сообщение для окна «Поделиться» готовит сервер; null — окна нет или сервер не смог (поделимся ссылкой). */
-async function prepared(kind: 'invite' | 'help'): Promise<string | null> {
+/**
+ * Сообщение для окна «Поделиться» готовит сервер. Нет id — окна нет или сервер не смог (поделимся
+ * ссылкой); busy — делились только что (сервер готовит не чаще раза в несколько секунд).
+ */
+async function prepared(kind: 'invite' | 'help'): Promise<{ id?: string; busy?: boolean }> {
   const initData = telegramInitData();
-  if (!initData || !canShareMessage()) return null;
-  const res = await post<{ id?: string }>('/api/share', { initData, kind, lang: getLang() });
-  return res?.id ?? null;
+  if (!initData || !canShareMessage()) return {};
+  const res = await post<{ id?: string; error?: string }>('/api/share', { initData, kind, lang: getLang() });
+  return { id: res?.id, busy: res?.error === 'too_often' };
 }
+
+/** Сервер готовит сообщение (до секунды на телефоне) — повторные касания не в счёт. */
+let preparing = false;
 
 /** Окно Telegram с карточкой от бота, а если его нет — «Поделиться ссылкой» с текстом. */
 async function shareOr(kind: 'invite' | 'help', link: string, text: string): Promise<ShareOutcome> {
-  const id = await prepared(kind);
-  if (id) return (await shareMessage(id)) ? 'sent' : 'cancelled';
+  // Второе касание, пока ждём сервер, — пропускаем: иначе сервер ответит «слишком часто», и вдобавок
+  // к карточке откроется старое окно со ссылкой.
+  if (preparing) return 'cancelled';
+  preparing = true;
+  let msg: { id?: string; busy?: boolean };
+  try {
+    msg = await prepared(kind);
+  } finally {
+    preparing = false;
+  }
+  // Делились только что (закрыл окно и сразу нажал снова) — тоже не в счёт, без окна со ссылкой.
+  if (msg.busy) return 'cancelled';
+  if (msg.id) return (await shareMessage(msg.id)) ? 'sent' : 'cancelled';
   return openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`) ? 'link' : 'failed';
 }
 

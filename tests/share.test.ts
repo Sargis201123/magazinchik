@@ -92,7 +92,10 @@ describe.skipIf(!Database)('поделиться и «Помоги!» (серв�
     const button = prepared.result.reply_markup.inline_keyboard[0][0];
     expect(button.url).toBe('https://t.me/magazinchik_bot?startapp=ref_1');
     expect(button.web_app).toBeUndefined();
-    expect((await share(req({ initData: await initData(1), kind: 'invite' }), env, now + SHARE_GAP / 2)).status).toBe(429);
+    // Второе касание сразу за первым: не сбой (игра не откроет вдобавок окно со ссылкой), сообщение не готовится.
+    const prepares = calls.filter((c) => c.method === 'savePreparedInlineMessage').length;
+    expect(await call(share, env, { initData: await initData(1), kind: 'invite' }, now + SHARE_GAP / 2)).toEqual({ error: 'too_often' });
+    expect(calls.filter((c) => c.method === 'savePreparedInlineMessage').length).toBe(prepares);
     expect((await call(share, env, { initData: await initData(1), kind: 'invite', lang: 'en' }, now + SHARE_GAP + 1)).id).toBeTruthy();
     expect(String((calls.filter((c) => c.method === 'savePreparedInlineMessage').pop()!.body.result as { photo_url: string }).photo_url)).toContain('invite_en.jpg');
   });
