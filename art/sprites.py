@@ -2641,19 +2641,25 @@ def thought():
 
 
 def critters():
-    """Спящий кот 20×12 и голубь: стоит, клюёт, летит."""
-    c = Canvas(20, 12)
-    c.ellipse(10, 7, 8.5, 4.5, "o")
-    c.ellipse(10, 8, 6, 3, "y")
-    c.ellipse(4, 6, 3.4, 3, "o")
-    c.stamp(["o.o", "ooo"], 2, 1)
-    c.hline(3, 6, 2, "k")
-    c.vline(17, 5, 4, "o")
-    c.vline(18, 7, 3, "o")
-    for x in (8, 12):
-        c.px(x, 5, "B")
-    c.outline("k")
-    c.save("cat")
+    """Спящий кот 20×12 (и он же дёрнул кончиком хвоста — cat_flick) и голубь: стоит, клюёт, летит."""
+    for name, flick in (("cat", False), ("cat_flick", True)):
+        c = Canvas(20, 12)
+        c.ellipse(10, 7, 8.5, 4.5, "o")
+        c.ellipse(10, 8, 6, 3, "y")
+        c.ellipse(4, 6, 3.4, 3, "o")
+        c.stamp(["o.o", "ooo"], 2, 1)
+        c.hline(3, 6, 2, "k")
+        if flick:
+            # Кончик хвоста дёрнулся: отогнулся наружу и вверх.
+            c.vline(17, 6, 3, "o")
+            c.vline(18, 3, 3, "o")
+        else:
+            c.vline(17, 5, 4, "o")
+        c.vline(18, 7, 3, "o")
+        for x in (8, 12):
+            c.px(x, 5, "B")
+        c.outline("k")
+        c.save(name)
     for name, rows in {
         "pigeon0": [
             "...kk....",
@@ -3531,9 +3537,17 @@ def stage9():
     c.px(19, 6, "Y")
     c.outline("k")
     shadowed(c, 13, 31, 10, 2).save("review_board")
-    # Рыжий кот: два кадра шага (смотрит влево) и сидит.
-    legs = {0: ((5, 0), (8, 1), (13, 0), (16, 1)), 1: ((5, 1), (8, 0), (13, 1), (16, 0))}
+    # Рыжий кот: четыре кадра шага (смотрит влево) и сидит. Кадры 0 и 1 — лапы врозь,
+    # 2 и 3 — лапы проходят друг мимо друга, голова чуть приподнята: походка мягче.
+    legs = {
+        0: ((5, 0), (8, 1), (13, 0), (16, 1)),
+        1: ((5, 1), (8, 0), (13, 1), (16, 0)),
+        2: ((6, 0), (7, 0), (14, 0), (15, 0)),
+        3: ((6, 0), (7, 0), (14, 0), (15, 0)),
+    }
+    tail_tip = {0: 2, 1: 3, 2: 3, 3: 2}
     for frame, feet in legs.items():
+        bob = 1 if frame >= 2 else 0
         c = Canvas(22, 14)
         c.ellipse(11, 7, 7, 3.2, "o")
         c.ellipse(11, 8, 5, 1.8, "y")
@@ -3541,11 +3555,11 @@ def stage9():
             c.vline(x, 5, 2, "B")
         for x, lift in feet:
             c.vline(x, 9, 3 - lift, "o")
-        c.ellipse(4, 5, 3.2, 2.8, "o")
-        c.stamp(["o.o", "ooo"], 2, 1)
-        c.px(3, 5, "k")
-        c.px(1, 6, "s")
-        c.line(18, 6, 21, 2 + frame, "o")
+        c.ellipse(4, 5 - bob, 3.2, 2.8, "o")
+        c.stamp(["o.o", "ooo"], 2, 1 - bob)
+        c.px(3, 5 - bob, "k")
+        c.px(1, 6 - bob, "s")
+        c.line(18, 6, 21, tail_tip[frame], "o")
         c.outline("k")
         c.save(f"cat_walk{frame}")
     c = Canvas(16, 18)
@@ -3561,6 +3575,7 @@ def stage9():
     c.line(13, 15, 15, 10, "o")
     c.outline("k")
     c.save("cat_sit")
+    cat_sitting()
     # Лежанки: плетёная корзинка, красная подушка, домик с круглым входом.
     c = Canvas(26, 12)
     c.ellipse(13, 6, 12, 5, "a")
@@ -3589,6 +3604,76 @@ def stage9():
     c.px(14, 4, "Y")
     c.outline("k")
     c.save("cat_house")
+
+
+def cat_sitting():
+    """Кот сидит посреди зала 20×18 (тот же кот, что cat_sit, по центру холста — не прыгает,
+    когда разворачивается): хвост внизу, посередине и вверху (cat_sit0..2), моргает
+    (cat_sit_blink) и умывается — лижет лапу и трёт ею мордочку (cat_groom0/1).
+    Хвост и поднятая лапа — отдельные слои со своим контуром: хвост прячется за спину,
+    лапа ложится поверх груди."""
+
+    def pairs(points):
+        return [(x + d, y) for x, y in points for d in (0, 1)]
+
+    tails = {
+        "low": [(x, y) for x in range(12, 17) for y in (15, 16)] + [(17, 14), (17, 15), (18, 13), (18, 14)],
+        "mid": pairs([(13, 15), (14, 14), (15, 13), (16, 12), (16, 11), (17, 10), (17, 9)]),
+        "high": pairs([(13, 15), (14, 14), (15, 13), (15, 12), (15, 11), (15, 10), (15, 9), (15, 8), (14, 7)]),
+    }
+    paws = {
+        # Лижет: лапа у рта, розовый язычок.
+        "lick": [(7, 11, 2, 3, "o"), (8, 9, 2, 2, "o"), (9, 8, 2, 1, "y")],
+        # Трёт мордочку: лапа выше, на щеке.
+        "wipe": [(7, 11, 2, 2, "o"), (7, 9, 2, 2, "o"), (7, 7, 2, 2, "y")],
+    }
+
+    def layer(c, draw):
+        top = Canvas(c.w, c.h)
+        draw(top)
+        top.outline("k")
+        c.img.alpha_composite(top.img)
+
+    def sit(name, tail="mid", eyes=True, paw=None):
+        c = Canvas(20, 18)
+
+        def draw_tail(t):
+            for x, y in tails[tail]:
+                t.px(x, y, "o")
+
+        def draw_body(b):
+            b.ellipse(10, 12, 5, 5, "o")
+            b.ellipse(10, 13, 3, 3.5, "y")
+            b.ellipse(10, 6, 4, 3.5, "o")
+            b.stamp(["o.....o", "oo...oo"], 6, 1)
+            if eyes:
+                b.px(8, 6, "k")
+                b.px(12, 6, "k")
+            else:
+                b.hline(7, 6, 2, "k")
+                b.hline(12, 6, 2, "k")
+            b.px(10, 7, "s")
+            if not paw:
+                b.rect(7, 16, 2, 1, "y")
+            b.rect(11, 16, 2, 1, "y")
+
+        def draw_paw(p):
+            for x, y, w, h, ch in paws[paw]:
+                p.rect(x, y, w, h, ch)
+
+        layer(c, draw_tail)
+        layer(c, draw_body)
+        if paw:
+            layer(c, draw_paw)
+            if paw == "lick":
+                c.px(11, 8, "s")
+        c.save(name)
+
+    for i, tail in enumerate(("low", "mid", "high")):
+        sit(f"cat_sit{i}", tail)
+    sit("cat_sit_blink", eyes=False)
+    sit("cat_groom0", eyes=False, paw="lick")
+    sit("cat_groom1", eyes=False, paw="wipe")
 
 
 def stage11():
@@ -4259,7 +4344,8 @@ def uniforms():
 
 
 def emotes():
-    """Эмоции над головой 12×12: злость, сердечко, вопрос."""
+    """Эмоции над головой 12×12: злость, сердечко, вопрос. Рисуются внутри белого облачка
+    (emo_bubble), поэтому вопрос — просто синий «?» без своей рамки."""
     for name, rows in {
         "emo_angry": [
             "............",
@@ -4290,18 +4376,18 @@ def emotes():
             "............",
         ],
         "emo_question": [
-            "..kkkkkkk...",
-            ".kwwwwwwwk..",
-            "kwwwkkkwwwk.",
-            "kwwkwwwkwwk.",
-            "kwwwwwkwwwk.",
-            "kwwwwkwwwwk.",
-            "kwwwwwwwwwk.",
-            "kwwwwkwwwwk.",
-            ".kwwwwwwwk..",
-            "..kkkkkkk...",
-            "....kk......",
-            "...k........",
+            "...kkkkk....",
+            "..kUUUUUk...",
+            ".kUUwkkUUk..",
+            ".kUkk.kUUk..",
+            ".kk..kUUk...",
+            "....kUUk....",
+            "....kUUk....",
+            ".....kk.....",
+            "....kkkk....",
+            "....kUUk....",
+            "....kUUk....",
+            "....kkkk....",
         ],
     }.items():
         c = Canvas(12, 12)
