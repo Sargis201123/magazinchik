@@ -131,6 +131,7 @@ import {
 import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene } from '../game/drama';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
+import { music } from '../platform/music';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
 import { BIG_DAYS, bigDayFor, bigDayKnown, bigDayProgress } from '../game/bigday';
 import {
@@ -473,13 +474,22 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   };
   window.addEventListener(MP_EVENT, onMultiplayer);
 
-  const update = (next: StoreState | null, feedback: 'tap' | 'success' | 'error' = 'tap') => {
+  /** quiet — звук уже сыграла заставка (награда главы), свой «дзынь» не нужен. */
+  const update = (next: StoreState | null, feedback: 'tap' | 'success' | 'error' = 'tap', quiet = false) => {
     if (!next) return;
     // Купленное сразу встаёт на полки, лишнее остаётся на складе.
     setState(shelveAll(next));
     haptic[feedback]();
-    sound[feedback === 'tap' ? 'tap' : feedback === 'success' ? 'coin' : 'bad']();
+    if (!quiet) sound[feedback === 'tap' ? 'tap' : feedback === 'success' ? 'coin' : 'bad']();
     render();
+  };
+
+  /** Сюжетный момент или мягкая неудача — заставка один раз на сцену (утро перерисовывается часто). */
+  let cued = '';
+  const cue = (id: 'story' | 'fail', scene: string) => {
+    if (scene === cued) return;
+    cued = scene;
+    music.sting(id);
   };
 
   const render = () => {
@@ -496,10 +506,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       return;
     }
     if (state.grandmaRescue && !state.grandmaRescue.seen) {
+      cue('fail', 'rescue');
       card.replaceChildren(rescueBox(state, state.grandmaRescue.paid));
       return;
     }
     if (state.debtWarning && !state.debtWarning.seen) {
+      cue('fail', `debt:${state.day}`);
       card.replaceChildren(title, bankLetterBox(state));
       return;
     }
@@ -509,11 +521,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     }
     const story = pendingStory(state);
     if (story) {
+      cue('story', `story:${story.kind}:${state.story.chapter}`);
       card.replaceChildren(storyBox(state, story.kind, story.chapter));
       return;
     }
     const drama = dramaScene(state);
     if (drama) {
+      cue('story', `drama:${drama.day}`);
       card.replaceChildren(dramaBox(drama));
       return;
     }
@@ -2979,7 +2993,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           return;
         }
         storyLine = 0;
-        update(kind === 'intro' ? finishIntro(getState()) : finishChapter(getState()), kind === 'outro' ? 'success' : 'tap');
+        // Глава пройдена — награда под заставку «монетка» в тональности музыки.
+        const done = kind === 'outro';
+        update(done ? finishChapter(getState()) : finishIntro(getState()), done ? 'success' : 'tap', done && music.sting('coin'));
       },
     });
   };

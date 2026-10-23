@@ -10,13 +10,18 @@ import { liteMode } from './quality';
 
 /**
  * Каналы. Улица — дождь, ветер, птицы, гром (без отзвука зала); зал — гул, шаги, колокольчик;
- * мир — звуки предметов в магазине (касса, полка, кот); кнопки — отклик интерфейса; голоса — диалоги.
+ * мир — звуки предметов в магазине (касса, полка, кот); кнопки — отклик интерфейса; голоса — диалоги;
+ * заставки — короткие музыкальные фразы к событиям (под ползунком «Музыка», но мимо притихания музыки).
  */
-export type Bus = 'music' | 'street' | 'hall' | 'world' | 'ui' | 'voice';
+export type Bus = 'music' | 'sting' | 'street' | 'hall' | 'world' | 'ui' | 'voice';
+
+/** Уровень музыки и заставок (см. LEVEL). */
+const MUSIC_LEVEL = 0.55;
 
 /** Какой ползунок управляет каналом. */
 const CHANNEL: Record<Bus, Exclude<VolumeKey, 'master'>> = {
   music: 'music',
+  sting: 'music',
   street: 'ambience',
   hall: 'ambience',
   world: 'effects',
@@ -29,9 +34,12 @@ const CHANNEL: Record<Bus, Exclude<VolumeKey, 'master'>> = {
  * по умолчанию (80%): музыка — около −24 дБ RMS (было −39), дождь на ~9 дБ тише музыки, ливень
  * с ветром — на ~6 (был громче музыки), касса и монетки — пик около −11…−16 дБ (было −44…−54).
  * Компрессор WebAudio сам подтягивает тихое (~+7 дБ), поэтому числа — из замера, а не из арифметики.
+ * Музыка теперь — файлы на −16 LUFS (а не тихие синтезированные ноты), отсюда и её уровень: тот же
+ * замер, те же −24 дБ RMS у дневного трека. Заставки сведены в одной шкале с музыкой — уровень тот же.
  */
 const LEVEL: Record<Bus, number> = {
-  music: 10,
+  music: MUSIC_LEVEL,
+  sting: MUSIC_LEVEL,
   street: 2.6,
   hall: 5.2,
   world: 6,
@@ -40,13 +48,13 @@ const LEVEL: Record<Bus, number> = {
 };
 
 /** Сколько каждого канала уходит в отзвук комнаты: улица — нисколько (она за стеклом). */
-const SEND = { indoor: 0.22, ui: 0.1, voice: 0.12, music: 0.08 };
+const SEND = { indoor: 0.22, ui: 0.1, voice: 0.12, music: 0.08, sting: 0.06 };
 
 /** Меню открыто: мир — глухо и тише, музыка — чуть мягче. */
 const MENU = { muffle: 750, dip: 0.55, music: 3200 };
 const OPEN_AIR = 18000;
 const MUSIC_TONE = 7000;
-/** Под диалогом музыка тише на ~7 дБ, под фанфарами и новостями — на ~6. */
+/** Под диалогом музыка тише на ~7 дБ, под фанфарами и новостями — на ~6 (заставки просят свою глубину). */
 const DIALOG_DUCK = 0.45;
 const STINGER_DUCK = 0.5;
 
@@ -149,7 +157,9 @@ function build(ac: AudioContext): Graph {
   const indoorSend = gain(SEND.indoor);
   indoor.connect(indoorSend).connect(reverb);
 
-  // Кнопки и голоса — мимо «двери»: меню и диалоги звучат ясно.
+  // Кнопки, голоса и заставки — мимо «двери»: меню, диалоги и итоги дня звучат ясно.
+  input.sting.connect(master);
+  input.sting.connect(gain(SEND.sting)).connect(reverb);
   input.ui.connect(master);
   input.ui.connect(gain(SEND.ui)).connect(reverb);
   input.voice.connect(master);
@@ -179,6 +189,7 @@ let menuOpen = false;
 let clearUntil = 0;
 let dialogOpen = false;
 let stingerUntil = 0;
+let stingerDuck = STINGER_DUCK;
 
 function applyDuck(fast: boolean): void {
   if (!ctx || !graph) return;
@@ -187,7 +198,7 @@ function applyDuck(fast: boolean): void {
   const base = dialogOpen ? DIALOG_DUCK : 1;
   p.cancelScheduledValues(now);
   if (stingerUntil > now) {
-    p.setTargetAtTime(Math.min(base, STINGER_DUCK), now, 0.03);
+    p.setTargetAtTime(Math.min(base, stingerDuck), now, 0.03);
     p.setTargetAtTime(base, stingerUntil, 0.35);
   } else p.setTargetAtTime(base, now, fast ? 0.08 : 0.35);
 }
@@ -344,9 +355,11 @@ export function busInput(ac: AudioContext, bus: Bus, pan = 0, gain = 1): AudioNo
 /** Не «пулемёт»: сыграть ли частый звук сейчас (правило — в mix.ts). */
 export const allowVoice = (key: string, rule: VoiceRule, dur: number): boolean => limiter.allow(key, rule, performance.now() / 1000, dur);
 
-/** Фанфары и новости: музыка на время притихает. */
-export function duckMusic(seconds: number): void {
+/** Фанфары, новости и заставки: музыка на время притихает (depth — во сколько раз, по умолчанию ~−6 дБ). */
+export function duckMusic(seconds: number, depth = STINGER_DUCK): void {
   if (!ctx) return;
+  // Предыдущее притихание ещё идёт — берём более глубокое из двух.
+  stingerDuck = stingerUntil > ctx.currentTime ? Math.min(stingerDuck, depth) : depth;
   stingerUntil = Math.max(stingerUntil, ctx.currentTime + seconds);
   applyDuck(true);
 }

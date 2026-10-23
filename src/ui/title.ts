@@ -3,7 +3,6 @@
 import { getLang, setLang, t, type Lang } from '../i18n';
 import { saveLang } from '../i18n/stored';
 import { sound } from '../platform/sound';
-import { music } from '../platform/music';
 import { mixer } from '../platform/mixer';
 import { track } from '../platform/analytics';
 import { addToHomeScreen, canFullscreen, homeScreenStatus, isFullscreen, setFullscreen } from '../platform/telegram';
@@ -85,7 +84,6 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
 
     const play = button(save ? t('title.continue') : t('title.play'), () => {
       sound.coin();
-      music.start();
       // Раз за запуск: играют ли без звука (или без части каналов) — главный признак, нравится ли звук.
       const silent = mixer.silenceMask();
       if (silent) track('sound_off', save?.day ?? 1, silent);
