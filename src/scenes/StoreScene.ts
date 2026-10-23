@@ -157,6 +157,7 @@ import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isM
 import { reportError, setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
 import { iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
+import { BASE_W, crispZoom } from './pixels';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { BARGAIN_CAPACITY, BARGAIN_CHANCE, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
@@ -203,29 +204,20 @@ import { note, reviewsFor } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { lossAdvice, noteLost } from '../game/losses';
 import { fairTolerance, isFairDay, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fair';
-import { fpsSummary, fpsVerdict, liteMode, lowerQuality, quality, qualityChosen, type Quality } from '../platform/quality';
+import { fpsSummary, fpsVerdict, lowerQuality, quality, qualityChosen, type Quality } from '../platform/quality';
 import { framesThrottled } from '../platform/frameCap';
 import { DELIVERY_SECONDS, makeHomeOrder, ORDER_EVERY, ORDER_TIMEOUT, packHomeOrder, type HomeOrder } from '../game/delivery';
 
-// Холст шириной 720 и высотой под экран телефона: от 9:16 до 9:20 — на вытянутых телефонах
-// картинка во весь экран, без пустых полос сверху и снизу. Камера подбирает масштаб под магазин.
-export const ASPECT = Phaser.Math.Clamp(window.innerHeight / Math.max(1, window.innerWidth), 16 / 9, 20 / 9);
-/**
- * Во сколько раз холст плотнее базовых 720 точек по ширине: под экран телефона (ширина × devicePixelRatio),
- * от 1 до 1,5 с шагом 0,25 (больше — тяжело слабым телефонам). Пиксель-арт и надписи не мылятся.
- */
-export const RES = (() => {
-  const cssWidth = Math.min(window.innerWidth, window.innerHeight / ASPECT);
-  // Лёгкая графика (platform/quality.ts) — без повышенной плотности: вдвое меньше пикселей.
-  return Phaser.Math.Clamp(Math.round(((cssWidth * (window.devicePixelRatio || 1)) / 720) * 4) / 4, 1, liteMode() ? 1 : 1.5);
-})();
-export const CANVAS_W = Math.round(720 * RES);
-export const CANVAS_H = Math.round(720 * ASPECT * RES);
-/** Сверху интерфейс (деньги, товар), снизу подсказки — магазин рисуем между ними. */
-const HUD_TOP = 140 * RES;
-const HUD_BOTTOM = 80 * RES;
+// Холст — ровно по пикселям экрана, высотой от 9:16 до 9:20 ширины (platform/screen.ts, scenes/pixels.ts):
+// на вытянутых телефонах картинка во весь экран, без пустых полос. Камера подбирает масштаб под магазин,
+// и в покое — ровный: пиксель рисунка — целое число пикселей экрана.
+/** Сверху интерфейс (деньги, товар), снизу подсказки — магазин рисуем между ними (в базовых точках, × res). */
+const HUD_TOP = 140;
+const HUD_BOTTOM = 80;
 /** Насколько ближе стартовый кадр, чем «весь магазин с флигелем по ширине». */
 const HOME_ZOOM = 1.1;
+/** Сколько флигеля (точек мира за стеной зала) остаётся в кадре, если камера ради ровного масштаба подошла ближе. */
+const WING_PEEK = 12;
 /** Верх вывески над стеной магазина: под верхнюю панель — без полосы пустого газона. */
 const SIGN_TOP = -16;
 /** Спрайты нарисованы с двойной детализацией (DETAIL в art/sprites.py): в мире они вдвое меньше своих пикселей. */
@@ -1015,6 +1007,8 @@ export class StoreScene extends Phaser.Scene {
   /** Куда камера возвращается после осмотра квартала. */
   private home = { x: 0, y: 0 };
   private homeTimer?: Phaser.Time.TimerEvent;
+  /** Колёсико затихло — масштаб доходит до ровного. */
+  private wheelTimer?: Phaser.Time.TimerEvent;
   private baseZoom = 1;
   /** Щипок двумя пальцами: расстояние и зум в начале. */
   private pinch: { dist: number; zoom: number } | null = null;
@@ -1404,7 +1398,8 @@ export class StoreScene extends Phaser.Scene {
   private titleShow(): () => void {
     const cam = this.cameras.main;
     this.updateLighting(0.88);
-    cam.setZoom(this.baseZoom * 0.8).centerOn(this.layout.door.x - 110, this.next.h - 20);
+    // Чуть дальше обычного кадра, если ровный (или хотя бы целый) масштаб это позволяет; нет — обычный кадр.
+    cam.setZoom(crispZoom(this.baseZoom * 0.8, ART, 0, this.baseZoom) || this.baseZoom).centerOn(this.layout.door.x - 110, this.next.h - 20);
     const pan = this.tweens.add({ targets: cam, scrollX: cam.scrollX + 220, duration: 20000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     return () => {
       pan.remove();
@@ -1566,6 +1561,55 @@ export class StoreScene extends Phaser.Scene {
 
   // ---------- Магазин ----------
 
+  /** Во сколько раз холст плотнее базовых 720 точек по ширине: от этого — размеры на холсте под интерфейсом. */
+  private get res(): number {
+    return this.scale.width / BASE_W;
+  }
+
+  /**
+   * Плотность надписи в мире: n — пикселей её текстуры на точку мира при обычном масштабе 4 (так их
+   * и подбирали). Камера в покое стоит на ровном масштабе — надпись рисуется под него: на крупном кадре
+   * (6) точка текстуры не растягивается в полтора пикселя, и буквы не выходят ступеньками разной ширины.
+   */
+  private textRes(n: number): number {
+    return Math.max(1, Math.round((n * this.baseZoom) / 4));
+  }
+
+  /**
+   * Обычный кадр — масштаб и середина (baseZoom, home) под нынешний холст: при постройке зала и когда
+   * холст меняется (полный экран Telegram, поворот планшета).
+   * Внизу кадра видна улица: тротуар и дорога с машинами. Камера крупно показывает сам магазин
+   * (вывеска сверху, фасад снизу); участок под расширение и улицу видно краем, а весь квартал —
+   * свайпом или отдалив двумя пальцами.
+   */
+  private frameCamera(): void {
+    const { width, height } = this.scale;
+    const top = HUD_TOP * this.res;
+    const bottom = HUD_BOTTOM * this.res;
+    const { w, h } = this.layout;
+    // В кадре и флигель слева: склад, пекарня, кофейня.
+    const viewW = w + WING_OUTER + 2 * WALL + 4;
+    const viewH = h + 40;
+    // Магазин шире, чем выше: если по высоте есть запас, камера подходит ближе (до HOME_ZOOM) —
+    // люди и товар крупнее, флигель слева виден краем, а пустой газон над вывеской — нет.
+    const fitW = width / viewW;
+    const want = Math.min(fitW * HOME_ZOOM, (height - top - bottom) / viewH);
+    // Ровный масштаб: пиксель рисунка — целое число пикселей экрана (1, 2, 3…), чуть ближе или дальше
+    // желаемого (scenes/pixels.ts). Ближе — пока в кадре остаётся край флигеля с дверями; если так
+    // ровного нет — пока влезает хотя бы весь зал (флигель тогда за краем, до него — свайпом).
+    const zoom =
+      crispZoom(want, ART, 0, width / (w + 2 * WALL + 2 + WING_PEEK)) || crispZoom(want, ART, 0, width / (w + WALL + 2)) || want;
+    const midY = top + (height - top - bottom) / 2;
+    this.baseZoom = zoom;
+    // Если по высоте есть запас, вывеска прижимается под верхнюю панель — снизу видно больше улицы.
+    const centered = (h + 4) / 2 + (height / 2 - midY) / zoom;
+    const signUnderHud = SIGN_TOP + (height / 2 - top) / zoom;
+    // Правая стена — у края экрана; не влезает слева только часть флигеля.
+    const homeX = Math.max((w - WING_OUTER) / 2, w + WALL + 2 - width / zoom / 2);
+    // Середина — на целой точке мира: камера в покое не сдвинута на полпикселя рисунка.
+    this.home = { x: Math.round(homeX), y: Math.round(Math.max(centered, signUnderHud)) };
+  }
+
   /**
    * Строит зал под текущий уровень помещения. При расширении зал строится заново.
    * bought — перестроили из-за покупки оборудования или украшения: новое утром распакуют из коробки.
@@ -1600,26 +1644,8 @@ export class StoreScene extends Phaser.Scene {
     // Камера показывает и соседнюю площадь, куда магазин вырастет: ларёк выглядит маленьким.
     const next = STORE_LEVELS[this.state.level + 1] ? layoutFor(this.state.level + 1) : this.layout;
     this.next = next;
-    // Внизу кадра видна улица: тротуар и дорога с машинами.
-    // Камера крупно показывает сам магазин (вывеска сверху, фасад снизу); участок под
-    // расширение и улицу видно краем, а весь квартал — свайпом или отдалив двумя пальцами.
-    const { w, h } = this.layout;
-    // В кадре и флигель слева: склад, пекарня, кофейня.
-    const viewW = w + WING_OUTER + 2 * WALL + 4;
-    const viewH = h + 40;
-    // Магазин шире, чем выше: если по высоте есть запас, камера подходит ближе (до HOME_ZOOM) —
-    // люди и товар крупнее, флигель слева виден краем, а пустой газон над вывеской — нет.
-    const fitW = CANVAS_W / viewW;
-    const zoom = Math.min(fitW * HOME_ZOOM, (CANVAS_H - HUD_TOP - HUD_BOTTOM) / viewH);
-    const midY = HUD_TOP + (CANVAS_H - HUD_TOP - HUD_BOTTOM) / 2;
-    this.baseZoom = zoom;
-    // Если по высоте есть запас, вывеска прижимается под верхнюю панель — снизу видно больше улицы.
-    const centered = (h + 4) / 2 + (CANVAS_H / 2 - midY) / zoom;
-    const signUnderHud = SIGN_TOP + (CANVAS_H / 2 - HUD_TOP) / zoom;
-    // Правая стена — у края экрана; не влезает слева только часть флигеля.
-    const homeX = Math.max((w - WING_OUTER) / 2, w + WALL + 2 - CANVAS_W / zoom / 2);
-    this.home = { x: homeX, y: Math.max(centered, signUnderHud) };
-    this.cameras.main.setZoom(zoom).centerOn(this.home.x, this.home.y);
+    this.frameCamera();
+    this.cameras.main.setZoom(this.baseZoom).centerOn(this.home.x, this.home.y);
     // Мягкая виньетка по краям кадра; к вечеру гуще.
     this.cameras.main.postFX?.clear();
     // Виньетка — лишний проход по всему экрану: только в высокой графике.
@@ -1742,7 +1768,7 @@ export class StoreScene extends Phaser.Scene {
         color: `#${signColor.toString(16).padStart(6, '0')}`,
       })
       .setOrigin(0.5)
-      .setResolution(4)
+      .setResolution(this.textRes(4))
       .setDepth(3);
     this.neonSign(w / 2, -9, this.shopTitle(), '7px', signColor, 64);
     if (!sign) this.signLights(w / 2, -9);
@@ -2387,7 +2413,7 @@ export class StoreScene extends Phaser.Scene {
     const label = this.add
       .text(x, y, `+${n}`, { fontFamily: UI_FONT, fontSize: '8px', fontStyle: 'bold', color: '#fee761', stroke: '#3e2731', strokeThickness: 3 })
       .setOrigin(0.5)
-      .setResolution(5)
+      .setResolution(this.textRes(5))
       .setDepth(1000)
       .setScale(0.3);
     this.tweens.chain({
@@ -2677,7 +2703,9 @@ export class StoreScene extends Phaser.Scene {
     for (const view of this.shelfViews.splice(0)) this.destroyShelfView(view);
     for (const mark of this.slotDecor) mark?.setVisible(false);
     const cam = this.cameras.main;
-    cam.setZoom(Math.min(CANVAS_W / (w + 24), (CANVAS_H - HUD_TOP - 120 * RES) / (h + 24))).centerOn(w / 2, h / 2 + 10);
+    // Весь зал целиком; масштаб ровный (или хотя бы целый) — чуть дальше, если ровно не влезает.
+    const fit = Math.min(this.scale.width / (w + 24), (this.scale.height - (HUD_TOP + 120) * this.res) / (h + 24));
+    cam.setZoom(crispZoom(fit, ART, 0, fit) || fit).centerOn(w / 2, h / 2 + 10);
     const grid = this.add.graphics().setDepth(LIGHT_DEPTH + 10);
     grid.lineStyle(0.4, 0x2b2233, 0.18);
     for (let x = 0; x <= w; x += 8) grid.lineBetween(x, this.layout.wallH, x, h);
@@ -3701,7 +3729,7 @@ export class StoreScene extends Phaser.Scene {
             color: station === 'hits' ? '#f6757a' : '#fee761',
           })
           .setOrigin(0.5)
-          .setResolution(4)
+          .setResolution(this.textRes(4))
           .setDepth(1000);
         this.tweens.add({
           targets: note,
@@ -3822,7 +3850,7 @@ export class StoreScene extends Phaser.Scene {
     bubble.add(this.add.rectangle(0, 0, width, 9, 0xffffff).setStrokeStyle(0.6, 0x181425));
     data.items.forEach((item, i) => {
       bubble.add(this.art(-width / 2 + 6.5 + i * 9, -0.5, `item_${item.id}`).setScale(1.3 / ART));
-      bubble.add(this.add.text(-width / 2 + 9.5 + i * 9, 2.5, String(item.qty), { fontFamily: UI_FONT, fontSize: '4px', fontStyle: 'bold', color: '#181425' }).setOrigin(0.5).setResolution(6));
+      bubble.add(this.add.text(-width / 2 + 9.5 + i * 9, 2.5, String(item.qty), { fontFamily: UI_FONT, fontSize: '4px', fontStyle: 'bold', color: '#181425' }).setOrigin(0.5).setResolution(this.textRes(6)));
     });
     this.tweens.add({ targets: bubble, y: bubble.y - 1.5, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     const timer = this.time.delayedCall(ORDER_TIMEOUT * 1000, () => {
@@ -4479,7 +4507,7 @@ export class StoreScene extends Phaser.Scene {
       return;
     }
     this.setFacing(sprite, 'right');
-    const mark = this.add.text(0, -24, '!', { fontFamily: UI_FONT, fontSize: '10px', color: '#2ce8f5', stroke: '#181425', strokeThickness: 3 }).setOrigin(0.5).setResolution(4);
+    const mark = this.add.text(0, -24, '!', { fontFamily: UI_FONT, fontSize: '10px', color: '#2ce8f5', stroke: '#181425', strokeThickness: 3 }).setOrigin(0.5).setResolution(this.textRes(4));
     sprite.add(mark);
     const blink = this.tweens.add({ targets: mark, y: -27, duration: 400, yoyo: true, repeat: -1 });
     // Уснувший врач сопит.
@@ -4582,7 +4610,7 @@ export class StoreScene extends Phaser.Scene {
       const z = this.add
         .text(cat.x - 3, cat.y - 6, 'z', { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#e8f0ff' })
         .setOrigin(0.5)
-        .setResolution(4)
+        .setResolution(this.textRes(4))
         .setDepth(cat.depth + 1)
         .setScale(0.6);
       this.tweens.add({ targets: z, x: z.x - 4, y: z.y - 9, scale: 1, alpha: 0, duration: 1800, onComplete: () => z.destroy() });
@@ -4958,7 +4986,7 @@ export class StoreScene extends Phaser.Scene {
     const tag = this.add
       .text(0, -24, `👋 ${f.name}`, { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#fee761', backgroundColor: 'rgba(24, 20, 37, 0.75)', padding: { x: 2, y: 1 } })
       .setOrigin(0.5)
-      .setResolution(5);
+      .setResolution(this.textRes(5));
     sprite.add([bubble, tag]);
     const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief: false, friend: f, wants: this.wanted(2) };
     // Нажми на друга — угостить кофе: он получит монеты при следующем запуске.
@@ -5529,11 +5557,29 @@ export class StoreScene extends Phaser.Scene {
       this.dragStart = { x: p.x, y: p.y };
     });
     this.input.addPointer(1);
-    const zoomTo = (z: number) => cam.setZoom(Phaser.Math.Clamp(z, this.baseZoom * 0.5, this.baseZoom * 2.2));
-    // Колёсико на компьютере.
+    // Пока пальцы двигаются, масштаб любой — плавно; отпустили — доходит до ближайшего ровного
+    // (пиксель рисунка — целое число пикселей экрана), иначе картинка так и останется в ряби.
+    let zoomed = false;
+    const zoomTo = (z: number) => {
+      cam.zoomEffect.reset();
+      cam.setZoom(Phaser.Math.Clamp(z, this.baseZoom * 0.5, this.baseZoom * 2.2));
+      zoomed = true;
+    };
+    const settle = () => {
+      if (!zoomed) return;
+      zoomed = false;
+      const target = crispZoom(cam.zoom, ART, this.baseZoom * 0.5, this.baseZoom * 2.2);
+      if (target && target !== cam.zoom) cam.zoomTo(target, 160, 'Sine.easeOut', true);
+    };
+    // Середина кадра под пальцем — без округления: камера рисуется с шагом в целую точку мира
+    // (roundPixels), и медленный палец иначе терял бы сдвиг меньше точки — в одну сторону.
+    let drag: { x: number; y: number } | null = null;
+    // Колёсико на компьютере: ровный масштаб — когда колёсико затихло.
     this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       if (this.arranging) return;
       zoomTo(cam.zoom * (dy > 0 ? 0.9 : 1.1));
+      this.wheelTimer?.remove();
+      this.wheelTimer = this.time.delayedCall(200, settle);
       this.scheduleHome();
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -5548,23 +5594,53 @@ export class StoreScene extends Phaser.Scene {
         zoomTo(this.pinch.zoom * (dist / this.pinch.dist));
         this.dragged = true;
         this.homeTimer?.remove();
+        drag = null;
         return;
       }
       this.pinch = null;
       if (!p.isDown) return;
-      if (!this.dragged && Phaser.Math.Distance.Between(p.x, p.y, this.dragStart.x, this.dragStart.y) < 12 * RES) return;
+      if (!this.dragged && Phaser.Math.Distance.Between(p.x, p.y, this.dragStart.x, this.dragStart.y) < 12 * this.res) return;
       this.dragged = true;
       this.homeTimer?.remove();
-      const dx = (p.x - p.prevPosition.x) / cam.zoom;
-      const dy = (p.y - p.prevPosition.y) / cam.zoom;
-      const cx = Phaser.Math.Clamp(cam.midPoint.x - dx, -CAMERA_REACH, this.next.w + CAMERA_REACH);
-      const cy = Phaser.Math.Clamp(cam.midPoint.y - dy, -CAMERA_REACH / 2, this.next.h + CAMERA_REACH / 2);
-      cam.centerOn(cx, cy);
+      // Камера могла лететь домой — палец её перехватывает.
+      if (!drag || cam.panEffect.isRunning) {
+        cam.panEffect.reset();
+        drag = { x: cam.midPoint.x, y: cam.midPoint.y };
+      }
+      drag.x = Phaser.Math.Clamp(drag.x - (p.x - p.prevPosition.x) / cam.zoom, -CAMERA_REACH, this.next.w + CAMERA_REACH);
+      drag.y = Phaser.Math.Clamp(drag.y - (p.y - p.prevPosition.y) / cam.zoom, -CAMERA_REACH / 2, this.next.h + CAMERA_REACH / 2);
+      cam.centerOn(drag.x, drag.y);
     });
     this.input.on('pointerup', () => {
       this.pinch = null;
+      drag = null;
+      settle();
       if (this.dragged) this.scheduleHome();
     });
+    // Холст сменил размер (полный экран Telegram, поворот, окно на компьютере) — кадр под новый холст.
+    // Масштабом холста ведает игра, а не сцена: подписка снимается вместе со сценой.
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this));
+  }
+
+  /**
+   * Холст сменил размер. Камера стояла в обычном кадре или летела к нему — ставим новый обычный кадр
+   * (масштаб ровный под новый холст); показывала своё (заставку, перестановку, осмотр) — та же середина.
+   */
+  private onResize(size: Phaser.Structs.Size, _base: Phaser.Structs.Size, _display: Phaser.Structs.Size, prevW: number, prevH: number): void {
+    if (size.width === prevW && size.height === prevH) return;
+    const cam = this.cameras.main;
+    const mid = { x: cam.midPoint.x, y: cam.midPoint.y };
+    const atHome = cam.zoom === this.baseZoom && Math.abs(mid.x - this.home.x) <= 1 && Math.abs(mid.y - this.home.y) <= 1;
+    const flying = cam.panEffect.isRunning || cam.zoomEffect.isRunning;
+    this.frameCamera();
+    if (this.arranging || !(atHome || flying)) {
+      cam.centerOn(mid.x, mid.y);
+      return;
+    }
+    cam.panEffect.reset();
+    cam.zoomEffect.reset();
+    cam.setZoom(this.baseZoom).centerOn(this.home.x, this.home.y);
   }
 
   /**
@@ -5636,7 +5712,7 @@ export class StoreScene extends Phaser.Scene {
     const front = across ? top + FACADE_H : bottom;
     this.add.tileSprite(n.x, roofY, n.w, n.h - FACADE_H, 'roof').setOrigin(0).setTileScale(1 / ART).setTint(n.roof).setDepth(-3);
     this.add.tileSprite(n.x - 2, (across ? bottom : top) - 3, n.w + 4, 3, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(-3);
-    this.add.tileSprite(n.x, front - FACADE_H, n.w, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(front - 5);
+    this.add.tileSprite(n.x, front - FACADE_H, n.w, FACADE_H, this.potTile('facade')).setOrigin(0).setTileScale(1 / ART).setDepth(front - 5);
     this.dressRoof(n, roofY, n.h - FACADE_H, across, rnd);
     // Витрины, дверь и навес.
     const doorX = across ? n.x + n.w / 2 : n.x + n.w * 0.62;
@@ -5656,7 +5732,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .text(n.x + n.w / 2, signY, n.label ?? t(n.name), { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
       .setOrigin(0.5)
-      .setResolution(4)
+      .setResolution(this.textRes(4))
       .setDepth(signDepth + 1);
     if (n.neon) this.neonSign(n.x + n.w / 2, signY, n.label ?? t(n.name), '6px', n.neon, 64);
   }
@@ -6344,7 +6420,7 @@ export class StoreScene extends Phaser.Scene {
     this.parking = { spots, x, w, aisleY: y + h / 2 };
     this.parkingTimer?.remove();
     this.parkingTimer = this.time.addEvent({ delay: 4000, loop: true, callback: () => this.parkingTick() });
-    this.add.text(x + w / 2, y + h / 2, 'P', { fontFamily: UI_FONT, fontSize: '10px', color: '#e6e1d6', fontStyle: 'bold' }).setOrigin(0.5).setResolution(4).setDepth(-9.44).setAlpha(0.7);
+    this.add.text(x + w / 2, y + h / 2, 'P', { fontFamily: UI_FONT, fontSize: '10px', color: '#e6e1d6', fontStyle: 'bold' }).setOrigin(0.5).setResolution(this.textRes(4)).setDepth(-9.44).setAlpha(0.7);
     return { x: x - 8, y: y - 8, w: w + 16, h: h + 16 };
   }
 
@@ -6446,7 +6522,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .text(a.x + a.w / 2, signY, t('district.soon', { name }), { fontFamily: UI_FONT, fontSize: '5px', color: '#262b44' })
       .setOrigin(0.5)
-      .setResolution(4)
+      .setResolution(this.textRes(4))
       .setDepth(signY + 21);
     function rnd(n: number): number {
       return Math.floor(Math.random() * Math.max(1, n));
@@ -6489,7 +6565,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .text(a.x + a.w / 2, a.y - 10, `${BUILDINGS.stadium.icon} ${name}`, { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
       .setOrigin(0.5)
-      .setResolution(4)
+      .setResolution(this.textRes(4))
       .setDepth(a.y + a.h + 2);
   }
 
@@ -6539,7 +6615,7 @@ export class StoreScene extends Phaser.Scene {
         this.add
           .text(door.x, y, t(ours ? 'trick.banner.own' : 'trick.banner.sign'), { fontFamily: UI_FONT, fontSize: '7px', color: '#ffffff', fontStyle: 'bold' })
           .setOrigin(0.5)
-          .setResolution(4)
+          .setResolution(this.textRes(4))
           .setDepth(depth + 2),
       );
       return;
@@ -6606,7 +6682,7 @@ export class StoreScene extends Phaser.Scene {
     this.nightGlow(this.art(x, y, 'glow').setDisplaySize(width * 1.5, 34).setTint(color), 0.4, seed);
     const css = `#${color.toString(16).padStart(6, '0')}`;
     this.nightGlow(
-      this.add.text(x, y, text, { fontFamily: UI_FONT, fontSize: size, color: css }).setOrigin(0.5).setResolution(4),
+      this.add.text(x, y, text, { fontFamily: UI_FONT, fontSize: size, color: css }).setOrigin(0.5).setResolution(this.textRes(4)),
       0.85,
       seed,
     );
@@ -6790,7 +6866,7 @@ export class StoreScene extends Phaser.Scene {
     shade.fillGradientStyle(ink, ink, ink, ink, 0.22, 0, 0.22, 0);
     shade.fillRect(w + WALL, 2, 12, h + FACADE_H - 4);
     const style = this.facadeStyle();
-    this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, style.texture).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
+    this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, this.potTile(style.texture)).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
     this.doorImg = this.art(door.x, h + 5, 'door').setDepth(h + 2);
     this.doorSign = this.art(door.x + 11, h + 8, this.running ? 'door_sign_open' : 'door_sign_closed').setDepth(h + 42);
     // Витрины с маленькими навесами слева и справа от двери.
@@ -7083,7 +7159,7 @@ export class StoreScene extends Phaser.Scene {
     const { w, h, door } = this.layout;
     const cost = STORE_LEVELS[this.state.level + 1].cost;
     const tile = (x: number, y: number, ww: number, hh: number, key: string, depth = -5) =>
-      this.add.tileSprite(x, y, ww, hh, key).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
+      this.add.tileSprite(x, y, ww, hh, this.potTile(key)).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
     if (next.w > w) tile(w + 3, 0, next.w - w - 3, next.h, 'lot', -8);
     if (next.h > h) tile(0, h + 3, w + 3, next.h - h - 3, 'lot', -8);
     this.scatterLot(next);
@@ -7112,7 +7188,7 @@ export class StoreScene extends Phaser.Scene {
         align: 'center',
       })
       .setOrigin(0.5)
-      .setResolution(8)
+      .setResolution(this.textRes(8))
       .setDepth(signY + 9);
   }
 
@@ -7234,8 +7310,8 @@ export class StoreScene extends Phaser.Scene {
     const { w, wallH, wc } = this.layout;
     const warm = 0xffd27a;
     if (light.id === 'light_garland') {
-      this.add.tileSprite(0, 0, w, 6, 'light_garland').setOrigin(0).setTileScale(1 / ART).setDepth(2);
-      const lit = this.add.tileSprite(0, 0, w, 6, 'light_garland_lit').setOrigin(0).setTileScale(1 / ART).setDepth(2);
+      this.add.tileSprite(0, 0, w, 6, this.potTile('light_garland')).setOrigin(0).setTileScale(1 / ART).setDepth(2);
+      const lit = this.add.tileSprite(0, 0, w, 6, this.potTile('light_garland_lit')).setOrigin(0).setTileScale(1 / ART).setDepth(2);
       lit.setBlendMode(Phaser.BlendModes.ADD);
       this.tweens.add({ targets: lit, alpha: { from: 1, to: 0.35 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       return;
@@ -7297,7 +7373,7 @@ export class StoreScene extends Phaser.Scene {
       const note = this.add
         .text(spot.x + 4, top + 2, '♪', { fontFamily: UI_FONT, fontSize: '7px', color: '#fee761', stroke: '#181425', strokeThickness: 2 })
         .setOrigin(0.5)
-        .setResolution(4)
+        .setResolution(this.textRes(4))
         .setDepth(spot.y + 9);
       this.tweens.add({
         targets: note,
@@ -7351,7 +7427,7 @@ export class StoreScene extends Phaser.Scene {
     cap(left + WALL, warehouse.y - WALL, wing.w, WALL);
     cap(left + WALL, bakery.y - WALL, wing.w, WALL);
     if (this.layout.kitchen) cap(left + WALL, this.layout.coffee.y - WALL, wing.w, WALL);
-    this.add.tileSprite(left, h, WING_OUTER - WALL, FACADE_H, this.facadeStyle().texture).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
+    this.add.tileSprite(left, h, WING_OUTER - WALL, FACADE_H, this.potTile(this.facadeStyle().texture)).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
     const gateX = warehouse.x + warehouse.w / 2;
     this.art(gateX, h + 5.5, 'shutter').setDepth(h + 2);
     // Подъезд от тротуара к воротам склада.
@@ -7373,7 +7449,7 @@ export class StoreScene extends Phaser.Scene {
     this.kitchenLabel = this.add
       .text(room.x + 30, room.y + 31, '', { fontFamily: UI_FONT, fontSize: '5px', fontStyle: 'bold', color: '#2b2233', backgroundColor: 'rgba(255, 246, 200, 0.9)', padding: { x: 1.5, y: 0.5 } })
       .setOrigin(0.5)
-      .setResolution(5)
+      .setResolution(this.textRes(5))
       .setDepth(room.y + 47);
     this.refreshKitchen();
   }
@@ -7427,7 +7503,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .text(x + w / 2, y + h / 2 + 6, `🔒\n${t(`wing.${kind}Locked`)}`, { fontFamily: UI_FONT, fontSize: '5px', color: '#c0cbdc', align: 'center' })
       .setOrigin(0.5)
-      .setResolution(4)
+      .setResolution(this.textRes(4))
       .setDepth(y + h + 1);
   }
 
@@ -7436,7 +7512,7 @@ export class StoreScene extends Phaser.Scene {
    * даже когда флигель в кадре краем.
    */
   private roomSign(x: number, y: number, w: number, text: string): void {
-    const label = this.add.text(0, y, text, { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#fee761' }).setOrigin(0.5).setResolution(4);
+    const label = this.add.text(0, y, text, { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#fee761' }).setOrigin(0.5).setResolution(this.textRes(4));
     const plateW = Math.min(w - 4, label.width + 6);
     const cx = x + w - 2 - plateW / 2;
     label.setX(cx).setDepth(y + 61);
@@ -7592,7 +7668,7 @@ export class StoreScene extends Phaser.Scene {
     const promo = this.add
       .text(slot.x - 12, slot.y - 22, t('shelf.promo'), { fontFamily: UI_FONT, fontSize: '5px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#e43b44', padding: { x: 2, y: 1 } })
       .setOrigin(0.5)
-      .setResolution(6)
+      .setResolution(this.textRes(6))
       .setDepth(990)
       .setAngle(-8)
       .setVisible(false);
@@ -7608,14 +7684,14 @@ export class StoreScene extends Phaser.Scene {
         padding: { x: 2, y: 1 },
       })
       .setOrigin(0.5)
-      .setResolution(6)
+      .setResolution(this.textRes(6))
       .setDepth(990)
       .setVisible(false);
     this.tweens.add({ targets: low, y: low.y - 1.5, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     const expire = this.add
       .text(slot.x, slot.y - 30, t('shelf.expiring'), { fontFamily: UI_FONT, fontSize: '5px', fontStyle: 'bold', color: '#2b2233', backgroundColor: '#fee761', padding: { x: 2, y: 1 } })
       .setOrigin(0.5)
-      .setResolution(6)
+      .setResolution(this.textRes(6))
       .setDepth(991)
       .setVisible(false);
     expire.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.markdownNow(expire.x, expire.y)));
@@ -7702,7 +7778,7 @@ export class StoreScene extends Phaser.Scene {
       this.add
         .text(slot.x + (right ? -10 : 10), slot.y + dy, text, { fontFamily: UI_FONT, fontSize: '5px', fontStyle: 'bold', color, backgroundColor: bgColor, padding: { x: 2, y: 1 } })
         .setOrigin(0.5)
-        .setResolution(6)
+        .setResolution(this.textRes(6))
         .setDepth(990)
         .setVisible(false);
     const promo = label(t('shelf.promo'), -26, '#e43b44');
@@ -7857,6 +7933,27 @@ export class StoreScene extends Phaser.Scene {
     this.wcBar.setTint(dirt < 30 ? 0x8fd16a : dirt < TOILET_DIRTY ? 0xf2c14e : 0xd95763);
     this.wcDoor.setTint(dirt >= TOILET_DIRTY ? 0xc8a878 : 0xffffff);
     this.wcStink.setVisible(dirt >= TOILET_DIRTY);
+  }
+
+  /**
+   * Картинка для полосы-плитки (фасад, забор, гирлянда). Phaser растягивает плитку до степени двойки
+   * (32×20 → 32×32), и ряды пикселей выходят разной высоты при любом масштабе камеры. Плитке с высотой
+   * не в степень двойки — копия, дополненная до неё той же картинкой ниже: полоса в одну плитку высотой
+   * показывает те же ряды, только без растяжки.
+   */
+  private potTile(key: string): string {
+    const frame = this.textures.getFrame(key);
+    if (!frame) return key;
+    const { cutWidth: w, cutHeight: h } = frame;
+    const pot = Phaser.Math.Pow2.GetNext(h);
+    if (pot === h || !Phaser.Math.Pow2.IsValue(w)) return key;
+    const padded = `${key}@pot`;
+    if (!this.textures.exists(padded)) {
+      const canvas = this.textures.createCanvas(padded, w, pot);
+      for (let y = 0; canvas && y < pot; y += h) canvas.context.drawImage(frame.source.image as CanvasImageSource, frame.cutX, frame.cutY, w, h, 0, y, w, h);
+      canvas?.refresh();
+    }
+    return padded;
   }
 
   /** Картинка из public/assets в мировом масштабе. */
@@ -8117,7 +8214,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Монетки летят от кассы к счётчику денег в углу экрана. */
   private flyCoins(x: number, y: number, count: number): void {
-    const target = this.cameras.main.getWorldPoint(70 * RES, 52 * RES);
+    const target = this.cameras.main.getWorldPoint(70 * this.res, 52 * this.res);
     for (let i = 0; i < count; i++) {
       const coin = this.art(x + Phaser.Math.Between(-4, 4), y - 10, 'coin').setDepth(LIGHT_DEPTH + 5);
       this.tweens.add({
@@ -8150,7 +8247,7 @@ export class StoreScene extends Phaser.Scene {
         strokeThickness: 3,
       })
       .setOrigin(0.5)
-      .setResolution(5)
+      .setResolution(this.textRes(5))
       .setDepth(LIGHT_DEPTH + 6)
       .setScale(0.2)
       .setAngle(-8);
@@ -10127,7 +10224,7 @@ export class StoreScene extends Phaser.Scene {
     const item = PRODUCTS[visit.product];
     this.popup(sprite.x, sprite.y - 18, t(`special.${visit.kind}.hello` as TextKey), '#fff3b0');
     // «!» над головой мигает, пока не ответишь.
-    const mark = this.add.text(0, -24, '!', { fontFamily: UI_FONT, fontSize: '10px', color: '#fee761', stroke: '#181425', strokeThickness: 3 }).setOrigin(0.5).setResolution(4);
+    const mark = this.add.text(0, -24, '!', { fontFamily: UI_FONT, fontSize: '10px', color: '#fee761', stroke: '#181425', strokeThickness: 3 }).setOrigin(0.5).setResolution(this.textRes(4));
     sprite.add(mark);
     const blink = this.tweens.add({ targets: mark, y: -27, duration: 400, yoyo: true, repeat: -1 });
     let answered: boolean | null = null;
@@ -10466,7 +10563,7 @@ export class StoreScene extends Phaser.Scene {
         .filter((r) => r.key || r.text)
         .map((r) => {
           if (r.key) return this.popupIcon(r.key);
-          return this.add.text(0, 0, r.text, { fontFamily: UI_FONT, fontSize: POPUP.font, fontStyle: 'bold', color: e.color, resolution: 5 }).setOrigin(0, 0.5);
+          return this.add.text(0, 0, r.text, { fontFamily: UI_FONT, fontSize: POPUP.font, fontStyle: 'bold', color: e.color, resolution: this.textRes(5) }).setOrigin(0, 0.5);
         });
       const gaps = (o: Phaser.GameObjects.Image | Phaser.GameObjects.Text) => (o instanceof Phaser.GameObjects.Image ? 2 * POPUP.gap : 0);
       return {
@@ -10883,7 +10980,7 @@ export class StoreScene extends Phaser.Scene {
     const label = this.add
       .text((left ? -1 : 1) * 10.25, -5.25, t('store.newTag'), { fontFamily: UI_FONT, fontSize: '4.5px', fontStyle: 'bold', color: '#ffffff' })
       .setOrigin(0.5)
-      .setResolution(8);
+      .setResolution(this.textRes(8));
     const tag = this.add.container(x, top + 2, [flag, label]).setDepth(990).setScale(0);
     this.tweens.add({ targets: tag, scale: 1, duration: 260, ease: 'Back.easeOut', easeParams: [2.5] });
     if (!this.lite) {
