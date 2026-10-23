@@ -1,14 +1,45 @@
 import { t, type TextKey } from '../i18n';
 import { onShelves, PRODUCTS, sellableProducts, warehouseCapacity, warehouseCount, type DayStats, type StoreState } from '../game/economy';
-import { button, curtain, el, injectStyles, openModal, pixelize } from './dom';
+import { button, curtain, el, injectStyles, openModal, pixelize, replay, rollNumber } from './dom';
 import type { Review } from '../game/reviews';
 import { reviewCards } from './reviews';
 import { liveFace } from './dialog';
 import type { LossAdvice } from '../game/losses';
+import { RECORD_ICONS, type RecordId } from '../game/records';
+import { liteMode } from '../platform/quality';
+import { sound } from '../platform/sound';
+import { haptic } from '../platform/telegram';
 
 /** Сколько штук на полках считается «мало» и сколько таких товаров показывать в панели. */
 const LOW_ON_SHELF = 3;
 const LOW_SHOWN = 6;
+
+/**
+ * Итоги дня по времени (мс от открытия): первая плитка выскакивает в TILE_AT, следующие — через TILE_STEP,
+ * число в плитке начинает крутиться через ROLL_DELAY и крутится ROLL_MS.
+ */
+const TILE_AT = 220;
+const TILE_STEP = 110;
+const ROLL_DELAY = 120;
+const ROLL_MS = 900;
+/** Печати: первая — когда числа почти докрутились (без докрутки — сразу за плитками), удар — на 60% её анимации. */
+const STAMP_AT = 1250;
+const CALM_STAMP_AT = 600;
+const STAMP_STEP = 420;
+const STAMP_HIT = 270;
+const STAMP_SPARKS = 10;
+/** Наклон печатей по очереди — шлёпнуты от руки, не по линейке. */
+const STAMP_TILT = [-10, -5, -8, -4];
+/** Лучший день недели загорается, когда столбики выросли. */
+const GOLD_AT = 950;
+/** Сколько места в столбце графика занимают подписи: сумма сверху и день снизу. */
+const CHART_LABELS = 28;
+/** Звезда рейтинга и зазор между звёздами — как в CSS .ui-stars. */
+const STAR_W = 14;
+const STAR_GAP = 1;
+
+/** Что «шлёпается» печатью в итогах дня: новое звание и побитые рекорды. */
+export type SummaryStamp = { kind: 'rank'; name: string } | { kind: 'record'; id: RecordId };
 
 /** Цвета причин ухода — те же, что в полоске. */
 const LOSS_COLORS = { queue: '#f77622', empty: '#8b9bb4', expensive: '#e43b44', eduard: '#68386c' } as const;
@@ -57,7 +88,7 @@ export class Hud {
   /** Сколько денег сейчас показано — число «докручивается» до настоящего. */
   private shownMoney: number | null = null;
   private targetMoney = 0;
-  private roll = 0;
+  private stopRoll = () => {};
 
   constructor() {
     injectStyles();
@@ -114,27 +145,23 @@ export class Hud {
     if (this.shownMoney !== null && value === this.targetMoney) return;
     const from = this.shownMoney ?? value;
     this.targetMoney = value;
-    cancelAnimationFrame(this.roll);
+    this.stopRoll();
     if (from === value) {
-      this.renderMoney(value);
+      this.moneyText.nodeValue = this.moneyLabel(value);
       return;
     }
     this.money.classList.toggle('ui-money-up', value > from);
     this.money.classList.toggle('ui-money-down', value < from);
-    const start = performance.now();
     const duration = Math.min(800, 250 + Math.abs(value - from) * 3);
-    const step = (now: number) => {
-      const k = Math.min(1, (now - start) / duration);
-      this.renderMoney(Math.round(from + (value - from) * (1 - (1 - k) ** 3)));
-      if (k < 1) this.roll = requestAnimationFrame(step);
-      else this.money.classList.remove('ui-money-up', 'ui-money-down');
-    };
-    this.roll = requestAnimationFrame(step);
+    this.stopRoll = rollNumber(this.moneyText, from, value, duration, (n) => this.moneyLabel(n), () =>
+      this.money.classList.remove('ui-money-up', 'ui-money-down'),
+    );
   }
 
-  private renderMoney(value: number): void {
+  /** Текст счётчика; запоминаем, что показано, — следующая докрутка начнётся отсюда. */
+  private moneyLabel(value: number): string {
     this.shownMoney = value;
-    this.moneyText.nodeValue = ` ${value}`;
+    return ` ${value}`;
   }
 
   /** Кнопка ускорения: видна только днём; ×1 или ×2. */
@@ -174,6 +201,7 @@ export class Hud {
     rating: { before: number; after: number },
     money: { bill: number | null; shortfall: number; total: number },
     extra: [string, string][],
+    stamps: SummaryStamp[],
     history: number[],
     losses: LossAdvice[],
     reviews: Review[],
@@ -181,20 +209,82 @@ export class Hud {
     onShare?: (button: HTMLButtonElement) => void,
   ): void {
     const { card, close } = openModal();
+    card.classList.add('ui-sum');
     card.append(el('h2', '', t('summary.title', { n: day })));
-    // Главное — крупными плитками.
+    // Слабый телефон или «меньше движения» в системе: числа сразу итоговые, печати без искр.
+    const calm = liteMode() || matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Главное — крупными плитками: выскакивают по очереди, числа в них докручиваются от нуля.
     const arrowRating = rating.after > rating.before ? '▲' : rating.after < rating.before ? '▼' : '';
-    const tiles = el('div', 'ui-tiles');
-    const tile = (value: string, label: string, tone = '') => {
-      const box = el('div', `ui-tile ${tone}`);
-      box.append(el('b', '', value), el('span', '', label));
+    const records = stamps.flatMap((s) => (s.kind === 'record' ? [s.id] : []));
+    const tiles = el('div', 'ui-tiles ui-sum-tiles');
+    const tile = (icon: string | HTMLElement, value: number, label: string, tone = '', record = false, format: (n: number) => string = String) => {
+      const at = TILE_AT + tiles.childElementCount * TILE_STEP;
+      const box = el('div', `ui-tile ${tone}${record ? ' record' : ''}`);
+      box.style.animationDelay = `${at}ms`;
+      const num = el('span', 'ui-tile-num', format(calm ? value : 0));
+      const b = el('b');
+      b.append(icon, ' ', num);
+      const caption = el('span', '', label);
+      box.append(b, caption);
       tiles.append(box);
+      if (!calm) setTimeout(() => rollNumber(num, 0, value, ROLL_MS, format), at + ROLL_DELAY);
+      return { box, num, caption, at };
     };
-    tile(`💰 ${stats.revenue}`, t('summary.revenue'), 'good');
-    tile(`🙂 ${stats.served}`, t('summary.served'));
-    tile(`🚶 ${stats.lost}`, t('summary.lost'), stats.lost > stats.served / 3 ? 'bad' : '');
-    tile(`★ ${rating.after.toFixed(1)} ${arrowRating}`, t('summary.rating'), arrowRating === '▼' ? 'bad' : arrowRating ? 'good' : '');
-    card.append(tiles, grannySays(day, stats, rating, history));
+    const recordTiles: Partial<Record<RecordId, ReturnType<typeof tile>>> = {
+      revenue: tile('💰', stats.revenue, t('summary.revenue'), 'good', records.includes('revenue')),
+      served: tile('🙂', stats.served, t('summary.served'), '', records.includes('served')),
+    };
+    tile('🚶', stats.lost, t('summary.lost'), stats.lost > stats.served / 3 ? 'bad' : '');
+    // Рейтинг: золотые звёзды заполняются до дробной части, рядом докручивается число, ниже — на сколько изменился.
+    const stars = starRow();
+    const rate = tile(stars.box, Math.round(rating.after * 10), t('summary.rating'), arrowRating === '▼' ? 'bad' : arrowRating ? 'good' : '', false, (n) =>
+      (n / 10).toFixed(1),
+    );
+    if (arrowRating) {
+      const delta = Math.round(Math.abs(rating.after - rating.before) * 10) / 10;
+      const sign = arrowRating === '▲' ? '+' : '−';
+      rate.caption.append(' ', el('span', `ui-tile-delta ${arrowRating === '▲' ? 'up' : 'down'}`, delta ? `${arrowRating} ${sign}${delta.toFixed(1)}` : arrowRating));
+    }
+    if (calm) stars.fill(rating.after);
+    else
+      setTimeout(() => {
+        stars.fill(rating.after);
+        // Рейтинг вырос — звёзды вспыхивают, когда заполнились.
+        if (arrowRating === '▲') setTimeout(() => replay(stars.box, 'ui-shine'), ROLL_MS);
+      }, rate.at + ROLL_DELAY);
+    card.append(tiles);
+    // Новое звание и побитые рекорды — не в «Подробнее», а печатью: звание золотой, рекорд красной.
+    if (stamps.length) {
+      const row = el('div', 'ui-stamps');
+      const recordValue: Record<RecordId, number> = { revenue: stats.revenue, served: stats.served, combo: stats.bestCombo, money: money.total, days: day };
+      stamps.forEach((s, i) => {
+        const at = (calm ? CALM_STAMP_AT : STAMP_AT) + i * STAMP_STEP;
+        const hit = at + STAMP_HIT;
+        row.append(
+          s.kind === 'rank'
+            ? stamp('gold', t('summary.stampRank'), `🏅 ${s.name}`, t('summary.stampRankNote'), at, i, !calm)
+            : stamp('red', t('summary.stampRecord'), `${recordValue[s.id]} ${RECORD_ICONS[s.id]}`, t(`records.${s.id}` as TextKey), at, i, !calm),
+        );
+        // Рекорд по выручке или покупателям: на его плитку в миг удара падает корона.
+        const target = s.kind === 'record' ? recordTiles[s.id] : undefined;
+        if (target) {
+          const crown = el('img', 'ui-tile-crown');
+          crown.src = 'assets/ico_crown.png';
+          crown.alt = '';
+          crown.style.animationDelay = `${hit}ms`;
+          target.box.append(crown);
+        }
+        setTimeout(() => {
+          if (!card.isConnected) return;
+          if (s.kind === 'rank') sound.medal();
+          else sound.pop(i);
+          haptic.tap();
+          if (target && !calm) replay(target.num, 'ui-shine');
+        }, hit);
+      });
+      card.append(row);
+    }
+    card.append(grannySays(day, stats, rating, history));
     // Карточка итогов для сторис или чата (platform/shareCard.ts).
     if (onShare) {
       const share: HTMLButtonElement = button(t('share.button'), () => onShare(share), 'ui-btn secondary');
@@ -205,12 +295,24 @@ export class Hud {
     if (week.length > 1) {
       const chart = el('div', 'ui-chart');
       const max = Math.max(...week, 1);
+      // Лучший день недели (из равных — последний) загорается золотом, когда столбики выросли.
+      const top = Math.max(...week);
+      const best = top > 0 ? week.lastIndexOf(top) : -1;
       week.forEach((value, i) => {
         const col = el('div', 'ui-chart-col');
-        const bar = el('div', `ui-chart-bar${i === week.length - 1 ? ' today' : ''}`);
-        bar.style.height = `${Math.max(4, Math.round((value / max) * 100))}%`;
-        bar.style.animationDelay = `${i * 70}ms`;
-        col.append(el('span', 'ui-chart-value', String(value)), bar, el('span', 'ui-chart-day', String(day - week.length + 1 + i)));
+        const bar = el('div', `ui-chart-bar${i === week.length - 1 ? ' today' : ''}${i === best ? ' record' : ''}`);
+        // Высота — от места под столбик (без подписей сверху и снизу): иначе высокие столбики сжимаются до одной высоты.
+        bar.style.height = `calc((100% - ${CHART_LABELS}px) * ${(value / max).toFixed(3)})`;
+        bar.style.animationDelay = i === best ? `${i * 70}ms, ${GOLD_AT}ms` : `${i * 70}ms`;
+        const caption = el('span', 'ui-chart-value', String(value));
+        if (i === best) {
+          const crown = el('img', 'ui-chart-crown');
+          crown.src = 'assets/ico_crown.png';
+          crown.alt = '';
+          crown.style.animationDelay = `${GOLD_AT + 150}ms`;
+          caption.append(crown);
+        }
+        col.append(caption, bar, el('span', 'ui-chart-day', String(day - week.length + 1 + i)));
         chart.append(col);
       });
       card.append(el('div', 'ui-muted', t('summary.week')), chart);
@@ -250,6 +352,56 @@ export class Hud {
       }),
     );
   }
+}
+
+/** Пять звёзд рейтинга: серые снизу, золотые поверх; fill заполняет до дробной части (4,3 — четыре и треть пятой). */
+function starRow(): { box: HTMLElement; fill: (rating: number) => void } {
+  const row = () =>
+    Array.from({ length: 5 }, () => {
+      const img = el('img');
+      img.src = 'assets/ico_star.png';
+      img.alt = '';
+      return img;
+    });
+  const box = el('span', 'ui-stars');
+  const gold = el('span', 'ui-stars-fill');
+  gold.style.width = '0px';
+  gold.append(...row());
+  box.append(...row(), gold);
+  return {
+    box,
+    fill: (rating) => {
+      const r = Math.min(5, Math.max(0, rating));
+      const full = Math.floor(r);
+      gold.style.width = `${full * (STAR_W + STAR_GAP) + (r - full) * STAR_W}px`;
+    },
+  };
+}
+
+/** Печать в итогах дня: сверху что, крупно — звание или число, снизу — пояснение. В миг удара — кольцо и искры. */
+function stamp(tone: 'gold' | 'red', top: string, big: string, note: string, at: number, i: number, sparks: boolean): HTMLElement {
+  const wrap = el('div', `ui-stamp-wrap ${tone}`);
+  wrap.style.setProperty('--at', `${at}ms`);
+  wrap.style.setProperty('--rot', `${STAMP_TILT[i % STAMP_TILT.length]}deg`);
+  const box = el('div', `ui-stamp ${tone}`);
+  box.append(el('small', '', top), el('b', '', big), el('span', '', note));
+  wrap.append(box);
+  // Кольцо и искры — под печатью: видно только то, что вылетело из-под неё.
+  if (sparks) {
+    wrap.prepend(el('i', 'ui-stamp-ring'));
+    // Искры вылетают от краёв печати наружу, а не из середины поверх надписи.
+    for (let k = 0; k < STAMP_SPARKS; k++) {
+      const angle = ((k + Math.random() * 0.6) / STAMP_SPARKS) * Math.PI * 2;
+      const dist = 22 + Math.random() * 22;
+      const spark = el('i', 'ui-spark');
+      spark.style.left = `${50 + Math.cos(angle) * 50}%`;
+      spark.style.top = `${50 + Math.sin(angle) * 54}%`;
+      spark.style.setProperty('--dx', `${Math.round(Math.cos(angle) * dist * 1.3)}px`);
+      spark.style.setProperty('--dy', `${Math.round(Math.sin(angle) * dist)}px`);
+      wrap.prepend(spark);
+    }
+  }
+  return wrap;
 }
 
 type GrannyMood = 'great' | 'good' | 'slow' | 'lost' | 'down';

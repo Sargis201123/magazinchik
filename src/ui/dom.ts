@@ -161,10 +161,71 @@ const css = `
 .ui-granny p { position: relative; flex: 1; margin: 0; padding: 6px 9px; background: #fff; border: 2px solid #2b2233; border-radius: 8px;
   font-size: 13px; line-height: 1.35; }
 .ui-chart-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
-.ui-chart-bar { width: 100%; background: #8fd16a; border: 2px solid #2b2233; border-bottom: 0; border-radius: 3px 3px 0 0; }
+.ui-chart-bar { flex: none; min-height: 4px; width: 100%; background: #8fd16a; border: 2px solid #2b2233; border-bottom: 0; border-radius: 3px 3px 0 0; }
 .ui-chart-bar.today { background: #fee761; }
 .ui-chart-value { font-size: 10px; color: #5a5048; }
 .ui-chart-day { font-size: 10px; color: #7a7066; }
+/* Итоги дня: плитки выскакивают по очереди, числа в них докручиваются от нуля (rollNumber). */
+.ui-card.ui-sum { overflow-x: hidden; }
+.ui-sum-tiles .ui-tile { position: relative; animation: ui-pop .35s cubic-bezier(.3, 1.45, .5, 1) both; }
+.ui-sum-tiles .ui-tile b { white-space: nowrap; }
+.ui-tile .ui-tile-num { font: inherit; color: inherit; }
+.ui-tile .ui-tile-delta { font-weight: 800; }
+.ui-tile .ui-tile-delta.up { color: #3e8948; }
+.ui-tile .ui-tile-delta.down { color: #c42f3c; }
+/* Побитый рекорд — плитка золотая, на угол падает корона. */
+.ui-tile.record { background: linear-gradient(#fff7cc, #fee761); box-shadow: 0 0 0 2px #feae34, 0 0 12px rgba(254, 174, 52, .6); }
+.ui-tile-crown { position: absolute; top: -11px; right: -7px; width: 28px; height: 28px; image-rendering: pixelated;
+  transform: rotate(14deg); animation: ui-crown .45s cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes ui-crown { from { opacity: 0; transform: translateY(-18px) rotate(-25deg) scale(1.6); } }
+/* Звёзды рейтинга: серые снизу, золотые поверх заполняются до дробной части (4,3 — четыре и треть пятой). */
+.ui-stars { position: relative; display: inline-flex; gap: 1px; vertical-align: -1px; margin-right: 2px; }
+.ui-stars img { width: 14px; height: 14px; flex: none; image-rendering: pixelated; }
+.ui-stars > img { filter: grayscale(1) brightness(.95); opacity: .45; }
+.ui-stars.ui-shine { display: inline-flex; }
+.ui-stars-fill { position: absolute; left: 0; top: 0; bottom: 0; display: flex; gap: 1px; overflow: hidden;
+  transition: width .9s cubic-bezier(.3, .7, .4, 1); }
+/* Новое звание и рекорды «шлёпаются» печатью: с размаху, с кольцом и искрами в миг удара. */
+.ui-stamps { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px 12px; margin: 12px 0 12px; }
+.ui-stamp-wrap { position: relative; --hit: calc(var(--at) + 270ms); }
+.ui-stamp { display: flex; flex-direction: column; align-items: center; padding: 3px 10px 4px; border: 3px solid currentColor;
+  border-radius: 8px; font: 800 10px/1.25 ${UI_FONT}; text-transform: uppercase; letter-spacing: 1px; text-align: center;
+  transform: rotate(var(--rot)); animation: ui-stamp .45s cubic-bezier(.55, 0, .75, 1) var(--at) both; }
+.ui-stamp small { font-size: inherit; }
+.ui-stamp b { display: inline-block; font-size: 19px; line-height: 1.15; letter-spacing: .3px; animation: ui-shine 1.1s ease-out var(--hit); }
+.ui-stamp span { font: 700 10.5px/1.2 ${UI_FONT}; text-transform: none; letter-spacing: 0; max-width: 112px; }
+.ui-stamp.red { color: #c42f3c; background: #fbe6df; box-shadow: inset 0 0 0 2px #fbe6df, inset 0 0 0 3.5px #c42f3c; }
+.ui-stamp.gold { color: #86490a; border-color: #e8962a; background: linear-gradient(#fff3b0, #fee761);
+  box-shadow: inset 0 0 0 2px #fff3b0, inset 0 0 0 3.5px #e8962a, 0 0 12px rgba(254, 174, 52, .7); }
+@keyframes ui-stamp {
+  0% { opacity: 0; transform: scale(2.4) rotate(calc(var(--rot) - 10deg)); }
+  60% { opacity: 1; transform: scale(.92) rotate(var(--rot)); }
+  100% { opacity: 1; transform: scale(1) rotate(var(--rot)); } }
+.ui-stamp-ring { position: absolute; left: 50%; top: 50%; width: 32px; height: 20px; margin: -10px -16px; border-radius: 50%;
+  box-shadow: 0 0 0 2px #feae34; opacity: 0; pointer-events: none; animation: ui-medal-ring .6s ease-out var(--hit); }
+.ui-spark { position: absolute; width: 6px; height: 6px; margin: -3px; background: #fee761; box-shadow: 0 0 0 1px #2b2233;
+  opacity: 0; pointer-events: none; animation: ui-spark .7s cubic-bezier(.2, .8, .4, 1) var(--hit); }
+.ui-spark:nth-of-type(3n) { background: #fff; }
+.ui-spark:nth-of-type(3n + 1) { background: #feae34; }
+.ui-stamp-wrap.red .ui-spark:nth-of-type(3n) { background: #e43b44; }
+@keyframes ui-spark { from { opacity: 1; transform: none; } to { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(200deg) scale(.4); } }
+/* Лучший день недели загорается золотом, на его столбик падает корона. */
+.ui-chart { padding-top: 16px; }
+.ui-chart-bar.today { --bar: #fee761; }
+.ui-chart-bar.record { background: #feae34; box-shadow: 0 0 8px 1px rgba(254, 174, 52, .75);
+  animation: ui-grow .5s cubic-bezier(.3, 1.4, .5, 1) both, ui-gold .9s ease-out both; }
+@keyframes ui-gold { from { background-color: var(--bar, #8fd16a); box-shadow: none; }
+  35% { background-color: #fee761; box-shadow: 0 0 0 2px #fff3b0, 0 0 16px 5px rgba(254, 174, 52, .95); } }
+.ui-chart-value { position: relative; }
+.ui-chart-crown { position: absolute; left: 50%; bottom: 100%; width: 14px; height: 14px; margin: 0 0 -1px -7px; image-rendering: pixelated;
+  animation: ui-crown .45s cubic-bezier(.3, 1.6, .5, 1) both; }
+/* Без лишнего движения: числа и печати сразу на месте, без искр. */
+@media (prefers-reduced-motion: reduce) {
+  .ui-sum-tiles .ui-tile, .ui-stamp, .ui-stamp b, .ui-tile-crown, .ui-chart-crown, .ui-chart-bar, .ui-chart-line polyline,
+  .ui-chart-line circle { animation: none; }
+  .ui-stars-fill { transition: none; }
+  .ui-spark, .ui-stamp-ring { display: none; }
+}
 .ui-bump { display: inline-block; animation: ui-bump .35s ease-out; }
 @keyframes ui-bump { 40% { transform: scale(1.25); background: rgba(143, 209, 106, .85); } }
 .ui-note { font-size: 13px; color: #5a5048; margin: 4px 0 8px; }
@@ -476,6 +537,48 @@ export function openModal(): { card: HTMLDivElement; close: () => void } {
       setTimeout(() => overlay.remove(), 160);
     },
   };
+}
+
+/**
+ * Число «докручивается» от from до to за ms, как барабан кассы: быстро в начале, плавно к концу.
+ * format — как показать число, done — когда докрутилось. Возвращает отмену.
+ */
+export function rollNumber(
+  target: Node,
+  from: number,
+  to: number,
+  ms: number,
+  format: (n: number) => string = String,
+  done?: () => void,
+): () => void {
+  const show = (n: number) => {
+    const text = format(n);
+    if (target.textContent !== text) target.textContent = text;
+  };
+  if (from === to || ms <= 0) {
+    show(to);
+    done?.();
+    return () => {};
+  }
+  let frame = 0;
+  const start = performance.now();
+  const step = (now: number) => {
+    // Время кадра бывает чуть раньше старта — без нижней границы число на миг ушло бы за from.
+    const k = Math.min(1, Math.max(0, (now - start) / ms));
+    show(Math.round(from + (to - from) * (1 - (1 - k) ** 3)));
+    if (k < 1) frame = requestAnimationFrame(step);
+    else done?.();
+  };
+  show(from);
+  frame = requestAnimationFrame(step);
+  return () => cancelAnimationFrame(frame);
+}
+
+/** Перезапустить разовую CSS-анимацию (блеск, подскок) на элементе. */
+export function replay(node: HTMLElement, className: string): void {
+  node.classList.remove(className);
+  void node.offsetWidth;
+  node.classList.add(className);
 }
 
 /** Шторка между экранами: опускается, в середине выполняется смена экрана, поднимается. */
