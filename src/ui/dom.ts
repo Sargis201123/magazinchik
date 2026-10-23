@@ -221,7 +221,7 @@ const css = `
   animation: ui-crown .45s cubic-bezier(.3, 1.6, .5, 1) both; }
 /* Без лишнего движения: числа и печати сразу на месте, без искр. */
 @media (prefers-reduced-motion: reduce) {
-  .ui-sum-tiles .ui-tile, .ui-stamp, .ui-stamp b, .ui-tile-crown, .ui-chart-crown, .ui-chart-bar, .ui-chart-line polyline,
+  .ui-sum-tiles .ui-tile, .ui-stamp, .ui-stamp b, .ui-tile-crown, .ui-chart-crown, .ui-chart-bar, .ui-chart-bar.record, .ui-chart-line polyline,
   .ui-chart-line circle { animation: none; }
   .ui-stars-fill { transition: none; }
   .ui-spark, .ui-stamp-ring { display: none; }
