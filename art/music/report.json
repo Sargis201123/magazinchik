@@ -60,10 +60,6 @@
     "ogg": 0.0,
     "m4a": 0.0
    },
-   "files": {
-    "ogg": "audio/music/day.ogg",
-    "m4a": "audio/music/day.m4a"
-   },
    "bytes": {
     "ogg": 517283,
     "m4a": 608040
@@ -264,10 +260,6 @@
     "ogg": 0.0,
     "m4a": 0.0
    },
-   "files": {
-    "ogg": "audio/music/evening.ogg",
-    "m4a": "audio/music/evening.m4a"
-   },
    "bytes": {
     "ogg": 522553,
     "m4a": 583926
@@ -459,10 +451,6 @@
     "ogg": 0.0,
     "m4a": 0.0
    },
-   "files": {
-    "ogg": "audio/music/morning.ogg",
-    "m4a": "audio/music/morning.m4a"
-   },
    "bytes": {
     "ogg": 526833,
     "m4a": 578878
@@ -636,10 +624,6 @@
    "encodeGainDb": {
     "ogg": 0.0,
     "m4a": 0.0
-   },
-   "files": {
-    "ogg": "audio/music/night.ogg",
-    "m4a": "audio/music/night.m4a"
    },
    "bytes": {
     "ogg": 532716,
@@ -822,10 +806,6 @@
    "encodeGainDb": {
     "ogg": 0.0,
     "m4a": 0.0
-   },
-   "files": {
-    "ogg": "audio/music/winter.ogg",
-    "m4a": "audio/music/winter.m4a"
    },
    "bytes": {
     "ogg": 537806,

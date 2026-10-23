@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 /** Флаги сборки Phaser из исходников (как DefinePlugin в его webpack-конфиге). */
@@ -25,13 +25,13 @@ const phaserFlags = (): Plugin => ({
   },
 });
 
-/** Папки public/, чьи файлы получают отпечаток в адресе (src/platform/assets.ts). */
-const VERSIONED_DIRS = ['assets', 'story'];
+/** Папки public/, чьи файлы (и файлы во вложенных папках) получают отпечаток в адресе (src/platform/assets.ts). */
+const VERSIONED_DIRS = ['assets', 'story', 'audio'];
 const VERSIONS_ID = 'virtual:asset-versions';
 
 /**
- * Отпечатки картинок: public/assets кэшируется у игроков на год (public/_headers), а имена файлов
- * не меняются — перерисованная картинка до вернувшегося игрока не доходила. В сборке у каждого файла
+ * Отпечатки картинок и музыки: public/assets и public/audio кэшируются у игроков на год (public/_headers),
+ * а имена файлов не меняются — перерисованная картинка до вернувшегося игрока не доходила. В сборке у каждого файла
  * считаем хэш содержимого, и адрес становится «assets/coin.png?v=1a2b3c4d»: файл изменился — сменился
  * и адрес. Таблица отпечатков — модуль virtual:asset-versions; в разработке она пустая (кэша там нет).
  */
@@ -39,13 +39,17 @@ const assetVersions = (build: boolean): Plugin => {
   let versions: Record<string, string> | null = null;
   const scan = (): Record<string, string> => {
     if (versions) return versions;
-    versions = {};
-    for (const dir of VERSIONED_DIRS) {
+    const found: Record<string, string> = {};
+    // Музыка лежит глубже (audio/music/suno/…) — обходим и вложенные папки.
+    const walk = (dir: string): void => {
       const root = fileURLToPath(new URL(`./public/${dir}/`, import.meta.url));
       for (const name of readdirSync(root).sort()) {
-        versions[`${dir}/${name}`] = createHash('sha256').update(readFileSync(root + name)).digest('hex').slice(0, 8);
+        if (statSync(root + name).isDirectory()) walk(`${dir}/${name}`);
+        else found[`${dir}/${name}`] = createHash('sha256').update(readFileSync(root + name)).digest('hex').slice(0, 8);
       }
-    }
+    };
+    for (const dir of VERSIONED_DIRS) walk(dir);
+    versions = found;
     return versions;
   };
   return {

@@ -75,7 +75,8 @@ import { friendState } from '../game/friendShop';
 import { awayTrade } from '../game/away';
 import { getLang, t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
-import { music } from '../platform/music';
+import { music, type MusicMood } from '../platform/music';
+import { winterMusic } from '../platform/playlist';
 import { findPath, type Rect } from './paths';
 import { ambience } from '../platform/ambience';
 import { setListener } from '../platform/mixer';
@@ -373,6 +374,8 @@ const INDOOR_LIGHT: [number, number][] = [
 
 /** С какой доли дня начинается вечер. */
 const EVENING_FROM = 0.72;
+/** До какой доли дня музыка выбирает утренний трек (дальше — дневной, с вечера — вечерний). */
+const MUSIC_MORNING = 0.3;
 /** Фонарь зажигается не сразу: яркость по шагам в 70 мс — вспыхнул, погас, ещё раз — и горит. */
 const LAMP_BLINK = [0.9, 0.9, 0.15, 0, 0, 0.75, 0.2, 0, 0, 0, 0.45, 0.85];
 /** За сколько мс свет фонаря из оранжевого становится тёплым жёлтым. */
@@ -1240,6 +1243,12 @@ export class StoreScene extends Phaser.Scene {
   private cafeToday: CafeDelivery | null = null;
   /** Ноты над радио, пока оно играет. */
   private radioTimer?: Phaser.Time.TimerEvent;
+  /** Где стоит приёмник (по x) — оттуда слышно радио. */
+  private radioX?: number;
+  /** Музыка: открыт титул; после ночной смены (итоги, ночь) ещё звучит ночная; зимняя ли сегодня. */
+  private onTitle = true;
+  private nightMusic = false;
+  private winterTune = false;
   private valyaCame = false;
   /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
   private combo = 0;
@@ -1380,10 +1389,14 @@ export class StoreScene extends Phaser.Scene {
     // Достижения проверяются и посреди дня: серия, сотый покупатель — сразу всплывашка.
     this.time.addEvent({ delay: 1000, loop: true, callback: () => this.running && this.checkAchievements(true) });
     // Сначала вывеска, потом утро. Первая встреча с сюжетом (письмо бабушки) — на утреннем экране.
+    // Музыка заиграет с первым касанием: на титуле — тема «Магазинчика».
+    this.winterTune = this.isWinterMusic();
+    music.start();
     const stopShow = this.titleShow();
     showTitle({
       save,
       onPlay: () => {
+        this.onTitle = false;
         stopShow();
         this.showMorning();
       },
@@ -1424,6 +1437,7 @@ export class StoreScene extends Phaser.Scene {
     this.windTick(deltaMs);
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     this.hud.showUrgent(this.running && !this.night && this.state.day > TUTORIAL_DAYS);
+    music.setMood(this.musicMood(), this.winterTune);
     if (!this.running) return;
     const dt = (deltaMs / 1000) * this.speed;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
@@ -3078,7 +3092,6 @@ export class StoreScene extends Phaser.Scene {
     // Днём светло; вечер — последняя четверть смены: фонари, неон, тёплый свет.
     const evening = Phaser.Math.Clamp((p - EVENING_FROM) / (1 - EVENING_FROM), 0, 1);
     this.evening = evening;
-    music.setMood(evening > 0.5 ? 'evening' : 'day');
     if (this.vignette) {
       this.vignette.strength = 0.1 + 0.4 * evening;
       this.vignette.radius = 0.95 - 0.12 * evening;
@@ -3671,10 +3684,14 @@ export class StoreScene extends Phaser.Scene {
   private buildRadio(): void {
     this.radioTimer?.remove();
     this.radioTimer = undefined;
-    music.setStation(null);
-    if (!hasRadio(this.state)) return;
+    this.radioX = undefined;
+    if (!hasRadio(this.state)) {
+      this.applyRadio();
+      return;
+    }
     // Радио стоит на автомате с напитками — и переезжает вместе с ним.
     const at = { x: this.vendingAt.x, y: this.vendingAt.y - 15 };
+    this.radioX = at.x;
     const radio = this.art(at.x, at.y, 'radio').setDepth(this.vendingAt.y + 11);
     radio.setInteractive({ useHandCursor: true }).on('pointerup', () =>
       this.tap(() => {
@@ -3685,7 +3702,7 @@ export class StoreScene extends Phaser.Scene {
         sound.tap();
         this.tweens.add({ targets: radio, scaleX: radio.scaleX * 1.15, scaleY: radio.scaleY * 1.15, duration: 90, yoyo: true });
         this.popup(at.x, at.y - 10, t('popup.radio', { name: t(STATION_INFO[stationOf(next)].nameKey) }), '#fee761');
-        this.applyRadio();
+        this.applyRadio(true);
       }),
     );
     this.radioTimer = this.time.addEvent({
@@ -3716,10 +3733,27 @@ export class StoreScene extends Phaser.Scene {
     this.applyRadio();
   }
 
-  /** Волна радио — в музыку. */
-  private applyRadio(): void {
+  /** Волна радио — в музыку: звучит из приёмника. byHand — переключил игрок (шипение настройки и позывные). */
+  private applyRadio(byHand = false): void {
     const station = stationOf(this.state);
-    music.setStation(station === 'off' ? null : station);
+    music.setRadio(station === 'off' || !hasRadio(this.state) ? null : station, this.radioX, byHand);
+  }
+
+  /**
+   * Настроение музыки: титул; до открытия — утро; рабочий день — по часам смены (утро, день, вечер);
+   * после закрытия — вечер; ночная смена и её итоги — ночь.
+   */
+  private musicMood(): MusicMood {
+    if (this.onTitle) return 'title';
+    if (this.night || this.nightMusic) return 'night';
+    if (!this.dayOpen) return this.closed ? 'evening' : 'morning';
+    const p = 1 - this.timeLeft / DAY_SECONDS;
+    return p < MUSIC_MORNING ? 'morning' : p < EVENING_FROM ? 'day' : 'evening';
+  }
+
+  /** Зимняя музыка сегодня: зима в игре, новогодняя неделя или настоящие новогодние дни. */
+  private isWinterMusic(): boolean {
+    return winterMusic(yearTime(this.state.day), holidayFor(this.state.day), new Date(trustedNow()));
   }
 
   /** Скорость покупателей: под бодрое радио ходят быстрее. */
@@ -4455,7 +4489,8 @@ export class StoreScene extends Phaser.Scene {
     this.timeLeft = NIGHT_SECONDS;
     this.nextSpawn = 1;
     this.running = true;
-    music.setMood('evening');
+    // Ночная смена — ночной трек (плавной сменой, music.ts); он доиграет и в итогах этой ночи.
+    this.nightMusic = true;
     sound.bell();
     this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.night'), '#2ce8f5');
     // Ночная история с выбором (nightGuests.ts) — где-то в первой половине смены.
@@ -5465,6 +5500,8 @@ export class StoreScene extends Phaser.Scene {
   private async celebrateExpansion(): Promise<void> {
     const modal = document.querySelector<HTMLElement>('.ui-modal:not(.closing)');
     if (modal) modal.style.visibility = 'hidden';
+    // Пока стучат молотки, заставка успеет скачаться.
+    music.prefetch('expand');
     const { w, h } = this.layout;
     const next = this.next;
     const spots: { x: number; y: number }[] = [];
@@ -5507,7 +5544,7 @@ export class StoreScene extends Phaser.Scene {
       emitting: false,
     });
     confetti.setDepth(LIGHT_DEPTH + 10).explode(70);
-    sound.fanfare();
+    if (!music.sting('expand')) sound.fanfare();
     haptic.success();
     this.popup(this.layout.w / 2, this.layout.h / 2 - 20, t('popup.expanded', { name: t(storeLevel(this.state).nameKey) }), '#fee761');
     await this.delay(1600);
@@ -8720,7 +8757,7 @@ export class StoreScene extends Phaser.Scene {
   private recordConfetti(): void {
     const { w } = this.layout;
     this.popup(w / 2, 40, t('records.broken', { name: t('records.revenue') }), '#fee761');
-    sound.fanfare();
+    if (!music.sting('record')) sound.fanfare();
     haptic.success();
     if (this.lite) return;
     // Короткая тёплая вспышка света — без тряски.
@@ -9219,6 +9256,7 @@ export class StoreScene extends Phaser.Scene {
     await this.walk(sprite, sellerHome.x - 18, sellerHome.y + 8, 40);
     if (!this.sys.isActive()) return;
     this.heartAt(sprite.x, sprite.y - 14);
+    music.sting('story');
     this.popup(sprite.x, sprite.y - 20, t('drama.visit'), '#fff3b0');
     await this.wait(9000);
     await this.walk(sprite, door.x, door.y - 10, 40);
@@ -9756,7 +9794,7 @@ export class StoreScene extends Phaser.Scene {
       ? t('popup.albumNew', { name: `${guest.icon} ${t(guest.nameKey)}`, tip })
       : t('popup.tip', { tip });
     this.popup(sellerHome.x - 24, sellerHome.y - 40, text, '#fee761');
-    if (result.isNew) sound.fanfare();
+    if (result.isNew && !music.sting('coin')) sound.fanfare();
     if (result.completed) {
       haptic.success();
       this.time.delayedCall(1200, () => this.popup(sellerHome.x - 24, sellerHome.y - 52, t('popup.albumDone', { money: ALBUM_REWARD.money }), '#fee761'));
@@ -10607,6 +10645,10 @@ export class StoreScene extends Phaser.Scene {
     if (trialOver || cupChanged || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant || districtKey(this.state) !== this.builtDistrict) this.buildWorld();
     this.updateLighting(0);
     this.openShop();
+    // Новый день: после ночной смены — снова дневная музыка; зима могла начаться или кончиться.
+    this.nightMusic = false;
+    this.winterTune = this.isWinterMusic();
+    music.prefetch('day_open');
     showMorning({
       onArrange: () => this.arrange(),
       onVisit: (id, name) => void this.visitFriend(id, name),
@@ -10634,7 +10676,7 @@ export class StoreScene extends Phaser.Scene {
         else if (s.level !== this.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard || giantLook(s) !== this.builtGiant) this.buildWorld(bought);
         else if (staffChanged) this.syncStaff();
         if (adsChanged) this.applyAds();
-        if (radioChanged) this.applyRadio();
+        if (radioChanged) this.applyRadio(true);
         this.awaitingBoxes = this.boxesToDeliver();
         this.refreshShelves();
         this.refreshWarehouse();
@@ -10660,6 +10702,8 @@ export class StoreScene extends Phaser.Scene {
 
   private startDay(): void {
     this.dayOpen = true;
+    // Магазин открылся: колокольчик двери и мотив «Магазинчика».
+    music.sting('day_open');
     // Купленное с утра ждёт в коробках: камера подлетит к магазину — и его распакуют.
     this.packFresh();
     this.flyIn();
@@ -10845,7 +10889,8 @@ export class StoreScene extends Phaser.Scene {
 
   /** Золотое кольцо, мягкая вспышка и искры вокруг распакованной вещи. */
   private unboxShine(x: number, y: number, size: number): void {
-    sound.medal();
+    // Первая распакованная вещь — заставка «покупка» (коробка и колокольчик), следующие — звон медали.
+    if (!music.sting('purchase', 4)) sound.medal();
     const ring = this.add.circle(x, y, size / 2).setStrokeStyle(1.5, 0xfee761, 1).setDepth(LIGHT_DEPTH + 12).setScale(0.5);
     this.tweens.add({ targets: ring, scale: 1.6, alpha: 0, duration: 560, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
     const flash = this.art(x, y, 'glow').setDisplaySize(size * 1.6, size * 1.6).setTint(0xfee761).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(LIGHT_DEPTH + 11);
@@ -11024,7 +11069,7 @@ export class StoreScene extends Phaser.Scene {
       this.powerCut = false;
       this.updateLighting();
     }
-    this.applyRadio();
+    music.setParade(null);
   }
 
   private startBigDay(id: BigDayId): void {
@@ -11099,7 +11144,8 @@ export class StoreScene extends Phaser.Scene {
     }
     this.startBigDayScene(id, keep, top);
     if (BIG_DAYS[id].crowd) {
-      music.setStation(id === 'carnival' ? 'samba' : id === 'marathon' ? 'hits' : 'march');
+      // Оркестр идёт по улице весь день: самба, марш или бодрые хиты марафона — вместо своей музыки и радио.
+      music.setParade(id === 'carnival' ? 'samba' : id === 'marathon' ? 'hits' : 'march');
       const marchers = () => {
         if (!this.running || this.night) return;
         const n = Phaser.Math.Between(6, 8);
@@ -11789,7 +11835,8 @@ export class StoreScene extends Phaser.Scene {
     // Магазин закрывается: опускаются роллеты, потом — итоги дня.
     this.closeShop();
     this.time.delayedCall(1500, () => {
-      sound.fanfare();
+      // Итоги дня — своя заставка, а с новым званием — фанфара звания (две подряд звучали бы кашей).
+      if (!music.sting(stamps.some((s) => s.kind === 'rank') ? 'rank_up' : 'day_close')) sound.fanfare();
       this.hud.showSummary(
         finishedDay,
         this.stats,

@@ -1,5 +1,9 @@
-"""Рендер всей музыки «Магазинчика»: партитуры -> WAV (art/build/music) -> Ogg Opus + M4A (AAC)
+"""Рендер синтезированной музыки «Магазинчика»: партитуры -> WAV (art/build/music) -> Ogg Opus + M4A (AAC)
 в public/audio/music, manifest.json и проверки качества.
+
+Радиоволны и заставки идут в игру. Пять основных пьес (утро, день, вечер, ночь, зима) больше не
+звучат в игре — их место заняли треки Suno (suno.py); партитуры оставлены как есть, а их файлы
+теперь кодируются в art/build/music (послушать и сравнить), а не в public/.
 
     python3 art/music/render.py              # всё
     python3 art/music/render.py morning day  # выборочно (манифест дописывается)
@@ -19,6 +23,7 @@ sys.path.insert(0, str(HERE))
 
 import checks  # noqa: E402
 import dsp  # noqa: E402
+import suno  # noqa: E402
 from dsp import SR  # noqa: E402
 from engine import Renderer  # noqa: E402
 from harmony import check_harmony, roughness  # noqa: E402
@@ -146,9 +151,11 @@ def job(args):
     else:
         body = x
     if encode_on:
-        ogg, m4a, gains = encode(body, OUT / key, kind)
+        # Основные пьесы — только для истории и сравнения: в игре вместо них треки Suno.
+        ogg, m4a, gains = encode(body, (BUILD if kind == "music" else OUT) / key, kind)
         entry["encodeGainDb"] = gains
-        entry["files"] = {"ogg": f"audio/music/{ogg.name}", "m4a": f"audio/music/{m4a.name}"}
+        if kind != "music":
+            entry["files"] = {"ogg": f"audio/music/{ogg.name}", "m4a": f"audio/music/{m4a.name}"}
         entry["bytes"] = {"ogg": ogg.stat().st_size, "m4a": m4a.stat().st_size}
         entry["decoded"] = {}
         for ext, p in (("ogg", ogg), ("m4a", m4a)):
@@ -201,7 +208,7 @@ def main(argv):
         "version": 2,
         "sampleRate": SR,
         "motif": "Мотив «Магазинчик»: в до мажоре C D | A G E (затакт, секста вверх, «дзынь» G→E)",
-        "playback": ("music — играть один раз с усилением 1.0 (громкость уже разная: ночь тише дня), затем "
+        "playback": ("music — треки Suno (suno.py): играть один раз с усилением gainDb (ночь и вечер тише дня), затем "
                      "пауза silenceAfter (с); loop — WebAudio: loop=true, loopStart/loopEnd из манифеста, "
                      "start(0, loopStart), после decodeAudioData сгладить шов (seamCrossfadeSamples); "
                      "sting — один раз поверх музыки: для stingerKeys взять вариант в тональности текущей "
@@ -212,15 +219,17 @@ def main(argv):
                           "убирает разницу шума кодека между копиями начала петли"),
         "seamCrossfadeSamples": 240,
         "stingerKeys": keyed,
-        "tracks": {k: checks.manifest_entry(k, e) for k, e in full.items()},
+        # Основная музыка — треки Suno (suno.py); синтезированные пьесы — только в отчёте.
+        "tracks": {**suno.entries(), **{k: checks.manifest_entry(k, e) for k, e in full.items() if e["kind"] != "music"}},
     }
     for sid, db in st_mod.DUCK_DB.items():
         if sid in manifest["tracks"]:
             manifest["tracks"][sid]["duckDb"] = db
     man_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=1) + "\n")
-    tot = sum(sum(e.get("bytes", {}).values()) for e in full.values())
-    print(f"всего файлов: {tot / 1e6:.2f} МБ (ogg {sum(e.get('bytes', {}).get('ogg', 0) for e in full.values()) / 1e6:.2f}, "
-          f"m4a {sum(e.get('bytes', {}).get('m4a', 0) for e in full.values()) / 1e6:.2f})")
+    shipped = manifest["tracks"].values()
+    tot = sum(sum(e.get("bytes", {}).values()) for e in shipped)
+    print(f"всего файлов в игре: {tot / 1e6:.2f} МБ (ogg {sum(e.get('bytes', {}).get('ogg', 0) for e in shipped) / 1e6:.2f}, "
+          f"m4a {sum(e.get('bytes', {}).get('m4a', 0) for e in shipped) / 1e6:.2f})")
     return results
 
 

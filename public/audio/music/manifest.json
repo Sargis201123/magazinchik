@@ -2,7 +2,7 @@
  "version": 2,
  "sampleRate": 48000,
  "motif": "Мотив «Магазинчик»: в до мажоре C D | A G E (затакт, секста вверх, «дзынь» G→E)",
- "playback": "music — играть один раз с усилением 1.0 (громкость уже разная: ночь тише дня), затем пауза silenceAfter (с); loop — WebAudio: loop=true, loopStart/loopEnd из манифеста, start(0, loopStart), после decodeAudioData сгладить шов (seamCrossfadeSamples); sting — один раз поверх музыки: для stingerKeys взять вариант в тональности текущей музыки (key, у петель с модуляцией — keySections: секунды от loopStart), под заставками с duckDb приглушить музыку на их длительность. ogg (Opus) — основной формат, m4a (AAC) — для iOS/Safari.",
+ "playback": "music — треки Suno (suno.py): играть один раз с усилением gainDb (ночь и вечер тише дня), затем пауза silenceAfter (с); loop — WebAudio: loop=true, loopStart/loopEnd из манифеста, start(0, loopStart), после decodeAudioData сгладить шов (seamCrossfadeSamples); sting — один раз поверх музыки: для stingerKeys взять вариант в тональности текущей музыки (key, у петель с модуляцией — keySections: секунды от loopStart), под заставками с duckDb приглушить музыку на их длительность. ogg (Opus) — основной формат, m4a (AAC) — для iOS/Safari.",
  "seamCrossfade": "после decodeAudioData для каждого канала d, s=loopStartSample, e=loopEndSample, k=seamCrossfadeSamples: d[e-k+i] = d[e-k+i]*(1-i/k) + d[s-k+i]*i/k, i=0..k-1 — убирает разницу шума кодека между копиями начала петли",
  "seamCrossfadeSamples": 240,
  "stingerKeys": {
@@ -44,125 +44,149 @@
   }
  },
  "tracks": {
-  "day": {
+  "theme": {
    "kind": "music",
-   "title": "День",
-   "use": "День: основной фон торговли",
+   "source": "suno",
+   "title": "Тема «Магазинчика»",
+   "use": "Титульный экран: первый трек каждого захода в игру",
    "files": {
-    "ogg": "audio/music/day.ogg",
-    "m4a": "audio/music/day.m4a"
+    "ogg": "audio/music/suno/theme.ogg",
+    "m4a": "audio/music/suno/theme.m4a"
    },
-   "duration": 79.661,
-   "lufs": -16.0,
-   "truePeakDb": -2.49,
-   "bpm": 96,
-   "key": "C",
-   "meter": "4/4",
+   "duration": 112.0,
+   "lufs": -16.1,
+   "truePeakDb": -3.9,
+   "key": "G",
+   "keyEstimated": true,
+   "gainDb": 0.0,
    "bytes": {
-    "ogg": 517283,
-    "m4a": 608040
+    "ogg": 1074359,
+    "m4a": 1378171
    },
    "silenceAfter": [
     30,
     90
-   ],
-   "fadeIn": 0.25
-  },
-  "evening": {
-   "kind": "music",
-   "title": "Вечер",
-   "use": "Вечер: закат, последние покупатели, итоги",
-   "files": {
-    "ogg": "audio/music/evening.ogg",
-    "m4a": "audio/music/evening.m4a"
-   },
-   "duration": 78.727,
-   "lufs": -17.5,
-   "truePeakDb": -5.55,
-   "bpm": 72,
-   "key": "F",
-   "meter": "4/4",
-   "bytes": {
-    "ogg": 522553,
-    "m4a": 583926
-   },
-   "silenceAfter": [
-    30,
-    90
-   ],
-   "fadeIn": 2.0
+   ]
   },
   "morning": {
    "kind": "music",
+   "source": "suno",
    "title": "Утро",
-   "use": "Утро: открытие магазина, первые часы дня",
+   "use": "Утро: экран закупки и первые часы дня",
    "files": {
-    "ogg": "audio/music/morning.ogg",
-    "m4a": "audio/music/morning.m4a"
+    "ogg": "audio/music/suno/morning.ogg",
+    "m4a": "audio/music/suno/morning.m4a"
    },
-   "duration": 77.661,
-   "lufs": -17.0,
-   "truePeakDb": -5.06,
-   "bpm": 80,
-   "key": "G",
-   "meter": "4/4",
+   "duration": 182.4,
+   "lufs": -16.0,
+   "truePeakDb": -2.9,
+   "key": "D",
+   "keyEstimated": true,
+   "gainDb": -1.0,
    "bytes": {
-    "ogg": 526833,
-    "m4a": 578878
+    "ogg": 1784291,
+    "m4a": 2230768
    },
    "silenceAfter": [
     30,
     90
-   ],
-   "fadeIn": 2.5
+   ]
+  },
+  "day": {
+   "kind": "music",
+   "source": "suno",
+   "title": "День",
+   "use": "День: основной фон торговли",
+   "files": {
+    "ogg": "audio/music/suno/day.ogg",
+    "m4a": "audio/music/suno/day.m4a"
+   },
+   "duration": 152.8,
+   "lufs": -16.0,
+   "truePeakDb": -3.6,
+   "key": "C",
+   "keyEstimated": true,
+   "gainDb": 0.0,
+   "bytes": {
+    "ogg": 1442088,
+    "m4a": 1883487
+   },
+   "silenceAfter": [
+    30,
+    90
+   ]
+  },
+  "evening": {
+   "kind": "music",
+   "source": "suno",
+   "title": "Вечер",
+   "use": "Вечер: фонари, последние покупатели, итоги дня",
+   "files": {
+    "ogg": "audio/music/suno/evening.ogg",
+    "m4a": "audio/music/suno/evening.m4a"
+   },
+   "duration": 192.8,
+   "lufs": -15.9,
+   "truePeakDb": -3.0,
+   "key": "C",
+   "keyEstimated": true,
+   "gainDb": -1.0,
+   "bytes": {
+    "ogg": 1797380,
+    "m4a": 2361579
+   },
+   "silenceAfter": [
+    30,
+    90
+   ]
   },
   "night": {
    "kind": "music",
+   "source": "suno",
    "title": "Ночная смена",
    "use": "Ночная смена: тихий фон ночью",
    "files": {
-    "ogg": "audio/music/night.ogg",
-    "m4a": "audio/music/night.m4a"
+    "ogg": "audio/music/suno/night.ogg",
+    "m4a": "audio/music/suno/night.m4a"
    },
-   "duration": 77.426,
-   "lufs": -19.0,
-   "truePeakDb": -6.14,
-   "bpm": 60,
-   "key": "Eb",
-   "meter": "4/4",
+   "duration": 163.2,
+   "lufs": -15.9,
+   "truePeakDb": -2.2,
+   "key": "D",
+   "keyEstimated": true,
+   "gainDb": -3.0,
    "bytes": {
-    "ogg": 532716,
-    "m4a": 570996
+    "ogg": 1395319,
+    "m4a": 2004602
    },
    "silenceAfter": [
     30,
     90
-   ],
-   "fadeIn": 3.0
+   ]
   },
   "winter": {
    "kind": "music",
+   "source": "suno",
    "title": "Зима",
-   "use": "Зима и Новый год: сезонный фон (вместо дня/вечера в декабре–январе)",
+   "use": "Зима и Новый год: вместо дня или вечера через раз",
    "files": {
-    "ogg": "audio/music/winter.ogg",
-    "m4a": "audio/music/winter.m4a"
+    "ogg": "audio/music/suno/winter.ogg",
+    "m4a": "audio/music/suno/winter.m4a"
    },
-   "duration": 70.258,
-   "lufs": -16.0,
-   "truePeakDb": -4.31,
-   "bpm": 144,
-   "key": "D",
-   "meter": "3/4",
+   "duration": 131.2,
+   "lufs": -16.1,
+   "truePeakDb": -1.8,
+   "key": "C",
+   "keyEstimated": true,
+   "gainDb": 0.0,
    "bytes": {
-    "ogg": 537806,
-    "m4a": 542051
+    "ogg": 1249431,
+    "m4a": 1608537
    },
    "silenceAfter": [
     30,
     90
-   ],
-   "fadeIn": 2.0
+   ]
   },
   "radio_hits": {
    "kind": "loop",

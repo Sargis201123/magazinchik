@@ -7,6 +7,7 @@ import { track } from '../platform/analytics';
 import { ambience } from '../platform/ambience';
 import { audibleAgain, inaudible, VOLUME_KEYS, type VolumeKey } from '../platform/mix';
 import { mixer } from '../platform/mixer';
+import { music } from '../platform/music';
 import { sound } from '../platform/sound';
 import { button, el } from './dom';
 
@@ -78,7 +79,11 @@ export function muteChip(day: () => number, after: () => void, className = 'ui-c
 
 /** Как прозвучит канал: короткий пример, когда отпустили ползунок. */
 function preview(key: VolumeKey): void {
-  if (key === 'music') return;
+  // Музыку слышно и так; а если сейчас тишина между треками — короткая заставка.
+  if (key === 'music') {
+    music.preview();
+    return;
+  }
   if (key === 'ambience') ambience.chime();
   else if (key === 'voices') [0, 90, 180].forEach((ms) => setTimeout(() => sound.voice(330), ms));
   else sound.coin();
