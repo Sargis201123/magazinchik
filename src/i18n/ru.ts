@@ -235,6 +235,7 @@ export const ru = {
   'store.l4': 'Супермаркет',
   'store.l5': 'Универмаг',
   'store.forRent': 'Сдаётся',
+  'store.newTag': 'НОВОЕ',
   'store.current': 'Сейчас: {name}',
   'store.stats': 'Полок: {slots} · склад: {wh} мест · касс: {r} · гостей ×{g}',
   'store.next': 'Следующий шаг: {name}',
