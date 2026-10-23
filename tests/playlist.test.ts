@@ -19,6 +19,7 @@ import {
   STINGS,
   TRACKS,
   winterMusic,
+  type Cue,
   type MusicMood,
   type TrackId,
 } from '../src/platform/playlist';
@@ -132,9 +133,13 @@ describe('что играть', () => {
     expect(pickTrack('morning', false, null, r)).toBe('morning');
     expect(pickTrack('morning', false, 'morning', r)).toBe('day');
     expect(pickTrack('evening', false, 'day', r)).toBe('evening');
-    expect(pickTrack('night', false, 'night', r)).toBe('evening');
+    // Ночью замены нет: другой трек тут же сменился бы обратно на ночной.
+    expect(pickTrack('night', false, 'night', r)).toBe('night');
+    expect(pickTrack('night', true, 'night', r)).toBe('night');
     expect(pickTrack('title', false, 'theme', r)).toBe('theme');
     for (const mood of Object.keys(POOLS) as MusicMood[]) expect(POOLS[mood].every((id) => id in TRACKS)).toBe(true);
+    // Ни одна замена не «не к месту» своему настроению.
+    for (const mood of Object.keys(POOLS) as MusicMood[]) expect(POOLS[mood].some((id) => clashes(id, mood))).toBe(false);
   });
 
   it('зимой вальс звучит вместо дня или вечера примерно через раз, утром и ночью — нет', () => {
@@ -197,6 +202,22 @@ describe('расписание: трек — тишина — трек', () => {
     // Итоги после ночной смены — ещё ночь; утро — смена.
     expect(p.next(70, 'night', false)).toBeNull();
     expect(p.next(90, 'morning', false)).toEqual({ track: 'morning', fade: true });
+  });
+
+  it('итоги ночи затянулись дольше трека и тишины — снова ночной, без вечернего и смены туда-обратно', () => {
+    const p = new Playlist(seeded(9));
+    p.started('night', 0, TRACKS.night.duration);
+    const cues: { at: number; cue: Cue }[] = [];
+    for (let t = 0; t < 1200; t += 0.25) {
+      const cue = p.next(t, 'night', false);
+      if (!cue) continue;
+      cues.push({ at: t, cue });
+      if (cue !== 'stop') p.started(cue.track, t + 1.5, TRACKS[cue.track].duration);
+    }
+    // За 20 минут ночной звучит ещё несколько раз — каждый после тишины, без плавных смен.
+    expect(cues.length).toBeGreaterThanOrEqual(3);
+    for (const { cue } of cues) expect(cue).toEqual({ track: 'night', fade: false });
+    for (let i = 1; i < cues.length; i++) expect(cues[i].at - cues[i - 1].at).toBeGreaterThan(TRACKS.night.duration + SILENCE.min);
   });
 
   it('ночь пришла, пока молчали, — тишина короче (пара секунд), а не до минуты', () => {
