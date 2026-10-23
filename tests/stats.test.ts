@@ -100,6 +100,39 @@ describe.skipIf(!Database)('рейтинг и аналитика (сервер)'
     ]);
   });
 
+  it('два начала новичка: игроки, шаги, удержание и время до первой продажи — по вариантам', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, WEBHOOK_SECRET: 'sekret', DB: d1() };
+    // Пришли 8 дней назад, второй и третий вернулись через день, второй — и через неделю.
+    const joined = Date.now() - 8 * 24 * 3600_000;
+    vi.setSystemTime(joined);
+    for (const id of [1, 2, 3, 4]) await socialPing(await post(id), env);
+    vi.useRealTimers();
+    // Прежнее начало (0): первый бросил на 3-м шаге обхода, второй прошёл его и продал за 40 с.
+    await progress(await post(1, { day: 1, events: [{ kind: 'onb_ab', day: 1, value: 0 }, { kind: 'onb_play', day: 1, value: 3 }, { kind: 'tour_step', day: 1, value: 1 }, { kind: 'tour_step', day: 1, value: 2 }, { kind: 'tour_step', day: 1, value: 3 }] }), env);
+    await progress(await post(2, { day: 8, events: [{ kind: 'onb_ab', day: 1, value: 0 }, { kind: 'tour_step', day: 1, value: 1 }, { kind: 'tour_done', day: 1, value: 11 }, { kind: 'onb_sale', day: 1, value: 40 }] }), env);
+    // Новое (1): оба продали — за 12 с и 26 с (второй прислал первую продажу дважды: берётся первая);
+    // за 20 с и быстрее — только первый.
+    await progress(await post(3, { day: 3, events: [{ kind: 'onb_ab', day: 1, value: 1 }, { kind: 'onb_sale', day: 1, value: 12 }, { kind: 'onb_tab', day: 2, value: 0 }] }), env);
+    await progress(await post(4, { day: 1, events: [{ kind: 'onb_ab', day: 1, value: 1 }, { kind: 'onb_sale', day: 1, value: 26 }, { kind: 'onb_sale', day: 1, value: 50 }] }), env);
+    // Вернулись: второй — через неделю, третий — на следующий день.
+    const seen = async (id: number, at: number) => {
+      vi.setSystemTime(at);
+      await socialPing(await post(id), env);
+      vi.useRealTimers();
+    };
+    await seen(2, joined + 7.5 * 24 * 3600_000);
+    await seen(3, joined + 1.5 * 24 * 3600_000);
+    const s = (await (await stats(new Request('https://x/api/stats?key=sekret'), env)).json()) as {
+      onboarding: Record<'tour' | 'play', { players: number; d1: { share: number | null }; d7: { share: number | null }; reached: { day2: number }; steps: Record<string, number>; firstSale: { players: number; median: number | null; fast: number }; tourSteps: Record<string, number>; tabs: Record<string, number> }>;
+    };
+    const { tour, play } = s.onboarding;
+    expect(tour).toMatchObject({ players: 2, d1: { share: 50 }, d7: { share: 50 }, reached: { day2: 1 }, tourSteps: { 1: 2, 2: 1, 3: 1 } });
+    expect(tour.steps).toMatchObject({ onb_play: 1, tour_done: 1, onb_sale: 1 });
+    expect(tour.firstSale).toEqual({ players: 1, median: 40, avg: 40, fast: 0 });
+    expect(play).toMatchObject({ players: 2, d1: { share: 50 }, d7: { share: 0 }, reached: { day2: 1 }, tabs: { 0: 1 } });
+    expect(play.firstSale).toEqual({ players: 2, median: 19, avg: 19, fast: 1 });
+  });
+
   it('рекламные метки: канал нового игрока, приглашения, прямые ссылки; в сводке — по каналам', async () => {
     expect(sourceOf('src_TGAds')).toBe('tgads');
     expect(sourceOf('ref_42')).toBe('ref');

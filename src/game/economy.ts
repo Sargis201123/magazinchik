@@ -662,6 +662,14 @@ export interface StoreState {
   autoOrder?: { on: boolean; lines: { sid: string; pid: ProductId; qty: number }[] };
   /** Бабушкино обучение: false — показать (новая игра или «пройти заново»), нет поля — старое сохранение. */
   tourDone?: boolean;
+  /**
+   * Как начинал новичок (onboarding.ts, A/B): прежний обход вкладок или сразу в зале.
+   * Нет поля — сохранение старше этого сравнения (или «Начать заново»): всё как раньше.
+   * В newGame не добавлять: недостающие поля старых сохранений берутся из новой игры.
+   */
+  onboarding?: import('./onboarding').Cohort;
+  /** Шаги первых минут и открытые вкладки утра (onboarding.ts). */
+  onb?: import('./onboarding').OnbState;
   /** Модели оборудования (номер модели; нет — начальная). */
   gear?: Partial<Record<GearId, number>>;
   /** Утренние закупки последних дней — для «как в прошлый раз» (reorder.ts). */

@@ -17,11 +17,12 @@ export interface SocialInfo {
 
 let info: SocialInfo | null = null;
 
-export async function post<T>(path: string, body: unknown): Promise<T | null> {
+/** keepalive — запрос доживёт, даже если игру сейчас закроют (тело до 64 КБ). */
+export async function post<T>(path: string, body: unknown, keepalive = false): Promise<T | null> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10000);
   try {
-    const res = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
+    const res = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal, keepalive });
     return res.ok ? ((await res.json()) as T) : null;
   } catch {
     return null;

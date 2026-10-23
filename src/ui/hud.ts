@@ -405,7 +405,7 @@ function starRow(): { box: HTMLElement; fill: (rating: number) => void } {
 }
 
 /** Печать в итогах дня: сверху что, крупно — звание или число, снизу — пояснение. В миг удара — кольцо и искры. */
-function stamp(tone: 'gold' | 'red', top: string, big: string, note: string, at: number, i: number, sparks: boolean): HTMLElement {
+export function stamp(tone: 'gold' | 'red', top: string, big: string, note: string, at: number, i: number, sparks: boolean): HTMLElement {
   const wrap = el('div', `ui-stamp-wrap ${tone}`);
   wrap.style.setProperty('--at', `${at}ms`);
   wrap.style.setProperty('--rot', `${STAMP_TILT[i % STAMP_TILT.length]}deg`);

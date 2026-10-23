@@ -217,7 +217,9 @@ import {
   type BurglaryNews,
 } from '../game/watch';
 import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
-import { track } from '../platform/analytics';
+import { flushSoon, track } from '../platform/analytics';
+import { MORNING_TABS, openAllTabs, openTabs, seeTab, tabNew, tabOpen, unlockTab } from '../game/onboarding';
+import { newTag, tabHint } from './onboarding';
 import { showLeaderboard } from './leaderboard';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
@@ -239,6 +241,8 @@ interface MorningOptions {
   onVisit?: (id: number, name: string) => void;
   /** Бабушка закончила обучение — теперь можно вручить её гостинец. */
   onTourDone?: () => void;
+  /** Дочитали вступление главы (в новом начале гостинец ждёт его конца). */
+  onStoryDone?: () => void;
 }
 
 // Вкладки в одну строку: значок и короткая подпись. Профиль (достижения, наследие, настройки) —
@@ -425,7 +429,7 @@ function helpRow(title: HTMLElement | string, text: string): HTMLElement {
 }
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onTourDone }: MorningOptions): void {
+export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onTourDone, onStoryDone }: MorningOptions): void {
   const { card, close } = openModal();
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
@@ -448,6 +452,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   let dramaLine = 0;
   /** Шаг бабушкиного обучения и его реплика внизу экрана (пока идёт обучение). */
   let tourStep = 0;
+  /** Какой шаг обучения уже ушёл в аналитику (утро перерисовывается, шаг — один раз). */
+  let trackedStep = -1;
   /** Открыто подтверждение «Начать заново». */
   let confirmRestart = false;
   let tourEl: HTMLElement | null = null;
@@ -564,21 +570,53 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const step = touring ? TOUR[Math.min(tourStep, TOUR.length - 1)] : null;
     if (step?.tab) tab = step.tab;
 
+    // Новое начало: вкладки открываются по одной, когда понадобятся (game/onboarding.ts).
+    // Во время бабушкиного обхода видны все — она о каждой рассказывает.
+    if (!touring) {
+      const opened = openTabs(state);
+      for (const id of opened.opened) track('onb_tab', state.day, MORNING_TABS.indexOf(id));
+      // В закрытую вкладку ведёт кнопка («Закупить» в «Главном на сегодня») — она открывается сразу.
+      let next = tab === 'profile' ? opened.state : unlockTab(opened.state, tab);
+      // Новичку нового начала прежние «Что нового» ни к чему: он и так видит игру такой. Следующие — покажем.
+      if (next.onboarding === 'play' && next.whatsNew === undefined) next = { ...next, whatsNew: WHATS_NEW };
+      if (next !== state) {
+        if (opened.opened.length) flushSoon();
+        setState(next);
+        render();
+        return;
+      }
+    }
+    const shown = TABS.filter(([id]) => touring || tabOpen(state, id));
+    // Только что открытая вкладка: ярлык «Новое» и бабушкина подсказка над вкладками.
+    const fresh = touring ? undefined : shown.find(([id]) => tabNew(state, id))?.[0];
+    const see = (id: Tab) => {
+      if (tabNew(getState(), id)) setState(seeTab(getState(), id));
+    };
+
     const tabs = el('div', 'ui-tabs');
     const badges = tabBadges(state);
     const go = (id: Tab) => () => {
       tab = id;
       slideTab = true;
+      see(id);
       render();
       // Вкладку сменили, а список прокручен далеко вниз — показываем её начало.
       requestAnimationFrame(() => card.querySelector('.ui-tabs')?.scrollIntoView({ block: 'start' }));
     };
-    for (const [id, icon, label] of TABS) {
-      const b = button('', go(id), `ui-tab${tab === id ? ' active' : ''}`);
+    for (const [id, icon, label] of shown) {
+      const b = button('', go(id), `ui-tab${tab === id ? ' active' : ''}${!touring && tabNew(state, id) ? ' ui-tab-new' : ''}`);
       b.append(el('span', 'ui-tab-icon', icon), el('span', 'ui-tab-label', t(label)));
       if (badges[id]) b.append(el('span', 'ui-tab-dot', String(badges[id])));
+      else if (!touring && tabNew(state, id)) b.append(newTag());
       tabs.append(b);
     }
+    const hint = fresh
+      ? tabHint(t(`onb.tab.${fresh}` as TextKey), () => {
+          see(fresh);
+          haptic.tap();
+          render();
+        })
+      : null;
     const profile = button('🏆', go('profile'), `ui-chip ui-profile-btn${tab === 'profile' ? ' active' : ''}`);
     profile.title = t('tab.profile');
     title.append(profile);
@@ -629,6 +667,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...guildClaimBox(state),
       today,
       todayCard(state, touring, [...friendShopsBox(), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),
+      ...(hint ? [hint] : []),
       tabs,
       body,
       openBar,
@@ -708,11 +747,20 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     tourEl?.remove();
     tourEl = el('div', 'ui-tour');
     const last = tourStep >= TOUR.length - 1;
+    // Каждый шаг — в аналитику: на каком бросают обход (номер шага с 1).
+    if (trackedStep !== tourStep) {
+      trackedStep = tourStep;
+      track('tour_step', getState().day, tourStep + 1);
+    }
     const finish = () => {
+      const at = tourStep + 1;
       tourStep = 0;
+      trackedStep = -1;
       endTour();
-      track(last ? 'tour_done' : 'tour_skip', getState().day);
-      update({ ...getState(), tourDone: true }, last ? 'success' : 'tap');
+      track(last ? 'tour_done' : 'tour_skip', getState().day, at);
+      flushSoon();
+      // После обхода в новом начале все вкладки уже знакомы — не прячем их обратно.
+      update(openAllTabs({ ...getState(), tourDone: true }), last ? 'success' : 'tap');
       // Подарок — только после обучения: окно гостинца не мешает бабушкиным подсказкам.
       if (onTourDone) {
         onTourDone();
@@ -2979,7 +3027,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           return;
         }
         storyLine = 0;
+        if (kind === 'intro') track('chapter_intro', getState().day, getState().story.chapter + 1);
         update(kind === 'intro' ? finishIntro(getState()) : finishChapter(getState()), kind === 'outro' ? 'success' : 'tap');
+        if (kind === 'intro') onStoryDone?.();
       },
     });
   };
@@ -3345,7 +3395,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       helpRow(t('tour.replayTitle'), t('tour.replayNote')),
       button(`👵 ${t('tour.replay')}`, () => {
         tourStep = 0;
+        trackedStep = -1;
         tab = 'buy';
+        track('tour_replay', getState().day);
         update({ ...getState(), tourDone: false });
       }, 'ui-btn secondary'),
     );
@@ -3383,8 +3435,11 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       input,
       button(t('shopName.save'), () => update({ ...getState(), shopName: input.value.trim().slice(0, SHOP_NAME_MAX) || undefined }, 'success'), 'ui-chip'),
     );
+    // В новом начале обход вкладок не показывают сразу — первую неделю он повыше, на виду.
+    const early = state.onboarding === 'play' && state.day <= 7;
     return [
       achievementsButton(state),
+      ...(early ? [replay] : []),
       ...friendsBox(),
       named,
       sounds,
@@ -3396,7 +3451,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...trophiesBox(state),
       recordsBox(state),
       albumBox(state),
-      replay,
+      ...(early ? [] : [replay]),
       again,
     ];
   };
