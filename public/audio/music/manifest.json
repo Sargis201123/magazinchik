@@ -1,0 +1,404 @@
+{
+ "version": 1,
+ "sampleRate": 48000,
+ "motif": "Мотив «Магазинчик»: в до мажоре C D | A G E (затакт, секста вверх, «дзынь» G→E)",
+ "playback": "music — играть один раз, затем пауза silenceAfter (с); loop — WebAudio: loop=true, loopStart/loopEnd из манифеста, start(0, loopStart); sting — один раз поверх музыки. ogg (Opus) — основной формат, m4a (AAC) — для iOS/Safari.",
+ "tracks": {
+  "day": {
+   "kind": "music",
+   "title": "День",
+   "use": "День: основной фон торговли",
+   "files": {
+    "ogg": "audio/music/day.ogg",
+    "m4a": "audio/music/day.m4a"
+   },
+   "duration": 78.996,
+   "lufs": -16.0,
+   "truePeakDb": -2.88,
+   "bpm": 96,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 354201,
+    "m4a": 403471
+   },
+   "silenceAfter": [
+    30,
+    90
+   ],
+   "fadeIn": 1.5
+  },
+  "evening": {
+   "kind": "music",
+   "title": "Вечер",
+   "use": "Вечер: закат, последние покупатели, итоги",
+   "files": {
+    "ogg": "audio/music/evening.ogg",
+    "m4a": "audio/music/evening.m4a"
+   },
+   "duration": 78.727,
+   "lufs": -16.0,
+   "truePeakDb": -2.97,
+   "bpm": 72,
+   "key": "F",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 367838,
+    "m4a": 398808
+   },
+   "silenceAfter": [
+    30,
+    90
+   ],
+   "fadeIn": 2.0
+  },
+  "morning": {
+   "kind": "music",
+   "title": "Утро",
+   "use": "Утро: открытие магазина, первые часы дня",
+   "files": {
+    "ogg": "audio/music/morning.ogg",
+    "m4a": "audio/music/morning.m4a"
+   },
+   "duration": 77.661,
+   "lufs": -16.0,
+   "truePeakDb": -3.65,
+   "bpm": 80,
+   "key": "G",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 355378,
+    "m4a": 399423
+   },
+   "silenceAfter": [
+    30,
+    90
+   ],
+   "fadeIn": 2.5
+  },
+  "night": {
+   "kind": "music",
+   "title": "Ночная смена",
+   "use": "Ночная смена: тихий фон ночью",
+   "files": {
+    "ogg": "audio/music/night.ogg",
+    "m4a": "audio/music/night.m4a"
+   },
+   "duration": 77.426,
+   "lufs": -16.0,
+   "truePeakDb": -2.07,
+   "bpm": 60,
+   "key": "Eb",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 367516,
+    "m4a": 393602
+   },
+   "silenceAfter": [
+    30,
+    90
+   ],
+   "fadeIn": 3.0
+  },
+  "winter": {
+   "kind": "music",
+   "title": "Зима",
+   "use": "Зима и Новый год: сезонный фон (вместо дня/вечера в декабре–январе)",
+   "files": {
+    "ogg": "audio/music/winter.ogg",
+    "m4a": "audio/music/winter.m4a"
+   },
+   "duration": 68.258,
+   "lufs": -16.0,
+   "truePeakDb": -3.74,
+   "bpm": 144,
+   "key": "D",
+   "meter": "3/4",
+   "bytes": {
+    "ogg": 360198,
+    "m4a": 353590
+   },
+   "silenceAfter": [
+    30,
+    90
+   ],
+   "fadeIn": 2.0
+  },
+  "radio_hits": {
+   "kind": "loop",
+   "title": "Радио «Хиты»",
+   "use": "Радио «Хиты»: бодрый поп-бит, по кругу (марафон)",
+   "files": {
+    "ogg": "audio/music/radio_hits.ogg",
+    "m4a": "audio/music/radio_hits.m4a"
+   },
+   "duration": 49.0,
+   "lufs": -16.0,
+   "truePeakDb": -3.22,
+   "bpm": 120,
+   "key": "A",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 228030,
+    "m4a": 243792
+   },
+   "loopStart": 0.5,
+   "loopEnd": 48.5,
+   "loopStartSample": 24000,
+   "loopEndSample": 2328000,
+   "loopDuration": 48.0
+  },
+  "radio_march": {
+   "kind": "loop",
+   "title": "Радио «Марш»",
+   "use": "Радио «Марш»: духовой оркестр на параде, по кругу (парады)",
+   "files": {
+    "ogg": "audio/music/radio_march.ogg",
+    "m4a": "audio/music/radio_march.m4a"
+   },
+   "duration": 49.0,
+   "lufs": -16.0,
+   "truePeakDb": -3.82,
+   "bpm": 120,
+   "key": "Bb",
+   "meter": "2/4",
+   "bytes": {
+    "ogg": 207102,
+    "m4a": 253775
+   },
+   "loopStart": 0.5,
+   "loopEnd": 48.5,
+   "loopStartSample": 24000,
+   "loopEndSample": 2328000,
+   "loopDuration": 48.0
+  },
+  "radio_retro": {
+   "kind": "loop",
+   "title": "Радио «Ретро»",
+   "use": "Радио «Ретро»: медленный свинг, крутится по кругу",
+   "files": {
+    "ogg": "audio/music/radio_retro.ogg",
+    "m4a": "audio/music/radio_retro.m4a"
+   },
+   "duration": 49.0,
+   "lufs": -16.0,
+   "truePeakDb": -1.95,
+   "bpm": 100,
+   "key": "F",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 222330,
+    "m4a": 249697
+   },
+   "loopStart": 0.5,
+   "loopEnd": 48.5,
+   "loopStartSample": 24000,
+   "loopEndSample": 2328000,
+   "loopDuration": 48.0
+  },
+  "radio_samba": {
+   "kind": "loop",
+   "title": "Радио «Самба»",
+   "use": "Радио «Самба»: карнавал, по кругу (особый день — карнавал)",
+   "files": {
+    "ogg": "audio/music/radio_samba.ogg",
+    "m4a": "audio/music/radio_samba.m4a"
+   },
+   "duration": 49.0,
+   "lufs": -16.0,
+   "truePeakDb": -2.81,
+   "bpm": 120,
+   "key": "F",
+   "meter": "2/4",
+   "bytes": {
+    "ogg": 235252,
+    "m4a": 245017
+   },
+   "loopStart": 0.5,
+   "loopEnd": 48.5,
+   "loopStartSample": 24000,
+   "loopEndSample": 2328000,
+   "loopDuration": 48.0
+  },
+  "sting_coin": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "files": {
+    "ogg": "audio/music/sting_coin.ogg",
+    "m4a": "audio/music/sting_coin.m4a"
+   },
+   "duration": 1.565,
+   "lufs": -14.0,
+   "truePeakDb": -2.44,
+   "bpm": 120,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 17245,
+    "m4a": 11707
+   },
+   "shortTermMaxLufs": -13.96
+  },
+  "sting_day_close": {
+   "kind": "sting",
+   "title": "Итоги дня",
+   "use": "Закрытие дня / итоги",
+   "files": {
+    "ogg": "audio/music/sting_day_close.ogg",
+    "m4a": "audio/music/sting_day_close.m4a"
+   },
+   "duration": 4.679,
+   "lufs": -14.0,
+   "truePeakDb": -2.23,
+   "bpm": 112,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 38344,
+    "m4a": 34435
+   },
+   "shortTermMaxLufs": -13.16
+  },
+  "sting_day_open": {
+   "kind": "sting",
+   "title": "Открытие дня",
+   "use": "Открытие дня: колокольчик двери и мотив",
+   "files": {
+    "ogg": "audio/music/sting_day_open.ogg",
+    "m4a": "audio/music/sting_day_open.m4a"
+   },
+   "duration": 3.532,
+   "lufs": -14.0,
+   "truePeakDb": -2.16,
+   "bpm": 132,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 38782,
+    "m4a": 26438
+   },
+   "shortTermMaxLufs": -14.33
+  },
+  "sting_expand": {
+   "kind": "sting",
+   "title": "Расширение магазина",
+   "use": "Расширение магазина",
+   "files": {
+    "ogg": "audio/music/sting_expand.ogg",
+    "m4a": "audio/music/sting_expand.m4a"
+   },
+   "duration": 4.7,
+   "lufs": -14.0,
+   "truePeakDb": -3.18,
+   "bpm": 120,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 35505,
+    "m4a": 34410
+   },
+   "shortTermMaxLufs": -13.18
+  },
+  "sting_fail": {
+   "kind": "sting",
+   "title": "Мягкая неудача",
+   "use": "Мягкая неудача (банкротство-предупреждение, проваленная цель)",
+   "files": {
+    "ogg": "audio/music/sting_fail.ogg",
+    "m4a": "audio/music/sting_fail.m4a"
+   },
+   "duration": 4.5,
+   "lufs": -14.0,
+   "truePeakDb": -2.73,
+   "bpm": 100,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 34293,
+    "m4a": 29356
+   },
+   "shortTermMaxLufs": -14.23
+  },
+  "sting_purchase": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "files": {
+    "ogg": "audio/music/sting_purchase.ogg",
+    "m4a": "audio/music/sting_purchase.m4a"
+   },
+   "duration": 2.231,
+   "lufs": -14.0,
+   "truePeakDb": -2.1,
+   "bpm": 160,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 19746,
+    "m4a": 17182
+   },
+   "shortTermMaxLufs": -14.5
+  },
+  "sting_rank_up": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "files": {
+    "ogg": "audio/music/sting_rank_up.ogg",
+    "m4a": "audio/music/sting_rank_up.m4a"
+   },
+   "duration": 4.045,
+   "lufs": -14.0,
+   "truePeakDb": -3.91,
+   "bpm": 132,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 29830,
+    "m4a": 29594
+   },
+   "shortTermMaxLufs": -15.14
+  },
+  "sting_record": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "files": {
+    "ogg": "audio/music/sting_record.ogg",
+    "m4a": "audio/music/sting_record.m4a"
+   },
+   "duration": 3.3,
+   "lufs": -14.0,
+   "truePeakDb": -1.62,
+   "bpm": 150,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 29172,
+    "m4a": 24102
+   },
+   "shortTermMaxLufs": -14.21
+  },
+  "sting_story": {
+   "kind": "sting",
+   "title": "Сюжетный момент",
+   "use": "Сюжетный момент (начало диалога, поворот)",
+   "files": {
+    "ogg": "audio/music/sting_story.ogg",
+    "m4a": "audio/music/sting_story.m4a"
+   },
+   "duration": 5.575,
+   "lufs": -14.0,
+   "truePeakDb": -3.49,
+   "bpm": 80,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 41348,
+    "m4a": 40887
+   },
+   "shortTermMaxLufs": -12.81
+  }
+ }
+}
