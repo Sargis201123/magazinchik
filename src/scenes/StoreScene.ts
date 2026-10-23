@@ -883,7 +883,8 @@ export class StoreScene extends Phaser.Scene {
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
   /** Сколько раз перерисовывали полки: толчок по нему узнаёт, что товар на картинках уже другой. */
-  private shelvesDrawn = 0;
+  /** Толчок: уронить разбитое, до чего волна ещё не дошла, — сразу, пока полки не перерисовали. */
+  private quakeFlush?: () => void;
   private boxes: Phaser.GameObjects.Image[] = [];
   private shutters: Phaser.GameObjects.Image[] = [];
   private arrow?: Phaser.GameObjects.Image;
@@ -1937,7 +1938,8 @@ export class StoreScene extends Phaser.Scene {
    */
   private hopShelf(view: ShelfView, height = 2): void {
     if (this.lite) return;
-    const still = (i: Phaser.GameObjects.Image) => i.visible && !(i.getData('slide') as Phaser.Tweens.Tween | undefined)?.isActive();
+    // Штуки, которые ещё летят из коробки (stockShelf) или съезжают на место, не трогаем: их ведёт свой твин.
+    const still = (i: Phaser.GameObjects.Image) => i.visible && !i.getData('flying') && !(i.getData('slide') as Phaser.Tweens.Tween | undefined)?.isActive();
     const parts = [view.bg, view.front, ...view.items.filter(still), ...view.backItems.filter(still)];
     if (parts.some((p) => p.getData('hopping'))) return;
     for (const p of parts) p.setData('hopping', true);
@@ -6587,7 +6589,8 @@ export class StoreScene extends Phaser.Scene {
    * место (slide). При выкладке (stockShelf) не съезжают — там штуки сами летят из рук.
    */
   private refreshShelves(slide = true): void {
-    this.shelvesDrawn++;
+    // Разбитое толчком падает раньше, чем полку перерисуют: иначе его картинку займёт уцелевшая штука.
+    this.quakeFlush?.();
     this.layout.slots.forEach((slot, i) => {
       // Свободное место под полку — разметка на полу: полку покупают утром во вкладке «Зал».
       if (!this.slotDecor[i]) {
@@ -6659,7 +6662,8 @@ export class StoreScene extends Phaser.Scene {
         img.setData('stock', key);
         const from = key ? was.get(key) : undefined;
         // Подпрыгивает с полкой — по высоте не сравниваем: прыжок сам вернёт её на место.
-        if (from && (from.x !== img.x || (from.y !== img.y && !img.getData('hopping')))) {
+        // Дрожь от толчка (до QUAKE_SHAKE_PX вбок) — не переезд: штука и так стоит на своём месте.
+        if (from && (Math.abs(from.x - img.x) > QUAKE_SHAKE_PX || (from.y !== img.y && !img.getData('hopping')))) {
           this.slideItem(img, from);
           if (back.visible) this.slideItem(back, { x: from.bx, y: from.by });
         }
@@ -8669,6 +8673,8 @@ export class StoreScene extends Phaser.Scene {
     // С полки пропадают последние штуки этого товара (остальное съедет на их место) — запоминаем,
     // где и какими они были: оттуда товар и полетит в руки (reachShelf), там качнутся соседи.
     const view = this.shelfViews[index];
+    // Разбитое толчком — не товар: оно уже падает с полки, а не летит в руки.
+    this.quakeFlush?.();
     const mine = view?.items.filter((img) => img.visible && (img.getData('stock') as string | null | undefined)?.startsWith(`${id}:`)) ?? [];
     this.takenFrom = mine
       .slice(-count)
@@ -10106,27 +10112,57 @@ export class StoreScene extends Phaser.Scene {
     const { state, broken } = quakeBreak(this.state, Math.random);
     this.state = state;
     this.stats.spoiled += broken;
-    // Что упадёт — запоминаем по картинкам сейчас: до прихода волны полку могут перерисовать.
-    const drawn = this.shelvesDrawn;
+    // Прошлый толчок ещё не долетел до дальних полок — роняем его остатки сейчас.
+    this.quakeFlush?.();
+    // Что упадёт — запоминаем по картинкам сейчас: они ещё показывают полки до толчка.
     const falls = this.shelfViews.map((view, i) => this.brokenOnShelf(view, before[i], state.shelves[i]));
+    this.rekeyAfterQuake(before, state.shelves);
     // Осколки — не больше чем у ~20 штук: в большом магазине разбивается и по 40.
     const every = Math.max(1, Math.ceil(falls.flat().length / QUAKE_SHATTER_MAX));
     let n = 0;
-    const end = this.quakeWave((view, i) => {
-      for (const fall of falls[i] ?? []) {
-        // Полку ещё не перерисовывали — разбитая штука на ней: прячем, вместо неё падает копия.
-        if (this.shelvesDrawn === drawn && fall.img.active) fall.img.setVisible(false);
+    // Разбитая штука прячется, вместо неё падает копия. Список опустошается: каждая падает один раз.
+    const fallAll = (view: ShelfView, list: QuakeFall[]) => {
+      for (const fall of list.splice(0)) {
+        if (!fall.img.active) continue;
+        fall.img.setVisible(false);
         this.dropItem(view, fall, n++ % every === 0);
       }
+    };
+    // Покупатель взял товар или продавец выложил до прихода волны — полки перерисуют: роняем всё сразу.
+    const flush = () => {
+      if (this.quakeFlush === flush) this.quakeFlush = undefined;
+      falls.forEach((list, i) => this.shelfViews[i] && fallAll(this.shelfViews[i], list));
+    };
+    this.quakeFlush = flush;
+    const end = this.quakeWave((view, i) => fallAll(view, falls[i] ?? []));
+    // Волна прошла, осколки улеглись — уцелевший товар съезжает в дыры, таблички «пусто» обновляются.
+    this.time.delayedCall(end + QUAKE_SETTLE_MS, () => {
+      if (this.quakeFlush === flush) this.quakeFlush = undefined;
+      this.refreshShelves();
     });
-    // Волна прошла, осколки улеглись — оставшийся товар встаёт по местам, таблички «пусто» обновляются.
-    this.time.delayedCall(end + QUAKE_SETTLE_MS, () => this.refreshShelves());
     if (!this.lite) {
       this.ceilingDust();
       this.swingLamps();
     }
     const { w, h } = this.layout;
     this.popup(w / 2, h / 2 - 10, t('popup.quake', { n: broken }), '#ffb0a0');
+  }
+
+  /**
+   * Уцелевшие штуки получают метку своего нового места в товаре (как в refreshShelves): тогда при
+   * перерисовке они съезжают в дыры от разбитого, а не появляется «новый» товар на месте разбитого.
+   */
+  private rekeyAfterQuake(before: StoreState['shelves'], after: StoreState['shelves']): void {
+    this.shelfViews.forEach((view, i) => {
+      let n = 0;
+      for (const id of PRODUCT_IDS) {
+        const kept = after[i]?.items[id] ?? [];
+        for (const unit of before[i]?.items[id] ?? []) {
+          const k = kept.indexOf(unit);
+          view.items[n++]?.setData('stock', k >= 0 ? `${id}:${k}` : null);
+        }
+      }
+    });
   }
 
   /** Какие картинки на полке показывают товар, который толчок разбил (сравнение полки до и после). */
