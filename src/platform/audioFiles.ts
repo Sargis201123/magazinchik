@@ -72,9 +72,10 @@ const STORE_RATE = { normal: 32000, lite: 22050 };
 /**
  * Разобрать в звук. Длинное (lean) — сразу в пониженной частоте через офлайн-контекст: AudioBuffer
  * занимает вдвое-втрое меньше. Не вышло (старый браузер) — обычным путём, в частоте контекста.
+ * cap — частота ещё ниже, если звук заведомо узкий (голоса — до 8 кГц): лишние отсчёты не нужны.
  */
-async function decode(ac: AudioContext, bytes: ArrayBuffer, lean: boolean): Promise<AudioBuffer> {
-  const rate = liteMode() ? STORE_RATE.lite : STORE_RATE.normal;
+async function decode(ac: AudioContext, bytes: ArrayBuffer, lean: boolean, cap = Infinity): Promise<AudioBuffer> {
+  const rate = Math.min(cap, liteMode() ? STORE_RATE.lite : STORE_RATE.normal);
   const Offline = window.OfflineAudioContext ?? (window as unknown as { webkitOfflineAudioContext?: typeof OfflineAudioContext }).webkitOfflineAudioContext;
   if (lean && Offline && rate < ac.sampleRate) {
     try {
@@ -89,18 +90,23 @@ async function decode(ac: AudioContext, bytes: ArrayBuffer, lean: boolean): Prom
 
 /**
  * Скачать и разобрать файл path (без расширения). lean — длинный трек или петля (разбор в пониженной
- * частоте), keep — запомнить сжатый файл (заставки). Если Ogg не разобрался («врёт» canPlayType) —
- * до конца захода в игру переходим на AAC и пробуем ещё раз.
+ * частоте), rate — с lean: не выше этой частоты (звук заведомо узкий), keep — запомнить сжатый файл
+ * (заставки). Если Ogg не разобрался («врёт» canPlayType) — до конца захода в игру переходим на AAC
+ * и пробуем ещё раз.
  */
-export async function loadAudio(ac: AudioContext, path: string, { lean = false, keep = false } = {}): Promise<AudioBuffer> {
+export async function loadAudio(
+  ac: AudioContext,
+  path: string,
+  { lean = false, rate = Infinity, keep = false } = {},
+): Promise<AudioBuffer> {
   const ext = audioFormat();
   const bytes = await bytesOf(audioUrl(path, ext), keep);
   try {
-    return await decode(ac, bytes, lean);
+    return await decode(ac, bytes, lean, rate);
   } catch (error) {
     if (ext !== 'ogg') throw error;
     format = 'm4a';
-    return decode(ac, await bytesOf(audioUrl(path, 'm4a'), keep), lean);
+    return decode(ac, await bytesOf(audioUrl(path, 'm4a'), keep), lean, rate);
   }
 }
 

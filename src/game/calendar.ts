@@ -14,6 +14,8 @@ export const YEAR_MONTHS = SEASON_EVERY * 4;
 /** Номер месяца в году: 0…15. Новогодняя неделя — 3, шашлыки — 7, школа — 11, урожай — 15. */
 export const monthInYear = (day: number): number => (monthOf(day) - 1) % YEAR_MONTHS;
 const dayInMonth = (day: number): number => ((day - 1) % MONTH_DAYS) + 1;
+/** Поздняя осень: после урожая и до новогодней недели (месяцы 0…2), а не вся осень со школы. */
+export const lateAutumn = (day: number): boolean => monthInYear(day) < 3;
 
 export function yearTime(day: number): YearTime {
   const m = monthInYear(day);
