@@ -8,6 +8,8 @@ import { FAST_SCREEN_MS, Pacer } from './pacing';
 import { onAppActive } from './telegram';
 
 const pacer = new Pacer();
+/** Обычный шаг Phaser при 60 кадрах. */
+const TARGET_MS = 1000 / 60;
 /** Окно во весь экран открыто (проверяем 4 раза в секунду, а не каждый кадр). */
 let covered = false;
 let checkedAt = -Infinity;
@@ -36,7 +38,12 @@ export function installFrameCap(): void {
       covered = modalOpen();
     }
     const interval = covered ? 1000 / 30 : pacer.screenMs < FAST_SCREEN_MS ? 1000 / 60 : 0;
-    if (pacer.step(time, interval)) step.call(this, time);
+    if (!pacer.step(time, interval)) return;
+    // После возврата в приложение и пока окно не в фокусе Phaser обрезает шаг до своего «целевого»
+    // (1/60 с). При 30 кадрах шаг вдвое длиннее — без этого время игры шло бы вдвое медленнее.
+    const self = this as unknown as { _target: number };
+    self._target = Math.max(TARGET_MS, interval);
+    step.call(this, time);
   };
   onAppActive((active) => {
     asleep = !active;
