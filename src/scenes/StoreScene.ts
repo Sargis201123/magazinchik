@@ -131,7 +131,8 @@ import { restorePurchases } from '../platform/stars';
 import { DOG_DAY_CATCH, hasDog, hasWatchman } from '../game/watch';
 import { contestOf, juryDay, tierKey } from '../game/contest';
 import { sonyaVisits, sunflowersPlanted } from '../game/drama';
-import { askWriteAccessOnce, socialPing, WELCOME_GIFT } from '../platform/social';
+import { askForHelp, askWriteAccessOnce, claimHelp, sendHelp, socialInfo, socialPing, WELCOME_GIFT } from '../platform/social';
+import { HELP_HOLD, HELP_QUEUE, HELP_REWARD, HELP_THANKS, helpAsked, helpGiven, helpScan, markHelpAsked, takeHelp } from '../game/help';
 import { reportProgress, track } from '../platform/analytics';
 import { shareDay } from '../platform/shareCard';
 import { duelInfo, fetchFriendShop, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
@@ -1214,6 +1215,9 @@ export class StoreScene extends Phaser.Scene {
   private inspector: 'none' | 'pending' | 'here' | 'done' = 'none';
   private inspection: InspectionResult | null = null;
   private rushAnnounced = false;
+  /** «Позвать на помощь»: до какого момента видна кнопка и ждём ли окно «Поделиться» (help.ts). */
+  private helpUntil = 0;
+  private helpBusy = false;
   /** Сколько заданий дня уже отпраздновали всплывашкой. */
   private questsSeen = 0;
   /** Кассы: основная и (если куплена) вторая слева от очереди. Очередь одна — идёт к свободной. */
@@ -1351,6 +1355,9 @@ export class StoreScene extends Phaser.Scene {
       void loadMultiplayer().then(() => {
         if (!this.running && (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend) this.buildWorld();
       });
+      // Открыли по ссылке «Помоги!» друга — подмога уходит сама; друзья откликнулись на нашу — забрать.
+      void this.sendFriendHelp();
+      if (info?.helped) void this.takeFriendHelp();
       if (!info?.welcome) return;
       this.state = { ...this.state, money: this.state.money + WELCOME_GIFT };
       saveGame(this.state);
@@ -1361,6 +1368,7 @@ export class StoreScene extends Phaser.Scene {
     if (away) toast('assets/ico_cash.png', t('away.title'), t('away.text', { h: Math.floor(away.hours), n: away.units, sum: away.revenue }));
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
     this.hud.onUrgent = () => this.openUrgent();
+    this.hud.onHelp = () => void this.callForHelp();
 
     this.buildWorld();
     this.hud.update(this.state, this.timeLeft);
@@ -1424,6 +1432,7 @@ export class StoreScene extends Phaser.Scene {
     this.windTick(deltaMs);
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     this.hud.showUrgent(this.running && !this.night && this.state.day > TUTORIAL_DAYS);
+    this.hud.showHelp(this.running && !this.night && this.time.now < this.helpUntil && this.canCallForHelp(), this.helpBusy);
     if (!this.running) return;
     const dt = (deltaMs / 1000) * this.speed;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
@@ -1449,6 +1458,8 @@ export class StoreScene extends Phaser.Scene {
       sound.bell(this.layout.door.x);
       this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.rush'), '#fff3b0');
     }
+    // Час пик или очередь до двери — можно позвать друзей на помощь (кнопка держится ещё пару секунд).
+    if (!this.night && (rush || this.queue.length >= HELP_QUEUE)) this.helpUntil = this.time.now + HELP_HOLD;
     if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void this.runInspector();
     if (!this.night && this.jury === 'pending' && elapsed >= JURY_AT) void this.runJury();
     if (!this.night && this.sonya === 'pending' && elapsed >= SONYA_AT) void this.runSonya();
@@ -10680,6 +10691,11 @@ export class StoreScene extends Phaser.Scene {
     this.timeLeft = DAY_SECONDS;
     this.nextSpawn = 1;
     this.running = true;
+    // Друзья откликнулись на «Помоги!» — весь день касса пробивает быстрее (help.ts).
+    if (helpScan(this.state) > 1) {
+      const { sellerHome } = this.layout;
+      this.time.delayedCall(2400, () => this.running && this.popup(sellerHome.x - 20, sellerHome.y - 46, t('popup.helpDay'), '#a8f0c8'));
+    }
     try {
       this.setupTrick();
     } catch (error) {
@@ -10918,6 +10934,7 @@ export class StoreScene extends Phaser.Scene {
     this.sonya = sonyaVisits(this.state) ? 'pending' : 'none';
     this.inspection = null;
     this.rushAnnounced = false;
+    this.helpUntil = 0;
     this.questsSeen = 0;
     this.valyaCame = false;
     this.syncStaff();
@@ -11806,7 +11823,58 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
-  /** «Поделиться итогами»: карточка в историю Telegram или в чат с ботом. */
+  /** Кнопку «Позвать на помощь» можно показать: игра в Telegram с сервером, после обучения, сегодня ещё не звали. */
+  private canCallForHelp(): boolean {
+    return this.state.day > TUTORIAL_DAYS && !helpAsked(this.state) && socialInfo() !== null;
+  }
+
+  /**
+   * «Позвать на помощь»: окно «Поделиться» Telegram с карточкой «Помогите!». Отправил (или открылось
+   * старое окно со ссылкой) — сегодня больше не зовём; закрыл окно — кнопка остаётся.
+   */
+  private async callForHelp(): Promise<void> {
+    if (this.helpBusy || !this.canCallForHelp()) return;
+    this.helpBusy = true;
+    haptic.tap();
+    const result = await askForHelp(t('help.share'));
+    this.helpBusy = false;
+    if (result === 'cancelled' || result === 'failed') return;
+    this.state = markHelpAsked(this.state);
+    track('help_ask', this.state.day);
+    const { sellerHome } = this.layout;
+    if (this.running) this.popup(sellerHome.x - 20, sellerHome.y - 46, t('popup.helpAsked'), '#a8f0c8');
+  }
+
+  /** Игру открыли по ссылке «Помоги!» друга: подмога уходит сама, за помощь — монеты. */
+  private async sendFriendHelp(): Promise<void> {
+    const res = await sendHelp();
+    if (!res) return;
+    if (!res.ok) {
+      // Своя просьба или сервер недоступен — молчим; остальное объясняем, почему подмога не ушла.
+      if (res.error === 'expired' || res.error === 'already' || res.error === 'limit' || res.error === 'full')
+        toast('assets/ico_handshake.png', t('help.err.title'), t(`help.err.${res.error}` as TextKey));
+      return;
+    }
+    this.state = helpGiven(this.state);
+    saveGame(this.state);
+    this.hud.update(this.state, this.timeLeft);
+    track('help_sent', this.state.day);
+    toast('assets/ico_handshake.png', t('help.sent.title'), t('help.sent.text', { name: res.name || t('help.friend'), n: HELP_REWARD }));
+  }
+
+  /** Друзья откликнулись на «Помоги!»: монеты за каждого и быстрая касса на день, который сейчас начнётся. */
+  private async takeFriendHelp(): Promise<void> {
+    const names = await claimHelp();
+    if (!names.length) return;
+    this.state = takeHelp(this.state, names.length);
+    saveGame(this.state);
+    this.hud.update(this.state, this.timeLeft);
+    track('help_came', this.state.day, names.length);
+    const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ` +${names.length - 3}` : '');
+    toast('assets/ico_handshake.png', t('help.came.title'), t('help.came.text', { names: shown, sum: names.length * HELP_THANKS }));
+  }
+
+  /** «Поделиться итогами»: карточка в историю Telegram, в окно «Поделиться» или в чат с ботом. */
   private async shareDay(button: HTMLButtonElement, day: number): Promise<void> {
     if (button.disabled) return;
     button.disabled = true;
@@ -11826,7 +11894,7 @@ export class StoreScene extends Phaser.Scene {
     );
     button.textContent = label;
     button.disabled = false;
-    track('share', day, result === 'failed' ? 0 : 1);
+    track('share', day, result === 'failed' || result === 'cancelled' ? 0 : 1);
     if (result === 'chat') toast('assets/ico_phone.png', t('share.chat.title'), t('share.chat.text'));
     if (result === 'failed') toast('assets/ico_phone.png', '📸', t('share.failed'));
   }

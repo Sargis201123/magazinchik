@@ -2,7 +2,8 @@
 // сервер хранит её пару дней по ссылке /api/card/<id>.jpg — Telegram берёт её оттуда для
 // истории (shareToStory) или бот присылает её игроку в чат, чтобы переслать друзьям.
 
-import { ready } from './social.js';
+import { ready, username } from './social.js';
+import { appLink, langOf, prepareMessage } from './share.js';
 import { bot, json, verifyInitData, type D1, type Env } from './telegram.js';
 
 /** Картинка в base64 не больше этого (≈ 700 КБ JPEG). */
@@ -17,14 +18,15 @@ const B64_RE = /^[A-Za-z0-9+/]+=*$/;
 const newId = (): string => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
 
 /**
- * POST /api/card { initData, image (base64 JPEG), send?, caption? } → { url, sent? }:
- * сохранить карточку; send — ещё и прислать её игроку в чат с ботом.
+ * POST /api/card { initData, image (base64 JPEG), send?, caption?, share?, lang? } → { url, sent?, prepared? }:
+ * сохранить карточку; share — подготовить её для окна «Поделиться» Telegram (prepared — номер
+ * сообщения для WebApp.shareMessage); send — прислать игроку в чат с ботом (если окна не вышло).
  */
 export async function card(request: Request, env: Env, now = Date.now()): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
   const db = env.DB;
   if (!token || !db) return json({ enabled: false });
-  const body = (await request.json().catch(() => ({}))) as { initData?: string; image?: string; send?: boolean; caption?: string };
+  const body = (await request.json().catch(() => ({}))) as { initData?: string; image?: string; send?: boolean; caption?: string; share?: boolean; lang?: string };
   const user = await verifyInitData(body.initData ?? '', token);
   if (!user) return json({ error: 'bad_init_data' }, 401);
   const image = String(body.image ?? '');
@@ -35,14 +37,26 @@ export async function card(request: Request, env: Env, now = Date.now()): Promis
   const id = newId();
   await db.prepare('INSERT INTO cards (id, owner, at, data) VALUES (?, ?, ?, ?)').bind(id, user.id, now, image).run();
   const url = `${new URL(request.url).origin}/api/card/${id}.jpg`;
+  if (body.share) {
+    try {
+      return json({ url, prepared: await prepareMessage(token, user, 'card', url, langOf(body.lang), now) });
+    } catch (error) {
+      // Окно «Поделиться» не вышло (например, у бота выключен инлайн-режим) — пришлём карточку в чат.
+      console.error(error);
+    }
+  }
   if (!body.send) return json({ url });
   try {
+    // Карточку пересылают друзьям: кнопка мини-приложения после пересылки не работает, а обычная
+    // ссылка t.me/<бот>?startapp=ref_<id> работает везде и сразу открывает игру с приглашением.
     const app = env.APP_URL ?? '';
+    const name = await username(token).catch(() => '');
+    const play = name ? { text: '▶ Магазинчик', url: appLink(name, `ref_${user.id}`) } : app ? { text: '▶ Магазинчик', web_app: { url: app } } : null;
     await bot(token, 'sendPhoto', {
       chat_id: user.id,
       photo: url,
       caption: String(body.caption ?? '').slice(0, 900),
-      ...(app ? { reply_markup: { inline_keyboard: [[{ text: '▶ Магазинчик', web_app: { url: app } }]] } } : {}),
+      ...(play ? { reply_markup: { inline_keyboard: [[play]] } } : {}),
     });
     return json({ url, sent: true });
   } catch {
