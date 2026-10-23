@@ -353,6 +353,10 @@ const ITEM_VARIANTS = 3;
 const PATIENCE_MS = 20_000;
 const CUSTOMER_SPEED = 40; // пикселей мира в секунду
 const SELLER_SPEED = 90;
+/** С такой скорости человек уже бежит: подпрыгивает, наклоняется вперёд, из-под ног летит пыль. */
+const RUN_PACE = 65;
+/** Пыли и брызг из-под ног одновременно не больше стольких (марафон — это толпа бегунов). */
+const MAX_DUST = 24;
 /** Как часто покупатель у пустой кассы зовёт продавца. */
 const CALL_EVERY_MS = 3000;
 
@@ -484,6 +488,25 @@ interface Look {
   coat?: number;
   scarf?: number;
 }
+
+/**
+ * Походка по образу: старик с тростью идёт медленно и сутулясь, ребёнок скачет вприпрыжку,
+ * в спортивном костюме шагает бодро, в наушниках пружинит в такт музыке.
+ */
+type Gait = 'cane' | 'kid' | 'sporty' | 'bouncy';
+/** Во сколько раз длиннее (больше 1) или короче обычного один кадр шага у этой походки. */
+const GAIT_CADENCE: Record<Gait, number> = { cane: 1.35, kid: 0.8, sporty: 0.88, bouncy: 0.95 };
+
+const gaitOf = (look: Look): Gait | undefined =>
+  look.prop === 'cane'
+    ? 'cane'
+    : look.kid
+      ? 'kid'
+      : look.outfit === 'tracksuit' || look.outfit === 'runner'
+        ? 'sporty'
+        : look.hat === 'headphones'
+          ? 'bouncy'
+          : undefined;
 
 /** Ночной сторож Михалыч: ушанка, ватник цвета хаки, седые усы, фонарик (как в art/security.py). */
 const WATCHMAN: Look = {
@@ -884,6 +907,10 @@ export class StoreScene extends Phaser.Scene {
   private glossyFloor = false;
   /** Мороз: на улице изо рта идёт пар. */
   private coldAir = false;
+  /** Облачка пыли и брызги из-под ног бегущих, что сейчас в воздухе (у брызг — первая капля). */
+  private footDust = new Set<Phaser.GameObjects.GameObject>();
+  /** Влажный блеск после мытья: пока пол сохнет, бегущий поднимает брызги. */
+  private wetSheens = new Set<Phaser.GameObjects.Ellipse>();
   /** Пятна света от потолочных ламп с номером ряда: утром включаются ряд за рядом. */
   private lampPools: { img: Phaser.GameObjects.Image; row: number }[] = [];
   /** Пруд в парке: рядом летают светлячки. */
@@ -1359,6 +1386,9 @@ export class StoreScene extends Phaser.Scene {
     this.clockHands = undefined;
     this.nightLights = [];
     this.trash.clear();
+    // Пыль и мокрый блеск старого зала уже не на сцене (removeAll их не уничтожает) — забываем.
+    this.footDust.clear();
+    this.wetSheens.clear();
     // Своя расстановка мест под полки (placement.ts) — если игрок переставлял в этом помещении.
     this.layout = withTill(withSlots(layoutFor(this.state.level), this.state.slotPos, this.state.level), this.state.tillPos, this.state.level);
     this.builtLevel = this.state.level;
@@ -1623,6 +1653,8 @@ export class StoreScene extends Phaser.Scene {
   /**
    * Шаги в 4 кадра (ноги: шаг, вместе, другой шаг, вместе; тело чуть подпрыгивает)
    * и дыхание, когда человек стоит. Спереди и сзади другой шаг — зеркало первого.
+   * Ноги перебирают под скорость: кто спешит (продавец, бегуны), тот бежит — отрывается
+   * от земли, наклоняется вперёд, из-под ног летит пыль. У стариков, детей и спортсменов своя походка.
    */
   private animatePeople(): void {
     const now = this.time.now;
@@ -1647,6 +1679,10 @@ export class StoreScene extends Phaser.Scene {
       let bob = 0;
       // Руки на шаге: кадры взмаха у рубашки и кожи (art/walk.py), в такт ногам.
       let arms = '';
+      // Подскок всего человека над тенью (бег, вприпрыжку) и наклон корпуса на бегу.
+      let lift = 0;
+      let lean = 0;
+      const gait = person.getData('gait') as Gait | undefined;
       const walking = Boolean(person.getData('walking'));
       // Остановился — чуть приседает, тронулся — вытягивается: шаг с весом, а не скольжение.
       if (walking !== Boolean(person.getData('wasWalking'))) {
@@ -1654,7 +1690,13 @@ export class StoreScene extends Phaser.Scene {
         this.squash(person, walking ? 0.96 : 1.05, walking ? 1.05 : 0.93, 70);
       }
       if (walking) {
-        const frame = Math.floor((now + phase) / 110) % 4;
+        const pace = (person.getData('pace') as number | undefined) ?? CUSTOMER_SPEED;
+        // На велосипеде, с тележкой или коляской — без подскоков: колёса не скачут.
+        const wheels = Boolean(person.getData('wheels') || person.getData('stroller'));
+        const running = pace >= RUN_PACE && !wheels;
+        // Чем быстрее идёт, тем чаще шаг; старик с тростью шагает реже, ребёнок семенит.
+        const period = Phaser.Math.Clamp((110 * CUSTOMER_SPEED) / pace, 70, 150) * (gait ? GAIT_CADENCE[gait] : 1);
+        const frame = Math.floor((now + phase) / period) % 4;
         arms = frame === 1 ? '_w1' : frame === 3 ? '_w2' : '';
         if (frame === 1) key = `p_legs1${suffix}`;
         if (frame === 3) {
@@ -1665,6 +1707,24 @@ export class StoreScene extends Phaser.Scene {
           }
         }
         bob = frame % 2 === 0 ? -0.5 : 0;
+        if (running) {
+          // Бег: на широком шаге отрывается от земли, сбоку видно, как наклоняется вперёд;
+          // приземлился — из-под ноги облачко пыли (каждый второй шаг).
+          lift = frame % 2 === 1 ? -1 : 0;
+          bob = 0;
+          if (facing === 'left' || facing === 'right') lean = facing === 'right' ? 4 : -4;
+          if (frame === 0 && person.getData('stepFrame') !== frame) this.kickUp(person, facing);
+        } else if (gait === 'kid' && !wheels) {
+          // Ребёнок вприпрыжку: через шаг подскакивает.
+          lift = frame === 1 ? -1 : 0;
+        } else if (gait === 'bouncy' && !wheels) {
+          // В наушниках пружинит в такт музыке.
+          lift = frame % 2 === 0 ? -0.5 : 0;
+        } else if (gait === 'cane') {
+          // С тростью приподнимается только на одной ноге — чуть прихрамывает — и идёт, ссутулившись вперёд.
+          bob = frame === 0 ? -0.5 : 0;
+          if (facing === 'left' || facing === 'right') lean = facing === 'right' ? 3 : -3;
+        }
         person.setData('idleAt', undefined);
         // Шаги слышно только у продавца — остальных было бы слишком много.
         if (person === this.seller && frame % 2 === 0 && person.getData('stepFrame') !== frame) ambience.step();
@@ -1678,12 +1738,38 @@ export class StoreScene extends Phaser.Scene {
         this.idle(person, now, facing);
       }
       if (legs && (legs.texture.key !== key || legs.flipX !== flip)) legs.setTexture(key).setFlipX(flip);
+      if (legs) legs.y = lift;
       for (const [img, base] of (person.getData('layers') as [Phaser.GameObjects.Image, string][] | undefined) ?? []) {
         if (!SWING_LAYERS.has(base)) continue;
         const want = base + suffix + arms;
         if (img.texture.key !== want) img.setTexture(want);
       }
-      for (const img of (person.getData('upper') as Phaser.GameObjects.Image[]) ?? []) img.y = bob + ((img.getData('dy') as number | undefined) ?? 0);
+      // Старик с тростью сутулится: плечи и голова ниже и (сбоку) чуть впереди.
+      const side = facing === 'right' ? 1 : facing === 'left' ? -1 : 0;
+      const stoop = gait === 'cane' ? 0.5 : 0;
+      for (const img of (person.getData('upper') as Phaser.GameObjects.Image[]) ?? []) {
+        img.y = bob + lift + stoop + ((img.getData('dy') as number | undefined) ?? 0);
+        img.x = stoop * side;
+      }
+      // Вещь в руке ходит вместе с рукой (вперёд-назад сбоку, вверх-вниз спереди),
+      // сумка на плече отстаёт и качается навстречу.
+      const sway = arms === '_w1' ? 0.5 : arms === '_w2' ? -0.5 : 0;
+      if (sway) {
+        const prop = person.getData('prop') as Phaser.GameObjects.Image | undefined;
+        const satchel = person.getData('satchel') as Phaser.GameObjects.Image | undefined;
+        if (prop) {
+          if (side) prop.x += sway * side;
+          else prop.y -= sway;
+        }
+        if (satchel && side) satchel.x -= sway * side;
+      }
+      // Наклон ставим, только когда он меняется (или его сбросило падение на луже — тоже angle),
+      // чтобы не мешать самому падению.
+      if (((person.getData('lean') as number | undefined) ?? 0) !== lean || (lean !== 0 && person.angle === 0)) {
+        person.setData('lean', lean).setAngle(lean);
+        // Тень остаётся ровной на полу.
+        (person.getData('shadow') as Phaser.GameObjects.Image | undefined)?.setAngle(-lean);
+      }
       const umbrella = person.getData('umbrella') as Phaser.GameObjects.Image | undefined;
       // Зонт раскрывается на выходе из магазина и закрывается, когда дождь кончился.
       const open = person.y > this.layout.h + 2 && !this.rainStopped;
@@ -1694,10 +1780,79 @@ export class StoreScene extends Phaser.Scene {
           this.tweens.add({ targets: umbrella, scaleY: 1 / ART, duration: 220, ease: 'Back.easeOut' });
         }
       }
-      this.lampShadow(person);
+      this.lampShadow(person, lift);
       this.reflect(person);
       this.breathe(person, now, facing);
     }
+  }
+
+  /**
+   * Из-под ноги бегущего: облачко пыли (клубки с каёмкой — мягкий пар, как у steamPuff,
+   * на светлом полу не видно), на мокром полу и на улице в дождь — голубые брызги, в снег — снежная пыль.
+   */
+  private kickUp(person: Phaser.GameObjects.Container, facing: Facing): void {
+    if (this.lite || this.footDust.size >= MAX_DUST || !person.visible) return;
+    if (!this.cameras.main.worldView.contains(person.x, person.y)) return;
+    // После пересборки зала старые человечки остаются в people, но не на сцене: из-под них не пылит.
+    if (!this.children.exists(person)) return;
+    const s = person.scaleY;
+    // Пыль летит назад, из-под отталкивающейся ноги; спереди и сзади — из-под левой или правой.
+    const back = facing === 'right' ? -1 : facing === 'left' ? 1 : 0;
+    const x = person.x + (back ? back * 2 : Phaser.Math.RND.sign() * 1.5) * s;
+    const y = person.y + 8 * s;
+    const { w, h, wallH } = this.layout;
+    const { x: px, y: py } = person;
+    const room = this.openRooms().some((r) => px > r.x && px < r.x + r.w && py > r.y && py < r.y + r.h);
+    const indoor = room || (py > wallH && py < h && px > 0 && px < w);
+    // Мокро: только что вымытый пол или пролитая лужа, а на улице — дождь.
+    const near = (o: { x: number; y: number }, r: number) => Math.abs(o.x - x) < r && Math.abs(o.y - y) < 5;
+    const wet = indoor
+      ? [...this.wetSheens].some((sh) => near(sh, 10)) || [...this.trash].some((piece) => piece.getData('kind') === 'spill' && near(piece, 8))
+      : Boolean(this.rainFx);
+    // Убегая от нас, пинает пыль к нам — облачко перед ним; иначе — за ним.
+    const depth = person.depth + (facing === 'up' ? 0.5 : -0.5);
+    if (wet) {
+      // Брызги: четыре капли дугой разлетаются из-под ноги.
+      const drops = [0x41a6f6, 0x5fb4e8, 0x41a6f6, 0xc8f0ff].map((color) => this.add.rectangle(x, y, 1, 1, color).setDepth(depth));
+      this.footDust.add(drops[0]);
+      drops[0].once('destroy', () => this.footDust.delete(drops[0]));
+      const fly = drops.map((_, i) => ({
+        dx: back ? back * Phaser.Math.FloatBetween(2.5, 5.5) : (i - 1.5) * Phaser.Math.FloatBetween(1.5, 2.5),
+        up: Phaser.Math.FloatBetween(2.5, 4.5),
+      }));
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: 340,
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          drops.forEach((d, i) => d.setPosition(x + fly[i].dx * k, y - Math.sin(k * Math.PI) * fly[i].up).setAlpha(1 - k * k));
+        },
+        onComplete: () => drops.forEach((d) => d.destroy()),
+      });
+      return;
+    }
+    // Светлый клубок с тёмной каёмкой виден и на светлом полу, и на асфальте; в снег — белый.
+    const [fill, edge] = !indoor && this.weather === 'snow' ? [0xffffff, 0xc0cbdc] : [0xf4ece0, 0xb8a888];
+    const away = back || Phaser.Math.FloatBetween(-1, 1);
+    // Облачко из двух клубков: побольше у ноги, поменьше чуть позади; растут, отлетают и тают.
+    const puffs = [
+      this.add.circle(x, y - 0.5, 1.5, fill).setStrokeStyle(0.5, edge),
+      this.add.circle(x + away * 1.8, y - 1.3, 1, fill).setStrokeStyle(0.5, edge),
+    ];
+    for (const puff of puffs) puff.setDepth(depth);
+    this.footDust.add(puffs[0]);
+    puffs[0].once('destroy', () => this.footDust.delete(puffs[0]));
+    this.tweens.add({
+      targets: puffs,
+      x: (target: { x: number }) => target.x + away * 2.5,
+      y: (target: { y: number }) => target.y - 2.5,
+      scale: 1.7,
+      duration: 420,
+      ease: 'Sine.easeOut',
+    });
+    // Тает к концу, а не сразу: облачко успевают заметить.
+    this.tweens.add({ targets: puffs, alpha: 0, duration: 420, ease: 'Quad.easeIn', onComplete: () => puffs.forEach((puff) => puff.destroy()) });
   }
 
   /** Стоит без дела: раз в несколько секунд — переступить, глянуть в телефон, потянуться, поправить сумку. */
@@ -1750,6 +1905,8 @@ export class StoreScene extends Phaser.Scene {
     const [ml, ms] = mirror.list as Phaser.GameObjects.Image[];
     if (ml.texture.key !== legs.texture.key || ml.flipX !== legs.flipX) ml.setTexture(legs.texture.key).setFlipX(legs.flipX);
     if (ms.texture.key !== shirt.texture.key) ms.setTexture(shirt.texture.key);
+    // Бегущий подпрыгнул — отражение уходит вниз.
+    ml.y = ms.y = -legs.y;
   }
 
   /** Мороз: на улице изо рта облачко пара, раз в пару секунд. */
@@ -1765,8 +1922,8 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.add({ targets: puff, x: puff.x + dx, y: puff.y - 4, scale: 2.4, alpha: 0, duration: 750, ease: 'Sine.easeOut', onComplete: () => puff.destroy() });
   }
 
-  /** Вечером на улице тень вытягивается в сторону от ближайшего фонаря. */
-  private lampShadow(person: Phaser.GameObjects.Container): void {
+  /** Вечером на улице тень вытягивается в сторону от ближайшего фонаря. В прыжке (lift) тень меньше. */
+  private lampShadow(person: Phaser.GameObjects.Container, lift = 0): void {
     const shadow = person.getData('shadow') as Phaser.GameObjects.Image | undefined;
     if (!shadow) return;
     // Днём тень поворачивается вслед за солнцем: утром — вправо, к вечеру — влево.
@@ -1776,7 +1933,9 @@ export class StoreScene extends Phaser.Scene {
       lean = Phaser.Math.Clamp((person.x - lamp) / 5, -5, 5) * this.evening;
     }
     shadow.x = lean;
-    shadow.scaleX = (1 + Math.abs(lean) / 5) / ART;
+    const air = lift < 0 ? 0.85 : 1;
+    shadow.scaleX = ((1 + Math.abs(lean) / 5) * air) / ART;
+    shadow.scaleY = air / ART;
   }
 
   /** Облачко-мысль с товаром над головой. */
@@ -3107,6 +3266,8 @@ export class StoreScene extends Phaser.Scene {
     const home = this.courierHome;
     const ride = this.art(0, 3, 'bike').setOrigin(0.5);
     courier.addAt(ride, 0);
+    // На велосипеде крутит педали, а не бежит (animatePeople): без подскока и пыли.
+    courier.setData('wheels', true);
     bike.setVisible(false);
     const road = this.streetY + 2;
     const away = -80;
@@ -3118,6 +3279,7 @@ export class StoreScene extends Phaser.Scene {
     await this.walk(courier, home.x, home.y, 70);
     if (!courier.active) return;
     ride.destroy();
+    courier.setData('wheels', false);
     bike.setVisible(true);
     this.setFacing(courier, 'down');
     this.courierBusy = false;
@@ -4400,6 +4562,8 @@ export class StoreScene extends Phaser.Scene {
     // Водитель катит тележку с двумя коробками.
     const box = this.art(7, 1, 'hand_truck').setVisible(false);
     driver.add(box);
+    // Катит тележку быстрым шагом, но не вприпрыжку: тележка не скачет по асфальту.
+    driver.setData('wheels', true);
     // С тротуара по подъезду к воротам склада во флигеле.
     const route = [
       { x: shutterX, y: this.streetY + 4 },
@@ -6749,10 +6913,12 @@ export class StoreScene extends Phaser.Scene {
       layers.push([acc, `acc_${look.acc}`]);
       parts.push(acc);
     }
+    let satchel: Phaser.GameObjects.Image | undefined;
     if (look.bag) {
       const bag = this.art(0, 0, look.bag).setTint(look.bagTint ?? 0xffffff);
       layers.push([bag, look.bag]);
       parts.push(bag);
+      if (look.bag === 'bag') satchel = bag;
     }
     parts.push(skin);
     if (look.scarf !== undefined) {
@@ -6771,9 +6937,14 @@ export class StoreScene extends Phaser.Scene {
     }
     parts.push(hair);
     if (look.hat) parts.push(wear(`w_hat_${look.hat}`, look.hatTint, true));
-    if (look.prop) parts.push(wear(`w_prop_${look.prop}`, look.propTint, true));
+    const prop = look.prop ? wear(`w_prop_${look.prop}`, look.propTint, true) : undefined;
+    if (prop) parts.push(prop);
     const person = this.add.container(x, y, parts).setDepth(y);
     if (back) person.setData('back', back);
+    // Вещь в руке и сумка через плечо покачиваются в такт шагу (animatePeople).
+    if (prop) person.setData('prop', prop);
+    if (satchel) person.setData('satchel', satchel);
+    person.setData('gait', gaitOf(look));
     const baseScale = look.kid ? 0.8 : 1;
     person.setScale(baseScale);
     person.setData('legs', legs);
@@ -6845,6 +7016,7 @@ export class StoreScene extends Phaser.Scene {
       this.setFacing(person, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy < 0 ? 'up' : 'down');
     }
     person.setData('walking', moving);
+    person.setData('pace', leader.getData('pace'));
   }
 
   /** Собака идёт рядом с хозяином; пока он в магазине — сидит привязанная у входа и виляет хвостом. */
@@ -7455,6 +7627,8 @@ export class StoreScene extends Phaser.Scene {
   /** После мытья — табличка «Мокрый пол» и влажный блеск, пока пол сохнет. */
   private wetSign(x: number, y: number): void {
     const sheen = this.add.ellipse(x, y + 1, 18, 7, 0xc8f0ff, 0.35).setDepth(0.55);
+    this.wetSheens.add(sheen);
+    sheen.once('destroy', () => this.wetSheens.delete(sheen));
     const sign = this.art(x + 7, y - 5, 'wet_sign').setDepth(y + 3);
     this.time.delayedCall(7000, () => {
       if (!sign.active) return;
@@ -8633,6 +8807,8 @@ export class StoreScene extends Phaser.Scene {
       const y = this.streetY + 12;
       const rider = this.makePerson(fromLeft ? left : right, y, { ...base, hat: Math.random() < 0.5 ? 'bikehelmet' : base.hat, hatTint: 0xe43b44 });
       rider.addAt(this.art(0, 3, 'bike').setOrigin(0.5), 0);
+      // Крутит педали, а не бежит: без подскока, наклона и пыли.
+      rider.setData('wheels', true);
       void this.walk(rider, fromLeft ? right : left, y, 70).then(() => rider.destroy());
       return;
     }
@@ -9001,6 +9177,8 @@ export class StoreScene extends Phaser.Scene {
     const dy = y - target.y;
     if (distance > 0.5) this.setFacing(target, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy < 0 ? 'up' : 'down');
     target.setData('walking', true);
+    // Темп шага (animatePeople): чем быстрее идёт, тем чаще перебирает ногами.
+    target.setData('pace', speed);
     return new Promise((resolve) => {
       const move = this.tweens.add({
         targets: target,
@@ -9698,6 +9876,8 @@ export class StoreScene extends Phaser.Scene {
     const person = keep(this.makePerson(x, y, look));
     this.setFacing(person, 'right');
     person.setData('walking', true);
+    // Марафонцы бегут трусцой (ноги часто, с подскоком), шествие идёт мерным шагом.
+    person.setData('pace', id === 'marathon' ? RUN_PACE : 16);
     keep(this.tweens.add({ targets: person, x: toX, duration: ((toX - x) / (id === 'marathon' ? 34 : 16)) * 1000, onComplete: () => person.destroy() }));
     // Танцоры подпрыгивают в такт.
     if (id === 'carnival') keep(this.tweens.add({ targets: person, y: y - 1.5, duration: 260, yoyo: true, repeat: -1, delay: i * 90 }));
