@@ -7,8 +7,10 @@ import { liveFace } from './dialog';
 import type { LossAdvice } from '../game/losses';
 import { RECORD_ICONS, type RecordId } from '../game/records';
 import { liteMode } from '../platform/quality';
+import { png } from '../platform/assets';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
+import { injectAudioStyles, muteIcon, toggleMute } from './audio';
 
 /** Сколько штук на полках считается «мало» и сколько таких товаров показывать в панели. */
 const LOW_ON_SHELF = 3;
@@ -81,6 +83,9 @@ export class Hud {
   /** Срочный подвоз: кнопка над ускорением. */
   private readonly urgent = el('button', 'ui-speed ui-urgent', '🚚');
   onUrgent: () => void = () => {};
+  /** Быстрое «без звука» — напротив ускорения, видно всегда, пока идёт игра. */
+  private readonly mute = el('button', 'ui-speed ui-mute');
+  private day = 1;
   private readonly money = el('span');
   private readonly moneyText = document.createTextNode('');
   private readonly clock = el('span');
@@ -93,7 +98,7 @@ export class Hud {
   constructor() {
     injectStyles();
     const coin = el('img', 'ui-ico');
-    coin.src = 'assets/coin.png';
+    coin.src = png('coin');
     coin.alt = '💰';
     this.money.append(coin, this.moneyText);
     this.top.append(this.money, this.clock, this.stars);
@@ -101,10 +106,28 @@ export class Hud {
     this.speed.style.display = 'none';
     this.urgent.addEventListener('click', () => this.onUrgent());
     this.urgent.style.display = 'none';
-    document.body.append(this.top, this.stock, this.hint, this.speed, this.urgent);
+    injectAudioStyles();
+    this.mute.title = t('audio.mute');
+    this.mute.addEventListener('click', () => {
+      toggleMute(this.day);
+      this.showMute();
+    });
+    this.showMute();
+    document.body.append(this.top, this.stock, this.hint, this.speed, this.urgent, this.mute);
+  }
+
+  /** Значок звука — как сейчас (его могли переключить и в профиле). */
+  private showMute(): void {
+    const icon = muteIcon();
+    if (this.mute.dataset.icon === icon) return;
+    this.mute.dataset.icon = icon;
+    this.mute.textContent = icon;
+    pixelize(this.mute);
   }
 
   update(state: StoreState, secondsLeft: number, quests = '', night = false): void {
+    this.day = state.day;
+    this.showMute();
     this.setMoney(state.money);
     const clock = `${night ? t('hud.night') : t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
     if (this.clock.textContent !== clock) this.clock.textContent = clock;
@@ -193,6 +216,9 @@ export class Hud {
   setHint(text: string, tutorial = false): void {
     if (this.hint.textContent !== text) this.hint.textContent = text;
     this.hint.classList.toggle('ui-hint-tip', tutorial && text !== '');
+    // На узком экране плашка почти во всю ширину — в дни обучения кнопка звука стоит выше неё
+    // (и не прыгает, когда подсказка то появляется, то гаснет).
+    this.mute.classList.toggle('ui-mute-up', tutorial);
   }
 
   showSummary(
@@ -269,7 +295,7 @@ export class Hud {
         const target = s.kind === 'record' ? recordTiles[s.id] : undefined;
         if (target) {
           const crown = el('img', 'ui-tile-crown');
-          crown.src = 'assets/ico_crown.png';
+          crown.src = png('ico_crown');
           crown.alt = '';
           crown.style.animationDelay = `${hit}ms`;
           target.box.append(crown);
@@ -307,7 +333,7 @@ export class Hud {
         const caption = el('span', 'ui-chart-value', String(value));
         if (i === best) {
           const crown = el('img', 'ui-chart-crown');
-          crown.src = 'assets/ico_crown.png';
+          crown.src = png('ico_crown');
           crown.alt = '';
           crown.style.animationDelay = `${GOLD_AT + 150}ms`;
           caption.append(crown);
@@ -359,7 +385,7 @@ function starRow(): { box: HTMLElement; fill: (rating: number) => void } {
   const row = () =>
     Array.from({ length: 5 }, () => {
       const img = el('img');
-      img.src = 'assets/ico_star.png';
+      img.src = png('ico_star');
       img.alt = '';
       return img;
     });

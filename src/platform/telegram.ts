@@ -209,3 +209,13 @@ export const haptic = {
   success: () => webApp()?.HapticFeedback?.notificationOccurred('success'),
   error: () => webApp()?.HapticFeedback?.notificationOccurred('error'),
 };
+
+/**
+ * Мини-приложение свернули или открыли снова (Bot API 8.0: deactivated / activated).
+ * В старом клиенте событий нет — обработчик просто не зовётся.
+ */
+export function onAppActive(handler: (active: boolean) => void): void {
+  const tg = webApp();
+  tg?.onEvent?.('activated', () => handler(true));
+  tg?.onEvent?.('deactivated', () => handler(false));
+}

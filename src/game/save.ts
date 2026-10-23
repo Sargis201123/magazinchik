@@ -118,6 +118,17 @@ export async function syncSave(): Promise<void> {
   }
 }
 
+let syncing: Promise<void> | null = null;
+
+/**
+ * Сверка с облаком — одна на запуск. main.ts начинает её сразу, параллельно с загрузкой картинок,
+ * а заставка (BootScene) потом только ждёт уже идущую сверку. Ошибка облака игру не держит.
+ */
+export function startSync(): Promise<void> {
+  syncing ??= syncSave().catch(() => undefined);
+  return syncing;
+}
+
 // Свернули Telegram — сразу отправить несохранённое в облако.
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {

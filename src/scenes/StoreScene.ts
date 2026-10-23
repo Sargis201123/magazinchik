@@ -78,6 +78,7 @@ import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { findPath, type Rect } from './paths';
 import { ambience } from '../platform/ambience';
+import { setListener } from '../platform/mixer';
 import { haptic, trustedNow } from '../platform/telegram';
 import { button, el, ICON_RE, ICONS, openModal, toast, UI_FONT } from '../ui/dom';
 import {
@@ -202,7 +203,8 @@ import { note, reviewsFor } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { lossAdvice, noteLost } from '../game/losses';
 import { fairTolerance, isFairDay, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fair';
-import { fpsSummary, LITE_FPS, liteMode, setLiteMode } from '../platform/quality';
+import { fpsSummary, fpsVerdict, liteMode, lowerQuality, quality, qualityChosen, type Quality } from '../platform/quality';
+import { framesThrottled } from '../platform/frameCap';
 import { DELIVERY_SECONDS, makeHomeOrder, ORDER_EVERY, ORDER_TIMEOUT, packHomeOrder, type HomeOrder } from '../game/delivery';
 
 // Холст шириной 720 и высотой под экран телефона: от 9:16 до 9:20 — на вытянутых телефонах
@@ -855,6 +857,13 @@ interface Worker {
 /** Мелочь вещи (лопасти, огонёк, экран): прячется и появляется вместе с ней при распаковке. */
 type Kin = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Visible;
 
+/**
+ * Убрать вещь события или рекламы: картинку — уничтожить, таймер — снять с часов. Сам destroy()
+ * у таймера только обнуляет колбэк, а таймер остаётся в часах сцены навсегда (повторяющийся — крутится
+ * впустую, разовый так и не «срабатывает»): с каждой перестройкой (applyAds) их копилось бы больше.
+ */
+const discard = (obj: { destroy: () => void }): void => (obj instanceof Phaser.Time.TimerEvent ? obj.remove() : obj.destroy());
+
 /** Кто из персонала: роль и имя (друг из Telegram — по id). Новый человек на ту же роль — другой ключ. */
 const staffKey = (m: StaffMember): string => `${m.role}:${m.friend ? `f${m.friend.id}` : m.name}`;
 
@@ -1011,6 +1020,12 @@ export class StoreScene extends Phaser.Scene {
   private pinch: { dist: number; zoom: number } | null = null;
   /** Все люди на экране: для шагов и дыхания. */
   private people = new Set<Phaser.GameObjects.Container>();
+  /** Нарисованное один раз в RenderTexture (bakeSpots) и как нарисовать снова после потери WebGL контекста. */
+  private baked = new Map<Phaser.GameObjects.RenderTexture, () => void>();
+  /** Номер постройки мира (buildWorld): дела, начатые в прежнем мире, по нему понимают, что мира уже нет. */
+  private worldGen = 0;
+  /** Повторы вещей мира (worldTimer): останавливаются при перестройке. */
+  private worldTimers: Phaser.Time.TimerEvent[] = [];
   /** Насколько открыты двери: 0 — закрыты, 1 — открыты. */
   private doorOpen = 0;
   private outdoorShades: Phaser.GameObjects.Rectangle[] = [];
@@ -1127,14 +1142,18 @@ export class StoreScene extends Phaser.Scene {
   private newcomers = new Set<Phaser.GameObjects.Container>();
   /** Где сейчас стоит автомат с напитками (на нём радио). */
   private vendingAt = { x: 0, y: 0 };
+  /** Уровень графики этого запуска (platform/quality.ts): если игра тормозит, он понижается на время. */
+  private gfx: Quality = quality();
   /** Лёгкая графика: без виньетки и облаков (холст поменьше — со следующего запуска). */
-  private lite = liteMode();
+  private lite = this.gfx === 'lite';
   /** Покупатель только что взял товар (tryTake): с каких мест полки — reachShelf пускает его оттуда. */
   private takenFrom: TakenSpot[] = [];
   /** Посекундные замеры FPS за день: медиана уходит в аналитику, при тормозах — лёгкая графика. */
   private fpsSamples: number[] = [];
   private fpsFrames = 0;
   private fpsMs = 0;
+  /** Сколько посекундных замеров с прошлого понижения графики. */
+  private fpsSince = 0;
   private cullAt = '';
   /** Ночь между днями: какая доля окон в домах уже погасла (0 — все горят). */
   private lightsOut = 0;
@@ -1296,6 +1315,11 @@ export class StoreScene extends Phaser.Scene {
 
   create(): void {
     setErrorContext(() => ({ day: this.state?.day, level: this.state?.level, running: this.running, ua: navigator.userAgent.slice(0, 120) }));
+    // Звук мира слышен с той стороны экрана, где он случился (касса слева — слева).
+    setListener(() => {
+      const v = this.cameras.main.worldView;
+      return { left: v.x, width: v.width };
+    });
     const savedAt = lastSavedAt();
     const save = loadGame();
     this.state = ensureRush(ensureSeason(ensurePlan(save ?? newGame()), trustedNow()), trustedNow());
@@ -1341,6 +1365,9 @@ export class StoreScene extends Phaser.Scene {
     this.buildWorld();
     this.hud.update(this.state, this.timeLeft);
     this.setupCameraDrag();
+    // Свернули Telegram — телефон мог отобрать у WebGL контекст; когда он вернётся, Phaser сам
+    // восстановит текстуры и шейдеры, а нарисованное в RenderTexture дорисуем мы.
+    if (this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) this.game.renderer.on(Phaser.Renderer.Events.RESTORE_WEBGL, () => this.rebake());
     // Улица живёт своей жизнью: прохожие и машины.
     this.time.addEvent({ delay: 1800, loop: true, callback: () => this.streetLife() });
     // Над кварталом плывут тени облаков, иногда пролетает стайка птиц.
@@ -1419,7 +1446,7 @@ export class StoreScene extends Phaser.Scene {
     if (rush && !this.rushAnnounced) {
       this.rushAnnounced = true;
       haptic.tap();
-      sound.bell();
+      sound.bell(this.layout.door.x);
       this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.rush'), '#fff3b0');
     }
     if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void this.runInspector();
@@ -1544,17 +1571,7 @@ export class StoreScene extends Phaser.Scene {
    * bought — перестроили из-за покупки оборудования или украшения: новое утром распакуют из коробки.
    */
   private buildWorld(bought = false): void {
-    this.children.removeAll(true);
-    // removeAll(true) только снимает объекты со сцены, не уничтожая: старые человечки остались бы
-    // в списке и каждый кадр «ходили» бы невидимками (а с ними пар, отражения, позы). Новых создаст сборка.
-    this.people.clear();
-    // Так же и надписи: их таяние ниже обрывается, и висели бы в списке (склейка «×N», место) вечно.
-    for (const p of this.popups) p.box.destroy();
-    this.popups = [];
-    this.cullDirty = true;
-    // killAll не вызывает onStop: незаконченный шаг продавца никогда не завершится, и он
-    // навсегда остался бы «занят» (не убирал бы мусор и не носил товар). Начинаем его дела заново.
-    this.tweens.killAll();
+    this.disposeWorld();
     this.choreId++;
     this.sellerBusy = false;
     // Кто ждал кофе — уже не дождётся: отпускаем, чтобы никто не застрял.
@@ -1573,7 +1590,7 @@ export class StoreScene extends Phaser.Scene {
     this.lamps = [];
     this.shelfStrips = [];
     this.trash.clear();
-    // Пыль и мокрый блеск старого зала уже не на сцене (removeAll их не уничтожает) — забываем.
+    // Пыль и мокрый блеск старого зала уничтожены вместе с ним (disposeWorld) — забываем.
     this.footDust.clear();
     this.wetSheens.clear();
     // Своя расстановка мест под полки (placement.ts) — если игрок переставлял в этом помещении.
@@ -1605,8 +1622,8 @@ export class StoreScene extends Phaser.Scene {
     this.cameras.main.setZoom(zoom).centerOn(this.home.x, this.home.y);
     // Мягкая виньетка по краям кадра; к вечеру гуще.
     this.cameras.main.postFX?.clear();
-    // Виньетка — лишний проход по всему экрану: в лёгкой графике без неё.
-    this.vignette = this.lite ? undefined : this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.1);
+    // Виньетка — лишний проход по всему экрану: только в высокой графике.
+    this.vignette = this.gfx === 'high' ? this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.1) : undefined;
     // Ламповый тон: чуть теплее и мягче по цвету, к вечеру — как от ламп накаливания.
     this.warmth = this.lite ? undefined : this.cameras.main.postFX?.addColorMatrix();
     this.warmAt = -1;
@@ -1629,6 +1646,67 @@ export class StoreScene extends Phaser.Scene {
     this.fairObjs = [];
     this.applyFair();
     this.noteNewProps(bought);
+  }
+
+  /**
+   * Старый мир — в утиль целиком. Раньше children.removeAll(true) только снимал объекты со сцены:
+   * они оставались в списках касаний и обновления, надписи и плитки — со своими холстами и текстурами.
+   * С каждой перестройкой магазин тяжелел (на среднем уровне — ~20 МБ за раз), а невидимые старые
+   * полки и зоны продолжали ловить нажатия. Теперь всё уничтожается, а дела старого мира — ожидания
+   * (wait), шаги (walk) и повторы вещей (worldTimer) — на этом обрываются. Таймеры, которые ещё держат
+   * старые картинки, проверяют active: у уничтоженного он false.
+   */
+  private disposeWorld(): void {
+    this.worldGen++;
+    // killAll не вызывает onStop: незаконченный шаг продавца никогда не завершится, и он
+    // навсегда остался бы «занят» (не убирал бы мусор и не носил товар). Начинаем его дела заново.
+    this.tweens.killAll();
+    for (const timer of this.worldTimers.splice(0)) timer.remove();
+    this.dropVisitors();
+    for (const obj of [...this.children.list]) obj.destroy();
+    // Снятое со сцены, но живое (в списке обновления) — тоже: иначе обновлялось бы невидимкой вечно.
+    for (const obj of [...this.sys.updateList.getActive()]) if (!obj.displayList && !obj.parentContainer) obj.destroy();
+    this.people.clear();
+    this.popups = [];
+    this.cullDirty = true;
+  }
+
+  /**
+   * Зал перестроили посреди дня: покупатели старого зала уходят вместе с ним (их дела оборваны —
+   * иначе день вечно ждал бы, пока они выйдут), инспектор, жюри и Соня заходят заново, а утренний
+   * грузовик считается разгруженным — его коробки уже на складе.
+   */
+  private dropVisitors(): void {
+    for (const c of this.customers) {
+      // Ещё не заплатил — взятое возвращается на полки, как у ушедшего из очереди (заплативший уже уходит: gone).
+      if (!c.gone) {
+        this.state = returnToShelf(this.state, c.items);
+        for (const extra of c.extras ?? []) if (extra.kind === 'candy') this.state = returnCandy(this.state);
+      }
+      c.gone = true;
+      c.patience?.remove();
+    }
+    this.customers.clear();
+    this.queue = [];
+    // Инспектор, уже выписавший итог проверки, второй раз не приходит.
+    if (this.inspector === 'here') this.inspector = this.inspection ? 'done' : 'pending';
+    if (this.jury === 'here') this.jury = 'pending';
+    if (this.sonya === 'here') this.sonya = 'pending';
+    if (this.running) this.awaitingBoxes = 0;
+  }
+
+  /**
+   * Повтор у вещи мира (экран на фасаде, лампочки вывески, взмахи голубя): при перестройке останавливается
+   * вместе с ней. Возвращает «остановить раньше»: снимает повтор и вычёркивает его из списка — иначе
+   * отработавшие взмахи голубей и пыль дворника копились бы там до перестройки (а она бывает редко).
+   */
+  private worldTimer(delay: number, callback: () => void): () => void {
+    const timer = this.time.addEvent({ delay, loop: true, callback });
+    this.worldTimers.push(timer);
+    return () => {
+      timer.remove();
+      Phaser.Utils.Array.Remove(this.worldTimers, timer);
+    };
   }
 
   private buildStore(): void {
@@ -2015,8 +2093,9 @@ export class StoreScene extends Phaser.Scene {
           if (facing === 'left' || facing === 'right') lean = facing === 'right' ? 3 : -3;
         }
         person.setData('idleAt', undefined);
-        // Шаги слышно только у продавца — остальных было бы слишком много.
-        if (person === this.seller && frame % 2 === 0 && person.getData('stepFrame') !== frame) ambience.step();
+        // Шаги слышно только у продавца — остальных было бы слишком много. Раз на пару шагов, а не
+        // на каждый: иначе на бегу стучало, как пулемёт (ещё реже — ограничитель в ambience.step).
+        if (person === this.seller && frame === 0 && person.getData('stepFrame') !== frame) ambience.step(person.x);
         person.setData('stepFrame', frame);
       } else {
         bob = Math.sin((now + phase) / 650) > 0.35 ? -0.5 : 0;
@@ -2084,8 +2163,9 @@ export class StoreScene extends Phaser.Scene {
   private kickUp(person: Phaser.GameObjects.Container, facing: Facing): void {
     if (this.lite || this.footDust.size >= MAX_DUST || !person.visible) return;
     if (!this.cameras.main.worldView.contains(person.x, person.y)) return;
-    // После пересборки зала старые человечки остаются в people, но не на сцене: из-под них не пылит.
-    if (!this.children.exists(person)) return;
+    // Только из-под тех, кто стоит прямо на сцене: уничтоженный с прежним залом или сидящий
+    // в чужом контейнере не пылит (проверка по ссылке на список — без поиска по тысячам объектов).
+    if (person.displayList !== this.children) return;
     const s = person.scaleY;
     // Пыль летит назад, из-под отталкивающейся ноги; спереди и сзади — из-под левой или правой.
     const back = facing === 'right' ? -1 : facing === 'left' ? 1 : 0;
@@ -2518,7 +2598,7 @@ export class StoreScene extends Phaser.Scene {
     const { door, h } = this.layout;
     const close = (p: { x: number; y: number }) => Math.abs(p.x - door.x) < 16 && Math.abs(p.y - h - 4) < 18;
     const near = [...this.customers].some((c) => close(c.sprite)) || [...this.newcomers].some(close);
-    if (near && this.doorOpen === 0) ambience.chime();
+    if (near && this.doorOpen === 0) ambience.chime(door.x);
     this.doorOpen = Phaser.Math.Clamp(this.doorOpen + (near ? 0.12 : -0.06), 0, 1);
     const key = this.doorOpen < 0.34 ? 'door' : this.doorOpen < 0.67 ? 'door_half' : 'door_open';
     if (this.doorImg.texture.key !== key) this.doorImg.setTexture(key);
@@ -2888,12 +2968,13 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * FPS по секундам, пока идёт день и вкладка на экране. Если игра заметно тормозит (медиана меньше
-   * LITE_FPS за полминуты) — включаем лёгкую графику и один раз говорим об этом.
+   * FPS по секундам, пока идёт день и вкладка на экране. Если игра заметно тормозит (медиана за
+   * полминуты, quality.ts) — графика на несколько дней проще: с высокой на обычную, а совсем медленно —
+   * лёгкая (о ней говорим). Ровные 30 кадров (энергосбережение iPhone) — не тормоза.
    */
   private measureFps(deltaMs: number): void {
-    // Свернули вкладку или окно утра поверх — такие кадры не в счёт.
-    if (!this.running || document.hidden || deltaMs > 250) {
+    // Свернули вкладку, окно поверх зала (там кадров нарочно меньше) — такие кадры не в счёт.
+    if (!this.running || document.hidden || framesThrottled() || deltaMs > 250) {
       this.fpsFrames = 0;
       this.fpsMs = 0;
       return;
@@ -2905,14 +2986,24 @@ export class StoreScene extends Phaser.Scene {
     if (this.fpsSamples.length > 600) this.fpsSamples.shift();
     this.fpsFrames = 0;
     this.fpsMs = 0;
-    if (this.lite || this.fpsSamples.length < 30) return;
-    const summary = fpsSummary(this.fpsSamples.slice(-30));
-    if (!summary || summary.median >= LITE_FPS) return;
-    this.lite = true;
-    setLiteMode(true);
-    track('lite_auto', this.state.day, summary.median);
+    // Судим по полминуте замеров после прошлого понижения: сначала видно, помогло ли оно.
+    if (++this.fpsSince < 30) return;
+    const recent = this.fpsSamples.slice(-30);
+    const verdict = fpsVerdict(recent, this.gfx);
+    // Игрок сам выбрал графику в профиле — её не трогаем.
+    if (!verdict || qualityChosen()) return;
+    this.fpsSince = 0;
+    this.gfx = verdict;
+    lowerQuality(verdict);
     if (this.vignette) this.cameras.main.postFX?.remove(this.vignette);
     this.vignette = undefined;
+    const median = fpsSummary(recent)?.median ?? 0;
+    if (verdict !== 'lite') {
+      track('gfx_auto', this.state.day, median);
+      return;
+    }
+    this.lite = true;
+    track('lite_auto', this.state.day, median);
     if (this.warmth) this.cameras.main.postFX?.remove(this.warmth as unknown as Phaser.FX.Controller);
     this.warmth = undefined;
     toast('assets/ico_phone.png', t('lite.autoTitle'), t('lite.autoText'));
@@ -2920,8 +3011,8 @@ export class StoreScene extends Phaser.Scene {
 
   /** Тёплые пылинки медленно плывут в свете зала — уютно; в лёгкой графике их нет. */
   private buildDust(): void {
-    // removeAll(true) в buildWorld только снимает объекты со сцены: старые излучатели остались бы
-    // в списке обновления и пылили бы невидимо (с каждой пересборкой — всё больше). Уничтожаем.
+    // Прежние излучатели — в утиль (обычно их уже уничтожил disposeWorld): в списке обновления
+    // они пылили бы невидимо, с каждой пересборкой — всё больше.
     this.hallDust?.destroy();
     this.rayDust?.destroy();
     this.hallDust = this.rayDust = undefined;
@@ -3122,12 +3213,26 @@ export class StoreScene extends Phaser.Scene {
     const minY = Math.min(...list.map((p) => p.y - p.size / 2)) - 1;
     const maxX = Math.max(...list.map((p) => p.x + p.size / 2)) + 1;
     const maxY = Math.max(...list.map((p) => p.y + p.size / 2)) + 1;
-    const g = this.make.graphics({}, false);
-    for (const p of list) g.fillStyle(p.color, 1).fillRect((p.x - p.size / 2 - minX) * K, (p.y - p.size / 2 - minY) * K, p.size * K, p.size * K);
     const rt = this.add.renderTexture(minX, minY, Math.ceil((maxX - minX) * K), Math.ceil((maxY - minY) * K)).setOrigin(0).setScale(1 / K);
-    rt.draw(g);
-    g.destroy();
+    const draw = () => {
+      const g = this.make.graphics({}, false);
+      for (const p of list) g.fillStyle(p.color, 1).fillRect((p.x - p.size / 2 - minX) * K, (p.y - p.size / 2 - minY) * K, p.size * K, p.size * K);
+      rt.clear().draw(g);
+      g.destroy();
+    };
+    draw();
+    // Картинка нарисована в видеопамяти один раз: потеряет WebGL контекст — нарисуем заново (rebake).
+    this.baked.set(rt, draw);
+    rt.once('destroy', () => this.baked.delete(rt));
     return rt;
+  }
+
+  /**
+   * WebGL вернул контекст (Telegram свернули и открыли снова — телефон мог отобрать видеопамять).
+   * Картинки и надписи Phaser загрузит в видеокарту сам, а нарисованное в RenderTexture пропало.
+   */
+  private rebake(): void {
+    for (const draw of this.baked.values()) draw();
   }
 
   /**
@@ -3359,7 +3464,7 @@ export class StoreScene extends Phaser.Scene {
         this.state = sale.state;
         this.stats.revenue += sale.price;
         this.refreshWarehouse();
-        sound.coin();
+        sound.coin(stall.x);
         this.tweens.add({ targets: stall, scaleY: 1.06 / ART, duration: 90, yoyo: true });
         this.popup(stall.x, stall.y - 18, `${PRODUCTS[sale.id].icon} +${sale.price} 💰`, '#c8ffb0');
       },
@@ -3661,7 +3766,7 @@ export class StoreScene extends Phaser.Scene {
     if (tier('entrance') === 2) this.art(door.x, h - 2, 'air_curtain').setDepth(h + 3);
     if (tier('lights') === 2) {
       const screen = this.art(w / 2 + 50, -9, 'facade_screen0').setDepth(3);
-      this.time.addEvent({ delay: 1400, loop: true, callback: () => screen.active && screen.setTexture(screen.texture.key === 'facade_screen0' ? 'facade_screen1' : 'facade_screen0') });
+      this.worldTimer(1400, () => screen.active && screen.setTexture(screen.texture.key === 'facade_screen0' ? 'facade_screen1' : 'facade_screen0'));
     }
     if (tier('wc')) {
       const sensor = this.add.rectangle(wc.x + 9, wc.y - 13, 2, 2, tier('wc') === 2 ? 0x2ce8f5 : 0x63c74d).setDepth(wc.y + 2);
@@ -3813,7 +3918,7 @@ export class StoreScene extends Phaser.Scene {
     this.state = { ...this.state, money: this.state.money + pay };
     this.stats.revenue += pay;
     this.stats.deliveries = (this.stats.deliveries ?? 0) + 1;
-    sound.coin();
+    sound.coin(courier.x);
     this.popup(courier.x, courier.y - 16, t('popup.orderPaid', { n: pay }), '#c8ffb0');
     this.scheduleOrder();
   }
@@ -3876,7 +3981,7 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.killTweensOf(mouse);
     if (!timeout) this.stats.mice = (this.stats.mice ?? 0) + 1;
     if (caught) {
-      sound.meow();
+      sound.meow(mouse.x);
       this.popup(mouse.x, mouse.y - 10, t('popup.mouseCaught', { name: this.state.cat?.name ?? '' }), '#c8ffb0');
       this.time.delayedCall(300, () => this.endLiveEvent());
       return;
@@ -3897,7 +4002,7 @@ export class StoreScene extends Phaser.Scene {
     this.catOut = true;
     this.tweens.killTweensOf(cat);
     cat.setScale(1 / ART).setOrigin(0.5, 1).setTexture('cat_walk0');
-    sound.meow();
+    sound.meow(cat.x);
     const { door, h, warehouse } = this.layout;
     const route = [{ x: door.x + 6, y: this.catHome.y }, { x: door.x + 6, y: h - 6 }, warehouse.doorway, warehouse.inside];
     for (const p of route) {
@@ -4001,7 +4106,7 @@ export class StoreScene extends Phaser.Scene {
     c.sprite.add(cup);
     c.extras = [...(c.extras ?? []), { kind: 'coffee', price: coffeePrice(this.state) }];
     this.stats.coffees = (this.stats.coffees ?? 0) + 1;
-    sound.pop(2);
+    sound.pop(2, c.sprite.x);
     this.popup(c.sprite.x, c.sprite.y - 18, t('popup.coffee', { n: coffeePrice(this.state) }), '#fff3b0');
     if (cupsOf(this.state) === 0) this.time.delayedCall(900, () => this.popup(machine.x + 10, machine.y - 16, t('popup.noCups'), '#ffd0d0'));
     for (const p of [room.inside, room.doorway]) await this.walk(c.sprite, p.x, p.y);
@@ -4027,7 +4132,7 @@ export class StoreScene extends Phaser.Scene {
       await this.workerWalk(w, machine.x + 7, w.home.y);
       if (!this.alive(gen)) return;
       this.setFacing(w.sprite, 'left');
-      sound.hiss(brewSeconds(this.state) * 0.8, 2600, 0.035);
+      sound.hiss(brewSeconds(this.state) * 0.8, 2600, 0.035, machine.x);
       const steam = this.time.addEvent({ delay: 260, repeat: Math.floor((brewSeconds(this.state) * 1000) / 260), callback: () => this.steamPuff(machine.x, machine.y - 6) });
       await this.workerWait(w, brewSeconds(this.state) * 1000);
       steam.remove();
@@ -4063,7 +4168,7 @@ export class StoreScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
       onComplete: () => {
         candy.destroy();
-        sound.pop(3);
+        sound.pop(3, c.sprite.x);
         if (c.sprite.active && !c.gone) this.popup(c.sprite.x, c.sprite.y - 18, t('popup.candy', { n: CANDY_PRICE }), '#fff3b0');
       },
     });
@@ -4123,7 +4228,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.state = next;
     haptic.tap();
-    sound.hiss(0.5, 900, 0.04);
+    sound.hiss(0.5, 900, 0.04, oven.img.x);
     const cost = product === 'bread' ? ovenBatchCost(this.state) : brandBatchCost(product);
     this.popup(oven.img.x - 10, oven.img.y - 18, `${PRODUCTS[product].icon} ${t('popup.ovenStart', { n: cost })}`, '#fff3b0');
     oven.product = product;
@@ -4140,7 +4245,7 @@ export class StoreScene extends Phaser.Scene {
     oven.state = 'ready';
     oven.start = this.time.now;
     oven.bread.setVisible(true);
-    sound.bell();
+    sound.bell(oven.img.x);
     this.tweens.add({ targets: oven.img, scaleY: 1.08 / ART, duration: 120, yoyo: true, repeat: 1 });
     // Пекарь рядом и вынет сам; если он ушёл (заболел посреди дня) — хлеб может сгореть.
     if (!this.workers.get('baker')) oven.timer = this.time.delayedCall(OVEN_BURN_SECONDS * 1000, () => this.burnBread());
@@ -4198,7 +4303,7 @@ export class StoreScene extends Phaser.Scene {
           const sold = sellWholesale(this.state);
           this.state = sold.state;
           this.stats.revenue += sold.pay;
-          sound.coin();
+          sound.coin(room.inside.x);
           this.popup(room.inside.x + 10, room.inside.y - 14, t('popup.wholesale', { n: ovenBatch(this.state), pay: sold.pay }), '#c8ffb0');
           this.hud.update(this.state, this.timeLeft);
           continue;
@@ -4248,7 +4353,7 @@ export class StoreScene extends Phaser.Scene {
     this.state = out.state;
     this.refreshShelves();
     this.refreshWarehouse();
-    sound.hiss(0.6, 1400, 0.04);
+    sound.hiss(0.6, 1400, 0.04, at.x);
     sound.good();
     const text = product === 'bread' ? t('popup.freshBread', { n: out.onShelves }) : t('popup.freshOwn', { icon: PRODUCTS[product].icon, n: out.onShelves });
     this.popup(at.x, at.y, text, '#c8ffb0');
@@ -4433,7 +4538,7 @@ export class StoreScene extends Phaser.Scene {
     this.emote(sprite, yes ? 'emo_heart' : 'emo_angry');
     if (yes) this.popup(sprite.x, sprite.y - 18, t('nightStory.thanks'), '#c8ffb0');
     if (res.money) {
-      sound.coin();
+      sound.coin(sprite.x);
       this.stats.revenue += res.money;
       this.stats.nightRevenue = (this.stats.nightRevenue ?? 0) + res.money;
       this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `+${res.money} 💰`, '#c8ffb0'));
@@ -4596,7 +4701,7 @@ export class StoreScene extends Phaser.Scene {
   private bobikBark(): void {
     const dog = this.bobik;
     if (!dog?.active) return;
-    sound.bark();
+    sound.bark(dog.x);
     this.bobikWag?.remove();
     this.tweens.killTweensOf(dog);
     dog.setScale(1 / ART).setTexture('bobik_bark');
@@ -4609,7 +4714,7 @@ export class StoreScene extends Phaser.Scene {
   private petCat(): void {
     const cat = this.catImg;
     if (!cat?.active || !this.state.cat) return;
-    sound.purr();
+    sound.purr(cat.x);
     haptic.tap();
     this.heartAt(cat.x, cat.y - 10);
     this.rub(cat);
@@ -4679,7 +4784,7 @@ export class StoreScene extends Phaser.Scene {
     this.catOut = true;
     this.tweens.killTweensOf(cat);
     cat.setScale(1 / ART).setOrigin(0.5, 1).setTexture('cat_walk0');
-    sound.meow();
+    sound.meow(cat.x);
     const { door, h } = this.layout;
     const spot = this.freeFloorPoint();
     const route = [
@@ -4695,7 +4800,7 @@ export class StoreScene extends Phaser.Scene {
     await this.wait(Phaser.Math.Between(9000, 13000));
     if (!cat.active) return;
     this.catStand();
-    sound.meow();
+    sound.meow(cat.x);
     const back = [...findPath({ x: cat.x, y: cat.y }, { x: door.x + 6, y: h - 6 }, this.obstacles), { x: door.x + 6, y: this.catHome.y }, this.catHome];
     for (const p of back) {
       await this.catStep(p.x, p.y);
@@ -4721,7 +4826,7 @@ export class StoreScene extends Phaser.Scene {
       cat.setFlipX(c.sprite.x > cat.x);
       this.rub(cat);
       this.catSlowBlink();
-      if (Math.random() < 0.5) sound.purr();
+      if (Math.random() < 0.5) sound.purr(cat.x);
     }
   }
 
@@ -4814,7 +4919,7 @@ export class StoreScene extends Phaser.Scene {
       if (!this.sys.isActive()) return true;
       const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(1.5 / ART).setDepth(1000);
       this.tweens.add({ targets: item, x: kiosk.x, y: kiosk.y - 6, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
-      sound.scan();
+      sound.scan(kiosk.x);
       this.kioskScreen?.setAlpha(0.9);
       this.time.delayedCall(150, () => this.kioskScreen?.setAlpha(0.3));
     }
@@ -4938,7 +5043,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private endLiveEvent(): void {
-    for (const obj of this.liveObjs) obj.destroy();
+    for (const obj of this.liveObjs) discard(obj);
     this.liveObjs = [];
     this.liveEvent = null;
     if (this.blackout) {
@@ -5132,7 +5237,7 @@ export class StoreScene extends Phaser.Scene {
               const gift = 40 + 40 * this.state.level;
               this.state = { ...this.state, money: this.state.money + gift };
               saveGame(this.state);
-              sound.coin();
+              sound.coin(courier.x);
               this.popup(courier.x, courier.y - 18, t('live.courierGift', { n: gift }), '#c8ffb0');
               this.flyCoins(courier.x, courier.y, 3);
               void leave(false);
@@ -5192,7 +5297,7 @@ export class StoreScene extends Phaser.Scene {
       // Каждый рейс открывает свою долю коробок (на последнем — все оставшиеся).
       this.awaitingBoxes = trip === trips - 1 ? 0 : Math.max(0, this.awaitingBoxes - Math.ceil(this.awaitingBoxes / (trips - trip)));
       this.refreshWarehouse();
-      sound.pop(trip);
+      sound.pop(trip, driver.x);
       if (trip < trips - 1) for (const p of [...route].reverse()) await this.walk(driver, p.x, p.y, SELLER_SPEED);
     }
     for (const p of [...route].reverse()) await this.walk(driver, p.x, p.y, SELLER_SPEED);
@@ -5207,7 +5312,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Реклама видна на улице, пока работает. */
   private applyAds(): void {
-    for (const obj of this.adObjs) obj.destroy();
+    for (const obj of this.adObjs) discard(obj);
     this.adObjs = [];
     const ad = activeAd(this.state);
     if (!ad) return;
@@ -5382,7 +5487,8 @@ export class StoreScene extends Phaser.Scene {
         if (spot) this.puff(spot.x + Phaser.Math.Between(-14, 14), spot.y + Phaser.Math.Between(-10, 14));
       },
     });
-    await this.wait(2400);
+    // Паузы — переживающие перестройку: эта сцена сама перестраивает зал, а окно утра надо вернуть в любом случае.
+    await this.delay(2400);
     hammer.remove();
     for (const obj of crew) obj.destroy();
     this.cameras.main.flash(300, 255, 250, 235);
@@ -5404,7 +5510,7 @@ export class StoreScene extends Phaser.Scene {
     sound.fanfare();
     haptic.success();
     this.popup(this.layout.w / 2, this.layout.h / 2 - 20, t('popup.expanded', { name: t(storeLevel(this.state).nameKey) }), '#fee761');
-    await this.wait(1600);
+    await this.delay(1600);
     confetti.destroy();
     if (modal) modal.style.visibility = '';
   }
@@ -6558,11 +6664,8 @@ export class StoreScene extends Phaser.Scene {
       const { img, home } = bird;
       const dir = Math.random() < 0.5 ? -1 : 1;
       img.setTexture('pigeon_fly').setFlipX(dir < 0).setDepth(LIGHT_DEPTH - 1);
-      const flap = this.time.addEvent({
-        delay: 110,
-        loop: true,
-        callback: () => img.active && img.setTexture(img.texture.key === 'pigeon_fly' ? 'pigeon0' : 'pigeon_fly'),
-      });
+      // Взмахи — повтор мира: перестроили зал посреди полёта (твин погашен) — перестают махать и они.
+      const stopFlap = this.worldTimer(110, () => img.active && img.setTexture(img.texture.key === 'pigeon_fly' ? 'pigeon0' : 'pigeon_fly'));
       this.tweens.add({
         targets: img,
         x: home.x + dir * Phaser.Math.Between(60, 90),
@@ -6571,7 +6674,7 @@ export class StoreScene extends Phaser.Scene {
         duration: 1400,
         ease: 'Sine.easeIn',
         onComplete: () => {
-          flap.remove();
+          stopFlap();
           this.time.delayedCall(Phaser.Math.Between(5000, 8000), () => {
             if (!img.active) return;
             // Прилетает обратно сверху и садится на своё место.
@@ -8445,7 +8548,7 @@ export class StoreScene extends Phaser.Scene {
         duration: 280,
         onStart: () => {
           img.setAlpha(1);
-          if (n % 2 === 0) sound.pop(n);
+          if (n % 2 === 0) sound.pop(n, x);
         },
         onUpdate: (tween) => {
           const k = tween.getValue() ?? 0;
@@ -9603,7 +9706,7 @@ export class StoreScene extends Phaser.Scene {
         this.tweens.add({ targets: clerk, scaleY: base * 1.06, duration: 90, yoyo: true, onComplete: () => clerk.setScale(base) });
       }
       // Без вибрации на каждый товар: на телефоне она щёлкает громче самого сканера.
-      sound.scan();
+      sound.scan(counter.x);
     }
     // Старая касса иногда заедает: пока продавец стучит по ней, очередь ждёт.
     if (Math.random() < registerJam(this.state)) {
@@ -9726,7 +9829,7 @@ export class StoreScene extends Phaser.Scene {
     recordSale(this.stats, c.items);
     if (c.rare) this.rareGuestServed(c, total);
     haptic.success();
-    sound.coin();
+    sound.coin(c.sprite.x);
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
     // Пакет, который передал кассир, теперь в руке: с ним покупатель и уходит.
@@ -9951,9 +10054,9 @@ export class StoreScene extends Phaser.Scene {
         const broom = this.add.container(6, 2, [this.add.rectangle(0, -3, 1, 8, 0x8f563b), this.add.rectangle(0, 2, 4, 2, 0xfeae34)]);
         sweeper.add(broom);
         this.tweens.add({ targets: broom, angle: { from: -25, to: 25 }, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-        const dust = this.time.addEvent({ delay: 420, loop: true, callback: () => sweeper.active && this.steamPuff(sweeper.x + 7, sweeper.y + 6, 0xc8b8a0) });
+        const stopDust = this.worldTimer(420, () => sweeper.active && this.steamPuff(sweeper.x + 7, sweeper.y + 6, 0xc8b8a0));
         void this.walk(sweeper, this.next.w + 60, y, CUSTOMER_SPEED * 0.45).then(() => {
-          dust.remove();
+          stopDust();
           sweeper.destroy();
         });
       });
@@ -10068,7 +10171,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshWarehouse();
     this.hud.update(this.state, this.timeLeft);
     if (yes && res.money) {
-      sound.coin();
+      sound.coin(sprite.x);
       this.popup(sprite.x, sprite.y - 18, `+${res.money} 💰`, '#c8ffb0');
     }
     if (res.rating > 0) this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `★ +${res.rating}`, '#fee761'));
@@ -10154,7 +10257,7 @@ export class StoreScene extends Phaser.Scene {
     const result = this.cafeToday;
     if (!sprite.active) return;
     if (result?.delivered) {
-      sound.coin();
+      sound.coin(sprite.x);
       this.popup(sprite.x, sprite.y - 18, t('popup.cafePaid', { n: result.pay }), '#c8ffb0');
       sprite.add(this.art(0, 3, 'box'));
     } else this.popup(sprite.x, sprite.y - 18, t('popup.cafeShort'), '#ffd0d0');
@@ -10209,16 +10312,22 @@ export class StoreScene extends Phaser.Scene {
     return top - index * Math.min(step, fit);
   }
 
-  /** Идёт к точке; в зале — в обход мебели, по нескольким отрезкам. Новый walk отменяет прежний. */
+  /**
+   * Идёт к точке; в зале — в обход мебели, по нескольким отрезкам. Новый walk отменяет прежний.
+   * Мир перестроили, пока шёл, — дело дальше не идёт: обещание так и не исполнится (как и у wait).
+   */
   private walk(target: Phaser.GameObjects.Container, x: number, y: number, speed = this.customerSpeed()): Promise<void> {
     const gen = ((target.getData('walkGen') as number | undefined) ?? 0) + 1;
     target.setData('walkGen', gen);
+    const world = this.worldGen;
     const indoor = target.y < this.layout.h - 2 && y < this.layout.h - 2;
     const legs = indoor ? findPath({ x: target.x, y: target.y }, { x, y }, this.obstacles) : [{ x, y }];
-    return legs.reduce<Promise<void>>(
-      (done, leg) => done.then(() => (target.active && target.getData('walkGen') === gen ? this.walkLeg(target, leg.x, leg.y, speed) : undefined)),
-      Promise.resolve(),
-    );
+    return legs
+      .reduce<Promise<void>>(
+        (done, leg) => done.then(() => (target.active && target.getData('walkGen') === gen ? this.walkLeg(target, leg.x, leg.y, speed) : undefined)),
+        Promise.resolve(),
+      )
+      .then(() => (world === this.worldGen ? undefined : new Promise<void>(() => undefined)));
   }
 
   private walkLeg(target: Phaser.GameObjects.Container, x: number, y: number, speed: number): Promise<void> {
@@ -10252,7 +10361,17 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Пауза в деле. Если за это время мир перестроили, дело старого мира на ней и обрывается: его люди
+   * и вещи уже уничтожены (так же обрывается шаг walk — killAll гасит его твин без onStop).
+   */
   private wait(ms: number): Promise<void> {
+    const world = this.worldGen;
+    return new Promise((resolve) => this.time.delayedCall(ms, () => world === this.worldGen && resolve()));
+  }
+
+  /** Пауза, которая переживает перестройку мира: для сцен, что перестраивают его сами (расширение). */
+  private delay(ms: number): Promise<void> {
     return new Promise((resolve) => this.time.delayedCall(ms, resolve));
   }
 
@@ -10651,8 +10770,8 @@ export class StoreScene extends Phaser.Scene {
    * в золотом кольце с искрами — и два часа носит флажок «НОВОЕ». На слабом телефоне — только рост и флажок.
    */
   private unbox(img: Phaser.GameObjects.Image): void {
-    // Зал успели перестроить (removeAll только снимает со сцены) — новая картинка стоит как обычно.
-    if (!img.active || !this.children.exists(img)) return;
+    // Зал успели перестроить — картинка уничтожена вместе со старым залом, новая стоит как обычно.
+    if (!img.active) return;
     const saved = img.getData('unbox') as { kin: Kin[]; sx: number; sy: number; y: number } | undefined;
     if (!saved) return;
     img.setData('unbox', undefined);
@@ -10683,7 +10802,7 @@ export class StoreScene extends Phaser.Scene {
       });
     };
     if (this.lite) {
-      sound.pop(2);
+      sound.pop(2, img.x);
       grow();
       return;
     }
@@ -10699,7 +10818,7 @@ export class StoreScene extends Phaser.Scene {
     // Всё по цепочке твинов (а не таймером): клапаны не откроются, пока коробка не долетела.
     const open = () => {
       if (!box.active) return;
-      sound.pop(3);
+      sound.pop(3, img.x);
       flaps.forEach((flap, i) => {
         const side = i ? 1 : -1;
         this.tweens.add({ targets: flap, x: side * 15, y: -26, angle: side * 200, alpha: 0, duration: 480, ease: 'Quad.easeOut' });
@@ -10896,7 +11015,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private clearBigDay(): void {
-    for (const obj of this.bigObjs) obj.destroy();
+    for (const obj of this.bigObjs) discard(obj);
     // Мороз красил деревья в иней — возвращаем цвет по погоде.
     if (this.bigObjs.length) for (const g of this.greenery) g.setTint(this.weather === 'leaves' ? 0xffb868 : 0xffffff);
     this.bigObjs = [];
@@ -11651,8 +11770,11 @@ export class StoreScene extends Phaser.Scene {
     if (fps) {
       track('fps', finishedDay, fps.median);
       track('fps_low', finishedDay, fps.low);
+      // Уровень графики рядом с FPS: 0 — лёгкая, 1 — обычная, 2 — высокая.
+      track('gfx', finishedDay, ['lite', 'normal', 'high'].indexOf(this.gfx));
     }
     this.fpsSamples = [];
+    this.fpsSince = 0;
     if (this.state.bankrupt) track('bankrupt', finishedDay);
     void reportProgress(this.state);
     this.refreshShelves();
@@ -11722,13 +11844,9 @@ export class StoreScene extends Phaser.Scene {
       bulbs.push(this.add.rectangle(x + 30 - i * 4, y + 6.5, 1.4, 1.4, 0xfee761).setDepth(4));
     }
     let step = 0;
-    this.time.addEvent({
-      delay: 160,
-      loop: true,
-      callback: () => {
-        step++;
-        bulbs.forEach((b, i) => b.active && b.setFillStyle(Math.floor(i / 2) % 3 === step % 3 ? 0xfff6c8 : 0xb8860b));
-      },
+    this.worldTimer(160, () => {
+      step++;
+      bulbs.forEach((b, i) => b.active && b.setFillStyle(Math.floor(i / 2) % 3 === step % 3 ? 0xfff6c8 : 0xb8860b));
     });
     if (level < 4) return;
     const led = this.add.rectangle(x, y + 8.5, 60, 1.6, 0x9cd8ff).setDepth(4);

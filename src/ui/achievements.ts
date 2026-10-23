@@ -5,8 +5,9 @@ import { ACHIEVEMENTS, achievementDesc, achievementName, liveProgress, type Achi
 import type { StoreState } from '../game/economy';
 import { button, el, openModal, toast } from './dom';
 import { sound } from '../platform/sound';
+import { png } from '../platform/assets';
 
-export const badgeSrc = (id: AchievementId): string => `assets/badge_${id}.png`;
+export const badgeSrc = (id: AchievementId): string => png(`badge_${id}`);
 
 export function achievementsButton(state: StoreState): HTMLButtonElement {
   const n = state.achievements?.length ?? 0;

@@ -4,9 +4,12 @@ import { getLang, setLang, t, type Lang } from '../i18n';
 import { saveLang } from '../i18n/stored';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
+import { mixer } from '../platform/mixer';
+import { track } from '../platform/analytics';
 import { addToHomeScreen, canFullscreen, homeScreenStatus, isFullscreen, setFullscreen } from '../platform/telegram';
 import type { StoreState } from '../game/economy';
 import { button, el, injectStyles, pixelize } from './dom';
+import { muteChip } from './audio';
 
 const css = `
 .ui-title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between;
@@ -83,6 +86,9 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
     const play = button(save ? t('title.continue') : t('title.play'), () => {
       sound.coin();
       music.start();
+      // Раз за запуск: играют ли без звука (или без части каналов) — главный признак, нравится ли звук.
+      const silent = mixer.silenceMask();
+      if (silent) track('sound_off', save?.day ?? 1, silent);
       root.remove();
       document.body.classList.remove('ui-on-title');
       onPlay();
@@ -100,17 +106,8 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
       }, `ui-chip${lang === getLang() ? ' active' : ''}`);
       langs.append(chip);
     }
-    const toggle = button(sound.isMuted() ? t('title.soundOff') : t('title.soundOn'), () => {
-      sound.setMuted(!sound.isMuted());
-      sound.tap();
-      render();
-    }, 'ui-chip');
-    langs.append(toggle);
-    const tunes = button(music.isMuted() ? t('title.musicOff') : t('title.musicOn'), () => {
-      music.setMuted(!music.isMuted());
-      render();
-    }, 'ui-chip');
-    langs.append(tunes);
+    // Звук — одной кнопкой; громкость по каналам — в профиле (🏆 → «Звук»).
+    langs.append(muteChip(() => save?.day ?? 1, render));
     // В Telegram на телефоне — полный экран и ярлык на главный экран.
     if (canFullscreen()) {
       langs.append(
