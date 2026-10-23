@@ -10468,7 +10468,8 @@ export class StoreScene extends Phaser.Scene {
     for (const obj of this.children.list) {
       if (taken.has(obj) || obj.type === 'Container' || obj.type === 'Zone' || obj.type === 'ParticleEmitter') continue;
       const o = obj as Kin & Phaser.GameObjects.Components.Depth & Partial<Phaser.GameObjects.Components.GetBounds>;
-      if (!o.visible || typeof o.getBounds !== 'function' || o.depth < img.depth - 1.5 || o.depth > img.depth + 3) continue;
+      // Плитки отделов, отражения и пятна света на полу (глубина до 0,62) — пол, а не мелочи вещи.
+      if (!o.visible || typeof o.getBounds !== 'function' || o.depth <= 0.62 || o.depth < img.depth - 1.5 || o.depth > img.depth + 3) continue;
       const box = o.getBounds();
       if (box.width * box.height <= area * 6 && frame.contains(box.centerX, box.centerY)) kin.push(o);
     }
