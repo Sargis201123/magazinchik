@@ -10343,17 +10343,32 @@ export class StoreScene extends Phaser.Scene {
     const top = -POPUP.tail - h;
     const g = e.bg.clear();
     if (this.lite) {
-      g.fillStyle(0x181425, 0.85).fillRoundedRect(left, top, w, h, r);
+      g.fillStyle(0x181425, 0.85);
+      this.fillPill(g, left, top, w, h);
       return;
     }
     // Мягкая тень на пиксель ниже — плашка чуть приподнята над полом.
-    g.fillStyle(0x0b0911, 0.3).fillRoundedRect(left, top + 1, w, h, r);
-    g.fillStyle(0x181425, 0.85).fillRoundedRect(left, top, w, h, r);
+    g.fillStyle(0x0b0911, 0.3);
+    this.fillPill(g, left, top + 1, w, h);
+    g.fillStyle(0x181425, 0.85);
+    this.fillPill(g, left, top, w, h);
     g.fillStyle(Phaser.Display.Color.HexStringToColor(e.color).color, 0.35).fillRect(left + r, top + 1, w - 2 * r, 1);
     if (!e.tail) return;
     // Хвостик — от низа плашки к точке 0, 0; если плашка прижата к стене — не на скруглении, а рядом.
     const bx = Phaser.Math.Clamp(0, left + r + 2.5, left + w - r - 2.5);
     g.fillStyle(0x181425, 0.85).fillTriangle(bx - 2.5, -POPUP.tail, bx + 2.5, -POPUP.tail, Phaser.Math.Clamp(0, bx - 2, bx + 2), 0);
+  }
+
+  /**
+   * Плашка со ступенчатыми пиксельными углами из пяти прямоугольников без наложений (прозрачность ровная).
+   * fillRoundedRect в WebGL каждый кадр заново режет 4 дуги на ~400 точек — а надписей бывает много сразу.
+   */
+  private fillPill(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
+    g.fillRect(x + 2, y, w - 4, 1)
+      .fillRect(x + 1, y + 1, w - 2, 1)
+      .fillRect(x, y + 2, w, h - 4)
+      .fillRect(x + 1, y + h - 2, w - 2, 1)
+      .fillRect(x + 2, y + h - 1, w - 4, 1);
   }
 
   /** Где плашка надписи в мире — чтобы новые надписи не налезали на прежние. */
