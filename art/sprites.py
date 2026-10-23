@@ -13,6 +13,7 @@
 (цвет кожи, одежды, волос): тинт умножается на цвет, поэтому серые тени сохраняются.
 """
 
+import math
 import random
 from pathlib import Path
 
@@ -2712,6 +2713,27 @@ def night_lights():
 
     trapezoid("light_cone", 48, 48, 8, 46, 0.55, 0.12, 6)
     trapezoid("light_spill", 48, 40, 34, 48, 0.75, 0.0, 6)
+    sun_ray()
+
+
+def sun_ray():
+    """Столб солнца из окна 56×64: у окна шириной с окно, к полу вдвое шире и тает; внутри —
+    светлые полосы, расходятся веером. Белый — цвет (утро, закат) задаёт игра."""
+    w, h = 56, 64
+    c = Canvas(w, h)
+    for y in range(h):
+        t = y / (h - 1)
+        half = (28 + 28 * t) / 2
+        # Мягко начинается у окна и тает к полу — пятно на полу рисуется отдельно.
+        a = (1.0 - 0.35 * t) * min(1.0, (y + 1) / 5) * min(1.0, (h - y) / 20)
+        for x in range(w):
+            d = x + 0.5 - w / 2
+            if abs(d) > half:
+                continue
+            soft = min(1.0, (half - abs(d)) / 8)
+            streak = 0.78 + 0.22 * math.cos(d / half * math.pi * 2.5)
+            c.px(x, y, (255, 255, 255, int(255 * a * soft * streak)))
+    c.save("sun_ray")
 
 
 def wet_weather():
