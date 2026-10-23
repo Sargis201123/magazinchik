@@ -1,10 +1,11 @@
 // Фоновая музыка: тёплый чиптюн, синтезируется WebAudio на лету — без файлов.
-// Днём — бодрее, с ритмом; вечером — медленнее и тише. Отдельный выключатель от звуков.
+// Днём — бодрее, с ритмом; вечером — медленнее и тише. Громкость — свой ползунок «Музыка» (mixer.ts).
 // Если в магазине играет радио, днём звучит его волна: ретро — медленный свинг, хиты — быстрый бит.
+// Бас — октавой выше прежнего и с призвуками: на динамике телефона его теперь слышно. Фраза не
+// крутится одинаково: каждый четвёртый проход мелодия молчит («вдох»), смена настроения и волны
+// — с начала такта, а не посреди ноты.
 
-import { audioContext } from './sound';
-
-const KEY = 'magazinchik.music';
+import { busInput, existingAudioContext, mixer } from './mixer';
 
 export type Mood = 'day' | 'evening';
 
@@ -128,51 +129,78 @@ const STATIONS: Record<Station, Tune> = {
 
 const freq = (midi: number): number => 440 * 2 ** ((midi - 69) / 12);
 
-let muted = readMuted();
 let mood: Mood = 'day';
 let station: Station | null = null;
-let master: GainNode | null = null;
+/** Что попросили сменить — применится с начала следующего такта. */
+let nextMood: Mood = 'day';
+let nextStation: Station | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 let step = 0;
 let nextTime = 0;
 let noise: AudioBuffer | null = null;
 
-function readMuted(): boolean {
-  try {
-    return localStorage.getItem(KEY) === '1';
-  } catch {
-    return false;
-  }
+/** Выход музыки в своём контексте: громкость (плавный вход), мягкий бас и мягкое арпеджио. */
+interface Out {
+  ac: AudioContext;
+  master: GainNode;
+  bass: BiquadFilterNode;
+  arp: BiquadFilterNode;
+}
+let out: Out | null = null;
+
+function connectOut(ac: AudioContext): Out {
+  const master = ac.createGain();
+  master.gain.value = 0;
+  master.gain.setValueAtTime(0, ac.currentTime);
+  master.gain.linearRampToValueAtTime(1, ac.currentTime + 1.5);
+  master.connect(busInput(ac, 'music'));
+  // Бас — пила через фильтр: телефон не играет сам тон (~130 Гц), но слышит его призвуки.
+  const bass = ac.createBiquadFilter();
+  bass.type = 'lowpass';
+  bass.frequency.value = 700;
+  bass.Q.value = 0.6;
+  bass.connect(master);
+  // Квадратное арпеджио — без визгливого верха.
+  const arp = ac.createBiquadFilter();
+  arp.type = 'lowpass';
+  arp.frequency.value = 2200;
+  arp.Q.value = 0.5;
+  arp.connect(master);
+  return { ac, master, bass, arp };
 }
 
-function tone(ac: AudioContext, midi: number, at: number, dur: number, wave: OscillatorType, vol: number): void {
+function tone(ac: AudioContext, midi: number, at: number, dur: number, wave: OscillatorType, vol: number, to: AudioNode = out!.master): void {
   const osc = ac.createOscillator();
   const gain = ac.createGain();
+  gain.gain.value = 0;
   osc.type = wave;
   osc.frequency.setValueAtTime(freq(midi), at);
   gain.gain.setValueAtTime(0, at);
   gain.gain.linearRampToValueAtTime(vol, at + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-  osc.connect(gain).connect(master!);
+  osc.connect(gain).connect(to);
   osc.start(at);
   osc.stop(at + dur + 0.02);
 }
 
+/** Бочка: «тук» повыше прежнего (телефон 40 Гц не играет) и щелчок колотушки сверху. */
 function kick(ac: AudioContext, at: number): void {
   const osc = ac.createOscillator();
   const gain = ac.createGain();
+  gain.gain.value = 0;
   osc.type = 'sine';
-  osc.frequency.setValueAtTime(120, at);
-  osc.frequency.exponentialRampToValueAtTime(40, at + 0.12);
-  gain.gain.setValueAtTime(0.09, at);
-  gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.15);
-  osc.connect(gain).connect(master!);
+  osc.frequency.setValueAtTime(180, at);
+  osc.frequency.exponentialRampToValueAtTime(75, at + 0.1);
+  gain.gain.setValueAtTime(0.07, at);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.14);
+  osc.connect(gain).connect(out!.master);
   osc.start(at);
-  osc.stop(at + 0.17);
+  osc.stop(at + 0.16);
+  hat(ac, at, 2500, 0.01, 0.015);
 }
 
-function hat(ac: AudioContext, at: number): void {
-  if (!noise) {
+function hat(ac: AudioContext, at: number, cut = 6000, vol = 0.012, len = 0.04): void {
+  if (!noise || noise.sampleRate !== ac.sampleRate) {
     noise = ac.createBuffer(1, ac.sampleRate * 0.05, ac.sampleRate);
     const data = noise.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
@@ -181,32 +209,50 @@ function hat(ac: AudioContext, at: number): void {
   src.buffer = noise;
   const filter = ac.createBiquadFilter();
   filter.type = 'highpass';
-  filter.frequency.value = 6000;
+  filter.frequency.value = cut;
   const gain = ac.createGain();
-  gain.gain.setValueAtTime(0.012, at);
-  gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.04);
-  src.connect(filter).connect(gain).connect(master!);
+  gain.gain.value = 0;
+  gain.gain.setValueAtTime(vol, at);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + len);
+  src.connect(filter).connect(gain).connect(out!.master);
   src.start(at);
 }
 
 /** Ставит в очередь ноты на 0.2 секунды вперёд — так музыка не сбивается при подвисаниях. */
 function schedule(): void {
-  const ac = audioContext();
-  if (!ac || !master) return;
-  // Вечером радио стихает — играет вечерняя мелодия магазина.
-  const radio = mood === 'day' && station ? STATIONS[station] : null;
-  const tune: Tune = radio ?? { ...MOODS[mood], chords: CHORDS, notes: MELODY, lead: 'triangle' };
-  const eighth = 60 / tune.bpm / 2;
+  const ac = existingAudioContext();
+  // Не слышно (свёрнуто, без звука, ползунок на нуле) — ноты не копим, потом продолжим с того же места.
+  if (!ac || !mixer.audible('music')) {
+    nextTime = 0;
+    return;
+  }
+  if (!out || out.ac !== ac) {
+    out = connectOut(ac);
+    nextTime = 0;
+    step = 0;
+  }
   if (nextTime < ac.currentTime) nextTime = ac.currentTime + 0.05;
   while (nextTime < ac.currentTime + 0.2) {
+    // Новое настроение и волна — только с начала такта: темп не скачет посреди ноты.
+    if (step % 8 === 0) {
+      mood = nextMood;
+      station = nextStation;
+    }
+    // Вечером радио стихает — играет вечерняя мелодия магазина.
+    const radio = mood === 'day' && station ? STATIONS[station] : null;
+    const tune: Tune = radio ?? { ...MOODS[mood], chords: CHORDS, notes: MELODY, lead: 'triangle' };
+    const eighth = 60 / tune.bpm / 2;
     const bar = Math.floor(step / 8) % 4;
     const beat = step % 8;
+    // Каждый четвёртый проход фразы — «вдох»: мелодия молчит, остаются аккорды и бас.
+    const rest = Math.floor(step / 32) % 4 === 3;
     const at = nextTime + (beat % 2 === 1 ? eighth * (tune.swing ?? 0) : 0);
     const chord = tune.chords[bar];
-    if (beat % 4 === 0) tone(ac, chord[0] - 24, at, eighth * 3.5, 'triangle', 0.06);
-    tone(ac, chord[[0, 1, 2, 1][beat % 4]], at, eighth * 0.9, radio ? 'triangle' : 'square', 0.012);
+    if (beat % 4 === 0) tone(ac, chord[0] - 12, at, eighth * 3.5, 'sawtooth', 0.035, out.bass);
+    tone(ac, chord[[0, 1, 2, 1][beat % 4]], at, eighth * 0.9, radio ? 'triangle' : 'square', 0.012, out.arp);
     const note = tune.notes[bar][beat];
-    if (note > 0 && (mood === 'day' || beat % 2 === 0)) tone(ac, note, at, eighth * 1.6, tune.lead, radio?.lead === 'square' ? tune.melody * 0.5 : tune.melody);
+    if (note > 0 && !rest && (mood === 'day' || beat % 2 === 0))
+      tone(ac, note, at, eighth * 1.6, tune.lead, radio?.lead === 'square' ? tune.melody * 0.5 : tune.melody, radio?.lead === 'square' ? out.arp : out.master);
     if (tune.kick && beat % 2 === 0) kick(ac, at);
     if (tune.drums && beat % 2 === 1) hat(ac, at);
     nextTime += eighth;
@@ -215,45 +261,26 @@ function schedule(): void {
 }
 
 export const music = {
-  /** Запускает музыку (после касания — иначе браузер не даст звук). */
+  /** Запускает музыку (после касания «Играть»). Играет, когда её слышно, — сама подхватывается. */
   start(): void {
-    if (muted || timer) return;
-    const ac = audioContext();
-    if (!ac) return;
-    master = ac.createGain();
-    master.gain.setValueAtTime(0, ac.currentTime);
-    master.gain.linearRampToValueAtTime(1, ac.currentTime + 1.5);
-    master.connect(ac.destination);
-    nextTime = ac.currentTime + 0.1;
-    timer = setInterval(schedule, 50);
+    if (!timer) timer = setInterval(schedule, 50);
   },
   stop(): void {
     if (timer) clearInterval(timer);
     timer = null;
-    const ac = audioContext();
-    if (ac && master) {
-      const old = master;
-      old.gain.linearRampToValueAtTime(0, ac.currentTime + 0.4);
+    if (out) {
+      const old = out.master;
+      old.gain.cancelScheduledValues(out.ac.currentTime);
+      old.gain.setTargetAtTime(0, out.ac.currentTime, 0.12);
       setTimeout(() => old.disconnect(), 500);
     }
-    master = null;
+    out = null;
   },
   setMood(next: Mood): void {
-    mood = next;
+    nextMood = next;
   },
   /** Волна радио в магазине (null — радио молчит, играет своя музыка). */
   setStation(next: Station | null): void {
-    station = next;
-  },
-  isMuted: (): boolean => muted,
-  setMuted(next: boolean): void {
-    muted = next;
-    try {
-      localStorage.setItem(KEY, next ? '1' : '0');
-    } catch {
-      // Без хранилища настройка живёт до перезапуска.
-    }
-    if (next) music.stop();
-    else music.start();
+    nextStation = next;
   },
 };

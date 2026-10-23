@@ -25,6 +25,9 @@ function start(): void {
     backgroundColor: BG,
     pixelArt: true,
     roundPixels: true,
+    // Звуки и музыка — свои (platform/mixer.ts); звуковой модуль Phaser не нужен, а он создавал
+    // второй, лишний аудиоконтекст.
+    audio: { noAudio: true },
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,

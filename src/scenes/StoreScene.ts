@@ -78,6 +78,7 @@ import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { findPath, type Rect } from './paths';
 import { ambience } from '../platform/ambience';
+import { setListener } from '../platform/mixer';
 import { haptic, trustedNow } from '../platform/telegram';
 import { button, el, ICON_RE, ICONS, openModal, toast, UI_FONT } from '../ui/dom';
 import {
@@ -1296,6 +1297,11 @@ export class StoreScene extends Phaser.Scene {
 
   create(): void {
     setErrorContext(() => ({ day: this.state?.day, level: this.state?.level, running: this.running, ua: navigator.userAgent.slice(0, 120) }));
+    // Звук мира слышен с той стороны экрана, где он случился (касса слева — слева).
+    setListener(() => {
+      const v = this.cameras.main.worldView;
+      return { left: v.x, width: v.width };
+    });
     const savedAt = lastSavedAt();
     const save = loadGame();
     this.state = ensureRush(ensureSeason(ensurePlan(save ?? newGame()), trustedNow()), trustedNow());
@@ -1419,7 +1425,7 @@ export class StoreScene extends Phaser.Scene {
     if (rush && !this.rushAnnounced) {
       this.rushAnnounced = true;
       haptic.tap();
-      sound.bell();
+      sound.bell(this.layout.door.x);
       this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.rush'), '#fff3b0');
     }
     if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void this.runInspector();
@@ -2015,8 +2021,9 @@ export class StoreScene extends Phaser.Scene {
           if (facing === 'left' || facing === 'right') lean = facing === 'right' ? 3 : -3;
         }
         person.setData('idleAt', undefined);
-        // Шаги слышно только у продавца — остальных было бы слишком много.
-        if (person === this.seller && frame % 2 === 0 && person.getData('stepFrame') !== frame) ambience.step();
+        // Шаги слышно только у продавца — остальных было бы слишком много. Раз на пару шагов, а не
+        // на каждый: иначе на бегу стучало, как пулемёт (ещё реже — ограничитель в ambience.step).
+        if (person === this.seller && frame === 0 && person.getData('stepFrame') !== frame) ambience.step(person.x);
         person.setData('stepFrame', frame);
       } else {
         bob = Math.sin((now + phase) / 650) > 0.35 ? -0.5 : 0;
@@ -2518,7 +2525,7 @@ export class StoreScene extends Phaser.Scene {
     const { door, h } = this.layout;
     const close = (p: { x: number; y: number }) => Math.abs(p.x - door.x) < 16 && Math.abs(p.y - h - 4) < 18;
     const near = [...this.customers].some((c) => close(c.sprite)) || [...this.newcomers].some(close);
-    if (near && this.doorOpen === 0) ambience.chime();
+    if (near && this.doorOpen === 0) ambience.chime(door.x);
     this.doorOpen = Phaser.Math.Clamp(this.doorOpen + (near ? 0.12 : -0.06), 0, 1);
     const key = this.doorOpen < 0.34 ? 'door' : this.doorOpen < 0.67 ? 'door_half' : 'door_open';
     if (this.doorImg.texture.key !== key) this.doorImg.setTexture(key);
@@ -3359,7 +3366,7 @@ export class StoreScene extends Phaser.Scene {
         this.state = sale.state;
         this.stats.revenue += sale.price;
         this.refreshWarehouse();
-        sound.coin();
+        sound.coin(stall.x);
         this.tweens.add({ targets: stall, scaleY: 1.06 / ART, duration: 90, yoyo: true });
         this.popup(stall.x, stall.y - 18, `${PRODUCTS[sale.id].icon} +${sale.price} 💰`, '#c8ffb0');
       },
@@ -3813,7 +3820,7 @@ export class StoreScene extends Phaser.Scene {
     this.state = { ...this.state, money: this.state.money + pay };
     this.stats.revenue += pay;
     this.stats.deliveries = (this.stats.deliveries ?? 0) + 1;
-    sound.coin();
+    sound.coin(courier.x);
     this.popup(courier.x, courier.y - 16, t('popup.orderPaid', { n: pay }), '#c8ffb0');
     this.scheduleOrder();
   }
@@ -3876,7 +3883,7 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.killTweensOf(mouse);
     if (!timeout) this.stats.mice = (this.stats.mice ?? 0) + 1;
     if (caught) {
-      sound.meow();
+      sound.meow(mouse.x);
       this.popup(mouse.x, mouse.y - 10, t('popup.mouseCaught', { name: this.state.cat?.name ?? '' }), '#c8ffb0');
       this.time.delayedCall(300, () => this.endLiveEvent());
       return;
@@ -3897,7 +3904,7 @@ export class StoreScene extends Phaser.Scene {
     this.catOut = true;
     this.tweens.killTweensOf(cat);
     cat.setScale(1 / ART).setOrigin(0.5, 1).setTexture('cat_walk0');
-    sound.meow();
+    sound.meow(cat.x);
     const { door, h, warehouse } = this.layout;
     const route = [{ x: door.x + 6, y: this.catHome.y }, { x: door.x + 6, y: h - 6 }, warehouse.doorway, warehouse.inside];
     for (const p of route) {
@@ -4001,7 +4008,7 @@ export class StoreScene extends Phaser.Scene {
     c.sprite.add(cup);
     c.extras = [...(c.extras ?? []), { kind: 'coffee', price: coffeePrice(this.state) }];
     this.stats.coffees = (this.stats.coffees ?? 0) + 1;
-    sound.pop(2);
+    sound.pop(2, c.sprite.x);
     this.popup(c.sprite.x, c.sprite.y - 18, t('popup.coffee', { n: coffeePrice(this.state) }), '#fff3b0');
     if (cupsOf(this.state) === 0) this.time.delayedCall(900, () => this.popup(machine.x + 10, machine.y - 16, t('popup.noCups'), '#ffd0d0'));
     for (const p of [room.inside, room.doorway]) await this.walk(c.sprite, p.x, p.y);
@@ -4027,7 +4034,7 @@ export class StoreScene extends Phaser.Scene {
       await this.workerWalk(w, machine.x + 7, w.home.y);
       if (!this.alive(gen)) return;
       this.setFacing(w.sprite, 'left');
-      sound.hiss(brewSeconds(this.state) * 0.8, 2600, 0.035);
+      sound.hiss(brewSeconds(this.state) * 0.8, 2600, 0.035, machine.x);
       const steam = this.time.addEvent({ delay: 260, repeat: Math.floor((brewSeconds(this.state) * 1000) / 260), callback: () => this.steamPuff(machine.x, machine.y - 6) });
       await this.workerWait(w, brewSeconds(this.state) * 1000);
       steam.remove();
@@ -4063,7 +4070,7 @@ export class StoreScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
       onComplete: () => {
         candy.destroy();
-        sound.pop(3);
+        sound.pop(3, c.sprite.x);
         if (c.sprite.active && !c.gone) this.popup(c.sprite.x, c.sprite.y - 18, t('popup.candy', { n: CANDY_PRICE }), '#fff3b0');
       },
     });
@@ -4123,7 +4130,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.state = next;
     haptic.tap();
-    sound.hiss(0.5, 900, 0.04);
+    sound.hiss(0.5, 900, 0.04, oven.img.x);
     const cost = product === 'bread' ? ovenBatchCost(this.state) : brandBatchCost(product);
     this.popup(oven.img.x - 10, oven.img.y - 18, `${PRODUCTS[product].icon} ${t('popup.ovenStart', { n: cost })}`, '#fff3b0');
     oven.product = product;
@@ -4140,7 +4147,7 @@ export class StoreScene extends Phaser.Scene {
     oven.state = 'ready';
     oven.start = this.time.now;
     oven.bread.setVisible(true);
-    sound.bell();
+    sound.bell(oven.img.x);
     this.tweens.add({ targets: oven.img, scaleY: 1.08 / ART, duration: 120, yoyo: true, repeat: 1 });
     // Пекарь рядом и вынет сам; если он ушёл (заболел посреди дня) — хлеб может сгореть.
     if (!this.workers.get('baker')) oven.timer = this.time.delayedCall(OVEN_BURN_SECONDS * 1000, () => this.burnBread());
@@ -4198,7 +4205,7 @@ export class StoreScene extends Phaser.Scene {
           const sold = sellWholesale(this.state);
           this.state = sold.state;
           this.stats.revenue += sold.pay;
-          sound.coin();
+          sound.coin(room.inside.x);
           this.popup(room.inside.x + 10, room.inside.y - 14, t('popup.wholesale', { n: ovenBatch(this.state), pay: sold.pay }), '#c8ffb0');
           this.hud.update(this.state, this.timeLeft);
           continue;
@@ -4248,7 +4255,7 @@ export class StoreScene extends Phaser.Scene {
     this.state = out.state;
     this.refreshShelves();
     this.refreshWarehouse();
-    sound.hiss(0.6, 1400, 0.04);
+    sound.hiss(0.6, 1400, 0.04, at.x);
     sound.good();
     const text = product === 'bread' ? t('popup.freshBread', { n: out.onShelves }) : t('popup.freshOwn', { icon: PRODUCTS[product].icon, n: out.onShelves });
     this.popup(at.x, at.y, text, '#c8ffb0');
@@ -4433,7 +4440,7 @@ export class StoreScene extends Phaser.Scene {
     this.emote(sprite, yes ? 'emo_heart' : 'emo_angry');
     if (yes) this.popup(sprite.x, sprite.y - 18, t('nightStory.thanks'), '#c8ffb0');
     if (res.money) {
-      sound.coin();
+      sound.coin(sprite.x);
       this.stats.revenue += res.money;
       this.stats.nightRevenue = (this.stats.nightRevenue ?? 0) + res.money;
       this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `+${res.money} 💰`, '#c8ffb0'));
@@ -4596,7 +4603,7 @@ export class StoreScene extends Phaser.Scene {
   private bobikBark(): void {
     const dog = this.bobik;
     if (!dog?.active) return;
-    sound.bark();
+    sound.bark(dog.x);
     this.bobikWag?.remove();
     this.tweens.killTweensOf(dog);
     dog.setScale(1 / ART).setTexture('bobik_bark');
@@ -4609,7 +4616,7 @@ export class StoreScene extends Phaser.Scene {
   private petCat(): void {
     const cat = this.catImg;
     if (!cat?.active || !this.state.cat) return;
-    sound.purr();
+    sound.purr(cat.x);
     haptic.tap();
     this.heartAt(cat.x, cat.y - 10);
     this.rub(cat);
@@ -4679,7 +4686,7 @@ export class StoreScene extends Phaser.Scene {
     this.catOut = true;
     this.tweens.killTweensOf(cat);
     cat.setScale(1 / ART).setOrigin(0.5, 1).setTexture('cat_walk0');
-    sound.meow();
+    sound.meow(cat.x);
     const { door, h } = this.layout;
     const spot = this.freeFloorPoint();
     const route = [
@@ -4695,7 +4702,7 @@ export class StoreScene extends Phaser.Scene {
     await this.wait(Phaser.Math.Between(9000, 13000));
     if (!cat.active) return;
     this.catStand();
-    sound.meow();
+    sound.meow(cat.x);
     const back = [...findPath({ x: cat.x, y: cat.y }, { x: door.x + 6, y: h - 6 }, this.obstacles), { x: door.x + 6, y: this.catHome.y }, this.catHome];
     for (const p of back) {
       await this.catStep(p.x, p.y);
@@ -4721,7 +4728,7 @@ export class StoreScene extends Phaser.Scene {
       cat.setFlipX(c.sprite.x > cat.x);
       this.rub(cat);
       this.catSlowBlink();
-      if (Math.random() < 0.5) sound.purr();
+      if (Math.random() < 0.5) sound.purr(cat.x);
     }
   }
 
@@ -4814,7 +4821,7 @@ export class StoreScene extends Phaser.Scene {
       if (!this.sys.isActive()) return true;
       const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(1.5 / ART).setDepth(1000);
       this.tweens.add({ targets: item, x: kiosk.x, y: kiosk.y - 6, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
-      sound.scan();
+      sound.scan(kiosk.x);
       this.kioskScreen?.setAlpha(0.9);
       this.time.delayedCall(150, () => this.kioskScreen?.setAlpha(0.3));
     }
@@ -5132,7 +5139,7 @@ export class StoreScene extends Phaser.Scene {
               const gift = 40 + 40 * this.state.level;
               this.state = { ...this.state, money: this.state.money + gift };
               saveGame(this.state);
-              sound.coin();
+              sound.coin(courier.x);
               this.popup(courier.x, courier.y - 18, t('live.courierGift', { n: gift }), '#c8ffb0');
               this.flyCoins(courier.x, courier.y, 3);
               void leave(false);
@@ -5192,7 +5199,7 @@ export class StoreScene extends Phaser.Scene {
       // Каждый рейс открывает свою долю коробок (на последнем — все оставшиеся).
       this.awaitingBoxes = trip === trips - 1 ? 0 : Math.max(0, this.awaitingBoxes - Math.ceil(this.awaitingBoxes / (trips - trip)));
       this.refreshWarehouse();
-      sound.pop(trip);
+      sound.pop(trip, driver.x);
       if (trip < trips - 1) for (const p of [...route].reverse()) await this.walk(driver, p.x, p.y, SELLER_SPEED);
     }
     for (const p of [...route].reverse()) await this.walk(driver, p.x, p.y, SELLER_SPEED);
@@ -8445,7 +8452,7 @@ export class StoreScene extends Phaser.Scene {
         duration: 280,
         onStart: () => {
           img.setAlpha(1);
-          if (n % 2 === 0) sound.pop(n);
+          if (n % 2 === 0) sound.pop(n, x);
         },
         onUpdate: (tween) => {
           const k = tween.getValue() ?? 0;
@@ -9603,7 +9610,7 @@ export class StoreScene extends Phaser.Scene {
         this.tweens.add({ targets: clerk, scaleY: base * 1.06, duration: 90, yoyo: true, onComplete: () => clerk.setScale(base) });
       }
       // Без вибрации на каждый товар: на телефоне она щёлкает громче самого сканера.
-      sound.scan();
+      sound.scan(counter.x);
     }
     // Старая касса иногда заедает: пока продавец стучит по ней, очередь ждёт.
     if (Math.random() < registerJam(this.state)) {
@@ -9726,7 +9733,7 @@ export class StoreScene extends Phaser.Scene {
     recordSale(this.stats, c.items);
     if (c.rare) this.rareGuestServed(c, total);
     haptic.success();
-    sound.coin();
+    sound.coin(c.sprite.x);
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
     // Пакет, который передал кассир, теперь в руке: с ним покупатель и уходит.
@@ -10068,7 +10075,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshWarehouse();
     this.hud.update(this.state, this.timeLeft);
     if (yes && res.money) {
-      sound.coin();
+      sound.coin(sprite.x);
       this.popup(sprite.x, sprite.y - 18, `+${res.money} 💰`, '#c8ffb0');
     }
     if (res.rating > 0) this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `★ +${res.rating}`, '#fee761'));
@@ -10154,7 +10161,7 @@ export class StoreScene extends Phaser.Scene {
     const result = this.cafeToday;
     if (!sprite.active) return;
     if (result?.delivered) {
-      sound.coin();
+      sound.coin(sprite.x);
       this.popup(sprite.x, sprite.y - 18, t('popup.cafePaid', { n: result.pay }), '#c8ffb0');
       sprite.add(this.art(0, 3, 'box'));
     } else this.popup(sprite.x, sprite.y - 18, t('popup.cafeShort'), '#ffd0d0');
@@ -10683,7 +10690,7 @@ export class StoreScene extends Phaser.Scene {
       });
     };
     if (this.lite) {
-      sound.pop(2);
+      sound.pop(2, img.x);
       grow();
       return;
     }
@@ -10699,7 +10706,7 @@ export class StoreScene extends Phaser.Scene {
     // Всё по цепочке твинов (а не таймером): клапаны не откроются, пока коробка не долетела.
     const open = () => {
       if (!box.active) return;
-      sound.pop(3);
+      sound.pop(3, img.x);
       flaps.forEach((flap, i) => {
         const side = i ? 1 : -1;
         this.tweens.add({ targets: flap, x: side * 15, y: -26, angle: side * 200, alpha: 0, duration: 480, ease: 'Quad.easeOut' });

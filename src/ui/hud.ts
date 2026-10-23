@@ -9,6 +9,7 @@ import { RECORD_ICONS, type RecordId } from '../game/records';
 import { liteMode } from '../platform/quality';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
+import { injectAudioStyles, muteIcon, toggleMute } from './audio';
 
 /** Сколько штук на полках считается «мало» и сколько таких товаров показывать в панели. */
 const LOW_ON_SHELF = 3;
@@ -81,6 +82,9 @@ export class Hud {
   /** Срочный подвоз: кнопка над ускорением. */
   private readonly urgent = el('button', 'ui-speed ui-urgent', '🚚');
   onUrgent: () => void = () => {};
+  /** Быстрое «без звука» — напротив ускорения, видно всегда, пока идёт игра. */
+  private readonly mute = el('button', 'ui-speed ui-mute');
+  private day = 1;
   private readonly money = el('span');
   private readonly moneyText = document.createTextNode('');
   private readonly clock = el('span');
@@ -101,10 +105,28 @@ export class Hud {
     this.speed.style.display = 'none';
     this.urgent.addEventListener('click', () => this.onUrgent());
     this.urgent.style.display = 'none';
-    document.body.append(this.top, this.stock, this.hint, this.speed, this.urgent);
+    injectAudioStyles();
+    this.mute.title = t('audio.mute');
+    this.mute.addEventListener('click', () => {
+      toggleMute(this.day);
+      this.showMute();
+    });
+    this.showMute();
+    document.body.append(this.top, this.stock, this.hint, this.speed, this.urgent, this.mute);
+  }
+
+  /** Значок звука — как сейчас (его могли переключить и в профиле). */
+  private showMute(): void {
+    const icon = muteIcon();
+    if (this.mute.dataset.icon === icon) return;
+    this.mute.dataset.icon = icon;
+    this.mute.textContent = icon;
+    pixelize(this.mute);
   }
 
   update(state: StoreState, secondsLeft: number, quests = '', night = false): void {
+    this.day = state.day;
+    this.showMute();
     this.setMoney(state.money);
     const clock = `${night ? t('hud.night') : t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
     if (this.clock.textContent !== clock) this.clock.textContent = clock;

@@ -1,20 +1,27 @@
 // Звуки окружения: дождь и ливень (из отдельных капель), ветер, капель с водостока, птицы днём,
 // сверчки летними вечерами, гул холодильников, шаги продавца и колокольчик на двери. Шума улицы
 // и проезжающих машин нет: вместе они звучали как прибой и сбивали спокойную атмосферу. Всё синтезируется WebAudio; дождь и шум ветра — заранее, в буферы
-// (ambienceSynth.ts). Выключаются вместе со звуками.
+// (ambienceSynth.ts). Погода и птицы — канал «улица» (за стеклом, без отзвука зала), гул, шаги
+// и колокольчик — канал «зал» (mixer.ts); оба слушаются ползунка «Окружение».
 
 import type { YearTime } from '../game/calendar';
 import type { Weather } from '../game/weather';
 import { brownNoise, rainTexture, seeded } from './ambienceSynth';
-import { existingAudioContext, noiseBuffer, sound } from './sound';
+import { jitter } from './mix';
+import { allowVoice, busInput, existingAudioContext, mixer, placeAt, type Bus } from './mixer';
+import { noiseBuffer } from './sound';
 
 interface Bed {
   gain: GainNode;
+  /** К какой громкости петля уже плывёт — не планируем то же самое каждый кадр. */
+  target?: number;
 }
 
 type BedId = 'rain' | 'downpour' | 'wind' | 'hum';
 
-let master: GainNode | null = null;
+/** Входы каналов «улица» и «зал» того контекста, для которого собраны петли. */
+let street: AudioNode | null = null;
+let hall: AudioNode | null = null;
 let beds: Record<BedId, Bed> | null = null;
 let noise: AudioBuffer | null = null;
 /** Когда в следующий раз: капля с водостока, птица, сверчок (время аудиоконтекста). */
@@ -52,7 +59,7 @@ function loopBed(ac: AudioContext, buffer: AudioBuffer, type: BiquadFilterType, 
   const mod = swell(ac, sway[0], sway[1]);
   const gain = ac.createGain();
   gain.gain.value = 0;
-  src.connect(filter).connect(mod).connect(gain).connect(master!);
+  src.connect(filter).connect(mod).connect(gain).connect(street!);
   src.start(0, Math.random() * buffer.duration);
   return { gain };
 }
@@ -79,31 +86,37 @@ function windBed(ac: AudioContext): Bed {
   const mod = swell(ac, 0.13, 0.55);
   const gain = ac.createGain();
   gain.gain.value = 0;
-  src.connect(filter).connect(mod).connect(gain).connect(master!);
+  src.connect(filter).connect(mod).connect(gain).connect(street!);
   src.start();
   return { gain };
 }
 
-/** Ровный гул холодильников: две низкие ноты чуть врозь — «живое» биение. */
+/**
+ * Ровный гул холодильников: две ноты чуть врозь — медленное «живое» биение. Раньше гудело на 118 Гц:
+ * динамик телефона это не играет, а запас громкости низ съедал. Теперь октавой выше и на самом
+ * пороге слышимости (~−52 дБ): чувствуется в тишине, когда музыка выключена, и не мешает ей.
+ */
 function humBed(ac: AudioContext): Bed {
   const gain = ac.createGain();
   gain.gain.value = 0;
-  for (const f of [118, 121.5, 236]) {
+  const soft = ac.createBiquadFilter();
+  soft.type = 'lowpass';
+  soft.frequency.value = 900;
+  for (const f of [236, 238, 472]) {
     const osc = ac.createOscillator();
     osc.type = 'triangle';
     osc.frequency.value = f;
-    osc.connect(gain);
+    osc.connect(soft);
     osc.start();
   }
-  gain.connect(master!);
+  soft.connect(gain).connect(hall!);
   return { gain };
 }
 
 function build(ac: AudioContext): void {
   noise = noiseBuffer(ac, 2);
-  master = ac.createGain();
-  master.gain.value = 1;
-  master.connect(ac.destination);
+  street = busInput(ac, 'street');
+  hall = busInput(ac, 'hall');
   // Дождь — 7 с, ливень — 5.3 с: разная длина петель, чтобы повтор не угадывался.
   const light = rainTexture(ac.sampleRate, 7, { drops: 170, wash: 0.35, plops: 0.06 }, seeded(11));
   const heavy = rainTexture(ac.sampleRate, 5.3, { drops: 520, wash: 0.6, plops: 0.04 }, seeded(23));
@@ -117,14 +130,16 @@ function build(ac: AudioContext): void {
 
 /** Плавно к нужной громкости — без щелчков. */
 function fade(bed: Bed, ac: AudioContext, target: number): void {
-  if (Math.abs(bed.gain.gain.value - target) < 0.0005) return;
+  if (bed.target === target) return;
+  bed.target = target;
   bed.gain.gain.setTargetAtTime(target, ac.currentTime, 0.6);
 }
 
-function blip(at: (ac: AudioContext, out: AudioNode) => void): void {
+/** Разовый звук зала: только когда петли уже собраны (контекст играет) и окружение слышно. */
+function blip(bus: Bus, at: (ac: AudioContext) => void): void {
   const ac = existingAudioContext();
-  if (!ac || !master || sound.isMuted()) return;
-  at(ac, master);
+  if (!ac || !beds || !mixer.audible(bus)) return;
+  at(ac);
 }
 
 /** Тон с огибающей и скольжением частоты; pan −1…1. */
@@ -134,6 +149,7 @@ function tone(ac: AudioContext, out: AudioNode, at: number, dur: number, f0: num
   osc.frequency.setValueAtTime(f0, at);
   osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), at + dur);
   const gain = ac.createGain();
+  gain.gain.value = 0;
   gain.gain.setValueAtTime(0, at);
   gain.gain.linearRampToValueAtTime(vol, at + Math.min(0.012, dur / 4));
   gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
@@ -186,14 +202,14 @@ function schedule(ac: AudioContext, weather: Weather, evening: number, season: Y
   for (const key of Object.keys(next) as (keyof typeof next)[]) if (next[key] < now - 1) next[key] = now + Math.random();
   if (wet) {
     while (next.drip < horizon) {
-      drip(ac, master!, Math.max(now, next.drip));
+      drip(ac, street!, Math.max(now, next.drip));
       next.drip += (weather === 'storm' ? 0.25 : 0.45) + Math.random() * 1.2;
     }
   } else next.drip = now + 1;
   const dayBirds = !wet && weather !== 'snow' && evening < 0.55 && season !== 'winter';
   if (dayBirds) {
     while (next.bird < horizon) {
-      bird(ac, master!, Math.max(now, next.bird), season === 'autumn' ? 0.02 : 0.032);
+      bird(ac, street!, Math.max(now, next.bird), season === 'autumn' ? 0.02 : 0.032);
       next.bird += (season === 'autumn' ? 4 : 1.6) + Math.random() * 4;
     }
   } else next.bird = now + 2;
@@ -201,12 +217,15 @@ function schedule(ac: AudioContext, weather: Weather, evening: number, season: Y
   if (crickets) {
     while (next.cricket < horizon) {
       const at = Math.max(now, next.cricket);
-      cricket(ac, master!, at, 4300, -0.5);
-      if (Math.random() < 0.7) cricket(ac, master!, at + 0.21, 4650, 0.45);
+      cricket(ac, street!, at, 4300, -0.5);
+      if (Math.random() < 0.7) cricket(ac, street!, at + 0.21, 4650, 0.45);
       next.cricket += 0.55 + Math.random() * 0.25;
     }
   } else next.cricket = now + 1;
 }
+
+/** Шаги продавца: левая-правая нога чуть по разные стороны, каждый шаг немного другой. */
+let foot = 1;
 
 export const ambience = {
   /** Каждый кадр: фоновые звуки под погоду, время суток, сезон и то, открыт ли магазин. */
@@ -214,53 +233,78 @@ export const ambience = {
     const ac = existingAudioContext();
     if (!ac) return;
     if (!beds) build(ac);
-    const muted = sound.isMuted();
-    fade(beds!.rain, ac, muted || weather !== 'rain' ? 0 : 0.11);
-    fade(beds!.downpour, ac, muted || weather !== 'storm' ? 0 : 0.16);
+    // Громкость задаёт канал (ползунок «Окружение»); здесь — только что звучит при такой погоде.
+    // Дождь — на ~9 дБ тише музыки, ливень с ветром — на ~6: слышно, но музыку не перекрывает.
+    fade(beds!.rain, ac, weather !== 'rain' ? 0 : 0.2);
+    fade(beds!.downpour, ac, weather !== 'storm' ? 0 : 0.19);
     // В снегопад и листопад — едва слышный ветер: тихая погода, а не буря.
     const windy = weather === 'storm' ? 0.06 : weather === 'snow' ? 0.018 : weather === 'leaves' ? 0.012 : 0;
-    fade(beds!.wind, ac, muted ? 0 : windy);
-    fade(beds!.hum, ac, muted || !open ? 0 : 0.006);
-    if (!muted) schedule(ac, weather, evening, season);
+    fade(beds!.wind, ac, windy);
+    fade(beds!.hum, ac, !open ? 0 : 0.0005);
+    if (mixer.audible('street')) schedule(ac, weather, evening, season);
   },
 
-  /** Шаг продавца: короткий глухой стук. */
-  step(): void {
-    blip((ac, out) => {
+  /**
+   * Шаг продавца: мягкий шорох подошвы. Не чаще ~4 раз в секунду, каждый раз чуть другой по
+   * тону и громкости; продавец за краем экрана не слышен.
+   */
+  step(x?: number): void {
+    blip('hall', (ac) => {
+      const where = placeAt(x);
+      if (!where.onScreen || !allowVoice('step', { gap: 0.22, max: 1, low: true }, 0.08)) return;
+      foot = -foot;
+      const j = jitter(Math.random, 0, 3);
+      const out = busInput(ac, 'hall', Math.max(-1, Math.min(1, where.pan + foot * 0.06)), where.gain * j.gain);
       const now = ac.currentTime;
       const src = ac.createBufferSource();
       src.buffer = noise;
       const filter = ac.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.value = 500;
+      filter.type = 'bandpass';
+      filter.frequency.value = 450 + Math.random() * 450;
+      filter.Q.value = 1.1;
       const gain = ac.createGain();
-      gain.gain.setValueAtTime(0.05, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+      gain.gain.value = 0;
+      const dur = 0.045 + Math.random() * 0.025;
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.06, now + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
       src.connect(filter).connect(gain).connect(out);
-      src.start(now, Math.random());
-      src.stop(now + 0.07);
+      src.start(now, Math.random() * 1.8);
+      src.stop(now + dur + 0.01);
     });
   },
 
-  /** Колокольчик над дверью: тихое «дзинь», когда входит покупатель. */
-  chime(): void {
-    blip((ac, out) => {
+  /** Колокольчик над дверью: тихое «дзинь» с той стороны, где дверь, — металл, а не два писка. */
+  chime(x?: number): void {
+    blip('hall', (ac) => {
+      if (!allowVoice('chime', { gap: 0.4, max: 2 }, 0.8)) return;
+      const where = placeAt(x);
+      const j = jitter(Math.random, 20, 1.5);
+      const out = busInput(ac, 'hall', where.pan, where.gain * j.gain);
       const now = ac.currentTime;
-      for (const [f, at] of [
-        [2093, 0],
-        [2637, 0.07],
-      ]) {
-        const osc = ac.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.value = f;
-        const gain = ac.createGain();
-        gain.gain.setValueAtTime(0, now + at);
-        gain.gain.linearRampToValueAtTime(0.025, now + at + 0.005);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.6);
-        osc.connect(gain).connect(out);
-        osc.start(now + at);
-        osc.stop(now + at + 0.65);
-      }
+      // Язычок задевает колокольчик то сверху вниз, то снизу вверх.
+      const pair = Math.random() < 0.5 ? [2093, 2637] : [2637, 2093];
+      pair.forEach((f, i) => {
+        const at = now + i * (0.06 + Math.random() * 0.03);
+        for (const [ratio, level, ring] of [
+          [1, 1, 0.7],
+          [2.76, 0.35, 0.3],
+          [5.4, 0.12, 0.15],
+        ]) {
+          if (f * ratio > 16000) continue;
+          const osc = ac.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.value = f * ratio * j.rate;
+          const gain = ac.createGain();
+          gain.gain.value = 0;
+          gain.gain.setValueAtTime(0, at);
+          gain.gain.linearRampToValueAtTime(0.022 * level, at + 0.004);
+          gain.gain.exponentialRampToValueAtTime(0.0001, at + ring);
+          osc.connect(gain).connect(out);
+          osc.start(at);
+          osc.stop(at + ring + 0.02);
+        }
+      });
     });
   },
 };

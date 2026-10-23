@@ -1,4 +1,5 @@
-// Синтез фоновых звуков «в буфер»: дождь из тысяч отдельных капель, бурый шум для ветра и грома.
+// Синтез фоновых звуков «в буфер»: дождь из тысяч отдельных капель, бурый шум для ветра и грома,
+// отзвук комнаты для зала.
 // Чистые функции (частота дискретизации и генератор случайных чисел — снаружи): их можно
 // проверить тестами и отрисовать в файл, не открывая браузер.
 
@@ -138,4 +139,43 @@ export function seeded(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * Отзвук комнаты для свёртки (ConvolverNode): пара ранних отражений от стен и витрин, потом шум,
+ * который затихает на 60 дБ за seconds. Верха гаснут быстрее низов — как в зале, заставленном
+ * полками и товаром, а не в пустой плиточной ванной. Энергия каждого канала — 1: громкость
+ * отзвука задаёт только посыл на него.
+ */
+export function roomImpulse(sampleRate: number, seconds: number, random: () => number): Stereo {
+  const n = Math.max(1, Math.floor(sampleRate * seconds));
+  const channels = [new Float32Array(n), new Float32Array(n)];
+  // Первые отражения: у левого и правого уха — от разных стен, чуть в разное время.
+  const early = [
+    [0.011, 0.5],
+    [0.019, 0.35],
+    [0.027, 0.25],
+    [0.041, 0.18],
+  ];
+  channels.forEach((ch, side) => {
+    let lp = 0;
+    for (let i = 0; i < n; i++) {
+      const t = i / sampleRate;
+      // Хвост начинается не сразу, а через ~10 мс, и мягко нарастает за 15 мс.
+      const onset = Math.min(1, Math.max(0, (t - 0.01) / 0.015));
+      const env = Math.exp((-6.9 * t) / seconds) * onset;
+      const k = 0.85 - 0.7 * (i / n);
+      lp += k * (random() * 2 - 1 - lp);
+      ch[i] = lp * env * 0.6;
+    }
+    for (const [at, amp] of early) {
+      const idx = Math.floor((at + side * 0.0035) * sampleRate);
+      if (idx < n) ch[idx] += (side ? -amp : amp) * (random() < 0.5 ? 1 : -1);
+    }
+    let energy = 0;
+    for (const v of ch) energy += v * v;
+    const k = energy > 0 ? 1 / Math.sqrt(energy) : 0;
+    for (let i = 0; i < n; i++) ch[i] *= k;
+  });
+  return { left: channels[0], right: channels[1] };
 }
