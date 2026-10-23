@@ -861,6 +861,13 @@ interface TakenSpot {
   tint: number;
 }
 
+/** Украшение кроны дерева и где оно относительно основания дерева. */
+interface CrownPart {
+  obj: Phaser.GameObjects.RenderTexture | Phaser.GameObjects.Rectangle;
+  dx: number;
+  dy: number;
+}
+
 interface NightLight {
   obj: Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse;
   /** Яркость к ночи. */
@@ -3335,11 +3342,18 @@ export class StoreScene extends Phaser.Scene {
       }
     };
     // Пятна листвы и цвета на кронах — тысячи крошечных квадратиков. Отдельными объектами они съедали
-    // кадр на телефоне, поэтому рисуем их один раз в картинку (по одной на слой глубины).
-    const spots = new Map<number, { x: number; y: number; size: number; color: number }[]>();
-    const spot = (depth: number, x: number, y: number, size: number, color: number) => {
-      if (!spots.has(depth)) spots.set(depth, []);
-      spots.get(depth)!.push({ x, y, size, color });
+    // кадр на телефоне, поэтому рисуем их один раз в картинку (по одной на дерево: ветер её качает с кроной).
+    const spots = new Map<Phaser.GameObjects.Image, { x: number; y: number; size: number; color: number }[]>();
+    const spot = (tree: Phaser.GameObjects.Image, x: number, y: number, size: number, color: number) => {
+      if (!spots.has(tree)) spots.set(tree, []);
+      spots.get(tree)!.push({ x, y, size, color });
+    };
+    // Украшение кроны (пятна, огоньки) запоминаем на дереве: windTick качает его вместе с деревом.
+    for (const tree of trees) tree.setData('crown', undefined);
+    const crown = (tree: Phaser.GameObjects.Image, obj: CrownPart['obj']) => {
+      const list = (tree.getData('crown') as CrownPart[] | undefined) ?? [];
+      list.push({ obj, dx: obj.x - tree.x, dy: obj.y - tree.y });
+      tree.setData('crown', list);
     };
     if (this.weather !== 'leaves' && this.weather !== 'snow') {
       trees.forEach((tree, i) => {
@@ -3347,15 +3361,20 @@ export class StoreScene extends Phaser.Scene {
         if (time === 'autumn') {
           tree.setTint(i % 3 === 2 ? 0xffffff : 0xffe0a0);
           const tones = i % 3 === 2 ? [0xfeae34] : [0xf77622, 0xfeae34, 0xfee761, 0xe43b44];
-          for (let n = 0; n < (i % 3 === 2 ? 5 : 22); n++) spot(tree.depth + 0.5, tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 2.4, rnd.pick(tones));
+          for (let n = 0; n < (i % 3 === 2 ? 5 : 22); n++) spot(tree, tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 2.4, rnd.pick(tones));
         }
         // Весной кроны в розово-белом цвету.
         if (time === 'spring') {
-          for (let n = 0; n < 14; n++) spot(tree.depth + 0.5, tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 1.6, rnd.pick([0xffd2e2, 0xffffff, 0xf6a5c0]));
+          for (let n = 0; n < 14; n++) spot(tree, tree.x + rnd.between(-9, 9), tree.y - rnd.between(5, 24), 1.6, rnd.pick([0xffd2e2, 0xffffff, 0xf6a5c0]));
         }
       });
     }
-    for (const [depth, list] of spots) keep(this.bakeSpots(list).setDepth(depth));
+    for (const [tree, list] of spots) {
+      const rt = keep(this.bakeSpots(list).setDepth(tree.depth + 0.5));
+      // Ось вращения — у основания дерева, как у самой картинки дерева.
+      rt.setOrigin((tree.x - rt.x) / rt.displayWidth, (tree.y - rt.y) / rt.displayHeight).setPosition(tree.x, tree.y);
+      crown(tree, rt);
+    }
     const flowers = [0xffffff, 0xf6757a, 0xfee761, 0xb55088, 0xe43b44, 0x2ce8f5];
     if (time === 'spring' || time === 'summer') {
       scatter(time === 'spring' ? 160 : 70, (x, y) => keep(this.art(x, y, 'flower').setTint(rnd.pick(flowers)).setDepth(-9)));
@@ -3415,6 +3434,7 @@ export class StoreScene extends Phaser.Scene {
         for (let i = 0; i < 6; i++) {
           const bulb = keep(this.add.rectangle(tree.x + rnd.between(-8, 8), tree.y - rnd.between(6, 22), 1.4, 1.4, rnd.pick(colors)).setDepth(tree.depth + 1));
           this.tweens.add({ targets: bulb, alpha: 0.2, duration: rnd.between(400, 900), yoyo: true, repeat: -1 });
+          crown(tree, bulb);
         }
       });
     }
@@ -5944,7 +5964,7 @@ export class StoreScene extends Phaser.Scene {
     if (!storm && this.windSway < 0.02) this.windSway = 0;
     const gusting = !this.lite && this.gust.on;
     if (!this.windSway && !gusting) {
-      if (!this.windStill) for (const tree of this.windTrees) if (tree.active) tree.setAngle(0);
+      if (!this.windStill) for (const tree of this.windTrees) if (tree.active) this.tiltTree(tree, 0);
       this.windStill = true;
       return;
     }
@@ -5958,8 +5978,19 @@ export class StoreScene extends Phaser.Scene {
         const k = (this.gust.t - ((tree.x - this.gust.x) / GUST_SPEED) * 1000) / GUST_MS;
         if (k > 0 && k < 1) tilt += GUST_TILT * 1.27 * Math.sin(k * Math.PI * 2) * Math.pow(1 - k, 0.83);
       }
-      tree.setAngle(tree.texture.key.startsWith('tree_pine') ? tilt * 0.6 : tilt);
+      this.tiltTree(tree, tree.texture.key.startsWith('tree_pine') ? tilt * 0.6 : tilt);
     }
+  }
+
+  /** Дерево клонится на ветру — вместе с украшением кроны (осенние пятна, весенний цвет, огоньки). */
+  private tiltTree(tree: Phaser.GameObjects.Image, angle: number): void {
+    tree.setAngle(angle);
+    const parts = tree.getData('crown') as CrownPart[] | undefined;
+    if (!parts) return;
+    const r = Phaser.Math.DegToRad(angle);
+    const cos = Math.cos(r);
+    const sin = Math.sin(r);
+    for (const { obj, dx, dy } of parts) if (obj.active) obj.setPosition(tree.x + dx * cos - dy * sin, tree.y + dx * sin + dy * cos).setAngle(angle);
   }
 
   /**
