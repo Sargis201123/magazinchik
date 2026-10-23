@@ -5100,6 +5100,8 @@ def main():
     import icons2
 
     icons2.main()
+    # Атлас значков для холста — из готовых ico_*, поэтому после icons2.
+    icons.atlas()
     import clockface
 
     clockface.main()

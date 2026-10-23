@@ -2,12 +2,16 @@
 
 На каждом телефоне эмодзи свои, а значки — одни и те же и в стиле игры. Интерфейс
 (src/ui/dom.ts → pixelize) подменяет эмодзи из таблицы ICONS на эти картинки.
-Рисуются вместе со всеми спрайтами:
+Те же значки — во всплывающих надписях в зале (StoreScene.popup): для холста они собраны
+в один атлас ico_atlas.png + ico_atlas.json (atlas() ниже). Рисуются вместе со всеми спрайтами:
 
     python3 art/sprites.py
 """
 
-from sprites import Canvas
+import json
+
+from PIL import Image
+from sprites import OUT, Canvas
 
 # Значок: основной рисунок (обводится контуром) и детали поверх контура (пар, блеск, искры).
 # Строки по 12 символов, символы — из палитры sprites.PALETTE.
@@ -1957,6 +1961,37 @@ def draw(rows, extra):
     if extra:
         c.stamp(extra, 1, 1)
     return c
+
+
+def atlas():
+    """Все значки ico_* (и из icons2.py) одной картинкой для Phaser: ico_atlas.png и ico_atlas.json
+    (формат JSON Hash, кадр называется как файл). Полторы сотни отдельных файлов грузились бы
+    к началу игры долго, а меню берёт их по одному — там атлас не нужен. Собирается из готовых
+    файлов, поэтому — после icons2 (sprites.main).
+
+    Ячейка 16×16 при значке 14×14: вокруг пиксель пустоты, и при дробном масштабе по краю значка
+    не просвечивает сосед."""
+    names = sorted(p.stem for p in OUT.glob("ico_*.png") if p.stem != "ico_atlas")
+    cell, cols = 16, 16
+    rows = -(-len(names) // cols)
+    sheet = Image.new("RGBA", (cols * cell, rows * cell), (0, 0, 0, 0))
+    frames = {}
+    for i, name in enumerate(names):
+        img = Image.open(OUT / f"{name}.png").convert("RGBA")
+        assert img.width <= cell - 2 and img.height <= cell - 2, name
+        x, y = (i % cols) * cell + 1, (i // cols) * cell + 1
+        sheet.paste(img, (x, y))
+        w, h = img.size
+        frames[name] = {
+            "frame": {"x": x, "y": y, "w": w, "h": h},
+            "rotated": False,
+            "trimmed": False,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": w, "h": h},
+            "sourceSize": {"w": w, "h": h},
+        }
+    sheet.save(OUT / "ico_atlas.png")
+    meta = {"image": "ico_atlas.png", "size": {"w": sheet.width, "h": sheet.height}, "scale": "1"}
+    (OUT / "ico_atlas.json").write_text(json.dumps({"frames": frames, "meta": meta}, separators=(",", ":")) + "\n")
 
 
 def main():
