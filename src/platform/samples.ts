@@ -1,10 +1,11 @@
 // Записанные звуки действий и слоги голосов: две «ленты» (public/audio/sfx, art/sfx/render.py).
-// Качаются только после первого касания (сначала звуки, потом голоса), разбираются один раз и лежат
-// в памяти целиком — это меньше минуты моно. Пока лента не готова (или не скачалась — тогда пробуем
-// ещё пару раз, реже), sound.ts играет прежние синтезированные звуки: тишины не бывает.
+// Качаются только после первого касания, обе сразу (голоса не ждут звуков: окно бабушки уже открыто),
+// разбираются один раз и лежат в памяти целиком — это меньше минуты моно. Пока лента не готова (или
+// не скачалась — тогда пробуем ещё пару раз, реже), sound.ts играет прежние синтезированные звуки:
+// тишины не бывает. Голос героя не меняется посреди реплики: писк или бормотание решает первый слог.
 
 import { fetched, loadAudio } from './audioFiles';
-import { markerShift } from './foley';
+import { clipSpan, markerShift } from './foley';
 import { existingAudioContext, mixer } from './mixer';
 import { SFX_BANK, VOICE_BANK, type Bank, type Segment } from './sfxData';
 
@@ -66,8 +67,8 @@ function poll(): void {
   for (const id of ['sfx', 'voice'] as BankId[]) {
     const s = state[id];
     if (s.buffer || s.loading || now < s.retryAt || !wanted(id)) continue;
-    // Голоса — после звуков: первыми нужны касса и полки.
-    if (id === 'voice' && state.sfx.loading) continue;
+    // Голоса не ждут звуков: иначе первый разговор с бабушкой начинался писком и посреди него
+    // становился бормотанием (а лента голосов и так легче ленты звуков).
     load(ac, id);
   }
   const done = (id: BankId) => state[id].buffer !== null || state[id].retryAt === Infinity;
@@ -79,13 +80,15 @@ function poll(): void {
 
 if (typeof window !== 'undefined') timer = setInterval(poll, POLL_MS);
 
-/** Кусок ленты, если она уже разобрана: буфер, откуда и сколько играть, множитель громкости. null — ещё нет. */
+/**
+ * Кусок ленты, если она уже разобрана: буфер, откуда и сколько играть (с тишиной спереди — foley.ts,
+ * clipSpan), множитель громкости. null — ещё нет.
+ */
 export function segment(id: BankId, seg: Segment): { buffer: AudioBuffer; offset: number; dur: number; gain: number } | null {
   const s = state[id];
   if (!s.buffer) return null;
   const [at, dur, gain] = seg;
-  const offset = Math.max(0, at + s.shift);
-  return { buffer: s.buffer, offset, dur: Math.max(0, Math.min(dur, s.buffer.duration - offset)), gain };
+  return { buffer: s.buffer, ...clipSpan(at, dur, s.shift, s.buffer.duration), gain };
 }
 
 /** Готова ли лента. */

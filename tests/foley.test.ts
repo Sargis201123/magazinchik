@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import manifestJson from '../art/sfx/manifest.json';
 import { SHELF_KINDS } from '../src/game/economy';
-import { markerShift, MATERIAL, NOTES_FROM, payWith, placeRate } from '../src/platform/foley';
+import { clipSpan, markerShift, MATERIAL, NOTES_FROM, payWith, placeRate, PRE_ROLL } from '../src/platform/foley';
 import { ONSETS, SFX, SFX_BANK, SYLLABLES, VOICE_BANK, VOWELS, type SfxId } from '../src/platform/sfxData';
 
 // Записанные звуки действий: таблица кусков совпадает с манифестом и файлами, у каждого звука есть
@@ -31,15 +31,15 @@ describe('ленты звуков', () => {
   });
 
   it('у каждого звука несколько вариантов — подряд не звучит «пулемётом»', () => {
-    for (const [id, segs] of Object.entries(SFX)) expect(segs.length, id).toBeGreaterThanOrEqual(id === 'ding' ? 2 : 3);
+    for (const [id, segs] of Object.entries(SFX)) expect(segs.length, id).toBeGreaterThanOrEqual(3);
   });
 
-  it('куски не налезают друг на друга и на метку, лежат внутри ленты, громкость разумная', () => {
+  it('куски не налезают друг на друга и на метку (с тишиной спереди), лежат внутри ленты, громкость разумная', () => {
     const check = (segs: readonly (readonly [number, number, number])[], marker: number, duration: number) => {
       const sorted = [...segs].sort((a, b) => a[0] - b[0]);
       let end = marker + 0.01;
       for (const [at, dur, gain] of sorted) {
-        expect(at).toBeGreaterThan(end + 0.03);
+        expect(at - PRE_ROLL).toBeGreaterThan(end + 0.03);
         expect(dur).toBeGreaterThan(0.02);
         expect(gain).toBeGreaterThan(0);
         expect(gain).toBeLessThan(0.5);
@@ -101,8 +101,34 @@ describe('сдвиг кодека по метке', () => {
     expect(markerShift(withMarker(0.071), rate, 0.05) - base).toBeCloseTo(0.021, 3);
   });
 
+  it('громкий первый кусок за меткой не сбивает её фронт (порог — от пика самой метки, как в render.py)', () => {
+    // Фронт метки по половине её пика — как first_cross в art/sfx/render.py.
+    const marker = withMarker(0.05);
+    let front = 0;
+    while (Math.abs(marker[front]) <= 0.25) front++;
+    const loud = withMarker(0.05);
+    const at = Math.round(0.135 * rate);
+    for (let i = 0; i < 0.1 * rate; i++) loud[at + i] = 0.84 * Math.sin((2 * Math.PI * 440 * i) / rate);
+    expect(markerShift(loud, rate, front / rate)).toBeCloseTo(0, 4);
+    expect(markerShift(marker, rate, front / rate)).toBeCloseTo(0, 4);
+  });
+
   it('метки нет или она за краем разумного — считаем, что сдвига нет', () => {
     expect(markerShift(new Float32Array(rate), rate, 0.05)).toBe(0);
     expect(markerShift(withMarker(0.27), rate, 0.05)).toBe(0);
+  });
+});
+
+describe('кусок ленты', () => {
+  it('начинается чуть раньше, в тишине перед ним, а кончается там же', () => {
+    const span = clipSpan(10, 0.3, 0.002, 60);
+    expect(span.offset).toBeCloseTo(10 + 0.002 - PRE_ROLL, 9);
+    expect(span.offset + span.dur).toBeCloseTo(10.302, 9);
+  });
+
+  it('не уходит за начало и за конец ленты', () => {
+    expect(clipSpan(0.001, 0.3, 0, 60)).toEqual({ offset: 0, dur: 0.301 });
+    const tail = clipSpan(59.9, 0.3, 0, 60);
+    expect(tail.offset + tail.dur).toBeCloseTo(60, 9);
   });
 });

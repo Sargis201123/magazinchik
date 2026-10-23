@@ -1029,6 +1029,8 @@ export class StoreScene extends Phaser.Scene {
   private worldGen = 0;
   /** Повторы вещей мира (worldTimer): останавливаются при перестройке. */
   private worldTimers: Phaser.Time.TimerEvent[] = [];
+  /** Чья швабра сейчас звучит (продавца, уборщика) и как её оборвать: дело бросили — стихает и звук. */
+  private mops = new Map<Phaser.GameObjects.Container, () => void>();
   /** Насколько открыты двери: 0 — закрыты, 1 — открыты. */
   private doorOpen = 0;
   private outdoorShades: Phaser.GameObjects.Rectangle[] = [];
@@ -1676,6 +1678,7 @@ export class StoreScene extends Phaser.Scene {
     // навсегда остался бы «занят» (не убирал бы мусор и не носил товар). Начинаем его дела заново.
     this.tweens.killAll();
     for (const timer of this.worldTimers.splice(0)) timer.remove();
+    this.stopMop();
     this.dropVisitors();
     for (const obj of [...this.children.list]) obj.destroy();
     // Снятое со сцены, но живое (в списке обновления) — тоже: иначе обновлялось бы невидимкой вечно.
@@ -8467,6 +8470,7 @@ export class StoreScene extends Phaser.Scene {
   private recallSeller(): void {
     if (!this.sellerBusy) return;
     this.choreId++;
+    this.stopMop(this.seller);
     this.tweens.killTweensOf(this.carried);
     this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
     // Несли мусор — роняем обратно; несли мешок — он «возвращается» в ведро.
@@ -8700,7 +8704,7 @@ export class StoreScene extends Phaser.Scene {
           y: piece.y,
           action: () => {
             scrub = this.tweens.add({ targets: this.carried, x: 1, duration: 160, yoyo: true, repeat: -1 });
-            sound.mop(piece.x, mopMs / 1000);
+            this.mopSound(this.seller, piece.x, mopMs);
           },
         },
         {
@@ -8709,6 +8713,7 @@ export class StoreScene extends Phaser.Scene {
           ms: mopMs,
           action: () => {
             scrub?.remove();
+            this.stopMop(this.seller);
             this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
             if (kind === 'spill') this.wetSign(piece.x, piece.y);
             this.cleanSparkle(piece.x, piece.y, 16);
@@ -8859,6 +8864,7 @@ export class StoreScene extends Phaser.Scene {
   private syncStaff(): void {
     const gen = ++this.staffGen;
     for (const w of this.workers.values()) {
+      this.stopMop(w.sprite);
       this.tweens.killTweensOf(w.sprite);
       w.sprite.destroy();
     }
@@ -8988,6 +8994,24 @@ export class StoreScene extends Phaser.Scene {
   /** Скорость сотрудника: его навык, менеджер на смене, а у грузчика — ещё и оборудование склада. */
   private workerPace(w: Worker): number {
     return workSpeed(w.member) * managerBoost(this.state) * (w.member.role === 'loader' ? warehouseSpeed(this.state) : 1);
+  }
+
+  /**
+   * Швабра в руках у who трёт пол ms игрового времени. Звук идёт в настоящих секундах: на ×2 дело вдвое
+   * короче (wait идёт по времени сцены), у шустрого уборщика — ещё в pace раз (как в workerWait).
+   */
+  private mopSound(who: Phaser.GameObjects.Container, x: number, ms: number, pace = 1): void {
+    this.stopMop(who);
+    this.mops.set(who, sound.mop(x, ms / pace / this.speed / 1000));
+  }
+
+  /** Швабра who стихает: дело закончили, бросили или его некому доделать; без who — все (зал перестроили). */
+  private stopMop(who?: Phaser.GameObjects.Container): void {
+    for (const [owner, stop] of this.mops) {
+      if (who && owner !== who) continue;
+      stop();
+      this.mops.delete(owner);
+    }
   }
 
   /**
@@ -9136,8 +9160,9 @@ export class StoreScene extends Phaser.Scene {
         await this.workerWalk(w, piece.x + 6, piece.y);
         if (!this.alive(gen)) return;
         const ms = kind === 'trash' ? TRASH_CLEAN_MS : kind === 'spill' ? SPILL_MOP_MS : MOP_MS;
-        if (kind !== 'trash') sound.mop(piece.x, ms / 1000);
+        if (kind !== 'trash') this.mopSound(w.sprite, piece.x, ms, this.workerPace(w));
         await this.workerWait(w, ms);
+        this.stopMop(w.sprite);
         if (!piece.active) continue;
         if (kind !== 'trash') {
           this.removeTrash(piece);
@@ -11320,6 +11345,7 @@ export class StoreScene extends Phaser.Scene {
       for (const worker of this.workers.values()) if (!hostages.includes(worker.sprite)) hostages.push(worker.sprite);
       hostages.push(this.seller);
       hostages.forEach((p, i) => {
+        this.stopMop(p);
         this.tweens.killTweensOf(p);
         const spot = corner(i);
         void this.walk(p, spot.x, spot.y).then(() => {

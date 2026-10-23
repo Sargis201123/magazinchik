@@ -135,7 +135,7 @@ def sfx_bank():
         # Дверь, печь
         "door": ("chime", 0, [own(synth.door_bell(10 + i, [2, 3, 2][i], [[2093, 2637], [2217, 2794], [1976, 2489]][i], 1.3, 1.0), f"колокольчик над дверью {i + 1}") for i in range(3)]),
         "bell": ("bell", -1, [own(synth.door_bell(20 + i, [5, 4, 6][i], [[1568, 1976], [1760, 2217], [1661, 2093]][i], 1.8, 1.0), f"колокольчик: дверь распахнули {i + 1}") for i in range(3)]),
-        "ding": ("bell", -2, [own(synth.ding(i), f"таймер печи {i + 1}") for i in range(2)]),
+        "ding": ("bell", -2, [own(synth.ding(i), f"таймер печи {i + 1}") for i in range(3)]),
         # Распаковка, уборка
         "unbox": ("pop", 2, [own(synth.unbox(i), f"скотч и клапаны коробки {i + 1}") for i in range(3)]),
         "boxland": ("tap", 4, [rec(R + f"bookPlace{i}.ogg", hp_hz=170) for i in (1, 2, 3)]),

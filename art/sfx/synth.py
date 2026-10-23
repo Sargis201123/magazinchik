@@ -145,10 +145,14 @@ def scanner(seed):
 
 
 def ding(seed):
-    """Таймер печи: одно чистое «дзинь» маленькой чашечки."""
+    """Таймер печи: одно чистое «дзинь» маленькой чашечки; в третьем варианте молоточек отскакивает
+    и тихо бьёт ещё раз — «дзинь-нь»."""
     rng = np.random.default_rng(seed + 50)
-    f0 = [2489, 2349][seed % 2]
+    f0 = [2489, 2349, 2637][seed % 3]
     s = strike(f0, **DOME_BELL, dur=1.4, rng=rng, hit=0.15)
+    if seed % 3 == 2:
+        a = int(0.085 * SR)
+        s[a:] += strike(f0, **DOME_BELL, dur=1.4, rng=rng, hit=0.1)[: len(s) - a] * 0.3
     return tail_trim(lp(hp(s, 500), 9000), -50)
 
 

@@ -50,10 +50,14 @@ def db(v):
 
 
 def marker_shift(x, expected):
-    """Как в игре (src/platform/foley.ts, markerShift): где метка в разобранном звуке минус где она в исходнике."""
-    head = x[: int((expected + 0.2) * SR)]
-    a = np.abs(head)
-    return int(np.argmax(a > a.max() * 0.5)) / SR - expected
+    """Как в игре (src/platform/foley.ts, markerShift): где метка в разобранном звуке минус где она в исходнике.
+    Порог — половина пика самой метки (10 мс с того места, где стало громко), а не первого куска за ней."""
+    a = np.abs(x[: int((expected + 0.25) * SR)])
+    loud = np.nonzero(a >= 0.05)[0]
+    if not len(loud):
+        return 0.0
+    w = a[loud[0]:loud[0] + int(np.ceil(0.01 * SR))]
+    return (loud[0] + int(np.argmax(w > w.max() * 0.5))) / SR - expected
 
 
 def _mag(x, n=1024, hop=256):

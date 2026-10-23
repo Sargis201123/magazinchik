@@ -12,7 +12,7 @@ import { MATERIAL, payWith, placeRate, type Material } from './foley';
 import { jitter, pickVariant, type VoiceRule } from './mix';
 import { allowVoice, audioContext, busInput, duckMusic, mixer, placeAt, type Bus } from './mixer';
 import { liteMode } from './quality';
-import { segment } from './samples';
+import { ready, segment } from './samples';
 import { SFX, SYLLABLES, type SfxId } from './sfxData';
 import type { Category } from '../game/economy';
 
@@ -106,6 +106,22 @@ interface SampleVoice extends Voice {
   gain?: number;
   /** Через сколько секунд. */
   at?: number;
+  /** Сюда кладётся «оборвать» этого звука (швабра: дело бросили — недоигранное не звучит). */
+  cuts?: (() => void)[];
+}
+
+/** Оборвать запущенный кусок: ещё не начавшийся не прозвучит, звучащий стихнет за ~40 мс — без щелчка. */
+function cutShort(ac: AudioContext, src: AudioBufferSourceNode, gain: GainNode, start: number): void {
+  const now = ac.currentTime;
+  try {
+    if (now < start) src.stop();
+    else {
+      gain.gain.setTargetAtTime(0, now, 0.012);
+      src.stop(now + 0.06);
+    }
+  } catch {
+    // уже доиграл (старый Safari на повторный stop ругается)
+  }
 }
 
 /**
@@ -135,7 +151,9 @@ function sample(id: SfxId, o: SampleVoice = {}): boolean | null {
     src.disconnect();
     gain.disconnect();
   };
-  src.start(ac.currentTime + 0.005 + (o.at ?? 0), piece.offset, piece.dur);
+  const start = ac.currentTime + 0.005 + (o.at ?? 0);
+  src.start(start, piece.offset, piece.dur);
+  o.cuts?.push(() => cutShort(ac, src, gain, start));
   return true;
 }
 
@@ -438,14 +456,20 @@ const synthTap = (): void => play([{ freq: 660, dur: 0.05, vol: 0.035, slide: 54
 /** Шаг швабры туда-обратно: «вжих» мокрой тряпки. */
 const MOP_STROKE = 0.42;
 
-/** Синтезированная швабра (пока нет записанной): шорох в полосе, туда-обратно. */
-function synthMop(x: number | undefined, strokes: number): void {
+const NOOP = (): void => {};
+
+/** Синтезированная швабра (пока нет записанной): шорох в полосе, туда-обратно. Возвращает «оборвать». */
+function synthMop(x: number | undefined, strokes: number): () => void {
   const ac = audio('world');
-  if (!ac) return;
+  if (!ac) return NOOP;
   const target = output(ac, { x, limit: ['mop', { gap: 0.8, max: 2, low: true }], skipOffscreen: true, db: 1.5 }, strokes * MOP_STROKE);
-  if (!target) return;
+  if (!target) return NOOP;
   const now = ac.currentTime + 0.01;
-  for (let i = 0; i < strokes; i++) noiseBurst(ac, target.out, now + i * MOP_STROKE, 0.34, 1000 + Math.random() * 500, 0.9, 0.03, 0.12);
+  // Все взмахи — через один «кран»: дело бросили — он закрывается за ~40 мс.
+  const valve = ac.createGain();
+  valve.connect(target.out);
+  for (let i = 0; i < strokes; i++) noiseBurst(ac, valve, now + i * MOP_STROKE, 0.34, 1000 + Math.random() * 500, 0.9, 0.03, 0.12);
+  return () => valve.gain.setTargetAtTime(0, ac.currentTime, 0.012);
 }
 
 /** Монетка: высота из нескольких, чтобы подряд не звенела одинаково. */
@@ -628,12 +652,19 @@ export const sound = {
   },
   /** Распаковка: «хрррт» скотча и два картонных клапана, через delay секунд. false — ленты ещё нет. */
   unbox: (x?: number, delay = 0): boolean => sample('unbox', { x, at: delay, cents: 40, db: 1.5, limit: ['unbox', { gap: 0.3, max: 2 }] }) !== null,
-  /** Швабра трёт пол seconds секунд: мокрый «вжих» туда-обратно. */
-  mop: (x?: number, seconds = 1.3) => {
+  /**
+   * Швабра трёт пол seconds настоящих секунд (не игровых: на ×2 дело вдвое короче): мокрый «вжих»
+   * туда-обратно. Возвращает «хватит»: дело закончили или бросили — недоигранные взмахи не звучат.
+   */
+  mop: (x?: number, seconds = 1.3): (() => void) => {
     const strokes = Math.max(2, Math.round(seconds / MOP_STROKE));
-    const first = sample('mop', { x, cents: 80, db: 2, limit: ['mop', { gap: 0.8, max: 2, low: true }], skipOffscreen: true });
-    if (first === null) synthMop(x, strokes);
-    else if (first) for (let i = 1; i < strokes; i++) sample('mop', { x, at: i * MOP_STROKE + Math.random() * 0.05, cents: 80, db: 2 });
+    const cuts: (() => void)[] = [];
+    const first = sample('mop', { x, cents: 80, db: 2, limit: ['mop', { gap: 0.8, max: 2, low: true }], skipOffscreen: true, cuts });
+    if (first === null) return synthMop(x, strokes);
+    if (first) for (let i = 1; i < strokes; i++) sample('mop', { x, at: i * MOP_STROKE + Math.random() * 0.05, cents: 80, db: 2, cuts });
+    return () => {
+      for (const cut of cuts.splice(0)) cut();
+    };
   },
   /** «Чпок» товара на полке; n — какой по счёту (каждый следующий чуть выше). */
   pop: (n = 0, x?: number) =>
@@ -644,13 +675,16 @@ export const sound = {
       limit: ['pop', { gap: 0.06, max: 3, low: true }],
       skipOffscreen: true,
     }),
+  /** Скачан ли банк слогов: реплика решает это на первом слоге и до конца звучит одним голосом. */
+  babbleReady: (): boolean => ready('voice'),
   /**
    * Слог героя в диалоге (какой и когда — babble.ts): слог из банка голосов на скорости героя, интонация —
-   * высотой, эмоция — тембром. Пока банк не скачан — прежний короткий «пик» на высоте героя.
+   * высотой, эмоция — тембром. Пока банк не скачан (или реплика началась без него: babble = false) —
+   * прежний короткий «пик» на высоте героя.
    */
-  syllable: (v: Speaker, s: Syllable) => {
+  syllable: (v: Speaker, s: Syllable, babble = true) => {
     const seg = SYLLABLES[v.bank][s.index];
-    const piece = seg ? segment('voice', seg) : null;
+    const piece = seg && babble ? segment('voice', seg) : null;
     if (!piece) {
       sound.voice(v.pitch * 2 ** (s.semitones / 12));
       return;
@@ -699,7 +733,8 @@ export const sound = {
   /** Пример голоса для ползунка «Голоса»: бабушка радостно здоровается. */
   speakSample: () => {
     const v = voiceOf('portrait_grandma_happy', 620);
-    for (const { at, syllable } of speak('Ой, здравствуй, внучек!', v)) setTimeout(() => sound.syllable(v, syllable), at * 1000);
+    const babble = sound.babbleReady();
+    for (const { at, syllable } of speak('Ой, здравствуй, внучек!', v)) setTimeout(() => sound.syllable(v, syllable, babble), at * 1000);
   },
   /** «Голос» героя в диалоге: короткий слог на его высоте, мягкий, каждый раз чуть другой. */
   voice: (pitch: number) =>

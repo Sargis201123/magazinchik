@@ -139,6 +139,9 @@ export function dialogBox(o: DialogOptions): HTMLElement {
 
   const chars = [...o.text];
   const talk = new Babbler(voiceOf(o.portrait, o.pitch), chars);
+  // Бормотание или прежний «пик» — решает первый слог, и так до конца реплики: банк слогов,
+  // докачавшийся посреди фразы, не меняет герою голос на полуслове.
+  let babble: boolean | undefined;
   let shown = 0;
   let done = false;
   const finish = () => {
@@ -161,7 +164,7 @@ export function dialogBox(o: DialogOptions): HTMLElement {
     const target = Math.min(chars.length, Math.max(shown + 1, Math.floor((performance.now() - start) / CHAR_MS)));
     // Слог — на букве и не чаще, чем говорит этот герой; на запятой и точке — пауза.
     const syllable = talk.next(target, performance.now() / 1000);
-    if (syllable) sound.syllable(talk.voice, syllable);
+    if (syllable) sound.syllable(talk.voice, syllable, (babble ??= sound.babbleReady()));
     shown = target;
     text.textContent = chars.slice(0, shown).join('');
     if (shown >= chars.length) finish();
