@@ -1689,11 +1689,18 @@ export class StoreScene extends Phaser.Scene {
     if (this.running) this.awaitingBoxes = 0;
   }
 
-  /** Повтор у вещи мира (экран на фасаде, лампочки вывески, взмахи голубя): при перестройке останавливается вместе с ней. */
-  private worldTimer(delay: number, callback: () => void): Phaser.Time.TimerEvent {
+  /**
+   * Повтор у вещи мира (экран на фасаде, лампочки вывески, взмахи голубя): при перестройке останавливается
+   * вместе с ней. Возвращает «остановить раньше»: снимает повтор и вычёркивает его из списка — иначе
+   * отработавшие взмахи голубей и пыль дворника копились бы там до перестройки (а она бывает редко).
+   */
+  private worldTimer(delay: number, callback: () => void): () => void {
     const timer = this.time.addEvent({ delay, loop: true, callback });
     this.worldTimers.push(timer);
-    return timer;
+    return () => {
+      timer.remove();
+      Phaser.Utils.Array.Remove(this.worldTimers, timer);
+    };
   }
 
   private buildStore(): void {
@@ -6651,7 +6658,7 @@ export class StoreScene extends Phaser.Scene {
       const dir = Math.random() < 0.5 ? -1 : 1;
       img.setTexture('pigeon_fly').setFlipX(dir < 0).setDepth(LIGHT_DEPTH - 1);
       // Взмахи — повтор мира: перестроили зал посреди полёта (твин погашен) — перестают махать и они.
-      const flap = this.worldTimer(110, () => img.active && img.setTexture(img.texture.key === 'pigeon_fly' ? 'pigeon0' : 'pigeon_fly'));
+      const stopFlap = this.worldTimer(110, () => img.active && img.setTexture(img.texture.key === 'pigeon_fly' ? 'pigeon0' : 'pigeon_fly'));
       this.tweens.add({
         targets: img,
         x: home.x + dir * Phaser.Math.Between(60, 90),
@@ -6660,7 +6667,7 @@ export class StoreScene extends Phaser.Scene {
         duration: 1400,
         ease: 'Sine.easeIn',
         onComplete: () => {
-          flap.remove();
+          stopFlap();
           this.time.delayedCall(Phaser.Math.Between(5000, 8000), () => {
             if (!img.active) return;
             // Прилетает обратно сверху и садится на своё место.
@@ -10040,9 +10047,9 @@ export class StoreScene extends Phaser.Scene {
         const broom = this.add.container(6, 2, [this.add.rectangle(0, -3, 1, 8, 0x8f563b), this.add.rectangle(0, 2, 4, 2, 0xfeae34)]);
         sweeper.add(broom);
         this.tweens.add({ targets: broom, angle: { from: -25, to: 25 }, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-        const dust = this.worldTimer(420, () => sweeper.active && this.steamPuff(sweeper.x + 7, sweeper.y + 6, 0xc8b8a0));
+        const stopDust = this.worldTimer(420, () => sweeper.active && this.steamPuff(sweeper.x + 7, sweeper.y + 6, 0xc8b8a0));
         void this.walk(sweeper, this.next.w + 60, y, CUSTOMER_SPEED * 0.45).then(() => {
-          dust.remove();
+          stopDust();
           sweeper.destroy();
         });
       });

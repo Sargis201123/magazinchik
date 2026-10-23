@@ -58,6 +58,13 @@ describe('понижение графики по FPS', () => {
     expect(fpsVerdict([...steady(30).slice(0, 28), 24, 26], 'normal')).toBeNull();
   });
 
+  it('ровные 15–25 — не потолок, а слабый телефон: лёгкая графика', () => {
+    expect(fpsVerdict(steady(20), 'high')).toBe('lite');
+    expect(fpsVerdict(steady(15), 'normal')).toBe('lite');
+    expect(fpsVerdict(steady(25), 'high')).toBe('lite');
+    expect(fpsVerdict(steady(20), 'lite')).toBeNull();
+  });
+
   it('рваные 30 — тормоза: лёгкая графика', () => {
     const jerky = Array.from({ length: 30 }, (_, i) => [18, 26, 31, 34, 22][i % 5]);
     expect(fpsVerdict(jerky, 'high')).toBe('lite');

@@ -141,11 +141,12 @@ export function fpsSummary(samples: number[]): { median: number; low: number } |
 /**
  * На какой уровень сойти по замерам FPS (null — оставить как есть). Ровные ~30 кадров без провалов —
  * потолок системы (энергосбережение iPhone, экран 30 Гц): картинка от понижения быстрее не станет.
+ * Только около 30: ровные 15–25 — это слабый телефон, ему и нужна лёгкая графика.
  */
 export function fpsVerdict(samples: number[], tier: Quality): Quality | null {
   const summary = fpsSummary(samples);
   if (!summary) return null;
-  if (summary.median <= 33 && summary.low >= summary.median - 3) return null;
+  if (summary.median >= 27 && summary.median <= 33 && summary.low >= summary.median - 3) return null;
   if (tier !== 'lite' && summary.median < LITE_FPS) return 'lite';
   if (tier === 'high' && summary.median < NORMAL_FPS) return 'normal';
   return null;
