@@ -2,6 +2,8 @@ import { defineConfig, type Plugin } from 'vite';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { buildAtlas, type Atlas } from './scripts/atlas';
+import { TEXTURES } from './src/scenes/textures';
 
 /** Флаги сборки Phaser из исходников (как DefinePlugin в его webpack-конфиге). */
 const PHASER_FLAGS: Record<string, boolean> = {
@@ -25,6 +27,17 @@ const phaserFlags = (): Plugin => ({
   },
 });
 
+const hash = (data: Buffer | string): string => createHash('sha256').update(data).digest('hex').slice(0, 8);
+
+const ASSETS_DIR = fileURLToPath(new URL('./public/assets/', import.meta.url));
+
+/**
+ * Атлас картинок мира (scripts/atlas.ts): собирается из public/assets при первой надобности и
+ * заново, если картинки перерисовали (buildStart в сборке, слежение за файлами в разработке).
+ */
+let packed: Atlas | null = null;
+const atlas = (): Atlas => (packed ??= buildAtlas(ASSETS_DIR, TEXTURES));
+
 /** Папки public/, чьи файлы получают отпечаток в адресе (src/platform/assets.ts). */
 const VERSIONED_DIRS = ['assets', 'story'];
 const VERSIONS_ID = 'virtual:asset-versions';
@@ -33,7 +46,8 @@ const VERSIONS_ID = 'virtual:asset-versions';
  * Отпечатки картинок: public/assets кэшируется у игроков на год (public/_headers), а имена файлов
  * не меняются — перерисованная картинка до вернувшегося игрока не доходила. В сборке у каждого файла
  * считаем хэш содержимого, и адрес становится «assets/coin.png?v=1a2b3c4d»: файл изменился — сменился
- * и адрес. Таблица отпечатков — модуль virtual:asset-versions; в разработке она пустая (кэша там нет).
+ * и адрес. Листы атласа (их в public/ нет — их пишет сборка) получают отпечаток так же.
+ * Таблица отпечатков — модуль virtual:asset-versions; в разработке она пустая (кэша там нет).
  */
 const assetVersions = (build: boolean): Plugin => {
   let versions: Record<string, string> | null = null;
@@ -42,9 +56,11 @@ const assetVersions = (build: boolean): Plugin => {
     versions = {};
     for (const dir of VERSIONED_DIRS) {
       const root = fileURLToPath(new URL(`./public/${dir}/`, import.meta.url));
-      for (const name of readdirSync(root).sort()) {
-        versions[`${dir}/${name}`] = createHash('sha256').update(readFileSync(root + name)).digest('hex').slice(0, 8);
-      }
+      for (const name of readdirSync(root).sort()) versions[`${dir}/${name}`] = hash(readFileSync(root + name));
+    }
+    for (const page of atlas().pages) {
+      versions[`assets/${page.name}.png`] = hash(page.png);
+      versions[`assets/${page.name}.json`] = hash(page.json);
     }
     return versions;
   };
@@ -53,6 +69,7 @@ const assetVersions = (build: boolean): Plugin => {
     // Пересборка в режиме --watch: картинки могли перерисовать — считаем заново.
     buildStart: () => {
       versions = null;
+      packed = null;
     },
     resolveId: (id) => (id === VERSIONS_ID ? `\0${VERSIONS_ID}` : null),
     load: (id) => (id === `\0${VERSIONS_ID}` ? `export default ${JSON.stringify(build ? scan() : {})};` : null),
@@ -62,9 +79,49 @@ const assetVersions = (build: boolean): Plugin => {
   };
 };
 
+const ATLAS_ID = 'virtual:atlas';
+
+/**
+ * Листы атласа в игре: в сборке — файлы dist/assets/atlas0.png и atlas0.json, в разработке их
+ * отдаёт сам сервер (и собирает заново, когда art/*.py перерисовали картинки). Какие листы есть
+ * и что в них не влезло, игра узнаёт из модуля virtual:atlas (BootScene).
+ */
+const atlasPlugin = (build: boolean): Plugin => ({
+  name: 'atlas',
+  resolveId: (id) => (id === ATLAS_ID ? `\0${ATLAS_ID}` : null),
+  load: (id) => {
+    if (id !== `\0${ATLAS_ID}`) return null;
+    const { pages, loose } = atlas();
+    return `export default ${JSON.stringify({ pages: pages.map((p) => ({ name: p.name, bytes: p.png.length })), loose })};`;
+  },
+  generateBundle() {
+    if (!build) return;
+    for (const page of atlas().pages) {
+      this.emitFile({ type: 'asset', fileName: `assets/${page.name}.png`, source: page.png });
+      this.emitFile({ type: 'asset', fileName: `assets/${page.name}.json`, source: page.json });
+    }
+  },
+  configureServer(server) {
+    server.watcher.on('all', (_event, file) => {
+      if (!file.startsWith(ASSETS_DIR) || !file.endsWith('.png')) return;
+      packed = null;
+      const mod = server.moduleGraph.getModuleById(`\0${ATLAS_ID}`);
+      if (mod) server.moduleGraph.invalidateModule(mod);
+    });
+    server.middlewares.use((req, res, next) => {
+      const m = /^\/assets\/(atlas\d+)\.(png|json)(?:\?|$)/.exec(req.url ?? '');
+      const page = m && atlas().pages.find((p) => p.name === m[1]);
+      if (!m || !page) return next();
+      res.setHeader('Content-Type', m[2] === 'png' ? 'image/png' : 'application/json');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.end(m[2] === 'png' ? page.png : page.json);
+    });
+  },
+});
+
 export default defineConfig(({ command }) => ({
   base: './',
-  plugins: command === 'build' ? [phaserFlags(), assetVersions(true)] : [assetVersions(false)],
+  plugins: command === 'build' ? [phaserFlags(), assetVersions(true), atlasPlugin(true)] : [assetVersions(false), atlasPlugin(false)],
   resolve: {
     // В production — Phaser без физики и тайловых карт (src/vendor/phaser-lite.js).
     alias: command === 'build' ? [{ find: /^phaser$/, replacement: fileURLToPath(new URL('./src/vendor/phaser-lite.js', import.meta.url)) }] : [],

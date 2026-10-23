@@ -1,329 +1,37 @@
-import { PRODUCT_IDS } from '../game/economy';
 import Phaser from 'phaser';
+import atlas from 'virtual:atlas';
 import { startSync } from '../game/save';
 import { t } from '../i18n';
 import { assetUrl, png } from '../platform/assets';
-import { WARDROBE_TEXTURES } from './wardrobe';
+import { TEXTURES } from './textures';
 
-/** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
-const SPRITES = [
-  // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
-  'sunflowers',
-  // Кубки конкурсов «Лучший магазин…» (art/contest.py).
-  'cup_district',
-  'cup_city',
-  'cup_region',
-  'cup_country',
-  'cup_legend',
-  // Ночная охрана: пёс Бобик и его будка (art/security.py).
-  'bobik_lie',
-  'bobik_sit0',
-  'bobik_sit1',
-  'bobik_bark',
-  'kennel',
-  // Гипермаркет «Гигант» за дорогой (art/giant.py).
-  'giant_site',
-  'giant_store',
-  'giant_closed',
-  // Особые дни: съёмки кино и ремонт дороги (art/street_props.py).
-  'film_camera',
-  'film_light',
-  'director_chair',
-  'road_barrier',
-  'road_pit',
-  'digger',
-  'floor',
-  'wall',
-  'concrete',
-  'asphalt',
-  'lot',
-  'grass',
-  'wall_cap',
-  'facade',
-  'shopwin',
-  'awning_small',
-  'door_open',
-  'door_half',
-  'raindrop',
-  'roof',
-  'arrow',
-  'think',
-  'cross',
-  'cat',
-  'cat_flick',
-  'pigeon0',
-  'pigeon1',
-  'pigeon_fly',
-  'light_cone',
-  'light_spill',
-  'sun_ray',
-  'mud',
-  'ripple',
-  'mop',
-  'puddle_wet',
-  'gondola',
-  ...['bag', 'backpack'].flatMap((b) => ['', '_b', '_s'].map((v) => `${b}${v}`)),
-  'stroller',
-  'stroller_s',
-  'dog0',
-  'dog1',
-  'dog_sit0',
-  'dog_sit1',
-  'flower',
-  'icecream',
-  'pumpkin',
-  'bat0',
-  'bat1',
-  'tulips',
-  'snowman',
-  'bin0',
-  'bin1',
-  'bin2',
-  'bin3',
-  'bin_t1_0',
-  'bin_t1_1',
-  'bin_t1_2',
-  'bin_t1_3',
-  'bin_t2_0',
-  'bin_t2_1',
-  'bin_t2_2',
-  'bin_t2_3',
-  'bin_t3_0',
-  'bin_t3_1',
-  'bin_t3_2',
-  'bin_t3_3',
-  'trash_bag',
-  'dumpster',
-  'spill',
-  'spill_pack',
-  'ad_banner',
-  'flyer',
-  'fusebox',
-  'leak',
-  'wrench',
-  'card_terminal',
-  'kiosk', 'candy', 'coffee_machine', 'coffee_machine1', 'coffee_machine2', 'cup', 'oven', 'oven1', 'oven2', 'oven_bread', 'review_board', 'cat_walk0', 'cat_walk1', 'cat_walk2', 'cat_walk3', 'cat_sit', 'cat_sit0', 'cat_sit1', 'cat_sit2', 'cat_sit_blink', 'cat_groom0', 'cat_groom1', 'cat_basket', 'cat_pillow', 'cat_house', 'phone', 'bike', 'mouse0', 'mouse1', 'fair_stall', 'eco_label', 'pallet_jack', 'forklift', 'autostore', 'fan_base', 'fan_blades', 'ac_wall', 'facade_screen0', 'facade_screen1', 'cam', 'mat_grate', 'air_curtain', 'slot_empty', 'unbox', 'unbox_flap', 'tag_new', 'wh_floor', 'hazard', 'wh_sign', 'extinguisher',
-  'floor_wood',
-  'floor_checker',
-  'floor_gold',
-  'art_sunflowers',
-  'art_sea',
-  'art_cat',
-  'rug',
-  'plant_big',
-  'neon',
-  'aquarium',
-  'wall_brick',
-  'wall_walnut',
-  'wall_metro',
-  'wall_damask',
-  'wall_provence',
-  'floor_chevron',
-  'floor_terracotta',
-  'floor_azulejo',
-  'floor_noir',
-  'sign_wood',
-  'sign_neon',
-  'sign_gold',
-  'sign_marquee',
-  'sign_marquee_lit',
-  'sign_candy',
-  'light_sconce',
-  'light_pendant',
-  'light_lantern',
-  'light_chandelier',
-  'light_garland',
-  'light_garland_lit',
-  'fountain',
-  'jukebox',
-  'lucky_cat',
-  'lucky_cat2',
-  'gumball',
-  'scaffold',
-  'confetti',
-  'ac_unit',
-  'skylight',
-  // Детали крыш и флагшток школы (art/rooftops.py).
-  'roof_vent',
-  'roof_tank',
-  'roof_dish',
-  'roof_solar',
-  'roof_hatch',
-  'roof_pipe',
-  'roof_helipad',
-  'roof_cross',
-  'roof_laundry',
-  'flagpole',
-  // Разные деревья и кусты сквера (art/flora.py) и их зимние варианты.
-  'tree_birch',
-  'tree_pine',
-  'tree_round',
-  'bush_flower',
-  'tree_birch_snow',
-  'tree_pine_snow',
-  'tree_round_snow',
-  'bush_flower_snow',
-  'bus_stop',
-  'bus',
-  'bus_lights',
-  'splash',
-  'snowflake',
-  'leaf',
-  'umbrella',
-  'xmas_tree',
-  'snow_ground',
-  'p_legs2_s',
-  'shutter',
-  'weeds',
-  'bricks',
-  'sand',
-  'cone',
-  'tire',
-  'puddle',
-  'floor2',
-  'floor3',
-  'queue_mark',
-  'facade_wood',
-  'facade_tile',
-  'facade_glass',
-  'dept_bakery',
-  'dept_produce',
-  'dept_dairy',
-  'dept_meat',
-  'dept_drinks',
-  'dept_frozen',
-  'dept_household',
-  'menu_chalk',
-  'jar_shelf',
-  'pot_rack',
-  'flour_sacks',
-  'paper_bag',
-  'hand_truck',
-  'door_sign_open',
-  'door_sign_closed',
-  'frost',
-  'emo_clock',
-  'emo_sigh',
-  'emo_pricey',
-  'emo_alert',
-  'emo_zzz',
-  'emo_star',
-  'emo_bubble',
-  'p_coat',
-  'p_coat_b',
-  'p_coat_s',
-  'p_scarf',
-  'p_scarf_b',
-  'p_scarf_s',
-  'p_skin_happy',
-  'p_skin_happy_b',
-  'p_skin_happy_s',
-  'p_skin_frown',
-  'p_skin_frown_b',
-  'p_skin_frown_s',
-  'p_pat_stripes',
-  'p_pat_stripes_b',
-  'p_pat_stripes_s',
-  'p_pat_print',
-  'candy_rack',
-  'icebox',
-  'trolley',
-  'boat',
-  'boat_oar',
-  'trolley_s',
-  'icebox_front',
-  'icebox_closed',
-  'florist',
-  'florist_front',
-  'radio',
-  'coffee_bar',
-  'cafe_table',
-  'baker_table',
-  'bread_rack',
-  'bread_tray',
-  'umbrella',
-  'carts',
-  ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),
-  'mat',
-  'glow',
-  'coin',
-  'spark',
-  'puff',
-  'bubble_s',
-  'stink',
-  'trash_banana',
-  'trash_cup',
-  'vending',
-  'vending_side',
-  'pallet_water',
-  'promo',
-  'paving',
-  'tree',
-  'bush',
-  'tree_snow',
-  'bush_snow',
-  'lamp',
-  'bench',
-  'bin',
-  'fence_h',
-  'fence_v',
-  'for_rent',
-  'awning',
-  'car',
-  'sign',
-  'shelf',
-  'shelf_front',
-  'shelf_side',
-  'stand',
-  'stand_front',
-  'stand_side',
-  'fridge',
-  'fridge_front',
-  'fridge_side',
-  'drinks',
-  'drinks_front',
-  'drinks_side',
-  'chem',
-  'chem_front',
-  'chem_side',
-  'shadow_wide',
-  'window',
-  'clock',
-  'counter0',
-  'counter1',
-  'counter2',
-  'counter3',
-  'wc',
-  'door',
-  'box',
-  'rack',
-  ...PRODUCT_IDS.map((id) => `crate_${id}`),
-  'trash',
-  'bubble',
-  'pip',
-  'bar',
-  ...PRODUCT_IDS.map((id) => `item_${id}`),
-  ...PRODUCT_IDS.flatMap((id) => [0, 1, 2].map((v) => `item_${id}_${v}`)),
-  ...['p_skin', 'p_shirt', 'p_legs0', 'p_legs1', 'acc_apron', 'acc_vest'].flatMap((k) => [k, `${k}_b`, `${k}_s`]),
-  // Взмах рук при ходьбе (art/walk.py).
-  ...['p_shirt', 'p_skin', 'p_skin_happy', 'p_skin_frown'].flatMap((k) => ['', '_b', '_s'].flatMap((v) => [`${k}${v}_w1`, `${k}${v}_w2`])),
-  ...['short', 'long', 'bun', 'cap', 'bald', 'ponytail', 'curly', 'beanie'].flatMap((h) => ['', '_b', '_s'].map((v) => `p_hair_${h}${v}`)),
-  'acc_badge',
-  'acc_tie',
-  'acc_glasses',
-  'emo_angry',
-  'emo_heart',
-  'emo_question',
-  'shadow',
-  'plant',
-  'poster',
-  'baskets',
-  'bargain_bin',
-  'wet_sign',
-  'butterfly0',
-  // Циферблат без стрелок: стрелки идут по ходу смены (art/clockface.py).
-  'clock_face',
-];
+/**
+ * Текстура-кадр общего листа атласа под старым именем ('shelf', 'p_legs1_s'…). Своей картинки
+ * у неё нет: источник — лист, поэтому и в видеокарте это одна текстура на всех, и соседние спрайты
+ * рисуются одной пачкой, а this.art(), setTexture() и texture.key работают как с отдельной картинкой.
+ */
+class SheetFrame extends Phaser.Textures.Texture {
+  constructor(manager: Phaser.Textures.TextureManager, key: string, sheet: Phaser.Textures.Texture, frame: Phaser.Textures.Frame) {
+    super(manager, key, []);
+    this.source.push(sheet.source[0]);
+    this.add('__BASE', 0, frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight);
+  }
+
+  /** Лист общий: убрать одну текстуру — не повод освобождать его в видеокарте. */
+  destroy(): void {
+    this.source = [];
+    super.destroy();
+  }
+}
+
+/** Разложить лист атласа обратно по именам: каждая картинка мира — текстура со своим ключом. */
+function spreadSheet(textures: Phaser.Textures.TextureManager, name: string): void {
+  const sheet = textures.get(name);
+  const list = textures.list as Record<string, Phaser.Textures.Texture>;
+  for (const key of sheet.getFrameNames()) {
+    if (!textures.exists(key)) list[key] = new SheetFrame(textures, key, sheet, sheet.get(key));
+  }
+}
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -340,14 +48,42 @@ export class BootScene extends Phaser.Scene {
     const bar = splash?.querySelector<HTMLElement>('.bar');
     const txt = splash?.querySelector('.txt');
     if (txt) txt.textContent = t('boot.loading');
-    this.load.on('progress', (p: number) => bar?.style.setProperty('--p', p.toFixed(3)));
+    // Картинки мира — листами атласа (собирает сборка, scripts/atlas.ts), а не восемью сотнями файлов.
     // Адреса — с отпечатком содержимого (platform/assets.ts): перерисованная картинка не застрянет в кэше.
-    for (const key of [...SPRITES, ...WARDROBE_TEXTURES]) this.load.image(key, png(key));
+    for (const page of atlas.pages) this.load.atlas(page.name, png(page.name), assetUrl(`assets/${page.name}.json`));
+    for (const key of atlas.loose) this.load.image(key, png(key));
     // Значки меню (ico_*) одним атласом — для всплывающих надписей в зале (art/icons.py → atlas).
     this.load.atlas('ico', png('ico_atlas'), assetUrl('assets/ico_atlas.json'));
+    // Полоска — по байтам, а не по числу готовых файлов: файлов теперь несколько, и почти всё время
+    // качается лист атласа — по файлам полоска стояла бы, а потом прыгала.
+    const bytes = new Map(atlas.pages.map((p) => [p.name, p.bytes]));
+    const files = this.load.list.getArray();
+    const weight = (f: Phaser.Loader.File): number => (f.type === 'image' && bytes.get(f.key)) || 20_000;
+    const total = files.reduce((sum, f) => sum + weight(f), 0);
+    const got = new Map<Phaser.Loader.File, number>();
+    const show = (file: Phaser.Loader.File, part: number): void => {
+      got.set(file, part);
+      let sum = 0;
+      for (const [f, p] of got) sum += weight(f) * p;
+      bar?.style.setProperty('--p', Math.min(1, sum / total).toFixed(3));
+    };
+    this.load.on('fileprogress', (file: Phaser.Loader.File, part: number) => show(file, part));
+    this.load.on('load', (file: Phaser.Loader.File) => show(file, 1));
+    this.load.on('loaderror', (file: Phaser.Loader.File) => show(file, 1));
   }
 
   create(): void {
+    for (const page of atlas.pages) spreadSheet(this.textures, page.name);
+    // Лист не догрузился (оборвалась связь) — недостающие картинки по одной, как до атласа.
+    const missing = TEXTURES.filter((key) => !this.textures.exists(key));
+    if (!missing.length) return this.ready();
+    for (const key of missing) this.load.image(key, png(key));
+    this.load.once('complete', () => this.ready());
+    this.load.start();
+  }
+
+  /** Картинки на месте: дождаться сверки с облаком — и в магазин. */
+  private ready(): void {
     // Сохранение сверяется с облаком Telegram с самого запуска (main.ts), параллельно с картинками;
     // здесь только дождаться конца (не дольше пары секунд) — и в магазин.
     const splash = document.getElementById('splash');
