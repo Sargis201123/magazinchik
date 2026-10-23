@@ -237,6 +237,7 @@ export const en: Record<TextKey, string> = {
   'store.l4': 'Supermarket',
   'store.l5': 'Department store',
   'store.forRent': 'For rent',
+  'store.newTag': 'NEW',
   'store.current': 'Now: {name}',
   'store.stats': 'Shelves: {slots} · storage: {wh} slots · registers: {r} · guests ×{g}',
   'store.next': 'Next step: {name}',
