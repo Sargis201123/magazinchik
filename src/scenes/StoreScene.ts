@@ -10847,6 +10847,13 @@ export class StoreScene extends Phaser.Scene {
       if (waiting) {
         if (!this.onbSaid.has('serve')) this.grannySays({ id: 'serve', text: t('onb.serve'), hold: 0 });
         this.ringTill(waiting);
+      } else if (!this.registers.some((r, i) => this.operator(i) === 'owner' && r.customer)) {
+        // Покупатель не дождался и ушёл — звать к кассе некого: облачко и кольцо гаснут, подсказки
+        // внизу возвращаются, а к следующему покупателю бабушка позовёт снова.
+        if (this.say.line === 'serve') this.say.hide();
+        this.onbSaid.delete('serve');
+        this.tillRing?.destroy();
+        this.tillRing = undefined;
       }
     }
     this.placeSay();
@@ -10884,6 +10891,8 @@ export class StoreScene extends Phaser.Scene {
       confetti.setDepth(LIGHT_DEPTH + 10).explode(36);
       this.time.delayedCall(1700, () => confetti.destroy());
     }
+    // Первый день прошёл без продажи — бабушка уже на даче: праздник есть, а её реплики нет.
+    if (!playDayOne(this.state)) return;
     const granny = this.granny;
     if (granny?.active) {
       this.emote(granny, 'emo_heart');
@@ -11981,6 +11990,8 @@ export class StoreScene extends Phaser.Scene {
     // Новичок доиграл первый день: сколько секунд прошло от «Играть».
     if (finishedDay === 1) this.onbStep('day1', 1);
     this.say.hide();
+    this.tillRing?.destroy();
+    this.tillRing = undefined;
     saveGame(this.state);
     track('day_end', finishedDay, this.stats.revenue);
     // Друзья на работе раз в неделю получают свою долю — монеты в своей игре (через «угощение»).
@@ -12008,6 +12019,9 @@ export class StoreScene extends Phaser.Scene {
     // Магазин закрывается: опускаются роллеты, потом — итоги дня.
     this.closeShop();
     this.time.delayedCall(1500, () => {
+      // Первый день кончился раньше, чем бабушка попрощалась (не продали или продали под самое
+      // закрытие): она уходит домой, пока на экране итоги, — во второй день в зале её нет.
+      if (!onbDone(this.state, 'bye')) this.granny?.destroy();
       sound.fanfare();
       this.hud.showSummary(
         finishedDay,

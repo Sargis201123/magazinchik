@@ -112,7 +112,8 @@ describe.skipIf(!Database)('рейтинг и аналитика (сервер)'
     await progress(await post(2, { day: 8, events: [{ kind: 'onb_ab', day: 1, value: 0 }, { kind: 'tour_step', day: 1, value: 1 }, { kind: 'tour_done', day: 1, value: 11 }, { kind: 'onb_sale', day: 1, value: 40 }] }), env);
     // Новое (1): оба продали — за 12 с и 26 с (второй прислал первую продажу дважды: берётся первая);
     // за 20 с и быстрее — только первый.
-    await progress(await post(3, { day: 3, events: [{ kind: 'onb_ab', day: 1, value: 1 }, { kind: 'onb_sale', day: 1, value: 12 }, { kind: 'onb_tab', day: 2, value: 0 }] }), env);
+    // Третий доиграл первый день и открыл второй (шаги с цифрой в названии).
+    await progress(await post(3, { day: 3, events: [{ kind: 'onb_ab', day: 1, value: 1 }, { kind: 'onb_sale', day: 1, value: 12 }, { kind: 'onb_day1', day: 1, value: 95 }, { kind: 'onb_day2', day: 2, value: 4 }, { kind: 'onb_tab', day: 2, value: 0 }] }), env);
     await progress(await post(4, { day: 1, events: [{ kind: 'onb_ab', day: 1, value: 1 }, { kind: 'onb_sale', day: 1, value: 26 }, { kind: 'onb_sale', day: 1, value: 50 }] }), env);
     // Вернулись: второй — через неделю, третий — на следующий день.
     const seen = async (id: number, at: number) => {
@@ -130,6 +131,8 @@ describe.skipIf(!Database)('рейтинг и аналитика (сервер)'
     expect(tour.steps).toMatchObject({ onb_play: 1, tour_done: 1, onb_sale: 1 });
     expect(tour.firstSale).toEqual({ players: 1, median: 40, avg: 40, fast: 0 });
     expect(play).toMatchObject({ players: 2, d1: { share: 50 }, d7: { share: 0 }, reached: { day2: 1 }, tabs: { 0: 1 } });
+    expect(play.steps).toMatchObject({ onb_sale: 2, onb_day1: 1, onb_day2: 1 });
+    expect(tour.steps).toMatchObject({ onb_day1: 0, onb_day2: 0 });
     expect(play.firstSale).toEqual({ players: 2, median: 19, avg: 19, fast: 1 });
   });
 

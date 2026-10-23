@@ -13,9 +13,9 @@ import { ready } from './social.js';
 import { json, verifyInitData, type D1, type Env } from './telegram.js';
 
 const DAY = 24 * 3600_000;
-/** Сколько событий за раз принимаем и как они называются. */
+/** Сколько событий за раз принимаем и как они называются (с цифрами — onb_day1, onb_day2). */
 const MAX_EVENTS = 20;
-const KIND_RE = /^[a-z_]{1,24}$/;
+const KIND_RE = /^[a-z0-9_]{1,24}$/;
 /** До какого дня считаем воронку «дошли до дня N». */
 export const FUNNEL_DAYS = [1, 2, 3, 5, 7, 10, 15, 20, 30, 45, 60, 90, 120];
 
