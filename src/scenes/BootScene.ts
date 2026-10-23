@@ -54,6 +54,7 @@ const SPRITES = [
   'pigeon_fly',
   'light_cone',
   'light_spill',
+  'sun_ray',
   'mud',
   'ripple',
   'mop',
