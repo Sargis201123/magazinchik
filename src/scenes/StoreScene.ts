@@ -814,6 +814,15 @@ interface QuakeFall {
   tint: number;
 }
 
+/** Штука на полке, которую только что сняли: откуда и какой она была — из неё товар и летит в руки. */
+interface TakenSpot {
+  x: number;
+  y: number;
+  texture: string;
+  scale: number;
+  tint: number;
+}
+
 interface NightLight {
   obj: Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Ellipse;
   /** Яркость к ночи. */
@@ -960,6 +969,8 @@ export class StoreScene extends Phaser.Scene {
   private vendingAt = { x: 0, y: 0 };
   /** Лёгкая графика: без виньетки и облаков (холст поменьше — со следующего запуска). */
   private lite = liteMode();
+  /** Покупатель только что взял товар (tryTake): с каких мест полки — reachShelf пускает его оттуда. */
+  private takenFrom: TakenSpot[] = [];
   /** Посекундные замеры FPS за день: медиана уходит в аналитику, при тормозах — лёгкая графика. */
   private fpsSamples: number[] = [];
   private fpsFrames = 0;
@@ -1823,31 +1834,38 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.add({ targets: thought, alpha: 0, delay: failed ? 1100 : 150, duration: 250, onComplete: () => thought.destroy() });
   }
 
-  /** Покупатель тянется к полке; если взял — товар летит ему в руки. */
-  private reachShelf(c: Customer, slot: { x: number; y: number }, id: ProductId | null): void {
+  /**
+   * Покупатель тянется к полке; если взял — товар летит ему в руки. Летит та самая штука, что пропала
+   * с полки (from — места из tryTake); без них (корзина уценки) — из случайной точки над полкой.
+   */
+  private reachShelf(c: Customer, slot: { x: number; y: number }, id: ProductId | null, from: TakenSpot[] = []): void {
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.07, duration: 140, yoyo: true, onComplete: () => c.sprite.setScale(base) });
     // Нашёл — улыбается, полка пустая — хмурится.
     this.setMood(c.sprite, id ? 'happy' : 'frown', id ? 1400 : 1200);
     if (!id) return;
-    const item = this.art(slot.x + Phaser.Math.Between(-12, 12), slot.y - 5, `item_${id}_0`).setDepth(c.sprite.y + 1);
-    // Товар перелетает дугой в руки (в корзину), над полкой — цена, которую принесёт.
-    const from = { x: item.x, y: item.y };
-    this.tweens.addCounter({
-      from: 0,
-      to: 1,
-      duration: 360,
-      ease: 'Sine.easeInOut',
-      onUpdate: (tween) => {
-        const k = tween.getValue() ?? 0;
-        const to = { x: c.sprite.x, y: c.sprite.y - 3 };
-        item.setPosition(from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k - Math.sin(k * Math.PI) * 9);
-        item.setScale((1 - 0.5 * k) / ART).setAlpha(1 - 0.6 * k * k);
-      },
-      onComplete: () => item.destroy(),
+    const spots = from.length ? from : [{ x: slot.x + Phaser.Math.Between(-12, 12), y: slot.y - 5, texture: `item_${id}_0`, scale: 1 / ART, tint: 0xffffff }];
+    // Товар перелетает дугой в руки (в корзину), над полкой — цена, которую принесёт. «2 по цене 1» — две штуки одна за другой.
+    spots.forEach((spot, n) => {
+      const item = this.art(spot.x, spot.y, spot.texture).setScale(spot.scale).setTint(spot.tint).setDepth(c.sprite.y + 1).setVisible(n === 0);
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay: n * 110,
+        duration: 360,
+        ease: 'Sine.easeInOut',
+        onStart: () => item.setVisible(true),
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          const to = { x: c.sprite.x, y: c.sprite.y - 3 };
+          item.setPosition(spot.x + (to.x - spot.x) * k, spot.y + (to.y - spot.y) * k - Math.sin(k * Math.PI) * 9);
+          item.setScale(spot.scale * (1 - 0.5 * k)).setAlpha(1 - 0.6 * k * k);
+        },
+        onComplete: () => item.destroy(),
+      });
     });
     const unit = [...c.items].reverse().find((i) => i.id === id);
-    if (unit && !unit.free) this.priceFlash(slot.x, slot.y - 12, Math.ceil(unitSalePrice(this.state, id, unit.unit) * (this.night ? NIGHT_MARKUP : 1)));
+    if (unit && !unit.free) this.priceFlash(spots[0].x, slot.y - 12, Math.ceil(unitSalePrice(this.state, id, unit.unit) * (this.night ? NIGHT_MARKUP : 1)));
   }
 
   /** «+45» над полкой: золотая цифра подпрыгивает и тает. Не всплывающая надпись — без подложки, мелко. */
@@ -1905,10 +1923,14 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
-  /** Полка подпрыгивает целиком — с товаром и кромкой: после выкладки и от касания. */
+  /**
+   * Полка подпрыгивает целиком — с товаром и кромкой: после выкладки и от касания. Штуки, которые
+   * сейчас съезжают на новое место (slideItem), не подпрыгивают: высоту у них ведёт съезд.
+   */
   private hopShelf(view: ShelfView, height = 2): void {
     if (this.lite) return;
-    const parts = [view.bg, view.front, ...view.items.filter((i) => i.visible), ...view.backItems.filter((i) => i.visible)];
+    const still = (i: Phaser.GameObjects.Image) => i.visible && !(i.getData('slide') as Phaser.Tweens.Tween | undefined)?.isActive();
+    const parts = [view.bg, view.front, ...view.items.filter(still), ...view.backItems.filter(still)];
     if (parts.some((p) => p.getData('hopping'))) return;
     for (const p of parts) p.setData('hopping', true);
     this.tweens.add({
@@ -1964,6 +1986,52 @@ export class StoreScene extends Phaser.Scene {
       });
     });
     return end;
+  }
+
+  /**
+   * Штука на полке съезжает со старого места на своё (refreshShelves уже поставил её туда): взяли
+   * соседнюю — остальные плавно сдвигаются, а не перескакивают. Пока полка подпрыгивает (hopShelf),
+   * высоту ведёт прыжок — он сам вернёт штуку на её высоту, поэтому едем только вбок.
+   */
+  private slideItem(img: Phaser.GameObjects.Image, from: { x: number; y: number }): void {
+    (img.getData('slide') as Phaser.Tweens.Tween | undefined)?.stop();
+    const hopping = Boolean(img.getData('hopping'));
+    const to = { x: img.x, y: img.y };
+    img.setPosition(from.x, hopping ? to.y : from.y);
+    const tween = this.tweens.add({ targets: img, x: to.x, ...(hopping ? {} : { y: to.y }), duration: 140, ease: 'Quad.easeOut' });
+    img.setData('slide', tween);
+  }
+
+  /**
+   * Штуку сняли с полки — соседи по ряду качнулись к пустому месту и пружинят обратно: ближние
+   * сильнее и раньше, дальние — слабее и чуть позже, как волна. На слабом телефоне не качаем.
+   */
+  private jostleShelf(view: ShelfView, gone: { x: number; y: number }): void {
+    if (this.lite) return;
+    // Шаг между штуками в ряду: на плотной полке качаются больше соседей, но так же далеко по счёту.
+    const row = view.items.filter((img) => img.visible && Math.abs(img.y - gone.y) < 3).map((img) => img.x).sort((a, b) => a - b);
+    const step = row.length > 1 ? Math.max(2, (row[row.length - 1] - row[0]) / (row.length - 1)) : 6;
+    for (const img of [...view.items, ...view.backItems]) {
+      if (!img.visible) continue;
+      const dx = img.x - gone.x;
+      if (Math.abs(img.y - gone.y) > 3 || Math.abs(dx) < 0.5) continue;
+      // В соседях (1 шаг) — полные 9°, через два шага — почти ничего.
+      const slots = Math.max(1, Math.abs(dx) / step);
+      const k = 1 - (slots - 1) / 2.2;
+      if (k <= 0) continue;
+      (img.getData('jostle') as Phaser.Tweens.TweenChain | undefined)?.stop();
+      // Быстро клонится к пустому месту и пружинит обратно, чуть перемахнув.
+      img.setData(
+        'jostle',
+        this.tweens.chain({
+          targets: img,
+          tweens: [
+            { angle: (dx < 0 ? 9 : -9) * k, delay: (slots - 1) * 40, duration: 70, ease: 'Sine.easeOut' },
+            { angle: 0, duration: 420, ease: 'Back.easeOut', easeParams: [2.5] },
+          ],
+        }),
+      );
+    }
   }
 
   /** Круг от пальца: показывает, куда пришлось касание, и что нажатие засчитано. */
@@ -6420,8 +6488,12 @@ export class StoreScene extends Phaser.Scene {
     this.roomSign(x, y + 7, w, t('warehouse.label'));
   }
 
-  /** Создаёт картинки для новых полок и обновляет товар на всех. */
-  private refreshShelves(): void {
+  /**
+   * Создаёт картинки для новых полок и обновляет товар на всех. Штука товара узнаётся по месту в своём
+   * товаре (третий батон — всегда третий батон): взяли одну — остальные съезжают на освободившееся
+   * место (slide). При выкладке (stockShelf) не съезжают — там штуки сами летят из рук.
+   */
+  private refreshShelves(slide = true): void {
     this.shelvesDrawn++;
     this.layout.slots.forEach((slot, i) => {
       // Свободное место под полку — разметка на полу: полку покупают утром во вкладке «Зал».
@@ -6454,8 +6526,16 @@ export class StoreScene extends Phaser.Scene {
       const size = (shelf.kind === 'florist' ? 1 : Phaser.Math.Clamp(step / 4, 1, 1.3)) / ART;
       const slot = at;
       const side = shelf.kind !== 'florist' && shelf.kind !== 'icebox' && slotSide(this.layout, slot) !== null;
-      const units = PRODUCT_IDS.flatMap((id) => (shelf.items[id] ?? []).map((unit) => ({ id, unit })));
+      const units = PRODUCT_IDS.flatMap((id) => (shelf.items[id] ?? []).map((unit, k) => ({ id, unit, k })));
       const covered = false;
+      // Где какая штука стояла до обновления (там, где видна сейчас — даже на полпути съезда).
+      const was = new Map<string, { x: number; y: number; bx: number; by: number }>();
+      if (slide && !this.lite) {
+        view.items.forEach((img, n) => {
+          const key = img.getData('stock') as string | null | undefined;
+          if (key && img.visible && !img.getData('flying')) was.set(key, { x: img.x, y: img.y, bx: view.backItems[n].x, by: view.backItems[n].y });
+        });
+      }
       view.items.forEach((img, n) => {
         const entry = units[n];
         const florist = shelf.kind === 'florist';
@@ -6468,9 +6548,11 @@ export class StoreScene extends Phaser.Scene {
           const rows = Math.ceil(capacity / 2);
           img.setPosition(slot.x + (n % 2 ? 3 : -3), slot.y - 18 + (32 / rows) * (Math.floor(n / 2) + 0.5));
         } else img.setPosition(slot.x + area.x + step * ((n % perRow) + 0.5), slot.y + area.y + Math.floor(n / perRow) * area.row);
+        // Вид штуки — по её месту в своём товаре, а не на полке: съезжая, батон остаётся тем же батоном.
+        const variant = entry ? entry.k + PRODUCT_IDS.indexOf(entry.id) : 0;
         if (entry) {
           // Три вида каждого товара (батон, багет, булка…) — полка выглядит живой.
-          img.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id)) % ITEM_VARIANTS}`).setScale(side ? 0.85 / ART : size);
+          img.setTexture(`item_${entry.id}_${variant % ITEM_VARIANTS}`).setScale(side ? 0.85 / ART : size);
           img.setTint(entry.unit.markdown ? 0xffe08a : entry.unit.bad ? 0x9a8a80 : 0xffffff);
         }
         // Позади — такой же товар чуть выше и в тени, между передними.
@@ -6478,7 +6560,15 @@ export class StoreScene extends Phaser.Scene {
         back.setVisible(img.visible && shelf.kind !== 'florist' && !side);
         if (entry) {
           back.setPosition(Math.min(img.x + step / 2, slot.x + area.x + area.w - 2), img.y - 2);
-          back.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id) + 1) % ITEM_VARIANTS}`).setScale(size);
+          back.setTexture(`item_${entry.id}_${(variant + 1) % ITEM_VARIANTS}`).setScale(size);
+        }
+        const key = img.visible && entry ? `${entry.id}:${entry.k}` : null;
+        img.setData('stock', key);
+        const from = key ? was.get(key) : undefined;
+        // Подпрыгивает с полкой — по высоте не сравниваем: прыжок сам вернёт её на место.
+        if (from && (from.x !== img.x || (from.y !== img.y && !img.getData('hopping')))) {
+          this.slideItem(img, from);
+          if (back.visible) this.slideItem(back, { x: from.bx, y: from.by });
         }
       });
       view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
@@ -7318,7 +7408,8 @@ export class StoreScene extends Phaser.Scene {
     const before = view ? view.items.filter((img) => img.visible).length : 0;
     // Хозяин-силач носит больше (навык «Силач»), сотрудники — как обычно.
     this.state = moveToShelf(this.state, index, undefined, carryOf(this.state) + (by === this.seller ? carryBonus(this.state) : 0)).state;
-    this.refreshShelves();
+    // Без съезда: новые штуки сами летят на свои места, а сдвинутые соседи просто встают рядом.
+    this.refreshShelves(false);
     this.refreshWarehouse();
     const items = this.shelfViews[index]?.items ?? [];
     const backs = this.shelfViews[index]?.backItems ?? [];
@@ -7330,7 +7421,8 @@ export class StoreScene extends Phaser.Scene {
       const { x, y } = img;
       const scale = img.scaleX;
       const from = { x: by.x, y: by.y - 4 };
-      img.setPosition(from.x, from.y).setScale(scale * 0.6).setAlpha(0);
+      // Пока летит, место ведёт полёт: если в это время с полки возьмут товар, эта штука не съезжает.
+      img.setPosition(from.x, from.y).setScale(scale * 0.6).setAlpha(0).setData('flying', true);
       // Летит дугой вверх из рук на своё место и подпрыгивает.
       this.tweens.addCounter({
         from: 0,
@@ -7347,7 +7439,7 @@ export class StoreScene extends Phaser.Scene {
           img.setScale(scale * (0.6 + 0.4 * k));
         },
         onComplete: () => {
-          img.setPosition(x, y);
+          img.setPosition(x, y).setData('flying', false);
           this.tweens.add({ targets: img, scale: { from: scale * 1.35, to: scale }, duration: 140, ease: 'Back.easeOut' });
           // Свежий товар поблёскивает; из коробки сыплется пыль.
           if (n === fresh.length - 1) {
@@ -8201,7 +8293,7 @@ export class StoreScene extends Phaser.Scene {
         return null;
       }
       const result = this.tryTake(c, id);
-      this.reachShelf(c, this.spotOf(index), result === 'taken' ? id : null);
+      this.reachShelf(c, this.spotOf(index), result === 'taken' ? id : null, result === 'taken' ? this.takenFrom : []);
       if (result === 'taken' && c.sprite.y < this.layout.h && Math.random() < SPILL_CHANCE) this.spill(c.sprite.x, c.sprite.y + 2);
       const failed = result === 'empty' || result === 'expensive' || result === 'eduard';
       this.endThought(thought, failed);
@@ -8353,6 +8445,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.state = taken.state;
     c.items.push({ id, unit: taken.unit });
+    let count = 1;
     // По акции «2 по цене 1» берут вторую штуку бесплатно.
     if (bogo) {
       const second = takeFromShelf(this.state, index, id);
@@ -8360,9 +8453,19 @@ export class StoreScene extends Phaser.Scene {
         this.state = second.state;
         c.items.push({ id, unit: second.unit, free: true });
         this.popup(c.sprite.x, c.sprite.y - 22, t('popup.bogo'), '#fee761');
+        count++;
       }
     }
+    // С полки пропадают последние штуки этого товара (остальное съедет на их место) — запоминаем,
+    // где и какими они были: оттуда товар и полетит в руки (reachShelf), там качнутся соседи.
+    const view = this.shelfViews[index];
+    const mine = view?.items.filter((img) => img.visible && (img.getData('stock') as string | null | undefined)?.startsWith(`${id}:`)) ?? [];
+    this.takenFrom = mine
+      .slice(-count)
+      .reverse()
+      .map((img) => ({ x: img.x, y: img.y, texture: img.texture.key, scale: img.scaleX, tint: img.tintTopLeft }));
     this.refreshShelves();
+    if (view && this.takenFrom.length) this.jostleShelf(view, this.takenFrom[0]);
     return 'taken';
   }
 
