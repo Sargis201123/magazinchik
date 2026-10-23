@@ -333,6 +333,16 @@ const QUAKE_SHATTER_MAX = 20;
 /** Цвет пыли и штукатурки; крошки потемнее — их видно и на светлом полу. */
 const QUAKE_DUST = 0xc8b8a0;
 const QUAKE_GRIT = 0x8f7f6a;
+/**
+ * Что распаковывают из коробки, когда оно впервые появилось в зале: оборудование (терминал, касса
+ * самообслуживания, радио, кассы, климат, камеры, склад, кофемашина, печь) и украшения.
+ */
+const UNBOX =
+  /^(card_terminal|kiosk|radio|phone|counter\d|bin_t\d_0|fan_base|ac_wall|cam|air_curtain|mat_grate|autostore|pallet_jack|forklift|carts|coffee_machine\d?|cafe_table|oven\d?|rug|neon|plant_big|art_[a-z]+|light_(sconce|pendant|lantern|chandelier)|gumball|aquarium|lucky_cat|fountain|jukebox)$/;
+/** Новинки распаковывают по очереди, с таким шагом. */
+const UNBOX_STEP = 350;
+/** Флажок «НОВОЕ» висит над новинкой два часа по часам зала (смена идёт с 8:00 до 20:00). */
+const NEW_TAG_MS = (DAY_SECONDS * 1000 * 2) / 12;
 /** Цвет света на улице и в зале по ходу дня: [доля дня, цвет]. Умножается на картинку. */
 const OUTDOOR_LIGHT: [number, number][] = [
   [0, 0xfff2dc],
@@ -842,6 +852,12 @@ interface Worker {
   home: { x: number; y: number };
 }
 
+/** Мелочь вещи (лопасти, огонёк, экран): прячется и появляется вместе с ней при распаковке. */
+type Kin = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Visible;
+
+/** Кто из персонала: роль и имя (друг из Telegram — по id). Новый человек на ту же роль — другой ключ. */
+const staffKey = (m: StaffMember): string => `${m.role}:${m.friend ? `f${m.friend.id}` : m.name}`;
+
 interface ShelfView {
   kind: Category;
   /** Где стоит: если после продажи соседней полки место сменилось — пересобираем. */
@@ -1101,6 +1117,14 @@ export class StoreScene extends Phaser.Scene {
   private propList: (Prop & { tex: string })[] = [];
   /** Стандартные места вещей зала (для «Как было» и чтобы не хранить несдвинутое). */
   private propDefaults: Record<string, { x: number; y: number }> = {};
+  /** Оборудование и украшения зала при прошлой постройке: «текстура@x,y» (по ним видно, что куплено). */
+  private builtProps = new Set<string>();
+  /** Купленное с утра: при открытии его распакуют из коробки. Ключ — «текстура@x,y», картинка — из последней постройки. */
+  private freshProps = new Map<string, Phaser.GameObjects.Image | undefined>();
+  /** Наняли утром: при открытии новенький войдёт с улицы в дверь, а не появится сразу на месте. */
+  private newHires = new Set<string>();
+  /** Новенькие, которые сейчас идут с улицы: перед ними разъезжаются двери. */
+  private newcomers = new Set<Phaser.GameObjects.Container>();
   /** Где сейчас стоит автомат с напитками (на нём радио). */
   private vendingAt = { x: 0, y: 0 };
   /** Лёгкая графика: без виньетки и облаков (холст поменьше — со следующего запуска). */
@@ -1515,8 +1539,11 @@ export class StoreScene extends Phaser.Scene {
 
   // ---------- Магазин ----------
 
-  /** Строит зал под текущий уровень помещения. При расширении зал строится заново. */
-  private buildWorld(): void {
+  /**
+   * Строит зал под текущий уровень помещения. При расширении зал строится заново.
+   * bought — перестроили из-за покупки оборудования или украшения: новое утром распакуют из коробки.
+   */
+  private buildWorld(bought = false): void {
     this.children.removeAll(true);
     // removeAll(true) только снимает объекты со сцены, не уничтожая: старые человечки остались бы
     // в списке и каждый кадр «ходили» бы невидимками (а с ними пар, отражения, позы). Новых создаст сборка.
@@ -1601,6 +1628,7 @@ export class StoreScene extends Phaser.Scene {
     this.applyWeather();
     this.fairObjs = [];
     this.applyFair();
+    this.noteNewProps(bought);
   }
 
   private buildStore(): void {
@@ -2488,7 +2516,8 @@ export class StoreScene extends Phaser.Scene {
   /** Двери разъезжаются, когда к ним подходят. */
   private updateDoor(): void {
     const { door, h } = this.layout;
-    const near = [...this.customers].some((c) => Math.abs(c.sprite.x - door.x) < 16 && Math.abs(c.sprite.y - h - 4) < 18);
+    const close = (p: { x: number; y: number }) => Math.abs(p.x - door.x) < 16 && Math.abs(p.y - h - 4) < 18;
+    const near = [...this.customers].some((c) => close(c.sprite)) || [...this.newcomers].some(close);
     if (near && this.doorOpen === 0) ambience.chime();
     this.doorOpen = Phaser.Math.Clamp(this.doorOpen + (near ? 0.12 : -0.06), 0, 1);
     const key = this.doorOpen < 0.34 ? 'door' : this.doorOpen < 0.67 ? 'door_half' : 'door_open';
@@ -8679,6 +8708,7 @@ export class StoreScene extends Phaser.Scene {
       w.sprite.destroy();
     }
     this.workers.clear();
+    this.newcomers.clear();
     this.managerOnFloor = false;
     this.claimedTrash.clear();
     if (this.binBy === 'cleaner') {
@@ -8700,7 +8730,10 @@ export class StoreScene extends Phaser.Scene {
       if (isAbsent(this.state, member)) continue;
       const covering = member.role === 'manager' && cover ? cover : undefined;
       const home = covering ? this.workerHome(covering) : this.workerHome(member.role);
-      const sprite = this.makePerson(home.x, home.y, {
+      // Новенький в первый день не стоит сразу на месте, а входит с улицы.
+      const fresh = this.dayOpen && this.newHires.has(staffKey(member));
+      const at = fresh ? this.streetSpawn() : home;
+      const sprite = this.makePerson(at.x ?? home.x, at.y ?? home.y, {
         ...randomLook(UNIFORMS[member.role]),
         style: STAFF_HAIR[member.role],
         acc: STAFF_ACC[member.role].acc,
@@ -8714,7 +8747,9 @@ export class StoreScene extends Phaser.Scene {
       this.workers.set(member.role, worker);
       if (covering) {
         this.workers.set(covering, worker);
-        void this.cashierLoop(worker, gen, registerOfRole(covering));
+        const serve = () => void this.cashierLoop(worker, gen, registerOfRole(covering));
+        if (fresh) void this.walkIn(worker, gen).then(serve);
+        else serve();
         continue;
       }
       const loop = {
@@ -8729,11 +8764,33 @@ export class StoreScene extends Phaser.Scene {
         baker: this.bakerLoop,
         barista: this.baristaLoop,
       }[member.role];
-      if (loop) void loop.call(this, worker, gen);
+      const work = () => {
+        if (loop) void loop.call(this, worker, gen);
+      };
+      if (fresh) void this.walkIn(worker, gen).then(work);
+      else work();
     }
+    // Новеньких встретили — в следующий раз они уже свои.
+    if (this.dayOpen) this.newHires.clear();
     // Хозяин уступает место кассиру.
     const home = this.ownerHome();
     if (!this.sellerBusy) this.seller.setPosition(home.x, home.y).setDepth(home.y);
+  }
+
+  /**
+   * Первый рабочий день: новенький идёт по тротуару к двери, на пороге радуется (сердечко) и проходит
+   * на своё место — работать начинает, когда дошёл.
+   */
+  private async walkIn(w: Worker, gen: number): Promise<void> {
+    const { door } = this.layout;
+    this.newcomers.add(w.sprite);
+    await this.workerWalk(w, door.x, this.streetY);
+    await this.workerWalk(w, door.x, door.y - 10);
+    this.newcomers.delete(w.sprite);
+    if (!this.alive(gen)) return;
+    this.emote(w.sprite, 'emo_heart');
+    this.squash(w.sprite, 1.1, 0.9, 120);
+    await this.workerWalk(w, w.home.x, w.home.y);
   }
 
   private workerHome(role: StaffRole): { x: number; y: number } {
@@ -10448,10 +10505,14 @@ export class StoreScene extends Phaser.Scene {
         // Убрали или продали полку — остальные остались на местах, но сами места переставлены.
         const placesChanged = s.slotPos !== was.slotPos || s.tillPos !== was.tillPos || s.propPos !== was.propPos;
         const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was) || hasDog(s) !== hasDog(was) || sunflowersPlanted(s) !== sunflowersPlanted(was);
+        // Купили оборудование или украшение — при открытии его распакуют. Перестановка — не покупка.
+        const bought = (decorChanged || upgradesChanged) && !placesChanged && s.level === this.builtLevel;
+        // Наняли — новенький при открытии войдёт в дверь.
+        if (staffChanged) for (const m of s.staff) if (!was.staff.some((o) => staffKey(o) === staffKey(m))) this.newHires.add(staffKey(m));
         this.state = s;
         saveGame(s);
         if (s.level > this.builtLevel) void this.celebrateExpansion();
-        else if (s.level !== this.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard || giantLook(s) !== this.builtGiant) this.buildWorld();
+        else if (s.level !== this.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard || giantLook(s) !== this.builtGiant) this.buildWorld(bought);
         else if (staffChanged) this.syncStaff();
         if (adsChanged) this.applyAds();
         if (radioChanged) this.applyRadio();
@@ -10480,6 +10541,8 @@ export class StoreScene extends Phaser.Scene {
 
   private startDay(): void {
     this.dayOpen = true;
+    // Купленное с утра ждёт в коробках: камера подлетит к магазину — и его распакуют.
+    this.packFresh();
     this.flyIn();
     this.lightsOn();
     this.flipDoorSign(true);
@@ -10510,6 +10573,202 @@ export class StoreScene extends Phaser.Scene {
       this.time.paused = false;
       this.running = true;
     }
+  }
+
+  // ---------- Новинки: распаковка купленного ----------
+
+  /**
+   * Что появилось в зале с прошлой постройки. bought — зал перестроили из-за покупки оборудования
+   * или украшения: новое запоминаем, при открытии его распакуют. Перестановка, расширение, гости
+   * у друга и загрузка сохранения — не покупки: там только запоминаем, что стоит. Картинки новинок
+   * берём из последней постройки (старые уничтожены вместе с залом).
+   */
+  private noteNewProps(bought: boolean): void {
+    const now = this.unboxables();
+    for (const key of this.freshProps.keys()) this.freshProps.set(key, now.get(key));
+    if (bought) for (const [key, img] of now) if (!this.builtProps.has(key)) this.freshProps.set(key, img);
+    this.builtProps = new Set(now.keys());
+  }
+
+  /** Оборудование и украшения магазина (зал и флигель): «текстура@x,y» → картинка. */
+  private unboxables(): Map<string, Phaser.GameObjects.Image> {
+    const { w, h } = this.layout;
+    const found = new Map<string, Phaser.GameObjects.Image>();
+    for (const obj of this.children.list) {
+      if (!(obj instanceof Phaser.GameObjects.Image) || !UNBOX.test(obj.texture.key)) continue;
+      if (obj.x < -WING_OUTER - 4 || obj.x > w + 4 || obj.y < -20 || obj.y > h + FACADE_H) continue;
+      found.set(`${obj.texture.key}@${Math.round(obj.x)},${Math.round(obj.y)}`, obj);
+    }
+    return found;
+  }
+
+  /**
+   * Открытие: новинки прячутся вместе со своими мелочами (лопасти, огоньки, экраны), а когда камера
+   * подлетит к магазину (flyIn, 1,6 с), их распакуют по одной — сверху вниз по залу.
+   */
+  private packFresh(): void {
+    const items = [...this.freshProps.values()].filter((img): img is Phaser.GameObjects.Image => Boolean(img?.active));
+    this.freshProps.clear();
+    if (!items.length) return;
+    items.sort((a, b) => a.y - b.y || a.x - b.x);
+    const taken = new Set<Phaser.GameObjects.GameObject>(items);
+    for (const img of items) {
+      const kin = this.kinOf(img, taken);
+      kin.forEach((o) => taken.add(o.setVisible(false)));
+      img.setData('unbox', { kin, sx: img.scaleX, sy: img.scaleY, y: img.y }).setVisible(false);
+    }
+    this.time.delayedCall(1700, () => items.forEach((img, i) => this.time.delayedCall(i * UNBOX_STEP, () => this.unbox(img))));
+  }
+
+  /**
+   * Мелочи вещи: лопасти вентилятора, огонёк камеры, экран кассы, блик, тень. Стоят на ней (центр —
+   * в её рамке), чуть выше по глубине и не огромные (пол и стены не в счёт). Люди и зоны касаний — не мелочи.
+   */
+  private kinOf(img: Phaser.GameObjects.Image, taken: Set<Phaser.GameObjects.GameObject>): Kin[] {
+    const frame = img.getBounds();
+    const area = frame.width * frame.height;
+    Phaser.Geom.Rectangle.Inflate(frame, 3, 3);
+    const kin: Kin[] = [];
+    for (const obj of this.children.list) {
+      if (taken.has(obj) || obj.type === 'Container' || obj.type === 'Zone' || obj.type === 'ParticleEmitter') continue;
+      const o = obj as Kin & Phaser.GameObjects.Components.Depth & Partial<Phaser.GameObjects.Components.GetBounds>;
+      // Плитки отделов, отражения и пятна света на полу (глубина до 0,62) — пол, а не мелочи вещи.
+      if (!o.visible || typeof o.getBounds !== 'function' || o.depth <= 0.62 || o.depth < img.depth - 1.5 || o.depth > img.depth + 3) continue;
+      const box = o.getBounds();
+      if (box.width * box.height <= area * 6 && frame.contains(box.centerX, box.centerY)) kin.push(o);
+    }
+    return kin;
+  }
+
+  /**
+   * Новинка из коробки: сверху падает картонная коробка, клапаны разлетаются, вещь вырастает из неё
+   * в золотом кольце с искрами — и два часа носит флажок «НОВОЕ». На слабом телефоне — только рост и флажок.
+   */
+  private unbox(img: Phaser.GameObjects.Image): void {
+    // Зал успели перестроить — эта картинка уже уничтожена, новая стоит как обычно.
+    if (!img.active) return;
+    const saved = img.getData('unbox') as { kin: Kin[]; sx: number; sy: number; y: number } | undefined;
+    if (!saved) return;
+    img.setData('unbox', undefined);
+    const { kin, sx, sy, y } = saved;
+    const fullH = img.displayHeight;
+    const bottom = y + fullH * (1 - img.originY);
+    const midY = bottom - fullH / 2;
+    // Вещь растёт снизу вверх — низ стоит на месте, как будто поднимается из коробки.
+    const grow = () => {
+      if (!img.active) return;
+      img.setVisible(true).setScale(sx * 0.2, sy * 0.2).setY(bottom - fullH * 0.2 * (1 - img.originY));
+      this.tweens.add({
+        targets: img,
+        scaleX: sx,
+        scaleY: sy,
+        y,
+        duration: 460,
+        ease: 'Back.easeOut',
+        easeParams: [2.2],
+        onComplete: () => {
+          for (const o of kin) if (o.active) o.setVisible(true);
+          this.squash(img, 1.08, 0.9, 110);
+          this.newTag(img);
+        },
+      });
+    };
+    if (this.lite) {
+      sound.pop(2);
+      grow();
+      return;
+    }
+    // Коробка по размеру вещи: падает, приседает, клапаны крышки разлетаются, сама она сплющивается.
+    // Стоит на полу там же, где низ вещи: полки впереди её закрывают, позади — нет.
+    const s = Phaser.Math.Clamp((img.displayWidth / 14) * 1.1, 0.75, 1.9);
+    const depth = Math.max(img.depth, bottom) + 4;
+    const flaps = [-1, 1].map((side) => this.art(side * 3.5, -9.5, 'unbox_flap').setFlipX(side > 0));
+    const box = this.add.container(img.x, bottom - 30, [this.art(0, 0, 'unbox').setOrigin(0.5, 1), ...flaps]).setScale(s).setAngle(8).setDepth(depth);
+    // Тень растёт под падающей коробкой — только на полу (у вещей на стене её нет).
+    const shadow = bottom > this.layout.wallH ? this.art(img.x, bottom, 'shadow').setScale((0.4 * s) / ART).setAlpha(0).setDepth(bottom - 1) : undefined;
+    if (shadow) this.tweens.add({ targets: shadow, alpha: 0.5, scale: (0.9 * s) / ART, duration: 300, ease: 'Quad.easeIn' });
+    // Всё по цепочке твинов (а не таймером): клапаны не откроются, пока коробка не долетела.
+    const open = () => {
+      if (!box.active) return;
+      sound.pop(3);
+      flaps.forEach((flap, i) => {
+        const side = i ? 1 : -1;
+        this.tweens.add({ targets: flap, x: side * 15, y: -26, angle: side * 200, alpha: 0, duration: 480, ease: 'Quad.easeOut' });
+      });
+      this.tweens.add({ targets: box, scaleY: s * 0.15, alpha: 0, delay: 120, duration: 260, ease: 'Quad.easeIn', onComplete: () => box.destroy() });
+      if (shadow) this.tweens.add({ targets: shadow, alpha: 0, delay: 120, duration: 260, onComplete: () => shadow.destroy() });
+      grow();
+      this.unboxShine(img.x, midY, Math.max((img.displayWidth + fullH) / 2, 10));
+    };
+    this.tweens.add({
+      targets: box,
+      y: bottom,
+      angle: 0,
+      duration: 300,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        sound.tap();
+        this.puff(img.x - 7 * s, bottom);
+        this.puff(img.x + 7 * s, bottom);
+        this.tweens.add({ targets: box, scaleX: s * 1.18, scaleY: s * 0.8, duration: 90, yoyo: true, completeDelay: 80, ease: 'Quad.easeOut', onComplete: open });
+      },
+    });
+  }
+
+  /** Золотое кольцо, мягкая вспышка и искры вокруг распакованной вещи. */
+  private unboxShine(x: number, y: number, size: number): void {
+    sound.medal();
+    const ring = this.add.circle(x, y, size / 2).setStrokeStyle(1.5, 0xfee761, 1).setDepth(LIGHT_DEPTH + 12).setScale(0.5);
+    this.tweens.add({ targets: ring, scale: 1.6, alpha: 0, duration: 560, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
+    const flash = this.art(x, y, 'glow').setDisplaySize(size * 1.6, size * 1.6).setTint(0xfee761).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(LIGHT_DEPTH + 11);
+    this.tweens.add({ targets: flash, alpha: 0.6, duration: 160, yoyo: true, hold: 120, onComplete: () => flash.destroy() });
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.3, 0.3);
+      const r = size / 2 + Phaser.Math.Between(5, 10);
+      const spark = this.art(x, y, 'spark').setTint(0xfee761).setScale(0.3 / ART).setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 12);
+      this.tweens.add({
+        targets: spark,
+        x: x + Math.cos(a) * r,
+        y: y + Math.sin(a) * r * 0.8,
+        scale: 0.9 / ART,
+        angle: 120,
+        alpha: { from: 1, to: 0 },
+        delay: i * 25,
+        duration: 560,
+        ease: 'Quad.easeOut',
+        onComplete: () => spark.destroy(),
+      });
+    }
+  }
+
+  /**
+   * Красный флажок «НОВОЕ» воткнут в новинку сверху: выскакивает, полощется на ветру и через два часа
+   * по часам зала прячется. У правой стены полотнище смотрит влево, чтобы не вылезать за магазин.
+   */
+  private newTag(img: Phaser.GameObjects.Image): void {
+    if (!img.active) return;
+    const top = img.y - img.displayHeight * img.originY;
+    const left = img.x - img.displayWidth * 0.2 + 25 > this.layout.w + WALL;
+    const x = img.x + (left ? 1 : -1) * img.displayWidth * 0.2;
+    // Древко — в 1,5 точки от края картинки 48×18 (24×9 в мире), надпись — по центру полотнища.
+    const flag = this.art(0, 0, 'tag_new').setOrigin(left ? 1 - 1.5 / 48 : 1.5 / 48, 1).setFlipX(left);
+    const label = this.add
+      .text((left ? -1 : 1) * 10.25, -5.25, t('store.newTag'), { fontFamily: UI_FONT, fontSize: '4.5px', fontStyle: 'bold', color: '#ffffff' })
+      .setOrigin(0.5)
+      .setResolution(8);
+    const tag = this.add.container(x, top + 2, [flag, label]).setDepth(990).setScale(0);
+    this.tweens.add({ targets: tag, scale: 1, duration: 260, ease: 'Back.easeOut', easeParams: [2.5] });
+    if (!this.lite) {
+      // Полощется: чуть качается на древке и морщится по ширине.
+      tag.setAngle(left ? 3 : -3);
+      this.tweens.add({ targets: tag, angle: left ? -3 : 3, delay: 260, duration: 720, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.tweens.add({ targets: flag, scaleX: 0.93 / ART, delay: 260, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    this.time.delayedCall(NEW_TAG_MS, () => {
+      if (!tag.active) return;
+      this.tweens.killTweensOf([tag, flag]);
+      this.tweens.add({ targets: tag, scale: 0, alpha: 0, duration: 220, ease: 'Back.easeIn', onComplete: () => tag.destroy() });
+    });
   }
 
   /** Утренние дела перед открытием: персонал, события дня, гости сюжета. */
