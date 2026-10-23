@@ -77,8 +77,9 @@ export const SEAM_SECONDS = 0.005;
  * Сгладить стык петли в разобранном звуке: последние 5 мс перед концом петли плавно переходят
  * в то, что лежит перед её началом, — и переход «конец → начало» звучит как в файле подряд.
  * Точки — в отсчётах буфера (его частота может быть ниже 48 кГц). channels меняются на месте.
+ * Так же сшиваются и петли атмосферы (дождь, гомон — ambienceFiles.ts).
  */
-export function smoothSeam(channels: Float32Array[], rate: number, loop: LoopFile): void {
+export function smoothSeam(channels: Float32Array[], rate: number, loop: Pick<LoopFile, 'loopStart' | 'loopEnd'>): void {
   const s = Math.round(loop.loopStart * rate);
   const e = Math.round(loop.loopEnd * rate);
   const k = Math.max(1, Math.round(SEAM_SECONDS * rate));
