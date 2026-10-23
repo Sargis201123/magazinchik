@@ -22,7 +22,7 @@ export const helpScan = (state: StoreState): number => (state.helpDay === state.
 /** Сегодня уже звал на помощь — второй раз кнопку не показываем. */
 export const helpAsked = (state: StoreState): boolean => state.helpAsked === state.day;
 
-export const markHelpAsked = (state: StoreState): StoreState => ({ ...state, helpAsked: state.day });
+export const markHelpAsked = (state: StoreState, day = state.day): StoreState => ({ ...state, helpAsked: day });
 
 /**
  * Друзья откликнулись: монеты за каждого и быстрая касса. Забирают подмогу при запуске игры — до
