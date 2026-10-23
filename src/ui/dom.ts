@@ -632,7 +632,8 @@ function showToast(image: string, title: string, text: string, medal: boolean): 
   }, 3700);
 }
 
-const ICONS: Record<string, string> = {
+/** Эмодзи → пиксельная картинка из игры: в меню (pixelize) и во всплывающих надписях в зале (StoreScene.popup). */
+export const ICONS: Record<string, string> = {
   '💰': 'coin',
   '🍞': 'item_bread',
   '🍎': 'item_apples',
@@ -834,7 +835,7 @@ const ICONS: Record<string, string> = {
   '🚽': 'ico_toilet',
 };
 // Эмодзи из таблицы; знак-вариант U+FE0F после него («⚠️») съедается вместе с ним.
-const ICON_RE = new RegExp(`(${Object.keys(ICONS).join('|')})\uFE0F?`, 'u');
+export const ICON_RE = new RegExp(`(${Object.keys(ICONS).join('|')})\uFE0F?`, 'u');
 
 /** Заменяет эмодзи денег и товаров на пиксельные картинки из игры. */
 export function pixelize(root: Node): void {
