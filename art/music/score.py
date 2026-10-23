@@ -1,4 +1,4 @@
-"""Нотная запись, аккорды, голосоведение и проверка гармонии.
+"""Нотная запись, аккорды, голосоведение.
 
 Запись мелодий строкой: «C5:1.5 D5:.5 r:1 A5:2!» — нота:длительность в долях (четвертях),
 r — пауза. Значки после длительности: ! акцент, ? тише, , стаккато, ~ легато.
@@ -243,65 +243,4 @@ def nearest(pc, around):
     c = [m for m in range(around - 6, around + 7) if m % 12 == pc]
     return min(c, key=lambda m: abs(m - around))
 
-
-# ---------------------------------------------------------------- проверка гармонии
-
-def check_harmony(notes, chords, meter=4):
-    """Каждый звук сверяется с текущим аккордом, а одновременные звуки — между собой.
-
-    Возвращает (ошибки, проходящие). Проходящие допустимы: короткая нота мелодии
-    (≤ 1/2 доли) не на сильной доле, либо подход баса на слабой доле.
-    """
-    issues, passing = [], []
-    segs = sorted(chords, key=lambda c: c[0])
-
-    def chords_at(s, e):
-        return [(max(s, a), min(e, b), c) for a, b, c in segs if a < e and b > s]
-
-    pitched = [n for n in notes if n.role != "drum" and n.pitch > 0]
-    for n in pitched:
-        s, e = n.start, n.start + n.dur * n.sound
-        for a, b, ch in chords_at(s, e):
-            pc = n.pitch % 12
-            if pc in ch.allowed():
-                continue
-            ov = b - a
-            pos = a % meter
-            strong = abs(pos) < 1e-6 or (meter == 4 and abs(pos - 2) < 1e-6)
-            on_beat = abs(a % 1.0) < 1e-6
-            ok = False
-            if n.role == "melody" and ov <= 0.5 + 1e-6 and not strong:
-                ok = True
-            if n.role == "melody" and ov <= 0.25 + 1e-6:
-                ok = True
-            if n.role == "bass" and ov <= 1.0 + 1e-6 and not strong:
-                ok = True
-            # Звук, начавшийся раньше смены аккорда и тянущийся в новый аккорд — недолго, допустимо.
-            if a > n.start + 1e-6 and ov <= 0.25 + 1e-6:
-                ok = True
-            rec = (n.inst, name(n.pitch), round(n.start, 3), ch.sym, round(ov, 3), "сильная" if strong else ("доля" if on_beat else "слабая"))
-            (passing if ok else issues).append(("нота вне аккорда",) + rec)
-    # Попарные столкновения: малая секунда/нона между долгими одновременными звуками.
-    ev = sorted(pitched, key=lambda n: n.start)
-    for i, n1 in enumerate(ev):
-        e1 = n1.start + n1.dur * n1.sound
-        for n2 in ev[i + 1:]:
-            if n2.start >= e1:
-                break
-            e2 = n2.start + n2.dur * n2.sound
-            ov = min(e1, e2) - max(n1.start, n2.start)
-            if ov < 0.3:
-                continue
-            d = abs(n1.pitch - n2.pitch)
-            if d % 12 == 1 and d <= 13 and min(n1.pitch, n2.pitch) >= 48:
-                t0 = max(n1.start, n2.start)
-                chs = chords_at(t0, t0 + 0.01)
-                sym = chs[0][2].sym if chs else "?"
-                # b9 законна в аккорде 7b9 — пропускаем
-                if chs and chs[0][2].qual == "7b9":
-                    continue
-                if n1.role == "melody" and n1.dur <= 0.5 or n2.role == "melody" and n2.dur <= 0.5:
-                    passing.append(("трение", n1.inst, name(n1.pitch), n2.inst, name(n2.pitch), round(t0, 3), sym))
-                    continue
-                issues.append(("трение", n1.inst, name(n1.pitch), n2.inst, name(n2.pitch), round(t0, 3), sym))
-    return issues, passing
+# Проверка гармонии (с учётом отпускания и звона нот) — в harmony.py.

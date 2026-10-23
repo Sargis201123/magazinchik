@@ -132,15 +132,31 @@ def comp(song, bar_from, bar_to, inst, rhythm, n=4, lo=52, hi=74, vel=0.55, top_
 
 
 def pad(song, bar_from, bar_to, inst="pad", n=4, lo=55, hi=76, vel=0.5, role="pad", **params):
+    """Пэд по аккордам. Общие звуки соседних аккордов не перезвучивают, а тянутся (лига) —
+    как у струнной группы; уходящие голоса глушит harmony.auto_damp."""
     out = []
     prev = None
-    for a, b, ch in sorted(song.chords, key=lambda c: c[0]):
-        if a < bar_from * song.meter or a >= bar_to * song.meter:
-            continue
+    spans = [(a, b, ch) for a, b, ch in sorted(song.chords, key=lambda c: c[0])
+             if bar_from * song.meter <= a < bar_to * song.meter]
+    vos = []
+    for a, b, ch in spans:
         vo = voicing(ch, n=n, lo=lo, hi=hi, prev=prev, avoid=melody_pitches(song, a, b))
         prev = vo
-        for p in vo:
-            out.append(Note(a, b - a, p, vel, inst, role, params=dict(params), sound=1.0))
+        vos.append(vo)
+    held = {}
+    for i, (a, b, ch) in enumerate(spans):
+        nxt = vos[i + 1] if i + 1 < len(spans) and abs(spans[i + 1][0] - b) < 1e-6 else ()
+        new_held = {}
+        for p in vos[i]:
+            if p in held:
+                note = held[p]
+                note.dur = b - note.start
+            else:
+                note = Note(a, b - a, p, vel, inst, role, params=dict(params), sound=1.0)
+                out.append(note)
+            if p in nxt:
+                new_held[p] = note
+        held = new_held
     song.add(out)
     return out
 
@@ -182,8 +198,9 @@ def bass_line(song, bar_from, bar_to, inst, style="two", vel=0.75, lo=36, hi=52,
                 for k, p in enumerate(tones):
                     out.append(Note(a + k, 0.9, p, vel * (1.0 if k % 2 == 0 else 0.88), inst, role, params=dict(params)))
             elif style == "pop8":
+                octave = root + 12 if root + 12 <= hi + 5 else fifth  # не залезать в регистр аккордов
                 for k in range(int(length * 2)):
-                    p = root if k % 4 != 3 else (root + 12 if k % 8 == 3 else fifth)
+                    p = root if k % 4 != 3 else (octave if k % 8 == 3 else fifth)
                     if k == int(length * 2) - 1 and nxt_root != root:
                         p = _approach(nxt_root, root, ch)
                     out.append(Note(a + k * 0.5, 0.42, p, vel * (1.0 if k % 2 == 0 else 0.8), inst, role,

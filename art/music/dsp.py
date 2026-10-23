@@ -298,12 +298,16 @@ def _smooth_env(level_db, attack, release, rate):
 
 
 def compress(x, ratio=2.0, thresh_db=None, knee=6.0, attack=0.025, release=0.3, circular=False, rate=1000,
-             makeup=False):
-    """Мягкий шинный компрессор (RMS-детектор, мягкое колено). Возвращает (y, gain_db)."""
+             makeup=False, detector_hp=150.0):
+    """Мягкий шинный компрессор (RMS-детектор, мягкое колено). Возвращает (y, gain_db).
+
+    Детектор слушает сигнал через фильтр верхних частот (~150 Гц): бас и бочка не «качают» всю смесь.
+    """
     n = x.shape[-1]
     hop = SR // rate
     m = n // hop + 1
-    p = np.mean(x * x, axis=0) if x.ndim == 2 else x * x
+    sc = filt(x, lambda f: hp_mag(f, detector_hp, 2), circular=circular) if detector_hp else x
+    p = np.mean(sc * sc, axis=0) if sc.ndim == 2 else sc * sc
     pad = np.zeros(m * hop)
     pad[:n] = p
     if circular:

@@ -40,8 +40,13 @@ def _fade_tail(y, ms=8):
 
 # ---------------------------------------------------------------- FM-электропиано (Rhodes)
 
-def epiano(f, dur, vel, rng, tine=1.0, decay=1.0, rel=0.16, bark=1.0):
-    """FM-электропиано: «тело» 1:1 + металлический «язычок» 1:14, яркость растёт с силой удара."""
+def epiano(f, dur, vel, rng, tine=1.0, decay=1.0, rel=0.12, bark=1.0):
+    """FM-электропиано: «тело» 1:1 + металлический «язычок» 1:14, яркость растёт с силой удара.
+
+    Колокольный «язычок» звучит ~0.1 с (а не 20 мс), индекс тела держится дольше, а нелинейность
+    звукоснимателя (несимметричное насыщение, как у Rhodes при сильном ударе) добавляет 2–4-ю
+    гармоники — от них «присутствие» в 1.5–4 кГц, которое слышно и в динамике телефона.
+    """
     tau = np.clip(decay * 3.0 * (220.0 / f) ** 0.5, 0.5, 7.0)
     n = int((dur + rel * 6) * SR)
     t = _t(n)
@@ -50,12 +55,17 @@ def epiano(f, dur, vel, rng, tine=1.0, decay=1.0, rel=0.16, bark=1.0):
     amp *= _release(t, dur, rel)
     ph = 2 * np.pi * f * t + rng.uniform(0, 2 * np.pi)
     reg = np.clip((520.0 / f) ** 0.6, 0.35, 1.4)  # верхние ноты мягче — меньше индекса
-    i1 = bark * (0.25 + 1.5 * v ** 2) * (0.5 * np.exp(-t / 0.22) + 0.5 * np.exp(-t / 1.6)) * reg
+    i1 = bark * (0.25 + 1.5 * v ** 2) * (0.5 * np.exp(-t / 0.22) + 0.7 * np.exp(-t / 2.5)) * reg
     body = np.sin(ph + i1 * np.sin(ph + 0.3))
     k = np.clip(800.0 / f, 0.0, 1.0)
-    i2 = tine * (0.5 + 1.4 * v) * np.exp(-t / 0.02) * k
+    i2 = tine * (0.5 + 1.4 * v) * np.exp(-t / 0.12) * k
     tine_sig = np.sin(ph * 1.0007 + i2 * np.sin(14.0 * ph)) * np.exp(-t / 0.35)
-    y = amp * (body + 0.45 * tine * (0.4 + 0.6 * v) * tine_sig)
+    y = amp * (body + 0.7 * tine * (0.4 + 0.6 * v) * tine_sig)
+    # звукосниматель: чем сильнее удар, тем больше «рычания»; спадает вместе с амплитудой
+    drive = bark * (0.6 + 1.6 * v ** 1.5) * np.clip((330.0 / f) ** 0.3, 0.6, 1.3)
+    y = np.tanh(drive * (y + 0.35 * y * y)) / np.tanh(drive)
+    # квадратичный член даёт и постоянную составляющую, повторяющую огибающую, — убираем её
+    y = np.fft.irfft(np.fft.rfft(y) * hp_mag(np.fft.rfftfreq(n, 1 / SR), 30, 2), n)
     return _fade_tail(y * (0.25 + 0.75 * v ** 1.4) * 0.55)
 
 
@@ -127,39 +137,47 @@ def guitar_body_ir(kind="nylon"):
 
 # ---------------------------------------------------------------- бас
 
+def _finger(n, t, rng, level=0.15):
+    """Шум пальца по струне: 25 мс полосы 500–1500 Гц — по нему бас «читается» в телефоне."""
+    return shaped_noise(n, rng, lambda ff: bp_mag(ff, 500, 1500, 2)) * np.exp(-t / 0.025) * level
+
+
 def bass_upright(f, dur, vel, rng, rel=0.07, tone=1.0, tau=None):
-    """Контрабас щипком: основной тон + 2-я/3-я гармоники (их слышно в телефоне)."""
+    """Контрабас щипком: богатый ряд гармоник (2–8-я) и шум пальца — основной тон дома слышно
+    в наушниках, а в динамике телефона бас «достраивается» ухом по гармоникам."""
     tau = tau or float(np.clip(0.9 * (60.0 / f) ** 0.25, 0.5, 1.4))
     n = int((dur + rel * 6) * SR)
     t = _t(n)
     fi = f * (1 + 0.006 * np.exp(-t / 0.035))
     ph = 2 * np.pi * np.cumsum(fi) / SR + rng.uniform(0, 2 * np.pi)
-    amps = np.array([1.0, 0.62, 0.42, 0.2, 0.1, 0.05]) * np.array([1, tone, tone, tone, tone, tone])
+    amps = np.array([1.0, 0.7, 0.55, 0.4, 0.3, 0.22, 0.15, 0.1])
     y = np.zeros(n)
     for k, a in enumerate(amps, start=1):
         if k * f > 5000:
             break
-        y += a * np.exp(-t * (1 + 0.8 * (k - 1)) / tau) * np.sin(k * ph + 0.2 * k)
+        a = a * (tone if k > 1 else 1.0)
+        y += a * np.exp(-t * (1 + 0.35 * (k - 1)) / tau) * np.sin(k * ph + 0.2 * k)
     thump = shaped_noise(n, rng, lambda ff: lp_mag(ff, 700, 2)) * np.exp(-t / 0.012) * 0.25
-    y = (y + thump) * _attack(t, 0.004) * _release(t, dur, rel)
-    y = np.tanh(1.2 * y) / np.tanh(1.2)
+    y = (y + thump + _finger(n, t, rng) * (0.5 + vel)) * _attack(t, 0.004) * _release(t, dur, rel)
+    y = np.tanh(1.1 * y / 2.2) / np.tanh(1.1)  # лёгкое насыщение (ряд гармоник и так богат)
     return _fade_tail(y * (0.35 + 0.65 * vel) * 0.6)
 
 
 def bass_electric(f, dur, vel, rng, rel=0.06, tone=1.0):
-    """Округлая бас-гитара пальцами: протяжнее контрабаса, чуть ярче атака."""
+    """Округлая бас-гитара пальцами: протяжнее контрабаса, ряд гармоник до 8-й, шум пальца."""
     n = int((dur + rel * 6) * SR)
     t = _t(n)
     ph = 2 * np.pi * f * t + rng.uniform(0, 2 * np.pi)
-    amps = [1.0, 0.5, 0.38, 0.16, 0.1, 0.05, 0.03]
+    amps = [1.0, 0.7, 0.55, 0.4, 0.3, 0.22, 0.15, 0.1]
     y = np.zeros(n)
     for k, a in enumerate(amps, start=1):
         if k * f > 6000:
             break
         a = a * (tone if k > 1 else 1)
-        y += a * (0.65 * np.exp(-t * k / 3.5) + 0.35 * np.exp(-t * k / 0.25)) * np.sin(k * ph + 0.3 * k)
-    y = y * _attack(t, 0.003) * _release(t, dur, rel)
-    y = np.tanh(1.3 * y) / np.tanh(1.3)
+        dk = 1 + 0.35 * (k - 1)
+        y += a * (0.65 * np.exp(-t * dk / 3.5) + 0.35 * np.exp(-t * dk / 0.25)) * np.sin(k * ph + 0.3 * k)
+    y = (y + _finger(n, t, rng, 0.12) * (0.5 + vel)) * _attack(t, 0.003) * _release(t, dur, rel)
+    y = np.tanh(1.2 * y / 2.2) / np.tanh(1.2)
     return _fade_tail(y * (0.4 + 0.6 * vel) * 0.55)
 
 
@@ -273,7 +291,7 @@ def flute(f, dur, vel, rng, vib=12.0, rel=0.09, attack=0.06, breath=0.045):
     vib_env = np.clip((t - 0.3) / 0.4, 0, 1)
     fi = f * 2 ** ((vib * vib_env * np.sin(2 * np.pi * 5.0 * t + rng.uniform(0, 6)) - 8 * np.exp(-t / 0.04)) / 1200)
     ph = 2 * np.pi * np.cumsum(fi) / SR
-    y = np.sin(ph) + 0.18 * np.sin(2 * ph + 0.4) + 0.06 * np.sin(3 * ph + 1.1) + 0.02 * np.sin(4 * ph)
+    y = np.sin(ph) + 0.30 * np.sin(2 * ph + 0.4) + 0.14 * np.sin(3 * ph + 1.1) + 0.07 * np.sin(4 * ph + 0.5)
     env = _attack(t, attack / 2.5) * _release(t, dur, rel)
     nz = shaped_noise(n, rng, lambda ff: bp_mag(ff, f * 0.8, min(f * 4, 5000), 2)) * breath
     chiff = shaped_noise(n, rng, lambda ff: bp_mag(ff, 1500, 6000, 1)) * np.exp(-t / 0.025) * 0.12 * vel
@@ -298,9 +316,9 @@ def pluck_lead(f, dur, vel, rng, rel=0.12):
 
 # ---------------------------------------------------------------- модальный синтез
 
-CELESTA = [(1.0, 1.0, 1.5), (2.0, 0.07, 0.4), (3.01, 0.05, 0.18), (4.17, 0.035, 0.1), (6.9, 0.012, 0.04)]
+CELESTA = [(1.0, 1.0, 1.5), (2.0, 0.25, 0.5), (3.0, 0.12, 0.25), (4.0, 0.08, 0.12), (6.9, 0.012, 0.04)]
 GLOCK = [(1.0, 1.0, 1.4), (2.76, 0.28, 0.35), (5.40, 0.12, 0.1), (8.93, 0.05, 0.04)]
-VIBES = [(1.0, 1.0, 2.6), (3.99, 0.18, 0.55), (9.8, 0.04, 0.12)]
+VIBES = [(1.0, 1.0, 2.6), (3.99, 0.4, 0.6), (9.8, 0.1, 0.15)]
 MUSICBOX = [(1.0, 1.0, 1.9), (2.0, 0.12, 0.6), (5.95, 0.05, 0.15), (9.3, 0.02, 0.05)]
 BELL = [(0.5, 0.35, 4.0), (1.0, 1.0, 3.0), (2.0, 0.5, 1.6), (2.76, 0.16, 0.8), (3.0, 0.25, 1.0), (4.07, 0.1, 0.5),
         (5.2, 0.05, 0.25)]  # «куранты»: без малой терции церковного колокола — не спорит с мажором
@@ -340,7 +358,7 @@ def _nz(n, rng, fn):
     return shaped_noise(n, rng, lambda f: fn(f) * lp_mag(f, 12500, 2))
 
 
-def kick_soft(vel, rng, f0=52.0, punch=70.0, decay=0.28, click=0.12):
+def kick_soft(vel, rng, f0=52.0, punch=70.0, decay=0.28, click=0.35, knock=0.3):
     n = int((decay * 5) * SR)
     t = _t(n)
     fi = f0 + punch * np.exp(-t / 0.03)
@@ -348,7 +366,9 @@ def kick_soft(vel, rng, f0=52.0, punch=70.0, decay=0.28, click=0.12):
     body = np.sin(ph) * np.exp(-t / decay)
     h2 = 0.25 * np.sin(2 * ph) * np.exp(-t / (decay * 0.4))  # 2-я гармоника — слышно в телефоне
     ck = _nz(n, rng, lambda ff: bp_mag(ff, 800, 4000, 1)) * np.exp(-t / 0.003) * click
-    y = (body + h2 + ck) * _attack(t, 0.0008)
+    # «стук» колотушки ~150 Гц: в динамике телефона бочка слышна по нему
+    kn = np.sin(2 * np.pi * 150 * t + 0.5) * np.exp(-t / 0.04) * knock
+    y = (body + h2 + ck + kn) * _attack(t, 0.0008)
     return _fade_tail(y * (0.3 + 0.7 * vel) * 0.8)
 
 
@@ -363,7 +383,7 @@ def bass_drum(vel, rng):
     return _fade_tail(y * _attack(t, 0.002) * (0.3 + 0.7 * vel) * 0.8)
 
 
-def surdo(vel, rng, f0=72.0, muted=False):
+def surdo(vel, rng, f0=80.0, muted=False):
     n = int((0.25 if muted else 1.0) * SR)
     t = _t(n)
     dec = 0.07 if muted else 0.4
@@ -405,7 +425,7 @@ def rim(vel, rng):
 def clock_tick(vel, rng, high=True):
     n = int(0.06 * SR)
     t = _t(n)
-    f = 2900 if high else 2300
+    f = 1800 if high else 1400
     y = np.sin(2 * np.pi * f * t) * np.exp(-t / 0.004) + 0.5 * np.sin(2 * np.pi * f * 1.62 * t) * np.exp(-t / 0.003)
     y += _nz(n, rng, lambda ff: bp_mag(ff, 3000, 9000, 1)) * np.exp(-t / 0.0015) * 0.4
     return _fade_tail(y * vel * 0.35)
