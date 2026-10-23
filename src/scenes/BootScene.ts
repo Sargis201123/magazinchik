@@ -3,7 +3,7 @@ import atlas from 'virtual:atlas';
 import { startSync } from '../game/save';
 import { t } from '../i18n';
 import { assetUrl, png } from '../platform/assets';
-import { TEXTURES } from './textures';
+import { DOM_TEXTURES, TEXTURES } from './textures';
 
 /**
  * Текстура-кадр общего листа атласа под старым именем ('shelf', 'p_legs1_s'…). Своей картинки
@@ -31,6 +31,16 @@ function spreadSheet(textures: Phaser.Textures.TextureManager, name: string): vo
   for (const key of sheet.getFrameNames()) {
     if (!textures.exists(key)) list[key] = new SheetFrame(textures, key, sheet, sheet.get(key));
   }
+}
+
+/**
+ * Меню берут картинки мира не из листа атласа, а отдельными файлами (DOM_TEXTURES). Пока ждём сверку
+ * с облаком, сеть свободна — прогреваем ими кэш браузера по тому же адресу с отпечатком (png), иначе у
+ * новенького на медленной связи монетка в HUD и товары в первом утреннем окне проявлялись бы по одной.
+ * Игру это не держит; вернувшемуся игроку файлы отдаёт кэш (assets/ кэшируются на год).
+ */
+function warmMenuImages(): void {
+  for (const key of DOM_TEXTURES) new Image().src = png(key);
 }
 
 export class BootScene extends Phaser.Scene {
@@ -84,6 +94,7 @@ export class BootScene extends Phaser.Scene {
 
   /** Картинки на месте: дождаться сверки с облаком — и в магазин. */
   private ready(): void {
+    warmMenuImages();
     // Сохранение сверяется с облаком Telegram с самого запуска (main.ts), параллельно с картинками;
     // здесь только дождаться конца (не дольше пары секунд) — и в магазин.
     const splash = document.getElementById('splash');

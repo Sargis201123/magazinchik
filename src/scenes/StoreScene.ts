@@ -9069,6 +9069,8 @@ export class StoreScene extends Phaser.Scene {
           await this.workerWalk(w, step.x, step.y);
           if (!this.alive(gen)) return;
           if (step.ms) await this.workerWait(w, step.ms);
+          // Пока завязывал мешок или бросал его в контейнер, состав мог смениться (syncStaff) — спрайта уже нет.
+          if (!this.alive(gen)) return;
           step.action?.();
         }
         continue;
@@ -9084,6 +9086,7 @@ export class StoreScene extends Phaser.Scene {
         await this.workerWalk(w, piece.x + 6, piece.y);
         if (!this.alive(gen)) return;
         await this.workerWait(w, kind === 'trash' ? TRASH_CLEAN_MS : kind === 'spill' ? SPILL_MOP_MS : MOP_MS);
+        if (!this.alive(gen)) return;
         if (!piece.active) continue;
         if (kind !== 'trash') {
           this.removeTrash(piece);
@@ -9095,6 +9098,7 @@ export class StoreScene extends Phaser.Scene {
         await this.workerWalk(w, stand.x, stand.y);
         if (!this.alive(gen)) return;
         await this.workerWait(w, BIN_DROP_MS);
+        if (!this.alive(gen)) return;
         w.carried.setVisible(false).setTexture('box');
         this.putInBin();
         continue;
@@ -9103,6 +9107,7 @@ export class StoreScene extends Phaser.Scene {
         await this.workerWalk(w, this.layout.wc.x, this.layout.wc.spotY);
         if (!this.alive(gen)) return;
         await this.workerWait(w, TOILET_CLEAN_MS);
+        if (!this.alive(gen)) return;
         this.toiletDirt = 0;
         this.refreshToilet();
         this.bubbles(this.layout.wc.x, this.layout.wc.y);

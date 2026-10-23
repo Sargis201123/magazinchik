@@ -326,3 +326,10 @@ const SPRITES = [
 
 /** Все картинки мира по именам (без повторов): спрайты и гардероб человечков. */
 export const TEXTURES: string[] = [...new Set([...SPRITES, ...WARDROBE_TEXTURES])];
+
+/**
+ * Картинки мира, которые меню показывают ещё и отдельными файлами (<img src=png(key)>): монетка в HUD,
+ * значки вместо эмодзи (ui/dom.ts, ICONS), товары в закупке и ценах, кот, краска стен в оформлении.
+ * Phaser берёт их из листа атласа, а меню — из assets/<имя>.png, поэтому BootScene заранее прогревает ими кэш.
+ */
+export const DOM_TEXTURES: string[] = ['coin', 'box', 'cat_sit', 'wall', ...PRODUCT_IDS.flatMap((id) => [`item_${id}`, `item_${id}_0`])];
