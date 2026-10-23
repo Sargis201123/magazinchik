@@ -112,7 +112,7 @@ import { dialogBox } from '../ui/dialog';
 import { giantLook, type GiantLook } from '../game/giant';
 import { pickWear, wearOf } from './archetypes';
 import { BIG_LAYER_DY, type BackId, type FaceId, type HatId, type OutfitId, type PropId } from './wardrobe';
-import { Hud } from '../ui/hud';
+import { Hud, type SummaryStamp } from '../ui/hud';
 import { showMorning } from '../ui/morning';
 import { showTitle } from '../ui/title';
 import { isWet, weatherFor, type Weather } from '../game/weather';
@@ -10430,6 +10430,8 @@ export class StoreScene extends Phaser.Scene {
     const cafe = this.cafeToday;
     this.cafeToday = null;
     const extra: [string, string][] = [];
+    // Новое звание и побитые рекорды — печатями в итогах, а не строкой в «Подробнее».
+    const stamps: SummaryStamp[] = [];
     const big = bigDayFor(finishedDay);
     if (big) extra.push([t('bigday.summary'), `${BIG_DAYS[big].icon} ${t(`bigday.${big}.title` as TextKey)}`]);
     if (wedding) extra.push([t('summary.wedding'), t(wedding.complete ? 'summary.weddingFull' : 'summary.weddingPart', { n: wedding.earned })]);
@@ -10437,7 +10439,7 @@ export class StoreScene extends Phaser.Scene {
     if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
     if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
     const rankAfter = rankOf(state.totalRevenue);
-    if (rankAfter > rankBefore) extra.push(['🏅', t('summary.rankUp', { name: rankName(rankAfter, t) })]);
+    if (rankAfter > rankBefore) stamps.push({ kind: 'rank', name: rankName(rankAfter, t) });
     if (order) extra.push([t('summary.order'), order.delivered ? t('summary.orderDone', { n: order.earned }) : t('summary.orderFailed')]);
     if (cafe) {
       const end = cafe.ended === 'done' ? ` · ${t('summary.cafeDone')}` : cafe.ended === 'canceled' ? ` · ${t('summary.cafeCanceled')}` : '';
@@ -10455,7 +10457,7 @@ export class StoreScene extends Phaser.Scene {
     const reviews = reviewsFor(this.stats, finishedDay);
     const best = updateRecords({ ...recordDay(state, this.stats), reviews }, this.stats, finishedDay);
     this.state = best.state;
-    for (const id of best.broken) extra.push(['🏆', t('records.broken', { name: t(`records.${id}` as TextKey) })]);
+    for (const id of best.broken) stamps.push({ kind: 'record', id });
     this.stats.spoiled = spoiled;
     this.stats.skimmed = skimmed;
     if (promoted) this.syncStaff();
@@ -10492,6 +10494,7 @@ export class StoreScene extends Phaser.Scene {
         { before: ratingBefore, after: state.rating },
         { bill: bill && billTotal(bill), shortfall, total: state.money },
         extra,
+        stamps,
         this.state.history,
         lossAdvice(this.stats, this.state),
         reviews,
