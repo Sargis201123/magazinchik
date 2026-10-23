@@ -337,9 +337,13 @@ function neon(ac: AudioContext, sign: Neon | null, lite: boolean): void {
     return;
   }
   if (buzz && buzz.bus !== bus) stopBuzz(ac);
-  if (!buzz) buzz = startBuzz(ac, bus);
-  const where = placeAt(sign.x);
   const now = ac.currentTime;
+  if (!buzz) {
+    buzz = startBuzz(ac, bus);
+    // Свет вернули (или звук включили) — вывеска зажигается сразу, с треском, а не молчит до прежнего срока мигания.
+    next.flicker = Math.min(next.flicker, now);
+  }
+  const where = placeAt(sign.x);
   const base = LEVEL.neon * where.gain;
   if (!buzz.at || Math.abs(buzz.at.pan - where.pan) > 0.02 || Math.abs(buzz.at.gain - base) > base * 0.05) {
     buzz.at = { pan: where.pan, gain: base };
@@ -375,6 +379,9 @@ export const ambFiles = {
   /** Каждый кадр (контекст уже играет): петли, случайные звуки, неон и уборка памяти. */
   update(ac: AudioContext, s: AmbScene, sign: Neon | null): void {
     lastWanted = mixer.audible('street') || mixer.audible('hall') ? wantedFiles(s) : [];
+    // Нужное качаем заранее (ensure не качает дважды): иначе файл улицы ждал бы первого трамвая, а
+    // велозвонок, голуби и «дзинь» фонаря до тех пор пропадали бы.
+    for (const id of lastWanted) ensure(ac, id);
     weatherBed(ac, s);
     murmur(ac, s);
     events(ac, s);

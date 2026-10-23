@@ -72,6 +72,8 @@ export const AMB = {
 export interface AmbScene {
   weather: Weather;
   season: YearTime;
+  /** Поздняя осень (после урожая, до Нового года): только тогда осенью каркают вороны. */
+  lateAutumn: boolean;
   /** Вечер: 0 — день, 1 — ночь (как в сцене). */
   evening: number;
   /** Утро: 1 — магазин только открылся (и утренний экран), 0 — с середины дня. */
@@ -98,11 +100,11 @@ export function birdGap(s: AmbScene): Gap {
   return s.morning > 0.4 ? [1.4, 4.5] : [4, 11];
 }
 
-/** Вороны: зимой и в снег — то и дело, поздней осенью — изредка; в темноте молчат. */
+/** Вороны: зимой и в снег — то и дело, поздней осенью — изредка (в начале осени их нет); в темноте молчат. */
 export function crowGap(s: AmbScene): Gap {
   if (s.night || s.evening > 0.75) return null;
   if (s.season === 'winter' || s.weather === 'snow') return [9, 26];
-  if (s.season === 'autumn' && !wet(s.weather)) return [30, 75];
+  if (s.season === 'autumn' && s.lateAutumn && !wet(s.weather)) return [30, 75];
   return null;
 }
 

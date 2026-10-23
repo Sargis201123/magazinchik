@@ -20,7 +20,7 @@ import { noiseBuffer } from './sound';
 
 export type { Neon } from './ambienceFiles';
 
-/** Жизнь вокруг — для атмосферы из файлов: покупатели, утро, Новый год, ночная смена, неон. */
+/** Жизнь вокруг — для атмосферы из файлов: покупатели, утро, Новый год, поздняя осень, ночная смена, неон. */
 export interface AmbLife {
   /** Покупателей в зале. */
   customers: number;
@@ -28,6 +28,8 @@ export interface AmbLife {
   morning: number;
   /** Новогодняя неделя в игре или 31 декабря — 1 января по календарю. */
   newYear: boolean;
+  /** Поздняя осень (после урожая, до Нового года) — вороны. */
+  lateAutumn: boolean;
   night: boolean;
   /** Облегчённый режим: меньше слоёв, без записанного дождя. */
   lite: boolean;
@@ -266,6 +268,7 @@ export const ambience = {
     const scene: AmbScene = {
       weather,
       season,
+      lateAutumn: life?.lateAutumn ?? false,
       evening,
       morning: life?.morning ?? 0,
       customers: life?.customers ?? 0,

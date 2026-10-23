@@ -119,7 +119,7 @@ import { Hud, type SummaryStamp } from '../ui/hud';
 import { showMorning } from '../ui/morning';
 import { showTitle } from '../ui/title';
 import { isWet, weatherFor, type Weather } from '../game/weather';
-import { holidayFor, yearTime } from '../game/calendar';
+import { holidayFor, lateAutumn, yearTime } from '../game/calendar';
 import { liveProgress, recordDay, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
@@ -1255,7 +1255,7 @@ export class StoreScene extends Phaser.Scene {
   /** Новый год для звуков (салют вечером): новогодняя неделя в игре или 31.12–1.01 по календарю. */
   private newYearSound = false;
   /** Что вокруг — для атмосферы (ambience.ts): один объект на все кадры, без мусора в памяти. */
-  private ambLife: AmbLife = { customers: 0, morning: 0, newYear: false, night: false, lite: false, neon: null };
+  private ambLife: AmbLife = { customers: 0, morning: 0, newYear: false, lateAutumn: false, night: false, lite: false, neon: null };
   private valyaCame = false;
   /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
   private combo = 0;
@@ -3782,13 +3782,14 @@ export class StoreScene extends Phaser.Scene {
 
   /**
    * Что вокруг — для атмосферы: сколько покупателей (гомон), утро ли (птицы чаще), Новый год (салют),
-   * ночная смена, облегчённый режим и какая неоновая вывеска сейчас горит (жужжит).
+   * поздняя осень (вороны), ночная смена, облегчённый режим и какая неоновая вывеска сейчас горит (жужжит).
    */
   private ambienceLife(): AmbLife {
     const life = this.ambLife;
     life.customers = this.running ? this.customers.size : 0;
     life.morning = this.onTitle || this.night || this.closed ? 0 : !this.dayOpen ? 1 : Phaser.Math.Clamp(1 - (1 - this.timeLeft / DAY_SECONDS) / (MUSIC_MORNING * 1.5), 0, 1);
     life.newYear = this.newYearSound;
+    life.lateAutumn = lateAutumn(this.state.day);
     life.night = this.night;
     life.lite = this.lite;
     // Неон в зале горит весь день; вывеска на крыше — с вечера (сначала мигает). Свет отключили — молчит.

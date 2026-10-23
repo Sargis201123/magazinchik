@@ -28,6 +28,7 @@ const FILES = new Set(Object.keys(import.meta.glob('../public/audio/amb/*.{ogg,m
 const scene = (patch: Partial<AmbScene> = {}): AmbScene => ({
   weather: 'clear',
   season: 'summer',
+  lateAutumn: false,
   evening: 0,
   morning: 0,
   customers: 0,
@@ -78,10 +79,11 @@ describe('файлы атмосферы', () => {
 describe('что качать сейчас', () => {
   const has = (s: AmbScene, id: AmbId) => wantedFiles(s).includes(id);
 
-  it('без покупателей и в сухую погоду — только мелкие звуки улицы, птицы летом и вороны осенью', () => {
+  it('без покупателей и в сухую погоду — только мелкие звуки улицы, птицы летом и вороны поздней осенью', () => {
     expect(wantedFiles(scene({ evening: 0.6 }))).toEqual(['street']);
     expect(wantedFiles(scene())).toEqual(['street', 'birds']);
-    expect(wantedFiles(scene({ season: 'autumn' }))).toEqual(['street', 'crows']);
+    expect(wantedFiles(scene({ season: 'autumn' }))).toEqual(['street']);
+    expect(wantedFiles(scene({ season: 'autumn', lateAutumn: true }))).toEqual(['street', 'crows']);
   });
 
   it('дождь — только в свою погоду: дождь или ливень, не оба; на слабом телефоне — без записи', () => {
@@ -107,12 +109,16 @@ describe('что качать сейчас', () => {
     expect(has(scene({ season: 'winter' }), 'birds')).toBe(false);
   });
 
-  it('вороны — зимой и в снег часто, поздней осенью реже, летом и в темноте — нет', () => {
+  it('вороны — зимой и в снег часто, поздней осенью реже, в начале осени, летом и в темноте — нет', () => {
     const winter = crowGap(scene({ season: 'winter' }))!;
-    const autumn = crowGap(scene({ season: 'autumn' }))!;
+    const autumn = crowGap(scene({ season: 'autumn', lateAutumn: true }))!;
     expect(winter[1]).toBeLessThan(autumn[0] + 1);
     expect(crowGap(scene({ weather: 'snow', season: 'autumn' }))).toEqual(winter);
     expect(crowGap(scene())).toBeNull();
+    // Начало осени (со школы до урожая): ворон нет — файл не качается и не играет.
+    expect(crowGap(scene({ season: 'autumn' }))).toBeNull();
+    expect(has(scene({ season: 'autumn', weather: 'leaves' }), 'crows')).toBe(false);
+    expect(crowGap(scene({ season: 'autumn', lateAutumn: true, weather: 'rain' }))).toBeNull();
     expect(crowGap(scene({ season: 'winter', night: true }))).toBeNull();
     expect(has(scene({ season: 'winter', weather: 'snow' }), 'crows')).toBe(true);
   });
