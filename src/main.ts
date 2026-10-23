@@ -34,6 +34,9 @@ function start(): void {
     // Phaser на Android качает по 6 файлов разом, а картинок больше 800: волнами по 6 первый вход
     // тянулся секунды на мобильной сети. Сервер отдаёт их по HTTP/2 — можно смело 32 параллельно.
     loader: { maxParallelDownloads: 32 },
+    // Звуки и музыка — свои (platform/mixer.ts); звуковой модуль Phaser не нужен, а он создавал
+    // второй, лишний аудиоконтекст.
+    audio: { noAudio: true },
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,

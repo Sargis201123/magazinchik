@@ -131,7 +131,6 @@ import {
 import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene } from '../game/drama';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
-import { music } from '../platform/music';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
 import { BIG_DAYS, bigDayFor, bigDayKnown, bigDayProgress } from '../game/bigday';
 import {
@@ -223,6 +222,7 @@ import { showLeaderboard } from './leaderboard';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { button, el, openModal, who } from './dom';
+import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
 import { keepPlaces } from '../scenes/placement';
 
@@ -3370,20 +3370,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         }, `ui-chip${lite === on ? ' active' : ''}`),
       );
     gfx.append(el('b', '', `🖥 ${t('lite.title')}`), el('div', 'ui-muted', t('lite.note')), chips);
-    // Звук: музыка и звуки игры (касса, монетки, погода) выключаются отдельно.
-    const audioBox = el('div', 'ui-box');
-    const audioChips = el('div', 'ui-chips');
-    audioChips.append(
-      button(music.isMuted() ? t('title.musicOff') : t('title.musicOn'), () => {
-        music.setMuted(!music.isMuted());
-        render();
-      }, `ui-chip${music.isMuted() ? '' : ' active'}`),
-      button(sound.isMuted() ? t('title.soundOff') : t('title.soundOn'), () => {
-        sound.setMuted(!sound.isMuted());
-        render();
-      }, `ui-chip${sound.isMuted() ? '' : ' active'}`),
-    );
-    audioBox.append(el('b', '', `🔊 ${t('audio.title')}`), el('div', 'ui-muted', t('audio.note')), audioChips);
+    // Звук: быстрое «без звука» и ползунки громкости по каналам (ui/audio.ts).
+    const sounds = audioBox(() => getState().day, render);
     // Своё название магазина — на вывеске на крыше.
     const named = el('div', 'ui-box');
     const input = el('input', 'ui-input');
@@ -3399,7 +3387,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       achievementsButton(state),
       ...friendsBox(),
       named,
-      audioBox,
+      sounds,
       gfx,
       rankBox(state),
       ...legacyBox(state),
