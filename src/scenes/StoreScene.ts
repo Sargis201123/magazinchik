@@ -299,6 +299,17 @@ const RIVAL_ACROSS_H = 106;
 
 /** Слой света: выше людей и мебели, ниже всплывающих надписей (1000). */
 const LIGHT_DEPTH = 900;
+/** Толчок: дрожь доходит до полки через x·QUAKE_WAVE_MS мс (слева направо), полка дрожит QUAKE_SHAKE_MS мс на ±QUAKE_SHAKE_PX. */
+const QUAKE_WAVE_MS = 1.5;
+const QUAKE_SHAKE_MS = 560;
+const QUAKE_SHAKE_PX = 0.8;
+/** После волны: осколки улеглись — полки перерисовываются. */
+const QUAKE_SETTLE_MS = 700;
+/** У скольких упавших штук самое большее разлетаются осколки (остальные просто бьются). */
+const QUAKE_SHATTER_MAX = 20;
+/** Цвет пыли и штукатурки; крошки потемнее — их видно и на светлом полу. */
+const QUAKE_DUST = 0xc8b8a0;
+const QUAKE_GRIT = 0x8f7f6a;
 /** Цвет света на улице и в зале по ходу дня: [доля дня, цвет]. Умножается на картинку. */
 const OUTDOOR_LIGHT: [number, number][] = [
   [0, 0xfff2dc],
@@ -754,6 +765,10 @@ const NIGHT_SHIRTS = [0x262b44, 0x3a4466, 0x45444f, 0x68386c, 0x124e89, 0x5a6988
 /** Кот гуляет по залу раз в столько секунд (если захочет). */
 const CAT_WALK_EVERY = 18_000;
 const CAT_SPEED = 26;
+/** Кот в зале живёт тиками по 130 мс: хвост, моргание, умывание. */
+const CAT_TICK = 130;
+/** Кадры походки кота: лапы врозь, проходят мимо, врозь наоборот, снова мимо. */
+const CAT_WALK = ['cat_walk0', 'cat_walk2', 'cat_walk1', 'cat_walk3'];
 
 type TrashKind = 'trash' | 'mud' | 'spill';
 
@@ -791,6 +806,25 @@ interface ShelfView {
   needsStock: boolean;
   /** Шкала запаса у боковой полки: товар на ней сбоку не разглядеть, а шкалу видно сразу. */
   meter?: Phaser.GameObjects.Graphics;
+}
+
+/** Штука, которую разбил толчок: какая картинка на полке и как она выглядела. */
+interface QuakeFall {
+  img: Phaser.GameObjects.Image;
+  key: string;
+  x: number;
+  y: number;
+  scale: number;
+  tint: number;
+}
+
+/** Штука на полке, которую только что сняли: откуда и какой она была — из неё товар и летит в руки. */
+interface TakenSpot {
+  x: number;
+  y: number;
+  texture: string;
+  scale: number;
+  tint: number;
 }
 
 interface NightLight {
@@ -848,6 +882,9 @@ export class StoreScene extends Phaser.Scene {
   private stats: DayStats = emptyDayStats();
   private hud!: Hud;
   private shelfViews: ShelfView[] = [];
+  /** Сколько раз перерисовывали полки: толчок по нему узнаёт, что товар на картинках уже другой. */
+  /** Толчок: уронить разбитое, до чего волна ещё не дошла, — сразу, пока полки не перерисовали. */
+  private quakeFlush?: () => void;
   private boxes: Phaser.GameObjects.Image[] = [];
   private shutters: Phaser.GameObjects.Image[] = [];
   private arrow?: Phaser.GameObjects.Image;
@@ -886,6 +923,10 @@ export class StoreScene extends Phaser.Scene {
   private coldAir = false;
   /** Пятна света от потолочных ламп с номером ряда: утром включаются ряд за рядом. */
   private lampPools: { img: Phaser.GameObjects.Image; row: number }[] = [];
+  /** Подвесные лампы (декор «Свет») с пятном света под ними: от подземного толчка качаются. */
+  private hangingLamps: { lamp: Phaser.GameObjects.Image; bulb: Phaser.GameObjects.Image }[] = [];
+  /** Цвета осколков разбитого товара по картинке — чтобы не читать пиксели каждый раз. */
+  private shardColors = new Map<string, number[]>();
   /** Пруд в парке: рядом летают светлячки. */
   private parkPond?: { x: number; y: number };
   /** Солнечные пятна от окон на полу зала. */
@@ -933,6 +974,8 @@ export class StoreScene extends Phaser.Scene {
   private vendingAt = { x: 0, y: 0 };
   /** Лёгкая графика: без виньетки и облаков (холст поменьше — со следующего запуска). */
   private lite = liteMode();
+  /** Покупатель только что взял товар (tryTake): с каких мест полки — reachShelf пускает его оттуда. */
+  private takenFrom: TakenSpot[] = [];
   /** Посекундные замеры FPS за день: медиана уходит в аналитику, при тормозах — лёгкая графика. */
   private fpsSamples: number[] = [];
   private fpsFrames = 0;
@@ -1064,6 +1107,10 @@ export class StoreScene extends Phaser.Scene {
   private sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
   private catHome = { x: 0, y: 0 };
   private catOut = false;
+  /** Кот сидит посреди зала: таймер, который водит его хвостом, моргает и умывает (есть, пока сидит). */
+  private catSitTimer?: Phaser.Time.TimerEvent;
+  /** Сколько ещё тиков кот жмурится (погладили — медленно моргает). */
+  private catBlink = 0;
   /** Флажки, шарики и лоток ярмарки; лоток продаёт со склада по таймеру. */
   private fairObjs: Phaser.GameObjects.GameObject[] = [];
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
@@ -1796,31 +1843,38 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.add({ targets: thought, alpha: 0, delay: failed ? 1100 : 150, duration: 250, onComplete: () => thought.destroy() });
   }
 
-  /** Покупатель тянется к полке; если взял — товар летит ему в руки. */
-  private reachShelf(c: Customer, slot: { x: number; y: number }, id: ProductId | null): void {
+  /**
+   * Покупатель тянется к полке; если взял — товар летит ему в руки. Летит та самая штука, что пропала
+   * с полки (from — места из tryTake); без них (корзина уценки) — из случайной точки над полкой.
+   */
+  private reachShelf(c: Customer, slot: { x: number; y: number }, id: ProductId | null, from: TakenSpot[] = []): void {
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.07, duration: 140, yoyo: true, onComplete: () => c.sprite.setScale(base) });
     // Нашёл — улыбается, полка пустая — хмурится.
     this.setMood(c.sprite, id ? 'happy' : 'frown', id ? 1400 : 1200);
     if (!id) return;
-    const item = this.art(slot.x + Phaser.Math.Between(-12, 12), slot.y - 5, `item_${id}_0`).setDepth(c.sprite.y + 1);
-    // Товар перелетает дугой в руки (в корзину), над полкой — цена, которую принесёт.
-    const from = { x: item.x, y: item.y };
-    this.tweens.addCounter({
-      from: 0,
-      to: 1,
-      duration: 360,
-      ease: 'Sine.easeInOut',
-      onUpdate: (tween) => {
-        const k = tween.getValue() ?? 0;
-        const to = { x: c.sprite.x, y: c.sprite.y - 3 };
-        item.setPosition(from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k - Math.sin(k * Math.PI) * 9);
-        item.setScale((1 - 0.5 * k) / ART).setAlpha(1 - 0.6 * k * k);
-      },
-      onComplete: () => item.destroy(),
+    const spots = from.length ? from : [{ x: slot.x + Phaser.Math.Between(-12, 12), y: slot.y - 5, texture: `item_${id}_0`, scale: 1 / ART, tint: 0xffffff }];
+    // Товар перелетает дугой в руки (в корзину), над полкой — цена, которую принесёт. «2 по цене 1» — две штуки одна за другой.
+    spots.forEach((spot, n) => {
+      const item = this.art(spot.x, spot.y, spot.texture).setScale(spot.scale).setTint(spot.tint).setDepth(c.sprite.y + 1).setVisible(n === 0);
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay: n * 110,
+        duration: 360,
+        ease: 'Sine.easeInOut',
+        onStart: () => item.setVisible(true),
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          const to = { x: c.sprite.x, y: c.sprite.y - 3 };
+          item.setPosition(spot.x + (to.x - spot.x) * k, spot.y + (to.y - spot.y) * k - Math.sin(k * Math.PI) * 9);
+          item.setScale(spot.scale * (1 - 0.5 * k)).setAlpha(1 - 0.6 * k * k);
+        },
+        onComplete: () => item.destroy(),
+      });
     });
     const unit = [...c.items].reverse().find((i) => i.id === id);
-    if (unit && !unit.free) this.priceFlash(slot.x, slot.y - 12, Math.ceil(unitSalePrice(this.state, id, unit.unit) * (this.night ? NIGHT_MARKUP : 1)));
+    if (unit && !unit.free) this.priceFlash(spots[0].x, slot.y - 12, Math.ceil(unitSalePrice(this.state, id, unit.unit) * (this.night ? NIGHT_MARKUP : 1)));
   }
 
   /** «+45» над полкой: золотая цифра подпрыгивает и тает. Не всплывающая надпись — без подложки, мелко. */
@@ -1878,10 +1932,15 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
-  /** Полка подпрыгивает целиком — с товаром и кромкой: после выкладки и от касания. */
+  /**
+   * Полка подпрыгивает целиком — с товаром и кромкой: после выкладки и от касания. Штуки, которые
+   * сейчас съезжают на новое место (slideItem), не подпрыгивают: высоту у них ведёт съезд.
+   */
   private hopShelf(view: ShelfView, height = 2): void {
     if (this.lite) return;
-    const parts = [view.bg, view.front, ...view.items.filter((i) => i.visible), ...view.backItems.filter((i) => i.visible)];
+    // Штуки, которые ещё летят из коробки (stockShelf) или съезжают на место, не трогаем: их ведёт свой твин.
+    const still = (i: Phaser.GameObjects.Image) => i.visible && !i.getData('flying') && !(i.getData('slide') as Phaser.Tweens.Tween | undefined)?.isActive();
+    const parts = [view.bg, view.front, ...view.items.filter(still), ...view.backItems.filter(still)];
     if (parts.some((p) => p.getData('hopping'))) return;
     for (const p of parts) p.setData('hopping', true);
     this.tweens.add({
@@ -1892,6 +1951,97 @@ export class StoreScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
       onComplete: () => parts.forEach((p) => p.setData('hopping', false)),
     });
+  }
+
+  /**
+   * Дрожь по залу от толчка: волна бежит по полкам слева направо — каждая полка вместе с товаром
+   * мелко ходит из стороны в сторону и затихает. Когда волна доходит до полки, зовётся onShelf.
+   * Возвращает, через сколько мс волна пройдёт весь зал.
+   */
+  private quakeWave(onShelf: (view: ShelfView, index: number) => void): number {
+    type Part = Phaser.GameObjects.GameObject & { x: number; visible: boolean; depth: number };
+    let end = 0;
+    this.shelfViews.forEach((view, index) => {
+      const delay = Math.max(0, view.at.x) * QUAKE_WAVE_MS;
+      end = Math.max(end, delay + QUAKE_SHAKE_MS);
+      let parts: { obj: Part; base: number; set: number }[] = [];
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay,
+        duration: QUAKE_SHAKE_MS,
+        onStart: () => {
+          if (!view.bg.active) return;
+          onShelf(view, index);
+          // Толчок снизу: полка коротко подскакивает, дальше дрожит.
+          this.hopShelf(view, 1);
+          // Полка, кромка, товар, значок отдела; плитка, тени и отсветы на полу стоят на месте.
+          const all = [view.bg, view.front, view.cover, view.meter, ...view.items, ...view.backItems, ...view.pips, ...(view.lights as unknown as Part[])];
+          parts = all.filter((o): o is Part => Boolean(o?.active && o.visible && o.depth > 1)).map((obj) => ({ obj, base: obj.x, set: NaN }));
+        },
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          // Несколько качаний, к концу всё тише.
+          const off = Math.sin(k * Math.PI * 8) * QUAKE_SHAKE_PX * (1 - k);
+          for (const p of parts) {
+            if (!p.obj.active) continue;
+            // Предмет переставили (полку перерисовали, штука летит из коробки) — качаем от нового места.
+            if (p.obj.x !== p.set) p.base = p.obj.x;
+            p.obj.x = p.set = p.base + off;
+          }
+        },
+        onComplete: () => {
+          for (const p of parts) if (p.obj.active && p.obj.x === p.set) p.obj.x = p.base;
+        },
+      });
+    });
+    return end;
+  }
+
+  /**
+   * Штука на полке съезжает со старого места на своё (refreshShelves уже поставил её туда): взяли
+   * соседнюю — остальные плавно сдвигаются, а не перескакивают. Пока полка подпрыгивает (hopShelf),
+   * высоту ведёт прыжок — он сам вернёт штуку на её высоту, поэтому едем только вбок.
+   */
+  private slideItem(img: Phaser.GameObjects.Image, from: { x: number; y: number }): void {
+    (img.getData('slide') as Phaser.Tweens.Tween | undefined)?.stop();
+    const hopping = Boolean(img.getData('hopping'));
+    const to = { x: img.x, y: img.y };
+    img.setPosition(from.x, hopping ? to.y : from.y);
+    const tween = this.tweens.add({ targets: img, x: to.x, ...(hopping ? {} : { y: to.y }), duration: 140, ease: 'Quad.easeOut' });
+    img.setData('slide', tween);
+  }
+
+  /**
+   * Штуку сняли с полки — соседи по ряду качнулись к пустому месту и пружинят обратно: ближние
+   * сильнее и раньше, дальние — слабее и чуть позже, как волна. На слабом телефоне не качаем.
+   */
+  private jostleShelf(view: ShelfView, gone: { x: number; y: number }): void {
+    if (this.lite) return;
+    // Шаг между штуками в ряду: на плотной полке качаются больше соседей, но так же далеко по счёту.
+    const row = view.items.filter((img) => img.visible && Math.abs(img.y - gone.y) < 3).map((img) => img.x).sort((a, b) => a - b);
+    const step = row.length > 1 ? Math.max(2, (row[row.length - 1] - row[0]) / (row.length - 1)) : 6;
+    for (const img of [...view.items, ...view.backItems]) {
+      if (!img.visible) continue;
+      const dx = img.x - gone.x;
+      if (Math.abs(img.y - gone.y) > 3 || Math.abs(dx) < 0.5) continue;
+      // В соседях (1 шаг) — полные 9°, через два шага — почти ничего.
+      const slots = Math.max(1, Math.abs(dx) / step);
+      const k = 1 - (slots - 1) / 2.2;
+      if (k <= 0) continue;
+      (img.getData('jostle') as Phaser.Tweens.TweenChain | undefined)?.stop();
+      // Быстро клонится к пустому месту и пружинит обратно, чуть перемахнув.
+      img.setData(
+        'jostle',
+        this.tweens.chain({
+          targets: img,
+          tweens: [
+            { angle: (dx < 0 ? 9 : -9) * k, delay: (slots - 1) * 40, duration: 70, ease: 'Sine.easeOut' },
+            { angle: 0, duration: 420, ease: 'Back.easeOut', easeParams: [2.5] },
+          ],
+        }),
+      );
+    }
   }
 
   /** Круг от пальца: показывает, куда пришлось касание, и что нажатие засчитано. */
@@ -3773,6 +3923,8 @@ export class StoreScene extends Phaser.Scene {
   private buildCat(x: number, y: number): void {
     this.catImg = undefined;
     this.catOut = false;
+    this.catSitTimer?.remove();
+    this.catSitTimer = undefined;
     const own = this.state.cat;
     if (own && !catHome(this.state)) return;
     this.catHome = { x, y };
@@ -3791,6 +3943,24 @@ export class StoreScene extends Phaser.Scene {
       this.tweens.add({ targets: z, x: z.x - 4, y: z.y - 9, scale: 1, alpha: 0, duration: 1800, onComplete: () => z.destroy() });
     };
     this.critterTimers.push(this.time.addEvent({ delay: 2600, loop: true, callback: snore }));
+    // Во сне изредка дёргает кончиком хвоста: дёрг-дёрг.
+    this.critterTimers.push(
+      this.time.addEvent({
+        delay: 2300,
+        loop: true,
+        callback: () => {
+          if (this.catOut || !cat.active || cat.texture.key !== 'cat' || Math.random() > 0.3) return;
+          this.time.addEvent({
+            delay: 130,
+            repeat: 3,
+            callback: () => {
+              if (this.catOut || !cat.active || !['cat', 'cat_flick'].includes(cat.texture.key)) return;
+              cat.setTexture(cat.texture.key === 'cat' ? 'cat_flick' : 'cat');
+            },
+          });
+        },
+      }),
+    );
     // Иногда просыпается: потягивается или следит за мухой.
     this.critterTimers.push(this.time.addEvent({ delay: 9000, loop: true, callback: () => !this.catOut && cat.active && this.catWake(cat) }));
     if (!own) return;
@@ -3903,21 +4073,19 @@ export class StoreScene extends Phaser.Scene {
     haptic.tap();
     this.heartAt(cat.x, cat.y - 10);
     this.rub(cat);
+    this.catSlowBlink();
     this.popup(cat.x, cat.y - 16, t('popup.catPurr', { name: this.state.cat.name }), '#fff3b0');
   }
 
-  /** Облачко с эмоцией над котом или Бобиком: всплывает и тает. */
+  /**
+   * Облачко с эмоцией над котом или Бобиком — как у людей, только поменьше. Поверх всего, кроме
+   * ночного затемнения: у входа облачко иначе пряталось бы за карнизом фасада.
+   */
   private petEmote(pet: Phaser.GameObjects.Image, key: EmoteKey): void {
     if (!pet.active) return;
-    const icon = this.art(pet.x, pet.y - 12, key).setDepth(pet.depth + 2).setScale(0.8 / ART);
-    this.tweens.add({
-      targets: icon,
-      y: icon.y - 4,
-      scale: 1 / ART,
-      duration: 450,
-      ease: 'Back.easeOut',
-      onComplete: () => this.tweens.add({ targets: icon, alpha: 0, delay: 900, duration: 300, onComplete: () => icon.destroy() }),
-    });
+    this.dropEmote(pet);
+    const box = this.emoteBox(key, 0.8).setPosition(pet.x + 1, pet.y - pet.displayHeight - 0.5).setDepth(LIGHT_DEPTH - 1);
+    pet.setData('emote', box);
   }
 
   /** Ласкается: покачивается из стороны в сторону. */
@@ -3941,7 +4109,7 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.add({ targets: heart, y: y - 8, scale: 1 / ART, alpha: { from: 1, to: 0 }, duration: 1000, ease: 'Quad.easeOut', onComplete: () => heart.destroy() });
   }
 
-  /** Кот идёт: перебирает лапами и смотрит туда, куда идёт (спрайт смотрит влево). */
+  /** Кот идёт: перебирает лапами (4 кадра: врозь, мимо, врозь, мимо) и смотрит туда, куда идёт (спрайт смотрит влево). */
   private catStep(x: number, y: number): Promise<void> {
     const cat = this.catImg;
     if (!cat?.active) return Promise.resolve();
@@ -3955,7 +4123,8 @@ export class StoreScene extends Phaser.Scene {
         duration: (distance / CAT_SPEED) * 1000,
         onUpdate: () => {
           cat.setDepth(cat.y);
-          cat.setTexture(Math.floor(this.time.now / 140) % 2 ? 'cat_walk0' : 'cat_walk1');
+          const frame = CAT_WALK[Math.floor(this.time.now / 90) % CAT_WALK.length];
+          if (cat.texture.key !== frame) cat.setTexture(frame);
         },
         onComplete: () => resolve(),
         onStop: () => resolve(),
@@ -3982,9 +4151,10 @@ export class StoreScene extends Phaser.Scene {
       await this.catStep(p.x, p.y);
       if (!cat.active) return;
     }
-    cat.setTexture('cat_sit').setFlipX(false);
+    this.catSit(cat);
     await this.wait(Phaser.Math.Between(9000, 13000));
     if (!cat.active) return;
+    this.catStand();
     sound.meow();
     const back = [...findPath({ x: cat.x, y: cat.y }, { x: door.x + 6, y: h - 6 }, this.obstacles), { x: door.x + 6, y: this.catHome.y }, this.catHome];
     for (const p of back) {
@@ -3999,7 +4169,7 @@ export class StoreScene extends Phaser.Scene {
   /** Покупатель проходит мимо кота в зале — гладит (сердечко, кот мурчит). Это попадёт в отзывы. */
   private petCatNearby(): void {
     const cat = this.catImg;
-    if (!this.catOut || !cat?.active || cat.texture.key !== 'cat_sit') return;
+    if (!this.catOut || !cat?.active || !this.catSitTimer) return;
     for (const c of this.customers) {
       if (c.petted || c.gone || c.thief) continue;
       if (Math.abs(c.sprite.x - cat.x) > 14 || Math.abs(c.sprite.y + 8 - cat.y) > 10) continue;
@@ -4007,11 +4177,76 @@ export class StoreScene extends Phaser.Scene {
       note(this.stats, 'cat');
       this.emote(c.sprite, 'emo_heart');
       this.heartAt(cat.x, cat.y - 10);
-      // Кот трётся о ноги: поворачивается к покупателю и покачивается.
+      // Кот трётся о ноги: поворачивается к покупателю, покачивается и довольно жмурится.
       cat.setFlipX(c.sprite.x > cat.x);
       this.rub(cat);
+      this.catSlowBlink();
       if (Math.random() < 0.5) sound.purr();
     }
+  }
+
+  /**
+   * Кот сидит посреди зала и живёт: лениво водит хвостом (вниз — посередине — вверх — посередине,
+   * по 260 мс), раз в 3–6 с моргает, раз в 6–10 с умывается лапой. Моргание и умывание начинаются,
+   * когда хвост посередине, — кадры сменяются без рывка. Всё считается в тиках таймера, поэтому
+   * на ускорении ×2 кот живёт вдвое быстрее, а на паузе замирает.
+   */
+  private catSit(cat: Phaser.GameObjects.Image): void {
+    this.catSitTimer?.remove();
+    cat.setTexture('cat_sit1').setFlipX(false);
+    const ticks = (min: number, max: number) => Math.round(Phaser.Math.Between(min, max) / CAT_TICK);
+    const tail = [0, 1, 2, 1];
+    let step = 1;
+    let tick = 0;
+    let groomLeft = 0;
+    let blinkIn = ticks(3000, 6000);
+    let groomIn = ticks(6000, 10000);
+    this.catBlink = 0;
+    const timer = this.time.addEvent({
+      delay: CAT_TICK,
+      loop: true,
+      callback: () => {
+        if (!cat.active) return void timer.remove();
+        tick++;
+        blinkIn--;
+        groomIn--;
+        let frame: string;
+        if (this.catBlink > 0) {
+          this.catBlink--;
+          frame = 'cat_sit_blink';
+        } else if (groomLeft > 0) {
+          groomLeft--;
+          frame = Math.floor(groomLeft / 2) % 2 ? 'cat_groom1' : 'cat_groom0';
+        } else if (tail[step] === 1 && groomIn <= 0) {
+          // Лижет лапу и трёт ею мордочку.
+          groomLeft = ticks(1300, 1900);
+          groomIn = groomLeft + ticks(6000, 10000);
+          frame = 'cat_groom0';
+        } else if (tail[step] === 1 && blinkIn <= 0) {
+          blinkIn = ticks(3000, 6000);
+          frame = 'cat_sit_blink';
+        } else {
+          if (tick % 2 === 0) step = (step + 1) % tail.length;
+          frame = `cat_sit${tail[step]}`;
+        }
+        if (cat.texture.key !== frame) cat.setTexture(frame);
+      },
+    });
+    this.catSitTimer = timer;
+  }
+
+  /** Кот встаёт: хвост и моргание больше не нужны. */
+  private catStand(): void {
+    this.catSitTimer?.remove();
+    this.catSitTimer = undefined;
+  }
+
+  /** Погладили сидящего кота — медленно и довольно жмурится. */
+  private catSlowBlink(): void {
+    const cat = this.catImg;
+    if (!cat?.active || !this.catSitTimer) return;
+    this.catBlink = Math.round(600 / CAT_TICK);
+    cat.setTexture('cat_sit_blink');
   }
 
   // ---------- Доска отзывов ----------
@@ -4557,7 +4792,6 @@ export class StoreScene extends Phaser.Scene {
             { alpha: 0, duration: 550 },
           ],
         });
-        this.cameras.main.shake(180, 0.0015);
         this.time.delayedCall(Phaser.Math.Between(250, 1100), () => {
           sound.thunder();
           this.petsStartled();
@@ -6110,6 +6344,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Премиальный свет: бра, лампы, фонари или люстры между картинами, гирлянда — по всей стене. */
   private buildLights(): void {
+    this.hangingLamps = [];
     const light = activeDecor(this.state, 'light');
     if (!light) return;
     const { w, wallH, wc } = this.layout;
@@ -6128,13 +6363,18 @@ export class StoreScene extends Phaser.Scene {
     const spots = [46, 78];
     for (let x = 126; x < wc.x - 12; x += 64) spots.push(x);
     for (const x of spots.filter((sx) => sx < wc.x - 12 && !this.behindShelf(sx, 4))) {
-      this.art(x, y, light.texture!).setDepth(2);
+      const lamp = this.art(x, y, light.texture!).setDepth(2);
       const bulb = this.art(x + (hanging ? 0.5 : 2), hanging ? y + 3 : y - 3, 'glow')
         .setDisplaySize(light.id === 'light_chandelier' ? 30 : 18, 14)
         .setTint(warm)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setAlpha(0.45)
         .setDepth(2);
+      // Подвесная лампа висит на шнуре: точка подвеса — верхний край, вокруг неё она и качается.
+      if (hanging) {
+        lamp.setOrigin(0.5, 0).setY(y - lamp.displayHeight / 2);
+        this.hangingLamps.push({ lamp, bulb });
+      }
       this.tweens.add({ targets: bulb, alpha: { from: 0.45, to: 0.32 }, duration: 1600 + (x % 5) * 140, yoyo: true, repeat: -1 });
       // Тёплое пятно на полу у стены — вечером ярче.
       this.nightGlow(this.art(x, wallH + 6, 'glow').setDisplaySize(52, 22).setTint(warm), 0.35);
@@ -6343,8 +6583,14 @@ export class StoreScene extends Phaser.Scene {
     this.roomSign(x, y + 7, w, t('warehouse.label'));
   }
 
-  /** Создаёт картинки для новых полок и обновляет товар на всех. */
-  private refreshShelves(): void {
+  /**
+   * Создаёт картинки для новых полок и обновляет товар на всех. Штука товара узнаётся по месту в своём
+   * товаре (третий батон — всегда третий батон): взяли одну — остальные съезжают на освободившееся
+   * место (slide). При выкладке (stockShelf) не съезжают — там штуки сами летят из рук.
+   */
+  private refreshShelves(slide = true): void {
+    // Разбитое толчком падает раньше, чем полку перерисуют: иначе его картинку займёт уцелевшая штука.
+    this.quakeFlush?.();
     this.layout.slots.forEach((slot, i) => {
       // Свободное место под полку — разметка на полу: полку покупают утром во вкладке «Зал».
       if (!this.slotDecor[i]) {
@@ -6376,8 +6622,16 @@ export class StoreScene extends Phaser.Scene {
       const size = (shelf.kind === 'florist' ? 1 : Phaser.Math.Clamp(step / 4, 1, 1.3)) / ART;
       const slot = at;
       const side = shelf.kind !== 'florist' && shelf.kind !== 'icebox' && slotSide(this.layout, slot) !== null;
-      const units = PRODUCT_IDS.flatMap((id) => (shelf.items[id] ?? []).map((unit) => ({ id, unit })));
+      const units = PRODUCT_IDS.flatMap((id) => (shelf.items[id] ?? []).map((unit, k) => ({ id, unit, k })));
       const covered = false;
+      // Где какая штука стояла до обновления (там, где видна сейчас — даже на полпути съезда).
+      const was = new Map<string, { x: number; y: number; bx: number; by: number }>();
+      if (slide && !this.lite) {
+        view.items.forEach((img, n) => {
+          const key = img.getData('stock') as string | null | undefined;
+          if (key && img.visible && !img.getData('flying')) was.set(key, { x: img.x, y: img.y, bx: view.backItems[n].x, by: view.backItems[n].y });
+        });
+      }
       view.items.forEach((img, n) => {
         const entry = units[n];
         const florist = shelf.kind === 'florist';
@@ -6390,9 +6644,11 @@ export class StoreScene extends Phaser.Scene {
           const rows = Math.ceil(capacity / 2);
           img.setPosition(slot.x + (n % 2 ? 3 : -3), slot.y - 18 + (32 / rows) * (Math.floor(n / 2) + 0.5));
         } else img.setPosition(slot.x + area.x + step * ((n % perRow) + 0.5), slot.y + area.y + Math.floor(n / perRow) * area.row);
+        // Вид штуки — по её месту в своём товаре, а не на полке: съезжая, батон остаётся тем же батоном.
+        const variant = entry ? entry.k + PRODUCT_IDS.indexOf(entry.id) : 0;
         if (entry) {
           // Три вида каждого товара (батон, багет, булка…) — полка выглядит живой.
-          img.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id)) % ITEM_VARIANTS}`).setScale(side ? 0.85 / ART : size);
+          img.setTexture(`item_${entry.id}_${variant % ITEM_VARIANTS}`).setScale(side ? 0.85 / ART : size);
           img.setTint(entry.unit.markdown ? 0xffe08a : entry.unit.bad ? 0x9a8a80 : 0xffffff);
         }
         // Позади — такой же товар чуть выше и в тени, между передними.
@@ -6400,7 +6656,16 @@ export class StoreScene extends Phaser.Scene {
         back.setVisible(img.visible && shelf.kind !== 'florist' && !side);
         if (entry) {
           back.setPosition(Math.min(img.x + step / 2, slot.x + area.x + area.w - 2), img.y - 2);
-          back.setTexture(`item_${entry.id}_${(n + PRODUCT_IDS.indexOf(entry.id) + 1) % ITEM_VARIANTS}`).setScale(size);
+          back.setTexture(`item_${entry.id}_${(variant + 1) % ITEM_VARIANTS}`).setScale(size);
+        }
+        const key = img.visible && entry ? `${entry.id}:${entry.k}` : null;
+        img.setData('stock', key);
+        const from = key ? was.get(key) : undefined;
+        // Подпрыгивает с полкой — по высоте не сравниваем: прыжок сам вернёт её на место.
+        // Дрожь от толчка (до QUAKE_SHAKE_PX вбок) — не переезд: штука и так стоит на своём месте.
+        if (from && (Math.abs(from.x - img.x) > QUAKE_SHAKE_PX || (from.y !== img.y && !img.getData('hopping')))) {
+          this.slideItem(img, from);
+          if (back.visible) this.slideItem(back, { x: from.bx, y: from.by });
         }
       });
       view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
@@ -7104,18 +7369,135 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
-  /** Эмоция над головой: всплывает и тает. */
+  /** Эмоция над головой: облачко выпрыгивает над макушкой (над шляпой — повыше). Новая эмоция сменяет прежнюю. */
   private emote(person: Phaser.GameObjects.Container, key: EmoteKey): void {
     if (!person.active) return;
-    const icon = this.art(0, -17, key);
-    person.add(icon);
-    this.tweens.add({
-      targets: icon,
-      y: -21,
-      duration: 500,
-      ease: 'Back.easeOut',
-      onComplete: () => this.tweens.add({ targets: icon, alpha: 0, delay: 800, duration: 300, onComplete: () => icon.destroy() }),
-    });
+    this.dropEmote(person);
+    const hat = person.list.some((o) => (o as Phaser.GameObjects.Image).texture?.key.startsWith('w_hat_'));
+    const box = this.emoteBox(key, 1).setPosition(1.5, hat ? -14 : -10.5);
+    person.add(box);
+    person.setData('emote', box);
+  }
+
+  /** Убирает облачко, которое ещё висит над человеком или зверем, вместе с его анимациями. */
+  private dropEmote(owner: Phaser.GameObjects.GameObject): void {
+    const old = owner.getData('emote') as Phaser.GameObjects.Container | undefined;
+    if (!old?.active) return;
+    this.tweens.killTweensOf([old, ...old.list]);
+    old.destroy();
+  }
+
+  /**
+   * Белое облачко с хвостиком (хвостик — в точке 0, 0) и значком внутри. Выпрыгивает с пружинкой,
+   * значок двигается по-своему (emoteMotion), через полторы секунды облачко тает.
+   */
+  private emoteBox(key: EmoteKey, scale: number): Phaser.GameObjects.Container {
+    const bubble = this.art(0, 0, 'emo_bubble').setOrigin(0.375, 1);
+    const icon = this.art(1.2, -4, key).setScale(0.85 / ART);
+    const box = this.add.container(0, 0, [bubble, icon]).setScale(0).setAngle(-10);
+    this.tweens.add({ targets: box, scale, angle: 0, duration: 220, ease: 'Back.easeOut', easeParams: [2.5] });
+    this.tweens.add({ targets: box, alpha: 0, delay: 1350, duration: 300, onComplete: () => box.destroy() });
+    this.emoteMotion(box, icon, key);
+    return box;
+  }
+
+  /**
+   * У каждой эмоции своё движение: сердечко бьётся, злость краснеет и пыхтит паром, «z» плывут
+   * волной, вопрос качается маятником, звезда крутится с искрами, часы тикают, вздох оседает,
+   * «дорого» подпрыгивает, «!» вздрагивает. Мини-сердечки, искры и пар — не на слабом телефоне.
+   */
+  private emoteMotion(box: Phaser.GameObjects.Container, icon: Phaser.GameObjects.Image, key: EmoteKey): void {
+    const { x, y } = icon;
+    const s = icon.scaleX;
+    const fx = !this.lite;
+    // Значок оживает, когда облачко уже выпрыгнуло.
+    const delay = 200;
+    switch (key) {
+      case 'emo_heart':
+        // Тук-тук: на каждом ударе из облачка вылетает маленькое сердечко.
+        this.tweens.add({
+          targets: icon,
+          scale: s * 1.3,
+          delay,
+          duration: 110,
+          yoyo: true,
+          repeat: 3,
+          repeatDelay: 140,
+          ease: 'Quad.easeOut',
+          onYoyo: () => fx && this.emoteBit(box, 'emo_heart', x + Phaser.Math.FloatBetween(-3, 4), y - 2),
+        });
+        break;
+      case 'emo_angry': {
+        // Облачко наливается красным, значок пыхтит, из-под облачка — клубы пара.
+        const flush = this.art(0, 0, 'emo_bubble').setOrigin(0.375, 1).setTint(0xff7070).setAlpha(0);
+        box.addAt(flush, 1);
+        this.tweens.add({ targets: flush, alpha: 0.9, delay, duration: 350, ease: 'Sine.easeOut' });
+        let side = 1;
+        this.tweens.add({
+          targets: icon,
+          scale: s * 1.18,
+          delay,
+          duration: 100,
+          yoyo: true,
+          repeat: 3,
+          repeatDelay: 160,
+          onYoyo: () => {
+            side = -side;
+            if (fx) this.emoteBit(box, 'puff', x + side * 4.5, y - 3, side);
+          },
+        });
+        break;
+      }
+      case 'emo_zzz':
+        // Плывут волной: вверх-вниз и чуть вбок со сдвигом по фазе.
+        this.tweens.add({ targets: icon, y: y - 1.2, delay, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: icon, x: x + 0.8, angle: 8, delay: delay + 150, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut' });
+        break;
+      case 'emo_question':
+        // Маятник: подвешен за макушку, качается и затихает.
+        icon.setOrigin(0.5, 0).setY(y - 6 * s).setAngle(-18);
+        this.tweens.add({ targets: icon, angle: 0, delay: 100, duration: 1300, ease: (t: number) => 1 - Math.cos(Math.PI * 4 * t) * (1 - t) });
+        break;
+      case 'emo_star':
+        // Крутится, замедляясь, а по краям облачка вспыхивают искры.
+        this.tweens.add({ targets: icon, angle: 360, delay: 120, duration: 900, ease: 'Cubic.easeOut' });
+        if (fx) [[-2.5, -7.5], [5.5, -6], [-3.5, -2]].forEach(([sx, sy], i) => this.emoteBit(box, 'spark', sx, sy, 0, delay + i * 150));
+        break;
+      case 'emo_clock':
+        // Тик-так: качнётся и замрёт, качнётся обратно.
+        this.tweens.add({ targets: icon, angle: { from: -10, to: 10 }, delay, duration: 90, hold: 200, yoyo: true, repeat: 1, repeatDelay: 200, ease: 'Back.easeOut' });
+        break;
+      case 'emo_sigh':
+        // Выдох: значок оседает и расплывается.
+        this.tweens.add({ targets: icon, y: y + 1, scaleX: s * 1.15, scaleY: s * 0.88, delay: delay + 100, duration: 520, hold: 200, yoyo: true, ease: 'Sine.easeInOut' });
+        break;
+      case 'emo_pricey':
+        // Цена прыгает вверх.
+        this.tweens.add({ targets: icon, y: y - 1.3, delay, duration: 130, yoyo: true, repeat: 2, repeatDelay: 120, ease: 'Quad.easeOut' });
+        break;
+      case 'emo_alert':
+        // Вздрагивает: вытягивается вверх.
+        this.tweens.add({ targets: icon, y: y - 0.8, scaleX: s * 0.85, scaleY: s * 1.25, delay, duration: 80, yoyo: true, repeat: 2, repeatDelay: 220 });
+        break;
+    }
+  }
+
+  /** Мелочь вокруг облачка: мини-сердечко, клуб пара (dir — в какую сторону) или искра. Живёт внутри облачка. */
+  private emoteBit(box: Phaser.GameObjects.Container, key: 'emo_heart' | 'puff' | 'spark', x: number, y: number, dir = 0, delay = 0): void {
+    if (!box.active) return;
+    const bit = this.art(x, y, key).setAlpha(0);
+    box.add(bit);
+    const done = () => bit.destroy();
+    if (key === 'emo_heart') {
+      bit.setScale(0.4 / ART);
+      this.tweens.add({ targets: bit, y: y - 6, scale: 0.6 / ART, alpha: { from: 1, to: 0 }, delay, duration: 600, ease: 'Quad.easeOut', onComplete: done });
+    } else if (key === 'puff') {
+      bit.setScale(0.4 / ART).setFlipX(dir < 0);
+      this.tweens.add({ targets: bit, x: x + dir * 2.5, y: y - 3, scale: 0.7 / ART, alpha: { from: 1, to: 0 }, delay, duration: 450, ease: 'Sine.easeOut', onComplete: done });
+    } else {
+      bit.setScale(0.3 / ART);
+      this.tweens.add({ targets: bit, scale: 1 / ART, angle: 90, alpha: { from: 1, to: 0 }, delay, duration: 420, ease: 'Quad.easeOut', onComplete: done });
+    }
   }
 
   // ---------- Продавец: уборка и выкладка ----------
@@ -7240,7 +7622,8 @@ export class StoreScene extends Phaser.Scene {
     const before = view ? view.items.filter((img) => img.visible).length : 0;
     // Хозяин-силач носит больше (навык «Силач»), сотрудники — как обычно.
     this.state = moveToShelf(this.state, index, undefined, carryOf(this.state) + (by === this.seller ? carryBonus(this.state) : 0)).state;
-    this.refreshShelves();
+    // Без съезда: новые штуки сами летят на свои места, а сдвинутые соседи просто встают рядом.
+    this.refreshShelves(false);
     this.refreshWarehouse();
     const items = this.shelfViews[index]?.items ?? [];
     const backs = this.shelfViews[index]?.backItems ?? [];
@@ -7252,7 +7635,8 @@ export class StoreScene extends Phaser.Scene {
       const { x, y } = img;
       const scale = img.scaleX;
       const from = { x: by.x, y: by.y - 4 };
-      img.setPosition(from.x, from.y).setScale(scale * 0.6).setAlpha(0);
+      // Пока летит, место ведёт полёт: если в это время с полки возьмут товар, эта штука не съезжает.
+      img.setPosition(from.x, from.y).setScale(scale * 0.6).setAlpha(0).setData('flying', true);
       // Летит дугой вверх из рук на своё место и подпрыгивает.
       this.tweens.addCounter({
         from: 0,
@@ -7269,7 +7653,7 @@ export class StoreScene extends Phaser.Scene {
           img.setScale(scale * (0.6 + 0.4 * k));
         },
         onComplete: () => {
-          img.setPosition(x, y);
+          img.setPosition(x, y).setData('flying', false);
           this.tweens.add({ targets: img, scale: { from: scale * 1.35, to: scale }, duration: 140, ease: 'Back.easeOut' });
           // Свежий товар поблёскивает; из коробки сыплется пыль.
           if (n === fresh.length - 1) {
@@ -8123,7 +8507,7 @@ export class StoreScene extends Phaser.Scene {
         return null;
       }
       const result = this.tryTake(c, id);
-      this.reachShelf(c, this.spotOf(index), result === 'taken' ? id : null);
+      this.reachShelf(c, this.spotOf(index), result === 'taken' ? id : null, result === 'taken' ? this.takenFrom : []);
       if (result === 'taken' && c.sprite.y < this.layout.h && Math.random() < SPILL_CHANCE) this.spill(c.sprite.x, c.sprite.y + 2);
       const failed = result === 'empty' || result === 'expensive' || result === 'eduard';
       this.endThought(thought, failed);
@@ -8275,6 +8659,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.state = taken.state;
     c.items.push({ id, unit: taken.unit });
+    let count = 1;
     // По акции «2 по цене 1» берут вторую штуку бесплатно.
     if (bogo) {
       const second = takeFromShelf(this.state, index, id);
@@ -8282,9 +8667,21 @@ export class StoreScene extends Phaser.Scene {
         this.state = second.state;
         c.items.push({ id, unit: second.unit, free: true });
         this.popup(c.sprite.x, c.sprite.y - 22, t('popup.bogo'), '#fee761');
+        count++;
       }
     }
+    // С полки пропадают последние штуки этого товара (остальное съедет на их место) — запоминаем,
+    // где и какими они были: оттуда товар и полетит в руки (reachShelf), там качнутся соседи.
+    const view = this.shelfViews[index];
+    // Разбитое толчком — не товар: оно уже падает с полки, а не летит в руки.
+    this.quakeFlush?.();
+    const mine = view?.items.filter((img) => img.visible && (img.getData('stock') as string | null | undefined)?.startsWith(`${id}:`)) ?? [];
+    this.takenFrom = mine
+      .slice(-count)
+      .reverse()
+      .map((img) => ({ x: img.x, y: img.y, texture: img.texture.key, scale: img.scaleX, tint: img.tintTopLeft }));
     this.refreshShelves();
+    if (view && this.takenFrom.length) this.jostleShelf(view, this.takenFrom[0]);
     return 'taken';
   }
 
@@ -9626,7 +10023,8 @@ export class StoreScene extends Phaser.Scene {
       this.tweens.add({ targets: flash, alpha: 0, duration: 900, onComplete: () => flash.destroy() });
       sound.rumble();
       haptic.error();
-      this.cameras.main.shake(400, 0.006);
+      // Вместо тряски — дым от светошумовой: у двери расползается облако.
+      this.smokeCloud(door.x, door.y + 2);
       say(w / 2, h / 2 - 20, 'robbery.storm', '#c8ffb0');
       for (const robber of robbers) void this.walk(robber, door.x, h + 16).then(() => {
         if (robber.active) robber.setVisible(false);
@@ -9703,17 +10101,288 @@ export class StoreScene extends Phaser.Scene {
     if (id === 'carnival') keep(this.tweens.add({ targets: person, y: y - 1.5, duration: 260, yoyo: true, repeat: -1, delay: i * 90 }));
   }
 
-  /** Подземный толчок: камера трясётся, с полок падает и бьётся часть товара. */
+  /**
+   * Подземный толчок: экран не трясётся — дрожит сам магазин. По полкам слева направо бежит дрожь,
+   * разбитый товар падает с полки на пол, с потолка сыплется пыль, подвесные лампы качаются.
+   */
   private tremor(): void {
-    this.cameras.main.shake(800, 0.008);
     sound.rumble();
     haptic.error();
+    const before = this.state.shelves;
     const { state, broken } = quakeBreak(this.state, Math.random);
     this.state = state;
     this.stats.spoiled += broken;
-    this.refreshShelves();
+    // Прошлый толчок ещё не долетел до дальних полок — роняем его остатки сейчас.
+    this.quakeFlush?.();
+    // Что упадёт — запоминаем по картинкам сейчас: они ещё показывают полки до толчка.
+    const falls = this.shelfViews.map((view, i) => this.brokenOnShelf(view, before[i], state.shelves[i]));
+    this.rekeyAfterQuake(before, state.shelves);
+    // Осколки — не больше чем у ~20 штук: в большом магазине разбивается и по 40.
+    const every = Math.max(1, Math.ceil(falls.flat().length / QUAKE_SHATTER_MAX));
+    let n = 0;
+    // Разбитая штука прячется, вместо неё падает копия. Список опустошается: каждая падает один раз.
+    const fallAll = (view: ShelfView, list: QuakeFall[]) => {
+      for (const fall of list.splice(0)) {
+        if (!fall.img.active) continue;
+        fall.img.setVisible(false);
+        this.dropItem(view, fall, n++ % every === 0);
+      }
+    };
+    // Покупатель взял товар или продавец выложил до прихода волны — полки перерисуют: роняем всё сразу.
+    const flush = () => {
+      if (this.quakeFlush === flush) this.quakeFlush = undefined;
+      falls.forEach((list, i) => this.shelfViews[i] && fallAll(this.shelfViews[i], list));
+    };
+    this.quakeFlush = flush;
+    const end = this.quakeWave((view, i) => fallAll(view, falls[i] ?? []));
+    // Волна прошла, осколки улеглись — уцелевший товар съезжает в дыры, таблички «пусто» обновляются.
+    this.time.delayedCall(end + QUAKE_SETTLE_MS, () => {
+      if (this.quakeFlush === flush) this.quakeFlush = undefined;
+      this.refreshShelves();
+    });
+    if (!this.lite) {
+      this.ceilingDust();
+      this.swingLamps();
+    }
     const { w, h } = this.layout;
     this.popup(w / 2, h / 2 - 10, t('popup.quake', { n: broken }), '#ffb0a0');
+  }
+
+  /**
+   * Уцелевшие штуки получают метку своего нового места в товаре (как в refreshShelves): тогда при
+   * перерисовке они съезжают в дыры от разбитого, а не появляется «новый» товар на месте разбитого.
+   */
+  private rekeyAfterQuake(before: StoreState['shelves'], after: StoreState['shelves']): void {
+    this.shelfViews.forEach((view, i) => {
+      let n = 0;
+      for (const id of PRODUCT_IDS) {
+        const kept = after[i]?.items[id] ?? [];
+        for (const unit of before[i]?.items[id] ?? []) {
+          const k = kept.indexOf(unit);
+          view.items[n++]?.setData('stock', k >= 0 ? `${id}:${k}` : null);
+        }
+      }
+    });
+  }
+
+  /** Какие картинки на полке показывают товар, который толчок разбил (сравнение полки до и после). */
+  private brokenOnShelf(view: ShelfView, before?: StoreState['shelves'][number], after?: StoreState['shelves'][number]): QuakeFall[] {
+    if (!before || !after) return [];
+    // Порядок — как в refreshShelves: картинка n показывает n-ю штуку по списку товаров.
+    const units = PRODUCT_IDS.flatMap((id) => before.items[id] ?? []);
+    const kept = new Set(PRODUCT_IDS.flatMap((id) => after.items[id] ?? []));
+    const falls: QuakeFall[] = [];
+    units.forEach((unit, n) => {
+      const img = view.items[n];
+      if (kept.has(unit) || !img?.visible) return;
+      falls.push({ img, key: img.texture.key, x: img.x, y: img.y, scale: img.scaleX, tint: img.tintTopLeft });
+    });
+    return falls;
+  }
+
+  /**
+   * Штука срывается с полки: подскок, дуга с кувырком на пол перед полкой, там — облачко пыли
+   * и осколки цвета самого товара; разбитое тускнеет и исчезает.
+   */
+  private dropItem(view: ShelfView, fall: QuakeFall, shards: boolean): void {
+    const side = view.meter ? slotSide(this.layout, view.at) : null;
+    const dir = side === 'right' ? -1 : side === 'left' ? 1 : Phaser.Math.RND.sign();
+    // С боковой полки — в проход рядом с ней, с обычной — на пол перед полкой.
+    const to = side
+      ? { x: view.at.x + dir * Phaser.Math.Between(11, 16), y: fall.y + Phaser.Math.Between(2, 6) }
+      : { x: fall.x + dir * Phaser.Math.Between(2, 7), y: view.at.y + Phaser.Math.Between(17, 22) };
+    // Летит перед полкой: с боковой — поверх её торца, а не за ним.
+    const piece = this.add.image(fall.x, fall.y, fall.key).setScale(fall.scale).setTint(fall.tint).setDepth(Math.max(to.y, view.at.y + 20) + 2);
+    const spin = dir * Phaser.Math.Between(100, 200);
+    const hop = Phaser.Math.Between(4, 7);
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      delay: Phaser.Math.Between(0, 140),
+      duration: Phaser.Math.Between(340, 420),
+      onUpdate: (tween) => {
+        const k = tween.getValue() ?? 0;
+        // Сначала вверх с полки, потом всё быстрее вниз — как брошенное.
+        piece.setPosition(fall.x + (to.x - fall.x) * k, fall.y + (to.y - fall.y) * k * k - hop * Math.sin(k * Math.PI));
+        piece.setAngle(spin * k);
+      },
+      onComplete: () => {
+        if (!piece.active) return;
+        piece.setPosition(to.x, to.y).setTint(0xc8b4a8);
+        // Удар о пол: штука сминается (но узнаётся), тускнеет и пропадает.
+        this.tweens.add({ targets: piece, scaleY: fall.scale * 0.7, scaleX: fall.scale * 1.15, duration: 70, ease: 'Quad.easeOut' });
+        this.tweens.add({ targets: piece, alpha: 0, delay: 650, duration: 450, onComplete: () => piece.destroy() });
+        if (shards && !this.lite) this.shatter(to.x, to.y, fall.key);
+      },
+    });
+  }
+
+  /** Осколки и пыль от разбитой штуки: облачко и кусочки её цвета разлетаются по полу. */
+  private shatter(x: number, y: number, key: string): void {
+    const dust = this.art(x, y - 1, 'puff').setTint(QUAKE_DUST).setScale(0.6 / ART).setAlpha(0.9).setDepth(y + 3);
+    this.tweens.add({ targets: dust, y: y - 6, scale: 1.1 / ART, alpha: 0, duration: 600, ease: 'Quad.easeOut', onComplete: () => dust.destroy() });
+    // Цвет осколков — с самой картинки товара (середина и чуть ниже), иначе светлое стекло. Один раз на картинку.
+    let colors = this.shardColors.get(key);
+    if (!colors) {
+      const frame = this.textures.getFrame(key);
+      const colorAt = (fy: number) => {
+        const c = frame ? this.textures.getPixel(Math.floor(frame.width / 2), Math.floor(frame.height * fy), key) : null;
+        return c && c.alpha > 0 ? c.color : 0xe8f4ff;
+      };
+      colors = [colorAt(0.5), colorAt(0.7), 0xffffff];
+      this.shardColors.set(key, colors);
+    }
+    for (let i = 0; i < 4; i++) {
+      const bit = this.add.rectangle(x, y, i % 2 ? 1 : 1.5, 1, colors[i % colors.length]).setDepth(y + 3);
+      const dx = Phaser.Math.Between(-9, 9);
+      this.tweens.add({ targets: bit, x: x + dx, angle: dx * 20, duration: 320, ease: 'Quad.easeOut' });
+      this.tweens.chain({
+        targets: bit,
+        tweens: [
+          { y: y - Phaser.Math.Between(2, 5), duration: 140, ease: 'Quad.easeOut' },
+          { y: y + Phaser.Math.Between(0, 3), duration: 180, ease: 'Quad.easeIn' },
+          { alpha: 0, delay: 500, duration: 400, onComplete: () => bit.destroy() },
+        ],
+      });
+    }
+  }
+
+  /** С потолка от толчка сыплется пыль: комки штукатурки и крошки вдоль задней стены, крошки над залом — вслед за волной. */
+  private ceilingDust(): void {
+    const { w, h, wallH } = this.layout;
+    // Пыль сыплется перед полками у задней стены, а не за ними.
+    const front = wallH + 24;
+    for (let x = 5; x < w - 3; x += Phaser.Math.Between(8, 13)) {
+      const delay = x * QUAKE_WAVE_MS + Phaser.Math.Between(0, 150);
+      // Комок у самого потолка: срывается, раздувается и тает, опускаясь.
+      const size = Phaser.Math.FloatBetween(0.6, 1);
+      const clump = this.art(x, 2, 'puff').setTint(QUAKE_DUST).setScale((0.5 * size) / ART).setFlipX(Math.random() < 0.5).setAlpha(0).setDepth(front);
+      this.tweens.chain({
+        targets: clump,
+        tweens: [
+          { alpha: 0.95, scale: (0.8 * size) / ART, delay, duration: 120, ease: 'Quad.easeOut' },
+          { alpha: 0, y: Phaser.Math.Between(8, 12), scale: (1.2 * size) / ART, duration: 900, ease: 'Sine.easeOut', onComplete: () => clump.destroy() },
+        ],
+      });
+      // Крошки струйкой вниз, до пола перед полками.
+      for (let i = 0; i < 3; i++) {
+        const size = i % 2 ? 1 : 1.5;
+        const speck = this.add.rectangle(x + Phaser.Math.FloatBetween(-2.5, 2.5), 3, size, size, i % 2 ? QUAKE_DUST : QUAKE_GRIT).setAlpha(0).setDepth(front);
+        this.tweens.chain({
+          targets: speck,
+          tweens: [
+            { alpha: 1, delay: delay + 40 + i * 90, duration: 60 },
+            { y: wallH + Phaser.Math.Between(-8, 10), x: speck.x + Phaser.Math.FloatBetween(-1.5, 1.5), duration: Phaser.Math.Between(600, 850), ease: 'Quad.easeIn' },
+            { alpha: 0, duration: 250, onComplete: () => speck.destroy() },
+          ],
+        });
+      }
+    }
+    // Над залом сверху, из-под потолка, падают редкие крошки.
+    for (let i = 0; i < 22; i++) {
+      const x = Phaser.Math.Between(6, w - 6);
+      const y = Phaser.Math.Between(wallH + 4, h - 30);
+      const mote = this.add.rectangle(x, y, 1, 1, i % 3 ? QUAKE_GRIT : QUAKE_DUST).setAlpha(0).setDepth(LIGHT_DEPTH - 2);
+      this.tweens.chain({
+        targets: mote,
+        tweens: [
+          { alpha: 0.9, delay: x * QUAKE_WAVE_MS + Phaser.Math.Between(0, 400), duration: 120 },
+          { y: y + Phaser.Math.Between(14, 22), x: x + Phaser.Math.FloatBetween(-2, 2), duration: Phaser.Math.Between(700, 1000), ease: 'Quad.easeIn' },
+          { alpha: 0, duration: 300, onComplete: () => mote.destroy() },
+        ],
+      });
+    }
+  }
+
+  /** Толчок раскачивает подвесные лампы, а пятна света от потолочных ламп ходят по полу. */
+  private swingLamps(): void {
+    for (const { lamp, bulb } of this.hangingLamps) {
+      if (!lamp.active) continue;
+      // Свет висит под лампой: при качании он описывает дугу вокруг точки подвеса.
+      const pivot = { x: lamp.x, y: lamp.y };
+      const arm = { x: bulb.x - pivot.x, y: bulb.y - pivot.y };
+      const swing = Phaser.Math.FloatBetween(9, 13) * Phaser.Math.RND.sign();
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay: pivot.x * QUAKE_WAVE_MS,
+        duration: 2600,
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          const a = Phaser.Math.DegToRad(swing * Math.sin(k * Math.PI * 7) * (1 - k) ** 1.5);
+          lamp.setRotation(a);
+          bulb.setPosition(pivot.x + arm.x * Math.cos(a) - arm.y * Math.sin(a), pivot.y + arm.x * Math.sin(a) + arm.y * Math.cos(a));
+        },
+        onComplete: () => {
+          lamp.setRotation(0);
+          bulb.setPosition(pivot.x + arm.x, pivot.y + arm.y);
+        },
+      });
+    }
+    for (const { img } of this.lampPools) {
+      const x = img.x;
+      const sway = Phaser.Math.FloatBetween(2.5, 4) * Phaser.Math.RND.sign();
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        delay: x * QUAKE_WAVE_MS,
+        duration: 2400,
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          img.x = x + sway * Math.sin(k * Math.PI * 6) * (1 - k);
+        },
+        onComplete: () => (img.x = x),
+      });
+    }
+  }
+
+  /** Дым после штурма: от двери в обе стороны расползается серое облако и медленно тает. */
+  private smokeCloud(x: number, y: number): void {
+    const n = this.lite ? 6 : 16;
+    for (let i = 0; i < n; i++) {
+      const dir = i % 2 ? 1 : -1;
+      const reach = Phaser.Math.FloatBetween(0.1, 1);
+      const blob = this.art(x + Phaser.Math.Between(-4, 4), y + Phaser.Math.Between(-3, 3), 'glow')
+        .setScale(0.15)
+        .setTint(Phaser.Utils.Array.GetRandom([0xa8acb8, 0xc4c6ce, 0x8e92a0]))
+        .setAlpha(0)
+        .setDepth(LIGHT_DEPTH - 3);
+      // Клубы расходятся вдоль фасада шире, чем вглубь, растут и поднимаются.
+      this.tweens.add({
+        targets: blob,
+        x: x + dir * reach * 58 + Phaser.Math.Between(-5, 5),
+        y: y + Phaser.Math.Between(-32, 16),
+        scale: Phaser.Math.FloatBetween(0.55, 0.85),
+        duration: Phaser.Math.Between(2600, 3400),
+        ease: 'Cubic.easeOut',
+      });
+      this.tweens.chain({
+        targets: blob,
+        tweens: [
+          { alpha: Phaser.Math.FloatBetween(0.7, 0.85), delay: i * 25, duration: 180 },
+          { alpha: 0, delay: Phaser.Math.Between(1200, 2000), duration: Phaser.Math.Between(2200, 3000), ease: 'Sine.easeIn', onComplete: () => blob.destroy() },
+        ],
+      });
+    }
+    if (this.lite) return;
+    // Поверх мягких клубов — пиксельные облачка: дым читается как дым, а не как туман.
+    for (let i = 0; i < 14; i++) {
+      const dir = i % 2 ? 1 : -1;
+      // Часть клубов вываливается наружу, на тротуар.
+      const clump = this.art(x + dir * Phaser.Math.Between(2, 12), y + Phaser.Math.Between(-8, 10), 'puff')
+        .setTint(Phaser.Utils.Array.GetRandom([0xb0b4bc, 0xd0d2d8]))
+        .setFlipX(Math.random() < 0.5)
+        .setAlpha(0)
+        .setDepth(LIGHT_DEPTH - 2);
+      this.tweens.add({ targets: clump, x: clump.x + dir * Phaser.Math.Between(12, 50), y: clump.y - Phaser.Math.Between(6, 26), scale: Phaser.Math.FloatBetween(1.8, 2.8) / ART, duration: 2800, ease: 'Cubic.easeOut' });
+      this.tweens.chain({
+        targets: clump,
+        tweens: [
+          { alpha: 0.95, delay: 80 + i * 50, duration: 160 },
+          { alpha: 0, delay: Phaser.Math.Between(800, 1400), duration: 1800, onComplete: () => clump.destroy() },
+        ],
+      });
+    }
   }
 
   private finishDay(): void {
