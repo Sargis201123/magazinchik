@@ -6,7 +6,7 @@
 
 import { brownNoise, seeded } from './ambienceSynth';
 import { jitter, pickVariant, type VoiceRule } from './mix';
-import { allowVoice, audioContext, busInput, duckMusic, mixer, placeAt, type Bus } from './mixer';
+import { allowVoice, audioContext, busInput, duckMusic, mixer, placeAt, STREET_LOW, type Bus } from './mixer';
 
 export { audioContext, existingAudioContext } from './mixer';
 
@@ -248,7 +248,8 @@ function thunder(): void {
   const gain = ac.createGain();
   gain.gain.value = 0;
   const delay = (1 - near) * 0.6;
-  const peak = 0.21 + 0.25 * near;
+  // Раскат низкий — стекло витрины его не глушит: без прибавки канала улицы (STREET_LOW).
+  const peak = (0.21 + 0.25 * near) * STREET_LOW;
   gain.gain.setValueAtTime(0, now);
   gain.gain.linearRampToValueAtTime(peak, now + delay + 0.12);
   let t = now + delay + 0.12;

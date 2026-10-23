@@ -78,8 +78,8 @@ interface LoopVoice {
 }
 let bed: LoopVoice | null = null;
 const crowd: (LoopVoice | null)[] = Array.from({ length: MURMUR_LAYERS }, () => null);
-/** С какого момента гомон молчит (часы звука): долго — петли останавливаем. */
-let crowdQuietSince = 0;
+/** С какого момента молчит каждый слой гомона (часы звука): долго — его петлю останавливаем. */
+const crowdQuietSince: number[] = Array.from({ length: MURMUR_LAYERS }, () => 0);
 
 /** Когда в следующий раз (часы звука): птица, ворона, трамвай, залп салюта, вспышка неона. */
 const next = { bird: 0, crow: 0, tram: 0, burst: 0, flicker: 0 };
@@ -217,19 +217,22 @@ function weatherBed(ac: AudioContext, s: AmbScene): void {
   level(bed, ac, LEVEL[want], 1.2);
 }
 
-/** Гомон: слои по числу покупателей; долго тихо — петли останавливаем (CPU), память — по DROP_AFTER. */
+/**
+ * Гомон: слои по числу покупателей; слой долго молчит — его петлю останавливаем (CPU), память — по
+ * DROP_AFTER. Каждый слой отдельно: людей стало меньше или включился облегчённый режим — лишние
+ * слои не играют беззвучно до конца смены.
+ */
 function murmur(ac: AudioContext, s: AmbScene): void {
   const now = ac.currentTime;
   const gains = mixer.audible('hall') ? murmurGains(s.customers, s.lite) : [0, 0, 0];
-  const loud = gains.some((g) => g > 0);
-  if (loud) crowdQuietSince = now;
-  const buffer = loud ? ensure(ac, 'murmur') : ready('murmur');
+  const buffer = gains.some((g) => g > 0) ? ensure(ac, 'murmur') : ready('murmur');
   crowd.forEach((v, i) => {
+    if (gains[i] > 0) crowdQuietSince[i] = now;
     if (!v && gains[i] > 0 && buffer) v = crowd[i] = startLoop(ac, 'murmur', buffer, 'hall', MURMUR_SPREAD[i]);
     if (!v) return;
     // Покупатели прибывают и уходят — гомон следует плавно, за пару секунд.
     level(v, ac, gains[i] * LEVEL.murmur, 1.5);
-    if (!loud && now - crowdQuietSince > 10) {
+    if (now - crowdQuietSince[i] > 10) {
       stopLoop(v, ac, 0.5);
       crowd[i] = null;
     }

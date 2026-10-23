@@ -15,7 +15,7 @@ import { birdGap, type AmbScene } from './ambienceLayers';
 import { brownNoise, rainTexture, seeded } from './ambienceSynth';
 import { fetched } from './audioFiles';
 import { jitter } from './mix';
-import { allowVoice, busInput, existingAudioContext, mixer, placeAt, setDoorAir, type Bus } from './mixer';
+import { allowVoice, busInput, existingAudioContext, mixer, placeAt, setDoorAir, STREET_LOW, type Bus } from './mixer';
 import { noiseBuffer } from './sound';
 
 export type { Neon } from './ambienceFiles';
@@ -280,9 +280,10 @@ export const ambience = {
     const under = ambFiles.rainPlaying() ? SYNTH_RAIN_UNDER : 1;
     fade(beds!.rain, ac, weather !== 'rain' ? 0 : 0.2 * under);
     fade(beds!.downpour, ac, weather !== 'storm' ? 0 : 0.19 * under);
-    // В снегопад и листопад — едва слышный ветер: тихая погода, а не буря.
+    // В снегопад и листопад — едва слышный ветер: тихая погода, а не буря. Ветер низкий, стекло витрины
+    // его не глушит — без прибавки канала улицы (STREET_LOW).
     const windy = weather === 'storm' ? 0.06 : weather === 'snow' ? 0.018 : weather === 'leaves' ? 0.012 : 0;
-    fade(beds!.wind, ac, windy);
+    fade(beds!.wind, ac, windy * STREET_LOW);
     fade(beds!.hum, ac, !open ? 0 : 0.0005);
     if (mixer.audible('street')) schedule(ac, weather, evening, season, Boolean(life) && birdGap(scene) !== null && ambFiles.birdsReady());
   },
