@@ -78,7 +78,8 @@ import { sound } from '../platform/sound';
 import { music, type MusicMood } from '../platform/music';
 import { winterMusic } from '../platform/playlist';
 import { findPath, type Rect } from './paths';
-import { ambience } from '../platform/ambience';
+import { ambience, type AmbLife } from '../platform/ambience';
+import { realNewYear } from '../platform/ambienceLayers';
 import { setListener } from '../platform/mixer';
 import { haptic, trustedNow } from '../platform/telegram';
 import { button, el, ICON_RE, ICONS, openModal, toast, UI_FONT } from '../ui/dom';
@@ -1162,6 +1163,8 @@ export class StoreScene extends Phaser.Scene {
   private lightsOut = 0;
   /** Стрелки настенных часов: идут по ходу смены с 8:00 до 20:00. */
   private clockHands?: Phaser.GameObjects.Graphics;
+  /** Неоновая вывеска в зале (декор), если висит, — по x: жужжит. */
+  private neonDecorX?: number;
   /** Мебель в зале (в координатах центра человека): люди обходят её. */
   private obstacles: Rect[] = [];
   /** Касса самообслуживания (если куплена): картинка, экран и занята ли она. */
@@ -1249,6 +1252,10 @@ export class StoreScene extends Phaser.Scene {
   private onTitle = true;
   private nightMusic = false;
   private winterTune = false;
+  /** Новый год для звуков (салют вечером): новогодняя неделя в игре или 31.12–1.01 по календарю. */
+  private newYearSound = false;
+  /** Что вокруг — для атмосферы (ambience.ts): один объект на все кадры, без мусора в памяти. */
+  private ambLife: AmbLife = { customers: 0, morning: 0, newYear: false, night: false, lite: false, neon: null };
   private valyaCame = false;
   /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
   private combo = 0;
@@ -1391,6 +1398,7 @@ export class StoreScene extends Phaser.Scene {
     // Сначала вывеска, потом утро. Первая встреча с сюжетом (письмо бабушки) — на утреннем экране.
     // Музыка заиграет с первым касанием: на титуле — тема «Магазинчика».
     this.winterTune = this.isWinterMusic();
+    this.newYearSound = this.isNewYearSound();
     music.start();
     const stopShow = this.titleShow();
     showTitle({
@@ -1432,13 +1440,17 @@ export class StoreScene extends Phaser.Scene {
     this.measureFps(deltaMs);
     this.watchStall(deltaMs);
     this.scarePigeons();
-    ambience.update(this.rainStopped ? 'clear' : this.weather, this.evening, this.running, yearTime(this.state.day));
+    ambience.update(this.rainStopped ? 'clear' : this.weather, this.evening, this.running, yearTime(this.state.day), this.ambienceLife());
     this.updateRain();
     this.windTick(deltaMs);
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     this.hud.showUrgent(this.running && !this.night && this.state.day > TUTORIAL_DAYS);
     music.setMood(this.musicMood(), this.winterTune);
-    if (!this.running) return;
+    // Дверь двигается только в рабочие часы: день кончился — стекло снова закрывает улицу.
+    if (!this.running) {
+      ambience.door(0);
+      return;
+    }
     const dt = (deltaMs / 1000) * this.speed;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
 
@@ -1600,6 +1612,7 @@ export class StoreScene extends Phaser.Scene {
     this.slotDecor = [];
     this.shutters = [];
     this.clockHands = undefined;
+    this.neonDecorX = undefined;
     this.nightLights = [];
     this.lamps = [];
     this.shelfStrips = [];
@@ -1980,7 +1993,11 @@ export class StoreScene extends Phaser.Scene {
     if (lamp.litAt !== undefined) return;
     const live = this.running && !this.night && evening - lamp.from < 0.05;
     lamp.litAt = live ? now : now - LAMP_WARMUP;
-    if (live) this.lampSpark(lamp);
+    if (live) {
+      this.lampSpark(lamp);
+      // Щелчок поджига, «дзинь» плафона и короткое гудение (только если фонарь на экране).
+      ambience.street('lamp', lamp.x);
+    }
   }
 
   /** Яркость фонаря: не горит — 0; только что зажёгся — мигает (LAMP_BLINK); дальше ровно. */
@@ -2614,6 +2631,8 @@ export class StoreScene extends Phaser.Scene {
     const near = [...this.customers].some((c) => close(c.sprite)) || [...this.newcomers].some(close);
     if (near && this.doorOpen === 0) ambience.chime(door.x);
     this.doorOpen = Phaser.Math.Clamp(this.doorOpen + (near ? 0.12 : -0.06), 0, 1);
+    // Открытая дверь «впускает улицу»: пока кто-то входит, за стеклом слышно ярче и чуть громче.
+    ambience.door(this.doorOpen);
     const key = this.doorOpen < 0.34 ? 'door' : this.doorOpen < 0.67 ? 'door_half' : 'door_open';
     if (this.doorImg.texture.key !== key) this.doorImg.setTexture(key);
     // В снегопад в открытые двери залетают снежинки и тают у входа.
@@ -3754,6 +3773,34 @@ export class StoreScene extends Phaser.Scene {
   /** Зимняя музыка сегодня: зима в игре, новогодняя неделя или настоящие новогодние дни. */
   private isWinterMusic(): boolean {
     return winterMusic(yearTime(this.state.day), holidayFor(this.state.day), new Date(trustedNow()));
+  }
+
+  /** Салют за окном сегодня вечером: новогодняя неделя в игре или 31 декабря — 1 января по календарю. */
+  private isNewYearSound(): boolean {
+    return holidayFor(this.state.day) === 'newyear' || realNewYear(new Date(trustedNow()));
+  }
+
+  /**
+   * Что вокруг — для атмосферы: сколько покупателей (гомон), утро ли (птицы чаще), Новый год (салют),
+   * ночная смена, облегчённый режим и какая неоновая вывеска сейчас горит (жужжит).
+   */
+  private ambienceLife(): AmbLife {
+    const life = this.ambLife;
+    life.customers = this.running ? this.customers.size : 0;
+    life.morning = this.onTitle || this.night || this.closed ? 0 : !this.dayOpen ? 1 : Phaser.Math.Clamp(1 - (1 - this.timeLeft / DAY_SECONDS) / (MUSIC_MORNING * 1.5), 0, 1);
+    life.newYear = this.newYearSound;
+    life.night = this.night;
+    life.lite = this.lite;
+    // Неон в зале горит весь день; вывеска на крыше — с вечера (сначала мигает). Свет отключили — молчит.
+    const inside = this.neonDecorX !== undefined;
+    if (this.blackout || this.powerCut || (!inside && this.evening <= 0.12)) life.neon = null;
+    else {
+      const spot = (life.neon ??= { x: 0, inside: false, flicker: false });
+      spot.x = this.neonDecorX ?? this.layout.w / 2;
+      spot.inside = inside;
+      spot.flicker = !inside && this.evening < 0.18;
+    }
+    return life;
   }
 
   /** Скорость покупателей: под бодрое радио ходят быстрее. */
@@ -6699,6 +6746,8 @@ export class StoreScene extends Phaser.Scene {
       if (!near) continue;
       bird.away = true;
       const { img, home } = bird;
+      // Хлопанье крыльев (вся стайка — один звук: ограничитель не даст сыграть его трижды).
+      ambience.street('pigeons', home.x);
       const dir = Math.random() < 0.5 ? -1 : 1;
       img.setTexture('pigeon_fly').setFlipX(dir < 0).setDepth(LIGHT_DEPTH - 1);
       // Взмахи — повтор мира: перестроили зал посреди полёта (твин погашен) — перестают махать и они.
@@ -7201,6 +7250,7 @@ export class StoreScene extends Phaser.Scene {
     }
     if (62 < wc.x - 16 && !this.behindShelf(62, 8)) {
       if (activeDecor(this.state, 'neon')) {
+        this.neonDecorX = 62;
         const glow = this.art(62, 11, 'glow').setScale(46 / 64, 24 / 64).setTint(0xf6757a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
         this.tweens.add({ targets: glow, alpha: { from: 0.8, to: 0.4 }, duration: 900, yoyo: true, repeat: -1 });
         this.art(62, 10, 'neon').setDepth(2);
@@ -10004,6 +10054,11 @@ export class StoreScene extends Phaser.Scene {
       // Крутит педали, а не бежит: без подскока, наклона и пыли.
       rider.setData('wheels', true);
       void this.walk(rider, fromLeft ? right : left, y, 70).then(() => rider.destroy());
+      // Иногда звонит в звонок — когда проезжает мимо магазина.
+      if (Math.random() < 0.35) {
+        const ms = (Math.abs(this.layout.door.x - rider.x) / 70) * 1000 * Phaser.Math.FloatBetween(0.6, 1);
+        this.time.delayedCall(ms, () => rider.active && ambience.street('bike', rider.x));
+      }
       return;
     }
     const y = this.streetY + Phaser.Math.Between(-5, 5);
@@ -10648,6 +10703,7 @@ export class StoreScene extends Phaser.Scene {
     // Новый день: после ночной смены — снова дневная музыка; зима могла начаться или кончиться.
     this.nightMusic = false;
     this.winterTune = this.isWinterMusic();
+    this.newYearSound = this.isNewYearSound();
     music.prefetch('day_open');
     showMorning({
       onArrange: () => this.arrange(),
