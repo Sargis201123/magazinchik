@@ -2325,7 +2325,7 @@ export class StoreScene extends Phaser.Scene {
    * полка не «подпрыгивает над полом». Исходный масштаб запоминается, чтобы частые нажатия не копились.
    */
   private squash(obj: Phaser.GameObjects.Image | Phaser.GameObjects.Container, sx: number, sy: number, ms = 90): void {
-    if (this.lite || !obj.active) return;
+    if (this.lite || !obj.active || obj.getData('growing')) return;
     // Человек (контейнер) стоит на ногах и может уже идти: только масштаб, от его обычного роста.
     if (obj instanceof Phaser.GameObjects.Container) {
       const s = (obj.getData('baseScale') as number | undefined) ?? 1;
@@ -10607,16 +10607,22 @@ export class StoreScene extends Phaser.Scene {
    * подлетит к магазину (flyIn, 1,6 с), их распакуют по одной — сверху вниз по залу.
    */
   private packFresh(): void {
-    const items = [...this.freshProps.values()].filter((img): img is Phaser.GameObjects.Image => Boolean(img?.active));
+    const fresh = [...this.freshProps.values()].filter((img): img is Phaser.GameObjects.Image => Boolean(img?.active));
     this.freshProps.clear();
-    if (!items.length) return;
-    items.sort((a, b) => a.y - b.y || a.x - b.x);
-    const taken = new Set<Phaser.GameObjects.GameObject>(items);
-    for (const img of items) {
+    if (!fresh.length) return;
+    // Крупное — первым: терминал на новой кассе — её мелочь, а не отдельная новинка в воздухе.
+    fresh.sort((a, b) => b.displayWidth * b.displayHeight - a.displayWidth * a.displayHeight);
+    const taken = new Set<Phaser.GameObjects.GameObject>();
+    const items: Phaser.GameObjects.Image[] = [];
+    for (const img of fresh) {
+      if (taken.has(img)) continue;
+      taken.add(img);
       const kin = this.kinOf(img, taken);
       kin.forEach((o) => taken.add(o.setVisible(false)));
       img.setData('unbox', { kin, sx: img.scaleX, sy: img.scaleY, y: img.y }).setVisible(false);
+      items.push(img);
     }
+    items.sort((a, b) => a.y - b.y || a.x - b.x);
     this.time.delayedCall(1700, () => items.forEach((img, i) => this.time.delayedCall(i * UNBOX_STEP, () => this.unbox(img))));
   }
 
@@ -10645,8 +10651,8 @@ export class StoreScene extends Phaser.Scene {
    * в золотом кольце с искрами — и два часа носит флажок «НОВОЕ». На слабом телефоне — только рост и флажок.
    */
   private unbox(img: Phaser.GameObjects.Image): void {
-    // Зал успели перестроить — эта картинка уже уничтожена, новая стоит как обычно.
-    if (!img.active) return;
+    // Зал успели перестроить (removeAll только снимает со сцены) — новая картинка стоит как обычно.
+    if (!img.active || !this.children.exists(img)) return;
     const saved = img.getData('unbox') as { kin: Kin[]; sx: number; sy: number; y: number } | undefined;
     if (!saved) return;
     img.setData('unbox', undefined);
@@ -10658,6 +10664,8 @@ export class StoreScene extends Phaser.Scene {
     const grow = () => {
       if (!img.active) return;
       img.setVisible(true).setScale(sx * 0.2, sy * 0.2).setY(bottom - fullH * 0.2 * (1 - img.originY));
+      // Пока растёт, пружинка от касания (касса) не трогает её: иначе запомнила бы недоросший размер.
+      img.setData({ sqX: undefined, sqY: undefined, sqPy: undefined, growing: true });
       this.tweens.add({
         targets: img,
         scaleX: sx,
@@ -10668,6 +10676,7 @@ export class StoreScene extends Phaser.Scene {
         easeParams: [2.2],
         onComplete: () => {
           for (const o of kin) if (o.active) o.setVisible(true);
+          img.setData('growing', false).setScale(sx, sy).setY(y);
           this.squash(img, 1.08, 0.9, 110);
           this.newTag(img);
         },
