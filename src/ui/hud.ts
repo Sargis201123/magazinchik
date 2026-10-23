@@ -215,6 +215,9 @@ export class Hud {
   setHint(text: string, tutorial = false): void {
     if (this.hint.textContent !== text) this.hint.textContent = text;
     this.hint.classList.toggle('ui-hint-tip', tutorial && text !== '');
+    // На узком экране плашка почти во всю ширину — в дни обучения кнопка звука стоит выше неё
+    // (и не прыгает, когда подсказка то появляется, то гаснет).
+    this.mute.classList.toggle('ui-mute-up', tutorial);
   }
 
   showSummary(

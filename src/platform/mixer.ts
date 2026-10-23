@@ -175,6 +175,8 @@ function applyVolumes(): void {
 // ---------- Меню, диалоги, фанфары ----------
 
 let menuOpen = false;
+/** До этого момента (performance.now) меню не глушит мир: двигают ползунок громкости. */
+let clearUntil = 0;
 let dialogOpen = false;
 let stingerUntil = 0;
 
@@ -204,7 +206,7 @@ function applyMenu(): void {
  * четыре раза в секунду, а не ловим каждое открытие: окна закрываются разными путями.
  */
 function watchScreen(): void {
-  const menu = document.querySelector('.ui-modal:not(.closing)') !== null;
+  const menu = performance.now() >= clearUntil && document.querySelector('.ui-modal:not(.closing)') !== null;
   const dialog = document.querySelector('.ui-dialog') !== null;
   if (menu !== menuOpen) {
     menuOpen = menu;
@@ -359,6 +361,14 @@ export const mixer = {
     write(VOLUMES_KEY, JSON.stringify(volumes));
     applyVolumes();
     sync();
+  },
+  /**
+   * Подбирают громкость (ползунки живут в профиле, а он — окно): пару секунд мир звучит без «двери»
+   * меню, иначе пример колокольчика и дождь за окном были бы почти не слышны.
+   */
+  listen(): void {
+    clearUntil = performance.now() + 2000;
+    if (graph) watchScreen();
   },
   /** Быстрое «без звука» — одной кнопкой, ползунки остаются как были. */
   isMuted: (): boolean => muted,

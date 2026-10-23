@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_VOLUMES, jitter, parseVolumes, pickVariant, silenceMask, sliderGain, VoiceLimiter, worldPan } from '../src/platform/mix';
+import { audibleAgain, DEFAULT_VOLUMES, inaudible, jitter, parseVolumes, pickVariant, silenceMask, sliderGain, VoiceLimiter, worldPan } from '../src/platform/mix';
 import { roomImpulse, seeded } from '../src/platform/ambienceSynth';
 
 // Звуковой «пульт»: громкости и их перенос со старых выключателей, сторона звука, варианты, ограничитель.
@@ -31,6 +31,21 @@ describe('громкости в настройках', () => {
     expect(20 * Math.log10(sliderGain(0.5))).toBeCloseTo(-12.04, 1);
     expect(sliderGain(1)).toBe(1);
     expect(sliderGain(2)).toBe(1);
+  });
+
+  it('«без звука» — и когда на нуле все каналы (старые оба выключателя); «включить» возвращает их', () => {
+    const legacy = parseVolumes(null, '1', '1');
+    expect(inaudible(legacy, false)).toBe(true);
+    expect(inaudible(DEFAULT_VOLUMES, false)).toBe(false);
+    expect(inaudible(DEFAULT_VOLUMES, true)).toBe(true);
+    expect(inaudible({ ...DEFAULT_VOLUMES, master: 0 }, false)).toBe(true);
+    // Выключена часть каналов — остальное слышно, это не «без звука».
+    expect(inaudible(parseVolumes(null, '1', null), false)).toBe(false);
+    expect(audibleAgain(legacy)).toEqual(DEFAULT_VOLUMES);
+    // Свои ползунки игрока не трогаем: только общую с нуля.
+    const mine = { ...DEFAULT_VOLUMES, master: 0, music: 0.3, effects: 0 };
+    expect(audibleAgain(mine)).toEqual({ ...mine, master: DEFAULT_VOLUMES.master });
+    expect(audibleAgain(DEFAULT_VOLUMES)).toEqual(DEFAULT_VOLUMES);
   });
 
   it('что выключено — битами для аналитики', () => {

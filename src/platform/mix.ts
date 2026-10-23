@@ -53,6 +53,28 @@ export function parseVolumes(raw: string | null, legacySound: string | null, leg
  */
 export const sliderGain = (v: number): number => clamp01(v) ** 2;
 
+/** Каналы под общей громкостью. */
+const CHANNEL_KEYS = VOLUME_KEYS.filter((key) => key !== 'master');
+
+/**
+ * Не слышно ничего: выключено кнопкой, общая громкость на нуле или на нуле все каналы разом —
+ * так переезжают старые «без звука» и «без музыки», выключенные вместе.
+ */
+export function inaudible(v: Volumes, muted: boolean): boolean {
+  return muted || v.master === 0 || CHANNEL_KEYS.every((key) => v[key] === 0);
+}
+
+/**
+ * Громкости, когда звук включают быстрой кнопкой. Ползунки остаются как были — разве что звук убран
+ * ими до нуля (общая или все каналы): их возвращаем к обычным, иначе «включить» ничего бы не включило.
+ */
+export function audibleAgain(v: Volumes): Volumes {
+  const out = { ...v };
+  if (v.master === 0) out.master = DEFAULT_VOLUMES.master;
+  if (CHANNEL_KEYS.every((key) => v[key] === 0)) for (const key of CHANNEL_KEYS) out[key] = DEFAULT_VOLUMES[key];
+  return out;
+}
+
 /** Что выключено (для аналитики): 1 — всё без звука, 2 — музыка, 4 — окружение, 8 — эффекты, 16 — голоса. */
 export function silenceMask(v: Volumes, muted: boolean): number {
   let mask = muted || v.master === 0 ? 1 : 0;

@@ -5,7 +5,7 @@
 import { t, type TextKey } from '../i18n';
 import { track } from '../platform/analytics';
 import { ambience } from '../platform/ambience';
-import { DEFAULT_VOLUMES, VOLUME_KEYS, type VolumeKey } from '../platform/mix';
+import { audibleAgain, inaudible, VOLUME_KEYS, type VolumeKey } from '../platform/mix';
 import { mixer } from '../platform/mixer';
 import { sound } from '../platform/sound';
 import { button, el } from './dom';
@@ -24,6 +24,8 @@ const css = `
 /* Быстрое «без звука» в игре — внизу слева, напротив ускорения. */
 .ui-mute { right: auto; left: max(10px, calc((100vw - var(--game-w, min(100vw, 56.25dvh))) / 2 + 10px)); padding: 5px 7px; line-height: 0; }
 .ui-mute .ui-ico { height: 20px; vertical-align: 0; }
+/* В первые дни внизу — жёлтая плашка обучения (ускорения и подвоза ещё нет): кнопка — выше неё, на высоте подвоза. */
+.ui-mute.ui-mute-up { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 84px); }
 .ui-on-title .ui-mute { display: none; }
 `;
 
@@ -44,19 +46,23 @@ const LABELS: Record<VolumeKey, [string, TextKey]> = {
   voices: ['💬', 'audio.voices'],
 };
 
-/** Звука нет совсем: выключен кнопкой или общая громкость на нуле. */
-const silent = (): boolean => mixer.isMuted() || mixer.volumes().master === 0;
+/** Звука нет совсем: выключен кнопкой или ползунками (mix.ts, inaudible). */
+const silent = (): boolean => inaudible(mixer.volumes(), mixer.isMuted());
 
 /** Значок быстрой кнопки: что сейчас — звук есть или выключен. */
 export const muteIcon = (): string => (silent() ? '🔇' : '🔊');
 
 /**
  * Быстро выключить или включить весь звук и отметить это в аналитике. Ползунки не трогаем —
- * разве что общая громкость стояла на нуле: тогда «включить» возвращает её к обычной.
+ * разве что звук убран ими до нуля: тогда «включить» возвращает их к обычным (mix.ts, audibleAgain).
  */
 export function toggleMute(day: number): void {
   const next = !silent();
-  if (!next && mixer.volumes().master === 0) mixer.setVolume('master', DEFAULT_VOLUMES.master);
+  if (!next) {
+    const now = mixer.volumes();
+    const back = audibleAgain(now);
+    for (const key of VOLUME_KEYS) if (back[key] !== now[key]) mixer.setVolume(key, back[key]);
+  }
   mixer.setMuted(next);
   track(next ? 'mute_on' : 'mute_off', day);
   if (!next) sound.tap();
@@ -104,12 +110,15 @@ export function audioBox(day: () => number, rerender: () => void): HTMLElement {
       row.classList.toggle('off', input.value === '0' || mixer.isMuted());
     };
     show();
+    // Пока двигают ползунок, меню не глушит мир: громкость подбирают на слух, как в игре.
     input.addEventListener('input', () => {
+      mixer.listen();
       mixer.setVolume(key, Number(input.value) / 100);
       show();
     });
     // Отпустили ползунок: пример звука; если какой-то канал выключился или включился — в аналитику.
     input.addEventListener('change', () => {
+      mixer.listen();
       preview(key);
       const now = mixer.silenceMask();
       if (now !== mask) track('sound_mask', day(), now);
