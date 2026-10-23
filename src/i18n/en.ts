@@ -198,7 +198,7 @@ export const en: Record<TextKey, string> = {
   'lite.off': "Normal",
   'lite.note': "Light is for slower phones: a slightly simpler picture, but smoother. Fully applies after restarting the game.",
   'lite.autoTitle': "Light graphics",
-  'lite.autoText': "The game was lagging, so light graphics are on. To switch back: profile 🏆 → Graphics.",
+  'lite.autoText': "The game was lagging, so light graphics are on for a few days. To switch back now: profile 🏆 → Graphics.",
   'corner.cups': "cups {n}/{max}",
   'corner.cat': "Cat",
   'corner.catAway': "out",

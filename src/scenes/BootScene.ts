@@ -1,7 +1,8 @@
 import { PRODUCT_IDS } from '../game/economy';
 import Phaser from 'phaser';
-import { syncSave } from '../game/save';
+import { startSync } from '../game/save';
 import { t } from '../i18n';
+import { assetUrl, png } from '../platform/assets';
 import { WARDROBE_TEXTURES } from './wardrobe';
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
@@ -329,19 +330,26 @@ export class BootScene extends Phaser.Scene {
     super('boot');
   }
 
+  /** Шрифт надписей на холсте: качается вместе с картинками, а не после них. */
+  private font: Promise<unknown> = Promise.resolve();
+
   preload(): void {
+    // Надписи на холсте рисуются один раз — магазин ждёт шрифт (create), иначе останутся системным.
+    this.font = document.fonts?.load(`600 16px "Nunito Variable"`).catch(() => []) ?? Promise.resolve([]);
     const splash = document.getElementById('splash');
     const bar = splash?.querySelector<HTMLElement>('.bar');
     const txt = splash?.querySelector('.txt');
     if (txt) txt.textContent = t('boot.loading');
     this.load.on('progress', (p: number) => bar?.style.setProperty('--p', p.toFixed(3)));
-    for (const key of [...SPRITES, ...WARDROBE_TEXTURES]) this.load.image(key, `assets/${key}.png`);
+    // Адреса — с отпечатком содержимого (platform/assets.ts): перерисованная картинка не застрянет в кэше.
+    for (const key of [...SPRITES, ...WARDROBE_TEXTURES]) this.load.image(key, png(key));
     // Значки меню (ico_*) одним атласом — для всплывающих надписей в зале (art/icons.py → atlas).
-    this.load.atlas('ico', 'assets/ico_atlas.png', 'assets/ico_atlas.json');
+    this.load.atlas('ico', png('ico_atlas'), assetUrl('assets/ico_atlas.json'));
   }
 
   create(): void {
-    // Сначала сверить сохранение с облаком Telegram (не дольше пары секунд), потом — в магазин.
+    // Сохранение сверяется с облаком Telegram с самого запуска (main.ts), параллельно с картинками;
+    // здесь только дождаться конца (не дольше пары секунд) — и в магазин.
     const splash = document.getElementById('splash');
     const txt = splash?.querySelector('.txt');
     if (txt) txt.textContent = t('boot.sync');
@@ -353,9 +361,7 @@ export class BootScene extends Phaser.Scene {
       setTimeout(() => splash?.remove(), 500);
     };
     const timer = setTimeout(start, 4000);
-    // Надписи на холсте рисуются один раз — дождаться шрифта, иначе останутся системным.
-    const font = document.fonts?.load(`600 16px "Nunito Variable"`).catch(() => []) ?? Promise.resolve([]);
-    void Promise.all([syncSave(), font]).finally(() => {
+    void Promise.all([startSync(), this.font]).finally(() => {
       clearTimeout(timer);
       start();
     });

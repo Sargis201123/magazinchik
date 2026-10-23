@@ -1,6 +1,8 @@
 // Интерфейс поверх canvas делаем на DOM: текст остаётся чётким на любом экране,
 // а переводы и вёрстка меню проще, чем внутри Phaser.
 
+import { assetUrl, png } from '../platform/assets';
+
 /**
  * Шрифт интерфейса и надписей в игре. Пиксельные шрифты пробовали: кириллица и цифры
  * в них читаются плохо («5» похожа на «S»). Системный шрифт на каждом телефоне свой
@@ -31,7 +33,7 @@ const css = `
 .ui-modal { position: fixed; inset: 0; background: rgba(15, 12, 22, .78); display: flex; align-items: center;
   justify-content: center; padding: 16px; overflow-y: auto; }
 /* Окно в пиксельной рамке (assets/ui_frame.png, 9 частей по 8 пикселей). */
-.ui-card { color: #2b2233; border: 16px solid transparent; border-image: url(assets/ui_frame.png) 8 fill / 16px stretch;
+.ui-card { color: #2b2233; border: 16px solid transparent; border-image: url(${png('ui_frame')}) 8 fill / 16px stretch;
   image-rendering: pixelated; padding: 2px 10px; max-width: 372px; width: 100%; max-height: calc(100dvh - 32px);
   overflow-y: auto; box-sizing: border-box; font: 15px/1.4 ${UI_FONT};
   filter: drop-shadow(0 4px 0 rgba(24, 20, 37, .6));
@@ -618,7 +620,7 @@ function showToast(image: string, title: string, text: string, medal: boolean): 
   // Открыто окно (утро, итоги) — всплывашка снизу, чтобы не закрывать заголовок и вкладки.
   if (document.querySelector('.ui-modal')) box.classList.add('ui-toast-low');
   const img = el('img');
-  img.src = image;
+  img.src = assetUrl(image);
   img.alt = '';
   const body = el('div');
   body.append(el('b', '', title), el('span', '', text));
@@ -854,7 +856,7 @@ export function pixelize(root: Node): void {
         continue;
       }
       const img = el('img', 'ui-ico');
-      img.src = `assets/${key}.png`;
+      img.src = png(key);
       img.alt = part;
       frag.append(img);
     }
@@ -866,7 +868,7 @@ export function pixelize(root: Node): void {
 export function who(portraitId: string, name: HTMLElement): HTMLDivElement {
   const row = el('div', 'ui-who');
   const img = el('img', 'ui-portrait');
-  img.src = `assets/portrait_${portraitId}.png`;
+  img.src = png(`portrait_${portraitId}`);
   img.alt = '';
   row.append(img, name);
   return row;

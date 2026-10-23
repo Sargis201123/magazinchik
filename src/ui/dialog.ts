@@ -1,6 +1,7 @@
 // Диалог как в RPG: большой портрет с эмоцией, табличка с именем, речевое облако.
 // Текст печатается по буквам с «голосом» героя; касание — дописать сразу.
 
+import { assetUrl } from '../platform/assets';
 import { sound } from '../platform/sound';
 import { button, el } from './dom';
 
@@ -37,7 +38,8 @@ export function liveFace(src: string, talking: () => boolean, className = 'ui-di
   canvas.height = 64;
   const ctx = canvas.getContext('2d');
   const img = new Image();
-  img.src = src;
+  // src — путь без отпечатка (по нему же узнаём настроение), отпечаток — только в адресе картинки.
+  img.src = assetUrl(src);
   // Улыбка и удивление — глаза-дужки или широко открытые, рот уже открыт: не трогаем.
   const mood = /_(happy|sad|angry|surprised)$/.exec(src.replace(/\.png$/, ''))?.[1];
   let lids: string[] = [];
@@ -104,7 +106,7 @@ export function dialogBox(o: DialogOptions): HTMLElement {
   if (o.caption) box.append(el('div', 'ui-muted', o.caption));
   if (o.art) {
     const art = el('img', 'ui-dialog-art');
-    art.src = o.art;
+    art.src = assetUrl(o.art);
     art.alt = '';
     art.addEventListener('error', () => art.remove());
     box.append(art);
