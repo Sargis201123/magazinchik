@@ -994,6 +994,8 @@ export class StoreScene extends Phaser.Scene {
   private sideRays: Phaser.GameObjects.Image[] = [];
   /** Золотые пылинки в лучах; rayLight — насколько лучи сейчас светят (0 — их нет). */
   private rayDust?: Phaser.GameObjects.Particles.ParticleEmitter;
+  /** Тёплая пыль в воздухе зала. */
+  private hallDust?: Phaser.GameObjects.Particles.ParticleEmitter;
   private rayLight = 0;
   /** Фонари на улице, в парке и на парковке: зажигаются по очереди. */
   private lamps: Lamp[] = [];
@@ -1937,7 +1939,13 @@ export class StoreScene extends Phaser.Scene {
         this.idle(person, now, facing);
       }
       if (legs && (legs.texture.key !== key || legs.flipX !== flip)) legs.setTexture(key).setFlipX(flip);
-      if (legs) legs.y = lift;
+      // Наклон — у самого тела (ноги и верхние слои), а не у контейнера: облачко эмоции, мысль,
+      // коробка в руках и тень остаются ровными, а падение на луже (angle контейнера) не спорит с бегом.
+      const tilt = Phaser.Math.DegToRad(lean);
+      if (legs) {
+        legs.y = lift;
+        legs.rotation = tilt;
+      }
       for (const [img, base] of (person.getData('layers') as [Phaser.GameObjects.Image, string][] | undefined) ?? []) {
         if (!SWING_LAYERS.has(base)) continue;
         const want = base + suffix + arms;
@@ -1947,8 +1955,11 @@ export class StoreScene extends Phaser.Scene {
       const side = facing === 'right' ? 1 : facing === 'left' ? -1 : 0;
       const stoop = gait === 'cane' ? 0.5 : 0;
       for (const img of (person.getData('upper') as Phaser.GameObjects.Image[]) ?? []) {
-        img.y = bob + lift + stoop + ((img.getData('dy') as number | undefined) ?? 0);
-        img.x = stoop * side;
+        const dy = (img.getData('dy') as number | undefined) ?? 0;
+        img.y = bob + lift + stoop + dy;
+        // Высокие слои (шапка, вещь, рюкзак) смещены вверх — наклоняются вокруг середины тела, как остальные.
+        img.x = stoop * side - dy * Math.sin(tilt);
+        img.rotation = tilt;
       }
       // Вещь в руке ходит вместе с рукой (вперёд-назад сбоку, вверх-вниз спереди),
       // сумка на плече отстаёт и качается навстречу.
@@ -1961,13 +1972,6 @@ export class StoreScene extends Phaser.Scene {
           else prop.y -= sway;
         }
         if (satchel && side) satchel.x -= sway * side;
-      }
-      // Наклон ставим, только когда он меняется (или его сбросило падение на луже — тоже angle),
-      // чтобы не мешать самому падению.
-      if (((person.getData('lean') as number | undefined) ?? 0) !== lean || (lean !== 0 && person.angle === 0)) {
-        person.setData('lean', lean).setAngle(lean);
-        // Тень остаётся ровной на полу.
-        (person.getData('shadow') as Phaser.GameObjects.Image | undefined)?.setAngle(-lean);
       }
       const umbrella = person.getData('umbrella') as Phaser.GameObjects.Image | undefined;
       // Зонт раскрывается на выходе из магазина и закрывается, когда дождь кончился.
@@ -2035,10 +2039,9 @@ export class StoreScene extends Phaser.Scene {
     const [fill, edge] = !indoor && this.weather === 'snow' ? [0xffffff, 0xc0cbdc] : [0xf4ece0, 0xb8a888];
     const away = back || Phaser.Math.FloatBetween(-1, 1);
     // Облачко из двух клубков: побольше у ноги, поменьше чуть позади; растут, отлетают и тают.
-    const puffs = [
-      this.add.circle(x, y - 0.5, 1.5, fill).setStrokeStyle(0.5, edge),
-      this.add.circle(x + away * 1.8, y - 1.3, 1, fill).setStrokeStyle(0.5, edge),
-    ];
+    // Крошечный круг — восьмиугольником: по умолчанию Phaser режет его на ~100 сегментов.
+    const puff = (px: number, py: number, r: number) => this.add.circle(px, py, r, fill).setIterations(0.125).setStrokeStyle(0.5, edge);
+    const puffs = [puff(x, y - 0.5, 1.5), puff(x + away * 1.8, y - 1.3, 1)];
     for (const puff of puffs) puff.setDepth(depth);
     this.footDust.add(puffs[0]);
     puffs[0].once('destroy', () => this.footDust.delete(puffs[0]));
@@ -2117,11 +2120,33 @@ export class StoreScene extends Phaser.Scene {
     person.setData('breathAt', now + Phaser.Math.Between(1800, 2800));
     if (next === 0) return;
     const dx = facing === 'left' ? -3 : facing === 'right' ? 3 : 1;
-    const puff = this.add.circle(person.x + dx * person.scaleX, person.y - 7 * person.scaleY, 1.2, 0xffffff, 0.55).setDepth(person.depth + 1);
+    const puff = this.add.circle(person.x + dx * person.scaleX, person.y - 7 * person.scaleY, 1.2, 0xffffff, 0.55).setIterations(0.125).setDepth(person.depth + 1);
     this.tweens.add({ targets: puff, x: puff.x + dx, y: puff.y - 4, scale: 2.4, alpha: 0, duration: 750, ease: 'Sine.easeOut', onComplete: () => puff.destroy() });
   }
 
   /** Вечером на улице тень вытягивается в сторону от ближайшего фонаря. В прыжке (lift) тень меньше. */
+  /**
+   * День встал (итоги, вопрос о ночной смене): поза бега больше не обновляется (animatePeople не идёт),
+   * поэтому снимаем наклон и подскок сразу — иначе продавец простоит наклонённым до утра.
+   */
+  private straightenPeople(): void {
+    for (const person of this.people) {
+      if (!person.active) continue;
+      const legs = person.getData('legs') as Phaser.GameObjects.Image | undefined;
+      if (legs) {
+        legs.y = 0;
+        legs.rotation = 0;
+      }
+      const stoop = person.getData('gait') === 'cane' ? 0.5 : 0;
+      for (const img of (person.getData('upper') as Phaser.GameObjects.Image[] | undefined) ?? []) {
+        img.y = stoop + ((img.getData('dy') as number | undefined) ?? 0);
+        img.x = 0;
+        img.rotation = 0;
+      }
+      this.lampShadow(person);
+    }
+  }
+
   private lampShadow(person: Phaser.GameObjects.Container, lift = 0): void {
     const shadow = person.getData('shadow') as Phaser.GameObjects.Image | undefined;
     if (!shadow) return;
@@ -2251,7 +2276,9 @@ export class StoreScene extends Phaser.Scene {
     if (this.lite) return;
     // Штуки, которые ещё летят из коробки (stockShelf) или съезжают на место, не трогаем: их ведёт свой твин.
     const still = (i: Phaser.GameObjects.Image) => i.visible && !i.getData('flying') && !(i.getData('slide') as Phaser.Tweens.Tween | undefined)?.isActive();
-    const parts = [view.bg, view.front, ...view.items.filter(still), ...view.backItems.filter(still)];
+    // Вечерние полоски света над товаром прыгают вместе с полкой, а не остаются висеть.
+    const strips = view.lights.filter((o): o is Phaser.GameObjects.Image => this.shelfStrips.includes(o as Phaser.GameObjects.Image));
+    const parts = [view.bg, view.front, ...strips, ...view.items.filter(still), ...view.backItems.filter(still)];
     if (parts.some((p) => p.getData('hopping'))) return;
     for (const p of parts) p.setData('hopping', true);
     this.tweens.add({
@@ -2804,10 +2831,14 @@ export class StoreScene extends Phaser.Scene {
 
   /** Тёплые пылинки медленно плывут в свете зала — уютно; в лёгкой графике их нет. */
   private buildDust(): void {
-    this.rayDust = undefined;
+    // removeAll(true) в buildWorld только снимает объекты со сцены: старые излучатели остались бы
+    // в списке обновления и пылили бы невидимо (с каждой пересборкой — всё больше). Уничтожаем.
+    this.hallDust?.destroy();
+    this.rayDust?.destroy();
+    this.hallDust = this.rayDust = undefined;
     if (this.lite) return;
     const { w, h, wallH } = this.layout;
-    this.add
+    this.hallDust = this.add
       .particles(0, 0, 'glow', {
         x: { min: 8, max: w - 8 },
         y: { min: wallH + 12, max: h - 12 },
@@ -4178,6 +4209,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.nightAsked = true;
     this.running = false;
+    this.straightenPeople();
     this.setSpeed(1);
     const { card, close } = openModal();
     card.append(
@@ -10878,6 +10910,7 @@ export class StoreScene extends Phaser.Scene {
       this.syncStaff();
     }
     this.running = false;
+    this.straightenPeople();
     this.clearBigDay();
     this.night = false;
     this.setSpeed(1);
