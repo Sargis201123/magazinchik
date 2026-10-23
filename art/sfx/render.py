@@ -94,7 +94,9 @@ def sfx_bank():
     return {
         # Касса
         "scan": ("scan", 0, [own(synth.scanner(i), f"сканер: пьезо «пик» {i + 1}") for i in range(4)]),
-        "till": ("coin", -1, [(synth.till(i), f"касса: рычаг, звонок, ящик {i + 1}", till_src) for i in range(4)]),
+        # Касса (рычаг, звонок, ящик, а следом мелочь) длиннее монетки, которую заменяет: равнять по самому
+        # громкому окну мало — тише на 5 дБ, чтобы и вся её энергия была меньше, чем у прежней монетки (check.py).
+        "till": ("coin", -5, [(synth.till(i), f"касса: рычаг, звонок, ящик {i + 1}", till_src) for i in range(4)]),
         "coin": ("coin", -2, [
             rec(R + "handleCoins.ogg", 0.105, 0.3),
             rec(R + "handleCoins.ogg", 0.43, 0.3),

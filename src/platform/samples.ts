@@ -11,6 +11,11 @@ import { SFX_BANK, VOICE_BANK, type Bank, type Segment } from './sfxData';
 export type BankId = 'sfx' | 'voice';
 
 const BANKS: Record<BankId, Bank> = { sfx: SFX_BANK, voice: VOICE_BANK };
+/**
+ * Не выше какой частоты разбирать: голоса сделаны до 6,5 кГц (art/sfx/voice.py) и сжаты со срезом 8 кГц,
+ * им хватает 16 кГц — 2 МБ памяти вместо 4. Звукам действий (звон, стекло) нужны верха — как у музыки.
+ */
+const DECODE_RATE: Record<BankId, number> = { sfx: Infinity, voice: 16000 };
 /** Не скачалось — следующая попытка через столько секунд (и ещё раз, вдвое позже); потом — только синтез. */
 const RETRY = [20, 60];
 const POLL_MS = 400;
@@ -32,8 +37,9 @@ const state: Record<BankId, State> = {
 function load(ac: AudioContext, id: BankId): void {
   const s = state[id];
   s.loading = true;
-  // Разбор сразу в пониженной частоте (32 кГц, на слабом телефоне — 22): в телефоне не слышно, памяти меньше.
-  loadAudio(ac, BANKS[id].path, { lean: true })
+  // Разбор сразу в пониженной частоте (32 кГц, на слабом телефоне — 22, голоса — 16): в телефоне не слышно,
+  // памяти меньше.
+  loadAudio(ac, BANKS[id].path, { lean: true, rate: DECODE_RATE[id] })
     .then((buffer) => {
       s.shift = markerShift(buffer.getChannelData(0), buffer.sampleRate, BANKS[id].marker);
       s.buffer = buffer;

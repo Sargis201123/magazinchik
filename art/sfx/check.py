@@ -1,7 +1,9 @@
 """Проверка уровней звуков действий и голосов (послушать нельзя — меряем): для каждой ленты в
 public/audio/sfx — размер, длина, пик и RMS, а для каждого куска (по manifest.json) — длина, пик,
 RMS, доля «подвала» ниже 150 Гц, громкость в модели телефона с множителем игры (должна совпадать
-с опорной у синтезированного звука) и отношение сигнал/шум кодека к исходнику (art/build/sfx/*.wav).
+с опорной у синтезированного звука), вся энергия куска (у длинного звука она больше при том же окне)
+и отношение сигнал/шум кодека к исходнику (art/build/sfx/*.wav). Касса с мелочью сверяется с прежней
+монеткой по энергии: она звучит на каждой покупке и не должна быть «тяжелее».
 
     python3 art/sfx/check.py          # обе ленты, оба формата
     python3 art/sfx/check.py --brief  # только итоги по файлам и по звукам
@@ -28,6 +30,8 @@ BUILD = ROOT / "art" / "build" / "sfx"
 REF = {"scan": "scan", "till": "coin", "coin": "coin", "notes": "coin", "glass": "pop", "tin": "pop", "bump": "pop", "soft": "pop",
        "box": "pop", "paper": "pop", "door": "chime", "bell": "bell", "ding": "bell", "unbox": "pop", "boxland": "tap", "mop": "pop",
        "meow": "meow", "bark": "bark", "click": "tap", "page": "tap"}
+# Как в игре (src/platform/sound.ts, till): мелочь или купюры ложатся через 0,2 с, вдвое тише.
+PAY_AT, PAY_GAIN = 0.2, 0.5
 
 
 def decode(path):
@@ -65,10 +69,28 @@ def snr(ref, got):
     return 10 * np.log10(np.sum(S ** 2) / (np.sum((S - D) ** 2) + 1e-15) + 1e-15)
 
 
+def till_energy(x, sounds, shift):
+    """Самая «тяжёлая» касса с оплатой (каждый вариант кассы × каждый вариант мелочи и купюр), дБ."""
+    def piece(seg):
+        at, dur, gain = seg
+        a = int((at + shift) * SR)
+        return x[a:a + int(dur * SR)] * gain
+    worst = -np.inf
+    for till in map(piece, sounds["till"]):
+        for pay in [piece(p) for p in sounds["coin"] + sounds["notes"]]:
+            a = int(PAY_AT * SR)
+            mix = np.zeros(max(len(till), a + len(pay)))
+            mix[:len(till)] += till
+            mix[a:a + len(pay)] += pay * PAY_GAIN
+            worst = max(worst, common.energy(mix))
+    return worst
+
+
 def main(argv):
     brief = "--brief" in argv
     m = json.loads((HERE / "manifest.json").read_text())
     ref = m["references"]
+    old_coin = common.energy(common.reference_sounds()["coin"])
     total = {"ogg": 0, "m4a": 0}
     for bank in ("sfx", "voice"):
         b = m[bank]
@@ -98,6 +120,7 @@ def main(argv):
                         "rms": db(np.sqrt(np.mean(seg ** 2))),
                         "low": common.low_share(seg),
                         "game": common.loud(seg * gain),
+                        "energy": common.energy(seg * gain),
                     }
                     if source is not None:
                         s0 = int(at * SR)
@@ -107,14 +130,20 @@ def main(argv):
                 game = [r["game"] for r in rows]
                 line = (f"   {sid:8s} ×{len(rows):3d} длина {min(r['dur'] for r in rows):.2f}–{max(r['dur'] for r in rows):.2f} с  "
                         f"пик {max(r['peak'] for r in rows):5.1f}  RMS {np.mean([r['rms'] for r in rows]):6.1f}  "
-                        f"ниже 150 Гц ≤{max(r['low'] for r in rows):5.1f} дБ  в игре {min(game):6.1f}…{max(game):6.1f} (опора {target})")
+                        f"ниже 150 Гц ≤{max(r['low'] for r in rows):5.1f} дБ  в игре {min(game):6.1f}…{max(game):6.1f} (опора {target})  "
+                        f"энергия ≤{max(r['energy'] for r in rows):6.1f}")
                 if source is not None:
                     line += f"  ОСШ кодека ≥{min(r['snr'] for r in rows):4.1f} дБ"
                 print(line)
                 if not brief and bank == "sfx":
                     for i, r in enumerate(rows):
                         print(f"       {i + 1}: {r['dur']:.2f} с  пик {r['peak']:5.1f}  RMS {r['rms']:6.1f}  в игре {r['game']:6.1f}"
+                              f"  энергия {r['energy']:6.1f}"
                               + (f"  ОСШ {r['snr']:4.1f}" if "snr" in r else ""))
+            if bank == "sfx":
+                worst = till_energy(x, b["sounds"], shift)
+                print(f"   касса с оплатой: энергия ≤{worst:6.1f} дБ, прежняя монетка {old_coin:6.1f} дБ"
+                      + ("" if worst <= old_coin else "  ← громче прежней!"))
     print(f"всего: Opus {total['ogg'] / 1024:.0f} КБ (Android, ПК), AAC {total['m4a'] / 1024:.0f} КБ (iPhone)")
 
 

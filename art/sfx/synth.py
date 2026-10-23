@@ -107,6 +107,8 @@ def strike(f0, ratios, levels, decays, dur, rng, detune=0.0015, hit=0.25, hit_hz
 
 SHOP_BELL = dict(ratios=[1.0, 2.42, 3.98, 5.63], levels=[1.0, 0.42, 0.22, 0.1], decays=[0.85, 0.36, 0.17, 0.09])
 DOME_BELL = dict(ratios=[1.0, 2.31, 4.12, 6.4], levels=[1.0, 0.36, 0.16, 0.07], decays=[1.1, 0.42, 0.2, 0.1])
+# Звонок кассы — та же чашечка, но придержанная: гаснет за полсекунды (касса звучит на каждой покупке).
+TILL_BELL = dict(DOME_BELL, decays=[0.3, 0.16, 0.09, 0.05])
 
 
 def door_bell(seed, hits, f0s, total, strength=1.0):
@@ -151,9 +153,10 @@ def ding(seed):
 
 
 def till(seed):
-    """Касса: щелчок рычага, «дзынь» звонка, ящик выезжает на роликах и стукается; в лотке звякает мелочь."""
+    """Касса: щелчок рычага, «дзынь» звонка, ящик выезжает на роликах и стукается; в лотке звякает мелочь.
+    Всё за полсекунды: звучит на каждой покупке, а при нескольких кассах — каждую секунду-две."""
     rng = np.random.default_rng(seed + 100)
-    total = 0.95
+    total = 0.6
     out = np.zeros(int(total * SR))
 
     def put(x, at, gain=1.0):
@@ -165,13 +168,13 @@ def till(seed):
     o = latch[int(0.03 * SR):]
     latch = cut(resample(o, 0.82), 0.0, 0.12, pre=0.002, fade_out=0.06)
     put(hp(latch, 400) / (np.abs(latch).max() + 1e-9), 0.0, 0.35)
-    # Звонок: маленькая чашечка, бьёт один раз (иногда второй, тише).
+    # Звонок: маленькая чашечка, бьёт один раз (иногда второй, тише) и не тянет хвост.
     f0 = [2349, 2217, 2489, 2289][seed % 4]
-    bell = strike(f0, **DOME_BELL, dur=0.9, rng=rng, hit=0.12)
+    bell = strike(f0, **TILL_BELL, dur=0.45, rng=rng, hit=0.12)
     bell /= np.abs(bell).max()
     put(bell, 0.025, 1.0)
     if seed % 2:
-        put(strike(f0, **DOME_BELL, dur=0.6, rng=rng, hit=0.1) / 1.2, 0.025 + rng.uniform(0.09, 0.12), 0.28)
+        put(strike(f0, **TILL_BELL, dur=0.3, rng=rng, hit=0.1) / 1.2, 0.025 + rng.uniform(0.09, 0.12), 0.28)
     # Ящик: шум роликов через резонансы корпуса (650 и 1300 Гц) и мелкие стуки колёсиков.
     slide = [0.24, 0.3, 0.27, 0.22][seed % 4]
     n = int(slide * SR)

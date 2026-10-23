@@ -32,6 +32,14 @@ def loud(x, win=0.1):
     return float(-0.691 + 10 * np.log10(p.max() + 1e-15))
 
 
+def energy(x):
+    """Вся энергия звука в телефоне, дБ (K-взвешенная, как loud, но сумма за всю длину, а не одно окно).
+    При том же самом громком окне длинный звук «тяжелее»: касса со звонком и ящиком на каждой покупке
+    утомляет больше короткой монетки — loud этого не видит."""
+    y = dsp.k_weight(phone(np.asarray(x, dtype=float)))
+    return float(-0.691 + 10 * np.log10(np.sum(y * y) / SR + 1e-15))
+
+
 def low_share(x, cut=150):
     """Доля энергии ниже cut Гц, дБ относительно всей (телефон её не сыграет, а запас громкости она съедает)."""
     X = np.abs(np.fft.rfft(x)) ** 2
@@ -173,9 +181,9 @@ BELL = [[1, 1, 1], [2.76, 0.45, 0.55], [5.4, 0.22, 0.32], [8.93, 0.1, 0.2]]
 COIN = [[1, 1, 1], [2.32, 0.6, 0.6], [3.81, 0.32, 0.4], [5.12, 0.15, 0.25]]
 
 
-def references():
-    """Громкость (loud) синтезированных звуков игры: на неё равняются записанные."""
-    ref = {
+def reference_sounds():
+    """Синтезированные звуки игры, которые заменяют записи (сигналы)."""
+    return {
         "tap": synth_play([dict(freq=660, dur=0.05, vol=0.035, slide=540)], 2400),
         "scan": synth_play([dict(freq=1175, dur=0.09, wave="sine", vol=0.03, attack=0.006),
                             dict(freq=2350, dur=0.06, wave="sine", vol=0.006, attack=0.006)], 3500),
@@ -191,4 +199,8 @@ def references():
         "chime": synth_ring([dict(freq=2093, vol=0.022, ring=0.7), dict(freq=2637, at=0.075, vol=0.022, ring=0.7)],
                             [[1, 1, 1], [2.76, 0.35, 0.43], [5.4, 0.12, 0.21]], 16000),
     }
-    return {k: loud(v) for k, v in ref.items()}
+
+
+def references():
+    """Громкость (loud) синтезированных звуков игры: на неё равняются записанные."""
+    return {k: loud(v) for k, v in reference_sounds().items()}
