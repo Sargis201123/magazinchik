@@ -79,7 +79,7 @@ import { music } from '../platform/music';
 import { findPath, type Rect } from './paths';
 import { ambience } from '../platform/ambience';
 import { haptic, trustedNow } from '../platform/telegram';
-import { button, el, openModal, toast, UI_FONT } from '../ui/dom';
+import { button, el, ICON_RE, ICONS, openModal, toast, UI_FONT } from '../ui/dom';
 import {
   BIG_DAYS,
   BLACKOUT_CHECKOUT,
@@ -266,8 +266,26 @@ const CAR_TYPES: [string, number | null, number][] = [
   ['car_van', 0, 16],
   ['car_truck', null, 14],
 ];
-/** Всплывающая надпись и сколько раз подряд она повторилась. */
-type Popup = { label: Phaser.GameObjects.Text; text: string; count: number; fade?: Phaser.Tweens.Tween };
+/**
+ * Всплывающая надпись и сколько раз подряд она повторилась. box — контейнер с фоном (bg), текстом и значками;
+ * его точка 0, 0 — кончик хвостика, x — куда он указывает, y — где надпись висит. Плашка w × h сдвинута
+ * от хвостика на dx, если прижата к краю магазина. text — исходная фраза (по ней склеиваются повторы «×N»).
+ */
+type Popup = {
+  box: Phaser.GameObjects.Container;
+  bg: Phaser.GameObjects.Graphics;
+  text: string;
+  color: string;
+  count: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  dx: number;
+  tail: boolean;
+};
+/** Плашка всплывающей надписи (в точках мира): поля, скругление, хвостик, высота значка вместо эмодзи. */
+const POPUP = { padX: 3, padY: 1.5, radius: 3, tail: 3, icon: 9, gap: 0.5, font: '8.5px' };
 
 /** Здание по соседству; back — отступ от тротуара (у кафе перед ним веранда). */
 /** Особая крыша: вертолётная площадка, красный крест, бельё, солнечные панели (art/rooftops.py). */
@@ -367,6 +385,17 @@ function lerpKeys(keys: [number, number][], p: number): number {
   const t = b === a ? 0 : (p - a) / (b - a);
   const mix = (shift: number) => Math.round(((ca >> shift) & 255) + (((cb >> shift) & 255) - ((ca >> shift) & 255)) * t);
   return (mix(16) << 16) | (mix(8) << 8) | mix(0);
+}
+
+/** Холст для замеров: по ширине слов надпись со значками переносится по строкам. */
+let measureCtx: CanvasRenderingContext2D | null = null;
+
+/** Ширина строки шрифтом всплывающих надписей (в точках мира). */
+function popupTextWidth(text: string): number {
+  if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+  if (!measureCtx) return text.length * 4.5;
+  measureCtx.font = `bold ${POPUP.font} ${UI_FONT}`;
+  return measureCtx.measureText(text).width;
 }
 /** Сколько видов у каждого товара (item_bread_0…2 в art/sprites.py). */
 const ITEM_VARIANTS = 3;
@@ -1492,6 +1521,9 @@ export class StoreScene extends Phaser.Scene {
     // removeAll(true) только снимает объекты со сцены, не уничтожая: старые человечки остались бы
     // в списке и каждый кадр «ходили» бы невидимками (а с ними пар, отражения, позы). Новых создаст сборка.
     this.people.clear();
+    // Так же и надписи: их таяние ниже обрывается, и висели бы в списке (склейка «×N», место) вечно.
+    for (const p of this.popups) p.box.destroy();
+    this.popups = [];
     this.cullDirty = true;
     // killAll не вызывает onStop: незаконченный шаг продавца никогда не завершится, и он
     // навсегда остался бы «занят» (не убирал бы мусор и не носил товар). Начинаем его дела заново.
@@ -6391,7 +6423,7 @@ export class StoreScene extends Phaser.Scene {
     this.trickObjs.push(person);
     await this.walk(person, promoter.x + 8, promoter.y + 2);
     if (!person.active) return;
-    this.popup(person.x, person.y - 18, '🤔', '#ffffff');
+    this.emote(person, 'emo_question');
     await this.wait(600);
     await this.walk(person, this.layout.door.x + Phaser.Math.Between(-30, 30), this.streetY + 74);
     if (person.active) this.tweens.add({ targets: person, alpha: 0, duration: 400, onComplete: () => person.destroy() });
@@ -10167,63 +10199,195 @@ export class StoreScene extends Phaser.Scene {
     return new Promise((resolve) => this.time.delayedCall(ms, resolve));
   }
 
-  /** Всплывающая надпись: жирная, на тёмной плашке, выпрыгивает, потом поднимается и тает. */
+  /**
+   * Всплывающая надпись: жирная, на тёмной плашке-пилюле со светлой полоской сверху и хвостиком к тому,
+   * над кем всплыла. Эмодзи, у которых в меню есть пиксельный значок, — тем же значком, а не эмодзи телефона.
+   * Выпрыгивает из кончика хвостика, потом поднимается и тает. На слабом телефоне — без хвостика и полоски.
+   */
   private popup(x: number, y: number, text: string, color: string): void {
-    this.popups = this.popups.filter((p) => p.label.active);
+    this.popups = this.popups.filter((p) => p.box.active);
     const hold = Math.min(1800, 500 + 40 * text.length);
     // Та же фраза ещё висит — не новая надпись, а счётчик: «Ушёл без покупки! ×3».
     const same = this.popups.find((p) => p.text === text);
     if (same) {
       same.count++;
-      same.label.setText(`${text} ×${same.count}`).setAlpha(1);
-      same.fade?.remove();
-      this.tweens.add({ targets: same.label, scale: { from: 1.2, to: 1 }, duration: 180, ease: 'Back.easeOut' });
+      // Прежние выпрыгивание и таяние — прочь: иначе конец выпрыгивания запустил бы второе таяние.
+      this.tweens.killTweensOf(same.box);
+      this.fillPopup(same, `${text} ×${same.count}`);
+      same.box.setAlpha(1).setY(same.y);
+      this.tweens.add({ targets: same.box, scale: { from: 1.2, to: 1 }, duration: 180, ease: 'Back.easeOut' });
       this.fadePopup(same, hold);
       return;
     }
-    const label = this.add
-      .text(x, y, text, {
-        fontFamily: UI_FONT,
-        fontSize: '8.5px',
-        fontStyle: 'bold',
-        color,
-        backgroundColor: 'rgba(24, 20, 37, 0.78)',
-        padding: { x: 3, y: 1.5 },
-        align: 'center',
-        // Длинная фраза переносится, чтобы не вылезать за край магазина.
-        wordWrap: { width: Math.min(110, this.layout.w - 10) },
-      })
-      .setOrigin(0.5)
-      .setResolution(5)
-      .setDepth(1000)
-      .setScale(0.4);
-    // Длинная надпись не должна вылезать за край магазина; и висит дольше, чтобы успеть прочитать.
-    const half = label.width / 2 + 2;
-    label.x = Phaser.Math.Clamp(x, half, Math.max(half, this.layout.w - half));
-    // Не налезать на другие надписи: если место занято — встаём над ними.
-    const box = (l: Phaser.GameObjects.Text) => new Phaser.Geom.Rectangle(l.x - l.width / 2, l.y - l.height / 2, l.width, l.height);
+    // Кончик хвостика — чуть ниже точки: плашка висит над головой, хвостик указывает на макушку.
+    const bg = this.add.graphics();
+    const box = this.add.container(x, y + 4, [bg]).setDepth(1000).setScale(0.4);
+    const entry: Popup = { box, bg, text, color, count: 1, x, y: box.y, w: 0, h: 0, dx: 0, tail: !this.lite };
+    this.fillPopup(entry, text);
+    // Не налезать на другие надписи: если место занято — встаём над ними. Хвостик тогда показал бы
+    // на соседнюю надпись, а не на хозяина, — без него.
+    let stacked = false;
     for (let i = 0; i < 6; i++) {
-      const hit = this.popups.find((p) => Phaser.Geom.Intersects.RectangleToRectangle(box(label), box(p.label)));
+      const hit = this.popups.find((p) => Phaser.Geom.Intersects.RectangleToRectangle(this.popupRect(entry), this.popupRect(p)));
       if (!hit) break;
-      label.y = hit.label.y - hit.label.height / 2 - label.height / 2 - 1;
+      box.y = this.popupRect(hit).y - 1 + POPUP.tail;
+      stacked = true;
     }
-    const entry: Popup = { label, text, count: 1 };
+    entry.y = box.y;
+    if (stacked && entry.tail) {
+      entry.tail = false;
+      this.drawPopupBg(entry);
+    }
     this.popups.push(entry);
-    this.tweens.add({ targets: label, scale: 1, duration: 220, ease: 'Back.easeOut', onComplete: () => this.fadePopup(entry, hold) });
+    this.tweens.add({ targets: box, scale: 1, duration: 220, ease: 'Back.easeOut', onComplete: () => this.fadePopup(entry, hold) });
+  }
+
+  /**
+   * Содержимое надписи: текст кусками, а эмодзи из ICONS (ui/dom.ts) — пиксельными значками, как в меню
+   * (значки меню — из атласа 'ico', монета, товары и коробка — свои картинки). Длинная фраза переносится
+   * по словам, чтобы не вылезать за край магазина. Размер плашки и сдвиг от хвостика — в entry.
+   */
+  private fillPopup(e: Popup, text: string): void {
+    // Прежнее содержимое (при склейке «×N») — прочь, фон остаётся первым, под всем.
+    for (const o of e.box.list.filter((o) => o !== e.bg)) o.destroy();
+    const maxW = Math.min(110, this.layout.w - 10);
+    // Слова (с пробелом после) и значки по порядку; нечётные куски split — эмодзи из таблицы.
+    type Bit = { text: string; key?: string };
+    const bits: Bit[] = [];
+    text.split(ICON_RE).forEach((part, i) => {
+      const key = i % 2 ? ICONS[part] : undefined;
+      if (key && this.hasIcon(key)) bits.push({ text: part, key });
+      else for (const word of part.match(/\S+\s*|\s+/g) ?? []) bits.push({ text: word });
+    });
+    const iconW = (key: string) => {
+      const f = this.iconFrame(key);
+      return (f.width * POPUP.icon) / f.height + 2 * POPUP.gap;
+    };
+    const lines: Bit[][] = [[]];
+    let lineW = 0;
+    for (const bit of bits) {
+      const w = bit.key ? iconW(bit.key) : popupTextWidth(bit.text);
+      if (lineW > 0 && lineW + (bit.key ? w : popupTextWidth(bit.text.trimEnd())) > maxW) {
+        lines.push([]);
+        lineW = 0;
+      }
+      // Пробелы в начале строки после переноса не нужны.
+      if (lineW === 0 && !bit.key && !bit.text.trim()) continue;
+      lines[lines.length - 1].push(bit);
+      lineW += w;
+    }
+    // Строка: соседние слова — одним текстом, значки — картинками; пробелы по краям строки не в счёт.
+    const rows = lines.map((line) => {
+      const runs: Bit[] = [];
+      for (const bit of line) {
+        const last = runs[runs.length - 1];
+        if (!bit.key && last && !last.key) last.text += bit.text;
+        else runs.push({ ...bit });
+      }
+      if (runs.length && !runs[0].key) runs[0].text = runs[0].text.trimStart();
+      if (runs.length && !runs[runs.length - 1].key) runs[runs.length - 1].text = runs[runs.length - 1].text.trimEnd();
+      const items = runs
+        .filter((r) => r.key || r.text)
+        .map((r) => {
+          if (r.key) return this.popupIcon(r.key);
+          return this.add.text(0, 0, r.text, { fontFamily: UI_FONT, fontSize: POPUP.font, fontStyle: 'bold', color: e.color, resolution: 5 }).setOrigin(0, 0.5);
+        });
+      const gaps = (o: Phaser.GameObjects.Image | Phaser.GameObjects.Text) => (o instanceof Phaser.GameObjects.Image ? 2 * POPUP.gap : 0);
+      return {
+        items,
+        w: items.reduce((sum, o) => sum + o.displayWidth + gaps(o), 0),
+        h: Math.max(POPUP.icon, ...items.map((o) => o.displayHeight)),
+      };
+    });
+    e.w = Math.max(...rows.map((r) => r.w)) + 2 * POPUP.padX;
+    e.h = rows.reduce((sum, r) => sum + r.h, 0) + 2 * POPUP.padY;
+    // Длинная надпись не вылезает за край магазина: плашка сдвигается, хвостик остаётся над хозяином.
+    const half = e.w / 2 + 2;
+    e.dx = Phaser.Math.Clamp(e.x, half, Math.max(half, this.layout.w - half)) - e.x;
+    let y = -POPUP.tail - e.h + POPUP.padY;
+    for (const row of rows) {
+      let x = e.dx - row.w / 2;
+      for (const o of row.items) {
+        const gap = o instanceof Phaser.GameObjects.Image ? POPUP.gap : 0;
+        // Значок чуть выше середины строки — вровень с заглавными буквами, а не с хвостиками «у» и «р».
+        o.setPosition(x + gap, y + row.h / 2 - (gap ? 0.5 : 0));
+        x += o.displayWidth + 2 * gap;
+      }
+      y += row.h;
+      e.box.add(row.items);
+    }
+    this.drawPopupBg(e);
+  }
+
+  /** Есть ли картинка для значка: значки меню — кадры атласа 'ico', остальное — отдельные текстуры. */
+  private hasIcon(key: string): boolean {
+    return key.startsWith('ico_') ? this.textures.get('ico').has(key) : this.textures.exists(key);
+  }
+
+  /** Кадр значка — по его размеру строка переносится ещё до того, как значок создан. */
+  private iconFrame(key: string): Phaser.Textures.Frame {
+    return key.startsWith('ico_') ? this.textures.getFrame('ico', key) : this.textures.getFrame(key);
+  }
+
+  /** Значок в надписи — высотой POPUP.icon, как в меню (там все значки в строку высотой 1,15 буквы). */
+  private popupIcon(key: string): Phaser.GameObjects.Image {
+    const img = key.startsWith('ico_') ? this.add.image(0, 0, 'ico', key) : this.add.image(0, 0, key);
+    return img.setOrigin(0, 0.5).setScale(POPUP.icon / img.height);
+  }
+
+  /** Фон надписи: тёмная пилюля, светлая полоска сверху — тоном надписи — и хвостик к тому, над кем всплыла. */
+  private drawPopupBg(e: Popup): void {
+    const { w, h, dx } = e;
+    const r = POPUP.radius;
+    const left = dx - w / 2;
+    const top = -POPUP.tail - h;
+    const g = e.bg.clear();
+    if (this.lite) {
+      g.fillStyle(0x181425, 0.85);
+      this.fillPill(g, left, top, w, h);
+      return;
+    }
+    // Мягкая тень на пиксель ниже — плашка чуть приподнята над полом.
+    g.fillStyle(0x0b0911, 0.3);
+    this.fillPill(g, left, top + 1, w, h);
+    g.fillStyle(0x181425, 0.85);
+    this.fillPill(g, left, top, w, h);
+    g.fillStyle(Phaser.Display.Color.HexStringToColor(e.color).color, 0.35).fillRect(left + r, top + 1, w - 2 * r, 1);
+    if (!e.tail) return;
+    // Хвостик — от низа плашки к точке 0, 0; если плашка прижата к стене — не на скруглении, а рядом.
+    const bx = Phaser.Math.Clamp(0, left + r + 2.5, left + w - r - 2.5);
+    g.fillStyle(0x181425, 0.85).fillTriangle(bx - 2.5, -POPUP.tail, bx + 2.5, -POPUP.tail, Phaser.Math.Clamp(0, bx - 2, bx + 2), 0);
+  }
+
+  /**
+   * Плашка со ступенчатыми пиксельными углами из пяти прямоугольников без наложений (прозрачность ровная).
+   * fillRoundedRect в WebGL каждый кадр заново режет 4 дуги на ~400 точек — а надписей бывает много сразу.
+   */
+  private fillPill(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
+    g.fillRect(x + 2, y, w - 4, 1)
+      .fillRect(x + 1, y + 1, w - 2, 1)
+      .fillRect(x, y + 2, w, h - 4)
+      .fillRect(x + 1, y + h - 2, w - 2, 1)
+      .fillRect(x + 2, y + h - 1, w - 4, 1);
+  }
+
+  /** Где плашка надписи в мире — чтобы новые надписи не налезали на прежние. */
+  private popupRect(p: Popup): Phaser.Geom.Rectangle {
+    return new Phaser.Geom.Rectangle(p.box.x + p.dx - p.w / 2, p.box.y - POPUP.tail - p.h, p.w, p.h);
   }
 
   /** Надпись повисит и уплывёт вверх, растворяясь. */
   private fadePopup(entry: Popup, hold: number): void {
-    const { label } = entry;
-    entry.fade = this.tweens.add({
-      targets: label,
-      y: label.y - 12,
+    const { box } = entry;
+    this.tweens.add({
+      targets: box,
+      y: box.y - 12,
       alpha: 0,
       delay: hold,
       duration: 600,
       ease: 'Quad.easeIn',
       onComplete: () => {
-        label.destroy();
+        box.destroy();
         this.popups = this.popups.filter((p) => p !== entry);
       },
     });

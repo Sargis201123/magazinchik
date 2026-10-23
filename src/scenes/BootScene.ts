@@ -336,6 +336,8 @@ export class BootScene extends Phaser.Scene {
     if (txt) txt.textContent = t('boot.loading');
     this.load.on('progress', (p: number) => bar?.style.setProperty('--p', p.toFixed(3)));
     for (const key of [...SPRITES, ...WARDROBE_TEXTURES]) this.load.image(key, `assets/${key}.png`);
+    // Значки меню (ico_*) одним атласом — для всплывающих надписей в зале (art/icons.py → atlas).
+    this.load.atlas('ico', 'assets/ico_atlas.png', 'assets/ico_atlas.json');
   }
 
   create(): void {
