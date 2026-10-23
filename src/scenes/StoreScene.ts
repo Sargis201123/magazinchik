@@ -2612,7 +2612,8 @@ export class StoreScene extends Phaser.Scene {
     const { door, h } = this.layout;
     const close = (p: { x: number; y: number }) => Math.abs(p.x - door.x) < 16 && Math.abs(p.y - h - 4) < 18;
     const near = [...this.customers].some((c) => close(c.sprite)) || [...this.newcomers].some(close);
-    if (near && this.doorOpen === 0) ambience.chime(door.x);
+    // Колокольчик над дверью — записанный (sound.ts); пока лента не скачалась — синтезированный.
+    if (near && this.doorOpen === 0 && !sound.doorbell(door.x)) ambience.chime(door.x);
     this.doorOpen = Phaser.Math.Clamp(this.doorOpen + (near ? 0.12 : -0.06), 0, 1);
     const key = this.doorOpen < 0.34 ? 'door' : this.doorOpen < 0.67 ? 'door_half' : 'door_open';
     if (this.doorImg.texture.key !== key) this.doorImg.setTexture(key);
@@ -4140,7 +4141,8 @@ export class StoreScene extends Phaser.Scene {
     c.sprite.add(cup);
     c.extras = [...(c.extras ?? []), { kind: 'coffee', price: coffeePrice(this.state) }];
     this.stats.coffees = (this.stats.coffees ?? 0) + 1;
-    sound.pop(2, c.sprite.x);
+    // Чашку ставят на блюдце — тонкий звон.
+    sound.place('glass', 2, c.sprite.x);
     this.popup(c.sprite.x, c.sprite.y - 18, t('popup.coffee', { n: coffeePrice(this.state) }), '#fff3b0');
     if (cupsOf(this.state) === 0) this.time.delayedCall(900, () => this.popup(machine.x + 10, machine.y - 16, t('popup.noCups'), '#ffd0d0'));
     for (const p of [room.inside, room.doorway]) await this.walk(c.sprite, p.x, p.y);
@@ -4202,7 +4204,8 @@ export class StoreScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
       onComplete: () => {
         candy.destroy();
-        sound.pop(3, c.sprite.x);
+        // Конфета в шуршащей обёртке.
+        sound.place('paper', 3, c.sprite.x);
         if (c.sprite.active && !c.gone) this.popup(c.sprite.x, c.sprite.y - 18, t('popup.candy', { n: CANDY_PRICE }), '#fff3b0');
       },
     });
@@ -4279,7 +4282,8 @@ export class StoreScene extends Phaser.Scene {
     oven.state = 'ready';
     oven.start = this.time.now;
     oven.bread.setVisible(true);
-    sound.bell(oven.img.x);
+    // Таймер печи: «дзинь».
+    sound.ding(oven.img.x);
     this.tweens.add({ targets: oven.img, scaleY: 1.08 / ART, duration: 120, yoyo: true, repeat: 1 });
     // Пекарь рядом и вынет сам; если он ушёл (заболел посреди дня) — хлеб может сгореть.
     if (!this.workers.get('baker')) oven.timer = this.time.delayedCall(OVEN_BURN_SECONDS * 1000, () => this.burnBread());
@@ -5332,7 +5336,8 @@ export class StoreScene extends Phaser.Scene {
       // Каждый рейс открывает свою долю коробок (на последнем — все оставшиеся).
       this.awaitingBoxes = trip === trips - 1 ? 0 : Math.max(0, this.awaitingBoxes - Math.ceil(this.awaitingBoxes / (trips - trip)));
       this.refreshWarehouse();
-      sound.pop(trip, driver.x);
+      // Коробка легла на склад — картонный стук, каждая следующая чуть выше.
+      sound.place('box', trip, driver.x);
       if (trip < trips - 1) for (const p of [...route].reverse()) await this.walk(driver, p.x, p.y, SELLER_SPEED);
     }
     for (const p of [...route].reverse()) await this.walk(driver, p.x, p.y, SELLER_SPEED);
@@ -8567,6 +8572,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshWarehouse();
     const items = this.shelfViews[index]?.items ?? [];
     const backs = this.shelfViews[index]?.backItems ?? [];
+    const kind = this.state.shelves[index]?.kind;
     const fresh = items.filter((img, n) => img.visible && n >= before);
     // Задний ряд проявляется, когда штука долетела до полки.
     backs.forEach((back, n) => n >= before && back.visible && back.setAlpha(0));
@@ -8585,7 +8591,8 @@ export class StoreScene extends Phaser.Scene {
         duration: 280,
         onStart: () => {
           img.setAlpha(1);
-          if (n % 2 === 0) sound.pop(n, x);
+          // Звук материала отдела (бутылки звенят, хлеб ложится мягко…), через штуку — без «пулемёта».
+          if (n % 2 === 0 && kind) sound.shelf(kind, n, x);
         },
         onUpdate: (tween) => {
           const k = tween.getValue() ?? 0;
@@ -8686,12 +8693,20 @@ export class StoreScene extends Phaser.Scene {
       // Продавец берёт швабру и трёт пол туда-сюда.
       this.carried.setTexture('mop').setPosition(5, -1).setVisible(true);
       let scrub: Phaser.Tweens.Tween | undefined;
+      const mopMs = kind === 'spill' ? SPILL_MOP_MS : MOP_MS;
       void this.doChore([
-        { x: piece.x + 7, y: piece.y, action: () => (scrub = this.tweens.add({ targets: this.carried, x: 1, duration: 160, yoyo: true, repeat: -1 })) },
         {
           x: piece.x + 7,
           y: piece.y,
-          ms: kind === 'spill' ? SPILL_MOP_MS : MOP_MS,
+          action: () => {
+            scrub = this.tweens.add({ targets: this.carried, x: 1, duration: 160, yoyo: true, repeat: -1 });
+            sound.mop(piece.x, mopMs / 1000);
+          },
+        },
+        {
+          x: piece.x + 7,
+          y: piece.y,
+          ms: mopMs,
           action: () => {
             scrub?.remove();
             this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
@@ -9052,7 +9067,7 @@ export class StoreScene extends Phaser.Scene {
     this.urgentOrders = [];
     this.refreshWarehouse();
     this.refreshShelves();
-    sound.pop(0);
+    sound.place('box', 0);
     const { warehouse } = this.layout;
     this.popup(warehouse.x + warehouse.w / 2, warehouse.y - 4, t('popup.urgent', { list }), '#fff3b0');
   }
@@ -9120,7 +9135,9 @@ export class StoreScene extends Phaser.Scene {
         this.claimedTrash.add(piece);
         await this.workerWalk(w, piece.x + 6, piece.y);
         if (!this.alive(gen)) return;
-        await this.workerWait(w, kind === 'trash' ? TRASH_CLEAN_MS : kind === 'spill' ? SPILL_MOP_MS : MOP_MS);
+        const ms = kind === 'trash' ? TRASH_CLEAN_MS : kind === 'spill' ? SPILL_MOP_MS : MOP_MS;
+        if (kind !== 'trash') sound.mop(piece.x, ms / 1000);
+        await this.workerWait(w, ms);
         if (!piece.active) continue;
         if (kind !== 'trash') {
           this.removeTrash(piece);
@@ -9867,7 +9884,8 @@ export class StoreScene extends Phaser.Scene {
     recordSale(this.stats, c.items);
     if (c.rare) this.rareGuestServed(c, total);
     haptic.success();
-    sound.coin(c.sprite.x);
+    // Касса: рычаг, «дзынь», ящик выезжает; мелочь или купюры — смотря по сумме.
+    sound.till(c.sprite.x, total);
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
     // Пакет, который передал кассир, теперь в руке: с ним покупатель и уходит.
@@ -10846,7 +10864,7 @@ export class StoreScene extends Phaser.Scene {
       });
     };
     if (this.lite) {
-      sound.pop(2, img.x);
+      if (!sound.unbox(img.x)) sound.pop(2, img.x);
       grow();
       return;
     }
@@ -10859,10 +10877,12 @@ export class StoreScene extends Phaser.Scene {
     // Тень растёт под падающей коробкой — только на полу (у вещей на стене её нет).
     const shadow = bottom > this.layout.wallH ? this.art(img.x, bottom, 'shadow').setScale((0.4 * s) / ART).setAlpha(0).setDepth(bottom - 1) : undefined;
     if (shadow) this.tweens.add({ targets: shadow, alpha: 0.5, scale: (0.9 * s) / ART, duration: 300, ease: 'Quad.easeIn' });
+    // Скотч рвут, пока коробка приседает, — клапаны хлопают, когда разлетаются (sound.unbox).
+    let ripped = false;
     // Всё по цепочке твинов (а не таймером): клапаны не откроются, пока коробка не долетела.
     const open = () => {
       if (!box.active) return;
-      sound.pop(3, img.x);
+      if (!ripped) sound.pop(3, img.x);
       flaps.forEach((flap, i) => {
         const side = i ? 1 : -1;
         this.tweens.add({ targets: flap, x: side * 15, y: -26, angle: side * 200, alpha: 0, duration: 480, ease: 'Quad.easeOut' });
@@ -10879,7 +10899,8 @@ export class StoreScene extends Phaser.Scene {
       duration: 300,
       ease: 'Quad.easeIn',
       onComplete: () => {
-        sound.tap();
+        sound.boxLand(img.x);
+        ripped = sound.unbox(img.x, 0.06);
         this.puff(img.x - 7 * s, bottom);
         this.puff(img.x + 7 * s, bottom);
         this.tweens.add({ targets: box, scaleX: s * 1.18, scaleY: s * 0.8, duration: 90, yoyo: true, completeDelay: 80, ease: 'Quad.easeOut', onComplete: open });

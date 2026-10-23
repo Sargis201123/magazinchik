@@ -1,7 +1,10 @@
 // Диалог как в RPG: большой портрет с эмоцией, табличка с именем, речевое облако.
-// Текст печатается по буквам с «голосом» героя; касание — дописать сразу.
+// Текст печатается по буквам, а герой «бормочет» своим голосом — слогами по самим буквам текста
+// (platform/babble.ts): у бабушки — низко и неспешно, у Сони — высоко и быстро, эмоция портрета
+// меняет тон. Касание — дописать сразу (и замолчать).
 
 import { assetUrl } from '../platform/assets';
+import { Babbler, voiceOf } from '../platform/babble';
 import { sound } from '../platform/sound';
 import { button, el } from './dom';
 
@@ -14,7 +17,10 @@ export interface DialogOptions {
   portrait: string;
   name: string;
   text: string;
-  /** Высота «голоса» в герцах: у бабушки выше, у Эдуарда ниже. */
+  /**
+   * Высота прежнего «пика» голоса в герцах: пока не скачан банк слогов — и для героев, у которых нет
+   * своего голоса в babble.ts (голос выбирается по портрету, эмоция — по его окончанию).
+   */
   pitch: number;
   /** Что появится, когда текст допечатан (цель главы, награда). */
   after?: HTMLElement[];
@@ -132,6 +138,7 @@ export function dialogBox(o: DialogOptions): HTMLElement {
   box.append(row, after, next);
 
   const chars = [...o.text];
+  const talk = new Babbler(voiceOf(o.portrait, o.pitch), chars);
   let shown = 0;
   let done = false;
   const finish = () => {
@@ -152,8 +159,9 @@ export function dialogBox(o: DialogOptions): HTMLElement {
       return;
     }
     const target = Math.min(chars.length, Math.max(shown + 1, Math.floor((performance.now() - start) / CHAR_MS)));
-    // Пищит не чаще раза за тик и только на букве (на пробелах и знаках — тишина).
-    if (target - shown >= 1 && /[\p{L}\p{N}]/u.test(chars[target - 1] ?? '') && target % 2 === 0) sound.voice(o.pitch);
+    // Слог — на букве и не чаще, чем говорит этот герой; на запятой и точке — пауза.
+    const syllable = talk.next(target, performance.now() / 1000);
+    if (syllable) sound.syllable(talk.voice, syllable);
     shown = target;
     text.textContent = chars.slice(0, shown).join('');
     if (shown >= chars.length) finish();

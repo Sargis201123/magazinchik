@@ -84,9 +84,30 @@ function preview(key: VolumeKey): void {
     music.preview();
     return;
   }
-  if (key === 'ambience') ambience.chime();
-  else if (key === 'voices') [0, 90, 180].forEach((ms) => setTimeout(() => sound.voice(330), ms));
+  if (key === 'ambience') {
+    if (!sound.doorbell()) ambience.chime();
+  } else if (key === 'voices') sound.speakSample();
   else sound.coin();
+}
+
+let clicking = false;
+
+/**
+ * Щелчки меню: каждая кнопка и чип звучат деревянным «ток», вкладка — шорохом страницы. Слушаем
+ * в фазе захвата на всём документе: так звучат все окна, даже те, что сами гасят всплытие касания.
+ */
+export function installClickSounds(): void {
+  if (clicking || typeof document === 'undefined') return;
+  clicking = true;
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target instanceof Element ? e.target.closest('.ui-btn, .ui-chip, .ui-tab') : null;
+      if (!target || (target as HTMLButtonElement).disabled) return;
+      sound.click(target.classList.contains('ui-tab') ? 'tab' : 'button');
+    },
+    { capture: true, passive: true },
+  );
 }
 
 /** Блок «Звук» в профиле: быстрая кнопка и пять ползунков. Сдвинули — слышно сразу и запомнилось. */
