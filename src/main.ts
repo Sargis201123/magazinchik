@@ -2,18 +2,17 @@ import Phaser from 'phaser';
 // Свой шрифт с кириллицей (лежит в сборке): текст одинаково ровный на iPhone, Android и компьютере.
 import '@fontsource-variable/nunito';
 import { BootScene } from './scenes/BootScene';
-import { ASPECT, CANVAS_H, CANVAS_W, StoreScene } from './scenes/StoreScene';
+import { StoreScene } from './scenes/StoreScene';
 
 import { initTelegram } from './platform/telegram';
 import { installErrorReporting } from './platform/errors';
 import { loadLang } from './i18n';
 import { startSync } from './game/save';
 import { installFrameCap } from './platform/frameCap';
+import { measureCanvas, watchScreen } from './platform/screen';
 import { installClickSounds } from './ui/audio';
 
 const BG = '#1d1a26';
-// Панели интерфейса — по ширине холста (на компьютере он уже окна).
-document.documentElement.style.setProperty('--game-w', `min(100vw, ${(100 / ASPECT).toFixed(2)}dvh)`);
 
 installErrorReporting();
 initTelegram(BG);
@@ -28,6 +27,8 @@ function start(): void {
   installFrameCap();
   // Кнопки и вкладки меню щёлкают деревом и бумагой (ui/audio.ts).
   installClickSounds();
+  // Холст ровно по пикселям экрана (platform/screen.ts): браузер его не растягивает, Phaser — тоже.
+  const fit = measureCanvas();
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
@@ -41,13 +42,15 @@ function start(): void {
     // второй, лишний аудиоконтекст.
     audio: { noAudio: true },
     scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
-      width: CANVAS_W,
-      height: CANVAS_H,
+      mode: Phaser.Scale.NONE,
+      autoCenter: Phaser.Scale.NO_CENTER,
+      width: fit.width,
+      height: fit.height,
     },
     scene: [BootScene, StoreScene],
   });
+  // Размер на странице, отступы и новые размеры, когда окно меняется (полный экран Telegram, поворот).
+  watchScreen(game);
   // Отладка: ?debug открывает доступ к игре из консоли браузера.
   if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { game });
 }

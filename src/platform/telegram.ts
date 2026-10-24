@@ -248,3 +248,13 @@ export function onAppActive(handler: (active: boolean) => void): void {
   tg?.onEvent?.('activated', () => handler(true));
   tg?.onEvent?.('deactivated', () => handler(false));
 }
+
+/**
+ * Видимая область мини-приложения изменилась: развернули, вошли в полный экран или вышли из него.
+ * Окно браузера обычно тоже шлёт resize — это запасной сигнал (холст подгоняется по нему, platform/screen.ts).
+ */
+export function onViewportChanged(handler: () => void): void {
+  const tg = webApp();
+  tg?.onEvent?.('viewportChanged', handler);
+  tg?.onEvent?.('fullscreenChanged', handler);
+}
