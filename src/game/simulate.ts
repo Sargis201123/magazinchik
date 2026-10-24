@@ -65,6 +65,7 @@ import {
   staffOf,
   roleOpen,
   thiefChance,
+  type StaffMember,
   type StaffRole,
   type StoreState,
   cashierScan,
@@ -84,7 +85,7 @@ import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } fro
 import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY, OWN_PRODUCTS } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
-import { buyRegister, CASHIER_ROLES, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from './registers';
+import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole, RELIEF_ROLE, TILL_ROLES } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
 import { weatherFor } from './weather';
@@ -198,20 +199,34 @@ const AVG_WANTS = 1.5;
 const NAIVE_STOCK = 8;
 
 /** Когда разумный игрок нанимает людей: по мере того, как один не справляется. */
-// Кассир — первым: остальные места не занимаем, пока за кассой стоит сам хозяин.
-const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
-  ['cashier', (s) => expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 1.2],
+type Hire = (state: StoreState) => StaffRole | null;
+const want =
+  (role: StaffRole, need: (state: StoreState) => boolean): Hire =>
+  (s) =>
+    !staffOf(s, role) && need(s) ? role : null;
+/**
+ * Ещё один кассир — когда гостей больше, чем пробьют хозяин и уже нанятые (n — сколько их уже).
+ * Кого именно — решает nextCashierRole: за свободную кассу (её докупим), а нет своих касс — сменщика.
+ */
+const cashier =
+  (n: number, need: number): Hire =>
+  (s) =>
+    cashierCount(s) === n && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * need ? nextCashierRole(s) : null;
+const hasCashier = (s: StoreState): boolean => cashierCount(s) > 0;
+// Кассир — первым: остальные места не занимаем, пока хозяин один на всё.
+const HIRE_WHEN: Hire[] = [
+  cashier(0, 1.2),
   // Пекарь и бариста — как только есть печь и кофейня: без них флигель стоит.
-  ['baker', (s) => roleOpen(s, 'baker')],
-  ['barista', (s) => roleOpen(s, 'barista')],
-  ['loader', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
-  ['guard', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
-  ['cleaner', (s) => s.level >= 3 && Boolean(staffOf(s, 'cashier'))],
-  // Кассиры на остальные кассы — когда есть место под кассу и гостей больше, чем пробьют уже нанятые.
-  ['cashier2', (s) => registerSlots(s) >= 2 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 2],
-  ['cashier3', (s) => registerSlots(s) >= 3 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 3],
-  ['cashier4', (s) => registerSlots(s) >= 4 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 4],
-  ['manager', (s) => s.level >= 3 && s.staff.length >= 4],
+  want('baker', (s) => roleOpen(s, 'baker')),
+  want('barista', (s) => roleOpen(s, 'barista')),
+  want('loader', (s) => s.level >= 2 && hasCashier(s)),
+  want('guard', (s) => s.level >= 2 && hasCashier(s)),
+  want('cleaner', (s) => s.level >= 3 && hasCashier(s)),
+  // Ещё кассиры — когда гостей больше, чем пробьют уже нанятые.
+  cashier(1, 2),
+  cashier(2, 3),
+  cashier(3, 4),
+  want('manager', (s) => s.level >= 3 && s.staff.length >= 4),
 ];
 
 /** Для решения «пора нанимать кассира»: примерно столько успевает один человек. */
@@ -223,24 +238,27 @@ const ownerAtRegister = (level: number): number => 0.65 - 0.07 * level;
 /** Подойти к кассе и отойти — секунды на каждого покупателя. */
 const QUEUE_STEP_SECONDS = 0.3;
 
-/** Сколько покупателей реально пробить за день: пробивка занимает время и зависит от навыка. */
-function serveCapacity(state: StoreState): number {
+/**
+ * Сколько покупателей реально пробить за день (total) и сколько из них — сам хозяин (owner):
+ * пробивка занимает время и зависит от навыка.
+ */
+function serveCapacity(state: StoreState): { total: number; owner: number } {
   // Старая касса иногда заедает — в среднем столько секунд на покупателя.
   const jam = registerJam(state) * REGISTER_JAM_SECONDS;
   const owner = checkoutSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
-  const ownerCap = Math.floor((DAY_SECONDS * ownerAtRegister(state.level)) / owner);
-  // Каждая касса: свой кассир или (одна, первая свободная) — хозяин между другими делами.
-  let total = 0;
-  let ownerUsed = false;
-  for (const role of CASHIER_ROLES.slice(0, registerCount(state))) {
+  const share = ownerAtRegister(state.level);
+  const ownerCap = Math.floor((DAY_SECONDS * share) / owner);
+  const cashierCap = (m: StaffMember, part: number) =>
+    Math.floor((DAY_SECONDS * part) / (checkoutSeconds(withUpgrades(state, cashierScan(m)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam));
+  // Первая касса — хозяина: он за ней между другими делами, а пока он в зале — сменщик (если нанят).
+  const relief = staffOf(state, RELIEF_ROLE);
+  let total = ownerCap + (relief ? cashierCap(relief, 1 - share) : 0);
+  // Остальные кассы — у каждой свой кассир; без кассира касса стоит закрытой.
+  for (const role of TILL_ROLES.slice(0, registerCount(state) - 1)) {
     const m = staffOf(state, role);
-    if (m) total += Math.floor(DAY_SECONDS / (checkoutSeconds(withUpgrades(state, cashierScan(m)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam));
-    else if (!ownerUsed) {
-      total += ownerCap;
-      ownerUsed = true;
-    }
+    if (m) total += cashierCap(m, 1);
   }
-  return total;
+  return { total, owner: ownerCap };
 }
 
 export function simulate({
@@ -350,15 +368,18 @@ export function simulate({
     const tired = state.staff.find((m) => isTired(m) && m.offDay !== state.day + 1);
     if (tired) state = giveDayOff(state, tired.role) ?? state;
     if (hireStaff) {
-      const role = HIRE_WHEN.find(([r, need]) => !staffOf(state, r) && need(state))?.[0];
+      const role = HIRE_WHEN.reduce<StaffRole | null>((found, next) => found ?? next(state), null);
       // Под нового кассира сначала ставим кассу.
       const price = nextRegisterPrice(state);
       if (role && registerOfRole(role) >= registerCount(state) && price !== null && state.money >= reserve + price) state = buyRegister(state) ?? state;
+      // Касса так и не встала (не хватило денег) — кассира за неё пока не берём: стоял бы без дела.
+      const seat = role && registerOfRole(role) < registerCount(state);
       // Берём самого быстрого; «тормоз» за кассой навсегда упирает магазин в потолок.
       const candidate =
         role &&
+        seat &&
         candidatesFor(state.day, 0, role)
-          .filter((c) => c.trait !== 'sticky' && !(role === 'cashier' && c.trait === 'slowpoke'))
+          .filter((c) => c.trait !== 'sticky' && !(isCashierRole(role) && c.trait === 'slowpoke'))
           .sort((a, b) => workSpeed(b) - workSpeed(a))[0];
       if (candidate && state.staff.length < staffLimit(state) && state.money >= reserve + candidate.wage) {
         state = hire(state, candidate) ?? state;
@@ -602,8 +623,9 @@ export function simulate({
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
     // С котом в очереди ждут дольше — уходят реже.
     const lossInQueue =
-      (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state) / radioPatience(state) / signagePatience(state) / cartPatience(state);
-    const serveCap = serveCapacity(state);
+      (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state) / radioPatience(state) / signagePatience(state) / cartPatience(state);
+    const capacity = serveCapacity(state);
+    const serveCap = capacity.total;
     // Грязь: уборщик, а ещё вход (грязь с улицы) и туалет (gear.ts).
     const dirtComplaint = (has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level) * (0.6 + 0.2 * entranceMud(state) + 0.2 * wcDirt(state));
     const guard = staffOf(state, 'guard');
@@ -760,7 +782,9 @@ export function simulate({
     }
 
     // ---------- Ночь ----------
-    if (!has('cashier')) state = { ...state, ownerServed: state.ownerServed + stats.served };
+    // Навык кассы растёт у хозяина: его доля пробитых (за первой кассой он всегда сам).
+    const byOwner = serveCap > 0 ? Math.min(capacity.owner, Math.round((stats.served * capacity.owner) / serveCap)) : 0;
+    state = { ...state, ownerServed: state.ownerServed + byOwner };
     state = recordDay(state, stats);
     const night = nightCycle(state, stats, random);
     const before = night.state;

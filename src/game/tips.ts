@@ -6,7 +6,7 @@ import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount } from './registers';
 
-export type TipId = 'broke' | 'alone' | 'promo' | 'contract' | 'markdown' | 'weekly' | 'fair' | 'cart' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'promo' | 'contract' | 'markdown' | 'weekly' | 'fair' | 'cart' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -14,6 +14,10 @@ export const isBroke = (s: StoreState): boolean =>
 
 const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['broke', isBroke],
+  // Касса — хозяина, пробивать можно и касанием улицы: со второго утра (в новом начале об этом
+  // уже сказала бабушка в первый день — там карточка отмечена прочитанной). Старым игрокам — в
+  // первое же утро после обновления: так они узнают, куда встал их кассир.
+  ['ownerTill', (s) => s.day >= 2],
   // Без персонала магазин выше второго помещения не тянет (в симуляторе: рейтинг 2,8, прибыль ~0).
   ['alone', (s) => s.level >= 2 && s.day >= 20 && s.staff.length === 0],
   ['weekly', (s) => Boolean(s.weekly)],
@@ -31,6 +35,7 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
 
 export const TIP_ICONS: Record<TipId, string> = {
   broke: '🏦',
+  ownerTill: '👆',
   alone: '🧑‍🤝‍🧑',
   promo: '🏷',
   contract: '📃',

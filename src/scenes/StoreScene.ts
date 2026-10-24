@@ -202,7 +202,8 @@ import {
   warehouseSpeed,
   wcDirt,
 } from '../game/gear';
-import { CASHIER_ROLES, nextRegisterCount, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from '../game/registers';
+import { idleRegisters, nextRegisterCount, nextRegisterPrice, registerCount, registerOfRole, registerSlots, RELIEF_ROLE, TILL_ROLES, tillRole } from '../game/registers';
+import { seeTip } from '../game/tips';
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, OVEN_BURN_SECONDS, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from '../game/bakery';
 import { canWorkNight, NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from '../game/night';
 import { CAT_BEDS, CAT_TIP, catHome, catPatience, catTipChance, fedToday } from '../game/cat';
@@ -422,6 +423,10 @@ const ONB_FIRST_AT = 0.6;
 const ONB_HELLO_AT = 0.9;
 const ONB_NEXT_GUEST = 8;
 const ONB_BYE_AFTER = 5.5;
+/** Перед уходом бабушка показывает, что пробивать можно и касанием улицы: столько мс до прощания. */
+const ONB_ROAD_MS = 4500;
+/** Касание улицы короче этого (мс) — нажатие; дольше — палец лежал или начинал жест. */
+const STREET_TAP_MS = 450;
 const CUSTOMER_SPEED = 40; // пикселей мира в секунду
 const SELLER_SPEED = 90;
 /** С такой скорости человек уже бежит: подпрыгивает, наклоняется вперёд, из-под ног летит пыль. */
@@ -1210,6 +1215,8 @@ export class StoreScene extends Phaser.Scene {
   private next!: Layout;
   /** Линия тротуара, по которой ходят прохожие и приходят покупатели. */
   private streetY = 0;
+  /** За сегодня: сколько покупателей пробил сам хозяин и скольких из них — касанием улицы (аналитика). */
+  private serves = { owner: 0, street: 0 };
   private customers = new Set<Customer>();
   private queue: Customer[] = [];
   private trash = new Set<Phaser.GameObjects.Image>();
@@ -1417,6 +1424,7 @@ export class StoreScene extends Phaser.Scene {
     this.buildWorld();
     this.hud.update(this.state, this.timeLeft);
     this.setupCameraDrag();
+    this.setupStreetTap();
     // Свернули Telegram — телефон мог отобрать у WebGL контекст; когда он вернётся, Phaser сам
     // восстановит текстуры и шейдеры, а нарисованное в RenderTexture дорисуем мы.
     if (this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) this.game.renderer.on(Phaser.Renderer.Events.RESTORE_WEBGL, () => this.rebake());
@@ -1577,16 +1585,13 @@ export class StoreScene extends Phaser.Scene {
     if (!this.workers.has('guard') && [...this.customers].some((c) => c.thief && !c.gone)) return t('hint.thief');
     if (this.sellerBusy && this.ownerRegister()) return t('hint.recall');
     if (this.ownerRegister() && this.state.day <= 2 && this.stats.served < 3) return t('hint.serve');
-    // Очередь растёт — подсказать, что поможет: кассир, вторая касса или встать за неё самому.
+    // Очередь растёт — подсказать, что поможет. За первой кассой и так хозяин: кассир за свободную
+    // кассу, ещё одна касса или помещение, где под неё есть место.
     if (this.queue.length >= 4 && this.state.day > TUTORIAL_DAYS) {
-      if (!staffOf(this.state, 'cashier')) return t('hint.queueHire');
-      if (this.registers.every((_, i) => this.operator(i) !== null)) {
-        if (nextRegisterPrice(this.state) !== null) return t('hint.queueBuy');
-        if ((nextRegisterCount(this.state) ?? 0) > registerSlots(this.state)) return t('hint.queueRegister');
-      }
+      if (idleRegisters(this.state) > 0) return t('hint.queueHire');
+      if (nextRegisterPrice(this.state) !== null) return t('hint.queueBuy');
+      if ((nextRegisterCount(this.state) ?? 0) > registerSlots(this.state)) return t('hint.queueRegister');
     }
-    const extra = this.registers.findIndex((r, i) => i > 0 && this.operator(i) === 'owner' && r.customer && !r.customer.serving);
-    if (extra > 0 && !this.sellerBusy) return t('hint.register2');
     if (this.state.day <= 4 && this.shelfNeedsRestock()) return t('hint.restock');
     if (this.binFull() && !this.binBusy) return t('hint.bin');
     if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
@@ -1912,12 +1917,14 @@ export class StoreScene extends Phaser.Scene {
     };
   }
 
-  /** Кто работает за кассой: нанятый кассир, сам хозяин (если основную взял кассир) или никто. */
+  /**
+   * Кто работает за кассой. Первая — всегда хозяина; пока он в зале по делу, за неё встаёт сменщик
+   * (если нанят). За остальными — их кассиры, а без кассира касса закрыта (null).
+   */
   private operator(index: number): Worker | 'owner' | null {
-    const worker = this.workers.get(CASHIER_ROLES[index]);
-    if (worker) return worker;
-    const free = this.registers.findIndex((_, i) => !this.workers.has(CASHIER_ROLES[i]));
-    return free === index ? 'owner' : null;
+    if (index === 0) return (this.sellerBusy && this.workers.get(RELIEF_ROLE)) || 'owner';
+    const role = tillRole(index);
+    return (role && this.workers.get(role)) || null;
   }
 
   /**
@@ -5687,7 +5694,8 @@ export class StoreScene extends Phaser.Scene {
     const cam = this.cameras.main;
     this.input.on('gameobjectup', (p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => this.tapFx(p, obj));
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      this.dragged = false;
+      // Второй палец — это щипок, а не нажатие: ни то, ни другое касание не засчитываем.
+      this.dragged = this.input.pointer1.isDown && this.input.pointer2.isDown;
       this.dragStart = { x: p.x, y: p.y };
     });
     this.input.addPointer(1);
@@ -5755,6 +5763,48 @@ export class StoreScene extends Phaser.Scene {
     // Масштабом холста ведает игра, а не сцена: подписка снимается вместе со сценой.
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this));
+  }
+
+  /**
+   * Касание улицы под магазином (участок перед входом, тротуары, дорога и дальше — туда, куда
+   * достаёт большой палец) — то же, что касание кассы: пробить того, кто ждёт у кассы хозяина, или
+   * позвать хозяина с дела. Считается только короткое касание без сдвига камеры и мимо всего, что
+   * нажимается само (вор, курьер, Бобик, голуби, мусор), — у тех своё. Отклик — круг под пальцем,
+   * кивок кассы и лёгкая вибрация.
+   */
+  private setupStreetTap(): void {
+    this.input.on('pointerup', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+      if (over.length || this.dragged || this.arranging || !this.running || p.upTime - p.downTime > STREET_TAP_MS) return;
+      const at = this.cameras.main.getWorldPoint(p.x, p.y);
+      if (at.y < this.layout.h + FACADE_H) return;
+      // Касание ничего не изменит (у кассы никого, хозяин уже пробивает, за кассой сменщик) — и отклика нет.
+      const r = this.ownerRegister();
+      if (!r || this.ownerScanning() || (!this.sellerBusy && !this.atSpot(r))) return;
+      this.ripple(at.x, at.y);
+      if (r.img) this.squash(r.img, 1.06, 0.9, 80);
+      if (!this.sellerBusy) this.serves.street++;
+      void this.serveNext();
+    });
+  }
+
+  /**
+   * Бабушка показывает касание улицы: на дороге под её словами прыгает стрелка и расходятся круги,
+   * как от пальца. Точка — в кадре, даже если дорога ниже края экрана (тогда — на участке у входа).
+   */
+  private showStreetTap(): void {
+    const view = this.cameras.main.worldView;
+    const x = Phaser.Math.Clamp(this.layout.door.x + 34, view.x + 24, view.right - 24);
+    const y = Phaser.Math.Clamp(this.streetY + 32, this.layout.h + FACADE_H + 14, view.bottom - 28);
+    const arrow = this.art(x, y - 12, 'arrow').setScale(1.3 / ART).setDepth(LIGHT_DEPTH + 20);
+    if (!this.lite) this.tweens.add({ targets: arrow, y: y - 16, duration: 260, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.time.delayedCall(ONB_ROAD_MS - 400, () => arrow.destroy());
+    const rings = this.lite ? 1 : 3;
+    for (let i = 0; i < rings; i++)
+      this.time.delayedCall(300 + i * 800, () => {
+        if (!this.running) return;
+        const ring = this.add.circle(x, y, 5).setStrokeStyle(1.5, 0xffffff, 0.95).setDepth(LIGHT_DEPTH + 50);
+        this.tweens.add({ targets: ring, scale: 3.6, alpha: 0, duration: 650, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
+      });
   }
 
   /**
@@ -8685,16 +8735,19 @@ export class StoreScene extends Phaser.Scene {
       await this.walk(this.seller, this.layout.door.x, this.layout.door.y - 8, SELLER_SPEED);
       if (id !== this.choreId) return;
     }
-    if (!this.ownerFree()) await this.walk(this.seller, home.x, home.y, SELLER_SPEED);
+    // После дела — всегда к своей кассе, даже если наняты кассиры: первая касса — его.
+    await this.walk(this.seller, home.x, home.y, SELLER_SPEED);
     if (id === this.choreId) this.sellerBusy = false;
   }
 
-  /** Где стоит хозяин (игрок): за кассой, а если нанят кассир — рядом с ним. */
+  /** Где стоит хозяин (игрок): за первой кассой — она всегда его. */
   private ownerHome(): { x: number; y: number } {
+    return this.registers[0]?.clerk ?? this.layout.sellerHome;
+  }
+
+  /** Где ждёт сменщик, пока хозяин за кассой: рядом, у той же стойки, — за кассу встаёт без перехода. */
+  private reliefSpot(): { x: number; y: number } {
     const { sellerHome } = this.layout;
-    // Хозяин встаёт за первую кассу, где нет кассира; все заняты — рядом с основной.
-    const free = this.registers.find((_, i) => !staffOf(this.state, CASHIER_ROLES[i]));
-    if (free) return free.clerk;
     return { x: sellerHome.x, y: sellerHome.y - 24 };
   }
 
@@ -9068,10 +9121,11 @@ export class StoreScene extends Phaser.Scene {
       this.binBy = null;
       this.refreshBin();
     }
-    // Кассир не вышел, а менеджер на месте — менеджер встаёт за его кассу.
+    // Кассир не вышел, а менеджер на месте — менеджер встаёт за его кассу. Сменщика не подменяет:
+    // за первой кассой и так хозяин, а у менеджера свои дела.
     const manager = this.state.staff.find((m) => m.role === 'manager' && !isAbsent(this.state, m));
     const cover = manager
-      ? CASHIER_ROLES.slice(0, this.registers.length).find((role) => {
+      ? TILL_ROLES.slice(0, this.registers.length - 1).find((role) => {
           const m = staffOf(this.state, role);
           return m && isAbsent(this.state, m);
         })
@@ -9103,7 +9157,7 @@ export class StoreScene extends Phaser.Scene {
         continue;
       }
       const loop = {
-        cashier: this.cashierLoop,
+        cashier: this.reliefLoop,
         cashier2: this.cashierLoop,
         cashier3: this.cashierLoop,
         cashier4: this.cashierLoop,
@@ -9122,7 +9176,7 @@ export class StoreScene extends Phaser.Scene {
     }
     // Новеньких встретили — в следующий раз они уже свои.
     if (this.dayOpen) this.newHires.clear();
-    // Хозяин уступает место кассиру.
+    // Хозяин — за своей кассой (если не занят делом).
     const home = this.ownerHome();
     if (!this.sellerBusy) this.seller.setPosition(home.x, home.y).setDepth(home.y);
   }
@@ -9144,13 +9198,15 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private workerHome(role: StaffRole): { x: number; y: number } {
-    const { sellerHome, wc, warehouse, door } = this.layout;
+    const { wc, warehouse, door } = this.layout;
     switch (role) {
       case 'cashier':
+        // Сменщик — рядом с хозяином, у той же стойки.
+        return this.reliefSpot();
       case 'cashier2':
       case 'cashier3':
       case 'cashier4':
-        return this.registers[registerOfRole(role)]?.clerk ?? { x: sellerHome.x, y: sellerHome.y - 24 };
+        return this.registers[registerOfRole(role)]?.clerk ?? this.reliefSpot();
       case 'cleaner':
         return { x: wc.x - 18, y: wc.spotY + 8 };
       case 'loader':
@@ -9295,6 +9351,24 @@ export class StoreScene extends Phaser.Scene {
         if (this.orderUrgentDelivery(id, qty)) sound.coin();
       },
     });
+  }
+
+  /**
+   * Сменщик: пока хозяин за кассой, ждёт рядом; хозяин ушёл по делу (выложить товар, убрать) —
+   * пробивает тех, кто подошёл к его кассе. Вернулся хозяин — следующего пробивает уже он.
+   */
+  private async reliefLoop(w: Worker, gen: number): Promise<void> {
+    while (this.alive(gen)) {
+      const r = this.registers[0];
+      const front = r?.customer;
+      if (!this.running || !r || !this.sellerBusy || !front || !this.atSpot(r) || front.serving || r.scan) {
+        // Отводили в сторону (ограбление, новенький) — назад к стойке.
+        if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
+        await this.wait(150);
+        continue;
+      }
+      await this.scanCustomer(r, front, withUpgrades(this.state, cashierScan(w.member)), false);
+    }
   }
 
   /** Кассир сам пробивает тех, кто подошёл к его кассе (второй кассир — ко второй). */
@@ -9915,7 +9989,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshToilet();
   }
 
-  /** Касание кассы: хозяин пробивает того, кто ждёт у его кассы, или возвращается с дела. */
+  /** Касание кассы (или улицы внизу): хозяин пробивает того, кто ждёт у его кассы, или возвращается с дела. */
   private async serveNext(): Promise<void> {
     if (this.ownerScanning()) return;
     const r = this.ownerRegister();
@@ -9926,7 +10000,7 @@ export class StoreScene extends Phaser.Scene {
     const c = r?.customer;
     if (!r || !c || c.serving || !this.atSpot(r)) return;
     haptic.tap();
-    // Хозяин отошёл (кассир работает, а он остался там, где закончил дело) — сначала к кассе.
+    // Хозяин не у кассы (его отвели в сторону — ограбление, перестройка) — сначала к ней.
     if (Phaser.Math.Distance.Between(this.seller.x, this.seller.y, r.clerk.x, r.clerk.y) > 2) {
       const id = ++this.choreId;
       this.sellerBusy = true;
@@ -9936,11 +10010,6 @@ export class StoreScene extends Phaser.Scene {
       if (r.customer !== c || c.serving || c.gone) return;
     }
     void this.scanCustomer(r, c, withUpgrades(this.state, ownerTiming(this.state)), true);
-  }
-
-  /** Есть кассир — хозяину не нужно стоять у кассы: после дела он остаётся там, где закончил. */
-  private ownerFree(): boolean {
-    return CASHIER_ROLES.some((role) => this.workers.has(role));
   }
 
   /**
@@ -9959,6 +10028,8 @@ export class StoreScene extends Phaser.Scene {
     const { counter } = r;
     const index = this.registers.indexOf(r);
     const clerk = byOwner ? this.seller : (this.operator(index) as Worker | null)?.sprite;
+    // Товар и пакет — к тому, кто пробивает: сменщик стоит у стойки чуть выше хозяина.
+    const hand = clerk?.active ? { x: clerk.x, y: clerk.y } : r.clerk;
     for (const { id } of c.items) {
       await this.wait(timing.item * 1000 * manual);
       if (!this.sys.isActive()) return;
@@ -9968,7 +10039,7 @@ export class StoreScene extends Phaser.Scene {
         targets: item,
         tweens: [
           { x: counter.x, y: counter.y - 8, duration: 180, ease: 'Quad.easeOut' },
-          { x: r.clerk.x, y: r.clerk.y - 8, scale: 1 / ART, alpha: 0.3, duration: 160, ease: 'Quad.easeIn' },
+          { x: hand.x, y: hand.y - 8, scale: 1 / ART, alpha: 0.3, duration: 160, ease: 'Quad.easeIn' },
         ],
         onComplete: () => item.destroy(),
       });
@@ -10000,7 +10071,7 @@ export class StoreScene extends Phaser.Scene {
     if (!this.sys.isActive()) return;
     // Кассир отдаёт пакет из рук в руки (с тележкой — товар уже в ней).
     if (c.items.length && c.sprite.getData('push') !== 'trolley' && c.sprite.active) {
-      const bag = this.art(r.clerk.x, r.clerk.y - 6, 'paper_bag').setScale(0.85 / ART).setDepth(1000);
+      const bag = this.art(hand.x, hand.y - 6, 'paper_bag').setScale(0.85 / ART).setDepth(1000);
       await new Promise<void>((done) =>
         this.tweens.add({
           targets: bag,
@@ -10008,7 +10079,7 @@ export class StoreScene extends Phaser.Scene {
           y: c.sprite.y + 3,
           duration: 260,
           ease: 'Sine.easeInOut',
-          onUpdate: (tw) => bag.setY(Phaser.Math.Linear(r.clerk.y - 6, c.sprite.y + 3, tw.progress) - Math.sin(tw.progress * Math.PI) * 8),
+          onUpdate: (tw) => bag.setY(Phaser.Math.Linear(hand.y - 6, c.sprite.y + 3, tw.progress) - Math.sin(tw.progress * Math.PI) * 8),
           onComplete: () => {
             bag.destroy();
             done();
@@ -10043,6 +10114,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Хозяин обслужил покупателя: растёт навык кассы. */
   private ownerServedOne(): void {
+    this.serves.owner++;
     const before = ownerLevel(this.state.ownerServed);
     this.state = { ...this.state, ownerServed: this.state.ownerServed + 1 };
     const after = ownerLevel(this.state.ownerServed);
@@ -11155,9 +11227,20 @@ export class StoreScene extends Phaser.Scene {
     this.time.delayedCall(ONB_BYE_AFTER * 1000, () => void this.grannyLeaves());
   }
 
-  /** Бабушка прощается и уходит на дачу: дальше новичок торгует сам. */
+  /**
+   * Бабушка прощается и уходит на дачу: дальше новичок торгует сам. Перед этим — как пробивать, не
+   * дотягиваясь до кассы: касанием улицы внизу (утренняя карточка об этом тогда уже не нужна), а
+   * прощание — через ONB_ROAD_MS. Таймер, а не wait: он переживёт перестройку зала.
+   */
   private async grannyLeaves(): Promise<void> {
     if (!this.running || !playDayOne(this.state) || onbDone(this.state, 'bye')) return;
+    if (!this.onbSaid.has('road')) {
+      this.grannySays({ id: 'road', text: t('onb.road'), mood: 'happy', hold: 2800 });
+      if (!this.state.seenTips?.includes('ownerTill')) this.state = seeTip(this.state, 'ownerTill');
+      this.showStreetTap();
+      this.time.delayedCall(ONB_ROAD_MS, () => void this.grannyLeaves());
+      return;
+    }
     this.onbStep('bye');
     this.grannySays({ id: 'bye', text: t('onb.bye'), mood: 'happy', hold: 3200 });
     const granny = this.granny;
@@ -11383,6 +11466,7 @@ export class StoreScene extends Phaser.Scene {
   /** Утренние дела перед открытием: персонал, события дня, гости сюжета. */
   private prepareDay(): void {
     this.stats = emptyDayStats();
+    this.serves = { owner: 0, street: 0 };
     this.recordCheered = false;
     for (const r of this.registers) {
       r.scan = null;
@@ -12253,6 +12337,8 @@ export class StoreScene extends Phaser.Scene {
     this.tillRing = undefined;
     saveGame(this.state);
     track('day_end', finishedDay, this.stats.revenue);
+    // Сколько процентов своих покупателей хозяин пробил касанием улицы, а не кассы.
+    if (this.serves.owner) track('serve_street', finishedDay, (100 * Math.min(this.serves.street, this.serves.owner)) / this.serves.owner);
     // Друзья на работе раз в неделю получают свою долю — монеты в своей игре (через «угощение»).
     if (finishedDay % 7 === 0) for (const m of friendsAtWork(state)) void treatFriend(m.friend!.id);
     const fps = fpsSummary(this.fpsSamples);

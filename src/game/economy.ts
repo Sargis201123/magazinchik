@@ -238,7 +238,10 @@ export const DEBT_PAYMENT = 250;
 
 export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'cleaner' | 'loader' | 'guard' | 'manager' | 'baker' | 'barista';
 
-/** Сотрудники: каждый забирает у игрока одно ручное дело. Зарплата — базовая за месяц. */
+/**
+ * Сотрудники: каждый забирает у игрока одно ручное дело. Зарплата — базовая за месяц.
+ * За первой кассой всегда сам хозяин; cashier — его сменщик, cashier2…4 — кассиры остальных касс (registers.ts).
+ */
 export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number; minLevel?: number; needs?: 'oven' | 'coffee' }> = {
   cashier: { nameKey: 'staff.cashier', descKey: 'staff.cashier.desc', wage: 420 },
   cashier2: { nameKey: 'staff.cashier2', descKey: 'staff.cashier2.desc', wage: 420 },
@@ -582,6 +585,11 @@ export interface StoreState {
   bakeMode?: 'auto' | 'full' | 'off';
   /** Сколько касс куплено (registers.ts). Нет поля — старое сохранение: кассы ставились сами. */
   registers?: number;
+  /**
+   * Первая касса — хозяина, кассиры — за остальными (registers.ts). Нет поля — сохранение до этого:
+   * при загрузке кассир переходит за свою кассу (migrateOwnerTill).
+   */
+  ownerTill?: boolean;
   /** Стаканчики в кофейном уголке (coffee.ts). */
   cups?: number;
   /** Ценовая война с Эдуардом (war.ts). */
@@ -774,6 +782,7 @@ export const newGame = (): StoreState => ({
   gift: { lastDate: '', streak: 0 },
   rack: { level: 0, stock: 6 },
   registers: 1,
+  ownerTill: true,
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [

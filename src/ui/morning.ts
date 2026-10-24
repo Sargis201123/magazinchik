@@ -3237,6 +3237,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     box.append(
       el('b', '', t('skill.title', { n: ownerLevelOf(state) })),
       el('div', 'ui-item-sub', `${t('staffTab.ownerSkill')} ${'★'.repeat(lvl).padEnd(5, '☆')} · ${t('staffTab.ownerPerDay', { n: servePerDay(withUpgrades(state, ownerTiming(state))) })}`),
+      // Первая касса — его: кассиры за остальными, сменщик — за его кассой, пока он в зале (подробности — за «❔»).
+      el('div', 'ui-item-sub', t('staffTab.ownerTill')),
+      el('div', 'ui-muted', t('staffTab.ownerTillNote')),
       el('div', 'ui-muted', next === null ? t('skill.xpMax', { xp: ownerXp(state) }) : t('skill.xp', { xp: ownerXp(state), next })),
       el(
         'div',
@@ -3340,8 +3343,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const roles = el('div', 'ui-chips');
     const locked: string[] = [];
     for (const role of STAFF_ROLE_IDS) {
-      // Кассир на кассу, которой ещё нет в помещении, — не показываем.
-      if (isCashierRole(role) && registerOfRole(role) >= registerCount(state)) continue;
+      // Кассир на кассу, которой ещё нет в помещении, — не показываем (сменщик — за кассу хозяина, она
+      // есть всегда). Место под следующую кассу уже есть, а саму не поставили — подскажем, где.
+      if (isCashierRole(role) && registerOfRole(role) >= registerCount(state)) {
+        if (registerOfRole(role) === registerCount(state) && registerOfRole(role) < registerSlots(state)) locked.push(t('staffTab.needsRegister', { role: t(STAFF_ROLES[role].nameKey) }));
+        continue;
+      }
       // Менеджер — только в большом магазине: пока рано, подскажем, где появится.
       if (!roleOpen(state, role)) {
         const { minLevel = 0, needs, nameKey } = STAFF_ROLES[role];
