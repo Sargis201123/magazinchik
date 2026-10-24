@@ -12,7 +12,8 @@
     "sim": "vite-node scripts/sim.ts",
     "sim:features": "vite-node scripts/sim-features.ts",
     "sim:final": "vite-node scripts/sim-final.ts",
-    "sim:restock": "vite-node scripts/sim-restock.ts"
+    "sim:restock": "vite-node scripts/sim-restock.ts",
+    "e2e": "vite-node scripts/e2e.ts"
   },
   "dependencies": {
     "@fontsource-variable/nunito": "^5.3.0",
