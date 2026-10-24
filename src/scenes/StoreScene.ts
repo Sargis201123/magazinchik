@@ -78,6 +78,22 @@ import { sound } from '../platform/sound';
 import { music, type MusicMood } from '../platform/music';
 import { winterMusic } from '../platform/playlist';
 import { findPath, type Rect } from './paths';
+import {
+  facingAlong,
+  frameStride,
+  makeRoute,
+  paceAt,
+  planPace,
+  polylineLength,
+  roundCorners,
+  sampleRoute,
+  sidestep,
+  turnVia,
+  type Facing,
+  type Pace,
+  type Passer,
+  type Route,
+} from './stride';
 import { ambience, type AmbLife } from '../platform/ambience';
 import { realNewYear } from '../platform/ambienceLayers';
 import { setListener } from '../platform/mixer';
@@ -162,7 +178,7 @@ import {
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
-import { buildingSpan, iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
+import { buildingSpan, iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Point, type Room } from './layout';
 import { BASE_W, crispZoom, homeFrame } from './pixels';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
@@ -518,7 +534,6 @@ const HAIR_STYLES = ['short', 'short', 'long', 'long', 'bald', 'ponytail', 'curl
 type HairStyle = 'short' | 'long' | 'bun' | 'cap' | 'bald' | 'ponytail' | 'curly' | 'beanie';
 /** Поверх одежды: фартук (красится), жилет грузчика, значок охранника. */
 type Accessory = 'apron' | 'vest' | 'badge' | 'tie';
-type Facing = 'down' | 'up' | 'left' | 'right';
 type EmoteKey = 'emo_angry' | 'emo_heart' | 'emo_question' | 'emo_clock' | 'emo_sigh' | 'emo_pricey' | 'emo_alert' | 'emo_zzz' | 'emo_star';
 
 const VIEW_SUFFIX: Record<Facing, string> = { down: '', up: '_b', left: '_s', right: '_s' };
@@ -561,12 +576,85 @@ interface Look {
 }
 
 /**
- * Походка по образу: старик с тростью идёт медленно и сутулясь, ребёнок скачет вприпрыжку,
- * в спортивном костюме шагает бодро, в наушниках пружинит в такт музыке.
+ * Походка по образу: старик с тростью идёт медленно и сутулясь, седые — неспешно и ровно, ребёнок
+ * скачет вприпрыжку, в спортивном костюме шагает бодро, в наушниках пружинит в такт музыке.
  */
-type Gait = 'cane' | 'kid' | 'sporty' | 'bouncy';
-/** Во сколько раз длиннее (больше 1) или короче обычного один кадр шага у этой походки. */
-const GAIT_CADENCE: Record<Gait, number> = { cane: 1.35, kid: 0.8, sporty: 0.88, bouncy: 0.95 };
+type Gait = 'cane' | 'elder' | 'kid' | 'sporty' | 'bouncy';
+/**
+ * Свой шаг у походки: speed — во сколько раз быстрее обычного идёт своим ходом (когда не спешит
+ * по делу), stride — во сколько раз шире шаг. Старик идёт медленно и мелко (ноги перебирают реже),
+ * ребёнок — чуть быстрее и короче (семенит), спортсмен — бодро и широко.
+ */
+const GAIT: Record<Gait, { speed: number; stride: number }> = {
+  cane: { speed: 0.8, stride: 0.85 },
+  elder: { speed: 0.92, stride: 0.9 },
+  kid: { speed: 1.05, stride: 0.95 },
+  sporty: { speed: 1.12, stride: 1.06 },
+  bouncy: { speed: 1.05, stride: 1 },
+};
+/**
+ * Разброс шага у каждого (от и до). Середина чуть выше единицы: медленных стариков уравновешивают
+ * остальные, и в среднем покупатели ходят столько же, сколько прежде, — поток через кассу не меняется.
+ */
+const OWN_SPEED: [number, number] = [0.93, 1.09];
+/** Седые волосы (у пенсионеров, бабушек, Деда Мороза): по ним видно, что человек в годах. */
+const GREY_HAIR = new Set([0xd8d8e0, 0xc0cbdc, 0xffffff]);
+/** Очередь теснее этого (точки мира) — встают ёлочкой, через одного на столько левее. */
+const QUEUE_SNUG = 12;
+const QUEUE_STAGGER = 5;
+/** За сколько точек до двери покупатель сворачивает с тротуара ко входу (дуга поворота — половина). */
+const DOOR_TURN = 16;
+/** Насколько в сторону от середины двери можно пройти проём (дверь — около 24 точек шириной). */
+const DOOR_EDGE = 8;
+/** Поворот кругом (мс времени игры): на миг — промежуточная сторона, а не мгновенный разворот. */
+const TURN_MS = 90;
+/** Как быстро отходит вбок, чтобы разойтись со встречным (точек мира в секунду). */
+const LANE_SPEED = 16;
+/** Как часто заново смотрит, нет ли кого впереди (мс времени игры). */
+const LANE_EVERY = 110;
+/**
+ * Дошёл, а следующий путь начнётся тут же (обещание walk исполняется после кадра): столько мс
+ * он ещё «идёт» — не приседает на каждом повороте и не сбивает шаг.
+ */
+const STEP_GRACE = 40;
+
+/**
+ * Шаг человека — всё, что меняется каждый кадр, в одном объекте (а не в setData: тот на каждую
+ * запись рассылает события). Кадр шага растёт с пройденным путём, а не по часам.
+ */
+interface Stride {
+  /** Кадр шага (дробный): 0…4 — два шага, растёт на пройденный путь. */
+  phase: number;
+  /** Где был в прошлом кадре: сколько прошёл. */
+  lastX: number;
+  lastY: number;
+  /** Свой шаг: множители скорости (своим ходом) и ширины шага — у каждого чуть свои. */
+  speed: number;
+  stride: number;
+  /** Каким по счёту шагом трогается: то с левой ноги, то с правой. */
+  foot: number;
+  /** Когда (время сцены) закончил прошлый путь и с какой скоростью шёл (точек в мс времени игры). */
+  endAt: number;
+  vel: number;
+  /** Доля крейсерской скорости сейчас (разгон и торможение): наклон на бегу растёт с ней. */
+  ratio: number;
+  /** Кадр шага в прошлый раз: пыль и звук — один раз на шаг. */
+  frame: number;
+  /** Текущий путь: точки, скорость по нему, на каком отрезке и сколько прошло времени (мс игры). */
+  route?: Route;
+  pace?: Pace;
+  seg: number;
+  t: number;
+  /** Сдвиг вбок от пути (разойтись со встречным): сейчас и куда тянется, когда снова посмотреть вперёд. */
+  lane: number;
+  laneGoal: number;
+  laneAt: number;
+  /** Направление пути сейчас: по нему другие решают, встречный это или попутчик. */
+  dirX: number;
+  dirY: number;
+  /** Поворот кругом: какой стороной встать и когда (время пути). */
+  turn?: { to: Facing; at: number };
+}
 
 const gaitOf = (look: Look): Gait | undefined =>
   look.prop === 'cane'
@@ -577,7 +665,9 @@ const gaitOf = (look: Look): Gait | undefined =>
         ? 'sporty'
         : look.hat === 'headphones'
           ? 'bouncy'
-          : undefined;
+          : look.hair !== undefined && GREY_HAIR.has(look.hair)
+            ? 'elder'
+            : undefined;
 
 /** Ночной сторож Михалыч: ушанка, ватник цвета хаки, седые усы, фонарик (как в art/security.py). */
 const WATCHMAN: Look = {
@@ -810,6 +900,8 @@ interface Customer {
   petted?: boolean;
   /** Сколько готов ждать в очереди. */
   patienceMs?: number;
+  /** В длинной очереди стоит чуть левее (1) или ровно (0): через одного, по порядку прихода. */
+  queueSide?: number;
 }
 
 /** Касса: где стоит стол, покупатель и кассир, кого пробивают и полоска пробивки. */
@@ -1185,6 +1277,8 @@ export class StoreScene extends Phaser.Scene {
   private neonDecorX?: number;
   /** Мебель в зале (в координатах центра человека): люди обходят её. */
   private obstacles: Rect[] = [];
+  /** Люди этого кадра для обхода встречных (passers): считаем раз за кадр, а не на каждого идущего. */
+  private crowd: { frame: number; list: Passer[] } = { frame: -1, list: [] };
   /** Касса самообслуживания (если куплена): картинка, экран и занята ли она. */
   private kiosk?: Phaser.GameObjects.Image;
   private kioskScreen?: Phaser.GameObjects.Rectangle;
@@ -1212,6 +1306,8 @@ export class StoreScene extends Phaser.Scene {
   private streetY = 0;
   private customers = new Set<Customer>();
   private queue: Customer[] = [];
+  /** Сколько встало в очередь за всё время: чётный — ровно, нечётный — чуть левее (queueSpot). */
+  private queueTurn = 0;
   private trash = new Set<Phaser.GameObjects.Image>();
   /** Мусор, за которым уже кто-то пошёл. */
   private claimedTrash = new Set<Phaser.GameObjects.Image>();
@@ -2121,8 +2217,10 @@ export class StoreScene extends Phaser.Scene {
   /**
    * Шаги в 4 кадра (ноги: шаг, вместе, другой шаг, вместе; тело чуть подпрыгивает)
    * и дыхание, когда человек стоит. Спереди и сзади другой шаг — зеркало первого.
-   * Ноги перебирают под скорость: кто спешит (продавец, бегуны), тот бежит — отрывается
-   * от земли, наклоняется вперёд, из-под ног летит пыль. У стариков, детей и спортсменов своя походка.
+   * Кадр шага меняется по пройденному пути, а не по часам: ноги не скользят ни на разгоне и торможении,
+   * ни при ускорении ×2, ни у сотрудника, который ходит быстрее. Кто спешит (продавец, бегуны), тот бежит —
+   * отрывается от земли, наклоняется вперёд, из-под ног летит пыль. У стариков, детей и спортсменов
+   * своя походка, с коляской и тележкой идут ровнее, а спереди и со спины переносят вес с ноги на ногу.
    */
   private animatePeople(): void {
     const now = this.time.now;
@@ -2138,6 +2236,11 @@ export class StoreScene extends Phaser.Scene {
       }
       const dog = person.getData('dog') as Phaser.GameObjects.Image | undefined;
       if (dog?.active) this.updateDog(person, dog);
+      const st = this.strideOf(person);
+      // Сколько прошёл с прошлого кадра: на столько и переставил ноги.
+      const moved = Math.hypot(person.x - st.lastX, person.y - st.lastY);
+      st.lastX = person.x;
+      st.lastY = person.y;
       const legs = person.getData('legs') as Phaser.GameObjects.Image | undefined;
       const facing = (person.getData('facing') as Facing | undefined) ?? 'down';
       const suffix = VIEW_SUFFIX[facing];
@@ -2150,21 +2253,30 @@ export class StoreScene extends Phaser.Scene {
       // Подскок всего человека над тенью (бег, вприпрыжку) и наклон корпуса на бегу.
       let lift = 0;
       let lean = 0;
+      // Перенос веса с ноги на ногу (спереди и со спины): всё тело — на точку рисунка в сторону.
+      let weight = 0;
       const gait = person.getData('gait') as Gait | undefined;
-      const walking = Boolean(person.getData('walking'));
+      // Только что дошёл, а следующий путь начнётся сразу (из двери — к полке): не останавливается.
+      const walking = Boolean(person.getData('walking')) || now - st.endAt < STEP_GRACE;
       // Остановился — чуть приседает, тронулся — вытягивается: шаг с весом, а не скольжение.
       if (walking !== Boolean(person.getData('wasWalking'))) {
         person.setData('wasWalking', walking);
         this.squash(person, walking ? 0.96 : 1.05, walking ? 1.05 : 0.93, 70);
+        // Трогается — первый шаг почти сразу, то с левой ноги, то с правой.
+        if (walking) {
+          st.foot = 2 - st.foot;
+          st.phase = st.foot + 0.55;
+        }
       }
       if (walking) {
         const pace = (person.getData('pace') as number | undefined) ?? CUSTOMER_SPEED;
         // На велосипеде, с тележкой или коляской — без подскоков: колёса не скачут.
         const wheels = Boolean(person.getData('wheels') || person.getData('stroller'));
         const running = pace >= RUN_PACE && !wheels;
-        // Чем быстрее идёт, тем чаще шаг; старик с тростью шагает реже, ребёнок семенит.
-        const period = Phaser.Math.Clamp((110 * CUSTOMER_SPEED) / pace, 70, 150) * (gait ? GAIT_CADENCE[gait] : 1);
-        const frame = Math.floor((now + phase) / period) % 4;
+        // Чем быстрее идёт, тем шире и чаще шаг; ребёнок (он меньше) и старик с тростью шагают мельче.
+        const scale = (person.getData('baseScale') as number | undefined) ?? 1;
+        st.phase = (st.phase + moved / frameStride(pace, CUSTOMER_SPEED, scale, st.stride)) % 4;
+        const frame = Math.floor(st.phase);
         arms = frame === 1 ? '_w1' : frame === 3 ? '_w2' : '';
         if (frame === 1) key = `p_legs1${suffix}`;
         if (frame === 3) {
@@ -2175,29 +2287,35 @@ export class StoreScene extends Phaser.Scene {
           }
         }
         bob = frame % 2 === 0 ? -0.5 : 0;
+        const side = facing === 'left' || facing === 'right';
         if (running) {
-          // Бег: на широком шаге отрывается от земли, сбоку видно, как наклоняется вперёд;
-          // приземлился — из-под ноги облачко пыли (каждый второй шаг).
+          // Бег: на широком шаге отрывается от земли, сбоку видно, как наклоняется вперёд (сильнее,
+          // когда разогнался); приземлился — из-под ноги облачко пыли (каждый второй шаг).
           lift = frame % 2 === 1 ? -1 : 0;
           bob = 0;
-          if (facing === 'left' || facing === 'right') lean = facing === 'right' ? 4 : -4;
-          if (frame === 0 && person.getData('stepFrame') !== frame) this.kickUp(person, facing);
-        } else if (gait === 'kid' && !wheels) {
+          if (side) lean = (facing === 'right' ? 4 : -4) * Math.min(1, st.ratio);
+          if (frame === 0 && st.frame !== frame) this.kickUp(person, facing);
+        } else if (wheels || gait === 'elder') {
+          // Катит коляску, тележку или крутит педали — ровно: тело чуть приподнимается раз на два шага.
+          // Пожилой идёт так же ровно, не пружиня.
+          bob = frame === 0 ? -0.5 : 0;
+        } else if (gait === 'kid') {
           // Ребёнок вприпрыжку: через шаг подскакивает.
           lift = frame === 1 ? -1 : 0;
-        } else if (gait === 'bouncy' && !wheels) {
+        } else if (gait === 'bouncy') {
           // В наушниках пружинит в такт музыке.
           lift = frame % 2 === 0 ? -0.5 : 0;
         } else if (gait === 'cane') {
           // С тростью приподнимается только на одной ноге — чуть прихрамывает — и идёт, ссутулившись вперёд.
           bob = frame === 0 ? -0.5 : 0;
-          if (facing === 'left' || facing === 'right') lean = facing === 'right' ? 3 : -3;
+          if (side) lean = facing === 'right' ? 3 : -3;
         }
-        person.setData('idleAt', undefined);
+        if (!running && !wheels && !side && !this.lite) weight = frame === 1 ? 0.5 : frame === 3 ? -0.5 : 0;
+        if (person.getData('idleAt') !== undefined) person.setData('idleAt', undefined);
         // Шаги слышно только у продавца — остальных было бы слишком много. Раз на пару шагов, а не
         // на каждый: иначе на бегу стучало, как пулемёт (ещё реже — ограничитель в ambience.step).
-        if (person === this.seller && frame === 0 && person.getData('stepFrame') !== frame) ambience.step(person.x);
-        person.setData('stepFrame', frame);
+        if (person === this.seller && frame === 0 && st.frame !== frame) ambience.step(person.x);
+        st.frame = frame;
       } else {
         bob = Math.sin((now + phase) / 650) > 0.35 ? -0.5 : 0;
         // Ожидание: переминается с ноги на ногу, поправляет сумку (idle).
@@ -2211,6 +2329,7 @@ export class StoreScene extends Phaser.Scene {
       // коробка в руках и тень остаются ровными, а падение на луже (angle контейнера) не спорит с бегом.
       const tilt = Phaser.Math.DegToRad(lean);
       if (legs) {
+        legs.x = weight;
         legs.y = lift;
         legs.rotation = tilt;
       }
@@ -2226,7 +2345,7 @@ export class StoreScene extends Phaser.Scene {
         const dy = (img.getData('dy') as number | undefined) ?? 0;
         img.y = bob + lift + stoop + dy;
         // Высокие слои (шапка, вещь, рюкзак) смещены вверх — наклоняются вокруг середины тела, как остальные.
-        img.x = stoop * side - dy * Math.sin(tilt);
+        img.x = stoop * side - dy * Math.sin(tilt) + weight;
         img.rotation = tilt;
       }
       // Вещь в руке ходит вместе с рукой (вперёд-назад сбоку, вверх-вниз спереди),
@@ -2403,6 +2522,7 @@ export class StoreScene extends Phaser.Scene {
       if (!person.active) continue;
       const legs = person.getData('legs') as Phaser.GameObjects.Image | undefined;
       if (legs) {
+        legs.x = 0;
         legs.y = 0;
         legs.rotation = 0;
       }
@@ -4058,12 +4178,24 @@ export class StoreScene extends Phaser.Scene {
     bike.setVisible(false);
     const road = this.streetY + 2;
     const away = -80;
-    await this.walk(courier, home.x, road, 70);
-    await this.walk(courier, away, road, 70);
+    await this.walkVia(
+      courier,
+      [
+        { x: home.x, y: road },
+        { x: away, y: road },
+      ],
+      70,
+    );
     await this.wait((DELIVERY_SECONDS * 1000) / 3);
     if (!courier.active) return;
-    await this.walk(courier, home.x, road, 70);
-    await this.walk(courier, home.x, home.y, 70);
+    await this.walkVia(
+      courier,
+      [
+        { x: home.x, y: road },
+        { x: home.x, y: home.y },
+      ],
+      70,
+    );
     if (!courier.active) return;
     ride.destroy();
     courier.setData('wheels', false);
@@ -4230,7 +4362,7 @@ export class StoreScene extends Phaser.Scene {
     const room = this.layout.coffee;
     const spots = this.coffeeSpots();
     const alive = () => !c.gone && c.sprite.active;
-    for (const p of [room.doorway, room.inside]) await this.walk(c.sprite, p.x, p.y);
+    await this.walkVia(c.sprite, [room.doorway, room.inside]);
     // К стойке по одному: пока там кто-то заказывает или забирает — подождать.
     await this.waitCounter(c);
     if (!alive()) return;
@@ -4265,7 +4397,7 @@ export class StoreScene extends Phaser.Scene {
     sound.place('glass', 2, c.sprite.x);
     this.popup(c.sprite.x, c.sprite.y - 18, t('popup.coffee', { n: coffeePrice(this.state) }), '#fff3b0');
     if (cupsOf(this.state) === 0) this.time.delayedCall(900, () => this.popup(machine.x + 10, machine.y - 16, t('popup.noCups'), '#ffd0d0'));
-    for (const p of [room.inside, room.doorway]) await this.walk(c.sprite, p.x, p.y);
+    await this.walkVia(c.sprite, [room.inside, room.doorway]);
   }
 
   /** Подождать, пока у стойки освободится место (не дольше 8 секунд). */
@@ -4469,18 +4601,14 @@ export class StoreScene extends Phaser.Scene {
         w.carried.setTexture('bread_tray').setPosition(0, 1).setVisible(true);
         const index = this.breadShelfIndex(product);
         const slot = index >= 0 ? this.spotOf(index) : null;
-        await this.workerWalk(w, room.inside.x, room.inside.y);
-        await this.workerWalk(w, room.doorway.x, room.doorway.y);
-        if (slot) {
-          const stand = standFor(this.layout, slot);
-          await this.workerWalk(w, stand.x, stand.y - 2);
-        }
+        // Из пекарни через дверь к полке — одним ходом, без остановки в дверях.
+        const stand = slot && standFor(this.layout, slot);
+        await this.workerWalkVia(w, [room.inside, room.doorway, ...(stand ? [{ x: stand.x, y: stand.y - 2 }] : [])]);
         await this.workerWait(w, PLACE_MS);
         if (!this.alive(gen)) return;
         w.carried.setVisible(false).setTexture('box').setPosition(0, 3);
         this.freshBread(slot ? { x: slot.x, y: slot.y - 18 } : room.doorway, product);
-        await this.workerWalk(w, room.doorway.x, room.doorway.y);
-        await this.workerWalk(w, room.inside.x, room.inside.y);
+        await this.workerWalkVia(w, [room.doorway, room.inside]);
         continue;
       }
       // Сначала хлеб для зала (по режиму пекарни); когда хватает — своя выпечка; потом — заказ соседей.
@@ -4630,9 +4758,11 @@ export class StoreScene extends Phaser.Scene {
     const { door, sellerHome } = this.layout;
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, nightGuestLook(STORY_GUEST[story]));
-    await this.walk(sprite, door.x, this.streetY);
-    await this.walk(sprite, door.x, door.y - 10);
-    await this.walk(sprite, sellerHome.x - 30, sellerHome.y - 16);
+    await this.walkVia(sprite, [
+      { x: door.x, y: this.streetY },
+      { x: door.x, y: door.y - 10 },
+      { x: sellerHome.x - 30, y: sellerHome.y - 16 },
+    ]);
     if (!sprite.active || !this.running) {
       sprite.destroy();
       return;
@@ -4707,8 +4837,10 @@ export class StoreScene extends Phaser.Scene {
     // Музыкант остаётся играть у входа до конца смены — ночных гостей больше.
     if (yes && story === 'busker') {
       this.busker = true;
-      await this.walk(sprite, door.x, door.y - 10);
-      await this.walk(sprite, door.x - 24, this.streetY - 2);
+      await this.walkVia(sprite, [
+        { x: door.x, y: door.y - 10 },
+        { x: door.x - 24, y: this.streetY - 2 },
+      ]);
       this.people.delete(sprite);
       this.trickObjs.push(sprite);
       this.trickTimers.push(this.time.addEvent({ delay: 1800, loop: true, callback: () => sprite.active && this.popup(sprite.x, sprite.y - 20, t('popup.busker'), '#fee761') }));
@@ -5369,8 +5501,10 @@ export class StoreScene extends Phaser.Scene {
     const courier = keep(this.makePerson(door.x + 60, this.streetY, { ...randomLook(0xe43b44), style: 'cap', hair: 0xe43b44 }));
     const parcel = this.art(0, 3, 'box').setTint(0xc28569);
     courier.add(parcel);
-    await this.walk(courier, door.x, this.streetY);
-    await this.walk(courier, door.x - 10, door.y - 14);
+    await this.walkVia(courier, [
+      { x: door.x, y: this.streetY },
+      { x: door.x - 10, y: door.y - 14 },
+    ]);
     if (!courier.active) return;
     let taken = false;
     const leave = async (left: boolean) => {
@@ -5378,8 +5512,10 @@ export class StoreScene extends Phaser.Scene {
       this.liveEvent = null;
       courier.disableInteractive();
       if (left) this.popup(courier.x, courier.y - 18, t('live.courierLeft'), '#ffd0d0');
-      await this.walk(courier, door.x, this.streetY);
-      await this.walk(courier, door.x - 80, this.streetY);
+      await this.walkVia(courier, [
+        { x: door.x, y: this.streetY },
+        { x: door.x - 80, y: this.streetY },
+      ]);
       courier.destroy();
     };
     courier.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () =>
@@ -5449,7 +5585,7 @@ export class StoreScene extends Phaser.Scene {
     const trips = Math.min(this.awaitingBoxes, 4);
     for (let trip = 0; trip < trips && driver.active; trip++) {
       box.setVisible(true);
-      for (const p of route) await this.walk(driver, p.x, p.y, SELLER_SPEED);
+      await this.walkVia(driver, route, SELLER_SPEED);
       if (!driver.active) return;
       await this.wait(300);
       box.setVisible(false);
@@ -5458,10 +5594,9 @@ export class StoreScene extends Phaser.Scene {
       this.refreshWarehouse();
       // Коробка легла на склад — картонный стук, каждая следующая чуть выше.
       sound.place('box', trip, driver.x);
-      if (trip < trips - 1) for (const p of [...route].reverse()) await this.walk(driver, p.x, p.y, SELLER_SPEED);
+      if (trip < trips - 1) await this.walkVia(driver, [...route].reverse(), SELLER_SPEED);
     }
-    for (const p of [...route].reverse()) await this.walk(driver, p.x, p.y, SELLER_SPEED);
-    await this.walk(driver, vanX, this.streetY + 10, SELLER_SPEED);
+    await this.walkVia(driver, [...[...route].reverse(), { x: vanX, y: this.streetY + 10 }], SELLER_SPEED);
     driver.destroy();
     if (!van.active) return;
     // Двери закрываются — и в путь.
@@ -6782,8 +6917,10 @@ export class StoreScene extends Phaser.Scene {
     const man = this.makePerson(start.x, start.y, look);
     this.people.delete(man);
     this.trickObjs.push(man);
-    await this.walk(man, door.x, this.streetY);
-    await this.walk(man, door.x, door.y - 10);
+    await this.walkVia(man, [
+      { x: door.x, y: this.streetY },
+      { x: door.x, y: door.y - 10 },
+    ]);
     for (let i = 0; i < 3 && man.active; i++) {
       const index = Phaser.Math.Between(0, Math.max(0, this.state.shelves.length - 1));
       const stand = this.standOf(index);
@@ -8174,7 +8311,11 @@ export class StoreScene extends Phaser.Scene {
     // Вещь в руке и сумка через плечо покачиваются в такт шагу (animatePeople).
     if (prop) person.setData('prop', prop);
     if (satchel) person.setData('satchel', satchel);
-    person.setData('gait', gaitOf(look));
+    const gait = gaitOf(look);
+    person.setData('gait', gait);
+    // Свой шаг: и скорость, и ширина шага у каждого чуть свои — толпа не марширует в ногу.
+    const own = gait ? GAIT[gait] : { speed: 1, stride: 1 };
+    person.setData('stride', this.newStride(x, y, own.speed * Phaser.Math.FloatBetween(...OWN_SPEED), own.stride * Phaser.Math.FloatBetween(0.94, 1.06)));
     const baseScale = look.kid ? 0.8 : 1;
     person.setScale(baseScale);
     person.setData('legs', legs);
@@ -8198,6 +8339,20 @@ export class StoreScene extends Phaser.Scene {
     this.people.add(person);
     person.once('destroy', () => this.people.delete(person));
     return person;
+  }
+
+  private newStride(x: number, y: number, speed = 1, stride = 1): Stride {
+    return { phase: 0, lastX: x, lastY: y, speed, stride, foot: Math.random() < 0.5 ? 0 : 2, endAt: -Infinity, vel: 0, ratio: 1, frame: 0, seg: 0, t: 0, lane: 0, laneGoal: 0, laneAt: 0, dirX: 0, dirY: 0 };
+  }
+
+  /** Шаг человека (makePerson заводит его сразу; у собранных иначе — заводится тут). */
+  private strideOf(person: Phaser.GameObjects.Container): Stride {
+    let st = person.getData('stride') as Stride | undefined;
+    if (!st) {
+      st = this.newStride(person.x, person.y);
+      person.setData('stride', st);
+    }
+    return st;
   }
 
   /** Открывает выполненные достижения; новые — всплывашкой по очереди. Возвращает, что открылось. */
@@ -8243,7 +8398,7 @@ export class StoreScene extends Phaser.Scene {
       person.x += dx * 0.2;
       person.y += dy * 0.2;
       person.setDepth(person.y);
-      this.setFacing(person, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy < 0 ? 'up' : 'down');
+      this.setFacing(person, facingAlong(dx, dy, person.getData('facing') as Facing | undefined));
     }
     person.setData('walking', moving);
     person.setData('pace', leader.getData('pace'));
@@ -8681,8 +8836,14 @@ export class StoreScene extends Phaser.Scene {
     const home = this.ownerHome();
     // С улицы — через дверь, а не сквозь стену.
     if (this.seller.y > this.layout.h - 2) {
-      await this.walk(this.seller, this.layout.door.x, this.layout.h + FACADE_H + 6, SELLER_SPEED);
-      await this.walk(this.seller, this.layout.door.x, this.layout.door.y - 8, SELLER_SPEED);
+      await this.walkVia(
+        this.seller,
+        [
+          { x: this.layout.door.x, y: this.layout.h + FACADE_H + 6 },
+          { x: this.layout.door.x, y: this.layout.door.y - 8 },
+        ],
+        SELLER_SPEED,
+      );
       if (id !== this.choreId) return;
     }
     if (!this.ownerFree()) await this.walk(this.seller, home.x, home.y, SELLER_SPEED);
@@ -9054,6 +9215,7 @@ export class StoreScene extends Phaser.Scene {
     const gen = ++this.staffGen;
     for (const w of this.workers.values()) {
       this.stopMop(w.sprite);
+      this.haltWalk(w.sprite);
       this.tweens.killTweensOf(w.sprite);
       w.sprite.destroy();
     }
@@ -9174,6 +9336,11 @@ export class StoreScene extends Phaser.Scene {
   /** Шаг сотрудника с учётом его скорости. */
   private workerWalk(w: Worker, x: number, y: number): Promise<void> {
     return this.walk(w.sprite, x, y, STAFF_SPEED * this.workerPace(w));
+  }
+
+  /** Сотрудник идёт через несколько точек одним ходом (дверь склада, пекарни) — не встаёт в каждой. */
+  private workerWalkVia(w: Worker, points: Point[]): Promise<void> {
+    return this.walkVia(w.sprite, points, STAFF_SPEED * this.workerPace(w));
   }
 
   private workerWait(w: Worker, ms: number): Promise<void> {
@@ -9408,19 +9575,17 @@ export class StoreScene extends Phaser.Scene {
       }
       const { doorway, pickup } = this.layout.warehouse;
       const route = this.routeTo(index);
-      await this.workerWalk(w, doorway.x, doorway.y);
-      await this.workerWalk(w, pickup.x, pickup.y);
+      await this.workerWalkVia(w, [doorway, pickup]);
       await this.workerWait(w, PICKUP_MS);
       if (!this.alive(gen)) return;
       w.carried.setVisible(true);
-      await this.workerWalk(w, doorway.x, doorway.y);
-      for (const p of route) await this.workerWalk(w, p.x, p.y);
+      await this.workerWalkVia(w, [doorway, ...route]);
       await this.workerWait(w, PLACE_MS);
       if (!this.alive(gen)) return;
       w.carried.setVisible(false);
       this.stockShelf(index, w.sprite);
       // От ларя на улице — обратно в зал через дверь.
-      for (const p of route.slice(0, -1).reverse()) await this.workerWalk(w, p.x, p.y);
+      await this.workerWalkVia(w, route.slice(0, -1).reverse());
     }
   }
 
@@ -9455,8 +9620,14 @@ export class StoreScene extends Phaser.Scene {
     this.popup(door.x, door.y - 24, t('popup.inspector'), '#fff3b0');
     haptic.tap();
     sound.bell();
-    await this.walk(sprite, door.x, this.streetY, 35);
-    await this.walk(sprite, door.x, door.y - 10, 35);
+    await this.walkVia(
+      sprite,
+      [
+        { x: door.x, y: this.streetY },
+        { x: door.x, y: door.y - 10 },
+      ],
+      35,
+    );
     // Полки в зале и вёдра у кассы (ларь у входа он видел, когда заходил).
     for (const i of this.state.shelves.map((_, i) => i)) if (this.state.shelves[i].kind !== 'icebox') await look(this.standOf(i).x, this.standOf(i).y);
     await look(wc.x - 6, wc.spotY + 4);
@@ -9487,16 +9658,28 @@ export class StoreScene extends Phaser.Scene {
     const { door, sellerHome } = this.layout;
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, SONYA);
-    await this.walk(sprite, door.x, this.streetY, 40);
-    await this.walk(sprite, door.x, door.y - 10, 40);
-    await this.walk(sprite, sellerHome.x - 18, sellerHome.y + 8, 40);
+    await this.walkVia(
+      sprite,
+      [
+        { x: door.x, y: this.streetY },
+        { x: door.x, y: door.y - 10 },
+        { x: sellerHome.x - 18, y: sellerHome.y + 8 },
+      ],
+      40,
+    );
     if (!this.sys.isActive()) return;
     this.heartAt(sprite.x, sprite.y - 14);
     music.sting('story');
     this.popup(sprite.x, sprite.y - 20, t('drama.visit'), '#fff3b0');
     await this.wait(9000);
-    await this.walk(sprite, door.x, door.y - 10, 40);
-    await this.walk(sprite, door.x, this.layout.h + 16, 40);
+    await this.walkVia(
+      sprite,
+      [
+        { x: door.x, y: door.y - 10 },
+        { x: door.x, y: this.layout.h + 16 },
+      ],
+      40,
+    );
     void this.strollAway(sprite);
     this.sonya = 'done';
   }
@@ -9513,8 +9696,14 @@ export class StoreScene extends Phaser.Scene {
       await this.wait(i * 700);
       const sprite = this.makePerson(start.x + i * 6, start.y, look);
       const dx = (i - 1) * 9;
-      await this.walk(sprite, door.x + dx, this.streetY, 32);
-      await this.walk(sprite, door.x + dx, door.y - 10, 32);
+      await this.walkVia(
+        sprite,
+        [
+          { x: door.x + dx, y: this.streetY },
+          { x: door.x + dx, y: door.y - 10 },
+        ],
+        32,
+      );
       const order = slots.map((_, k) => k).filter((k) => k % 3 === i % 3 || slots.length < 4);
       for (const k of order.slice(0, 3)) {
         const stand = standFor(this.layout, slots[k]);
@@ -9626,8 +9815,10 @@ export class StoreScene extends Phaser.Scene {
 
   private async runThief(c: Customer): Promise<void> {
     const { door } = this.layout;
-    await this.walk(c.sprite, door.x, this.streetY);
-    await this.walk(c.sprite, door.x, door.y - 10);
+    await this.walkVia(c.sprite, [
+      { x: door.x, y: this.streetY },
+      { x: door.x, y: door.y - 10 },
+    ]);
     // С тележкой у входа покупатель иногда берёт что-то сверх списка.
     const wanted = this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day));
     for (const id of wanted) {
@@ -9692,7 +9883,9 @@ export class StoreScene extends Phaser.Scene {
   private async runCustomer(c: Customer): Promise<void> {
     const { door } = this.layout;
     // Первый покупатель нового начала появляется уже на дорожке у двери — с улицы не идёт.
-    if (!c.first) await this.walk(c.sprite, door.x, this.streetY);
+    // Остальные идут по тротуару почти до двери: тележку берут здесь, а к двери заворачивают дугой.
+    const gap = c.sprite.x - door.x;
+    if (!c.first) await this.walk(c.sprite, door.x + Math.sign(gap) * Math.min(Math.abs(gap), DOOR_TURN), this.streetY);
     // Тележки у входа: часть покупателей берёт их — кому удобнее.
     if (this.cartsAtDoor() && Math.random() < CART_SHARE && !c.sprite.getData('stroller') && !c.thief) this.giveTrolley(c.sprite);
     const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day));
@@ -9726,7 +9919,7 @@ export class StoreScene extends Phaser.Scene {
       }
       return result;
     };
-    await this.walk(c.sprite, door.x, door.y - 10);
+    await this.walkVia(c.sprite, c.first ? [{ x: door.x, y: door.y - 10 }] : [{ x: door.x, y: this.streetY }, { x: door.x, y: door.y - 10 }]);
     if (c.gone) return;
     // В дождь и снег с улицы несут грязь.
     const muddy = isWet(this.weather) || this.weather === 'snow';
@@ -9780,9 +9973,12 @@ export class StoreScene extends Phaser.Scene {
 
     if (await this.useKiosk(c)) return;
     if (c.gone) return;
+    // Через одного, по порядку прихода: в тесной очереди встают ёлочкой, и сторона у каждого своя —
+    // очередь подвинулась, а люди не перескакивают из ряда в ряд.
+    c.queueSide = this.queueTurn++ % 2;
     this.queue.push(c);
     this.layoutQueue();
-    const spot = this.registerOf(c)?.spot ?? { x: this.layout.queue.x, y: this.queueSpotY(this.queue.indexOf(c)) };
+    const spot = this.registerOf(c)?.spot ?? this.queueSpot(c, this.queue.indexOf(c));
     await this.walk(c.sprite, spot.x, spot.y);
     if (c.gone) return;
     // Заскучал в очереди — тянется к стойке со сладостями.
@@ -10172,8 +10368,16 @@ export class StoreScene extends Phaser.Scene {
 
   private async leave(c: Customer, pastCounter = false): Promise<void> {
     c.gone = true;
-    if (pastCounter) await this.walk(c.sprite, this.layout.queue.x, this.layout.counter.y + 40);
-    await this.walk(c.sprite, this.layout.door.x, this.layout.h + 16);
+    const { door, h, queue, counter } = this.layout;
+    const route: Point[] = pastCounter ? [{ x: queue.x, y: counter.y + 40 }] : [];
+    // Из зала — в обход полок и в дверной проём (с ближнего к себе края), а не наискосок сквозь мебель
+    // и стену у входа. Крюк выходит в пару шагов: на поток покупателей не влияет.
+    if (c.sprite.y < h - 2) {
+      const from = route[0] ?? c.sprite;
+      route.push({ x: door.x + Phaser.Math.Clamp(from.x - door.x, -DOOR_EDGE, DOOR_EDGE), y: door.y - 4 });
+    }
+    route.push({ x: door.x, y: h + 16 });
+    await this.walkVia(c.sprite, route);
     this.dropTrolley(c.sprite);
     this.customers.delete(c);
     void this.strollAway(c.sprite);
@@ -10195,7 +10399,7 @@ export class StoreScene extends Phaser.Scene {
       const person = this.makePerson(fromLeft ? left : right, y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)));
       this.addUmbrella(person);
       if (Math.random() < 0.1) this.addCompanion(person);
-      void this.walk(person, fromLeft ? right : left, y, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1.1)).then(() => person.destroy());
+      void this.walk(person, fromLeft ? right : left, y, this.ownPace(person, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.75, 1.1))).then(() => person.destroy());
     }
     if (flood) return;
     if (Math.random() < 0.14) this.passerby();
@@ -10261,7 +10465,7 @@ export class StoreScene extends Phaser.Scene {
     }
     const walker = this.makePerson(fromLeft ? left : right, y, { ...base, dog: Phaser.Utils.Array.GetRandom(DOG_COLORS) });
     this.addUmbrella(walker);
-    void this.walk(walker, fromLeft ? right : left, y, CUSTOMER_SPEED * 0.8).then(() => walker.destroy());
+    void this.walk(walker, fromLeft ? right : left, y, this.ownPace(walker, CUSTOMER_SPEED * 0.8)).then(() => walker.destroy());
   }
 
   /** Наводнение: по затопленной дороге проплывает лодка с гребцом (иногда — с пассажиром). */
@@ -10401,9 +10605,11 @@ export class StoreScene extends Phaser.Scene {
     };
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, looks[visit.kind]);
-    await this.walk(sprite, door.x, this.streetY);
-    await this.walk(sprite, door.x, door.y - 10);
-    await this.walk(sprite, sellerHome.x - 30, sellerHome.y - 16);
+    await this.walkVia(sprite, [
+      { x: door.x, y: this.streetY },
+      { x: door.x, y: door.y - 10 },
+      { x: sellerHome.x - 30, y: sellerHome.y - 16 },
+    ]);
     if (!sprite.active || !this.running) {
       sprite.destroy();
       return;
@@ -10488,9 +10694,11 @@ export class StoreScene extends Phaser.Scene {
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, look);
     this.addUmbrella(sprite);
-    await this.walk(sprite, door.x, this.streetY);
-    await this.walk(sprite, door.x, door.y - 10);
-    await this.walk(sprite, sellerHome.x - 28, sellerHome.y - 12);
+    await this.walkVia(sprite, [
+      { x: door.x, y: this.streetY },
+      { x: door.x, y: door.y - 10 },
+      { x: sellerHome.x - 28, y: sellerHome.y - 12 },
+    ]);
     if (!sprite.active) return;
     this.setFacing(sprite, 'right');
     this.popup(sprite.x, sprite.y - 18, line, '#fff3b0');
@@ -10498,8 +10706,10 @@ export class StoreScene extends Phaser.Scene {
     onArrive?.();
     await this.wait(2200);
     if (carriesBox && sprite.active) sprite.add(this.art(0, 3, 'box'));
-    await this.walk(sprite, door.x, door.y - 10);
-    await this.walk(sprite, door.x, this.layout.h + 16);
+    await this.walkVia(sprite, [
+      { x: door.x, y: door.y - 10 },
+      { x: door.x, y: this.layout.h + 16 },
+    ]);
     void this.strollAway(sprite);
   }
 
@@ -10507,23 +10717,22 @@ export class StoreScene extends Phaser.Scene {
   private async runEduard(): Promise<void> {
     const { w, h } = this.layout;
     const sprite = this.makePerson(this.next.w + 60, this.streetY, EDUARD);
-    await this.walk(sprite, w - 20, this.streetY);
-    await this.walk(sprite, w - 20, h + 15);
+    await this.walkVia(sprite, [
+      { x: w - 20, y: this.streetY },
+      { x: w - 20, y: h + 15 },
+    ]);
     if (!sprite.active) return;
     this.setFacing(sprite, 'up');
     this.emote(sprite, 'emo_question');
     this.popup(sprite.x, sprite.y - 18, t('popup.eduard'), '#d0e0ff');
     await this.wait(2500);
-    await this.walk(sprite, w - 20, this.streetY);
-    if (this.rivalAcross) {
-      // Его магазин за дорогой, напротив входа: переходит по зебре.
-      await this.walk(sprite, this.layout.door.x, this.streetY);
-      await this.walk(sprite, this.layout.door.x, this.streetY + 82);
-    } else {
-      const eduardDoor = this.next.w + 26 + 128 * 0.62;
-      await this.walk(sprite, eduardDoor, this.streetY);
-      await this.walk(sprite, eduardDoor, this.next.h - 2);
-    }
+    // Его магазин за дорогой, напротив входа — переходит по зебре; иначе — по соседству справа.
+    const home = this.rivalAcross ? { x: this.layout.door.x, y: this.streetY + 82 } : { x: this.next.w + 26 + 128 * 0.62, y: this.next.h - 2 };
+    await this.walkVia(sprite, [
+      { x: w - 20, y: this.streetY },
+      { x: home.x, y: this.streetY },
+      home,
+    ]);
     sprite.destroy();
   }
 
@@ -10532,9 +10741,11 @@ export class StoreScene extends Phaser.Scene {
     const { door, h } = this.layout;
     const cafeDoor = -136 - WING_OUTER + 112 * 0.62;
     const sprite = this.makePerson(cafeDoor, this.next.h - 2, { ...randomLook(0x733e39), acc: 'apron', accTint: 0xffffff });
-    await this.walk(sprite, cafeDoor, this.streetY);
-    await this.walk(sprite, door.x, this.streetY);
-    await this.walk(sprite, door.x, h + 15);
+    await this.walkVia(sprite, [
+      { x: cafeDoor, y: this.streetY },
+      { x: door.x, y: this.streetY },
+      { x: door.x, y: h + 15 },
+    ]);
     if (!sprite.active) return;
     this.setFacing(sprite, 'up');
     this.popup(sprite.x, sprite.y - 18, t('popup.cafeWaiter'), '#fff3b0');
@@ -10547,9 +10758,11 @@ export class StoreScene extends Phaser.Scene {
       sprite.add(this.art(0, 3, 'box'));
     } else this.popup(sprite.x, sprite.y - 18, t('popup.cafeShort'), '#ffd0d0');
     await this.wait(900);
-    await this.walk(sprite, door.x, this.streetY);
-    await this.walk(sprite, cafeDoor, this.streetY);
-    await this.walk(sprite, cafeDoor, this.next.h - 2);
+    await this.walkVia(sprite, [
+      { x: door.x, y: this.streetY },
+      { x: cafeDoor, y: this.streetY },
+      { x: cafeDoor, y: this.next.h - 2 },
+    ]);
     sprite.destroy();
   }
 
@@ -10561,9 +10774,13 @@ export class StoreScene extends Phaser.Scene {
 
   /** Вышел из магазина — уходит по тротуару за край кадра. */
   private async strollAway(sprite: Phaser.GameObjects.Container): Promise<void> {
-    await this.walk(sprite, this.layout.door.x, this.streetY + Phaser.Math.Between(-3, 3));
+    const y = this.streetY + Phaser.Math.Between(-3, 3);
     const side = Math.random() < 0.5 ? -1 : 1;
-    await this.walk(sprite, side < 0 ? -60 : this.next.w + 60, sprite.y);
+    // С крыльца на тротуар и в сторону — одним ходом, заворачивая, а не по команде «налево».
+    await this.walkVia(sprite, [
+      { x: this.layout.door.x, y },
+      { x: side < 0 ? -60 : this.next.w + 60, y },
+    ]);
     sprite.destroy();
   }
 
@@ -10575,7 +10792,10 @@ export class StoreScene extends Phaser.Scene {
       r.customer = c;
       void this.walk(c.sprite, r.spot.x, r.spot.y);
     });
-    this.queue.forEach((c, i) => void this.walk(c.sprite, this.layout.queue.x, this.queueSpotY(i)));
+    this.queue.forEach((c, i) => {
+      const spot = this.queueSpot(c, i);
+      void this.walk(c.sprite, spot.x, spot.y);
+    });
   }
 
   private updateBubble(c: Customer): void {
@@ -10588,62 +10808,176 @@ export class StoreScene extends Phaser.Scene {
 
   // ---------- Утилиты ----------
 
-  /** Место в очереди: в тесном ларьке длинная очередь стоит плотнее, чтобы не упираться в полки. */
-  /** Место в линии: сразу за кассами (выше их мест), длинная очередь сжимается до стены. */
-  private queueSpotY(index: number): number {
-    const { y, step, minY } = this.layout.queue;
+  /**
+   * Место в линии: сразу за кассами (выше их мест), длинная очередь сжимается до стены (в тесном
+   * ларьке стоит плотнее, чтобы не упираться в полки). Сжалась теснее роста человека — встают
+   * «ёлочкой», через одного чуть левее: видно каждого, а не стопку голов друг в друге.
+   */
+  private queueSpot(c: Customer, index: number): Point {
+    const { x, y, step, minY } = this.layout.queue;
     const top = (this.registers.length ? Math.min(...this.registers.map((r) => r.spot.y)) : y + step) - step;
     const fit = this.queue.length > 1 ? (top - minY) / (this.queue.length - 1) : step;
-    return top - index * Math.min(step, fit);
+    const gap = Math.min(step, fit);
+    return { x: x - (gap < QUEUE_SNUG ? (c.queueSide ?? 0) * QUEUE_STAGGER : 0), y: top - index * gap };
   }
 
   /**
    * Идёт к точке; в зале — в обход мебели, по нескольким отрезкам. Новый walk отменяет прежний.
    * Мир перестроили, пока шёл, — дело дальше не идёт: обещание так и не исполнится (как и у wait).
+   * Без скорости — своим шагом (покупатели): старик с тростью медленнее, спортсмен бодрее, с коляской ровнее.
    */
-  private walk(target: Phaser.GameObjects.Container, x: number, y: number, speed = this.customerSpeed()): Promise<void> {
-    const gen = ((target.getData('walkGen') as number | undefined) ?? 0) + 1;
-    target.setData('walkGen', gen);
-    const world = this.worldGen;
-    const indoor = target.y < this.layout.h - 2 && y < this.layout.h - 2;
-    const legs = indoor ? findPath({ x: target.x, y: target.y }, { x, y }, this.obstacles) : [{ x, y }];
-    return legs
-      .reduce<Promise<void>>(
-        (done, leg) => done.then(() => (target.active && target.getData('walkGen') === gen ? this.walkLeg(target, leg.x, leg.y, speed) : undefined)),
-        Promise.resolve(),
-      )
-      .then(() => (world === this.worldGen ? undefined : new Promise<void>(() => undefined)));
+  private walk(target: Phaser.GameObjects.Container, x: number, y: number, speed?: number): Promise<void> {
+    return this.walkVia(target, [{ x, y }], speed);
   }
 
-  private walkLeg(target: Phaser.GameObjects.Container, x: number, y: number, speed: number): Promise<void> {
+  /**
+   * Идёт через несколько точек одним ходом: у дверей и полок не встаёт на каждом повороте, а заворачивает
+   * дугой (stride.ts). С места разгоняется, к концу притормаживает, но в пути ровно столько, сколько шёл бы
+   * ровным шагом по ломаной, — ход игры от походки не зависит. Встречного и стоящего на пути обходит
+   * чуть сбоку (на слабом телефоне — нет). Шаг — твин-счётчик: ×2 и пауза действуют на него, как на всё,
+   * а killTweensOf(человек) его не гасит — для этого haltWalk.
+   */
+  private walkVia(target: Phaser.GameObjects.Container, points: Point[], speed?: number): Promise<void> {
+    const world = this.worldGen;
+    const st = this.strideOf(target);
+    const pace = speed ?? this.ownPace(target);
+    const from = { x: target.x, y: target.y };
+    const legs: Point[] = [];
+    let at = from;
+    for (const p of points) {
+      // В зале — в обход мебели; на улице и через дверь — напрямик.
+      const indoor = at.y < this.layout.h - 2 && p.y < this.layout.h - 2;
+      legs.push(...(indoor ? findPath(at, p, this.obstacles) : [p]));
+      at = p;
+    }
+    const route = makeRoute([from, ...roundCorners(from, legs, this.obstacles)]);
+    const duration = (polylineLength(from, legs) / pace) * 1000;
     // Останавливаем только прошлый шаг: прыжок от радости и прочие анимации доигрывают.
     (target.getData('move') as Phaser.Tweens.Tween | undefined)?.stop();
-    const distance = Phaser.Math.Distance.Between(target.x, target.y, x, y);
-    // Поворачивается туда, куда идёт.
-    const dx = x - target.x;
-    const dy = y - target.y;
-    if (distance > 0.5) this.setFacing(target, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy < 0 ? 'up' : 'down');
-    target.setData('walking', true);
-    // Темп шага (animatePeople): чем быстрее идёт, тем чаще перебирает ногами.
-    target.setData('pace', speed);
-    return new Promise((resolve) => {
-      const move = this.tweens.add({
-        targets: target,
-        x,
-        y,
-        duration: (distance / speed) * 1000,
-        onUpdate: () => target.setDepth(target.y),
+    // Уже шёл (новый путь посреди прежнего или сразу следом) — продолжает с той же скоростью, без разгона.
+    const going = Boolean(target.getData('walking')) || this.time.now - st.endAt < STEP_GRACE;
+    Object.assign(st, { route, pace: planPace(route.length, duration, going ? st.vel : 0), seg: 0, t: 0, lane: 0, laneGoal: 0, laneAt: 0, turn: undefined });
+    // Уже на месте (очередь пересчитали, а он и так стоит где надо) — не «трогается» на кадр.
+    if (route.length >= 0.3) target.setData('walking', true);
+    // Темп шага (animatePeople): чем быстрее идёт, тем шире и чаще шаг.
+    target.setData('pace', pace);
+    const end = route.pts[route.pts.length - 1];
+    return new Promise<void>((resolve) => {
+      const stop = () => {
+        target.setData('walking', false);
+        st.endAt = this.time.now;
+        resolve();
+      };
+      const move = this.tweens.addCounter({
+        from: 0,
+        to: duration,
+        duration,
+        onUpdate: (tween) => this.stepAlong(target, st, tween.getValue() ?? 0),
         onComplete: () => {
-          target.setData('walking', false);
-          resolve();
+          if (target.active) {
+            target.setPosition(end.x, end.y).setDepth(end.y);
+            // Не успел довернуться кругом — встаёт той стороной, куда шёл.
+            if (st.turn) this.setFacing(target, st.turn.to);
+          }
+          st.turn = undefined;
+          stop();
         },
-        onStop: () => {
-          target.setData('walking', false);
-          resolve();
-        },
+        onStop: stop,
       });
       target.setData('move', move);
-    });
+    }).then(() => (world === this.worldGen ? undefined : new Promise<void>(() => undefined)));
+  }
+
+  /** Своим ходом: скорость base с поправкой на походку человека (старик медленнее, спортсмен бодрее). */
+  private ownPace(person: Phaser.GameObjects.Container, base = this.customerSpeed()): number {
+    return base * this.strideOf(person).speed;
+  }
+
+  /** Остановить шаг на месте, не исполняя обещание walk (как прежде killTweensOf гасил твин шага). */
+  private haltWalk(person: Phaser.GameObjects.Container): void {
+    (person.getData('move') as Phaser.Tweens.Tween | undefined)?.destroy();
+    person.setData('walking', false);
+  }
+
+  /** Шаг по пути: где человек через t мс (времени игры), куда смотрит, насколько отошёл вбок от встречного. */
+  private stepAlong(target: Phaser.GameObjects.Container, st: Stride, t: number): void {
+    const { route, pace } = st;
+    if (!target.active || !route || !pace) return;
+    const dt = Math.max(0, t - st.t);
+    st.t = t;
+    const { s, v } = paceAt(pace, t);
+    const p = sampleRoute(route, s, st.seg);
+    st.seg = p.seg;
+    if (p.dx || p.dy) {
+      st.dirX = p.dx;
+      st.dirY = p.dy;
+    }
+    st.vel = v;
+    st.ratio = pace.vc > 0 ? v / pace.vc : 1;
+    // Разойтись со встречным: раз в LANE_EVERY смотрит вперёд, а вбок отходит плавно.
+    if (!this.lite) {
+      if (t >= st.laneAt) {
+        st.laneAt = t + LANE_EVERY;
+        st.laneGoal = this.laneGoal(target, st, p.x, p.y, route.length - s);
+      }
+      const step = (LANE_SPEED * dt) / 1000;
+      st.lane += Phaser.Math.Clamp(st.laneGoal - st.lane, -step, step);
+    }
+    // У начала и конца пути сдвиг сходит на нет: приходит ровно туда, куда шёл.
+    const off = st.lane * Phaser.Math.Clamp(Math.min(s, route.length - s) / 10, 0, 1);
+    target.x = p.x - st.dirY * off;
+    target.y = p.y + st.dirX * off;
+    // Глубину трогаем, только если она правда сменилась: каждая смена — пересортировка всей сцены.
+    if (target.depth !== target.y) target.setDepth(target.y);
+    if (route.length > 0.5) this.faceAlong(target, st, t);
+  }
+
+  /** Смотрит туда, куда идёт; кругом поворачивается не мгновенно — на миг встаёт вполоборота. */
+  private faceAlong(target: Phaser.GameObjects.Container, st: Stride, t: number): void {
+    if (st.turn) {
+      if (t < st.turn.at) return;
+      this.setFacing(target, st.turn.to);
+      st.turn = undefined;
+    }
+    if (!st.dirX && !st.dirY) return;
+    const current = target.getData('facing') as Facing | undefined;
+    const want = facingAlong(st.dirX, st.dirY, current);
+    if (want === current) return;
+    const via = current && turnVia(current, want, st.dirX);
+    if (via) {
+      this.setFacing(target, via);
+      st.turn = { to: want, at: t + TURN_MS };
+    } else this.setFacing(target, want);
+  }
+
+  /** Люди на сцене в этом кадре: где стоят и куда идут (для обхода встречных; считаем раз за кадр). */
+  private passers(): Passer[] {
+    const frame = this.game.loop.frame;
+    if (this.crowd.frame === frame) return this.crowd.list;
+    const list: Passer[] = [];
+    for (const p of this.people) {
+      // Только те, кто стоит прямо на сцене и виден: сидящий в чужом контейнере (лодка) — не помеха.
+      if (!p.active || !p.visible || p.displayList !== this.children) continue;
+      const st = p.getData('stride') as Stride | undefined;
+      list.push({ x: p.x, y: p.y, dx: st?.dirX ?? 0, dy: st?.dirY ?? 0, moving: Boolean(p.getData('walking')), shift: st ? st.laneGoal - st.lane : 0 });
+    }
+    this.crowd = { frame, list };
+    return list;
+  }
+
+  /**
+   * Насколько отойти вбок, чтобы не пройти сквозь людей впереди (stride.ts: sidestep). Сдвиг не
+   * заводит в мебель: там, где окажется сейчас и через полшага, должно быть свободно; негде разойтись —
+   * протиснутся по своему пути, как раньше.
+   */
+  private laneGoal(target: Phaser.GameObjects.Container, st: Stride, x: number, y: number, left: number): number {
+    const free = (lane: number) =>
+      [0, 8].every((ahead) => {
+        const qx = x + st.dirX * ahead - st.dirY * lane;
+        const qy = y + st.dirY * ahead + st.dirX * lane;
+        return this.obstacles.every((r) => qx <= r.x + 1 || qx >= r.x + r.w - 1 || qy <= r.y + 1 || qy >= r.y + r.h - 1);
+      });
+    return sidestep({ x: target.x, y: target.y }, st.dirX, st.dirY, st.lane, this.passers(), left, free);
   }
 
   /**
@@ -11166,8 +11500,10 @@ export class StoreScene extends Phaser.Scene {
     await this.wait(2600);
     if (!granny.active) return;
     const { door } = this.layout;
-    await this.walk(granny, door.x, door.y - 6);
-    await this.walk(granny, door.x, this.layout.h + 16);
+    await this.walkVia(granny, [
+      { x: door.x, y: door.y - 6 },
+      { x: door.x, y: this.layout.h + 16 },
+    ]);
     void this.strollAway(granny);
   }
 
@@ -11737,6 +12073,7 @@ export class StoreScene extends Phaser.Scene {
       hostages.push(this.seller);
       hostages.forEach((p, i) => {
         this.stopMop(p);
+        this.haltWalk(p);
         this.tweens.killTweensOf(p);
         const spot = corner(i);
         void this.walk(p, spot.x, spot.y).then(() => {
@@ -11876,6 +12213,8 @@ export class StoreScene extends Phaser.Scene {
     const person = keep(this.makePerson(x, y, look));
     this.setFacing(person, 'right');
     person.setData('walking', true);
+    // Шаг считается по пройденному пути: трусцой бегут мелко и часто, иначе ноги мелькали бы вдвое реже.
+    if (id === 'marathon') this.strideOf(person).stride = 0.5;
     // Марафонцы бегут трусцой (ноги часто, с подскоком), шествие идёт мерным шагом.
     person.setData('pace', id === 'marathon' ? RUN_PACE : 16);
     keep(this.tweens.add({ targets: person, x: toX, duration: ((toX - x) / (id === 'marathon' ? 34 : 16)) * 1000, onComplete: () => person.destroy() }));
