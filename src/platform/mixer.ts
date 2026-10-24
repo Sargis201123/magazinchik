@@ -1,22 +1,31 @@
 // Звуковой «пульт»: один аудиоконтекст на всю игру и каналы — музыка, улица, зал, звуки мира,
 // кнопки и голоса. Всё сходится в общую громкость → мягкий компрессор → ограничитель: вместе
 // звуки не «хрипят», а тихие (касса, монетки) не тонут. Зал и звуки мира звучат с лёгким отзвуком
-// комнаты; музыка притихает под диалогами; пока открыто меню, мир слышен глухо, «как из-за двери».
+// комнаты; улицу слышно через стекло витрины (глуше), а когда входит покупатель — дверь на миг
+// «впускает улицу»; музыка притихает под диалогами; пока открыто меню, мир слышен глухо, «как из-за двери».
 // Когда игра свёрнута (вкладка скрыта, Telegram свернули) или звук выключен — контекст спит.
 
+import { glassAt } from './ambienceLayers';
 import { roomImpulse, seeded } from './ambienceSynth';
 import { parseVolumes, silenceMask, sliderGain, VoiceLimiter, worldPan, type VolumeKey, type Volumes, type VoiceRule } from './mix';
 import { liteMode } from './quality';
 
 /**
- * Каналы. Улица — дождь, ветер, птицы, гром (без отзвука зала); зал — гул, шаги, колокольчик;
- * мир — звуки предметов в магазине (касса, полка, кот); кнопки — отклик интерфейса; голоса — диалоги.
+ * Каналы. Улица — дождь, ветер, птицы, гром, трамвай (за стеклом, без отзвука зала); зал — гул, шаги, колокольчик, гомон;
+ * мир — звуки предметов в магазине (касса, полка, кот); кнопки — отклик интерфейса; голоса — диалоги;
+ * заставки — короткие музыкальные фразы к событиям (под ползунком «Музыка», но мимо притихания музыки).
  */
-export type Bus = 'music' | 'street' | 'hall' | 'world' | 'ui' | 'voice';
+export type Bus = 'music' | 'sting' | 'street' | 'hall' | 'world' | 'ui' | 'voice';
+
+/** Уровень музыки и заставок (см. LEVEL). */
+const MUSIC_LEVEL = 0.55;
+/** Уровень улицы, пока её слышали без стекла витрины (см. LEVEL и STREET_LOW). */
+const STREET_BEFORE_GLASS = 2.6;
 
 /** Какой ползунок управляет каналом. */
 const CHANNEL: Record<Bus, Exclude<VolumeKey, 'master'>> = {
   music: 'music',
+  sting: 'music',
   street: 'ambience',
   hall: 'ambience',
   world: 'effects',
@@ -29,24 +38,36 @@ const CHANNEL: Record<Bus, Exclude<VolumeKey, 'master'>> = {
  * по умолчанию (80%): музыка — около −24 дБ RMS (было −39), дождь на ~9 дБ тише музыки, ливень
  * с ветром — на ~6 (был громче музыки), касса и монетки — пик около −11…−16 дБ (было −44…−54).
  * Компрессор WebAudio сам подтягивает тихое (~+7 дБ), поэтому числа — из замера, а не из арифметики.
+ * Музыка теперь — файлы на −16 LUFS (а не тихие синтезированные ноты), отсюда и её уровень: тот же
+ * замер, те же −24 дБ RMS у дневного трека. Заставки сведены в одной шкале с музыкой — уровень тот же.
  */
 const LEVEL: Record<Bus, number> = {
-  music: 10,
-  street: 2.6,
+  music: MUSIC_LEVEL,
+  sting: MUSIC_LEVEL,
+  // Улица — за стеклом (glassAt): оно убирает ~5 дБ у дождя (верх), канал на ~3 дБ громче прежнего
+  // (STREET_BEFORE_GLASS) — дождь глуше по тембру, но на слух лишь чуть тише.
+  street: 3.6,
   hall: 5.2,
   world: 6,
   ui: 5.2,
   voice: 4.9,
 };
 
+/**
+ * Низкие звуки улицы — ветер и раскат грома: стекло их почти не трогает (ниже ~800 Гц — меньше 0.3 дБ),
+ * и прибавка канала сделала бы их на ~3 дБ громче прежнего (ровный шум ветра — тот самый «прибой»,
+ * а громкий раскат «качает» компрессор вместе с музыкой). Их громкость умножаем на это — как до стекла.
+ */
+export const STREET_LOW = STREET_BEFORE_GLASS / LEVEL.street;
+
 /** Сколько каждого канала уходит в отзвук комнаты: улица — нисколько (она за стеклом). */
-const SEND = { indoor: 0.22, ui: 0.1, voice: 0.12, music: 0.08 };
+const SEND = { indoor: 0.22, ui: 0.1, voice: 0.12, music: 0.08, sting: 0.06 };
 
 /** Меню открыто: мир — глухо и тише, музыка — чуть мягче. */
 const MENU = { muffle: 750, dip: 0.55, music: 3200 };
 const OPEN_AIR = 18000;
 const MUSIC_TONE = 7000;
-/** Под диалогом музыка тише на ~7 дБ, под фанфарами и новостями — на ~6. */
+/** Под диалогом музыка тише на ~7 дБ, под фанфарами и новостями — на ~6 (заставки просят свою глубину). */
 const DIALOG_DUCK = 0.45;
 const STINGER_DUCK = 0.5;
 
@@ -76,6 +97,10 @@ let muted = read(MUTE_KEY) === '1';
 interface Graph {
   input: Record<Bus, GainNode>;
   master: GainNode;
+  /** Стекло витрины на канале улицы: полка верхов, срез и громкость открытой двери. */
+  glass: BiquadFilterNode;
+  glassCut: BiquadFilterNode;
+  door: GainNode;
   musicDuck: GainNode;
   musicTone: BiquadFilterNode;
   muffle: BiquadFilterNode;
@@ -137,11 +162,16 @@ function build(ac: AudioContext): Graph {
   const input = {} as Record<Bus, GainNode>;
   for (const bus of Object.keys(CHANNEL) as Bus[]) input[bus] = gain(0);
 
-  // Мир: улица и зал (с отзвуком) → «дверь» (глушится, пока открыто меню) → общая громкость.
+  // Мир: улица (через стекло витрины) и зал (с отзвуком) → «дверь» (глушится, пока открыто меню) → общая громкость.
   const muffle = filter('lowpass', OPEN_AIR);
   const dip = gain(1);
   muffle.connect(dip).connect(master);
-  input.street.connect(muffle);
+  const shut = glassAt(0);
+  const glass = filter('highshelf', 1800);
+  glass.gain.value = shut.shelf;
+  const glassCut = filter('lowpass', shut.cut, 0.5);
+  const door = gain(shut.gain);
+  input.street.connect(glass).connect(glassCut).connect(door).connect(muffle);
   const indoor = gain(1);
   input.hall.connect(indoor);
   input.world.connect(indoor);
@@ -149,7 +179,9 @@ function build(ac: AudioContext): Graph {
   const indoorSend = gain(SEND.indoor);
   indoor.connect(indoorSend).connect(reverb);
 
-  // Кнопки и голоса — мимо «двери»: меню и диалоги звучат ясно.
+  // Кнопки, голоса и заставки — мимо «двери»: меню, диалоги и итоги дня звучат ясно.
+  input.sting.connect(master);
+  input.sting.connect(gain(SEND.sting)).connect(reverb);
   input.ui.connect(master);
   input.ui.connect(gain(SEND.ui)).connect(reverb);
   input.voice.connect(master);
@@ -161,7 +193,7 @@ function build(ac: AudioContext): Graph {
   input.music.connect(musicDuck).connect(musicTone).connect(master);
   musicTone.connect(gain(SEND.music)).connect(reverb);
 
-  return { input, master, musicDuck, musicTone, muffle, dip, indoorSend };
+  return { input, master, glass, glassCut, door, musicDuck, musicTone, muffle, dip, indoorSend };
 }
 
 /** Громкости с ползунков — в усилители каналов. */
@@ -172,6 +204,26 @@ function applyVolumes(): void {
   for (const bus of Object.keys(CHANNEL) as Bus[]) glide(graph.input[bus].gain, LEVEL[bus] * sliderGain(volumes[CHANNEL[bus]]), now, 0.05);
 }
 
+// ---------- Дверь на улицу ----------
+
+let doorOpen = 0;
+
+/**
+ * Насколько открыта дверь магазина (0…1, каждый кадр): открыли — улица «входит» быстро (~0.1 с),
+ * закрыли — стекло возвращается мягче (~0.3 с). Покупатель вошёл — улица звучала ярче около секунды.
+ */
+export function setDoorAir(open: number): void {
+  const next = Math.round(Math.min(1, Math.max(0, open)) * 20) / 20;
+  if (!ctx || !graph || next === doorOpen) return;
+  const tau = next > doorOpen ? 0.06 : 0.25;
+  doorOpen = next;
+  const now = ctx.currentTime;
+  const air = glassAt(next);
+  glide(graph.glass.gain, air.shelf, now, tau);
+  glide(graph.glassCut.frequency, air.cut, now, tau);
+  glide(graph.door.gain, air.gain, now, tau);
+}
+
 // ---------- Меню, диалоги, фанфары ----------
 
 let menuOpen = false;
@@ -179,6 +231,7 @@ let menuOpen = false;
 let clearUntil = 0;
 let dialogOpen = false;
 let stingerUntil = 0;
+let stingerDuck = STINGER_DUCK;
 
 function applyDuck(fast: boolean): void {
   if (!ctx || !graph) return;
@@ -187,7 +240,7 @@ function applyDuck(fast: boolean): void {
   const base = dialogOpen ? DIALOG_DUCK : 1;
   p.cancelScheduledValues(now);
   if (stingerUntil > now) {
-    p.setTargetAtTime(Math.min(base, STINGER_DUCK), now, 0.03);
+    p.setTargetAtTime(Math.min(base, stingerDuck), now, 0.03);
     p.setTargetAtTime(base, stingerUntil, 0.35);
   } else p.setTargetAtTime(base, now, fast ? 0.08 : 0.35);
 }
@@ -344,9 +397,11 @@ export function busInput(ac: AudioContext, bus: Bus, pan = 0, gain = 1): AudioNo
 /** Не «пулемёт»: сыграть ли частый звук сейчас (правило — в mix.ts). */
 export const allowVoice = (key: string, rule: VoiceRule, dur: number): boolean => limiter.allow(key, rule, performance.now() / 1000, dur);
 
-/** Фанфары и новости: музыка на время притихает. */
-export function duckMusic(seconds: number): void {
+/** Фанфары, новости и заставки: музыка на время притихает (depth — во сколько раз, по умолчанию ~−6 дБ). */
+export function duckMusic(seconds: number, depth = STINGER_DUCK): void {
   if (!ctx) return;
+  // Предыдущее притихание ещё идёт — берём более глубокое из двух.
+  stingerDuck = stingerUntil > ctx.currentTime ? Math.min(stingerDuck, depth) : depth;
   stingerUntil = Math.max(stingerUntil, ctx.currentTime + seconds);
   applyDuck(true);
 }
@@ -388,4 +443,4 @@ export const mixer = {
 
 // Отладка: ?debug открывает пульт из консоли браузера (контекст, каналы, меню и диалог).
 if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug'))
-  Object.assign(window, { mixerDebug: () => ({ ctx, graph, volumes, muted, menuOpen, dialogOpen, level: LEVEL }) });
+  Object.assign(window, { mixerDebug: () => ({ ctx, graph, volumes, muted, menuOpen, dialogOpen, doorOpen, level: LEVEL }) });

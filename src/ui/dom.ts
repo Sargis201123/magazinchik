@@ -454,6 +454,12 @@ const css = `
 .ui-speed:active { transform: translateY(1px); box-shadow: none; }
 .ui-speed.on { background: rgba(254, 231, 97, .92); color: #2b2233; text-shadow: none; border-color: #2b2233; }
 .ui-urgent { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 84px); }
+/* «Позвать на помощь»: над срочным подвозом, мягко светится, пока идёт час пик. */
+.ui-help { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 128px); border-color: rgba(99, 199, 77, .9);
+  animation: ui-help-glow 1.6s ease-in-out infinite; }
+.ui-help:disabled { opacity: .55; animation: none; }
+@keyframes ui-help-glow { 50% { box-shadow: 0 2px 0 rgba(0, 0, 0, .45), 0 0 10px rgba(99, 199, 77, .75); } }
+@media (prefers-reduced-motion: reduce) { .ui-help { animation: none; } }
 .ui-report-chart { display: flex; align-items: flex-end; gap: 6px; height: 110px; margin: 10px 0; padding: 0 2px; }
 .ui-report-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
 .ui-report-bar { width: 100%; background: #63c74d; border: 2px solid #2b2233; border-radius: 4px 4px 0 0; }

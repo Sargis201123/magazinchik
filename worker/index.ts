@@ -11,6 +11,7 @@ import { weekend } from '../api/_lib/weekend.js';
 import { visits } from '../api/_lib/visits.js';
 import { sendNewspapers } from '../api/_lib/newspaper.js';
 import { card, cardImage, cleanCards } from '../api/_lib/card.js';
+import { help, share } from '../api/_lib/share.js';
 import type { Env } from '../api/_lib/telegram.js';
 
 interface WorkerEnv extends Env {
@@ -34,6 +35,8 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   '/api/weekend': { method: 'POST', handler: weekend },
   '/api/visits': { method: 'POST', handler: visits },
   '/api/card': { method: 'POST', handler: card },
+  '/api/share': { method: 'POST', handler: share },
+  '/api/help': { method: 'POST', handler: help },
 };
 
 export default {

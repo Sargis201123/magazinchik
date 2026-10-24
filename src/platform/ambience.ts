@@ -3,13 +3,39 @@
 // и проезжающих машин нет: вместе они звучали как прибой и сбивали спокойную атмосферу. Всё синтезируется WebAudio; дождь и шум ветра — заранее, в буферы
 // (ambienceSynth.ts). Погода и птицы — канал «улица» (за стеклом, без отзвука зала), гул, шаги
 // и колокольчик — канал «зал» (mixer.ts); оба слушаются ползунка «Окружение».
+//
+// Поверх синтеза — атмосфера из файлов (ambienceFiles.ts): записанный дождь за витриной, гомон
+// покупателей, записанные птицы и вороны, салют на Новый год, трамвай вдали, велозвонок, голуби,
+// «дзинь» фонаря и жужжание неона. Пока файл не скачан (или на слабом телефоне) — звучит синтез.
 
 import type { YearTime } from '../game/calendar';
 import type { Weather } from '../game/weather';
+import { ambFiles, SYNTH_RAIN_UNDER, type Neon } from './ambienceFiles';
+import { birdGap, type AmbScene } from './ambienceLayers';
 import { brownNoise, rainTexture, seeded } from './ambienceSynth';
+import { fetched } from './audioFiles';
 import { jitter } from './mix';
-import { allowVoice, busInput, existingAudioContext, mixer, placeAt, type Bus } from './mixer';
+import { allowVoice, busInput, existingAudioContext, mixer, placeAt, setDoorAir, STREET_LOW, type Bus } from './mixer';
 import { noiseBuffer } from './sound';
+
+export type { Neon } from './ambienceFiles';
+
+/** Жизнь вокруг — для атмосферы из файлов: покупатели, утро, Новый год, поздняя осень, ночная смена, неон. */
+export interface AmbLife {
+  /** Покупателей в зале. */
+  customers: number;
+  /** Утро: 1 — только открылись (и утренний экран), 0 — с середины дня. */
+  morning: number;
+  /** Новогодняя неделя в игре или 31 декабря — 1 января по календарю. */
+  newYear: boolean;
+  /** Поздняя осень (после урожая, до Нового года) — вороны. */
+  lateAutumn: boolean;
+  night: boolean;
+  /** Облегчённый режим: меньше слоёв, без записанного дождя. */
+  lite: boolean;
+  /** Неоновая вывеска, которая сейчас горит (или null). */
+  neon: Neon | null;
+}
 
 interface Bed {
   gain: GainNode;
@@ -188,13 +214,16 @@ function bird(ac: AudioContext, out: AudioNode, at: number, vol: number): void {
   }
 }
 
-/** Сверчок: три быстрых стрекота на высокой ноте. */
+/** Сверчок: три быстрых стрекота на высокой ноте (за стеклом витрины верх глуше — чуть громче, чем был). */
 function cricket(ac: AudioContext, out: AudioNode, at: number, pitch: number, pan: number): void {
-  for (let i = 0; i < 3; i++) tone(ac, out, at + i * 0.045, 0.028, pitch, pitch * 0.98, 0.011, pan);
+  for (let i = 0; i < 3; i++) tone(ac, out, at + i * 0.045, 0.028, pitch, pitch * 0.98, 0.015, pan);
 }
 
-/** Расписать случайные звуки на ближайшие полсекунды (вызывается каждый кадр). */
-function schedule(ac: AudioContext, weather: Weather, evening: number, season: YearTime): void {
+/**
+ * Расписать случайные звуки на ближайшие полсекунды (вызывается каждый кадр). recordedBirds — звучат
+ * записанные птицы (ambienceFiles.ts): синтезированные тогда молчат.
+ */
+function schedule(ac: AudioContext, weather: Weather, evening: number, season: YearTime, recordedBirds: boolean): void {
   const now = ac.currentTime;
   const horizon = now + 0.5;
   const wet = weather === 'rain' || weather === 'storm';
@@ -206,7 +235,7 @@ function schedule(ac: AudioContext, weather: Weather, evening: number, season: Y
       next.drip += (weather === 'storm' ? 0.25 : 0.45) + Math.random() * 1.2;
     }
   } else next.drip = now + 1;
-  const dayBirds = !wet && weather !== 'snow' && evening < 0.55 && season !== 'winter';
+  const dayBirds = !recordedBirds && !wet && weather !== 'snow' && evening < 0.55 && season !== 'winter';
   if (dayBirds) {
     while (next.bird < horizon) {
       bird(ac, street!, Math.max(now, next.bird), season === 'autumn' ? 0.02 : 0.032);
@@ -228,20 +257,48 @@ function schedule(ac: AudioContext, weather: Weather, evening: number, season: Y
 let foot = 1;
 
 export const ambience = {
-  /** Каждый кадр: фоновые звуки под погоду, время суток, сезон и то, открыт ли магазин. */
-  update(weather: Weather, evening: number, open: boolean, season: YearTime = 'summer'): void {
+  /**
+   * Каждый кадр: фоновые звуки под погоду, время суток, сезон и то, открыт ли магазин; life — что
+   * вокруг (покупатели, утро, Новый год, неон) для атмосферы из файлов.
+   */
+  update(weather: Weather, evening: number, open: boolean, season: YearTime = 'summer', life?: AmbLife): void {
     const ac = existingAudioContext();
     if (!ac) return;
     if (!beds) build(ac);
+    const scene: AmbScene = {
+      weather,
+      season,
+      lateAutumn: life?.lateAutumn ?? false,
+      evening,
+      morning: life?.morning ?? 0,
+      customers: life?.customers ?? 0,
+      newYear: life?.newYear ?? false,
+      night: life?.night ?? false,
+      lite: life?.lite ?? false,
+    };
+    if (life) ambFiles.update(ac, scene, life.neon);
     // Громкость задаёт канал (ползунок «Окружение»); здесь — только что звучит при такой погоде.
     // Дождь — на ~9 дБ тише музыки, ливень с ветром — на ~6: слышно, но музыку не перекрывает.
-    fade(beds!.rain, ac, weather !== 'rain' ? 0 : 0.2);
-    fade(beds!.downpour, ac, weather !== 'storm' ? 0 : 0.19);
-    // В снегопад и листопад — едва слышный ветер: тихая погода, а не буря.
+    // Звучит записанный дождь — синтезированный остаётся тихим слоем капель поверх него.
+    const under = ambFiles.rainPlaying() ? SYNTH_RAIN_UNDER : 1;
+    fade(beds!.rain, ac, weather !== 'rain' ? 0 : 0.2 * under);
+    fade(beds!.downpour, ac, weather !== 'storm' ? 0 : 0.19 * under);
+    // В снегопад и листопад — едва слышный ветер: тихая погода, а не буря. Ветер низкий, стекло витрины
+    // его не глушит — без прибавки канала улицы (STREET_LOW).
     const windy = weather === 'storm' ? 0.06 : weather === 'snow' ? 0.018 : weather === 'leaves' ? 0.012 : 0;
-    fade(beds!.wind, ac, windy);
+    fade(beds!.wind, ac, windy * STREET_LOW);
     fade(beds!.hum, ac, !open ? 0 : 0.0005);
-    if (mixer.audible('street')) schedule(ac, weather, evening, season);
+    if (mixer.audible('street')) schedule(ac, weather, evening, season, Boolean(life) && birdGap(scene) !== null && ambFiles.birdsReady());
+  },
+
+  /** Насколько открыта дверь (0…1, каждый кадр): улица на миг «входит» в зал — ярче и чуть громче. */
+  door(open: number): void {
+    setDoorAir(open);
+  },
+
+  /** Звук улицы по событию: велосипедист звонит, голуби вспорхнули, фонарь зажёгся (x — где в мире). */
+  street(kind: 'bike' | 'pigeons' | 'lamp', x?: number): void {
+    ambFiles.street(kind, x);
   },
 
   /**
@@ -308,3 +365,9 @@ export const ambience = {
     });
   },
 };
+
+// Отладка: ?debug открывает атмосферу из консоли (что нужно, что скачано, что звучит, сколько раз).
+if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug'))
+  Object.assign(window, {
+    ambienceDebug: () => ({ ...ambFiles.debug(), fetched: fetched.filter((f) => f.url.includes('audio/amb/')).map((f) => f.url) }),
+  });

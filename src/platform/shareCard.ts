@@ -1,10 +1,11 @@
 // Карточка итогов дня для сторис: картинка 1080×1920 — снимок магазина, выручка, гости, рейтинг
 // и ссылка «сыграй со мной». Сервер (api/_lib/card.ts) хранит её по ссылке: Telegram берёт её
-// для истории, а где истории недоступны — бот присылает карточку в чат, чтобы переслать друзьям.
+// для истории; где истории недоступны (компьютер) — окно «Поделиться» с карточкой и кнопкой
+// «Играть», а в старом Telegram бот присылает карточку в чат, чтобы переслать друзьям.
 
-import { t } from '../i18n';
-import { post, socialInfo } from './social';
-import { canShareStory, shareStory, telegramInitData, telegramUserId } from './telegram';
+import { getLang, t } from '../i18n';
+import { inviteLink, post } from './social';
+import { canShareMessage, canShareStory, shareMessage, shareStory, telegramInitData } from './telegram';
 
 export interface CardData {
   day: number;
@@ -114,14 +115,15 @@ function toBase64(canvas: HTMLCanvasElement): string {
   return '';
 }
 
-export type ShareResult = 'story' | 'chat' | 'download' | 'failed';
+export type ShareResult = 'story' | 'message' | 'cancelled' | 'chat' | 'download' | 'failed';
 
-/** Поделиться итогами: история Telegram, иначе — карточка в чат с ботом, вне Telegram — скачать. */
+/**
+ * Поделиться итогами: история Telegram; без историй — окно «Поделиться» с карточкой, а если и его
+ * нет — карточка в чат с ботом; вне Telegram — скачать.
+ */
 export async function shareDay(data: CardData, shot: CanvasImageSource | null): Promise<ShareResult> {
   await document.fonts?.ready;
-  const info = socialInfo();
-  const id = telegramUserId();
-  const link = info && id ? `https://t.me/${info.bot}?start=ref_${id}` : '';
+  const link = inviteLink();
   const canvas = drawCard(data, shot, link);
   const initData = telegramInitData();
   if (!initData) {
@@ -135,8 +137,16 @@ export async function shareDay(data: CardData, shot: CanvasImageSource | null): 
   if (!image) return 'failed';
   const text = t('share.story', { link });
   const story = canShareStory();
-  const res = await post<{ url?: string; sent?: boolean }>('/api/card', { initData, image, ...(story ? {} : { send: true, caption: text }) });
+  // Окно «Поделиться» готовит сервер; не выйдет у него — сам пришлёт карточку в чат (send).
+  const share = !story && canShareMessage();
+  const res = await post<{ url?: string; sent?: boolean; prepared?: string }>('/api/card', {
+    initData,
+    image,
+    ...(story ? {} : { send: true, caption: text }),
+    ...(share ? { share: true, lang: getLang() } : {}),
+  });
   if (!res?.url) return 'failed';
   if (story && shareStory(res.url, text.slice(0, 200))) return 'story';
+  if (res.prepared) return (await shareMessage(res.prepared)) ? 'message' : 'cancelled';
   return res.sent ? 'chat' : 'failed';
 }

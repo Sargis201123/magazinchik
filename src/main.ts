@@ -9,6 +9,7 @@ import { installErrorReporting } from './platform/errors';
 import { loadLang } from './i18n';
 import { startSync } from './game/save';
 import { installFrameCap } from './platform/frameCap';
+import { installClickSounds } from './ui/audio';
 
 const BG = '#1d1a26';
 // Панели интерфейса — по ширине холста (на компьютере он уже окна).
@@ -25,6 +26,8 @@ void loadLang().catch(() => undefined).then(start);
 function start(): void {
   // Не больше 60 кадров на быстрых экранах и 30 — под окнами во весь экран (platform/frameCap.ts).
   installFrameCap();
+  // Кнопки и вкладки меню щёлкают деревом и бумагой (ui/audio.ts).
+  installClickSounds();
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetStarsCache, starsInvoice, starsOwned, starsRefund, starsSetup, telegramWebhook } from '../api/_lib/handlers';
-import { SUPPORT } from '../api/_lib/botProfile';
+import { resetStarsCache, resetStartClip, starsInvoice, starsOwned, starsRefund, starsSetup, telegramWebhook } from '../api/_lib/handlers';
+import { startCaption, SUPPORT, WELCOME_COINS } from '../api/_lib/botProfile';
 import { payloadFor, STARS_CATALOG, type Env } from '../api/_lib/telegram';
 
 // Серверная часть оплаты звёздами: подпись Telegram, проверка цены перед оплатой,
@@ -25,13 +25,18 @@ const post = (body: unknown, headers: Record<string, string> = {}) =>
 /** Вызовы Bot API: метод и тело; ответы — по методу. */
 let calls: { method: string; body: Record<string, unknown> }[] = [];
 let replies: Record<string, unknown[]> = {};
+/** Методы, на которые Telegram отвечает ошибкой. */
+let failing = new Set<string>();
 beforeEach(() => {
   resetStarsCache();
+  resetStartClip();
   calls = [];
   replies = {};
+  failing = new Set();
   vi.stubGlobal('fetch', async (url: string, init: { body: string }) => {
     const method = url.split('/').pop()!;
     calls.push({ method, body: JSON.parse(init.body) });
+    if (failing.has(method)) return new Response(JSON.stringify({ ok: false, description: 'Bad Request: failed to get HTTP URL content' }));
     const queue = replies[method];
     const result = queue?.length ? queue.shift() : true;
     return new Response(JSON.stringify({ ok: true, result }));
@@ -91,13 +96,41 @@ describe('оплата звёздами (сервер)', () => {
     expect(calls.every((c) => c.method === 'answerPreCheckoutQuery')).toBe(true);
   });
 
-  it('/start отвечает кнопкой «Играть» на этот же сайт; после оплаты — спасибо', async () => {
+  it('/start отвечает роликом и кнопкой «Играть» на этот же сайт; после оплаты — спасибо', async () => {
     const msg = (message: unknown) => telegramWebhook(post({ message }, { 'x-telegram-bot-api-secret-token': SECRET }), env);
     await msg({ chat: { id: 5 }, text: '/start', from: { id: 5, language_code: 'ru' } });
-    const start = calls[0].body as { reply_markup: { inline_keyboard: { web_app: { url: string } }[][] } };
+    expect(calls[0].method).toBe('sendAnimation');
+    const start = calls[0].body as { animation: string; caption: string; reply_markup: { inline_keyboard: { web_app: { url: string } }[][] } };
+    expect(start.animation).toBe('https://shop.example/promo/start.mp4');
+    expect(start.caption).toBe(startCaption(true, {}));
     expect(start.reply_markup.inline_keyboard[0][0].web_app.url).toBe('https://shop.example/');
     await msg({ chat: { id: 5 }, from: { id: 5, language_code: 'en' }, successful_payment: { invoice_payload: payloadFor(ITEM) } });
     expect(String(calls[1].body.text)).toContain(STARS_CATALOG[ITEM].en);
+  });
+
+  it('/start: ролик Telegram скачал один раз — дальше по file_id; не скачал — приветствие текстом', async () => {
+    const msg = (message: unknown) => telegramWebhook(post({ message }, { 'x-telegram-bot-api-secret-token': SECRET }), env);
+    replies.sendAnimation = [{ animation: { file_id: 'CLIP1' } }];
+    await msg({ chat: { id: 5 }, text: '/start', from: { id: 5, language_code: 'ru' } });
+    await msg({ chat: { id: 6 }, text: '/start', from: { id: 6, language_code: 'en' } });
+    expect(calls[1].body.animation).toBe('CLIP1');
+    expect(calls[1].body.caption).toBe(startCaption(false, {}));
+    failing.add('sendAnimation');
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await msg({ chat: { id: 7 }, text: '/start', from: { id: 7, language_code: 'ru' } });
+    expect(calls.slice(2).map((c) => c.method)).toEqual(['sendAnimation', 'sendMessage']);
+    expect(calls[3].body).toMatchObject({ chat_id: 7, text: startCaption(true, {}) });
+  });
+
+  it('подпись на /start: играющему — его день и Соня, приглашённому — от кого подарок, новичку — бабушкин магазин', () => {
+    expect(startCaption(true, { day: 14 })).toMatch(/^День 14\. .*Соня ждёт тебя/s);
+    expect(startCaption(false, { day: 14 })).toMatch(/^Day 14\. .*Sonya/s);
+    // Разные дни — разные строки, но всегда с днём.
+    expect(new Set([14, 15, 16].map((day) => startCaption(true, { day }))).size).toBe(3);
+    expect(startCaption(true, { friend: 'Аня' })).toContain(`Аня зовёт тебя`);
+    expect(startCaption(true, { friend: 'Аня' })).toContain(String(WELCOME_COINS));
+    expect(startCaption(true, { day: 1, friend: 'Аня' })).toContain('Аня');
+    expect(startCaption(true, {})).toContain('Бабушка оставила тебе магазинчик');
   });
 
   it('установка вебхука — только с ключом; заодно описание, команды и кнопка «Играть»', async () => {

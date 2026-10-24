@@ -7,6 +7,7 @@ import { track } from '../platform/analytics';
 import { ambience } from '../platform/ambience';
 import { audibleAgain, inaudible, VOLUME_KEYS, type VolumeKey } from '../platform/mix';
 import { mixer } from '../platform/mixer';
+import { music } from '../platform/music';
 import { sound } from '../platform/sound';
 import { button, el } from './dom';
 
@@ -78,10 +79,35 @@ export function muteChip(day: () => number, after: () => void, className = 'ui-c
 
 /** Как прозвучит канал: короткий пример, когда отпустили ползунок. */
 function preview(key: VolumeKey): void {
-  if (key === 'music') return;
-  if (key === 'ambience') ambience.chime();
-  else if (key === 'voices') [0, 90, 180].forEach((ms) => setTimeout(() => sound.voice(330), ms));
+  // Музыку слышно и так; а если сейчас тишина между треками — короткая заставка.
+  if (key === 'music') {
+    music.preview();
+    return;
+  }
+  if (key === 'ambience') {
+    if (!sound.doorbell()) ambience.chime();
+  } else if (key === 'voices') sound.speakSample();
   else sound.coin();
+}
+
+let clicking = false;
+
+/**
+ * Щелчки меню: каждая кнопка и чип звучат деревянным «ток», вкладка — шорохом страницы. Слушаем
+ * в фазе захвата на всём документе: так звучат все окна, даже те, что сами гасят всплытие касания.
+ */
+export function installClickSounds(): void {
+  if (clicking || typeof document === 'undefined') return;
+  clicking = true;
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target instanceof Element ? e.target.closest('.ui-btn, .ui-chip, .ui-tab') : null;
+      if (!target || (target as HTMLButtonElement).disabled) return;
+      sound.click(target.classList.contains('ui-tab') ? 'tab' : 'button');
+    },
+    { capture: true, passive: true },
+  );
 }
 
 /** Блок «Звук» в профиле: быстрая кнопка и пять ползунков. Сдвинули — слышно сразу и запомнилось. */

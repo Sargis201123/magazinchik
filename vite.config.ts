@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { buildAtlas, type Atlas } from './scripts/atlas';
 import { TEXTURES } from './src/scenes/textures';
@@ -38,13 +38,13 @@ const ASSETS_DIR = fileURLToPath(new URL('./public/assets/', import.meta.url));
 let packed: Atlas | null = null;
 const atlas = (): Atlas => (packed ??= buildAtlas(ASSETS_DIR, TEXTURES));
 
-/** Папки public/, чьи файлы получают отпечаток в адресе (src/platform/assets.ts). */
-const VERSIONED_DIRS = ['assets', 'story'];
+/** Папки public/, чьи файлы (и файлы во вложенных папках) получают отпечаток в адресе (src/platform/assets.ts). */
+const VERSIONED_DIRS = ['assets', 'story', 'audio'];
 const VERSIONS_ID = 'virtual:asset-versions';
 
 /**
- * Отпечатки картинок: public/assets кэшируется у игроков на год (public/_headers), а имена файлов
- * не меняются — перерисованная картинка до вернувшегося игрока не доходила. В сборке у каждого файла
+ * Отпечатки картинок и музыки: public/assets и public/audio кэшируются у игроков на год (public/_headers),
+ * а имена файлов не меняются — перерисованная картинка до вернувшегося игрока не доходила. В сборке у каждого файла
  * считаем хэш содержимого, и адрес становится «assets/coin.png?v=1a2b3c4d»: файл изменился — сменился
  * и адрес. Листы атласа (их в public/ нет — их пишет сборка) получают отпечаток так же.
  * Таблица отпечатков — модуль virtual:asset-versions; в разработке она пустая (кэша там нет).
@@ -53,15 +53,21 @@ const assetVersions = (build: boolean): Plugin => {
   let versions: Record<string, string> | null = null;
   const scan = (): Record<string, string> => {
     if (versions) return versions;
-    versions = {};
-    for (const dir of VERSIONED_DIRS) {
+    const found: Record<string, string> = {};
+    // Музыка лежит глубже (audio/music/suno/…) — обходим и вложенные папки.
+    const walk = (dir: string): void => {
       const root = fileURLToPath(new URL(`./public/${dir}/`, import.meta.url));
-      for (const name of readdirSync(root).sort()) versions[`${dir}/${name}`] = hash(readFileSync(root + name));
-    }
+      for (const name of readdirSync(root).sort()) {
+        if (statSync(root + name).isDirectory()) walk(`${dir}/${name}`);
+        else found[`${dir}/${name}`] = hash(readFileSync(root + name));
+      }
+    };
+    for (const dir of VERSIONED_DIRS) walk(dir);
     for (const page of atlas().pages) {
-      versions[`assets/${page.name}.png`] = hash(page.png);
-      versions[`assets/${page.name}.json`] = hash(page.json);
+      found[`assets/${page.name}.png`] = hash(page.png);
+      found[`assets/${page.name}.json`] = hash(page.json);
     }
+    versions = found;
     return versions;
   };
   return {
