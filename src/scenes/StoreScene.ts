@@ -1596,9 +1596,9 @@ export class StoreScene extends Phaser.Scene {
     const want = Math.min(fitW * HOME_ZOOM, (height - top - bottom) / viewH);
     // Ровный масштаб: пиксель рисунка — целое число пикселей экрана (1, 2, 3…), чуть ближе или дальше
     // желаемого (scenes/pixels.ts). Ближе — пока в кадре остаётся край флигеля с дверями; если так
-    // ровного нет — пока влезает хотя бы весь зал (флигель тогда за краем, до него — свайпом).
-    const zoom =
-      crispZoom(want, ART, 0, width / (w + 2 * WALL + 2 + WING_PEEK)) || crispZoom(want, ART, 0, width / (w + WALL + 2)) || want;
+    // ровного нет — пока влезает хотя бы весь зал (флигель тогда за краем, до него — свайпом). И только
+    // если ровного нет ни так ни так — целый (пиксели рисунка через один шире).
+    const zoom = crispZoom(want, ART, 0, width / (w + 2 * WALL + 2 + WING_PEEK), width / (w + WALL + 2)) || want;
     const midY = top + (height - top - bottom) / 2;
     this.baseZoom = zoom;
     // Если по высоте есть запас, вывеска прижимается под верхнюю панель — снизу видно больше улицы.

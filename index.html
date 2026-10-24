@@ -9,7 +9,7 @@
     <style>
       html, body { margin: 0; padding: 0; height: 100%; background: #1d1a26; overflow: hidden; overscroll-behavior: none; touch-action: none; }
       #game { width: 100vw; height: 100vh; height: 100dvh; overflow: hidden; }
-      /* Холст ровно по пикселям экрана; в лёгкой графике он в целое число раз реже — растягиваем без размытия. */
+      /* Холст ровно по пикселям экрана; в лёгкой и обычной графике он бывает реже — растягиваем без размытия. */
       canvas { image-rendering: pixelated; }
       #game canvas { display: block; }
       /* Заставка, пока грузится игра: бабушка кивает, полоска ползёт (BootScene двигает --p и убирает её). */

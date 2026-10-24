@@ -40,16 +40,48 @@ describe('холст по пикселям экрана', () => {
   });
 
   it('лёгкая графика не делает холст уже MIN_CANVAS_W: иначе зал не влезет пиксель в пиксель', () => {
-    // 828 пикселей: вдвое реже было бы 414 — мельче рисунка; остаётся 1:1.
+    // 828 пикселей: вдвое реже было бы 414 — мельче рисунка; 1:1 — тяжелее прежнего. Холст 720, растянутый.
     const fit = fitCanvas(414, 896, 2, canvasCap('lite'));
-    expect(fit.density).toBe(1);
-    expect(fit.width).toBe(828);
+    expect(fit.width).toBe(720);
+    expect(fit.density).toBeCloseTo(828 / 720, 6);
+    // На странице — по-прежнему ровно в пиксели экрана.
+    expect(fit.cssWidth * 2).toBeCloseTo(828, 6);
     expect(fitCanvas(360, 800, 2, canvasCap('lite')).width).toBeGreaterThanOrEqual(MIN_CANVAS_W);
+  });
+
+  it('лёгкая графика не шире 720 и на экранах 721…1079 пикселей (окно Telegram ниже 16:9, планшет)', () => {
+    // Android 1080 с кнопками внизу: экран 1008 пикселей — раньше холст был бы 1008, вдвое тяжелее.
+    expect(fitCanvas(411, 683, 2.625, canvasCap('lite')).width).toBeLessThanOrEqual(720);
+    expect(fitCanvas(393, 657, 2.75, canvasCap('lite')).width).toBeLessThanOrEqual(720);
+    for (const [w, h, dpr] of [
+      [411, 683, 2.625],
+      [393, 657, 2.75],
+      [800, 1216, 1.5],
+      [375, 667, 2],
+      [393, 851, 2.75],
+      [390, 844, 3],
+      [360, 760, 2],
+      [411, 914, 3.5],
+      [480, 853, 3.2],
+    ]) {
+      const fit = fitCanvas(w, h, dpr, canvasCap('lite'));
+      expect(fit.width).toBeLessThanOrEqual(720);
+      expect(fit.width).toBeGreaterThanOrEqual(MIN_CANVAS_W);
+    }
   });
 
   it('обычная графика на экране 1440: вдвое реже, высокая — точь-в-точь', () => {
     expect(fitCanvas(411, 914, 3.5, canvasCap('normal'))).toMatchObject({ density: 2, width: 718 });
     expect(fitCanvas(411, 914, 3.5, canvasCap('high'))).toMatchObject({ density: 1, width: 1438 });
+  });
+
+  it('обычная графика на iPhone — вдвое реже: понижение с высокой после тормозов облегчает холст', () => {
+    expect(fitCanvas(390, 844, 3, canvasCap('high'))).toMatchObject({ density: 1, width: 1170 });
+    expect(fitCanvas(390, 844, 3, canvasCap('normal'))).toMatchObject({ density: 2, width: 584 });
+    expect(fitCanvas(440, 956, 3, canvasCap('normal'))).toMatchObject({ density: 2, width: 660 });
+    // Не шире прежних 1080 (с запасом на округление) — и обычный Android по-прежнему точь-в-точь.
+    expect(fitCanvas(412, 915, 2.625, canvasCap('normal'))).toMatchObject({ density: 1, width: 1080 });
+    expect(fitCanvas(375, 667, 2, canvasCap('normal'))).toMatchObject({ density: 1, width: 750 });
   });
 
   it('компьютер: полоса 9:16 посередине, отступ — целым числом пикселей экрана', () => {
@@ -95,6 +127,17 @@ describe('ровный масштаб камеры', () => {
     expect(crispZoom(3.41, 2, 0, 3.9)).toBe(3);
     expect(crispZoom(1.72, 2, 0, 1.9)).toBe(0);
     expect(crispZoom(1.72, 2, 0, 2.03)).toBe(2);
+  });
+
+  it('несколько пределов: ровный под вторым важнее целого под первым', () => {
+    // Android 1080, уровень 4: с краем флигеля (до 3,78) ровного нет, весь зал (до 4,03) — ровный 4.
+    expect(crispZoom(3.41, 2, 0, 1080 / 286, 1080 / 268)).toBe(4);
+    expect(crispZoom(3.41, 2, 0, 1080 / 286)).toBe(3);
+    // iPhone Pro Max, уровень 2: 6 — ровный, хоть и без края флигеля.
+    expect(crispZoom(5.04, 2, 0, 1320 / 226, 1320 / 208)).toBe(6);
+    // Ровного нет ни под одним — целый под первым.
+    expect(crispZoom(3.19, 2, 0, 1008 / 286, 1008 / 268)).toBe(3);
+    expect(crispZoom(3, 2, 0, 3.2, 2.9)).toBe(3);
   });
 
   it('не мельче min: щипок не уводит дальше разрешённого', () => {
