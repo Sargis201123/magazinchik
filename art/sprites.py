@@ -3699,14 +3699,7 @@ def cat_sitting():
 
 
 def stage11():
-    """Телефон у кассы, велосипед курьера и мышь (два кадра бега)."""
-    c = Canvas(10, 8)
-    c.round_rect(0, 3, 10, 5, "R", r=1)
-    c.hline(1, 4, 8, "s")
-    c.rect(3, 5, 4, 2, "W")
-    c.round_rect(1, 0, 8, 3, "r", r=1)
-    c.outline("k")
-    c.save("phone")
+    """Велосипед курьера и мышь (два кадра бега). Телефон у кассы и мопед — в art/delivery.py."""
     c = Canvas(22, 14)
     for cx in (5, 16):
         c.ellipse(cx, 9, 4.2, 4.2, "k")
@@ -5155,6 +5148,10 @@ def main():
     import icons2
 
     icons2.main()
+    # Доставка на дом: телефон, посылка, мопед, значки транспорта (до атласа значков) и портреты звонящих.
+    import delivery
+
+    delivery.main()
     # Атлас значков для холста — из готовых ico_*, поэтому после icons2.
     icons.atlas()
     import clockface

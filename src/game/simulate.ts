@@ -97,6 +97,7 @@ import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
+import { deliveryDay } from './delivery';
 import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
 import { buyRadio, hasRadio, radioPatience, RADIO_PRICE, radioTolerance, setStation } from './radio';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
@@ -186,7 +187,8 @@ export type Feature =
   | 'brand'
   | 'cafe'
   | 'kitchen'
-  | 'rush';
+  | 'rush'
+  | 'delivery';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -222,6 +224,10 @@ const AVG_BASKET = 1.4;
 const ownerAtRegister = (level: number): number => 0.65 - 0.07 * level;
 /** Подойти к кассе и отойти — секунды на каждого покупателя. */
 const QUEUE_STEP_SECONDS = 0.3;
+/** Хозяин собирает заказ на дом: сходить на склад, уложить коробку, вынести курьеру. */
+const OWNER_PACK_SECONDS = 8;
+/** Столько секунд кассы в среднем уходит на одного покупателя у хозяина (для «пока собирал заказ»). */
+const OWNER_SECONDS_PER_GUEST = 2.5;
 
 /** Сколько покупателей реально пробить за день: пробивка занимает время и зависит от навыка. */
 function serveCapacity(state: StoreState): number {
@@ -376,6 +382,7 @@ export function simulate({
       ['oven', 'wholesale'],
       ['coffee', 'coffeeTables'],
       ['kitchen', 'kitchen'],
+      ['delivery', 'delivery'],
     ];
     // Дорогое «для удобства» (ночная смена, новые модели) разумный игрок берёт, когда уже не копит на расширение.
     const nextLevel = nextStoreLevel(state);
@@ -603,7 +610,20 @@ export function simulate({
     // С котом в очереди ждут дольше — уходят реже.
     const lossInQueue =
       (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state) / radioPatience(state) / signagePatience(state) / cartPatience(state);
-    const serveCap = serveCapacity(state);
+    // Доставка на дом: звонки идут весь день, а здесь заказы забирают товар раньше покупателей
+    // (осторожная оценка). Без менеджера и грузчика заказ собирает хозяин — это время не за кассой.
+    let packTime = 0;
+    if (features.delivery && hasUpgrade(state, 'delivery')) {
+      const delivery = deliveryDay(state, extraRandom);
+      state = delivery.state;
+      stats.revenue += delivery.pay;
+      stats.deliveries = delivery.delivered;
+      stats.deliveryPay = delivery.pay;
+      stats.deliveryTips = delivery.tips;
+      stats.deliveryMissed = delivery.missed;
+      if (!has('manager') && !has('loader') && !has('cashier')) packTime = delivery.delivered * OWNER_PACK_SECONDS;
+    }
+    const serveCap = Math.max(0, serveCapacity(state) - Math.round(packTime / OWNER_SECONDS_PER_GUEST));
     // Грязь: уборщик, а ещё вход (грязь с улицы) и туалет (gear.ts).
     const dirtComplaint = (has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level) * (0.6 + 0.2 * entranceMud(state) + 0.2 * wcDirt(state));
     const guard = staffOf(state, 'guard');
