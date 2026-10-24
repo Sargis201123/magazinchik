@@ -162,8 +162,8 @@ import {
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
-import { iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
-import { BASE_W, crispZoom } from './pixels';
+import { buildingSpan, iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
+import { BASE_W, crispZoom, homeFrame } from './pixels';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { BARGAIN_CAPACITY, BARGAIN_CHANCE, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
@@ -215,15 +215,13 @@ import { framesThrottled } from '../platform/frameCap';
 import { DELIVERY_SECONDS, makeHomeOrder, ORDER_EVERY, ORDER_TIMEOUT, packHomeOrder, type HomeOrder } from '../game/delivery';
 
 // Холст — ровно по пикселям экрана, высотой от 9:16 до 9:20 ширины (platform/screen.ts, scenes/pixels.ts):
-// на вытянутых телефонах картинка во весь экран, без пустых полос. Камера подбирает масштаб под магазин,
-// и в покое — ровный: пиксель рисунка — целое число пикселей экрана.
+// на вытянутых телефонах картинка во весь экран, без пустых полос. Камера подбирает масштаб под магазин
+// с флигелем, и в покое — по возможности ровный: пиксель рисунка — целое число пикселей экрана.
 /** Сверху интерфейс (деньги, товар), снизу подсказки — магазин рисуем между ними (в базовых точках, × res). */
 const HUD_TOP = 140;
 const HUD_BOTTOM = 80;
-/** Насколько ближе стартовый кадр, чем «весь магазин с флигелем по ширине». */
-const HOME_ZOOM = 1.1;
-/** Сколько флигеля (точек мира за стеной зала) остаётся в кадре, если камера ради ровного масштаба подошла ближе. */
-const WING_PEEK = 12;
+/** Запас по бокам обычного кадра (в точках мира): наружная стена флигеля и правая стена не впритык к краю экрана. */
+const FRAME_PAD = 1;
 /** Верх вывески над стеной магазина: под верхнюю панель — без полосы пустого газона. */
 const SIGN_TOP = -16;
 /** Спрайты нарисованы с двойной детализацией (DETAIL в art/sprites.py): в мире они вдвое меньше своих пикселей. */
@@ -1657,36 +1655,28 @@ export class StoreScene extends Phaser.Scene {
   /**
    * Обычный кадр — масштаб и середина (baseZoom, home) под нынешний холст: при постройке зала и когда
    * холст меняется (полный экран Telegram, поворот планшета).
-   * Внизу кадра видна улица: тротуар и дорога с машинами. Камера крупно показывает сам магазин
-   * (вывеска сверху, фасад снизу); участок под расширение и улицу видно краем, а весь квартал —
-   * свайпом или отдалив двумя пальцами.
+   * Внизу кадра видна улица: тротуар и дорога с машинами. Камера показывает весь магазин: по ширине —
+   * от наружной стены флигеля до правой стены зала, по высоте — от вывески до фасада; участок под
+   * расширение и улицу видно краем, а весь квартал — свайпом или отдалив двумя пальцами.
    */
   private frameCamera(): void {
     const { width, height } = this.scale;
     const top = HUD_TOP * this.res;
     const bottom = HUD_BOTTOM * this.res;
-    const { w, h } = this.layout;
-    // В кадре и флигель слева: склад, пекарня, кофейня.
-    const viewW = w + WING_OUTER + 2 * WALL + 4;
-    const viewH = h + 40;
-    // Магазин шире, чем выше: если по высоте есть запас, камера подходит ближе (до HOME_ZOOM) —
-    // люди и товар крупнее, флигель слева виден краем, а пустой газон над вывеской — нет.
-    const fitW = width / viewW;
-    const want = Math.min(fitW * HOME_ZOOM, (height - top - bottom) / viewH);
-    // Ровный масштаб: пиксель рисунка — целое число пикселей экрана (1, 2, 3…), чуть ближе или дальше
-    // желаемого (scenes/pixels.ts). Ближе — пока в кадре остаётся край флигеля с дверями; если так
-    // ровного нет — пока влезает хотя бы весь зал (флигель тогда за краем, до него — свайпом). И только
-    // если ровного нет ни так ни так — целый (пиксели рисунка через один шире).
-    const zoom = crispZoom(want, ART, 0, width / (w + 2 * WALL + 2 + WING_PEEK), width / (w + WALL + 2)) || want;
+    const { h } = this.layout;
+    // В кадре целиком и флигель слева (склад, пекарня, кофейня, кухня — с табличками), и правая стена зала:
+    // на узком телефоне камера раньше подходила ближе ради ровного масштаба, и флигель уходил за край.
+    // Масштаб ровный (пиксель рисунка — целое число пикселей экрана), но не крупнее «впритык» и не намного
+    // мельче; иначе дробный — весь магазин в кадре важнее ровных пикселей (scenes/pixels.ts).
+    const span = buildingSpan(this.layout);
+    const { zoom, x } = homeFrame(width, height - top - bottom, { left: span.left - FRAME_PAD, right: span.right + FRAME_PAD }, h + 40, ART);
     const midY = top + (height - top - bottom) / 2;
     this.baseZoom = zoom;
     // Если по высоте есть запас, вывеска прижимается под верхнюю панель — снизу видно больше улицы.
     const centered = (h + 4) / 2 + (height / 2 - midY) / zoom;
     const signUnderHud = SIGN_TOP + (height / 2 - top) / zoom;
-    // Правая стена — у края экрана; не влезает слева только часть флигеля.
-    const homeX = Math.max((w - WING_OUTER) / 2, w + WALL + 2 - width / zoom / 2);
     // Середина — на целой точке мира: камера в покое не сдвинута на полпикселя рисунка.
-    this.home = { x: Math.round(homeX), y: Math.round(Math.max(centered, signUnderHud)) };
+    this.home = { x, y: Math.round(Math.max(centered, signUnderHud)) };
   }
 
   /**

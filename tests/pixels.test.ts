@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { canvasCap, crispZoom, fitCanvas, MIN_CANVAS_W } from '../src/scenes/pixels';
+import { STORE_LEVELS } from '../src/game/economy';
+import { buildingSpan, layoutFor, WING_OUTER } from '../src/scenes/layout';
+import { BASE_W, canvasCap, crispZoom, fitCanvas, HOME_SLACK, homeFrame, homeZoom, MIN_CANVAS_W } from '../src/scenes/pixels';
 
 describe('холст по пикселям экрана', () => {
   it('iPhone 390×844 при плотности 3: холст 1170×2532, браузер его не растягивает', () => {
@@ -129,29 +131,100 @@ describe('ровный масштаб камеры', () => {
     expect(crispZoom(1.72, 2, 0, 2.03)).toBe(2);
   });
 
-  it('несколько пределов: ровный под вторым важнее целого под первым', () => {
-    // Android 1080, уровень 4: с краем флигеля (до 3,78) ровного нет, весь зал (до 4,03) — ровный 4.
-    expect(crispZoom(3.41, 2, 0, 1080 / 286, 1080 / 268)).toBe(4);
-    expect(crispZoom(3.41, 2, 0, 1080 / 286)).toBe(3);
-    // iPhone Pro Max, уровень 2: 6 — ровный, хоть и без края флигеля.
-    expect(crispZoom(5.04, 2, 0, 1320 / 226, 1320 / 208)).toBe(6);
-    // Ровного нет ни под одним — целый под первым.
-    expect(crispZoom(3.19, 2, 0, 1008 / 286, 1008 / 268)).toBe(3);
-    expect(crispZoom(3, 2, 0, 3.2, 2.9)).toBe(3);
-  });
-
   it('не мельче min: щипок не уводит дальше разрешённого', () => {
     expect(crispZoom(2.3, 2, 2.1)).toBe(0);
     expect(crispZoom(2.3, 2, 2.1, 3)).toBe(0);
     expect(crispZoom(2.6, 2, 2.1)).toBe(3);
   });
 
-  it('кадр рядом с привычным для частых экранов (уровни 0–4)', () => {
-    // Желаемый масштаб на iPhone 1170 и Android 1080 — ровный не дальше чем на 20%.
+  it('щипок около обычного кадра частых экранов (уровни 0–4) доходит до ровного', () => {
+    // Масштаб около обычного кадра на iPhone 1170 и Android 1080 — ровный не дальше чем на 20%.
     for (const want of [5.75, 4.88, 4.47, 3.7, 5.3, 4.5, 4.13]) {
       const z = crispZoom(want, 2);
       expect(z % 2).toBe(0);
       expect(Math.abs(Math.log(z / want))).toBeLessThanOrEqual(Math.log(1.25));
     }
+  });
+});
+
+describe('обычный кадр: весь магазин с флигелем', () => {
+  it('самый крупный ровный не крупнее «впритык»', () => {
+    expect(homeZoom(4.15, 2)).toBe(4);
+    expect(homeZoom(4.5, 2)).toBe(4);
+    expect(homeZoom(2.09, 2)).toBe(2);
+    // 4 мельче 4,6 на 13% — ещё ровный.
+    expect(homeZoom(4.6, 2)).toBe(4);
+    // Ровно впритык — он и есть (запас на округление).
+    expect(homeZoom(4, 2)).toBe(4);
+    expect(homeZoom(5 - 1e-12, 2)).toBe(5);
+  });
+
+  it('ровного рядом нет — целый, но никогда не крупнее «впритык»', () => {
+    // 4 мельче 5,32 на 25% — целый 5.
+    expect(homeZoom(5.32, 2)).toBe(5);
+    expect(homeZoom(3.14, 2)).toBe(3);
+    expect(homeZoom(3.4, 2)).toBe(3);
+    for (const fit of [1.3, 2.2, 2.9, 3.4, 3.8, 4.9, 5.7, 6.3]) expect(homeZoom(fit, 2)).toBeLessThanOrEqual(fit + 1e-9);
+  });
+
+  it('ни ровного, ни целого в пределах 15% — дробный впритык', () => {
+    // 3,8: ровный 2 и целый 3 — оба мельче больше чем на 15%.
+    expect(homeZoom(3.8, 2)).toBe(3.8);
+    expect(homeZoom(1.57, 2)).toBe(1.57);
+    expect(homeZoom(2.77, 2)).toBe(2.77);
+    expect(homeZoom(0, 2)).toBe(0);
+  });
+
+  it('не мельче «впритык» больше чем на HOME_SLACK', () => {
+    for (let fit = 0.5; fit < 8; fit += 0.01) {
+      const z = homeZoom(fit, 2);
+      expect(z).toBeLessThanOrEqual(fit + 1e-9);
+      expect(z).toBeGreaterThanOrEqual(fit * HOME_SLACK - 1e-9);
+    }
+  });
+
+  it('на любом уровне и телефоне в кадре весь флигель, весь зал и правая стена', () => {
+    // Узкие и широкие телефоны, планшет; лёгкая, обычная и высокая графика.
+    const screens: [number, number, number][] = [
+      [320, 640, 2],
+      [360, 800, 2],
+      [375, 667, 2],
+      [390, 844, 3],
+      [393, 851, 2.75],
+      [412, 915, 2.625],
+      [430, 932, 3],
+      [820, 1180, 2],
+      [768, 1024, 2],
+      [1280, 721, 1],
+    ];
+    for (const [cssW, cssH, dpr] of screens) {
+      for (const tier of ['lite', 'normal', 'high'] as const) {
+        const canvas = fitCanvas(cssW, cssH, dpr, canvasCap(tier));
+        const res = canvas.width / BASE_W;
+        for (let level = 0; level < STORE_LEVELS.length; level++) {
+          const layout = layoutFor(level);
+          const span = buildingSpan(layout);
+          // Как в сцене (frameCamera): запас в точку по бокам, панели сверху и снизу.
+          const { zoom, x } = homeFrame(canvas.width, canvas.height - 220 * res, { left: span.left - 1, right: span.right + 1 }, layout.h + 40, 2);
+          const half = canvas.width / zoom / 2;
+          expect(x - half).toBeLessThanOrEqual(-WING_OUTER + 1e-6);
+          expect(x + half).toBeGreaterThanOrEqual(layout.w + 6 - 1e-6);
+          // И не мелко: магазин занимает не меньше 85% ширины экрана.
+          expect((span.right - span.left + 2) * zoom).toBeGreaterThanOrEqual(canvas.width * HOME_SLACK - 1e-6);
+        }
+      }
+    }
+  });
+
+  it('Android 1080 и iPhone 1170: где можно — ровный или целый', () => {
+    const zoomAt = (width: number, level: number) => {
+      const layout = layoutFor(level);
+      const span = buildingSpan(layout);
+      return homeFrame(width, 10_000, { left: span.left - 1, right: span.right + 1 }, layout.h + 40, 2).zoom;
+    };
+    expect([0, 1, 3, 4].map((l) => zoomAt(1080, l))).toEqual([5, 4, 3, 3]);
+    expect([0, 1, 2, 3, 4].map((l) => zoomAt(1170, l))).toEqual([5, 4, 4, 3, 3]);
+    // Уровень 3 на 1080: ровный 2 и целый 3 — дальше 15%, дробный впритык.
+    expect(Number.isInteger(zoomAt(1080, 2))).toBe(false);
   });
 });

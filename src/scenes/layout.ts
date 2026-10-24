@@ -94,6 +94,9 @@ export const KITCHEN_FROM = 3;
 /** Сколько занимает флигель слева от зала вместе со стенами. */
 export const WING_OUTER = WING_W + 2 * WING_WALL;
 
+/** Здание по ширине (точки мира): от наружной стены флигеля до наружного края правой стены зала. */
+export const buildingSpan = (layout: { w: number }): { left: number; right: number } => ({ left: -WING_OUTER, right: layout.w + WING_WALL });
+
 /** Препятствие полки (как в сцене): люди обходят его. */
 export const shelfRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 25, y: y - 16, w: 50, h: 24 });
 
