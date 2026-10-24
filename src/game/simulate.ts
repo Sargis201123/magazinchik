@@ -5,7 +5,7 @@
 import { noteLost } from './losses';
 import { isBroke } from './tips';
 import { loanOptions, takeLoan } from './bank';
-import { cook, DISHES, DISH_IDS, sellDish } from './kitchen';
+import { cook, cookBatch, cookRoundsPerDay, DISHES, DISH_IDS, kitchenNeeds, kitchenWorking, sellDish, servePortions, takeIngredients } from './kitchen';
 import { answerStaffEvent, eventCost } from './staffEvents';
 import { answerTale, taleToday } from './tales';
 import { answerOpening, BUILDINGS, districtNews } from './district';
@@ -204,6 +204,8 @@ const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
   // Пекарь и бариста — как только есть печь и кофейня: без них флигель стоит.
   ['baker', (s) => roleOpen(s, 'baker')],
   ['barista', (s) => roleOpen(s, 'barista')],
+  // Повар — как только есть кухня: без него готовить приходится утром самому.
+  ['cook', (s) => roleOpen(s, 'cook')],
   ['loader', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
   ['guard', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
   ['cleaner', (s) => s.level >= 3 && Boolean(staffOf(s, 'cashier'))],
@@ -447,8 +449,8 @@ export function simulate({
       state = refillRack(state, 999) ?? state;
     }
     if (features.coffee && hasUpgrade(state, 'coffee')) state = buyCups(state, 999) ?? state;
-    // Кухня: по закладке каждого блюда, на что хватает продуктов.
-    if (features.kitchen) for (const id of DISH_IDS) state = cook(state, id) ?? state;
+    // Кухня без повара: утром по закладке каждого блюда, на что хватает продуктов (с поваром — днём, ниже).
+    if (features.kitchen && !kitchenWorking(state)) for (const id of DISH_IDS) state = cook(state, id) ?? state;
     // «Чёрная пятница района» — каждые 6-й и 7-й дни недели (как суббота и воскресенье).
     state = { ...state, rush: (features.rush && state.day % 7 >= 5) || undefined };
     // Просьбы сотрудников и истории покупателей: соглашается, если деньги есть с запасом.
@@ -540,6 +542,8 @@ export function simulate({
       0,
     );
     const otherWeight = sellable.filter((p) => !OWN_PRODUCTS.includes(p)).reduce((sum, p) => sum + weight(p), 0);
+    // Повару на кухню — сверху к спросу зала.
+    const forKitchen = features.kitchen ? kitchenNeeds(state) : {};
     if (buyMode === 'restock') {
       const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state));
       for (const line of plan.lines) {
@@ -569,7 +573,7 @@ export function simulate({
         .filter((s) => s.kind === PRODUCTS[id].category)
         .reduce((sum, s) => sum + shelfCapacity(s), 0);
       const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category && !OWN_PRODUCTS.includes(p)).length;
-      const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0);
+      const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0) + (forKitchen[id] ?? 0);
       const target = Math.ceil(Math.min(demand * 1.1, shareOfShelf + CARRY * 2)) + order;
       const have = onShelves(state, id) + warehouseOf(state, id);
       let qty = Math.max(0, target - have);
@@ -631,14 +635,17 @@ export function simulate({
           coffee += coffeePrice(state);
         }
       }
-      if (features.kitchen && !night) {
-        const dish = sellDish(state, extraRandom);
-        if (dish) {
-          state = dish.state;
-          extra += DISHES[dish.dish].price;
-        }
-      }
       return extra;
+    };
+    // Порция с кухни — после чека (иначе чек затёр бы убыль в витрине): по ней повар считает спрос, ночью списывают остаток.
+    const dishExtra = (night: boolean): number => {
+      const dish = features.kitchen && !night ? sellDish(state, extraRandom) : null;
+      if (!dish) return 0;
+      stats.dishWanted = (stats.dishWanted ?? 0) + 1;
+      if (!dish.dish) return 0;
+      state = { ...dish.state, money: dish.state.money + DISHES[dish.dish].price };
+      stats.dishes = (stats.dishes ?? 0) + 1;
+      return DISHES[dish.dish].price;
     };
     const runGuests = (count: number, tolerance: number, cap: number, night: boolean) => {
     for (let g = 0; g < count; g++) {
@@ -709,8 +716,9 @@ export function simulate({
       const paid = checkout(state, cart, night ? NIGHT_MARKUP : 1);
       const extra = extras(night) + (extraRandom() < catTipChance(state) ? CAT_TIP : 0);
       state = { ...paid.state, money: paid.state.money + extra };
-      stats.revenue += paid.total + extra;
-      if (night) nightRevenue += paid.total + extra;
+      const dish = dishExtra(night);
+      stats.revenue += paid.total + extra + dish;
+      if (night) nightRevenue += paid.total + extra + dish;
       stats.served++;
       recordSale(stats, cart);
       if (hasUnmarkedBad(cart) && random() < BAD_COMPLAINT_CHANCE) stats.complaints++;
@@ -718,13 +726,39 @@ export function simulate({
     }
     };
     let nightRevenue = 0;
+    // Повар готовит весь день: перед каждой четвертью дня ставит кастрюли — сколько успеет и сколько разберут.
+    const chef = features.kitchen && kitchenWorking(state) ? staffOf(state, 'cook') : undefined;
+    let cookRounds = chef ? cookRoundsPerDay(state, DAY_SECONDS, workSpeed(chef)) : 0;
+    const perQuarter = Math.ceil(cookRounds / 4);
+    const cookFor = (dayLeft: number) => {
+      for (let r = 0; r < perQuarter && cookRounds > 0; r++) {
+        const batch = cookBatch(state, dayLeft);
+        if (!batch.length) break;
+        for (const id of batch) {
+          const taken = takeIngredients(state, id);
+          if (taken) state = servePortions(taken, id);
+        }
+        cookRounds--;
+      }
+    };
+    // Гости части дня (от доли start, длиной share): с поваром — по четвертям, между ними он готовит.
+    const dayPart = (count: number, start: number, share: number) => {
+      const parts = chef ? Math.max(1, Math.round(share * 4)) : 1;
+      let done = 0;
+      for (let i = 0; i < parts; i++) {
+        if (chef) cookFor(1 - start - (share * i) / parts);
+        const n = Math.round((count * (i + 1)) / parts) - done;
+        runGuests(n, 1, serveCap, false);
+        done += n;
+      }
+    };
     if (hasUpgrade(state, 'eTags')) {
       // Электронные ценники: к вечеру то, что испортится ночью, уценяется само.
       const evening = Math.round(dayGuests * ETAGS_EVENING);
-      runGuests(dayGuests - evening, 1, serveCap, false);
+      dayPart(dayGuests - evening, 0, 1 - ETAGS_EVENING);
       state = markdownSurplus(state, (id) => eveningSales(stats.sold[id] ?? 0)).state;
-      runGuests(evening, 1, serveCap, false);
-    } else runGuests(dayGuests, 1, serveCap, false);
+      dayPart(evening, 1 - ETAGS_EVENING, ETAGS_EVENING);
+    } else dayPart(dayGuests, 0, 1);
     // Ночная смена: гостей меньше, к ценам терпимее, касса успевает пропорционально времени.
     let nightProfit = 0;
     if (features.night && hasUpgrade(state, 'nightShift')) {
