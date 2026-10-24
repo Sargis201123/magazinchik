@@ -419,7 +419,7 @@ const css = `
 .ui-dialog-text { margin: 0; font-size: 15px; line-height: 1.4; min-height: 3em; }
 .ui-dialog-caret { display: inline-block; margin-left: 4px; font-size: 10px; color: #b86f50; animation: ui-tip .8s ease-in-out infinite; }
 .ui-tour { position: fixed; left: 8px; right: 8px; bottom: 8px; max-width: 480px; margin: 0 auto; z-index: 50; color: #2b2233;
-  background: #f4ecd8; border: 3px solid #2b2233; border-radius: 10px; padding: 8px 10px 10px; box-shadow: 0 6px 0 rgba(0,0,0,.35);
+  font: 15px/1.4 ${UI_FONT}; background: #f4ecd8; border: 3px solid #2b2233; border-radius: 10px; padding: 8px 10px 10px; box-shadow: 0 6px 0 rgba(0,0,0,.35);
   animation: ui-pop .3s cubic-bezier(.3, 1.45, .5, 1); }
 .ui-tour .ui-dialog { margin: 0; }
 .ui-tour .ui-dialog-face { width: 64px; height: 64px; }

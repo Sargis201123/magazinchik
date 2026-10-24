@@ -49,6 +49,9 @@ export function dramaScene(state: StoreState): DramaScene | null {
   const upTo = upToOf(state);
   const scene = SCENES.find((s) => s.day > upTo);
   if (!scene || state.tourDone === false || state.day < scene.day || state.drama?.last === state.day) return null;
+  // Новое начало (onboarding.ts): утро второго дня — первое утро новичка, в нём уже вступление главы;
+  // Соня подождёт до завтра, чтобы окна не шли одно за другим.
+  if (state.onboarding === 'play' && state.day <= 2) return null;
   return scene;
 }
 
