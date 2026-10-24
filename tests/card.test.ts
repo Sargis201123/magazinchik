@@ -73,6 +73,6 @@ describe.skipIf(!Database)('карточка итогов', () => {
     expect((await card(await post(2, { image: 'A'.repeat(CARD_MAX + 4) }), env)).status).toBe(400);
     const res = (await (await card(await post(2, { image: IMAGE, send: true, caption: 'Мой магазин' }), env)).json()) as { url: string; sent: boolean };
     expect(res.sent).toBe(true);
-    expect(sent[0]).toMatchObject({ method: 'sendPhoto', body: { chat_id: 2, photo: res.url, caption: 'Мой магазин' } });
+    expect(sent.find((c) => c.method === 'sendPhoto')).toMatchObject({ method: 'sendPhoto', body: { chat_id: 2, photo: res.url, caption: 'Мой магазин' } });
   });
 });

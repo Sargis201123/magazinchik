@@ -83,6 +83,9 @@ export class Hud {
   /** Срочный подвоз: кнопка над ускорением. */
   private readonly urgent = el('button', 'ui-speed ui-urgent', '🚚');
   onUrgent: () => void = () => {};
+  /** «Позвать на помощь» в час пик (game/help.ts): над срочным подвозом, пока очередь длинная. */
+  private readonly help = el('button', 'ui-speed ui-help');
+  onHelp: () => void = () => {};
   /** Быстрое «без звука» — напротив ускорения, видно всегда, пока идёт игра. */
   private readonly mute = el('button', 'ui-speed ui-mute');
   private day = 1;
@@ -106,6 +109,8 @@ export class Hud {
     this.speed.style.display = 'none';
     this.urgent.addEventListener('click', () => this.onUrgent());
     this.urgent.style.display = 'none';
+    this.help.addEventListener('click', () => this.onHelp());
+    this.help.style.display = 'none';
     injectAudioStyles();
     this.mute.title = t('audio.mute');
     this.mute.addEventListener('click', () => {
@@ -113,7 +118,7 @@ export class Hud {
       this.showMute();
     });
     this.showMute();
-    document.body.append(this.top, this.stock, this.hint, this.speed, this.urgent, this.mute);
+    document.body.append(this.top, this.stock, this.hint, this.speed, this.urgent, this.help, this.mute);
   }
 
   /** Значок звука — как сейчас (его могли переключить и в профиле). */
@@ -194,6 +199,19 @@ export class Hud {
       this.urgent.style.display = display;
       if (visible) pixelize(this.urgent);
     }
+  }
+
+  /** «Позвать на помощь»: видна в час пик; busy — ждём окно «Поделиться» (кнопка гаснет). */
+  showHelp(visible: boolean, busy = false): void {
+    const display = visible ? '' : 'none';
+    if (this.help.style.display !== display) {
+      this.help.style.display = display;
+      if (visible && !this.help.childNodes.length) {
+        this.help.textContent = t('help.button');
+        pixelize(this.help);
+      }
+    }
+    if (this.help.disabled !== busy) this.help.disabled = busy;
   }
 
   showSpeed(visible: boolean, speed: number): void {
@@ -405,7 +423,7 @@ function starRow(): { box: HTMLElement; fill: (rating: number) => void } {
 }
 
 /** Печать в итогах дня: сверху что, крупно — звание или число, снизу — пояснение. В миг удара — кольцо и искры. */
-function stamp(tone: 'gold' | 'red', top: string, big: string, note: string, at: number, i: number, sparks: boolean): HTMLElement {
+export function stamp(tone: 'gold' | 'red', top: string, big: string, note: string, at: number, i: number, sparks: boolean): HTMLElement {
   const wrap = el('div', `ui-stamp-wrap ${tone}`);
   wrap.style.setProperty('--at', `${at}ms`);
   wrap.style.setProperty('--rot', `${STAMP_TILT[i % STAMP_TILT.length]}deg`);

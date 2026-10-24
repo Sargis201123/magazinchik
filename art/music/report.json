@@ -1,0 +1,6417 @@
+{
+ "tracks": {
+  "day": {
+   "kind": "music",
+   "title": "День",
+   "use": "День: основной фон торговли",
+   "key": "C",
+   "bpm": 96,
+   "meter": "4/4",
+   "duration": 79.661,
+   "samples": 3823749,
+   "fileSamples": 3823749,
+   "lufs": -16.0,
+   "truePeakDb": -3.88,
+   "dc": [
+    0.0,
+    0.0
+   ],
+   "silenceAfter": [
+    30,
+    90
+   ],
+   "fadeIn": 0.25,
+   "lra": 3.7,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -41.5,
+      "63": -11.0,
+      "125": -9.1,
+      "250": -5.9,
+      "500": -6.2,
+      "1000": -6.5,
+      "2000": -15.6,
+      "4000": -14.2,
+      "8000": -19.7,
+      "16000": -31.2
+     },
+     "low_vs_lowmid": -3.9,
+     "lowmid_vs_mid": 3.0,
+     "upper_vs_lowmid": -8.8,
+     "mid_vs_high": 7.1,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -13.2,
+    "lrDb": 0.14,
+    "mono": {
+     "corr": 0.828,
+     "monoLoudnessDelta": -0.4
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 83,
+    "semitoneRoughnessPct": 1.96,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.76
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "bytes": {
+    "ogg": 517283,
+    "m4a": 608040
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 3823749,
+     "lengthDeltaMs": 0.0,
+     "lufs": -15.99,
+     "truePeakDb": -3.39,
+     "clippedSamples": 0,
+     "dc": [
+      -3.9e-05,
+      -1.8e-05
+     ],
+     "snrDb": {
+      "250-1000": 15.9,
+      "1000-2500": 15.4,
+      "2500-5000": 10.6
+     }
+    },
+    "m4a": {
+     "samples": 3824640,
+     "lengthDeltaMs": 18.6,
+     "lufs": -15.92,
+     "truePeakDb": -2.49,
+     "clippedSamples": 0,
+     "dc": [
+      8e-06,
+      6e-06
+     ],
+     "snrDb": {
+      "250-1000": 14.6,
+      "1000-2500": 11.9,
+      "2500-5000": 7.5
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 83,
+    "roughness": {
+     "semitonePct": 1.96,
+     "outOfChordPct": {
+      "ebass": 0.2,
+      "epfill": 1.0,
+      "epiano": 0.4,
+      "glock": 0.0,
+      "guitar": 0.0,
+      "pad": 0.8,
+      "vibes": 1.4
+     },
+     "topPairs": [
+      [
+       [
+        "vibes",
+        "vibes"
+       ],
+       0.7
+      ],
+      [
+       [
+        "epiano",
+        "epiano"
+       ],
+       0.56
+      ],
+      [
+       [
+        "epiano",
+        "vibes"
+       ],
+       0.48
+      ]
+     ],
+     "worst": [
+      "50.0s Dm7: D5/vibes 0dB, D3/ebass -2dB, A4/epiano -4dB, C#5/vibes -4dB, F4/epiano -5dB, D4/epiano -5dB",
+      "10.0s Dm7: D5/vibes 0dB, D3/ebass -2dB, E4/epiano -4dB, C#5/vibes -4dB, D4/epiano -4dB, C4/epiano -5dB",
+      "20.0s Dm7: F5/vibes 0dB, D3/ebass -2dB, E5/vibes -2dB, F4/epiano -4dB, D4/epiano -4dB, C4/epiano -5dB"
+     ]
+    }
+   },
+   "phone": {
+    "ebass": {
+     "full": -6.7,
+     "phone": -10.8
+    },
+    "kick": {
+     "full": -13.2,
+     "phone": -29.2
+    },
+    "melodyOverAccPhone": 2.1
+   },
+   "stems": {
+    "ebass": {
+     "raw_lufs": -16.9,
+     "target": -21.5
+    },
+    "epiano": {
+     "raw_lufs": -11.1,
+     "target": -21
+    },
+    "swishl": {
+     "raw_lufs": -19.2,
+     "target": -33
+    },
+    "vibes": {
+     "raw_lufs": -14.0,
+     "target": -19
+    },
+    "epfill": {
+     "raw_lufs": -14.6,
+     "target": -22
+    },
+    "glock": {
+     "raw_lufs": -18.2,
+     "target": -27
+    },
+    "guitar": {
+     "raw_lufs": 2.9,
+     "target": -26
+    },
+    "pad": {
+     "raw_lufs": -15.5,
+     "target": -31
+    },
+    "shaker": {
+     "raw_lufs": -25.3,
+     "target": -31.5
+    },
+    "kick": {
+     "raw_lufs": -19.8,
+     "target": -28
+    },
+    "tap": {
+     "raw_lufs": -24.2,
+     "target": -28
+    }
+   }
+  },
+  "evening": {
+   "kind": "music",
+   "title": "Вечер",
+   "use": "Вечер: закат, последние покупатели, итоги",
+   "key": "F",
+   "bpm": 72,
+   "meter": "4/4",
+   "duration": 78.727,
+   "samples": 3778899,
+   "fileSamples": 3778899,
+   "lufs": -17.5,
+   "truePeakDb": -5.69,
+   "dc": [
+    0.0,
+    0.0
+   ],
+   "silenceAfter": [
+    30,
+    90
+   ],
+   "fadeIn": 2.0,
+   "lra": 5.4,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -44.6,
+      "63": -15.5,
+      "125": -7.7,
+      "250": -5.7,
+      "500": -5.9,
+      "1000": -6.3,
+      "2000": -16.1,
+      "4000": -19.4,
+      "8000": -22.1,
+      "16000": -30.0
+     },
+     "low_vs_lowmid": -4.2,
+     "lowmid_vs_mid": 3.0,
+     "upper_vs_lowmid": -11.6,
+     "mid_vs_high": 11.6,
+     "flags": []
+    },
+    "balanceTrimDb": 0.39,
+    "presence2kVs700Db": -12.1,
+    "lrDb": -0.01,
+    "mono": {
+     "corr": 0.765,
+     "monoLoudnessDelta": -0.54
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 61,
+    "semitoneRoughnessPct": 0.98,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.89
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "bytes": {
+    "ogg": 522553,
+    "m4a": 583926
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 3778899,
+     "lengthDeltaMs": 0.0,
+     "lufs": -17.49,
+     "truePeakDb": -5.55,
+     "clippedSamples": 0,
+     "dc": [
+      3.6e-05,
+      5.1e-05
+     ],
+     "snrDb": {
+      "250-1000": 17.2,
+      "1000-2500": 17.9,
+      "2500-5000": 8.8
+     }
+    },
+    "m4a": {
+     "samples": 3780096,
+     "lengthDeltaMs": 24.9,
+     "lufs": -17.49,
+     "truePeakDb": -5.79,
+     "clippedSamples": 0,
+     "dc": [
+      -1e-06,
+      5e-06
+     ],
+     "snrDb": {
+      "250-1000": 16.6,
+      "1000-2500": 13.7,
+      "2500-5000": 5.4
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 61,
+    "roughness": {
+     "semitonePct": 0.98,
+     "outOfChordPct": {
+      "epiano": 0.2,
+      "epmel": 4.7,
+      "flugel": 2.2,
+      "guitar": 0.0,
+      "pad": 0.6,
+      "upright": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "epmel",
+        "epmel"
+       ],
+       0.38
+      ],
+      [
+       [
+        "epiano",
+        "upright"
+       ],
+       0.32
+      ],
+      [
+       [
+        "epiano",
+        "epiano"
+       ],
+       0.26
+      ]
+     ],
+     "worst": [
+      "11.7s Dm9: E5/epmel 0dB, A2/upright -3dB, F5/epmel -5dB, F3/epiano -16dB, A3/epiano -16dB, D4/epiano -17dB",
+      "15.0s Gm9: Bb5/epmel 0dB, D3/upright -3dB, A5/epmel -5dB, G3/epiano -16dB, Bb3/epiano -16dB, F3/epiano -16dB",
+      "53.4s Gm7: G2/upright 0dB, Bb4/flugel -2dB, G2/guitar -5dB, D4/epiano -5dB, Bb3/epiano -6dB, G3/epiano -6dB"
+     ]
+    }
+   },
+   "phone": {
+    "upright": {
+     "full": -6.8,
+     "phone": -10.0
+    },
+    "kick": {
+     "full": -17.8,
+     "phone": -33.4
+    },
+    "melodyOverAccPhone": 2.6
+   },
+   "stems": {
+    "epmel": {
+     "raw_lufs": -14.7,
+     "target": -19
+    },
+    "flugel": {
+     "raw_lufs": -14.2,
+     "target": -19
+    },
+    "epiano": {
+     "raw_lufs": -12.9,
+     "target": -22
+    },
+    "guitar": {
+     "raw_lufs": 1.9,
+     "target": -27
+    },
+    "pad": {
+     "raw_lufs": -14.9,
+     "target": -31
+    },
+    "upright": {
+     "raw_lufs": -18.3,
+     "target": -22
+    },
+    "swishl": {
+     "raw_lufs": -18.9,
+     "target": -32
+    },
+    "tap": {
+     "raw_lufs": -27.8,
+     "target": -31
+    },
+    "kick": {
+     "raw_lufs": -25.0,
+     "target": -33
+    }
+   }
+  },
+  "morning": {
+   "kind": "music",
+   "title": "Утро",
+   "use": "Утро: открытие магазина, первые часы дня",
+   "key": "G",
+   "bpm": 80,
+   "meter": "4/4",
+   "duration": 77.661,
+   "samples": 3727720,
+   "fileSamples": 3727720,
+   "lufs": -17.0,
+   "truePeakDb": -5.22,
+   "dc": [
+    -0.0,
+    0.0
+   ],
+   "silenceAfter": [
+    30,
+    90
+   ],
+   "fadeIn": 2.5,
+   "lra": 5.7,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -49.2,
+      "63": -23.1,
+      "125": -9.4,
+      "250": -6.4,
+      "500": -4.3,
+      "1000": -6.5,
+      "2000": -13.5,
+      "4000": -23.6,
+      "8000": -25.7,
+      "16000": -36.9
+     },
+     "low_vs_lowmid": -7.0,
+     "lowmid_vs_mid": 3.5,
+     "upper_vs_lowmid": -10.9,
+     "mid_vs_high": 15.9,
+     "flags": []
+    },
+    "balanceTrimDb": -0.39,
+    "presence2kVs700Db": -13.3,
+    "lrDb": -0.06,
+    "mono": {
+     "corr": 0.799,
+     "monoLoudnessDelta": -0.46
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 38,
+    "semitoneRoughnessPct": 0.32,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.92
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "bytes": {
+    "ogg": 526833,
+    "m4a": 578878
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 3727720,
+     "lengthDeltaMs": 0.0,
+     "lufs": -16.99,
+     "truePeakDb": -5.06,
+     "clippedSamples": 0,
+     "dc": [
+      -4.4e-05,
+      -3.5e-05
+     ],
+     "snrDb": {
+      "250-1000": 19.1,
+      "1000-2500": 17.5,
+      "2500-5000": 11.2
+     }
+    },
+    "m4a": {
+     "samples": 3727872,
+     "lengthDeltaMs": 3.2,
+     "lufs": -17.03,
+     "truePeakDb": -5.36,
+     "clippedSamples": 0,
+     "dc": [
+      -1e-06,
+      0.0
+     ],
+     "snrDb": {
+      "250-1000": 18.4,
+      "1000-2500": 14.3,
+      "2500-5000": 6.4
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 38,
+    "roughness": {
+     "semitonePct": 0.32,
+     "outOfChordPct": {
+      "flute": 0.1,
+      "glock": 6.8,
+      "guitar": 0.1,
+      "pad": 0.2,
+      "upright": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "flute",
+        "flute"
+       ],
+       0.25
+      ],
+      [
+       [
+        "flute",
+        "pad"
+       ],
+       0.05
+      ],
+      [
+       [
+        "guitar",
+        "pad"
+       ],
+       0.01
+      ]
+     ],
+     "worst": [
+      "54.0s Em7: E2/upright 0dB, E2/guitar -1dB, G5/flute -3dB, F#5/flute -7dB, F#3/guitar -10dB, D2/upright -14dB",
+      "39.0s Bm7: B2/upright 0dB, B2/guitar -1dB, F#5/flute -3dB, G5/flute -7dB, B3/guitar -10dB, C3/upright -14dB",
+      "60.0s Am7: A2/upright 0dB, A2/guitar -1dB, C5/flute -3dB, G3/guitar -10dB, B4/flute -10dB, G2/upright -14dB"
+     ]
+    }
+   },
+   "phone": {
+    "upright": {
+     "full": -6.4,
+     "phone": -10.1
+    },
+    "melodyOverAccPhone": 3.9
+   },
+   "stems": {
+    "flute": {
+     "raw_lufs": -12.4,
+     "target": -19
+    },
+    "glock": {
+     "raw_lufs": -16.3,
+     "target": -24
+    },
+    "guitar": {
+     "raw_lufs": 7.7,
+     "target": -21
+    },
+    "pad": {
+     "raw_lufs": -14.4,
+     "target": -30
+    },
+    "upright": {
+     "raw_lufs": -18.9,
+     "target": -22.5
+    },
+    "shaker": {
+     "raw_lufs": -25.7,
+     "target": -32
+    }
+   }
+  },
+  "night": {
+   "kind": "music",
+   "title": "Ночная смена",
+   "use": "Ночная смена: тихий фон ночью",
+   "key": "Eb",
+   "bpm": 60,
+   "meter": "4/4",
+   "duration": 77.426,
+   "samples": 3716435,
+   "fileSamples": 3716435,
+   "lufs": -19.0,
+   "truePeakDb": -6.56,
+   "dc": [
+    0.0,
+    0.0
+   ],
+   "silenceAfter": [
+    30,
+    90
+   ],
+   "fadeIn": 3.0,
+   "lra": 4.2,
+   "checks": {
+    "longestInnerSilence": 0.05,
+    "balance": {
+     "octaves_db": {
+      "31.5": -46.4,
+      "63": -15.7,
+      "125": -8.2,
+      "250": -4.7,
+      "500": -6.7,
+      "1000": -6.0,
+      "2000": -18.4,
+      "4000": -27.6,
+      "8000": -29.1,
+      "16000": -35.9
+     },
+     "low_vs_lowmid": -4.9,
+     "lowmid_vs_mid": 3.2,
+     "upper_vs_lowmid": -15.4,
+     "mid_vs_high": 19.4,
+     "flags": []
+    },
+    "balanceTrimDb": 0.6,
+    "presence2kVs700Db": -13.8,
+    "lrDb": 0.01,
+    "mono": {
+     "corr": 0.692,
+     "monoLoudnessDelta": -0.73
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 15,
+    "semitoneRoughnessPct": 0.44,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.47
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "bytes": {
+    "ogg": 532716,
+    "m4a": 570996
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 3716435,
+     "lengthDeltaMs": 0.0,
+     "lufs": -19.0,
+     "truePeakDb": -6.84,
+     "clippedSamples": 0,
+     "dc": [
+      1.9e-05,
+      7e-06
+     ],
+     "snrDb": {
+      "250-1000": 19.1,
+      "1000-2500": 19.4,
+      "2500-5000": 11.2
+     }
+    },
+    "m4a": {
+     "samples": 3717120,
+     "lengthDeltaMs": 14.3,
+     "lufs": -19.04,
+     "truePeakDb": -6.14,
+     "clippedSamples": 0,
+     "dc": [
+      0.0,
+      1e-06
+     ],
+     "snrDb": {
+      "250-1000": 20.6,
+      "1000-2500": 16.7,
+      "2500-5000": 7.0
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 15,
+    "roughness": {
+     "semitonePct": 0.44,
+     "outOfChordPct": {
+      "celesta": 0.0,
+      "epiano": 0.0,
+      "epmel": 0.0,
+      "pad": 0.2,
+      "upright": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "epiano",
+        "epiano"
+       ],
+       0.13
+      ],
+      [
+       [
+        "epiano",
+        "pad"
+       ],
+       0.13
+      ],
+      [
+       [
+        "epmel",
+        "epmel"
+       ],
+       0.07
+      ]
+     ],
+     "worst": [
+      "44.0s Abm6: B5/epmel 0dB, Ab2/upright -2dB, Eb4/epiano -7dB, B3/epiano -8dB, Ab3/epiano -8dB, F3/epiano -9dB",
+      "56.0s Fm9: Ab5/epmel 0dB, F2/upright -2dB, Eb4/epiano -7dB, C4/epiano -7dB, Ab3/epiano -7dB, F3/epiano -8dB",
+      "40.0s Abmaj7: Eb5/epmel 0dB, Ab2/upright -2dB, C4/epiano -7dB, Bb3/epiano -7dB, G3/epiano -7dB, F3/epiano -8dB"
+     ]
+    }
+   },
+   "phone": {
+    "upright": {
+     "full": -7.2,
+     "phone": -11.1
+    },
+    "melodyOverAccPhone": 3.0
+   },
+   "stems": {
+    "celesta": {
+     "raw_lufs": -15.9,
+     "target": -21
+    },
+    "epmel": {
+     "raw_lufs": -18.2,
+     "target": -20
+    },
+    "epiano": {
+     "raw_lufs": -15.4,
+     "target": -22
+    },
+    "pad": {
+     "raw_lufs": -14.6,
+     "target": -27
+    },
+    "upright": {
+     "raw_lufs": -21.4,
+     "target": -23
+    },
+    "tick_h": {
+     "raw_lufs": -35.7,
+     "target": -44
+    },
+    "tick_l": {
+     "raw_lufs": -36.5,
+     "target": -44
+    },
+    "swishl": {
+     "raw_lufs": -19.1,
+     "target": -37
+    }
+   }
+  },
+  "winter": {
+   "kind": "music",
+   "title": "Зима",
+   "use": "Зима и Новый год: сезонный фон (вместо дня/вечера в декабре–январе)",
+   "key": "D",
+   "bpm": 144,
+   "meter": "3/4",
+   "duration": 70.258,
+   "samples": 3372384,
+   "fileSamples": 3372384,
+   "lufs": -16.0,
+   "truePeakDb": -4.71,
+   "dc": [
+    -0.0,
+    -0.0
+   ],
+   "silenceAfter": [
+    30,
+    90
+   ],
+   "fadeIn": 2.0,
+   "lra": 5.9,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -47.5,
+      "63": -20.0,
+      "125": -10.5,
+      "250": -5.6,
+      "500": -6.3,
+      "1000": -4.5,
+      "2000": -15.0,
+      "4000": -26.0,
+      "8000": -34.5,
+      "16000": -56.1
+     },
+     "low_vs_lowmid": -7.1,
+     "lowmid_vs_mid": 1.2,
+     "upper_vs_lowmid": -11.7,
+     "mid_vs_high": 21.3,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -11.7,
+    "lrDb": -0.26,
+    "mono": {
+     "corr": 0.678,
+     "monoLoudnessDelta": -0.78
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 114,
+    "semitoneRoughnessPct": 2.31,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.84
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "bytes": {
+    "ogg": 537806,
+    "m4a": 542051
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 3372384,
+     "lengthDeltaMs": 0.0,
+     "lufs": -16.0,
+     "truePeakDb": -4.48,
+     "clippedSamples": 0,
+     "dc": [
+      6.2e-05,
+      7.3e-05
+     ],
+     "snrDb": {
+      "250-1000": 19.1,
+      "1000-2500": 16.5,
+      "2500-5000": 12.7
+     }
+    },
+    "m4a": {
+     "samples": 3373056,
+     "lengthDeltaMs": 14.0,
+     "lufs": -16.06,
+     "truePeakDb": -4.31,
+     "clippedSamples": 0,
+     "dc": [
+      -6e-06,
+      -4e-06
+     ],
+     "snrDb": {
+      "250-1000": 21.7,
+      "1000-2500": 17.3,
+      "2500-5000": 9.1
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 114,
+    "roughness": {
+     "semitonePct": 2.31,
+     "outOfChordPct": {
+      "bell": 0.0,
+      "celesta": 3.4,
+      "epiano": 0.1,
+      "glock": 2.9,
+      "harp": 0.9,
+      "musicbox": 0.0,
+      "strings": 1.0,
+      "strmel": 1.0,
+      "upright": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "celesta",
+        "celesta"
+       ],
+       0.73
+      ],
+      [
+       [
+        "celesta",
+        "strings"
+       ],
+       0.72
+      ],
+      [
+       [
+        "celesta",
+        "epiano"
+       ],
+       0.44
+      ]
+     ],
+     "worst": [
+      "9.6s F#m: D5/celesta 0dB, F#5/celesta -6dB, F#4/epiano -7dB, C#4/epiano -7dB, A3/epiano -7dB, F#4/strings -12dB",
+      "49.6s F#m: D5/celesta 0dB, F#5/celesta -6dB, F#4/epiano -7dB, C#4/epiano -7dB, A3/epiano -7dB, A3/strings -12dB",
+      "22.5s D: D5/celesta 0dB, D3/upright -0dB, C#5/celesta -4dB, E4/strings -12dB, A4/strings -12dB, G4/strings -13dB"
+     ]
+    }
+   },
+   "phone": {
+    "upright": {
+     "full": -6.9,
+     "phone": -10.7
+    },
+    "melodyOverAccPhone": 1.3
+   },
+   "stems": {
+    "celesta": {
+     "raw_lufs": -12.9,
+     "target": -19.5
+    },
+    "strmel": {
+     "raw_lufs": -22.2,
+     "target": -20
+    },
+    "glock": {
+     "raw_lufs": -16.2,
+     "target": -28
+    },
+    "upright": {
+     "raw_lufs": -18.1,
+     "target": -22.5
+    },
+    "epiano": {
+     "raw_lufs": -14.8,
+     "target": -22.5
+    },
+    "harp": {
+     "raw_lufs": -13.1,
+     "target": -23
+    },
+    "strings": {
+     "raw_lufs": -15.5,
+     "target": -25
+    },
+    "sleigh": {
+     "raw_lufs": -29.4,
+     "target": -33
+    },
+    "musicbox": {
+     "raw_lufs": -19.5,
+     "target": -30
+    },
+    "bell": {
+     "raw_lufs": -20.0,
+     "target": -24
+    }
+   }
+  },
+  "radio_hits": {
+   "kind": "loop",
+   "title": "Радио «Хиты»",
+   "use": "Радио «Хиты»: бодрый поп-бит, по кругу (марафон)",
+   "key": "A",
+   "bpm": 120,
+   "meter": "4/4",
+   "duration": 64.0,
+   "samples": 3072000,
+   "fileSamples": 3120000,
+   "lufs": -16.0,
+   "truePeakDb": -3.98,
+   "dc": [
+    0.0,
+    0.0
+   ],
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -37.7,
+      "63": -7.0,
+      "125": -9.4,
+      "250": -6.4,
+      "500": -7.3,
+      "1000": -7.8,
+      "2000": -11.3,
+      "4000": -16.4,
+      "8000": -20.2,
+      "16000": -29.2
+     },
+     "low_vs_lowmid": -1.2,
+     "lowmid_vs_mid": 2.3,
+     "upper_vs_lowmid": -6.3,
+     "mid_vs_high": 8.7,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -7.2,
+    "lrDb": 0.06,
+    "mono": {
+     "corr": 0.904,
+     "monoLoudnessDelta": -0.25
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 49,
+    "semitoneRoughnessPct": 1.18,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.86
+   },
+   "loopStart": 0.5,
+   "loopEnd": 64.5,
+   "loopStartSample": 24000,
+   "loopEndSample": 3096000,
+   "fileDuration": 65.0,
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/radio_hits.ogg",
+    "m4a": "audio/music/radio_hits.m4a"
+   },
+   "bytes": {
+    "ogg": 438400,
+    "m4a": 501154
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 3120000,
+     "lengthDeltaMs": 0.0,
+     "lufs": -15.99,
+     "truePeakDb": -3.57,
+     "clippedSamples": 0,
+     "dc": [
+      -2e-05,
+      1.5e-05
+     ],
+     "snrDb": {
+      "250-1000": 16.3,
+      "1000-2500": 14.3,
+      "2500-5000": 8.2
+     },
+     "seam": {
+      "diffDb": -23.5,
+      "spike": 4.05
+     },
+     "seamXf": {
+      "jump": 0.0311,
+      "rawJump": 0.0281,
+      "naturalMaxStep": 0.1803
+     },
+     "loopLufs": -15.98
+    },
+    "m4a": {
+     "samples": 3121152,
+     "lengthDeltaMs": 24.0,
+     "lufs": -15.84,
+     "truePeakDb": -3.07,
+     "clippedSamples": 0,
+     "dc": [
+      3e-06,
+      2.8e-05
+     ],
+     "snrDb": {
+      "250-1000": 13.5,
+      "1000-2500": 10.7,
+      "2500-5000": 4.9
+     },
+     "seam": {
+      "diffDb": -14.1,
+      "spike": 3.3
+     },
+     "seamXf": {
+      "jump": 0.0606,
+      "rawJump": 0.1392,
+      "naturalMaxStep": 0.1495
+     },
+     "loopLufs": -15.83
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 49,
+    "roughness": {
+     "semitonePct": 1.18,
+     "outOfChordPct": {
+      "ebass": 0.1,
+      "epiano": 0.2,
+      "glock": 0.0,
+      "lead": 1.6,
+      "pad": 0.4,
+      "steel": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "lead",
+        "lead"
+       ],
+       0.36
+      ],
+      [
+       [
+        "epiano",
+        "lead"
+       ],
+       0.27
+      ],
+      [
+       [
+        "epiano",
+        "epiano"
+       ],
+       0.15
+      ]
+     ],
+     "worst": [
+      "56.5s Dmaj7: C#6/lead 0dB, D2/ebass -0dB, D6/lead -2dB, C#6/glock -5dB, A3/steel -8dB, E4/epiano -8dB",
+      "44.0s D: A5/lead 0dB, D3/ebass -0dB, Ab5/lead -4dB, F#4/epiano -5dB, D4/epiano -5dB, B3/epiano -6dB",
+      "42.0s C#m7: E5/lead 0dB, C#3/ebass -0dB, F#5/lead -4dB, E4/epiano -5dB, C#4/epiano -5dB, B3/epiano -6dB"
+     ]
+    }
+   },
+   "phone": {
+    "ebass": {
+     "full": -6.6,
+     "phone": -10.3
+    },
+    "kick": {
+     "full": -9.6,
+     "phone": -27.1
+    },
+    "melodyOverAccPhone": 2.1
+   },
+   "stems": {
+    "lead": {
+     "raw_lufs": -15.9,
+     "target": -19
+    },
+    "glock": {
+     "raw_lufs": -16.8,
+     "target": -26
+    },
+    "epiano": {
+     "raw_lufs": -11.2,
+     "target": -22
+    },
+    "steel": {
+     "raw_lufs": 3.5,
+     "target": -25
+    },
+    "pad": {
+     "raw_lufs": -14.8,
+     "target": -30
+    },
+    "ebass": {
+     "raw_lufs": -14.9,
+     "target": -20.5
+    },
+    "kick": {
+     "raw_lufs": -17.7,
+     "target": -23.5
+    },
+    "clap": {
+     "raw_lufs": -20.6,
+     "target": -25.5
+    },
+    "hat": {
+     "raw_lufs": -28.2,
+     "target": -30
+    },
+    "ohat": {
+     "raw_lufs": -22.8,
+     "target": -33
+    },
+    "shaker": {
+     "raw_lufs": -23.4,
+     "target": -32
+    },
+    "crash": {
+     "raw_lufs": -21.1,
+     "target": -31
+    }
+   }
+  },
+  "radio_march": {
+   "kind": "loop",
+   "title": "Радио «Марш»",
+   "use": "Радио «Марш»: духовой оркестр на параде, по кругу (парады)",
+   "key": "Bb",
+   "bpm": 120,
+   "meter": "2/4",
+   "duration": 64.0,
+   "samples": 3072000,
+   "fileSamples": 3120000,
+   "lufs": -16.0,
+   "truePeakDb": -4.74,
+   "dc": [
+    -0.0,
+    -1e-06
+   ],
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -36.3,
+      "63": -4.6,
+      "125": -9.2,
+      "250": -8.9,
+      "500": -6.9,
+      "1000": -8.1,
+      "2000": -14.6,
+      "4000": -19.4,
+      "8000": -22.2,
+      "16000": -35.6
+     },
+     "low_vs_lowmid": 1.4,
+     "lowmid_vs_mid": 2.5,
+     "upper_vs_lowmid": -8.6,
+     "mid_vs_high": 10.3,
+     "flags": []
+    },
+    "balanceTrimDb": 0.33,
+    "presence2kVs700Db": -7.3,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.835,
+     "monoLoudnessDelta": -0.41
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 65,
+    "semitoneRoughnessPct": 1.58,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.1
+   },
+   "loopStart": 0.5,
+   "loopEnd": 64.5,
+   "loopStartSample": 24000,
+   "loopEndSample": 3096000,
+   "fileDuration": 65.0,
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/radio_march.ogg",
+    "m4a": "audio/music/radio_march.m4a"
+   },
+   "bytes": {
+    "ogg": 410816,
+    "m4a": 498927
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 3120000,
+     "lengthDeltaMs": 0.0,
+     "lufs": -16.0,
+     "truePeakDb": -4.53,
+     "clippedSamples": 0,
+     "dc": [
+      4.4e-05,
+      -4.5e-05
+     ],
+     "snrDb": {
+      "250-1000": 15.6,
+      "1000-2500": 13.5,
+      "2500-5000": 7.5
+     },
+     "seam": {
+      "diffDb": -8.4,
+      "spike": 2.78
+     },
+     "seamXf": {
+      "jump": 0.0161,
+      "rawJump": 0.0879,
+      "naturalMaxStep": 0.0921
+     },
+     "loopLufs": -15.99
+    },
+    "m4a": {
+     "samples": 3121152,
+     "lengthDeltaMs": 24.0,
+     "lufs": -16.01,
+     "truePeakDb": -4.84,
+     "clippedSamples": 0,
+     "dc": [
+      6e-06,
+      2e-06
+     ],
+     "snrDb": {
+      "250-1000": 15.2,
+      "1000-2500": 11.8,
+      "2500-5000": 5.3
+     },
+     "seam": {
+      "diffDb": -11.1,
+      "spike": 3.33
+     },
+     "seamXf": {
+      "jump": 0.0149,
+      "rawJump": 0.0574,
+      "naturalMaxStep": 0.0877
+     },
+     "loopLufs": -16.0
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 65,
+    "roughness": {
+     "semitonePct": 1.58,
+     "outOfChordPct": {
+      "brass": 2.3,
+      "brass2": 0.1,
+      "glock": 0.5,
+      "horn": 0.3,
+      "hornmel": 2.6,
+      "tuba": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "brass",
+        "brass2"
+       ],
+       0.4
+      ],
+      [
+       [
+        "brass",
+        "brass"
+       ],
+       0.33
+      ],
+      [
+       [
+        "hornmel",
+        "hornmel"
+       ],
+       0.29
+      ]
+     ],
+     "worst": [
+      "44.4s Eb: D6/brass 0dB, D5/hornmel -1dB, Eb6/brass -3dB, Eb5/hornmel -3dB, Bb5/brass2 -4dB, Eb2/tuba -5dB",
+      "38.0s Bb7: Bb2/tuba 0dB, D6/brass -3dB, D5/hornmel -3dB, Eb6/brass -5dB, Eb5/hornmel -6dB, Bb5/brass2 -6dB",
+      "48.0s Eb/Bb: Bb2/tuba 0dB, G5/brass -3dB, G4/hornmel -3dB, Ab5/brass -5dB, Ab4/hornmel -6dB, Eb5/brass2 -6dB"
+     ]
+    }
+   },
+   "phone": {
+    "tuba": {
+     "full": -5.4,
+     "phone": -11.1
+    },
+    "bdrum": {
+     "full": -11.4,
+     "phone": -28.7
+    },
+    "melodyOverAccPhone": 0.8
+   },
+   "stems": {
+    "brass": {
+     "raw_lufs": -17.4,
+     "target": -19.5
+    },
+    "brass2": {
+     "raw_lufs": -18.6,
+     "target": -23
+    },
+    "hornmel": {
+     "raw_lufs": -17.9,
+     "target": -19.5
+    },
+    "glock": {
+     "raw_lufs": -17.1,
+     "target": -26
+    },
+    "horn": {
+     "raw_lufs": -20.0,
+     "target": -26
+    },
+    "tuba": {
+     "raw_lufs": -18.2,
+     "target": -19
+    },
+    "fsnare": {
+     "raw_lufs": -13.1,
+     "target": -28
+    },
+    "bdrum": {
+     "raw_lufs": -14.2,
+     "target": -25
+    },
+    "cymbals": {
+     "raw_lufs": -20.9,
+     "target": -31
+    }
+   },
+   "keySections": [
+    {
+     "start": 0.0,
+     "end": 20.0,
+     "key": "Bb"
+    },
+    {
+     "start": 20.0,
+     "end": 52.0,
+     "key": "Eb"
+    },
+    {
+     "start": 52.0,
+     "end": 64.0,
+     "key": "Bb"
+    }
+   ]
+  },
+  "radio_retro": {
+   "kind": "loop",
+   "title": "Радио «Ретро»",
+   "use": "Радио «Ретро»: медленный свинг, крутится по кругу",
+   "key": "F",
+   "bpm": 100,
+   "meter": "4/4",
+   "duration": 67.2,
+   "samples": 3225600,
+   "fileSamples": 3273600,
+   "lufs": -16.0,
+   "truePeakDb": -3.77,
+   "dc": [
+    0.0,
+    0.0
+   ],
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -43.0,
+      "63": -13.3,
+      "125": -7.3,
+      "250": -7.2,
+      "500": -8.4,
+      "1000": -4.4,
+      "2000": -14.2,
+      "4000": -16.1,
+      "8000": -21.8,
+      "16000": -32.6
+     },
+     "low_vs_lowmid": -1.6,
+     "lowmid_vs_mid": -0.8,
+     "upper_vs_lowmid": -7.3,
+     "mid_vs_high": 11.1,
+     "flags": []
+    },
+    "balanceTrimDb": -0.5,
+    "presence2kVs700Db": -11.9,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.838,
+     "monoLoudnessDelta": -0.4
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 35,
+    "semitoneRoughnessPct": 1.18,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.09
+   },
+   "loopStart": 0.5,
+   "loopEnd": 67.7,
+   "loopStartSample": 24000,
+   "loopEndSample": 3249600,
+   "fileDuration": 68.2,
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/radio_retro.ogg",
+    "m4a": "audio/music/radio_retro.m4a"
+   },
+   "bytes": {
+    "ogg": 444334,
+    "m4a": 523380
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 3273600,
+     "lengthDeltaMs": 0.0,
+     "lufs": -16.01,
+     "truePeakDb": -3.86,
+     "clippedSamples": 0,
+     "dc": [
+      -1e-05,
+      3e-06
+     ],
+     "snrDb": {
+      "250-1000": 17.0,
+      "1000-2500": 15.4,
+      "2500-5000": 9.8
+     },
+     "seam": {
+      "diffDb": -20.3,
+      "spike": 1.1
+     },
+     "seamXf": {
+      "jump": 0.0045,
+      "rawJump": 0.0017,
+      "naturalMaxStep": 0.0696
+     },
+     "loopLufs": -15.99
+    },
+    "m4a": {
+     "samples": 3274752,
+     "lengthDeltaMs": 24.0,
+     "lufs": -15.98,
+     "truePeakDb": -2.96,
+     "clippedSamples": 0,
+     "dc": [
+      -6e-06,
+      -9e-06
+     ],
+     "snrDb": {
+      "250-1000": 15.5,
+      "1000-2500": 12.8,
+      "2500-5000": 7.1
+     },
+     "seam": {
+      "diffDb": -13.4,
+      "spike": 2.12
+     },
+     "seamXf": {
+      "jump": 0.0193,
+      "rawJump": 0.0653,
+      "naturalMaxStep": 0.0874
+     },
+     "loopLufs": -15.96
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 35,
+    "roughness": {
+     "semitonePct": 1.18,
+     "outOfChordPct": {
+      "archtop": 0.0,
+      "clarinet": 2.2,
+      "upright": 0.1,
+      "vibcomp": 0.1,
+      "vibes": 0.5
+     },
+     "topPairs": [
+      [
+       [
+        "clarinet",
+        "clarinet"
+       ],
+       0.59
+      ],
+      [
+       [
+        "vibes",
+        "vibes"
+       ],
+       0.36
+      ],
+      [
+       [
+        "archtop",
+        "clarinet"
+       ],
+       0.18
+      ]
+     ],
+     "worst": [
+      "30.0s D7: D3/upright 0dB, F#5/clarinet -1dB, G5/clarinet -4dB, D3/archtop -7dB, C4/archtop -7dB, F#4/archtop -7dB",
+      "44.4s D7: D3/upright 0dB, F#5/clarinet -1dB, G5/clarinet -4dB, D3/archtop -7dB, C4/archtop -7dB, F#4/archtop -7dB",
+      "3.6s D7: A2/upright 0dB, B5/clarinet -1dB, C6/clarinet -4dB, D3/archtop -7dB, C4/archtop -7dB, F#4/archtop -7dB"
+     ]
+    }
+   },
+   "phone": {
+    "upright": {
+     "full": -5.3,
+     "phone": -10.1
+    },
+    "kick": {
+     "full": -21.3,
+     "phone": -38.8
+    },
+    "melodyOverAccPhone": 1.8
+   },
+   "stems": {
+    "clarinet": {
+     "raw_lufs": -12.5,
+     "target": -19
+    },
+    "vibes": {
+     "raw_lufs": -13.2,
+     "target": -21
+    },
+    "vibcomp": {
+     "raw_lufs": -15.9,
+     "target": -28
+    },
+    "archtop": {
+     "raw_lufs": -0.5,
+     "target": -25
+    },
+    "upright": {
+     "raw_lufs": -16.2,
+     "target": -21
+    },
+    "tap": {
+     "raw_lufs": -23.7,
+     "target": -28
+    },
+    "swishl": {
+     "raw_lufs": -19.6,
+     "target": -32
+    },
+    "kick": {
+     "raw_lufs": -23.4,
+     "target": -37
+    }
+   }
+  },
+  "radio_samba": {
+   "kind": "loop",
+   "title": "Радио «Самба»",
+   "use": "Радио «Самба»: карнавал, по кругу (особый день — карнавал)",
+   "key": "F",
+   "bpm": 120,
+   "meter": "2/4",
+   "duration": 64.0,
+   "samples": 3072000,
+   "fileSamples": 3120000,
+   "lufs": -16.0,
+   "truePeakDb": -4.18,
+   "dc": [
+    -0.0,
+    -0.0
+   ],
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -35.7,
+      "63": -6.6,
+      "125": -7.8,
+      "250": -8.9,
+      "500": -7.4,
+      "1000": -7.0,
+      "2000": -10.5,
+      "4000": -18.9,
+      "8000": -22.4,
+      "16000": -33.7
+     },
+     "low_vs_lowmid": 0.9,
+     "lowmid_vs_mid": 0.4,
+     "upper_vs_lowmid": -4.8,
+     "mid_vs_high": 11.9,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -5.6,
+    "lrDb": 0.03,
+    "mono": {
+     "corr": 0.893,
+     "monoLoudnessDelta": -0.28
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 13,
+    "semitoneRoughnessPct": 1.38,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.9
+   },
+   "loopStart": 0.5,
+   "loopEnd": 64.5,
+   "loopStartSample": 24000,
+   "loopEndSample": 3096000,
+   "fileDuration": 65.0,
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/radio_samba.ogg",
+    "m4a": "audio/music/radio_samba.m4a"
+   },
+   "bytes": {
+    "ogg": 452854,
+    "m4a": 499202
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 3120000,
+     "lengthDeltaMs": 0.0,
+     "lufs": -15.98,
+     "truePeakDb": -3.91,
+     "clippedSamples": 0,
+     "dc": [
+      6.8e-05,
+      3.5e-05
+     ],
+     "snrDb": {
+      "250-1000": 16.2,
+      "1000-2500": 15.4,
+      "2500-5000": 9.7
+     },
+     "seam": {
+      "diffDb": -19.6,
+      "spike": 6.26
+     },
+     "seamXf": {
+      "jump": 0.0315,
+      "rawJump": 0.0493,
+      "naturalMaxStep": 0.0906
+     },
+     "loopLufs": -15.99
+    },
+    "m4a": {
+     "samples": 3121152,
+     "lengthDeltaMs": 24.0,
+     "lufs": -15.98,
+     "truePeakDb": -3.86,
+     "clippedSamples": 0,
+     "dc": [
+      4e-06,
+      6e-06
+     ],
+     "snrDb": {
+      "250-1000": 14.2,
+      "1000-2500": 12.8,
+      "2500-5000": 5.8
+     },
+     "seam": {
+      "diffDb": -12.8,
+      "spike": 3.34
+     },
+     "seamXf": {
+      "jump": 0.0366,
+      "rawJump": 0.0555,
+      "naturalMaxStep": 0.0826
+     },
+     "loopLufs": -15.99
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 13,
+    "roughness": {
+     "semitonePct": 1.38,
+     "outOfChordPct": {
+      "brass": 2.0,
+      "brass2": 0.2,
+      "cavaco": 0.0,
+      "ebass": 0.0,
+      "flute": 0.5,
+      "stabs": 0.1
+     },
+     "topPairs": [
+      [
+       [
+        "brass",
+        "brass"
+       ],
+       0.63
+      ],
+      [
+       [
+        "flute",
+        "flute"
+       ],
+       0.26
+      ],
+      [
+       [
+        "brass",
+        "brass2"
+       ],
+       0.18
+      ]
+     ],
+     "worst": [
+      "48.4s Gm7: A5/brass 0dB, Bb5/brass -3dB, A6/flute -3dB, G2/ebass -4dB, F5/brass2 -4dB, Bb6/flute -6dB",
+      "54.4s Gm7: A5/brass 0dB, Bb5/brass -3dB, A6/flute -3dB, G2/ebass -4dB, F5/brass2 -4dB, Bb6/flute -6dB",
+      "2.0s D7: D2/ebass 0dB, F#5/brass -2dB, G5/brass -3dB, D5/brass2 -6dB, D5/brass2 -7dB, C4/cavaco -8dB"
+     ]
+    }
+   },
+   "phone": {
+    "ebass": {
+     "full": -5.3,
+     "phone": -11.0
+    },
+    "surdo": {
+     "full": -11.8,
+     "phone": -26.0
+    },
+    "melodyOverAccPhone": 0.1
+   },
+   "stems": {
+    "brass": {
+     "raw_lufs": -18.1,
+     "target": -19
+    },
+    "brass2": {
+     "raw_lufs": -19.0,
+     "target": -23
+    },
+    "flute": {
+     "raw_lufs": -10.5,
+     "target": -20.5
+    },
+    "stabs": {
+     "raw_lufs": -21.8,
+     "target": -24
+    },
+    "cavaco": {
+     "raw_lufs": -1.7,
+     "target": -26.5
+    },
+    "ebass": {
+     "raw_lufs": -16.4,
+     "target": -19.5
+    },
+    "apito": {
+     "raw_lufs": -24.4,
+     "target": -30
+    },
+    "cuica_u": {
+     "raw_lufs": -27.4,
+     "target": -29
+    },
+    "cuica_d": {
+     "raw_lufs": -27.2,
+     "target": -29
+    },
+    "surdo_m": {
+     "raw_lufs": -22.1,
+     "target": -29
+    },
+    "surdo": {
+     "raw_lufs": -14.9,
+     "target": -26
+    },
+    "caixa": {
+     "raw_lufs": -19.3,
+     "target": -30
+    },
+    "ganza": {
+     "raw_lufs": -24.3,
+     "target": -30
+    },
+    "tamb": {
+     "raw_lufs": -25.9,
+     "target": -29.5
+    },
+    "agogo_h": {
+     "raw_lufs": -24.0,
+     "target": -31.5
+    },
+    "agogo_l": {
+     "raw_lufs": -24.7,
+     "target": -31.5
+    }
+   }
+  },
+  "sting_coin": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "key": "C",
+   "bpm": 120,
+   "meter": "4/4",
+   "duration": 1.965,
+   "samples": 94320,
+   "fileSamples": 94320,
+   "lufs": -18.0,
+   "truePeakDb": -7.87,
+   "dc": [
+    2e-06,
+    2e-06
+   ],
+   "shortTermMaxLufs": -18.59,
+   "momentaryMaxLufs": -13.34,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -69.6,
+      "63": -66.1,
+      "125": -63.2,
+      "250": -59.8,
+      "500": -50.6,
+      "1000": -4.8,
+      "2000": -1.9,
+      "4000": -18.7,
+      "8000": -20.1,
+      "16000": -51.9
+     },
+     "low_vs_lowmid": -11.3,
+     "lowmid_vs_mid": -50.0,
+     "upper_vs_lowmid": 48.3,
+     "mid_vs_high": 16.2,
+     "flags": []
+    },
+    "balanceTrimDb": -1.85,
+    "presence2kVs700Db": 51.3,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.964,
+     "monoLoudnessDelta": -0.09
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 4.37
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_coin.ogg",
+    "m4a": "audio/music/sting_coin.m4a"
+   },
+   "bytes": {
+    "ogg": 28058,
+    "m4a": 16424
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 94320,
+     "lengthDeltaMs": 0.0,
+     "lufs": -17.99,
+     "truePeakDb": -8.06,
+     "clippedSamples": 0,
+     "dc": [
+      0.0,
+      0.0
+     ],
+     "snrDb": {
+      "250-1000": 13.7,
+      "1000-2500": 32.0,
+      "2500-5000": 18.6
+     }
+    },
+    "m4a": {
+     "samples": 95232,
+     "lengthDeltaMs": 19.0,
+     "lufs": -18.19,
+     "truePeakDb": -8.5,
+     "clippedSamples": 0,
+     "dc": [
+      2e-06,
+      2e-06
+     ],
+     "snrDb": {
+      "250-1000": -1.1,
+      "1000-2500": 17.2,
+      "2500-5000": 11.8
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "coin": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "coin": {
+     "raw_lufs": -15.6,
+     "target": -15
+    },
+    "sleigh": {
+     "raw_lufs": -38.2,
+     "target": -26
+    }
+   }
+  },
+  "sting_coin_A": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "key": "A",
+   "bpm": 120,
+   "meter": "4/4",
+   "duration": 1.965,
+   "samples": 94320,
+   "fileSamples": 94320,
+   "lufs": -18.0,
+   "truePeakDb": -5.81,
+   "dc": [
+    -1e-06,
+    -1e-06
+   ],
+   "shortTermMaxLufs": -18.33,
+   "momentaryMaxLufs": -12.82,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -68.5,
+      "63": -64.8,
+      "125": -61.0,
+      "250": -54.8,
+      "500": -44.9,
+      "1000": -5.6,
+      "2000": -1.6,
+      "4000": -15.5,
+      "8000": -20.7,
+      "16000": -48.1
+     },
+     "low_vs_lowmid": -15.0,
+     "lowmid_vs_mid": -44.3,
+     "upper_vs_lowmid": 43.0,
+     "mid_vs_high": 14.2,
+     "flags": []
+    },
+    "balanceTrimDb": 1.35,
+    "presence2kVs700Db": 21.7,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.909,
+     "monoLoudnessDelta": -0.22
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 5.21
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_coin_A.ogg",
+    "m4a": "audio/music/sting_coin_A.m4a"
+   },
+   "bytes": {
+    "ogg": 28134,
+    "m4a": 16467
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 94320,
+     "lengthDeltaMs": 0.0,
+     "lufs": -17.99,
+     "truePeakDb": -5.98,
+     "clippedSamples": 0,
+     "dc": [
+      1e-06,
+      1e-06
+     ],
+     "snrDb": {
+      "250-1000": 17.4,
+      "1000-2500": 33.8,
+      "2500-5000": 18.7
+     }
+    },
+    "m4a": {
+     "samples": 95232,
+     "lengthDeltaMs": 19.0,
+     "lufs": -18.01,
+     "truePeakDb": -6.13,
+     "clippedSamples": 0,
+     "dc": [
+      1e-06,
+      -0.0
+     ],
+     "snrDb": {
+      "250-1000": -4.2,
+      "1000-2500": 18.8,
+      "2500-5000": 11.0
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "coin": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "coin": {
+     "raw_lufs": -16.1,
+     "target": -15
+    },
+    "sleigh": {
+     "raw_lufs": -38.1,
+     "target": -26
+    }
+   },
+   "baseKey": "C",
+   "transpose": -3
+  },
+  "sting_coin_Bb": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "key": "Bb",
+   "bpm": 120,
+   "meter": "4/4",
+   "duration": 1.965,
+   "samples": 94320,
+   "fileSamples": 94320,
+   "lufs": -18.0,
+   "truePeakDb": -7.85,
+   "dc": [
+    0.0,
+    0.0
+   ],
+   "shortTermMaxLufs": -18.69,
+   "momentaryMaxLufs": -13.57,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -70.2,
+      "63": -70.9,
+      "125": -66.6,
+      "250": -64.1,
+      "500": -53.2,
+      "1000": -7.3,
+      "2000": -1.0,
+      "4000": -17.1,
+      "8000": -21.1,
+      "16000": -52.2
+     },
+     "low_vs_lowmid": -12.4,
+     "lowmid_vs_mid": -52.7,
+     "upper_vs_lowmid": 51.9,
+     "mid_vs_high": 15.6,
+     "flags": []
+    },
+    "balanceTrimDb": 1.75,
+    "presence2kVs700Db": 50.5,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.922,
+     "monoLoudnessDelta": -0.18
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 4.08
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_coin_Bb.ogg",
+    "m4a": "audio/music/sting_coin_Bb.m4a"
+   },
+   "bytes": {
+    "ogg": 28926,
+    "m4a": 16360
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 94320,
+     "lengthDeltaMs": 0.0,
+     "lufs": -17.99,
+     "truePeakDb": -7.77,
+     "clippedSamples": 0,
+     "dc": [
+      0.0,
+      1e-06
+     ],
+     "snrDb": {
+      "250-1000": 13.0,
+      "1000-2500": 36.8,
+      "2500-5000": 19.5
+     }
+    },
+    "m4a": {
+     "samples": 95232,
+     "lengthDeltaMs": 19.0,
+     "lufs": -18.07,
+     "truePeakDb": -8.25,
+     "clippedSamples": 0,
+     "dc": [
+      -1e-06,
+      -1e-06
+     ],
+     "snrDb": {
+      "250-1000": -11.3,
+      "1000-2500": 16.8,
+      "2500-5000": 11.9
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "coin": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "coin": {
+     "raw_lufs": -16.0,
+     "target": -15
+    },
+    "sleigh": {
+     "raw_lufs": -36.6,
+     "target": -26
+    }
+   },
+   "baseKey": "C",
+   "transpose": -2
+  },
+  "sting_coin_D": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "key": "D",
+   "bpm": 120,
+   "meter": "4/4",
+   "duration": 1.965,
+   "samples": 94320,
+   "fileSamples": 94320,
+   "lufs": -18.0,
+   "truePeakDb": -7.86,
+   "dc": [
+    -1e-06,
+    -1e-06
+   ],
+   "shortTermMaxLufs": -18.46,
+   "momentaryMaxLufs": -13.0,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -69.0,
+      "63": -64.4,
+      "125": -61.4,
+      "250": -57.6,
+      "500": -50.2,
+      "1000": -32.7,
+      "2000": -0.1,
+      "4000": -18.3,
+      "8000": -20.0,
+      "16000": -43.2
+     },
+     "low_vs_lowmid": -10.2,
+     "lowmid_vs_mid": -49.4,
+     "upper_vs_lowmid": 49.4,
+     "mid_vs_high": 15.9,
+     "flags": []
+    },
+    "balanceTrimDb": 1.05,
+    "presence2kVs700Db": 16.0,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.95,
+     "monoLoudnessDelta": -0.12
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 4.66
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_coin_D.ogg",
+    "m4a": "audio/music/sting_coin_D.m4a"
+   },
+   "bytes": {
+    "ogg": 27485,
+    "m4a": 16378
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 94320,
+     "lengthDeltaMs": 0.0,
+     "lufs": -17.99,
+     "truePeakDb": -7.78,
+     "clippedSamples": 0,
+     "dc": [
+      0.0,
+      -0.0
+     ],
+     "snrDb": {
+      "250-1000": 17.7,
+      "1000-2500": 33.2,
+      "2500-5000": 17.3
+     }
+    },
+    "m4a": {
+     "samples": 95232,
+     "lengthDeltaMs": 19.0,
+     "lufs": -18.03,
+     "truePeakDb": -7.9,
+     "clippedSamples": 0,
+     "dc": [
+      -1e-06,
+      -1e-06
+     ],
+     "snrDb": {
+      "250-1000": 3.7,
+      "1000-2500": 19.1,
+      "2500-5000": 9.9
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "coin": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "coin": {
+     "raw_lufs": -15.4,
+     "target": -15
+    },
+    "sleigh": {
+     "raw_lufs": -37.0,
+     "target": -26
+    }
+   },
+   "baseKey": "C",
+   "transpose": 2
+  },
+  "sting_coin_Eb": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "key": "Eb",
+   "bpm": 120,
+   "meter": "4/4",
+   "duration": 1.965,
+   "samples": 94320,
+   "fileSamples": 94320,
+   "lufs": -18.0,
+   "truePeakDb": -8.51,
+   "dc": [
+    0.0,
+    0.0
+   ],
+   "shortTermMaxLufs": -18.51,
+   "momentaryMaxLufs": -13.14,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -75.6,
+      "63": -68.4,
+      "125": -68.2,
+      "250": -63.1,
+      "500": -53.3,
+      "1000": -40.7,
+      "2000": -0.1,
+      "4000": -18.2,
+      "8000": -20.7,
+      "16000": -43.8
+     },
+     "low_vs_lowmid": -12.4,
+     "lowmid_vs_mid": -52.8,
+     "upper_vs_lowmid": 52.9,
+     "mid_vs_high": 16.2,
+     "flags": []
+    },
+    "balanceTrimDb": -1.12,
+    "presence2kVs700Db": 15.6,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.974,
+     "monoLoudnessDelta": -0.06
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 4.79
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_coin_Eb.ogg",
+    "m4a": "audio/music/sting_coin_Eb.m4a"
+   },
+   "bytes": {
+    "ogg": 26307,
+    "m4a": 16370
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 94320,
+     "lengthDeltaMs": 0.0,
+     "lufs": -17.97,
+     "truePeakDb": -8.45,
+     "clippedSamples": 0,
+     "dc": [
+      -0.0,
+      -0.0
+     ],
+     "snrDb": {
+      "250-1000": 16.5,
+      "1000-2500": 33.6,
+      "2500-5000": 17.7
+     }
+    },
+    "m4a": {
+     "samples": 95232,
+     "lengthDeltaMs": 19.0,
+     "lufs": -18.06,
+     "truePeakDb": -8.32,
+     "clippedSamples": 0,
+     "dc": [
+      0.0,
+      1e-06
+     ],
+     "snrDb": {
+      "250-1000": 2.1,
+      "1000-2500": 18.0,
+      "2500-5000": 11.5
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "coin": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "coin": {
+     "raw_lufs": -15.3,
+     "target": -15
+    },
+    "sleigh": {
+     "raw_lufs": -38.5,
+     "target": -26
+    }
+   },
+   "baseKey": "C",
+   "transpose": 3
+  },
+  "sting_coin_F": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "key": "F",
+   "bpm": 120,
+   "meter": "4/4",
+   "duration": 1.965,
+   "samples": 94320,
+   "fileSamples": 94320,
+   "lufs": -18.0,
+   "truePeakDb": -7.5,
+   "dc": [
+    1e-06,
+    1e-06
+   ],
+   "shortTermMaxLufs": -18.51,
+   "momentaryMaxLufs": -13.22,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -75.2,
+      "63": -73.2,
+      "125": -70.9,
+      "250": -64.5,
+      "500": -60.7,
+      "1000": -48.0,
+      "2000": -0.1,
+      "4000": -16.5,
+      "8000": -19.5,
+      "16000": -45.0
+     },
+     "low_vs_lowmid": -9.7,
+     "lowmid_vs_mid": -59.0,
+     "upper_vs_lowmid": 59.1,
+     "mid_vs_high": 14.6,
+     "flags": []
+    },
+    "balanceTrimDb": 1.49,
+    "presence2kVs700Db": 33.7,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.845,
+     "monoLoudnessDelta": -0.5
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 4.8
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_coin_F.ogg",
+    "m4a": "audio/music/sting_coin_F.m4a"
+   },
+   "bytes": {
+    "ogg": 29670,
+    "m4a": 16335
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 94320,
+     "lengthDeltaMs": 0.0,
+     "lufs": -17.99,
+     "truePeakDb": -7.3,
+     "clippedSamples": 0,
+     "dc": [
+      0.0,
+      -0.0
+     ],
+     "snrDb": {
+      "250-1000": 15.6,
+      "1000-2500": 36.6,
+      "2500-5000": 30.0
+     }
+    },
+    "m4a": {
+     "samples": 95232,
+     "lengthDeltaMs": 19.0,
+     "lufs": -18.1,
+     "truePeakDb": -7.88,
+     "clippedSamples": 0,
+     "dc": [
+      0.0,
+      0.0
+     ],
+     "snrDb": {
+      "250-1000": 3.8,
+      "1000-2500": 14.8,
+      "2500-5000": 17.2
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "coin": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "coin": {
+     "raw_lufs": -14.6,
+     "target": -15
+    },
+    "sleigh": {
+     "raw_lufs": -38.3,
+     "target": -26
+    }
+   },
+   "baseKey": "C",
+   "transpose": 5
+  },
+  "sting_coin_G": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "key": "G",
+   "bpm": 120,
+   "meter": "4/4",
+   "duration": 1.965,
+   "samples": 94320,
+   "fileSamples": 94320,
+   "lufs": -18.0,
+   "truePeakDb": -6.57,
+   "dc": [
+    6e-06,
+    6e-06
+   ],
+   "shortTermMaxLufs": -18.5,
+   "momentaryMaxLufs": -13.05,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -56.0,
+      "63": -53.0,
+      "125": -50.2,
+      "250": -46.6,
+      "500": -40.0,
+      "1000": -5.1,
+      "2000": -1.8,
+      "4000": -15.9,
+      "8000": -21.8,
+      "16000": -52.3
+     },
+     "low_vs_lowmid": -9.3,
+     "lowmid_vs_mid": -39.0,
+     "upper_vs_lowmid": 37.4,
+     "mid_vs_high": 14.8,
+     "flags": []
+    },
+    "balanceTrimDb": -0.83,
+    "presence2kVs700Db": 14.9,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.962,
+     "monoLoudnessDelta": -0.09
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 4.84
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_coin_G.ogg",
+    "m4a": "audio/music/sting_coin_G.m4a"
+   },
+   "bytes": {
+    "ogg": 27014,
+    "m4a": 16416
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 94320,
+     "lengthDeltaMs": 0.0,
+     "lufs": -17.99,
+     "truePeakDb": -6.56,
+     "clippedSamples": 0,
+     "dc": [
+      -3e-06,
+      2e-06
+     ],
+     "snrDb": {
+      "250-1000": 37.9,
+      "1000-2500": 31.9,
+      "2500-5000": 21.2
+     }
+    },
+    "m4a": {
+     "samples": 95232,
+     "lengthDeltaMs": 19.0,
+     "lufs": -18.06,
+     "truePeakDb": -6.55,
+     "clippedSamples": 0,
+     "dc": [
+      6e-06,
+      6e-06
+     ],
+     "snrDb": {
+      "250-1000": 19.9,
+      "1000-2500": 21.3,
+      "2500-5000": 13.0
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "coin": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "coin": {
+     "raw_lufs": -16.0,
+     "target": -15
+    },
+    "sleigh": {
+     "raw_lufs": -37.1,
+     "target": -26
+    }
+   },
+   "baseKey": "C",
+   "transpose": -5
+  },
+  "sting_day_close": {
+   "kind": "sting",
+   "title": "Итоги дня",
+   "use": "Закрытие дня / итоги",
+   "key": "C",
+   "bpm": 112,
+   "meter": "4/4",
+   "duration": 4.679,
+   "samples": 224571,
+   "fileSamples": 224571,
+   "lufs": -15.0,
+   "truePeakDb": -4.48,
+   "dc": [
+    -1.3e-05,
+    -1.2e-05
+   ],
+   "shortTermMaxLufs": -14.64,
+   "momentaryMaxLufs": -12.25,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -40.3,
+      "63": -9.6,
+      "125": -11.0,
+      "250": -6.1,
+      "500": -5.5,
+      "1000": -6.1,
+      "2000": -16.3,
+      "4000": -24.0,
+      "8000": -22.2,
+      "16000": -29.5
+     },
+     "low_vs_lowmid": -4.5,
+     "lowmid_vs_mid": 3.0,
+     "upper_vs_lowmid": -12.9,
+     "mid_vs_high": 14.3,
+     "flags": []
+    },
+    "balanceTrimDb": -0.86,
+    "presence2kVs700Db": -18.6,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.763,
+     "monoLoudnessDelta": -0.43
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 1,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.92
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_day_close.ogg",
+    "m4a": "audio/music/sting_day_close.m4a"
+   },
+   "bytes": {
+    "ogg": 44645,
+    "m4a": 38841
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 224571,
+     "lengthDeltaMs": 0.0,
+     "lufs": -14.98,
+     "truePeakDb": -3.96,
+     "clippedSamples": 0,
+     "dc": [
+      0.000298,
+      0.000292
+     ],
+     "snrDb": {
+      "250-1000": 21.3,
+      "1000-2500": 18.8,
+      "2500-5000": 16.9
+     }
+    },
+    "m4a": {
+     "samples": 225792,
+     "lengthDeltaMs": 25.4,
+     "lufs": -15.19,
+     "truePeakDb": -4.07,
+     "clippedSamples": 0,
+     "dc": [
+      -0.000137,
+      -2.9e-05
+     ],
+     "snrDb": {
+      "250-1000": 19.0,
+      "1000-2500": 14.6,
+      "2500-5000": 11.1
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 1,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "epiano": 0.0,
+      "epmel": 0.0,
+      "pad": 0.0,
+      "upright": 0.2
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "epmel": {
+     "raw_lufs": -13.6,
+     "target": -16.5
+    },
+    "epiano": {
+     "raw_lufs": -11.7,
+     "target": -20
+    },
+    "upright": {
+     "raw_lufs": -20.2,
+     "target": -21
+    },
+    "pad": {
+     "raw_lufs": -17.0,
+     "target": -26
+    }
+   }
+  },
+  "sting_day_open": {
+   "kind": "sting",
+   "title": "Открытие дня",
+   "use": "Открытие дня: колокольчик двери и мотив",
+   "key": "C",
+   "bpm": 132,
+   "meter": "4/4",
+   "duration": 3.532,
+   "samples": 169527,
+   "fileSamples": 169527,
+   "lufs": -15.0,
+   "truePeakDb": -2.93,
+   "dc": [
+    1e-06,
+    1e-06
+   ],
+   "shortTermMaxLufs": -15.2,
+   "momentaryMaxLufs": -11.46,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -40.8,
+      "63": -12.0,
+      "125": -12.9,
+      "250": -8.3,
+      "500": -6.6,
+      "1000": -4.9,
+      "2000": -7.2,
+      "4000": -21.1,
+      "8000": -38.0,
+      "16000": -62.6
+     },
+     "low_vs_lowmid": -5.0,
+     "lowmid_vs_mid": -1.5,
+     "upper_vs_lowmid": -2.6,
+     "mid_vs_high": 18.1,
+     "flags": []
+    },
+    "balanceTrimDb": -2.22,
+    "presence2kVs700Db": -21.7,
+    "lrDb": 0.02,
+    "mono": {
+     "corr": 0.831,
+     "monoLoudnessDelta": -0.38
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.33
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_day_open.ogg",
+    "m4a": "audio/music/sting_day_open.m4a"
+   },
+   "bytes": {
+    "ogg": 46919,
+    "m4a": 29067
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 169527,
+     "lengthDeltaMs": 0.0,
+     "lufs": -15.0,
+     "truePeakDb": -2.88,
+     "clippedSamples": 0,
+     "dc": [
+      5.9e-05,
+      -2.4e-05
+     ],
+     "snrDb": {
+      "250-1000": 23.7,
+      "1000-2500": 28.7,
+      "2500-5000": 17.7
+     }
+    },
+    "m4a": {
+     "samples": 170496,
+     "lengthDeltaMs": 20.2,
+     "lufs": -15.12,
+     "truePeakDb": -2.65,
+     "clippedSamples": 0,
+     "dc": [
+      7e-06,
+      -6e-06
+     ],
+     "snrDb": {
+      "250-1000": 20.2,
+      "1000-2500": 21.4,
+      "2500-5000": 15.6
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "celesta": 0.0,
+      "doorbell": 0.0,
+      "epiano": 0.0,
+      "upright": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "celesta": {
+     "raw_lufs": -12.4,
+     "target": -17
+    },
+    "doorbell": {
+     "raw_lufs": -15.6,
+     "target": -20
+    },
+    "epiano": {
+     "raw_lufs": -10.4,
+     "target": -20
+    },
+    "upright": {
+     "raw_lufs": -20.8,
+     "target": -22
+    }
+   }
+  },
+  "sting_expand": {
+   "kind": "sting",
+   "title": "Расширение магазина",
+   "use": "Расширение магазина",
+   "key": "C",
+   "bpm": 120,
+   "meter": "4/4",
+   "duration": 4.7,
+   "samples": 225600,
+   "fileSamples": 225600,
+   "lufs": -14.0,
+   "truePeakDb": -1.7,
+   "dc": [
+    -0.0,
+    0.0
+   ],
+   "shortTermMaxLufs": -13.13,
+   "momentaryMaxLufs": -10.71,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -41.5,
+      "63": -12.9,
+      "125": -15.1,
+      "250": -7.7,
+      "500": -4.4,
+      "1000": -7.3,
+      "2000": -7.6,
+      "4000": -17.9,
+      "8000": -22.4,
+      "16000": -31.1
+     },
+     "low_vs_lowmid": -8.2,
+     "lowmid_vs_mid": 1.7,
+     "upper_vs_lowmid": -4.5,
+     "mid_vs_high": 12.2,
+     "flags": []
+    },
+    "balanceTrimDb": 1.94,
+    "presence2kVs700Db": -6.1,
+    "lrDb": -0.14,
+    "mono": {
+     "corr": 0.601,
+     "monoLoudnessDelta": -0.9
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.75
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_expand.ogg",
+    "m4a": "audio/music/sting_expand.m4a"
+   },
+   "bytes": {
+    "ogg": 44100,
+    "m4a": 38998
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 225600,
+     "lengthDeltaMs": 0.0,
+     "lufs": -14.0,
+     "truePeakDb": -1.53,
+     "clippedSamples": 0,
+     "dc": [
+      7.2e-05,
+      -7.2e-05
+     ],
+     "snrDb": {
+      "250-1000": 20.6,
+      "1000-2500": 18.0,
+      "2500-5000": 11.4
+     }
+    },
+    "m4a": {
+     "samples": 225792,
+     "lengthDeltaMs": 4.0,
+     "lufs": -14.13,
+     "truePeakDb": -2.0,
+     "clippedSamples": 0,
+     "dc": [
+      1.2e-05,
+      5e-06
+     ],
+     "snrDb": {
+      "250-1000": 19.1,
+      "1000-2500": 19.8,
+      "2500-5000": 8.5
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "bell": 0.0,
+      "glock": 0.0,
+      "harp": 0.0,
+      "pad": 0.0,
+      "upright": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "whoosh": {
+     "raw_lufs": -24.5,
+     "target": -24
+    },
+    "harp": {
+     "raw_lufs": -8.6,
+     "target": -19
+    },
+    "bell": {
+     "raw_lufs": -17.9,
+     "target": -20
+    },
+    "pad": {
+     "raw_lufs": -16.6,
+     "target": -22
+    },
+    "glock": {
+     "raw_lufs": -14.5,
+     "target": -21
+    },
+    "upright": {
+     "raw_lufs": -20.4,
+     "target": -23
+    }
+   }
+  },
+  "sting_fail": {
+   "kind": "sting",
+   "title": "Мягкая неудача",
+   "use": "Мягкая неудача (банкротство-предупреждение, проваленная цель)",
+   "key": "C",
+   "bpm": 100,
+   "meter": "4/4",
+   "duration": 4.5,
+   "samples": 216000,
+   "fileSamples": 216000,
+   "lufs": -16.0,
+   "truePeakDb": -5.81,
+   "dc": [
+    1.1e-05,
+    9e-06
+   ],
+   "shortTermMaxLufs": -16.19,
+   "momentaryMaxLufs": -13.66,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -41.4,
+      "63": -11.9,
+      "125": -11.6,
+      "250": -5.8,
+      "500": -3.8,
+      "1000": -8.5,
+      "2000": -15.9,
+      "4000": -17.7,
+      "8000": -30.8,
+      "16000": -53.6
+     },
+     "low_vs_lowmid": -7.1,
+     "lowmid_vs_mid": 6.2,
+     "upper_vs_lowmid": -12.0,
+     "mid_vs_high": 9.7,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -12.0,
+    "lrDb": 0.1,
+    "mono": {
+     "corr": 0.879,
+     "monoLoudnessDelta": -0.29
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 5,
+    "semitoneRoughnessPct": 1.22,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 0.94
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_fail.ogg",
+    "m4a": "audio/music/sting_fail.m4a"
+   },
+   "bytes": {
+    "ogg": 44198,
+    "m4a": 33326
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 216000,
+     "lengthDeltaMs": 0.0,
+     "lufs": -16.0,
+     "truePeakDb": -5.8,
+     "clippedSamples": 0,
+     "dc": [
+      -0.000109,
+      7.4e-05
+     ],
+     "snrDb": {
+      "250-1000": 21.2,
+      "1000-2500": 20.6,
+      "2500-5000": 21.5
+     }
+    },
+    "m4a": {
+     "samples": 216576,
+     "lengthDeltaMs": 12.0,
+     "lufs": -16.06,
+     "truePeakDb": -4.39,
+     "clippedSamples": 0,
+     "dc": [
+      -2.8e-05,
+      1.9e-05
+     ],
+     "snrDb": {
+      "250-1000": 18.9,
+      "1000-2500": 15.2,
+      "2500-5000": 13.5
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 5,
+    "roughness": {
+     "semitonePct": 1.22,
+     "outOfChordPct": {
+      "epiano": 1.8,
+      "upright": 0.8,
+      "vibes": 2.0
+     },
+     "topPairs": [
+      [
+       [
+        "epiano",
+        "epiano"
+       ],
+       1.22
+      ]
+     ],
+     "worst": [
+      "1.2s C: C5/vibes 0dB, C2/upright -2dB, G3/epiano -6dB, C4/epiano -6dB, E4/epiano -6dB, F2/upright -9dB",
+      "0.6s Fm6: D5/vibes 0dB, F2/upright -2dB, E5/vibes -3dB, Ab3/epiano -6dB, C4/epiano -6dB, F4/epiano -6dB"
+     ]
+    }
+   },
+   "phone": {},
+   "stems": {
+    "vibes": {
+     "raw_lufs": -14.8,
+     "target": -17
+    },
+    "epiano": {
+     "raw_lufs": -11.0,
+     "target": -20
+    },
+    "upright": {
+     "raw_lufs": -19.0,
+     "target": -22
+    }
+   }
+  },
+  "sting_purchase": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "key": "C",
+   "bpm": 160,
+   "meter": "4/4",
+   "duration": 3.231,
+   "samples": 155100,
+   "fileSamples": 155100,
+   "lufs": -18.5,
+   "truePeakDb": -3.64,
+   "dc": [
+    6e-06,
+    5e-06
+   ],
+   "shortTermMaxLufs": -21.39,
+   "momentaryMaxLufs": -15.68,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -54.6,
+      "63": -45.3,
+      "125": -18.7,
+      "250": -14.7,
+      "500": -8.2,
+      "1000": -1.3,
+      "2000": -15.9,
+      "4000": -15.3,
+      "8000": -23.3,
+      "16000": -37.5
+     },
+     "low_vs_lowmid": -11.4,
+     "lowmid_vs_mid": -6.1,
+     "upper_vs_lowmid": -5.3,
+     "mid_vs_high": 13.5,
+     "flags": []
+    },
+    "balanceTrimDb": -2.77,
+    "presence2kVs700Db": -8.3,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.871,
+     "monoLoudnessDelta": 0.05
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.72
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_purchase.ogg",
+    "m4a": "audio/music/sting_purchase.m4a"
+   },
+   "bytes": {
+    "ogg": 39335,
+    "m4a": 24586
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 155100,
+     "lengthDeltaMs": 0.0,
+     "lufs": -18.49,
+     "truePeakDb": -3.79,
+     "clippedSamples": 0,
+     "dc": [
+      -4e-06,
+      1.9e-05
+     ],
+     "snrDb": {
+      "250-1000": 24.8,
+      "1000-2500": 25.3,
+      "2500-5000": 16.1
+     }
+    },
+    "m4a": {
+     "samples": 155136,
+     "lengthDeltaMs": 0.8,
+     "lufs": -18.49,
+     "truePeakDb": -4.66,
+     "clippedSamples": 0,
+     "dc": [
+      4.5e-05,
+      5e-06
+     ],
+     "snrDb": {
+      "250-1000": 18.9,
+      "1000-2500": 17.6,
+      "2500-5000": 9.2
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "celesta": 0.0,
+      "glock": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "pop": {
+     "raw_lufs": -23.0,
+     "target": -19
+    },
+    "glock": {
+     "raw_lufs": -13.5,
+     "target": -17
+    },
+    "celesta": {
+     "raw_lufs": -14.9,
+     "target": -21
+    }
+   }
+  },
+  "sting_purchase_A": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "key": "A",
+   "bpm": 160,
+   "meter": "4/4",
+   "duration": 3.231,
+   "samples": 155100,
+   "fileSamples": 155100,
+   "lufs": -18.5,
+   "truePeakDb": -5.42,
+   "dc": [
+    -1.1e-05,
+    -1.1e-05
+   ],
+   "shortTermMaxLufs": -21.35,
+   "momentaryMaxLufs": -15.22,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -45.7,
+      "63": -41.2,
+      "125": -17.3,
+      "250": -9.6,
+      "500": -4.3,
+      "1000": -3.6,
+      "2000": -14.3,
+      "4000": -16.3,
+      "8000": -21.8,
+      "16000": -36.0
+     },
+     "low_vs_lowmid": -14.1,
+     "lowmid_vs_mid": 0.0,
+     "upper_vs_lowmid": -9.0,
+     "mid_vs_high": 12.0,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -11.1,
+    "lrDb": -0.3,
+    "mono": {
+     "corr": 0.576,
+     "monoLoudnessDelta": -0.5
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.88
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_purchase_A.ogg",
+    "m4a": "audio/music/sting_purchase_A.m4a"
+   },
+   "bytes": {
+    "ogg": 38037,
+    "m4a": 24819
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 155100,
+     "lengthDeltaMs": 0.0,
+     "lufs": -18.48,
+     "truePeakDb": -5.4,
+     "clippedSamples": 0,
+     "dc": [
+      2.3e-05,
+      -5e-06
+     ],
+     "snrDb": {
+      "250-1000": 25.4,
+      "1000-2500": 23.6,
+      "2500-5000": 13.8
+     }
+    },
+    "m4a": {
+     "samples": 155136,
+     "lengthDeltaMs": 0.8,
+     "lufs": -18.56,
+     "truePeakDb": -5.18,
+     "clippedSamples": 0,
+     "dc": [
+      -2.7e-05,
+      -2.1e-05
+     ],
+     "snrDb": {
+      "250-1000": 20.5,
+      "1000-2500": 17.5,
+      "2500-5000": 8.1
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "celesta": 0.0,
+      "glock": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "pop": {
+     "raw_lufs": -21.2,
+     "target": -19
+    },
+    "glock": {
+     "raw_lufs": -13.5,
+     "target": -17
+    },
+    "celesta": {
+     "raw_lufs": -15.6,
+     "target": -21
+    }
+   },
+   "baseKey": "C",
+   "transpose": -3
+  },
+  "sting_purchase_Bb": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "key": "Bb",
+   "bpm": 160,
+   "meter": "4/4",
+   "duration": 3.231,
+   "samples": 155100,
+   "fileSamples": 155100,
+   "lufs": -18.5,
+   "truePeakDb": -4.85,
+   "dc": [
+    1.6e-05,
+    1.6e-05
+   ],
+   "shortTermMaxLufs": -20.89,
+   "momentaryMaxLufs": -14.96,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -46.0,
+      "63": -39.5,
+      "125": -16.3,
+      "250": -9.3,
+      "500": -3.6,
+      "1000": -4.8,
+      "2000": -14.3,
+      "4000": -13.8,
+      "8000": -21.8,
+      "16000": -35.0
+     },
+     "low_vs_lowmid": -13.7,
+     "lowmid_vs_mid": 1.8,
+     "upper_vs_lowmid": -8.5,
+     "mid_vs_high": 8.8,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -11.0,
+    "lrDb": -0.04,
+    "mono": {
+     "corr": 0.711,
+     "monoLoudnessDelta": -0.15
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 3.25
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_purchase_Bb.ogg",
+    "m4a": "audio/music/sting_purchase_Bb.m4a"
+   },
+   "bytes": {
+    "ogg": 40497,
+    "m4a": 25062
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 155100,
+     "lengthDeltaMs": 0.0,
+     "lufs": -18.5,
+     "truePeakDb": -4.5,
+     "clippedSamples": 0,
+     "dc": [
+      -2.5e-05,
+      4.1e-05
+     ],
+     "snrDb": {
+      "250-1000": 23.8,
+      "1000-2500": 21.4,
+      "2500-5000": 16.2
+     }
+    },
+    "m4a": {
+     "samples": 155136,
+     "lengthDeltaMs": 0.8,
+     "lufs": -18.61,
+     "truePeakDb": -3.98,
+     "clippedSamples": 0,
+     "dc": [
+      -6e-06,
+      1.2e-05
+     ],
+     "snrDb": {
+      "250-1000": 18.7,
+      "1000-2500": 17.2,
+      "2500-5000": 10.3
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "celesta": 0.0,
+      "glock": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "pop": {
+     "raw_lufs": -22.9,
+     "target": -19
+    },
+    "glock": {
+     "raw_lufs": -13.4,
+     "target": -17
+    },
+    "celesta": {
+     "raw_lufs": -14.9,
+     "target": -21
+    }
+   },
+   "baseKey": "C",
+   "transpose": -2
+  },
+  "sting_purchase_D": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "key": "D",
+   "bpm": 160,
+   "meter": "4/4",
+   "duration": 3.231,
+   "samples": 155100,
+   "fileSamples": 155100,
+   "lufs": -18.5,
+   "truePeakDb": -6.86,
+   "dc": [
+    1e-05,
+    1.1e-05
+   ],
+   "shortTermMaxLufs": -21.2,
+   "momentaryMaxLufs": -15.82,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -48.6,
+      "63": -41.6,
+      "125": -18.7,
+      "250": -14.7,
+      "500": -9.7,
+      "1000": -4.7,
+      "2000": -3.2,
+      "4000": -17.0,
+      "8000": -23.3,
+      "16000": -37.3
+     },
+     "low_vs_lowmid": -10.2,
+     "lowmid_vs_mid": -7.6,
+     "upper_vs_lowmid": 5.5,
+     "mid_vs_high": 15.3,
+     "flags": []
+    },
+    "balanceTrimDb": 0.38,
+    "presence2kVs700Db": -16.2,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.716,
+     "monoLoudnessDelta": -0.66
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.33
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_purchase_D.ogg",
+    "m4a": "audio/music/sting_purchase_D.m4a"
+   },
+   "bytes": {
+    "ogg": 38307,
+    "m4a": 24674
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 155100,
+     "lengthDeltaMs": 0.0,
+     "lufs": -18.49,
+     "truePeakDb": -6.92,
+     "clippedSamples": 0,
+     "dc": [
+      -1.5e-05,
+      -3e-06
+     ],
+     "snrDb": {
+      "250-1000": 26.9,
+      "1000-2500": 25.5,
+      "2500-5000": 14.2
+     }
+    },
+    "m4a": {
+     "samples": 155136,
+     "lengthDeltaMs": 0.8,
+     "lufs": -18.53,
+     "truePeakDb": -7.23,
+     "clippedSamples": 0,
+     "dc": [
+      -3.8e-05,
+      7e-06
+     ],
+     "snrDb": {
+      "250-1000": 20.1,
+      "1000-2500": 18.6,
+      "2500-5000": 9.5
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "celesta": 0.0,
+      "glock": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "pop": {
+     "raw_lufs": -21.9,
+     "target": -19
+    },
+    "glock": {
+     "raw_lufs": -12.7,
+     "target": -17
+    },
+    "celesta": {
+     "raw_lufs": -15.4,
+     "target": -21
+    }
+   },
+   "baseKey": "C",
+   "transpose": 2
+  },
+  "sting_purchase_Eb": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "key": "Eb",
+   "bpm": 160,
+   "meter": "4/4",
+   "duration": 3.231,
+   "samples": 155100,
+   "fileSamples": 155100,
+   "lufs": -18.5,
+   "truePeakDb": -4.9,
+   "dc": [
+    1e-06,
+    1e-06
+   ],
+   "shortTermMaxLufs": -21.2,
+   "momentaryMaxLufs": -15.54,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -59.9,
+      "63": -54.3,
+      "125": -18.4,
+      "250": -14.0,
+      "500": -8.1,
+      "1000": -4.8,
+      "2000": -3.7,
+      "4000": -15.8,
+      "8000": -23.4,
+      "16000": -35.7
+     },
+     "low_vs_lowmid": -11.3,
+     "lowmid_vs_mid": -6.0,
+     "upper_vs_lowmid": 3.7,
+     "mid_vs_high": 14.0,
+     "flags": []
+    },
+    "balanceTrimDb": -1.32,
+    "presence2kVs700Db": -12.9,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.87,
+     "monoLoudnessDelta": -0.27
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.35
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_purchase_Eb.ogg",
+    "m4a": "audio/music/sting_purchase_Eb.m4a"
+   },
+   "bytes": {
+    "ogg": 40803,
+    "m4a": 24978
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 155100,
+     "lengthDeltaMs": 0.0,
+     "lufs": -18.5,
+     "truePeakDb": -5.04,
+     "clippedSamples": 0,
+     "dc": [
+      -5e-06,
+      -1.5e-05
+     ],
+     "snrDb": {
+      "250-1000": 24.9,
+      "1000-2500": 25.1,
+      "2500-5000": 14.6
+     }
+    },
+    "m4a": {
+     "samples": 155136,
+     "lengthDeltaMs": 0.8,
+     "lufs": -18.59,
+     "truePeakDb": -5.81,
+     "clippedSamples": 0,
+     "dc": [
+      7e-06,
+      -4e-06
+     ],
+     "snrDb": {
+      "250-1000": 18.7,
+      "1000-2500": 19.7,
+      "2500-5000": 8.9
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "celesta": 0.0,
+      "glock": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "pop": {
+     "raw_lufs": -22.2,
+     "target": -19
+    },
+    "glock": {
+     "raw_lufs": -12.4,
+     "target": -17
+    },
+    "celesta": {
+     "raw_lufs": -15.0,
+     "target": -21
+    }
+   },
+   "baseKey": "C",
+   "transpose": 3
+  },
+  "sting_purchase_F": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "key": "F",
+   "bpm": 160,
+   "meter": "4/4",
+   "duration": 3.231,
+   "samples": 155100,
+   "fileSamples": 155100,
+   "lufs": -18.5,
+   "truePeakDb": -6.55,
+   "dc": [
+    -7e-06,
+    -6e-06
+   ],
+   "shortTermMaxLufs": -21.46,
+   "momentaryMaxLufs": -15.92,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -49.0,
+      "63": -41.4,
+      "125": -18.6,
+      "250": -14.7,
+      "500": -10.4,
+      "1000": -3.2,
+      "2000": -4.6,
+      "4000": -15.0,
+      "8000": -24.2,
+      "16000": -35.7
+     },
+     "low_vs_lowmid": -9.6,
+     "lowmid_vs_mid": -8.2,
+     "upper_vs_lowmid": 4.8,
+     "mid_vs_high": 13.7,
+     "flags": []
+    },
+    "balanceTrimDb": -1.18,
+    "presence2kVs700Db": -13.4,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.839,
+     "monoLoudnessDelta": -0.34
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.93
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_purchase_F.ogg",
+    "m4a": "audio/music/sting_purchase_F.m4a"
+   },
+   "bytes": {
+    "ogg": 39962,
+    "m4a": 24750
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 155100,
+     "lengthDeltaMs": 0.0,
+     "lufs": -18.5,
+     "truePeakDb": -6.9,
+     "clippedSamples": 0,
+     "dc": [
+      2e-06,
+      3.2e-05
+     ],
+     "snrDb": {
+      "250-1000": 26.3,
+      "1000-2500": 24.1,
+      "2500-5000": 15.7
+     }
+    },
+    "m4a": {
+     "samples": 155136,
+     "lengthDeltaMs": 0.8,
+     "lufs": -18.6,
+     "truePeakDb": -6.92,
+     "clippedSamples": 0,
+     "dc": [
+      -3.7e-05,
+      -4e-06
+     ],
+     "snrDb": {
+      "250-1000": 19.5,
+      "1000-2500": 20.1,
+      "2500-5000": 10.9
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "celesta": 0.0,
+      "glock": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "pop": {
+     "raw_lufs": -22.1,
+     "target": -19
+    },
+    "glock": {
+     "raw_lufs": -12.0,
+     "target": -17
+    },
+    "celesta": {
+     "raw_lufs": -14.9,
+     "target": -21
+    }
+   },
+   "baseKey": "C",
+   "transpose": 5
+  },
+  "sting_purchase_G": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "key": "G",
+   "bpm": 160,
+   "meter": "4/4",
+   "duration": 3.231,
+   "samples": 155100,
+   "fileSamples": 155100,
+   "lufs": -18.5,
+   "truePeakDb": -3.78,
+   "dc": [
+    -1.6e-05,
+    -1.6e-05
+   ],
+   "shortTermMaxLufs": -21.16,
+   "momentaryMaxLufs": -14.89,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -43.7,
+      "63": -39.4,
+      "125": -17.4,
+      "250": -9.1,
+      "500": -4.9,
+      "1000": -3.2,
+      "2000": -13.9,
+      "4000": -17.7,
+      "8000": -23.8,
+      "16000": -35.5
+     },
+     "low_vs_lowmid": -13.9,
+     "lowmid_vs_mid": -0.6,
+     "upper_vs_lowmid": -8.9,
+     "mid_vs_high": 13.9,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -10.5,
+    "lrDb": 0.04,
+    "mono": {
+     "corr": 0.888,
+     "monoLoudnessDelta": -0.27
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 3.33
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_purchase_G.ogg",
+    "m4a": "audio/music/sting_purchase_G.m4a"
+   },
+   "bytes": {
+    "ogg": 37802,
+    "m4a": 24391
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 155100,
+     "lengthDeltaMs": 0.0,
+     "lufs": -18.48,
+     "truePeakDb": -3.64,
+     "clippedSamples": 0,
+     "dc": [
+      1.5e-05,
+      1e-06
+     ],
+     "snrDb": {
+      "250-1000": 26.8,
+      "1000-2500": 15.6,
+      "2500-5000": 14.3
+     }
+    },
+    "m4a": {
+     "samples": 155136,
+     "lengthDeltaMs": 0.8,
+     "lufs": -18.61,
+     "truePeakDb": -5.23,
+     "clippedSamples": 0,
+     "dc": [
+      -6e-05,
+      -1.6e-05
+     ],
+     "snrDb": {
+      "250-1000": 21.9,
+      "1000-2500": 11.9,
+      "2500-5000": 8.8
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "celesta": 0.0,
+      "glock": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "pop": {
+     "raw_lufs": -21.6,
+     "target": -19
+    },
+    "glock": {
+     "raw_lufs": -13.9,
+     "target": -17
+    },
+    "celesta": {
+     "raw_lufs": -15.2,
+     "target": -21
+    }
+   },
+   "baseKey": "C",
+   "transpose": -5
+  },
+  "sting_rank_up": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "key": "C",
+   "bpm": 132,
+   "meter": "4/4",
+   "duration": 4.045,
+   "samples": 194181,
+   "fileSamples": 194181,
+   "lufs": -14.0,
+   "truePeakDb": -4.25,
+   "dc": [
+    0.0,
+    -0.0
+   ],
+   "shortTermMaxLufs": -15.15,
+   "momentaryMaxLufs": -12.04,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -38.0,
+      "63": -10.2,
+      "125": -8.7,
+      "250": -12.7,
+      "500": -7.4,
+      "1000": -4.4,
+      "2000": -9.1,
+      "4000": -15.3,
+      "8000": -19.8,
+      "16000": -31.1
+     },
+     "low_vs_lowmid": -0.1,
+     "lowmid_vs_mid": -3.1,
+     "upper_vs_lowmid": -1.9,
+     "mid_vs_high": 10.9,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -3.9,
+    "lrDb": 0.03,
+    "mono": {
+     "corr": 0.765,
+     "monoLoudnessDelta": -0.35
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 1,
+    "semitoneRoughnessPct": 0.78,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.67
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_rank_up.ogg",
+    "m4a": "audio/music/sting_rank_up.m4a"
+   },
+   "bytes": {
+    "ogg": 38303,
+    "m4a": 33486
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 194181,
+     "lengthDeltaMs": 0.0,
+     "lufs": -14.0,
+     "truePeakDb": -3.98,
+     "clippedSamples": 0,
+     "dc": [
+      0.000336,
+      0.000352
+     ],
+     "snrDb": {
+      "250-1000": 20.0,
+      "1000-2500": 18.9,
+      "2500-5000": 12.6
+     }
+    },
+    "m4a": {
+     "samples": 195072,
+     "lengthDeltaMs": 18.6,
+     "lufs": -14.11,
+     "truePeakDb": -4.12,
+     "clippedSamples": 0,
+     "dc": [
+      -7e-06,
+      2.7e-05
+     ],
+     "snrDb": {
+      "250-1000": 18.1,
+      "1000-2500": 19.9,
+      "2500-5000": 7.8
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 1,
+    "roughness": {
+     "semitonePct": 0.78,
+     "outOfChordPct": {
+      "brass": 0.0,
+      "brass2": 0.2,
+      "horn": 0.0,
+      "tuba": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "brass2",
+        "brass2"
+       ],
+       0.67
+      ],
+      [
+       [
+        "brass2",
+        "horn"
+       ],
+       0.11
+      ]
+     ],
+     "worst": [
+      "0.8s Fadd9: G5/brass 0dB, A5/brass -3dB, E5/brass2 -4dB, F5/brass2 -7dB"
+     ]
+    }
+   },
+   "phone": {},
+   "stems": {
+    "brass": {
+     "raw_lufs": -16.9,
+     "target": -17
+    },
+    "brass2": {
+     "raw_lufs": -19.4,
+     "target": -21
+    },
+    "horn": {
+     "raw_lufs": -15.3,
+     "target": -22
+    },
+    "tuba": {
+     "raw_lufs": -17.3,
+     "target": -21
+    },
+    "fsnare": {
+     "raw_lufs": -14.8,
+     "target": -25
+    },
+    "bdrum": {
+     "raw_lufs": -17.2,
+     "target": -22
+    },
+    "cymbals": {
+     "raw_lufs": -23.1,
+     "target": -27
+    }
+   }
+  },
+  "sting_rank_up_A": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "key": "A",
+   "bpm": 132,
+   "meter": "4/4",
+   "duration": 4.045,
+   "samples": 194181,
+   "fileSamples": 194181,
+   "lufs": -14.0,
+   "truePeakDb": -3.72,
+   "dc": [
+    0.0,
+    0.0
+   ],
+   "shortTermMaxLufs": -14.99,
+   "momentaryMaxLufs": -12.05,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -42.4,
+      "63": -10.0,
+      "125": -7.8,
+      "250": -9.4,
+      "500": -7.5,
+      "1000": -5.6,
+      "2000": -8.9,
+      "4000": -15.6,
+      "8000": -19.4,
+      "16000": -31.0
+     },
+     "low_vs_lowmid": -0.4,
+     "lowmid_vs_mid": -1.4,
+     "upper_vs_lowmid": -2.8,
+     "mid_vs_high": 10.2,
+     "flags": []
+    },
+    "balanceTrimDb": 0.54,
+    "presence2kVs700Db": -9.7,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.811,
+     "monoLoudnessDelta": -0.26
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 1,
+    "semitoneRoughnessPct": 0.78,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.32
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_rank_up_A.ogg",
+    "m4a": "audio/music/sting_rank_up_A.m4a"
+   },
+   "bytes": {
+    "ogg": 37544,
+    "m4a": 33492
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 194181,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.81,
+     "truePeakDb": -3.96,
+     "clippedSamples": 0,
+     "dc": [
+      0.000305,
+      -6.6e-05
+     ],
+     "snrDb": {
+      "250-1000": 20.0,
+      "1000-2500": 16.6,
+      "2500-5000": 12.3
+     }
+    },
+    "m4a": {
+     "samples": 195072,
+     "lengthDeltaMs": 18.6,
+     "lufs": -14.11,
+     "truePeakDb": -3.3,
+     "clippedSamples": 0,
+     "dc": [
+      -3.7e-05,
+      -1.3e-05
+     ],
+     "snrDb": {
+      "250-1000": 19.4,
+      "1000-2500": 16.2,
+      "2500-5000": 8.2
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 1,
+    "roughness": {
+     "semitonePct": 0.78,
+     "outOfChordPct": {
+      "brass": 0.0,
+      "brass2": 0.2,
+      "horn": 0.0,
+      "tuba": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "brass2",
+        "brass2"
+       ],
+       0.67
+      ],
+      [
+       [
+        "brass2",
+        "horn"
+       ],
+       0.11
+      ]
+     ],
+     "worst": [
+      "0.8s Dadd9: E5/brass 0dB, F#5/brass -3dB, C#5/brass2 -4dB, D5/brass2 -7dB"
+     ]
+    }
+   },
+   "phone": {},
+   "stems": {
+    "brass": {
+     "raw_lufs": -18.0,
+     "target": -17
+    },
+    "brass2": {
+     "raw_lufs": -19.0,
+     "target": -21
+    },
+    "horn": {
+     "raw_lufs": -14.7,
+     "target": -22
+    },
+    "tuba": {
+     "raw_lufs": -14.5,
+     "target": -21
+    },
+    "fsnare": {
+     "raw_lufs": -14.7,
+     "target": -25
+    },
+    "bdrum": {
+     "raw_lufs": -17.4,
+     "target": -22
+    },
+    "cymbals": {
+     "raw_lufs": -22.9,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": -3
+  },
+  "sting_rank_up_Bb": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "key": "Bb",
+   "bpm": 132,
+   "meter": "4/4",
+   "duration": 4.045,
+   "samples": 194181,
+   "fileSamples": 194181,
+   "lufs": -14.0,
+   "truePeakDb": -3.29,
+   "dc": [
+    0.0,
+    0.0
+   ],
+   "shortTermMaxLufs": -15.17,
+   "momentaryMaxLufs": -12.09,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -41.1,
+      "63": -9.4,
+      "125": -11.1,
+      "250": -9.5,
+      "500": -7.8,
+      "1000": -4.6,
+      "2000": -8.5,
+      "4000": -15.5,
+      "8000": -19.0,
+      "16000": -30.5
+     },
+     "low_vs_lowmid": -1.6,
+     "lowmid_vs_mid": -2.5,
+     "upper_vs_lowmid": -2.1,
+     "mid_vs_high": 10.8,
+     "flags": []
+    },
+    "balanceTrimDb": 0.59,
+    "presence2kVs700Db": 0.3,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.825,
+     "monoLoudnessDelta": -0.22
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 1,
+    "semitoneRoughnessPct": 0.78,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.12
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_rank_up_Bb.ogg",
+    "m4a": "audio/music/sting_rank_up_Bb.m4a"
+   },
+   "bytes": {
+    "ogg": 37712,
+    "m4a": 33487
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 194181,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.97,
+     "truePeakDb": -3.27,
+     "clippedSamples": 0,
+     "dc": [
+      9.6e-05,
+      -0.000166
+     ],
+     "snrDb": {
+      "250-1000": 20.5,
+      "1000-2500": 15.7,
+      "2500-5000": 12.4
+     }
+    },
+    "m4a": {
+     "samples": 195072,
+     "lengthDeltaMs": 18.6,
+     "lufs": -14.09,
+     "truePeakDb": -3.27,
+     "clippedSamples": 0,
+     "dc": [
+      -1e-06,
+      1.1e-05
+     ],
+     "snrDb": {
+      "250-1000": 19.6,
+      "1000-2500": 16.9,
+      "2500-5000": 7.4
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 1,
+    "roughness": {
+     "semitonePct": 0.78,
+     "outOfChordPct": {
+      "brass": 0.0,
+      "brass2": 0.2,
+      "horn": 0.0,
+      "tuba": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "brass2",
+        "brass2"
+       ],
+       0.67
+      ],
+      [
+       [
+        "brass2",
+        "horn"
+       ],
+       0.11
+      ]
+     ],
+     "worst": [
+      "0.8s Ebadd9: F5/brass 0dB, G5/brass -3dB, D5/brass2 -4dB, Eb5/brass2 -7dB"
+     ]
+    }
+   },
+   "phone": {},
+   "stems": {
+    "brass": {
+     "raw_lufs": -17.6,
+     "target": -17
+    },
+    "brass2": {
+     "raw_lufs": -18.7,
+     "target": -21
+    },
+    "horn": {
+     "raw_lufs": -15.6,
+     "target": -22
+    },
+    "tuba": {
+     "raw_lufs": -14.8,
+     "target": -21
+    },
+    "fsnare": {
+     "raw_lufs": -14.9,
+     "target": -25
+    },
+    "bdrum": {
+     "raw_lufs": -18.0,
+     "target": -22
+    },
+    "cymbals": {
+     "raw_lufs": -22.7,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": -2
+  },
+  "sting_rank_up_D": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "key": "D",
+   "bpm": 132,
+   "meter": "4/4",
+   "duration": 4.045,
+   "samples": 194181,
+   "fileSamples": 194181,
+   "lufs": -14.0,
+   "truePeakDb": -4.41,
+   "dc": [
+    -1e-06,
+    -0.0
+   ],
+   "shortTermMaxLufs": -15.1,
+   "momentaryMaxLufs": -12.47,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -42.2,
+      "63": -9.9,
+      "125": -10.8,
+      "250": -12.6,
+      "500": -6.1,
+      "1000": -4.2,
+      "2000": -10.4,
+      "4000": -15.2,
+      "8000": -19.5,
+      "16000": -30.9
+     },
+     "low_vs_lowmid": -2.1,
+     "lowmid_vs_mid": -2.0,
+     "upper_vs_lowmid": -3.9,
+     "mid_vs_high": 10.6,
+     "flags": []
+    },
+    "balanceTrimDb": 1.08,
+    "presence2kVs700Db": -6.7,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.746,
+     "monoLoudnessDelta": -0.6
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 1,
+    "semitoneRoughnessPct": 0.78,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.33
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_rank_up_D.ogg",
+    "m4a": "audio/music/sting_rank_up_D.m4a"
+   },
+   "bytes": {
+    "ogg": 37823,
+    "m4a": 33499
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 194181,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.99,
+     "truePeakDb": -4.12,
+     "clippedSamples": 0,
+     "dc": [
+      -0.000138,
+      -7.3e-05
+     ],
+     "snrDb": {
+      "250-1000": 21.4,
+      "1000-2500": 16.9,
+      "2500-5000": 12.4
+     }
+    },
+    "m4a": {
+     "samples": 195072,
+     "lengthDeltaMs": 18.6,
+     "lufs": -14.08,
+     "truePeakDb": -4.03,
+     "clippedSamples": 0,
+     "dc": [
+      -1.2e-05,
+      -2e-06
+     ],
+     "snrDb": {
+      "250-1000": 18.2,
+      "1000-2500": 18.9,
+      "2500-5000": 7.8
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 1,
+    "roughness": {
+     "semitonePct": 0.78,
+     "outOfChordPct": {
+      "brass": 0.0,
+      "brass2": 0.2,
+      "horn": 0.0,
+      "tuba": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "brass2",
+        "brass2"
+       ],
+       0.67
+      ],
+      [
+       [
+        "brass2",
+        "horn"
+       ],
+       0.11
+      ]
+     ],
+     "worst": [
+      "0.8s Gadd9: A5/brass 0dB, B5/brass -3dB, F#5/brass2 -4dB, G5/brass2 -7dB"
+     ]
+    }
+   },
+   "phone": {},
+   "stems": {
+    "brass": {
+     "raw_lufs": -17.5,
+     "target": -17
+    },
+    "brass2": {
+     "raw_lufs": -18.0,
+     "target": -21
+    },
+    "horn": {
+     "raw_lufs": -15.3,
+     "target": -22
+    },
+    "tuba": {
+     "raw_lufs": -19.3,
+     "target": -21
+    },
+    "fsnare": {
+     "raw_lufs": -15.0,
+     "target": -25
+    },
+    "bdrum": {
+     "raw_lufs": -17.7,
+     "target": -22
+    },
+    "cymbals": {
+     "raw_lufs": -22.8,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": 2
+  },
+  "sting_rank_up_Eb": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "key": "Eb",
+   "bpm": 132,
+   "meter": "4/4",
+   "duration": 4.045,
+   "samples": 194181,
+   "fileSamples": 194181,
+   "lufs": -14.0,
+   "truePeakDb": -4.16,
+   "dc": [
+    -0.0,
+    -0.0
+   ],
+   "shortTermMaxLufs": -15.11,
+   "momentaryMaxLufs": -12.5,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -42.9,
+      "63": -10.0,
+      "125": -12.3,
+      "250": -18.4,
+      "500": -6.9,
+      "1000": -3.3,
+      "2000": -9.3,
+      "4000": -15.3,
+      "8000": -19.3,
+      "16000": -30.7
+     },
+     "low_vs_lowmid": -1.4,
+     "lowmid_vs_mid": -4.3,
+     "upper_vs_lowmid": -1.7,
+     "mid_vs_high": 11.5,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -0.7,
+    "lrDb": -0.2,
+    "mono": {
+     "corr": 0.782,
+     "monoLoudnessDelta": -0.52
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 1,
+    "semitoneRoughnessPct": 0.78,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.1
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_rank_up_Eb.ogg",
+    "m4a": "audio/music/sting_rank_up_Eb.m4a"
+   },
+   "bytes": {
+    "ogg": 38964,
+    "m4a": 33489
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 194181,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.99,
+     "truePeakDb": -4.17,
+     "clippedSamples": 0,
+     "dc": [
+      -4.1e-05,
+      -1.1e-05
+     ],
+     "snrDb": {
+      "250-1000": 21.2,
+      "1000-2500": 19.0,
+      "2500-5000": 11.6
+     }
+    },
+    "m4a": {
+     "samples": 195072,
+     "lengthDeltaMs": 18.6,
+     "lufs": -14.13,
+     "truePeakDb": -4.7,
+     "clippedSamples": 0,
+     "dc": [
+      1.2e-05,
+      1.5e-05
+     ],
+     "snrDb": {
+      "250-1000": 17.3,
+      "1000-2500": 19.6,
+      "2500-5000": 8.4
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 1,
+    "roughness": {
+     "semitonePct": 0.78,
+     "outOfChordPct": {
+      "brass": 0.0,
+      "brass2": 0.2,
+      "horn": 0.0,
+      "tuba": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "brass2",
+        "brass2"
+       ],
+       0.67
+      ],
+      [
+       [
+        "brass2",
+        "horn"
+       ],
+       0.11
+      ]
+     ],
+     "worst": [
+      "0.8s Abadd9: Bb5/brass 0dB, C6/brass -3dB, G5/brass2 -4dB, Ab5/brass2 -7dB"
+     ]
+    }
+   },
+   "phone": {},
+   "stems": {
+    "brass": {
+     "raw_lufs": -18.4,
+     "target": -17
+    },
+    "brass2": {
+     "raw_lufs": -18.7,
+     "target": -21
+    },
+    "horn": {
+     "raw_lufs": -14.3,
+     "target": -22
+    },
+    "tuba": {
+     "raw_lufs": -18.8,
+     "target": -21
+    },
+    "fsnare": {
+     "raw_lufs": -14.8,
+     "target": -25
+    },
+    "bdrum": {
+     "raw_lufs": -18.0,
+     "target": -22
+    },
+    "cymbals": {
+     "raw_lufs": -23.1,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": 3
+  },
+  "sting_rank_up_F": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "key": "F",
+   "bpm": 132,
+   "meter": "4/4",
+   "duration": 4.045,
+   "samples": 194181,
+   "fileSamples": 194181,
+   "lufs": -14.0,
+   "truePeakDb": -2.81,
+   "dc": [
+    2e-06,
+    2e-06
+   ],
+   "shortTermMaxLufs": -15.15,
+   "momentaryMaxLufs": -11.58,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -39.2,
+      "63": -6.5,
+      "125": -13.9,
+      "250": -9.4,
+      "500": -4.6,
+      "1000": -7.9,
+      "2000": -11.4,
+      "4000": -15.5,
+      "8000": -18.9,
+      "16000": -30.5
+     },
+     "low_vs_lowmid": -2.4,
+     "lowmid_vs_mid": 3.0,
+     "upper_vs_lowmid": -6.7,
+     "mid_vs_high": 7.6,
+     "flags": []
+    },
+    "balanceTrimDb": 0.0,
+    "presence2kVs700Db": -5.8,
+    "lrDb": 0.16,
+    "mono": {
+     "corr": 0.784,
+     "monoLoudnessDelta": -0.51
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 1,
+    "semitoneRoughnessPct": 0.78,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.21
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_rank_up_F.ogg",
+    "m4a": "audio/music/sting_rank_up_F.m4a"
+   },
+   "bytes": {
+    "ogg": 36063,
+    "m4a": 33560
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 194181,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.99,
+     "truePeakDb": -2.98,
+     "clippedSamples": 0,
+     "dc": [
+      5.3e-05,
+      0.000226
+     ],
+     "snrDb": {
+      "250-1000": 19.2,
+      "1000-2500": 16.3,
+      "2500-5000": 11.9
+     }
+    },
+    "m4a": {
+     "samples": 195072,
+     "lengthDeltaMs": 18.6,
+     "lufs": -14.11,
+     "truePeakDb": -2.77,
+     "clippedSamples": 0,
+     "dc": [
+      -2.3e-05,
+      -3.7e-05
+     ],
+     "snrDb": {
+      "250-1000": 18.7,
+      "1000-2500": 16.1,
+      "2500-5000": 6.9
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 1,
+    "roughness": {
+     "semitonePct": 0.78,
+     "outOfChordPct": {
+      "brass": 0.0,
+      "brass2": 0.2,
+      "horn": 0.0,
+      "tuba": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "brass2",
+        "brass2"
+       ],
+       0.67
+      ],
+      [
+       [
+        "brass2",
+        "horn"
+       ],
+       0.11
+      ]
+     ],
+     "worst": [
+      "0.8s Bbadd9: C5/brass 0dB, D5/brass -3dB, A4/brass2 -4dB, Bb4/brass2 -7dB"
+     ]
+    }
+   },
+   "phone": {},
+   "stems": {
+    "brass": {
+     "raw_lufs": -17.8,
+     "target": -17
+    },
+    "brass2": {
+     "raw_lufs": -17.4,
+     "target": -21
+    },
+    "horn": {
+     "raw_lufs": -15.1,
+     "target": -22
+    },
+    "tuba": {
+     "raw_lufs": -18.1,
+     "target": -21
+    },
+    "fsnare": {
+     "raw_lufs": -14.7,
+     "target": -25
+    },
+    "bdrum": {
+     "raw_lufs": -18.4,
+     "target": -22
+    },
+    "cymbals": {
+     "raw_lufs": -23.1,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": -7
+  },
+  "sting_rank_up_G": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "key": "G",
+   "bpm": 132,
+   "meter": "4/4",
+   "duration": 4.045,
+   "samples": 194181,
+   "fileSamples": 194181,
+   "lufs": -14.0,
+   "truePeakDb": -3.46,
+   "dc": [
+    -1e-06,
+    -1e-06
+   ],
+   "shortTermMaxLufs": -14.89,
+   "momentaryMaxLufs": -12.4,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -41.1,
+      "63": -10.1,
+      "125": -8.0,
+      "250": -9.5,
+      "500": -5.5,
+      "1000": -6.5,
+      "2000": -10.4,
+      "4000": -16.3,
+      "8000": -19.9,
+      "16000": -31.3
+     },
+     "low_vs_lowmid": -1.8,
+     "lowmid_vs_mid": 1.0,
+     "upper_vs_lowmid": -5.4,
+     "mid_vs_high": 9.7,
+     "flags": []
+    },
+    "balanceTrimDb": 0.44,
+    "presence2kVs700Db": -11.3,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.785,
+     "monoLoudnessDelta": -0.34
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 1,
+    "semitoneRoughnessPct": 0.78,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.33
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_rank_up_G.ogg",
+    "m4a": "audio/music/sting_rank_up_G.m4a"
+   },
+   "bytes": {
+    "ogg": 37082,
+    "m4a": 33500
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 194181,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.98,
+     "truePeakDb": -3.94,
+     "clippedSamples": 0,
+     "dc": [
+      -0.000135,
+      8.4e-05
+     ],
+     "snrDb": {
+      "250-1000": 20.0,
+      "1000-2500": 16.3,
+      "2500-5000": 11.7
+     }
+    },
+    "m4a": {
+     "samples": 195072,
+     "lengthDeltaMs": 18.6,
+     "lufs": -14.15,
+     "truePeakDb": -3.55,
+     "clippedSamples": 0,
+     "dc": [
+      1.5e-05,
+      1.5e-05
+     ],
+     "snrDb": {
+      "250-1000": 18.6,
+      "1000-2500": 15.7,
+      "2500-5000": 7.6
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 1,
+    "roughness": {
+     "semitonePct": 0.78,
+     "outOfChordPct": {
+      "brass": 0.0,
+      "brass2": 0.2,
+      "horn": 0.0,
+      "tuba": 0.0
+     },
+     "topPairs": [
+      [
+       [
+        "brass2",
+        "brass2"
+       ],
+       0.67
+      ],
+      [
+       [
+        "brass2",
+        "horn"
+       ],
+       0.11
+      ]
+     ],
+     "worst": [
+      "0.8s Cadd9: D5/brass 0dB, E5/brass -3dB, B4/brass2 -4dB, C5/brass2 -7dB"
+     ]
+    }
+   },
+   "phone": {},
+   "stems": {
+    "brass": {
+     "raw_lufs": -17.4,
+     "target": -17
+    },
+    "brass2": {
+     "raw_lufs": -18.5,
+     "target": -21
+    },
+    "horn": {
+     "raw_lufs": -14.8,
+     "target": -22
+    },
+    "tuba": {
+     "raw_lufs": -17.6,
+     "target": -21
+    },
+    "fsnare": {
+     "raw_lufs": -14.5,
+     "target": -25
+    },
+    "bdrum": {
+     "raw_lufs": -18.6,
+     "target": -22
+    },
+    "cymbals": {
+     "raw_lufs": -21.3,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": -5
+  },
+  "sting_record": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "key": "C",
+   "bpm": 150,
+   "meter": "4/4",
+   "duration": 3.3,
+   "samples": 158400,
+   "fileSamples": 158400,
+   "lufs": -14.0,
+   "truePeakDb": -3.82,
+   "dc": [
+    -2e-06,
+    -1e-06
+   ],
+   "shortTermMaxLufs": -16.37,
+   "momentaryMaxLufs": -11.44,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -49.1,
+      "63": -45.2,
+      "125": -12.4,
+      "250": -8.7,
+      "500": -6.5,
+      "1000": -5.9,
+      "2000": -5.2,
+      "4000": -16.9,
+      "8000": -23.4,
+      "16000": -46.1
+     },
+     "low_vs_lowmid": -8.0,
+     "lowmid_vs_mid": -1.9,
+     "upper_vs_lowmid": -0.5,
+     "mid_vs_high": 13.5,
+     "flags": []
+    },
+    "balanceTrimDb": -0.88,
+    "presence2kVs700Db": -6.6,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.839,
+     "monoLoudnessDelta": -0.34
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.21
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_record.ogg",
+    "m4a": "audio/music/sting_record.m4a"
+   },
+   "bytes": {
+    "ogg": 39296,
+    "m4a": 26208
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 158400,
+     "lengthDeltaMs": 0.0,
+     "lufs": -14.0,
+     "truePeakDb": -4.16,
+     "clippedSamples": 0,
+     "dc": [
+      -3e-06,
+      -6.4e-05
+     ],
+     "snrDb": {
+      "250-1000": 22.0,
+      "1000-2500": 21.0,
+      "2500-5000": 16.5
+     }
+    },
+    "m4a": {
+     "samples": 159744,
+     "lengthDeltaMs": 28.0,
+     "lufs": -14.04,
+     "truePeakDb": -3.59,
+     "clippedSamples": 0,
+     "dc": [
+      -5e-06,
+      -2e-06
+     ],
+     "snrDb": {
+      "250-1000": 19.0,
+      "1000-2500": 19.7,
+      "2500-5000": 14.6
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "epiano": 0.0,
+      "glock": 0.0,
+      "harp": 0.0,
+      "upright": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "glock": {
+     "raw_lufs": -11.9,
+     "target": -17
+    },
+    "harp": {
+     "raw_lufs": -11.5,
+     "target": -21
+    },
+    "epiano": {
+     "raw_lufs": -11.2,
+     "target": -20
+    },
+    "upright": {
+     "raw_lufs": -18.3,
+     "target": -23
+    },
+    "sleigh": {
+     "raw_lufs": -29.4,
+     "target": -27
+    }
+   }
+  },
+  "sting_record_A": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "key": "A",
+   "bpm": 150,
+   "meter": "4/4",
+   "duration": 3.3,
+   "samples": 158400,
+   "fileSamples": 158400,
+   "lufs": -14.0,
+   "truePeakDb": -3.16,
+   "dc": [
+    -8e-06,
+    -4e-06
+   ],
+   "shortTermMaxLufs": -16.37,
+   "momentaryMaxLufs": -11.29,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -47.9,
+      "63": -39.8,
+      "125": -11.9,
+      "250": -6.2,
+      "500": -5.4,
+      "1000": -4.5,
+      "2000": -15.4,
+      "4000": -18.1,
+      "8000": -24.9,
+      "16000": -46.3
+     },
+     "low_vs_lowmid": -9.1,
+     "lowmid_vs_mid": 1.4,
+     "upper_vs_lowmid": -10.8,
+     "mid_vs_high": 13.1,
+     "flags": []
+    },
+    "balanceTrimDb": -0.73,
+    "presence2kVs700Db": -10.8,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.802,
+     "monoLoudnessDelta": -0.47
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.86
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_record_A.ogg",
+    "m4a": "audio/music/sting_record_A.m4a"
+   },
+   "bytes": {
+    "ogg": 36582,
+    "m4a": 25976
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 158400,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.99,
+     "truePeakDb": -3.17,
+     "clippedSamples": 0,
+     "dc": [
+      -3.8e-05,
+      0.000183
+     ],
+     "snrDb": {
+      "250-1000": 20.8,
+      "1000-2500": 22.2,
+      "2500-5000": 15.2
+     }
+    },
+    "m4a": {
+     "samples": 159744,
+     "lengthDeltaMs": 28.0,
+     "lufs": -13.99,
+     "truePeakDb": -3.06,
+     "clippedSamples": 0,
+     "dc": [
+      -5e-06,
+      -0.0
+     ],
+     "snrDb": {
+      "250-1000": 20.7,
+      "1000-2500": 16.3,
+      "2500-5000": 11.9
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "epiano": 0.0,
+      "glock": 0.0,
+      "harp": 0.0,
+      "upright": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "glock": {
+     "raw_lufs": -12.1,
+     "target": -17
+    },
+    "harp": {
+     "raw_lufs": -11.9,
+     "target": -21
+    },
+    "epiano": {
+     "raw_lufs": -10.9,
+     "target": -20
+    },
+    "upright": {
+     "raw_lufs": -18.9,
+     "target": -23
+    },
+    "sleigh": {
+     "raw_lufs": -30.3,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": -3
+  },
+  "sting_record_Bb": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "key": "Bb",
+   "bpm": 150,
+   "meter": "4/4",
+   "duration": 3.3,
+   "samples": 158400,
+   "fileSamples": 158400,
+   "lufs": -14.0,
+   "truePeakDb": -3.88,
+   "dc": [
+    -3e-06,
+    -3e-06
+   ],
+   "shortTermMaxLufs": -16.43,
+   "momentaryMaxLufs": -11.84,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -47.5,
+      "63": -40.4,
+      "125": -13.8,
+      "250": -5.7,
+      "500": -5.2,
+      "1000": -4.9,
+      "2000": -14.3,
+      "4000": -16.5,
+      "8000": -23.8,
+      "16000": -45.6
+     },
+     "low_vs_lowmid": -11.3,
+     "lowmid_vs_mid": 1.9,
+     "upper_vs_lowmid": -9.8,
+     "mid_vs_high": 11.4,
+     "flags": []
+    },
+    "balanceTrimDb": 0.63,
+    "presence2kVs700Db": -10.0,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.867,
+     "monoLoudnessDelta": -0.3
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.22
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_record_Bb.ogg",
+    "m4a": "audio/music/sting_record_Bb.m4a"
+   },
+   "bytes": {
+    "ogg": 38030,
+    "m4a": 26165
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 158400,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.98,
+     "truePeakDb": -4.44,
+     "clippedSamples": 0,
+     "dc": [
+      3.6e-05,
+      -2e-06
+     ],
+     "snrDb": {
+      "250-1000": 21.3,
+      "1000-2500": 21.4,
+      "2500-5000": 15.1
+     }
+    },
+    "m4a": {
+     "samples": 159744,
+     "lengthDeltaMs": 28.0,
+     "lufs": -14.07,
+     "truePeakDb": -3.91,
+     "clippedSamples": 0,
+     "dc": [
+      -7e-06,
+      -7e-06
+     ],
+     "snrDb": {
+      "250-1000": 20.1,
+      "1000-2500": 20.6,
+      "2500-5000": 13.8
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "epiano": 0.0,
+      "glock": 0.0,
+      "harp": 0.0,
+      "upright": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "glock": {
+     "raw_lufs": -12.3,
+     "target": -17
+    },
+    "harp": {
+     "raw_lufs": -12.1,
+     "target": -21
+    },
+    "epiano": {
+     "raw_lufs": -11.3,
+     "target": -20
+    },
+    "upright": {
+     "raw_lufs": -19.1,
+     "target": -23
+    },
+    "sleigh": {
+     "raw_lufs": -26.6,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": -2
+  },
+  "sting_record_D": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "key": "D",
+   "bpm": 150,
+   "meter": "4/4",
+   "duration": 3.3,
+   "samples": 158400,
+   "fileSamples": 158400,
+   "lufs": -14.0,
+   "truePeakDb": -3.8,
+   "dc": [
+    5e-06,
+    3e-06
+   ],
+   "shortTermMaxLufs": -16.32,
+   "momentaryMaxLufs": -11.03,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -51.1,
+      "63": -44.9,
+      "125": -12.6,
+      "250": -12.6,
+      "500": -6.5,
+      "1000": -6.5,
+      "2000": -3.8,
+      "4000": -17.4,
+      "8000": -23.3,
+      "16000": -46.2
+     },
+     "low_vs_lowmid": -7.1,
+     "lowmid_vs_mid": -3.6,
+     "upper_vs_lowmid": 1.9,
+     "mid_vs_high": 14.4,
+     "flags": []
+    },
+    "balanceTrimDb": 0.73,
+    "presence2kVs700Db": -9.6,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.819,
+     "monoLoudnessDelta": -0.4
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.4
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_record_D.ogg",
+    "m4a": "audio/music/sting_record_D.m4a"
+   },
+   "bytes": {
+    "ogg": 39560,
+    "m4a": 26205
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 158400,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.99,
+     "truePeakDb": -3.76,
+     "clippedSamples": 0,
+     "dc": [
+      -6.3e-05,
+      2e-05
+     ],
+     "snrDb": {
+      "250-1000": 21.6,
+      "1000-2500": 23.1,
+      "2500-5000": 15.6
+     }
+    },
+    "m4a": {
+     "samples": 159744,
+     "lengthDeltaMs": 28.0,
+     "lufs": -14.07,
+     "truePeakDb": -3.62,
+     "clippedSamples": 0,
+     "dc": [
+      3e-06,
+      4e-06
+     ],
+     "snrDb": {
+      "250-1000": 16.7,
+      "1000-2500": 18.7,
+      "2500-5000": 11.3
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "epiano": 0.0,
+      "glock": 0.0,
+      "harp": 0.0,
+      "upright": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "glock": {
+     "raw_lufs": -11.4,
+     "target": -17
+    },
+    "harp": {
+     "raw_lufs": -11.5,
+     "target": -21
+    },
+    "epiano": {
+     "raw_lufs": -11.3,
+     "target": -20
+    },
+    "upright": {
+     "raw_lufs": -18.5,
+     "target": -23
+    },
+    "sleigh": {
+     "raw_lufs": -28.2,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": 2
+  },
+  "sting_record_Eb": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "key": "Eb",
+   "bpm": 150,
+   "meter": "4/4",
+   "duration": 3.3,
+   "samples": 158400,
+   "fileSamples": 158400,
+   "lufs": -14.0,
+   "truePeakDb": -4.03,
+   "dc": [
+    -9e-06,
+    -8e-06
+   ],
+   "shortTermMaxLufs": -16.4,
+   "momentaryMaxLufs": -11.36,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -48.7,
+      "63": -48.0,
+      "125": -16.0,
+      "250": -8.9,
+      "500": -6.0,
+      "1000": -7.0,
+      "2000": -4.2,
+      "4000": -19.3,
+      "8000": -24.9,
+      "16000": -47.4
+     },
+     "low_vs_lowmid": -11.8,
+     "lowmid_vs_mid": -1.8,
+     "upper_vs_lowmid": 0.1,
+     "mid_vs_high": 15.9,
+     "flags": []
+    },
+    "balanceTrimDb": 1.35,
+    "presence2kVs700Db": 4.9,
+    "lrDb": -0.0,
+    "mono": {
+     "corr": 0.891,
+     "monoLoudnessDelta": -0.25
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.12
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_record_Eb.ogg",
+    "m4a": "audio/music/sting_record_Eb.m4a"
+   },
+   "bytes": {
+    "ogg": 40275,
+    "m4a": 26147
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 158400,
+     "lengthDeltaMs": 0.0,
+     "lufs": -14.0,
+     "truePeakDb": -4.16,
+     "clippedSamples": 0,
+     "dc": [
+      4e-06,
+      4.6e-05
+     ],
+     "snrDb": {
+      "250-1000": 22.3,
+      "1000-2500": 22.4,
+      "2500-5000": 15.9
+     }
+    },
+    "m4a": {
+     "samples": 159744,
+     "lengthDeltaMs": 28.0,
+     "lufs": -14.14,
+     "truePeakDb": -3.54,
+     "clippedSamples": 0,
+     "dc": [
+      -1.6e-05,
+      -1.2e-05
+     ],
+     "snrDb": {
+      "250-1000": 17.2,
+      "1000-2500": 17.5,
+      "2500-5000": 12.7
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "epiano": 0.0,
+      "glock": 0.0,
+      "harp": 0.0,
+      "upright": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "glock": {
+     "raw_lufs": -11.0,
+     "target": -17
+    },
+    "harp": {
+     "raw_lufs": -12.4,
+     "target": -21
+    },
+    "epiano": {
+     "raw_lufs": -11.3,
+     "target": -20
+    },
+    "upright": {
+     "raw_lufs": -17.7,
+     "target": -23
+    },
+    "sleigh": {
+     "raw_lufs": -30.0,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": 3
+  },
+  "sting_record_F": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "key": "F",
+   "bpm": 150,
+   "meter": "4/4",
+   "duration": 3.3,
+   "samples": 158400,
+   "fileSamples": 158400,
+   "lufs": -14.0,
+   "truePeakDb": -2.77,
+   "dc": [
+    -3e-06,
+    -2e-06
+   ],
+   "shortTermMaxLufs": -16.41,
+   "momentaryMaxLufs": -11.3,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -50.9,
+      "63": -49.2,
+      "125": -15.6,
+      "250": -11.1,
+      "500": -7.1,
+      "1000": -6.0,
+      "2000": -3.7,
+      "4000": -18.3,
+      "8000": -22.5,
+      "16000": -43.6
+     },
+     "low_vs_lowmid": -10.0,
+     "lowmid_vs_mid": -3.9,
+     "upper_vs_lowmid": 2.1,
+     "mid_vs_high": 15.2,
+     "flags": []
+    },
+    "balanceTrimDb": -1.42,
+    "presence2kVs700Db": 4.7,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.82,
+     "monoLoudnessDelta": -0.34
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.43
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_record_F.ogg",
+    "m4a": "audio/music/sting_record_F.m4a"
+   },
+   "bytes": {
+    "ogg": 41611,
+    "m4a": 26124
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 158400,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.98,
+     "truePeakDb": -2.59,
+     "clippedSamples": 0,
+     "dc": [
+      1.9e-05,
+      -5e-06
+     ],
+     "snrDb": {
+      "250-1000": 20.5,
+      "1000-2500": 23.3,
+      "2500-5000": 16.4
+     }
+    },
+    "m4a": {
+     "samples": 159744,
+     "lengthDeltaMs": 28.0,
+     "lufs": -14.17,
+     "truePeakDb": -3.14,
+     "clippedSamples": 0,
+     "dc": [
+      1e-06,
+      -5e-06
+     ],
+     "snrDb": {
+      "250-1000": 16.8,
+      "1000-2500": 17.8,
+      "2500-5000": 12.9
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "epiano": 0.0,
+      "glock": 0.0,
+      "harp": 0.0,
+      "upright": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "glock": {
+     "raw_lufs": -11.1,
+     "target": -17
+    },
+    "harp": {
+     "raw_lufs": -11.2,
+     "target": -21
+    },
+    "epiano": {
+     "raw_lufs": -11.4,
+     "target": -20
+    },
+    "upright": {
+     "raw_lufs": -18.3,
+     "target": -23
+    },
+    "sleigh": {
+     "raw_lufs": -27.9,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": 5
+  },
+  "sting_record_G": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "key": "G",
+   "bpm": 150,
+   "meter": "4/4",
+   "duration": 3.3,
+   "samples": 158400,
+   "fileSamples": 158400,
+   "lufs": -14.0,
+   "truePeakDb": -2.18,
+   "dc": [
+    2e-06,
+    2e-06
+   ],
+   "shortTermMaxLufs": -16.27,
+   "momentaryMaxLufs": -11.03,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -49.5,
+      "63": -36.6,
+      "125": -10.4,
+      "250": -5.9,
+      "500": -4.9,
+      "1000": -6.1,
+      "2000": -12.3,
+      "4000": -17.1,
+      "8000": -23.8,
+      "16000": -45.4
+     },
+     "low_vs_lowmid": -8.0,
+     "lowmid_vs_mid": 2.8,
+     "upper_vs_lowmid": -8.7,
+     "mid_vs_high": 11.1,
+     "flags": []
+    },
+    "balanceTrimDb": 0.82,
+    "presence2kVs700Db": -8.3,
+    "lrDb": 0.0,
+    "mono": {
+     "corr": 0.85,
+     "monoLoudnessDelta": -0.38
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 2.78
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_record_G.ogg",
+    "m4a": "audio/music/sting_record_G.m4a"
+   },
+   "bytes": {
+    "ogg": 37189,
+    "m4a": 26214
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 158400,
+     "lengthDeltaMs": 0.0,
+     "lufs": -13.94,
+     "truePeakDb": -2.1,
+     "clippedSamples": 0,
+     "dc": [
+      0.000121,
+      -9.9e-05
+     ],
+     "snrDb": {
+      "250-1000": 21.9,
+      "1000-2500": 18.9,
+      "2500-5000": 15.3
+     }
+    },
+    "m4a": {
+     "samples": 159744,
+     "lengthDeltaMs": 28.0,
+     "lufs": -14.07,
+     "truePeakDb": -1.32,
+     "clippedSamples": 0,
+     "dc": [
+      2.1e-05,
+      1e-05
+     ],
+     "snrDb": {
+      "250-1000": 18.0,
+      "1000-2500": 13.3,
+      "2500-5000": 9.5
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "epiano": 0.0,
+      "glock": 0.0,
+      "harp": 0.0,
+      "upright": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "glock": {
+     "raw_lufs": -12.3,
+     "target": -17
+    },
+    "harp": {
+     "raw_lufs": -12.2,
+     "target": -21
+    },
+    "epiano": {
+     "raw_lufs": -11.0,
+     "target": -20
+    },
+    "upright": {
+     "raw_lufs": -19.3,
+     "target": -23
+    },
+    "sleigh": {
+     "raw_lufs": -28.0,
+     "target": -27
+    }
+   },
+   "baseKey": "C",
+   "transpose": -5
+  },
+  "sting_story": {
+   "kind": "sting",
+   "title": "Сюжетный момент",
+   "use": "Сюжетный момент (начало диалога, поворот)",
+   "key": "C",
+   "bpm": 80,
+   "meter": "4/4",
+   "duration": 5.575,
+   "samples": 267600,
+   "fileSamples": 267600,
+   "lufs": -16.0,
+   "truePeakDb": -5.34,
+   "dc": [
+    -3e-06,
+    -2e-06
+   ],
+   "shortTermMaxLufs": -14.88,
+   "momentaryMaxLufs": -13.1,
+   "checks": {
+    "longestInnerSilence": 0.0,
+    "balance": {
+     "octaves_db": {
+      "31.5": -53.4,
+      "63": -14.6,
+      "125": -9.5,
+      "250": -6.6,
+      "500": -5.9,
+      "1000": -4.8,
+      "2000": -12.9,
+      "4000": -33.6,
+      "8000": -54.0,
+      "16000": -70.2
+     },
+     "low_vs_lowmid": -5.1,
+     "lowmid_vs_mid": 1.0,
+     "upper_vs_lowmid": -9.7,
+     "mid_vs_high": 29.4,
+     "flags": []
+    },
+    "balanceTrimDb": -1.42,
+    "presence2kVs700Db": -23.3,
+    "lrDb": -0.02,
+    "mono": {
+     "corr": 0.596,
+     "monoLoudnessDelta": -0.89
+    },
+    "harmonyIssues": 0,
+    "harmonyPassingTones": 0,
+    "semitoneRoughnessPct": 0.0,
+    "limiterMaxGrDb": 0.0,
+    "compMaxGrDb": 1.49
+   },
+   "encodeGainDb": {
+    "ogg": 0.0,
+    "m4a": 0.0
+   },
+   "files": {
+    "ogg": "audio/music/sting_story.ogg",
+    "m4a": "audio/music/sting_story.m4a"
+   },
+   "bytes": {
+    "ogg": 50952,
+    "m4a": 46390
+   },
+   "decoded": {
+    "ogg": {
+     "samples": 267600,
+     "lengthDeltaMs": 0.0,
+     "lufs": -16.0,
+     "truePeakDb": -5.3,
+     "clippedSamples": 0,
+     "dc": [
+      8.7e-05,
+      3.8e-05
+     ],
+     "snrDb": {
+      "250-1000": 21.4,
+      "1000-2500": 17.5,
+      "2500-5000": 13.7
+     }
+    },
+    "m4a": {
+     "samples": 268800,
+     "lengthDeltaMs": 25.0,
+     "lufs": -16.14,
+     "truePeakDb": -5.24,
+     "clippedSamples": 0,
+     "dc": [
+      -6.4e-05,
+      -8e-06
+     ],
+     "snrDb": {
+      "250-1000": 18.7,
+      "1000-2500": 16.1,
+      "2500-5000": 12.4
+     }
+    }
+   },
+   "harmony": {
+    "issues": [],
+    "passingTones": 0,
+    "roughness": {
+     "semitonePct": 0.0,
+     "outOfChordPct": {
+      "celesta": 0.0,
+      "musicbox": 0.0,
+      "pad": 0.0,
+      "upright": 0.0
+     },
+     "topPairs": [],
+     "worst": []
+    }
+   },
+   "phone": {},
+   "stems": {
+    "pad": {
+     "raw_lufs": -15.8,
+     "target": -20
+    },
+    "celesta": {
+     "raw_lufs": -15.4,
+     "target": -17
+    },
+    "musicbox": {
+     "raw_lufs": -18.8,
+     "target": -25
+    },
+    "upright": {
+     "raw_lufs": -22.8,
+     "target": -24
+    }
+   }
+  }
+ }
+}

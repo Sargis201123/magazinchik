@@ -1,10 +1,10 @@
 // Обработчики серверных функций. Не зависят от хостинга: секреты приходят параметром env,
 // а тонкие обёртки лежат в api/ (Vercel) и worker/index.ts (Cloudflare Workers).
 
-import { commandReply, setupProfile } from './botProfile.js';
-import { recordReferral, recordSource } from './social.js';
+import { commandReply, setupProfile, startCaption, type StartInfo } from './botProfile.js';
+import { ready, recordReferral, recordSource } from './social.js';
 import { recordGuildInvite } from './guild.js';
-import { bot, canBuy, itemFromPayload, json, catalogItem, ownedFrom, payloadFor, verifyInitData, type Env, type StarTransaction } from './telegram.js';
+import { bot, canBuy, itemFromPayload, json, catalogItem, ownedFrom, payloadFor, verifyInitData, type D1, type Env, type StarTransaction } from './telegram.js';
 
 /** POST /api/stars-invoice { initData, item } → { link }: счёт в звёздах на одну вещь оформления. */
 export async function starsInvoice(request: Request, env: Env): Promise<Response> {
@@ -83,8 +83,48 @@ interface Update {
 }
 
 /**
+ * Ролик к /start (public/promo/start.mp4, без звука — Telegram крутит его по кругу). Первый раз
+ * Telegram скачивает его по ссылке, потом шлём по file_id — быстро и без лишних загрузок.
+ */
+let startClip: string | null = null;
+export const resetStartClip = (): void => {
+  startClip = null;
+};
+
+/** Что известно об игроке для приветствия: его день (если уже играл) и имя пригласившего друга. */
+async function startInfo(db: D1 | undefined, id: number, payload: string): Promise<StartInfo> {
+  if (!db) return {};
+  await ready(db);
+  const me = await db.prepare('SELECT day FROM progress WHERE id = ?').bind(id).first<{ day: number }>();
+  const inviter = /^(?:ref|help)_(\d+)$/.exec(payload)?.[1];
+  const friend = inviter ? await db.prepare('SELECT name FROM progress WHERE id = ?').bind(Number(inviter)).first<{ name: string }>() : null;
+  return { day: me?.day, friend: friend?.name && friend.name !== '—' ? friend.name : undefined };
+}
+
+/** Приветствие на /start: короткий ролик с личной подписью и кнопкой «Играть»; ролика нет — просто текст. */
+async function greet(token: string, env: Env, chat: number, from: { id: number } | undefined, payload: string, ru: boolean, origin: string): Promise<void> {
+  const info = from ? await startInfo(env.DB, from.id, payload).catch((e) => (console.error(e), {})) : {};
+  const caption = startCaption(ru, info);
+  const reply_markup = { inline_keyboard: [[{ text: ru ? '▶ Играть' : '▶ Play', web_app: { url: `${origin}/` } }]] };
+  try {
+    const sent = await bot<{ animation?: { file_id: string }; document?: { file_id: string }; video?: { file_id: string } }>(token, 'sendAnimation', {
+      chat_id: chat,
+      animation: startClip ?? `${origin}/promo/start.mp4`,
+      caption,
+      reply_markup,
+    });
+    startClip = sent?.animation?.file_id ?? sent?.document?.file_id ?? sent?.video?.file_id ?? startClip;
+  } catch (error) {
+    // Ролик не дошёл (нет файла на этом хостинге, Telegram не скачал) — приветствие текстом.
+    console.error(error);
+    startClip = null;
+    await bot(token, 'sendMessage', { chat_id: chat, text: caption, reply_markup });
+  }
+}
+
+/**
  * POST /api/telegram — вебхук бота. Подтверждает оплату звёздами (pre_checkout_query: у Telegram
- * на ответ 10 секунд), благодарит после покупки и отвечает на /start кнопкой «Играть».
+ * на ответ 10 секунд), благодарит после покупки и отвечает на /start роликом и кнопкой «Играть».
  */
 export async function telegramWebhook(request: Request, env: Env): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
@@ -100,7 +140,7 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
   const message = update.message;
   if (message) {
     const ru = (message.from?.language_code ?? 'ru').startsWith('ru');
-    const app = `https://${new URL(request.url).host}/`;
+    const origin = `https://${new URL(request.url).host}`;
     if (message.successful_payment) {
       // Новая покупка: при следующем восстановлении перечитать платежи.
       resetStarsCache();
@@ -121,11 +161,7 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
       if (payload && message.from) await recordSource(env, message.from.id, payload).catch((e) => console.error(e));
       // «/start guild_ABC123» — приглашение в гильдию района (guild.ts).
       if (payload && message.from) await recordGuildInvite(env, message.from.id, payload).catch((e) => console.error(e));
-      await bot(token, 'sendMessage', {
-        chat_id: message.chat.id,
-        text: ru ? 'Бабушкин магазинчик ждёт тебя! 🛒' : "Grandma's little shop is waiting for you! 🛒",
-        reply_markup: { inline_keyboard: [[{ text: ru ? '▶ Играть' : '▶ Play', web_app: { url: app } }]] },
-      });
+      await greet(token, env, message.chat.id, message.from, payload, ru, origin);
     }
   }
   return new Response('ok');

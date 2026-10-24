@@ -52,7 +52,10 @@ beforeEach(() => {
     return new Response(JSON.stringify({ ok: true, result: {} }));
   });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 const DAY = 24 * 3600_000;
 const json = async <T>(r: Response | Promise<Response>) => (await (await r).json()) as T;
@@ -68,6 +71,10 @@ describe.skipIf(!Database)('«Чёрная пятница района» (сер
   });
 
   it('выручка за выходные, общий счётчик, место и итог в понедельник', async () => {
+    // Сервер сам отмечает выходные по текущим часам: в настоящую субботу первая отметка с выручкой 0
+    // сбила бы подсчёт. Часы теста — на среде перед этими выходными.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SAT - 3 * DAY);
     const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
     for (const id of [1, 2, 3]) await socialPing(await post(id), env);
     const db = env.DB!;

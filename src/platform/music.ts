@@ -1,286 +1,303 @@
-// Фоновая музыка: тёплый чиптюн, синтезируется WebAudio на лету — без файлов.
-// Днём — бодрее, с ритмом; вечером — медленнее и тише. Громкость — свой ползунок «Музыка» (mixer.ts).
-// Если в магазине играет радио, днём звучит его волна: ретро — медленный свинг, хиты — быстрый бит.
-// Бас — октавой выше прежнего и с призвуками: на динамике телефона его теперь слышно. Фраза не
-// крутится одинаково: каждый четвёртый проход мелодия молчит («вдох»), смена настроения и волны
-// — с начала такта, а не посреди ноты.
+// Музыка игры: настоящие треки (Suno) по настроению дня, тишина между ними, радио из приёмника
+// в зале, оркестр на улице в особый день и заставки к важным моментам. Что и когда играть, решает
+// расписание (playlist.ts), здесь — только звук. Всё идёт через канал «Музыка» пульта (mixer.ts):
+// ползунок, «без звука», притихание под диалогами и глухой звук под меню работают сами.
+//
+// Файлы качаются только тогда, когда нужны (после первого касания — тот трек, что сейчас заиграет),
+// разобранным в памяти держится только звучащий трек (audioFiles.ts). Пока играет радио или оркестр,
+// своя музыка молчит; ночью радио молчит — играет ночная смена.
 
-import { busInput, existingAudioContext, mixer } from './mixer';
+import { BufferCache, fetched, loadAudio, prefetchAudio } from './audioFiles';
+import { duckMusic, existingAudioContext, mixer, busInput } from './mixer';
+import { LoopPlayer, type LoopWant } from './radioSound';
+import { Playlist, RESUME_GAP, STINGS, stingPath, TRACKS, type Key, type MusicMood, type StationId, type StingId, type TrackId } from './playlist';
 
-export type Mood = 'day' | 'evening';
+export type { MusicMood, StationId, StingId } from './playlist';
 
-/** Аккорды по тактам (MIDI-ноты): C — Am — F — G. */
-const CHORDS = [
-  [60, 64, 67],
-  [57, 60, 64],
-  [53, 57, 60],
-  [55, 59, 62],
-];
-/** Мелодия: 8 восьмых на такт, -1 — пауза. */
-const MELODY = [
-  [76, -1, 79, 76, 74, -1, 72, -1],
-  [72, -1, 76, 74, 72, -1, 69, -1],
-  [69, 72, -1, 74, 72, -1, 69, 67],
-  [67, -1, 71, 74, 72, -1, -1, -1],
-];
-const MOODS: Record<Mood, { bpm: number; melody: number; drums: boolean }> = {
-  day: { bpm: 104, melody: 0.022, drums: true },
-  evening: { bpm: 82, melody: 0.014, drums: false },
-};
+/** Как часто расписание смотрит, что делать (мс). */
+const TICK_MS = 250;
+/** Смена трека, когда он не к месту (ночная смена), — секунды. */
+const CROSSFADE = 4;
+/** Вход трека после тишины: у треков Suno своё мягкое начало, здесь — только без щелчка. */
+const FADE_IN = 0.08;
+/** Трек не скачался — помолчим и попробуем снова. */
+const RETRY_GAP = 20;
+/** Заставка опоздала больше чем на столько (файл ещё качался) — уже не к месту, не играем. */
+const LATE_MS = 1500;
+/** Заставки, которые звучат чаще других: их держим скачанными в тональности текущей музыки. */
+const COMMON_STINGS: StingId[] = ['coin', 'purchase', 'record', 'rank_up'];
 
-/** Волна радио: свои аккорды, мелодия, темп и барабаны. */
-/** Ещё карнавальная самба и марш оркестра — играют в особый день (bigday.ts), пока идёт шествие. */
-export type Station = 'retro' | 'hits' | 'samba' | 'march';
-interface Tune {
-  bpm: number;
-  melody: number;
-  drums: boolean;
-  /** Бочка на каждую четверть. */
-  kick?: boolean;
-  /** Свинг: вторая восьмая запаздывает. */
-  swing?: number;
-  chords: number[][];
-  notes: number[][];
-  lead: OscillatorType;
-}
-const STATIONS: Record<Station, Tune> = {
-  // Ретро: Dm7 — G7 — Cmaj7 — A7, мягкий синус и свинг.
-  retro: {
-    bpm: 88,
-    melody: 0.026,
-    drums: false,
-    swing: 0.18,
-    chords: [
-      [62, 65, 69],
-      [55, 59, 65],
-      [60, 64, 71],
-      [57, 61, 67],
-    ],
-    notes: [
-      [74, -1, 72, 69, -1, 65, 69, -1],
-      [71, -1, 67, -1, 65, 67, -1, -1],
-      [72, 76, -1, 74, 72, -1, 71, -1],
-      [73, -1, 69, -1, 67, -1, -1, -1],
-    ],
-    lead: 'sine',
-  },
-  // Хиты: Am — F — C — G, быстрый бит с бочкой и звонкой мелодией.
-  hits: {
-    bpm: 128,
-    melody: 0.02,
-    drums: true,
-    kick: true,
-    chords: [
-      [57, 60, 64],
-      [53, 57, 60],
-      [60, 64, 67],
-      [55, 59, 62],
-    ],
-    notes: [
-      [76, 76, -1, 72, 76, -1, 79, -1],
-      [77, -1, 76, 72, -1, 69, 72, -1],
-      [72, 72, -1, 76, 79, -1, 84, -1],
-      [83, -1, 79, -1, 74, 76, 74, -1],
-    ],
-    lead: 'square',
-  },
-  // Самба: C — F — Dm — G, быстрая бочка, свинг и звонкая синкопа.
-  samba: {
-    bpm: 118,
-    melody: 0.022,
-    drums: true,
-    kick: true,
-    swing: 0.12,
-    chords: [
-      [60, 64, 67],
-      [65, 69, 72],
-      [62, 65, 69],
-      [67, 71, 74],
-    ],
-    notes: [
-      [79, -1, 79, 76, -1, 79, 81, -1],
-      [81, 79, -1, 77, -1, 76, 77, -1],
-      [77, -1, 74, 77, -1, 81, 79, -1],
-      [79, 77, -1, 74, 71, -1, 72, -1],
-    ],
-    lead: 'square',
-  },
-  // Марш: C — G — C — F, ровная бочка на каждую долю и труба-квадрат.
-  march: {
-    bpm: 112,
-    melody: 0.024,
-    drums: true,
-    kick: true,
-    chords: [
-      [60, 64, 67],
-      [55, 59, 62],
-      [60, 64, 67],
-      [53, 57, 60],
-    ],
-    notes: [
-      [72, -1, 72, 74, 76, -1, 72, -1],
-      [74, -1, 71, -1, 67, -1, -1, -1],
-      [72, -1, 76, 79, 84, -1, 79, -1],
-      [77, 76, 74, -1, 72, -1, -1, -1],
-    ],
-    lead: 'square',
-  },
-};
+const playlist = new Playlist(Math.random);
+const loops = new LoopPlayer();
+const stingBuffers = new BufferCache(6);
 
-const freq = (midi: number): number => 440 * 2 ** ((midi - 69) / 12);
-
-let mood: Mood = 'day';
-let station: Station | null = null;
-/** Что попросили сменить — применится с начала следующего такта. */
-let nextMood: Mood = 'day';
-let nextStation: Station | null = null;
+let mood: MusicMood = 'title';
+let winter = false;
+let radio: { station: StationId; x?: number } | null = null;
+let parade: StationId | null = null;
+/** Игрок сам крутил ручку приёмника — шипение и позывные; и тема на титуле больше не держит радио. */
+let tuned = false;
+let radioTouched = false;
 let timer: ReturnType<typeof setInterval> | null = null;
-let step = 0;
-let nextTime = 0;
-let noise: AudioBuffer | null = null;
 
-/** Выход музыки в своём контексте: громкость (плавный вход), мягкий бас и мягкое арпеджио. */
-interface Out {
-  ac: AudioContext;
-  master: GainNode;
-  bass: BiquadFilterNode;
-  arp: BiquadFilterNode;
+interface Voice {
+  track: TrackId;
+  src: AudioBufferSourceNode;
+  gain: GainNode;
 }
-let out: Out | null = null;
+/** Звучащий трек (на время смены уходящий уже отпущен — он доигрывает сам и выбрасывается). */
+let voice: Voice | null = null;
+let loads = 0;
+let loading = 0;
 
-function connectOut(ac: AudioContext): Out {
-  const master = ac.createGain();
-  master.gain.value = 0;
-  master.gain.setValueAtTime(0, ac.currentTime);
-  master.gain.linearRampToValueAtTime(1, ac.currentTime + 1.5);
-  master.connect(busInput(ac, 'music'));
-  // Бас — пила через фильтр: телефон не играет сам тон (~130 Гц), но слышит его призвуки.
-  const bass = ac.createBiquadFilter();
-  bass.type = 'lowpass';
-  bass.frequency.value = 700;
-  bass.Q.value = 0.6;
-  bass.connect(master);
-  // Квадратное арпеджио — без визгливого верха.
-  const arp = ac.createBiquadFilter();
-  arp.type = 'lowpass';
-  arp.frequency.value = 2200;
-  arp.Q.value = 0.5;
-  arp.connect(master);
-  return { ac, master, bass, arp };
-}
-
-function tone(ac: AudioContext, midi: number, at: number, dur: number, wave: OscillatorType, vol: number, to: AudioNode = out!.master): void {
-  const osc = ac.createOscillator();
-  const gain = ac.createGain();
-  gain.gain.value = 0;
-  osc.type = wave;
-  osc.frequency.setValueAtTime(freq(midi), at);
-  gain.gain.setValueAtTime(0, at);
-  gain.gain.linearRampToValueAtTime(vol, at + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-  osc.connect(gain).connect(to);
-  osc.start(at);
-  osc.stop(at + dur + 0.02);
-}
-
-/** Бочка: «тук» повыше прежнего (телефон 40 Гц не играет) и щелчок колотушки сверху. */
-function kick(ac: AudioContext, at: number): void {
-  const osc = ac.createOscillator();
-  const gain = ac.createGain();
-  gain.gain.value = 0;
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(180, at);
-  osc.frequency.exponentialRampToValueAtTime(75, at + 0.1);
-  gain.gain.setValueAtTime(0.07, at);
-  gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.14);
-  osc.connect(gain).connect(out!.master);
-  osc.start(at);
-  osc.stop(at + 0.16);
-  hat(ac, at, 2500, 0.01, 0.015);
-}
-
-function hat(ac: AudioContext, at: number, cut = 6000, vol = 0.012, len = 0.04): void {
-  if (!noise || noise.sampleRate !== ac.sampleRate) {
-    noise = ac.createBuffer(1, ac.sampleRate * 0.05, ac.sampleRate);
-    const data = noise.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+/** Равная мощность: при смене двух треков общая громкость не проваливается посередине. */
+function powerCurve(from: number, to: number): Float32Array<ArrayBuffer> {
+  const n = 32;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = (i / (n - 1)) * (Math.PI / 2);
+    curve[i] = to > from ? from + (to - from) * Math.sin(k) : to + (from - to) * Math.cos(k);
   }
-  const src = ac.createBufferSource();
-  src.buffer = noise;
-  const filter = ac.createBiquadFilter();
-  filter.type = 'highpass';
-  filter.frequency.value = cut;
-  const gain = ac.createGain();
-  gain.gain.value = 0;
-  gain.gain.setValueAtTime(vol, at);
-  gain.gain.exponentialRampToValueAtTime(0.0001, at + len);
-  src.connect(filter).connect(gain).connect(out!.master);
-  src.start(at);
+  return curve;
 }
 
-/** Ставит в очередь ноты на 0.2 секунды вперёд — так музыка не сбивается при подвисаниях. */
-function schedule(): void {
+/** Плавно к значению за seconds. Кривая не легла (другая ещё идёт) — прямой линией от текущего. */
+function glide(param: AudioParam, to: number, at: number, seconds: number): void {
+  const from = param.value;
+  param.cancelScheduledValues(at);
+  try {
+    param.setValueCurveAtTime(powerCurve(from, to), at, seconds);
+  } catch {
+    param.cancelScheduledValues(0);
+    param.setValueAtTime(from, at);
+    param.linearRampToValueAtTime(to, at + seconds);
+  }
+}
+
+function startTrack(ac: AudioContext, track: TrackId, buffer: AudioBuffer, fadeIn: number): void {
+  const src = ac.createBufferSource();
+  src.buffer = buffer;
+  const gain = ac.createGain();
+  gain.gain.value = 0;
+  src.connect(gain).connect(busInput(ac, 'music'));
+  const at = ac.currentTime + 0.05;
+  glide(gain.gain, 10 ** (TRACKS[track].gainDb / 20), at, fadeIn);
+  src.start(at);
+  const v: Voice = { track, src, gain };
+  voice = v;
+  src.onended = () => {
+    src.disconnect();
+    gain.disconnect();
+    if (voice === v) voice = null;
+  };
+  playlist.started(track, at, buffer.duration);
+}
+
+/** Отпустить трек: тихо уходит за seconds и выбрасывается из памяти. */
+function release(v: Voice, seconds: number): void {
+  const ac = v.src.context;
+  const now = ac.currentTime;
+  glide(v.gain.gain, 0, now, seconds);
+  try {
+    v.src.stop(now + seconds + 0.05);
+  } catch {
+    v.src.disconnect();
+  }
+  if (voice === v) voice = null;
+}
+
+/** Скачать, разобрать и начать трек (fade — плавно сменить играющий). */
+async function begin(ac: AudioContext, track: TrackId, fade: boolean): Promise<void> {
+  const token = ++loads;
+  loading = token;
+  try {
+    const buffer = await loadAudio(ac, TRACKS[track].path, { lean: true });
+    // Пока качали: музыку выключили, отменили или включили радио (оркестр) — трек уже не нужен.
+    if (loading !== token || ac.state === 'closed' || !mixer.audible('music') || wantedLoop()) return;
+    const old = voice;
+    if (old) release(old, fade ? CROSSFADE : 1.5);
+    startTrack(ac, track, buffer, old && fade ? CROSSFADE : FADE_IN);
+  } catch {
+    // Не скачалось или не разобралось — помолчим, как после трека, и попробуем позже.
+    if (loading === token) playlist.stopped(ac.currentTime, RETRY_GAP);
+  } finally {
+    if (loading === token) loading = 0;
+  }
+}
+
+/**
+ * Музыку выключили (ползунок, «без звука»): всё убрать из памяти; включат — через пару секунд
+ * следующий трек (а если шла тишина между треками — она и продолжится).
+ */
+function hush(ac: AudioContext): void {
+  loading = 0;
+  tuned = false;
+  if (voice) release(voice, 0.3);
+  loops.stop();
+  const now = ac.currentTime;
+  if (playlist.playing) playlist.stopped(now, 1.5);
+  else playlist.quietUntil = Math.max(playlist.quietUntil, now + 1.5);
+}
+
+/** Тема на титуле — первый трек захода: радио дожидается её конца (если игрок сам не трогал приёмник). */
+const openingTheme = (): boolean => !radioTouched && (playlist.count === 0 || (playlist.count === 1 && playlist.playing?.track === 'theme'));
+
+/** Что должно играть из «петель»: оркестр на параде важнее приёмника; ночью и на титуле радио молчит. */
+function wantedLoop(): LoopWant | null {
+  if (parade && mood !== 'night') return { station: parade, kind: 'parade' };
+  if (radio && mood !== 'night' && mood !== 'title' && !openingTheme()) return { station: radio.station, kind: 'radio', x: radio.x };
+  return null;
+}
+
+function tick(): void {
   const ac = existingAudioContext();
-  // Не слышно (свёрнуто, без звука, ползунок на нуле) — ноты не копим, потом продолжим с того же места.
-  if (!ac || !mixer.audible('music')) {
-    nextTime = 0;
+  // Ещё не было касания, игра свёрнута или весь звук выключен — ждём (часы звука тоже стоят).
+  if (!ac) return;
+  if (!mixer.audible('music')) {
+    hush(ac);
     return;
   }
-  if (!out || out.ac !== ac) {
-    out = connectOut(ac);
-    nextTime = 0;
-    step = 0;
+  const loop = wantedLoop();
+  loops.update(ac, loop, tuned);
+  tuned = false;
+  if (loading) return;
+  const now = ac.currentTime;
+  // Зазвучала музыка в новой тональности — частые заставки скачать заранее (трек к тому времени уже скачан).
+  const key = currentKey(now);
+  if (key && key !== prefetched) {
+    prefetched = key;
+    prefetchStings(key);
   }
-  if (nextTime < ac.currentTime) nextTime = ac.currentTime + 0.05;
-  while (nextTime < ac.currentTime + 0.2) {
-    // Новое настроение и волна — только с начала такта: темп не скачет посреди ноты.
-    if (step % 8 === 0) {
-      mood = nextMood;
-      station = nextStation;
-    }
-    // Вечером радио стихает — играет вечерняя мелодия магазина.
-    const radio = mood === 'day' && station ? STATIONS[station] : null;
-    const tune: Tune = radio ?? { ...MOODS[mood], chords: CHORDS, notes: MELODY, lead: 'triangle' };
-    const eighth = 60 / tune.bpm / 2;
-    const bar = Math.floor(step / 8) % 4;
-    const beat = step % 8;
-    // Каждый четвёртый проход фразы — «вдох»: мелодия молчит, остаются аккорды и бас.
-    const rest = Math.floor(step / 32) % 4 === 3;
-    const at = nextTime + (beat % 2 === 1 ? eighth * (tune.swing ?? 0) : 0);
-    const chord = tune.chords[bar];
-    if (beat % 4 === 0) tone(ac, chord[0] - 12, at, eighth * 3.5, 'sawtooth', 0.035, out.bass);
-    tone(ac, chord[[0, 1, 2, 1][beat % 4]], at, eighth * 0.9, radio ? 'triangle' : 'square', 0.012, out.arp);
-    const note = tune.notes[bar][beat];
-    if (note > 0 && !rest && (mood === 'day' || beat % 2 === 0))
-      tone(ac, note, at, eighth * 1.6, tune.lead, radio?.lead === 'square' ? tune.melody * 0.5 : tune.melody, radio?.lead === 'square' ? out.arp : out.master);
-    if (tune.kick && beat % 2 === 0) kick(ac, at);
-    if (tune.drums && beat % 2 === 1) hat(ac, at);
-    nextTime += eighth;
-    step++;
-  }
+  const cue = playlist.next(now, mood, winter, loop !== null);
+  // По расписанию трек кончился, а звук ещё идёт (прыжок во времени при отладке) — два трека сразу не звучат.
+  if (!playlist.playing && voice) release(voice, 1);
+  if (cue === 'stop') {
+    if (voice) release(voice, 2.5);
+    playlist.stopped(now, RESUME_GAP);
+  } else if (cue) void begin(ac, cue.track, cue.fade);
+}
+
+/** Тональность того, что сейчас звучит (null — тишина): заставки берут вариант в ней. */
+function currentKey(now: number): Key | null {
+  return loops.key(now) ?? (voice ? TRACKS[voice.track].key : null);
+}
+
+/** Тональность, под которую заставки уже скачаны. */
+let prefetched: Key | null = null;
+
+/** Частые заставки — скачать заранее в тональности музыки, что только что зазвучала (и открытие с итогами дня). */
+function prefetchStings(key: Key): void {
+  for (const id of COMMON_STINGS) prefetchAudio(stingPath(id, key));
+  prefetchAudio(stingPath('day_open', null));
+  prefetchAudio(stingPath('day_close', null));
+}
+
+let stingUntil = 0;
+const lastSting: Partial<Record<StingId, number>> = {};
+
+function playSting(ac: AudioContext, id: StingId, buffer: AudioBuffer): void {
+  const src = ac.createBufferSource();
+  src.buffer = buffer;
+  src.connect(busInput(ac, 'sting'));
+  src.onended = () => src.disconnect();
+  src.start();
+  const duck = STINGS[id].duckDb;
+  // Заставки в до мажоре не попадут в тональность музыки — на их время музыка притихает.
+  if (duck) duckMusic(buffer.duration * 0.85, 10 ** (duck / 20));
 }
 
 export const music = {
-  /** Запускает музыку (после касания «Играть»). Играет, когда её слышно, — сама подхватывается. */
+  /** Включить расписание. Играет само, когда звук открыт касанием; до того ничего не качает. */
   start(): void {
-    if (!timer) timer = setInterval(schedule, 50);
+    if (!timer) timer = setInterval(tick, TICK_MS);
   },
-  stop(): void {
-    if (timer) clearInterval(timer);
-    timer = null;
-    if (out) {
-      const old = out.master;
-      old.gain.cancelScheduledValues(out.ac.currentTime);
-      old.gain.setTargetAtTime(0, out.ac.currentTime, 0.12);
-      setTimeout(() => old.disconnect(), 500);
+
+  /** Настроение момента и зима (зимой вальс иногда звучит вместо дня и вечера). Звать можно хоть каждый кадр. */
+  setMood(next: MusicMood, isWinter = false): void {
+    mood = next;
+    winter = isWinter;
+  },
+
+  /**
+   * Радио в зале: волна (null — выключено или приёмника нет) и где он стоит. byHand — волну сменил
+   * сам игрок: шипение настройки и позывные «Радио Магазинчик». Та же волна — только место.
+   */
+  setRadio(station: StationId | null, x?: number, byHand = false): void {
+    if (station !== (radio?.station ?? null) && byHand) {
+      tuned = true;
+      radioTouched = true;
     }
-    out = null;
+    radio = station ? { station, x } : null;
   },
-  setMood(next: Mood): void {
-    nextMood = next;
+
+  /** Оркестр на улице в особый день (самба, марш, хиты марафона); null — ушёл. */
+  setParade(station: StationId | null): void {
+    parade = station;
   },
-  /** Волна радио в магазине (null — радио молчит, играет своя музыка). */
-  setStation(next: Station | null): void {
-    nextStation = next;
+
+  /**
+   * Заставка к событию поверх музыки (в её тональности, а нет — музыка притихает). false — не прозвучит
+   * (музыка выключена, звук ещё не открыт, только что звучала другая): тогда можно сыграть обычный звук.
+   * gap — не чаще раза в столько секунд.
+   */
+  sting(id: StingId, gap = 1): boolean {
+    const ac = existingAudioContext();
+    if (!ac || !mixer.audible('music')) return false;
+    const now = ac.currentTime;
+    // Одна заставка за раз: вторая поверх первой — каша.
+    if (now < stingUntil || now - (lastSting[id] ?? -Infinity) < gap) return false;
+    stingUntil = now + STINGS[id].duration * 0.75;
+    lastSting[id] = now;
+    const path = stingPath(id, currentKey(now));
+    const ready = stingBuffers.get(path);
+    if (ready) {
+      playSting(ac, id, ready);
+      return true;
+    }
+    const asked = performance.now();
+    void loadAudio(ac, path, { keep: true })
+      .then((buffer) => {
+        stingBuffers.set(path, buffer);
+        if (performance.now() - asked < LATE_MS && mixer.audible('music')) playSting(ac, id, buffer);
+      })
+      .catch(() => {});
+    return true;
+  },
+
+  /** Скачать заставку заранее (расширение, открытие дня) — чтобы прозвучала вовремя. */
+  prefetch(id: StingId): void {
+    if (existingAudioContext()) prefetchAudio(stingPath(id, null));
+  },
+
+  /** Ползунок «Музыка» отпустили: если сейчас тишина между треками — короткая заставка, чтобы было слышно громкость. */
+  preview(): void {
+    if (!voice && !loops.active) music.sting('coin', 0);
   },
 };
+
+// Отладка: ?debug открывает расписание из консоли (что играет, что скачано) и «прыжок» во времени.
+if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')) {
+  Object.assign(window, {
+    musicDebug: () => {
+      const ac = existingAudioContext();
+      const b = voice?.src.buffer;
+      return {
+        now: ac?.currentTime,
+        mood,
+        winter,
+        radio,
+        parade,
+        loading: Boolean(loading),
+        playlist: { playing: playlist.playing, quietUntil: playlist.quietUntil, last: playlist.last, count: playlist.count },
+        track: voice && b ? { id: voice.track, duration: b.duration, sampleRate: b.sampleRate, channels: b.numberOfChannels, gain: voice.gain.gain.value } : null,
+        loop: loops.debug(),
+        key: ac ? currentKey(ac.currentTime) : null,
+        stings: stingBuffers.keys(),
+        fetched: fetched.slice(),
+      };
+    },
+    musicSkip: (seconds: number) => playlist.skip(seconds),
+    musicSting: (id: StingId) => music.sting(id),
+    musicLoopBuffer: () => loops.buffer(),
+  });
+}

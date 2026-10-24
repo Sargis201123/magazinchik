@@ -6,3 +6,7 @@ dist
 __pycache__
 .wrangler
 art/build
+# Снимки автопроверки (npm run e2e): свежие, эталон и отличия — у каждого свои.
+e2e/shots
+e2e/baseline
+e2e/diff

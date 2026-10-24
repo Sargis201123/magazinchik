@@ -81,6 +81,8 @@ let paused = false;
 export const pauseSaving = (on: boolean): void => {
   paused = on;
 };
+/** Сейчас на экране чужой магазин (в гостях у друга). */
+export const savingPaused = (): boolean => paused;
 
 export function saveGame(state: StoreState): void {
   if (paused) return;
