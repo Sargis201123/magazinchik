@@ -1,0 +1,1018 @@
+{
+ "version": 2,
+ "sampleRate": 48000,
+ "motif": "Мотив «Магазинчик»: в до мажоре C D | A G E (затакт, секста вверх, «дзынь» G→E)",
+ "playback": "music — треки Suno (suno.py): играть один раз с усилением gainDb (ночь и вечер тише дня), затем пауза silenceAfter (с); loop — WebAudio: loop=true, loopStart/loopEnd из манифеста, start(0, loopStart), после decodeAudioData сгладить шов (seamCrossfadeSamples); sting — один раз поверх музыки: для stingerKeys взять вариант в тональности текущей музыки (key, у петель с модуляцией — keySections: секунды от loopStart), под заставками с duckDb приглушить музыку на их длительность. ogg (Opus) — основной формат, m4a (AAC) — для iOS/Safari.",
+ "seamCrossfade": "после decodeAudioData для каждого канала d, s=loopStartSample, e=loopEndSample, k=seamCrossfadeSamples: d[e-k+i] = d[e-k+i]*(1-i/k) + d[s-k+i]*i/k, i=0..k-1 — убирает разницу шума кодека между копиями начала петли",
+ "seamCrossfadeSamples": 240,
+ "stingerKeys": {
+  "sting_coin": {
+   "C": "sting_coin",
+   "G": "sting_coin_G",
+   "F": "sting_coin_F",
+   "Eb": "sting_coin_Eb",
+   "D": "sting_coin_D",
+   "A": "sting_coin_A",
+   "Bb": "sting_coin_Bb"
+  },
+  "sting_purchase": {
+   "C": "sting_purchase",
+   "G": "sting_purchase_G",
+   "F": "sting_purchase_F",
+   "Eb": "sting_purchase_Eb",
+   "D": "sting_purchase_D",
+   "A": "sting_purchase_A",
+   "Bb": "sting_purchase_Bb"
+  },
+  "sting_record": {
+   "C": "sting_record",
+   "G": "sting_record_G",
+   "F": "sting_record_F",
+   "Eb": "sting_record_Eb",
+   "D": "sting_record_D",
+   "A": "sting_record_A",
+   "Bb": "sting_record_Bb"
+  },
+  "sting_rank_up": {
+   "C": "sting_rank_up",
+   "G": "sting_rank_up_G",
+   "F": "sting_rank_up_F",
+   "Eb": "sting_rank_up_Eb",
+   "D": "sting_rank_up_D",
+   "A": "sting_rank_up_A",
+   "Bb": "sting_rank_up_Bb"
+  }
+ },
+ "tracks": {
+  "theme": {
+   "kind": "music",
+   "source": "suno",
+   "title": "Тема «Магазинчика»",
+   "use": "Титульный экран: первый трек каждого захода в игру",
+   "files": {
+    "ogg": "audio/music/suno/theme.ogg",
+    "m4a": "audio/music/suno/theme.m4a"
+   },
+   "duration": 112.0,
+   "lufs": -16.1,
+   "truePeakDb": -3.9,
+   "key": "G",
+   "keyEstimated": true,
+   "gainDb": 0.0,
+   "bytes": {
+    "ogg": 1074359,
+    "m4a": 1378171
+   },
+   "silenceAfter": [
+    30,
+    90
+   ]
+  },
+  "morning": {
+   "kind": "music",
+   "source": "suno",
+   "title": "Утро",
+   "use": "Утро: экран закупки и первые часы дня",
+   "files": {
+    "ogg": "audio/music/suno/morning.ogg",
+    "m4a": "audio/music/suno/morning.m4a"
+   },
+   "duration": 182.4,
+   "lufs": -16.0,
+   "truePeakDb": -2.9,
+   "key": "D",
+   "keyEstimated": true,
+   "gainDb": -1.0,
+   "bytes": {
+    "ogg": 1784291,
+    "m4a": 2230768
+   },
+   "silenceAfter": [
+    30,
+    90
+   ]
+  },
+  "day": {
+   "kind": "music",
+   "source": "suno",
+   "title": "День",
+   "use": "День: основной фон торговли",
+   "files": {
+    "ogg": "audio/music/suno/day.ogg",
+    "m4a": "audio/music/suno/day.m4a"
+   },
+   "duration": 152.8,
+   "lufs": -16.0,
+   "truePeakDb": -3.6,
+   "key": "C",
+   "keyEstimated": true,
+   "gainDb": 0.0,
+   "bytes": {
+    "ogg": 1442088,
+    "m4a": 1883487
+   },
+   "silenceAfter": [
+    30,
+    90
+   ]
+  },
+  "evening": {
+   "kind": "music",
+   "source": "suno",
+   "title": "Вечер",
+   "use": "Вечер: фонари, последние покупатели, итоги дня",
+   "files": {
+    "ogg": "audio/music/suno/evening.ogg",
+    "m4a": "audio/music/suno/evening.m4a"
+   },
+   "duration": 192.8,
+   "lufs": -15.9,
+   "truePeakDb": -3.0,
+   "key": "C",
+   "keyEstimated": true,
+   "gainDb": -1.0,
+   "bytes": {
+    "ogg": 1797380,
+    "m4a": 2361579
+   },
+   "silenceAfter": [
+    30,
+    90
+   ]
+  },
+  "night": {
+   "kind": "music",
+   "source": "suno",
+   "title": "Ночная смена",
+   "use": "Ночная смена: тихий фон ночью",
+   "files": {
+    "ogg": "audio/music/suno/night.ogg",
+    "m4a": "audio/music/suno/night.m4a"
+   },
+   "duration": 163.2,
+   "lufs": -15.9,
+   "truePeakDb": -2.2,
+   "key": "D",
+   "keyEstimated": true,
+   "gainDb": -3.0,
+   "bytes": {
+    "ogg": 1395319,
+    "m4a": 2004602
+   },
+   "silenceAfter": [
+    30,
+    90
+   ]
+  },
+  "winter": {
+   "kind": "music",
+   "source": "suno",
+   "title": "Зима",
+   "use": "Зима и Новый год: вместо дня или вечера через раз",
+   "files": {
+    "ogg": "audio/music/suno/winter.ogg",
+    "m4a": "audio/music/suno/winter.m4a"
+   },
+   "duration": 131.2,
+   "lufs": -16.1,
+   "truePeakDb": -1.8,
+   "key": "C",
+   "keyEstimated": true,
+   "gainDb": 0.0,
+   "bytes": {
+    "ogg": 1249431,
+    "m4a": 1608537
+   },
+   "silenceAfter": [
+    30,
+    90
+   ]
+  },
+  "radio_hits": {
+   "kind": "loop",
+   "title": "Радио «Хиты»",
+   "use": "Радио «Хиты»: бодрый поп-бит, по кругу (марафон)",
+   "files": {
+    "ogg": "audio/music/radio_hits.ogg",
+    "m4a": "audio/music/radio_hits.m4a"
+   },
+   "duration": 65.0,
+   "lufs": -16.0,
+   "truePeakDb": -3.07,
+   "bpm": 120,
+   "key": "A",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 438400,
+    "m4a": 501154
+   },
+   "loopStart": 0.5,
+   "loopEnd": 64.5,
+   "loopStartSample": 24000,
+   "loopEndSample": 3096000,
+   "loopDuration": 64.0
+  },
+  "radio_march": {
+   "kind": "loop",
+   "title": "Радио «Марш»",
+   "use": "Радио «Марш»: духовой оркестр на параде, по кругу (парады)",
+   "files": {
+    "ogg": "audio/music/radio_march.ogg",
+    "m4a": "audio/music/radio_march.m4a"
+   },
+   "duration": 65.0,
+   "lufs": -16.0,
+   "truePeakDb": -4.53,
+   "bpm": 120,
+   "key": "Bb",
+   "meter": "2/4",
+   "bytes": {
+    "ogg": 410816,
+    "m4a": 498927
+   },
+   "loopStart": 0.5,
+   "loopEnd": 64.5,
+   "loopStartSample": 24000,
+   "loopEndSample": 3096000,
+   "loopDuration": 64.0,
+   "keySections": [
+    {
+     "start": 0.0,
+     "end": 20.0,
+     "key": "Bb"
+    },
+    {
+     "start": 20.0,
+     "end": 52.0,
+     "key": "Eb"
+    },
+    {
+     "start": 52.0,
+     "end": 64.0,
+     "key": "Bb"
+    }
+   ]
+  },
+  "radio_retro": {
+   "kind": "loop",
+   "title": "Радио «Ретро»",
+   "use": "Радио «Ретро»: медленный свинг, крутится по кругу",
+   "files": {
+    "ogg": "audio/music/radio_retro.ogg",
+    "m4a": "audio/music/radio_retro.m4a"
+   },
+   "duration": 68.2,
+   "lufs": -16.0,
+   "truePeakDb": -2.96,
+   "bpm": 100,
+   "key": "F",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 444334,
+    "m4a": 523380
+   },
+   "loopStart": 0.5,
+   "loopEnd": 67.7,
+   "loopStartSample": 24000,
+   "loopEndSample": 3249600,
+   "loopDuration": 67.2
+  },
+  "radio_samba": {
+   "kind": "loop",
+   "title": "Радио «Самба»",
+   "use": "Радио «Самба»: карнавал, по кругу (особый день — карнавал)",
+   "files": {
+    "ogg": "audio/music/radio_samba.ogg",
+    "m4a": "audio/music/radio_samba.m4a"
+   },
+   "duration": 65.0,
+   "lufs": -16.0,
+   "truePeakDb": -3.86,
+   "bpm": 120,
+   "key": "F",
+   "meter": "2/4",
+   "bytes": {
+    "ogg": 452854,
+    "m4a": 499202
+   },
+   "loopStart": 0.5,
+   "loopEnd": 64.5,
+   "loopStartSample": 24000,
+   "loopEndSample": 3096000,
+   "loopDuration": 64.0
+  },
+  "sting_coin": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "files": {
+    "ogg": "audio/music/sting_coin.ogg",
+    "m4a": "audio/music/sting_coin.m4a"
+   },
+   "duration": 1.965,
+   "lufs": -18.0,
+   "truePeakDb": -7.87,
+   "bpm": 120,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 28058,
+    "m4a": 16424
+   },
+   "shortTermMaxLufs": -18.59
+  },
+  "sting_coin_A": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "files": {
+    "ogg": "audio/music/sting_coin_A.ogg",
+    "m4a": "audio/music/sting_coin_A.m4a"
+   },
+   "duration": 1.965,
+   "lufs": -18.0,
+   "truePeakDb": -5.81,
+   "bpm": 120,
+   "key": "A",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 28134,
+    "m4a": 16467
+   },
+   "shortTermMaxLufs": -18.33,
+   "baseKey": "C",
+   "transpose": -3
+  },
+  "sting_coin_Bb": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "files": {
+    "ogg": "audio/music/sting_coin_Bb.ogg",
+    "m4a": "audio/music/sting_coin_Bb.m4a"
+   },
+   "duration": 1.965,
+   "lufs": -18.0,
+   "truePeakDb": -7.77,
+   "bpm": 120,
+   "key": "Bb",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 28926,
+    "m4a": 16360
+   },
+   "shortTermMaxLufs": -18.69,
+   "baseKey": "C",
+   "transpose": -2
+  },
+  "sting_coin_D": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "files": {
+    "ogg": "audio/music/sting_coin_D.ogg",
+    "m4a": "audio/music/sting_coin_D.m4a"
+   },
+   "duration": 1.965,
+   "lufs": -18.0,
+   "truePeakDb": -7.78,
+   "bpm": 120,
+   "key": "D",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 27485,
+    "m4a": 16378
+   },
+   "shortTermMaxLufs": -18.46,
+   "baseKey": "C",
+   "transpose": 2
+  },
+  "sting_coin_Eb": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "files": {
+    "ogg": "audio/music/sting_coin_Eb.ogg",
+    "m4a": "audio/music/sting_coin_Eb.m4a"
+   },
+   "duration": 1.965,
+   "lufs": -18.0,
+   "truePeakDb": -8.32,
+   "bpm": 120,
+   "key": "Eb",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 26307,
+    "m4a": 16370
+   },
+   "shortTermMaxLufs": -18.51,
+   "baseKey": "C",
+   "transpose": 3
+  },
+  "sting_coin_F": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "files": {
+    "ogg": "audio/music/sting_coin_F.ogg",
+    "m4a": "audio/music/sting_coin_F.m4a"
+   },
+   "duration": 1.965,
+   "lufs": -18.0,
+   "truePeakDb": -7.3,
+   "bpm": 120,
+   "key": "F",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 29670,
+    "m4a": 16335
+   },
+   "shortTermMaxLufs": -18.51,
+   "baseKey": "C",
+   "transpose": 5
+  },
+  "sting_coin_G": {
+   "kind": "sting",
+   "title": "Монетка",
+   "use": "Монетка (крупная выручка, награда)",
+   "files": {
+    "ogg": "audio/music/sting_coin_G.ogg",
+    "m4a": "audio/music/sting_coin_G.m4a"
+   },
+   "duration": 1.965,
+   "lufs": -18.0,
+   "truePeakDb": -6.55,
+   "bpm": 120,
+   "key": "G",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 27014,
+    "m4a": 16416
+   },
+   "shortTermMaxLufs": -18.5,
+   "baseKey": "C",
+   "transpose": -5
+  },
+  "sting_day_close": {
+   "kind": "sting",
+   "title": "Итоги дня",
+   "use": "Закрытие дня / итоги",
+   "files": {
+    "ogg": "audio/music/sting_day_close.ogg",
+    "m4a": "audio/music/sting_day_close.m4a"
+   },
+   "duration": 4.679,
+   "lufs": -15.0,
+   "truePeakDb": -3.96,
+   "bpm": 112,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 44645,
+    "m4a": 38841
+   },
+   "shortTermMaxLufs": -14.64,
+   "duckDb": -8
+  },
+  "sting_day_open": {
+   "kind": "sting",
+   "title": "Открытие дня",
+   "use": "Открытие дня: колокольчик двери и мотив",
+   "files": {
+    "ogg": "audio/music/sting_day_open.ogg",
+    "m4a": "audio/music/sting_day_open.m4a"
+   },
+   "duration": 3.532,
+   "lufs": -15.0,
+   "truePeakDb": -2.65,
+   "bpm": 132,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 46919,
+    "m4a": 29067
+   },
+   "shortTermMaxLufs": -15.2,
+   "duckDb": -8
+  },
+  "sting_expand": {
+   "kind": "sting",
+   "title": "Расширение магазина",
+   "use": "Расширение магазина",
+   "files": {
+    "ogg": "audio/music/sting_expand.ogg",
+    "m4a": "audio/music/sting_expand.m4a"
+   },
+   "duration": 4.7,
+   "lufs": -14.0,
+   "truePeakDb": -1.53,
+   "bpm": 120,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 44100,
+    "m4a": 38998
+   },
+   "shortTermMaxLufs": -13.13,
+   "duckDb": -8
+  },
+  "sting_fail": {
+   "kind": "sting",
+   "title": "Мягкая неудача",
+   "use": "Мягкая неудача (банкротство-предупреждение, проваленная цель)",
+   "files": {
+    "ogg": "audio/music/sting_fail.ogg",
+    "m4a": "audio/music/sting_fail.m4a"
+   },
+   "duration": 4.5,
+   "lufs": -16.0,
+   "truePeakDb": -4.39,
+   "bpm": 100,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 44198,
+    "m4a": 33326
+   },
+   "shortTermMaxLufs": -16.19,
+   "duckDb": -8
+  },
+  "sting_purchase": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "files": {
+    "ogg": "audio/music/sting_purchase.ogg",
+    "m4a": "audio/music/sting_purchase.m4a"
+   },
+   "duration": 3.231,
+   "lufs": -18.5,
+   "truePeakDb": -3.64,
+   "bpm": 160,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 39335,
+    "m4a": 24586
+   },
+   "shortTermMaxLufs": -21.39
+  },
+  "sting_purchase_A": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "files": {
+    "ogg": "audio/music/sting_purchase_A.ogg",
+    "m4a": "audio/music/sting_purchase_A.m4a"
+   },
+   "duration": 3.231,
+   "lufs": -18.5,
+   "truePeakDb": -5.18,
+   "bpm": 160,
+   "key": "A",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 38037,
+    "m4a": 24819
+   },
+   "shortTermMaxLufs": -21.35,
+   "baseKey": "C",
+   "transpose": -3
+  },
+  "sting_purchase_Bb": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "files": {
+    "ogg": "audio/music/sting_purchase_Bb.ogg",
+    "m4a": "audio/music/sting_purchase_Bb.m4a"
+   },
+   "duration": 3.231,
+   "lufs": -18.5,
+   "truePeakDb": -3.98,
+   "bpm": 160,
+   "key": "Bb",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 40497,
+    "m4a": 25062
+   },
+   "shortTermMaxLufs": -20.89,
+   "baseKey": "C",
+   "transpose": -2
+  },
+  "sting_purchase_D": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "files": {
+    "ogg": "audio/music/sting_purchase_D.ogg",
+    "m4a": "audio/music/sting_purchase_D.m4a"
+   },
+   "duration": 3.231,
+   "lufs": -18.5,
+   "truePeakDb": -6.86,
+   "bpm": 160,
+   "key": "D",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 38307,
+    "m4a": 24674
+   },
+   "shortTermMaxLufs": -21.2,
+   "baseKey": "C",
+   "transpose": 2
+  },
+  "sting_purchase_Eb": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "files": {
+    "ogg": "audio/music/sting_purchase_Eb.ogg",
+    "m4a": "audio/music/sting_purchase_Eb.m4a"
+   },
+   "duration": 3.231,
+   "lufs": -18.5,
+   "truePeakDb": -4.9,
+   "bpm": 160,
+   "key": "Eb",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 40803,
+    "m4a": 24978
+   },
+   "shortTermMaxLufs": -21.2,
+   "baseKey": "C",
+   "transpose": 3
+  },
+  "sting_purchase_F": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "files": {
+    "ogg": "audio/music/sting_purchase_F.ogg",
+    "m4a": "audio/music/sting_purchase_F.m4a"
+   },
+   "duration": 3.231,
+   "lufs": -18.5,
+   "truePeakDb": -6.55,
+   "bpm": 160,
+   "key": "F",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 39962,
+    "m4a": 24750
+   },
+   "shortTermMaxLufs": -21.46,
+   "baseKey": "C",
+   "transpose": 5
+  },
+  "sting_purchase_G": {
+   "kind": "sting",
+   "title": "Покупка",
+   "use": "Покупка оборудования / распаковка",
+   "files": {
+    "ogg": "audio/music/sting_purchase_G.ogg",
+    "m4a": "audio/music/sting_purchase_G.m4a"
+   },
+   "duration": 3.231,
+   "lufs": -18.5,
+   "truePeakDb": -3.64,
+   "bpm": 160,
+   "key": "G",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 37802,
+    "m4a": 24391
+   },
+   "shortTermMaxLufs": -21.16,
+   "baseKey": "C",
+   "transpose": -5
+  },
+  "sting_rank_up": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "files": {
+    "ogg": "audio/music/sting_rank_up.ogg",
+    "m4a": "audio/music/sting_rank_up.m4a"
+   },
+   "duration": 4.045,
+   "lufs": -14.0,
+   "truePeakDb": -3.98,
+   "bpm": 132,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 38303,
+    "m4a": 33486
+   },
+   "shortTermMaxLufs": -15.15
+  },
+  "sting_rank_up_A": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "files": {
+    "ogg": "audio/music/sting_rank_up_A.ogg",
+    "m4a": "audio/music/sting_rank_up_A.m4a"
+   },
+   "duration": 4.045,
+   "lufs": -14.0,
+   "truePeakDb": -3.3,
+   "bpm": 132,
+   "key": "A",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 37544,
+    "m4a": 33492
+   },
+   "shortTermMaxLufs": -14.99,
+   "baseKey": "C",
+   "transpose": -3
+  },
+  "sting_rank_up_Bb": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "files": {
+    "ogg": "audio/music/sting_rank_up_Bb.ogg",
+    "m4a": "audio/music/sting_rank_up_Bb.m4a"
+   },
+   "duration": 4.045,
+   "lufs": -14.0,
+   "truePeakDb": -3.27,
+   "bpm": 132,
+   "key": "Bb",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 37712,
+    "m4a": 33487
+   },
+   "shortTermMaxLufs": -15.17,
+   "baseKey": "C",
+   "transpose": -2
+  },
+  "sting_rank_up_D": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "files": {
+    "ogg": "audio/music/sting_rank_up_D.ogg",
+    "m4a": "audio/music/sting_rank_up_D.m4a"
+   },
+   "duration": 4.045,
+   "lufs": -14.0,
+   "truePeakDb": -4.03,
+   "bpm": 132,
+   "key": "D",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 37823,
+    "m4a": 33499
+   },
+   "shortTermMaxLufs": -15.1,
+   "baseKey": "C",
+   "transpose": 2
+  },
+  "sting_rank_up_Eb": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "files": {
+    "ogg": "audio/music/sting_rank_up_Eb.ogg",
+    "m4a": "audio/music/sting_rank_up_Eb.m4a"
+   },
+   "duration": 4.045,
+   "lufs": -14.0,
+   "truePeakDb": -4.16,
+   "bpm": 132,
+   "key": "Eb",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 38964,
+    "m4a": 33489
+   },
+   "shortTermMaxLufs": -15.11,
+   "baseKey": "C",
+   "transpose": 3
+  },
+  "sting_rank_up_F": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "files": {
+    "ogg": "audio/music/sting_rank_up_F.ogg",
+    "m4a": "audio/music/sting_rank_up_F.m4a"
+   },
+   "duration": 4.045,
+   "lufs": -14.0,
+   "truePeakDb": -2.77,
+   "bpm": 132,
+   "key": "F",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 36063,
+    "m4a": 33560
+   },
+   "shortTermMaxLufs": -15.15,
+   "baseKey": "C",
+   "transpose": -7
+  },
+  "sting_rank_up_G": {
+   "kind": "sting",
+   "title": "Новое звание",
+   "use": "Новое звание / повышение",
+   "files": {
+    "ogg": "audio/music/sting_rank_up_G.ogg",
+    "m4a": "audio/music/sting_rank_up_G.m4a"
+   },
+   "duration": 4.045,
+   "lufs": -14.0,
+   "truePeakDb": -3.46,
+   "bpm": 132,
+   "key": "G",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 37082,
+    "m4a": 33500
+   },
+   "shortTermMaxLufs": -14.89,
+   "baseKey": "C",
+   "transpose": -5
+  },
+  "sting_record": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "files": {
+    "ogg": "audio/music/sting_record.ogg",
+    "m4a": "audio/music/sting_record.m4a"
+   },
+   "duration": 3.3,
+   "lufs": -14.0,
+   "truePeakDb": -3.59,
+   "bpm": 150,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 39296,
+    "m4a": 26208
+   },
+   "shortTermMaxLufs": -16.37
+  },
+  "sting_record_A": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "files": {
+    "ogg": "audio/music/sting_record_A.ogg",
+    "m4a": "audio/music/sting_record_A.m4a"
+   },
+   "duration": 3.3,
+   "lufs": -14.0,
+   "truePeakDb": -3.06,
+   "bpm": 150,
+   "key": "A",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 36582,
+    "m4a": 25976
+   },
+   "shortTermMaxLufs": -16.37,
+   "baseKey": "C",
+   "transpose": -3
+  },
+  "sting_record_Bb": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "files": {
+    "ogg": "audio/music/sting_record_Bb.ogg",
+    "m4a": "audio/music/sting_record_Bb.m4a"
+   },
+   "duration": 3.3,
+   "lufs": -14.0,
+   "truePeakDb": -3.88,
+   "bpm": 150,
+   "key": "Bb",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 38030,
+    "m4a": 26165
+   },
+   "shortTermMaxLufs": -16.43,
+   "baseKey": "C",
+   "transpose": -2
+  },
+  "sting_record_D": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "files": {
+    "ogg": "audio/music/sting_record_D.ogg",
+    "m4a": "audio/music/sting_record_D.m4a"
+   },
+   "duration": 3.3,
+   "lufs": -14.0,
+   "truePeakDb": -3.62,
+   "bpm": 150,
+   "key": "D",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 39560,
+    "m4a": 26205
+   },
+   "shortTermMaxLufs": -16.32,
+   "baseKey": "C",
+   "transpose": 2
+  },
+  "sting_record_Eb": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "files": {
+    "ogg": "audio/music/sting_record_Eb.ogg",
+    "m4a": "audio/music/sting_record_Eb.m4a"
+   },
+   "duration": 3.3,
+   "lufs": -14.0,
+   "truePeakDb": -3.54,
+   "bpm": 150,
+   "key": "Eb",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 40275,
+    "m4a": 26147
+   },
+   "shortTermMaxLufs": -16.4,
+   "baseKey": "C",
+   "transpose": 3
+  },
+  "sting_record_F": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "files": {
+    "ogg": "audio/music/sting_record_F.ogg",
+    "m4a": "audio/music/sting_record_F.m4a"
+   },
+   "duration": 3.3,
+   "lufs": -14.0,
+   "truePeakDb": -2.59,
+   "bpm": 150,
+   "key": "F",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 41611,
+    "m4a": 26124
+   },
+   "shortTermMaxLufs": -16.41,
+   "baseKey": "C",
+   "transpose": 5
+  },
+  "sting_record_G": {
+   "kind": "sting",
+   "title": "Новый рекорд",
+   "use": "Новый рекорд",
+   "files": {
+    "ogg": "audio/music/sting_record_G.ogg",
+    "m4a": "audio/music/sting_record_G.m4a"
+   },
+   "duration": 3.3,
+   "lufs": -14.0,
+   "truePeakDb": -1.32,
+   "bpm": 150,
+   "key": "G",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 37189,
+    "m4a": 26214
+   },
+   "shortTermMaxLufs": -16.27,
+   "baseKey": "C",
+   "transpose": -5
+  },
+  "sting_story": {
+   "kind": "sting",
+   "title": "Сюжетный момент",
+   "use": "Сюжетный момент (начало диалога, поворот)",
+   "files": {
+    "ogg": "audio/music/sting_story.ogg",
+    "m4a": "audio/music/sting_story.m4a"
+   },
+   "duration": 5.575,
+   "lufs": -16.0,
+   "truePeakDb": -5.24,
+   "bpm": 80,
+   "key": "C",
+   "meter": "4/4",
+   "bytes": {
+    "ogg": 50952,
+    "m4a": 46390
+   },
+   "shortTermMaxLufs": -14.88,
+   "duckDb": -8
+  }
+ }
+}

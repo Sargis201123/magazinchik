@@ -48,6 +48,46 @@ const COMMANDS: Record<Lang, { command: string; description: string }[]> = {
   ],
 };
 
+/** Подарок новичку от друга — как WELCOME_GIFT в src/platform/social.ts (проверяет тест). */
+export const WELCOME_COINS = 300;
+
+/** Что бот знает об игроке для приветствия на /start: его день в игре и кто позвал. */
+export interface StartInfo {
+  /** День магазина из последнего отчёта игры (progress); нет — ещё не играл. */
+  day?: number;
+  /** Имя друга, по чьей ссылке пришёл (ref_/help_), если друг уже играет. */
+  friend?: string;
+}
+
+/**
+ * Подпись к ролику на /start: играющему — его день и Соня, приглашённому — от кого подарок,
+ * новичку — приглашение открыть бабушкин магазин. Вариант зависит от дня, чтобы не повторяться.
+ */
+export function startCaption(ru: boolean, info: StartInfo): string {
+  const day = info.day ?? 0;
+  if (day > 1) {
+    const lines = ru
+      ? [
+          `День ${day}. Соня ждёт тебя вечером 🌙\nА у дверей магазинчика уже собираются покупатели.`,
+          `День ${day}. За окном темнеет, зажигаются фонари 🏮\nЗагляни в магазинчик — а вечером Соня ждёт тебя дома.`,
+          `День ${day}. Очередь у кассы растёт 🛒\nОткрывай смену — Соня ждёт тебя вечером.`,
+        ]
+      : [
+          `Day ${day}. Sonya is waiting for you tonight 🌙\nCustomers are already gathering at the shop door.`,
+          `Day ${day}. It's getting dark, the street lamps are on 🏮\nDrop by the shop — Sonya is waiting for you at home tonight.`,
+          `Day ${day}. The queue at the till keeps growing 🛒\nOpen up — Sonya is waiting for you tonight.`,
+        ];
+    return lines[day % lines.length];
+  }
+  if (info.friend)
+    return ru
+      ? `${info.friend} зовёт тебя в «Магазинчик» 🎁\nТебе подарок на старт — ${WELCOME_COINS} монет. Бабушкин магазин ждёт!`
+      : `${info.friend} invites you to Magazinchik 🎁\nA starter gift of ${WELCOME_COINS} coins is waiting. Grandma's shop is yours!`;
+  return ru
+    ? 'Бабушка оставила тебе магазинчик 🛒\nОткрывай двери — первые покупатели уже ждут!'
+    : "Grandma left you her little shop 🛒\nOpen the doors — the first customers are already waiting!";
+}
+
 /** Ответ на /paysupport и /terms (null — это не наша команда). userId — чтобы поддержка нашла платёж. */
 export function commandReply(text: string, ru: boolean, userId?: number): string | null {
   const command = text.trim().split(/[\s@]/)[0].toLowerCase();

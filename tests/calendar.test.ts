@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { holidayFor, yearTime, YEAR_MONTHS } from '../src/game/calendar';
+import { holidayFor, lateAutumn, yearTime, YEAR_MONTHS } from '../src/game/calendar';
 import { MONTH_DAYS } from '../src/game/economy';
 import { seasonFor } from '../src/game/endless';
 
@@ -20,6 +20,17 @@ describe('calendar', () => {
       if (seasonFor(day)?.id === 'bbq') expect(yearTime(day)).toBe('summer');
       if (seasonFor(day)?.id === 'harvest') expect(yearTime(day)).toBe('autumn');
     }
+  });
+
+  it('поздняя осень — после урожая до новогодней недели, а не со школы', () => {
+    for (const day of days) {
+      if (lateAutumn(day)) expect(yearTime(day)).toBe('autumn');
+      const season = seasonFor(day)?.id;
+      if (season === 'school' || season === 'harvest') expect(lateAutumn(day)).toBe(false);
+      if (seasonFor(day + MONTH_DAYS)?.id === 'newyear') expect(lateAutumn(day)).toBe(true);
+    }
+    const autumn = days.slice(0, YEAR_MONTHS * MONTH_DAYS).filter((day) => yearTime(day) === 'autumn');
+    expect(autumn.filter(lateAutumn).length).toBeLessThan(autumn.length / 2);
   });
 
   it('за год бывают все времена года и все праздники, 8 Марта — весной', () => {

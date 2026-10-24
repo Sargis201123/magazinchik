@@ -5,6 +5,7 @@
 import { t } from '../i18n';
 import { CHARACTERS } from '../game/story';
 import { liteMode } from '../platform/quality';
+import { Babbler, voiceOf } from '../platform/babble';
 import { sound } from '../platform/sound';
 import { liveFace } from './dialog';
 import { button, el, injectStyles, pixelize, UI_FONT } from './dom';
@@ -116,6 +117,10 @@ export class SayBubble {
     this.holdMs = o.hold;
     this.hideAt = 0;
     const chars = [...o.text];
+    // Голос — тот же, что у бабушки в диалогах (бормотание слогами); писк или бормотание решает
+    // первый слог, и так до конца реплики.
+    const talk = new Babbler(voiceOf(`portrait_grandma${o.mood ? `_${o.mood}` : ''}`, GRANDMA_PITCH), chars);
+    let babble: boolean | undefined;
     let shown = 0;
     const finish = () => {
       if (!typing) return;
@@ -129,7 +134,8 @@ export class SayBubble {
     const start = performance.now();
     this.timer = setInterval(() => {
       const target = Math.min(chars.length, Math.max(shown + 1, Math.floor((performance.now() - start) / CHAR_MS)));
-      if (target - shown >= 1 && /[\p{L}\p{N}]/u.test(chars[target - 1] ?? '') && target % 2 === 0) sound.voice(GRANDMA_PITCH);
+      const syllable = talk.next(target, performance.now() / 1000);
+      if (syllable) sound.syllable(talk.voice, syllable, (babble ??= sound.babbleReady()));
       shown = target;
       text.textContent = chars.slice(0, shown).join('');
       if (shown >= chars.length) finish();

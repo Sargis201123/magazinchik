@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { PRODUCTS } from '../game/economy';
 import { GIFT_DAYS, type Gift } from '../game/gift';
 import { sound } from '../platform/sound';
+import { music } from '../platform/music';
 import { haptic } from '../platform/telegram';
 import { dialogBox } from './dialog';
 import { el, openModal } from './dom';
@@ -31,7 +32,7 @@ export function showGift(gift: Gift): void {
       after: [reward],
       nextLabel: t('gift.take'),
       onNext: () => {
-        sound.coin();
+        if (!music.sting('coin')) sound.coin();
         haptic.success();
         close();
       },
