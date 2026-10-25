@@ -1,10 +1,12 @@
 // Cloudflare Worker: отдаёт игру (папка dist) и обслуживает серверную часть оплаты звёздами.
 // Статические файлы Cloudflare раздаёт сам; сюда попадают только запросы, для которых файла нет, —
 // то есть /api/*. Логика — в api/_lib/handlers.ts (та же, что на Vercel). Раз в час cron шлёт
-// напоминания от бота (api/_lib/social.ts, нужна база D1).
+// напоминания от бота (api/_lib/remind.ts, нужна база D1).
 
 import { clientError, starsInvoice, starsOwned, starsRefund, starsSetup, telegramWebhook } from '../api/_lib/handlers.js';
-import { sendReminders, socialClaim, socialPing } from '../api/_lib/social.js';
+import { socialClaim, socialPing } from '../api/_lib/social.js';
+import { sendReminders } from '../api/_lib/remind.js';
+import { events, eventsEdit } from '../api/_lib/live.js';
 import { leaderboard, progress, stats } from '../api/_lib/stats.js';
 import { duel, guild } from '../api/_lib/guild.js';
 import { weekend } from '../api/_lib/weekend.js';
@@ -39,6 +41,9 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   '/api/card': { method: 'POST', handler: card },
   '/api/share': { method: 'POST', handler: share },
   '/api/help': { method: 'POST', handler: help },
+  // Календарь праздников по настоящим датам: игре — GET, автору — правка с ключом (docs/EVENTS.md).
+  '/api/events': { method: 'GET', handler: events },
+  '/api/events-edit': { method: 'POST', handler: eventsEdit },
 };
 
 export default {

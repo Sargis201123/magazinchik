@@ -248,6 +248,21 @@ const css = `
 .ui-gift-box { font-size: 16px; line-height: 1.2; }
 .ui-gift-reward { margin: 8px 0 2px; padding: 8px; text-align: center; font: 800 17px ${UI_FONT}; background: #fee761;
   border: 2px solid #2b2233; border-radius: 8px; }
+/* Праздник по календарю (game/live.ts): открытки по дням, сегодняшняя подпрыгивает; открытка крупно. */
+.ui-box.ui-live { background: #e6f2ff; border-color: #5fb4f0; }
+.ui-advent { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin: 6px 0 4px; }
+.ui-advent-day { text-align: center; padding: 3px 0; border: 2px solid #2b2233; border-radius: 4px; background: #fbf6ea;
+  font: 700 12px ${UI_FONT}; color: #2b2233; }
+.ui-advent-day.done { background: #e3f5d6; color: #3e8948; }
+.ui-advent-day.today { background: #fee761; animation: ui-pulse 1s ease-in-out infinite; }
+.ui-advent-day.missed { opacity: .4; }
+.ui-advent-day.later { color: #8b9bb4; background: #f1ece0; }
+.ui-live-card { display: block; width: 100%; aspect-ratio: 3 / 2; image-rendering: pixelated; margin: 6px 0 10px;
+  border: 3px solid #2b2233; border-radius: 8px; box-shadow: 0 3px 0 #2b2233; animation: ui-art .6s ease-out; }
+/* Тизер в итогах дня: Соня что-то хотела сказать (game/drama.ts — «Приходи завтра»). */
+.ui-teaser { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 6px 8px; border: 2px dashed #5fb4f0;
+  border-radius: 8px; background: #eef7ff; font-size: 14px; line-height: 1.3; }
+.ui-teaser img { width: 40px; height: 40px; flex: none; image-rendering: pixelated; border: 2px solid #2b2233; border-radius: 6px; }
 /* Сводка утра: каждая строка — отдельно, крупнее и темнее, без «простыни» серого текста. */
 .ui-infos { border: 2px solid #2b2233; border-radius: 8px; background: #fbf6ea; padding: 2px 10px; margin: 4px 0 8px; }
 .ui-infos > div { font-size: 13.5px; line-height: 1.3; color: #3a3046; padding: 5px 0; margin: 0; font-style: normal; }

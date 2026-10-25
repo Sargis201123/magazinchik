@@ -149,11 +149,14 @@ import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, ti
 import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskSlots, kioskTier, kioskTierIndex } from '../game/lanes';
 import { showGift } from '../ui/gift';
-import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor';
+import { activeDecor, decorFromPurchases, grantDecor, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
 import { DOG_DAY_CATCH, hasDog, hasWatchman } from '../game/watch';
 import { contestOf, juryDay, tierKey } from '../game/contest';
-import { sonyaVisits, sunflowersPlanted } from '../game/drama';
+import { dramaHeld, sonyaVisits, sunflowersPlanted } from '../game/drama';
+import { activeEvent, guestCoins, guestDue, LIVE_LOOKS, liveLook, seeGuest, type GuestId } from '../game/live';
+import { liveEvents, loadLiveEvents, todayLocal } from '../platform/live';
+import { comebackHooks } from '../game/comeback';
 import { askForHelp, askWriteAccessOnce, claimHelp, sendHelp, socialInfo, socialPing, WELCOME_GIFT } from '../platform/social';
 import { HELP_HOLD, HELP_QUEUE, HELP_REWARD, HELP_THANKS, helpAsked, helpGiven, helpScan, markHelpAsked, takeHelp } from '../game/help';
 import { flushSoon, reportProgress, setProgressSource, track } from '../platform/analytics';
@@ -203,7 +206,7 @@ import { BRAND_BATCH, brandBatchCost, brandToBake, startBrandBatch } from '../ga
 import { hasRadio, nextStation, radioPatience, radioTolerance, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
 import { autoArrived, autoTopUp } from '../game/autoorder';
-import { liveEventsFor, type LiveKind } from '../game/live';
+import { liveEventsFor, type LiveKind } from '../game/minievents';
 import { showUrgent } from '../ui/urgent';
 import {
   bargainRows,
@@ -1052,6 +1055,17 @@ const INSPECTOR_AT = 25;
 const SONYA_AT = 18;
 /** Соня: каштановые волосы, сиреневая толстовка, жёлтый рюкзак (как на портрете, art/family.py). */
 const SONYA: Look = { shirt: 0xffffff, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x8f563b, style: 'long', outfit: 'hoodie', outfitTint: 0x68386c, bag: 'backpack', bagTint: 0xfee761 };
+/** Праздничный гость по настоящему календарю (game/live.ts) заходит на этой секунде дня. */
+const LIVE_GUEST_AT = 30;
+/**
+ * Праздничные гости: Дед Мороз — весь в красном, с белой бородой, меховым воротником и посохом;
+ * Снегурочка — в голубом, с белым воротником, в диадеме и с косой. Шуба из гардероба (furcoat)
+ * нарисована коричневой и в красный не красится — поэтому пуховик с оттенком (coat) и шарф-воротник.
+ */
+const LIVE_GUEST_LOOKS: Record<GuestId, Look> = {
+  moroz: { shirt: 0xe43b44, pants: 0xe43b44, coat: 0xe43b44, scarf: 0xffffff, hair: 0xffffff, style: 'bald', skin: 0xf2d3ab, hat: 'ushanka', hatTint: 0xe43b44, face: 'beard', faceTint: 0xffffff, prop: 'cane' },
+  snegurochka: { shirt: 0x9cd8ff, pants: 0x9cd8ff, coat: 0x9cd8ff, scarf: 0xffffff, hair: 0xead4aa, style: 'long', skin: 0xf2d3ab, hat: 'tiara' },
+};
 /** Жюри конкурса приходит на этой секунде дня. */
 const JURY_AT = 40;
 /** Жюри: строгие костюмы, у одного портфель, у другого блокнот (как у инспектора). */
@@ -1691,6 +1705,8 @@ export class StoreScene extends Phaser.Scene {
   private jury: 'none' | 'pending' | 'here' | 'done' = 'none';
   /** Соня сегодня заглянет в магазин (сюжет «Папа и Соня»). */
   private sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
+  /** Праздничный гость сегодня (game/live.ts): кто, ждём / пришёл / ушёл и настоящая дата визита. */
+  private liveGuest: { who: GuestId; phase: 'pending' | 'here' | 'done'; date: string } | null = null;
   private catHome = { x: 0, y: 0 };
   private catOut = false;
   /** Кот сидит посреди зала: таймер, который водит его хвостом, моргает и умывает (есть, пока сидит). */
@@ -1779,7 +1795,8 @@ export class StoreScene extends Phaser.Scene {
     setBigDaySeed(this.state.seed!);
     // Покупки за звёзды — по данным Telegram: вернутся и на новом телефоне.
     void restorePurchases().then((ids) => {
-      const owned = (ids ?? []).filter(isDecorId);
+      // Наборы за звёзды (новогодний) раскрываются в свои вещи.
+      const owned = decorFromPurchases(ids ?? []);
       const next = grantPass(grantDecor(this.state, owned, !save), ids ?? []);
       if (next === this.state) return;
       this.state = next;
@@ -1787,7 +1804,12 @@ export class StoreScene extends Phaser.Scene {
       if (!save) this.buildWorld();
     });
     // Игрок на месте — бот не будет напоминать. Пришёл по приглашению друга — подарок новичку.
-    void socialPing(getLang()).then((info) => {
+    // Календарь праздников с сервера (game/live.ts): пришёл другой — переукрасить улицу, пока магазин закрыт.
+    const lookBefore = liveLook(liveEvents(), todayLocal());
+    void loadLiveEvents().then((events) => {
+      if (!this.running && this.sys.isActive() && liveLook(events, todayLocal()) !== lookBefore) this.buildWorld();
+    });
+    void socialPing(getLang(), comebackHooks(this.state)).then((info) => {
       // Торговая неделя и гильдия: магазин друга появится на улице, если соперник есть.
       void loadMultiplayer().then(() => {
         if (!this.running && (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend) this.buildWorld();
@@ -1929,6 +1951,7 @@ export class StoreScene extends Phaser.Scene {
     if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void this.runInspector();
     if (!this.night && this.jury === 'pending' && elapsed >= JURY_AT) void this.runJury();
     if (!this.night && this.sonya === 'pending' && elapsed >= SONYA_AT) void this.runSonya();
+    if (!this.night && this.liveGuest?.phase === 'pending' && elapsed >= LIVE_GUEST_AT) void this.runLiveGuest();
 
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;
@@ -1942,7 +1965,7 @@ export class StoreScene extends Phaser.Scene {
           spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
       }
-    } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here') {
+    } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here' && this.liveGuest?.phase !== 'here') {
       this.endOfDay();
     }
 
@@ -3557,6 +3580,12 @@ export class StoreScene extends Phaser.Scene {
       const lay = placed();
       const bad = slotIssues(lay, at, defaults, registers, props.map(propRect), kioskCount(this.state));
       const badProps = propIssues(lay, at, props, registers, kioskCount(this.state));
+      // След праздничной вещи вырос книзу (чтобы гости обходили кадку), но проверять её место — по
+      // прежнему: ёлка, переставленная игроком раньше, не должна вдруг стать красной.
+      if (badProps.has('holiday')) {
+        const legacy = props.map((p) => (p.id === 'holiday' ? { ...p, fp: { x: -7, y: -8, w: 14, h: 12 } } : p));
+        if (!propIssues(lay, at, legacy, registers, kioskCount(this.state)).has('holiday')) badProps.delete('holiday');
+      }
       // Вещь на своём стандартном месте игра поставила сама так, чтобы не мешать (растение у будущей
       // кассы, у двери склада) — красной она становится, только если на неё поставили полку.
       for (const p of props) {
@@ -4006,6 +4035,9 @@ export class StoreScene extends Phaser.Scene {
    */
   private applyWeather(): void {
     this.cullDirty = true;
+    // Бесконечные твины (мигание гирлянды и огоньков, туман, мотыльки) со своими вещами сами не
+    // умирают: без этого каждая смена погоды утром оставляла их сотнями крутиться впустую до пересборки.
+    this.tweens.killTweensOf(this.weatherObjs);
     for (const obj of this.weatherObjs) obj.destroy();
     this.weatherObjs = [];
     this.nightLights = this.nightLights.filter((light) => light.obj.active);
@@ -4068,9 +4100,8 @@ export class StoreScene extends Phaser.Scene {
         quantity: 2,
         frequency: 30,
       })).setDepth(-5);
-      // Гирлянда на фасаде и ёлка в зале.
-      this.garland([0xe43b44, 0xfee761, 0x63c74d, 0x0099db], keep);
-      // Ёлка — на улице у входа, чтобы не занимать место в зале.
+      // Гирлянда на фасаде — в applySeason (одна на все праздники); ёлка — на улице у входа,
+      // чтобы не занимать место в зале.
       const { door, h } = this.layout;
       keep(this.art(door.x - 26, h + 12, 'xmas_tree').setDepth(h + 30));
     }
@@ -4181,6 +4212,8 @@ export class StoreScene extends Phaser.Scene {
    * (ярмарка — один день в месяц, погода при этом может не меняться).
    */
   private applyFair(): void {
+    // Флажки и шарики качаются бесконечными твинами — гасим их вместе с вещами (как и в applyWeather).
+    this.tweens.killTweensOf(this.fairObjs);
     for (const obj of this.fairObjs) obj.destroy();
     this.fairObjs = [];
     this.stall = undefined;
@@ -4239,10 +4272,22 @@ export class StoreScene extends Phaser.Scene {
   /** Гирлянда по краю фасада: лампочки мигают по очереди. */
   private garland(colors: number[], keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
     const { w, h } = this.layout;
+    const bulbs: Phaser.GameObjects.Rectangle[] = [];
     for (let x = -WALL + 2, i = 0; x < w + WALL; x += 5, i++) {
-      const bulb = keep(this.add.rectangle(x, h + 1, 1.6, 1.6, colors[i % colors.length]).setDepth(h + 42));
-      this.tweens.add({ targets: bulb, alpha: 0.25, duration: 500, delay: (i % 4) * 250, yoyo: true, repeat: -1 });
+      bulbs.push(keep(this.add.rectangle(x, h + 1, 1.6, 1.6, colors[i % colors.length]).setDepth(h + 42)));
     }
+    // Один счётчик на всю гирлянду (а не твин на лампочку — их под сотню): гаснут и загораются волной по четыре.
+    const blink = this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 1000,
+      repeat: -1,
+      onUpdate: (tween) => {
+        const t = tween.getValue() ?? 0;
+        bulbs.forEach((bulb, i) => (bulb.alpha = 0.25 + 0.75 * Math.abs(Math.cos((t - (i % 4) / 4) * Math.PI))));
+      },
+    });
+    bulbs[0]?.once('destroy', () => blink.remove());
   }
 
   /**
@@ -4300,6 +4345,54 @@ export class StoreScene extends Phaser.Scene {
         }
       });
     }
+    // Праздник по настоящему календарю (game/live.ts) — поверх времени года игры: 31 декабря Новый год
+    // и в магазине, даже если в игре лето.
+    const live = liveLook(liveEvents(), todayLocal());
+    const look = live ? LIVE_LOOKS[live] : null;
+    if (holiday === 'newyear' || look?.treeLights) {
+      // Разноцветные огоньки на деревьях. Новый год по календарю длится больше месяца, а деревьев в районе
+      // под полторы сотни: по 6 мигающих огоньков на каждом — 900 твинов на кадр. Поэтому мигают только
+      // огоньки у магазина (что видно без прокрутки), а дальше — и в лёгкой графике везде — горят ровно,
+      // нарисованные в картинку кроны вместе с пятнами листвы.
+      // Мигают они все одним счётчиком: у каждого огонька своя частота и сдвиг.
+      const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xffffff];
+      const twinkle = (tree: Phaser.GameObjects.Image) =>
+        !this.lite && tree.x > -100 && tree.x < this.next.w + 100 && tree.y > -100 && tree.y < top + 430;
+      // Свои случайные числа: цветы и листья ниже (rnd) лежат одинаково и с огоньками, и без, и в лёгкой графике.
+      const lit = new Phaser.Math.RandomDataGenerator([`lights${day}`]);
+      const bulbs: { obj: Phaser.GameObjects.Rectangle; period: number; shift: number }[] = [];
+      trees.forEach((tree) => {
+        const near = twinkle(tree);
+        for (let i = 0; i < 6; i++) {
+          const x = tree.x + lit.between(-8, 8);
+          const y = tree.y - lit.between(6, 22);
+          const color = lit.pick(colors);
+          const period = lit.between(800, 1800);
+          const shift = lit.frac();
+          if (!near) {
+            spot(tree, x, y, 1.4, color);
+            continue;
+          }
+          const bulb = keep(this.add.rectangle(x, y, 1.4, 1.4, color).setDepth(tree.depth + 1));
+          bulbs.push({ obj: bulb, period, shift });
+          crown(tree, bulb);
+        }
+      });
+      if (bulbs.length) {
+        const blink = this.tweens.addCounter({
+          from: 0,
+          to: 1,
+          duration: 1000,
+          repeat: -1,
+          onUpdate: () => {
+            const now = this.time.now;
+            for (const b of bulbs) b.obj.alpha = 0.6 + 0.4 * Math.cos((now / b.period + b.shift) * Math.PI * 2);
+          },
+        });
+        // Счётчик держит не огоньки — убрали их (смена погоды утром, пересборка) — убрать и его.
+        bulbs[0].obj.once('destroy', () => blink.remove());
+      }
+    }
     for (const [tree, list] of spots) {
       const rt = keep(this.bakeSpots(list).setDepth(tree.depth + 0.5));
       // Ось вращения — у основания дерева, как у самой картинки дерева.
@@ -4334,12 +4427,18 @@ export class StoreScene extends Phaser.Scene {
       scatter(110, (x, y) => keep(this.art(x, y, 'leaf').setTint(rnd.pick([0xf77622, 0xfeae34, 0xb86f50, 0xe43b44])).setAngle(rnd.angle()).setDepth(-9)));
     }
 
-    if (holiday === 'march8') {
-      this.garland([0xf6757a, 0xffffff, 0xe43b44, 0xffd2e2], keep);
-      keep(this.art(door.x - 26, front + 6, 'tulips').setDepth(front + 12));
-    }
+    // Гирлянда на фасаде — одна: свой праздник игрового года, иначе праздник по календарю, иначе
+    // новогодняя в снегопад.
+    const garland =
+      holiday === 'march8'
+        ? [0xf6757a, 0xffffff, 0xe43b44, 0xffd2e2]
+        : holiday === 'halloween'
+          ? [0xf77622, 0x68386c, 0xfeae34, 0x68386c]
+          : (look?.garland ?? (this.weather === 'snow' ? [0xe43b44, 0xfee761, 0x63c74d, 0x0099db] : null));
+    if (garland) this.garland(garland, keep);
+    // Тюльпаны у входа — к 8 Марта, игровому или настоящему; там же будка Бобика — с ней без тюльпанов.
+    if ((holiday === 'march8' || look?.tulips) && !hasDog(this.state)) keep(this.art(door.x - 26, front + 6, 'tulips').setDepth(front + 12));
     if (holiday === 'halloween') {
-      this.garland([0xf77622, 0x68386c, 0xfeae34, 0x68386c], keep);
       for (const dx of [-20, 18]) {
         keep(this.art(door.x + dx, front + 5, 'pumpkin').setDepth(front + 8));
         // Вечером внутри тыкв горит свет.
@@ -4350,7 +4449,7 @@ export class StoreScene extends Phaser.Scene {
         this.bats.push(bat);
         const cx = this.layout.w / 2 + rnd.between(-60, 60);
         const cy = rnd.between(-48, -30);
-        this.tweens.addCounter({
+        const flight = this.tweens.addCounter({
           from: 0,
           to: Math.PI * 2,
           duration: rnd.between(5000, 8000),
@@ -4360,20 +4459,12 @@ export class StoreScene extends Phaser.Scene {
             bat.setPosition(cx + Math.cos(a) * 46, cy + Math.sin(a * 2) * 10).setTexture(Math.floor(this.time.now / 140 + i) % 2 ? 'bat0' : 'bat1');
           },
         });
+        // Счётчик полёта держит не мышь, и killTweensOf его не найдёт: убрали мышь (смена погоды утром) —
+        // убрать и его, иначе он тронет уничтоженную картинку и игра встанет.
+        bat.once('destroy', () => flight.remove());
       }
     }
-    if (holiday === 'newyear') {
-      keep(this.art(-40, top - 190, 'snowman').setDepth(top - 180));
-      // Разноцветные огоньки на деревьях.
-      const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xffffff];
-      trees.forEach((tree) => {
-        for (let i = 0; i < 6; i++) {
-          const bulb = keep(this.add.rectangle(tree.x + rnd.between(-8, 8), tree.y - rnd.between(6, 22), 1.4, 1.4, rnd.pick(colors)).setDepth(tree.depth + 1));
-          this.tweens.add({ targets: bulb, alpha: 0.2, duration: rnd.between(400, 900), yoyo: true, repeat: -1 });
-          crown(tree, bulb);
-        }
-      });
-    }
+    if (holiday === 'newyear') keep(this.art(-40, top - 190, 'snowman').setDepth(top - 180));
   }
 
   /**
@@ -4404,12 +4495,49 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Праздничная вещь за открытки (ёлка, парусник, мимоза — game/live.ts): у входа, рядом с витриной.
+   * Её можно передвинуть при перестановке; ёлка вечером мигает огоньками.
+   */
+  private buildHolidayDecor(): void {
+    const item = activeDecor(this.state, 'holiday');
+    if (!item?.texture) return;
+    const { w, h, door } = this.layout;
+    const props = this.propList.map(propRect);
+    const free = (x: number, y: number) =>
+      this.obstacles.every((o) => x < o.x - 10 || x > o.x + o.w + 10 || y < o.y - 12 || y > o.y + o.h + 12) &&
+      props.every((r) => x + 8 < r.x || x - 8 > r.x + r.w || y + 8 < r.y || y - 8 > r.y + r.h);
+    const spots = [
+      { x: door.x - 34, y: h - 14 },
+      { x: door.x + 30, y: h - 30 },
+      { x: w - 34, y: h - 14 },
+    ];
+    // Своё место (перестановка) — всегда; стандартное — первое свободное, а все заняты — вещи сегодня нет.
+    const def = spots.find((p) => free(p.x, p.y)) ?? spots[0];
+    const p = this.propAt('holiday', def);
+    if (p === def && !free(p.x, p.y)) return;
+    const img = this.art(p.x, p.y, item.texture).setDepth(p.y + 8);
+    const fp = propFootprint(this.layout, 'holiday', p.x);
+    this.obstacles.push({ x: p.x + fp.x, y: p.y + fp.y, w: fp.w, h: fp.h });
+    this.registerProp('holiday', p, item.texture, fp);
+    if (item.id === 'holiday_tree' && !this.lite) {
+      // Огоньки на ёлке перемигиваются (тёплое пятно — вечером ярче).
+      this.nightGlow(this.art(p.x, p.y - 2, 'glow').setDisplaySize(26, 22).setTint(0xffd27a), 0.5);
+      const top = p.y - img.displayHeight / 2;
+      [0xfee761, 0xe43b44, 0x2ce8f5].forEach((color, i) => {
+        const bulb = this.add.rectangle(p.x - 4 + i * 4, top + 8 + i * 3, 1.2, 1.2, color).setDepth(p.y + 9);
+        this.tweens.add({ targets: bulb, alpha: 0.2, duration: 600 + i * 180, yoyo: true, repeat: -1 });
+      });
+    }
+  }
+
   /** Терминал на прилавке и кассы самообслуживания у правой стены — если куплены. */
   private buildUpgrades(): void {
     const { counter } = this.layout;
     if (hasUpgrade(this.state, 'terminal')) this.art(counter.x + 3, counter.y - 4, 'card_terminal').setDepth(counter.y + 22);
     for (let i = 1; i < registerCount(this.state); i++) this.buildRegister(i);
     this.buildHallDecor();
+    this.buildHolidayDecor();
     this.buildGearProps();
     this.buildCoffee();
     this.buildOven();
@@ -11807,6 +11935,51 @@ export class StoreScene extends Phaser.Scene {
     this.sonya = 'done';
   }
 
+  /**
+   * Праздничный гость (game/live.ts): Дед Мороз или Снегурочка заходит, поздравляет у прилавка,
+   * оставляет подарок монетами и уходит. Подарок — сразу, как дошёл: ушёл ли гость, уже неважно.
+   */
+  private async runLiveGuest(): Promise<void> {
+    const guest = this.liveGuest;
+    if (!guest) return;
+    guest.phase = 'here';
+    const { door, sellerHome, queue } = this.layout;
+    const start = this.streetSpawn();
+    const sprite = this.makePerson(start.x, start.y, LIVE_GUEST_LOOKS[guest.who]);
+    if (!this.lite) sprite.postFX?.addGlow(0xcfe8ff, 3, 0, false, 0.1, 6);
+    sound.bell(door.x);
+    await this.walkVia(
+      sprite,
+      [
+        { x: door.x, y: this.streetY },
+        { x: door.x, y: door.y - 10 },
+        // Рядом с тем, кто платит, — а не на самом прилавке и не в очереди.
+        { x: queue.x - 14, y: queue.y + 10 },
+      ],
+      34,
+    );
+    if (!this.sys.isActive()) return;
+    const coins = guestCoins(this.state);
+    this.state = seeGuest(this.state, guest.date);
+    saveGame(this.state);
+    this.heartAt(sprite.x, sprite.y - 14);
+    if (!music.sting('coin')) sound.coin(sellerHome.x);
+    haptic.success();
+    this.popup(sprite.x, sprite.y - 20, `«${t(`live.guest.${guest.who}.line` as TextKey)}»`, '#cfe8ff');
+    this.time.delayedCall(1400, () => this.popup(sellerHome.x - 20, sellerHome.y - 40, t('live.guest.gift', { n: coins }), '#fee761'));
+    await this.wait(7000);
+    await this.walkVia(
+      sprite,
+      [
+        { x: door.x, y: door.y - 10 },
+        { x: door.x, y: this.layout.h + 16 },
+      ],
+      34,
+    );
+    void this.strollAway(sprite);
+    guest.phase = 'done';
+  }
+
   /** Жюри конкурса: трое заходят вместе, обходят полки, что-то записывают и уходят. */
   private async runJury(): Promise<void> {
     this.jury = 'here';
@@ -13961,6 +14134,11 @@ export class StoreScene extends Phaser.Scene {
     this.inspector = this.state.plan?.inspection ? 'pending' : 'none';
     this.jury = juryDay(this.state) ? 'pending' : 'none';
     this.sonya = sonyaVisits(this.state) ? 'pending' : 'none';
+    // Праздничный гость — раз за настоящий день, сколько игровых дней ни сыграй. В первый день
+    // (бабушка показывает магазин) не заходит: новичку и так есть на что смотреть.
+    const today = todayLocal();
+    const guest = this.state.day > 1 ? guestDue(this.state, activeEvent(liveEvents(), today), today) : null;
+    this.liveGuest = guest ? { who: guest, phase: 'pending', date: today } : null;
     this.inspection = null;
     this.rushAnnounced = false;
     this.helpUntil = 0;
@@ -14838,6 +15016,9 @@ export class StoreScene extends Phaser.Scene {
     if (unlocked.length) extra.push([t('ach.summary'), unlocked.map((id) => t(`ach.${id}` as TextKey)).join(', ')]);
     // Новичок доиграл первый день: сколько секунд прошло от «Играть».
     if (finishedDay === 1) this.onbStep('day1', 1);
+    // «Приходи завтра»: сцена Сони готова, но сегодня их уже было довольно — намёк в итогах дня.
+    const teaser = dramaHeld(this.state, todayLocal()) ? t('drama.teaser') : undefined;
+    if (teaser) track('drama_held', finishedDay);
     this.say.hide();
     this.tillRing?.destroy();
     this.tillRing = undefined;
@@ -14887,6 +15068,7 @@ export class StoreScene extends Phaser.Scene {
         reviews,
         () => this.nightPass(() => this.showMorning()),
         (button) => void this.shareDay(button, finishedDay),
+        teaser,
       );
     });
   }

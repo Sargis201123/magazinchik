@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newGame, type StoreState } from '../src/game/economy';
-import { activeDecor, canTry, DECOR, DECOR_KINDS, grantDecor, normalizeDecor, tryDecor, type DecorState } from '../src/game/decor';
+import { activeDecor, canTry, DECOR, DECOR_KINDS, grantDecor, normalizeDecor, STAR_PACKS, tryDecor, type DecorState } from '../src/game/decor';
 import { ownedFrom, STARS_CATALOG, verifyInitData, itemFromPayload, payloadFor } from '../api/_lib/telegram';
 
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 10, ...patch });
@@ -14,9 +14,12 @@ describe('премиальное оформление', () => {
     expect(new Set(DECOR.map((d) => d.id)).size).toBe(DECOR.length);
   });
 
-  it('цены на сервере совпадают с игрой', () => {
+  it('цены на сервере совпадают с игрой (вещи и наборы)', () => {
     const premium = Object.fromEntries(DECOR.filter((d) => d.stars !== undefined).map((d) => [d.id, d.stars]));
+    for (const [id, pack] of Object.entries(STAR_PACKS)) premium[id] = pack.stars;
     expect(Object.fromEntries(Object.entries(STARS_CATALOG).map(([id, v]) => [id, v.stars]))).toEqual(premium);
+    // Вещь набора знает свой набор, а в продаже по отдельности её нет.
+    for (const [id, pack] of Object.entries(STAR_PACKS)) for (const item of pack.items) expect(DECOR.find((d) => d.id === item)?.pack).toBe(id);
     for (const v of Object.values(STARS_CATALOG)) expect(v.ru.length).toBeLessThanOrEqual(32);
   });
 

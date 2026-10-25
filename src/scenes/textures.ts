@@ -11,6 +11,12 @@ export const TRASH_KEYS = ['trash', 'trash_banana', 'trash_cup', 'trash_wrapper'
 const SPRITES = [
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
+  // Праздники по календарю (art/holidays.py): вещи за открытки и новогодний набор за звёзды.
+  'holiday_tree',
+  'holiday_ship',
+  'holiday_mimosa',
+  'sign_frost',
+  'wall_winter',
   // Кубки конкурсов «Лучший магазин…» (art/contest.py).
   'cup_district',
   'cup_city',

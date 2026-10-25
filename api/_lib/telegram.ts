@@ -90,7 +90,7 @@ export async function bot<T>(token: string, method: string, body: unknown): Prom
 export const json = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
-/** Что продаётся за звёзды: цена и название для счёта. Должно совпадать с src/game/decor.ts (проверяет тест). */
+/** Что продаётся за звёзды: цена и название для счёта. Должно совпадать с src/game/decor.ts — вещи и наборы (проверяет тест). */
 export const STARS_CATALOG: Record<string, { stars: number; ru: string; en: string }> = {
   outfit_farmer: { stars: 30, ru: 'Наряд «Фермер»', en: 'Farmer outfit' },
   outfit_retro: { stars: 50, ru: 'Наряд «Ретро-лавочник»', en: 'Retro shopkeeper outfit' },
@@ -122,6 +122,8 @@ export const STARS_CATALOG: Record<string, { stars: number; ru: string; en: stri
   fountain: { stars: 100, ru: 'Фонтан', en: 'Fountain' },
   jukebox: { stars: 100, ru: 'Музыкальный автомат', en: 'Jukebox' },
   neon_open: { stars: 30, ru: 'Неон «ОТКРЫТО»', en: 'OPEN neon' },
+  // Наборы (src/game/decor.ts → STAR_PACKS): одна покупка — несколько вещей.
+  pack_newyear: { stars: 100, ru: 'Новогодний набор', en: 'New Year pack' },
 };
 
 /** Сезонный пропуск (src/game/pass.ts): у каждого сезона свой номер, цена одна (совпадает с pass.ts — проверяет тест). */

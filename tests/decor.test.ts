@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../src/game/economy';
-import { activeDecor, buyDecor, DECOR, DECOR_KINDS, decorItem, normalizeDecor, setDecor, type DecorId, type DecorState } from '../src/game/decor';
+import { activeDecor, buyDecor, DECOR, DECOR_KINDS, decorFromPurchases, decorItem, grantDecor, normalizeDecor, setDecor, STAR_PACKS, type DecorId, type DecorState } from '../src/game/decor';
+import { restartGame } from '../src/game/restart';
 import { TEXTURES } from '../src/scenes/textures';
 import { en } from '../src/i18n/en';
 import { ru, type TextKey } from '../src/i18n/ru';
@@ -34,8 +35,20 @@ describe('оформление', () => {
     expect(setDecor(state, 'wall', 'floor_wood')).toBeNull();
   });
 
-  it('у каждой вещи есть цена в монетах или в Stars', () => {
-    for (const d of DECOR) expect((d.price ?? 0) > 0 || (d.stars ?? 0) > 0).toBe(true);
+  it('у каждой вещи есть цена в монетах или в Stars, набор за звёзды или праздник, который её дарит', () => {
+    for (const d of DECOR) expect((d.price ?? 0) > 0 || (d.stars ?? 0) > 0 || (d.pack !== undefined && STAR_PACKS[d.pack]?.items.includes(d.id)) || d.holiday !== undefined).toBe(true);
+  });
+
+  it('праздничное не купить, но после «Начать заново» оно остаётся — как и купленное за звёзды', () => {
+    let state = { ...newGame(), money: 99999 };
+    expect(buyDecor(state, 'holiday_tree')).toBeNull();
+    expect(buyDecor(state, 'sign_frost')).toBeNull();
+    state = grantDecor(state, ['holiday_tree', ...decorFromPurchases(['pack_newyear', 'ghost'])]);
+    expect(state.decor.owned).toEqual(['holiday_tree', 'sign_frost', 'wall_winter']);
+    expect(activeDecor(state, 'holiday')?.id).toBe('holiday_tree');
+    const again = restartGame(state);
+    expect(again.decor.owned).toEqual(['holiday_tree', 'sign_frost', 'wall_winter']);
+    expect(activeDecor(again, 'holiday')?.id).toBe('holiday_tree');
   });
 });
 
