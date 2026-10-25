@@ -9,6 +9,7 @@ import { leaderboard, progress, stats } from '../api/_lib/stats.js';
 import { duel, guild } from '../api/_lib/guild.js';
 import { weekend } from '../api/_lib/weekend.js';
 import { visits } from '../api/_lib/visits.js';
+import { rival } from '../api/_lib/rival.js';
 import { sendNewspapers } from '../api/_lib/newspaper.js';
 import { card, cardImage, cleanCards } from '../api/_lib/card.js';
 import { help, share } from '../api/_lib/share.js';
@@ -34,6 +35,7 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   '/api/guild': { method: 'POST', handler: guild },
   '/api/weekend': { method: 'POST', handler: weekend },
   '/api/visits': { method: 'POST', handler: visits },
+  '/api/rival': { method: 'POST', handler: rival },
   '/api/card': { method: 'POST', handler: card },
   '/api/share': { method: 'POST', handler: share },
   '/api/help': { method: 'POST', handler: help },

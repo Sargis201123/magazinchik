@@ -120,6 +120,8 @@ export interface BoardRow {
   rating: number;
   revenue: number;
   me?: boolean;
+  /** Ключ для «Заглянуть к конкуренту» (api/_lib/rival.ts). */
+  key?: string;
 }
 
 export interface Board {

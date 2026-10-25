@@ -10,6 +10,7 @@
 import { markWeek } from './guild.js';
 import { markWeekend } from './weekend.js';
 import { ready } from './social.js';
+import { rivalKey } from './rival.js';
 import { json, verifyInitData, type D1, type Env } from './telegram.js';
 
 const DAY = 24 * 3600_000;
@@ -37,6 +38,8 @@ export interface BoardRow {
   rating: number;
   revenue: number;
   me?: boolean;
+  /** Ключ для «Заглянуть к конкуренту» (rival.ts): у своей строки нет. */
+  key?: string;
 }
 
 /** Самый большой снимок магазина (символов), который сохраняем. */
@@ -227,7 +230,13 @@ export async function leaderboard(request: Request, env: Env): Promise<Response>
   const mine = await db.prepare('SELECT revenue FROM progress WHERE id = ?').bind(user.id).first<{ revenue: number }>();
   const rank = mine ? ((await db.prepare('SELECT COUNT(*) AS n FROM progress WHERE revenue > ?').bind(mine.revenue).first<{ n: number }>())?.n ?? 0) + 1 : null;
   const total = (await db.prepare('SELECT COUNT(*) AS n FROM progress').first<{ n: number }>())?.n ?? 0;
-  return json({ enabled: true, top: strip(top, user.id), friends: strip(friends, user.id), rank, total });
+  // Ключи для «Заглянуть к конкуренту»: номера Telegram клиенту не отдаём.
+  const keyed = async (rows: Row[]): Promise<BoardRow[]> => {
+    const out = strip(rows, user.id);
+    for (const [i, r] of rows.entries()) if (r.id !== user.id) out[i].key = await rivalKey(user.id, r.id, token);
+    return out;
+  };
+  return json({ enabled: true, top: await keyed(top), friends: await keyed(friends), rank, total });
 }
 
 /**
