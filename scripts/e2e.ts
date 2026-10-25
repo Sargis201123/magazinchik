@@ -2,7 +2,8 @@
 // магазин середины игры (e2e/save.json) проживает целый день до итогов, а по дороге снимаются одни
 // и те же кадры — утро, день, вечер, ночная смена, дождь, на трёх уровнях магазина. Снимки — в
 // e2e/shots; если есть эталон (e2e/baseline, его кладёт npm run e2e -- --update), каждый кадр
-// сравнивается с ним по точкам, отличия — красным в e2e/diff. Ошибка в странице, зависший день или
+// сравнивается с ним по точкам, отличия — красным в e2e/diff. Ошибка в странице, файл игры, который
+// не загрузился (404 и обрывы со своего адреса), атлас, не дошедший до сцены, зависший день или
 // отличие от эталона — провал (код выхода 1).
 //
 // Кадры совпадают от запуска к запуску до точки: часы в странице свои (время стоит, пока проверка
@@ -303,6 +304,17 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
   // Ждём загрузку, не двигая часы: магазин запустится на первом же кадре — в любой сборке в один момент.
   await until(page, "!!document.querySelector('#splash.gone')", 'загрузки картинок');
   await tick(16);
+  // Картинки мира должны прийти листом атласа: не дошёл лист — игра тихо грузит их по одной (BootScene),
+  // и проверка этого бы не заметила.
+  const sheet = await page.evaluate(() => {
+    const textures = (window as any).game.textures;
+    if (!textures.exists('atlas0')) return 'нет текстуры atlas0';
+    const frames = textures.get('atlas0').getFrameNames().length;
+    if (frames < 100) return `в листе atlas0 всего ${frames} кадров`;
+    const own = ['shelf', 'coin', 'floor'].filter((key) => textures.get(key).source[0] !== textures.get('atlas0').source[0]);
+    return own.length ? `не из листа atlas0: ${own.join(', ')}` : '';
+  });
+  if (sheet) throw new Error(`атлас: ${sheet}`);
 
   // Титул → утро → «Открыть магазин»: прокликиваем окна, пока не откроется день.
   for (let i = 0; ; i++) {
@@ -414,6 +426,18 @@ function compare(threshold: number): boolean {
   return ok;
 }
 
+/**
+ * Отчёт эталона после --update: полный прогон пишет свой целиком, прогон с --only меняет только свои
+ * строки, а строки остальных прогонов остаются (иначе отчёт эталона сжимался до одного прогона).
+ */
+function mergeReport(only: string | undefined): string {
+  const file = `${BASELINE}report.json`;
+  if (!only || !existsSync(file)) return JSON.stringify(report, null, 2) + '\n';
+  const rows = new Map((JSON.parse(readFileSync(file, 'utf8')) as typeof report).map((r) => [r.shot, r]));
+  for (const r of report) rows.set(r.shot, r);
+  return JSON.stringify([...rows.values()], null, 2) + '\n';
+}
+
 /** Вызовы отрисовки за кадр против эталона: картинка та же, а видеокарте работы прибавилось — тоже повод взглянуть. */
 function drawCalls(): void {
   if (!existsSync(`${BASELINE}report.json`)) return;
@@ -452,6 +476,7 @@ async function main(): Promise<void> {
     url = server.resolvedUrls?.local[0] ?? 'http://127.0.0.1:4173/';
     close = () => new Promise((done) => server.httpServer.close(() => done()));
   }
+  const origin = new URL(url).origin;
   const save = JSON.parse(readFileSync(`${DIR}save.json`, 'utf8')) as SaveFile;
   rmSync(SHOTS, { recursive: true, force: true });
   mkdirSync(SHOTS, { recursive: true });
@@ -462,9 +487,17 @@ async function main(): Promise<void> {
     const page = await context.newPage();
     page.on('pageerror', (e) => errors.push(`${run.name}: ${e.stack ?? e.message}`));
     page.on('console', (m) => {
-      // Сервера (api/) у проверки нет — его недоступность не ошибка игры.
+      // Незагрузившиеся файлы ловит failed() ниже — по адресу, а не по тексту в консоли.
       if (m.type() === 'error' && !/Failed to load resource|ERR_TUNNEL|net::ERR_/.test(m.text())) errors.push(`${run.name}: ${m.text()}`);
     });
+    // Файл со своего адреса не загрузился (404, оборвалось) — провал: потерянная картинка или звук иначе
+    // проходили молча. Сервера (api/) и чужих адресов (telegram.org) у проверки нет — их не считаем.
+    const failed = (address: string, why: string) => {
+      const at = new URL(address);
+      if (at.origin === origin && !at.pathname.includes('/api/')) errors.push(`${run.name}: не загрузился ${at.pathname}${at.search} (${why})`);
+    };
+    page.on('response', (r) => void (r.status() >= 400 && failed(r.url(), `${r.status()}`)));
+    page.on('requestfailed', (r) => failed(r.url(), r.failure()?.errorText ?? 'обрыв'));
     try {
       await play(page, url, run, save);
     } catch (error) {
@@ -484,8 +517,10 @@ async function main(): Promise<void> {
   } else if (flag('update')) {
     // Полный прогон заменяет эталон целиком, прогон с --only — только свои кадры.
     if (!only) rmSync(BASELINE, { recursive: true, force: true });
+    const merged = mergeReport(only);
     mkdirSync(BASELINE, { recursive: true });
     for (const file of readdirSync(SHOTS)) writeFileSync(BASELINE + file, readFileSync(SHOTS + file));
+    writeFileSync(`${BASELINE}report.json`, merged);
     console.log('Снимки сохранены эталоном: e2e/baseline');
   } else {
     console.log('Сравнение с эталоном:');

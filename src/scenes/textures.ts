@@ -1,11 +1,10 @@
-// Картинки, которые грузит Phaser (BootScene). Модуль без Phaser: список читает и сборка —
-// она складывает эти картинки в общие листы-атласы (vite.config.ts, scripts/atlas.ts).
-
-import { PRODUCT_IDS } from '../game/economy';
-import { WARDROBE_TEXTURES } from './wardrobe';
+// Картинки, которые грузит Phaser (BootScene). Модуль — голые данные, без единого импорта: список
+// читает и сборка (vite.config.ts, scripts/atlas.ts) — она складывает эти картинки в общие листы-атласы.
+// Потяни он за собой экономику, любая правка economy.ts перезапускала бы сервер разработки.
+// Полный список с товарами и гардеробом — worldTextures.ts.
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
-const SPRITES = [
+export const SPRITES = [
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
   // Кубки конкурсов «Лучший магазин…» (art/contest.py).
@@ -312,13 +311,10 @@ const SPRITES = [
   'door',
   'box',
   'rack',
-  ...PRODUCT_IDS.map((id) => `crate_${id}`),
   'trash',
   'bubble',
   'pip',
   'bar',
-  ...PRODUCT_IDS.map((id) => `item_${id}`),
-  ...PRODUCT_IDS.flatMap((id) => [0, 1, 2].map((v) => `item_${id}_${v}`)),
   ...['p_skin', 'p_shirt', 'p_legs0', 'p_legs1', 'acc_apron', 'acc_vest'].flatMap((k) => [k, `${k}_b`, `${k}_s`]),
   // Взмах рук при ходьбе (art/walk.py).
   ...['p_shirt', 'p_skin', 'p_skin_happy', 'p_skin_frown'].flatMap((k) => ['', '_b', '_s'].flatMap((v) => [`${k}${v}_w1`, `${k}${v}_w2`])),
@@ -340,12 +336,14 @@ const SPRITES = [
   'clock_face',
 ];
 
-/** Все картинки мира по именам (без повторов): спрайты и гардероб человечков. */
-export const TEXTURES: string[] = [...new Set([...SPRITES, ...WARDROBE_TEXTURES])];
-
 /**
- * Картинки мира, которые меню показывают ещё и отдельными файлами (<img src=png(key)>): монетка в HUD,
- * значки вместо эмодзи (ui/dom.ts, ICONS), товары в закупке и ценах, кот, краска стен в оформлении.
- * Phaser берёт их из листа атласа, а меню — из assets/<имя>.png, поэтому BootScene заранее прогревает ими кэш.
+ * Семейства картинок, чьи имена складывает игровой код: товары (item_<товар>, item_<товар>_0…2, ящики
+ * crate_<товар>) и гардероб (w_<вид>_<вещь>, wardrobe.ts). Сборка берёт их по началу имени файла в
+ * public/assets, игра — из своих списков (worldTextures.ts); что списки совпадают, следит tests/textures.test.ts.
  */
-export const DOM_TEXTURES: string[] = ['coin', 'box', 'cat_sit', 'wall', ...PRODUCT_IDS.flatMap((id) => [`item_${id}`, `item_${id}_0`])];
+export const FAMILIES: readonly RegExp[] = [/^item_/, /^crate_/, /^w_/];
+
+/** Что класть в атлас, по именам файлов public/assets (без .png): спрайты из списка и найденные семейства. */
+export const atlasKeysFrom = (names: readonly string[]): string[] => [
+  ...new Set([...SPRITES, ...names.filter((key) => FAMILIES.some((re) => re.test(key))).sort()]),
+];

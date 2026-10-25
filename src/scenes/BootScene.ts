@@ -3,7 +3,8 @@ import atlas from 'virtual:atlas';
 import { startSync } from '../game/save';
 import { t } from '../i18n';
 import { assetUrl, png } from '../platform/assets';
-import { DOM_TEXTURES, TEXTURES } from './textures';
+import { useSheet } from '../ui/sheet';
+import { TEXTURES } from './worldTextures';
 
 /**
  * Текстура-кадр общего листа атласа под старым именем ('shelf', 'p_legs1_s'…). Своей картинки
@@ -34,13 +35,22 @@ function spreadSheet(textures: Phaser.Textures.TextureManager, name: string): vo
 }
 
 /**
- * Меню берут картинки мира не из листа атласа, а отдельными файлами (DOM_TEXTURES). Пока ждём сверку
- * с облаком, сеть свободна — прогреваем ими кэш браузера по тому же адресу с отпечатком (png), иначе у
- * новенького на медленной связи монетка в HUD и товары в первом утреннем окне проявлялись бы по одной.
- * Игру это не держит; вернувшемуся игроку файлы отдаёт кэш (assets/ кэшируются на год).
+ * Меню (DOM) берут картинки мира и значки ico_* из тех же листов (ui/sheet.ts): кадр листа атласа
+ * или атласа значков вырезается в маленький холст — по сети за ними больше не ходят. Только кадры
+ * листов: свои текстуры сцены (холсты, надписи) под теми же именами меню не нужны.
  */
-function warmMenuImages(): void {
-  for (const key of DOM_TEXTURES) new Image().src = png(key);
+function shareSheets(textures: Phaser.Textures.TextureManager): void {
+  const cut = (frame: Phaser.Textures.Frame) => {
+    const image = frame.source.image;
+    if (!(image instanceof HTMLImageElement) || !image.naturalWidth) return null;
+    return { image, x: frame.cutX, y: frame.cutY, w: frame.cutWidth, h: frame.cutHeight };
+  };
+  useSheet((key) => {
+    const own = textures.exists(key) ? textures.get(key) : null;
+    if (own instanceof SheetFrame) return cut(own.get());
+    const ico = textures.exists('ico') ? textures.get('ico') : null;
+    return key.startsWith('ico_') && ico?.has(key) ? cut(ico.get(key)) : null;
+  });
 }
 
 export class BootScene extends Phaser.Scene {
@@ -94,7 +104,7 @@ export class BootScene extends Phaser.Scene {
 
   /** Картинки на месте: дождаться сверки с облаком — и в магазин. */
   private ready(): void {
-    warmMenuImages();
+    shareSheets(this.textures);
     // Сохранение сверяется с облаком Telegram с самого запуска (main.ts), параллельно с картинками;
     // здесь только дождаться конца (не дольше пары секунд) — и в магазин.
     const splash = document.getElementById('splash');

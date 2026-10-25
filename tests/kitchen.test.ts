@@ -30,7 +30,7 @@ import { nightCycle } from '../src/game/day';
 import { restockPlan } from '../src/game/restock';
 import { weatherFor, type Weather } from '../src/game/weather';
 import { layoutFor, KITCHEN_FROM } from '../src/scenes/layout';
-import { TEXTURES } from '../src/scenes/textures';
+import { TEXTURES } from '../src/scenes/worldTextures';
 
 const units = (n: number) => Array.from({ length: n }, () => ({ age: 0 }));
 const at = (patch: Partial<StoreState> = {}): StoreState => ({

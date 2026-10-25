@@ -2,8 +2,7 @@ import { defineConfig, type Plugin } from 'vite';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { buildAtlas, type Atlas } from './scripts/atlas';
-import { TEXTURES } from './src/scenes/textures';
+import { atlasKeys, buildAtlas, type Atlas } from './scripts/atlas';
 
 /** Флаги сборки Phaser из исходников (как DefinePlugin в его webpack-конфиге). */
 const PHASER_FLAGS: Record<string, boolean> = {
@@ -34,9 +33,11 @@ const ASSETS_DIR = fileURLToPath(new URL('./public/assets/', import.meta.url));
 /**
  * Атлас картинок мира (scripts/atlas.ts): собирается из public/assets при первой надобности и
  * заново, если картинки перерисовали (buildStart в сборке, слежение за файлами в разработке).
+ * Список берётся из src/scenes/textures.ts — модуля без импортов: конфиг не тянет игровой код,
+ * и правка экономики не перезапускает сервер разработки.
  */
 let packed: Atlas | null = null;
-const atlas = (): Atlas => (packed ??= buildAtlas(ASSETS_DIR, TEXTURES));
+const atlas = (): Atlas => (packed ??= buildAtlas(ASSETS_DIR, atlasKeys(ASSETS_DIR)));
 
 /** Папки public/, чьи файлы (и файлы во вложенных папках) получают отпечаток в адресе (src/platform/assets.ts). */
 const VERSIONED_DIRS = ['assets', 'story', 'audio'];
