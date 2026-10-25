@@ -651,6 +651,8 @@ export interface StoreState {
   /** «Позвать на помощь» (help.ts): в какой день друзья на подмоге и в какой день уже звал. */
   helpDay?: number;
   helpAsked?: number;
+  /** «Заглянуть к конкуренту» (rival.ts): проделки у босса, позванные гости, беспорядок к открытию. */
+  rival?: import('./rival').RivalState;
   /** Сезонный пропуск (pass.ts). */
   pass?: PassState;
   /** Истории постоянных покупателей (tales.ts). */

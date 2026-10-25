@@ -195,7 +195,7 @@ import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCo
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
 import { flushCloud, saveGame } from '../game/save';
 import { buyRadio, hasRadio, RADIO_PRICE, setStation, STATION_INFO, STATIONS, stationOf } from '../game/radio';
-import { BOSS_DAYS, bossActive, EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_MAX, EDUARD_STAGES, eduardNews, eduardPull, eduardStage, seeEduardNews, type EduardNews } from '../game/eduard';
+import { BOSS_DAYS, bossActive, EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_MAX, EDUARD_STAGES, eduardLook, eduardNews, eduardPull, eduardStage, seeEduardNews, type EduardNews } from '../game/eduard';
 import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../game/upgrades';
 
 /** Высота «голоса» героев в диалогах. */
@@ -240,6 +240,9 @@ interface MorningOptions {
   onArrange?: () => void;
   /** Зайти в гости в магазин друга (id в Telegram, имя). */
   onVisit?: (id: number, name: string) => void;
+  /** «Заглянуть к конкуренту» из рейтинга (ключ с сервера, имя) и к боссу через дорогу (game/rival.ts). */
+  onRival?: (key: string, name: string) => void;
+  onBoss?: () => void;
   /** Бабушка закончила обучение — теперь можно вручить её гостинец. */
   onTourDone?: () => void;
   /** Дочитали вступление главы (в новом начале гостинец ждёт его конца). */
@@ -430,7 +433,7 @@ function helpRow(title: HTMLElement | string, text: string): HTMLElement {
 }
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onTourDone, onStoryDone }: MorningOptions): void {
+export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone }: MorningOptions): void {
   const { card, close } = openModal();
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
@@ -2520,7 +2523,17 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   /** Магазин Эдуарда по соседству (после сюжета): сколько гостей уводит и когда вырастет. */
   const eduardBox = (state: StoreState): HTMLElement[] => {
     const stage = eduardStage(state);
-    if (stage === null) return [];
+    // По сюжету напротив «МегаМарт» — к нему тоже можно заглянуть.
+    if (stage === null) {
+      if (!onBoss || eduardLook(state) !== 'mega') return [];
+      const mega = el('div', 'ui-box');
+      mega.append(button(t('rival.boss'), () => {
+        endTour();
+        close();
+        onBoss();
+      }, 'ui-btn secondary'));
+      return [mega];
+    }
     const box = el('div', 'ui-box');
     const since = state.eduard?.since ?? state.day;
     // Напротив пусто: скоро новый конкурент — или всех уже победили.
@@ -2534,6 +2547,14 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       el('div', 'ui-muted', t(eduardPull(state) < info.pull ? 'eduard.box' : 'eduard.boxFull', { n: Math.round(eduardPull(state) * 100), r: EDUARD_LOYAL_RATING, max: Math.round(info.pull * 100) })),
       el('div', 'ui-note', t('boss.goal', { goal: info.rating, d: BOSS_DAYS, n: state.eduard?.streak ?? 0 })),
     );
+    // Заглянуть к нему через дорогу и немного похулиганить (game/rival.ts) — без сервера.
+    if (onBoss) {
+      box.append(button(t('rival.boss'), () => {
+        endTour();
+        close();
+        onBoss();
+      }, 'ui-btn secondary'));
+    }
     return [box];
   };
 
@@ -2774,7 +2795,11 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const info = socialInfo();
     if (!info) return [];
     const board = el('div', 'ui-box');
-    board.append(button(t('board.open'), showLeaderboard, 'ui-btn'));
+    board.append(button(t('board.open'), () => showLeaderboard(onRival && ((key, name) => {
+      endTour();
+      close();
+      onRival(key, name);
+    })), 'ui-btn'));
     const box = el('div', 'ui-box');
     box.append(el('b', '', `🤝 ${t('social.title')}`), el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT })));
     if (info.friends) box.append(el('div', 'ui-muted', t('social.count', { n: info.friends })));
