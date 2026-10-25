@@ -86,7 +86,7 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
  * Висящее на стене и стоящее на прилавке — нет.
  */
 const FURNITURE =
-  /^(?:(?:shelf|stand|fridge|drinks|chem)(?:_side)?|counter\d|icebox(?:_closed)?|florist|vending(?:_side)?|kiosk|coffee_bar|cafe_table|baker_table|bread_rack|oven\d?|stove\d|ktable|kshowcase|kcrate|plant(?:_big)?|bin\d|bin_t\d_\d|bargain_bin|candy_rack|carts|baskets|fountain|jukebox|aquarium|gumball|lucky_cat2?|rack|autostore|pallet_jack|forklift|cat_house|cat_basket|flour_sacks)$/;
+  /^(?:(?:shelf|stand|fridge|drinks|chem)(?:_side)?|counter\d|icebox(?:_closed)?|florist|vending(?:_side)?|kiosk|coffee_bar|cafe_table|baker_table|bread_rack|oven\d?|stove\d|ktable|kshowcase|kcrate|plant(?:_big)?|bin\d|bin_t\d_\d|bargain_shelf\d|candy_rack|carts|baskets|fountain|jukebox|aquarium|gumball|lucky_cat2?|rack|autostore|pallet_jack|forklift|cat_house|cat_basket|flour_sacks)$/;
 
 export const castsShadow = (key: string): boolean => FURNITURE.test(key);
 

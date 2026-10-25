@@ -64,7 +64,7 @@ describe('живой пол: тени', () => {
   });
 
   it('все картинки мебели из списка теней правда есть в игре', () => {
-    const missing = ['shelf', 'counter0', 'icebox', 'kshowcase', 'ktable', 'stove0', 'bargain_bin', 'candy_rack'].filter((k) => !TEXTURES.includes(k));
+    const missing = ['shelf', 'counter0', 'icebox', 'kshowcase', 'ktable', 'stove0', 'bargain_shelf0', 'bargain_shelf2', 'candy_rack'].filter((k) => !TEXTURES.includes(k));
     expect(missing).toEqual([]);
   });
 
