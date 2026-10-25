@@ -44,6 +44,7 @@ import {
   type ScanTiming,
   warehouseCapacity,
   warehouseCount,
+  warehouseOf,
   type CartItem,
   type Category,
   type DayStats,
@@ -144,7 +145,7 @@ import { duelInfo, fetchFriendShop, loadMultiplayer, treatFriend, visitsInfo, ty
 import { friendsAtWork } from '../game/staff';
 import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
-import { DISHES, DISH_IDS, kitchenOpen, portionsOf, sellDish } from '../game/kitchen';
+import { cookBatch, cookMenu, DISHES, DISH_IDS, hasIngredients, kitchenOpen, kitchenWorking, portionsOf, portionsTotal, sellDish, servePortions, stoveSeconds, stoveSprite, takeIngredients, type DishId } from '../game/kitchen';
 import { activeTrick, seeTrickResult, trickResult } from '../game/tricks';
 import {
   answerNightStory,
@@ -490,6 +491,11 @@ const TOILET_CLEAN_MS = 1000;
 const TRASH_CLEAN_MS = 400;
 const PICKUP_MS = 500;
 const PLACE_MS = 400;
+/**
+ * Дорога за продуктами, нарезка и раздача — столько секунд на закладку сверх варки у повара обычной скорости
+ * (у медленного — дольше). До закрытия меньше — новое не ставит; сколько ставить — по спросу после того, как сварится.
+ */
+const COOK_LATE = 14;
 /** Одна коробка на складе изображает минимум столько штук товара. */
 
 
@@ -732,6 +738,7 @@ const STAFF_ACC: Record<StaffRole, { acc: Accessory; tint: number }> = {
   manager: { acc: 'tie', tint: 0xffffff },
   baker: { acc: 'apron', tint: 0xffffff },
   barista: { acc: 'apron', tint: 0x8f563b },
+  cook: { acc: 'apron', tint: 0xffffff },
 };
 /** Тёмная кофта — так игрок может заметить вора. */
 const THIEF_SHIRT = 0x45444f;
@@ -746,7 +753,7 @@ interface ParkSpot {
 const CAR_COLORS = [0xe43b44, 0x0099db, 0x3e8948, 0xfeae34, 0xc0cbdc, 0x68386c, 0x262b44];
 const THIEF_SPEED = 52;
 /** Форма сотрудников. */
-const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4, baker: 0xf4f4f4, barista: 0x3e8948 };
+const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4, baker: 0xf4f4f4, barista: 0x3e8948, cook: 0xf4f4f4 };
 const STAFF_SPEED = 60;
 /** Глубина веранды перед кафе «Пончик». */
 const VERANDA_D = 28;
@@ -782,7 +789,7 @@ const ownerLook = (state: StoreState): Look => {
   const outfit = activeDecor(state, 'outfit');
   return { ...OWNER, ...(outfit ? COSTUMES[outfit.id] : {}) };
 };
-const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short', baker: 'cap', barista: 'ponytail' };
+const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short', baker: 'cap', barista: 'ponytail', cook: 'short' };
 /** На какой секунде дня приходит инспектор. */
 const INSPECTOR_AT = 25;
 /** Соня заходит после школы — на этой секунде дня. */
@@ -862,6 +869,23 @@ interface Oven {
   forShops?: boolean;
   /** Что в печи: хлеб или своя выпечка «От бабушки». */
   product: ProductId;
+}
+
+/**
+ * Кухня во флигеле: плита с кастрюлями, стол повара с ножом, витрина-раздача с тарелками.
+ * Что сейчас варится, уже взято со склада: при перестройке зала оно сразу встаёт в витрину (flushCooking).
+ */
+interface KitchenView {
+  stove: Phaser.GameObjects.Image;
+  /** Кастрюли (сковороды) на конфорках и огонь под ними — видны, пока варится. */
+  pots: Phaser.GameObjects.Image[];
+  flames: Phaser.GameObjects.Rectangle[];
+  knife: Phaser.GameObjects.Image;
+  showcase: Phaser.GameObjects.Image;
+  plates: Phaser.GameObjects.Image[];
+  cooking: DishId[];
+  /** Пар над кастрюлями: снять, когда сварилось. */
+  stopSteam?: () => void;
 }
 
 /** Ночью заходят таксисты, студенты и полуночники — в тёмном. */
@@ -1035,8 +1059,10 @@ export class StoreScene extends Phaser.Scene {
   private builtEduard: EduardLook | null = null;
   /** Всплывающие надписи на экране: чтобы не налезали друг на друга и склеивались. */
   private popups: Popup[] = [];
-  /** Табличка с порциями на кухне. */
-  private kitchenLabel?: Phaser.GameObjects.Text;
+  /** Кухня во флигеле: плита, стол повара, витрина с тарелками (кухни нет — пусто). */
+  private kitchenView?: KitchenView;
+  /** В какой день повар уже пожаловался, что не из чего готовить (раз в день, не чаще). */
+  private cookNoFoodDay = 0;
   /** Чей магазин друга нарисован сбоку (торговая неделя). */
   private builtFriend?: string;
   /** Магазин босса района стоит за дорогой (на месте «Гиганта»), а не сбоку. */
@@ -8078,28 +8104,255 @@ export class StoreScene extends Phaser.Scene {
     this.buildKitchen();
   }
 
-  /** Кухня: плита, стол с готовыми блюдами и табличка, сколько порций осталось. */
+  /**
+   * Кухня: кафельный фартук, плита (модель — оборудование «Плита»), стол повара с доской и ножом,
+   * ящик с овощами и витрина-раздача, где стоят тарелки с готовым. Касание плиты — кто готовит,
+   * касание витрины — сколько чего осталось.
+   */
   private buildKitchen(): void {
-    this.kitchenLabel = undefined;
+    // Что варилось до перестройки, уже куплено и снято со склада: сразу в витрину.
+    this.flushCooking();
+    this.kitchenView = undefined;
     const room = this.layout.kitchen;
     if (!room || !kitchenOpen(this.state)) return;
-    this.art(room.x + 11, room.y + 26, 'oven1').setTint(0xd8dce8).setDepth(room.y + 35);
-    this.art(room.x + 30, room.y + 40, 'baker_table').setDepth(room.y + 46);
-    this.kitchenLabel = this.add
-      .text(room.x + 30, room.y + 31, '', { fontFamily: UI_FONT, fontSize: '5px', fontStyle: 'bold', color: '#2b2233', backgroundColor: 'rgba(255, 246, 200, 0.9)', padding: { x: 1.5, y: 0.5 } })
-      .setOrigin(0.5)
-      .setResolution(this.textRes(5))
-      .setDepth(room.y + 47);
+    const { x, y } = room;
+    this.add.tileSprite(x + 1, y + 6, 40, 8, 'ktiles').setOrigin(0).setTileScale(1 / ART).setDepth(1.5);
+    const stove = this.art(x + 10, y + 23, stoveSprite(this.state)).setDepth(y + 31);
+    const table = this.art(x + 33, y + 23, 'ktable').setDepth(y + 29);
+    const knife = this.art(table.x - 3, table.y - 2.5, 'kknife').setDepth(y + 30);
+    knife.setData('y', knife.y);
+    this.art(x + 52, y + 24, 'kcrate').setDepth(y + 28);
+    const showcase = this.art(x + 16, y + 46.5, 'kshowcase').setDepth(y + 50);
+    this.art(showcase.x, showcase.y, 'kshowcase_glass').setDepth(y + 50.6);
+    // Кастрюли на конфорках: у электроплитки одна посередине, у газовой и плиты шефа — две спереди.
+    const burners = gearTier(this.state, 'stove') ? [-3, 3].map((dx) => ({ x: stove.x + dx, y: stove.y - 3.5 })) : [{ x: stove.x, y: stove.y - 4 }];
+    const gas = gearTier(this.state, 'stove') > 0;
+    const flames = burners.map((b) =>
+      this.add
+        .rectangle(b.x, b.y + 0.5, 4, 1, gas ? 0x5fcde4 : 0xf77622)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setVisible(false)
+        .setDepth(y + 31.5),
+    );
+    const pots = burners.map((b) => this.art(b.x, b.y + 1, 'kpot').setOrigin(0.5, 1).setVisible(false).setDepth(y + 32));
+    this.kitchenView = { stove, pots, flames, knife, showcase, plates: [], cooking: [] };
+    stove.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.tapStove()));
+    showcase.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.tapShowcase()));
     this.refreshKitchen();
   }
 
-  /** Сколько каких порций на кухне — на табличке у стола. */
+  /** Тарелки в витрине: по тарелке на каждые три порции (восемь в ряд на полке), блюда — по порядку меню. */
   private refreshKitchen(): void {
-    if (!this.kitchenLabel?.active) return;
+    const k = this.kitchenView;
+    if (!k?.showcase.active) return;
+    for (const plate of k.plates) plate.destroy();
+    k.plates = [];
+    const dishes = DISH_IDS.flatMap((id) => Array.from({ length: Math.ceil(portionsOf(this.state, id) / 3) }, () => id)).slice(0, 8);
+    dishes.forEach((id, i) => {
+      // Низ тарелки — на полке за стеклом, на полточки ниже середины витрины (art/kitchen.py).
+      const px = k.showcase.x + (7 + i * 6.5 - 28) / 2;
+      k.plates.push(this.art(px, k.showcase.y + 0.5, `kdish_${id}`).setOrigin(0.5, 1).setDepth(k.showcase.depth + 0.3 + i * 0.01));
+    });
+  }
+
+  /** Плита: кто готовит — повар или никто (тогда подсказка: нанять или готовить самому утром). */
+  private tapStove(): void {
+    const k = this.kitchenView;
+    if (!k || !this.running) return;
+    const works = kitchenWorking(this.state);
+    this.popup(k.stove.x + 8, k.stove.y - 14, works ? t('popup.cookWorks') : t('popup.needCook'), works ? '#fff3b0' : '#ffd0d0');
+  }
+
+  /** Витрина: сколько каких порций осталось — значками блюд. */
+  private tapShowcase(): void {
+    const k = this.kitchenView;
+    if (!k) return;
     const text = DISH_IDS.filter((id) => portionsOf(this.state, id) > 0)
       .map((id) => `${DISHES[id].icon}${portionsOf(this.state, id)}`)
       .join(' ');
-    this.kitchenLabel.setText(text).setVisible(text !== '');
+    this.popup(k.showcase.x, k.showcase.y - 10, text || t('popup.kitchenEmpty'), '#fff3b0');
+  }
+
+  /** Что варилось — сразу в витрину (зал перестраивают, повара переставляют); кастрюли с плиты. */
+  private flushCooking(): void {
+    const k = this.kitchenView;
+    if (!k) return;
+    for (const id of k.cooking.splice(0)) this.state = servePortions(this.state, id);
+    this.stopPots();
+    this.refreshKitchen();
+  }
+
+  /** На плиту: кастрюли (блины и сырники — на сковороде), огонь под ними, пар и шкворчание. */
+  private startPots(dishes: DishId[]): void {
+    const k = this.kitchenView;
+    if (!k) return;
+    k.pots.forEach((pot, i) => {
+      const id = dishes[i];
+      const pan = id === 'pancakes' || id === 'syrniki';
+      pot.setTexture(pan ? 'kpan' : 'kpot').setOrigin(pan ? 0.4 : 0.5, 1).setVisible(Boolean(id));
+      k.flames[i].setVisible(Boolean(id)).setAlpha(0.8);
+      if (id) this.tweens.add({ targets: k.flames[i], alpha: 0.35, duration: 180, yoyo: true, repeat: -1 });
+    });
+    sound.hiss(Math.min(2.5, stoveSeconds(this.state) * 0.4), 1200, 0.03, k.stove.x);
+    // Пар — облачками над каждой кастрюлей (сероватый: на белом кафеле белый не видно); в лёгкой графике реже.
+    k.stopSteam?.();
+    k.stopSteam = this.worldTimer(this.lite ? 700 : 320, () => {
+      for (const pot of k.pots) if (pot.visible && pot.active) this.steamPuff(pot.x + Phaser.Math.FloatBetween(-1.5, 1.5), pot.y - 5, 0xc0cbdc);
+    });
+  }
+
+  private stopPots(): void {
+    const k = this.kitchenView;
+    if (!k) return;
+    k.stopSteam?.();
+    k.stopSteam = undefined;
+    for (const pot of k.pots) if (pot.active) pot.setVisible(false);
+    for (const flame of k.flames) {
+      if (!flame.active) continue;
+      this.tweens.killTweensOf(flame);
+      flame.setVisible(false);
+    }
+  }
+
+  /**
+   * Повар: по меню дня решает, что поставить (kitchen.ts, cookBatch), ходит за продуктами на склад
+   * (чего там нет — к полке в зале), режет на доске, варит на плите — над кастрюлями пар — и выставляет
+   * порции в витрину. Под вечер и ночью новое не начинает: не успеет продаться — спишется.
+   */
+  private async cookLoop(w: Worker, gen: number): Promise<void> {
+    while (this.alive(gen)) {
+      const k = this.kitchenView;
+      // Через сколько закладка будет в витрине: варка — по плите, дорога и нарезка — по шагу повара.
+      const ready = stoveSeconds(this.state) + COOK_LATE / this.workerPace(w);
+      const open = this.running && !this.night && Boolean(k?.stove.active) && this.timeLeft > ready;
+      const plan = open ? cookBatch(this.state, this.timeLeft / DAY_SECONDS, ready / DAY_SECONDS) : [];
+      if (!k || !plan.length) {
+        // Витрина пуста, а сварить не из чего — раз в день повар просит закупить продукты.
+        const noFood = open && portionsTotal(this.state) === 0 && cookMenu(this.state).every((id) => !hasIngredients(this.state, id));
+        if (noFood && this.cookNoFoodDay !== this.state.day) {
+          this.cookNoFoodDay = this.state.day;
+          this.popup(w.sprite.x, w.sprite.y - 18, t('popup.cookNoFood'), '#ffd0d0');
+        }
+        await this.cookIdle(w);
+        continue;
+      }
+      const taken = await this.fetchIngredients(w, gen, k, plan);
+      if (!this.alive(gen)) return;
+      if (!taken.length) continue;
+      // Режет на доске: корзинку — на стол, сам — у края стола боком к доске, чтобы нож было видно.
+      await this.workerWalk(w, w.home.x, w.home.y);
+      if (!this.alive(gen)) return;
+      w.carried.setVisible(false);
+      this.setFacing(w.sprite, 'left');
+      await this.chop(w, gen, k, taken);
+      if (!this.alive(gen)) return;
+      // К плите: встаёт сбоку (кастрюли и пар не загораживает) и, пока варится, помешивает.
+      await this.workerWalk(w, k.stove.x + 11, w.home.y);
+      if (!this.alive(gen)) return;
+      this.setFacing(w.sprite, 'left');
+      this.startPots(taken);
+      const stir = Math.max(1, Math.round(stoveSeconds(this.state) / 1.5));
+      for (let i = 0; i < stir; i++) {
+        this.squash(w.sprite, 1.04, 0.96, 140);
+        await this.wait((stoveSeconds(this.state) * 1000) / stir);
+        if (!this.alive(gen)) return;
+      }
+      this.stopPots();
+      // Магазин закрылся, пока варилось: сваренное уже в витрине (flushCooking) — нести нечего.
+      if (!k.cooking.length) continue;
+      sound.ding(k.stove.x);
+      // Готовое — на тарелках в витрину.
+      w.carried.setTexture(`kdish_${taken[0]}`).setPosition(0, 2).setVisible(true);
+      await this.workerWalk(w, k.showcase.x + 4, k.showcase.y - 8);
+      if (!this.alive(gen)) return;
+      this.setFacing(w.sprite, 'down');
+      await this.workerWait(w, PLACE_MS);
+      if (!this.alive(gen)) return;
+      w.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+      k.cooking.splice(0).forEach((id, i) => {
+        const before = portionsOf(this.state, id);
+        this.state = servePortions(this.state, id);
+        const text = t('popup.cooked', { icon: DISHES[id].icon, name: t(`dish.${id}` as TextKey), n: portionsOf(this.state, id) - before });
+        this.time.delayedCall(i * 450, () => this.popup(k.showcase.x, k.showcase.y - 12, text, '#c8ffb0'));
+      });
+      this.refreshKitchen();
+      sound.place('glass', 1, k.showcase.x);
+    }
+  }
+
+  /** Готовить нечего — стоит у стола. */
+  private async cookIdle(w: Worker): Promise<void> {
+    if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
+    this.setFacing(w.sprite, 'up');
+    await this.wait(600);
+  }
+
+  /**
+   * За продуктами на всю закладку: на склад, а чего там не хватает — к полке в зале. Снимает их в последней
+   * точке пути; чего уже нет (разобрали, пока шёл) — того блюда не будет. Возвращает, что взял в работу.
+   */
+  private async fetchIngredients(w: Worker, gen: number, k: KitchenView, plan: DishId[]): Promise<DishId[]> {
+    const room = this.layout.kitchen!;
+    const store = this.layout.warehouse;
+    const need = new Map<ProductId, number>();
+    for (const id of plan) for (const [p, n] of Object.entries(DISHES[id].needs)) need.set(p as ProductId, (need.get(p as ProductId) ?? 0) + (n ?? 0));
+    const fromStore = [...need.keys()].some((p) => warehouseOf(this.state, p) > 0);
+    const short = [...need].find(([p, n]) => warehouseOf(this.state, p) < n)?.[0];
+    const shelf = short ? this.state.shelves.findIndex((sh) => !sh.broken && (sh.items[short]?.length ?? 0) > 0) : -1;
+    await this.workerWalk(w, room.inside.x, room.inside.y);
+    await this.workerWalk(w, room.doorway.x, room.doorway.y);
+    if (fromStore) {
+      await this.workerWalk(w, store.doorway.x, store.doorway.y);
+      await this.workerWalk(w, store.inside.x, store.inside.y);
+      await this.workerWait(w, 450);
+    }
+    if (shelf >= 0) {
+      // Со склада в зал — обратно через дверь, а не наискосок сквозь стену флигеля.
+      if (fromStore) await this.workerWalk(w, store.doorway.x, store.doorway.y);
+      const stand = standFor(this.layout, this.spotOf(shelf));
+      await this.workerWalk(w, stand.x, stand.y - 2);
+      await this.workerWait(w, PLACE_MS);
+    }
+    if (!this.alive(gen)) return [];
+    const taken: DishId[] = [];
+    for (const id of plan) {
+      const next = takeIngredients(this.state, id);
+      if (!next) continue;
+      this.state = next;
+      taken.push(id);
+    }
+    if (taken.length) {
+      // Уже снято со склада: если зал перестроят, пока варится, — сразу в витрину (flushCooking).
+      k.cooking.push(...taken);
+      this.refreshWarehouse();
+      this.refreshShelves();
+      w.carried.setTexture('kbasket').setPosition(0, 1).setVisible(true);
+      sound.place('bump', 0, w.sprite.x);
+    }
+    if (fromStore && shelf < 0) await this.workerWalk(w, store.doorway.x, store.doorway.y);
+    await this.workerWalk(w, room.doorway.x, room.doorway.y);
+    await this.workerWalk(w, room.inside.x, room.inside.y);
+    return taken;
+  }
+
+  /** Нарезка: нож стучит по доске, кусочки подпрыгивают — цвета продуктов закладки. */
+  private async chop(w: Worker, gen: number, k: KitchenView, dishes: DishId[]): Promise<void> {
+    const knife = k.knife;
+    if (!knife.active) return;
+    const base = knife.getData('y') as number;
+    const colors = dishes.flatMap((id) => Object.keys(DISHES[id].needs).map((p) => PRODUCTS[p as ProductId].color));
+    for (let i = 0; i < 5 * dishes.length && this.alive(gen); i++) {
+      this.tweens.add({ targets: knife, y: base - 1.5, duration: 80, yoyo: true, ease: 'Quad.easeOut', onComplete: () => void (knife.active && knife.setY(base)) });
+      if (i % 2 === 0) {
+        sound.place('bump', i % 4, knife.x);
+        this.squash(w.sprite, 1.03, 0.97, 90);
+      }
+      if (!this.lite) {
+        const bit = this.add.rectangle(knife.x - 2 + Math.random() * 3, knife.y, 1, 1, colors[i % colors.length]).setDepth(knife.depth + 1);
+        this.tweens.add({ targets: bit, y: bit.y - 2.5, x: bit.x + Phaser.Math.FloatBetween(-2, 2), alpha: 0, duration: 420, ease: 'Quad.easeOut', onComplete: () => bit.destroy() });
+      }
+      await this.workerWait(w, 240);
+    }
   }
 
   /**
@@ -9563,6 +9816,8 @@ export class StoreScene extends Phaser.Scene {
   /** Расставляет нанятых сотрудников по местам и запускает их работу. */
   private syncStaff(): void {
     const gen = ++this.staffGen;
+    // Повара переставляют посреди варки — сваренное не пропадает, а встаёт в витрину.
+    this.flushCooking();
     for (const w of this.workers.values()) {
       this.stopMop(w.sprite);
       this.tweens.killTweensOf(w.sprite);
@@ -9602,6 +9857,8 @@ export class StoreScene extends Phaser.Scene {
         accTint: STAFF_ACC[member.role].tint,
         // У охранника форменная кепка, у пекаря — белый колпак.
         hair: member.role === 'guard' ? UNIFORMS.guard : member.role === 'baker' ? 0xffffff : Phaser.Utils.Array.GetRandom(HAIR_COLORS),
+        // Повар — в поварском колпаке и белом кителе.
+        ...(member.role === 'cook' ? { hat: 'toque' as const, outfit: 'chefcoat' as const } : {}),
       });
       const carried = this.art(0, 3, 'box').setVisible(false);
       sprite.add(carried);
@@ -9625,6 +9882,7 @@ export class StoreScene extends Phaser.Scene {
         manager: this.managerLoop,
         baker: this.bakerLoop,
         barista: this.baristaLoop,
+        cook: this.cookLoop,
       }[member.role];
       const work = () => {
         if (loop) void loop.call(this, worker, gen);
@@ -9678,6 +9936,11 @@ export class StoreScene extends Phaser.Scene {
         return { x: this.layout.bakery.x + 26, y: this.layout.bakery.y + 36 };
       case 'barista':
         return { x: this.layout.coffee.x + 26, y: this.layout.coffee.y + 19 };
+      case 'cook': {
+        // Повар — у правого края стола (доска с ножом слева от него); кухни в помещении нет (так не бывает) — у входа.
+        const k = this.layout.kitchen;
+        return k ? { x: k.x + 40, y: k.y + 33 } : { x: door.x - 24, y: door.y - 30 };
+      }
     }
   }
 
@@ -10613,10 +10876,12 @@ export class StoreScene extends Phaser.Scene {
     const at = this.registerOf(c);
     if (at) at.customer = null;
 
-    // С кухни на кассе докупают порцию готовой еды.
+    // С кухни на кассе докупают порцию готовой еды (хотели, а витрина пуста, — в отчёт: повар учтёт спрос).
     const dish = c.thief || !c.items.length ? null : sellDish(this.state, Math.random);
-    if (dish) {
+    if (dish) this.stats.dishWanted = (this.stats.dishWanted ?? 0) + 1;
+    if (dish?.dish) {
       this.state = dish.state;
+      this.stats.dishes = (this.stats.dishes ?? 0) + 1;
       const d = DISHES[dish.dish];
       c.extras = [...(c.extras ?? []), { kind: 'dish', price: d.price }];
       this.popup(c.sprite.x, c.sprite.y - 26, t('popup.dish', { icon: d.icon, name: t(`dish.${dish.dish}` as TextKey), n: d.price }), '#c8ffb0');
@@ -12737,6 +13002,8 @@ export class StoreScene extends Phaser.Scene {
     this.stallTimer = undefined;
     // Заказы на дом, которые не успели отвезти, курьер развозит после закрытия.
     const delivery = this.closeDelivery();
+    // Что повар не успел снять с плиты к закрытию, — в витрину: ночью спишется вместе с остальным (в отчёт).
+    this.flushCooking();
     // Хлеб, оставшийся в печи к закрытию, продавец вынимает сам.
     if (this.oven && this.oven.state !== 'idle') {
       const product = this.oven.product;
@@ -12774,6 +13041,12 @@ export class StoreScene extends Phaser.Scene {
       const end = cafe.ended === 'done' ? ` · ${t('summary.cafeDone')}` : cafe.ended === 'canceled' ? ` · ${t('summary.cafeCanceled')}` : '';
       extra.push([t('summary.cafe'), `${cafe.delivered ? t('summary.cafePaid', { n: cafe.pay }) : t('summary.cafeMissed')}${end}`]);
     }
+    // Кухня: сколько порций продали и сколько списали ночью (строка отчёта дня; кому не хватило — утром у кухни).
+    const kitchenDay = kitchenOpen(state) ? state.reports?.at(-1)?.kitchen : undefined;
+    if (kitchenDay && (kitchenDay.wanted || kitchenDay.spoiled)) {
+      const sold = t('summary.kitchenSold', { n: kitchenDay.sold });
+      extra.push([t('summary.kitchen'), kitchenDay.spoiled ? `${sold} · ${t('summary.kitchenSpoiled', { n: kitchenDay.spoiled })}` : sold]);
+    }
     if (this.inspection) {
       const r = this.inspection;
       extra.push([
@@ -12789,6 +13062,8 @@ export class StoreScene extends Phaser.Scene {
     for (const id of best.broken) stamps.push({ kind: 'record', id });
     this.stats.spoiled = spoiled;
     this.stats.skimmed = skimmed;
+    // Непроданное с кухни списано — тарелки из витрины убираем.
+    this.refreshKitchen();
     if (promoted) this.syncStaff();
     const unlocked = this.checkAchievements(false);
     if (unlocked.length) extra.push([t('ach.summary'), unlocked.map((id) => t(`ach.${id}` as TextKey)).join(', ')]);

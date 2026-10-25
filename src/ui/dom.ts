@@ -811,6 +811,10 @@ export const ICONS: Record<string, string> = {
   '🍽': 'ico_plate',
   '🥗': 'ico_salad',
   '🥞': 'ico_pancakes',
+  // Блюда кухни (kitchen.ts): пельмени, сырники, уха.
+  '🥣': 'ico_pelmeni',
+  '🧀': 'ico_syrniki',
+  '🍜': 'ico_ukha',
   '🍖': 'ico_drumstick',
   '💪': 'ico_muscle',
   '🌷': 'ico_tulip',

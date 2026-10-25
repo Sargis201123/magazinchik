@@ -5136,6 +5136,9 @@ def main():
     import rooms
 
     rooms.main()
+    import kitchen
+
+    kitchen.main()
     import patterns
 
     patterns.main()

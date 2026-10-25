@@ -1,7 +1,7 @@
 // Оборудование: у всего в магазине есть модели — от простой к современной. Новую модель покупают
 // утром во вкладке «Развитие»; она заменяет старую (на всех кассах сразу).
 // Касса пробивает быстрее и реже заедает, бак вмещает больше мусора, кофемашина варит быстрее
-// и вкуснее, печь печёт больше; холодильники не текут и дольше держат свежесть, склад вмещает
+// и вкуснее, печь печёт больше, плита на кухне варит быстрее и в двух кастрюлях; холодильники не текут и дольше держат свежесть, склад вмещает
 // больше, климат и свет — уют и экономия, камеры отпугивают воров, вход и туалет — чистота,
 // курьер доставки пересаживается с велосипеда на мопед и фургончик.
 
@@ -16,6 +16,7 @@ export type GearId =
   | 'bin'
   | 'coffee'
   | 'oven'
+  | 'stove'
   | 'climate'
   | 'lights'
   | 'cameras'
@@ -112,6 +113,18 @@ export const GEAR: Record<GearId, Gear> = {
       model('gear.oven.2', 3500, 3, 'gear.oven.2.fx'),
     ],
   },
+  // Плита на кухне: варит быстрее, потом — в двух кастрюлях сразу, у плиты шефа из закладки лишняя порция (kitchen.ts).
+  stove: {
+    id: 'stove',
+    icon: '🍳',
+    nameKey: 'gear.stove',
+    needs: 'kitchen',
+    models: [
+      model('gear.stove.0', 0, 0, 'gear.stove.0.fx'),
+      model('gear.stove.1', 1600, 3, 'gear.stove.1.fx'),
+      model('gear.stove.2', 3800, 3, 'gear.stove.2.fx'),
+    ],
+  },
   climate: {
     id: 'climate',
     icon: '🌀',
@@ -198,7 +211,7 @@ export const GEAR: Record<GearId, Gear> = {
 
 
 /** Порядок в списке: сначала то, что влияет на торговлю, потом удобства. */
-export const GEAR_IDS: GearId[] = ['register', 'fridge', 'warehouse', 'bin', 'coffee', 'oven', 'courier', 'climate', 'lights', 'signage', 'cameras', 'entrance', 'wc', 'solar'];
+export const GEAR_IDS: GearId[] = ['register', 'fridge', 'warehouse', 'bin', 'coffee', 'oven', 'stove', 'courier', 'climate', 'lights', 'signage', 'cameras', 'entrance', 'wc', 'solar'];
 
 /** Какая модель стоит сейчас (номер в списке моделей). */
 export const gearTier = (state: StoreState, id: GearId): number => Math.min(state.gear?.[id] ?? 0, GEAR[id].models.length - 1);
