@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { daytime, DEFAULT_TZ, faceUrl, localMinutes, pickReminder, reasons, resetReminderPhotos, sendReminders, type Player } from '../api/_lib/remind';
 import { saveHooks, socialPing } from '../api/_lib/social';
 import { events, eventsEdit, resetEventsCache } from '../api/_lib/live';
-import { DEFAULT_EVENTS } from '../src/game/live';
+import { DEFAULT_EVENTS, GUEST_IDS } from '../src/game/live';
 import type { D1, D1Statement, Env } from '../api/_lib/telegram';
 
 // Настоящая SQLite из Node (22.5+) вместо Cloudflare D1 (как в social.test.ts).
@@ -112,6 +112,16 @@ describe('напоминания по местному времени', () => {
     expect(eve.text).toContain('последний день года');
   });
 
+  it('у каждого героя напоминаний есть картинка на сайте', () => {
+    const files = Object.keys(import.meta.glob('../public/promo/remind_*.png'));
+    const faces = new Set(['sonya', 'grandma', 'valya', 'anchor', ...GUEST_IDS]);
+    // Все герои, от чьего лица бот пишет хоть раз, — и в будни, и в праздник, и в выходные.
+    const p = player({ sonya: 1, spoil: 2, streak: 2, gift: '2026-12-12', cashier: 1, helper: 'Аня' });
+    for (const at of [Date.UTC(2026, 11, 13, 9), Date.UTC(2026, 11, 6, 9), Date.UTC(2027, 2, 7, 9)])
+      for (const r of reasons(p, at, DEFAULT_EVENTS)) expect(faces).toContain(r.face);
+    for (const face of faces) expect(files).toContain(`../public/promo/remind_${face}.png`);
+  });
+
   it('cron: пишет только тем, у кого день; картинка героя — по полному адресу сайта, потом по file_id', async () => {
     if (!Database) return;
     const db = d1();
@@ -182,5 +192,13 @@ describe('календарь праздников на сервере', () => {
     expect(await get()).toEqual({ events: mine, custom: true });
     expect((await edit('secret', { reset: true })).status).toBe(200);
     expect((await get()).custom).toBe(false);
+    // Секрет лучше слать заголовком: адрес запроса попадает в журналы, заголовок — нет.
+    const byHeader = (key: string) =>
+      eventsEdit(new Request('https://x/api/events-edit', { method: 'POST', headers: { 'x-key': key }, body: JSON.stringify({ events: mine }) }), env);
+    expect((await byHeader('wrong')).status).toBe(403);
+    const saved = await byHeader('secret');
+    expect(saved.status).toBe(200);
+    expect(JSON.stringify(await saved.json())).not.toContain('secret');
+    expect((await get()).custom).toBe(true);
   });
 });

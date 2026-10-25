@@ -1524,9 +1524,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const next = guest ? null : nextGuest(e, today);
     if (guest) box.append(el('div', 'ui-note', t(guestDue(state, e, today) ? 'live.box.guestToday' : 'live.box.guestSeen', { icon: GUEST_ICON[guest], who: t(`who.${guest}`) })));
     else if (next) box.append(el('div', 'ui-muted', t('live.box.guestNext', { icon: GUEST_ICON[next.who], who: t(`who.${next.who}`), date: dateLabel(next.date) })));
-    // Набор за звёзды — только по желанию и пока он не куплен.
+    // Набор за звёзды — только по желанию: когда бесплатная открытка уже открыта и пока набор не куплен.
     const pack = e.pack ? STAR_PACKS[e.pack] : undefined;
-    if (pack && !pack.items.every((id) => state.decor.owned.includes(id))) {
+    if (pack && !cardWaiting(state, e, today) && !pack.items.every((id) => state.decor.owned.includes(id))) {
       box.append(
         button(t('live.box.pack', { name: t(pack.nameKey), n: pack.stars }), () => premiumDecorModal(decorItem(pack.items[0])), 'ui-btn secondary'),
         el('div', 'ui-muted', t('live.box.packNote')),

@@ -2129,7 +2129,7 @@ export const ru = {
   "live.box.prize": "За {need} открыток — «{item}» в зал, бесплатно ({n}/{need})",
   "live.box.prizeGot": "🎁 «{item}» уже твоя — стоит в зале (убрать или вернуть — в «Оформлении»).",
   "live.box.guestToday": "{icon} Сегодня в магазин заглянет {who} — с подарком!",
-  "live.box.guestSeen": "{icon} {who} уже заходил(а) сегодня — спасибо, что открылся!",
+  "live.box.guestSeen": "{icon} Подарок от гостя уже получен — {who} передаёт привет!",
   "live.box.guestNext": "{icon} Следующий гость — {who}, {date}",
   "live.box.pack": "⭐ По желанию: «{name}» за {n} ⭐",
   "live.box.packNote": "Необязательно: открытки, гости и праздничная вещь — бесплатные.",

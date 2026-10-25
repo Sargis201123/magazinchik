@@ -77,10 +77,14 @@ https://magazinchik.sargis-zsx.workers.dev/api/events
 **2. Сохранить свой** — отправить весь список целиком (из терминала на компьютере):
 
 ```sh
-curl -X POST 'https://magazinchik.sargis-zsx.workers.dev/api/events-edit?key=<WEBHOOK_SECRET>' \
-  -H 'content-type: application/json' \
+curl -X POST 'https://magazinchik.sargis-zsx.workers.dev/api/events-edit' \
+  -H 'x-key: <WEBHOOK_SECRET>' -H 'content-type: application/json' \
   -d '{ "events": [ … весь список, как в примере выше … ] }'
 ```
+
+Секрет — в заголовке `x-key`, а не в адресе: адреса запросов Cloudflare пишет в журналы, заголовки — нет.
+Длинный список удобнее держать в файле `events.json` (`{ "events": [ … ] }`) и отправлять так:
+`-d @events.json`.
 
 Сервер сначала всё проверяет: если где-то ошибка (неверная дата, неизвестный гость или вещь), он
 ничего не меняет и отвечает списком ошибок по-русски — например,
@@ -89,8 +93,8 @@ curl -X POST 'https://magazinchik.sargis-zsx.workers.dev/api/events-edit?key=<WE
 **3. Вернуть встроенный:**
 
 ```sh
-curl -X POST 'https://magazinchik.sargis-zsx.workers.dev/api/events-edit?key=<WEBHOOK_SECRET>' \
-  -H 'content-type: application/json' -d '{ "reset": true }'
+curl -X POST 'https://magazinchik.sargis-zsx.workers.dev/api/events-edit' \
+  -H 'x-key: <WEBHOOK_SECRET>' -H 'content-type: application/json' -d '{ "reset": true }'
 ```
 
 Без терминала — через панель Cloudflare: Storage & Databases → D1 → `magazinchik` → Console:

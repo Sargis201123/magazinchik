@@ -130,9 +130,6 @@ const FINAL_ART: Partial<Record<LiveTheme, string>> = { newyear: 'card_newyear_f
 export const cardArt = (theme: LiveTheme, n: number, total: number): string =>
   n === total && FINAL_ART[theme] ? FINAL_ART[theme]! : CARD_ART[theme][(n - 1) % CARD_ART[theme].length];
 
-/** Кто «подписал» открытку — портрет в окне открытки. */
-export const CARD_FROM: Record<LiveTheme, string> = { newyear: 'portrait_snegurochka_happy', feb23: 'portrait_grandma_happy', march8: 'portrait_valya_happy' };
-
 /** Открытые открытки этого праздника (даты). */
 export const openedCards = (state: StoreState, e: LiveEvent, date: string): string[] => state.live?.cards?.[eventKey(e, date)] ?? [];
 

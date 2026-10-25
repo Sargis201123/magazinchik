@@ -12,6 +12,7 @@ import { activeEvent, addDays, cardOf, dateAt, daysBetween, guestOn, type GuestI
 import { liveEventsFor } from './live.js';
 import { ready } from './social.js';
 import { bot, type Env } from './telegram.js';
+import { isWeekend } from './weekend.js';
 
 const HOUR = 3600_000;
 /** Не заходил столько — напомнить; не чаще раза в REMIND_EVERY; не больше MAX_MISSES подряд. */
@@ -32,9 +33,6 @@ export const daytime = (now: number, tz: number): boolean => {
   const m = localMinutes(now, tz);
   return m >= QUIET.from * 60 && m < QUIET.to * 60;
 };
-
-/** Выходные «Чёрной пятницы района» (как в weekend.ts: суббота и воскресенье по UTC). */
-const weekend = (now: number): boolean => [0, 6].includes(new Date(now).getUTCDay());
 
 export type Reason = 'sonya' | 'helped' | 'guest' | 'card' | 'gift' | 'spoil' | 'weekend' | 'cashier' | 'day';
 export type Face = 'sonya' | 'grandma' | 'valya' | 'anchor' | GuestId;
@@ -62,6 +60,7 @@ export interface Reminder {
   text: string;
 }
 
+/** Дней в серии бабушкиных гостинцев (как GIFT_DAYS в src/game/gift.ts: тот тянет за собой всю экономику). */
 const GIFT_DAYS = 7;
 const DAY_NAMES = {
   ru: ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'],
@@ -84,7 +83,7 @@ const TEXTS: Record<'ru' | 'en', Record<string, string>> = {
     'card.march8': '🌷 Валентина: «С праздником весны! В магазинчике тебя ждёт открытка — и мимоза»',
     gift: '👵 Бабушка: «Внучек, гостинец уже собран — день {n} из 7! Загляни сегодня, а то серия начнётся сначала»',
     'gift.big': '👵 Бабушка: «Внучек, шесть дней подряд заходил — сегодня самый большой гостинец! Не пропусти»',
-    spoil: '🧓 Валентина: «Слышала, у тебя на складе {n} шт. доживают последний день. Продай со скидкой, пока не пропали!»',
+    spoil: '🧓 Валентина: «Слышала, у тебя {n} шт. товара доживают последний день. Уцени, пока не пропали!»',
     weekend: '📺 Новости района: «Выходная распродажа! Все магазины района соревнуются, кто наторгует больше. Успей занять место»',
     cashier: '👵 Бабушка: «Кассир торгует без тебя, но полки пустеют. Заглянул бы, закупил товара»',
     day: '👵 Бабушка: «День {day}: у дверей уже собрались покупатели. Открываем?»',
@@ -103,7 +102,7 @@ const TEXTS: Record<'ru' | 'en', Record<string, string>> = {
     'card.march8': '🌷 Valentina: "Happy spring holiday! A card is waiting for you in the shop — with mimosa"',
     gift: '👵 Grandma: "Dear, your gift is ready — day {n} of 7! Come today, or the streak starts over"',
     'gift.big': '👵 Grandma: "Dear, six days in a row — today is the biggest gift! Don\'t miss it"',
-    spoil: '🧓 Valentina: "I heard {n} items in your stockroom are on their last day. Sell them at a discount before they spoil!"',
+    spoil: '🧓 Valentina: "I heard {n} items in your shop are on their last day. Mark them down before they spoil!"',
     weekend: '📺 District news: "Weekend sale! All the shops in the district compete for the best takings. Grab your spot"',
     cashier: '👵 Grandma: "Your cashier is trading without you, but the shelves are emptying. Come restock"',
     day: '👵 Grandma: "Day {day}: customers are already at the door. Shall we open?"',
@@ -149,7 +148,7 @@ export function reasons(p: Player, now: number, events: LiveEvent[]): Reminder[]
     out.push({ reason: 'gift', face: 'grandma', text: p.streak === GIFT_DAYS - 1 ? t['gift.big'] : fill(t.gift, { n: p.streak + 1 }) });
   }
   if (p.spoil > 0) out.push({ reason: 'spoil', face: 'valya', text: fill(t.spoil, { n: p.spoil }) });
-  if (weekend(now)) out.push({ reason: 'weekend', face: 'anchor', text: t.weekend });
+  if (isWeekend(now)) out.push({ reason: 'weekend', face: 'anchor', text: t.weekend });
   if (p.cashier) out.push({ reason: 'cashier', face: 'grandma', text: t.cashier });
   out.push({ reason: 'day', face: 'grandma', text: p.day > 1 ? fill(t.day, { day: p.day }) : t['day.0'] });
   return out;
@@ -226,6 +225,8 @@ export async function sendReminders(env: Env, now = Date.now()): Promise<number>
       reason: row.reason,
       helper: row.helper && row.helper !== '—' ? row.helper : null,
     };
+    // Запрос уже отобрал тех, у кого день; проверка ещё раз — тем же правилом, что в тестах.
+    if (!daytime(now, player.tz)) continue;
     const reminder = pickReminder(player, now, events);
     try {
       await deliver(token, app, row.id, reminder, lang);

@@ -1025,10 +1025,14 @@ const SONYA_AT = 18;
 const SONYA: Look = { shirt: 0xffffff, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x8f563b, style: 'long', outfit: 'hoodie', outfitTint: 0x68386c, bag: 'backpack', bagTint: 0xfee761 };
 /** Праздничный гость по настоящему календарю (game/live.ts) заходит на этой секунде дня. */
 const LIVE_GUEST_AT = 30;
-/** Праздничные гости: Дед Мороз — как редкий гость из альбома, Снегурочка — в голубой шубке и диадеме, с косой. */
+/**
+ * Праздничные гости: Дед Мороз — весь в красном, с белой бородой, меховым воротником и посохом;
+ * Снегурочка — в голубом, с белым воротником, в диадеме и с косой. Шуба из гардероба (furcoat)
+ * нарисована коричневой и в красный не красится — поэтому пуховик с оттенком (coat) и шарф-воротник.
+ */
 const LIVE_GUEST_LOOKS: Record<GuestId, Look> = {
-  moroz: { shirt: 0xe43b44, pants: 0xe43b44, hair: 0xffffff, style: 'bald', skin: 0xf2d3ab, hat: 'ushanka', hatTint: 0xe43b44, outfit: 'furcoat', face: 'beard', faceTint: 0xffffff, prop: 'cane' },
-  snegurochka: { shirt: 0x9cd8ff, pants: 0x9cd8ff, hair: 0xead4aa, style: 'long', skin: 0xf2d3ab, hat: 'tiara', outfit: 'furcoat', outfitTint: 0x9cd8ff },
+  moroz: { shirt: 0xe43b44, pants: 0xe43b44, coat: 0xe43b44, scarf: 0xffffff, hair: 0xffffff, style: 'bald', skin: 0xf2d3ab, hat: 'ushanka', hatTint: 0xe43b44, face: 'beard', faceTint: 0xffffff, prop: 'cane' },
+  snegurochka: { shirt: 0x9cd8ff, pants: 0x9cd8ff, coat: 0x9cd8ff, scarf: 0xffffff, hair: 0xead4aa, style: 'long', skin: 0xf2d3ab, hat: 'tiara' },
 };
 /** Жюри конкурса приходит на этой секунде дня. */
 const JURY_AT = 40;
@@ -3783,9 +3787,8 @@ export class StoreScene extends Phaser.Scene {
         quantity: 2,
         frequency: 30,
       })).setDepth(-5);
-      // Гирлянда на фасаде и ёлка в зале.
-      this.garland([0xe43b44, 0xfee761, 0x63c74d, 0x0099db], keep);
-      // Ёлка — на улице у входа, чтобы не занимать место в зале.
+      // Гирлянда на фасаде — в applySeason (одна на все праздники); ёлка — на улице у входа,
+      // чтобы не занимать место в зале.
       const { door, h } = this.layout;
       keep(this.art(door.x - 26, h + 12, 'xmas_tree').setDepth(h + 30));
     }
@@ -4049,12 +4052,22 @@ export class StoreScene extends Phaser.Scene {
       scatter(110, (x, y) => keep(this.art(x, y, 'leaf').setTint(rnd.pick([0xf77622, 0xfeae34, 0xb86f50, 0xe43b44])).setAngle(rnd.angle()).setDepth(-9)));
     }
 
-    if (holiday === 'march8') {
-      this.garland([0xf6757a, 0xffffff, 0xe43b44, 0xffd2e2], keep);
-      keep(this.art(door.x - 26, front + 6, 'tulips').setDepth(front + 12));
-    }
+    // Праздник по настоящему календарю (game/live.ts) — поверх времени года игры: 31 декабря Новый год
+    // и в магазине, даже если в игре лето.
+    const live = liveLook(liveEvents(), todayLocal());
+    const look = live ? LIVE_LOOKS[live] : null;
+    // Гирлянда на фасаде — одна: свой праздник игрового года, иначе праздник по календарю, иначе
+    // новогодняя в снегопад.
+    const garland =
+      holiday === 'march8'
+        ? [0xf6757a, 0xffffff, 0xe43b44, 0xffd2e2]
+        : holiday === 'halloween'
+          ? [0xf77622, 0x68386c, 0xfeae34, 0x68386c]
+          : (look?.garland ?? (this.weather === 'snow' ? [0xe43b44, 0xfee761, 0x63c74d, 0x0099db] : null));
+    if (garland) this.garland(garland, keep);
+    // Тюльпаны у входа — к 8 Марта, игровому или настоящему; там же будка Бобика — с ней без тюльпанов.
+    if ((holiday === 'march8' || look?.tulips) && !hasDog(this.state)) keep(this.art(door.x - 26, front + 6, 'tulips').setDepth(front + 12));
     if (holiday === 'halloween') {
-      this.garland([0xf77622, 0x68386c, 0xfeae34, 0x68386c], keep);
       for (const dx of [-20, 18]) {
         keep(this.art(door.x + dx, front + 5, 'pumpkin').setDepth(front + 8));
         // Вечером внутри тыкв горит свет.
@@ -4077,13 +4090,6 @@ export class StoreScene extends Phaser.Scene {
         });
       }
     }
-    // Праздник по настоящему календарю (game/live.ts) — поверх времени года игры: 31 декабря Новый год
-    // и в магазине, даже если в игре лето. Свой праздник игрового года уже украсил улицу — второй раз не вешаем.
-    const live = liveLook(liveEvents(), todayLocal());
-    const look = live ? LIVE_LOOKS[live] : null;
-    if (look && holiday !== 'march8' && holiday !== 'halloween') this.garland(look.garland, keep);
-    // Тюльпаны у входа — на месте летнего ларя с мороженым, поэтому не летом.
-    if (look?.tulips && holiday !== 'march8' && time !== 'summer') keep(this.art(door.x - 26, front + 6, 'tulips').setDepth(front + 12));
     if (holiday === 'newyear') keep(this.art(-40, top - 190, 'snowman').setDepth(top - 180));
     if (holiday === 'newyear' || look?.treeLights) {
       // Разноцветные огоньки на деревьях.
@@ -4143,9 +4149,10 @@ export class StoreScene extends Phaser.Scene {
       { x: door.x + 30, y: h - 30 },
       { x: w - 34, y: h - 14 },
     ];
-    const def = spots.find((p) => free(p.x, p.y));
-    if (!def) return;
+    // Своё место (перестановка) — всегда; стандартное — первое свободное, а все заняты — вещи сегодня нет.
+    const def = spots.find((p) => free(p.x, p.y)) ?? spots[0];
     const p = this.propAt('holiday', def);
+    if (p === def && !free(p.x, p.y)) return;
     const img = this.art(p.x, p.y, item.texture).setDepth(p.y + 8);
     this.obstacles.push({ x: p.x - 7, y: p.y - 8, w: 14, h: 12 });
     this.registerProp('holiday', p, item.texture, { x: -7, y: -8, w: 14, h: 12 });
@@ -11194,14 +11201,21 @@ export class StoreScene extends Phaser.Scene {
     const guest = this.liveGuest;
     if (!guest) return;
     guest.phase = 'here';
-    const { door, sellerHome } = this.layout;
+    const { door, sellerHome, queue } = this.layout;
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, LIVE_GUEST_LOOKS[guest.who]);
     if (!this.lite) sprite.postFX?.addGlow(0xcfe8ff, 3, 0, false, 0.1, 6);
     sound.bell(door.x);
-    await this.walk(sprite, door.x, this.streetY, 34);
-    await this.walk(sprite, door.x, door.y - 10, 34);
-    await this.walk(sprite, sellerHome.x - 18, sellerHome.y + 10, 34);
+    await this.walkVia(
+      sprite,
+      [
+        { x: door.x, y: this.streetY },
+        { x: door.x, y: door.y - 10 },
+        // Рядом с тем, кто платит, — а не на самом прилавке и не в очереди.
+        { x: queue.x - 14, y: queue.y + 10 },
+      ],
+      34,
+    );
     if (!this.sys.isActive()) return;
     const coins = guestCoins(this.state);
     this.state = seeGuest(this.state, guest.date);
@@ -11212,8 +11226,14 @@ export class StoreScene extends Phaser.Scene {
     this.popup(sprite.x, sprite.y - 20, `«${t(`live.guest.${guest.who}.line` as TextKey)}»`, '#cfe8ff');
     this.time.delayedCall(1400, () => this.popup(sellerHome.x - 20, sellerHome.y - 40, t('live.guest.gift', { n: coins }), '#fee761'));
     await this.wait(7000);
-    await this.walk(sprite, door.x, door.y - 10, 34);
-    await this.walk(sprite, door.x, this.layout.h + 16, 34);
+    await this.walkVia(
+      sprite,
+      [
+        { x: door.x, y: door.y - 10 },
+        { x: door.x, y: this.layout.h + 16 },
+      ],
+      34,
+    );
     void this.strollAway(sprite);
     guest.phase = 'done';
   }
@@ -13304,9 +13324,10 @@ export class StoreScene extends Phaser.Scene {
     this.inspector = this.state.plan?.inspection ? 'pending' : 'none';
     this.jury = juryDay(this.state) ? 'pending' : 'none';
     this.sonya = sonyaVisits(this.state) ? 'pending' : 'none';
-    // Праздничный гость — раз за настоящий день, сколько игровых дней ни сыграй.
+    // Праздничный гость — раз за настоящий день, сколько игровых дней ни сыграй. В первый день
+    // (бабушка показывает магазин) не заходит: новичку и так есть на что смотреть.
     const today = todayLocal();
-    const guest = guestDue(this.state, activeEvent(liveEvents(), today), today);
+    const guest = this.state.day > 1 ? guestDue(this.state, activeEvent(liveEvents(), today), today) : null;
     this.liveGuest = guest ? { who: guest, phase: 'pending', date: today } : null;
     this.inspection = null;
     this.rushAnnounced = false;

@@ -2131,7 +2131,7 @@ export const en: Record<TextKey, string> = {
   "live.box.prize": "{need} cards — a free “{item}” for the shop ({n}/{need})",
   "live.box.prizeGot": "🎁 “{item}” is yours — it's in the shop (remove or bring back in Decor).",
   "live.box.guestToday": "{icon} {who} will visit the shop today — with a present!",
-  "live.box.guestSeen": "{icon} {who} already came by today — thanks for opening!",
+  "live.box.guestSeen": "{icon} The guest's present is already yours — {who} says hi!",
   "live.box.guestNext": "{icon} Next guest: {who}, {date}",
   "live.box.pack": "⭐ Optional: “{name}” for {n} ⭐",
   "live.box.packNote": "Optional: the cards, guests and holiday item are free.",

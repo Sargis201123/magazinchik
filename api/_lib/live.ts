@@ -4,8 +4,9 @@
 // Как поменять — docs/EVENTS.md.
 //
 // GET  /api/events → { events, custom } — игра спрашивает при запуске (и держит копию у себя).
-// POST /api/events-edit?key=WEBHOOK_SECRET { events } → сохранить свой календарь (с проверкой);
-//      { reset: true } → вернуть встроенный.
+// POST /api/events-edit { events } → сохранить свой календарь (с проверкой); { reset: true } → вернуть
+//      встроенный. Только для автора: секрет вебхука — в заголовке x-key (адреса запросов попадают в
+//      журналы Cloudflare, заголовки — нет); ?key= в адресе тоже принимается, как у /api/stats.
 
 import { DEFAULT_EVENTS, parseEvents, type LiveEvent } from '../../src/game/live.js';
 import { ready } from './social.js';
@@ -50,7 +51,7 @@ export async function events(_request: Request, env: Env): Promise<Response> {
 }
 
 /**
- * POST /api/events-edit?key=WEBHOOK_SECRET { events: [...] } → { ok, events } или { error, errors }:
+ * POST /api/events-edit (x-key: WEBHOOK_SECRET) { events: [...] } → { ok, events } или { error, errors }:
  * сохранить свой календарь (только целиком верный — иначе список ошибок, ничего не меняется);
  * { reset: true } — удалить свой и вернуться к встроенному.
  */
@@ -58,7 +59,8 @@ export async function eventsEdit(request: Request, env: Env, now = Date.now()): 
   const secret = env.WEBHOOK_SECRET ?? '';
   const db = env.DB;
   if (!secret || !db) return json({ error: 'not_configured' }, 503);
-  if (new URL(request.url).searchParams.get('key') !== secret) return json({ error: 'forbidden' }, 403);
+  const key = request.headers.get('x-key') ?? new URL(request.url).searchParams.get('key');
+  if (key !== secret) return json({ error: 'forbidden' }, 403);
   const body = (await request.json().catch(() => null)) as { events?: unknown; reset?: boolean } | null;
   if (!body) return json({ error: 'bad_json' }, 400);
   await ready(db);
