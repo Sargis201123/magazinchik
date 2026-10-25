@@ -181,7 +181,7 @@ import { reportError, setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propFootprint, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
 import { buildingSpan, iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Point, type Room } from './layout';
 import { BASE_W, crispZoom, homeFrame } from './pixels';
-import { FloorShade, furnitureCasters, lawnShade, lawnTexture, type WearLayer } from './floor';
+import { castsShadow, FloorShade, furnitureCasters, lawnShade, lawnTexture, type WearLayer } from './floor';
 import { addStep, decodeWear, encodeWear, mopWear, MOP_RADIUS, settleWear, WEAR_CELL, wearGrid, wornSpot, type WearGrid } from '../game/wear';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
@@ -13158,6 +13158,8 @@ export class StoreScene extends Phaser.Scene {
       items.push(img);
     }
     items.sort((a, b) => a.y - b.y || a.x - b.x);
+    // Тень на полу — от того, что уже стоит: новинка в коробке её ещё не отбрасывает.
+    if (items.some((img) => castsShadow(img.texture.key)) && this.floor.ready()) this.bakeFloor();
     this.time.delayedCall(1700, () => items.forEach((img, i) => this.time.delayedCall(i * UNBOX_STEP, () => this.unbox(img))));
   }
 
@@ -13214,6 +13216,8 @@ export class StoreScene extends Phaser.Scene {
           img.setData('growing', false).setScale(sx, sy).setY(y);
           this.squash(img, 1.08, 0.9, 110);
           this.newTag(img);
+          // Вещь встала — теперь и тень от неё на полу.
+          if (castsShadow(img.texture.key) && this.floor.ready() && !this.arranging) this.bakeFloor();
         },
       });
     };
