@@ -122,7 +122,7 @@ describe.skipIf(!Database)('заглянуть к конкуренту (серв
     // Ответный визит: магазин обидчика открывается по ключу из уведомления.
     expect((await json<{ shop: unknown }>(rival(await post(5, { action: 'shop', key: inbox.pranks[0].key }), env, now))).shop).not.toBeNull();
     expect((await json<{ ok: boolean }>(rival(await post(5, { action: 'thank', key: inbox.pranks[0].key }), env, now))).ok).toBe(true);
-    expect((await json<{ ok: boolean }>(rival(await post(5, { action: 'thank', key: inbox.pranks[0].key }), env, now))).ok).toBe(false);
+    expect(await json(rival(await post(5, { action: 'thank', key: inbox.pranks[0].key }), env, now))).toEqual({ ok: false, error: 'already' });
     expect((await json<Inbox>(rival(await post(1, { action: 'inbox' }), env, now))).thanks).toEqual(['Тест']);
     expect((await json<Inbox>(rival(await post(1, { action: 'inbox' }), env, now))).thanks).toEqual([]);
   });
@@ -138,5 +138,16 @@ describe.skipIf(!Database)('заглянуть к конкуренту (серв
     const bad = new Request('https://x/api', { method: 'POST', body: JSON.stringify({ initData: 'user=%7B%22id%22%3A1%7D&hash=00', action: 'inbox' }) });
     expect((await rival(bad, env)).status).toBe(401);
     expect(await json(rival(await post(1, { action: 'inbox' }), { DB: env.DB }))).toEqual({ enabled: false });
+  });
+
+  it('много своих: лучшие в рейтинге всё равно находятся по ключу', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
+    await progress(await post(1, { level: 1, revenue: 1 }), env);
+    await progress(await post(5000, { level: 1, revenue: 99_000, shop: { level: 0, day: 2, shelves: [] } }), env);
+    for (let id = 1000; id < 1140; id++) {
+      await env.DB!.prepare('INSERT INTO progress (id, name, day, level, rating, revenue, updated) VALUES (?, ?, 1, 0, 3, 0, ?)').bind(id, 'Друг', Date.now() + id).run();
+      await env.DB!.prepare('INSERT INTO friends (a, b, at) VALUES (?, ?, 0)').bind(1, id).run();
+    }
+    expect((await json<{ shop: unknown }>(rival(await post(1, { action: 'shop', key: await rivalKey(1, 5000, TOKEN) }), env))).shop).not.toBeNull();
   });
 });

@@ -1620,6 +1620,8 @@ export class StoreScene extends Phaser.Scene {
   private dayOpen = false;
   /** «Заглянуть к конкуренту» (game/rival.ts): сейчас в чужом магазине; сколько гостей сегодня увели. */
   private rivalVisit = false;
+  /** На экране утро своего магазина (до «Открыть магазин»): только тогда — новости о проделках и ответный визит. */
+  private inMorning = false;
   private rivalLost = 0;
   /** Когда спрашивали сервер, что натворили у нас; что пришло, пока мы были в гостях. */
   private rivalCheckedAt = 0;
@@ -3132,11 +3134,13 @@ export class StoreScene extends Phaser.Scene {
    * мы в гостях, «Домой» — вернуть свой и утро.
    */
   private async visitRival(key: string | null, name: string): Promise<void> {
+    this.inMorning = false;
+    const res = key ? await fetchRivalShop(key) : null;
+    // Свой магазин — после ответа сервера: пока ждали, в него могли прийти монеты или новости.
     let home = this.state;
     const look = eduardLook(home);
     const stage = EDUARD_STAGES[eduardStage(home) ?? 0];
     const bossName = look === 'mega' ? t('eduard.mega') : t(stage.nameKey);
-    const res = key ? await fetchRivalShop(key) : null;
     const guest = key ? res && friendState(res.shop, home) : friendState(bossShop(home, bossName, stage.rating || 4.2), home);
     if (!guest) {
       toast('assets/ico_cross.png', t('visitShop.title'), t('rival.none', { name }));
@@ -3175,13 +3179,18 @@ export class StoreScene extends Phaser.Scene {
       bar.setBusy(false);
       // Пока ждали сервер, ушли домой — проделка засчитана: награда сразу в свой магазин.
       if (this.state !== guest) {
-        if (done.ok) this.state = usePrank(this.state, kind, !key);
+        if (done.ok && !savingPaused()) {
+          this.state = usePrank(this.state, kind, !key);
+          saveGame(this.state);
+        }
         return;
       }
       const { sellerHome } = this.layout;
       if (!done.ok) {
         if (done.error !== 'too_often' && done.error !== 'offline') bar.setLeft((left = 0));
-        this.popup(sellerHome.x - 20, sellerHome.y - 40, t(`rival.err.${done.error === 'pair' || done.error === 'victim' || done.error === 'too_often' || done.error === 'offline' ? done.error : 'limit'}`), '#ffd0d0');
+        // Неизвестная ошибка (не лимит) — тоже без кнопок, но с понятной надписью.
+        if (done.error === 'bad_kind') done.error = 'gone';
+        this.popup(sellerHome.x - 20, sellerHome.y - 40, t(`rival.err.${done.error === 'pair' || done.error === 'victim' || done.error === 'too_often' || done.error === 'offline' || done.error === 'gone' ? done.error : 'limit'}`), '#ffd0d0');
         sound.bad();
         return;
       }
@@ -3258,14 +3267,15 @@ export class StoreScene extends Phaser.Scene {
    */
   private async checkRivals(): Promise<void> {
     // Вернулись из гостей — показать то, что пришло, пока гуляли.
-    if (this.rivalPending) return void (savingPaused() || this.applyRivalInbox());
+    if (this.rivalPending) return void (this.inMorning && !savingPaused() && this.applyRivalInbox());
     const now = Date.now();
     if (now - this.rivalCheckedAt < 10 * 60_000) return;
     this.rivalCheckedAt = now;
     const inbox = await rivalInbox();
     if (!inbox || (!inbox.pranks.length && !inbox.thanks.length)) return;
     this.rivalPending = inbox;
-    if (!this.rivalVisit && !savingPaused()) this.applyRivalInbox();
+    // Последствия — только к утру этого дня: иначе подождут следующего утра.
+    if (this.inMorning && !this.rivalVisit && !savingPaused()) this.applyRivalInbox();
   }
 
   private applyRivalInbox(): void {
@@ -3291,7 +3301,7 @@ export class StoreScene extends Phaser.Scene {
         if (document.querySelector('.ui-dialog') || document.querySelectorAll('.ui-modal').length > 1 || this.rivalVisit || savingPaused()) return;
         show.remove();
         // Ответный визит — только с утра: утреннее окно закрываем.
-        const morning = !this.dayOpen;
+        const morning = this.inMorning && !this.dayOpen;
         showRivalNews(
           news,
           morning
@@ -12958,6 +12968,7 @@ export class StoreScene extends Phaser.Scene {
       },
       onOpen: () => this.startDay(),
     });
+    this.inMorning = true;
     void this.checkRivals();
   }
 
@@ -12977,6 +12988,7 @@ export class StoreScene extends Phaser.Scene {
 
   private startDay(): void {
     this.dayOpen = true;
+    this.inMorning = false;
     // Магазин открылся: колокольчик двери и мотив «Магазинчика».
     music.sting('day_open');
     // Купленное с утра ждёт в коробках: камера подлетит к магазину — и его распакуют.

@@ -59,7 +59,8 @@ export async function rivalKey(viewer: number, id: number, token: string): Promi
 
 /**
  * Кого игрок может навестить: десять лучших в рейтинге, свои (по приглашениям и коду) и те, кто
- * заходил к нему сам за последнюю неделю (ответить визитом). Себя — нет.
+ * заходил к нему сам за последнюю неделю (ответить визитом). Себя — нет. Своих бывает много —
+ * лучшие и обидчики идут первыми, чтобы их ключи всегда находились.
  */
 async function candidates(db: D1, me: number, now: number): Promise<{ id: number; name: string }[]> {
   return (
@@ -72,6 +73,8 @@ async function candidates(db: D1, me: number, now: number): Promise<{ id: number
           OR id IN (SELECT invitee FROM referrals WHERE inviter IN (SELECT inviter FROM referrals WHERE invitee = ?1))
           OR id IN (SELECT b FROM friends WHERE a = ?1)
           OR id IN (SELECT actor FROM pranks WHERE victim = ?1 AND day >= ?2))
+         ORDER BY (id IN (SELECT id FROM progress ORDER BY revenue DESC LIMIT 10)) DESC,
+                  (id IN (SELECT actor FROM pranks WHERE victim = ?1 AND day >= ?2)) DESC, updated DESC
          LIMIT 120`,
       )
       .bind(me, today(now) - ANSWER_DAYS)
@@ -103,7 +106,7 @@ async function left(db: D1, me: number, victim: number | null, day: number): Pro
  * act: { ok, left } | { ok: false, error: limit | pair | victim | too_often | gone | bad_kind };
  * inbox: { pranks: [{ key, name, spill, trash, lure }], thanks: [name] } — что натворили у меня и кто
  *        поблагодарил за визит (забираются один раз);
- * thank: { ok } — поблагодарить того, кто заходил ко мне (раз в день).
+ * thank: { ok } | { ok: false, error?: already } — поблагодарить того, кто заходил ко мне (раз в день).
  */
 export async function rival(request: Request, env: Env, now = Date.now()): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
@@ -156,7 +159,7 @@ export async function rival(request: Request, env: Env, now = Date.now()): Promi
     const visited = await count(db, 'SELECT COUNT(*) AS n FROM pranks WHERE actor = ? AND victim = ? AND day >= ?', target.id, user.id, day - ANSWER_DAYS);
     if (!visited) return json({ ok: false });
     const res = await db.prepare('INSERT OR IGNORE INTO rival_thanks (sender, receiver, day) VALUES (?, ?, ?)').bind(user.id, target.id, day).run();
-    return json({ ok: (res.meta?.changes ?? 0) > 0 });
+    return (res.meta?.changes ?? 0) > 0 ? json({ ok: true }) : json({ ok: false, error: 'already' });
   }
   if (body.action === 'inbox') {
     // Одним запросом: два одновременных запуска не покажут одно и то же дважды.

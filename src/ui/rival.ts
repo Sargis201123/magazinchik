@@ -48,7 +48,7 @@ export function rivalBar(title: string, left: number, onPrank: (kind: PrankKind)
  * защиты нет. Ответить визитом (только утром; onVisit — null, если магазин уже открыт) или
  * поблагодарить — тому, кто заходил первым.
  */
-export function showRivalNews(news: RivalNews, onVisit: ((key: string, name: string) => void) | null, onThank: (key: string) => Promise<boolean>): void {
+export function showRivalNews(news: RivalNews, onVisit: ((key: string, name: string) => void) | null, onThank: (key: string) => Promise<'ok' | 'already' | 'offline'>): void {
   const { card, close } = openModal();
   card.append(el('h2', '', t('rival.news.title')));
   if (news.visitors.length) card.append(el('p', '', t('rival.news.who', { names: news.visitors.map((v) => v.name).join(', ') })));
@@ -60,8 +60,8 @@ export function showRivalNews(news: RivalNews, onVisit: ((key: string, name: str
   if (first) {
     const thank = button(t('rival.news.thank'), () => {
       thank.disabled = true;
-      void onThank(first.key).then((ok) => {
-        thank.textContent = ok ? t('rival.news.thanked', { name: first.name }) : t('rival.err.offline');
+      void onThank(first.key).then((res) => {
+        thank.textContent = res === 'ok' ? t('rival.news.thanked', { name: first.name }) : res === 'already' ? t('rival.news.already') : t('rival.err.offline');
       });
     }, 'ui-btn secondary');
     if (onVisit) {

@@ -33,9 +33,10 @@ export async function rivalInbox(): Promise<{ pranks: PrankIn[]; thanks: string[
   return { pranks, thanks: (Array.isArray(res.thanks) ? res.thanks : []).slice(0, 20).map((s) => String(s).slice(0, 32)) };
 }
 
-/** «Спасибо за визит» тому, кто к нам заходил: он получит кофе при следующем запуске. */
-export async function thankRival(key: string): Promise<boolean> {
+/** «Спасибо за визит» тому, кто к нам заходил: он получит кофе при следующем запуске. already — уже благодарили сегодня. */
+export async function thankRival(key: string): Promise<'ok' | 'already' | 'offline'> {
   const initData = telegramInitData();
-  if (!initData) return false;
-  return Boolean((await post<{ ok?: boolean }>('/api/rival', { initData, action: 'thank', key }))?.ok);
+  if (!initData) return 'offline';
+  const res = await post<{ ok?: boolean; error?: string }>('/api/rival', { initData, action: 'thank', key });
+  return res?.ok ? 'ok' : res?.error === 'already' ? 'already' : 'offline';
 }

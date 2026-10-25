@@ -148,6 +148,8 @@ export const en: Record<TextKey, string> = {
   'rival.err.pair': 'Enough for this shop today.',
   'rival.err.victim': 'Everyone has been here today — the owner is on guard.',
   'rival.err.too_often': 'Not so fast!',
+  'rival.err.gone': 'This shop isn’t available right now.',
+  'rival.news.already': 'Already said thanks today.',
   'rival.err.offline': 'Didn’t work — the server isn’t responding.',
   'rival.none': '{name}’s shop isn’t available yet — they haven’t played for a while.',
   'rival.news.title': '🥷 Rivals dropped by',
