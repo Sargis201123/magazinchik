@@ -84,25 +84,50 @@ export function canvasCap(tier: 'lite' | 'normal' | 'high'): number {
  * • ровный — пиксель рисунка ровно в 1, 2, 3… пикселя холста (zoom кратен art): все пиксели одной ширины;
  * • целый — точка мира в целое число пикселей (zoom 3 при art 2): пиксели рисунка через один шире
  *   (1 и 2), но узор не меняется, когда человек идёт или камера едет, — без ряби.
- * Берём ближайший по отношению, не дальше чем на 20% в любую сторону. Пределов max может быть несколько —
- * по порядку, какой кадр лучше (с краем флигеля, потом хотя бы весь зал): сначала ровный под каждый из них,
- * и только потом целый. Ни того ни другого рядом нет — 0 (что тогда делать, решает тот, кто спрашивает).
+ * Берём ближайший по отношению, не дальше чем на 20% в любую сторону. Ни того ни другого рядом нет — 0
+ * (что тогда делать, решает тот, кто спрашивает).
  */
-export function crispZoom(zoom: number, art: number, min = 0, ...max: number[]): number {
+export function crispZoom(zoom: number, art: number, min = 0, max = Infinity): number {
   if (!(zoom > 0)) return 0;
-  const nearest = (step: number, limit: number): number => {
-    const fits = (z: number) => z > 0 && z >= min - 1e-9 && z <= limit + 1e-9 && z / zoom >= ZOOM_OUT - 1e-9 && z / zoom <= ZOOM_IN + 1e-9;
+  const fits = (z: number) => z > 0 && z >= min - 1e-9 && z <= max + 1e-9 && z / zoom >= ZOOM_OUT - 1e-9 && z / zoom <= ZOOM_IN + 1e-9;
+  for (const step of [art, 1]) {
     let best = 0;
     for (const z of [Math.floor(zoom / step) * step, Math.ceil(zoom / step) * step]) {
       if (fits(z) && (!best || Math.abs(Math.log(z / zoom)) < Math.abs(Math.log(best / zoom)))) best = z;
     }
-    return best;
-  };
-  for (const step of [art, 1]) {
-    for (const limit of max.length ? max : [Infinity]) {
-      const z = nearest(step, limit);
-      if (z) return z;
-    }
+    if (best) return best;
   }
   return 0;
+}
+
+/**
+ * Насколько обычный кадр может быть мельче «впритык» ради ровного масштаба: на 15%. Дальше по бокам
+ * уже широкие полосы газона, а люди и товар заметно мельче — тогда лучше дробный масштаб впритык.
+ */
+export const HOME_SLACK = 0.85;
+
+/**
+ * Масштаб обычного кадра. fit — «впритык»: крупнее нельзя, иначе за край экрана уйдёт флигель слева
+ * (склад, пекарня, кофейня, кухня с табличками) или правая стена. Берём самый крупный ровный (кратный art)
+ * не крупнее fit; нет такого — самый крупный целый; но не мельче fit больше чем на HOME_SLACK. Ни того
+ * ни другого — сам fit, дробный: весь магазин в кадре важнее ровных пикселей.
+ */
+export function homeZoom(fit: number, art: number): number {
+  if (!(fit > 0)) return 0;
+  for (const step of [art, 1]) {
+    // Запас на округление: fit бывает «ровно 5» с хвостом 4,999999…
+    const z = Math.floor(fit / step + 1e-9) * step;
+    if (z > 0 && z >= fit * HOME_SLACK - 1e-9) return z;
+  }
+  return fit;
+}
+
+/**
+ * Обычный кадр: по ширине целиком отрезок мира span (здание с флигелем и запасом по бокам), по высоте —
+ * viewH точек мира в availH пикселях холста (между верхней и нижней панелями). Масштаб — homeZoom,
+ * середина по ширине — посередине отрезка, на целой точке мира (камера в покое не сдвинута на полпикселя).
+ */
+export function homeFrame(width: number, availH: number, span: { left: number; right: number }, viewH: number, art: number): { zoom: number; x: number } {
+  const fit = Math.min(width / (span.right - span.left), availH / viewH);
+  return { zoom: homeZoom(fit, art), x: Math.round((span.left + span.right) / 2) };
 }

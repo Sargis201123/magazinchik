@@ -18,9 +18,11 @@ export interface DayReport {
   /** Сколько раз сочли дорогим и сколько раз не нашли на полке. */
   pricey: Partial<Record<ProductId, number>>;
   missing: Partial<Record<ProductId, number>>;
+  /** Кухня (kitchen.ts): продано порций, сколько раз хотели порцию (и кому не хватило) и сколько списали ночью. */
+  kitchen?: { sold: number; wanted: number; spoiled: number };
 }
 
-export function addReport(state: StoreState, day: number, stats: DayStats, spoiled: Partial<Record<ProductId, number>>): StoreState {
+export function addReport(state: StoreState, day: number, stats: DayStats, spoiled: Partial<Record<ProductId, number>>, dishSpoiled = 0): StoreState {
   const row: DayReport = {
     day,
     revenue: stats.revenue,
@@ -30,6 +32,8 @@ export function addReport(state: StoreState, day: number, stats: DayStats, spoil
     spoiled: { ...spoiled },
     pricey: { ...(stats.pricey ?? {}) },
     missing: { ...(stats.missing ?? {}) },
+    // Кухня работала: по этой строке повар «по спросу» и закупка знают, сколько порций берут.
+    ...(stats.dishWanted !== undefined || dishSpoiled ? { kitchen: { sold: stats.dishes ?? 0, wanted: stats.dishWanted ?? 0, spoiled: dishSpoiled } } : {}),
   };
   return { ...state, reports: [...(state.reports ?? []), row].slice(-REPORT_DAYS) };
 }

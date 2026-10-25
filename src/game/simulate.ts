@@ -5,7 +5,7 @@
 import { noteLost } from './losses';
 import { isBroke } from './tips';
 import { loanOptions, takeLoan } from './bank';
-import { cook, DISHES, DISH_IDS, sellDish } from './kitchen';
+import { cook, cookBatch, cookRoundsPerDay, DISHES, DISH_IDS, kitchenNeeds, kitchenWorking, sellDish, servePortions, takeIngredients } from './kitchen';
 import { answerStaffEvent, eventCost } from './staffEvents';
 import { answerTale, taleToday } from './tales';
 import { answerOpening, BUILDINGS, districtNews } from './district';
@@ -65,6 +65,7 @@ import {
   staffOf,
   roleOpen,
   thiefChance,
+  type StaffMember,
   type StaffRole,
   type StoreState,
   cashierScan,
@@ -84,7 +85,7 @@ import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } fro
 import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY, OWN_PRODUCTS } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
-import { buyRegister, CASHIER_ROLES, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from './registers';
+import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole, RELIEF_ROLE, TILL_ROLES } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
 import { weatherFor } from './weather';
@@ -97,6 +98,7 @@ import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
+import { deliveryDay } from './delivery';
 import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
 import { buyRadio, hasRadio, radioPatience, RADIO_PRICE, radioTolerance, setStation } from './radio';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
@@ -186,7 +188,8 @@ export type Feature =
   | 'brand'
   | 'cafe'
   | 'kitchen'
-  | 'rush';
+  | 'rush'
+  | 'delivery';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -198,20 +201,36 @@ const AVG_WANTS = 1.5;
 const NAIVE_STOCK = 8;
 
 /** Когда разумный игрок нанимает людей: по мере того, как один не справляется. */
-// Кассир — первым: остальные места не занимаем, пока за кассой стоит сам хозяин.
-const HIRE_WHEN: [StaffRole, (state: StoreState) => boolean][] = [
-  ['cashier', (s) => expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 1.2],
+type Hire = (state: StoreState) => StaffRole | null;
+const want =
+  (role: StaffRole, need: (state: StoreState) => boolean): Hire =>
+  (s) =>
+    !staffOf(s, role) && need(s) ? role : null;
+/**
+ * Ещё один кассир — когда гостей больше, чем пробьют хозяин и уже нанятые (n — сколько их уже).
+ * Кого именно — решает nextCashierRole: за свободную кассу (её докупим), а нет своих касс — сменщика.
+ */
+const cashier =
+  (n: number, need: number): Hire =>
+  (s) =>
+    cashierCount(s) === n && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * need ? nextCashierRole(s) : null;
+const hasCashier = (s: StoreState): boolean => cashierCount(s) > 0;
+// Кассир — первым: остальные места не занимаем, пока хозяин один на всё.
+const HIRE_WHEN: Hire[] = [
+  cashier(0, 1.2),
   // Пекарь и бариста — как только есть печь и кофейня: без них флигель стоит.
-  ['baker', (s) => roleOpen(s, 'baker')],
-  ['barista', (s) => roleOpen(s, 'barista')],
-  ['loader', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
-  ['guard', (s) => s.level >= 2 && Boolean(staffOf(s, 'cashier'))],
-  ['cleaner', (s) => s.level >= 3 && Boolean(staffOf(s, 'cashier'))],
-  // Кассиры на остальные кассы — когда есть место под кассу и гостей больше, чем пробьют уже нанятые.
-  ['cashier2', (s) => registerSlots(s) >= 2 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 2],
-  ['cashier3', (s) => registerSlots(s) >= 3 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 3],
-  ['cashier4', (s) => registerSlots(s) >= 4 && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * 4],
-  ['manager', (s) => s.level >= 3 && s.staff.length >= 4],
+  want('baker', (s) => roleOpen(s, 'baker')),
+  want('barista', (s) => roleOpen(s, 'barista')),
+  // Повар — как только есть кухня: без него готовить приходится утром самому.
+  want('cook', (s) => roleOpen(s, 'cook')),
+  want('loader', (s) => s.level >= 2 && hasCashier(s)),
+  want('guard', (s) => s.level >= 2 && hasCashier(s)),
+  want('cleaner', (s) => s.level >= 3 && hasCashier(s)),
+  // Ещё кассиры — когда гостей больше, чем пробьют уже нанятые.
+  cashier(1, 2),
+  cashier(2, 3),
+  cashier(3, 4),
+  want('manager', (s) => s.level >= 3 && s.staff.length >= 4),
 ];
 
 /** Для решения «пора нанимать кассира»: примерно столько успевает один человек. */
@@ -222,25 +241,32 @@ const AVG_BASKET = 1.4;
 const ownerAtRegister = (level: number): number => 0.65 - 0.07 * level;
 /** Подойти к кассе и отойти — секунды на каждого покупателя. */
 const QUEUE_STEP_SECONDS = 0.3;
+/** Хозяин собирает заказ на дом: сходить на склад, уложить коробку, вынести курьеру. */
+const OWNER_PACK_SECONDS = 8;
+/** Столько секунд кассы в среднем уходит на одного покупателя у хозяина (для «пока собирал заказ»). */
+const OWNER_SECONDS_PER_GUEST = 2.5;
 
-/** Сколько покупателей реально пробить за день: пробивка занимает время и зависит от навыка. */
-function serveCapacity(state: StoreState): number {
+/**
+ * Сколько покупателей реально пробить за день (total) и сколько из них — сам хозяин (owner):
+ * пробивка занимает время и зависит от навыка.
+ */
+function serveCapacity(state: StoreState): { total: number; owner: number } {
   // Старая касса иногда заедает — в среднем столько секунд на покупателя.
   const jam = registerJam(state) * REGISTER_JAM_SECONDS;
   const owner = checkoutSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
-  const ownerCap = Math.floor((DAY_SECONDS * ownerAtRegister(state.level)) / owner);
-  // Каждая касса: свой кассир или (одна, первая свободная) — хозяин между другими делами.
-  let total = 0;
-  let ownerUsed = false;
-  for (const role of CASHIER_ROLES.slice(0, registerCount(state))) {
+  const share = ownerAtRegister(state.level);
+  const ownerCap = Math.floor((DAY_SECONDS * share) / owner);
+  const cashierCap = (m: StaffMember, part: number) =>
+    Math.floor((DAY_SECONDS * part) / (checkoutSeconds(withUpgrades(state, cashierScan(m)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam));
+  // Первая касса — хозяина: он за ней между другими делами, а пока он в зале — сменщик (если нанят).
+  const relief = staffOf(state, RELIEF_ROLE);
+  let total = ownerCap + (relief ? cashierCap(relief, 1 - share) : 0);
+  // Остальные кассы — у каждой свой кассир; без кассира касса стоит закрытой.
+  for (const role of TILL_ROLES.slice(0, registerCount(state) - 1)) {
     const m = staffOf(state, role);
-    if (m) total += Math.floor(DAY_SECONDS / (checkoutSeconds(withUpgrades(state, cashierScan(m)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam));
-    else if (!ownerUsed) {
-      total += ownerCap;
-      ownerUsed = true;
-    }
+    if (m) total += cashierCap(m, 1);
   }
-  return total;
+  return { total, owner: ownerCap };
 }
 
 export function simulate({
@@ -350,15 +376,18 @@ export function simulate({
     const tired = state.staff.find((m) => isTired(m) && m.offDay !== state.day + 1);
     if (tired) state = giveDayOff(state, tired.role) ?? state;
     if (hireStaff) {
-      const role = HIRE_WHEN.find(([r, need]) => !staffOf(state, r) && need(state))?.[0];
+      const role = HIRE_WHEN.reduce<StaffRole | null>((found, next) => found ?? next(state), null);
       // Под нового кассира сначала ставим кассу.
       const price = nextRegisterPrice(state);
       if (role && registerOfRole(role) >= registerCount(state) && price !== null && state.money >= reserve + price) state = buyRegister(state) ?? state;
+      // Касса так и не встала (не хватило денег) — кассира за неё пока не берём: стоял бы без дела.
+      const seat = role && registerOfRole(role) < registerCount(state);
       // Берём самого быстрого; «тормоз» за кассой навсегда упирает магазин в потолок.
       const candidate =
         role &&
+        seat &&
         candidatesFor(state.day, 0, role)
-          .filter((c) => c.trait !== 'sticky' && !(role === 'cashier' && c.trait === 'slowpoke'))
+          .filter((c) => c.trait !== 'sticky' && !(isCashierRole(role) && c.trait === 'slowpoke'))
           .sort((a, b) => workSpeed(b) - workSpeed(a))[0];
       if (candidate && state.staff.length < staffLimit(state) && state.money >= reserve + candidate.wage) {
         state = hire(state, candidate) ?? state;
@@ -376,6 +405,7 @@ export function simulate({
       ['oven', 'wholesale'],
       ['coffee', 'coffeeTables'],
       ['kitchen', 'kitchen'],
+      ['delivery', 'delivery'],
     ];
     // Дорогое «для удобства» (ночная смена, новые модели) разумный игрок берёт, когда уже не копит на расширение.
     const nextLevel = nextStoreLevel(state);
@@ -447,8 +477,8 @@ export function simulate({
       state = refillRack(state, 999) ?? state;
     }
     if (features.coffee && hasUpgrade(state, 'coffee')) state = buyCups(state, 999) ?? state;
-    // Кухня: по закладке каждого блюда, на что хватает продуктов.
-    if (features.kitchen) for (const id of DISH_IDS) state = cook(state, id) ?? state;
+    // Кухня без повара: утром по закладке каждого блюда, на что хватает продуктов (с поваром — днём, ниже).
+    if (features.kitchen && !kitchenWorking(state)) for (const id of DISH_IDS) state = cook(state, id) ?? state;
     // «Чёрная пятница района» — каждые 6-й и 7-й дни недели (как суббота и воскресенье).
     state = { ...state, rush: (features.rush && state.day % 7 >= 5) || undefined };
     // Просьбы сотрудников и истории покупателей: соглашается, если деньги есть с запасом.
@@ -540,6 +570,8 @@ export function simulate({
       0,
     );
     const otherWeight = sellable.filter((p) => !OWN_PRODUCTS.includes(p)).reduce((sum, p) => sum + weight(p), 0);
+    // Повару на кухню — сверху к спросу зала.
+    const forKitchen = features.kitchen ? kitchenNeeds(state) : {};
     if (buyMode === 'restock') {
       const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state));
       for (const line of plan.lines) {
@@ -569,7 +601,7 @@ export function simulate({
         .filter((s) => s.kind === PRODUCTS[id].category)
         .reduce((sum, s) => sum + shelfCapacity(s), 0);
       const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category && !OWN_PRODUCTS.includes(p)).length;
-      const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0);
+      const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0) + (forKitchen[id] ?? 0);
       const target = Math.ceil(Math.min(demand * 1.1, shareOfShelf + CARRY * 2)) + order;
       const have = onShelves(state, id) + warehouseOf(state, id);
       let qty = Math.max(0, target - have);
@@ -602,8 +634,23 @@ export function simulate({
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
     // С котом в очереди ждут дольше — уходят реже.
     const lossInQueue =
-      (queueLoss ?? (has('cashier') ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state) / radioPatience(state) / signagePatience(state) / cartPatience(state);
-    const serveCap = serveCapacity(state);
+      (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state) / radioPatience(state) / signagePatience(state) / cartPatience(state);
+    // Доставка на дом: звонки идут весь день, а здесь заказы забирают товар раньше покупателей
+    // (осторожная оценка). Без менеджера и грузчика заказ собирает хозяин — это время не за кассой
+    // (сменщик, если нанят, в это время стоит за его кассой).
+    let packTime = 0;
+    if (features.delivery && hasUpgrade(state, 'delivery')) {
+      const delivery = deliveryDay(state, extraRandom);
+      state = delivery.state;
+      stats.revenue += delivery.pay;
+      stats.deliveries = delivery.delivered;
+      stats.deliveryPay = delivery.pay;
+      stats.deliveryTips = delivery.tips;
+      stats.deliveryMissed = delivery.missed;
+      if (!has('manager') && !has('loader') && !has('cashier')) packTime = delivery.delivered * OWNER_PACK_SECONDS;
+    }
+    const capacity = serveCapacity(state);
+    const serveCap = Math.max(0, capacity.total - Math.round(packTime / OWNER_SECONDS_PER_GUEST));
     // Грязь: уборщик, а ещё вход (грязь с улицы) и туалет (gear.ts).
     const dirtComplaint = (has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level) * (0.6 + 0.2 * entranceMud(state) + 0.2 * wcDirt(state));
     const guard = staffOf(state, 'guard');
@@ -631,14 +678,17 @@ export function simulate({
           coffee += coffeePrice(state);
         }
       }
-      if (features.kitchen && !night) {
-        const dish = sellDish(state, extraRandom);
-        if (dish) {
-          state = dish.state;
-          extra += DISHES[dish.dish].price;
-        }
-      }
       return extra;
+    };
+    // Порция с кухни — после чека (иначе чек затёр бы убыль в витрине): по ней повар считает спрос, ночью списывают остаток.
+    const dishExtra = (night: boolean): number => {
+      const dish = features.kitchen && !night ? sellDish(state, extraRandom) : null;
+      if (!dish) return 0;
+      stats.dishWanted = (stats.dishWanted ?? 0) + 1;
+      if (!dish.dish) return 0;
+      state = { ...dish.state, money: dish.state.money + DISHES[dish.dish].price };
+      stats.dishes = (stats.dishes ?? 0) + 1;
+      return DISHES[dish.dish].price;
     };
     const runGuests = (count: number, tolerance: number, cap: number, night: boolean) => {
     for (let g = 0; g < count; g++) {
@@ -709,8 +759,9 @@ export function simulate({
       const paid = checkout(state, cart, night ? NIGHT_MARKUP : 1);
       const extra = extras(night) + (extraRandom() < catTipChance(state) ? CAT_TIP : 0);
       state = { ...paid.state, money: paid.state.money + extra };
-      stats.revenue += paid.total + extra;
-      if (night) nightRevenue += paid.total + extra;
+      const dish = dishExtra(night);
+      stats.revenue += paid.total + extra + dish;
+      if (night) nightRevenue += paid.total + extra + dish;
       stats.served++;
       recordSale(stats, cart);
       if (hasUnmarkedBad(cart) && random() < BAD_COMPLAINT_CHANCE) stats.complaints++;
@@ -718,13 +769,39 @@ export function simulate({
     }
     };
     let nightRevenue = 0;
+    // Повар готовит весь день: перед каждой четвертью дня ставит кастрюли — сколько успеет и сколько разберут.
+    const chef = features.kitchen && kitchenWorking(state) ? staffOf(state, 'cook') : undefined;
+    let cookRounds = chef ? cookRoundsPerDay(state, DAY_SECONDS, workSpeed(chef)) : 0;
+    const perQuarter = Math.ceil(cookRounds / 4);
+    const cookFor = (dayLeft: number) => {
+      for (let r = 0; r < perQuarter && cookRounds > 0; r++) {
+        const batch = cookBatch(state, dayLeft);
+        if (!batch.length) break;
+        for (const id of batch) {
+          const taken = takeIngredients(state, id);
+          if (taken) state = servePortions(taken, id);
+        }
+        cookRounds--;
+      }
+    };
+    // Гости части дня (от доли start, длиной share): с поваром — по четвертям, между ними он готовит.
+    const dayPart = (count: number, start: number, share: number) => {
+      const parts = chef ? Math.max(1, Math.round(share * 4)) : 1;
+      let done = 0;
+      for (let i = 0; i < parts; i++) {
+        if (chef) cookFor(1 - start - (share * i) / parts);
+        const n = Math.round((count * (i + 1)) / parts) - done;
+        runGuests(n, 1, serveCap, false);
+        done += n;
+      }
+    };
     if (hasUpgrade(state, 'eTags')) {
       // Электронные ценники: к вечеру то, что испортится ночью, уценяется само.
       const evening = Math.round(dayGuests * ETAGS_EVENING);
-      runGuests(dayGuests - evening, 1, serveCap, false);
+      dayPart(dayGuests - evening, 0, 1 - ETAGS_EVENING);
       state = markdownSurplus(state, (id) => eveningSales(stats.sold[id] ?? 0)).state;
-      runGuests(evening, 1, serveCap, false);
-    } else runGuests(dayGuests, 1, serveCap, false);
+      dayPart(evening, 1 - ETAGS_EVENING, ETAGS_EVENING);
+    } else dayPart(dayGuests, 0, 1);
     // Ночная смена: гостей меньше, к ценам терпимее, касса успевает пропорционально времени.
     let nightProfit = 0;
     if (features.night && hasUpgrade(state, 'nightShift')) {
@@ -760,7 +837,9 @@ export function simulate({
     }
 
     // ---------- Ночь ----------
-    if (!has('cashier')) state = { ...state, ownerServed: state.ownerServed + stats.served };
+    // Навык кассы растёт у хозяина: его доля пробитых (за первой кассой он всегда сам).
+    const byOwner = serveCap > 0 ? Math.min(capacity.owner, Math.round((stats.served * capacity.owner) / serveCap)) : 0;
+    state = { ...state, ownerServed: state.ownerServed + byOwner };
     state = recordDay(state, stats);
     const night = nightCycle(state, stats, random);
     const before = night.state;

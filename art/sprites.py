@@ -2287,6 +2287,74 @@ def cars():
     lamp.rect(2, 6, 2, 4, "R")
     lamp.rect(2, 28, 2, 4, "R")
     lamp.save("car_truck_lights")
+    cars_vertical()
+
+
+def cars_vertical():
+    """Легковые носом вверх (_up) и вниз (_down), 36×72 — для парковки и проезда к ней.
+
+    Сверху видна крыша, снизу (к зрителю) — задний борт со стоп-сигналами или перед с фарами,
+    тень — под нижним краем, как у машин, что едут вбок. Кузов белый — под тинт, фары отдельно.
+    """
+    # Вид: кузов x0..x1 × y0..y1, колёса (по высоте), крыша (откуда от носа, длина),
+    # лобовое и заднее стекло, у фургона — высокая крыша с ребром.
+    specs = {
+        "car_sedan": dict(x0=6, x1=30, y0=3, y1=67, wheels=(13, 49), roof=(17, 30), front=8, rear=6),
+        "car_hatch": dict(x0=7, x1=29, y0=9, y1=63, wheels=(15, 45), roof=(11, 37), front=7, rear=4),
+        "car_taxi": dict(x0=6, x1=30, y0=3, y1=67, wheels=(13, 49), roof=(17, 30), front=8, rear=6, taxi=True),
+        "car_van": dict(x0=4, x1=32, y0=2, y1=70, wheels=(11, 51), roof=(10, 55), front=7, rear=0, van=True),
+    }
+    for name, s in specs.items():
+        for up in (True, False):
+            x0, x1, y0, y1 = s["x0"], s["x1"], s["y0"], s["y1"]
+            # Нос сверху (вверх) или снизу (вниз): всё, что считается от носа, зеркалим по длине кузова.
+            def span(d, h):
+                return y0 + d if up else y1 - d - h
+
+            c = Canvas(36, 72)
+            for wy in s["wheels"]:
+                c.rect(x0 - 1, wy, 3, 9, "k")
+                c.rect(x1 - 2, wy, 3, 9, "k")
+            c.round_rect(x0, y0, x1 - x0, y1 - y0, "1", r=4)
+            rx0, rw = x0 + 3, x1 - x0 - 6
+            d, length = s["roof"]
+            ry = span(d, length)
+            c.round_rect(rx0, ry, rw, length, "2", r=2 if s.get("van") else 3)
+            # Лобовое — у носа, заднее — у багажника.
+            c.rect(rx0, span(d, s["front"]), rw, s["front"], "u")
+            if s["rear"]:
+                c.rect(rx0, span(d + length - s["rear"], s["rear"]), rw, s["rear"], "u")
+            glint = span(d + 2, 1)
+            c.hline(rx0 + 1, glint, 5, "c")
+            if s.get("van"):
+                c.vline(18, span(d + s["front"] + 3, length - s["front"] - 6), length - s["front"] - 6, "3")
+            else:
+                side = span(d + s["front"] + 1, length - s["front"] - s["rear"] - 2)
+                c.vline(rx0, side, length - s["front"] - s["rear"] - 2, "U")
+                c.vline(rx0 + rw - 1, side, length - s["front"] - s["rear"] - 2, "U")
+            if s.get("taxi"):
+                for y in range(y0 + 2, y1 - 3, 4):
+                    c.rect(x0, y, 2, 2, "k")
+                    c.rect(x1 - 2, y + 2, 2, 2, "k")
+                c.rect(15, 33, 6, 6, "w")
+                c.rect(16, 34, 4, 4, "R")
+            # Борт к зрителю: задний (едет вверх) или передний с решёткой (едет вниз).
+            c.hline(x0 + 3, y1 - 2, x1 - x0 - 6, "3")
+            c.hline(x0 + 3, y1 - 1, x1 - x0 - 6, "4")
+            if not up:
+                c.hline(x0 + 8, y1 - 2, x1 - x0 - 16, "k")
+            c.outline("k")
+            suffix = "up" if up else "down"
+            shadowed(c, 18, y1 - 1, (x1 - x0) / 2 + 3, 4.5).save(f"{name}_{suffix}")
+            # Фары и стоп-сигналы: у носа — жёлтые, у багажника — красные.
+            lamp = Canvas(36, 72)
+            near = (y1 - 3, y1 - 2)  # борт к зрителю
+            far = (y0 + 1, y0 + 2)  # дальний край
+            front, back = (far, near) if up else (near, far)
+            for x in (x0 + 2, x1 - 6):
+                lamp.rect(x, front[0], 4, 2, "Y")
+                lamp.rect(x, back[0], 4, 2, "R")
+            lamp.save(f"{name}_{suffix}_lights")
 
 
 def floors():
@@ -3699,14 +3767,7 @@ def cat_sitting():
 
 
 def stage11():
-    """Телефон у кассы, велосипед курьера и мышь (два кадра бега)."""
-    c = Canvas(10, 8)
-    c.round_rect(0, 3, 10, 5, "R", r=1)
-    c.hline(1, 4, 8, "s")
-    c.rect(3, 5, 4, 2, "W")
-    c.round_rect(1, 0, 8, 3, "r", r=1)
-    c.outline("k")
-    c.save("phone")
+    """Велосипед курьера и мышь (два кадра бега). Телефон у кассы и мопед — в art/delivery.py."""
     c = Canvas(22, 14)
     for cx in (5, 16):
         c.ellipse(cx, 9, 4.2, 4.2, "k")
@@ -5143,6 +5204,9 @@ def main():
     import rooms
 
     rooms.main()
+    import kitchen
+
+    kitchen.main()
     import patterns
 
     patterns.main()
@@ -5155,6 +5219,10 @@ def main():
     import icons2
 
     icons2.main()
+    # Доставка на дом: телефон, посылка, мопед, значки транспорта (до атласа значков) и портреты звонящих.
+    import delivery
+
+    delivery.main()
     # Атлас значков для холста — из готовых ico_*, поэтому после icons2.
     icons.atlas()
     import clockface
