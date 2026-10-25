@@ -6239,6 +6239,8 @@ export class StoreScene extends Phaser.Scene {
       this.adObjs.push(obj);
       return obj;
     };
+    /** Бесконечный твин рекламы: при смене реклам без пересборки мира его надо остановить (stop снимает его с менеджера). */
+    const keepTween = (tween: Phaser.Tweens.Tween) => keep({ destroy: () => void tween.stop() });
     /** Стоит у входа и не участвует в жизни покупателей. */
     const extra = (x: number, y: number, look: Look, facing: Facing) => {
       const person = keep(this.makePerson(x, y, look));
@@ -6264,7 +6266,7 @@ export class StoreScene extends Phaser.Scene {
     };
     if (ads.has('banner')) {
       const banner = keep(this.art(door.x - 44, h + 4, 'ad_banner').setDepth(h + 44));
-      this.tweens.add({ targets: banner, angle: { from: -1.5, to: 1.5 }, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      keepTween(this.tweens.add({ targets: banner, angle: { from: -1.5, to: 1.5 }, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }));
     }
     if (ads.has('city')) {
       // Городская кампания: флажки во всю ширину фасада.
@@ -6301,7 +6303,7 @@ export class StoreScene extends Phaser.Scene {
         const fan = extra(star.x + dx, star.y + 8 + (i % 2) * 3, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day), dx < 0 ? 'right' : 'left');
         if (this.lite) return;
         // Фанаты подпрыгивают от восторга.
-        this.tweens.add({ targets: fan, y: fan.y - 2, duration: 260, yoyo: true, repeat: -1, repeatDelay: 900 + i * 370, ease: 'Sine.easeOut' });
+        keepTween(this.tweens.add({ targets: fan, y: fan.y - 2, duration: 260, yoyo: true, repeat: -1, repeatDelay: 900 + i * 370, ease: 'Sine.easeOut' }));
       });
     } else if (ads.has('blogger')) {
       // Блогер снимает обзор у входа: блёстки вокруг.
@@ -8826,13 +8828,16 @@ export class StoreScene extends Phaser.Scene {
     this.art(counter.x + 2, counter.y - 20, item.texture).setOrigin(0.5, 1).setDepth(counter.y + 21);
   }
 
-  /** Вещи у входа на тротуаре: кадки с цветами по бокам двери или меловая доска-штендер. */
+  /**
+   * Вещи у входа на тротуаре: кадки с цветами по бокам от входа или меловая доска-штендер. У самой двери
+   * места заняты (урна, Бобик, подсолнухи, доска отзывов, промоутер, скамейка) — ставим чуть дальше.
+   */
   private buildOutdoorDecor(): void {
     const item = activeDecor(this.state, 'outdoor');
     if (!item?.texture) return;
     const { door } = this.layout;
     const top = this.streetY - 12;
-    const spots = item.id === 'out_planters' ? [door.x - 17, door.x + 17] : [door.x + 24];
+    const spots = item.id === 'out_planters' ? [door.x - 60, door.x + 62] : [door.x - 50];
     for (const x of spots) this.art(x, top + 9, item.texture).setOrigin(0.5, 1).setDepth(top + 9);
   }
 

@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { newGame } from '../src/game/economy';
 import { activeDecor, buyDecor, DECOR, DECOR_KINDS, decorItem, normalizeDecor, setDecor, type DecorId, type DecorState } from '../src/game/decor';
@@ -57,11 +56,12 @@ describe('оформление за монеты: второй набор и ц�
   });
 
   it('каждая картинка оформления есть в списке текстур и лежит в public/assets', () => {
+    const files = Object.keys(import.meta.glob('../public/assets/*.png'));
     // Наряды хозяина — слои костюма (scenes/wardrobe), а не отдельная картинка.
     for (const d of DECOR) {
       if (!d.texture || d.kind === 'outfit') continue;
       expect(TEXTURES).toContain(d.texture);
-      expect(existsSync(`public/assets/${d.texture}.png`)).toBe(true);
+      expect(files).toContain(`../public/assets/${d.texture}.png`);
     }
   });
 
