@@ -643,8 +643,10 @@ export interface StoreState {
   trick?: Trick;
   /** Ночные гости: долг студента, таксист рассказал о нас (nightGuests.ts). */
   nightGuests?: NightState;
-  /** Готовые порции на кухне (kitchen.ts). */
+  /** Готовые порции на полке «Еда» у входа (kitchen.ts; в старых сохранениях — «в витрине кухни», те же порции). */
   kitchen?: Partial<Record<DishId, number>>;
+  /** Кладовая кухни (kitchen.ts): продукты, которые кухня сама закупила у поставщиков, — штук каждого. */
+  pantry?: Partial<Record<ProductId, number>>;
   /** Меню дня для повара (kitchen.ts): какие блюда готовить; не задано — «авто». */
   cookMenu?: DishId[];
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */
@@ -757,6 +759,8 @@ export interface DayStats {
   /** Кухня: сколько порций продали и сколько раз хотели порцию (вместе с теми, кому не хватило). */
   dishes?: number;
   dishWanted?: number;
+  /** Сколько кухня потратила за день на продукты в свою кладовую (утром и докупая днём). */
+  kitchenSpent?: number;
   /** Почему ушли без покупки (losses.ts) и каких товаров не хватило или показались дорогими. */
   lostWhy?: Partial<Record<LostReason, number>>;
   missing?: Partial<Record<ProductId, number>>;

@@ -96,7 +96,8 @@ describe('новые механики', () => {
 });
 
 describe('кухня с поваром', () => {
-  // Опытный игрок со всеми механиками: кухня (повар, продукты, списание) окупается, но главной статьёй не становится.
+  // Опытный игрок со всеми механиками: кухня (повар, своя закупка продуктов, полка «Еда», списание) окупается,
+  // но главной статьёй не становится.
   const ALL = { candy: true, coffee: true, oven: true, night: true, cat: true, cart: true, loyalty: true, gear: true, etags: true, departments: true, skills: true, radio: true, brand: true, cafe: true, rush: true };
   const lateProfit = (kitchen: boolean) => {
     let sum = 0;
@@ -107,10 +108,10 @@ describe('кухня с поваром', () => {
     return sum / 4;
   };
 
-  it('прибыль в день к концу — не меньше, чем без кухни, и не больше чем на четверть', () => {
+  it('прибыль в день к концу — больше, чем без кухни (своя закупка окупается), но не больше чем на четверть', () => {
     const without = lateProfit(false);
     const withKitchen = lateProfit(true);
-    expect(withKitchen).toBeGreaterThan(without * 0.98);
+    expect(withKitchen).toBeGreaterThan(without * 1.02);
     expect(withKitchen).toBeLessThan(without * 1.25);
   });
 });

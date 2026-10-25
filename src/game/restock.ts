@@ -9,7 +9,6 @@ import { bigDayDemand } from './bigday';
 import { stockOf, usualSales } from './bakery';
 import { AUTO_RESERVE, type ReorderPlan } from './reorder';
 import { SUPPLIER_IDS, SUPPLIERS, supplierOpen, type SupplierId } from './suppliers';
-import { kitchenNeeds } from './kitchen';
 
 /** Сколько покупок в среднем делает гость (на все товары вместе). */
 const ITEMS_PER_GUEST = 1.5;
@@ -66,12 +65,12 @@ export function restockPlan(
   /** Что не брать (автозаказ: строки, которые игрок вернул). */
   skip: ProductId[] = [],
 ): ReorderPlan {
-  const kitchen = kitchenNeeds(state);
   const wants = sellableProducts(state)
     .filter((pid) => canStock(state, pid) && !skip.includes(pid))
     .map((pid) => {
-      // Сверху — то, что сегодня заберут по заказу, по договору с кафе и повар на кухню: иначе полки опустеют к открытию.
-      const reserved = (state.plan?.order?.product === pid ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[pid] ?? 0) + (kitchen[pid] ?? 0);
+      // Сверху — то, что сегодня заберут по заказу и по договору с кафе: иначе полки опустеют к открытию.
+      // Повар продукты не трогает — у кухни своя кладовая, она закупает сама (kitchen.ts).
+      const reserved = (state.plan?.order?.product === pid ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[pid] ?? 0);
       const target = restockTarget(state, pid, guests) + reserved;
       const have = stockOf(state, pid);
       return { pid, need: target - have, fill: have / Math.max(1, target), offer: bestOffer(state, pid, priceOf) };
