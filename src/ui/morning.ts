@@ -84,7 +84,8 @@ import {
   type SupplierId,
   supplierOpen,
 } from '../game/suppliers';
-import { guestsToday } from '../game/day';
+import { guestsGain, guestsToday } from '../game/day';
+import { buyKiosk, KIOSK_TIERS, kioskCount, kioskSlots, KIOSKS_BY_LEVEL, kioskTier, kioskTierIndex, laneGuests, nextKioskPrice, nextKioskTier, openRegisters, upgradeKiosks, withNextTill } from '../game/lanes';
 import {
   ALBUM_REWARD,
   ALL_QUESTS_RATING,
@@ -354,6 +355,9 @@ function artRow(texture: string, opts: { name: string; price?: number; sub?: str
 /** «+10%» / «−20%» для множителя. */
 /** Название на вывеске — до 16 букв: длиннее не влезает на доску. */
 const SHOP_NAME_MAX = 16;
+
+/** Улучшения в списке «Уголков»: кассы самообслуживания живут отдельно, рядом с кассами (их бывает несколько). */
+const LISTED_UPGRADES = UPGRADE_IDS.filter((id) => id !== 'selfCheckout');
 
 const percent = (k: number): string => `${k >= 1 ? '+' : '−'}${Math.round(Math.abs(k - 1) * 100)}%`;
 
@@ -1726,7 +1730,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const cap = rackCapacity(state);
     const coffee = hasUpgrade(state, 'coffee');
     const oven = hasUpgrade(state, 'oven');
-    const owned = UPGRADE_IDS.filter((id) => hasUpgrade(state, id)).length;
+    const owned = LISTED_UPGRADES.filter((id) => hasUpgrade(state, id)).length;
     const tiles: Tile[] = [
       { id: 'rack', icon: 'assets/candy_rack.png', title: t('rack.title'), status: `${rack.stock}/${cap}`, alert: rack.stock <= cap / 3, details: () => [rackBox(getState())] },
       {
@@ -1780,7 +1784,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         status: [securityOf(state).dog ? '🐕' : '', hasWatchman(state) ? '🔦' : ''].join(' ').trim() || '—',
         details: () => [securityBox(getState())],
       },
-      { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${UPGRADE_IDS.length}`, details: () => [upgradesBox(getState())] },
+      { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${LISTED_UPGRADES.length}`, details: () => [upgradesBox(getState())] },
     ];
     return [
       tileGrid(tiles, openCorner, (id) => {
@@ -2541,7 +2545,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const upgradesBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('upgrade.title')));
-    for (const id of UPGRADE_IDS) {
+    for (const id of LISTED_UPGRADES) {
       const up = UPGRADES[id];
       const owned = hasUpgrade(state, id);
       const row = el('div', 'ui-item');
@@ -2617,6 +2621,47 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const model = GEAR.register.models[gearTier(state, 'register')];
     const sub = `${t(model.nameKey)} · ${price !== null ? t('registers.free', { n: slots - n }) : nextRegisterCount(state) && (nextRegisterCount(state) ?? 0) > slots ? t('registers.full') : t('registers.max')}`;
     box.append(artRow(gearArt(state, 'register', gearTier(state, 'register')) ?? 'counter0', { name: t('registers.count', { n, max: slots }), sub, actions }));
+    // Открытые кассы зовут гостей (lanes.ts): сколько уже дают и сколько даст следующая касса с кассиром.
+    const till = withNextTill(state);
+    const now = Math.round(guestsToday(state) * (1 - 1 / laneGuests(state)));
+    box.append(
+      helpRow(t('lanes.now', { n: openRegisters(state), g: now }), t('lanes.note')),
+      ...(till ? [el('div', 'ui-muted', t('lanes.nextTill', { g: guestsGain(state, till) }))] : []),
+    );
+    return box;
+  };
+
+  /** Кассы самообслуживания (lanes.ts): сколько стоит, поставить ещё, сменить модель — и сколько гостей это даст. */
+  const kiosksBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    const n = kioskCount(state);
+    const slots = kioskSlots(state);
+    box.append(el('b', '', t('kiosks.title')), el('div', 'ui-muted', t('kiosks.note')));
+    const tierIndex = kioskTierIndex(state);
+    const tier = kioskTier(state);
+    const texture = ['kiosk', 'kiosk1', 'kiosk2'][tierIndex];
+    if (!slots && !n) {
+      const from = KIOSKS_BY_LEVEL.findIndex((k) => k > 0);
+      box.append(artRow(texture, { name: t('kiosks.count', { n: 0, max: 0 }), sub: t('kiosks.locked', { name: t(STORE_LEVELS[from].nameKey) }), actions: [] }));
+      return box;
+    }
+    const price = nextKioskPrice(state);
+    const bought = price === null ? null : buyKiosk({ ...state, money: Math.max(state.money, price) });
+    const free = price !== null ? t('kiosks.free', { n: slots - n }) : STORE_LEVELS[state.level + 1] ? t('kiosks.full') : t('kiosks.max');
+    const gain = bought ? ` · ${t('lanes.gain', { g: guestsGain(state, bought) })}` : '';
+    const actions = price === null ? [] : [button(t('kiosks.buy', { cost: price }), () => update(buyKiosk(getState()), 'success'), 'ui-chip', state.money < price)];
+    box.append(artRow(texture, { name: t('kiosks.count', { n, max: slots }), sub: `${free}${gain}`, actions }));
+    const model = (k: typeof tier) =>
+      t('kiosks.model', { name: t(k.nameKey), max: k.maxItems, s: k.item.toFixed(1), err: Math.round(k.error * 100), skip: +(k.skip * 100).toFixed(1) });
+    box.append(el('div', 'ui-item-sub', model(tier)));
+    const next = nextKioskTier(state);
+    if (next) {
+      const locked = state.level < next.minLevel;
+      const up = locked ? null : upgradeKiosks({ ...state, money: Math.max(state.money, next.price) });
+      const sub = locked ? t('kiosks.upgradeLocked', { name: t(STORE_LEVELS[next.minLevel].nameKey) }) : `${model(next)}${up && n ? ` · ${t('lanes.gain', { g: guestsGain(state, up) })}` : ''}`;
+      const actions = locked ? [] : [button(t('kiosks.upgrade', { cost: next.price }), () => update(upgradeKiosks(getState()), 'success'), 'ui-chip', !n || state.money < next.price)];
+      box.append(artRow(['kiosk', 'kiosk1', 'kiosk2'][KIOSK_TIERS.indexOf(next)], { name: t(next.nameKey), sub, actions }));
+    } else box.append(el('div', 'ui-muted', t('kiosks.best')));
     return box;
   };
 
@@ -3276,6 +3321,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       // Первая касса — его: кассиры за остальными, сменщик — за его кассой, пока он в зале (подробности — за «❔»).
       el('div', 'ui-item-sub', t('staffTab.ownerTill')),
       el('div', 'ui-muted', t('staffTab.ownerTillNote')),
+      ...(staffOf(state, 'cashier') ? [el('div', 'ui-note', t('staffTab.reliefOn'))] : []),
       el('div', 'ui-muted', next === null ? t('skill.xpMax', { xp: ownerXp(state) }) : t('skill.xp', { xp: ownerXp(state), next })),
       el(
         'div',
@@ -3558,7 +3604,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         ),
       );
     }
-    out.push(grow, registersBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), bankBox(state));
+    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {

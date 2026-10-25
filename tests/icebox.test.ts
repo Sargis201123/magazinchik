@@ -32,8 +32,9 @@ describe('ларь с мороженым', () => {
       const registers = REGISTERS_BY_LEVEL[level];
       const spot = iceboxSpotFor(layout, registers);
       const ice = iceboxRect(spot);
-      // Ни на одной кассе (и тех, что ещё можно купить), ни на кассе самообслуживания, ни на цветах.
-      for (const zone of tillZones(layout, registers)) expect(overlaps(ice, zone), `касса, уровень ${level}`).toBe(false);
+      // Ни на одной кассе (и тех, что ещё можно купить), ни на кассе самообслуживания, ни на цветах. Места под
+      // следующие киоски ларь может занять: поставят киоск — он переедет (см. ниже).
+      for (const zone of tillZones(layout, registers, 1)) expect(overlaps(ice, zone), `касса, уровень ${level}`).toBe(false);
       // Не у двери: проход ко входу свободен.
       expect(overlaps(ice, { x: layout.door.x - 16, y: layout.h - 34, w: 32, h: 34 }), `вход, уровень ${level}`).toBe(false);
       // Вплотную к стене — правой или нижней (а не посреди пола), со стороны кассы от входа.
@@ -65,7 +66,7 @@ describe('ларь с мороженым', () => {
         const layout = withTill(plain, till, level);
         expect(iceboxFits(layout, layout.slots, registers), `уровень ${level}, ${JSON.stringify(till)}`).toBe(true);
         const ice = iceboxRect(iceboxSpotFor(layout, registers));
-        for (const zone of tillZones(layout, registers)) expect(overlaps(ice, zone), `касса, уровень ${level}`).toBe(false);
+        for (const zone of tillZones(layout, registers, 1)) expect(overlaps(ice, zone), `касса, уровень ${level}`).toBe(false);
       }
     }
   });

@@ -28,8 +28,10 @@ describe('кассы и кассиры', () => {
   });
 
   it('кого брать следующим: кассира за свободную кассу, а когда своих касс нет — сменщика', () => {
-    expect(nextCashierRole(shop(0, 1, []))).toBe('cashier');
-    expect(nextCashierRole(shop(0, 1, ['cashier']))).toBeNull();
+    // В ларьке сменщика ещё нет — хозяин справляется сам; с «Магазинчика» — можно.
+    expect(nextCashierRole(shop(0, 1, []))).toBeNull();
+    expect(nextCashierRole(shop(1, 1, []))).toBe('cashier');
+    expect(nextCashierRole(shop(1, 1, ['cashier']))).toBeNull();
     // Место под вторую кассу есть (её докупят) — сначала кассир за неё.
     expect(nextCashierRole(shop(2, 1, []))).toBe('cashier2');
     expect(nextCashierRole(shop(2, 2, ['cashier2']))).toBe('cashier');

@@ -3,7 +3,7 @@
 // и можно ли от входа подойти к каждой полке, к кассе и в очередь. Сохраняется в StoreState.slotPos.
 
 import { isFixture, slotOf, type StoreState } from '../game/economy';
-import { iceboxRect, iceboxSpotFor, layoutFor, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
+import { iceboxRect, iceboxSpotFor, kioskZones, layoutFor, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
 import { reachable, type Rect } from './paths';
 
 /** Шаг сетки, по которой встают полки. */
@@ -93,18 +93,19 @@ const grow = (r: Rect, d: number): Rect => ({ x: r.x - d, y: r.y - d, w: r.w + 2
 
 /**
  * Касса со всем, что при ней (переезжает целиком): стол, очередь, места под остальные кассы (registers —
- * сколько их можно поставить в этом помещении, вместе с кассиром), касса самообслуживания и цветы.
+ * сколько их можно поставить в этом помещении, вместе с кассиром), места под кассы самообслуживания (kiosks —
+ * сколько держать; мест под них столько же, сколько под кассы, — lanes.ts) и цветы.
  * Первый прямоугольник — сам стол: к нему подходят вплотную, проход к нему не проверяем.
  */
-export function tillZones(layout: Layout, registers = 1): Rect[] {
-  const { h, wallH, counter, queue } = layout;
+export function tillZones(layout: Layout, registers = 1, kiosks = registers): Rect[] {
+  const { h, counter, queue } = layout;
   return [
     { x: counter.x - 16, y: counter.y - 34, w: 32, h: 62 },
     { x: queue.x - 10, y: queue.minY - 10, w: 20, h: queue.y - queue.minY + 22 },
     ...Array.from({ length: Math.max(0, registers - 1) }, (_, k) => registerSpot(layout, k + 1)).map(({ x, y, left }) =>
       left ? { x: x - 18, y: y - 30, w: 31, h: 54 } : { x: x - 13, y: y - 30, w: 31, h: 54 },
     ),
-    { x: counter.x + 14, y: wallH + 72, w: 16, h: 20 },
+    ...kioskZones(layout, kiosks),
     // Цветы у кассы.
     { x: counter.x + 10, y: h - 52, w: 20, h: 26 },
   ];
@@ -188,8 +189,8 @@ export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = l
  * Ларь всё ещё находит себе место при такой расстановке (registers — сколько касс может стоять
  * в помещении, avoid — вещи, которые он обходит).
  */
-export function iceboxFits(layout: Layout, slots: Point[], registers = 1, avoid: Rect[] = []): boolean {
-  const ice = iceboxRect(iceboxSpotFor({ ...layout, slots }, registers, avoid));
+export function iceboxFits(layout: Layout, slots: Point[], registers = 1, avoid: Rect[] = [], kiosks = 1): boolean {
+  const ice = iceboxRect(iceboxSpotFor({ ...layout, slots }, registers, avoid, kiosks));
   return slots.every((s) => !overlaps(ice, slotRect(layout, s)));
 }
 

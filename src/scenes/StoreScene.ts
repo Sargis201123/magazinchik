@@ -143,7 +143,8 @@ import { claimGift, localDate } from '../game/gift';
 import { activeAd } from '../game/ads';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
-import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
+import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, withUpgrades } from '../game/upgrades';
+import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskTier, kioskTierIndex } from '../game/lanes';
 import { showGift } from '../ui/gift';
 import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
@@ -179,7 +180,7 @@ import {
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propFootprint, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
-import { buildingSpan, iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Point, type Room } from './layout';
+import { buildingSpan, iceboxRect, iceboxSpotFor, kioskSpot, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Point, type Room } from './layout';
 import { BASE_W, crispZoom, homeFrame } from './pixels';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
@@ -368,7 +369,7 @@ const QUAKE_GRIT = 0x8f7f6a;
  * самообслуживания, радио, кассы, климат, камеры, склад, кофемашина, печь) и украшения.
  */
 const UNBOX =
-  /^(card_terminal|kiosk|radio|phone|counter\d|bin_t\d_0|fan_base|ac_wall|cam|air_curtain|mat_grate|autostore|pallet_jack|forklift|carts|coffee_machine\d?|cafe_table|oven\d?|rug|neon|plant_big|art_[a-z]+|light_(sconce|pendant|lantern|chandelier)|gumball|aquarium|lucky_cat|fountain|jukebox)$/;
+  /^(card_terminal|kiosk\d?|radio|phone|counter\d|bin_t\d_0|fan_base|ac_wall|cam|air_curtain|mat_grate|autostore|pallet_jack|forklift|carts|coffee_machine\d?|cafe_table|oven\d?|rug|neon|plant_big|art_[a-z]+|light_(sconce|pendant|lantern|chandelier)|gumball|aquarium|lucky_cat|fountain|jukebox)$/;
 /** Новинки распаковывают по очереди, с таким шагом. */
 const UNBOX_STEP = 350;
 /** Флажок «НОВОЕ» висит над новинкой два часа по часам зала (смена идёт с 8:00 до 20:00). */
@@ -466,6 +467,14 @@ const RUN_PACE = 65;
 const MAX_DUST = 24;
 /** Как часто покупатель у пустой кассы зовёт продавца. */
 const CALL_EVERY_MS = 3000;
+/** Картинки киосков по модели (lanes.ts, KIOSK_TIERS), где у них экран (от центра) и чем он светится. */
+const KIOSK_SPRITES = ['kiosk', 'kiosk1', 'kiosk2'];
+const KIOSK_SCREEN = { x: 0, y: -5.5, w: 8, h: 5 };
+const KIOSK_GLOW = 0x2ce8f5;
+const KIOSK_ALARM = 0xe43b44;
+/** Касание кассы, за которой сменщик, срезает столько мс пробивки; про запас — не больше стольких. */
+const RELIEF_TAP_MS = 250;
+const RELIEF_HURRY_MAX_MS = 1200;
 
 const TRASH_CHANCE = 0.15;
 const MAX_TRASH = 8;
@@ -1080,6 +1089,15 @@ interface Register {
   beam: Phaser.GameObjects.Rectangle;
   /** Сам аппарат: вздрагивает на каждом пробитом товаре. */
   img?: Phaser.GameObjects.Image;
+  /** Сколько мс пробивки срезали касания хозяина (у кассы хозяина, когда за ней сменщик). */
+  hurry: number;
+}
+
+/** Касса самообслуживания: картинка, экран и занята ли она. */
+interface Kiosk {
+  img: Phaser.GameObjects.Image;
+  screen: Phaser.GameObjects.Rectangle;
+  busy: boolean;
 }
 
 /** Печь: что в ней и всё, что её рисует. */
@@ -1488,10 +1506,10 @@ export class StoreScene extends Phaser.Scene {
   private obstacles: Rect[] = [];
   /** Люди этого кадра для обхода встречных (passers): считаем раз за кадр, а не на каждого идущего. */
   private crowd: { frame: number; list: Passer[] } = { frame: -1, list: [] };
-  /** Касса самообслуживания (если куплена): картинка, экран и занята ли она. */
-  private kiosk?: Phaser.GameObjects.Image;
-  private kioskScreen?: Phaser.GameObjects.Rectangle;
-  private kioskBusy = false;
+  /** Кассы самообслуживания (сколько куплено) — у правой стены над кассами. */
+  private kiosks: Kiosk[] = [];
+  /** Когда последний раз всплывало «быстрее» над кассой (касания сменщику). */
+  private lastHurry = 0;
   /** Мини-событие дня: что сейчас происходит и всё, что его рисует. */
   private liveEvent: LiveKind | null = null;
   private liveObjs: { destroy: () => void }[] = [];
@@ -2239,15 +2257,19 @@ export class StoreScene extends Phaser.Scene {
       fill,
       screen,
       beam,
+      hurry: 0,
     };
   }
 
   /**
-   * Кто работает за кассой. Первая — всегда хозяина; пока он в зале по делу, за неё встаёт сменщик
-   * (если нанят). За остальными — их кассиры, а без кассира касса закрыта (null).
+   * Кто работает за кассой. Первая — хозяина, но если нанят сменщик и он вышел на смену, за ней весь
+   * день он (новенький — с той минуты, как дошёл от двери). За остальными — их кассиры, а без кассира касса закрыта (null).
    */
   private operator(index: number): Worker | 'owner' | null {
-    if (index === 0) return (this.sellerBusy && this.workers.get(RELIEF_ROLE)) || 'owner';
+    if (index === 0) {
+      const relief = this.workers.get(RELIEF_ROLE);
+      return relief && relief.member.role === RELIEF_ROLE && !this.newcomers.has(relief.sprite) ? relief : 'owner';
+    }
     const role = tillRole(index);
     return (role && this.workers.get(role)) || null;
   }
@@ -3261,7 +3283,7 @@ export class StoreScene extends Phaser.Scene {
       }
       // Ларь ищет место сам — вещь не должна занять его место.
       if (this.state.shelves.some((sh) => sh.kind === 'icebox')) {
-        const ice = iceboxRect(iceboxSpotFor({ ...lay, slots: at }, registers, props.map(propRect)));
+        const ice = iceboxRect(iceboxSpotFor({ ...lay, slots: at }, registers, props.map(propRect), kioskCount(this.state)));
         for (const p of props) if (overlapsRect(propRect(p), ice)) badProps.add(p.id);
       }
       propGhosts.forEach((g, i) => {
@@ -3291,7 +3313,7 @@ export class StoreScene extends Phaser.Scene {
         linkG.fillStyle(color, 1).fillCircle((a.x + b.x) / 2, (a.y + b.y) / 2 - 4, 1.8);
       }
       // Ларь ищет место сам — после перестановки ему должно найтись место у стены.
-      const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(lay, at, registers, props.map(propRect));
+      const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(lay, at, registers, props.map(propRect), kioskCount(this.state));
       done.disabled = bad.size > 0 || badProps.size > 0 || iceless;
       hint.textContent = bad.size || badProps.size ? t('arrange.bad', { n: bad.size + badProps.size }) : iceless ? t('arrange.icebox') : t('arrange.hint');
       return iceless || badProps.size ? new Set([...bad, -1]) : bad;
@@ -4100,9 +4122,9 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
-  /** Терминал на прилавке и касса самообслуживания у правой стены — если куплены. */
+  /** Терминал на прилавке и кассы самообслуживания у правой стены — если куплены. */
   private buildUpgrades(): void {
-    const { counter, wallH } = this.layout;
+    const { counter } = this.layout;
     if (hasUpgrade(this.state, 'terminal')) this.art(counter.x + 3, counter.y - 4, 'card_terminal').setDepth(counter.y + 22);
     for (let i = 1; i < registerCount(this.state); i++) this.buildRegister(i);
     this.buildHallDecor();
@@ -4112,14 +4134,20 @@ export class StoreScene extends Phaser.Scene {
     this.buildRadio();
     this.buildCup();
     this.buildDelivery();
-    this.kiosk = undefined;
-    this.kioskBusy = false;
-    if (!hasUpgrade(this.state, 'selfCheckout')) return;
-    // Касса самообслуживания — у очереди, справа от основной кассы (вместе с ней переезжает).
-    const at = { x: this.layout.counter.x + 22, y: wallH + 86 };
-    this.kiosk = this.art(at.x, at.y, 'kiosk').setDepth(at.y + 9);
-    this.kioskScreen = this.add.rectangle(at.x, at.y - 9, 6, 4, 0x2ce8f5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(at.y + 10);
-    this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
+    // Кассы самообслуживания — у очереди, у правой стены над кассами, одна под другой (вместе с кассой переезжают).
+    this.kiosks = [];
+    const tex = KIOSK_SPRITES[kioskTierIndex(this.state)];
+    for (let i = 0; i < kioskCount(this.state); i++) {
+      const at = kioskSpot(this.layout, i);
+      const img = this.art(at.x, at.y, tex).setDepth(at.y + 9);
+      const screen = this.add
+        .rectangle(at.x + KIOSK_SCREEN.x, at.y + KIOSK_SCREEN.y, KIOSK_SCREEN.w, KIOSK_SCREEN.h, KIOSK_GLOW)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(0.3)
+        .setDepth(at.y + 10);
+      this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
+      this.kiosks.push({ img, screen, busy: false });
+    }
   }
 
   /** Кубок последнего выигранного конкурса — на прилавке, слегка поблёскивает. */
@@ -5806,31 +5834,56 @@ export class StoreScene extends Phaser.Scene {
     this.art(x, y, 'review_board').setOrigin(0.5, 1).setDepth(y);
   }
 
-  /** Покупатель с 1–2 товарами, пока у кассы очередь, пробивает себя сам. */
+  /**
+   * Покупатель с небольшой корзиной пробивает себя сам на свободной кассе самообслуживания: когда у
+   * касс очередь, а без очереди — каждый третий (KIOSK_PREFER). Сколько штук, как быстро, как часто
+   * «ошибка» и непробитый товар — по модели киосков (lanes.ts).
+   */
   private async useKiosk(c: Customer): Promise<boolean> {
-    const kiosk = this.kiosk;
-    if (!kiosk?.active || this.kioskBusy || c.thief || c.items.length > KIOSK_MAX_ITEMS || this.waiting() === 0) return false;
-    this.kioskBusy = true;
-    await this.walk(c.sprite, kiosk.x - 14, kiosk.y + 4);
+    const tier = kioskTier(this.state);
+    if (!this.kiosks.length || c.thief || !c.items.length || c.items.length > tier.maxItems) return false;
+    if (this.waiting() === 0 && Math.random() >= KIOSK_PREFER) return false;
+    const kiosk = this.kiosks.find((k) => !k.busy && k.img.active);
+    if (!kiosk) return false;
+    kiosk.busy = true;
+    const { img, screen } = kiosk;
+    await this.walk(c.sprite, img.x - 14, img.y + 4);
     if (c.gone || !c.sprite.active) {
-      this.kioskBusy = false;
+      kiosk.busy = false;
       return true;
     }
     this.setFacing(c.sprite, 'right');
     c.serving = true;
-    for (const { id } of c.items) {
-      await this.wait(KIOSK_ITEM_SECONDS * 1000);
+    // «Забыл» пробить один товар (только из нескольких — с пустым чеком не уходят): уйдёт с ним, не заплатив.
+    const skipped = c.items.length > 1 && Math.random() < tier.skip ? c.items[c.items.length - 1] : undefined;
+    for (const it of c.items) {
+      await this.wait(tier.item * 1000);
       if (!this.sys.isActive()) return true;
-      const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(1.5 / ART).setDepth(1000);
-      this.tweens.add({ targets: item, x: kiosk.x, y: kiosk.y - 6, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
-      sound.scan(kiosk.x);
-      this.kioskScreen?.setAlpha(0.9);
-      this.time.delayedCall(150, () => this.kioskScreen?.setAlpha(0.3));
+      if (it === skipped) continue;
+      const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${it.id}`).setScale(1.5 / ART).setDepth(1000);
+      this.tweens.add({ targets: item, x: img.x, y: img.y - 6, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
+      sound.scan(img.x);
+      screen.setAlpha(0.9);
+      this.time.delayedCall(150, () => screen.setAlpha(0.3));
     }
-    await this.wait(KIOSK_PAY_SECONDS * 1000);
-    this.kioskBusy = false;
+    // «Неизвестный товар в зоне упаковки»: экран краснеет, покупатель ждёт, пока он сбросится.
+    if (Math.random() < tier.error) {
+      screen.setFillStyle(KIOSK_ALARM).setAlpha(0.9);
+      this.popup(img.x - 6, img.y - 20, t('popup.kioskError'), '#ffd0d0');
+      await this.wait(KIOSK_ERROR_SECONDS * 1000);
+      if (!this.sys.isActive()) return true;
+      screen.setFillStyle(KIOSK_GLOW).setAlpha(0.3);
+    }
+    await this.wait(tier.pay * 1000);
+    kiosk.busy = false;
     if (!this.sys.isActive()) return true;
-    this.finishCheckout(c, { x: kiosk.x - 10, y: kiosk.y - 12 });
+    if (skipped) {
+      c.items = c.items.filter((it) => it !== skipped);
+      const value = unitSalePrice(this.state, skipped.id, skipped.unit);
+      this.stats.stolen += value;
+      this.popup(c.sprite.x, c.sprite.y - 14, t('popup.kioskSkip', { n: value }), '#ffd0d0');
+    }
+    this.finishCheckout(c, { x: img.x - 10, y: img.y - 12 });
     return true;
   }
 
@@ -9560,7 +9613,7 @@ export class StoreScene extends Phaser.Scene {
     // Вещи, переставленные игроком в этом помещении, ларь обходит (как и при перестановке).
     const moved = this.state.propPos?.level === this.state.level ? Object.entries(this.state.propPos.at) : [];
     const avoid = moved.map(([id, p]) => propRect({ id, x: p.x, y: p.y, fp: propFootprint(this.layout, id, p.x) }));
-    return iceboxSpotFor(this.layout, registerSlots(this.state), avoid);
+    return iceboxSpotFor(this.layout, registerSlots(this.state), avoid, kioskCount(this.state));
   }
 
   /** Вёдра с цветами — у кассы, в углу у правой стены. */
@@ -10245,12 +10298,19 @@ export class StoreScene extends Phaser.Scene {
     if (id === this.choreId) this.sellerBusy = false;
   }
 
-  /** Где стоит хозяин (игрок): за первой кассой — она всегда его. */
+  /** Где стоит хозяин (игрок): за первой кассой, а когда за ней сменщик — рядом, у той же стойки. */
   private ownerHome(): { x: number; y: number } {
+    if (this.reliefOnDuty()) return this.reliefSpot();
     return this.registers[0]?.clerk ?? this.layout.sellerHome;
   }
 
-  /** Где ждёт сменщик, пока хозяин за кассой: рядом, у той же стойки, — за кассу встаёт без перехода. */
+  /** Сменщик нанят и сегодня на смене: тогда касса хозяина — его на весь день. */
+  private reliefOnDuty(): boolean {
+    const m = staffOf(this.state, RELIEF_ROLE);
+    return Boolean(m && !isAbsent(this.state, m));
+  }
+
+  /** Место рядом с кассой хозяина, у той же стойки: тут стоит хозяин, когда за его кассой сменщик. */
   private reliefSpot(): { x: number; y: number } {
     const { sellerHome } = this.layout;
     return { x: sellerHome.x, y: sellerHome.y - 24 };
@@ -10712,8 +10772,8 @@ export class StoreScene extends Phaser.Scene {
     const { wc, warehouse, door } = this.layout;
     switch (role) {
       case 'cashier':
-        // Сменщик — рядом с хозяином, у той же стойки.
-        return this.reliefSpot();
+        // Сменщик — за кассой хозяина (хозяин встаёт рядом, у той же стойки).
+        return this.registers[0]?.clerk ?? this.reliefSpot();
       case 'cashier2':
       case 'cashier3':
       case 'cashier4':
@@ -10882,14 +10942,14 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Сменщик: пока хозяин за кассой, ждёт рядом; хозяин ушёл по делу (выложить товар, убрать) —
-   * пробивает тех, кто подошёл к его кассе. Вернулся хозяин — следующего пробивает уже он.
+   * Сменщик: весь день за кассой хозяина и пробивает сам всех, кто к ней подошёл. Хозяин свободен
+   * для дел, а его касания кассы торопят пробивку (hurryRelief).
    */
   private async reliefLoop(w: Worker, gen: number): Promise<void> {
     while (this.alive(gen)) {
       const r = this.registers[0];
       const front = r?.customer;
-      if (!this.running || !r || !this.sellerBusy || !front || !this.atSpot(r) || front.serving || r.scan) {
+      if (!this.running || !r || !front || !this.atSpot(r) || front.serving || r.scan) {
         // Отводили в сторону (ограбление, новенький) — назад к стойке.
         if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
         await this.wait(150);
@@ -11564,6 +11624,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Касание кассы (или улицы внизу): хозяин пробивает того, кто ждёт у его кассы, или возвращается с дела. */
   private async serveNext(): Promise<void> {
+    if (this.hurryRelief()) return;
     if (this.ownerScanning()) return;
     const r = this.ownerRegister();
     if (this.sellerBusy) {
@@ -11586,6 +11647,43 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
+   * За кассой хозяина сменщик: касание торопит его пробивку (срезает RELIEF_TAP_MS), а сам хозяин
+   * за кассу не встаёт. true — касание ушло сменщику.
+   */
+  private hurryRelief(): boolean {
+    const r = this.registers[0];
+    if (!r || this.operator(0) === 'owner') return false;
+    if (!r.scan || r.scan.byOwner) return true;
+    r.hurry = Math.min(RELIEF_HURRY_MAX_MS, r.hurry + RELIEF_TAP_MS);
+    haptic.tap();
+    if (r.img) this.squash(r.img, 1.04, 0.94, 70);
+    if (this.time.now - this.lastHurry > 1500) {
+      this.lastHurry = this.time.now;
+      this.popup(r.counter.x, r.counter.y - 36, t('popup.hurry'), '#fff3b0');
+    }
+    return true;
+  }
+
+  /** Пауза пробивки. У кассы хозяина её срезают касания (r.hurry), пока за кассой сменщик. */
+  private async scanWait(r: Register, ms: number): Promise<void> {
+    if (this.registers.indexOf(r) !== 0 || r.scan?.byOwner) return this.wait(ms);
+    let left = ms;
+    while (left > 0) {
+      const cut = Math.min(left, r.hurry);
+      if (cut > 0) {
+        r.hurry -= cut;
+        left -= cut;
+        if (r.scan) r.scan.start -= cut;
+        continue;
+      }
+      const step = Math.min(left, 100);
+      await this.wait(step);
+      if (!this.sys.isActive()) return;
+      left -= step;
+    }
+  }
+
+  /**
    * Пробивка: товары по одному уезжают по ленте, потом оплата. Время зависит от навыка
    * того, кто стоит за кассой (хозяин или кассир) и от размера корзины.
    */
@@ -11604,7 +11702,7 @@ export class StoreScene extends Phaser.Scene {
     // Товар и пакет — к тому, кто пробивает: сменщик стоит у стойки чуть выше хозяина.
     const hand = clerk?.active ? { x: clerk.x, y: clerk.y } : r.clerk;
     for (const { id } of c.items) {
-      await this.wait(timing.item * 1000 * manual);
+      await this.scanWait(r, timing.item * 1000 * manual);
       if (!this.sys.isActive()) return;
       // Товар — на ленту, под красный луч сканера (вспышка), и дальше к кассиру в пакет.
       const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2 / ART).setDepth(1000);
@@ -11639,8 +11737,9 @@ export class StoreScene extends Phaser.Scene {
       await this.wait(REGISTER_JAM_SECONDS * 1000);
       if (!this.sys.isActive()) return;
     }
-    await this.wait(timing.pay * 1000);
+    await this.scanWait(r, timing.pay * 1000);
     r.scan = null;
+    r.hurry = 0;
     if (!this.sys.isActive()) return;
     // Кассир отдаёт пакет из рук в руки (с тележкой — товар уже в ней).
     if (c.items.length && c.sprite.getData('push') !== 'trolley' && c.sprite.active) {

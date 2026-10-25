@@ -1,16 +1,18 @@
 // Места под кассы растут вместе с помещением: в ларьке и маленьком магазине — одно, дальше с каждым
 // расширением ещё одно (до четырёх в универмаге). Первая касса — всегда хозяина: за ней стоит сам
 // игрок и пробивает касанием. Остальные кассы хозяин покупает сам, когда очередь того стоит, и за
-// каждую нанимает своего кассира. Сменщик (роль cashier) подменяет хозяина за его кассой, только
-// пока тот отошёл по делу (выложить товар, убрать), — вернулся хозяин, и пробивает снова он.
+// каждую нанимает своего кассира. Сменщик (роль cashier, с «Магазинчика») встаёт за кассу хозяина
+// насовсем и пробивает сам — хозяин свободен для дел, а его касания только торопят пробивку.
 
-import { STORE_LEVELS, type StaffMember, type StaffRole, type StoreState } from './economy';
+import { STAFF_ROLES, STORE_LEVELS, type StaffMember, type StaffRole, type StoreState } from './economy';
 
 export const REGISTERS_BY_LEVEL = [1, 1, 2, 3, 4];
 /** Все, кто работает за кассой: сменщик хозяина и кассиры второй, третьей и четвёртой касс. */
 export const CASHIER_ROLES: StaffRole[] = ['cashier', 'cashier2', 'cashier3', 'cashier4'];
-/** Сменщик: встаёт за кассу хозяина, пока тот в зале, и торгует, пока игрока нет в игре. */
+/** Сменщик: стоит за кассой хозяина весь день и торгует, пока игрока нет в игре. */
 export const RELIEF_ROLE: StaffRole = 'cashier';
+/** С какого помещения можно нанять сменщика (с «Магазинчика»; в ларьке хозяин справляется сам). */
+export const RELIEF_LEVEL = STAFF_ROLES[RELIEF_ROLE].minLevel ?? 0;
 /** Кассиры своих касс: TILL_ROLES[0] — за второй кассой (у первой кассы кассира нет — она хозяина). */
 export const TILL_ROLES: StaffRole[] = ['cashier2', 'cashier3', 'cashier4'];
 /** Цена второй, третьей и четвёртой кассы (первая есть всегда). */
@@ -65,11 +67,12 @@ export const idleRegisters = (state: StoreState): number =>
 
 /**
  * Кого брать следующим, когда очередь не успевает: кассира за первую свободную кассу (её можно
- * докупить, если место есть), а когда свои кассы кончились — сменщика. null — все места заняты.
+ * докупить, если место есть), а когда свои кассы кончились — сменщика (в ларьке его ещё нет).
+ * null — все места заняты.
  */
 export function nextCashierRole(state: StoreState): StaffRole | null {
   const till = TILL_ROLES.slice(0, registerSlots(state) - 1).find((role) => !hired(state, role));
-  return till ?? (hired(state, RELIEF_ROLE) ? null : RELIEF_ROLE);
+  return till ?? (hired(state, RELIEF_ROLE) || state.level < RELIEF_LEVEL ? null : RELIEF_ROLE);
 }
 
 /**

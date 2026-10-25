@@ -101,6 +101,7 @@ import { answerCafe, cafeDeliver } from './cafe';
 import { deliveryDay } from './delivery';
 import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
 import { buyRadio, hasRadio, radioPatience, RADIO_PRICE, radioTolerance, setStation } from './radio';
+import { buyKiosk, kioskCount, kioskTier, laneGuests, nextKioskPrice, nextKioskTier, upgradeKiosks } from './lanes';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
 
 export { rng };
@@ -189,7 +190,8 @@ export type Feature =
   | 'cafe'
   | 'kitchen'
   | 'rush'
-  | 'delivery';
+  | 'delivery'
+  | 'kiosks';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -213,7 +215,9 @@ const want =
 const cashier =
   (n: number, need: number): Hire =>
   (s) =>
-    cashierCount(s) === n && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * need ? nextCashierRole(s) : null;
+    cashierCount(s) === n && expectedGuests(s.rating, s.level) > SOLO_SERVE_CAP * (need + kioskLanes(s)) ? nextCashierRole(s) : null;
+/** Киоски берут на себя часть очереди: каждый — как кассир на долю своей модели (lanes.ts). */
+const kioskLanes = (s: StoreState): number => kioskCount(s) * kioskTier(s).lane;
 const hasCashier = (s: StoreState): boolean => cashierCount(s) > 0;
 // Кассир — первым: остальные места не занимаем, пока хозяин один на всё.
 const HIRE_WHEN: Hire[] = [
@@ -241,6 +245,13 @@ const AVG_BASKET = 1.4;
 const ownerAtRegister = (level: number): number => 0.65 - 0.07 * level;
 /** Подойти к кассе и отойти — секунды на каждого покупателя. */
 const QUEUE_STEP_SECONDS = 0.3;
+/** Сменщик за кассой хозяина весь день, а хозяин между делами касается кассы — пробивка чуть быстрее. */
+const RELIEF_TAPS = 1.1;
+/** Киоск занят не весь день (к нему идут с небольшой корзиной), дойти и уложить покупки — секунды. */
+const KIOSK_BUSY = 0.5;
+const KIOSK_WALK_SECONDS = 2;
+/** Какая доля гостей с корзиной не больше maxItems штук (корзина в среднем AVG_BASKET). */
+const smallBasket = (maxItems: number): number => (maxItems >= 3 ? 0.9 : 0.75);
 /** Хозяин собирает заказ на дом: сходить на склад, уложить коробку, вынести курьеру. */
 const OWNER_PACK_SECONDS = 8;
 /** Столько секунд кассы в среднем уходит на одного покупателя у хозяина (для «пока собирал заказ»). */
@@ -250,7 +261,7 @@ const OWNER_SECONDS_PER_GUEST = 2.5;
  * Сколько покупателей реально пробить за день (total) и сколько из них — сам хозяин (owner):
  * пробивка занимает время и зависит от навыка.
  */
-function serveCapacity(state: StoreState): { total: number; owner: number } {
+function serveCapacity(state: StoreState): { total: number; owner: number; kiosk: number } {
   // Старая касса иногда заедает — в среднем столько секунд на покупателя.
   const jam = registerJam(state) * REGISTER_JAM_SECONDS;
   const owner = checkoutSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
@@ -258,15 +269,25 @@ function serveCapacity(state: StoreState): { total: number; owner: number } {
   const ownerCap = Math.floor((DAY_SECONDS * share) / owner);
   const cashierCap = (m: StaffMember, part: number) =>
     Math.floor((DAY_SECONDS * part) / (checkoutSeconds(withUpgrades(state, cashierScan(m)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam));
-  // Первая касса — хозяина: он за ней между другими делами, а пока он в зале — сменщик (если нанят).
+  // Первая касса — хозяина: он за ней между другими делами. Нанят сменщик — за ней весь день он,
+  // а хозяин свободен и только торопит его касаниями.
   const relief = staffOf(state, RELIEF_ROLE);
-  let total = ownerCap + (relief ? cashierCap(relief, 1 - share) : 0);
+  let total = relief ? Math.floor(cashierCap(relief, 1) * RELIEF_TAPS) : ownerCap;
   // Остальные кассы — у каждой свой кассир; без кассира касса стоит закрытой.
   for (const role of TILL_ROLES.slice(0, registerCount(state) - 1)) {
     const m = staffOf(state, role);
     if (m) total += cashierCap(m, 1);
   }
-  return { total, owner: ownerCap };
+  return { total, owner: relief ? 0 : ownerCap, kiosk: kioskCapacity(state) };
+}
+
+/** Сколько покупателей за день пробьют себя сами на киосках (lanes.ts). */
+function kioskCapacity(state: StoreState): number {
+  const n = kioskCount(state);
+  if (!n) return 0;
+  const tier = kioskTier(state);
+  const items = Math.min(tier.maxItems, AVG_BASKET);
+  return Math.floor((n * DAY_SECONDS * KIOSK_BUSY) / (items * tier.item + tier.pay + KIOSK_WALK_SECONDS));
 }
 
 export function simulate({
@@ -421,6 +442,27 @@ export function simulate({
         if (id === 'loyalty') for (const p of PRODUCT_IDS) state = setPrice(state, p, Math.round((state.prices[p] * (1 + (LOYALTY_TOLERANCE - 1) * 0.8)) / 5) * 5);
       }
     }
+    // Киоски: ставит по одному, когда касса не успевает за гостями и не копит на расширение; модель
+    // обновляет, когда киосков уже два.
+    if (features.kiosks) {
+      const price = nextKioskPrice(state);
+      const short = (() => {
+        const cap = serveCapacity(state);
+        return cap.total + cap.kiosk < guestsToday(state);
+      })();
+      if (price !== null && short && state.money >= price + reserve && canSplurge(price)) {
+        state = buyKiosk(state) ?? state;
+        investments += price;
+      }
+      const tier = nextKioskTier(state);
+      if (tier && kioskCount(state) >= 2 && state.money >= tier.price + reserve && canSplurge(tier.price)) {
+        const up = upgradeKiosks(state);
+        if (up) {
+          state = up;
+          investments += tier.price;
+        }
+      }
+    }
     // Новые модели оборудования — когда хватает денег с запасом и не копит на расширение.
     if (features.gear) {
       for (const id of GEAR_IDS) {
@@ -563,7 +605,8 @@ export function simulate({
     const weight = (p: ProductId) =>
       (seasonFor(state.day)?.demand[p] ?? 1) * seasonalDemand(p, state.day) * dayDemand(state, p, aromaShare > 0.5);
     const totalWeight = sellable.reduce((sum, p) => sum + weight(p), 0);
-    const itemWants = guests * AVG_WANTS;
+    // Гостей, которых привели открытые кассы (lanes.ts), закупка учитывает отдельно — см. ниже.
+    const itemWants = (guests / laneGuests(state)) * AVG_WANTS;
     // Свою выпечку хотят, только пока она на полке: раскупили — хотят другое.
     const ownWanted = OWN_PRODUCTS.filter((p) => sellable.includes(p)).reduce(
       (sum, p) => sum + Math.min(onShelves(state, p), (itemWants * weight(p)) / totalWeight),
@@ -618,6 +661,32 @@ export function simulate({
       if (bad) state = resolveBadBatch(state, id, 'markdown', best.price);
       purchases += qty * best.price;
     }
+    // Под гостей, которых привели открытые кассы, — докупка на остаток места на складе, поровну по спросу
+    // (жадно по списку — первые товары забили бы склад, а остальные полки пустовали).
+    if (buyMode === 'smart' && laneGuests(state) > 1) {
+      const extraWants = guests * AVG_WANTS - itemWants;
+      const extra = sellable
+        .filter((id) => !OWN_PRODUCTS.includes(id))
+        .map((id) => {
+          const offers = SUPPLIER_IDS.map((sid) => ({ sid, price: unitPrice(SUPPLIERS[sid], deals[sid], id) })).filter(
+            (o): o is { sid: (typeof SUPPLIER_IDS)[number]; price: number } => o.price !== null,
+          );
+          const best = offers.sort((a, b) => a.price - b.price)[0];
+          const want = extraWants * buyChance(state.prices[id], perceivedBase(state, id)) * (weight(id) / otherWeight);
+          return { id, best, want };
+        })
+        .filter((x) => x.best && x.want > 0);
+      const total = extra.reduce((sum, x) => sum + x.want, 0);
+      const share = Math.min(1, (warehouseCapacity(state) - warehouseCount(state)) / Math.max(1, total));
+      for (const { id, best, want } of extra) {
+        const qty = Math.min(Math.floor(want * share), Math.floor((state.money - reserve) / best!.price));
+        if (qty <= 0) continue;
+        const bad = random() < SUPPLIERS[best!.sid].badChance;
+        state = buyStock(state, id, qty, best!.price, bad) ?? state;
+        if (bad) state = resolveBadBatch(state, id, 'markdown', best!.price);
+        purchases += qty * best!.price;
+      }
+    }
     // Кафе по соседству забирает заказ, как только магазин открылся.
     const cafeRes = cafeDeliver(state);
     state = cafeRes.state;
@@ -650,7 +719,11 @@ export function simulate({
       if (!has('manager') && !has('loader') && !has('cashier')) packTime = delivery.delivered * OWNER_PACK_SECONDS;
     }
     const capacity = serveCapacity(state);
-    const serveCap = Math.max(0, capacity.total - Math.round(packTime / OWNER_SECONDS_PER_GUEST));
+    // Киоски пробивают только небольшие корзины: больше, чем таких гостей, они не возьмут.
+    const kioskServe = Math.min(capacity.kiosk, Math.round(dayGuests * smallBasket(kioskTier(state).maxItems)));
+    const serveCap = Math.max(0, capacity.total + kioskServe - Math.round(packTime / OWNER_SECONDS_PER_GUEST));
+    // У киоска кто-то «забывает» пробить товар — доля таких чеков от всех.
+    const kioskSkip = serveCap > 0 ? (kioskServe / serveCap) * kioskTier(state).skip : 0;
     // Грязь: уборщик, а ещё вход (грязь с улицы) и туалет (gear.ts).
     const dirtComplaint = (has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level) * (0.6 + 0.2 * entranceMud(state) + 0.2 * wcDirt(state));
     const guard = staffOf(state, 'guard');
@@ -755,6 +828,11 @@ export function simulate({
         state = returnToShelf(state, cart);
         if (!night) stats.lost++;
         continue;
+      }
+      // Непробитый на киоске товар уходит без оплаты (только из корзины в несколько штук, как в игре).
+      if (cart.length > 1 && kioskSkip > 0 && extraRandom() < kioskSkip) {
+        const lost = cart.pop()!;
+        stats.stolen += unitSalePrice(state, lost.id, lost.unit);
       }
       const paid = checkout(state, cart, night ? NIGHT_MARKUP : 1);
       const extra = extras(night) + (extraRandom() < catTipChance(state) ? CAT_TIP : 0);
