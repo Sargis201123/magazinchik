@@ -472,7 +472,10 @@ const TOILET_CLEAN_MS = 1000;
 const TRASH_CLEAN_MS = 400;
 const PICKUP_MS = 500;
 const PLACE_MS = 400;
-/** Повар не ставит кастрюли, если до закрытия меньше варки и стольких секунд (дорога и нарезка): не успеет продаться. */
+/**
+ * Дорога за продуктами, нарезка и раздача — столько секунд на закладку сверх варки у повара обычной скорости
+ * (у медленного — дольше). До закрытия меньше — новое не ставит; сколько ставить — по спросу после того, как сварится.
+ */
 const COOK_LATE = 14;
 /** Одна коробка на складе изображает минимум столько штук товара. */
 
@@ -7717,8 +7720,10 @@ export class StoreScene extends Phaser.Scene {
   private async cookLoop(w: Worker, gen: number): Promise<void> {
     while (this.alive(gen)) {
       const k = this.kitchenView;
-      const open = this.running && !this.night && Boolean(k?.stove.active) && this.timeLeft > stoveSeconds(this.state) + COOK_LATE;
-      const plan = open ? cookBatch(this.state, this.timeLeft / DAY_SECONDS) : [];
+      // Через сколько закладка будет в витрине: варка — по плите, дорога и нарезка — по шагу повара.
+      const ready = stoveSeconds(this.state) + COOK_LATE / this.workerPace(w);
+      const open = this.running && !this.night && Boolean(k?.stove.active) && this.timeLeft > ready;
+      const plan = open ? cookBatch(this.state, this.timeLeft / DAY_SECONDS, ready / DAY_SECONDS) : [];
       if (!k || !plan.length) {
         // Витрина пуста, а сварить не из чего — раз в день повар просит закупить продукты.
         const noFood = open && portionsTotal(this.state) === 0 && cookMenu(this.state).every((id) => !hasIngredients(this.state, id));
@@ -7800,6 +7805,8 @@ export class StoreScene extends Phaser.Scene {
       await this.workerWait(w, 450);
     }
     if (shelf >= 0) {
+      // Со склада в зал — обратно через дверь, а не наискосок сквозь стену флигеля.
+      if (fromStore) await this.workerWalk(w, store.doorway.x, store.doorway.y);
       const stand = standFor(this.layout, this.spotOf(shelf));
       await this.workerWalk(w, stand.x, stand.y - 2);
       await this.workerWait(w, PLACE_MS);

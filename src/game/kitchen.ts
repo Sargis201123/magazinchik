@@ -155,11 +155,14 @@ const worthCooking = (state: StoreState, id: DishId, want: number): boolean => p
 /**
  * Что повар ставит на плиту сейчас (по кастрюле на блюдо, сколько есть кастрюль): из меню дня то, что
  * охотнее берут и чего меньше в витрине. Не готовит, если продуктов нет, витрина полна или порций уже
- * хватит до закрытия.
+ * хватит до закрытия. readyIn — через какую долю дня закладка будет в витрине (дорога, нарезка, варка).
  */
-export function cookBatch(state: StoreState, dayLeft = 1, pots = stovePots(state)): DishId[] {
+export function cookBatch(state: StoreState, dayLeft = 1, readyIn = 0, pots = stovePots(state)): DishId[] {
   if (!kitchenWorking(state)) return [];
-  const want = dishDemand(state) * dayLeft;
+  // Сваренное продаётся, только когда окажется в витрине: пока варится, разбирают то, что в ней уже есть,
+  // а кому не хватило — уходят без порции.
+  const demand = dishDemand(state);
+  const want = demand * Math.max(0, dayLeft - readyIn) + Math.min(portionsTotal(state), demand * readyIn);
   const out: DishId[] = [];
   let s = state;
   for (let i = 0; i < pots; i++) {
