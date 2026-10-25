@@ -23,6 +23,8 @@ const css = `
 .ui-call.top { bottom: auto; top: calc(var(--safe-top, env(safe-area-inset-top)) + 62px); transform: translateY(calc(-100% - 140px)); }
 .ui-call.shown { transform: none; }
 .ui-call.gone { transition-duration: .22s; transition-timing-function: ease-in; }
+/* Поверх открыто окно — карточка прячется под него и ждёт; закрыли окно — выезжает снова. */
+.ui-call.covered { visibility: hidden; transition: none; }
 .ui-call-head { display: flex; align-items: center; gap: 9px; }
 .ui-call-face { width: 44px; height: 44px; image-rendering: pixelated; border-radius: 8px; border: 2px solid #2b2233; flex: none; }
 .ui-call-who { flex: 1; min-width: 0; }
@@ -81,6 +83,17 @@ function injectDeliveryStyles(): void {
   const style = document.createElement('style');
   style.textContent = css;
   document.head.append(style);
+}
+
+/**
+ * Касание карточки или плашки не должно дойти до мира под ней. Phaser слушает касания и мышь на всём
+ * окне (input.windowEvents) и всё, что пришло не с холста, проверяет по точке экрана: без этого
+ * «Принять» заодно нажимало бы на дорогу, мусор или полку под карточкой. Гасим всплытие до окна;
+ * разблокировка звука и щелчки кнопок слушают в фазе захвата — их это не задевает. preventDefault
+ * на touchend нельзя: пропал бы сам щелчок по кнопке.
+ */
+function keepTouches(node: HTMLElement): void {
+  for (const type of ['touchstart', 'touchend', 'touchcancel', 'mousedown', 'mouseup']) node.addEventListener(type, (e) => e.stopPropagation());
 }
 
 export interface CallView {
@@ -152,9 +165,7 @@ export class DeliveryUi {
     const actions = el('div', 'ui-call-actions');
     actions.append(button(t('delivery.decline'), view.onDecline, 'ui-btn no'), button(`📞 ${t('delivery.accept')}`, view.onAccept, 'ui-btn'));
     card.append(head, items, pay, note, actions);
-    // Отпустили кнопку мышью — Phaser не должен принять это за касание того, что в мире под карточкой
-    // (на телефоне касание, начатое не на холсте, он и так не видит).
-    card.addEventListener('mouseup', (e) => e.preventDefault());
+    keepTouches(card);
     pixelize(card);
     document.body.append(card);
     this.card = card;
@@ -170,6 +181,14 @@ export class DeliveryUi {
     if (this.seconds.textContent !== text) this.seconds.textContent = text;
     this.timer.classList.toggle('warn', left <= 0.5 && left > 0.25);
     this.timer.classList.toggle('late', left <= 0.25);
+  }
+
+  /** Открыто окно поверх зала (срочный подвоз, особый гость): карточка не закрывает его, а ждёт под ним. */
+  coverCall(covered: boolean): void {
+    const card = this.card;
+    if (!card || card.classList.contains('covered') === covered) return;
+    card.classList.toggle('covered', covered);
+    card.classList.toggle('shown', !covered);
   }
 
   /** Карточка уезжает (now — сразу, без анимации: перестройка сцены, конец дня). */
@@ -206,7 +225,7 @@ export class DeliveryUi {
       this.pill?.remove();
       this.pill = onTap ? el('button', 'ui-deliv-pill') : el('div', 'ui-deliv-pill');
       if (onTap) this.pill.addEventListener('click', () => this.onPill());
-      this.pill.addEventListener('mouseup', (e) => e.preventDefault());
+      keepTouches(this.pill);
       this.pill.classList.toggle('ui-calm', liteMode());
       document.body.append(this.pill);
     }

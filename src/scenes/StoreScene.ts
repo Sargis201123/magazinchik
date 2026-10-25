@@ -211,7 +211,7 @@ import { warLeaves } from '../game/war';
 import { lossAdvice, noteLost } from '../game/losses';
 import { fairTolerance, isFairDay, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fair';
 import { fpsSummary, fpsVerdict, lowerQuality, quality, qualityChosen, type Quality } from '../platform/quality';
-import { framesThrottled } from '../platform/frameCap';
+import { framesThrottled, modalOpen } from '../platform/frameCap';
 import {
   deliveryRating,
   deliveryTip,
@@ -1378,8 +1378,11 @@ export class StoreScene extends Phaser.Scene {
   /** Кольца вокруг звонящего телефона и его подсветка. */
   private phoneHalo?: Phaser.GameObjects.Arc;
   private phoneGlow?: Phaser.FX.Glow;
-  /** Звонок, на который ещё не ответили: заказ, когда позвонили (playTime), таймеры ответа, трели и дрожи трубки. */
-  private call: { order: HomeOrder; at: number; timer: Phaser.Time.TimerEvent; ringer: Phaser.Time.TimerEvent; shake: Phaser.Time.TimerEvent } | null = null;
+  /**
+   * Звонок, на который ещё не ответили: заказ, когда позвонили (playTime), таймеры ответа, трели и дрожи
+   * трубки; covered — поверх открыто окно, звонок ждёт.
+   */
+  private call: { order: HomeOrder; at: number; timer: Phaser.Time.TimerEvent; ringer: Phaser.Time.TimerEvent; shake: Phaser.Time.TimerEvent; covered?: boolean } | null = null;
   /** Когда позвонят в следующий раз. */
   private callTimer?: Phaser.Time.TimerEvent;
   /** Принятые заказы: ждут сборки, собираются, стоят коробкой у двери или едут с курьером. */
@@ -4049,8 +4052,9 @@ export class StoreScene extends Phaser.Scene {
     this.callTimer = undefined;
     const phone = this.phone;
     if (!phone?.active || !this.running || this.night || this.timeLeft < ORDER_TIMEOUT + 3) return;
-    // Курьеру уже некуда брать — перезвонят чуть позже, заказ не пропадает.
-    if (this.call || this.parcelsWaiting() >= vehicleOf(this.state).queue) {
+    // Курьеру уже некуда брать или игрок в окне (срочный подвоз, особый гость) — перезвонят чуть позже,
+    // заказ не пропадает.
+    if (this.call || this.parcelsWaiting() >= vehicleOf(this.state).queue || modalOpen()) {
       this.scheduleOrder(RETRY_CALL);
       return;
     }
@@ -4118,7 +4122,9 @@ export class StoreScene extends Phaser.Scene {
     const phone = this.phone;
     if (phone?.active) {
       this.tweens.killTweensOf(phone);
-      if (this.phoneGlow) phone.preFX?.remove(this.phoneGlow);
+      // Снимаем подсветку вместе с FX целиком: иначе телефон до конца дня рисовался бы через отдельный
+      // буфер с пустым списком эффектов (см. glowOn).
+      if (this.phoneGlow) phone.preFX?.disable(true);
       phone.setTexture('phone').setAngle(0).setScale(1 / ART).disableInteractive();
     }
     this.phoneGlow = undefined;
@@ -4389,7 +4395,11 @@ export class StoreScene extends Phaser.Scene {
     void this.dispatchCourier();
   }
 
-  /** Фургончик: подъезжает к тротуару, курьер садится, уезжает по ближней полосе и возвращается. false — не доехал. */
+  /**
+   * Фургончик: подъезжает к тротуару, курьер садится, уезжает по ближней полосе. Машины на ней едут
+   * только вправо (налево — по дальней), поэтому обратно он не пятится, а объезжает квартал: снова
+   * появляется слева, высаживает курьера и едет дальше вправо. false — не доехал.
+   */
   private async vanTrip(courier: Phaser.GameObjects.Container, vehicle: Vehicle, arrive: () => void): Promise<boolean> {
     const home = this.courierHome;
     const roadY = this.streetY + 24;
@@ -4407,10 +4417,11 @@ export class StoreScene extends Phaser.Scene {
     arrive();
     await this.wait(vehicle.away * 1000);
     if (!van.active) return false;
+    van.x = -70;
     await drive(home.x + 6, 'Sine.easeOut');
     courier.setVisible(true);
     await this.walk(courier, home.x, home.y, 45);
-    if (van.active) this.tweens.add({ targets: van, x: -70, duration: ((home.x + 76) / vehicle.speed) * 1000, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
+    if (van.active) void drive(this.next.w + 70, 'Sine.easeIn').then(() => van.destroy());
     return courier.active;
   }
 
@@ -4445,7 +4456,20 @@ export class StoreScene extends Phaser.Scene {
   private updateDelivery(): void {
     if (!this.phone) return;
     const call = this.call;
-    if (call) this.deliveryUi.setCountdown(1 - call.timer.getProgress(), call.timer.getRemainingSeconds());
+    if (call) {
+      // Поверх открыли окно (срочный подвоз, особый гость): карточка его не закрывает и сама под ним не
+      // теряется — прячется, а звонок ждёт: время на ответ стоит, трель молчит, трубку не нажать сквозь окно.
+      const covered = modalOpen();
+      if (covered !== Boolean(call.covered)) {
+        call.covered = covered;
+        call.timer.paused = covered;
+        call.ringer.paused = covered;
+        this.deliveryUi.coverCall(covered);
+        if (covered) this.phone.disableInteractive();
+        else this.phone.setInteractive();
+      }
+      this.deliveryUi.setCountdown(1 - call.timer.getProgress(), call.timer.getRemainingSeconds());
+    }
     if (this.packRequested && !this.sellerBusy && !this.ownerScanning()) {
       this.packRequested = false;
       void this.ownerPack();
