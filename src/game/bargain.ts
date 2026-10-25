@@ -1,13 +1,15 @@
-// Полка «Уценка» у входа: сюда уходит товар, который испортится этой ночью (и уже уценённый), —
+// Полка «Уценка» у входа — горка с ценниками «−50%» (модели побольше — gear 'bargain'): сюда уходит товар, который испортится этой ночью (и уже уценённый), —
 // за полцены, под красной табличкой «АКЦИЯ». Покупатели по пути заглядывают и берут с неё сверх
 // списка, так старое продаётся, а не выбрасывается, и на основных полках освобождается место.
 
 import { PRODUCT_IDS, unitLife, type ProductId, type Stock, type StoreState, type Unit } from './economy';
-import { fridgeLife } from './gear';
+import { bargainRows, fridgeLife } from './gear';
 import { hasUpgrade } from './upgrades';
 
-/** Сколько штук помещается на полке уценки. */
-export const BARGAIN_CAPACITY = 12;
+/** Мест в одном ряду горки; рядов — по модели полки (gear 'bargain': 2, 3, 4). */
+export const BARGAIN_PER_ROW = 6;
+/** Сколько штук помещается на полке уценки: 12, 18 или 24. */
+export const bargainCapacity = (state: StoreState): number => BARGAIN_PER_ROW * bargainRows(state);
 /** С такой вероятностью покупатель заглядывает на полку уценки, если на ней что-то есть. */
 export const BARGAIN_CHANCE = 0.35;
 
@@ -24,7 +26,7 @@ const goesToBargain = (state: StoreState, id: ProductId, u: Unit): boolean => !u
  */
 export function fillBargain(state: StoreState): { state: StoreState; count: number } {
   if (!hasBargain(state)) return { state, count: 0 };
-  let room = BARGAIN_CAPACITY - bargainCount(state);
+  let room = bargainCapacity(state) - bargainCount(state);
   if (room <= 0) return { state, count: 0 };
   const bargain: Stock = { ...(state.bargain ?? {}) };
   let count = 0;

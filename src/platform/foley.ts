@@ -28,6 +28,11 @@ export const NOTES_FROM = 300;
 
 export const payWith = (total: number): 'notes' | 'coin' => (total >= NOTES_FROM ? 'notes' : 'coin');
 
+/** Большая покупка — после кассы тихое «спасибо» (sound.thanks): столько товаров или на такую сумму. */
+export const BIG_BASKET = { items: 4, total: 2 * NOTES_FROM };
+
+export const bigBasket = (items: number, total: number): boolean => items >= BIG_BASKET.items || total >= BIG_BASKET.total;
+
 /** Каждый следующий товар на полке — на полтона выше, но не выше чем на кварту. */
 export const placeRate = (n: number): number => 2 ** (Math.min(Math.max(n, 0), 10) * 0.5 / 12);
 

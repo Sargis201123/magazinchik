@@ -5223,6 +5223,13 @@ def main():
     import delivery
 
     delivery.main()
+    # Мусор на полу и он же сгнивший, полка «Уценка» (поверх старых trash*.png из trash() и effects()).
+    import litter
+
+    litter.main()
+    import bargain_shelf
+
+    bargain_shelf.main()
     # Атлас значков для холста — из готовых ico_*, поэтому после icons2.
     icons.atlas()
     import clockface

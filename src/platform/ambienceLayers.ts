@@ -93,18 +93,21 @@ const wet = (w: Weather): boolean => w === 'rain' || w === 'storm';
 /** Промежуток между случайными звуками: от и до, секунды. null — сейчас не звучат. */
 export type Gap = [number, number] | null;
 
-/** Птицы за окном: весной и летом в сухую погоду, утром часто, днём реже, к вечеру смолкают. */
+/**
+ * Птицы за окном: весной и летом в сухую погоду, к вечеру смолкают. Редко — фон, а не щебет без
+ * перерыва (просьба автора): утром раз в 5–12 с, днём — раз в 12–30 с.
+ */
 export function birdGap(s: AmbScene): Gap {
   if (s.season !== 'spring' && s.season !== 'summer') return null;
   if (wet(s.weather) || s.weather === 'snow' || s.night || s.evening >= 0.55) return null;
-  return s.morning > 0.4 ? [1.4, 4.5] : [4, 11];
+  return s.morning > 0.4 ? [5, 12] : [12, 30];
 }
 
-/** Вороны: зимой и в снег — то и дело, поздней осенью — изредка (в начале осени их нет); в темноте молчат. */
+/** Вороны: зимой и в снег — изредка, поздней осенью — ещё реже (в начале осени их нет); в темноте молчат. */
 export function crowGap(s: AmbScene): Gap {
   if (s.night || s.evening > 0.75) return null;
-  if (s.season === 'winter' || s.weather === 'snow') return [9, 26];
-  if (s.season === 'autumn' && s.lateAutumn && !wet(s.weather)) return [30, 75];
+  if (s.season === 'winter' || s.weather === 'snow') return [16, 40];
+  if (s.season === 'autumn' && s.lateAutumn && !wet(s.weather)) return [40, 90];
   return null;
 }
 
@@ -144,15 +147,16 @@ export function wantedFiles(s: AmbScene): AmbId[] {
 export const MURMUR_LAYERS = 3;
 
 /**
- * Гомон по числу покупателей: громкость каждого из трёх слоёв (0…1). Один-два человека — тихий
- * разговор у полки, к шести-семи — второй слой, к десятку — третий. Не «вечеринка»: даже полный
- * зал — ровный негромкий гул голосов. На слабом телефоне — один слой (чуть громче, когда людно).
+ * Гомон по числу покупателей: громкость каждого из трёх слоёв (0…1). Один-два человека — едва
+ * слышный разговор у полки, к пяти — первый слой целиком, к девяти-десяти — второй, к четырнадцати —
+ * третий. Не «вечеринка»: даже полный зал — ровный негромкий гул голосов (и весь он тише прежнего,
+ * ambienceFiles.ts). На слабом телефоне — один слой (чуть громче, когда людно).
  */
 export function murmurGains(customers: number, lite: boolean): number[] {
   const n = Math.max(0, customers);
-  const first = Math.min(1, n / 3);
-  if (lite) return [Math.min(1.25, first * (1 + Math.max(0, n - 4) * 0.05)), 0, 0];
-  return [first, Math.min(1, Math.max(0, (n - 3) / 4)), Math.min(1, Math.max(0, (n - 7) / 5))];
+  const first = Math.min(1, (n / 5) ** 1.5);
+  if (lite) return [Math.min(1.25, first * (1 + Math.max(0, n - 6) * 0.05)), 0, 0];
+  return [first, Math.min(1, Math.max(0, (n - 5) / 5)), Math.min(1, Math.max(0, (n - 9) / 5))];
 }
 
 /** Следующий промежуток: случайно между min и max. */
