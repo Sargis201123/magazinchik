@@ -286,6 +286,15 @@ const css = `
 /* Закупка: большая кнопка «Закупить нужное», фильтры. */
 .ui-restock .ui-btn { margin: 0 0 4px; }
 .ui-filter { margin: 8px 0 2px; }
+/* Автозаказ — первой карточкой закупки: рамка толще, справа ярлык «включён / выключен». */
+.ui-auto { border-width: 3px; background: #eef4ff; }
+.ui-auto.on { background: #e6f6dc; }
+.ui-auto-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 16px; }
+.ui-auto-state { flex: none; font: 700 12px ${UI_FONT}; padding: 2px 8px; border-radius: 10px; background: #2b2233; color: #f4ecd8; }
+.ui-auto.on .ui-auto-state { background: #3e8948; }
+.ui-auto-limit { flex-wrap: wrap; font-size: 14px; }
+.ui-auto-lines { margin: 4px 0; }
+.ui-auto-actions { margin-top: 6px; }
 .ui-chip.active { background: #2b2233; color: #f4ecd8; }
 /* Зал: склад строкой, полки сеткой. */
 .ui-stock-line { font-size: 14px; margin: 4px 0 6px; line-height: 1.6; }

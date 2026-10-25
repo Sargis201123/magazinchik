@@ -76,6 +76,8 @@ import {
 } from './economy';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { restockPlan } from './restock';
+import { autoActive, autoMorning, autoTopUp } from './autoorder';
+import { receiveUrgent } from './urgent';
 import { answerEvent, inspect } from './events';
 import { candidatesFor } from './staff';
 import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
@@ -167,9 +169,11 @@ export interface SimOptions {
   ovenBurn?: number;
   /**
    * Как игрок закупается утром: 'smart' — знает спрос дня точно (как раньше); 'restock' — жмёт
-   * «Закупить нужное» (restock.ts); 'naive' — новичок: держит всего поровну, по 8 штук.
+   * «Закупить нужное» (restock.ts); 'naive' — новичок: держит всего поровну, по 8 штук; 'auto' — как
+   * 'restock', пока не купит автозаказ (autoorder.ts), а дальше закупается он сам: утром в пределах
+   * лимита, днём подвозит кончившееся.
    */
-  buyMode?: 'smart' | 'restock' | 'naive';
+  buyMode?: 'smart' | 'restock' | 'naive' | 'auto';
 }
 
 export type Feature =
@@ -410,6 +414,14 @@ export function simulate({
     // Дорогое «для удобства» (ночная смена, новые модели) разумный игрок берёт, когда уже не копит на расширение.
     const nextLevel = nextStoreLevel(state);
     const canSplurge = (price: number) => !nextLevel || state.money - price >= nextLevel.cost + reserve;
+    // Автозаказ: берёт, как только хватает с запасом, и сразу включает.
+    if (buyMode === 'auto' && !hasUpgrade(state, 'autoOrder') && state.level >= UPGRADES.autoOrder.minLevel && state.money >= UPGRADES.autoOrder.price + reserve) {
+      const bought = buyUpgrade(state, 'autoOrder');
+      if (bought) {
+        investments += UPGRADES.autoOrder.price;
+        state = { ...bought, autoOrder: { on: true } };
+      }
+    }
     for (const [feature, id] of wants) {
       if (!features[feature] || hasUpgrade(state, id) || state.money < UPGRADES[id].price + reserve) continue;
       if ((id === 'nightShift' || id === 'eTags' || id === 'coffeeTables' || id === 'kitchen') && !canSplurge(UPGRADES[id].price)) continue;
@@ -572,7 +584,12 @@ export function simulate({
     const otherWeight = sellable.filter((p) => !OWN_PRODUCTS.includes(p)).reduce((sum, p) => sum + weight(p), 0);
     // Повару на кухню — сверху к спросу зала.
     const forKitchen = features.kitchen ? kitchenNeeds(state) : {};
-    if (buyMode === 'restock') {
+    if (buyMode === 'auto' && autoActive(state)) {
+      // Закупщик платит обычную цену (без торга) и брака не берёт.
+      const before = state.money;
+      state = autoMorning(state, (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid), guestsToday(state));
+      purchases += before - state.money;
+    } else if (buyMode === 'restock' || buyMode === 'auto') {
       const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state));
       for (const line of plan.lines) {
         const bad = random() < SUPPLIERS[line.sid].badChance;
@@ -703,6 +720,14 @@ export function simulate({
         if (caught) stats.caught++;
         else stats.stolen += unitSalePrice(state, id, taken.unit);
         continue;
+      }
+      // Автозаказ днём: разобрали, а на складе пусто — подвоз (фургон в симуляции приезжает сразу).
+      if (!night && autoActive(state)) {
+        const top = autoTopUp(state, (id) => stats.sold[id] ?? 0);
+        if (top) {
+          state = receiveUrgent(top.state, top.pid, top.qty);
+          purchases += top.cost;
+        }
       }
       // Игрок замечает пустую полку и несёт товар со склада.
       for (const id of sellable) {

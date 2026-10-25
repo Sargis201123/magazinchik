@@ -673,8 +673,10 @@ export interface StoreState {
   brand?: number;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */
   records?: import('./records').Records;
-  /** Автозаказ: сколько чего держать на складе и включён ли он (reorder.ts). */
-  autoOrder?: { on: boolean; lines: { sid: string; pid: ProductId; qty: number }[] };
+  /** Последние мини-события дня — чтобы не повторялись подряд (live.ts). */
+  liveRecent?: import('./live').LiveKind[];
+  /** Автозаказ: включён ли, лимит и что купил сегодня (autoorder.ts). */
+  autoOrder?: import('./autoorder').AutoOrder;
   /** Бабушкино обучение: false — показать (новая игра или «пройти заново»), нет поля — старое сохранение. */
   tourDone?: boolean;
   /**
@@ -689,8 +691,6 @@ export interface StoreState {
   gear?: Partial<Record<GearId, number>>;
   /** Рейтинг доставки на дом 1..5 (delivery.ts); нет — 4 звезды. */
   deliveryRating?: number;
-  /** Утренние закупки последних дней — для «как в прошлый раз» (reorder.ts). */
-  purchases?: { day: number; lines: { sid: string; pid: ProductId; qty: number }[] }[];
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */

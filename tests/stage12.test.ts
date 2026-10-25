@@ -177,21 +177,7 @@ describe('новые линейки оборудования', () => {
   });
 });
 
-describe('автозаказ, ценники, тележки', () => {
-  it('автозаказ пополняет склад до списка, по обычной цене, и только когда включён', async () => {
-    const { autoOrderPlan, rememberAutoOrder, toggleAutoOrder, recordPurchase } = await import('../src/game/reorder');
-    let s: StoreState = { ...at(2), upgrades: ['autoOrder'], warehouse: { milk: [{ age: 0 }, { age: 0 }] } };
-    expect(rememberAutoOrder(s)).toBeNull();
-    s = recordPurchase(s, 'farmer', 'milk', 10);
-    s = rememberAutoOrder(s)!;
-    const price = () => 20;
-    const plan = autoOrderPlan(s, price)!;
-    expect(plan.lines).toEqual([{ sid: 'farmer', pid: 'milk', qty: 8, price: 20 }]);
-    expect(plan.total).toBe(160);
-    expect(autoOrderPlan(toggleAutoOrder(s)!, price)).toBeNull();
-    expect(autoOrderPlan({ ...s, upgrades: [] }, price)).toBeNull();
-  });
-
+describe('ценники, тележки', () => {
   it('умные ценники уценяют только то, что не успеют купить', async () => {
     const { markdownSurplus, PRODUCTS } = await import('../src/game/economy');
     const old = PRODUCTS.milk.shelfLife - 1;
