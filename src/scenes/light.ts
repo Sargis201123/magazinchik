@@ -176,7 +176,13 @@ export class LightMap {
     const textures = this.scene.textures;
     let texture = textures.exists(KEY) ? (textures.get(KEY) as Phaser.Textures.DynamicTexture) : undefined;
     if (!texture) texture = textures.addDynamicTexture(KEY, w, h) ?? undefined;
-    else if (texture.width !== w || texture.height !== h) texture.setSize(w, h);
+    else if (texture.width !== w || texture.height !== h) {
+      // Буфер карты в видеокарте сам размер не меняет (autoResize у динамической текстуры выключен): без
+      // этого после расширения магазина рисовали бы в старый размер, а растягивали на новый — свет съезжал.
+      texture.renderTarget?.setAutoResize(true);
+      texture.setSize(w, h);
+      texture.renderTarget?.setAutoResize(false);
+    }
     this.texture = texture;
     // Свет мягкий: карту растягиваем сглаженно (весь остальной мир — по пикселям).
     texture?.setFilter(Phaser.Textures.FilterMode.LINEAR);

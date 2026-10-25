@@ -63,6 +63,6 @@ export class Halo {
  */
 export function personGlow(scene: Phaser.Scene, person: Phaser.GameObjects.Container, color: number, strength: number): Phaser.GameObjects.Image {
   const glow = scene.add.image(0, -1, 'glow').setDisplaySize(20, 28).setTint(color).setAlpha(Math.min(0.85, 0.25 + strength * 0.18));
-  person.addAt(glow, 0);
+  person.addAt(glow, 0).setData('glow', glow);
   return glow;
 }

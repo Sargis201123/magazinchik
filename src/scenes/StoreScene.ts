@@ -2250,9 +2250,10 @@ export class StoreScene extends Phaser.Scene {
     const fill = this.add.rectangle(counter.x - 8, counter.y - 31, 0, 2, 0x63c74d).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
     const sx = counter.x + (mirrored ? -0.5 : 0.5);
     const screen = this.add.rectangle(sx, counter.y + 10.5, 6, 3, 0xb6f58a).setDepth(counter.y + 21).setVisible(false);
-    // Экран кассы светит зеленоватым на прилавок и кассира: тлеет всегда, ярче — пока пробивает.
+    // Экран кассы светит зеленоватым на прилавок и кассира: тлеет всегда, ярче — пока пробивает. Ровно, не по
+    // мерцанию экрана (оно 7 раз в секунду, при заедании — каждый кадр): карту ради него не перерисовывать.
     const till = this.light.add('glow', sx, counter.y + 9, 22, 16, 0xb6f58a).attach(screen);
-    till.sync = () => till.set(this.powerOn() * (screen.visible ? 0.2 + 0.4 * screen.alpha : 0.2));
+    till.sync = () => till.set(this.powerOn() * (screen.visible ? 0.5 : 0.2));
     const beam = this.add
       .rectangle(sx, counter.y + 4.2, 8, 4.5, 0xff4a4a)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -10015,7 +10016,8 @@ export class StoreScene extends Phaser.Scene {
     const back = person.getData('back') as Phaser.GameObjects.Image | undefined;
     if (back) {
       if (facing === 'up') person.bringToTop(back);
-      else person.moveTo(back, 1);
+      // Сразу над тенью (а у светящегося человека тень — над свечением, personGlow).
+      else person.moveTo(back, person.getData('glow') ? 2 : 1);
     }
     this.placeStroller(person, facing);
   }
@@ -14573,10 +14575,11 @@ export class StoreScene extends Phaser.Scene {
     beam.fillStyle(0xfff3b0, 0.22);
     beam.fillTriangle(0, 0, 22, 8, 16, 16);
     this.tweens.add({ targets: beam, rotation: { from: -0.25, to: 0.35 }, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    // Луч фонарика в карте освещения: ходит по тротуару вместе с рукой сторожа.
+    // Луч фонарика в карте освещения: ходит по тротуару вместе с рукой сторожа — ступеньками по 1/8 радиана
+    // (свет мягкий, шагов не видно), а не каждый кадр: карту всю ночь перерисовывали бы непрерывно.
     const torch = this.light.add('light_cone', beam.x, beam.y, 16, 28, 0xfff3c8, 0.7).attach(beam);
     torch.originY = 0;
-    torch.sync = () => (torch.rotation = beam.rotation + Math.atan2(12, 19) - Math.PI / 2);
+    torch.sync = () => (torch.rotation = Math.round(beam.rotation * 8) / 8 + Math.atan2(12, 19) - Math.PI / 2);
     this.nightWatch.push(watchman, beam);
   }
 
