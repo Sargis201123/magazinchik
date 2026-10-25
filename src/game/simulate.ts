@@ -426,7 +426,8 @@ export function simulate({
     if (features.gear) {
       for (const id of GEAR_IDS) {
         const next = nextGear(state, id);
-        if (!next || !gearAvailable(state, id) || state.money < next.price + reserve * 2 || !canSplurge(next.price)) continue;
+        // Полка «Уценка» в симуляторе не моделируется (fillBargain) — места на ней не покупаем.
+        if (id === 'bargain' || !next || !gearAvailable(state, id) || state.money < next.price + reserve * 2 || !canSplurge(next.price)) continue;
         investments += next.price;
         state = upgradeGear(state, id) ?? state;
       }

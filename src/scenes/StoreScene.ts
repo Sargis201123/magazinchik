@@ -1836,6 +1836,8 @@ export class StoreScene extends Phaser.Scene {
     music.setMood(this.musicMood(), this.winterTune);
     // Дверь двигается только в рабочие часы: день кончился — стекло снова закрывает улицу.
     if (!this.running) {
+      // Мухи над неубранным не замирают и между сменами.
+      this.rotting.tick(this.time.now);
       ambience.door(0);
       return;
     }
@@ -11161,7 +11163,7 @@ export class StoreScene extends Phaser.Scene {
     if (!this.sys.isActive()) return;
 
     // Переполненное ведро инспектор считает как две кучки мусора.
-    const result = inspect(this.state, { trash: this.trash.size + (this.binFull() ? 2 : 0) + (this.smell() ? 1 : 0), toiletDirt: this.toiletDirt });
+    const result = inspect(this.state, { trash: this.trash.size + (this.binFull() ? 2 : 0) + ([...this.trash].some((piece) => piece.getData('rot')) ? 1 : 0), toiletDirt: this.toiletDirt });
     this.inspection = result;
     this.state = inspectionDone(this.state, result);
     if (result.passed) {
@@ -11861,7 +11863,8 @@ export class StoreScene extends Phaser.Scene {
     const dirty = this.trash.size >= TRASH_COMPLAINT || this.binFull();
     const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
     // Гнилой мусор и давно полное ведро пахнут: чем сильнее, тем чаще морщатся (rot.ts).
-    const smelly = !dirty && Math.random() < smellChance(this.smell());
+    // (Полное ведро и так «грязно» — его запах здесь не добавляется второй раз.)
+    const smelly = !c.unhappy && !dirty && Math.random() < smellChance(this.smell());
     if (c.unhappy || dirty || badGoods || smelly) {
       this.stats.complaints++;
       if (badGoods) note(this.stats, 'badGoods');
