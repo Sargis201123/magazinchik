@@ -1034,7 +1034,6 @@ export class StoreScene extends Phaser.Scene {
   private starsCheered = -1;
   /** Рекорд выручки сегодня уже отметили конфетти. */
   private recordCheered = false;
-  private dragStart = { x: 0, y: 0 };
   /** Куда камера возвращается после осмотра квартала. */
   private home = { x: 0, y: 0 };
   private homeTimer?: Phaser.Time.TimerEvent;
@@ -5693,10 +5692,10 @@ export class StoreScene extends Phaser.Scene {
   private setupCameraDrag(): void {
     const cam = this.cameras.main;
     this.input.on('gameobjectup', (p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => this.tapFx(p, obj));
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      // Второй палец — это щипок, а не нажатие: ни то, ни другое касание не засчитываем.
-      this.dragged = this.input.pointer1.isDown && this.input.pointer2.isDown;
-      this.dragStart = { x: p.x, y: p.y };
+    // Новый жест — с первым пальцем. Второй палец (щипок, касания внахлёст, ладонь у края экрана)
+    // жест не сбрасывает и сам его сдвигом не делает: сдвигом считается только движение пальцев.
+    this.input.on('pointerdown', () => {
+      if (!(this.input.pointer1.isDown && this.input.pointer2.isDown)) this.dragged = false;
     });
     this.input.addPointer(1);
     // Пока пальцы двигаются, масштаб любой — плавно; отпустили — доходит до ближайшего ровного
@@ -5729,7 +5728,11 @@ export class StoreScene extends Phaser.Scene {
       if (this.arranging) return;
       const a = this.input.pointer1;
       const b = this.input.pointer2;
+      // Палец сдвинулся — каждый считается от того места, где коснулся.
+      const slop = 12 * this.res;
       if (a.isDown && b.isDown) {
+        // Оба пальца почти на месте — это ещё не щипок (два касания внахлёст), касание засчитается.
+        if (!this.dragged && a.getDistance() < slop && b.getDistance() < slop) return;
         // Два пальца: приближаем или отдаляем.
         const dist = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
         this.pinch ??= { dist, zoom: cam.zoom };
@@ -5741,7 +5744,7 @@ export class StoreScene extends Phaser.Scene {
       }
       this.pinch = null;
       if (!p.isDown) return;
-      if (!this.dragged && Phaser.Math.Distance.Between(p.x, p.y, this.dragStart.x, this.dragStart.y) < 12 * this.res) return;
+      if (!this.dragged && p.getDistance() < slop) return;
       this.dragged = true;
       this.homeTimer?.remove();
       // Камера могла лететь домой — палец её перехватывает.
@@ -8708,6 +8711,13 @@ export class StoreScene extends Phaser.Scene {
   /** Продавца позвали к кассе: бросает дело на полпути и идёт обратно. Несённый товар остаётся на складе. */
   private recallSeller(): void {
     if (!this.sellerBusy) return;
+    this.dropChore();
+    haptic.tap();
+    void this.returnSeller();
+  }
+
+  /** Хозяин бросает дело на полпути (позвали к кассе, взяли в заложники): дальше оно не идёт. */
+  private dropChore(): void {
     this.choreId++;
     this.stopMop(this.seller);
     this.tweens.killTweensOf(this.carried);
@@ -8722,8 +8732,6 @@ export class StoreScene extends Phaser.Scene {
       this.binBy = null;
       this.refreshBin();
     }
-    haptic.tap();
-    void this.returnSeller();
   }
 
   private async returnSeller(): Promise<void> {
@@ -11818,6 +11826,10 @@ export class StoreScene extends Phaser.Scene {
       this.staffGen++;
       this.managerOnFloor = false;
       for (const worker of this.workers.values()) if (!hostages.includes(worker.sprite)) hostages.push(worker.sprite);
+      // Хозяин бросает дело: его шаг гасится без onStop, и само дело уже не кончится — без этого он
+      // так и числился бы занятым, а за его кассой до конца дня стоял бы сменщик.
+      if (this.sellerBusy) this.dropChore();
+      this.sellerBusy = false;
       hostages.push(this.seller);
       hostages.forEach((p, i) => {
         this.stopMop(p);
