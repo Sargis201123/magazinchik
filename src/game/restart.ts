@@ -1,19 +1,20 @@
 // Новая игра с нуля: после банкротства или по кнопке «Начать заново».
 // Магазин, деньги, персонал, сюжет и опыт хозяина начинаются сначала. Остаётся то, что
 // принадлежит игроку, а не магазину:
-// - всё купленное за Telegram Stars (премиальный декор; новые покупки за звёзды добавлять сюда);
+// - всё купленное за Telegram Stars (премиальный декор; новые покупки за звёзды добавлять сюда)
+//   и праздничные вещи за открытки (live.ts), а с ними — какие открытки уже открыты;
 // - открытые достижения;
 // - бабушкина экскурсия уже пройдена, серия ежедневных подарков не сбрасывается;
 // - наследие проданных магазинов (legacy.ts): очки и бонусы, стартовые — сразу в новом магазине;
 // - сезонный пропуск и отметки о забранных наградах недели и выходных.
 
-import { DECOR, type DecorId, type DecorKind } from './decor';
+import { isDecorId, isKeepsake, type DecorId, type DecorKind } from './decor';
 import { newGame, type StoreState } from './economy';
 import { applyLegacyStart } from './legacy';
 
-/** Премиальные (за Stars) вещи оформления, которые игрок уже купил. */
+/** Вещи оформления, которые принадлежат игроку: купленные за звёзды и праздничные (за открытки). */
 export function premiumDecor(state: StoreState): DecorId[] {
-  return state.decor.owned.filter((id) => DECOR.find((d) => d.id === id)?.stars !== undefined);
+  return state.decor.owned.filter((id) => isDecorId(id) && isKeepsake(id));
 }
 
 export function restartGame(old: StoreState): StoreState {
@@ -39,5 +40,7 @@ export function restartGame(old: StoreState): StoreState {
     rushClaimed: old.rushClaimed,
     // Сезонный пропуск — тоже (за него могли заплатить звёздами): опыт и забранные награды остаются.
     pass: old.pass,
+    // Открытки праздника по календарю: сегодняшнюю второй раз не открыть, гостя второй раз не встретить.
+    live: old.live,
   });
 }

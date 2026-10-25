@@ -7,6 +7,7 @@ import { t, type TextKey } from '../i18n';
 import { PRODUCTS } from '../game/economy';
 import { DELIVERY_FEE, TIPS, type HomeOrder } from '../game/delivery';
 import { png } from '../platform/assets';
+import { sheetPng } from './sheet';
 import { liteMode } from '../platform/quality';
 import { button, el, injectStyles, pixelize, UI_FONT } from './dom';
 
@@ -151,7 +152,7 @@ export class DeliveryUi {
     for (const { id, qty } of view.order.items) {
       const chip = el('div', 'ui-call-item');
       const img = el('img');
-      img.src = png(`item_${id}`);
+      img.src = sheetPng(`item_${id}`);
       img.alt = PRODUCTS[id].icon;
       chip.append(img, `×${qty}`);
       chip.title = t(PRODUCTS[id].nameKey);

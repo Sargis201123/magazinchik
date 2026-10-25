@@ -9,7 +9,7 @@
 
 import { markWeek } from './guild.js';
 import { markWeekend } from './weekend.js';
-import { ready } from './social.js';
+import { ready, saveHooks } from './social.js';
 import { rivalKey } from './rival.js';
 import { json, verifyInitData, type D1, type Env } from './telegram.js';
 
@@ -46,8 +46,8 @@ export interface BoardRow {
 export const SHOP_MAX = 16_000;
 
 /**
- * POST /api/progress { initData, day, level, rating, revenue, money, chapter, events: [{ kind, day, value }] } → { ok }:
- * прогресс магазина (для рейтинга) и события игры (для воронки).
+ * POST /api/progress { initData, day, level, rating, revenue, money, chapter, tz, hooks, events: [{ kind, day, value }] } → { ok }:
+ * прогресс магазина (для рейтинга), события игры (для воронки), часовой пояс и поводы для напоминаний.
  */
 export async function progress(request: Request, env: Env): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
@@ -58,6 +58,8 @@ export async function progress(request: Request, env: Env): Promise<Response> {
   if (!user) return json({ error: 'bad_init_data' }, 401);
   await ready(db);
   const now = Date.now();
+  // Часовой пояс и поводы для напоминаний бота (remind.ts).
+  await saveHooks(db, user.id, body, now);
   const name = (user.first_name ?? '').trim().slice(0, 20) || '—';
   const rating = Math.max(0, Math.min(5, Number(body.rating) || 0));
   const prev = await db

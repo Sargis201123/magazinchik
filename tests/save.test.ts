@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newGame } from '../src/game/economy';
+import { decodeWear, encodeWear, wearGrid } from '../src/game/wear';
 
 // Сохранение в телефоне: битые и чужие версии не ломают игру, недоступное хранилище — тоже,
 // а новые поля (охрана, конкурс, сюжет) переживают сохранение и загрузку.
@@ -75,5 +76,28 @@ describe('сохранение в телефоне', () => {
     broken = true;
     expect(loadGame()).toBeNull();
     expect(() => saveGame(newGame())).not.toThrow();
+  });
+
+  it('потёртость пола переживает сохранение; без неё (старое сохранение) или испорченная — чистый пол', async () => {
+    const { loadGame, saveGame } = await import('../src/game/save');
+    const grid = wearGrid(176, 224 - 26);
+    const cells = new Float32Array(grid.cols * grid.rows);
+    cells[40] = 0.5;
+    cells[41] = 1;
+    saveGame({ ...newGame(), level: 1, floorWear: encodeWear(cells, 1, grid) });
+    const back = decodeWear(loadGame()!.floorWear, 1, grid);
+    expect(back[41]).toBe(1);
+    expect(back[40]).toBeCloseTo(0.5, 1);
+    // Сохранение версии 10 — поля ещё не было.
+    const old = { ...newGame(), level: 1 } as Record<string, unknown>;
+    delete old.floorWear;
+    local[KEY] = JSON.stringify({ version: 10, state: old });
+    expect(decodeWear(loadGame()!.floorWear, 1, grid).every((v) => v === 0)).toBe(true);
+    // Облако вернуло что-то странное — игра грузится, пол чистый.
+    for (const junk of [null, 5, 'x', { level: 1, cols: grid.cols, rows: grid.rows, data: 7 }, { level: 1, cols: grid.cols, rows: grid.rows, data: '!!' }]) {
+      local[KEY] = JSON.stringify({ version: 11, state: { ...newGame(), level: 1, floorWear: junk } });
+      const state = loadGame()!;
+      expect(decodeWear(state.floorWear, 1, grid).every((v) => v === 0)).toBe(true);
+    }
   });
 });

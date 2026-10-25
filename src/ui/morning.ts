@@ -1,4 +1,5 @@
-import { memberName, t } from '../i18n';
+import { getLang, memberName, t } from '../i18n';
+import { pluralForm } from '../i18n/plural';
 import type { TextKey } from '../i18n/ru';
 import {
   buyChance,
@@ -131,6 +132,9 @@ import {
   type ContestState,
 } from '../game/contest';
 import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene } from '../game/drama';
+import { activeEvent, addDays, cardOf, cardWaiting, guestDue, guestOn, nextGuest, openCard, openedCards, type LiveEvent } from '../game/live';
+import { liveEvents, todayLocal } from '../platform/live';
+import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
@@ -179,7 +183,7 @@ import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
-import { assetUrl, png } from '../platform/assets';
+import { sheetAsset, sheetPng } from './sheet';
 import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
 import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeLoyalty, cafeOf } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
@@ -202,7 +206,7 @@ import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../
 
 /** Высота «голоса» героев в диалогах. */
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420, sonya: 760, father: 300 };
-import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, tryDecor, type DecorItem, type DecorKind, decorItem } from '../game/decor';
+import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, STAR_PACKS, tryDecor, type DecorItem, type DecorKind, decorItem } from '../game/decor';
 import { buyWithStars, starsAvailable } from '../platform/stars';
 import {
   adoptDog,
@@ -290,7 +294,7 @@ const productLabel = (id: ProductId) => `${PRODUCTS[id].icon} ${t(PRODUCTS[id].n
 function itemRow(pid: ProductId, opts: { price?: number; sub?: string; actions: HTMLElement[]; name?: string }): HTMLElement {
   const row = el('div', 'ui-item');
   const icon = el('img', 'ui-item-icon');
-  icon.src = png(`item_${pid}_0`);
+  icon.src = sheetPng(`item_${pid}_0`);
   icon.alt = '';
   const body = el('div');
   const name = el('div', 'ui-item-name', opts.name ?? t(PRODUCTS[pid].nameKey));
@@ -343,7 +347,7 @@ function foldBox(id: string, title: string, fill: (body: HTMLElement) => void): 
 function artRow(texture: string, opts: { name: string; price?: number; sub?: string; actions: HTMLElement[] }): HTMLElement {
   const row = el('div', 'ui-item');
   const img = el('img', 'ui-item-art');
-  img.src = png(texture);
+  img.src = sheetPng(texture);
   img.alt = '';
   const body = el('div');
   const name = el('div', 'ui-item-name', opts.name);
@@ -407,7 +411,7 @@ function tileGrid(tiles: Tile[], open: string | null, toggle: (id: string) => vo
     const cell = button('', () => toggle(tile.id), `ui-shelf-card ui-tile-card${open === tile.id ? ' active' : ''}${tile.alert ? ' broken' : ''}`);
     const icon = tile.icon.startsWith('assets/') ? el('img', 'ui-tile-img') : el('span', 'ui-tile-icon', tile.icon);
     if (icon instanceof HTMLImageElement) {
-      icon.src = assetUrl(tile.icon);
+      icon.src = sheetAsset(tile.icon);
       icon.alt = '';
     }
     const text = el('span', 'ui-tile-text');
@@ -541,7 +545,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       card.replaceChildren(storyBox(state, story.kind, story.chapter));
       return;
     }
-    const drama = dramaScene(state);
+    const drama = dramaScene(state, todayLocal());
     if (drama) {
       cue('story', `drama:${drama.day}`);
       card.replaceChildren(dramaBox(drama));
@@ -683,6 +687,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
       ...giftsBox(),
+      ...(touring ? [] : liveBox(state)),
       ...staffEventBox(state),
       ...districtBox(state),
       ...lifeBox(state),
@@ -1521,6 +1526,59 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return [box];
   };
 
+  /**
+   * Праздник по настоящему календарю (game/live.ts): открытки по дням — сегодняшнюю открыть,
+   * сколько до праздничной вещи, когда заглянет гость и, по желанию, набор за звёзды.
+   */
+  const liveBox = (state: StoreState): HTMLElement[] => {
+    const today = todayLocal();
+    const e = activeEvent(liveEvents(), today);
+    const card = e && cardOf(e, today);
+    if (!e || !card) return [];
+    const opened = openedCards(state, e, today);
+    const box = el('div', 'ui-box ui-live');
+    box.append(el('b', '', `${THEME_ICON[e.theme]} ${t(`live.${e.theme}.title` as TextKey)}`));
+    // Календарь: открытые — галочкой, сегодняшняя подпрыгивает, пропущенные — бледные.
+    const grid = el('div', 'ui-advent');
+    grid.style.gridTemplateColumns = `repeat(${Math.min(8, card.total)}, 1fr)`;
+    for (let n = 1; n <= card.total; n++) {
+      const date = addDays(today, n - card.n);
+      const done = opened.includes(date);
+      const mark = done ? ' done' : n === card.n ? ' today' : n < card.n ? ' missed' : ' later';
+      grid.append(el('span', `ui-advent-day${mark}`, done ? '✓' : String(Number(date.slice(8)))));
+    }
+    box.append(grid, el('div', 'ui-muted', t('live.box.count', { n: opened.length, total: card.total })));
+    if (cardWaiting(state, e, today)) box.append(button(t('live.box.open'), () => openLiveCard(e, today)));
+    else box.append(el('div', 'ui-note', t('live.box.opened')));
+    if (e.prize) {
+      const item = t(decorItem(e.prize.decor).nameKey);
+      const got = state.decor.owned.includes(e.prize.decor);
+      box.append(el('div', 'ui-muted', got ? t('live.box.prizeGot', { item }) : t('live.box.prize', { need: e.prize.cards, cards: t(`live.box.cards.${pluralForm(e.prize.cards, getLang())}`), item, n: Math.min(opened.length, e.prize.cards) })));
+    }
+    const guest = guestOn(e, today);
+    const next = guest ? null : nextGuest(e, today);
+    if (guest) box.append(el('div', 'ui-note', t(guestDue(state, e, today) ? 'live.box.guestToday' : 'live.box.guestSeen', { icon: GUEST_ICON[guest], who: t(`who.${guest}`) })));
+    else if (next) box.append(el('div', 'ui-muted', t('live.box.guestNext', { icon: GUEST_ICON[next.who], who: t(`who.${next.who}`), date: dateLabel(next.date) })));
+    // Набор за звёзды — только по желанию: когда бесплатная открытка уже открыта и пока набор не куплен.
+    const pack = e.pack ? STAR_PACKS[e.pack] : undefined;
+    if (pack && !cardWaiting(state, e, today) && !pack.items.every((id) => state.decor.owned.includes(id))) {
+      box.append(
+        button(t('live.box.pack', { name: t(pack.nameKey), n: pack.stars }), () => premiumDecorModal(decorItem(pack.items[0])), 'ui-btn secondary'),
+        el('div', 'ui-muted', t('live.box.packNote')),
+      );
+    }
+    return [box];
+  };
+
+  /** Открыть открытку дня: монеты (и праздничная вещь) — сразу, окно с открыткой — поверх утра. */
+  const openLiveCard = (e: LiveEvent, today: string) => {
+    const opened = openCard(getState(), e, today);
+    if (!opened) return;
+    track('live_card', getState().day, opened.gift.n);
+    update(opened.state, 'success', true);
+    showLiveCard(e.theme, opened.gift);
+  };
+
   /** Жизнь района: свадьба, малыш, пенсия у постоянных — подарок или поздравить. */
   const lifeBox = (state: StoreState): HTMLElement[] => {
     const news = lifeNews(state);
@@ -1834,7 +1892,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     box.append(el('b', '', t('kitchen.title')), el('div', 'ui-muted', t('kitchen.note', { n: portionsTotal(state), max: foodSlots(state) })));
     const shelf = el('div', 'ui-item');
     const shelfImg = el('img', 'ui-item-art');
-    shelfImg.src = png(foodSprite(state));
+    shelfImg.src = sheetPng(foodSprite(state));
     shelfImg.alt = '';
     shelf.append(shelfImg, el('div', 'ui-item-sub', t('kitchen.shelf', { name: t(GEAR.foodShelf.models[gearTier(state, 'foodShelf')].nameKey), n: portionsTotal(state), max: foodSlots(state) })));
     box.append(shelf);
@@ -2072,7 +2130,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     input.value = names[state.day % names.length];
     input.maxLength = CAT_NAME_MAX;
     const art = el('img', 'ui-item-art');
-    art.src = png('cat_sit');
+    art.src = sheetPng('cat_sit');
     art.alt = '';
     art.style.cssText = 'width:64px;height:72px;display:block;margin:4px auto';
     box.append(
@@ -2357,7 +2415,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           return;
         }
         dramaLine = 0;
-        update(seeDrama(getState()));
+        update(seeDrama(getState(), todayLocal()));
       },
     });
   };
@@ -2751,7 +2809,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const texture = gearArt(state, id, next && !needs ? tier + 1 : tier);
       if (texture) {
         const img = el('img', 'ui-item-art');
-        img.src = png(texture);
+        img.src = sheetPng(texture);
         img.alt = '';
         row.append(img);
       } else row.append(el('div', 'ui-ad-icon', gear.icon));
@@ -2942,15 +3000,15 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if (!item) preview.textContent = '↺';
     else if (item.color !== undefined) {
       const hex = `#${item.color.toString(16).padStart(6, '0')}`;
-      preview.style.background = `url(${png('wall')}) 0 0 / 32px 64px, ${hex}`;
+      preview.style.background = `url(${sheetPng('wall')}) 0 0 / 32px 64px, ${hex}`;
       preview.style.backgroundBlendMode = 'multiply';
     } else if (kind === 'floor' || kind === 'wall') {
-      preview.style.backgroundImage = `url(${assetUrl(`assets/${item.texture}.png`)})`;
+      preview.style.backgroundImage = `url(${sheetAsset(`assets/${item.texture}.png`)})`;
       if (kind === 'wall') preview.style.backgroundSize = big ? '64px 128px' : '32px 64px';
       else if (big) preview.style.backgroundSize = item.id === 'floor_gold' || item.id === 'floor_noir' ? '128px 128px' : '64px 64px';
     } else {
       const img = el('img');
-      img.src = assetUrl(`assets/${item.texture}.png`);
+      img.src = sheetAsset(`assets/${item.texture}.png`);
       img.alt = '';
       preview.append(img);
     }
@@ -2962,7 +3020,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const owned = !item || state.decor.owned.includes(item.id);
     const trying = Boolean(item && state.decor.trial?.id === item.id && state.decor.trial.day === state.day);
     const active = trying || (item ? state.decor.active[kind] === item.id : !state.decor.active[kind]);
-    const premium = Boolean(item && item.stars !== undefined);
+    const premium = Boolean(item && (item.stars !== undefined || item.pack !== undefined));
+    // Праздничную вещь не купить — её дарят открытки (game/live.ts); по нажатию — откуда она.
+    const holiday = Boolean(item?.holiday);
     const canBuy = item?.price !== undefined && state.money >= item.price;
     const card = button(
       '',
@@ -2971,12 +3031,16 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           premiumDecorModal(item);
           return;
         }
+        if (item && holiday && !owned) {
+          holidayDecorModal(item);
+          return;
+        }
         if (active) return;
         if (owned) update(setDecor(getState(), kind, item?.id ?? null));
         else if (item) update(buyDecor(getState(), item.id), 'success');
       },
       `ui-decor${active ? ' active' : ''}${premium ? ' premium' : ''}`,
-      !owned && !premium && !canBuy,
+      !owned && !premium && !holiday && !canBuy,
     );
     const status = trying
       ? `👀 ${t('decor.trying')}`
@@ -2986,30 +3050,40 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           ? t('decor.put')
           : item?.price !== undefined
             ? `${item.price} 💰`
-            : `⭐ ${item?.stars ?? 0}`;
+            : item?.holiday
+              ? t('decor.holidayEarn')
+              : `⭐ ${item?.stars ?? (item?.pack ? STAR_PACKS[item.pack]?.stars : 0) ?? 0}`;
     card.append(decorPreview(item, kind), el('div', 'ui-decor-name', item ? t(item.nameKey) : t('decor.none')), el('div', 'ui-decor-status', status));
     return card;
   };
 
-  /** Премиальная вещь: крупно, цена в звёздах, «Купить» и бесплатная примерка на день. */
+  /**
+   * Премиальная вещь: крупно, цена в звёздах, «Купить» и бесплатная примерка на день. Вещь из
+   * набора (STAR_PACKS) покупается всем набором — в окне сказано, что в него входит.
+   */
   const premiumDecorModal = (item: DecorItem) => {
     const { card: modal, close } = openModal();
     const state = getState();
     const note = el('div', 'ui-muted');
+    const pack = item.pack ? STAR_PACKS[item.pack] : undefined;
     modal.append(
       el('h2', '', t(item.nameKey)),
       decorPreview(item, item.kind, true),
-      el('div', 'ui-muted', t('decor.premiumNote')),
+      el(
+        'div',
+        'ui-muted',
+        pack ? t('decor.packNote', { pack: t(pack.nameKey), items: pack.items.map((id) => t(decorItem(id).nameKey)).join(', ') }) : t('decor.premiumNote'),
+      ),
       note,
     );
-    const buy = button(t('decor.buyStars', { n: item.stars ?? 0 }), () => {
+    const buy = button(t('decor.buyStars', { n: pack?.stars ?? item.stars ?? 0 }), () => {
       buy.disabled = true;
       note.textContent = t('decor.paying');
-      void buyWithStars(item.id).then(async (result) => {
+      void buyWithStars(item.pack ?? item.id).then(async (result) => {
         if (result === 'paid') {
-          // Оплата прошла — вещь сразу в магазине; сервер подтвердит при следующем запуске.
+          // Оплата прошла — вещь (или весь набор) сразу в магазине; сервер подтвердит при следующем запуске.
           close();
-          update(grantDecor(getState(), [item.id]), 'success');
+          update(grantDecor(getState(), pack ? pack.items : [item.id]), 'success');
           void flushCloud();
           return;
         }
@@ -3034,6 +3108,17 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     } else if ((state.decor.tried ?? []).includes(item.id)) modal.append(el('div', 'ui-muted', t('decor.triedAlready')));
     modal.append(button(t('decor.close'), close, 'ui-btn secondary'));
     if (!starsAvailable()) note.textContent = t('decor.starsOff');
+  };
+
+  /** Праздничная вещь, которой ещё нет: крупно и откуда она берётся (открытки праздника). */
+  const holidayDecorModal = (item: DecorItem) => {
+    const { card: modal, close } = openModal();
+    modal.append(
+      el('h2', '', t(item.nameKey)),
+      decorPreview(item, item.kind, true),
+      el('div', 'ui-muted', t('decor.holidayNote', { when: t(`decor.holidayWhen.${item.holiday}` as TextKey) })),
+      button(t('decor.close'), close, 'ui-btn secondary'),
+    );
   };
 
   const albumBox = (state: StoreState) =>
@@ -3752,7 +3837,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const product = PRODUCTS[pid];
       const card = el('div', 'ui-price');
       const icon = el('img', 'ui-price-icon');
-      icon.src = png(`item_${pid}`);
+      icon.src = sheetPng(`item_${pid}`);
       icon.alt = '';
       const info = el('div', 'ui-price-info');
       info.append(el('b', '', t(product.nameKey)));

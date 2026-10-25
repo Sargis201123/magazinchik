@@ -7,6 +7,7 @@ import { liveFace } from './dialog';
 import type { LossAdvice } from '../game/losses';
 import { RECORD_ICONS, type RecordId } from '../game/records';
 import { liteMode } from '../platform/quality';
+import { sheetPng } from './sheet';
 import { png } from '../platform/assets';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
@@ -103,7 +104,7 @@ export class Hud {
   constructor() {
     injectStyles();
     const coin = el('img', 'ui-ico');
-    coin.src = png('coin');
+    coin.src = sheetPng('coin');
     coin.alt = '💰';
     this.money.append(coin, this.moneyText);
     this.top.append(this.money, this.clock, this.stars);
@@ -253,6 +254,8 @@ export class Hud {
     reviews: Review[],
     onNext: () => void,
     onShare?: (button: HTMLButtonElement) => void,
+    /** «Приходи завтра»: Соня что-то хотела сказать (game/drama.ts) — строка с её портретом. */
+    teaser?: string,
   ): void {
     const { card, close } = openModal();
     card.classList.add('ui-sum');
@@ -317,7 +320,7 @@ export class Hud {
         const target = s.kind === 'record' ? recordTiles[s.id] : undefined;
         if (target) {
           const crown = el('img', 'ui-tile-crown');
-          crown.src = png('ico_crown');
+          crown.src = sheetPng('ico_crown');
           crown.alt = '';
           crown.style.animationDelay = `${hit}ms`;
           target.box.append(crown);
@@ -333,6 +336,14 @@ export class Hud {
       card.append(row);
     }
     card.append(grannySays(day, stats, rating, history));
+    if (teaser) {
+      const row = el('div', 'ui-teaser');
+      const face = el('img');
+      face.src = png('portrait_sonya');
+      face.alt = '';
+      row.append(face, el('span', '', teaser));
+      card.append(row);
+    }
     // Карточка итогов для сторис или чата (platform/shareCard.ts).
     if (onShare) {
       const share: HTMLButtonElement = button(t('share.button'), () => onShare(share), 'ui-btn secondary');
@@ -355,7 +366,7 @@ export class Hud {
         const caption = el('span', 'ui-chart-value', String(value));
         if (i === best) {
           const crown = el('img', 'ui-chart-crown');
-          crown.src = png('ico_crown');
+          crown.src = sheetPng('ico_crown');
           crown.alt = '';
           crown.style.animationDelay = `${GOLD_AT + 150}ms`;
           caption.append(crown);
@@ -410,7 +421,7 @@ function starRow(): { box: HTMLElement; fill: (rating: number) => void } {
   const row = () =>
     Array.from({ length: 5 }, () => {
       const img = el('img');
-      img.src = png('ico_star');
+      img.src = sheetPng('ico_star');
       img.alt = '';
       return img;
     });

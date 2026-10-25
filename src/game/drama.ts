@@ -3,6 +3,11 @@
 // с ним по утрам. Что случилось, раскрывается понемногу: сначала только намёки, правда —
 // ближе к концу, а потом — светлый финал.
 // Сцены привязаны к дням (почти каждый день, но не больше одной за утро) и на экономику не влияют никак.
+//
+// «Приходи завтра»: игровой день длится пару минут, и без предела вся история проглатывалась
+// бы за вечер. Поэтому за настоящий день (по часам игрока) — не больше DRAMA_PER_DAY сцен;
+// следующая ждёт завтрашнего дня, а в итогах дня об этом намекает тизер («Соня что-то хотела
+// сказать…»), и бот на следующий день пишет от имени Сони (api/_lib/remind.ts).
 
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
@@ -30,7 +35,13 @@ export interface DramaState {
   last?: number;
   /** День, когда Соня заходит в магазин. */
   visit?: number;
+  /** Настоящий день (дата игрока «ГГГГ-ММ-ДД»), когда показали последнюю сцену, и сколько сцен за него. */
+  date?: string;
+  today?: number;
 }
+
+/** Сколько сцен за один настоящий день. Остальные ждут завтра (решение автора о темпе — здесь). */
+export const DRAMA_PER_DAY = 2;
 
 export { SCENES };
 
@@ -44,8 +55,8 @@ function upToOf(state: StoreState): number {
   return drama?.seen ? FIRST_VERSION_DAYS[Math.min(drama.seen, FIRST_VERSION_DAYS.length) - 1] : 0;
 }
 
-/** Сцена этого утра: следующая по порядку, если её день наступил. */
-export function dramaScene(state: StoreState): DramaScene | null {
+/** Сцена, чей игровой день наступил, — без оглядки на предел за настоящий день. */
+function dueScene(state: StoreState): DramaScene | null {
   const upTo = upToOf(state);
   const scene = SCENES.find((s) => s.day > upTo);
   if (!scene || state.tourDone === false || state.day < scene.day || state.drama?.last === state.day) return null;
@@ -55,10 +66,31 @@ export function dramaScene(state: StoreState): DramaScene | null {
   return scene;
 }
 
-export function seeDrama(state: StoreState): StoreState {
-  const scene = dramaScene(state);
+/** Сколько сцен уже показали в этот настоящий день (today — дата игрока «ГГГГ-ММ-ДД»). */
+const shownToday = (state: StoreState, today: string): number => (state.drama?.date === today ? (state.drama.today ?? 0) : 0);
+
+/** Сцена этого утра: следующая по порядку, если её день наступил и предел на сегодня не выбран. */
+export function dramaScene(state: StoreState, today: string): DramaScene | null {
+  const scene = dueScene(state);
+  return scene && shownToday(state, today) < DRAMA_PER_DAY ? scene : null;
+}
+
+/** Сцена готова, но сегодняшний предел выбран: Соня ждёт завтра (тизер в итогах дня). */
+export const dramaHeld = (state: StoreState, today: string): boolean => Boolean(dueScene(state)) && shownToday(state, today) >= DRAMA_PER_DAY;
+
+/**
+ * Соне есть что сказать при следующей встрече: сцена ждёт сейчас или будет утром следующего
+ * игрового дня (для напоминания бота — api/_lib/remind.ts).
+ */
+export const dramaWaiting = (state: StoreState): boolean => Boolean(dueScene(state) ?? dueScene({ ...state, day: state.day + 1 }));
+
+export function seeDrama(state: StoreState, today: string): StoreState {
+  const scene = dramaScene(state, today);
   if (!scene) return state;
-  return { ...state, drama: { upTo: scene.day, last: state.day, visit: scene.visit ? state.day : state.drama?.visit } };
+  return {
+    ...state,
+    drama: { upTo: scene.day, last: state.day, visit: scene.visit ? state.day : state.drama?.visit, date: today, today: shownToday(state, today) + 1 },
+  };
 }
 
 /** История рассказана до конца. */
