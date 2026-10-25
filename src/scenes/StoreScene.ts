@@ -161,7 +161,7 @@ import {
 } from '../game/nightGuests';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
-import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
+import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propFootprint, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
 import { buildingSpan, iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
 import { BASE_W, crispZoom, homeFrame } from './pixels';
 import { dayDemand } from '../game/demand';
@@ -716,13 +716,128 @@ const STAFF_ACC: Record<StaffRole, { acc: Accessory; tint: number }> = {
 };
 /** Тёмная кофта — так игрок может заметить вора. */
 const THIEF_SHIRT = 0x45444f;
-/** Место на парковке: где стоит машина и куда смотрит носом. */
+/** Место на парковке: где стоит машина и куда смотрит носом (верхний ряд — вверх, нижний — вниз). */
 interface ParkSpot {
   x: number;
   y: number;
-  angle: number;
-  car: Phaser.GameObjects.Container | null;
+  up: boolean;
+  /** Чья машина здесь стоит или уже едет сюда (место занято с той минуты, как она свернула к парковке). */
+  car: LotCar | null;
 }
+
+/**
+ * Машина у магазина: кузов и фары (кадр по направлению — вбок, носом вверх или вниз, в повороте
+ * доворачивается), два мигающих огонька поворотника, свет фар (вечером) — поверх темноты, как у такси.
+ */
+interface LotCar {
+  box: Phaser.GameObjects.Container;
+  body: Phaser.GameObjects.Image;
+  lights: Phaser.GameObjects.Image;
+  key: string;
+  /** Половина длины кузова: где у него нос и багажник. */
+  half: number;
+  /** Куда смотрит нос, в градусах: 0 — вправо, 90 — вниз, −90 — вверх. */
+  heading: number;
+  frame: 'side' | 'up' | 'down';
+  blink: Phaser.GameObjects.Rectangle[];
+  /** Мигает левым или правым поворотником (null — не мигает). */
+  turn: 'left' | 'right' | null;
+  beam: Phaser.GameObjects.Image;
+  flash: Phaser.GameObjects.Image;
+  /** Едет (фары горят) или стоит заглушённая. */
+  moving: boolean;
+  /** Чья: покупателя (уедет, когда он вернётся из магазина) или соседей (уезжают сами, parkingTick). */
+  owner: 'customer' | 'neighbor';
+  /** За ней уже идёт водитель. */
+  leaving: boolean;
+}
+
+/**
+ * Парковка за магазином и проезд к ней с улицы вдоль правой стены (buildParking). left/right/top/bottom —
+ * площадка, aisleY — проезд между рядами, laneX — середина въезда, footX — дорожка для пешеходов вдоль
+ * стены, mouthY — где въезд выходит на тротуар. Проезд узкий: по нему (drive) и по парковке (aisle) за раз
+ * едет одна машина; waiting — сколько водителей ждут у парковки, чтобы уехать (новые тогда не заезжают).
+ * onRoad — машина с парковки сейчас на улице: в её полосе новые не появляются, чтобы не въехать в багажник.
+ */
+interface ParkingLot {
+  spots: ParkSpot[];
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  aisleY: number;
+  laneX: number;
+  footX: number;
+  mouthY: number;
+  busy: { drive: boolean; aisle: boolean };
+  waiting: number;
+  onRoad: boolean;
+}
+
+/** Путь машины по прямой. */
+const straight = (x0: number, y0: number, x1: number, y1: number): Phaser.Curves.Path => new Phaser.Curves.Path(x0, y0).lineTo(x1, y1);
+/** Поворот: плавная дуга от (x0, y0) к (x1, y1) через угол (cx, cy). */
+const bend = (x0: number, y0: number, cx: number, cy: number, x1: number, y1: number): Phaser.Curves.Path =>
+  new Phaser.Curves.Path(x0, y0).quadraticBezierTo(x1, y1, cx, cy);
+/**
+ * Прямой участок: разгон от v0 до v на первых up точках, дальше ровно, на последних down — торможение
+ * до v1 (поворотник turn мигает, пока тормозит). На коротком участке ровного куска нет.
+ */
+function cruise(x0: number, y0: number, x1: number, y1: number, v0: number, v: number, v1: number, up: number, down: number, turn?: CarLeg['turn']): CarLeg[] {
+  const length = Math.hypot(x1 - x0, y1 - y0);
+  const speedUp = Math.min(up, length / 2);
+  const slowDown = Math.min(down, length / 2);
+  const at = (d: number): [number, number] => [x0 + ((x1 - x0) * d) / length, y0 + ((y1 - y0) * d) / length];
+  const legs: CarLeg[] = [{ path: straight(x0, y0, ...at(speedUp)), v0, v1: v }];
+  if (length - speedUp - slowDown > 0.5) legs.push({ path: straight(...at(speedUp), ...at(length - slowDown)), v0: v, v1: v });
+  legs.push({ path: straight(...at(length - slowDown), x1, y1), v0: v, v1, turn });
+  return legs;
+}
+
+/**
+ * Отрезок пути машины: по прямой или дугой поворота (path), скорость равномерно меняется от v0 до v1
+ * (точек мира в секунду), back — задним ходом, turn — какой поворотник мигает.
+ */
+interface CarLeg {
+  path: Phaser.Curves.Path;
+  v0: number;
+  v1: number;
+  back?: boolean;
+  turn?: 'left' | 'right';
+}
+
+/** Парковка за магазином: 5 мест в два ряда (по краям — островки), справа — въезд с проезда вдоль правой стены. */
+const LOT = { w: 226, h: 96, top: -160, bay: 33, bays: 5 };
+/** Кто паркуется: легковые и фургоны (грузовики — только по улице). */
+const LOT_CARS = CAR_TYPES.filter(([key]) => key !== 'car_truck');
+/**
+ * Проезд к парковке — справа от зала (от его правого края, точки мира): дорожка для пешеходов вдоль
+ * стены (FOOT…DRIVE), за ней асфальт шириной в машину с запасом (DRIVE…DRIVE_END), дальше — соседний дом.
+ */
+const LOT_FOOT = 7;
+const LOT_DRIVE = 14;
+const LOT_DRIVE_END = 36;
+/** Сколько у левой стены держим свободным у дверей флигеля (как iceboxSpotFor и roomZones). */
+const WING_DOOR_CLEAR = 32;
+/** Соседний магазин справа: отступ от зала (за проездом к парковке) и ширина. */
+const SIDE_SHOP_X = 40;
+const SIDE_SHOP_W = 126;
+/** Глубина машин и людей на парковке (за зданием глубина отрицательная): над асфальтом, под кронами. */
+const LOT_DEPTH = -9.41;
+/** Скорости машины у парковки (точек мира в секунду): по улице, в проезде, по парковке, на месте. */
+const CAR_ROAD = 85;
+const CAR_DRIVE = 80;
+const CAR_LOT = 30;
+const CAR_CREEP = 12;
+/** Сколько покупателей приезжает на машине, если на парковке есть место (в лёгкой графике — реже). */
+const CAR_CUSTOMERS = 0.5;
+/** Позже этого (секунд до закрытия) на машине уже не приезжают: пока доедет и дойдёт — магазин закроется. */
+const CAR_LAST_SECONDS = 50;
+/**
+ * В какие особые дни к парковке можно проехать по улице: в наводнение, ремонт дороги, шествия,
+ * съёмки, свадьбу, автобус туристов и ограбление улица занята — машины стоят, где стоят.
+ */
+const LOT_ROAD_DAYS: BigDayId[] = ['heatwave', 'frost', 'quake', 'blackout', 'starfall', 'pigeons', 'sanitary', 'epidemic'];
 
 const CAR_COLORS = [0xe43b44, 0x0099db, 0x3e8948, 0xfeae34, 0xc0cbdc, 0x68386c, 0x262b44];
 const THIEF_SPEED = 52;
@@ -810,6 +925,8 @@ interface Customer {
   petted?: boolean;
   /** Сколько готов ждать в очереди. */
   patienceMs?: number;
+  /** Приехал на машине: после покупок идёт к ней на парковку и уезжает. */
+  car?: ParkSpot;
 }
 
 /** Касса: где стоит стол, покупатель и кассир, кого пробивают и полоска пробивки. */
@@ -1128,9 +1245,11 @@ export class StoreScene extends Phaser.Scene {
   private cullDirty = true;
   /** Идёт перестановка полок: камера не ездит, полки — «призраки», которые тянут пальцем. */
   private arranging = false;
-  /** Парковка за магазином: места и машины на них (живая днём). */
-  private parking: { spots: ParkSpot[]; x: number; w: number; aisleY: number } | null = null;
+  /** Парковка за магазином и проезд к ней: места, машины на них и кто сейчас едет (живая днём). */
+  private parking: ParkingLot | null = null;
   private parkingTimer?: Phaser.Time.TimerEvent;
+  /** Машины на улице и их полоса (верхняя — к магазину, едут вправо): с парковки выезжают в просвет. */
+  private roadTraffic = new Set<{ obj: Phaser.GameObjects.Container; lane: 'up' | 'down'; slow: boolean }>();
   /** Стаи птиц над кварталом (buildAmbient). */
   private flockTimer?: Phaser.Time.TimerEvent;
   /** Порывы ветра (windGust): таймер, деревья с кронами и навесы соседей с зонтиками веранды. */
@@ -1527,7 +1646,8 @@ export class StoreScene extends Phaser.Scene {
       this.nextSpawn -= dt;
       const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0) + (isCrowdDay(this.state.day) && !this.night ? CROWD_EXTRA_GUESTS : 0);
       if (this.nextSpawn <= 0 && this.customers.size < maxCustomers && !this.siege) {
-        this.spawnCustomer();
+        // Очередной покупатель иногда приезжает на машине: сначала паркуется, потом идёт в магазин.
+        if (!this.carCustomer()) this.spawnCustomer();
         const interval =
           spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
@@ -2905,7 +3025,7 @@ export class StoreScene extends Phaser.Scene {
       }
       // Ларь ищет место сам — вещь не должна занять его место.
       if (this.state.shelves.some((sh) => sh.kind === 'icebox')) {
-        const ice = iceboxRect(iceboxSpotFor({ ...lay, slots: at }));
+        const ice = iceboxRect(iceboxSpotFor({ ...lay, slots: at }, registers, props.map(propRect)));
         for (const p of props) if (overlapsRect(propRect(p), ice)) badProps.add(p.id);
       }
       propGhosts.forEach((g, i) => {
@@ -2935,7 +3055,7 @@ export class StoreScene extends Phaser.Scene {
         linkG.fillStyle(color, 1).fillCircle((a.x + b.x) / 2, (a.y + b.y) / 2 - 4, 1.8);
       }
       // Ларь ищет место сам — после перестановки ему должно найтись место у стены.
-      const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(lay, at);
+      const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(lay, at, registers, props.map(propRect));
       done.disabled = bad.size > 0 || badProps.size > 0 || iceless;
       hint.textContent = bad.size || badProps.size ? t('arrange.bad', { n: bad.size + badProps.size }) : iceless ? t('arrange.icebox') : t('arrange.hint');
       return iceless || badProps.size ? new Set([...bad, -1]) : bad;
@@ -3586,7 +3706,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Время года и праздники: весной цветут деревья и газон, летом у входа ларь с мороженым,
+   * Время года и праздники: весной цветут деревья и газон, летом у входа тележка с мороженым,
    * осенью желтеют деревья и лежат листья; 8 Марта — тюльпаны и розовая гирлянда,
    * Хэллоуин — тыквы со светом и летучие мыши, Новый год — снеговик и огоньки на деревьях.
    */
@@ -3664,7 +3784,12 @@ export class StoreScene extends Phaser.Scene {
         frequency: 260,
       })).setDepth(-5);
     }
-    if (time === 'summer') keep(this.art(door.x - 26, front + 7, 'icecream').setDepth(front + 12));
+    // Летом у входа — тележка с мороженым под зонтиком: справа от двери, за доской отзывов и котом
+    // (слева будка Бобика и подсолнухи); в самом большом магазине — на тротуаре, как и они.
+    if (time === 'summer') {
+      const y = this.next === this.layout ? top + 8 : front + 9;
+      keep(this.art(door.x + 66, y, 'icecream').setDepth(y + 5));
+    }
     if (time === 'autumn' && this.weather !== 'snow') {
       scatter(110, (x, y) => keep(this.art(x, y, 'leaf').setTint(rnd.pick([0xf77622, 0xfeae34, 0xb86f50, 0xe43b44])).setAngle(rnd.angle()).setDepth(-9)));
     }
@@ -3735,7 +3860,7 @@ export class StoreScene extends Phaser.Scene {
       this.art(p.x, p.y + 3, 'shadow').setScale(0.7 / ART).setDepth(p.y - 1);
       this.art(p.x, p.y, tex).setDepth(p.y + 6);
       this.obstacles.push({ x: p.x - 7, y: p.y - 10, w: 14, h: 14 });
-      this.registerProp(id, p, tex, { x: -7, y: -10, w: 14, h: 14 });
+      this.registerProp(id, p, tex, propFootprint(this.layout, id, p.x));
     });
   }
 
@@ -5427,6 +5552,7 @@ export class StoreScene extends Phaser.Scene {
     const body = this.art(0, 0, 'car_van').setTint(0xffffff);
     const lights = this.art(0, 0, 'car_van_lights');
     const van = this.add.container(-260, roadY, [body, lights]).setDepth(roadY);
+    this.onRoad(van, 'up', true);
     await new Promise<void>((done) => this.tweens.add({ targets: van, x: vanX, duration: 2200, ease: 'Sine.easeOut', onComplete: () => done() }));
     if (!van.active) return;
     // Задние двери распахиваются: внутри темно и видны коробки.
@@ -5825,7 +5951,7 @@ export class StoreScene extends Phaser.Scene {
     const neighbors: Neighbor[] = [
       { x: -136 - WING_OUTER, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860, back: VERANDA_D },
       { x: -268 - WING_OUTER, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0, neon: 0x7cff8a },
-      { x: next.w + 26, w: 128, ...side },
+      { x: next.w + SIDE_SHOP_X, w: SIDE_SHOP_W, ...side },
       { x: next.w + 170, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc, neon: 0xff8ad8 },
     ];
     const rnd = new Phaser.Math.RandomDataGenerator(['neighbors']);
@@ -6026,11 +6152,10 @@ export class StoreScene extends Phaser.Scene {
     this.art(door.x + 44, top + 7, 'bench').setDepth(top + 7);
     this.art(door.x - 32, top + 6, 'bin').setDepth(top + 6);
     // Деревья и кусты на газоне вокруг здания.
+    // Справа от зала — проезд к парковке и дорожка вдоль стены (buildParking): деревьев там нет.
     const trees: [number, number][] = [
       [-14 - WING_OUTER, next.h * 0.35],
       [-16 - WING_OUTER, next.h * 0.8],
-      [next.w + 14, next.h * 0.3],
-      [next.w + 16, next.h * 0.75],
       [next.w * 0.25, -12],
       [next.w * 0.75, -16],
     ];
@@ -6075,7 +6200,7 @@ export class StoreScene extends Phaser.Scene {
       this.art(door.x, top + 92, key).setOrigin(0.5, 0).setDepth(top + 92 + 88);
     }
     // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
-    const districtAreas = [...this.buildDistrict(next, top), ...this.buildPark(next, top), this.buildParking(next)];
+    const districtAreas = [...this.buildDistrict(next, top), ...this.buildPark(next, top), ...this.buildParking(next, top)];
     const inArea = (px: number, py: number, a: { x: number; y: number; w: number; h: number }) => px > a.x - 6 && px < a.x + a.w + 6 && py > a.y - 6 && py < a.y + a.h + 14;
     const scatter = (y0: number, y1: number) => {
       for (let y = y0; y < y1; y += 40) {
@@ -6100,7 +6225,7 @@ export class StoreScene extends Phaser.Scene {
     // Газон слева и справа от магазина: полосы стриженой травы, кусты и клумбы — не пустое поле.
     const sides = [
       { x0: left + 10, x1: -WING_OUTER - 28 },
-      { x0: next.w + 26, x1: left + width - 10 },
+      { x0: next.w + SIDE_SHOP_X, x1: left + width - 10 },
     ];
     for (const { x0, x1 } of sides) {
       if (x1 - x0 < 20) continue;
@@ -6498,137 +6623,520 @@ export class StoreScene extends Phaser.Scene {
     return areas;
   }
 
-  /** Парковка за магазином: разметка, машины соседей и наших покупателей. */
-  private buildParking(next: Layout): { x: number; y: number; w: number; h: number } {
-    const w = 210;
-    const h = 96;
-    const x = next.w / 2 - w / 2;
-    const y = -160;
+  /**
+   * Парковка за магазином и проезд к ней с улицы вдоль правой стены: площадка с бордюром и разметкой
+   * мест, островки с кустами, деревом и фонарём, у стены — дорожка для пешеходов, у въезда — знак «P».
+   * Утром на местах стоят машины соседей; днём на машинах приезжают наши покупатели (carCustomer).
+   * Возвращает занятые места — сквер не сажает туда деревья.
+   */
+  private buildParking(next: Layout, street: number): { x: number; y: number; w: number; h: number }[] {
+    const right = next.w + LOT_DRIVE_END;
+    const left = right - LOT.w;
+    const top = LOT.top;
+    const bottom = top + LOT.h;
+    const aisleY = top + LOT.h / 2;
+    const driveX = next.w + LOT_DRIVE;
+    const footX = next.w + LOT_FOOT;
+    const tile = (x: number, y: number, w: number, h: number, key: string, depth: number) =>
+      this.add.tileSprite(x, y, w, h, key).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
     // Бордюр вокруг площадки и тень от него на асфальт.
-    this.add.rectangle(x - 3, y - 3, w + 6, h + 6, 0xc0cbdc).setOrigin(0).setDepth(-9.47);
-    this.add.rectangle(x - 3, y - 3, w + 6, 1, 0xe8edf4).setOrigin(0).setDepth(-9.47);
-    this.add.tileSprite(x, y, w, h, 'asphalt').setOrigin(0).setTileScale(1 / ART).setDepth(-9.46);
-    this.add.rectangle(x, y, w, 2, 0x181425, 0.25).setOrigin(0).setDepth(-9.45);
-    this.add.rectangle(x, y, 2, h, 0x181425, 0.2).setOrigin(0).setDepth(-9.45);
-    const rnd = new Phaser.Math.RandomDataGenerator(['parking']);
-    // Островки с газоном в конце площадки (проезд посередине свободен — по нему ездят и ходят):
-    // сверху дерево, снизу клумба с фонарём.
-    const ix = x + 180;
-    const isle = (iy: number, ih: number) => {
-      this.add.rectangle(ix - 1, iy, 26, ih, 0xc0cbdc).setOrigin(0).setDepth(-9.44);
-      this.add.tileSprite(ix + 1, iy + 2, 22, ih - 4, 'grass').setOrigin(0).setTileScale(1 / ART).setDepth(-9.435);
+    this.add.rectangle(left - 3, top - 3, LOT.w + 6, LOT.h + 6, 0xc0cbdc).setOrigin(0).setDepth(-9.47);
+    this.add.rectangle(left - 3, top - 3, LOT.w + 6, 1, 0xe8edf4).setOrigin(0).setDepth(-9.47);
+    tile(left, top, LOT.w, LOT.h, 'asphalt', -9.46);
+    this.add.rectangle(left, top, LOT.w, 2, 0x181425, 0.25).setOrigin(0).setDepth(-9.45);
+    this.add.rectangle(left, top, 2, LOT.h, 0x181425, 0.2).setOrigin(0).setDepth(-9.45);
+    // Проезд с улицы: асфальт от площадки до тротуара (бордюр площадки тут разобран), справа — бордюр,
+    // слева за поребриком — дорожка, по которой водители ходят в магазин и обратно.
+    tile(driveX, bottom, right - driveX, street - bottom, 'asphalt', -9.46);
+    this.add.rectangle(right, bottom, 2, street - bottom, 0xc0cbdc).setOrigin(0).setDepth(-9.45);
+    tile(footX, bottom - 30, driveX - footX, street - bottom + 30, 'paving', -9.455);
+    this.add.rectangle(driveX - 1, bottom - 30, 1, street - bottom + 30, 0xc0cbdc).setOrigin(0).setDepth(-9.45);
+    // На тротуаре — края въезда, у дороги — пониженный бордюр.
+    for (const x of [driveX, right]) this.add.rectangle(x, street, 1, 22, 0x8b9bb4, 0.8).setOrigin(0).setDepth(-9.4);
+    this.add.rectangle(driveX, street + 22, right - driveX, 2, 0x5a6988).setOrigin(0).setDepth(-8.99);
+    // Знак «P» у въезда: видно, куда сворачивают машины.
+    const signX = right + 3;
+    this.add.rectangle(signX, street + 4, 1, 9, 0x5a6988).setOrigin(0.5, 1).setDepth(street + 4);
+    this.add.rectangle(signX, street - 8, 7, 7, 0x0099db).setStrokeStyle(0.6, 0xffffff).setDepth(street + 4.1);
+    this.add
+      .text(signX, street - 8, 'P', { fontFamily: UI_FONT, fontSize: '6px', color: '#ffffff', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setResolution(this.textRes(4))
+      .setDepth(street + 4.2);
+    // Островки с газоном: по краям рядов — кусты, справа сверху — дерево (въезд под ним свободен),
+    // справа снизу, у дорожки, — фонарь.
+    const isle = (x: number, y: number, w: number, h: number) => {
+      this.add.rectangle(x - 1, y, w + 2, h, 0xc0cbdc).setOrigin(0).setDepth(-9.44);
+      tile(x + 1, y + 2, w - 2, h - 4, 'grass', -9.435);
     };
-    isle(y + 6, h / 2 - 16);
-    isle(y + h / 2 + 10, h / 2 - 16);
-    this.add.image(ix + 17, y + h / 2 - 14, 'shadow').setScale(2.1 / ART, 1.5 / ART).setAlpha(0.75).setDepth(-9.43);
+    isle(left + 3, top + 4, 10, 24);
+    isle(left + 3, bottom - 28, 10, 24);
+    isle(right - 40, top + 4, 36, 22);
+    isle(right - 42, bottom - 28, 10, 24);
+    this.art(left + 8, top + 18, 'bush').setDepth(-9.42);
+    this.art(left + 8, bottom - 12, 'bush').setDepth(-9.42);
+    this.add.image(right - 18, top + 24, 'shadow').setScale(2.1 / ART, 1.5 / ART).setAlpha(0.75).setDepth(-9.43);
     // Дерево — как в сквере: в снегу в шапке, осенью рыжее, на ветру качается.
-    const tree = this.art(ix + 12, y + h / 2 - 14, 'tree_round').setOrigin(0.5, 0.9).setDepth(-9.42);
+    const tree = this.art(right - 23, top + 24, 'tree_round').setOrigin(0.5, 0.9).setDepth(-9.42);
     this.greenery.push(tree);
     this.windTrees.push(tree);
-    this.art(ix + 7, y + h - 18, 'bush_flower').setDepth(-9.42);
-    this.art(ix + 18, y + h - 12, 'lamp').setOrigin(0.5, 0.95).setDepth(-9.42);
+    this.art(right - 9, top + 20, 'bush_flower').setDepth(-9.42);
     // Фонарь парковки загорается первым — у него датчик сумерек; под ним на асфальте — пятно света.
-    const parkLamp = this.addLamp(ix + 18, y + h - 34, 0.02, 0.5);
-    this.lampGlow(parkLamp, this.art(ix + 18, y + h - 12, 'glow').setScale(40 / 64).setTint(0xffc860), 0.5);
-    // Стрелки проезда и упоры для колёс на каждом месте.
-    const arrows = this.add.graphics().setDepth(-9.45);
-    arrows.fillStyle(0xe6e1d6, 0.75);
-    for (const [ax, dir] of [[x + 50, 1], [x + 130, -1]] as const) {
-      const ay = y + h / 2;
-      arrows.fillRect(ax - 7 * dir, ay - 0.75, 10 * dir, 1.5);
-      arrows.fillTriangle(ax + 3 * dir, ay - 3, ax + 3 * dir, ay + 3, ax + 7 * dir, ay);
+    const lampX = right - 37;
+    this.art(lampX, bottom - 8, 'lamp').setOrigin(0.5, 0.95).setDepth(-9.42);
+    const parkLamp = this.addLamp(lampX, bottom - 30, 0.02, 0.5);
+    this.lampGlow(parkLamp, this.art(lampX, bottom - 8, 'glow').setScale(40 / 64).setTint(0xffc860), 0.5);
+    // Разметка мест, стрелки проезда (въезд справа) и упоры для колёс у дальнего края каждого места.
+    const bayX = left + 16;
+    const marks = this.add.graphics().setDepth(-9.45);
+    marks.fillStyle(0xe6e1d6, 1);
+    for (const ry of [top + 4, bottom - 30]) for (let i = 0; i <= LOT.bays; i++) marks.fillRect(bayX + i * LOT.bay, ry, 1.5, 26);
+    marks.fillStyle(0xe6e1d6, 0.75);
+    for (const [ax, dir] of [[bayX + 40, 1], [right - 66, -1]] as const) {
+      marks.fillRect(ax - 7 * dir, aisleY - 0.75, 10 * dir, 1.5);
+      marks.fillTriangle(ax + 3 * dir, aisleY - 3, ax + 3 * dir, aisleY + 3, ax + 7 * dir, aisleY);
     }
-    // Два ряда мест: машины стоят носом к проезду посередине. Днём одни приезжают, другие уезжают.
+    this.add
+      .text(bayX + 92, aisleY, 'P', { fontFamily: UI_FONT, fontSize: '10px', color: '#e6e1d6', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setResolution(this.textRes(4))
+      .setDepth(-9.44)
+      .setAlpha(0.7);
+    const stops = this.add.graphics().setDepth(-9.445);
+    // Два ряда мест носом к проезду посередине. Утром часть занята соседями — остальные ждут наших покупателей.
+    const rnd = new Phaser.Math.RandomDataGenerator(['parking']);
+    const full = this.lite ? 0.25 : 0.4;
     const spots: ParkSpot[] = [];
-    for (const row of [0, 1]) {
-      const ry = row === 0 ? y + 4 : y + h - 30;
-      for (let i = 0; i <= 5; i++) this.add.rectangle(x + 6 + i * 33, ry, 1.5, 26, 0xe6e1d6).setOrigin(0).setDepth(-9.45);
-      for (let i = 0; i < 5; i++) {
-        // Упор для колёс у дальнего края места.
-        this.add.rectangle(x + 22 + i * 33, row === 0 ? ry + 3 : ry + 23, 12, 2, 0xa8a8a8).setStrokeStyle(0.5, 0x5a6988).setDepth(-9.445);
-        const spot: ParkSpot = { x: x + 22 + i * 33, y: ry + 13, angle: row === 0 ? 90 : -90, car: null };
+    for (const up of [true, false]) {
+      for (let i = 0; i < LOT.bays; i++) {
+        const spot: ParkSpot = { x: bayX + i * LOT.bay + LOT.bay / 2, y: up ? top + 18 : bottom - 18, up, car: null };
         spots.push(spot);
-        if (rnd.frac() >= 0.35) spot.car = this.parkedCar(spot, rnd.pick(CAR_TYPES.filter(([k]) => k !== 'car_truck')));
+        stops.fillStyle(0xa8a8a8, 1).fillRect(spot.x - 6, up ? top + 6 : bottom - 8, 12, 2);
+        stops.lineStyle(0.5, 0x5a6988, 1).strokeRect(spot.x - 6, up ? top + 6 : bottom - 8, 12, 2);
+        if (rnd.frac() < full) spot.car = this.lotCar(this.lotCarType(() => rnd.frac()), spot.x, spot.y, up ? -90 : 90, 'neighbor');
       }
     }
-    this.parking = { spots, x, w, aisleY: y + h / 2 };
+    this.parking = {
+      spots,
+      left,
+      right,
+      top,
+      bottom,
+      aisleY,
+      laneX: right - 12,
+      footX: (footX + driveX) / 2,
+      mouthY: street,
+      busy: { drive: false, aisle: false },
+      waiting: 0,
+      onRoad: false,
+    };
     this.parkingTimer?.remove();
     this.parkingTimer = this.time.addEvent({ delay: 4000, loop: true, callback: () => this.parkingTick() });
-    this.add.text(x + w / 2, y + h / 2, 'P', { fontFamily: UI_FONT, fontSize: '10px', color: '#e6e1d6', fontStyle: 'bold' }).setOrigin(0.5).setResolution(this.textRes(4)).setDepth(-9.44).setAlpha(0.7);
-    return { x: x - 8, y: y - 8, w: w + 16, h: h + 16 };
+    return [
+      { x: left - 8, y: top - 8, w: LOT.w + 16, h: LOT.h + 16 },
+      { x: footX - 4, y: bottom, w: right - footX + 8, h: street - bottom },
+    ];
   }
 
-  /** Машина на парковке (или подъезжающая): за зданием глубина отрицательная — над асфальтом, под крышами. */
-  private parkedCar(spot: ParkSpot, [key, color]: [string, number | null, number], at?: { x: number; y: number; angle: number }): Phaser.GameObjects.Container {
+  /** Глубина на улице: перед зданием и сбоку — по высоте, как у людей; за ним (y < 0) — над асфальтом парковки. */
+  private outsideDepth(y: number): number {
+    return y >= 0 ? y : LOT_DEPTH + (y + 400) / 100000;
+  }
+
+  /** Машина у магазина: стоит на месте носом по heading (или сейчас поедет). */
+  private lotCar([key, color]: [string, number | null, number], x: number, y: number, heading: number, owner: LotCar['owner']): LotCar {
     const body = this.art(0, 0, key);
     if (color !== null) body.setTint(color || Phaser.Utils.Array.GetRandom(CAR_COLORS));
-    // Тень под машиной — чуть в сторону от света.
-    const shade = this.add.rectangle(1.2, 1.2, body.displayWidth - 1, body.displayHeight - 1, 0x181425, 0.28);
-    const car = this.add.container(at?.x ?? spot.x, at?.y ?? spot.y, [shade, body]).setAngle(at?.angle ?? spot.angle).setDepth(-9.41);
+    const lights = this.art(0, 0, `${key}_lights`);
+    const blink = [0, 1].map(() => this.add.rectangle(0, 0, 1.5, 1.5, 0xfeae34).setVisible(false));
+    const box = this.add.container(x, y, [body, lights, ...blink]);
+    // Свет фар и вспышка поворотника — поверх вечерней темноты (как у ночного такси), едут вместе с машиной.
+    // Они в своём контейнере (в координатах мира): отсечение за краем кадра (cullView) не трогает то, что ездит.
+    const glow = (w: number, h: number, tint: number) => this.art(x, y, 'glow').setScale(w / 64, h / 64).setTint(tint).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
+    const beam = glow(30, 14, 0xfff0b0);
+    const flash = glow(7, 7, 0xffa030);
+    const lamps = this.add.container(0, 0, [beam, flash]).setDepth(LIGHT_DEPTH + 1);
+    box.once(Phaser.GameObjects.Events.DESTROY, () => lamps.destroy());
+    const car: LotCar = { box, body, lights, key, half: key === 'car_hatch' ? 13 : 16, heading, frame: 'side', blink, turn: null, beam, flash, moving: false, owner, leaving: false };
+    this.placeCar(car, x, y, heading);
     return car;
   }
 
+  /** Какая машина: седан, хэтчбек, такси или фургон — по весам, как на улице. */
+  private lotCarType(random: () => number = Math.random): [string, number | null, number] {
+    const total = LOT_CARS.reduce((sum, [, , weight]) => sum + weight, 0);
+    let roll = random() * total;
+    return LOT_CARS.find(([, , weight]) => (roll -= weight) < 0) ?? LOT_CARS[0];
+  }
+
   /**
-   * Живая парковка: пока магазин открыт, машин тем больше, чем больше покупателей в зале; к вечеру
-   * пустеет. Приехавшая машина заезжает с проезда на место, водитель идёт в сторону магазина.
+   * Машина в точке (x, y) носом по heading: кадр — ближайший из четырёх (вбок, вверх, вниз; влево —
+   * зеркально), остаток поворота — наклоном. Поворотник мигает у носа и у багажника со своей стороны,
+   * фары светят вперёд — пока едет и только вечером.
    */
-  private parkingTick(): void {
-    const lot = this.parking;
-    if (!lot || !this.running || this.arranging) return;
-    const busy = lot.spots.filter((s) => s.car);
-    const load = Math.min(1, this.customers.size / Math.max(1, storeLevel(this.state).maxCustomers));
-    const target = Math.round(lot.spots.length * Math.min(0.9, 0.25 + 0.6 * load) * (1 - 0.5 * this.evening));
-    if (busy.length < target && Math.random() < 0.6) {
-      const free = lot.spots.filter((s) => !s.car);
-      if (free.length) this.parkArrive(Phaser.Utils.Array.GetRandom(free));
-    } else if (busy.length > target && Math.random() < 0.5) {
-      this.parkLeave(Phaser.Utils.Array.GetRandom(busy));
+  private placeCar(car: LotCar, x: number, y: number, heading: number): void {
+    const h = Phaser.Math.Angle.WrapDegrees(heading);
+    car.heading = h;
+    const west = Math.abs(h) > 135;
+    const frame: LotCar['frame'] = Math.abs(h) <= 45 || west ? 'side' : h > 0 ? 'down' : 'up';
+    if (frame !== car.frame) {
+      car.frame = frame;
+      const key = frame === 'side' ? car.key : `${car.key}_${frame}`;
+      car.body.setTexture(key);
+      car.lights.setTexture(`${key}_lights`);
+    }
+    car.body.setFlipX(west);
+    car.lights.setFlipX(west);
+    const tilt = Phaser.Math.Angle.WrapDegrees(h - (frame === 'side' ? (west ? 180 : 0) : frame === 'down' ? 90 : -90));
+    car.box.setPosition(x, y).setAngle(tilt).setDepth(this.outsideDepth(y));
+    // Нос в кадре (до наклона) и левый бок: поворотник — у носа и багажника со своей стороны.
+    const fwd = frame === 'side' ? { x: west ? -1 : 1, y: 0 } : { x: 0, y: frame === 'down' ? 1 : -1 };
+    const side = car.turn === 'right' ? -5 : 5;
+    const on = car.turn !== null && Math.floor(this.time.now / 300) % 2 === 0;
+    car.blink.forEach((dot, i) => {
+      const along = (i === 0 ? 1 : -1) * (car.half - 1);
+      dot.setPosition(fwd.x * along + fwd.y * side, fwd.y * along - fwd.x * side).setVisible(on);
+    });
+    const t = Phaser.Math.DegToRad(tilt);
+    const [dot] = car.blink;
+    car.flash
+      .setPosition(x + dot.x * Math.cos(t) - dot.y * Math.sin(t), y + dot.x * Math.sin(t) + dot.y * Math.cos(t))
+      .setAlpha(on ? 0.2 + 0.7 * this.evening : 0);
+    const a = Phaser.Math.DegToRad(h);
+    const reach = car.half + 12;
+    car.beam
+      .setPosition(x + Math.cos(a) * reach, y + Math.sin(a) * reach)
+      .setRotation(a)
+      .setAlpha(car.moving ? 0.75 * this.evening : 0);
+  }
+
+  /** Машина едет по отрезкам пути: место и направление — по прямой или дуге, скорость меняется плавно. */
+  private async drive(car: LotCar, legs: CarLeg[]): Promise<void> {
+    for (const leg of legs) {
+      if (!car.box.active) return;
+      const length = leg.path.getLength();
+      if (length < 0.5) continue;
+      car.turn = leg.turn ?? null;
+      const seconds = (2 * length) / Math.max(1, leg.v0 + leg.v1);
+      const place = (u: number) => {
+        const p = leg.path.getPoint(u);
+        const d = leg.path.getTangent(u);
+        this.placeCar(car, p.x, p.y, Phaser.Math.RadToDeg(Math.atan2(d.y, d.x)) + (leg.back ? 180 : 0));
+      };
+      await new Promise<void>((done) =>
+        this.tweens.addCounter({
+          from: 0,
+          to: seconds,
+          duration: seconds * 1000,
+          onUpdate: (tween) => {
+            const time = tween.getValue() ?? 0;
+            place(Phaser.Math.Clamp((leg.v0 * time + ((leg.v1 - leg.v0) * time * time) / (2 * seconds)) / length, 0, 1));
+          },
+          onComplete: () => {
+            if (car.box.active) place(1);
+            done();
+          },
+        }),
+      );
+    }
+    car.turn = null;
+    if (car.box.active) this.placeCar(car, car.box.x, car.box.y, car.heading);
+  }
+
+  /** Машина стоит с работающим мотором (фары горят, поворотник мигает), пока ready() не скажет «можно». */
+  private carWait(car: LotCar, ready: () => boolean, turn: LotCar['turn']): Promise<void> {
+    car.turn = turn;
+    return new Promise((done) => {
+      const tick = this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: 1000,
+        repeat: -1,
+        onUpdate: () => {
+          if (!car.box.active) {
+            tick.stop();
+            return;
+          }
+          if (!ready()) {
+            this.placeCar(car, car.box.x, car.box.y, car.heading);
+            return;
+          }
+          tick.stop();
+          done();
+        },
+      });
+    });
+  }
+
+  /** Ждёт, пока ready() не станет истинным (проверяет несколько раз в секунду); перестройка мира обрывает ожидание. */
+  private until(ready: () => boolean): Promise<void> {
+    if (ready()) return Promise.resolve();
+    return new Promise((done) => {
+      const stop = this.worldTimer(150, () => {
+        if (!ready()) return;
+        stop();
+        done();
+      });
+    });
+  }
+
+  /** Человек идёт по точкам на улице напрямик (без обхода полок); перестройка мира обрывает путь. */
+  private async stroll(sprite: Phaser.GameObjects.Container, points: { x: number; y: number }[]): Promise<void> {
+    const world = this.worldGen;
+    for (const p of points) {
+      if (!sprite.active) return;
+      await this.walkLeg(sprite, p.x, p.y, this.customerSpeed(), (y) => this.outsideDepth(y));
+      if (world !== this.worldGen) return new Promise<void>(() => undefined);
     }
   }
 
-  private parkArrive(spot: ParkSpot): void {
-    const lot = this.parking!;
-    const total = CAR_TYPES.reduce((sum, [, , weight]) => sum + weight, 0);
-    let roll = Math.random() * total;
-    const type = CAR_TYPES.filter(([k]) => k !== 'car_truck').find(([, , weight]) => (roll -= weight) < 0) ?? CAR_TYPES[0];
-    const car = this.parkedCar(spot, type, { x: lot.x - 30, y: lot.aisleY, angle: 0 });
-    spot.car = car;
-    this.tweens.chain({
-      targets: car,
-      tweens: [
-        { x: spot.x, duration: 1400 + Math.abs(spot.x - lot.x) * 8, ease: 'Sine.easeOut' },
-        { angle: spot.angle, y: spot.y, duration: 700, ease: 'Sine.easeInOut' },
-      ],
-      onComplete: () => {
-        if (!car.active) return;
-        // Водитель выходит и идёт к магазину (за угол здания).
-        const driver = this.makePerson(spot.x + 10, spot.y, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)).setDepth(-9.39);
-        this.setFacing(driver, 'right');
-        driver.setData('walking', true);
-        this.tweens.add({
-          targets: driver,
-          x: lot.x + lot.w + 24,
-          y: lot.aisleY,
-          duration: 2600 + (lot.x + lot.w - spot.x) * 12,
-          onComplete: () => driver.destroy(),
-        });
-      },
-    });
+  /** Занять проезд (drive) и/или парковку (aisle), если они свободны. */
+  private lotTake(lot: ParkingLot, need: ('drive' | 'aisle')[]): boolean {
+    if (this.parking !== lot || need.some((key) => lot.busy[key])) return false;
+    for (const key of need) lot.busy[key] = true;
+    return true;
   }
 
-  private parkLeave(spot: ParkSpot): void {
-    const lot = this.parking!;
+  /** Машина появилась на улице: с парковки выезжают, только когда в её полосе слева никого нет. */
+  private onRoad(obj: Phaser.GameObjects.Container, lane: 'up' | 'down', slow = false): void {
+    const entry = { obj, lane, slow };
+    this.roadTraffic.add(entry);
+    obj.once(Phaser.GameObjects.Events.DESTROY, () => this.roadTraffic.delete(entry));
+  }
+
+  /** Можно ли ехать по улице к парковке: в особые дни, когда улица занята, машины стоят, где стоят. */
+  private lotRoadOpen(): boolean {
+    const big = this.bigObjs.length ? bigDayFor(this.state.day) : null;
+    return !big || LOT_ROAD_DAYS.includes(big);
+  }
+
+  /**
+   * Откуда можно подъехать к парковке (пока машина с парковки на дороге, новые на улице не появляются).
+   * Слева — по ближней к магазину полосе, если в ней нет автобуса или фургона, которые стоят или тащатся
+   * впереди, а быстрая машина уже отъехала от края (сзади эта её не догонит — медленнее). Справа — по
+   * дальней полосе с поворотом направо через ближнюю: если справа только что никто не въехал, а в ближней
+   * полосе до въезда пусто (её переезжать). null — пока никак.
+   */
+  private arrivalSide(lot: ParkingLot): 'left' | 'right' | null {
+    let left = true;
+    let right = true;
+    for (const v of this.roadTraffic) {
+      if (!v.obj.active) continue;
+      const { x } = v.obj;
+      if (v.lane === 'up' && (v.slow ? x > -220 && x < this.next.w + 80 : x < 0)) left = false;
+      if (v.lane === 'down' && x > this.next.w + 20) right = false;
+      if (v.lane === 'up' && x < lot.laneX + 40 && (!v.slow || x > lot.laneX - 160)) right = false;
+    }
+    return left && right ? (Math.random() < 0.5 ? 'left' : 'right') : left ? 'left' : right ? 'right' : null;
+  }
+
+  /** Можно ли выехать с проезда на улицу: в своей полосе слева никого, перед въездом нет прохожих. */
+  private mouthClear(lot: ParkingLot): boolean {
+    for (const v of this.roadTraffic) {
+      if (v.lane === 'up' && v.obj.active && v.obj.x < lot.laneX + 40 && (!v.slow || v.obj.x > -220)) return false;
+    }
+    for (const p of this.people) if (Math.abs(p.x - lot.laneX) < 12 && Math.abs(p.y - this.streetY) < 9) return false;
+    return true;
+  }
+
+  /**
+   * Очередной покупатель приезжает на машине — если на парковке есть место и проезд к ней свободен.
+   * Поток гостей тот же: этот просто придёт с парковки, а не с тротуара (arriveByCar). true — поехал.
+   * Под вечер и в короткую ночную смену не приезжают (пока доедет и дойдёт — магазин закроется),
+   * в обучение — тоже.
+   */
+  private carCustomer(): boolean {
+    const lot = this.parking;
+    if (!lot || this.night || this.state.day <= TUTORIAL_DAYS || this.timeLeft < CAR_LAST_SECONDS || !this.lotRoadOpen()) return false;
+    if (lot.busy.drive || lot.waiting > 0 || lot.onRoad) return false;
+    const side = this.arrivalSide(lot);
+    if (!side || Math.random() >= CAR_CUSTOMERS * (this.lite ? 0.5 : 1)) return false;
+    const free = lot.spots.filter((s) => !s.car);
+    if (!free.length) return false;
+    void this.arriveByCar(lot, Phaser.Utils.Array.GetRandom(free), side);
+    return true;
+  }
+
+  /**
+   * Покупатель на машине: едет по улице в своей полосе, у въезда сбрасывает скорость, мигает и сворачивает
+   * в проезд вдоль магазина (слева — налево из ближней полосы, справа — направо через неё), в конце —
+   * на парковку (если там кто-то паркуется — ждёт), по ней — к своему месту, заезжает носом по дуге
+   * и глохнет. Водитель выходит и по дорожке вдоль стены идёт на тротуар — там он уже обычный
+   * покупатель (spawnCustomer), а после покупок вернётся к машине (driveHome).
+   */
+  private async arriveByCar(lot: ParkingLot, spot: ParkSpot, side: 'left' | 'right'): Promise<void> {
+    const { laneX, aisleY } = lot;
+    const road = this.streetY + 24;
+    const far = this.streetY + 42;
+    const r = 12;
+    lot.busy.drive = true;
+    lot.onRoad = true;
+    const from = side === 'left' ? -70 : this.next.w + 90;
+    const car = this.lotCar(this.lotCarType(), from, side === 'left' ? road : far, side === 'left' ? 0 : 180, 'customer');
+    car.moving = true;
+    spot.car = car;
+    await this.drive(
+      car,
+      side === 'left'
+        ? [
+            ...cruise(from, road, laneX - r, road, CAR_ROAD, CAR_ROAD, 16, 0, 110, 'left'),
+            { path: bend(laneX - r, road, laneX, road, laneX, road - r), v0: 16, v1: 18, turn: 'left' },
+          ]
+        : [
+            ...cruise(from, far, laneX + r, far, CAR_ROAD * 0.8, CAR_ROAD * 0.8, 14, 0, 50, 'right'),
+            { path: bend(laneX + r, far, laneX, far, laneX, far - r), v0: 14, v1: 16, turn: 'right' },
+            { path: straight(laneX, far - r, laneX, road - r), v0: 16, v1: 18, turn: 'right' },
+          ],
+    );
+    lot.onRoad = false;
+    // По проезду вдоль магазина: разгон, ровно, перед поворотом на парковку — тормозит.
+    const corner = aisleY + r;
+    const legs = cruise(laneX, road - r, laneX, corner, 18, CAR_DRIVE, 14, 50, 60, 'left');
+    const brake = legs.pop()!;
+    await this.drive(car, legs);
+    const free = this.lotTake(lot, ['aisle']);
+    if (!free) brake.v1 = 0;
+    await this.drive(car, [brake]);
+    if (!free) await this.carWait(car, () => this.lotTake(lot, ['aisle']), 'left');
+    await this.drive(car, [{ path: bend(laneX, corner, laneX, aisleY, laneX - r, aisleY), v0: free ? 14 : 0, v1: 14, turn: 'left' }]);
+    // Свернул на парковку — проезд свободен для следующей машины.
+    lot.busy.drive = false;
+    const bay = 14;
+    const into = spot.x + bay;
+    const dir = spot.up ? -1 : 1;
+    const turn = spot.up ? 'right' : 'left';
+    await this.drive(car, [
+      ...cruise(laneX - r, aisleY, into, aisleY, 14, CAR_LOT, CAR_CREEP, 20, 30, turn),
+      { path: bend(into, aisleY, spot.x, aisleY, spot.x, aisleY + dir * bay), v0: CAR_CREEP, v1: CAR_CREEP, turn },
+      { path: straight(spot.x, aisleY + dir * bay, spot.x, spot.y), v0: CAR_CREEP, v1: 0 },
+    ]);
+    if (!car.box.active) {
+      lot.busy.aisle = false;
+      return;
+    }
+    car.moving = false;
+    this.placeCar(car, spot.x, spot.y, spot.up ? -90 : 90);
+    // Водитель выходит (дверь слева по ходу) и идёт по парковке к дорожке вдоль стены, по ней — на тротуар.
+    let look = this.night ? nightLook() : customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day);
+    const big = bigDayFor(this.state.day);
+    if (big && BIG_DAYS[big].masks && !look.face && Math.random() < MASKS) look = { ...look, face: 'medmask' };
+    const door = this.carDoor(spot);
+    const driver = this.makePerson(door.x, door.y, look);
+    driver.setDepth(this.outsideDepth(door.y)).setAlpha(0);
+    this.addUmbrella(driver);
+    this.tweens.add({ targets: driver, alpha: 1, duration: 250 });
+    await this.stroll(driver, [{ x: door.x, y: aisleY + 3 }, { x: lot.footX, y: aisleY + 3 }, { x: lot.footX, y: lot.bottom }]);
+    lot.busy.aisle = false;
+    await this.stroll(driver, [{ x: lot.footX, y: this.streetY }]);
+    if (!driver.active) return;
+    // Пока шёл, магазин закрылся — возвращается к машине.
+    if (this.running && this.timeLeft > 0 && !this.siege) this.spawnCustomer(undefined, { sprite: driver, look, car: spot });
+    else void this.driveHome(driver, spot);
+  }
+
+  /** Где у машины на месте дверь водителя (слева по ходу): там он выходит и садится. */
+  private carDoor(spot: ParkSpot): { x: number; y: number } {
+    return { x: spot.x + (spot.up ? -9 : 9), y: spot.y + (spot.up ? 6 : -6) };
+  }
+
+  /**
+   * Покупатель с покупками возвращается к машине: по тротуару к дорожке вдоль стены, по ней на парковку —
+   * и уезжает (boardCar). Парковку за это время перестроили — просто уходит по тротуару.
+   */
+  private async driveHome(sprite: Phaser.GameObjects.Container, spot: ParkSpot): Promise<void> {
+    const lot = this.parking;
+    if (!lot || !lot.spots.includes(spot) || !spot.car?.box.active) {
+      void this.strollAway(sprite);
+      return;
+    }
+    await this.stroll(sprite, [
+      { x: sprite.x, y: this.streetY },
+      { x: lot.footX, y: this.streetY },
+    ]);
+    await this.boardCar(lot, spot, sprite);
+  }
+
+  /** Водитель по дорожке поднимается на парковку, ждёт, пока проезд свободен, садится — и машина уезжает. */
+  private async boardCar(lot: ParkingLot, spot: ParkSpot, sprite: Phaser.GameObjects.Container): Promise<void> {
     const car = spot.car;
+    if (!car) return;
+    car.leaving = true;
+    // Ждёт у края парковки, пока по ней и по проезду никто не едет (если ждут несколько — друг за другом).
+    await this.stroll(sprite, [{ x: lot.footX, y: lot.bottom + 4 + 7 * Math.min(lot.waiting, 3) }]);
+    lot.waiting++;
+    await this.until(() => this.lotTake(lot, ['drive', 'aisle']));
+    lot.waiting--;
+    const door = this.carDoor(spot);
+    await this.stroll(sprite, [{ x: lot.footX, y: lot.aisleY + 3 }, { x: door.x, y: lot.aisleY + 3 }, door]);
+    if (!sprite.active || !car.box.active) {
+      lot.busy.drive = false;
+      lot.busy.aisle = false;
+      return;
+    }
+    // Сел в машину.
+    await new Promise<void>((done) => this.tweens.add({ targets: sprite, alpha: 0, duration: 200, onComplete: () => done() }));
+    sprite.destroy();
+    await this.lotDepart(lot, spot, car);
+  }
+
+  /**
+   * Машина уезжает с парковки (проезд и парковка уже заняты для неё): задним ходом с места и по дуге —
+   * носом к выезду, по парковке и проезду к улице; у тротуара пропускает машины в своей полосе
+   * и прохожих, мигает — и уезжает направо, за край.
+   */
+  private async lotDepart(lot: ParkingLot, spot: ParkSpot, car: LotCar): Promise<void> {
+    const { laneX, aisleY } = lot;
+    const r = 12;
+    const back = 14;
+    const dir = spot.up ? -1 : 1;
+    // Завёлся: зажглись фары.
+    car.moving = true;
+    this.placeCar(car, spot.x, spot.y, car.heading);
+    await this.wait(400);
+    await this.drive(car, [
+      { path: straight(spot.x, spot.y, spot.x, aisleY + dir * back), v0: 0, v1: CAR_CREEP, back: true },
+      { path: bend(spot.x, aisleY + dir * back, spot.x, aisleY, spot.x - back, aisleY), v0: CAR_CREEP, v1: 0, back: true },
+    ]);
     spot.car = null;
-    if (!car?.active) return;
-    this.tweens.chain({
-      targets: car,
-      tweens: [
-        { y: lot.aisleY, angle: 0, duration: 800, ease: 'Sine.easeInOut' },
-        { x: lot.x + lot.w + 40, duration: 1400 + Math.abs(lot.x + lot.w - spot.x) * 8, ease: 'Sine.easeIn' },
-      ],
-      onComplete: () => car.destroy(),
-    });
+    await this.drive(car, [
+      ...cruise(spot.x - back, aisleY, laneX - r, aisleY, 0, CAR_LOT, 14, 20, 30, 'right'),
+      { path: bend(laneX - r, aisleY, laneX, aisleY, laneX, aisleY + r), v0: 14, v1: 16, turn: 'right' },
+    ]);
+    lot.busy.aisle = false;
+    const stop = lot.mouthY - 17;
+    await this.drive(car, cruise(laneX, aisleY + r, laneX, stop, 16, CAR_DRIVE, 0, 50, 60, 'left'));
+    // У тротуара ждёт просвета: в её полосе новые машины не появляются, пока она не уехала.
+    lot.onRoad = true;
+    await this.carWait(car, () => this.mouthClear(lot), 'left');
+    const road = this.streetY + 24;
+    await this.drive(car, [
+      { path: straight(laneX, stop, laneX, road - r), v0: 0, v1: 24, turn: 'left' },
+      { path: bend(laneX, road - r, laneX, road, laneX + r, road), v0: 24, v1: 28, turn: 'left' },
+    ]);
+    lot.busy.drive = false;
+    await this.drive(car, [{ path: straight(laneX + r, road, this.next.w + 100, road), v0: 28, v1: CAR_ROAD * 1.3 }]);
+    lot.onRoad = false;
+    car.box.destroy();
+  }
+
+  /**
+   * Соседские машины разъезжаются во второй половине дня (к вечеру парковка пустеет), а утром — только
+   * если мест почти не осталось: проезд узкий, пусть сначала заезжают наши покупатели (carCustomer).
+   * За машиной приходит водитель по дорожке вдоль стены.
+   */
+  private parkingTick(): void {
+    const lot = this.parking;
+    if (!lot || !this.running || this.arranging || !this.lotRoadOpen()) return;
+    if (lot.busy.drive || lot.busy.aisle || lot.waiting > 0 || lot.onRoad) return;
+    const taken = lot.spots.filter((s) => s.car).length;
+    if (!this.night && this.timeLeft > CAR_LAST_SECONDS && taken < lot.spots.length - 2) return;
+    const target = Math.round(lot.spots.length * (0.5 - 0.3 * this.evening) * (this.lite ? 0.7 : 1));
+    const parked = lot.spots.filter((s) => s.car?.owner === 'neighbor' && !s.car.leaving);
+    if (taken <= target || !parked.length || Math.random() >= 0.3) return;
+    const driver = this.makePerson(lot.footX, lot.bottom + 50, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
+    driver.setDepth(this.outsideDepth(driver.y));
+    this.addUmbrella(driver);
+    void this.boardCar(lot, Phaser.Utils.Array.GetRandom(parked), driver);
   }
 
   /** Стройка: забор, котлован, кран и табличка «Скоро: …». */
@@ -6800,7 +7308,9 @@ export class StoreScene extends Phaser.Scene {
   /** Фонарь не ставим на дорожку к двери и на подъезд к складу. */
   private lampAt(x: number): boolean {
     const { door, warehouse } = this.layout;
-    return Math.abs(x - door.x) > 20 && Math.abs(x - (warehouse.x + warehouse.w / 2)) > 18;
+    // Не на въезде к парковке и не на дорожке вдоль стены.
+    const lot = x > this.next.w + 2 && x < this.next.w + LOT_DRIVE_END + 4;
+    return Math.abs(x - door.x) > 20 && Math.abs(x - (warehouse.x + warehouse.w / 2)) > 18 && !lot;
   }
 
   /** Светящийся слой поверх темноты: виден только вечером. */
@@ -7116,7 +7626,7 @@ export class StoreScene extends Phaser.Scene {
     this.binStink = this.art(bin.x, bin.y - 14, 'stink').setDepth(bin.y + 30).setVisible(false);
     this.tweens.add({ targets: this.binStink, y: bin.y - 19, alpha: { from: 1, to: 0.35 }, duration: 900, yoyo: true, repeat: -1 });
     this.obstacles.push({ x: bin.x - 8, y: bin.y - 12, w: 16, h: 14 });
-    this.registerProp('bin', bin, binSprite(this.state, 0), { x: -8, y: -12, w: 16, h: 14 });
+    this.registerProp('bin', bin, binSprite(this.state, 0), propFootprint(this.layout, 'bin', bin.x));
     this.refreshBin();
   }
 
@@ -7129,7 +7639,7 @@ export class StoreScene extends Phaser.Scene {
     this.bargainItems = [];
     if (!hasBargain(this.state)) return;
     const { door, h, w } = this.layout;
-    const fp = { x: -13, y: -8, w: 26, h: 12 };
+    const fp = propFootprint(this.layout, 'bargain', 0);
     const zones = [...tillZones(this.layout, registerSlots(this.state)), ...blockedZones(this.layout)];
     const free = (p: { x: number; y: number }) => {
       const r = { x: p.x + fp.x - 3, y: p.y + fp.y - 16, w: fp.w + 6, h: fp.h + 19 };
@@ -7389,10 +7899,15 @@ export class StoreScene extends Phaser.Scene {
     if (activeDecor(this.state, 'rug')) this.art(w / 2, (wallH + h) / 2 + 6, 'rug').setDepth(1);
     this.buildLights();
     this.buildShowpiece();
-    // Стойка со сладостями у кассы, в больших магазинах — тележки у входа.
+    // Стойка со сладостями у кассы, у входа — корзинки, в больших магазинах — тележки. Если справа
+    // от двери встал ларь с мороженым (тесный зал), корзинки и тележки — слева от неё, но не в дверях склада.
     const { counter } = this.layout;
     this.art(counter.x, counter.y + 39, 'candy_rack').setDepth(counter.y + 40);
-    if (this.state.level >= 2 || (this.state.level >= 1 && hasUpgrade(this.state, 'cart'))) this.art(door.x + 46, h - 10, 'carts').setDepth(h - 4);
+    const ice = this.state.shelves.some((sh) => sh.kind === 'icebox') ? iceboxRect(this.iceboxSpot()) : null;
+    const clear = (x: number, half: number) => !ice || x + half < ice.x - 2 || x - half > ice.x + ice.w + 2;
+    const basketsX = [door.x + 26, door.x - 26].find((x) => clear(x, 6)) ?? door.x + 26;
+    const cartsX = [door.x + 46, door.x - 46].find((x) => clear(x, 9) && Math.abs(x - basketsX) > 16 && x - 9 > WING_DOOR_CLEAR);
+    if (cartsX !== undefined && (this.state.level >= 2 || (this.state.level >= 1 && hasUpgrade(this.state, 'cart')))) this.art(cartsX, h - 10, 'carts').setDepth(h - 4);
     // Коврик у входа и автомат с напитками у правой стены.
     this.art(door.x, h - 7, gearTier(this.state, 'entrance') ? 'mat_grate' : 'mat').setDepth(1);
     // Автомат: у боковой стены — боком (лицом в зал), в зале — лицом к игроку. Его можно двигать.
@@ -7421,7 +7936,7 @@ export class StoreScene extends Phaser.Scene {
     }
     // Мягкая тень вдоль стены — пол уходит под неё.
     this.add.rectangle(0, wallH, w, 3, 0x181425, 0.18).setOrigin(0).setDepth(1);
-    this.art(door.x + 26, h - 8, 'baskets').setDepth(h - 8);
+    this.art(basketsX, h - 8, 'baskets').setDepth(h - 8);
     // Растения в свободных углах у правой стены — не на пути покупателей.
     // Растение у туалета убрано: угол у правой стены оставляем свободным.
     const spots = [
@@ -7435,7 +7950,7 @@ export class StoreScene extends Phaser.Scene {
       if (busy) return;
       const tex = activeDecor(this.state, 'plants') ? 'plant_big' : 'plant';
       this.art(p.x, p.y, tex).setDepth(p.y + 6);
-      this.registerProp(id, p, tex, { x: -7, y: -10, w: 14, h: 14 });
+      this.registerProp(id, p, tex, propFootprint(this.layout, id, p.x));
     });
   }
 
@@ -8031,11 +8546,14 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Ларь с мороженым — у нижней стены рядом со входом или у левой стены, там, где он не задевает
-   * места под полки (layout.ts, iceboxSpotFor).
+   * Ларь с мороженым — у кассы: у правой стены рядом с очередью, в тесном зале — у нижней стены
+   * поближе к кассе; там, где он не задевает места под полки и кассы (layout.ts, iceboxSpotFor).
    */
   private iceboxSpot(): { x: number; y: number } {
-    return iceboxSpotFor(this.layout);
+    // Вещи, переставленные игроком в этом помещении, ларь обходит (как и при перестановке).
+    const moved = this.state.propPos?.level === this.state.level ? Object.entries(this.state.propPos.at) : [];
+    const avoid = moved.map(([id, p]) => propRect({ id, x: p.x, y: p.y, fp: propFootprint(this.layout, id, p.x) }));
+    return iceboxSpotFor(this.layout, registerSlots(this.state), avoid);
   }
 
   /** Вёдра с цветами — у кассы, в углу у правой стены. */
@@ -9264,6 +9782,7 @@ export class StoreScene extends Phaser.Scene {
     const vanX = warehouse.x + warehouse.w / 2 + 14;
     const roadY = this.streetY + 24;
     const van = this.add.container(-260, roadY, [this.art(0, 0, 'car_van').setTint(0xffd27a), this.art(0, 0, 'car_van_lights')]).setDepth(roadY);
+    this.onRoad(van, 'up', true);
     await this.wait((URGENT_SECONDS * 1000) / Math.max(1, this.speed) - 1800);
     await new Promise<void>((done) => this.tweens.add({ targets: van, x: vanX, duration: 1800, ease: 'Sine.easeOut', onComplete: () => done(), onStop: () => done() }));
     this.receiveUrgentOrders();
@@ -9534,36 +10053,46 @@ export class StoreScene extends Phaser.Scene {
 
   // ---------- Покупатели ----------
 
-  private spawnCustomer(forced?: { look: Look; at: Phaser.Types.Math.Vector2Like; wants?: ProductId[]; first?: boolean }): void {
-    const thief = !forced && Math.random() < thiefChance(this.state.level) * cameraTheft(this.state) * eyeTheft(this.state);
-    const valya = !forced && !thief && !this.night && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
+  /**
+   * Новый покупатель с улицы. forced — заданный (друг, первый покупатель); arrived — уже идёт по
+   * тротуару от парковки (carCustomer): человечек готов, после покупок он вернётся к своей машине.
+   */
+  private spawnCustomer(
+    forced?: { look: Look; at: Phaser.Types.Math.Vector2Like; wants?: ProductId[]; first?: boolean },
+    arrived?: { sprite: Phaser.GameObjects.Container; look: Look; car: ParkSpot },
+  ): void {
+    const thief = !forced && !arrived && Math.random() < thiefChance(this.state.level) * cameraTheft(this.state) * eyeTheft(this.state);
+    const valya = !forced && !arrived && !thief && !this.night && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
     const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
     // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще.
     const rareChance = rareGuestChance(this.state.level) * (activeAd(this.state)?.id === 'blogger' ? 2 : 1);
-    const rare = !forced && !thief && !valya && !this.night && Math.random() < rareChance ? pickRareGuest(this.state, Math.random) : null;
+    const rare = !forced && !arrived && !thief && !valya && !this.night && Math.random() < rareChance ? pickRareGuest(this.state, Math.random) : null;
     let look: Look = forced
       ? forced.look
-      : rare
-      ? (rare.look as Look)
-      : valya
-        ? VALYA
-        : thief
-          ? { ...randomLook(shirt), style: 'long' as const, hair: THIEF_SHIRT }
-          : this.night
-            ? nightLook()
-            : withCompanionItems(customerLook(shirt, this.state.day));
+      : arrived
+        ? arrived.look
+        : rare
+          ? (rare.look as Look)
+          : valya
+            ? VALYA
+            : thief
+              ? { ...randomLook(shirt), style: 'long' as const, hair: THIEF_SHIRT }
+              : this.night
+                ? nightLook()
+                : withCompanionItems(customerLook(shirt, this.state.day));
     // Ночью — гость с характером: свой образ, свой список и реплика у входа (nightGuests.ts).
-    const nightGuest = this.night && !forced && !thief && !rare && !valya ? pickNightGuest(Math.random) : null;
+    const nightGuest = this.night && !forced && !arrived && !thief && !rare && !valya ? pickNightGuest(Math.random) : null;
     if (nightGuest) look = nightGuestLook(nightGuest);
     const big = bigDayFor(this.state.day);
-    if (!rare && !thief && !valya) {
+    // Приехавший на машине уже одет (маска в эпидемию — ещё у машины, carCustomer).
+    if (!rare && !thief && !valya && !arrived) {
       // Ремонт дороги: рабочие в касках приходят за обедом. Болезнь: почти все в масках.
       if (big === 'roadworks' && !forced && !this.night && Math.random() < ROADWORKERS) look = { ...look, ...wearOf('builder', Math.random) };
       if (big && BIG_DAYS[big].masks && !look.face && Math.random() < MASKS) look = { ...look, face: 'medmask' };
     }
     // Гость из здания района: свой образ и свой список покупок (district.ts).
     let wants: ProductId[] | undefined = forced?.wants;
-    const fromDistrict = !forced && !rare && !thief && !valya && !this.night ? districtGuest(this.state, Math.random) : null;
+    const fromDistrict = !forced && !arrived && !rare && !thief && !valya && !this.night ? districtGuest(this.state, Math.random) : null;
     if (nightGuest) {
       const sellable = sellableProducts(this.state);
       const pool = NIGHT_GUEST_TYPES[nightGuest].wants.filter((id) => sellable.includes(id));
@@ -9578,10 +10107,10 @@ export class StoreScene extends Phaser.Scene {
       }
     }
     const start = forced?.at ?? this.streetSpawn();
-    const sprite = this.makePerson(start.x, start.y, look);
-    this.addUmbrella(sprite);
+    const sprite = arrived?.sprite ?? this.makePerson(start.x, start.y, look);
+    if (!arrived) this.addUmbrella(sprite);
     // Иногда приходят парой.
-    if (!thief && !rare && !valya && !forced?.first && look.stroller === undefined && Math.random() < 0.08) this.addCompanion(sprite);
+    if (!arrived && !thief && !rare && !valya && !forced?.first && look.stroller === undefined && Math.random() < 0.08) this.addCompanion(sprite);
     if (rare) {
       sound.bell();
       // Редкий гость сверкает, пока он в магазине.
@@ -9608,7 +10137,7 @@ export class StoreScene extends Phaser.Scene {
     }
     const bubble = this.art(0, -14, 'bubble').setVisible(false);
     sprite.add(bubble);
-    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief, rare: rare?.id, wants, first: forced?.first };
+    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief, rare: rare?.id, wants, first: forced?.first, car: arrived?.car };
     // Вора без охранника видно по красному контуру — его можно поймать касанием. Редкий гость — в золотом.
     if (thief && !this.workers.has('guard')) sprite.postFX?.addGlow(0xe43b44, 3, 0, false, 0.1, 6);
     if (rare) sprite.postFX?.addGlow(0xfee761, 3, 0, false, 0.1, 6);
@@ -9632,7 +10161,7 @@ export class StoreScene extends Phaser.Scene {
     const wanted = this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day));
     for (const id of wanted) {
       const index = shelfFor(this.state, id);
-      // Ларь у входа на виду — вор туда не идёт.
+      // Ларь у кассы на виду — вор туда не идёт.
       if (index < 0 || c.gone || this.state.shelves[index].kind === 'icebox') continue;
       const stand = this.standOf(index);
       await this.walk(c.sprite, stand.x + Phaser.Math.Between(-8, 8), stand.y);
@@ -9698,7 +10227,7 @@ export class StoreScene extends Phaser.Scene {
     const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day));
     let disappointed = false;
     let why: { reason: LostReason; id: ProductId } | undefined;
-    // Подойти, поискать глазами, взять: к полке в зале, к ларю у входа и к вёдрам у кассы — одинаково.
+    // Подойти, поискать глазами, взять: к полке в зале, к ларю и к вёдрам у кассы — одинаково.
     const visit = async (id: ProductId, index: number): Promise<ReturnType<StoreScene['tryTake']> | null> => {
       const stand = this.standOf(index);
       const fixture = SHELF_KINDS[this.state.shelves[index].kind].fixture;
@@ -10176,7 +10705,9 @@ export class StoreScene extends Phaser.Scene {
     await this.walk(c.sprite, this.layout.door.x, this.layout.h + 16);
     this.dropTrolley(c.sprite);
     this.customers.delete(c);
-    void this.strollAway(c.sprite);
+    // Приехавший на машине идёт к ней на парковку, остальные — по тротуару за край кадра.
+    if (c.car) void this.driveHome(c.sprite, c.car);
+    else void this.strollAway(c.sprite);
   }
 
   /** Прохожий идёт по тротуару, машина проезжает по дороге. */
@@ -10202,6 +10733,8 @@ export class StoreScene extends Phaser.Scene {
     if (Math.random() < 0.04) this.driveBus();
     if (Math.random() < 0.3) {
       const toRight = Math.random() < 0.5;
+      // Машина с парковки сейчас на дороге (сворачивает к ней или выезжает) — новые не въезжают ей в бок и в багажник.
+      if (this.parking?.onRoad) return;
       const y = this.streetY + (toRight ? 24 : 42);
       const total = CAR_TYPES.reduce((sum, [, , weight]) => sum + weight, 0);
       let roll = Math.random() * total;
@@ -10228,6 +10761,7 @@ export class StoreScene extends Phaser.Scene {
       }
       const car = this.add.container(toRight ? left : right, y, parts).setDepth(y);
       car.setScale(toRight ? 1 : -1, 1);
+      this.onRoad(car, toRight ? 'up' : 'down');
       this.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
     }
   }
@@ -10302,6 +10836,7 @@ export class StoreScene extends Phaser.Scene {
     const body = this.art(0, 0, 'bus').setTint(Phaser.Utils.Array.GetRandom([0xfeae34, 0xe43b44, 0x63c74d]));
     const lights = this.art(0, 0, 'bus_lights');
     const bus = this.add.container(-120, y, [body, lights]).setDepth(y);
+    this.onRoad(bus, 'up', true);
     const stopX = -70;
     this.tweens.add({
       targets: bus,
@@ -10352,6 +10887,7 @@ export class StoreScene extends Phaser.Scene {
         const dump = this.dumpSpot();
         const y = this.streetY + 24;
         const truck = this.add.container(-140, y, [this.art(0, 0, 'car_truck').setTint(0x3e8948), this.art(0, 0, 'car_truck_lights')]).setDepth(y);
+        this.onRoad(truck, 'up', true);
         this.tweens.add({
           targets: truck,
           x: dump.x + 10,
@@ -10520,7 +11056,7 @@ export class StoreScene extends Phaser.Scene {
       await this.walk(sprite, this.layout.door.x, this.streetY);
       await this.walk(sprite, this.layout.door.x, this.streetY + 82);
     } else {
-      const eduardDoor = this.next.w + 26 + 128 * 0.62;
+      const eduardDoor = this.next.w + SIDE_SHOP_X + SIDE_SHOP_W * 0.62;
       await this.walk(sprite, eduardDoor, this.streetY);
       await this.walk(sprite, eduardDoor, this.next.h - 2);
     }
@@ -10615,7 +11151,8 @@ export class StoreScene extends Phaser.Scene {
       .then(() => (world === this.worldGen ? undefined : new Promise<void>(() => undefined)));
   }
 
-  private walkLeg(target: Phaser.GameObjects.Container, x: number, y: number, speed: number): Promise<void> {
+  /** Один отрезок шага; depth — глубина по высоте не как в зале (за зданием, на парковке, — своя). */
+  private walkLeg(target: Phaser.GameObjects.Container, x: number, y: number, speed: number, depth?: (y: number) => number): Promise<void> {
     // Останавливаем только прошлый шаг: прыжок от радости и прочие анимации доигрывают.
     (target.getData('move') as Phaser.Tweens.Tween | undefined)?.stop();
     const distance = Phaser.Math.Distance.Between(target.x, target.y, x, y);
@@ -10632,7 +11169,7 @@ export class StoreScene extends Phaser.Scene {
         x,
         y,
         duration: (distance / speed) * 1000,
-        onUpdate: () => target.setDepth(target.y),
+        onUpdate: () => target.setDepth(depth ? depth(target.y) : target.y),
         onComplete: () => {
           target.setData('walking', false);
           resolve();

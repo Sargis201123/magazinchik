@@ -181,39 +181,58 @@ export function registerSpot(layout: Layout, index: number): Point & { left: boo
   return { x: left ? layout.counter.x - 34 : layout.counter.x, y: layout.counter.y - REGISTER_ROW * row, left };
 }
 
-/** Ларь с мороженым на месте (x, y): рамка вместе с крышкой и витриной. */
+/** Ларь с мороженым на месте (x, y): рамка вместе с крышкой, витриной и местом покупателя над ним. */
 export const iceboxRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 15, y: y - 24, w: 30, h: 30 });
 
 /**
- * Куда поставить ларь с мороженым: у нижней стены слева от входа, если там тесно — справа от входа
- * (до кассы), потом вдоль левой стены. Место не должно задевать ни одно место под полку (даже пустое —
- * полку могут купить завтра), островные витрины, кассу и проход к двери.
+ * Куда поставить ларь с мороженым. Как в настоящих магазинах — у кассы: вплотную к правой стене
+ * рядом с очередью (кто стоит в очереди, видит мороженое), между автоматом с напитками и кассами.
+ * Если там тесно (маленький зал, на месте ларя полка) — у нижней стены поближе к кассе, потом — вдоль
+ * левой стены. Место не задевает ни одно место под полку (даже пустое — полку могут купить завтра),
+ * островные витрины, кассы (сколько их может стоять в этом помещении — registers) с очередью,
+ * кассу самообслуживания, автомат на своём месте, стойку со сладостями, цветы, ведро, вход, двери
+ * флигеля и то, что ещё велено обойти (avoid — вещи, переставленные игроком).
  */
-export function iceboxSpotFor(layout: Layout): Point {
-  const { w, h, door, counter } = layout;
+export function iceboxSpotFor(layout: Layout, registers = 1, avoid: { x: number; y: number; w: number; h: number }[] = []): Point {
+  const { w, h, door, counter, queue, wallH } = layout;
   const pad = 2;
   const blocked = [
     ...layout.slots.map(shelfRect),
     ...layout.showcases.map(shelfRect),
     { x: counter.x - 16, y: counter.y - 34, w: 32, h: 62 },
+    // Остальные кассы — с кассиром и покупателем у каждой (как tillZones в placement.ts).
+    ...Array.from({ length: Math.max(0, registers - 1) }, (_, k) => registerSpot(layout, k + 1)).map(({ x, y, left }) =>
+      left ? { x: x - 18, y: y - 30, w: 31, h: 54 } : { x: x - 13, y: y - 30, w: 31, h: 54 },
+    ),
+    // Касса самообслуживания у правой стены, над ней — автомат с напитками и радио на нём.
+    { x: counter.x + 14, y: wallH + 72, w: 16, h: 20 },
+    { x: w - 16, y: wallH + 36, w: 16, h: 38 },
+    // Стойка со сладостями под кассой, вёдра с цветами (или растение) в углу у кассы, ведро для мусора.
+    { x: counter.x - 12, y: counter.y + 28, w: 24, h: 18 },
+    { x: counter.x + 10, y: h - 52, w: 20, h: 26 },
+    { x: w - 18, y: h - 24, w: 16, h: 14 },
     // Проход к двери: полоса шириной в два шага над входом.
     { x: door.x - 14, y: h - 40, w: 28, h: 40 },
     // Очередь к кассе: от начала вверх до самого высокого места.
-    { x: layout.queue.x - 12, y: layout.queue.minY - 12, w: 24, h: layout.queue.y - layout.queue.minY + 26 },
+    { x: queue.x - 12, y: queue.minY - 12, w: 24, h: queue.y - queue.minY + 26 },
     // Двери во флигель у левой стены (склад, пекарня, кофейня, кухня) — к ним тоже ходят.
     ...[layout.warehouse, layout.bakery, layout.coffee, layout.kitchen].filter((r): r is Room => Boolean(r)).map((r) => ({ x: -2, y: r.doorway.y - 16, w: 34, h: 32 })),
+    // Вещи, которые игрок переставил сам (автомат, ведро, растения), — ларь их обходит.
+    ...avoid,
   ];
   const free = (p: Point) => {
     const r = iceboxRect(p);
-    if (r.x < 2 || r.x + r.w > w - 2 || r.y < layout.wallH + 6 || r.y + r.h > h + 4) return false;
+    if (r.x < 2 || r.x + r.w > w - 2 || r.y < wallH + 6 || r.y + r.h > h + 4) return false;
     return blocked.every((b) => r.x + r.w + pad <= b.x || b.x + b.w + pad <= r.x || r.y + r.h + pad <= b.y || b.y + b.h + pad <= r.y);
   };
-  // Сначала нижняя стена — ближе всего к привычному месту слева от входа, потом левая стена снизу вверх.
-  const y = h - 16;
+  const candidates: Point[] = [];
+  // У правой стены рядом с очередью: от касс вверх — чем ближе к кассе, тем лучше.
+  for (let y = h - 20; y >= wallH + 40; y -= 2) candidates.push({ x: w - 17, y });
+  // У нижней стены (ларь стоит к ней вплотную) — как можно ближе к кассе.
   const bottom: Point[] = [];
-  for (let x = 18; x <= w - 18; x += 2) bottom.push({ x, y });
-  bottom.sort((a, b) => Math.abs(a.x - (door.x - 44)) - Math.abs(b.x - (door.x - 44)));
-  const candidates: Point[] = [...bottom];
-  for (let cy = h - 38; cy >= layout.wallH + 40; cy -= 2) candidates.push({ x: 18, y: cy });
-  return candidates.find(free) ?? (door.x - 44 >= 36 ? { x: door.x - 44, y } : { x: 24, y: h - 38 });
+  for (let x = 18; x <= w - 18; x += 2) bottom.push({ x, y: h - 12 });
+  bottom.sort((a, b) => Math.abs(a.x - (queue.x - 12)) - Math.abs(b.x - (queue.x - 12)));
+  candidates.push(...bottom);
+  for (let cy = h - 38; cy >= wallH + 40; cy -= 2) candidates.push({ x: 18, y: cy });
+  return candidates.find(free) ?? (door.x - 44 >= 36 ? { x: door.x - 44, y: h - 12 } : { x: 24, y: h - 38 });
 }
