@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { newGame } from '../src/game/economy';
 import { activeDecor, buyDecor, DECOR, DECOR_KINDS, decorFromPurchases, decorItem, grantDecor, normalizeDecor, setDecor, STAR_PACKS, type DecorId, type DecorState } from '../src/game/decor';
 import { restartGame } from '../src/game/restart';
-import { TEXTURES } from '../src/scenes/textures';
+import { TEXTURES } from '../src/scenes/worldTextures';
 import { en } from '../src/i18n/en';
 import { ru, type TextKey } from '../src/i18n/ru';
 

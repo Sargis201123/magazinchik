@@ -183,7 +183,7 @@ import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
-import { assetUrl, png } from '../platform/assets';
+import { sheetAsset, sheetPng } from './sheet';
 import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
 import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeLoyalty, cafeOf } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
@@ -294,7 +294,7 @@ const productLabel = (id: ProductId) => `${PRODUCTS[id].icon} ${t(PRODUCTS[id].n
 function itemRow(pid: ProductId, opts: { price?: number; sub?: string; actions: HTMLElement[]; name?: string }): HTMLElement {
   const row = el('div', 'ui-item');
   const icon = el('img', 'ui-item-icon');
-  icon.src = png(`item_${pid}_0`);
+  icon.src = sheetPng(`item_${pid}_0`);
   icon.alt = '';
   const body = el('div');
   const name = el('div', 'ui-item-name', opts.name ?? t(PRODUCTS[pid].nameKey));
@@ -347,7 +347,7 @@ function foldBox(id: string, title: string, fill: (body: HTMLElement) => void): 
 function artRow(texture: string, opts: { name: string; price?: number; sub?: string; actions: HTMLElement[] }): HTMLElement {
   const row = el('div', 'ui-item');
   const img = el('img', 'ui-item-art');
-  img.src = png(texture);
+  img.src = sheetPng(texture);
   img.alt = '';
   const body = el('div');
   const name = el('div', 'ui-item-name', opts.name);
@@ -411,7 +411,7 @@ function tileGrid(tiles: Tile[], open: string | null, toggle: (id: string) => vo
     const cell = button('', () => toggle(tile.id), `ui-shelf-card ui-tile-card${open === tile.id ? ' active' : ''}${tile.alert ? ' broken' : ''}`);
     const icon = tile.icon.startsWith('assets/') ? el('img', 'ui-tile-img') : el('span', 'ui-tile-icon', tile.icon);
     if (icon instanceof HTMLImageElement) {
-      icon.src = assetUrl(tile.icon);
+      icon.src = sheetAsset(tile.icon);
       icon.alt = '';
     }
     const text = el('span', 'ui-tile-text');
@@ -1892,7 +1892,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     box.append(el('b', '', t('kitchen.title')), el('div', 'ui-muted', t('kitchen.note', { n: portionsTotal(state), max: foodSlots(state) })));
     const shelf = el('div', 'ui-item');
     const shelfImg = el('img', 'ui-item-art');
-    shelfImg.src = png(foodSprite(state));
+    shelfImg.src = sheetPng(foodSprite(state));
     shelfImg.alt = '';
     shelf.append(shelfImg, el('div', 'ui-item-sub', t('kitchen.shelf', { name: t(GEAR.foodShelf.models[gearTier(state, 'foodShelf')].nameKey), n: portionsTotal(state), max: foodSlots(state) })));
     box.append(shelf);
@@ -2130,7 +2130,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     input.value = names[state.day % names.length];
     input.maxLength = CAT_NAME_MAX;
     const art = el('img', 'ui-item-art');
-    art.src = png('cat_sit');
+    art.src = sheetPng('cat_sit');
     art.alt = '';
     art.style.cssText = 'width:64px;height:72px;display:block;margin:4px auto';
     box.append(
@@ -2809,7 +2809,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const texture = gearArt(state, id, next && !needs ? tier + 1 : tier);
       if (texture) {
         const img = el('img', 'ui-item-art');
-        img.src = png(texture);
+        img.src = sheetPng(texture);
         img.alt = '';
         row.append(img);
       } else row.append(el('div', 'ui-ad-icon', gear.icon));
@@ -3000,15 +3000,15 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if (!item) preview.textContent = '↺';
     else if (item.color !== undefined) {
       const hex = `#${item.color.toString(16).padStart(6, '0')}`;
-      preview.style.background = `url(${png('wall')}) 0 0 / 32px 64px, ${hex}`;
+      preview.style.background = `url(${sheetPng('wall')}) 0 0 / 32px 64px, ${hex}`;
       preview.style.backgroundBlendMode = 'multiply';
     } else if (kind === 'floor' || kind === 'wall') {
-      preview.style.backgroundImage = `url(${assetUrl(`assets/${item.texture}.png`)})`;
+      preview.style.backgroundImage = `url(${sheetAsset(`assets/${item.texture}.png`)})`;
       if (kind === 'wall') preview.style.backgroundSize = big ? '64px 128px' : '32px 64px';
       else if (big) preview.style.backgroundSize = item.id === 'floor_gold' || item.id === 'floor_noir' ? '128px 128px' : '64px 64px';
     } else {
       const img = el('img');
-      img.src = assetUrl(`assets/${item.texture}.png`);
+      img.src = sheetAsset(`assets/${item.texture}.png`);
       img.alt = '';
       preview.append(img);
     }
@@ -3837,7 +3837,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const product = PRODUCTS[pid];
       const card = el('div', 'ui-price');
       const icon = el('img', 'ui-price-icon');
-      icon.src = png(`item_${pid}`);
+      icon.src = sheetPng(`item_${pid}`);
       icon.alt = '';
       const info = el('div', 'ui-price-info');
       info.append(el('b', '', t(product.nameKey)));

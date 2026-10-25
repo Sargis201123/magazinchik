@@ -5,7 +5,8 @@
 // одной пачкой. Собирает vite.config.ts (плагин atlas) — и в сборке, и в режиме разработки;
 // игра раскладывает лист обратно по старым именам (BootScene), так что код сцены не меняется.
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { atlasKeysFrom } from '../src/scenes/textures';
 import { decodePng, encodePng, type Rgba } from './png';
 
 /** Больше 2048 точек по стороне старые телефоны текстуру не возьмут. */
@@ -116,6 +117,12 @@ function blit(page: Uint8Array, pageW: number, { img, x, y }: Sprite): void {
     }
   }
 }
+
+/**
+ * Что класть в атлас: спрайты из списка и семейства по именам файлов в dir (item_*, crate_*, w_*).
+ * Игра собирает тот же список из своих данных (src/scenes/worldTextures.ts) — без экономики в сборке.
+ */
+export const atlasKeys = (dir: string): string[] => atlasKeysFrom(readdirSync(dir).filter((f) => f.endsWith('.png')).map((f) => f.slice(0, -4)));
 
 /** Сложить картинки dir/<key>.png в листы atlas0, atlas1… (второй — только если не влезло в один). */
 export function buildAtlas(dir: string, keys: readonly string[]): Atlas {

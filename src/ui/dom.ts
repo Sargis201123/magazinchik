@@ -2,6 +2,7 @@
 // а переводы и вёрстка меню проще, чем внутри Phaser.
 
 import { assetUrl, png } from '../platform/assets';
+import { sheetPng } from './sheet';
 
 /**
  * Шрифт интерфейса и надписей в игре. Пиксельные шрифты пробовали: кириллица и цифры
@@ -904,7 +905,7 @@ export function pixelize(root: Node): void {
         continue;
       }
       const img = el('img', 'ui-ico');
-      img.src = png(key);
+      img.src = sheetPng(key);
       img.alt = part;
       frag.append(img);
     }

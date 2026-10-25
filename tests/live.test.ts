@@ -27,7 +27,7 @@ import {
 import { comebackHooks } from '../src/game/comeback';
 import { ru } from '../src/i18n/ru';
 import { en } from '../src/i18n/en';
-import { TEXTURES } from '../src/scenes/textures';
+import { TEXTURES } from '../src/scenes/worldTextures';
 
 // Картинки, что лежат в public/assets (vite находит их сам, без node:fs).
 const files = Object.keys(import.meta.glob(['../public/assets/card_*.png', '../public/assets/portrait_*.png', '../public/assets/holiday_*.png']));

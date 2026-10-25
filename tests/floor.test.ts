@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { blur, castsShadow, footprint, lawnLayout, lawnPatches, NOT_FLOOR, paintFloor, scuffAt, shadeMap, wearAt, type FloorPlan, type WearLayer } from '../src/scenes/floor';
-import { TEXTURES } from '../src/scenes/textures';
+import { TEXTURES } from '../src/scenes/worldTextures';
 
 /** Зал 100×80 (пол — от 20 до 80 по высоте), вход внизу посередине. */
 const hall: FloorPlan = {

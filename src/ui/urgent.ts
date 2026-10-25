@@ -3,7 +3,7 @@
 import { t } from '../i18n';
 import { onShelves, PRODUCTS, sellableProducts, warehouseOf, type ProductId, type StoreState } from '../game/economy';
 import { URGENT_FEE, URGENT_QTYS, urgentCost, urgentRoom } from '../game/urgent';
-import { png } from '../platform/assets';
+import { sheetPng } from './sheet';
 import { button, el, openModal } from './dom';
 
 export interface UrgentOptions {
@@ -26,7 +26,7 @@ export function showUrgent({ getState, onTheWay, onTheWayList, order }: UrgentOp
       .map((id) => {
         const row = el('div', 'ui-item');
         const img = el('img', 'ui-item-art');
-        img.src = png(`item_${id}`);
+        img.src = sheetPng(`item_${id}`);
         img.alt = '';
         const body = el('div');
         body.append(
