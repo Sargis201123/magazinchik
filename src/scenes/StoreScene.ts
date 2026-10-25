@@ -195,7 +195,7 @@ import { showChoice } from '../ui/choice';
 import { BRAND_BATCH, brandBatchCost, brandToBake, startBrandBatch } from '../game/brand';
 import { hasRadio, nextStation, radioPatience, radioTolerance, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
-import { autoTopUp } from '../game/autoorder';
+import { autoArrived, autoTopUp } from '../game/autoorder';
 import { liveEventsFor, type LiveKind } from '../game/live';
 import { showUrgent } from '../ui/urgent';
 import {
@@ -1535,7 +1535,8 @@ export class StoreScene extends Phaser.Scene {
   private staffGen = 0;
   private toiletDirt = 0;
   /** Срочный подвоз: что едет и занят ли фургон. */
-  private urgentOrders: { id: ProductId; qty: number }[] = [];
+  /** auto — подвоз автозаказа (по приезде вычёркивается из autoOrder.today.inbound). */
+  private urgentOrders: { id: ProductId; qty: number; auto?: boolean }[] = [];
   private urgentVanBusy = false;
   /** Через сколько секунд дня автозаказ снова проверит, не кончился ли товар. */
   private autoCheck = 0;
@@ -10863,7 +10864,7 @@ export class StoreScene extends Phaser.Scene {
     const order = autoTopUp(this.state, (id) => this.stats.sold[id] ?? 0, this.urgentOrders.map((o) => o.id), this.urgentOnTheWay());
     if (!order) return;
     this.state = order.state;
-    this.urgentOrders.push({ id: order.pid, qty: order.qty });
+    this.urgentOrders.push({ id: order.pid, qty: order.qty, auto: true });
     this.hud.update(this.state, this.timeLeft);
     const { warehouse } = this.layout;
     this.popup(warehouse.x + warehouse.w / 2, warehouse.y - 4, t('popup.autoTopUp', { icon: PRODUCTS[order.pid].icon, n: order.qty }), '#c8ffb0');
@@ -10895,7 +10896,7 @@ export class StoreScene extends Phaser.Scene {
   private receiveUrgentOrders(): void {
     if (!this.urgentOrders.length) return;
     const list = this.urgentOrders.map((o) => `${PRODUCTS[o.id].icon}×${o.qty}`).join(' ');
-    for (const o of this.urgentOrders) this.state = receiveUrgent(this.state, o.id, o.qty);
+    for (const o of this.urgentOrders) this.state = o.auto ? autoArrived(this.state, o.id, o.qty) : receiveUrgent(this.state, o.id, o.qty);
     this.urgentOrders = [];
     this.refreshWarehouse();
     this.refreshShelves();

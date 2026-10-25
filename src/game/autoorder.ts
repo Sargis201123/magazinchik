@@ -7,6 +7,7 @@
 import { buyStock, onShelves, sellableProducts, warehouseCapacity, warehouseCount, warehouseOf, type ProductId, type StoreState, type Unit } from './economy';
 import { hasUpgrade } from './upgrades';
 import { canStock, restockPlan } from './restock';
+import { receiveUrgent } from './urgent';
 import { newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice, type SupplierId } from './suppliers';
 
 /** Лимит утра на выбор: какую долю денег автозаказ может потратить за день. */
@@ -43,6 +44,8 @@ export interface AutoDay {
   skip?: ProductId[];
   /** Сколько раз за день подвозил. */
   topUps: number;
+  /** Подвоз оплачен, но фургон ещё едет: закрыли игру — товар кладём на склад при загрузке. */
+  inbound?: { pid: ProductId; qty: number }[];
 }
 
 export interface AutoOrder {
@@ -77,16 +80,18 @@ export function autoMorning(state: StoreState, priceOf: (sid: SupplierId, pid: P
   const today = autoDay(state);
   if (today.canceled) return state;
   const left = Math.max(0, Math.floor(today.base * autoShare(state)) - today.spent);
-  const plan = restockPlan({ ...state, money: Math.min(state.money, left) }, priceOf, guests);
+  // Вернутое — не в плане вовсе: иначе пустой товар встал бы первым и съел лимит и место.
+  const plan = restockPlan({ ...state, money: Math.min(state.money, left) }, priceOf, guests, today.skip);
   let next = state;
   let spent = today.spent;
   const lines = today.lines.map((l) => ({ ...l }));
   for (const line of plan.lines) {
-    if (today.skip?.includes(line.pid)) continue;
     const bought = buyStock(next, line.pid, line.qty, line.price);
     if (!bought) continue;
     const paid = next.money - bought.money;
-    next = bought;
+    // Свои штуки помечены: вернуть можно только их (не подвоз и не подарки, даже после перезапуска днём).
+    const units = bought.warehouse[line.pid]!;
+    next = { ...bought, warehouse: { ...bought.warehouse, [line.pid]: units.map((u, i) => (i >= units.length - line.qty ? { ...u, auto: true } : u)) } };
     spent += paid;
     const same = lines.find((l) => l.sid === line.sid && l.pid === line.pid);
     if (same) {
@@ -97,7 +102,7 @@ export function autoMorning(state: StoreState, priceOf: (sid: SupplierId, pid: P
   return withDay(next, { ...today, spent, lines, cut: plan.cut });
 }
 
-/** Забрать со склада, а потом с полок до n свежих (сегодняшних) штук товара. Сколько забрали. */
+/** Забрать со склада, а потом с полок до n штук, купленных автозаказом сегодня. Сколько забрали. */
 function takeFresh(state: StoreState, pid: ProductId, n: number): { state: StoreState; taken: number } {
   let left = n;
   const strip = (units: Unit[] | undefined): Unit[] | undefined => {
@@ -105,7 +110,7 @@ function takeFresh(state: StoreState, pid: ProductId, n: number): { state: Store
     const out = [...units];
     for (let i = out.length - 1; i >= 0 && left > 0; i--) {
       const u = out[i];
-      if (u.age === 0 && !u.bad && !u.markdown) {
+      if (u.auto && u.age === 0 && !u.bad && !u.markdown) {
         out.splice(i, 1);
         left--;
       }
@@ -187,7 +192,26 @@ export function autoTopUp(
   const qty = Math.min(AUTO_TOPUP_QTY, room, Math.floor(left / price));
   if (qty <= 0) return null;
   const cost = qty * price;
-  return { state: withDay({ ...state, money: state.money - cost }, { ...today, spent: today.spent + cost, topUps: today.topUps + 1 }), pid, qty, cost };
+  const inbound = [...(today.inbound ?? []), { pid, qty }];
+  return { state: withDay({ ...state, money: state.money - cost }, { ...today, spent: today.spent + cost, topUps: today.topUps + 1, inbound }), pid, qty, cost };
+}
+
+/** Фургон подвоза приехал: товар на склад, из «едет» — вычеркнуть. */
+export function autoArrived(state: StoreState, pid: ProductId, qty: number): StoreState {
+  const today = state.autoOrder?.today;
+  const next = receiveUrgent(state, pid, qty);
+  const i = today?.inbound?.findIndex((o) => o.pid === pid && o.qty === qty) ?? -1;
+  if (!today || i < 0) return next;
+  return withDay(next, { ...today, inbound: today.inbound!.filter((_, k) => k !== i) });
+}
+
+/** При загрузке: оплаченный, но не доехавший подвоз (игру закрыли, пока ехал фургон) — сразу на склад. */
+export function settleInbound(state: StoreState): StoreState {
+  const today = state.autoOrder?.today;
+  if (!today?.inbound?.length) return state;
+  let next = state;
+  for (const o of today.inbound) next = receiveUrgent(next, o.pid, o.qty);
+  return withDay(next, { ...today, inbound: [] });
 }
 
 /**

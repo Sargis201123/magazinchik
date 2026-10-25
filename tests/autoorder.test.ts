@@ -7,6 +7,7 @@ import {
   AUTO_TOPUPS,
   autoCancel,
   autoLimit,
+  autoArrived,
   autoMorning,
   autoResume,
   autoReturn,
@@ -14,6 +15,7 @@ import {
   autoToggle,
   autoTopUp,
   migrateAutoOrder,
+  settleInbound,
   topUpPrice,
 } from '../src/game/autoorder';
 import { restockPlan } from '../src/game/restock';
@@ -120,6 +122,45 @@ describe('автозаказ — закупщик', () => {
     expect(r).not.toBeNull();
     expect(r!.qty).toBe(Math.min(AUTO_TOPUP_QTY, Math.floor(Math.floor(100 * AUTO_SHARE) / topUpPrice('bread')!)));
     expect(r!.state.autoOrder!.today!.spent).toBe(r!.cost);
+  });
+});
+
+describe('автозаказ — возвраты и подвоз в пути', () => {
+  it('вернули строку и подняли лимит — докупает другое, а не упирается в вернутое', () => {
+    const s = autoSetShare(empty(base({ money: 400 })), 0.25);
+    const first = autoMorning(s, price, GUESTS);
+    const line = first.autoOrder!.today!.lines[0];
+    const back = autoReturn(first, line.pid)!;
+    const more = autoMorning(autoSetShare(back, 0.5), price, GUESTS);
+    expect(more.autoOrder!.today!.lines.length).toBeGreaterThan(0);
+    expect(more.money).toBeLessThan(back.money);
+    expect(more.autoOrder!.today!.lines.some((l) => l.pid === line.pid)).toBe(false);
+  });
+
+  it('возвращает только свои штуки: подвезённое днём и чужое не трогает', () => {
+    const done = shelveAll(autoMorning(empty(base()), price, GUESTS));
+    const line = done.autoOrder!.today!.lines[0];
+    // Всё своё распродали, а на складе лежат свежие штуки из подвоза.
+    const sold: StoreState = {
+      ...done,
+      shelves: done.shelves.map((sh) => ({ ...sh, items: { ...sh.items, [line.pid]: [] } })),
+      warehouse: { ...done.warehouse, [line.pid]: [{ age: 0 }, { age: 0 }] },
+    };
+    const back = autoReturn(sold, line.pid)!;
+    expect(back.money).toBe(sold.money);
+    expect(warehouseOf(back, line.pid)).toBe(2);
+  });
+
+  it('подвоз в пути: приехал — вычеркнут; закрыли игру, пока ехал, — при загрузке на складе', () => {
+    const s = empty(base());
+    const r = autoTopUp(s, (id) => (id === 'bread' ? 4 : 0))!;
+    expect(r.state.autoOrder!.today!.inbound).toEqual([{ pid: 'bread', qty: r.qty }]);
+    const arrived = autoArrived(r.state, 'bread', r.qty);
+    expect(arrived.autoOrder!.today!.inbound).toEqual([]);
+    expect(warehouseOf(arrived, 'bread')).toBe(r.qty);
+    const loaded = settleInbound(r.state);
+    expect(warehouseOf(loaded, 'bread')).toBe(r.qty);
+    expect(settleInbound(loaded)).toBe(loaded);
   });
 });
 

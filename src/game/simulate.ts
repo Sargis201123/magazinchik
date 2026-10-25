@@ -76,8 +76,7 @@ import {
 } from './economy';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { restockPlan } from './restock';
-import { autoActive, autoMorning, autoTopUp } from './autoorder';
-import { receiveUrgent } from './urgent';
+import { autoActive, autoArrived, autoMorning, autoTopUp } from './autoorder';
 import { answerEvent, inspect } from './events';
 import { candidatesFor } from './staff';
 import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
@@ -725,7 +724,7 @@ export function simulate({
       if (!night && autoActive(state)) {
         const top = autoTopUp(state, (id) => stats.sold[id] ?? 0);
         if (top) {
-          state = receiveUrgent(top.state, top.pid, top.qty);
+          state = autoArrived(top.state, top.pid, top.qty);
           purchases += top.cost;
         }
       }
