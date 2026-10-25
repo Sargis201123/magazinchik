@@ -244,7 +244,8 @@ export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'clea
  * За первой кассой всегда сам хозяин; cashier — его сменщик, cashier2…4 — кассиры остальных касс (registers.ts).
  */
 export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number; minLevel?: number; needs?: 'oven' | 'coffee' | 'kitchen' }> = {
-  cashier: { nameKey: 'staff.cashier', descKey: 'staff.cashier.desc', wage: 420 },
+  // Сменщик — с «Магазинчика»: в ларьке хозяин справляется сам (нанятого раньше не увольняем — registers.ts).
+  cashier: { nameKey: 'staff.cashier', descKey: 'staff.cashier.desc', wage: 420, minLevel: 1 },
   cashier2: { nameKey: 'staff.cashier2', descKey: 'staff.cashier2.desc', wage: 420 },
   cashier3: { nameKey: 'staff.cashier3', descKey: 'staff.cashier3.desc', wage: 420 },
   cashier4: { nameKey: 'staff.cashier4', descKey: 'staff.cashier4.desc', wage: 420 },
@@ -592,6 +593,8 @@ export interface StoreState {
   bakeMode?: 'auto' | 'full' | 'off';
   /** Сколько касс куплено (registers.ts). Нет поля — старое сохранение: кассы ставились сами. */
   registers?: number;
+  /** Кассы самообслуживания (lanes.ts): сколько стоит и какая модель. Нет поля — киоск был улучшением selfCheckout. */
+  kiosks?: { n: number; tier: number };
   /**
    * Первая касса — хозяина, кассиры — за остальными (registers.ts). Нет поля — сохранение до этого:
    * при загрузке кассир переходит за свою кассу (migrateOwnerTill).

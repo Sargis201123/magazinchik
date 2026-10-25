@@ -37,6 +37,7 @@ import { staffMorning } from './staffEvents';
 import { districtGuests } from './district';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
+import { laneGuests } from './lanes';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -95,7 +96,7 @@ export function inspectionDone(state: StoreState, result: InspectionResult): Sto
   return { ...s, story: { ...s.story, inspectionsPassed: s.story.inspectionsPassed + 1 } };
 }
 
-/** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина, реклама, погода, цены и Эдуард. */
+/** Множитель гостей сегодня: сюжет (конкурент), сезон, звание магазина, реклама, погода, цены, Эдуард и открытые кассы. */
 export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
   legacyGuests(state) *
@@ -117,6 +118,7 @@ export const guestFactor = (state: StoreState): number =>
   nightBoostGuests(state) *
   giantGuests(state) *
   contestGuests(state) *
+  laneGuests(state) *
   knownBigDayGuests(state.day);
 
 /**
@@ -130,3 +132,6 @@ export const spawnIntervalToday = (state: StoreState): number =>
 export const actualGuestsToday = (state: StoreState): number => Math.round(guestsToday(state) * hiddenBigDayGuests(state.day));
 
 export const guestsToday = (state: StoreState): number => Math.round(expectedGuests(state.rating, state.level) * guestFactor(state));
+
+/** Сколько гостей в день прибавится, если магазин станет таким (after — с новой кассой или киоском): для «Развития». */
+export const guestsGain = (state: StoreState, after: StoreState): number => Math.max(0, guestsToday(after) - guestsToday(state));

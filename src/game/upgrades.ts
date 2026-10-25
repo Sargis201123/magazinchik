@@ -1,6 +1,5 @@
 // Улучшения магазина: терминал для карт (оплата быстрее), касса самообслуживания
-// (покупатели с 1–2 товарами пробивают себя сами, пока у основной кассы очередь),
-// тележки, карта лояльности, доставка, автозаказ, электронные ценники,
+// (есть хотя бы один киоск — их число и модель в lanes.ts), тележки, карта лояльности, доставка, автозаказ, электронные ценники,
 // кофейный уголок, своя печь и ночная смена.
 
 import type { TextKey } from '../i18n/ru';
@@ -43,10 +42,6 @@ export const UPGRADE_IDS = Object.keys(UPGRADES) as UpgradeId[];
 
 /** С терминалом оплата занимает столько от прежнего времени. */
 export const TERMINAL_PAY = 0.4;
-/** Касса самообслуживания: сколько товаров максимум и сколько секунд на товар и оплату. */
-export const KIOSK_MAX_ITEMS = 2;
-export const KIOSK_ITEM_SECONDS = 1.6;
-export const KIOSK_PAY_SECONDS = 1.2;
 
 export const hasUpgrade = (state: StoreState, id: UpgradeId): boolean => (state.upgrades ?? []).includes(id);
 
