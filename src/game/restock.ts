@@ -2,7 +2,7 @@
 // истории — поровну от числа гостей) с запасом, минус то, что уже есть на полках и складе.
 // Берём у того поставщика, у кого сегодня дешевле. Сначала — то, чего меньше всего.
 
-import { buyChance, canPlace, CARRY, OWN_PRODUCTS, PRODUCT_IDS, PRODUCTS, shelfCapacity, shelfFree, productAvailable, seasonalDemand, sellableProducts, warehouseCapacity, warehouseCount, type Category, type ProductId, type StoreState } from './economy';
+import { buyChance, canPlace, CARRY, OWN_PRODUCTS, PRODUCT_IDS, PRODUCTS, shelfCapacity, shelfFree, shelveAll, productAvailable, seasonalDemand, sellableProducts, warehouseCapacity, warehouseCount, type Category, type ProductId, type StoreState } from './economy';
 import { perceivedBase, seasonFor } from './endless';
 import { dayDemand } from './demand';
 import { bigDayDemand } from './bigday';
@@ -91,7 +91,9 @@ export function restockPlan(
     })
     .filter((w) => w.need > 0 && w.offer)
     .sort((a, b) => a.fill - b.fill);
-  let room = Math.max(0, warehouseCapacity(state) - warehouseCount(state));
+  // Место считаем как после раскладки: ждущее на складе, чему есть полка, уйдёт туда первым.
+  const shelved = shelveAll(state);
+  let room = Math.max(0, warehouseCapacity(shelved) - warehouseCount(shelved));
   // Свободные места на полках — по отделам: молоко не встанет на хлебную полку.
   const shelves = new Map<Category, number>();
   let money = state.money;
@@ -100,7 +102,8 @@ export function restockPlan(
   for (const w of wants) {
     const { sid, price } = w.offer!;
     const category = PRODUCTS[w.pid].category;
-    const onShelf = shelves.get(category) ?? shelfRoom(state, category);
+    // Покупка идёт через склад: забит он тем, что на полки не встанет, — до полок товару не дойти.
+    const onShelf = room > 0 ? (shelves.get(category) ?? shelfRoom(shelved, category)) : 0;
     const afford = Math.floor(money / price);
     const qty = Math.max(0, Math.min(w.need, onShelf + room, afford));
     // Почему не всё: сначала кончилось место или деньги (первая причина и решает, что подсказать).

@@ -105,5 +105,10 @@ describe('одиночка выше третьего помещения', () => 
     expect(soloExpandRisk(start({ level: 2, staff: [member({ friend: { id: 7, name: 'Оля' } })] }))).toBe(false);
     // Друзья на подмоге на один день — не персонал.
     expect(soloExpandRisk(start({ level: 2, staff: [], helpDay: 10 }))).toBe(true);
+    // Пекарь, бариста, повар — в пристройках, сторож ловит воров: касса, полки и склад всё равно на хозяине.
+    for (const role of ['baker', 'barista', 'cook', 'guard'] as const) expect(soloExpandRisk(start({ level: 2, staff: [member({ role })] }))).toBe(true);
+    expect(soloExpandRisk(start({ level: 2, staff: [member({ role: 'baker' }), member({ role: 'guard' })] }))).toBe(true);
+    // Кто-то в зале — кассир любой кассы, грузчик, уборщица, менеджер — уже не один.
+    for (const role of ['cashier', 'cashier2', 'loader', 'cleaner', 'manager'] as const) expect(soloExpandRisk(start({ level: 2, staff: [member({ role })] }))).toBe(false);
   });
 });

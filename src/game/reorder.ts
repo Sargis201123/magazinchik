@@ -19,12 +19,18 @@ export interface ReorderPlan {
   short?: 'room' | 'money';
 }
 
+/** Сколько штук товара останется на складе после раскладки (ждущий решения брак не считаем). */
+const staysInWarehouse = (state: StoreState, pid: ProductId): number => (shelveAll(state).warehouse[pid] ?? []).filter((u) => !u.pending).length;
+
 /**
  * Купить одну строку плана. Купленное сразу встаёт на полки, поэтому строка бывает больше свободного
- * склада: берём частями — сколько влезает на склад, раскладываем (shelveAll) и снова. bad — партия
- * бракованная: она ждёт решения игрока на складе, на полки не идёт, поэтому бракованной бывает только
- * последняя часть, которая целиком влезла на склад. mark — пометить купленные штуки (автозаказ).
- * Возвращает, сколько куплено и сколько из них брака.
+ * склада: берём частями — сколько влезает на склад, раскладываем (shelveAll) и снова. Раскладываем и
+ * перед первой частью, если склад тесен: там может лежать хвост прошлой строки, которому есть место на
+ * полке, — иначе он занял бы склад и следующие строки не купились бы (план их считал). bad — партия
+ * бракованная: она ждёт решения игрока на складе и на полки не идёт, поэтому бракованным выходит
+ * только то, что и так осталось бы на складе после раскладки, — склад он не занимает сверх плана и
+ * следующим строкам не мешает. Всё ушло на полки — брака в этот раз нет. mark — пометить купленные
+ * штуки (автозаказ). Возвращает, сколько куплено и сколько из них брака.
  */
 export function buyLine(
   state: StoreState,
@@ -34,23 +40,28 @@ export function buyLine(
 ): { state: StoreState; qty: number; bad: number } {
   let next = state;
   let left = line.qty;
-  let badQty = 0;
   while (left > 0) {
+    if (warehouseCapacity(next) - warehouseCount(next) < left) next = shelveAll(next);
     const part = Math.min(left, warehouseCapacity(next) - warehouseCount(next));
     if (part <= 0) break;
-    const asBad = bad && part === left;
-    let bought = buyStock(next, line.pid, part, line.price, asBad);
+    let bought = buyStock(next, line.pid, part, line.price);
     if (!bought) break;
     if (mark) {
       const units = bought.warehouse[line.pid]!;
       bought = { ...bought, warehouse: { ...bought.warehouse, [line.pid]: units.map((u, i) => (i >= units.length - part ? mark(u) : u)) } };
     }
     left -= part;
-    if (asBad) badQty = part;
-    // Раскладываем только между частями: последнюю разложит тот, кто закупал (как и раньше).
-    next = left > 0 ? shelveAll(bought) : bought;
+    // Последнюю часть разложит тот, кто закупал (как и раньше), остальные — в начале круга.
+    next = bought;
   }
-  return { state: next, qty: line.qty - left, bad: badQty };
+  const qty = line.qty - left;
+  // Раскладка берёт самые старые штуки, на складе остаются последние купленные — они и брак.
+  const badQty = bad && qty > 0 ? Math.max(0, Math.min(qty, staysInWarehouse(next, line.pid) - staysInWarehouse(state, line.pid))) : 0;
+  if (badQty > 0) {
+    const units = next.warehouse[line.pid]!;
+    next = { ...next, warehouse: { ...next.warehouse, [line.pid]: units.map((u, i) => (i >= units.length - badQty ? { ...u, bad: true, pending: true } : u)) } };
+  }
+  return { state: next, qty, bad: badQty };
 }
 
 /** Закупить по плану. bad — какая строка оказалась бракованной (не больше одной за раз); в badLine — сколько штук брака. */

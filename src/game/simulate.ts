@@ -349,8 +349,9 @@ export function simulate({
     if (state.debt > 0 && state.money - state.debt >= reserve) state = payDebt(state, state.debt) ?? state;
 
     const next = nextStoreLevel(state);
-    // Расширяется, только если после стройки останется на счета уже по новой аренде.
-    const nextBill = next ? billTotal(monthlyBill({ ...state, level: state.level + 1 })) : 0;
+    // Расширяется, только если после стройки останется на ближайший счёт — так же, как предупреждает
+    // утро (morning.ts): первый счёт после переезда — по старой аренде («новоселье»).
+    const nextBill = next ? billTotal(monthlyBill({ ...state, level: state.level + 1, movedFrom: state.movedFrom ?? state.level })) : 0;
     if (next && state.money >= next.cost + Math.max(reserve, nextBill)) {
       const expanded = expandStore(state);
       if (expanded) {

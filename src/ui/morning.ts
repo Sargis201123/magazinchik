@@ -930,7 +930,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         if (!fresh.lines.length) return;
         const result = applyReorder(getState(), fresh, (line) => Math.random() < SUPPLIERS[line.sid].badChance);
         if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
-        update(result.state, result.badLine ? 'error' : 'success');
+        // Ничего не купилось (не должно: план считает место как при покупке) — без звона монет.
+        const bought = result.state.money < getState().money;
+        update(result.state, result.badLine || !bought ? 'error' : 'success');
       }, state.day <= 2 ? 'ui-btn ui-pulse' : 'ui-btn'),
       el('div', 'ui-muted', list),
     );
