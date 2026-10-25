@@ -2654,6 +2654,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const art: Partial<Record<GearId, string>> = {
       register: `counter_icon${tier}`,
       bin: tier ? `bin_t${tier}_0` : 'bin0',
+      bargain: `bargain_shelf${tier}`,
       coffee: coffeeSprite(at),
       oven: ovenSprite(at),
       // Транспорт курьера: велосипед и мопед сбоку, фургончик — значком (сверху он как все машины).

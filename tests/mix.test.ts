@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { audibleAgain, DEFAULT_VOLUMES, inaudible, jitter, parseVolumes, pickVariant, silenceMask, sliderGain, VoiceLimiter, worldPan } from '../src/platform/mix';
+import { audibleAgain, BUDGET, DEFAULT_VOLUMES, inaudible, jitter, parseVolumes, pickVariant, silenceMask, sliderGain, SoundBudget, VoiceLimiter, worldPan, type VoiceRule } from '../src/platform/mix';
 import { roomImpulse, seeded } from '../src/platform/ambienceSynth';
 
 // Звуковой «пульт»: громкости и их перенос со старых выключателей, сторона звука, варианты, ограничитель.
@@ -140,6 +140,108 @@ describe('ограничитель голосов', () => {
     expect(lim.allow('bell3', { gap: 0, max: 9 }, 0, 2)).toBe(false);
     // Отзвучали — снова можно.
     expect(lim.allow('step', { gap: 0, max: 9, low: true }, 3, 1)).toBe(true);
+  });
+});
+
+describe('бюджет звука', () => {
+  const WORLD: VoiceRule = { gap: 0.3, max: 1 };
+  const DOOR: VoiceRule = { gap: 4, max: 1, tier: 'ambience' };
+  const TILL: VoiceRule = { gap: 0.25, max: 2, tier: 'feedback' };
+
+  /** Поток одинаковых событий игры: count штук через step игровых секунд на скорости pace — сколько прозвучало. */
+  const stream = (b: SoundBudget, key: string, rule: VoiceRule, count: number, step: number, pace: number, from = 0): number => {
+    b.pace = pace;
+    let played = 0;
+    for (let i = 0; i < count; i++) if (b.admit(key, rule, from + (i * step) / pace, 0.1)) played++;
+    return played;
+  };
+
+  it('на ×2 события мира звучат не чаще, чем на ×1, за настоящую секунду', () => {
+    for (const step of [0.2, 0.5, 1, 3]) {
+      const x1 = stream(new SoundBudget(12), 'scan', WORLD, 60, step, 1);
+      const x2 = stream(new SoundBudget(12), 'scan', WORLD, 60, step, 2);
+      // Тот же отрезок дня на ×2 длится вдвое меньше настоящих секунд — звуков за него вдвое меньше.
+      expect(x2 / ((60 * step) / 2)).toBeLessThanOrEqual(x1 / (60 * step) + 1e-9);
+      expect(x2).toBeGreaterThan(0);
+    }
+  });
+
+  it('колокольчик двери: на ×1 — не чаще раза в 4 с, на ×2 — в 8 с', () => {
+    // Покупатели входят каждую секунду игры, 40 секунд.
+    expect(stream(new SoundBudget(12), 'chime', DOOR, 40, 1, 1)).toBe(10);
+    expect(stream(new SoundBudget(12), 'chime', DOOR, 40, 1, 2)).toBeLessThanOrEqual(3);
+  });
+
+  it('отклик на ×2: редкий звучит всегда, частый по событию игры — через раз, на касание игрока — всегда', () => {
+    // Вор пойман раз в 20 игровых секунд — каждый раз.
+    expect(stream(new SoundBudget(12), 'good', TILL, 10, 20, 2)).toBe(10);
+    // Хлеб из печи каждые 2 игровые секунды: на ×2 — половина, за настоящую секунду как на ×1.
+    expect(stream(new SoundBudget(12), 'bread', TILL, 20, 2, 2)).toBe(10);
+    // Касса хозяина — ответ на касание (game: false): каждая продажа.
+    const b = new SoundBudget(12);
+    expect(stream(b, 'till', { ...TILL, game: false }, 10, 2, 2)).toBe(10);
+    const tap: VoiceRule = { gap: 0.04, max: 2, tier: 'feedback', game: false };
+    b.pace = 2;
+    expect(b.admit('tap', tap, 100, 0.05)).toBe(1);
+    expect(b.admit('tap', tap, 100.05, 0.05)).toBe(1);
+  });
+
+  it('людно: окружение уступает первым, события мира — следом, отклик и сюжет звучат всегда', () => {
+    const b = new SoundBudget(32);
+    for (let i = 0; i < BUDGET.busy.ambience; i++) expect(b.admit(`coin${i}`, TILL, 10 + i * 0.01, 0.1)).toBe(1);
+    expect(b.admit('chime', DOOR, 10.1, 0.5)).toBe(0);
+    expect(b.admit('scan', WORLD, 10.1, 0.1)).toBe(1);
+    for (let i = 0; i < 5; i++) b.admit(`till${i}`, TILL, 10.2, 0.1);
+    expect(b.admit('meow', WORLD, 10.3, 0.3)).toBe(0);
+    expect(b.admit('coin', TILL, 10.3, 0.1)).toBe(1);
+    expect(b.admit('voice', { gap: 0, max: 9, tier: 'story', game: false }, 10.3, 0.1)).toBe(1);
+    // Через окно «людности» — снова можно.
+    expect(b.admit('chime', DOOR, 10.3 + BUDGET.window, 0.5)).toBe(1);
+  });
+
+  it('мелочь (шаги) не делает зал «людным»', () => {
+    const b = new SoundBudget(32);
+    for (let i = 0; i < 20; i++) b.admit('step', { gap: 0, max: 9, low: true }, 5 + i * 0.05, 0.05);
+    expect(b.admit('chime', DOOR, 6, 0.5)).toBe(1);
+  });
+
+  it('игрок занят (касание, диалог): события мира тише, окружение молчит, отклик — как есть', () => {
+    const b = new SoundBudget(12);
+    b.calm(20);
+    expect(b.admit('chime', DOOR, 20.5, 0.5)).toBe(0);
+    expect(b.admit('scan', WORLD, 20.5, 0.1)).toBeCloseTo(BUDGET.calmGain, 6);
+    expect(b.admit('till', TILL, 20.5, 0.1)).toBe(1);
+    // Прошло — снова обычная громкость.
+    expect(b.admit('scan', WORLD, 20 + BUDGET.calm + 0.5, 0.1)).toBe(1);
+    expect(b.admit('chime', DOOR, 20 + BUDGET.calm + 2, 0.5)).toBe(1);
+  });
+
+  it('у каждого канала свой запас: мир не займёт место кнопок', () => {
+    const b = new SoundBudget(64);
+    const free: VoiceRule = { gap: 0, max: 99 };
+    BUDGET.busy.world = 99;
+    let world = 0;
+    for (let i = 0; i < 20; i++) if (b.admit(`w${i}`, free, 30, 2, 'world')) world++;
+    expect(world).toBe(BUDGET.voices.world);
+    expect(b.admit('tap', free, 30, 0.1, 'ui')).toBe(1);
+    // Отзвучали — место снова есть; на слабом телефоне запас вдвое меньше.
+    expect(b.admit('w99', free, 33, 2, 'world')).toBe(1);
+    const lite = new SoundBudget(64, 0.5);
+    let few = 0;
+    for (let i = 0; i < 20; i++) if (lite.admit(`w${i}`, free, 0, 2, 'world')) few++;
+    expect(few).toBe(BUDGET.voices.world / 2);
+    // Отклик (касса хозяина) звучит и в полном канале.
+    expect(lite.admit('till', { gap: 0, max: 9, tier: 'feedback' }, 0, 0.5, 'world')).toBe(1);
+    BUDGET.busy.world = 5;
+  });
+
+  it('звук по часам атмосферы (птицы) на ×2 не прореживается', () => {
+    const bird: VoiceRule = { gap: 2, max: 1, tier: 'ambience', game: false };
+    const b = new SoundBudget(12);
+    b.pace = 2;
+    let played = 0;
+    for (let t = 0; t < 60; t += 5) if (b.admit('bird', bird, t, 1)) played++;
+    expect(played).toBe(12);
   });
 });
 
