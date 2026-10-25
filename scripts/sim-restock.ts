@@ -1,10 +1,11 @@
-// Сравнение способов утренней закупки: «разумный игрок» (знает спрос дня), кнопка «Закупить нужное»
-// и новичок, который держит всего поровну. Запуск: npm run sim:restock
+// Сравнение способов утренней закупки: «разумный игрок» (знает спрос дня), кнопка «Закупить нужное»,
+// автозаказ (сам закупает утром в лимите и подвозит днём) и новичок, который держит всего поровну.
+// Запуск: npm run sim:restock
 import { simulate } from '../src/game/simulate';
 
 const SEEDS = 20;
 const DAYS = 60;
-const modes = ['smart', 'restock', 'naive'] as const;
+const modes = ['smart', 'restock', 'auto', 'naive'] as const;
 
 const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];

@@ -59,10 +59,16 @@ export const canStock = (state: StoreState, pid: ProductId): boolean =>
  * План «Закупить нужное»: чего не хватит до цели, у самого дешёвого поставщика, в пределах склада и
  * денег. Сначала товары, которых меньше всего относительно цели.
  */
-export function restockPlan(state: StoreState, priceOf: (sid: SupplierId, pid: ProductId) => number | null, guests: number): ReorderPlan {
+export function restockPlan(
+  state: StoreState,
+  priceOf: (sid: SupplierId, pid: ProductId) => number | null,
+  guests: number,
+  /** Что не брать (автозаказ: строки, которые игрок вернул). */
+  skip: ProductId[] = [],
+): ReorderPlan {
   const kitchen = kitchenNeeds(state);
   const wants = sellableProducts(state)
-    .filter((pid) => canStock(state, pid))
+    .filter((pid) => canStock(state, pid) && !skip.includes(pid))
     .map((pid) => {
       // Сверху — то, что сегодня заберут по заказу, по договору с кафе и повар на кухню: иначе полки опустеют к открытию.
       const reserved = (state.plan?.order?.product === pid ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[pid] ?? 0) + (kitchen[pid] ?? 0);

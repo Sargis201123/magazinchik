@@ -98,7 +98,8 @@ import {
   type Quest,
 } from '../game/endless';
 import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
-import { applyReorder, autoOrderPlan, recordPurchase, rememberAutoOrder, reorderPlan, toggleAutoOrder } from '../game/reorder';
+import { applyReorder } from '../game/reorder';
+import { AUTO_SHARES, AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoCancel, autoDay, autoLimit, autoMorning, autoResume, autoReturn, autoSetShare, autoShare, autoToggle } from '../game/autoorder';
 import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
 import { stockOf } from '../game/bakery';
 import { activePromo, setPromo, type PromoKind } from '../game/promo';
@@ -469,9 +470,11 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const morningDelivery = deliverContracts(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid));
   const delivered: Delivery[] = morningDelivery.deliveries;
   if (morningDelivery.deliveries.length) setState(morningDelivery.state);
-  /** Автозаказ: утром склад сам пополняется до списка (по обычной цене, без брака). */
-  const autoPlan = autoOrderPlan(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid));
-  if (autoPlan?.lines.length) setState(applyReorder(getState(), autoPlan, () => false).state);
+  /** Автозаказ: утром сам закупает нужное на день в пределах лимита (по обычной цене, без брака). */
+  const autoPrice = (sid: SupplierId, pid: ProductId) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid);
+  /** Утренняя закупка автозаказа — сразу на полки (повторно докупает только недостающее). */
+  const autoBuy = (state: StoreState): StoreState => shelveAll(autoMorning(state, autoPrice, guestsToday(state)));
+  if (autoActive(getState())) setState(autoBuy(getState()));
 
   // Торговая неделя и гильдия приходят с сервера чуть позже — перерисовать утро, когда пришли.
   const onMultiplayer = () => {
@@ -807,44 +810,70 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
 
   // ---------- Закупка ----------
 
-  /** «Как в прошлый раз»: последняя закупка одной кнопкой, по сегодняшним ценам. */
-  const reorderBox = (state: StoreState): HTMLElement[] => {
-    const plan = reorderPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid));
-    const last = (state.purchases ?? []).filter((d) => d.day < state.day && d.lines.length).pop();
-    if (!plan || !last) return [];
-    const box = el('div', 'ui-box');
-    const list = last.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' ');
-    box.append(el('b', '', t('reorder.title')), el('div', 'ui-muted', t('reorder.text', { day: last.day, list })));
-    if (!plan.lines.length) {
-      box.append(el('div', 'ui-note', t('reorder.empty')));
+  /**
+   * Автозаказ — первой карточкой закупки, крупно: включён ли, лимит на день, что купил утром (товар можно
+   * вернуть по одному или весь). Не куплен — та же карточка с кнопкой покупки.
+   */
+  const autoCard = (state: StoreState): HTMLElement[] => {
+    if (state.day <= 3) return [];
+    const up = UPGRADES.autoOrder;
+    const owned = hasUpgrade(state, 'autoOrder');
+    if (!owned && state.level < up.minLevel) return [];
+    const on = autoActive(state);
+    const box = el('div', `ui-box ui-auto${on ? ' on' : ''}`);
+    const head = el('div', 'ui-auto-head');
+    head.append(el('b', '', t('auto.title')), el('span', 'ui-auto-state', owned ? t(on ? 'auto.stateOn' : 'auto.stateOff') : `${up.price} 💰`));
+    box.append(head);
+    if (!owned) {
+      box.append(
+        el('div', 'ui-muted', t('auto.teaser')),
+        button(t('auto.buy', { n: up.price }), () => {
+          const bought = buyUpgrade(getState(), 'autoOrder');
+          update(bought && autoBuy({ ...bought, autoOrder: { ...bought.autoOrder, on: true } }), 'success');
+        }, 'ui-btn', state.money < up.price),
+      );
       return [box];
     }
-    if (plan.cut) box.append(el('div', 'ui-note', t('reorder.cut')));
-    box.append(
-      button(t('reorder.buy', { n: plan.total }), () => {
-        const fresh = reorderPlan(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid));
-        if (!fresh?.lines.length) return;
-        const result = applyReorder(getState(), fresh, (line) => Math.random() < SUPPLIERS[line.sid].badChance);
-        if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
-        update(result.state, result.badLine ? 'error' : 'success');
-      }),
-    );
-    return [box];
-  };
-
-  /** Автозаказ (если куплен): список, вкл/выкл и «запомнить закупку». */
-  const autoOrderBox = (state: StoreState): HTMLElement[] => {
-    if (!hasUpgrade(state, 'autoOrder')) return [];
-    const box = el('div', 'ui-box');
-    box.append(el('b', '', t('auto.title')));
-    const auto = state.autoOrder;
-    const list = auto?.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' ') ?? '';
-    box.append(el('div', 'ui-muted', !auto ? t('auto.none') : auto.on ? t('auto.on', { list }) : t('auto.off', { list })), el('div', 'ui-muted', t('auto.diff')));
-    const chips = el('div', 'ui-chips');
-    const canRemember = Boolean(rememberAutoOrder(state));
-    chips.append(button(t('auto.remember'), () => update(rememberAutoOrder(getState()), 'success'), 'ui-chip', !canRemember));
-    if (auto) chips.append(button(auto.on ? t('auto.disable') : t('auto.enable'), () => update(toggleAutoOrder(getState())), 'ui-chip'));
-    box.append(chips);
+    if (!on) {
+      box.append(el('div', 'ui-muted', t('auto.offText')), button(t('auto.enable'), () => update(autoBuy(autoToggle(getState())), 'success'), 'ui-btn'));
+      return [box];
+    }
+    // Лимит: доля денег на утро — сразу видно, сколько это в монетах.
+    const limitRow = el('div', 'ui-row ui-auto-limit');
+    const shares = el('div', 'ui-chips');
+    for (const share of AUTO_SHARES) {
+      shares.append(
+        // Подняли лимит — сразу докупает до нового; опустили — купленное остаётся (вернуть можно ниже).
+        button(
+          t('auto.share', { p: Math.round(share * 100) }),
+          () => {
+            const next = autoSetShare(getState(), share);
+            update(share > autoShare(getState()) ? autoBuy(next) : next);
+          },
+          `ui-chip${autoShare(state) === share ? ' active' : ''}`,
+        ),
+      );
+    }
+    limitRow.append(el('span', '', t('auto.limit', { n: autoLimit(state) })), shares);
+    box.append(limitRow);
+    const today = autoDay(state);
+    const off = button(t('auto.disable'), () => update(autoToggle(getState())), 'ui-chip');
+    const actions = el('div', 'ui-chips ui-auto-actions');
+    if (today.canceled) {
+      box.append(el('div', 'ui-note', t('auto.canceled')), button(t('auto.resume'), () => update(autoBuy(autoResume(getState())), 'success'), 'ui-btn secondary'));
+    } else if (today.lines.length) {
+      box.append(el('div', 'ui-muted', t('auto.bought', { spent: today.spent, limit: autoLimit(state) })));
+      const lines = el('div', 'ui-chips ui-auto-lines');
+      for (const line of today.lines) lines.append(button(`${PRODUCTS[line.pid].icon}×${line.qty} ✕`, () => update(autoReturn(getState(), line.pid)), 'ui-chip'));
+      box.append(lines);
+      if (today.cut) box.append(el('div', 'ui-note', t('auto.cut')));
+      const refund = today.lines.reduce((sum, l) => sum + l.paid, 0);
+      actions.append(button(t('auto.cancel', { n: refund }), () => update(autoCancel(getState())), 'ui-chip'));
+    } else {
+      box.append(el('div', 'ui-muted', t(today.cut ? 'auto.cut' : 'auto.nothing')));
+    }
+    actions.append(off);
+    box.append(el('div', 'ui-muted', t('auto.day', { n: AUTO_TOPUPS, p: Math.round((AUTO_TOPUP_MARKUP - 1) * 100) })), actions);
     return [box];
   };
 
@@ -856,11 +885,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
 
   const priceOf = (sid: SupplierId, pid: ProductId) => unitPrice(SUPPLIERS[sid], deals[sid], pid);
 
-  /** Купить у поставщика: брак — с той же вероятностью, что и раньше; покупка запоминается для «как в прошлый раз». */
+  /** Купить у поставщика: брак — с той же вероятностью, что и раньше. */
   const buyFrom = (sid: SupplierId, pid: ProductId, qty: number, price: number) => {
     const bad = Math.random() < SUPPLIERS[sid].badChance;
-    const bought = buyStock(getState(), pid, qty, price, bad);
-    const next = bought && recordPurchase(bought, sid, pid, qty);
+    const next = buyStock(getState(), pid, qty, price, bad);
     if (bad && next) pendingBad = { sid, pid, qty, price };
     update(next, bad ? 'error' : 'tap');
   };
@@ -943,8 +971,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const req = SUPPLIERS[sid].requires;
       return !Array.isArray(req) || req.some((k) => shelfKindOpen(state, k));
     });
-    const extra = [...autoOrderBox(state), ...reorderBox(state)];
     return [
+      ...autoCard(state),
       ...cafeBox(state),
       // Купленное сразу уходит на полки — показываем и полки, и склад, иначе кажется, что ничего не купил.
       helpRow(t('buy.space', { ...shelfSpace(state), n: warehouseCount(state), max: warehouseCapacity(state) }), t('buy.note')),
@@ -952,7 +980,6 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       filters,
       ...productRows(state),
       foldBox('suppliers', `🤝 ${t('restock.suppliers')}`, (body) => body.append(...suppliers.map((sid) => supplierBox(sid, getState())))),
-      ...(extra.length ? [foldBox('reorder', `🔁 ${t('restock.more')}`, (body) => body.append(...extra))] : []),
       foldBox('prices', `🏷 ${t('tab.prices')}`, (body) => body.append(helpRow(t('prices.title'), t('prices.note', { g: percent(priceAppeal(getState())) })), ...pricesTab(getState()))),
     ];
   };
@@ -3015,13 +3042,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return [...lines, ...autoLine()];
   };
 
+  /** Строка сводки утра: что автозаказ уже купил (подробно и с отменой — во вкладке закупки). */
   const autoLine = (): HTMLElement[] => {
-    if (!autoPlan) return [];
-    const lines: HTMLElement[] = [];
-    if (autoPlan.lines.length)
-      lines.push(el('div', 'ui-muted', t('auto.delivered', { list: autoPlan.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: autoPlan.total })));
-    if (autoPlan.cut) lines.push(el('div', 'ui-note', t('auto.cut')));
-    return lines;
+    const state = getState();
+    const today = state.autoOrder?.today;
+    if (!autoActive(state) || today?.day !== state.day || today.canceled || !today.lines.length) return [];
+    return [el('div', 'ui-muted', t('auto.delivered', { list: today.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: today.spent }))];
   };
 
   const fairLine = (state: StoreState): HTMLElement[] => {

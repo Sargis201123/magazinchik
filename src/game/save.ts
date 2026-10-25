@@ -1,6 +1,7 @@
 import { newGame, normalizeShelves, type StoreState } from './economy';
 import { normalizeDecor } from './decor';
 import { migrateOwnerTill } from './registers';
+import { migrateAutoOrder, settleInbound } from './autoorder';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId } from '../platform/telegram';
 
@@ -62,7 +63,7 @@ export function loadGame(): StoreState | null {
   const merged = { ...fresh, ...save.state, prices: { ...fresh.prices, ...save.state.prices }, decor: normalizeDecor(save.state.decor) };
   // Раньше кассир стоял за первой кассой, теперь она хозяина: кассир переходит за свою (registers.ts).
   // Смотрим на само сохранение — в новой игре поле уже есть, и после слияния оно было бы всегда.
-  const state = save.state.ownerTill ? merged : migrateOwnerTill(merged);
+  const state = settleInbound(migrateAutoOrder(save.state.ownerTill ? merged : migrateOwnerTill(merged)));
   // До версии 11 мороженое и цветы стояли на обычных полках (теперь — ларь у входа и вёдра у кассы).
   return normalizeShelves(state, save.version < 11);
 }

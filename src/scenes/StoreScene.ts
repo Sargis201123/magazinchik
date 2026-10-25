@@ -198,6 +198,8 @@ import { showChoice } from '../ui/choice';
 import { BRAND_BATCH, brandBatchCost, brandToBake, startBrandBatch } from '../game/brand';
 import { hasRadio, nextStation, radioPatience, radioTolerance, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
+import { autoArrived, autoTopUp } from '../game/autoorder';
+import { liveEventsFor, type LiveKind } from '../game/live';
 import { showUrgent } from '../ui/urgent';
 import {
   bargainRows,
@@ -497,14 +499,20 @@ const DUMP_MS = 450;
 const SPILL_CHANCE = 0.035;
 const SPILL_TINTS = [0xf4f8ff, 0xffb347, 0xb86f50];
 const SPILL_MOP_MS = 1700;
-/** Мини-события дня (свет, труба, голубь, курьер): с какого дня и как часто. */
-const LIVE_FROM_DAY = 4;
-const LIVE_CHANCE = 0.5;
-const LIVE_KINDS = ['blackout', 'leak', 'pigeon', 'courier', 'mouse'] as const;
+/** Когда (доли дня) случается мини-событие; если их два — первое до обеда, второе к вечеру. */
+const LIVE_WINDOW: [number, number] = [0.2, 0.6];
+const LIVE_WINDOWS: [number, number][] = [
+  [0.15, 0.4],
+  [0.55, 0.8],
+];
+/** Мини-событие ждёт, пока кончится прошлое, и не начинается, если до закрытия меньше этой доли дня. */
+const LIVE_RETRY_MS = 5000;
+const LIVE_LATEST = 0.1;
+/** Автозаказ проверяет склад раз в столько секунд дня. */
+const AUTO_CHECK_SECONDS = 2;
 /** Мышь грызёт товар раз в столько секунд; сама уходит через столько. */
 const MOUSE_BITE_MS = 4000;
 const MOUSE_STAY_MS = 25_000;
-type LiveKind = (typeof LIVE_KINDS)[number];
 const FIX_MS = 1600;
 const LEAK_FIX_MS = 2200;
 /** Следующий покупатель обслужен за столько после предыдущего — серия продолжается. */
@@ -1539,8 +1547,11 @@ export class StoreScene extends Phaser.Scene {
   private staffGen = 0;
   private toiletDirt = 0;
   /** Срочный подвоз: что едет и занят ли фургон. */
-  private urgentOrders: { id: ProductId; qty: number }[] = [];
+  /** auto — подвоз автозаказа (по приезде вычёркивается из autoOrder.today.inbound). */
+  private urgentOrders: { id: ProductId; qty: number; auto?: boolean }[] = [];
   private urgentVanBusy = false;
+  /** Через сколько секунд дня автозаказ снова проверит, не кончился ли товар. */
+  private autoCheck = 0;
   /** Электронные ценники сегодня уже уценили старое. */
   private eveningMarkdown = false;
   private wcStink!: Phaser.GameObjects.Image;
@@ -1859,6 +1870,12 @@ export class StoreScene extends Phaser.Scene {
       }
       // Уценённое — на полку «Уценка», пока есть место.
       this.sendToBargain();
+    }
+    // Автозаказ: товар разобрали, а на складе пусто — сам вызывает фургон (autoorder.ts).
+    this.autoCheck -= dt;
+    if (!this.night && this.autoCheck <= 0) {
+      this.autoCheck = AUTO_CHECK_SECONDS;
+      this.autoTopUpIfNeeded();
     }
     const rushAt = this.state.plan?.rushAt;
     const rush = !this.night && rushAt !== undefined && elapsed >= rushAt && elapsed < rushAt + RUSH_SECONDS;
@@ -5948,6 +5965,13 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Начало мини-события дня. */
+  /** Прошлое мини-событие ещё не кончилось — подождать; к вечеру уже не начинать. */
+  private tryLiveEvent(kind: LiveKind): void {
+    if (!this.running || this.night || this.timeLeft < DAY_SECONDS * LIVE_LATEST) return;
+    if (this.liveEvent) this.time.delayedCall(LIVE_RETRY_MS, () => this.tryLiveEvent(kind));
+    else this.startLiveEvent(kind);
+  }
+
   private startLiveEvent(kind: LiveKind): void {
     if (this.liveEvent) return;
     this.liveEvent = kind;
@@ -10927,6 +10951,18 @@ export class StoreScene extends Phaser.Scene {
     return true;
   }
 
+  /** Автозаказ подвозит кончившийся товар: оплачено из лимита дня, едет тем же фургоном, что и срочный заказ. */
+  private autoTopUpIfNeeded(): void {
+    const order = autoTopUp(this.state, (id) => this.stats.sold[id] ?? 0, this.urgentOrders.map((o) => o.id), this.urgentOnTheWay());
+    if (!order) return;
+    this.state = order.state;
+    this.urgentOrders.push({ id: order.pid, qty: order.qty, auto: true });
+    this.hud.update(this.state, this.timeLeft);
+    const { warehouse } = this.layout;
+    this.popup(warehouse.x + warehouse.w / 2, warehouse.y - 4, t('popup.autoTopUp', { icon: PRODUCTS[order.pid].icon, n: order.qty }), '#c8ffb0');
+    if (!this.urgentVanBusy) void this.urgentVan();
+  }
+
   /** Фургон срочного подвоза: подъезжает к складу, товар — на стеллаж, уезжает. */
   private async urgentVan(): Promise<void> {
     this.urgentVanBusy = true;
@@ -10952,7 +10988,7 @@ export class StoreScene extends Phaser.Scene {
   private receiveUrgentOrders(): void {
     if (!this.urgentOrders.length) return;
     const list = this.urgentOrders.map((o) => `${PRODUCTS[o.id].icon}×${o.qty}`).join(' ');
-    for (const o of this.urgentOrders) this.state = receiveUrgent(this.state, o.id, o.qty);
+    for (const o of this.urgentOrders) this.state = o.auto ? autoArrived(this.state, o.id, o.qty) : receiveUrgent(this.state, o.id, o.qty);
     this.urgentOrders = [];
     this.refreshWarehouse();
     this.refreshShelves();
@@ -13347,10 +13383,14 @@ export class StoreScene extends Phaser.Scene {
     if (Math.random() < fridgeLeak(this.state)) {
       this.time.delayedCall(Phaser.Math.FloatBetween(0.15, 0.7) * DAY_SECONDS * 1000, () => this.running && this.fridgeLeaks());
     }
-    if (this.state.day >= LIVE_FROM_DAY && Math.random() < LIVE_CHANCE) {
-      const kind = Phaser.Utils.Array.GetRandom([...LIVE_KINDS]);
-      this.time.delayedCall(Phaser.Math.FloatBetween(0.2, 0.6) * DAY_SECONDS * 1000, () => this.running && this.startLiveEvent(kind));
-    }
+    // Мини-события (свет, труба, голубь, курьер, мышь): почти каждый день, по очереди (live.ts).
+    // Два за день — первое до обеда, второе ближе к вечеру, чтобы не наложились.
+    const live = liveEventsFor(this.state, Math.random);
+    this.state = live.state;
+    live.kinds.forEach((kind, i) => {
+      const [from, to] = live.kinds.length > 1 ? LIVE_WINDOWS[i] : LIVE_WINDOW;
+      this.time.delayedCall(Phaser.Math.FloatBetween(from, to) * DAY_SECONDS * 1000, () => this.tryLiveEvent(kind));
+    });
     this.eveningMarkdown = false;
     this.toiletDirt = 0;
     this.refreshToilet();
