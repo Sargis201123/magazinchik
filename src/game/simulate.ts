@@ -89,6 +89,7 @@ import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegister
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
 import { weatherFor } from './weather';
+import { simSmellComplaint } from './rot';
 import { brewSeconds, cameraTheft, climatePatience, coffeePrice, entranceMud, fridgeLeak, GEAR_IDS, gearAvailable, nextGear, ovenBatch, ovenBatchCost, REGISTER_JAM_SECONDS, registerJam, signagePatience, upgradeGear, wcDirt } from './gear';
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from './bakery';
 import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
@@ -651,8 +652,9 @@ export function simulate({
     }
     const capacity = serveCapacity(state);
     const serveCap = Math.max(0, capacity.total - Math.round(packTime / OWNER_SECONDS_PER_GUEST));
-    // Грязь: уборщик, а ещё вход (грязь с улицы) и туалет (gear.ts).
-    const dirtComplaint = (has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level) * (0.6 + 0.2 * entranceMud(state) + 0.2 * wcDirt(state));
+    // Грязь: уборщик, а ещё вход (грязь с улицы) и туалет (gear.ts); без уборщика мусор ещё и гниёт — пахнет (rot.ts).
+    const dirtComplaint =
+      (has('cleaner') ? 0.01 : 0.02 + 0.02 * state.level) * (0.6 + 0.2 * entranceMud(state) + 0.2 * wcDirt(state)) + simSmellComplaint(state.level, has('cleaner'));
     const guard = staffOf(state, 'guard');
     let candy = 0;
     let coffee = 0;

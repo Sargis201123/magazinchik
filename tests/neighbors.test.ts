@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isClash, isPair, nextTo, shelfLinks } from '../src/game/neighbors';
-import { BARGAIN_CAPACITY, bargainCount, fillBargain, takeBargain } from '../src/game/bargain';
+import { gearAvailable, upgradeGear, bargainSprite } from '../src/game/gear';
+import { bargainCapacity, bargainCount, fillBargain, takeBargain } from '../src/game/bargain';
 import { emptyDayStats, endDay, newGame, PRODUCTS, type Category, type StoreState } from '../src/game/economy';
 import { layoutFor } from '../src/scenes/layout';
 import { canShortenQueue, slotIssues, slotRect, tillZones, withTill } from '../src/scenes/placement';
@@ -56,7 +57,9 @@ describe('полка «Уценка»', () => {
     expect(fillBargain(withBread(1, 3)).count).toBe(0);
   });
 
-  it('вмещает не больше BARGAIN_CAPACITY, берут по одной штуке, ночью не купленное портится', () => {
+  it('вмещает не больше bargainCapacity (12 мест), берут по одной штуке, ночью не купленное портится', () => {
+    const BARGAIN_CAPACITY = bargainCapacity(withBread(0, 0));
+    expect(BARGAIN_CAPACITY).toBe(12);
     const moved = fillBargain(withBread(0, BARGAIN_CAPACITY + 5));
     expect(moved.count).toBe(BARGAIN_CAPACITY);
     const taken = takeBargain(moved.state, () => 0);
@@ -65,6 +68,20 @@ describe('полка «Уценка»', () => {
     const night = endDay(taken!.state, emptyDayStats());
     expect(bargainCount(night.state)).toBe(0);
     expect(night.spoiled).toBeGreaterThanOrEqual(BARGAIN_CAPACITY - 1);
+  });
+
+  it('модели полки прибавляют мест: 12 → 18 → 24; без полки улучшать нечего', () => {
+    const s = { ...withBread(0, 30), money: 10_000, level: 2 };
+    expect(gearAvailable({ ...s, upgrades: [] }, 'bargain')).toBe(false);
+    const one = upgradeGear(s, 'bargain')!;
+    expect(bargainCapacity(one)).toBe(18);
+    expect(bargainSprite(one)).toBe('bargain_shelf1');
+    const two = upgradeGear(one, 'bargain')!;
+    expect(bargainCapacity(two)).toBe(24);
+    expect(upgradeGear(two, 'bargain')).toBeNull();
+    expect(fillBargain(two).count).toBe(24);
+    // Старые сохранения без модели — начальная горка на 12.
+    expect(bargainCapacity({ ...s, gear: undefined })).toBe(12);
   });
 });
 
