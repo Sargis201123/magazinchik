@@ -173,6 +173,8 @@ export const en: Record<TextKey, string> = {
   'audio.effects': 'Effects',
   'audio.voices': 'Voices',
   'audio.mute': 'Sound on or off',
+  'audio.hapticsOn': '📳 Vibration: on',
+  'audio.hapticsOff': '📴 Vibration: off',
   'news.sound': '🔊 New sound: softer and roomier. Music, ambience, effects and voice volume: 🏆 in the corner → "Sound".',
   'arrange.open': "Rearrange shelves",
   'arrange.queueShort': '🚶 Shorter queue — room for shelves',

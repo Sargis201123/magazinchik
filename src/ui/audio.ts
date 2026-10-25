@@ -9,6 +9,7 @@ import { audibleAgain, inaudible, VOLUME_KEYS, type VolumeKey } from '../platfor
 import { mixer } from '../platform/mixer';
 import { music } from '../platform/music';
 import { sound } from '../platform/sound';
+import { hapticsEnabled, setHaptics } from '../platform/telegram';
 import { button, el } from './dom';
 
 const css = `
@@ -117,6 +118,15 @@ export function audioBox(day: () => number, rerender: () => void): HTMLElement {
   box.append(el('b', '', `🔊 ${t('audio.title')}`), el('div', 'ui-muted', t('audio.note')));
   const chips = el('div', 'ui-chips');
   chips.append(muteChip(day, rerender, `ui-chip${silent() ? '' : ' active'}`));
+  // Вибрация — рядом со звуком: кому мешает дрожание телефона на каждом касании, выключает здесь.
+  chips.append(
+    button(hapticsEnabled() ? t('audio.hapticsOn') : t('audio.hapticsOff'), () => {
+      const on = !hapticsEnabled();
+      setHaptics(on);
+      track(on ? 'haptics_on' : 'haptics_off', day());
+      rerender();
+    }, `ui-chip${hapticsEnabled() ? ' active' : ''}`),
+  );
   box.append(chips);
   const volumes = mixer.volumes();
   let mask = mixer.silenceMask();

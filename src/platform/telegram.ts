@@ -233,10 +233,38 @@ export function initTelegram(bgColor: string): void {
 export const telegramLanguage = (): string | undefined =>
   webApp()?.initDataUnsafe.user?.language_code;
 
+/** Вибрация: игрок может выключить её в профиле (🏆 → «Звук»). Хранится на этом устройстве. */
+const HAPTICS_KEY = 'magazinchik.haptics';
+let hapticsOn: boolean | null = null;
+
+export function hapticsEnabled(): boolean {
+  if (hapticsOn === null) {
+    try {
+      hapticsOn = localStorage.getItem(HAPTICS_KEY) !== '0';
+    } catch {
+      hapticsOn = true;
+    }
+  }
+  return hapticsOn;
+}
+
+export function setHaptics(on: boolean): void {
+  hapticsOn = on;
+  try {
+    localStorage.setItem(HAPTICS_KEY, on ? '1' : '0');
+  } catch {
+    // Без хранилища настройка живёт до перезапуска.
+  }
+  // Включили — короткий отклик: так понятно, что вибрация снова работает.
+  if (on) webApp()?.HapticFeedback?.impactOccurred('light');
+}
+
+const feedback = () => (hapticsEnabled() ? webApp()?.HapticFeedback : undefined);
+
 export const haptic = {
-  tap: () => webApp()?.HapticFeedback?.impactOccurred('light'),
-  success: () => webApp()?.HapticFeedback?.notificationOccurred('success'),
-  error: () => webApp()?.HapticFeedback?.notificationOccurred('error'),
+  tap: () => feedback()?.impactOccurred('light'),
+  success: () => feedback()?.notificationOccurred('success'),
+  error: () => feedback()?.notificationOccurred('error'),
 };
 
 /**
