@@ -7,19 +7,10 @@
 // как раньше: метку записывает вебхук, когда друг нажмёт «Старт». Когда друг откроет игру,
 // пригласивший может забрать награду, а друг получает подарок при первом запуске.
 //
-// Напоминание: раз в час cron смотрит, кто не заходил почти сутки, и бот пишет ему одно доброе
-// сообщение в день (днём по Москве). Три напоминания без ответа — больше не пишем, пока игрок
-// сам не вернётся. Заблокировал бота — не пишем никогда.
+// Напоминания от бота (раз в день, днём по местному времени игрока, от лица героев) — в remind.ts.
+// Сюда игра присылает часовой пояс и поводы для напоминания (hooks, src/game/comeback.ts).
 
 import { bot, json, verifyInitData, type D1, type Env } from './telegram.js';
-
-const HOUR = 3600_000;
-/** Не заходил столько — напомнить; не чаще раза в REMIND_EVERY; не больше MAX_MISSES подряд. */
-export const IDLE_AFTER = 20 * HOUR;
-export const REMIND_EVERY = 22 * HOUR;
-export const MAX_MISSES = 3;
-/** Пишем только днём по Москве (UTC+3): с 9 до 21. */
-const QUIET = { from: 6, to: 18 };
 
 const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS players (id INTEGER PRIMARY KEY, lang TEXT, joined INTEGER, last_seen INTEGER, reminded_at INTEGER, misses INTEGER DEFAULT 0)',
@@ -65,6 +56,11 @@ const SCHEMA = [
   'CREATE INDEX IF NOT EXISTS helps_receiver ON helps (receiver, claimed)',
   // Когда игрок последний раз готовил сообщение для окна «Поделиться» (share.ts): не чаще раза в несколько секунд.
   'CREATE TABLE IF NOT EXISTS shares (id INTEGER PRIMARY KEY, at INTEGER)',
+  // Для напоминаний (remind.ts): часовой пояс игрока (минуты к востоку от Гринвича), поводы от игры
+  // (ждёт ли Соня, что портится, серия гостинцев, кассир, день магазина) и о чём писали в прошлый раз.
+  'CREATE TABLE IF NOT EXISTS hooks (id INTEGER PRIMARY KEY, tz INTEGER, sonya INTEGER, spoil INTEGER, streak INTEGER, gift TEXT, cashier INTEGER, day INTEGER, reason TEXT, updated INTEGER)',
+  // Настройки, которые автор меняет без выпуска игры: календарь праздников (live.ts, docs/EVENTS.md).
+  'CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, updated INTEGER)',
 ].join(';\n');
 
 /** Таблицы создаются сами при первом обращении к базе. */
@@ -121,6 +117,30 @@ export async function recordSource(env: Env, id: number, payload: string, now = 
   await db.prepare('INSERT OR IGNORE INTO sources (id, source, at) VALUES (?, ?, ?)').bind(id, source, now).run();
 }
 
+const num = (v: unknown, min: number, max: number): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.round(v))) : 0);
+
+/**
+ * Часовой пояс и поводы для напоминаний — из отчёта игры (/api/social-ping и /api/progress).
+ * Пояс — минуты к востоку от Гринвича (−12…+14 часов); нет его — останется прежний (или Москва).
+ */
+export async function saveHooks(db: D1, id: number, body: { tz?: unknown; hooks?: unknown }, now = Date.now()): Promise<void> {
+  const tz = typeof body.tz === 'number' && Number.isFinite(body.tz) ? num(body.tz, -720, 840) : null;
+  const h = body.hooks && typeof body.hooks === 'object' ? (body.hooks as Record<string, unknown>) : null;
+  if (tz === null && !h) return;
+  const gift = typeof h?.gift === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(h.gift) ? h.gift : '';
+  await db
+    .prepare(
+      `INSERT INTO hooks (id, tz, sonya, spoil, streak, gift, cashier, day, updated) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+       ON CONFLICT(id) DO UPDATE SET tz = COALESCE(excluded.tz, hooks.tz),
+         sonya = CASE WHEN ?10 THEN excluded.sonya ELSE hooks.sonya END, spoil = CASE WHEN ?10 THEN excluded.spoil ELSE hooks.spoil END,
+         streak = CASE WHEN ?10 THEN excluded.streak ELSE hooks.streak END, gift = CASE WHEN ?10 THEN excluded.gift ELSE hooks.gift END,
+         cashier = CASE WHEN ?10 THEN excluded.cashier ELSE hooks.cashier END, day = CASE WHEN ?10 THEN excluded.day ELSE hooks.day END,
+         updated = excluded.updated`,
+    )
+    .bind(id, tz, num(h?.sonya, 0, 1), num(h?.spoil, 0, 9999), num(h?.streak, 0, 7), gift, num(h?.cashier, 0, 1), num(h?.day, 0, 100000), now, h ? 1 : 0)
+    .run();
+}
+
 /** Сколько приглашённых уже играют и сколько из них ещё не забраны. */
 async function friends(db: D1, inviter: number): Promise<{ total: number; unclaimed: number }> {
   const row = await db
@@ -142,11 +162,12 @@ export async function socialPing(request: Request, env: Env): Promise<Response> 
   const token = env.BOT_TOKEN ?? '';
   const db = env.DB;
   if (!token || !db) return json({ enabled: false });
-  const body = (await request.json().catch(() => ({}))) as { initData?: string; lang?: string };
+  const body = (await request.json().catch(() => ({}))) as { initData?: string; lang?: string; tz?: unknown; hooks?: unknown };
   const user = await verifyInitData(body.initData ?? '', token);
   if (!user) return json({ error: 'bad_init_data' }, 401);
   await ready(db);
   const now = Date.now();
+  await saveHooks(db, user.id, body, now);
   // Открыли игру прямой ссылкой ?startapp=src_<канал> или ref_<id> — запомнить источник и того, кто
   // пригласил, до первой записи игрока (потом он уже не новичок).
   const startParam = new URLSearchParams(body.initData ?? '').get('start_param');
@@ -187,50 +208,4 @@ export async function socialClaim(request: Request, env: Env): Promise<Response>
     .bind(user.id)
     .run();
   return json({ claimed: result.meta?.changes ?? 0 });
-}
-
-const REMINDERS = {
-  ru: [
-    '👵 Бабушкин гостинец уже ждёт! Загляни в магазинчик — покупатели скучают.',
-    '🛒 У дверей магазина собралась очередь. Пора открывать смену!',
-    '📦 Склад ждёт хозяина: проверь, ничего ли не портится, и закупи свежего.',
-  ],
-  en: [
-    "👵 Grandma's gift is waiting! Drop by the shop — the customers miss you.",
-    "🛒 There's a queue at the shop door. Time to open up!",
-    '📦 The warehouse needs its owner: check nothing is spoiling and buy fresh stock.',
-  ],
-};
-
-/** Раз в час (cron): кто давно не заходил — бот пишет одно напоминание с кнопкой «Играть». */
-export async function sendReminders(env: Env, now = Date.now()): Promise<number> {
-  const token = env.BOT_TOKEN ?? '';
-  const db = env.DB;
-  if (!token || !db) return 0;
-  const hour = new Date(now).getUTCHours();
-  if (hour < QUIET.from || hour > QUIET.to) return 0;
-  await ready(db);
-  const { results } = await db
-    .prepare('SELECT id, lang, misses FROM players WHERE last_seen < ? AND (reminded_at IS NULL OR reminded_at < ?) AND misses < ? LIMIT 200')
-    .bind(now - IDLE_AFTER, now - REMIND_EVERY, MAX_MISSES)
-    .all<{ id: number; lang: string; misses: number }>();
-  const app = env.APP_URL ?? '';
-  let sent = 0;
-  for (const p of results) {
-    const lang = p.lang === 'en' ? 'en' : 'ru';
-    const text = REMINDERS[lang][(Math.floor(now / (24 * HOUR)) + p.id) % REMINDERS[lang].length];
-    try {
-      await bot(token, 'sendMessage', {
-        chat_id: p.id,
-        text,
-        ...(app ? { reply_markup: { inline_keyboard: [[{ text: lang === 'ru' ? '▶ Играть' : '▶ Play', web_app: { url: app } }]] } } : {}),
-      });
-      await db.prepare('UPDATE players SET reminded_at = ?, misses = misses + 1 WHERE id = ?').bind(now, p.id).run();
-      sent++;
-    } catch {
-      // Бот заблокирован или чата нет — больше не пишем.
-      await db.prepare('UPDATE players SET reminded_at = ?, misses = 99 WHERE id = ?').bind(now, p.id).run();
-    }
-  }
-  return sent;
 }

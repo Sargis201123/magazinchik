@@ -7,6 +7,8 @@
 // клиенте — как раньше, окном «Поделиться ссылкой».
 
 import { getLang } from '../i18n';
+import type { Hooks } from '../game/comeback';
+import { tzOffset } from './live';
 import { canShareMessage, openTelegramLink, requestWriteAccess, shareMessage, startParam, telegramInitData, telegramUserId } from './telegram';
 
 /** Награда за друга, который начал играть, и подарок самому другу. */
@@ -39,11 +41,19 @@ export async function post<T>(path: string, body: unknown, keepalive = false): P
   }
 }
 
-/** Игра открылась: отметиться у сервера (бот не будет напоминать) и узнать про приглашения. */
-export async function socialPing(lang: string): Promise<SocialInfo | null> {
+/**
+ * Игра открылась: отметиться у сервера (бот не будет напоминать) и узнать про приглашения.
+ * Заодно — часовой пояс (бот пишет днём по местному времени) и поводы для напоминания (game/comeback.ts).
+ */
+export async function socialPing(lang: string, hooks?: Hooks): Promise<SocialInfo | null> {
   const initData = telegramInitData();
   if (!initData) return null;
-  const res = await post<{ enabled?: boolean; bot?: string; friends?: number; unclaimed?: number; welcome?: boolean; helped?: number }>('/api/social-ping', { initData, lang });
+  const res = await post<{ enabled?: boolean; bot?: string; friends?: number; unclaimed?: number; welcome?: boolean; helped?: number }>('/api/social-ping', {
+    initData,
+    lang,
+    tz: tzOffset(),
+    hooks,
+  });
   if (!res?.enabled || !res.bot) return null;
   info = { bot: res.bot, friends: res.friends ?? 0, unclaimed: res.unclaimed ?? 0, welcome: Boolean(res.welcome), helped: res.helped ?? 0 };
   return info;

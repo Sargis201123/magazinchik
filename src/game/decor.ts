@@ -1,12 +1,14 @@
 // Оформление магазина: стены, пол, картины, ковёр, растения, неон, аквариум — и наряд хозяина.
 // Обычное покупается за монеты; премиальное — за Telegram Stars (platform/stars.ts),
 // его можно один раз бесплатно примерить на день. Купленное за звёзды остаётся навсегда,
-// даже после «Начать заново».
+// даже после «Начать заново». Праздничное (ёлка, мимоза…) не продаётся: его дарят открытки
+// праздников по настоящему календарю (live.ts), и оно тоже остаётся навсегда. Некоторые
+// премиальные вещи продаются только набором (STAR_PACKS) — например, новогодний.
 
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
 
-export type DecorKind = 'outfit' | 'sign' | 'wall' | 'floor' | 'light' | 'showpiece' | 'art' | 'rug' | 'plants' | 'neon';
+export type DecorKind = 'outfit' | 'sign' | 'wall' | 'floor' | 'light' | 'showpiece' | 'art' | 'rug' | 'plants' | 'neon' | 'holiday';
 
 export type DecorId =
   | 'outfit_farmer'
@@ -50,7 +52,12 @@ export type DecorId =
   | 'fountain'
   | 'jukebox'
   | 'lucky_cat'
-  | 'gumball';
+  | 'gumball'
+  | 'sign_frost'
+  | 'wall_winter'
+  | 'holiday_tree'
+  | 'holiday_ship'
+  | 'holiday_mimosa';
 
 export interface DecorItem {
   id: DecorId;
@@ -65,6 +72,10 @@ export interface DecorItem {
   texture?: string;
   /** Цвет надписи на вывеске. */
   textColor?: number;
+  /** Продаётся только набором за звёзды (STAR_PACKS): id набора. */
+  pack?: string;
+  /** Праздничная вещь: её дарят открытки этого праздника (live.ts), не купить. */
+  holiday?: 'newyear' | 'feb23' | 'march8';
 }
 
 const coins = (id: DecorId, kind: DecorKind, price: number, extra: Partial<DecorItem> = {}): DecorItem => ({
@@ -128,9 +139,28 @@ export const DECOR: DecorItem[] = [
   coins('rug_red', 'rug', 250, { texture: 'rug' }),
   coins('plants_big', 'plants', 300, { texture: 'plant_big' }),
   stars('neon_open', 'neon', 30, { texture: 'neon' }),
+  // Новогодний набор за звёзды (по желанию): снежная вывеска и зимние обои (art/holidays.py).
+  { id: 'sign_frost', kind: 'sign', nameKey: 'decor.sign_frost', texture: 'sign_frost', textColor: 0xffffff, pack: 'pack_newyear' },
+  { id: 'wall_winter', kind: 'wall', nameKey: 'decor.wall_winter', texture: 'wall_winter', pack: 'pack_newyear' },
+  // Праздничное — подарок за открытки (live.ts): ставится у входа в зал, рядом с витриной.
+  { id: 'holiday_tree', kind: 'holiday', nameKey: 'decor.holiday_tree', texture: 'holiday_tree', holiday: 'newyear' },
+  { id: 'holiday_ship', kind: 'holiday', nameKey: 'decor.holiday_ship', texture: 'holiday_ship', holiday: 'feb23' },
+  { id: 'holiday_mimosa', kind: 'holiday', nameKey: 'decor.holiday_mimosa', texture: 'holiday_mimosa', holiday: 'march8' },
 ];
 
-export const DECOR_KINDS: DecorKind[] = ['outfit', 'sign', 'wall', 'floor', 'light', 'showpiece', 'art', 'rug', 'plants', 'neon'];
+export const DECOR_KINDS: DecorKind[] = ['outfit', 'sign', 'wall', 'floor', 'light', 'showpiece', 'art', 'rug', 'plants', 'neon', 'holiday'];
+
+/**
+ * Наборы за звёзды: одна покупка — несколько вещей. Цена и название — и на сервере
+ * (api/_lib/telegram.ts, STARS_CATALOG; совпадение проверяет тест).
+ */
+export const STAR_PACKS: Record<string, { stars: number; nameKey: TextKey; items: DecorId[] }> = {
+  pack_newyear: { stars: 100, nameKey: 'decor.pack_newyear', items: ['sign_frost', 'wall_winter'] },
+};
+
+/** Что дают покупки за звёзды (вещи и наборы — по данным Telegram): только вещи оформления. */
+export const decorFromPurchases = (ids: string[]): DecorId[] =>
+  ids.flatMap((id) => STAR_PACKS[id]?.items ?? (isDecorId(id) ? [id] : []));
 
 export interface DecorState {
   owned: DecorId[];
@@ -147,8 +177,11 @@ export const decorItem = (id: DecorId): DecorItem => DECOR.find((d) => d.id === 
 
 export const isDecorId = (id: string): id is DecorId => DECOR.some((d) => d.id === id);
 
-/** Премиальная — та, что продаётся за звёзды. */
-export const isPremium = (id: DecorId): boolean => decorItem(id).stars !== undefined;
+/** Премиальная — та, что продаётся за звёзды (сама или в наборе). */
+export const isPremium = (id: DecorId): boolean => decorItem(id).stars !== undefined || decorItem(id).pack !== undefined;
+
+/** Принадлежит игроку, а не магазину: за звёзды (сама или в наборе) и праздничная — остаётся после «Начать заново». */
+export const isKeepsake = (id: DecorId): boolean => isPremium(id) || decorItem(id).holiday !== undefined;
 
 /** Примерка идёт сегодня? */
 const trialToday = (state: StoreState): DecorItem | undefined => {
@@ -195,7 +228,7 @@ export function normalizeDecor(decor: DecorState | undefined): DecorState {
   return { ...decor, owned, active };
 }
 
-/** Купить за монеты и сразу поставить. Премиальное (за Stars) так купить нельзя. */
+/** Купить за монеты и сразу поставить. Премиальное (за Stars) и праздничное так купить нельзя. */
 export function buyDecor(state: StoreState, id: DecorId): StoreState | null {
   const item = decorItem(id);
   if (item.price === undefined || state.decor.owned.includes(id) || state.money < item.price) return null;

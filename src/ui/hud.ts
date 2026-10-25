@@ -251,6 +251,8 @@ export class Hud {
     reviews: Review[],
     onNext: () => void,
     onShare?: (button: HTMLButtonElement) => void,
+    /** «Приходи завтра»: Соня что-то хотела сказать (game/drama.ts) — строка с её портретом. */
+    teaser?: string,
   ): void {
     const { card, close } = openModal();
     card.classList.add('ui-sum');
@@ -329,6 +331,14 @@ export class Hud {
       card.append(row);
     }
     card.append(grannySays(day, stats, rating, history));
+    if (teaser) {
+      const row = el('div', 'ui-teaser');
+      const face = el('img');
+      face.src = png('portrait_sonya');
+      face.alt = '';
+      row.append(face, el('span', '', teaser));
+      card.append(row);
+    }
     // Карточка итогов для сторис или чата (platform/shareCard.ts).
     if (onShare) {
       const share: HTMLButtonElement = button(t('share.button'), () => onShare(share), 'ui-btn secondary');

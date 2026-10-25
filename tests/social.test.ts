@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MAX_MISSES, recordReferral, sendReminders, socialClaim, socialPing } from '../api/_lib/social';
+import { recordReferral, socialClaim, socialPing } from '../api/_lib/social';
+import { MAX_MISSES, sendReminders } from '../api/_lib/remind';
 import type { D1, D1Statement, Env } from '../api/_lib/telegram';
 
 // Настоящая SQLite из Node (22.5+) вместо Cloudflare D1: те же запросы, та же логика.

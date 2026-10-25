@@ -104,10 +104,10 @@ describe('первые минуты новичка: два начала (A/B)', 
 
   it('в новом начале Соня ждёт до третьего дня: во втором утре уже есть вступление главы', () => {
     const play = { ...day(startCohort(newGame(), 'play'), 2), tourDone: true };
-    expect(dramaScene(play)).toBeNull();
-    expect(dramaScene(day(play, 3))?.day).toBe(2);
+    expect(dramaScene(play, '2026-12-01')).toBeNull();
+    expect(dramaScene(day(play, 3), '2026-12-01')?.day).toBe(2);
     const tour = { ...day(startCohort(newGame(), 'tour'), 2), tourDone: true };
-    expect(dramaScene(tour)?.day).toBe(2);
+    expect(dramaScene(tour, '2026-12-01')?.day).toBe(2);
   });
 
   it('первый покупатель идёт к полке, от которой ближе всего пройти от двери до кассы', () => {

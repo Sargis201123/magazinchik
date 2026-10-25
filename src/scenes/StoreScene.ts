@@ -128,11 +128,14 @@ import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
 import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { showGift } from '../ui/gift';
-import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor';
+import { activeDecor, decorFromPurchases, grantDecor, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
 import { DOG_DAY_CATCH, hasDog, hasWatchman } from '../game/watch';
 import { contestOf, juryDay, tierKey } from '../game/contest';
-import { sonyaVisits, sunflowersPlanted } from '../game/drama';
+import { dramaHeld, sonyaVisits, sunflowersPlanted } from '../game/drama';
+import { activeEvent, guestCoins, guestDue, LIVE_LOOKS, liveLook, seeGuest, type GuestId } from '../game/live';
+import { liveEvents, loadLiveEvents, todayLocal } from '../platform/live';
+import { comebackHooks } from '../game/comeback';
 import { askForHelp, askWriteAccessOnce, claimHelp, sendHelp, socialInfo, socialPing, WELCOME_GIFT } from '../platform/social';
 import { HELP_HOLD, HELP_QUEUE, HELP_REWARD, HELP_THANKS, helpAsked, helpGiven, helpScan, markHelpAsked, takeHelp } from '../game/help';
 import { flushSoon, reportProgress, setProgressSource, track } from '../platform/analytics';
@@ -772,6 +775,13 @@ const INSPECTOR_AT = 25;
 const SONYA_AT = 18;
 /** Соня: каштановые волосы, сиреневая толстовка, жёлтый рюкзак (как на портрете, art/family.py). */
 const SONYA: Look = { shirt: 0xffffff, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x8f563b, style: 'long', outfit: 'hoodie', outfitTint: 0x68386c, bag: 'backpack', bagTint: 0xfee761 };
+/** Праздничный гость по настоящему календарю (game/live.ts) заходит на этой секунде дня. */
+const LIVE_GUEST_AT = 30;
+/** Праздничные гости: Дед Мороз — как редкий гость из альбома, Снегурочка — в голубой шубке и диадеме, с косой. */
+const LIVE_GUEST_LOOKS: Record<GuestId, Look> = {
+  moroz: { shirt: 0xe43b44, pants: 0xe43b44, hair: 0xffffff, style: 'bald', skin: 0xf2d3ab, hat: 'ushanka', hatTint: 0xe43b44, outfit: 'furcoat', face: 'beard', faceTint: 0xffffff, prop: 'cane' },
+  snegurochka: { shirt: 0x9cd8ff, pants: 0x9cd8ff, hair: 0xead4aa, style: 'long', skin: 0xf2d3ab, hat: 'tiara', outfit: 'furcoat', outfitTint: 0x9cd8ff },
+};
 /** Жюри конкурса приходит на этой секунде дня. */
 const JURY_AT = 40;
 /** Жюри: строгие костюмы, у одного портфель, у другого блокнот (как у инспектора). */
@@ -1318,6 +1328,8 @@ export class StoreScene extends Phaser.Scene {
   private jury: 'none' | 'pending' | 'here' | 'done' = 'none';
   /** Соня сегодня заглянет в магазин (сюжет «Папа и Соня»). */
   private sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
+  /** Праздничный гость сегодня (game/live.ts): кто, ждём / пришёл / ушёл и настоящая дата визита. */
+  private liveGuest: { who: GuestId; phase: 'pending' | 'here' | 'done'; date: string } | null = null;
   private catHome = { x: 0, y: 0 };
   private catOut = false;
   /** Кот сидит посреди зала: таймер, который водит его хвостом, моргает и умывает (есть, пока сидит). */
@@ -1388,7 +1400,8 @@ export class StoreScene extends Phaser.Scene {
     setBigDaySeed(this.state.seed!);
     // Покупки за звёзды — по данным Telegram: вернутся и на новом телефоне.
     void restorePurchases().then((ids) => {
-      const owned = (ids ?? []).filter(isDecorId);
+      // Наборы за звёзды (новогодний) раскрываются в свои вещи.
+      const owned = decorFromPurchases(ids ?? []);
       const next = grantPass(grantDecor(this.state, owned, !save), ids ?? []);
       if (next === this.state) return;
       this.state = next;
@@ -1396,7 +1409,12 @@ export class StoreScene extends Phaser.Scene {
       if (!save) this.buildWorld();
     });
     // Игрок на месте — бот не будет напоминать. Пришёл по приглашению друга — подарок новичку.
-    void socialPing(getLang()).then((info) => {
+    // Календарь праздников с сервера (game/live.ts): пришёл другой — переукрасить улицу, пока магазин закрыт.
+    const lookBefore = liveLook(liveEvents(), todayLocal());
+    void loadLiveEvents().then((events) => {
+      if (!this.running && this.sys.isActive() && liveLook(events, todayLocal()) !== lookBefore) this.buildWorld();
+    });
+    void socialPing(getLang(), comebackHooks(this.state)).then((info) => {
       // Торговая неделя и гильдия: магазин друга появится на улице, если соперник есть.
       void loadMultiplayer().then(() => {
         if (!this.running && (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend) this.buildWorld();
@@ -1524,6 +1542,7 @@ export class StoreScene extends Phaser.Scene {
     if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void this.runInspector();
     if (!this.night && this.jury === 'pending' && elapsed >= JURY_AT) void this.runJury();
     if (!this.night && this.sonya === 'pending' && elapsed >= SONYA_AT) void this.runSonya();
+    if (!this.night && this.liveGuest?.phase === 'pending' && elapsed >= LIVE_GUEST_AT) void this.runLiveGuest();
 
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;
@@ -1534,7 +1553,7 @@ export class StoreScene extends Phaser.Scene {
           spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
       }
-    } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here') {
+    } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here' && this.liveGuest?.phase !== 'here') {
       this.endOfDay();
     }
 
@@ -3707,8 +3726,15 @@ export class StoreScene extends Phaser.Scene {
         });
       }
     }
-    if (holiday === 'newyear') {
-      keep(this.art(-40, top - 190, 'snowman').setDepth(top - 180));
+    // Праздник по настоящему календарю (game/live.ts) — поверх времени года игры: 31 декабря Новый год
+    // и в магазине, даже если в игре лето. Свой праздник игрового года уже украсил улицу — второй раз не вешаем.
+    const live = liveLook(liveEvents(), todayLocal());
+    const look = live ? LIVE_LOOKS[live] : null;
+    if (look && holiday !== 'march8' && holiday !== 'halloween') this.garland(look.garland, keep);
+    // Тюльпаны у входа — на месте летнего ларя с мороженым, поэтому не летом.
+    if (look?.tulips && holiday !== 'march8' && time !== 'summer') keep(this.art(door.x - 26, front + 6, 'tulips').setDepth(front + 12));
+    if (holiday === 'newyear') keep(this.art(-40, top - 190, 'snowman').setDepth(top - 180));
+    if (holiday === 'newyear' || look?.treeLights) {
       // Разноцветные огоньки на деревьях.
       const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xffffff];
       trees.forEach((tree) => {
@@ -3749,12 +3775,47 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Праздничная вещь за открытки (ёлка, парусник, мимоза — game/live.ts): у входа, рядом с витриной.
+   * Её можно передвинуть при перестановке; ёлка вечером мигает огоньками.
+   */
+  private buildHolidayDecor(): void {
+    const item = activeDecor(this.state, 'holiday');
+    if (!item?.texture) return;
+    const { w, h, door } = this.layout;
+    const props = this.propList.map(propRect);
+    const free = (x: number, y: number) =>
+      this.obstacles.every((o) => x < o.x - 10 || x > o.x + o.w + 10 || y < o.y - 12 || y > o.y + o.h + 12) &&
+      props.every((r) => x + 8 < r.x || x - 8 > r.x + r.w || y + 8 < r.y || y - 8 > r.y + r.h);
+    const spots = [
+      { x: door.x - 34, y: h - 14 },
+      { x: door.x + 30, y: h - 30 },
+      { x: w - 34, y: h - 14 },
+    ];
+    const def = spots.find((p) => free(p.x, p.y));
+    if (!def) return;
+    const p = this.propAt('holiday', def);
+    const img = this.art(p.x, p.y, item.texture).setDepth(p.y + 8);
+    this.obstacles.push({ x: p.x - 7, y: p.y - 8, w: 14, h: 12 });
+    this.registerProp('holiday', p, item.texture, { x: -7, y: -8, w: 14, h: 12 });
+    if (item.id === 'holiday_tree' && !this.lite) {
+      // Огоньки на ёлке перемигиваются (тёплое пятно — вечером ярче).
+      this.nightGlow(this.art(p.x, p.y - 2, 'glow').setDisplaySize(26, 22).setTint(0xffd27a), 0.5);
+      const top = p.y - img.displayHeight / 2;
+      [0xfee761, 0xe43b44, 0x2ce8f5].forEach((color, i) => {
+        const bulb = this.add.rectangle(p.x - 4 + i * 4, top + 8 + i * 3, 1.2, 1.2, color).setDepth(p.y + 9);
+        this.tweens.add({ targets: bulb, alpha: 0.2, duration: 600 + i * 180, yoyo: true, repeat: -1 });
+      });
+    }
+  }
+
   /** Терминал на прилавке и касса самообслуживания у правой стены — если куплены. */
   private buildUpgrades(): void {
     const { counter, wallH } = this.layout;
     if (hasUpgrade(this.state, 'terminal')) this.art(counter.x + 3, counter.y - 4, 'card_terminal').setDepth(counter.y + 22);
     for (let i = 1; i < registerCount(this.state); i++) this.buildRegister(i);
     this.buildHallDecor();
+    this.buildHolidayDecor();
     this.buildGearProps();
     this.buildCoffee();
     this.buildOven();
@@ -9511,6 +9572,38 @@ export class StoreScene extends Phaser.Scene {
     this.sonya = 'done';
   }
 
+  /**
+   * Праздничный гость (game/live.ts): Дед Мороз или Снегурочка заходит, поздравляет у прилавка,
+   * оставляет подарок монетами и уходит. Подарок — сразу, как дошёл: ушёл ли гость, уже неважно.
+   */
+  private async runLiveGuest(): Promise<void> {
+    const guest = this.liveGuest;
+    if (!guest) return;
+    guest.phase = 'here';
+    const { door, sellerHome } = this.layout;
+    const start = this.streetSpawn();
+    const sprite = this.makePerson(start.x, start.y, LIVE_GUEST_LOOKS[guest.who]);
+    if (!this.lite) sprite.postFX?.addGlow(0xcfe8ff, 3, 0, false, 0.1, 6);
+    sound.bell(door.x);
+    await this.walk(sprite, door.x, this.streetY, 34);
+    await this.walk(sprite, door.x, door.y - 10, 34);
+    await this.walk(sprite, sellerHome.x - 18, sellerHome.y + 10, 34);
+    if (!this.sys.isActive()) return;
+    const coins = guestCoins(this.state);
+    this.state = seeGuest(this.state, guest.date);
+    saveGame(this.state);
+    this.heartAt(sprite.x, sprite.y - 14);
+    if (!music.sting('coin')) sound.coin(sellerHome.x);
+    haptic.success();
+    this.popup(sprite.x, sprite.y - 20, `«${t(`live.guest.${guest.who}.line` as TextKey)}»`, '#cfe8ff');
+    this.time.delayedCall(1400, () => this.popup(sellerHome.x - 20, sellerHome.y - 40, t('live.guest.gift', { n: coins }), '#fee761'));
+    await this.wait(7000);
+    await this.walk(sprite, door.x, door.y - 10, 34);
+    await this.walk(sprite, door.x, this.layout.h + 16, 34);
+    void this.strollAway(sprite);
+    guest.phase = 'done';
+  }
+
   /** Жюри конкурса: трое заходят вместе, обходят полки, что-то записывают и уходят. */
   private async runJury(): Promise<void> {
     this.jury = 'here';
@@ -11407,6 +11500,10 @@ export class StoreScene extends Phaser.Scene {
     this.inspector = this.state.plan?.inspection ? 'pending' : 'none';
     this.jury = juryDay(this.state) ? 'pending' : 'none';
     this.sonya = sonyaVisits(this.state) ? 'pending' : 'none';
+    // Праздничный гость — раз за настоящий день, сколько игровых дней ни сыграй.
+    const today = todayLocal();
+    const guest = guestDue(this.state, activeEvent(liveEvents(), today), today);
+    this.liveGuest = guest ? { who: guest, phase: 'pending', date: today } : null;
     this.inspection = null;
     this.rushAnnounced = false;
     this.helpUntil = 0;
@@ -12258,6 +12355,9 @@ export class StoreScene extends Phaser.Scene {
     if (unlocked.length) extra.push([t('ach.summary'), unlocked.map((id) => t(`ach.${id}` as TextKey)).join(', ')]);
     // Новичок доиграл первый день: сколько секунд прошло от «Играть».
     if (finishedDay === 1) this.onbStep('day1', 1);
+    // «Приходи завтра»: сцена Сони готова, но сегодня их уже было довольно — намёк в итогах дня.
+    const teaser = dramaHeld(this.state, todayLocal()) ? t('drama.teaser') : undefined;
+    if (teaser) track('drama_held', finishedDay);
     this.say.hide();
     this.tillRing?.destroy();
     this.tillRing = undefined;
@@ -12305,6 +12405,7 @@ export class StoreScene extends Phaser.Scene {
         reviews,
         () => this.nightPass(() => this.showMorning()),
         (button) => void this.shareDay(button, finishedDay),
+        teaser,
       );
     });
   }

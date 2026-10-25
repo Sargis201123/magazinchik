@@ -7,7 +7,9 @@
 import type { StoreState } from '../game/economy';
 import { lifetimeRevenue } from '../game/legacy';
 import { shopSnapshot } from '../game/friendShop';
+import { comebackHooks } from '../game/comeback';
 import { telegramInitData } from './telegram';
+import { tzOffset } from './live';
 import { post } from './social';
 
 export interface GameEvent {
@@ -70,6 +72,9 @@ export async function reportProgress(state: StoreState, keepalive = false): Prom
         chapter: state.story.chapter,
         // Как выглядит магазин — для друзей, которые зайдут в гости.
         shop: shopSnapshot(state),
+        // Часовой пояс и поводы для напоминания бота от лица героев (game/comeback.ts, api/_lib/remind.ts).
+        tz: tzOffset(),
+        hooks: comebackHooks(state),
         events,
       },
       keepalive,
