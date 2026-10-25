@@ -53,8 +53,8 @@ const SNOW_OUTDOOR: [number, number][] = [
 const INDOOR: [number, number][] = [
   [0, 0xffffff],
   [0.8, 0xffffff],
-  [0.9, 0xe6e4ea],
-  [1, 0xc8c4d4],
+  [0.9, 0xeae8ee],
+  [1, 0xd4d0dc],
 ];
 /** Погода приглушает свет снаружи: в дождь серо-синий, в грозу темнее, в снег чуть холодный. */
 const WEATHER_TINT: Record<Weather, number> = { clear: 0xffffff, heat: 0xffffff, rain: 0xc8d0de, storm: 0xb0b8d0, snow: 0xf6f8ff, leaves: 0xffffff };
