@@ -137,7 +137,7 @@ export interface VoiceRule {
   /**
    * Звук по событию игры (а не по касанию игрока или часам атмосферы — тогда false): на ×2 таких
    * событий вдвое больше, поэтому пауза между ними вдвое длиннее, а у событий мира и окружения
-   * звучит лишь каждое второе. По умолчанию — да.
+   * звучит лишь каждое второе (у отклика и сюжета — когда они идут чередой). По умолчанию — да.
    */
   game?: boolean;
 }
@@ -178,6 +178,8 @@ export class VoiceLimiter {
 export const BUDGET = {
   window: 1.5,
   busy: { world: 5, ambience: 2 } as Record<'world' | 'ambience', number>,
+  /** Отклик или сюжет, прозвучавший столько секунд назад и раньше, на ×2 не прореживается. */
+  streak: 4,
   /** Сколько секунд после касания мир звучит тише. */
   calm: 1.2,
   calmGain: 0.63,
@@ -191,8 +193,8 @@ export const BUDGET = {
 /**
  * Пульт решает, что звучит: ограничитель голосов (паузы и запас одновременных звуков) плюс важность,
  * «людность» и скорость игры. На ×2 мир не вдвое шумнее: пауза у звука по событию игры растёт вместе
- * со скоростью, а из событий мира и окружения звучит каждое второе — за настоящую секунду их столько же,
- * сколько на ×1 (или меньше).
+ * со скоростью, а из событий мира и окружения звучит каждое второе (из частого отклика — тоже) — за
+ * настоящую секунду их столько же, сколько на ×1 (или меньше).
  */
 export class SoundBudget {
   /** Скорость игры (×1, ×2). */
@@ -204,6 +206,8 @@ export class SoundBudget {
   private recent: number[] = [];
   /** «Право» звука на ×2: копится по 1/pace за событие, звучит, когда накопилась единица. */
   private readonly credit = new Map<string, number>();
+  /** Когда звук каждого имени звучал в последний раз. */
+  private readonly played = new Map<string, number>();
   /** Когда отзвучат звуки каждого канала. */
   private readonly buses = new Map<string, number[]>();
 
@@ -231,11 +235,14 @@ export class SoundBudget {
     if (minor) {
       if (calm && tier === 'ambience') return 0;
       if (this.recent.length >= BUDGET.busy[tier]) return 0;
-      if (paced) {
-        credit = Math.min(1, (this.credit.get(key) ?? 1 - 1 / this.pace) + 1 / this.pace);
-        this.credit.set(key, credit);
-        if (credit < 1 - 1e-9) return 0;
-      }
+    }
+    // Отклик и сюжет на ×2 прореживаются, только когда идут чередой: редкий звук (вор пойман, важный
+    // гость) звучит всегда, а частый (хлеб из печи, монетка с прилавка) — через раз.
+    const thin = paced && (minor || now - (this.played.get(key) ?? -Infinity) < BUDGET.streak);
+    if (thin) {
+      credit = Math.min(1, (this.credit.get(key) ?? 1 - 1 / this.pace) + 1 / this.pace);
+      this.credit.set(key, credit);
+      if (credit < 1 - 1e-9) return 0;
     }
     const mine = bus ? (this.buses.get(bus) ?? []).filter((end) => end > now) : [];
     const room = bus && bus in BUDGET.voices ? Math.max(1, Math.ceil(BUDGET.voices[bus] * this.busScale)) : Infinity;
@@ -245,7 +252,9 @@ export class SoundBudget {
       mine.push(now + dur);
       this.buses.set(bus, mine);
     }
-    if (minor && paced) this.credit.set(key, credit - 1);
+    // Сыгранный звук тратит «право»: следующий из череды на ×2 промолчит.
+    if (paced) this.credit.set(key, credit - 1);
+    this.played.set(key, now);
     if (!rule.low) this.recent.push(now);
     return minor && calm ? BUDGET.calmGain : 1;
   }

@@ -39,7 +39,8 @@ const RULE = {
   medal: { gap: 0.2, max: 2, tier: 'feedback' },
   fanfare: { gap: 0.5, max: 1, tier: 'feedback' },
   news: { gap: 0.5, max: 1, tier: 'feedback' },
-  combo: { gap: 0.3, max: 1, tier: 'feedback' },
+  // Серия у кассы хозяина идёт за касаниями игрока, а не за часами игры.
+  combo: { gap: 0.3, max: 1, tier: 'feedback', game: false },
   coin: { gap: 0.25, max: 2, tier: 'feedback' },
   phone: { gap: 0.8, max: 1, tier: 'feedback' },
   voice: { gap: 0.045, max: 2, tier: 'story', game: false },
@@ -630,19 +631,19 @@ export const sound = {
    * Покупатель расплатился на кассе: щелчок рычага, «дзынь» звонка, ящик выезжает — и в лоток ложится
    * мелочь, а за большую покупку шуршат купюры. Звучит на каждой покупке, поэтому всё за полсекунды
    * и не громче прежней монетки даже по всей энергии (art/sfx/check.py). Пока ленты нет — «дзынь» монеток.
-   * own — за кассой хозяин: это награда игроку, звучит всегда (на ×2 — без мелочи следом: продажи
-   * идут вдвое чаще). У кассира — тише и глуше (касса подальше, «за спиной»), мелочь не звенит (купюры
+   * own — за кассой хозяин: это награда игроку на его касание, звучит всегда, с мелочью. У кассира — тише и глуше (касса подальше, «за спиной»), мелочь не звенит (купюры
    * шуршат), а в час пик и на ×2 — через раз. Большая корзина (foley.ts, bigBasket) — тихое «спасибо» следом.
    */
   till: (x?: number, total = 0, { own = true, items = 0 }: { own?: boolean; items?: number } = {}) => {
-    const rule = withTier(RULE.till, own ? 'feedback' : 'world');
+    // У хозяина каждая продажа — ответ на касание игрока: на ×2 их не больше, чем он нажимает.
+    const rule: VoiceRule = own ? { ...RULE.till, tier: 'feedback', game: false } : withTier(RULE.till, 'world');
     const played = sample('till', { x, cents: 30, db: 1, gain: own ? 1 : 0.6, lp: own ? 7000 : 4200, limit: ['till', rule] });
     if (played === null) {
       if (own) sound.coin(x);
       return;
     }
     if (!played) return;
-    if (gamePace() <= 1 && (own || total >= NOTES_FROM)) sample(payWith(total), { x, at: 0.2, gain: own ? 0.45 : 0.3, cents: 60, db: 1.5, layer: 'tillCoins' });
+    if (own || (gamePace() <= 1 && total >= NOTES_FROM)) sample(payWith(total), { x, at: 0.2, gain: own ? 0.45 : 0.3, cents: 60, db: 1.5, layer: 'tillCoins' });
     if (bigBasket(items, total)) sound.thanks(x, own);
   },
   /**

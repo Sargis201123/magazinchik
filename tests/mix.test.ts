@@ -172,9 +172,14 @@ describe('бюджет звука', () => {
     expect(stream(new SoundBudget(12), 'chime', DOOR, 40, 1, 2)).toBeLessThanOrEqual(3);
   });
 
-  it('отклик игроку на ×2 не прореживается, а касание кнопки не ждёт удлинённой паузы', () => {
+  it('отклик на ×2: редкий звучит всегда, частый по событию игры — через раз, на касание игрока — всегда', () => {
+    // Вор пойман раз в 20 игровых секунд — каждый раз.
+    expect(stream(new SoundBudget(12), 'good', TILL, 10, 20, 2)).toBe(10);
+    // Хлеб из печи каждые 2 игровые секунды: на ×2 — половина, за настоящую секунду как на ×1.
+    expect(stream(new SoundBudget(12), 'bread', TILL, 20, 2, 2)).toBe(10);
+    // Касса хозяина — ответ на касание (game: false): каждая продажа.
     const b = new SoundBudget(12);
-    expect(stream(b, 'till', TILL, 10, 2, 2)).toBe(10);
+    expect(stream(b, 'till', { ...TILL, game: false }, 10, 2, 2)).toBe(10);
     const tap: VoiceRule = { gap: 0.04, max: 2, tier: 'feedback', game: false };
     b.pace = 2;
     expect(b.admit('tap', tap, 100, 0.05)).toBe(1);
