@@ -77,6 +77,7 @@ import {
 import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd } from './ads';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { restockPlan } from './restock';
+import { bigDaySeed, setBigDaySeed } from './bigday';
 import { autoActive, autoArrived, autoMorning, autoTopUp } from './autoorder';
 import { answerEvent, inspect } from './events';
 import { candidatesFor } from './staff';
@@ -318,6 +319,10 @@ export function simulate({
   // Случайности новых механик — отдельно: тогда прогоны с механикой и без идут по одним и тем же
   // событиям дня, и разницу видно точно, а не сквозь шум.
   const extraRandom = rng(seed * 7919 + 1);
+  // Своё расписание особых дней на каждый прогон — как в игре у каждого магазина своё (StoreScene, setBigDaySeed);
+  // после прогона — прежнее зерно.
+  const bigDaySeedBefore = bigDaySeed();
+  setBigDaySeed(seed);
   let state = ensurePlan(newGame());
   for (const id of PRODUCT_IDS) state = setPrice(state, id, Math.round((PRODUCTS[id].basePrice * priceMult) / 5) * 5);
   const out: SimDay[] = [];
@@ -898,9 +903,11 @@ export function simulate({
         const lost = cart.pop()!;
         stats.stolen += unitSalePrice(state, lost.id, lost.unit);
       }
+      // Сначала чек, потом шоколадка и стаканчик (extras списывает их из state): иначе чек затёр бы списание.
       const paid = checkout(state, cart, night ? NIGHT_MARKUP : 1);
+      state = paid.state;
       const extra = extras(night) + (extraRandom() < catTipChance(state) ? CAT_TIP : 0);
-      state = { ...paid.state, money: paid.state.money + extra };
+      state = { ...state, money: state.money + extra };
       const dish = dishExtra(night);
       stats.revenue += paid.total + extra + dish;
       if (night) nightRevenue += paid.total + extra + dish;
@@ -1027,6 +1034,7 @@ export function simulate({
     });
     void moneyStart;
   }
+  setBigDaySeed(bigDaySeedBefore);
   return { days: out, levelDay, chapterDay, rescueDay, bankruptDay, burglaries, giant: giantLog, contests, final: state };
 }
 

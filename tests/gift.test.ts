@@ -20,6 +20,13 @@ describe('daily gift', () => {
     expect(claimGift(s, '2026-10-11', r)!.gift.day).toBe(1);
   });
 
+  it('часы перевели назад (или сменили пояс) — подарка нет; старое сохранение из будущего — серия с начала', () => {
+    const s = claimGift(newGame(), '2026-10-08', r)!.state;
+    expect(claimGift(s, '2026-10-07', r)).toBeNull();
+    expect(claimGift(s, '2026-10-06', r)).toBeNull();
+    expect(claimGift(s, '2026-09-20', r)!.gift.day).toBe(1);
+  });
+
   it('через конец месяца серия тоже продолжается', () => {
     const s = claimGift(newGame(), '2026-10-31', r)!.state;
     expect(claimGift(s, '2026-11-01', r)!.gift.day).toBe(2);

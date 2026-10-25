@@ -38,6 +38,9 @@ export const giftBase = (state: StoreState): number => 40 + 60 * state.level;
 export function claimGift(state: StoreState, today: string, random: () => number): { state: StoreState; gift: Gift } | null {
   const last = state.gift ?? { lastDate: '', streak: 0 };
   if (last.lastDate === today) return null;
+  // Дата раньше прошлой на день-два — сменили часовой пояс или перевели часы назад: подарка нет (иначе
+  // серию набирали бы переводом часов). Сильно раньше — старое сохранение: серия с первого дня.
+  if (last.lastDate && today < last.lastDate && today >= dayBefore(dayBefore(last.lastDate))) return null;
   const continues = last.lastDate === dayBefore(today) && last.streak < GIFT_DAYS;
   const day = continues ? last.streak + 1 : 1;
   const gift: Gift = { day, money: Math.round(giftBase(state) * GIFT_SCALE[day - 1]) };

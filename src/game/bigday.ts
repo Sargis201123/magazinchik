@@ -243,6 +243,7 @@ export const BIG_DAY_REPEAT = 14;
  * и в новой игре события идут в разные дни, а не «у всех землетрясение на 10-й день».
  */
 let seed = 0;
+export const bigDaySeed = (): number => seed;
 export function setBigDaySeed(value: number): void {
   if (value === seed) return;
   seed = value;

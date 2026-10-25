@@ -103,13 +103,19 @@ import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, typ
 import { applyReorder } from '../game/reorder';
 import { AUTO_SHARES, AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoCancel, autoDay, autoLimit, autoMorning, autoResume, autoReturn, autoSetShare, autoShare, autoToggle } from '../game/autoorder';
 import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
-import { stockOf } from '../game/bakery';
+import { stockOf, usualSales } from '../game/bakery';
+
+/**
+ * Утренняя уценка — только лишнее сверх обычных продаж (как вечерние электронные ценники): старое покупатели
+ * берут первым, и то, что и так купят по полной цене, уценивать — себе в убыток.
+ */
+const surplus = (state: StoreState) => markdownSurplus(state, (id) => usualSales(state, id) ?? 0);
 import { activePromo, setPromo, type PromoKind } from '../game/promo';
 import { deliverContracts, type Delivery } from '../game/contracts';
 import { daysToFair, isFairDay } from '../game/fair';
 import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
 import { pendingTip, seeTip, TIP_ICONS } from '../game/tips';
-import { expiringCount, markdownExpiring, toggleDonate } from '../game/economy';
+import { markdownSurplus, toggleDonate } from '../game/economy';
 import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
 import {
   CONTEST_DAYS,
@@ -724,7 +730,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   /** Красные цифры на вкладках: где утром нужно что-то сделать. */
   const tabBadges = (state: StoreState): Partial<Record<Tab, number>> => {
     const empty = sellableProducts(state).filter((pid) => canStock(state, pid) && stockOf(state, pid) === 0).length;
-    const broken = state.shelves.filter((sh) => sh.broken).length + (expiringCount(state) ? 1 : 0);
+    const broken = state.shelves.filter((sh) => sh.broken).length + (surplus(state).count ? 1 : 0);
     const rack = rackOf(state);
     const extras = (state.cat && !fedToday(state) ? 1 : 0) + (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0);
     const next = nextStoreLevel(state);
@@ -1080,12 +1086,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   /** Склад во вкладке «Зал»: что не влезло на полки — строкой значков; разложить одной кнопкой. */
   const stockBox = (state: StoreState): HTMLElement[] => {
     const out: HTMLElement[] = [];
-    const expiring = expiringCount(state);
+    const expiring = surplus(state).count;
     if (expiring) {
       const box = el('div', 'ui-box');
       box.append(
         el('div', 'ui-note', t('markdown.note', { n: expiring })),
-        button(t('markdown.button', { n: expiring }), () => update(markdownExpiring(getState()).state, 'success'), 'ui-chip'),
+        button(t('markdown.button', { n: expiring }), () => update(surplus(getState()).state, 'success'), 'ui-chip'),
       );
       out.push(box);
     }
@@ -3190,8 +3196,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         }, 'ui-chip'),
       );
     }
-    const expiring = expiringCount(state);
-    if (expiring) row(t('todo.expiring', { n: expiring }), button(t('todo.expiringBtn'), () => update(markdownExpiring(getState()).state, 'success'), 'ui-chip'));
+    const expiring = surplus(state).count;
+    if (expiring) row(t('todo.expiring', { n: expiring }), button(t('todo.expiringBtn'), () => update(surplus(getState()).state, 'success'), 'ui-chip'));
     state.shelves.forEach((sh, i) => {
       if (!sh.broken) return;
       const cost = fridgeRepairCost(state.level);
@@ -3869,6 +3875,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const promoRow = el('div', 'ui-chips ui-promo');
       for (const kind of ['discount', 'bogo'] as PromoKind[]) {
         const on = promo?.product === pid && promo.kind === kind;
+        // «2 по цене 1» в убыток (пара дешевле двух закупок) не предлагаем; уже поставленную можно снять.
+        if (kind === 'bogo' && !on && price < 2 * product.cost) continue;
         promoRow.append(button(`🏷 ${t(`promo.${kind}` as TextKey)}`, () => update(setPromo(getState(), pid, kind)), `ui-chip${on ? ' active' : ''}`));
       }
       info.append(promoRow);

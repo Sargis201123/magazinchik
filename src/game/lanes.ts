@@ -8,7 +8,7 @@
 // чем новее, тем быстрее пробивает, реже «ошибка, позовите продавца» и реже кто-то «забывает» пробить товар.
 
 import type { TextKey } from '../i18n/ru';
-import type { StoreState } from './economy';
+import { isAbsent, type StoreState } from './economy';
 import { registerCount, registerSlots, TILL_ROLES } from './registers';
 import { hasUpgrade } from './upgrades';
 
@@ -88,9 +88,18 @@ export function upgradeKiosks(state: StoreState): StoreState | null {
   return { ...state, money: state.money - next.price, kiosks: { n: kioskCount(state), tier: kioskTierIndex(state) + 1 } };
 }
 
-/** Кассы с кассиром, кроме кассы хозяина (она открыта всегда). */
-export const staffedTills = (state: StoreState): number =>
-  TILL_ROLES.slice(0, registerCount(state) - 1).filter((role) => state.staff.some((m) => m.role === role)).length;
+/**
+ * Кассы с кассиром, кроме кассы хозяина (она открыта всегда): кассир сегодня на месте (не болеет, не на
+ * выходном). Кого-то нет, а менеджер на смене — он встаёт за одну из пустых касс (как в зале).
+ */
+export function staffedTills(state: StoreState): number {
+  const roles = TILL_ROLES.slice(0, registerCount(state) - 1);
+  const here = (role: string, away: boolean) => state.staff.some((m) => m.role === role && isAbsent(state, m) === away);
+  const open = roles.filter((role) => here(role, false)).length;
+  const gap = roles.some((role) => here(role, true));
+  const cover = gap && state.staff.some((m) => m.role === 'manager' && !isAbsent(state, m)) ? 1 : 0;
+  return open + cover;
+}
 
 /** Открытых касс сверх кассы хозяина: кассы с кассиром — по одной, киоски — сколько стоит их модель. */
 export const extraLanes = (state: StoreState): number => staffedTills(state) + kioskCount(state) * kioskTier(state).lane;

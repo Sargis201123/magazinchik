@@ -3,7 +3,7 @@ import { normalizeDecor } from './decor';
 import { migrateOwnerTill } from './registers';
 import { migrateAutoOrder, settleInbound } from './autoorder';
 import { readCloud, writeCloud } from '../platform/cloud';
-import { telegramUserId } from '../platform/telegram';
+import { telegramUserId, trustedNow } from '../platform/telegram';
 
 // Сохранение: сразу в память телефона и, чуть погодя, в облако Telegram (platform/cloud.ts) —
 // так прогресс и покупки за звёзды не пропадут, если очистить телефон или сменить его.
@@ -91,7 +91,9 @@ export const savingPaused = (): boolean => paused;
 
 export function saveGame(state: StoreState): void {
   if (paused) return;
-  const savedAt = Date.now();
+  // Время сохранения — по часам Telegram, как и отсутствие игрока (away.ts): отстающие часы телефона
+  // не должны засчитывать каждый перезапуск как восемь часов торговли без него.
+  const savedAt = trustedNow();
   const text = JSON.stringify({ version: VERSION, state, savedAt, user: telegramUserId() } satisfies SaveFile);
   writeLocal(text);
   pending = text;
