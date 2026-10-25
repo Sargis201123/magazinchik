@@ -182,7 +182,8 @@ describe('календарь праздников на сервере', () => {
     const env: Env = { BOT_TOKEN: TOKEN, WEBHOOK_SECRET: 'secret', DB: d1() };
     const get = async () => (await (await events(new Request('https://x/api/events'), env)).json()) as { events: unknown[]; custom: boolean };
     expect(await get()).toEqual({ events: DEFAULT_EVENTS, custom: false });
-    const edit = (key: string, body: unknown) => eventsEdit(new Request(`https://x/api/events-edit?key=${key}`, { method: 'POST', body: JSON.stringify(body) }), env);
+    const edit = (key: string, body: unknown) =>
+      eventsEdit(new Request('https://x/api/events-edit', { method: 'POST', headers: { 'x-key': key }, body: JSON.stringify(body) }), env);
     expect((await edit('wrong', { events: [] })).status).toBe(403);
     const bad = await edit('secret', { events: [{ id: 'ny', theme: 'newyear', from: '13-01', to: '12-31' }] });
     expect(bad.status).toBe(400);
@@ -192,13 +193,17 @@ describe('календарь праздников на сервере', () => {
     expect(await get()).toEqual({ events: mine, custom: true });
     expect((await edit('secret', { reset: true })).status).toBe(200);
     expect((await get()).custom).toBe(false);
-    // Секрет лучше слать заголовком: адрес запроса попадает в журналы, заголовок — нет.
-    const byHeader = (key: string) =>
-      eventsEdit(new Request('https://x/api/events-edit', { method: 'POST', headers: { 'x-key': key }, body: JSON.stringify({ events: mine }) }), env);
-    expect((await byHeader('wrong')).status).toBe(403);
-    const saved = await byHeader('secret');
+    const saved = await edit('secret', { events: mine });
     expect(saved.status).toBe(200);
     expect(JSON.stringify(await saved.json())).not.toContain('secret');
     expect((await get()).custom).toBe(true);
+  });
+
+  it('секрет — только заголовком x-key: ?key= в адресе не пускает (адрес пишется в журналы)', async () => {
+    // До базы дело не доходит: ключ проверяется раньше — хватает пустышки.
+    const env = { BOT_TOKEN: TOKEN, WEBHOOK_SECRET: 'secret', DB: {} } as unknown as Env;
+    const body = JSON.stringify({ reset: true });
+    expect((await eventsEdit(new Request('https://x/api/events-edit?key=secret', { method: 'POST', body }), env)).status).toBe(403);
+    expect((await eventsEdit(new Request('https://x/api/events-edit?key=secret', { method: 'POST', headers: { 'x-key': 'wrong' }, body }), env)).status).toBe(403);
   });
 });

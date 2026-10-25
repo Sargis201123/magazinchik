@@ -1,4 +1,5 @@
-import { memberName, t } from '../i18n';
+import { getLang, memberName, t } from '../i18n';
+import { pluralForm } from '../i18n/plural';
 import type { TextKey } from '../i18n/ru';
 import {
   buyChance,
@@ -1518,7 +1519,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if (e.prize) {
       const item = t(decorItem(e.prize.decor).nameKey);
       const got = state.decor.owned.includes(e.prize.decor);
-      box.append(el('div', 'ui-muted', got ? t('live.box.prizeGot', { item }) : t('live.box.prize', { need: e.prize.cards, item, n: Math.min(opened.length, e.prize.cards) })));
+      box.append(el('div', 'ui-muted', got ? t('live.box.prizeGot', { item }) : t('live.box.prize', { need: e.prize.cards, cards: t(`live.box.cards.${pluralForm(e.prize.cards, getLang())}`), item, n: Math.min(opened.length, e.prize.cards) })));
     }
     const guest = guestOn(e, today);
     const next = guest ? null : nextGuest(e, today);

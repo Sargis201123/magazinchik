@@ -3962,10 +3962,22 @@ export class StoreScene extends Phaser.Scene {
   /** Гирлянда по краю фасада: лампочки мигают по очереди. */
   private garland(colors: number[], keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
     const { w, h } = this.layout;
+    const bulbs: Phaser.GameObjects.Rectangle[] = [];
     for (let x = -WALL + 2, i = 0; x < w + WALL; x += 5, i++) {
-      const bulb = keep(this.add.rectangle(x, h + 1, 1.6, 1.6, colors[i % colors.length]).setDepth(h + 42));
-      this.tweens.add({ targets: bulb, alpha: 0.25, duration: 500, delay: (i % 4) * 250, yoyo: true, repeat: -1 });
+      bulbs.push(keep(this.add.rectangle(x, h + 1, 1.6, 1.6, colors[i % colors.length]).setDepth(h + 42)));
     }
+    // Один счётчик на всю гирлянду (а не твин на лампочку — их под сотню): гаснут и загораются волной по четыре.
+    const blink = this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 1000,
+      repeat: -1,
+      onUpdate: (tween) => {
+        const t = tween.getValue() ?? 0;
+        bulbs.forEach((bulb, i) => (bulb.alpha = 0.25 + 0.75 * Math.abs(Math.cos((t - (i % 4) / 4) * Math.PI))));
+      },
+    });
+    bulbs[0]?.once('destroy', () => blink.remove());
   }
 
   /**
@@ -4032,9 +4044,11 @@ export class StoreScene extends Phaser.Scene {
       // под полторы сотни: по 6 мигающих огоньков на каждом — 900 твинов на кадр. Поэтому мигают только
       // огоньки у магазина (что видно без прокрутки), а дальше — и в лёгкой графике везде — горят ровно,
       // нарисованные в картинку кроны вместе с пятнами листвы.
+      // Мигают они все одним счётчиком: у каждого огонька своя частота и сдвиг.
       const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xffffff];
       const twinkle = (tree: Phaser.GameObjects.Image) =>
         !this.lite && tree.x > -100 && tree.x < this.next.w + 100 && tree.y > -100 && tree.y < top + 430;
+      const bulbs: { obj: Phaser.GameObjects.Rectangle; period: number; shift: number }[] = [];
       trees.forEach((tree) => {
         const near = twinkle(tree);
         for (let i = 0; i < 6; i++) {
@@ -4046,10 +4060,24 @@ export class StoreScene extends Phaser.Scene {
             continue;
           }
           const bulb = keep(this.add.rectangle(x, y, 1.4, 1.4, color).setDepth(tree.depth + 1));
-          this.tweens.add({ targets: bulb, alpha: 0.2, duration: rnd.between(400, 900), yoyo: true, repeat: -1 });
+          bulbs.push({ obj: bulb, period: rnd.between(800, 1800), shift: rnd.frac() });
           crown(tree, bulb);
         }
       });
+      if (bulbs.length) {
+        const blink = this.tweens.addCounter({
+          from: 0,
+          to: 1,
+          duration: 1000,
+          repeat: -1,
+          onUpdate: () => {
+            const now = this.time.now;
+            for (const b of bulbs) b.obj.alpha = 0.6 + 0.4 * Math.cos((now / b.period + b.shift) * Math.PI * 2);
+          },
+        });
+        // Счётчик держит не огоньки — убрали их (смена погоды утром, пересборка) — убрать и его.
+        bulbs[0].obj.once('destroy', () => blink.remove());
+      }
     }
     for (const [tree, list] of spots) {
       const rt = keep(this.bakeSpots(list).setDepth(tree.depth + 0.5));

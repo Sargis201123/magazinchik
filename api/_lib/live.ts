@@ -59,7 +59,9 @@ export async function eventsEdit(request: Request, env: Env, now = Date.now()): 
   const secret = env.WEBHOOK_SECRET ?? '';
   const db = env.DB;
   if (!secret || !db) return json({ error: 'not_configured' }, 503);
-  const key = request.headers.get('x-key') ?? new URL(request.url).searchParams.get('key');
+  // Секрет — только из заголовка: адрес запроса (?key=…) Cloudflare пишет в журналы, а этим же секретом
+  // подписан вебхук Telegram.
+  const key = request.headers.get('x-key');
   if (key !== secret) return json({ error: 'forbidden' }, 403);
   const body = (await request.json().catch(() => null)) as { events?: unknown; reset?: boolean } | null;
   if (!body) return json({ error: 'bad_json' }, 400);
