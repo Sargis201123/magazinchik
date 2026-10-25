@@ -24,7 +24,8 @@ export type GearId =
   | 'wc'
   | 'signage'
   | 'solar'
-  | 'courier';
+  | 'courier'
+  | 'bargain';
 
 export interface GearModel {
   nameKey: TextKey;
@@ -197,6 +198,18 @@ export const GEAR: Record<GearId, Gear> = {
       model('gear.courier.2', 2400, 2, 'gear.courier.2.fx'),
     ],
   },
+  // Полка «Уценка» (bargain.ts): горка в два ряда, в три ряда и большая металлическая в четыре — по 6 мест в ряду.
+  bargain: {
+    id: 'bargain',
+    icon: '🏷',
+    nameKey: 'gear.bargain',
+    needs: 'bargain',
+    models: [
+      model('gear.bargain.0', 0, 0, 'gear.bargain.0.fx'),
+      model('gear.bargain.1', 600, 1, 'gear.bargain.1.fx'),
+      model('gear.bargain.2', 1600, 2, 'gear.bargain.2.fx'),
+    ],
+  },
   solar: {
     id: 'solar',
     icon: '☀️',
@@ -211,7 +224,7 @@ export const GEAR: Record<GearId, Gear> = {
 
 
 /** Порядок в списке: сначала то, что влияет на торговлю, потом удобства. */
-export const GEAR_IDS: GearId[] = ['register', 'fridge', 'warehouse', 'bin', 'coffee', 'oven', 'stove', 'courier', 'climate', 'lights', 'signage', 'cameras', 'entrance', 'wc', 'solar'];
+export const GEAR_IDS: GearId[] = ['register', 'fridge', 'warehouse', 'bin', 'bargain', 'coffee', 'oven', 'stove', 'courier', 'climate', 'lights', 'signage', 'cameras', 'entrance', 'wc', 'solar'];
 
 /** Какая модель стоит сейчас (номер в списке моделей). */
 export const gearTier = (state: StoreState, id: GearId): number => Math.min(state.gear?.[id] ?? 0, GEAR[id].models.length - 1);
@@ -335,6 +348,11 @@ export const signagePatience = (state: StoreState): number => SIGNAGE_PATIENCE[g
 /** Солнечные панели на крыше: такая доля счёта за свет остаётся. */
 export const SOLAR_POWER = [1, 0.7, 0.45];
 export const solarPower = (state: StoreState): number => SOLAR_POWER[gearTier(state, 'solar')];
+
+// Полка «Уценка»: рядов на горке и картинка модели (art/bargain_shelf.py). Мест — по 6 в ряду (bargain.ts).
+export const BARGAIN_ROWS = [2, 3, 4];
+export const bargainRows = (state: StoreState): number => BARGAIN_ROWS[gearTier(state, 'bargain')];
+export const bargainSprite = (state: StoreState): string => `bargain_shelf${gearTier(state, 'bargain')}`;
 
 /** Сколько всего новых моделей поставлено (для достижений). */
 export const gearUpgrades = (state: StoreState): number => GEAR_IDS.reduce((sum, id) => sum + gearTier(state, id), 0);

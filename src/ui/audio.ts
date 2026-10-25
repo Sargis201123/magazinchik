@@ -86,7 +86,8 @@ function preview(key: VolumeKey): void {
     return;
   }
   if (key === 'ambience') {
-    if (!sound.doorbell()) ambience.chime();
+    // Пример — сразу, мимо бюджета звука: игрок только что отпустил ползунок (а колокольчик — «окружение»).
+    if (!sound.doorbell(undefined, true)) ambience.chime(undefined, true);
   } else if (key === 'voices') sound.speakSample();
   else sound.coin();
 }
