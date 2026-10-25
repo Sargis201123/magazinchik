@@ -311,8 +311,10 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     if (!textures.exists('atlas0')) return 'нет текстуры atlas0';
     const frames = textures.get('atlas0').getFrameNames().length;
     if (frames < 100) return `в листе atlas0 всего ${frames} кадров`;
-    const own = ['shelf', 'coin', 'floor'].filter((key) => textures.get(key).source[0] !== textures.get('atlas0').source[0]);
-    return own.length ? `не из листа atlas0: ${own.join(', ')}` : '';
+    // Лист может быть и не один (atlas1…): спрайт должен лежать в каком-нибудь из них.
+    const sheets = Object.keys(textures.list).filter((key) => /^atlas\d+$/.test(key)).map((key) => textures.get(key).source[0]);
+    const own = ['shelf', 'coin', 'floor'].filter((key) => !sheets.includes(textures.get(key).source[0]));
+    return own.length ? `не из листа атласа: ${own.join(', ')}` : '';
   });
   if (sheet) throw new Error(`атлас: ${sheet}`);
 
@@ -496,7 +498,13 @@ async function main(): Promise<void> {
       const at = new URL(address);
       if (at.origin === origin && !at.pathname.includes('/api/')) errors.push(`${run.name}: не загрузился ${at.pathname}${at.search} (${why})`);
     };
-    page.on('response', (r) => void (r.status() >= 400 && failed(r.url(), `${r.status()}`)));
+    page.on('response', (r) => {
+      if (r.status() >= 400) return failed(r.url(), `${r.status()}`);
+      // Сервер проверки (vite preview) на несуществующий файл отвечает страницей игры с кодом 200 —
+      // картинка или звук, пришедшие как HTML, тоже не загрузились.
+      const html = /text\/html/.test(r.headers()['content-type'] ?? '');
+      if (html && r.request().resourceType() !== 'document' && /\.(?!html?$)\w+$/.test(new URL(r.url()).pathname)) failed(r.url(), 'нет файла');
+    });
     page.on('requestfailed', (r) => failed(r.url(), r.failure()?.errorText ?? 'обрыв'));
     try {
       await play(page, url, run, save);
