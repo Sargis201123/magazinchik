@@ -181,6 +181,27 @@ export function registerSpot(layout: Layout, index: number): Point & { left: boo
   return { x: left ? layout.counter.x - 34 : layout.counter.x, y: layout.counter.y - REGISTER_ROW * row, left };
 }
 
+/** Шаг между кассами самообслуживания у правой стены: стоят вплотную, рамка киоска — 20 точек в высоту. */
+export const KIOSK_STEP = 20;
+
+/** Касса самообслуживания номер index (с 0): у правой стены над кассами, одна под другой; первая — под автоматом с напитками. */
+export const kioskSpot = (layout: Layout, index: number): Point => ({ x: layout.counter.x + 22, y: layout.wallH + 86 + KIOSK_STEP * index });
+
+/** Рамка киоска на полу (покупатель стоит слева от неё — в проходе у очереди). */
+export const kioskRect = (layout: Layout, index: number): { x: number; y: number; w: number; h: number } => ({
+  x: layout.counter.x + 14,
+  y: layout.wallH + 72 + KIOSK_STEP * index,
+  w: 16,
+  h: 20,
+});
+
+/**
+ * Рамки первых n киосков (хотя бы одна — место под киоск держали всегда, когда он был один). Сколько
+ * мест под киоски в помещении — lanes.ts, KIOSKS_BY_LEVEL: столько же, сколько мест под кассы (с «Минимаркета»).
+ */
+export const kioskZones = (layout: Layout, n = 1): { x: number; y: number; w: number; h: number }[] =>
+  Array.from({ length: Math.max(1, n) }, (_, i) => kioskRect(layout, i));
+
 /** Ларь с мороженым на месте (x, y): рамка вместе с крышкой, витриной и местом покупателя над ним. */
 export const iceboxRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 15, y: y - 24, w: 30, h: 30 });
 
@@ -190,10 +211,10 @@ export const iceboxRect = ({ x, y }: Point): { x: number; y: number; w: number; 
  * Если там тесно (маленький зал, на месте ларя полка) — у нижней стены поближе к кассе, потом — вдоль
  * левой стены. Место не задевает ни одно место под полку (даже пустое — полку могут купить завтра),
  * островные витрины, кассы (сколько их может стоять в этом помещении — registers) с очередью,
- * кассу самообслуживания, автомат на своём месте, стойку со сладостями, цветы, ведро, вход, двери
+ * кассы самообслуживания (сколько стоит — kiosks), автомат на своём месте, стойку со сладостями, цветы, ведро, вход, двери
  * флигеля и то, что ещё велено обойти (avoid — вещи, переставленные игроком).
  */
-export function iceboxSpotFor(layout: Layout, registers = 1, avoid: { x: number; y: number; w: number; h: number }[] = []): Point {
+export function iceboxSpotFor(layout: Layout, registers = 1, avoid: { x: number; y: number; w: number; h: number }[] = [], kiosks = 1): Point {
   const { w, h, door, counter, queue, wallH } = layout;
   const pad = 2;
   const blocked = [
@@ -204,8 +225,8 @@ export function iceboxSpotFor(layout: Layout, registers = 1, avoid: { x: number;
     ...Array.from({ length: Math.max(0, registers - 1) }, (_, k) => registerSpot(layout, k + 1)).map(({ x, y, left }) =>
       left ? { x: x - 18, y: y - 30, w: 31, h: 54 } : { x: x - 13, y: y - 30, w: 31, h: 54 },
     ),
-    // Касса самообслуживания у правой стены, над ней — автомат с напитками и радио на нём.
-    { x: counter.x + 14, y: wallH + 72, w: 16, h: 20 },
+    // Кассы самообслуживания у правой стены (те, что стоят: купят ещё — ларь переедет), над ними — автомат с напитками и радио на нём.
+    ...kioskZones(layout, kiosks),
     { x: w - 16, y: wallH + 36, w: 16, h: 38 },
     // Стойка со сладостями под кассой, вёдра с цветами (или растение) в углу у кассы, ведро для мусора.
     { x: counter.x - 12, y: counter.y + 28, w: 24, h: 18 },

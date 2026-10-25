@@ -36,6 +36,8 @@ const STAMP_TILT = [-10, -5, -8, -4];
 const GOLD_AT = 950;
 /** Сколько места в столбце графика занимают подписи: сумма сверху и день снизу. */
 const CHART_LABELS = 28;
+/** Значение длиннее стольких знаков в «Подробнее» — уже своей строкой под названием (на 320 px в строку влезает ~14). */
+const SUM_INLINE = 14;
 /** Звезда рейтинга и зазор между звёздами — как в CSS .ui-stars. */
 const STAR_W = 14;
 const STAR_GAP = 1;
@@ -297,6 +299,8 @@ export class Hud {
         if (arrowRating === '▲') setTimeout(() => replay(stars.box, 'ui-shine'), ROLL_MS);
       }, rate.at + ROLL_DELAY);
     card.append(tiles);
+    // Реклама работала — сразу под плитками видно, окупилась ли она гостями.
+    if (stats.adGuests) card.append(el('div', 'ui-muted ui-sum-ads', t('summary.ads', { n: stats.adGuests })));
     // Новое звание и побитые рекорды — не в «Подробнее», а печатью: звание золотой, рекорд красной.
     if (stamps.length) {
       const row = el('div', 'ui-stamps');
@@ -365,9 +369,12 @@ export class Hud {
     // Главное — плитки, бабушка, график и деньги; остальное — под «Подробнее».
     const more = el('details', 'ui-more');
     more.append(el('summary', '', t('summary.more')));
+    // Короткое значение — справа в строке с названием; длинное (кафе, проверка, доставка) — своей строкой
+    // под ним: в одну строку оно не влезало в узкий экран и налезало на название.
     const row = (label: string, value: string | number, target: HTMLElement = more) => {
-      const r = el('div', 'ui-row');
-      r.append(el('span', '', label), el('b', '', String(value)));
+      const text = String(value);
+      const r = el('div', text.length > SUM_INLINE ? 'ui-sum-line' : 'ui-row');
+      r.append(el('span', '', label), el('b', '', text));
       target.append(r);
     };
     row(t('summary.money'), `${money.total} 💰`, card);

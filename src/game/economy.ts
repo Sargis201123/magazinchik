@@ -17,6 +17,7 @@ import type { ReviewTopic, Review } from './reviews';
 import type { War } from './war';
 import type { ShopCat } from './cat';
 import type { DayReport } from './reports';
+import type { AdId } from './ads';
 import { afterLoanPayment, loanDue } from './bank';
 import { fridgeLife, fridgePower, lightsPower, solarPower, warehouseRoom, type GearId } from './gear';
 
@@ -243,7 +244,8 @@ export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'clea
  * За первой кассой всегда сам хозяин; cashier — его сменщик, cashier2…4 — кассиры остальных касс (registers.ts).
  */
 export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number; minLevel?: number; needs?: 'oven' | 'coffee' | 'kitchen' }> = {
-  cashier: { nameKey: 'staff.cashier', descKey: 'staff.cashier.desc', wage: 420 },
+  // Сменщик — с «Магазинчика»: в ларьке хозяин справляется сам (нанятого раньше не увольняем — registers.ts).
+  cashier: { nameKey: 'staff.cashier', descKey: 'staff.cashier.desc', wage: 420, minLevel: 1 },
   cashier2: { nameKey: 'staff.cashier2', descKey: 'staff.cashier2.desc', wage: 420 },
   cashier3: { nameKey: 'staff.cashier3', descKey: 'staff.cashier3.desc', wage: 420 },
   cashier4: { nameKey: 'staff.cashier4', descKey: 'staff.cashier4.desc', wage: 420 },
@@ -503,6 +505,8 @@ export interface Unit {
   age: number;
   /** Брак: портится на день раньше, покупатели могут жаловаться. */
   bad?: boolean;
+  /** Куплен автозаказом утром: только такие штуки он и возвращает поставщику (autoorder.ts). */
+  auto?: boolean;
   /** Уценён: продаётся дешевле, жалоб нет. */
   markdown?: boolean;
   /** Бракованная партия, по которой игрок ещё не принял решение. */
@@ -571,8 +575,10 @@ export interface StoreState {
   lifeSeen?: string[];
   /** Купленные улучшения кассы (upgrades.ts). */
   upgrades?: string[];
-  /** Реклама: какая и в какие дни (включительно) работает. */
+  /** Реклама из старых сохранений (одна за раз); новые кампании — в adRuns (ads.ts). */
   ads?: { id: 'flyers' | 'banner' | 'blogger'; from: number; until: number };
+  /** Рекламные кампании: какая и в какие дни (включительно) работает; их может быть несколько. */
+  adRuns?: { id: AdId; from: number; until: number }[];
   /** Стойка со сладостями у кассы (impulse.ts). */
   rack?: { level: number; stock: number };
   /** Подсказку к перестановке уже показали (в первый раз). */
@@ -587,6 +593,8 @@ export interface StoreState {
   bakeMode?: 'auto' | 'full' | 'off';
   /** Сколько касс куплено (registers.ts). Нет поля — старое сохранение: кассы ставились сами. */
   registers?: number;
+  /** Кассы самообслуживания (lanes.ts): сколько стоит и какая модель. Нет поля — киоск был улучшением selfCheckout. */
+  kiosks?: { n: number; tier: number };
   /**
    * Первая касса — хозяина, кассиры — за остальными (registers.ts). Нет поля — сохранение до этого:
    * при загрузке кассир переходит за свою кассу (migrateOwnerTill).
@@ -641,8 +649,10 @@ export interface StoreState {
   trick?: Trick;
   /** Ночные гости: долг студента, таксист рассказал о нас (nightGuests.ts). */
   nightGuests?: NightState;
-  /** Готовые порции на кухне (kitchen.ts). */
+  /** Готовые порции на полке «Еда» у входа (kitchen.ts; в старых сохранениях — «в витрине кухни», те же порции). */
   kitchen?: Partial<Record<DishId, number>>;
+  /** Кладовая кухни (kitchen.ts): продукты, которые кухня сама закупила у поставщиков, — штук каждого. */
+  pantry?: Partial<Record<ProductId, number>>;
   /** Меню дня для повара (kitchen.ts): какие блюда готовить; не задано — «авто». */
   cookMenu?: DishId[];
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */
@@ -651,6 +661,8 @@ export interface StoreState {
   /** «Позвать на помощь» (help.ts): в какой день друзья на подмоге и в какой день уже звал. */
   helpDay?: number;
   helpAsked?: number;
+  /** «Заглянуть к конкуренту» (rival.ts): проделки у босса, позванные гости, беспорядок к открытию. */
+  rival?: import('./rival').RivalState;
   /** Сезонный пропуск (pass.ts). */
   pass?: PassState;
   /** Истории постоянных покупателей (tales.ts). */
@@ -673,8 +685,10 @@ export interface StoreState {
   brand?: number;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */
   records?: import('./records').Records;
-  /** Автозаказ: сколько чего держать на складе и включён ли он (reorder.ts). */
-  autoOrder?: { on: boolean; lines: { sid: string; pid: ProductId; qty: number }[] };
+  /** Последние мини-события дня — чтобы не повторялись подряд (live.ts). */
+  liveRecent?: import('./live').LiveKind[];
+  /** Автозаказ: включён ли, лимит и что купил сегодня (autoorder.ts). */
+  autoOrder?: import('./autoorder').AutoOrder;
   /** Бабушкино обучение: false — показать (новая игра или «пройти заново»), нет поля — старое сохранение. */
   tourDone?: boolean;
   /**
@@ -689,8 +703,6 @@ export interface StoreState {
   gear?: Partial<Record<GearId, number>>;
   /** Рейтинг доставки на дом 1..5 (delivery.ts); нет — 4 звезды. */
   deliveryRating?: number;
-  /** Утренние закупки последних дней — для «как в прошлый раз» (reorder.ts). */
-  purchases?: { day: number; lines: { sid: string; pid: ProductId; qty: number }[] }[];
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -742,6 +754,8 @@ export interface DayStats {
   notes?: Partial<Record<ReviewTopic, number>>;
   /** Выручка ночной смены (входит в revenue). */
   nightRevenue?: number;
+  /** Сколько гостей за день привела реклама (ads.ts). */
+  adGuests?: number;
   /** Счётчики новых механик за день. */
   fair?: boolean;
   coffees?: number;
@@ -755,6 +769,8 @@ export interface DayStats {
   /** Кухня: сколько порций продали и сколько раз хотели порцию (вместе с теми, кому не хватило). */
   dishes?: number;
   dishWanted?: number;
+  /** Сколько кухня потратила за день на продукты в свою кладовую (утром и докупая днём). */
+  kitchenSpent?: number;
   /** Почему ушли без покупки (losses.ts) и каких товаров не хватило или показались дорогими. */
   lostWhy?: Partial<Record<LostReason, number>>;
   missing?: Partial<Record<ProductId, number>>;
@@ -1224,9 +1240,16 @@ export const ratingTarget = (rating: number): number => 0.55 + 0.03 * rating;
  */
 export const PRICE_FORGIVE = 0.5;
 
+/**
+ * Пришедшие по рекламе и ушедшие ни с чем злятся вдвое меньше: зашли из любопытства, а не к «своему»
+ * магазину. Иначе большая реклама в тесном магазине только роняла бы рейтинг (видно в симуляторе).
+ */
+export const AD_FORGIVE = 0.5;
+
 /** 0..1: доля довольных посетителей. Жалоба считается за «полпокупателя». */
 export function satisfaction(stats: DayStats, lostWeight = 1): number {
-  const lost = Math.max(0, stats.lost - Math.min(stats.lost, stats.lostWhy?.expensive ?? 0) * (1 - PRICE_FORGIVE));
+  const priced = Math.max(0, stats.lost - Math.min(stats.lost, stats.lostWhy?.expensive ?? 0) * (1 - PRICE_FORGIVE));
+  const lost = Math.max(0, priced - Math.min(priced, stats.adGuests ?? 0) * AD_FORGIVE);
   const visitors = stats.served + lost * lostWeight;
   if (visitors === 0) return 0.5;
   return Math.max(0, (stats.served - stats.complaints * 0.5) / visitors);

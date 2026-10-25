@@ -84,7 +84,8 @@ import {
   type SupplierId,
   supplierOpen,
 } from '../game/suppliers';
-import { guestsToday } from '../game/day';
+import { guestsGain, guestsToday } from '../game/day';
+import { buyKiosk, KIOSK_TIERS, kioskCount, kioskSlots, KIOSKS_BY_LEVEL, kioskTier, kioskTierIndex, laneGuests, nextKioskPrice, nextKioskTier, openRegisters, upgradeKiosks, withNextTill } from '../game/lanes';
 import {
   ALBUM_REWARD,
   ALL_QUESTS_RATING,
@@ -98,7 +99,8 @@ import {
   type Quest,
 } from '../game/endless';
 import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
-import { applyReorder, autoOrderPlan, recordPurchase, rememberAutoOrder, reorderPlan, toggleAutoOrder } from '../game/reorder';
+import { applyReorder } from '../game/reorder';
+import { AUTO_SHARES, AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoCancel, autoDay, autoLimit, autoMorning, autoResume, autoReturn, autoSetShare, autoShare, autoToggle } from '../game/autoorder';
 import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
 import { stockOf } from '../game/bakery';
 import { activePromo, setPromo, type PromoKind } from '../game/promo';
@@ -178,7 +180,7 @@ import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
 import { assetUrl, png } from '../platform/assets';
-import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
+import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
 import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeLoyalty, cafeOf } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
@@ -189,13 +191,13 @@ import { rushPrize } from '../game/rush';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
 import { answerOpening, BUILDINGS, districtNews, districtSite, isMatchDay, OPENING_DAYS, type BuildingId } from '../game/district';
-import { canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, kitchenOpen, kitchenWorking, menuAuto, portionsOf, portionsTotal, PORTIONS_MAX, stoveSprite, toggleMenu } from '../game/kitchen';
+import { canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, foodSlots, foodSprite, kitchenOpen, kitchenWorking, menuAuto, morningOrder, orderCost, pantryOf, portionsOf, portionsTotal, stoveSprite, toggleMenu } from '../game/kitchen';
 import { addFriend, duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
 import { flushCloud, saveGame } from '../game/save';
 import { buyRadio, hasRadio, RADIO_PRICE, setStation, STATION_INFO, STATIONS, stationOf } from '../game/radio';
-import { BOSS_DAYS, bossActive, EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_MAX, EDUARD_STAGES, eduardNews, eduardPull, eduardStage, seeEduardNews, type EduardNews } from '../game/eduard';
+import { BOSS_DAYS, bossActive, EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_MAX, EDUARD_STAGES, eduardLook, eduardNews, eduardPull, eduardStage, seeEduardNews, type EduardNews } from '../game/eduard';
 import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../game/upgrades';
 
 /** Высота «голоса» героев в диалогах. */
@@ -227,7 +229,7 @@ import { showReviews } from './reviews';
 import { button, el, openModal, who } from './dom';
 import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
-import { keepPlaces } from '../scenes/placement';
+import { keepPlaces, kioskSpotFree } from '../scenes/placement';
 
 /** Портрет заказчика: шеф — это Марат. */
 const CLIENT_PORTRAIT: Record<ClientId, string> = { chef: 'marat', school: 'school', valya: 'valya' };
@@ -240,6 +242,9 @@ interface MorningOptions {
   onArrange?: () => void;
   /** Зайти в гости в магазин друга (id в Telegram, имя). */
   onVisit?: (id: number, name: string) => void;
+  /** «Заглянуть к конкуренту» из рейтинга (ключ с сервера, имя) и к боссу через дорогу (game/rival.ts). */
+  onRival?: (key: string, name: string) => void;
+  onBoss?: () => void;
   /** Бабушка закончила обучение — теперь можно вручить её гостинец. */
   onTourDone?: () => void;
   /** Дочитали вступление главы (в новом начале гостинец ждёт его конца). */
@@ -355,6 +360,9 @@ function artRow(texture: string, opts: { name: string; price?: number; sub?: str
 /** Название на вывеске — до 16 букв: длиннее не влезает на доску. */
 const SHOP_NAME_MAX = 16;
 
+/** Улучшения в списке «Уголков»: кассы самообслуживания живут отдельно, рядом с кассами (их бывает несколько). */
+const LISTED_UPGRADES = UPGRADE_IDS.filter((id) => id !== 'selfCheckout');
+
 const percent = (k: number): string => `${k >= 1 ? '+' : '−'}${Math.round(Math.abs(k - 1) * 100)}%`;
 
 /** Заголовок с «❔»: длинное пояснение спрятано и открывается по нажатию. */
@@ -430,7 +438,7 @@ function helpRow(title: HTMLElement | string, text: string): HTMLElement {
 }
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onTourDone, onStoryDone }: MorningOptions): void {
+export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone }: MorningOptions): void {
   const { card, close } = openModal();
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
@@ -469,9 +477,11 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const morningDelivery = deliverContracts(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid));
   const delivered: Delivery[] = morningDelivery.deliveries;
   if (morningDelivery.deliveries.length) setState(morningDelivery.state);
-  /** Автозаказ: утром склад сам пополняется до списка (по обычной цене, без брака). */
-  const autoPlan = autoOrderPlan(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid));
-  if (autoPlan?.lines.length) setState(applyReorder(getState(), autoPlan, () => false).state);
+  /** Автозаказ: утром сам закупает нужное на день в пределах лимита (по обычной цене, без брака). */
+  const autoPrice = (sid: SupplierId, pid: ProductId) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid);
+  /** Утренняя закупка автозаказа — сразу на полки (повторно докупает только недостающее). */
+  const autoBuy = (state: StoreState): StoreState => shelveAll(autoMorning(state, autoPrice, guestsToday(state)));
+  if (autoActive(getState())) setState(autoBuy(getState()));
 
   // Торговая неделя и гильдия приходят с сервера чуть позже — перерисовать утро, когда пришли.
   const onMultiplayer = () => {
@@ -807,44 +817,70 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
 
   // ---------- Закупка ----------
 
-  /** «Как в прошлый раз»: последняя закупка одной кнопкой, по сегодняшним ценам. */
-  const reorderBox = (state: StoreState): HTMLElement[] => {
-    const plan = reorderPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid));
-    const last = (state.purchases ?? []).filter((d) => d.day < state.day && d.lines.length).pop();
-    if (!plan || !last) return [];
-    const box = el('div', 'ui-box');
-    const list = last.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' ');
-    box.append(el('b', '', t('reorder.title')), el('div', 'ui-muted', t('reorder.text', { day: last.day, list })));
-    if (!plan.lines.length) {
-      box.append(el('div', 'ui-note', t('reorder.empty')));
+  /**
+   * Автозаказ — первой карточкой закупки, крупно: включён ли, лимит на день, что купил утром (товар можно
+   * вернуть по одному или весь). Не куплен — та же карточка с кнопкой покупки.
+   */
+  const autoCard = (state: StoreState): HTMLElement[] => {
+    if (state.day <= 3) return [];
+    const up = UPGRADES.autoOrder;
+    const owned = hasUpgrade(state, 'autoOrder');
+    if (!owned && state.level < up.minLevel) return [];
+    const on = autoActive(state);
+    const box = el('div', `ui-box ui-auto${on ? ' on' : ''}`);
+    const head = el('div', 'ui-auto-head');
+    head.append(el('b', '', t('auto.title')), el('span', 'ui-auto-state', owned ? t(on ? 'auto.stateOn' : 'auto.stateOff') : `${up.price} 💰`));
+    box.append(head);
+    if (!owned) {
+      box.append(
+        el('div', 'ui-muted', t('auto.teaser')),
+        button(t('auto.buy', { n: up.price }), () => {
+          const bought = buyUpgrade(getState(), 'autoOrder');
+          update(bought && autoBuy({ ...bought, autoOrder: { ...bought.autoOrder, on: true } }), 'success');
+        }, 'ui-btn', state.money < up.price),
+      );
       return [box];
     }
-    if (plan.cut) box.append(el('div', 'ui-note', t('reorder.cut')));
-    box.append(
-      button(t('reorder.buy', { n: plan.total }), () => {
-        const fresh = reorderPlan(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid));
-        if (!fresh?.lines.length) return;
-        const result = applyReorder(getState(), fresh, (line) => Math.random() < SUPPLIERS[line.sid].badChance);
-        if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
-        update(result.state, result.badLine ? 'error' : 'success');
-      }),
-    );
-    return [box];
-  };
-
-  /** Автозаказ (если куплен): список, вкл/выкл и «запомнить закупку». */
-  const autoOrderBox = (state: StoreState): HTMLElement[] => {
-    if (!hasUpgrade(state, 'autoOrder')) return [];
-    const box = el('div', 'ui-box');
-    box.append(el('b', '', t('auto.title')));
-    const auto = state.autoOrder;
-    const list = auto?.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' ') ?? '';
-    box.append(el('div', 'ui-muted', !auto ? t('auto.none') : auto.on ? t('auto.on', { list }) : t('auto.off', { list })), el('div', 'ui-muted', t('auto.diff')));
-    const chips = el('div', 'ui-chips');
-    const canRemember = Boolean(rememberAutoOrder(state));
-    chips.append(button(t('auto.remember'), () => update(rememberAutoOrder(getState()), 'success'), 'ui-chip', !canRemember));
-    if (auto) chips.append(button(auto.on ? t('auto.disable') : t('auto.enable'), () => update(toggleAutoOrder(getState())), 'ui-chip'));
-    box.append(chips);
+    if (!on) {
+      box.append(el('div', 'ui-muted', t('auto.offText')), button(t('auto.enable'), () => update(autoBuy(autoToggle(getState())), 'success'), 'ui-btn'));
+      return [box];
+    }
+    // Лимит: доля денег на утро — сразу видно, сколько это в монетах.
+    const limitRow = el('div', 'ui-row ui-auto-limit');
+    const shares = el('div', 'ui-chips');
+    for (const share of AUTO_SHARES) {
+      shares.append(
+        // Подняли лимит — сразу докупает до нового; опустили — купленное остаётся (вернуть можно ниже).
+        button(
+          t('auto.share', { p: Math.round(share * 100) }),
+          () => {
+            const next = autoSetShare(getState(), share);
+            update(share > autoShare(getState()) ? autoBuy(next) : next);
+          },
+          `ui-chip${autoShare(state) === share ? ' active' : ''}`,
+        ),
+      );
+    }
+    limitRow.append(el('span', '', t('auto.limit', { n: autoLimit(state) })), shares);
+    box.append(limitRow);
+    const today = autoDay(state);
+    const off = button(t('auto.disable'), () => update(autoToggle(getState())), 'ui-chip');
+    const actions = el('div', 'ui-chips ui-auto-actions');
+    if (today.canceled) {
+      box.append(el('div', 'ui-note', t('auto.canceled')), button(t('auto.resume'), () => update(autoBuy(autoResume(getState())), 'success'), 'ui-btn secondary'));
+    } else if (today.lines.length) {
+      box.append(el('div', 'ui-muted', t('auto.bought', { spent: today.spent, limit: autoLimit(state) })));
+      const lines = el('div', 'ui-chips ui-auto-lines');
+      for (const line of today.lines) lines.append(button(`${PRODUCTS[line.pid].icon}×${line.qty} ✕`, () => update(autoReturn(getState(), line.pid)), 'ui-chip'));
+      box.append(lines);
+      if (today.cut) box.append(el('div', 'ui-note', t('auto.cut')));
+      const refund = today.lines.reduce((sum, l) => sum + l.paid, 0);
+      actions.append(button(t('auto.cancel', { n: refund }), () => update(autoCancel(getState())), 'ui-chip'));
+    } else {
+      box.append(el('div', 'ui-muted', t(today.cut ? 'auto.cut' : 'auto.nothing')));
+    }
+    actions.append(off);
+    box.append(el('div', 'ui-muted', t('auto.day', { n: AUTO_TOPUPS, p: Math.round((AUTO_TOPUP_MARKUP - 1) * 100) })), actions);
     return [box];
   };
 
@@ -856,11 +892,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
 
   const priceOf = (sid: SupplierId, pid: ProductId) => unitPrice(SUPPLIERS[sid], deals[sid], pid);
 
-  /** Купить у поставщика: брак — с той же вероятностью, что и раньше; покупка запоминается для «как в прошлый раз». */
+  /** Купить у поставщика: брак — с той же вероятностью, что и раньше. */
   const buyFrom = (sid: SupplierId, pid: ProductId, qty: number, price: number) => {
     const bad = Math.random() < SUPPLIERS[sid].badChance;
-    const bought = buyStock(getState(), pid, qty, price, bad);
-    const next = bought && recordPurchase(bought, sid, pid, qty);
+    const next = buyStock(getState(), pid, qty, price, bad);
     if (bad && next) pendingBad = { sid, pid, qty, price };
     update(next, bad ? 'error' : 'tap');
   };
@@ -943,8 +978,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const req = SUPPLIERS[sid].requires;
       return !Array.isArray(req) || req.some((k) => shelfKindOpen(state, k));
     });
-    const extra = [...autoOrderBox(state), ...reorderBox(state)];
     return [
+      ...autoCard(state),
       ...cafeBox(state),
       // Купленное сразу уходит на полки — показываем и полки, и склад, иначе кажется, что ничего не купил.
       helpRow(t('buy.space', { ...shelfSpace(state), n: warehouseCount(state), max: warehouseCapacity(state) }), t('buy.note')),
@@ -952,7 +987,6 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       filters,
       ...productRows(state),
       foldBox('suppliers', `🤝 ${t('restock.suppliers')}`, (body) => body.append(...suppliers.map((sid) => supplierBox(sid, getState())))),
-      ...(extra.length ? [foldBox('reorder', `🔁 ${t('restock.more')}`, (body) => body.append(...extra))] : []),
       foldBox('prices', `🏷 ${t('tab.prices')}`, (body) => body.append(helpRow(t('prices.title'), t('prices.note', { g: percent(priceAppeal(getState())) })), ...pricesTab(getState()))),
     ];
   };
@@ -1726,7 +1760,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const cap = rackCapacity(state);
     const coffee = hasUpgrade(state, 'coffee');
     const oven = hasUpgrade(state, 'oven');
-    const owned = UPGRADE_IDS.filter((id) => hasUpgrade(state, id)).length;
+    const owned = LISTED_UPGRADES.filter((id) => hasUpgrade(state, id)).length;
     const tiles: Tile[] = [
       { id: 'rack', icon: 'assets/candy_rack.png', title: t('rack.title'), status: `${rack.stock}/${cap}`, alert: rack.stock <= cap / 3, details: () => [rackBox(getState())] },
       {
@@ -1758,7 +1792,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
               id: 'kitchen',
               icon: '🍲',
               title: t('kitchen.title'),
-              status: `${portionsTotal(state)}/${PORTIONS_MAX}`,
+              status: `${portionsTotal(state)}/${foodSlots(state)}`,
               // Витрина пуста и повара нет — сегодня кухне нечего продавать.
               alert: portionsTotal(state) === 0 && !kitchenWorking(state),
               details: () => kitchenBox(getState()),
@@ -1780,7 +1814,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         status: [securityOf(state).dog ? '🐕' : '', hasWatchman(state) ? '🔦' : ''].join(' ').trim() || '—',
         details: () => [securityBox(getState())],
       },
-      { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${UPGRADE_IDS.length}`, details: () => [upgradesBox(getState())] },
+      { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${LISTED_UPGRADES.length}`, details: () => [upgradesBox(getState())] },
     ];
     return [
       tileGrid(tiles, openCorner, (id) => {
@@ -1797,14 +1831,35 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const kitchenBox = (state: StoreState): HTMLElement[] => {
     if (!kitchenOpen(state)) return [];
     const box = el('div', 'ui-box');
-    box.append(el('b', '', t('kitchen.title')), el('div', 'ui-muted', t('kitchen.note', { n: portionsTotal(state), max: PORTIONS_MAX })));
+    box.append(el('b', '', t('kitchen.title')), el('div', 'ui-muted', t('kitchen.note', { n: portionsTotal(state), max: foodSlots(state) })));
+    const shelf = el('div', 'ui-item');
+    const shelfImg = el('img', 'ui-item-art');
+    shelfImg.src = png(foodSprite(state));
+    shelfImg.alt = '';
+    shelf.append(shelfImg, el('div', 'ui-item-sub', t('kitchen.shelf', { name: t(GEAR.foodShelf.models[gearTier(state, 'foodShelf')].nameKey), n: portionsTotal(state), max: foodSlots(state) })));
+    box.append(shelf);
     const chef = staffOf(state, 'cook');
     const who = chef ? t(isAbsent(state, chef) ? 'kitchen.chefOff' : 'kitchen.chef', { name: memberName(chef) }) : t('kitchen.noChef');
     // Кто готовит — главное правило кухни: строкой на виду, а не за «❔».
     box.append(el('div', 'ui-note', who));
+    // Повар на смене: что кухня сама закупит при открытии и почём (деньги — из кассы магазина).
+    const list = (items: Partial<Record<ProductId, number>>) =>
+      Object.entries(items)
+        .filter(([, n]) => (n ?? 0) > 0)
+        .map(([p, n]) => `${PRODUCTS[p as ProductId].icon}×${n}`)
+        .join(' ');
+    if (kitchenWorking(state)) {
+      const order = morningOrder(state);
+      const cost = orderCost(order);
+      box.append(el('div', 'ui-item-sub', cost ? t('kitchen.order', { items: list(order), cost }) : t('kitchen.orderNone')));
+      if (cost > state.money) box.append(el('div', 'ui-item-sub', t('kitchen.orderBroke', { cost })));
+    }
+    const pantry = list(Object.fromEntries(PRODUCT_IDS.map((p) => [p, pantryOf(state, p)])));
+    if (pantry) box.append(el('div', 'ui-item-sub', t('kitchen.pantry', { items: pantry })));
     const reports = state.reports ?? [];
     const last = reports[reports.length - 1]?.kitchen;
     if (last) box.append(el('div', 'ui-item-sub', t('kitchen.yesterday', { sold: last.sold, missed: Math.max(0, last.wanted - last.sold), spoiled: last.spoiled })));
+    if (last?.spent) box.append(el('div', 'ui-item-sub', t('kitchen.yesterdaySpent', { n: last.spent })));
     // Меню дня — только для повара: сам готовишь — сам и выбираешь кнопками ниже.
     if (chef) {
       const auto = menuAuto(state);
@@ -2520,7 +2575,17 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   /** Магазин Эдуарда по соседству (после сюжета): сколько гостей уводит и когда вырастет. */
   const eduardBox = (state: StoreState): HTMLElement[] => {
     const stage = eduardStage(state);
-    if (stage === null) return [];
+    // По сюжету напротив «МегаМарт» — к нему тоже можно заглянуть.
+    if (stage === null) {
+      if (!onBoss || eduardLook(state) !== 'mega') return [];
+      const mega = el('div', 'ui-box');
+      mega.append(button(t('rival.boss'), () => {
+        endTour();
+        close();
+        onBoss();
+      }, 'ui-btn secondary'));
+      return [mega];
+    }
     const box = el('div', 'ui-box');
     const since = state.eduard?.since ?? state.day;
     // Напротив пусто: скоро новый конкурент — или всех уже победили.
@@ -2534,6 +2599,14 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       el('div', 'ui-muted', t(eduardPull(state) < info.pull ? 'eduard.box' : 'eduard.boxFull', { n: Math.round(eduardPull(state) * 100), r: EDUARD_LOYAL_RATING, max: Math.round(info.pull * 100) })),
       el('div', 'ui-note', t('boss.goal', { goal: info.rating, d: BOSS_DAYS, n: state.eduard?.streak ?? 0 })),
     );
+    // Заглянуть к нему через дорогу и немного похулиганить (game/rival.ts) — без сервера.
+    if (onBoss) {
+      box.append(button(t('rival.boss'), () => {
+        endTour();
+        close();
+        onBoss();
+      }, 'ui-btn secondary'));
+    }
     return [box];
   };
 
@@ -2541,7 +2614,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const upgradesBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('upgrade.title')));
-    for (const id of UPGRADE_IDS) {
+    for (const id of LISTED_UPGRADES) {
       const up = UPGRADES[id];
       const owned = hasUpgrade(state, id);
       const row = el('div', 'ui-item');
@@ -2602,6 +2675,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       // Транспорт курьера: велосипед и мопед сбоку, фургончик — значком (сверху он как все машины).
       courier: ['bike', 'scooter', 'ico_van'][tier],
       stove: stoveSprite(at),
+      foodShelf: foodSprite(at),
     };
     return art[id] ?? null;
   };
@@ -2618,6 +2692,49 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const model = GEAR.register.models[gearTier(state, 'register')];
     const sub = `${t(model.nameKey)} · ${price !== null ? t('registers.free', { n: slots - n }) : nextRegisterCount(state) && (nextRegisterCount(state) ?? 0) > slots ? t('registers.full') : t('registers.max')}`;
     box.append(artRow(gearArt(state, 'register', gearTier(state, 'register')) ?? 'counter0', { name: t('registers.count', { n, max: slots }), sub, actions }));
+    // Открытые кассы зовут гостей (lanes.ts): сколько уже дают и сколько даст следующая касса с кассиром.
+    const till = withNextTill(state);
+    const now = Math.round(guestsToday(state) * (1 - 1 / laneGuests(state)));
+    box.append(
+      helpRow(t('lanes.now', { n: openRegisters(state), g: now }), t('lanes.note')),
+      ...(till ? [el('div', 'ui-muted', t('lanes.nextTill', { g: guestsGain(state, till) }))] : []),
+    );
+    return box;
+  };
+
+  /** Кассы самообслуживания (lanes.ts): сколько стоит, поставить ещё, сменить модель — и сколько гостей это даст. */
+  const kiosksBox = (state: StoreState) => {
+    const box = el('div', 'ui-box');
+    const n = kioskCount(state);
+    const slots = kioskSlots(state);
+    box.append(el('b', '', t('kiosks.title')), el('div', 'ui-muted', t('kiosks.note')));
+    const tierIndex = kioskTierIndex(state);
+    const tier = kioskTier(state);
+    const texture = ['kiosk', 'kiosk1', 'kiosk2'][tierIndex];
+    if (!slots && !n) {
+      const from = KIOSKS_BY_LEVEL.findIndex((k) => k > 0);
+      box.append(artRow(texture, { name: t('kiosks.count', { n: 0, max: 0 }), sub: t('kiosks.locked', { name: t(STORE_LEVELS[from].nameKey) }), actions: [] }));
+      return box;
+    }
+    const price = nextKioskPrice(state);
+    const bought = price === null ? null : buyKiosk({ ...state, money: Math.max(state.money, price) });
+    const free = price !== null ? t('kiosks.free', { n: slots - n }) : STORE_LEVELS[state.level + 1] ? t('kiosks.full') : t('kiosks.max');
+    const gain = bought ? ` · ${t('lanes.gain', { g: guestsGain(state, bought) })}` : '';
+    // Место у правой стены заняла полка или вещь (своя расстановка) — сначала переставить.
+    const blocked = price !== null && !kioskSpotFree(state, n);
+    const actions = price === null ? [] : [button(t('kiosks.buy', { cost: price }), () => update(buyKiosk(getState()), 'success'), 'ui-chip', blocked || state.money < price)];
+    box.append(artRow(texture, { name: t('kiosks.count', { n, max: slots }), sub: blocked ? t('kiosks.blocked') : `${free}${gain}`, actions }));
+    const model = (k: typeof tier) =>
+      t('kiosks.model', { name: t(k.nameKey), max: k.maxItems, s: k.item.toFixed(1), err: Math.round(k.error * 100), skip: +(k.skip * 100).toFixed(1) });
+    box.append(el('div', 'ui-item-sub', model(tier)));
+    const next = nextKioskTier(state);
+    if (next) {
+      const locked = state.level < next.minLevel;
+      const up = locked ? null : upgradeKiosks({ ...state, money: Math.max(state.money, next.price) });
+      const sub = locked ? t('kiosks.upgradeLocked', { name: t(STORE_LEVELS[next.minLevel].nameKey) }) : `${model(next)}${up && n ? ` · ${t('lanes.gain', { g: guestsGain(state, up) })}` : ''}`;
+      const actions = locked ? [] : [button(t('kiosks.upgrade', { cost: next.price }), () => update(upgradeKiosks(getState()), 'success'), 'ui-chip', !n || state.money < next.price)];
+      box.append(artRow(['kiosk', 'kiosk1', 'kiosk2'][KIOSK_TIERS.indexOf(next)], { name: t(next.nameKey), sub, actions }));
+    } else box.append(el('div', 'ui-muted', t('kiosks.best')));
     return box;
   };
 
@@ -2664,27 +2781,37 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return box;
   };
 
-  /** Реклама: карточка на каждый вид — иконка, что даёт, цена и кнопка. */
+  /**
+   * Реклама: карточка на каждый вид — иконка, что даёт, цена и кнопка. Сверху — сколько гостей
+   * добавляет уже запущенная; у остальных — сколько прибавят к ней (следующая работает слабее).
+   */
   const adsBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
-    box.append(el('b', '', t('ads.title')), el('div', 'ui-muted', t('ads.note')));
-    const running = activeAd(state);
+    box.append(el('b', '', t('ads.title')), el('div', 'ui-muted', t('ads.note', { n: MAX_ADS })));
+    const running = activeAds(state);
+    const pct = (x: number) => Math.round(x * 100);
+    if (running.length) box.append(el('div', 'ui-note', t('ads.now', { n: pct(adBoost(state) - 1), list: running.map((a) => a.icon).join(' ') })));
     for (const id of AD_IDS) {
       const ad = ADS[id];
-      const row = el('div', 'ui-item');
+      const block = adBlock(state, id);
+      const row = el('div', `ui-item${block === 'level' ? ' ui-locked' : ''}`);
       row.append(el('div', 'ui-ad-icon', ad.icon));
       const body = el('div');
       const name = el('div', 'ui-item-name', t(ad.nameKey));
-      name.append(el('span', 'ui-tag', `${adPrice(state, id)} 💰`));
-      body.append(name, el('div', 'ui-item-sub', running?.id === id ? t('ads.active', { n: state.ads?.until ?? state.day }) : t(ad.descKey)));
-      const action = button(
-        running?.id === id ? '✓' : t('ads.order'),
-        () => update(buyAd(getState(), id), 'success'),
-        'ui-chip',
-        Boolean(running) || state.money < adPrice(state, id),
-      );
+      if (block !== 'level') name.append(el('span', 'ui-tag', `${adPrice(state, id)} 💰`));
+      const sub =
+        block === 'running'
+          ? t('ads.active', { n: adUntil(state, id) ?? state.day })
+          : block === 'level'
+            ? t('upgrade.needLevel', { name: t(STORE_LEVELS[ad.minLevel].nameKey) })
+            : t(ad.descKey);
+      body.append(name, el('div', 'ui-item-sub', sub));
+      // С уже запущенной рекламой эта прибавит меньше, чем одна, — честно показываем сколько.
+      if (running.length && !block) body.append(el('div', 'ui-item-sub', t('ads.stack', { n: pct(adGain(state, id)) })));
+      if (block === 'full') body.append(el('div', 'ui-item-sub', t('ads.full', { n: MAX_ADS })));
+      const action = button(block === 'running' ? '✓' : t('ads.order'), () => update(buyAd(getState(), id), 'success'), 'ui-chip', Boolean(block));
       const actions = el('div', 'ui-item-actions');
-      actions.append(action);
+      if (block !== 'level') actions.append(action);
       row.append(body, actions);
       box.append(row);
     }
@@ -2775,7 +2902,11 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const info = socialInfo();
     if (!info) return [];
     const board = el('div', 'ui-box');
-    board.append(button(t('board.open'), showLeaderboard, 'ui-btn'));
+    board.append(button(t('board.open'), () => showLeaderboard(onRival && ((key, name) => {
+      endTour();
+      close();
+      onRival(key, name);
+    })), 'ui-btn'));
     const box = el('div', 'ui-box');
     box.append(el('b', '', `🤝 ${t('social.title')}`), el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT })));
     if (info.friends) box.append(el('div', 'ui-muted', t('social.count', { n: info.friends })));
@@ -3015,13 +3146,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return [...lines, ...autoLine()];
   };
 
+  /** Строка сводки утра: что автозаказ уже купил (подробно и с отменой — во вкладке закупки). */
   const autoLine = (): HTMLElement[] => {
-    if (!autoPlan) return [];
-    const lines: HTMLElement[] = [];
-    if (autoPlan.lines.length)
-      lines.push(el('div', 'ui-muted', t('auto.delivered', { list: autoPlan.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: autoPlan.total })));
-    if (autoPlan.cut) lines.push(el('div', 'ui-note', t('auto.cut')));
-    return lines;
+    const state = getState();
+    const today = state.autoOrder?.today;
+    if (!autoActive(state) || today?.day !== state.day || today.canceled || !today.lines.length) return [];
+    return [el('div', 'ui-muted', t('auto.delivered', { list: today.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: today.spent }))];
   };
 
   const fairLine = (state: StoreState): HTMLElement[] => {
@@ -3277,6 +3407,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       // Первая касса — его: кассиры за остальными, сменщик — за его кассой, пока он в зале (подробности — за «❔»).
       el('div', 'ui-item-sub', t('staffTab.ownerTill')),
       el('div', 'ui-muted', t('staffTab.ownerTillNote')),
+      ...(staffOf(state, 'cashier') ? [el('div', 'ui-note', t('staffTab.reliefOn'))] : []),
       el('div', 'ui-muted', next === null ? t('skill.xpMax', { xp: ownerXp(state) }) : t('skill.xp', { xp: ownerXp(state), next })),
       el(
         'div',
@@ -3387,6 +3518,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         continue;
       }
       // Менеджер — только в большом магазине: пока рано, подскажем, где появится.
+      // Сменщик, нанятый ещё в ларьке, работает — замок с подсказкой ему ни к чему.
+      if (!roleOpen(state, role) && staffOf(state, role)) continue;
       if (!roleOpen(state, role)) {
         const { minLevel = 0, needs, nameKey } = STAFF_ROLES[role];
         // Пекарь, бариста и повар — когда во флигеле открыты пекарня, кофейня и кухня.
@@ -3559,7 +3692,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         ),
       );
     }
-    out.push(grow, registersBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), bankBox(state));
+    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {

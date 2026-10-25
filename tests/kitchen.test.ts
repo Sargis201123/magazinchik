@@ -14,16 +14,25 @@ import {
   dishPortions,
   kitchenNeeds,
   kitchenWorking,
+  FOOD_KEEP,
+  FOOD_SLOTS,
+  foodSlots,
   menuAuto,
-  PORTIONS_MAX,
+  morningOrder,
+  orderCost,
+  pantryOf,
   portionsTotal,
   sellDish,
   servePortions,
   spoilDishes,
   stovePots,
   stoveSeconds,
+  stockKitchen,
+  takeDish,
   takeIngredients,
   toggleMenu,
+  topUpKitchen,
+  wantsDish,
 } from '../src/game/kitchen';
 import { addReport } from '../src/game/reports';
 import { nightCycle } from '../src/game/day';
@@ -82,10 +91,12 @@ describe('кухня', () => {
     expect(takeIngredients(s, 'syrniki')).toBeNull();
   });
 
-  it('витрина не больше PORTIONS_MAX; продажа и списание ночью', () => {
-    let s: StoreState = { ...at(), kitchen: { olivier: PORTIONS_MAX - 2 } };
+  it('полка «Еда» не больше foodSlots; продажа и списание ночью', () => {
+    const max = foodSlots(at());
+    expect(max).toBe(FOOD_SLOTS[0]);
+    let s: StoreState = { ...at(), kitchen: { olivier: max - 2 } };
     expect(canCook(s, 'borscht')).toBe(false);
-    expect(portionsTotal(servePortions(s, 'borscht'))).toBe(PORTIONS_MAX);
+    expect(portionsTotal(servePortions(s, 'borscht'))).toBe(max);
     s = { ...at(), kitchen: { borscht: 1 } };
     expect(sellDish(s, () => 0.99)).toBeNull();
     const sold = sellDish(s, () => 0)!;
@@ -109,7 +120,8 @@ describe('кухня', () => {
 
   it('у блюд и плит есть картинки в атласе', () => {
     for (const id of DISH_IDS) expect(TEXTURES).toContain(`kdish_${id}`);
-    for (const key of ['stove0', 'stove1', 'stove2', 'kpot', 'kpan', 'ktable', 'kknife', 'kshowcase', 'kshowcase_glass', 'kbasket', 'kcrate', 'ktiles']) expect(TEXTURES).toContain(key);
+    for (const key of ['stove0', 'stove1', 'stove2', 'kpot', 'kpan', 'ktable', 'kknife', 'kshowcase', 'kshowcase_glass', 'kbasket', 'kcrate', 'ktiles', 'kplates']) expect(TEXTURES).toContain(key);
+    for (const key of ['food_shelf0', 'food_shelf1', 'food_shelf2', 'food_glass2']) expect(TEXTURES).toContain(key);
   });
 });
 
@@ -148,8 +160,8 @@ describe('повар', () => {
     expect(cookBatch(stocked, 0.3)).toEqual([]);
     // Спрос маленький — одна кастрюля, а не две.
     expect(cookBatch({ ...s, ...demand(5) }, 1)).toHaveLength(1);
-    // Витрина полна — тоже.
-    expect(cookBatch({ ...s, kitchen: { olivier: PORTIONS_MAX } }, 1)).toEqual([]);
+    // Полка «Еда» полна — тоже.
+    expect(cookBatch({ ...s, kitchen: { olivier: foodSlots(s) } }, 1)).toEqual([]);
     // Продуктов нет — нечего ставить.
     expect(cookBatch({ ...s, warehouse: {} }, 1)).toEqual([]);
   });
@@ -192,22 +204,53 @@ describe('повар', () => {
     expect(night.state.reports!.at(-1)!.kitchen).toEqual({ sold: 3, wanted: 4, spoiled: 5 });
   });
 
-  it('«Закупить нужное» докупает продукты повару', () => {
-    // Мясной холодильник и овощной прилавок в зале: мясо и картошку магазин продаёт и закупает.
+  it('кухня с поваром утром сама закупает продукты в кладовую — из кассы; без повара — ничего', () => {
+    const s = at({ staff: [chef()], money: 5000, warehouse: {}, shelves: [], cookMenu: ['olivier'] });
+    expect(kitchenNeeds(at({ warehouse: {} }))).toEqual({});
+    const needs = kitchenNeeds(s);
+    expect(needs.meat).toBeGreaterThan(0);
+    expect(needs.potatoes).toBe((needs.meat ?? 0) * 2);
+    expect(morningOrder(s)).toEqual(needs);
+    const bought = stockKitchen(s);
+    expect(bought.spent).toBe(orderCost(needs));
+    expect(bought.state.money).toBe(5000 - bought.spent);
+    expect(pantryOf(bought.state, 'meat')).toBe(needs.meat);
+    // Наутро в кладовой ещё осталось — докупает только недостающее.
+    expect(morningOrder(bought.state)).toEqual({});
+    // Без повара (и в его выходной) кухня ничего не покупает.
+    expect(stockKitchen({ ...s, staff: [] }).spent).toBe(0);
+    expect(stockKitchen({ ...s, staff: [chef({ offDay: 1 })] }).spent).toBe(0);
+    // Денег мало — берёт, на что хватает, в минус не уходит.
+    const poor = stockKitchen({ ...s, money: 100 });
+    expect(poor.state.money).toBeGreaterThanOrEqual(0);
+    expect(poor.spent).toBeLessThanOrEqual(100);
+  });
+
+  it('«Закупить нужное» больше не докупает повару: у кухни своя закупка', () => {
     const shelves = [
       { kind: 'meat' as const, level: 0, items: {} },
       { kind: 'produce' as const, level: 0, items: {} },
     ];
     const s = at({ staff: [chef()], money: 5000, warehouse: {}, shelves, cookMenu: ['olivier'] });
-    expect(kitchenNeeds(at({ warehouse: {} }))).toEqual({});
-    const needs = kitchenNeeds(s);
-    expect(needs.meat).toBeGreaterThan(0);
-    expect(needs.potatoes).toBe((needs.meat ?? 0) * 2);
     const price = () => 10;
-    const without = restockPlan({ ...s, staff: [] }, price, 60);
-    const withChef = restockPlan(s, price, 60);
-    const qty = (plan: typeof without, id: 'meat' | 'potatoes') => plan.lines.filter((l) => l.pid === id).reduce((n, l) => n + l.qty, 0);
-    expect(qty(withChef, 'meat')).toBeGreaterThan(qty(without, 'meat'));
+    const qty = (plan: ReturnType<typeof restockPlan>, id: 'meat' | 'potatoes') => plan.lines.filter((l) => l.pid === id).reduce((n, l) => n + l.qty, 0);
+    expect(qty(restockPlan(s, price, 60), 'meat')).toBe(qty(restockPlan({ ...s, staff: [] }, price, 60), 'meat'));
+  });
+
+  it('повар берёт из кладовой, а кончилось днём — кухня докупает ровно на закладку', () => {
+    const s = at({ staff: [chef()], money: 5000, warehouse: { potatoes: units(10), meat: units(3) }, cookMenu: ['olivier'], ...demand(20) });
+    // Кладовая пуста: по продуктам из магазина повар не варит, пока кухня не докупит своё.
+    const plan = cookBatch(s, 1, 0, undefined, true);
+    expect(plan).toEqual(['olivier']);
+    const top = topUpKitchen(s, plan);
+    expect(top.bought).toEqual({ potatoes: 2, meat: 1 });
+    expect(top.state.money).toBe(5000 - top.spent);
+    const cooked = takeIngredients(top.state, 'olivier')!;
+    expect(pantryOf(cooked, 'meat')).toBe(0);
+    // Склад магазина не тронут.
+    expect(cooked.warehouse.meat).toHaveLength(3);
+    // Кладовой хватает — докупать нечего.
+    expect(topUpKitchen(top.state, plan).spent).toBe(0);
   });
 
   it('закупка повару — по спросу за день, но не больше, чем он успеет сварить', () => {
@@ -222,8 +265,8 @@ describe('повар', () => {
     // Хотят 500 — столько закладок, сколько раз за день повар успеет поставить кастрюли.
     const cap = cookRoundsPerDay(base, 90, 1) * stovePots(base);
     expect(kitchenNeeds({ ...base, ...demand(500) }).meat).toBe(cap);
-    // Витрина вмещает PORTIONS_MAX, но за день порции разбирают: закупка не упирается в неё.
-    expect(cap * DISHES.olivier.portions).toBeGreaterThan(PORTIONS_MAX);
+    // Полка вмещает foodSlots, но за день порции разбирают: закупка не упирается в неё.
+    expect(cap * DISHES.olivier.portions).toBeGreaterThan(foodSlots(base));
   });
 });
 
@@ -240,5 +283,41 @@ describe('плита', () => {
     expect([stovePots(s), stovePots(t1), stovePots(t2)]).toEqual([1, 2, 2]);
     expect(dishPortions(t2, 'olivier')).toBe(dishPortions(s, 'olivier') + 1);
     expect(cookRoundsPerDay(t2, 90)).toBeGreaterThan(cookRoundsPerDay(s, 90));
+  });
+});
+
+describe('полка «Еда»', () => {
+  it('улучшается только с кухней: больше порций, холодильник держит часть до утра, у витрины берут чаще', () => {
+    expect(GEAR_IDS).toContain('foodShelf');
+    expect(gearAvailable({ ...at(), upgrades: [] }, 'foodShelf')).toBe(false);
+    const s = at({ money: 10000 });
+    const t1 = upgradeGear(s, 'foodShelf')!;
+    const t2 = upgradeGear(t1, 'foodShelf')!;
+    expect([foodSlots(s), foodSlots(t1), foodSlots(t2)]).toEqual(FOOD_SLOTS);
+    // Деревянная полка: к утру списывается всё; в холодильнике — половина, в витрине-горке — три четверти.
+    expect(spoilDishes({ ...s, kitchen: { borscht: 8 } })).toMatchObject({ spoiled: 8, state: { kitchen: {} } });
+    expect(spoilDishes({ ...t1, kitchen: { borscht: 8, olivier: 3 } })).toMatchObject({ spoiled: 6, state: { kitchen: { borscht: 4, olivier: 1 } } });
+    expect(spoilDishes({ ...t2, kitchen: { borscht: 8 } })).toMatchObject({ spoiled: 2, state: { kitchen: { borscht: 6 } } });
+    expect(FOOD_KEEP[0]).toBe(0);
+    // Нарядная витрина: тот же бросок, что у простой полки мимо, у неё — порция.
+    const roll = () => 0.17;
+    expect(wantsDish(s, roll)).toBe(false);
+    expect(wantsDish(t2, roll)).toBe(true);
+  });
+
+  it('покупатель берёт с полки порцию; пустая — ничего', () => {
+    const s = at({ kitchen: { pancakes: 1 } });
+    const took = takeDish(s, () => 0)!;
+    expect(took.dish).toBe('pancakes');
+    expect(portionsTotal(took.state)).toBe(0);
+    expect(takeDish(took.state, () => 0)).toBeNull();
+  });
+
+  it('старое сохранение: порции из витрины кухни стоят на полке «Еда»', () => {
+    const old = { ...at(), kitchen: { olivier: 4, ukha: 3 } } as StoreState;
+    delete (old as { pantry?: unknown }).pantry;
+    expect(portionsTotal(old)).toBe(7);
+    expect(pantryOf(old, 'meat')).toBe(0);
+    expect(takeDish(old, () => 0)?.dish).toBe('olivier');
   });
 });

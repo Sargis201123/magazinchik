@@ -65,6 +65,10 @@ describe('козни конкурента', () => {
     const fined = trickNight(answerTrick(s, 'ignore')!, () => 0, false);
     expect(fined.money).toBe(5000 - inspectorFine(2));
     expect(fined.rating).toBeLessThan(s.rating);
+    // Пустая касса — остаток штрафа уходит в долг, в минус касса не уходит.
+    const broke = trickNight(answerTrick(withTrick('inspector', { money: 5, debt: 10 }), 'ignore')!, () => 0, false);
+    expect(broke.money).toBe(0);
+    expect(broke.debt).toBe(10 + inspectorFine(2) - 5);
     // Уборщица на смене — шанс штрафа вдвое меньше.
     expect(trickNight(answerTrick(s, 'ignore')!, () => 0.4, true).trick?.result).toBe('passed');
     // Утром рассказать один раз.

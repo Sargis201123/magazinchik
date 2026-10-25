@@ -112,9 +112,11 @@ export function trickNight(state: StoreState, random: () => number, cleaner: boo
   }
   if (random() >= INSPECTOR_FINE_CHANCE * (cleaner ? 0.5 : 1)) return { ...state, trick: { ...trick, result: 'passed' } };
   const fine = inspectorFine(state.level);
+  // Не хватает в кассе — остаток штрафа в долг (как у обычной проверки), в минус касса не уходит.
   return {
     ...state,
-    money: state.money - fine,
+    money: Math.max(0, state.money - fine),
+    debt: state.debt + Math.max(0, fine - Math.max(0, state.money)),
     rating: Math.round(Math.max(0, state.rating - INSPECTOR_RATING) * 100) / 100,
     trick: { ...trick, result: 'fined', fine },
   };

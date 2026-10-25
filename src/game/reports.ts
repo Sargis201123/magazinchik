@@ -18,8 +18,8 @@ export interface DayReport {
   /** Сколько раз сочли дорогим и сколько раз не нашли на полке. */
   pricey: Partial<Record<ProductId, number>>;
   missing: Partial<Record<ProductId, number>>;
-  /** Кухня (kitchen.ts): продано порций, сколько раз хотели порцию (и кому не хватило) и сколько списали ночью. */
-  kitchen?: { sold: number; wanted: number; spoiled: number };
+  /** Кухня (kitchen.ts): продано порций, сколько раз хотели порцию (и кому не хватило), сколько списали ночью и потратили на продукты. */
+  kitchen?: { sold: number; wanted: number; spoiled: number; spent?: number };
 }
 
 export function addReport(state: StoreState, day: number, stats: DayStats, spoiled: Partial<Record<ProductId, number>>, dishSpoiled = 0): StoreState {
@@ -33,7 +33,9 @@ export function addReport(state: StoreState, day: number, stats: DayStats, spoil
     pricey: { ...(stats.pricey ?? {}) },
     missing: { ...(stats.missing ?? {}) },
     // Кухня работала: по этой строке повар «по спросу» и закупка знают, сколько порций берут.
-    ...(stats.dishWanted !== undefined || dishSpoiled ? { kitchen: { sold: stats.dishes ?? 0, wanted: stats.dishWanted ?? 0, spoiled: dishSpoiled } } : {}),
+    ...(stats.dishWanted !== undefined || dishSpoiled || stats.kitchenSpent
+      ? { kitchen: { sold: stats.dishes ?? 0, wanted: stats.dishWanted ?? 0, spoiled: dishSpoiled, ...(stats.kitchenSpent ? { spent: stats.kitchenSpent } : {}) } }
+      : {}),
   };
   return { ...state, reports: [...(state.reports ?? []), row].slice(-REPORT_DAYS) };
 }

@@ -30,11 +30,15 @@ const css = `
 .ui-stock .ui-stock-out { color: #fff; background: rgba(228, 59, 68, .85); }
 .ui-hint { position: fixed; left: 0; right: 0; padding: 0 12px; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 12px);
   text-align: center; font: 13px ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
+/* Окно — ниже кнопок Telegram: в полном экране «Закрыть» и «⋯» лежат поверх игры и забирают касания себе
+   (из-за этого не нажимался кубок 🏆 в правом верхнем углу утра). Отступы — те же --safe-top / --safe-bottom, что у HUD. */
 .ui-modal { position: fixed; inset: 0; background: rgba(15, 12, 22, .78); display: flex; align-items: center;
-  justify-content: center; padding: 16px; overflow-y: auto; }
+  justify-content: center; overflow-y: auto; box-sizing: border-box;
+  padding: calc(var(--safe-top, env(safe-area-inset-top)) + 16px) 16px calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 16px); }
 /* Окно в пиксельной рамке (assets/ui_frame.png, 9 частей по 8 пикселей). */
 .ui-card { color: #2b2233; border: 16px solid transparent; border-image: url(${png('ui_frame')}) 8 fill / 16px stretch;
-  image-rendering: pixelated; padding: 2px 10px; max-width: 372px; width: 100%; max-height: calc(100dvh - 32px);
+  image-rendering: pixelated; padding: 2px 10px; max-width: 372px; width: 100%;
+  max-height: calc(100dvh - var(--safe-top, env(safe-area-inset-top)) - var(--safe-bottom, env(safe-area-inset-bottom)) - 32px);
   overflow-y: auto; box-sizing: border-box; font: 15px/1.4 ${UI_FONT};
   filter: drop-shadow(0 4px 0 rgba(24, 20, 37, .6));
   /* Полоса прокрутки тонкая и в цвет рамки; поля по бокам — чтобы цифры справа не налезали на неё. */
@@ -282,6 +286,15 @@ const css = `
 /* Закупка: большая кнопка «Закупить нужное», фильтры. */
 .ui-restock .ui-btn { margin: 0 0 4px; }
 .ui-filter { margin: 8px 0 2px; }
+/* Автозаказ — первой карточкой закупки: рамка толще, справа ярлык «включён / выключен». */
+.ui-auto { border-width: 3px; background: #eef4ff; }
+.ui-auto.on { background: #e6f6dc; }
+.ui-auto-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 16px; }
+.ui-auto-state { flex: none; font: 700 12px ${UI_FONT}; padding: 2px 8px; border-radius: 10px; background: #2b2233; color: #f4ecd8; }
+.ui-auto.on .ui-auto-state { background: #3e8948; }
+.ui-auto-limit { flex-wrap: wrap; font-size: 14px; }
+.ui-auto-lines { margin: 4px 0; }
+.ui-auto-actions { margin-top: 6px; }
 .ui-chip.active { background: #2b2233; color: #f4ecd8; }
 /* Зал: склад строкой, полки сеткой. */
 .ui-stock-line { font-size: 14px; margin: 4px 0 6px; line-height: 1.6; }
@@ -322,6 +335,14 @@ const css = `
 .ui-more { border: 2px solid #2b2233; border-radius: 6px; background: #fbf6ea; padding: 6px 8px; margin: 6px 0; }
 .ui-more summary { cursor: pointer; font-weight: 700; font-size: 14px; }
 .ui-more[open] summary { margin-bottom: 4px; }
+/* Строки «Подробнее» — по одной на пункт, с полоской-разделителем. Длинное значение (кафе, проверка, доставка,
+   свет) не в строку с названием, а своей строкой под ним, с переносом: в одну строку на 320–430 px оно
+   вылезало за рамку и ложилось поверх названия. */
+.ui-more .ui-row, .ui-sum-line { margin: 0; padding: 5px 0; border-top: 1px dashed #d8ccb0; }
+.ui-more summary + .ui-row, .ui-more summary + .ui-sum-line { border-top: 0; }
+.ui-more .ui-row > span:first-child { line-height: 1.25; }
+.ui-sum-line > span { display: block; line-height: 1.25; }
+.ui-sum-line > b { display: block; margin-top: 1px; line-height: 1.3; overflow-wrap: anywhere; }
 .ui-card h3 { font-size: 16px; border-bottom: 2px solid #2b2233; padding-bottom: 2px; }
 /* Строка товара: крупная иконка, название с жёлтым ценником, подпись, кнопки справа — ничего не переносится. */
 .ui-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 8px; align-items: center; padding: 7px 0; }
@@ -418,7 +439,7 @@ const css = `
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 24px); box-sizing: border-box; }
 .ui-dialog-text { margin: 0; font-size: 15px; line-height: 1.4; min-height: 3em; }
 .ui-dialog-caret { display: inline-block; margin-left: 4px; font-size: 10px; color: #b86f50; animation: ui-tip .8s ease-in-out infinite; }
-.ui-tour { position: fixed; left: 8px; right: 8px; bottom: 8px; max-width: 480px; margin: 0 auto; z-index: 50; color: #2b2233;
+.ui-tour { position: fixed; left: 8px; right: 8px; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 8px); max-width: 480px; margin: 0 auto; z-index: 50; color: #2b2233;
   font: 15px/1.4 ${UI_FONT}; background: #f4ecd8; border: 3px solid #2b2233; border-radius: 10px; padding: 8px 10px 10px; box-shadow: 0 6px 0 rgba(0,0,0,.35);
   animation: ui-pop .3s cubic-bezier(.3, 1.45, .5, 1); }
 .ui-tour .ui-dialog { margin: 0; }

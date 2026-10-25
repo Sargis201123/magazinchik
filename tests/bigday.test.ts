@@ -4,6 +4,7 @@ import {
   BAD_DAY_SOFTEN,
   BIG_DAY_FROM,
   BIG_DAY_GAP,
+  BIG_DAY_REPEAT,
   BIG_DAYS,
   bigDayDemand,
   bigDayFor,
@@ -46,10 +47,19 @@ describe('особые дни', () => {
     }
   });
 
-  it('не слишком часто: примерно каждый седьмой–десятый день', () => {
+  it('часто, но не каждый день: новое событие примерно раз в 4–7 дней, одно и то же — не раньше чем через BIG_DAY_REPEAT', () => {
+    const starts = DAYS.filter((d) => bigDayFor(d) && bigDayStart(d) === d);
+    const every = (DAYS.length - BIG_DAY_FROM) / starts.length;
+    expect(every).toBeGreaterThan(4);
+    expect(every).toBeLessThan(7);
     const share = DAYS.filter((d) => bigDayFor(d)).length / DAYS.length;
-    expect(share).toBeGreaterThan(0.06);
-    expect(share).toBeLessThan(0.2);
+    expect(share).toBeLessThan(0.35);
+    const last = new Map<string, number>();
+    for (const d of starts) {
+      const id = bigDayFor(d)!;
+      if (last.has(id)) expect(d - last.get(id)!).toBeGreaterThan(BIG_DAY_REPEAT);
+      last.set(id, d);
+    }
   });
 
   it('утренний прогноз гостей не выдаёт особый день, а поток гостей — меняется', () => {
@@ -130,7 +140,7 @@ describe('особые дни', () => {
     const warm = blackoutWarm(s);
     expect(warm.aged).toBeGreaterThanOrEqual(0);
     const reward = filmingReward({ ...s, day: 20, ads: undefined });
-    expect(reward.ads).toEqual({ id: 'blogger', from: 21, until: 21 });
+    expect(reward.adRuns).toEqual([{ id: 'blogger', from: 21, until: 21 }]);
     const busy = { ...s, day: 20, ads: { id: 'banner' as const, from: 19, until: 22 } };
     expect(filmingReward(busy)).toBe(busy);
   });

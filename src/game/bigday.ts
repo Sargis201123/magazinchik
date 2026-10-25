@@ -16,6 +16,7 @@
 import { PRODUCTS, SHELF_KINDS, sellableProducts, type ProductId, type Shelf, type StoreState } from './economy';
 import { monthInYear, yearTime } from './calendar';
 import { rng } from './random';
+import { adPlanned, grantAd } from './ads';
 
 export type BigDayId =
   | 'heatwave'
@@ -144,7 +145,7 @@ export const BIG_DAY_IDS = Object.keys(BIG_DAYS) as BigDayId[];
 
 /** С какого дня бывают особые дни и сколько дней минимум между ними (после конца прошлого). */
 export const BIG_DAY_FROM = 10;
-export const BIG_DAY_GAP = 3;
+export const BIG_DAY_GAP = 2;
 /** В толпу в зале помещается больше гостей сразу, и очередь они терпят дольше. */
 export const CROWD_EXTRA_GUESTS = 3;
 export const CROWD_PATIENCE = 1.2;
@@ -233,7 +234,9 @@ function seasonChances(day: number): [BigDayId, number][] {
 }
 
 /** Особые дни бывают чаще обычного в столько раз (раньше шли раз в ~9 дней — игроки скучали). */
-export const BIG_DAY_RATE = 1.6;
+export const BIG_DAY_RATE = 2.2;
+/** Одно и то же особое событие не начинается снова раньше, чем через столько дней: выпало недавнее — берём другое. */
+export const BIG_DAY_REPEAT = 14;
 
 /**
  * Зерно расписания особых дней: у каждого магазина своё (state.seed), поэтому у разных игроков
@@ -255,6 +258,24 @@ function rawStart(day: number): BigDayId | null {
   return null;
 }
 
+/** Начиналось ли это событие за последние BIG_DAY_REPEAT дней. */
+const startedLately = (day: number, id: BigDayId): boolean => {
+  for (let k = 1; k <= BIG_DAY_REPEAT; k++) if (startAt(day - k) === id) return true;
+  return false;
+};
+
+/** Выпало недавнее — другое событие этого времени года (по их же шансам), из тех, что давно не было. */
+function another(day: number): BigDayId | null {
+  const fresh = chances(day).filter(([id]) => !startedLately(day, id));
+  const total = fresh.reduce((sum, [, chance]) => sum + chance, 0);
+  let roll = rng(day * 7727 + 3 + seed * 104723)() * total;
+  for (const [id, chance] of fresh) {
+    if (roll < chance) return id;
+    roll -= chance;
+  }
+  return null;
+}
+
 const MAX_DAYS = Math.max(...BIG_DAY_IDS.map(days));
 const starts = new Map<number, BigDayId | null>();
 
@@ -265,6 +286,7 @@ function startAt(day: number): BigDayId | null {
   if (known !== undefined) return known;
   let id = rawStart(day);
   for (let k = 1; id && k <= BIG_DAY_GAP; k++) if (bigDayFor(day - k)) id = null;
+  if (id && startedLately(day, id)) id = another(day);
   starts.set(day, id);
   return id;
 }
@@ -366,8 +388,8 @@ export function blackoutWarm(state: StoreState): { state: StoreState; aged: numb
 /** Кино сняли — магазин попал в кадр: завтра бесплатная реклама (если своя не куплена). */
 export function filmingReward(state: StoreState): StoreState {
   const tomorrow = state.day + 1;
-  if (state.ads && state.ads.until >= tomorrow) return state;
-  return { ...state, ads: { id: 'blogger', from: tomorrow, until: tomorrow } };
+  if (adPlanned(state, tomorrow)) return state;
+  return grantAd(state, 'blogger', tomorrow);
 }
 
 export interface WeddingOrder {

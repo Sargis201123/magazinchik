@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyDayStats, newGame, servePerDay, cashierScan, type StaffMember, type StoreState } from '../src/game/economy';
 import { lossAdvice, noteLost } from '../src/game/losses';
-import { applyReorder, previousOrder, recordPurchase, reorderPlan } from '../src/game/reorder';
+import { applyReorder } from '../src/game/reorder';
 import { SLOWPOKE_FIX_COST, train, trainingCost, TRAINING_COST } from '../src/game/staff';
 
 const rich = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), money: 10000, level: 3, ...patch });
@@ -30,8 +30,10 @@ describe('куда ушли покупатели', () => {
     const stats = emptyDayStats();
     noteLost(stats, 'queue');
     const key = (s: StoreState) => lossAdvice(stats, s)[0].key;
-    // За первой кассой — хозяин. В ларьке касса одна: некому подменить, пока хозяин в зале, — сменщик.
-    expect(key(rich({ level: 0 }))).toBe('loss.queue.hire');
+    // За первой кассой — хозяин. В ларьке касса одна, а сменщика ещё не нанять — расширяться до «Магазинчика»;
+    // там касса тоже одна — сменщик.
+    expect(key(rich({ level: 0 }))).toBe('loss.queue.relief');
+    expect(key(rich({ level: 1 }))).toBe('loss.queue.hire');
     expect(key(rich())).toBe('loss.queue.buy');
     // Ур. 3 (индекс 2): место под две кассы. Стоит одна — поставить вторую; вторая без кассира — нанять;
     // обе заняты — сменщик, а с ним — расширяться (будет место под третью).
@@ -39,43 +41,29 @@ describe('куда ушли покупатели', () => {
     const two = rich({ level: 2, registers: 2, staff: [member()] });
     expect(key(two)).toBe('loss.queue.hire2');
     expect(key({ ...two, staff: [member({ role: 'cashier2' })] })).toBe('loss.queue.hire');
-    expect(key({ ...two, staff: [member(), member({ role: 'cashier2' })] })).toBe('loss.queue.register');
-    // Универмаг: четыре кассы, все с кассирами — остаётся учить.
-    const all = rich({ level: 4, registers: 4, staff: ['cashier', 'cashier2', 'cashier3', 'cashier4'].map((role) => member({ role: role as 'cashier' })) });
+    // Есть место под кассу самообслуживания — поставить её; все места заняты — расширяться.
+    expect(key({ ...two, staff: [member(), member({ role: 'cashier2' })] })).toBe('loss.queue.kiosk');
+    expect(key({ ...two, staff: [member(), member({ role: 'cashier2' })], kiosks: { n: 2, tier: 0 } })).toBe('loss.queue.register');
+    // Универмаг: четыре кассы, все с кассирами, и все киоски — остаётся учить.
+    const all = rich({ level: 4, registers: 4, kiosks: { n: 4, tier: 0 }, staff: ['cashier', 'cashier2', 'cashier3', 'cashier4'].map((role) => member({ role: role as 'cashier' })) });
     expect(key(all)).toBe('loss.queue.train');
   });
 });
 
-describe('как в прошлый раз', () => {
-  const price = () => 10;
-
-  it('помнит закупку и повторяет её на следующий день', () => {
-    let s = recordPurchase(rich({ day: 5 }), 'farmer', 'bread', 5);
-    s = recordPurchase(s, 'farmer', 'bread', 5);
-    s = recordPurchase(s, 'dairy', 'milk', 4);
-    expect(previousOrder(s)).toBeNull();
-    const tomorrow = { ...s, day: 6 };
-    expect(previousOrder(tomorrow)!.lines).toEqual([
-      { sid: 'farmer', pid: 'bread', qty: 10 },
-      { sid: 'dairy', pid: 'milk', qty: 4 },
-    ]);
-    const plan = reorderPlan(tomorrow, price)!;
-    expect(plan.total).toBe(140);
-    const done = applyReorder(tomorrow, plan, () => false);
-    expect(done.state.money).toBe(tomorrow.money - 140);
-    expect(done.state.warehouse.milk).toHaveLength((tomorrow.warehouse.milk?.length ?? 0) + 4);
-    // Повтор — тоже закупка сегодняшнего дня.
-    expect(done.state.purchases!.find((d) => d.day === 6)!.lines).toHaveLength(2);
-  });
-
-  it('урезает по деньгам и складу; брак — не больше одной строки', () => {
-    const s = { ...recordPurchase(rich({ day: 5 }), 'farmer', 'bread', 30), day: 6, money: 100 };
-    const plan = reorderPlan(s, price)!;
-    expect(plan.cut).toBe(true);
-    expect(plan.lines[0].qty).toBe(10);
-    const two = { ...recordPurchase(recordPurchase(rich({ day: 5 }), 'farmer', 'bread', 2), 'dairy', 'milk', 2), day: 6 };
-    const done = applyReorder(two, reorderPlan(two, price)!, () => true);
+describe('закупка по плану', () => {
+  it('урезанная по деньгам строка покупается, брак — не больше одной строки', () => {
+    const plan = {
+      lines: [
+        { sid: 'farmer' as const, pid: 'bread' as const, qty: 2, price: 10 },
+        { sid: 'dairy' as const, pid: 'milk' as const, qty: 2, price: 10 },
+      ],
+      total: 40,
+      cut: false,
+    };
+    const s = rich({ day: 6 });
+    const done = applyReorder(s, plan, () => true);
     expect(done.badLine?.pid).toBe('bread');
+    expect(done.state.money).toBe(s.money - 40);
     expect(done.state.warehouse.milk!.every((u) => !u.pending)).toBe(true);
   });
 });

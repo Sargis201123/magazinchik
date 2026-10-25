@@ -73,6 +73,9 @@ import {
 } from '../game/endless';
 import { lastSavedAt, loadGame, pauseSaving, saveGame, savingPaused } from '../game/save';
 import { friendState } from '../game/friendShop';
+import { applyPranks, bonusGuests, bossLeft, bossShop, messToday, PRANK_COINS, takeRivalDay, takeThanks, THANK_COINS, usePrank, type PrankIn, type PrankKind } from '../game/rival';
+import { fetchRivalShop, rivalAct, rivalInbox, thankRival } from '../platform/rival';
+import { rivalBar, showRivalNews } from '../ui/rival';
 import { awayTrade } from '../game/away';
 import { getLang, t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
@@ -140,10 +143,11 @@ import { holidayFor, lateAutumn, yearTime } from '../game/calendar';
 import { liveProgress, recordDay, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
-import { activeAd } from '../game/ads';
+import { activeAds, adExtraItems, adGuests, adRareBoost, adTrust } from '../game/ads';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
-import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
+import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, withUpgrades } from '../game/upgrades';
+import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskSlots, kioskTier, kioskTierIndex } from '../game/lanes';
 import { showGift } from '../ui/gift';
 import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
@@ -161,7 +165,7 @@ import { duelInfo, fetchFriendShop, loadMultiplayer, treatFriend, visitsInfo, ty
 import { friendsAtWork } from '../game/staff';
 import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
-import { cookBatch, cookMenu, DISHES, DISH_IDS, hasIngredients, kitchenOpen, kitchenWorking, portionsOf, portionsTotal, sellDish, servePortions, stoveSeconds, stoveSprite, takeIngredients, type DishId } from '../game/kitchen';
+import { cookBatch, DISHES, DISH_IDS, dishPortions, foodSlots, foodSprite, kitchenOpen, kitchenWorking, pantryOf, portionsOf, servePortions, stockKitchen, stoveSeconds, stoveSprite, takeDish, takeIngredients, topUpKitchen, wantsDish, type DishId } from '../game/kitchen';
 import { activeTrick, seeTrickResult, trickResult } from '../game/tricks';
 import {
   answerNightStory,
@@ -179,7 +183,7 @@ import {
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propFootprint, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
-import { buildingSpan, iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Point, type Room } from './layout';
+import { buildingSpan, iceboxRect, iceboxSpotFor, kioskSpot, kioskZones, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Point, type Room } from './layout';
 import { BASE_W, crispZoom, homeFrame } from './pixels';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
@@ -190,7 +194,7 @@ import { TRASH_KEYS } from './textures';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
 import { carryBonus, charmPatience, eyeTheft, ownerTiming } from '../game/owner';
-import { eduardLook, type EduardLook } from '../game/eduard';
+import { EDUARD_STAGES, eduardLook, eduardStage, type EduardLook } from '../game/eduard';
 import { updateRecords } from '../game/records';
 import { cafeDeliver, type CafeDelivery } from '../game/cafe';
 import { answerSpecial, grannyRepays, makeSpecial, type SpecialKind, type SpecialVisit } from '../game/special';
@@ -198,6 +202,8 @@ import { showChoice } from '../ui/choice';
 import { BRAND_BATCH, brandBatchCost, brandToBake, startBrandBatch } from '../game/brand';
 import { hasRadio, nextStation, radioPatience, radioTolerance, radioSpeed, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
+import { autoArrived, autoTopUp } from '../game/autoorder';
+import { liveEventsFor, type LiveKind } from '../game/live';
 import { showUrgent } from '../ui/urgent';
 import {
   bargainRows,
@@ -373,7 +379,7 @@ const QUAKE_GRIT = 0x8f7f6a;
  * самообслуживания, радио, кассы, климат, камеры, склад, кофемашина, печь) и украшения.
  */
 const UNBOX =
-  /^(card_terminal|kiosk|radio|phone|counter\d|bin_t\d_0|fan_base|ac_wall|cam|air_curtain|mat_grate|autostore|pallet_jack|forklift|carts|coffee_machine\d?|cafe_table|oven\d?|rug|neon|plant_big|art_[a-z]+|light_(sconce|pendant|lantern|chandelier)|gumball|aquarium|lucky_cat|fountain|jukebox)$/;
+  /^(card_terminal|kiosk\d?|radio|phone|counter\d|bin_t\d_0|fan_base|ac_wall|cam|air_curtain|mat_grate|autostore|pallet_jack|forklift|carts|coffee_machine\d?|cafe_table|oven\d?|rug|neon|plant_big|art_[a-z]+|light_(sconce|pendant|lantern|chandelier)|gumball|aquarium|lucky_cat|fountain|jukebox)$/;
 /** Новинки распаковывают по очереди, с таким шагом. */
 const UNBOX_STEP = 350;
 /** Флажок «НОВОЕ» висит над новинкой два часа по часам зала (смена идёт с 8:00 до 20:00). */
@@ -471,6 +477,16 @@ const RUN_PACE = 65;
 const MAX_DUST = 24;
 /** Как часто покупатель у пустой кассы зовёт продавца. */
 const CALL_EVERY_MS = 3000;
+/** Картинки киосков по модели (lanes.ts, KIOSK_TIERS), где у них экран (от центра) и чем он светится. */
+const KIOSK_SPRITES = ['kiosk', 'kiosk1', 'kiosk2'];
+const KIOSK_SCREEN = { x: 0, y: -5.5, w: 8, h: 5 };
+const KIOSK_GLOW = 0x2ce8f5;
+const KIOSK_ALARM = 0xe43b44;
+/** Касание кассы, за которой сменщик, срезает столько мс пробивки; про запас — не больше стольких. */
+const RELIEF_TAP_MS = 250;
+const RELIEF_HURRY_MAX_MS = 1200;
+/** Какую долю пробивки сменщика можно срезать касаниями (в симуляторе — RELIEF_TAPS). */
+const RELIEF_HURRY_SHARE = 0.3;
 
 /** Полка «Уценка» (art/bargain_shelf.py, в точках мира): низ горки ниже точки места, высота цоколя и шаг рядов. */
 const BARGAIN_BOTTOM = 8;
@@ -497,14 +513,20 @@ const DUMP_MS = 450;
 const SPILL_CHANCE = 0.035;
 const SPILL_TINTS = [0xf4f8ff, 0xffb347, 0xb86f50];
 const SPILL_MOP_MS = 1700;
-/** Мини-события дня (свет, труба, голубь, курьер): с какого дня и как часто. */
-const LIVE_FROM_DAY = 4;
-const LIVE_CHANCE = 0.5;
-const LIVE_KINDS = ['blackout', 'leak', 'pigeon', 'courier', 'mouse'] as const;
+/** Когда (доли дня) случается мини-событие; если их два — первое до обеда, второе к вечеру. */
+const LIVE_WINDOW: [number, number] = [0.2, 0.6];
+const LIVE_WINDOWS: [number, number][] = [
+  [0.15, 0.4],
+  [0.55, 0.8],
+];
+/** Мини-событие ждёт, пока кончится прошлое, и не начинается, если до закрытия меньше этой доли дня. */
+const LIVE_RETRY_MS = 5000;
+const LIVE_LATEST = 0.1;
+/** Автозаказ проверяет склад раз в столько секунд дня. */
+const AUTO_CHECK_SECONDS = 2;
 /** Мышь грызёт товар раз в столько секунд; сама уходит через столько. */
 const MOUSE_BITE_MS = 4000;
 const MOUSE_STAY_MS = 25_000;
-type LiveKind = (typeof LIVE_KINDS)[number];
 const FIX_MS = 1600;
 const LEAK_FIX_MS = 2200;
 /** Следующий покупатель обслужен за столько после предыдущего — серия продолжается. */
@@ -1065,7 +1087,7 @@ interface Customer {
   /** Первый покупатель нового начала: берёт одно, без туалета и мусора — и сразу к кассе. */
   first?: boolean;
   /** Шоколадка со стойки и кофе — оплачиваются на кассе вместе с товаром. */
-  extras?: { kind: 'candy' | 'coffee' | 'dish'; price: number }[];
+  extras?: { kind: 'candy' | 'coffee' | 'dish'; price: number; dish?: DishId }[];
   /** Уже погладил кота. */
   petted?: boolean;
   /** Сколько готов ждать в очереди. */
@@ -1083,13 +1105,22 @@ interface Register {
   clerk: { x: number; y: number };
   /** Кто подошёл к этой кассе (идёт к ней, ждёт или уже пробивается). */
   customer: Customer | null;
-  scan: { start: number; total: number; byOwner: boolean } | null;
+  scan: { start: number; total: number; byOwner: boolean; cut?: number } | null;
   bar: Phaser.GameObjects.Rectangle;
   fill: Phaser.GameObjects.Rectangle;
   screen: Phaser.GameObjects.Rectangle;
   beam: Phaser.GameObjects.Rectangle;
   /** Сам аппарат: вздрагивает на каждом пробитом товаре. */
   img?: Phaser.GameObjects.Image;
+  /** Сколько мс пробивки срезали касания хозяина (у кассы хозяина, когда за ней сменщик). */
+  hurry: number;
+}
+
+/** Касса самообслуживания: картинка, экран и занята ли она. */
+interface Kiosk {
+  img: Phaser.GameObjects.Image;
+  screen: Phaser.GameObjects.Rectangle;
+  busy: boolean;
 }
 
 /** Печь: что в ней и всё, что её рисует. */
@@ -1110,8 +1141,9 @@ interface Oven {
 }
 
 /**
- * Кухня во флигеле: плита с кастрюлями, стол повара с ножом, витрина-раздача с тарелками.
- * Что сейчас варится, уже взято со склада: при перестройке зала оно сразу встаёт в витрину (flushCooking).
+ * Кухня во флигеле: плита с кастрюлями, стол повара с ножом, витрина-раздача, ящик-кладовая.
+ * Что сейчас варится (и несут на полку), уже взято из кладовой: при перестройке зала оно сразу встаёт
+ * на полку «Еда» (flushCooking).
  */
 interface KitchenView {
   stove: Phaser.GameObjects.Image;
@@ -1119,9 +1151,12 @@ interface KitchenView {
   pots: Phaser.GameObjects.Image[];
   flames: Phaser.GameObjects.Rectangle[];
   knife: Phaser.GameObjects.Image;
+  crate: Phaser.GameObjects.Image;
   showcase: Phaser.GameObjects.Image;
   plates: Phaser.GameObjects.Image[];
   cooking: DishId[];
+  /** Сваренное стоит на раздаче, пока повар не переложит его на поднос. */
+  onPass: boolean;
   /** Пар над кастрюлями: снять, когда сварилось. */
   stopSteam?: () => void;
 }
@@ -1301,6 +1336,8 @@ export class StoreScene extends Phaser.Scene {
   private popups: Popup[] = [];
   /** Кухня во флигеле: плита, стол повара, витрина с тарелками (кухни нет — пусто). */
   private kitchenView?: KitchenView;
+  /** Полка «Еда» у входа (kitchen.ts): где стоит, картинка и тарелки на ней. */
+  private foodView?: { at: { x: number; y: number }; img: Phaser.GameObjects.Image; plates: Phaser.GameObjects.Image[] };
   /** В какой день повар уже пожаловался, что не из чего готовить (раз в день, не чаще). */
   private cookNoFoodDay = 0;
   /** Чей магазин друга нарисован сбоку (торговая неделя). */
@@ -1500,10 +1537,12 @@ export class StoreScene extends Phaser.Scene {
   private obstacles: Rect[] = [];
   /** Люди этого кадра для обхода встречных (passers): считаем раз за кадр, а не на каждого идущего. */
   private crowd: { frame: number; list: Passer[] } = { frame: -1, list: [] };
-  /** Касса самообслуживания (если куплена): картинка, экран и занята ли она. */
-  private kiosk?: Phaser.GameObjects.Image;
-  private kioskScreen?: Phaser.GameObjects.Rectangle;
-  private kioskBusy = false;
+  /** Кассы самообслуживания (сколько куплено) — у правой стены над кассами. */
+  private kiosks: Kiosk[] = [];
+  /** Когда последний раз всплывало «быстрее» над кассой (касания сменщику). */
+  private lastHurry = 0;
+  /** Сменщик дошёл до кассы хозяина и пробивает (новенький — с той минуты, как встал за неё). */
+  private reliefReady = false;
   /** Мини-событие дня: что сейчас происходит и всё, что его рисует. */
   private liveEvent: LiveKind | null = null;
   private liveObjs: { destroy: () => void }[] = [];
@@ -1539,8 +1578,11 @@ export class StoreScene extends Phaser.Scene {
   private staffGen = 0;
   private toiletDirt = 0;
   /** Срочный подвоз: что едет и занят ли фургон. */
-  private urgentOrders: { id: ProductId; qty: number }[] = [];
+  /** auto — подвоз автозаказа (по приезде вычёркивается из autoOrder.today.inbound). */
+  private urgentOrders: { id: ProductId; qty: number; auto?: boolean }[] = [];
   private urgentVanBusy = false;
+  /** Через сколько секунд дня автозаказ снова проверит, не кончился ли товар. */
+  private autoCheck = 0;
   /** Электронные ценники сегодня уже уценили старое. */
   private eveningMarkdown = false;
   private wcStink!: Phaser.GameObjects.Image;
@@ -1633,6 +1675,14 @@ export class StoreScene extends Phaser.Scene {
   private closed = false;
   /** Рабочий день идёт (от «Открыть магазин» до итогов) — для сторожа зависаний. */
   private dayOpen = false;
+  /** «Заглянуть к конкуренту» (game/rival.ts): сейчас в чужом магазине; сколько гостей сегодня увели. */
+  private rivalVisit = false;
+  /** На экране утро своего магазина (до «Открыть магазин»): только тогда — новости о проделках и ответный визит. */
+  private inMorning = false;
+  private rivalLost = 0;
+  /** Когда спрашивали сервер, что натворили у нас; что пришло, пока мы были в гостях. */
+  private rivalCheckedAt = 0;
+  private rivalPending: { pranks: PrankIn[]; thanks: string[] } | null = null;
   /** Сколько мс день стоит без открытых окон — сторож запускает его дальше. */
   private stallMs = 0;
   private nightWatch: Phaser.GameObjects.GameObject[] = [];
@@ -1860,6 +1910,12 @@ export class StoreScene extends Phaser.Scene {
       // Уценённое — на полку «Уценка», пока есть место.
       this.sendToBargain();
     }
+    // Автозаказ: товар разобрали, а на складе пусто — сам вызывает фургон (autoorder.ts).
+    this.autoCheck -= dt;
+    if (!this.night && this.autoCheck <= 0) {
+      this.autoCheck = AUTO_CHECK_SECONDS;
+      this.autoTopUpIfNeeded();
+    }
     const rushAt = this.state.plan?.rushAt;
     const rush = !this.night && rushAt !== undefined && elapsed >= rushAt && elapsed < rushAt + RUSH_SECONDS;
     if (rush && !this.rushAnnounced) {
@@ -1879,7 +1935,9 @@ export class StoreScene extends Phaser.Scene {
       const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0) + (isCrowdDay(this.state.day) && !this.night ? CROWD_EXTRA_GUESTS : 0);
       if (this.nextSpawn <= 0 && this.customers.size < maxCustomers && !this.siege) {
         // Очередной покупатель иногда приезжает на машине: сначала паркуется, потом идёт в магазин.
-        if (!this.carCustomer()) this.spawnCustomer();
+        // Этого гостя позвал к себе конкурент (game/rival.ts) — он не придёт.
+        if (this.rivalLost > 0 && !this.night) this.rivalLost--;
+        else if (!this.carCustomer()) this.spawnCustomer();
         const interval =
           spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
@@ -2133,7 +2191,7 @@ export class StoreScene extends Phaser.Scene {
       // Ещё не заплатил — взятое возвращается на полки, как у ушедшего из очереди (заплативший уже уходит: gone).
       if (!c.gone) {
         this.state = returnToShelf(this.state, c.items);
-        for (const extra of c.extras ?? []) if (extra.kind === 'candy') this.state = returnCandy(this.state);
+        this.returnExtras(c);
       }
       c.gone = true;
       c.patience?.remove();
@@ -2218,6 +2276,7 @@ export class StoreScene extends Phaser.Scene {
     this.buildShowcases();
     this.buildBin();
     this.buildBargain();
+    this.buildFood();
     // Электрощиток на стене: нужен, когда отключат свет. Перестановка не даёт закрыть его полкой
     // (placement.ts), а если в старом сохранении полка уже стоит там — щиток висит левее, на открытой стене.
     const fuseX = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12).find((x) => x > 10 && !this.behindShelf(x, 6)) ?? wc.x - 24;
@@ -2264,15 +2323,19 @@ export class StoreScene extends Phaser.Scene {
       fill,
       screen,
       beam,
+      hurry: 0,
     };
   }
 
   /**
-   * Кто работает за кассой. Первая — всегда хозяина; пока он в зале по делу, за неё встаёт сменщик
-   * (если нанят). За остальными — их кассиры, а без кассира касса закрыта (null).
+   * Кто работает за кассой. Первая — хозяина, но если нанят сменщик и он вышел на смену, за ней весь
+   * день он (новенький — с той минуты, как дошёл до кассы, reliefLoop). За остальными — их кассиры, а без кассира касса закрыта (null).
    */
   private operator(index: number): Worker | 'owner' | null {
-    if (index === 0) return (this.sellerBusy && this.workers.get(RELIEF_ROLE)) || 'owner';
+    if (index === 0) {
+      const relief = this.workers.get(RELIEF_ROLE);
+      return relief && relief.member.role === RELIEF_ROLE && this.reliefReady ? relief : 'owner';
+    }
     const role = tillRole(index);
     return (role && this.workers.get(role)) || null;
   }
@@ -2296,7 +2359,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .zone(at.x + (left ? -6 : 6), at.y + 6, 40, 64)
       .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => this.tap(() => this.serveNext()));
+      .on('pointerup', () => this.tap(() => this.serveNext(index)));
   }
 
   /** Хозяин сейчас пробивает кого-то. */
@@ -3143,6 +3206,219 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
+   * «Заглянуть к конкуренту» (game/rival.ts): чужой магазин по снимку с сервера (ключ из рейтинга)
+   * или босс через дорогу (key — null, сервер не нужен). По залу бродят покупатели; внизу — проделки,
+   * их число считает сервер (у босса — мы сами). Награда — в свой магазин; он не сохраняется, пока
+   * мы в гостях, «Домой» — вернуть свой и утро.
+   */
+  private async visitRival(key: string | null, name: string): Promise<void> {
+    this.inMorning = false;
+    const res = key ? await fetchRivalShop(key) : null;
+    // Свой магазин — после ответа сервера: пока ждали, в него могли прийти монеты или новости.
+    let home = this.state;
+    const look = eduardLook(home);
+    const stage = EDUARD_STAGES[eduardStage(home) ?? 0];
+    const bossName = look === 'mega' ? t('eduard.mega') : t(stage.nameKey);
+    const guest = key ? res && friendState(res.shop, home) : friendState(bossShop(home, bossName, stage.rating || 4.2), home);
+    if (!guest) {
+      toast('assets/ico_cross.png', t('visitShop.title'), t('rival.none', { name }));
+      this.showMorning();
+      return;
+    }
+    pauseSaving(true);
+    this.rivalVisit = true;
+    this.state = guest;
+    this.buildWorld();
+    track('visit_rival', home.day);
+    const owner = key ? res!.name || name : bossName;
+    const browsers: Phaser.GameObjects.Container[] = [];
+    // Покупатели бродят от полки к полке; позванный к нам уходит на улицу.
+    const wander = this.time.addEvent({
+      delay: 2400,
+      loop: true,
+      callback: () => {
+        for (const b of browsers) {
+          if (!b.active || b.getData('lured') || b.getData('walking') || Math.random() < 0.5) continue;
+          const p = this.rivalSpot();
+          void this.walk(b, p.x, p.y, this.customerSpeed() * 0.7);
+        }
+      },
+    });
+    for (let i = 0; i < (this.lite ? 2 : 3); i++) {
+      const p = this.rivalSpot();
+      const b = this.makePerson(p.x, p.y, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), guest.day));
+      this.setFacing(b, Math.random() < 0.5 ? 'left' : 'right');
+      browsers.push(b);
+    }
+    let left = key ? res!.left : bossLeft(home);
+    const prank = async (kind: PrankKind): Promise<void> => {
+      bar.setBusy(true);
+      const done = key ? await rivalAct(key, kind) : { ok: bossLeft(home) > 0, left: 0, error: 'limit' };
+      bar.setBusy(false);
+      // Пока ждали сервер, ушли домой — проделка засчитана: награда сразу в свой магазин.
+      if (this.state !== guest) {
+        if (done.ok && !savingPaused()) {
+          this.state = usePrank(this.state, kind, !key);
+          saveGame(this.state);
+        }
+        return;
+      }
+      const { sellerHome } = this.layout;
+      if (!done.ok) {
+        if (done.error !== 'too_often' && done.error !== 'offline') bar.setLeft((left = 0));
+        // Неизвестная ошибка (не лимит) — тоже без кнопок, но с понятной надписью.
+        if (done.error === 'bad_kind') done.error = 'gone';
+        this.popup(sellerHome.x - 20, sellerHome.y - 40, t(`rival.err.${done.error === 'pair' || done.error === 'victim' || done.error === 'too_often' || done.error === 'offline' || done.error === 'gone' ? done.error : 'limit'}`), '#ffd0d0');
+        sound.bad();
+        return;
+      }
+      home = usePrank(home, kind, !key);
+      left = key ? done.left : bossLeft(home);
+      bar.setLeft(left);
+      this.hud.update({ ...guest, money: home.money }, DAY_SECONDS);
+      this.rivalPrank(kind, browsers);
+      this.time.delayedCall(900, () => {
+        if (this.state !== guest) return;
+        this.popup(sellerHome.x - 20, sellerHome.y - 52, t(kind === 'lure' ? 'rival.reward.guest' : 'rival.reward', { n: PRANK_COINS[kind] }), '#c8ffb0');
+        sound.coin();
+      });
+    };
+    const bar = rivalBar(t('rival.bar', { name: owner, rating: guest.rating.toFixed(1) }), left, (kind) => void prank(kind), () => {
+      bar.remove();
+      wander.remove();
+      this.rivalVisit = false;
+      this.state = home;
+      pauseSaving(false);
+      saveGame(this.state);
+      this.buildWorld();
+      this.showMorning();
+    });
+  }
+
+  /** Место в чужом зале, куда встать: перед случайной полкой, чуть вразброс. */
+  private rivalSpot(): { x: number; y: number } {
+    const n = this.state.shelves.length;
+    const p = n ? this.standOf(Phaser.Math.Between(0, n - 1)) : { x: this.layout.door.x, y: this.layout.door.y - 20 };
+    return { x: p.x + Phaser.Math.Between(-6, 6), y: p.y + Phaser.Math.Between(0, 4) };
+  }
+
+  /** Проделка в чужом зале: лужа или мусор на полу (хозяин удивляется), а позванный покупатель уходит к нам. */
+  private rivalPrank(kind: PrankKind, browsers: Phaser.GameObjects.Container[]): void {
+    if (kind === 'lure') {
+      const b = browsers.find((p) => p.active && !p.getData('lured'));
+      if (!b) return;
+      b.setData('lured', true);
+      this.haltWalk(b);
+      this.popup(b.x, b.y - 22, t('rival.say.lure'), '#fff3b0');
+      this.time.delayedCall(1100, () => {
+        if (!b.active) return;
+        this.emote(b, 'emo_heart');
+        this.popup(b.x, b.y - 34, t('rival.say.yes'), '#c8ffb0');
+        void this.strollAway(b);
+      });
+      return;
+    }
+    const p = this.rivalSpot();
+    const piece = this.dropTrash(p.x, p.y, kind);
+    if (piece) {
+      // Убирать чужое не наше дело: лужа и мусор только для вида.
+      piece.removeAllListeners('pointerup').disableInteractive();
+      if (kind === 'spill') {
+        piece.setTint(Phaser.Utils.Array.GetRandom(SPILL_TINTS));
+        const pack = this.art(piece.x + 9, piece.y - 3, 'spill_pack').setAngle(70).setDepth(0.6);
+        piece.once('destroy', () => pack.destroy());
+      }
+    }
+    if (kind === 'spill') sound.bad();
+    else sound.pop();
+    this.popup(p.x, p.y - 16, t(kind === 'spill' ? 'rival.popup.spill' : 'rival.popup.trash'), '#ffd0d0');
+    // Хозяин чужого магазина замечает.
+    if (this.seller?.active) {
+      this.emote(this.seller, 'emo_question');
+      this.popup(this.seller.x, this.seller.y - 30, t('rival.say.owner'), '#ffffff');
+    }
+  }
+
+  /**
+   * Утром — что натворили у нас конкуренты и кто поблагодарил за наш визит (не чаще раза в 10 минут:
+   * сервер отдаёт это один раз). Пришло, пока мы в гостях, — покажем, когда вернёмся.
+   */
+  private async checkRivals(): Promise<void> {
+    // Вернулись из гостей — показать то, что пришло, пока гуляли.
+    if (this.rivalPending) return void (this.inMorning && !savingPaused() && this.applyRivalInbox());
+    const now = Date.now();
+    if (now - this.rivalCheckedAt < 10 * 60_000) return;
+    this.rivalCheckedAt = now;
+    const inbox = await rivalInbox();
+    if (!inbox || (!inbox.pranks.length && !inbox.thanks.length)) return;
+    this.rivalPending = inbox;
+    // Последствия — только к утру этого дня: иначе подождут следующего утра.
+    if (this.inMorning && !this.rivalVisit && !savingPaused()) this.applyRivalInbox();
+  }
+
+  private applyRivalInbox(): void {
+    const inbox = this.rivalPending;
+    if (!inbox) return;
+    this.rivalPending = null;
+    if (inbox.thanks.length) {
+      this.state = takeThanks(this.state, inbox.thanks);
+      toast('assets/ico_coffee.png', t('rival.thanks.title'), t('rival.thanks', { names: inbox.thanks.slice(0, 3).join(', '), n: THANK_COINS * Math.min(5, inbox.thanks.length) }));
+    }
+    // Магазин уже открыт — беспорядок подождёт завтрашнего утра.
+    const { state, news } = applyPranks(this.state, inbox.pranks, this.dayOpen ? this.state.day + 1 : this.state.day);
+    this.state = state;
+    saveGame(this.state);
+    this.hud.update(this.state, DAY_SECONDS);
+    if (!news) return;
+    track('rival_news', this.state.day, inbox.pranks.length);
+    // Окно — когда закроются другие (гостинец бабушки, сюжет): поверх утра, но не поверх них.
+    const show = this.time.addEvent({
+      delay: 500,
+      loop: true,
+      callback: () => {
+        if (document.querySelector('.ui-dialog') || document.querySelectorAll('.ui-modal').length > 1 || this.rivalVisit || savingPaused()) return;
+        show.remove();
+        // Ответный визит — только с утра: утреннее окно закрываем.
+        const morning = this.inMorning && !this.dayOpen;
+        showRivalNews(
+          news,
+          morning
+            ? (key, name) => {
+                for (const m of document.querySelectorAll('.ui-modal')) m.remove();
+                void this.visitRival(key, name);
+              }
+            : null,
+          thankRival,
+        );
+      },
+    });
+  }
+
+  /** Открытие: беспорядок от конкурентов — в зал, увели гостей — столько не придёт, позванные нами — придут. */
+  private openRivalDay(): void {
+    const mess = messToday(this.state);
+    const guests = bonusGuests(this.state);
+    this.rivalLost = mess?.lost ?? 0;
+    this.state = takeRivalDay(this.state);
+    const { door } = this.layout;
+    if (mess && mess.spill + mess.trash) {
+      for (let i = 0; i < mess.spill + mess.trash; i++) {
+        const p = this.rivalSpot();
+        const piece = this.dropTrash(p.x, p.y, i < mess.spill ? 'spill' : 'trash');
+        if (piece && i < mess.spill) piece.setTint(Phaser.Utils.Array.GetRandom(SPILL_TINTS));
+      }
+      this.time.delayedCall(2600, () => this.running && this.popup(door.x, door.y - 30, t('rival.mess'), '#ffd0d0'));
+    }
+    for (let i = 0; i < guests; i++) {
+      this.time.delayedCall(6000 + i * 7000, () => {
+        if (!this.running || this.night || this.timeLeft <= 0) return;
+        this.spawnCustomer();
+        this.popup(door.x, door.y - 24, t('rival.guest'), '#c8ffb0');
+      });
+    }
+  }
+
+  /**
    * Перестановка полок утром: зал целиком в кадре, каждое место под полку — «призрак», который тянут
    * пальцем по сетке. Место, куда ставить нельзя (вплотную к проходу, на кассе, у двери, так, что к
    * полке не подойти), — красное; «Готово» — только когда красных нет.
@@ -3216,7 +3492,7 @@ export class StoreScene extends Phaser.Scene {
     const drawTill = (bad: boolean) => {
       const lay = placed();
       tillFrame.clear();
-      for (const z of tillZones(lay, registers)) {
+      for (const z of tillZones(lay, registers, kioskCount(this.state))) {
         const r = { x: z.x - lay.counter.x, y: z.y - lay.counter.y, w: z.w, h: z.h };
         tillFrame.fillStyle(bad ? 0xe43b44 : 0x2ce8f5, 0.18).fillRect(r.x, r.y, r.w, r.h);
         tillFrame.lineStyle(1, bad ? 0xe43b44 : 0x0099db, 0.9).strokeRect(r.x, r.y, r.w, r.h);
@@ -3279,8 +3555,8 @@ export class StoreScene extends Phaser.Scene {
     };
     const check = () => {
       const lay = placed();
-      const bad = slotIssues(lay, at, defaults, registers, props.map(propRect));
-      const badProps = propIssues(lay, at, props, registers);
+      const bad = slotIssues(lay, at, defaults, registers, props.map(propRect), kioskCount(this.state));
+      const badProps = propIssues(lay, at, props, registers, kioskCount(this.state));
       // Вещь на своём стандартном месте игра поставила сама так, чтобы не мешать (растение у будущей
       // кассы, у двери склада) — красной она становится, только если на неё поставили полку.
       for (const p of props) {
@@ -3289,7 +3565,7 @@ export class StoreScene extends Phaser.Scene {
       }
       // Ларь ищет место сам — вещь не должна занять его место.
       if (this.state.shelves.some((sh) => sh.kind === 'icebox')) {
-        const ice = iceboxRect(iceboxSpotFor({ ...lay, slots: at }, registers, props.map(propRect)));
+        const ice = iceboxRect(iceboxSpotFor({ ...lay, slots: at }, registers, props.map(propRect), kioskCount(this.state)));
         for (const p of props) if (overlapsRect(propRect(p), ice)) badProps.add(p.id);
       }
       propGhosts.forEach((g, i) => {
@@ -3301,7 +3577,7 @@ export class StoreScene extends Phaser.Scene {
         frame.lineStyle(1, red ? 0xe43b44 : 0xb86f50, 1).strokeRect(fp.x, fp.y, fp.w, fp.h);
       });
       // Кассу подсвечиваем красным, если на её месте или в очереди стоит красная полка.
-      drawTill(tillZones(lay, registers).some((z) => at.some((p, i) => bad.has(i) && overlapsRect(slotRect(lay, p), z))));
+      drawTill(tillZones(lay, registers, kioskCount(this.state)).some((z) => at.some((p, i) => bad.has(i) && overlapsRect(slotRect(lay, p), z))));
       ghosts.forEach((g, i) => {
         const frame = g.getData('frame') as Phaser.GameObjects.Graphics;
         const abs = slotRect(lay, at[i]);
@@ -3319,7 +3595,7 @@ export class StoreScene extends Phaser.Scene {
         linkG.fillStyle(color, 1).fillCircle((a.x + b.x) / 2, (a.y + b.y) / 2 - 4, 1.8);
       }
       // Ларь ищет место сам — после перестановки ему должно найтись место у стены.
-      const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(lay, at, registers, props.map(propRect));
+      const iceless = this.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(lay, at, registers, props.map(propRect), kioskCount(this.state));
       done.disabled = bad.size > 0 || badProps.size > 0 || iceless;
       hint.textContent = bad.size || badProps.size ? t('arrange.bad', { n: bad.size + badProps.size }) : iceless ? t('arrange.icebox') : t('arrange.hint');
       return iceless || badProps.size ? new Set([...bad, -1]) : bad;
@@ -4115,12 +4391,12 @@ export class StoreScene extends Phaser.Scene {
     // Вдоль правой стены растений больше нет — там автомат, касса и проход; остался угол у склада.
     const ice = this.iceboxSpot();
     if (ice.x >= 36) spots.push({ x: 12, y: h - 14 });
-    const big = Boolean(activeDecor(this.state, 'plants'));
+    const bought = activeDecor(this.state, 'plants')?.texture;
     spots.forEach((def, i) => {
       const id = `hall${i}`;
       const p = this.propAt(id, def);
       if (p === def && !free(p.x, p.y)) return;
-      const tex = big || i % 2 ? 'plant_big' : 'plant';
+      const tex = bought ?? (i % 2 ? 'plant_big' : 'plant');
       this.art(p.x, p.y + 3, 'shadow').setScale(0.7 / ART).setDepth(p.y - 1);
       this.art(p.x, p.y, tex).setDepth(p.y + 6);
       this.obstacles.push({ x: p.x - 7, y: p.y - 10, w: 14, h: 14 });
@@ -4128,9 +4404,9 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
-  /** Терминал на прилавке и касса самообслуживания у правой стены — если куплены. */
+  /** Терминал на прилавке и кассы самообслуживания у правой стены — если куплены. */
   private buildUpgrades(): void {
-    const { counter, wallH } = this.layout;
+    const { counter } = this.layout;
     if (hasUpgrade(this.state, 'terminal')) this.art(counter.x + 3, counter.y - 4, 'card_terminal').setDepth(counter.y + 22);
     for (let i = 1; i < registerCount(this.state); i++) this.buildRegister(i);
     this.buildHallDecor();
@@ -4140,14 +4416,20 @@ export class StoreScene extends Phaser.Scene {
     this.buildRadio();
     this.buildCup();
     this.buildDelivery();
-    this.kiosk = undefined;
-    this.kioskBusy = false;
-    if (!hasUpgrade(this.state, 'selfCheckout')) return;
-    // Касса самообслуживания — у очереди, справа от основной кассы (вместе с ней переезжает).
-    const at = { x: this.layout.counter.x + 22, y: wallH + 86 };
-    this.kiosk = this.art(at.x, at.y, 'kiosk').setDepth(at.y + 9);
-    this.kioskScreen = this.add.rectangle(at.x, at.y - 9, 6, 4, 0x2ce8f5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(at.y + 10);
-    this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
+    // Кассы самообслуживания — у очереди, у правой стены над кассами, одна под другой (вместе с кассой переезжают).
+    this.kiosks = [];
+    const tex = KIOSK_SPRITES[kioskTierIndex(this.state)];
+    for (let i = 0; i < kioskCount(this.state); i++) {
+      const at = kioskSpot(this.layout, i);
+      const img = this.art(at.x, at.y, tex).setDepth(at.y + 9);
+      const screen = this.add
+        .rectangle(at.x + KIOSK_SCREEN.x, at.y + KIOSK_SCREEN.y, KIOSK_SCREEN.w, KIOSK_SCREEN.h, KIOSK_GLOW)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(0.3)
+        .setDepth(at.y + 10);
+      this.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
+      this.kiosks.push({ img, screen, busy: false });
+    }
   }
 
   /** Кубок последнего выигранного конкурса — на прилавке, слегка поблёскивает. */
@@ -5834,31 +6116,56 @@ export class StoreScene extends Phaser.Scene {
     this.art(x, y, 'review_board').setOrigin(0.5, 1).setDepth(y);
   }
 
-  /** Покупатель с 1–2 товарами, пока у кассы очередь, пробивает себя сам. */
+  /**
+   * Покупатель с небольшой корзиной пробивает себя сам на свободной кассе самообслуживания: когда у
+   * касс очередь, а без очереди — каждый третий (KIOSK_PREFER). Сколько штук, как быстро, как часто
+   * «ошибка» и непробитый товар — по модели киосков (lanes.ts).
+   */
   private async useKiosk(c: Customer): Promise<boolean> {
-    const kiosk = this.kiosk;
-    if (!kiosk?.active || this.kioskBusy || c.thief || c.items.length > KIOSK_MAX_ITEMS || this.waiting() === 0) return false;
-    this.kioskBusy = true;
-    await this.walk(c.sprite, kiosk.x - 14, kiosk.y + 4);
+    const tier = kioskTier(this.state);
+    if (!this.kiosks.length || c.thief || !c.items.length || c.items.length > tier.maxItems) return false;
+    if (this.waiting() === 0 && Math.random() >= KIOSK_PREFER) return false;
+    const kiosk = this.kiosks.find((k) => !k.busy && k.img.active);
+    if (!kiosk) return false;
+    kiosk.busy = true;
+    const { img, screen } = kiosk;
+    await this.walk(c.sprite, img.x - 14, img.y + 4);
     if (c.gone || !c.sprite.active) {
-      this.kioskBusy = false;
+      kiosk.busy = false;
       return true;
     }
     this.setFacing(c.sprite, 'right');
     c.serving = true;
-    for (const [n, { id }] of c.items.entries()) {
-      await this.wait(KIOSK_ITEM_SECONDS * 1000);
+    // «Забыл» пробить один товар (только из нескольких — с пустым чеком не уходят): уйдёт с ним, не заплатив.
+    const skipped = c.items.length > 1 && Math.random() < tier.skip ? c.items[c.items.length - 1] : undefined;
+    for (const [n, it] of c.items.entries()) {
+      await this.wait(tier.item * 1000);
       if (!this.sys.isActive()) return true;
-      const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(1.5 / ART).setDepth(1000);
-      this.tweens.add({ targets: item, x: kiosk.x, y: kiosk.y - 6, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
-      sound.scan(kiosk.x, n);
-      this.kioskScreen?.setAlpha(0.9);
-      this.time.delayedCall(150, () => this.kioskScreen?.setAlpha(0.3));
+      if (it === skipped) continue;
+      const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${it.id}`).setScale(1.5 / ART).setDepth(1000);
+      this.tweens.add({ targets: item, x: img.x, y: img.y - 6, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
+      sound.scan(img.x, n);
+      screen.setAlpha(0.9);
+      this.time.delayedCall(150, () => screen.setAlpha(0.3));
     }
-    await this.wait(KIOSK_PAY_SECONDS * 1000);
-    this.kioskBusy = false;
+    // «Неизвестный товар в зоне упаковки»: экран краснеет, покупатель ждёт, пока он сбросится.
+    if (Math.random() < tier.error) {
+      screen.setFillStyle(KIOSK_ALARM).setAlpha(0.9);
+      this.popup(img.x - 6, img.y - 20, t('popup.kioskError'), '#ffd0d0');
+      await this.wait(KIOSK_ERROR_SECONDS * 1000);
+      if (!this.sys.isActive()) return true;
+      screen.setFillStyle(KIOSK_GLOW).setAlpha(0.3);
+    }
+    await this.wait(tier.pay * 1000);
+    kiosk.busy = false;
     if (!this.sys.isActive()) return true;
-    this.finishCheckout(c, { x: kiosk.x - 10, y: kiosk.y - 12 });
+    if (skipped) {
+      c.items = c.items.filter((it) => it !== skipped);
+      const value = unitSalePrice(this.state, skipped.id, skipped.unit);
+      this.stats.stolen += value;
+      this.popup(c.sprite.x, c.sprite.y - 14, t('popup.kioskSkip', { n: value }), '#ffd0d0');
+    }
+    this.finishCheckout(c, { x: img.x - 10, y: img.y - 12 });
     return true;
   }
 
@@ -5948,6 +6255,13 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Начало мини-события дня. */
+  /** Прошлое мини-событие ещё не кончилось — подождать; к вечеру уже не начинать. */
+  private tryLiveEvent(kind: LiveKind): void {
+    if (!this.running || this.night || this.timeLeft < DAY_SECONDS * LIVE_LATEST) return;
+    if (this.liveEvent) this.time.delayedCall(LIVE_RETRY_MS, () => this.tryLiveEvent(kind));
+    else this.startLiveEvent(kind);
+  }
+
   private startLiveEvent(kind: LiveKind): void {
     if (this.liveEvent) return;
     this.liveEvent = kind;
@@ -6251,26 +6565,64 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.add({ targets: van, x: this.next.w + 300, duration: 2600, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
   }
 
-  /** Реклама видна на улице, пока работает. */
+  /**
+   * Реклама видна на улице, пока работает: баннер на фасаде, промоутер с листовками, блогер у входа,
+   * билборд за дорогой, съёмочная группа ТВ, блогер-звезда с фанатами, флажки городской кампании.
+   * Радио в эфире — его не видно. Работает несколько реклам — видны все.
+   */
   private applyAds(): void {
     for (const obj of this.adObjs) discard(obj);
     this.adObjs = [];
-    const ad = activeAd(this.state);
-    if (!ad) return;
-    const { door, h } = this.layout;
+    const ads = new Set(activeAds(this.state).map((a) => a.id));
+    if (!ads.size) return;
+    const { door, h, w } = this.layout;
+    const top = this.streetY - 12;
     const keep = <T extends { destroy: () => void }>(obj: T): T => {
       this.adObjs.push(obj);
       return obj;
     };
-    if (ad.id === 'banner') {
+    /** Бесконечный твин рекламы: при смене реклам без пересборки мира его надо остановить (stop снимает его с менеджера). */
+    const keepTween = (tween: Phaser.Tweens.Tween) => keep({ destroy: () => void tween.stop() });
+    /** Стоит у входа и не участвует в жизни покупателей. */
+    const extra = (x: number, y: number, look: Look, facing: Facing) => {
+      const person = keep(this.makePerson(x, y, look));
+      this.people.delete(person);
+      this.setFacing(person, facing);
+      return person;
+    };
+    /** Блёстки вокруг человека (не в лёгком режиме). */
+    const sparkle = (target: Phaser.GameObjects.Container, frequency: number) => {
+      if (this.lite) return;
+      const sparkles = keep(
+        this.add.particles(0, 0, 'spark', {
+          lifespan: 700,
+          speed: { min: 4, max: 14 },
+          scale: { start: 0.5, end: 0 },
+          alpha: { start: 1, end: 0 },
+          frequency,
+          x: { min: -8, max: 8 },
+          y: { min: -16, max: 2 },
+        }),
+      );
+      sparkles.startFollow(target).setDepth(LIGHT_DEPTH - 1);
+    };
+    if (ads.has('banner')) {
       const banner = keep(this.art(door.x - 44, h + 4, 'ad_banner').setDepth(h + 44));
-      this.tweens.add({ targets: banner, angle: { from: -1.5, to: 1.5 }, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      keepTween(this.tweens.add({ targets: banner, angle: { from: -1.5, to: 1.5 }, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }));
     }
-    if (ad.id === 'flyers') {
+    if (ads.has('city')) {
+      // Городская кампания: флажки во всю ширину фасада.
+      keep(this.add.tileSprite(0, h + 1, w, 5, 'ad_flags').setOrigin(0).setTileScale(1 / ART).setDepth(h + 43));
+    }
+    if (ads.has('billboard') || ads.has('city')) {
+      // Билборд за дорогой, на дальнем тротуаре справа от перехода: его видно из магазина.
+      const base = top + 87;
+      keep(this.art(door.x + 70, base, 'ad_billboard').setOrigin(0.5, 1).setDepth(base));
+    }
+    if (ads.has('flyers') || ads.has('city')) {
       // Промоутер в жёлтом жилете раздаёт листовки прохожим.
       const spot = { x: door.x + 24, y: this.streetY - 3 };
-      const promoter = keep(this.makePerson(spot.x, spot.y, { ...randomLook(0xfee761), acc: 'vest', accTint: 0xfee761 }));
-      this.people.delete(promoter);
+      extra(spot.x, spot.y, { ...randomLook(0xfee761), acc: 'vest', accTint: 0xfee761 }, 'down');
       keep(
         this.time.addEvent({
           delay: 2200,
@@ -6284,24 +6636,29 @@ export class StoreScene extends Phaser.Scene {
         }),
       );
     }
-    if (ad.id === 'blogger') {
+    const star = { x: door.x - 20, y: h + FACADE_H + 8 };
+    if (ads.has('collab')) {
+      // Звезда соцсетей снимает обзор у входа, вокруг — фанаты с телефонами.
+      const blogger = extra(star.x, star.y, { shirt: 0xb55088, pants: 0x262b44, hair: 0xfee761, style: 'long', skin: 0xf2d3ab }, 'up');
+      sparkle(blogger, 140);
+      [-14, 12, -4].forEach((dx, i) => {
+        const fan = extra(star.x + dx, star.y + 8 + (i % 2) * 3, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day), dx < 0 ? 'right' : 'left');
+        if (this.lite) return;
+        // Фанаты подпрыгивают от восторга.
+        keepTween(this.tweens.add({ targets: fan, y: fan.y - 2, duration: 260, yoyo: true, repeat: -1, repeatDelay: 900 + i * 370, ease: 'Sine.easeOut' }));
+      });
+    } else if (ads.has('blogger')) {
       // Блогер снимает обзор у входа: блёстки вокруг.
-      const spot = { x: door.x - 20, y: this.layout.h + FACADE_H + 8 };
-      const blogger = keep(this.makePerson(spot.x, spot.y, { shirt: 0xf6757a, pants: 0x262b44, hair: 0xb55088, style: 'long', skin: 0xf2d3ab }));
-      this.people.delete(blogger);
-      this.setFacing(blogger, 'up');
-      const sparkles = keep(
-        this.add.particles(0, 0, 'spark', {
-          lifespan: 700,
-          speed: { min: 4, max: 14 },
-          scale: { start: 0.5, end: 0 },
-          alpha: { start: 1, end: 0 },
-          frequency: 220,
-          x: { min: -8, max: 8 },
-          y: { min: -16, max: 2 },
-        }),
-      );
-      sparkles.startFollow(blogger).setDepth(LIGHT_DEPTH - 1);
+      const blogger = extra(star.x, star.y, { shirt: 0xf6757a, pants: 0x262b44, hair: 0xb55088, style: 'long', skin: 0xf2d3ab }, 'up');
+      sparkle(blogger, 220);
+    }
+    if (ads.has('tv')) {
+      // Съёмочная группа ТВ: камера на штативе и ведущая с микрофоном у витрины.
+      const x = door.x - 48;
+      const y = h + FACADE_H + 12;
+      keep(this.art(x + 12, y, 'film_camera').setDepth(y + 6));
+      extra(x + 20, y + 1, { shirt: 0x3a4466, pants: 0x262b44, hair: 0x3b2a35, style: 'short', skin: 0xe4a672 }, 'left');
+      extra(x, y - 2, { shirt: 0xe43b44, pants: 0x262b44, hair: 0x733e39, style: 'long', skin: 0xf2d3ab }, 'right');
     }
   }
 
@@ -6555,7 +6912,15 @@ export class StoreScene extends Phaser.Scene {
       if (over.length || this.dragged || this.arranging || !this.running || p.upTime - p.downTime > STREET_TAP_MS) return;
       const at = this.cameras.main.getWorldPoint(p.x, p.y);
       if (at.y < this.layout.h + FACADE_H) return;
-      // Касание ничего не изменит (у кассы никого, хозяин уже пробивает, за кассой сменщик) — и отклика нет.
+      // За кассой хозяина сменщик: касание улицы торопит его, пока он пробивает.
+      const first = this.registers[0];
+      if (this.operator(0) !== 'owner') {
+        if (!first?.scan || first.scan.byOwner) return;
+        this.ripple(at.x, at.y);
+        void this.serveNext();
+        return;
+      }
+      // Касание ничего не изменит (у кассы никого, хозяин уже пробивает) — и отклика нет.
       const r = this.ownerRegister();
       if (!r || this.ownerScanning() || (!this.sellerBusy && !this.atSpot(r))) return;
       this.ripple(at.x, at.y);
@@ -8440,7 +8805,7 @@ export class StoreScene extends Phaser.Scene {
     if (!hasBargain(this.state)) return;
     const { door, h, w } = this.layout;
     const fp = propFootprint(this.layout, 'bargain', 0);
-    const zones = [...tillZones(this.layout, registerSlots(this.state)), ...blockedZones(this.layout)];
+    const zones = [...tillZones(this.layout, registerSlots(this.state), kioskCount(this.state)), ...blockedZones(this.layout)];
     const free = (p: { x: number; y: number }) => {
       const r = { x: p.x + fp.x - 3, y: p.y + fp.y - 16, w: fp.w + 6, h: fp.h + 19 };
       return r.x > 2 && r.x + r.w < w - 2 && ![...this.obstacles, ...zones].some((o) => overlapsRect(r, o));
@@ -8671,6 +9036,8 @@ export class StoreScene extends Phaser.Scene {
       ...slots.map((s) => ({ x: s.x - 22, y: s.y - 14, w: 44, h: 30 })),
       { x: counter.x - 10, y: counter.y - 28, w: 20, h: 64 },
       ...this.propList.map(propRect),
+      // Купленные киоски у правой стены (их ставит buildUpgrades — позже украшений).
+      ...(kioskCount(this.state) ? kioskZones(this.layout, kioskCount(this.state)) : []),
     ];
     return (
       candidates.find((c) =>
@@ -8683,7 +9050,7 @@ export class StoreScene extends Phaser.Scene {
     const { w, h, wallH, wc, door, slots } = this.layout;
     // От входа вглубь зала — наклейки-стрелки на полу (только там, где не стоят полки и касса).
     const arrows = this.add.graphics().setDepth(0.42);
-    const blocked = [...slots.map((p) => slotRect(this.layout, p)), ...tillZones(this.layout, registerSlots(this.state))];
+    const blocked = [...slots.map((p) => slotRect(this.layout, p)), ...tillZones(this.layout, registerSlots(this.state), kioskCount(this.state))];
     for (const ay of [h - 44, h - 60]) {
       if (blocked.some((r) => overlapsRect(r, { x: door.x - 6, y: ay - 4, w: 12, h: 8 }))) continue;
       arrows.fillStyle(0x0099db, 0.32);
@@ -8721,9 +9088,12 @@ export class StoreScene extends Phaser.Scene {
       }
     }
     // Ковёр в центре зала.
-    if (activeDecor(this.state, 'rug')) this.art(w / 2, (wallH + h) / 2 + 6, 'rug').setDepth(1);
+    const rug = activeDecor(this.state, 'rug');
+    if (rug) this.art(w / 2, (wallH + h) / 2 + 6, rug.texture ?? 'rug').setDepth(1);
     this.buildLights();
     this.buildShowpiece();
+    this.buildCounterDecor();
+    this.buildOutdoorDecor();
     // Стойка со сладостями у кассы, у входа — корзинки, в больших магазинах — тележки. Если справа
     // от двери у нижней стены встал ларь с мороженым (тесный зал), тележки — слева от неё (но не
     // в дверях склада), а корзинки — где осталось место: слева от двери или по ту сторону ларя.
@@ -8781,7 +9151,7 @@ export class StoreScene extends Phaser.Scene {
       const p = this.propAt(id, def);
       const busy = p === def && [...slots, ...this.layout.showcases].some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
       if (busy) return;
-      const tex = activeDecor(this.state, 'plants') ? 'plant_big' : 'plant';
+      const tex = activeDecor(this.state, 'plants')?.texture ?? 'plant';
       this.art(p.x, p.y, tex).setDepth(p.y + 6);
       this.registerProp(id, p, tex, propFootprint(this.layout, id, p.x));
     });
@@ -8825,6 +9195,27 @@ export class StoreScene extends Phaser.Scene {
       this.nightGlow(this.art(x, wallH + 6, 'glow').setDisplaySize(52, 22).setTint(warm), 0.35);
       this.add.image(x, wallH + 6, 'glow').setScale(52 / 64, 22 / 64).setTint(warm).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.12).setDepth(1);
     }
+  }
+
+  /** Вещица на прилавке (ваза, копилка): у верхнего края стойки, над лентой. */
+  private buildCounterDecor(): void {
+    const item = activeDecor(this.state, 'counter');
+    if (!item?.texture) return;
+    const { counter } = this.layout;
+    this.art(counter.x + 2, counter.y - 20, item.texture).setOrigin(0.5, 1).setDepth(counter.y + 21);
+  }
+
+  /**
+   * Вещи у входа на тротуаре: кадки с цветами по бокам от входа или меловая доска-штендер. У самой двери
+   * места заняты (урна, Бобик, подсолнухи, доска отзывов, промоутер, скамейка) — ставим чуть дальше.
+   */
+  private buildOutdoorDecor(): void {
+    const item = activeDecor(this.state, 'outdoor');
+    if (!item?.texture) return;
+    const { door } = this.layout;
+    const top = this.streetY - 12;
+    const spots = item.id === 'out_planters' ? [door.x - 60, door.x + 62] : [door.x - 50];
+    for (const x of spots) this.art(x, top + 9, item.texture).setOrigin(0.5, 1).setDepth(top + 9);
   }
 
   /** Украшение зала (аквариум, фонтан, автомат…) — в свободном месте, с маленькой анимацией. */
@@ -8941,7 +9332,8 @@ export class StoreScene extends Phaser.Scene {
     const table = this.art(x + 33, y + 23, 'ktable').setDepth(y + 29);
     const knife = this.art(table.x - 3, table.y - 2.5, 'kknife').setDepth(y + 30);
     knife.setData('y', knife.y);
-    this.art(x + 52, y + 24, 'kcrate').setDepth(y + 28);
+    // Ящик с овощами — кладовая кухни: сюда кухня складывает закупленное у поставщиков.
+    const crate = this.art(x + 52, y + 24, 'kcrate').setDepth(y + 28);
     const showcase = this.art(x + 16, y + 46.5, 'kshowcase').setDepth(y + 50);
     this.art(showcase.x, showcase.y, 'kshowcase_glass').setDepth(y + 50.6);
     // Кастрюли на конфорках: у электроплитки одна посередине, у газовой и плиты шефа — две спереди.
@@ -8955,19 +9347,23 @@ export class StoreScene extends Phaser.Scene {
         .setDepth(y + 31.5),
     );
     const pots = burners.map((b) => this.art(b.x, b.y + 1, 'kpot').setOrigin(0.5, 1).setVisible(false).setDepth(y + 32));
-    this.kitchenView = { stove, pots, flames, knife, showcase, plates: [], cooking: [] };
+    this.kitchenView = { stove, pots, flames, knife, crate, showcase, plates: [], cooking: [], onPass: false };
     stove.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.tapStove()));
     showcase.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.tapShowcase()));
     this.refreshKitchen();
   }
 
-  /** Тарелки в витрине: по тарелке на каждые три порции (восемь в ряд на полке), блюда — по порядку меню. */
+  /**
+   * Тарелки на раздаче кухни — только что сваренное, пока повар не переложил на поднос (по тарелке на каждые
+   * три порции, восемь в ряд); и тарелки на полке «Еда».
+   */
   private refreshKitchen(): void {
+    this.refreshFood();
     const k = this.kitchenView;
     if (!k?.showcase.active) return;
     for (const plate of k.plates) plate.destroy();
     k.plates = [];
-    const dishes = DISH_IDS.flatMap((id) => Array.from({ length: Math.ceil(portionsOf(this.state, id) / 3) }, () => id)).slice(0, 8);
+    const dishes = k.onPass ? k.cooking.flatMap((id) => Array.from({ length: Math.ceil(dishPortions(this.state, id) / 3) }, () => id)).slice(0, 8) : [];
     dishes.forEach((id, i) => {
       // Низ тарелки — на полке за стеклом, на полточки ниже середины витрины (art/kitchen.py).
       const px = k.showcase.x + (7 + i * 6.5 - 28) / 2;
@@ -8983,23 +9379,135 @@ export class StoreScene extends Phaser.Scene {
     this.popup(k.stove.x + 8, k.stove.y - 14, works ? t('popup.cookWorks') : t('popup.needCook'), works ? '#fff3b0' : '#ffd0d0');
   }
 
-  /** Витрина: сколько каких порций осталось — значками блюд. */
-  private tapShowcase(): void {
+  /** Раздача и полка «Еда»: сколько каких порций на полке — значками блюд. */
+  private tapShowcase(at?: { x: number; y: number }): void {
     const k = this.kitchenView;
-    if (!k) return;
+    const where = at ?? (k ? { x: k.showcase.x, y: k.showcase.y } : null);
+    if (!where) return;
     const text = DISH_IDS.filter((id) => portionsOf(this.state, id) > 0)
       .map((id) => `${DISHES[id].icon}${portionsOf(this.state, id)}`)
       .join(' ');
-    this.popup(k.showcase.x, k.showcase.y - 10, text || t('popup.kitchenEmpty'), '#fff3b0');
+    this.popup(where.x, where.y - 10, text || t('popup.kitchenEmpty'), '#fff3b0');
   }
 
-  /** Что варилось — сразу в витрину (зал перестраивают, повара переставляют); кастрюли с плиты. */
+  /** Что варилось или несут — сразу на полку «Еда» (зал перестраивают, повара переставляют); кастрюли с плиты. */
   private flushCooking(): void {
     const k = this.kitchenView;
     if (!k) return;
     for (const id of k.cooking.splice(0)) this.state = servePortions(this.state, id);
+    k.onPass = false;
     this.stopPots();
     this.refreshKitchen();
+  }
+
+  /**
+   * Полка «Еда» у входа (модель — оборудование «Полка «Еда»»): у нижней стены рядом с дверью, где свободно
+   * (или где поставили при перестановке). Сверху табличка «Еда», в нише — тарелки с готовым. Нажать —
+   * сколько чего осталось.
+   */
+  private buildFood(): void {
+    this.foodView = undefined;
+    if (!this.layout.kitchen || !kitchenOpen(this.state)) return;
+    const { door, h, w } = this.layout;
+    const fp = propFootprint(this.layout, 'food', 0);
+    // Места под все киоски помещения (и ещё не купленные): полку не ставим туда, где встанет киоск.
+    const zones = [...tillZones(this.layout, registerSlots(this.state), kioskSlots(this.state)), ...blockedZones(this.layout)];
+    const ice = this.state.shelves.some((sh) => sh.kind === 'icebox') ? [iceboxRect(this.iceboxSpot())] : [];
+    // Горка уценки целиком (она выше своего следа) и место её покупателя; где стоят менеджер и охранник.
+    const bargain = this.bargainAt;
+    const stand = bargain ? [{ x: bargain.x - 15, y: this.bargainStand(bargain) - 4, w: 30, h: bargain.y + 8 - (this.bargainStand(bargain) - 4) }] : [];
+    const homes = (['manager', 'guard'] as const).map((role) => this.workerHome(role)).map((p) => ({ x: p.x - 6, y: p.y - 10, w: 12, h: 14 }));
+    // Тележки и корзинки у входа (buildDecor ставит их по обе стороны двери) — не загораживаем.
+    const byDoor = [-46, -26, -24, 26, 46].map((dx) => ({ x: door.x + dx - 11, y: h - 22, w: 22, h: 22 }));
+    // Свободно и место покупателя над полкой (там он стоит, когда берёт порцию).
+    const free = (p: { x: number; y: number }) => {
+      const r = { x: p.x + fp.x - 3, y: p.y + fp.y - 16, w: fp.w + 6, h: fp.h + 19 };
+      return r.x > 2 && r.x + r.w < w - 2 && r.y > this.layout.wallH + 4 && ![...this.obstacles, ...zones, ...ice, ...byDoor, ...stand, ...homes].some((o) => overlapsRect(r, o));
+    };
+    // У нижней стены как можно ближе к двери, а если там тесно — в зале повыше, тоже поближе к входу.
+    const candidates: { x: number; y: number }[] = [];
+    for (let y = h - 12; y > this.layout.wallH + 40; y -= 8) for (let x = 20; x <= w - 20; x += 4) candidates.push({ x, y });
+    candidates.sort((a, b) => Math.hypot(a.x - door.x, (a.y - h) * 1.5) - Math.hypot(b.x - door.x, (b.y - h) * 1.5));
+    const def = candidates.find(free) ?? { x: door.x + 76, y: h - 12 };
+    const at = this.propAt('food', def);
+    const tex = foodSprite(this.state);
+    const img = this.art(at.x, at.y - 4, tex).setDepth(at.y + 4);
+    img.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.tapShowcase({ x: at.x, y: at.y - 14 })));
+    // Табличка «Еда» — надпись по центру таблички над нишей (art/kitchen.py).
+    this.add
+      .text(at.x, at.y - 13.5, t('food.sign'), { fontFamily: UI_FONT, fontSize: '4.5px', fontStyle: 'bold', color: '#fee761' })
+      .setOrigin(0.5)
+      .setResolution(this.textRes(8))
+      .setDepth(at.y + 4.2);
+    if (gearTier(this.state, 'foodShelf') === 2) this.art(at.x, at.y - 4, 'food_glass2').setDepth(at.y + 4.6);
+    this.foodView = { at, img, plates: [] };
+    this.obstacles.push({ x: at.x + fp.x, y: at.y + fp.y, w: fp.w, h: fp.h });
+    this.registerProp('food', at, tex, fp);
+    this.refreshFood();
+  }
+
+  /** Тарелки на полке «Еда»: до десяти в два ряда — сколько их, по заполненности полки; блюда — по порядку меню. */
+  private refreshFood(): void {
+    const f = this.foodView;
+    if (!f?.img.active) return;
+    for (const plate of f.plates) plate.destroy();
+    f.plates = [];
+    const slots = foodSlots(this.state);
+    const dishes = DISH_IDS.flatMap((id) => Array.from({ length: Math.ceil((portionsOf(this.state, id) * 10) / slots) }, () => id)).slice(0, 10);
+    // Сначала задний ряд, потом передний (в точках картинки полки: низ тарелок — 19 и 23, по x — от 12 через 9).
+    dishes.forEach((id, i) => {
+      const px = f.at.x + (12 + (i % 5) * 9 - 30) / 2;
+      const py = f.at.y - 16 + (i < 5 ? 19 : 23) / 2;
+      f.plates.push(this.art(px, py, `kdish_${id}`).setOrigin(0.5, 1).setDepth(f.img.depth + 0.2 + i * 0.01));
+    });
+  }
+
+  /** Где стоит покупатель (и повар), когда берёт с полки «Еда» или ставит на неё: над полкой. */
+  private foodStand(): { x: number; y: number } | null {
+    const f = this.foodView;
+    return f ? { x: f.at.x, y: f.at.y - 17 } : null;
+  }
+
+  /**
+   * Покупатель с покупками по пути к кассе заглядывает на полку «Еда» и берёт порцию — платит за неё на
+   * кассе. Хотел, а полка пуста, — в отчёт (повар учтёт спрос завтра).
+   */
+  private async visitFood(c: Customer): Promise<void> {
+    const stand = this.foodStand();
+    if (!stand || c.thief || this.night || !c.items.length || !wantsDish(this.state, Math.random)) return;
+    this.stats.dishWanted = (this.stats.dishWanted ?? 0) + 1;
+    await this.walk(c.sprite, stand.x + Phaser.Math.Between(-7, 7), stand.y);
+    if (c.gone) return;
+    this.setFacing(c.sprite, 'down');
+    await this.wait(450);
+    if (c.gone) return;
+    const took = takeDish(this.state, Math.random);
+    if (!took) {
+      if (Math.random() < 0.6) this.popup(c.sprite.x, c.sprite.y - 22, t('popup.foodEmpty'), '#ffd0d0');
+      return;
+    }
+    this.state = took.state;
+    const d = DISHES[took.dish];
+    c.extras = [...(c.extras ?? []), { kind: 'dish', price: d.price, dish: took.dish }];
+    // Тарелка с полки перелетает дугой в руки, над полкой — цена порции.
+    const from = { x: c.sprite.x, y: c.sprite.y + 10 };
+    this.setMood(c.sprite, 'happy', 1400);
+    const plate = this.art(from.x, from.y, `kdish_${took.dish}`).setDepth(c.sprite.y + 1);
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 360,
+      ease: 'Sine.easeInOut',
+      onUpdate: (tween) => {
+        const k = tween.getValue() ?? 0;
+        plate.setPosition(from.x + (c.sprite.x - from.x) * k, from.y + (c.sprite.y - 3 - from.y) * k - Math.sin(k * Math.PI) * 7).setAlpha(1 - 0.6 * k * k);
+      },
+      onComplete: () => plate.destroy(),
+    });
+    this.priceFlash(from.x, from.y - 12, d.price);
+    if (Math.random() < 0.5) this.popup(c.sprite.x, c.sprite.y - 24, t('popup.foodTake', { icon: d.icon, name: t(`dish.${took.dish}` as TextKey) }), '#c8ffb0');
+    sound.place('glass', 0, c.sprite.x);
+    this.refreshFood();
   }
 
   /** На плиту: кастрюли (блины и сырники — на сковороде), огонь под ними, пар и шкворчание. */
@@ -9035,21 +9543,25 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Повар: по меню дня решает, что поставить (kitchen.ts, cookBatch), ходит за продуктами на склад
-   * (чего там нет — к полке в зале), режет на доске, варит на плите — над кастрюлями пар — и выставляет
-   * порции в витрину. Под вечер и ночью новое не начинает: не успеет продаться — спишется.
+   * Повар: по меню дня решает, что поставить (kitchen.ts, cookBatch). Не хватает продуктов — кухня докупает
+   * их в кладовую (из кассы). Берёт из ящика-кладовой (нет денег — со склада и с полок зала), режет на доске,
+   * варит на плите — над кастрюлями пар, — ставит тарелки на раздачу, перекладывает на поднос и несёт
+   * на полку «Еда» у входа. Под вечер и ночью новое не начинает: не успеет продаться — спишется.
    */
   private async cookLoop(w: Worker, gen: number): Promise<void> {
     while (this.alive(gen)) {
       const k = this.kitchenView;
-      // Через сколько закладка будет в витрине: варка — по плите, дорога и нарезка — по шагу повара.
+      // Через сколько закладка будет на полке: варка — по плите, нарезка и дорога — по шагу повара.
       const ready = stoveSeconds(this.state) + COOK_LATE / this.workerPace(w);
-      const open = this.running && !this.night && Boolean(k?.stove.active) && this.timeLeft > ready;
-      const plan = open ? cookBatch(this.state, this.timeLeft / DAY_SECONDS, ready / DAY_SECONDS) : [];
+      const open = this.running && !this.night && Boolean(k?.stove.active) && Boolean(this.foodView) && this.timeLeft > ready;
+      const left = this.timeLeft / DAY_SECONDS;
+      // Что поставил бы, будь всё в кладовой, — на это кухня и докупает.
+      const wish = open ? cookBatch(this.state, left, ready / DAY_SECONDS, undefined, true) : [];
+      if (k && wish.length) this.topUpPantry(k, wish);
+      const plan = wish.length ? cookBatch(this.state, left, ready / DAY_SECONDS) : [];
       if (!k || !plan.length) {
-        // Витрина пуста, а сварить не из чего — раз в день повар просит закупить продукты.
-        const noFood = open && portionsTotal(this.state) === 0 && cookMenu(this.state).every((id) => !hasIngredients(this.state, id));
-        if (noFood && this.cookNoFoodDay !== this.state.day) {
+        // Надо готовить, а продуктов не купить (денег нет) — раз в день повар об этом говорит.
+        if (wish.length && this.cookNoFoodDay !== this.state.day) {
           this.cookNoFoodDay = this.state.day;
           this.popup(w.sprite.x, w.sprite.y - 18, t('popup.cookNoFood'), '#ffd0d0');
         }
@@ -9078,26 +9590,65 @@ export class StoreScene extends Phaser.Scene {
         if (!this.alive(gen)) return;
       }
       this.stopPots();
-      // Магазин закрылся, пока варилось: сваренное уже в витрине (flushCooking) — нести нечего.
+      // Магазин закрылся, пока варилось: сваренное уже на полке (flushCooking) — нести нечего.
       if (!k.cooking.length) continue;
       sound.ding(k.stove.x);
-      // Готовое — на тарелках в витрину.
-      w.carried.setTexture(`kdish_${taken[0]}`).setPosition(0, 2).setVisible(true);
+      // Готовое — по тарелкам на раздачу, оттуда — на поднос.
       await this.workerWalk(w, k.showcase.x + 4, k.showcase.y - 8);
+      if (!this.alive(gen)) return;
+      this.setFacing(w.sprite, 'down');
+      k.onPass = true;
+      this.refreshKitchen();
+      sound.place('glass', 1, k.showcase.x);
+      await this.workerWait(w, PLACE_MS * 2);
+      if (!this.alive(gen)) return;
+      k.onPass = false;
+      this.refreshKitchen();
+      w.carried.setTexture('kplates').setPosition(0, 1).setVisible(true);
+      // С подносом — через дверь кухни в зал, к полке «Еда» у входа.
+      await this.carryToFood(w, gen, k);
+      if (!this.alive(gen)) return;
+    }
+  }
+
+  /** Кухня докупает в кладовую то, чего не хватает на закладки plan, — из кассы; у ящика — коробка и надпись. */
+  private topUpPantry(k: KitchenView, plan: DishId[]): void {
+    const top = topUpKitchen(this.state, plan);
+    if (!top.spent) return;
+    this.state = top.state;
+    this.stats.kitchenSpent = (this.stats.kitchenSpent ?? 0) + top.spent;
+    this.popup(k.crate.x, k.crate.y - 12, t('popup.kitchenBought', { n: top.spent }), '#fff3b0');
+    this.squash(k.crate, 1.08, 0.92, 120);
+    sound.place('bump', 1, k.crate.x);
+  }
+
+  /**
+   * Повар несёт поднос на полку «Еда»: из кухни через дверь в зал, ставит тарелки (порции — на полку)
+   * и возвращается на кухню. Полки нет (зал перестроили) — сваренное и так уже на ней (flushCooking).
+   */
+  private async carryToFood(w: Worker, gen: number, k: KitchenView): Promise<void> {
+    const room = this.layout.kitchen!;
+    await this.workerWalkVia(w, [room.inside, room.doorway]);
+    if (!this.alive(gen)) return;
+    const stand = this.foodStand();
+    if (stand) {
+      await this.workerWalk(w, stand.x + 4, stand.y);
       if (!this.alive(gen)) return;
       this.setFacing(w.sprite, 'down');
       await this.workerWait(w, PLACE_MS);
       if (!this.alive(gen)) return;
-      w.carried.setVisible(false).setTexture('box').setPosition(0, 3);
-      k.cooking.splice(0).forEach((id, i) => {
-        const before = portionsOf(this.state, id);
-        this.state = servePortions(this.state, id);
-        const text = t('popup.cooked', { icon: DISHES[id].icon, name: t(`dish.${id}` as TextKey), n: portionsOf(this.state, id) - before });
-        this.time.delayedCall(i * 450, () => this.popup(k.showcase.x, k.showcase.y - 12, text, '#c8ffb0'));
-      });
-      this.refreshKitchen();
-      sound.place('glass', 1, k.showcase.x);
     }
+    w.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+    const at = this.foodStand() ?? { x: w.sprite.x, y: w.sprite.y };
+    k.cooking.splice(0).forEach((id, i) => {
+      const before = portionsOf(this.state, id);
+      this.state = servePortions(this.state, id);
+      const text = t('popup.cooked', { icon: DISHES[id].icon, name: t(`dish.${id}` as TextKey), n: portionsOf(this.state, id) - before });
+      this.time.delayedCall(i * 450, () => this.popup(at.x, at.y - 8, text, '#c8ffb0'));
+    });
+    this.refreshKitchen();
+    sound.place('glass', 1, at.x);
+    await this.workerWalkVia(w, [room.doorway, room.inside, w.home]);
   }
 
   /** Готовить нечего — стоит у стола. */
@@ -9108,19 +9659,29 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * За продуктами на всю закладку: на склад, а чего там не хватает — к полке в зале. Снимает их в последней
-   * точке пути; чего уже нет (разобрали, пока шёл) — того блюда не будет. Возвращает, что взял в работу.
+   * За продуктами на всю закладку: всё есть в кладовой — к ящику на кухне; нет (денег на закупку не было) —
+   * на склад, а чего там не хватает — к полке в зале. Снимает их в последней точке пути; чего уже нет
+   * (разобрали, пока шёл) — того блюда не будет. Возвращает, что взял в работу.
    */
   private async fetchIngredients(w: Worker, gen: number, k: KitchenView, plan: DishId[]): Promise<DishId[]> {
     const room = this.layout.kitchen!;
     const store = this.layout.warehouse;
     const need = new Map<ProductId, number>();
     for (const id of plan) for (const [p, n] of Object.entries(DISHES[id].needs)) need.set(p as ProductId, (need.get(p as ProductId) ?? 0) + (n ?? 0));
-    const fromStore = [...need.keys()].some((p) => warehouseOf(this.state, p) > 0);
-    const short = [...need].find(([p, n]) => warehouseOf(this.state, p) < n)?.[0];
+    // Кладовой хватает на всю закладку сразу (два блюда могут делить продукт).
+    const pantry = [...need].every(([p, n]) => pantryOf(this.state, p) >= n);
+    const fromStore = !pantry && [...need.keys()].some((p) => warehouseOf(this.state, p) > 0);
+    const short = pantry ? undefined : [...need].find(([p, n]) => warehouseOf(this.state, p) < n)?.[0];
     const shelf = short ? this.state.shelves.findIndex((sh) => !sh.broken && (sh.items[short]?.length ?? 0) > 0) : -1;
-    await this.workerWalk(w, room.inside.x, room.inside.y);
-    await this.workerWalk(w, room.doorway.x, room.doorway.y);
+    if (pantry) {
+      // Ящик-кладовая в углу кухни: встаёт перед ним и набирает корзинку.
+      await this.workerWalk(w, k.crate.x - 2, w.home.y);
+      this.setFacing(w.sprite, 'up');
+      await this.workerWait(w, 450);
+    } else {
+      await this.workerWalk(w, room.inside.x, room.inside.y);
+      await this.workerWalk(w, room.doorway.x, room.doorway.y);
+    }
     if (fromStore) {
       await this.workerWalk(w, store.doorway.x, store.doorway.y);
       await this.workerWalk(w, store.inside.x, store.inside.y);
@@ -9133,7 +9694,8 @@ export class StoreScene extends Phaser.Scene {
       await this.workerWalk(w, stand.x, stand.y - 2);
       await this.workerWait(w, PLACE_MS);
     }
-    if (!this.alive(gen)) return [];
+    // Пока ходил, магазин закрылся: варить уже нечего — к ночи всё равно спишется.
+    if (!this.alive(gen) || !this.running || this.night) return [];
     const taken: DishId[] = [];
     for (const id of plan) {
       const next = takeIngredients(this.state, id);
@@ -9142,13 +9704,16 @@ export class StoreScene extends Phaser.Scene {
       taken.push(id);
     }
     if (taken.length) {
-      // Уже снято со склада: если зал перестроят, пока варится, — сразу в витрину (flushCooking).
+      // Уже снято из кладовой (со склада): если зал перестроят, пока варится, — сразу на полку (flushCooking).
       k.cooking.push(...taken);
-      this.refreshWarehouse();
-      this.refreshShelves();
+      if (!pantry) {
+        this.refreshWarehouse();
+        this.refreshShelves();
+      }
       w.carried.setTexture('kbasket').setPosition(0, 1).setVisible(true);
       sound.place('bump', 0, w.sprite.x);
     }
+    if (pantry) return taken;
     if (fromStore && shelf < 0) await this.workerWalk(w, store.doorway.x, store.doorway.y);
     await this.workerWalk(w, room.doorway.x, room.doorway.y);
     await this.workerWalk(w, room.inside.x, room.inside.y);
@@ -9613,7 +10178,7 @@ export class StoreScene extends Phaser.Scene {
     // Вещи, переставленные игроком в этом помещении, ларь обходит (как и при перестановке).
     const moved = this.state.propPos?.level === this.state.level ? Object.entries(this.state.propPos.at) : [];
     const avoid = moved.map(([id, p]) => propRect({ id, x: p.x, y: p.y, fp: propFootprint(this.layout, id, p.x) }));
-    return iceboxSpotFor(this.layout, registerSlots(this.state), avoid);
+    return iceboxSpotFor(this.layout, registerSlots(this.state), avoid, kioskCount(this.state));
   }
 
   /** Вёдра с цветами — у кассы, в углу у правой стены. */
@@ -10298,12 +10863,19 @@ export class StoreScene extends Phaser.Scene {
     if (id === this.choreId) this.sellerBusy = false;
   }
 
-  /** Где стоит хозяин (игрок): за первой кассой — она всегда его. */
+  /** Где стоит хозяин (игрок): за первой кассой, а когда за ней сменщик — рядом, у той же стойки. */
   private ownerHome(): { x: number; y: number } {
+    if (this.reliefOnDuty()) return this.reliefSpot();
     return this.registers[0]?.clerk ?? this.layout.sellerHome;
   }
 
-  /** Где ждёт сменщик, пока хозяин за кассой: рядом, у той же стойки, — за кассу встаёт без перехода. */
+  /** Сменщик нанят и сегодня на смене: тогда касса хозяина — его на весь день. */
+  private reliefOnDuty(): boolean {
+    const m = staffOf(this.state, RELIEF_ROLE);
+    return Boolean(m && !isAbsent(this.state, m));
+  }
+
+  /** Место рядом с кассой хозяина, у той же стойки: тут стоит хозяин, когда за его кассой сменщик. */
   private reliefSpot(): { x: number; y: number } {
     const { sellerHome } = this.layout;
     return { x: sellerHome.x, y: sellerHome.y - 24 };
@@ -10712,6 +11284,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.workers.clear();
     this.newcomers.clear();
+    this.reliefReady = false;
     this.managerOnFloor = false;
     this.claimedTrash.clear();
     if (this.binBy === 'cleaner') {
@@ -10804,8 +11377,8 @@ export class StoreScene extends Phaser.Scene {
     const { wc, warehouse, door } = this.layout;
     switch (role) {
       case 'cashier':
-        // Сменщик — рядом с хозяином, у той же стойки.
-        return this.reliefSpot();
+        // Сменщик — за кассой хозяина (хозяин встаёт рядом, у той же стойки).
+        return this.registers[0]?.clerk ?? this.reliefSpot();
       case 'cashier2':
       case 'cashier3':
       case 'cashier4':
@@ -10927,6 +11500,18 @@ export class StoreScene extends Phaser.Scene {
     return true;
   }
 
+  /** Автозаказ подвозит кончившийся товар: оплачено из лимита дня, едет тем же фургоном, что и срочный заказ. */
+  private autoTopUpIfNeeded(): void {
+    const order = autoTopUp(this.state, (id) => this.stats.sold[id] ?? 0, this.urgentOrders.map((o) => o.id), this.urgentOnTheWay());
+    if (!order) return;
+    this.state = order.state;
+    this.urgentOrders.push({ id: order.pid, qty: order.qty, auto: true });
+    this.hud.update(this.state, this.timeLeft);
+    const { warehouse } = this.layout;
+    this.popup(warehouse.x + warehouse.w / 2, warehouse.y - 4, t('popup.autoTopUp', { icon: PRODUCTS[order.pid].icon, n: order.qty }), '#c8ffb0');
+    if (!this.urgentVanBusy) void this.urgentVan();
+  }
+
   /** Фургон срочного подвоза: подъезжает к складу, товар — на стеллаж, уезжает. */
   private async urgentVan(): Promise<void> {
     this.urgentVanBusy = true;
@@ -10952,7 +11537,7 @@ export class StoreScene extends Phaser.Scene {
   private receiveUrgentOrders(): void {
     if (!this.urgentOrders.length) return;
     const list = this.urgentOrders.map((o) => `${PRODUCTS[o.id].icon}×${o.qty}`).join(' ');
-    for (const o of this.urgentOrders) this.state = receiveUrgent(this.state, o.id, o.qty);
+    for (const o of this.urgentOrders) this.state = o.auto ? autoArrived(this.state, o.id, o.qty) : receiveUrgent(this.state, o.id, o.qty);
     this.urgentOrders = [];
     this.refreshWarehouse();
     this.refreshShelves();
@@ -10974,14 +11559,18 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Сменщик: пока хозяин за кассой, ждёт рядом; хозяин ушёл по делу (выложить товар, убрать) —
-   * пробивает тех, кто подошёл к его кассе. Вернулся хозяин — следующего пробивает уже он.
+   * Сменщик: весь день за кассой хозяина и пробивает сам всех, кто к ней подошёл. Хозяин свободен
+   * для дел, а его касания кассы торопят пробивку (hurryRelief).
    */
   private async reliefLoop(w: Worker, gen: number): Promise<void> {
+    this.reliefReady = true;
+    // Хозяин, пока сменщик шёл, сам встал за кассу — уступает место и отходит к стойке.
+    const clerk = this.registers[0]?.clerk;
+    if (clerk && !this.sellerBusy && !this.ownerScanning() && Phaser.Math.Distance.Between(this.seller.x, this.seller.y, clerk.x, clerk.y) <= 2) void this.returnSeller();
     while (this.alive(gen)) {
       const r = this.registers[0];
       const front = r?.customer;
-      if (!this.running || !r || !this.sellerBusy || !front || !this.atSpot(r) || front.serving || r.scan) {
+      if (!this.running || !r || !front || !this.atSpot(r) || front.serving || r.scan) {
         // Отводили в сторону (ограбление, новенький) — назад к стойке.
         if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
         await this.wait(150);
@@ -11269,7 +11858,7 @@ export class StoreScene extends Phaser.Scene {
     const valya = !forced && !arrived && !thief && !this.night && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
     const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
     // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще.
-    const rareChance = rareGuestChance(this.state.level) * (activeAd(this.state)?.id === 'blogger' ? 2 : 1);
+    const rareChance = rareGuestChance(this.state.level) * adRareBoost(this.state);
     const rare = !forced && !arrived && !thief && !valya && !this.night && Math.random() < rareChance ? pickRareGuest(this.state, Math.random) : null;
     let look: Look = forced
       ? forced.look
@@ -11364,7 +11953,7 @@ export class StoreScene extends Phaser.Scene {
       { x: door.x, y: door.y - 10 },
     ]);
     // С тележкой у входа покупатель иногда берёт что-то сверх списка.
-    const wanted = this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day));
+    const wanted = this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day) + adExtraItems(this.state, Math.random));
     for (const id of wanted) {
       const index = shelfFor(this.state, id);
       // Ларь у кассы на виду — вор туда не идёт.
@@ -11432,7 +12021,7 @@ export class StoreScene extends Phaser.Scene {
     if (!c.first) await this.walk(c.sprite, door.x + Math.sign(gap) * Math.min(Math.abs(gap), DOOR_TURN), this.streetY);
     // Тележки у входа: часть покупателей берёт их — кому удобнее.
     if (this.cartsAtDoor() && Math.random() < CART_SHARE && !c.sprite.getData('stroller') && !c.thief) this.giveTrolley(c.sprite);
-    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day));
+    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day) + adExtraItems(this.state, Math.random));
     let disappointed = false;
     let why: { reason: LostReason; id: ProductId } | undefined;
     // Подойти, поискать глазами, взять: к полке в зале, к ларю и к вёдрам у кассы — одинаково.
@@ -11510,6 +12099,9 @@ export class StoreScene extends Phaser.Scene {
       return;
     }
 
+    // По пути к кассе — к полке «Еда» за порцией готового (если кухня открыта).
+    await this.visitFood(c);
+    if (c.gone) return;
     if (!c.first && Math.random() < TOILET_CHANCE) await this.visitToilet(c);
     if (c.gone) return;
     await this.buyCoffee(c);
@@ -11583,6 +12175,7 @@ export class StoreScene extends Phaser.Scene {
       fairTolerance(this.state.day) *
       loyaltyTolerance(this.state) *
       radioTolerance(this.state) *
+      adTrust(this.state) *
       // Химия рядом с едой — к еде с этой полки придираются сильнее.
       (this.clashes(index) ? CLASH_FACTOR : 1);
     // «2 по цене 1»: за штуку выходит вдвое дешевле.
@@ -11656,7 +12249,12 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Касание кассы (или улицы внизу): хозяин пробивает того, кто ждёт у его кассы, или возвращается с дела. */
-  private async serveNext(): Promise<void> {
+  private async serveNext(from = 0): Promise<void> {
+    // За кассой хозяина сменщик: касание его кассы (или улицы) торопит пробивку, касание чужой — ничего.
+    if (this.operator(0) !== 'owner') {
+      if (from === 0) this.hurryRelief();
+      return;
+    }
     if (this.ownerScanning()) return;
     const r = this.ownerRegister();
     if (this.sellerBusy) {
@@ -11679,6 +12277,46 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
+   * За кассой хозяина сменщик: касание торопит его пробивку (срезает RELIEF_TAP_MS), а сам хозяин
+   * за кассу не встаёт. true — касание ушло сменщику.
+   */
+  private hurryRelief(): boolean {
+    const r = this.registers[0];
+    if (!r || this.operator(0) === 'owner') return false;
+    if (!r.scan || r.scan.byOwner || (r.scan.cut ?? 0) >= r.scan.total * RELIEF_HURRY_SHARE) return true;
+    r.hurry = Math.min(RELIEF_HURRY_MAX_MS, r.hurry + RELIEF_TAP_MS);
+    haptic.tap();
+    if (r.img) this.squash(r.img, 1.04, 0.94, 70);
+    if (this.time.now - this.lastHurry > 1500) {
+      this.lastHurry = this.time.now;
+      this.popup(r.counter.x, r.counter.y - 36, t('popup.hurry'), '#fff3b0');
+    }
+    return true;
+  }
+
+  /** Пауза пробивки. У кассы хозяина её срезают касания (r.hurry), пока за кассой сменщик. */
+  private async scanWait(r: Register, ms: number): Promise<void> {
+    if (this.registers.indexOf(r) !== 0 || r.scan?.byOwner) return this.wait(ms);
+    let left = ms;
+    while (left > 0) {
+      // Касаниями пробивку не сделать мгновенной: срезать можно не больше RELIEF_HURRY_SHARE от неё.
+      const room = r.scan ? r.scan.total * RELIEF_HURRY_SHARE - (r.scan.cut ?? 0) : 0;
+      const cut = Math.min(left, r.hurry, Math.max(0, room));
+      if (cut > 0) {
+        r.hurry -= cut;
+        left -= cut;
+        r.scan!.start -= cut;
+        r.scan!.cut = (r.scan!.cut ?? 0) + cut;
+        continue;
+      }
+      const step = Math.min(left, 100);
+      await this.wait(step);
+      if (!this.sys.isActive()) return;
+      left -= step;
+    }
+  }
+
+  /**
    * Пробивка: товары по одному уезжают по ленте, потом оплата. Время зависит от навыка
    * того, кто стоит за кассой (хозяин или кассир) и от размера корзины.
    */
@@ -11697,7 +12335,7 @@ export class StoreScene extends Phaser.Scene {
     // Товар и пакет — к тому, кто пробивает: сменщик стоит у стойки чуть выше хозяина.
     const hand = clerk?.active ? { x: clerk.x, y: clerk.y } : r.clerk;
     for (const [n, { id }] of c.items.entries()) {
-      await this.wait(timing.item * 1000 * manual);
+      await this.scanWait(r, timing.item * 1000 * manual);
       if (!this.sys.isActive()) return;
       // Товар — на ленту, под красный луч сканера (вспышка), и дальше к кассиру в пакет.
       const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2 / ART).setDepth(1000);
@@ -11733,8 +12371,9 @@ export class StoreScene extends Phaser.Scene {
       await this.wait(REGISTER_JAM_SECONDS * 1000);
       if (!this.sys.isActive()) return;
     }
-    await this.wait(timing.pay * 1000);
+    await this.scanWait(r, timing.pay * 1000);
     r.scan = null;
+    r.hurry = 0;
     if (!this.sys.isActive()) return;
     // Кассир отдаёт пакет из рук в руки (с тележкой — товар уже в ней).
     if (c.items.length && c.sprite.getData('push') !== 'trolley' && c.sprite.active) {
@@ -11816,23 +12455,16 @@ export class StoreScene extends Phaser.Scene {
     const at = this.registerOf(c);
     if (at) at.customer = null;
 
-    // С кухни на кассе докупают порцию готовой еды (хотели, а витрина пуста, — в отчёт: повар учтёт спрос).
-    const dish = c.thief || !c.items.length ? null : sellDish(this.state, Math.random);
-    if (dish) this.stats.dishWanted = (this.stats.dishWanted ?? 0) + 1;
-    if (dish?.dish) {
-      this.state = dish.state;
-      this.stats.dishes = (this.stats.dishes ?? 0) + 1;
-      const d = DISHES[dish.dish];
-      c.extras = [...(c.extras ?? []), { kind: 'dish', price: d.price }];
-      this.popup(c.sprite.x, c.sprite.y - 26, t('popup.dish', { icon: d.icon, name: t(`dish.${dish.dish}` as TextKey), n: d.price }), '#c8ffb0');
-      this.refreshKitchen();
-    }
+    // Порцию с полки «Еда» покупатель взял сам по пути (visitFood) — платит за неё здесь, вместе с покупками.
     const { state, total: goods } = checkout(this.state, c.items, this.night ? NIGHT_MARKUP : 1);
     // Шоколадка и кофе — сверху к товару.
     const extras = (c.extras ?? []).reduce((sum, e) => sum + e.price, 0);
     const total = goods + extras;
     this.state = { ...state, money: state.money + extras };
-    for (const e of c.extras ?? []) if (e.kind !== 'dish') note(this.stats, e.kind);
+    for (const e of c.extras ?? []) {
+      if (e.kind === 'dish') this.stats.dishes = (this.stats.dishes ?? 0) + 1;
+      else note(this.stats, e.kind);
+    }
     // Чаевые «за котика».
     if (catHome(this.state) && Math.random() < catTipChance(this.state)) {
       this.state = { ...this.state, money: this.state.money + CAT_TIP };
@@ -11891,6 +12523,15 @@ export class StoreScene extends Phaser.Scene {
     void this.leave(c, true);
   }
 
+  /** Ушёл, не заплатив: шоколадка — обратно на стойку, порция — обратно на полку «Еда». */
+  private returnExtras(c: Customer): void {
+    for (const extra of c.extras ?? []) {
+      if (extra.kind === 'candy') this.state = returnCandy(this.state);
+      if (extra.dish) this.state = servePortions(this.state, extra.dish, 1);
+    }
+    if (c.extras?.some((e) => e.dish)) this.refreshFood();
+  }
+
   private async giveUp(c: Customer): Promise<void> {
     if (c.gone || c.serving) return;
     this.queue = this.queue.filter((q) => q !== c);
@@ -11899,7 +12540,7 @@ export class StoreScene extends Phaser.Scene {
     c.bubble.setVisible(false);
     this.state = returnToShelf(this.state, c.items);
     c.items = [];
-    for (const extra of c.extras ?? []) if (extra.kind === 'candy') this.state = returnCandy(this.state);
+    this.returnExtras(c);
     c.extras = [];
     this.refreshShelves();
     this.refreshWarehouse();
@@ -12806,15 +13447,17 @@ export class StoreScene extends Phaser.Scene {
     showMorning({
       onArrange: () => this.arrange(),
       onVisit: (id, name) => void this.visitFriend(id, name),
+      onRival: (key, name) => void this.visitRival(key, name),
+      onBoss: eduardLook(this.state) !== 'vacant' ? () => void this.visitRival(null, '') : undefined,
       onTourDone: () => this.offerGift(),
       onStoryDone: afterStory ? () => this.offerGift() : undefined,
       getState: () => this.state,
       setState: (s) => {
         const staffChanged = s.staff !== this.state.staff;
         const decorChanged = s.decor !== this.state.decor;
-        const adsChanged = s.ads !== this.state.ads;
+        const adsChanged = s.ads !== this.state.ads || s.adRuns !== this.state.adRuns;
         // Купили приёмник — его надо поставить на прилавок; сменили волну — только музыка.
-        const upgradesChanged = s.upgrades !== this.state.upgrades || s.registers !== this.state.registers || s.gear !== this.state.gear || hasRadio(s) !== hasRadio(this.state);
+        const upgradesChanged = s.upgrades !== this.state.upgrades || s.registers !== this.state.registers || s.kiosks?.n !== this.state.kiosks?.n || s.kiosks?.tier !== this.state.kiosks?.tier || s.gear !== this.state.gear || hasRadio(s) !== hasRadio(this.state);
         const radioChanged = s.radio !== this.state.radio;
         // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
         const was = this.state;
@@ -12839,6 +13482,8 @@ export class StoreScene extends Phaser.Scene {
       },
       onOpen: () => this.startDay(),
     });
+    this.inMorning = true;
+    void this.checkRivals();
   }
 
   /**
@@ -12857,6 +13502,7 @@ export class StoreScene extends Phaser.Scene {
 
   private startDay(): void {
     this.dayOpen = true;
+    this.inMorning = false;
     // Магазин открылся: колокольчик двери и мотив «Магазинчика».
     music.sting('day_open');
     // Купленное с утра ждёт в коробках: камера подлетит к магазину — и его распакуют.
@@ -12876,6 +13522,11 @@ export class StoreScene extends Phaser.Scene {
     }
     // Утром то, что испортится к ночи, само уходит на полку уценки.
     this.sendToBargain();
+    try {
+      this.openRivalDay();
+    } catch (error) {
+      reportError(error, 'rivalDay');
+    }
     this.timeLeft = DAY_SECONDS;
     this.nextSpawn = 1;
     this.running = true;
@@ -13316,6 +13967,14 @@ export class StoreScene extends Phaser.Scene {
     this.questsSeen = 0;
     this.valyaCame = false;
     this.syncStaff();
+    // Повар на смене — кухня сама закупает у поставщиков продукты на день (из кассы; видно утром у кухни и в итогах).
+    const pantry = stockKitchen(this.state);
+    if (pantry.spent) {
+      this.state = pantry.state;
+      this.stats.kitchenSpent = pantry.spent;
+      const crate = this.kitchenView?.crate;
+      if (crate) this.time.delayedCall(900, () => crate.active && this.popup(crate.x, crate.y - 12, t('popup.kitchenBought', { n: pantry.spent }), '#fff3b0'));
+    }
     // Кафе по соседству забирает свой заказ по договору — сразу, как открылись.
     const cafe = cafeDeliver(this.state);
     this.state = cafe.state;
@@ -13347,10 +14006,14 @@ export class StoreScene extends Phaser.Scene {
     if (Math.random() < fridgeLeak(this.state)) {
       this.time.delayedCall(Phaser.Math.FloatBetween(0.15, 0.7) * DAY_SECONDS * 1000, () => this.running && this.fridgeLeaks());
     }
-    if (this.state.day >= LIVE_FROM_DAY && Math.random() < LIVE_CHANCE) {
-      const kind = Phaser.Utils.Array.GetRandom([...LIVE_KINDS]);
-      this.time.delayedCall(Phaser.Math.FloatBetween(0.2, 0.6) * DAY_SECONDS * 1000, () => this.running && this.startLiveEvent(kind));
-    }
+    // Мини-события (свет, труба, голубь, курьер, мышь): почти каждый день, по очереди (live.ts).
+    // Два за день — первое до обеда, второе ближе к вечеру, чтобы не наложились.
+    const live = liveEventsFor(this.state, Math.random);
+    this.state = live.state;
+    live.kinds.forEach((kind, i) => {
+      const [from, to] = live.kinds.length > 1 ? LIVE_WINDOWS[i] : LIVE_WINDOW;
+      this.time.delayedCall(Phaser.Math.FloatBetween(from, to) * DAY_SECONDS * 1000, () => this.tryLiveEvent(kind));
+    });
     this.eveningMarkdown = false;
     this.toiletDirt = 0;
     this.refreshToilet();
@@ -14121,6 +14784,8 @@ export class StoreScene extends Phaser.Scene {
     const filmed = bigDayFor(this.state.day) === 'filming';
     if (filmed) this.state = filmingReward(this.state);
     const finishedDay = this.state.day;
+    // Сколько гостей сверх обычного привела реклама — строкой в итогах дня.
+    this.stats.adGuests = adGuests(this.state, this.stats.served + this.stats.lost);
     const ratingBefore = this.state.rating;
     const rankBefore = rankOf(this.state.totalRevenue);
     const { state, spoiled, bill, shortfall, skimmed, order, quests, weekly } = nightCycle(this.state, this.stats);
@@ -14143,11 +14808,13 @@ export class StoreScene extends Phaser.Scene {
       const end = cafe.ended === 'done' ? ` · ${t('summary.cafeDone')}` : cafe.ended === 'canceled' ? ` · ${t('summary.cafeCanceled')}` : '';
       extra.push([t('summary.cafe'), `${cafe.delivered ? t('summary.cafePaid', { n: cafe.pay }) : t('summary.cafeMissed')}${end}`]);
     }
-    // Кухня: сколько порций продали и сколько списали ночью (строка отчёта дня; кому не хватило — утром у кухни).
+    // Кухня: сколько порций продали, на сколько закупила продуктов и сколько списали ночью (строка отчёта дня; кому не хватило — утром у кухни).
     const kitchenDay = kitchenOpen(state) ? state.reports?.at(-1)?.kitchen : undefined;
-    if (kitchenDay && (kitchenDay.wanted || kitchenDay.spoiled)) {
-      const sold = t('summary.kitchenSold', { n: kitchenDay.sold });
-      extra.push([t('summary.kitchen'), kitchenDay.spoiled ? `${sold} · ${t('summary.kitchenSpoiled', { n: kitchenDay.spoiled })}` : sold]);
+    if (kitchenDay && (kitchenDay.wanted || kitchenDay.spoiled || kitchenDay.spent)) {
+      const parts = [t('summary.kitchenSold', { n: kitchenDay.sold })];
+      if (kitchenDay.spent) parts.push(t('summary.kitchenSpent', { n: kitchenDay.spent }));
+      if (kitchenDay.spoiled) parts.push(t('summary.kitchenSpoiled', { n: kitchenDay.spoiled }));
+      extra.push([t('summary.kitchen'), parts.join(' · ')]);
     }
     if (this.inspection) {
       const r = this.inspection;

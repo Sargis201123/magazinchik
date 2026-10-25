@@ -1,15 +1,18 @@
 // Кухня-кулинария во флигеле над кофейней (улучшение «Кухня», с 4-го помещения). Готовят блюда из
-// продуктов (со склада, потом с полок) — оливье, борщ, блины, пельмени, сырники, уху; днём покупатели
-// докупают порцию на кассе (как кофе). Готовое стоит в витрине-раздаче до вечера: что не продали —
-// ночью списывается.
+// продуктов — оливье, борщ, блины, пельмени, сырники, уху — и выставляют на полку «Еда» у входа:
+// покупатели по пути к кассе берут с неё порцию сверх покупок. Что не продали, ночью списывается
+// (холодильная витрина часть сохраняет до утра).
 //
-// Без повара готовишь сам — утром, сколько влезет в витрину. Повар (его нанимают) готовит весь день:
-// ходит за продуктами (на склад, чего там нет — к полке в зале), режет, варит и выставляет порции —
-// по меню дня и столько, сколько разберут до закрытия. «Закупить нужное» докупает продукты и ему.
-// Плита (оборудование) варит быстрее и в двух кастрюлях сразу.
+// Без повара готовишь сам — утром, из продуктов магазина (склад, потом полки), сколько влезет на полку.
+// Повар (его нанимают) ведёт кухню сам: у кухни своя кладовая (ящик с продуктами), её он каждое утро
+// заполняет у поставщиков на день вперёд — из кассы магазина, — а кончится днём, докупает к следующей
+// закладке. Режет, варит, носит тарелки на полку — по меню дня и столько, сколько разберут до закрытия.
+// Плита (оборудование) варит быстрее и в двух кастрюлях сразу, полка «Еда» (тоже оборудование) вмещает
+// больше и в холодильнике держит готовое до утра.
 
-import { DAY_SECONDS, expectedGuests, onShelves, onShift, sellableProducts, staffOf, warehouseOf, workSpeed, type ProductId, type StoreState } from './economy';
+import { DAY_SECONDS, expectedGuests, onShelves, onShift, PRODUCTS, staffOf, warehouseOf, workSpeed, type ProductId, type StoreState } from './economy';
 import { gearTier } from './gear';
+import { usualCost } from './reports';
 import { hasUpgrade } from './upgrades';
 import { weatherFor } from './weather';
 
@@ -39,8 +42,7 @@ export const DISHES: Record<DishId, Dish> = {
 };
 export const DISH_IDS = Object.keys(DISHES) as DishId[];
 
-/** Сколько порций помещается в витрине кухни и шанс, что покупатель возьмёт порцию. */
-export const PORTIONS_MAX = 24;
+/** Шанс, что покупатель возьмёт порцию с полки «Еда» (у нарядной витрины — чаще, FOOD_APPEAL). */
 export const DISH_CHANCE = 0.16;
 
 export const kitchenOpen = (state: StoreState): boolean => hasUpgrade(state, 'kitchen');
@@ -62,32 +64,107 @@ export const dishPortions = (state: StoreState, id: DishId): number => DISHES[id
 /** Картинка плиты для модели. */
 export const stoveSprite = (state: StoreState): string => `stove${gearTier(state, 'stove')}`;
 
+// ---------- Полка «Еда» у входа (оборудование, gear.ts) ----------
+
+/**
+ * Сколько порций вмещает полка, какая доля готового доживает до утра (деревянная полка — ничего,
+ * холодильник — половина, витрина-горка — три четверти) и насколько охотнее берут с нарядной витрины.
+ */
+export const FOOD_SLOTS = [20, 28, 36];
+export const FOOD_KEEP = [0, 0.5, 0.75];
+export const FOOD_APPEAL = [1, 1, 1.15];
+export const foodSlots = (state: StoreState): number => FOOD_SLOTS[gearTier(state, 'foodShelf')];
+/** Картинка полки «Еда» для модели. */
+export const foodSprite = (state: StoreState): string => `food_shelf${gearTier(state, 'foodShelf')}`;
+
+// ---------- Кладовая кухни: закупка у поставщиков ----------
+
+export const pantryOf = (state: StoreState, id: ProductId): number => state.pantry?.[id] ?? 0;
+/** Почём кухня берёт продукт у поставщиков: как обычная закупка магазина. */
+export const ingredientPrice = (id: ProductId): number => usualCost(id) ?? PRODUCTS[id].cost;
+export const orderCost = (items: Partial<Record<ProductId, number>>): number =>
+  Object.entries(items).reduce((sum, [p, n]) => sum + ingredientPrice(p as ProductId) * (n ?? 0), 0);
+
+/** Продукты на закладки plan. */
+export function dishNeeds(plan: DishId[]): Partial<Record<ProductId, number>> {
+  const out: Partial<Record<ProductId, number>> = {};
+  for (const id of plan) for (const [p, n] of Object.entries(DISHES[id].needs)) out[p as ProductId] = (out[p as ProductId] ?? 0) + (n ?? 0);
+  return out;
+}
+
+/** Чего не хватает в кладовой на эти продукты. */
+export function pantryShort(state: StoreState, needs: Partial<Record<ProductId, number>>): Partial<Record<ProductId, number>> {
+  const out: Partial<Record<ProductId, number>> = {};
+  for (const [p, n] of Object.entries(needs)) {
+    const short = (n ?? 0) - pantryOf(state, p as ProductId);
+    if (short > 0) out[p as ProductId] = short;
+  }
+  return out;
+}
+
+/**
+ * Кухня закупает продукты в кладовую — из кассы магазина. На что денег не хватает, того не берёт
+ * (по продуктам по порядку). Возвращает, что купили и почём.
+ */
+export function buyPantry(state: StoreState, items: Partial<Record<ProductId, number>>): { state: StoreState; spent: number; bought: Partial<Record<ProductId, number>> } {
+  let money = state.money;
+  const pantry = { ...(state.pantry ?? {}) };
+  const bought: Partial<Record<ProductId, number>> = {};
+  for (const [p, n] of Object.entries(items)) {
+    const id = p as ProductId;
+    const price = ingredientPrice(id);
+    const qty = Math.min(n ?? 0, Math.floor(money / price));
+    if (qty <= 0) continue;
+    money -= qty * price;
+    pantry[id] = (pantry[id] ?? 0) + qty;
+    bought[id] = qty;
+  }
+  const spent = state.money - money;
+  return spent ? { state: { ...state, money, pantry }, spent, bought } : { state, spent: 0, bought };
+}
+
+/** Что кухня закупит утром: продукты на день вперёд (kitchenNeeds) за вычетом того, что осталось в кладовой. */
+export const morningOrder = (state: StoreState): Partial<Record<ProductId, number>> => pantryShort(state, kitchenNeeds(state));
+
+/** Утром, пока повар на смене: кухня сама заполняет кладовую на день. Без повара — ничего не покупает. */
+export const stockKitchen = (state: StoreState): { state: StoreState; spent: number; bought: Partial<Record<ProductId, number>> } =>
+  kitchenWorking(state) ? buyPantry(state, morningOrder(state)) : { state, spent: 0, bought: {} };
+
+/**
+ * Днём продукты кончились: повар собирается ставить plan (cookBatch с stocked) — кухня докупает
+ * в кладовую ровно то, чего на эти закладки не хватает.
+ */
+export const topUpKitchen = (state: StoreState, plan: DishId[]): { state: StoreState; spent: number; bought: Partial<Record<ProductId, number>> } =>
+  kitchenWorking(state) ? buyPantry(state, pantryShort(state, dishNeeds(plan))) : { state, spent: 0, bought: {} };
+
 // ---------- Готовка ----------
 
-const stockOf = (state: StoreState, id: ProductId): number => warehouseOf(state, id) + onShelves(state, id);
+const stockOf = (state: StoreState, id: ProductId): number => pantryOf(state, id) + warehouseOf(state, id) + onShelves(state, id);
 
-/** Хватает ли продуктов (склад и полки) на закладку. */
+/** Хватает ли продуктов (кладовая кухни, склад и полки) на закладку. */
 export const hasIngredients = (state: StoreState, id: DishId): boolean =>
   Object.entries(DISHES[id].needs).every(([p, n]) => stockOf(state, p as ProductId) >= (n ?? 0));
 
-/** Хватает ли продуктов (склад и полки) на закладку и места в витрине. */
+/** Хватает ли продуктов на закладку и места на полке «Еда». */
 export const canCook = (state: StoreState, id: DishId): boolean =>
-  kitchenOpen(state) && portionsTotal(state) + dishPortions(state, id) <= PORTIONS_MAX && hasIngredients(state, id);
+  kitchenOpen(state) && portionsTotal(state) + dishPortions(state, id) <= foodSlots(state) && hasIngredients(state, id);
 
-/** Забрать штуки: сначала со склада, потом с полок. */
+/** Забрать штуки: сначала из кладовой кухни, потом со склада, потом с полок. */
 function take(state: StoreState, id: ProductId, n: number): StoreState {
-  const fromWarehouse = Math.min(n, warehouseOf(state, id));
-  let left = n - fromWarehouse;
+  const fromPantry = Math.min(n, pantryOf(state, id));
+  const fromWarehouse = Math.min(n - fromPantry, warehouseOf(state, id));
+  let left = n - fromPantry - fromWarehouse;
   const shelves = state.shelves.map((s) => {
     const units = s.items[id] ?? [];
     const k = Math.min(left, units.length);
     left -= k;
     return k ? { ...s, items: { ...s.items, [id]: units.slice(k) } } : s;
   });
-  return { ...state, shelves, warehouse: { ...state.warehouse, [id]: (state.warehouse[id] ?? []).slice(fromWarehouse) } };
+  const pantry = fromPantry ? { pantry: { ...state.pantry, [id]: pantryOf(state, id) - fromPantry } } : {};
+  return { ...state, ...pantry, shelves, warehouse: { ...state.warehouse, [id]: (state.warehouse[id] ?? []).slice(fromWarehouse) } };
 }
 
-/** Продукты на закладку: сначала со склада, потом с полок. null — не хватает. */
+/** Продукты на закладку: из кладовой, потом со склада, потом с полок. null — не хватает. */
 export function takeIngredients(state: StoreState, id: DishId): StoreState | null {
   if (!hasIngredients(state, id)) return null;
   let s = state;
@@ -95,13 +172,13 @@ export function takeIngredients(state: StoreState, id: DishId): StoreState | nul
   return s;
 }
 
-/** Готовые порции — в витрину (не больше, чем она вмещает). */
+/** Готовые порции — на полку «Еда» (не больше, чем она вмещает). */
 export const servePortions = (state: StoreState, id: DishId, n = dishPortions(state, id)): StoreState => ({
   ...state,
-  kitchen: { ...state.kitchen, [id]: portionsOf(state, id) + Math.max(0, Math.min(n, PORTIONS_MAX - portionsTotal(state))) },
+  kitchen: { ...state.kitchen, [id]: portionsOf(state, id) + Math.max(0, Math.min(n, foodSlots(state) - portionsTotal(state))) },
 });
 
-/** Приготовить закладку сразу (утром, своими руками): продукты со склада, потом с полок → порции. */
+/** Приготовить закладку сразу (утром, своими руками): продукты из кладовой, со склада, потом с полок → порции. */
 export function cook(state: StoreState, id: DishId): StoreState | null {
   if (!canCook(state, id)) return null;
   const taken = takeIngredients(state, id);
@@ -148,18 +225,19 @@ export function dishDemand(state: StoreState): number {
 
 /**
  * Новая закладка нужна, если до закрытия (dayLeft — доля дня впереди) разберут хотя бы половину её
- * порций сверх того, что уже в витрине: готовое ночью списывается, лишнего к вечеру не варим.
+ * порций сверх того, что уже на полке: готовое ночью списывается, лишнего к вечеру не варим.
  */
 const worthCooking = (state: StoreState, id: DishId, want: number): boolean => portionsTotal(state) + dishPortions(state, id) / 2 < want;
 
 /**
  * Что повар ставит на плиту сейчас (по кастрюле на блюдо, сколько есть кастрюль): из меню дня то, что
- * охотнее берут и чего меньше в витрине. Не готовит, если продуктов нет, витрина полна или порций уже
- * хватит до закрытия. readyIn — через какую долю дня закладка будет в витрине (дорога, нарезка, варка).
+ * охотнее берут и чего меньше на полке. Не готовит, если продуктов нет, полка полна или порций уже
+ * хватит до закрытия. readyIn — через какую долю дня закладка будет на полке (нарезка, варка, дорога).
+ * stocked — продукты не проверять: что повар поставил бы, будь всё в кладовой (по этому кухня докупает).
  */
-export function cookBatch(state: StoreState, dayLeft = 1, readyIn = 0, pots = stovePots(state)): DishId[] {
+export function cookBatch(state: StoreState, dayLeft = 1, readyIn = 0, pots = stovePots(state), stocked = false): DishId[] {
   if (!kitchenWorking(state)) return [];
-  // Сваренное продаётся, только когда окажется в витрине: пока варится, разбирают то, что в ней уже есть,
+  // Сваренное продаётся, только когда окажется на полке: пока варится, разбирают то, что на ней уже есть,
   // а кому не хватило — уходят без порции.
   const demand = dishDemand(state);
   const want = demand * Math.max(0, dayLeft - readyIn) + Math.min(portionsTotal(state), demand * readyIn);
@@ -167,26 +245,25 @@ export function cookBatch(state: StoreState, dayLeft = 1, readyIn = 0, pots = st
   let s = state;
   for (let i = 0; i < pots; i++) {
     const have = portionsTotal(s);
-    const options = cookMenu(s).filter((id) => have + dishPortions(s, id) <= PORTIONS_MAX && worthCooking(s, id, want) && hasIngredients(s, id));
+    const options = cookMenu(s).filter((id) => have + dishPortions(s, id) <= foodSlots(s) && worthCooking(s, id, want) && (stocked || hasIngredients(s, id)));
     if (!options.length) break;
     const score = (id: DishId) => dishAppeal(s, id) / (1 + portionsOf(s, id));
     const best = options.reduce((a, b) => (score(b) > score(a) ? b : a));
-    s = servePortions(takeIngredients(s, best)!, best);
+    s = servePortions(stocked ? s : takeIngredients(s, best)!, best);
     out.push(best);
   }
   return out;
 }
 
 /**
- * Сколько продуктов повар заберёт за день — «Закупить нужное» докупает это сверху. Считаем, как он сам
- * выбирает (охотнее берут и меньше в витрине), из блюд меню, чьи продукты магазин продаёт (есть полка).
- * Порции за день не упираются в витрину (их разбирают), но закладок не больше, чем повар успеет сварить.
+ * Сколько продуктов повар заберёт за день — столько кухня утром закупает в кладовую. Считаем, как он сам
+ * выбирает (охотнее берут и меньше на полке), из блюд меню (продукты кухня берёт у поставщиков сама).
+ * Порции за день не упираются в полку (их разбирают), но закладок не больше, чем повар успеет сварить.
  */
 export function kitchenNeeds(state: StoreState): Partial<Record<ProductId, number>> {
   const chef = staffOf(state, 'cook');
   if (!kitchenWorking(state) || !chef) return {};
-  const sold = sellableProducts(state);
-  const menu = cookMenu(state).filter((id) => Object.keys(DISHES[id].needs).every((p) => sold.includes(p as ProductId)));
+  const menu = cookMenu(state);
   const want = dishDemand(state);
   const batches = cookRoundsPerDay(state, DAY_SECONDS, workSpeed(chef)) * stovePots(state);
   const out: Partial<Record<ProductId, number>> = {};
@@ -204,29 +281,47 @@ export function kitchenNeeds(state: StoreState): Partial<Record<ProductId, numbe
 
 // ---------- Продажа и ночь ----------
 
-/**
- * Покупатель на кассе хочет порцию (шанс DISH_CHANCE) и берёт из готового — что сегодня по душе.
- * null — не захотел; dish: null — хотел, но витрина пуста (в отчёт: «не хватило»).
- */
-export function sellDish(state: StoreState, random: () => number): { state: StoreState; dish: DishId | null } | null {
-  if (!kitchenOpen(state) || random() >= DISH_CHANCE) return null;
+/** Покупатель хочет порцию с полки «Еда» (шанс DISH_CHANCE, у нарядной витрины — выше). */
+export const wantsDish = (state: StoreState, random: () => number): boolean =>
+  kitchenOpen(state) && random() < DISH_CHANCE * FOOD_APPEAL[gearTier(state, 'foodShelf')];
+
+/** Покупатель берёт с полки порцию — что сегодня по душе. null — полка пуста (в отчёт: «не хватило»). */
+export function takeDish(state: StoreState, random: () => number): { state: StoreState; dish: DishId } | null {
   const ready = DISH_IDS.filter((id) => portionsOf(state, id) > 0);
-  if (!ready.length) return { state, dish: null };
+  if (!ready.length) return null;
   const total = ready.reduce((sum, id) => sum + dishAppeal(state, id), 0);
   let roll = random() * total;
   const dish = ready.find((id) => (roll -= dishAppeal(state, id)) < 0) ?? ready[ready.length - 1];
   return { state: { ...state, kitchen: { ...state.kitchen, [dish]: portionsOf(state, dish) - 1 } }, dish };
 }
 
-/** Ночью непроданное списывается: сколько порций пропало. */
+/**
+ * Покупатель хочет порцию и берёт с полки — что сегодня по душе (wantsDish + takeDish, для симулятора).
+ * null — не захотел; dish: null — хотел, но полка пуста.
+ */
+export function sellDish(state: StoreState, random: () => number): { state: StoreState; dish: DishId | null } | null {
+  if (!wantsDish(state, random)) return null;
+  return takeDish(state, random) ?? { state, dish: null };
+}
+
+/**
+ * Ночью непроданное списывается: сколько порций пропало. В холодильнике (полка «Еда» получше) часть
+ * каждого блюда доживает до утра.
+ */
 export function spoilDishes(state: StoreState): { state: StoreState; spoiled: number } {
-  const spoiled = portionsTotal(state);
-  return spoiled ? { state: { ...state, kitchen: {} }, spoiled } : { state, spoiled: 0 };
+  const keep = FOOD_KEEP[gearTier(state, 'foodShelf')];
+  const kitchen: Partial<Record<DishId, number>> = {};
+  for (const id of DISH_IDS) {
+    const kept = Math.floor(portionsOf(state, id) * keep);
+    if (kept > 0) kitchen[id] = kept;
+  }
+  const spoiled = portionsTotal(state) - portionsTotal({ ...state, kitchen });
+  return spoiled ? { state: { ...state, kitchen }, spoiled } : { state, spoiled: 0 };
 }
 
 // ---------- Сколько успевает повар (закупка и симулятор) ----------
 
-/** Дорога за продуктами и нарезка — секунд на закладку сверх варки (в игре повар ходит сам). */
+/** Продукты из ящика, нарезка и дорога с тарелками к полке «Еда» — секунд на закладку сверх варки (в игре повар ходит сам). */
 export const COOK_ROUND_EXTRA = 9;
 /** Сколько раз за день повар успевает поставить кастрюли (при скорости pace). */
 export const cookRoundsPerDay = (state: StoreState, daySeconds: number, pace = 1): number =>

@@ -1,7 +1,8 @@
 """Кухня во флигеле: плиты трёх моделей (gear.ts, «Плита на кухне»), кастрюля и сковорода на конфорку,
 рабочий стол с разделочной доской и нож, витрина-раздача (задник и стекло отдельно — тарелки стоят
 между ними), тарелки с блюдами для витрины, корзинка повара с продуктами, ящик с овощами
-и кафельный фартук на стену.
+и кафельный фартук на стену. А ещё полка «Еда» у входа в зал трёх моделей (gear.ts, «Полка «Еда»»:
+деревянная, холодильная, витрина-горка со стеклом) и поднос с тарелками, с которым повар идёт к ней.
 
 Запуск: python3 art/kitchen.py (картинки — в public/assets, как у остальных скриптов)."""
 
@@ -313,7 +314,124 @@ def tiles():
     c.save("ktiles")
 
 
+# Полка «Еда» 60×48 (в мире 30×24), лицом в зал. Сверху на двух стойках — табличка (надпись «Еда» пишет
+# сцена, по центру таблички: y = 5), ниже — ниша, где стоят тарелки (сцена ставит их в два ряда: низ
+# тарелок — y = 19 и 23, по x — 12, 21, 30, 39, 48), спереди — тумба.
+FOOD_W, FOOD_H = 60, 48
+ICE = H("#cfefff")
+ICE_D = H("#9fd8f4")
+WARM = H("#fff1c8")
+
+
+def food_sign(c, board, trim, post):
+    """Табличка на двух стойках над нишей."""
+    for x in (17, 42):
+        c.vline(x, 9, 6, post)
+    c.rect(14, 0, 32, 11, board)
+    c.hline(14, 0, 32, trim)
+    c.hline(14, 10, 32, lit(board, -0.25) if not isinstance(board, str) else trim)
+    c.frame(14, 0, 32, 11, "k")
+
+
+def food_shelves():
+    """Три модели полки «Еда»: деревянная, холодильная витрина и витрина-горка (стекло — отдельно, поверх тарелок)."""
+    # Деревянная полка: столешница-ниша и тумба из досок на ножках, табличка — тёмное дерево.
+    c = Canvas(FOOD_W, FOOD_H)
+    food_sign(c, H("#3b2a35"), WOOD_HI, WOOD_DK)
+    c.rect(3, 14, 54, 11, WOOD_LO)
+    c.rect(5, 15, 50, 8, H("#c88a5c"))
+    c.hline(5, 15, 50, WOOD_DK)
+    c.hline(3, 14, 54, WOOD_HI)
+    c.rect(3, 24, 54, 16, WOOD)
+    c.hline(3, 24, 54, WOOD_HI)
+    for y in (29, 34):
+        c.hline(3, y, 54, WOOD_LO)
+    for x in (16, 30, 44):
+        c.vline(x, 25, 15, WOOD_LO)
+    c.hline(3, 39, 54, WOOD_DK)
+    for x in (5, 52):
+        c.rect(x, 40, 3, 5, WOOD_DK)
+    c.outline("k")
+    shadowed(c, 30, 45, 28, 2.5).save("food_shelf0")
+
+    # Холодильная витрина: белый корпус, открытая ванна с холодом, синяя полоса со снежинкой, цоколь.
+    c = Canvas(FOOD_W, FOOD_H)
+    food_sign(c, "u", "U", STEEL_LO)
+    c.rect(2, 13, 56, 13, "w")
+    for yy in range(15, 25):
+        t = (yy - 15) / 9
+        c.hline(5, yy, 50, ICE if t < 0.6 else ICE_D)
+    c.hline(5, 15, 50, STEEL_LO)
+    c.speckle(5, 15, 50, 9, ["w", ICE], 26, 3)
+    c.rect(2, 26, 56, 14, STEEL)
+    c.hline(2, 26, 56, "w")
+    c.rect(2, 30, 56, 5, "U")
+    c.hline(2, 30, 56, "c")
+    c.hline(2, 34, 56, "u")
+    flake = [
+        "w.w.w",
+        ".www.",
+        "wwYww",
+        ".www.",
+        "w.w.w",
+    ]
+    c.stamp([r.replace("Y", "w") for r in flake], 27, 30)
+    c.rect(2, 40, 56, 3, "G")
+    for x in (5, 52):
+        c.rect(x, 43, 3, 2, "k")
+    c.outline("k")
+    shadowed(c, 30, 45, 29, 2.5).save("food_shelf1")
+
+    # Витрина-горка: хромированный кант, тёплая подсветка ниши, тумба тёмного дерева с золотым кантом
+    # и светящейся полосой; табличка — зелёная с золотом.
+    c = Canvas(FOOD_W, FOOD_H)
+    food_sign(c, "d", "Y", STEEL_LO)
+    c.rect(2, 13, 56, 13, STEEL)
+    c.hline(2, 13, 56, STEEL_HI)
+    for yy in range(15, 25):
+        c.hline(5, yy, 50, WARM if yy < 21 else lit(WARM, -0.1))
+    c.hline(5, 15, 50, "Y")
+    c.rect(2, 26, 56, 14, "x")
+    c.hline(2, 26, 56, "y")
+    c.rect(4, 29, 52, 2, "Y")
+    c.hline(4, 31, 52, "y")
+    for x in (15, 30, 45):
+        c.vline(x, 32, 7, H("#5a3a2a"))
+    c.hline(2, 39, 56, "y")
+    c.rect(2, 40, 56, 3, STEEL_DK)
+    for x in (5, 52):
+        c.rect(x, 43, 3, 2, "k")
+    c.outline("k")
+    shadowed(c, 30, 45, 29, 2.5).save("food_shelf2")
+    # Стекло витрины-горки: косой козырёк над нишей с бликами — поверх тарелок.
+    g = Canvas(FOOD_W, FOOD_H)
+    g.rect(4, 11, 52, 4, (210, 238, 255, 70))
+    g.rect(4, 15, 52, 9, (210, 238, 255, 34))
+    g.hline(4, 11, 52, (255, 255, 255, 170))
+    for x0, alpha in ((10, 130), (34, 120), (40, 70)):
+        for i in range(7):
+            g.px(x0 + i, 22 - (i * 3) // 2, (255, 255, 255, alpha))
+    g.save("food_glass2")
+
+
+def tray():
+    """Поднос с тремя тарелками: с ним повар несёт готовое на полку «Еда»."""
+    # Поднос деревянный: на белом кителе повара стальной бы потерялся.
+    c = Canvas(16, 10)
+    c.rect(1, 6, 14, 3, WOOD)
+    c.hline(1, 6, 14, WOOD_HI)
+    c.hline(1, 8, 14, WOOD_DK)
+    for x, food in ((4, "R"), (8, "y"), (12, "E")):
+        c.ellipse(x, 5, 2.6, 1.2, STEEL_HI)
+        c.ellipse(x, 4.6, 1.5, 0.8, food)
+    c.px(8, 3, "Y")
+    c.outline("k")
+    c.save("kplates")
+
+
 def main():
+    food_shelves()
+    tray()
     stoves()
     pot_and_pan()
     table()
