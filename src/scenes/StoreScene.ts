@@ -2195,10 +2195,11 @@ export class StoreScene extends Phaser.Scene {
     this.fuseBox = this.art(fuseX, 18, 'fusebox').setDepth(3);
     this.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.fixFuse()));
     this.fuseGlow = new Halo(this, this.fuseBox, 0xfee761);
-    // Свет отключили — у щитка мигает аварийная лампочка: в тёмном зале видно, куда нажать.
+    // Свет отключили — у щитка мигает аварийная лампочка: в тёмном зале видно, куда нажать. Мигает
+    // ступеньками (ярко — тускло), а не плавно: карту перерисовывать дважды за мигание, а не каждый кадр.
     const fuse = this.fuseBox;
     const emergency = this.light.add('light_pool', fuse.x, fuse.y + 6, 34, 30, 0xffe08a, 0).attach(fuse);
-    emergency.sync = () => emergency.set(this.blackout ? 0.55 + 0.25 * Math.sin(this.time.now / 260) : 0);
+    emergency.sync = () => emergency.set(this.blackout ? (Math.floor(this.time.now / 400) % 2 ? 0.8 : 0.35) : 0);
     this.registers = [];
     this.registers.push({ ...this.makeRegister(counter, false, this.layout.queue, this.layout.sellerHome), img: registerImg });
     this.buildUpgrades();
@@ -3521,7 +3522,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Свет по ходу дня: фон карты освещения (днём белый, к ночи — синие сумерки на улице и полумрак в зале),
+   * Свет по ходу дня: фон карты освещения (днём белый, к ночи — синие сумерки на улице, а зал чуть темнее),
    * цветокоррекция часа и погоды, фонари, окна и неон.
    */
   private updateLighting(progress?: number): void {
@@ -8237,7 +8238,7 @@ export class StoreScene extends Phaser.Scene {
     g.fillGradientStyle(ink, ink, ink, ink, 0, 0.16, 0, 0.16);
     g.fillRect(w - 10, wallH, 10, h - wallH);
     // Свет потолочных ламп: тёплые пятна на полу рядами — зал не плоский, а освещённый. Ночью эти же лампы
-    // держат зал в карте освещения: под ними светло и тепло (LED — белее), между ними и в углах — полумрак.
+    // держат зал в карте освещения: под ними светло и тепло (LED — белее), между ними и в углах — темнее.
     // Утром они загораются ряд за рядом (lightsOn), свет отключили — гаснут.
     this.lampPools = [];
     const color = gearTier(this.state, 'lights') ? HALL_LED : HALL_WARM;
@@ -8701,6 +8702,8 @@ export class StoreScene extends Phaser.Scene {
         const glow = this.art(62, 11, 'glow').setScale(46 / 64, 24 / 64).setTint(0xf6757a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
         this.tweens.add({ targets: glow, alpha: { from: 0.8, to: 0.4 }, duration: 900, yoyo: true, repeat: -1 });
         this.art(62, 10, 'neon').setDepth(2);
+        // Неон под картой освещения: ночью светит в ней сам (ровно, без пульса — карту ради него не перерисовывать).
+        this.light.follow(glow, { key: 'light_pool', w: 44, h: 26, power: () => 0.6 * this.evening * this.powerOn() });
       } else {
         this.art(62, 9, 'clock_face').setDepth(1);
         this.clockHands = this.add.graphics({ x: 62, y: 9 }).setDepth(1.1);
@@ -8787,6 +8790,13 @@ export class StoreScene extends Phaser.Scene {
       const lit = this.add.tileSprite(0, 0, w, 6, this.potTile('light_garland_lit')).setOrigin(0).setTileScale(1 / ART).setDepth(2);
       lit.setBlendMode(Phaser.BlendModes.ADD);
       this.tweens.add({ targets: lit, alpha: { from: 1, to: 0.35 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      // Гирлянда сама рисуется под картой освещения — ночью карта приглушила бы её вместе со стеной.
+      // Поэтому она светит и в карте: тёплая полоса по верху стены (пятна внахлёст — без просветов), вечером
+      // ярче, свет отключили — гаснет. Ровно, без мигания огоньков: карту ради них не перерисовывать.
+      for (let x = 12; x < w + 12; x += 24) {
+        const strip = this.light.add('light_pool', x, 4, 40, 18, 0xffe6b0, 0);
+        strip.sync = () => strip.set(0.55 * this.evening * this.powerOn());
+      }
       return;
     }
     // Между плакатами и окнами (над часами место занято).
@@ -8809,6 +8819,10 @@ export class StoreScene extends Phaser.Scene {
         this.hangingLamps.push({ lamp, bulb });
       }
       this.tweens.add({ targets: bulb, alpha: { from: 0.45, to: 0.32 }, duration: 1600 + (x % 5) * 140, yoyo: true, repeat: -1 });
+      // Светильник тоже под картой освещения: он и стена вокруг светятся в ней сами (свет идёт за лампочкой
+      // и когда она качается), вечером ярче, без электричества гаснут.
+      const big = light.id === 'light_chandelier';
+      this.light.follow(bulb, { key: 'light_pool', w: big ? 48 : 34, h: big ? 30 : 26, color: warm, power: () => 0.7 * this.evening * this.powerOn() });
       // Тёплое пятно на полу у стены — вечером ярче.
       this.nightGlow(this.art(x, wallH + 6, 'glow').setDisplaySize(52, 22).setTint(warm), 0.35, undefined, { store: true, map: { scale: 1.5, gain: 2.2, haze: 0.2 } });
       this.add.image(x, wallH + 6, 'glow').setScale(52 / 64, 22 / 64).setTint(warm).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.12).setDepth(1);
@@ -8943,8 +8957,10 @@ export class StoreScene extends Phaser.Scene {
         .setDepth(y + 31.5),
     );
     const pots = burners.map((b) => this.art(b.x, b.y + 1, 'kpot').setOrigin(0.5, 1).setVisible(false).setDepth(y + 32));
-    // Огонь плиты отсвечивает на стену и повара: газ — голубым, электроплитка — оранжевым.
-    for (const flame of flames) this.light.follow(flame, { key: 'glow', w: 26, h: 20, dy: -2, power: () => (flame.visible ? flame.alpha * 0.7 * this.powerOn() : 0) });
+    // Огонь плиты отсвечивает на стену и повара: газ — голубым, электроплитка — оранжевым. Сам огонёк
+    // дрожит часто (твин в startPots), а отсвет — ступеньками раз в 300 мс и у всех конфорок разом: иначе
+    // карту перерисовывали бы каждый кадр, пока варится.
+    for (const flame of flames) this.light.follow(flame, { key: 'glow', w: 26, h: 20, dy: -2, power: () => (flame.visible ? (Math.floor(this.time.now / 300) % 2 ? 0.55 : 0.4) * this.powerOn() : 0) });
     this.kitchenView = { stove, pots, flames, knife, showcase, plates: [], cooking: [] };
     stove.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.tapStove()));
     showcase.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.tapShowcase()));

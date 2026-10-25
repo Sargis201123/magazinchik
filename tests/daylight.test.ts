@@ -55,11 +55,14 @@ describe('фон карты освещения', () => {
     }
   });
 
-  it('ночью темно, но читаемо: в зале без ламп светлее, чем на улице, — около половины дневного', () => {
+  it('ночью на улице темно, но читаемо, а зал — как было до карты освещения (так решил автор)', () => {
     for (const weather of WEATHERS) {
       const { outdoor, indoor } = ambientAt(1, weather, false);
       expect(luma(indoor)).toBeGreaterThan(luma(outdoor));
-      expect(luma(indoor)).toBeGreaterThan(0.4);
+      // Зал без ламп ночью светлый: вместе с лампами он в среднем такой же, как раньше (0xe4d8ec и ореолы под
+      // потолком). Темнее не делать — товар, облачка желаний и ценники под картой света тускнеют. В грозу из
+      // окон чуть серее.
+      expect(luma(indoor)).toBeGreaterThan(0.68);
       expect(luma(outdoor)).toBeGreaterThan(0.25);
       // Ночь синяя, а не серая.
       const [r, , b] = channels(outdoor);
