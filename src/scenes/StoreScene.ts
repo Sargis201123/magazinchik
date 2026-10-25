@@ -161,7 +161,7 @@ import { duelInfo, fetchFriendShop, loadMultiplayer, treatFriend, visitsInfo, ty
 import { friendsAtWork } from '../game/staff';
 import { ensureSeason, grantPass } from '../game/pass';
 import { ensureRush } from '../game/rush';
-import { cookBatch, DISHES, DISH_IDS, dishPortions, foodSlots, foodSprite, inPantry, kitchenOpen, kitchenWorking, portionsOf, servePortions, stockKitchen, stoveSeconds, stoveSprite, takeDish, takeIngredients, topUpKitchen, wantsDish, type DishId } from '../game/kitchen';
+import { cookBatch, DISHES, DISH_IDS, dishPortions, foodSlots, foodSprite, kitchenOpen, kitchenWorking, pantryOf, portionsOf, servePortions, stockKitchen, stoveSeconds, stoveSprite, takeDish, takeIngredients, topUpKitchen, wantsDish, type DishId } from '../game/kitchen';
 import { activeTrick, seeTrickResult, trickResult } from '../game/tricks';
 import {
   answerNightStory,
@@ -9224,9 +9224,10 @@ export class StoreScene extends Phaser.Scene {
   private async fetchIngredients(w: Worker, gen: number, k: KitchenView, plan: DishId[]): Promise<DishId[]> {
     const room = this.layout.kitchen!;
     const store = this.layout.warehouse;
-    const pantry = plan.every((id) => inPantry(this.state, id));
     const need = new Map<ProductId, number>();
     for (const id of plan) for (const [p, n] of Object.entries(DISHES[id].needs)) need.set(p as ProductId, (need.get(p as ProductId) ?? 0) + (n ?? 0));
+    // Кладовой хватает на всю закладку сразу (два блюда могут делить продукт).
+    const pantry = [...need].every(([p, n]) => pantryOf(this.state, p) >= n);
     const fromStore = !pantry && [...need.keys()].some((p) => warehouseOf(this.state, p) > 0);
     const short = pantry ? undefined : [...need].find(([p, n]) => warehouseOf(this.state, p) < n)?.[0];
     const shelf = short ? this.state.shelves.findIndex((sh) => !sh.broken && (sh.items[short]?.length ?? 0) > 0) : -1;
@@ -9251,7 +9252,8 @@ export class StoreScene extends Phaser.Scene {
       await this.workerWalk(w, stand.x, stand.y - 2);
       await this.workerWait(w, PLACE_MS);
     }
-    if (!this.alive(gen)) return [];
+    // Пока ходил, магазин закрылся: варить уже нечего — к ночи всё равно спишется.
+    if (!this.alive(gen) || !this.running || this.night) return [];
     const taken: DishId[] = [];
     for (const id of plan) {
       const next = takeIngredients(this.state, id);

@@ -164,10 +164,6 @@ function take(state: StoreState, id: ProductId, n: number): StoreState {
   return { ...state, ...pantry, shelves, warehouse: { ...state.warehouse, [id]: (state.warehouse[id] ?? []).slice(fromWarehouse) } };
 }
 
-/** Хватает ли на закладку одной кладовой кухни (повару не надо идти на склад и в зал). */
-export const inPantry = (state: StoreState, id: DishId): boolean =>
-  Object.entries(DISHES[id].needs).every(([p, n]) => pantryOf(state, p as ProductId) >= (n ?? 0));
-
 /** Продукты на закладку: из кладовой, потом со склада, потом с полок. null — не хватает. */
 export function takeIngredients(state: StoreState, id: DishId): StoreState | null {
   if (!hasIngredients(state, id)) return null;
