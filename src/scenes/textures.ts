@@ -64,6 +64,9 @@ const SPRITES = [
   'pigeon_fly',
   'light_cone',
   'light_spill',
+  // Пятно света для карты освещения и ореол «нажми сюда» (art/light.py).
+  'light_pool',
+  'halo',
   'sun_ray',
   'mud',
   'ripple',
