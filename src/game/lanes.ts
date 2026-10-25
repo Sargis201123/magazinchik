@@ -36,13 +36,13 @@ export interface KioskTier {
 
 export const KIOSK_TIERS: KioskTier[] = [
   { nameKey: 'kiosk.t0', item: 1.6, pay: 1.2, maxItems: 2, error: 0.12, skip: 0.05, lane: 0.6, price: 0, minLevel: 2 },
-  { nameKey: 'kiosk.t1', item: 1.1, pay: 0.8, maxItems: 3, error: 0.06, skip: 0.025, lane: 0.8, price: 800, minLevel: 2 },
-  { nameKey: 'kiosk.t2', item: 0.8, pay: 0.6, maxItems: 4, error: 0.02, skip: 0.008, lane: 1, price: 1500, minLevel: 3 },
+  { nameKey: 'kiosk.t1', item: 1.1, pay: 0.8, maxItems: 3, error: 0.06, skip: 0.025, lane: 0.8, price: 600, minLevel: 2 },
+  { nameKey: 'kiosk.t2', item: 0.8, pay: 0.6, maxItems: 4, error: 0.02, skip: 0.008, lane: 1, price: 1100, minLevel: 3 },
 ];
 /** Мест под киоски в помещении (у правой стены над кассами — layout.ts, kioskSpot). */
 export const KIOSKS_BY_LEVEL = [0, 0, 2, 3, 4];
 /** Цена первого, второго, третьего и четвёртого киоска. */
-export const KIOSK_PRICES = [1000, 1200, 1500, 1800];
+export const KIOSK_PRICES = [700, 900, 1100, 1300];
 /** Сколько секунд покупатель ждёт, пока экран «ошибки» сбросится. */
 export const KIOSK_ERROR_SECONDS = 3.5;
 /** Без очереди к киоску идёт только каждый третий с подходящей корзиной — остальные к кассиру. */
