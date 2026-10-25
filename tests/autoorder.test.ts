@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newGame, onShelves, shelveAll, warehouseOf, type StoreState } from '../src/game/economy';
+import { newGame, onShelves, shelveAll, warehouseCapacity, warehouseCount, warehouseOf, type StoreState } from '../src/game/economy';
 import {
   AUTO_SHARE,
   AUTO_TOPUP_MARKUP,
@@ -63,6 +63,24 @@ describe('автозаказ — закупщик', () => {
     expect(autoLimit(more)).toBe(300);
     expect(more.autoOrder!.today!.spent).toBeGreaterThan(small.autoOrder!.today!.spent);
     expect(more.autoOrder!.today!.spent).toBeLessThanOrEqual(300);
+  });
+
+  it('утром закупает и на полки, и на склад — больше, чем влезло бы на один склад; всё купленное помечено', () => {
+    const more = base({ money: 100_000 });
+    const s = empty({ ...more, shelves: [...more.shelves, { kind: 'dairy', level: 0, items: {} }, { kind: 'meat', level: 0, items: {} }] });
+    const done = shelveAll(autoMorning(s, price, 200));
+    const today = done.autoOrder!.today!;
+    const bought = today.lines.reduce((n, l) => n + l.qty, 0);
+    expect(bought).toBeGreaterThan(warehouseCapacity(s));
+    for (const l of today.lines) {
+      const units = [...(done.warehouse[l.pid] ?? []), ...done.shelves.flatMap((sh) => sh.items[l.pid] ?? [])];
+      expect(units.filter((u) => u.auto)).toHaveLength(l.qty);
+    }
+    expect(warehouseCount(done)).toBeLessThanOrEqual(warehouseCapacity(done));
+    // Вернуть строку можно целиком — и с полок, и со склада.
+    const line = today.lines[0];
+    const back = autoReturn(done, line.pid)!;
+    expect(back.money - done.money).toBe(line.paid);
   });
 
   it('выключен или не куплен — ничего не делает', () => {

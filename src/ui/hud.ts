@@ -246,7 +246,8 @@ export class Hud {
     day: number,
     stats: DayStats,
     rating: { before: number; after: number },
-    money: { bill: number | null; shortfall: number; total: number },
+    /** housewarming — счёт пришёл по старой аренде («новоселье» после переезда). */
+    money: { bill: number | null; shortfall: number; total: number; housewarming?: boolean },
     extra: [string, string][],
     stamps: SummaryStamp[],
     history: number[],
@@ -389,6 +390,7 @@ export class Hud {
       target.append(r);
     };
     row(t('summary.money'), `${money.total} 💰`, card);
+    if (money.bill !== null && money.housewarming) card.append(el('div', 'ui-note', t('summary.housewarming')));
     if (money.shortfall > 0) card.append(el('div', 'ui-note', t('summary.shortfall', { n: money.shortfall })));
     // Почему уходили покупатели — подсказка на завтра, её видно сразу.
     if (losses.length) card.append(lossBox(stats.served, losses));

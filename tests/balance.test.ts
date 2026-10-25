@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { averageLevelDays, simulate } from '../src/game/simulate';
+import { MONTH_DAYS } from '../src/game/economy';
 
 // Баланс экономики: «разумный игрок» из симулятора должен расти не слишком быстро
 // и не слишком медленно. Если тест упал после правки цифр — запусти `npm run sim`.
+// Игрок каждое утро жмёт «Закупить нужное» (buyMode по умолчанию — 'restock'): одно нажатие закупает
+// и на полки, и на склад, как в игре. Раньше баланс считали по 'smart', которому закупку резал склад.
 describe('баланс экономики', () => {
   // 24 прогона: на 12 интервалы плясали на день от шума погоды.
   const days = averageLevelDays(120, 24);
@@ -29,6 +32,22 @@ describe('баланс экономики', () => {
       Math.min(...simulate({ days: 10, seed: i + 1 }).days.slice(1).map((d) => d.profit)),
     ).sort((a, b) => a - b);
     expect(worst[5]).toBeLessThan(120);
+  });
+});
+
+describe('новоселье', () => {
+  // Стройка, полки на новые места и первый счёт (по старой аренде) не загоняют в долг с пени. До закупки
+  // «и на полки, и на склад» и новоселья после первого расширения в долг уходил каждый пятый (4 из 20).
+  it('первый счёт после первого расширения почти всегда оплачен: в долг — не больше 1 прогона из 12', () => {
+    let unpaid = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const r = simulate({ days: 30, seed });
+      const moved = r.levelDay[1];
+      expect(moved).not.toBeNull();
+      const bill = r.days.find((d) => d.day >= moved! && d.day % MONTH_DAYS === 0)!;
+      if (bill.debt > r.days[bill.day - 2].debt) unpaid++;
+    }
+    expect(unpaid).toBeLessThanOrEqual(1);
   });
 });
 
