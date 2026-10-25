@@ -257,6 +257,8 @@ const SPRITES = [
   'umbrella',
   'carts',
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),
+  // Легковые носом вверх и вниз — на парковке и в проезде к ней (art/sprites.py, cars_vertical).
+  ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van'].flatMap((k) => ['up', 'down'].flatMap((d) => [`${k}_${d}`, `${k}_${d}_lights`])),
   'mat',
   'glow',
   'coin',
