@@ -40,7 +40,8 @@ export type AchievementId =
   | 'gear_10'
   | 'gear_all'
   | 'registers_4'
-  | 'giant';
+  | 'giant'
+  | 'branch';
 
 export type Tier = 'bronze' | 'silver' | 'gold';
 
@@ -95,6 +96,8 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'gear_all', tier: 'gold', progress: ({ state }) => flag(gearMaxed(state)) },
   // Победа над гипермаркетом «Гигант» (giant.ts).
   { id: 'giant', tier: 'gold', progress: ({ state }) => flag(state.giant?.phase === 'won') },
+  // Свой филиал в здании «Гиганта» (branch.ts).
+  { id: 'branch', tier: 'gold', progress: ({ state }) => flag(Boolean(state.branch)) },
 ];
 
 export const achievementName = (id: AchievementId): TextKey => `ach.${id}` as TextKey;

@@ -1,4 +1,5 @@
-"""Гипермаркет «Гигант» за дорогой (src/game/giant.ts): стройка, открытый магазин и закрытый.
+"""Гипермаркет «Гигант» за дорогой (src/game/giant.ts): стройка, открытый магазин и закрытый,
+а после покупки — свой филиал (src/game/branch.ts).
 
 Здание большое — 300×176 пикселей (150×88 точек мира): крыша с вентиляцией сверху, фасад
 с синими панелями, красная вывеска с буквами «ГИГАНТ», стеклянный вход. Плюс четыре картинки
@@ -121,6 +122,67 @@ def giant_closed():
     shadowed(c, GW // 2, GH - 3, GW // 2 - 8, 4).save("giant_closed")
 
 
+def giant_branch():
+    """Филиал в здании «Гиганта»: то же здание после ремонта — светлая крыша, тёплый фасад,
+    зелёные вывески без букв (название магазина сцена пишет сверху сама: у каждого игрока своё),
+    витрины с полками и товаром, полосатый навес над стеклянным входом, ящики с цветами."""
+    c = Canvas(GW, GH)
+    rnd = random.Random(11)
+    c.rect(4, 4, GW - 8, ROOF, "W")
+    c.frame(4, 4, GW - 8, ROOF, "l")
+    for _ in range(40):
+        c.px(rnd.randrange(8, GW - 8), rnd.randrange(8, ROOF), "l")
+    for x in (16, 254):
+        c.rect(x, 40, 22, 14, "G")
+        c.rect(x + 2, 42, 18, 4, "l")
+        c.ellipse(x + 11, 50, 4, 2.5, "K")
+    # Вывеска на крыше: зелёная доска в рамке, буквы — от сцены.
+    for x in (90, 210):
+        c.rect(x, 36, 4, 18, "K")
+    c.rect(56, 8, 188, 30, "e")
+    c.frame(56, 8, 188, 30, "d")
+    c.hline(58, 10, 184, "E")
+    c.hline(58, 35, 184, "d")
+    # Фасад: тёплые панели, карниз, табличка «Филиал» над входом (тоже без букв).
+    c.rect(4, ROOF + 4, GW - 8, GH - ROOF - 10, "N")
+    for x in range(4, GW - 4, 20):
+        c.vline(x, ROOF + 4, GH - ROOF - 10, "n")
+    c.rect(100, ROOF + 12, 100, 18, "e")
+    c.frame(100, ROOF + 12, 100, 18, "d")
+    c.hline(102, ROOF + 14, 96, "E")
+    c.rect(4, ROOF + 44, GW - 8, 4, "t")
+    c.hline(4, ROOF + 48, GW - 8, "a")
+    # Витрины: стекло, за ним полки с товаром.
+    goods = ["R", "Y", "E", "o", "P", "U", "s", "w"]
+    for x in list(range(14, 110, 26)) + list(range(186, 270, 26)):
+        c.rect(x, ROOF + 56, 20, 30, "c")
+        c.frame(x - 1, ROOF + 55, 22, 32, "K")
+        for sy in (ROOF + 66, ROOF + 77):
+            c.hline(x, sy, 20, "a")
+            for gx in range(x + 1, x + 19, 3):
+                c.rect(gx, sy - 3, 2, 3, rnd.choice(goods))
+        c.line(x + 3, ROOF + 58, x + 8, ROOF + 64, "w")
+    # Стеклянный вход и навес в полоску.
+    c.rect(124, ROOF + 52, 52, GH - ROOF - 58, "K")
+    c.rect(126, ROOF + 54, 23, GH - ROOF - 62, "c")
+    c.rect(151, ROOF + 54, 23, GH - ROOF - 62, "c")
+    c.vline(146, ROOF + 70, 8, "Y")
+    c.vline(153, ROOF + 70, 8, "Y")
+    for i, x in enumerate(range(116, 184, 6)):
+        c.rect(x, ROOF + 49, 6, 7, "E" if i % 2 == 0 else "w")
+    c.hline(116, ROOF + 56, 68, "d")
+    # Ящики с цветами под витринами по сторонам от входа.
+    for x in (92, 180):
+        c.rect(x, GH - 14, 26, 6, "a")
+        c.hline(x, GH - 14, 26, "t")
+        for fx in range(x + 2, x + 25, 4):
+            c.px(fx, GH - 16, rnd.choice(["R", "Y", "P", "w"]))
+            c.px(fx + 1, GH - 15, "E")
+    c.hline(4, GH - 6, GW - 8, "K")
+    c.outline("k")
+    shadowed(c, GW // 2, GH - 3, GW // 2 - 8, 4).save("giant_branch")
+
+
 def giant_site():
     """Стройка: каркас из балок, кран, песок и синий забор с баннером «СКОРО ГИГАНТ»."""
     c = Canvas(GW, GH + 40)
@@ -230,6 +292,7 @@ def draw_lost(c):
 def main():
     giant_store()
     giant_closed()
+    giant_branch()
     giant_site()
     news_giant("build", draw_build)
     news_giant("battle", draw_open)

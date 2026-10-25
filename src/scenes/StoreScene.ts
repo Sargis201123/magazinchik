@@ -77,6 +77,7 @@ import { applyPranks, bonusGuests, bossLeft, bossShop, messToday, PRANK_COINS, t
 import { fetchRivalShop, rivalAct, rivalInbox, thankRival } from '../platform/rival';
 import { rivalBar, showRivalNews } from '../ui/rival';
 import { awayTrade } from '../game/away';
+import { branchAway, branchLook, branchSignName, branchTier, branchUpgrades } from '../game/branch';
 import { getLang, t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { music, type MusicMood } from '../platform/music';
@@ -1356,6 +1357,8 @@ export class StoreScene extends Phaser.Scene {
   private rivalAcross = false;
   /** Каким построен «Гигант» за дорогой (giant.ts): стройка, магазин, закрытый. */
   private builtGiant: GiantLook = 'none';
+  /** Каким построен свой филиал в здании «Гиганта» (branch.ts); '' — его нет. */
+  private builtBranch = '';
   /** Какие здания района стояли, когда рисовали улицу (district.ts). */
   private builtDistrict = '';
   /** Снежные покрывала на крышах соседей: видны в снегопад. */
@@ -1791,6 +1794,12 @@ export class StoreScene extends Phaser.Scene {
       saveGame(this.state);
       track('away', this.state.day, away.revenue);
     }
+    // Филиал (branch.ts) тоже работал — понемногу, без кассира: им правит управляющий.
+    const branchAwayTrade = save && savedAt ? branchAway(this.state, trustedNow() - savedAt) : null;
+    if (branchAwayTrade) {
+      this.state = branchAwayTrade.state;
+      saveGame(this.state);
+    }
     // Игра открылась — прогресс и накопленные события на сервер (рейтинг и аналитика).
     void reportProgress(this.state);
     // Своё расписание особых дней: зерно появляется у новой игры и у старых сохранений при первом запуске.
@@ -1828,6 +1837,7 @@ export class StoreScene extends Phaser.Scene {
     });
     this.hud = new Hud();
     if (away) toast('assets/ico_cash.png', t('away.title'), t('away.text', { h: Math.floor(away.hours), n: away.units, sum: away.revenue }));
+    if (branchAwayTrade) toast('assets/ico_shop.png', t('branch.awayTitle'), t('branch.awayText', { h: Math.floor(branchAwayTrade.hours), sum: branchAwayTrade.income }));
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
     this.hud.onUrgent = () => this.openUrgent();
     this.hud.onHelp = () => void this.callForHelp();
@@ -6821,7 +6831,8 @@ export class StoreScene extends Phaser.Scene {
           delay: 2200,
           loop: true,
           callback: () => {
-            const target = [...this.people].find((p) => p.active && Math.abs(p.x - spot.x) < 50 && p.y > this.layout.h + FACADE_H);
+            // Только на своём тротуаре: покупатели филиала за дорогой листовку не ловят.
+            const target = [...this.people].find((p) => p.active && Math.abs(p.x - spot.x) < 50 && p.y > this.layout.h + FACADE_H && p.y < this.streetY + 40);
             if (!target) return;
             const flyer = this.art(spot.x, spot.y - 4, 'flyer').setDepth(spot.y + 20);
             this.tweens.add({ targets: flyer, x: target.x, y: target.y - 4, angle: 180, duration: 450, onComplete: () => flyer.destroy() });
@@ -7453,8 +7464,12 @@ export class StoreScene extends Phaser.Scene {
     const giantArea = { x: door.x - 82, y: top + 86, w: 164, h: 112 };
     // Босс района (eduard.ts) — за дорогой напротив входа, когда «Гиганта» там нет или он закрылся.
     const look = eduardLook(this.state);
-    this.rivalAcross = look !== 'vacant' && look !== 'mega' && (giant === 'none' || giant === 'closed');
-    if (this.rivalAcross) {
+    // Купили здание под филиал (branch.ts) — босс района возвращается на своё место сбоку, рядом с магазином.
+    this.builtBranch = branchLook(this.state);
+    this.rivalAcross = !this.builtBranch && look !== 'vacant' && look !== 'mega' && (giant === 'none' || giant === 'closed');
+    if (this.builtBranch) {
+      this.buildBranch(door.x, top + 92);
+    } else if (this.rivalAcross) {
       const rival = RIVAL_LOOKS[look];
       const h = Math.min(rival.h, RIVAL_ACROSS_H);
       this.drawNeighbor({ ...rival, x: door.x - 64, w: 128, h }, top + 92 + h, new Phaser.Math.RandomDataGenerator(['rival']), true);
@@ -7510,6 +7525,86 @@ export class StoreScene extends Phaser.Scene {
     }
     // Парк за аллеей гуще — второй проход (деревья не встают на пруд, клумбы и дорожку).
     scatter(top + 290, top + 470);
+  }
+
+  /**
+   * Свой филиал в здании «Гиганта» (branch.ts): здание после ремонта, на вывесках — название магазина
+   * с «№2» и «Филиал». Вечером горят витрины и неон (и в карте освещения), днём заходят и выходят
+   * покупатели — по одному-два, без лишней нагрузки; в лёгкой графике двое просто стоят у входа.
+   * Чем больше улучшений, тем наряднее: ремонт — цветы и фонари у входа, реклама — флажки на крыше.
+   */
+  private buildBranch(x: number, y: number): void {
+    const depth = y + 88;
+    this.art(x, y, 'giant_branch').setOrigin(0.5, 0).setDepth(depth);
+    // Вывеска на крыше: своё название с «№2» — во всю доску, длинное сжимаем.
+    const name = branchSignName(this.state, t('branch.defaultName'));
+    const signY = y + 11.5;
+    const sign = this.add.text(x, signY, name, { fontFamily: UI_FONT, fontSize: '9px', color: '#fee761' }).setOrigin(0.5).setResolution(this.textRes(4)).setDepth(depth + 1);
+    const fit = Math.min(1, 86 / Math.max(1, sign.width));
+    sign.setScale(fit);
+    this.neonSign(x, signY, name, `${Math.max(4, Math.floor(9 * fit))}px`, 0xfee761, 90);
+    const label = t('branch.label');
+    this.add.text(x, y + 42.5, label, { fontFamily: UI_FONT, fontSize: '6px', color: '#ffffff' }).setOrigin(0.5).setResolution(this.textRes(4)).setDepth(depth + 1);
+    this.neonSign(x, y + 42.5, label, '6px', 0x7cff8a, 46);
+    // Витрины вечером светятся тёплым, свет ложится на тротуар перед зданием.
+    const glassY = y + 67.5;
+    for (const dx of [-63, -50, -37, -24, 23, 36, 49, 62]) {
+      this.nightGlow(this.add.rectangle(x + dx, glassY, 10, 15, 0xffd890), 0.45, undefined, { from: Math.random() * 0.4 });
+      const spill = this.art(x + dx, y + 84, 'light_spill').setOrigin(0.5, 0).setTint(0xffd08a).setScale(0.7 / ART);
+      this.nightGlow(spill, 0.5, undefined, { map: { scale: 0.9, gain: 1.2, haze: 0.1 } });
+    }
+    // Стеклянный вход — самый яркий: свет из зала на крыльцо.
+    const entry = this.art(x, y + 86, 'glow').setDisplaySize(40, 18).setTint(0xffe6b0);
+    this.nightGlow(entry, 0.5, undefined, { map: { key: 'light_pool', scale: 1.6, gain: 1.4, haze: 0.15 } });
+    // Ремонт: цветы в кадках у входа, потом фонари по бокам.
+    const repair = branchTier(this.state, 'repair');
+    if (repair >= 1) for (const dx of [-30, 30]) this.art(x + dx, y + 88, 'tulips').setOrigin(0.5, 1).setDepth(depth + 0.5);
+    if (repair >= 3) {
+      for (const dx of [-44, 44]) {
+        this.add.rectangle(x + dx, y + 80, 1, 8, 0x262b44).setDepth(depth + 1);
+        this.add.circle(x + dx, y + 75, 1.6, 0xfff0c0).setDepth(depth + 1);
+        this.nightGlow(this.art(x + dx, y + 75, 'glow').setDisplaySize(14, 12).setTint(0xffd890), 0.8, undefined, { map: { key: 'light_pool', scale: 1.4, gain: 1.2 } });
+      }
+    }
+    // Реклама: флажки вдоль края крыши.
+    if (branchTier(this.state, 'ads') >= 2) {
+      const colors = [0xfee761, 0xe43b44, 0x63c74d, 0xffffff];
+      for (let i = 0, fx = x - 68; fx <= x + 68; fx += 8, i++) this.add.triangle(fx, y + 2, 0, 0, 4, 0, 2, 4, colors[i % colors.length]).setOrigin(0).setDepth(depth + 1);
+    }
+    this.branchShoppers(x, y + 88, depth);
+  }
+
+  /** Покупатели филиала: подходят к стеклянному входу и заходят, другие выходят и уходят по тротуару. */
+  private branchShoppers(x: number, ground: number, depth: number): void {
+    const walkY = ground + 6;
+    const look = () => customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day);
+    if (this.lite) {
+      // Лёгкая графика: двое стоят у входа — улица не пустая, а кадр не тратится.
+      for (const dx of [-14, 12]) this.makePerson(x + dx, walkY, look()).setDepth(depth + 2);
+      return;
+    }
+    const busy = { n: 0 };
+    // Чем больше ступеней куплено, тем чаще заходят (но не больше трёх человек разом).
+    const every = 7000 - Math.min(3000, branchUpgrades(this.state) * 250);
+    this.worldTimer(every, () => {
+      if (this.night || busy.n >= 3 || !this.sys.isActive()) return;
+      busy.n++;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const far = { x: x + side * Phaser.Math.Between(70, 95), y: walkY + Phaser.Math.Between(-1, 3) };
+      const door = { x: x + Phaser.Math.Between(-4, 4), y: walkY - 3 };
+      const coming = Math.random() < 0.55;
+      const from = coming ? far : door;
+      const to = coming ? door : far;
+      const person = this.makePerson(from.x, from.y, look()).setDepth(depth + 2);
+      if (!coming) person.setAlpha(0);
+      if (!coming) this.tweens.add({ targets: person, alpha: 1, duration: 300 });
+      void this.walk(person, to.x, to.y, this.ownPace(person, CUSTOMER_SPEED * 0.7)).then(() => {
+        busy.n--;
+        if (!coming) return person.destroy();
+        // Зашёл внутрь: тает в дверях.
+        this.tweens.add({ targets: person, alpha: 0, duration: 300, onComplete: () => person.destroy() });
+      });
+    });
   }
 
   /**
@@ -13831,7 +13926,7 @@ export class StoreScene extends Phaser.Scene {
     if (trialOver) this.state = { ...this.state, decor: { ...this.state.decor, trial: undefined } };
     // Эдуард за ночь открыл магазин побольше — перерисовать улицу.
     const cupChanged = (contestOf(this.state)?.wins ?? 0) !== this.builtCup;
-    if (trialOver || cupChanged || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant || districtKey(this.state) !== this.builtDistrict) this.buildWorld();
+    if (trialOver || cupChanged || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant || branchLook(this.state) !== this.builtBranch || districtKey(this.state) !== this.builtDistrict) this.buildWorld();
     this.refillParking();
     this.updateLighting(0);
     this.openShop();
@@ -13872,7 +13967,7 @@ export class StoreScene extends Phaser.Scene {
         this.state = s;
         saveGame(s);
         if (s.level > this.builtLevel) void this.celebrateExpansion();
-        else if (s.level !== this.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard || giantLook(s) !== this.builtGiant) this.buildWorld(bought);
+        else if (s.level !== this.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard || giantLook(s) !== this.builtGiant || branchLook(s) !== this.builtBranch) this.buildWorld(bought);
         else if (staffChanged) this.syncStaff();
         if (adsChanged) this.applyAds();
         if (radioChanged) this.applyRadio(true);
@@ -15200,7 +15295,7 @@ export class StoreScene extends Phaser.Scene {
     this.stats.adGuests = adGuests(this.state, this.stats.served + this.stats.lost);
     const ratingBefore = this.state.rating;
     const rankBefore = rankOf(this.state.totalRevenue);
-    const { state, spoiled, bill, shortfall, skimmed, order, quests, weekly } = nightCycle(this.state, this.stats);
+    const { state, spoiled, bill, shortfall, skimmed, order, quests, weekly, branch } = nightCycle(this.state, this.stats);
     const cafe = this.cafeToday;
     this.cafeToday = null;
     const extra: [string, string][] = [];
@@ -15212,6 +15307,8 @@ export class StoreScene extends Phaser.Scene {
     if (filmed) extra.push(['🎬', t('summary.filming')]);
     if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
     if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
+    // Филиал за дорогой (branch.ts): чистый доход за день одной строкой.
+    if (branch) extra.push([t('branch.summary'), t('branch.summaryValue', { n: branch })]);
     const rankAfter = rankOf(state.totalRevenue);
     if (rankAfter > rankBefore) stamps.push({ kind: 'rank', name: rankName(rankAfter, t) });
     if (order) extra.push([t('summary.order'), order.delivered ? t('summary.orderDone', { n: order.earned }) : t('summary.orderFailed')]);

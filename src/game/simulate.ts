@@ -106,6 +106,7 @@ import { deliveryDay } from './delivery';
 import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
 import { buyRadio, hasRadio, radioPatience, RADIO_PRICE, radioTolerance, setStation } from './radio';
 import { buyKiosk, kioskCount, kioskTier, laneGuests, nextKioskPrice, nextKioskTier, upgradeKiosks } from './lanes';
+import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, nextBranchTier, upgradeBranch } from './branch';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
 
 export { rng };
@@ -129,6 +130,8 @@ export interface SimDay {
   /** Экономия на хлебе из своей печи против закупки. */
   oven: number;
   night: number;
+  /** Чистый доход филиала за день (branch.ts). */
+  branch: number;
   expenses: number;
   /** Выручка − закупка − расходы (без вложений в полки и расширение). */
   profit: number;
@@ -199,7 +202,8 @@ export type Feature =
   | 'delivery'
   | 'ads'
   | 'adsMax'
-  | 'kiosks';
+  | 'kiosks'
+  | 'branch';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -251,6 +255,8 @@ const AD_LOST_OK = 0.05;
 const AD_BUSY_OK = 0.8;
 /** Для решения «пора нанимать кассира»: примерно столько успевает один человек. */
 const SOLO_SERVE_CAP = 30;
+/** Улучшение филиала разумный игрок берёт, если оно окупится не дольше чем за столько дней. */
+const BRANCH_PAYBACK_OK = 60;
 /** Средняя корзина в штуках. */
 const AVG_BASKET = 1.4;
 /** Один игрок стоит за кассой не весь день: ещё бегает на склад и убирает — в большом магазине дел больше. */
@@ -529,6 +535,24 @@ export function simulate({
       if (pick) {
         investments += adPrice(state, pick);
         state = buyAd(state, pick) ?? state;
+      }
+    }
+    // Филиал (branch.ts): здание — как только можно и хватает с запасом на счета; улучшения — самое
+    // выгодное из доступных, если окупится за два месяца и после покупки останется тройной запас.
+    if (features.branch) {
+      if (branchOpen(state) && state.money >= BRANCH_PRICE + reserve * 3) {
+        const bought = buyBranch(state);
+        if (bought) {
+          investments += BRANCH_PRICE;
+          state = bought;
+        }
+      }
+      const best = BRANCH_TRACK_IDS.map((id) => ({ id, next: nextBranchTier(state, id), gain: branchGain(state, id) }))
+        .filter((o) => o.next && o.gain > 0 && o.next.price / o.gain <= BRANCH_PAYBACK_OK)
+        .sort((a, b) => a.next!.price / a.gain - b.next!.price / b.gain)[0];
+      if (best && state.money >= best.next!.price + reserve * 3) {
+        investments += best.next!.price;
+        state = upgradeBranch(state, best.id) ?? state;
       }
     }
     // Навыки хозяина: очки — по кругу во все навыки.
@@ -1031,6 +1055,7 @@ export function simulate({
       coffee,
       oven: breadBaked,
       night: nightProfit,
+      branch: night.branch,
     });
     void moneyStart;
   }

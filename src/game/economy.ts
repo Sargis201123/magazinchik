@@ -678,6 +678,8 @@ export interface StoreState {
   cafe?: import('./cafe').CafeState;
   /** Гипермаркет «Гигант» за дорогой — после сюжета (giant.ts). */
   giant?: import('./giant').GiantState;
+  /** Филиал в здании «Гиганта» (branch.ts): куплен после победы над ним, на последнем помещении. */
+  branch?: import('./branch').BranchState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */

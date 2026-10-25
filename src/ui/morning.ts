@@ -236,7 +236,8 @@ import { newTag, tabHint } from './onboarding';
 import { showLeaderboard } from './leaderboard';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
-import { button, el, openModal, who } from './dom';
+import { button, el, openModal, toast, who } from './dom';
+import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, nextBranchTier, upgradeBranch } from '../game/branch';
 import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
@@ -3740,6 +3741,81 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     ];
   };
 
+  /**
+   * Филиал в здании «Гиганта» (branch.ts). Пока закрыт — чего не хватает (победить «Гигант», стать
+   * универмагом); виден, только когда «Гигант» уже в истории магазина. После
+   * покупки — вчерашний и недельный доход и четыре направления улучшений с ценой и прибавкой.
+   */
+  const branchBox = (state: StoreState): HTMLElement[] => {
+    const lock = branchLock(state);
+    const branch = branchOf(state);
+    // До «Гиганта» о здании за дорогой молчим: там ещё сквер, рано раскрывать сюжет.
+    if (!branch && !state.giant) return [];
+    const box = el('div', 'ui-box');
+    const name = branchSignName(state, t('branch.defaultName'));
+    box.append(el('b', '', `🏬 ${t('branch.title')}`));
+    const art = el('img');
+    art.src = sheetPng('giant_branch');
+    art.alt = '';
+    art.style.cssText = `display: block; width: 100%; max-width: 300px; margin: 6px auto; image-rendering: pixelated;${branch ? '' : ' filter: grayscale(0.8) opacity(0.75);'}`;
+    if (!branch) {
+      if (lock) {
+        box.append(art, el('div', 'ui-muted', `🔒 ${t(lock === 'giant' ? 'branch.lock.giant' : 'branch.lock.level')}`));
+        return [box];
+      }
+      box.append(art, el('div', '', t('branch.offer', { name })), el('div', 'ui-muted', t('branch.preview', { n: Math.round(branchUsual({ ...state, branch: { since: state.day } })) })));
+      if (state.debt > 0) box.append(el('div', 'ui-note', t('branch.needNoDebt')));
+      box.append(
+        button(
+          t('branch.buy', { n: BRANCH_PRICE }),
+          () => {
+            const bought = buyBranch(getState());
+            if (!bought) return;
+            track('branch', bought.day, BRANCH_PRICE);
+            toast('assets/ico_shop.png', t('branch.bought'), t('branch.boughtText', { name }));
+            update(bought, 'success');
+          },
+          'ui-btn',
+          state.debt > 0 || state.money < BRANCH_PRICE,
+        ),
+      );
+      return [box];
+    }
+    box.append(art, el('div', 'ui-item-name', t('branch.name', { name })));
+    if (branch.last) box.append(el('div', '', t('branch.last', { n: branch.last.income })));
+    box.append(
+      el('div', 'ui-muted', t('branch.week', { n: branchWeek(state), total: branch.earned ?? 0 })),
+      el('div', 'ui-muted', t('branch.usual', { n: branchUsual(state), p: Math.round(branchShare(state) * 100) })),
+      el('div', 'ui-muted', t('branch.note')),
+    );
+    for (const id of BRANCH_TRACK_IDS) {
+      const info = BRANCH_TRACKS[id];
+      const tier = branchTier(state, id);
+      const next = nextBranchTier(state, id);
+      const row = el('div', 'ui-item');
+      row.append(el('div', 'ui-ad-icon', info.icon));
+      const body = el('div');
+      const title = el('div', 'ui-item-name', t(info.nameKey));
+      const actions = el('div', 'ui-item-actions');
+      // Ступени — точками: сколько сделано из скольких.
+      title.append(el('span', 'ui-tag', '●'.repeat(tier) + '○'.repeat(info.tiers.length - tier)));
+      if (!next) {
+        body.append(title, el('div', 'ui-item-sub', t('branch.done', { name: t(info.tiers[tier - 1].nameKey) })));
+        actions.append(el('span', 'ui-tag', t('branch.max')));
+      } else {
+        body.append(
+          title,
+          el('div', 'ui-item-sub', t('branch.step', { name: t(next.nameKey), n: tier + 1, of: info.tiers.length })),
+          el('div', 'ui-item-sub', t('branch.gain', { n: branchGain(state, id) })),
+        );
+        actions.append(button(`${next.price} 💰`, () => update(upgradeBranch(getState(), id), 'success'), 'ui-chip', state.money < next.price));
+      }
+      row.append(body, actions);
+      box.append(row);
+    }
+    return [box];
+  };
+
   /** Развитие: помещение и расширение, кассы, оборудование, реклама, оформление, банк, счета. */
   const growTab = (state: StoreState): HTMLElement[] => {
     const level = storeLevel(state);
@@ -3783,7 +3859,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         ),
       );
     }
-    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), bankBox(state));
+    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), ...branchBox(state), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {

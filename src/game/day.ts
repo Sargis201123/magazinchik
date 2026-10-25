@@ -38,12 +38,15 @@ import { districtGuests } from './district';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
 import { laneGuests } from './lanes';
+import { branchNight, branchReport } from './branch';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
   quests: { earned: number; done: number; total: number };
   /** Испытания недели, выполненные сегодня. */
   weekly: { completed: Challenge[]; earned: number };
+  /** Чистый доход филиала за день (branch.ts; 0 — филиала нет). */
+  branch: number;
 }
 
 export function nightCycle(state: StoreState, stats: DayStats, random: () => number = Math.random): NightSummary {
@@ -67,17 +70,21 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // «Проверяющий» от конкурента: штраф, ушёл ни с чем или разоблачили (tricks.ts).
   s = trickNight(s, random, Boolean(staffOf(s, 'cleaner')));
   const day = s.day;
+  // Филиал отдаёт доход за день до счетов: им можно расплатиться.
+  const branch = branchNight(s, day);
+  s = branch.state;
   const ended = endDay(s, stats, random);
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(staffMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random), random), random), random), stats.revenue), stats.revenue, random), stats);
+  const next = branchReport(contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(staffMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random), random), random), random), stats.revenue), stats.revenue, random), stats), day, branch.income);
   return {
     ...night,
     state: next,
     order: order && { delivered: order.delivered, earned: order.earned },
     quests: { earned: rewarded.earned, done: rewarded.done, total: quests.length },
     weekly: { completed: weekly.completed, earned: weekly.earned },
+    branch: branch.income,
   };
 }
 
