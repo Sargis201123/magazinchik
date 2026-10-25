@@ -8,6 +8,22 @@ import { canvasCap, fitCanvas, type CanvasFit } from '../scenes/pixels';
 import { quality } from './quality';
 import { onViewportChanged } from './telegram';
 
+/**
+ * Округление вершин к пикселям холста — как было в Phaser 3: всегда, когда у камеры roundPixels
+ * (main.ts) и её масштаб целый. Phaser 4 по умолчанию («safeAuto») округляет только объекты без
+ * масштаба под камерой без масштаба, а у нас масштабировано всё: картинки — 1/ART, камера — ×2…×6.
+ * Без округления человек на дробной точке рисуется пикселями разной ширины (1 и 3 вместо 2 и 2) и
+ * рябит на ходу. Объектам, которым режим задали явно (setVertexRoundMode), — как просили.
+ */
+export function installPixelRounding(): void {
+  const proto = Phaser.GameObjects.GameObject.prototype;
+  const will = proto.willRoundVertices;
+  proto.willRoundVertices = function (this: Phaser.GameObjects.GameObject, camera: Phaser.Cameras.Scene2D.Camera, onlyTranslated: boolean): boolean {
+    if (this.vertexRoundMode !== 'safeAuto') return will.call(this, camera, onlyTranslated);
+    return camera.roundPixels && Number.isInteger(camera.zoomX) && Number.isInteger(camera.zoomY);
+  };
+}
+
 /** Сколько окно должно не меняться, чтобы подогнать холст (мс). */
 const SETTLE_MS = 120;
 

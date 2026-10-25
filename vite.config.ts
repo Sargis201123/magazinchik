@@ -1,6 +1,8 @@
 import { defineConfig, type Plugin } from 'vite';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildAtlas, type Atlas } from './scripts/atlas';
 import { TEXTURES } from './src/scenes/textures';
@@ -16,6 +18,9 @@ const PHASER_FLAGS: Record<string, boolean> = {
   PLUGIN_CAMERA3D: false,
   PLUGIN_FBINSTANT: false,
 };
+
+/** Папка пакета phaser (package.json Phaser 4 отдаёт наружу — по нему и находим). */
+const PHASER_DIR = dirname(createRequire(import.meta.url).resolve('phaser/package.json'));
 
 const phaserFlags = (): Plugin => ({
   name: 'phaser-flags',
@@ -129,8 +134,15 @@ export default defineConfig(({ command }) => ({
   base: './',
   plugins: command === 'build' ? [phaserFlags(), assetVersions(true), atlasPlugin(true)] : [assetVersions(false), atlasPlugin(false)],
   resolve: {
-    // В production — Phaser без физики и тайловых карт (src/vendor/phaser-lite.js).
-    alias: command === 'build' ? [{ find: /^phaser$/, replacement: fileURLToPath(new URL('./src/vendor/phaser-lite.js', import.meta.url)) }] : [],
+    // В production — Phaser без физики и тайловых карт (src/vendor/phaser-lite.js). Его части он берёт
+    // из phaser/src/…, а Phaser 4 закрыл их полем exports — направляем такие пути прямо в папку пакета.
+    alias:
+      command === 'build'
+        ? [
+            { find: /^phaser$/, replacement: fileURLToPath(new URL('./src/vendor/phaser-lite.js', import.meta.url)) },
+            { find: /^phaser\/src\//, replacement: `${PHASER_DIR}/src/` },
+          ]
+        : [],
   },
   build: {
     target: 'es2020',

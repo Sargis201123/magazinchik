@@ -181,6 +181,7 @@ import { reportError, setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propFootprint, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
 import { buildingSpan, iceboxRect, iceboxSpotFor, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Point, type Room } from './layout';
 import { BASE_W, crispZoom, homeFrame } from './pixels';
+import { addSoftVignette, type SoftVignette } from './vignette';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { BARGAIN_CAPACITY, BARGAIN_CHANCE, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
@@ -1089,7 +1090,7 @@ interface Oven {
   bread: Phaser.GameObjects.Image;
   bar: Phaser.GameObjects.Rectangle;
   fill: Phaser.GameObjects.Rectangle;
-  fx?: Phaser.FX.Glow;
+  fx?: Phaser.Filters.Glow;
   state: 'idle' | 'baking' | 'ready';
   start: number;
   timer?: Phaser.Time.TimerEvent;
@@ -1171,7 +1172,7 @@ interface ShelfView {
   /** Ценник «АКЦИЯ», если товар этой полки — товар дня. */
   promo: Phaser.GameObjects.Text;
   /** Подсветка: полка пустая, а на складе её товар есть — пора нести. */
-  glow?: Phaser.FX.Glow;
+  glow?: Phaser.Filters.Glow;
   needsStock: boolean;
   /** Шкала запаса у боковой полки: товар на ней сбоку не разглядеть, а шкалу видно сразу. */
   meter?: Phaser.GameObjects.Graphics;
@@ -1410,9 +1411,9 @@ export class StoreScene extends Phaser.Scene {
   /** Снимок зала перед закрытием — для карточки итогов дня. */
   private dayShot: HTMLImageElement | null = null;
   private doorImg!: Phaser.GameObjects.Image;
-  private vignette?: Phaser.FX.Vignette;
+  private vignette?: SoftVignette;
   /** Тёплый «ламповый» тон всей картинки; к вечеру теплее. */
-  private warmth?: Phaser.FX.ColorMatrix;
+  private warmth?: Phaser.Filters.ColorMatrix;
   private warmAt = -1;
   /** Насколько вечер (0 — день, 1 — сумерки): фары машин горят сильнее. */
   private evening = 0;
@@ -1497,7 +1498,7 @@ export class StoreScene extends Phaser.Scene {
   private liveObjs: { destroy: () => void }[] = [];
   private blackout = false;
   private fuseBox?: Phaser.GameObjects.Image;
-  private fuseGlow?: Phaser.FX.Glow;
+  private fuseGlow?: Phaser.Filters.Glow;
   /** Утренняя закупка: сколько было на складе в начале утра и сколько коробок ещё ждут доставки. */
   private morningStock = 0;
   private awaitingBoxes = 0;
@@ -1558,7 +1559,7 @@ export class StoreScene extends Phaser.Scene {
   /** Полка «Уценка» (bargain.ts): где стоит и картинки товара на ней. */
   private bargainAt: { x: number; y: number } | null = null;
   private bargainItems: Phaser.GameObjects.Image[] = [];
-  private binGlow?: Phaser.FX.Glow;
+  private binGlow?: Phaser.Filters.Glow;
   private binStink?: Phaser.GameObjects.Image;
   private binBusy = false;
   /** Кто сейчас выносит мусор: продавец (его могут позвать к кассе) или уборщица. */
@@ -1643,7 +1644,7 @@ export class StoreScene extends Phaser.Scene {
   private phone?: Phaser.GameObjects.Image;
   /** Кольца вокруг звонящего телефона и его подсветка. */
   private phoneHalo?: Phaser.GameObjects.Arc;
-  private phoneGlow?: Phaser.FX.Glow;
+  private phoneGlow?: Phaser.Filters.Glow;
   /**
    * Звонок, на который ещё не ответили: заказ, когда позвонили (playTime), таймеры ответа, трели и дрожи
    * трубки; covered — поверх открыто окно, звонок ждёт.
@@ -2046,12 +2047,13 @@ export class StoreScene extends Phaser.Scene {
     this.next = next;
     this.frameCamera();
     this.cameras.main.setZoom(this.baseZoom).centerOn(this.home.x, this.home.y);
-    // Мягкая виньетка по краям кадра; к вечеру гуще.
-    this.cameras.main.postFX?.clear();
-    // Виньетка — лишний проход по всему экрану: только в высокой графике.
-    this.vignette = this.gfx === 'high' ? this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.95, 0.1) : undefined;
+    // Мягкая виньетка по краям кадра; к вечеру гуще. Фильтры камеры (в Phaser 3 — postFX) работают
+    // только в WebGL: на холсте Canvas их нет, как не было и postFX.
+    const screenFx = this.renderer.type === Phaser.WEBGL ? this.cameras.main.filters.external.clear() : undefined;
+    // Виньетка — лишний проход по всему экрану: только в высокой графике. Своя, с формулой Phaser 3 (vignette.ts).
+    this.vignette = this.gfx === 'high' && screenFx ? addSoftVignette(this.cameras.main, 0.95, 0.1) : undefined;
     // Ламповый тон: чуть теплее и мягче по цвету, к вечеру — как от ламп накаливания.
-    this.warmth = this.lite ? undefined : this.cameras.main.postFX?.addColorMatrix();
+    this.warmth = this.lite ? undefined : screenFx?.addColorMatrix();
     this.warmAt = -1;
     this.setWarmth(0);
     this.buildStreet(next);
@@ -2198,7 +2200,7 @@ export class StoreScene extends Phaser.Scene {
     const fuseX = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12).find((x) => x > 10 && !this.behindShelf(x, 6)) ?? wc.x - 24;
     this.fuseBox = this.art(fuseX, 18, 'fusebox').setDepth(3);
     this.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.fixFuse()));
-    this.fuseGlow = this.fuseBox.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 6);
+    this.fuseGlow = this.addGlow(this.fuseBox, 0xfee761, 0, 6);
     this.registers = [];
     this.registers.push({ ...this.makeRegister(counter, false, this.layout.queue, this.layout.sellerHome), img: registerImg });
     this.buildUpgrades();
@@ -2206,7 +2208,7 @@ export class StoreScene extends Phaser.Scene {
     const home = this.ownerHome();
     this.seller = this.makePerson(home.x, home.y, ownerLook(this.state));
     // Кибер-продавец светится неоном.
-    if (activeDecor(this.state, 'outfit')?.id === 'outfit_cyber') this.seller.postFX?.addGlow(0x2ce8f5, 2, 0, false, 0.1, 6);
+    if (activeDecor(this.state, 'outfit')?.id === 'outfit_cyber') this.addGlow(this.seller, 0x2ce8f5, 2, 6);
     this.carried = this.art(0, 3, 'box').setVisible(false);
     this.seller.add(this.carried);
     this.add
@@ -3033,7 +3035,7 @@ export class StoreScene extends Phaser.Scene {
   private pulseHighlights(): void {
     const pulse = 1.5 + Math.sin(this.time.now / 260) * 1.2;
     for (const view of this.shelfViews) this.glowOn(view.bg, view.glow, view.needsStock ? pulse : 0);
-    for (const piece of this.trash) this.glowOn(piece, piece.getData('glow') as Phaser.FX.Glow | undefined, pulse);
+    for (const piece of this.trash) this.glowOn(piece, piece.getData('glow') as Phaser.Filters.Glow | undefined, pulse);
     if (this.binImg) this.glowOn(this.binImg, this.binGlow, this.binFull() && !this.binBusy ? pulse : 0);
     if (this.fuseBox) this.glowOn(this.fuseBox, this.fuseGlow, this.blackout ? pulse : 0);
   }
@@ -3042,12 +3044,27 @@ export class StoreScene extends Phaser.Scene {
    * Подсветка «нажми сюда». Погасшую выключаем целиком: даже с нулевой силой эффект перерисовывал
    * объект через отдельный буфер каждый кадр — на телефоне это заметно садило FPS.
    */
-  private glowOn(obj: Phaser.GameObjects.Image, glow: Phaser.FX.Glow | undefined, strength: number): void {
-    if (!glow || !obj.preFX) return;
+  private glowOn(obj: Phaser.GameObjects.Image, glow: Phaser.Filters.Glow | undefined, strength: number): void {
+    if (!glow) return;
     if (strength > 0) {
-      if (!obj.preFX.enabled) obj.preFX.enable();
+      obj.renderFilters = true;
       glow.outerStrength = strength;
-    } else if (obj.preFX.enabled) obj.preFX.disable();
+    } else obj.renderFilters = false;
+  }
+
+  /**
+   * Свечение по краю картинки — фильтр Glow (в Phaser 4 он заменил preFX/postFX Phaser 3). Объект с
+   * включёнными фильтрами рисуется через свой буфер, поэтому с нулевой силой фильтры сразу выключены
+   * (их включает glowOn). Без WebGL фильтров нет — undefined, как раньше без preFX.
+   * Сколько точек шейдер берёт на каждом шаге от края — как в Phaser 3 с качеством 0,1 (4 при
+   * distance 6, 6 при 8): по умолчанию в Phaser 4 их 10 — в 2,5 раза дороже, а для подсветки
+   * на весь экран (у человека-контейнера) это заметно на телефоне.
+   */
+  private addGlow(obj: Phaser.GameObjects.Image | Phaser.GameObjects.Container, color: number, strength: number, distance: number): Phaser.Filters.Glow | undefined {
+    const filters = obj.enableFilters().filters;
+    if (!filters) return undefined;
+    obj.renderFilters = strength > 0;
+    return filters.internal.addGlow(color, strength, 0, 1, false, Math.ceil(0.2 * Math.PI * distance), distance);
   }
 
   /** Двери разъезжаются, когда к ним подходят. */
@@ -3457,7 +3474,7 @@ export class StoreScene extends Phaser.Scene {
     this.fpsSince = 0;
     this.gfx = verdict;
     lowerQuality(verdict);
-    if (this.vignette) this.cameras.main.postFX?.remove(this.vignette);
+    if (this.vignette) this.cameras.main.filters.external.remove(this.vignette);
     this.vignette = undefined;
     const median = fpsSummary(recent)?.median ?? 0;
     if (verdict !== 'lite') {
@@ -3466,7 +3483,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.lite = true;
     track('lite_auto', this.state.day, median);
-    if (this.warmth) this.cameras.main.postFX?.remove(this.warmth as unknown as Phaser.FX.Controller);
+    if (this.warmth) this.cameras.main.filters.external.remove(this.warmth);
     this.warmth = undefined;
     toast('assets/ico_phone.png', t('lite.autoTitle'), t('lite.autoText'));
   }
@@ -3523,9 +3540,10 @@ export class StoreScene extends Phaser.Scene {
     const r = 1.04 + 0.05 * step;
     const g = 1.0 + 0.01 * step;
     const b = 0.92 - 0.07 * step;
-    this.warmth.reset();
-    this.warmth.set([r, 0, 0, 0, 0, 0, g, 0, 0, 0, 0, 0, b, 0, 0, 0, 0, 0, 1, 0]);
-    this.warmth.saturate(-0.06, true);
+    const matrix = this.warmth.colorMatrix;
+    matrix.reset();
+    matrix.set([r, 0, 0, 0, 0, 0, g, 0, 0, 0, 0, 0, b, 0, 0, 0, 0, 0, 1, 0]);
+    matrix.saturate(-0.06, true);
   }
 
   /** Оттенок по ходу дня: тёплое утро, белый день, закат, сумерки. */
@@ -3678,7 +3696,8 @@ export class StoreScene extends Phaser.Scene {
     const draw = () => {
       const g = this.make.graphics({}, false);
       for (const p of list) g.fillStyle(p.color, 1).fillRect((p.x - p.size / 2 - minX) * K, (p.y - p.size / 2 - minY) * K, p.size * K, p.size * K);
-      rt.clear().draw(g);
+      // Phaser 4 копит команды рисования и выполняет их по render() — до того, как кисть уничтожена.
+      rt.clear().draw(g).render();
       g.destroy();
     };
     draw();
@@ -4373,7 +4392,7 @@ export class StoreScene extends Phaser.Scene {
     this.popup(phone.x, phone.y - 14, t('popup.order'), '#fff3b0');
     // Телефон крупнее, светится, от него расходятся кольца — видно, где звонит.
     this.tweens.add({ targets: phone, scale: 1.6 / ART, duration: 180, ease: 'Back.easeOut' });
-    if (!this.lite) this.phoneGlow = phone.preFX?.addGlow(0xfee761, 3, 0, false, 0.1, 8);
+    if (!this.lite) this.phoneGlow = this.addGlow(phone, 0xfee761, 3, 8);
     this.phoneHalo = this.add.circle(phone.x, phone.y, 5).setStrokeStyle(1.2, 0xfee761, 1).setDepth(LIGHT_DEPTH + 12);
     this.tweens.add({ targets: this.phoneHalo, scale: 2.6, alpha: { from: 0.95, to: 0 }, duration: 750, repeat: -1, ease: 'Quad.easeOut' });
     this.deliveryUi.showCall({
@@ -4418,9 +4437,12 @@ export class StoreScene extends Phaser.Scene {
     const phone = this.phone;
     if (phone?.active) {
       this.tweens.killTweensOf(phone);
-      // Снимаем подсветку вместе с FX целиком: иначе телефон до конца дня рисовался бы через отдельный
-      // буфер с пустым списком эффектов (см. glowOn).
-      if (this.phoneGlow) phone.preFX?.disable(true);
+      // Снимаем подсветку вместе с фильтрами целиком: иначе телефон до конца дня рисовался бы через
+      // отдельный буфер (см. glowOn).
+      if (this.phoneGlow) {
+        phone.filters?.internal.clear();
+        phone.renderFilters = false;
+      }
       phone.setTexture('phone').setAngle(0).setScale(1 / ART).disableInteractive();
     }
     this.phoneGlow = undefined;
@@ -5092,7 +5114,7 @@ export class StoreScene extends Phaser.Scene {
     const bread = this.art(at.x, at.y + 1.5, 'oven_bread').setDepth(at.y + 11).setVisible(false);
     const bar = this.add.rectangle(at.x - 8, at.y - 13, 16, 3, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
     const fill = this.add.rectangle(at.x - 7.5, at.y - 13, 0, 2, 0xfeae34).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
-    const fx = img.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 6);
+    const fx = this.addGlow(img, 0xfee761, 0, 6);
     // Тёплый отсвет печи на полу и мука, взлетающая со стола пекаря.
     const warm = this.add.image(at.x + 2, at.y + 13, 'glow').setDisplaySize(34, 14).setTint(0xffb060).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.14).setDepth(room.y + 26);
     this.tweens.add({ targets: warm, alpha: 0.22, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -6646,7 +6668,7 @@ export class StoreScene extends Phaser.Scene {
     const front = across ? top + FACADE_H : bottom;
     this.add.tileSprite(n.x, roofY, n.w, n.h - FACADE_H, 'roof').setOrigin(0).setTileScale(1 / ART).setTint(n.roof).setDepth(-3);
     this.add.tileSprite(n.x - 2, (across ? bottom : top) - 3, n.w + 4, 3, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(-3);
-    this.add.tileSprite(n.x, front - FACADE_H, n.w, FACADE_H, this.potTile('facade')).setOrigin(0).setTileScale(1 / ART).setDepth(front - 5);
+    this.add.tileSprite(n.x, front - FACADE_H, n.w, FACADE_H, 'facade').setOrigin(0).setTileScale(1 / ART).setDepth(front - 5);
     this.dressRoof(n, roofY, n.h - FACADE_H, across, rnd);
     // Витрины, дверь и навес.
     const doorX = across ? n.x + n.w / 2 : n.x + n.w * 0.62;
@@ -8284,7 +8306,7 @@ export class StoreScene extends Phaser.Scene {
     shade.fillGradientStyle(ink, ink, ink, ink, 0.22, 0, 0.22, 0);
     shade.fillRect(w + WALL, 2, 12, h + FACADE_H - 4);
     const style = this.facadeStyle();
-    this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, this.potTile(style.texture)).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
+    this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, style.texture).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
     this.doorImg = this.art(door.x, h + 5, 'door').setDepth(h + 2);
     this.doorSign = this.art(door.x + 11, h + 8, this.running ? 'door_sign_open' : 'door_sign_closed').setDepth(h + 42);
     // Витрины с маленькими навесами слева и справа от двери.
@@ -8394,7 +8416,7 @@ export class StoreScene extends Phaser.Scene {
     this.dumpImg = this.art(dump.x, dump.y, 'dumpster').setDepth(dump.y + 8);
     this.binImg = this.art(bin.x, bin.y, binSprite(this.state, 0)).setDepth(bin.y + 6);
     this.binImg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.takeOutTrash()));
-    this.binGlow = this.binImg.preFX?.addGlow(0xe43b44, 0, 0, false, 0.1, 6);
+    this.binGlow = this.addGlow(this.binImg, 0xe43b44, 0, 6);
     this.binStink = this.art(bin.x, bin.y - 14, 'stink').setDepth(bin.y + 30).setVisible(false);
     this.tweens.add({ targets: this.binStink, y: bin.y - 19, alpha: { from: 1, to: 0.35 }, duration: 900, yoyo: true, repeat: -1 });
     this.obstacles.push({ x: bin.x - 8, y: bin.y - 12, w: 16, h: 14 });
@@ -8577,7 +8599,7 @@ export class StoreScene extends Phaser.Scene {
     const { w, h, door } = this.layout;
     const cost = STORE_LEVELS[this.state.level + 1].cost;
     const tile = (x: number, y: number, ww: number, hh: number, key: string, depth = -5) =>
-      this.add.tileSprite(x, y, ww, hh, this.potTile(key)).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
+      this.add.tileSprite(x, y, ww, hh, key).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
     if (next.w > w) tile(w + 3, 0, next.w - w - 3, next.h, 'lot', -8);
     if (next.h > h) tile(0, h + 3, w + 3, next.h - h - 3, 'lot', -8);
     this.scatterLot(next);
@@ -8742,8 +8764,8 @@ export class StoreScene extends Phaser.Scene {
     const { w, wallH, wc } = this.layout;
     const warm = 0xffd27a;
     if (light.id === 'light_garland') {
-      this.add.tileSprite(0, 0, w, 6, this.potTile('light_garland')).setOrigin(0).setTileScale(1 / ART).setDepth(2);
-      const lit = this.add.tileSprite(0, 0, w, 6, this.potTile('light_garland_lit')).setOrigin(0).setTileScale(1 / ART).setDepth(2);
+      this.add.tileSprite(0, 0, w, 6, 'light_garland').setOrigin(0).setTileScale(1 / ART).setDepth(2);
+      const lit = this.add.tileSprite(0, 0, w, 6, 'light_garland_lit').setOrigin(0).setTileScale(1 / ART).setDepth(2);
       lit.setBlendMode(Phaser.BlendModes.ADD);
       this.tweens.add({ targets: lit, alpha: { from: 1, to: 0.35 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       return;
@@ -8859,7 +8881,7 @@ export class StoreScene extends Phaser.Scene {
     cap(left + WALL, warehouse.y - WALL, wing.w, WALL);
     cap(left + WALL, bakery.y - WALL, wing.w, WALL);
     if (this.layout.kitchen) cap(left + WALL, this.layout.coffee.y - WALL, wing.w, WALL);
-    this.add.tileSprite(left, h, WING_OUTER - WALL, FACADE_H, this.potTile(this.facadeStyle().texture)).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
+    this.add.tileSprite(left, h, WING_OUTER - WALL, FACADE_H, this.facadeStyle().texture).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
     const gateX = warehouse.x + warehouse.w / 2;
     this.art(gateX, h + 5.5, 'shutter').setDepth(h + 2);
     // Подъезд от тротуара к воротам склада.
@@ -9332,7 +9354,7 @@ export class StoreScene extends Phaser.Scene {
       .setAngle(-8)
       .setVisible(false);
     this.tweens.add({ targets: promo, angle: 8, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    const glow = bg.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 8);
+    const glow = this.addGlow(bg, 0xfee761, 0, 8);
     const low = this.add
       .text(slot.x + 6, slot.y - 22, '', {
         fontFamily: UI_FONT,
@@ -9444,7 +9466,7 @@ export class StoreScene extends Phaser.Scene {
     const low = label('', -18, '#d95763');
     const expire = label(t('shelf.expiring'), -34, '#fee761', '#2b2233');
     expire.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.markdownNow(expire.x, expire.y)));
-    const glow = bg.preFX?.addGlow(0xfee761, 0, 0, false, 0.1, 8);
+    const glow = this.addGlow(bg, 0xfee761, 0, 8);
     const lights: Phaser.GameObjects.GameObject[] = [
       this.add.rectangle(slot.x + (right ? -6 : 6), slot.y, 30, 50, DEPT_FLOOR[kind]).setAlpha(0.3).setStrokeStyle(1, DEPT_FLOOR[kind], 0.7).setDepth(0.3),
       this.art(slot.x, slot.y - 24, `dept_${kind}`).setScale(0.7 / ART).setDepth(d - 11.9),
@@ -9595,27 +9617,6 @@ export class StoreScene extends Phaser.Scene {
     this.wcBar.setTint(dirt < 30 ? 0x8fd16a : dirt < TOILET_DIRTY ? 0xf2c14e : 0xd95763);
     this.wcDoor.setTint(dirt >= TOILET_DIRTY ? 0xc8a878 : 0xffffff);
     this.wcStink.setVisible(dirt >= TOILET_DIRTY);
-  }
-
-  /**
-   * Картинка для полосы-плитки (фасад, забор, гирлянда). Phaser растягивает плитку до степени двойки
-   * (32×20 → 32×32), и ряды пикселей выходят разной высоты при любом масштабе камеры. Плитке с высотой
-   * не в степень двойки — копия, дополненная до неё той же картинкой ниже: полоса в одну плитку высотой
-   * показывает те же ряды, только без растяжки.
-   */
-  private potTile(key: string): string {
-    const frame = this.textures.getFrame(key);
-    if (!frame) return key;
-    const { cutWidth: w, cutHeight: h } = frame;
-    const pot = Phaser.Math.Pow2.GetNext(h);
-    if (pot === h || !Phaser.Math.Pow2.IsValue(w)) return key;
-    const padded = `${key}@pot`;
-    if (!this.textures.exists(padded)) {
-      const canvas = this.textures.createCanvas(padded, w, pot);
-      for (let y = 0; canvas && y < pot; y += h) canvas.context.drawImage(frame.source.image as CanvasImageSource, frame.cutX, frame.cutY, w, h, 0, y, w, h);
-      canvas?.refresh();
-    }
-    return padded;
   }
 
   /** Картинка из public/assets в мировом масштабе. */
@@ -10406,7 +10407,7 @@ export class StoreScene extends Phaser.Scene {
       .setDepth(kind === 'trash' ? 1 : 0.5)
       .setInteractive(area, Phaser.Geom.Rectangle.Contains);
     piece.setData('kind', kind);
-    piece.setData('glow', piece.preFX?.addGlow(0xffffff, 1, 0, false, 0.1, 6));
+    piece.setData('glow', this.addGlow(piece, 0xffffff, 1, 6));
     piece.on('pointerup', () => {
       if (this.dragged || this.claimedTrash.has(piece) || this.sellerBusy || this.ownerScanning()) return;
       if (kind === 'trash' && this.binFull()) {
@@ -11250,8 +11251,8 @@ export class StoreScene extends Phaser.Scene {
     sprite.add(bubble);
     const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief, rare: rare?.id, wants, first: forced?.first, car: arrived?.car };
     // Вора без охранника видно по красному контуру — его можно поймать касанием. Редкий гость — в золотом.
-    if (thief && !this.workers.has('guard')) sprite.postFX?.addGlow(0xe43b44, 3, 0, false, 0.1, 6);
-    if (rare) sprite.postFX?.addGlow(0xfee761, 3, 0, false, 0.1, 6);
+    if (thief && !this.workers.has('guard')) this.addGlow(sprite, 0xe43b44, 3, 6);
+    if (rare) this.addGlow(sprite, 0xfee761, 3, 6);
     this.customers.add(customer);
     if (thief) {
       // Вора можно поймать касанием.

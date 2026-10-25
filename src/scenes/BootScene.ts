@@ -67,7 +67,7 @@ export class BootScene extends Phaser.Scene {
     // Полоска — по байтам, а не по числу готовых файлов: файлов теперь несколько, и почти всё время
     // качается лист атласа — по файлам полоска стояла бы, а потом прыгала.
     const bytes = new Map(atlas.pages.map((p) => [p.name, p.bytes]));
-    const files = this.load.list.getArray();
+    const files = [...this.load.list];
     const weight = (f: Phaser.Loader.File): number => (f.type === 'image' && bytes.get(f.key)) || 20_000;
     const total = files.reduce((sum, f) => sum + weight(f), 0);
     const got = new Map<Phaser.Loader.File, number>();

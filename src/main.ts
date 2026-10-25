@@ -9,7 +9,7 @@ import { installErrorReporting } from './platform/errors';
 import { loadLang } from './i18n';
 import { startSync } from './game/save';
 import { installFrameCap } from './platform/frameCap';
-import { measureCanvas, watchScreen } from './platform/screen';
+import { installPixelRounding, measureCanvas, watchScreen } from './platform/screen';
 import { installClickSounds } from './ui/audio';
 
 const BG = '#1d1a26';
@@ -22,15 +22,37 @@ void startSync();
 // Словарь языка — до запуска: сцены строят надписи сразу.
 void loadLang().catch(() => undefined).then(start);
 
+/**
+ * WebGL или холст Canvas. Phaser 4 рисует через WebGL 1, но обязательно с двумя расширениями
+ * (ANGLE_instanced_arrays, OES_vertex_array_object): без них он не запускается вовсе — падает при
+ * создании игры. Они есть почти везде; на редком старом Android, где их нет, — Canvas, как без WebGL
+ * (медленнее и без подсветок, зато игра идёт).
+ */
+function rendererType(): number {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (!gl) return Phaser.CANVAS;
+    const exts = gl.getSupportedExtensions() ?? [];
+    const ok = exts.includes('ANGLE_instanced_arrays') && exts.includes('OES_vertex_array_object');
+    // Пробный контекст сразу отдаём: их у страницы не больше 16, а у телефона — видеопамять.
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return ok ? Phaser.WEBGL : Phaser.CANVAS;
+  } catch {
+    return Phaser.CANVAS;
+  }
+}
+
 function start(): void {
   // Не больше 60 кадров на быстрых экранах и 30 — под окнами во весь экран (platform/frameCap.ts).
   installFrameCap();
   // Кнопки и вкладки меню щёлкают деревом и бумагой (ui/audio.ts).
   installClickSounds();
   // Холст ровно по пикселям экрана (platform/screen.ts): браузер его не растягивает, Phaser — тоже.
+  // Вершины округляются к пикселям холста, как в Phaser 3 (там же).
+  installPixelRounding();
   const fit = measureCanvas();
   const game = new Phaser.Game({
-    type: Phaser.AUTO,
+    type: rendererType(),
     parent: 'game',
     backgroundColor: BG,
     pixelArt: true,
