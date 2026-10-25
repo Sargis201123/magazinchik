@@ -74,6 +74,7 @@ import {
   DAY_SECONDS,
   recordSale,
 } from './economy';
+import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd } from './ads';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { restockPlan } from './restock';
 import { autoActive, autoArrived, autoMorning, autoTopUp } from './autoorder';
@@ -193,7 +194,9 @@ export type Feature =
   | 'cafe'
   | 'kitchen'
   | 'rush'
-  | 'delivery';
+  | 'delivery'
+  | 'ads'
+  | 'adsMax';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -237,6 +240,10 @@ const HIRE_WHEN: Hire[] = [
   want('manager', (s) => s.level >= 3 && s.staff.length >= 4),
 ];
 
+/** Реклама имеет смысл, только если вчера ушли ни с чем не больше этой доли гостей. */
+const AD_LOST_OK = 0.05;
+/** …и кассы вчера были заняты не больше чем на эту долю: есть кому пробить новых гостей. */
+const AD_BUSY_OK = 0.8;
 /** Для решения «пора нанимать кассира»: примерно столько успевает один человек. */
 const SOLO_SERVE_CAP = 30;
 /** Средняя корзина в штуках. */
@@ -461,6 +468,22 @@ export function simulate({
       if (!hasRadio(state) && state.money >= RADIO_PRICE + reserve) state = buyRadio(state) ?? state;
       if (hasRadio(state)) state = setStation(state, features.candy ? 'hits' : 'retro') ?? state;
     }
+    // Реклама: 'ads' — разумный игрок: когда вчера почти никто не ушёл ни с чем (магазин справляется),
+    // не копит на расширение и есть свободные деньги — берёт самую сильную рекламу на четверть запаса,
+    // по одной за раз. 'adsMax' — каждый день самую дорогую, что по карману, и сверху ещё.
+    const yesterday = out.at(-1);
+    const coping =
+      !yesterday || (yesterday.lost <= (yesterday.served + yesterday.lost) * AD_LOST_OK && yesterday.served < serveCapacity(state).total * AD_BUSY_OK);
+    if (features.adsMax || (features.ads && coping && !activeAds(state).length)) {
+      const budget = features.adsMax ? state.money - reserve : (state.money - reserve * 2) / 4;
+      const pick = AD_IDS.filter((id) => !adBlock(state, id) && adPrice(state, id) <= budget && (features.adsMax || canSplurge(adPrice(state, id)))).sort(
+        (a, b) => adPrice(state, b) - adPrice(state, a),
+      )[0];
+      if (pick) {
+        investments += adPrice(state, pick);
+        state = buyAd(state, pick) ?? state;
+      }
+    }
     // Навыки хозяина: очки — по кругу во все навыки.
     if (features.skills) {
       for (let i = 0; skillPoints(state) > 0 && i < SKILL_IDS.length * 3; i++) {
@@ -576,7 +599,7 @@ export function simulate({
     const weight = (p: ProductId) =>
       (seasonFor(state.day)?.demand[p] ?? 1) * seasonalDemand(p, state.day) * dayDemand(state, p, aromaShare > 0.5);
     const totalWeight = sellable.reduce((sum, p) => sum + weight(p), 0);
-    const itemWants = guests * AVG_WANTS;
+    const itemWants = guests * (AVG_WANTS + adBasket(state));
     // Свою выпечку хотят, только пока она на полке: раскупили — хотят другое.
     const ownWanted = OWN_PRODUCTS.filter((p) => sellable.includes(p)).reduce(
       (sum, p) => sum + Math.min(onShelves(state, p), (itemWants * weight(p)) / totalWeight),
@@ -603,6 +626,22 @@ export function simulate({
         purchases += line.qty * line.price;
       }
     }
+    /** Сколько штук товара не хватает до запаса на сегодня (разумная закупка). */
+    const lacking = (id: ProductId): number => {
+      const demand = (itemWants - ownWanted) * buyChance(state.prices[id], perceivedBase(state, id)) * (weight(id) / otherWeight);
+      const shelfRoom = state.shelves
+        .filter((s) => s.kind === PRODUCTS[id].category)
+        .reduce((sum, s) => sum + shelfCapacity(s), 0);
+      const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category && !OWN_PRODUCTS.includes(p)).length;
+      const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0);
+      const target = Math.ceil(Math.min(demand * 1.1, shareOfShelf + CARRY * 2)) + order;
+      return Math.max(0, target - onShelves(state, id) - warehouseOf(state, id));
+    };
+    // Под рекламу закупаются с умом: места на складе не хватит на всё — режут закупку поровну, а не по
+    // порядку списка. Иначе при наплыве гостей первые по списку дешёвые товары забивают склад, а мясо и
+    // цветы не влезают. В обычные дни — как раньше (по списку): на это откалиброван баланс.
+    const toBuy = buyMode === 'smart' && activeAds(state).length ? sellable.filter((p) => !OWN_PRODUCTS.includes(p)).reduce((sum, p) => sum + lacking(p), 0) : 0;
+    const fit = toBuy > 0 ? Math.min(1, (warehouseCapacity(state) - warehouseCount(state)) / toBuy) : 1;
     for (const id of buyMode === 'smart' || buyMode === 'naive' ? sellable : []) {
       if (OWN_PRODUCTS.includes(id)) continue;
       if (buyMode === 'naive') {
@@ -618,15 +657,7 @@ export function simulate({
         purchases += qty * price;
         continue;
       }
-      const demand = (itemWants - ownWanted) * buyChance(state.prices[id], perceivedBase(state, id)) * (weight(id) / otherWeight);
-      const shelfRoom = state.shelves
-        .filter((s) => s.kind === PRODUCTS[id].category)
-        .reduce((sum, s) => sum + shelfCapacity(s), 0);
-      const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category && !OWN_PRODUCTS.includes(p)).length;
-      const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0);
-      const target = Math.ceil(Math.min(demand * 1.1, shareOfShelf + CARRY * 2)) + order;
-      const have = onShelves(state, id) + warehouseOf(state, id);
-      let qty = Math.max(0, target - have);
+      let qty = Math.ceil(lacking(id) * fit);
       // Самый дешёвый поставщик этого товара.
       const offers = SUPPLIER_IDS.map((sid) => ({ sid, price: unitPrice(SUPPLIERS[sid], deals[sid], id) })).filter(
         (o): o is { sid: (typeof SUPPLIER_IDS)[number]; price: number } => o.price !== null,
@@ -744,9 +775,9 @@ export function simulate({
         }
       }
       const aroma = random() < aromaShare;
-      const wanted = pickWanted(state, random, random() < AVG_WANTS - 1 ? 2 : 1, (p) => dayDemand(state, p, aroma));
+      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + adExtraItems(state, extraRandom), (p) => dayDemand(state, p, aroma));
       const fair = (p: ProductId) =>
-        perceivedBase(state, p) * tolerance * fairTolerance(state.day) * loyaltyTolerance(state) * radioTolerance(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
+        perceivedBase(state, p) * tolerance * fairTolerance(state.day) * loyaltyTolerance(state) * radioTolerance(state) * adTrust(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
       const cart: CartItem[] = [];
       let sawEmpty = false;
       // Чего не хватило — записываем в отчёт дня (по нему «Закупить нужное» и печь считают спрос).
@@ -878,6 +909,7 @@ export function simulate({
     const byOwner = serveCap > 0 ? Math.min(capacity.owner, Math.round((stats.served * capacity.owner) / serveCap)) : 0;
     state = { ...state, ownerServed: state.ownerServed + byOwner };
     state = recordDay(state, stats);
+    stats.adGuests = adGuests(state, stats.served + stats.lost);
     const night = nightCycle(state, stats, random);
     const before = night.state;
     state = night.state;

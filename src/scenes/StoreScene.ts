@@ -140,7 +140,7 @@ import { holidayFor, lateAutumn, yearTime } from '../game/calendar';
 import { liveProgress, recordDay, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
 import { claimGift, localDate } from '../game/gift';
-import { activeAd } from '../game/ads';
+import { activeAds, adExtraItems, adGuests, adRareBoost, adTrust } from '../game/ads';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
 import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, KIOSK_ITEM_SECONDS, KIOSK_MAX_ITEMS, KIOSK_PAY_SECONDS, loyaltyTolerance, withUpgrades } from '../game/upgrades';
@@ -4139,12 +4139,12 @@ export class StoreScene extends Phaser.Scene {
     // Вдоль правой стены растений больше нет — там автомат, касса и проход; остался угол у склада.
     const ice = this.iceboxSpot();
     if (ice.x >= 36) spots.push({ x: 12, y: h - 14 });
-    const big = Boolean(activeDecor(this.state, 'plants'));
+    const bought = activeDecor(this.state, 'plants')?.texture;
     spots.forEach((def, i) => {
       const id = `hall${i}`;
       const p = this.propAt(id, def);
       if (p === def && !free(p.x, p.y)) return;
-      const tex = big || i % 2 ? 'plant_big' : 'plant';
+      const tex = bought ?? (i % 2 ? 'plant_big' : 'plant');
       this.art(p.x, p.y + 3, 'shadow').setScale(0.7 / ART).setDepth(p.y - 1);
       this.art(p.x, p.y, tex).setDepth(p.y + 6);
       this.obstacles.push({ x: p.x - 7, y: p.y - 10, w: 14, h: 14 });
@@ -6282,26 +6282,64 @@ export class StoreScene extends Phaser.Scene {
     this.tweens.add({ targets: van, x: this.next.w + 300, duration: 2600, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
   }
 
-  /** Реклама видна на улице, пока работает. */
+  /**
+   * Реклама видна на улице, пока работает: баннер на фасаде, промоутер с листовками, блогер у входа,
+   * билборд за дорогой, съёмочная группа ТВ, блогер-звезда с фанатами, флажки городской кампании.
+   * Радио в эфире — его не видно. Работает несколько реклам — видны все.
+   */
   private applyAds(): void {
     for (const obj of this.adObjs) discard(obj);
     this.adObjs = [];
-    const ad = activeAd(this.state);
-    if (!ad) return;
-    const { door, h } = this.layout;
+    const ads = new Set(activeAds(this.state).map((a) => a.id));
+    if (!ads.size) return;
+    const { door, h, w } = this.layout;
+    const top = this.streetY - 12;
     const keep = <T extends { destroy: () => void }>(obj: T): T => {
       this.adObjs.push(obj);
       return obj;
     };
-    if (ad.id === 'banner') {
+    /** Бесконечный твин рекламы: при смене реклам без пересборки мира его надо остановить (stop снимает его с менеджера). */
+    const keepTween = (tween: Phaser.Tweens.Tween) => keep({ destroy: () => void tween.stop() });
+    /** Стоит у входа и не участвует в жизни покупателей. */
+    const extra = (x: number, y: number, look: Look, facing: Facing) => {
+      const person = keep(this.makePerson(x, y, look));
+      this.people.delete(person);
+      this.setFacing(person, facing);
+      return person;
+    };
+    /** Блёстки вокруг человека (не в лёгком режиме). */
+    const sparkle = (target: Phaser.GameObjects.Container, frequency: number) => {
+      if (this.lite) return;
+      const sparkles = keep(
+        this.add.particles(0, 0, 'spark', {
+          lifespan: 700,
+          speed: { min: 4, max: 14 },
+          scale: { start: 0.5, end: 0 },
+          alpha: { start: 1, end: 0 },
+          frequency,
+          x: { min: -8, max: 8 },
+          y: { min: -16, max: 2 },
+        }),
+      );
+      sparkles.startFollow(target).setDepth(LIGHT_DEPTH - 1);
+    };
+    if (ads.has('banner')) {
       const banner = keep(this.art(door.x - 44, h + 4, 'ad_banner').setDepth(h + 44));
-      this.tweens.add({ targets: banner, angle: { from: -1.5, to: 1.5 }, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      keepTween(this.tweens.add({ targets: banner, angle: { from: -1.5, to: 1.5 }, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }));
     }
-    if (ad.id === 'flyers') {
+    if (ads.has('city')) {
+      // Городская кампания: флажки во всю ширину фасада.
+      keep(this.add.tileSprite(0, h + 1, w, 5, 'ad_flags').setOrigin(0).setTileScale(1 / ART).setDepth(h + 43));
+    }
+    if (ads.has('billboard') || ads.has('city')) {
+      // Билборд за дорогой, на дальнем тротуаре справа от перехода: его видно из магазина.
+      const base = top + 87;
+      keep(this.art(door.x + 70, base, 'ad_billboard').setOrigin(0.5, 1).setDepth(base));
+    }
+    if (ads.has('flyers') || ads.has('city')) {
       // Промоутер в жёлтом жилете раздаёт листовки прохожим.
       const spot = { x: door.x + 24, y: this.streetY - 3 };
-      const promoter = keep(this.makePerson(spot.x, spot.y, { ...randomLook(0xfee761), acc: 'vest', accTint: 0xfee761 }));
-      this.people.delete(promoter);
+      extra(spot.x, spot.y, { ...randomLook(0xfee761), acc: 'vest', accTint: 0xfee761 }, 'down');
       keep(
         this.time.addEvent({
           delay: 2200,
@@ -6315,24 +6353,29 @@ export class StoreScene extends Phaser.Scene {
         }),
       );
     }
-    if (ad.id === 'blogger') {
+    const star = { x: door.x - 20, y: h + FACADE_H + 8 };
+    if (ads.has('collab')) {
+      // Звезда соцсетей снимает обзор у входа, вокруг — фанаты с телефонами.
+      const blogger = extra(star.x, star.y, { shirt: 0xb55088, pants: 0x262b44, hair: 0xfee761, style: 'long', skin: 0xf2d3ab }, 'up');
+      sparkle(blogger, 140);
+      [-14, 12, -4].forEach((dx, i) => {
+        const fan = extra(star.x + dx, star.y + 8 + (i % 2) * 3, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day), dx < 0 ? 'right' : 'left');
+        if (this.lite) return;
+        // Фанаты подпрыгивают от восторга.
+        keepTween(this.tweens.add({ targets: fan, y: fan.y - 2, duration: 260, yoyo: true, repeat: -1, repeatDelay: 900 + i * 370, ease: 'Sine.easeOut' }));
+      });
+    } else if (ads.has('blogger')) {
       // Блогер снимает обзор у входа: блёстки вокруг.
-      const spot = { x: door.x - 20, y: this.layout.h + FACADE_H + 8 };
-      const blogger = keep(this.makePerson(spot.x, spot.y, { shirt: 0xf6757a, pants: 0x262b44, hair: 0xb55088, style: 'long', skin: 0xf2d3ab }));
-      this.people.delete(blogger);
-      this.setFacing(blogger, 'up');
-      const sparkles = keep(
-        this.add.particles(0, 0, 'spark', {
-          lifespan: 700,
-          speed: { min: 4, max: 14 },
-          scale: { start: 0.5, end: 0 },
-          alpha: { start: 1, end: 0 },
-          frequency: 220,
-          x: { min: -8, max: 8 },
-          y: { min: -16, max: 2 },
-        }),
-      );
-      sparkles.startFollow(blogger).setDepth(LIGHT_DEPTH - 1);
+      const blogger = extra(star.x, star.y, { shirt: 0xf6757a, pants: 0x262b44, hair: 0xb55088, style: 'long', skin: 0xf2d3ab }, 'up');
+      sparkle(blogger, 220);
+    }
+    if (ads.has('tv')) {
+      // Съёмочная группа ТВ: камера на штативе и ведущая с микрофоном у витрины.
+      const x = door.x - 48;
+      const y = h + FACADE_H + 12;
+      keep(this.art(x + 12, y, 'film_camera').setDepth(y + 6));
+      extra(x + 20, y + 1, { shirt: 0x3a4466, pants: 0x262b44, hair: 0x3b2a35, style: 'short', skin: 0xe4a672 }, 'left');
+      extra(x, y - 2, { shirt: 0xe43b44, pants: 0x262b44, hair: 0x733e39, style: 'long', skin: 0xf2d3ab }, 'right');
     }
   }
 
@@ -8752,9 +8795,12 @@ export class StoreScene extends Phaser.Scene {
       }
     }
     // Ковёр в центре зала.
-    if (activeDecor(this.state, 'rug')) this.art(w / 2, (wallH + h) / 2 + 6, 'rug').setDepth(1);
+    const rug = activeDecor(this.state, 'rug');
+    if (rug) this.art(w / 2, (wallH + h) / 2 + 6, rug.texture ?? 'rug').setDepth(1);
     this.buildLights();
     this.buildShowpiece();
+    this.buildCounterDecor();
+    this.buildOutdoorDecor();
     // Стойка со сладостями у кассы, у входа — корзинки, в больших магазинах — тележки. Если справа
     // от двери у нижней стены встал ларь с мороженым (тесный зал), тележки — слева от неё (но не
     // в дверях склада), а корзинки — где осталось место: слева от двери или по ту сторону ларя.
@@ -8812,7 +8858,7 @@ export class StoreScene extends Phaser.Scene {
       const p = this.propAt(id, def);
       const busy = p === def && [...slots, ...this.layout.showcases].some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
       if (busy) return;
-      const tex = activeDecor(this.state, 'plants') ? 'plant_big' : 'plant';
+      const tex = activeDecor(this.state, 'plants')?.texture ?? 'plant';
       this.art(p.x, p.y, tex).setDepth(p.y + 6);
       this.registerProp(id, p, tex, propFootprint(this.layout, id, p.x));
     });
@@ -8856,6 +8902,27 @@ export class StoreScene extends Phaser.Scene {
       this.nightGlow(this.art(x, wallH + 6, 'glow').setDisplaySize(52, 22).setTint(warm), 0.35);
       this.add.image(x, wallH + 6, 'glow').setScale(52 / 64, 22 / 64).setTint(warm).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.12).setDepth(1);
     }
+  }
+
+  /** Вещица на прилавке (ваза, копилка): у верхнего края стойки, над лентой. */
+  private buildCounterDecor(): void {
+    const item = activeDecor(this.state, 'counter');
+    if (!item?.texture) return;
+    const { counter } = this.layout;
+    this.art(counter.x + 2, counter.y - 20, item.texture).setOrigin(0.5, 1).setDepth(counter.y + 21);
+  }
+
+  /**
+   * Вещи у входа на тротуаре: кадки с цветами по бокам от входа или меловая доска-штендер. У самой двери
+   * места заняты (урна, Бобик, подсолнухи, доска отзывов, промоутер, скамейка) — ставим чуть дальше.
+   */
+  private buildOutdoorDecor(): void {
+    const item = activeDecor(this.state, 'outdoor');
+    if (!item?.texture) return;
+    const { door } = this.layout;
+    const top = this.streetY - 12;
+    const spots = item.id === 'out_planters' ? [door.x - 60, door.x + 62] : [door.x - 50];
+    for (const x of spots) this.art(x, top + 9, item.texture).setOrigin(0.5, 1).setDepth(top + 9);
   }
 
   /** Украшение зала (аквариум, фонтан, автомат…) — в свободном месте, с маленькой анимацией. */
@@ -11481,7 +11548,7 @@ export class StoreScene extends Phaser.Scene {
     const valya = !forced && !arrived && !thief && !this.night && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
     const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
     // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще.
-    const rareChance = rareGuestChance(this.state.level) * (activeAd(this.state)?.id === 'blogger' ? 2 : 1);
+    const rareChance = rareGuestChance(this.state.level) * adRareBoost(this.state);
     const rare = !forced && !arrived && !thief && !valya && !this.night && Math.random() < rareChance ? pickRareGuest(this.state, Math.random) : null;
     let look: Look = forced
       ? forced.look
@@ -11576,7 +11643,7 @@ export class StoreScene extends Phaser.Scene {
       { x: door.x, y: door.y - 10 },
     ]);
     // С тележкой у входа покупатель иногда берёт что-то сверх списка.
-    const wanted = this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day));
+    const wanted = this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day) + adExtraItems(this.state, Math.random));
     for (const id of wanted) {
       const index = shelfFor(this.state, id);
       // Ларь у кассы на виду — вор туда не идёт.
@@ -11644,7 +11711,7 @@ export class StoreScene extends Phaser.Scene {
     if (!c.first) await this.walk(c.sprite, door.x + Math.sign(gap) * Math.min(Math.abs(gap), DOOR_TURN), this.streetY);
     // Тележки у входа: часть покупателей берёт их — кому удобнее.
     if (this.cartsAtDoor() && Math.random() < CART_SHARE && !c.sprite.getData('stroller') && !c.thief) this.giveTrolley(c.sprite);
-    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day));
+    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day) + adExtraItems(this.state, Math.random));
     let disappointed = false;
     let why: { reason: LostReason; id: ProductId } | undefined;
     // Подойти, поискать глазами, взять: к полке в зале, к ларю и к вёдрам у кассы — одинаково.
@@ -11798,6 +11865,7 @@ export class StoreScene extends Phaser.Scene {
       fairTolerance(this.state.day) *
       loyaltyTolerance(this.state) *
       radioTolerance(this.state) *
+      adTrust(this.state) *
       // Химия рядом с едой — к еде с этой полки придираются сильнее.
       (this.clashes(index) ? CLASH_FACTOR : 1);
     // «2 по цене 1»: за штуку выходит вдвое дешевле.
@@ -13029,7 +13097,7 @@ export class StoreScene extends Phaser.Scene {
       setState: (s) => {
         const staffChanged = s.staff !== this.state.staff;
         const decorChanged = s.decor !== this.state.decor;
-        const adsChanged = s.ads !== this.state.ads;
+        const adsChanged = s.ads !== this.state.ads || s.adRuns !== this.state.adRuns;
         // Купили приёмник — его надо поставить на прилавок; сменили волну — только музыка.
         const upgradesChanged = s.upgrades !== this.state.upgrades || s.registers !== this.state.registers || s.gear !== this.state.gear || hasRadio(s) !== hasRadio(this.state);
         const radioChanged = s.radio !== this.state.radio;
@@ -14350,6 +14418,8 @@ export class StoreScene extends Phaser.Scene {
     const filmed = bigDayFor(this.state.day) === 'filming';
     if (filmed) this.state = filmingReward(this.state);
     const finishedDay = this.state.day;
+    // Сколько гостей сверх обычного привела реклама — строкой в итогах дня.
+    this.stats.adGuests = adGuests(this.state, this.stats.served + this.stats.lost);
     const ratingBefore = this.state.rating;
     const rankBefore = rankOf(this.state.totalRevenue);
     const { state, spoiled, bill, shortfall, skimmed, order, quests, weekly } = nightCycle(this.state, this.stats);

@@ -179,7 +179,7 @@ import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
 import { assetUrl, png } from '../platform/assets';
-import { activeAd, AD_IDS, ADS, adPrice, buyAd } from '../game/ads';
+import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
 import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeLoyalty, cafeOf } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
@@ -2713,27 +2713,37 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return box;
   };
 
-  /** Реклама: карточка на каждый вид — иконка, что даёт, цена и кнопка. */
+  /**
+   * Реклама: карточка на каждый вид — иконка, что даёт, цена и кнопка. Сверху — сколько гостей
+   * добавляет уже запущенная; у остальных — сколько прибавят к ней (следующая работает слабее).
+   */
   const adsBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
-    box.append(el('b', '', t('ads.title')), el('div', 'ui-muted', t('ads.note')));
-    const running = activeAd(state);
+    box.append(el('b', '', t('ads.title')), el('div', 'ui-muted', t('ads.note', { n: MAX_ADS })));
+    const running = activeAds(state);
+    const pct = (x: number) => Math.round(x * 100);
+    if (running.length) box.append(el('div', 'ui-note', t('ads.now', { n: pct(adBoost(state) - 1), list: running.map((a) => a.icon).join(' ') })));
     for (const id of AD_IDS) {
       const ad = ADS[id];
-      const row = el('div', 'ui-item');
+      const block = adBlock(state, id);
+      const row = el('div', `ui-item${block === 'level' ? ' ui-locked' : ''}`);
       row.append(el('div', 'ui-ad-icon', ad.icon));
       const body = el('div');
       const name = el('div', 'ui-item-name', t(ad.nameKey));
-      name.append(el('span', 'ui-tag', `${adPrice(state, id)} 💰`));
-      body.append(name, el('div', 'ui-item-sub', running?.id === id ? t('ads.active', { n: state.ads?.until ?? state.day }) : t(ad.descKey)));
-      const action = button(
-        running?.id === id ? '✓' : t('ads.order'),
-        () => update(buyAd(getState(), id), 'success'),
-        'ui-chip',
-        Boolean(running) || state.money < adPrice(state, id),
-      );
+      if (block !== 'level') name.append(el('span', 'ui-tag', `${adPrice(state, id)} 💰`));
+      const sub =
+        block === 'running'
+          ? t('ads.active', { n: adUntil(state, id) ?? state.day })
+          : block === 'level'
+            ? t('upgrade.needLevel', { name: t(STORE_LEVELS[ad.minLevel].nameKey) })
+            : t(ad.descKey);
+      body.append(name, el('div', 'ui-item-sub', sub));
+      // С уже запущенной рекламой эта прибавит меньше, чем одна, — честно показываем сколько.
+      if (running.length && !block) body.append(el('div', 'ui-item-sub', t('ads.stack', { n: pct(adGain(state, id)) })));
+      if (block === 'full') body.append(el('div', 'ui-item-sub', t('ads.full', { n: MAX_ADS })));
+      const action = button(block === 'running' ? '✓' : t('ads.order'), () => update(buyAd(getState(), id), 'success'), 'ui-chip', Boolean(block));
       const actions = el('div', 'ui-item-actions');
-      actions.append(action);
+      if (block !== 'level') actions.append(action);
       row.append(body, actions);
       box.append(row);
     }
