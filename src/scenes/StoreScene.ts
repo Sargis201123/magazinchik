@@ -142,7 +142,7 @@ import { isWet, weatherFor, type Weather } from '../game/weather';
 import { holidayFor, lateAutumn, yearTime } from '../game/calendar';
 import { liveProgress, recordDay, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
-import { claimGift, localDate } from '../game/gift';
+import { claimGift } from '../game/gift';
 import { activeAds, adExtraItems, adGuests, adRareBoost, adTrust } from '../game/ads';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
@@ -13797,7 +13797,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Подарок за ежедневный вход: деньги (и товар) сразу в состоянии, окно — поверх утра. */
   private offerGift(): void {
-    const claimed = claimGift(this.state, localDate(new Date()), Math.random);
+    const claimed = claimGift(this.state, todayLocal(), Math.random);
     if (!claimed) return;
     // Товар из гостинца сразу встаёт на полки, если есть место.
     this.state = shelveAll(claimed.state);

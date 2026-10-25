@@ -5,7 +5,7 @@
 import type { StoreState } from './economy';
 
 /** Сколько даёт банк в каждом помещении: чем больше магазин, тем больше доверие. */
-export const LOAN_LIMITS = [800, 1500, 3000, 6000, 10000];
+export const LOAN_LIMITS = [400, 1500, 3000, 6000, 10000];
 /** Переплата за весь срок и на сколько месяцев. */
 export const LOAN_INTEREST = 0.2;
 export const LOAN_MONTHS = 4;
