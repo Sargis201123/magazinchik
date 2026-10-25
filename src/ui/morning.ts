@@ -228,7 +228,7 @@ import { showReviews } from './reviews';
 import { button, el, openModal, who } from './dom';
 import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
-import { keepPlaces } from '../scenes/placement';
+import { keepPlaces, kioskSpotFree } from '../scenes/placement';
 
 /** Портрет заказчика: шеф — это Марат. */
 const CLIENT_PORTRAIT: Record<ClientId, string> = { chef: 'marat', school: 'school', valya: 'valya' };
@@ -2649,8 +2649,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const bought = price === null ? null : buyKiosk({ ...state, money: Math.max(state.money, price) });
     const free = price !== null ? t('kiosks.free', { n: slots - n }) : STORE_LEVELS[state.level + 1] ? t('kiosks.full') : t('kiosks.max');
     const gain = bought ? ` · ${t('lanes.gain', { g: guestsGain(state, bought) })}` : '';
-    const actions = price === null ? [] : [button(t('kiosks.buy', { cost: price }), () => update(buyKiosk(getState()), 'success'), 'ui-chip', state.money < price)];
-    box.append(artRow(texture, { name: t('kiosks.count', { n, max: slots }), sub: `${free}${gain}`, actions }));
+    // Место у правой стены заняла полка или вещь (своя расстановка) — сначала переставить.
+    const blocked = price !== null && !kioskSpotFree(state, n);
+    const actions = price === null ? [] : [button(t('kiosks.buy', { cost: price }), () => update(buyKiosk(getState()), 'success'), 'ui-chip', blocked || state.money < price)];
+    box.append(artRow(texture, { name: t('kiosks.count', { n, max: slots }), sub: blocked ? t('kiosks.blocked') : `${free}${gain}`, actions }));
     const model = (k: typeof tier) =>
       t('kiosks.model', { name: t(k.nameKey), max: k.maxItems, s: k.item.toFixed(1), err: Math.round(k.error * 100), skip: +(k.skip * 100).toFixed(1) });
     box.append(el('div', 'ui-item-sub', model(tier)));
@@ -3432,6 +3434,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         continue;
       }
       // Менеджер — только в большом магазине: пока рано, подскажем, где появится.
+      // Сменщик, нанятый ещё в ларьке, работает — замок с подсказкой ему ни к чему.
+      if (!roleOpen(state, role) && staffOf(state, role)) continue;
       if (!roleOpen(state, role)) {
         const { minLevel = 0, needs, nameKey } = STAFF_ROLES[role];
         // Пекарь, бариста и повар — когда во флигеле открыты пекарня, кофейня и кухня.

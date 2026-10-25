@@ -245,7 +245,7 @@ const AVG_BASKET = 1.4;
 const ownerAtRegister = (level: number): number => 0.65 - 0.07 * level;
 /** Подойти к кассе и отойти — секунды на каждого покупателя. */
 const QUEUE_STEP_SECONDS = 0.3;
-/** Сменщик за кассой хозяина весь день, а хозяин между делами касается кассы — пробивка чуть быстрее. */
+/** Сменщик за кассой хозяина весь день, а хозяин между делами касается кассы — пробивка чуть быстрее (в игре касаниями срезают до 30%). */
 const RELIEF_TAPS = 1.1;
 /** Киоск занят не весь день (к нему идут с небольшой корзиной), дойти и уложить покупки — секунды. */
 const KIOSK_BUSY = 0.5;
@@ -664,7 +664,7 @@ export function simulate({
     // Под гостей, которых привели открытые кассы, — докупка на остаток места на складе, поровну по спросу
     // (жадно по списку — первые товары забили бы склад, а остальные полки пустовали).
     if (buyMode === 'smart' && laneGuests(state) > 1) {
-      const extraWants = guests * AVG_WANTS - itemWants;
+      const allWants = guests * AVG_WANTS - ownWanted;
       const extra = sellable
         .filter((id) => !OWN_PRODUCTS.includes(id))
         .map((id) => {
@@ -672,7 +672,9 @@ export function simulate({
             (o): o is { sid: (typeof SUPPLIER_IDS)[number]; price: number } => o.price !== null,
           );
           const best = offers.sort((a, b) => a.price - b.price)[0];
-          const want = extraWants * buyChance(state.prices[id], perceivedBase(state, id)) * (weight(id) / otherWeight);
+          // Сколько не хватает до спроса всех гостей с учётом того, что уже есть на полках и складе.
+          const demand = allWants * buyChance(state.prices[id], perceivedBase(state, id)) * (weight(id) / otherWeight);
+          const want = demand * 1.1 - onShelves(state, id) - warehouseOf(state, id);
           return { id, best, want };
         })
         .filter((x) => x.best && x.want > 0);

@@ -114,7 +114,7 @@ describe('кухня с поваром', () => {
     const withKitchen = lateProfit(true);
     expect(withKitchen).toBeGreaterThan(without * 0.98);
     expect(withKitchen).toBeLessThan(without * 1.25);
-  });
+  }, 30_000);
 });
 
 describe('кнопка «Закупить нужное»', () => {

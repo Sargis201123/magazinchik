@@ -2135,6 +2135,7 @@ export const en: Record<TextKey, string> = {
   "kiosks.upgrade": "Upgrade · {cost} 💰",
   "kiosks.upgradeLocked": "The next model needs the “{name}” premises",
   "kiosks.best": "best model",
+  "kiosks.blocked": "the spot by the wall is taken — move the shelf or item (Hall → “Rearrange shelves”)",
   "lanes.now": "Open checkouts: {n} · guests a day +{g}",
   "lanes.gain": "+{g} more guests a day",
   "lanes.note": "The more checkouts are open (a staffed register or a kiosk), the more readily people come in: the line moves. Each next one adds less.",

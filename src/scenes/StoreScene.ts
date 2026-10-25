@@ -475,6 +475,8 @@ const KIOSK_ALARM = 0xe43b44;
 /** Касание кассы, за которой сменщик, срезает столько мс пробивки; про запас — не больше стольких. */
 const RELIEF_TAP_MS = 250;
 const RELIEF_HURRY_MAX_MS = 1200;
+/** Какую долю пробивки сменщика можно срезать касаниями (в симуляторе — RELIEF_TAPS). */
+const RELIEF_HURRY_SHARE = 0.3;
 
 const TRASH_CHANCE = 0.15;
 const MAX_TRASH = 8;
@@ -1082,7 +1084,7 @@ interface Register {
   clerk: { x: number; y: number };
   /** Кто подошёл к этой кассе (идёт к ней, ждёт или уже пробивается). */
   customer: Customer | null;
-  scan: { start: number; total: number; byOwner: boolean } | null;
+  scan: { start: number; total: number; byOwner: boolean; cut?: number } | null;
   bar: Phaser.GameObjects.Rectangle;
   fill: Phaser.GameObjects.Rectangle;
   screen: Phaser.GameObjects.Rectangle;
@@ -1510,6 +1512,8 @@ export class StoreScene extends Phaser.Scene {
   private kiosks: Kiosk[] = [];
   /** Когда последний раз всплывало «быстрее» над кассой (касания сменщику). */
   private lastHurry = 0;
+  /** Сменщик дошёл до кассы хозяина и пробивает (новенький — с той минуты, как встал за неё). */
+  private reliefReady = false;
   /** Мини-событие дня: что сейчас происходит и всё, что его рисует. */
   private liveEvent: LiveKind | null = null;
   private liveObjs: { destroy: () => void }[] = [];
@@ -2263,12 +2267,12 @@ export class StoreScene extends Phaser.Scene {
 
   /**
    * Кто работает за кассой. Первая — хозяина, но если нанят сменщик и он вышел на смену, за ней весь
-   * день он (новенький — с той минуты, как дошёл от двери). За остальными — их кассиры, а без кассира касса закрыта (null).
+   * день он (новенький — с той минуты, как дошёл до кассы, reliefLoop). За остальными — их кассиры, а без кассира касса закрыта (null).
    */
   private operator(index: number): Worker | 'owner' | null {
     if (index === 0) {
       const relief = this.workers.get(RELIEF_ROLE);
-      return relief && relief.member.role === RELIEF_ROLE && !this.newcomers.has(relief.sprite) ? relief : 'owner';
+      return relief && relief.member.role === RELIEF_ROLE && this.reliefReady ? relief : 'owner';
     }
     const role = tillRole(index);
     return (role && this.workers.get(role)) || null;
@@ -2293,7 +2297,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .zone(at.x + (left ? -6 : 6), at.y + 6, 40, 64)
       .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => this.tap(() => this.serveNext()));
+      .on('pointerup', () => this.tap(() => this.serveNext(index)));
   }
 
   /** Хозяин сейчас пробивает кого-то. */
@@ -3210,7 +3214,7 @@ export class StoreScene extends Phaser.Scene {
     const drawTill = (bad: boolean) => {
       const lay = placed();
       tillFrame.clear();
-      for (const z of tillZones(lay, registers)) {
+      for (const z of tillZones(lay, registers, kioskCount(this.state))) {
         const r = { x: z.x - lay.counter.x, y: z.y - lay.counter.y, w: z.w, h: z.h };
         tillFrame.fillStyle(bad ? 0xe43b44 : 0x2ce8f5, 0.18).fillRect(r.x, r.y, r.w, r.h);
         tillFrame.lineStyle(1, bad ? 0xe43b44 : 0x0099db, 0.9).strokeRect(r.x, r.y, r.w, r.h);
@@ -3273,8 +3277,8 @@ export class StoreScene extends Phaser.Scene {
     };
     const check = () => {
       const lay = placed();
-      const bad = slotIssues(lay, at, defaults, registers, props.map(propRect));
-      const badProps = propIssues(lay, at, props, registers);
+      const bad = slotIssues(lay, at, defaults, registers, props.map(propRect), kioskCount(this.state));
+      const badProps = propIssues(lay, at, props, registers, kioskCount(this.state));
       // Вещь на своём стандартном месте игра поставила сама так, чтобы не мешать (растение у будущей
       // кассы, у двери склада) — красной она становится, только если на неё поставили полку.
       for (const p of props) {
@@ -3295,7 +3299,7 @@ export class StoreScene extends Phaser.Scene {
         frame.lineStyle(1, red ? 0xe43b44 : 0xb86f50, 1).strokeRect(fp.x, fp.y, fp.w, fp.h);
       });
       // Кассу подсвечиваем красным, если на её месте или в очереди стоит красная полка.
-      drawTill(tillZones(lay, registers).some((z) => at.some((p, i) => bad.has(i) && overlapsRect(slotRect(lay, p), z))));
+      drawTill(tillZones(lay, registers, kioskCount(this.state)).some((z) => at.some((p, i) => bad.has(i) && overlapsRect(slotRect(lay, p), z))));
       ghosts.forEach((g, i) => {
         const frame = g.getData('frame') as Phaser.GameObjects.Graphics;
         const abs = slotRect(lay, at[i]);
@@ -6580,7 +6584,15 @@ export class StoreScene extends Phaser.Scene {
       if (over.length || this.dragged || this.arranging || !this.running || p.upTime - p.downTime > STREET_TAP_MS) return;
       const at = this.cameras.main.getWorldPoint(p.x, p.y);
       if (at.y < this.layout.h + FACADE_H) return;
-      // Касание ничего не изменит (у кассы никого, хозяин уже пробивает, за кассой сменщик) — и отклика нет.
+      // За кассой хозяина сменщик: касание улицы торопит его, пока он пробивает.
+      const first = this.registers[0];
+      if (this.operator(0) !== 'owner') {
+        if (!first?.scan || first.scan.byOwner) return;
+        this.ripple(at.x, at.y);
+        void this.serveNext();
+        return;
+      }
+      // Касание ничего не изменит (у кассы никого, хозяин уже пробивает) — и отклика нет.
       const r = this.ownerRegister();
       if (!r || this.ownerScanning() || (!this.sellerBusy && !this.atSpot(r))) return;
       this.ripple(at.x, at.y);
@@ -8465,7 +8477,7 @@ export class StoreScene extends Phaser.Scene {
     if (!hasBargain(this.state)) return;
     const { door, h, w } = this.layout;
     const fp = propFootprint(this.layout, 'bargain', 0);
-    const zones = [...tillZones(this.layout, registerSlots(this.state)), ...blockedZones(this.layout)];
+    const zones = [...tillZones(this.layout, registerSlots(this.state), kioskCount(this.state)), ...blockedZones(this.layout)];
     const free = (p: { x: number; y: number }) => {
       const r = { x: p.x + fp.x - 3, y: p.y + fp.y - 16, w: fp.w + 6, h: fp.h + 19 };
       return r.x > 2 && r.x + r.w < w - 2 && ![...this.obstacles, ...zones].some((o) => overlapsRect(r, o));
@@ -8683,7 +8695,7 @@ export class StoreScene extends Phaser.Scene {
     const { w, h, wallH, wc, door, slots } = this.layout;
     // От входа вглубь зала — наклейки-стрелки на полу (только там, где не стоят полки и касса).
     const arrows = this.add.graphics().setDepth(0.42);
-    const blocked = [...slots.map((p) => slotRect(this.layout, p)), ...tillZones(this.layout, registerSlots(this.state))];
+    const blocked = [...slots.map((p) => slotRect(this.layout, p)), ...tillZones(this.layout, registerSlots(this.state), kioskCount(this.state))];
     for (const ay of [h - 44, h - 60]) {
       if (blocked.some((r) => overlapsRect(r, { x: door.x - 6, y: ay - 4, w: 12, h: 8 }))) continue;
       arrows.fillStyle(0x0099db, 0.32);
@@ -10680,6 +10692,7 @@ export class StoreScene extends Phaser.Scene {
     }
     this.workers.clear();
     this.newcomers.clear();
+    this.reliefReady = false;
     this.managerOnFloor = false;
     this.claimedTrash.clear();
     if (this.binBy === 'cleaner') {
@@ -10946,6 +10959,10 @@ export class StoreScene extends Phaser.Scene {
    * для дел, а его касания кассы торопят пробивку (hurryRelief).
    */
   private async reliefLoop(w: Worker, gen: number): Promise<void> {
+    this.reliefReady = true;
+    // Хозяин, пока сменщик шёл, сам встал за кассу — уступает место и отходит к стойке.
+    const clerk = this.registers[0]?.clerk;
+    if (clerk && !this.sellerBusy && !this.ownerScanning() && Phaser.Math.Distance.Between(this.seller.x, this.seller.y, clerk.x, clerk.y) <= 2) void this.returnSeller();
     while (this.alive(gen)) {
       const r = this.registers[0];
       const front = r?.customer;
@@ -11623,8 +11640,12 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Касание кассы (или улицы внизу): хозяин пробивает того, кто ждёт у его кассы, или возвращается с дела. */
-  private async serveNext(): Promise<void> {
-    if (this.hurryRelief()) return;
+  private async serveNext(from = 0): Promise<void> {
+    // За кассой хозяина сменщик: касание его кассы (или улицы) торопит пробивку, касание чужой — ничего.
+    if (this.operator(0) !== 'owner') {
+      if (from === 0) this.hurryRelief();
+      return;
+    }
     if (this.ownerScanning()) return;
     const r = this.ownerRegister();
     if (this.sellerBusy) {
@@ -11653,7 +11674,7 @@ export class StoreScene extends Phaser.Scene {
   private hurryRelief(): boolean {
     const r = this.registers[0];
     if (!r || this.operator(0) === 'owner') return false;
-    if (!r.scan || r.scan.byOwner) return true;
+    if (!r.scan || r.scan.byOwner || (r.scan.cut ?? 0) >= r.scan.total * RELIEF_HURRY_SHARE) return true;
     r.hurry = Math.min(RELIEF_HURRY_MAX_MS, r.hurry + RELIEF_TAP_MS);
     haptic.tap();
     if (r.img) this.squash(r.img, 1.04, 0.94, 70);
@@ -11669,11 +11690,14 @@ export class StoreScene extends Phaser.Scene {
     if (this.registers.indexOf(r) !== 0 || r.scan?.byOwner) return this.wait(ms);
     let left = ms;
     while (left > 0) {
-      const cut = Math.min(left, r.hurry);
+      // Касаниями пробивку не сделать мгновенной: срезать можно не больше RELIEF_HURRY_SHARE от неё.
+      const room = r.scan ? r.scan.total * RELIEF_HURRY_SHARE - (r.scan.cut ?? 0) : 0;
+      const cut = Math.min(left, r.hurry, Math.max(0, room));
       if (cut > 0) {
         r.hurry -= cut;
         left -= cut;
-        if (r.scan) r.scan.start -= cut;
+        r.scan!.start -= cut;
+        r.scan!.cut = (r.scan!.cut ?? 0) + cut;
         continue;
       }
       const step = Math.min(left, 100);
@@ -12814,7 +12838,7 @@ export class StoreScene extends Phaser.Scene {
         const decorChanged = s.decor !== this.state.decor;
         const adsChanged = s.ads !== this.state.ads;
         // Купили приёмник — его надо поставить на прилавок; сменили волну — только музыка.
-        const upgradesChanged = s.upgrades !== this.state.upgrades || s.registers !== this.state.registers || s.gear !== this.state.gear || hasRadio(s) !== hasRadio(this.state);
+        const upgradesChanged = s.upgrades !== this.state.upgrades || s.registers !== this.state.registers || s.kiosks?.n !== this.state.kiosks?.n || s.kiosks?.tier !== this.state.kiosks?.tier || s.gear !== this.state.gear || hasRadio(s) !== hasRadio(this.state);
         const radioChanged = s.radio !== this.state.radio;
         // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
         const was = this.state;

@@ -3,7 +3,7 @@
 // и можно ли от входа подойти к каждой полке, к кассе и в очередь. Сохраняется в StoreState.slotPos.
 
 import { isFixture, slotOf, type StoreState } from '../game/economy';
-import { iceboxRect, iceboxSpotFor, kioskZones, layoutFor, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
+import { iceboxRect, iceboxSpotFor, kioskRect, kioskZones, layoutFor, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
 import { reachable, type Rect } from './paths';
 
 /** Шаг сетки, по которой встают полки. */
@@ -93,11 +93,11 @@ const grow = (r: Rect, d: number): Rect => ({ x: r.x - d, y: r.y - d, w: r.w + 2
 
 /**
  * Касса со всем, что при ней (переезжает целиком): стол, очередь, места под остальные кассы (registers —
- * сколько их можно поставить в этом помещении, вместе с кассиром), места под кассы самообслуживания (kiosks —
- * сколько держать; мест под них столько же, сколько под кассы, — lanes.ts) и цветы.
+ * сколько их можно поставить в этом помещении, вместе с кассиром), кассы самообслуживания (kiosks — сколько
+ * стоит; место под следующий проверяет kioskSpotFree перед покупкой) и цветы.
  * Первый прямоугольник — сам стол: к нему подходят вплотную, проход к нему не проверяем.
  */
-export function tillZones(layout: Layout, registers = 1, kiosks = registers): Rect[] {
+export function tillZones(layout: Layout, registers = 1, kiosks = 1): Rect[] {
   const { h, counter, queue } = layout;
   return [
     { x: counter.x - 16, y: counter.y - 34, w: 32, h: 62 },
@@ -133,7 +133,7 @@ export const blockedZones = (layout: Layout, defaults: Point[] = layout.slots): 
   roomZones(layout).filter((z) => !defaults.some((d) => overlaps(bodyRect(d), z)));
 
 /** Всё, чему полки не должны мешать: касса со всем, что при ней, и то, что не переезжает. */
-export const fixedZones = (layout: Layout, registers = 1): Rect[] => [...tillZones(layout, registers), ...roomZones(layout)];
+export const fixedZones = (layout: Layout, registers = 1, kiosks = 1): Rect[] => [...tillZones(layout, registers, kiosks), ...roomZones(layout)];
 
 /** Стены зала как препятствия: путь не может обойти полку снаружи здания. */
 const walls = (layout: Layout): Rect[] => [
@@ -147,12 +147,12 @@ const walls = (layout: Layout): Rect[] => [
  * Какие места поставлены неправильно (их номера): за пределами зала, друг на друге, в запретной зоне
  * или так, что к полке не подойти. Если неправильных нет — расстановку можно сохранять.
  */
-export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = layout.slots, registers = 1, props: Rect[] = []): Set<number> {
+export function slotIssues(layout: Layout, slots: Point[], defaults: Point[] = layout.slots, registers = 1, props: Rect[] = [], kiosks = 1): Set<number> {
   const bad = new Set<number>();
   const rects = slots.map((p) => slotRect(layout, p));
   // Зона, которую занимает и стандартная расстановка (дверь в ещё закрытую комнату флигеля), — не запретная.
   // Касса переезжает — её зоны запретны всегда.
-  const zones = [...tillZones(layout, registers), ...blockedZones(layout, defaults), ...props];
+  const zones = [...tillZones(layout, registers, kiosks), ...blockedZones(layout, defaults), ...props];
   rects.forEach((r, i) => {
     const stand = standFor(layout, slots[i]);
     // У задней стены полка стоит вплотную и заходит на нижнюю панель стены — так стоят и стандартные.
@@ -246,9 +246,9 @@ export const vendingFootprint = (side: boolean): Rect => (side ? { x: -5, y: -16
  * Какие вещи стоят неправильно (их id): за пределами зала, на полке, на кассе с очередью,
  * у входа, в дверях флигеля или друг на друге.
  */
-export function propIssues(layout: Layout, slots: Point[], props: Prop[], registers = 1): Set<string> {
+export function propIssues(layout: Layout, slots: Point[], props: Prop[], registers = 1, kiosks = 1): Set<string> {
   const bad = new Set<string>();
-  const zones = [...tillZones(layout, registers), ...roomZones(layout)];
+  const zones = [...tillZones(layout, registers, kiosks), ...roomZones(layout)];
   const rects = props.map(propRect);
   rects.forEach((r, i) => {
     const id = props[i].id;
@@ -270,4 +270,18 @@ export function propPosFor(level: number, props: Prop[], defaults: Record<string
     if (!d || d.x !== p.x || d.y !== p.y) at[p.id] = { x: p.x, y: p.y };
   }
   return Object.keys(at).length ? { level, at } : undefined;
+}
+
+/**
+ * Место под киоск номер index свободно: на нём не стоит полка (своя расстановка, короткая очередь
+ * освобождает правую стену под полки) и не стоит переставленная вещь. Занято — сначала переставить.
+ */
+export function kioskSpotFree(state: StoreState, index: number): boolean {
+  const layout = withTill(withSlots(layoutFor(state.level), state.slotPos, state.level), state.tillPos, state.level);
+  const k = kioskRect(layout, index);
+  const moved = state.propPos?.level === state.level ? Object.entries(state.propPos.at) : [];
+  return (
+    layout.slots.every((p) => !overlaps(slotRect(layout, p), k)) &&
+    moved.every(([id, p]) => !overlaps(propRect({ id, x: p.x, y: p.y, fp: propFootprint(layout, id, p.x) }), k))
+  );
 }

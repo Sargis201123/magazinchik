@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { newGame, roleOpen, type StaffMember, type StaffRole, type StoreState } from '../src/game/economy';
 import { nextCashierRole, REGISTERS_BY_LEVEL, RELIEF_LEVEL } from '../src/game/registers';
-import { guestsGain, guestsToday } from '../src/game/day';
+import { ensurePlan, guestsGain, guestsToday } from '../src/game/day';
 import { canTradeAway } from '../src/game/away';
 import {
   buyKiosk,
@@ -21,7 +21,7 @@ import {
 } from '../src/game/lanes';
 import { simulate } from '../src/game/simulate';
 import { iceboxRect, iceboxSpotFor, kioskRect, kioskSpot, kioskZones, layoutFor, registerSpot } from '../src/scenes/layout';
-import { overlapsRect, tillZones } from '../src/scenes/placement';
+import { kioskSpotFree, overlapsRect, tillZones } from '../src/scenes/placement';
 
 // Кассы и поток гостей (lanes.ts): сменщик — с «Магазинчика» и весь день за кассой хозяина; открытые
 // кассы зовут гостей с убывающей прибавкой; киоски — несколько, с моделями, тоже зовут гостей.
@@ -48,11 +48,15 @@ describe('сменщик — с «Магазинчика»', () => {
 
   it('нанятый в ларьке раньше — остаётся и работает: не увольняем и денег не берём', () => {
     const s = shop(0, ['cashier']);
-    expect(s.staff.map((m) => m.role)).toEqual(['cashier']);
-    // Торгует, пока игрока нет, как и раньше.
-    expect(canTradeAway(s)).toBe(true);
+    // Утро нового дня с ним: никого не увольняют, торгует, пока игрока нет, как и раньше.
+    const next = ensurePlan({ ...s, day: s.day + 1, plan: undefined });
+    expect(next.staff.map((m) => m.role)).toContain('cashier');
+    expect(next.money).toBe(s.money);
+    expect(canTradeAway(next)).toBe(true);
     // Сменщик — касса хозяина: новых касс он не открывает, гостей сам по себе не прибавляет.
     expect(laneGuests(s)).toBe(1);
+    // И в «Персонале» его не нанять второй раз.
+    expect(nextCashierRole(s)).toBeNull();
   });
 
 });
@@ -169,6 +173,17 @@ describe('кассы самообслуживания', () => {
     }
   });
 
+  it('место под киоск занято полкой (своя расстановка) — поставить нельзя, пока не переставят', () => {
+    const s = shop(4, []);
+    expect(kioskSpotFree(s, 0)).toBe(true);
+    const layout = layoutFor(4);
+    const k = kioskSpot(layout, 2);
+    const at = layout.slots.map((p, i) => (i === layout.slots.length - 1 ? { x: k.x - 12, y: k.y } : p));
+    const moved = { ...s, slotPos: { level: 4, at } };
+    expect(kioskSpotFree(moved, 2)).toBe(false);
+    expect(kioskSpotFree(moved, 0)).toBe(true);
+  });
+
   it('купили все киоски — ларь с мороженым переезжает и на них не встаёт', () => {
     for (let level = 2; level <= 4; level++) {
       const layout = layoutFor(level);
@@ -202,13 +217,16 @@ describe('загрузка сохранения: киоски и сменщик'
   });
   afterEach(() => delete (globalThis as Record<string, unknown>).localStorage);
 
-  it('киоск-улучшение и сменщик в ларьке переживают загрузку', async () => {
+  it('киоск-улучшение и сменщик в ларьке переживают загрузку (и переезд «касса — хозяина»)', async () => {
     const { loadGame } = await import('../src/game/save');
     const old = shop(0, ['cashier'], { upgrades: ['selfCheckout'] }) as Partial<StoreState>;
     delete old.kiosks;
+    delete old.ownerTill;
+    delete old.registers;
     local['magazinchik.save'] = JSON.stringify({ version: 11, state: old });
     const s = loadGame()!;
     expect(s.staff.map((m) => m.role)).toEqual(['cashier']);
+    expect(s.ownerTill).toBe(true);
     expect(kioskCount({ ...s, level: 2 })).toBe(1);
   });
 });
