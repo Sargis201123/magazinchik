@@ -254,6 +254,12 @@ const SPRITES = [
   'kbasket',
   'kcrate',
   'ktiles',
+  // Поднос повара и полка «Еда» у входа трёх моделей, стекло витрины-горки (art/kitchen.py).
+  'kplates',
+  'food_shelf0',
+  'food_shelf1',
+  'food_shelf2',
+  'food_glass2',
   'umbrella',
   'carts',
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),

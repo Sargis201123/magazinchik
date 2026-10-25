@@ -189,7 +189,7 @@ import { rushPrize } from '../game/rush';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
 import { answerOpening, BUILDINGS, districtNews, districtSite, isMatchDay, OPENING_DAYS, type BuildingId } from '../game/district';
-import { canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, kitchenOpen, kitchenWorking, menuAuto, portionsOf, portionsTotal, PORTIONS_MAX, stoveSprite, toggleMenu } from '../game/kitchen';
+import { canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, foodSlots, foodSprite, kitchenOpen, kitchenWorking, menuAuto, morningOrder, orderCost, pantryOf, portionsOf, portionsTotal, stoveSprite, toggleMenu } from '../game/kitchen';
 import { addFriend, duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
@@ -1758,7 +1758,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
               id: 'kitchen',
               icon: '🍲',
               title: t('kitchen.title'),
-              status: `${portionsTotal(state)}/${PORTIONS_MAX}`,
+              status: `${portionsTotal(state)}/${foodSlots(state)}`,
               // Витрина пуста и повара нет — сегодня кухне нечего продавать.
               alert: portionsTotal(state) === 0 && !kitchenWorking(state),
               details: () => kitchenBox(getState()),
@@ -1797,14 +1797,35 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const kitchenBox = (state: StoreState): HTMLElement[] => {
     if (!kitchenOpen(state)) return [];
     const box = el('div', 'ui-box');
-    box.append(el('b', '', t('kitchen.title')), el('div', 'ui-muted', t('kitchen.note', { n: portionsTotal(state), max: PORTIONS_MAX })));
+    box.append(el('b', '', t('kitchen.title')), el('div', 'ui-muted', t('kitchen.note', { n: portionsTotal(state), max: foodSlots(state) })));
+    const shelf = el('div', 'ui-item');
+    const shelfImg = el('img', 'ui-item-art');
+    shelfImg.src = png(foodSprite(state));
+    shelfImg.alt = '';
+    shelf.append(shelfImg, el('div', 'ui-item-sub', t('kitchen.shelf', { name: t(GEAR.foodShelf.models[gearTier(state, 'foodShelf')].nameKey), n: portionsTotal(state), max: foodSlots(state) })));
+    box.append(shelf);
     const chef = staffOf(state, 'cook');
     const who = chef ? t(isAbsent(state, chef) ? 'kitchen.chefOff' : 'kitchen.chef', { name: memberName(chef) }) : t('kitchen.noChef');
     // Кто готовит — главное правило кухни: строкой на виду, а не за «❔».
     box.append(el('div', 'ui-note', who));
+    // Повар на смене: что кухня сама закупит при открытии и почём (деньги — из кассы магазина).
+    const list = (items: Partial<Record<ProductId, number>>) =>
+      Object.entries(items)
+        .filter(([, n]) => (n ?? 0) > 0)
+        .map(([p, n]) => `${PRODUCTS[p as ProductId].icon}×${n}`)
+        .join(' ');
+    if (kitchenWorking(state)) {
+      const order = morningOrder(state);
+      const cost = orderCost(order);
+      box.append(el('div', 'ui-item-sub', cost ? t('kitchen.order', { items: list(order), cost }) : t('kitchen.orderNone')));
+      if (cost > state.money) box.append(el('div', 'ui-item-sub', t('kitchen.orderBroke', { cost })));
+    }
+    const pantry = list(Object.fromEntries(PRODUCT_IDS.map((p) => [p, pantryOf(state, p)])));
+    if (pantry) box.append(el('div', 'ui-item-sub', t('kitchen.pantry', { items: pantry })));
     const reports = state.reports ?? [];
     const last = reports[reports.length - 1]?.kitchen;
     if (last) box.append(el('div', 'ui-item-sub', t('kitchen.yesterday', { sold: last.sold, missed: Math.max(0, last.wanted - last.sold), spoiled: last.spoiled })));
+    if (last?.spent) box.append(el('div', 'ui-item-sub', t('kitchen.yesterdaySpent', { n: last.spent })));
     // Меню дня — только для повара: сам готовишь — сам и выбираешь кнопками ниже.
     if (chef) {
       const auto = menuAuto(state);
@@ -2601,6 +2622,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       // Транспорт курьера: велосипед и мопед сбоку, фургончик — значком (сверху он как все машины).
       courier: ['bike', 'scooter', 'ico_van'][tier],
       stove: stoveSprite(at),
+      foodShelf: foodSprite(at),
     };
     return art[id] ?? null;
   };

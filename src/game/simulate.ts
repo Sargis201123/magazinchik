@@ -5,7 +5,7 @@
 import { noteLost } from './losses';
 import { isBroke } from './tips';
 import { loanOptions, takeLoan } from './bank';
-import { cook, cookBatch, cookRoundsPerDay, DISHES, DISH_IDS, kitchenNeeds, kitchenWorking, sellDish, servePortions, takeIngredients } from './kitchen';
+import { cook, cookBatch, cookRoundsPerDay, DISHES, DISH_IDS, kitchenWorking, sellDish, servePortions, stockKitchen, takeIngredients, topUpKitchen } from './kitchen';
 import { answerStaffEvent, eventCost } from './staffEvents';
 import { answerTale, taleToday } from './tales';
 import { answerOpening, BUILDINGS, districtNews } from './district';
@@ -570,8 +570,12 @@ export function simulate({
       0,
     );
     const otherWeight = sellable.filter((p) => !OWN_PRODUCTS.includes(p)).reduce((sum, p) => sum + weight(p), 0);
-    // Повару на кухню — сверху к спросу зала.
-    const forKitchen = features.kitchen ? kitchenNeeds(state) : {};
+    // Кухня с поваром закупает продукты в свою кладовую сама — из кассы, на день вперёд (полки зала не трогает).
+    if (features.kitchen) {
+      const pantry = stockKitchen(state);
+      state = pantry.state;
+      purchases += pantry.spent;
+    }
     if (buyMode === 'restock') {
       const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state));
       for (const line of plan.lines) {
@@ -601,7 +605,7 @@ export function simulate({
         .filter((s) => s.kind === PRODUCTS[id].category)
         .reduce((sum, s) => sum + shelfCapacity(s), 0);
       const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category && !OWN_PRODUCTS.includes(p)).length;
-      const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0) + (forKitchen[id] ?? 0);
+      const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0);
       const target = Math.ceil(Math.min(demand * 1.1, shareOfShelf + CARRY * 2)) + order;
       const have = onShelves(state, id) + warehouseOf(state, id);
       let qty = Math.max(0, target - have);
@@ -775,6 +779,12 @@ export function simulate({
     const perQuarter = Math.ceil(cookRounds / 4);
     const cookFor = (dayLeft: number) => {
       for (let r = 0; r < perQuarter && cookRounds > 0; r++) {
+        // Кончились продукты — кухня докупает ровно на эту закладку.
+        const plan = cookBatch(state, dayLeft, 0, undefined, true);
+        if (!plan.length) break;
+        const top = topUpKitchen(state, plan);
+        state = top.state;
+        purchases += top.spent;
         const batch = cookBatch(state, dayLeft);
         if (!batch.length) break;
         for (const id of batch) {
