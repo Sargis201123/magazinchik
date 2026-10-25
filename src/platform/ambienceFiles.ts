@@ -1,11 +1,13 @@
 // Атмосфера из файлов: дождь за витриной, гомон покупателей, птицы и вороны за окном, салют, редкие
-// звуки улицы (велозвонок, трамвай вдали, голуби, «дзинь» фонаря) и жужжание неоновой вывески. Что
+// звуки улицы (велозвонок, трамвай вдали, «дзинь» фонаря) и жужжание неоновой вывески. Что
 // нужно сейчас — решает ambienceLayers.ts; здесь — скачать (только нужное и только после первого
 // касания), разобрать, играть и выбросить из памяти, когда долго не нужно. Улица звучит через стекло
 // витрины (канал «улица», mixer.ts), гомон — в зале (канал «зал», с отзвуком комнаты).
 //
 // Свернули Telegram — контекст спит (mixer.ts), а с ним и петли; часы звука стоят, поэтому редкие
-// звуки не «догоняют» пропущенное разом.
+// звуки не «догоняют» пропущенное разом. Разовые звуки — окружение (mix.ts, SoundBudget): когда в
+// магазине людно или игрок занят, птица, ворона, трамвай и велозвонок промолчат. Хлопанье крыльев
+// голубей убрано совсем (просьба автора): в нарезке оно осталось, но не звучит.
 
 import { loadAudio } from './audioFiles';
 import {
@@ -24,29 +26,42 @@ import {
   type AmbSprite,
 } from './ambienceLayers';
 import { pickVariant } from './mix';
-import { allowVoice, busInput, existingAudioContext, mixer, placeAt, type Bus } from './mixer';
+import { allowVoice, busInput, existingAudioContext, mixer, noteStart, placeAt, type Bus } from './mixer';
+import type { VoiceRule } from './mix';
 import { smoothSeam } from './playlist';
 
 /**
  * Громкость слоёв (файлы выровнены: петли — −22 LUFS, куски нарезки — −20 дБ RMS звучащей части).
  * Записанный дождь подобран замером (модель стекла и динамика телефона): вместе с синтезированным,
  * притихшим до трети, — как прежний синтезированный; на выходе пульта дождь на ~8 дБ тише музыки.
- * Гомон (замер в браузере): три покупателя — на ~12 дБ тише музыки, полный зал — на ~8, один — на ~20.
- * Остальное — рядом с прежними синтезированными птицами.
+ * Гомон — на 6 дБ тише прежнего (просьба автора: голоса людей сливались в шум): полный зал — на ~14 дБ
+ * тише музыки, несколько человек — на ~20, один — едва слышно. Птицы — на 3 дБ тише прежнего.
  */
 const LEVEL = {
   rain: 0.18,
   downpour: 0.26,
-  murmur: 0.04,
-  bird: 0.2,
-  crow: 0.24,
+  murmur: 0.02,
+  bird: 0.14,
+  crow: 0.2,
   burst: 0.3,
   bike: 0.16,
   tram: 0.2,
   tramBell: 0.1,
-  pigeons: 0.2,
-  lamp: 0.12,
+  lamp: 0.08,
   neon: 0.0025,
+};
+
+/**
+ * Правила разовых звуков (mix.ts): всё — окружение. Птицы, вороны и трамвай идут по часам атмосферы
+ * (game: false — на ×2 их не больше); велозвонок и фонарь — по событию сцены: на ×2 пауза вдвое длиннее
+ * и звучит каждый второй. Фонари зажигаются по одному — «дзинь» только у первого из нескольких.
+ */
+const RULE: Record<'bird' | 'crow' | 'tram' | 'bike' | 'lamp', VoiceRule> = {
+  bird: { gap: 2, max: 1, tier: 'ambience', game: false },
+  crow: { gap: 4, max: 1, tier: 'ambience', game: false },
+  tram: { gap: 30, max: 1, tier: 'ambience', game: false },
+  bike: { gap: 10, max: 1, tier: 'ambience' },
+  lamp: { gap: 6, max: 1, tier: 'ambience' },
 };
 /** Синтезированный дождь, пока звучит записанный: треть громкости — капли по сторонам поверх записи. */
 export const SYNTH_RAIN_UNDER = 0.35;
@@ -249,14 +264,16 @@ function events(ac: AudioContext, s: AmbScene): void {
   const birds = birdGap(s);
   if (birds && ensure(ac, 'birds')) {
     while (next.bird < horizon) {
-      piece(ac, 'birds', 'bird', 'street', LEVEL.bird * (s.morning > 0.4 ? 1 : 0.75) * rand(0.55, 1), side(), rand(0.94, 1.06), Math.max(0, next.bird - now));
+      if (allowVoice('bird', RULE.bird, 1, 'street'))
+        piece(ac, 'birds', 'bird', 'street', LEVEL.bird * (s.morning > 0.4 ? 1 : 0.75) * rand(0.55, 1), side(), rand(0.94, 1.06), Math.max(0, next.bird - now));
       next.bird += nextGap(birds, Math.random);
     }
   } else next.bird = now + 2;
   const crows = crowGap(s);
   if (crows && ensure(ac, 'crows')) {
     while (next.crow < horizon) {
-      piece(ac, 'crows', 'crow', 'street', LEVEL.crow * rand(0.45, 1), side(0.9), rand(0.95, 1.04), Math.max(0, next.crow - now));
+      if (allowVoice('crow', RULE.crow, 1.5, 'street'))
+        piece(ac, 'crows', 'crow', 'street', LEVEL.crow * rand(0.45, 1), side(0.9), rand(0.95, 1.04), Math.max(0, next.crow - now));
       next.crow += nextGap(crows, Math.random);
     }
   } else next.crow = now + rand(4, 12);
@@ -268,16 +285,23 @@ function events(ac: AudioContext, s: AmbScene): void {
         showUntil = next.burst + rand(6, s.lite ? 10 : 16);
         continue;
       }
-      piece(ac, 'fireworks', 'burst', 'street', LEVEL.burst * rand(0.35, 1), side(0.8), rand(0.9, 1.08), Math.max(0, next.burst - now));
+      // Салют — праздник: мимо бюджета (как дождь и гром), только в счёт звуков.
+      if (piece(ac, 'fireworks', 'burst', 'street', LEVEL.burst * rand(0.35, 1), side(0.8), rand(0.9, 1.08), Math.max(0, next.burst - now))) noteStart('burst', 'street');
       next.burst += rand(0.7, 3.2);
     }
   } else next.burst = now + rand(1, 4);
   const tram = tramGap(s);
   if (tram && next.tram < horizon && ensure(ac, 'street')) {
+    // Людно — трамвай проедет в другой раз (через обычный промежуток).
+    if (!allowVoice('tram', RULE.tram, 2, 'street')) {
+      next.tram += nextGap(tram, Math.random);
+      return;
+    }
     const from = Math.random() < 0.5 ? -0.75 : 0.75;
     const dur = piece(ac, 'street', 'tram', 'street', LEVEL.tram * rand(0.7, 1), [from, -from], 1, Math.max(0, next.tram - now));
     // Иногда звенит, проезжая остановку.
-    if (dur && Math.random() < 0.6) piece(ac, 'street', 'tramBell', 'street', LEVEL.tramBell * rand(0.7, 1), from * 0.3, rand(0.97, 1.03), Math.max(0, next.tram - now) + rand(1.5, dur * 0.55));
+    if (dur && Math.random() < 0.6 && piece(ac, 'street', 'tramBell', 'street', LEVEL.tramBell * rand(0.7, 1), from * 0.3, rand(0.97, 1.03), Math.max(0, next.tram - now) + rand(1.5, dur * 0.55)))
+      noteStart('tramBell', 'street', 'layer');
     next.tram += nextGap(tram, Math.random);
   }
 }
@@ -359,6 +383,7 @@ function neon(ac: AudioContext, sign: Neon | null, lite: boolean): void {
     t += rand(0.04, 0.11);
   }
   buzz.level.gain.setValueAtTime(base, t);
+  noteStart('neon', bus);
   next.flicker = t + (sign.flicker ? rand(0.6, 2) : rand(30, 70));
   count('neon');
 }
@@ -396,20 +421,19 @@ export const ambFiles = {
   birdsReady: (): boolean => ready('birds') !== null,
 
   /**
-   * Звук улицы по событию сцены: велозвонок проезжающего велосипедиста, голуби вспорхнули, фонарь
-   * зажёгся. Сторона и громкость — по месту на экране; файла ещё нет — начнёт качаться, а звук пропустим.
+   * Звук улицы по событию сцены: велозвонок проезжающего велосипедиста, фонарь зажёгся. Сторона
+   * и громкость — по месту на экране; файла ещё нет — начнёт качаться, а звук пропустим.
    */
-  street(kind: 'bike' | 'pigeons' | 'lamp', x?: number): void {
+  street(kind: 'bike' | 'lamp', x?: number): void {
     const ac = existingAudioContext();
     if (!ac || !mixer.audible('street')) return;
-    const rule = { bike: { gap: 6, max: 1 }, pigeons: { gap: 3, max: 1 }, lamp: { gap: 0.5, max: 2 } }[kind];
     const where = placeAt(x);
     if (kind === 'lamp' && !where.onScreen) return;
     if (!ready('street')) {
       ensure(ac, 'street');
       return;
     }
-    if (!allowVoice(`amb-${kind}`, rule, 2)) return;
+    if (!allowVoice(`amb-${kind}`, RULE[kind], 2, 'street')) return;
     piece(ac, 'street', kind, 'street', LEVEL[kind] * where.gain * rand(0.8, 1), where.pan, rand(0.95, 1.05));
   },
 
