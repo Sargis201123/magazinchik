@@ -15294,7 +15294,7 @@ export class StoreScene extends Phaser.Scene {
         finishedDay,
         this.stats,
         { before: ratingBefore, after: state.rating },
-        { bill: bill && billTotal(bill), shortfall, total: state.money },
+        { bill: bill && billTotal(bill), shortfall, total: state.money, housewarming: Boolean(bill?.housewarming) },
         extra,
         stamps,
         this.state.history,

@@ -195,11 +195,17 @@ describe('кассы самообслуживания', () => {
   });
 
   it('симулятор: киоски ставят и обновляют, гостей с ними больше', () => {
-    const r = simulate({ days: 100, seed: 2, features: { kiosks: true } });
-    expect(kioskCount(r.final)).toBeGreaterThan(0);
-    const plain = simulate({ days: 100, seed: 2 });
-    const late = (x: typeof r) => x.days.slice(-20).reduce((s, d) => s + d.guests, 0);
-    expect(late(r)).toBeGreaterThan(late(plain));
+    // Четыре прогона: на одном гости к концу шумят (с кнопкой «Закупить нужное» киоски выиграли в 11 сидах из 12).
+    const late = (x: ReturnType<typeof simulate>) => x.days.slice(-20).reduce((s, d) => s + d.guests, 0);
+    let withKiosks = 0;
+    let plain = 0;
+    for (let seed = 1; seed <= 4; seed++) {
+      const r = simulate({ days: 100, seed, features: { kiosks: true } });
+      expect(kioskCount(r.final)).toBeGreaterThan(0);
+      withKiosks += late(r);
+      plain += late(simulate({ days: 100, seed }));
+    }
+    expect(withKiosks).toBeGreaterThan(plain);
   });
 });
 

@@ -2,7 +2,7 @@
 // истории — поровну от числа гостей) с запасом, минус то, что уже есть на полках и складе.
 // Берём у того поставщика, у кого сегодня дешевле. Сначала — то, чего меньше всего.
 
-import { buyChance, canPlace, CARRY, OWN_PRODUCTS, PRODUCTS, shelfCapacity, productAvailable, seasonalDemand, sellableProducts, warehouseCapacity, warehouseCount, type ProductId, type StoreState } from './economy';
+import { buyChance, canPlace, CARRY, OWN_PRODUCTS, PRODUCT_IDS, PRODUCTS, shelfCapacity, shelfFree, shelveAll, productAvailable, seasonalDemand, sellableProducts, warehouseCapacity, warehouseCount, type Category, type ProductId, type StoreState } from './economy';
 import { perceivedBase, seasonFor } from './endless';
 import { dayDemand } from './demand';
 import { bigDayDemand } from './bigday';
@@ -55,8 +55,22 @@ export const canStock = (state: StoreState, pid: ProductId): boolean =>
   productAvailable(pid, state.day) && state.shelves.some((sh) => canPlace(pid, sh));
 
 /**
- * План «Закупить нужное»: чего не хватит до цели, у самого дешёвого поставщика, в пределах склада и
- * денег. Сначала товары, которых меньше всего относительно цели.
+ * Сколько ещё встанет на полки отдела: свободные места на рабочих полках минус то, что уже ждёт на
+ * складе (его разложат первым). Бракованная партия ждёт решения и на полки не идёт.
+ */
+export function shelfRoom(state: StoreState, category: Category): number {
+  const free = state.shelves.filter((sh) => !sh.broken && sh.kind === category).reduce((sum, sh) => sum + Math.max(0, shelfFree(sh)), 0);
+  const waiting = PRODUCT_IDS.filter((id) => PRODUCTS[id].category === category).reduce(
+    (sum, id) => sum + (state.warehouse[id] ?? []).filter((u) => !u.pending).length,
+    0,
+  );
+  return Math.max(0, free - waiting);
+}
+
+/**
+ * План «Закупить нужное»: чего не хватит до цели, у самого дешёвого поставщика, в пределах места и
+ * денег. Купленное сразу встаёт на полки (shelveAll), поэтому место — свободные полки своего отдела
+ * плюс склад: одно нажатие заполняет и то и другое. Сначала товары, которых меньше всего относительно цели.
  */
 export function restockPlan(
   state: StoreState,
@@ -77,18 +91,29 @@ export function restockPlan(
     })
     .filter((w) => w.need > 0 && w.offer)
     .sort((a, b) => a.fill - b.fill);
-  let room = warehouseCapacity(state) - warehouseCount(state);
+  // Место считаем как после раскладки: ждущее на складе, чему есть полка, уйдёт туда первым.
+  const shelved = shelveAll(state);
+  let room = Math.max(0, warehouseCapacity(shelved) - warehouseCount(shelved));
+  // Свободные места на полках — по отделам: молоко не встанет на хлебную полку.
+  const shelves = new Map<Category, number>();
   let money = state.money;
-  let cut = false;
+  let short: ReorderPlan['short'];
   const lines: ReorderPlan['lines'] = [];
   for (const w of wants) {
     const { sid, price } = w.offer!;
-    const qty = Math.max(0, Math.min(w.need, room, Math.floor(money / price)));
-    if (qty < w.need) cut = true;
+    const category = PRODUCTS[w.pid].category;
+    // Покупка идёт через склад: забит он тем, что на полки не встанет, — до полок товару не дойти.
+    const onShelf = room > 0 ? (shelves.get(category) ?? shelfRoom(shelved, category)) : 0;
+    const afford = Math.floor(money / price);
+    const qty = Math.max(0, Math.min(w.need, onShelf + room, afford));
+    // Почему не всё: сначала кончилось место или деньги (первая причина и решает, что подсказать).
+    if (qty < w.need) short ??= afford < Math.min(w.need, onShelf + room) ? 'money' : 'room';
     if (qty <= 0) continue;
-    room -= qty;
+    const toShelf = Math.min(qty, onShelf);
+    shelves.set(category, onShelf - toShelf);
+    room -= qty - toShelf;
     money -= qty * price;
     lines.push({ sid, pid: w.pid, qty, price });
   }
-  return { lines, total: lines.reduce((sum, l) => sum + l.qty * l.price, 0), cut };
+  return { lines, total: lines.reduce((sum, l) => sum + l.qty * l.price, 0), cut: Boolean(short), ...(short ? { short } : {}) };
 }

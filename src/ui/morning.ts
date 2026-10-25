@@ -114,7 +114,7 @@ import { activePromo, setPromo, type PromoKind } from '../game/promo';
 import { deliverContracts, type Delivery } from '../game/contracts';
 import { daysToFair, isFairDay } from '../game/fair';
 import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
-import { pendingTip, seeTip, TIP_ICONS } from '../game/tips';
+import { pendingTip, seeTip, soloExpandRisk, TIP_ICONS } from '../game/tips';
 import { markdownSurplus, toggleDonate } from '../game/economy';
 import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
 import {
@@ -911,13 +911,16 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     update(next, bad ? 'error' : 'tap');
   };
 
-  /** «Закупить нужное»: одна кнопка — всё, чего не хватит на день, у самых дешёвых поставщиков. */
+  /**
+   * «Закупить нужное»: одна кнопка — всё, чего не хватит на день, у самых дешёвых поставщиков, сразу
+   * на полки и на склад. «Не влезет» — только когда правда нет места или денег, и сказано, чего именно.
+   */
   const restockBox = (state: StoreState): HTMLElement => {
     const plan = restockPlan(state, priceOf, guestsToday(state));
     const box = el('div', 'ui-box ui-restock');
     if (!plan.lines.length) {
-      box.append(el('b', '', `✅ ${t('restock.enough')}`));
-      if (plan.cut) box.append(el('div', 'ui-note', t('restock.noRoom')));
+      if (!plan.cut) box.append(el('b', '', `✅ ${t('restock.enough')}`));
+      else box.append(el('div', 'ui-note', t(plan.short === 'money' ? 'restock.noMoney' : 'restock.noRoom')));
       return box;
     }
     const list = plan.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' ');
@@ -927,11 +930,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         if (!fresh.lines.length) return;
         const result = applyReorder(getState(), fresh, (line) => Math.random() < SUPPLIERS[line.sid].badChance);
         if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
-        update(result.state, result.badLine ? 'error' : 'success');
+        // Ничего не купилось (не должно: план считает место как при покупке) — без звона монет.
+        const bought = result.state.money < getState().money;
+        update(result.state, result.badLine || !bought ? 'error' : 'success');
       }, state.day <= 2 ? 'ui-btn ui-pulse' : 'ui-btn'),
       el('div', 'ui-muted', list),
     );
-    if (plan.cut) box.append(el('div', 'ui-note', t('restock.cut')));
+    if (plan.cut) box.append(el('div', 'ui-note', t(plan.short === 'money' ? 'restock.cutMoney' : 'restock.cutRoom')));
     return box;
   };
 
@@ -3754,6 +3759,19 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const reviews = state.reviews?.length ? [button(t('review.title'), () => showReviews(getState().reviews), 'ui-btn secondary')] : [];
     out.push(current, button(t('report.button'), () => showReport(getState()), 'ui-btn secondary'), ...reviews);
 
+    // Карточка «Одному не справиться» — в первый раз, когда игрок без персонала смотрит на расширение
+    // в четвёртое помещение и дальше (утром она появилась бы только с 20-го дня). Уже висит сверху утра —
+    // второй раз не повторяем.
+    if (soloExpandRisk(state) && !state.seenTips?.includes('alone') && pendingTip(state) !== 'alone') {
+      const tip = el('div', 'ui-box ui-tip');
+      tip.append(
+        el('b', '', `${TIP_ICONS.alone} ${t('tip.alone.title')}`),
+        el('div', '', t('tip.alone.text')),
+        button(t('tip.ok'), () => update(seeTip(getState(), 'alone')), 'ui-chip'),
+      );
+      out.push(tip);
+    }
+
     const grow = el('div', 'ui-box');
     if (!next) {
       grow.append(el('div', 'ui-muted', t('store.max')));
@@ -3763,8 +3781,15 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, r: nextRegisterCount(state) ?? registerSlots(state), g: next.guests, rent: next.rent })),
       );
       if (state.debt > 0) grow.append(el('div', 'ui-note', t('store.needNoDebt')));
-      // После стройки может не хватить на счета по новой аренде — предупредить заранее.
-      const billAfter = billTotal(monthlyBill({ ...state, level: state.level + 1 }));
+      // Без персонала дальше третьего помещения — в убыток: сказать прямо, у самой кнопки.
+      if (soloExpandRisk(state)) {
+        const solo = el('div', 'ui-note', t('store.soloWarn'));
+        solo.style.color = '#b13e53';
+        grow.append(solo);
+      }
+      // После стройки может не хватить на ближайшие счета — предупредить заранее. Первый счёт после
+      // переезда — по старой аренде («новоселье», economy.ts), свет и холодильники — уже новые.
+      const billAfter = billTotal(monthlyBill({ ...state, level: state.level + 1, movedFrom: state.movedFrom ?? state.level }));
       if (state.debt === 0 && state.money >= next.cost && state.money - next.cost < billAfter) {
         const warn = el('div', 'ui-note', t('store.billWarn', { left: state.money - next.cost, bill: billAfter, n: daysUntilBill(state.day) }));
         warn.style.color = '#b13e53';
@@ -3821,6 +3846,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       r.append(el('span', '', label), el('span', '', typeof value === 'number' ? `${value} 💰` : value));
       costs.append(r);
     };
+    if (bill.housewarming) costs.append(el('div', 'ui-note', t('bills.housewarming')));
     row(t('bills.rent'), bill.rent);
     row(t('bills.utilities'), bill.utilities);
     row(t('bills.power'), bill.power);

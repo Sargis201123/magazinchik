@@ -4,9 +4,10 @@
 // заказывает небольшой подвоз: приезжает фургон, штука чуть дороже утренней (AUTO_TOPUP_MARKUP).
 // Подвоз тратит тот же лимит дня. Утром видно, что куплено и почём; строку или всё можно вернуть.
 
-import { buyStock, onShelves, sellableProducts, warehouseCapacity, warehouseCount, warehouseOf, type ProductId, type StoreState, type Unit } from './economy';
+import { onShelves, sellableProducts, warehouseCapacity, warehouseCount, warehouseOf, type ProductId, type StoreState, type Unit } from './economy';
 import { hasUpgrade } from './upgrades';
 import { canStock, restockPlan } from './restock';
+import { buyLine } from './reorder';
 import { receiveUrgent } from './urgent';
 import { newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice, type SupplierId } from './suppliers';
 
@@ -86,18 +87,18 @@ export function autoMorning(state: StoreState, priceOf: (sid: SupplierId, pid: P
   let spent = today.spent;
   const lines = today.lines.map((l) => ({ ...l }));
   for (const line of plan.lines) {
-    const bought = buyStock(next, line.pid, line.qty, line.price);
-    if (!bought) continue;
-    const paid = next.money - bought.money;
     // Свои штуки помечены: вернуть можно только их (не подвоз и не подарки, даже после перезапуска днём).
-    const units = bought.warehouse[line.pid]!;
-    next = { ...bought, warehouse: { ...bought.warehouse, [line.pid]: units.map((u, i) => (i >= units.length - line.qty ? { ...u, auto: true } : u)) } };
+    // Купленное сразу встаёт на полки: строка больше склада покупается частями (buyLine).
+    const bought = buyLine(next, line, false, (u) => ({ ...u, auto: true }));
+    if (!bought.qty) continue;
+    const paid = next.money - bought.state.money;
+    next = bought.state;
     spent += paid;
     const same = lines.find((l) => l.sid === line.sid && l.pid === line.pid);
     if (same) {
-      same.qty += line.qty;
+      same.qty += bought.qty;
       same.paid += paid;
-    } else lines.push({ sid: line.sid, pid: line.pid, qty: line.qty, paid });
+    } else lines.push({ sid: line.sid, pid: line.pid, qty: bought.qty, paid });
   }
   return withDay(next, { ...today, spent, lines, cut: plan.cut });
 }

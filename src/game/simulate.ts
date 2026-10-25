@@ -77,6 +77,7 @@ import {
 import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd } from './ads';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { restockPlan } from './restock';
+import { buyLine } from './reorder';
 import { bigDaySeed, setBigDaySeed } from './bigday';
 import { autoActive, autoArrived, autoMorning, autoTopUp } from './autoorder';
 import { answerEvent, inspect } from './events';
@@ -171,10 +172,11 @@ export interface SimOptions {
   ovenBatches?: number;
   ovenBurn?: number;
   /**
-   * Как игрок закупается утром: 'smart' — знает спрос дня точно (как раньше); 'restock' — жмёт
-   * «Закупить нужное» (restock.ts); 'naive' — новичок: держит всего поровну, по 8 штук; 'auto' — как
-   * 'restock', пока не купит автозаказ (autoorder.ts), а дальше закупается он сам: утром в пределах
-   * лимита, днём подвозит кончившееся.
+   * Как игрок закупается утром: 'restock' (по умолчанию) — жмёт «Закупить нужное» (restock.ts): одно
+   * нажатие закупает и на полки, и на склад, на этом игроке откалиброван баланс; 'smart' — знает спрос
+   * дня точно, но закупку режет свободный склад (старая модель, до раскладки на полки); 'naive' —
+   * новичок: держит всего поровну, по 8 штук; 'auto' — как 'restock', пока не купит автозаказ
+   * (autoorder.ts), а дальше закупается он сам: утром в пределах лимита, днём подвозит кончившееся.
    */
   buyMode?: 'smart' | 'restock' | 'naive' | 'auto';
 }
@@ -308,7 +310,7 @@ export function simulate({
   queueLoss,
   tripsPerDay,
   priceMult = 1,
-  buyMode = 'smart',
+  buyMode = 'restock',
   hireStaff = true,
   features = {},
   war = 'wait',
@@ -347,8 +349,9 @@ export function simulate({
     if (state.debt > 0 && state.money - state.debt >= reserve) state = payDebt(state, state.debt) ?? state;
 
     const next = nextStoreLevel(state);
-    // Расширяется, только если после стройки останется на счета уже по новой аренде.
-    const nextBill = next ? billTotal(monthlyBill({ ...state, level: state.level + 1 })) : 0;
+    // Расширяется, только если после стройки останется на ближайший счёт — так же, как предупреждает
+    // утро (morning.ts): первый счёт после переезда — по старой аренде («новоселье»).
+    const nextBill = next ? billTotal(monthlyBill({ ...state, level: state.level + 1, movedFrom: state.movedFrom ?? state.level })) : 0;
     if (next && state.money >= next.cost + Math.max(reserve, nextBill)) {
       const expanded = expandStore(state);
       if (expanded) {
@@ -666,12 +669,14 @@ export function simulate({
       state = autoMorning(state, (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid), guestsToday(state));
       purchases += before - state.money;
     } else if (buyMode === 'restock' || buyMode === 'auto') {
+      // Одно нажатие: купленное сразу встаёт на полки, лишнее — на склад (buyLine).
       const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state));
       for (const line of plan.lines) {
-        const bad = random() < SUPPLIERS[line.sid].badChance;
-        state = buyStock(state, line.pid, line.qty, line.price, bad) ?? state;
-        if (bad) state = resolveBadBatch(state, line.pid, 'markdown', line.price);
-        purchases += line.qty * line.price;
+        const before = state.money;
+        const got = buyLine(state, line, random() < SUPPLIERS[line.sid].badChance);
+        state = got.state;
+        if (got.bad) state = resolveBadBatch(state, line.pid, 'markdown', line.price);
+        purchases += before - state.money;
       }
     }
     /** Сколько штук товара не хватает до запаса на сегодня (разумная закупка). */
@@ -687,7 +692,7 @@ export function simulate({
     };
     // Под рекламу закупаются с умом: места на складе не хватит на всё — режут закупку поровну, а не по
     // порядку списка. Иначе при наплыве гостей первые по списку дешёвые товары забивают склад, а мясо и
-    // цветы не влезают. В обычные дни — как раньше (по списку): на это откалиброван баланс.
+    // цветы не влезают. В обычные дни — по списку, как было (баланс теперь считают по 'restock').
     const toBuy = buyMode === 'smart' && activeAds(state).length ? sellable.filter((p) => !OWN_PRODUCTS.includes(p)).reduce((sum, p) => sum + lacking(p), 0) : 0;
     const fit = toBuy > 0 ? Math.min(1, (warehouseCapacity(state) - warehouseCount(state)) / toBuy) : 1;
     for (const id of buyMode === 'smart' || buyMode === 'naive' ? sellable : []) {
