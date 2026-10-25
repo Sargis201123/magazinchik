@@ -2,7 +2,8 @@
 // утром во вкладке «Развитие»; она заменяет старую (на всех кассах сразу).
 // Касса пробивает быстрее и реже заедает, бак вмещает больше мусора, кофемашина варит быстрее
 // и вкуснее, печь печёт больше; холодильники не текут и дольше держат свежесть, склад вмещает
-// больше, климат и свет — уют и экономия, камеры отпугивают воров, вход и туалет — чистота.
+// больше, климат и свет — уют и экономия, камеры отпугивают воров, вход и туалет — чистота,
+// курьер доставки пересаживается с велосипеда на мопед и фургончик.
 
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
@@ -21,7 +22,8 @@ export type GearId =
   | 'entrance'
   | 'wc'
   | 'signage'
-  | 'solar';
+  | 'solar'
+  | 'courier';
 
 export interface GearModel {
   nameKey: TextKey;
@@ -170,6 +172,18 @@ export const GEAR: Record<GearId, Gear> = {
       model('gear.signage.2', 2500, 3, 'gear.signage.2.fx'),
     ],
   },
+  // Транспорт курьера доставки на дом (delivery.ts): велосипед, мопед, фургончик.
+  courier: {
+    id: 'courier',
+    icon: '🚲',
+    nameKey: 'gear.courier',
+    needs: 'delivery',
+    models: [
+      model('gear.courier.0', 0, 0, 'gear.courier.0.fx'),
+      model('gear.courier.1', 900, 1, 'gear.courier.1.fx'),
+      model('gear.courier.2', 2400, 2, 'gear.courier.2.fx'),
+    ],
+  },
   solar: {
     id: 'solar',
     icon: '☀️',
@@ -184,7 +198,7 @@ export const GEAR: Record<GearId, Gear> = {
 
 
 /** Порядок в списке: сначала то, что влияет на торговлю, потом удобства. */
-export const GEAR_IDS: GearId[] = ['register', 'fridge', 'warehouse', 'bin', 'coffee', 'oven', 'climate', 'lights', 'signage', 'cameras', 'entrance', 'wc', 'solar'];
+export const GEAR_IDS: GearId[] = ['register', 'fridge', 'warehouse', 'bin', 'coffee', 'oven', 'courier', 'climate', 'lights', 'signage', 'cameras', 'entrance', 'wc', 'solar'];
 
 /** Какая модель стоит сейчас (номер в списке моделей). */
 export const gearTier = (state: StoreState, id: GearId): number => Math.min(state.gear?.[id] ?? 0, GEAR[id].models.length - 1);

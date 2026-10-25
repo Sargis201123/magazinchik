@@ -677,6 +677,8 @@ export const ICONS: Record<string, string> = {
   '🐭': 'ico_mouse',
   '🎪': 'ico_tent',
   '🚲': 'ico_bike',
+  '🛵': 'ico_scooter',
+  '🚐': 'ico_van',
   '🤖': 'ico_robot',
   '🚚': 'ico_truck',
   '📖': 'ico_book',

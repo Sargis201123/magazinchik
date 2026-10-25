@@ -683,6 +683,8 @@ export interface StoreState {
   onb?: import('./onboarding').OnbState;
   /** Модели оборудования (номер модели; нет — начальная). */
   gear?: Partial<Record<GearId, number>>;
+  /** Рейтинг доставки на дом 1..5 (delivery.ts); нет — 4 звезды. */
+  deliveryRating?: number;
   /** Утренние закупки последних дней — для «как в прошлый раз» (reorder.ts). */
   purchases?: { day: number; lines: { sid: string; pid: ProductId; qty: number }[] }[];
   /** 0..5 звёзд, влияет на поток покупателей. */
@@ -741,6 +743,10 @@ export interface DayStats {
   coffees?: number;
   burnt?: number;
   deliveries?: number;
+  /** Доставка за день: деньги за привезённое (с чаевыми), из них чаевые, сколько звонков пропустили или отклонили. */
+  deliveryPay?: number;
+  deliveryTips?: number;
+  deliveryMissed?: number;
   mice?: number;
   /** Почему ушли без покупки (losses.ts) и каких товаров не хватило или показались дорогими. */
   lostWhy?: Partial<Record<LostReason, number>>;

@@ -2565,6 +2565,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       bin: tier ? `bin_t${tier}_0` : 'bin0',
       coffee: coffeeSprite(at),
       oven: ovenSprite(at),
+      // Транспорт курьера: велосипед и мопед сбоку, фургончик — значком (сверху он как все машины).
+      courier: ['bike', 'scooter', 'ico_van'][tier],
     };
     return art[id] ?? null;
   };
