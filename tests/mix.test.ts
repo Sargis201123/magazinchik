@@ -218,7 +218,8 @@ describe('бюджет звука', () => {
 
   it('у каждого канала свой запас: мир не займёт место кнопок', () => {
     const b = new SoundBudget(64);
-    const free: VoiceRule = { gap: 0, max: 99, tier: 'feedback' };
+    const free: VoiceRule = { gap: 0, max: 99 };
+    BUDGET.busy.world = 99;
     let world = 0;
     for (let i = 0; i < 20; i++) if (b.admit(`w${i}`, free, 30, 2, 'world')) world++;
     expect(world).toBe(BUDGET.voices.world);
@@ -229,6 +230,9 @@ describe('бюджет звука', () => {
     let few = 0;
     for (let i = 0; i < 20; i++) if (lite.admit(`w${i}`, free, 0, 2, 'world')) few++;
     expect(few).toBe(BUDGET.voices.world / 2);
+    // Отклик (касса хозяина) звучит и в полном канале.
+    expect(lite.admit('till', { gap: 0, max: 9, tier: 'feedback' }, 0, 0.5, 'world')).toBe(1);
+    BUDGET.busy.world = 5;
   });
 
   it('звук по часам атмосферы (птицы) на ×2 не прореживается', () => {

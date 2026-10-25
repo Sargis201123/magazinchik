@@ -179,13 +179,13 @@ export const BUDGET = {
   window: 1.5,
   busy: { world: 5, ambience: 2 } as Record<'world' | 'ambience', number>,
   /** Отклик или сюжет, прозвучавший столько секунд назад и раньше, на ×2 не прореживается. */
-  streak: 4,
+  streak: 8,
   /** Сколько секунд после касания мир звучит тише. */
   calm: 1.2,
   calmGain: 0.63,
   /**
-   * Сколько звуков каждого канала звучит сразу: мир не займёт весь общий запас, и кнопкам с голосами
-   * всегда есть место (на слабом телефоне — вдвое меньше).
+   * Сколько событий мира и окружения каждого канала звучит сразу (отклик и сюжет в счёт, но не
+   * ограничены): мир не займёт весь общий запас (на слабом телефоне — вдвое меньше).
    */
   voices: { ui: 4, world: 6, hall: 3, street: 3, voice: 3, sting: 2 } as Record<string, number>,
 };
@@ -246,7 +246,9 @@ export class SoundBudget {
     }
     const mine = bus ? (this.buses.get(bus) ?? []).filter((end) => end > now) : [];
     const room = bus && bus in BUDGET.voices ? Math.max(1, Math.ceil(BUDGET.voices[bus] * this.busScale)) : Infinity;
-    if (mine.length >= room) return 0;
+    // Запас канала — для событий мира и окружения: отклик и сюжет (касса хозяина, гром, реплика) им не
+    // ждут, но место занимают — мир уступит им.
+    if (minor && mine.length >= room) return 0;
     if (!this.limiter.allow(key, paced ? { ...rule, gap: rule.gap * this.pace } : rule, now, dur)) return 0;
     if (bus) {
       mine.push(now + dur);

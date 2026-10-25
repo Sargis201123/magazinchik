@@ -615,7 +615,9 @@ export const sound = {
   },
   /** Деньги: звон монеток в горсти (пока нет записи — два мягких касания, высота каждый раз своя). */
   coin: (x?: number) => {
-    if (sample('coin', { x, cents: 70, db: 1.5, limit: ['coin', RULE.coin] }) !== null) return;
+    // Без места в мире — монетка из меню (подарок, награда, пример ползунка): ответ на касание, на ×2 не прореживается.
+    const rule: VoiceRule = x === undefined ? { ...RULE.coin, game: false } : RULE.coin;
+    if (sample('coin', { x, cents: 70, db: 1.5, limit: ['coin', rule] }) !== null) return;
     lastCoin = pickVariant(lastCoin, COIN_NOTES.length, Math.random);
     const f = COIN_NOTES[lastCoin];
     ring(
@@ -624,7 +626,7 @@ export const sound = {
         { freq: f * 1.335, at: 0.055 + Math.random() * 0.02, vol: 0.024, ring: 0.32 },
       ],
       COIN,
-      { x, lp: 6000, cents: 20, db: 1.5, limit: ['coin', RULE.coin] },
+      { x, lp: 6000, cents: 20, db: 1.5, limit: ['coin', rule] },
     );
   },
   /**
