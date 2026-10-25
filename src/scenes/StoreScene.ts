@@ -757,7 +757,8 @@ interface LotCar {
  * площадка, aisleY — проезд между рядами, laneX — середина въезда, footX — дорожка для пешеходов вдоль
  * стены, mouthY — где въезд выходит на тротуар. Проезд узкий: по нему (drive) и по парковке (aisle) за раз
  * едет одна машина; waiting — сколько водителей ждут у парковки, чтобы уехать (новые тогда не заезжают).
- * onRoad — машина с парковки сейчас на улице: в её полосе новые не появляются, чтобы не въехать в багажник.
+ * onRoad — машина с парковки сейчас на улице: в её полосе новые не появляются, чтобы не въехать в багажник;
+ * mouth — она пока стоит у тротуара и ждёт просвета (это она пропускает тех, кто на дороге, а не они её).
  */
 interface ParkingLot {
   spots: ParkSpot[];
@@ -772,6 +773,17 @@ interface ParkingLot {
   busy: { drive: boolean; aisle: boolean };
   waiting: number;
   onRoad: boolean;
+  mouth: boolean;
+}
+
+/**
+ * Машина на улице и её полоса (верхняя — к магазину, едут вправо). slow — тащится или встанет у магазина
+ * (автобус, фургон, мусоровоз): сзади её не догонят, но и она не разгонится, пока снова не тронется.
+ */
+interface RoadCar {
+  obj: Phaser.GameObjects.Container;
+  lane: 'up' | 'down';
+  slow: boolean;
 }
 
 /** Путь машины по прямой. */
@@ -817,6 +829,8 @@ const LOT_CARS = CAR_TYPES.filter(([key]) => key !== 'car_truck');
 const LOT_FOOT = 7;
 const LOT_DRIVE = 14;
 const LOT_DRIVE_END = 36;
+/** Полоса тротуара перед въездом, которую переезжает машина: полкузова и шаг прохожего от середины въезда. */
+const LOT_MOUTH = 12;
 /** Сколько у левой стены держим свободным у дверей флигеля (как iceboxSpotFor и roomZones). */
 const WING_DOOR_CLEAR = 32;
 /** Соседний магазин справа: отступ от зала (за проездом к парковке) и ширина. */
@@ -829,6 +843,9 @@ const CAR_ROAD = 85;
 const CAR_DRIVE = 80;
 const CAR_LOT = 30;
 const CAR_CREEP = 12;
+/** Сколько мест утром заняты машинами соседей (в лёгкой графике машин меньше). */
+const LOT_NEIGHBORS = 0.4;
+const LOT_NEIGHBORS_LITE = 0.25;
 /** Сколько покупателей приезжает на машине, если на парковке есть место (в лёгкой графике — реже). */
 const CAR_CUSTOMERS = 0.5;
 /** Позже этого (секунд до закрытия) на машине уже не приезжают: пока доедет и дойдёт — магазин закроется. */
@@ -1248,8 +1265,8 @@ export class StoreScene extends Phaser.Scene {
   /** Парковка за магазином и проезд к ней: места, машины на них и кто сейчас едет (живая днём). */
   private parking: ParkingLot | null = null;
   private parkingTimer?: Phaser.Time.TimerEvent;
-  /** Машины на улице и их полоса (верхняя — к магазину, едут вправо): с парковки выезжают в просвет. */
-  private roadTraffic = new Set<{ obj: Phaser.GameObjects.Container; lane: 'up' | 'down'; slow: boolean }>();
+  /** Машины на улице и их полоса: с парковки выезжают в просвет. */
+  private roadTraffic = new Set<RoadCar>();
   /** Стаи птиц над кварталом (buildAmbient). */
   private flockTimer?: Phaser.Time.TimerEvent;
   /** Порывы ветра (windGust): таймер, деревья с кронами и навесы соседей с зонтиками веранды. */
@@ -5552,7 +5569,8 @@ export class StoreScene extends Phaser.Scene {
     const body = this.art(0, 0, 'car_van').setTint(0xffffff);
     const lights = this.art(0, 0, 'car_van_lights');
     const van = this.add.container(-260, roadY, [body, lights]).setDepth(roadY);
-    this.onRoad(van, 'up', true);
+    const road = this.onRoad(van, 'up', true);
+    await this.yieldToLot(road);
     await new Promise<void>((done) => this.tweens.add({ targets: van, x: vanX, duration: 2200, ease: 'Sine.easeOut', onComplete: () => done() }));
     if (!van.active) return;
     // Задние двери распахиваются: внутри темно и видны коробки.
@@ -5593,7 +5611,10 @@ export class StoreScene extends Phaser.Scene {
     // Двери закрываются — и в путь.
     cargo.destroy();
     this.tweens.add({ targets: hold, width: 0.1, x: hold.x + 1, duration: 250 });
-    this.tweens.add({ targets: van, x: this.next.w + 300, delay: 300, duration: 2600, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
+    await this.wait(300);
+    if (!van.active) return;
+    await this.yieldToLot(road, true);
+    this.tweens.add({ targets: van, x: this.next.w + 300, duration: 2600, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
   }
 
   /** Реклама видна на улице, пока работает. */
@@ -6705,7 +6726,7 @@ export class StoreScene extends Phaser.Scene {
     const stops = this.add.graphics().setDepth(-9.445);
     // Два ряда мест носом к проезду посередине. Утром часть занята соседями — остальные ждут наших покупателей.
     const rnd = new Phaser.Math.RandomDataGenerator(['parking']);
-    const full = this.lite ? 0.25 : 0.4;
+    const full = this.lite ? LOT_NEIGHBORS_LITE : LOT_NEIGHBORS;
     const spots: ParkSpot[] = [];
     for (const up of [true, false]) {
       for (let i = 0; i < LOT.bays; i++) {
@@ -6729,6 +6750,7 @@ export class StoreScene extends Phaser.Scene {
       busy: { drive: false, aisle: false },
       waiting: 0,
       onRoad: false,
+      mouth: false,
     };
     this.parkingTimer?.remove();
     this.parkingTimer = this.time.addEvent({ delay: 4000, loop: true, callback: () => this.parkingTick() });
@@ -6898,10 +6920,22 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Машина появилась на улице: с парковки выезжают, только когда в её полосе слева никого нет. */
-  private onRoad(obj: Phaser.GameObjects.Container, lane: 'up' | 'down', slow = false): void {
-    const entry = { obj, lane, slow };
+  private onRoad(obj: Phaser.GameObjects.Container, lane: 'up' | 'down', slow = false): RoadCar {
+    const entry: RoadCar = { obj, lane, slow };
     this.roadTraffic.add(entry);
     obj.once(Phaser.GameObjects.Events.DESTROY, () => this.roadTraffic.delete(entry));
+    return entry;
+  }
+
+  /**
+   * Фургон (автобус, мусоровоз) трогается с места: сначала пропускает машину с парковки, если она сейчас
+   * на дороге (сворачивает к парковке или уже выехала), — не въезжает ей в багажник и не проезжает сквозь
+   * неё; та, что ещё ждёт у тротуара, сама его пропустит. away — уезжает насовсем и разгоняется, как все:
+   * он больше не медленный — с парковки при нём не выезжают и справа через его полосу не сворачивают.
+   */
+  private async yieldToLot(car: RoadCar, away = false): Promise<void> {
+    await this.until(() => !this.parking?.onRoad || this.parking.mouth);
+    if (away) car.slow = false;
   }
 
   /** Можно ли ехать по улице к парковке: в особые дни, когда улица занята, машины стоят, где стоят. */
@@ -6913,9 +6947,9 @@ export class StoreScene extends Phaser.Scene {
   /**
    * Откуда можно подъехать к парковке (пока машина с парковки на дороге, новые на улице не появляются).
    * Слева — по ближней к магазину полосе, если в ней нет автобуса или фургона, которые стоят или тащатся
-   * впереди, а быстрая машина уже отъехала от края (сзади эта её не догонит — медленнее). Справа — по
-   * дальней полосе с поворотом направо через ближнюю: если справа только что никто не въехал, а в ближней
-   * полосе до въезда пусто (её переезжать). null — пока никак.
+   * впереди (или ждут за краем, чтобы поехать к складу), а быстрая машина уже отъехала от края (сзади
+   * эта её не догонит — медленнее). Справа — по дальней полосе с поворотом направо через ближнюю: если
+   * справа только что никто не въехал, а в ближней полосе до въезда пусто (её переезжать). null — пока никак.
    */
   private arrivalSide(lot: ParkingLot): 'left' | 'right' | null {
     let left = true;
@@ -6923,7 +6957,7 @@ export class StoreScene extends Phaser.Scene {
     for (const v of this.roadTraffic) {
       if (!v.obj.active) continue;
       const { x } = v.obj;
-      if (v.lane === 'up' && (v.slow ? x > -220 && x < this.next.w + 80 : x < 0)) left = false;
+      if (v.lane === 'up' && (v.slow ? x > -300 && x < this.next.w + 80 : x < 0)) left = false;
       if (v.lane === 'down' && x > this.next.w + 20) right = false;
       if (v.lane === 'up' && x < lot.laneX + 40 && (!v.slow || x > lot.laneX - 160)) right = false;
     }
@@ -6935,8 +6969,51 @@ export class StoreScene extends Phaser.Scene {
     for (const v of this.roadTraffic) {
       if (v.lane === 'up' && v.obj.active && v.obj.x < lot.laneX + 40 && (!v.slow || v.obj.x > -220)) return false;
     }
-    for (const p of this.people) if (Math.abs(p.x - lot.laneX) < 12 && Math.abs(p.y - this.streetY) < 9) return false;
+    return this.sidewalkClear(lot);
+  }
+
+  /** На тротуаре перед въездом никого: машина переедет его, ни в кого не упершись. */
+  private sidewalkClear(lot: ParkingLot): boolean {
+    for (const p of this.people) if (Math.abs(p.x - lot.laneX) < LOT_MOUTH && Math.abs(p.y - this.streetY) < 9) return false;
     return true;
+  }
+
+  /**
+   * Машина переезжает тротуар у въезда: прохожие, что подходят к въезду, останавливаются перед ним
+   * и ждут, пока она проедет, — никто не проходит сквозь машину. Возвращает «проехала»: идут дальше.
+   */
+  private holdWalkers(lot: ParkingLot): () => void {
+    const held = new Set<Phaser.GameObjects.Container>();
+    // Смотрим каждый кадр, как машина ждёт просвета (carWait): шаг прохожих — тоже твин, в одном с ним времени.
+    const tick = this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 1000,
+      repeat: -1,
+      onUpdate: () => {
+        for (const p of this.people) {
+          if (held.has(p) || !p.getData('walking') || Math.abs(p.y - this.streetY) >= 9) continue;
+          const dx = p.x - lot.laneX;
+          const pace = (p.getData('pace') as number | undefined) ?? CUSTOMER_SPEED;
+          // Подходит к въезду и вот-вот на него ступит (за шаг-другой), а не уходит от него.
+          if (Math.abs(dx) < LOT_MOUTH || Math.abs(dx) > LOT_MOUTH + 2 + pace * 0.5 || p.getData('facing') !== (dx < 0 ? 'right' : 'left')) continue;
+          const move = p.getData('move') as Phaser.Tweens.Tween | undefined;
+          if (!move?.isPlaying()) continue;
+          move.pause();
+          p.setData('walking', false);
+          held.add(p);
+        }
+      },
+    });
+    return () => {
+      tick.stop();
+      for (const p of held) {
+        const move = p.getData('move') as Phaser.Tweens.Tween | undefined;
+        if (!p.active || !move?.isPaused()) continue;
+        p.setData('walking', true);
+        move.resume();
+      }
+    };
   }
 
   /**
@@ -6959,7 +7036,8 @@ export class StoreScene extends Phaser.Scene {
 
   /**
    * Покупатель на машине: едет по улице в своей полосе, у въезда сбрасывает скорость, мигает и сворачивает
-   * в проезд вдоль магазина (слева — налево из ближней полосы, справа — направо через неё), в конце —
+   * в проезд вдоль магазина (слева — налево из ближней полосы, справа — направо через неё); если по
+   * тротуару перед въездом кто-то идёт — останавливается и пропускает его. В конце проезда —
    * на парковку (если там кто-то паркуется — ждёт), по ней — к своему месту, заезжает носом по дуге
    * и глохнет. Водитель выходит и по дорожке вдоль стены идёт на тротуар — там он уже обычный
    * покупатель (spawnCustomer), а после покупок вернётся к машине (driveHome).
@@ -6975,24 +7053,40 @@ export class StoreScene extends Phaser.Scene {
     const car = this.lotCar(this.lotCarType(), from, side === 'left' ? road : far, side === 'left' ? 0 : 180, 'customer');
     car.moving = true;
     spot.car = car;
+    // Перед самым поворотом смотрит на тротуар: кто уже на въезде — пропускает (тормозит до конца и ждёт),
+    // кто только подходит — сам подождёт, пока машина проедет (holdWalkers).
+    const lane = side === 'left' ? road : far;
+    const turnAt = side === 'left' ? laneX - r : laneX + r;
+    const before = side === 'left' ? turnAt - 8 : turnAt + 8;
+    const slow = side === 'left' ? 16 : 14;
     await this.drive(
       car,
       side === 'left'
-        ? [
-            ...cruise(from, road, laneX - r, road, CAR_ROAD, CAR_ROAD, 16, 0, 110, 'left'),
-            { path: bend(laneX - r, road, laneX, road, laneX, road - r), v0: 16, v1: 18, turn: 'left' },
-          ]
+        ? cruise(from, road, before, road, CAR_ROAD, CAR_ROAD, slow, 0, 110, 'left')
+        : cruise(from, far, before, far, CAR_ROAD * 0.8, CAR_ROAD * 0.8, slow, 0, 50, 'right'),
+    );
+    const clear = this.sidewalkClear(lot);
+    await this.drive(car, [{ path: straight(before, lane, turnAt, lane), v0: slow, v1: clear ? slow : 0, turn: side }]);
+    if (!clear) await this.carWait(car, () => this.sidewalkClear(lot), side);
+    const release = this.holdWalkers(lot);
+    const v0 = clear ? slow : 0;
+    await this.drive(
+      car,
+      side === 'left'
+        ? [{ path: bend(laneX - r, road, laneX, road, laneX, road - r), v0, v1: 18, turn: 'left' }]
         : [
-            ...cruise(from, far, laneX + r, far, CAR_ROAD * 0.8, CAR_ROAD * 0.8, 14, 0, 50, 'right'),
-            { path: bend(laneX + r, far, laneX, far, laneX, far - r), v0: 14, v1: 16, turn: 'right' },
+            { path: bend(laneX + r, far, laneX, far, laneX, far - r), v0, v1: 16, turn: 'right' },
             { path: straight(laneX, far - r, laneX, road - r), v0: 16, v1: 18, turn: 'right' },
           ],
     );
     lot.onRoad = false;
-    // По проезду вдоль магазина: разгон, ровно, перед поворотом на парковку — тормозит.
+    // По проезду вдоль магазина: разгон, ровно, перед поворотом на парковку — тормозит. Разогнался —
+    // уже за тротуаром: прохожие идут дальше.
     const corner = aisleY + r;
     const legs = cruise(laneX, road - r, laneX, corner, 18, CAR_DRIVE, 14, 50, 60, 'left');
     const brake = legs.pop()!;
+    await this.drive(car, legs.splice(0, 1));
+    release();
     await this.drive(car, legs);
     const free = this.lotTake(lot, ['aisle']);
     if (!free) brake.v1 = 0;
@@ -7105,14 +7199,19 @@ export class StoreScene extends Phaser.Scene {
     lot.busy.aisle = false;
     const stop = lot.mouthY - 17;
     await this.drive(car, cruise(laneX, aisleY + r, laneX, stop, 16, CAR_DRIVE, 0, 50, 60, 'left'));
-    // У тротуара ждёт просвета: в её полосе новые машины не появляются, пока она не уехала.
+    // У тротуара (нос — у его края) ждёт просвета: в её полосе новые машины не появляются, пока она
+    // не уехала. Пока она переезжает тротуар, подошедшие прохожие ждут.
     lot.onRoad = true;
+    lot.mouth = true;
     await this.carWait(car, () => this.mouthClear(lot), 'left');
+    lot.mouth = false;
+    const release = this.holdWalkers(lot);
     const road = this.streetY + 24;
     await this.drive(car, [
       { path: straight(laneX, stop, laneX, road - r), v0: 0, v1: 24, turn: 'left' },
       { path: bend(laneX, road - r, laneX, road, laneX + r, road), v0: 24, v1: 28, turn: 'left' },
     ]);
+    release();
     lot.busy.drive = false;
     await this.drive(car, [{ path: straight(laneX + r, road, this.next.w + 100, road), v0: 28, v1: CAR_ROAD * 1.3 }]);
     lot.onRoad = false;
@@ -7131,12 +7230,34 @@ export class StoreScene extends Phaser.Scene {
     const taken = lot.spots.filter((s) => s.car).length;
     if (!this.night && this.timeLeft > CAR_LAST_SECONDS && taken < lot.spots.length - 2) return;
     const target = Math.round(lot.spots.length * (0.5 - 0.3 * this.evening) * (this.lite ? 0.7 : 1));
+    // Те, за кем уже идут, не в счёт: уедут и так.
+    const staying = lot.spots.filter((s) => s.car && !s.car.leaving).length;
     const parked = lot.spots.filter((s) => s.car?.owner === 'neighbor' && !s.car.leaving);
-    if (taken <= target || !parked.length || Math.random() >= 0.3) return;
-    const driver = this.makePerson(lot.footX, lot.bottom + 50, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
-    driver.setDepth(this.outsideDepth(driver.y));
+    if (staying <= target || !parked.length || Math.random() >= 0.3) return;
+    // Сосед приходит из-за угла по тротуару и по дорожке вдоль стены поднимается к машине — как наши покупатели.
+    const spot = Phaser.Utils.Array.GetRandom(parked);
+    spot.car!.leaving = true;
+    const driver = this.makePerson(this.next.w + 60, this.streetY + Phaser.Math.Between(-3, 3), customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
+    driver.setAlpha(0);
+    this.tweens.add({ targets: driver, alpha: 1, duration: 250 });
     this.addUmbrella(driver);
-    void this.boardCar(lot, Phaser.Utils.Array.GetRandom(parked), driver);
+    void this.driveHome(driver, spot);
+  }
+
+  /**
+   * Утро: за ночь соседи вернулись — на свободных местах снова стоят их машины (сразу, без заезда: магазин
+   * был закрыт). Днём они понемногу разъезжаются (parkingTick), а места занимают наши покупатели.
+   */
+  private refillParking(): void {
+    const lot = this.parking;
+    if (!lot) return;
+    const want = Math.round(lot.spots.length * (this.lite ? LOT_NEIGHBORS_LITE : LOT_NEIGHBORS));
+    let have = lot.spots.filter((s) => s.car?.owner === 'neighbor' && !s.car.leaving).length;
+    for (const spot of Phaser.Utils.Array.Shuffle(lot.spots.filter((s) => !s.car))) {
+      if (have >= want) break;
+      spot.car = this.lotCar(this.lotCarType(), spot.x, spot.y, spot.up ? -90 : 90, 'neighbor');
+      have++;
+    }
   }
 
   /** Стройка: забор, котлован, кран и табличка «Скоро: …». */
@@ -7900,14 +8021,22 @@ export class StoreScene extends Phaser.Scene {
     this.buildLights();
     this.buildShowpiece();
     // Стойка со сладостями у кассы, у входа — корзинки, в больших магазинах — тележки. Если справа
-    // от двери встал ларь с мороженым (тесный зал), корзинки и тележки — слева от неё, но не в дверях склада.
+    // от двери у нижней стены встал ларь с мороженым (тесный зал), тележки — слева от неё (но не
+    // в дверях склада), а корзинки — где осталось место: слева от двери или по ту сторону ларя.
+    // Купленные тележки стоят всегда: покупатели берут их у входа (cartsAtDoor).
     const { counter } = this.layout;
     this.art(counter.x, counter.y + 39, 'candy_rack').setDepth(counter.y + 40);
     const ice = this.state.shelves.some((sh) => sh.kind === 'icebox') ? iceboxRect(this.iceboxSpot()) : null;
-    const clear = (x: number, half: number) => !ice || x + half < ice.x - 2 || x - half > ice.x + ice.w + 2;
-    const basketsX = [door.x + 26, door.x - 26].find((x) => clear(x, 6)) ?? door.x + 26;
-    const cartsX = [door.x + 46, door.x - 46].find((x) => clear(x, 9) && Math.abs(x - basketsX) > 16 && x - 9 > WING_DOOR_CLEAR);
-    if (cartsX !== undefined && (this.state.level >= 2 || (this.state.level >= 1 && hasUpgrade(this.state, 'cart')))) this.art(cartsX, h - 10, 'carts').setDepth(h - 4);
+    const low = ice && ice.y + ice.h > h - 16 ? ice : null;
+    const fits = (x: number, half: number, taken?: number) =>
+      x - half > WING_DOOR_CLEAR &&
+      x + half < w - 20 &&
+      (!low || x + half < low.x - 2 || x - half > low.x + low.w + 2) &&
+      (taken === undefined || Math.abs(x - taken) > 16);
+    const beyond = (half: number) => (low ? low.x + low.w + 3 + half : -1);
+    const cartsX = this.cartsAtDoor() ? ([door.x + 46, door.x - 46, door.x - 24, beyond(9)].find((x) => fits(x, 9)) ?? door.x + 46) : undefined;
+    const basketsX = [door.x + 26, door.x - 26, beyond(6)].find((x) => fits(x, 6, cartsX)) ?? door.x + 26;
+    if (cartsX !== undefined) this.art(cartsX, h - 10, 'carts').setDepth(h - 4);
     // Коврик у входа и автомат с напитками у правой стены.
     this.art(door.x, h - 7, gearTier(this.state, 'entrance') ? 'mat_grate' : 'mat').setDepth(1);
     // Автомат: у боковой стены — боком (лицом в зал), в зале — лицом к игроку. Его можно двигать.
@@ -9782,13 +9911,18 @@ export class StoreScene extends Phaser.Scene {
     const vanX = warehouse.x + warehouse.w / 2 + 14;
     const roadY = this.streetY + 24;
     const van = this.add.container(-260, roadY, [this.art(0, 0, 'car_van').setTint(0xffd27a), this.art(0, 0, 'car_van_lights')]).setDepth(roadY);
-    this.onRoad(van, 'up', true);
+    const road = this.onRoad(van, 'up', true);
     await this.wait((URGENT_SECONDS * 1000) / Math.max(1, this.speed) - 1800);
+    await this.yieldToLot(road);
     await new Promise<void>((done) => this.tweens.add({ targets: van, x: vanX, duration: 1800, ease: 'Sine.easeOut', onComplete: () => done(), onStop: () => done() }));
     this.receiveUrgentOrders();
-    if (van.active) this.tweens.add({ targets: van, x: this.next.w + 300, delay: 600, duration: 2400, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
     this.urgentVanBusy = false;
     if (this.urgentOrders.length) void this.urgentVan();
+    // Пустой — в путь.
+    await this.wait(600);
+    if (!van.active) return;
+    await this.yieldToLot(road, true);
+    this.tweens.add({ targets: van, x: this.next.w + 300, duration: 2400, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
   }
 
   /** Всё, что едет, — на склад (и в конце дня, если фургон не успел). */
@@ -10730,7 +10864,8 @@ export class StoreScene extends Phaser.Scene {
     }
     if (flood) return;
     if (Math.random() < 0.14) this.passerby();
-    if (Math.random() < 0.04) this.driveBus();
+    // Автобус тоже не выезжает следом за машиной с парковки.
+    if (Math.random() < 0.04 && !this.parking?.onRoad) this.driveBus();
     if (Math.random() < 0.3) {
       const toRight = Math.random() < 0.5;
       // Машина с парковки сейчас на дороге (сворачивает к ней или выезжает) — новые не въезжают ей в бок и в багажник.
@@ -10836,7 +10971,7 @@ export class StoreScene extends Phaser.Scene {
     const body = this.art(0, 0, 'bus').setTint(Phaser.Utils.Array.GetRandom([0xfeae34, 0xe43b44, 0x63c74d]));
     const lights = this.art(0, 0, 'bus_lights');
     const bus = this.add.container(-120, y, [body, lights]).setDepth(y);
-    this.onRoad(bus, 'up', true);
+    const road = this.onRoad(bus, 'up', true);
     const stopX = -70;
     this.tweens.add({
       targets: bus,
@@ -10855,7 +10990,9 @@ export class StoreScene extends Phaser.Scene {
             void this.walk(p, p.x, y).then(() => this.walk(p, to, y, CUSTOMER_SPEED * 0.9)).then(() => p.destroy());
           });
         }
-        this.tweens.add({ targets: bus, x: this.next.w + 140, delay: 1800, duration: 3200, ease: 'Sine.easeIn', onComplete: () => bus.destroy() });
+        void this.wait(1800)
+          .then(() => this.yieldToLot(road, true))
+          .then(() => bus.active && this.tweens.add({ targets: bus, x: this.next.w + 140, duration: 3200, ease: 'Sine.easeIn', onComplete: () => bus.destroy() }));
       },
     });
   }
@@ -10887,7 +11024,7 @@ export class StoreScene extends Phaser.Scene {
         const dump = this.dumpSpot();
         const y = this.streetY + 24;
         const truck = this.add.container(-140, y, [this.art(0, 0, 'car_truck').setTint(0x3e8948), this.art(0, 0, 'car_truck_lights')]).setDepth(y);
-        this.onRoad(truck, 'up', true);
+        const road = this.onRoad(truck, 'up', true);
         this.tweens.add({
           targets: truck,
           x: dump.x + 10,
@@ -10895,7 +11032,9 @@ export class StoreScene extends Phaser.Scene {
           ease: 'Sine.easeOut',
           onComplete: () => {
             if (this.dumpImg?.active) this.tweens.add({ targets: this.dumpImg, angle: { from: -6, to: 6 }, duration: 90, yoyo: true, repeat: 5, onComplete: () => this.dumpImg?.setAngle(0) });
-            this.tweens.add({ targets: truck, x: this.next.w + 160, delay: 2200, duration: 3200, ease: 'Sine.easeIn', onComplete: () => truck.destroy() });
+            void this.wait(2200)
+              .then(() => this.yieldToLot(road, true))
+              .then(() => truck.active && this.tweens.add({ targets: truck, x: this.next.w + 160, duration: 3200, ease: 'Sine.easeIn', onComplete: () => truck.destroy() }));
           },
         });
       });
@@ -11430,6 +11569,7 @@ export class StoreScene extends Phaser.Scene {
     // Эдуард за ночь открыл магазин побольше — перерисовать улицу.
     const cupChanged = (contestOf(this.state)?.wins ?? 0) !== this.builtCup;
     if (trialOver || cupChanged || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant || districtKey(this.state) !== this.builtDistrict) this.buildWorld();
+    this.refillParking();
     this.updateLighting(0);
     this.openShop();
     // Новый день: после ночной смены — снова дневная музыка; зима могла начаться или кончиться.
