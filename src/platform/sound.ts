@@ -4,13 +4,14 @@
 // не скачалась (первые секунды после касания) или если не скачалась вовсе — те же звуки синтезируются
 // WebAudio на лету, как раньше: огибающая без щелчков, мягкий фильтр сверху. Звуки мира (касса, полка,
 // кот) слышны с той стороны экрана, где это случилось. Громкость, каналы, отзвук комнаты и сон в фоне —
-// в mixer.ts.
+// в mixer.ts; что звучит, когда звуков много (важность, «людность», ×2), — в mix.ts (SoundBudget):
+// у каждого звука здесь своё правило (RULE).
 
 import { brownNoise, seeded } from './ambienceSynth';
 import { speak, voiceOf, type Syllable, type Voice as Speaker } from './babble';
-import { MATERIAL, payWith, placeRate, type Material } from './foley';
-import { jitter, pickVariant, type VoiceRule } from './mix';
-import { allowVoice, audioContext, busInput, duckMusic, mixer, placeAt, STREET_LOW, type Bus } from './mixer';
+import { bigBasket, MATERIAL, NOTES_FROM, payWith, placeRate, type Material } from './foley';
+import { jitter, pickVariant, type Tier, type VoiceRule } from './mix';
+import { admitVoice, allowVoice, audioContext, busInput, duckMusic, gamePace, mixer, noteStart, placeAt, setPace, STREET_LOW, type Bus } from './mixer';
 import { liteMode } from './quality';
 import { ready, segment } from './samples';
 import { SFX, SYLLABLES, type SfxId } from './sfxData';
@@ -25,6 +26,49 @@ function audio(bus: Bus): AudioContext | null {
 
 /** Канал звука: с точкой в мире — звук мира (глохнет под меню), без неё — отклик интерфейса. */
 const busOf = (o: Voice): Bus => o.bus ?? (o.x === undefined ? 'ui' : 'world');
+
+/**
+ * Правила звуков: пауза, сколько сразу и важность (mix.ts). Отклик на действие игрока (деньги, кнопки,
+ * «хорошо» и «плохо») звучит всегда; сюжет — тоже; события мира уступают, когда звуков много, а на ×2
+ * звучат через одно. Касание кнопки (game: false) на ×2 чаще не становится — его пауза не растёт.
+ */
+const RULE = {
+  tap: { gap: 0.04, max: 2, tier: 'feedback', game: false },
+  good: { gap: 0.15, max: 2, tier: 'feedback' },
+  bad: { gap: 0.3, max: 1, tier: 'feedback' },
+  medal: { gap: 0.2, max: 2, tier: 'feedback' },
+  fanfare: { gap: 0.5, max: 1, tier: 'feedback' },
+  news: { gap: 0.5, max: 1, tier: 'feedback' },
+  combo: { gap: 0.3, max: 1, tier: 'feedback' },
+  coin: { gap: 0.25, max: 2, tier: 'feedback' },
+  phone: { gap: 0.8, max: 1, tier: 'feedback' },
+  voice: { gap: 0.045, max: 2, tier: 'story', game: false },
+  syllable: { gap: 0.04, max: 3, tier: 'story', game: false },
+  bell: { gap: 0.25, max: 2, tier: 'story' },
+  thunder: { gap: 2.5, max: 2, tier: 'story', game: false },
+  rumble: { gap: 1, max: 1, tier: 'story' },
+  // Касса: расплатились у хозяина — отклик (feedback), у кассира — событие мира (тише, на ×2 через одно).
+  // «Пик» сканера — всегда событие мира: награда — сама касса, а пищалка лишь отмечает товар.
+  scan: { gap: 0.3, max: 1 },
+  till: { gap: 0.25, max: 2 },
+  thanks: { gap: 3, max: 1 },
+  pop: { gap: 0.06, max: 3, low: true },
+  boxland: { gap: 0.15, max: 2 },
+  unbox: { gap: 0.3, max: 2 },
+  mop: { gap: 0.8, max: 2, low: true },
+  meow: { gap: 0.6, max: 1 },
+  bark: { gap: 0.5, max: 1 },
+  purr: { gap: 1, max: 1 },
+  hiss: { gap: 0.3, max: 2 },
+  ding: { gap: 0.25, max: 2 },
+  courier: { gap: 0.4, max: 1 },
+  // Колокольчик над дверью — окружение: не чаще раза в 4 с (на ×2 — в 8 и через раз), в час пик и
+  // пока игрок занят — молчит.
+  door: { gap: 4, max: 1, tier: 'ambience' },
+} satisfies Record<string, VoiceRule>;
+
+/** Правило с другой важностью (касса хозяина и кассира). */
+const withTier = (rule: VoiceRule, tier: Tier): VoiceRule => ({ ...rule, tier });
 
 interface Note {
   freq: number;
@@ -49,19 +93,34 @@ interface Voice {
   /** Разброс высоты (центы) и громкости (дБ) — каждый раз чуть другой. */
   cents?: number;
   db?: number;
-  /** Ограничение частого звука: имя и правило. */
+  /** Имя и правило звука (RULE): пульт решает, звучать ли ему сейчас и насколько громко. */
   limit?: [string, VoiceRule];
+  /**
+   * Часть уже прозвучавшего звука (мелочь после кассы, следующие взмахи швабры): пульт его не
+   * спрашивает — решение принято за весь звук; строка — имя для счёта звуков.
+   */
+  layer?: string;
   /** Мелочь за краем экрана не играем вовсе. */
   skipOffscreen?: boolean;
 }
+
+/** Звук без своего правила: всегда, если канал слышен. */
+const FREE: VoiceRule = { gap: 0, max: 99, tier: 'feedback', game: false };
 
 /** Куда подключить звук: канал, сторона, громкость за краем. null — звук не нужен. */
 function output(ac: AudioContext, o: Voice, dur: number): { out: AudioNode; rate: number } | null {
   const where = placeAt(o.x);
   if (o.skipOffscreen && !where.onScreen) return null;
-  if (o.limit && !allowVoice(o.limit[0], o.limit[1], dur)) return null;
+  const bus = busOf(o);
+  let level = 1;
+  if (o.layer) noteStart(o.layer, bus, 'layer');
+  else {
+    const [key, rule] = o.limit ?? ['sound', FREE];
+    level = admitVoice(key, rule, dur, bus);
+    if (!level) return null;
+  }
   const j = jitter(Math.random, o.cents ?? 0, o.db ?? 0);
-  return { out: busInput(ac, busOf(o), where.pan, where.gain * j.gain), rate: j.rate };
+  return { out: busInput(ac, bus, where.pan, where.gain * j.gain * level), rate: j.rate };
 }
 
 function play(notes: Note[], o: Voice = {}): void {
@@ -146,7 +205,17 @@ function sample(id: SfxId, o: SampleVoice = {}): boolean | null {
   src.playbackRate.value = rate * target.rate;
   const gain = ac.createGain();
   gain.gain.value = piece.gain * (o.gain ?? 1);
-  src.connect(gain).connect(target.out);
+  // Мягче верх (сканер, касса кассира): один фильтр, только если просили.
+  let out = target.out;
+  if (o.lp) {
+    const tone = ac.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = o.lp;
+    tone.Q.value = 0.5;
+    tone.connect(out);
+    out = tone;
+  }
+  src.connect(gain).connect(out);
   src.onended = () => {
     src.disconnect();
     gain.disconnect();
@@ -179,6 +248,12 @@ const COIN = [
   [2.32, 0.6, 0.6],
   [3.81, 0.32, 0.4],
   [5.12, 0.15, 0.25],
+];
+/** Музыкальная шкатулка: призвуки — почти гармоники и тихие, звон мягкий, без «металла». */
+const CHIME = [
+  [1, 1, 1],
+  [2, 0.18, 0.45],
+  [3.01, 0.05, 0.25],
 ];
 
 function ring(strikes: Strike[], partials: number[][], o: Voice = {}): void {
@@ -278,7 +353,7 @@ let rumbleBuffer: AudioBuffer | null = null;
  */
 function thunder(): void {
   const ac = audio('street');
-  if (!ac || !allowVoice('thunder', { gap: 2.5, max: 2 }, 6)) return;
+  if (!ac || !allowVoice('thunder', RULE.thunder, 6, 'street')) return;
   const now = ac.currentTime + 0.01;
   const near = Math.random();
   if (!rumbleBuffer || rumbleBuffer.sampleRate !== ac.sampleRate) {
@@ -336,7 +411,7 @@ function thunder(): void {
 function hiss(seconds = 0.9, freq = 3200, vol = 0.05, x?: number): void {
   const ac = audio('world');
   if (!ac) return;
-  const target = output(ac, { x, limit: ['hiss', { gap: 0.3, max: 2 }], cents: 60, db: 1.5 }, seconds);
+  const target = output(ac, { x, limit: ['hiss', RULE.hiss], cents: 60, db: 1.5 }, seconds);
   if (!target) return;
   const now = ac.currentTime + 0.01;
   const src = ac.createBufferSource();
@@ -361,7 +436,7 @@ function hiss(seconds = 0.9, freq = 3200, vol = 0.05, x?: number): void {
 function purr(x?: number): void {
   const ac = audio('world');
   if (!ac) return;
-  const target = output(ac, { x, limit: ['purr', { gap: 1, max: 1 }], cents: 80, db: 1.5 }, 1.45);
+  const target = output(ac, { x, limit: ['purr', RULE.purr], cents: 80, db: 1.5 }, 1.45);
   if (!target) return;
   const now = ac.currentTime + 0.01;
   const pulse = ac.createGain();
@@ -400,7 +475,7 @@ function purr(x?: number): void {
  */
 function rumble(): void {
   const ac = audio('world');
-  if (!ac) return;
+  if (!ac || !allowVoice('rumble', RULE.rumble, 1.2, 'world')) return;
   const out = busInput(ac, 'world');
   const now = ac.currentTime + 0.01;
   // Глухой удар: низкая пила, но через фильтр — слышны её верхние призвуки, а не «подвал».
@@ -452,7 +527,7 @@ function rumble(): void {
 }
 
 /** Синтезированное касание (пока нет записанного щелчка): короткий мягкий «ток». */
-const synthTap = (): void => play([{ freq: 660, dur: 0.05, vol: 0.035, slide: 540 }], { bus: 'ui', lp: 2400, cents: 50, db: 1.5, limit: ['tap', { gap: 0.04, max: 2 }] });
+const synthTap = (): void => play([{ freq: 660, dur: 0.05, vol: 0.035, slide: 540 }], { bus: 'ui', lp: 2400, cents: 50, db: 1.5, limit: ['tap', RULE.tap] });
 
 /** Шаг швабры туда-обратно: «вжих» мокрой тряпки. */
 const MOP_STROKE = 0.42;
@@ -463,7 +538,7 @@ const NOOP = (): void => {};
 function synthMop(x: number | undefined, strokes: number): () => void {
   const ac = audio('world');
   if (!ac) return NOOP;
-  const target = output(ac, { x, limit: ['mop', { gap: 0.8, max: 2, low: true }], skipOffscreen: true, db: 1.5 }, strokes * MOP_STROKE);
+  const target = output(ac, { x, limit: ['mop', RULE.mop], skipOffscreen: true, db: 1.5 }, strokes * MOP_STROKE);
   if (!target) return NOOP;
   const now = ac.currentTime + 0.01;
   // Все взмахи — через один «кран»: дело бросили — он закрывается за ~40 мс.
@@ -484,7 +559,7 @@ let lastBad = -1;
 export const sound = {
   /** Мяу: кот открывает и закрывает рот, тон вверх и вниз (пока нет записи — короткое скольжение). */
   meow: (x?: number) => {
-    if (sample('meow', { x, cents: 90, db: 2, limit: ['meow', { gap: 0.6, max: 1 }] }) !== null) return;
+    if (sample('meow', { x, cents: 90, db: 2, limit: ['meow', RULE.meow] }) !== null) return;
     lastMeow = pickVariant(lastMeow, 3, Math.random);
     const k = [1, 1.14, 0.88][lastMeow];
     play(
@@ -492,48 +567,54 @@ export const sound = {
         { freq: 620 * k, dur: 0.12, vol: 0.04, slide: 900 * k, attack: 0.02 },
         { freq: 900 * k, at: 0.12, dur: 0.2 + 0.06 * lastMeow, vol: 0.036, slide: 520 * k },
       ],
-      { x, lp: 2600, cents: 40, db: 2, limit: ['meow', { gap: 0.6, max: 1 }] },
+      { x, lp: 2600, cents: 40, db: 2, limit: ['meow', RULE.meow] },
     );
   },
   purr,
   /** Гав: «гав», «гав-гав» или «тяв-тяв-тяв» (пока нет записи — два хриплых тявка, пила через фильтр). */
   bark: (x?: number) => {
-    if (sample('bark', { x, cents: 70, db: 2, limit: ['bark', { gap: 0.5, max: 1 }] }) !== null) return;
+    if (sample('bark', { x, cents: 70, db: 2, limit: ['bark', RULE.bark] }) !== null) return;
     play(
       [
         { freq: 340, dur: 0.09, wave: 'sawtooth', vol: 0.045, slide: 220 },
         { freq: 360, at: 0.17, dur: 0.1, wave: 'sawtooth', vol: 0.045, slide: 230 },
       ],
-      { x, lp: 1400, cents: 60, db: 2, limit: ['bark', { gap: 0.5, max: 1 }] },
+      { x, lp: 1400, cents: 60, db: 2, limit: ['bark', RULE.bark] },
     );
   },
   /** Пар кофемашины и шипение печи. */
   hiss,
   /** Касание, начало дела: деревянный «ток», каждый раз чуть другой. */
   tap: () => {
-    if (sample('click', { bus: 'ui', cents: 120, db: 1.5, limit: ['tap', { gap: 0.04, max: 2 }] }) === null) synthTap();
+    if (sample('click', { bus: 'ui', cents: 120, db: 1.5, limit: ['tap', RULE.tap] }) === null) synthTap();
   },
   /** Кнопка в меню — деревянный щелчок, вкладка — шорох страницы. */
   click: (kind: 'button' | 'tab' = 'button') => {
-    if (sample(kind === 'tab' ? 'page' : 'click', { bus: 'ui', cents: 100, db: 1.5, gain: 0.85, limit: ['tap', { gap: 0.04, max: 2 }] }) === null) synthTap();
+    if (sample(kind === 'tab' ? 'page' : 'click', { bus: 'ui', cents: 100, db: 1.5, gain: 0.85, limit: ['tap', RULE.tap] }) === null) synthTap();
   },
   /**
-   * Сканер на кассе: «пик» пьезопищалки и стук товара о стекло. Слышно, но не режет. Не чаще раза
-   * в 0,35 с — на большой корзине не превращается в трель.
+   * Сканер на кассе: «пик» пьезопищалки и стук товара о стекло — круглее прежнего (верх срезан, звон
+   * обертонов не режет на динамике телефона). Корзина пробивается «пачкой»: первый товар (n = 0) —
+   * ясное «пик», дальше — через один, вдвое тише и чуть ниже, а не трель на каждый товар. В час пик
+   * и на ×2 звучит реже (событие мира).
    */
-  scan: (x?: number) => {
-    if (sample('scan', { x, cents: 8, db: 1, limit: ['scan', { gap: 0.35, max: 1 }] }) !== null) return;
+  scan: (x?: number, n = 0) => {
+    if (n % 2) return;
+    const soft = n > 0;
+    const rule = RULE.scan;
+    if (sample('scan', { x, cents: 8, db: 1, gain: soft ? 0.5 : 0.85, rate: soft ? 0.96 : 1, lp: 3000, limit: ['scan', rule] }) !== null) return;
+    const k = soft ? 0.5 : 0.85;
     play(
       [
-        { freq: 1175, dur: 0.09, wave: 'sine', vol: 0.03, attack: 0.006 },
-        { freq: 2350, dur: 0.06, wave: 'sine', vol: 0.006, attack: 0.006 },
+        { freq: soft ? 1130 : 1175, dur: 0.09, wave: 'sine', vol: 0.03 * k, attack: 0.006 },
+        { freq: 2350, dur: 0.06, wave: 'sine', vol: 0.004 * k, attack: 0.006 },
       ],
-      { x, lp: 3500, cents: 15, db: 1.5, limit: ['scan', { gap: 0.35, max: 1 }] },
+      { x, lp: 3000, cents: 15, db: 1.5, limit: ['scan', rule] },
     );
   },
   /** Деньги: звон монеток в горсти (пока нет записи — два мягких касания, высота каждый раз своя). */
   coin: (x?: number) => {
-    if (sample('coin', { x, cents: 70, db: 1.5, limit: ['coin', { gap: 0.25, max: 2 }] }) !== null) return;
+    if (sample('coin', { x, cents: 70, db: 1.5, limit: ['coin', RULE.coin] }) !== null) return;
     lastCoin = pickVariant(lastCoin, COIN_NOTES.length, Math.random);
     const f = COIN_NOTES[lastCoin];
     ring(
@@ -542,19 +623,41 @@ export const sound = {
         { freq: f * 1.335, at: 0.055 + Math.random() * 0.02, vol: 0.024, ring: 0.32 },
       ],
       COIN,
-      { x, lp: 6000, cents: 20, db: 1.5, limit: ['coin', { gap: 0.25, max: 2 }] },
+      { x, lp: 6000, cents: 20, db: 1.5, limit: ['coin', RULE.coin] },
     );
   },
   /**
    * Покупатель расплатился на кассе: щелчок рычага, «дзынь» звонка, ящик выезжает — и в лоток ложится
    * мелочь, а за большую покупку шуршат купюры. Звучит на каждой покупке, поэтому всё за полсекунды
    * и не громче прежней монетки даже по всей энергии (art/sfx/check.py). Пока ленты нет — «дзынь» монеток.
+   * own — за кассой хозяин: это награда игроку, звучит всегда (на ×2 — без мелочи следом: продажи
+   * идут вдвое чаще). У кассира — тише и глуше (касса подальше, «за спиной»), мелочь не звенит (купюры
+   * шуршат), а в час пик и на ×2 — через раз. Большая корзина (foley.ts, bigBasket) — тихое «спасибо» следом.
    */
-  till: (x?: number, total = 0) => {
-    const played = sample('till', { x, cents: 30, db: 1, limit: ['coin', { gap: 0.25, max: 2 }] });
-    if (played === null) sound.coin(x);
-    else if (played) sample(payWith(total), { x, at: 0.2, gain: 0.5, cents: 60, db: 1.5 });
+  till: (x?: number, total = 0, { own = true, items = 0 }: { own?: boolean; items?: number } = {}) => {
+    const rule = withTier(RULE.till, own ? 'feedback' : 'world');
+    const played = sample('till', { x, cents: 30, db: 1, gain: own ? 1 : 0.6, lp: own ? 7000 : 4200, limit: ['till', rule] });
+    if (played === null) {
+      if (own) sound.coin(x);
+      return;
+    }
+    if (!played) return;
+    if (gamePace() <= 1 && (own || total >= NOTES_FROM)) sample(payWith(total), { x, at: 0.2, gain: own ? 0.45 : 0.3, cents: 60, db: 1.5, layer: 'tillCoins' });
+    if (bigBasket(items, total)) sound.thanks(x, own);
   },
+  /**
+   * «Спасибо за покупку»: после кассы — два тихих мягких звона вверх, как у музыкальной шкатулки (почти
+   * без обертонов — на динамике телефона не звенит). Не чаще раза в 3 с.
+   */
+  thanks: (x?: number, own = true) =>
+    ring(
+      [
+        { freq: 784, at: 0.34, vol: 0.016, ring: 0.5 },
+        { freq: 1175, at: 0.5, vol: 0.014, ring: 0.8 },
+      ],
+      CHIME,
+      { x, lp: 4000, cents: 12, db: 1, limit: ['thanks', withTier(RULE.thanks, own ? 'feedback' : 'world')] },
+    ),
   /** Хорошо: поймали вора, задание выполнено, проверка пройдена. */
   good: () =>
     play(
@@ -563,12 +666,12 @@ export const sound = {
         { freq: 659, at: 0.08, dur: 0.1, vol: 0.06 },
         { freq: 784, at: 0.16, dur: 0.22, vol: 0.06 },
       ],
-      { lp: 3200, cents: 10, limit: ['good', { gap: 0.15, max: 2 }] },
+      { lp: 3200, cents: 10, limit: ['good', RULE.good] },
     ),
   /** Плохо (украли, ушёл злой, штраф): два мягких деревянных стука вниз, а не зуммер. */
   bad: () => {
     const ac = audio('ui');
-    if (!ac || !allowVoice('bad', { gap: 0.3, max: 1 }, 0.4)) return;
+    if (!ac || !allowVoice('bad', RULE.bad, 0.4, 'ui')) return;
     lastBad = pickVariant(lastBad, 2, Math.random);
     const j = jitter(Math.random, 30, 1.5);
     const out = busInput(ac, 'ui', 0, j.gain);
@@ -579,24 +682,26 @@ export const sound = {
   },
   /** Кто-то важный вошёл: колокольчики над дверью звенят от распахнутой двери (без ленты — два удара). */
   bell: (x?: number) => {
-    if (sample('bell', { x, cents: 25, db: 1, limit: ['bell', { gap: 0.25, max: 2 }] }) !== null) return;
+    if (sample('bell', { x, cents: 25, db: 1, limit: ['bell', RULE.bell] }) !== null) return;
     ring(
       [
         { freq: 1175, vol: 0.035, ring: 1 },
         { freq: 880, at: 0.18, vol: 0.035, ring: 1.3 },
       ],
       BELL,
-      { x, cents: 12, db: 1, limit: ['bell', { gap: 0.25, max: 2 }] },
+      { x, cents: 12, db: 1, limit: ['bell', RULE.bell] },
     );
   },
   /**
-   * Покупатель входит: тихое «дзинь» колокольчика над дверью (канал «зал»). false — записи ещё нет:
-   * тогда звенит синтезированный колокольчик из ambience.ts.
+   * Покупатель входит: тихое «дзинь» колокольчика над дверью (канал «зал»), вдвое тише прежнего и
+   * редко (RULE.door). false — записи ещё нет: тогда звенит синтезированный колокольчик из ambience.ts.
+   * preview — пример для ползунка «Окружение»: звучит сразу, хоть игрок и только что коснулся экрана.
    */
-  doorbell: (x?: number): boolean => sample('door', { bus: 'hall', x, cents: 30, db: 1.5, limit: ['chime', { gap: 0.4, max: 2 }] }) !== null,
+  doorbell: (x?: number, preview = false): boolean =>
+    sample('door', { bus: 'hall', x, gain: preview ? 1 : 0.55, cents: 30, db: 1.5, limit: ['chime', preview ? FREE : RULE.door] }) !== null,
   /** Таймер печи: чистое «дзинь» чашечки (без ленты — колокольчик). */
   ding: (x?: number) => {
-    if (sample('ding', { x, cents: 20, db: 1, limit: ['bell', { gap: 0.25, max: 2 }] }) === null) sound.bell(x);
+    if (sample('ding', { x, cents: 20, db: 1, limit: ['ding', RULE.ding] }) === null) sound.bell(x);
   },
   /**
    * Звонит телефон на кассе (заказ на дом): короткая трель молоточка по двум чашкам, как у старого
@@ -605,7 +710,7 @@ export const sound = {
   phone: (x?: number) => {
     const notes: Note[] = [];
     for (let i = 0; i < 14; i++) notes.push({ freq: i % 2 ? 1568 : 1319, at: i * 0.055, dur: 0.07, vol: 0.022, attack: 0.004 });
-    play(notes, { x, lp: 3600, cents: 15, db: 1, limit: ['phone', { gap: 0.8, max: 1 }] });
+    play(notes, { x, lp: 3600, cents: 15, db: 1, limit: ['phone', RULE.phone] });
   },
   /** Курьер тронулся или вернулся: звонок велосипеда «дзынь-дзынь», у мопеда и фургона — «би-бип». */
   courier: (vehicle: 'bike' | 'scooter' | 'van', x?: number) => {
@@ -616,7 +721,7 @@ export const sound = {
           { freq: 2349, at: 0.16, vol: 0.02, ring: 0.6 },
         ],
         BELL,
-        { x, cents: 20, db: 1, limit: ['courier', { gap: 0.4, max: 1 }] },
+        { x, cents: 20, db: 1, limit: ['courier', RULE.courier] },
       );
       return;
     }
@@ -626,7 +731,7 @@ export const sound = {
         { freq: f, dur: 0.09, wave: 'square', vol: 0.018 },
         { freq: f * 1.06, at: 0.14, dur: 0.14, wave: 'square', vol: 0.018 },
       ],
-      { x, lp: 1800, cents: 20, db: 1, limit: ['courier', { gap: 0.4, max: 1 }] },
+      { x, lp: 1800, cents: 20, db: 1, limit: ['courier', RULE.courier] },
     );
   },
   /** Медаль достижения упала в рамку: высокий звон с отзвуком. */
@@ -637,7 +742,7 @@ export const sound = {
         { freq: 2093, at: 0.08, vol: 0.022, ring: 0.9 },
       ],
       BELL,
-      { bus: 'ui', limit: ['medal', { gap: 0.2, max: 2 }] },
+      { bus: 'ui', limit: ['medal', RULE.medal] },
     ),
   /** Большое событие: редкий гость, новое звание, конец дня. Музыка на это время притихает. */
   fanfare: () => {
@@ -652,7 +757,7 @@ export const sound = {
         { freq: 523, at: 0.3, dur: 0.4, vol: 0.048 },
         { freq: 784, at: 0.3, dur: 0.45, vol: 0.028 },
       ],
-      { bus: 'ui', lp: 2400, limit: ['fanfare', { gap: 0.5, max: 1 }] },
+      { bus: 'ui', lp: 2400, limit: ['fanfare', RULE.fanfare] },
     );
   },
 
@@ -666,7 +771,7 @@ export const sound = {
         { freq: base * 1.26, at: 0.08, dur: 0.09, wave: 'sine', vol: 0.03 },
         { freq: base * 1.5, at: 0.16, dur: 0.24, wave: 'sine', vol: 0.028 },
       ],
-      { bus: 'ui', lp: 5000, db: 1 },
+      { bus: 'ui', lp: 5000, db: 1, limit: ['combo', RULE.combo] },
     );
   },
   /**
@@ -674,16 +779,16 @@ export const sound = {
    * шуршит картоном); n — какой по счёту, каждый следующий чуть выше. Без ленты — прежний «чпок».
    */
   place: (material: Material, n = 0, x?: number) => {
-    if (sample(material, { x, rate: placeRate(n), cents: 40, db: 2, limit: ['pop', { gap: 0.06, max: 3, low: true }], skipOffscreen: true }) === null) sound.pop(n, x);
+    if (sample(material, { x, rate: placeRate(n), cents: 40, db: 2, limit: ['pop', RULE.pop], skipOffscreen: true }) === null) sound.pop(n, x);
   },
   /** Товар отдела встал на полку. */
   shelf: (category: Category, n = 0, x?: number) => sound.place(MATERIAL[category], n, x),
   /** Коробка с новинкой упала на пол: глухой картонный стук (без ленты — «ток»). */
   boxLand: (x?: number) => {
-    if (sample('boxland', { x, cents: 50, db: 1.5, limit: ['boxland', { gap: 0.15, max: 2 }] }) === null) synthTap();
+    if (sample('boxland', { x, cents: 50, db: 1.5, limit: ['boxland', RULE.boxland] }) === null) synthTap();
   },
   /** Распаковка: «хрррт» скотча и два картонных клапана, через delay секунд. false — ленты ещё нет. */
-  unbox: (x?: number, delay = 0): boolean => sample('unbox', { x, at: delay, cents: 40, db: 1.5, limit: ['unbox', { gap: 0.3, max: 2 }] }) !== null,
+  unbox: (x?: number, delay = 0): boolean => sample('unbox', { x, at: delay, cents: 40, db: 1.5, limit: ['unbox', RULE.unbox] }) !== null,
   /**
    * Швабра трёт пол seconds настоящих секунд (не игровых: на ×2 дело вдвое короче): мокрый «вжих»
    * туда-обратно. Возвращает «хватит»: дело закончили или бросили — недоигранные взмахи не звучат.
@@ -691,9 +796,9 @@ export const sound = {
   mop: (x?: number, seconds = 1.3): (() => void) => {
     const strokes = Math.max(2, Math.round(seconds / MOP_STROKE));
     const cuts: (() => void)[] = [];
-    const first = sample('mop', { x, cents: 80, db: 2, limit: ['mop', { gap: 0.8, max: 2, low: true }], skipOffscreen: true, cuts });
+    const first = sample('mop', { x, cents: 80, db: 2, limit: ['mop', RULE.mop], skipOffscreen: true, cuts });
     if (first === null) return synthMop(x, strokes);
-    if (first) for (let i = 1; i < strokes; i++) sample('mop', { x, at: i * MOP_STROKE + Math.random() * 0.05, cents: 80, db: 2, cuts });
+    if (first) for (let i = 1; i < strokes; i++) sample('mop', { x, at: i * MOP_STROKE + Math.random() * 0.05, cents: 80, db: 2, cuts, layer: 'mopStroke' });
     return () => {
       for (const cut of cuts.splice(0)) cut();
     };
@@ -704,7 +809,7 @@ export const sound = {
       x,
       cents: 35,
       db: 2,
-      limit: ['pop', { gap: 0.06, max: 3, low: true }],
+      limit: ['pop', RULE.pop],
       skipOffscreen: true,
     }),
   /** Скачан ли банк слогов: реплика решает это на первом слоге и до конца звучит одним голосом. */
@@ -727,7 +832,7 @@ export const sound = {
     // Не выше 1.6 и не ниже 0.7 от записи: дальше голос звучит «бурундуком» или гулко.
     const rate = Math.min(1.6, Math.max(0.7, v.rate * 2 ** (s.semitones / 12) * j.rate));
     const dur = piece.dur * v.clip;
-    if (!allowVoice('voice', { gap: 0.04, max: 3 }, dur / rate)) return;
+    if (!allowVoice('voice', RULE.syllable, dur / rate, 'voice')) return;
     const now = ac.currentTime + 0.005;
     const src = ac.createBufferSource();
     src.buffer = piece.buffer;
@@ -774,7 +879,7 @@ export const sound = {
       bus: 'voice',
       lp: 1500 + Math.random() * 500,
       db: 1.5,
-      limit: ['voice', { gap: 0.045, max: 2 }],
+      limit: ['voice', RULE.voice],
     }),
   /** Раскат грома в грозу. */
   thunder,
@@ -789,9 +894,11 @@ export const sound = {
         { freq: 1319, at: 0.28, dur: 0.3, wave: 'square', vol: 0.025 },
         { freq: 1319, at: 0.28, dur: 0.35, vol: 0.03 },
       ],
-      { bus: 'ui', lp: 2600, limit: ['news', { gap: 0.5, max: 1 }] },
+      { bus: 'ui', lp: 2600, limit: ['news', RULE.news] },
     );
   },
   /** Подземный толчок: дребезг полок и бутылок. */
   rumble,
+  /** Скорость игры (×1, ×2): пульт делает мир на ×2 не шумнее, чем на ×1 (mix.ts, SoundBudget). */
+  pace: setPace,
 };

@@ -1788,6 +1788,8 @@ export class StoreScene extends Phaser.Scene {
     this.speed = speed;
     this.time.timeScale = speed;
     this.tweens.timeScale = speed;
+    // На ×2 событий вдвое больше — звуков мира за секунду столько же, сколько на ×1 (mix.ts, SoundBudget).
+    sound.pace(speed);
   }
 
   private titleShow(): () => void {
@@ -3055,8 +3057,11 @@ export class StoreScene extends Phaser.Scene {
     const { door, h } = this.layout;
     const close = (p: { x: number; y: number }) => Math.abs(p.x - door.x) < 16 && Math.abs(p.y - h - 4) < 18;
     const near = [...this.customers].some((c) => close(c.sprite)) || [...this.newcomers].some(close);
-    // Колокольчик над дверью — записанный (sound.ts); пока лента не скачалась — синтезированный.
-    if (near && this.doorOpen === 0 && !sound.doorbell(door.x)) ambience.chime(door.x);
+    // Колокольчик над дверью — записанный (sound.ts); пока лента не скачалась — синтезированный. Звенит,
+    // только когда входит один человек: на выходе молчит, а когда входят несколько сразу (пара, толпа
+    // в час пик) — тоже, иначе дверь звенела без умолку. Ещё реже — правило звука (не чаще раза в 4 с).
+    const entering = [...this.customers].filter((c) => !c.gone && close(c.sprite)).length + [...this.newcomers].filter(close).length;
+    if (entering === 1 && this.doorOpen === 0 && !sound.doorbell(door.x)) ambience.chime(door.x);
     this.doorOpen = Phaser.Math.Clamp(this.doorOpen + (near ? 0.12 : -0.06), 0, 1);
     // Открытая дверь «впускает улицу»: пока кто-то входит, за стеклом слышно ярче и чуть громче.
     ambience.door(this.doorOpen);
@@ -5818,12 +5823,12 @@ export class StoreScene extends Phaser.Scene {
     }
     this.setFacing(c.sprite, 'right');
     c.serving = true;
-    for (const { id } of c.items) {
+    for (const [n, { id }] of c.items.entries()) {
       await this.wait(KIOSK_ITEM_SECONDS * 1000);
       if (!this.sys.isActive()) return true;
       const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(1.5 / ART).setDepth(1000);
       this.tweens.add({ targets: item, x: kiosk.x, y: kiosk.y - 6, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
-      sound.scan(kiosk.x);
+      sound.scan(kiosk.x, n);
       this.kioskScreen?.setAlpha(0.9);
       this.time.delayedCall(150, () => this.kioskScreen?.setAlpha(0.3));
     }
@@ -8154,8 +8159,7 @@ export class StoreScene extends Phaser.Scene {
       if (!near) continue;
       bird.away = true;
       const { img, home } = bird;
-      // Хлопанье крыльев (вся стайка — один звук: ограничитель не даст сыграть его трижды).
-      ambience.street('pigeons', home.x);
+      // Голуби взлетают молча: хлопанье крыльев на каждого прохожего звучало то и дело (просьба автора — убрать).
       const dir = Math.random() < 0.5 ? -1 : 1;
       img.setTexture('pigeon_fly').setFlipX(dir < 0).setDepth(LIGHT_DEPTH - 1);
       // Взмахи — повтор мира: перестроили зал посреди полёта (твин погашен) — перестают махать и они.
@@ -10487,7 +10491,9 @@ export class StoreScene extends Phaser.Scene {
   /** Прибавилась звезда рейтинга — по залу волной бегут золотые искры; побит рекорд выручки — конфетти. */
   private cheerProgress(): void {
     const stars = Math.round(this.state.rating);
-    if (this.starsCheered < 0 || stars < this.starsCheered) this.starsCheered = stars;
+    // Рейтинг около «x,5» качается туда-сюда — звезда считается потерянной, только когда он ушёл вниз
+    // заметно: иначе волна искр и звон медали шли на каждое покачивание.
+    if (this.starsCheered < 0 || this.state.rating < this.starsCheered - 0.75) this.starsCheered = stars;
     if (stars > this.starsCheered) {
       this.starsCheered = stars;
       this.starWave();
@@ -11603,7 +11609,7 @@ export class StoreScene extends Phaser.Scene {
     const clerk = byOwner ? this.seller : (this.operator(index) as Worker | null)?.sprite;
     // Товар и пакет — к тому, кто пробивает: сменщик стоит у стойки чуть выше хозяина.
     const hand = clerk?.active ? { x: clerk.x, y: clerk.y } : r.clerk;
-    for (const { id } of c.items) {
+    for (const [n, { id }] of c.items.entries()) {
       await this.wait(timing.item * 1000 * manual);
       if (!this.sys.isActive()) return;
       // Товар — на ленту, под красный луч сканера (вспышка), и дальше к кассиру в пакет.
@@ -11627,8 +11633,9 @@ export class StoreScene extends Phaser.Scene {
         const base = (clerk.getData('baseScale') as number) ?? 1;
         this.tweens.add({ targets: clerk, scaleY: base * 1.06, duration: 90, yoyo: true, onComplete: () => clerk.setScale(base) });
       }
-      // Без вибрации на каждый товар: на телефоне она щёлкает громче самого сканера.
-      sound.scan(counter.x);
+      // Без вибрации на каждый товар: на телефоне она щёлкает громче самого сканера. «Пик» — пачкой:
+      // первый товар ясно, дальше через один и тише (sound.ts).
+      sound.scan(counter.x, n);
     }
     // Старая касса иногда заедает: пока продавец стучит по ней, очередь ждёт.
     if (Math.random() < registerJam(this.state)) {
@@ -11661,7 +11668,7 @@ export class StoreScene extends Phaser.Scene {
       );
       if (!this.sys.isActive()) return;
     }
-    this.finishCheckout(c);
+    this.finishCheckout(c, undefined, byOwner);
     if (byOwner) this.ownerServedOne();
   }
 
@@ -11716,7 +11723,8 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
-  private finishCheckout(c: Customer, where?: { x: number; y: number }): void {
+  /** Покупатель расплатился; own — пробивал хозяин (полный звук кассы — награда игроку). */
+  private finishCheckout(c: Customer, where?: { x: number; y: number }, own = false): void {
     this.queue = this.queue.filter((q) => q !== c);
     const at = this.registerOf(c);
     if (at) at.customer = null;
@@ -11754,8 +11762,8 @@ export class StoreScene extends Phaser.Scene {
     recordSale(this.stats, c.items);
     if (c.rare) this.rareGuestServed(c, total);
     haptic.success();
-    // Касса: рычаг, «дзынь», ящик выезжает; мелочь или купюры — смотря по сумме.
-    sound.till(c.sprite.x, total);
+    // Касса: рычаг, «дзынь», ящик выезжает; мелочь или купюры — смотря по сумме; большая корзина — «спасибо».
+    sound.till(c.sprite.x, total, { own, items: c.items.length });
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
     // Пакет, который передал кассир, теперь в руке: с ним покупатель и уходит.

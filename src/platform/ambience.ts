@@ -14,8 +14,8 @@ import { ambFiles, SYNTH_RAIN_UNDER, type Neon } from './ambienceFiles';
 import { birdGap, type AmbScene } from './ambienceLayers';
 import { brownNoise, rainTexture, seeded } from './ambienceSynth';
 import { fetched } from './audioFiles';
-import { jitter } from './mix';
-import { allowVoice, busInput, existingAudioContext, mixer, placeAt, setDoorAir, STREET_LOW, type Bus } from './mixer';
+import { jitter, type VoiceRule } from './mix';
+import { admitVoice, allowVoice, busInput, existingAudioContext, mixer, noteStart, placeAt, setDoorAir, STREET_LOW, type Bus } from './mixer';
 import { noiseBuffer } from './sound';
 
 export type { Neon } from './ambienceFiles';
@@ -188,12 +188,17 @@ function tone(ac: AudioContext, out: AudioNode, at: number, dur: number, f0: num
 
 /** Капля с водостока в лужу: короткий «плинк», звенящий вверх. */
 function drip(ac: AudioContext, out: AudioNode, at: number): void {
+  noteStart('drip', 'street', 'weather');
   const f = 700 + Math.random() * 600;
   tone(ac, out, at, 0.07, f, f * 1.9, 0.02, Math.random() * 1.4 - 0.7);
 }
 
-/** Птица: одна из трёх «песен» — чик-чирик, трель или свист с переливом. */
+/**
+ * Птица: одна из трёх «песен» — чик-чирик, трель или свист с переливом. Окружение: когда в магазине
+ * людно (касса, полки) или игрок занят — птица промолчит (mix.ts, SoundBudget).
+ */
 function bird(ac: AudioContext, out: AudioNode, at: number, vol: number): void {
+  if (!allowVoice('synthBird', BIRD_RULE, 1, 'street')) return;
   const pan = Math.random() * 1.6 - 0.8;
   const kind = Math.random();
   if (kind < 0.45) {
@@ -216,6 +221,7 @@ function bird(ac: AudioContext, out: AudioNode, at: number, vol: number): void {
 
 /** Сверчок: три быстрых стрекота на высокой ноте (за стеклом витрины верх глуше — чуть громче, чем был). */
 function cricket(ac: AudioContext, out: AudioNode, at: number, pitch: number, pan: number): void {
+  noteStart('cricket', 'street');
   for (let i = 0; i < 3; i++) tone(ac, out, at + i * 0.045, 0.028, pitch, pitch * 0.98, 0.015, pan);
 }
 
@@ -238,8 +244,9 @@ function schedule(ac: AudioContext, weather: Weather, evening: number, season: Y
   const dayBirds = !recordedBirds && !wet && weather !== 'snow' && evening < 0.55 && season !== 'winter';
   if (dayBirds) {
     while (next.bird < horizon) {
-      bird(ac, street!, Math.max(now, next.bird), season === 'autumn' ? 0.02 : 0.032);
-      next.bird += (season === 'autumn' ? 4 : 1.6) + Math.random() * 4;
+      bird(ac, street!, Math.max(now, next.bird), season === 'autumn' ? 0.016 : 0.024);
+      // Редко: птица — раз в 8–22 с (осенью — в 16–36), а не каждые две-три секунды.
+      next.bird += (season === 'autumn' ? 16 : 8) + Math.random() * (season === 'autumn' ? 20 : 14);
     }
   } else next.bird = now + 2;
   const crickets = (weather === 'clear' || weather === 'heat') && evening >= 0.45 && (season === 'summer' || season === 'spring');
@@ -255,6 +262,14 @@ function schedule(ac: AudioContext, weather: Weather, evening: number, season: Y
 
 /** Шаги продавца: левая-правая нога чуть по разные стороны, каждый шаг немного другой. */
 let foot = 1;
+
+/**
+ * Правила (mix.ts): птицы — окружение по часам атмосферы (на ×2 их не больше); шаг — мелочь по событию
+ * игры (на ×2 продавец шагает вдвое чаще — слышен каждый второй); колокольчик двери — окружение.
+ */
+const BIRD_RULE: VoiceRule = { gap: 3, max: 1, tier: 'ambience', game: false };
+const STEP_RULE: VoiceRule = { gap: 0.22, max: 1, low: true };
+const CHIME_RULE: VoiceRule = { gap: 4, max: 1, tier: 'ambience' };
 
 export const ambience = {
   /**
@@ -296,8 +311,8 @@ export const ambience = {
     setDoorAir(open);
   },
 
-  /** Звук улицы по событию: велосипедист звонит, голуби вспорхнули, фонарь зажёгся (x — где в мире). */
-  street(kind: 'bike' | 'pigeons' | 'lamp', x?: number): void {
+  /** Звук улицы по событию: велосипедист звонит, фонарь зажёгся (x — где в мире). */
+  street(kind: 'bike' | 'lamp', x?: number): void {
     ambFiles.street(kind, x);
   },
 
@@ -308,10 +323,12 @@ export const ambience = {
   step(x?: number): void {
     blip('hall', (ac) => {
       const where = placeAt(x);
-      if (!where.onScreen || !allowVoice('step', { gap: 0.22, max: 1, low: true }, 0.08)) return;
+      if (!where.onScreen) return;
+      const level = admitVoice('step', STEP_RULE, 0.08, 'hall');
+      if (!level) return;
       foot = -foot;
       const j = jitter(Math.random, 0, 3);
-      const out = busInput(ac, 'hall', Math.max(-1, Math.min(1, where.pan + foot * 0.06)), where.gain * j.gain);
+      const out = busInput(ac, 'hall', Math.max(-1, Math.min(1, where.pan + foot * 0.06)), where.gain * j.gain * level);
       const now = ac.currentTime;
       const src = ac.createBufferSource();
       src.buffer = noise;
@@ -331,13 +348,16 @@ export const ambience = {
     });
   },
 
-  /** Колокольчик над дверью: тихое «дзинь» с той стороны, где дверь, — металл, а не два писка. */
-  chime(x?: number): void {
+  /**
+   * Колокольчик над дверью: тихое «дзинь» с той стороны, где дверь, — металл, а не два писка. Редко
+   * и вдвое тише прежнего (как записанный, sound.doorbell); preview — пример для ползунка «Окружение».
+   */
+  chime(x?: number, preview = false): void {
     blip('hall', (ac) => {
-      if (!allowVoice('chime', { gap: 0.4, max: 2 }, 0.8)) return;
+      if (!allowVoice('chime', preview ? { gap: 0, max: 2, tier: 'feedback', game: false } : CHIME_RULE, 0.8, 'hall')) return;
       const where = placeAt(x);
       const j = jitter(Math.random, 20, 1.5);
-      const out = busInput(ac, 'hall', where.pan, where.gain * j.gain);
+      const out = busInput(ac, 'hall', where.pan, where.gain * j.gain * (preview ? 1 : 0.55));
       const now = ac.currentTime;
       // Язычок задевает колокольчик то сверху вниз, то снизу вверх.
       const pair = Math.random() < 0.5 ? [2093, 2637] : [2637, 2093];
