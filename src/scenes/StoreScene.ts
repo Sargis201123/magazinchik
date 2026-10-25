@@ -192,6 +192,8 @@ import { LightMap, type Light } from './light';
 import { ambientAt, lerpKeys } from './daylight';
 import { ColorGrade } from './grade';
 import { Halo, personGlow } from './halo';
+import { castsShadow, FloorShade, furnitureCasters, lawnShade, lawnTexture, type WearLayer } from './floor';
+import { addStep, decodeWear, encodeWear, mopWear, MOP_RADIUS, settleWear, WEAR_CELL, wearGrid, wornSpot, type WearGrid } from '../game/wear';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { BARGAIN_CHANCE, BARGAIN_PER_ROW, bargainCapacity, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
@@ -537,18 +539,15 @@ const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
   icebox: { texture: 'icebox', tint: 0xffffff },
   florist: { texture: 'florist', tint: 0xffffff },
 };
-/** Цвет плитки отдела под полкой. */
-const DEPT_FLOOR: Record<Category, number> = {
-  bakery: 0xe8a65a,
-  produce: 0x63c74d,
-  dairy: 0x5fb4f0,
-  meat: 0xe4606a,
-  drinks: 0x2ea8e0,
-  frozen: 0x9ad8ff,
-  household: 0xb27ae0,
-  icebox: 0x9ad8ff,
-  florist: 0xf6757a,
-};
+/** Плиточная вставка отдела под полкой — на плитке пола, под тенями живого пола (FLOOR_SHADE_DEPTH). */
+const DEPT_INLAY_DEPTH = 0.2;
+/** Тени и потёртость пола (floor.ts): над плиткой и вставками, под пятнами света ламп (0.45). */
+const FLOOR_SHADE_DEPTH = 0.25;
+/** Как часто смотрим, кто идёт по залу (мс времени игры): шаги для потёртости пола. */
+const WEAR_SAMPLE_MS = 250;
+/** Уборщик без дела натирает самое потёртое место — не чаще, чем раз в столько мс, и если потёрто не меньше. */
+const POLISH_EVERY_MS = 9000;
+const POLISH_MIN_WEAR = 0.25;
 /** Где на картинке лежит товар (относительно центра места): x, ширина, верхний ряд, шаг рядов. */
 const ITEM_AREA: Partial<Record<Category, { x: number; w: number; y: number; row: number }>> = {
   icebox: { x: -13, w: 26, y: -6, row: 4 },
@@ -1430,6 +1429,15 @@ export class StoreScene extends Phaser.Scene {
   private wetSheens = new Set<Phaser.GameObjects.Ellipse>();
   /** Пятна света от потолочных ламп с номером ряда: утром включаются ряд за рядом. */
   private lampPools: { img: Phaser.GameObjects.Image; row: number }[] = [];
+  /** Живой пол (floor.ts): мягкие тени у стен и под мебелью и потёртость — одна картинка поверх плитки. */
+  private floor = new FloorShade(this);
+  /**
+   * Потёртость пола зала (game/wear.ts): клетки 0…1 из сохранения и шаги за сегодня по той же сетке
+   * (кто где прошёл — sampleSteps). level — для какого помещения сетка.
+   */
+  private wear: { level: number; grid: WearGrid; cells: Float32Array; steps: Float32Array } | null = null;
+  /** Когда уборщик в последний раз натирал потёртый пол (мс времени сцены): не весь день подряд. */
+  private polishedAt = -Infinity;
   /** Подвесные лампы (декор «Свет») с пятном света под ними: от подземного толчка качаются. */
   private hangingLamps: { lamp: Phaser.GameObjects.Image; bulb: Phaser.GameObjects.Image }[] = [];
   /** Цвета осколков разбитого товара по картинке — чтобы не читать пиксели каждый раз. */
@@ -1842,6 +1850,8 @@ export class StoreScene extends Phaser.Scene {
     this.time.addEvent({ delay: 1800, loop: true, callback: () => this.streetLife() });
     // Над кварталом плывут тени облаков, иногда пролетает стайка птиц.
     this.time.addEvent({ delay: 6000, loop: true, callback: () => this.skyLife() });
+    // Потёртость пола: кто где идёт по залу — по таймеру времени игры, а не каждый кадр.
+    this.time.addEvent({ delay: WEAR_SAMPLE_MS, loop: true, callback: () => this.running && this.sampleSteps() });
     // Живая очередь и продавец без дела: кто-то вздыхает, смотрит на часы, продавец протирает прилавок.
     this.time.addEvent({ delay: 1300, loop: true, callback: () => this.running && this.queueIdle() });
     this.time.addEvent({ delay: 4200, loop: true, callback: () => this.running && this.sellerIdle() });
@@ -2173,6 +2183,48 @@ export class StoreScene extends Phaser.Scene {
     this.fairObjs = [];
     this.applyFair();
     this.noteNewProps(bought);
+    // Пол — последним: тени ложатся от всей мебели, что уже стоит в зале и во флигеле.
+    this.loadWear();
+    this.bakeFloor();
+  }
+
+  /** Потёртость пола этого зала — из сохранения; шаги сегодняшнего дня остаются, если сетка та же. */
+  private loadWear(): void {
+    const { w, h, wallH } = this.layout;
+    const grid = wearGrid(w, h - wallH);
+    const level = this.state.level;
+    const was = this.wear;
+    const same = was && was.level === level && was.grid.cols === grid.cols && was.grid.rows === grid.rows;
+    this.wear = { level, grid, cells: decodeWear(this.state.floorWear, level, grid), steps: same ? was.steps : new Float32Array(grid.cols * grid.rows) };
+  }
+
+  /** Потёртость для картинки пола: сетка лежит от левого верхнего угла пола зала (под задней стеной). */
+  private wearLayer(): WearLayer | null {
+    const wear = this.wear;
+    return wear ? { cells: wear.cells, cols: wear.grid.cols, rows: wear.grid.rows, x: 0, y: this.layout.wallH } : null;
+  }
+
+  /**
+   * Живой пол (floor.ts): тени у стен и под мебелью — заново, если мебель переставили (та же расстановка —
+   * готовые), и потёртость. Пол — зал, комнаты флигеля (под куском стены с табличкой) и проёмы их дверей;
+   * входная дверь — проём наружу: у неё пол не темнеет.
+   */
+  private bakeFloor(): void {
+    const { w, h, wallH, door, wing, warehouse, bakery, coffee, kitchen } = this.layout;
+    const top = Math.min(wallH, wing.y);
+    const floors: Rect[] = [
+      { x: 0, y: wallH, w, h: h - wallH },
+      { x: warehouse.x, y: warehouse.y, w: warehouse.w, h: warehouse.h },
+      ...[bakery, coffee, ...(kitchen ? [kitchen] : [])].map((r) => ({ x: r.x, y: r.y + 14, w: r.w, h: r.h - 14 })),
+      ...this.openRooms().map((r) => ({ x: -WALL, y: r.doorway.y - 8, w: WALL, h: 16 })),
+    ];
+    const plan = {
+      area: { x: -WING_OUTER, y: top, w: w + WING_OUTER, h: h - top },
+      floors,
+      openings: [{ x: door.x - 14, y: h, w: 28, h: 12 }],
+      casters: furnitureCasters(this.children.list),
+    };
+    this.floor.bake(plan, this.lite ? 1 : ART, FLOOR_SHADE_DEPTH, this.wearLayer());
   }
 
   /**
@@ -3467,9 +3519,10 @@ export class StoreScene extends Phaser.Scene {
     // Короткая очередь освобождает верх зала у правой стены.
     let shortQueue = this.state.tillPos?.level === level && Boolean(this.state.tillPos.short);
     const placed = () => withTill(plain, { level, dx: tillDx, short: shortQueue }, level);
-    // Настоящие полки и разметку прячем — вместо них «призраки».
+    // Настоящие полки и разметку прячем — вместо них «призраки»; тени мебели на полу — тоже.
     for (const view of this.shelfViews.splice(0)) this.destroyShelfView(view);
     for (const mark of this.slotDecor) mark?.setVisible(false);
+    this.floor.hide();
     const cam = this.cameras.main;
     // Весь зал целиком; масштаб ровный (или хотя бы целый) — чуть дальше, если ровно не влезает.
     const fit = Math.min(this.scale.width / (w + 24), (this.scale.height - (HUD_TOP + 120) * this.res) / (h + 24));
@@ -7288,7 +7341,12 @@ export class StoreScene extends Phaser.Scene {
     const width = next.w + 800;
     const top = next.h + 4;
     // Газон с запасом за краями квартала: когда отдаляешь камеру, мир не обрывается в темноту.
-    tile(left - 400, -800, width + 800, top + 1600, 'grass');
+    // Плитки травы вразнобой и с отражениями (floor.ts) — повтора не видно, поверх — большие мягкие
+    // пятна светлой и тёмной травы. Один газон на всё: дорожки и дома ложатся сверху. В лёгкой
+    // графике — прежний газон одной плиткой, без пятен.
+    const lawn = { x: left - 400, y: -800, w: width + 800, h: top + 1600 };
+    tile(lawn.x, lawn.y, lawn.w, lawn.h, this.lite ? 'grass' : lawnTexture(this));
+    if (!this.lite) lawnShade(this, lawn, -10);
     this.streetY = top + 12;
     this.lawns = [
       { x: left, y: -400, w: width, h: top + 400 },
@@ -7299,7 +7357,6 @@ export class StoreScene extends Phaser.Scene {
       { x: left - 400, y: -400, w: 400, h: top + 788 },
       { x: left + width, y: -400, w: 400, h: top + 788 },
     ];
-    tile(left, -400, width, top + 400, 'grass');
     tile(left, top, width, 22, 'paving');
     this.add.rectangle(left, top + 22, width, 2, 0x8b9bb4).setOrigin(0).setDepth(-9);
     tile(left, top + 24, width, 40, 'asphalt');
@@ -7332,7 +7389,6 @@ export class StoreScene extends Phaser.Scene {
     }
     this.add.rectangle(left, top + 64, width, 2, 0x8b9bb4).setOrigin(0).setDepth(-9);
     tile(left, top + 66, width, 22, 'paving');
-    tile(left, top + 88, width, 300, 'grass');
     // Дорожка от двери до тротуара через пустой участок.
     if (top > h + FACADE_H) tile(door.x - 12, h + FACADE_H, 24, top - h - FACADE_H, 'paving');
     // Пешеходный переход напротив входа.
@@ -8747,16 +8803,11 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Толстые стены с кирпичной крышкой и фасад с витринами и дверями; в левой стене — двери во флигель. */
-  /** Объём зала: у стен пол чуть темнее — туда меньше света, и зал не выглядит плоской заливкой. */
+  /**
+   * Объём зала. Пол у стен и под мебелью темнее — это мягкие тени живого пола (bakeFloor), а здесь —
+   * пятна света потолочных ламп.
+   */
   private floorLight(w: number, h: number, wallH: number): void {
-    const g = this.add.graphics().setDepth(0.5);
-    const ink = 0x181425;
-    g.fillGradientStyle(ink, ink, ink, ink, 0.26, 0.26, 0, 0);
-    g.fillRect(0, wallH, w, 14);
-    g.fillGradientStyle(ink, ink, ink, ink, 0.16, 0, 0.16, 0);
-    g.fillRect(0, wallH, 10, h - wallH);
-    g.fillGradientStyle(ink, ink, ink, ink, 0, 0.16, 0, 0.16);
-    g.fillRect(w - 10, wallH, 10, h - wallH);
     // Свет потолочных ламп: тёплые пятна на полу рядами — зал не плоский, а освещённый. Ночью эти же лампы
     // держат зал в карте освещения: под ними светло и тепло (LED — белее), между ними и в углах — темнее.
     // Утром они загораются ряд за рядом (lightsOn), свет отключили — гаснут.
@@ -9309,8 +9360,6 @@ export class StoreScene extends Phaser.Scene {
       const blocked = [vending, ...sideSlots].some((p) => p.x > w - 24 && Math.abs(p.y - sun.y) < 30);
       if (!blocked) this.sideRays.push(this.sunRay(w - 1, sun.y, 0xff9a48));
     }
-    // Мягкая тень вдоль стены — пол уходит под неё.
-    this.add.rectangle(0, wallH, w, 3, 0x181425, 0.18).setOrigin(0).setDepth(1);
     this.art(basketsX, h - 8, 'baskets').setDepth(h - 8);
     // Растения в свободных углах у правой стены — не на пути покупателей.
     // Растение у туалета убрано: угол у правой стены оставляем свободным.
@@ -9953,7 +10002,6 @@ export class StoreScene extends Phaser.Scene {
       .setTileScale(1 / ART)
       .setTint(kind === 'bakery' ? 0xffe2d2 : kind === 'kitchen' ? 0xd8f0d8 : 0xe6dcf6)
       .setDepth(1);
-    this.add.rectangle(x, y + 14, w, 2, 0x181425, 0.18).setOrigin(0).setDepth(1);
     this.roomSign(x, y + 7, w, t(`wing.${kind}`));
     if (open) {
       this.nightGlow(this.art(x + w / 2, y + 26, 'glow').setScale(44 / 64).setTint(kind === 'bakery' ? 0xffd8a0 : 0xffe8c8), 0.5, undefined, { store: true, map: { scale: 1.3, gain: 0.8, haze: 0.12 } });
@@ -10027,7 +10075,10 @@ export class StoreScene extends Phaser.Scene {
       this.slotDecor[i].setVisible(i >= this.regularShelves());
     });
     // Полок стало меньше (продали) — лишние картинки убираем.
-    for (const view of this.shelfViews.splice(this.state.shelves.length)) this.destroyShelfView(view);
+    const sold = this.shelfViews.splice(this.state.shelves.length);
+    for (const view of sold) this.destroyShelfView(view);
+    // Мебель в зале поменялась — тени на полу запечь заново (в пересборке зала — потом, разом).
+    let moved = sold.length > 0;
     this.state.shelves.forEach((shelf, i) => {
       let view = this.shelfViews[i];
       const at = this.spotOf(i);
@@ -10036,6 +10087,7 @@ export class StoreScene extends Phaser.Scene {
         if (view) this.destroyShelfView(view);
         view = this.buildShelf(i, shelf.kind);
         this.shelfViews[i] = view;
+        moved = true;
       }
 
       const capacity = shelfCapacity(shelf);
@@ -10105,6 +10157,8 @@ export class StoreScene extends Phaser.Scene {
       view.needsStock = !shelf.broken && units.length === 0 && PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id]?.length ?? 0) > 0);
       view.bg.setTint(shelf.broken ? BROKEN_TINT : SHELF_LOOK[shelf.kind].tint);
     });
+    // В перестановке тени спрятаны (там «призраки») — запечём, когда расстановку примут.
+    if (moved && this.floor.ready() && !this.arranging) this.bakeFloor();
   }
 
   private buildShelf(index: number, kind: Category): ShelfView {
@@ -10160,10 +10214,10 @@ export class StoreScene extends Phaser.Scene {
       .setVisible(false);
     expire.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.markdownNow(expire.x, expire.y)));
     const lights: Phaser.GameObjects.GameObject[] = [];
-    // Цветная плитка отдела под полкой и перед ней, шириной с полку: соседние плитки стыкуются без щелей.
-    // У задней стены плитка начинается от плинтуса — на стену не заходит.
+    // Плиточная вставка отдела в полу под полкой и перед ней, шириной с полку (art/livefloor.py): узор
+    // и кайма в тон отдела. У задней стены вставка начинается от плинтуса — на стену не заходит.
     const tileTop = Math.max(slot.y - 11, this.layout.wallH);
-    if (!fixture) lights.push(this.add.rectangle(slot.x, (tileTop + slot.y + 19) / 2, 40, slot.y + 19 - tileTop, DEPT_FLOOR[kind]).setAlpha(0.2).setStrokeStyle(1, DEPT_FLOOR[kind], 0.35).setDepth(0.3));
+    if (!fixture) lights.push(this.deptInlay(`deptfloor_${kind}`, slot.x, slot.y + 19, 30, slot.y + 19 - tileTop));
     // На мраморе низ полки отражается в полу — бледно и перевёрнуто.
     if (!fixture && this.glossyFloor) {
       // Только самый низ полки и коротко: блик у основания, а не призрачная копия полки.
@@ -10213,13 +10267,7 @@ export class StoreScene extends Phaser.Scene {
         lights.push(glint);
       }
     }
-    // Тень от полки на пол: свет сверху слева — тень ложится вниз и вправо, полка «стоит», а не нарисована на полу.
-    if (!fixture) {
-      lights.push(this.add.rectangle(slot.x + 2, slot.y + 15, 40, 4, 0x181425, 0.16).setDepth(0.62));
-      // Сбоку — только по полу: у задней стены тень не залезает на стену.
-      const sideTop = Math.max(slot.y - 14, this.layout.wallH);
-      lights.push(this.add.rectangle(slot.x + 21.5, (sideTop + slot.y + 16) / 2, 3, slot.y + 16 - sideTop, 0x181425, 0.12).setDepth(0.62));
-    }
+    // Тень от полки на пол запекается вместе с полом (bakeFloor): свет сверху слева — вниз и вправо.
     if (fixture) this.shelfLight(bg, kind, 50, 40, 4);
     else this.shelfLight(bg, kind, 58, 50, look.texture === 'fridge' ? 10 : 6);
     return { kind, at: { x: slot.x, y: slot.y }, cover, bg, front, shadow, items, backItems, pips, lights, low, expire, promo, glow, needsStock: false };
@@ -10236,6 +10284,17 @@ export class StoreScene extends Phaser.Scene {
     const color = kind === 'meat' ? SHELF_MEAT : cold ? SHELF_COLD : SHELF_WARM;
     const power = cold ? 0.6 : 0.42;
     this.light.follow(bg, { key: 'light_pool', w, h, dy, color, power: () => power * this.powerOn() });
+  }
+
+  /**
+   * Плиточная вставка отдела в полу (art/livefloor.py) нижним краем на bottom; full — её высота
+   * в мире, visible — сколько видно (у задней стены верх срезан плинтусом). Лежит на плитке под
+   * тенями пола (bakeFloor) — и мебель отбрасывает тень на вставку, как на пол.
+   */
+  private deptInlay(key: string, x: number, bottom: number, full: number, visible: number): Phaser.GameObjects.Image {
+    const img = this.art(x, bottom, key).setOrigin(0.5, 1).setDepth(DEPT_INLAY_DEPTH);
+    if (visible < full) img.setCrop(0, (full - visible) * ART, img.width, visible * ART);
+    return img;
   }
 
   /**
@@ -10266,7 +10325,7 @@ export class StoreScene extends Phaser.Scene {
     expire.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.markdownNow(expire.x, expire.y)));
     const glow = new Halo(this, bg, 0xfee761);
     const lights: Phaser.GameObjects.GameObject[] = [
-      this.add.rectangle(slot.x + (right ? -6 : 6), slot.y, 30, 50, DEPT_FLOOR[kind]).setAlpha(0.3).setStrokeStyle(1, DEPT_FLOOR[kind], 0.7).setDepth(0.3),
+      this.deptInlay(`deptfloor_${kind}_side`, slot.x + (right ? -6 : 6), slot.y + 25, 50, 50),
       this.art(slot.x, slot.y - 24, `dept_${kind}`).setScale(0.7 / ART).setDepth(d - 11.9),
     ];
     const meter = this.add.graphics({ x: slot.x + (right ? -12 : 12), y: slot.y }).setDepth(d - 11);
@@ -11469,8 +11528,48 @@ export class StoreScene extends Phaser.Scene {
     this.trash.delete(piece);
     this.claimedTrash.delete(piece);
     if (piece.getData('kind') === 'trash') this.puff(piece.x, piece.y);
-    else this.bubbles(piece.x, piece.y);
+    else {
+      this.bubbles(piece.x, piece.y);
+      // Мыли шваброй — заодно стёрли и потёртость пола вокруг.
+      this.polishFloor(piece.x, piece.y);
+    }
     piece.destroy();
+  }
+
+  /**
+   * Шаги для потёртости пола (game/wear.ts): кто сейчас идёт по залу — в клетку под его ногами.
+   * Смотрим по таймеру времени игры, а не каждый кадр: на ×2 таймер тикает вдвое чаще вместе с игрой.
+   */
+  private sampleSteps(): void {
+    const wear = this.wear;
+    if (!wear || wear.level !== this.state.level) return;
+    const { w, h, wallH } = this.layout;
+    for (const person of this.people) {
+      if (!person.active || !person.visible || !person.getData('walking') || person.displayList !== this.children) continue;
+      const feet = person.y + 8 * person.scaleY;
+      if (person.x <= 0 || person.x >= w || feet <= wallH || feet >= h) continue;
+      addStep(wear.steps, wear.grid, person.x, feet - wallH);
+    }
+  }
+
+  /** Конец дня: шаги дня — в потёртость пола; с уборщиком и решёткой у входа пол стирается медленнее. */
+  private settleFloorWear(): void {
+    const wear = this.wear;
+    if (!wear || wear.level !== this.state.level) return;
+    wear.cells = settleWear(wear.cells, wear.steps, wear.grid, { cleaner: this.workers.has('cleaner'), entrance: gearTier(this.state, 'entrance') });
+    wear.steps.fill(0);
+    this.state = { ...this.state, floorWear: encodeWear(wear.cells, wear.level, wear.grid) };
+    this.floor.setWear(this.wearLayer());
+  }
+
+  /** Помыли пол в точке (x, y) зала: потёртость вокруг уходит — в сохранении и на картинке пола (только там). */
+  private polishFloor(x: number, y: number): void {
+    const wear = this.wear;
+    const { wallH } = this.layout;
+    if (!wear || wear.level !== this.state.level || !mopWear(wear.cells, wear.grid, x, y - wallH)) return;
+    this.state = { ...this.state, floorWear: encodeWear(wear.cells, wear.level, wear.grid) };
+    const r = MOP_RADIUS + WEAR_CELL;
+    this.floor.setWear(this.wearLayer(), { x: x - r, y: y - r, w: 2 * r, h: 2 * r });
   }
 
   // ---------- Сотрудники ----------
@@ -11868,9 +11967,37 @@ export class StoreScene extends Phaser.Scene {
         this.bubbles(this.layout.wc.x, this.layout.wc.y);
         continue;
       }
+      // Делать нечего — натирает шваброй самое потёртое место пола (не чаще раза в POLISH_EVERY_MS).
+      const worn = this.running && this.time.now - this.polishedAt > POLISH_EVERY_MS ? this.wornFloorSpot() : null;
+      if (worn) {
+        this.polishedAt = this.time.now;
+        await this.workerWalk(w, worn.x + 6, worn.y);
+        if (!this.alive(gen)) return;
+        this.mopSound(w.sprite, worn.x, MOP_MS, this.workerPace(w));
+        await this.workerWait(w, MOP_MS);
+        this.stopMop(w.sprite);
+        if (!this.alive(gen)) return;
+        this.bubbles(worn.x, worn.y);
+        this.polishFloor(worn.x, worn.y);
+        continue;
+      }
       if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
       await this.wait(300);
     }
+  }
+
+  /**
+   * Самое потёртое место зала (точки мира), куда можно подойти со шваброй: не под мебелью. Потёрто
+   * меньше POLISH_MIN_WEAR — натирать нечего (null).
+   */
+  private wornFloorSpot(): { x: number; y: number } | null {
+    const wear = this.wear;
+    if (!wear || wear.level !== this.state.level) return null;
+    const { wallH } = this.layout;
+    const free = (x: number, y: number) => this.obstacles.every((o) => x < o.x - 2 || x > o.x + o.w + 2 || y < o.y - 2 || y > o.y + o.h + 2);
+    // Уборщик встаёт правее пятна (как у лужи): свободно должно быть и там, где он стоит.
+    const spot = wornSpot(wear.cells, wear.grid, POLISH_MIN_WEAR, (x, y) => free(x, y + wallH) && free(x + 6, y + wallH));
+    return spot && { x: spot.x, y: spot.y + wallH };
   }
 
   private nearestTrash(x: number, y: number): Phaser.GameObjects.Image | undefined {
@@ -14038,6 +14165,8 @@ export class StoreScene extends Phaser.Scene {
       items.push(img);
     }
     items.sort((a, b) => a.y - b.y || a.x - b.x);
+    // Тень на полу — от того, что уже стоит: новинка в коробке её ещё не отбрасывает.
+    if (items.some((img) => castsShadow(img.texture.key)) && this.floor.ready()) this.bakeFloor();
     this.time.delayedCall(1700, () => items.forEach((img, i) => this.time.delayedCall(i * UNBOX_STEP, () => this.unbox(img))));
   }
 
@@ -14094,6 +14223,8 @@ export class StoreScene extends Phaser.Scene {
           img.setData('growing', false).setScale(sx, sy).setY(y);
           this.squash(img, 1.08, 0.9, 110);
           this.newTag(img);
+          // Вещь встала — теперь и тень от неё на полу.
+          if (castsShadow(img.texture.key) && this.floor.ready() && !this.arranging) this.bakeFloor();
         },
       });
     };
@@ -15045,6 +15176,8 @@ export class StoreScene extends Phaser.Scene {
     this.wedding = null;
     const filmed = bigDayFor(this.state.day) === 'filming';
     if (filmed) this.state = filmingReward(this.state);
+    // Пол за день: шаги покупателей — в потёртость (видна с утра, швабра и уборщик её стирают).
+    this.settleFloorWear();
     const finishedDay = this.state.day;
     // Сколько гостей сверх обычного привела реклама — строкой в итогах дня.
     this.stats.adGuests = adGuests(this.state, this.stats.served + this.stats.lost);

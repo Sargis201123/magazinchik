@@ -18,6 +18,7 @@ import type { War } from './war';
 import type { ShopCat } from './cat';
 import type { DayReport } from './reports';
 import type { AdId } from './ads';
+import type { FloorWear } from './wear';
 import { afterLoanPayment, loanDue } from './bank';
 import { fridgeLife, fridgePower, lightsPower, solarPower, warehouseRoom, type GearId } from './gear';
 
@@ -533,6 +534,8 @@ export interface StoreState {
   tillPos?: { level: number; dx: number; short?: boolean };
   /** Вещи зала, сдвинутые при перестановке: автомат, ведро, растения (scenes/placement.ts). */
   propPos?: { level: number; at: Record<string, { x: number; y: number }> };
+  /** Потёртость пола от шагов покупателей (wear.ts): дорожки от двери к кассе, швабра их стирает. */
+  floorWear?: FloorWear;
   /** Полки, убранные из зала в запас: стоят без товара, их можно поставить обратно бесплатно. */
   storedShelves?: Shelf[];
   /** Своё название магазина на вывеске (иначе — название уровня). */
