@@ -5149,6 +5149,10 @@ def main():
     import premium
 
     premium.main()
+    # Второй набор оформления за монеты и большая реклама на улице.
+    import decor_coins
+
+    decor_coins.main()
     # Значки меню вместо эмодзи.
     import icons
 

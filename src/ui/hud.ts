@@ -297,6 +297,8 @@ export class Hud {
         if (arrowRating === '▲') setTimeout(() => replay(stars.box, 'ui-shine'), ROLL_MS);
       }, rate.at + ROLL_DELAY);
     card.append(tiles);
+    // Реклама работала — сразу под плитками видно, окупилась ли она гостями.
+    if (stats.adGuests) card.append(el('div', 'ui-muted ui-sum-ads', t('summary.ads', { n: stats.adGuests })));
     // Новое звание и побитые рекорды — не в «Подробнее», а печатью: звание золотой, рекорд красной.
     if (stamps.length) {
       const row = el('div', 'ui-stamps');

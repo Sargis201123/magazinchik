@@ -1,12 +1,13 @@
-// Оформление магазина: стены, пол, картины, ковёр, растения, неон, аквариум — и наряд хозяина.
-// Обычное покупается за монеты; премиальное — за Telegram Stars (platform/stars.ts),
+// Оформление магазина: стены, пол, картины, ковёр, растения, свет, украшения зала, вещицы
+// на прилавке и у входа, неон — и наряд хозяина. Обычное покупается за монеты: цены растут
+// от сотен до нескольких тысяч, чтобы и в большом магазине было на что копить; премиальное — за Telegram Stars (platform/stars.ts),
 // его можно один раз бесплатно примерить на день. Купленное за звёзды остаётся навсегда,
 // даже после «Начать заново».
 
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
 
-export type DecorKind = 'outfit' | 'sign' | 'wall' | 'floor' | 'light' | 'showpiece' | 'art' | 'rug' | 'plants' | 'neon';
+export type DecorKind = 'outfit' | 'sign' | 'wall' | 'floor' | 'light' | 'showpiece' | 'art' | 'rug' | 'plants' | 'counter' | 'outdoor' | 'neon';
 
 export type DecorId =
   | 'outfit_farmer'
@@ -21,6 +22,8 @@ export type DecorId =
   | 'wall_metro'
   | 'wall_damask'
   | 'wall_provence'
+  | 'wall_sky'
+  | 'wall_lemon'
   | 'floor_cool'
   | 'floor_wood'
   | 'floor_checker'
@@ -30,6 +33,8 @@ export type DecorId =
   | 'floor_terracotta'
   | 'floor_azulejo'
   | 'floor_noir'
+  | 'floor_oak'
+  | 'floor_mosaic'
   | 'sign_wood'
   | 'sign_neon'
   | 'sign_gold'
@@ -40,11 +45,26 @@ export type DecorId =
   | 'light_lantern'
   | 'light_chandelier'
   | 'light_garland'
+  | 'light_bulbs'
+  | 'light_shade'
   | 'art_sunflowers'
   | 'art_sea'
   | 'art_cat'
+  | 'art_mountains'
+  | 'art_stilllife'
+  | 'art_city'
   | 'rug_red'
+  | 'rug_blue'
+  | 'rug_patch'
   | 'plants_big'
+  | 'plants_cactus'
+  | 'plants_palm'
+  | 'counter_vase'
+  | 'counter_piggy'
+  | 'out_planters'
+  | 'out_chalkboard'
+  | 'grand_clock'
+  | 'globe'
   | 'neon_open'
   | 'aquarium'
   | 'fountain'
@@ -95,42 +115,64 @@ export const DECOR: DecorItem[] = [
   stars('sign_candy', 'sign', 75, { textColor: 0xffffff }),
   stars('sign_marquee', 'sign', 100, { textColor: 0xffffff }),
   stars('sign_gold', 'sign', 100, { textColor: 0xf7dc85 }),
-  coins('wall_mint', 'wall', 150, { color: 0xd6f2e4 }),
-  coins('wall_peach', 'wall', 150, { color: 0xffe2d2 }),
-  coins('wall_lilac', 'wall', 150, { color: 0xe6dcf6 }),
+  // Краска за монеты: на первые выручки, но уже не мелочь.
+  coins('wall_mint', 'wall', 600, { color: 0xd6f2e4 }),
+  coins('wall_peach', 'wall', 600, { color: 0xffe2d2 }),
+  coins('wall_lilac', 'wall', 700, { color: 0xe6dcf6 }),
+  coins('wall_sky', 'wall', 800, { color: 0xd8ecfa }),
+  coins('wall_lemon', 'wall', 800, { color: 0xfff4c8 }),
   stars('wall_brick', 'wall', 50),
   stars('wall_metro', 'wall', 50),
   stars('wall_provence', 'wall', 50),
   stars('wall_walnut', 'wall', 75),
   stars('wall_damask', 'wall', 75),
-  coins('floor_cool', 'floor', 300, { texture: 'floor2' }),
-  coins('floor_wood', 'floor', 450, { texture: 'floor_wood' }),
-  coins('floor_checker', 'floor', 450, { texture: 'floor_checker' }),
-  coins('floor_marble', 'floor', 900, { texture: 'floor3' }),
+  // Пол — дорогая переделка всего зала: мрамор — на большой магазин.
+  coins('floor_cool', 'floor', 1200, { texture: 'floor2' }),
+  coins('floor_wood', 'floor', 2000, { texture: 'floor_wood' }),
+  coins('floor_checker', 'floor', 2000, { texture: 'floor_checker' }),
+  coins('floor_oak', 'floor', 3000, { texture: 'floor_oak' }),
+  coins('floor_mosaic', 'floor', 3500, { texture: 'floor_mosaic' }),
+  coins('floor_marble', 'floor', 6000, { texture: 'floor3' }),
   stars('floor_gold', 'floor', 50),
   stars('floor_chevron', 'floor', 50),
   stars('floor_terracotta', 'floor', 50),
   stars('floor_azulejo', 'floor', 75),
   stars('floor_noir', 'floor', 100),
+  coins('light_bulbs', 'light', 2200, { texture: 'light_bulbs' }),
+  coins('light_shade', 'light', 3500, { texture: 'light_shade' }),
   stars('light_sconce', 'light', 50),
   stars('light_pendant', 'light', 50),
   stars('light_lantern', 'light', 50),
   stars('light_garland', 'light', 75),
   stars('light_chandelier', 'light', 100),
+  coins('globe', 'showpiece', 4000, { texture: 'globe' }),
+  coins('grand_clock', 'showpiece', 7000, { texture: 'grand_clock' }),
   stars('gumball', 'showpiece', 50),
   stars('aquarium', 'showpiece', 75),
   stars('lucky_cat', 'showpiece', 75),
   stars('fountain', 'showpiece', 100),
   stars('jukebox', 'showpiece', 100),
-  coins('art_sunflowers', 'art', 200, { texture: 'art_sunflowers' }),
-  coins('art_sea', 'art', 200, { texture: 'art_sea' }),
-  coins('art_cat', 'art', 250, { texture: 'art_cat' }),
-  coins('rug_red', 'rug', 250, { texture: 'rug' }),
-  coins('plants_big', 'plants', 300, { texture: 'plant_big' }),
+  coins('art_sunflowers', 'art', 900, { texture: 'art_sunflowers' }),
+  coins('art_sea', 'art', 900, { texture: 'art_sea' }),
+  coins('art_cat', 'art', 1200, { texture: 'art_cat' }),
+  coins('art_mountains', 'art', 1500, { texture: 'art_mountains' }),
+  coins('art_stilllife', 'art', 1800, { texture: 'art_stilllife' }),
+  coins('art_city', 'art', 2500, { texture: 'art_city' }),
+  coins('rug_red', 'rug', 1200, { texture: 'rug' }),
+  coins('rug_patch', 'rug', 1600, { texture: 'rug_patch' }),
+  coins('rug_blue', 'rug', 2500, { texture: 'rug_blue' }),
+  coins('plants_big', 'plants', 1200, { texture: 'plant_big' }),
+  coins('plants_cactus', 'plants', 1600, { texture: 'plants_cactus' }),
+  coins('plants_palm', 'plants', 2800, { texture: 'plants_palm' }),
+  // Мелочи на прилавок у кассы и вещи у входа (на тротуаре).
+  coins('counter_vase', 'counter', 1000, { texture: 'counter_vase' }),
+  coins('counter_piggy', 'counter', 1800, { texture: 'counter_piggy' }),
+  coins('out_chalkboard', 'outdoor', 1500, { texture: 'out_chalkboard' }),
+  coins('out_planters', 'outdoor', 2500, { texture: 'out_planters' }),
   stars('neon_open', 'neon', 30, { texture: 'neon' }),
 ];
 
-export const DECOR_KINDS: DecorKind[] = ['outfit', 'sign', 'wall', 'floor', 'light', 'showpiece', 'art', 'rug', 'plants', 'neon'];
+export const DECOR_KINDS: DecorKind[] = ['outfit', 'sign', 'wall', 'floor', 'light', 'showpiece', 'art', 'rug', 'plants', 'counter', 'outdoor', 'neon'];
 
 export interface DecorState {
   owned: DecorId[];

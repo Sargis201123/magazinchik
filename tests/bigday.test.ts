@@ -130,7 +130,7 @@ describe('особые дни', () => {
     const warm = blackoutWarm(s);
     expect(warm.aged).toBeGreaterThanOrEqual(0);
     const reward = filmingReward({ ...s, day: 20, ads: undefined });
-    expect(reward.ads).toEqual({ id: 'blogger', from: 21, until: 21 });
+    expect(reward.adRuns).toEqual([{ id: 'blogger', from: 21, until: 21 }]);
     const busy = { ...s, day: 20, ads: { id: 'banner' as const, from: 19, until: 22 } };
     expect(filmingReward(busy)).toBe(busy);
   });

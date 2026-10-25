@@ -17,6 +17,7 @@ import type { ReviewTopic, Review } from './reviews';
 import type { War } from './war';
 import type { ShopCat } from './cat';
 import type { DayReport } from './reports';
+import type { AdId } from './ads';
 import { afterLoanPayment, loanDue } from './bank';
 import { fridgeLife, fridgePower, lightsPower, solarPower, warehouseRoom, type GearId } from './gear';
 
@@ -571,8 +572,10 @@ export interface StoreState {
   lifeSeen?: string[];
   /** Купленные улучшения кассы (upgrades.ts). */
   upgrades?: string[];
-  /** Реклама: какая и в какие дни (включительно) работает. */
+  /** Реклама из старых сохранений (одна за раз); новые кампании — в adRuns (ads.ts). */
   ads?: { id: 'flyers' | 'banner' | 'blogger'; from: number; until: number };
+  /** Рекламные кампании: какая и в какие дни (включительно) работает; их может быть несколько. */
+  adRuns?: { id: AdId; from: number; until: number }[];
   /** Стойка со сладостями у кассы (impulse.ts). */
   rack?: { level: number; stock: number };
   /** Подсказку к перестановке уже показали (в первый раз). */
@@ -742,6 +745,8 @@ export interface DayStats {
   notes?: Partial<Record<ReviewTopic, number>>;
   /** Выручка ночной смены (входит в revenue). */
   nightRevenue?: number;
+  /** Сколько гостей за день привела реклама (ads.ts). */
+  adGuests?: number;
   /** Счётчики новых механик за день. */
   fair?: boolean;
   coffees?: number;
@@ -1224,9 +1229,16 @@ export const ratingTarget = (rating: number): number => 0.55 + 0.03 * rating;
  */
 export const PRICE_FORGIVE = 0.5;
 
+/**
+ * Пришедшие по рекламе и ушедшие ни с чем злятся вдвое меньше: зашли из любопытства, а не к «своему»
+ * магазину. Иначе большая реклама в тесном магазине только роняла бы рейтинг (видно в симуляторе).
+ */
+export const AD_FORGIVE = 0.5;
+
 /** 0..1: доля довольных посетителей. Жалоба считается за «полпокупателя». */
 export function satisfaction(stats: DayStats, lostWeight = 1): number {
-  const lost = Math.max(0, stats.lost - Math.min(stats.lost, stats.lostWhy?.expensive ?? 0) * (1 - PRICE_FORGIVE));
+  const priced = Math.max(0, stats.lost - Math.min(stats.lost, stats.lostWhy?.expensive ?? 0) * (1 - PRICE_FORGIVE));
+  const lost = Math.max(0, priced - Math.min(priced, stats.adGuests ?? 0) * AD_FORGIVE);
   const visitors = stats.served + lost * lostWeight;
   if (visitors === 0) return 0.5;
   return Math.max(0, (stats.served - stats.complaints * 0.5) / visitors);

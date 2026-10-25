@@ -16,6 +16,7 @@
 import { PRODUCTS, SHELF_KINDS, sellableProducts, type ProductId, type Shelf, type StoreState } from './economy';
 import { monthInYear, yearTime } from './calendar';
 import { rng } from './random';
+import { adPlanned, grantAd } from './ads';
 
 export type BigDayId =
   | 'heatwave'
@@ -366,8 +367,8 @@ export function blackoutWarm(state: StoreState): { state: StoreState; aged: numb
 /** Кино сняли — магазин попал в кадр: завтра бесплатная реклама (если своя не куплена). */
 export function filmingReward(state: StoreState): StoreState {
   const tomorrow = state.day + 1;
-  if (state.ads && state.ads.until >= tomorrow) return state;
-  return { ...state, ads: { id: 'blogger', from: tomorrow, until: tomorrow } };
+  if (adPlanned(state, tomorrow)) return state;
+  return grantAd(state, 'blogger', tomorrow);
 }
 
 export interface WeddingOrder {
