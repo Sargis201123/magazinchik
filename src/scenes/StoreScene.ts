@@ -147,7 +147,7 @@ import { activeAds, adExtraItems, adGuests, adRareBoost, adTrust } from '../game
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
 import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, withUpgrades } from '../game/upgrades';
-import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskTier, kioskTierIndex } from '../game/lanes';
+import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskSlots, kioskTier, kioskTierIndex } from '../game/lanes';
 import { showGift } from '../ui/gift';
 import { activeDecor, grantDecor, isDecorId, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
@@ -183,7 +183,7 @@ import {
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propFootprint, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
-import { buildingSpan, iceboxRect, iceboxSpotFor, kioskSpot, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Point, type Room } from './layout';
+import { buildingSpan, iceboxRect, iceboxSpotFor, kioskSpot, kioskZones, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Point, type Room } from './layout';
 import { BASE_W, crispZoom, homeFrame } from './pixels';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
@@ -9036,6 +9036,8 @@ export class StoreScene extends Phaser.Scene {
       ...slots.map((s) => ({ x: s.x - 22, y: s.y - 14, w: 44, h: 30 })),
       { x: counter.x - 10, y: counter.y - 28, w: 20, h: 64 },
       ...this.propList.map(propRect),
+      // Купленные киоски у правой стены (их ставит buildUpgrades — позже украшений).
+      ...(kioskCount(this.state) ? kioskZones(this.layout, kioskCount(this.state)) : []),
     ];
     return (
       candidates.find((c) =>
@@ -9408,14 +9410,19 @@ export class StoreScene extends Phaser.Scene {
     if (!this.layout.kitchen || !kitchenOpen(this.state)) return;
     const { door, h, w } = this.layout;
     const fp = propFootprint(this.layout, 'food', 0);
-    const zones = [...tillZones(this.layout, registerSlots(this.state)), ...blockedZones(this.layout)];
+    // Места под все киоски помещения (и ещё не купленные): полку не ставим туда, где встанет киоск.
+    const zones = [...tillZones(this.layout, registerSlots(this.state), kioskSlots(this.state)), ...blockedZones(this.layout)];
     const ice = this.state.shelves.some((sh) => sh.kind === 'icebox') ? [iceboxRect(this.iceboxSpot())] : [];
+    // Горка уценки целиком (она выше своего следа) и место её покупателя; где стоят менеджер и охранник.
+    const bargain = this.bargainAt;
+    const stand = bargain ? [{ x: bargain.x - 15, y: this.bargainStand(bargain) - 4, w: 30, h: bargain.y + 8 - (this.bargainStand(bargain) - 4) }] : [];
+    const homes = (['manager', 'guard'] as const).map((role) => this.workerHome(role)).map((p) => ({ x: p.x - 6, y: p.y - 10, w: 12, h: 14 }));
     // Тележки и корзинки у входа (buildDecor ставит их по обе стороны двери) — не загораживаем.
     const byDoor = [-46, -26, -24, 26, 46].map((dx) => ({ x: door.x + dx - 11, y: h - 22, w: 22, h: 22 }));
     // Свободно и место покупателя над полкой (там он стоит, когда берёт порцию).
     const free = (p: { x: number; y: number }) => {
       const r = { x: p.x + fp.x - 3, y: p.y + fp.y - 16, w: fp.w + 6, h: fp.h + 19 };
-      return r.x > 2 && r.x + r.w < w - 2 && r.y > this.layout.wallH + 4 && ![...this.obstacles, ...zones, ...ice, ...byDoor].some((o) => overlapsRect(r, o));
+      return r.x > 2 && r.x + r.w < w - 2 && r.y > this.layout.wallH + 4 && ![...this.obstacles, ...zones, ...ice, ...byDoor, ...stand, ...homes].some((o) => overlapsRect(r, o));
     };
     // У нижней стены как можно ближе к двери, а если там тесно — в зале повыше, тоже поближе к входу.
     const candidates: { x: number; y: number }[] = [];
