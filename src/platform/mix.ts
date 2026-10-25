@@ -118,12 +118,28 @@ export function pickVariant(last: number, count: number, random: Random): number
   return last >= 0 && last < count && pick >= last ? pick + 1 : pick;
 }
 
+/**
+ * Важность звука — кто уступает, когда звуков много. По убыванию: отклик на то, что сделал игрок (деньги,
+ * продажа, кнопки, «хорошо» и «плохо»), сюжет (голоса героев, важный гость, гром), события мира (касса
+ * у кассира, товар на полке, кот, печь, швабра) и разовые звуки окружения (колокольчик двери, птицы,
+ * велозвонок, фонарь). Первые два звучат всегда; события мира и окружение ждут, пока станет тише.
+ */
+export type Tier = 'feedback' | 'story' | 'world' | 'ambience';
+
 /** Правило для частого звука: не чаще раза в gap секунд и не больше max сразу. */
 export interface VoiceRule {
   gap: number;
   max: number;
-  /** Мелочь (шаги, «чпок») уступает место, когда звуков и так много. */
+  /** Мелочь (шаги, «чпок»): уступает место, когда звуков и так много, и сама «людность» не прибавляет. */
   low?: boolean;
+  /** Важность; по умолчанию — событие мира. */
+  tier?: Tier;
+  /**
+   * Звук по событию игры (а не по касанию игрока или часам атмосферы — тогда false): на ×2 таких
+   * событий вдвое больше, поэтому пауза между ними вдвое длиннее, а у событий мира и окружения
+   * звучит лишь каждое второе (у отклика и сюжета — когда они идут чередой). По умолчанию — да.
+   */
+  game?: boolean;
 }
 
 /**
@@ -150,5 +166,98 @@ export class VoiceLimiter {
     this.playing.set(key, mine);
     this.all.push(now + dur);
     return true;
+  }
+}
+
+/**
+ * Бюджет звука. Сколько звуков слышно за последние полторы секунды: событиям мира хватает места,
+ * пока их меньше пяти, окружению — пока меньше двух (в час пик колокольчик двери и птицы молчат,
+ * а касса слышна). Игрок только что коснулся экрана, идёт диалог или заставка — «тише»: события мира
+ * на ~4 дБ тише, окружение не звучит вовсе.
+ */
+export const BUDGET = {
+  window: 1.5,
+  busy: { world: 5, ambience: 2 } as Record<'world' | 'ambience', number>,
+  /** Отклик или сюжет, прозвучавший столько секунд назад и раньше, на ×2 не прореживается. */
+  streak: 8,
+  /** Сколько секунд после касания мир звучит тише. */
+  calm: 1.2,
+  calmGain: 0.63,
+  /**
+   * Сколько событий мира и окружения каждого канала звучит сразу (отклик и сюжет в счёт, но не
+   * ограничены): мир не займёт весь общий запас (на слабом телефоне — вдвое меньше).
+   */
+  voices: { ui: 4, world: 6, hall: 3, street: 3, voice: 3, sting: 2 } as Record<string, number>,
+};
+
+/**
+ * Пульт решает, что звучит: ограничитель голосов (паузы и запас одновременных звуков) плюс важность,
+ * «людность» и скорость игры. На ×2 мир не вдвое шумнее: пауза у звука по событию игры растёт вместе
+ * со скоростью, а из событий мира и окружения звучит каждое второе (из частого отклика — тоже) — за
+ * настоящую секунду их столько же, сколько на ×1 (или меньше).
+ */
+export class SoundBudget {
+  /** Скорость игры (×1, ×2). */
+  pace = 1;
+  /** До какого момента (секунды) игрок занят: касание, диалог, заставка. */
+  calmUntil = -Infinity;
+  readonly limiter: VoiceLimiter;
+  /** Когда начались недавние звуки (без мелочи). */
+  private recent: number[] = [];
+  /** «Право» звука на ×2: копится по 1/pace за событие, звучит, когда накопилась единица. */
+  private readonly credit = new Map<string, number>();
+  /** Когда звук каждого имени звучал в последний раз. */
+  private readonly played = new Map<string, number>();
+  /** Когда отзвучат звуки каждого канала. */
+  private readonly buses = new Map<string, number[]>();
+
+  /** cap — общий запас одновременных звуков; busScale — доля запаса каналов (слабый телефон — 0.5). */
+  constructor(cap: number, private readonly busScale = 1) {
+    this.limiter = new VoiceLimiter(cap);
+  }
+
+  /** Игрок занят ещё seconds секунд с момента now (дольше, если уже занят дольше). */
+  calm(now: number, seconds = BUDGET.calm): void {
+    this.calmUntil = Math.max(this.calmUntil, now + seconds);
+  }
+
+  /**
+   * С какой громкостью можно сыграть звук key канала bus сейчас (now — секунды, dur — длина): 0 — не
+   * играть, иначе он учтён (1 — как есть, меньше — мир притих, пока игрок занят).
+   */
+  admit(key: string, rule: VoiceRule, now: number, dur: number, bus?: string): number {
+    const tier = rule.tier ?? 'world';
+    const minor = tier === 'world' || tier === 'ambience';
+    const paced = rule.game !== false && this.pace > 1;
+    this.recent = this.recent.filter((t) => now - t < BUDGET.window);
+    const calm = now < this.calmUntil;
+    let credit = 1;
+    if (minor) {
+      if (calm && tier === 'ambience') return 0;
+      if (this.recent.length >= BUDGET.busy[tier]) return 0;
+    }
+    // Отклик и сюжет на ×2 прореживаются, только когда идут чередой: редкий звук (вор пойман, важный
+    // гость) звучит всегда, а частый (хлеб из печи, монетка с прилавка) — через раз.
+    const thin = paced && (minor || now - (this.played.get(key) ?? -Infinity) < BUDGET.streak);
+    if (thin) {
+      credit = Math.min(1, (this.credit.get(key) ?? 1 - 1 / this.pace) + 1 / this.pace);
+      this.credit.set(key, credit);
+      if (credit < 1 - 1e-9) return 0;
+    }
+    const mine = bus ? (this.buses.get(bus) ?? []).filter((end) => end > now) : [];
+    const room = bus && bus in BUDGET.voices ? Math.max(1, Math.ceil(BUDGET.voices[bus] * this.busScale)) : Infinity;
+    // Запас канала — для событий мира и окружения: отклик и сюжет (касса хозяина, гром, реплика) им не
+    // ждут, но место занимают — мир уступит им.
+    if (minor && mine.length >= room) return 0;
+    if (!this.limiter.allow(key, paced ? { ...rule, gap: rule.gap * this.pace } : rule, now, dur)) return 0;
+    if (bus) {
+      mine.push(now + dur);
+      this.buses.set(bus, mine);
+    }
+    // Сыгранный звук тратит «право»: следующий из череды на ×2 промолчит.
+    if (paced) this.credit.set(key, credit - 1);
+    this.played.set(key, now);
+    if (!rule.low) this.recent.push(now);
+    return minor && calm ? BUDGET.calmGain : 1;
   }
 }

@@ -7,7 +7,7 @@
 
 import { glassAt } from './ambienceLayers';
 import { roomImpulse, seeded } from './ambienceSynth';
-import { parseVolumes, silenceMask, sliderGain, VoiceLimiter, worldPan, type VolumeKey, type Volumes, type VoiceRule } from './mix';
+import { parseVolumes, silenceMask, sliderGain, SoundBudget, worldPan, type VolumeKey, type Volumes, type VoiceRule } from './mix';
 import { liteMode } from './quality';
 
 /**
@@ -110,7 +110,7 @@ interface Graph {
 
 let ctx: AudioContext | null = null;
 let graph: Graph | null = null;
-const limiter = new VoiceLimiter(liteMode() ? 6 : 12);
+const budget = new SoundBudget(liteMode() ? 6 : 12, liteMode() ? 0.5 : 1);
 
 /** Плавно к значению: без щелчков, прежние планы параметра отменяются. */
 function glide(param: AudioParam, value: number, at: number, tau: number): void {
@@ -207,15 +207,21 @@ function applyVolumes(): void {
 // ---------- Дверь на улицу ----------
 
 let doorOpen = 0;
+/**
+ * Насколько распахнутая дверь «впускает улицу»: наполовину. Раньше на каждого покупателя улица
+ * вспыхивала целиком (дождь ярче и громче), в час пик и на ×2 — то и дело: звучало как хлопанье двери.
+ */
+const DOOR_AIR = 0.5;
 
 /**
- * Насколько открыта дверь магазина (0…1, каждый кадр): открыли — улица «входит» быстро (~0.1 с),
- * закрыли — стекло возвращается мягче (~0.3 с). Покупатель вошёл — улица звучала ярче около секунды.
+ * Насколько открыта дверь магазина (0…1, каждый кадр): открыли — улица «входит» мягко (~0.6 с),
+ * закрыли — стекло возвращается ещё мягче (~1.5 с): частые входы сливаются в ровное «приоткрыто»,
+ * а не мигают.
  */
 export function setDoorAir(open: number): void {
-  const next = Math.round(Math.min(1, Math.max(0, open)) * 20) / 20;
+  const next = Math.round(Math.min(1, Math.max(0, open)) * DOOR_AIR * 20) / 20;
   if (!ctx || !graph || next === doorOpen) return;
-  const tau = next > doorOpen ? 0.06 : 0.25;
+  const tau = next > doorOpen ? 0.2 : 0.5;
   doorOpen = next;
   const now = ctx.currentTime;
   const air = glassAt(next);
@@ -269,6 +275,8 @@ function watchScreen(): void {
     dialogOpen = dialog;
     applyDuck(dialog);
   }
+  // Говорит герой — мир звучит тише, окружение молчит (до следующего опроса и ещё чуть-чуть).
+  if (dialog) budget.calm(performance.now() / 1000, 0.5);
 }
 
 // ---------- Сон и пробуждение ----------
@@ -341,9 +349,13 @@ function unlock(): void {
   }
 }
 
+/** Игрок коснулся экрана: на секунду с небольшим мир тише, а отклик на касание — ясно слышен. */
+const busy = (): void => budget.calm(performance.now() / 1000);
+
 if (typeof window !== 'undefined') {
   for (const type of ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'click', 'keydown'])
     window.addEventListener(type, unlock, { capture: true, passive: true });
+  for (const type of ['pointerdown', 'touchstart']) window.addEventListener(type, busy, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => {
     pageHidden = document.hidden;
     sync();
@@ -378,6 +390,7 @@ export function placeAt(x?: number): { pan: number; gain: number; onScreen: bool
 /** Вход канала; со стороной — через панораму. Куда подключать голос звука. */
 export function busInput(ac: AudioContext, bus: Bus, pan = 0, gain = 1): AudioNode {
   if (!graph || graph.input[bus].context !== ac) return ac.destination;
+  if (bus === 'sting') noteStart('sting', bus, 'sting');
   let out: AudioNode = graph.input[bus];
   if (gain !== 1) {
     const g = ac.createGain();
@@ -394,8 +407,38 @@ export function busInput(ac: AudioContext, bus: Bus, pan = 0, gain = 1): AudioNo
   return out;
 }
 
-/** Не «пулемёт»: сыграть ли частый звук сейчас (правило — в mix.ts). */
-export const allowVoice = (key: string, rule: VoiceRule, dur: number): boolean => limiter.allow(key, rule, performance.now() / 1000, dur);
+/**
+ * Сколько звуков началось: всего, по каналам и по именам — замер «сколько звуков в минуту» (?debug,
+ * mixerDebug().starts). Петли (дождь, гомон, гул) не считаются — только разовые звуки.
+ */
+const starts = { total: 0, bus: {} as Record<string, number>, key: {} as Record<string, number>, tier: {} as Record<string, number> };
+export function noteStart(key: string, bus: Bus, tier = 'free'): void {
+  starts.total++;
+  starts.bus[bus] = (starts.bus[bus] ?? 0) + 1;
+  starts.key[key] = (starts.key[key] ?? 0) + 1;
+  starts.tier[tier] = (starts.tier[tier] ?? 0) + 1;
+}
+
+/**
+ * Можно ли сыграть звук key канала bus сейчас — и с какой громкостью (0 — нет): важность, «людность»,
+ * скорость игры и паузы — в mix.ts (SoundBudget). Сыгранный — учтён и посчитан.
+ */
+export function admitVoice(key: string, rule: VoiceRule, dur: number, bus: Bus): number {
+  const gain = budget.admit(key, rule, performance.now() / 1000, dur, bus);
+  if (gain > 0) noteStart(key, bus, rule.tier ?? 'world');
+  return gain;
+}
+
+/** То же, когда громкость не важна: сыграть ли звук сейчас. */
+export const allowVoice = (key: string, rule: VoiceRule, dur: number, bus: Bus): boolean => admitVoice(key, rule, dur, bus) > 0;
+
+/** Скорость игры (×1, ×2): на ×2 события мира звучат реже, чтобы за секунду их было не больше, чем на ×1. */
+export function setPace(speed: number): void {
+  budget.pace = Math.max(1, speed);
+}
+
+/** Скорость игры, под которую сейчас звучит мир. */
+export const gamePace = (): number => budget.pace;
 
 /** Фанфары, новости и заставки: музыка на время притихает (depth — во сколько раз, по умолчанию ~−6 дБ). */
 export function duckMusic(seconds: number, depth = STINGER_DUCK): void {
@@ -404,6 +447,8 @@ export function duckMusic(seconds: number, depth = STINGER_DUCK): void {
   stingerDuck = stingerUntil > ctx.currentTime ? Math.min(stingerDuck, depth) : depth;
   stingerUntil = Math.max(stingerUntil, ctx.currentTime + seconds);
   applyDuck(true);
+  // Под фанфары и заставки мир не перебивает их своими мелочами.
+  budget.calm(performance.now() / 1000, seconds);
 }
 
 // ---------- Настройки ----------
@@ -443,4 +488,4 @@ export const mixer = {
 
 // Отладка: ?debug открывает пульт из консоли браузера (контекст, каналы, меню и диалог).
 if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug'))
-  Object.assign(window, { mixerDebug: () => ({ ctx, graph, volumes, muted, menuOpen, dialogOpen, doorOpen, level: LEVEL }) });
+  Object.assign(window, { mixerDebug: () => ({ ctx, graph, volumes, muted, menuOpen, dialogOpen, doorOpen, level: LEVEL, starts: JSON.parse(JSON.stringify(starts)), pace: budget.pace, calm: Math.max(0, budget.calmUntil - performance.now() / 1000) }) });

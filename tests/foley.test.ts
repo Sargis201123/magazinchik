@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import manifestJson from '../art/sfx/manifest.json';
 import { SHELF_KINDS } from '../src/game/economy';
-import { clipSpan, markerShift, MATERIAL, NOTES_FROM, payWith, placeRate, PRE_ROLL } from '../src/platform/foley';
+import { BIG_BASKET, bigBasket, clipSpan, markerShift, MATERIAL, NOTES_FROM, payWith, placeRate, PRE_ROLL } from '../src/platform/foley';
 import { ONSETS, SFX, SFX_BANK, SYLLABLES, VOICE_BANK, VOWELS, type SfxId } from '../src/platform/sfxData';
 
 // Записанные звуки действий: таблица кусков совпадает с манифестом и файлами, у каждого звука есть
@@ -82,6 +82,15 @@ describe('касса', () => {
     expect(payWith(40)).toBe('coin');
     expect(payWith(NOTES_FROM - 1)).toBe('coin');
     expect(payWith(NOTES_FROM)).toBe('notes');
+  });
+
+  it('«спасибо» — только за большую корзину: много товаров или крупная сумма', () => {
+    expect(bigBasket(1, 80)).toBe(false);
+    expect(bigBasket(BIG_BASKET.items - 1, NOTES_FROM)).toBe(false);
+    expect(bigBasket(BIG_BASKET.items, 50)).toBe(true);
+    expect(bigBasket(1, BIG_BASKET.total)).toBe(true);
+    // Средняя корзина — 1,4 товара: «спасибо» звучит у немногих, а не на каждой покупке.
+    expect(BIG_BASKET.items).toBeGreaterThanOrEqual(3);
   });
 });
 

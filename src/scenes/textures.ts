@@ -4,6 +4,9 @@
 import { PRODUCT_IDS } from '../game/economy';
 import { WARDROBE_TEXTURES } from './wardrobe';
 
+/** Виды мусора на полу (art/litter.py); у каждого есть сгнивший «_rot». */
+export const TRASH_KEYS = ['trash', 'trash_banana', 'trash_cup', 'trash_wrapper', 'trash_can', 'trash_apple'];
+
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
 const SPRITES = [
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
@@ -269,8 +272,6 @@ const SPRITES = [
   'puff',
   'bubble_s',
   'stink',
-  'trash_banana',
-  'trash_cup',
   'vending',
   'vending_side',
   'pallet_water',
@@ -316,7 +317,10 @@ const SPRITES = [
   'box',
   'rack',
   ...PRODUCT_IDS.map((id) => `crate_${id}`),
-  'trash',
+  // Мусор на полу и он же сгнивший, муха и вонь над ним (art/litter.py, src/game/rot.ts).
+  ...TRASH_KEYS.flatMap((k) => [k, `${k}_rot`]),
+  'fly',
+  'rot_stink',
   'bubble',
   'pip',
   'bar',
@@ -336,7 +340,10 @@ const SPRITES = [
   'plant',
   'poster',
   'baskets',
-  'bargain_bin',
+  // Полка «Уценка» трёх моделей (art/bargain_shelf.py).
+  'bargain_shelf0',
+  'bargain_shelf1',
+  'bargain_shelf2',
   'wet_sign',
   'butterfly0',
   // Циферблат без стрелок: стрелки идут по ходу смены (art/clockface.py).

@@ -233,7 +233,7 @@ export const propRect = (p: Prop): Rect => ({ x: p.x + p.fp.x, y: p.y + p.fp.y, 
 export function propFootprint(layout: Layout, id: string, x: number): Rect {
   if (id === 'vending') return vendingFootprint(vendingSide(layout, x));
   if (id === 'bin') return { x: -8, y: -12, w: 16, h: 14 };
-  if (id === 'bargain') return { x: -13, y: -8, w: 26, h: 12 };
+  if (id === 'bargain') return { x: -15, y: -8, w: 30, h: 12 };
   return { x: -7, y: -10, w: 14, h: 14 };
 }
 

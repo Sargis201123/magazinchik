@@ -187,7 +187,10 @@ import { ColorGrade } from './grade';
 import { Halo, personGlow } from './halo';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
-import { BARGAIN_CAPACITY, BARGAIN_CHANCE, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
+import { BARGAIN_CHANCE, BARGAIN_PER_ROW, bargainCapacity, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
+import { binSmell, ROTS, rotStage, smellChance, smellLevel, type RotStage } from '../game/rot';
+import { Rotting } from './rotting';
+import { TRASH_KEYS } from './textures';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { coffeeChance, cupsOf, useCup } from '../game/coffee';
 import { carryBonus, charmPatience, eyeTheft, ownerTiming } from '../game/owner';
@@ -201,6 +204,8 @@ import { hasRadio, nextStation, radioPatience, radioTolerance, radioSpeed, setSt
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
 import { showUrgent } from '../ui/urgent';
 import {
+  bargainRows,
+  bargainSprite,
   binCapacity,
   binSprite,
   brewSeconds,
@@ -440,6 +445,11 @@ const RUN_PACE = 65;
 const MAX_DUST = 24;
 /** Как часто покупатель у пустой кассы зовёт продавца. */
 const CALL_EVERY_MS = 3000;
+
+/** Полка «Уценка» (art/bargain_shelf.py, в точках мира): низ горки ниже точки места, высота цоколя и шаг рядов. */
+const BARGAIN_BOTTOM = 8;
+const BARGAIN_BASE = 6;
+const BARGAIN_STEP = 4;
 
 const TRASH_CHANCE = 0.15;
 const MAX_TRASH = 8;
@@ -1274,6 +1284,8 @@ const packMs = (order: HomeOrder): number => orderUnits(order) * PACK_UNIT_MS + 
 const VAN_TINT = 0xf9a25c;
 /** Метка в seenTips: первый звонок с карточкой уже был (до него подсказка внизу — подробнее). */
 const CALL_CARD_TIP = 'deliveryCard';
+/** Метка в seenTips: первый сгнивший мусор уже убрали (до этого внизу подсказка про запах). */
+const ROT_TIP = 'rot';
 
 export class StoreScene extends Phaser.Scene {
   private state!: StoreState;
@@ -1445,7 +1457,7 @@ export class StoreScene extends Phaser.Scene {
   /** Дневная живность и тени облаков: к вечеру исчезают (updateLighting). */
   private dayLife: { obj: Phaser.GameObjects.Image; alpha: number }[] = [];
   /** Вещи зала, которые двигают при перестановке (автомат, ведро, растения): место и «след» на полу. */
-  private propList: (Prop & { tex: string })[] = [];
+  private propList: (Prop & { tex: string; oy?: number })[] = [];
   /** Стандартные места вещей зала (для «Как было» и чтобы не хранить несдвинутое). */
   private propDefaults: Record<string, { x: number; y: number }> = {};
   /** Оборудование и украшения зала при прошлой постройке: «текстура@x,y» (по ним видно, что куплено). */
@@ -1548,9 +1560,15 @@ export class StoreScene extends Phaser.Scene {
   /** Ведро с мусором в зале: сколько в нём, картинка, выносят ли его сейчас и сколько несут в мешке. */
   private binFill = 0;
   private binImg?: Phaser.GameObjects.Image;
-  /** Полка «Уценка» (bargain.ts): где стоит и картинки товара на ней. */
+  /** Полка «Уценка» (bargain.ts): где стоит и картинки товара на ней (по местам горки). */
   private bargainAt: { x: number; y: number } | null = null;
   private bargainItems: Phaser.GameObjects.Image[] = [];
+  /** Гниющий мусор (rot.ts): мухи и вонь над ним и над переполненным ведром. */
+  private rotting = new Rotting(this, () => this.lite);
+  /** Сколько секунд ведро стоит переполненным (тогда оно тоже пахнет). */
+  private binFullFor = 0;
+  /** Всплывашка «Мусор гниёт» уже была в этом запуске (пока игрок не убрал гнилое — подсказка внизу). */
+  private rotWarned = false;
   private binGlow?: Halo;
   private binStink?: Phaser.GameObjects.Image;
   private binBusy = false;
@@ -1788,6 +1806,8 @@ export class StoreScene extends Phaser.Scene {
     this.speed = speed;
     this.time.timeScale = speed;
     this.tweens.timeScale = speed;
+    // На ×2 событий вдвое больше — звуков мира за секунду столько же, сколько на ×1 (mix.ts, SoundBudget).
+    sound.pace(speed);
   }
 
   private titleShow(): () => void {
@@ -1818,6 +1838,8 @@ export class StoreScene extends Phaser.Scene {
     music.setMood(this.musicMood(), this.winterTune);
     // Дверь двигается только в рабочие часы: день кончился — стекло снова закрывает улицу.
     if (!this.running) {
+      // Мухи над неубранным не замирают и между сменами.
+      this.rotting.tick(this.time.now);
       ambience.door(0);
       return;
     }
@@ -1869,6 +1891,7 @@ export class StoreScene extends Phaser.Scene {
     for (const c of this.queue) this.updateBubble(c);
     for (const r of this.registers) if (r.customer) this.updateBubble(r.customer);
     this.checkSlips();
+    this.updateRot(dt);
     this.updateScanBar();
     this.callSellerIfNeeded();
     // Пока говорит бабушка, та же подсказка снизу не повторяется.
@@ -1918,6 +1941,7 @@ export class StoreScene extends Phaser.Scene {
       if ((nextRegisterCount(this.state) ?? 0) > registerSlots(this.state)) return t('hint.queueRegister');
     }
     if (this.state.day <= 4 && this.shelfNeedsRestock()) return t('hint.restock');
+    if (!this.state.seenTips?.includes(ROT_TIP) && [...this.trash].some((piece) => piece.getData('rot'))) return t('hint.rot');
     if (this.binFull() && !this.binBusy) return t('hint.bin');
     if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
     return '';
@@ -2087,6 +2111,7 @@ export class StoreScene extends Phaser.Scene {
     this.stopMop();
     this.dropVisitors();
     for (const obj of [...this.children.list]) obj.destroy();
+    this.rotting.clear();
     // Снятое со сцены, но живое (в списке обновления) — тоже: иначе обновлялось бы невидимкой вечно.
     for (const obj of [...this.sys.updateList.getActive()]) if (!obj.displayList && !obj.parentContainer) obj.destroy();
     this.people.clear();
@@ -3061,8 +3086,11 @@ export class StoreScene extends Phaser.Scene {
     const { door, h } = this.layout;
     const close = (p: { x: number; y: number }) => Math.abs(p.x - door.x) < 16 && Math.abs(p.y - h - 4) < 18;
     const near = [...this.customers].some((c) => close(c.sprite)) || [...this.newcomers].some(close);
-    // Колокольчик над дверью — записанный (sound.ts); пока лента не скачалась — синтезированный.
-    if (near && this.doorOpen === 0 && !sound.doorbell(door.x)) ambience.chime(door.x);
+    // Колокольчик над дверью — записанный (sound.ts); пока лента не скачалась — синтезированный. Звенит,
+    // только когда входит один человек: на выходе молчит, а когда входят несколько сразу (пара, толпа
+    // в час пик) — тоже, иначе дверь звенела без умолку. Ещё реже — правило звука (не чаще раза в 4 с).
+    const entering = [...this.customers].filter((c) => !c.gone && close(c.sprite)).length + [...this.newcomers].filter(close).length;
+    if (entering === 1 && this.doorOpen === 0 && !sound.doorbell(door.x)) ambience.chime(door.x);
     this.doorOpen = Phaser.Math.Clamp(this.doorOpen + (near ? 0.12 : -0.06), 0, 1);
     // Открытая дверь «впускает улицу»: пока кто-то входит, за стеклом слышно ярче и чуть громче.
     ambience.door(this.doorOpen);
@@ -3201,9 +3229,9 @@ export class StoreScene extends Phaser.Scene {
       }
     };
     // Вещи зала (автомат, ведро, растения) — тоже «призраки», их тянут свободно.
-    const props: (Prop & { tex: string })[] = this.propList.map((p) => ({ ...p, fp: { ...p.fp } }));
+    const props: (Prop & { tex: string; oy?: number })[] = this.propList.map((p) => ({ ...p, fp: { ...p.fp } }));
     const propGhosts = props.map((p) => {
-      const img = this.art(0, 0, p.tex);
+      const img = this.art(0, p.oy ?? 0, p.tex);
       const frame = this.add.graphics();
       const ghost = this.add.container(p.x, p.y, [frame, img]).setDepth(LIGHT_DEPTH + 11);
       ghost.setSize(Math.max(16, p.fp.w), Math.max(16, p.fp.h)).setInteractive({ draggable: true, useHandCursor: true });
@@ -5816,12 +5844,12 @@ export class StoreScene extends Phaser.Scene {
     }
     this.setFacing(c.sprite, 'right');
     c.serving = true;
-    for (const { id } of c.items) {
+    for (const [n, { id }] of c.items.entries()) {
       await this.wait(KIOSK_ITEM_SECONDS * 1000);
       if (!this.sys.isActive()) return true;
       const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(1.5 / ART).setDepth(1000);
       this.tweens.add({ targets: item, x: kiosk.x, y: kiosk.y - 6, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
-      sound.scan(kiosk.x);
+      sound.scan(kiosk.x, n);
       this.kioskScreen?.setAlpha(0.9);
       this.time.delayedCall(150, () => this.kioskScreen?.setAlpha(0.3));
     }
@@ -8190,8 +8218,7 @@ export class StoreScene extends Phaser.Scene {
       if (!near) continue;
       bird.away = true;
       const { img, home } = bird;
-      // Хлопанье крыльев (вся стайка — один звук: ограничитель не даст сыграть его трижды).
-      ambience.street('pigeons', home.x);
+      // Голуби взлетают молча: хлопанье крыльев на каждого прохожего звучало то и дело (просьба автора — убрать).
       const dir = Math.random() < 0.5 ? -1 : 1;
       img.setTexture('pigeon_fly').setFlipX(dir < 0).setDepth(LIGHT_DEPTH - 1);
       // Взмахи — повтор мира: перестроили зал посреди полёта (твин погашен) — перестают махать и они.
@@ -8396,9 +8423,9 @@ export class StoreScene extends Phaser.Scene {
     return custom ? { x: custom.x, y: custom.y } : def;
   }
 
-  /** Вещь зала, которую можно двигать при перестановке; её «след» — препятствие для обхода. */
-  private registerProp(id: string, at: { x: number; y: number }, tex: string, fp: Rect): void {
-    this.propList.push({ id, x: at.x, y: at.y, fp, tex });
+  /** Вещь зала, которую можно двигать при перестановке; её «след» — препятствие для обхода (oy — сдвиг картинки по высоте). */
+  private registerProp(id: string, at: { x: number; y: number }, tex: string, fp: Rect, oy = 0): void {
+    this.propList.push({ id, x: at.x, y: at.y, fp, tex, oy });
   }
 
   /** Стандартное место ведра: правый нижний угол зала (двигается отдельно от кассы). */
@@ -8443,7 +8470,8 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Полка «Уценка»: у входа, на свободном месте у нижней стены (или где поставили при перестановке).
+   * Полка «Уценка»: горка у входа, на свободном месте у нижней стены (или где поставили при перестановке).
+   * Модель (gear 'bargain') — сколько на ней рядов по BARGAIN_PER_ROW мест; товар лежит на полках горки.
    * Нажать — снести на неё то, что испортится ночью.
    */
   private buildBargain(): void {
@@ -8457,19 +8485,39 @@ export class StoreScene extends Phaser.Scene {
       const r = { x: p.x + fp.x - 3, y: p.y + fp.y - 16, w: fp.w + 6, h: fp.h + 19 };
       return r.x > 2 && r.x + r.w < w - 2 && ![...this.obstacles, ...zones].some((o) => overlapsRect(r, o));
     };
-    const candidates = [-44, -72, 44, 72, -100, 100, -128, 128].map((dx) => ({ x: door.x + dx, y: h - 12 }));
-    const def = candidates.find(free) ?? { x: door.x - 44, y: h - 12 };
+    const candidates = [-46, -76, 46, 76, -106, 106, -136, 136].map((dx) => ({ x: door.x + dx, y: h - 12 }));
+    const def = candidates.find(free) ?? { x: door.x - 46, y: h - 12 };
     const at = this.propAt('bargain', def);
     this.bargainAt = at;
-    const img = this.art(at.x, at.y - 2, 'bargain_bin').setDepth(at.y + 4);
+    const rows = bargainRows(this.state);
+    const tex = bargainSprite(this.state);
+    // Низом — на пол у точки at: у моделей побольше горка растёт вверх.
+    const img = this.art(at.x, at.y + BARGAIN_BOTTOM, tex).setOrigin(0.5, 1).setDepth(at.y + 4);
     img.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.sendToBargain(true)));
-    this.bargainItems = Array.from({ length: 8 }, (_, n) => this.art(at.x - 8 + (n % 4) * 5.5, at.y - 6 + Math.floor(n / 4) * 2.5, 'item').setDepth(at.y + 3).setVisible(false));
+    this.bargainItems = Array.from({ length: rows * BARGAIN_PER_ROW }, (_, n) => {
+      const spot = this.bargainSlot(at, n);
+      // Передний ряд — поверх задних.
+      return this.art(spot.x, spot.y, 'item').setDepth(at.y + 5 - Math.floor(n / BARGAIN_PER_ROW) * 0.1).setVisible(false);
+    });
     this.obstacles.push({ x: at.x + fp.x, y: at.y + fp.y, w: fp.w, h: fp.h });
-    this.registerProp('bargain', at, 'bargain_bin', fp);
+    this.registerProp('bargain', at, tex, fp, BARGAIN_BOTTOM - img.displayHeight / 2);
     this.refreshBargain();
   }
 
-  /** Товар на полке уценки: до восьми штук видно в корзине. */
+  /** Место n на горке уценки: ряды по BARGAIN_PER_ROW, первый — передний нижний (art/bargain_shelf.py). */
+  private bargainSlot(at: { x: number; y: number }, n: number): { x: number; y: number } {
+    const row = Math.floor(n / BARGAIN_PER_ROW);
+    const col = n % BARGAIN_PER_ROW;
+    // Полка ряда — на BARGAIN_BASE + row × BARGAIN_STEP точек выше низа горки; товар стоит на ней.
+    return { x: at.x - 11.25 + col * 4.5, y: at.y + BARGAIN_BOTTOM - BARGAIN_BASE - row * BARGAIN_STEP - 2 };
+  }
+
+  /** Где встать покупателю: за горкой, тянется к товару через неё (горка повыше — встаёт дальше). */
+  private bargainStand(at: { x: number; y: number }): number {
+    return at.y + BARGAIN_BOTTOM - BARGAIN_BASE - bargainRows(this.state) * BARGAIN_STEP - 9;
+  }
+
+  /** Товар на полке уценки: по картинке на каждую штуку, передний ряд заполняется первым. */
   private refreshBargain(): void {
     const units = PRODUCT_IDS.flatMap((id) => (this.state.bargain?.[id] ?? []).map(() => id));
     this.bargainItems.forEach((img, n) => {
@@ -8492,24 +8540,29 @@ export class StoreScene extends Phaser.Scene {
       this.refreshShelves();
       this.refreshWarehouse();
     } else if (byTap) {
-      const full = bargainCount(this.state) >= BARGAIN_CAPACITY;
+      const full = bargainCount(this.state) >= bargainCapacity(this.state);
       this.popup(this.bargainAt.x, this.bargainAt.y - 18, t(full ? 'popup.bargainFull' : 'popup.bargainNone'), '#fff3b0');
     }
     this.refreshBargain();
   }
 
-  /** Покупатель по пути заглядывает на полку уценки и берёт одну штуку сверх списка. */
+  /** Покупатель по пути заглядывает на полку уценки и берёт одну штуку сверх списка — прямо с её места на горке. */
   private async visitBargain(c: Customer): Promise<void> {
     const at = this.bargainAt;
     if (!at || c.thief || !bargainCount(this.state) || Math.random() >= BARGAIN_CHANCE) return;
-    await this.walk(c.sprite, at.x + Phaser.Math.Between(-6, 6), at.y - 16);
+    await this.walk(c.sprite, at.x + Phaser.Math.Between(-8, 8), this.bargainStand(at));
     await this.wait(400);
     if (c.gone) return;
+    const units = PRODUCT_IDS.flatMap((id) => (this.state.bargain?.[id] ?? []).map(() => id));
     const taken = takeBargain(this.state);
     if (!taken) return;
     this.state = taken.state;
     c.items.push({ id: taken.id, unit: taken.unit });
-    this.reachShelf(c, { x: at.x, y: at.y - 6 }, taken.id);
+    // Штука улетает в руки с того места, где лежала (берут самую старую — первую этого товара).
+    const n = units.indexOf(taken.id);
+    const img = this.bargainItems[n];
+    const from = img?.active && img.visible ? [{ x: img.x, y: img.y, texture: img.texture.key, scale: img.scaleX, tint: 0xffffff }] : [];
+    this.reachShelf(c, { x: at.x, y: at.y - 6 }, taken.id, from);
     if (Math.random() < 0.5) this.popup(c.sprite.x, c.sprite.y - 18, t('popup.bargainTake'), '#ffd0d0');
     this.refreshBargain();
   }
@@ -10473,7 +10526,8 @@ export class StoreScene extends Phaser.Scene {
    */
   private dropTrash(x: number, y: number, kind: TrashKind = 'trash'): Phaser.GameObjects.Image | undefined {
     if (this.trash.size >= MAX_TRASH) return undefined;
-    const key = kind === 'trash' ? Phaser.Utils.Array.GetRandom(['trash', 'trash', 'trash_banana', 'trash_cup']) : kind;
+    // Чаще всего — бумажка, остальное вразнобой (art/litter.py).
+    const key = kind === 'trash' ? Phaser.Utils.Array.GetRandom(['trash', ...TRASH_KEYS]) : kind;
     const area =
       kind === 'mud' ? new Phaser.Geom.Rectangle(-2, -2, 30, 26) : kind === 'spill' ? new Phaser.Geom.Rectangle(-2, -4, 32, 20) : new Phaser.Geom.Rectangle(-5, -5, 16, 15);
     const piece = this
@@ -10481,6 +10535,8 @@ export class StoreScene extends Phaser.Scene {
       .setDepth(kind === 'trash' ? 1 : 0.5)
       .setInteractive(area, Phaser.Geom.Rectangle.Contains);
     piece.setData('kind', kind);
+    // Сколько секунд лежит на полу и стадия гниения (rot.ts), base — картинка без «_rot».
+    piece.setData('age', 0).setData('rot', 0).setData('base', key);
     piece.setData('glow', new Halo(this, piece, 0xffffff));
     piece.on('pointerup', () => {
       if (this.dragged || this.claimedTrash.has(piece) || this.sellerBusy || this.ownerScanning()) return;
@@ -10562,7 +10618,9 @@ export class StoreScene extends Phaser.Scene {
   /** Прибавилась звезда рейтинга — по залу волной бегут золотые искры; побит рекорд выручки — конфетти. */
   private cheerProgress(): void {
     const stars = Math.round(this.state.rating);
-    if (this.starsCheered < 0 || stars < this.starsCheered) this.starsCheered = stars;
+    // Рейтинг около «x,5» качается туда-сюда — звезда считается потерянной, только когда он ушёл вниз
+    // заметно: иначе волна искр и звон медали шли на каждое покачивание.
+    if (this.starsCheered < 0 || this.state.rating < this.starsCheered - 0.75) this.starsCheered = stars;
     if (stars > this.starsCheered) {
       this.starsCheered = stars;
       this.starWave();
@@ -10671,8 +10729,42 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Мусор на полу стареет и гниёт (rot.ts): темнеет, над ним мухи и вонь. Переполненное ведро,
+   * которое долго не выносят, тоже пахнет. В первый раз — всплывашка над гнилым мусором.
+   */
+  private updateRot(dt: number): void {
+    for (const piece of this.trash) {
+      if (!(ROTS as readonly string[]).includes(piece.getData('kind') as string)) continue;
+      const age = ((piece.getData('age') as number) ?? 0) + dt;
+      piece.setData('age', age);
+      const stage = rotStage(age);
+      if (stage <= ((piece.getData('rot') as RotStage) ?? 0)) continue;
+      piece.setData('rot', stage);
+      this.rotting.apply(piece, stage, piece.y);
+      if (stage === 1 && !this.state.seenTips?.includes(ROT_TIP) && !this.rotWarned) {
+        this.rotWarned = true;
+        sound.bad();
+        this.popup(piece.x, piece.y - 14, t('popup.rotFirst'), '#d8f0a0');
+      }
+    }
+    this.binFullFor = this.binFull() && !this.binBusy ? this.binFullFor + dt : 0;
+    const bin = binSmell(this.binFullFor) && this.binImg?.active ? this.binSpot() : null;
+    this.rotting.bin(bin && { x: bin.x, y: bin.y - 12 }, (bin?.y ?? 0) + 31);
+    // Чем дольше стоит полное, тем гуще вонь над ним.
+    this.binStink?.setScale((binSmell(this.binFullFor) === 2 ? 1.35 : 1) / ART);
+    this.rotting.tick(this.time.now);
+  }
+
+  /** Сколько пахнет в зале: гнилой мусор и давно полное ведро (rot.ts). */
+  private smell(): number {
+    return smellLevel([...this.trash].map((piece) => (piece.getData('age') as number) ?? 0), this.binFullFor);
+  }
+
   private removeTrash(piece: Phaser.GameObjects.Image): void {
     if (this.trash.has(piece)) this.stats.trashCleaned++;
+    // Убрали первый гнилой мусор — подсказка про запах больше не нужна.
+    if (piece.getData('rot') && !this.state.seenTips?.includes(ROT_TIP)) this.state = { ...this.state, seenTips: [...(this.state.seenTips ?? []), ROT_TIP] };
     this.trash.delete(piece);
     this.claimedTrash.delete(piece);
     if (piece.getData('kind') === 'trash') this.puff(piece.x, piece.y);
@@ -11068,7 +11160,8 @@ export class StoreScene extends Phaser.Scene {
     let bestDist = Infinity;
     for (const piece of this.trash) {
       if (this.claimedTrash.has(piece)) continue;
-      const d = Phaser.Math.Distance.Between(x, y, piece.x, piece.y);
+      // Гнилое пахнет — его уборщик убирает в первую очередь.
+      const d = Phaser.Math.Distance.Between(x, y, piece.x, piece.y) - 60 * ((piece.getData('rot') as number) ?? 0);
       if (d < bestDist) [best, bestDist] = [piece, d];
     }
     return best;
@@ -11151,7 +11244,7 @@ export class StoreScene extends Phaser.Scene {
     if (!this.sys.isActive()) return;
 
     // Переполненное ведро инспектор считает как две кучки мусора.
-    const result = inspect(this.state, { trash: this.trash.size + (this.binFull() ? 2 : 0), toiletDirt: this.toiletDirt });
+    const result = inspect(this.state, { trash: this.trash.size + (this.binFull() ? 2 : 0) + ([...this.trash].some((piece) => piece.getData('rot')) ? 1 : 0), toiletDirt: this.toiletDirt });
     this.inspection = result;
     this.state = inspectionDone(this.state, result);
     if (result.passed) {
@@ -11678,7 +11771,7 @@ export class StoreScene extends Phaser.Scene {
     const clerk = byOwner ? this.seller : (this.operator(index) as Worker | null)?.sprite;
     // Товар и пакет — к тому, кто пробивает: сменщик стоит у стойки чуть выше хозяина.
     const hand = clerk?.active ? { x: clerk.x, y: clerk.y } : r.clerk;
-    for (const { id } of c.items) {
+    for (const [n, { id }] of c.items.entries()) {
       await this.wait(timing.item * 1000 * manual);
       if (!this.sys.isActive()) return;
       // Товар — на ленту, под красный луч сканера (вспышка), и дальше к кассиру в пакет.
@@ -11702,8 +11795,9 @@ export class StoreScene extends Phaser.Scene {
         const base = (clerk.getData('baseScale') as number) ?? 1;
         this.tweens.add({ targets: clerk, scaleY: base * 1.06, duration: 90, yoyo: true, onComplete: () => clerk.setScale(base) });
       }
-      // Без вибрации на каждый товар: на телефоне она щёлкает громче самого сканера.
-      sound.scan(counter.x);
+      // Без вибрации на каждый товар: на телефоне она щёлкает громче самого сканера. «Пик» — пачкой:
+      // первый товар ясно, дальше через один и тише (sound.ts).
+      sound.scan(counter.x, n);
     }
     // Старая касса иногда заедает: пока продавец стучит по ней, очередь ждёт.
     if (Math.random() < registerJam(this.state)) {
@@ -11736,7 +11830,7 @@ export class StoreScene extends Phaser.Scene {
       );
       if (!this.sys.isActive()) return;
     }
-    this.finishCheckout(c);
+    this.finishCheckout(c, undefined, byOwner);
     if (byOwner) this.ownerServedOne();
   }
 
@@ -11791,7 +11885,8 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
-  private finishCheckout(c: Customer, where?: { x: number; y: number }): void {
+  /** Покупатель расплатился; own — пробивал хозяин (полный звук кассы — награда игроку). */
+  private finishCheckout(c: Customer, where?: { x: number; y: number }, own = false): void {
     this.queue = this.queue.filter((q) => q !== c);
     const at = this.registerOf(c);
     if (at) at.customer = null;
@@ -11829,8 +11924,8 @@ export class StoreScene extends Phaser.Scene {
     recordSale(this.stats, c.items);
     if (c.rare) this.rareGuestServed(c, total);
     haptic.success();
-    // Касса: рычаг, «дзынь», ящик выезжает; мелочь или купюры — смотря по сумме.
-    sound.till(c.sprite.x, total);
+    // Касса: рычаг, «дзынь», ящик выезжает; мелочь или купюры — смотря по сумме; большая корзина — «спасибо».
+    sound.till(c.sprite.x, total, { own, items: c.items.length });
     const base = (c.sprite.getData('baseScale') as number) ?? 1;
     this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
     // Пакет, который передал кассир, теперь в руке: с ним покупатель и уходит.
@@ -11850,11 +11945,15 @@ export class StoreScene extends Phaser.Scene {
 
     const dirty = this.trash.size >= TRASH_COMPLAINT || this.binFull();
     const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
-    if (c.unhappy || dirty || badGoods) {
+    // Гнилой мусор и давно полное ведро пахнут: чем сильнее, тем чаще морщатся (rot.ts).
+    // (Полное ведро и так «грязно» — его запах здесь не добавляется второй раз.)
+    const smelly = !c.unhappy && !dirty && Math.random() < smellChance(this.smell());
+    if (c.unhappy || dirty || badGoods || smelly) {
       this.stats.complaints++;
       if (badGoods) note(this.stats, 'badGoods');
       else if (dirty) note(this.stats, 'dirty');
-      const why = badGoods ? t('popup.badProduct') : dirty ? t('popup.dirty') : '😣';
+      else if (smelly) note(this.stats, 'smell');
+      const why = badGoods ? t('popup.badProduct') : dirty ? t('popup.dirty') : smelly ? t('popup.smell') : '😣';
       this.popup(c.sprite.x, c.sprite.y - 26, why, '#ffd0d0');
       this.emote(c.sprite, 'emo_angry');
       this.setMood(c.sprite, 'frown');
@@ -13318,6 +13417,7 @@ export class StoreScene extends Phaser.Scene {
     this.scheduleOrder();
     // Вечером мусор выносят — утром ведро пустое.
     this.binFill = 0;
+    this.binFullFor = 0;
     this.refreshBin();
     this.combo = 0;
     this.lastSaleAt = -Infinity;
