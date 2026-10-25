@@ -598,6 +598,37 @@ export const sound = {
   ding: (x?: number) => {
     if (sample('ding', { x, cents: 20, db: 1, limit: ['bell', { gap: 0.25, max: 2 }] }) === null) sound.bell(x);
   },
+  /**
+   * Звонит телефон на кассе (заказ на дом): короткая трель молоточка по двум чашкам, как у старого
+   * настольного аппарата. Одна трель — около секунды; пока не ответили, сцена повторяет её.
+   */
+  phone: (x?: number) => {
+    const notes: Note[] = [];
+    for (let i = 0; i < 14; i++) notes.push({ freq: i % 2 ? 1568 : 1319, at: i * 0.055, dur: 0.07, vol: 0.022, attack: 0.004 });
+    play(notes, { x, lp: 3600, cents: 15, db: 1, limit: ['phone', { gap: 0.8, max: 1 }] });
+  },
+  /** Курьер тронулся или вернулся: звонок велосипеда «дзынь-дзынь», у мопеда и фургона — «би-бип». */
+  courier: (vehicle: 'bike' | 'scooter' | 'van', x?: number) => {
+    if (vehicle === 'bike') {
+      ring(
+        [
+          { freq: 2349, vol: 0.02, ring: 0.45 },
+          { freq: 2349, at: 0.16, vol: 0.02, ring: 0.6 },
+        ],
+        BELL,
+        { x, cents: 20, db: 1, limit: ['courier', { gap: 0.4, max: 1 }] },
+      );
+      return;
+    }
+    const f = vehicle === 'van' ? 330 : 494;
+    play(
+      [
+        { freq: f, dur: 0.09, wave: 'square', vol: 0.018 },
+        { freq: f * 1.06, at: 0.14, dur: 0.14, wave: 'square', vol: 0.018 },
+      ],
+      { x, lp: 1800, cents: 20, db: 1, limit: ['courier', { gap: 0.4, max: 1 }] },
+    );
+  },
   /** Медаль достижения упала в рамку: высокий звон с отзвуком. */
   medal: () =>
     ring(

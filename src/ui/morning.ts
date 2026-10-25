@@ -189,7 +189,7 @@ import { rushPrize } from '../game/rush';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
 import { answerOpening, BUILDINGS, districtNews, districtSite, isMatchDay, OPENING_DAYS, type BuildingId } from '../game/district';
-import { canCook, cook, DISHES, DISH_IDS, kitchenOpen, portionsOf, portionsTotal, PORTIONS_MAX } from '../game/kitchen';
+import { canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, kitchenOpen, kitchenWorking, menuAuto, portionsOf, portionsTotal, PORTIONS_MAX, stoveSprite, toggleMenu } from '../game/kitchen';
 import { addFriend, duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
@@ -1753,7 +1753,17 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         details: () => [ovenBox(getState())],
       },
       ...(kitchenOpen(state)
-        ? [{ id: 'kitchen', icon: '🍲', title: t('kitchen.title'), status: `${portionsTotal(state)}/${PORTIONS_MAX}`, details: () => kitchenBox(getState()) }]
+        ? [
+            {
+              id: 'kitchen',
+              icon: '🍲',
+              title: t('kitchen.title'),
+              status: `${portionsTotal(state)}/${PORTIONS_MAX}`,
+              // Витрина пуста и повара нет — сегодня кухне нечего продавать.
+              alert: portionsTotal(state) === 0 && !kitchenWorking(state),
+              details: () => kitchenBox(getState()),
+            },
+          ]
         : []),
       {
         id: 'cat',
@@ -1780,11 +1790,33 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     ];
   };
 
-  /** Кухня: что приготовить из продуктов со склада (kitchen.ts). */
+  /**
+   * Кухня (kitchen.ts): кто готовит — повар весь день или ты сам утром, как торговали вчера,
+   * меню дня для повара и рецепты с кнопкой «приготовить сейчас».
+   */
   const kitchenBox = (state: StoreState): HTMLElement[] => {
     if (!kitchenOpen(state)) return [];
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('kitchen.title')), el('div', 'ui-muted', t('kitchen.note', { n: portionsTotal(state), max: PORTIONS_MAX })));
+    const chef = staffOf(state, 'cook');
+    const who = chef ? t(isAbsent(state, chef) ? 'kitchen.chefOff' : 'kitchen.chef', { name: memberName(chef) }) : t('kitchen.noChef');
+    // Кто готовит — главное правило кухни: строкой на виду, а не за «❔».
+    box.append(el('div', 'ui-note', who));
+    const reports = state.reports ?? [];
+    const last = reports[reports.length - 1]?.kitchen;
+    if (last) box.append(el('div', 'ui-item-sub', t('kitchen.yesterday', { sold: last.sold, missed: Math.max(0, last.wanted - last.sold), spoiled: last.spoiled })));
+    // Меню дня — только для повара: сам готовишь — сам и выбираешь кнопками ниже.
+    if (chef) {
+      const auto = menuAuto(state);
+      const chips = el('div', 'ui-chips');
+      chips.append(button(t('kitchen.auto'), () => update(toggleMenu(getState(), null)), `ui-chip${auto ? ' active' : ''}`));
+      for (const id of DISH_IDS) {
+        const on = !auto && cookMenu(state).includes(id);
+        chips.append(button(`${DISHES[id].icon} ${t(`dish.${id}` as TextKey)}`, () => update(toggleMenu(getState(), id)), `ui-chip${on ? ' active' : ''}`));
+      }
+      box.append(el('h3', '', t('kitchen.menu')), chips, el('div', 'ui-muted', t(auto ? 'kitchen.autoNote' : 'kitchen.menuNote')));
+    }
+    box.append(el('h3', '', t('kitchen.recipes')));
     for (const id of DISH_IDS) {
       const d = DISHES[id];
       const row = el('div', 'ui-item');
@@ -1792,9 +1824,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const name = el('div', 'ui-item-name', t(`dish.${id}` as TextKey));
       name.append(el('span', 'ui-tag', `${d.price} 💰`));
       const needs = Object.entries(d.needs).map(([p, n]) => `${PRODUCTS[p as ProductId].icon}×${n}`).join(' ');
-      body.append(name, el('div', 'ui-item-sub', `${needs} → ${d.portions} · ${t('kitchen.ready', { n: portionsOf(state, id) })}`));
+      const hot = d.hot ? `🔥 ${t('kitchen.hot')} · ` : '';
+      body.append(name, el('div', 'ui-item-sub', `${hot}${needs} → ${dishPortions(state, id)} · ${t('kitchen.ready', { n: portionsOf(state, id) })}`));
       const actions = el('div', 'ui-item-actions');
-      actions.append(button(t('kitchen.cook', { n: d.portions }), () => update(cook(getState(), id), 'success'), 'ui-chip', !canCook(state, id)));
+      actions.append(button(t('kitchen.cook', { n: dishPortions(state, id) }), () => update(cook(getState(), id), 'success'), 'ui-chip', !canCook(state, id)));
       row.append(el('div', 'ui-ad-icon', d.icon), body, actions);
       box.append(row);
     }
@@ -2565,6 +2598,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       bin: tier ? `bin_t${tier}_0` : 'bin0',
       coffee: coffeeSprite(at),
       oven: ovenSprite(at),
+      // Транспорт курьера: велосипед и мопед сбоку, фургончик — значком (сверху он как все машины).
+      courier: ['bike', 'scooter', 'ico_van'][tier],
+      stove: stoveSprite(at),
     };
     return art[id] ?? null;
   };
@@ -3237,6 +3273,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     box.append(
       el('b', '', t('skill.title', { n: ownerLevelOf(state) })),
       el('div', 'ui-item-sub', `${t('staffTab.ownerSkill')} ${'★'.repeat(lvl).padEnd(5, '☆')} · ${t('staffTab.ownerPerDay', { n: servePerDay(withUpgrades(state, ownerTiming(state))) })}`),
+      // Первая касса — его: кассиры за остальными, сменщик — за его кассой, пока он в зале (подробности — за «❔»).
+      el('div', 'ui-item-sub', t('staffTab.ownerTill')),
+      el('div', 'ui-muted', t('staffTab.ownerTillNote')),
       el('div', 'ui-muted', next === null ? t('skill.xpMax', { xp: ownerXp(state) }) : t('skill.xp', { xp: ownerXp(state), next })),
       el(
         'div',
@@ -3340,14 +3379,18 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const roles = el('div', 'ui-chips');
     const locked: string[] = [];
     for (const role of STAFF_ROLE_IDS) {
-      // Кассир на кассу, которой ещё нет в помещении, — не показываем.
-      if (isCashierRole(role) && registerOfRole(role) >= registerCount(state)) continue;
+      // Кассир на кассу, которой ещё нет в помещении, — не показываем (сменщик — за кассу хозяина, она
+      // есть всегда). Место под следующую кассу уже есть, а саму не поставили — подскажем, где.
+      if (isCashierRole(role) && registerOfRole(role) >= registerCount(state)) {
+        if (registerOfRole(role) === registerCount(state) && registerOfRole(role) < registerSlots(state)) locked.push(t('staffTab.needsRegister', { role: t(STAFF_ROLES[role].nameKey) }));
+        continue;
+      }
       // Менеджер — только в большом магазине: пока рано, подскажем, где появится.
       if (!roleOpen(state, role)) {
         const { minLevel = 0, needs, nameKey } = STAFF_ROLES[role];
-        // Пекарь и бариста — когда во флигеле открыты пекарня и кофейня.
+        // Пекарь, бариста и повар — когда во флигеле открыты пекарня, кофейня и кухня.
         if (state.level < minLevel) locked.push(t('staffTab.lockedRole', { role: t(nameKey), name: t(STORE_LEVELS[minLevel].nameKey) }));
-        else if (needs) locked.push(t(needs === 'oven' ? 'staffTab.needsOven' : 'staffTab.needsCoffee', { role: t(nameKey) }));
+        else if (needs) locked.push(t(needs === 'oven' ? 'staffTab.needsOven' : needs === 'coffee' ? 'staffTab.needsCoffee' : 'staffTab.needsKitchen', { role: t(nameKey) }));
         continue;
       }
       const searched = state.jobSearch?.day === state.day && state.jobSearch.role === role;

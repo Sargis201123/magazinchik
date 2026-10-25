@@ -87,12 +87,32 @@ describe('новые механики', () => {
   const base = money({});
 
   // Шесть прогонов — шумно (точнее: npm run sim:features), поэтому проверяем только «не ломает».
-  it.each([['cat'], ['candy'], ['coffee'], ['oven'], ['night']] as const)('%s — не в минус и не вдвое', (feature) => {
+  it.each([['cat'], ['candy'], ['coffee'], ['oven'], ['night'], ['delivery'], ['kitchen']] as const)('%s — не в минус и не вдвое', (feature) => {
     const m = money({ [feature]: true });
     expect(m).toBeGreaterThan(base * 0.9);
     expect(m).toBeLessThan(base * 2);
   });
 
+});
+
+describe('кухня с поваром', () => {
+  // Опытный игрок со всеми механиками: кухня (повар, продукты, списание) окупается, но главной статьёй не становится.
+  const ALL = { candy: true, coffee: true, oven: true, night: true, cat: true, cart: true, loyalty: true, gear: true, etags: true, departments: true, skills: true, radio: true, brand: true, cafe: true, rush: true };
+  const lateProfit = (kitchen: boolean) => {
+    let sum = 0;
+    for (let seed = 1; seed <= 4; seed++) {
+      const r = simulate({ days: 100, seed, features: { ...ALL, kitchen } });
+      sum += r.days.slice(-14).reduce((s, d) => s + d.profit, 0) / 14;
+    }
+    return sum / 4;
+  };
+
+  it('прибыль в день к концу — не меньше, чем без кухни, и не больше чем на четверть', () => {
+    const without = lateProfit(false);
+    const withKitchen = lateProfit(true);
+    expect(withKitchen).toBeGreaterThan(without * 0.98);
+    expect(withKitchen).toBeLessThan(without * 1.25);
+  });
 });
 
 describe('кнопка «Закупить нужное»', () => {

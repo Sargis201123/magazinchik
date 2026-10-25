@@ -48,7 +48,7 @@ describe('кассы растут вместе с помещением', () => {
     expect(registerCount(at(1, { upgrades: ['register2' as never] }))).toBe(2);
   });
 
-  it('у каждого кассира своя касса', () => {
+  it('у каждого кассира своя касса, а первая — хозяина (сменщик подменяет за ней)', () => {
     expect(['cashier', 'cashier2', 'cashier3', 'cashier4'].map((r) => registerOfRole(r as never))).toEqual([0, 1, 2, 3]);
   });
 });

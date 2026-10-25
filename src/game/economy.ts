@@ -236,10 +236,13 @@ export const LATE_PENALTY = 0.1;
 export const START_DEBT = 500;
 export const DEBT_PAYMENT = 250;
 
-export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'cleaner' | 'loader' | 'guard' | 'manager' | 'baker' | 'barista';
+export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'cleaner' | 'loader' | 'guard' | 'manager' | 'baker' | 'barista' | 'cook';
 
-/** Сотрудники: каждый забирает у игрока одно ручное дело. Зарплата — базовая за месяц. */
-export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number; minLevel?: number; needs?: 'oven' | 'coffee' }> = {
+/**
+ * Сотрудники: каждый забирает у игрока одно ручное дело. Зарплата — базовая за месяц.
+ * За первой кассой всегда сам хозяин; cashier — его сменщик, cashier2…4 — кассиры остальных касс (registers.ts).
+ */
+export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number; minLevel?: number; needs?: 'oven' | 'coffee' | 'kitchen' }> = {
   cashier: { nameKey: 'staff.cashier', descKey: 'staff.cashier.desc', wage: 420 },
   cashier2: { nameKey: 'staff.cashier2', descKey: 'staff.cashier2.desc', wage: 420 },
   cashier3: { nameKey: 'staff.cashier3', descKey: 'staff.cashier3.desc', wage: 420 },
@@ -253,6 +256,8 @@ export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey
   // Пекарь работает в пекарне во флигеле (нужна печь), бариста — в кофейне (нужен кофейный уголок).
   baker: { nameKey: 'staff.baker', descKey: 'staff.baker.desc', wage: 380, needs: 'oven' },
   barista: { nameKey: 'staff.barista', descKey: 'staff.barista.desc', wage: 360, needs: 'coffee' },
+  // Повар — на кухне над кофейней (нужно улучшение «Кухня»): готовит весь день сам, без него — только утром руками.
+  cook: { nameKey: 'staff.cook', descKey: 'staff.cook.desc', wage: 400, needs: 'kitchen' },
 };
 
 /** Можно ли нанять на эту должность в этом помещении. */
@@ -282,8 +287,8 @@ const SKILL_PAY = [0.85, 1, 1.3];
 export const STICKY_SKIM = 0.04;
 /** Навык растёт каждые столько месяцев работы. */
 export const MONTHS_PER_SKILL = 2;
-/** Сколько сотрудников помещается в помещении каждого уровня. */
-export const STAFF_LIMIT = [1, 3, 5, 9, 11];
+/** Сколько сотрудников помещается в помещении каждого уровня (в больших — все должности, с поваром). */
+export const STAFF_LIMIT = [1, 3, 5, 10, 11];
 
 export interface StaffMember {
   role: StaffRole;
@@ -582,6 +587,11 @@ export interface StoreState {
   bakeMode?: 'auto' | 'full' | 'off';
   /** Сколько касс куплено (registers.ts). Нет поля — старое сохранение: кассы ставились сами. */
   registers?: number;
+  /**
+   * Первая касса — хозяина, кассиры — за остальными (registers.ts). Нет поля — сохранение до этого:
+   * при загрузке кассир переходит за свою кассу (migrateOwnerTill).
+   */
+  ownerTill?: boolean;
   /** Стаканчики в кофейном уголке (coffee.ts). */
   cups?: number;
   /** Ценовая война с Эдуардом (war.ts). */
@@ -633,6 +643,8 @@ export interface StoreState {
   nightGuests?: NightState;
   /** Готовые порции на кухне (kitchen.ts). */
   kitchen?: Partial<Record<DishId, number>>;
+  /** Меню дня для повара (kitchen.ts): какие блюда готовить; не задано — «авто». */
+  cookMenu?: DishId[];
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */
   rush?: boolean;
   rushClaimed?: number;
@@ -675,6 +687,8 @@ export interface StoreState {
   onb?: import('./onboarding').OnbState;
   /** Модели оборудования (номер модели; нет — начальная). */
   gear?: Partial<Record<GearId, number>>;
+  /** Рейтинг доставки на дом 1..5 (delivery.ts); нет — 4 звезды. */
+  deliveryRating?: number;
   /** Утренние закупки последних дней — для «как в прошлый раз» (reorder.ts). */
   purchases?: { day: number; lines: { sid: string; pid: ProductId; qty: number }[] }[];
   /** 0..5 звёзд, влияет на поток покупателей. */
@@ -733,7 +747,14 @@ export interface DayStats {
   coffees?: number;
   burnt?: number;
   deliveries?: number;
+  /** Доставка за день: деньги за привезённое (с чаевыми), из них чаевые, сколько звонков пропустили или отклонили. */
+  deliveryPay?: number;
+  deliveryTips?: number;
+  deliveryMissed?: number;
   mice?: number;
+  /** Кухня: сколько порций продали и сколько раз хотели порцию (вместе с теми, кому не хватило). */
+  dishes?: number;
+  dishWanted?: number;
   /** Почему ушли без покупки (losses.ts) и каких товаров не хватило или показались дорогими. */
   lostWhy?: Partial<Record<LostReason, number>>;
   missing?: Partial<Record<ProductId, number>>;
@@ -774,6 +795,7 @@ export const newGame = (): StoreState => ({
   gift: { lastDate: '', streak: 0 },
   rack: { level: 0, stock: 6 },
   registers: 1,
+  ownerTill: true,
   rating: 3,
   warehouse: { bread: fresh(4), apples: fresh(4) },
   shelves: [

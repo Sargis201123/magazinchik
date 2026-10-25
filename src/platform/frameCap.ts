@@ -17,7 +17,7 @@ let checkedAt = -Infinity;
 let asleep = false;
 
 /** Открыто окно поверх зала (а не спрятано на время сцены, как при расширении). */
-function modalOpen(): boolean {
+export function modalOpen(): boolean {
   for (const modal of document.querySelectorAll<HTMLElement>('.ui-modal:not(.closing)')) {
     if (modal.style.visibility !== 'hidden') return true;
   }

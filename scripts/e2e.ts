@@ -231,10 +231,14 @@ function prepare({ save, seed, start, labels }: { save: string; seed: number; st
       count,
       run,
       look,
-      /** Перемотка: день вдвое быстрее (как по кнопке ×2), время вперёд, что на экране. */
+      /**
+       * Перемотка: день вдвое быстрее (как по кнопке ×2), время вперёд, что на экране. Игрок — за
+       * своей кассой (первая касса всегда хозяина): раз в шаг касается её, как живой игрок.
+       */
       fast: async (ms: number) => {
         const scene = store();
         if (scene?.running && scene.speed === 1) scene.setSpeed(2);
+        if (scene?.running) void scene.serveNext();
         await run(ms);
         return look();
       },

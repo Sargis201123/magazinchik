@@ -2,7 +2,7 @@
 // Это то, что раньше было видно только в симуляторе: где магазин теряет деньги.
 
 import { PRODUCTS, staffOf, type DayStats, type LostReason, type ProductId, type StoreState } from './economy';
-import { CASHIER_ROLES, nextRegisterCount, nextRegisterPrice, registerCount, registerSlots } from './registers';
+import { idleRegisters, nextRegisterCount, nextRegisterPrice, registerSlots, RELIEF_ROLE } from './registers';
 import type { TextKey } from '../i18n/ru';
 
 export const LOST_REASONS: LostReason[] = ['queue', 'empty', 'expensive', 'eduard'];
@@ -36,17 +36,18 @@ export function lossAdvice(stats: DayStats, state: StoreState): LossAdvice[] {
     .map(({ reason, count }): LossAdvice => {
       switch (reason) {
         case 'queue': {
-          // Свободная касса без кассира → нанять; есть место → поставить кассу; нет места → расширить; дальше — учить.
-          const free = CASHIER_ROLES.slice(0, registerCount(state)).filter((r) => !staffOf(state, r)).length;
-          const key: TextKey = !staffOf(state, 'cashier')
-            ? 'loss.queue.hire'
-            : free > 0
+          // За первой кассой — хозяин. Касса стоит без кассира → нанять; есть место → поставить кассу;
+          // некому подменить хозяина, пока он в зале, → сменщик; нет места → расширить; дальше — учить.
+          const key: TextKey =
+            idleRegisters(state) > 0
               ? 'loss.queue.hire2'
               : nextRegisterPrice(state) !== null
                 ? 'loss.queue.buy'
-                : (nextRegisterCount(state) ?? 0) > registerSlots(state)
-                  ? 'loss.queue.register'
-                  : 'loss.queue.train';
+                : !staffOf(state, RELIEF_ROLE)
+                  ? 'loss.queue.hire'
+                  : (nextRegisterCount(state) ?? 0) > registerSlots(state)
+                    ? 'loss.queue.register'
+                    : 'loss.queue.train';
           return { reason, count, key, params: {} };
         }
         case 'empty':

@@ -58,8 +58,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const weekly = progressWeekly(s, stats);
   s = weekly.state;
   s = addPassXp(s, rewarded.done, weekly.completed.length);
-  // Непроданное с кухни ночью списывается.
-  s = spoilDishes(s).state;
+  // Непроданное с кухни ночью списывается (сколько — в отчёт дня).
+  const dishes = spoilDishes(s);
+  s = dishes.state;
   // Усталость считаем до смены плана: сегодняшний отгул обнуляет её, ночная смена — удваивает.
   s = restStaff(s, (stats.nightRevenue ?? 0) > 0);
   // «Проверяющий» от конкурента: штраф, ушёл ни с чем или разоблачили (tricks.ts).
@@ -69,7 +70,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(staffMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy)))), random), random), random), random), random), stats.revenue), stats.revenue, random), stats);
+  const next = contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(staffMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random), random), random), random), stats.revenue), stats.revenue, random), stats);
   return {
     ...night,
     state: next,

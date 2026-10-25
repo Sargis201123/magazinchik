@@ -1,9 +1,10 @@
-// Пока игрока нет: если нанят кассир, он торгует понемногу — продаёт с полок то, что обычно берут,
+// Пока игрока нет: если нанят кассир (сменщик или кассир своей кассы), он торгует понемногу — продаёт с полок то, что обычно берут,
 // по ценам хозяина. Не больше AWAY_MAX_HOURS часов за раз (дальше полки всё равно пустеют), и только
 // если не было хотя бы часа. Деньги и проданное — сразу в магазин, полки пустеют: утром есть что закупить.
 
 import { PRODUCT_IDS, type ProductId, type StoreState } from './economy';
 import { usualSales } from './bakery';
+import { isCashierRole } from './registers';
 
 /** Меньше часа — не считаем: игрок просто переключался. */
 export const AWAY_MIN_HOURS = 1;
@@ -19,8 +20,8 @@ export interface AwayTrade {
   revenue: number;
 }
 
-/** Торговал ли кто-то без хозяина: нужен кассир. */
-export const canTradeAway = (state: StoreState): boolean => state.staff.some((m) => m.role === 'cashier');
+/** Торговал ли кто-то без хозяина: нужен кассир — любой, кто работает за кассой. */
+export const canTradeAway = (state: StoreState): boolean => state.staff.some((m) => isCashierRole(m.role));
 
 /** Торговля за время отсутствия (awayMs — сколько не было игрока). null — нечего начислять. */
 export function awayTrade(state: StoreState, awayMs: number): AwayTrade | null {
