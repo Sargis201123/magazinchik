@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DECOR } from '../src/game/decor';
 import { blur, castsShadow, footprint, lawnLayout, lawnPatches, NOT_FLOOR, paintFloor, scuffAt, shadeMap, wearAt, type FloorPlan, type WearLayer } from '../src/scenes/floor';
 import { TEXTURES } from '../src/scenes/worldTextures';
 
@@ -61,6 +62,12 @@ describe('живой пол: тени', () => {
   it('тень бросает мебель на полу, а не полоски света, кромки и висящее на стене', () => {
     for (const key of ['shelf', 'fridge_side', 'counter2', 'icebox', 'vending_side', 'stove1', 'plant_big', 'bin_t2_3', 'oven2', 'rack']) expect(castsShadow(key)).toBe(true);
     for (const key of ['shelf_front', 'glow', 'clock', 'coffee_machine', 'oven_bread', 'ac_wall', 'item_bread', 'p_shirt']) expect(castsShadow(key)).toBe(false);
+  });
+
+  it('купленные растения, украшения зала и праздничные вещи стоят на полу — и отбрасывают тень', () => {
+    const items = DECOR.filter((d) => (d.kind === 'plants' || d.kind === 'showpiece' || d.kind === 'holiday') && d.texture);
+    expect(items.length).toBeGreaterThan(5);
+    expect(items.filter((d) => !castsShadow(d.texture!)).map((d) => d.id)).toEqual([]);
   });
 
   it('все картинки мебели из списка теней правда есть в игре', () => {
