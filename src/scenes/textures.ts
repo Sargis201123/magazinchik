@@ -102,6 +102,9 @@ const SPRITES = [
   'wrench',
   'card_terminal',
   'kiosk', 'candy', 'coffee_machine', 'coffee_machine1', 'coffee_machine2', 'cup', 'oven', 'oven1', 'oven2', 'oven_bread', 'review_board', 'cat_walk0', 'cat_walk1', 'cat_walk2', 'cat_walk3', 'cat_sit', 'cat_sit0', 'cat_sit1', 'cat_sit2', 'cat_sit_blink', 'cat_groom0', 'cat_groom1', 'cat_basket', 'cat_pillow', 'cat_house', 'phone', 'phone_ring', 'parcel', 'scooter', 'bike', 'mouse0', 'mouse1', 'fair_stall', 'eco_label', 'pallet_jack', 'forklift', 'autostore', 'fan_base', 'fan_blades', 'ac_wall', 'facade_screen0', 'facade_screen1', 'cam', 'mat_grate', 'air_curtain', 'slot_empty', 'unbox', 'unbox_flap', 'tag_new', 'wh_floor', 'hazard', 'wh_sign', 'extinguisher',
+  // Живой пол (art/livefloor.py): плиточные вставки отделов под полками и газон из четырёх плиток.
+  ...['bakery', 'produce', 'dairy', 'meat', 'drinks', 'frozen', 'household'].flatMap((d) => [`deptfloor_${d}`, `deptfloor_${d}_side`]),
+  'grass_set',
   'floor_wood',
   'floor_checker',
   'floor_gold',
