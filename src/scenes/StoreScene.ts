@@ -3276,6 +3276,12 @@ export class StoreScene extends Phaser.Scene {
       const lay = placed();
       const bad = slotIssues(lay, at, defaults, registers, props.map(propRect));
       const badProps = propIssues(lay, at, props, registers);
+      // След праздничной вещи вырос книзу (чтобы гости обходили кадку), но проверять её место — по
+      // прежнему: ёлка, переставленная игроком раньше, не должна вдруг стать красной.
+      if (badProps.has('holiday')) {
+        const legacy = props.map((p) => (p.id === 'holiday' ? { ...p, fp: { x: -7, y: -8, w: 14, h: 12 } } : p));
+        if (!propIssues(lay, at, legacy, registers).has('holiday')) badProps.delete('holiday');
+      }
       // Вещь на своём стандартном месте игра поставила сама так, чтобы не мешать (растение у будущей
       // кассы, у двери склада) — красной она становится, только если на неё поставили полку.
       for (const p of props) {
@@ -4048,19 +4054,23 @@ export class StoreScene extends Phaser.Scene {
       const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xffffff];
       const twinkle = (tree: Phaser.GameObjects.Image) =>
         !this.lite && tree.x > -100 && tree.x < this.next.w + 100 && tree.y > -100 && tree.y < top + 430;
+      // Свои случайные числа: цветы и листья ниже (rnd) лежат одинаково и с огоньками, и без, и в лёгкой графике.
+      const lit = new Phaser.Math.RandomDataGenerator([`lights${day}`]);
       const bulbs: { obj: Phaser.GameObjects.Rectangle; period: number; shift: number }[] = [];
       trees.forEach((tree) => {
         const near = twinkle(tree);
         for (let i = 0; i < 6; i++) {
-          const x = tree.x + rnd.between(-8, 8);
-          const y = tree.y - rnd.between(6, 22);
-          const color = rnd.pick(colors);
+          const x = tree.x + lit.between(-8, 8);
+          const y = tree.y - lit.between(6, 22);
+          const color = lit.pick(colors);
+          const period = lit.between(800, 1800);
+          const shift = lit.frac();
           if (!near) {
             spot(tree, x, y, 1.4, color);
             continue;
           }
           const bulb = keep(this.add.rectangle(x, y, 1.4, 1.4, color).setDepth(tree.depth + 1));
-          bulbs.push({ obj: bulb, period: rnd.between(800, 1800), shift: rnd.frac() });
+          bulbs.push({ obj: bulb, period, shift });
           crown(tree, bulb);
         }
       });
