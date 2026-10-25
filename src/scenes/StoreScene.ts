@@ -1523,6 +1523,8 @@ export class StoreScene extends Phaser.Scene {
   private builtProps = new Set<string>();
   /** Купленное с утра: при открытии его распакуют из коробки. Ключ — «текстура@x,y», картинка — из последней постройки. */
   private freshProps = new Map<string, Phaser.GameObjects.Image | undefined>();
+  /** Отложенное запекание пола после распаковки новинок (bakeFloorSoon). */
+  private floorBakeTimer?: Phaser.Time.TimerEvent;
   /** Наняли утром: при открытии новенький войдёт с улицы в дверь, а не появится сразу на месте. */
   private newHires = new Set<string>();
   /** Новенькие, которые сейчас идут с улицы: перед ними разъезжаются двери. */
@@ -2225,6 +2227,18 @@ export class StoreScene extends Phaser.Scene {
       casters: furnitureCasters(this.children.list),
     };
     this.floor.bake(plan, this.lite ? 1 : ART, FLOOR_SHADE_DEPTH, this.wearLayer());
+  }
+
+  /**
+   * Запечь пол чуть позже — одним разом после последней из нескольких распакованных новинок. Каждое
+   * запекание — заметная пауза на слабом телефоне, а новинки встают одна за другой через UNBOX_STEP.
+   */
+  private bakeFloorSoon(): void {
+    this.floorBakeTimer?.remove();
+    this.floorBakeTimer = this.time.delayedCall(500, () => {
+      this.floorBakeTimer = undefined;
+      if (this.floor.ready() && !this.arranging) this.bakeFloor();
+    });
   }
 
   /**
@@ -9653,12 +9667,15 @@ export class StoreScene extends Phaser.Scene {
     const bargain = this.bargainAt;
     const stand = bargain ? [{ x: bargain.x - 15, y: this.bargainStand(bargain) - 4, w: 30, h: bargain.y + 8 - (this.bargainStand(bargain) - 4) }] : [];
     const homes = (['manager', 'guard'] as const).map((role) => this.workerHome(role)).map((p) => ({ x: p.x - 6, y: p.y - 10, w: 12, h: 14 }));
+    // Вещи, переставленные игроком в этом помещении (ёлку ставят позже — по своему месту), полка тоже обходит.
+    const moved = this.state.propPos?.level === this.state.level ? Object.entries(this.state.propPos.at).filter(([id]) => id !== 'food') : [];
+    const placed = moved.map(([id, p]) => propRect({ id, x: p.x, y: p.y, fp: propFootprint(this.layout, id, p.x) }));
     // Тележки и корзинки у входа (buildDecor ставит их по обе стороны двери) — не загораживаем.
     const byDoor = [-46, -26, -24, 26, 46].map((dx) => ({ x: door.x + dx - 11, y: h - 22, w: 22, h: 22 }));
     // Свободно и место покупателя над полкой (там он стоит, когда берёт порцию).
     const free = (p: { x: number; y: number }) => {
       const r = { x: p.x + fp.x - 3, y: p.y + fp.y - 16, w: fp.w + 6, h: fp.h + 19 };
-      return r.x > 2 && r.x + r.w < w - 2 && r.y > this.layout.wallH + 4 && ![...this.obstacles, ...zones, ...ice, ...byDoor, ...stand, ...homes].some((o) => overlapsRect(r, o));
+      return r.x > 2 && r.x + r.w < w - 2 && r.y > this.layout.wallH + 4 && ![...this.obstacles, ...zones, ...ice, ...byDoor, ...stand, ...homes, ...placed].some((o) => overlapsRect(r, o));
     };
     // У нижней стены как можно ближе к двери, а если там тесно — в зале повыше, тоже поближе к входу.
     const candidates: { x: number; y: number }[] = [];
@@ -14224,7 +14241,7 @@ export class StoreScene extends Phaser.Scene {
           this.squash(img, 1.08, 0.9, 110);
           this.newTag(img);
           // Вещь встала — теперь и тень от неё на полу.
-          if (castsShadow(img.texture.key) && this.floor.ready() && !this.arranging) this.bakeFloor();
+          if (castsShadow(img.texture.key)) this.bakeFloorSoon();
         },
       });
     };
