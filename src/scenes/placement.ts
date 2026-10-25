@@ -229,11 +229,14 @@ export interface Prop {
 
 export const propRect = (p: Prop): Rect => ({ x: p.x + p.fp.x, y: p.y + p.fp.y, w: p.fp.w, h: p.fp.h });
 
-/** «След» вещи зала по её id: автомат (боком у стены или лицом), ведро, полка «Уценка», растения. */
+/** «След» вещи зала по её id: автомат (боком у стены или лицом), ведро, полка «Уценка», праздничная вещь, растения. */
 export function propFootprint(layout: Layout, id: string, x: number): Rect {
   if (id === 'vending') return vendingFootprint(vendingSide(layout, x));
   if (id === 'bin') return { x: -8, y: -12, w: 16, h: 14 };
   if (id === 'bargain') return { x: -13, y: -8, w: 26, h: 12 };
+  // Праздничная вещь (ёлка в кадке и др.) рисуется по глубине y + 8, а кадка — до y + 11: след до y + 10,
+  // иначе проходящий (праздничный гость от двери к прилавку) шагает сквозь ёлку — у самой кадки, но за ней.
+  if (id === 'holiday') return { x: -7, y: -8, w: 14, h: 18 };
   return { x: -7, y: -10, w: 14, h: 14 };
 }
 

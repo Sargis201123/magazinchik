@@ -3725,6 +3725,9 @@ export class StoreScene extends Phaser.Scene {
    */
   private applyWeather(): void {
     this.cullDirty = true;
+    // Бесконечные твины (мигание гирлянды и огоньков, туман, мотыльки) со своими вещами сами не
+    // умирают: без этого каждая смена погоды утром оставляла их сотнями крутиться впустую до пересборки.
+    this.tweens.killTweensOf(this.weatherObjs);
     for (const obj of this.weatherObjs) obj.destroy();
     this.weatherObjs = [];
     this.nightLights = this.nightLights.filter((light) => light.obj.active);
@@ -3899,6 +3902,8 @@ export class StoreScene extends Phaser.Scene {
    * (ярмарка — один день в месяц, погода при этом может не меняться).
    */
   private applyFair(): void {
+    // Флажки и шарики качаются бесконечными твинами — гасим их вместе с вещами (как и в applyWeather).
+    this.tweens.killTweensOf(this.fairObjs);
     for (const obj of this.fairObjs) obj.destroy();
     this.fairObjs = [];
     this.stall = undefined;
@@ -4018,6 +4023,34 @@ export class StoreScene extends Phaser.Scene {
         }
       });
     }
+    // Праздник по настоящему календарю (game/live.ts) — поверх времени года игры: 31 декабря Новый год
+    // и в магазине, даже если в игре лето.
+    const live = liveLook(liveEvents(), todayLocal());
+    const look = live ? LIVE_LOOKS[live] : null;
+    if (holiday === 'newyear' || look?.treeLights) {
+      // Разноцветные огоньки на деревьях. Новый год по календарю длится больше месяца, а деревьев в районе
+      // под полторы сотни: по 6 мигающих огоньков на каждом — 900 твинов на кадр. Поэтому мигают только
+      // огоньки у магазина (что видно без прокрутки), а дальше — и в лёгкой графике везде — горят ровно,
+      // нарисованные в картинку кроны вместе с пятнами листвы.
+      const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xffffff];
+      const twinkle = (tree: Phaser.GameObjects.Image) =>
+        !this.lite && tree.x > -100 && tree.x < this.next.w + 100 && tree.y > -100 && tree.y < top + 430;
+      trees.forEach((tree) => {
+        const near = twinkle(tree);
+        for (let i = 0; i < 6; i++) {
+          const x = tree.x + rnd.between(-8, 8);
+          const y = tree.y - rnd.between(6, 22);
+          const color = rnd.pick(colors);
+          if (!near) {
+            spot(tree, x, y, 1.4, color);
+            continue;
+          }
+          const bulb = keep(this.add.rectangle(x, y, 1.4, 1.4, color).setDepth(tree.depth + 1));
+          this.tweens.add({ targets: bulb, alpha: 0.2, duration: rnd.between(400, 900), yoyo: true, repeat: -1 });
+          crown(tree, bulb);
+        }
+      });
+    }
     for (const [tree, list] of spots) {
       const rt = keep(this.bakeSpots(list).setDepth(tree.depth + 0.5));
       // Ось вращения — у основания дерева, как у самой картинки дерева.
@@ -4052,10 +4085,6 @@ export class StoreScene extends Phaser.Scene {
       scatter(110, (x, y) => keep(this.art(x, y, 'leaf').setTint(rnd.pick([0xf77622, 0xfeae34, 0xb86f50, 0xe43b44])).setAngle(rnd.angle()).setDepth(-9)));
     }
 
-    // Праздник по настоящему календарю (game/live.ts) — поверх времени года игры: 31 декабря Новый год
-    // и в магазине, даже если в игре лето.
-    const live = liveLook(liveEvents(), todayLocal());
-    const look = live ? LIVE_LOOKS[live] : null;
     // Гирлянда на фасаде — одна: свой праздник игрового года, иначе праздник по календарю, иначе
     // новогодняя в снегопад.
     const garland =
@@ -4078,7 +4107,7 @@ export class StoreScene extends Phaser.Scene {
         this.bats.push(bat);
         const cx = this.layout.w / 2 + rnd.between(-60, 60);
         const cy = rnd.between(-48, -30);
-        this.tweens.addCounter({
+        const flight = this.tweens.addCounter({
           from: 0,
           to: Math.PI * 2,
           duration: rnd.between(5000, 8000),
@@ -4088,20 +4117,12 @@ export class StoreScene extends Phaser.Scene {
             bat.setPosition(cx + Math.cos(a) * 46, cy + Math.sin(a * 2) * 10).setTexture(Math.floor(this.time.now / 140 + i) % 2 ? 'bat0' : 'bat1');
           },
         });
+        // Счётчик полёта держит не мышь, и killTweensOf его не найдёт: убрали мышь (смена погоды утром) —
+        // убрать и его, иначе он тронет уничтоженную картинку и игра встанет.
+        bat.once('destroy', () => flight.remove());
       }
     }
     if (holiday === 'newyear') keep(this.art(-40, top - 190, 'snowman').setDepth(top - 180));
-    if (holiday === 'newyear' || look?.treeLights) {
-      // Разноцветные огоньки на деревьях.
-      const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xffffff];
-      trees.forEach((tree) => {
-        for (let i = 0; i < 6; i++) {
-          const bulb = keep(this.add.rectangle(tree.x + rnd.between(-8, 8), tree.y - rnd.between(6, 22), 1.4, 1.4, rnd.pick(colors)).setDepth(tree.depth + 1));
-          this.tweens.add({ targets: bulb, alpha: 0.2, duration: rnd.between(400, 900), yoyo: true, repeat: -1 });
-          crown(tree, bulb);
-        }
-      });
-    }
   }
 
   /**
@@ -4154,8 +4175,9 @@ export class StoreScene extends Phaser.Scene {
     const p = this.propAt('holiday', def);
     if (p === def && !free(p.x, p.y)) return;
     const img = this.art(p.x, p.y, item.texture).setDepth(p.y + 8);
-    this.obstacles.push({ x: p.x - 7, y: p.y - 8, w: 14, h: 12 });
-    this.registerProp('holiday', p, item.texture, { x: -7, y: -8, w: 14, h: 12 });
+    const fp = propFootprint(this.layout, 'holiday', p.x);
+    this.obstacles.push({ x: p.x + fp.x, y: p.y + fp.y, w: fp.w, h: fp.h });
+    this.registerProp('holiday', p, item.texture, fp);
     if (item.id === 'holiday_tree' && !this.lite) {
       // Огоньки на ёлке перемигиваются (тёплое пятно — вечером ярче).
       this.nightGlow(this.art(p.x, p.y - 2, 'glow').setDisplaySize(26, 22).setTint(0xffd27a), 0.5);
