@@ -9,6 +9,7 @@ import {
   adGain,
   adGuests,
   adPrice,
+  adExtraGuests,
   adRareBoost,
   adTrust,
   ADS,
@@ -17,6 +18,7 @@ import {
   MAX_ADS,
 } from '../src/game/ads';
 import { filmingReward } from '../src/game/bigday';
+import { guestsToday } from '../src/game/day';
 import { emptyDayStats, newGame, satisfaction, type StoreState } from '../src/game/economy';
 import { en } from '../src/i18n/en';
 import { ru } from '../src/i18n/ru';
@@ -61,6 +63,16 @@ describe('ads', () => {
     expect(adPrice(big, 'billboard')).toBeGreaterThan(adPrice(big, 'radio'));
     // Кампания по городу у звёздного большого магазина — заметные деньги.
     expect(adPrice({ ...big, rating: 5 }, 'city')).toBeGreaterThanOrEqual(1500);
+  });
+
+  it('цена — от сегодняшнего потока, но не от уже идущей рекламы; до покупки видно, сколько гостей прибавит', () => {
+    const flow = guestsToday(big);
+    expect(adPrice(big, 'tv')).toBe(Math.max(ADS.tv.minPrice, Math.round((flow * ADS.tv.days * ADS.tv.cost) / 10) * 10));
+    const running = buyAd(big, 'flyers')!;
+    expect(Math.abs(adPrice(running, 'tv') - adPrice(big, 'tv'))).toBeLessThanOrEqual(10);
+    expect(adExtraGuests(big, 'tv')).toBe(Math.round(flow * ADS.tv.boost));
+    // Со второй рекламой прибавка меньше (AD_STACK).
+    expect(adExtraGuests(running, 'tv')).toBeLessThan(adExtraGuests(big, 'tv'));
   });
 
   it('звёздная реклама зовёт редких гостей, громкая — прибавляет доверия и полнит корзины', () => {

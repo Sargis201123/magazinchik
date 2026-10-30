@@ -32,6 +32,8 @@ export const SPRITES = [
   'giant_site',
   'giant_store',
   'giant_closed',
+  // Свой филиал в здании «Гиганта» (art/giant.py, branch.ts).
+  'giant_branch',
   // Особые дни: съёмки кино и ремонт дороги (art/street_props.py).
   'film_camera',
   'film_light',

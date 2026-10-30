@@ -200,7 +200,17 @@ export const kioskRect = (layout: Layout, index: number): { x: number; y: number
  * мест под киоски в помещении — lanes.ts, KIOSKS_BY_LEVEL: столько же, сколько мест под кассы (с «Минимаркета»).
  */
 export const kioskZones = (layout: Layout, n = 1): { x: number; y: number; w: number; h: number }[] =>
-  Array.from({ length: Math.max(1, n) }, (_, i) => kioskRect(layout, i));
+  Array.from({ length: Math.max(1, n) }, (_, i) => kioskZone(layout, i));
+
+/**
+ * Киоск вместе с местом покупателя слева от рамки (StoreScene.useKiosk: x − 14 от киоска). При короткой
+ * очереди проход у правой стены свободен под полки — место покупателя держит эта зона, а не очередь.
+ */
+export function kioskZone(layout: Layout, index: number): { x: number; y: number; w: number; h: number } {
+  const frame = kioskRect(layout, index);
+  const left = kioskSpot(layout, index).x - 14 - 6;
+  return { x: left, y: frame.y, w: frame.x + frame.w - left, h: frame.h };
+}
 
 /** Ларь с мороженым на месте (x, y): рамка вместе с крышкой, витриной и местом покупателя над ним. */
 export const iceboxRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 15, y: y - 24, w: 30, h: 30 });

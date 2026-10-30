@@ -74,7 +74,7 @@ import {
   DAY_SECONDS,
   recordSale,
 } from './economy';
-import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd } from './ads';
+import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd, type AdId } from './ads';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { restockPlan } from './restock';
 import { buyLine } from './reorder';
@@ -85,7 +85,7 @@ import { candidatesFor } from './staff';
 import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
-import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } from './suppliers';
+import { badBatch, haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } from './suppliers';
 import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY, OWN_PRODUCTS } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
@@ -107,6 +107,7 @@ import { deliveryDay } from './delivery';
 import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
 import { buyRadio, hasRadio, radioPatience, RADIO_PRICE, radioTolerance, setStation } from './radio';
 import { buyKiosk, kioskCount, kioskTier, laneGuests, nextKioskPrice, nextKioskTier, upgradeKiosks } from './lanes';
+import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, nextBranchTier, upgradeBranch } from './branch';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
 
 export { rng };
@@ -130,6 +131,10 @@ export interface SimDay {
   /** Экономия на хлебе из своей печи против закупки. */
   oven: number;
   night: number;
+  /** Чистый доход филиала за день (branch.ts). */
+  branch: number;
+  /** Сколько потрачено на рекламу сегодня. */
+  ads: number;
   expenses: number;
   /** Выручка − закупка − расходы (без вложений в полки и расширение). */
   profit: number;
@@ -179,6 +184,8 @@ export interface SimOptions {
    * (autoorder.ts), а дальше закупается он сам: утром в пределах лимита, днём подвозит кончившееся.
    */
   buyMode?: 'smart' | 'restock' | 'naive' | 'auto';
+  /** Замер одной рекламы: держать её всегда, пока магазин на этом уровне (индекс STORE_LEVELS) и есть запас. */
+  adAlways?: { id: AdId; level: number };
 }
 
 export type Feature =
@@ -201,7 +208,8 @@ export type Feature =
   | 'delivery'
   | 'ads'
   | 'adsMax'
-  | 'kiosks';
+  | 'kiosks'
+  | 'branch';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -253,6 +261,8 @@ const AD_LOST_OK = 0.05;
 const AD_BUSY_OK = 0.8;
 /** Для решения «пора нанимать кассира»: примерно столько успевает один человек. */
 const SOLO_SERVE_CAP = 30;
+/** Улучшение филиала разумный игрок берёт, если оно окупится не дольше чем за столько дней. */
+const BRANCH_PAYBACK_OK = 60;
 /** Средняя корзина в штуках. */
 const AVG_BASKET = 1.4;
 /** Один игрок стоит за кассой не весь день: ещё бегает на склад и убирает — в большом магазине дел больше. */
@@ -316,6 +326,7 @@ export function simulate({
   war = 'wait',
   ovenBatches = 3,
   ovenBurn = 0.1,
+  adAlways,
 }: SimOptions): SimResult {
   const random = rng(seed);
   // Случайности новых механик — отдельно: тогда прогоны с механикой и без идут по одним и тем же
@@ -339,6 +350,7 @@ export function simulate({
   for (let d = 0; d < days; d++) {
     const moneyStart = state.money;
     let investments = 0;
+    let adSpent = 0;
     // Запас на закупку плюс копилка на счета в конце месяца.
     const bill = billTotal(monthlyBill(state));
     const reserve = 150 + 100 * state.level + Math.round(bill * (1 - daysUntilBill(state.day) / MONTH_DAYS));
@@ -530,8 +542,31 @@ export function simulate({
         (a, b) => adPrice(state, b) - adPrice(state, a),
       )[0];
       if (pick) {
-        investments += adPrice(state, pick);
+        adSpent += adPrice(state, pick);
         state = buyAd(state, pick) ?? state;
+      }
+    }
+    if (adAlways && state.level === adAlways.level && !adBlock(state, adAlways.id) && state.money >= adPrice(state, adAlways.id) + reserve) {
+      adSpent += adPrice(state, adAlways.id);
+      state = buyAd(state, adAlways.id) ?? state;
+    }
+    investments += adSpent;
+    // Филиал (branch.ts): здание — как только можно и хватает с запасом на счета; улучшения — самое
+    // выгодное из доступных, если окупится за два месяца и после покупки останется тройной запас.
+    if (features.branch) {
+      if (branchOpen(state) && state.money >= BRANCH_PRICE + reserve * 3) {
+        const bought = buyBranch(state);
+        if (bought) {
+          investments += BRANCH_PRICE;
+          state = bought;
+        }
+      }
+      const best = BRANCH_TRACK_IDS.map((id) => ({ id, next: nextBranchTier(state, id), gain: branchGain(state, id) }))
+        .filter((o) => o.next && o.gain > 0 && o.next.price / o.gain <= BRANCH_PAYBACK_OK)
+        .sort((a, b) => a.next!.price / a.gain - b.next!.price / b.gain)[0];
+      if (best && state.money >= best.next!.price + reserve * 3) {
+        investments += best.next!.price;
+        state = upgradeBranch(state, best.id) ?? state;
       }
     }
     // Навыки хозяина: очки — по кругу во все навыки.
@@ -670,10 +705,11 @@ export function simulate({
       purchases += before - state.money;
     } else if (buyMode === 'restock' || buyMode === 'auto') {
       // Одно нажатие: купленное сразу встаёт на полки, лишнее — на склад (buyLine).
-      const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state));
+      // Печь в симуляторе печёт до закупки: её хлеб уже в запасе, вычитать его из плана второй раз не нужно.
+      const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state), [], 0);
       for (const line of plan.lines) {
         const before = state.money;
-        const got = buyLine(state, line, random() < SUPPLIERS[line.sid].badChance);
+        const got = buyLine(state, line, badBatch(line.sid, state.day, random()));
         state = got.state;
         if (got.bad) state = resolveBadBatch(state, line.pid, 'markdown', line.price);
         purchases += before - state.money;
@@ -704,7 +740,7 @@ export function simulate({
         const price = unitPrice(SUPPLIERS[sid], deals[sid], id)!;
         const qty = Math.min(Math.max(0, NAIVE_STOCK - onShelves(state, id) - warehouseOf(state, id)), Math.floor(state.money / price), warehouseCapacity(state) - warehouseCount(state));
         if (qty <= 0) continue;
-        const bad = random() < SUPPLIERS[sid].badChance;
+        const bad = badBatch(sid, state.day, random());
         state = buyStock(state, id, qty, price, bad) ?? state;
         if (bad) state = resolveBadBatch(state, id, 'markdown', price);
         purchases += qty * price;
@@ -719,7 +755,7 @@ export function simulate({
       if (!best) continue;
       qty = Math.min(qty, Math.floor(state.money / best.price), warehouseCapacity(state) - warehouseCount(state));
       if (qty <= 0) continue;
-      const bad = random() < SUPPLIERS[best.sid].badChance;
+      const bad = badBatch(best.sid, state.day, random());
       state = buyStock(state, id, qty, best.price, bad) ?? state;
       if (bad) state = resolveBadBatch(state, id, 'markdown', best.price);
       purchases += qty * best.price;
@@ -746,7 +782,7 @@ export function simulate({
       for (const { id, best, want } of extra) {
         const qty = Math.min(Math.floor(want * share), Math.floor((state.money - reserve) / best!.price));
         if (qty <= 0) continue;
-        const bad = random() < SUPPLIERS[best!.sid].badChance;
+        const bad = badBatch(best!.sid, state.day, random());
         state = buyStock(state, id, qty, best!.price, bad) ?? state;
         if (bad) state = resolveBadBatch(state, id, 'markdown', best!.price);
         purchases += qty * best!.price;
@@ -1036,6 +1072,8 @@ export function simulate({
       coffee,
       oven: breadBaked,
       night: nightProfit,
+      branch: night.branch,
+      ads: adSpent,
     });
     void moneyStart;
   }

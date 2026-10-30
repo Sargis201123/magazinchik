@@ -10,11 +10,11 @@ import { onShelves, PRODUCTS, SEASONAL, sellableProducts, warehouseOf, type Prod
 export const CAFE_FROM_DAY = 6;
 export const CAFE_DAYS = 7;
 export const CAFE_MISSES = 2;
-/** Кафе платит на 30% дороже обычной цены: за гарантированную поставку каждое утро. */
-export const CAFE_PAY = 1.3;
-/** За неделю без срывов — +5% к оплате в следующем договоре (до +25%). */
+/** Кафе платит на 15% дороже обычной цены (было 30%): за гарантированную поставку каждое утро. */
+export const CAFE_PAY = 1.15;
+/** За неделю без срывов — +5% к оплате в следующем договоре (до +15%, было до +25%). */
 export const CAFE_LOYALTY_STEP = 0.05;
-export const CAFE_LOYALTY_MAX = 0.25;
+export const CAFE_LOYALTY_MAX = 0.15;
 /** Что кафе берёт охотнее всего. */
 const CAFE_LIKES: ProductId[] = ['bread', 'milk', 'apples', 'juice', 'pies', 'buns', 'honeycake', 'potatoes', 'meat'];
 

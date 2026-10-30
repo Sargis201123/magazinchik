@@ -25,13 +25,16 @@ describe('первые минуты новичка: два начала (A/B)', 
   it('вариант — по номеру в Telegram, всегда один и тот же; без номера — случайно; доля настраивается', () => {
     expect(pickCohort(1042, Math.random)).toBe('play');
     expect(pickCohort(1042, Math.random)).toBe('play');
-    expect(pickCohort(1077, Math.random)).toBe('tour');
+    expect(pickCohort(1077, Math.random, 0.5)).toBe('tour');
+    // Сравнение закрыто: по умолчанию всем новое начало.
+    expect(pickCohort(1077, Math.random)).toBe('play');
     const ids = Array.from({ length: 1000 }, (_, i) => 5_000_000 + i * 7);
-    const play = ids.filter((id) => pickCohort(id, Math.random) === 'play').length;
+    const play = ids.filter((id) => pickCohort(id, Math.random, 0.5) === 'play').length;
     expect(play).toBeGreaterThan(400);
     expect(play).toBeLessThan(600);
     expect(pickCohort(undefined, () => 0.1)).toBe('play');
-    expect(pickCohort(undefined, () => 0.9)).toBe('tour');
+    expect(pickCohort(undefined, () => 0.9, 0.5)).toBe('tour');
+    expect(pickCohort(undefined, () => 0.9)).toBe('play');
     expect(pickCohort(1077, Math.random, 1)).toBe('play');
     expect(pickCohort(1042, Math.random, 0)).toBe('tour');
   });

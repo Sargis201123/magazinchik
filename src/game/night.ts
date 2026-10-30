@@ -5,8 +5,11 @@ import { hasUpgrade } from './upgrades';
 import type { StoreState } from './economy';
 
 export const NIGHT_SECONDS = 45;
-/** Поток гостей ночью от дневного. */
-export const NIGHT_GUESTS = 0.6;
+/**
+ * Поток гостей ночью от дневного. Было 0,6 при свете за 60: с закупкой в одно нажатие ночь давала
+ * +1500…+2400 в день и окупалась за 2 дня; сейчас около +600…+800 в день на ур.5 (симулятор, 24 × 150).
+ */
+export const NIGHT_GUESTS = 0.25;
 /** Ночью «справедливая» цена в глазах покупателя выше. */
 export const NIGHT_TOLERANCE = 1.45;
 /**
@@ -15,8 +18,8 @@ export const NIGHT_TOLERANCE = 1.45;
  * то, что купили бы и днём (видно в симуляторе), и не окупала свет.
  */
 export const NIGHT_MARKUP = 1.4;
-/** Свет, вывеска и сверхурочные на одну ночь. */
-export const NIGHT_POWER = 60;
+/** Свет, вывеска и сверхурочные на одну ночь (было 60). */
+export const NIGHT_POWER = 300;
 
 export const canWorkNight = (state: StoreState): boolean => hasUpgrade(state, 'nightShift');
 

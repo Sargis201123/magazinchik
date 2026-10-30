@@ -16,6 +16,7 @@ import {
   UPSET_SPEED,
   wageFor,
   workSpeed,
+  RAISE_CAP,
   type StaffMember,
   type StoreState,
 } from '../src/game/economy';
@@ -112,6 +113,20 @@ describe('опыт и прибавки', () => {
     const veteran = member({ skill: 3, months: 4, wage });
     expect(monthForStaff([veteran], always).staff[0].raiseAsk).toBe(Math.round((wage * 1.1) / 10) * 10);
     expect(monthForStaff([veteran], never).staff[0].raiseAsk).toBeUndefined();
+  });
+
+  it('прибавки «просто так» — не выше ставки по навыку × 1,3; кто уже выше, тому не урезают', () => {
+    const cap = Math.round((wageFor('cashier', 3) * RAISE_CAP) / 10) * 10;
+    let m = member({ skill: 3, months: 4, wage: wageFor('cashier', 3) });
+    for (let i = 0; i < 30; i++) {
+      m = monthForStaff([m], always).staff[0];
+      if (m.raiseAsk) m = { ...m, wage: m.raiseAsk, raiseAsk: undefined };
+    }
+    expect(m.wage).toBe(cap);
+    const rich = member({ skill: 3, months: 40, wage: cap + 300 });
+    const after = monthForStaff([rich], always).staff[0];
+    expect(after.raiseAsk).toBeUndefined();
+    expect(after.wage).toBe(cap + 300);
   });
 
   it('за месяц о прибавке просит только один; остальные — в следующие месяцы', () => {

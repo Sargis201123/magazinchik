@@ -6,7 +6,8 @@
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
 
-export const CAT_FROM_DAY = 5;
+/** С какого утра кот просится в магазин: не в первые дни, когда новичку и так много нового (5-е утро — вкладка «Развитие»). */
+export const CAT_FROM_DAY = 7;
 /** Отказались — кот спросит снова через неделю. */
 export const CAT_ASK_AGAIN = 7;
 export const FEED_COST = 10;

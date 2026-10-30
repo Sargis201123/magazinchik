@@ -39,6 +39,8 @@ export function showReport(state: StoreState): void {
   card.append(
     el('h2', '', t('report.title', { n: report.days.length })),
     el('div', 'ui-muted', t('report.total', { rev: report.revenue, served: report.served, lost: report.lost })),
+    // Филиал (branch.ts) — одной строкой: его выручку не смешиваем со своей.
+    ...(report.branch ? [el('div', 'ui-muted', t('report.branch', { n: report.branch }))] : []),
     chart,
     el('h3', '', t('report.products')),
     ...lines,

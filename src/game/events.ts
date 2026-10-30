@@ -40,7 +40,8 @@ export const DEAL_DISCOUNT = 0.5;
 export const ORDER_DONE_RATING = 0.1;
 export const ORDER_FAILED_RATING = 0.3;
 export const INSPECTION_PASS_RATING = 0.2;
-export const INSPECTION_FAIL_RATING = 0.3;
+/** Провал проверки СЭС: −0,15 рейтинга (было −0,3 — самое тяжёлое наказание за одну гнилую бумажку). */
+export const INSPECTION_FAIL_RATING = 0.15;
 export const RUSH_SECONDS = 20;
 /** Эдуард переманивает сотрудника (+25% к зарплате) или жалуется инспектору. */
 export const POACH_FROM_DAY = 15;
@@ -63,6 +64,8 @@ export const PERSONAL_CHANCE = 0.08;
 export const DAY_OFF_REASONS = 4;
 export const GO_HOME_REASONS = 3;
 export const BILL_FROM_DAY = 12;
+/** «Выгодная партия» (купить или пропустить) — не в первую неделю: новичку хватает своих решений. */
+export const DEAL_FROM_DAY = 6;
 export const BILL_CHANCE = 0.05;
 export type BillReason = 'tax' | 'flood' | 'fire' | 'pipes';
 export const BILL_REASONS: BillReason[] = ['tax', 'flood', 'fire', 'pipes'];
@@ -148,7 +151,7 @@ export function planDay(state: StoreState, chances: EventChances = { order: 0.15
     plan.event = { kind: 'inspection' };
   } else if (orderRoll < chances.order) {
     plan.event = makeOrder(state, random);
-  } else if (dealRoll < 0.12) {
+  } else if (dealRoll < 0.12 && state.day >= DEAL_FROM_DAY) {
     plan.event = makeDeal(state, random);
   } else if (state.day >= WAR_FROM_DAY && !state.war && random() < WAR_CHANCE * eduardWar(state)) {
     // Эдуард через дорогу снижает цену — отвечать или нет, решает игрок (war.ts).

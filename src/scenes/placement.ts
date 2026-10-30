@@ -3,7 +3,7 @@
 // и можно ли от входа подойти к каждой полке, к кассе и в очередь. Сохраняется в StoreState.slotPos.
 
 import { isFixture, slotOf, type StoreState } from '../game/economy';
-import { iceboxRect, iceboxSpotFor, kioskRect, kioskZones, layoutFor, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
+import { iceboxRect, iceboxSpotFor, kioskZone, kioskZones, layoutFor, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
 import { reachable, type Rect } from './paths';
 
 /** Шаг сетки, по которой встают полки. */
@@ -277,15 +277,34 @@ export function propPosFor(level: number, props: Prop[], defaults: Record<string
 }
 
 /**
- * Место под киоск номер index свободно: на нём не стоит полка (своя расстановка, короткая очередь
+ * Место под киоск номер index (с местом покупателя) свободно: на нём не стоит полка (своя расстановка, короткая очередь
  * освобождает правую стену под полки) и не стоит переставленная вещь. Занято — сначала переставить.
  */
 export function kioskSpotFree(state: StoreState, index: number): boolean {
   const layout = withTill(withSlots(layoutFor(state.level), state.slotPos, state.level), state.tillPos, state.level);
-  const k = kioskRect(layout, index);
+  // Рамка киоска вместе с местом покупателя.
+  const k = kioskZone(layout, index);
   const moved = state.propPos?.level === state.level ? Object.entries(state.propPos.at) : [];
   return (
     layout.slots.every((p) => !overlaps(slotRect(layout, p), k)) &&
     moved.every(([id, p]) => !overlaps(propRect({ id, x: p.x, y: p.y, fp: propFootprint(layout, id, p.x) }), k))
   );
+}
+
+// ---------- Улица у входа ----------
+
+/** Отрезок улицы по x — от двери (слева, справа). */
+export type StreetSpan = [number, number];
+
+/** Места у входа, занятые своим делом (от двери): курьер со своим транспортом и летняя тележка с мороженым. */
+export const COURIER_SPAN: StreetSpan = [-42, -19];
+export const ICE_CART_SPAN: StreetSpan = [57, 77];
+
+/**
+ * Куда у входа встать рекламе (съёмочной группе, блогеру с фанатами): первое из мест candidates (x от
+ * двери), где её отрезок span (от x) не задевает занятые taken. Всё занято — первое место.
+ */
+export function freeStreetX(candidates: number[], span: StreetSpan, taken: StreetSpan[]): number {
+  const free = candidates.find((x) => taken.every(([from, to]) => x + span[1] <= from || x + span[0] >= to));
+  return free ?? candidates[0];
 }

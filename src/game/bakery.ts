@@ -100,7 +100,7 @@ export function takeOutBread(state: StoreState, qty = ovenBatch(state), id: Prod
 /** Поставки соседним магазинам: столько противней хлеба в день пекарь печёт на продажу им. */
 export const WHOLESALE_BATCHES = 2;
 /** Почём соседи берут буханку (оптом — дешевле, чем в зале). */
-export const WHOLESALE_PRICE = 18;
+export const WHOLESALE_PRICE = 26;
 
 /** Испечь ещё противень для соседей: договор куплен, пекарь на смене, свой хлеб для зала не нужен прямо сейчас. */
 export const wholesaleToBake = (state: StoreState, bakedToday: number): boolean =>

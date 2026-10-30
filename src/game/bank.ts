@@ -19,7 +19,7 @@ export const loanPayment = (amount: number): number => Math.ceil(loanTotal(amoun
 /** Взять кредит: один за раз. */
 export function takeLoan(state: StoreState, amount: number): StoreState | null {
   if (state.loan || !loanOptions(state).includes(amount)) return null;
-  return { ...state, money: state.money + amount, loan: { left: loanTotal(amount), payment: loanPayment(amount) } };
+  return { ...state, money: state.money + amount, loan: { left: loanTotal(amount), payment: loanPayment(amount), day: state.day } };
 }
 
 /** Вернуть досрочно (сколько есть, но не больше остатка). Проценты уже посчитаны — скидки нет. */
@@ -31,8 +31,12 @@ export function repayLoan(state: StoreState, amount: number): StoreState | null 
   return { ...state, money: state.money - pay, loan: left > 0 ? { ...loan, left } : undefined };
 }
 
-/** Платёж в этом месяце (идёт в счета). */
-export const loanDue = (state: StoreState): number => (state.loan ? Math.min(state.loan.payment, state.loan.left) : 0);
+/**
+ * Платёж в этом месяце (идёт в счета). Кредит, взятый в день счетов, в тот же вечер не платят:
+ * иначе весь лимит, взятый утром, тут же съедала первая выплата.
+ */
+export const loanDue = (state: StoreState): number =>
+  state.loan && state.loan.day !== state.day ? Math.min(state.loan.payment, state.loan.left) : 0;
 
 /** После оплаты счетов: остаток уменьшается на платёж (неоплаченное ушло в долг вместе со счетами). */
 export function afterLoanPayment(state: StoreState, paid: number): StoreState {

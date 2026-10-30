@@ -84,6 +84,7 @@ import {
   type Deal,
   type SupplierId,
   supplierOpen,
+  badBatch,
 } from '../game/suppliers';
 import { guestsGain, guestsToday } from '../game/day';
 import { buyKiosk, KIOSK_TIERS, kioskCount, kioskSlots, KIOSKS_BY_LEVEL, kioskTier, kioskTierIndex, laneGuests, nextKioskPrice, nextKioskTier, openRegisters, upgradeKiosks, withNextTill } from '../game/lanes';
@@ -190,7 +191,7 @@ import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
 import { sheetAsset, sheetPng } from './sheet';
-import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
+import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adExtraGuests, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
 import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeLoyalty, cafeOf } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
@@ -233,10 +234,15 @@ import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } 
 import { flushSoon, track } from '../platform/analytics';
 import { MORNING_TABS, openAllTabs, openTabs, seeTab, tabNew, tabOpen, unlockTab } from '../game/onboarding';
 import { newTag, tabHint } from './onboarding';
+import { seeWeek, tutAt, tutIndex, tutNext, tutPass, tutReplay, tutSkip, tutStep, tutTell, weekNote, type TutStep, type WeekNote } from '../game/tutorial';
+import type { Coach, Spot } from './coach';
 import { showLeaderboard } from './leaderboard';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
-import { button, el, openModal, who } from './dom';
+import { anchorScroll, button, el, foldUp, holdPlace, openModal, toast, unfold, who } from './dom';
+import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, nextBranchTier, upgradeBranch } from '../game/branch';
+import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
+import { tryNudge } from './nudge';
 import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
@@ -259,13 +265,29 @@ interface MorningOptions {
   onTourDone?: () => void;
   /** Дочитали вступление главы (в новом начале гостинец ждёт его конца). */
   onStoryDone?: () => void;
+  /** Подсветка бабушкиного обучения (ui/coach.ts): шаги утра — у нужной кнопки. */
+  coach?: Coach;
 }
 
 // Вкладки в одну строку: значок и короткая подпись. Профиль (достижения, наследие, настройки) —
 // кнопкой в углу заголовка, не вкладкой.
 type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
-/** Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. */
-const WHATS_NEW = 2;
+/**
+ * Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. Видевшие прежнюю
+ * (2: звук, перестановка, друзья…) увидят новую один раз.
+ */
+const WHATS_NEW = 3;
+/** Строки карточки «Что нового» — самое свежее сверху. */
+const WHATS_NEW_LINES: TextKey[] = [
+  'news.branch',
+  'news.goal',
+  'news.kiosks',
+  'news.relief',
+  'news.restock',
+  'news.housewarming',
+  'news.newyear',
+  'news.prices',
+];
 
 const TABS: [Tab, string, TextKey][] = [
   ['buy', '🛒', 'tab.buy'],
@@ -324,7 +346,7 @@ const openFolds: Set<string> = (() => {
   }
 })();
 
-/** Блок со сворачиваемым содержимым: заголовок с ▸/▾, по умолчанию свёрнут. */
+/** Блок со сворачиваемым содержимым: заголовок с ▸/▾, по умолчанию свёрнут. Открывается и закрывается плавно. */
 function foldBox(id: string, title: string, fill: (body: HTMLElement) => void): HTMLElement {
   const box = el('div', 'ui-box');
   const head = el('button', 'ui-fold', '');
@@ -336,18 +358,47 @@ function foldBox(id: string, title: string, fill: (body: HTMLElement) => void): 
     if (open && !body.childElementCount) fill(body);
   };
   head.addEventListener('click', () => {
-    if (openFolds.has(id)) openFolds.delete(id);
-    else openFolds.add(id);
-    try {
-      localStorage.setItem(OPEN_KEY, JSON.stringify([...openFolds]));
-    } catch {
-      // Без хранилища помним до перезапуска.
+    const open = !openFolds.has(id);
+    if (open) openFolds.add(id);
+    else openFolds.delete(id);
+    rememberFolds();
+    if (open) {
+      render();
+      unfold(body);
+    } else {
+      // Стрелка — сразу, содержимое уезжает за ней.
+      head.textContent = `▸ ${title}`;
+      // Поля вложенных карточек схлопываются вместе с блоком — заголовок досдвигаем на место.
+      foldUp(body, () => holdPlace(head, render));
     }
-    render();
   });
   render();
   box.append(head, body);
   return box;
+}
+
+const rememberFolds = () => {
+  try {
+    localStorage.setItem(OPEN_KEY, JSON.stringify([...openFolds]));
+  } catch {
+    // Без хранилища помним до перезапуска.
+  }
+};
+
+/**
+ * Подробности под плиткой, полкой или «Сегодня» рисует перерисовка окна: закрываемые сначала плавно
+ * уезжают (нажатое остаётся на месте — holdPlace), открытые — плавно выезжают после перерисовки.
+ */
+function flipSpan(cell: HTMLElement, key: string, shown: HTMLElement | null, apply: () => void): void {
+  if (shown) {
+    if (shown.dataset.closing) return;
+    shown.dataset.closing = '1';
+    foldUp(shown, () => holdPlace(cell, apply));
+    return;
+  }
+  apply();
+  const span = document.querySelector<HTMLElement>(`.ui-anchored [data-fold="${key}"]`);
+  if (span) unfold(span);
 }
 
 function artRow(texture: string, opts: { name: string; price?: number; sub?: string; actions: HTMLElement[] }): HTMLElement {
@@ -411,10 +462,15 @@ interface Tile {
   details: () => HTMLElement[];
 }
 
-function tileGrid(tiles: Tile[], open: string | null, toggle: (id: string) => void): HTMLElement {
+/** toggle(id, show): show — открыть эту плитку, иначе закрыть (если открыта именно она). */
+function tileGrid(tiles: Tile[], open: string | null, toggle: (id: string, show: boolean) => void): HTMLElement {
   const grid = el('div', 'ui-shelf-grid');
   for (const tile of tiles) {
-    const cell = button('', () => toggle(tile.id), `ui-shelf-card ui-tile-card${open === tile.id ? ' active' : ''}${tile.alert ? ' broken' : ''}`);
+    const cell: HTMLButtonElement = button(
+      '',
+      () => flipSpan(cell, `tile:${tile.id}`, open === tile.id ? grid.querySelector<HTMLElement>(':scope > .ui-shelf-span') : null, () => toggle(tile.id, open !== tile.id)),
+      `ui-shelf-card ui-tile-card${open === tile.id ? ' active' : ''}${tile.alert ? ' broken' : ''}`,
+    );
     const icon = tile.icon.startsWith('assets/') ? el('img', 'ui-tile-img') : el('span', 'ui-tile-icon', tile.icon);
     if (icon instanceof HTMLImageElement) {
       icon.src = sheetAsset(tile.icon);
@@ -426,6 +482,7 @@ function tileGrid(tiles: Tile[], open: string | null, toggle: (id: string) => vo
     grid.append(cell);
     if (open === tile.id) {
       const details = el('div', 'ui-shelf-span');
+      details.dataset.fold = `tile:${tile.id}`;
       details.append(...tuckAll(tile.details()));
       grid.append(details);
     }
@@ -447,9 +504,18 @@ function helpRow(title: HTMLElement | string, text: string): HTMLElement {
   return wrap;
 }
 
+/** Где элемент на экране — для подсветки обучения. */
+const rectOf = (node: HTMLElement): Spot | null => {
+  if (!node.isConnected) return null;
+  const r = node.getBoundingClientRect();
+  return r.width && r.height ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+};
+
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone }: MorningOptions): void {
+export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach }: MorningOptions): void {
   const { card, close } = openModal();
+  // Нажатый заголовок или кнопка остаются на месте, когда блоки сворачиваются и окно перерисовывается.
+  anchorScroll(card);
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
   let tab: Tab = 'buy';
@@ -475,6 +541,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   let trackedStep = -1;
   /** Открыто подтверждение «Начать заново». */
   let confirmRestart = false;
+  /** Шаг обучения, к кнопке которого уже прокрутили список (прокручиваем один раз на шаг). */
+  let scrolledLesson = '';
+  /** Что нового сегодня (первая неделя): сказано в это утро, висит до «Понятно». */
+  let weekShown: WeekNote | null = null;
   let tourEl: HTMLElement | null = null;
   const endTour = () => {
     tourEl?.remove();
@@ -492,6 +562,45 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   /** Утренняя закупка автозаказа — сразу на полки (повторно докупает только недостающее). */
   const autoBuy = (state: StoreState): StoreState => shelveAll(autoMorning(state, autoPrice, guestsToday(state)));
   if (autoActive(getState())) setState(autoBuy(getState()));
+
+  /**
+   * Подсказка «что дальше» (game/nudge.ts): игрок застыл в меню, а важное не сделано — мягко светится
+   * нужная кнопка и одна строка над «Открыть магазин». Любое касание окна — гаснет до перерисовки.
+   */
+  let idleSince = Date.now();
+  let nudged: MorningNudge | null = null;
+  const awake = () => {
+    idleSince = Date.now();
+    nudged = null;
+  };
+  card.addEventListener('pointerdown', awake, { passive: true, capture: true });
+  card.addEventListener('scroll', () => (idleSince = Date.now()), { passive: true });
+  card.classList.toggle('ui-calm', liteMode());
+  const nudgeTimer = window.setInterval(() => {
+    if (!card.isConnected) {
+      window.clearInterval(nudgeTimer);
+      return;
+    }
+    const idle = Date.now() - idleSince;
+    // Только в меню с вкладками, без бабушкиного обхода и без окна поверх.
+    if (nudged || idle < NUDGE_IDLE_MS || !card.classList.contains('ui-full') || card.classList.contains('touring')) return;
+    if (document.querySelectorAll('.ui-modal:not(.closing)').length > 1 || document.querySelector('.ui-dialog')) return;
+    const state = getState();
+    if (state.day > NUDGE_LAST_DAY) return;
+    const kind = morningNudge(state, { restock: restockPlan(state, priceOf, guestsToday(state)).lines.length > 0 });
+    if (!kind || !tryNudge(state.day, kind, idle)) return;
+    nudged = kind;
+    const tabButton = (id: Tab) => card.querySelector<HTMLElement>(`.ui-tab[data-tab="${id}"]`);
+    const target =
+      kind === 'restock'
+        ? (tab === 'buy' ? card.querySelector<HTMLElement>('.ui-restock .ui-btn') : null) ?? tabButton('buy')
+        : kind === 'grow'
+          ? tab === 'grow' ? null : tabButton('grow')
+          : card.querySelector<HTMLElement>('.ui-open-bar .ui-btn');
+    target?.classList.add('ui-nudge');
+    card.querySelector('.ui-open-bar')?.prepend(el('div', 'ui-nudge-line', t(`nudge.${kind}`)));
+    haptic.tap();
+  }, 1000);
 
   // Торговая неделя и гильдия приходят с сервера чуть позже — перерисовать утро, когда пришли.
   const onMultiplayer = () => {
@@ -520,6 +629,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
 
   const render = () => {
     const state = getState();
+    // Окно во всю высоту — только у меню с вкладками (ниже); сюжет и письма — по размеру, по центру.
+    card.classList.remove('ui-full');
     const title = el('h2');
     title.append(el('span', '', t('morning.title', { n: state.day })), el('span', '', t('morning.money', { n: state.money })));
 
@@ -621,8 +732,19 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       }
     }
     const shown = TABS.filter(([id]) => touring || tabOpen(state, id));
+    // Шаг бабушкиного обучения (game/tutorial.ts): пока он идёт, подсказку говорит она у самой кнопки.
+    const lesson = touring ? null : tutAt(state, 'morning');
     // Только что открытая вкладка: ярлык «Новое» и бабушкина подсказка над вкладками.
-    const fresh = touring ? undefined : shown.find(([id]) => tabNew(state, id))?.[0];
+    const fresh = touring || lesson ? undefined : shown.find(([id]) => tabNew(state, id))?.[0];
+    // Первая неделя: что ни утро — бабушка говорит, что нового (после подсказки о вкладке).
+    const week = touring || lesson || fresh ? null : weekNote(state);
+    if (week) {
+      weekShown = week;
+      track('tut_week', state.day, week.day);
+      setState(seeWeek(state, week));
+      render();
+      return;
+    }
     const see = (id: Tab) => {
       if (tabNew(getState(), id)) setState(seeTab(getState(), id));
     };
@@ -633,12 +755,14 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       tab = id;
       slideTab = true;
       see(id);
+      if (id === 'hall') hallSeen();
       render();
       // Вкладку сменили, а список прокручен далеко вниз — показываем её начало.
       requestAnimationFrame(() => card.querySelector('.ui-tabs')?.scrollIntoView({ block: 'start' }));
     };
     for (const [id, icon, label] of shown) {
       const b = button('', go(id), `ui-tab${tab === id ? ' active' : ''}${!touring && tabNew(state, id) ? ' ui-tab-new' : ''}`);
+      b.dataset.tab = id;
       b.append(el('span', 'ui-tab-icon', icon), el('span', 'ui-tab-label', t(label)));
       if (badges[id]) b.append(el('span', 'ui-tab-dot', String(badges[id])));
       else if (!touring && tabNew(state, id)) b.append(newTag());
@@ -650,7 +774,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           haptic.tap();
           render();
         })
-      : null;
+      : weekShown?.day === state.day && !lesson
+        ? tabHint(t(weekShown.key, { name: weekShown.product ? productLabel(weekShown.product) : '', cost: weekShown.cost ?? 0 }), () => {
+            weekShown = null;
+            haptic.tap();
+            render();
+          })
+        : null;
     const profile = button('🏆', go('profile'), `ui-chip ui-profile-btn${tab === 'profile' ? ' active' : ''}`);
     profile.title = t('tab.profile');
     title.append(profile);
@@ -681,12 +811,16 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     );
     const openButton = button(t('morning.open'), () => {
       endTour();
+      if (tutStep(getState()) === 'open') setState(tutPass(getState(), 'open'));
+      coach?.hide();
+      coach?.skipButton(false);
       close();
       onOpen();
     });
     // Кнопка «Открыть магазин» всегда внизу окна — не нужно листать до конца списка.
     const openBar = el('div', 'ui-open-bar');
     openBar.append(openButton);
+    card.classList.add('ui-full');
     // Сверху — только то, где нужно решить или забрать; остальное утро — в свёрнутой карточке «Сегодня».
     card.replaceChildren(
       title,
@@ -707,6 +841,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       body,
       openBar,
     );
+    if (lesson) showLesson(state, lesson, tabs, body, openButton);
+    else coach?.skipButton(false);
     if (!step) {
       endTour();
       return;
@@ -725,6 +861,65 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     showTour(step);
     if (focus) requestAnimationFrame(() => focus.scrollIntoView({ block: 'center', behavior: 'smooth' }));
     else card.scrollTo({ top: 0 });
+  };
+
+  /**
+   * Шаг бабушкиного обучения в утре: светлое окошко и стрелка у кнопки, одна строчка рядом.
+   * Кнопки нет (закупать нечего, вкладка уже открыта) — шаг засчитан, утро рисуется дальше.
+   */
+  /** Шаг обучения «Загляни в „Зал“» — последний: бабушка прощается одной строчкой. */
+  const hallSeen = () => {
+    if (tutStep(getState()) !== 'hall') return;
+    const at = tutIndex(getState());
+    const next = tutNext(getState());
+    setState(next);
+    if (tutStep(next)) return;
+    track('tut_done', next.day, at);
+    flushSoon();
+    coach?.skipButton(false);
+    coach?.note(t('tut.done'), 4500);
+  };
+
+  const showLesson = (state: StoreState, lesson: TutStep, tabs: HTMLElement, body: HTMLElement, openButton: HTMLElement) => {
+    if (!coach) return;
+    const tabButton = (id: Tab) => tabs.querySelector<HTMLElement>(`[data-tab="${id}"]`);
+    let target: HTMLElement | null = null;
+    let key: TextKey = 'tut.open';
+    if (lesson === 'reorder') {
+      target = tab === 'buy' ? body.querySelector<HTMLElement>('.ui-restock .ui-btn') : tabButton('buy');
+      key = tab === 'buy' ? 'tut.reorder' : 'tut.buyTab';
+    } else if (lesson === 'open') target = openButton;
+    else if (tab !== 'hall') {
+      target = tabButton('hall');
+      key = 'tut.hall';
+    }
+    if (!target) {
+      if (lesson === 'hall') hallSeen();
+      else setState(tutPass(state, lesson));
+      render();
+      return;
+    }
+    const told = tutTell(state);
+    if (told) {
+      track('tut_step', state.day, tutIndex(state));
+      flushSoon();
+      setState(told);
+    }
+    const node = target;
+    const id = `${lesson}:${key}`;
+    // Новый шаг, а кнопка ниже края списка — прокрутить к ней (один раз: покупки список не дёргают).
+    if (scrolledLesson !== id) {
+      scrolledLesson = id;
+      requestAnimationFrame(() => node.isConnected && node.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+    }
+    coach.onSkip = () => {
+      track('tut_skip', getState().day, tutIndex(getState()));
+      flushSoon();
+      setState(tutSkip(getState()));
+      render();
+    };
+    coach.skipButton(true, true);
+    coach.show({ id, text: t(key), target: () => rectOf(node), under: () => node });
   };
 
   /** Красные цифры на вкладках: где утром нужно что-то сделать. */
@@ -758,18 +953,18 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if (state.pass) chip(`🎫 ${passLevel(state.pass)}${ready ? ` · 🎁${ready}` : ''}`, ready > 0);
     head.append(el('b', '', `${open ? '▾' : '▸'} ${t('today.title')}`), chips);
     head.addEventListener('click', () => {
-      if (openFolds.has('today')) openFolds.delete('today');
-      else openFolds.add('today');
-      try {
-        localStorage.setItem(OPEN_KEY, JSON.stringify([...openFolds]));
-      } catch {
-        // Без хранилища помним до перезапуска.
-      }
-      render();
+      if (touring) return;
+      flipSpan(head, 'today', open ? box.querySelector<HTMLElement>('.ui-today-more') : null, () => {
+        if (open) openFolds.delete('today');
+        else openFolds.add('today');
+        rememberFolds();
+        render();
+      });
     });
     box.append(head);
     if (open) {
       const more = el('div', 'ui-today-more');
+      more.dataset.fold = 'today';
       more.append(...details);
       box.append(more);
     }
@@ -905,7 +1100,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
 
   /** Купить у поставщика: брак — с той же вероятностью, что и раньше. */
   const buyFrom = (sid: SupplierId, pid: ProductId, qty: number, price: number) => {
-    const bad = Math.random() < SUPPLIERS[sid].badChance;
+    const bad = badBatch(sid, getState().day, Math.random());
     const next = buyStock(getState(), pid, qty, price, bad);
     if (bad && next) pendingBad = { sid, pid, qty, price };
     update(next, bad ? 'error' : 'tap');
@@ -928,11 +1123,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       button(t('restock.buy', { n: plan.total }), () => {
         const fresh = restockPlan(getState(), priceOf, guestsToday(getState()));
         if (!fresh.lines.length) return;
-        const result = applyReorder(getState(), fresh, (line) => Math.random() < SUPPLIERS[line.sid].badChance);
+        const result = applyReorder(getState(), fresh, (line) => badBatch(line.sid, getState().day, Math.random()));
         if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
         // Ничего не купилось (не должно: план считает место как при покупке) — без звона монет.
         const bought = result.state.money < getState().money;
-        update(result.state, result.badLine || !bought ? 'error' : 'success');
+        // Шаг обучения «Закупить нужное» пройден; бабушкина подсказка о «Закупке» уже не нужна.
+        const next = tutStep(getState()) === 'reorder' ? tutPass(seeTab(result.state, 'buy'), 'reorder') : result.state;
+        update(next, result.badLine || !bought ? 'error' : 'success');
       }, state.day <= 2 ? 'ui-btn ui-pulse' : 'ui-btn'),
       el('div', 'ui-muted', list),
     );
@@ -1222,9 +1419,15 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     state.shelves.forEach((shelf, i) => {
       const n = shelfCount(shelf);
       const max = shelfCapacity(shelf);
-      const cell = button('', () => {
-        openShelf = openShelf === i ? -1 : i;
-        render();
+      const cell: HTMLButtonElement = button('', () => {
+        const shown = openShelf === i ? grid.querySelector<HTMLElement>(':scope > .ui-shelf-span') : null;
+        const show = !shown;
+        flipSpan(cell, `shelf:${i}`, shown, () => {
+          // Явно, а не «наоборот»: закрытие ждёт конца анимации, а за это время могли раскрыть другую полку.
+          if (show) openShelf = i;
+          else if (openShelf === i) openShelf = -1;
+          render();
+        });
       }, `ui-shelf-card${openShelf === i ? ' active' : ''}${shelf.broken ? ' broken' : ''}`);
       const bar = el('div', 'ui-bar');
       const fill = el('div', 'ui-bar-fill');
@@ -1242,6 +1445,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       if (openShelf === i) {
         const details = shelfDetails(state, i);
         details.classList.add('ui-shelf-span');
+        details.dataset.fold = `shelf:${i}`;
         grid.append(details);
       }
     });
@@ -1886,8 +2090,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${LISTED_UPGRADES.length}`, details: () => [upgradesBox(getState())] },
     ];
     return [
-      tileGrid(tiles, openCorner, (id) => {
-        openCorner = openCorner === id ? null : id;
+      tileGrid(tiles, openCorner, (id, show) => {
+        // Явно, а не «наоборот»: закрытие ждёт конца анимации, а за это время могли раскрыть другую плитку.
+        if (show) openCorner = id;
+        else if (openCorner === id) openCorner = null;
         render();
       }),
     ];
@@ -2691,7 +2897,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const body = el('div');
       const name = el('div', 'ui-item-name', t(up.nameKey));
       if (!owned) name.append(el('span', 'ui-tag', `${up.price} 💰`));
-      const sub = state.level < up.minLevel ? t('upgrade.needLevel', { name: t(STORE_LEVELS[up.minLevel].nameKey) }) : t(up.descKey);
+      // Купленное раньше, чем порог подняли (доставка, «Уценка»), — работает, «нужно помещение» не пишем.
+      const sub = !owned && state.level < up.minLevel ? t('upgrade.needLevel', { name: t(STORE_LEVELS[up.minLevel].nameKey) }) : t(up.descKey);
       body.append(name, el('div', 'ui-item-sub', sub));
       const actions = el('div', 'ui-item-actions');
       actions.append(
@@ -2877,6 +3084,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       body.append(name, el('div', 'ui-item-sub', sub));
       // С уже запущенной рекламой эта прибавит меньше, чем одна, — честно показываем сколько.
       if (running.length && !block) body.append(el('div', 'ui-item-sub', t('ads.stack', { n: pct(adGain(state, id)) })));
+      // До покупки — сколько гостей в день прибавит (от сегодняшнего потока).
+      if (block === null || block === 'money') body.append(el('div', 'ui-item-sub', t('ads.guests', { n: adExtraGuests(state, id) })));
       if (block === 'full') body.append(el('div', 'ui-item-sub', t('ads.full', { n: MAX_ADS })));
       const action = button(block === 'running' ? '✓' : t('ads.order'), () => update(buyAd(getState(), id), 'success'), 'ui-chip', Boolean(block));
       const actions = el('div', 'ui-item-actions');
@@ -2948,20 +3157,20 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if ((state.whatsNew ?? 0) >= WHATS_NEW) return [];
     const box = el('div', 'ui-box ui-duel');
     box.append(el('b', '', `✨ ${t('news.title')}`));
-    for (const key of ['news.sound', 'news.arrange', 'news.store', 'news.name', 'news.away', 'news.friends', 'news.life'] as TextKey[]) box.append(el('div', '', t(key)));
+    for (const key of WHATS_NEW_LINES) box.append(el('div', '', t(key)));
     const row = el('div', 'ui-row');
-    if (onArrange) {
-      row.append(button(`🔧 ${t('arrange.open')}`, () => {
+    // Кассы самообслуживания и сменщик — во вкладке «Развитие» и «Персонал».
+    // Новичку нового начала вкладки открываются по очереди — кнопки только к уже открытым.
+    if (tabOpen(state, 'grow'))
+      row.append(button(`🏗 ${t('tab.grow')}`, () => {
+        tab = 'grow';
         update({ ...getState(), whatsNew: WHATS_NEW });
-        close();
-        onArrange();
       }, 'ui-chip'));
-    }
-    row.append(button(`🏠 ${t('friends.title')}`, () => {
-      tab = 'profile';
-      update({ ...getState(), whatsNew: WHATS_NEW });
-      requestAnimationFrame(() => card.querySelector('.ui-friends')?.scrollIntoView({ block: 'start' }));
-    }, 'ui-chip'));
+    if (tabOpen(state, 'staff'))
+      row.append(button(`🧑‍💼 ${t('tab.staff')}`, () => {
+        tab = 'staff';
+        update({ ...getState(), whatsNew: WHATS_NEW });
+      }, 'ui-chip'));
     box.append(row, button(t('news.ok'), () => update({ ...getState(), whatsNew: WHATS_NEW }), 'ui-btn secondary'));
     return [box];
   };
@@ -3682,12 +3891,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const replay = el('div', 'ui-box');
     replay.append(
       helpRow(t('tour.replayTitle'), t('tour.replayNote')),
+      // Заново — пошаговое обучение: закупка, открытие, касса, полка и «Зал» (game/tutorial.ts).
       button(`👵 ${t('tour.replay')}`, () => {
-        tourStep = 0;
-        trackedStep = -1;
         tab = 'buy';
-        track('tour_replay', getState().day);
-        update({ ...getState(), tourDone: false });
+        scrolledLesson = '';
+        track('tut_replay', getState().day);
+        update(tutReplay(getState()));
       }, 'ui-btn secondary'),
     );
     // В самом низу — начать игру заново (с подтверждением).
@@ -3743,6 +3952,81 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...(early ? [] : [replay]),
       again,
     ];
+  };
+
+  /**
+   * Филиал в здании «Гиганта» (branch.ts). Пока закрыт — чего не хватает (победить «Гигант», стать
+   * универмагом); виден, только когда «Гигант» уже в истории магазина. После
+   * покупки — вчерашний и недельный доход и четыре направления улучшений с ценой и прибавкой.
+   */
+  const branchBox = (state: StoreState): HTMLElement[] => {
+    const lock = branchLock(state);
+    const branch = branchOf(state);
+    // До «Гиганта» о здании за дорогой молчим: там ещё сквер, рано раскрывать сюжет.
+    if (!branch && !state.giant) return [];
+    const box = el('div', 'ui-box');
+    const name = branchSignName(state, t('branch.defaultName'));
+    box.append(el('b', '', `🏬 ${t('branch.title')}`));
+    const art = el('img');
+    art.src = sheetPng('giant_branch');
+    art.alt = '';
+    art.style.cssText = `display: block; width: 100%; max-width: 300px; margin: 6px auto; image-rendering: pixelated;${branch ? '' : ' filter: grayscale(0.8) opacity(0.75);'}`;
+    if (!branch) {
+      if (lock) {
+        box.append(art, el('div', 'ui-muted', `🔒 ${t(lock === 'giant' ? 'branch.lock.giant' : 'branch.lock.level')}`));
+        return [box];
+      }
+      box.append(art, el('div', '', t('branch.offer', { name })), el('div', 'ui-muted', t('branch.preview', { n: Math.round(branchUsual({ ...state, branch: { since: state.day } })) })));
+      if (state.debt > 0) box.append(el('div', 'ui-note', t('branch.needNoDebt')));
+      box.append(
+        button(
+          t('branch.buy', { n: BRANCH_PRICE }),
+          () => {
+            const bought = buyBranch(getState());
+            if (!bought) return;
+            track('branch', bought.day, BRANCH_PRICE);
+            toast('assets/ico_shop.png', t('branch.bought'), t('branch.boughtText', { name }));
+            update(bought, 'success');
+          },
+          'ui-btn',
+          state.debt > 0 || state.money < BRANCH_PRICE,
+        ),
+      );
+      return [box];
+    }
+    box.append(art, el('div', 'ui-item-name', t('branch.name', { name })));
+    if (branch.last) box.append(el('div', '', t('branch.last', { n: branch.last.income })));
+    box.append(
+      el('div', 'ui-muted', t('branch.week', { n: branchWeek(state), total: branch.earned ?? 0 })),
+      el('div', 'ui-muted', t('branch.usual', { n: branchUsual(state), p: Math.round(branchShare(state) * 100) })),
+      el('div', 'ui-muted', t('branch.note')),
+    );
+    for (const id of BRANCH_TRACK_IDS) {
+      const info = BRANCH_TRACKS[id];
+      const tier = branchTier(state, id);
+      const next = nextBranchTier(state, id);
+      const row = el('div', 'ui-item');
+      row.append(el('div', 'ui-ad-icon', info.icon));
+      const body = el('div');
+      const title = el('div', 'ui-item-name', t(info.nameKey));
+      const actions = el('div', 'ui-item-actions');
+      // Ступени — точками: сколько сделано из скольких.
+      title.append(el('span', 'ui-tag', '●'.repeat(tier) + '○'.repeat(info.tiers.length - tier)));
+      if (!next) {
+        body.append(title, el('div', 'ui-item-sub', t('branch.done', { name: t(info.tiers[tier - 1].nameKey) })));
+        actions.append(el('span', 'ui-tag', t('branch.max')));
+      } else {
+        body.append(
+          title,
+          el('div', 'ui-item-sub', t('branch.step', { name: t(next.nameKey), n: tier + 1, of: info.tiers.length })),
+          el('div', 'ui-item-sub', t('branch.gain', { n: branchGain(state, id) })),
+        );
+        actions.append(button(`${next.price} 💰`, () => update(upgradeBranch(getState(), id), 'success'), 'ui-chip', state.money < next.price));
+      }
+      row.append(body, actions);
+      box.append(row);
+    }
+    return [box];
   };
 
   /** Развитие: помещение и расширение, кассы, оборудование, реклама, оформление, банк, счета. */
@@ -3808,7 +4092,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         ),
       );
     }
-    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), bankBox(state));
+    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), ...branchBox(state), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {

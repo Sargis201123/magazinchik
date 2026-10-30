@@ -27,7 +27,8 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
     nameKey: 'supplier.farmer',
     lines: { hello: 'supplier.farmer.hello', yes: 'supplier.farmer.yes', no: 'supplier.farmer.no', angry: 'supplier.farmer.angry' },
     products: { bread: 1, apples: 0.9, potatoes: 1, tangerines: 1, flowers: 1.1 },
-    flexibility: 0.9,
+    // Был 0,9: скидка 20% за три попытки удавалась в 87,5% случаев — торговаться было выгодно всегда.
+    flexibility: 0.75,
     patience: 3,
     badChance: 0.03,
     color: 0x6abe30,
@@ -93,6 +94,11 @@ export const canHaggle = (deal: Deal): boolean => deal.discount === 0 && !deal.a
 export function haggleChance(s: Supplier, ask: number, rating: number, bonus = 0): number {
   return Math.min(0.95, Math.max(0.05, s.flexibility - ask * 2 + (rating - 3) * 0.03 + bonus));
 }
+
+/** Первые дни поставщики брака не привозят: новичку и так хватает решений (окно «Брак» — с 4-го утра). */
+export const CLEAN_BATCH_DAYS = 3;
+/** Партия бракованная? roll — случайное число 0…1 (его тянут всегда — ряд случайных чисел не сдвигается). */
+export const badBatch = (sid: SupplierId, day: number, roll: number): boolean => roll < SUPPLIERS[sid].badChance && day > CLEAN_BATCH_DAYS;
 
 /** roll — случайное число 0..1 (передаётся снаружи, чтобы торг можно было тестировать). */
 export function haggle(s: Supplier, deal: Deal, ask: number, rating: number, roll: number, bonus = 0): { deal: Deal; success: boolean } {
