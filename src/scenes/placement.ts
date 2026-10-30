@@ -3,7 +3,8 @@
 // и можно ли от входа подойти к каждой полке, к кассе и в очередь. Сохраняется в StoreState.slotPos.
 
 import { isFixture, slotOf, type StoreState } from '../game/economy';
-import { iceboxRect, iceboxSpotFor, kioskZone, kioskZones, layoutFor, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
+import { registerSlots, REGISTERS_BY_LEVEL } from '../game/registers';
+import { iceboxRect, iceboxSpotFor, kioskZone, kioskZones, layoutFor, REGISTER_ROW, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
 import { reachable, type Rect } from './paths';
 
 /** Шаг сетки, по которой встают полки. */
@@ -25,11 +26,18 @@ export const SHORT_QUEUE = 150;
 /** Очередь можно укоротить: в этом помещении от этого освобождается место. */
 export const canShortenQueue = (layout: Layout): boolean => layout.queue.y - SHORT_QUEUE > layout.queue.minY + 20;
 
+/**
+ * Сколько точек над короткой очередью добавить ради касс: третья пара касс (пятая касса гипермаркета)
+ * стоит на ряд выше, и очередь начинается над ней — без запаса короткой очереди осталось бы место на одного.
+ */
+const shortExtra = (level: number): number =>
+  Math.max(0, Math.ceil(REGISTERS_BY_LEVEL[Math.min(level, REGISTERS_BY_LEVEL.length - 1)] / 2) - 2) * REGISTER_ROW;
+
 /** Планировка со сдвинутой кассой (дверь остаётся на месте) и, если выбрано, короткой очередью. */
 export function withTill(layout: Layout, till: TillPosition | undefined, level: number): Layout {
   if (!till || till.level !== level || (!till.dx && !till.short)) return layout;
   const { dx } = till;
-  const minY = till.short && canShortenQueue(layout) ? layout.queue.y - SHORT_QUEUE : layout.queue.minY;
+  const minY = till.short && canShortenQueue(layout) ? layout.queue.y - SHORT_QUEUE - shortExtra(level) : layout.queue.minY;
   return {
     ...layout,
     counter: { x: layout.counter.x + dx, y: layout.counter.y },
@@ -281,7 +289,7 @@ export function propPosFor(level: number, props: Prop[], defaults: Record<string
  * освобождает правую стену под полки) и не стоит переставленная вещь. Занято — сначала переставить.
  */
 export function kioskSpotFree(state: StoreState, index: number): boolean {
-  const layout = withTill(withSlots(layoutFor(state.level), state.slotPos, state.level), state.tillPos, state.level);
+  const layout = savedLayout(state);
   // Рамка киоска вместе с местом покупателя.
   const k = kioskZone(layout, index);
   const moved = state.propPos?.level === state.level ? Object.entries(state.propPos.at) : [];
@@ -307,4 +315,18 @@ export const ICE_CART_SPAN: StreetSpan = [57, 77];
 export function freeStreetX(candidates: number[], span: StreetSpan, taken: StreetSpan[]): number {
   const free = candidates.find((x) => taken.every(([from, to]) => x + span[1] <= from || x + span[0] >= to));
   return free ?? candidates[0];
+}
+
+/**
+ * Планировка игрока: своя расстановка полок и касса. Расстановку, которая задевает кассы помещения,
+ * не берём — стандартная: так бывает, когда места под кассы прибавились уже после перестановки (пятая
+ * касса гипермаркета встала бы прямо в полку у правой стены). Касса и очередь остаются как выбраны.
+ */
+export function savedLayout(state: StoreState): Layout {
+  const plain = layoutFor(state.level);
+  const layout = withTill(withSlots(plain, state.slotPos, state.level), state.tillPos, state.level);
+  if (layout.slots === plain.slots) return layout;
+  // Только места под кассы (без стола хозяина, очереди и киосков): прибавиться после перестановки могли лишь они.
+  const zones = tillZones(layout, registerSlots(state), 1).slice(2, 1 + registerSlots(state));
+  return layout.slots.some((p) => zones.some((z) => overlaps(slotRect(layout, p), z))) ? withTill(plain, state.tillPos, state.level) : layout;
 }

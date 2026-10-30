@@ -10,7 +10,8 @@ import { kioskSlots } from '../src/game/lanes';
 import { loanLimit } from '../src/game/bank';
 import { CHAPTERS } from '../src/game/story';
 import { ACHIEVEMENTS } from '../src/game/achievements';
-import { layoutFor } from '../src/scenes/layout';
+import { layoutFor, REGISTER_ROW, registerSpot } from '../src/scenes/layout';
+import { savedLayout, SHORT_QUEUE, slotIssues, withTill } from '../src/scenes/placement';
 
 // Переезд в гипермаркет (economy.ts HYPER_LEVEL, branch.ts): шестое помещение открывается только
 // с филиалом в здании «Гиганта»; старый магазин становится филиалом, ступени остаются, доход не прыгает.
@@ -173,5 +174,33 @@ describe('гипермаркет: сохранения', () => {
     const back = loadGame()!;
     expect(back.level).toBe(BRANCH_LEVEL);
     expect(hyperLock(back)).toBe('branch');
+  });
+});
+
+describe('пятая касса в зале гипермаркета', () => {
+  it('короткая очередь оставляет место над пятой кассой', () => {
+    const plain = layoutFor(HYPER_LEVEL);
+    const short = withTill(plain, { level: HYPER_LEVEL, dx: 0, short: true }, HYPER_LEVEL);
+    // Покупатель пятой кассы стоит в колонке очереди на два ряда касс выше начала (StoreScene.buildRegister),
+    // очередь — над ним: на неё остаётся не меньше трёх шагов.
+    expect(registerSpot(plain, 4).y).toBe(plain.counter.y - 2 * REGISTER_ROW);
+    const top = plain.queue.y - 2 * REGISTER_ROW - plain.queue.step;
+    expect(top - short.queue.minY).toBeGreaterThanOrEqual(3 * plain.queue.step);
+    // В универмаге короткая очередь — как раньше.
+    const dept = layoutFor(BRANCH_LEVEL);
+    expect(withTill(dept, { level: BRANCH_LEVEL, dx: 0, short: true }, BRANCH_LEVEL).queue.minY).toBe(dept.queue.y - SHORT_QUEUE);
+  });
+
+  it('расстановка, где полка стоит на месте пятой кассы, сбрасывается на стандартную', () => {
+    const plain = layoutFor(HYPER_LEVEL);
+    const at = plain.slots.map((p, i) => (i === plain.slots.length - 1 ? { x: 312, y: 236 } : p));
+    const s = { ...expandStore(withBranch())!, slotPos: { level: HYPER_LEVEL, at } };
+    // С четырьмя местами под кассы такая полка была разрешена, с пятью — задевает кассу.
+    expect(slotIssues(plain, at, plain.slots, 4).size).toBe(0);
+    expect(slotIssues(plain, at, plain.slots, 5).size).toBeGreaterThan(0);
+    expect(savedLayout(s).slots).toEqual(plain.slots);
+    // Расстановка, которая кассам не мешает, остаётся.
+    const ok = plain.slots.map((p, i) => (i === 0 ? { x: p.x + 4, y: p.y } : p));
+    expect(savedLayout({ ...s, slotPos: { level: HYPER_LEVEL, at: ok } }).slots[0].x).toBe(plain.slots[0].x + 4);
   });
 });
