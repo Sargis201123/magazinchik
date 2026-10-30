@@ -42,7 +42,9 @@ describe('«Закупить нужное»', () => {
     const plain = bread(s);
     expect(plain).toBeGreaterThan(0);
     const bakery = { ...s, upgrades: ['oven'], staff: [baker] } as StoreState;
-    expect(ownBreadToday(bakery)).toBe(ovenBatch(bakery) * OVEN_DAY_BATCHES);
+    expect(ownBreadToday(bakery)).toBe(ovenBatch(bakery) * (OVEN_DAY_BATCHES - 1));
+    // Не на что купить муку — пекарь не печёт, хлеб берём как раньше.
+    expect(ownBreadToday({ ...bakery, money: 0 })).toBe(0);
     expect(bread(bakery)).toBe(Math.max(0, plain - ownBreadToday(bakery)));
     // Печь выключена или пекаря нет — закупка как раньше.
     expect(ownBreadToday({ ...bakery, bakeMode: 'off' })).toBe(0);

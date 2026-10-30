@@ -2967,14 +2967,17 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     for (const key of WHATS_NEW_LINES) box.append(el('div', '', t(key)));
     const row = el('div', 'ui-row');
     // Кассы самообслуживания и сменщик — во вкладке «Развитие» и «Персонал».
-    row.append(button(`🏗 ${t('tab.grow')}`, () => {
-      tab = 'grow';
-      update({ ...getState(), whatsNew: WHATS_NEW });
-    }, 'ui-chip'));
-    row.append(button(`🧑‍💼 ${t('tab.staff')}`, () => {
-      tab = 'staff';
-      update({ ...getState(), whatsNew: WHATS_NEW });
-    }, 'ui-chip'));
+    // Новичку нового начала вкладки открываются по очереди — кнопки только к уже открытым.
+    if (tabOpen(state, 'grow'))
+      row.append(button(`🏗 ${t('tab.grow')}`, () => {
+        tab = 'grow';
+        update({ ...getState(), whatsNew: WHATS_NEW });
+      }, 'ui-chip'));
+    if (tabOpen(state, 'staff'))
+      row.append(button(`🧑‍💼 ${t('tab.staff')}`, () => {
+        tab = 'staff';
+        update({ ...getState(), whatsNew: WHATS_NEW });
+      }, 'ui-chip'));
     box.append(row, button(t('news.ok'), () => update({ ...getState(), whatsNew: WHATS_NEW }), 'ui-btn secondary'));
     return [box];
   };
