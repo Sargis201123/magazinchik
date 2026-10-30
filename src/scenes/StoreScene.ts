@@ -852,6 +852,7 @@ const STAFF_ACC: Record<StaffRole, { acc: Accessory; tint: number }> = {
   cashier2: { acc: 'apron', tint: 0xffffff },
   cashier3: { acc: 'apron', tint: 0xffffff },
   cashier4: { acc: 'apron', tint: 0xffffff },
+  cashier5: { acc: 'apron', tint: 0xffffff },
   cleaner: { acc: 'apron', tint: 0x5fcde4 },
   loader: { acc: 'vest', tint: 0xffffff },
   guard: { acc: 'badge', tint: 0xffffff },
@@ -1007,7 +1008,7 @@ const LOT_ROAD_DAYS: BigDayId[] = ['heatwave', 'frost', 'quake', 'blackout', 'st
 const CAR_COLORS = [0xe43b44, 0x0099db, 0x3e8948, 0xfeae34, 0xc0cbdc, 0x68386c, 0x262b44];
 const THIEF_SPEED = 52;
 /** Форма сотрудников. */
-const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4, baker: 0xf4f4f4, barista: 0x3e8948, cook: 0xf4f4f4 };
+const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cashier5: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4, baker: 0xf4f4f4, barista: 0x3e8948, cook: 0xf4f4f4 };
 const STAFF_SPEED = 60;
 /** Глубина веранды перед кафе «Пончик». */
 const VERANDA_D = 28;
@@ -1043,7 +1044,7 @@ const ownerLook = (state: StoreState): Look => {
   const outfit = activeDecor(state, 'outfit');
   return { ...OWNER, ...(outfit ? COSTUMES[outfit.id] : {}) };
 };
-const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short', baker: 'cap', barista: 'ponytail', cook: 'short' };
+const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cashier5: 'curly', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short', baker: 'cap', barista: 'ponytail', cook: 'short' };
 /** На какой секунде дня приходит инспектор. */
 const INSPECTOR_AT = 25;
 /** Соня заходит после школы — на этой секунде дня. */
@@ -11935,6 +11936,7 @@ export class StoreScene extends Phaser.Scene {
         cashier2: this.cashierLoop,
         cashier3: this.cashierLoop,
         cashier4: this.cashierLoop,
+        cashier5: this.cashierLoop,
         cleaner: this.cleanerLoop,
         loader: this.loaderLoop,
         guard: null,
@@ -11981,6 +11983,7 @@ export class StoreScene extends Phaser.Scene {
       case 'cashier2':
       case 'cashier3':
       case 'cashier4':
+      case 'cashier5':
         return this.registers[registerOfRole(role)]?.clerk ?? this.reliefSpot();
       case 'cleaner':
         return { x: wc.x - 18, y: wc.spotY + 8 };

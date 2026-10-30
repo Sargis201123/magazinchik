@@ -97,9 +97,16 @@ const RUNS: Run[] = [
   { name: 'l3', patch: level(2), shots: [['day', 0.3]] },
   { name: 'l2', patch: level(1), shots: [['day', 0.3]] },
   // Гипермаркет: переехали в здание «Гиганта», за дорогой — старый магазин-филиал с ремонтом и флажками.
+  // Все пять касс с кассирами и четыре киоска — проверяем, что ряд касс с очередью помещается в зале.
   {
     name: 'l6',
-    patch: (s) => ({ level: 5, branch: { since: s.day - 30, tiers: { repair: 3, ads: 2, shelves: 1 }, earned: 40000 } }),
+    patch: (s) => ({
+      level: 5,
+      branch: { since: s.day - 30, tiers: { repair: 3, ads: 2, shelves: 1 }, earned: 40000 },
+      registers: 5,
+      kiosks: { n: 4, tier: 1 },
+      staff: [...(s.staff as { role: string }[]), ...['cashier4', 'cashier5'].map((role, i) => ({ ...(s.staff as { role: string }[]).find((m) => m.role === 'cashier2'), role, name: 20 + i }))],
+    }),
     shots: [
       ['day', 0.3],
       ['evening', 0.9],

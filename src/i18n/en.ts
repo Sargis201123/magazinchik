@@ -908,6 +908,8 @@ export const en: Record<TextKey, string> = {
   "staff.cashier3.desc": "Rings up whoever comes to the third register on their own. Its spot comes with the Supermarket",
   "staff.cashier4": "Cashier, till 4",
   "staff.cashier4.desc": "Rings up whoever comes to the fourth register on their own. Its spot comes with the Department store",
+  "staff.cashier5": "Cashier, till 5",
+  "staff.cashier5.desc": "Rings up whoever comes to the fifth register on their own. Its spot comes only with the Hypermarket",
   "loss.title": "Where customers went",
   "loss.bought": "bought",
   "loss.r.queue": "⏳ gave up queueing",

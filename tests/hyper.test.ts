@@ -4,7 +4,8 @@ import { BRANCH_LEVEL, BRANCH_REF_MAX, branchInOldShop, branchLook, branchRef, b
 import { mainGoal } from '../src/game/nudge';
 import { soloExpandRisk } from '../src/game/tips';
 import { canSell } from '../src/game/legacy';
-import { registerSlots, nextRegisterCount } from '../src/game/registers';
+import { buyRegister, nextCashierRole, nextRegisterPrice, registerCount, registerSlots, nextRegisterCount, REGISTER_PRICES } from '../src/game/registers';
+import { STAFF_LIMIT, STAFF_ROLE_IDS } from '../src/game/economy';
 import { kioskSlots } from '../src/game/lanes';
 import { loanLimit } from '../src/game/bank';
 import { CHAPTERS } from '../src/game/story';
@@ -29,6 +30,29 @@ const shop = (over: Partial<StoreState> = {}): StoreState => ({
   ...over,
 });
 const withBranch = (over: Partial<StoreState> = {}): StoreState => buyBranch(shop(over))!;
+
+describe('пятая касса — только в гипермаркете', () => {
+  it('после переезда старые четыре кассы на месте, пятую покупают сами и за неё нанимают cashier5', () => {
+    // Сохранение до пятой кассы: четыре кассы и кассиры второй–четвёртой.
+    const staff = (['cashier2', 'cashier3', 'cashier4'] as const).map((role) => ({ role, name: 1, skill: 2, wage: 420, months: 3 }));
+    const s = expandStore(withBranch({ registers: 4, staff }))!;
+    expect(registerCount(s)).toBe(4);
+    expect(nextRegisterPrice(s)).toBe(REGISTER_PRICES[4]);
+    expect(nextCashierRole(s)).toBe('cashier5');
+    const bought = buyRegister(s)!;
+    expect(registerCount(bought)).toBe(5);
+    expect(bought.money).toBe(s.money - REGISTER_PRICES[4]);
+    expect(nextRegisterPrice(bought)).toBeNull();
+    // В универмаге места под пятую нет.
+    expect(nextRegisterPrice(shop({ registers: 4 }))).toBeNull();
+    expect(nextCashierRole(shop({ registers: 4, staff }))).toBe('cashier');
+  });
+
+  it('в гипермаркете есть место для всех должностей', () => {
+    expect(STAFF_LIMIT[HYPER_LEVEL]).toBe(STAFF_LIMIT[BRANCH_LEVEL] + 1);
+    expect(STAFF_LIMIT[HYPER_LEVEL]).toBeGreaterThanOrEqual(STAFF_ROLE_IDS.length);
+  });
+});
 
 describe('гипермаркет: когда можно переехать', () => {
   it('последнее помещение, больше универмага во всём', () => {
@@ -72,7 +96,7 @@ describe('гипермаркет: когда можно переехать', () 
 
   it('всё, что зависит от помещения, знает шестое', () => {
     const s = expandStore(withBranch())!;
-    expect(registerSlots(s)).toBe(4);
+    expect(registerSlots(s)).toBe(5);
     expect(kioskSlots(s)).toBeGreaterThanOrEqual(4);
     expect(loanLimit(s)).toBeGreaterThan(loanLimit(shop()));
     expect(canSell(s)).toBe(true);

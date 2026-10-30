@@ -223,7 +223,7 @@ export const STORE_LEVELS: StoreLevel[] = [
   { nameKey: 'store.l5', cost: 32000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
   // Гипермаркет — переезд в здание «Гиганта» за дорогой, когда там уже открыт свой филиал (branch.ts):
   // старый магазин становится филиалом. Цена подобрана симулятором (docs/BALANCE.md «Гипермаркет»).
-  { nameKey: 'store.l6', cost: 190000, slots: 22, warehouse: 150, rent: 2300, utilities: 340, power: 260, guests: 3, maxCustomers: 17 },
+  { nameKey: 'store.l6', cost: 120000, slots: 22, warehouse: 150, rent: 2300, utilities: 340, power: 260, guests: 5, maxCustomers: 20 },
 ];
 
 /**
@@ -248,11 +248,11 @@ export const LATE_PENALTY = 0.1;
 export const START_DEBT = 500;
 export const DEBT_PAYMENT = 250;
 
-export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'cleaner' | 'loader' | 'guard' | 'manager' | 'baker' | 'barista' | 'cook';
+export type StaffRole = 'cashier' | 'cashier2' | 'cashier3' | 'cashier4' | 'cashier5' | 'cleaner' | 'loader' | 'guard' | 'manager' | 'baker' | 'barista' | 'cook';
 
 /**
  * Сотрудники: каждый забирает у игрока одно ручное дело. Зарплата — базовая за месяц.
- * За первой кассой всегда сам хозяин; cashier — его сменщик, cashier2…4 — кассиры остальных касс (registers.ts).
+ * За первой кассой всегда сам хозяин; cashier — его сменщик, cashier2…5 — кассиры остальных касс (registers.ts).
  */
 export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey; wage: number; minLevel?: number; needs?: 'oven' | 'coffee' | 'kitchen' }> = {
   // Сменщик — с «Магазинчика»: в ларьке хозяин справляется сам (нанятого раньше не увольняем — registers.ts).
@@ -260,6 +260,7 @@ export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey
   cashier2: { nameKey: 'staff.cashier2', descKey: 'staff.cashier2.desc', wage: 420 },
   cashier3: { nameKey: 'staff.cashier3', descKey: 'staff.cashier3.desc', wage: 420 },
   cashier4: { nameKey: 'staff.cashier4', descKey: 'staff.cashier4.desc', wage: 420 },
+  cashier5: { nameKey: 'staff.cashier5', descKey: 'staff.cashier5.desc', wage: 420 },
   cleaner: { nameKey: 'staff.cleaner', descKey: 'staff.cleaner.desc', wage: 280 },
   loader: { nameKey: 'staff.loader', descKey: 'staff.loader.desc', wage: 350 },
   guard: { nameKey: 'staff.guard', descKey: 'staff.guard.desc', wage: 490 },
@@ -301,7 +302,7 @@ export const STICKY_SKIM = 0.04;
 /** Навык растёт каждые столько месяцев работы. */
 export const MONTHS_PER_SKILL = 2;
 /** Сколько сотрудников помещается в помещении каждого уровня (в больших — все должности, с поваром). */
-export const STAFF_LIMIT = [1, 3, 5, 10, 11, 11];
+export const STAFF_LIMIT = [1, 3, 5, 10, 11, 12];
 
 export interface StaffMember {
   role: StaffRole;

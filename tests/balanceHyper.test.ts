@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { simulate } from '../src/game/simulate';
-import { HYPER_LEVEL } from '../src/game/economy';
+import { HYPER_LEVEL, STORE_LEVELS } from '../src/game/economy';
 
 // Баланс переезда в гипермаркет (economy.ts HYPER_LEVEL): «разумный игрок» жмёт «Закупить нужное»,
 // нанимает людей, после победы над «Гигантом» покупает филиал, улучшает его и копит на переезд.
@@ -14,18 +14,42 @@ describe('баланс гипермаркета', () => {
   }));
   const moved = (r: (typeof runs)[number]) => r.move.levelDay[HYPER_LEVEL]!;
 
-  it('переезжают за 200 дней, обычно через 3–5 недель после филиала', () => {
+  it('переезжают за 200 дней, обычно через 2–3 недели после филиала', () => {
     const gaps = runs.map((r) => {
       expect(r.move.levelDay[HYPER_LEVEL]).not.toBeNull();
       // Без механики «гипермаркет» в симуляторе не переезжают (и в старых тестах всё как было).
       expect(r.stay.levelDay[HYPER_LEVEL]).toBeNull();
       return moved(r) - r.move.final.branch!.since;
     });
-    for (const g of gaps) expect(g).toBeLessThanOrEqual(40);
+    for (const g of gaps) expect(g).toBeLessThanOrEqual(30);
     // Если «Гигант» сдался только с реванша, денег к покупке филиала уже много — тогда переезд сразу.
     const median = [...gaps].sort((a, b) => a - b)[gaps.length >> 1];
-    expect(median).toBeGreaterThanOrEqual(21);
-    expect(median).toBeLessThanOrEqual(35);
+    expect(median).toBeGreaterThanOrEqual(10);
+    expect(median).toBeLessThanOrEqual(28);
+  });
+
+  it('переезд окупается за 5–6 недель: прибавка к доходу после переезда покрывает цену', () => {
+    for (const r of runs) {
+      const h = moved(r);
+      let extra = 0;
+      let paid: number | null = null;
+      for (const d of r.move.days.filter((x) => x.day >= h)) {
+        const s = r.stay.days[d.day - 1];
+        extra += d.profit + d.branch - s.profit - s.branch;
+        if (paid === null && extra >= STORE_LEVELS[HYPER_LEVEL].cost) paid = d.day - h;
+      }
+      expect(paid).not.toBeNull();
+      expect(paid!).toBeGreaterThanOrEqual(28);
+      expect(paid!).toBeLessThanOrEqual(50);
+    }
+  });
+
+  it('на 200-й день денег с переездом больше, чем без него (+10…35%)', () => {
+    for (const r of runs) {
+      const ratio = r.move.final.money / r.stay.final.money;
+      expect(ratio).toBeGreaterThan(1.05);
+      expect(ratio).toBeLessThan(1.4);
+    }
   });
 
   it('пауза перед гипермаркетом длиннее, чем перед универмагом', () => {
@@ -45,29 +69,30 @@ describe('баланс гипермаркета', () => {
     }
   });
 
-  it('филиал в старом магазине приносит столько же, сколько до переезда', () => {
+  it('филиал в старом магазине приносит столько же, сколько без переезда', () => {
+    // Парно с тем же сидом без переезда: молодой филиал ещё растёт сам (ступени), переезд этот рост не ускоряет и не режет.
     for (const r of runs) {
       const h = moved(r);
-      if (h - r.move.final.branch!.since < 14) continue;
-      const avg = (a: number, b: number) => {
-        const days = r.move.days.filter((x) => x.day >= a && x.day < b);
-        return days.reduce((s, x) => s + x.branch, 0) / days.length;
+      const avg = (days: typeof r.move.days) => {
+        const part = days.filter((x) => x.day >= h + 10 && x.day < h + 40);
+        return part.reduce((s, x) => s + x.branch, 0) / part.length;
       };
-      const ratio = avg(h + 10, h + 40) / avg(h - 10, h);
+      const ratio = avg(r.move.days) / avg(r.stay.days);
       expect(ratio).toBeGreaterThan(0.85);
       expect(ratio).toBeLessThan(1.15);
     }
   });
 
-  it('в поздней игре доход дня растёт на 10–40%, а не взлетает', () => {
+
+  it('в поздней игре доход дня растёт в полтора раза, а не взлетает', () => {
     for (const r of runs) {
       const net = (days: typeof r.move.days) => {
         const late = days.slice(-20);
         return late.reduce((s, d) => s + d.profit + d.branch, 0) / late.length;
       };
       const ratio = net(r.move.days) / net(r.stay.days);
-      expect(ratio).toBeGreaterThan(1.1);
-      expect(ratio).toBeLessThan(1.4);
+      expect(ratio).toBeGreaterThan(1.3);
+      expect(ratio).toBeLessThan(1.9);
     }
   });
 });
