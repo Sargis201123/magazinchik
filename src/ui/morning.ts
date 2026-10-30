@@ -264,8 +264,21 @@ interface MorningOptions {
 // Вкладки в одну строку: значок и короткая подпись. Профиль (достижения, наследие, настройки) —
 // кнопкой в углу заголовка, не вкладкой.
 type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
-/** Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. */
-const WHATS_NEW = 2;
+/**
+ * Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. Видевшие прежнюю
+ * (2: звук, перестановка, друзья…) увидят новую один раз.
+ */
+const WHATS_NEW = 3;
+/** Строки карточки «Что нового» — самое свежее сверху. */
+const WHATS_NEW_LINES: TextKey[] = [
+  // Сюда — строка про «Филиал» (второй магазин), когда он выйдет: 'news.branch'.
+  'news.kiosks',
+  'news.relief',
+  'news.restock',
+  'news.housewarming',
+  'news.newyear',
+  'news.prices',
+];
 
 const TABS: [Tab, string, TextKey][] = [
   ['buy', '🛒', 'tab.buy'],
@@ -2951,19 +2964,16 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if ((state.whatsNew ?? 0) >= WHATS_NEW) return [];
     const box = el('div', 'ui-box ui-duel');
     box.append(el('b', '', `✨ ${t('news.title')}`));
-    for (const key of ['news.sound', 'news.arrange', 'news.store', 'news.name', 'news.away', 'news.friends', 'news.life'] as TextKey[]) box.append(el('div', '', t(key)));
+    for (const key of WHATS_NEW_LINES) box.append(el('div', '', t(key)));
     const row = el('div', 'ui-row');
-    if (onArrange) {
-      row.append(button(`🔧 ${t('arrange.open')}`, () => {
-        update({ ...getState(), whatsNew: WHATS_NEW });
-        close();
-        onArrange();
-      }, 'ui-chip'));
-    }
-    row.append(button(`🏠 ${t('friends.title')}`, () => {
-      tab = 'profile';
+    // Кассы самообслуживания и сменщик — во вкладке «Развитие» и «Персонал».
+    row.append(button(`🏗 ${t('tab.grow')}`, () => {
+      tab = 'grow';
       update({ ...getState(), whatsNew: WHATS_NEW });
-      requestAnimationFrame(() => card.querySelector('.ui-friends')?.scrollIntoView({ block: 'start' }));
+    }, 'ui-chip'));
+    row.append(button(`🧑‍💼 ${t('tab.staff')}`, () => {
+      tab = 'staff';
+      update({ ...getState(), whatsNew: WHATS_NEW });
     }, 'ui-chip'));
     box.append(row, button(t('news.ok'), () => update({ ...getState(), whatsNew: WHATS_NEW }), 'ui-btn secondary'));
     return [box];
