@@ -9732,13 +9732,15 @@ export class StoreScene extends Phaser.Scene {
   /**
    * Вещи у входа на тротуаре: кадки с цветами по бокам от входа или меловая доска-штендер. У самой двери
    * места заняты (урна, Бобик, подсолнухи, доска отзывов, промоутер, скамейка) — ставим чуть дальше.
+   * Летом справа от двери стоит тележка с мороженым (applySeason) — правая кадка тогда за ней.
    */
   private buildOutdoorDecor(): void {
     const item = activeDecor(this.state, 'outdoor');
     if (!item?.texture) return;
     const { door } = this.layout;
     const top = this.streetY - 12;
-    const spots = item.id === 'out_planters' ? [door.x - 60, door.x + 62] : [door.x - 50];
+    const right = yearTime(this.state.day) === 'summer' ? door.x + 96 : door.x + 62;
+    const spots = item.id === 'out_planters' ? [door.x - 60, right] : [door.x - 50];
     for (const x of spots) this.art(x, top + 9, item.texture).setOrigin(0.5, 1).setDepth(top + 9);
   }
 
