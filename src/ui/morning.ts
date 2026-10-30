@@ -279,7 +279,8 @@ type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
 const WHATS_NEW = 3;
 /** Строки карточки «Что нового» — самое свежее сверху. */
 const WHATS_NEW_LINES: TextKey[] = [
-  // Сюда — строка про «Филиал» (второй магазин), когда он выйдет: 'news.branch'.
+  'news.branch',
+  'news.goal',
   'news.kiosks',
   'news.relief',
   'news.restock',

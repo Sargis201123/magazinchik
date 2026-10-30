@@ -2416,6 +2416,8 @@ export const en: Record<TextKey, string> = {
   "news.relief": "🧑‍💼 The relief cashier (from the “Little shop” premises) takes your till for the whole day — you're free for chores. Staff tab.",
   "news.restock": "📦 \"Buy what's needed\" is one tap now: goods go straight onto the shelves and into the stockroom.",
   "news.housewarming": "🏠 Housewarming: after a move, the first bill is still at the old rent.",
+  "news.branch": "🏬 Branch store: after beating the Giant at the Department Store level you can buy its building — your second shop earns by itself every night. «Growth» → «Branch».",
+  "news.goal": "🎯 Up top — one main goal with a progress bar: tap it to see what to do next. The day summary tells what comes tomorrow. And the menu no longer jumps when you fold sections.",
   "news.newyear": "🎄 In December — the New Year calendar: a card with a gift every day, and Santa drops by.",
   "news.prices": "🏷 Prices tuned: cheaper entrance, restroom, LED lights, e-price tags and kiosks; pricier loyalty card, cameras and big ads; the night shift earns less. Whatever you already own stays.",
   // Casual loop (game/nudge.ts): goal bar, "what next" nudge, "Tomorrow:" in the summary.

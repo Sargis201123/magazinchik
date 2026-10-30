@@ -33,8 +33,8 @@ const css = `
 .ui-coach-face { width: 36px; height: 36px; flex: none; image-rendering: pixelated; border: 2px solid #2b2233; border-radius: 6px; background: #fbf6ea; }
 .ui-coach-name { font: 800 10.5px/1.2 ${UI_FONT}; color: #b86f50; text-transform: uppercase; letter-spacing: .5px; }
 .ui-coach-text { margin: 1px 0 0; }
-/* «Пропустить обучение» — маленькая, всегда в одном месте: слева сверху, под деньгами и днём. */
-.ui-coach-skip { position: fixed; z-index: 46; left: 8px; top: calc(var(--safe-top, env(safe-area-inset-top)) + 44px);
+/* «Пропустить обучение» — маленькая, всегда в одном месте: слева сверху, под деньгами, складом и полоской цели. */
+.ui-coach-skip { position: fixed; z-index: 46; left: 8px; top: calc(var(--safe-top, env(safe-area-inset-top)) + 86px);
   display: flex; gap: 4px; align-items: center; padding: 3px; border-radius: 8px; background: rgba(24, 20, 37, .72); color: #fff;
   font: 700 11px/1.2 ${UI_FONT}; }
 .ui-coach-skip .ui-chip { padding: 3px 7px; font-size: 11px; background: transparent; color: #fff; border-color: rgba(255, 255, 255, .55); box-shadow: none; }
