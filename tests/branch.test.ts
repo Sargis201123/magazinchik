@@ -87,17 +87,18 @@ describe('филиал: улучшения', () => {
     expect(branchMaxed(s)).toBe(true);
   });
 
-  it('всего вложений — 80–150 тысяч; первые ступени окупаются за 15–35 дней, последние — дольше', () => {
+  it('всего вложений — 20–40 тысяч; первые ступени окупаются за 15–20 дней, последние — дольше, но не больше 40', () => {
     const total = BRANCH_TRACK_IDS.reduce((sum, id) => sum + BRANCH_TRACKS[id].tiers.reduce((a, t) => a + t.price, 0), 0);
-    expect(total).toBeGreaterThanOrEqual(80000);
-    expect(total).toBeLessThanOrEqual(150000);
-    // Окупаемость — у игрока с выручкой около 7000 в день.
-    const ref = 7000;
+    expect(total).toBeGreaterThanOrEqual(20000);
+    expect(total).toBeLessThanOrEqual(40000);
+    // Окупаемость — у игрока с выручкой около 10 000 в день (универмаг после победы над «Гигантом»).
+    const ref = 10000;
     for (const id of BRANCH_TRACK_IDS) {
       const days = BRANCH_TRACKS[id].tiers.map((t) => t.price / (t.share * ref));
       expect(days[0]).toBeGreaterThanOrEqual(15);
-      expect(days[0]).toBeLessThanOrEqual(35);
+      expect(days[0]).toBeLessThanOrEqual(20);
       expect(days[days.length - 1]).toBeGreaterThan(days[0]);
+      expect(days[days.length - 1]).toBeLessThanOrEqual(40);
     }
   });
 

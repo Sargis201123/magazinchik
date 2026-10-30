@@ -31,7 +31,7 @@ export interface BranchState {
 /** Цена здания. */
 export const BRANCH_PRICE = 30000;
 /** Доля обычной выручки своего магазина, которую приносит филиал без улучшений. */
-export const BRANCH_BASE_SHARE = 0.1;
+export const BRANCH_BASE_SHARE = 0.05;
 /** Выручка своего магазина в день, от которой считается доход: не меньше и не больше. */
 export const BRANCH_REF_MIN = 3000;
 export const BRANCH_REF_MAX = 20000;
@@ -60,45 +60,46 @@ export interface BranchTrackInfo {
 }
 
 /**
- * Направления улучшений. Первая ступень окупается примерно за 15–20 дней, вторая — за 25–30,
- * последняя — медленнее, за полтора-два месяца (у игрока с выручкой около 7000 в день). Всего
- * вложений — около 110 тысяч.
+ * Направления улучшений. Первая ступень окупается примерно за 17 дней, вторая — за 25, последняя —
+ * за 36–39 (у игрока с выручкой около 10 000 в день — универмаг после победы над «Гигантом»). Всего
+ * вложений — около 28 тысяч. Со всеми ступенями филиал добавляет к чистому доходу дня примерно
+ * половину, а не удваивает его (docs/BALANCE.md).
  */
 export const BRANCH_TRACKS: Record<BranchTrack, BranchTrackInfo> = {
   shelves: {
     icon: '🛒',
     nameKey: 'branch.track.shelves',
     tiers: [
-      { price: 3500, share: 0.025, nameKey: 'branch.shelves.1' },
-      { price: 7500, share: 0.035, nameKey: 'branch.shelves.2' },
-      { price: 12500, share: 0.03, nameKey: 'branch.shelves.3' },
+      { price: 1400, share: 0.008, nameKey: 'branch.shelves.1' },
+      { price: 2500, share: 0.01, nameKey: 'branch.shelves.2' },
+      { price: 3600, share: 0.01, nameKey: 'branch.shelves.3' },
     ],
   },
   manager: {
     icon: '💼',
     nameKey: 'branch.track.manager',
     tiers: [
-      { price: 4000, share: 0.03, nameKey: 'branch.manager.1' },
-      { price: 8500, share: 0.035, nameKey: 'branch.manager.2' },
-      { price: 14000, share: 0.03, nameKey: 'branch.manager.3' },
+      { price: 1500, share: 0.009, nameKey: 'branch.manager.1' },
+      { price: 2600, share: 0.01, nameKey: 'branch.manager.2' },
+      { price: 3500, share: 0.009, nameKey: 'branch.manager.3' },
     ],
   },
   ads: {
     icon: '🪧',
     nameKey: 'branch.track.ads',
     tiers: [
-      { price: 3000, share: 0.02, nameKey: 'branch.ads.1' },
-      { price: 6500, share: 0.03, nameKey: 'branch.ads.2' },
-      { price: 11000, share: 0.025, nameKey: 'branch.ads.3' },
+      { price: 1000, share: 0.006, nameKey: 'branch.ads.1' },
+      { price: 2000, share: 0.008, nameKey: 'branch.ads.2' },
+      { price: 3000, share: 0.008, nameKey: 'branch.ads.3' },
     ],
   },
   repair: {
     icon: '🔨',
     nameKey: 'branch.track.repair',
     tiers: [
-      { price: 3500, share: 0.025, nameKey: 'branch.repair.1' },
-      { price: 7500, share: 0.035, nameKey: 'branch.repair.2' },
-      { price: 12500, share: 0.03, nameKey: 'branch.repair.3' },
+      { price: 1400, share: 0.008, nameKey: 'branch.repair.1' },
+      { price: 2500, share: 0.01, nameKey: 'branch.repair.2' },
+      { price: 3400, share: 0.009, nameKey: 'branch.repair.3' },
     ],
   },
 };

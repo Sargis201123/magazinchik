@@ -18,12 +18,17 @@ describe('баланс филиала', () => {
       expect(branch).toBeDefined();
       const wonDay = r.with.giant.find((g) => g.phase === 'won')!.day;
       expect(branch!.since - wonDay).toBeLessThanOrEqual(15);
-      expect(Object.values(branch!.tiers ?? {}).reduce((a, b) => a + (b ?? 0), 0)).toBeGreaterThanOrEqual(4);
+      // Ступени окупаются за 15–40 дней — «разумный игрок» берёт все двенадцать.
+      expect(Object.values(branch!.tiers ?? {}).reduce((a, b) => a + (b ?? 0), 0)).toBe(12);
     }
   });
 
+  // Окупаемость и поздний доход — где филиалу дали хотя бы три месяца (на сиде 3 «Гигант» сдаётся лишь к 172-му дню).
+  const long = runs.filter((r) => r.with.final.branch!.since <= DAYS - 90);
+
   it('окупается: к концу филиал принёс больше, чем в него вложили', () => {
-    for (const r of runs) {
+    expect(long.length).toBeGreaterThanOrEqual(3);
+    for (const r of long) {
       const branch = r.with.final.branch!;
       const spent = r.with.days.filter((d) => d.day >= branch.since - 1).reduce((s, d) => s + d.investments, 0) - (r.without.days.filter((d) => d.day >= branch.since - 1).reduce((s, d) => s + d.investments, 0));
       expect(spent).toBeGreaterThanOrEqual(BRANCH_PRICE);
@@ -43,19 +48,21 @@ describe('баланс филиала', () => {
     }
   });
 
-  it('доход в поздней игре вырастает, но не больше чем вдвое', () => {
-    for (const r of runs) {
+  it('доход в поздней игре вырастает примерно в полтора раза, а не вдвое', () => {
+    for (const r of long) {
       const since = r.with.final.branch!.since;
-      // Сколько денег прибавилось с покупки до конца — с филиалом и без (те же случайности).
-      const gain = (days: typeof r.with.days) => days.at(-1)!.money - days[since - 1].money;
-      const ratio = gain(r.with.days) / gain(r.without.days);
-      expect(ratio).toBeGreaterThan(1.2);
-      expect(ratio).toBeLessThanOrEqual(2);
-      // И за день филиал приносит меньше, чем сам магазин выручает.
+      // Чистый доход в день (магазин + филиал) за 20 дней после всех улучшений — против того же сида без филиала.
+      const from = Math.max(141, since + 30);
+      const net = (days: typeof r.with.days) => {
+        const late = days.filter((d) => d.day >= from && d.day < from + 20);
+        return late.reduce((s, d) => s + d.profit + d.branch, 0) / late.length;
+      };
+      const ratio = net(r.with.days) / net(r.without.days);
+      expect(ratio).toBeGreaterThan(1.4);
+      expect(ratio).toBeLessThan(1.7);
+      // И за день филиал приносит меньше, чем сам магазин зарабатывает.
       const late = r.with.days.slice(-30);
-      const branch = late.reduce((s, d) => s + d.branch, 0);
-      const revenue = late.reduce((s, d) => s + d.revenue, 0);
-      expect(branch).toBeLessThan(revenue);
+      expect(late.reduce((s, d) => s + d.branch, 0)).toBeLessThan(late.reduce((s, d) => s + d.profit, 0));
     }
   });
 });
