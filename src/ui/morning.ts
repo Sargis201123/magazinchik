@@ -233,6 +233,8 @@ import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } 
 import { flushSoon, track } from '../platform/analytics';
 import { MORNING_TABS, openAllTabs, openTabs, seeTab, tabNew, tabOpen, unlockTab } from '../game/onboarding';
 import { newTag, tabHint } from './onboarding';
+import { seeWeek, tutAt, tutIndex, tutNext, tutPass, tutReplay, tutSkip, tutStep, tutTell, weekNote, type TutStep, type WeekNote } from '../game/tutorial';
+import type { Coach, Spot } from './coach';
 import { showLeaderboard } from './leaderboard';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
@@ -260,6 +262,8 @@ interface MorningOptions {
   onTourDone?: () => void;
   /** Дочитали вступление главы (в новом начале гостинец ждёт его конца). */
   onStoryDone?: () => void;
+  /** Подсветка бабушкиного обучения (ui/coach.ts): шаги утра — у нужной кнопки. */
+  coach?: Coach;
 }
 
 // Вкладки в одну строку: значок и короткая подпись. Профиль (достижения, наследие, настройки) —
@@ -461,8 +465,15 @@ function helpRow(title: HTMLElement | string, text: string): HTMLElement {
   return wrap;
 }
 
+/** Где элемент на экране — для подсветки обучения. */
+const rectOf = (node: HTMLElement): Spot | null => {
+  if (!node.isConnected) return null;
+  const r = node.getBoundingClientRect();
+  return r.width && r.height ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+};
+
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone }: MorningOptions): void {
+export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach }: MorningOptions): void {
   const { card, close } = openModal();
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
@@ -489,6 +500,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   let trackedStep = -1;
   /** Открыто подтверждение «Начать заново». */
   let confirmRestart = false;
+  /** Шаг обучения, к кнопке которого уже прокрутили список (прокручиваем один раз на шаг). */
+  let scrolledLesson = '';
+  /** Что нового сегодня (первая неделя): сказано в это утро, висит до «Понятно». */
+  let weekShown: WeekNote | null = null;
   let tourEl: HTMLElement | null = null;
   const endTour = () => {
     tourEl?.remove();
@@ -635,8 +650,19 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       }
     }
     const shown = TABS.filter(([id]) => touring || tabOpen(state, id));
+    // Шаг бабушкиного обучения (game/tutorial.ts): пока он идёт, подсказку говорит она у самой кнопки.
+    const lesson = touring ? null : tutAt(state, 'morning');
     // Только что открытая вкладка: ярлык «Новое» и бабушкина подсказка над вкладками.
-    const fresh = touring ? undefined : shown.find(([id]) => tabNew(state, id))?.[0];
+    const fresh = touring || lesson ? undefined : shown.find(([id]) => tabNew(state, id))?.[0];
+    // Первая неделя: что ни утро — бабушка говорит, что нового (после подсказки о вкладке).
+    const week = touring || lesson || fresh ? null : weekNote(state);
+    if (week) {
+      weekShown = week;
+      track('tut_week', state.day, week.day);
+      setState(seeWeek(state, week));
+      render();
+      return;
+    }
     const see = (id: Tab) => {
       if (tabNew(getState(), id)) setState(seeTab(getState(), id));
     };
@@ -647,12 +673,14 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       tab = id;
       slideTab = true;
       see(id);
+      if (id === 'hall') hallSeen();
       render();
       // Вкладку сменили, а список прокручен далеко вниз — показываем её начало.
       requestAnimationFrame(() => card.querySelector('.ui-tabs')?.scrollIntoView({ block: 'start' }));
     };
     for (const [id, icon, label] of shown) {
       const b = button('', go(id), `ui-tab${tab === id ? ' active' : ''}${!touring && tabNew(state, id) ? ' ui-tab-new' : ''}`);
+      b.dataset.tab = id;
       b.append(el('span', 'ui-tab-icon', icon), el('span', 'ui-tab-label', t(label)));
       if (badges[id]) b.append(el('span', 'ui-tab-dot', String(badges[id])));
       else if (!touring && tabNew(state, id)) b.append(newTag());
@@ -664,7 +692,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           haptic.tap();
           render();
         })
-      : null;
+      : weekShown?.day === state.day && !lesson
+        ? tabHint(t(weekShown.key, { name: weekShown.product ? productLabel(weekShown.product) : '', cost: weekShown.cost ?? 0 }), () => {
+            weekShown = null;
+            haptic.tap();
+            render();
+          })
+        : null;
     const profile = button('🏆', go('profile'), `ui-chip ui-profile-btn${tab === 'profile' ? ' active' : ''}`);
     profile.title = t('tab.profile');
     title.append(profile);
@@ -695,6 +729,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     );
     const openButton = button(t('morning.open'), () => {
       endTour();
+      if (tutStep(getState()) === 'open') setState(tutPass(getState(), 'open'));
+      coach?.hide();
+      coach?.skipButton(false);
       close();
       onOpen();
     });
@@ -721,6 +758,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       body,
       openBar,
     );
+    if (lesson) showLesson(state, lesson, tabs, body, openButton);
+    else coach?.skipButton(false);
     if (!step) {
       endTour();
       return;
@@ -739,6 +778,65 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     showTour(step);
     if (focus) requestAnimationFrame(() => focus.scrollIntoView({ block: 'center', behavior: 'smooth' }));
     else card.scrollTo({ top: 0 });
+  };
+
+  /**
+   * Шаг бабушкиного обучения в утре: светлое окошко и стрелка у кнопки, одна строчка рядом.
+   * Кнопки нет (закупать нечего, вкладка уже открыта) — шаг засчитан, утро рисуется дальше.
+   */
+  /** Шаг обучения «Загляни в „Зал“» — последний: бабушка прощается одной строчкой. */
+  const hallSeen = () => {
+    if (tutStep(getState()) !== 'hall') return;
+    const at = tutIndex(getState());
+    const next = tutNext(getState());
+    setState(next);
+    if (tutStep(next)) return;
+    track('tut_done', next.day, at);
+    flushSoon();
+    coach?.skipButton(false);
+    coach?.note(t('tut.done'), 4500);
+  };
+
+  const showLesson = (state: StoreState, lesson: TutStep, tabs: HTMLElement, body: HTMLElement, openButton: HTMLElement) => {
+    if (!coach) return;
+    const tabButton = (id: Tab) => tabs.querySelector<HTMLElement>(`[data-tab="${id}"]`);
+    let target: HTMLElement | null = null;
+    let key: TextKey = 'tut.open';
+    if (lesson === 'reorder') {
+      target = tab === 'buy' ? body.querySelector<HTMLElement>('.ui-restock .ui-btn') : tabButton('buy');
+      key = tab === 'buy' ? 'tut.reorder' : 'tut.buyTab';
+    } else if (lesson === 'open') target = openButton;
+    else if (tab !== 'hall') {
+      target = tabButton('hall');
+      key = 'tut.hall';
+    }
+    if (!target) {
+      if (lesson === 'hall') hallSeen();
+      else setState(tutPass(state, lesson));
+      render();
+      return;
+    }
+    const told = tutTell(state);
+    if (told) {
+      track('tut_step', state.day, tutIndex(state));
+      flushSoon();
+      setState(told);
+    }
+    const node = target;
+    const id = `${lesson}:${key}`;
+    // Новый шаг, а кнопка ниже края списка — прокрутить к ней (один раз: покупки список не дёргают).
+    if (scrolledLesson !== id) {
+      scrolledLesson = id;
+      requestAnimationFrame(() => node.isConnected && node.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+    }
+    coach.onSkip = () => {
+      track('tut_skip', getState().day, tutIndex(getState()));
+      flushSoon();
+      setState(tutSkip(getState()));
+      render();
+    };
+    coach.skipButton(true, true);
+    coach.show({ id, text: t(key), target: () => rectOf(node), under: () => node });
   };
 
   /** Красные цифры на вкладках: где утром нужно что-то сделать. */
@@ -946,7 +1044,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
         // Ничего не купилось (не должно: план считает место как при покупке) — без звона монет.
         const bought = result.state.money < getState().money;
-        update(result.state, result.badLine || !bought ? 'error' : 'success');
+        // Шаг обучения «Закупить нужное» пройден; бабушкина подсказка о «Закупке» уже не нужна.
+        const next = tutStep(getState()) === 'reorder' ? tutPass(seeTab(result.state, 'buy'), 'reorder') : result.state;
+        update(next, result.badLine || !bought ? 'error' : 'success');
       }, state.day <= 2 ? 'ui-btn ui-pulse' : 'ui-btn'),
       el('div', 'ui-muted', list),
     );
@@ -3699,12 +3799,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const replay = el('div', 'ui-box');
     replay.append(
       helpRow(t('tour.replayTitle'), t('tour.replayNote')),
+      // Заново — пошаговое обучение: закупка, открытие, касса, полка и «Зал» (game/tutorial.ts).
       button(`👵 ${t('tour.replay')}`, () => {
-        tourStep = 0;
-        trackedStep = -1;
         tab = 'buy';
-        track('tour_replay', getState().day);
-        update({ ...getState(), tourDone: false });
+        scrolledLesson = '';
+        track('tut_replay', getState().day);
+        update(tutReplay(getState()));
       }, 'ui-btn secondary'),
     );
     // В самом низу — начать игру заново (с подтверждением).
