@@ -163,6 +163,8 @@ import { flushSoon, reportProgress, setProgressSource, track } from '../platform
 import { firstWant, markOnb, onbDone, pickCohort, playDayOne, startCohort, type Cohort, type OnbStep } from '../game/onboarding';
 import { pendingStory } from '../game/story';
 import { firstSaleStamp, SayBubble, type SayLine } from '../ui/onboarding';
+import { TUT_IGNORE_MS, TUT_WAIT_MS, tutAt, tutDayEnd, tutIndex, tutMorning, tutNext, tutPass, tutPatient, tutSkip, tutStep, tutTell, type TutStep } from '../game/tutorial';
+import { Coach, type Spot } from '../ui/coach';
 import { shareDay } from '../platform/shareCard';
 import { duelInfo, fetchFriendShop, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
 import { friendsAtWork } from '../game/staff';
@@ -1376,6 +1378,14 @@ export class StoreScene extends Phaser.Scene {
   private arrow?: Phaser.GameObjects.Image;
   /** Новое начало (game/onboarding.ts): облачко бабушки, она сама у входа и кольцо у кассы до первой продажи. */
   private readonly say = new SayBubble();
+  /** Бабушкино обучение (game/tutorial.ts): подсветка и стрелка у того, что нажать. */
+  private readonly coach = new Coach();
+  /** Подсветку сейчас показывает зал (а не утро или итоги). */
+  private hallCoach = false;
+  /** Какой шаг обучения уже ушёл в аналитику, и сколько он ждёт без цели и с целью (мс дня). */
+  private tutTracked: TutStep | null = null;
+  private tutIdleMs = 0;
+  private tutShownMs = 0;
   private granny?: Phaser.GameObjects.Container;
   private tillRing?: Phaser.GameObjects.Ellipse;
   /** Когда нажали «Играть» (мс, performance.now): шаги первых минут считаются от него. */
@@ -1922,6 +1932,8 @@ export class StoreScene extends Phaser.Scene {
     music.setMood(this.musicMood(), this.winterTune);
     // Дверь двигается только в рабочие часы: день кончился — стекло снова закрывает улицу.
     if (!this.running) {
+      // День стоит (итоги, ночь, окно) — подсветка зала гаснет; утро и итоги показывают свою.
+      this.hallCoachOff();
       // Мухи над неубранным не замирают и между сменами.
       this.rotting.tick(this.time.now);
       ambience.door(0);
@@ -1987,10 +1999,14 @@ export class StoreScene extends Phaser.Scene {
     this.updateRot(dt);
     this.updateScanBar();
     this.callSellerIfNeeded();
-    // Пока говорит бабушка, та же подсказка снизу не повторяется.
-    this.hud.setHint(this.say.visible ? '' : this.currentHint(), this.state.day <= TUTORIAL_DAYS);
+    // Пока говорит бабушка (облачком или у подсветки обучения), та же подсказка снизу не повторяется.
+    const hint = this.currentHint();
+    // Та же подсказка, что у подсветки обучения (касса, полка), снизу не повторяется; другие (вор, мусор) — да.
+    const coached = this.hallCoach && this.coach.pointing && (hint === t('hint.serve') || hint === t('hint.restock'));
+    this.hud.setHint(this.say.visible || coached ? '' : hint, this.state.day <= TUTORIAL_DAYS);
     this.updateTutorialArrow();
     if (this.state.onboarding && this.state.day === 1) this.onboardingTick();
+    this.tutorialTick(deltaMs);
     this.updateLighting(this.night ? 1 : undefined);
     this.updateDoor();
     this.pulseHighlights();
@@ -2046,7 +2062,9 @@ export class StoreScene extends Phaser.Scene {
    */
   private updateTutorialArrow(): void {
     const target = this.state.day <= TUTORIAL_DAYS || this.inspector === 'here' ? this.tutorialTarget() : null;
-    if (!target) {
+    // Ту же цель бабушкино обучение показывает своей стрелкой (ui/coach.ts) — вторая не нужна.
+    const own = this.hallCoach && this.coach.pointing && this.tutTracked ? this.tutWorldSpot(this.tutTracked) : null;
+    if (!target || (own && Math.abs(own.x - target.x) < 24 && Math.abs(own.y - target.y) < 40)) {
       this.arrow?.setVisible(false);
       return;
     }
@@ -11215,6 +11233,8 @@ export class StoreScene extends Phaser.Scene {
       ...back.map((p) => ({ ...p })),
     ];
     void this.doChore(Array.from({ length: Math.min(trips, MAX_RESTOCK_TRIPS) }, () => trip).flat());
+    // Шаг обучения «Разложи товар»: полку нажали — хозяин уже несёт коробку.
+    this.passTut('restock');
   }
 
   /** Товар из коробки на полку: штуки вылетают по одной и встают на место с «чпок». */
@@ -12844,6 +12864,8 @@ export class StoreScene extends Phaser.Scene {
 
   /** Покупатель расплатился; own — пробивал хозяин (полный звук кассы — награда игроку). */
   private finishCheckout(c: Customer, where?: { x: number; y: number }, own = false): void {
+    // Шаг обучения «Пробей покупку» — пробил сам, касанием кассы или улицы.
+    if (own) this.passTut('serve');
     this.queue = this.queue.filter((q) => q !== c);
     const at = this.registerOf(c);
     if (at) at.customer = null;
@@ -13816,6 +13838,8 @@ export class StoreScene extends Phaser.Scene {
     // Подарок за ежедневный вход — но не во время бабушкиного обучения: его вручат, когда оно закончится.
     // В новом начале в первый день утра нет, а потом гостинец ждёт конца вступления главы.
     const noMorning = playDayOne(this.state);
+    // Игру закрыли на итогах дня — утром о них уже не говорим.
+    this.state = tutMorning(this.state);
     const afterStory = this.state.onboarding === 'play' && pendingStory(this.state)?.kind === 'intro';
     if (this.state.tourDone !== false && !noMorning && !afterStory) this.offerGift();
     // Старые сохранения сразу получают значки за то, что уже сделано.
@@ -13852,6 +13876,7 @@ export class StoreScene extends Phaser.Scene {
       onBoss: eduardLook(this.state) !== 'vacant' ? () => void this.visitRival(null, '') : undefined,
       onTourDone: () => this.offerGift(),
       onStoryDone: afterStory ? () => this.offerGift() : undefined,
+      coach: this.coach,
       getState: () => this.state,
       setState: (s) => {
         const staffChanged = s.staff !== this.state.staff;
@@ -14132,6 +14157,145 @@ export class StoreScene extends Phaser.Scene {
       { x: door.x, y: this.layout.h + 16 },
     ]);
     void this.strollAway(granny);
+  }
+
+  // ---------- Бабушкино обучение (game/tutorial.ts) ----------
+
+  /**
+   * Каждый кадр дня: шаг обучения в зале — светлое окошко и стрелка у кассы с покупателем или у пустой
+   * полки, строчка бабушки рядом. Цели нет — ждём (в первый день — сколько надо, иначе TUT_WAIT_MS);
+   * цель есть, а её не трогают — через TUT_IGNORE_MS шаг идёт дальше сам: обучение игру не держит.
+   * Состояние шага — в сохранении, а цель ищется заново каждый кадр: перестройка зала ему не мешает.
+   */
+  private tutorialTick(deltaMs: number): void {
+    const step = tutAt(this.state, 'hall');
+    if (!step || this.night || this.arranging || savingPaused()) {
+      this.hallCoachOff();
+      return;
+    }
+    this.coach.onSkip = () => this.skipTutorial();
+    this.coach.skipButton(true);
+    this.hallCoach = true;
+    // В первый день, пока бабушка в зале, она сама говорит облачком (onboardingTick): подсветка — без строчки,
+    // а до полок дело дойдёт, когда она попрощается.
+    const granny = playDayOne(this.state) && !onbDone(this.state, 'bye');
+    if (granny && step === 'restock') {
+      this.coach.hide();
+      return;
+    }
+    if (this.tutTracked !== step) {
+      this.tutTracked = step;
+      this.tutIdleMs = 0;
+      this.tutShownMs = 0;
+      // В аналитику — один раз на шаг, и после перезапуска тоже (отметка в сохранении).
+      const told = tutTell(this.state);
+      if (told) {
+        track('tut_step', this.state.day, tutIndex(this.state));
+        flushSoon();
+        this.state = told;
+      }
+    }
+    const spot = this.tutWorldSpot(step);
+    const ms = deltaMs * this.speed;
+    if (spot) this.tutShownMs += ms;
+    // Хозяин уже несёт товар или пробивает — это не «цели нет».
+    else if (!this.sellerBusy && !this.ownerScanning()) this.tutIdleMs += ms;
+    const patient = tutPatient(this.state, step);
+    if ((!patient && this.tutIdleMs > TUT_WAIT_MS) || (!(patient && step === 'serve') && this.tutShownMs > TUT_IGNORE_MS)) {
+      track('tut_auto', this.state.day, tutIndex(this.state));
+      this.advanceTut(tutNext(this.state));
+      return;
+    }
+    const text = step === 'serve' ? (granny ? '' : t('tut.serve')) : t('tut.restock');
+    this.coach.show({ id: `hall:${step}`, text, target: () => this.tutScreenSpot(step), under: () => this.game.canvas });
+  }
+
+  /** Цель шага в мире: касса, у которой ждёт покупатель хозяина, или полка, которую пора пополнить. */
+  private tutWorldSpot(step: TutStep): { x: number; y: number; w: number; h: number } | null {
+    if (step === 'serve') {
+      const r = this.ownerRegister();
+      return r && this.atSpot(r) ? { x: r.counter.x, y: r.counter.y - 8, w: 30, h: 26 } : null;
+    }
+    if (step !== 'restock' || this.sellerBusy) return null;
+    // Полка, которую можно пополнить прямо сейчас: товар уже на складе, а не в пути.
+    const index = this.shelfViews.findIndex(
+      (v, i) => v.needsStock && PRODUCT_IDS.some((id) => canPlace(id, this.state.shelves[i]) && (this.state.warehouse[id] ?? []).some((u) => !u.pending)),
+    );
+    if (index < 0) return null;
+    const at = this.spotOf(index);
+    return { x: at.x, y: at.y - 12, w: 30, h: 30 };
+  }
+
+  /** То же на экране, CSS-пиксели (камера могла сдвинуться). */
+  private tutScreenSpot(step: TutStep): Spot | null {
+    if (!this.hallCoach || !this.running) return null;
+    const box = this.tutWorldSpot(step);
+    if (!box) return null;
+    const a = this.screenPoint(box.x - box.w / 2, box.y - box.h / 2);
+    const b = this.screenPoint(box.x + box.w / 2, box.y + box.h / 2);
+    return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+  }
+
+  /** Игрок сделал то, чего ждал шаг зала. */
+  private passTut(step: TutStep): void {
+    if (tutStep(this.state) !== step || !this.running) return;
+    this.advanceTut(tutPass(this.state, step));
+  }
+
+  private advanceTut(next: StoreState): void {
+    const was = tutIndex(this.state);
+    this.state = next;
+    this.tutTracked = null;
+    this.coach.hide();
+    saveGame(this.state);
+    if (!tutStep(next)) {
+      track('tut_done', next.day, was);
+      flushSoon();
+      this.hallCoachOff();
+      this.coach.note(t('tut.done'), 4500);
+    }
+  }
+
+  /** Подсветка зала гаснет (день встал, шаг ушёл в утро или обучение кончилось). */
+  private hallCoachOff(): void {
+    if (!this.hallCoach) return;
+    this.hallCoach = false;
+    this.coach.hide();
+    this.coach.skipButton(false);
+  }
+
+  /** «Пропустить обучение» подтвердили: шаги кончаются, все вкладки утра открыты. */
+  private skipTutorial(): void {
+    if (!tutStep(this.state)) return;
+    track('tut_skip', this.state.day, tutIndex(this.state));
+    flushSoon();
+    this.state = tutSkip(this.state);
+    this.hallCoachOff();
+    saveGame(this.state);
+  }
+
+  /** Итог первого дня: бабушка в одну строчку объясняет плитки сверху. */
+  private summaryLesson(): void {
+    if (!tutAt(this.state, 'summary')) return;
+    const told = tutTell(this.state);
+    if (told) {
+      track('tut_step', this.state.day, tutIndex(this.state));
+      flushSoon();
+      this.state = told;
+    }
+    const tiles = () => document.querySelector<HTMLElement>('.ui-sum .ui-sum-tiles');
+    this.coach.onSkip = () => this.skipTutorial();
+    this.coach.skipButton(true, true);
+    this.coach.show({
+      id: 'summary',
+      text: t('tut.summary'),
+      target: () => {
+        const node = tiles();
+        const r = node?.getBoundingClientRect();
+        return r && r.width ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
+      },
+      under: tiles,
+    });
   }
 
   // ---------- Новинки: распаковка купленного ----------
@@ -15256,6 +15420,9 @@ export class StoreScene extends Phaser.Scene {
     this.say.hide();
     this.tillRing?.destroy();
     this.tillRing = undefined;
+    // Шаги зала, до которых за день не дошло, закрываются вместе с ним; дальше — итог дня.
+    this.state = tutDayEnd(this.state);
+    this.hallCoachOff();
     saveGame(this.state);
     track('day_end', finishedDay, this.stats.revenue);
     // Сколько процентов своих покупателей хозяин пробил касанием улицы, а не кассы.
@@ -15300,10 +15467,20 @@ export class StoreScene extends Phaser.Scene {
         this.state.history,
         lossAdvice(this.stats, this.state),
         reviews,
-        () => this.nightPass(() => this.showMorning()),
+        () => {
+          // Итог дня прочитан — шаг обучения о нём пройден.
+          if (tutStep(this.state) === 'summary') {
+            this.coach.hide();
+            this.coach.skipButton(false);
+            this.state = tutPass(this.state, 'summary');
+            saveGame(this.state);
+          }
+          this.nightPass(() => this.showMorning());
+        },
         (button) => void this.shareDay(button, finishedDay),
         teaser,
       );
+      this.summaryLesson();
     });
   }
 

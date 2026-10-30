@@ -709,6 +709,8 @@ export interface StoreState {
   onboarding?: import('./onboarding').Cohort;
   /** Шаги первых минут и открытые вкладки утра (onboarding.ts). */
   onb?: import('./onboarding').OnbState;
+  /** Бабушкино обучение: какой шаг идёт (tutorial.ts). Нет поля — старое сохранение без обучения. */
+  tut?: import('./tutorial').TutState;
   /** Модели оборудования (номер модели; нет — начальная). */
   gear?: Partial<Record<GearId, number>>;
   /** Рейтинг доставки на дом 1..5 (delivery.ts); нет — 4 звезды. */

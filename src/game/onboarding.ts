@@ -1,19 +1,19 @@
-// Первые минуты новичка — два начала, чтобы сравнить их на живых игроках (A/B).
-// «tour» — прежнее: утро, глава 1 и бабушкин обход вкладок, потом «Открыть магазин».
-// «play» — новое: сразу в зале, бабушка говорит облачком, первый покупатель входит через пару секунд,
-// а вкладки утра открываются по одной — тогда, когда понадобятся.
-// Половина новичков получает одно, половина другое; старые сохранения (без поля) не трогаем.
-// Как читать итог в /api/stats — docs/ONBOARDING.md.
+// Первые минуты новичка. Было два начала, чтобы сравнить их на живых игроках (A/B); сравнение закрыто —
+// теперь каждому новичку «play»: сразу в зале, бабушка говорит облачком, первый покупатель входит через
+// пару секунд, вкладки утра открываются по одной, а первые дни ведёт бабушкино обучение (tutorial.ts).
+// «tour» — прежнее начало: утро, глава 1 и бабушкин обход вкладок. Его больше не выдают, но сохранения,
+// где оно уже есть (и старые, без поля), идут как раньше. ?onb=tour — посмотреть его самому.
+// События и как их читать — docs/ONBOARDING.md.
 
 import { buyStock, PRODUCTS, type ProductId, type StoreState } from './economy';
 
 export type Cohort = 'tour' | 'play';
 
 /**
- * Доля новичков с новым началом (0…1). Когда сравнение закончится: 1 — всем новое, 0 — всем прежнее.
+ * Доля новичков с новым началом (0…1). Сравнение закрыто: всем новое.
  * Номер в Telegram делит игроков всегда одинаково: переустановил игру — попал туда же.
  */
-export const PLAY_SHARE = 0.5;
+export const PLAY_SHARE = 1;
 
 /** Какое начало у новичка: по номеру в Telegram (вне Telegram — случайно). */
 export function pickCohort(userId: number | undefined, random: () => number, share = PLAY_SHARE): Cohort {
@@ -29,6 +29,8 @@ export interface OnbState {
   done: OnbStep[];
   /** Вкладки утра (новое начало): false — только что открылась, бабушка о ней ещё не сказала; true — знакома. */
   tabs?: Record<string, boolean>;
+  /** Первая неделя: о каком дне бабушка уже сказала, что нового (tutorial.ts, weekNote). */
+  week?: number;
 }
 
 /**
@@ -38,10 +40,14 @@ export interface OnbState {
  */
 export const PLAY_STOCK: Partial<Record<ProductId, number>> = { potatoes: 6, apples: 2, bread: 2 };
 
-/** Новая игра новичка: запомнить его начало. В новом — запас на складе и без обхода вкладок. */
+/**
+ * Новая игра новичка: запомнить его начало. В новом — запас на складе, без обхода вкладок и с первого
+ * шага бабушкиного обучения (tutorial.ts: tutStart — здесь тот же шаг, без взаимного импорта).
+ */
 export function startCohort(state: StoreState, cohort: Cohort): StoreState {
   const base: StoreState = { ...state, onboarding: cohort, onb: { done: [] } };
   if (cohort === 'tour') return base;
+  base.tut = { step: 'serve' };
   let next = base;
   for (const [id, qty] of Object.entries(PLAY_STOCK) as [ProductId, number][]) next = buyStock(next, id, qty, 0) ?? next;
   return { ...next, tourDone: true };
@@ -88,25 +94,25 @@ export function openTabs(state: StoreState): { state: StoreState; opened: Mornin
   const opened = MORNING_TABS.filter((id) => !(id in tabs) && OPENS[id](state));
   if (!opened.length) return { state, opened };
   for (const id of opened) tabs[id] = false;
-  return { state: { ...state, onb: { done: state.onb?.done ?? [], tabs } }, opened };
+  return { state: { ...state, onb: { ...state.onb, done: state.onb?.done ?? [], tabs } }, opened };
 }
 
 /** Открыть вкладку сразу: в неё ведёт кнопка («Закупить» в «Главном на сегодня»). */
 export function unlockTab(state: StoreState, tab: string): StoreState {
   if (tabOpen(state, tab)) return state;
-  return { ...state, onb: { done: state.onb?.done ?? [], tabs: { ...state.onb?.tabs, [tab]: false } } };
+  return { ...state, onb: { ...state.onb, done: state.onb?.done ?? [], tabs: { ...state.onb?.tabs, [tab]: false } } };
 }
 
 /** Новичок заглянул во вкладку (или прочёл подсказку) — метка «Новое» гаснет. */
 export function seeTab(state: StoreState, tab: string): StoreState {
   if (!tabNew(state, tab)) return state;
-  return { ...state, onb: { done: state.onb?.done ?? [], tabs: { ...state.onb?.tabs, [tab]: true } } };
+  return { ...state, onb: { ...state.onb, done: state.onb?.done ?? [], tabs: { ...state.onb?.tabs, [tab]: true } } };
 }
 
 /** Прошёл бабушкин обход из профиля — все вкладки открыты и знакомы. */
 export function openAllTabs(state: StoreState): StoreState {
   if (state.onboarding !== 'play' || MORNING_TABS.every((id) => state.onb?.tabs?.[id] === true)) return state;
-  return { ...state, onb: { done: state.onb?.done ?? [], tabs: Object.fromEntries(MORNING_TABS.map((id) => [id, true])) } };
+  return { ...state, onb: { ...state.onb, done: state.onb?.done ?? [], tabs: Object.fromEntries(MORNING_TABS.map((id) => [id, true])) } };
 }
 
 /**
