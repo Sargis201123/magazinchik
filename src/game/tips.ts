@@ -1,7 +1,7 @@
 // Карточки «Новое!»: при первом появлении механики утро объясняет её в двух словах.
 // Каждую показываем один раз (seenTips в сохранении).
 
-import { expiringCount, onShelves, PRODUCT_IDS, STORE_LEVELS, warehouseOf, type StoreState } from './economy';
+import { expiringCount, nextStoreLevel, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount } from './registers';
@@ -25,7 +25,7 @@ export const hasFloorStaff = (s: StoreState): boolean =>
  * дню копит ~13 тыс. при прибыли ~110 в день, а оставшись в третьем помещении — ~97 тыс. и ~650 в день.
  * Друзья, пришедшие на подмогу на день (help.ts), — не персонал: их в state.staff нет.
  */
-export const soloExpandRisk = (s: StoreState): boolean => !hasFloorStaff(s) && s.level >= 2 && s.level + 1 < STORE_LEVELS.length;
+export const soloExpandRisk = (s: StoreState): boolean => !hasFloorStaff(s) && s.level >= 2 && Boolean(nextStoreLevel(s));
 
 const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['broke', isBroke],

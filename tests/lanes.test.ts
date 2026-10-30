@@ -94,7 +94,7 @@ describe('открытые кассы зовут гостей', () => {
 
 describe('кассы самообслуживания', () => {
   it('места — с «Минимаркета», и чем больше помещение, тем больше', () => {
-    expect([0, 1, 2, 3, 4].map((level) => kioskSlots(shop(level, [])))).toEqual(KIOSKS_BY_LEVEL);
+    expect([0, 1, 2, 3, 4, 5].map((level) => kioskSlots(shop(level, [])))).toEqual(KIOSKS_BY_LEVEL);
     expect(buyKiosk(shop(1, []))).toBeNull();
     expect(nextKioskPrice(shop(2, []))).toBe(KIOSK_PRICES[0]);
   });

@@ -1,12 +1,12 @@
 // Места под кассы растут вместе с помещением: в ларьке и маленьком магазине — одно, дальше с каждым
-// расширением ещё одно (до четырёх в универмаге). Первая касса — всегда хозяина: за ней стоит сам
+// расширением ещё одно (до четырёх в универмаге и гипермаркете). Первая касса — всегда хозяина: за ней стоит сам
 // игрок и пробивает касанием. Остальные кассы хозяин покупает сам, когда очередь того стоит, и за
 // каждую нанимает своего кассира. Сменщик (роль cashier, с «Магазинчика») встаёт за кассу хозяина
 // насовсем и пробивает сам — хозяин свободен для дел, а его касания только торопят пробивку.
 
-import { STAFF_ROLES, STORE_LEVELS, type StaffMember, type StaffRole, type StoreState } from './economy';
+import { nextStoreLevel, STAFF_ROLES, type StaffMember, type StaffRole, type StoreState } from './economy';
 
-export const REGISTERS_BY_LEVEL = [1, 1, 2, 3, 4];
+export const REGISTERS_BY_LEVEL = [1, 1, 2, 3, 4, 4];
 /** Все, кто работает за кассой: сменщик хозяина и кассиры второй, третьей и четвёртой касс. */
 export const CASHIER_ROLES: StaffRole[] = ['cashier', 'cashier2', 'cashier3', 'cashier4'];
 /** Сменщик: стоит за кассой хозяина весь день и торгует, пока игрока нет в игре. */
@@ -48,7 +48,7 @@ export function buyRegister(state: StoreState): StoreState | null {
 
 /** Мест под кассы будет после следующего расширения (null — расширяться некуда). */
 export const nextRegisterCount = (state: StoreState): number | null =>
-  STORE_LEVELS[state.level + 1] ? slotsAt(state.level + 1) : null;
+  nextStoreLevel(state) ? slotsAt(state.level + 1) : null;
 
 export const isCashierRole = (role: StaffRole): boolean => CASHIER_ROLES.includes(role);
 /** За какой кассой работает этот кассир: 0 — касса хозяина (там только сменщик), -1 — не кассир. */

@@ -2452,6 +2452,21 @@ export const en: Record<TextKey, string> = {
   'teaser.tab': 'the "{tab}" tab opens',
   'teaser.clear': '{icon} clear skies — a good day for trade',
   'teaser.weather': '{icon} {name} — check the forecast in the morning',
+  // Moving into the hypermarket (branch.ts, HYPER_LEVEL).
+  'store.l6': 'Hypermarket',
+  'hyper.title': 'Move into the hypermarket',
+  'hyper.lock.giant': "The Giant's building across the road is still his. Beat the Giant, open a branch there — and you can move your main store in.",
+  'hyper.lock.branch': "First open a branch in the Giant's building (below, «Branch») — then you can move there for good.",
+  'hyper.offer': "Your main store moves into the Giant's building: a big hall, {slots} shelf spots, a warehouse for {wh}, guests ×{g}. Rent is {rent} 💰 a month; the first bill is still at the old rate.",
+  'hyper.branch': 'The old store stays open as the branch «{name}». The manager and the team move there, every branch upgrade stays, the income stays the same.',
+  'hyper.move': 'Move — {cost} 💰',
+  'hyper.cheer1': 'What a palace! 🥹',
+  'hyper.cheer2': 'Congratulations! 🎉',
+  'hyper.cheer3': 'A hypermarket! Hooray!',
+  'branch.oldShop': 'The branch is now in your old store across the road.',
+  'ach.hypermarket': 'A hypermarket of my own',
+  'ach.hypermarket.desc': "Move into the Giant's building",
+  'news.hyper': "🏬 Hypermarket: with a branch in the Giant's building you can move your main store there — a big hall, and the old store becomes the branch. «Growth».",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

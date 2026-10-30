@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { emptyDayStats, newGame, STORE_LEVELS, type StoreState } from '../src/game/economy';
+import { emptyDayStats, newGame, type StoreState } from '../src/game/economy';
 import {
   BRANCH_AWAY_MAX_HOURS,
   BRANCH_MIN_INCOME,
@@ -19,6 +19,7 @@ import {
   buyBranch,
   nextBranchTier,
   upgradeBranch,
+  BRANCH_LEVEL,
 } from '../src/game/branch';
 import { nightCycle } from '../src/game/day';
 import { weekReport } from '../src/game/reports';
@@ -27,7 +28,8 @@ import { rng } from '../src/game/random';
 // Филиал в здании «Гиганта» (branch.ts): когда можно купить, сколько приносит, улучшения,
 // ночь и отчёт, «пока тебя не было» и старые сохранения.
 
-const LAST = STORE_LEVELS.length - 1;
+// Здание продаётся с универмага (BRANCH_LEVEL); гипермаркет после него — переезд (HYPER_LEVEL).
+const LAST = BRANCH_LEVEL;
 const won = (over: Partial<StoreState> = {}): StoreState => ({
   ...newGame(),
   day: 100,

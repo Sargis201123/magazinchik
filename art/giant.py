@@ -183,6 +183,92 @@ def giant_branch():
     shadowed(c, GW // 2, GH - 3, GW // 2 - 8, 4).save("giant_branch")
 
 
+OW, OH = 208, 144
+OROOF = 54
+
+
+def branch_old():
+    """Старый магазин через дорогу — филиал после переезда в гипермаркет (branch.ts): маленький
+    кирпичный дом с черепичной крышей, вывеска без букв (название с «№2» пишет сцена), две витрины
+    с товаром, деревянная дверь под полосатым навесом. 208×144 пикселей (104×72 точки мира)."""
+    c = Canvas(OW, OH)
+    rnd = random.Random(23)
+    # Черепичная крыша: ряды черепицы, конёк и печная труба.
+    c.rect(4, 6, OW - 8, OROOF, "G")
+    for y in range(10, OROOF + 6, 6):
+        c.hline(4, y, OW - 8, "g")
+        for x in range(4 + (y // 6 % 2) * 6, OW - 4, 12):
+            c.vline(x, y - 5, 5, "g")
+            c.px(x + 1, y - 4, "l")
+    c.hline(4, 6, OW - 8, "W")
+    c.rect(150, 0, 14, 16, "b")
+    c.rect(148, 0, 18, 3, "x")
+    # Вывеска на крыше: зелёная доска в рамке, буквы — от сцены.
+    for x in (64, 140):
+        c.rect(x, 34, 3, 16, "K")
+    c.rect(34, 12, 140, 24, "e")
+    c.frame(34, 12, 140, 24, "d")
+    c.hline(36, 14, 136, "E")
+    # Фасад: кирпич с затиркой.
+    top = OROOF + 6
+    c.rect(4, top, OW - 8, OH - top - 6, "B")
+    for row, y in enumerate(range(top, OH - 6, 5)):
+        c.hline(4, y, OW - 8, "b")
+        for x in range(4 + (row % 2) * 6, OW - 4, 12):
+            c.vline(x, y, 5, "b")
+    c.rect(4, top, OW - 8, 3, "t")
+    c.hline(4, top + 3, OW - 8, "a")
+    # Табличка «№2» над дверью — тоже без букв.
+    c.rect(86, top + 8, 36, 12, "N")
+    c.frame(86, top + 8, 36, 12, "a")
+    # Витрины с полками и товаром.
+    goods = ["R", "Y", "E", "o", "P", "U", "s", "w"]
+    for x in (14, 132):
+        c.rect(x, top + 22, 62, 44, "c")
+        c.frame(x - 2, top + 20, 66, 48, "x")
+        for sy in (top + 36, top + 52):
+            c.hline(x, sy, 62, "a")
+            for gx in range(x + 2, x + 60, 3):
+                c.rect(gx, sy - 4, 2, 4, rnd.choice(goods))
+        c.line(x + 4, top + 25, x + 14, top + 37, "w")
+        c.line(x + 8, top + 25, x + 16, top + 34, "w")
+        # Ящик с цветами под витриной.
+        c.rect(x + 4, top + 68, 54, 5, "a")
+        for fx in range(x + 6, x + 56, 4):
+            c.px(fx, top + 67, rnd.choice(["R", "Y", "P", "w"]))
+    # Дверь: дерево, окошко, ручка; над ней навес в полоску.
+    c.rect(88, top + 26, 32, OH - top - 32, "x")
+    c.rect(90, top + 28, 28, OH - top - 34, "a")
+    c.rect(94, top + 32, 20, 16, "c")
+    c.frame(94, top + 32, 20, 16, "x")
+    c.rect(113, top + 56, 2, 4, "Y")
+    for i, x in enumerate(range(80, 128, 6)):
+        c.rect(x, top + 20, 6, 7, "Y" if i % 2 == 0 else "w")
+    c.hline(80, top + 27, 48, "y")
+    c.hline(4, OH - 6, OW - 8, "K")
+    c.outline("k")
+    shadowed(c, OW // 2, OH - 3, OW // 2 - 6, 4).save("branch_old")
+
+
+def sign_hyper():
+    """Вывеска гипермаркета 192×30 (вдвое шире обычной sign): тёмная доска в золотой рамке,
+    лампочки по краю, по бокам — две звезды."""
+    c = Canvas(192, 30)
+    c.round_rect(0, 0, 192, 30, "x", r=3)
+    c.round_rect(3, 3, 186, 24, "r", r=2)
+    c.frame(5, 5, 182, 20, "y")
+    c.hline(6, 6, 180, "R")
+    for x in range(6, 188, 8):
+        c.px(x, 1, "Y")
+        c.px(x, 28, "Y")
+    for cx in (14, 177):
+        c.rect(cx - 1, 11, 3, 9, "Y")
+        c.rect(cx - 4, 14, 9, 3, "Y")
+        c.px(cx, 15, "w")
+    c.outline("k")
+    c.save("sign_hyper")
+
+
 def giant_site():
     """Стройка: каркас из балок, кран, песок и синий забор с баннером «СКОРО ГИГАНТ»."""
     c = Canvas(GW, GH + 40)
@@ -293,6 +379,8 @@ def main():
     giant_store()
     giant_closed()
     giant_branch()
+    branch_old()
+    sign_hyper()
     giant_site()
     news_giant("build", draw_build)
     news_giant("battle", draw_open)

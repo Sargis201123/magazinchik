@@ -21,6 +21,7 @@ import {
   freeSlots,
   moveToShelf,
   shelveAll,
+  HYPER_LEVEL,
   nextStoreLevel,
   payDebt,
   PRICE_STEP,
@@ -240,7 +241,7 @@ import { showLeaderboard } from './leaderboard';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { anchorScroll, button, el, foldUp, holdPlace, openModal, toast, unfold, who } from './dom';
-import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, nextBranchTier, upgradeBranch } from '../game/branch';
+import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
 import { tryNudge } from './nudge';
 import { audioBox } from './audio';
@@ -276,9 +277,10 @@ type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
  * Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. Видевшие прежнюю
  * (2: звук, перестановка, друзья…) увидят новую один раз.
  */
-const WHATS_NEW = 3;
+const WHATS_NEW = 4;
 /** Строки карточки «Что нового» — самое свежее сверху. */
 const WHATS_NEW_LINES: TextKey[] = [
+  'news.hyper',
   'news.branch',
   'news.goal',
   'news.kiosks',
@@ -2994,7 +2996,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     }
     const price = nextKioskPrice(state);
     const bought = price === null ? null : buyKiosk({ ...state, money: Math.max(state.money, price) });
-    const free = price !== null ? t('kiosks.free', { n: slots - n }) : STORE_LEVELS[state.level + 1] ? t('kiosks.full') : t('kiosks.max');
+    // «В новом помещении будет ещё» — только если там правда больше мест (у гипермаркета — столько же, сколько у универмага).
+    const more = nextStoreLevel(state) && KIOSKS_BY_LEVEL[Math.min(state.level + 1, KIOSKS_BY_LEVEL.length - 1)] > slots;
+    const free = price !== null ? t('kiosks.free', { n: slots - n }) : more ? t('kiosks.full') : t('kiosks.max');
     const gain = bought ? ` · ${t('lanes.gain', { g: guestsGain(state, bought) })}` : '';
     // Место у правой стены заняла полка или вещь (своя расстановка) — сначала переставить.
     const blocked = price !== null && !kioskSpotFree(state, n);
@@ -3968,7 +3972,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const name = branchSignName(state, t('branch.defaultName'));
     box.append(el('b', '', `🏬 ${t('branch.title')}`));
     const art = el('img');
-    art.src = sheetPng('giant_branch');
+    // После переезда в гипермаркет филиал — в старом магазине через дорогу.
+    art.src = sheetPng(branchInOldShop(state) ? 'branch_old' : 'giant_branch');
     art.alt = '';
     art.style.cssText = `display: block; width: 100%; max-width: 300px; margin: 6px auto; image-rendering: pixelated;${branch ? '' : ' filter: grayscale(0.8) opacity(0.75);'}`;
     if (!branch) {
@@ -3995,6 +4000,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       return [box];
     }
     box.append(art, el('div', 'ui-item-name', t('branch.name', { name })));
+    if (branchInOldShop(state)) box.append(el('div', 'ui-muted', t('branch.oldShop')));
     if (branch.last) box.append(el('div', '', t('branch.last', { n: branch.last.income })));
     box.append(
       el('div', 'ui-muted', t('branch.week', { n: branchWeek(state), total: branch.earned ?? 0 })),
@@ -4057,13 +4063,37 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     }
 
     const grow = el('div', 'ui-box');
-    if (!next) {
+    // Переезд в гипермаркет — своя карточка: здание «Гиганта» и что станет со старым магазином.
+    const hyper = state.level + 1 === HYPER_LEVEL;
+    const hyperArt = (locked: boolean) => {
+      const img = el('img');
+      img.src = sheetPng('giant_branch');
+      img.alt = '';
+      img.style.cssText = `display: block; width: 100%; max-width: 300px; margin: 6px auto; image-rendering: pixelated;${locked ? ' filter: grayscale(0.8) opacity(0.75);' : ''}`;
+      return img;
+    };
+    if (!next && hyper && state.giant) {
+      // Закрыт до филиала; до «Гиганта» о здании за дорогой молчим, как и в «Филиале».
+      // «Гигант» ещё не побеждён — сначала он (как и у «Филиала»), потом филиал, потом переезд.
+      const lock = state.giant.phase !== 'won' ? 'giant' : hyperLock(state);
+      grow.append(el('b', '', `🏬 ${t('hyper.title')}`), hyperArt(true), el('div', '', `🔒 ${t(lock === 'giant' ? 'hyper.lock.giant' : 'hyper.lock.branch')}`));
+    } else if (!next) {
       grow.append(el('div', 'ui-muted', t('store.max')));
     } else {
-      grow.append(
-        el('b', '', t('store.next', { name: t(next.nameKey) })),
-        el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, r: nextRegisterCount(state) ?? registerSlots(state), g: next.guests, rent: next.rent })),
-      );
+      if (hyper) {
+        grow.append(
+          el('b', '', `🏬 ${t('hyper.title')}`),
+          hyperArt(false),
+          el('div', '', t('hyper.offer', { slots: next.slots, wh: next.warehouse, g: next.guests, rent: next.rent })),
+          // Не в «?»: что станет со старым магазином — главное в этой карточке.
+          el('div', '', t('hyper.branch', { name: branchSignName(state, t('branch.defaultName')) })),
+        );
+      } else {
+        grow.append(
+          el('b', '', t('store.next', { name: t(next.nameKey) })),
+          el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, r: nextRegisterCount(state) ?? registerSlots(state), g: next.guests, rent: next.rent })),
+        );
+      }
       if (state.debt > 0) grow.append(el('div', 'ui-note', t('store.needNoDebt')));
       // Без персонала дальше третьего помещения — в убыток: сказать прямо, у самой кнопки.
       if (soloExpandRisk(state)) {
@@ -4081,7 +4111,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       }
       grow.append(
         button(
-          t('store.expand', { cost: next.cost }),
+          t(hyper ? 'hyper.move' : 'store.expand', { cost: next.cost }),
           () => {
             const grown = expandStore(getState());
             if (grown) track('level_up', grown.day, grown.level);

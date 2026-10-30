@@ -8,8 +8,13 @@
 // растёт с улучшениями по четырём направлениям (ассортимент, управляющий, реклама, ремонт). День ото
 // дня доход немного гуляет: погода, сезон, рейтинг и случай, — но в минус не уходит никогда.
 // Пока игрока нет, филиал тоже работает, но понемногу (branchAway): не больше трети дня за раз.
+//
+// Переезд в гипермаркет (HYPER_LEVEL): главный магазин переезжает в здание «Гиганта», а филиалом
+// становится старый магазин через дорогу. Управляющий со своей командой переходит туда же — все
+// купленные ступени остаются. Старый магазин — универмаг, а не гипермаркет: образец выручки после
+// переезда уменьшаем до размеров универмага (branchRef), и доход филиала не прыгает ни вверх, ни вниз.
 
-import { monthOf, STORE_LEVELS, type StoreState } from './economy';
+import { HYPER_LEVEL, monthOf, STORE_LEVELS, type StoreState } from './economy';
 import { WEATHER_EFFECTS, weatherFor } from './weather';
 import { seasonFor } from './endless';
 import { rng } from './random';
@@ -26,8 +31,12 @@ export interface BranchState {
   last?: { day: number; income: number };
   /** Сколько принёс за всё время. */
   earned?: number;
+  /** День переезда главного магазина в гипермаркет: с него филиал — в старом магазине. */
+  moved?: number;
 }
 
+/** С какого помещения можно купить здание (универмаг). */
+export const BRANCH_LEVEL = HYPER_LEVEL - 1;
 /** Цена здания. */
 export const BRANCH_PRICE = 30000;
 /** Доля обычной выручки своего магазина, которую приносит филиал без улучшений. */
@@ -114,7 +123,7 @@ export type BranchLock = 'giant' | 'level' | null;
 
 export function branchLock(state: StoreState): BranchLock {
   if (state.giant?.phase !== 'won') return 'giant';
-  if (state.level < STORE_LEVELS.length - 1) return 'level';
+  if (state.level < BRANCH_LEVEL) return 'level';
   return null;
 }
 
@@ -152,10 +161,23 @@ export function branchShare(state: StoreState): number {
   return BRANCH_TRACK_IDS.reduce((sum, id) => sum + BRANCH_TRACKS[id].tiers.slice(0, branchTier(state, id)).reduce((s, t) => s + t.share, 0), BRANCH_BASE_SHARE);
 }
 
+/** Филиал — в старом магазине: главный переехал в гипермаркет. */
+export const branchInOldShop = (state: StoreState): boolean => hasBranch(state) && state.level >= HYPER_LEVEL;
+
+/**
+ * Во сколько раз старый магазин меньше гипермаркета по потоку гостей: после переезда образец выручки
+ * уменьшаем во столько же раз — филиал торгует как прежний универмаг, а не как новый гипермаркет.
+ */
+export const OLD_SHOP_SCALE = STORE_LEVELS[BRANCH_LEVEL].guests / STORE_LEVELS[HYPER_LEVEL].guests;
+
 /** Обычная выручка своего магазина в день — средняя за последнюю неделю, в разумных пределах. */
 export function branchRef(state: StoreState): number {
   const week = (state.history ?? []).slice(-BRANCH_REF_DAYS);
-  const avg = week.length ? week.reduce((a, b) => a + b, 0) / week.length : 0;
+  // Выручка дня day−1 записана последней: уменьшаем только дни гипермаркета (с дня переезда), дни
+  // универмага до него и так — образец старого магазина. Иначе в день переезда доход упал бы на четверть.
+  const hyperDays = state.level < HYPER_LEVEL ? 0 : state.branch?.moved === undefined ? week.length : Math.max(0, state.day - state.branch.moved);
+  const scaled = week.map((v, i) => (i >= week.length - hyperDays ? v * OLD_SHOP_SCALE : v));
+  const avg = scaled.length ? scaled.reduce((a, b) => a + b, 0) / scaled.length : 0;
   return Math.min(BRANCH_REF_MAX, Math.max(BRANCH_REF_MIN, avg));
 }
 
@@ -218,8 +240,22 @@ export const branchWeek = (state: StoreState): number => (state.reports ?? []).r
 /** Имя на вывеске: своё название магазина с «№2», иначе «Магазинчик №2». */
 export const branchSignName = (state: StoreState, fallback: string): string => `${state.shopName?.trim() || fallback} №2`;
 
-/** Как филиал выглядит на улице: ключ для перестройки мира (купили, сделали ремонт, повесили вывеску). */
+/** Как филиал выглядит на улице: ключ для перестройки мира (купили, сделали ремонт, повесили вывеску, переехали). */
 export function branchLook(state: StoreState): string {
   if (!state.branch) return '';
-  return `b${branchTier(state, 'repair')}${branchTier(state, 'ads')}${branchTier(state, 'shelves')}|${state.shopName ?? ''}`;
+  return `${branchInOldShop(state) ? 'o' : 'b'}${branchTier(state, 'repair')}${branchTier(state, 'ads')}${branchTier(state, 'shelves')}|${state.shopName ?? ''}`;
 }
+
+// ---------- Переезд в гипермаркет ----------
+
+/** Почему переезд пока закрыт: магазин ещё не универмаг или в здании «Гиганта» нет своего филиала. */
+export type HyperLock = 'level' | 'branch' | null;
+
+export function hyperLock(state: StoreState): HyperLock {
+  if (state.level < BRANCH_LEVEL) return 'level';
+  if (state.level === BRANCH_LEVEL && !state.branch) return 'branch';
+  return null;
+}
+
+/** Переезд уже был: главный магазин — гипермаркет. */
+export const isHyper = (state: StoreState): boolean => state.level >= HYPER_LEVEL;

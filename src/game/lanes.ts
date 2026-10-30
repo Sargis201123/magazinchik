@@ -40,7 +40,7 @@ export const KIOSK_TIERS: KioskTier[] = [
   { nameKey: 'kiosk.t2', item: 0.8, pay: 0.6, maxItems: 4, error: 0.02, skip: 0.008, lane: 1, price: 1100, minLevel: 3 },
 ];
 /** Мест под киоски в помещении (у правой стены над кассами — layout.ts, kioskSpot). */
-export const KIOSKS_BY_LEVEL = [0, 0, 2, 3, 4];
+export const KIOSKS_BY_LEVEL = [0, 0, 2, 3, 4, 4];
 /** Цена первого, второго, третьего и четвёртого киоска: дальние приносят меньше гостей — и стоят меньше (было 700/900/1100/1300). */
 export const KIOSK_PRICES = [700, 800, 700, 600];
 /** Сколько секунд покупатель ждёт, пока экран «ошибки» сбросится. */

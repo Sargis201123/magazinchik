@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { averageLevelDays, simulate } from '../src/game/simulate';
-import { MONTH_DAYS } from '../src/game/economy';
+import { HYPER_LEVEL, MONTH_DAYS } from '../src/game/economy';
 
 // Баланс экономики: «разумный игрок» из симулятора должен расти не слишком быстро
 // и не слишком медленно. Если тест упал после правки цифр — запусти `npm run sim`.
@@ -15,15 +15,16 @@ describe('баланс экономики', () => {
     expect(days[1]).toBeLessThanOrEqual(15);
   });
 
+  // Гипермаркет — только с филиалом (его пауза — в balanceHyper.test.ts): здесь помещения до универмага.
   it('каждое следующее расширение даётся дольше', () => {
-    for (let i = 2; i < days.length; i++) {
+    for (let i = 2; i < HYPER_LEVEL; i++) {
       expect(days[i]).not.toBeNull();
       expect(days[i]! - days[i - 1]!).toBeGreaterThanOrEqual(days[1]! - 1);
     }
   });
 
   it('универмаг — не раньше 40-го дня', () => {
-    expect(days[days.length - 1]).toBeGreaterThanOrEqual(40);
+    expect(days[HYPER_LEVEL - 1]).toBeGreaterThanOrEqual(40);
   });
 
   it('первые дни — тяжёлые: бывают дни почти без прибыли', () => {

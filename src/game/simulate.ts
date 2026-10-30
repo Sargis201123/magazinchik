@@ -28,6 +28,7 @@ import {
   moveToShelf,
   newGame,
   nextStoreLevel,
+  HYPER_LEVEL,
   onShelves,
   payDebt,
   PRODUCT_IDS,
@@ -209,7 +210,9 @@ export type Feature =
   | 'ads'
   | 'adsMax'
   | 'kiosks'
-  | 'branch';
+  | 'branch'
+  // Переезд в гипермаркет (economy.ts, HYPER_LEVEL): только вместе с филиалом — без него переезд закрыт.
+  | 'hyper';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -339,6 +342,8 @@ export function simulate({
   let state = ensurePlan(newGame());
   for (const id of PRODUCT_IDS) state = setPrice(state, id, Math.round((PRODUCTS[id].basePrice * priceMult) / 5) * 5);
   const out: SimDay[] = [];
+  // Гипермаркет — отдельная механика: с одним филиалом «разумный игрок» туда не переезжает и на него не копит.
+  const nextFor = (s: StoreState) => (s.level + 1 === HYPER_LEVEL && !features.hyper ? undefined : nextStoreLevel(s));
   const levelDay: (number | null)[] = STORE_LEVELS.map((_, i) => (i === 0 ? 1 : null));
   let rescueDay: number | null = null;
   let bankruptDay: number | null = null;
@@ -360,7 +365,7 @@ export function simulate({
     if (isBroke(state)) state = takeLoan(state, loanOptions(state)[0]) ?? state;
     if (state.debt > 0 && state.money - state.debt >= reserve) state = payDebt(state, state.debt) ?? state;
 
-    const next = nextStoreLevel(state);
+    const next = nextFor(state);
     // Расширяется, только если после стройки останется на ближайший счёт — так же, как предупреждает
     // утро (morning.ts): первый счёт после переезда — по старой аренде («новоселье»).
     const nextBill = next ? billTotal(monthlyBill({ ...state, level: state.level + 1, movedFrom: state.movedFrom ?? state.level })) : 0;
@@ -460,7 +465,7 @@ export function simulate({
       ['delivery', 'delivery'],
     ];
     // Дорогое «для удобства» (ночная смена, новые модели) разумный игрок берёт, когда уже не копит на расширение.
-    const nextLevel = nextStoreLevel(state);
+    const nextLevel = nextFor(state);
     const canSplurge = (price: number) => !nextLevel || state.money - price >= nextLevel.cost + reserve;
     // Автозаказ: берёт, как только хватает с запасом, и сразу включает.
     if (buyMode === 'auto' && !hasUpgrade(state, 'autoOrder') && state.level >= UPGRADES.autoOrder.minLevel && state.money >= UPGRADES.autoOrder.price + reserve) {
@@ -609,13 +614,13 @@ export function simulate({
     // Козни конкурента: отвечает, если деньги есть с запасом и не копит на расширение; иначе жалуется (или молчит).
     const trick = trickToday(state);
     if (trick) {
-      const saving = nextStoreLevel(state);
+      const saving = nextFor(state);
       const afford = state.money >= counterCost(trick.kind, state.level) + reserve * 2 + (saving ? saving.cost : 0);
       state = answerTrick(state, afford ? 'counter' : trick.kind === 'banner' ? 'ignore' : 'complain', extraRandom) ?? answerTrick(state, 'ignore') ?? state;
     }
     const opened = districtNews(state);
     if (opened) {
-      const saving = nextStoreLevel(state);
+      const saving = nextFor(state);
       const spare = state.money - BUILDINGS[opened].gift - reserve * 2 - (saving ? saving.cost : 0);
       state = answerOpening(state, opened, spare >= 0) ?? answerOpening(state, opened, false) ?? state;
     }

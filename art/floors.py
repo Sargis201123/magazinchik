@@ -126,7 +126,19 @@ def facades():
             return H("#7fa8d8")
         return H("#3d5a8c") if y > 10 else H("#4a6a9c")
 
+    def hyper(x, y):
+        # Гипермаркет: тёмное стекло в светлых колоннах, по низу — красная полоса с золотым кантом.
+        if y >= 14:
+            return H("#f7cf72") if y == 14 else H("#b13e53")
+        if x % 16 in (0, 1, 2):
+            return H("#ece4d4") if x % 16 != 2 else H("#c4bba8")
+        shine = (x - (y - 4)) % 16 in (5, 6)
+        if shine:
+            return H("#8fb8e0")
+        return H("#2f456e") if y > 9 else H("#3d5a8c")
+
     build("facade_wood", wood)
+    build("facade_hyper", hyper)
     build("facade_tile", tile)
     build("facade_glass", glass)
 

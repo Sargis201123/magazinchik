@@ -96,6 +96,15 @@ const RUNS: Run[] = [
   { name: 'rain', patch: (s) => ({ day: rainDay(s.day), plan: undefined }), shots: [['rain', 0.3]] },
   { name: 'l3', patch: level(2), shots: [['day', 0.3]] },
   { name: 'l2', patch: level(1), shots: [['day', 0.3]] },
+  // Гипермаркет: переехали в здание «Гиганта», за дорогой — старый магазин-филиал с ремонтом и флажками.
+  {
+    name: 'l6',
+    patch: (s) => ({ level: 5, branch: { since: s.day - 30, tiers: { repair: 3, ads: 2, shelves: 1 }, earned: 40000 } }),
+    shots: [
+      ['day', 0.3],
+      ['evening', 0.9],
+    ],
+  },
 ];
 
 // ---------- Что делается внутри страницы ----------

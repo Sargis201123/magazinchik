@@ -34,6 +34,8 @@ export const SPRITES = [
   'giant_closed',
   // Свой филиал в здании «Гиганта» (art/giant.py, branch.ts).
   'giant_branch',
+  // После переезда в гипермаркет филиал — в старом магазине через дорогу (art/giant.py).
+  'branch_old',
   // Особые дни: съёмки кино и ремонт дороги (art/street_props.py).
   'film_camera',
   'film_light',
@@ -222,6 +224,9 @@ export const SPRITES = [
   'facade_wood',
   'facade_tile',
   'facade_glass',
+  // Гипермаркет: фасад и большая вывеска (art/floors.py, art/giant.py).
+  'facade_hyper',
+  'sign_hyper',
   'dept_bakery',
   'dept_produce',
   'dept_dairy',

@@ -221,7 +221,17 @@ export const STORE_LEVELS: StoreLevel[] = [
   { nameKey: 'store.l3', cost: 4000, slots: 9, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
   { nameKey: 'store.l4', cost: 16000, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
   { nameKey: 'store.l5', cost: 32000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
+  // Гипермаркет — переезд в здание «Гиганта» за дорогой, когда там уже открыт свой филиал (branch.ts):
+  // старый магазин становится филиалом. Цена подобрана симулятором (docs/BALANCE.md «Гипермаркет»).
+  { nameKey: 'store.l6', cost: 190000, slots: 22, warehouse: 150, rent: 2300, utilities: 340, power: 260, guests: 3, maxCustomers: 17 },
 ];
+
+/**
+ * Гипермаркет — последнее помещение. Переезд туда открывается только с филиалом в здании «Гиганта»:
+ * без него универмаг — последний, и всё, что смотрит на «следующее помещение» (цель дня, «Развитие»,
+ * подсказки, симулятор), ведёт себя как раньше.
+ */
+export const HYPER_LEVEL = STORE_LEVELS.length - 1;
 
 /**
  * Игровой месяц — 7 дней (~15–20 минут игры). В конце месяца приходят счета:
@@ -291,7 +301,7 @@ export const STICKY_SKIM = 0.04;
 /** Навык растёт каждые столько месяцев работы. */
 export const MONTHS_PER_SKILL = 2;
 /** Сколько сотрудников помещается в помещении каждого уровня (в больших — все должности, с поваром). */
-export const STAFF_LIMIT = [1, 3, 5, 10, 11];
+export const STAFF_LIMIT = [1, 3, 5, 10, 11, 11];
 
 export interface StaffMember {
   role: StaffRole;
@@ -382,7 +392,7 @@ export const onShift = (state: StoreState, role: StaffRole): boolean => {
   const m = staffOf(state, role);
   return Boolean(m) && !isAbsent(state, m!);
 };
-export const staffLimit = (state: StoreState): number => STAFF_LIMIT[state.level];
+export const staffLimit = (state: StoreState): number => STAFF_LIMIT[Math.min(state.level, STAFF_LIMIT.length - 1)];
 
 /** Нанять: одна роль — один человек, не больше лимита помещения. */
 export function hire(state: StoreState, member: StaffMember): StoreState | null {
@@ -847,7 +857,8 @@ export const newGame = (): StoreState => ({
 });
 
 export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];
-export const nextStoreLevel = (state: StoreState): StoreLevel | undefined => STORE_LEVELS[state.level + 1];
+export const nextStoreLevel = (state: StoreState): StoreLevel | undefined =>
+  state.level + 1 === HYPER_LEVEL && !state.branch ? undefined : STORE_LEVELS[state.level + 1];
 /** Сколько мест на складе: по помещению и оборудованию склада (gear.ts). */
 export const warehouseCapacity = (state: StoreState): number => Math.round(storeLevel(state).warehouse * warehouseRoom(state));
 export const freeSlots = (state: StoreState): number => storeLevel(state).slots - state.shelves.filter((s) => !isFixture(s)).length;
@@ -1148,7 +1159,9 @@ export function placeStored(state: StoreState, k: number): StoreState | null {
 export function expandStore(state: StoreState): StoreState | null {
   const next = nextStoreLevel(state);
   if (!next || state.debt > 0 || next.cost > state.money) return null;
-  return { ...state, money: state.money - next.cost, level: state.level + 1, movedFrom: state.movedFrom ?? state.level };
+  const moved = { ...state, money: state.money - next.cost, level: state.level + 1, movedFrom: state.movedFrom ?? state.level };
+  // Переезд в гипермаркет: филиал помнит день — его образец выручки считает гипермаркетом только дни после него (branch.ts).
+  return moved.level === HYPER_LEVEL && state.branch ? { ...moved, branch: { ...state.branch, moved: state.day } } : moved;
 }
 
 /** Помещение, по которому придёт ближайший счёт за аренду и коммуналку: после переезда — старое. */

@@ -37,6 +37,8 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['реклама (самая дорогая каждый день)', { features: { adsMax: true } }],
   // Филиал покупают только после победы над «Гигантом» (~85-й день): заметен при прогоне от 150 дней.
   ['филиал в здании «Гиганта»', { features: { branch: true } }],
+  // Переезд в гипермаркет — только с филиалом (~110-й день): заметен при прогоне от 200 дней, разница — к прогону без механик.
+  ['филиал + гипермаркет', { features: { branch: true, hyper: true } }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, cart: true, loyalty: true, gear: true, etags: true, departments: true, skills: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 
