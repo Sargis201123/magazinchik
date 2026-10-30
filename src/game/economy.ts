@@ -636,7 +636,8 @@ export interface StoreState {
   /** Навыки хозяина: ступень каждого (owner.ts). */
   skills?: Partial<Record<'hands' | 'haggle' | 'strong' | 'charm' | 'eye', number>>;
   /** Кредит в банке: сколько осталось вернуть и платёж в месяц (bank.ts). */
-  loan?: { left: number; payment: number };
+  /** day — когда взят (в старых сохранениях нет): в тот же вечер платёж не берут. */
+  loan?: { left: number; payment: number; day?: number };
   /** Отчёт по дням: последние REPORT_DAYS дней (reports.ts). */
   reports?: DayReport[];
   /** Радио: какая волна играет (radio.ts); нет поля — приёмник не куплен. */
@@ -1018,11 +1019,14 @@ export function shelveAll(state: StoreState): StoreState {
 
 // ---------- Полки ----------
 
-/** Ларь и вёдра улучшаются только раз: товар в них сезонный, больше мест не окупится. */
+/** Вёдра с цветами улучшаются только раз: товар сезонный, больше мест не окупится (и букетов в вёдрах — 9). */
 export const FIXTURE_MAX_LEVEL = 1;
+/** Ларь с мороженым растёт вместе с магазином, как обычная полка (было — только раз). */
+export const ICEBOX_MAX_LEVEL = 3;
+const fixtureMax = (kind: Category): number => (kind === 'icebox' ? ICEBOX_MAX_LEVEL : FIXTURE_MAX_LEVEL);
 
 export function upgradeCost(shelf: Shelf): number | null {
-  if (SHELF_KINDS[shelf.kind].fixture && shelf.level >= FIXTURE_MAX_LEVEL) return null;
+  if (SHELF_KINDS[shelf.kind].fixture && shelf.level >= fixtureMax(shelf.kind)) return null;
   return SHELF_LEVELS[shelf.level + 1]?.cost ?? null;
 }
 

@@ -31,13 +31,14 @@ export interface Dish {
 // Пельмени — из замороженных (отдел заморозки), сырники — из молока (творог), уха — из рыбы с картошкой.
 // С выпечкой пекарни (пирожки, булочки, медовик) не пересекаются. Из кастрюли супа и стопки блинов
 // порций больше. Порции дороже продуктов на них в полтора раза по магазинным ценам: готовить выгодно,
-// даже если эти продукты разобрали бы и так, но не в разы (tests/kitchen.test.ts).
+// даже если эти продукты разобрали бы и так, но не в разы (tests/kitchen.test.ts). Цены выровнены по марже
+// с порции: оливье и пельмени были почти вдвое выгоднее блинов и сырников.
 export const DISHES: Record<DishId, Dish> = {
-  olivier: { icon: '🥗', needs: { potatoes: 2, meat: 1 }, portions: 4, price: 75 },
+  olivier: { icon: '🥗', needs: { potatoes: 2, meat: 1 }, portions: 4, price: 65 },
   borscht: { icon: '🍲', needs: { potatoes: 1, meat: 1, bread: 1 }, portions: 6, price: 55, hot: true },
-  pancakes: { icon: '🥞', needs: { milk: 2, apples: 1 }, portions: 6, price: 40 },
-  pelmeni: { icon: '🥣', needs: { dumplings: 2, milk: 1 }, portions: 5, price: 70, hot: true },
-  syrniki: { icon: '🧀', needs: { milk: 3 }, portions: 6, price: 45 },
+  pancakes: { icon: '🥞', needs: { milk: 2, apples: 1 }, portions: 6, price: 43 },
+  pelmeni: { icon: '🥣', needs: { dumplings: 2, milk: 1 }, portions: 5, price: 60, hot: true },
+  syrniki: { icon: '🧀', needs: { milk: 3 }, portions: 6, price: 50 },
   ukha: { icon: '🍜', needs: { fish: 1, potatoes: 2 }, portions: 5, price: 45, hot: true },
 };
 export const DISH_IDS = Object.keys(DISHES) as DishId[];
