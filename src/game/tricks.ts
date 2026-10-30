@@ -47,8 +47,11 @@ export const INSPECTOR_RATING = 0.05;
 export const counterCost = (kind: TrickKind, level: number): number =>
   ({ promoter: 200 + 60 * level, banner: 300 + 80 * level, inspector: 150 + 50 * level })[kind];
 export const inspectorFine = (level: number): number => 250 + 150 * level;
-/** Разоблачили подставного — конкурент платит за беспокойство. */
-export const exposedPay = (level: number): number => 150 + 100 * level;
+/**
+ * Разоблачили подставного — конкурент платит за беспокойство. Было 150 + 100 × ур.: жалоба выходила
+ * выгоднее уборки всегда, теперь это настоящий риск.
+ */
+export const exposedPay = (level: number): number => 100 + 50 * level;
 
 /** Пакость, которая действует сегодня. */
 export const activeTrick = (state: StoreState): Trick | undefined => {

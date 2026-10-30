@@ -40,7 +40,8 @@ export const DEAL_DISCOUNT = 0.5;
 export const ORDER_DONE_RATING = 0.1;
 export const ORDER_FAILED_RATING = 0.3;
 export const INSPECTION_PASS_RATING = 0.2;
-export const INSPECTION_FAIL_RATING = 0.3;
+/** Провал проверки СЭС: −0,15 рейтинга (было −0,3 — самое тяжёлое наказание за одну гнилую бумажку). */
+export const INSPECTION_FAIL_RATING = 0.15;
 export const RUSH_SECONDS = 20;
 /** Эдуард переманивает сотрудника (+25% к зарплате) или жалуется инспектору. */
 export const POACH_FROM_DAY = 15;
