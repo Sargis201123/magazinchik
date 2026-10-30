@@ -269,6 +269,8 @@ import {
   type Vehicle,
 } from '../game/delivery';
 import { clock, DeliveryUi } from '../ui/delivery';
+import { hallNudge, mainGoal, NUDGE_IDLE_MS, tomorrowTeaser, type HallNudge } from '../game/nudge';
+import { teaserText, tryNudge } from '../ui/nudge';
 
 // Холст — ровно по пикселям экрана, высотой от 9:16 до 9:20 ширины (platform/screen.ts, scenes/pixels.ts):
 // на вытянутых телефонах картинка во весь экран, без пустых полос. Камера подбирает масштаб под магазин
@@ -286,6 +288,8 @@ const ART = 2;
 const STREET_VIEW = 40;
 /** Сколько первых дней показывать обучение: стрелки и яркую подсказку. */
 const TUTORIAL_DAYS = 3;
+/** Сколько мс видна подсказка «что дальше» в зале (если игрок так и не коснулся экрана). */
+const NUDGE_SHOW_MS = 7000;
 /** Сколько штук на полке считается «почти пусто» — табличка «Осталось N». */
 const LOW_STOCK = 2;
 /** Высота видимой крышки мебели (TOP в art/sprites.py, в точках мира). */
@@ -1690,6 +1694,12 @@ export class StoreScene extends Phaser.Scene {
   private lastSaleAt = -Infinity;
   private nextSpawn = 1;
   private running = false;
+  /** Подсказка «что дальше» в зале (game/nudge.ts): когда игрок последний раз касался экрана, какая подсказка и до каких пор. */
+  private lastTouch = 0;
+  private nudge: HallNudge | null = null;
+  private nudgeUntil = 0;
+  /** Для какого состояния нарисована цель в HUD (состояние меняется целиком — сравниваем ссылку). */
+  private goalFor: StoreState | null = null;
   /** Кофемашина (если куплена) и занята ли она. */
   private coffeeImg?: Phaser.GameObjects.Image;
   /** Кто сейчас у стойки кофейни делает заказ или забирает. */
@@ -2020,10 +2030,15 @@ export class StoreScene extends Phaser.Scene {
     this.updateScanBar();
     this.callSellerIfNeeded();
     // Пока говорит бабушка (облачком или у подсветки обучения), та же подсказка снизу не повторяется.
-    const hint = this.currentHint();
+    const raw = this.currentHint();
     // Та же подсказка, что у подсветки обучения (касса, полка), снизу не повторяется; другие (вор, мусор) — да.
-    const coached = this.hallCoach && this.coach.pointing && (hint === t('hint.serve') || hint === t('hint.restock'));
-    this.hud.setHint(this.say.visible || coached ? '' : hint, this.state.day <= TUTORIAL_DAYS);
+    const coached = this.hallCoach && this.coach.pointing && (raw === t('hint.serve') || raw === t('hint.restock'));
+    const hint = this.say.visible || coached ? '' : raw || this.nudgeHint();
+    this.hud.setHint(hint, this.state.day <= TUTORIAL_DAYS || this.nudgeUntil > this.time.now);
+    if (this.goalFor !== this.state) {
+      this.goalFor = this.state;
+      this.hud.setGoal(mainGoal(this.state));
+    }
     this.updateTutorialArrow();
     if (this.state.onboarding && this.state.day === 1) this.onboardingTick();
     this.tutorialTick(deltaMs);
@@ -2077,11 +2092,33 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
+   * Игрок застыл на NUDGE_IDLE_MS, а в зале ждёт дело: покупатель у кассы хозяина или пустая полка при
+   * товаре на складе. Одна строка снизу и стрелка на несколько секунд; каждая — раз в день, всего не
+   * больше трёх в день и только в первые две недели (game/nudge.ts). Касание экрана — гаснет.
+   */
+  private nudgeHint(): string {
+    const now = this.time.now;
+    if (!this.running || this.night || !this.dayOpen) {
+      this.lastTouch = now;
+      this.nudge = null;
+      return '';
+    }
+    if (this.nudge && this.nudgeUntil > now) return t(this.nudge === 'serve' ? 'hint.serve' : 'hint.restock');
+    this.nudge = null;
+    if (now - this.lastTouch < NUDGE_IDLE_MS) return '';
+    const kind = hallNudge({ waiting: Boolean(this.ownerRegister()) && !this.sellerBusy, emptyShelf: this.shelfNeedsRestock() });
+    if (!kind || !tryNudge(this.state.day, kind, now - this.lastTouch)) return '';
+    this.nudge = kind;
+    this.nudgeUntil = now + NUDGE_SHOW_MS;
+    return t(kind === 'serve' ? 'hint.serve' : 'hint.restock');
+  }
+
+  /**
    * Обучение первых дней: над тем, что нужно нажать сейчас, прыгает стрелка —
    * касса, пустая полка, мусор или грязный туалет, вор.
    */
   private updateTutorialArrow(): void {
-    const target = this.state.day <= TUTORIAL_DAYS || this.inspector === 'here' ? this.tutorialTarget() : null;
+    const target = this.state.day <= TUTORIAL_DAYS || this.inspector === 'here' || this.nudgeUntil > this.time.now ? this.tutorialTarget() : null;
     // Ту же цель бабушкино обучение показывает своей стрелкой (ui/coach.ts) — вторая не нужна.
     const own = this.hallCoach && this.coach.pointing && this.tutTracked ? this.tutWorldSpot(this.tutTracked) : null;
     if (!target || (own && Math.abs(own.x - target.x) < 24 && Math.abs(own.y - target.y) < 40)) {
@@ -2100,7 +2137,7 @@ export class StoreScene extends Phaser.Scene {
     const thief = !this.workers.has('guard') ? [...this.customers].find((c) => c.thief && !c.gone) : undefined;
     if (thief) return { x: thief.sprite.x, y: thief.sprite.y - 12 };
     const waitingAt = this.ownerRegister();
-    if (waitingAt && (this.sellerBusy || this.stats.served < 3)) return { x: waitingAt.counter.x, y: waitingAt.counter.y - 28 };
+    if (waitingAt && (this.sellerBusy || this.stats.served < 3 || this.nudge === 'serve')) return { x: waitingAt.counter.x, y: waitingAt.counter.y - 28 };
     void counter;
     if (this.shelfNeedsRestock()) {
       const index = this.shelfViews.findIndex((v) => v.needsStock);
@@ -7069,6 +7106,9 @@ export class StoreScene extends Phaser.Scene {
     // жест не сбрасывает и сам его сдвигом не делает: сдвигом считается только движение пальцев.
     this.input.on('pointerdown', () => {
       if (!(this.input.pointer1.isDown && this.input.pointer2.isDown)) this.dragged = false;
+      // Игрок здесь — подсказка «что дальше» гаснет.
+      this.lastTouch = this.time.now;
+      this.nudgeUntil = 0;
     });
     this.input.addPointer(1);
     // Пока пальцы двигаются, масштаб любой — плавно; отпустили — доходит до ближайшего ровного
@@ -15595,6 +15635,7 @@ export class StoreScene extends Phaser.Scene {
         },
         (button) => void this.shareDay(button, finishedDay),
         teaser,
+        this.state.bankrupt ? undefined : teaserText(tomorrowTeaser(this.state)),
       );
       this.summaryLesson();
     });

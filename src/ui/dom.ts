@@ -3,6 +3,7 @@
 
 import { assetUrl, png } from '../platform/assets';
 import { sheetPng } from './sheet';
+import { liteMode } from '../platform/quality';
 
 /**
  * Шрифт интерфейса и надписей в игре. Пиксельные шрифты пробовали: кириллица и цифры
@@ -28,6 +29,29 @@ const css = `
 .ui-stock { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
 .ui-stock span { background: rgba(24, 20, 37, .72); padding: 1px 7px; border-radius: 6px; white-space: nowrap; }
 .ui-stock .ui-stock-low { color: #fee761; }
+/* Цель с полоской — своей строкой под складом; только она ловит касания (остальная строка — сквозная). */
+.ui-goal-wrap { flex-basis: 100%; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.ui-goal { pointer-events: auto; display: flex; align-items: center; gap: 6px; max-width: min(100%, 340px); box-sizing: border-box;
+  background: rgba(24, 20, 37, .78); border: 1.5px solid rgba(254, 231, 97, .55); border-radius: 8px; padding: 2px 8px; margin: 0;
+  font: 600 12.5px/1.35 ${UI_FONT}; color: #fff; text-shadow: 0 1px 0 #000; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ui-goal[hidden], .ui-goal-next[hidden] { display: none; }
+.ui-goal:active { transform: translateY(1px); }
+.ui-goal-text { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ui-goal-bar { flex: 0 0 52px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .18); overflow: hidden; box-shadow: 0 0 0 1px #000; }
+.ui-goal-fill { display: block; height: 100%; background: #63c74d; transition: width .5s ease-out; }
+.ui-goal-next { max-width: min(100%, 340px); box-sizing: border-box; background: #fee761; color: #2b2233; text-shadow: none; border: 2px solid #2b2233;
+  border-radius: 8px; padding: 3px 8px; font: 600 12.5px/1.3 ${UI_FONT}; text-align: center; }
+.ui-on-title .ui-goal { pointer-events: none; }
+/* Подсказка «что дальше» в утреннем меню: кнопка мягко светится, строка — над «Открыть магазин». */
+.ui-nudge { animation: ui-nudge 1.1s ease-in-out infinite; position: relative; z-index: 2; }
+@keyframes ui-nudge { 50% { box-shadow: 0 0 0 3px #fee761, 0 0 12px 4px rgba(254, 174, 52, .85); } }
+.ui-nudge-line { font: 700 13px/1.3 ${UI_FONT}; color: #2b2233; background: #fee761; border: 2px solid #2b2233; border-radius: 8px;
+  padding: 4px 8px; margin: 0 0 6px; text-align: center; }
+.ui-calm .ui-nudge, .ui-calm.ui-nudge { animation: none; box-shadow: 0 0 0 3px #fee761; }
+@media (prefers-reduced-motion: reduce) { .ui-nudge { animation: none; box-shadow: 0 0 0 3px #fee761; } }
+/* «Завтра:» в итогах дня — одна строка-зацепка. */
+.ui-tomorrow { margin: 8px 0; padding: 6px 8px; border: 2px dashed #f7c948; border-radius: 8px; background: #fff8d6; font-size: 14px; }
+.ui-tomorrow b { margin-right: 4px; }
 .ui-stock .ui-stock-out { color: #fff; background: rgba(228, 59, 68, .85); }
 .ui-hint { position: fixed; left: 0; right: 0; padding: 0 12px; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 12px);
   text-align: center; font: 13px ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
@@ -465,6 +489,12 @@ const css = `
 .ui-tour-head { font-size: 12px; color: #8b6d5c; margin-bottom: 10px; }
 .ui-tour-skip { position: absolute; top: 0; right: 0; background: none; border: none; color: #8b6d5c; font-size: 13px;
   text-decoration: underline; padding: 10px 12px; min-height: 40px; cursor: pointer; }
+/* Меню утра: свёрнутые и раскрытые блоки не двигают нажатый заголовок (anchorScroll). Высота окна
+   постоянная — карточка не «переезжает» к центру, когда содержимое стало короче; свой «якорь» браузера
+   выключен, чтобы он не спорил с нашим; --keep — запас снизу, пока прокрутка стоит ниже нового конца. */
+.ui-card.ui-anchored { overflow-anchor: none; overscroll-behavior: contain; padding-bottom: calc(2px + var(--keep, 0px)); }
+.ui-card.ui-anchored.ui-full { height: calc(100dvh - var(--safe-top, env(safe-area-inset-top)) - var(--safe-bottom, env(safe-area-inset-bottom)) - 32px); }
+.ui-folding { overflow: hidden; }
 .ui-card.touring { padding-bottom: 230px; }
 /* Пока идёт обучение, низ окна закрыт репликой бабушки — кнопка «Открыть» стоит на своём месте в списке. */
 .ui-card.touring .ui-open-bar { position: static; box-shadow: none; }
@@ -539,6 +569,140 @@ export function injectStyles(): void {
   const style = document.createElement('style');
   style.textContent = css;
   document.head.append(style);
+}
+
+/** Что считается «якорем» прокрутки: заголовки блоков, плитки, карточки и строки. */
+const ANCHORS = '.ui-fold, .ui-today-head, .ui-tile-card, .ui-shelf-card, .ui-tab, .ui-item, .ui-box, .ui-help, .ui-btn, .ui-chip';
+/** Длительность раскрытия и сворачивания блоков меню. */
+const FOLD_MS = 180;
+
+/** Без лишнего движения: лёгкая графика или «уменьшить движение» в системе. */
+const calmMotion = (): boolean => liteMode() || matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** Запас снизу окна (--keep), пока прокрутка стоит ниже нового конца списка. */
+const keepOf = (card: HTMLElement): number => parseFloat(card.style.getPropertyValue('--keep')) || 0;
+const setKeep = (card: HTMLElement, px: number) => card.style.setProperty('--keep', `${Math.max(0, Math.round(px))}px`);
+
+/** Встать на прокрутку top: снизу ровно столько запаса, сколько для этого нужно. */
+function holdAt(card: HTMLElement, top: number): void {
+  const content = card.scrollHeight - keepOf(card);
+  setKeep(card, Math.max(0, top + card.clientHeight - content));
+  card.scrollTop = top;
+}
+
+/** Как найти «тот же» элемент после перерисовки: по классу, началу текста и номеру среди таких же. */
+type Mark = { cls: string; text: string; index: number };
+const kin = (card: HTMLElement, cls: string) => [...card.querySelectorAll<HTMLElement>(ANCHORS)].filter((e) => e.className.split(' ')[0] === cls.split(' ')[0]);
+const markOf = (card: HTMLElement, node: HTMLElement): Mark => ({ cls: node.className, text: (node.textContent ?? '').slice(0, 24), index: kin(card, node.className).indexOf(node) });
+function findMark(card: HTMLElement, mark: Mark): HTMLElement | undefined {
+  const same = kin(card, mark.cls);
+  const byText = same.filter((e) => (e.textContent ?? '').slice(0, 24) === mark.text);
+  if (byText.length) return byText.reduce((a, b) => (Math.abs(same.indexOf(b) - mark.index) < Math.abs(same.indexOf(a) - mark.index) ? b : a));
+  return same[mark.index];
+}
+
+/**
+ * Изменить окно так, чтобы node (или его двойник после перерисовки) остался на том же месте экрана.
+ * Вне окна с якорем — просто change().
+ */
+export function holdPlace(node: HTMLElement, change: () => void): void {
+  const card = node.closest<HTMLElement>('.ui-anchored');
+  if (!card) {
+    change();
+    return;
+  }
+  const before = node.getBoundingClientRect().top;
+  const mark = markOf(card, node);
+  change();
+  pixelize(card);
+  const now = node.isConnected && card.contains(node) ? node : findMark(card, mark);
+  if (!now) return;
+  const shift = now.getBoundingClientRect().top - before;
+  if (Math.abs(shift) >= 1) holdAt(card, card.scrollTop + shift);
+}
+
+/**
+ * Прокрутка окна держится за то, что нажали: заголовок блока (или кнопка внутри открытого блока)
+ * остаётся на том же месте экрана, что бы ни случилось ниже или выше — свернулся блок, раскрылась
+ * плитка, окно перерисовалось после покупки. Если после сворачивания прокрутке «некуда стоять»
+ * (низ списка стал выше), снизу добавляется запас --keep — он тает, когда листаешь вверх.
+ */
+export function anchorScroll(card: HTMLElement): void {
+  card.classList.add('ui-anchored');
+  card.addEventListener(
+    'scroll',
+    () => {
+      const keep = keepOf(card);
+      if (!keep) return;
+      const need = card.scrollTop + card.clientHeight - (card.scrollHeight - keep);
+      if (need < keep) setKeep(card, need);
+    },
+    { passive: true },
+  );
+  /** Ждущая всплытия поправка: если кнопка остановила всплытие, следующее нажатие её сменит. */
+  let pending: (() => void) | null = null;
+  card.addEventListener(
+    'click',
+    (e) => {
+      if (pending) card.removeEventListener('click', pending);
+      pending = null;
+      const target = e.target instanceof Element ? e.target.closest<HTMLElement>(ANCHORS) : null;
+      if (!target || !card.contains(target)) return;
+      const before = target.getBoundingClientRect().top;
+      const mark = markOf(card, target);
+      // Обработчики кнопки срабатывают между погружением и всплытием: здесь окно уже перерисовано.
+      const after = () => {
+        pending = null;
+        // Эмодзи новой разметки становятся картинками до замера (иначе строки чуть меняют высоту уже после поправки).
+        pixelize(card);
+        const now = target.isConnected && card.contains(target) ? target : findMark(card, mark);
+        if (!now) return;
+        const shift = now.getBoundingClientRect().top - before;
+        if (Math.abs(shift) >= 1) holdAt(card, card.scrollTop + shift);
+      };
+      pending = after;
+      card.addEventListener('click', after, { once: true });
+    },
+    true,
+  );
+}
+
+/** Плавно раскрыть только что показанный блок: высота и прозрачность от нуля (без движения — сразу). */
+export function unfold(body: HTMLElement): void {
+  if (calmMotion() || !body.isConnected) return;
+  const h = body.scrollHeight;
+  if (!h) return;
+  body.classList.add('ui-folding');
+  const anim = body.animate([{ height: '0px', opacity: 0 }, { height: `${h}px`, opacity: 1 }], { duration: FOLD_MS, easing: 'ease-out' });
+  anim.onfinish = anim.oncancel = () => body.classList.remove('ui-folding');
+}
+
+/**
+ * Плавно свернуть блок, потом done (спрятать или перерисовать). Пока сворачивается, снизу окна
+ * держим запас — нажатый заголовок не съезжает, даже если блок был в самом низу списка.
+ */
+export function foldUp(body: HTMLElement, done: () => void): void {
+  const card = body.closest<HTMLElement>('.ui-anchored');
+  const h = body.offsetHeight;
+  if (card && h) {
+    const keep = keepOf(card);
+    const need = card.scrollTop + card.clientHeight - (card.scrollHeight - keep - h);
+    if (need > keep) setKeep(card, need);
+  }
+  if (calmMotion() || !h || !body.isConnected) {
+    done();
+    return;
+  }
+  body.classList.add('ui-folding');
+  const anim = body.animate([{ height: `${h}px`, opacity: 1 }, { height: '0px', opacity: 0 }], { duration: FOLD_MS * 0.8, easing: 'ease-in' });
+  let finished = false;
+  anim.onfinish = anim.oncancel = () => {
+    if (finished) return;
+    finished = true;
+    body.classList.remove('ui-folding');
+    // Окно закрыли, пока блок сворачивался, — перерисовывать уже нечего.
+    if (body.isConnected) done();
+  };
 }
 
 export function el<K extends keyof HTMLElementTagNameMap>(
