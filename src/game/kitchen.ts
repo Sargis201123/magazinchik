@@ -53,10 +53,10 @@ export const portionsTotal = (state: StoreState): number => DISH_IDS.reduce((n, 
 
 // ---------- Плита (оборудование, gear.ts) ----------
 
-/** Сколько секунд варится закладка, сколько кастрюль на плите сразу и лишняя порция у плиты шефа. */
+/** Сколько секунд варится закладка, сколько кастрюль на плите сразу и лишняя порция с закладки (с первой же новой плиты). */
 export const STOVE_SECONDS = [12, 10, 8];
 export const STOVE_POTS = [1, 2, 2];
-export const STOVE_EXTRA = [0, 0, 1];
+export const STOVE_EXTRA = [0, 1, 1];
 export const stoveSeconds = (state: StoreState): number => STOVE_SECONDS[gearTier(state, 'stove')];
 export const stovePots = (state: StoreState): number => STOVE_POTS[gearTier(state, 'stove')];
 /** Сколько порций выходит из закладки на этой плите. */

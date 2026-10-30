@@ -255,7 +255,7 @@ export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey
   guard: { nameKey: 'staff.guard', descKey: 'staff.guard.desc', wage: 490 },
   // Менеджер зала — только в супермаркете и больше: организует работу (все быстрее), сам
   // заказывает срочный подвоз, когда товар кончился, и встаёт за кассу вместо отсутствующего.
-  manager: { nameKey: 'staff.manager', descKey: 'staff.manager.desc', wage: 650, minLevel: 3 },
+  manager: { nameKey: 'staff.manager', descKey: 'staff.manager.desc', wage: 450, minLevel: 3 },
   // Пекарь работает в пекарне во флигеле (нужна печь), бариста — в кофейне (нужен кофейный уголок).
   baker: { nameKey: 'staff.baker', descKey: 'staff.baker.desc', wage: 380, needs: 'oven' },
   barista: { nameKey: 'staff.barista', descKey: 'staff.barista.desc', wage: 360, needs: 'coffee' },

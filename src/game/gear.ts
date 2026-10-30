@@ -136,7 +136,7 @@ export const GEAR: Record<GearId, Gear> = {
     needs: 'kitchen',
     models: [
       model('gear.foodShelf.0', 0, 0, 'gear.foodShelf.0.fx'),
-      model('gear.foodShelf.1', 1500, 3, 'gear.foodShelf.1.fx'),
+      model('gear.foodShelf.1', 700, 3, 'gear.foodShelf.1.fx'),
       model('gear.foodShelf.2', 3400, 3, 'gear.foodShelf.2.fx'),
     ],
   },
@@ -156,7 +156,7 @@ export const GEAR: Record<GearId, Gear> = {
     nameKey: 'gear.lights',
     models: [
       model('gear.lights.0', 0, 0, 'gear.lights.0.fx'),
-      model('gear.lights.1', 600, 1, 'gear.lights.1.fx'),
+      model('gear.lights.1', 250, 1, 'gear.lights.1.fx'),
       model('gear.lights.2', 3000, 3, 'gear.lights.2.fx'),
     ],
   },
@@ -176,8 +176,8 @@ export const GEAR: Record<GearId, Gear> = {
     nameKey: 'gear.entrance',
     models: [
       model('gear.entrance.0', 0, 0, 'gear.entrance.0.fx'),
-      model('gear.entrance.1', 300, 0, 'gear.entrance.1.fx'),
-      model('gear.entrance.2', 1500, 2, 'gear.entrance.2.fx'),
+      model('gear.entrance.1', 150, 0, 'gear.entrance.1.fx'),
+      model('gear.entrance.2', 600, 2, 'gear.entrance.2.fx'),
     ],
   },
   wc: {
@@ -186,8 +186,8 @@ export const GEAR: Record<GearId, Gear> = {
     nameKey: 'gear.wc',
     models: [
       model('gear.wc.0', 0, 0, 'gear.wc.0.fx'),
-      model('gear.wc.1', 500, 1, 'gear.wc.1.fx'),
-      model('gear.wc.2', 2000, 2, 'gear.wc.2.fx'),
+      model('gear.wc.1', 200, 1, 'gear.wc.1.fx'),
+      model('gear.wc.2', 800, 2, 'gear.wc.2.fx'),
     ],
   },
   signage: {

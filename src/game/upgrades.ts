@@ -28,7 +28,7 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   delivery: { id: 'delivery', icon: '🚲', nameKey: 'upgrade.delivery', descKey: 'upgrade.delivery.desc', price: 1500, minLevel: 3 },
   autoOrder: { id: 'autoOrder', icon: '🤖', nameKey: 'upgrade.autoOrder', descKey: 'upgrade.autoOrder.desc', price: 1200, minLevel: 1 },
   bargain: { id: 'bargain', icon: '🏷', nameKey: 'upgrade.bargain', descKey: 'upgrade.bargain.desc', price: 900, minLevel: 2 },
-  eTags: { id: 'eTags', icon: '🏷', nameKey: 'upgrade.eTags', descKey: 'upgrade.eTags.desc', price: 800, minLevel: 1 },
+  eTags: { id: 'eTags', icon: '🏷', nameKey: 'upgrade.eTags', descKey: 'upgrade.eTags.desc', price: 300, minLevel: 1 },
   selfCheckout: { id: 'selfCheckout', icon: '🖥', nameKey: 'upgrade.selfCheckout', descKey: 'upgrade.selfCheckout.desc', price: 2500, minLevel: 2 },
   coffee: { id: 'coffee', icon: '☕', nameKey: 'upgrade.coffee', descKey: 'upgrade.coffee.desc', price: 1500, minLevel: 2 },
   oven: { id: 'oven', icon: '🥖', nameKey: 'upgrade.oven', descKey: 'upgrade.oven.desc', price: 1800, minLevel: 1 },
