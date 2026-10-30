@@ -217,10 +217,10 @@ export interface StoreLevel {
 
 export const STORE_LEVELS: StoreLevel[] = [
   { nameKey: 'store.l1', cost: 0, slots: 3, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 5 },
-  { nameKey: 'store.l2', cost: 1000, slots: 7, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 7 },
-  { nameKey: 'store.l3', cost: 3200, slots: 9, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
-  { nameKey: 'store.l4', cost: 6500, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
-  { nameKey: 'store.l5', cost: 14000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
+  { nameKey: 'store.l2', cost: 1500, slots: 7, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 7 },
+  { nameKey: 'store.l3', cost: 4000, slots: 9, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
+  { nameKey: 'store.l4', cost: 16000, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
+  { nameKey: 'store.l5', cost: 32000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
 ];
 
 /**
@@ -546,6 +546,11 @@ export interface StoreState {
   level: number;
   /** Долг: пока он есть, арендодатель не даёт расширяться. */
   debt: number;
+  /**
+   * «Новоселье»: из какого помещения (индекс в STORE_LEVELS) переехали после прошлых счетов. Первый счёт
+   * после переезда — по аренде и коммуналке старого помещения, потом поле убирают. Нет поля — не переезжали.
+   */
+  movedFrom?: number;
   staff: StaffMember[];
   /** Сколько покупателей хозяин обслужил сам — от этого растёт навык кассы. */
   ownerServed: number;
@@ -1121,12 +1126,19 @@ export function placeStored(state: StoreState, k: number): StoreState | null {
 
 // ---------- Помещение и долг ----------
 
-/** Расширение магазина. Нельзя, пока висит долг. */
+/**
+ * Расширение магазина. Нельзя, пока висит долг. Запоминаем, откуда переехали: первый счёт — по старой
+ * аренде («новоселье»), иначе стройка, полки и новая аренда разом загоняли в долг с пени. Два переезда
+ * до счетов — счёт по тому помещению, где встретили прошлые счета.
+ */
 export function expandStore(state: StoreState): StoreState | null {
   const next = nextStoreLevel(state);
   if (!next || state.debt > 0 || next.cost > state.money) return null;
-  return { ...state, money: state.money - next.cost, level: state.level + 1 };
+  return { ...state, money: state.money - next.cost, level: state.level + 1, movedFrom: state.movedFrom ?? state.level };
 }
+
+/** Помещение, по которому придёт ближайший счёт за аренду и коммуналку: после переезда — старое. */
+export const billLevel = (state: StoreState): number => Math.min(state.level, state.movedFrom ?? state.level);
 
 export function payDebt(state: StoreState, amount: number): StoreState | null {
   const paid = Math.min(amount, state.debt, state.money);
@@ -1145,6 +1157,8 @@ export interface Bill {
   debt: number;
   /** Платёж банку (bank.ts). */
   loan?: number;
+  /** «Новоселье»: аренда и коммуналка — ещё по старому помещению. */
+  housewarming?: boolean;
 }
 
 /** Холодильник включён: ларь с мороженым работает только летом, остальные — всегда. */
@@ -1155,15 +1169,18 @@ export function fridgeOn(state: StoreState, shelf: Shelf): boolean {
 
 export function monthlyBill(state: StoreState): Bill {
   const level = storeLevel(state);
+  // Аренда и коммуналка — по старому помещению, если переехали после прошлых счетов; свет — уже новый.
+  const old = billLevel(state);
   const fridges = state.shelves.filter((s) => fridgeOn(state, s)).length;
   return {
-    rent: level.rent,
-    utilities: level.utilities,
+    rent: STORE_LEVELS[old].rent,
+    utilities: STORE_LEVELS[old].utilities,
     // Свет в зале дешевле с LED, холодильники — с новыми моделями, всё вместе — с солнечными панелями (gear.ts).
     power: Math.round((level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state)) * solarPower(state)),
     salaries: state.staff.reduce((sum, m) => sum + m.wage, 0),
     debt: Math.min(DEBT_PAYMENT, state.debt),
     loan: loanDue(state),
+    ...(old < state.level ? { housewarming: true } : {}),
   };
 }
 
@@ -1180,9 +1197,11 @@ export function payBill(state: StoreState): { state: StoreState; bill: Bill; sho
   const paid = Math.min(total, Math.max(0, state.money));
   const shortfall = total - paid;
   const penalty = Math.round(shortfall * LATE_PENALTY);
+  // Новоселье — на один счёт: дальше аренда по новому помещению.
+  const { movedFrom: _movedFrom, ...rest } = state;
   return {
     // Платёж банку засчитан в любом случае: не хватило — недостача ушла в долг вместе со счетами.
-    state: afterLoanPayment({ ...state, money: state.money - paid, debt: state.debt - bill.debt + shortfall + penalty }, bill.loan ?? 0),
+    state: afterLoanPayment({ ...rest, money: state.money - paid, debt: state.debt - bill.debt + shortfall + penalty }, bill.loan ?? 0),
     bill,
     shortfall,
   };
