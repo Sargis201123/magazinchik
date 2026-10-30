@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { layoutFor } from '../src/scenes/layout';
-import { clampTill, keepPlaces, propIssues, propRect, slotIssues, slotRect, slotSide, standFor, tillMinDx, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from '../src/scenes/placement';
+import { clampTill, COURIER_SPAN, freeStreetX, ICE_CART_SPAN, keepPlaces, propIssues, propRect, slotIssues, slotRect, slotSide, standFor, tillMinDx, vendingFootprint, vendingSide, withSlots, withTill, type Prop, type StreetSpan } from '../src/scenes/placement';
 import { REGISTERS_BY_LEVEL } from '../src/game/registers';
 import { registerSpot } from '../src/scenes/layout';
 import { newGame, placeStored, storeShelf, type Shelf, type StoreState } from '../src/game/economy';
@@ -187,5 +187,21 @@ describe('полка боком у боковой стены', () => {
     expect(back.filter((p) => p.y === l.wallH - 6)).toHaveLength(wallRow.length);
     // Боковые полки не трогаем.
     expect(withSlots(l, { level: 4, at: old.map((p, i) => (i === old.length - 1 ? { x: 8, y: l.wallH + 30 } : p)) }, 4).slots.at(-1)).toEqual({ x: 8, y: l.wallH + 30 });
+  });
+});
+
+describe('реклама у входа', () => {
+  it('не встаёт на место курьера и летней тележки с мороженым', () => {
+    const tv: StreetSpan = [-5, 25];
+    // Ничего не занято — обычное место.
+    expect(freeStreetX([-48, 84, -100], tv, [])).toBe(-48);
+    // Курьер у входа — группа уходит на следующее свободное место.
+    const x = freeStreetX([-48, 84, -100], tv, [COURIER_SPAN]);
+    expect(x).toBe(84);
+    // Летом там тележка — значит, ещё дальше.
+    const summer = freeStreetX([-48, 84, -100], tv, [COURIER_SPAN, ICE_CART_SPAN]);
+    for (const [from, to] of [COURIER_SPAN, ICE_CART_SPAN]) expect(summer + tv[1] <= from || summer + tv[0] >= to).toBe(true);
+    // Всё занято — хоть куда-то (первое место), без падения.
+    expect(freeStreetX([-48], tv, [[-1000, 1000]])).toBe(-48);
   });
 });
