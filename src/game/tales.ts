@@ -111,7 +111,7 @@ export function canChoose(state: StoreState, choice: TaleChoice): boolean {
 }
 
 /** Забрать штуки: сначала с полок, потом со склада. */
-function take(state: StoreState, id: ProductId, n: number): StoreState {
+export function take(state: StoreState, id: ProductId, n: number): StoreState {
   let left = n;
   const shelves = state.shelves.map((s) => {
     const units = s.items[id] ?? [];

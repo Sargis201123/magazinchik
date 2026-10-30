@@ -4,6 +4,10 @@
 // серия гостинцев вот-вот прервётся, товар доживает последний день, выходная распродажа района,
 // кассир торгует без хозяина. Поводы игра присылает сама (src/game/comeback.ts → social.ts, saveHooks).
 //
+// Что ждёт игрока в магазине (src/game/returns.ts → таблица waiting): сосед придёт за отложенным,
+// письмо от бабушки или постоянного покупателя, сундучок выручки с суммой. Это и свои поводы, и
+// приписка «Ещё ждут: …» к любому другому — напоминание всегда называет конкретное.
+//
 // Пишем только днём по местному времени игрока (QUIET; пояс присылает игра, неизвестен — Москва).
 // Три напоминания без ответа — больше не пишем, пока игрок сам не вернётся. Заблокировал бота —
 // не пишем никогда. Картинки — public/promo/remind_<герой>.png, адрес — от APP_URL (у cron нет запроса).
@@ -34,7 +38,7 @@ export const daytime = (now: number, tz: number): boolean => {
   return m >= QUIET.from * 60 && m < QUIET.to * 60;
 };
 
-export type Reason = 'sonya' | 'helped' | 'guest' | 'card' | 'gift' | 'spoil' | 'weekend' | 'cashier' | 'day';
+export type Reason = 'sonya' | 'helped' | 'guest' | 'card' | 'gift' | 'order' | 'letter' | 'chest' | 'spoil' | 'weekend' | 'cashier' | 'day';
 export type Face = 'sonya' | 'grandma' | 'valya' | 'anchor' | GuestId;
 
 /** Что известно об игроке для напоминания: поводы из игры (hooks) и что знает сервер. */
@@ -52,6 +56,13 @@ export interface Player {
   reason: string | null;
   /** Имя друга, чья подмога ещё не забрана (share.ts). */
   helper: string | null;
+  /** Сколько примерно в сундучке выручки (уже округлено игрой). */
+  chest?: number;
+  /** От кого ждёт письмо (returns.ts LetterFrom). */
+  letter?: string;
+  /** Кто придёт за отложенным и за чем: «petr:bread», и сколько штук. */
+  order?: string;
+  qty?: number;
 }
 
 export interface Reminder {
@@ -88,6 +99,15 @@ const TEXTS: Record<'ru' | 'en', Record<string, string>> = {
     cashier: '👵 Бабушка: «Кассир торгует без тебя, но полки пустеют. Заглянул бы, закупил товара»',
     day: '👵 Бабушка: «День {day}: у дверей уже собрались покупатели. Открываем?»',
     'day.0': '👵 Бабушкин гостинец уже ждёт! Загляни в магазинчик — покупатели скучают.',
+    order: '🧓 Валентина: «Встретила {who} — спрашивает про свой заказ: {item}, {qty} шт. Ты же обещал отложить!»',
+    letter: '👵 Бабушка: «Внучек, тебе письмо от {from}! Лежит у кассы, ждёт»',
+    'letter.grandma': '👵 Бабушка: «Внучек, я тебе письмо написала — и кое-что в него вложила. Загляни!»',
+    'letter.sonya': '👧 Соня: «Пап, я тебе открытку нарисовала! Она в магазине, у кассы»',
+    chest: '👵 Бабушка: «Сундучок выручки уже тяжёленький — около {sum} 💰. Загляни, открой!»',
+    also: 'Ещё ждут: {list}',
+    'also.order': 'заказ для {who}',
+    'also.letter': 'письмо от {from}',
+    'also.chest': 'сундучок ≈{sum} 💰',
     play: '▶ Играть',
   },
   en: {
@@ -107,11 +127,84 @@ const TEXTS: Record<'ru' | 'en', Record<string, string>> = {
     cashier: '👵 Grandma: "Your cashier is trading without you, but the shelves are emptying. Come restock"',
     day: '👵 Grandma: "Day {day}: customers are already at the door. Shall we open?"',
     'day.0': "👵 Grandma's gift is waiting! Drop by the shop — the customers miss you.",
+    order: '🧓 Valentina: "I ran into {who} — asking about the order: {item}, {qty} pcs. You promised to put it aside!"',
+    letter: '👵 Grandma: "Dear, there\'s a letter for you from {from}! It\'s waiting by the till"',
+    'letter.grandma': '👵 Grandma: "Dear, I wrote you a letter — and tucked a little something inside. Drop by!"',
+    'letter.sonya': '👧 Sonya: "Dad, I drew you a card! It\'s in the shop, by the till"',
+    chest: '👵 Grandma: "The takings chest is getting heavy — about {sum} 💰. Come open it!"',
+    also: 'Also waiting: {list}',
+    'also.order': "{who}'s order",
+    'also.letter': 'a letter from {from}',
+    'also.chest': 'the chest ≈{sum} 💰',
     play: '▶ Play',
   },
 };
 
 const fill = (text: string, params: Record<string, string | number>): string => text.replace(/\{(\w+)\}/g, (_, k: string) => String(params[k] ?? ''));
+
+/**
+ * Кто пишет письма и приходит за заказом (src/game/regulars.ts, returns.ts): имя «от кого» (родительный
+ * падеж) и «встретила кого» (винительный). Неизвестная метка — повода нет.
+ */
+const PEOPLE: Record<'ru' | 'en', Record<string, { from: string; who: string }>> = {
+  ru: {
+    grandma: { from: 'бабушки', who: 'бабушку' },
+    valya: { from: 'Валентины', who: 'Валентину' },
+    sonya: { from: 'Сони', who: 'Соню' },
+    petr: { from: 'Петра Ильича', who: 'Петра Ильича' },
+    sveta: { from: 'Светы', who: 'Свету' },
+    kostya: { from: 'Кости', who: 'Костю' },
+    akhmed: { from: 'Ахмеда', who: 'Ахмеда' },
+    olga: { from: 'Ольги Николаевны', who: 'Ольгу Николаевну' },
+    misha: { from: 'Миши', who: 'Мишу' },
+  },
+  en: {
+    grandma: { from: 'Grandma', who: 'Grandma' },
+    valya: { from: 'Valentina', who: 'Valentina' },
+    sonya: { from: 'Sonya', who: 'Sonya' },
+    petr: { from: 'Pyotr Ilyich', who: 'Pyotr Ilyich' },
+    sveta: { from: 'Sveta', who: 'Sveta' },
+    kostya: { from: 'Kostya', who: 'Kostya' },
+    akhmed: { from: 'Akhmed', who: 'Akhmed' },
+    olga: { from: 'Olga Nikolaevna', who: 'Olga Nikolaevna' },
+    misha: { from: 'Misha', who: 'Misha' },
+  },
+};
+/** Любимые товары постоянных покупателей — то, что они просят отложить. */
+const ITEMS: Record<'ru' | 'en', Record<string, string>> = {
+  ru: { bread: '🍞 хлеб', milk: '🥛 молоко', potatoes: '🥔 картошка', meat: '🥩 мясо', apples: '🍎 яблоки', juice: '🧃 сок' },
+  en: { bread: '🍞 bread', milk: '🥛 milk', potatoes: '🥔 potatoes', meat: '🥩 meat', apples: '🍎 apples', juice: '🧃 juice' },
+};
+/** Своё поле словаря (не «constructor» из прототипа): метки приходят от игры. */
+const own = <T>(table: Record<string, T>, key: string): T | undefined => (Object.hasOwn(table, key) ? table[key] : undefined);
+/** Сундучок меньше этого — не повод писать (кассир едва начал торговать). */
+export const CHEST_MIN = 100;
+
+/** Сумма с разрядами: «1 200» (ru, неразрывный пробел) или «1,200» (en). */
+export const money = (n: number, lang: 'ru' | 'en'): string => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, lang === 'ru' ? '\u00a0' : ',');
+
+/** Что ждёт в магазине — по отдельности: повод, текст, и короткая строка для приписки «Ещё ждут». */
+function waiting(p: Player): { reason: Reason; face: Face; text: string; short: string }[] {
+  const lang = p.lang;
+  const t = TEXTS[lang];
+  const out: { reason: Reason; face: Face; text: string; short: string }[] = [];
+  const [whoId, pid] = (p.order ?? '').split(':');
+  const who = own(PEOPLE[lang], whoId ?? '');
+  if (who && pid && (p.qty ?? 0) > 0) {
+    const item = own(ITEMS[lang], pid) ?? (lang === 'ru' ? 'товар' : 'goods');
+    out.push({ reason: 'order', face: 'valya', text: fill(t.order, { who: who.who, item, qty: p.qty ?? 0 }), short: fill(t['also.order'], { who: who.from }) });
+  }
+  const from = p.letter ? own(PEOPLE[lang], p.letter) : undefined;
+  if (from) {
+    const key = p.letter === 'grandma' ? 'letter.grandma' : p.letter === 'sonya' ? 'letter.sonya' : 'letter';
+    out.push({ reason: 'letter', face: p.letter === 'sonya' ? 'sonya' : 'grandma', text: fill(t[key], { from: from.from }), short: fill(t['also.letter'], { from: from.from }) });
+  }
+  if ((p.chest ?? 0) >= CHEST_MIN) {
+    const sum = money(p.chest ?? 0, lang);
+    out.push({ reason: 'chest', face: 'grandma', text: fill(t.chest, { sum }), short: fill(t['also.chest'], { sum }) });
+  }
+  return out;
+}
 
 /** Сколько дней до Нового года — словами (дата — в декабре). */
 function daysLeft(date: string, lang: 'ru' | 'en'): string {
@@ -123,7 +216,7 @@ function daysLeft(date: string, lang: 'ru' | 'en'): string {
 
 /**
  * Все поводы написать игроку — по важности: Соня, подмога друга, праздничный гость, открытка,
- * серия гостинцев, порча, выходные, кассир; последний — просто «день N».
+ * серия гостинцев, заказ соседа, письмо, сундучок выручки, порча, выходные, кассир; последний — просто «день N».
  */
 export function reasons(p: Player, now: number, events: LiveEvent[]): Reminder[] {
   const lang = p.lang;
@@ -147,6 +240,7 @@ export function reasons(p: Player, now: number, events: LiveEvent[]): Reminder[]
   if (p.gift && p.gift === addDays(date, -1) && p.streak >= 1 && p.streak < GIFT_DAYS) {
     out.push({ reason: 'gift', face: 'grandma', text: p.streak === GIFT_DAYS - 1 ? t['gift.big'] : fill(t.gift, { n: p.streak + 1 }) });
   }
+  for (const w of waiting(p)) out.push({ reason: w.reason, face: w.face, text: w.text });
   if (p.spoil > 0) out.push({ reason: 'spoil', face: 'valya', text: fill(t.spoil, { n: p.spoil }) });
   if (isWeekend(now)) out.push({ reason: 'weekend', face: 'anchor', text: t.weekend });
   if (p.cashier) out.push({ reason: 'cashier', face: 'grandma', text: t.cashier });
@@ -154,10 +248,16 @@ export function reasons(p: Player, now: number, events: LiveEvent[]): Reminder[]
   return out;
 }
 
-/** Повод для напоминания: самый важный, но не тот же, что в прошлый раз (если есть другой). */
+/**
+ * Повод для напоминания: самый важный, но не тот же, что в прошлый раз (если есть другой).
+ * Что ещё ждёт в магазине (заказ, письмо, сундучок) и не стало главным поводом — припиской ниже.
+ */
 export function pickReminder(p: Player, now: number, events: LiveEvent[]): Reminder {
   const all = reasons(p, now, events);
-  return all.find((r) => r.reason !== p.reason) ?? all[0];
+  const main = all.find((r) => r.reason !== p.reason) ?? all[0];
+  const rest = waiting(p).filter((w) => w.reason !== main.reason);
+  if (!rest.length) return main;
+  return { ...main, text: `${main.text}\n\n${fill(TEXTS[p.lang].also, { list: rest.map((w) => w.short).join(' · ') })}` };
 }
 
 /** Картинки уже загружены в Telegram: дальше шлём по file_id — быстро и без лишних скачиваний. */
@@ -198,14 +298,15 @@ export async function sendReminders(env: Env, now = Date.now()): Promise<number>
     .prepare(
       `SELECT p.id AS id, p.lang AS lang, p.misses AS misses, h.tz AS tz, h.sonya AS sonya, h.spoil AS spoil, h.streak AS streak, h.gift AS gift,
          h.cashier AS cashier, COALESCE(h.day, pr.day) AS day, h.reason AS reason,
-         (SELECT g.name FROM helps hp JOIN progress g ON g.id = hp.helper WHERE hp.receiver = p.id AND hp.claimed = 0 LIMIT 1) AS helper
-       FROM players p LEFT JOIN hooks h ON h.id = p.id LEFT JOIN progress pr ON pr.id = p.id
+         (SELECT g.name FROM helps hp JOIN progress g ON g.id = hp.helper WHERE hp.receiver = p.id AND hp.claimed = 0 LIMIT 1) AS helper,
+         w.chest AS chest, w.letter AS letter, w.ord AS ord, w.qty AS qty
+       FROM players p LEFT JOIN hooks h ON h.id = p.id LEFT JOIN progress pr ON pr.id = p.id LEFT JOIN waiting w ON w.id = p.id
        WHERE p.last_seen < ?1 AND (p.reminded_at IS NULL OR p.reminded_at < ?2) AND p.misses < ?3
          AND (?4 + COALESCE(h.tz, ?5)) % 1440 >= ?6 AND (?4 + COALESCE(h.tz, ?5)) % 1440 < ?7
        LIMIT ?8`,
     )
     .bind(now - IDLE_AFTER, now - REMIND_EVERY, MAX_MISSES, minute, DEFAULT_TZ, QUIET.from * 60, QUIET.to * 60, BATCH)
-    .all<{ id: number; lang: string; misses: number; tz: number | null; sonya: number | null; spoil: number | null; streak: number | null; gift: string | null; cashier: number | null; day: number | null; reason: string | null; helper: string | null }>();
+    .all<{ id: number; lang: string; misses: number; tz: number | null; sonya: number | null; spoil: number | null; streak: number | null; gift: string | null; cashier: number | null; day: number | null; reason: string | null; helper: string | null; chest: number | null; letter: string | null; ord: string | null; qty: number | null }>();
   if (!results.length) return 0;
   const app = env.APP_URL ?? '';
   const events = await liveEventsFor(env);
@@ -224,6 +325,10 @@ export async function sendReminders(env: Env, now = Date.now()): Promise<number>
       day: row.day ?? 0,
       reason: row.reason,
       helper: row.helper && row.helper !== '—' ? row.helper : null,
+      chest: row.chest ?? 0,
+      letter: row.letter ?? '',
+      order: row.ord ?? '',
+      qty: row.qty ?? 0,
     };
     // Запрос уже отобрал тех, у кого день; проверка ещё раз — тем же правилом, что в тестах.
     if (!daytime(now, player.tz)) continue;

@@ -176,6 +176,78 @@ describe('напоминания по местному времени', () => {
   });
 });
 
+describe('напоминания о том, что ждёт в магазине', () => {
+  const now = Date.UTC(2026, 10, 4, 9, 0); // среда, ноябрь — без праздника и выходных
+
+  it('заказ соседа, письмо и сундучок — свои поводы с подробностями', () => {
+    const p = player({ order: 'petr:bread', qty: 4, letter: 'olga', chest: 1234 });
+    const r = reasons(p, now, DEFAULT_EVENTS);
+    expect(r.map((x) => x.reason)).toEqual(['order', 'letter', 'chest', 'day']);
+    expect(r[0]).toMatchObject({ face: 'valya', text: expect.stringContaining('Петра Ильича') });
+    expect(r[0].text).toContain('хлеб, 4 шт.');
+    expect(r[1].text).toContain('от Ольги Николаевны');
+    expect(r[2].text).toContain('около 1\u00a0234 💰');
+    // Письмо от бабушки и рисунок Сони — своими словами и со своим лицом.
+    expect(reasons(player({ letter: 'grandma' }), now, DEFAULT_EVENTS)[0].text).toContain('кое-что в него вложила');
+    expect(reasons(player({ letter: 'sonya' }), now, DEFAULT_EVENTS)[0]).toMatchObject({ face: 'sonya', reason: 'letter' });
+    expect(reasons(player({ lang: 'en', order: 'sveta:milk', qty: 5 }), now, DEFAULT_EVENTS)[0].text).toContain('milk, 5 pcs');
+  });
+
+  it('что не стало главным поводом — припиской «Ещё ждут»', () => {
+    const p = player({ sonya: 1, letter: 'valya', chest: 900, order: 'kostya:potatoes', qty: 3 });
+    const first = pickReminder(p, now, DEFAULT_EVENTS);
+    expect(first.reason).toBe('sonya');
+    expect(first.text).toContain('Ещё ждут: заказ для Кости · письмо от Валентины · сундучок ≈900 💰');
+    // Главный повод — письмо: о нём в приписке не повторяем.
+    const second = pickReminder({ ...p, sonya: 0, order: '', reason: 'chest' }, now, DEFAULT_EVENTS);
+    expect(second.reason).toBe('letter');
+    expect(second.text).not.toContain('письмо от Валентины ·');
+    expect(second.text).toContain('Ещё ждут: сундучок ≈900 💰');
+    // Ничего не ждёт — без приписки; маленький сундучок — не повод.
+    expect(pickReminder(player({ chest: 40 }), now, DEFAULT_EVENTS).text).not.toContain('Ещё ждут');
+  });
+
+  it('незнакомые метки от игры в текст не попадают', () => {
+    const r = reasons(player({ letter: 'hacker', order: 'x:<b>', qty: 3 }), now, DEFAULT_EVENTS);
+    expect(r.map((x) => x.reason)).toEqual(['day']);
+    expect(reasons(player({ letter: 'constructor', order: 'constructor:bread', qty: 3 }), now, DEFAULT_EVENTS).map((x) => x.reason)).toEqual(['day']);
+    expect(reasons(player({ order: 'petr:constructor', qty: 3 }), now, DEFAULT_EVENTS)[0].text).toContain('товар, 3 шт.');
+  });
+
+  it('что ждёт — сохраняется из отчёта игры; cron пишет с подробностями', async () => {
+    if (!Database) return;
+    const db = d1();
+    await socialPing(await ping(9, { tz: 180, hooks: { day: 20, chest: 1500, letter: 'grandma', order: 'petr:bread', qty: 5 } }), { BOT_TOKEN: TOKEN, DB: db });
+    expect(await db.prepare('SELECT chest, letter, ord, qty FROM waiting WHERE id = 9').first()).toEqual({ chest: 1500, letter: 'grandma', ord: 'petr:bread', qty: 5 });
+    // Мусор вместо меток — пусто.
+    await saveHooks(db, 9, { hooks: { chest: 'много', letter: 'Grandma!', order: 'petr;drop', qty: 500 } });
+    expect(await db.prepare('SELECT chest, letter, ord, qty FROM waiting WHERE id = 9').first()).toEqual({ chest: 0, letter: '', ord: '', qty: 0 });
+    await saveHooks(db, 9, { hooks: { day: 20, order: 'petr:bread', qty: 5, chest: 1500 } });
+    const at = Date.UTC(2026, 10, 4, 9, 0);
+    await db.prepare('UPDATE players SET last_seen = ? WHERE id = 9').bind(at - 2 * 86_400_000).run();
+    expect(await sendReminders({ BOT_TOKEN: TOKEN, DB: db }, at)).toBe(1);
+    const sent = calls.find((c) => c.method === 'sendMessage' || c.method === 'sendPhoto')!;
+    const text = String(sent.body.text ?? sent.body.caption);
+    expect(text).toContain('Петра Ильича');
+    expect(text).toContain('сундучок ≈1\u00a0500 💰');
+    expect(JSON.stringify(calls)).not.toContain(TOKEN);
+  });
+
+  it('вернулся после напоминания — событие с поводом', async () => {
+    if (!Database) return;
+    const db = d1();
+    await socialPing(await ping(11, { tz: 180, hooks: { day: 5, letter: 'valya' } }), { BOT_TOKEN: TOKEN, DB: db });
+    const at = Date.now() - 3 * 3_600_000;
+    await db.prepare('UPDATE players SET last_seen = ?, reminded_at = ?, misses = 1 WHERE id = 11').bind(at - 86_400_000, at).run();
+    await db.prepare("UPDATE hooks SET reason = 'letter' WHERE id = 11").run();
+    await socialPing(await ping(11), { BOT_TOKEN: TOKEN, DB: db });
+    expect(await db.prepare("SELECT kind, day, value FROM events WHERE id = 11").first()).toEqual({ kind: 'remind_back.letter', day: 5, value: 3 });
+    // Зашёл ещё раз — второй раз не считаем.
+    await socialPing(await ping(11), { BOT_TOKEN: TOKEN, DB: db });
+    expect((await db.prepare('SELECT COUNT(*) AS n FROM events WHERE id = 11').first<{ n: number }>())?.n).toBe(1);
+  });
+});
+
 describe('календарь праздников на сервере', () => {
   it('без своего — встроенный; автор сохраняет свой по ключу, ошибки — списком', async () => {
     if (!Database) return;
