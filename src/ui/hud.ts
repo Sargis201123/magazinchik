@@ -12,6 +12,8 @@ import { png } from '../platform/assets';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
 import { injectAudioStyles, muteIcon, toggleMute } from './audio';
+import type { Goal } from '../game/nudge';
+import { goalText } from './nudge';
 
 /** Сколько штук на полках считается «мало» и сколько таких товаров показывать в панели. */
 const LOW_ON_SHELF = 3;
@@ -100,6 +102,15 @@ export class Hud {
   private shownMoney: number | null = null;
   private targetMoney = 0;
   private stopRoll = () => {};
+  /** Главная цель с полоской (game/nudge.ts) — под строкой склада; по нажатию — что делать дальше одной строкой. */
+  private readonly goalWrap = el('div', 'ui-goal-wrap');
+  private readonly goal = el('button', 'ui-goal');
+  private readonly goalLabel = el('b', 'ui-goal-text');
+  private readonly goalFill = el('i', 'ui-goal-fill');
+  private readonly goalNext = el('div', 'ui-goal-next');
+  private goalKey = '';
+  private goalHow: TextKey | null = null;
+  private goalTimer = 0;
 
   constructor() {
     injectStyles();
@@ -121,7 +132,50 @@ export class Hud {
       this.showMute();
     });
     this.showMute();
+    const bar = el('i', 'ui-goal-bar');
+    bar.append(this.goalFill);
+    this.goal.append(this.goalLabel, bar);
+    this.goal.hidden = true;
+    this.goalNext.hidden = true;
+    // Касание полоски — не касание улицы под ней (там хозяин пробивает покупки).
+    for (const type of ['pointerdown', 'touchstart', 'mousedown'] as const) this.goal.addEventListener(type, (e) => e.stopPropagation(), { passive: true });
+    this.goal.addEventListener('click', () => this.explainGoal());
+    this.goalWrap.append(this.goal, this.goalNext);
+    this.stock.append(this.goalWrap);
     document.body.append(this.top, this.stock, this.hint, this.speed, this.urgent, this.help, this.mute);
+  }
+
+  /** Цель на полоске; null — спрятать. Перерисовывается, только когда что-то поменялось. */
+  setGoal(goal: Goal | null): void {
+    const key = goal ? `${goal.key}|${JSON.stringify(goal.params)}|${goal.progress.toFixed(3)}|${goal.next}` : '';
+    if (key === this.goalKey) return;
+    this.goalKey = key;
+    this.goal.hidden = !goal;
+    if (!goal) {
+      this.goalHow = null;
+      this.goalNext.hidden = true;
+      return;
+    }
+    if (this.goalHow !== goal.next) this.goalNext.hidden = true;
+    this.goalHow = goal.next;
+    this.goalLabel.textContent = `${goal.icon} ${goalText(goal)}`;
+    this.goalFill.style.width = `${Math.round(goal.progress * 100)}%`;
+    pixelize(this.goal);
+  }
+
+  /** Нажали на цель: одна строка «что делать дальше» на несколько секунд (ещё нажатие — спрятать). */
+  private explainGoal(): void {
+    if (!this.goalHow) return;
+    haptic.tap();
+    sound.tap();
+    clearTimeout(this.goalTimer);
+    this.goalNext.hidden = !this.goalNext.hidden;
+    if (this.goalNext.hidden) return;
+    this.goalNext.textContent = t(this.goalHow);
+    pixelize(this.goalNext);
+    this.goalTimer = window.setTimeout(() => {
+      this.goalNext.hidden = true;
+    }, 5000);
   }
 
   /** Значок звука — как сейчас (его могли переключить и в профиле). */
@@ -165,8 +219,8 @@ export class Hud {
     for (const p of shown) parts.push(el('span', p.n === 0 ? 'ui-stock-out' : 'ui-stock-low', `${PRODUCTS[p.id].icon}${p.n}`));
     if (low.length > shown.length) parts.push(el('span', 'ui-stock-low', `+${low.length - shown.length}`));
     if (quests) parts.push(el('span', 'ui-stock-wh', quests));
-    this.stock.replaceChildren(...parts);
-    pixelize(this.stock);
+    this.stock.replaceChildren(...parts, this.goalWrap);
+    for (const p of parts) pixelize(p);
   }
 
   private lastStock = '';
@@ -257,6 +311,8 @@ export class Hud {
     onShare?: (button: HTMLButtonElement) => void,
     /** «Приходи завтра»: Соня что-то хотела сказать (game/drama.ts) — строка с её портретом. */
     teaser?: string,
+    /** «Завтра:» — одна строка-зацепка на следующий день (game/nudge.ts tomorrowTeaser). */
+    tomorrow?: string,
   ): void {
     const { card, close } = openModal();
     card.classList.add('ui-sum');
@@ -337,6 +393,11 @@ export class Hud {
       card.append(row);
     }
     card.append(grannySays(day, stats, rating, history));
+    if (tomorrow) {
+      const line = el('div', 'ui-tomorrow');
+      line.append(el('b', '', t('teaser.title')), tomorrow);
+      card.append(line);
+    }
     if (teaser) {
       const row = el('div', 'ui-teaser');
       const face = el('img');

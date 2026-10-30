@@ -84,6 +84,7 @@ import {
   type Deal,
   type SupplierId,
   supplierOpen,
+  badBatch,
 } from '../game/suppliers';
 import { guestsGain, guestsToday } from '../game/day';
 import { buyKiosk, KIOSK_TIERS, kioskCount, kioskSlots, KIOSKS_BY_LEVEL, kioskTier, kioskTierIndex, laneGuests, nextKioskPrice, nextKioskTier, openRegisters, upgradeKiosks, withNextTill } from '../game/lanes';
@@ -236,7 +237,9 @@ import { newTag, tabHint } from './onboarding';
 import { showLeaderboard } from './leaderboard';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
-import { button, el, openModal, who } from './dom';
+import { anchorScroll, button, el, foldUp, holdPlace, openModal, unfold, who } from './dom';
+import { morningNudge, NUDGE_IDLE_MS, type MorningNudge } from '../game/nudge';
+import { tryNudge } from './nudge';
 import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
@@ -324,7 +327,7 @@ const openFolds: Set<string> = (() => {
   }
 })();
 
-/** Блок со сворачиваемым содержимым: заголовок с ▸/▾, по умолчанию свёрнут. */
+/** Блок со сворачиваемым содержимым: заголовок с ▸/▾, по умолчанию свёрнут. Открывается и закрывается плавно. */
 function foldBox(id: string, title: string, fill: (body: HTMLElement) => void): HTMLElement {
   const box = el('div', 'ui-box');
   const head = el('button', 'ui-fold', '');
@@ -336,18 +339,47 @@ function foldBox(id: string, title: string, fill: (body: HTMLElement) => void): 
     if (open && !body.childElementCount) fill(body);
   };
   head.addEventListener('click', () => {
-    if (openFolds.has(id)) openFolds.delete(id);
-    else openFolds.add(id);
-    try {
-      localStorage.setItem(OPEN_KEY, JSON.stringify([...openFolds]));
-    } catch {
-      // Без хранилища помним до перезапуска.
+    const open = !openFolds.has(id);
+    if (open) openFolds.add(id);
+    else openFolds.delete(id);
+    rememberFolds();
+    if (open) {
+      render();
+      unfold(body);
+    } else {
+      // Стрелка — сразу, содержимое уезжает за ней.
+      head.textContent = `▸ ${title}`;
+      // Поля вложенных карточек схлопываются вместе с блоком — заголовок досдвигаем на место.
+      foldUp(body, () => holdPlace(head, render));
     }
-    render();
   });
   render();
   box.append(head, body);
   return box;
+}
+
+const rememberFolds = () => {
+  try {
+    localStorage.setItem(OPEN_KEY, JSON.stringify([...openFolds]));
+  } catch {
+    // Без хранилища помним до перезапуска.
+  }
+};
+
+/**
+ * Подробности под плиткой, полкой или «Сегодня» рисует перерисовка окна: закрываемые сначала плавно
+ * уезжают (нажатое остаётся на месте — holdPlace), открытые — плавно выезжают после перерисовки.
+ */
+function flipSpan(cell: HTMLElement, key: string, shown: HTMLElement | null, apply: () => void): void {
+  if (shown) {
+    if (shown.dataset.closing) return;
+    shown.dataset.closing = '1';
+    foldUp(shown, () => holdPlace(cell, apply));
+    return;
+  }
+  apply();
+  const span = document.querySelector<HTMLElement>(`.ui-anchored [data-fold="${key}"]`);
+  if (span) unfold(span);
 }
 
 function artRow(texture: string, opts: { name: string; price?: number; sub?: string; actions: HTMLElement[] }): HTMLElement {
@@ -414,7 +446,11 @@ interface Tile {
 function tileGrid(tiles: Tile[], open: string | null, toggle: (id: string) => void): HTMLElement {
   const grid = el('div', 'ui-shelf-grid');
   for (const tile of tiles) {
-    const cell = button('', () => toggle(tile.id), `ui-shelf-card ui-tile-card${open === tile.id ? ' active' : ''}${tile.alert ? ' broken' : ''}`);
+    const cell: HTMLButtonElement = button(
+      '',
+      () => flipSpan(cell, `tile:${tile.id}`, open === tile.id ? grid.querySelector<HTMLElement>(':scope > .ui-shelf-span') : null, () => toggle(tile.id)),
+      `ui-shelf-card ui-tile-card${open === tile.id ? ' active' : ''}${tile.alert ? ' broken' : ''}`,
+    );
     const icon = tile.icon.startsWith('assets/') ? el('img', 'ui-tile-img') : el('span', 'ui-tile-icon', tile.icon);
     if (icon instanceof HTMLImageElement) {
       icon.src = sheetAsset(tile.icon);
@@ -426,6 +462,7 @@ function tileGrid(tiles: Tile[], open: string | null, toggle: (id: string) => vo
     grid.append(cell);
     if (open === tile.id) {
       const details = el('div', 'ui-shelf-span');
+      details.dataset.fold = `tile:${tile.id}`;
       details.append(...tuckAll(tile.details()));
       grid.append(details);
     }
@@ -450,6 +487,8 @@ function helpRow(title: HTMLElement | string, text: string): HTMLElement {
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
 export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone }: MorningOptions): void {
   const { card, close } = openModal();
+  // Нажатый заголовок или кнопка остаются на месте, когда блоки сворачиваются и окно перерисовывается.
+  anchorScroll(card);
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
   let tab: Tab = 'buy';
@@ -493,6 +532,44 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const autoBuy = (state: StoreState): StoreState => shelveAll(autoMorning(state, autoPrice, guestsToday(state)));
   if (autoActive(getState())) setState(autoBuy(getState()));
 
+  /**
+   * Подсказка «что дальше» (game/nudge.ts): игрок застыл в меню, а важное не сделано — мягко светится
+   * нужная кнопка и одна строка над «Открыть магазин». Любое касание окна — гаснет до перерисовки.
+   */
+  let idleSince = Date.now();
+  let nudged: MorningNudge | null = null;
+  const awake = () => {
+    idleSince = Date.now();
+    nudged = null;
+  };
+  card.addEventListener('pointerdown', awake, { passive: true, capture: true });
+  card.addEventListener('scroll', () => (idleSince = Date.now()), { passive: true });
+  card.classList.toggle('ui-calm', liteMode());
+  const nudgeTimer = window.setInterval(() => {
+    if (!card.isConnected) {
+      window.clearInterval(nudgeTimer);
+      return;
+    }
+    const idle = Date.now() - idleSince;
+    // Только в меню с вкладками, без бабушкиного обхода и без окна поверх.
+    if (nudged || idle < NUDGE_IDLE_MS || !card.classList.contains('ui-full') || card.classList.contains('touring')) return;
+    if (document.querySelectorAll('.ui-modal:not(.closing)').length > 1 || document.querySelector('.ui-dialog')) return;
+    const state = getState();
+    const kind = morningNudge(state, { restock: restockPlan(state, priceOf, guestsToday(state)).lines.length > 0 });
+    if (!kind || !tryNudge(state.day, kind, idle)) return;
+    nudged = kind;
+    const tabButton = (id: Tab) => card.querySelector<HTMLElement>(`.ui-tab[data-tab="${id}"]`);
+    const target =
+      kind === 'restock'
+        ? (tab === 'buy' ? card.querySelector<HTMLElement>('.ui-restock .ui-btn') : null) ?? tabButton('buy')
+        : kind === 'grow'
+          ? tab === 'grow' ? null : tabButton('grow')
+          : card.querySelector<HTMLElement>('.ui-open-bar .ui-btn');
+    target?.classList.add('ui-nudge');
+    card.querySelector('.ui-open-bar')?.prepend(el('div', 'ui-nudge-line', t(`nudge.${kind}`)));
+    haptic.tap();
+  }, 1000);
+
   // Торговая неделя и гильдия приходят с сервера чуть позже — перерисовать утро, когда пришли.
   const onMultiplayer = () => {
     if (!card.isConnected) window.removeEventListener(MP_EVENT, onMultiplayer);
@@ -520,6 +597,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
 
   const render = () => {
     const state = getState();
+    // Окно во всю высоту — только у меню с вкладками (ниже); сюжет и письма — по размеру, по центру.
+    card.classList.remove('ui-full');
     const title = el('h2');
     title.append(el('span', '', t('morning.title', { n: state.day })), el('span', '', t('morning.money', { n: state.money })));
 
@@ -639,6 +718,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     };
     for (const [id, icon, label] of shown) {
       const b = button('', go(id), `ui-tab${tab === id ? ' active' : ''}${!touring && tabNew(state, id) ? ' ui-tab-new' : ''}`);
+      b.dataset.tab = id;
       b.append(el('span', 'ui-tab-icon', icon), el('span', 'ui-tab-label', t(label)));
       if (badges[id]) b.append(el('span', 'ui-tab-dot', String(badges[id])));
       else if (!touring && tabNew(state, id)) b.append(newTag());
@@ -687,6 +767,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     // Кнопка «Открыть магазин» всегда внизу окна — не нужно листать до конца списка.
     const openBar = el('div', 'ui-open-bar');
     openBar.append(openButton);
+    card.classList.add('ui-full');
     // Сверху — только то, где нужно решить или забрать; остальное утро — в свёрнутой карточке «Сегодня».
     card.replaceChildren(
       title,
@@ -758,18 +839,18 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if (state.pass) chip(`🎫 ${passLevel(state.pass)}${ready ? ` · 🎁${ready}` : ''}`, ready > 0);
     head.append(el('b', '', `${open ? '▾' : '▸'} ${t('today.title')}`), chips);
     head.addEventListener('click', () => {
-      if (openFolds.has('today')) openFolds.delete('today');
-      else openFolds.add('today');
-      try {
-        localStorage.setItem(OPEN_KEY, JSON.stringify([...openFolds]));
-      } catch {
-        // Без хранилища помним до перезапуска.
-      }
-      render();
+      if (touring) return;
+      flipSpan(head, 'today', open ? box.querySelector<HTMLElement>('.ui-today-more') : null, () => {
+        if (openFolds.has('today')) openFolds.delete('today');
+        else openFolds.add('today');
+        rememberFolds();
+        render();
+      });
     });
     box.append(head);
     if (open) {
       const more = el('div', 'ui-today-more');
+      more.dataset.fold = 'today';
       more.append(...details);
       box.append(more);
     }
@@ -905,7 +986,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
 
   /** Купить у поставщика: брак — с той же вероятностью, что и раньше. */
   const buyFrom = (sid: SupplierId, pid: ProductId, qty: number, price: number) => {
-    const bad = Math.random() < SUPPLIERS[sid].badChance;
+    const bad = badBatch(sid, getState().day, Math.random());
     const next = buyStock(getState(), pid, qty, price, bad);
     if (bad && next) pendingBad = { sid, pid, qty, price };
     update(next, bad ? 'error' : 'tap');
@@ -928,7 +1009,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       button(t('restock.buy', { n: plan.total }), () => {
         const fresh = restockPlan(getState(), priceOf, guestsToday(getState()));
         if (!fresh.lines.length) return;
-        const result = applyReorder(getState(), fresh, (line) => Math.random() < SUPPLIERS[line.sid].badChance);
+        const result = applyReorder(getState(), fresh, (line) => badBatch(line.sid, getState().day, Math.random()));
         if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
         // Ничего не купилось (не должно: план считает место как при покупке) — без звона монет.
         const bought = result.state.money < getState().money;
@@ -1222,9 +1303,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     state.shelves.forEach((shelf, i) => {
       const n = shelfCount(shelf);
       const max = shelfCapacity(shelf);
-      const cell = button('', () => {
-        openShelf = openShelf === i ? -1 : i;
-        render();
+      const cell: HTMLButtonElement = button('', () => {
+        const shown = openShelf === i ? grid.querySelector<HTMLElement>(':scope > .ui-shelf-span') : null;
+        flipSpan(cell, `shelf:${i}`, shown, () => {
+          openShelf = openShelf === i ? -1 : i;
+          render();
+        });
       }, `ui-shelf-card${openShelf === i ? ' active' : ''}${shelf.broken ? ' broken' : ''}`);
       const bar = el('div', 'ui-bar');
       const fill = el('div', 'ui-bar-fill');
@@ -1242,6 +1326,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       if (openShelf === i) {
         const details = shelfDetails(state, i);
         details.classList.add('ui-shelf-span');
+        details.dataset.fold = `shelf:${i}`;
         grid.append(details);
       }
     });

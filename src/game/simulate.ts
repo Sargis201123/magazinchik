@@ -85,7 +85,7 @@ import { candidatesFor } from './staff';
 import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
-import { haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } from './suppliers';
+import { badBatch, haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } from './suppliers';
 import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY, OWN_PRODUCTS } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
@@ -673,7 +673,7 @@ export function simulate({
       const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state));
       for (const line of plan.lines) {
         const before = state.money;
-        const got = buyLine(state, line, random() < SUPPLIERS[line.sid].badChance);
+        const got = buyLine(state, line, badBatch(line.sid, state.day, random()));
         state = got.state;
         if (got.bad) state = resolveBadBatch(state, line.pid, 'markdown', line.price);
         purchases += before - state.money;
@@ -704,7 +704,7 @@ export function simulate({
         const price = unitPrice(SUPPLIERS[sid], deals[sid], id)!;
         const qty = Math.min(Math.max(0, NAIVE_STOCK - onShelves(state, id) - warehouseOf(state, id)), Math.floor(state.money / price), warehouseCapacity(state) - warehouseCount(state));
         if (qty <= 0) continue;
-        const bad = random() < SUPPLIERS[sid].badChance;
+        const bad = badBatch(sid, state.day, random());
         state = buyStock(state, id, qty, price, bad) ?? state;
         if (bad) state = resolveBadBatch(state, id, 'markdown', price);
         purchases += qty * price;
@@ -719,7 +719,7 @@ export function simulate({
       if (!best) continue;
       qty = Math.min(qty, Math.floor(state.money / best.price), warehouseCapacity(state) - warehouseCount(state));
       if (qty <= 0) continue;
-      const bad = random() < SUPPLIERS[best.sid].badChance;
+      const bad = badBatch(best.sid, state.day, random());
       state = buyStock(state, id, qty, best.price, bad) ?? state;
       if (bad) state = resolveBadBatch(state, id, 'markdown', best.price);
       purchases += qty * best.price;
@@ -746,7 +746,7 @@ export function simulate({
       for (const { id, best, want } of extra) {
         const qty = Math.min(Math.floor(want * share), Math.floor((state.money - reserve) / best!.price));
         if (qty <= 0) continue;
-        const bad = random() < SUPPLIERS[best!.sid].badChance;
+        const bad = badBatch(best!.sid, state.day, random());
         state = buyStock(state, id, qty, best!.price, bad) ?? state;
         if (bad) state = resolveBadBatch(state, id, 'markdown', best!.price);
         purchases += qty * best!.price;
