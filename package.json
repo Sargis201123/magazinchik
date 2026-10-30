@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "sim": "vite-node scripts/sim.ts",
+    "sim:hyper": "vite-node scripts/sim-hyper.ts",
     "sim:features": "vite-node scripts/sim-features.ts",
     "sim:final": "vite-node scripts/sim-final.ts",
     "sim:restock": "vite-node scripts/sim-restock.ts",

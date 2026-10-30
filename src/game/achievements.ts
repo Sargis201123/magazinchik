@@ -2,7 +2,7 @@
 // Счётчики «за всю игру» копятся в конце каждого дня; днём к ним прибавляется сегодняшнее.
 
 import type { TextKey } from '../i18n/ru';
-import { newLifetime, type DayStats, type Lifetime, type StoreState } from './economy';
+import { HYPER_LEVEL, newLifetime, type DayStats, type Lifetime, type StoreState } from './economy';
 import { RARE_GUESTS } from './endless';
 import { CHAPTERS } from './story';
 import { registerCount } from './registers';
@@ -41,7 +41,8 @@ export type AchievementId =
   | 'gear_all'
   | 'registers_4'
   | 'giant'
-  | 'branch';
+  | 'branch'
+  | 'hypermarket';
 
 export type Tier = 'bronze' | 'silver' | 'gold';
 
@@ -98,6 +99,8 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'giant', tier: 'gold', progress: ({ state }) => flag(state.giant?.phase === 'won') },
   // Свой филиал в здании «Гиганта» (branch.ts).
   { id: 'branch', tier: 'gold', progress: ({ state }) => flag(Boolean(state.branch)) },
+  // Переезд в гипермаркет — в здание «Гиганта» (branch.ts).
+  { id: 'hypermarket', tier: 'gold', progress: ({ state }) => flag(state.level >= HYPER_LEVEL) },
 ];
 
 export const achievementName = (id: AchievementId): TextKey => `ach.${id}` as TextKey;

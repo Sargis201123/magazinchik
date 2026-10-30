@@ -3,7 +3,7 @@
 // а на них — бонусы, которые остаются во всех следующих магазинах: стартовый капитал, известное
 // имя, старые связи с поставщиками, слава района и опытные знакомые. Деньги магазина не переносятся.
 
-import { STORE_LEVELS, type StoreState } from './economy';
+import { HYPER_LEVEL, type StoreState } from './economy';
 import { CHAPTERS } from './story';
 
 export type PerkId = 'capital' | 'fame' | 'suppliers' | 'crowd' | 'mentor';
@@ -45,8 +45,8 @@ export interface Legacy {
 export const legacyOf = (state: StoreState): Legacy => state.legacy ?? { gen: 0, points: 0, perks: {} };
 export const perkLevel = (state: StoreState, id: PerkId): number => Math.min(PERKS[id].max, legacyOf(state).perks[id] ?? 0);
 
-/** Продать можно универмаг после сюжета. */
-export const canSell = (state: StoreState): boolean => state.level >= STORE_LEVELS.length - 1 && state.story.chapter >= CHAPTERS.length;
+/** Продать можно универмаг (и гипермаркет) после сюжета. */
+export const canSell = (state: StoreState): boolean => state.level >= HYPER_LEVEL - 1 && state.story.chapter >= CHAPTERS.length;
 
 /**
  * Деньги в кассе при продаже идут в зачёт вдвое: в конце игры деньгам иначе некуда деться

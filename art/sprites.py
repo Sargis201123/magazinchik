@@ -3120,6 +3120,7 @@ BADGE_SYMBOLS = {
     "registers_4": ["##.##.##.", "##.##.##.", "##.##.##.", ".........", "##.##.##.", "##.##.##.", "##.##.##.", ".........", "#########"],
     "giant": ["#####....", "#.#.#....", "#####....", "#.#.#..#.", "#####.###", "#.#.#####", "#####.#.#", "#####.###", "#########"],
     "branch": [".##...##.", "####.####", "####.####", "#..#.#..#", "####.####", "##.#.#.##", "##.#.#.##", "##.#.#.##", "#########"],
+    "hypermarket": ["#########", "#.#.#.#.#", "#########", "#.......#", "#.##.##.#", "#.##.##.#", "#.......#", "#.##.##.#", "#########"],
 }
 BADGE_TIERS = {
     "bronze": ("B", "n", "a"),
@@ -3134,7 +3135,7 @@ BADGE_TIER = {
     "burnt_bread": "bronze", "coffee_100": "silver", "cat_mascot": "silver", "night_owl": "silver", "two_registers": "bronze",
     "courier_20": "silver", "mouse_5": "bronze", "war_answer": "bronze", "fair_3": "bronze",
     "gear_first": "bronze", "gear_10": "silver", "gear_all": "gold", "registers_4": "silver",
-    "giant": "gold", "branch": "gold",
+    "giant": "gold", "branch": "gold", "hypermarket": "gold",
 }
 
 

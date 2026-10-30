@@ -38,7 +38,7 @@ describe('в гости к другу', () => {
       },
       home,
     )!;
-    expect(guest.level).toBe(4);
+    expect(guest.level).toBe(5);
     expect(guest.rating).toBe(3);
     expect(guest.shelves).toHaveLength(1);
     expect(guest.shelves[0].level).toBe(4);

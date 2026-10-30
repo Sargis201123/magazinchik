@@ -33,6 +33,7 @@ import {
   isFixture,
   slotOf,
   STORE_LEVELS,
+  HYPER_LEVEL,
   sellableProducts,
   storeLevel,
   takeFromShelf,
@@ -77,7 +78,7 @@ import { applyPranks, bonusGuests, bossLeft, bossShop, messToday, PRANK_COINS, t
 import { fetchRivalShop, rivalAct, rivalInbox, thankRival } from '../platform/rival';
 import { rivalBar, showRivalNews } from '../ui/rival';
 import { awayTrade } from '../game/away';
-import { branchAway, branchLook, branchSignName, branchTier, branchUpgrades } from '../game/branch';
+import { branchAway, branchInOldShop, branchLook, branchSignName, branchTier, branchUpgrades } from '../game/branch';
 import { getLang, t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { music, type MusicMood } from '../platform/music';
@@ -311,9 +312,11 @@ const FACADE_STYLES: { texture: string; awning?: number; canopy?: number; led?: 
   { texture: 'facade', awning: 0xfee761 },
   { texture: 'facade_tile', canopy: 0x3e8948 },
   { texture: 'facade_glass', canopy: 0x262b44, led: true },
+  // Гипермаркет: светлые колонны, тёмное стекло, красный козырёк с подсветкой.
+  { texture: 'facade_hyper', canopy: 0xa22633, led: true },
 ];
 /** Пол по уровням помещения. */
-const FLOORS = ['floor', 'floor', 'floor2', 'floor2', 'floor3'];
+const FLOORS = ['floor', 'floor', 'floor2', 'floor2', 'floor3', 'floor3'];
 /** Яркость пятен света от потолочных ламп на полу. */
 const LAMP_POOL_ALPHA = 0.09;
 /** На сколько точек мира в стороны от магазина тянется карта освещения (дальше — ровный фон улицы). */
@@ -2234,7 +2237,8 @@ export class StoreScene extends Phaser.Scene {
     this.builtLevel = this.state.level;
 
     // Камера показывает и соседнюю площадь, куда магазин вырастет: ларёк выглядит маленьким.
-    const next = STORE_LEVELS[this.state.level + 1] ? layoutFor(this.state.level + 1) : this.layout;
+    // Гипермаркет — не пристройка, а здание «Гиганта» за дорогой: участка «Сдаётся» рядом нет.
+    const next = STORE_LEVELS[this.state.level + 1] && this.state.level + 1 < HYPER_LEVEL ? layoutFor(this.state.level + 1) : this.layout;
     this.next = next;
     this.frameCamera();
     this.cameras.main.setZoom(this.baseZoom).centerOn(this.home.x, this.home.y);
@@ -2399,7 +2403,10 @@ export class StoreScene extends Phaser.Scene {
     // Вывеска с названием на крыше; премиальная — своя доска и цвет букв.
     const sign = activeDecor(this.state, 'sign');
     const signColor = sign?.textColor ?? 0xfee761;
-    this.art(w / 2, -9, sign?.texture ?? 'sign').setDepth(2);
+    // У гипермаркета своя вывеска — вдвое шире, буквы крупнее (премиальная доска из «Оформления» — главнее).
+    const grand = !sign && this.state.level >= HYPER_LEVEL;
+    const signFont = grand ? '9px' : '7px';
+    this.art(w / 2, -9, sign?.texture ?? (grand ? 'sign_hyper' : 'sign')).setDepth(2);
     if (sign?.id === 'sign_marquee') {
       // Лампочки «Бродвея» перемигиваются.
       const lit = this.art(w / 2, -9, 'sign_marquee_lit').setDepth(2).setBlendMode(Phaser.BlendModes.ADD);
@@ -2408,14 +2415,14 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .text(w / 2, -9, this.shopTitle(), {
         fontFamily: UI_FONT,
-        fontSize: '7px',
+        fontSize: signFont,
         color: `#${signColor.toString(16).padStart(6, '0')}`,
       })
       .setOrigin(0.5)
       .setResolution(this.textRes(4))
       .setDepth(3);
-    this.neonSign(w / 2, -9, this.shopTitle(), '7px', signColor, 64, true);
-    if (!sign) this.signLights(w / 2, -9);
+    this.neonSign(w / 2, -9, this.shopTitle(), signFont, signColor, grand ? 92 : 64, true);
+    if (!sign) this.signLights(w / 2, -9, grand ? 46 : 30);
     this.buildWing();
     this.buildWarehouse();
     this.buildDecor();
@@ -7043,6 +7050,7 @@ export class StoreScene extends Phaser.Scene {
     if (modal) modal.style.visibility = 'hidden';
     // Пока стучат молотки, заставка успеет скачаться.
     music.prefetch('expand');
+    if (this.state.level >= HYPER_LEVEL && this.builtLevel < HYPER_LEVEL) return this.celebrateMove(modal);
     const { w, h } = this.layout;
     const next = this.next;
     const spots: { x: number; y: number }[] = [];
@@ -7090,6 +7098,59 @@ export class StoreScene extends Phaser.Scene {
     this.popup(this.layout.w / 2, this.layout.h / 2 - 20, t('popup.expanded', { name: t(storeLevel(this.state).nameKey) }), '#fee761');
     await this.delay(1600);
     confetti.destroy();
+    if (modal) modal.style.visibility = '';
+  }
+
+  /**
+   * Переезд в гипермаркет: не стройка, а новоселье. Зал меняется на большой, у входа собираются бабушка
+   * и постоянные покупатели — поздравляют, над вывеской и у двери — конфетти. Камера стоит на месте.
+   */
+  private async celebrateMove(modal: HTMLElement | null): Promise<void> {
+    this.popup(this.layout.w / 2, this.layout.h / 2, t('hyper.title'), '#fee761');
+    await this.delay(900);
+    this.cameras.main.flash(300, 255, 250, 235);
+    this.buildWorld();
+    this.refreshShelves();
+    this.refreshWarehouse();
+    this.hud.update(this.state, DAY_SECONDS);
+    const { w, h, door } = this.layout;
+    const y = h + FACADE_H + 12;
+    const guests = [GRANDMA, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day), customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)];
+    const crowd = guests.map((look, i) => {
+      const person = this.makePerson(door.x + [-20, 20, -38][i], y + [0, 2, 4][i], look);
+      this.setFacing(person, 'up');
+      return person;
+    });
+    const burst = (x: number, by: number, n: number) => {
+      const confetti = this.add.particles(x, by, 'confetti', {
+        speed: { min: 50, max: 150 },
+        angle: { min: 200, max: 340 },
+        gravityY: 160,
+        rotate: { min: 0, max: 360 },
+        scale: 1 / ART,
+        lifespan: 1800,
+        tint: [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xb55088],
+        emitting: false,
+      });
+      confetti.setDepth(LIGHT_DEPTH + 10).explode(this.lite ? Math.round(n / 2) : n);
+      this.time.delayedCall(2000, () => confetti.destroy());
+    };
+    burst(w / 2, -6, 60);
+    burst(door.x, h, 40);
+    if (!music.sting('expand')) sound.fanfare();
+    haptic.success();
+    this.popup(w / 2, h / 2 - 20, t('popup.expanded', { name: t(storeLevel(this.state).nameKey) }), '#fee761');
+    const cheers: TextKey[] = ['hyper.cheer1', 'hyper.cheer2', 'hyper.cheer3'];
+    for (const [i, person] of crowd.entries()) {
+      this.time.delayedCall(300 + i * 450, () => {
+        if (!person.active) return;
+        this.emote(person, i === 0 ? 'emo_heart' : 'emo_star');
+        this.popup(person.x, person.y - 22, t(cheers[i]), '#ffffff');
+      });
+    }
+    await this.delay(2600);
+    // Поздравили — расходятся: тают у входа (зал уже мог перестроиться — тогда их нет).
+    for (const person of crowd) if (person.active) this.tweens.add({ targets: person, alpha: 0, duration: 500, onComplete: () => person.destroy() });
     if (modal) modal.style.visibility = '';
   }
 
@@ -7544,7 +7605,9 @@ export class StoreScene extends Phaser.Scene {
     // Купили здание под филиал (branch.ts) — босс района возвращается на своё место сбоку, рядом с магазином.
     this.builtBranch = branchLook(this.state);
     this.rivalAcross = !this.builtBranch && look !== 'vacant' && look !== 'mega' && (giant === 'none' || giant === 'closed');
-    if (this.builtBranch) {
+    if (this.builtBranch && branchInOldShop(this.state)) {
+      this.buildOldBranch(door.x, top + 92);
+    } else if (this.builtBranch) {
       this.buildBranch(door.x, top + 92);
     } else if (this.rivalAcross) {
       const rival = RIVAL_LOOKS[look];
@@ -7651,8 +7714,50 @@ export class StoreScene extends Phaser.Scene {
     this.branchShoppers(x, y + 88, depth);
   }
 
+  /**
+   * Филиал после переезда в гипермаркет: за дорогой — старый магазин, маленький кирпичный дом. На доске
+   * своё название с «№2», над дверью — «Филиал». Вечером светятся витрины и окошко двери, днём заходят
+   * покупатели (в лёгкой графике двое стоят у входа). Ремонт — цветы и фонари, реклама — флажки, как у
+   * филиала в здании «Гиганта»: купленные ступени видны и здесь.
+   */
+  private buildOldBranch(x: number, y: number): void {
+    const depth = y + 72;
+    this.art(x, y, 'branch_old').setOrigin(0.5, 0).setDepth(depth);
+    const name = branchSignName(this.state, t('branch.defaultName'));
+    const signY = y + 12;
+    const sign = this.add.text(x, signY, name, { fontFamily: UI_FONT, fontSize: '8px', color: '#fee761' }).setOrigin(0.5).setResolution(this.textRes(4)).setDepth(depth + 1);
+    const fit = Math.min(1, 64 / Math.max(1, sign.width));
+    sign.setScale(fit);
+    this.neonSign(x, signY, name, `${Math.max(4, Math.floor(8 * fit))}px`, 0xfee761, 68);
+    const label = t('branch.label');
+    this.add.text(x, y + 37, label, { fontFamily: UI_FONT, fontSize: '4px', color: '#3b2a35' }).setOrigin(0.5).setResolution(this.textRes(6)).setDepth(depth + 1);
+    // Витрины и окошко двери вечером светятся, свет ложится на тротуар.
+    for (const dx of [-29.5, 29.5]) {
+      this.nightGlow(this.add.rectangle(x + dx, y + 52, 31, 22, 0xffd890), 0.4, undefined, { from: Math.random() * 0.4 });
+      const spill = this.art(x + dx, y + 68, 'light_spill').setOrigin(0.5, 0).setTint(0xffd08a).setScale(0.9 / ART);
+      this.nightGlow(spill, 0.5, undefined, { map: { scale: 0.9, gain: 1.2, haze: 0.1 } });
+    }
+    this.nightGlow(this.add.rectangle(x, y + 50, 10, 8, 0xffd890), 0.45);
+    const entry = this.art(x, y + 70, 'glow').setDisplaySize(26, 14).setTint(0xffe6b0);
+    this.nightGlow(entry, 0.5, undefined, { map: { key: 'light_pool', scale: 1.2, gain: 1.3, haze: 0.15 } });
+    const repair = branchTier(this.state, 'repair');
+    if (repair >= 1) for (const dx of [-24, 24]) this.art(x + dx, y + 72, 'tulips').setOrigin(0.5, 1).setDepth(depth + 0.5);
+    if (repair >= 3) {
+      for (const dx of [-34, 34]) {
+        this.add.rectangle(x + dx, y + 64, 1, 8, 0x262b44).setDepth(depth + 1);
+        this.add.circle(x + dx, y + 59, 1.6, 0xfff0c0).setDepth(depth + 1);
+        this.nightGlow(this.art(x + dx, y + 59, 'glow').setDisplaySize(14, 12).setTint(0xffd890), 0.8, undefined, { map: { key: 'light_pool', scale: 1.4, gain: 1.2 } });
+      }
+    }
+    if (branchTier(this.state, 'ads') >= 2) {
+      const colors = [0xfee761, 0xe43b44, 0x63c74d, 0xffffff];
+      for (let i = 0, fx = x - 48; fx <= x + 48; fx += 8, i++) this.add.triangle(fx, y + 3, 0, 0, 4, 0, 2, 4, colors[i % colors.length]).setOrigin(0).setDepth(depth + 1);
+    }
+    this.branchShoppers(x, y + 72, depth, 60);
+  }
+
   /** Покупатели филиала: подходят к стеклянному входу и заходят, другие выходят и уходят по тротуару. */
-  private branchShoppers(x: number, ground: number, depth: number): void {
+  private branchShoppers(x: number, ground: number, depth: number, reach = 70): void {
     const walkY = ground + 6;
     const look = () => customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day);
     if (this.lite) {
@@ -7667,7 +7772,7 @@ export class StoreScene extends Phaser.Scene {
       if (!this.running || this.night || busy.n >= 3 || !this.sys.isActive()) return;
       busy.n++;
       const side = Math.random() < 0.5 ? -1 : 1;
-      const far = { x: x + side * Phaser.Math.Between(70, 95), y: walkY + Phaser.Math.Between(-1, 3) };
+      const far = { x: x + side * Phaser.Math.Between(reach, reach + 25), y: walkY + Phaser.Math.Between(-1, 3) };
       const door = { x: x + Phaser.Math.Between(-4, 4), y: walkY - 3 };
       const coming = Math.random() < 0.55;
       const from = coming ? far : door;
@@ -15723,13 +15828,15 @@ export class StoreScene extends Phaser.Scene {
    * Вывеска растёт с магазином: с третьего уровня по краю бегут огоньки, у супермаркета под
    * буквами переливается светодиодная лента.
    */
-  private signLights(x: number, y: number): void {
+  private signLights(x: number, y: number, half = 30): void {
     const level = this.state.level;
     if (level < 2) return;
     const bulbs: Phaser.GameObjects.Rectangle[] = [];
-    for (let i = 0; i < 16; i++) {
-      bulbs.push(this.add.rectangle(x - 30 + i * 4, y - 6.5, 1.4, 1.4, 0xfee761).setDepth(4));
-      bulbs.push(this.add.rectangle(x + 30 - i * 4, y + 6.5, 1.4, 1.4, 0xfee761).setDepth(4));
+    // Вывеска гипермаркета выше и шире: лампочки — по её краю.
+    const dy = half > 30 ? 7.5 : 6.5;
+    for (let i = 0; i <= (half * 2) / 4; i++) {
+      bulbs.push(this.add.rectangle(x - half + i * 4, y - dy, 1.4, 1.4, 0xfee761).setDepth(4));
+      bulbs.push(this.add.rectangle(x + half - i * 4, y + dy, 1.4, 1.4, 0xfee761).setDepth(4));
     }
     let step = 0;
     this.worldTimer(160, () => {
@@ -15737,7 +15844,7 @@ export class StoreScene extends Phaser.Scene {
       bulbs.forEach((b, i) => b.active && b.setFillStyle(Math.floor(i / 2) % 3 === step % 3 ? 0xfff6c8 : 0xb8860b));
     });
     if (level < 4) return;
-    const led = this.add.rectangle(x, y + 8.5, 60, 1.6, 0x9cd8ff).setDepth(4);
+    const led = this.add.rectangle(x, y + dy + 2, half * 2, 1.6, 0x9cd8ff).setDepth(4);
     this.tweens.addCounter({
       from: 0,
       to: 360,
@@ -15745,7 +15852,7 @@ export class StoreScene extends Phaser.Scene {
       repeat: -1,
       onUpdate: (tw) => led.active && led.setFillStyle(Phaser.Display.Color.HSVToRGB(((tw.getValue() ?? 0) % 360) / 360, 0.45, 1).color),
     });
-    this.nightGlow(this.art(x, y + 9, 'glow').setDisplaySize(80, 12).setTint(0x9cd8ff), 0.5, undefined, { map: { scale: 1.3, gain: 1.2, haze: 0.4 } });
+    this.nightGlow(this.art(x, y + dy + 2.5, 'glow').setDisplaySize(half * 2.7, 12).setTint(0x9cd8ff), 0.5, undefined, { map: { scale: 1.3, gain: 1.2, haze: 0.4 } });
   }
 
   /**
