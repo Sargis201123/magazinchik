@@ -3,7 +3,7 @@
 // и можно ли от входа подойти к каждой полке, к кассе и в очередь. Сохраняется в StoreState.slotPos.
 
 import { isFixture, slotOf, type StoreState } from '../game/economy';
-import { iceboxRect, iceboxSpotFor, kioskRect, kioskZones, layoutFor, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
+import { iceboxRect, iceboxSpotFor, kioskZone, kioskZones, layoutFor, registerSpot, shelfRect, type Layout, type Point, WALL_ROW_Y } from './layout';
 import { reachable, type Rect } from './paths';
 
 /** Шаг сетки, по которой встают полки. */
@@ -277,12 +277,13 @@ export function propPosFor(level: number, props: Prop[], defaults: Record<string
 }
 
 /**
- * Место под киоск номер index свободно: на нём не стоит полка (своя расстановка, короткая очередь
+ * Место под киоск номер index (с местом покупателя) свободно: на нём не стоит полка (своя расстановка, короткая очередь
  * освобождает правую стену под полки) и не стоит переставленная вещь. Занято — сначала переставить.
  */
 export function kioskSpotFree(state: StoreState, index: number): boolean {
   const layout = withTill(withSlots(layoutFor(state.level), state.slotPos, state.level), state.tillPos, state.level);
-  const k = kioskRect(layout, index);
+  // Рамка киоска вместе с местом покупателя.
+  const k = kioskZone(layout, index);
   const moved = state.propPos?.level === state.level ? Object.entries(state.propPos.at) : [];
   return (
     layout.slots.every((p) => !overlaps(slotRect(layout, p), k)) &&

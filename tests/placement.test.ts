@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { layoutFor } from '../src/scenes/layout';
-import { clampTill, COURIER_SPAN, freeStreetX, ICE_CART_SPAN, keepPlaces, propIssues, propRect, slotIssues, slotRect, slotSide, standFor, tillMinDx, vendingFootprint, vendingSide, withSlots, withTill, type Prop, type StreetSpan } from '../src/scenes/placement';
+import { kioskRect, kioskSpot, kioskZone, layoutFor } from '../src/scenes/layout';
+import { canShortenQueue, clampTill, COURIER_SPAN, freeStreetX, ICE_CART_SPAN, keepPlaces, overlapsRect, propIssues, propRect, slotIssues, slotRect, slotSide, standFor, tillMinDx, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop, type StreetSpan } from '../src/scenes/placement';
 import { REGISTERS_BY_LEVEL } from '../src/game/registers';
 import { registerSpot } from '../src/scenes/layout';
 import { newGame, placeStored, storeShelf, type Shelf, type StoreState } from '../src/game/economy';
@@ -203,5 +203,29 @@ describe('реклама у входа', () => {
     for (const [from, to] of [COURIER_SPAN, ICE_CART_SPAN]) expect(summer + tv[1] <= from || summer + tv[0] >= to).toBe(true);
     // Всё занято — хоть куда-то (первое место), без падения.
     expect(freeStreetX([-48], tv, [[-1000, 1000]])).toBe(-48);
+  });
+});
+
+describe('место покупателя у киоска', () => {
+  it('при короткой очереди полку нельзя поставить туда, где покупатель стоит у киоска', () => {
+    const level = 4;
+    const layout = withTill(layoutFor(level), { level, dx: 0, short: true }, level);
+    expect(canShortenQueue(layoutFor(level))).toBe(true);
+    const kiosks = 2;
+    const spot = kioskSpot(layout, 1);
+    // Покупатель стоит слева от рамки (StoreScene.useKiosk).
+    const customer = { x: spot.x - 14, y: spot.y + 4 };
+    // Полка вплотную слева от рамки киоска: саму рамку не задевает, а место покупателя — да.
+    const p = { x: layout.counter.x - 8, y: customer.y };
+    const body = slotRect(layout, p);
+    expect(overlapsRect(body, kioskRect(layout, 1))).toBe(false);
+    expect(body.x < customer.x && body.x + body.w > customer.x).toBe(true);
+    // Короткая очередь этот проход уже не держит — раньше полка вставала на место покупателя.
+    const queueZone = tillZones(layout, REGISTERS_BY_LEVEL[level], 0)[1];
+    expect(overlapsRect(body, queueZone)).toBe(false);
+    const slots = layout.slots.map((s, i) => (i === layout.slots.length - 1 ? p : s));
+    expect(slotIssues(layout, slots, layout.slots, REGISTERS_BY_LEVEL[level], [], kiosks).has(layout.slots.length - 1)).toBe(true);
+    // Киоска на этом месте ещё нет — и место под него с покупателем занято полкой: купить нельзя, пока не переставят.
+    expect(kioskZone(layout, 1).x).toBeLessThan(customer.x - 4);
   });
 });
