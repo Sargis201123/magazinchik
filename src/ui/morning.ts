@@ -238,7 +238,7 @@ import { showLeaderboard } from './leaderboard';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { anchorScroll, button, el, foldUp, holdPlace, openModal, unfold, who } from './dom';
-import { morningNudge, NUDGE_IDLE_MS, type MorningNudge } from '../game/nudge';
+import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
 import { tryNudge } from './nudge';
 import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
@@ -443,12 +443,13 @@ interface Tile {
   details: () => HTMLElement[];
 }
 
-function tileGrid(tiles: Tile[], open: string | null, toggle: (id: string) => void): HTMLElement {
+/** toggle(id, show): show — открыть эту плитку, иначе закрыть (если открыта именно она). */
+function tileGrid(tiles: Tile[], open: string | null, toggle: (id: string, show: boolean) => void): HTMLElement {
   const grid = el('div', 'ui-shelf-grid');
   for (const tile of tiles) {
     const cell: HTMLButtonElement = button(
       '',
-      () => flipSpan(cell, `tile:${tile.id}`, open === tile.id ? grid.querySelector<HTMLElement>(':scope > .ui-shelf-span') : null, () => toggle(tile.id)),
+      () => flipSpan(cell, `tile:${tile.id}`, open === tile.id ? grid.querySelector<HTMLElement>(':scope > .ui-shelf-span') : null, () => toggle(tile.id, open !== tile.id)),
       `ui-shelf-card ui-tile-card${open === tile.id ? ' active' : ''}${tile.alert ? ' broken' : ''}`,
     );
     const icon = tile.icon.startsWith('assets/') ? el('img', 'ui-tile-img') : el('span', 'ui-tile-icon', tile.icon);
@@ -555,6 +556,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if (nudged || idle < NUDGE_IDLE_MS || !card.classList.contains('ui-full') || card.classList.contains('touring')) return;
     if (document.querySelectorAll('.ui-modal:not(.closing)').length > 1 || document.querySelector('.ui-dialog')) return;
     const state = getState();
+    if (state.day > NUDGE_LAST_DAY) return;
     const kind = morningNudge(state, { restock: restockPlan(state, priceOf, guestsToday(state)).lines.length > 0 });
     if (!kind || !tryNudge(state.day, kind, idle)) return;
     nudged = kind;
@@ -841,7 +843,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     head.addEventListener('click', () => {
       if (touring) return;
       flipSpan(head, 'today', open ? box.querySelector<HTMLElement>('.ui-today-more') : null, () => {
-        if (openFolds.has('today')) openFolds.delete('today');
+        if (open) openFolds.delete('today');
         else openFolds.add('today');
         rememberFolds();
         render();
@@ -1305,8 +1307,11 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const max = shelfCapacity(shelf);
       const cell: HTMLButtonElement = button('', () => {
         const shown = openShelf === i ? grid.querySelector<HTMLElement>(':scope > .ui-shelf-span') : null;
+        const show = !shown;
         flipSpan(cell, `shelf:${i}`, shown, () => {
-          openShelf = openShelf === i ? -1 : i;
+          // Явно, а не «наоборот»: закрытие ждёт конца анимации, а за это время могли раскрыть другую полку.
+          if (show) openShelf = i;
+          else if (openShelf === i) openShelf = -1;
           render();
         });
       }, `ui-shelf-card${openShelf === i ? ' active' : ''}${shelf.broken ? ' broken' : ''}`);
@@ -1971,8 +1976,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${LISTED_UPGRADES.length}`, details: () => [upgradesBox(getState())] },
     ];
     return [
-      tileGrid(tiles, openCorner, (id) => {
-        openCorner = openCorner === id ? null : id;
+      tileGrid(tiles, openCorner, (id, show) => {
+        // Явно, а не «наоборот»: закрытие ждёт конца анимации, а за это время могли раскрыть другую плитку.
+        if (show) openCorner = id;
+        else if (openCorner === id) openCorner = null;
         render();
       }),
     ];

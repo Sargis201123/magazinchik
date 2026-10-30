@@ -700,7 +700,8 @@ export function foldUp(body: HTMLElement, done: () => void): void {
     if (finished) return;
     finished = true;
     body.classList.remove('ui-folding');
-    done();
+    // Окно закрыли, пока блок сворачивался, — перерисовывать уже нечего.
+    if (body.isConnected) done();
   };
 }
 

@@ -12,7 +12,11 @@ import {
   NUDGE_PER_DAY,
   noteNudge,
   tomorrowTeaser,
+  formatText,
 } from '../src/game/nudge';
+
+/** Русский переводчик без браузера (как t() в игре). */
+const tr = (key: keyof typeof ru, params: Record<string, number | string>) => ru[key].replace(/\{(\w+)\}/g, (_, n: string) => String(params[n] ?? `{${n}}`));
 import { isFairDay } from '../src/game/fair';
 import { weatherFor } from '../src/game/weather';
 import { badBatch, CLEAN_BATCH_DAYS } from '../src/game/suppliers';
@@ -112,6 +116,14 @@ describe('«Завтра:» в итогах дня', () => {
     const t = tomorrowTeaser(game({ day: 9, story: story(0), debt: Math.round(START_DEBT * 0.2) }));
     expect(t.key).toBe('teaser.goal');
     expect(t.params.goal).toBe('goal.debt');
+  });
+
+  it('почти накопили на помещение — в строке название помещения, а не ключ', () => {
+    const s = game({ day: 9, story: story(4), debt: 0, level: 1, money: Math.round(STORE_LEVELS[2].cost * 0.9) });
+    const { key, params } = tomorrowTeaser(s);
+    const text = formatText(key, params, tr);
+    expect(text).toContain(ru['store.l3']);
+    expect(text).not.toMatch(/store\.|goal\.|\{/);
   });
 
   it('хватает на переезд — зовём переезжать', () => {

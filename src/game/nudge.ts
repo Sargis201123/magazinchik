@@ -174,3 +174,17 @@ export function tomorrowTeaser(s: StoreState): Teaser {
 
 /** Параметры, которые сами — ключи текста (название помещения, главы, погоды), переводятся при показе. */
 export const TEXT_PARAMS = ['name', 'title', 'goal', 'tab'] as const;
+
+/**
+ * Текст цели или «Завтра:» через переводчик tr: сначала простые ключи (помещение, глава, вкладка),
+ * потом вложенная цель — уже с переведёнными (иначе в строке осталось бы «store.l3»).
+ */
+export function formatText(key: TextKey, params: Params, tr: (key: TextKey, params: Params) => string): string {
+  const out: Params = { ...params };
+  for (const name of TEXT_PARAMS) {
+    const v = params[name];
+    if (name !== 'goal' && typeof v === 'string') out[name] = tr(v as TextKey, params);
+  }
+  if (typeof params.goal === 'string') out.goal = tr(params.goal as TextKey, out);
+  return tr(key, out);
+}
