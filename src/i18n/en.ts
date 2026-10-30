@@ -2347,6 +2347,8 @@ export const en: Record<TextKey, string> = {
   "live.march8.card.1": "Spring is at the door! May every day be warm and bright.",
   "live.march8.card.2": "Mimosa smells of spring. May your mood be just as sunny!",
   "live.march8.card.3": "Happy March 8th! May you be surrounded by flowers, smiles and kind words.",
+  // Цены (nx-prices): реклама, «Что нового».
+  "ads.guests": "Extra guests: ≈{n} a day",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

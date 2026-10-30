@@ -190,7 +190,7 @@ import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
 import { sheetAsset, sheetPng } from './sheet';
-import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
+import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adExtraGuests, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
 import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeLoyalty, cafeOf } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
@@ -2877,6 +2877,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       body.append(name, el('div', 'ui-item-sub', sub));
       // С уже запущенной рекламой эта прибавит меньше, чем одна, — честно показываем сколько.
       if (running.length && !block) body.append(el('div', 'ui-item-sub', t('ads.stack', { n: pct(adGain(state, id)) })));
+      // До покупки — сколько гостей в день прибавит (от сегодняшнего потока).
+      if (block === null || block === 'money') body.append(el('div', 'ui-item-sub', t('ads.guests', { n: adExtraGuests(state, id) })));
       if (block === 'full') body.append(el('div', 'ui-item-sub', t('ads.full', { n: MAX_ADS })));
       const action = button(block === 'running' ? '✓' : t('ads.order'), () => update(buyAd(getState(), id), 'success'), 'ui-chip', Boolean(block));
       const actions = el('div', 'ui-item-actions');

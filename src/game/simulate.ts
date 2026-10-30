@@ -74,7 +74,7 @@ import {
   DAY_SECONDS,
   recordSale,
 } from './economy';
-import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd } from './ads';
+import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd, type AdId } from './ads';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { restockPlan } from './restock';
 import { buyLine } from './reorder';
@@ -130,6 +130,8 @@ export interface SimDay {
   /** Экономия на хлебе из своей печи против закупки. */
   oven: number;
   night: number;
+  /** Сколько потрачено на рекламу сегодня. */
+  ads: number;
   expenses: number;
   /** Выручка − закупка − расходы (без вложений в полки и расширение). */
   profit: number;
@@ -179,6 +181,8 @@ export interface SimOptions {
    * (autoorder.ts), а дальше закупается он сам: утром в пределах лимита, днём подвозит кончившееся.
    */
   buyMode?: 'smart' | 'restock' | 'naive' | 'auto';
+  /** Замер одной рекламы: держать её всегда, пока магазин на этом уровне (индекс STORE_LEVELS) и есть запас. */
+  adAlways?: { id: AdId; level: number };
 }
 
 export type Feature =
@@ -316,6 +320,7 @@ export function simulate({
   war = 'wait',
   ovenBatches = 3,
   ovenBurn = 0.1,
+  adAlways,
 }: SimOptions): SimResult {
   const random = rng(seed);
   // Случайности новых механик — отдельно: тогда прогоны с механикой и без идут по одним и тем же
@@ -339,6 +344,7 @@ export function simulate({
   for (let d = 0; d < days; d++) {
     const moneyStart = state.money;
     let investments = 0;
+    let adSpent = 0;
     // Запас на закупку плюс копилка на счета в конце месяца.
     const bill = billTotal(monthlyBill(state));
     const reserve = 150 + 100 * state.level + Math.round(bill * (1 - daysUntilBill(state.day) / MONTH_DAYS));
@@ -530,10 +536,15 @@ export function simulate({
         (a, b) => adPrice(state, b) - adPrice(state, a),
       )[0];
       if (pick) {
-        investments += adPrice(state, pick);
+        adSpent += adPrice(state, pick);
         state = buyAd(state, pick) ?? state;
       }
     }
+    if (adAlways && state.level === adAlways.level && !adBlock(state, adAlways.id) && state.money >= adPrice(state, adAlways.id) + reserve) {
+      adSpent += adPrice(state, adAlways.id);
+      state = buyAd(state, adAlways.id) ?? state;
+    }
+    investments += adSpent;
     // Навыки хозяина: очки — по кругу во все навыки.
     if (features.skills) {
       for (let i = 0; skillPoints(state) > 0 && i < SKILL_IDS.length * 3; i++) {
@@ -1036,6 +1047,7 @@ export function simulate({
       coffee,
       oven: breadBaked,
       night: nightProfit,
+      ads: adSpent,
     });
     void moneyStart;
   }
