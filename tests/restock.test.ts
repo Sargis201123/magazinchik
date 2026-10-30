@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { newGame, type StoreState } from '../src/game/economy';
-import { bestOffer, restockPlan, restockTarget } from '../src/game/restock';
+import { newGame, type StaffMember, type StoreState } from '../src/game/economy';
+import { bestOffer, OVEN_DAY_BATCHES, ownBreadToday, restockPlan, restockTarget } from '../src/game/restock';
+import { ovenBatch } from '../src/game/gear';
 
 const start = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), money: 5000, ...patch });
 
@@ -32,6 +33,23 @@ describe('«Закупить нужное»', () => {
     const plain = restockPlan(s, () => 10, 30).lines.find((l) => l.pid === 'bread')?.qty ?? 0;
     const withCafe = restockPlan({ ...s, cafe: { deal: { items: { bread: 7 } } } } as unknown as StoreState, () => 10, 30).lines.find((l) => l.pid === 'bread')?.qty ?? 0;
     expect(withCafe).toBe(plain + 7);
+  });
+
+  it('своя пекарня: хлеб, который сегодня испечёт пекарь, у поставщика не берёт', () => {
+    const baker: StaffMember = { role: 'baker', name: 0, skill: 1, wage: 400, months: 1 };
+    const s = start({ level: 2, money: 50000 });
+    const bread = (st: StoreState) => restockPlan(st, () => 10, 60).lines.find((l) => l.pid === 'bread')?.qty ?? 0;
+    const plain = bread(s);
+    expect(plain).toBeGreaterThan(0);
+    const bakery = { ...s, upgrades: ['oven'], staff: [baker] } as StoreState;
+    expect(ownBreadToday(bakery)).toBe(ovenBatch(bakery) * OVEN_DAY_BATCHES);
+    expect(bread(bakery)).toBe(Math.max(0, plain - ownBreadToday(bakery)));
+    // Печь выключена или пекаря нет — закупка как раньше.
+    expect(ownBreadToday({ ...bakery, bakeMode: 'off' })).toBe(0);
+    expect(ownBreadToday({ ...s, upgrades: ['oven'] })).toBe(0);
+    // Остальной товар не трогает.
+    const milk = (st: StoreState) => restockPlan(st, () => 10, 60).lines.find((l) => l.pid === 'milk')?.qty ?? 0;
+    expect(milk(bakery)).toBe(milk(s));
   });
 
   it('докупает только недостающее, сначала самое пустое, в пределах денег', () => {

@@ -10,6 +10,7 @@ import {
   nextGear,
   ovenBatch,
   ovenBatchCost,
+  FLOUR_PER_LOAF,
   registerSprite,
   upgradeGear,
 } from '../src/game/gear';
@@ -96,13 +97,13 @@ describe('модели оборудования', () => {
     expect(coffeePrice(s)).toBe(50);
     s = upgradeGear(s, 'oven')!;
     expect(ovenBatch(s)).toBe(9);
-    expect(ovenBatchCost(s)).toBe(90);
+    expect(ovenBatchCost(s)).toBe(9 * FLOUR_PER_LOAF);
   });
 
   it('большая печь закладывает и выдаёт больше хлеба', () => {
     const s = upgradeGear(at(3, { upgrades: ['oven'] }), 'oven')!;
     const started = startBatch(s)!;
-    expect(started.money).toBe(s.money - 90);
+    expect(started.money).toBe(s.money - 9 * FLOUR_PER_LOAF);
     const out = takeOutBread(started);
     const bread = (st: StoreState) =>
       st.shelves.reduce((n, sh) => n + (sh.items.bread?.length ?? 0), 0) + (st.warehouse.bread?.length ?? 0);

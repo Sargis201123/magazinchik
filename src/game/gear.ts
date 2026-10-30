@@ -275,10 +275,10 @@ export const COFFEE_PRICES = [35, 42, 50];
 export const brewSeconds = (state: StoreState): number => COFFEE_BREW[gearTier(state, 'coffee')];
 export const coffeePrice = (state: StoreState): number => COFFEE_PRICES[gearTier(state, 'coffee')];
 
-/** Печь: буханок в закладке и сколько секунд печётся. Мука — 10 монет на буханку. */
+/** Печь: буханок в закладке и сколько секунд печётся. Мука — 15 монет на буханку (было 10: печь с маркой окупалась слишком быстро). */
 export const OVEN_BATCHES = [6, 9, 12];
 export const OVEN_BAKES = [14, 12, 10];
-export const FLOUR_PER_LOAF = 10;
+export const FLOUR_PER_LOAF = 15;
 export const ovenBatch = (state: StoreState): number => OVEN_BATCHES[gearTier(state, 'oven')];
 export const ovenBake = (state: StoreState): number => OVEN_BAKES[gearTier(state, 'oven')];
 export const ovenBatchCost = (state: StoreState): number => ovenBatch(state) * FLOUR_PER_LOAF;

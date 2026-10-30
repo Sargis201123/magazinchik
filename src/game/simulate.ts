@@ -681,7 +681,8 @@ export function simulate({
       purchases += before - state.money;
     } else if (buyMode === 'restock' || buyMode === 'auto') {
       // Одно нажатие: купленное сразу встаёт на полки, лишнее — на склад (buyLine).
-      const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state));
+      // Печь в симуляторе печёт до закупки: её хлеб уже в запасе, вычитать его из плана второй раз не нужно.
+      const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state), [], 0);
       for (const line of plan.lines) {
         const before = state.money;
         const got = buyLine(state, line, random() < SUPPLIERS[line.sid].badChance);
