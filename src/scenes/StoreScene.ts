@@ -7530,7 +7530,7 @@ export class StoreScene extends Phaser.Scene {
   /**
    * Свой филиал в здании «Гиганта» (branch.ts): здание после ремонта, на вывесках — название магазина
    * с «№2» и «Филиал». Вечером горят витрины и неон (и в карте освещения), днём заходят и выходят
-   * покупатели — по одному-два, без лишней нагрузки; в лёгкой графике двое просто стоят у входа.
+   * покупатели (пока магазин открыт) — по одному-два, без лишней нагрузки; в лёгкой графике двое просто стоят у входа.
    * Чем больше улучшений, тем наряднее: ремонт — цветы и фонари у входа, реклама — флажки на крыше.
    */
   private buildBranch(x: number, y: number): void {
@@ -7587,7 +7587,7 @@ export class StoreScene extends Phaser.Scene {
     // Чем больше ступеней куплено, тем чаще заходят (но не больше трёх человек разом).
     const every = 7000 - Math.min(3000, branchUpgrades(this.state) * 250);
     this.worldTimer(every, () => {
-      if (this.night || busy.n >= 3 || !this.sys.isActive()) return;
+      if (!this.running || this.night || busy.n >= 3 || !this.sys.isActive()) return;
       busy.n++;
       const side = Math.random() < 0.5 ? -1 : 1;
       const far = { x: x + side * Phaser.Math.Between(70, 95), y: walkY + Phaser.Math.Between(-1, 3) };
