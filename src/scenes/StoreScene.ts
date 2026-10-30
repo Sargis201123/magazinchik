@@ -1796,6 +1796,8 @@ export class StoreScene extends Phaser.Scene {
   private speed = 1;
   /** Сколько игровых секунд магазин проработал (с ускорением, без пауз): часы доставки — чаевые и «в пути 0:06». */
   private playTime = 0;
+  /** В какой игровой день уже был ритуал возвращения (offerReturn): утро открывается не раз за день. */
+  private ritualDay = -1;
 
   constructor() {
     super('store');
@@ -14112,6 +14114,12 @@ export class StoreScene extends Phaser.Scene {
    * поверх утра; после него — then (гостинец). Нечего показать — сразу then.
    */
   private offerReturn(then: () => void): void {
+    // Утро открывают заново (расстановка, возврат из гостей) — ритуал второй раз не показываем.
+    if (this.ritualDay === this.state.day) {
+      then();
+      return;
+    }
+    this.ritualDay = this.state.day;
     const chest = this.state.ret?.chest;
     const letter = takeLetter(this.state, todayLocal());
     if (letter) this.state = letter.state;
@@ -14192,8 +14200,8 @@ export class StoreScene extends Phaser.Scene {
       onVisit: (id, name) => void this.visitFriend(id, name),
       onRival: (key, name) => void this.visitRival(key, name),
       onBoss: eduardLook(this.state) !== 'vacant' ? () => void this.visitRival(null, '') : undefined,
-      onTourDone: () => this.offerGift(),
-      onStoryDone: afterStory ? () => this.offerGift() : undefined,
+      onTourDone: () => this.offerReturn(() => this.offerGift()),
+      onStoryDone: afterStory ? () => this.offerReturn(() => this.offerGift()) : undefined,
       coach: this.coach,
       getState: () => this.state,
       setState: (s) => {
