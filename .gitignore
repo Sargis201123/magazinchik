@@ -10,4 +10,3 @@ art/build
 # кадры повторяются точка в точку, так что любая правка графики видна. Поменял картинку нарочно — npm run e2e -- --update.
 e2e/shots
 e2e/diff
-e2e/baseline/report.json
