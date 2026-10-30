@@ -6,7 +6,8 @@ import { buyChance, canPlace, CARRY, OWN_PRODUCTS, PRODUCT_IDS, PRODUCTS, shelfC
 import { perceivedBase, seasonFor } from './endless';
 import { dayDemand } from './demand';
 import { bigDayDemand } from './bigday';
-import { stockOf, usualSales } from './bakery';
+import { bakeModeOf, bakeryWorking, stockOf, usualSales } from './bakery';
+import { ovenBatch, ovenBatchCost } from './gear';
 import { AUTO_RESERVE, type ReorderPlan } from './reorder';
 import { SUPPLIER_IDS, SUPPLIERS, supplierOpen, type SupplierId } from './suppliers';
 
@@ -50,6 +51,18 @@ export function restockTarget(state: StoreState, pid: ProductId, guests: number)
   return Math.ceil(Math.min(Math.max(usual, modelled) * AUTO_RESERVE, room / neighbours + CARRY * 2));
 }
 
+/** Сколько закладок своей печи за день считаем, закупая хлеб: пекарь успевает больше, но утром полки пустые. */
+export const OVEN_DAY_BATCHES = 3;
+
+/**
+ * Сколько хлеба сегодня испечёт своя пекарня (пекарь на смене, печь не выключена и есть на муку):
+ * столько у поставщика не берём — иначе пекарю некуда класть свой, а купленный лежит и черствеет.
+ * Первую закладку не считаем: свежий хлеб выйдет только через 12–15 секунд дня, к открытию на
+ * полках должен быть купленный.
+ */
+export const ownBreadToday = (state: StoreState): number =>
+  bakeryWorking(state) && bakeModeOf(state) !== 'off' && state.money >= ovenBatchCost(state) ? ovenBatch(state) * (OVEN_DAY_BATCHES - 1) : 0;
+
 /** Товар можно закупить сегодня: сезон, есть полка, кто-то продаёт. */
 export const canStock = (state: StoreState, pid: ProductId): boolean =>
   productAvailable(pid, state.day) && state.shelves.some((sh) => canPlace(pid, sh));
@@ -78,6 +91,8 @@ export function restockPlan(
   guests: number,
   /** Что не брать (автозаказ: строки, которые игрок вернул). */
   skip: ProductId[] = [],
+  /** Сколько хлеба ещё испечёт своя печь сегодня (симулятор печёт до закупки и передаёт остаток). */
+  ownBread = ownBreadToday(state),
 ): ReorderPlan {
   const wants = sellableProducts(state)
     .filter((pid) => canStock(state, pid) && !skip.includes(pid))
@@ -85,7 +100,7 @@ export function restockPlan(
       // Сверху — то, что сегодня заберут по заказу и по договору с кафе: иначе полки опустеют к открытию.
       // Повар продукты не трогает — у кухни своя кладовая, она закупает сама (kitchen.ts).
       const reserved = (state.plan?.order?.product === pid ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[pid] ?? 0);
-      const target = restockTarget(state, pid, guests) + reserved;
+      const target = Math.max(0, restockTarget(state, pid, guests) - (pid === 'bread' ? ownBread : 0)) + reserved;
       const have = stockOf(state, pid);
       return { pid, need: target - have, fill: have / Math.max(1, target), offer: bestOffer(state, pid, priceOf) };
     })

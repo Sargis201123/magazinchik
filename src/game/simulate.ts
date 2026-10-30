@@ -74,7 +74,7 @@ import {
   DAY_SECONDS,
   recordSale,
 } from './economy';
-import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd } from './ads';
+import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd, type AdId } from './ads';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { restockPlan } from './restock';
 import { buyLine } from './reorder';
@@ -133,6 +133,8 @@ export interface SimDay {
   night: number;
   /** Чистый доход филиала за день (branch.ts). */
   branch: number;
+  /** Сколько потрачено на рекламу сегодня. */
+  ads: number;
   expenses: number;
   /** Выручка − закупка − расходы (без вложений в полки и расширение). */
   profit: number;
@@ -182,6 +184,8 @@ export interface SimOptions {
    * (autoorder.ts), а дальше закупается он сам: утром в пределах лимита, днём подвозит кончившееся.
    */
   buyMode?: 'smart' | 'restock' | 'naive' | 'auto';
+  /** Замер одной рекламы: держать её всегда, пока магазин на этом уровне (индекс STORE_LEVELS) и есть запас. */
+  adAlways?: { id: AdId; level: number };
 }
 
 export type Feature =
@@ -322,6 +326,7 @@ export function simulate({
   war = 'wait',
   ovenBatches = 3,
   ovenBurn = 0.1,
+  adAlways,
 }: SimOptions): SimResult {
   const random = rng(seed);
   // Случайности новых механик — отдельно: тогда прогоны с механикой и без идут по одним и тем же
@@ -345,6 +350,7 @@ export function simulate({
   for (let d = 0; d < days; d++) {
     const moneyStart = state.money;
     let investments = 0;
+    let adSpent = 0;
     // Запас на закупку плюс копилка на счета в конце месяца.
     const bill = billTotal(monthlyBill(state));
     const reserve = 150 + 100 * state.level + Math.round(bill * (1 - daysUntilBill(state.day) / MONTH_DAYS));
@@ -536,10 +542,15 @@ export function simulate({
         (a, b) => adPrice(state, b) - adPrice(state, a),
       )[0];
       if (pick) {
-        investments += adPrice(state, pick);
+        adSpent += adPrice(state, pick);
         state = buyAd(state, pick) ?? state;
       }
     }
+    if (adAlways && state.level === adAlways.level && !adBlock(state, adAlways.id) && state.money >= adPrice(state, adAlways.id) + reserve) {
+      adSpent += adPrice(state, adAlways.id);
+      state = buyAd(state, adAlways.id) ?? state;
+    }
+    investments += adSpent;
     // Филиал (branch.ts): здание — как только можно и хватает с запасом на счета; улучшения — самое
     // выгодное из доступных, если окупится за два месяца и после покупки останется тройной запас.
     if (features.branch) {
@@ -694,7 +705,8 @@ export function simulate({
       purchases += before - state.money;
     } else if (buyMode === 'restock' || buyMode === 'auto') {
       // Одно нажатие: купленное сразу встаёт на полки, лишнее — на склад (buyLine).
-      const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state));
+      // Печь в симуляторе печёт до закупки: её хлеб уже в запасе, вычитать его из плана второй раз не нужно.
+      const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state), [], 0);
       for (const line of plan.lines) {
         const before = state.money;
         const got = buyLine(state, line, random() < SUPPLIERS[line.sid].badChance);
@@ -1061,6 +1073,7 @@ export function simulate({
       oven: breadBaked,
       night: nightProfit,
       branch: night.branch,
+      ads: adSpent,
     });
     void moneyStart;
   }

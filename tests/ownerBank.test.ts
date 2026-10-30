@@ -47,7 +47,7 @@ describe('банк', () => {
     expect(half).toBeLessThan(full);
     const taken = takeLoan(s, full)!;
     expect(taken.money).toBe(s.money + full);
-    expect(taken.loan).toEqual({ left: loanTotal(full), payment: loanPayment(full) });
+    expect(taken.loan).toEqual({ left: loanTotal(full), payment: loanPayment(full), day: s.day });
     expect(takeLoan(taken, half)).toBeNull();
     expect(takeLoan(s, 1234)).toBeNull();
   });
@@ -55,6 +55,10 @@ describe('банк', () => {
   it('платёж приходит со счетами и уменьшает остаток; последний — не больше остатка', () => {
     let s = takeLoan(shop({ level: 1, money: 100000 }), loanOptions(shop({ level: 1 }))[1])!;
     const total = s.loan!.left;
+    // В день, когда взят, платёж не берут — первый со следующих счетов.
+    expect(monthlyBill(s).loan).toBe(0);
+    expect(payBill(s).state.loan!.left).toBe(total);
+    s = { ...s, day: s.day + 1 };
     expect(monthlyBill(s).loan).toBe(s.loan!.payment);
     let months = 0;
     while (s.loan && months < 10) {
@@ -68,9 +72,14 @@ describe('банк', () => {
 
   it('не хватило на счета — платёж всё равно засчитан, недостача в долг', () => {
     const s = takeLoan(shop({ level: 1, money: 0 }), 1500)!;
-    const after = payBill({ ...s, money: 0 }).state;
+    const after = payBill({ ...s, money: 0, day: s.day + 1 }).state;
     expect(after.loan!.left).toBe(s.loan!.left - s.loan!.payment);
     expect(after.debt).toBeGreaterThan(s.debt);
+  });
+
+  it('старое сохранение без дня выдачи: платёж как раньше', () => {
+    const s = shop({ level: 1, loan: { left: 1200, payment: 300 } });
+    expect(monthlyBill(s).loan).toBe(300);
   });
 
   it('досрочное погашение', () => {

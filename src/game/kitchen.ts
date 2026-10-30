@@ -31,13 +31,14 @@ export interface Dish {
 // Пельмени — из замороженных (отдел заморозки), сырники — из молока (творог), уха — из рыбы с картошкой.
 // С выпечкой пекарни (пирожки, булочки, медовик) не пересекаются. Из кастрюли супа и стопки блинов
 // порций больше. Порции дороже продуктов на них в полтора раза по магазинным ценам: готовить выгодно,
-// даже если эти продукты разобрали бы и так, но не в разы (tests/kitchen.test.ts).
+// даже если эти продукты разобрали бы и так, но не в разы (tests/kitchen.test.ts). Цены выровнены по марже
+// с порции: оливье и пельмени были почти вдвое выгоднее блинов и сырников.
 export const DISHES: Record<DishId, Dish> = {
-  olivier: { icon: '🥗', needs: { potatoes: 2, meat: 1 }, portions: 4, price: 75 },
+  olivier: { icon: '🥗', needs: { potatoes: 2, meat: 1 }, portions: 4, price: 65 },
   borscht: { icon: '🍲', needs: { potatoes: 1, meat: 1, bread: 1 }, portions: 6, price: 55, hot: true },
-  pancakes: { icon: '🥞', needs: { milk: 2, apples: 1 }, portions: 6, price: 40 },
-  pelmeni: { icon: '🥣', needs: { dumplings: 2, milk: 1 }, portions: 5, price: 70, hot: true },
-  syrniki: { icon: '🧀', needs: { milk: 3 }, portions: 6, price: 45 },
+  pancakes: { icon: '🥞', needs: { milk: 2, apples: 1 }, portions: 6, price: 43 },
+  pelmeni: { icon: '🥣', needs: { dumplings: 2, milk: 1 }, portions: 5, price: 60, hot: true },
+  syrniki: { icon: '🧀', needs: { milk: 3 }, portions: 6, price: 50 },
   ukha: { icon: '🍜', needs: { fish: 1, potatoes: 2 }, portions: 5, price: 45, hot: true },
 };
 export const DISH_IDS = Object.keys(DISHES) as DishId[];
@@ -53,10 +54,10 @@ export const portionsTotal = (state: StoreState): number => DISH_IDS.reduce((n, 
 
 // ---------- Плита (оборудование, gear.ts) ----------
 
-/** Сколько секунд варится закладка, сколько кастрюль на плите сразу и лишняя порция у плиты шефа. */
+/** Сколько секунд варится закладка, сколько кастрюль на плите сразу и лишняя порция с закладки (с первой же новой плиты). */
 export const STOVE_SECONDS = [12, 10, 8];
 export const STOVE_POTS = [1, 2, 2];
-export const STOVE_EXTRA = [0, 0, 1];
+export const STOVE_EXTRA = [0, 1, 1];
 export const stoveSeconds = (state: StoreState): number => STOVE_SECONDS[gearTier(state, 'stove')];
 export const stovePots = (state: StoreState): number => STOVE_POTS[gearTier(state, 'stove')];
 /** Сколько порций выходит из закладки на этой плите. */

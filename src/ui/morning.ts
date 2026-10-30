@@ -190,7 +190,7 @@ import { dialogBox } from './dialog';
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
 import { sheetAsset, sheetPng } from './sheet';
-import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
+import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adExtraGuests, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
 import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeLoyalty, cafeOf } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
@@ -265,8 +265,21 @@ interface MorningOptions {
 // Вкладки в одну строку: значок и короткая подпись. Профиль (достижения, наследие, настройки) —
 // кнопкой в углу заголовка, не вкладкой.
 type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
-/** Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. */
-const WHATS_NEW = 2;
+/**
+ * Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. Видевшие прежнюю
+ * (2: звук, перестановка, друзья…) увидят новую один раз.
+ */
+const WHATS_NEW = 3;
+/** Строки карточки «Что нового» — самое свежее сверху. */
+const WHATS_NEW_LINES: TextKey[] = [
+  // Сюда — строка про «Филиал» (второй магазин), когда он выйдет: 'news.branch'.
+  'news.kiosks',
+  'news.relief',
+  'news.restock',
+  'news.housewarming',
+  'news.newyear',
+  'news.prices',
+];
 
 const TABS: [Tab, string, TextKey][] = [
   ['buy', '🛒', 'tab.buy'],
@@ -2692,7 +2705,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const body = el('div');
       const name = el('div', 'ui-item-name', t(up.nameKey));
       if (!owned) name.append(el('span', 'ui-tag', `${up.price} 💰`));
-      const sub = state.level < up.minLevel ? t('upgrade.needLevel', { name: t(STORE_LEVELS[up.minLevel].nameKey) }) : t(up.descKey);
+      // Купленное раньше, чем порог подняли (доставка, «Уценка»), — работает, «нужно помещение» не пишем.
+      const sub = !owned && state.level < up.minLevel ? t('upgrade.needLevel', { name: t(STORE_LEVELS[up.minLevel].nameKey) }) : t(up.descKey);
       body.append(name, el('div', 'ui-item-sub', sub));
       const actions = el('div', 'ui-item-actions');
       actions.append(
@@ -2878,6 +2892,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       body.append(name, el('div', 'ui-item-sub', sub));
       // С уже запущенной рекламой эта прибавит меньше, чем одна, — честно показываем сколько.
       if (running.length && !block) body.append(el('div', 'ui-item-sub', t('ads.stack', { n: pct(adGain(state, id)) })));
+      // До покупки — сколько гостей в день прибавит (от сегодняшнего потока).
+      if (block === null || block === 'money') body.append(el('div', 'ui-item-sub', t('ads.guests', { n: adExtraGuests(state, id) })));
       if (block === 'full') body.append(el('div', 'ui-item-sub', t('ads.full', { n: MAX_ADS })));
       const action = button(block === 'running' ? '✓' : t('ads.order'), () => update(buyAd(getState(), id), 'success'), 'ui-chip', Boolean(block));
       const actions = el('div', 'ui-item-actions');
@@ -2949,20 +2965,20 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if ((state.whatsNew ?? 0) >= WHATS_NEW) return [];
     const box = el('div', 'ui-box ui-duel');
     box.append(el('b', '', `✨ ${t('news.title')}`));
-    for (const key of ['news.sound', 'news.arrange', 'news.store', 'news.name', 'news.away', 'news.friends', 'news.life'] as TextKey[]) box.append(el('div', '', t(key)));
+    for (const key of WHATS_NEW_LINES) box.append(el('div', '', t(key)));
     const row = el('div', 'ui-row');
-    if (onArrange) {
-      row.append(button(`🔧 ${t('arrange.open')}`, () => {
+    // Кассы самообслуживания и сменщик — во вкладке «Развитие» и «Персонал».
+    // Новичку нового начала вкладки открываются по очереди — кнопки только к уже открытым.
+    if (tabOpen(state, 'grow'))
+      row.append(button(`🏗 ${t('tab.grow')}`, () => {
+        tab = 'grow';
         update({ ...getState(), whatsNew: WHATS_NEW });
-        close();
-        onArrange();
       }, 'ui-chip'));
-    }
-    row.append(button(`🏠 ${t('friends.title')}`, () => {
-      tab = 'profile';
-      update({ ...getState(), whatsNew: WHATS_NEW });
-      requestAnimationFrame(() => card.querySelector('.ui-friends')?.scrollIntoView({ block: 'start' }));
-    }, 'ui-chip'));
+    if (tabOpen(state, 'staff'))
+      row.append(button(`🧑‍💼 ${t('tab.staff')}`, () => {
+        tab = 'staff';
+        update({ ...getState(), whatsNew: WHATS_NEW });
+      }, 'ui-chip'));
     box.append(row, button(t('news.ok'), () => update({ ...getState(), whatsNew: WHATS_NEW }), 'ui-btn secondary'));
     return [box];
   };

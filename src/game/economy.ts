@@ -255,7 +255,7 @@ export const STAFF_ROLES: Record<StaffRole, { nameKey: TextKey; descKey: TextKey
   guard: { nameKey: 'staff.guard', descKey: 'staff.guard.desc', wage: 490 },
   // Менеджер зала — только в супермаркете и больше: организует работу (все быстрее), сам
   // заказывает срочный подвоз, когда товар кончился, и встаёт за кассу вместо отсутствующего.
-  manager: { nameKey: 'staff.manager', descKey: 'staff.manager.desc', wage: 650, minLevel: 3 },
+  manager: { nameKey: 'staff.manager', descKey: 'staff.manager.desc', wage: 450, minLevel: 3 },
   // Пекарь работает в пекарне во флигеле (нужна печь), бариста — в кофейне (нужен кофейный уголок).
   baker: { nameKey: 'staff.baker', descKey: 'staff.baker.desc', wage: 380, needs: 'oven' },
   barista: { nameKey: 'staff.barista', descKey: 'staff.barista.desc', wage: 360, needs: 'coffee' },
@@ -398,6 +398,14 @@ export function fire(state: StoreState, role: StaffRole): StoreState {
 }
 
 /**
+ * Прибавки «просто так» — не выше ставки по навыку × RAISE_CAP: работает он с той же скоростью, и
+ * без потолка кассир с 420 доходил до 760–1010. Кто уже получает больше, тому не урезаем — просто
+ * больше не просит.
+ */
+export const RAISE_CAP = 1.3;
+const raiseCap = (role: StaffRole, skill: number, trait: StaffMember['trait']): number => Math.round((wageFor(role, skill, trait) * RAISE_CAP) / 10) * 10;
+
+/**
  * Конец месяца для персонала. Обиженные могут уволиться, остальные успокаиваются.
  * Опыт растёт; раз в MONTHS_PER_SKILL месяцев растёт навык — и сотрудник просит
  * прибавку. Опытные иногда просят прибавку и просто так.
@@ -418,7 +426,7 @@ export function monthForStaff(staff: StaffMember[], random: () => number): { sta
     if (!raiseAsk && !asked) {
       // Навык вырос, а платят по-старому — просит по новому навыку; опытные иногда просят и просто так.
       if (m.wage < wageFor(m.role, skill, m.trait)) raiseAsk = wageFor(m.role, skill, m.trait);
-      else if (months >= 3 && random() < RAISE_ASK_CHANCE) raiseAsk = Math.round((m.wage * (1 + RAISE_STEP)) / 10) * 10;
+      else if (months >= 3 && random() < RAISE_ASK_CHANCE) raiseAsk = Math.min(Math.round((m.wage * (1 + RAISE_STEP)) / 10) * 10, raiseCap(m.role, skill, m.trait));
       asked = Boolean(raiseAsk && raiseAsk > m.wage);
     }
     kept.push({ ...m, months, skill, raiseAsk: raiseAsk && raiseAsk > m.wage ? raiseAsk : undefined, upset: false });
@@ -628,7 +636,8 @@ export interface StoreState {
   /** Навыки хозяина: ступень каждого (owner.ts). */
   skills?: Partial<Record<'hands' | 'haggle' | 'strong' | 'charm' | 'eye', number>>;
   /** Кредит в банке: сколько осталось вернуть и платёж в месяц (bank.ts). */
-  loan?: { left: number; payment: number };
+  /** day — когда взят (в старых сохранениях нет): в тот же вечер платёж не берут. */
+  loan?: { left: number; payment: number; day?: number };
   /** Отчёт по дням: последние REPORT_DAYS дней (reports.ts). */
   reports?: DayReport[];
   /** Радио: какая волна играет (radio.ts); нет поля — приёмник не куплен. */
@@ -1012,11 +1021,14 @@ export function shelveAll(state: StoreState): StoreState {
 
 // ---------- Полки ----------
 
-/** Ларь и вёдра улучшаются только раз: товар в них сезонный, больше мест не окупится. */
+/** Вёдра с цветами улучшаются только раз: товар сезонный, больше мест не окупится (и букетов в вёдрах — 9). */
 export const FIXTURE_MAX_LEVEL = 1;
+/** Ларь с мороженым растёт вместе с магазином, как обычная полка (было — только раз). */
+export const ICEBOX_MAX_LEVEL = 3;
+const fixtureMax = (kind: Category): number => (kind === 'icebox' ? ICEBOX_MAX_LEVEL : FIXTURE_MAX_LEVEL);
 
 export function upgradeCost(shelf: Shelf): number | null {
-  if (SHELF_KINDS[shelf.kind].fixture && shelf.level >= FIXTURE_MAX_LEVEL) return null;
+  if (SHELF_KINDS[shelf.kind].fixture && shelf.level >= fixtureMax(shelf.kind)) return null;
   return SHELF_LEVELS[shelf.level + 1]?.cost ?? null;
 }
 

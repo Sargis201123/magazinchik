@@ -822,7 +822,7 @@ export const en: Record<TextKey, string> = {
   "prices.note": "Below the usual price, goods sell more readily and word of low prices brings more guests (guests now {g}). Above it, you earn more per item, but some shoppers leave saying «too expensive».",
   "prices.line": "Bought {p}% · usual price {n} 💰 · profit per item {m} 💰",
   "upgrade.wholesale": "Bread for neighbours",
-  "upgrade.wholesale.desc": "A deal with the district's kiosks: the baker bakes 2 trays a day for them — 18 💰 a loaf. Needs your own oven.",
+  "upgrade.wholesale.desc": "A deal with the district's kiosks: the baker bakes 2 trays a day for them — 26 💰 a loaf. Needs your own oven.",
   "bake.title": "How much bread to bake",
   "bake.auto": "To demand",
   "bake.full": "As much as fits",
@@ -1734,7 +1734,7 @@ export const en: Record<TextKey, string> = {
   "gear.stove.0": "Hot plate",
   "gear.stove.0.fx": "One pot, cooks in 12 s",
   "gear.stove.1": "Gas stove",
-  "gear.stove.1.fx": "Two pots at once, cooks in 10 s",
+  "gear.stove.1.fx": "Two pots at once, cooks in 10 s and +1 portion per batch",
   "gear.stove.2": "Chef's range",
   "gear.stove.2.fx": "Two pots, 8 s and +1 portion per batch",
   "popup.cooked": "{icon} {name}: +{n} portions",
@@ -2391,6 +2391,14 @@ export const en: Record<TextKey, string> = {
   "live.march8.card.1": "Spring is at the door! May every day be warm and bright.",
   "live.march8.card.2": "Mimosa smells of spring. May your mood be just as sunny!",
   "live.march8.card.3": "Happy March 8th! May you be surrounded by flowers, smiles and kind words.",
+  // Цены (nx-prices): реклама, «Что нового».
+  "ads.guests": "Extra guests: ≈{n} a day",
+  "news.kiosks": "🖥 Self-checkouts: shoppers with a small basket scan their own items — Growth → Self-checkouts.",
+  "news.relief": "🧑‍💼 The relief cashier (from the “Little shop” premises) takes your till for the whole day — you're free for chores. Staff tab.",
+  "news.restock": "📦 \"Buy what's needed\" is one tap now: goods go straight onto the shelves and into the stockroom.",
+  "news.housewarming": "🏠 Housewarming: after a move, the first bill is still at the old rent.",
+  "news.newyear": "🎄 In December — the New Year calendar: a card with a gift every day, and Santa drops by.",
+  "news.prices": "🏷 Prices tuned: cheaper entrance, restroom, LED lights, e-price tags and kiosks; pricier loyalty card, cameras and big ads; the night shift earns less. Whatever you already own stays.",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

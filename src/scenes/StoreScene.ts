@@ -187,6 +187,7 @@ import {
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtGuest, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propFootprint, propIssues, propPosFor, propRect, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withSlots, withTill, type Prop } from './placement';
+import { COURIER_SPAN, freeStreetX, ICE_CART_SPAN, type StreetSpan } from './placement';
 import { buildingSpan, iceboxRect, iceboxSpotFor, kioskSpot, kioskZones, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WALL_ROW_Y, WAREHOUSE_COLS, WING_OUTER, type Layout, type Point, type Room } from './layout';
 import { BASE_W, crispZoom, homeFrame } from './pixels';
 import { LightMap, type Light } from './light';
@@ -549,6 +550,15 @@ const WEAR_SAMPLE_MS = 250;
 /** Уборщик без дела натирает самое потёртое место — не чаще, чем раз в столько мс, и если потёрто не меньше. */
 const POLISH_EVERY_MS = 9000;
 const POLISH_MIN_WEAR = 0.25;
+/**
+ * Реклама у входа (x от двери): съёмочная группа ТВ (оператор, камера, ведущая) и блогер — один или
+ * звезда с фанатами. Первое место — обычное, следующие — если оно занято курьером или тележкой (freeStreetX).
+ */
+const TV_SPOTS = [-48, 84, -100];
+const TV_SPAN: StreetSpan = [-5, 25];
+const STAR_SPOTS = [-20, 104, 136];
+const BLOGGER_SPAN: StreetSpan = [-5, 5];
+const COLLAB_SPAN: StreetSpan = [-19, 17];
 /** Где на картинке лежит товар (относительно центра места): x, ширина, верхний ряд, шаг рядов. */
 const ITEM_AREA: Partial<Record<Category, { x: number; w: number; y: number; row: number }>> = {
   icebox: { x: -13, w: 26, y: -6, row: 4 },
@@ -6840,7 +6850,16 @@ export class StoreScene extends Phaser.Scene {
         }),
       );
     }
-    const star = { x: door.x - 20, y: h + FACADE_H + 8 };
+    // У входа свои места: курьер с велосипедом (доставка) и летом тележка с мороженым — реклама их
+    // обходит; съёмочная группа и блогер с фанатами друг на друга тоже не встают.
+    const taken: StreetSpan[] = [
+      ...(hasUpgrade(this.state, 'delivery') ? [COURIER_SPAN] : []),
+      ...(yearTime(this.state.day) === 'summer' ? [ICE_CART_SPAN] : []),
+    ];
+    const tvX = freeStreetX(TV_SPOTS, TV_SPAN, taken);
+    if (ads.has('tv')) taken.push([tvX + TV_SPAN[0], tvX + TV_SPAN[1]]);
+    const starSpan: StreetSpan = ads.has('collab') ? COLLAB_SPAN : BLOGGER_SPAN;
+    const star = { x: door.x + freeStreetX(STAR_SPOTS, starSpan, taken), y: h + FACADE_H + 8 };
     if (ads.has('collab')) {
       // Звезда соцсетей снимает обзор у входа, вокруг — фанаты с телефонами.
       const blogger = extra(star.x, star.y, { shirt: 0xb55088, pants: 0x262b44, hair: 0xfee761, style: 'long', skin: 0xf2d3ab }, 'up');
@@ -6858,7 +6877,7 @@ export class StoreScene extends Phaser.Scene {
     }
     if (ads.has('tv')) {
       // Съёмочная группа ТВ: камера на штативе и ведущая с микрофоном у витрины.
-      const x = door.x - 48;
+      const x = door.x + tvX;
       const y = h + FACADE_H + 12;
       keep(this.art(x + 12, y, 'film_camera').setDepth(y + 6));
       extra(x + 20, y + 1, { shirt: 0x3a4466, pants: 0x262b44, hair: 0x3b2a35, style: 'short', skin: 0xe4a672 }, 'left');

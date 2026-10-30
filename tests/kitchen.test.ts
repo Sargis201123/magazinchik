@@ -260,8 +260,8 @@ describe('повар', () => {
     ];
     // Газовая плита: две кастрюли сразу.
     const base = at({ staff: [chef()], warehouse: {}, shelves, cookMenu: ['olivier'], gear: { stove: 1 } });
-    // Хотят 20 порций: оливье по 4 — пять закладок, хотя повар успел бы больше.
-    expect(kitchenNeeds({ ...base, ...demand(20) }).meat).toBe(5);
+    // Хотят 20 порций: оливье по 4 и +1 с газовой плиты — четыре закладки, хотя повар успел бы больше.
+    expect(kitchenNeeds({ ...base, ...demand(20) }).meat).toBe(4);
     // Хотят 500 — столько закладок, сколько раз за день повар успеет поставить кастрюли.
     const cap = cookRoundsPerDay(base, 90, 1) * stovePots(base);
     expect(kitchenNeeds({ ...base, ...demand(500) }).meat).toBe(cap);

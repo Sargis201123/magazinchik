@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buyShelf,
+  ICEBOX_MAX_LEVEL,
+  shelfCapacity,
   canPlace,
   daysUntilSeason,
   freeSlots,
@@ -84,11 +86,15 @@ describe('ларь с мороженым и вёдра с цветами', () =>
     expect(sold.shelves.some((sh) => sh.kind === 'icebox')).toBe(false);
   });
 
-  it('ларь и вёдра улучшаются только раз: сезонный товар больше мест не окупит', () => {
+  it('ларь растёт, как обычная полка (до 24 мест); вёдра улучшаются только раз', () => {
     let s = buyShelf(rich(), 'icebox')!;
     const i = s.shelves.findIndex((sh) => sh.kind === 'icebox');
-    expect(upgradeCost(s.shelves[i])).not.toBeNull();
-    s = upgradeShelf(s, i)!;
+    for (let level = 1; level <= ICEBOX_MAX_LEVEL; level++) {
+      expect(upgradeCost(s.shelves[i])).not.toBeNull();
+      s = upgradeShelf(s, i)!;
+      expect(s.shelves[i].level).toBe(level);
+    }
+    expect(shelfCapacity(s.shelves[i])).toBe(24);
     expect(upgradeCost(s.shelves[i])).toBeNull();
     expect(upgradeShelf(s, i)).toBeNull();
     const f = s.shelves.findIndex((sh) => sh.kind === 'florist');

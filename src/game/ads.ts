@@ -6,7 +6,8 @@
 // Можно запустить несколько реклам сразу, но каждая следующая работает слабее (AD_STACK).
 
 import type { TextKey } from '../i18n/ru';
-import { expectedGuests, type StoreState } from './economy';
+import type { StoreState } from './economy';
+import { guestsToday } from './day';
 
 export type AdId = 'flyers' | 'banner' | 'blogger' | 'radio' | 'billboard' | 'tv' | 'collab' | 'city';
 
@@ -46,8 +47,9 @@ const ad = (id: AdId, icon: string, boost: number, days: number, cost: number, m
 });
 
 /**
- * Цены подобраны по симулятору (scripts/sim-features.ts): в магазине, который успевает обслужить
- * гостей, реклама возвращает примерно в 1,3 раза больше, чем стоит. Дорогая — радио, билборд, ТВ,
+ * Цены подобраны по симулятору (закупка одним нажатием, по одной рекламе на уровень): на ур.3–5 каждая
+ * монета возвращает примерно 1,3–2 монеты прибыли, у дорогой — ближе к 1,5. В ларьке и на ур.2 дешёвая
+ * реклама почти не окупается: касса и полки там и так не успевают. Дорогая — радио, билборд, ТВ,
  * кампания по городу — берёт не только числом гостей (касса всё равно не пробьёт всех), а чеком:
  * покупатели доверяют и берут больше.
  */
@@ -55,11 +57,11 @@ export const ADS: Record<AdId, Ad> = {
   flyers: ad('flyers', '📄', 0.2, 1, 1.6, 0, 30),
   banner: ad('banner', '🪧', 0.12, 3, 1, 0, 60),
   blogger: ad('blogger', '📱', 0.4, 1, 2.5, 0, 80, { rare: 2 }),
-  radio: ad('radio', '📻', 0.2, 3, 2.4, 1, 250, { trust: 1.04, basket: 0.15 }),
-  billboard: ad('billboard', '🏙️', 0.3, 5, 2.8, 2, 600, { trust: 1.05, basket: 0.25 }),
-  tv: ad('tv', '📺', 0.6, 3, 4.2, 3, 800, { trust: 1.1, basket: 0.5 }),
-  collab: ad('collab', '🤳', 1, 1, 4.2, 3, 600, { rare: 3, trust: 1.05, basket: 0.35 }),
-  city: ad('city', '🎪', 0.5, 7, 2.6, 4, 1500, { trust: 1.08, basket: 0.4 }),
+  radio: ad('radio', '📻', 0.2, 3, 3, 1, 250, { trust: 1.04, basket: 0.15 }),
+  billboard: ad('billboard', '🏙️', 0.3, 5, 5, 2, 600, { trust: 1.05, basket: 0.25 }),
+  tv: ad('tv', '📺', 0.6, 3, 9.5, 3, 800, { trust: 1.1, basket: 0.5 }),
+  collab: ad('collab', '🤳', 1, 1, 6.5, 3, 600, { rare: 3, trust: 1.05, basket: 0.35 }),
+  city: ad('city', '🎪', 0.5, 7, 7.5, 4, 1500, { trust: 1.08, basket: 0.4 }),
 };
 
 export const AD_IDS = Object.keys(ADS) as AdId[];
@@ -124,11 +126,22 @@ export const adExtraItems = (state: StoreState, random: () => number): number =>
 
 export const adUnlocked = (state: StoreState, id: AdId): boolean => state.level >= ADS[id].minLevel;
 
-/** Цена: обычный поток гостей × дни × цена гостя-дня, округлено до 10. Больше магазин — дороже реклама. */
+/**
+ * Поток, от которого считается цена: сегодняшние гости со всеми прибавками (касса, отделы, сезон…),
+ * кроме уже идущей рекламы — иначе вторая реклама дорожала бы от первой. Раньше цена шла от потока
+ * без прибавок, а прибавка рекламы множила настоящий поток: на ур.5 он в 1,7 раза больше, и реклама
+ * возвращала 4–9 монет на монету.
+ */
+const adFlow = (state: StoreState): number => guestsToday(state) / adBoost(state);
+
+/** Цена: поток гостей × дни × цена гостя-дня, округлено до 10. Больше магазин — дороже реклама. */
 export function adPrice(state: StoreState, id: AdId): number {
   const a = ADS[id];
-  return Math.max(a.minPrice, Math.round((expectedGuests(state.rating, state.level) * a.days * a.cost) / 10) * 10);
+  return Math.max(a.minPrice, Math.round((adFlow(state) * a.days * a.cost) / 10) * 10);
 }
+
+/** Сколько гостей за день прибавит эта реклама к тем, что придут и так (подсказка до покупки). */
+export const adExtraGuests = (state: StoreState, id: AdId): number => Math.round(adFlow(state) * adGain(state, id));
 
 /** Почему нельзя заказать (или null — можно). */
 export function adBlock(state: StoreState, id: AdId): 'level' | 'running' | 'full' | 'money' | null {

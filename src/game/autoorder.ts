@@ -14,8 +14,8 @@ import { newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice, type SupplierId } from './
 /** Лимит утра на выбор: какую долю денег автозаказ может потратить за день. */
 export const AUTO_SHARES = [0.25, 0.5, 0.75, 1] as const;
 export const AUTO_SHARE = 0.75;
-/** Подвоз днём: наценка к самой низкой цене, сколько штук за раз и сколько раз за день. */
-export const AUTO_TOPUP_MARKUP = 1.1;
+/** Подвоз днём: наценка к самой низкой цене (была 1,1), сколько штук за раз и сколько раз за день. */
+export const AUTO_TOPUP_MARKUP = 1.25;
 export const AUTO_TOPUP_QTY = 6;
 export const AUTO_TOPUPS = 3;
 /** На полке осталось столько или меньше (а на складе пусто) — пора подвезти. */
