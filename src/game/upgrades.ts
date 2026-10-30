@@ -24,10 +24,10 @@ export interface Upgrade {
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
   terminal: { id: 'terminal', icon: '💳', nameKey: 'upgrade.terminal', descKey: 'upgrade.terminal.desc', price: 600, minLevel: 1 },
   cart: { id: 'cart', icon: '🛒', nameKey: 'upgrade.cart', descKey: 'upgrade.cart.desc', price: 700, minLevel: 1 },
-  loyalty: { id: 'loyalty', icon: '💳', nameKey: 'upgrade.loyalty', descKey: 'upgrade.loyalty.desc', price: 500, minLevel: 1 },
-  delivery: { id: 'delivery', icon: '🚲', nameKey: 'upgrade.delivery', descKey: 'upgrade.delivery.desc', price: 1500, minLevel: 1 },
+  loyalty: { id: 'loyalty', icon: '💳', nameKey: 'upgrade.loyalty', descKey: 'upgrade.loyalty.desc', price: 1500, minLevel: 1 },
+  delivery: { id: 'delivery', icon: '🚲', nameKey: 'upgrade.delivery', descKey: 'upgrade.delivery.desc', price: 1500, minLevel: 3 },
   autoOrder: { id: 'autoOrder', icon: '🤖', nameKey: 'upgrade.autoOrder', descKey: 'upgrade.autoOrder.desc', price: 1200, minLevel: 1 },
-  bargain: { id: 'bargain', icon: '🏷', nameKey: 'upgrade.bargain', descKey: 'upgrade.bargain.desc', price: 400, minLevel: 0 },
+  bargain: { id: 'bargain', icon: '🏷', nameKey: 'upgrade.bargain', descKey: 'upgrade.bargain.desc', price: 900, minLevel: 2 },
   eTags: { id: 'eTags', icon: '🏷', nameKey: 'upgrade.eTags', descKey: 'upgrade.eTags.desc', price: 800, minLevel: 1 },
   selfCheckout: { id: 'selfCheckout', icon: '🖥', nameKey: 'upgrade.selfCheckout', descKey: 'upgrade.selfCheckout.desc', price: 2500, minLevel: 2 },
   coffee: { id: 'coffee', icon: '☕', nameKey: 'upgrade.coffee', descKey: 'upgrade.coffee.desc', price: 1500, minLevel: 2 },

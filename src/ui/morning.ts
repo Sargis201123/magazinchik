@@ -2691,7 +2691,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const body = el('div');
       const name = el('div', 'ui-item-name', t(up.nameKey));
       if (!owned) name.append(el('span', 'ui-tag', `${up.price} 💰`));
-      const sub = state.level < up.minLevel ? t('upgrade.needLevel', { name: t(STORE_LEVELS[up.minLevel].nameKey) }) : t(up.descKey);
+      // Купленное раньше, чем порог подняли (доставка, «Уценка»), — работает, «нужно помещение» не пишем.
+      const sub = !owned && state.level < up.minLevel ? t('upgrade.needLevel', { name: t(STORE_LEVELS[up.minLevel].nameKey) }) : t(up.descKey);
       body.append(name, el('div', 'ui-item-sub', sub));
       const actions = el('div', 'ui-item-actions');
       actions.append(

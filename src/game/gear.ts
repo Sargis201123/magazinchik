@@ -166,7 +166,7 @@ export const GEAR: Record<GearId, Gear> = {
     nameKey: 'gear.cameras',
     models: [
       model('gear.cameras.0', 0, 0, 'gear.cameras.0.fx'),
-      model('gear.cameras.1', 500, 1, 'gear.cameras.1.fx'),
+      model('gear.cameras.1', 1000, 1, 'gear.cameras.1.fx'),
       model('gear.cameras.2', 1800, 2, 'gear.cameras.2.fx'),
     ],
   },
