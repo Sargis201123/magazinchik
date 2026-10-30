@@ -129,9 +129,10 @@ describe('повар', () => {
   it('нанимается, когда есть кухня, и в большом помещении есть место для всех должностей', () => {
     expect(roleOpen({ ...at(), upgrades: [] }, 'cook')).toBe(false);
     expect(roleOpen(at(), 'cook')).toBe(true);
-    // В супермаркете — три кассы, в универмаге — четыре: все должности с поваром помещаются.
-    expect(STAFF_LIMIT[3]).toBeGreaterThanOrEqual(STAFF_ROLE_IDS.filter((r) => r !== 'cashier4').length);
-    expect(STAFF_LIMIT[4]).toBeGreaterThanOrEqual(STAFF_ROLE_IDS.length);
+    // В супермаркете — три кассы, в универмаге — четыре, в гипермаркете — пять: все должности с поваром помещаются.
+    expect(STAFF_LIMIT[3]).toBeGreaterThanOrEqual(STAFF_ROLE_IDS.filter((r) => r !== 'cashier4' && r !== 'cashier5').length);
+    expect(STAFF_LIMIT[4]).toBeGreaterThanOrEqual(STAFF_ROLE_IDS.filter((r) => r !== 'cashier5').length);
+    expect(STAFF_LIMIT[5]).toBeGreaterThanOrEqual(STAFF_ROLE_IDS.length);
   });
 
   it('без повара (или в его выходной) кухня сама не готовит', () => {

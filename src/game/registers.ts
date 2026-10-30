@@ -1,22 +1,22 @@
 // Места под кассы растут вместе с помещением: в ларьке и маленьком магазине — одно, дальше с каждым
-// расширением ещё одно (до четырёх в универмаге и гипермаркете). Первая касса — всегда хозяина: за ней стоит сам
+// расширением ещё одно (до четырёх в универмаге, в гипермаркете — пять). Первая касса — всегда хозяина: за ней стоит сам
 // игрок и пробивает касанием. Остальные кассы хозяин покупает сам, когда очередь того стоит, и за
 // каждую нанимает своего кассира. Сменщик (роль cashier, с «Магазинчика») встаёт за кассу хозяина
 // насовсем и пробивает сам — хозяин свободен для дел, а его касания только торопят пробивку.
 
 import { nextStoreLevel, STAFF_ROLES, type StaffMember, type StaffRole, type StoreState } from './economy';
 
-export const REGISTERS_BY_LEVEL = [1, 1, 2, 3, 4, 4];
-/** Все, кто работает за кассой: сменщик хозяина и кассиры второй, третьей и четвёртой касс. */
-export const CASHIER_ROLES: StaffRole[] = ['cashier', 'cashier2', 'cashier3', 'cashier4'];
+export const REGISTERS_BY_LEVEL = [1, 1, 2, 3, 4, 5];
+/** Все, кто работает за кассой: сменщик хозяина и кассиры второй–пятой касс. */
+export const CASHIER_ROLES: StaffRole[] = ['cashier', 'cashier2', 'cashier3', 'cashier4', 'cashier5'];
 /** Сменщик: стоит за кассой хозяина весь день и торгует, пока игрока нет в игре. */
 export const RELIEF_ROLE: StaffRole = 'cashier';
 /** С какого помещения можно нанять сменщика (с «Магазинчика»; в ларьке хозяин справляется сам). */
 export const RELIEF_LEVEL = STAFF_ROLES[RELIEF_ROLE].minLevel ?? 0;
 /** Кассиры своих касс: TILL_ROLES[0] — за второй кассой (у первой кассы кассира нет — она хозяина). */
-export const TILL_ROLES: StaffRole[] = ['cashier2', 'cashier3', 'cashier4'];
-/** Цена второй, третьей и четвёртой кассы (первая есть всегда). */
-export const REGISTER_PRICES = [0, 1200, 2400, 4000];
+export const TILL_ROLES: StaffRole[] = ['cashier2', 'cashier3', 'cashier4', 'cashier5'];
+/** Цена второй–пятой кассы (первая есть всегда; пятая — только в гипермаркете). */
+export const REGISTER_PRICES = [0, 1200, 2400, 4000, 6000];
 
 const slotsAt = (level: number): number => REGISTERS_BY_LEVEL[Math.min(level, REGISTERS_BY_LEVEL.length - 1)];
 

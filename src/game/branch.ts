@@ -14,7 +14,7 @@
 // купленные ступени остаются. Старый магазин — универмаг, а не гипермаркет: образец выручки после
 // переезда уменьшаем до размеров универмага (branchRef), и доход филиала не прыгает ни вверх, ни вниз.
 
-import { HYPER_LEVEL, monthOf, STORE_LEVELS, type StoreState } from './economy';
+import { HYPER_LEVEL, monthOf, type StoreState } from './economy';
 import { WEATHER_EFFECTS, weatherFor } from './weather';
 import { seasonFor } from './endless';
 import { rng } from './random';
@@ -165,10 +165,12 @@ export function branchShare(state: StoreState): number {
 export const branchInOldShop = (state: StoreState): boolean => hasBranch(state) && state.level >= HYPER_LEVEL;
 
 /**
- * Во сколько раз старый магазин меньше гипермаркета по потоку гостей: после переезда образец выручки
+ * Во сколько раз старый магазин меньше гипермаркета по выручке: после переезда образец выручки
  * уменьшаем во столько же раз — филиал торгует как прежний универмаг, а не как новый гипермаркет.
+ * Не отношение гостей (2,2 к 5): гостей в гипермаркете больше, чем успевают пробить пять касс, и
+ * выручка вырастает примерно вдвое (симулятор, docs/BALANCE.md «Гипермаркет»).
  */
-export const OLD_SHOP_SCALE = STORE_LEVELS[BRANCH_LEVEL].guests / STORE_LEVELS[HYPER_LEVEL].guests;
+export const OLD_SHOP_SCALE = 0.5;
 
 /** Обычная выручка своего магазина в день — средняя за последнюю неделю, в разумных пределах. */
 export function branchRef(state: StoreState): number {

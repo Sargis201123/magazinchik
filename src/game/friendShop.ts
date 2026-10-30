@@ -4,6 +4,7 @@
 
 import { newGame, PRODUCT_IDS, SHELF_KINDS, STORE_LEVELS, type Category, type ProductId, type Shelf, type StoreState } from './economy';
 import { isDecorId, normalizeDecor, type DecorId } from './decor';
+import { REGISTERS_BY_LEVEL } from './registers';
 
 export interface ShopSnapshot {
   day: number;
@@ -80,6 +81,6 @@ export function friendState(raw: unknown, home: StoreState): StoreState | null {
       owned: Array.isArray(snap.decor?.owned) ? snap.decor.owned.filter((id): id is DecorId => typeof id === 'string' && isDecorId(id)) : [],
       active: snap.decor?.active && typeof snap.decor.active === 'object' ? (Object.fromEntries(Object.entries(snap.decor.active).filter(([, id]) => typeof id === 'string' && isDecorId(id))) as StoreState['decor']['active']) : {},
     }),
-    ...(snap.registers ? { registers: int(snap.registers, 1, 4, 1) } : {}),
+    ...(snap.registers ? { registers: int(snap.registers, 1, Math.max(...REGISTERS_BY_LEVEL), 1) } : {}),
   };
 }

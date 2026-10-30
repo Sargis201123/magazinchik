@@ -255,6 +255,8 @@ const HIRE_WHEN: Hire[] = [
   cashier(1, 2),
   cashier(2, 3),
   cashier(3, 4),
+  // Пятая касса — только в гипермаркете (registers.ts).
+  cashier(4, 5),
   want('manager', (s) => s.level >= 3 && s.staff.length >= 4),
 ];
 

@@ -79,6 +79,12 @@ describe('открытые кассы зовут гостей', () => {
     for (let i = 1; i < gains.length; i++) expect(gains[i]).toBeLessThan(gains[i - 1]);
     const all = laneGuests(shop(4, ['cashier2', 'cashier3', 'cashier4'], { kiosks: { n: 4, tier: 2 }, upgrades: ['selfCheckout'] }));
     expect(all).toBeLessThan(1 + LANE_GUESTS_MAX);
+    // Пятая касса гипермаркета прибавляет ещё меньше, потолок тот же.
+    const four = laneGuests(shop(5, ['cashier2', 'cashier3', 'cashier4']));
+    const five = laneGuests(shop(5, ['cashier2', 'cashier3', 'cashier4', 'cashier5']));
+    expect(five).toBeGreaterThan(four);
+    expect(five - four).toBeLessThan(gains[gains.length - 1]);
+    expect(laneGuests(shop(5, ['cashier2', 'cashier3', 'cashier4', 'cashier5'], { kiosks: { n: 4, tier: 2 } }))).toBeLessThan(1 + LANE_GUESTS_MAX);
   });
 
   it('прибавка видна в прогнозе гостей дня, и «Развитие» показывает, сколько даст следующая касса', () => {
@@ -156,11 +162,11 @@ describe('кассы самообслуживания', () => {
   });
 
   it('в зале все киоски помещаются у правой стены: не на кассах, не на очереди, не друг на друге', () => {
-    for (let level = 2; level <= 4; level++) {
+    for (let level = 2; level <= 5; level++) {
       const layout = layoutFor(level);
       const n = KIOSKS_BY_LEVEL[level];
-      // Сколько мест держит расстановка — столько и киосков в помещении.
-      expect(kioskZones(layout, REGISTERS_BY_LEVEL[level])).toHaveLength(n);
+      // Мест под киоски — столько же, сколько под кассы (в гипермаркете касс пять, киосков — четыре).
+      expect(n).toBe(Math.min(4, REGISTERS_BY_LEVEL[level]));
       const others = tillZones(layout, REGISTERS_BY_LEVEL[level], 0).filter((z) => !kioskZones(layout, 1).some((k) => k.x === z.x && k.y === z.y));
       for (let i = 0; i < n; i++) {
         const k = kioskRect(layout, i);
@@ -186,7 +192,7 @@ describe('кассы самообслуживания', () => {
   });
 
   it('купили все киоски — ларь с мороженым переезжает и на них не встаёт', () => {
-    for (let level = 2; level <= 4; level++) {
+    for (let level = 2; level <= 5; level++) {
       const layout = layoutFor(level);
       const n = KIOSKS_BY_LEVEL[level];
       const ice = iceboxRect(iceboxSpotFor(layout, REGISTERS_BY_LEVEL[level], [], n));
