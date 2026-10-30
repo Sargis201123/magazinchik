@@ -398,6 +398,14 @@ export function fire(state: StoreState, role: StaffRole): StoreState {
 }
 
 /**
+ * Прибавки «просто так» — не выше ставки по навыку × RAISE_CAP: работает он с той же скоростью, и
+ * без потолка кассир с 420 доходил до 760–1010. Кто уже получает больше, тому не урезаем — просто
+ * больше не просит.
+ */
+export const RAISE_CAP = 1.3;
+const raiseCap = (role: StaffRole, skill: number, trait: StaffMember['trait']): number => Math.round((wageFor(role, skill, trait) * RAISE_CAP) / 10) * 10;
+
+/**
  * Конец месяца для персонала. Обиженные могут уволиться, остальные успокаиваются.
  * Опыт растёт; раз в MONTHS_PER_SKILL месяцев растёт навык — и сотрудник просит
  * прибавку. Опытные иногда просят прибавку и просто так.
@@ -418,7 +426,7 @@ export function monthForStaff(staff: StaffMember[], random: () => number): { sta
     if (!raiseAsk && !asked) {
       // Навык вырос, а платят по-старому — просит по новому навыку; опытные иногда просят и просто так.
       if (m.wage < wageFor(m.role, skill, m.trait)) raiseAsk = wageFor(m.role, skill, m.trait);
-      else if (months >= 3 && random() < RAISE_ASK_CHANCE) raiseAsk = Math.round((m.wage * (1 + RAISE_STEP)) / 10) * 10;
+      else if (months >= 3 && random() < RAISE_ASK_CHANCE) raiseAsk = Math.min(Math.round((m.wage * (1 + RAISE_STEP)) / 10) * 10, raiseCap(m.role, skill, m.trait));
       asked = Boolean(raiseAsk && raiseAsk > m.wage);
     }
     kept.push({ ...m, months, skill, raiseAsk: raiseAsk && raiseAsk > m.wage ? raiseAsk : undefined, upset: false });
