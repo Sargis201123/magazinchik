@@ -2771,7 +2771,7 @@ export const en: Record<TextKey, string> = {
   "week.goal.serve": "serve {n} customers",
   "week.goal.revenue": "take in {n} 💰",
   "week.goal.sell": "sell {n} {what}",
-  "week.note.pies": "Pie contest today: a table of pies by the door — baked goods sell better.",
+  "week.note.pies": "Pie contest today: a table of pies by the door, the fair is in full swing.",
   "week.note.fireworks": "The festival's last evening: fireworks over the roof once it gets dark.",
   "week.note.sale": "In the evening, the last quarter of the day, there's a sale: everything −{p}%, more customers.",
   "week.today": "Today's step: {goal} — +{n} 💰",

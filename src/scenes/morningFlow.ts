@@ -57,6 +57,7 @@ import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
 import * as weeksFx from './weeks';
+import { endSale } from '../game/weeks';
 import * as deliveries from './deliveries';
 import * as food from './food';
 import * as streets from './streets';
@@ -173,6 +174,8 @@ export function showMorning(scene: StoreScene): void {
   if (!quietDays(scene.state) && takeLiteNote()) toast('assets/ico_phone.png', t('lite.autoTitle'), t('lite.autoText'));
   scene.morningStock = warehouseCount(scene.state);
   decorations.applyFair(scene);
+  // Отметка вечерней распродажи из сохранения посреди дня — утром не действует (weeks.ts).
+  scene.state = endSale(scene.state);
   weeksFx.applyWeek(scene);
   scene.awaitingBoxes = 0;
   scene.hud.update(scene.state, DAY_SECONDS);

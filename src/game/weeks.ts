@@ -200,6 +200,9 @@ export const startSale = (state: StoreState): StoreState => (weekFor(state.day)?
 export const SALE_BASKET = 0.5;
 export const saleExtraItems = (state: StoreState, random: () => number): number => (saleOn(state) && random() < SALE_BASKET ? 1 : 0);
 
+/** Распродажа кончилась: ночная смена идёт по ночным ценам, а утро (и перезапуск посреди дня) — без скидки. */
+export const endSale = (state: StoreState): StoreState => (state.weeks?.sale === undefined ? state : { ...state, weeks: { ...state.weeks, sale: undefined } });
+
 /** Множитель цены на кассе: вечером распродажи −20%. */
 export const saleFactor = (state: StoreState): number => (saleOn(state) ? SALE_DISCOUNT : 1);
 

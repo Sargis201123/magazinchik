@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import type { TextKey } from '../i18n/ru';
 import { decorItem } from '../game/decor';
 import { PRODUCTS, type StoreState } from '../game/economy';
-import { nextWeek, SALE_DISCOUNT, stepReward, trackOf, weekFor, weekGoal, WEEK_STEPS, WEEKS, type WeekGoalToday, type WeekId } from '../game/weeks';
+import { FIREWORKS_DAY, nextWeek, PIE_CONTEST_DAY, SALE_DISCOUNT, stepReward, trackOf, weekFor, weekGoal, WEEK_STEPS, WEEKS, type WeekGoalToday, type WeekId } from '../game/weeks';
 import { el } from './dom';
 
 /** Цель шага словами: «обслужить 20 гостей», «продать 4 🎃 Тыквы», «выручка 600 💰». */
@@ -18,8 +18,8 @@ export function goalText(goal: WeekGoalToday): string {
 
 /** Что особенного сегодня в неделе: конкурс пирогов, салют, вечерняя распродажа. */
 const todayNote = (id: WeekId, n: number): TextKey | null => {
-  if (id === 'harvest' && n === 4) return 'week.note.pies';
-  if (id === 'summer' && n === 7) return 'week.note.fireworks';
+  if (id === 'harvest' && n === PIE_CONTEST_DAY) return 'week.note.pies';
+  if (id === 'summer' && n === FIREWORKS_DAY) return 'week.note.fireworks';
   if (id === 'sale') return 'week.note.sale';
   return null;
 };

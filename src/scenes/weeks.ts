@@ -43,7 +43,6 @@ function clearWeek(scene: StoreScene): void {
 export function applyWeek(scene: StoreScene): void {
   clearWeek(scene);
   const w = weekFor(scene.state.day);
-  scene.builtWeek = w ? `${w.id}${w.n}` : '';
   if (!w) return;
   const keep = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
     scene.weekObjs.push(obj);
@@ -157,7 +156,8 @@ function summer(scene: StoreScene, n: number, keep: Keep): void {
       if (!scene.running) return;
       const who = Phaser.Utils.Array.GetRandom(band);
       if (!who?.active) return;
-      const note = keep(scene.add.text(who.x + 3, who.y - 16, Phaser.Utils.Array.GetRandom(['♪', '♫']), { fontFamily: UI_FONT, fontSize: '8px', color: '#fee761', stroke: '#181425', strokeThickness: 2 }).setOrigin(0.5).setResolution(scene.textRes(4)).setDepth(LIGHT_DEPTH + 3));
+      // Нота живёт полторы секунды и убирает себя сама — в список вещей недели её не кладём.
+      const note = scene.add.text(who.x + 3, who.y - 16, Phaser.Utils.Array.GetRandom(['♪', '♫']), { fontFamily: UI_FONT, fontSize: '8px', color: '#fee761', stroke: '#181425', strokeThickness: 2 }).setOrigin(0.5).setResolution(scene.textRes(4)).setDepth(LIGHT_DEPTH + 3);
       scene.tweens.add({ targets: note, y: note.y - 10, x: note.x + 4, alpha: 0, duration: 1400, onComplete: () => note.destroy() });
     });
   }
@@ -215,7 +215,7 @@ export function tick(scene: StoreScene): void {
   scene.popup(scene.layout.door.x, scene.layout.door.y - 30, t('week.saleStart'), '#ff8aa0');
   // Баннер «−20%» вспыхивает (вечером он и так светится — тут ещё и подмигивает).
   const sign = scene.weekSign;
-  if (sign?.active && !scene.lite) scene.tweens.add({ targets: sign, scale: sign.scale * 1.15, duration: 220, yoyo: true, repeat: 3 });
+  if (sign?.active && !scene.lite) scene.tweens.add({ targets: sign, scaleX: sign.scaleX * 1.15, scaleY: sign.scaleY * 1.15, duration: 220, yoyo: true, repeat: 3 });
 }
 
 /** Во сколько раз чаще заходят гости: вечером распродажи сбегаются на скидки. */

@@ -27,7 +27,7 @@ import { askForHelp, claimHelp, sendHelp, socialInfo } from '../platform/social'
 import { HELP_REWARD, HELP_THANKS, helpAsked, helpGiven, markHelpAsked, takeHelp } from '../game/help';
 import { reportProgress, track } from '../platform/analytics';
 import { decorItem } from '../game/decor';
-import { WEEK_IDS, WEEK_STEPS, WEEKS } from '../game/weeks';
+import { endSale, WEEK_IDS, WEEK_STEPS, WEEKS } from '../game/weeks';
 import { onbDone } from '../game/onboarding';
 import { firstGiftCard } from '../ui/onboarding';
 import { tutDayEnd, tutPass, tutStep } from '../game/tutorial';
@@ -125,7 +125,8 @@ export function startNightShift(scene: StoreScene): void {
     finishDay(scene);
     return;
   }
-  scene.state = next;
+  // Вечерняя распродажа (weeks.ts) кончается с закрытием: ночью — ночные цены.
+  scene.state = endSale(next);
   scene.night = true;
   scene.stats.nightRevenue ??= 0;
   scene.timeLeft = NIGHT_SECONDS;

@@ -572,11 +572,10 @@ export class StoreScene extends Phaser.Scene {
   catBlink = 0;
   /** Флажки, шарики и лоток ярмарки; лоток продаёт со склада по таймеру. */
   fairObjs: Phaser.GameObjects.GameObject[] = [];
-  /** Сезонная неделя (weeks.ts): украшения, люди у лотков, их повторы, баннер «−20%» и какая неделя нарисована. */
+  /** Сезонная неделя (weeks.ts): украшения, люди у лотков, их повторы и баннер «−20%». */
   weekObjs: Phaser.GameObjects.GameObject[] = [];
   weekTimers: (() => void)[] = [];
   weekSign?: Phaser.GameObjects.Image;
-  builtWeek = '';
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
   bigObjs: { destroy: () => void }[] = [];
   /** Блэкаут на весь район: темно, касса считает вручную (щиток не поможет). */

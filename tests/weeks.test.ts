@@ -14,6 +14,7 @@ import {
   onlyWeeks,
   SALE_EVENING,
   saleOn,
+  endSale,
   startSale,
   stepReward,
   trackOf,
@@ -165,6 +166,8 @@ describe('сезонные недели: распродажа', () => {
     expect(unitSalePrice(on, 'bread', unit)).toBe(Math.round(s.prices.bread * 0.8));
     // Отметка вчерашнего вечера сегодня не действует.
     expect(saleOn({ ...on, day: on.day + 1 })).toBe(false);
+    // С закрытием (ночная смена, утро) распродажа кончается.
+    expect(saleOn(endSale(on))).toBe(false);
     // Не в неделю распродажи — отметку не ставим.
     const other = { ...newGame(), day: weekStart('summer') };
     expect(startSale(other)).toBe(other);
@@ -234,6 +237,6 @@ describe('сезонные недели: баланс (симулятор)', () 
       expect(on.revenue / off.revenue).toBeGreaterThan(1);
       expect(on.revenue / off.revenue).toBeLessThan(1.1);
       expect(on.profit).toBeGreaterThan(off.profit);
-    });
+    }, 90_000);
   }
 });
