@@ -45,6 +45,7 @@ import {
 } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
+import * as cars from './cars';
 
 // ---------- Доставка на дом ----------
 
@@ -592,8 +593,8 @@ export async function deliver(scene: StoreScene): Promise<void> {
   const body = scene.art(0, 0, 'car_van').setTint(0xffffff);
   const lights = scene.art(0, 0, 'car_van_lights');
   const van = scene.add.container(-260, roadY, [body, lights]).setDepth(roadY);
-  const road = scene.onRoad(van, 'up', true);
-  await scene.yieldToLot(road);
+  const road = cars.onRoad(scene, van, 'up', true);
+  await cars.yieldToLot(scene, road);
   await new Promise<void>((done) => scene.tweens.add({ targets: van, x: vanX, duration: 2200, ease: 'Sine.easeOut', onComplete: () => done() }));
   if (!van.active) return;
   // Задние двери распахиваются: внутри темно и видны коробки.
@@ -635,7 +636,7 @@ export async function deliver(scene: StoreScene): Promise<void> {
   scene.tweens.add({ targets: hold, width: 0.1, x: hold.x + 1, duration: 250 });
   await scene.wait(300);
   if (!van.active) return;
-  await scene.yieldToLot(road, true);
+  await cars.yieldToLot(scene, road, true);
   scene.tweens.add({ targets: van, x: scene.next.w + 300, duration: 2600, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
 }
 
@@ -676,9 +677,9 @@ export async function urgentVan(scene: StoreScene): Promise<void> {
   const vanX = warehouse.x + warehouse.w / 2 + 14;
   const roadY = scene.streetY + 24;
   const van = scene.add.container(-260, roadY, [scene.art(0, 0, 'car_van').setTint(0xffd27a), scene.art(0, 0, 'car_van_lights')]).setDepth(roadY);
-  const road = scene.onRoad(van, 'up', true);
+  const road = cars.onRoad(scene, van, 'up', true);
   await scene.wait((URGENT_SECONDS * 1000) / Math.max(1, scene.speed) - 1800);
-  await scene.yieldToLot(road);
+  await cars.yieldToLot(scene, road);
   await new Promise<void>((done) => scene.tweens.add({ targets: van, x: vanX, duration: 1800, ease: 'Sine.easeOut', onComplete: () => done(), onStop: () => done() }));
   receiveUrgentOrders(scene);
   scene.urgentVanBusy = false;
@@ -686,7 +687,7 @@ export async function urgentVan(scene: StoreScene): Promise<void> {
   // Пустой — в путь.
   await scene.wait(600);
   if (!van.active) return;
-  await scene.yieldToLot(road, true);
+  await cars.yieldToLot(scene, road, true);
   scene.tweens.add({ targets: van, x: scene.next.w + 300, duration: 2400, ease: 'Sine.easeIn', onComplete: () => van.destroy() });
 }
 
