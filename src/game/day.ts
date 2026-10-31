@@ -25,6 +25,7 @@ import { cafeMorning } from './cafe';
 import { giantGuests, giantNight } from './giant';
 import { promoGuests } from './promo';
 import { fairGuests } from './fair';
+import { weekGoal, weekGuests, weekNight, type WeekNight } from './weeks';
 import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
 import { hiddenBigDayGuests, knownBigDayGuests } from './bigday';
 import { coffeeTablesGuests } from './coffee';
@@ -50,6 +51,8 @@ export interface NightSummary extends NightResult {
   weekly: { completed: Challenge[]; earned: number };
   /** Чистый доход филиала за день (branch.ts; 0 — филиала нет). */
   branch: number;
+  /** Пройденный сегодня шаг сезонной недели (weeks.ts) или null. */
+  week: WeekNight | null;
 }
 
 export function nightCycle(state: StoreState, stats: DayStats, random: () => number = Math.random): NightSummary {
@@ -67,6 +70,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   if (sparkle) s = { ...s, rating: Math.min(5, s.rating + sparkle) };
   const weekly = progressWeekly(s, stats);
   s = weekly.state;
+  // Шаг сезонной недели (weeks.ts): цель — утренняя, из плана дня.
+  const week = weekNight(s, stats, s.plan?.week !== undefined ? s.plan.week : weekGoal(s, guestsToday(s)));
+  s = week.state;
   s = addPassXp(s, rewarded.done, weekly.completed.length);
   // Непроданное с кухни ночью списывается (сколько — в отчёт дня).
   const dishes = spoilDishes(s);
@@ -91,6 +97,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     quests: { earned: rewarded.earned, done: rewarded.done, total: quests.length },
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
+    week: week.done,
   };
 }
 
@@ -99,7 +106,7 @@ export function ensurePlan(state: StoreState): StoreState {
   const weekly = ensureWeekly(state, guestsToday(state));
   if (weekly.plan?.day === weekly.day && weekly.plan.quests) return weekly;
   const plan = planDay(weekly, storyChances(weekly));
-  return { ...weekly, plan: { ...plan, quests: questsFor(weekly, guestsToday(weekly), momentCount(weekly)) } };
+  return { ...weekly, plan: { ...plan, quests: questsFor(weekly, guestsToday(weekly), momentCount(weekly)), week: weekGoal(weekly, guestsToday(weekly)) } };
 }
 
 /** Итог проверки: штраф/рейтинг и счётчик для сюжета. */
@@ -124,6 +131,7 @@ export const guestFactor = (state: StoreState): number =>
   WEATHER_EFFECTS[weatherFor(state.day)].guests *
   promoGuests(state) *
   fairGuests(state.day) *
+  weekGuests(state.day) *
   lightsGuests(state) *
   departmentGuests(state) *
   eduardGuests(state) *

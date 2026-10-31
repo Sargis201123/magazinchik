@@ -91,6 +91,7 @@ import { badBatch, haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitP
 import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY, OWN_PRODUCTS } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
+import { endSale, SALE_CROWD, saleExtraItems, startSale, weekFor } from './weeks';
 import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole, RELIEF_ROLE, TILL_ROLES } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
@@ -931,7 +932,7 @@ export function simulate({
         }
       }
       const aroma = random() < aromaShare;
-      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + adExtraItems(state, extraRandom), (p) => dayDemand(state, p, aroma));
+      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + adExtraItems(state, extraRandom) + saleExtraItems(state, extraRandom), (p) => dayDemand(state, p, aroma));
       const fair = (p: ProductId) =>
         perceivedBase(state, p) * tolerance * fairTolerance(state.day) * loyaltyTolerance(state) * radioTolerance(state) * adTrust(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
       const cart: CartItem[] = [];
@@ -1026,15 +1027,20 @@ export function simulate({
         done += n;
       }
     };
-    if (hasUpgrade(state, 'eTags')) {
-      // Электронные ценники: к вечеру то, что испортится ночью, уценяется само.
+    // Вечер «Ночи распродаж» (weeks.ts): последняя четверть дня — всё на 20% дешевле, гостей больше.
+    const sale = weekFor(state.day)?.id === 'sale';
+    if (hasUpgrade(state, 'eTags') || sale) {
+      // Электронные ценники: к вечеру то, что испортится ночью, уценяется само (вечер у них тот же — SALE_EVENING).
       const evening = Math.round(dayGuests * ETAGS_EVENING);
       dayPart(dayGuests - evening, 0, 1 - ETAGS_EVENING);
-      state = markdownSurplus(state, (id) => eveningSales(stats.sold[id] ?? 0)).state;
-      dayPart(evening, 1 - ETAGS_EVENING, ETAGS_EVENING);
+      if (hasUpgrade(state, 'eTags')) state = markdownSurplus(state, (id) => eveningSales(stats.sold[id] ?? 0)).state;
+      if (sale) state = startSale(state);
+      dayPart(sale ? Math.round(evening * SALE_CROWD) : evening, 1 - ETAGS_EVENING, ETAGS_EVENING);
     } else dayPart(dayGuests, 0, 1);
     // Ночная смена: гостей меньше, к ценам терпимее, касса успевает пропорционально времени.
     let nightProfit = 0;
+    // Вечерняя распродажа кончается с закрытием (как в игре — nightShift.startNightShift).
+    state = endSale(state);
     if (features.night && hasUpgrade(state, 'nightShift')) {
       const paid = startNight(state);
       if (paid) {

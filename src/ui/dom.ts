@@ -288,6 +288,7 @@ const css = `
   border: 2px solid #2b2233; border-radius: 8px; }
 /* Праздник по календарю (game/live.ts): открытки по дням, сегодняшняя подпрыгивает; открытка крупно. */
 .ui-box.ui-live { background: #e6f2ff; border-color: #5fb4f0; }
+.ui-box.ui-week { background: #fff3dc; border-color: #feae34; }
 .ui-advent { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin: 6px 0 4px; }
 .ui-advent-day { text-align: center; padding: 3px 0; border: 2px solid #2b2233; border-radius: 4px; background: #fbf6ea;
   font: 700 12px ${UI_FONT}; color: #2b2233; }
@@ -866,6 +867,7 @@ export const ICONS: Record<string, string> = {
   '🍦': 'item_icecream',
   '🍊': 'item_tangerines',
   '💐': 'item_flowers',
+  '🍉': 'item_watermelons',
   '💧': 'item_water',
   '🧃': 'item_juice',
   '🥟': 'item_dumplings',

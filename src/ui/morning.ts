@@ -143,6 +143,8 @@ import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene } from '.
 import { activeEvent, addDays, cardOf, cardWaiting, guestDue, guestOn, nextGuest, openCard, openedCards, type LiveEvent } from '../game/live';
 import { liveEvents, todayLocal } from '../platform/live';
 import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
+import { weekBox, weekSoonLine } from './weeks';
+import { WEEK_IDS, type WeekId } from '../game/weeks';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
@@ -815,6 +817,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...debtLine(state),
       ...bigDayLine(state),
       ...seasonLine(state),
+      ...weekSoonLine(state),
       ...weatherLine(state),
       ...warLine(state),
       ...districtLines(state),
@@ -846,6 +849,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...presentsBox(getState, update),
       ...leagueClaimBox(state, getState, update),
       ...(touring ? [] : liveBox(state)),
+      ...(touring ? [] : weekBox(state, guestsToday(state))),
       ...staffEventBox(state),
       ...districtBox(state),
       ...lifeBox(state),
@@ -3322,7 +3326,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           : item?.price !== undefined
             ? `${item.price} 💰`
             : item?.holiday
-              ? t('decor.holidayEarn')
+              ? t(WEEK_IDS.includes(item.holiday as WeekId) ? 'decor.weekEarn' : 'decor.holidayEarn')
               : item?.season !== undefined
                 ? t('decor.seasonEarn')
                 : item?.support
@@ -3414,7 +3418,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     modal.append(
       el('h2', '', t(item.nameKey)),
       decorPreview(item, item.kind, true),
-      el('div', 'ui-muted', t('decor.holidayNote', { when: t(`decor.holidayWhen.${item.holiday}` as TextKey) })),
+      el('div', 'ui-muted', t(WEEK_IDS.includes(item.holiday as WeekId) ? 'decor.weekNote' : 'decor.holidayNote', { when: t(`decor.holidayWhen.${item.holiday}` as TextKey) })),
       button(t('decor.close'), close, 'ui-btn secondary'),
     );
   };
