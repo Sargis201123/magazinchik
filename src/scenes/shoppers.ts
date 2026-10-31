@@ -398,7 +398,8 @@ export async function runJury(scene: StoreScene): Promise<void> {
  * Новый покупатель с улицы. forced — заданный (друг, первый покупатель); arrived — уже идёт по
  * тротуару от парковки (carCustomer): человечек готов, после покупок он вернётся к своей машине.
  */
-export function spawnCustomer(scene: StoreScene, 
+export function spawnCustomer(
+  scene: StoreScene,
   forced?: { look: Look; at: Phaser.Types.Math.Vector2Like; wants?: ProductId[]; first?: boolean },
   arrived?: { sprite: Phaser.GameObjects.Container; look: Look; car: ParkSpot },
 ): void {
