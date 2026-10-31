@@ -1692,6 +1692,8 @@ export class StoreScene extends Phaser.Scene {
   private newYearSound = false;
   /** Что вокруг — для атмосферы (ambience.ts): один объект на все кадры, без мусора в памяти. */
   private ambLife: AmbLife = { customers: 0, morning: 0, newYear: false, lateAutumn: false, night: false, lite: false, neon: null };
+  /** Для какого состояния посчитаны работающие кассы (звук зала). */
+  private tillsFor: StoreState | null = null;
   private valyaCame = false;
   /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
   private combo = 0;
@@ -4809,6 +4811,12 @@ export class StoreScene extends Phaser.Scene {
     life.lateAutumn = lateAutumn(this.state.day);
     life.night = this.night;
     life.lite = this.lite;
+    // Звук зала по размеру магазина: помещение и сколько касс работает (состояние меняется целиком — сравниваем ссылку).
+    life.level = this.state.level;
+    if (this.tillsFor !== this.state) {
+      this.tillsFor = this.state;
+      life.tills = registerCount(this.state) - idleRegisters(this.state);
+    }
     // Неон в зале горит весь день; вывеска на крыше — с вечера (сначала мигает). Свет отключили — молчит.
     const inside = this.neonDecorX !== undefined;
     if (this.blackout || this.powerCut || (!inside && this.evening <= 0.12)) life.neon = null;

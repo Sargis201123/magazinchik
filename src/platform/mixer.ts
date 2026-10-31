@@ -106,6 +106,10 @@ interface Graph {
   muffle: BiquadFilterNode;
   dip: GainNode;
   indoorSend: GainNode;
+  /** Всё, что звучит в зале (зал и мир), — отсюда отзвук; длинный хвост большого зала цепляется сюда же. */
+  indoor: GainNode;
+  /** Длинный хвост большого зала (гипермаркет): собирается, только когда понадобится. */
+  bigSend?: GainNode;
 }
 
 let ctx: AudioContext | null = null;
@@ -193,7 +197,7 @@ function build(ac: AudioContext): Graph {
   input.music.connect(musicDuck).connect(musicTone).connect(master);
   musicTone.connect(gain(SEND.music)).connect(reverb);
 
-  return { input, master, glass, glassCut, door, musicDuck, musicTone, muffle, dip, indoorSend };
+  return { input, master, glass, glassCut, door, musicDuck, musicTone, muffle, dip, indoorSend, indoor };
 }
 
 /** Громкости с ползунков — в усилители каналов. */
@@ -207,6 +211,8 @@ function applyVolumes(): void {
 // ---------- Дверь на улицу ----------
 
 let doorOpen = 0;
+/** Как открыта дверь на самом деле (без «улицы ближе»). */
+let doorRaw = 0;
 /**
  * Насколько распахнутая дверь «впускает улицу»: наполовину. Раньше на каждого покупателя улица
  * вспыхивала целиком (дождь ярче и громче), в час пик и на ×2 — то и дело: звучало как хлопанье двери.
@@ -219,7 +225,8 @@ const DOOR_AIR = 0.5;
  * а не мигают.
  */
 export function setDoorAir(open: number): void {
-  const next = Math.round(Math.min(1, Math.max(0, open)) * DOOR_AIR * 20) / 20;
+  doorRaw = open;
+  const next = Math.round(Math.max(streetNear, Math.min(1, Math.max(0, open)) * DOOR_AIR) * 20) / 20;
   if (!ctx || !graph || next === doorOpen) return;
   const tau = next > doorOpen ? 0.2 : 0.5;
   doorOpen = next;
@@ -228,6 +235,62 @@ export function setDoorAir(open: number): void {
   glide(graph.glass.gain, air.shelf, now, tau);
   glide(graph.glassCut.frequency, air.cut, now, tau);
   glide(graph.door.gain, air.gain, now, tau);
+}
+
+// ---------- Размер зала ----------
+
+/** Улица ближе, чем за витриной (ларёк: окошко открыто всегда) — сколько «приоткрыта дверь» и без покупателей. */
+let streetNear = 0;
+let roomSize = 1;
+let bigHall = 0;
+/** Длинный хвост большого зала: громкость при big = 1 и длина, с. */
+const BIG_HALL = { send: 0.12, seconds: 2.4 };
+
+/**
+ * Размер зала (hallLayers.ts): size — множитель отзвука комнаты (ларёк суше, универмаг гулче), big — длинный
+ * хвост большого зала (0…1, гипермаркет), near — улица ближе (0…1). Плавно, без щелчков; вызывать можно
+ * часто — меняется, только если что-то правда изменилось. Хвост собирается при первой нужде, на слабом
+ * телефоне — никогда (свёртка длинного отклика — заметная нагрузка).
+ */
+export function setRoom(size: number, big: number, near: number): void {
+  if (!ctx || !graph) return;
+  const now = ctx.currentTime;
+  if (near !== streetNear) {
+    streetNear = near;
+    setDoorAir(doorRaw);
+  }
+  if (size !== roomSize) {
+    roomSize = size;
+    glide(graph.indoorSend.gain, SEND.indoor * size * (menuOpen ? 0.15 : 1), now, 1.5);
+  }
+  const k = liteMode() ? 0 : big;
+  if (k === bigHall) return;
+  bigHall = k;
+  if (k > 0 && !graph.bigSend) graph.bigSend = buildBigHall(ctx, graph);
+  if (graph.bigSend) glide(graph.bigSend.gain, BIG_HALL.send * k * (menuOpen ? 0.15 : 1), now, 1.5);
+}
+
+function buildBigHall(ac: AudioContext, g: Graph): GainNode {
+  const send = ac.createGain();
+  send.gain.value = 0;
+  const reverb = ac.createConvolver();
+  reverb.normalize = false;
+  const ir = roomImpulse(ac.sampleRate, BIG_HALL.seconds, seeded(91));
+  const buffer = ac.createBuffer(2, ir.left.length, ac.sampleRate);
+  buffer.copyToChannel(ir.left as Float32Array<ArrayBuffer>, 0);
+  buffer.copyToChannel(ir.right as Float32Array<ArrayBuffer>, 1);
+  reverb.buffer = buffer;
+  // Чуть позже основного (большой зал — стены дальше) и темнее: гул, а не звон.
+  const delay = ac.createDelay(0.1);
+  delay.delayTime.value = 0.035;
+  const low = ac.createBiquadFilter();
+  low.type = 'highpass';
+  low.frequency.value = 300;
+  const high = ac.createBiquadFilter();
+  high.type = 'lowpass';
+  high.frequency.value = 3200;
+  g.indoor.connect(send).connect(delay).connect(reverb).connect(low).connect(high).connect(g.master);
+  return send;
 }
 
 // ---------- Меню, диалоги, фанфары ----------
@@ -256,7 +319,8 @@ function applyMenu(): void {
   const now = ctx.currentTime;
   glide(graph.muffle.frequency, menuOpen ? MENU.muffle : OPEN_AIR, now, menuOpen ? 0.08 : 0.25);
   glide(graph.dip.gain, menuOpen ? MENU.dip : 1, now, 0.15);
-  glide(graph.indoorSend.gain, menuOpen ? SEND.indoor * 0.15 : SEND.indoor, now, 0.15);
+  glide(graph.indoorSend.gain, SEND.indoor * roomSize * (menuOpen ? 0.15 : 1), now, 0.15);
+  if (graph.bigSend) glide(graph.bigSend.gain, BIG_HALL.send * bigHall * (menuOpen ? 0.15 : 1), now, 0.15);
   glide(graph.musicTone.frequency, menuOpen ? MENU.music : MUSIC_TONE, now, 0.25);
 }
 
