@@ -106,7 +106,7 @@ export async function progress(request: Request, env: Env): Promise<Response> {
 }
 
 /** Шаги первых минут, которые считаем по каждому варианту начала (события игры). */
-export const ONB_STEPS = ['onb_play', 'onb_open', 'onb_hello', 'onb_cust', 'onb_sale', 'onb_bye', 'onb_day1', 'onb_day2', 'tour_done', 'tour_skip', 'tour_replay'];
+export const ONB_STEPS = ['onb_play', 'onb_open', 'onb_hello', 'onb_cust', 'onb_sale', 'onb_stock', 'onb_bye', 'onb_day1', 'onb_gift', 'onb_day2', 'tour_done', 'tour_skip', 'tour_replay'];
 /** Варианты начала: значение события onb_ab (src/game/onboarding.ts). */
 const COHORTS = ['tour', 'play'] as const;
 /** Первая продажа «быстрая» — не позже стольких секунд от «Играть» (цель нового начала). */
