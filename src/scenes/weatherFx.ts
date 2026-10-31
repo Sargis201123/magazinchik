@@ -12,6 +12,7 @@ import { WING_OUTER } from './layout';
 import { ART, STREET_VIEW, WALL, FACADE_H, GUST_SPEED, GUST_MS, GUST_TILT, LIGHT_DEPTH, CAR_COLORS, type CrownPart } from './common';
 import * as pets from './pets';
 import * as lighting from './lighting';
+import * as decorations from './decorations';
 
 /**
  * Погода дня: дождь с брызгами и зонтами, снег (белый газон, гирлянда на фасаде, ёлка в зале),
@@ -117,7 +118,7 @@ export function applyWeather(scene: StoreScene): void {
     })).setDepth(-5);
   }
   weatherExtras(scene, keep);
-  scene.applySeason(keep);
+  decorations.applySeason(scene, keep);
   scene.updateLighting(scene.running ? undefined : 0);
 }
 
