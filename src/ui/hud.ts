@@ -327,6 +327,8 @@ export class Hud {
      * за отложенным и какой будет гостинец (game/returns.ts, gift.ts).
      */
     tomorrow?: string | string[],
+    /** Первый день новичка (game/firstday.ts): печать «Отличный первый день!», бабушка прощается до завтра. */
+    firstDay = false,
   ): void {
     const { card, close } = openModal();
     card.classList.add('ui-sum');
@@ -354,7 +356,9 @@ export class Hud {
       revenue: tile('💰', stats.revenue, t('summary.revenue'), 'good', records.includes('revenue')),
       served: tile('🙂', stats.served, t('summary.served'), '', records.includes('served')),
     };
-    tile('🚶', stats.lost, t('summary.lost'), stats.lost > stats.served / 3 ? 'bad' : '');
+    // Первый день новичка: никто не ушёл — плитки нет совсем; ушли — без красного.
+    if (!firstDay) tile('🚶', stats.lost, t('summary.lost'), stats.lost > stats.served / 3 ? 'bad' : '');
+    else if (stats.lost) tile('🚶', stats.lost, t('summary.lost'));
     // Рейтинг: золотые звёзды заполняются до дробной части, рядом докручивается число, ниже — на сколько изменился.
     const stars = starRow();
     const rate = tile(stars.box, Math.round(rating.after * 10), t('summary.rating'), arrowRating === '▼' ? 'bad' : arrowRating ? 'good' : '', false, (n) =>
@@ -376,10 +380,21 @@ export class Hud {
     // Реклама работала — сразу под плитками видно, окупилась ли она гостями.
     if (stats.adGuests) card.append(el('div', 'ui-muted ui-sum-ads', t('summary.ads', { n: stats.adGuests })));
     // Новое звание и побитые рекорды — не в «Подробнее», а печатью: звание золотой, рекорд красной.
-    if (stamps.length) {
+    if (stamps.length || firstDay) {
       const row = el('div', 'ui-stamps');
+      if (firstDay) {
+        const at = calm ? CALM_STAMP_AT : STAMP_AT;
+        row.append(stamp('gold', t('first.stampTop'), t('first.stamp'), stats.lost ? t('first.stampNote') : t('first.allSold'), at, 0, !calm));
+        setTimeout(() => {
+          if (!card.isConnected) return;
+          sound.medal();
+          haptic.tap();
+        }, at + STAMP_HIT);
+      }
+      const shift = firstDay ? 1 : 0;
       const recordValue: Record<RecordId, number> = { revenue: stats.revenue, served: stats.served, combo: stats.bestCombo, money: money.total, days: day };
-      stamps.forEach((s, i) => {
+      stamps.forEach((s, n) => {
+        const i = n + shift;
         const at = (calm ? CALM_STAMP_AT : STAMP_AT) + i * STAMP_STEP;
         const hit = at + STAMP_HIT;
         row.append(
@@ -406,7 +421,7 @@ export class Hud {
       });
       card.append(row);
     }
-    card.append(grannySays(day, stats, rating, history));
+    card.append(grannySays(day, stats, rating, history, firstDay));
     const later = typeof tomorrow === 'string' ? [tomorrow] : (tomorrow ?? []);
     if (later.length) {
       const line = el('div', 'ui-tomorrow');
@@ -549,7 +564,14 @@ type GrannyMood = 'great' | 'good' | 'slow' | 'lost' | 'down';
 const GRANNY_FACE: Record<GrannyMood, string> = { great: '_happy', good: '', slow: '_sad', lost: '_surprised', down: '_sad' };
 
 /** Бабушка одной фразой оценивает день: по выручке против недели, ушедшим и рейтингу. */
-function grannySays(day: number, stats: DayStats, rating: { before: number; after: number }, history: number[]): HTMLElement {
+function grannySays(day: number, stats: DayStats, rating: { before: number; after: number }, history: number[], firstDay = false): HTMLElement {
+  if (firstDay) {
+    // Вечер первого дня: бабушка уезжает на дачу и прощается до завтра.
+    const box = el('div', 'ui-granny');
+    const started = performance.now();
+    box.append(liveFace('assets/portrait_grandma_happy.png', () => performance.now() - started < 1600, 'ui-granny-face'), el('p', '', t('first.bye')));
+    return box;
+  }
   const earlier = history.slice(-8, -1);
   const avg = earlier.length ? earlier.reduce((a, b) => a + b, 0) / earlier.length : stats.revenue;
   const mood: GrannyMood =

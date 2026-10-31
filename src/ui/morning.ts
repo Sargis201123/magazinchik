@@ -1,3 +1,4 @@
+import { warmKey } from '../game/firstday';
 import { momentCount } from '../game/moments';
 import { getLang, memberName, t } from '../i18n';
 import { pluralForm } from '../i18n/plural';
@@ -596,7 +597,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if (nudged || idle < NUDGE_IDLE_MS || !card.classList.contains('ui-full') || card.classList.contains('touring')) return;
     if (document.querySelectorAll('.ui-modal:not(.closing)').length > 1 || document.querySelector('.ui-dialog')) return;
     const state = getState();
-    if (state.day > NUDGE_LAST_DAY) return;
+    // Идёт шаг бабушкиного обучения утра — говорит она, строка снизу о том же молчит (одна подсказка за раз).
+    if (state.day > NUDGE_LAST_DAY || tutAt(state, 'morning') || document.querySelector('.ui-coach-say')) return;
     const kind = morningNudge(state, { restock: restockPlan(state, priceOf, guestsToday(state)).lines.length > 0 });
     if (!kind || !tryNudge(state.day, kind, idle)) return;
     nudged = kind;
@@ -3545,7 +3547,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const goalLine = (state: StoreState) => {
     const chapter = currentChapter(state);
     const text = chapter
-      ? t('story.goalLine', { title: t(chapter.titleKey), goal: t(chapter.goalKey, chapter.progress(state)) })
+      ? t('story.goalLine', { title: t(chapter.titleKey), goal: t(warmKey(state, chapter.goalKey), chapter.progress(state)) })
       : t('story.free');
     return el('div', 'ui-note', text);
   };
@@ -3555,8 +3557,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const current = lines[Math.min(storyLine, lines.length - 1)];
     const speaker = CHARACTERS[current.who];
     const last = storyLine >= lines.length - 1;
+    const key = warmKey(state, current.key);
+    const mood = key !== current.key ? 'happy' : current.mood;
     const after: HTMLElement[] = [];
-    if (last && kind === 'intro') after.push(el('div', 'ui-note', `🎯 ${t(chapter.goalKey, chapter.progress(state))}`));
+    if (last && kind === 'intro') after.push(el('div', 'ui-note', `🎯 ${t(warmKey(state, chapter.goalKey), chapter.progress(state))}`));
     if (last && kind === 'outro') {
       const reward = [
         chapter.reward.money ? `+${chapter.reward.money} 💰` : '',
@@ -3571,9 +3575,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return dialogBox({
       caption: t('story.chapter', { n: state.story.chapter + 1, title: t(chapter.titleKey) }),
       art,
-      portrait: `portrait_${current.who}${current.mood ? `_${current.mood}` : ''}`,
+      // Новичку о бабушкином долге — тёплой семейной историей, с улыбкой (firstday.ts warmKey).
+      portrait: `portrait_${current.who}${mood ? `_${mood}` : ''}`,
       name: t(speaker.nameKey),
-      text: `«${t(current.key)}»`,
+      text: `«${t(key)}»`,
       pitch: VOICE[current.who],
       after,
       nextLabel: t('story.next'),

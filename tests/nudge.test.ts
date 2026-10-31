@@ -143,9 +143,10 @@ describe('«Завтра:» в итогах дня', () => {
     }
   });
 
-  it('новичку нового начала — какая вкладка откроется завтра', () => {
-    const t = tomorrowTeaser(game({ day: 2, story: story(0), onboarding: 'play', onb: { done: [], tabs: {} } }));
-    expect(t).toEqual({ key: 'teaser.tab', params: { tab: 'tab.buy' } });
+  it('новичку нового начала после первого дня — обещание, потом — какая вкладка откроется завтра', () => {
+    expect(tomorrowTeaser(game({ day: 2, story: story(0), onboarding: 'play', onb: { done: [], tabs: {} } }))).toEqual({ key: 'teaser.first', params: {} });
+    const t = tomorrowTeaser(game({ day: 3, money: 0, story: story(0), onboarding: 'play', onb: { done: [], tabs: { buy: true } } }));
+    expect(t).toEqual({ key: 'teaser.tab', params: { tab: 'tab.hall' } });
   });
 });
 

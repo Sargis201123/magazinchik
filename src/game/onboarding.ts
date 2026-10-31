@@ -22,7 +22,11 @@ export function pickCohort(userId: number | undefined, random: () => number, sha
 }
 
 /** Шаги первых минут: каждый отмечается один раз и уходит в аналитику (onb_<шаг>). */
-export type OnbStep = 'open' | 'cust' | 'sale' | 'day1' | 'day2' | 'hello' | 'bye';
+/**
+ * stock — новичок сам разложил полку (до этого в первый день её раскладывает бабушка, firstday.ts);
+ * gift — бабушкин подарок за первый день вручён.
+ */
+export type OnbStep = 'open' | 'cust' | 'sale' | 'day1' | 'day2' | 'hello' | 'bye' | 'stock' | 'gift';
 
 export interface OnbState {
   /** Пройденные шаги. */
