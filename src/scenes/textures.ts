@@ -19,6 +19,15 @@ export const SPRITES = [
   'holiday_mimosa',
   'sign_frost',
   'wall_winter',
+  // Сезонные недели (art/weeks.py, game/weeks.ts): украшения улицы и памятные вещи за дорожку.
+  'week_stall',
+  'week_hay',
+  'week_pietable',
+  'week_sale_banner',
+  'week_lantern',
+  'holiday_scarecrow',
+  'holiday_cart',
+  'holiday_lantern',
   // Кубки конкурсов «Лучший магазин…» (art/contest.py).
   'cup_district',
   'cup_city',

@@ -118,6 +118,7 @@ import * as pets from './pets';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
+import * as weeksFx from './weeks';
 import * as deliveries from './deliveries';
 import * as food from './food';
 import * as streets from './streets';
@@ -571,6 +572,11 @@ export class StoreScene extends Phaser.Scene {
   catBlink = 0;
   /** Флажки, шарики и лоток ярмарки; лоток продаёт со склада по таймеру. */
   fairObjs: Phaser.GameObjects.GameObject[] = [];
+  /** Сезонная неделя (weeks.ts): украшения, люди у лотков, их повторы, баннер «−20%» и какая неделя нарисована. */
+  weekObjs: Phaser.GameObjects.GameObject[] = [];
+  weekTimers: (() => void)[] = [];
+  weekSign?: Phaser.GameObjects.Image;
+  builtWeek = '';
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
   bigObjs: { destroy: () => void }[] = [];
   /** Блэкаут на весь район: темно, касса считает вручную (щиток не поможет). */
@@ -842,17 +848,18 @@ export class StoreScene extends Phaser.Scene {
     if (!this.night && this.sonya === 'pending' && elapsed >= SONYA_AT) void this.runSonya();
     if (!this.night && this.liveGuest?.phase === 'pending' && elapsed >= LIVE_GUEST_AT) void shoppers.runLiveGuest(this);
     if (!this.night) this.moments.tick(elapsed, deltaMs);
+    weeksFx.tick(this);
 
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;
-      const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0) + (isCrowdDay(this.state.day) && !this.night ? CROWD_EXTRA_GUESTS : 0);
+      const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0) + (isCrowdDay(this.state.day) && !this.night ? CROWD_EXTRA_GUESTS : 0) + weeksFx.crowdExtra(this);
       if (this.nextSpawn <= 0 && this.customers.size < maxCustomers && !this.siege) {
         // Очередной покупатель иногда приезжает на машине: сначала паркуется, потом идёт в магазин.
         // Этого гостя позвал к себе конкурент (game/rival.ts) — он не придёт.
         if (this.rivalLost > 0 && !this.night) this.rivalLost--;
         else if (!cars.carCustomer(this)) this.spawnCustomer();
         const interval =
-          spawnIntervalToday(this.state) / (rush ? 2 : 1) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : 1);
+          spawnIntervalToday(this.state) / (rush ? 2 : 1) / weeksFx.crowd(this) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
       }
     } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here' && this.liveGuest?.phase !== 'here') {
@@ -998,6 +1005,9 @@ export class StoreScene extends Phaser.Scene {
     weatherFx.applyWeather(this);
     this.fairObjs = [];
     decorations.applyFair(this);
+    this.weekObjs = [];
+    this.weekTimers = [];
+    weeksFx.applyWeek(this);
     morningFlow.noteNewProps(this, bought);
     // Пол — последним: тени ложатся от всей мебели, что уже стоит в зале и во флигеле.
     this.loadWear();

@@ -20,6 +20,7 @@ import type { DayReport } from './reports';
 import type { AdId } from './ads';
 import type { FloorWear } from './wear';
 import { afterLoanPayment, loanDue } from './bank';
+import { SALE_DISCOUNT, saleOn, weekDemand, weekProductOk } from './weeks';
 import { fridgeLife, fridgePower, lightsPower, solarPower, warehouseRoom, type GearId } from './gear';
 
 /**
@@ -37,6 +38,8 @@ export type ProductId =
   | 'meat'
   | 'icecream'
   | 'tangerines'
+  | 'pumpkins'
+  | 'watermelons'
   | 'flowers'
   | 'water'
   | 'juice'
@@ -76,6 +79,9 @@ export const PRODUCTS: Record<ProductId, Product> = {
   icecream: { id: 'icecream', nameKey: 'product.icecream', icon: '🍦', category: 'icebox', cost: 30, basePrice: 55, shelfLife: 4, color: 0xf6c6d6 },
   tangerines: { id: 'tangerines', nameKey: 'product.tangerines', icon: '🍊', category: 'produce', cost: 20, basePrice: 40, shelfLife: 6, color: 0xf77622 },
   flowers: { id: 'flowers', nameKey: 'product.flowers', icon: '💐', category: 'florist', cost: 35, basePrice: 70, shelfLife: 3, color: 0xe43b44 },
+  // Товары сезонных недель (weeks.ts): тыквы — на «Ярмарке урожая», арбузы — на «Летнем фестивале».
+  pumpkins: { id: 'pumpkins', nameKey: 'product.pumpkins', icon: '🎃', category: 'produce', cost: 22, basePrice: 45, shelfLife: 7, color: 0xf77622 },
+  watermelons: { id: 'watermelons', nameKey: 'product.watermelons', icon: '🍉', category: 'produce', cost: 30, basePrice: 60, shelfLife: 4, color: 0x3e8948 },
   // Новые отделы больших магазинов: напитки, заморозка, бытовая химия (полки — с уровня помещения).
   water: { id: 'water', nameKey: 'product.water', icon: '💧', category: 'drinks', cost: 12, basePrice: 25, shelfLife: NEVER, color: 0x0099db },
   juice: { id: 'juice', nameKey: 'product.juice', icon: '🧃', category: 'drinks', cost: 28, basePrice: 50, shelfLife: NEVER, color: 0xfeae34 },
@@ -103,12 +109,13 @@ export const PRODUCT_IDS = Object.keys(PRODUCTS) as ProductId[];
 const YEAR_MONTHS = 16;
 /**
  * Сезонные товары: в какие месяцы игрового года (0…15) их продают.
- * Мороженое — летом, мандарины — перед Новым годом и в новогоднюю неделю, цветы — весной.
+ * Мороженое — летом, мандарины — перед Новым годом и в новогоднюю неделю, цветы — весной;
+ * арбузы и тыквы — только в свою сезонную неделю (weeks.ts WEEKS.*.month; совпадение проверяет тест).
  */
-export const SEASONAL: Partial<Record<ProductId, number[]>> = { tangerines: [2, 3], flowers: [4, 5, 6] };
+export const SEASONAL: Partial<Record<ProductId, number[]>> = { tangerines: [2, 3], flowers: [4, 5, 6], watermelons: [9], pumpkins: [13] };
 
 export const monthInYear = (day: number): number => (monthOf(day) - 1) % YEAR_MONTHS;
-export const productAvailable = (id: ProductId, day: number): boolean => SEASONAL[id]?.includes(monthInYear(day)) ?? true;
+export const productAvailable = (id: ProductId, day: number): boolean => (SEASONAL[id]?.includes(monthInYear(day)) ?? true) && weekProductOk(id, day);
 
 /** Через сколько дней начнётся сезон товара (0 — уже сезон или товар всегда в продаже). */
 export function daysUntilSeason(id: ProductId, day: number): number {
@@ -119,8 +126,13 @@ export function daysUntilSeason(id: ProductId, day: number): number {
 /** Летние месяцы (7…10) — мороженое продаётся круглый год, но летом его берут охотнее, в Новый год — реже. */
 const SUMMER_MONTHS = [7, 8, 9, 10];
 
-/** Спрос на сезонный товар: в сезон берут охотно, на 8 Марта (первые два дня весны) цветы — нарасхват. */
-export function seasonalDemand(id: ProductId, day: number): number {
+/**
+ * Спрос на сезонный товар: в сезон берут охотно, на 8 Марта (первые два дня весны) цветы — нарасхват.
+ * В сезонную неделю (weeks.ts) любимое недели — ещё охотнее.
+ */
+export const seasonalDemand = (id: ProductId, day: number): number => seasonBase(id, day) * weekDemand(id, day);
+
+function seasonBase(id: ProductId, day: number): number {
   if (id === 'icecream') return SUMMER_MONTHS.includes(monthInYear(day)) ? 1.5 : monthInYear(day) === 3 ? 0.6 : 1;
   if (!SEASONAL[id]) return 1;
   if (id === 'flowers' && monthInYear(day) === 4 && (day - 1) % MONTH_DAYS < 2) return 5;
@@ -722,6 +734,8 @@ export interface StoreState {
   drama?: import('./drama').DramaState;
   /** Праздники по настоящему календарю (live.ts): открытые открытки и когда заходил гость. */
   live?: import('./live').LiveState;
+  /** Сезонные недели игрового года (weeks.ts): дорожки и вечер распродажи. */
+  weeks?: import('./weeks').WeeksState;
   /** Ступень своей марки «От бабушки» (0 — нет, brand.ts). */
   brand?: number;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */
@@ -867,7 +881,7 @@ export const newGame = (): StoreState => ({
     // Вёдра для цветов у кассы — с самого начала, весной в них ставят букеты.
     { kind: 'florist', level: 0, items: {} },
   ],
-  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70, water: 25, juice: 50, dumplings: 80, fish: 110, soap: 35, detergent: 99, pies: 45, buns: 40, honeycake: 110 },
+  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70, pumpkins: 45, watermelons: 60, water: 25, juice: 50, dumplings: 80, fish: 110, soap: 35, detergent: 99, pies: 45, buns: 40, honeycake: 110 },
 });
 
 export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];
@@ -951,7 +965,9 @@ export const promoKind = (state: StoreState, id: ProductId): 'discount' | 'bogo'
   state.promo?.day === state.day && state.promo.product === id ? state.promo.kind : undefined;
 
 export const unitSalePrice = (state: StoreState, id: ProductId, unit: Unit): number => {
-  const price = promoKind(state, id) === 'discount' ? Math.max(1, Math.round(state.prices[id] * PROMO_DISCOUNT)) : state.prices[id];
+  const promo = promoKind(state, id) === 'discount' ? Math.max(1, Math.round(state.prices[id] * PROMO_DISCOUNT)) : state.prices[id];
+  // Вечер «Ночи распродаж» (weeks.ts): всё на 20% дешевле.
+  const price = saleOn(state) ? Math.max(1, Math.round(promo * SALE_DISCOUNT)) : promo;
   return unit.markdown ? Math.max(1, Math.round(price * MARKDOWN)) : price;
 };
 

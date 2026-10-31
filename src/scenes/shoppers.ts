@@ -42,6 +42,7 @@ import { BIG_DAYS, BLACKOUT_CHECKOUT, bigDayExtraItems, bigDayFor, CROWD_PATIENC
 import { wearOf } from './archetypes';
 import { isWet, weatherFor } from '../game/weather';
 import { adExtraItems, adRareBoost, adTrust } from '../game/ads';
+import { saleExtraItems } from '../game/weeks';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular } from '../game/regulars';
 import { CART_SHARE, cartPatience, loyaltyTolerance, withUpgrades } from '../game/upgrades';
@@ -536,7 +537,7 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
     { x: door.x, y: door.y - 10 },
   ]);
   // С тележкой у входа покупатель иногда берёт что-то сверх списка.
-  const wanted = scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + adExtraItems(scene.state, Math.random));
+  const wanted = scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + adExtraItems(scene.state, Math.random) + saleExtraItems(scene.state, Math.random));
   for (const id of wanted) {
     const index = shelfFor(scene.state, id);
     // Ларь у кассы на виду — вор туда не идёт.
@@ -604,7 +605,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   if (!c.first) await persons.walk(scene, c.sprite, door.x + Math.sign(gap) * Math.min(Math.abs(gap), DOOR_TURN), scene.streetY);
   // Тележки у входа: часть покупателей берёт их — кому удобнее.
   if (persons.cartsAtDoor(scene) && Math.random() < CART_SHARE && !c.sprite.getData('stroller') && !c.thief) persons.giveTrolley(scene, c.sprite);
-  const wanted = c.wants ?? scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + adExtraItems(scene.state, Math.random));
+  const wanted = c.wants ?? scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + adExtraItems(scene.state, Math.random) + saleExtraItems(scene.state, Math.random));
   let disappointed = false;
   let why: { reason: LostReason; id: ProductId } | undefined;
   // Подойти, поискать глазами, взять: к полке в зале, к ларю и к вёдрам у кассы — одинаково.

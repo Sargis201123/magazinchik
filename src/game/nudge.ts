@@ -7,6 +7,7 @@ import { nextStoreLevel, START_DEBT, type StoreState } from './economy';
 import { CHAPTERS } from './story';
 import { isFairDay } from './fair';
 import { seasonFor } from './endless';
+import { weekFor, WEEKS } from './weeks';
 import { holidayFor } from './calendar';
 import { weatherFor, WEATHER_EFFECTS } from './weather';
 import { openTabs } from './onboarding';
@@ -154,7 +155,7 @@ export const TEASER_NEAR = 0.75;
 
 /**
  * Одна строка на завтра — чтобы хотелось вернуться. s — уже утро следующего дня (после ночи):
- * глава готова к награде, цель почти взята, ярмарка, сезон, праздник, новая вкладка — иначе погода.
+ * глава готова к награде, цель почти взята, сезонная неделя, ярмарка, сезон, праздник, новая вкладка — иначе погода.
  */
 export function tomorrowTeaser(s: StoreState): Teaser {
   const day = s.day;
@@ -167,6 +168,9 @@ export function tomorrowTeaser(s: StoreState): Teaser {
   if (goal?.id === 'level' && goal.progress >= 1) return { key: 'teaser.levelReady', params: { name: goal.params.name } };
   const weekly = (s.weekly?.challenges ?? []).find((c) => !c.done && c.progress / Math.max(1, c.target) >= 0.8);
   if (weekly) return { key: 'teaser.weekly', params: {} };
+  // Завтра начинается сезонная неделя (weeks.ts).
+  const week = weekFor(day);
+  if (week?.n === 1) return { key: 'teaser.week', params: { icon: WEEKS[week.id].icon, name: WEEKS[week.id].nameKey } };
   if (isFairDay(day)) return { key: 'teaser.fair', params: {} };
   const season = seasonFor(day);
   if (season && !seasonFor(day - 1)) return { key: 'teaser.season', params: { icon: season.icon, name: season.nameKey } };
