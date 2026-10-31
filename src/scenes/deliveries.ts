@@ -46,6 +46,7 @@ import {
 import * as motion from './motion';
 import * as effects from './effects';
 import * as cars from './cars';
+import * as staff from './staff';
 
 // ---------- Доставка на дом ----------
 
@@ -291,7 +292,7 @@ export async function ownerPack(scene: StoreScene): Promise<void> {
   let cancel = () => {};
   parcel.stage = 'packing';
   scene.popup(scene.seller.x, scene.seller.y - 18, t('popup.packOwner'), '#fff3b0');
-  await scene.doChore([
+  await staff.doChore(scene, [
     { ...warehouse.doorway },
     {
       ...warehouse.pickup,
@@ -335,18 +336,18 @@ export async function packParcel(scene: StoreScene, w: Worker, gen: number, parc
       parcel.packed = 0;
     }
   };
-  await scene.workerWalk(w, warehouse.doorway.x, warehouse.doorway.y);
-  await scene.workerWalk(w, warehouse.pickup.x, warehouse.pickup.y);
+  await staff.workerWalk(scene, w, warehouse.doorway.x, warehouse.doorway.y);
+  await staff.workerWalk(scene, w, warehouse.pickup.x, warehouse.pickup.y);
   if (!scene.alive(gen)) return drop();
-  const ms = packMs(parcel.order) / scene.workerPace(w);
+  const ms = packMs(parcel.order) / staff.workerPace(scene, w);
   const cancel = packFx(scene, w.sprite, parcel, ms);
   await scene.wait(ms);
   if (!scene.alive(gen)) return drop(cancel);
   w.carried.setTexture('parcel').setPosition(0, 3).setVisible(true);
   scene.popup(w.sprite.x, w.sprite.y - 18, t('popup.parcel'), '#fff3b0');
-  await scene.workerWalk(w, warehouse.doorway.x, warehouse.doorway.y);
-  await scene.workerWalk(w, door.x - 6, door.y - 10);
-  await scene.workerWait(w, 250);
+  await staff.workerWalk(scene, w, warehouse.doorway.x, warehouse.doorway.y);
+  await staff.workerWalk(scene, w, door.x - 6, door.y - 10);
+  await staff.workerWait(scene, w, 250);
   if (!scene.alive(gen)) return drop();
   w.carried.setVisible(false).setTexture('box');
   parcelAtDoor(scene, parcel);

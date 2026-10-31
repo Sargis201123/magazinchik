@@ -51,6 +51,7 @@ import {
 import { ART, LIGHT_DEPTH, PLACE_MS, COOK_LATE, COFFEE_WAITING, COFFEE_ORDERS, type Customer, type KitchenView, type Worker } from './common';
 import * as motion from './motion';
 import * as lighting from './lighting';
+import * as staff from './staff';
 
 /** Кофейня во флигеле: кофемашина у стены, стойка, за ней бариста; в углу столик. */
 export function buildCoffee(scene: StoreScene): void {
@@ -150,21 +151,21 @@ export async function baristaLoop(scene: StoreScene, w: Worker, gen: number): Pr
     const order = scene.coffeeOrders[0];
     const machine = scene.coffeeImg;
     if (!order || !machine?.active) {
-      if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await scene.workerWalk(w, w.home.x, w.home.y);
+      if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await staff.workerWalk(scene, w, w.home.x, w.home.y);
       scene.setFacing(w.sprite, 'down');
       await scene.wait(300);
       continue;
     }
     // К машине: варит, над машиной пар.
-    await scene.workerWalk(w, machine.x + 7, w.home.y);
+    await staff.workerWalk(scene, w, machine.x + 7, w.home.y);
     if (!scene.alive(gen)) return;
     scene.setFacing(w.sprite, 'left');
     sound.hiss(brewSeconds(scene.state) * 0.8, 2600, 0.035, machine.x);
     const steam = scene.time.addEvent({ delay: 260, repeat: Math.floor((brewSeconds(scene.state) * 1000) / 260), callback: () => steamPuff(scene, machine.x, machine.y - 6) });
-    await scene.workerWait(w, brewSeconds(scene.state) * 1000);
+    await staff.workerWait(scene, w, brewSeconds(scene.state) * 1000);
     steam.remove();
     if (!scene.alive(gen)) return;
-    await scene.workerWalk(w, w.home.x, w.home.y);
+    await staff.workerWalk(scene, w, w.home.x, w.home.y);
     scene.setFacing(w.sprite, 'down');
     scene.popup(w.sprite.x, w.sprite.y - 18, t('popup.coffeeReady'), '#c8ffb0');
     if (scene.coffeeOrders[0] === order) scene.coffeeOrders.shift();
@@ -299,8 +300,8 @@ export async function bakerLoop(scene: StoreScene, w: Worker, gen: number): Prom
     }
     const atOven = { x: oven.img.x + 10, y: oven.img.y + 12 };
     if (oven.state === 'ready') {
-      await scene.workerWalk(w, atOven.x, atOven.y);
-      await scene.workerWait(w, 400);
+      await staff.workerWalk(scene, w, atOven.x, atOven.y);
+      await staff.workerWait(scene, w, 400);
       if (!scene.alive(gen)) return;
       if (oven.state !== 'ready') continue;
       const product = oven.product;
@@ -308,7 +309,7 @@ export async function bakerLoop(scene: StoreScene, w: Worker, gen: number): Prom
       resetOven(scene);
       if (forShops) {
         // Противень для соседей — в ящик у двери пекарни, курьер заберёт; деньги сразу.
-        await scene.workerWalk(w, room.inside.x, room.inside.y);
+        await staff.workerWalk(scene, w, room.inside.x, room.inside.y);
         if (!scene.alive(gen)) return;
         const sold = sellWholesale(scene.state);
         scene.state = sold.state;
@@ -323,12 +324,12 @@ export async function bakerLoop(scene: StoreScene, w: Worker, gen: number): Prom
       const slot = index >= 0 ? scene.spotOf(index) : null;
       // Из пекарни через дверь к полке — одним ходом, без остановки в дверях.
       const stand = slot && standFor(scene.layout, slot);
-      await scene.workerWalkVia(w, [room.inside, room.doorway, ...(stand ? [{ x: stand.x, y: stand.y - 2 }] : [])]);
-      await scene.workerWait(w, PLACE_MS);
+      await staff.workerWalkVia(scene, w, [room.inside, room.doorway, ...(stand ? [{ x: stand.x, y: stand.y - 2 }] : [])]);
+      await staff.workerWait(scene, w, PLACE_MS);
       if (!scene.alive(gen)) return;
       w.carried.setVisible(false).setTexture('box').setPosition(0, 3);
       freshBread(scene, slot ? { x: slot.x, y: slot.y - 18 } : room.doorway, product);
-      await scene.workerWalkVia(w, [room.doorway, room.inside]);
+      await staff.workerWalkVia(scene, w, [room.doorway, room.inside]);
       continue;
     }
     // Сначала хлеб для зала (по режиму пекарни); когда хватает — своя выпечка; потом — заказ соседей.
@@ -336,13 +337,13 @@ export async function bakerLoop(scene: StoreScene, w: Worker, gen: number): Prom
     const next = oven.state === 'idle' ? (bakerShouldBake(scene.state, dayLeft) ? 'bread' : brandToBake(scene.state, dayLeft)) : null;
     const forShops = oven.state === 'idle' && !next && wholesaleToBake(scene.state, scene.wholesaleBaked);
     if (next || forShops) {
-      await scene.workerWalk(w, atOven.x, atOven.y);
+      await staff.workerWalk(scene, w, atOven.x, atOven.y);
       if (!scene.alive(gen)) return;
       startOven(scene, next ?? 'bread', forShops);
       continue;
     }
     // Пока печётся — месит тесто у стола.
-    if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await scene.workerWalk(w, w.home.x, w.home.y);
+    if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await staff.workerWalk(scene, w, w.home.x, w.home.y);
     scene.setFacing(w.sprite, 'up');
     await scene.wait(600);
   }
@@ -526,7 +527,7 @@ export function buildFood(scene: StoreScene): void {
   // Горка уценки целиком (она выше своего следа) и место её покупателя; где стоят менеджер и охранник.
   const bargain = scene.bargainAt;
   const stand = bargain ? [{ x: bargain.x - 15, y: scene.bargainStand(bargain) - 4, w: 30, h: bargain.y + 8 - (scene.bargainStand(bargain) - 4) }] : [];
-  const homes = (['manager', 'guard'] as const).map((role) => scene.workerHome(role)).map((p) => ({ x: p.x - 6, y: p.y - 10, w: 12, h: 14 }));
+  const homes = (['manager', 'guard'] as const).map((role) => staff.workerHome(scene, role)).map((p) => ({ x: p.x - 6, y: p.y - 10, w: 12, h: 14 }));
   // Вещи, переставленные игроком в этом помещении (ёлку ставят позже — по своему месту), полка тоже обходит.
   const moved = scene.state.propPos?.level === scene.state.level ? Object.entries(scene.state.propPos.at).filter(([id]) => id !== 'food') : [];
   const placed = moved.map(([id, p]) => propRect({ id, x: p.x, y: p.y, fp: propFootprint(scene.layout, id, p.x) }));
@@ -665,7 +666,7 @@ export async function cookLoop(scene: StoreScene, w: Worker, gen: number): Promi
   while (scene.alive(gen)) {
     const k = scene.kitchenView;
     // Через сколько закладка будет на полке: варка — по плите, нарезка и дорога — по шагу повара.
-    const ready = stoveSeconds(scene.state) + COOK_LATE / scene.workerPace(w);
+    const ready = stoveSeconds(scene.state) + COOK_LATE / staff.workerPace(scene, w);
     const open = scene.running && !scene.night && Boolean(k?.stove.active) && Boolean(scene.foodView) && scene.timeLeft > ready;
     const left = scene.timeLeft / DAY_SECONDS;
     // Что поставил бы, будь всё в кладовой, — на это кухня и докупает.
@@ -685,14 +686,14 @@ export async function cookLoop(scene: StoreScene, w: Worker, gen: number): Promi
     if (!scene.alive(gen)) return;
     if (!taken.length) continue;
     // Режет на доске: корзинку — на стол, сам — у края стола боком к доске, чтобы нож было видно.
-    await scene.workerWalk(w, w.home.x, w.home.y);
+    await staff.workerWalk(scene, w, w.home.x, w.home.y);
     if (!scene.alive(gen)) return;
     w.carried.setVisible(false);
     scene.setFacing(w.sprite, 'left');
     await chop(scene, w, gen, k, taken);
     if (!scene.alive(gen)) return;
     // К плите: встаёт сбоку (кастрюли и пар не загораживает) и, пока варится, помешивает.
-    await scene.workerWalk(w, k.stove.x + 11, w.home.y);
+    await staff.workerWalk(scene, w, k.stove.x + 11, w.home.y);
     if (!scene.alive(gen)) return;
     scene.setFacing(w.sprite, 'left');
     startPots(scene, taken);
@@ -707,13 +708,13 @@ export async function cookLoop(scene: StoreScene, w: Worker, gen: number): Promi
     if (!k.cooking.length) continue;
     sound.ding(k.stove.x);
     // Готовое — по тарелкам на раздачу, оттуда — на поднос.
-    await scene.workerWalk(w, k.showcase.x + 4, k.showcase.y - 8);
+    await staff.workerWalk(scene, w, k.showcase.x + 4, k.showcase.y - 8);
     if (!scene.alive(gen)) return;
     scene.setFacing(w.sprite, 'down');
     k.onPass = true;
     refreshKitchen(scene);
     sound.place('glass', 1, k.showcase.x);
-    await scene.workerWait(w, PLACE_MS * 2);
+    await staff.workerWait(scene, w, PLACE_MS * 2);
     if (!scene.alive(gen)) return;
     k.onPass = false;
     refreshKitchen(scene);
@@ -741,14 +742,14 @@ export function topUpPantry(scene: StoreScene, k: KitchenView, plan: DishId[]): 
  */
 export async function carryToFood(scene: StoreScene, w: Worker, gen: number, k: KitchenView): Promise<void> {
   const room = scene.layout.kitchen!;
-  await scene.workerWalkVia(w, [room.inside, room.doorway]);
+  await staff.workerWalkVia(scene, w, [room.inside, room.doorway]);
   if (!scene.alive(gen)) return;
   const stand = foodStand(scene);
   if (stand) {
-    await scene.workerWalk(w, stand.x + 4, stand.y);
+    await staff.workerWalk(scene, w, stand.x + 4, stand.y);
     if (!scene.alive(gen)) return;
     scene.setFacing(w.sprite, 'down');
-    await scene.workerWait(w, PLACE_MS);
+    await staff.workerWait(scene, w, PLACE_MS);
     if (!scene.alive(gen)) return;
   }
   w.carried.setVisible(false).setTexture('box').setPosition(0, 3);
@@ -761,12 +762,12 @@ export async function carryToFood(scene: StoreScene, w: Worker, gen: number, k: 
   });
   refreshKitchen(scene);
   sound.place('glass', 1, at.x);
-  await scene.workerWalkVia(w, [room.doorway, room.inside, w.home]);
+  await staff.workerWalkVia(scene, w, [room.doorway, room.inside, w.home]);
 }
 
 /** Готовить нечего — стоит у стола. */
 export async function cookIdle(scene: StoreScene, w: Worker): Promise<void> {
-  if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await scene.workerWalk(w, w.home.x, w.home.y);
+  if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await staff.workerWalk(scene, w, w.home.x, w.home.y);
   scene.setFacing(w.sprite, 'up');
   await scene.wait(600);
 }
@@ -788,24 +789,24 @@ export async function fetchIngredients(scene: StoreScene, w: Worker, gen: number
   const shelf = short ? scene.state.shelves.findIndex((sh) => !sh.broken && (sh.items[short]?.length ?? 0) > 0) : -1;
   if (pantry) {
     // Ящик-кладовая в углу кухни: встаёт перед ним и набирает корзинку.
-    await scene.workerWalk(w, k.crate.x - 2, w.home.y);
+    await staff.workerWalk(scene, w, k.crate.x - 2, w.home.y);
     scene.setFacing(w.sprite, 'up');
-    await scene.workerWait(w, 450);
+    await staff.workerWait(scene, w, 450);
   } else {
-    await scene.workerWalk(w, room.inside.x, room.inside.y);
-    await scene.workerWalk(w, room.doorway.x, room.doorway.y);
+    await staff.workerWalk(scene, w, room.inside.x, room.inside.y);
+    await staff.workerWalk(scene, w, room.doorway.x, room.doorway.y);
   }
   if (fromStore) {
-    await scene.workerWalk(w, store.doorway.x, store.doorway.y);
-    await scene.workerWalk(w, store.inside.x, store.inside.y);
-    await scene.workerWait(w, 450);
+    await staff.workerWalk(scene, w, store.doorway.x, store.doorway.y);
+    await staff.workerWalk(scene, w, store.inside.x, store.inside.y);
+    await staff.workerWait(scene, w, 450);
   }
   if (shelf >= 0) {
     // Со склада в зал — обратно через дверь, а не наискосок сквозь стену флигеля.
-    if (fromStore) await scene.workerWalk(w, store.doorway.x, store.doorway.y);
+    if (fromStore) await staff.workerWalk(scene, w, store.doorway.x, store.doorway.y);
     const stand = standFor(scene.layout, scene.spotOf(shelf));
-    await scene.workerWalk(w, stand.x, stand.y - 2);
-    await scene.workerWait(w, PLACE_MS);
+    await staff.workerWalk(scene, w, stand.x, stand.y - 2);
+    await staff.workerWait(scene, w, PLACE_MS);
   }
   // Пока ходил, магазин закрылся: варить уже нечего — к ночи всё равно спишется.
   if (!scene.alive(gen) || !scene.running || scene.night) return [];
@@ -827,9 +828,9 @@ export async function fetchIngredients(scene: StoreScene, w: Worker, gen: number
     sound.place('bump', 0, w.sprite.x);
   }
   if (pantry) return taken;
-  if (fromStore && shelf < 0) await scene.workerWalk(w, store.doorway.x, store.doorway.y);
-  await scene.workerWalk(w, room.doorway.x, room.doorway.y);
-  await scene.workerWalk(w, room.inside.x, room.inside.y);
+  if (fromStore && shelf < 0) await staff.workerWalk(scene, w, store.doorway.x, store.doorway.y);
+  await staff.workerWalk(scene, w, room.doorway.x, room.doorway.y);
+  await staff.workerWalk(scene, w, room.inside.x, room.inside.y);
   return taken;
 }
 
@@ -849,6 +850,6 @@ export async function chop(scene: StoreScene, w: Worker, gen: number, k: Kitchen
       const bit = scene.add.rectangle(knife.x - 2 + Math.random() * 3, knife.y, 1, 1, colors[i % colors.length]).setDepth(knife.depth + 1);
       scene.tweens.add({ targets: bit, y: bit.y - 2.5, x: bit.x + Phaser.Math.FloatBetween(-2, 2), alpha: 0, duration: 420, ease: 'Quad.easeOut', onComplete: () => bit.destroy() });
     }
-    await scene.workerWait(w, 240);
+    await staff.workerWait(scene, w, 240);
   }
 }

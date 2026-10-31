@@ -12,17 +12,12 @@ import {
   emptyDayStats,
   billTotal,
   guardCatchChance,
-  staffOf,
-  isAbsent,
-  managerBoost,
   markdownSurplus,
   markdownExpiring,
   expiringIn,
   SHELF_KINDS,
   thiefChance,
-  workSpeed,
   hasUnmarkedBad,
-  moveToShelf,
   shelveAll,
   newGame,
   PRODUCT_IDS,
@@ -39,7 +34,6 @@ import {
   takeFromShelf,
   recordSale,
   unitSalePrice,
-  cashierScan,
   checkoutSeconds,
   ownerLevel,
   type ScanTiming,
@@ -143,7 +137,7 @@ import { claimGift, giftTomorrow } from '../game/gift';
 import { adExtraItems, adGuests, adRareBoost, adTrust } from '../game/ads';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular } from '../game/regulars';
-import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, withUpgrades } from '../game/upgrades';
+import { CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskTier } from '../game/lanes';
 import { showGift } from '../ui/gift';
 import { collectOrder, dropOrder, noteSeen, openChest, orderTeaser, planLetter, planOrder, stashAway, takeLetter } from '../game/returns';
@@ -208,15 +202,14 @@ import { LightMap } from './light';
 import { ColorGrade } from './grade';
 import { Halo, personGlow } from './halo';
 import { castsShadow, FloorShade, furnitureCasters, type WearLayer } from './floor';
-import { addStep, decodeWear, encodeWear, mopWear, MOP_RADIUS, settleWear, WEAR_CELL, wearGrid, wornSpot, type WearGrid } from '../game/wear';
+import { decodeWear, wearGrid, type WearGrid } from '../game/wear';
 import { dayDemand } from '../game/demand';
 import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { BARGAIN_CHANCE, BARGAIN_PER_ROW, bargainCapacity, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
-import { binSmell, ROTS, rotStage, smellChance, smellLevel, type RotStage } from '../game/rot';
+import { smellChance } from '../game/rot';
 import { Rotting } from './rotting';
-import { TRASH_KEYS } from './textures';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
-import { carryBonus, charmPatience, eyeTheft, ownerTiming } from '../game/owner';
+import { charmPatience, eyeTheft, ownerTiming } from '../game/owner';
 import { EDUARD_STAGES, eduardLook, eduardStage, type EduardLook } from '../game/eduard';
 import { updateRecords } from '../game/records';
 import { cafeDeliver, type CafeDelivery } from '../game/cafe';
@@ -224,7 +217,6 @@ import { answerSpecial, grannyRepays, makeSpecial, type SpecialKind, type Specia
 import { showChoice } from '../ui/choice';
 import { BRAND_BATCH } from '../game/brand';
 import { hasRadio, radioPatience, radioTolerance, radioSpeed } from '../game/radio';
-import { managerPick, URGENT_QTYS } from '../game/urgent';
 import { liveEventsFor, type LiveKind } from '../game/minievents';
 import { momentGain, momentsFor, noteMoment, type MomentKind } from '../game/moments';
 import { Moments } from './moments';
@@ -244,19 +236,9 @@ import {
   REGISTER_JAM_SECONDS,
   registerJam,
   registerSprite,
-  warehouseSpeed,
   wcDirt,
 } from '../game/gear';
-import {
-  idleRegisters,
-  nextRegisterCount,
-  nextRegisterPrice,
-  registerOfRole,
-  registerSlots,
-  RELIEF_ROLE,
-  TILL_ROLES,
-  tillRole,
-} from '../game/registers';
+import { idleRegisters, nextRegisterCount, nextRegisterPrice, registerSlots, RELIEF_ROLE, tillRole } from '../game/registers';
 import { seeTip } from '../game/tips';
 import { AROMA_TOLERANCE, sellWholesale, takeOutBread } from '../game/bakery';
 import { canWorkNight, NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from '../game/night';
@@ -319,7 +301,6 @@ import {
   CUSTOMER_SPEED,
   SELLER_SPEED,
   RUN_PACE,
-  CALL_EVERY_MS,
   KIOSK_GLOW,
   KIOSK_ALARM,
   RELIEF_TAP_MS,
@@ -329,18 +310,13 @@ import {
   BARGAIN_BASE,
   BARGAIN_STEP,
   TRASH_CHANCE,
-  MAX_TRASH,
   TRASH_COMPLAINT,
   MUD_CHANCE,
   MAX_MUD,
-  MOP_MS,
-  BIN_DROP_MS,
-  MAX_RESTOCK_TRIPS,
   BAG_MS,
   DUMP_MS,
   SPILL_CHANCE,
   SPILL_TINTS,
-  SPILL_MOP_MS,
   LIVE_WINDOW,
   LIVE_WINDOWS,
   LIVE_RETRY_MS,
@@ -352,21 +328,16 @@ import {
   TOILET_CHANCE,
   TOILET_DIRT_PER_VISIT,
   TOILET_DIRTY,
-  TOILET_CLEAN_MS,
-  TRASH_CLEAN_MS,
   PICKUP_MS,
   PLACE_MS,
   SHELF_LOOK,
   DEPT_INLAY_DEPTH,
   FLOOR_SHADE_DEPTH,
   WEAR_SAMPLE_MS,
-  POLISH_EVERY_MS,
-  POLISH_MIN_WEAR,
   ITEM_AREA,
   FLORIST_SPOTS,
   WHITE_SHIRT,
   SHIRTS,
-  HAIR_COLORS,
   type EmoteKey,
   VIEW_SUFFIX,
   type Look,
@@ -390,7 +361,6 @@ import {
   nightLook,
   nightGuestLook,
   withCompanionItems,
-  STAFF_ACC,
   THIEF_SHIRT,
   type ParkSpot,
   type ParkingLot,
@@ -399,7 +369,6 @@ import {
   SIDE_SHOP_W,
   CAR_COLORS,
   THIEF_SPEED,
-  UNIFORMS,
   STAFF_SPEED,
   INSPECTOR_SHIRT,
   VALYA,
@@ -409,7 +378,6 @@ import {
   GRANDMA_LINES_KEYS,
   ORDER_GUESTS,
   ownerLook,
-  STAFF_HAIR,
   INSPECTOR_AT,
   SONYA_AT,
   SONYA,
@@ -424,7 +392,6 @@ import {
   type Kiosk,
   type Oven,
   type KitchenView,
-  type TrashKind,
   type Worker,
   type Kin,
   discard,
@@ -450,6 +417,7 @@ import * as deliveries from './deliveries';
 import * as food from './food';
 import * as streets from './streets';
 import * as cars from './cars';
+import * as staff from './staff';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -548,7 +516,7 @@ export class StoreScene extends Phaser.Scene {
   /** Повторы вещей мира (worldTimer): останавливаются при перестройке. */
   private worldTimers: Phaser.Time.TimerEvent[] = [];
   /** Чья швабра сейчас звучит (продавца, уборщика) и как её оборвать: дело бросили — стихает и звук. */
-  private mops = new Map<Phaser.GameObjects.Container, () => void>();
+  mops = new Map<Phaser.GameObjects.Container, () => void>();
   /** Насколько открыты двери: 0 — закрыты, 1 — открыты. */
   doorOpen = 0;
   /** Погода дня и всё, что её рисует (частицы, снег на газоне, гирлянда, ёлка). */
@@ -573,14 +541,14 @@ export class StoreScene extends Phaser.Scene {
   /** Пятна света от потолочных ламп с номером ряда: утром включаются ряд за рядом. */
   lampPools: { img: Phaser.GameObjects.Image; row: number }[] = [];
   /** Живой пол (floor.ts): мягкие тени у стен и под мебелью и потёртость — одна картинка поверх плитки. */
-  private floor = new FloorShade(this);
+  floor = new FloorShade(this);
   /**
    * Потёртость пола зала (game/wear.ts): клетки 0…1 из сохранения и шаги за сегодня по той же сетке
    * (кто где прошёл — sampleSteps). level — для какого помещения сетка.
    */
-  private wear: { level: number; grid: WearGrid; cells: Float32Array; steps: Float32Array } | null = null;
+  wear: { level: number; grid: WearGrid; cells: Float32Array; steps: Float32Array } | null = null;
   /** Когда уборщик в последний раз натирал потёртый пол (мс времени сцены): не весь день подряд. */
-  private polishedAt = -Infinity;
+  polishedAt = -Infinity;
   /** Подвесные лампы (декор «Свет») с пятном света под ними: от подземного толчка качаются. */
   hangingLamps: { lamp: Phaser.GameObjects.Image; bulb: Phaser.GameObjects.Image }[] = [];
   /** Цвета осколков разбитого товара по картинке — чтобы не читать пиксели каждый раз. */
@@ -669,7 +637,7 @@ export class StoreScene extends Phaser.Scene {
   /** Отложенное запекание пола после распаковки новинок (bakeFloorSoon). */
   private floorBakeTimer?: Phaser.Time.TimerEvent;
   /** Наняли утром: при открытии новенький войдёт с улицы в дверь, а не появится сразу на месте. */
-  private newHires = new Set<string>();
+  newHires = new Set<string>();
   /** Новенькие, которые сейчас идут с улицы: перед ними разъезжаются двери. */
   newcomers = new Set<Phaser.GameObjects.Container>();
   /** Где сейчас стоит автомат с напитками (на нём радио). */
@@ -702,7 +670,7 @@ export class StoreScene extends Phaser.Scene {
   /** Когда последний раз всплывало «быстрее» над кассой (касания сменщику). */
   private lastHurry = 0;
   /** Сменщик дошёл до кассы хозяина и пробивает (новенький — с той минуты, как встал за неё). */
-  private reliefReady = false;
+  reliefReady = false;
   /** Мини-событие дня: что сейчас происходит и всё, что его рисует. */
   private liveEvent: LiveKind | null = null;
   private liveObjs: { destroy: () => void }[] = [];
@@ -732,11 +700,11 @@ export class StoreScene extends Phaser.Scene {
   private queueTurn = 0;
   trash = new Set<Phaser.GameObjects.Image>();
   /** Мусор, за которым уже кто-то пошёл. */
-  private claimedTrash = new Set<Phaser.GameObjects.Image>();
+  claimedTrash = new Set<Phaser.GameObjects.Image>();
   workers = new Map<StaffRole, Worker>();
   /** Смена номера останавливает циклы работы старых сотрудников. */
-  private staffGen = 0;
-  private toiletDirt = 0;
+  staffGen = 0;
+  toiletDirt = 0;
   /** Срочный подвоз: что едет и занят ли фургон. */
   /** auto — подвоз автозаказа (по приезде вычёркивается из autoOrder.today.inbound). */
   urgentOrders: { id: ProductId; qty: number; auto?: boolean }[] = [];
@@ -752,8 +720,8 @@ export class StoreScene extends Phaser.Scene {
   carried!: Phaser.GameObjects.Image;
   sellerBusy = false;
   /** Номер текущего дела продавца: смена номера отменяет дело (продавца позвали к кассе). */
-  private choreId = 0;
-  private lastCall = 0;
+  choreId = 0;
+  lastCall = 0;
   timeLeft = DAY_SECONDS;
   /** Инспектор: 'pending' — ещё не пришёл, 'here' — ходит по залу, 'done' — ушёл. */
   private inspector: 'none' | 'pending' | 'here' | 'done' = 'none';
@@ -786,25 +754,25 @@ export class StoreScene extends Phaser.Scene {
   /** Кассы: основная и (если куплена) вторая слева от очереди. Очередь одна — идёт к свободной. */
   registers: Register[] = [];
   /** Ведро с мусором в зале: сколько в нём, картинка, выносят ли его сейчас и сколько несут в мешке. */
-  private binFill = 0;
+  binFill = 0;
   binImg?: Phaser.GameObjects.Image;
   /** Полка «Уценка» (bargain.ts): где стоит и картинки товара на ней (по местам горки). */
   bargainAt: { x: number; y: number } | null = null;
   private bargainItems: Phaser.GameObjects.Image[] = [];
   /** Гниющий мусор (rot.ts): мухи и вонь над ним и над переполненным ведром. */
-  private rotting = new Rotting(this, () => this.lite);
+  rotting = new Rotting(this, () => this.lite);
   /** Сколько секунд ведро стоит переполненным (тогда оно тоже пахнет). */
-  private binFullFor = 0;
+  binFullFor = 0;
   /** Всплывашка «Мусор гниёт» уже была в этом запуске (пока игрок не убрал гнилое — подсказка внизу). */
-  private rotWarned = false;
+  rotWarned = false;
   binGlow?: Halo;
-  private binStink?: Phaser.GameObjects.Image;
+  binStink?: Phaser.GameObjects.Image;
   binBusy = false;
   /** Кто сейчас выносит мусор: продавец (его могут позвать к кассе) или уборщица. */
-  private binBy: 'seller' | 'cleaner' | null = null;
-  private bagCarried = 0;
+  binBy: 'seller' | 'cleaner' | null = null;
+  bagCarried = 0;
   /** Продавец несёт мусор к ведру (если позовут к кассе — мусор упадёт обратно на пол). */
-  private carryingTrash = false;
+  carryingTrash = false;
   /** Голуби на тротуаре: разлетаются, когда рядом проходит человек. */
   pigeons: Pigeon[] = [];
   /** Таймеры кота и голубей: при перестройке мира старые останавливаются. */
@@ -1045,7 +1013,7 @@ export class StoreScene extends Phaser.Scene {
     // Над кварталом плывут тени облаков, иногда пролетает стайка птиц.
     this.time.addEvent({ delay: 6000, loop: true, callback: () => this.skyLife() });
     // Потёртость пола: кто где идёт по залу — по таймеру времени игры, а не каждый кадр.
-    this.time.addEvent({ delay: WEAR_SAMPLE_MS, loop: true, callback: () => this.running && this.sampleSteps() });
+    this.time.addEvent({ delay: WEAR_SAMPLE_MS, loop: true, callback: () => this.running && staff.sampleSteps(this) });
     // Живая очередь и продавец без дела: кто-то вздыхает, смотрит на часы, продавец протирает прилавок.
     this.time.addEvent({ delay: 1300, loop: true, callback: () => this.running && this.queueIdle() });
     this.time.addEvent({ delay: 4200, loop: true, callback: () => this.running && this.sellerIdle() });
@@ -1178,10 +1146,10 @@ export class StoreScene extends Phaser.Scene {
 
     for (const c of this.queue) this.updateBubble(c);
     for (const r of this.registers) if (r.customer) this.updateBubble(r.customer);
-    this.checkSlips();
-    this.updateRot(dt);
+    staff.checkSlips(this);
+    staff.updateRot(this, dt);
     this.updateScanBar();
-    this.callSellerIfNeeded();
+    staff.callSellerIfNeeded(this);
     // Пока говорит бабушка (облачком или у подсветки обучения), та же подсказка снизу не повторяется.
     const raw = this.currentHint();
     // Та же подсказка, что у подсветки обучения (касса, полка), снизу не повторяется; другие (вор, мусор) — да.
@@ -1441,7 +1409,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshWarehouse();
     this.refreshToilet();
     this.workers.clear();
-    this.syncStaff();
+    staff.syncStaff(this);
     weatherFx.applyWeather(this);
     this.fairObjs = [];
     decorations.applyFair(this);
@@ -1462,7 +1430,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Потёртость для картинки пола: сетка лежит от левого верхнего угла пола зала (под задней стеной). */
-  private wearLayer(): WearLayer | null {
+  wearLayer(): WearLayer | null {
     const wear = this.wear;
     return wear ? { cells: wear.cells, cols: wear.grid.cols, rows: wear.grid.rows, x: 0, y: this.layout.wallH } : null;
   }
@@ -1517,7 +1485,7 @@ export class StoreScene extends Phaser.Scene {
     // навсегда остался бы «занят» (не убирал бы мусор и не носил товар). Начинаем его дела заново.
     this.tweens.killAll();
     for (const timer of this.worldTimers.splice(0)) timer.remove();
-    this.stopMop();
+    staff.stopMop(this);
     this.dropVisitors();
     for (const obj of [...this.children.list]) obj.destroy();
     this.rotting.clear();
@@ -1624,7 +1592,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .zone(wc.x, wc.y + 4, 24, 36)
       .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => this.tap(() => this.cleanToilet()));
+      .on('pointerup', () => this.tap(() => staff.cleanToilet(this)));
 
     this.art(counter.x + 2, counter.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(counter.y + 19);
     const registerImg = this.art(counter.x, counter.y + FURNITURE_TOP / 2, registerSprite(this.state)).setDepth(counter.y + 20);
@@ -1647,7 +1615,7 @@ export class StoreScene extends Phaser.Scene {
     this.registers.push({ ...this.makeRegister(counter, false, this.layout.queue, this.layout.sellerHome), img: registerImg });
     decorations.buildUpgrades(this);
     void sellerHome;
-    const home = this.ownerHome();
+    const home = staff.ownerHome(this);
     this.seller = this.makePerson(home.x, home.y, ownerLook(this.state));
     // Кибер-продавец светится неоном.
     if (activeDecor(this.state, 'outfit')?.id === 'outfit_cyber') personGlow(this, this.seller, 0x2ce8f5, 2);
@@ -1732,7 +1700,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Касса, у которой ждёт покупатель, а за кассой — хозяин (нужно нажать). */
-  private ownerRegister(): Register | undefined {
+  ownerRegister(): Register | undefined {
     return this.registers.find((r, i) => this.operator(i) === 'owner' && r.customer && !r.customer.serving);
   }
 
@@ -1741,7 +1709,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Покупатель уже стоит у своей кассы. */
-  private atSpot(r: Register): boolean {
+  atSpot(r: Register): boolean {
     const c = r.customer;
     return Boolean(c) && Phaser.Math.Distance.Between(c!.sprite.x, c!.sprite.y, r.spot.x, r.spot.y) < 2;
   }
@@ -1916,7 +1884,7 @@ export class StoreScene extends Phaser.Scene {
       return;
     }
     const p = this.rivalSpot();
-    const piece = this.dropTrash(p.x, p.y, kind);
+    const piece = staff.dropTrash(this, p.x, p.y, kind);
     if (piece) {
       // Убирать чужое не наше дело: лужа и мусор только для вида.
       piece.removeAllListeners('pointerup').disableInteractive();
@@ -2001,7 +1969,7 @@ export class StoreScene extends Phaser.Scene {
     if (mess && mess.spill + mess.trash) {
       for (let i = 0; i < mess.spill + mess.trash; i++) {
         const p = this.rivalSpot();
-        const piece = this.dropTrash(p.x, p.y, i < mess.spill ? 'spill' : 'trash');
+        const piece = staff.dropTrash(this, p.x, p.y, i < mess.spill ? 'spill' : 'trash');
         if (piece && i < mess.spill) piece.setTint(Phaser.Utils.Array.GetRandom(SPILL_TINTS));
       }
       this.time.delayedCall(2600, () => this.running && this.popup(door.x, door.y - 30, t('rival.mess'), '#ffd0d0'));
@@ -2444,11 +2412,6 @@ export class StoreScene extends Phaser.Scene {
     return this.playTime;
   }
 
-  /** Переходник к food.baristaLoop: он в таблице работы по должностям (syncStaff). */
-  private baristaLoop(w: Worker, gen: number): Promise<void> {
-    return food.baristaLoop(this, w, gen);
-  }
-
   /** Шоколадка со стойки у кассы летит в руки стоящему в очереди. */
   private grabCandy(c: Customer): void {
     const next = takeCandy(this.state);
@@ -2470,11 +2433,6 @@ export class StoreScene extends Phaser.Scene {
         if (c.sprite.active && !c.gone) this.popup(c.sprite.x, c.sprite.y - 18, t('popup.candy', { n: CANDY_PRICE }), '#fff3b0');
       },
     });
-  }
-
-  /** Переходник к food.bakerLoop: он в таблице работы по должностям (syncStaff). */
-  private bakerLoop(w: Worker, gen: number): Promise<void> {
-    return food.bakerLoop(this, w, gen);
   }
 
   // ---------- Ночная смена ----------
@@ -2880,7 +2838,7 @@ export class StoreScene extends Phaser.Scene {
     if (!this.blackout || this.sellerBusy || this.ownerScanning() || !this.fuseBox) return;
     this.carried.setTexture('wrench').setPosition(5, -1).setVisible(true);
     effects.emote(this, this.seller, 'emo_alert');
-    void this.doChore([
+    void staff.doChore(this, [
       {
         x: this.fuseBox.x,
         y: this.layout.wallH + 16,
@@ -2937,7 +2895,7 @@ export class StoreScene extends Phaser.Scene {
     const ring = keep(this.art(at.x, at.y, 'ripple').setTint(0x9fd8ff).setDepth(0.7));
     this.tweens.add({ targets: ring, scale: 1.6 / ART, alpha: { from: 1, to: 0.2 }, duration: 700, repeat: -1 });
     const puddle = () => {
-      const piece = this.dropTrash(at.x + Phaser.Math.Between(-8, 8), at.y - 6, 'spill');
+      const piece = staff.dropTrash(this, at.x + Phaser.Math.Between(-8, 8), at.y - 6, 'spill');
       piece?.setTint(0xbfe4ff);
     };
     puddle();
@@ -2954,7 +2912,7 @@ export class StoreScene extends Phaser.Scene {
       this.tap(() => {
         if (this.sellerBusy || this.ownerScanning() || !drops.active) return;
         this.carried.setTexture('wrench').setPosition(5, -1).setVisible(true);
-        void this.doChore([
+        void staff.doChore(this, [
           {
             x: at.x + 9,
             y: at.y + 2,
@@ -3054,7 +3012,7 @@ export class StoreScene extends Phaser.Scene {
       this.tap(() => {
         if (taken || this.sellerBusy || this.ownerScanning()) return;
         taken = true;
-        void this.doChore([
+        void staff.doChore(this, [
           {
             x: courier.x + 9,
             y: courier.y,
@@ -3470,12 +3428,12 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Где стоит ведро и уличный контейнер (у роллета склада). */
-  private binSpot(): { x: number; y: number } {
+  binSpot(): { x: number; y: number } {
     return this.propAt('bin', this.binDefault());
   }
 
   /** Куда встать, чтобы завязать мешок: со стороны зала. */
-  private binStand(): { x: number; y: number } {
+  binStand(): { x: number; y: number } {
     const bin = this.binSpot();
     return { x: bin.x + (bin.x < this.layout.w / 2 ? 16 : -16), y: bin.y + 2 };
   }
@@ -3607,7 +3565,7 @@ export class StoreScene extends Phaser.Scene {
     return this.binFill >= binCapacity(this.state);
   }
 
-  private refreshBin(): void {
+  refreshBin(): void {
     if (!this.binImg?.active) return;
     const level = this.binFill === 0 ? 0 : this.binFull() ? 3 : this.binFill >= binCapacity(this.state) / 2 ? 2 : 1;
     this.binImg.setTexture(binSprite(this.state, level));
@@ -3615,7 +3573,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Мусор в ведро: оно подпрыгивает. */
-  private putInBin(): void {
+  putInBin(): void {
     this.binFill = Math.min(binCapacity(this.state), this.binFill + 1);
     this.refreshBin();
     sound.tap();
@@ -3624,7 +3582,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Шаги «вынести мусор»: к ведру, завязать мешок, через дверь к контейнеру, бросить и вернуться. */
-  private takeOutSteps(onBag: () => void, onDump: () => void): ChoreStep[] {
+  takeOutSteps(onBag: () => void, onDump: () => void): ChoreStep[] {
     const dump = this.dumpSpot();
     const { door, h } = this.layout;
     const outside = h + FACADE_H + 6;
@@ -3638,13 +3596,13 @@ export class StoreScene extends Phaser.Scene {
     ];
   }
 
-  private bagFromBin(): void {
+  bagFromBin(): void {
     this.bagCarried = this.binFill;
     this.binFill = 0;
     this.refreshBin();
   }
 
-  private bagToDumpster(): void {
+  bagToDumpster(): void {
     this.bagCarried = 0;
     this.binBusy = false;
     this.binBy = null;
@@ -3658,7 +3616,7 @@ export class StoreScene extends Phaser.Scene {
     if (!this.running || this.sellerBusy || this.ownerScanning() || this.binBusy || this.binFill === 0) return;
     this.binBusy = true;
     this.binBy = 'seller';
-    void this.doChore(
+    void staff.doChore(this, 
       this.takeOutSteps(
         () => {
           this.bagFromBin();
@@ -3720,11 +3678,6 @@ export class StoreScene extends Phaser.Scene {
     this.buildRoom(coffee, 'coffee', food.coffeeOpen(this));
     if (this.layout.kitchen) this.buildRoom(this.layout.kitchen, 'kitchen', kitchenOpen(this.state));
     food.buildKitchen(this);
-  }
-
-  /** Переходник к food.cookLoop: он в таблице работы по должностям (syncStaff). */
-  private cookLoop(w: Worker, gen: number): Promise<void> {
-    return food.cookLoop(this, w, gen);
   }
 
   /**
@@ -3930,7 +3883,7 @@ export class StoreScene extends Phaser.Scene {
     bg.setDepth(d - 14);
     front.setDepth(d - 12);
     const cover = undefined;
-    bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.restockShelf(index)));
+    bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => staff.restockShelf(this, index)));
     const items = Array.from({ length: SHELF_LEVELS[SHELF_LEVELS.length - 1].capacity }, () => this.art(slot.x, slot.y, 'item').setDepth(d - 13));
     const backItems = items.map(() => this.art(slot.x, slot.y, 'item').setDepth(d - 13.5).setTint(0x8f8278).setVisible(false));
     // Уровень улучшения — жёлтые точки над полкой.
@@ -4048,7 +4001,7 @@ export class StoreScene extends Phaser.Scene {
     const shadow = this.art(slot.x, slot.y + 2, 'shadow_wide').setScale(0.5 / ART, 1.2 / ART).setAngle(90).setDepth(slot.y - 30);
     const bg = this.art(slot.x, slot.y, `${look.texture}_side`).setTint(look.tint).setFlipX(right).setDepth(d - 14);
     const front = this.art(slot.x, slot.y, 'item').setVisible(false);
-    bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.restockShelf(index)));
+    bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => staff.restockShelf(this, index)));
     const items = Array.from({ length: SHELF_LEVELS[SHELF_LEVELS.length - 1].capacity }, () => this.art(slot.x, slot.y, 'item').setDepth(d - 13));
     const backItems = items.map(() => this.art(slot.x, slot.y, 'item').setVisible(false));
     const pips = [0, 1, 2].map((n) => this.art(slot.x - 4 + n * 4, slot.y - 26, 'pip').setDepth(d - 12));
@@ -4168,7 +4121,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Путь из зала к полке. */
-  private routeTo(index: number): { x: number; y: number }[] {
+  routeTo(index: number): { x: number; y: number }[] {
     return [this.standOf(index)];
   }
 
@@ -4209,7 +4162,7 @@ export class StoreScene extends Phaser.Scene {
     });
   }
 
-  private refreshToilet(): void {
+  refreshToilet(): void {
     const dirt = this.toiletDirt;
     this.wcBar.setDisplaySize((14 * dirt) / 100, 2);
     this.wcBar.setTint(dirt < 30 ? 0x8fd16a : dirt < TOILET_DIRTY ? 0xf2c14e : 0xd95763);
@@ -4598,863 +4551,8 @@ export class StoreScene extends Phaser.Scene {
     }
   }
 
-  // ---------- Продавец: уборка и выкладка ----------
-
-  /** Продавец уходит от кассы по шагам и возвращается. Пока его нет, касса пустует. */
-  async doChore(steps: ChoreStep[]): Promise<void> {
-    if (this.sellerBusy || this.ownerScanning()) return;
-    const id = ++this.choreId;
-    this.sellerBusy = true;
-    haptic.tap();
-    for (const step of steps) {
-      await this.walk(this.seller, step.x, step.y, SELLER_SPEED);
-      if (id !== this.choreId) return;
-      step.arrive?.();
-      if (step.ms) await this.wait(step.ms);
-      if (id !== this.choreId) return;
-      step.action?.();
-    }
-    await this.returnSeller();
-  }
-
-  /** Продавца позвали к кассе: бросает дело на полпути и идёт обратно. Несённый товар остаётся на складе. */
-  private recallSeller(): void {
-    if (!this.sellerBusy) return;
-    this.dropChore();
-    haptic.tap();
-    void this.returnSeller();
-  }
-
-  /** Хозяин бросает дело на полпути (позвали к кассе, взяли в заложники): дальше оно не идёт. */
-  private dropChore(): void {
-    this.choreId++;
-    this.stopMop(this.seller);
-    this.tweens.killTweensOf(this.carried);
-    this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
-    // Несли мусор — роняем обратно; несли мешок — он «возвращается» в ведро.
-    if (this.carryingTrash) this.dropTrash(this.seller.x, this.seller.y - 6);
-    this.carryingTrash = false;
-    if (this.binBy === 'seller') {
-      this.binFill = Math.min(binCapacity(this.state), this.binFill + this.bagCarried);
-      this.bagCarried = 0;
-      this.binBusy = false;
-      this.binBy = null;
-      this.refreshBin();
-    }
-  }
-
-  private async returnSeller(): Promise<void> {
-    const id = this.choreId;
-    const home = this.ownerHome();
-    // С улицы — через дверь, а не сквозь стену.
-    if (this.seller.y > this.layout.h - 2) {
-      await this.walkVia(
-        this.seller,
-        [
-          { x: this.layout.door.x, y: this.layout.h + FACADE_H + 6 },
-          { x: this.layout.door.x, y: this.layout.door.y - 8 },
-        ],
-        SELLER_SPEED,
-      );
-      if (id !== this.choreId) return;
-    }
-    // После дела — всегда к своей кассе, даже если наняты кассиры: первая касса — его.
-    await this.walk(this.seller, home.x, home.y, SELLER_SPEED);
-    if (id === this.choreId) this.sellerBusy = false;
-  }
-
-  /** Где стоит хозяин (игрок): за первой кассой, а когда за ней сменщик — рядом, у той же стойки. */
-  private ownerHome(): { x: number; y: number } {
-    if (this.reliefOnDuty()) return this.reliefSpot();
-    return this.registers[0]?.clerk ?? this.layout.sellerHome;
-  }
-
-  /** Сменщик нанят и сегодня на смене: тогда касса хозяина — его на весь день. */
-  private reliefOnDuty(): boolean {
-    const m = staffOf(this.state, RELIEF_ROLE);
-    return Boolean(m && !isAbsent(this.state, m));
-  }
-
-  /** Место рядом с кассой хозяина, у той же стойки: тут стоит хозяин, когда за его кассой сменщик. */
-  private reliefSpot(): { x: number; y: number } {
-    const { sellerHome } = this.layout;
-    return { x: sellerHome.x, y: sellerHome.y - 24 };
-  }
-
-  private callSellerIfNeeded(): void {
-    const r = this.ownerRegister();
-    const front = r?.customer;
-    if (!r || !front || !this.atSpot(r)) return;
-    // Зовём, если хозяин занят делом или стоит не у этой кассы.
-    if (!this.sellerBusy && Phaser.Math.Distance.Between(this.seller.x, this.seller.y, r.clerk.x, r.clerk.y) <= 2) return;
-    if (this.time.now - this.lastCall < CALL_EVERY_MS) return;
-    this.lastCall = this.time.now;
-    this.popup(front.sprite.x, front.sprite.y - 22, t('popup.callRegister'), '#fff3b0');
-  }
-
-  /** Касание полки: продавец идёт на склад, берёт коробку подходящего товара и раскладывает. */
-  private restockShelf(index: number): void {
-    if (!this.running || this.sellerBusy) return;
-    const shelf = this.state.shelves[index];
-    const slot = this.spotOf(index);
-    if (shelf.broken) {
-      this.popup(slot.x, slot.y - 18, t('popup.broken'), '#ffd0d0');
-      return;
-    }
-    if (shelfFree(shelf) === 0) {
-      this.popup(slot.x, slot.y - 18, t('popup.shelfFull'), '#fff3b0');
-      return;
-    }
-    const available = PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id] ?? []).some((u) => !u.pending));
-    if (!available) {
-      this.popup(slot.x, slot.y - 18, t('popup.warehouseEmpty'), '#ffd0d0');
-      return;
-    }
-    // Одно касание — полка заполняется целиком: продавец ходит на склад, пока есть место и товар.
-    const stock = PRODUCT_IDS.reduce((sum, id) => sum + (canPlace(id, shelf) ? (this.state.warehouse[id] ?? []).filter((u) => !u.pending).length : 0), 0);
-    const trips = Math.max(1, Math.ceil(Math.min(shelfFree(shelf), stock) / (carryOf(this.state) + carryBonus(this.state))));
-    const { doorway, pickup } = this.layout.warehouse;
-    // К ларю на улице — через дверь и обратно.
-    const route = this.routeTo(index);
-    const stand = route[route.length - 1];
-    const back = route.slice(0, -1).reverse();
-    const trip: ChoreStep[] = [
-      { ...doorway },
-      { ...pickup, ms: PICKUP_MS, action: () => this.carried.setTexture('box').setPosition(0, 3).setVisible(true) },
-      { ...doorway },
-      ...route.slice(0, -1).map((p) => ({ ...p })),
-      {
-        x: stand.x,
-        y: stand.y - (shelf.kind === 'icebox' ? 0 : 2),
-        ms: PLACE_MS,
-        action: () => {
-          this.carried.setVisible(false);
-          this.stockShelf(index, this.seller);
-        },
-      },
-      ...back.map((p) => ({ ...p })),
-    ];
-    void this.doChore(Array.from({ length: Math.min(trips, MAX_RESTOCK_TRIPS) }, () => trip).flat());
-    // Шаг обучения «Разложи товар»: полку нажали — хозяин уже несёт коробку.
-    this.passTut('restock');
-    // Новичок разложил полку сам (до этого в первый день её раскладывала бабушка).
-    if (playDayOne(this.state)) this.onbStep('stock');
-  }
-
-  /** Товар из коробки на полку: штуки вылетают по одной и встают на место с «чпок». */
-  private stockShelf(index: number, by: Phaser.GameObjects.Container): void {
-    const view = this.shelfViews[index];
-    const before = view ? view.items.filter((img) => img.visible).length : 0;
-    // Хозяин-силач носит больше (навык «Силач»), сотрудники — как обычно.
-    this.state = moveToShelf(this.state, index, undefined, carryOf(this.state) + (by === this.seller ? carryBonus(this.state) : 0)).state;
-    // Без съезда: новые штуки сами летят на свои места, а сдвинутые соседи просто встают рядом.
-    this.refreshShelves(false);
-    this.refreshWarehouse();
-    const items = this.shelfViews[index]?.items ?? [];
-    const backs = this.shelfViews[index]?.backItems ?? [];
-    const kind = this.state.shelves[index]?.kind;
-    const fresh = items.filter((img, n) => img.visible && n >= before);
-    // Задний ряд проявляется, когда штука долетела до полки.
-    backs.forEach((back, n) => n >= before && back.visible && back.setAlpha(0));
-    this.time.delayedCall(fresh.length * 90 + 300, () => backs.forEach((back) => back.active && back.alpha < 1 && this.tweens.add({ targets: back, alpha: 1, duration: 200 })));
-    fresh.forEach((img, n) => {
-      const { x, y } = img;
-      const scale = img.scaleX;
-      const from = { x: by.x, y: by.y - 4 };
-      // Пока летит, место ведёт полёт: если в это время с полки возьмут товар, эта штука не съезжает.
-      img.setPosition(from.x, from.y).setScale(scale * 0.6).setAlpha(0).setData('flying', true);
-      // Летит дугой вверх из рук на своё место и подпрыгивает.
-      this.tweens.addCounter({
-        from: 0,
-        to: 1,
-        delay: n * 90,
-        duration: 280,
-        onStart: () => {
-          img.setAlpha(1);
-          // Звук материала отдела (бутылки звенят, хлеб ложится мягко…), через штуку — без «пулемёта».
-          if (n % 2 === 0 && kind) sound.shelf(kind, n, x);
-        },
-        onUpdate: (tween) => {
-          const k = tween.getValue() ?? 0;
-          img.setPosition(from.x + (x - from.x) * k, from.y + (y - from.y) * k - Math.sin(k * Math.PI) * 10);
-          img.setScale(scale * (0.6 + 0.4 * k));
-        },
-        onComplete: () => {
-          img.setPosition(x, y).setData('flying', false);
-          this.tweens.add({ targets: img, scale: { from: scale * 1.35, to: scale }, duration: 140, ease: 'Back.easeOut' });
-          // Свежий товар поблёскивает; из коробки сыплется пыль.
-          if (n === fresh.length - 1) {
-            this.freshShine(index);
-            const shelfView = this.shelfViews[index];
-            if (shelfView) this.time.delayedCall(60, () => motion.hopShelf(this, shelfView, 2.5));
-          }
-        },
-      });
-    });
-  }
-
-  private freshShine(index: number): void {
-    const view = this.shelfViews[index];
-    if (!view) return;
-    const { x, y } = view.at;
-    for (let i = 0; i < 3; i++) {
-      const spark = this.art(x + Phaser.Math.Between(-15, 15), y - Phaser.Math.Between(2, 12), 'spark').setScale(0.4 / ART).setDepth(y + 5);
-      this.tweens.add({ targets: spark, scale: 1 / ART, angle: 90, alpha: 0, delay: i * 120, duration: 450, onComplete: () => spark.destroy() });
-    }
-    for (let i = 0; i < 3; i++) food.steamPuff(this, x + Phaser.Math.Between(-10, 10), y + 12, 0xc8b8a0);
-  }
-
-  private cleanToilet(): void {
-    if (this.toiletDirt === 0) return;
-    void this.doChore([
-      {
-        x: this.layout.wc.x,
-        y: this.layout.wc.spotY,
-        ms: TOILET_CLEAN_MS,
-        action: () => {
-          this.toiletDirt = 0;
-          this.refreshToilet();
-          effects.bubbles(this, this.layout.wc.x, this.layout.wc.y);
-          effects.cleanSparkle(this, this.layout.wc.x, this.layout.wc.spotY - 4, 20);
-        },
-      },
-    ]);
-  }
-
-  /**
-   * Мусор на полу. trash — фантики и стаканчики: подобрать и отнести в ведро;
-   * mud — грязные следы с улицы и spill — пролитое: их моют шваброй, это дольше.
-   */
-  private dropTrash(x: number, y: number, kind: TrashKind = 'trash'): Phaser.GameObjects.Image | undefined {
-    if (this.trash.size >= MAX_TRASH) return undefined;
-    // Чаще всего — бумажка, остальное вразнобой (art/litter.py).
-    const key = kind === 'trash' ? Phaser.Utils.Array.GetRandom(['trash', ...TRASH_KEYS]) : kind;
-    const area =
-      kind === 'mud' ? new Phaser.Geom.Rectangle(-2, -2, 30, 26) : kind === 'spill' ? new Phaser.Geom.Rectangle(-2, -4, 32, 20) : new Phaser.Geom.Rectangle(-5, -5, 16, 15);
-    const piece = this
-      .art(x + Phaser.Math.Between(-6, 6), y + Phaser.Math.Between(4, 8), key)
-      .setDepth(kind === 'trash' ? 1 : 0.5)
-      .setInteractive(area, Phaser.Geom.Rectangle.Contains);
-    piece.setData('kind', kind);
-    // Сколько секунд лежит на полу и стадия гниения (rot.ts), base — картинка без «_rot».
-    piece.setData('age', 0).setData('rot', 0).setData('base', key);
-    piece.setData('glow', new Halo(this, piece, 0xffffff));
-    piece.on('pointerup', () => {
-      if (this.dragged || this.claimedTrash.has(piece) || this.sellerBusy || this.ownerScanning()) return;
-      if (kind === 'trash' && this.binFull()) {
-        // Ведро полное — сначала вынести.
-        this.popup(this.binSpot().x, this.binSpot().y - 18, t('popup.binFull'), '#ffd0d0');
-        sound.bad();
-        return;
-      }
-      this.claimedTrash.add(piece);
-      if (kind === 'trash') {
-        const stand = this.binStand();
-        void this.doChore([
-          {
-            x: piece.x + 6,
-            y: piece.y,
-            ms: TRASH_CLEAN_MS,
-            action: () => {
-              this.carried.setTexture(piece.texture.key).setPosition(5, 0).setVisible(true);
-              this.carryingTrash = true;
-              this.removeTrash(piece);
-            },
-          },
-          {
-            ...stand,
-            ms: BIN_DROP_MS,
-            action: () => {
-              this.carryingTrash = false;
-              this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
-              this.putInBin();
-            },
-          },
-        ]);
-        return;
-      }
-      // Продавец берёт швабру и трёт пол туда-сюда.
-      this.carried.setTexture('mop').setPosition(5, -1).setVisible(true);
-      let scrub: Phaser.Tweens.Tween | undefined;
-      const mopMs = kind === 'spill' ? SPILL_MOP_MS : MOP_MS;
-      void this.doChore([
-        {
-          x: piece.x + 7,
-          y: piece.y,
-          action: () => {
-            scrub = this.tweens.add({ targets: this.carried, x: 1, duration: 160, yoyo: true, repeat: -1 });
-            this.mopSound(this.seller, piece.x, mopMs);
-          },
-        },
-        {
-          x: piece.x + 7,
-          y: piece.y,
-          ms: mopMs,
-          action: () => {
-            scrub?.remove();
-            this.stopMop(this.seller);
-            this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
-            if (kind === 'spill') this.wetSign(piece.x, piece.y);
-            effects.cleanSparkle(this, piece.x, piece.y, 16);
-            this.removeTrash(piece);
-          },
-        },
-      ]);
-    });
-    this.trash.add(piece);
-    return piece;
-  }
-
-  /** После мытья — табличка «Мокрый пол» и влажный блеск, пока пол сохнет. */
-  private wetSign(x: number, y: number): void {
-    const sheen = this.add.ellipse(x, y + 1, 18, 7, 0xc8f0ff, 0.35).setDepth(0.55);
-    this.wetSheens.add(sheen);
-    sheen.once('destroy', () => this.wetSheens.delete(sheen));
-    const sign = this.art(x + 7, y - 5, 'wet_sign').setDepth(y + 3);
-    this.time.delayedCall(7000, () => {
-      if (!sign.active) return;
-      this.tweens.add({ targets: [sign, sheen], alpha: 0, duration: 600, onComplete: () => [sign, sheen].forEach((o) => o.destroy()) });
-    });
-  }
-
-  /** Покупатель уронил покупку: лужа и опрокинутый пакет. По луже скользко. */
-  private spill(x: number, y: number): void {
-    const piece = this.dropTrash(x, y, 'spill');
-    if (!piece) return;
-    piece.setTint(Phaser.Utils.Array.GetRandom(SPILL_TINTS));
-    const pack = this.art(piece.x + 9, piece.y - 3, 'spill_pack').setAngle(70).setDepth(0.6);
-    piece.once('destroy', () => pack.destroy());
-    sound.bad();
-    this.popup(x, y - 16, t('popup.spill'), '#ffd0d0');
-  }
-
-  /** Протёк холодильник: лужа перед ним (её моют, как пролитое). */
-  private fridgeLeaks(): void {
-    const fridges = this.state.shelves.map((s, i) => ({ s, i })).filter(({ s }) => SHELF_KINDS[s.kind].fridge && !SHELF_KINDS[s.kind].fixture);
-    if (!fridges.length) return;
-    const slot = this.spotOf(Phaser.Utils.Array.GetRandom(fridges).i);
-    const front = standFor(this.layout, slot);
-    const piece = this.dropTrash(front.x + Phaser.Math.Between(-6, 6), front.y + 2, 'spill');
-    if (!piece) return;
-    piece.setTint(0xc8f0ff);
-    sound.bad();
-    this.popup(slot.x, slot.y + 8, t('popup.leak'), '#ffd0d0');
-  }
-
-  /** Наступил в лужу — чуть не упал: настроение испорчено. */
-  private checkSlips(): void {
-    const spills = [...this.trash].filter((piece) => piece.getData('kind') === 'spill');
-    if (!spills.length) return;
-    for (const c of this.customers) {
-      if (c.slipped || c.gone || c.thief) continue;
-      const feetY = c.sprite.y + 8;
-      if (!spills.some((sp) => Math.abs(sp.x - c.sprite.x) < 7 && Math.abs(sp.y - feetY) < 4)) continue;
-      c.slipped = true;
-      c.unhappy = true;
-      note(this.stats, 'slip');
-      this.tweens.add({ targets: c.sprite, angle: { from: -14, to: 12 }, duration: 110, yoyo: true, repeat: 1, onComplete: () => c.sprite.setAngle(0) });
-      effects.emote(this, c.sprite, 'emo_angry');
-      this.popup(c.sprite.x, c.sprite.y - 18, t('popup.slip'), '#ffd0d0');
-    }
-  }
-
-  /**
-   * Мусор на полу стареет и гниёт (rot.ts): темнеет, над ним мухи и вонь. Переполненное ведро,
-   * которое долго не выносят, тоже пахнет. В первый раз — всплывашка над гнилым мусором.
-   */
-  private updateRot(dt: number): void {
-    for (const piece of this.trash) {
-      if (!(ROTS as readonly string[]).includes(piece.getData('kind') as string)) continue;
-      const age = ((piece.getData('age') as number) ?? 0) + dt;
-      piece.setData('age', age);
-      const stage = rotStage(age);
-      if (stage <= ((piece.getData('rot') as RotStage) ?? 0)) continue;
-      piece.setData('rot', stage);
-      this.rotting.apply(piece, stage, piece.y);
-      if (stage === 1 && !this.state.seenTips?.includes(ROT_TIP) && !this.rotWarned) {
-        this.rotWarned = true;
-        sound.bad();
-        this.popup(piece.x, piece.y - 14, t('popup.rotFirst'), '#d8f0a0');
-      }
-    }
-    this.binFullFor = this.binFull() && !this.binBusy ? this.binFullFor + dt : 0;
-    const bin = binSmell(this.binFullFor) && this.binImg?.active ? this.binSpot() : null;
-    this.rotting.bin(bin && { x: bin.x, y: bin.y - 12 }, (bin?.y ?? 0) + 31);
-    // Чем дольше стоит полное, тем гуще вонь над ним.
-    this.binStink?.setScale((binSmell(this.binFullFor) === 2 ? 1.35 : 1) / ART);
-    this.rotting.tick(this.time.now);
-  }
-
-  /** Сколько пахнет в зале: гнилой мусор и давно полное ведро (rot.ts). */
-  private smell(): number {
-    return smellLevel([...this.trash].map((piece) => (piece.getData('age') as number) ?? 0), this.binFullFor);
-  }
-
-  private removeTrash(piece: Phaser.GameObjects.Image): void {
-    if (this.trash.has(piece)) this.stats.trashCleaned++;
-    // Убрали первый гнилой мусор — подсказка про запах больше не нужна.
-    if (piece.getData('rot') && !this.state.seenTips?.includes(ROT_TIP)) this.state = { ...this.state, seenTips: [...(this.state.seenTips ?? []), ROT_TIP] };
-    this.trash.delete(piece);
-    this.claimedTrash.delete(piece);
-    if (piece.getData('kind') === 'trash') effects.puff(this, piece.x, piece.y);
-    else {
-      effects.bubbles(this, piece.x, piece.y);
-      // Мыли шваброй — заодно стёрли и потёртость пола вокруг.
-      this.polishFloor(piece.x, piece.y);
-    }
-    piece.destroy();
-  }
-
-  /**
-   * Шаги для потёртости пола (game/wear.ts): кто сейчас идёт по залу — в клетку под его ногами.
-   * Смотрим по таймеру времени игры, а не каждый кадр: на ×2 таймер тикает вдвое чаще вместе с игрой.
-   */
-  private sampleSteps(): void {
-    const wear = this.wear;
-    if (!wear || wear.level !== this.state.level) return;
-    const { w, h, wallH } = this.layout;
-    for (const person of this.people) {
-      if (!person.active || !person.visible || !person.getData('walking') || person.displayList !== this.children) continue;
-      const feet = person.y + 8 * person.scaleY;
-      if (person.x <= 0 || person.x >= w || feet <= wallH || feet >= h) continue;
-      addStep(wear.steps, wear.grid, person.x, feet - wallH);
-    }
-  }
-
-  /** Конец дня: шаги дня — в потёртость пола; с уборщиком и решёткой у входа пол стирается медленнее. */
-  private settleFloorWear(): void {
-    const wear = this.wear;
-    if (!wear || wear.level !== this.state.level) return;
-    wear.cells = settleWear(wear.cells, wear.steps, wear.grid, { cleaner: this.workers.has('cleaner'), entrance: gearTier(this.state, 'entrance') });
-    wear.steps.fill(0);
-    this.state = { ...this.state, floorWear: encodeWear(wear.cells, wear.level, wear.grid) };
-    this.floor.setWear(this.wearLayer());
-  }
-
-  /** Помыли пол в точке (x, y) зала: потёртость вокруг уходит — в сохранении и на картинке пола (только там). */
-  private polishFloor(x: number, y: number): void {
-    const wear = this.wear;
-    const { wallH } = this.layout;
-    if (!wear || wear.level !== this.state.level || !mopWear(wear.cells, wear.grid, x, y - wallH)) return;
-    this.state = { ...this.state, floorWear: encodeWear(wear.cells, wear.level, wear.grid) };
-    const r = MOP_RADIUS + WEAR_CELL;
-    this.floor.setWear(this.wearLayer(), { x: x - r, y: y - r, w: 2 * r, h: 2 * r });
-  }
-
-  // ---------- Сотрудники ----------
-
-  /** Расставляет нанятых сотрудников по местам и запускает их работу. */
-  private syncStaff(): void {
-    const gen = ++this.staffGen;
-    // Повара переставляют посреди варки — сваренное не пропадает, а встаёт в витрину.
-    food.flushCooking(this);
-    for (const w of this.workers.values()) {
-      this.stopMop(w.sprite);
-      this.haltWalk(w.sprite);
-      this.tweens.killTweensOf(w.sprite);
-      w.sprite.destroy();
-    }
-    this.workers.clear();
-    this.newcomers.clear();
-    this.reliefReady = false;
-    this.managerOnFloor = false;
-    this.claimedTrash.clear();
-    if (this.binBy === 'cleaner') {
-      this.binFill = Math.min(binCapacity(this.state), this.binFill + this.bagCarried);
-      this.bagCarried = 0;
-      this.binBusy = false;
-      this.binBy = null;
-      this.refreshBin();
-    }
-    // Кассир не вышел, а менеджер на месте — менеджер встаёт за его кассу. Сменщика не подменяет:
-    // за первой кассой и так хозяин, а у менеджера свои дела.
-    const manager = this.state.staff.find((m) => m.role === 'manager' && !isAbsent(this.state, m));
-    const cover = manager
-      ? TILL_ROLES.slice(0, this.registers.length - 1).find((role) => {
-          const m = staffOf(this.state, role);
-          return m && isAbsent(this.state, m);
-        })
-      : undefined;
-    for (const member of this.state.staff) {
-      if (isAbsent(this.state, member)) continue;
-      const covering = member.role === 'manager' && cover ? cover : undefined;
-      const home = covering ? this.workerHome(covering) : this.workerHome(member.role);
-      // Новенький в первый день не стоит сразу на месте, а входит с улицы.
-      const fresh = this.dayOpen && this.newHires.has(staffKey(member));
-      const at = fresh ? this.streetSpawn() : home;
-      const sprite = this.makePerson(at.x ?? home.x, at.y ?? home.y, {
-        ...randomLook(UNIFORMS[member.role]),
-        style: STAFF_HAIR[member.role],
-        acc: STAFF_ACC[member.role].acc,
-        accTint: STAFF_ACC[member.role].tint,
-        // У охранника форменная кепка, у пекаря — белый колпак.
-        hair: member.role === 'guard' ? UNIFORMS.guard : member.role === 'baker' ? 0xffffff : Phaser.Utils.Array.GetRandom(HAIR_COLORS),
-        // Повар — в поварском колпаке и белом кителе.
-        ...(member.role === 'cook' ? { hat: 'toque' as const, outfit: 'chefcoat' as const } : {}),
-      });
-      const carried = this.art(0, 3, 'box').setVisible(false);
-      sprite.add(carried);
-      const worker: Worker = { member, sprite, carried, home };
-      this.workers.set(member.role, worker);
-      if (covering) {
-        this.workers.set(covering, worker);
-        const serve = () => void this.cashierLoop(worker, gen, registerOfRole(covering));
-        if (fresh) void this.walkIn(worker, gen).then(serve);
-        else serve();
-        continue;
-      }
-      const loop = {
-        cashier: this.reliefLoop,
-        cashier2: this.cashierLoop,
-        cashier3: this.cashierLoop,
-        cashier4: this.cashierLoop,
-        cashier5: this.cashierLoop,
-        cleaner: this.cleanerLoop,
-        loader: this.loaderLoop,
-        guard: null,
-        manager: this.managerLoop,
-        baker: this.bakerLoop,
-        barista: this.baristaLoop,
-        cook: this.cookLoop,
-      }[member.role];
-      const work = () => {
-        if (loop) void loop.call(this, worker, gen);
-      };
-      if (fresh) void this.walkIn(worker, gen).then(work);
-      else work();
-    }
-    // Новеньких встретили — в следующий раз они уже свои.
-    if (this.dayOpen) this.newHires.clear();
-    // Хозяин — за своей кассой (если не занят делом).
-    const home = this.ownerHome();
-    if (!this.sellerBusy) this.seller.setPosition(home.x, home.y).setDepth(home.y);
-  }
-
-  /**
-   * Первый рабочий день: новенький идёт по тротуару к двери, на пороге радуется (сердечко) и проходит
-   * на своё место — работать начинает, когда дошёл.
-   */
-  private async walkIn(w: Worker, gen: number): Promise<void> {
-    const { door } = this.layout;
-    this.newcomers.add(w.sprite);
-    await this.workerWalk(w, door.x, this.streetY);
-    await this.workerWalk(w, door.x, door.y - 10);
-    this.newcomers.delete(w.sprite);
-    if (!this.alive(gen)) return;
-    effects.emote(this, w.sprite, 'emo_heart');
-    motion.squash(this, w.sprite, 1.1, 0.9, 120);
-    await this.workerWalk(w, w.home.x, w.home.y);
-  }
-
-  workerHome(role: StaffRole): { x: number; y: number } {
-    const { wc, warehouse, door } = this.layout;
-    switch (role) {
-      case 'cashier':
-        // Сменщик — за кассой хозяина (хозяин встаёт рядом, у той же стойки).
-        return this.registers[0]?.clerk ?? this.reliefSpot();
-      case 'cashier2':
-      case 'cashier3':
-      case 'cashier4':
-      case 'cashier5':
-        return this.registers[registerOfRole(role)]?.clerk ?? this.reliefSpot();
-      case 'cleaner':
-        return { x: wc.x - 18, y: wc.spotY + 8 };
-      case 'loader':
-        return { x: warehouse.doorway.x + 6, y: warehouse.doorway.y - 18 };
-      case 'guard':
-        return { x: door.x + 22, y: door.y - 14 };
-      case 'manager':
-        // Менеджер ходит у входа, где проход свободен.
-        return { x: door.x - 24, y: door.y - 30 };
-      case 'baker':
-        return { x: this.layout.bakery.x + 26, y: this.layout.bakery.y + 36 };
-      case 'barista':
-        return { x: this.layout.coffee.x + 26, y: this.layout.coffee.y + 19 };
-      case 'cook': {
-        // Повар — у правого края стола (доска с ножом слева от него); кухни в помещении нет (так не бывает) — у входа.
-        const k = this.layout.kitchen;
-        return k ? { x: k.x + 40, y: k.y + 33 } : { x: door.x - 24, y: door.y - 30 };
-      }
-    }
-  }
-
   alive(gen: number): boolean {
     return gen === this.staffGen && this.scene.isActive();
-  }
-
-  /** Шаг сотрудника с учётом его скорости. */
-  workerWalk(w: Worker, x: number, y: number): Promise<void> {
-    return this.walk(w.sprite, x, y, STAFF_SPEED * this.workerPace(w));
-  }
-
-  /** Сотрудник идёт через несколько точек одним ходом (дверь склада, пекарни) — не встаёт в каждой. */
-  workerWalkVia(w: Worker, points: Point[]): Promise<void> {
-    return this.walkVia(w.sprite, points, STAFF_SPEED * this.workerPace(w));
-  }
-
-  workerWait(w: Worker, ms: number): Promise<void> {
-    return this.wait(ms / this.workerPace(w));
-  }
-
-  /** Скорость сотрудника: его навык, менеджер на смене, а у грузчика — ещё и оборудование склада. */
-  workerPace(w: Worker): number {
-    return workSpeed(w.member) * managerBoost(this.state) * (w.member.role === 'loader' ? warehouseSpeed(this.state) : 1);
-  }
-
-  /**
-   * Швабра в руках у who трёт пол ms игрового времени. Звук идёт в настоящих секундах: на ×2 дело вдвое
-   * короче (wait идёт по времени сцены), у шустрого уборщика — ещё в pace раз (как в workerWait).
-   */
-  private mopSound(who: Phaser.GameObjects.Container, x: number, ms: number, pace = 1): void {
-    this.stopMop(who);
-    this.mops.set(who, sound.mop(x, ms / pace / this.speed / 1000));
-  }
-
-  /** Швабра who стихает: дело закончили, бросили или его некому доделать; без who — все (зал перестроили). */
-  private stopMop(who?: Phaser.GameObjects.Container): void {
-    for (const [owner, stop] of this.mops) {
-      if (who && owner !== who) continue;
-      stop();
-      this.mops.delete(owner);
-    }
-  }
-
-  /**
-   * Менеджер обходит зал: заглядывает к полкам, а когда товар кончился и на полке, и на складе —
-   * сам звонит и заказывает срочный подвоз (если хватает денег).
-   */
-  private async managerLoop(w: Worker, gen: number): Promise<void> {
-    this.managerOnFloor = true;
-    while (this.alive(gen)) {
-      if (!this.running) {
-        await this.wait(400);
-        continue;
-      }
-      // Заказ на дом: принятый — собирает и выносит к двери курьеру; звонит телефон — берёт трубку сам.
-      const parcel = deliveries.nextParcel(this);
-      if (parcel) {
-        await deliveries.packParcel(this, w, gen, parcel);
-        continue;
-      }
-      if (this.call && this.phone) {
-        await this.workerWalk(w, this.phone.x - 10, this.phone.y + 14);
-        if (!this.alive(gen)) return;
-        if (this.call) deliveries.acceptOrder(this);
-        continue;
-      }
-      const pick = managerPick(this.state);
-      if (pick && !this.urgentOrders.some((o) => o.id === pick)) {
-        const qty = URGENT_QTYS[0];
-        if (deliveries.orderUrgentDelivery(this, pick, qty, true)) this.popup(w.sprite.x, w.sprite.y - 20, t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
-      }
-      const slot = Phaser.Utils.Array.GetRandom(this.layout.slots.slice(0, Math.max(1, this.state.shelves.length)));
-      if (slot) {
-        const stand = standFor(this.layout, slot);
-        await this.workerWalk(w, stand.x + (slotSide(this.layout, slot) ? 0 : Phaser.Math.Between(-12, 12)), stand.y);
-      }
-      await this.workerWait(w, 2500);
-    }
-  }
-
-  /**
-   * Сменщик: весь день за кассой хозяина и пробивает сам всех, кто к ней подошёл. Хозяин свободен
-   * для дел, а его касания кассы торопят пробивку (hurryRelief).
-   */
-  private async reliefLoop(w: Worker, gen: number): Promise<void> {
-    this.reliefReady = true;
-    // Хозяин, пока сменщик шёл, сам встал за кассу — уступает место и отходит к стойке.
-    const clerk = this.registers[0]?.clerk;
-    if (clerk && !this.sellerBusy && !this.ownerScanning() && Phaser.Math.Distance.Between(this.seller.x, this.seller.y, clerk.x, clerk.y) <= 2) void this.returnSeller();
-    while (this.alive(gen)) {
-      const r = this.registers[0];
-      const front = r?.customer;
-      if (!this.running || !r || !front || !this.atSpot(r) || front.serving || r.scan) {
-        // Отводили в сторону (ограбление, новенький) — назад к стойке.
-        if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
-        await this.wait(150);
-        continue;
-      }
-      await this.scanCustomer(r, front, withUpgrades(this.state, cashierScan(w.member)), false);
-    }
-  }
-
-  /** Кассир сам пробивает тех, кто подошёл к его кассе (второй кассир — ко второй). */
-  private async cashierLoop(w: Worker, gen: number, index = registerOfRole(w.member.role)): Promise<void> {
-    while (this.alive(gen)) {
-      const r = this.registers[index];
-      const front = r?.customer;
-      if (!this.running || !r || !front || !this.atSpot(r)) {
-        await this.wait(200);
-        continue;
-      }
-      if (front.serving || r.scan) {
-        await this.wait(100);
-        continue;
-      }
-      await this.scanCustomer(r, front, withUpgrades(this.state, cashierScan(w.member)), false);
-    }
-  }
-
-  /** Уборщик подбирает мусор, а когда его нет — моет туалет. */
-  private async cleanerLoop(w: Worker, gen: number): Promise<void> {
-    while (this.alive(gen)) {
-      // Ведро почти полное — сначала вынести.
-      if (this.running && this.binFill >= binCapacity(this.state) - 1 && !this.binBusy) {
-        this.binBusy = true;
-        this.binBy = 'cleaner';
-        for (const step of this.takeOutSteps(
-          () => {
-            this.bagFromBin();
-            w.carried.setTexture('trash_bag').setVisible(true);
-          },
-          () => {
-            w.carried.setVisible(false).setTexture('box');
-            this.bagToDumpster();
-          },
-        )) {
-          await this.workerWalk(w, step.x, step.y);
-          if (!this.alive(gen)) return;
-          if (step.ms) await this.workerWait(w, step.ms);
-          // Пока завязывал мешок или бросал его в контейнер, состав мог смениться (syncStaff) — спрайта уже нет.
-          if (!this.alive(gen)) return;
-          step.action?.();
-        }
-        continue;
-      }
-      const piece = this.running ? this.nearestTrash(w.sprite.x, w.sprite.y) : undefined;
-      if (piece) {
-        const kind = piece.getData('kind') as TrashKind;
-        if (kind === 'trash' && this.binFull()) {
-          await this.wait(300);
-          continue;
-        }
-        this.claimedTrash.add(piece);
-        await this.workerWalk(w, piece.x + 6, piece.y);
-        if (!this.alive(gen)) return;
-        const ms = kind === 'trash' ? TRASH_CLEAN_MS : kind === 'spill' ? SPILL_MOP_MS : MOP_MS;
-        if (kind !== 'trash') this.mopSound(w.sprite, piece.x, ms, this.workerPace(w));
-        await this.workerWait(w, ms);
-        this.stopMop(w.sprite);
-        if (!this.alive(gen)) return;
-        if (!piece.active) continue;
-        if (kind !== 'trash') {
-          this.removeTrash(piece);
-          continue;
-        }
-        w.carried.setTexture(piece.texture.key).setVisible(true);
-        this.removeTrash(piece);
-        const stand = this.binStand();
-        await this.workerWalk(w, stand.x, stand.y);
-        if (!this.alive(gen)) return;
-        await this.workerWait(w, BIN_DROP_MS);
-        if (!this.alive(gen)) return;
-        w.carried.setVisible(false).setTexture('box');
-        this.putInBin();
-        continue;
-      }
-      if (this.running && this.toiletDirt >= 40) {
-        await this.workerWalk(w, this.layout.wc.x, this.layout.wc.spotY);
-        if (!this.alive(gen)) return;
-        await this.workerWait(w, TOILET_CLEAN_MS);
-        if (!this.alive(gen)) return;
-        this.toiletDirt = 0;
-        this.refreshToilet();
-        effects.bubbles(this, this.layout.wc.x, this.layout.wc.y);
-        continue;
-      }
-      // Делать нечего — натирает шваброй самое потёртое место пола (не чаще раза в POLISH_EVERY_MS).
-      const worn = this.running && this.time.now - this.polishedAt > POLISH_EVERY_MS ? this.wornFloorSpot() : null;
-      if (worn) {
-        this.polishedAt = this.time.now;
-        await this.workerWalk(w, worn.x + 6, worn.y);
-        if (!this.alive(gen)) return;
-        this.mopSound(w.sprite, worn.x, MOP_MS, this.workerPace(w));
-        await this.workerWait(w, MOP_MS);
-        this.stopMop(w.sprite);
-        if (!this.alive(gen)) return;
-        effects.bubbles(this, worn.x, worn.y);
-        this.polishFloor(worn.x, worn.y);
-        continue;
-      }
-      if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
-      await this.wait(300);
-    }
-  }
-
-  /**
-   * Самое потёртое место зала (точки мира), куда можно подойти со шваброй: не под мебелью. Потёрто
-   * меньше POLISH_MIN_WEAR — натирать нечего (null).
-   */
-  private wornFloorSpot(): { x: number; y: number } | null {
-    const wear = this.wear;
-    if (!wear || wear.level !== this.state.level) return null;
-    const { wallH } = this.layout;
-    const free = (x: number, y: number) => this.obstacles.every((o) => x < o.x - 2 || x > o.x + o.w + 2 || y < o.y - 2 || y > o.y + o.h + 2);
-    // Уборщик встаёт правее пятна (как у лужи): свободно должно быть и там, где он стоит.
-    const spot = wornSpot(wear.cells, wear.grid, POLISH_MIN_WEAR, (x, y) => free(x, y + wallH) && free(x + 6, y + wallH));
-    return spot && { x: spot.x, y: spot.y + wallH };
-  }
-
-  private nearestTrash(x: number, y: number): Phaser.GameObjects.Image | undefined {
-    let best: Phaser.GameObjects.Image | undefined;
-    let bestDist = Infinity;
-    for (const piece of this.trash) {
-      if (this.claimedTrash.has(piece)) continue;
-      // Гнилое пахнет — его уборщик убирает в первую очередь.
-      const d = Phaser.Math.Distance.Between(x, y, piece.x, piece.y) - 60 * ((piece.getData('rot') as number) ?? 0);
-      if (d < bestDist) [best, bestDist] = [piece, d];
-    }
-    return best;
-  }
-
-  /** Грузчик носит товар со склада на полки, где он кончается. */
-  private async loaderLoop(w: Worker, gen: number): Promise<void> {
-    while (this.alive(gen)) {
-      // Заказ на дом без менеджера в зале собирает грузчик: склад и так его.
-      const parcel = this.running && !this.managerOnFloor ? deliveries.nextParcel(this) : undefined;
-      if (parcel) {
-        await deliveries.packParcel(this, w, gen, parcel);
-        continue;
-      }
-      const index = this.running ? this.shelfToRestock() : -1;
-      if (index < 0) {
-        if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await this.workerWalk(w, w.home.x, w.home.y);
-        await this.wait(400);
-        continue;
-      }
-      const { doorway, pickup } = this.layout.warehouse;
-      const route = this.routeTo(index);
-      await this.workerWalkVia(w, [doorway, pickup]);
-      await this.workerWait(w, PICKUP_MS);
-      if (!this.alive(gen)) return;
-      w.carried.setVisible(true);
-      await this.workerWalkVia(w, [doorway, ...route]);
-      await this.workerWait(w, PLACE_MS);
-      if (!this.alive(gen)) return;
-      w.carried.setVisible(false);
-      this.stockShelf(index, w.sprite);
-      // От ларя на улице — обратно в зал через дверь.
-      await this.workerWalkVia(w, route.slice(0, -1).reverse());
-    }
-  }
-
-  /** Полка, которую стоит пополнить: место есть, а на складе есть подходящий товар. */
-  /** Сначала полки со звёздочкой, потом те, где товар кончился, потом самые пустые. */
-  private shelfToRestock(): number {
-    let best = -1;
-    let bestScore = 0;
-    this.state.shelves.forEach((shelf, i) => {
-      if (shelf.broken) return;
-      const free = shelfFree(shelf);
-      const hasGoods = PRODUCT_IDS.some((id) => canPlace(id, shelf) && (this.state.warehouse[id] ?? []).some((u) => !u.pending));
-      const runningOut = PRODUCT_IDS.some(
-        (id) => canPlace(id, shelf) && (shelf.items[id]?.length ?? 0) === 0 && (this.state.warehouse[id]?.length ?? 0) > 0,
-      );
-      if (!hasGoods || !(free >= 3 || (runningOut && free > 0))) return;
-      const score = (runningOut ? 100 : 0) + free;
-      if (score > bestScore) [best, bestScore] = [i, score];
-    });
-    return best;
   }
 
   // ---------- Проверка ----------
@@ -5819,7 +4917,7 @@ export class StoreScene extends Phaser.Scene {
       }
       const result = this.tryTake(c, id);
       motion.reachShelf(this, c, this.spotOf(index), result === 'taken' ? id : null, result === 'taken' ? this.takenFrom : []);
-      if (result === 'taken' && c.sprite.y < this.layout.h && Math.random() < SPILL_CHANCE) this.spill(c.sprite.x, c.sprite.y + 2);
+      if (result === 'taken' && c.sprite.y < this.layout.h && Math.random() < SPILL_CHANCE) staff.spill(this, c.sprite.x, c.sprite.y + 2);
       const failed = result === 'empty' || result === 'expensive' || result === 'eduard';
       motion.endThought(this, thought, failed);
       if (failed) {
@@ -5834,7 +4932,7 @@ export class StoreScene extends Phaser.Scene {
     // В дождь и снег с улицы несут грязь.
     const muddy = isWet(this.weather) || this.weather === 'snow';
     const mud = [...this.trash].filter((piece) => piece.texture.key === 'mud').length;
-    if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE * entranceMud(this.state)) this.dropTrash(this.layout.door.x, this.layout.door.y - 30, 'mud');
+    if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE * entranceMud(this.state)) staff.dropTrash(this, this.layout.door.x, this.layout.door.y - 30, 'mud');
 
     if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
     if (c.friend) this.popup(c.sprite.x, c.sprite.y - 20, t('visit.hello', { name: c.friend.name }), '#fee761');
@@ -5856,7 +4954,7 @@ export class StoreScene extends Phaser.Scene {
       if (c.gone) return;
     }
 
-    if (!c.first && Math.random() < TRASH_CHANCE) this.dropTrash(c.sprite.x, c.sprite.y);
+    if (!c.first && Math.random() < TRASH_CHANCE) staff.dropTrash(this, c.sprite.x, c.sprite.y);
     if (c.regular) this.regularVerdict(c);
     // Друг оставляет чаевые — больше, если у него самого магазин побольше.
     if (c.friend && c.items.length) {
@@ -6055,7 +5153,7 @@ export class StoreScene extends Phaser.Scene {
     if (this.ownerScanning()) return;
     const r = this.ownerRegister();
     if (this.sellerBusy) {
-      if (r) this.recallSeller();
+      if (r) staff.recallSeller(this);
       return;
     }
     const c = r?.customer;
@@ -6117,7 +5215,7 @@ export class StoreScene extends Phaser.Scene {
    * Пробивка: товары по одному уезжают по ленте, потом оплата. Время зависит от навыка
    * того, кто стоит за кассой (хозяин или кассир) и от размера корзины.
    */
-  private async scanCustomer(r: Register, c: Customer, timing: ScanTiming, byOwner: boolean, by?: Phaser.GameObjects.Container): Promise<void> {
+  async scanCustomer(r: Register, c: Customer, timing: ScanTiming, byOwner: boolean, by?: Phaser.GameObjects.Container): Promise<void> {
     c.serving = true;
     c.patience?.remove();
     c.bubble.setVisible(false);
@@ -6306,7 +5404,7 @@ export class StoreScene extends Phaser.Scene {
     const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
     // Гнилой мусор и давно полное ведро пахнут: чем сильнее, тем чаще морщатся (rot.ts).
     // (Полное ведро и так «грязно» — его запах здесь не добавляется второй раз.)
-    const smelly = !c.unhappy && !dirty && Math.random() < smellChance(this.smell());
+    const smelly = !c.unhappy && !dirty && Math.random() < smellChance(staff.smell(this));
     if (c.unhappy || dirty || badGoods || smelly) {
       this.stats.complaints++;
       if (badGoods) note(this.stats, 'badGoods');
@@ -6786,7 +5884,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Откуда приходят с улицы: с тротуара слева или справа от входа. */
-  private streetSpawn(): Phaser.Types.Math.Vector2Like {
+  streetSpawn(): Phaser.Types.Math.Vector2Like {
     const side = Math.random() < 0.5 ? -1 : 1;
     return { x: this.layout.door.x + side * Phaser.Math.Between(50, 90), y: this.streetY + Phaser.Math.Between(-3, 3) };
   }
@@ -6913,7 +6011,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Остановить шаг на месте, не исполняя обещание walk (как прежде killTweensOf гасил твин шага). */
-  private haltWalk(person: Phaser.GameObjects.Container): void {
+  haltWalk(person: Phaser.GameObjects.Container): void {
     (person.getData('move') as Phaser.Tweens.Tween | undefined)?.destroy();
     person.setData('walking', false);
   }
@@ -7154,7 +6252,7 @@ export class StoreScene extends Phaser.Scene {
         saveGame(s);
         if (s.level > this.builtLevel) void effects.celebrateExpansion(this);
         else if (s.level !== this.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard || giantLook(s) !== this.builtGiant || branchLook(s) !== this.builtBranch || hoodLook(s) !== this.builtHood) this.buildWorld(bought);
-        else if (staffChanged) this.syncStaff();
+        else if (staffChanged) staff.syncStaff(this);
         if (adsChanged) streets.applyAds(this);
         if (radioChanged) decorations.applyRadio(this, true);
         this.awaitingBoxes = deliveries.boxesToDeliver(this);
@@ -7240,7 +6338,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Шаг первых минут: отмечается один раз, уходит в аналитику (onb_<шаг>) и на сервер — поскорее. */
-  private onbStep(step: OnbStep, day = this.state.day): void {
+  onbStep(step: OnbStep, day = this.state.day): void {
     if (!this.state.onboarding || onbDone(this.state, step)) return;
     this.state = markOnb(this.state, step);
     track(`onb_${step}`, day, this.sincePlay());
@@ -7305,7 +6403,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private grannyHome(): { x: number; y: number } {
-    return this.reliefSpot();
+    return staff.reliefSpot(this);
   }
 
   /** Бабушка сейчас занята делом (полка, касса). Дело прошлой постройки зала не считается. */
@@ -7377,7 +6475,7 @@ export class StoreScene extends Phaser.Scene {
     if (!ok()) return done();
     this.grannyBox?.setVisible(false);
     // Пока шла, полку мог разложить сам игрок — тогда коробка просто возвращается на склад.
-    if (shelfFree(this.state.shelves[index]) > 0) this.stockShelf(index, granny);
+    if (shelfFree(this.state.shelves[index]) > 0) staff.stockShelf(this, index, granny);
     const home = this.grannyHome();
     await this.walkVia(granny, [...route.slice(0, -1).reverse(), doorway, home], GRANNY_SPEED);
     if (granny.active) this.setFacing(granny, 'down');
@@ -7595,7 +6693,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Игрок сделал то, чего ждал шаг зала. */
-  private passTut(step: TutStep): void {
+  passTut(step: TutStep): void {
     if (tutStep(this.state) !== step || !this.running) return;
     this.advanceTut(tutPass(this.state, step));
   }
@@ -7906,7 +7004,7 @@ export class StoreScene extends Phaser.Scene {
     // Активные моменты дня: расписание по секундам дня (game/moments.ts).
     this.moments.start(momentsFor(this.state, Math.random));
     this.valyaCame = false;
-    this.syncStaff();
+    staff.syncStaff(this);
     // Повар на смене — кухня сама закупает у поставщиков продукты на день (из кассы; видно утром у кухни и в итогах).
     const pantry = stockKitchen(this.state);
     if (pantry.spent) {
@@ -7944,7 +7042,7 @@ export class StoreScene extends Phaser.Scene {
     food.refreshKitchen(this);
     // Старые холодильники иногда подтекают: лужа у одного из них посреди дня.
     if (Math.random() < fridgeLeak(this.state)) {
-      this.time.delayedCall(Phaser.Math.FloatBetween(0.15, 0.7) * DAY_SECONDS * 1000, () => this.running && this.fridgeLeaks());
+      this.time.delayedCall(Phaser.Math.FloatBetween(0.15, 0.7) * DAY_SECONDS * 1000, () => this.running && staff.fridgeLeaks(this));
     }
     // Мини-события (свет, труба, голубь, курьер, мышь): почти каждый день, по очереди (live.ts).
     // Два за день — первое до обеда, второе ближе к вечеру, чтобы не наложились.
@@ -8253,11 +7351,11 @@ export class StoreScene extends Phaser.Scene {
       for (const worker of this.workers.values()) if (!hostages.includes(worker.sprite)) hostages.push(worker.sprite);
       // Хозяин бросает дело: его шаг гасится без onStop, и само дело уже не кончится — без этого он
       // так и числился бы занятым, а за его кассой до конца дня стоял бы сменщик.
-      if (this.sellerBusy) this.dropChore();
+      if (this.sellerBusy) staff.dropChore(this);
       this.sellerBusy = false;
       hostages.push(this.seller);
       hostages.forEach((p, i) => {
-        this.stopMop(p);
+        staff.stopMop(this, p);
         this.haltWalk(p);
         this.tweens.killTweensOf(p);
         const spot = corner(i);
@@ -8339,9 +7437,9 @@ export class StoreScene extends Phaser.Scene {
       }
       this.siege = false;
       this.state = { ...this.state, rating: Math.min(5, Math.round((this.state.rating + ROBBERY_RATING) * 100) / 100) };
-      const home = this.ownerHome();
+      const home = staff.ownerHome(this);
       void this.walk(this.seller, home.x, home.y);
-      this.syncStaff();
+      staff.syncStaff(this);
       this.time.delayedCall(1500, () => this.popup(w / 2, h / 2 - 8, t('robbery.thanks', { r: ROBBERY_RATING }), '#fff3b0'));
     });
   }
@@ -8697,7 +7795,7 @@ export class StoreScene extends Phaser.Scene {
     // Захват не успел закончиться (день досрочно закрыт) — персонал возвращается к работе.
     if (this.siege) {
       this.siege = false;
-      this.syncStaff();
+      staff.syncStaff(this);
     }
     this.running = false;
     motion.straightenPeople(this);
@@ -8725,7 +7823,7 @@ export class StoreScene extends Phaser.Scene {
     const filmed = bigDayFor(this.state.day) === 'filming';
     if (filmed) this.state = filmingReward(this.state);
     // Пол за день: шаги покупателей — в потёртость (видна с утра, швабра и уборщик её стирают).
-    this.settleFloorWear();
+    staff.settleFloorWear(this);
     // Сосед утром не дождался товара (returns.ts) — заходит к закрытию: есть — забирает, нет — без обид.
     const neighbour = this.state.ret?.order?.day === this.state.day ? collectOrder(this.state) : null;
     if (neighbour) this.state = neighbour.paid ? neighbour.state : dropOrder(neighbour.state);
@@ -8795,7 +7893,7 @@ export class StoreScene extends Phaser.Scene {
     this.stats.skimmed = skimmed;
     // Непроданное с кухни списано — тарелки из витрины убираем.
     food.refreshKitchen(this);
-    if (promoted) this.syncStaff();
+    if (promoted) staff.syncStaff(this);
     const unlocked = this.checkAchievements(false);
     if (unlocked.length) extra.push([t('ach.summary'), unlocked.map((id) => t(`ach.${id}` as TextKey)).join(', ')]);
     // Новичок доиграл первый день: сколько секунд прошло от «Играть».
