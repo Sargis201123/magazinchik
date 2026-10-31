@@ -246,7 +246,7 @@ function murmur(ac: AudioContext, s: AmbScene): void {
     if (!v && gains[i] > 0 && buffer) v = crowd[i] = startLoop(ac, 'murmur', buffer, 'hall', MURMUR_SPREAD[i]);
     if (!v) return;
     // Покупатели прибывают и уходят — гомон следует плавно, за пару секунд.
-    level(v, ac, gains[i] * LEVEL.murmur, 1.5);
+    level(v, ac, gains[i] * LEVEL.murmur * (s.murmur ?? 1), 1.5);
     if (now - crowdQuietSince[i] > 10) {
       stopLoop(v, ac, 0.5);
       crowd[i] = null;

@@ -8,6 +8,9 @@ export const TRASH_KEYS = ['trash', 'trash_banana', 'trash_cup', 'trash_wrapper'
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
 export const SPRITES = [
+  // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
+  'tip_jar',
+  'jam_splat',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
   // Праздники по календарю (art/holidays.py): вещи за открытки и новогодний набор за звёзды.
@@ -36,6 +39,22 @@ export const SPRITES = [
   'giant_branch',
   // После переезда в гипермаркет филиал — в старом магазине через дорогу (art/giant.py).
   'branch_old',
+  // Благоустройство района (art/hood.py, hood.ts).
+  'hood_lamp',
+  'hood_planter',
+  'hood_planter_winter',
+  'hood_bikes',
+  'hood_bus',
+  'hood_mural',
+  'hood_fir',
+  'hood_fir_xmas',
+  'hood_fountain',
+  'hood_playground',
+  'hood_flowerbox',
+  'hood_stall_R',
+  'hood_stall_U',
+  'hood_stall_E',
+  'hood_statue',
   // Особые дни: съёмки кино и ремонт дороги (art/street_props.py).
   'film_camera',
   'film_light',
@@ -166,6 +185,13 @@ export const SPRITES = [
   'sign_marquee',
   'sign_marquee_lit',
   'sign_candy',
+  // Эксклюзив звёздного пропуска и подарки за поддержку автора (art/season.py).
+  'sign_s1',
+  'sign_s2',
+  'sign_s2_lit',
+  'thanks_plaque',
+  'cat_hat',
+  'cat_hat_blink',
   'light_sconce',
   'light_pendant',
   'light_lantern',

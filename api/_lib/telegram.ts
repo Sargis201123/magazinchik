@@ -124,7 +124,18 @@ export const STARS_CATALOG: Record<string, { stars: number; ru: string; en: stri
   neon_open: { stars: 30, ru: 'Неон «ОТКРЫТО»', en: 'OPEN neon' },
   // Наборы (src/game/decor.ts → STAR_PACKS): одна покупка — несколько вещей.
   pack_newyear: { stars: 100, ru: 'Новогодний набор', en: 'New Year pack' },
+  // «Поддержать автора» (src/game/support.ts): только спасибо и красота, без преимуществ в игре.
+  support_25: { stars: 25, ru: 'Кофе автору', en: 'A coffee for the author' },
+  support_100: { stars: 100, ru: 'Кот в цилиндре', en: 'Cat in a top hat' },
+  support_250: { stars: 250, ru: 'Золотой меценат', en: 'Golden patron' },
 };
+
+/** Покупка — поддержка автора (support_*), а не вещь для магазина. */
+export const isSupport = (id: string): boolean => id.startsWith('support_') && Boolean(STARS_CATALOG[id]);
+/** Ступень, с которой в рейтинге золотая табличка (src/game/support.ts, gold). */
+export const GOLD_SUPPORT = 250;
+/** Самая щедрая поддержка среди покупок игрока (звёзды) или 0. */
+export const supportStars = (items: string[]): number => Math.max(0, ...items.filter(isSupport).map((id) => STARS_CATALOG[id].stars));
 
 /** Сезонный пропуск (src/game/pass.ts): у каждого сезона свой номер, цена одна (совпадает с pass.ts — проверяет тест). */
 export const PASS_STARS = 100;

@@ -3,8 +3,11 @@
 // открывают уровни; на каждом — награда бесплатной дорожки (монеты), а со звёздным пропуском —
 // ещё и премиальной (монеты вдвое и звёздный декор на 10, 20 и 30-м уровнях).
 // Новый сезон — очки и награды с нуля; купленный декор остаётся навсегда.
+// У сезона есть и свой эксклюзив (decor.ts, поле season): наряд хозяина на EXCLUSIVE_LEVELS.outfit
+// и вывеска на EXCLUSIVE_LEVELS.sign. Их нельзя купить — только забрать со звёздной дорожки,
+// и их видят друзья в гостях (снимок магазина несёт то, что стоит, friendShop.ts).
 
-import { DECOR, type DecorId } from './decor';
+import { DECOR, type DecorId, type DecorKind } from './decor';
 import type { StoreState } from './economy';
 
 export const PASS_DAYS = 28;
@@ -21,6 +24,8 @@ const EPOCH = Date.UTC(2026, 9, 19);
 const DAY = 24 * 3600_000;
 /** Уровни с наградой-декором на премиальной дорожке. */
 export const DECOR_LEVELS = [10, 20, 30];
+/** Уровни с эксклюзивом сезона: наряд — пораньше (сразу видно, за что платил), вывеска — к середине. */
+export const EXCLUSIVE_LEVELS: Partial<Record<DecorKind, number>> = { outfit: 5, sign: 15 };
 
 export interface PassState {
   season: number;
@@ -41,11 +46,28 @@ export const passItem = (season: number): string => `pass_${season}`;
 export const passOf = (state: StoreState, season: number): PassState =>
   state.pass && state.pass.season === season ? state.pass : { season, xp: 0, free: [], premium: [] };
 
-/** Новый сезон — пропуск с нуля. */
+/** Новый сезон — пропуск с нуля. Заодно — эксклюзив за уже забранные уровни (claimedExclusives). */
 export const ensureSeason = (state: StoreState, now: number): StoreState => {
   const season = seasonOf(now);
-  return state.pass?.season === season ? state : { ...state, pass: passOf(state, season) };
+  return claimedExclusives(state.pass?.season === season ? state : { ...state, pass: passOf(state, season) });
 };
+
+/**
+ * Премиальный уровень с эксклюзивом забрали ещё до того, как эксклюзив появился в игре
+ * (сезон 1 шёл уже две недели): выдать его и поставить. Повторно ничего не делает.
+ */
+export function claimedExclusives(state: StoreState): StoreState {
+  const pass = state.pass;
+  if (!pass?.paid) return state;
+  let s = state;
+  for (const level of pass.premium) {
+    const id = passExclusive(pass.season, level);
+    if (!id || s.decor.owned.includes(id)) continue;
+    const kind = DECOR.find((d) => d.id === id)!.kind;
+    s = { ...s, decor: { ...s.decor, owned: [...s.decor.owned, id], active: { ...s.decor.active, [kind]: id } } };
+  }
+  return s;
+}
 
 export const passLevel = (pass: PassState): number => Math.min(PASS_LEVELS, Math.floor(pass.xp / XP_PER_LEVEL));
 
@@ -68,6 +90,14 @@ export function passDecor(state: StoreState, level: number): DecorId | null {
   return starred[((season - 1) * DECOR_LEVELS.length + i) % starred.length];
 }
 
+/** Эксклюзивные вещи сезона (вывеска, наряд); у сезона без своего эксклюзива — пусто. */
+export const seasonExclusives = (season: number): DecorId[] => DECOR.filter((d) => d.season === season).map((d) => d.id);
+
+/** Эксклюзив сезона на этом уровне премиальной дорожки (или null). */
+export function passExclusive(season: number, level: number): DecorId | null {
+  return DECOR.find((d) => d.season === season && EXCLUSIVE_LEVELS[d.kind] === level)?.id ?? null;
+}
+
 export type Track = 'free' | 'premium';
 
 /** Забрать награду уровня. null — уровень не открыт, уже забрано или нет пропуска. */
@@ -80,6 +110,12 @@ export function claimPass(state: StoreState, level: number, track: Track): Store
   s = { ...s, money: s.money + passCoins(state, level) * 2 };
   const decor = passDecor(state, level);
   if (decor && !s.decor.owned.includes(decor)) s = { ...s, decor: { ...s.decor, owned: [...s.decor.owned, decor] } };
+  // Эксклюзив сезона сразу надевается и вешается — ради него и брали пропуск.
+  const exclusive = passExclusive(pass.season, level);
+  if (exclusive && !s.decor.owned.includes(exclusive)) {
+    const kind = DECOR.find((d) => d.id === exclusive)!.kind;
+    s = { ...s, decor: { ...s.decor, owned: [...s.decor.owned, exclusive], active: { ...s.decor.active, [kind]: exclusive } } };
+  }
   return s;
 }
 

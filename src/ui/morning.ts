@@ -1,3 +1,4 @@
+import { momentCount } from '../game/moments';
 import { getLang, memberName, t } from '../i18n';
 import { pluralForm } from '../i18n/plural';
 import type { TextKey } from '../i18n/ru';
@@ -198,7 +199,8 @@ import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable,
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
-import { claimPass, grantPass, passCoins, passDecor, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
+import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
+import { showSupport } from './support';
 import { rushPrize } from '../game/rush';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
@@ -238,9 +240,12 @@ import { newTag, tabHint } from './onboarding';
 import { seeWeek, tutAt, tutIndex, tutNext, tutPass, tutReplay, tutSkip, tutStep, tutTell, weekNote, type TutStep, type WeekNote } from '../game/tutorial';
 import type { Coach, Spot } from './coach';
 import { showLeaderboard } from './leaderboard';
+import { keepsakeBox, presentsBox } from './presents';
+import { leagueBox, leagueClaimBox, leaguePlace } from './league';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { anchorScroll, button, el, foldUp, holdPlace, openModal, toast, unfold, who } from './dom';
+import { hoodBox } from './hood';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
 import { tryNudge } from './nudge';
@@ -277,9 +282,10 @@ type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
  * Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. Видевшие прежнюю
  * (2: звук, перестановка, друзья…) увидят новую один раз.
  */
-const WHATS_NEW = 4;
+const WHATS_NEW = 5;
 /** Строки карточки «Что нового» — самое свежее сверху. */
 const WHATS_NEW_LINES: TextKey[] = [
+  'news.hood',
   'news.hyper',
   'news.branch',
   'news.goal',
@@ -318,6 +324,8 @@ const TOUR: { key: TextKey; focus: TourFocus; tab?: Tab; mood?: 'happy' | 'sad' 
   { key: 'tour.hall', focus: 'open', mood: 'happy' },
 ];
 
+/** До какого дня утро напоминает про активные моменты дня. */
+const MOMENT_TIP_LAST_DAY = 5;
 const productLabel = (id: ProductId) => `${PRODUCTS[id].icon} ${t(PRODUCTS[id].nameKey)}`;
 
 /** Строка товара: крупная пиксельная иконка, название (и ценник), подпись и кнопки справа. */
@@ -829,6 +837,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
       ...giftsBox(),
+      ...presentsBox(getState, update),
+      ...leagueClaimBox(state, getState, update),
       ...(touring ? [] : liveBox(state)),
       ...staffEventBox(state),
       ...districtBox(state),
@@ -837,7 +847,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...taleBox(state),
       ...guildClaimBox(state),
       today,
-      todayCard(state, touring, [...friendShopsBox(), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),
+      todayCard(state, touring, [...friendShopsBox(), ...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: getState().level })), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),
       ...(hint ? [hint] : []),
       tabs,
       body,
@@ -953,6 +963,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if (weekly?.length) chip(`📅 ${weekly.filter((c) => c.done).length}/${weekly.length}`);
     const ready = state.pass ? passReady(state) : 0;
     if (state.pass) chip(`🎫 ${passLevel(state.pass)}${ready ? ` · 🎁${ready}` : ''}`, ready > 0);
+    // Турнир района (ui/league.ts): место в лиге этой недели.
+    const place = leaguePlace();
+    if (place) chip(`🏆 ${place}`, place <= 3);
     head.append(el('b', '', `${open ? '▾' : '▸'} ${t('today.title')}`), chips);
     head.addEventListener('click', () => {
       if (touring) return;
@@ -1570,7 +1583,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const rows = el('div', 'ui-box');
       for (let l = 1; l <= PASS_LEVELS; l++) {
         const row = el('div', `ui-pass-row${l <= level ? ' open' : ''}`);
-        const decor = passDecor(state, l);
+        const decor = passExclusive(pass.season, l) ?? passDecor(state, l);
         const cell = (track: 'free' | 'premium', label: string) => {
           const got = pass[track].includes(l);
           const can = l <= level && !got && (track === 'free' || pass.paid);
@@ -1603,6 +1616,21 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         bar,
         el('div', 'ui-muted', t('pass.note', { d: XP_DAY, q: XP_QUEST, w: XP_WEEKLY, x: XP_PER_LEVEL, days: PASS_DAYS })),
       ];
+      // Эксклюзив сезона: вывеска и наряд крупно — ради них и стоит взять звёздный пропуск.
+      const exclusive = seasonExclusives(pass.season);
+      if (exclusive.length) {
+        const show = el('div', 'ui-pass-excl');
+        for (const id of exclusive) {
+          const item = decorItem(id);
+          const got = state.decor.owned.includes(id);
+          const cardEl = el('div', `ui-decor premium${got ? ' active' : ''}`);
+          cardEl.append(decorPreview(item, item.kind), el('div', 'ui-decor-name', t(item.nameKey)), el('div', 'ui-decor-status', got ? `✓ ${t('pass.exclusiveGot')}` : t('pass.exclusiveAt', { l: EXCLUSIVE_LEVELS[item.kind] ?? 0 })));
+          show.append(cardEl);
+        }
+        head.push(el('b', '', t('pass.exclusive')), show, el('div', 'ui-muted', t('pass.exclusiveNote')));
+        const next = seasonExclusives(pass.season + 1);
+        if (next.length) head.push(el('div', 'ui-muted', t('pass.nextSeason', { items: next.map((id) => t(decorItem(id).nameKey)).join(', ') })));
+      }
       if (pass.paid) head.push(el('div', 'ui-note', t('pass.paid')));
       else {
         const note = el('div', 'ui-muted', t('pass.buyNote'));
@@ -1983,7 +2011,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const goalsBox = (state: StoreState): HTMLElement[] => {
     const quests = state.plan?.quests ?? [];
     const weekly = state.weekly;
-    if (!quests.length && !weekly) return [];
+    const momentTip = momentCount(state) > 0 && state.day <= MOMENT_TIP_LAST_DAY;
+    if (!quests.length && !weekly && !momentTip) return [];
     const box = el('div', 'ui-box ui-goals');
     if (quests.length) {
       box.append(el('b', '', t('quest.title')));
@@ -1992,8 +2021,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         r.append(el('span', '', `• ${questText(q)}`), el('b', 'ui-goal-reward', `+${q.reward} 💰`));
         box.append(r);
       }
-      box.append(el('div', 'ui-muted', t('quest.allBonus', { r: ALL_QUESTS_RATING })));
+      box.append(el('div', 'ui-muted', `${t('quest.now')} ${t('quest.allBonus', { r: ALL_QUESTS_RATING })}`));
     }
+    // Первые дни с активными моментами (game/moments.ts) — одной строкой, что ловить днём.
+    if (momentTip) box.append(el('div', 'ui-muted', t('moment.morning')));
     if (weekly) {
       box.append(el('b', 'ui-goals-week', t('weekly.title', { day: weeklyUntil(state) })));
       for (const c of weekly.challenges as Challenge[]) {
@@ -3188,7 +3219,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       endTour();
       close();
       onRival(key, name);
-    })), 'ui-btn'));
+    }), { level: getState().level }), 'ui-btn'));
     const box = el('div', 'ui-box');
     box.append(el('b', '', `🤝 ${t('social.title')}`), el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT })));
     if (info.friends) box.append(el('div', 'ui-muted', t('social.count', { n: info.friends })));
@@ -3209,11 +3240,16 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const decorBox = (state: StoreState) =>
     foldBox('decor', t('decor.title'), (box) => {
       box.append(el('div', 'ui-muted', t('decor.note')));
+      // Эксклюзив пропуска — свой сезон и уже забранное; подарки за поддержку — только полученные.
+      const shown = (d: DecorItem) =>
+        state.decor.owned.includes(d.id) || (d.season === undefined ? !d.support : d.season === state.pass?.season);
       for (const kind of DECOR_KINDS) {
+        const items = DECOR.filter((d) => d.kind === kind && shown(d));
+        if (!items.length) continue;
         box.append(el('div', 'ui-decor-kind', t(`decor.kind.${kind}` as TextKey)));
         const grid = el('div', 'ui-decor-grid');
         grid.append(decorCard(state, kind, null));
-        for (const item of DECOR.filter((d) => d.kind === kind)) grid.append(decorCard(state, kind, item));
+        for (const item of items) grid.append(decorCard(state, kind, item));
         box.append(grid);
       }
     });
@@ -3259,11 +3295,15 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           holidayDecorModal(item);
           return;
         }
+        if (item && (item.season !== undefined || item.support) && !owned) {
+          exclusiveDecorModal(item);
+          return;
+        }
         if (active) return;
         if (owned) update(setDecor(getState(), kind, item?.id ?? null));
         else if (item) update(buyDecor(getState(), item.id), 'success');
       },
-      `ui-decor${active ? ' active' : ''}${premium ? ' premium' : ''}`,
+      `ui-decor${active ? ' active' : ''}${premium || item?.season !== undefined || item?.support ? ' premium' : ''}`,
       !owned && !premium && !holiday && !canBuy,
     );
     const status = trying
@@ -3276,6 +3316,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
             ? `${item.price} 💰`
             : item?.holiday
               ? t('decor.holidayEarn')
+              : item?.season !== undefined
+                ? t('decor.seasonEarn')
+                : item?.support
+                  ? t('decor.supportEarn')
               : `⭐ ${item?.stars ?? (item?.pack ? STAR_PACKS[item.pack]?.stars : 0) ?? 0}`;
     card.append(decorPreview(item, kind), el('div', 'ui-decor-name', item ? t(item.nameKey) : t('decor.none')), el('div', 'ui-decor-status', status));
     return card;
@@ -3332,6 +3376,29 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     } else if ((state.decor.tried ?? []).includes(item.id)) modal.append(el('div', 'ui-muted', t('decor.triedAlready')));
     modal.append(button(t('decor.close'), close, 'ui-btn secondary'));
     if (!starsAvailable()) note.textContent = t('decor.starsOff');
+  };
+
+  /**
+   * Эксклюзив пропуска или подарок за поддержку, которых ещё нет: крупно и откуда они берутся.
+   * Эксклюзив своего сезона можно один раз примерить на день — как премиальное.
+   */
+  const exclusiveDecorModal = (item: DecorItem) => {
+    const { card: modal, close } = openModal();
+    const state = getState();
+    const current = item.season !== undefined && item.season === state.pass?.season;
+    const text = item.support
+      ? t('decor.supportNote')
+      : current
+        ? t('decor.seasonNote', { n: item.season!, l: EXCLUSIVE_LEVELS[item.kind] ?? 0 })
+        : t('decor.seasonGone');
+    modal.append(el('h2', '', t(item.nameKey)), decorPreview(item, item.kind, true), el('div', 'ui-muted', text));
+    if (current && canTry(state, item.id)) {
+      modal.append(button(t('decor.try'), () => {
+        close();
+        update(tryDecor(getState(), item.id));
+      }, 'ui-btn secondary'));
+    } else if (current && (state.decor.tried ?? []).includes(item.id)) modal.append(el('div', 'ui-muted', t('decor.triedAlready')));
+    modal.append(button(t('decor.close'), close, 'ui-btn secondary'));
   };
 
   /** Праздничная вещь, которой ещё нет: крупно и откуда она берётся (открытки праздника). */
@@ -3890,6 +3957,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
 
   // ---------- Магазин: помещение, долг, расходы ----------
 
+  /** «Поддержать автора» (ui/support.ts): скромная строчка среди настроек профиля. */
+  const supportBox = () => {
+    const box = el('div', 'ui-box');
+    box.append(button(t('support.open'), () => showSupport(getState, update), 'ui-btn secondary'));
+    return box;
+  };
+
   /** Профиль (кнопка 🏆 в заголовке): достижения, звание, наследие, друзья, альбом, настройки. */
   const profileTab = (state: StoreState): HTMLElement[] => {
     const replay = el('div', 'ui-box');
@@ -3946,6 +4020,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       named,
       sounds,
       gfx,
+      supportBox(),
       rankBox(state),
       ...legacyBox(state),
       ...inviteBox(),
@@ -3953,6 +4028,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...trophiesBox(state),
       recordsBox(state),
       albumBox(state),
+      ...keepsakeBox(state),
       ...(early ? [] : [replay]),
       again,
     ];
@@ -4122,7 +4198,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         ),
       );
     }
-    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), ...branchBox(state), bankBox(state));
+    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), ...branchBox(state), ...hoodBox(state, getState, update), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {

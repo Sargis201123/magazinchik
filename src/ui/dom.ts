@@ -98,6 +98,18 @@ const css = `
 .ui-board { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; }
 .ui-board-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; background: rgba(43, 34, 51, .06); }
 .ui-board-row.me { background: #fee761; }
+/* Золотая табличка: поддержал автора звёздами (support.ts). */
+.ui-board-row.gold { background: linear-gradient(90deg, #ffe9a3, #f7c948); box-shadow: inset 0 0 0 2px #b8860b; }
+.ui-board-row.gold.me { background: linear-gradient(90deg, #fee761, #f7c948); }
+/* «Поддержать автора» и эксклюзив сезона в пропуске. */
+.ui-support-tier { display: grid; grid-template-columns: 40px 1fr; gap: 4px 10px; align-items: center; padding: 8px; margin: 6px 0;
+  border: 2px solid #feae34; border-radius: 10px; background: #fff8e6; }
+.ui-support-tier .ui-support-icon { font-size: 26px; text-align: center; grid-row: span 2; }
+.ui-support-tier .ui-btn { grid-column: 1 / -1; margin: 4px 0 0; }
+.ui-support-show { display: flex; justify-content: center; gap: 12px; margin: 6px 0; }
+.ui-support-show img { height: 56px; image-rendering: pixelated; }
+.ui-pass-excl { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0; }
+.ui-pass-excl .ui-decor { cursor: default; }
 .ui-board-place { width: 26px; text-align: center; font-weight: 800; }
 .ui-board-who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .ui-board-who b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

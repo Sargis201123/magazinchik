@@ -686,6 +686,9 @@ export interface StoreState {
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */
   rush?: boolean;
   rushClaimed?: number;
+  /** Турнир района (social.ts): за какую неделю забрана награда; полка памяти — открытки друзей и кубки. */
+  leagueClaimed?: number;
+  keepsakes?: import('./social').Keepsake[];
   /** «Позвать на помощь» (help.ts): в какой день друзья на подмоге и в какой день уже звал. */
   helpDay?: number;
   helpAsked?: number;
@@ -693,6 +696,8 @@ export interface StoreState {
   rival?: import('./rival').RivalState;
   /** Сезонный пропуск (pass.ts). */
   pass?: PassState;
+  /** Поддержал автора звёздами (support.ts): самая щедрая ступень, ⭐. Принадлежит игроку. */
+  supporter?: number;
   /** Истории постоянных покупателей (tales.ts). */
   tales?: TalesState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */
@@ -707,6 +712,8 @@ export interface StoreState {
   branch?: import('./branch').BranchState;
   /** Что копится без игрока и ждёт его утром: сундучок выручки, письмо, заказ соседа (returns.ts). */
   ret?: import('./returns').ReturnState;
+  /** Благоустройство района (hood.ts): что куплено и в какой день. */
+  hood?: import('./hood').HoodState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */
@@ -811,6 +818,10 @@ export interface DayStats {
   lostWhy?: Partial<Record<LostReason, number>>;
   missing?: Partial<Record<ProductId, number>>;
   pricey?: Partial<Record<ProductId, number>>;
+  /** Активные моменты дня (moments.ts): сколько показали, сколько поймали и сколько из них — искорки к рейтингу. */
+  momentsShown?: number;
+  moments?: number;
+  momentStars?: number;
 }
 
 export type LostReason = 'queue' | 'empty' | 'expensive' | 'eduard';

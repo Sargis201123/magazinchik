@@ -7,6 +7,7 @@ import { RARE_GUESTS } from './endless';
 import { CHAPTERS } from './story';
 import { registerCount } from './registers';
 import { gearMaxed, gearUpgrades } from './gear';
+import { hasHood, hoodOwned } from './hood';
 
 export type AchievementId =
   | 'first_day'
@@ -42,7 +43,10 @@ export type AchievementId =
   | 'registers_4'
   | 'giant'
   | 'branch'
-  | 'hypermarket';
+  | 'hypermarket'
+  | 'hood_first'
+  | 'hood_half'
+  | 'hood_all';
 
 export type Tier = 'bronze' | 'silver' | 'gold';
 
@@ -101,6 +105,10 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'branch', tier: 'gold', progress: ({ state }) => flag(Boolean(state.branch)) },
   // Переезд в гипермаркет — в здание «Гиганта» (branch.ts).
   { id: 'hypermarket', tier: 'gold', progress: ({ state }) => flag(state.level >= HYPER_LEVEL) },
+  // Благоустройство района (hood.ts): первое улучшение, шесть и памятник бабушке — последний.
+  { id: 'hood_first', tier: 'bronze', progress: ({ state }) => count(hoodOwned(state).length, 1) },
+  { id: 'hood_half', tier: 'silver', progress: ({ state }) => count(hoodOwned(state).length, 6) },
+  { id: 'hood_all', tier: 'gold', progress: ({ state }) => flag(hasHood(state, 'statue')) },
 ];
 
 export const achievementName = (id: AchievementId): TextKey => `ach.${id}` as TextKey;

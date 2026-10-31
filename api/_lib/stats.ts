@@ -9,9 +9,10 @@
 
 import { markWeek } from './guild.js';
 import { markWeekend } from './weekend.js';
+import { markLeague } from './league.js';
 import { ready, saveHooks } from './social.js';
 import { rivalKey } from './rival.js';
-import { json, verifyInitData, type D1, type Env } from './telegram.js';
+import { GOLD_SUPPORT, json, verifyInitData, type D1, type Env } from './telegram.js';
 
 const DAY = 24 * 3600_000;
 /** Сколько событий за раз принимаем и как они называются (с цифрами — onb_day1, onb_day2). */
@@ -40,6 +41,8 @@ export interface BoardRow {
   me?: boolean;
   /** Ключ для «Заглянуть к конкуренту» (rival.ts): у своей строки нет. */
   key?: string;
+  /** Золотая табличка: поддержал автора (supporters.ts, ступень GOLD_SUPPORT). */
+  gold?: true;
 }
 
 /** Самый большой снимок магазина (символов), который сохраняем. */
@@ -90,6 +93,8 @@ export async function progress(request: Request, env: Env): Promise<Response> {
   // Начало недели и выходных — по счёту сервера до этого отчёта.
   await markWeek(db, user.id, before, now);
   await markWeekend(db, user.id, before, revenue, now);
+  // Турнир района (league.ts): выручка на начало дня и лига недели. Сбой турнира отчёту не мешает.
+  await markLeague(db, user.id, int(body.level, 10), before, now).catch((e) => console.error(e));
   if (throttled) return json({ ok: false, error: 'too_often' });
   const events = Array.isArray(body.events) ? body.events.slice(0, MAX_EVENTS) : [];
   for (const e of events as Record<string, unknown>[]) {
@@ -198,10 +203,10 @@ async function onboardingStats(db: D1, now: number): Promise<Record<(typeof COHO
   return out;
 }
 
-const ROW = 'SELECT id, name, day, level, rating, revenue FROM progress';
-type Row = BoardRow & { id: number };
+const ROW = `SELECT id, name, day, level, rating, revenue, EXISTS (SELECT 1 FROM supporters s WHERE s.id = progress.id AND s.stars >= ${GOLD_SUPPORT}) AS gold FROM progress`;
+type Row = Omit<BoardRow, 'gold'> & { id: number; gold?: number | boolean };
 const strip = (rows: Row[], me: number): BoardRow[] =>
-  rows.map(({ id, name, day, level, rating, revenue }) => ({ name, day, level, rating: Math.round(rating * 10) / 10, revenue, ...(id === me ? { me: true } : {}) }));
+  rows.map(({ id, name, day, level, rating, revenue, gold }) => ({ name, day, level, rating: Math.round(rating * 10) / 10, revenue, ...(id === me ? { me: true } : {}), ...(gold ? { gold: true as const } : {}) }));
 
 /**
  * POST /api/leaderboard { initData } → { enabled, top, friends, rank, total }:

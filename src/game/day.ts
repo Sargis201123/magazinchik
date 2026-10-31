@@ -35,9 +35,11 @@ import { rushGuests } from './rush';
 import { spoilDishes } from './kitchen';
 import { staffMorning } from './staffEvents';
 import { districtGuests } from './district';
+import { hoodGuests } from './hood';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
 import { laneGuests } from './lanes';
+import { momentCount, momentRating } from './moments';
 import { branchNight, branchReport } from './branch';
 
 export interface NightSummary extends NightResult {
@@ -59,6 +61,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const quests = s.plan?.quests ?? [];
   const rewarded = rewardQuests(s, quests, stats);
   s = rewarded.state;
+  // Искорки активных моментов дня — к рейтингу (moments.ts), понемногу.
+  const sparkle = momentRating(stats);
+  if (sparkle) s = { ...s, rating: Math.min(5, s.rating + sparkle) };
   const weekly = progressWeekly(s, stats);
   s = weekly.state;
   s = addPassXp(s, rewarded.done, weekly.completed.length);
@@ -93,7 +98,7 @@ export function ensurePlan(state: StoreState): StoreState {
   const weekly = ensureWeekly(state, guestsToday(state));
   if (weekly.plan?.day === weekly.day && weekly.plan.quests) return weekly;
   const plan = planDay(weekly, storyChances(weekly));
-  return { ...weekly, plan: { ...plan, quests: questsFor(weekly, guestsToday(weekly)) } };
+  return { ...weekly, plan: { ...plan, quests: questsFor(weekly, guestsToday(weekly), momentCount(weekly)) } };
 }
 
 /** Итог проверки: штраф/рейтинг и счётчик для сюжета. */
@@ -121,6 +126,7 @@ export const guestFactor = (state: StoreState): number =>
   departmentGuests(state) *
   eduardGuests(state) *
   districtGuests(state) *
+  hoodGuests(state) *
   trickGuests(state) *
   nightBoostGuests(state) *
   giantGuests(state) *

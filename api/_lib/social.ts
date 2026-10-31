@@ -64,6 +64,8 @@ const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS waiting (id INTEGER PRIMARY KEY, chest INTEGER, letter TEXT, ord TEXT, qty INTEGER, updated INTEGER)',
   // Настройки, которые автор меняет без выпуска игры: календарь праздников (live.ts, docs/EVENTS.md).
   'CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, updated INTEGER)',
+  // Поддержали автора звёздами (supporters.ts): самая щедрая ступень — для золотой таблички в рейтинге.
+  'CREATE TABLE IF NOT EXISTS supporters (id INTEGER PRIMARY KEY, stars INTEGER, updated INTEGER)',
 ].join(';\n');
 
 /** Таблицы создаются сами при первом обращении к базе. */
