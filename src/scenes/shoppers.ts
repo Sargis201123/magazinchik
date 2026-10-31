@@ -125,6 +125,7 @@ import * as staff from './staff';
 import * as persons from './persons';
 import * as visitors from './visitors';
 import * as newcomer from './newcomer';
+import * as camera from './camera';
 
 /** Шоколадка со стойки у кассы летит в руки стоящему в очереди. */
 export function grabCandy(scene: StoreScene, c: Customer): void {
@@ -182,7 +183,7 @@ export function spawnFriend(scene: StoreScene, f: VisitFriend): void {
   const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief: false, friend: f, wants: scene.wanted(2) };
   // Нажми на друга — угостить кофе: он получит монеты при следующем запуске.
   sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () =>
-    scene.tap(() => {
+    camera.tap(scene, () => {
       if (customer.friend!.treated) return scene.popup(sprite.x, sprite.y - 30, t('visit.treated', { name: f.name }), '#fff3b0');
       customer.friend = { ...customer.friend!, treated: true };
       void treatFriend(f.id).then((ok) => ok && sprite.active && scene.popup(sprite.x, sprite.y - 30, t('visit.treat', { name: f.name, n: FRIEND_GIFT }), '#c8ffb0'));
@@ -487,7 +488,7 @@ export function spawnCustomer(
   scene.customers.add(customer);
   if (thief) {
     // Вора можно поймать касанием.
-    sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () => scene.tap(() => catchThief(scene, customer, 'owner')));
+    sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => catchThief(scene, customer, 'owner')));
     void runThief(scene, customer);
   } else {
     void runCustomer(scene, customer);

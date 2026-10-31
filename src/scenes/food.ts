@@ -53,6 +53,7 @@ import * as motion from './motion';
 import * as lighting from './lighting';
 import * as staff from './staff';
 import * as persons from './persons';
+import * as camera from './camera';
 
 /** Кофейня во флигеле: кофемашина у стены, стойка, за ней бариста; в углу столик. */
 export function buildCoffee(scene: StoreScene): void {
@@ -212,7 +213,7 @@ export function buildOven(scene: StoreScene): void {
   scene.light.follow(warm, { key: 'light_pool', w: 46, h: 30, power: () => 0.45 * lighting.powerOn(scene) });
   scene.light.follow(glow, { key: 'glow', w: 22, h: 16, color: 0xff9a40, power: () => Math.round(glow.alpha * 4) / 4 });
   scene.oven = { img, glow, bread, bar, fill, halo, state: 'idle', start: 0, product: 'bread' };
-  img.setInteractive({ useHandCursor: true }).on('pointerup', () => scene.tap(() => tapOven(scene)));
+  img.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => tapOven(scene)));
 }
 
 /** Печью занимается пекарь: без него пекарня стоит, касание подсказывает, что делать. */
@@ -460,8 +461,8 @@ export function buildKitchen(scene: StoreScene): void {
   // карту перерисовывали бы каждый кадр, пока варится.
   for (const flame of flames) scene.light.follow(flame, { key: 'glow', w: 26, h: 20, dy: -2, power: () => (flame.visible ? (Math.floor(scene.time.now / 300) % 2 ? 0.55 : 0.4) * lighting.powerOn(scene) : 0) });
   scene.kitchenView = { stove, pots, flames, knife, crate, showcase, plates: [], cooking: [], onPass: false };
-  stove.setInteractive({ useHandCursor: true }).on('pointerup', () => scene.tap(() => tapStove(scene)));
-  showcase.setInteractive({ useHandCursor: true }).on('pointerup', () => scene.tap(() => tapShowcase(scene)));
+  stove.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => tapStove(scene)));
+  showcase.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => tapShowcase(scene)));
   refreshKitchen(scene);
 }
 
@@ -547,7 +548,7 @@ export function buildFood(scene: StoreScene): void {
   const at = scene.propAt('food', def);
   const tex = foodSprite(scene.state);
   const img = scene.art(at.x, at.y - 4, tex).setDepth(at.y + 4);
-  img.setInteractive({ useHandCursor: true }).on('pointerup', () => scene.tap(() => tapShowcase(scene, { x: at.x, y: at.y - 14 })));
+  img.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => tapShowcase(scene, { x: at.x, y: at.y - 14 })));
   // Табличка «Еда» — надпись по центру таблички над нишей (art/kitchen.py).
   scene.add
     .text(at.x, at.y - 13.5, t('food.sign'), { fontFamily: UI_FONT, fontSize: '4.5px', fontStyle: 'bold', color: '#fee761' })

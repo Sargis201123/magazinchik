@@ -46,6 +46,7 @@ import * as deliveries from './deliveries';
 import * as staff from './staff';
 import * as shoppers from './shoppers';
 import * as persons from './persons';
+import * as camera from './camera';
 
 export function currentHint(scene: StoreScene): string {
   if (scene.liveEvent) return t(`hint.${scene.liveEvent}` as TextKey);
@@ -405,7 +406,7 @@ export function grannyRoad(scene: StoreScene): void {
   if (!scene.running || !grannyStays(scene.state) || scene.onbSaid.has('road')) return;
   grannySays(scene, { id: 'road', text: t('onb.road'), mood: 'happy', hold: 2800 });
   if (!scene.state.seenTips?.includes('ownerTill')) scene.state = seeTip(scene.state, 'ownerTill');
-  scene.showStreetTap();
+  camera.showStreetTap(scene);
 }
 
 // ---------- Бабушкино обучение (game/tutorial.ts) ----------

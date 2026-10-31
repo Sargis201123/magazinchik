@@ -48,6 +48,7 @@ import * as effects from './effects';
 import * as cars from './cars';
 import * as staff from './staff';
 import * as persons from './persons';
+import * as camera from './camera';
 
 // ---------- Доставка на дом ----------
 
@@ -74,7 +75,7 @@ export function buildDelivery(scene: StoreScene): void {
   // Касание телефона тоже принимает заказ, но главное «Принять» — в карточке внизу (ui/delivery.ts):
   // телефон в пару точек пальцем почти не попасть, а рядом — касса со своей зоной касания. Поэтому
   // телефон ловит касания, только пока звонит, — в остальное время они достаются кассе.
-  scene.phone.setInteractive(new Phaser.Geom.Rectangle(-6, -6, 24, 23), Phaser.Geom.Rectangle.Contains).on('pointerup', () => scene.tap(() => acceptOrder(scene)));
+  scene.phone.setInteractive(new Phaser.Geom.Rectangle(-6, -6, 24, 23), Phaser.Geom.Rectangle.Contains).on('pointerup', () => camera.tap(scene, () => acceptOrder(scene)));
   scene.phone.disableInteractive();
   // Курьер ждёт у входа рядом со своим велосипедом или мопедом; фургончик подъезжает, когда есть что везти.
   const at = { x: door.x - 36, y: h + FACADE_H + 9 };

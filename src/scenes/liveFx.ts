@@ -17,6 +17,7 @@ import * as effects from './effects';
 import * as pets from './pets';
 import * as staff from './staff';
 import * as persons from './persons';
+import * as camera from './camera';
 
 // ---------- Активные моменты дня (game/moments.ts, scenes/moments.ts) ----------
 
@@ -178,7 +179,7 @@ export function startLeak(scene: StoreScene, keep: <T extends { destroy: () => v
   keep(scene.time.delayedCall(40000, stop));
   const zone = keep(scene.add.zone(at.x, at.y - 10, 26, 30).setInteractive({ useHandCursor: true }).setDepth(LIGHT_DEPTH));
   zone.on('pointerup', () =>
-    scene.tap(() => {
+    camera.tap(scene, () => {
       if (scene.sellerBusy || scene.ownerScanning() || !drops.active) return;
       scene.carried.setTexture('wrench').setPosition(5, -1).setVisible(true);
       void staff.doChore(scene, [
@@ -246,7 +247,7 @@ export function pigeonInside(scene: StoreScene, keep: <T extends { destroy: () =
     }),
   );
   bird.setInteractive(new Phaser.Geom.Rectangle(-6, -6, 21, 19), Phaser.Geom.Rectangle.Contains).on('pointerup', () =>
-    scene.tap(() => {
+    camera.tap(scene, () => {
       sound.tap();
       flyOut();
     }),
@@ -278,7 +279,7 @@ export async function courierVisit(scene: StoreScene, keep: <T extends { destroy
     courier.destroy();
   };
   courier.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () =>
-    scene.tap(() => {
+    camera.tap(scene, () => {
       if (taken || scene.sellerBusy || scene.ownerScanning()) return;
       taken = true;
       void staff.doChore(scene, [

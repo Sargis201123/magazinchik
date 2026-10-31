@@ -45,6 +45,7 @@ import * as lighting from './lighting';
 import * as deliveries from './deliveries';
 import * as food from './food';
 import * as persons from './persons';
+import * as camera from './camera';
 
 /**
  * Ярмарка: флажки над фасадом и шарики у входа. Перерисовывается каждое утро
@@ -425,7 +426,7 @@ export function buildRadio(scene: StoreScene): void {
   scene.radioX = at.x;
   const radio = scene.art(at.x, at.y, 'radio').setDepth(scene.vendingAt.y + 11);
   radio.setInteractive({ useHandCursor: true }).on('pointerup', () =>
-    scene.tap(() => {
+    camera.tap(scene, () => {
       const next = setStation(scene.state, nextStation(stationOf(scene.state)));
       if (!next) return;
       scene.state = next;

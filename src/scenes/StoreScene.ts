@@ -75,7 +75,6 @@ import { BUSKER_GUESTS } from '../game/nightGuests';
 import { setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propFootprint, propIssues, propPosFor, propRect, savedLayout, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withTill, type Prop } from './placement';
 import {
-  buildingSpan,
   iceboxRect,
   iceboxSpotFor,
   kioskZones,
@@ -89,7 +88,7 @@ import {
   type Layout,
   type Room,
 } from './layout';
-import { BASE_W, crispZoom, homeFrame } from './pixels';
+import { BASE_W, crispZoom } from './pixels';
 import { LightMap } from './light';
 import { ColorGrade } from './grade';
 import { Halo, personGlow } from './halo';
@@ -109,22 +108,17 @@ import { questRows } from '../ui/today';
 import { bargainRows, bargainSprite, binCapacity, binSprite, gearTier, type GearId, registerSprite } from '../game/gear';
 import { registerSlots, RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
-import { deferLiteNote, fpsSummary, fpsVerdict, lowerQuality, quality, qualityChosen, type Quality } from '../platform/quality';
-import { cleanHall, dreamShelf, grannyStays, quietDays } from '../game/firstday';
-import { framesThrottled } from '../platform/frameCap';
+import { quality, type Quality } from '../platform/quality';
+import { cleanHall, dreamShelf, grannyStays } from '../game/firstday';
 import type { HomeOrder } from '../game/delivery';
 import { DeliveryUi } from '../ui/delivery';
 import { mainGoal, type HallNudge } from '../game/nudge';
 import {
   HUD_TOP,
-  HUD_BOTTOM,
-  FRAME_PAD,
-  SIGN_TOP,
   ART,
   TUTORIAL_DAYS,
   LOW_STOCK,
   FURNITURE_TOP,
-  CAMERA_REACH,
   WALL,
   FACADE_H,
   FACADE_STYLES,
@@ -133,8 +127,6 @@ import {
   LIGHT_DEPTH,
   QUAKE_SHAKE_PX,
   ITEM_VARIANTS,
-  ONB_ROAD_MS,
-  STREET_TAP_MS,
   CUSTOMER_SPEED,
   KIOSK_GLOW,
   KIOSK_ALARM,
@@ -193,6 +185,7 @@ import * as liveFx from './liveFx';
 import * as nightShift from './nightShift';
 import * as morningFlow from './morningFlow';
 import * as newcomer from './newcomer';
+import * as camera from './camera';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -275,13 +268,13 @@ export class StoreScene extends Phaser.Scene {
   /** Рекорд выручки сегодня уже отметили конфетти. */
   recordCheered = false;
   /** Куда камера возвращается после осмотра квартала. */
-  private home = { x: 0, y: 0 };
-  private homeTimer?: Phaser.Time.TimerEvent;
+  home = { x: 0, y: 0 };
+  homeTimer?: Phaser.Time.TimerEvent;
   /** Колёсико затихло — масштаб доходит до ровного. */
-  private wheelTimer?: Phaser.Time.TimerEvent;
-  private baseZoom = 1;
+  wheelTimer?: Phaser.Time.TimerEvent;
+  baseZoom = 1;
   /** Щипок двумя пальцами: расстояние и зум в начале. */
-  private pinch: { dist: number; zoom: number } | null = null;
+  pinch: { dist: number; zoom: number } | null = null;
   /** Все люди на экране: для шагов и дыхания. */
   people = new Set<Phaser.GameObjects.Container>();
   /** Нарисованное один раз в RenderTexture (bakeSpots) и как нарисовать снова после потери WebGL контекста. */
@@ -372,7 +365,7 @@ export class StoreScene extends Phaser.Scene {
   /** Ночные огни (витрины, лужи света, конусы фонарей, неон): сила растёт к вечеру. */
   nightLights: NightLight[] = [];
   /** Неподвижные картинки мира (деревья, дома, клумбы) с их рамками — для отсечения за краем экрана. */
-  private cullables: { obj: Phaser.GameObjects.GameObject & { cameraFilter: number }; box: Phaser.Geom.Rectangle }[] = [];
+  cullables: { obj: Phaser.GameObjects.GameObject & { cameraFilter: number }; box: Phaser.Geom.Rectangle }[] = [];
   /** Мир перестроен — список для отсечения собрать заново (на следующем кадре, когда всё уже на месте). */
   cullDirty = true;
   /** Идёт перестановка полок: камера не ездит, полки — «призраки», которые тянут пальцем. */
@@ -425,11 +418,11 @@ export class StoreScene extends Phaser.Scene {
   takenFrom: TakenSpot[] = [];
   /** Посекундные замеры FPS за день: медиана уходит в аналитику, при тормозах — лёгкая графика. */
   fpsSamples: number[] = [];
-  private fpsFrames = 0;
-  private fpsMs = 0;
+  fpsFrames = 0;
+  fpsMs = 0;
   /** Сколько посекундных замеров с прошлого понижения графики. */
   fpsSince = 0;
-  private cullAt = '';
+  cullAt = '';
   /** Ночь между днями: какая доля окон в домах уже погасла (0 — все горят). */
   lightsOut = 0;
   /** Стрелки настенных часов: идут по ходу смены с 8:00 до 20:00. */
@@ -522,7 +515,7 @@ export class StoreScene extends Phaser.Scene {
     emote: (person, key) => effects.emote(this, person, key),
     coins: (x, y, n) => effects.flyCoins(this, x, y, n),
     puff: (x, y) => effects.puff(this, x, y),
-    tap: (action) => this.tap(action),
+    tap: (action) => camera.tap(this, action),
     caught: (kind) => liveFx.momentCaught(this, kind),
     missed: () => noteMoment(this.stats, false),
   });
@@ -778,8 +771,8 @@ export class StoreScene extends Phaser.Scene {
     });
     this.buildWorld();
     this.hud.update(this.state, this.timeLeft);
-    this.setupCameraDrag();
-    this.setupStreetTap();
+    camera.setupCameraDrag(this);
+    camera.setupStreetTap(this);
     // Свернули Telegram — телефон мог отобрать у WebGL контекст; когда он вернётся, Phaser сам
     // восстановит текстуры и шейдеры, а нарисованное в RenderTexture дорисуем мы.
     if (this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) this.game.renderer.on(Phaser.Renderer.Events.RESTORE_WEBGL, () => lighting.rebake(this));
@@ -844,8 +837,8 @@ export class StoreScene extends Phaser.Scene {
   }
 
   update(_time: number, deltaMs: number): void {
-    this.cullView();
-    this.measureFps(deltaMs);
+    camera.cullView(this);
+    camera.measureFps(this, deltaMs);
     morningFlow.watchStall(this, deltaMs);
     streets.scarePigeons(this);
     ambience.update(this.rainStopped ? 'clear' : this.weather, this.evening, this.running, yearTime(this.state.day), decorations.ambienceLife(this));
@@ -1019,33 +1012,6 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Обычный кадр — масштаб и середина (baseZoom, home) под нынешний холст: при постройке зала и когда
-   * холст меняется (полный экран Telegram, поворот планшета).
-   * Внизу кадра видна улица: тротуар и дорога с машинами. Камера показывает весь магазин: по ширине —
-   * от наружной стены флигеля до правой стены зала, по высоте — от вывески до фасада; участок под
-   * расширение и улицу видно краем, а весь квартал — свайпом или отдалив двумя пальцами.
-   */
-  private frameCamera(): void {
-    const { width, height } = this.scale;
-    const top = HUD_TOP * this.res;
-    const bottom = HUD_BOTTOM * this.res;
-    const { h } = this.layout;
-    // В кадре целиком и флигель слева (склад, пекарня, кофейня, кухня — с табличками), и правая стена зала:
-    // на узком телефоне камера раньше подходила ближе ради ровного масштаба, и флигель уходил за край.
-    // Масштаб ровный (пиксель рисунка — целое число пикселей экрана), но не крупнее «впритык» и не намного
-    // мельче; иначе дробный — весь магазин в кадре важнее ровных пикселей (scenes/pixels.ts).
-    const span = buildingSpan(this.layout);
-    const { zoom, x } = homeFrame(width, height - top - bottom, { left: span.left - FRAME_PAD, right: span.right + FRAME_PAD }, h + 40, ART);
-    const midY = top + (height - top - bottom) / 2;
-    this.baseZoom = zoom;
-    // Если по высоте есть запас, вывеска прижимается под верхнюю панель — снизу видно больше улицы.
-    const centered = (h + 4) / 2 + (height / 2 - midY) / zoom;
-    const signUnderHud = SIGN_TOP + (height / 2 - top) / zoom;
-    // Середина — на целой точке мира: камера в покое не сдвинута на полпикселя рисунка.
-    this.home = { x, y: Math.round(Math.max(centered, signUnderHud)) };
-  }
-
-  /**
    * Строит зал под текущий уровень помещения. При расширении зал строится заново.
    * bought — перестроили из-за покупки оборудования или украшения: новое утром распакуют из коробки.
    */
@@ -1081,7 +1047,7 @@ export class StoreScene extends Phaser.Scene {
     // Гипермаркет — не пристройка, а здание «Гиганта» за дорогой: участка «Сдаётся» рядом нет.
     const next = STORE_LEVELS[this.state.level + 1] && this.state.level + 1 < HYPER_LEVEL ? layoutFor(this.state.level + 1) : this.layout;
     this.next = next;
-    this.frameCamera();
+    camera.frameCamera(this);
     this.cameras.main.setZoom(this.baseZoom).centerOn(this.home.x, this.home.y);
     // Цветокоррекция часа и погоды — один проход по экрану (в лёгкой графике — без него), виньетка — картинкой.
     this.grade.attach(LIGHT_DEPTH + 30);
@@ -1283,7 +1249,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .zone(wc.x, wc.y + 4, 24, 36)
       .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => this.tap(() => staff.cleanToilet(this)));
+      .on('pointerup', () => camera.tap(this, () => staff.cleanToilet(this)));
 
     this.art(counter.x + 2, counter.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(counter.y + 19);
     const registerImg = this.art(counter.x, counter.y + FURNITURE_TOP / 2, registerSprite(this.state)).setDepth(counter.y + 20);
@@ -1295,7 +1261,7 @@ export class StoreScene extends Phaser.Scene {
     // (placement.ts), а если в старом сохранении полка уже стоит там — щиток висит левее, на открытой стене.
     const fuseX = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12).find((x) => x > 10 && !this.behindShelf(x, 6)) ?? wc.x - 24;
     this.fuseBox = this.art(fuseX, 18, 'fusebox').setDepth(3);
-    this.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => liveFx.fixFuse(this)));
+    this.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(this, () => liveFx.fixFuse(this)));
     this.fuseGlow = new Halo(this, this.fuseBox, 0xfee761);
     // Свет отключили — у щитка мигает аварийная лампочка: в тёмном зале видно, куда нажать. Мигает
     // ступеньками (ярко — тускло), а не плавно: карту перерисовывать дважды за мигание, а не каждый кадр.
@@ -1315,7 +1281,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .zone(counter.x + 6, counter.y + 6, 40, 64)
       .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => this.tap(() => this.serveNext()));
+      .on('pointerup', () => camera.tap(this, () => this.serveNext()));
   }
 
   /**
@@ -1382,7 +1348,7 @@ export class StoreScene extends Phaser.Scene {
     this.add
       .zone(at.x + (left ? -6 : 6), at.y + 6, 40, 64)
       .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => this.tap(() => this.serveNext(index)));
+      .on('pointerup', () => camera.tap(this, () => this.serveNext(index)));
   }
 
   /** Хозяин сейчас пробивает кого-то. */
@@ -1702,86 +1668,6 @@ export class StoreScene extends Phaser.Scene {
     };
   }
 
-  /**
-   * Отсечение: то, что не двигается и сейчас за краем экрана, камера не рисует (через cameraFilter —
-   * собственную видимость объектов не трогаем). В большом магазине за кадром ~800 деревьев, кустов
-   * и домов — на слабом телефоне это треть времени отрисовки.
-   */
-  private cullView(): void {
-    const cam = this.cameras.main;
-    if (this.cullDirty) {
-      this.cullDirty = false;
-      this.cullAt = '';
-      // Люди и звери (контейнеры, кот, Бобик) ходят, частицы летают — их не трогаем.
-      const moving = new Set<unknown>([this.catImg, this.bobik]);
-      this.cullables = [];
-      for (const obj of this.children.list) {
-        if (obj.type === 'Container' || obj.type === 'ParticleEmitter' || moving.has(obj)) continue;
-        // Прибитое к экрану (виньетка) не отсекается по месту в мире.
-        if ((obj as unknown as Phaser.GameObjects.Components.ScrollFactor).scrollFactorX === 0) continue;
-        const shape = obj as unknown as Phaser.GameObjects.Components.GetBounds & { cameraFilter: number };
-        if (typeof shape.getBounds !== 'function') continue;
-        this.cullables.push({ obj: obj as Phaser.GameObjects.GameObject & { cameraFilter: number }, box: shape.getBounds() });
-      }
-    }
-    // Пересчитываем, только когда видимая область сдвинулась или приблизилась. Ключ — по самой
-    // видимой области (worldView), а не по scroll: после прыжка камеры worldView обновляется лишь
-    // к следующему кадру, и по scroll отсечение застряло бы со старым видом — пропадали дома и деревья.
-    const v = cam.worldView;
-    const key = `${Math.round(v.x)}|${Math.round(v.y)}|${Math.round(v.width)}|${this.cullables.length}`;
-    if (key === this.cullAt) return;
-    this.cullAt = key;
-    const margin = 24;
-    const view = new Phaser.Geom.Rectangle(v.x - margin, v.y - margin, v.width + margin * 2, v.height + margin * 2);
-    for (const c of this.cullables) {
-      if (!c.obj.active) continue;
-      c.obj.cameraFilter = Phaser.Geom.Rectangle.Overlaps(view, c.box) ? 0 : cam.id;
-    }
-  }
-
-  /**
-   * FPS по секундам, пока идёт день и вкладка на экране. Если игра заметно тормозит (медиана за
-   * полминуты, quality.ts) — графика на несколько дней проще: с высокой на обычную, а совсем медленно —
-   * лёгкая (о ней говорим). Ровные 30 кадров (энергосбережение iPhone) — не тормоза.
-   */
-  private measureFps(deltaMs: number): void {
-    // Свернули вкладку, окно поверх зала (там кадров нарочно меньше) — такие кадры не в счёт.
-    if (!this.running || document.hidden || framesThrottled() || deltaMs > 250) {
-      this.fpsFrames = 0;
-      this.fpsMs = 0;
-      return;
-    }
-    this.fpsFrames++;
-    this.fpsMs += deltaMs;
-    if (this.fpsMs < 1000) return;
-    this.fpsSamples.push((this.fpsFrames * 1000) / this.fpsMs);
-    if (this.fpsSamples.length > 600) this.fpsSamples.shift();
-    this.fpsFrames = 0;
-    this.fpsMs = 0;
-    // Судим по полминуте замеров после прошлого понижения: сначала видно, помогло ли оно.
-    if (++this.fpsSince < 30) return;
-    const recent = this.fpsSamples.slice(-30);
-    const verdict = fpsVerdict(recent, this.gfx);
-    // Игрок сам выбрал графику в профиле — её не трогаем.
-    if (!verdict || qualityChosen()) return;
-    this.fpsSince = 0;
-    this.gfx = verdict;
-    lowerQuality(verdict);
-    // Виньетки больше нет, в лёгкой — и цветокоррекции; карта освещения грубее — с ближайшей перестройки.
-    this.grade.setTier(verdict);
-    this.light.setTier(verdict);
-    const median = fpsSummary(recent)?.median ?? 0;
-    if (verdict !== 'lite') {
-      track('gfx_auto', this.state.day, median);
-      return;
-    }
-    this.lite = true;
-    track('lite_auto', this.state.day, median);
-    // Первые тихие дни новичка: лёгкая включается молча, а записка о ней — утром 4-го дня (firstday.ts).
-    if (quietDays(this.state)) deferLiteNote();
-    else toast('assets/ico_phone.png', t('lite.autoTitle'), t('lite.autoText'));
-  }
-
   /** Переходник к lighting.updateLighting: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
   updateLighting(progress?: number): void {
     return lighting.updateLighting(this, progress);
@@ -1915,188 +1801,9 @@ export class StoreScene extends Phaser.Scene {
     return true;
   }
 
-  /** Нажатие засчитывается, только если палец не двигал камеру. */
-  tap(action: () => void): void {
-    if (!this.dragged) action();
-  }
-
-  /** Квартал можно рассмотреть, проведя пальцем; через несколько секунд камера возвращается к магазину. */
-  private setupCameraDrag(): void {
-    const cam = this.cameras.main;
-    this.input.on('gameobjectup', (p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => motion.tapFx(this, p, obj));
-    // Новый жест — с первым пальцем. Второй палец (щипок, касания внахлёст, ладонь у края экрана)
-    // жест не сбрасывает и сам его сдвигом не делает: сдвигом считается только движение пальцев.
-    this.input.on('pointerdown', () => {
-      if (!(this.input.pointer1.isDown && this.input.pointer2.isDown)) this.dragged = false;
-      // Игрок здесь — подсказка «что дальше» гаснет.
-      this.lastTouch = this.time.now;
-      this.nudgeUntil = 0;
-    });
-    this.input.addPointer(1);
-    // Пока пальцы двигаются, масштаб любой — плавно; отпустили — доходит до ближайшего ровного
-    // (пиксель рисунка — целое число пикселей экрана), иначе картинка так и останется в ряби.
-    let zoomed = false;
-    const zoomTo = (z: number) => {
-      cam.zoomEffect.reset();
-      cam.setZoom(Phaser.Math.Clamp(z, this.baseZoom * 0.5, this.baseZoom * 2.2));
-      zoomed = true;
-    };
-    const settle = () => {
-      if (!zoomed) return;
-      zoomed = false;
-      const target = crispZoom(cam.zoom, ART, this.baseZoom * 0.5, this.baseZoom * 2.2);
-      if (target && target !== cam.zoom) cam.zoomTo(target, 160, 'Sine.easeOut', true);
-    };
-    // Середина кадра под пальцем — без округления: камера рисуется с шагом в целую точку мира
-    // (roundPixels), и медленный палец иначе терял бы сдвиг меньше точки — в одну сторону.
-    let drag: { x: number; y: number } | null = null;
-    // Колёсико на компьютере: ровный масштаб — когда колёсико затихло.
-    this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (this.arranging) return;
-      zoomTo(cam.zoom * (dy > 0 ? 0.9 : 1.1));
-      this.wheelTimer?.remove();
-      this.wheelTimer = this.time.delayedCall(200, settle);
-      this.scheduleHome();
-    });
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      // Пока переставляют полки, палец двигает полку, а не камеру.
-      if (this.arranging) return;
-      const a = this.input.pointer1;
-      const b = this.input.pointer2;
-      // Палец сдвинулся — каждый считается от того места, где коснулся.
-      const slop = 12 * this.res;
-      if (a.isDown && b.isDown) {
-        // Оба пальца почти на месте — это ещё не щипок (два касания внахлёст), касание засчитается.
-        if (!this.dragged && a.getDistance() < slop && b.getDistance() < slop) return;
-        // Два пальца: приближаем или отдаляем.
-        const dist = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
-        this.pinch ??= { dist, zoom: cam.zoom };
-        zoomTo(this.pinch.zoom * (dist / this.pinch.dist));
-        this.dragged = true;
-        this.homeTimer?.remove();
-        drag = null;
-        return;
-      }
-      this.pinch = null;
-      if (!p.isDown) return;
-      if (!this.dragged && p.getDistance() < slop) return;
-      this.dragged = true;
-      this.homeTimer?.remove();
-      // Камера могла лететь домой — палец её перехватывает.
-      if (!drag || cam.panEffect.isRunning) {
-        cam.panEffect.reset();
-        drag = { x: cam.midPoint.x, y: cam.midPoint.y };
-      }
-      drag.x = Phaser.Math.Clamp(drag.x - (p.x - p.prevPosition.x) / cam.zoom, -CAMERA_REACH, this.next.w + CAMERA_REACH);
-      drag.y = Phaser.Math.Clamp(drag.y - (p.y - p.prevPosition.y) / cam.zoom, -CAMERA_REACH / 2, this.next.h + CAMERA_REACH / 2);
-      cam.centerOn(drag.x, drag.y);
-    });
-    this.input.on('pointerup', () => {
-      this.pinch = null;
-      drag = null;
-      settle();
-      if (this.dragged) this.scheduleHome();
-    });
-    // Холст сменил размер (полный экран Telegram, поворот, окно на компьютере) — кадр под новый холст.
-    // Масштабом холста ведает игра, а не сцена: подписка снимается вместе со сценой.
-    this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this));
-  }
-
-  /**
-   * Касание улицы под магазином (участок перед входом, тротуары, дорога и дальше — туда, куда
-   * достаёт большой палец) — то же, что касание кассы: пробить того, кто ждёт у кассы хозяина, или
-   * позвать хозяина с дела. Считается только короткое касание без сдвига камеры и мимо всего, что
-   * нажимается само (вор, курьер, Бобик, голуби, мусор), — у тех своё. Отклик — круг под пальцем,
-   * кивок кассы и лёгкая вибрация.
-   */
-  private setupStreetTap(): void {
-    this.input.on('pointerup', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
-      if (over.length || this.dragged || this.arranging || !this.running || p.upTime - p.downTime > STREET_TAP_MS) return;
-      const at = this.cameras.main.getWorldPoint(p.x, p.y);
-      if (at.y < this.layout.h + FACADE_H) return;
-      // За кассой хозяина сменщик: касание улицы торопит его, пока он пробивает.
-      const first = this.registers[0];
-      if (this.operator(0) !== 'owner') {
-        if (!first?.scan || first.scan.byOwner) return;
-        motion.ripple(this, at.x, at.y);
-        void this.serveNext();
-        return;
-      }
-      // Касание ничего не изменит (у кассы никого, хозяин уже пробивает) — и отклика нет.
-      const r = this.ownerRegister();
-      if (!r || this.ownerScanning() || (!this.sellerBusy && !this.atSpot(r))) return;
-      motion.ripple(this, at.x, at.y);
-      if (r.img) motion.squash(this, r.img, 1.06, 0.9, 80);
-      if (!this.sellerBusy) this.serves.street++;
-      void this.serveNext();
-    });
-  }
-
-  /**
-   * Бабушка показывает касание улицы: на дороге под её словами прыгает стрелка и расходятся круги,
-   * как от пальца. Точка — в кадре, даже если дорога ниже края экрана (тогда — на участке у входа).
-   */
-  showStreetTap(): void {
-    const view = this.cameras.main.worldView;
-    const x = Phaser.Math.Clamp(this.layout.door.x + 34, view.x + 24, view.right - 24);
-    const y = Phaser.Math.Clamp(this.streetY + 32, this.layout.h + FACADE_H + 14, view.bottom - 28);
-    const arrow = this.art(x, y - 12, 'arrow').setScale(1.3 / ART).setDepth(LIGHT_DEPTH + 20);
-    if (!this.lite) this.tweens.add({ targets: arrow, y: y - 16, duration: 260, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.time.delayedCall(ONB_ROAD_MS - 400, () => arrow.destroy());
-    const rings = this.lite ? 1 : 3;
-    for (let i = 0; i < rings; i++)
-      this.time.delayedCall(300 + i * 800, () => {
-        if (!this.running) return;
-        const ring = this.add.circle(x, y, 5).setStrokeStyle(1.5, 0xffffff, 0.95).setDepth(LIGHT_DEPTH + 50);
-        this.tweens.add({ targets: ring, scale: 3.6, alpha: 0, duration: 650, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
-      });
-  }
-
-  /**
-   * Холст сменил размер. Камера стояла в обычном кадре или летела к нему — ставим новый обычный кадр
-   * (масштаб ровный под новый холст); показывала своё (заставку, перестановку, осмотр) — та же середина.
-   */
-  private onResize(size: Phaser.Structs.Size, _base: Phaser.Structs.Size, _display: Phaser.Structs.Size, prevW: number, prevH: number): void {
-    if (size.width === prevW && size.height === prevH) return;
-    const cam = this.cameras.main;
-    const mid = { x: cam.midPoint.x, y: cam.midPoint.y };
-    const atHome = cam.zoom === this.baseZoom && Math.abs(mid.x - this.home.x) <= 1 && Math.abs(mid.y - this.home.y) <= 1;
-    const flying = cam.panEffect.isRunning || cam.zoomEffect.isRunning;
-    this.frameCamera();
-    if (this.arranging || !(atHome || flying)) {
-      cam.centerOn(mid.x, mid.y);
-      return;
-    }
-    cam.panEffect.reset();
-    cam.zoomEffect.reset();
-    cam.setZoom(this.baseZoom).centerOn(this.home.x, this.home.y);
-  }
-
-  /**
-   * Начало дня: камера сначала показывает весь квартал сверху-сбоку (улица, соседи), потом
-   * плавно подлетает к магазину. Если игрок сам двигает камеру — не мешаем.
-   */
-  flyIn(): void {
-    const cam = this.cameras.main;
-    if (this.input.pointer1.isDown || this.input.pointer2.isDown) return;
-    this.homeTimer?.remove();
-    const wide = this.baseZoom * 0.55;
-    const x = Phaser.Math.Clamp(this.home.x + 70, -CAMERA_REACH, this.next.w + CAMERA_REACH);
-    const y = Phaser.Math.Clamp(this.home.y + 30, -CAMERA_REACH / 2, this.next.h + CAMERA_REACH / 2);
-    cam.setZoom(wide).centerOn(x, y);
-    cam.pan(this.home.x, this.home.y, 1600, 'Sine.easeInOut', true);
-    cam.zoomTo(this.baseZoom, 1600, 'Cubic.easeInOut', true);
-  }
-
-  /** Через несколько секунд после осмотра камера возвращается к магазину. */
-  private scheduleHome(): void {
-    const cam = this.cameras.main;
-    this.homeTimer?.remove();
-    this.homeTimer = this.time.delayedCall(4000, () => {
-      cam.pan(this.home.x, this.home.y, 700, 'Sine.easeInOut');
-      cam.zoomTo(this.baseZoom, 700, 'Sine.easeInOut');
-    });
+  /** Переходник к camera.onResize: на метод подписано событие RESIZE (scale.on/off по ссылке на метод). */
+  onResize(size: Phaser.Structs.Size, _base: Phaser.Structs.Size, _display: Phaser.Structs.Size, prevW: number, prevH: number): void {
+    return camera.onResize(this, size, _base, _display, prevW, prevH);
   }
 
   private buildShell(): void {
@@ -2239,7 +1946,7 @@ export class StoreScene extends Phaser.Scene {
     this.bagCarried = 0;
     this.dumpImg = this.art(dump.x, dump.y, 'dumpster').setDepth(dump.y + 8);
     this.binImg = this.art(bin.x, bin.y, binSprite(this.state, 0)).setDepth(bin.y + 6);
-    this.binImg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.takeOutTrash()));
+    this.binImg.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(this, () => this.takeOutTrash()));
     this.binGlow = new Halo(this, this.binImg, 0xe43b44);
     this.binStink = this.art(bin.x, bin.y - 14, 'stink').setDepth(bin.y + 30).setVisible(false);
     this.tweens.add({ targets: this.binStink, y: bin.y - 19, alpha: { from: 1, to: 0.35 }, duration: 900, yoyo: true, repeat: -1 });
@@ -2272,7 +1979,7 @@ export class StoreScene extends Phaser.Scene {
     const tex = bargainSprite(this.state);
     // Низом — на пол у точки at: у моделей побольше горка растёт вверх.
     const img = this.art(at.x, at.y + BARGAIN_BOTTOM, tex).setOrigin(0.5, 1).setDepth(at.y + 4);
-    img.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.sendToBargain(true)));
+    img.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(this, () => this.sendToBargain(true)));
     this.bargainItems = Array.from({ length: rows * BARGAIN_PER_ROW }, (_, n) => {
       const spot = this.bargainSlot(at, n);
       // Передний ряд — поверх задних.
@@ -2559,7 +2266,7 @@ export class StoreScene extends Phaser.Scene {
       if (!this.slotDecor[i]) {
         const mark = this.art(slot.x, slot.y + 2, 'slot_empty').setDepth(1.5).setAngle(slotSide(this.layout, slot) ? 90 : 0);
         mark.setInteractive({ useHandCursor: true }).on('pointerup', () =>
-          this.tap(() => i >= this.regularShelves() && this.popup(slot.x, slot.y - 8, t('popup.slotEmpty'), '#fff3b0')),
+          camera.tap(this, () => i >= this.regularShelves() && this.popup(slot.x, slot.y - 8, t('popup.slotEmpty'), '#fff3b0')),
         );
         this.slotDecor[i] = mark;
       }
@@ -2668,7 +2375,7 @@ export class StoreScene extends Phaser.Scene {
     bg.setDepth(d - 14);
     front.setDepth(d - 12);
     const cover = undefined;
-    bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => staff.restockShelf(this, index)));
+    bg.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(this, () => staff.restockShelf(this, index)));
     const items = Array.from({ length: SHELF_LEVELS[SHELF_LEVELS.length - 1].capacity }, () => this.art(slot.x, slot.y, 'item').setDepth(d - 13));
     const backItems = items.map(() => this.art(slot.x, slot.y, 'item').setDepth(d - 13.5).setTint(0x8f8278).setVisible(false));
     // Уровень улучшения — жёлтые точки над полкой.
@@ -2703,7 +2410,7 @@ export class StoreScene extends Phaser.Scene {
       .setResolution(this.textRes(6))
       .setDepth(991)
       .setVisible(false);
-    expire.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.markdownNow(expire.x, expire.y)));
+    expire.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(this, () => this.markdownNow(expire.x, expire.y)));
     const lights: Phaser.GameObjects.GameObject[] = [];
     // Плиточная вставка отдела в полу под полкой и перед ней, шириной с полку (art/livefloor.py): узор
     // и кайма в тон отдела. У задней стены вставка начинается от плинтуса — на стену не заходит.
@@ -2786,7 +2493,7 @@ export class StoreScene extends Phaser.Scene {
     const shadow = this.art(slot.x, slot.y + 2, 'shadow_wide').setScale(0.5 / ART, 1.2 / ART).setAngle(90).setDepth(slot.y - 30);
     const bg = this.art(slot.x, slot.y, `${look.texture}_side`).setTint(look.tint).setFlipX(right).setDepth(d - 14);
     const front = this.art(slot.x, slot.y, 'item').setVisible(false);
-    bg.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => staff.restockShelf(this, index)));
+    bg.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(this, () => staff.restockShelf(this, index)));
     const items = Array.from({ length: SHELF_LEVELS[SHELF_LEVELS.length - 1].capacity }, () => this.art(slot.x, slot.y, 'item').setDepth(d - 13));
     const backItems = items.map(() => this.art(slot.x, slot.y, 'item').setVisible(false));
     const pips = [0, 1, 2].map((n) => this.art(slot.x - 4 + n * 4, slot.y - 26, 'pip').setDepth(d - 12));
@@ -2800,7 +2507,7 @@ export class StoreScene extends Phaser.Scene {
     const promo = label(t('shelf.promo'), -26, '#e43b44');
     const low = label('', -18, '#d95763');
     const expire = label(t('shelf.expiring'), -34, '#fee761', '#2b2233');
-    expire.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.markdownNow(expire.x, expire.y)));
+    expire.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(this, () => this.markdownNow(expire.x, expire.y)));
     const glow = new Halo(this, bg, 0xfee761);
     const lights: Phaser.GameObjects.GameObject[] = [
       this.deptInlay(`deptfloor_${kind}_side`, slot.x + (right ? -6 : 6), slot.y + 25, 50, 50),
@@ -3025,7 +2732,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Переходник к shoppers.serveNext: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
-  private serveNext(from = 0): Promise<void> {
+  serveNext(from = 0): Promise<void> {
     return shoppers.serveNext(this, from);
   }
 

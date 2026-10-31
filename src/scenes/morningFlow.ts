@@ -68,6 +68,7 @@ import * as liveFx from './liveFx';
 import * as nightShift from './nightShift';
 import * as newcomer from './newcomer';
 import * as rivals from './rivals';
+import * as camera from './camera';
 
 // ---------- День ----------
 
@@ -239,7 +240,7 @@ export function startDay(scene: StoreScene): void {
   music.sting('day_open');
   // Купленное с утра ждёт в коробках: камера подлетит к магазину — и его распакуют.
   scene.packFresh();
-  scene.flyIn();
+  camera.flyIn(scene);
   lighting.lightsOn(scene);
   nightShift.flipDoorSign(scene, true);
   visitors.morningCrew(scene);

@@ -59,6 +59,7 @@ import * as bigDays from './bigDays';
 import * as morningFlow from './morningFlow';
 import * as newcomer from './newcomer';
 import * as rivals from './rivals';
+import * as camera from './camera';
 
 // ---------- Ночная смена ----------
 
@@ -156,7 +157,7 @@ export async function runNightStory(scene: StoreScene, story: NightStoryId): Pro
       resolve();
     };
     hit.on('pointerup', () =>
-      scene.tap(() => {
+      camera.tap(scene, () => {
         if (closeChoice) return;
         const item = product ? `${debtLabel(product)} ${t(PRODUCTS[product].nameKey)}` : '';
         closeChoice = showChoice({

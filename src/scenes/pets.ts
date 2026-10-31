@@ -15,6 +15,7 @@ import { note } from '../game/reviews';
 import { ART, LIGHT_DEPTH, MOUSE_BITE_MS, MOUSE_STAY_MS, type EmoteKey, CAT_WALK_EVERY, CAT_SPEED, CAT_TICK, CAT_WALK } from './common';
 import * as effects from './effects';
 import * as liveFx from './liveFx';
+import * as camera from './camera';
 
 // ---------- Мышь на складе ----------
 
@@ -27,7 +28,7 @@ export function mouseInWarehouse(scene: StoreScene, keep: <T extends { destroy: 
   const point = () => ({ x: warehouse.x + 8 + Math.random() * (warehouse.w - 16), y: warehouse.y + 16 + Math.random() * Math.max(4, warehouse.h - 24) });
   const start = point();
   const mouse = keep(scene.art(start.x, start.y, 'mouse0').setDepth(LIGHT_DEPTH - 3));
-  mouse.setInteractive(new Phaser.Geom.Circle(6, 3.5, 16), Phaser.Geom.Circle.Contains).on('pointerup', () => scene.tap(() => mouseGone(scene, mouse, false)));
+  mouse.setInteractive(new Phaser.Geom.Circle(6, 3.5, 16), Phaser.Geom.Circle.Contains).on('pointerup', () => camera.tap(scene, () => mouseGone(scene, mouse, false)));
   const run = () => {
     if (!mouse.active || mouse.getData('caught')) return;
     const p = point();
@@ -169,7 +170,7 @@ export function buildCat(scene: StoreScene, x: number, y: number): void {
   // Иногда просыпается: потягивается или следит за мухой.
   scene.critterTimers.push(scene.time.addEvent({ delay: 9000, loop: true, callback: () => !scene.catOut && cat.active && catWake(scene, cat) }));
   if (!own) return;
-  cat.setInteractive({ useHandCursor: true }).on('pointerup', () => scene.tap(() => petCat(scene)));
+  cat.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => petCat(scene)));
   scene.critterTimers.push(
     scene.time.addEvent({
       delay: CAT_WALK_EVERY,
@@ -219,7 +220,7 @@ export function buildBobik(scene: StoreScene, x: number, y: number): void {
   scene.bobik = dog;
   if (scene.closed) bobikSit(scene, 900);
   else bobikRest(scene);
-  dog.setInteractive({ useHandCursor: true }).on('pointerup', () => scene.tap(() => petBobik(scene)));
+  dog.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => petBobik(scene)));
   // Днём Бобик дремлет — иногда над ним «z-z-z».
   scene.critterTimers.push(
     scene.time.addEvent({ delay: 11000, loop: true, callback: () => !scene.closed && dog.texture.key === 'bobik_lie' && Math.random() < 0.5 && petEmote(scene, dog, 'emo_zzz') }),

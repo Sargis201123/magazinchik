@@ -41,6 +41,7 @@ import * as weatherFx from './weatherFx';
 import * as food from './food';
 import * as cars from './cars';
 import * as persons from './persons';
+import * as camera from './camera';
 
 /** Прохожий идёт по тротуару, машина проезжает по дороге. */
 export function streetLife(scene: StoreScene): void {
@@ -308,7 +309,7 @@ export async function runSpecial(scene: StoreScene, visit: SpecialVisit): Promis
       resolve();
     };
     hit.on('pointerup', () =>
-      scene.tap(() => {
+      camera.tap(scene, () => {
         if (closeChoice) return;
         closeChoice = showChoice({
           title: t(`special.${visit.kind}.title` as TextKey),
