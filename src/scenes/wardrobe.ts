@@ -7,13 +7,13 @@ export const HATS = [
   'feathers', 'shako', 'flatcap', 'headscarf', 'headphones', 'headband', 'nursecap', 'toque', 'policecap',
   'firehelmet', 'hardhat', 'bucket', 'sunhat', 'straw', 'bandana', 'mohawk', 'beret', 'sailor', 'cowboy',
   'bikehelmet', 'bow', 'ushanka', 'furhat', 'crown', 'tricorn', 'clownwig', 'knighthelmet', 'antennae',
-  'tophat', 'viking', 'tiara', 'ninjahood', 'papercap', 'silkhat', 'cyberhelmet',
+  'tophat', 'viking', 'tiara', 'ninjahood', 'papercap', 'silkhat', 'cyberhelmet', 'leafcap', 'pompom',
 ] as const;
 export const OUTFITS = [
   'samba', 'band', 'cardigan', 'hoodie', 'tracksuit', 'suit', 'labcoat', 'chefcoat', 'police', 'firecoat',
   'leather', 'fishvest', 'hawaii', 'telnyashka', 'dress', 'furcoat', 'gown', 'piratecoat', 'clownsuit',
   'armor', 'spacesuit', 'vikingfur', 'herosuit', 'tutu', 'ninja', 'runner', 'overalls', 'soda', 'tuxedo',
-  'cyber',
+  'cyber', 'trench', 'nordic',
 ] as const;
 export const PROPS = [
   'maracas', 'trumpet', 'drum', 'flag', 'balloon', 'cane', 'stringbag', 'briefcase', 'rod', 'camera',

@@ -36,7 +36,7 @@ describe('оформление', () => {
   });
 
   it('у каждой вещи есть цена в монетах или в Stars, набор за звёзды или праздник, который её дарит', () => {
-    for (const d of DECOR) expect((d.price ?? 0) > 0 || (d.stars ?? 0) > 0 || (d.pack !== undefined && STAR_PACKS[d.pack]?.items.includes(d.id)) || d.holiday !== undefined).toBe(true);
+    for (const d of DECOR) expect((d.price ?? 0) > 0 || (d.stars ?? 0) > 0 || (d.pack !== undefined && STAR_PACKS[d.pack]?.items.includes(d.id)) || d.holiday !== undefined || d.season !== undefined || d.support === true).toBe(true);
   });
 
   it('праздничное не купить, но после «Начать заново» оно остаётся — как и купленное за звёзды', () => {

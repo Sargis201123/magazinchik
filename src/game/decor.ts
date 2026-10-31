@@ -5,11 +5,14 @@
 // даже после «Начать заново». Праздничное (ёлка, мимоза…) не продаётся: его дарят открытки
 // праздников по настоящему календарю (live.ts), и оно тоже остаётся навсегда. Некоторые
 // премиальные вещи продаются только набором (STAR_PACKS) — например, новогодний.
+// Эксклюзив звёздного пропуска (season, pass.ts) не продаётся вовсе: вывеска и наряд сезона
+// только с его звёздной дорожки. Табличка «Спасибо!» и кот в цилиндре — подарки за поддержку
+// автора (support, support.ts). И то и другое тоже остаётся навсегда.
 
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
 
-export type DecorKind = 'outfit' | 'sign' | 'wall' | 'floor' | 'light' | 'showpiece' | 'art' | 'rug' | 'plants' | 'counter' | 'outdoor' | 'neon' | 'holiday';
+export type DecorKind = 'outfit' | 'sign' | 'wall' | 'floor' | 'light' | 'showpiece' | 'art' | 'rug' | 'plants' | 'counter' | 'outdoor' | 'neon' | 'holiday' | 'plaque' | 'mascot';
 
 export type DecorId =
   | 'outfit_farmer'
@@ -77,7 +80,13 @@ export type DecorId =
   | 'wall_winter'
   | 'holiday_tree'
   | 'holiday_ship'
-  | 'holiday_mimosa';
+  | 'holiday_mimosa'
+  | 'sign_s1'
+  | 'outfit_s1'
+  | 'sign_s2'
+  | 'outfit_s2'
+  | 'thanks_plaque'
+  | 'cat_hat';
 
 export interface DecorItem {
   id: DecorId;
@@ -96,6 +105,10 @@ export interface DecorItem {
   pack?: string;
   /** Праздничная вещь: её дарят открытки этого праздника (live.ts), не купить. */
   holiday?: 'newyear' | 'feb23' | 'march8';
+  /** Эксклюзив звёздного пропуска этого сезона (pass.ts): не купить, только с его дорожки. */
+  season?: number;
+  /** Подарок за поддержку автора (support.ts): не купить отдельно. */
+  support?: true;
 }
 
 const coins = (id: DecorId, kind: DecorKind, price: number, extra: Partial<DecorItem> = {}): DecorItem => ({
@@ -188,9 +201,17 @@ export const DECOR: DecorItem[] = [
   { id: 'holiday_tree', kind: 'holiday', nameKey: 'decor.holiday_tree', texture: 'holiday_tree', holiday: 'newyear' },
   { id: 'holiday_ship', kind: 'holiday', nameKey: 'decor.holiday_ship', texture: 'holiday_ship', holiday: 'feb23' },
   { id: 'holiday_mimosa', kind: 'holiday', nameKey: 'decor.holiday_mimosa', texture: 'holiday_mimosa', holiday: 'march8' },
+  // Эксклюзив звёздного пропуска (art/season.py): «Листопад» — первый сезон, «Северное сияние» — второй.
+  { id: 'outfit_s1', kind: 'outfit', nameKey: 'decor.outfit_s1', texture: 'outfit_s1', season: 1 },
+  { id: 'sign_s1', kind: 'sign', nameKey: 'decor.sign_s1', texture: 'sign_s1', textColor: 0xf7dc85, season: 1 },
+  { id: 'outfit_s2', kind: 'outfit', nameKey: 'decor.outfit_s2', texture: 'outfit_s2', season: 2 },
+  { id: 'sign_s2', kind: 'sign', nameKey: 'decor.sign_s2', texture: 'sign_s2', textColor: 0xc8ffe6, season: 2 },
+  // Подарки за поддержку автора (support.ts): табличка у кассы и кот на прилавке.
+  { id: 'thanks_plaque', kind: 'plaque', nameKey: 'decor.thanks_plaque', texture: 'thanks_plaque', support: true },
+  { id: 'cat_hat', kind: 'mascot', nameKey: 'decor.cat_hat', texture: 'cat_hat', support: true },
 ];
 
-export const DECOR_KINDS: DecorKind[] = ['outfit', 'sign', 'wall', 'floor', 'light', 'showpiece', 'art', 'rug', 'plants', 'counter', 'outdoor', 'neon', 'holiday'];
+export const DECOR_KINDS: DecorKind[] = ['outfit', 'sign', 'wall', 'floor', 'light', 'showpiece', 'art', 'rug', 'plants', 'counter', 'outdoor', 'neon', 'holiday', 'plaque', 'mascot'];
 
 /**
  * Наборы за звёзды: одна покупка — несколько вещей. Цена и название — и на сервере
@@ -222,8 +243,14 @@ export const isDecorId = (id: string): id is DecorId => DECOR.some((d) => d.id =
 /** Премиальная — та, что продаётся за звёзды (сама или в наборе). */
 export const isPremium = (id: DecorId): boolean => decorItem(id).stars !== undefined || decorItem(id).pack !== undefined;
 
-/** Принадлежит игроку, а не магазину: за звёзды (сама или в наборе) и праздничная — остаётся после «Начать заново». */
-export const isKeepsake = (id: DecorId): boolean => isPremium(id) || decorItem(id).holiday !== undefined;
+/**
+ * Принадлежит игроку, а не магазину: за звёзды (сама или в наборе), праздничная, эксклюзив пропуска
+ * и подарок за поддержку — остаётся после «Начать заново».
+ */
+export const isKeepsake = (id: DecorId): boolean => {
+  const item = decorItem(id);
+  return isPremium(id) || item.holiday !== undefined || item.season !== undefined || item.support === true;
+};
 
 /** Примерка идёт сегодня? */
 const trialToday = (state: StoreState): DecorItem | undefined => {
@@ -239,9 +266,9 @@ export const activeDecor = (state: StoreState, kind: DecorKind): DecorItem | und
   return id && isDecorId(id) ? decorItem(id) : undefined;
 };
 
-/** Можно ли примерить: премиальная, не куплена и ещё не примерялась. */
+/** Можно ли примерить: премиальная или эксклюзив пропуска, не куплена и ещё не примерялась. */
 export const canTry = (state: StoreState, id: DecorId): boolean =>
-  isPremium(id) && !state.decor.owned.includes(id) && !(state.decor.tried ?? []).includes(id);
+  (isPremium(id) || decorItem(id).season !== undefined) && !state.decor.owned.includes(id) && !(state.decor.tried ?? []).includes(id);
 
 /** Поставить премиальную вещь на сегодняшний день — посмотреть, как она смотрится в магазине. */
 export function tryDecor(state: StoreState, id: DecorId): StoreState | null {

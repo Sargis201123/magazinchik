@@ -693,6 +693,8 @@ export interface StoreState {
   rival?: import('./rival').RivalState;
   /** Сезонный пропуск (pass.ts). */
   pass?: PassState;
+  /** Поддержал автора звёздами (support.ts): самая щедрая ступень, ⭐. Принадлежит игроку. */
+  supporter?: number;
   /** Истории постоянных покупателей (tales.ts). */
   tales?: TalesState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */

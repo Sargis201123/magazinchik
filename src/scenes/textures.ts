@@ -166,6 +166,13 @@ export const SPRITES = [
   'sign_marquee',
   'sign_marquee_lit',
   'sign_candy',
+  // Эксклюзив звёздного пропуска и подарки за поддержку автора (art/season.py).
+  'sign_s1',
+  'sign_s2',
+  'sign_s2_lit',
+  'thanks_plaque',
+  'cat_hat',
+  'cat_hat_blink',
   'light_sconce',
   'light_pendant',
   'light_lantern',

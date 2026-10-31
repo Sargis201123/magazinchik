@@ -173,6 +173,7 @@ import { shareDay } from '../platform/shareCard';
 import { duelInfo, fetchFriendShop, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
 import { friendsAtWork } from '../game/staff';
 import { ensureSeason, grantPass } from '../game/pass';
+import { grantSupport } from '../game/support';
 import { ensureRush } from '../game/rush';
 import { cookBatch, DISHES, DISH_IDS, dishPortions, foodSlots, foodSprite, kitchenOpen, kitchenWorking, pantryOf, portionsOf, servePortions, stockKitchen, stoveSeconds, stoveSprite, takeDish, takeIngredients, topUpKitchen, wantsDish, type DishId } from '../game/kitchen';
 import { activeTrick, seeTrickResult, trickResult } from '../game/tricks';
@@ -1041,6 +1042,9 @@ const COSTUMES: Partial<Record<DecorId, Partial<Look>>> = {
   outfit_retro: { hat: 'papercap', outfit: 'soda', face: 'mustache', pants: 0x262b44 },
   outfit_tuxedo: { hat: 'silkhat', outfit: 'tuxedo', face: 'monocle', back: 'tails', pants: 0x181425 },
   outfit_cyber: { hat: 'cyberhelmet', outfit: 'cyber', back: 'jetpack', pants: 0x262b44 },
+  // Эксклюзив звёздного пропуска (pass.ts, art/season.py).
+  outfit_s1: { hat: 'leafcap', outfit: 'trench', pants: 0x4f2c17 },
+  outfit_s2: { hat: 'pompom', outfit: 'nordic', pants: 0x262b44 },
 };
 const ownerLook = (state: StoreState): Look => {
   const outfit = activeDecor(state, 'outfit');
@@ -1863,7 +1867,8 @@ export class StoreScene extends Phaser.Scene {
     void restorePurchases().then((ids) => {
       // Наборы за звёзды (новогодний) раскрываются в свои вещи.
       const owned = decorFromPurchases(ids ?? []);
-      const next = grantPass(grantDecor(this.state, owned, !save), ids ?? []);
+      // Поддержка автора (support.ts): табличка и кот, ступень — для меню «Поддержать автора».
+      const next = grantSupport(grantPass(grantDecor(this.state, owned, !save), ids ?? []), ids ?? [], !save);
       if (next === this.state) return;
       this.state = next;
       saveGame(next);
@@ -2430,6 +2435,11 @@ export class StoreScene extends Phaser.Scene {
       // Лампочки «Бродвея» перемигиваются.
       const lit = this.art(w / 2, -9, 'sign_marquee_lit').setDepth(2).setBlendMode(Phaser.BlendModes.ADD);
       this.tweens.add({ targets: lit, alpha: { from: 1, to: 0.25 }, duration: 520, yoyo: true, repeat: -1, ease: 'Stepped' });
+    }
+    if (sign?.id === 'sign_s2' && !this.lite) {
+      // «Северное сияние» медленно дышит.
+      const lit = this.art(w / 2, -9, 'sign_s2_lit').setDepth(2).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: lit, alpha: { from: 0.9, to: 0.2 }, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
     this.add
       .text(w / 2, -9, this.shopTitle(), {
@@ -9630,6 +9640,7 @@ export class StoreScene extends Phaser.Scene {
     this.buildLights();
     this.buildShowpiece();
     this.buildCounterDecor();
+    this.buildSupportDecor();
     this.buildOutdoorDecor();
     // Стойка со сладостями у кассы, у входа — корзинки, в больших магазинах — тележки. Если справа
     // от двери у нижней стены встал ларь с мороженым (тесный зал), тележки — слева от неё (но не
@@ -9751,6 +9762,36 @@ export class StoreScene extends Phaser.Scene {
     if (!item?.texture) return;
     const { counter } = this.layout;
     this.art(counter.x + 2, counter.y - 20, item.texture).setOrigin(0.5, 1).setDepth(counter.y + 21);
+  }
+
+  /**
+   * Подарки за поддержку автора (support.ts): табличка «Спасибо!» у кассы — надпись на языке игрока —
+   * и кот в цилиндре на прилавке; кот иногда моргает (в лёгкой графике сидит смирно).
+   */
+  private buildSupportDecor(): void {
+    const { counter } = this.layout;
+    if (activeDecor(this.state, 'plaque')) {
+      // Стоит на прилавке у нижнего края, лицом к очереди.
+      const x = counter.x - 1;
+      const y = counter.y + 30;
+      this.art(x, y, 'thanks_plaque').setOrigin(0.5, 1).setDepth(counter.y + 22);
+      this.add
+        .text(x, y - 4.5, t('support.plaque'), { fontFamily: UI_FONT, fontSize: '3.5px', fontStyle: 'bold', color: '#f7dc85' })
+        .setOrigin(0.5)
+        .setResolution(this.textRes(6))
+        .setDepth(counter.y + 23);
+    }
+    if (activeDecor(this.state, 'mascot')) {
+      const y = counter.y - 8;
+      const cat = this.art(counter.x + 3, y, 'cat_hat').setOrigin(0.5, 1).setDepth(counter.y + 22);
+      if (!this.lite) {
+        this.worldTimer(3700, () => {
+          if (!cat.active) return;
+          cat.setTexture('cat_hat_blink');
+          this.time.delayedCall(160, () => cat.active && cat.setTexture('cat_hat'));
+        });
+      }
+    }
   }
 
   /**
