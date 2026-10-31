@@ -1,6 +1,6 @@
 // Люди в мире: как собрать человечка (внешность, походка, спутник, собака, тележка или коляска), куда он
 // смотрит и какое у него настроение, ходьба по точкам (walk/walkVia/stepAlong, остановка — haltWalk), очередь
-// к кассе и облачко над ней, ожидание в очереди. Кто и зачем идёт — shoppers.ts, staff.ts, passers.ts.
+// к кассе и облачко над ней, ожидание в очереди. Кто и зачем идёт — shoppers.ts, staff.ts, visitors.ts.
 
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';

@@ -83,7 +83,7 @@ import { wearOf } from './archetypes';
 import { Hud, type SummaryStamp } from '../ui/hud';
 import { showMorning } from '../ui/morning';
 import { showTitle } from '../ui/title';
-import { isWet, weatherFor, type Weather } from '../game/weather';
+import { weatherFor, type Weather } from '../game/weather';
 import { yearTime } from '../game/calendar';
 import { liveProgress, recordDay, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
@@ -152,7 +152,6 @@ import { ownerTiming } from '../game/owner';
 import { EDUARD_STAGES, eduardLook, eduardStage, type EduardLook } from '../game/eduard';
 import { updateRecords } from '../game/records';
 import { cafeDeliver, type CafeDelivery } from '../game/cafe';
-import { answerSpecial, grannyRepays, makeSpecial, type SpecialKind, type SpecialVisit } from '../game/special';
 import { showChoice } from '../ui/choice';
 import { BRAND_BATCH } from '../game/brand';
 import { hasRadio, radioSpeed } from '../game/radio';
@@ -192,8 +191,6 @@ import {
   FACADE_H,
   FACADE_STYLES,
   FLOORS,
-  HEADLIGHT_POWER,
-  CAR_TYPES,
   type Popup,
   LIGHT_DEPTH,
   QUAKE_WAVE_MS,
@@ -245,20 +242,13 @@ import {
   WATCHMAN,
   randomLook,
   HAT_COLORS,
-  DOG_COLORS,
   customerLook,
   nightGuestLook,
   withCompanionItems,
   type ParkSpot,
   type ParkingLot,
   type RoadCar,
-  SIDE_SHOP_X,
-  SIDE_SHOP_W,
-  CAR_COLORS,
   GRANDMA,
-  EDUARD,
-  GRANDMA_LINES_KEYS,
-  ORDER_GUESTS,
   ownerLook,
   INSPECTOR_AT,
   SONYA_AT,
@@ -299,6 +289,7 @@ import * as cars from './cars';
 import * as staff from './staff';
 import * as shoppers from './shoppers';
 import * as persons from './persons';
+import * as visitors from './visitors';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -410,7 +401,7 @@ export class StoreScene extends Phaser.Scene {
   /** Доля прошедшего дня (0 — утро, 1 — конец смены): солнце, туман, тени. */
   dayProgress = 0;
   /** Мусорный контейнер на улице (его трясёт мусоровоз). */
-  private dumpImg?: Phaser.GameObjects.Image;
+  dumpImg?: Phaser.GameObjects.Image;
   /** Пол блестит (мрамор): в нём отражаются полки. */
   glossyFloor = false;
   /** Мороз: на улице изо рта идёт пар. */
@@ -659,7 +650,7 @@ export class StoreScene extends Phaser.Scene {
   /** Таймеры кота и голубей: при перестройке мира старые останавливаются. */
   critterTimers: Phaser.Time.TimerEvent[] = [];
   /** Как кафе забрало утром заказ по договору — для итогов дня. */
-  private cafeToday: CafeDelivery | null = null;
+  cafeToday: CafeDelivery | null = null;
   /** Ноты над радио, пока оно играет. */
   radioTimer?: Phaser.Time.TimerEvent;
   /** Где стоит приёмник (по x) — оттуда слышно радио. */
@@ -890,7 +881,7 @@ export class StoreScene extends Phaser.Scene {
     // восстановит текстуры и шейдеры, а нарисованное в RenderTexture дорисуем мы.
     if (this.game.renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer) this.game.renderer.on(Phaser.Renderer.Events.RESTORE_WEBGL, () => lighting.rebake(this));
     // Улица живёт своей жизнью: прохожие и машины.
-    this.time.addEvent({ delay: 1800, loop: true, callback: () => this.streetLife() });
+    this.time.addEvent({ delay: 1800, loop: true, callback: () => visitors.streetLife(this) });
     // Над кварталом плывут тени облаков, иногда пролетает стайка птиц.
     this.time.addEvent({ delay: 6000, loop: true, callback: () => this.skyLife() });
     // Потёртость пола: кто где идёт по залу — по таймеру времени игры, а не каждый кадр.
@@ -1760,7 +1751,7 @@ export class StoreScene extends Phaser.Scene {
         if (!b.active) return;
         effects.emote(this, b, 'emo_heart');
         this.popup(b.x, b.y - 34, t('rival.say.yes'), '#c8ffb0');
-        void this.strollAway(b);
+        void visitors.strollAway(this, b);
       });
       return;
     }
@@ -2361,7 +2352,7 @@ export class StoreScene extends Phaser.Scene {
   /** Ночной гость с историей: встаёт у кассы с «!», нажми — выбор; не ответил — уходит. */
   private async runNightStory(story: NightStoryId): Promise<void> {
     const { door, sellerHome } = this.layout;
-    const start = this.streetSpawn();
+    const start = visitors.streetSpawn(this);
     const sprite = persons.makePerson(this, start.x, start.y, nightGuestLook(STORY_GUEST[story]));
     await persons.walkVia(this, sprite, [
       { x: door.x, y: this.streetY },
@@ -2452,7 +2443,7 @@ export class StoreScene extends Phaser.Scene {
       return;
     }
     await persons.walk(this, sprite, door.x, door.y - 10);
-    await this.strollAway(sprite);
+    await visitors.strollAway(this, sprite);
   }
 
   /** Переходник к pets.catVisit: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
@@ -3049,7 +3040,7 @@ export class StoreScene extends Phaser.Scene {
 
   /** Прохожий идёт к промоутеру конкурента и уходит через дорогу к нему в магазин. */
   private async lureAway(promoter: Phaser.GameObjects.Container): Promise<void> {
-    const start = this.streetSpawn();
+    const start = visitors.streetSpawn(this);
     const person = persons.makePerson(this, start.x, start.y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)));
     this.people.delete(person);
     this.trickObjs.push(person);
@@ -3065,7 +3056,7 @@ export class StoreScene extends Phaser.Scene {
   private async fakeInspector(): Promise<void> {
     const { door } = this.layout;
     const look: Look = { ...randomLook(0x262b44), outfit: 'suit', outfitTint: 0x3a4466, prop: 'briefcase', glasses: true, face: 'mustache' };
-    const start = this.streetSpawn();
+    const start = visitors.streetSpawn(this);
     const man = persons.makePerson(this, start.x, start.y, look);
     this.people.delete(man);
     this.trickObjs.push(man);
@@ -3083,7 +3074,7 @@ export class StoreScene extends Phaser.Scene {
     }
     if (!man.active) return;
     await persons.walk(this, man, door.x, this.layout.h + 16);
-    void this.strollAway(man);
+    void visitors.strollAway(this, man);
   }
 
   private buildShell(): void {
@@ -3211,7 +3202,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Контейнер у фасада слева от двери, на пути от двери не стоит. */
-  private dumpSpot(): { x: number; y: number } {
+  dumpSpot(): { x: number; y: number } {
     const { h } = this.layout;
     return { x: 18, y: h + FACADE_H + 9 };
   }
@@ -4016,425 +4007,6 @@ export class StoreScene extends Phaser.Scene {
     return shoppers.serveNext(this, from);
   }
 
-  /** Прохожий идёт по тротуару, машина проезжает по дороге. */
-  private streetLife(): void {
-    const left = -60;
-    const right = this.next.w + 60;
-    // Наводнение: машины не ходят, людей на улице мало — зато по воде плавают лодки.
-    const flood = this.bigObjs.length > 0 && bigDayFor(this.state.day) === 'flood';
-    if (flood) {
-      if (Math.random() < 0.12) this.rowBoat(left, right);
-      if (Math.random() >= 0.12) return;
-    }
-    if (Math.random() < (flood ? 1 : 0.45)) {
-      const fromLeft = Math.random() < 0.5;
-      const y = this.streetY + Phaser.Math.Between(-5, 5);
-      const person = persons.makePerson(this, fromLeft ? left : right, y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)));
-      weatherFx.addUmbrella(this, person);
-      if (Math.random() < 0.1) persons.addCompanion(this, person);
-      void persons.walk(this, person, fromLeft ? right : left, y, persons.ownPace(this, person, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.75, 1.1))).then(() => person.destroy());
-    }
-    if (flood) return;
-    if (Math.random() < 0.14) this.passerby();
-    // Автобус тоже не выезжает следом за машиной с парковки.
-    if (Math.random() < 0.04 && !this.parking?.onRoad) this.driveBus();
-    if (Math.random() < 0.3) {
-      const toRight = Math.random() < 0.5;
-      // Машина с парковки сейчас на дороге (сворачивает к ней или выезжает) — новые не въезжают ей в бок и в багажник.
-      if (this.parking?.onRoad) return;
-      const y = this.streetY + (toRight ? 24 : 42);
-      const total = CAR_TYPES.reduce((sum, [, , weight]) => sum + weight, 0);
-      let roll = Math.random() * total;
-      const [key, color] = CAR_TYPES.find(([, , weight]) => (roll -= weight) < 0) ?? CAR_TYPES[0];
-      const body = this.art(0, 0, key);
-      if (color !== null) body.setTint(color || Phaser.Utils.Array.GetRandom(CAR_COLORS));
-      const lights = this.art(0, 0, `${key}_lights`);
-      // Вечером фары светят вперёд: конусом в карте освещения, а в лёгкой графике — пятном поверх темноты.
-      const beam = this.art(body.displayWidth / 2 + 8, 0, 'glow')
-        .setScale(30 / 64, 16 / 64)
-        .setTint(0xfff0b0)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setAlpha(0.8 * this.evening * cars.beamHaze(this));
-      const parts = [body, lights, beam];
-      // На мокрой дороге фары отражаются бликом.
-      if (isWet(this.weather)) {
-        parts.push(
-          this.art(body.displayWidth / 2 + 6, 7, 'glow')
-            .setScale(28 / 64, 5 / 64)
-            .setTint(0xfff0b0)
-            .setBlendMode(Phaser.BlendModes.ADD)
-            .setAlpha(0.2 + 0.5 * this.evening),
-        );
-      }
-      const car = this.add.container(toRight ? left : right, y, parts).setDepth(y);
-      car.setScale(toRight ? 1 : -1, 1);
-      const lit = cars.headlights(this, car);
-      const dir = toRight ? 1 : -1;
-      lit.rotation = -dir * (Math.PI / 2);
-      lit.sync = () => {
-        lit.x = car.x + dir * (body.displayWidth / 2 - 2);
-        lit.y = car.y;
-        lit.set(HEADLIGHT_POWER * this.evening);
-      };
-      cars.onRoad(this, car, toRight ? 'up' : 'down');
-      this.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
-    }
-  }
-
-  /** Прохожие повеселее: велосипедист у края дороги, бегун, хозяин с собакой. */
-  private passerby(): void {
-    const left = -60;
-    const right = this.next.w + 60;
-    const fromLeft = Math.random() < 0.5;
-    const roll = Math.random();
-    const base = customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day);
-    if (roll < 0.4) {
-      const y = this.streetY + 12;
-      const rider = persons.makePerson(this, fromLeft ? left : right, y, { ...base, hat: Math.random() < 0.5 ? 'bikehelmet' : base.hat, hatTint: 0xe43b44 });
-      rider.addAt(this.art(0, 3, 'bike').setOrigin(0.5), 0);
-      // Крутит педали, а не бежит: без подскока, наклона и пыли.
-      rider.setData('wheels', true);
-      void persons.walk(this, rider, fromLeft ? right : left, y, 70).then(() => rider.destroy());
-      // Иногда звонит в звонок — когда проезжает мимо магазина.
-      if (Math.random() < 0.35) {
-        const ms = (Math.abs(this.layout.door.x - rider.x) / 70) * 1000 * Phaser.Math.FloatBetween(0.6, 1);
-        this.time.delayedCall(ms, () => rider.active && ambience.street('bike', rider.x));
-      }
-      return;
-    }
-    const y = this.streetY + Phaser.Math.Between(-5, 5);
-    if (roll < 0.7) {
-      const runner = persons.makePerson(this, fromLeft ? left : right, y, { ...base, outfit: 'runner', outfitTint: Phaser.Utils.Array.GetRandom(HAT_COLORS), hat: 'headband', hatTint: 0xffffff, coat: undefined, scarf: undefined });
-      void persons.walk(this, runner, fromLeft ? right : left, y, CUSTOMER_SPEED * 2.4).then(() => runner.destroy());
-      return;
-    }
-    const walker = persons.makePerson(this, fromLeft ? left : right, y, { ...base, dog: Phaser.Utils.Array.GetRandom(DOG_COLORS) });
-    weatherFx.addUmbrella(this, walker);
-    void persons.walk(this, walker, fromLeft ? right : left, y, persons.ownPace(this, walker, CUSTOMER_SPEED * 0.8)).then(() => walker.destroy());
-  }
-
-  /** Наводнение: по затопленной дороге проплывает лодка с гребцом (иногда — с пассажиром). */
-  private rowBoat(left: number, right: number): void {
-    const toRight = Math.random() < 0.5;
-    const y = this.streetY + Phaser.Math.Between(26, 40);
-    const hull = this.art(0, 4, 'boat');
-    const oar = this.art(4, 4, 'boat_oar').setOrigin(0.1, 0.2);
-    const rower = persons.makePerson(this, 4, -4, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
-    this.people.delete(rower);
-    rower.setScale(0.9);
-    const parts: Phaser.GameObjects.GameObject[] = [rower, oar, hull];
-    if (Math.random() < 0.4) {
-      const guest = persons.makePerson(this, -10, -4, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
-      this.people.delete(guest);
-      guest.setScale(0.9);
-      parts.unshift(guest);
-    }
-    const boat = this.add.container(toRight ? left : right, y, parts).setDepth(y);
-    boat.setScale(toRight ? 1 : -1, 1);
-    this.tweens.add({ targets: oar, angle: { from: -18, to: 22 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.tweens.add({ targets: boat, y: y + 1.2, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.tweens.add({
-      targets: boat,
-      x: toRight ? right : left,
-      duration: Phaser.Math.Between(9000, 13000),
-      onComplete: () => {
-        this.tweens.killTweensOf(boat);
-        this.tweens.killTweensOf(oar);
-        boat.destroy();
-      },
-    });
-  }
-
-  /** Иногда по дороге едет автобус и останавливается на остановке. */
-  private driveBus(): void {
-    const y = this.streetY + 25;
-    const body = this.art(0, 0, 'bus').setTint(Phaser.Utils.Array.GetRandom([0xfeae34, 0xe43b44, 0x63c74d]));
-    const lights = this.art(0, 0, 'bus_lights');
-    const bus = this.add.container(-120, y, [body, lights]).setDepth(y);
-    const road = cars.onRoad(this, bus, 'up', true);
-    const stopX = -70;
-    this.tweens.add({
-      targets: bus,
-      x: stopX,
-      duration: 2600,
-      ease: 'Sine.easeOut',
-      onComplete: () => {
-        // На остановке выходят пассажиры и расходятся по тротуару.
-        const out = Phaser.Math.Between(1, 3);
-        for (let i = 0; i < out; i++) {
-          this.time.delayedCall(300 + i * 350, () => {
-            const y = this.streetY + Phaser.Math.Between(-4, 4);
-            const p = persons.makePerson(this, stopX + Phaser.Math.Between(-8, 8), this.streetY + 10, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
-            weatherFx.addUmbrella(this, p);
-            const to = Math.random() < 0.5 ? -100 : this.next.w + 100;
-            void persons.walk(this, p, p.x, y).then(() => persons.walk(this, p, to, y, CUSTOMER_SPEED * 0.9)).then(() => p.destroy());
-          });
-        }
-        void this.wait(1800)
-          .then(() => cars.yieldToLot(this, road, true))
-          .then(() => bus.active && this.tweens.add({ targets: bus, x: this.next.w + 140, duration: 3200, ease: 'Sine.easeIn', onComplete: () => bus.destroy() }));
-      },
-    });
-  }
-
-  /**
-   * Утро района: через день дворник метёт тротуар (за ним клубится пыль), раз в три дня
-   * к мусорному контейнеру подъезжает мусоровоз.
-   */
-  private morningCrew(): void {
-    const day = this.state.day;
-    if (day % 2 === 0) {
-      this.time.delayedCall(DAY_SECONDS * 30, () => {
-        if (!this.running) return;
-        const y = this.streetY + 2;
-        const sweeper = persons.makePerson(this, -60, y, { ...randomLook(0xf77622), acc: 'vest', accTint: 0xfee761, style: 'cap', hair: 0xf77622 });
-        const broom = this.add.container(6, 2, [this.add.rectangle(0, -3, 1, 8, 0x8f563b), this.add.rectangle(0, 2, 4, 2, 0xfeae34)]);
-        sweeper.add(broom);
-        this.tweens.add({ targets: broom, angle: { from: -25, to: 25 }, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-        const stopDust = this.worldTimer(420, () => sweeper.active && food.steamPuff(this, sweeper.x + 7, sweeper.y + 6, 0xc8b8a0));
-        void persons.walk(this, sweeper, this.next.w + 60, y, CUSTOMER_SPEED * 0.45).then(() => {
-          stopDust();
-          sweeper.destroy();
-        });
-      });
-    }
-    if (day % 3 === 0) {
-      this.time.delayedCall(DAY_SECONDS * 60, () => {
-        if (!this.running) return;
-        const dump = this.dumpSpot();
-        const y = this.streetY + 24;
-        const truck = this.add.container(-140, y, [this.art(0, 0, 'car_truck').setTint(0x3e8948), this.art(0, 0, 'car_truck_lights')]).setDepth(y);
-        const road = cars.onRoad(this, truck, 'up', true);
-        this.tweens.add({
-          targets: truck,
-          x: dump.x + 10,
-          duration: 2600,
-          ease: 'Sine.easeOut',
-          onComplete: () => {
-            if (this.dumpImg?.active) this.tweens.add({ targets: this.dumpImg, angle: { from: -6, to: 6 }, duration: 90, yoyo: true, repeat: 5, onComplete: () => this.dumpImg?.setAngle(0) });
-            void this.wait(2200)
-              .then(() => cars.yieldToLot(this, road, true))
-              .then(() => truck.active && this.tweens.add({ targets: truck, x: this.next.w + 160, duration: 3200, ease: 'Sine.easeIn', onComplete: () => truck.destroy() }));
-          },
-        });
-      });
-    }
-  }
-
-  /** Кто из героев сюжета заглянет сегодня: бабушка, заказчик за заказом, Эдуард. */
-  private scheduleStoryGuests(): void {
-    const day = this.state.day;
-    const at = (share: number, fn: () => Promise<void>) =>
-      this.time.delayedCall(DAY_SECONDS * share * 1000, () => {
-        if (this.running) void fn();
-      });
-    if (day > 2 && day % 6 === 2) at(0.25, () => this.runVisitor(GRANDMA, t(Phaser.Utils.Array.GetRandom(GRANDMA_LINES_KEYS))));
-    const order = this.state.plan?.order;
-    if (order) {
-      const [look, name] = ORDER_GUESTS[order.client];
-      at(0.78, () => this.runVisitor(look, t('popup.orderPickup', { name: t(name) }), true));
-    }
-    if (eduardLook(this.state) !== 'vacant' && day % 5 === 1) at(0.5, () => this.runEduard());
-    if (this.cafeToday) at(0.08, () => this.runCafeWaiter());
-    // Особый гость с выбором (бизнесмен, бабушка без денег, ребёнок с мелочью).
-    const special = makeSpecial(this.state, Math.random);
-    if (special) at(Phaser.Math.FloatBetween(0.2, 0.6), () => this.runSpecial(special));
-    // Добрая бабушка возвращает долг.
-    if (this.state.grannyOwed && Math.random() < 0.5) at(0.35, () => this.runGrannyRepay());
-  }
-
-  /**
-   * Особый гость: заходит, встаёт у кассы, над ним «!». Нажми — окно выбора.
-   * Не ответил за 14 секунд — гость уходит сам.
-   */
-  private async runSpecial(visit: SpecialVisit): Promise<void> {
-    const { door, sellerHome } = this.layout;
-    const looks: Record<SpecialKind, Look> = {
-      business: { shirt: 0x262b44, skin: Phaser.Utils.Array.GetRandom(SKINS), pants: 0x181425, hair: 0x181425, style: 'short', acc: 'tie' },
-      granny: { shirt: 0x8f563b, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xd8d8e0, style: 'bun', glasses: true },
-      kid: { ...randomLook(Phaser.Utils.Array.GetRandom(HAT_COLORS)), kid: true, style: 'short', bag: 'backpack', bagTint: 0xe43b44 },
-    };
-    const start = this.streetSpawn();
-    const sprite = persons.makePerson(this, start.x, start.y, looks[visit.kind]);
-    await persons.walkVia(this, sprite, [
-      { x: door.x, y: this.streetY },
-      { x: door.x, y: door.y - 10 },
-      { x: sellerHome.x - 30, y: sellerHome.y - 16 },
-    ]);
-    if (!sprite.active || !this.running) {
-      sprite.destroy();
-      return;
-    }
-    persons.setFacing(sprite, 'right');
-    const item = PRODUCTS[visit.product];
-    this.popup(sprite.x, sprite.y - 18, t(`special.${visit.kind}.hello` as TextKey), '#fff3b0');
-    // «!» над головой мигает, пока не ответишь.
-    const mark = this.add.text(0, -24, '!', { fontFamily: UI_FONT, fontSize: '10px', color: '#fee761', stroke: '#181425', strokeThickness: 3 }).setOrigin(0.5).setResolution(this.textRes(4));
-    sprite.add(mark);
-    const blink = this.tweens.add({ targets: mark, y: -27, duration: 400, yoyo: true, repeat: -1 });
-    let answered: boolean | null = null;
-    let closeChoice: (() => void) | null = null;
-    const hit = this.add.zone(sprite.x, sprite.y - 6, 22, 30).setInteractive({ useHandCursor: true }).setDepth(2000);
-    const decided = new Promise<void>((resolve) => {
-      const finish = (yes: boolean | null) => {
-        if (answered !== null) return;
-        answered = yes;
-        resolve();
-      };
-      hit.on('pointerup', () =>
-        this.tap(() => {
-          if (closeChoice) return;
-          closeChoice = showChoice({
-            title: t(`special.${visit.kind}.title` as TextKey),
-            text: t(`special.${visit.kind}.text` as TextKey, { n: visit.qty, item: `${item.icon} ${t(item.nameKey)}`, pay: visit.pay, full: this.state.prices[visit.product] * visit.qty }),
-            note: t(`special.${visit.kind}.note` as TextKey),
-            yes: t(`special.${visit.kind}.yes` as TextKey),
-            no: t(`special.${visit.kind}.no` as TextKey),
-            onYes: () => finish(true),
-            onNo: () => finish(false),
-          });
-        }),
-      );
-      this.time.delayedCall(14000, () => {
-        closeChoice?.();
-        if (answered === null) answered = false;
-        resolve();
-      });
-    });
-    await decided;
-    hit.destroy();
-    blink.stop();
-    mark.destroy();
-    if (!sprite.active) return;
-    const yes = answered === true;
-    const res = answerSpecial(this.state, visit, yes);
-    this.state = res.state;
-    this.refreshShelves();
-    this.refreshWarehouse();
-    this.hud.update(this.state, this.timeLeft);
-    if (yes && res.money) {
-      sound.coin(sprite.x);
-      this.popup(sprite.x, sprite.y - 18, `+${res.money} 💰`, '#c8ffb0');
-    }
-    if (res.rating > 0) this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `★ +${res.rating}`, '#fee761'));
-    if (res.rating < 0) this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `★ ${res.rating}`, '#ffd0d0'));
-    effects.emote(this, sprite, yes ? 'emo_heart' : 'emo_angry');
-    if (yes && visit.kind === 'business') sprite.add(this.art(0, 3, 'box'));
-    if (yes) sprite.add(this.art(5, 1, `item_${visit.product}`).setScale(1 / ART));
-    await this.wait(1200);
-    await persons.walk(this, sprite, door.x, door.y - 10);
-    await this.strollAway(sprite);
-  }
-
-  /** Добрая бабушка возвращается с пирожками и отдаёт долг вдвое. */
-  private async runGrannyRepay(): Promise<void> {
-    const owed = grannyRepays(this.state).paid;
-    if (!owed) return;
-    const look: Look = { shirt: 0x8f563b, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xd8d8e0, style: 'bun', glasses: true };
-    // Деньги — когда бабушка дошла до кассы; не дошла (день кончился) — придёт в другой раз.
-    await this.runVisitor(look, t('special.granny.repay', { n: owed }), false, () => {
-      this.state = grannyRepays(this.state).state;
-      sound.coin();
-      this.hud.update(this.state, this.timeLeft);
-    });
-  }
-
-  /** Гость заходит к кассе, говорит фразу и уходит (заказчик уносит коробку). */
-  private async runVisitor(look: Look, line: string, carriesBox = false, onArrive?: () => void): Promise<void> {
-    const { door, sellerHome } = this.layout;
-    const start = this.streetSpawn();
-    const sprite = persons.makePerson(this, start.x, start.y, look);
-    weatherFx.addUmbrella(this, sprite);
-    await persons.walkVia(this, sprite, [
-      { x: door.x, y: this.streetY },
-      { x: door.x, y: door.y - 10 },
-      { x: sellerHome.x - 28, y: sellerHome.y - 12 },
-    ]);
-    if (!sprite.active) return;
-    persons.setFacing(sprite, 'right');
-    this.popup(sprite.x, sprite.y - 18, line, '#fff3b0');
-    effects.emote(this, sprite, 'emo_heart');
-    onArrive?.();
-    await this.wait(2200);
-    if (carriesBox && sprite.active) sprite.add(this.art(0, 3, 'box'));
-    await persons.walkVia(this, sprite, [
-      { x: door.x, y: door.y - 10 },
-      { x: door.x, y: this.layout.h + 16 },
-    ]);
-    void this.strollAway(sprite);
-  }
-
-  /** Эдуард подходит к витрине, присматривается и уходит в свой магазин по соседству. */
-  private async runEduard(): Promise<void> {
-    const { w, h } = this.layout;
-    const sprite = persons.makePerson(this, this.next.w + 60, this.streetY, EDUARD);
-    await persons.walkVia(this, sprite, [
-      { x: w - 20, y: this.streetY },
-      { x: w - 20, y: h + 15 },
-    ]);
-    if (!sprite.active) return;
-    persons.setFacing(sprite, 'up');
-    effects.emote(this, sprite, 'emo_question');
-    this.popup(sprite.x, sprite.y - 18, t('popup.eduard'), '#d0e0ff');
-    await this.wait(2500);
-    // Его магазин за дорогой, напротив входа — переходит по зебре; иначе — по соседству справа.
-    const home = this.rivalAcross ? { x: this.layout.door.x, y: this.streetY + 82 } : { x: this.next.w + SIDE_SHOP_X + SIDE_SHOP_W * 0.62, y: this.next.h - 2 };
-    await persons.walkVia(this, sprite, [
-      { x: w - 20, y: this.streetY },
-      { x: home.x, y: this.streetY },
-      home,
-    ]);
-    sprite.destroy();
-  }
-
-  /** Официант кафе «Пончик» приходит к магазину за заказом по договору и уносит коробку. */
-  private async runCafeWaiter(): Promise<void> {
-    const { door, h } = this.layout;
-    const cafeDoor = -136 - WING_OUTER + 112 * 0.62;
-    const sprite = persons.makePerson(this, cafeDoor, this.next.h - 2, { ...randomLook(0x733e39), acc: 'apron', accTint: 0xffffff });
-    await persons.walkVia(this, sprite, [
-      { x: cafeDoor, y: this.streetY },
-      { x: door.x, y: this.streetY },
-      { x: door.x, y: h + 15 },
-    ]);
-    if (!sprite.active) return;
-    persons.setFacing(sprite, 'up');
-    this.popup(sprite.x, sprite.y - 18, t('popup.cafeWaiter'), '#fff3b0');
-    await this.wait(1500);
-    const result = this.cafeToday;
-    if (!sprite.active) return;
-    if (result?.delivered) {
-      sound.coin(sprite.x);
-      this.popup(sprite.x, sprite.y - 18, t('popup.cafePaid', { n: result.pay }), '#c8ffb0');
-      sprite.add(this.art(0, 3, 'box'));
-    } else this.popup(sprite.x, sprite.y - 18, t('popup.cafeShort'), '#ffd0d0');
-    await this.wait(900);
-    await persons.walkVia(this, sprite, [
-      { x: door.x, y: this.streetY },
-      { x: cafeDoor, y: this.streetY },
-      { x: cafeDoor, y: this.next.h - 2 },
-    ]);
-    sprite.destroy();
-  }
-
-  /** Откуда приходят с улицы: с тротуара слева или справа от входа. */
-  streetSpawn(): Phaser.Types.Math.Vector2Like {
-    const side = Math.random() < 0.5 ? -1 : 1;
-    return { x: this.layout.door.x + side * Phaser.Math.Between(50, 90), y: this.streetY + Phaser.Math.Between(-3, 3) };
-  }
-
-  /** Вышел из магазина — уходит по тротуару за край кадра. */
-  async strollAway(sprite: Phaser.GameObjects.Container): Promise<void> {
-    const y = this.streetY + Phaser.Math.Between(-3, 3);
-    const side = Math.random() < 0.5 ? -1 : 1;
-    // С крыльца на тротуар и в сторону — одним ходом, заворачивая, а не по команде «налево».
-    await persons.walkVia(this, sprite, [
-      { x: this.layout.door.x, y },
-      { x: side < 0 ? -60 : this.next.w + 60, y },
-    ]);
-    sprite.destroy();
-  }
-
   /**
    * Пауза в деле. Если за это время мир перестроили, дело старого мира на ней и обрывается: его люди
    * и вещи уже уничтожены (так же обрывается шаг walk — killAll гасит его твин без onStop).
@@ -4627,7 +4199,7 @@ export class StoreScene extends Phaser.Scene {
     this.flyIn();
     lighting.lightsOn(this);
     this.flipDoorSign(true);
-    this.morningCrew();
+    visitors.morningCrew(this);
     // Утром рассказали, чем кончился вчерашний «проверяющий» (tricks.ts) — больше не показываем.
     if (trickResult(this.state)) this.state = seeTrickResult(this.state);
     this.stallMs = 0;
@@ -5358,7 +4930,7 @@ export class StoreScene extends Phaser.Scene {
       this.refreshShelves();
       this.refreshWarehouse();
     }
-    this.scheduleStoryGuests();
+    visitors.scheduleStoryGuests(this);
     const season = seasonFor(this.state.day);
     if (season) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
     else if (isFairDay(this.state.day)) this.time.delayedCall(600, () => this.popup(this.layout.w / 2, this.layout.h / 2, t('popup.fair'), '#fee761'));
@@ -5504,7 +5076,7 @@ export class StoreScene extends Phaser.Scene {
     }
     if (id === 'flood') {
       // Сразу по воде плывёт первая лодка: машины сегодня не ездят.
-      keep(this.time.delayedCall(1500, () => this.running && this.rowBoat(-60, this.next.w + 60)));
+      keep(this.time.delayedCall(1500, () => this.running && visitors.rowBoat(this, -60, this.next.w + 60)));
       // Вода стоит от крыльца до сквера за дорогой; по ней расходятся круги.
       const water = keep(this.add.rectangle(wide.x, h + FACADE_H + 2, wide.w, top + 88 - h - FACADE_H - 2, 0x2f7fd8).setOrigin(0).setAlpha(0.5).setDepth(-5));
       keep(this.tweens.add({ targets: water, alpha: 0.58, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }));
@@ -5738,7 +5310,7 @@ export class StoreScene extends Phaser.Scene {
       for (const p of freed) {
         hostages.splice(hostages.indexOf(p), 1);
         void persons.walk(this, p, door.x, h + 16).then(() => {
-          if (p.active) void this.strollAway(p);
+          if (p.active) void visitors.strollAway(this, p);
         });
       }
       sound.good();
@@ -5769,7 +5341,7 @@ export class StoreScene extends Phaser.Scene {
       for (const p of hostages) {
         if (p === this.seller || [...this.workers.values()].some((wk) => wk.sprite === p)) continue;
         void persons.walk(this, p, door.x, h + 16).then(() => {
-          if (p.active) void this.strollAway(p);
+          if (p.active) void visitors.strollAway(this, p);
         });
       }
       this.siege = false;

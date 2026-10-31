@@ -69,6 +69,7 @@ import * as deliveries from './deliveries';
 import * as food from './food';
 import * as shoppers from './shoppers';
 import * as persons from './persons';
+import * as visitors from './visitors';
 
 // ---------- Продавец: уборка и выкладка ----------
 
@@ -553,7 +554,7 @@ export function syncStaff(scene: StoreScene): void {
     const home = covering ? workerHome(scene, covering) : workerHome(scene, member.role);
     // Новенький в первый день не стоит сразу на месте, а входит с улицы.
     const fresh = scene.dayOpen && scene.newHires.has(staffKey(member));
-    const at = fresh ? scene.streetSpawn() : home;
+    const at = fresh ? visitors.streetSpawn(scene) : home;
     const sprite = persons.makePerson(scene, at.x ?? home.x, at.y ?? home.y, {
       ...randomLook(UNIFORMS[member.role]),
       style: STAFF_HAIR[member.role],

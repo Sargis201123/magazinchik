@@ -46,6 +46,7 @@ import {
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as persons from './persons';
+import * as visitors from './visitors';
 
 /**
  * Парковка за магазином и проезд к ней с улицы вдоль правой стены: площадка с бордюром и разметкой
@@ -564,7 +565,7 @@ export function carDoor(spot: ParkSpot): { x: number; y: number } {
 export async function driveHome(scene: StoreScene, sprite: Phaser.GameObjects.Container, spot: ParkSpot): Promise<void> {
   const lot = scene.parking;
   if (!lot || !lot.spots.includes(spot) || !spot.car?.box.active) {
-    void scene.strollAway(sprite);
+    void visitors.strollAway(scene, sprite);
     return;
   }
   await stroll(scene, sprite, [

@@ -123,6 +123,7 @@ import * as food from './food';
 import * as cars from './cars';
 import * as staff from './staff';
 import * as persons from './persons';
+import * as visitors from './visitors';
 
 /** Шоколадка со стойки у кассы летит в руки стоящему в очереди. */
 export function grabCandy(scene: StoreScene, c: Customer): void {
@@ -167,7 +168,7 @@ export function scheduleFriends(scene: StoreScene): void {
 }
 
 export function spawnFriend(scene: StoreScene, f: VisitFriend): void {
-  const start = scene.streetSpawn();
+  const start = visitors.streetSpawn(scene);
   const sprite = persons.makePerson(scene, start.x, start.y, customerLook(SHIRTS[f.id % SHIRTS.length], scene.state.day));
   weatherFx.addUmbrella(scene, sprite);
   const bubble = scene.art(0, -14, 'bubble').setVisible(false);
@@ -192,7 +193,7 @@ export function spawnFriend(scene: StoreScene, f: VisitFriend): void {
 }
 
 export function spawnRegular(scene: StoreScene, r: Regular): void {
-  const start = scene.streetSpawn();
+  const start = visitors.streetSpawn(scene);
   const sprite = persons.makePerson(scene, start.x, start.y, { ...livedRegular(scene.state, r).look });
   weatherFx.addUmbrella(scene, sprite);
   const bubble = scene.art(0, -14, 'bubble').setVisible(false);
@@ -239,7 +240,7 @@ export function regularVerdict(scene: StoreScene, c: Customer): void {
 export async function runInspector(scene: StoreScene): Promise<void> {
   scene.inspector = 'here';
   const { door, wc, sellerHome } = scene.layout;
-  const start = scene.streetSpawn();
+  const start = visitors.streetSpawn(scene);
   const sprite = persons.makePerson(scene, start.x, start.y, { shirt: INSPECTOR_SHIRT, skin: SKINS[0], pants: INSPECTOR_SHIRT, hair: 0x181425, style: 'short' });
   const look = (x: number, y: number) => persons.walk(scene, sprite, x, y, 35).then(() => scene.wait(700));
   scene.popup(door.x, door.y - 24, t('popup.inspector'), '#fff3b0');
@@ -273,7 +274,7 @@ export async function runInspector(scene: StoreScene): Promise<void> {
     scene.popup(sprite.x, sprite.y - 16, t('popup.inspectionFailed', { n: result.fine }), '#ffd0d0');
   }
   await persons.walk(scene, sprite, door.x, scene.layout.h + 16, 35);
-  void scene.strollAway(sprite);
+  void visitors.strollAway(scene, sprite);
   scene.inspector = 'done';
 }
 
@@ -281,7 +282,7 @@ export async function runInspector(scene: StoreScene): Promise<void> {
 export async function runSonya(scene: StoreScene): Promise<void> {
   scene.sonya = 'here';
   const { door, sellerHome } = scene.layout;
-  const start = scene.streetSpawn();
+  const start = visitors.streetSpawn(scene);
   const sprite = persons.makePerson(scene, start.x, start.y, SONYA);
   await persons.walkVia(scene, 
     sprite,
@@ -305,7 +306,7 @@ export async function runSonya(scene: StoreScene): Promise<void> {
     ],
     40,
   );
-  void scene.strollAway(sprite);
+  void visitors.strollAway(scene, sprite);
   scene.sonya = 'done';
 }
 
@@ -318,7 +319,7 @@ export async function runLiveGuest(scene: StoreScene): Promise<void> {
   if (!guest) return;
   guest.phase = 'here';
   const { door, sellerHome, queue } = scene.layout;
-  const start = scene.streetSpawn();
+  const start = visitors.streetSpawn(scene);
   const sprite = persons.makePerson(scene, start.x, start.y, LIVE_GUEST_LOOKS[guest.who]);
   if (!scene.lite) personGlow(scene, sprite, 0xcfe8ff, 3);
   sound.bell(door.x);
@@ -350,7 +351,7 @@ export async function runLiveGuest(scene: StoreScene): Promise<void> {
     ],
     34,
   );
-  void scene.strollAway(sprite);
+  void visitors.strollAway(scene, sprite);
   guest.phase = 'done';
 }
 
@@ -358,7 +359,7 @@ export async function runLiveGuest(scene: StoreScene): Promise<void> {
 export async function runJury(scene: StoreScene): Promise<void> {
   scene.jury = 'here';
   const { door, slots, sellerHome } = scene.layout;
-  const start = scene.streetSpawn();
+  const start = visitors.streetSpawn(scene);
   scene.popup(door.x, door.y - 24, t('popup.jury'), '#fee761');
   haptic.tap();
   sound.bell();
@@ -385,7 +386,7 @@ export async function runJury(scene: StoreScene): Promise<void> {
     await persons.walk(scene, sprite, sellerHome.x - 24 + dx, sellerHome.y - 8, 32);
     await scene.wait(600);
     await persons.walk(scene, sprite, door.x + dx, scene.layout.h + 16, 32);
-    void scene.strollAway(sprite);
+    void visitors.strollAway(scene, sprite);
   };
   await Promise.all(JURY_LOOKS.map((look, i) => walkOne(look, i)));
   scene.jury = 'done';
@@ -446,7 +447,7 @@ export function spawnCustomer(scene: StoreScene,
       wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
     }
   }
-  const start = forced?.at ?? scene.streetSpawn();
+  const start = forced?.at ?? visitors.streetSpawn(scene);
   const sprite = arrived?.sprite ?? persons.makePerson(scene, start.x, start.y, look);
   if (!arrived) weatherFx.addUmbrella(scene, sprite);
   // Иногда приходят парой.
@@ -1146,5 +1147,5 @@ export async function leave(scene: StoreScene, c: Customer, pastCounter = false)
   scene.customers.delete(c);
   // Приехавший на машине идёт к ней на парковку, остальные — по тротуару за край кадра.
   if (c.car) void cars.driveHome(scene, c.sprite, c.car);
-  else void scene.strollAway(c.sprite);
+  else void visitors.strollAway(scene, c.sprite);
 }
