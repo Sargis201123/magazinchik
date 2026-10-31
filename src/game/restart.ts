@@ -39,6 +39,9 @@ export function restartGame(old: StoreState): StoreState {
     duelClaimed: old.duelClaimed,
     guildClaimed: old.guildClaimed,
     rushClaimed: old.rushClaimed,
+    // Турнир района и полка памяти (social.ts): награду недели второй раз не забрать, открытки друзей остаются.
+    leagueClaimed: old.leagueClaimed,
+    keepsakes: old.keepsakes,
     // Сезонный пропуск — тоже (за него могли заплатить звёздами): опыт и забранные награды остаются.
     pass: old.pass,
     // Поддержка автора — тоже игрока: табличка и кот остаются (они в owned), ступень — здесь.
