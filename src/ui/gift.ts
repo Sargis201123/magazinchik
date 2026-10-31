@@ -2,14 +2,16 @@
 
 import { t } from '../i18n';
 import { PRODUCTS } from '../game/economy';
-import { GIFT_DAYS, type Gift } from '../game/gift';
+import { GIFT_DAYS, type Gift, type GiftPreview } from '../game/gift';
+import type { TextKey } from '../i18n/ru';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { haptic } from '../platform/telegram';
 import { dialogBox } from './dialog';
 import { el, openModal } from './dom';
 
-export function showGift(gift: Gift): void {
+/** tomorrow — что будет завтра (gift.ts giftTomorrow): «Завтра — 3-й день подряд: банка варенья». */
+export function showGift(gift: Gift, tomorrow?: GiftPreview | null): void {
   const { card, close } = openModal();
   card.append(el('h2', '', `🎁 ${t('gift.title')}`));
   const days = el('div', 'ui-gift-days');
@@ -22,6 +24,11 @@ export function showGift(gift: Gift): void {
   if (gift.goods) rewards.push(`+${gift.goods.qty} × ${PRODUCTS[gift.goods.id].icon} ${t(PRODUCTS[gift.goods.id].nameKey)}`);
   if (gift.rating) rewards.push(`+${gift.rating}★`);
   const reward = el('div', 'ui-gift-reward', rewards.join('   '));
+  const after = [reward];
+  if (tomorrow) {
+    const treat = t(`gift.treat.${tomorrow.day}` as TextKey);
+    after.push(el('div', 'ui-tomorrow', tomorrow.day === 1 ? t('gift.restart', { treat }) : t('gift.tomorrow', { n: tomorrow.day, treat })));
+  }
   card.append(
     days,
     dialogBox({
@@ -29,7 +36,7 @@ export function showGift(gift: Gift): void {
       name: t('who.grandma'),
       text: `«${t(gift.day === GIFT_DAYS ? 'gift.textBig' : 'gift.text', { n: gift.day, total: GIFT_DAYS })}»`,
       pitch: 620,
-      after: [reward],
+      after,
       nextLabel: t('gift.take'),
       onNext: () => {
         if (!music.sting('coin')) sound.coin();

@@ -8,7 +8,7 @@ export const GIFT_DAYS = 7;
 /** Множитель денег по дню серии. */
 export const GIFT_SCALE = [1, 1.5, 2, 2.5, 3, 4, 6];
 /** В эти дни серии сверху ещё и товар на склад. */
-const GOODS_DAYS = new Set([3, 6]);
+export const GOODS_DAYS = new Set([3, 6]);
 const GOODS_QTY = 6;
 /** Седьмой день — ещё и к рейтингу. */
 export const GIFT_RATING = 0.1;
@@ -60,4 +60,23 @@ export function claimGift(state: StoreState, today: string, random: () => number
     next = { ...next, rating: Math.min(5, next.rating + GIFT_RATING) };
   }
   return { state: next, gift };
+}
+
+/** Что бабушка пришлёт в следующий раз: день серии, деньги, товар (3-й и 6-й день), рейтинг (7-й). */
+export interface GiftPreview {
+  day: number;
+  money: number;
+  goods: boolean;
+  rating: boolean;
+}
+
+/**
+ * Завтрашний гостинец — для строки «завтра — 3-й день подряд: банка варенья» в итогах дня и в окне
+ * гостинца. Только когда сегодняшний уже вручён (иначе он ещё ждёт). После седьмого — серия заново.
+ */
+export function giftTomorrow(state: StoreState, today: string): GiftPreview | null {
+  const last = state.gift;
+  if (!last || last.lastDate !== today) return null;
+  const day = last.streak < GIFT_DAYS ? last.streak + 1 : 1;
+  return { day, money: Math.round(giftBase(state) * GIFT_SCALE[day - 1]), goods: GOODS_DAYS.has(day), rating: day === GIFT_DAYS };
 }
