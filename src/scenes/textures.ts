@@ -36,6 +36,22 @@ export const SPRITES = [
   'giant_branch',
   // После переезда в гипермаркет филиал — в старом магазине через дорогу (art/giant.py).
   'branch_old',
+  // Благоустройство района (art/hood.py, hood.ts).
+  'hood_lamp',
+  'hood_planter',
+  'hood_planter_winter',
+  'hood_bikes',
+  'hood_bus',
+  'hood_mural',
+  'hood_fir',
+  'hood_fir_xmas',
+  'hood_fountain',
+  'hood_playground',
+  'hood_flowerbox',
+  'hood_stall_R',
+  'hood_stall_U',
+  'hood_stall_E',
+  'hood_statue',
   // Особые дни: съёмки кино и ремонт дороги (art/street_props.py).
   'film_camera',
   'film_light',

@@ -109,6 +109,7 @@ import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost,
 import { buyRadio, hasRadio, radioPatience, RADIO_PRICE, radioTolerance, setStation } from './radio';
 import { buyKiosk, kioskCount, kioskTier, laneGuests, nextKioskPrice, nextKioskTier, upgradeKiosks } from './lanes';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, nextBranchTier, upgradeBranch } from './branch';
+import { buyHood, HOOD, nextHood } from './hood';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
 
 export { rng };
@@ -212,7 +213,9 @@ export type Feature =
   | 'kiosks'
   | 'branch'
   // Переезд в гипермаркет (economy.ts, HYPER_LEVEL): только вместе с филиалом — без него переезд закрыт.
-  | 'hyper';
+  | 'hyper'
+  // Благоустройство района (hood.ts): тратит лишнее — самое дешёвое, когда не копит на помещение.
+  | 'hood';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -574,6 +577,16 @@ export function simulate({
       if (best && state.money >= best.next!.price + reserve * 3) {
         investments += best.next!.price;
         state = upgradeBranch(state, best.id) ?? state;
+      }
+    }
+    // Район (hood.ts): деньги сверх запаса — на самое дешёвое улучшение. Пока впереди помещение (или
+    // филиал), сначала копит на него: район — трата лишнего, а не вложение.
+    if (features.hood) {
+      const id = nextHood(state);
+      const saving = (nextFor(state)?.cost ?? 0) + (features.branch && branchOpen(state) ? BRANCH_PRICE : 0);
+      if (id && state.money >= HOOD[id].price + saving + reserve * 3) {
+        investments += HOOD[id].price;
+        state = buyHood(state, id) ?? state;
       }
     }
     // Навыки хозяина: очки — по кругу во все навыки.

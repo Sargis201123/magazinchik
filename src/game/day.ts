@@ -35,6 +35,7 @@ import { rushGuests } from './rush';
 import { spoilDishes } from './kitchen';
 import { staffMorning } from './staffEvents';
 import { districtGuests } from './district';
+import { hoodGuests } from './hood';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
 import { laneGuests } from './lanes';
@@ -121,6 +122,7 @@ export const guestFactor = (state: StoreState): number =>
   departmentGuests(state) *
   eduardGuests(state) *
   districtGuests(state) *
+  hoodGuests(state) *
   trickGuests(state) *
   nightBoostGuests(state) *
   giantGuests(state) *

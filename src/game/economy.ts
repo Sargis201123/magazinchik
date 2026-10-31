@@ -705,6 +705,8 @@ export interface StoreState {
   giant?: import('./giant').GiantState;
   /** Филиал в здании «Гиганта» (branch.ts): куплен после победы над ним, на последнем помещении. */
   branch?: import('./branch').BranchState;
+  /** Благоустройство района (hood.ts): что куплено и в какой день. */
+  hood?: import('./hood').HoodState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */
