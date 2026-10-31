@@ -144,13 +144,15 @@ import { isWet, weatherFor, type Weather } from '../game/weather';
 import { holidayFor, lateAutumn, yearTime } from '../game/calendar';
 import { liveProgress, recordDay, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
-import { claimGift } from '../game/gift';
+import { claimGift, giftTomorrow } from '../game/gift';
 import { activeAds, adExtraItems, adGuests, adRareBoost, adTrust } from '../game/ads';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular, type RegularId } from '../game/regulars';
 import { carryOf, CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskSlots, kioskTier, kioskTierIndex } from '../game/lanes';
 import { showGift } from '../ui/gift';
+import { collectOrder, dropOrder, noteSeen, openChest, orderTeaser, planLetter, planOrder, stashAway, takeLetter } from '../game/returns';
+import { showReturn } from '../ui/returns';
 import { activeDecor, decorFromPurchases, grantDecor, type DecorId } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
 import { DOG_DAY_CATCH, hasDog, hasWatchman } from '../game/watch';
@@ -1794,6 +1796,8 @@ export class StoreScene extends Phaser.Scene {
   private speed = 1;
   /** Сколько игровых секунд магазин проработал (с ускорением, без пауз): часы доставки — чаевые и «в пути 0:06». */
   private playTime = 0;
+  /** В какой игровой день уже был ритуал возвращения (offerReturn): утро открывается не раз за день. */
+  private ritualDay = -1;
 
   constructor() {
     super('store');
@@ -1825,14 +1829,28 @@ export class StoreScene extends Phaser.Scene {
     const away = save && savedAt ? awayTrade(this.state, trustedNow() - savedAt) : null;
     if (away) {
       this.state = away.state;
-      saveGame(this.state);
       track('away', this.state.day, away.revenue);
     }
     // Филиал (branch.ts) тоже работал — понемногу, без кассира: им правит управляющий.
     const branchAwayTrade = save && savedAt ? branchAway(this.state, trustedNow() - savedAt) : null;
-    if (branchAwayTrade) {
-      this.state = branchAwayTrade.state;
+    if (branchAwayTrade) this.state = branchAwayTrade.state;
+    // Всё заработанное без игрока — не сразу в кассу, а в сундучок выручки (returns.ts): утром его
+    // открывают касанием. Не открыл — копится дальше.
+    if (away || branchAwayTrade) {
+      this.state = stashAway(this.state, {
+        cashier: away?.revenue ?? 0,
+        branch: branchAwayTrade?.income ?? 0,
+        hours: Math.max(away?.hours ?? 0, branchAwayTrade?.hours ?? 0),
+        units: away?.units ?? 0,
+      });
       saveGame(this.state);
+    }
+    // Вернулся через день (или позже) — для сводки удержания по событиям (docs/ONBOARDING.md).
+    if (save) {
+      const seen = noteSeen(this.state, todayLocal());
+      this.state = seen.state;
+      if (seen.gap === 1) track('returned_d1', this.state.day);
+      if (seen.gap !== null && seen.gap > 0) track('returned', this.state.day, seen.gap);
     }
     // Игра открылась — прогресс и накопленные события на сервер (рейтинг и аналитика).
     void reportProgress(this.state);
@@ -1870,8 +1888,6 @@ export class StoreScene extends Phaser.Scene {
       toast('assets/ico_gift.png', t('social.welcome'), t('social.welcomeText', { n: WELCOME_GIFT }));
     });
     this.hud = new Hud();
-    if (away) toast('assets/ico_cash.png', t('away.title'), t('away.text', { h: Math.floor(away.hours), n: away.units, sum: away.revenue }));
-    if (branchAwayTrade) toast('assets/ico_shop.png', t('branch.awayTitle'), t('branch.awayText', { h: Math.floor(branchAwayTrade.hours), sum: branchAwayTrade.income }));
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
     this.hud.onUrgent = () => this.openUrgent();
     this.hud.onHelp = () => void this.callForHelp();
@@ -14090,9 +14106,56 @@ export class StoreScene extends Phaser.Scene {
     saveGame(this.state);
     this.hud.update(this.state, DAY_SECONDS);
     this.refreshWarehouse();
-    this.time.delayedCall(400, () => showGift(claimed.gift));
+    this.time.delayedCall(400, () => showGift(claimed.gift, giftTomorrow(this.state, todayLocal())));
     // Со второго дня — один раз спросить, можно ли боту напоминать о магазине.
     if (this.state.day > 1) this.time.delayedCall(4000, askWriteAccessOnce);
+  }
+
+  /**
+   * Ритуал возвращения (returns.ts): сундучок выручки, письмо, сосед за отложенным — одним окном
+   * поверх утра; после него — then (гостинец). Нечего показать — сразу then.
+   */
+  private offerReturn(then: () => void): void {
+    // Утро открывают заново (расстановка, возврат из гостей) — ритуал второй раз не показываем.
+    if (this.ritualDay === this.state.day) {
+      then();
+      return;
+    }
+    this.ritualDay = this.state.day;
+    const chest = this.state.ret?.chest;
+    const letter = takeLetter(this.state, todayLocal());
+    if (letter) this.state = letter.state;
+    const order = collectOrder(this.state);
+    // Заказ не на сегодня (устарел) — сосед просто не пришёл, окно о нём не нужно.
+    const fresh = order && order.order.day === this.state.day ? order : null;
+    if (order) this.state = order.state;
+    if (letter || order) {
+      saveGame(this.state);
+      this.hud.update(this.state, DAY_SECONDS);
+      if (order?.paid) this.refreshShelves();
+    }
+    if (letter) track('ret_letter', this.state.day);
+    if (fresh) track(fresh.paid ? 'ret_order' : 'ret_order_wait', this.state.day, fresh.paid);
+    if (!chest && !letter && !fresh) {
+      then();
+      return;
+    }
+    this.time.delayedCall(400, () =>
+      showReturn({
+        chest,
+        letter: letter?.gift,
+        order: fresh ?? undefined,
+        onChest: () => {
+          const opened = openChest(this.state);
+          if (!opened) return;
+          this.state = opened.state;
+          saveGame(this.state);
+          this.hud.update(this.state, DAY_SECONDS);
+          track('ret_chest', this.state.day, opened.chest.sum);
+        },
+        onDone: then,
+      }),
+    );
   }
 
   private showMorning(): void {
@@ -14105,7 +14168,8 @@ export class StoreScene extends Phaser.Scene {
     // Игру закрыли на итогах дня — утром о них уже не говорим.
     this.state = tutMorning(this.state);
     const afterStory = this.state.onboarding === 'play' && pendingStory(this.state)?.kind === 'intro';
-    if (this.state.tourDone !== false && !noMorning && !afterStory) this.offerGift();
+    // Сначала то, что накопилось без игрока (сундучок, письмо, сосед за заказом), потом гостинец.
+    if (this.state.tourDone !== false && !noMorning && !afterStory) this.offerReturn(() => this.offerGift());
     // Старые сохранения сразу получают значки за то, что уже сделано.
     this.checkAchievements(false);
     this.morningStock = warehouseCount(this.state);
@@ -14138,8 +14202,8 @@ export class StoreScene extends Phaser.Scene {
       onVisit: (id, name) => void this.visitFriend(id, name),
       onRival: (key, name) => void this.visitRival(key, name),
       onBoss: eduardLook(this.state) !== 'vacant' ? () => void this.visitRival(null, '') : undefined,
-      onTourDone: () => this.offerGift(),
-      onStoryDone: afterStory ? () => this.offerGift() : undefined,
+      onTourDone: () => this.offerReturn(() => this.offerGift()),
+      onStoryDone: afterStory ? () => this.offerReturn(() => this.offerGift()) : undefined,
       coach: this.coach,
       getState: () => this.state,
       setState: (s) => {
@@ -15623,6 +15687,10 @@ export class StoreScene extends Phaser.Scene {
     if (filmed) this.state = filmingReward(this.state);
     // Пол за день: шаги покупателей — в потёртость (видна с утра, швабра и уборщик её стирают).
     this.settleFloorWear();
+    // Сосед утром не дождался товара (returns.ts) — заходит к закрытию: есть — забирает, нет — без обид.
+    const neighbour = this.state.ret?.order?.day === this.state.day ? collectOrder(this.state) : null;
+    if (neighbour) this.state = neighbour.paid ? neighbour.state : dropOrder(neighbour.state);
+    if (neighbour) track(neighbour.paid ? 'ret_order_eve' : 'ret_order_miss', this.state.day, neighbour.paid);
     const finishedDay = this.state.day;
     // Сколько гостей сверх обычного привела реклама — строкой в итогах дня.
     this.stats.adGuests = adGuests(this.state, this.stats.served + this.stats.lost);
@@ -15645,6 +15713,10 @@ export class StoreScene extends Phaser.Scene {
     const rankAfter = rankOf(state.totalRevenue);
     if (rankAfter > rankBefore) stamps.push({ kind: 'rank', name: rankName(rankAfter, t) });
     if (order) extra.push([t('summary.order'), order.delivered ? t('summary.orderDone', { n: order.earned }) : t('summary.orderFailed')]);
+    if (neighbour) {
+      const name = t(regularById(neighbour.order.who).nameKey);
+      extra.push([t('ret.order.summary'), neighbour.paid ? t('ret.order.summaryDone', { name, pay: neighbour.paid }) : t('ret.order.summaryMissed', { name })]);
+    }
     if (delivery) extra.push(delivery);
     if (cafe) {
       const end = cafe.ended === 'done' ? ` · ${t('summary.cafeDone')}` : cafe.ended === 'canceled' ? ` · ${t('summary.cafeCanceled')}` : '';
@@ -15670,6 +15742,8 @@ export class StoreScene extends Phaser.Scene {
     const reviews = reviewsFor(this.stats, finishedDay);
     const best = updateRecords({ ...recordDay(state, this.stats), reviews }, this.stats, finishedDay);
     this.state = best.state;
+    // Повод вернуться (returns.ts): сосед просит отложить на завтра, письмо придёт на следующий настоящий день.
+    this.state = planLetter(planOrder(this.state, Math.random), todayLocal(), Math.random);
     for (const id of best.broken) stamps.push({ kind: 'record', id });
     this.stats.spoiled = spoiled;
     this.stats.skimmed = skimmed;
@@ -15745,10 +15819,27 @@ export class StoreScene extends Phaser.Scene {
         },
         (button) => void this.shareDay(button, finishedDay),
         teaser,
-        this.state.bankrupt ? undefined : teaserText(tomorrowTeaser(this.state)),
+        this.state.bankrupt ? undefined : this.tomorrowLines(),
       );
       this.summaryLesson();
     });
+  }
+
+  /**
+   * «Завтра:» в итогах дня: зацепка (nudge.ts), кто из соседей придёт за отложенным и что пришлёт
+   * бабушка, если зайти завтра (серия гостинцев, gift.ts).
+   */
+  private tomorrowLines(): string[] {
+    const lines = [teaserText(tomorrowTeaser(this.state))];
+    const order = orderTeaser(this.state);
+    if (order) lines.push(teaserText(order));
+    const gift = giftTomorrow(this.state, todayLocal());
+    if (gift) {
+      const treat = t(`gift.treat.${gift.day}` as TextKey);
+      const more = (gift.goods ? t('streak.goods') : '') + (gift.rating ? t('streak.star') : '');
+      lines.push(gift.day === 1 ? t('streak.restart', { treat, sum: gift.money }) : t('streak.tomorrow', { n: gift.day, treat, sum: gift.money, more }));
+    }
+    return lines;
   }
 
   /** Кнопку «Позвать на помощь» можно показать: игра в Telegram с сервером, после обучения, сегодня ещё не звали. */

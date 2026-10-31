@@ -52,6 +52,7 @@ const css = `
 /* «Завтра:» в итогах дня — одна строка-зацепка. */
 .ui-tomorrow { margin: 8px 0; padding: 6px 8px; border: 2px dashed #f7c948; border-radius: 8px; background: #fff8d6; font-size: 14px; }
 .ui-tomorrow b { margin-right: 4px; }
+.ui-tomorrow-more { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #f7c948; }
 .ui-stock .ui-stock-out { color: #fff; background: rgba(228, 59, 68, .85); }
 .ui-hint { position: fixed; left: 0; right: 0; padding: 0 12px; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 12px);
   text-align: center; font: 13px ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
