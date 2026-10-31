@@ -311,8 +311,11 @@ export class Hud {
     onShare?: (button: HTMLButtonElement) => void,
     /** «Приходи завтра»: Соня что-то хотела сказать (game/drama.ts) — строка с её портретом. */
     teaser?: string,
-    /** «Завтра:» — одна строка-зацепка на следующий день (game/nudge.ts tomorrowTeaser). */
-    tomorrow?: string,
+    /**
+     * «Завтра:» — строка-зацепка на следующий день (game/nudge.ts tomorrowTeaser), а под ней — кто придёт
+     * за отложенным и какой будет гостинец (game/returns.ts, gift.ts).
+     */
+    tomorrow?: string | string[],
   ): void {
     const { card, close } = openModal();
     card.classList.add('ui-sum');
@@ -393,9 +396,11 @@ export class Hud {
       card.append(row);
     }
     card.append(grannySays(day, stats, rating, history));
-    if (tomorrow) {
+    const later = typeof tomorrow === 'string' ? [tomorrow] : (tomorrow ?? []);
+    if (later.length) {
       const line = el('div', 'ui-tomorrow');
-      line.append(el('b', '', t('teaser.title')), tomorrow);
+      line.append(el('b', '', t('teaser.title')), later[0]);
+      for (const more of later.slice(1)) line.append(el('div', 'ui-tomorrow-more', more));
       card.append(line);
     }
     if (teaser) {

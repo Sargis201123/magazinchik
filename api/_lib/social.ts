@@ -59,6 +59,9 @@ const SCHEMA = [
   // Для напоминаний (remind.ts): часовой пояс игрока (минуты к востоку от Гринвича), поводы от игры
   // (ждёт ли Соня, что портится, серия гостинцев, кассир, день магазина) и о чём писали в прошлый раз.
   'CREATE TABLE IF NOT EXISTS hooks (id INTEGER PRIMARY KEY, tz INTEGER, sonya INTEGER, spoil INTEGER, streak INTEGER, gift TEXT, cashier INTEGER, day INTEGER, reason TEXT, updated INTEGER)',
+  // Что ждёт игрока в магазине (src/game/returns.ts, remind.ts): сколько примерно в сундучке выручки,
+  // от кого письмо, кто придёт за отложенным («petr:bread») и сколько штук.
+  'CREATE TABLE IF NOT EXISTS waiting (id INTEGER PRIMARY KEY, chest INTEGER, letter TEXT, ord TEXT, qty INTEGER, updated INTEGER)',
   // Настройки, которые автор меняет без выпуска игры: календарь праздников (live.ts, docs/EVENTS.md).
   'CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, updated INTEGER)',
 ].join(';\n');
@@ -139,6 +142,17 @@ export async function saveHooks(db: D1, id: number, body: { tz?: unknown; hooks?
     )
     .bind(id, tz, num(h?.sonya, 0, 1), num(h?.spoil, 0, 9999), num(h?.streak, 0, 7), gift, num(h?.cashier, 0, 1), num(h?.day, 0, 100000), now, h ? 1 : 0)
     .run();
+  if (!h) return;
+  // Что ждёт в магазине: только короткие метки из своего словаря — в текст бота чужое не попадёт.
+  const letter = typeof h.letter === 'string' && /^[a-z]{2,12}$/.test(h.letter) ? h.letter : '';
+  const order = typeof h.order === 'string' && /^[a-z]{2,12}:[a-z]{2,16}$/.test(h.order) ? h.order : '';
+  await db
+    .prepare(
+      `INSERT INTO waiting (id, chest, letter, ord, qty, updated) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+       ON CONFLICT(id) DO UPDATE SET chest = excluded.chest, letter = excluded.letter, ord = excluded.ord, qty = excluded.qty, updated = excluded.updated`,
+    )
+    .bind(id, num(h.chest, 0, 1_000_000_000), letter, order, order ? num(h.qty, 0, 99) : 0, now)
+    .run();
 }
 
 /** Сколько приглашённых уже играют и сколько из них ещё не забраны. */
@@ -174,6 +188,18 @@ export async function socialPing(request: Request, env: Env): Promise<Response> 
   if (startParam) {
     await recordReferral(env, user.id, startParam).catch((e) => console.error(e));
     await recordSource(env, user.id, startParam, now).catch((e) => console.error(e));
+  }
+  // Вернулся после напоминания бота — событие «remind_back.<повод>» (через сколько часов): какие
+  // поводы и правда возвращают (сводка /api/stats, eventsWeek).
+  const before = await db
+    .prepare('SELECT p.last_seen AS seen, p.reminded_at AS reminded, p.misses AS misses, h.reason AS reason, h.day AS day FROM players p LEFT JOIN hooks h ON h.id = p.id WHERE p.id = ?')
+    .bind(user.id)
+    .first<{ seen: number | null; reminded: number | null; misses: number | null; reason: string | null; day: number | null }>();
+  if (before?.reminded && (before.seen ?? 0) < before.reminded && (before.misses ?? 0) > 0 && (before.misses ?? 0) < 99) {
+    await db
+      .prepare('INSERT INTO events (id, at, kind, day, value) VALUES (?, ?, ?, ?, ?)')
+      .bind(user.id, now, `remind_back.${/^[a-z.]{1,24}$/.test(before.reason ?? '') ? before.reason : 'none'}`, before.day ?? 0, Math.round((now - before.reminded) / 3_600_000))
+      .run();
   }
   await db
     .prepare(
