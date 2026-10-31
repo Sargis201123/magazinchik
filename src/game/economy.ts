@@ -712,6 +712,8 @@ export interface StoreState {
   branch?: import('./branch').BranchState;
   /** Что копится без игрока и ждёт его утром: сундучок выручки, письмо, заказ соседа (returns.ts). */
   ret?: import('./returns').ReturnState;
+  /** Благоустройство района (hood.ts): что куплено и в какой день. */
+  hood?: import('./hood').HoodState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */

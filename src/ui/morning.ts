@@ -244,6 +244,7 @@ import { leagueBox, leagueClaimBox, leaguePlace } from './league';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { anchorScroll, button, el, foldUp, holdPlace, openModal, toast, unfold, who } from './dom';
+import { hoodBox } from './hood';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
 import { tryNudge } from './nudge';
@@ -280,9 +281,10 @@ type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
  * Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. Видевшие прежнюю
  * (2: звук, перестановка, друзья…) увидят новую один раз.
  */
-const WHATS_NEW = 4;
+const WHATS_NEW = 5;
 /** Строки карточки «Что нового» — самое свежее сверху. */
 const WHATS_NEW_LINES: TextKey[] = [
+  'news.hood',
   'news.hyper',
   'news.branch',
   'news.goal',
@@ -4190,7 +4192,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         ),
       );
     }
-    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), ...branchBox(state), bankBox(state));
+    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), ...branchBox(state), ...hoodBox(state, getState, update), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
