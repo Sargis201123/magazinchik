@@ -78,6 +78,7 @@ import * as lighting from './lighting';
 import * as staff from './staff';
 import * as morningFlow from './morningFlow';
 import * as camera from './camera';
+import * as building from './building';
 
 /**
  * Разметка свободного места под полку. Новичку первой недели — только когда на новую полку хватает
@@ -667,7 +668,7 @@ export function drawMeter(meter: Phaser.GameObjects.Graphics, units: number, cap
 export function markdownNow(scene: StoreScene, x: number, y: number): void {
   // Есть полка уценки — старое уходит туда, под табличку «АКЦИЯ».
   if (scene.bargainAt && fillBargain(scene.state).count) {
-    scene.sendToBargain();
+    building.sendToBargain(scene);
     return;
   }
   const { state, count } = markdownExpiring(scene.state);

@@ -55,6 +55,7 @@ import * as weatherFx from './weatherFx';
 import * as cars from './cars';
 import * as persons from './persons';
 import * as newcomer from './newcomer';
+import * as building from './building';
 
 /**
  * Реклама видна на улице, пока работает: баннер на фасаде, промоутер с листовками, блогер у входа,
@@ -209,7 +210,7 @@ export function drawNeighbor(scene: StoreScene, n: Neighbor, bottom: number, rnd
   const front = across ? top + FACADE_H : bottom;
   scene.add.tileSprite(n.x, roofY, n.w, n.h - FACADE_H, 'roof').setOrigin(0).setTileScale(1 / ART).setTint(n.roof).setDepth(-3);
   scene.add.tileSprite(n.x - 2, (across ? bottom : top) - 3, n.w + 4, 3, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(-3);
-  scene.add.tileSprite(n.x, front - FACADE_H, n.w, FACADE_H, scene.potTile('facade')).setOrigin(0).setTileScale(1 / ART).setDepth(front - 5);
+  scene.add.tileSprite(n.x, front - FACADE_H, n.w, FACADE_H, building.potTile(scene, 'facade')).setOrigin(0).setTileScale(1 / ART).setDepth(front - 5);
   dressRoof(scene, n, roofY, n.h - FACADE_H, across, rnd);
   // Витрины, дверь и навес.
   const doorX = across ? n.x + n.w / 2 : n.x + n.w * 0.62;
@@ -1058,7 +1059,7 @@ export function buildCritters(scene: StoreScene, next: Layout): void {
     const y = atStreet ? top + 8.5 : front + 10;
     scene.art(door.x - 11, y + 2, 'sunflowers').setOrigin(0.5, 1).setDepth(y + 3);
   }
-  scene.buildReviewBoard(door.x + 28, atStreet ? top + 13 : front + 13);
+  building.buildReviewBoard(scene, door.x + 28, atStreet ? top + 13 : front + 13);
 
   scene.pigeons = [];
   // У края газона, подальше от прохожих: пугаются только тех, кто прошёл совсем рядом.
@@ -1152,7 +1153,7 @@ export function buildForRent(scene: StoreScene, next: Layout): void {
   const { w, h, door } = scene.layout;
   const cost = STORE_LEVELS[scene.state.level + 1].cost;
   const tile = (x: number, y: number, ww: number, hh: number, key: string, depth = -5) =>
-    scene.add.tileSprite(x, y, ww, hh, scene.potTile(key)).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
+    scene.add.tileSprite(x, y, ww, hh, building.potTile(scene, key)).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
   if (next.w > w) tile(w + 3, 0, next.w - w - 3, next.h, 'lot', -8);
   if (next.h > h) tile(0, h + 3, w + 3, next.h - h - 3, 'lot', -8);
   scatterLot(scene, next);

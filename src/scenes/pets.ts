@@ -16,6 +16,7 @@ import { ART, LIGHT_DEPTH, MOUSE_BITE_MS, MOUSE_STAY_MS, type EmoteKey, CAT_WALK
 import * as effects from './effects';
 import * as liveFx from './liveFx';
 import * as camera from './camera';
+import * as building from './building';
 
 // ---------- Мышь на складе ----------
 
@@ -55,7 +56,7 @@ export function mouseInWarehouse(scene: StoreScene, keep: <T extends { destroy: 
         const i = units.findIndex((u) => !u.pending);
         scene.state = { ...scene.state, warehouse: { ...scene.state.warehouse, [id]: units.filter((_, n) => n !== i) } };
         scene.stats.spoiled++;
-        scene.refreshWarehouse();
+        building.refreshWarehouse(scene);
         sound.tap();
         scene.popup(mouse.x, mouse.y - 8, t('popup.mouseBite', { icon: PRODUCTS[id].icon }), '#ffd0d0');
       },

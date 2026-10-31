@@ -72,6 +72,7 @@ import * as persons from './persons';
 import * as visitors from './visitors';
 import * as newcomer from './newcomer';
 import * as shelves from './shelves';
+import * as building from './building';
 
 // ---------- Продавец: уборка и выкладка ----------
 
@@ -114,7 +115,7 @@ export function dropChore(scene: StoreScene): void {
     scene.bagCarried = 0;
     scene.binBusy = false;
     scene.binBy = null;
-    scene.refreshBin();
+    building.refreshBin(scene);
   }
 }
 
@@ -224,7 +225,7 @@ export function stockShelf(scene: StoreScene, index: number, by: Phaser.GameObje
   scene.state = moveToShelf(scene.state, index, undefined, carryOf(scene.state) + (by === scene.seller ? carryBonus(scene.state) : 0)).state;
   // Без съезда: новые штуки сами летят на свои места, а сдвинутые соседи просто встают рядом.
   scene.refreshShelves(false);
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   const items = scene.shelfViews[index]?.items ?? [];
   const backs = scene.shelfViews[index]?.backItems ?? [];
   const kind = scene.state.shelves[index]?.kind;
@@ -288,7 +289,7 @@ export function cleanToilet(scene: StoreScene): void {
       ms: TOILET_CLEAN_MS,
       action: () => {
         scene.toiletDirt = 0;
-        scene.refreshToilet();
+        building.refreshToilet(scene);
         effects.bubbles(scene, scene.layout.wc.x, scene.layout.wc.y);
         effects.cleanSparkle(scene, scene.layout.wc.x, scene.layout.wc.spotY - 4, 20);
       },
@@ -316,15 +317,15 @@ export function dropTrash(scene: StoreScene, x: number, y: number, kind: TrashKi
   piece.setData('glow', new Halo(scene, piece, 0xffffff));
   piece.on('pointerup', () => {
     if (scene.dragged || scene.claimedTrash.has(piece) || scene.sellerBusy || scene.ownerScanning()) return;
-    if (kind === 'trash' && scene.binFull()) {
+    if (kind === 'trash' && building.binFull(scene)) {
       // Ведро полное — сначала вынести.
-      scene.popup(scene.binSpot().x, scene.binSpot().y - 18, t('popup.binFull'), '#ffd0d0');
+      scene.popup(building.binSpot(scene).x, building.binSpot(scene).y - 18, t('popup.binFull'), '#ffd0d0');
       sound.bad();
       return;
     }
     scene.claimedTrash.add(piece);
     if (kind === 'trash') {
-      const stand = scene.binStand();
+      const stand = building.binStand(scene);
       void doChore(scene, [
         {
           x: piece.x + 6,
@@ -342,7 +343,7 @@ export function dropTrash(scene: StoreScene, x: number, y: number, kind: TrashKi
           action: () => {
             scene.carryingTrash = false;
             scene.carried.setVisible(false).setTexture('box').setPosition(0, 3);
-            scene.putInBin();
+            building.putInBin(scene);
           },
         },
       ]);
@@ -452,8 +453,8 @@ export function updateRot(scene: StoreScene, dt: number): void {
       scene.popup(piece.x, piece.y - 14, t('popup.rotFirst'), '#d8f0a0');
     }
   }
-  scene.binFullFor = scene.binFull() && !scene.binBusy ? scene.binFullFor + dt : 0;
-  const bin = binSmell(scene.binFullFor) && scene.binImg?.active ? scene.binSpot() : null;
+  scene.binFullFor = building.binFull(scene) && !scene.binBusy ? scene.binFullFor + dt : 0;
+  const bin = binSmell(scene.binFullFor) && scene.binImg?.active ? building.binSpot(scene) : null;
   scene.rotting.bin(bin && { x: bin.x, y: bin.y - 12 }, (bin?.y ?? 0) + 31);
   // Чем дольше стоит полное, тем гуще вонь над ним.
   scene.binStink?.setScale((binSmell(scene.binFullFor) === 2 ? 1.35 : 1) / ART);
@@ -539,7 +540,7 @@ export function syncStaff(scene: StoreScene): void {
     scene.bagCarried = 0;
     scene.binBusy = false;
     scene.binBy = null;
-    scene.refreshBin();
+    building.refreshBin(scene);
   }
   // Кассир не вышел, а менеджер на месте — менеджер встаёт за его кассу. Сменщика не подменяет:
   // за первой кассой и так хозяин, а у менеджера свои дела.
@@ -773,14 +774,14 @@ export async function cleanerLoop(scene: StoreScene, w: Worker, gen: number): Pr
     if (scene.running && scene.binFill >= binCapacity(scene.state) - 1 && !scene.binBusy) {
       scene.binBusy = true;
       scene.binBy = 'cleaner';
-      for (const step of scene.takeOutSteps(
+      for (const step of building.takeOutSteps(scene, 
         () => {
-          scene.bagFromBin();
+          building.bagFromBin(scene);
           w.carried.setTexture('trash_bag').setVisible(true);
         },
         () => {
           w.carried.setVisible(false).setTexture('box');
-          scene.bagToDumpster();
+          building.bagToDumpster(scene);
         },
       )) {
         await workerWalk(scene, w, step.x, step.y);
@@ -795,7 +796,7 @@ export async function cleanerLoop(scene: StoreScene, w: Worker, gen: number): Pr
     const piece = scene.running ? nearestTrash(scene, w.sprite.x, w.sprite.y) : undefined;
     if (piece) {
       const kind = piece.getData('kind') as TrashKind;
-      if (kind === 'trash' && scene.binFull()) {
+      if (kind === 'trash' && building.binFull(scene)) {
         await scene.wait(300);
         continue;
       }
@@ -814,13 +815,13 @@ export async function cleanerLoop(scene: StoreScene, w: Worker, gen: number): Pr
       }
       w.carried.setTexture(piece.texture.key).setVisible(true);
       removeTrash(scene, piece);
-      const stand = scene.binStand();
+      const stand = building.binStand(scene);
       await workerWalk(scene, w, stand.x, stand.y);
       if (!scene.alive(gen)) return;
       await workerWait(scene, w, BIN_DROP_MS);
       if (!scene.alive(gen)) return;
       w.carried.setVisible(false).setTexture('box');
-      scene.putInBin();
+      building.putInBin(scene);
       continue;
     }
     if (scene.running && scene.toiletDirt >= 40) {
@@ -829,7 +830,7 @@ export async function cleanerLoop(scene: StoreScene, w: Worker, gen: number): Pr
       await workerWait(scene, w, TOILET_CLEAN_MS);
       if (!scene.alive(gen)) return;
       scene.toiletDirt = 0;
-      scene.refreshToilet();
+      building.refreshToilet(scene);
       effects.bubbles(scene, scene.layout.wc.x, scene.layout.wc.y);
       continue;
     }

@@ -49,6 +49,7 @@ import * as cars from './cars';
 import * as staff from './staff';
 import * as persons from './persons';
 import * as camera from './camera';
+import * as building from './building';
 
 // ---------- Доставка на дом ----------
 
@@ -218,7 +219,7 @@ export function acceptOrder(scene: StoreScene): void {
   }
   scene.state = packed;
   scene.refreshShelves();
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   haptic.success();
   sound.good();
   scene.parcels.push({ order: call.order, calledAt: call.at, stage: 'wait', packed: 0 });
@@ -626,7 +627,7 @@ export async function deliver(scene: StoreScene): Promise<void> {
     box.setVisible(false);
     // Каждый рейс открывает свою долю коробок (на последнем — все оставшиеся).
     scene.awaitingBoxes = trip === trips - 1 ? 0 : Math.max(0, scene.awaitingBoxes - Math.ceil(scene.awaitingBoxes / (trips - trip)));
-    scene.refreshWarehouse();
+    building.refreshWarehouse(scene);
     // Коробка легла на склад — картонный стук, каждая следующая чуть выше.
     sound.place('box', trip, driver.x);
     if (trip < trips - 1) await persons.walkVia(scene, driver, [...route].reverse(), SELLER_SPEED);
@@ -700,7 +701,7 @@ export function receiveUrgentOrders(scene: StoreScene): void {
   const list = scene.urgentOrders.map((o) => `${PRODUCTS[o.id].icon}×${o.qty}`).join(' ');
   for (const o of scene.urgentOrders) scene.state = o.auto ? autoArrived(scene.state, o.id, o.qty) : receiveUrgent(scene.state, o.id, o.qty);
   scene.urgentOrders = [];
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   scene.refreshShelves();
   sound.place('box', 0);
   const { warehouse } = scene.layout;

@@ -60,6 +60,7 @@ import * as morningFlow from './morningFlow';
 import * as newcomer from './newcomer';
 import * as rivals from './rivals';
 import * as camera from './camera';
+import * as building from './building';
 
 // ---------- Ночная смена ----------
 
@@ -372,7 +373,7 @@ export function finishDay(scene: StoreScene): void {
   if (scene.state.bankrupt) track('bankrupt', finishedDay);
   void reportProgress(scene.state);
   scene.refreshShelves();
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   scene.hud.update(scene.state, 0);
   // Снимок зала до роллет — для карточки итогов (shareCard.ts).
   scene.dayShot = null;

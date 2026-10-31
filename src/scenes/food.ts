@@ -55,6 +55,7 @@ import * as staff from './staff';
 import * as persons from './persons';
 import * as camera from './camera';
 import * as shelves from './shelves';
+import * as building from './building';
 
 /** Кофейня во флигеле: кофемашина у стены, стойка, за ней бариста; в углу столик. */
 export function buildCoffee(scene: StoreScene): void {
@@ -362,7 +363,7 @@ export function freshBread(scene: StoreScene, at: { x: number; y: number }, prod
   const out = product === 'bread' ? takeOutBread(scene.state) : takeOutBread(scene.state, BRAND_BATCH, product);
   scene.state = out.state;
   scene.refreshShelves();
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   sound.hiss(0.6, 1400, 0.04, at.x);
   sound.good();
   const text = product === 'bread' ? t('popup.freshBread', { n: out.onShelves }) : t('popup.freshOwn', { icon: PRODUCTS[product].icon, n: out.onShelves });
@@ -529,7 +530,7 @@ export function buildFood(scene: StoreScene): void {
   const ice = scene.state.shelves.some((sh) => sh.kind === 'icebox') ? [iceboxRect(shelves.iceboxSpot(scene))] : [];
   // Горка уценки целиком (она выше своего следа) и место её покупателя; где стоят менеджер и охранник.
   const bargain = scene.bargainAt;
-  const stand = bargain ? [{ x: bargain.x - 15, y: scene.bargainStand(bargain) - 4, w: 30, h: bargain.y + 8 - (scene.bargainStand(bargain) - 4) }] : [];
+  const stand = bargain ? [{ x: bargain.x - 15, y: building.bargainStand(scene, bargain) - 4, w: 30, h: bargain.y + 8 - (building.bargainStand(scene, bargain) - 4) }] : [];
   const homes = (['manager', 'guard'] as const).map((role) => staff.workerHome(scene, role)).map((p) => ({ x: p.x - 6, y: p.y - 10, w: 12, h: 14 }));
   // Вещи, переставленные игроком в этом помещении (ёлку ставят позже — по своему месту), полка тоже обходит.
   const moved = scene.state.propPos?.level === scene.state.level ? Object.entries(scene.state.propPos.at).filter(([id]) => id !== 'food') : [];
@@ -546,7 +547,7 @@ export function buildFood(scene: StoreScene): void {
   for (let y = h - 12; y > scene.layout.wallH + 40; y -= 8) for (let x = 20; x <= w - 20; x += 4) candidates.push({ x, y });
   candidates.sort((a, b) => Math.hypot(a.x - door.x, (a.y - h) * 1.5) - Math.hypot(b.x - door.x, (b.y - h) * 1.5));
   const def = candidates.find(free) ?? { x: door.x + 76, y: h - 12 };
-  const at = scene.propAt('food', def);
+  const at = building.propAt(scene, 'food', def);
   const tex = foodSprite(scene.state);
   const img = scene.art(at.x, at.y - 4, tex).setDepth(at.y + 4);
   img.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => tapShowcase(scene, { x: at.x, y: at.y - 14 })));
@@ -559,7 +560,7 @@ export function buildFood(scene: StoreScene): void {
   if (gearTier(scene.state, 'foodShelf') === 2) scene.art(at.x, at.y - 4, 'food_glass2').setDepth(at.y + 4.6);
   scene.foodView = { at, img, plates: [] };
   scene.obstacles.push({ x: at.x + fp.x, y: at.y + fp.y, w: fp.w, h: fp.h });
-  scene.registerProp('food', at, tex, fp);
+  building.registerProp(scene, 'food', at, tex, fp);
   refreshFood(scene);
 }
 
@@ -824,7 +825,7 @@ export async function fetchIngredients(scene: StoreScene, w: Worker, gen: number
     // Уже снято из кладовой (со склада): если зал перестроят, пока варится, — сразу на полку (flushCooking).
     k.cooking.push(...taken);
     if (!pantry) {
-      scene.refreshWarehouse();
+      building.refreshWarehouse(scene);
       scene.refreshShelves();
     }
     w.carried.setTexture('kbasket').setPosition(0, 1).setVisible(true);

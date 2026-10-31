@@ -127,6 +127,7 @@ import * as visitors from './visitors';
 import * as newcomer from './newcomer';
 import * as camera from './camera';
 import * as shelves from './shelves';
+import * as building from './building';
 
 /** Шоколадка со стойки у кассы летит в руки стоящему в очереди. */
 export function grabCandy(scene: StoreScene, c: Customer): void {
@@ -264,7 +265,7 @@ export async function runInspector(scene: StoreScene): Promise<void> {
   if (!scene.sys.isActive()) return;
 
   // Переполненное ведро инспектор считает как две кучки мусора.
-  const result = inspect(scene.state, { trash: scene.trash.size + (scene.binFull() ? 2 : 0) + ([...scene.trash].some((piece) => piece.getData('rot')) ? 1 : 0), toiletDirt: scene.toiletDirt });
+  const result = inspect(scene.state, { trash: scene.trash.size + (building.binFull(scene) ? 2 : 0) + ([...scene.trash].some((piece) => piece.getData('rot')) ? 1 : 0), toiletDirt: scene.toiletDirt });
   scene.inspection = result;
   scene.state = inspectionDone(scene.state, result);
   if (result.passed) {
@@ -557,7 +558,7 @@ export function catchThief(scene: StoreScene, c: Customer, by: 'owner' | 'guard'
   scene.state = returnToShelf(scene.state, c.items);
   c.items = [];
   scene.refreshShelves();
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   scene.stats.caught++;
   haptic.success();
   sound.good();
@@ -619,7 +620,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
 
   if (c.regular) scene.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
   if (c.friend) scene.popup(c.sprite.x, c.sprite.y - 20, t('visit.hello', { name: c.friend.name }), '#fee761');
-  await scene.visitBargain(c);
+  await building.visitBargain(scene, c);
   if (c.gone) return;
   // Соседняя полка-пара: взяв хлеб, заодно берут и молоко (один раз за покупку).
   let extra: { id: ProductId; index: number } | null = null;
@@ -666,7 +667,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   await food.buyCoffee(scene, c);
   if (c.gone) return;
 
-  if (await scene.useKiosk(c)) return;
+  if (await building.useKiosk(scene, c)) return;
   if (c.gone) return;
   // Через одного, по порядку прихода: в тесной очереди встают ёлочкой, и сторона у каждого своя —
   // очередь подвинулась, а люди не перескакивают из ряда в ряд.
@@ -812,7 +813,7 @@ export async function visitToilet(scene: StoreScene, c: Customer): Promise<void>
   await scene.wait(1200);
   c.sprite.setVisible(true);
   scene.toiletDirt = Math.min(100, scene.toiletDirt + TOILET_DIRT_PER_VISIT * wcDirt(scene.state));
-  scene.refreshToilet();
+  building.refreshToilet(scene);
 }
 
 /** Касание кассы (или улицы внизу): хозяин пробивает того, кто ждёт у его кассы, или возвращается с дела. */
@@ -1072,7 +1073,7 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   // Серия от пяти — весь зал оборачивается на кассу.
   if (scene.combo === 5 || scene.combo === 10) persons.everyoneLooks(scene, scene.layout.counter.x, scene.layout.counter.y, 'emo_star');
 
-  const dirty = scene.trash.size >= TRASH_COMPLAINT || scene.binFull();
+  const dirty = scene.trash.size >= TRASH_COMPLAINT || building.binFull(scene);
   const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
   // Гнилой мусор и давно полное ведро пахнут: чем сильнее, тем чаще морщатся (rot.ts).
   // (Полное ведро и так «грязно» — его запах здесь не добавляется второй раз.)
@@ -1121,7 +1122,7 @@ export async function giveUp(scene: StoreScene, c: Customer): Promise<void> {
   returnExtras(scene, c);
   c.extras = [];
   scene.refreshShelves();
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   if (!scene.night) scene.stats.lost++;
   note(scene.stats, 'queue');
   noteLost(scene.stats, 'queue');

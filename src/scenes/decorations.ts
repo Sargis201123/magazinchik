@@ -47,6 +47,7 @@ import * as food from './food';
 import * as persons from './persons';
 import * as camera from './camera';
 import * as shelves from './shelves';
+import * as building from './building';
 
 /**
  * Ярмарка: флажки над фасадом и шарики у входа. Перерисовывается каждое утро
@@ -102,7 +103,7 @@ export function startStall(scene: StoreScene): void {
       sold++;
       scene.state = sale.state;
       scene.stats.revenue += sale.price;
-      scene.refreshWarehouse();
+      building.refreshWarehouse(scene);
       sound.coin(stall.x);
       scene.tweens.add({ targets: stall, scaleY: 1.06 / ART, duration: 90, yoyo: true });
       scene.popup(stall.x, stall.y - 18, `${PRODUCTS[sale.id].icon} +${sale.price} 💰`, '#c8ffb0');
@@ -326,13 +327,13 @@ export function buildHallDecor(scene: StoreScene): void {
   const bought = activeDecor(scene.state, 'plants')?.texture;
   spots.forEach((def, i) => {
     const id = `hall${i}`;
-    const p = scene.propAt(id, def);
+    const p = building.propAt(scene, id, def);
     if (p === def && !free(p.x, p.y)) return;
     const tex = bought ?? (i % 2 ? 'plant_big' : 'plant');
     scene.art(p.x, p.y + 3, 'shadow').setScale(0.7 / ART).setDepth(p.y - 1);
     scene.art(p.x, p.y, tex).setDepth(p.y + 6);
     scene.obstacles.push({ x: p.x - 7, y: p.y - 10, w: 14, h: 14 });
-    scene.registerProp(id, p, tex, propFootprint(scene.layout, id, p.x));
+    building.registerProp(scene, id, p, tex, propFootprint(scene.layout, id, p.x));
   });
 }
 
@@ -355,12 +356,12 @@ export function buildHolidayDecor(scene: StoreScene): void {
   ];
   // Своё место (перестановка) — всегда; стандартное — первое свободное, а все заняты — вещи сегодня нет.
   const def = spots.find((p) => free(p.x, p.y)) ?? spots[0];
-  const p = scene.propAt('holiday', def);
+  const p = building.propAt(scene, 'holiday', def);
   if (p === def && !free(p.x, p.y)) return;
   const img = scene.art(p.x, p.y, item.texture).setDepth(p.y + 8);
   const fp = propFootprint(scene.layout, 'holiday', p.x);
   scene.obstacles.push({ x: p.x + fp.x, y: p.y + fp.y, w: fp.w, h: fp.h });
-  scene.registerProp('holiday', p, item.texture, fp);
+  building.registerProp(scene, 'holiday', p, item.texture, fp);
   if (item.id === 'holiday_tree' && !scene.lite) {
     // Огоньки на ёлке перемигиваются (тёплое пятно — вечером ярче).
     lighting.nightGlow(scene, scene.art(p.x, p.y - 2, 'glow').setDisplaySize(26, 22).setTint(0xffd27a), 0.5);
@@ -376,10 +377,10 @@ export function buildHolidayDecor(scene: StoreScene): void {
 export function buildUpgrades(scene: StoreScene): void {
   const { counter } = scene.layout;
   if (hasUpgrade(scene.state, 'terminal')) scene.art(counter.x + 3, counter.y - 4, 'card_terminal').setDepth(counter.y + 22);
-  for (let i = 1; i < registerCount(scene.state); i++) scene.buildRegister(i);
+  for (let i = 1; i < registerCount(scene.state); i++) building.buildRegister(scene, i);
   buildHallDecor(scene);
   buildHolidayDecor(scene);
-  scene.buildGearProps();
+  building.buildGearProps(scene);
   food.buildCoffee(scene);
   food.buildOven(scene);
   buildRadio(scene);
@@ -595,12 +596,12 @@ export function buildDecor(scene: StoreScene): void {
   // Коврик у входа и автомат с напитками у правой стены.
   scene.art(door.x, h - 7, gearTier(scene.state, 'entrance') ? 'mat_grate' : 'mat').setDepth(1);
   // Автомат: у боковой стены — боком (лицом в зал), в зале — лицом к игроку. Его можно двигать.
-  const vending = scene.propAt('vending', { x: w - 8, y: wallH + 56 });
+  const vending = building.propAt(scene, 'vending', { x: w - 8, y: wallH + 56 });
   const side = vendingSide(scene.layout, vending.x);
   const vendingTex = side ? 'vending_side' : 'vending';
   scene.art(vending.x, vending.y, vendingTex).setFlipX(side && vending.x < w / 2).setDepth(vending.y + 10);
   scene.vendingAt = vending;
-  scene.registerProp('vending', vending, vendingTex, vendingFootprint(side));
+  building.registerProp(scene, 'vending', vending, vendingTex, vendingFootprint(side));
   // Стекло автомата светится, на пол перед ним ложится розоватое пятно — к вечеру ярче (furnitureLight).
   // Боком у стены стекло — в торце, смотрит в зал: у левой стены картинка отражена.
   const facing = side ? (vending.x < w / 2 ? 1 : -1) : 0;
@@ -629,12 +630,12 @@ export function buildDecor(scene: StoreScene): void {
   ];
   spots.forEach((def, i) => {
     const id = `plant${i}`;
-    const p = scene.propAt(id, def);
+    const p = building.propAt(scene, id, def);
     const busy = p === def && [...slots, ...scene.layout.showcases].some((s) => Math.abs(s.x - p.x) < 28 && Math.abs(s.y - p.y) < 24);
     if (busy) return;
     const tex = activeDecor(scene.state, 'plants')?.texture ?? 'plant';
     scene.art(p.x, p.y, tex).setDepth(p.y + 6);
-    scene.registerProp(id, p, tex, propFootprint(scene.layout, id, p.x));
+    building.registerProp(scene, id, p, tex, propFootprint(scene.layout, id, p.x));
   });
 }
 
@@ -696,7 +697,7 @@ export function buildShowpiece(scene: StoreScene): void {
   const item = activeDecor(scene.state, 'showpiece');
   if (!item) return;
   const { w, wallH, h } = scene.layout;
-  const spot = scene.freeSpot([
+  const spot = building.freeSpot(scene, [
     { x: w - 16, y: wallH + 92 },
     { x: w - 70, y: wallH + 40 },
     { x: w / 2, y: h - 30 },

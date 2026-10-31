@@ -48,6 +48,7 @@ import * as shoppers from './shoppers';
 import * as persons from './persons';
 import * as camera from './camera';
 import * as shelves from './shelves';
+import * as building from './building';
 
 export function currentHint(scene: StoreScene): string {
   if (scene.liveEvent) return t(`hint.${scene.liveEvent}` as TextKey);
@@ -70,7 +71,7 @@ export function currentHint(scene: StoreScene): string {
   if (scene.state.day <= 4 && shelves.shelfNeedsRestock(scene)) return t('hint.restock');
   if (!scene.state.seenTips?.includes(ROT_TIP) && [...scene.trash].some((piece) => piece.getData('rot')))
     return t(scene.state.staff.some((m) => m.role === 'cleaner') ? 'hint.rot' : 'hint.rotSolo');
-  if (scene.binFull() && !scene.binBusy) return t('hint.bin');
+  if (building.binFull(scene) && !scene.binBusy) return t('hint.bin');
   if ((scene.trash.size > 0 || scene.toiletDirt >= TOILET_DIRTY) && scene.state.day <= 4) return t('hint.clean');
   return '';
 }

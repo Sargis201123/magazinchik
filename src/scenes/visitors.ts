@@ -42,6 +42,7 @@ import * as food from './food';
 import * as cars from './cars';
 import * as persons from './persons';
 import * as camera from './camera';
+import * as building from './building';
 
 /** Прохожий идёт по тротуару, машина проезжает по дороге. */
 export function streetLife(scene: StoreScene): void {
@@ -228,7 +229,7 @@ export function morningCrew(scene: StoreScene): void {
   if (day % 3 === 0) {
     scene.time.delayedCall(DAY_SECONDS * 60, () => {
       if (!scene.running) return;
-      const dump = scene.dumpSpot();
+      const dump = building.dumpSpot(scene);
       const y = scene.streetY + 24;
       const truck = scene.add.container(-140, y, [scene.art(0, 0, 'car_truck').setTint(0x3e8948), scene.art(0, 0, 'car_truck_lights')]).setDepth(y);
       const road = cars.onRoad(scene, truck, 'up', true);
@@ -337,7 +338,7 @@ export async function runSpecial(scene: StoreScene, visit: SpecialVisit): Promis
   const res = answerSpecial(scene.state, visit, yes);
   scene.state = res.state;
   scene.refreshShelves();
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   scene.hud.update(scene.state, scene.timeLeft);
   if (yes && res.money) {
     sound.coin(sprite.x);

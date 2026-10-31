@@ -25,6 +25,7 @@ import {
   GRANDMA,
 } from './common';
 import * as persons from './persons';
+import * as building from './building';
 
 /**
  * Расширение — событие: утреннее окно прячется, на участке леса и строители стучат молотками,
@@ -65,7 +66,7 @@ export async function celebrateExpansion(scene: StoreScene): Promise<void> {
   scene.cameras.main.flash(300, 255, 250, 235);
   scene.buildWorld();
   scene.refreshShelves();
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   scene.hud.update(scene.state, DAY_SECONDS);
   const confetti = scene.add.particles(scene.layout.w / 2, scene.layout.h / 2, 'confetti', {
     speed: { min: 60, max: 170 },
@@ -96,7 +97,7 @@ export async function celebrateMove(scene: StoreScene, modal: HTMLElement | null
   scene.cameras.main.flash(300, 255, 250, 235);
   scene.buildWorld();
   scene.refreshShelves();
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   scene.hud.update(scene.state, DAY_SECONDS);
   const { w, h, door } = scene.layout;
   const y = h + FACADE_H + 12;

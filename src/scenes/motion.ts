@@ -30,6 +30,7 @@ import {
   type TakenSpot,
 } from './common';
 import * as persons from './persons';
+import * as building from './building';
 
 /**
  * Шаги в 4 кадра (ноги: шаг, вместе, другой шаг, вместе; тело чуть подпрыгивает)
@@ -210,7 +211,7 @@ export function kickUp(scene: StoreScene, person: Phaser.GameObjects.Container, 
   const y = person.y + 8 * s;
   const { w, h, wallH } = scene.layout;
   const { x: px, y: py } = person;
-  const room = scene.openRooms().some((r) => px > r.x && px < r.x + r.w && py > r.y && py < r.y + r.h);
+  const room = building.openRooms(scene).some((r) => px > r.x && px < r.x + r.w && py > r.y && py < r.y + r.h);
   const indoor = room || (py > wallH && py < h && px > 0 && px < w);
   // Мокро: только что вымытый пол или пролитая лужа, а на улице — дождь.
   const near = (o: { x: number; y: number }, r: number) => Math.abs(o.x - x) < r && Math.abs(o.y - y) < 5;
@@ -619,7 +620,7 @@ export function pulseHighlights(scene: StoreScene): void {
   const pulse = 1.5 + Math.sin(scene.time.now / 260) * 1.2;
   for (const view of scene.shelfViews) view.glow?.set(view.needsStock ? pulse : 0);
   for (const piece of scene.trash) (piece.getData('glow') as Halo | undefined)?.set(pulse);
-  scene.binGlow?.set(scene.binImg && scene.binFull() && !scene.binBusy ? pulse : 0);
+  scene.binGlow?.set(scene.binImg && building.binFull(scene) && !scene.binBusy ? pulse : 0);
   scene.fuseGlow?.set(scene.blackout ? pulse : 0);
   // Звонящий телефон светится, пока звонит (ореол растёт вместе с ним).
   scene.phoneGlow?.set(scene.call ? 2.4 + Math.sin(scene.time.now / 120) * 0.6 : 0);

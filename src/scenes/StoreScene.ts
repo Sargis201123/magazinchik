@@ -4,13 +4,10 @@ import {
   emptyDayStats,
   markdownSurplus,
   newGame,
-  PRODUCT_IDS,
   returnToShelf,
   STORE_LEVELS,
   HYPER_LEVEL,
   storeLevel,
-  unitSalePrice,
-  warehouseCapacity,
   type DayStats,
   type ProductId,
   type StaffRole,
@@ -31,19 +28,18 @@ import type { Passer } from './stride';
 import { ambience, type AmbLife } from '../platform/ambience';
 import { setListener } from '../platform/mixer';
 import { haptic, telegramUserId, trustedNow } from '../platform/telegram';
-import { toast, UI_FONT } from '../ui/dom';
+import { toast } from '../ui/dom';
 import { bigDayNightGuests, CROWD_EXTRA_GUESTS, isCrowdDay, setBigDaySeed, type WeddingOrder } from '../game/bigday';
 import type { GiantLook } from '../game/giant';
 import { Hud } from '../ui/hud';
 import { showTitle } from '../ui/title';
-import { weatherFor, type Weather } from '../game/weather';
+import type { Weather } from '../game/weather';
 import { yearTime } from '../game/calendar';
 import { liveProgress, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
 import { ETAGS_EVENING, eveningSales, hasUpgrade } from '../game/upgrades';
-import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskTier } from '../game/lanes';
 import { noteSeen, stashAway } from '../game/returns';
-import { activeDecor, decorFromPurchases, grantDecor } from '../game/decor';
+import { decorFromPurchases, grantDecor } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
 import { liveLook, type GuestId } from '../game/live';
 import { liveEvents, loadLiveEvents, todayLocal } from '../platform/live';
@@ -59,19 +55,17 @@ import { duelInfo, loadMultiplayer } from '../platform/multiplayer';
 import { ensureSeason, grantPass } from '../game/pass';
 import { grantSupport } from '../game/support';
 import { ensureRush } from '../game/rush';
-import { kitchenOpen } from '../game/kitchen';
 import { BUSKER_GUESTS } from '../game/nightGuests';
 import { setErrorContext } from '../platform/errors';
-import { blockedZones, slotSide, overlapsRect, propFootprint, propRect, savedLayout, tillZones, type Prop } from './placement';
-import { kioskZones, layoutFor, REGISTER_ROW, registerSpot, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Layout, type Room } from './layout';
+import { savedLayout, type Prop } from './placement';
+import { layoutFor, WING_OUTER, type Layout } from './layout';
 import { BASE_W, crispZoom } from './pixels';
 import { LightMap } from './light';
 import { ColorGrade } from './grade';
-import { Halo, personGlow } from './halo';
+import { Halo } from './halo';
 import { FloorShade, furnitureCasters, type WearLayer } from './floor';
 import { decodeWear, wearGrid, type WearGrid } from '../game/wear';
 import { dayDemand } from '../game/demand';
-import { BARGAIN_CHANCE, BARGAIN_PER_ROW, bargainCapacity, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
 import { Rotting } from './rotting';
 import type { EduardLook } from '../game/eduard';
 import type { CafeDelivery } from '../game/cafe';
@@ -80,42 +74,27 @@ import type { LiveKind } from '../game/minievents';
 import { noteMoment } from '../game/moments';
 import { Moments } from './moments';
 import { questRows } from '../ui/today';
-import { bargainRows, bargainSprite, binCapacity, binSprite, gearTier, type GearId, registerSprite } from '../game/gear';
-import { registerSlots, RELIEF_ROLE, tillRole } from '../game/registers';
+import { RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
 import { quality, type Quality } from '../platform/quality';
-import { cleanHall, grannyStays } from '../game/firstday';
+import { grannyStays } from '../game/firstday';
 import type { HomeOrder } from '../game/delivery';
 import { DeliveryUi } from '../ui/delivery';
 import { mainGoal, type HallNudge } from '../game/nudge';
 import {
   ART,
   TUTORIAL_DAYS,
-  FURNITURE_TOP,
   WALL,
-  FACADE_H,
-  FACADE_STYLES,
-  FLOORS,
   type Popup,
   LIGHT_DEPTH,
-  ITEM_VARIANTS,
   CUSTOMER_SPEED,
-  KIOSK_GLOW,
-  KIOSK_ALARM,
-  BARGAIN_BOTTOM,
-  BARGAIN_BASE,
-  BARGAIN_STEP,
-  BAG_MS,
-  DUMP_MS,
   AUTO_CHECK_SECONDS,
-  TOILET_DIRTY,
   FLOOR_SHADE_DEPTH,
   WEAR_SAMPLE_MS,
   type Look,
   type ParkSpot,
   type ParkingLot,
   type RoadCar,
-  ownerLook,
   INSPECTOR_AT,
   SONYA_AT,
   LIVE_GUEST_AT,
@@ -131,7 +110,6 @@ import {
   type NightLight,
   type Lamp,
   type Pigeon,
-  type ChoreStep,
   type Parcel,
 } from './common';
 import * as motion from './motion';
@@ -154,6 +132,7 @@ import * as morningFlow from './morningFlow';
 import * as newcomer from './newcomer';
 import * as camera from './camera';
 import * as shelves from './shelves';
+import * as building from './building';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -197,7 +176,7 @@ export class StoreScene extends Phaser.Scene {
   /** Сколько раз перерисовывали полки: толчок по нему узнаёт, что товар на картинках уже другой. */
   /** Толчок: уронить разбитое, до чего волна ещё не дошла, — сразу, пока полки не перерисовали. */
   quakeFlush?: () => void;
-  private boxes: Phaser.GameObjects.Image[] = [];
+  boxes: Phaser.GameObjects.Image[] = [];
   shutters: Phaser.GameObjects.Image[] = [];
   arrow?: Phaser.GameObjects.Image;
   /** Новое начало (game/onboarding.ts): облачко бабушки, она сама у входа и кольцо у кассы до первой продажи. */
@@ -449,9 +428,9 @@ export class StoreScene extends Phaser.Scene {
   private autoCheck = 0;
   /** Электронные ценники сегодня уже уценили старое. */
   eveningMarkdown = false;
-  private wcStink!: Phaser.GameObjects.Image;
-  private wcDoor!: Phaser.GameObjects.Image;
-  private wcBar!: Phaser.GameObjects.Image;
+  wcStink!: Phaser.GameObjects.Image;
+  wcDoor!: Phaser.GameObjects.Image;
+  wcBar!: Phaser.GameObjects.Image;
   seller!: Phaser.GameObjects.Container;
   carried!: Phaser.GameObjects.Image;
   sellerBusy = false;
@@ -494,7 +473,7 @@ export class StoreScene extends Phaser.Scene {
   binImg?: Phaser.GameObjects.Image;
   /** Полка «Уценка» (bargain.ts): где стоит и картинки товара на ней (по местам горки). */
   bargainAt: { x: number; y: number } | null = null;
-  private bargainItems: Phaser.GameObjects.Image[] = [];
+  bargainItems: Phaser.GameObjects.Image[] = [];
   /** Гниющий мусор (rot.ts): мухи и вонь над ним и над переполненным ведром. */
   rotting = new Rotting(this, () => this.lite);
   /** Сколько секунд ведро стоит переполненным (тогда оно тоже пахнет). */
@@ -840,7 +819,7 @@ export class StoreScene extends Phaser.Scene {
         this.popup(this.layout.w / 2, this.layout.wallH + 30, t('popup.etags', { n: marked.count }), '#c8f0ff');
       }
       // Уценённое — на полку «Уценка», пока есть место.
-      this.sendToBargain();
+      building.sendToBargain(this);
     }
     // Автозаказ: товар разобрали, а на складе пусто — сам вызывает фургон (autoorder.ts).
     this.autoCheck -= dt;
@@ -1007,13 +986,13 @@ export class StoreScene extends Phaser.Scene {
     streets.buildNeighbors(this, next);
     if (next !== this.layout) streets.buildForRent(this, next);
 
-    this.buildStore();
+    building.buildStore(this);
     lighting.buildLighting(this, next);
     lighting.buildDust(this);
     streets.applyAds(this);
     this.refreshShelves();
-    this.refreshWarehouse();
-    this.refreshToilet();
+    building.refreshWarehouse(this);
+    building.refreshToilet(this);
     this.workers.clear();
     staff.syncStaff(this);
     weatherFx.applyWeather(this);
@@ -1053,7 +1032,7 @@ export class StoreScene extends Phaser.Scene {
       { x: 0, y: wallH, w, h: h - wallH },
       { x: warehouse.x, y: warehouse.y, w: warehouse.w, h: warehouse.h },
       ...[bakery, coffee, ...(kitchen ? [kitchen] : [])].map((r) => ({ x: r.x, y: r.y + 14, w: r.w, h: r.h - 14 })),
-      ...this.openRooms().map((r) => ({ x: -WALL, y: r.doorway.y - 8, w: WALL, h: 16 })),
+      ...building.openRooms(this).map((r) => ({ x: -WALL, y: r.doorway.y - 8, w: WALL, h: 16 })),
     ];
     const plan = {
       area: { x: -WING_OUTER, y: top, w: w + WING_OUTER, h: h - top },
@@ -1140,131 +1119,6 @@ export class StoreScene extends Phaser.Scene {
     };
   }
 
-  private buildStore(): void {
-    const { w, h, wallH, wc, counter, sellerHome } = this.layout;
-    // Пол богаче с каждым уровнем: тёплая плитка, прохладная плитка, мрамор.
-    // Пол и цвет стен можно сменить в «Оформлении».
-    const floor = activeDecor(this.state, 'floor')?.texture ?? FLOORS[Math.min(this.state.level, FLOORS.length - 1)];
-    this.add.tileSprite(0, wallH, w, h - wallH, floor).setOrigin(0).setTileScale(1 / ART);
-    this.glossyFloor = ['floor3', 'floor_gold', 'floor_noir'].includes(floor);
-    this.coldAir = yearTime(this.state.day) === 'winter' || weatherFor(this.state.day) === 'snow';
-    lighting.floorLight(this, w, h, wallH);
-    // Стены: цветная краска за монеты или премиальная отделка (кирпич, плитка, обои) за звёзды.
-    const wallDecor = activeDecor(this.state, 'wall');
-    this.add
-      .tileSprite(0, 0, w, wallH, wallDecor?.texture ?? 'wall')
-      .setOrigin(0)
-      .setTileScale(1 / ART)
-      .setTint(wallDecor?.color ?? 0xffffff);
-    this.buildShell();
-    // Вывеска с названием на крыше; премиальная — своя доска и цвет букв.
-    const sign = activeDecor(this.state, 'sign');
-    const signColor = sign?.textColor ?? 0xfee761;
-    // У гипермаркета своя вывеска — вдвое шире, буквы крупнее (премиальная доска из «Оформления» — главнее).
-    const grand = !sign && this.state.level >= HYPER_LEVEL;
-    const signFont = grand ? '9px' : '7px';
-    this.art(w / 2, -9, sign?.texture ?? (grand ? 'sign_hyper' : 'sign')).setDepth(2);
-    if (sign?.id === 'sign_marquee') {
-      // Лампочки «Бродвея» перемигиваются.
-      const lit = this.art(w / 2, -9, 'sign_marquee_lit').setDepth(2).setBlendMode(Phaser.BlendModes.ADD);
-      this.tweens.add({ targets: lit, alpha: { from: 1, to: 0.25 }, duration: 520, yoyo: true, repeat: -1, ease: 'Stepped' });
-    }
-    if (sign?.id === 'sign_s2' && !this.lite) {
-      // «Северное сияние» медленно дышит.
-      const lit = this.art(w / 2, -9, 'sign_s2_lit').setDepth(2).setBlendMode(Phaser.BlendModes.ADD);
-      this.tweens.add({ targets: lit, alpha: { from: 0.9, to: 0.2 }, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    }
-    this.add
-      .text(w / 2, -9, this.shopTitle(), {
-        fontFamily: UI_FONT,
-        fontSize: signFont,
-        color: `#${signColor.toString(16).padStart(6, '0')}`,
-      })
-      .setOrigin(0.5)
-      .setResolution(this.textRes(4))
-      .setDepth(3);
-    lighting.neonSign(this, w / 2, -9, this.shopTitle(), signFont, signColor, grand ? 92 : 64, true);
-    if (!sign) nightShift.signLights(this, w / 2, -9, grand ? 46 : 30);
-    this.buildWing();
-    this.buildWarehouse();
-    decorations.buildDecor(this);
-
-    this.wcDoor = this.art(wc.x, wc.y, 'wc');
-    // Над грязным туалетом поднимается запах.
-    this.wcStink = this.art(wc.x, wc.y - 10, 'stink').setScale(1.4 / ART).setDepth(wc.y + 30).setVisible(false);
-    this.tweens.add({ targets: this.wcStink, y: wc.y - 15, alpha: { from: 1, to: 0.35 }, duration: 900, yoyo: true, repeat: -1 });
-    this.art(wc.x, wc.y - 15, 'bar').setDisplaySize(14, 3).setTint(0x2b2233);
-    this.wcBar = this.art(wc.x - 7, wc.y - 15, 'bar').setOrigin(0, 0.5).setDisplaySize(0, 2);
-    this.add
-      .zone(wc.x, wc.y + 4, 24, 36)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => camera.tap(this, () => staff.cleanToilet(this)));
-
-    this.art(counter.x + 2, counter.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(counter.y + 19);
-    const registerImg = this.art(counter.x, counter.y + FURNITURE_TOP / 2, registerSprite(this.state)).setDepth(counter.y + 20);
-    this.buildShowcases();
-    this.buildBin();
-    this.buildBargain();
-    food.buildFood(this);
-    // Электрощиток на стене: нужен, когда отключат свет. Перестановка не даёт закрыть его полкой
-    // (placement.ts), а если в старом сохранении полка уже стоит там — щиток висит левее, на открытой стене.
-    const fuseX = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12).find((x) => x > 10 && !shelves.behindShelf(this, x, 6)) ?? wc.x - 24;
-    this.fuseBox = this.art(fuseX, 18, 'fusebox').setDepth(3);
-    this.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(this, () => liveFx.fixFuse(this)));
-    this.fuseGlow = new Halo(this, this.fuseBox, 0xfee761);
-    // Свет отключили — у щитка мигает аварийная лампочка: в тёмном зале видно, куда нажать. Мигает
-    // ступеньками (ярко — тускло), а не плавно: карту перерисовывать дважды за мигание, а не каждый кадр.
-    const fuse = this.fuseBox;
-    const emergency = this.light.add('light_pool', fuse.x, fuse.y + 6, 34, 30, 0xffe08a, 0).attach(fuse);
-    emergency.sync = () => emergency.set(this.blackout ? (Math.floor(this.time.now / 400) % 2 ? 0.8 : 0.35) : 0);
-    this.registers = [];
-    this.registers.push({ ...this.makeRegister(counter, false, this.layout.queue, this.layout.sellerHome), img: registerImg });
-    decorations.buildUpgrades(this);
-    void sellerHome;
-    const home = staff.ownerHome(this);
-    this.seller = persons.makePerson(this, home.x, home.y, ownerLook(this.state));
-    // Кибер-продавец светится неоном.
-    if (activeDecor(this.state, 'outfit')?.id === 'outfit_cyber') personGlow(this, this.seller, 0x2ce8f5, 2);
-    this.carried = this.art(0, 3, 'box').setVisible(false);
-    this.seller.add(this.carried);
-    this.add
-      .zone(counter.x + 6, counter.y + 6, 40, 64)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => camera.tap(this, () => this.serveNext()));
-  }
-
-  /**
-   * Касса: полоска пробивки над столом, экран монитора и луч сканера. Вторая касса стоит
-   * зеркально слева от очереди: её покупатель — второй в очереди, кассир — слева от стола.
-   */
-  private makeRegister(counter: { x: number; y: number }, mirrored: boolean, spot: { x: number; y: number }, clerk: { x: number; y: number }): Register {
-    const bar = this.add.rectangle(counter.x - 9, counter.y - 31, 18, 4, 0x181425).setOrigin(0, 0.5).setDepth(1000).setVisible(false);
-    const fill = this.add.rectangle(counter.x - 8, counter.y - 31, 0, 2, 0x63c74d).setOrigin(0, 0.5).setDepth(1001).setVisible(false);
-    const sx = counter.x + (mirrored ? -0.5 : 0.5);
-    const screen = this.add.rectangle(sx, counter.y + 10.5, 6, 3, 0xb6f58a).setDepth(counter.y + 21).setVisible(false);
-    // Экран кассы светит зеленоватым на прилавок и кассира: тлеет всегда, ярче — пока пробивает. Ровно, не по
-    // мерцанию экрана (оно 7 раз в секунду, при заедании — каждый кадр): карту ради него не перерисовывать.
-    const till = this.light.add('glow', sx, counter.y + 9, 22, 16, 0xb6f58a).attach(screen);
-    till.sync = () => till.set(lighting.powerOn(this) * (screen.visible ? 0.5 : 0.2));
-    const beam = this.add
-      .rectangle(sx, counter.y + 4.2, 8, 4.5, 0xff4a4a)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setDepth(counter.y + 21)
-      .setVisible(false);
-    return {
-      counter,
-      spot,
-      clerk,
-      customer: null,
-      scan: null,
-      bar,
-      fill,
-      screen,
-      beam,
-      hurry: 0,
-    };
-  }
-
   /**
    * Кто работает за кассой. Первая — хозяина, но если нанят сменщик и он вышел на смену, за ней весь
    * день он (новенький — с той минуты, как дошёл до кассы, reliefLoop). За остальными — их кассиры, а без кассира касса закрыта (null).
@@ -1276,28 +1130,6 @@ export class StoreScene extends Phaser.Scene {
     }
     const role = tillRole(index);
     return (role && this.workers.get(role)) || null;
-  }
-
-  /**
-   * Касса номер index (с 1): нечётные — зеркально слева от очереди, чётные — справа;
-   * каждая следующая пара — выше по залу. Покупатель встаёт в колонку очереди рядом со столом.
-   */
-  buildRegister(index: number): void {
-    const { queue } = this.layout;
-    const { left, ...at } = registerSpot(this.layout, index);
-    const row = Math.floor(index / 2);
-    const shadowX = left ? at.x - 2 : at.x + 2;
-    this.art(shadowX, at.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(at.y + 19);
-    const img = this.art(at.x, at.y + FURNITURE_TOP / 2, registerSprite(this.state)).setFlipX(left).setDepth(at.y + 20);
-    if (hasUpgrade(this.state, 'terminal')) this.art(at.x + (left ? -3 : 3), at.y - 4, 'card_terminal').setDepth(at.y + 22);
-    this.obstacles.push({ x: at.x - 13, y: at.y - 30, w: 26, h: 54 });
-    const spot = { x: queue.x, y: queue.y - REGISTER_ROW * row - (left ? queue.step : 0) };
-    const clerk = { x: at.x + (left ? -16 : 16), y: at.y + 16 };
-    this.registers.push({ ...this.makeRegister(at, left, spot, clerk), img });
-    this.add
-      .zone(at.x + (left ? -6 : 6), at.y + 6, 40, 64)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerup', () => camera.tap(this, () => this.serveNext(index)));
   }
 
   /** Хозяин сейчас пробивает кого-то. */
@@ -1340,53 +1172,6 @@ export class StoreScene extends Phaser.Scene {
     return CUSTOMER_SPEED * radioSpeed(this.state);
   }
 
-  /**
-   * Оборудование, которое видно в зале: рохля, погрузчик или автосклад на складе, вентиляторы
-   * или кондиционер на стене, камеры под потолком, решётка и тепловая завеса у входа,
-   * экран на фасаде и датчик у туалета.
-   */
-  buildGearProps(): void {
-    const { w, h, door, warehouse, wc } = this.layout;
-    const tier = (id: GearId) => gearTier(this.state, id);
-    const store = tier('warehouse');
-    if (store === 3) this.art(warehouse.x + warehouse.w - 13, warehouse.y + 12, 'autostore').setDepth(warehouse.y + 60);
-    else if (store) this.art(warehouse.x + 11, h - 11, store === 1 ? 'pallet_jack' : 'forklift').setDepth(h - 4);
-    const climate = tier('climate');
-    // На стене между постером, часами и окном (они висят через 32 от x = 30) — свободные места.
-    if (climate === 1) {
-      for (const x of [46, 78].filter((fx) => !shelves.behindShelf(this, fx))) {
-        this.art(x, 10, 'fan_base').setDepth(4);
-        const blades = this.art(x, 10, 'fan_blades').setDepth(5);
-        this.tweens.add({ targets: blades, angle: 360, duration: 700, repeat: -1 });
-      }
-    } else if (climate === 2) {
-      // Кондиционер — между картинами и окнами, на куске стены, не закрытом полкой.
-      const acX = [126, 190].find((x) => x < wc.x - 16 && !shelves.behindShelf(this, x, 10));
-      const ac = acX === undefined ? null : this.art(acX, 7, 'ac_wall').setDepth(4);
-      // Струйки холодного воздуха из кондиционера.
-      for (let i = 0; ac && i < 3; i++) {
-        const puff = this.add.rectangle(ac.x - 8 + i * 8, ac.y + 6, 1, 3, 0xc8f0ff, 0.6).setDepth(5);
-        this.tweens.add({ targets: puff, y: ac.y + 14, alpha: 0, duration: 1100, delay: i * 300, repeat: -1 });
-      }
-    }
-    const cams = tier('cameras');
-    const camSpots = cams === 2 ? [{ x: w - 5, y: 3, flip: true }, { x: 5, y: 3, flip: false }, { x: w / 2, y: 3, flip: false }] : cams === 1 ? [{ x: w - 5, y: 3, flip: true }] : [];
-    for (const spot of camSpots) {
-      this.art(spot.x, spot.y, 'cam').setFlipX(spot.flip).setDepth(6);
-      const led = this.add.rectangle(spot.x + (spot.flip ? 2 : -2), spot.y + 1, 1, 1, 0xff4a4a).setDepth(7);
-      this.tweens.add({ targets: led, alpha: 0.1, duration: 600, yoyo: true, repeat: -1 });
-    }
-    if (tier('entrance') === 2) this.art(door.x, h - 2, 'air_curtain').setDepth(h + 3);
-    if (tier('lights') === 2) {
-      const screen = this.art(w / 2 + 50, -9, 'facade_screen0').setDepth(3);
-      this.worldTimer(1400, () => screen.active && screen.setTexture(screen.texture.key === 'facade_screen0' ? 'facade_screen1' : 'facade_screen0'));
-    }
-    if (tier('wc')) {
-      const sensor = this.add.rectangle(wc.x + 9, wc.y - 13, 2, 2, tier('wc') === 2 ? 0x2ce8f5 : 0x63c74d).setDepth(wc.y + 2);
-      this.tweens.add({ targets: sensor, alpha: 0.3, duration: 900, yoyo: true, repeat: -1 });
-    }
-  }
-
   /** Игровые секунды: идут с ускорением и стоят, пока магазин закрыт или на паузе (time.now — нет). */
   dayClock(): number {
     return this.playTime;
@@ -1402,571 +1187,14 @@ export class StoreScene extends Phaser.Scene {
     return pets.catVisit(this);
   }
 
-  // ---------- Доска отзывов ----------
-
-  buildReviewBoard(x: number, y: number): void {
-    // Доска у входа — просто украшение. Раньше нажатие на неё открывало отзывы, и они вылезали
-    // посреди дня от случайного касания у двери; теперь отзывы — в итогах дня и утром на вкладке «Развитие».
-    this.art(x, y, 'review_board').setOrigin(0.5, 1).setDepth(y);
-  }
-
-  /**
-   * Покупатель с небольшой корзиной пробивает себя сам на свободной кассе самообслуживания: когда у
-   * касс очередь, а без очереди — каждый третий (KIOSK_PREFER). Сколько штук, как быстро, как часто
-   * «ошибка» и непробитый товар — по модели киосков (lanes.ts).
-   */
-  async useKiosk(c: Customer): Promise<boolean> {
-    const tier = kioskTier(this.state);
-    if (!this.kiosks.length || c.thief || !c.items.length || c.items.length > tier.maxItems) return false;
-    if (this.waiting() === 0 && Math.random() >= KIOSK_PREFER) return false;
-    const kiosk = this.kiosks.find((k) => !k.busy && k.img.active);
-    if (!kiosk) return false;
-    kiosk.busy = true;
-    const { img, screen } = kiosk;
-    await persons.walk(this, c.sprite, img.x - 14, img.y + 4);
-    if (c.gone || !c.sprite.active) {
-      kiosk.busy = false;
-      return true;
-    }
-    persons.setFacing(c.sprite, 'right');
-    c.serving = true;
-    // «Забыл» пробить один товар (только из нескольких — с пустым чеком не уходят): уйдёт с ним, не заплатив.
-    const skipped = c.items.length > 1 && Math.random() < tier.skip ? c.items[c.items.length - 1] : undefined;
-    for (const [n, it] of c.items.entries()) {
-      await this.wait(tier.item * 1000);
-      if (!this.sys.isActive()) return true;
-      if (it === skipped) continue;
-      const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${it.id}`).setScale(1.5 / ART).setDepth(1000);
-      this.tweens.add({ targets: item, x: img.x, y: img.y - 6, alpha: 0.2, duration: 220, onComplete: () => item.destroy() });
-      sound.scan(img.x, n);
-      screen.setAlpha(0.9);
-      this.time.delayedCall(150, () => screen.setAlpha(0.3));
-    }
-    // «Неизвестный товар в зоне упаковки»: экран краснеет, покупатель ждёт, пока он сбросится.
-    if (Math.random() < tier.error) {
-      screen.setFillStyle(KIOSK_ALARM).setAlpha(0.9);
-      this.popup(img.x - 6, img.y - 20, t('popup.kioskError'), '#ffd0d0');
-      await this.wait(KIOSK_ERROR_SECONDS * 1000);
-      if (!this.sys.isActive()) return true;
-      screen.setFillStyle(KIOSK_GLOW).setAlpha(0.3);
-    }
-    await this.wait(tier.pay * 1000);
-    kiosk.busy = false;
-    if (!this.sys.isActive()) return true;
-    if (skipped) {
-      c.items = c.items.filter((it) => it !== skipped);
-      const value = unitSalePrice(this.state, skipped.id, skipped.unit);
-      this.stats.stolen += value;
-      this.popup(c.sprite.x, c.sprite.y - 14, t('popup.kioskSkip', { n: value }), '#ffd0d0');
-    }
-    shoppers.finishCheckout(this, c, { x: img.x - 10, y: img.y - 12 });
-    return true;
-  }
-
   /** Переходник к camera.onResize: на метод подписано событие RESIZE (scale.on/off по ссылке на метод). */
   onResize(size: Phaser.Structs.Size, _base: Phaser.Structs.Size, _display: Phaser.Structs.Size, prevW: number, prevH: number): void {
     return camera.onResize(this, size, _base, _display, prevW, prevH);
   }
 
-  private buildShell(): void {
-    const { w, h, door } = this.layout;
-    const cap = (x: number, y: number, ww: number, hh: number) =>
-      this.add.tileSprite(x, y, ww, hh, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(2);
-    cap(-WALL, -4, w + 2 * WALL, 4);
-    // Левая стена с проёмами в открытые комнаты флигеля.
-    const gaps = this.openRooms()
-      .map((room) => room.doorway.y)
-      .sort((a, b) => a - b);
-    let from = 0;
-    for (const y of gaps) {
-      cap(-WALL, from, WALL, y - 8 - from);
-      this.buildWingDoor(y);
-      from = y + 8;
-    }
-    cap(-WALL, from, WALL, h - from);
-    cap(w, 0, WALL, h);
-    // Окна в правой стене: стекло в толще стены, вечером через них на пол падает солнце.
-    this.sideSun = [];
-    for (let y = this.layout.wallH + 50; y < h - 70; y += 72) {
-      this.add.rectangle(w + 1, y, WALL - 2, 22, 0x9fd8f0).setOrigin(0).setStrokeStyle(0.6, 0x3a4466).setDepth(2.1);
-      this.add.rectangle(w + 2, y + 2, 1, 18, 0xe8f8ff).setOrigin(0).setDepth(2.11);
-      const sun = this.art(w - 2, y + 11, 'light_spill').setOrigin(0.5, 0).setAngle(90).setScale(1 / ART, 1.3 / ART).setTint(0xffd6a0).setAlpha(0).setDepth(0.45);
-      this.sideSun.push(sun);
-    }
-    // Тень здания на газон справа: магазин стоит на земле, а не наклеен на траву.
-    const ink = 0x181425;
-    const shade = this.add.graphics().setDepth(-9.4);
-    shade.fillGradientStyle(ink, ink, ink, ink, 0.22, 0, 0.22, 0);
-    shade.fillRect(w + WALL, 2, 12, h + FACADE_H - 4);
-    const style = this.facadeStyle();
-    this.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, this.potTile(style.texture)).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
-    this.doorImg = this.art(door.x, h + 5, 'door').setDepth(h + 2);
-    this.doorSign = this.art(door.x + 11, h + 8, this.running ? 'door_sign_open' : 'door_sign_closed').setDepth(h + 42);
-    // Витрины с маленькими навесами слева и справа от двери.
-    const segments: [number, number][] = [
-      [8, door.x - 18],
-      [door.x + 18, w - 2],
-    ];
-    for (const [from, to] of segments) {
-      const n = Math.floor((to - from) / 24);
-      const start = (from + to) / 2 - ((n - 1) * 24) / 2;
-      for (let i = 0; i < n; i++) {
-        const x = start + i * 24;
-        this.art(x, h + 5.5, 'shopwin').setDepth(h + 2);
-        if (!style.canopy) this.art(x, h + 1.5, 'awning_small').setTint(style.awning ?? 0xffffff).setDepth(h + 40);
-        lighting.windowLight(this, x, h + 5.5, h + 9, false, undefined, true);
-      }
-    }
-    // Из дверей свет падает дорожкой на тротуар.
-    lighting.nightGlow(this, this.art(door.x, h + 9, 'light_spill').setOrigin(0.5, 0).setScale(1.3 / ART, 1.4 / ART).setTint(0xffd890), 0.55, undefined, { store: true, map: { scale: 1.1, gain: 1.5, haze: 0.12 } });
-    // Главный навес над входом: покупатели проходят под ним.
-    this.art(door.x, h + 1, 'awning').setScale(1 / ART, 0.6 / ART).setTint(style.canopy ?? style.awning ?? 0xffffff).setDepth(h + 41);
-    if (style.canopy) {
-      // Сплошной козырёк над витринами; у супермаркета снизу светится полоса.
-      this.add.rectangle(-WALL, h - 1, w + 2 * WALL, 3, style.canopy).setOrigin(0).setStrokeStyle(0.5, 0x181425).setDepth(h + 40);
-      this.add.rectangle(-WALL, h + 2, w + 2 * WALL, 1, 0x181425, 0.25).setOrigin(0).setDepth(h + 40);
-      if (style.led) {
-        this.add.rectangle(-WALL, h + 1.5, w + 2 * WALL, 0.6, 0x9cd8ff).setOrigin(0).setDepth(h + 40.5);
-        lighting.nightGlow(this, this.add.rectangle(-WALL, h + 1, w + 2 * WALL, 3, 0x9cd8ff).setOrigin(0), 0.6, undefined, { store: true });
-      }
-    }
-  }
-
-  private facadeStyle(): (typeof FACADE_STYLES)[number] {
-    return FACADE_STYLES[Math.min(this.state.level, FACADE_STYLES.length - 1)];
-  }
-
-  /**
-   * Острова-витрины «Акция» в пустом центре зала и список препятствий для обхода:
-   * полки (и места под них), витрины, касса. Человек за мебелью — если его центр выше её задней кромки,
-   * перед ней — если ноги ниже передней.
-   */
-  private buildShowcases(): void {
-    // Витрины с товаром в пустом центре зала больше не ставим: игроки принимали их за полки,
-    // с которых почему-то не покупают. Пустые места под полки размечены на полу.
-    const { slots, counter } = this.layout;
-    const furniture = (x: number, y: number): Rect => ({ x: x - 25, y: y - 16, w: 50, h: 24 });
-    // Места под полки обходят всегда: полку могут купить утром без перестройки зала.
-    this.obstacles = slots.map((p) => (slotSide(this.layout, p) ? { x: p.x - 10, y: p.y - 24, w: 20, h: 48 } : furniture(p.x, p.y)));
-    this.obstacles.push({ x: counter.x - 13, y: counter.y - 30, w: 26, h: 54 });
-    // Место ларя обходят всегда, как и места под полки: его могут поставить утром.
-    const ice = shelves.iceboxSpot(this);
-    this.obstacles.push({ x: ice.x - 16, y: ice.y - 10, w: 32, h: 18 });
-    // Левая стена: вдоль неё не ходят, во флигель — только через двери.
-    const { h } = this.layout;
-    let from = -4;
-    for (const y of this.openRooms().map((room) => room.doorway.y).sort((a, b) => a - b)) {
-      this.obstacles.push({ x: -WALL - 2, y: from, w: WALL + 2, h: y - 8 - from });
-      from = y + 8;
-    }
-    this.obstacles.push({ x: -WALL - 2, y: from, w: WALL + 2, h: h - from });
-    // Вещи, поставленные раньше (автомат, растения), — тоже препятствия.
-    for (const prop of this.propList) this.obstacles.push(propRect(prop));
-  }
-
-  /** Место вещи зала: своё (перестановка в этом помещении) или стандартное. */
-  propAt(id: string, def: { x: number; y: number }): { x: number; y: number } {
-    this.propDefaults[id] = def;
-    const custom = this.state.propPos?.level === this.state.level ? this.state.propPos.at[id] : undefined;
-    return custom ? { x: custom.x, y: custom.y } : def;
-  }
-
-  /** Вещь зала, которую можно двигать при перестановке; её «след» — препятствие для обхода (oy — сдвиг картинки по высоте). */
-  registerProp(id: string, at: { x: number; y: number }, tex: string, fp: Rect, oy = 0): void {
-    this.propList.push({ id, x: at.x, y: at.y, fp, tex, oy });
-  }
-
-  /** Стандартное место ведра: правый нижний угол зала (двигается отдельно от кассы). */
-  private binDefault(): { x: number; y: number } {
-    return { x: this.layout.w - 10, y: this.layout.h - 12 };
-  }
-
-  /** Где стоит ведро и уличный контейнер (у роллета склада). */
-  binSpot(): { x: number; y: number } {
-    return this.propAt('bin', this.binDefault());
-  }
-
-  /** Куда встать, чтобы завязать мешок: со стороны зала. */
-  binStand(): { x: number; y: number } {
-    const bin = this.binSpot();
-    return { x: bin.x + (bin.x < this.layout.w / 2 ? 16 : -16), y: bin.y + 2 };
-  }
-
-  /** Контейнер у фасада слева от двери, на пути от двери не стоит. */
-  dumpSpot(): { x: number; y: number } {
-    const { h } = this.layout;
-    return { x: 18, y: h + FACADE_H + 9 };
-  }
-
-  /** Ведро в зале (нажми — продавец вынесет мусор) и зелёный контейнер на улице. */
-  private buildBin(): void {
-    const bin = this.binSpot();
-    const dump = this.dumpSpot();
-    this.binFill = 0;
-    this.binBusy = false;
-    this.binBy = null;
-    this.bagCarried = 0;
-    this.dumpImg = this.art(dump.x, dump.y, 'dumpster').setDepth(dump.y + 8);
-    this.binImg = this.art(bin.x, bin.y, binSprite(this.state, 0)).setDepth(bin.y + 6);
-    this.binImg.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(this, () => this.takeOutTrash()));
-    this.binGlow = new Halo(this, this.binImg, 0xe43b44);
-    this.binStink = this.art(bin.x, bin.y - 14, 'stink').setDepth(bin.y + 30).setVisible(false);
-    this.tweens.add({ targets: this.binStink, y: bin.y - 19, alpha: { from: 1, to: 0.35 }, duration: 900, yoyo: true, repeat: -1 });
-    this.obstacles.push({ x: bin.x - 8, y: bin.y - 12, w: 16, h: 14 });
-    this.registerProp('bin', bin, binSprite(this.state, 0), propFootprint(this.layout, 'bin', bin.x));
-    this.refreshBin();
-  }
-
-  /**
-   * Полка «Уценка»: горка у входа, на свободном месте у нижней стены (или где поставили при перестановке).
-   * Модель (gear 'bargain') — сколько на ней рядов по BARGAIN_PER_ROW мест; товар лежит на полках горки.
-   * Нажать — снести на неё то, что испортится ночью.
-   */
-  private buildBargain(): void {
-    this.bargainAt = null;
-    this.bargainItems = [];
-    if (!hasBargain(this.state)) return;
-    const { door, h, w } = this.layout;
-    const fp = propFootprint(this.layout, 'bargain', 0);
-    const zones = [...tillZones(this.layout, registerSlots(this.state), kioskCount(this.state)), ...blockedZones(this.layout)];
-    const free = (p: { x: number; y: number }) => {
-      const r = { x: p.x + fp.x - 3, y: p.y + fp.y - 16, w: fp.w + 6, h: fp.h + 19 };
-      return r.x > 2 && r.x + r.w < w - 2 && ![...this.obstacles, ...zones].some((o) => overlapsRect(r, o));
-    };
-    const candidates = [-46, -76, 46, 76, -106, 106, -136, 136].map((dx) => ({ x: door.x + dx, y: h - 12 }));
-    const def = candidates.find(free) ?? { x: door.x - 46, y: h - 12 };
-    const at = this.propAt('bargain', def);
-    this.bargainAt = at;
-    const rows = bargainRows(this.state);
-    const tex = bargainSprite(this.state);
-    // Низом — на пол у точки at: у моделей побольше горка растёт вверх.
-    const img = this.art(at.x, at.y + BARGAIN_BOTTOM, tex).setOrigin(0.5, 1).setDepth(at.y + 4);
-    img.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(this, () => this.sendToBargain(true)));
-    this.bargainItems = Array.from({ length: rows * BARGAIN_PER_ROW }, (_, n) => {
-      const spot = this.bargainSlot(at, n);
-      // Передний ряд — поверх задних.
-      return this.art(spot.x, spot.y, 'item').setDepth(at.y + 5 - Math.floor(n / BARGAIN_PER_ROW) * 0.1).setVisible(false);
-    });
-    this.obstacles.push({ x: at.x + fp.x, y: at.y + fp.y, w: fp.w, h: fp.h });
-    this.registerProp('bargain', at, tex, fp, BARGAIN_BOTTOM - img.displayHeight / 2);
-    this.refreshBargain();
-  }
-
-  /** Место n на горке уценки: ряды по BARGAIN_PER_ROW, первый — передний нижний (art/bargain_shelf.py). */
-  private bargainSlot(at: { x: number; y: number }, n: number): { x: number; y: number } {
-    const row = Math.floor(n / BARGAIN_PER_ROW);
-    const col = n % BARGAIN_PER_ROW;
-    // Полка ряда — на BARGAIN_BASE + row × BARGAIN_STEP точек выше низа горки; товар стоит на ней.
-    return { x: at.x - 11.25 + col * 4.5, y: at.y + BARGAIN_BOTTOM - BARGAIN_BASE - row * BARGAIN_STEP - 2 };
-  }
-
-  /** Где встать покупателю: за горкой, тянется к товару через неё (горка повыше — встаёт дальше). */
-  bargainStand(at: { x: number; y: number }): number {
-    return at.y + BARGAIN_BOTTOM - BARGAIN_BASE - bargainRows(this.state) * BARGAIN_STEP - 9;
-  }
-
-  /** Товар на полке уценки: по картинке на каждую штуку, передний ряд заполняется первым. */
-  private refreshBargain(): void {
-    const units = PRODUCT_IDS.flatMap((id) => (this.state.bargain?.[id] ?? []).map(() => id));
-    this.bargainItems.forEach((img, n) => {
-      if (!img.active) return;
-      const id = units[n];
-      img.setVisible(Boolean(id));
-      if (id) img.setTexture(`item_${id}_${n % ITEM_VARIANTS}`).setScale(0.7 / ART);
-    });
-  }
-
-  /** Снести на полку уценки то, что испортится ночью (по нажатию — с подсказкой, если нечего). */
-  sendToBargain(byTap = false): void {
-    if (!this.bargainAt) return;
-    const moved = fillBargain(this.state);
-    if (moved.count) {
-      this.state = moved.state;
-      saveGame(this.state);
-      sound.tap();
-      this.popup(this.bargainAt.x, this.bargainAt.y - 18, t('popup.bargain', { n: moved.count }), '#ffd0d0');
-      this.refreshShelves();
-      this.refreshWarehouse();
-    } else if (byTap) {
-      const full = bargainCount(this.state) >= bargainCapacity(this.state);
-      this.popup(this.bargainAt.x, this.bargainAt.y - 18, t(full ? 'popup.bargainFull' : 'popup.bargainNone'), '#fff3b0');
-    }
-    this.refreshBargain();
-  }
-
-  /** Покупатель по пути заглядывает на полку уценки и берёт одну штуку сверх списка — прямо с её места на горке. */
-  async visitBargain(c: Customer): Promise<void> {
-    const at = this.bargainAt;
-    if (!at || c.thief || !bargainCount(this.state) || Math.random() >= BARGAIN_CHANCE) return;
-    await persons.walk(this, c.sprite, at.x + Phaser.Math.Between(-8, 8), this.bargainStand(at));
-    await this.wait(400);
-    if (c.gone) return;
-    const units = PRODUCT_IDS.flatMap((id) => (this.state.bargain?.[id] ?? []).map(() => id));
-    const taken = takeBargain(this.state);
-    if (!taken) return;
-    this.state = taken.state;
-    c.items.push({ id: taken.id, unit: taken.unit });
-    // Штука улетает в руки с того места, где лежала (берут самую старую — первую этого товара).
-    const n = units.indexOf(taken.id);
-    const img = this.bargainItems[n];
-    const from = img?.active && img.visible ? [{ x: img.x, y: img.y, texture: img.texture.key, scale: img.scaleX, tint: 0xffffff }] : [];
-    motion.reachShelf(this, c, { x: at.x, y: at.y - 6 }, taken.id, from);
-    if (Math.random() < 0.5) this.popup(c.sprite.x, c.sprite.y - 18, t('popup.bargainTake'), '#ffd0d0');
-    this.refreshBargain();
-  }
-
-  binFull(): boolean {
-    return this.binFill >= binCapacity(this.state);
-  }
-
-  refreshBin(): void {
-    if (!this.binImg?.active) return;
-    const level = this.binFill === 0 ? 0 : this.binFull() ? 3 : this.binFill >= binCapacity(this.state) / 2 ? 2 : 1;
-    this.binImg.setTexture(binSprite(this.state, level));
-    this.binStink?.setVisible(this.binFull());
-  }
-
-  /** Мусор в ведро: оно подпрыгивает. */
-  putInBin(): void {
-    this.binFill = Math.min(binCapacity(this.state), this.binFill + 1);
-    this.refreshBin();
-    sound.tap();
-    if (this.binImg) this.tweens.add({ targets: this.binImg, scaleY: 1.15 / ART, duration: 90, yoyo: true });
-    if (this.binFull()) this.popup(this.binSpot().x, this.binSpot().y - 18, t('popup.binFull'), '#ffd0d0');
-  }
-
-  /** Шаги «вынести мусор»: к ведру, завязать мешок, через дверь к контейнеру, бросить и вернуться. */
-  takeOutSteps(onBag: () => void, onDump: () => void): ChoreStep[] {
-    const dump = this.dumpSpot();
-    const { door, h } = this.layout;
-    const outside = h + FACADE_H + 6;
-    return [
-      { ...this.binStand(), ms: BAG_MS, action: onBag },
-      { x: door.x, y: door.y - 8 },
-      { x: door.x, y: outside },
-      { x: dump.x + 15, y: dump.y + 3, ms: DUMP_MS, action: onDump },
-      { x: door.x, y: outside },
-      { x: door.x, y: door.y - 8 },
-    ];
-  }
-
-  bagFromBin(): void {
-    this.bagCarried = this.binFill;
-    this.binFill = 0;
-    this.refreshBin();
-  }
-
-  bagToDumpster(): void {
-    this.bagCarried = 0;
-    this.binBusy = false;
-    this.binBy = null;
-    sound.coin();
-    const dump = this.dumpSpot();
-    effects.puff(this, dump.x, dump.y - 6);
-  }
-
-  /** Продавец выносит мусор: долго, касса в это время пустует. */
-  private takeOutTrash(): void {
-    if (!this.running || this.sellerBusy || this.ownerScanning() || this.binBusy || this.binFill === 0) return;
-    this.binBusy = true;
-    this.binBy = 'seller';
-    void staff.doChore(this, 
-      this.takeOutSteps(
-        () => {
-          this.bagFromBin();
-          this.carried.setTexture('trash_bag').setPosition(5, 1).setVisible(true);
-        },
-        () => {
-          this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
-          this.bagToDumpster();
-        },
-      ),
-    );
-  }
-
-  /** Плакаты на стене, растения и корзинки у входа — чтобы зал не выглядел пустым. */
-  /** Первое место, где вещь 26×20 не мешает полкам, кассе, складу и автомату. */
-  freeSpot(candidates: { x: number; y: number }[]): { x: number; y: number } | null {
-    const { slots, counter } = this.layout;
-    const blocked = [
-      ...slots.map((s) => ({ x: s.x - 22, y: s.y - 14, w: 44, h: 30 })),
-      { x: counter.x - 10, y: counter.y - 28, w: 20, h: 64 },
-      ...this.propList.map(propRect),
-      // Купленные киоски у правой стены (их ставит buildUpgrades — позже украшений).
-      ...(kioskCount(this.state) ? kioskZones(this.layout, kioskCount(this.state)) : []),
-    ];
-    return (
-      candidates.find((c) =>
-        blocked.every((b) => c.x + 13 < b.x || c.x - 13 > b.x + b.w || c.y + 10 < b.y || c.y - 10 > b.y + b.h),
-      ) ?? null
-    );
-  }
-
-  /** Комнаты флигеля, в которые есть дверь из зала. */
-  openRooms(): Room[] {
-    const { warehouse, bakery, coffee, kitchen } = this.layout;
-    return [warehouse, ...(food.bakeryOpen(this) ? [bakery] : []), ...(food.coffeeOpen(this) ? [coffee] : []), ...(kitchen && kitchenOpen(this.state) ? [kitchen] : [])];
-  }
-
-  /**
-   * Флигель слева от зала: наружные стены, стены между комнатами, фасад склада с воротами
-   * и подъезд к ним с улицы. Пекарня и кофейня, пока не открыты, стоят тёмные и запертые.
-   */
-  private buildWing(): void {
-    const { h, wing, warehouse, bakery, coffee } = this.layout;
-    const cap = (x: number, y: number, ww: number, hh: number) =>
-      this.add.tileSprite(x, y, ww, hh, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(2);
-    const left = -WING_OUTER;
-    cap(left, wing.y - 4, WING_OUTER - WALL, 4);
-    cap(left, wing.y, WALL, h - wing.y);
-    cap(left + WALL, warehouse.y - WALL, wing.w, WALL);
-    cap(left + WALL, bakery.y - WALL, wing.w, WALL);
-    if (this.layout.kitchen) cap(left + WALL, this.layout.coffee.y - WALL, wing.w, WALL);
-    this.add.tileSprite(left, h, WING_OUTER - WALL, FACADE_H, this.potTile(this.facadeStyle().texture)).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
-    const gateX = warehouse.x + warehouse.w / 2;
-    this.art(gateX, h + 5.5, 'shutter').setDepth(h + 2);
-    // Подъезд от тротуара к воротам склада.
-    const top = this.next.h + 4;
-    if (top > h + FACADE_H) this.add.tileSprite(gateX - 12, h + FACADE_H, 24, top - h - FACADE_H, 'paving').setOrigin(0).setTileScale(1 / ART).setDepth(-9);
-    this.buildRoom(bakery, 'bakery', food.bakeryOpen(this));
-    this.buildRoom(coffee, 'coffee', food.coffeeOpen(this));
-    if (this.layout.kitchen) this.buildRoom(this.layout.kitchen, 'kitchen', kitchenOpen(this.state));
-    food.buildKitchen(this);
-  }
-
-  /**
-   * Дверь из зала во флигель: порог, деревянные косяки, створка открыта внутрь комнаты,
-   * коврик в зале. Куда ведёт дверь — видно по табличке внутри самой комнаты.
-   */
-  private buildWingDoor(y: number): void {
-    const { warehouse, bakery, coffee } = this.layout;
-    const room = [warehouse, bakery, coffee].find((r) => r.doorway.y === y);
-    this.add.tileSprite(-WALL, y - 8, WALL, 16, 'wh_floor').setOrigin(0).setTileScale(1 / ART).setDepth(1);
-    // Косяки — сверху и снизу проёма.
-    for (const jy of [y - 9.5, y + 7.5]) this.add.rectangle(-WALL - 1, jy, WALL + 2, 2.5, 0x5a3a2a).setOrigin(0).setDepth(jy + 6);
-    // Створка распахнута внутрь комнаты.
-    this.add.rectangle(-WALL - 11, y - 8, 11, 2, 0xb86f50).setOrigin(0).setStrokeStyle(0.5, 0x3b2a35).setDepth(y - 2);
-    // Коврик со стороны зала.
-    this.add.rectangle(0.5, y - 6, 9, 12, room === warehouse ? 0x5a6988 : 0x9e2835, 0.85).setOrigin(0).setDepth(1);
-  }
-
-  /** Комната флигеля: пол, кусок стены с табличкой; закрытая — тёмная, с замком. */
-  private buildRoom(room: Room, kind: 'bakery' | 'coffee' | 'kitchen', open: boolean): void {
-    const { x, y, w, h } = room;
-    this.add.tileSprite(x, y, w, h, kind === 'coffee' ? 'floor_wood' : 'floor2').setOrigin(0).setTileScale(1 / ART);
-    this.add
-      .tileSprite(x, y, w, 14, 'wall')
-      .setOrigin(0)
-      .setTileScale(1 / ART)
-      .setTint(kind === 'bakery' ? 0xffe2d2 : kind === 'kitchen' ? 0xd8f0d8 : 0xe6dcf6)
-      .setDepth(1);
-    if (open || !cleanHall(this.state)) this.roomSign(x, y + 7, w, t(`wing.${kind}`));
-    if (open) {
-      lighting.nightGlow(this, this.art(x + w / 2, y + 26, 'glow').setScale(44 / 64).setTint(kind === 'bakery' ? 0xffd8a0 : 0xffe8c8), 0.5, undefined, { store: true, map: { scale: 1.3, gain: 0.8, haze: 0.12 } });
-      // Мелочи: на стене слева от таблички — меню, банки или сковородки; у двери — коврик.
-      this.art(x + 13, y + 7, kind === 'coffee' ? 'menu_chalk' : kind === 'bakery' ? 'jar_shelf' : 'pot_rack').setDepth(2);
-      if (kind === 'bakery') this.art(x + w - 8, y + h - 8, 'flour_sacks').setDepth(y + h - 2);
-      this.add.rectangle(x + w - 3, room.doorway.y, 4, 14, 0x9e5b33).setStrokeStyle(1, 0x5a3420).setDepth(1.5);
-      return;
-    }
-    this.add.rectangle(x, y + 16, w, h - 16, 0x1d1a26, 0.62).setOrigin(0).setDepth(y + h);
-    // Первая неделя новичка в киоске: закрытая комната — тихий силуэт, без замка и «закрыта» (firstday.ts).
-    if (cleanHall(this.state)) return;
-    this.add
-      .text(x + w / 2, y + h / 2 + 6, `🔒\n${t(`wing.${kind}Locked`)}`, { fontFamily: UI_FONT, fontSize: '5px', color: '#c0cbdc', align: 'center' })
-      .setOrigin(0.5)
-      .setResolution(this.textRes(4))
-      .setDepth(y + h + 1);
-  }
-
-  /**
-   * Табличка комнаты флигеля по ширине надписи — у двери в зал (справа): её видно,
-   * даже когда флигель в кадре краем.
-   */
-  private roomSign(x: number, y: number, w: number, text: string): void {
-    const label = this.add.text(0, y, text, { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#fee761' }).setOrigin(0.5).setResolution(this.textRes(4));
-    const plateW = Math.min(w - 4, label.width + 6);
-    const cx = x + w - 2 - plateW / 2;
-    label.setX(cx).setDepth(y + 61);
-    this.add.rectangle(cx, y, plateW, 9, 0x3b2a35).setStrokeStyle(1, 0xb86f50).setDepth(y + 60);
-  }
-
-  /** Центр ряда тары на складе: ряды стоят на балках стеллажа. */
-  private warehouseRowY(row: number): number {
-    return this.layout.warehouse.y + 16 + row * 8;
-  }
-
-  private buildWarehouse(): void {
-    const { x, y, w, h, doorway } = this.layout.warehouse;
-    this.add.tileSprite(x, y, w, h, 'wh_floor').setOrigin(0).setTileScale(1 / ART);
-    // Складской стеллаж: на каждой балке — поддон и ряд тары.
-    const rows = this.layout.warehouse.rows;
-    for (let row = 0; row < rows; row++) {
-      const rowY = this.warehouseRowY(row);
-      this.art(x, rowY - 4, 'rack').setOrigin(0).setDepth(rowY - 101);
-    }
-    // Жёлто-чёрная разметка проезда под стеллажом и у проёма.
-    const laneY = this.warehouseRowY(rows - 1) + 7;
-    this.add.tileSprite(x + 2, laneY, w - 4, 2, 'hazard').setOrigin(0).setTileScale(1 / ART).setDepth(laneY - 100);
-    this.add.tileSprite(x + w - 2, doorway.y - 10, 2, 20, 'hazard').setOrigin(0).setTileScale(1 / ART).setDepth(doorway.y - 100);
-    // Огнетушитель у проёма и лампа под потолком.
-    this.art(x + w - 4, doorway.y - 16, 'extinguisher').setDepth(doorway.y - 90);
-    lighting.nightGlow(this, this.art(x + w / 2, y + 10, 'glow').setScale(40 / 64).setTint(0xfff0c8), 0.5, undefined, { store: true, map: { scale: 1.3, gain: 0.8, haze: 0.12 } });
-    this.roomSign(x, y + 7, w, t('warehouse.label'));
-  }
-
   /** Переходник к shelves.refreshShelves: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
   refreshShelves(slide = true): void {
     return shelves.refreshShelves(this, slide);
-  }
-
-  refreshWarehouse(): void {
-    // На складе помещается ~30 коробок: в большом складе одна коробка изображает больше штук.
-    const perBox = unitsPerBox(warehouseCapacity(this.state));
-    const boxes = PRODUCT_IDS.flatMap((id) =>
-      Array.from({ length: Math.ceil((this.state.warehouse[id]?.length ?? 0) / perBox) }, () => id),
-    ).slice(0, WAREHOUSE_COLS * this.layout.warehouse.rows);
-    // Купленное утром ещё едет: последние коробки появятся, когда водитель их занесёт.
-    boxes.length = Math.max(0, boxes.length - this.awaitingBoxes);
-    while (this.boxes.length < boxes.length) this.boxes.push(this.art(0, 0, 'box'));
-    this.boxes.forEach((img, n) => {
-      const id = boxes[n];
-      img.setVisible(Boolean(id));
-      if (!id) return;
-      // У каждого товара своя тара: лоток, ящик, мешок, пластиковый ящик, термобокс.
-      const row = Math.floor(n / WAREHOUSE_COLS);
-      const y = this.warehouseRowY(row);
-      img.setPosition(this.layout.warehouse.x + 8 + (n % WAREHOUSE_COLS) * 9, y).setTexture(`crate_${id}`).setDepth(y - 100);
-    });
-  }
-
-  refreshToilet(): void {
-    const dirt = this.toiletDirt;
-    this.wcBar.setDisplaySize((14 * dirt) / 100, 2);
-    this.wcBar.setTint(dirt < 30 ? 0x8fd16a : dirt < TOILET_DIRTY ? 0xf2c14e : 0xd95763);
-    this.wcDoor.setTint(dirt >= TOILET_DIRTY ? 0xc8a878 : 0xffffff);
-    this.wcStink.setVisible(dirt >= TOILET_DIRTY);
-  }
-
-  /**
-   * Картинка для полосы-плитки (фасад, забор, гирлянда). Phaser растягивает плитку до степени двойки
-   * (32×20 → 32×32), и ряды пикселей выходят разной высоты при любом масштабе камеры. Плитке с высотой
-   * не в степень двойки — копия, дополненная до неё той же картинкой ниже: полоса в одну плитку высотой
-   * показывает те же ряды, только без растяжки.
-   */
-  potTile(key: string): string {
-    const frame = this.textures.getFrame(key);
-    if (!frame) return key;
-    const { cutWidth: w, cutHeight: h } = frame;
-    const pot = Phaser.Math.Pow2.GetNext(h);
-    if (pot === h || !Phaser.Math.Pow2.IsValue(w)) return key;
-    const padded = `${key}@pot`;
-    if (!this.textures.exists(padded)) {
-      const canvas = this.textures.createCanvas(padded, w, pot);
-      for (let y = 0; canvas && y < pot; y += h) canvas.context.drawImage(frame.source.image as CanvasImageSource, frame.cutX, frame.cutY, w, h, 0, y, w, h);
-      canvas?.refresh();
-    }
-    return padded;
   }
 
   /** Картинка из public/assets в мировом масштабе. */

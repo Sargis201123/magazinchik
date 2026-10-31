@@ -34,6 +34,7 @@ import {
   type Lamp,
 } from './common';
 import * as shelves from './shelves';
+import * as building from './building';
 
 /**
  * Карта освещения под новый мир (scenes/light.ts): где есть свет (квартал вокруг магазина, за ним — фон
@@ -79,7 +80,7 @@ export function buildLighting(scene: StoreScene, next: Layout): void {
   nightGlow(scene, scene.art(scene.layout.door.x, h + 8, 'glow').setDisplaySize(40, 40).setTint(0xffd890), 0.7, undefined, { store: true, map: { key: 'light_pool', w: 56, h: 30, gain: 0.9 } });
   // Флигель: в каждой открытой комнате и на складе — свой плафон (гаснет вместе со светом в зале).
   const led = gearTier(scene.state, 'lights');
-  for (const room of scene.openRooms()) {
+  for (const room of building.openRooms(scene)) {
     const lamp = scene.light.add('light_pool', room.x + room.w / 2, room.y + room.h / 2 + 4, room.w * 1.5, room.h * 1.5, led ? HALL_LED : HALL_WARM);
     lamp.sync = () => lamp.set(0.62 * powerOn(scene));
   }
@@ -525,8 +526,8 @@ export function buildLights(scene: StoreScene): void {
   const { w, wallH, wc } = scene.layout;
   const warm = 0xffd27a;
   if (light.id === 'light_garland') {
-    scene.add.tileSprite(0, 0, w, 6, scene.potTile('light_garland')).setOrigin(0).setTileScale(1 / ART).setDepth(2);
-    const lit = scene.add.tileSprite(0, 0, w, 6, scene.potTile('light_garland_lit')).setOrigin(0).setTileScale(1 / ART).setDepth(2);
+    scene.add.tileSprite(0, 0, w, 6, building.potTile(scene, 'light_garland')).setOrigin(0).setTileScale(1 / ART).setDepth(2);
+    const lit = scene.add.tileSprite(0, 0, w, 6, building.potTile(scene, 'light_garland_lit')).setOrigin(0).setTileScale(1 / ART).setDepth(2);
     lit.setBlendMode(Phaser.BlendModes.ADD);
     scene.tweens.add({ targets: lit, alpha: { from: 1, to: 0.35 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     // Гирлянда сама рисуется под картой освещения — ночью карта приглушила бы её вместе со стеной.

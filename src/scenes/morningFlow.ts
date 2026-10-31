@@ -70,6 +70,7 @@ import * as newcomer from './newcomer';
 import * as rivals from './rivals';
 import * as camera from './camera';
 import * as shelves from './shelves';
+import * as building from './building';
 
 // ---------- День ----------
 
@@ -81,7 +82,7 @@ export function offerGift(scene: StoreScene): void {
   scene.state = shelveAll(claimed.state);
   saveGame(scene.state);
   scene.hud.update(scene.state, DAY_SECONDS);
-  scene.refreshWarehouse();
+  building.refreshWarehouse(scene);
   scene.time.delayedCall(400, () => showGift(claimed.gift, giftTomorrow(scene.state, todayLocal())));
   // Со второго дня — один раз спросить, можно ли боту напоминать о магазине.
   if (scene.state.day > 1) scene.time.delayedCall(4000, askWriteAccessOnce);
@@ -211,7 +212,7 @@ export function showMorning(scene: StoreScene): void {
       if (radioChanged) decorations.applyRadio(scene, true);
       scene.awaitingBoxes = deliveries.boxesToDeliver(scene);
       scene.refreshShelves();
-      scene.refreshWarehouse();
+      building.refreshWarehouse(scene);
       scene.hud.update(s, DAY_SECONDS);
     },
     onOpen: () => startDay(scene),
@@ -255,7 +256,7 @@ export function startDay(scene: StoreScene): void {
     reportError(error, 'startDay');
   }
   // Утром то, что испортится к ночи, само уходит на полку уценки.
-  scene.sendToBargain();
+  building.sendToBargain(scene);
   try {
     rivals.openRivalDay(scene);
   } catch (error) {
@@ -573,7 +574,7 @@ export function prepareDay(scene: StoreScene): void {
   scene.cafeToday = cafe.result;
   if (cafe.result) {
     scene.refreshShelves();
-    scene.refreshWarehouse();
+    building.refreshWarehouse(scene);
   }
   visitors.scheduleStoryGuests(scene);
   const season = seasonFor(scene.state.day);
@@ -586,7 +587,7 @@ export function prepareDay(scene: StoreScene): void {
   // Вечером мусор выносят — утром ведро пустое.
   scene.binFill = 0;
   scene.binFullFor = 0;
-  scene.refreshBin();
+  building.refreshBin(scene);
   scene.combo = 0;
   scene.lastSaleAt = -Infinity;
   if (scene.awaitingBoxes > 0) void deliveries.deliver(scene);
@@ -608,7 +609,7 @@ export function prepareDay(scene: StoreScene): void {
   });
   scene.eveningMarkdown = false;
   scene.toiletDirt = 0;
-  scene.refreshToilet();
+  building.refreshToilet(scene);
   for (const piece of scene.trash) piece.destroy();
   scene.trash.clear();
 }
