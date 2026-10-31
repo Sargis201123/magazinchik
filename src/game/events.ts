@@ -101,6 +101,8 @@ export interface DayPlan {
   sick?: StaffRole;
   /** Задания дня. */
   quests: Quest[];
+  /** Шаг дорожки сезонной недели на сегодня (weeks.ts); цель запоминается утром, чтобы вечером не уехала. */
+  week?: import('./weeks').WeekGoalToday | null;
 }
 
 export interface EventChances {

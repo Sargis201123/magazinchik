@@ -26,7 +26,7 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
     id: 'farmer',
     nameKey: 'supplier.farmer',
     lines: { hello: 'supplier.farmer.hello', yes: 'supplier.farmer.yes', no: 'supplier.farmer.no', angry: 'supplier.farmer.angry' },
-    products: { bread: 1, apples: 0.9, potatoes: 1, tangerines: 1, flowers: 1.1 },
+    products: { bread: 1, apples: 0.9, potatoes: 1, tangerines: 1, flowers: 1.1, pumpkins: 1, watermelons: 1 },
     // Был 0,9: скидка 20% за три попытки удавалась в 87,5% случаев — торговаться было выгодно всегда.
     flexibility: 0.75,
     patience: 3,

@@ -92,14 +92,12 @@ import {
 import { guestsGain, guestsToday } from '../game/day';
 import { buyKiosk, KIOSK_TIERS, kioskCount, kioskSlots, KIOSKS_BY_LEVEL, kioskTier, kioskTierIndex, laneGuests, nextKioskPrice, nextKioskTier, openRegisters, upgradeKiosks, withNextTill } from '../game/lanes';
 import {
-  ALBUM_REWARD,
   ALL_QUESTS_RATING,
   QUEST_TEXT,
   RANK_GUESTS,
   rankName,
   rankOf,
   rankThreshold,
-  RARE_GUESTS,
   seasonFor,
   type Quest,
 } from '../game/endless';
@@ -145,6 +143,8 @@ import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene } from '.
 import { activeEvent, addDays, cardOf, cardWaiting, guestDue, guestOn, nextGuest, openCard, openedCards, type LiveEvent } from '../game/live';
 import { liveEvents, todayLocal } from '../platform/live';
 import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
+import { weekBox, weekSoonLine } from './weeks';
+import { WEEK_IDS, type WeekId } from '../game/weeks';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
@@ -200,6 +200,7 @@ import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable,
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
+import { arcBox, arcLines } from './arcs';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { showSupport } from './support';
 import { rushPrize } from '../game/rush';
@@ -253,6 +254,8 @@ import { tryNudge } from './nudge';
 import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
+import { albumButton, showAlbum } from './album';
+import { freshCount } from '../game/collections';
 
 /** Портрет заказчика: шеф — это Марат. */
 const CLIENT_PORTRAIT: Record<ClientId, string> = { chef: 'marat', school: 'school', valya: 'valya' };
@@ -795,6 +798,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         : null;
     const profile = button('🏆', go('profile'), `ui-chip ui-profile-btn${tab === 'profile' ? ' active' : ''}`);
     profile.title = t('tab.profile');
+    // «Новое в альбоме» коллекций — точкой на кнопке профиля, где лежит альбом.
+    if (tab !== 'profile' && freshCount(state)) profile.append(el('span', 'ui-tab-dot', String(freshCount(state))));
     title.append(profile);
 
     const body = el('div', slideTab ? 'ui-enter' : '');
@@ -812,9 +817,11 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...debtLine(state),
       ...bigDayLine(state),
       ...seasonLine(state),
+      ...weekSoonLine(state),
       ...weatherLine(state),
       ...warLine(state),
       ...districtLines(state),
+      ...arcLines(state),
       ...trickLines(state),
       ...nightGuestLines(state),
       ...holidayLine(state),
@@ -842,11 +849,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...presentsBox(getState, update),
       ...leagueClaimBox(state, getState, update),
       ...(touring ? [] : liveBox(state)),
+      ...(touring ? [] : weekBox(state, guestsToday(state))),
       ...staffEventBox(state),
       ...districtBox(state),
       ...lifeBox(state),
       ...trickBox(state),
       ...taleBox(state),
+      ...arcBox(state, getState, update),
       ...guildClaimBox(state),
       today,
       todayCard(state, touring, [...friendShopsBox(), ...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: getState().level })), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),
@@ -3317,7 +3326,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           : item?.price !== undefined
             ? `${item.price} 💰`
             : item?.holiday
-              ? t('decor.holidayEarn')
+              ? t(WEEK_IDS.includes(item.holiday as WeekId) ? 'decor.weekEarn' : 'decor.holidayEarn')
               : item?.season !== undefined
                 ? t('decor.seasonEarn')
                 : item?.support
@@ -3409,21 +3418,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     modal.append(
       el('h2', '', t(item.nameKey)),
       decorPreview(item, item.kind, true),
-      el('div', 'ui-muted', t('decor.holidayNote', { when: t(`decor.holidayWhen.${item.holiday}` as TextKey) })),
+      el('div', 'ui-muted', t(WEEK_IDS.includes(item.holiday as WeekId) ? 'decor.weekNote' : 'decor.holidayNote', { when: t(`decor.holidayWhen.${item.holiday}` as TextKey) })),
       button(t('decor.close'), close, 'ui-btn secondary'),
     );
   };
 
-  const albumBox = (state: StoreState) =>
-    foldBox('album', t('album.title', { n: state.album.length, max: RARE_GUESTS.length }), (box) => {
-      box.append(el('div', 'ui-muted', t('album.note', { money: ALBUM_REWARD.money, r: ALBUM_REWARD.rating })));
-      const grid = el('div', 'ui-chips');
-      for (const g of RARE_GUESTS) {
-        const got = state.album.includes(g.id);
-        grid.append(el('span', got ? 'ui-chip' : 'ui-chip ui-chip-off', got ? `${g.icon} ${t(g.nameKey)}` : `❔ ${t('album.unknown')}`));
-      }
-      box.append(grid);
-    });
+  /** Альбом коллекций (ui/album.ts): книга с наборами; прежний альбом редких гостей — её первая страница. */
+  const albumBox = (state: StoreState) => albumButton(state, () => showAlbum(getState, setState, render));
 
   // ---------- Сюжет и события ----------
 
@@ -4020,6 +4021,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const early = state.onboarding === 'play' && state.day <= 7;
     return [
       achievementsButton(state),
+      albumBox(state),
       ...(early ? [replay] : []),
       ...friendsBox(),
       named,
@@ -4032,7 +4034,6 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...guildBox(state),
       ...trophiesBox(state),
       recordsBox(state),
-      albumBox(state),
       ...keepsakeBox(state),
       ...(early ? [] : [replay]),
       again,

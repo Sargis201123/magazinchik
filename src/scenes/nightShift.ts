@@ -26,6 +26,8 @@ import { todayLocal } from '../platform/live';
 import { askForHelp, claimHelp, sendHelp, socialInfo } from '../platform/social';
 import { HELP_REWARD, HELP_THANKS, helpAsked, helpGiven, markHelpAsked, takeHelp } from '../game/help';
 import { reportProgress, track } from '../platform/analytics';
+import { decorItem } from '../game/decor';
+import { endSale, WEEK_IDS, WEEK_STEPS, WEEKS } from '../game/weeks';
 import { onbDone } from '../game/onboarding';
 import { firstGiftCard } from '../ui/onboarding';
 import { tutDayEnd, tutPass, tutStep } from '../game/tutorial';
@@ -123,7 +125,8 @@ export function startNightShift(scene: StoreScene): void {
     finishDay(scene);
     return;
   }
-  scene.state = next;
+  // Вечерняя распродажа (weeks.ts) кончается с закрытием: ночью — ночные цены.
+  scene.state = endSale(next);
   scene.night = true;
   scene.stats.nightRevenue ??= 0;
   scene.timeLeft = NIGHT_SECONDS;
@@ -301,6 +304,14 @@ export function finishDay(scene: StoreScene): void {
   if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
   if (scene.stats.momentsShown) extra.push([t('summary.moments'), t('summary.momentsValue', { n: scene.stats.moments ?? 0, total: scene.stats.momentsShown })]);
   if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
+  // Шаг сезонной недели (weeks.ts): монеты, а за последний — памятная вещь в зал.
+  if (night.week) {
+    const w = night.week;
+    extra.push([`${WEEKS[w.id].icon} ${t(WEEKS[w.id].nameKey)}`, t('week.summaryStep', { step: w.step, total: WEEK_STEPS, n: w.coins })]);
+    if (w.keepsake) extra.push(['🎁', t('week.summaryPrize', { item: t(decorItem(w.keepsake).nameKey) })]);
+    track('week_step', finishedDay, w.step + 10 * WEEK_IDS.indexOf(w.id));
+    if (w.keepsake) track('week_keepsake', finishedDay, WEEK_IDS.indexOf(w.id));
+  }
   // Филиал за дорогой (branch.ts): чистый доход за день одной строкой.
   if (branch) extra.push([t('branch.summary'), t('branch.summaryValue', { n: branch })]);
   const rankAfter = rankOf(state.totalRevenue);

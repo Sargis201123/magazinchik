@@ -56,6 +56,8 @@ import * as effects from './effects';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
+import * as weeksFx from './weeks';
+import { endSale } from '../game/weeks';
 import * as deliveries from './deliveries';
 import * as food from './food';
 import * as streets from './streets';
@@ -63,6 +65,7 @@ import * as cars from './cars';
 import * as staff from './staff';
 import * as shoppers from './shoppers';
 import * as visitors from './visitors';
+import * as arcsFx from './arcsFx';
 import * as bigDays from './bigDays';
 import * as liveFx from './liveFx';
 import * as nightShift from './nightShift';
@@ -71,6 +74,7 @@ import * as rivals from './rivals';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+import * as collections from './collections';
 
 /**
  * Что распаковывают из коробки, когда оно впервые появилось в зале: оборудование (терминал, касса
@@ -120,7 +124,10 @@ export function offerReturn(scene: StoreScene, then: () => void): void {
   scene.ritualDay = scene.state.day;
   const chest = scene.state.ret?.chest;
   const letter = takeLetter(scene.state, todayLocal());
-  if (letter) scene.state = letter.state;
+  if (letter) {
+    scene.state = letter.state;
+    collections.note(scene, 'cards', letter.gift.letter.from);
+  }
   const order = collectOrder(scene.state);
   // Заказ не на сегодня (устарел) — сосед просто не пришёл, окно о нём не нужно.
   const fresh = order && order.order.day === scene.state.day ? order : null;
@@ -172,6 +179,9 @@ export function showMorning(scene: StoreScene): void {
   if (!quietDays(scene.state) && takeLiteNote()) toast('assets/ico_phone.png', t('lite.autoTitle'), t('lite.autoText'));
   scene.morningStock = warehouseCount(scene.state);
   decorations.applyFair(scene);
+  // Отметка вечерней распродажи из сохранения посреди дня — утром не действует (weeks.ts).
+  scene.state = endSale(scene.state);
+  weeksFx.applyWeek(scene);
   scene.awaitingBoxes = 0;
   scene.hud.update(scene.state, DAY_SECONDS);
   if (weatherFor(scene.state.day) !== scene.weather) weatherFx.applyWeather(scene);
@@ -595,11 +605,14 @@ export function prepareDay(scene: StoreScene): void {
     scene.refreshShelves();
     building.refreshWarehouse(scene);
   }
+  // Кафе Ахмеда (хроники района) забирает хлеб в день поставки.
+  arcsFx.dealAtOpening(scene);
   visitors.scheduleStoryGuests(scene);
   const season = seasonFor(scene.state.day);
   if (season) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
   else if (isFairDay(scene.state.day)) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, t('popup.fair'), '#fee761'));
   if (isFairDay(scene.state.day)) scene.stats.fair = true;
+  weeksFx.morning(scene);
   decorations.startStall(scene);
   scene.setSpeed(1);
   deliveries.scheduleOrder(scene);

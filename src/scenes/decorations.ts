@@ -36,6 +36,8 @@ import * as persons from './persons';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+import * as collections from './collections';
+import * as weeksFx from './weeks';
 
 /** До какой доли дня музыка выбирает утренний трек (дальше — дневной, с вечера — вечерний). */
 const MUSIC_MORNING = 0.3;
@@ -376,6 +378,7 @@ export function buildUpgrades(scene: StoreScene): void {
   for (let i = 1; i < registerCount(scene.state); i++) building.buildRegister(scene, i);
   buildHallDecor(scene);
   buildHolidayDecor(scene);
+  collections.buildTrophyCase(scene);
   building.buildGearProps(scene);
   food.buildCoffee(scene);
   food.buildOven(scene);
@@ -486,9 +489,10 @@ export function isWinterMusic(scene: StoreScene): boolean {
   return winterMusic(yearTime(scene.state.day), holidayFor(scene.state.day), new Date(trustedNow()));
 }
 
-/** Салют за окном сегодня вечером: новогодняя неделя в игре или 31 декабря — 1 января по календарю. */
+/** Салют за окном сегодня вечером: новогодняя неделя в игре, 31 декабря — 1 января по календарю или финал фестиваля. */
 export function isNewYearSound(scene: StoreScene): boolean {
-  return holidayFor(scene.state.day) === 'newyear' || realNewYear(new Date(trustedNow()));
+  // И в последний вечер «Летнего фестиваля» (weeks.ts) — там тоже салют.
+  return holidayFor(scene.state.day) === 'newyear' || realNewYear(new Date(trustedNow())) || weeksFx.fireworksToday(scene.state.day);
 }
 
 /**

@@ -288,6 +288,7 @@ const css = `
   border: 2px solid #2b2233; border-radius: 8px; }
 /* Праздник по календарю (game/live.ts): открытки по дням, сегодняшняя подпрыгивает; открытка крупно. */
 .ui-box.ui-live { background: #e6f2ff; border-color: #5fb4f0; }
+.ui-box.ui-week { background: #fff3dc; border-color: #feae34; }
 .ui-advent { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin: 6px 0 4px; }
 .ui-advent-day { text-align: center; padding: 3px 0; border: 2px solid #2b2233; border-radius: 4px; background: #fbf6ea;
   font: 700 12px ${UI_FONT}; color: #2b2233; }
@@ -316,7 +317,7 @@ const css = `
 .ui-tab-label { font-size: 10.5px; line-height: 1.1; white-space: nowrap; }
 .ui-tab-dot { position: absolute; top: -6px; right: -4px; min-width: 16px; height: 16px; padding: 0 3px; box-sizing: border-box;
   border-radius: 8px; background: #e43b44; color: #fff; border: 2px solid #2b2233; font: 700 10px/12px ${UI_FONT}; }
-.ui-profile-btn { margin-left: 6px; padding: 2px 6px; }
+.ui-profile-btn { position: relative; margin-left: 6px; padding: 2px 6px; }
 .ui-card h2 { align-items: center; }
 .ui-card h2 > span:nth-child(2) { margin-left: auto; }
 /* «Открыть магазин» прилипает к низу окна. */
@@ -866,6 +867,7 @@ export const ICONS: Record<string, string> = {
   '🍦': 'item_icecream',
   '🍊': 'item_tangerines',
   '💐': 'item_flowers',
+  '🍉': 'item_watermelons',
   '💧': 'item_water',
   '🧃': 'item_juice',
   '🥟': 'item_dumplings',

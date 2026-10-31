@@ -81,6 +81,9 @@ export type DecorId =
   | 'holiday_tree'
   | 'holiday_ship'
   | 'holiday_mimosa'
+  | 'holiday_scarecrow'
+  | 'holiday_cart'
+  | 'holiday_lantern'
   | 'sign_s1'
   | 'outfit_s1'
   | 'sign_s2'
@@ -104,7 +107,7 @@ export interface DecorItem {
   /** Продаётся только набором за звёзды (STAR_PACKS): id набора. */
   pack?: string;
   /** Праздничная вещь: её дарят открытки этого праздника (live.ts), не купить. */
-  holiday?: 'newyear' | 'feb23' | 'march8';
+  holiday?: 'newyear' | 'feb23' | 'march8' | 'harvest' | 'sale' | 'summer';
   /** Эксклюзив звёздного пропуска этого сезона (pass.ts): не купить, только с его дорожки. */
   season?: number;
   /** Подарок за поддержку автора (support.ts): не купить отдельно. */
@@ -201,6 +204,10 @@ export const DECOR: DecorItem[] = [
   { id: 'holiday_tree', kind: 'holiday', nameKey: 'decor.holiday_tree', texture: 'holiday_tree', holiday: 'newyear' },
   { id: 'holiday_ship', kind: 'holiday', nameKey: 'decor.holiday_ship', texture: 'holiday_ship', holiday: 'feb23' },
   { id: 'holiday_mimosa', kind: 'holiday', nameKey: 'decor.holiday_mimosa', texture: 'holiday_mimosa', holiday: 'march8' },
+  // Памятные вещи сезонных недель (weeks.ts, art/weeks.py): за всю дорожку недели — пугало, тележка, фонарик.
+  { id: 'holiday_scarecrow', kind: 'holiday', nameKey: 'decor.holiday_scarecrow', texture: 'holiday_scarecrow', holiday: 'harvest' },
+  { id: 'holiday_cart', kind: 'holiday', nameKey: 'decor.holiday_cart', texture: 'holiday_cart', holiday: 'sale' },
+  { id: 'holiday_lantern', kind: 'holiday', nameKey: 'decor.holiday_lantern', texture: 'holiday_lantern', holiday: 'summer' },
   // Эксклюзив звёздного пропуска (art/season.py): «Листопад» — первый сезон, «Северное сияние» — второй.
   { id: 'outfit_s1', kind: 'outfit', nameKey: 'decor.outfit_s1', texture: 'outfit_s1', season: 1 },
   { id: 'sign_s1', kind: 'sign', nameKey: 'decor.sign_s1', texture: 'sign_s1', textColor: 0xf7dc85, season: 1 },

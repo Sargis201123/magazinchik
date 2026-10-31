@@ -1,8 +1,10 @@
 import { newGame, normalizeShelves, type StoreState } from './economy';
 import { normalizeDecor } from './decor';
+import { normalizeWeeks } from './weeks';
 import { migrateOwnerTill } from './registers';
 import { migrateAutoOrder, settleInbound } from './autoorder';
 import { migrateTut } from './tutorial';
+import { migrateCollections } from './collections';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId, trustedNow } from '../platform/telegram';
 
@@ -61,13 +63,14 @@ export function loadGame(): StoreState | null {
   if (!save) return null;
   // Новые товары появляются в старых сохранениях со своей ценой по умолчанию.
   const fresh = newGame();
-  const merged = { ...fresh, ...save.state, prices: { ...fresh.prices, ...save.state.prices }, decor: normalizeDecor(save.state.decor) };
+  const merged = { ...fresh, ...save.state, prices: { ...fresh.prices, ...save.state.prices }, decor: normalizeDecor(save.state.decor), weeks: normalizeWeeks(save.state.weeks) };
   // Раньше кассир стоял за первой кассой, теперь она хозяина: кассир переходит за свою (registers.ts).
   // Смотрим на само сохранение — в новой игре поле уже есть, и после слияния оно было бы всегда.
   // Новичок посреди первых дней (обновился до бабушкиного обучения) получает его с того шага, где он сейчас.
   const state = migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? merged : migrateOwnerTill(merged))));
   // До версии 11 мороженое и цветы стояли на обычных полках (теперь — ларь у входа и вёдра у кассы).
-  return normalizeShelves(state, save.version < 11);
+  // Альбом коллекций появился позже: старое сохранение сразу получает уже заработанное (collections.ts).
+  return migrateCollections(normalizeShelves(state, save.version < 11));
 }
 
 let pending: string | null = null;

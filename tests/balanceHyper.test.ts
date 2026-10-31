@@ -40,7 +40,8 @@ describe('баланс гипермаркета', () => {
       }
       expect(paid).not.toBeNull();
       expect(paid!).toBeGreaterThanOrEqual(28);
-      expect(paid!).toBeLessThanOrEqual(50);
+      // Худший сид — до ~7 недель: сезонные недели (weeks.ts) дают выручку неравномерно и сдвигают окупаемость на день-два.
+      expect(paid!).toBeLessThanOrEqual(52);
     }
   });
 
