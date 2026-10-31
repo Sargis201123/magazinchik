@@ -42,6 +42,7 @@ import {
   type CrownPart,
 } from './common';
 import * as lighting from './lighting';
+import * as deliveries from './deliveries';
 
 /**
  * Ярмарка: флажки над фасадом и шарики у входа. Перерисовывается каждое утро
@@ -379,7 +380,7 @@ export function buildUpgrades(scene: StoreScene): void {
   scene.buildOven();
   buildRadio(scene);
   buildCup(scene);
-  scene.buildDelivery();
+  deliveries.buildDelivery(scene);
   // Кассы самообслуживания — у очереди, у правой стены над кассами, одна под другой (вместе с кассой переезжают).
   scene.kiosks = [];
   const tex = KIOSK_SPRITES[kioskTierIndex(scene.state)];
