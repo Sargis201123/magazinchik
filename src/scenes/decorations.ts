@@ -46,6 +46,7 @@ import * as deliveries from './deliveries';
 import * as food from './food';
 import * as persons from './persons';
 import * as camera from './camera';
+import * as shelves from './shelves';
 
 /**
  * Ярмарка: флажки над фасадом и шарики у входа. Перерисовывается каждое утро
@@ -320,7 +321,7 @@ export function buildHallDecor(scene: StoreScene): void {
     clerks.every((c) => Math.hypot(c.x - x, c.y - y) > 22);
   const spots: { x: number; y: number }[] = [];
   // Вдоль правой стены растений больше нет — там автомат, касса и проход; остался угол у склада.
-  const ice = scene.iceboxSpot();
+  const ice = shelves.iceboxSpot(scene);
   if (ice.x >= 36) spots.push({ x: 12, y: h - 14 });
   const bought = activeDecor(scene.state, 'plants')?.texture;
   spots.forEach((def, i) => {
@@ -542,7 +543,7 @@ export function buildDecor(scene: StoreScene): void {
   scene.sunRays = [];
   for (let x = 30, i = 0; x < wc.x - 16; x += 64, i++) {
     // Полки стоят вплотную к стене и закрывают её: за полкой картину и окно не вешаем.
-    if (scene.behindShelf(x, 10)) continue;
+    if (shelves.behindShelf(scene, x, 10)) continue;
     scene.art(x, 9, i % 2 ? 'window' : art).setDepth(1);
     // Из окна на пол ложится солнечное пятно (updateDaylight).
     if (i % 2) {
@@ -553,7 +554,7 @@ export function buildDecor(scene: StoreScene): void {
       if (!scene.lite) scene.sunRays.push({ ray: lighting.sunRay(scene, x, 14, 0xffe6a0), patch });
     }
   }
-  if (62 < wc.x - 16 && !scene.behindShelf(62, 8)) {
+  if (62 < wc.x - 16 && !shelves.behindShelf(scene, 62, 8)) {
     if (activeDecor(scene.state, 'neon')) {
       scene.neonDecorX = 62;
       const glow = scene.art(62, 11, 'glow').setScale(46 / 64, 24 / 64).setTint(0xf6757a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
@@ -580,7 +581,7 @@ export function buildDecor(scene: StoreScene): void {
   // Купленные тележки стоят всегда: покупатели берут их у входа (cartsAtDoor).
   const { counter } = scene.layout;
   scene.art(counter.x, counter.y + 39, 'candy_rack').setDepth(counter.y + 40);
-  const ice = scene.state.shelves.some((sh) => sh.kind === 'icebox') ? iceboxRect(scene.iceboxSpot()) : null;
+  const ice = scene.state.shelves.some((sh) => sh.kind === 'icebox') ? iceboxRect(shelves.iceboxSpot(scene)) : null;
   const low = ice && ice.y + ice.h > h - 16 ? ice : null;
   const fits = (x: number, half: number, taken?: number) =>
     x - half > WING_DOOR_CLEAR &&

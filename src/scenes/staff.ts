@@ -71,6 +71,7 @@ import * as shoppers from './shoppers';
 import * as persons from './persons';
 import * as visitors from './visitors';
 import * as newcomer from './newcomer';
+import * as shelves from './shelves';
 
 // ---------- Продавец: уборка и выкладка ----------
 
@@ -170,7 +171,7 @@ export function callSellerIfNeeded(scene: StoreScene): void {
 export function restockShelf(scene: StoreScene, index: number): void {
   if (!scene.running || scene.sellerBusy) return;
   const shelf = scene.state.shelves[index];
-  const slot = scene.spotOf(index);
+  const slot = shelves.spotOf(scene, index);
   if (shelf.broken) {
     scene.popup(slot.x, slot.y - 18, t('popup.broken'), '#ffd0d0');
     return;
@@ -189,7 +190,7 @@ export function restockShelf(scene: StoreScene, index: number): void {
   const trips = Math.max(1, Math.ceil(Math.min(shelfFree(shelf), stock) / (carryOf(scene.state) + carryBonus(scene.state))));
   const { doorway, pickup } = scene.layout.warehouse;
   // К ларю на улице — через дверь и обратно.
-  const route = scene.routeTo(index);
+  const route = shelves.routeTo(scene, index);
   const stand = route[route.length - 1];
   const back = route.slice(0, -1).reverse();
   const trip: ChoreStep[] = [
@@ -406,7 +407,7 @@ export function spill(scene: StoreScene, x: number, y: number): void {
 export function fridgeLeaks(scene: StoreScene): void {
   const fridges = scene.state.shelves.map((s, i) => ({ s, i })).filter(({ s }) => SHELF_KINDS[s.kind].fridge && !SHELF_KINDS[s.kind].fixture);
   if (!fridges.length) return;
-  const slot = scene.spotOf(Phaser.Utils.Array.GetRandom(fridges).i);
+  const slot = shelves.spotOf(scene, Phaser.Utils.Array.GetRandom(fridges).i);
   const front = standFor(scene.layout, slot);
   const piece = dropTrash(scene, front.x + Phaser.Math.Between(-6, 6), front.y + 2, 'spill');
   if (!piece) return;
@@ -893,7 +894,7 @@ export async function loaderLoop(scene: StoreScene, w: Worker, gen: number): Pro
       continue;
     }
     const { doorway, pickup } = scene.layout.warehouse;
-    const route = scene.routeTo(index);
+    const route = shelves.routeTo(scene, index);
     await workerWalkVia(scene, w, [doorway, pickup]);
     await workerWait(scene, w, PICKUP_MS);
     if (!scene.alive(gen)) return;

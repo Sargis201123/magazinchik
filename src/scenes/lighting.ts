@@ -33,6 +33,7 @@ import {
   type NightLight,
   type Lamp,
 } from './common';
+import * as shelves from './shelves';
 
 /**
  * Карта освещения под новый мир (scenes/light.ts): где есть свет (квартал вокруг магазина, за ним — фон
@@ -96,7 +97,7 @@ export function buildLighting(scene: StoreScene, next: Layout): void {
     scene.wallDusk.fillStyle(0x3a2434, 0.24).fillRect(0, 0, w, wallH);
     scene.wallDusk.fillGradientStyle(ink, ink, ink, ink, 0.5, 0.5, 0, 0).fillRect(0, 0, w, 4);
     const spots = [wc.x];
-    for (let x = 30; x < wc.x - 16; x += 64) if (!scene.behindShelf(x, 10)) spots.push(x);
+    for (let x = 30; x < wc.x - 16; x += 64) if (!shelves.behindShelf(scene, x, 10)) spots.push(x);
     for (const x of spots) {
       const tint = led ? 0xeef4ff : 0xffd08a;
       // Конус — свет на стене: он в карте освещения (сам по себе не рисуется), сила — как у бра.
@@ -543,7 +544,7 @@ export function buildLights(scene: StoreScene): void {
   // По бокам от часов и дальше — между плакатами и окнами.
   const spots = [46, 78];
   for (let x = 126; x < wc.x - 12; x += 64) spots.push(x);
-  for (const x of spots.filter((sx) => sx < wc.x - 12 && !scene.behindShelf(sx, 4))) {
+  for (const x of spots.filter((sx) => sx < wc.x - 12 && !shelves.behindShelf(scene, sx, 4))) {
     const lamp = scene.art(x, y, light.texture!).setDepth(2);
     const bulb = scene.art(x + (hanging ? 0.5 : 2), hanging ? y + 3 : y - 3, 'glow')
       .setDisplaySize(light.id === 'light_chandelier' ? 30 : 18, 14)

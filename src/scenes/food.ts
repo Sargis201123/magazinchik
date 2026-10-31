@@ -54,6 +54,7 @@ import * as lighting from './lighting';
 import * as staff from './staff';
 import * as persons from './persons';
 import * as camera from './camera';
+import * as shelves from './shelves';
 
 /** Кофейня во флигеле: кофемашина у стены, стойка, за ней бариста; в углу столик. */
 export function buildCoffee(scene: StoreScene): void {
@@ -323,7 +324,7 @@ export async function bakerLoop(scene: StoreScene, w: Worker, gen: number): Prom
       }
       w.carried.setTexture('bread_tray').setPosition(0, 1).setVisible(true);
       const index = breadShelfIndex(scene, product);
-      const slot = index >= 0 ? scene.spotOf(index) : null;
+      const slot = index >= 0 ? shelves.spotOf(scene, index) : null;
       // Из пекарни через дверь к полке — одним ходом, без остановки в дверях.
       const stand = slot && standFor(scene.layout, slot);
       await staff.workerWalkVia(scene, w, [room.inside, room.doorway, ...(stand ? [{ x: stand.x, y: stand.y - 2 }] : [])]);
@@ -525,7 +526,7 @@ export function buildFood(scene: StoreScene): void {
   const fp = propFootprint(scene.layout, 'food', 0);
   // Места под все киоски помещения (и ещё не купленные): полку не ставим туда, где встанет киоск.
   const zones = [...tillZones(scene.layout, registerSlots(scene.state), kioskSlots(scene.state)), ...blockedZones(scene.layout)];
-  const ice = scene.state.shelves.some((sh) => sh.kind === 'icebox') ? [iceboxRect(scene.iceboxSpot())] : [];
+  const ice = scene.state.shelves.some((sh) => sh.kind === 'icebox') ? [iceboxRect(shelves.iceboxSpot(scene))] : [];
   // Горка уценки целиком (она выше своего следа) и место её покупателя; где стоят менеджер и охранник.
   const bargain = scene.bargainAt;
   const stand = bargain ? [{ x: bargain.x - 15, y: scene.bargainStand(bargain) - 4, w: 30, h: bargain.y + 8 - (scene.bargainStand(bargain) - 4) }] : [];
@@ -806,7 +807,7 @@ export async function fetchIngredients(scene: StoreScene, w: Worker, gen: number
   if (shelf >= 0) {
     // Со склада в зал — обратно через дверь, а не наискосок сквозь стену флигеля.
     if (fromStore) await staff.workerWalk(scene, w, store.doorway.x, store.doorway.y);
-    const stand = standFor(scene.layout, scene.spotOf(shelf));
+    const stand = standFor(scene.layout, shelves.spotOf(scene, shelf));
     await staff.workerWalk(scene, w, stand.x, stand.y - 2);
     await staff.workerWait(scene, w, PLACE_MS);
   }

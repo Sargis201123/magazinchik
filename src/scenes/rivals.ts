@@ -36,6 +36,7 @@ import * as staff from './staff';
 import * as persons from './persons';
 import * as visitors from './visitors';
 import * as morningFlow from './morningFlow';
+import * as shelves from './shelves';
 
 /**
  * В гостях у друга: на экране его магазин по снимку с сервера (только смотреть). Свой магазин
@@ -176,7 +177,7 @@ export async function visitRival(scene: StoreScene, key: string | null, name: st
 /** Место в чужом зале, куда встать: перед случайной полкой, чуть вразброс. */
 export function rivalSpot(scene: StoreScene): { x: number; y: number } {
   const n = scene.state.shelves.length;
-  const p = n ? scene.standOf(Phaser.Math.Between(0, n - 1)) : { x: scene.layout.door.x, y: scene.layout.door.y - 20 };
+  const p = n ? shelves.standOf(scene, Phaser.Math.Between(0, n - 1)) : { x: scene.layout.door.x, y: scene.layout.door.y - 20 };
   return { x: p.x + Phaser.Math.Between(-6, 6), y: p.y + Phaser.Math.Between(0, 4) };
 }
 
@@ -381,7 +382,7 @@ export async function fakeInspector(scene: StoreScene): Promise<void> {
   ]);
   for (let i = 0; i < 3 && man.active; i++) {
     const index = Phaser.Math.Between(0, Math.max(0, scene.state.shelves.length - 1));
-    const stand = scene.standOf(index);
+    const stand = shelves.standOf(scene, index);
     await persons.walk(scene, man, stand.x, stand.y);
     if (!man.active) return;
     scene.popup(man.x, man.y - 20, t('popup.fakeInspector'), '#fff3b0');

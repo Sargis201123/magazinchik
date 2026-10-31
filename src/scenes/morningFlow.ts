@@ -69,6 +69,7 @@ import * as nightShift from './nightShift';
 import * as newcomer from './newcomer';
 import * as rivals from './rivals';
 import * as camera from './camera';
+import * as shelves from './shelves';
 
 // ---------- День ----------
 
@@ -177,7 +178,7 @@ export function showMorning(scene: StoreScene): void {
     return;
   }
   showMorningMenu({
-    onArrange: () => scene.arrange(),
+    onArrange: () => shelves.arrange(scene),
     onVisit: (id, name) => void rivals.visitFriend(scene, id, name),
     onRival: (key, name) => void rivals.visitRival(scene, key, name),
     onBoss: eduardLook(scene.state) !== 'vacant' ? () => void rivals.visitRival(scene, null, '') : undefined,

@@ -47,6 +47,7 @@ import * as staff from './staff';
 import * as shoppers from './shoppers';
 import * as persons from './persons';
 import * as camera from './camera';
+import * as shelves from './shelves';
 
 export function currentHint(scene: StoreScene): string {
   if (scene.liveEvent) return t(`hint.${scene.liveEvent}` as TextKey);
@@ -66,7 +67,7 @@ export function currentHint(scene: StoreScene): string {
     if (nextRegisterPrice(scene.state) !== null) return t('hint.queueBuy');
     if ((nextRegisterCount(scene.state) ?? 0) > registerSlots(scene.state)) return t('hint.queueRegister');
   }
-  if (scene.state.day <= 4 && scene.shelfNeedsRestock()) return t('hint.restock');
+  if (scene.state.day <= 4 && shelves.shelfNeedsRestock(scene)) return t('hint.restock');
   if (!scene.state.seenTips?.includes(ROT_TIP) && [...scene.trash].some((piece) => piece.getData('rot')))
     return t(scene.state.staff.some((m) => m.role === 'cleaner') ? 'hint.rot' : 'hint.rotSolo');
   if (scene.binFull() && !scene.binBusy) return t('hint.bin');
@@ -89,7 +90,7 @@ export function nudgeHint(scene: StoreScene): string {
   if (scene.nudge && scene.nudgeUntil > now) return t(scene.nudge === 'serve' ? 'hint.serve' : 'hint.restock');
   scene.nudge = null;
   if (now - scene.lastTouch < NUDGE_IDLE_MS) return '';
-  const kind = hallNudge({ waiting: Boolean(scene.ownerRegister()) && !scene.sellerBusy, emptyShelf: scene.shelfNeedsRestock() });
+  const kind = hallNudge({ waiting: Boolean(scene.ownerRegister()) && !scene.sellerBusy, emptyShelf: shelves.shelfNeedsRestock(scene) });
   if (!kind || !tryNudge(scene.state.day, kind, now - scene.lastTouch)) return '';
   scene.nudge = kind;
   scene.nudgeUntil = now + NUDGE_SHOW_MS;
@@ -122,9 +123,9 @@ export function tutorialTarget(scene: StoreScene): { x: number; y: number } | nu
   const waitingAt = scene.ownerRegister();
   if (waitingAt && (scene.sellerBusy || scene.stats.served < 3 || scene.nudge === 'serve')) return { x: waitingAt.counter.x, y: waitingAt.counter.y - 28 };
   void counter;
-  if (scene.shelfNeedsRestock()) {
+  if (shelves.shelfNeedsRestock(scene)) {
     const index = scene.shelfViews.findIndex((v) => v.needsStock);
-    if (index >= 0) return { x: scene.spotOf(index).x, y: scene.spotOf(index).y - 18 };
+    if (index >= 0) return { x: shelves.spotOf(scene, index).x, y: shelves.spotOf(scene, index).y - 18 };
   }
   const trash = [...scene.trash].find((piece) => !scene.claimedTrash.has(piece));
   if (trash) return { x: trash.x, y: trash.y - 2 };
@@ -169,7 +170,7 @@ export function spawnFirst(scene: StoreScene): void {
   if (!scene.running || onbDone(scene.state, 'sale')) return;
   const { door } = scene.layout;
   const till = scene.registers[0]?.spot ?? scene.layout.counter;
-  const want = firstWant(scene.state, (i) => scene.standOf(i), door, till);
+  const want = firstWant(scene.state, (i) => shelves.standOf(scene, i), door, till);
   const look = customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day);
   // Уже на дорожке у двери: камера ещё подлетает, а он входит.
   scene.spawnCustomer({ look, at: { x: door.x, y: door.y + 24 }, wants: want ? [want] : undefined, first: true });
@@ -258,7 +259,7 @@ export async function grannyRestock(scene: StoreScene, index: number): Promise<v
     track('first_granny_stock', scene.state.day, scene.sincePlay());
   }
   const { doorway, pickup } = scene.layout.warehouse;
-  const route = scene.routeTo(index);
+  const route = shelves.routeTo(scene, index);
   await persons.walkVia(scene, granny, [doorway, pickup], GRANNY_SPEED);
   if (!ok()) return done();
   await scene.wait(PICKUP_MS);
@@ -473,7 +474,7 @@ export function tutWorldSpot(scene: StoreScene, step: TutStep): { x: number; y: 
     (v, i) => v.needsStock && PRODUCT_IDS.some((id) => canPlace(id, scene.state.shelves[i]) && (scene.state.warehouse[id] ?? []).some((u) => !u.pending)),
   );
   if (index < 0) return null;
-  const at = scene.spotOf(index);
+  const at = shelves.spotOf(scene, index);
   return { x: at.x, y: at.y - 12, w: 30, h: 30 };
 }
 

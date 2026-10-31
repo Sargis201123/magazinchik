@@ -126,6 +126,7 @@ import * as persons from './persons';
 import * as visitors from './visitors';
 import * as newcomer from './newcomer';
 import * as camera from './camera';
+import * as shelves from './shelves';
 
 /** Шоколадка со стойки у кассы летит в руки стоящему в очереди. */
 export function grabCandy(scene: StoreScene, c: Customer): void {
@@ -257,7 +258,7 @@ export async function runInspector(scene: StoreScene): Promise<void> {
     35,
   );
   // Полки в зале и вёдра у кассы (ларь у входа он видел, когда заходил).
-  for (const i of scene.state.shelves.map((_, i) => i)) if (scene.state.shelves[i].kind !== 'icebox') await look(scene.standOf(i).x, scene.standOf(i).y);
+  for (const i of scene.state.shelves.map((_, i) => i)) if (scene.state.shelves[i].kind !== 'icebox') await look(shelves.standOf(scene, i).x, shelves.standOf(scene, i).y);
   await look(wc.x - 6, wc.spotY + 4);
   await look(sellerHome.x - 30, sellerHome.y - 10);
   if (!scene.sys.isActive()) return;
@@ -509,7 +510,7 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
     const index = shelfFor(scene.state, id);
     // Ларь у кассы на виду — вор туда не идёт.
     if (index < 0 || c.gone || scene.state.shelves[index].kind === 'icebox') continue;
-    const stand = scene.standOf(index);
+    const stand = shelves.standOf(scene, index);
     await persons.walk(scene, c.sprite, stand.x + Phaser.Math.Between(-8, 8), stand.y);
     if (c.gone) return;
     await scene.wait(400);
@@ -577,12 +578,12 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   let why: { reason: LostReason; id: ProductId } | undefined;
   // Подойти, поискать глазами, взять: к полке в зале, к ларю и к вёдрам у кассы — одинаково.
   const visit = async (id: ProductId, index: number): Promise<ReturnType<typeof tryTake> | null> => {
-    const stand = scene.standOf(index);
+    const stand = shelves.standOf(scene, index);
     const fixture = SHELF_KINDS[scene.state.shelves[index].kind].fixture;
     // Над головой облачко: что покупатель ищет.
     const thought = motion.think(scene, c.sprite, id);
     // У боковой полки встают вдоль неё (по вертикали), у обычной — вдоль по горизонтали.
-    const along = !fixture && slotSide(scene.layout, scene.spotOf(index)) ? 'y' : 'x';
+    const along = !fixture && slotSide(scene.layout, shelves.spotOf(scene, index)) ? 'y' : 'x';
     const jitter = Phaser.Math.Between(-8, 8) * (fixture ? 0.4 : 1);
     await persons.walk(scene, c.sprite, stand.x + (along === 'x' ? jitter : 0), stand.y + (along === 'y' ? jitter : 0));
     await scene.wait(500);
@@ -598,7 +599,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
       return null;
     }
     const result = tryTake(scene, c, id);
-    motion.reachShelf(scene, c, scene.spotOf(index), result === 'taken' ? id : null, result === 'taken' ? scene.takenFrom : []);
+    motion.reachShelf(scene, c, shelves.spotOf(scene, index), result === 'taken' ? id : null, result === 'taken' ? scene.takenFrom : []);
     if (result === 'taken' && c.sprite.y < scene.layout.h && Math.random() < SPILL_CHANCE) staff.spill(scene, c.sprite.x, c.sprite.y + 2);
     const failed = result === 'empty' || result === 'expensive' || result === 'eduard';
     motion.endThought(scene, thought, failed);
@@ -627,7 +628,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     const index = shelfFor(scene.state, id);
     if (index < 0) continue;
     const result = await visit(id, index);
-    if (result === 'taken' && !extra && !c.thief && !c.first) extra = scene.pairPick(index, wanted);
+    if (result === 'taken' && !extra && !c.thief && !c.first) extra = shelves.pairPick(scene, index, wanted);
   }
   if (c.gone) return;
   if (extra) {
@@ -743,7 +744,7 @@ export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' 
     radioTolerance(scene.state) *
     adTrust(scene.state) *
     // Химия рядом с едой — к еде с этой полки придираются сильнее.
-    (scene.clashes(index) ? CLASH_FACTOR : 1);
+    (shelves.clashes(scene, index) ? CLASH_FACTOR : 1);
   // «2 по цене 1»: за штуку выходит вдвое дешевле.
   const bogo = promoKind(scene.state, id) === 'bogo';
   const perUnit = bogo ? price / 2 : price;
