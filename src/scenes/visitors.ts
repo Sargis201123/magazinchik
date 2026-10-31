@@ -41,6 +41,7 @@ import * as cars from './cars';
 import * as persons from './persons';
 import * as camera from './camera';
 import * as building from './building';
+import * as arcsFx from './arcsFx';
 import type { ClientId } from '../game/events';
 
 const MARAT: Look = { shirt: 0xffffff, skin: 0xd9a066, pants: 0x262b44, hair: 0xffffff, style: 'cap' };
@@ -279,6 +280,8 @@ export function scheduleStoryGuests(scene: StoreScene): void {
   if (special) at(Phaser.Math.FloatBetween(0.2, 0.6), () => runSpecial(scene, special));
   // Добрая бабушка возвращает долг.
   if (scene.state.grannyOwed && Math.random() < 0.5) at(0.35, () => runGrannyRepay(scene));
+  // Хроники района: герой истории у кассы, свадебная машина, грузовик с вещами, забег (arcsFx.ts).
+  arcsFx.scheduleArcScene(scene);
 }
 
 /**

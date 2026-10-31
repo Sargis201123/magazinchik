@@ -30,6 +30,7 @@ import { hiddenBigDayGuests, knownBigDayGuests } from './bigday';
 import { coffeeTablesGuests } from './coffee';
 import { legacyGuests } from './legacy';
 import { taleGuests, talesMorning } from './tales';
+import { arcGuests, arcsMorning } from './arcs';
 import { addPassXp } from './pass';
 import { rushGuests } from './rush';
 import { spoilDishes } from './kitchen';
@@ -82,7 +83,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = branchReport(contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(staffMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random), random), random), random), stats.revenue), stats.revenue, random), stats), day, branch.income);
+  const next = branchReport(contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random), random), random), stats.revenue), stats.revenue, random), stats), day, branch.income);
   return {
     ...night,
     state: next,
@@ -113,6 +114,7 @@ export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
   legacyGuests(state) *
   taleGuests(state) *
+  arcGuests(state) *
   rushGuests(state) *
   priceAppeal(state) *
   coffeeTablesGuests(state) *

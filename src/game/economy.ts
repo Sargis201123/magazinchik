@@ -700,6 +700,8 @@ export interface StoreState {
   supporter?: number;
   /** Истории постоянных покупателей (tales.ts). */
   tales?: TalesState;
+  /** Хроники района после финала: истории постоянных, договор с кафе, летний помощник (arcs.ts). */
+  arcs?: import('./arcs').ArcsState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */
   legacy?: Legacy;
   /** Сколько должна добрая бабушка, которой дали хлеба в долг (special.ts). */

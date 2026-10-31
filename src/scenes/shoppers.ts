@@ -99,6 +99,7 @@ import * as cars from './cars';
 import * as staff from './staff';
 import * as persons from './persons';
 import * as visitors from './visitors';
+import * as arcsFx from './arcsFx';
 import * as newcomer from './newcomer';
 import * as camera from './camera';
 import * as shelves from './shelves';
@@ -482,6 +483,8 @@ export function spawnCustomer(
       wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
     }
   }
+  // Хроники района: в праздник часть гостей нарядные, в день детей — дети с шарами (arcsFx.ts).
+  if (!forced && !arrived && !rare && !thief && !valya && !nightGuest && !fromDistrict) look = arcsFx.dressUp(scene, look);
   const start = forced?.at ?? visitors.streetSpawn(scene);
   const sprite = arrived?.sprite ?? persons.makePerson(scene, start.x, start.y, look);
   if (!arrived) weatherFx.addUmbrella(scene, sprite);
