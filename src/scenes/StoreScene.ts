@@ -2184,7 +2184,8 @@ export class StoreScene extends Phaser.Scene {
       if ((nextRegisterCount(this.state) ?? 0) > registerSlots(this.state)) return t('hint.queueRegister');
     }
     if (this.state.day <= 4 && this.shelfNeedsRestock()) return t('hint.restock');
-    if (!this.state.seenTips?.includes(ROT_TIP) && [...this.trash].some((piece) => piece.getData('rot'))) return t('hint.rot');
+    if (!this.state.seenTips?.includes(ROT_TIP) && [...this.trash].some((piece) => piece.getData('rot')))
+      return t(this.state.staff.some((m) => m.role === 'cleaner') ? 'hint.rot' : 'hint.rotSolo');
     if (this.binFull() && !this.binBusy) return t('hint.bin');
     if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
     return '';

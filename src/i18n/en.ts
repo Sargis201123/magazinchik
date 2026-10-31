@@ -2720,6 +2720,8 @@ export const en: Record<TextKey, string> = {
   "first.giftTitle": "A gift from Grandma",
   "first.giftText": "“For your first day — my vase of flowers. Let it stand by the till, for luck.” It's already on the counter.",
   "first.giftOk": "Thank you, Grandma!",
+  "goal.dream.shelfReady": "Dream: {name} — you can afford it! Buy it in the morning ✨",
+  "hint.rotSolo": "Trash on the floor started to smell — tap it to clean up",
   "goal.dream.shelf": "Dream: {name} — {n} / {cost} 💰",
   "goal.dream.level": "Dream: “{name}” — {n} / {cost} 💰",
   "goal.next.dream": "Trade and save: a new shelf goes on a free spot in the morning, “Hall” tab.",

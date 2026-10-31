@@ -92,7 +92,8 @@ export function dreamGoal(s: StoreState): Goal | null {
     return {
       id: 'dream',
       icon: '✨',
-      key: 'goal.dream.shelf',
+      // Хватает — полоска не стоит полной до вечера, а зовёт за покупкой.
+      key: s.money >= cost ? 'goal.dream.shelfReady' : 'goal.dream.shelf',
       params: { name: SHELF_KINDS[kind].nameKey, n: Math.min(s.money, cost), cost },
       progress: clamp01(s.money / cost),
       next: s.money >= cost ? 'goal.next.dreamReady' : 'goal.next.dream',
