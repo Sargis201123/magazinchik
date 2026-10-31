@@ -615,8 +615,6 @@ export class StoreScene extends Phaser.Scene {
   ritualDay = -1;
   /** Витрина трофеев коллекций в зале (collections.ts): где стоит и какие трофеи уже на полках. */
   trophyCase?: { x: number; y: number; img: Phaser.GameObjects.Image; shown: import('../game/collections').SetId[] };
-  /** Что из «Новое в альбоме» уже показано надписью над кассой (collections.tick). */
-  collectSeen?: Set<string>;
 
   constructor() {
     super('store');

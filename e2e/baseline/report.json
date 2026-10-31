@@ -41,13 +41,13 @@
   },
   {
     "shot": "l6-day.png",
-    "drawCalls": 134,
-    "textureBinds": 132
+    "drawCalls": 128,
+    "textureBinds": 125
   },
   {
     "shot": "l6-evening.png",
-    "drawCalls": 163,
-    "textureBinds": 148
+    "drawCalls": 159,
+    "textureBinds": 145
   },
   {
     "shot": "pl4-day.png",

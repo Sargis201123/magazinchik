@@ -2750,7 +2750,6 @@ export const en: Record<TextKey, string> = {
   "col.partyCoins": "“{trophy}” goes to the hall showcase, +{money} 💰",
   "col.partyTrophy": "“{trophy}” goes to the hall showcase",
   "col.partyAll": "Every collection is complete — the album turned golden!",
-  "col.popupNew": "📖 Album: {icon} {name}",
   "col.set.guests": "Rare guests",
   "col.set.cards": "Letters",
   "col.set.recipes": "Recipes",

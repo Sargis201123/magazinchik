@@ -1,6 +1,6 @@
 // Альбом коллекций в мире (game/collections.ts): витрина трофеев в зале — по трофею за каждый
 // собранный набор, золотая, когда собраны все, — и праздник, когда набор собран. Раз в секунду
-// альбом добирает заработанное, показывает «📖 В альбом: …» над кассой и празднует собранное.
+// альбом добирает заработанное и празднует собранное.
 // Сам альбом-книга — в ui/album.ts.
 
 import type { StoreScene } from './StoreScene';
@@ -20,6 +20,7 @@ import {
   trophyKey,
   type SetId,
 } from '../game/collections';
+import { DAY_SECONDS } from '../game/economy';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { haptic } from '../platform/telegram';
@@ -75,7 +76,8 @@ export function buildTrophyCase(scene: StoreScene): void {
   const def = spots.find((p) => free(p.x, p.y)) ?? spots[0];
   const p = building.propAt(scene, 'trophies', def);
   if (p === def && !free(p.x, p.y)) return;
-  const golden = albumGolden(scene.state);
+  // Золотая витрина — только когда праздник последнего набора уже показан (иначе он сам её позолотит).
+  const golden = albumGolden(scene.state) && !(scene.state.collections?.party ?? []).length;
   const tex = golden ? 'trophy_case_gold' : 'trophy_case';
   const img = scene.art(p.x, p.y, tex).setDepth(p.y + 10);
   scene.obstacles.push({ x: p.x + fp.x, y: p.y + fp.y, w: fp.w, h: fp.h });
@@ -124,7 +126,7 @@ function placeTrophy(scene: StoreScene, set: SetId): { x: number; y: number } | 
   const box = scene.trophyCase;
   if (box?.img.active) {
     const img = addTrophy(scene, set);
-    if (albumGolden(scene.state)) {
+    if (albumGolden(scene.state) && box.img.texture.key !== 'trophy_case_gold') {
       box.img.setTexture('trophy_case_gold');
       shine(scene);
     }
@@ -190,32 +192,17 @@ export function note(scene: StoreScene, set: SetId, item: string): void {
 }
 
 /**
- * Раз в секунду: добрать заработанное, сказать о новом над кассой и отпраздновать собранное.
+ * Раз в секунду: добрать заработанное и отпраздновать собранное. Новое в альбоме видно меткой
+ * «Новое» на кнопке профиля и в самом альбоме — без надписей в зале.
  * В гостях у друга на экране чужой магазин — его альбом не трогаем.
  */
 export function tick(scene: StoreScene): void {
   if (savingPaused() || scene.onTitle) return;
-  let next = syncCollections(scene.state);
-  const fresh = next.collections?.fresh ?? [];
-  // Первый взгляд после загрузки: то, что уже было, — не новость.
-  if (!scene.collectSeen) scene.collectSeen = new Set(fresh);
-  const news = fresh.filter((f) => !scene.collectSeen!.has(f));
-  for (const f of news) scene.collectSeen.add(f);
-  const party = takeParty(next);
-  next = party.state;
-  if (next === scene.state && !news.length) return;
-  scene.state = next;
-  saveGame(next);
-  if (!scene.running) scene.hud.update(next, scene.timeLeft);
-  // У редкого гостя своя надпись (shoppers.rareGuestServed).
-  const { sellerHome } = scene.layout;
-  news
-    .filter((f) => !f.startsWith('guests:'))
-    .forEach((f, i) => {
-      const [set, id] = f.split(':') as [SetId, string];
-      const item = collectionSet(set)?.items.find((x) => x.id === id);
-      if (!item) return;
-      scene.time.delayedCall(i * 900, () => scene.popup(sellerHome.x - 24, sellerHome.y - 46, t('col.popupNew', { icon: item.icon, name: t(item.nameKey) }), '#c8e6ff'));
-    });
+  const party = takeParty(syncCollections(scene.state));
+  if (party.state === scene.state) return;
+  scene.state = party.state;
+  saveGame(party.state);
+  // Утром часы дня ещё не идут: HUD показывает полный день, как утреннее окно.
+  if (!scene.running) scene.hud.update(party.state, scene.dayOpen ? scene.timeLeft : DAY_SECONDS);
   if (party.sets.length) celebrate(scene, party.sets);
 }

@@ -2748,7 +2748,6 @@ export const ru = {
   "col.partyCoins": "Трофей «{trophy}» — в витрину зала, +{money} 💰",
   "col.partyTrophy": "Трофей «{trophy}» — в витрину зала",
   "col.partyAll": "Все коллекции собраны — альбом стал золотым!",
-  "col.popupNew": "📖 В альбом: {icon} {name}",
   "col.set.guests": "Редкие гости",
   "col.set.cards": "Письма",
   "col.set.recipes": "Рецепты",

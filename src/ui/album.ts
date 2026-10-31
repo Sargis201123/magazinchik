@@ -35,7 +35,7 @@ const css = `
 .ui-album-btn .ui-tab-dot { top: -6px; right: -4px; }
 .ui-album-new { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 8px; background: #e43b44; color: #fff;
   font-size: 11px; line-height: 16px; vertical-align: middle; }
-.ui-album { padding: 0 !important; overflow: hidden; }
+.ui-album { padding: 0 !important; overflow-x: hidden; }
 .ui-album-cover { margin: -2px -2px 0; padding: 10px 12px 8px; border-radius: 6px 6px 0 0; color: #fbe9c8; text-align: center;
   background: linear-gradient(180deg, #8a4a32, #6a3424); box-shadow: inset 0 0 0 2px #b86f50, inset 0 0 0 4px #5a2a1c; }
 .ui-album-cover h2 { margin: 0; color: #fee761; text-shadow: 0 2px 0 #3b1d14; }
