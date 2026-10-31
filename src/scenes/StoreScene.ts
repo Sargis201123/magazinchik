@@ -13079,7 +13079,8 @@ export class StoreScene extends Phaser.Scene {
         return null;
       }
       // Первый день новичка: товар кончился на полке, а на складе есть — покупатель ждёт, пока его поднесут.
-      if (await this.waitForShelf(c, index, id)) {
+      // Проверка — без await: у всех остальных путь к полке не сдвигается ни на микрозадачу (порядок случайных чисел — как был).
+      if (this.shelfWaitNeeded(c, index, id) && (await this.waitForShelf(c, index, id))) {
         this.endThought(thought, false);
         return null;
       }
@@ -13195,10 +13196,13 @@ export class StoreScene extends Phaser.Scene {
    * Первый день новичка, пока бабушка за прилавком: на полке товар кончился, а на складе он есть —
    * покупатель говорит «сейчас поднесут» и ждёт (бабушка или игрок разложат). true — ушёл, пока ждал.
    */
+  private shelfWaitNeeded(c: Customer, index: number, id: ProductId): boolean {
+    if (!gentleDay(this.state) || this.night || !this.granny?.active || c.thief) return false;
+    return (this.state.shelves[index]?.items[id]?.length ?? 0) === 0 && (this.state.warehouse[id] ?? []).some((u) => !u.pending);
+  }
+
   private async waitForShelf(c: Customer, index: number, id: ProductId): Promise<boolean> {
     const has = () => (this.state.shelves[index]?.items[id]?.length ?? 0) > 0;
-    if (!gentleDay(this.state) || this.night || !this.granny?.active || c.thief || has()) return false;
-    if (!(this.state.warehouse[id] ?? []).some((u) => !u.pending)) return false;
     this.popup(c.sprite.x, c.sprite.y - 14, t('first.wait'), '#fff3b0');
     for (let waited = 0; waited < GRANNY_SHELF_WAIT_MS && !has(); waited += 300) {
       await this.wait(300);
