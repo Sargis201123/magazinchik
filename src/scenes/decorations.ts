@@ -44,6 +44,7 @@ import {
 import * as lighting from './lighting';
 import * as deliveries from './deliveries';
 import * as food from './food';
+import * as persons from './persons';
 
 /**
  * Ярмарка: флажки над фасадом и шарики у входа. Перерисовывается каждое утро
@@ -586,7 +587,7 @@ export function buildDecor(scene: StoreScene): void {
     (!low || x + half < low.x - 2 || x - half > low.x + low.w + 2) &&
     (taken === undefined || Math.abs(x - taken) > 16);
   const beyond = (half: number) => (low ? low.x + low.w + 3 + half : -1);
-  const cartsX = scene.cartsAtDoor() ? ([door.x + 46, door.x - 46, door.x - 24, beyond(9)].find((x) => fits(x, 9)) ?? door.x + 46) : undefined;
+  const cartsX = persons.cartsAtDoor(scene) ? ([door.x + 46, door.x - 46, door.x - 24, beyond(9)].find((x) => fits(x, 9)) ?? door.x + 46) : undefined;
   const basketsX = [door.x + 26, door.x - 26, beyond(6)].find((x) => fits(x, 6, cartsX)) ?? door.x + 26;
   if (cartsX !== undefined) scene.art(cartsX, h - 10, 'carts').setDepth(h - 4);
   // Коврик у входа и автомат с напитками у правой стены.

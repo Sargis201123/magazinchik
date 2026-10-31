@@ -24,6 +24,7 @@ import {
   customerLook,
   GRANDMA,
 } from './common';
+import * as persons from './persons';
 
 /**
  * Расширение — событие: утреннее окно прячется, на участке леса и строители стучат молотками,
@@ -43,7 +44,7 @@ export async function celebrateExpansion(scene: StoreScene): Promise<void> {
   const crew: Phaser.GameObjects.GameObject[] = [];
   for (const spot of spots) {
     crew.push(scene.art(spot.x, spot.y, 'scaffold').setDepth(spot.y));
-    const builder = scene.makePerson(spot.x + 14, spot.y + 10, { ...randomLook(0xfeae34), style: 'cap', hair: 0xfeae34, acc: 'vest' });
+    const builder = persons.makePerson(scene, spot.x + 14, spot.y + 10, { ...randomLook(0xfeae34), style: 'cap', hair: 0xfeae34, acc: 'vest' });
     scene.tweens.add({ targets: builder, scaleY: 0.92, duration: 140, yoyo: true, repeat: -1 });
     crew.push(builder);
   }
@@ -101,8 +102,8 @@ export async function celebrateMove(scene: StoreScene, modal: HTMLElement | null
   const y = h + FACADE_H + 12;
   const guests = [GRANDMA, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day), customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day)];
   const crowd = guests.map((look, i) => {
-    const person = scene.makePerson(door.x + [-20, 20, -38][i], y + [0, 2, 4][i], look);
-    scene.setFacing(person, 'up');
+    const person = persons.makePerson(scene, door.x + [-20, 20, -38][i], y + [0, 2, 4][i], look);
+    persons.setFacing(person, 'up');
     return person;
   });
   const burst = (x: number, by: number, n: number) => {

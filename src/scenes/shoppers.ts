@@ -122,6 +122,7 @@ import * as weatherFx from './weatherFx';
 import * as food from './food';
 import * as cars from './cars';
 import * as staff from './staff';
+import * as persons from './persons';
 
 /** Шоколадка со стойки у кассы летит в руки стоящему в очереди. */
 export function grabCandy(scene: StoreScene, c: Customer): void {
@@ -167,7 +168,7 @@ export function scheduleFriends(scene: StoreScene): void {
 
 export function spawnFriend(scene: StoreScene, f: VisitFriend): void {
   const start = scene.streetSpawn();
-  const sprite = scene.makePerson(start.x, start.y, customerLook(SHIRTS[f.id % SHIRTS.length], scene.state.day));
+  const sprite = persons.makePerson(scene, start.x, start.y, customerLook(SHIRTS[f.id % SHIRTS.length], scene.state.day));
   weatherFx.addUmbrella(scene, sprite);
   const bubble = scene.art(0, -14, 'bubble').setVisible(false);
   // Имя над головой — видно, что это друг.
@@ -192,13 +193,13 @@ export function spawnFriend(scene: StoreScene, f: VisitFriend): void {
 
 export function spawnRegular(scene: StoreScene, r: Regular): void {
   const start = scene.streetSpawn();
-  const sprite = scene.makePerson(start.x, start.y, { ...livedRegular(scene.state, r).look });
+  const sprite = persons.makePerson(scene, start.x, start.y, { ...livedRegular(scene.state, r).look });
   weatherFx.addUmbrella(scene, sprite);
   const bubble = scene.art(0, -14, 'bubble').setVisible(false);
   sprite.add(bubble);
   // Жизнь района: Пётр Ильич с Ольгой Николаевной, Костя с женой — вдвоём.
   const companion = companionOf(scene.state, r.id);
-  if (companion) scene.addCompanion(sprite, companion.look);
+  if (companion) persons.addCompanion(scene, sprite, companion.look);
   // Любимый товар — всегда; иногда ещё что-нибудь.
   const extra = Math.random() < 0.4 ? scene.wanted(1).filter((id) => id !== r.favorite) : [];
   const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief: false, regular: r.id, wants: [r.favorite, ...extra] };
@@ -239,12 +240,12 @@ export async function runInspector(scene: StoreScene): Promise<void> {
   scene.inspector = 'here';
   const { door, wc, sellerHome } = scene.layout;
   const start = scene.streetSpawn();
-  const sprite = scene.makePerson(start.x, start.y, { shirt: INSPECTOR_SHIRT, skin: SKINS[0], pants: INSPECTOR_SHIRT, hair: 0x181425, style: 'short' });
-  const look = (x: number, y: number) => scene.walk(sprite, x, y, 35).then(() => scene.wait(700));
+  const sprite = persons.makePerson(scene, start.x, start.y, { shirt: INSPECTOR_SHIRT, skin: SKINS[0], pants: INSPECTOR_SHIRT, hair: 0x181425, style: 'short' });
+  const look = (x: number, y: number) => persons.walk(scene, sprite, x, y, 35).then(() => scene.wait(700));
   scene.popup(door.x, door.y - 24, t('popup.inspector'), '#fff3b0');
   haptic.tap();
   sound.bell();
-  await scene.walkVia(
+  await persons.walkVia(scene, 
     sprite,
     [
       { x: door.x, y: scene.streetY },
@@ -271,7 +272,7 @@ export async function runInspector(scene: StoreScene): Promise<void> {
     sound.bad();
     scene.popup(sprite.x, sprite.y - 16, t('popup.inspectionFailed', { n: result.fine }), '#ffd0d0');
   }
-  await scene.walk(sprite, door.x, scene.layout.h + 16, 35);
+  await persons.walk(scene, sprite, door.x, scene.layout.h + 16, 35);
   void scene.strollAway(sprite);
   scene.inspector = 'done';
 }
@@ -281,8 +282,8 @@ export async function runSonya(scene: StoreScene): Promise<void> {
   scene.sonya = 'here';
   const { door, sellerHome } = scene.layout;
   const start = scene.streetSpawn();
-  const sprite = scene.makePerson(start.x, start.y, SONYA);
-  await scene.walkVia(
+  const sprite = persons.makePerson(scene, start.x, start.y, SONYA);
+  await persons.walkVia(scene, 
     sprite,
     [
       { x: door.x, y: scene.streetY },
@@ -296,7 +297,7 @@ export async function runSonya(scene: StoreScene): Promise<void> {
   music.sting('story');
   scene.popup(sprite.x, sprite.y - 20, t('drama.visit'), '#fff3b0');
   await scene.wait(9000);
-  await scene.walkVia(
+  await persons.walkVia(scene, 
     sprite,
     [
       { x: door.x, y: door.y - 10 },
@@ -318,10 +319,10 @@ export async function runLiveGuest(scene: StoreScene): Promise<void> {
   guest.phase = 'here';
   const { door, sellerHome, queue } = scene.layout;
   const start = scene.streetSpawn();
-  const sprite = scene.makePerson(start.x, start.y, LIVE_GUEST_LOOKS[guest.who]);
+  const sprite = persons.makePerson(scene, start.x, start.y, LIVE_GUEST_LOOKS[guest.who]);
   if (!scene.lite) personGlow(scene, sprite, 0xcfe8ff, 3);
   sound.bell(door.x);
-  await scene.walkVia(
+  await persons.walkVia(scene, 
     sprite,
     [
       { x: door.x, y: scene.streetY },
@@ -341,7 +342,7 @@ export async function runLiveGuest(scene: StoreScene): Promise<void> {
   scene.popup(sprite.x, sprite.y - 20, `«${t(`live.guest.${guest.who}.line` as TextKey)}»`, '#cfe8ff');
   scene.time.delayedCall(1400, () => scene.popup(sellerHome.x - 20, sellerHome.y - 40, t('live.guest.gift', { n: coins }), '#fee761'));
   await scene.wait(7000);
-  await scene.walkVia(
+  await persons.walkVia(scene, 
     sprite,
     [
       { x: door.x, y: door.y - 10 },
@@ -363,9 +364,9 @@ export async function runJury(scene: StoreScene): Promise<void> {
   sound.bell();
   const walkOne = async (look: Look, i: number) => {
     await scene.wait(i * 700);
-    const sprite = scene.makePerson(start.x + i * 6, start.y, look);
+    const sprite = persons.makePerson(scene, start.x + i * 6, start.y, look);
     const dx = (i - 1) * 9;
-    await scene.walkVia(
+    await persons.walkVia(scene, 
       sprite,
       [
         { x: door.x + dx, y: scene.streetY },
@@ -376,14 +377,14 @@ export async function runJury(scene: StoreScene): Promise<void> {
     const order = slots.map((_, k) => k).filter((k) => k % 3 === i % 3 || slots.length < 4);
     for (const k of order.slice(0, 3)) {
       const stand = standFor(scene.layout, slots[k]);
-      await scene.walk(sprite, stand.x + dx / 2, stand.y, 32);
+      await persons.walk(scene, sprite, stand.x + dx / 2, stand.y, 32);
       if (!scene.sys.isActive()) return;
       scene.popup(sprite.x, sprite.y - 16, t('popup.juryNote'), '#ffffff');
       await scene.wait(900);
     }
-    await scene.walk(sprite, sellerHome.x - 24 + dx, sellerHome.y - 8, 32);
+    await persons.walk(scene, sprite, sellerHome.x - 24 + dx, sellerHome.y - 8, 32);
     await scene.wait(600);
-    await scene.walk(sprite, door.x + dx, scene.layout.h + 16, 32);
+    await persons.walk(scene, sprite, door.x + dx, scene.layout.h + 16, 32);
     void scene.strollAway(sprite);
   };
   await Promise.all(JURY_LOOKS.map((look, i) => walkOne(look, i)));
@@ -446,10 +447,10 @@ export function spawnCustomer(scene: StoreScene,
     }
   }
   const start = forced?.at ?? scene.streetSpawn();
-  const sprite = arrived?.sprite ?? scene.makePerson(start.x, start.y, look);
+  const sprite = arrived?.sprite ?? persons.makePerson(scene, start.x, start.y, look);
   if (!arrived) weatherFx.addUmbrella(scene, sprite);
   // Иногда приходят парой.
-  if (!arrived && !thief && !rare && !valya && !forced?.first && look.stroller === undefined && Math.random() < 0.08) scene.addCompanion(sprite);
+  if (!arrived && !thief && !rare && !valya && !forced?.first && look.stroller === undefined && Math.random() < 0.08) persons.addCompanion(scene, sprite);
   if (rare) {
     sound.bell();
     // Редкий гость сверкает, пока он в магазине.
@@ -494,7 +495,7 @@ export function spawnCustomer(scene: StoreScene,
 
 export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
   const { door } = scene.layout;
-  await scene.walkVia(c.sprite, [
+  await persons.walkVia(scene, c.sprite, [
     { x: door.x, y: scene.streetY },
     { x: door.x, y: door.y - 10 },
   ]);
@@ -505,7 +506,7 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
     // Ларь у кассы на виду — вор туда не идёт.
     if (index < 0 || c.gone || scene.state.shelves[index].kind === 'icebox') continue;
     const stand = scene.standOf(index);
-    await scene.walk(c.sprite, stand.x + Phaser.Math.Between(-8, 8), stand.y);
+    await persons.walk(scene, c.sprite, stand.x + Phaser.Math.Between(-8, 8), stand.y);
     if (c.gone) return;
     await scene.wait(400);
     const taken = takeFromShelf(scene.state, index, id);
@@ -517,12 +518,12 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
   }
   if (c.gone) return;
   // Мимо кассы — сразу к выходу.
-  await scene.walk(c.sprite, door.x, door.y - 10, THIEF_SPEED);
+  await persons.walk(scene, c.sprite, door.x, door.y - 10, THIEF_SPEED);
   if (c.gone) return;
   const guard = scene.workers.get('guard');
   if (guard && c.items.length && Math.random() < guardCatchChance(guard.member)) {
-    void scene.walk(guard.sprite, c.sprite.x + 10, c.sprite.y, STAFF_SPEED * 1.5).then(() =>
-      scene.walk(guard.sprite, guard.home.x, guard.home.y, STAFF_SPEED),
+    void persons.walk(scene, guard.sprite, c.sprite.x + 10, c.sprite.y, STAFF_SPEED * 1.5).then(() =>
+      persons.walk(scene, guard.sprite, guard.home.x, guard.home.y, STAFF_SPEED),
     );
     catchThief(scene, c, 'guard');
     return;
@@ -564,9 +565,9 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   // Первый покупатель нового начала появляется уже на дорожке у двери — с улицы не идёт.
   // Остальные идут по тротуару почти до двери: тележку берут здесь, а к двери заворачивают дугой.
   const gap = c.sprite.x - door.x;
-  if (!c.first) await scene.walk(c.sprite, door.x + Math.sign(gap) * Math.min(Math.abs(gap), DOOR_TURN), scene.streetY);
+  if (!c.first) await persons.walk(scene, c.sprite, door.x + Math.sign(gap) * Math.min(Math.abs(gap), DOOR_TURN), scene.streetY);
   // Тележки у входа: часть покупателей берёт их — кому удобнее.
-  if (scene.cartsAtDoor() && Math.random() < CART_SHARE && !c.sprite.getData('stroller') && !c.thief) scene.giveTrolley(c.sprite);
+  if (persons.cartsAtDoor(scene) && Math.random() < CART_SHARE && !c.sprite.getData('stroller') && !c.thief) persons.giveTrolley(scene, c.sprite);
   const wanted = c.wants ?? scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + adExtraItems(scene.state, Math.random));
   let disappointed = false;
   let why: { reason: LostReason; id: ProductId } | undefined;
@@ -579,7 +580,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     // У боковой полки встают вдоль неё (по вертикали), у обычной — вдоль по горизонтали.
     const along = !fixture && slotSide(scene.layout, scene.spotOf(index)) ? 'y' : 'x';
     const jitter = Phaser.Math.Between(-8, 8) * (fixture ? 0.4 : 1);
-    await scene.walk(c.sprite, stand.x + (along === 'x' ? jitter : 0), stand.y + (along === 'y' ? jitter : 0));
+    await persons.walk(scene, c.sprite, stand.x + (along === 'x' ? jitter : 0), stand.y + (along === 'y' ? jitter : 0));
     await scene.wait(500);
     // Пока шёл — магазин захватили (или ушёл по другой причине): к полке уже не тянется.
     if (c.gone) {
@@ -604,7 +605,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     }
     return result;
   };
-  await scene.walkVia(c.sprite, c.first ? [{ x: door.x, y: door.y - 10 }] : [{ x: door.x, y: scene.streetY }, { x: door.x, y: door.y - 10 }]);
+  await persons.walkVia(scene, c.sprite, c.first ? [{ x: door.x, y: door.y - 10 }] : [{ x: door.x, y: scene.streetY }, { x: door.x, y: door.y - 10 }]);
   if (c.gone) return;
   // В дождь и снег с улицы несут грязь.
   const muddy = isWet(scene.weather) || scene.weather === 'snow';
@@ -666,9 +667,9 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   // очередь подвинулась, а люди не перескакивают из ряда в ряд.
   c.queueSide = scene.queueTurn++ % 2;
   scene.queue.push(c);
-  scene.layoutQueue();
-  const spot = scene.registerOf(c)?.spot ?? scene.queueSpot(c, scene.queue.indexOf(c));
-  await scene.walk(c.sprite, spot.x, spot.y);
+  persons.layoutQueue(scene);
+  const spot = scene.registerOf(c)?.spot ?? persons.queueSpot(scene, c, scene.queue.indexOf(c));
+  await persons.walk(scene, c.sprite, spot.x, spot.y);
   if (c.gone) return;
   // Заскучал в очереди — тянется к стойке со сладостями.
   if (!c.serving && Math.random() < impulseChance(scene.state, scene.queue.indexOf(c) + 1)) grabCandy(scene, c);
@@ -686,7 +687,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     (isCrowdDay(scene.state.day) ? CROWD_PATIENCE : 1) *
     (c.first ? FIRST_PATIENCE : 1);
   c.patience = scene.time.delayedCall(c.patienceMs, () => void giveUp(scene, c));
-  scene.layoutQueue();
+  persons.layoutQueue(scene);
 }
 
 /**
@@ -791,7 +792,7 @@ export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' 
 }
 
 export async function visitToilet(scene: StoreScene, c: Customer): Promise<void> {
-  await scene.walk(c.sprite, scene.layout.wc.x, scene.layout.wc.spotY);
+  await persons.walk(scene, c.sprite, scene.layout.wc.x, scene.layout.wc.spotY);
   if (scene.toiletDirt >= 100) {
     c.unhappy = true;
     note(scene.stats, 'toilet');
@@ -829,7 +830,7 @@ export async function serveNext(scene: StoreScene, from = 0): Promise<void> {
   if (Phaser.Math.Distance.Between(scene.seller.x, scene.seller.y, r.clerk.x, r.clerk.y) > 2) {
     const id = ++scene.choreId;
     scene.sellerBusy = true;
-    await scene.walk(scene.seller, r.clerk.x, r.clerk.y, SELLER_SPEED);
+    await persons.walk(scene, scene.seller, r.clerk.x, r.clerk.y, SELLER_SPEED);
     if (id !== scene.choreId) return;
     scene.sellerBusy = false;
     if (r.customer !== c || c.serving || c.gone) return;
@@ -1064,7 +1065,7 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   effects.flyCoins(scene, where?.x ?? at?.counter.x ?? scene.layout.counter.x, where?.y ?? at?.counter.y ?? scene.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)) + Math.min(scene.combo - 1, 5));
   if (scene.combo >= 2) scene.celebrateCombo(scene.combo);
   // Серия от пяти — весь зал оборачивается на кассу.
-  if (scene.combo === 5 || scene.combo === 10) scene.everyoneLooks(scene.layout.counter.x, scene.layout.counter.y, 'emo_star');
+  if (scene.combo === 5 || scene.combo === 10) persons.everyoneLooks(scene, scene.layout.counter.x, scene.layout.counter.y, 'emo_star');
 
   const dirty = scene.trash.size >= TRASH_COMPLAINT || scene.binFull();
   const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
@@ -1079,12 +1080,12 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
     const why = badGoods ? t('popup.badProduct') : dirty ? t('popup.dirty') : smelly ? t('popup.smell') : '😣';
     scene.popup(c.sprite.x, c.sprite.y - 26, why, '#ffd0d0');
     effects.emote(scene, c.sprite, 'emo_angry');
-    scene.setMood(c.sprite, 'frown');
+    persons.setMood(scene, c.sprite, 'frown');
   } else {
-    scene.setMood(c.sprite, 'happy', 2500);
+    persons.setMood(scene, c.sprite, 'happy', 2500);
     if (Math.random() < 0.5) effects.emote(scene, c.sprite, 'emo_heart');
   }
-  scene.layoutQueue();
+  persons.layoutQueue(scene);
   if (scene.state.onboarding && !onbDone(scene.state, 'sale')) scene.firstSale(total);
   void leave(scene, c, true);
 }
@@ -1124,8 +1125,8 @@ export async function giveUp(scene: StoreScene, c: Customer): Promise<void> {
   sound.bad();
   scene.popup(c.sprite.x, c.sprite.y - 14, t('popup.leftAngry'), '#ffd0d0');
   effects.emote(scene, c.sprite, 'emo_angry');
-  scene.setMood(c.sprite, 'frown');
-  scene.layoutQueue();
+  persons.setMood(scene, c.sprite, 'frown');
+  persons.layoutQueue(scene);
   await leave(scene, c);
 }
 
@@ -1140,8 +1141,8 @@ export async function leave(scene: StoreScene, c: Customer, pastCounter = false)
     route.push({ x: door.x + Phaser.Math.Clamp(from.x - door.x, -DOOR_EDGE, DOOR_EDGE), y: door.y - 4 });
   }
   route.push({ x: door.x, y: h + 16 });
-  await scene.walkVia(c.sprite, route);
-  scene.dropTrolley(c.sprite);
+  await persons.walkVia(scene, c.sprite, route);
+  persons.dropTrolley(c.sprite);
   scene.customers.delete(c);
   // Приехавший на машине идёт к ней на парковку, остальные — по тротуару за край кадра.
   if (c.car) void cars.driveHome(scene, c.sprite, c.car);

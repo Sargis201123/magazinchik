@@ -29,6 +29,7 @@ import {
   type ShelfView,
   type TakenSpot,
 } from './common';
+import * as persons from './persons';
 
 /**
  * Шаги в 4 кадра (ноги: шаг, вместе, другой шаг, вместе; тело чуть подпрыгивает)
@@ -43,7 +44,7 @@ export function animatePeople(scene: StoreScene): void {
   for (const person of scene.people) {
     if (!person.active) continue;
     const leader = person.getData('leader') as Phaser.GameObjects.Container | undefined;
-    if (leader?.active) scene.followLeader(person, leader);
+    if (leader?.active) persons.followLeader(person, leader);
     const trail = person.getData('trail') as { x: number; y: number }[] | undefined;
     const last = trail?.at(-1);
     if (trail && (!last || Phaser.Math.Distance.Between(last.x, last.y, person.x, person.y) > 0.5)) {
@@ -51,8 +52,8 @@ export function animatePeople(scene: StoreScene): void {
       if (trail.length > 40) trail.shift();
     }
     const dog = person.getData('dog') as Phaser.GameObjects.Image | undefined;
-    if (dog?.active) scene.updateDog(person, dog);
-    const st = scene.strideOf(person);
+    if (dog?.active) persons.updateDog(scene, person, dog);
+    const st = persons.strideOf(person);
     // Сколько прошёл с прошлого кадра: на столько и переставил ноги.
     const moved = Math.hypot(person.x - st.lastX, person.y - st.lastY);
     st.lastX = person.x;
@@ -392,7 +393,7 @@ export function reachShelf(scene: StoreScene, c: Customer, slot: { x: number; y:
   const base = (c.sprite.getData('baseScale') as number) ?? 1;
   scene.tweens.add({ targets: c.sprite, scaleY: base * 1.07, duration: 140, yoyo: true, onComplete: () => c.sprite.setScale(base) });
   // Нашёл — улыбается, полка пустая — хмурится.
-  scene.setMood(c.sprite, id ? 'happy' : 'frown', id ? 1400 : 1200);
+  persons.setMood(scene, c.sprite, id ? 'happy' : 'frown', id ? 1400 : 1200);
   if (!id) return;
   const spots = from.length ? from : [{ x: slot.x + Phaser.Math.Between(-12, 12), y: slot.y - 5, texture: `item_${id}_0`, scale: 1 / ART, tint: 0xffffff }];
   // Товар перелетает дугой в руки (в корзину), над полкой — цена, которую принесёт. «2 по цене 1» — две штуки одна за другой.

@@ -53,6 +53,7 @@ import * as pets from './pets';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as cars from './cars';
+import * as persons from './persons';
 
 /**
  * Реклама видна на улице, пока работает: баннер на фасаде, промоутер с листовками, блогер у входа,
@@ -74,9 +75,9 @@ export function applyAds(scene: StoreScene): void {
   const keepTween = (tween: Phaser.Tweens.Tween) => keep({ destroy: () => void tween.stop() });
   /** Стоит у входа и не участвует в жизни покупателей. */
   const extra = (x: number, y: number, look: Look, facing: Facing) => {
-    const person = keep(scene.makePerson(x, y, look));
+    const person = keep(persons.makePerson(scene, x, y, look));
     scene.people.delete(person);
-    scene.setFacing(person, facing);
+    persons.setFacing(person, facing);
     return person;
   };
   /** Блёстки вокруг человека (не в лёгком режиме). */
@@ -319,11 +320,11 @@ export function buildVeranda(scene: StoreScene, x: number, w: number, base: numb
     scene.art(tx, ty + 2, 'cafe_table').setDepth(ty + 6);
     scene.awnings.push(scene.art(tx, ty - 3, 'umbrella').setDepth(ty + 30));
     // За столиком кто-нибудь сидит (через раз — вдвоём).
-    const guest = scene.makePerson(tx - 7, ty + 3, randomLook(looks[i % looks.length]));
+    const guest = persons.makePerson(scene, tx - 7, ty + 3, randomLook(looks[i % looks.length]));
     scene.people.delete(guest);
     guest.setDepth(ty + 5);
     if (i !== 1) {
-      const second = scene.makePerson(tx + 7, ty + 3, randomLook(looks[(i + 2) % looks.length]));
+      const second = persons.makePerson(scene, tx + 7, ty + 3, randomLook(looks[(i + 2) % looks.length]));
       scene.people.delete(second);
       second.setDepth(ty + 5);
     }
@@ -598,7 +599,7 @@ export function branchShoppers(scene: StoreScene, x: number, ground: number, dep
   const look = () => customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day);
   if (scene.lite) {
     // Лёгкая графика: двое стоят у входа — улица не пустая, а кадр не тратится.
-    for (const dx of [-14, 12]) scene.makePerson(x + dx, walkY, look()).setDepth(depth + 2);
+    for (const dx of [-14, 12]) persons.makePerson(scene, x + dx, walkY, look()).setDepth(depth + 2);
     return;
   }
   const busy = { n: 0 };
@@ -613,10 +614,10 @@ export function branchShoppers(scene: StoreScene, x: number, ground: number, dep
     const coming = Math.random() < 0.55;
     const from = coming ? far : door;
     const to = coming ? door : far;
-    const person = scene.makePerson(from.x, from.y, look()).setDepth(depth + 2);
+    const person = persons.makePerson(scene, from.x, from.y, look()).setDepth(depth + 2);
     if (!coming) person.setAlpha(0);
     if (!coming) scene.tweens.add({ targets: person, alpha: 1, duration: 300 });
-    void scene.walk(person, to.x, to.y, scene.ownPace(person, CUSTOMER_SPEED * 0.7)).then(() => {
+    void persons.walk(scene, person, to.x, to.y, persons.ownPace(scene, person, CUSTOMER_SPEED * 0.7)).then(() => {
       busy.n--;
       if (!coming) return person.destroy();
       // Зашёл внутрь: тает в дверях.

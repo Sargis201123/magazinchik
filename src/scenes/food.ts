@@ -52,6 +52,7 @@ import { ART, LIGHT_DEPTH, PLACE_MS, COOK_LATE, COFFEE_WAITING, COFFEE_ORDERS, t
 import * as motion from './motion';
 import * as lighting from './lighting';
 import * as staff from './staff';
+import * as persons from './persons';
 
 /** Кофейня во флигеле: кофемашина у стены, стойка, за ней бариста; в углу столик. */
 export function buildCoffee(scene: StoreScene): void {
@@ -102,17 +103,17 @@ export async function buyCoffee(scene: StoreScene, c: Customer): Promise<void> {
   const room = scene.layout.coffee;
   const spots = coffeeSpots(scene);
   const alive = () => !c.gone && c.sprite.active;
-  await scene.walkVia(c.sprite, [room.doorway, room.inside]);
+  await persons.walkVia(scene, c.sprite, [room.doorway, room.inside]);
   // К стойке по одному: пока там кто-то заказывает или забирает — подождать.
   await waitCounter(scene, c);
   if (!alive()) return;
   scene.coffeeCounter = true;
-  await scene.walk(c.sprite, spots.order.x, spots.order.y);
+  await persons.walk(scene, c.sprite, spots.order.x, spots.order.y);
   if (!alive()) {
     scene.coffeeCounter = false;
     return;
   }
-  scene.setFacing(c.sprite, 'up');
+  persons.setFacing(c.sprite, 'up');
   scene.popup(c.sprite.x, c.sprite.y - 18, t(Phaser.Utils.Array.GetRandom(COFFEE_ORDERS)), '#ffffff');
   await scene.wait(900);
   scene.coffeeCounter = false;
@@ -120,13 +121,13 @@ export async function buyCoffee(scene: StoreScene, c: Customer): Promise<void> {
   // Отходит ждать, пока сварят.
   const spot = spots.wait[scene.coffeeOrders.length % spots.wait.length];
   const ready = new Promise<void>((done) => scene.coffeeOrders.push({ c, done }));
-  await scene.walk(c.sprite, spot.x, spot.y);
-  if (alive()) scene.setFacing(c.sprite, 'up');
+  await persons.walk(scene, c.sprite, spot.x, spot.y);
+  if (alive()) persons.setFacing(c.sprite, 'up');
   await ready;
   if (!alive() || !scene.sys.isActive()) return;
   await waitCounter(scene, c);
   scene.coffeeCounter = true;
-  await scene.walk(c.sprite, spots.order.x + 6, spots.order.y);
+  await persons.walk(scene, c.sprite, spots.order.x + 6, spots.order.y);
   scene.coffeeCounter = false;
   if (!alive()) return;
   const cup = scene.art(5, 1, 'cup');
@@ -137,7 +138,7 @@ export async function buyCoffee(scene: StoreScene, c: Customer): Promise<void> {
   sound.place('glass', 2, c.sprite.x);
   scene.popup(c.sprite.x, c.sprite.y - 18, t('popup.coffee', { n: coffeePrice(scene.state) }), '#fff3b0');
   if (cupsOf(scene.state) === 0) scene.time.delayedCall(900, () => scene.popup(machine.x + 10, machine.y - 16, t('popup.noCups'), '#ffd0d0'));
-  await scene.walkVia(c.sprite, [room.inside, room.doorway]);
+  await persons.walkVia(scene, c.sprite, [room.inside, room.doorway]);
 }
 
 /** Подождать, пока у стойки освободится место (не дольше 8 секунд). */
@@ -152,21 +153,21 @@ export async function baristaLoop(scene: StoreScene, w: Worker, gen: number): Pr
     const machine = scene.coffeeImg;
     if (!order || !machine?.active) {
       if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await staff.workerWalk(scene, w, w.home.x, w.home.y);
-      scene.setFacing(w.sprite, 'down');
+      persons.setFacing(w.sprite, 'down');
       await scene.wait(300);
       continue;
     }
     // К машине: варит, над машиной пар.
     await staff.workerWalk(scene, w, machine.x + 7, w.home.y);
     if (!scene.alive(gen)) return;
-    scene.setFacing(w.sprite, 'left');
+    persons.setFacing(w.sprite, 'left');
     sound.hiss(brewSeconds(scene.state) * 0.8, 2600, 0.035, machine.x);
     const steam = scene.time.addEvent({ delay: 260, repeat: Math.floor((brewSeconds(scene.state) * 1000) / 260), callback: () => steamPuff(scene, machine.x, machine.y - 6) });
     await staff.workerWait(scene, w, brewSeconds(scene.state) * 1000);
     steam.remove();
     if (!scene.alive(gen)) return;
     await staff.workerWalk(scene, w, w.home.x, w.home.y);
-    scene.setFacing(w.sprite, 'down');
+    persons.setFacing(w.sprite, 'down');
     scene.popup(w.sprite.x, w.sprite.y - 18, t('popup.coffeeReady'), '#c8ffb0');
     if (scene.coffeeOrders[0] === order) scene.coffeeOrders.shift();
     order.done();
@@ -344,7 +345,7 @@ export async function bakerLoop(scene: StoreScene, w: Worker, gen: number): Prom
     }
     // Пока печётся — месит тесто у стола.
     if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await staff.workerWalk(scene, w, w.home.x, w.home.y);
-    scene.setFacing(w.sprite, 'up');
+    persons.setFacing(w.sprite, 'up');
     await scene.wait(600);
   }
 }
@@ -590,9 +591,9 @@ export async function visitFood(scene: StoreScene, c: Customer): Promise<void> {
   const stand = foodStand(scene);
   if (!stand || c.thief || scene.night || !c.items.length || !wantsDish(scene.state, Math.random)) return;
   scene.stats.dishWanted = (scene.stats.dishWanted ?? 0) + 1;
-  await scene.walk(c.sprite, stand.x + Phaser.Math.Between(-7, 7), stand.y);
+  await persons.walk(scene, c.sprite, stand.x + Phaser.Math.Between(-7, 7), stand.y);
   if (c.gone) return;
-  scene.setFacing(c.sprite, 'down');
+  persons.setFacing(c.sprite, 'down');
   await scene.wait(450);
   if (c.gone) return;
   const took = takeDish(scene.state, Math.random);
@@ -605,7 +606,7 @@ export async function visitFood(scene: StoreScene, c: Customer): Promise<void> {
   c.extras = [...(c.extras ?? []), { kind: 'dish', price: d.price, dish: took.dish }];
   // Тарелка с полки перелетает дугой в руки, над полкой — цена порции.
   const from = { x: c.sprite.x, y: c.sprite.y + 10 };
-  scene.setMood(c.sprite, 'happy', 1400);
+  persons.setMood(scene, c.sprite, 'happy', 1400);
   const plate = scene.art(from.x, from.y, `kdish_${took.dish}`).setDepth(c.sprite.y + 1);
   scene.tweens.addCounter({
     from: 0,
@@ -689,13 +690,13 @@ export async function cookLoop(scene: StoreScene, w: Worker, gen: number): Promi
     await staff.workerWalk(scene, w, w.home.x, w.home.y);
     if (!scene.alive(gen)) return;
     w.carried.setVisible(false);
-    scene.setFacing(w.sprite, 'left');
+    persons.setFacing(w.sprite, 'left');
     await chop(scene, w, gen, k, taken);
     if (!scene.alive(gen)) return;
     // К плите: встаёт сбоку (кастрюли и пар не загораживает) и, пока варится, помешивает.
     await staff.workerWalk(scene, w, k.stove.x + 11, w.home.y);
     if (!scene.alive(gen)) return;
-    scene.setFacing(w.sprite, 'left');
+    persons.setFacing(w.sprite, 'left');
     startPots(scene, taken);
     const stir = Math.max(1, Math.round(stoveSeconds(scene.state) / 1.5));
     for (let i = 0; i < stir; i++) {
@@ -710,7 +711,7 @@ export async function cookLoop(scene: StoreScene, w: Worker, gen: number): Promi
     // Готовое — по тарелкам на раздачу, оттуда — на поднос.
     await staff.workerWalk(scene, w, k.showcase.x + 4, k.showcase.y - 8);
     if (!scene.alive(gen)) return;
-    scene.setFacing(w.sprite, 'down');
+    persons.setFacing(w.sprite, 'down');
     k.onPass = true;
     refreshKitchen(scene);
     sound.place('glass', 1, k.showcase.x);
@@ -748,7 +749,7 @@ export async function carryToFood(scene: StoreScene, w: Worker, gen: number, k: 
   if (stand) {
     await staff.workerWalk(scene, w, stand.x + 4, stand.y);
     if (!scene.alive(gen)) return;
-    scene.setFacing(w.sprite, 'down');
+    persons.setFacing(w.sprite, 'down');
     await staff.workerWait(scene, w, PLACE_MS);
     if (!scene.alive(gen)) return;
   }
@@ -768,7 +769,7 @@ export async function carryToFood(scene: StoreScene, w: Worker, gen: number, k: 
 /** Готовить нечего — стоит у стола. */
 export async function cookIdle(scene: StoreScene, w: Worker): Promise<void> {
   if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await staff.workerWalk(scene, w, w.home.x, w.home.y);
-  scene.setFacing(w.sprite, 'up');
+  persons.setFacing(w.sprite, 'up');
   await scene.wait(600);
 }
 
@@ -790,7 +791,7 @@ export async function fetchIngredients(scene: StoreScene, w: Worker, gen: number
   if (pantry) {
     // Ящик-кладовая в углу кухни: встаёт перед ним и набирает корзинку.
     await staff.workerWalk(scene, w, k.crate.x - 2, w.home.y);
-    scene.setFacing(w.sprite, 'up');
+    persons.setFacing(w.sprite, 'up');
     await staff.workerWait(scene, w, 450);
   } else {
     await staff.workerWalk(scene, w, room.inside.x, room.inside.y);

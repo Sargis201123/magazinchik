@@ -45,6 +45,7 @@ import {
 } from './common';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
+import * as persons from './persons';
 
 /**
  * Парковка за магазином и проезд к ней с улицы вдоль правой стены: площадка с бордюром и разметкой
@@ -332,7 +333,7 @@ export function until(scene: StoreScene, ready: () => boolean): Promise<void> {
 /** Человек идёт по точкам на улице напрямик (без обхода полок); перестройка мира обрывает путь. */
 export async function stroll(scene: StoreScene, sprite: Phaser.GameObjects.Container, points: { x: number; y: number }[]): Promise<void> {
   if (!sprite.active || !points.length) return;
-  await scene.walkVia(sprite, points, undefined, { depth: (y) => outsideDepth(y), direct: true });
+  await persons.walkVia(scene, sprite, points, undefined, { depth: (y) => outsideDepth(y), direct: true });
 }
 
 /** Занять проезд (drive) и/или парковку (aisle), если они свободны. */
@@ -538,7 +539,7 @@ export async function arriveByCar(scene: StoreScene, lot: ParkingLot, spot: Park
   const big = bigDayFor(scene.state.day);
   if (big && BIG_DAYS[big].masks && !look.face && Math.random() < MASKS) look = { ...look, face: 'medmask' };
   const door = carDoor(spot);
-  const driver = scene.makePerson(door.x, door.y, look);
+  const driver = persons.makePerson(scene, door.x, door.y, look);
   driver.setDepth(outsideDepth(door.y)).setAlpha(0);
   weatherFx.addUmbrella(scene, driver);
   scene.tweens.add({ targets: driver, alpha: 1, duration: 250 });
@@ -660,7 +661,7 @@ export function parkingTick(scene: StoreScene): void {
   // Сосед приходит из-за угла по тротуару и по дорожке вдоль стены поднимается к машине — как наши покупатели.
   const spot = Phaser.Utils.Array.GetRandom(parked);
   spot.car!.leaving = true;
-  const driver = scene.makePerson(scene.next.w + 60, scene.streetY + Phaser.Math.Between(-3, 3), customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day));
+  const driver = persons.makePerson(scene, scene.next.w + 60, scene.streetY + Phaser.Math.Between(-3, 3), customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day));
   driver.setAlpha(0);
   scene.tweens.add({ targets: driver, alpha: 1, duration: 250 });
   weatherFx.addUmbrella(scene, driver);

@@ -47,6 +47,7 @@ import * as motion from './motion';
 import * as effects from './effects';
 import * as cars from './cars';
 import * as staff from './staff';
+import * as persons from './persons';
 
 // ---------- Доставка на дом ----------
 
@@ -80,7 +81,7 @@ export function buildDelivery(scene: StoreScene): void {
   scene.courierHome = at;
   const vehicle = vehicleOf(scene.state);
   if (vehicle.id !== 'van') scene.courierRide = scene.art(at.x + 9, at.y + 2, vehicle.id).setDepth(at.y + 1);
-  scene.courier = scene.makePerson(at.x, at.y, { ...randomLook(0xf77622), style: 'cap', hair: 0xf77622, bag: 'backpack', bagTint: 0xe43b44 });
+  scene.courier = persons.makePerson(scene, at.x, at.y, { ...randomLook(0xf77622), style: 'cap', hair: 0xf77622, bag: 'backpack', bagTint: 0xe43b44 });
 }
 
 /**
@@ -378,7 +379,7 @@ export async function dispatchCourier(scene: StoreScene): Promise<void> {
   for (const p of batch) p.stage = 'riding';
   const { door, h } = scene.layout;
   // Подходит к порогу (снаружи, у двери), коробки перелетают к нему в руки.
-  await scene.walk(courier, door.x - 4, h + FACADE_H + 5, 45);
+  await persons.walk(scene, courier, door.x - 4, h + FACADE_H + 5, 45);
   if (!courier.active) return;
   batch.forEach((p, i) => {
     const box = p.box;
@@ -389,7 +390,7 @@ export async function dispatchCourier(scene: StoreScene): Promise<void> {
   courier.add(held);
   scene.popup(courier.x, courier.y - 18, t('popup.parcelGiven', { icon: vehicle.icon }), '#c8ffb0');
   await scene.wait(300);
-  await scene.walk(courier, scene.courierHome.x, scene.courierHome.y, 45);
+  await persons.walk(scene, courier, scene.courierHome.x, scene.courierHome.y, 45);
   held.destroy();
   if (!courier.active) return;
   await rideCourier(scene, batch, vehicle);
@@ -421,21 +422,21 @@ export async function rideCourier(scene: StoreScene, batch: Parcel[], vehicle: V
     // На велосипеде крутит педали, а не бежит (animatePeople): без подскока и пыли.
     courier.setData('wheels', true);
     scene.courierRide?.setVisible(false);
-    await scene.walk(courier, home.x, road, vehicle.speed);
+    await persons.walk(scene, courier, home.x, road, vehicle.speed);
     ride.setFlipX(true);
-    await scene.walk(courier, away, road, vehicle.speed);
+    await persons.walk(scene, courier, away, road, vehicle.speed);
     if (!courier.active) return;
     arrive();
     await scene.wait(vehicle.away * 1000);
     ride.setFlipX(false);
-    await scene.walk(courier, home.x, road, vehicle.speed);
-    await scene.walk(courier, home.x, home.y, vehicle.speed);
+    await persons.walk(scene, courier, home.x, road, vehicle.speed);
+    await persons.walk(scene, courier, home.x, home.y, vehicle.speed);
     if (!courier.active) return;
     ride.destroy();
     courier.setData('wheels', false);
     scene.courierRide?.setVisible(true);
   }
-  scene.setFacing(courier, 'down');
+  persons.setFacing(courier, 'down');
   scene.courierBusy = false;
   scene.courierTrip = null;
   sound.courier(vehicle.id, courier.x);
@@ -458,7 +459,7 @@ export async function vanTrip(scene: StoreScene, courier: Phaser.GameObjects.Con
       scene.tweens.add({ targets: van, x, duration: ms, ease, onComplete: () => done(), onStop: () => done() });
     });
   await drive(home.x + 6, 'Sine.easeOut');
-  await scene.walk(courier, home.x, roadY - 9, 45);
+  await persons.walk(scene, courier, home.x, roadY - 9, 45);
   if (!courier.active || !van.active) return false;
   courier.setVisible(false);
   await drive(scene.next.w + 70, 'Sine.easeIn');
@@ -468,7 +469,7 @@ export async function vanTrip(scene: StoreScene, courier: Phaser.GameObjects.Con
   van.x = -70;
   await drive(home.x + 6, 'Sine.easeOut');
   courier.setVisible(true);
-  await scene.walk(courier, home.x, home.y, 45);
+  await persons.walk(scene, courier, home.x, home.y, 45);
   if (van.active) void drive(scene.next.w + 70, 'Sine.easeIn').then(() => van.destroy());
   return courier.active;
 }
@@ -604,7 +605,7 @@ export async function deliver(scene: StoreScene): Promise<void> {
   van.add([hold, cargo]);
   scene.tweens.add({ targets: hold, width: 9, x: hold.x - 1, duration: 300, ease: 'Back.easeOut' });
   scene.tweens.add({ targets: cargo, alpha: 1, delay: 200, duration: 200 });
-  const driver = scene.makePerson(vanX, scene.streetY + 10, { ...randomLook(0x0099db), style: 'cap', hair: 0x0099db });
+  const driver = persons.makePerson(scene, vanX, scene.streetY + 10, { ...randomLook(0x0099db), style: 'cap', hair: 0x0099db });
   // Водитель катит тележку с двумя коробками.
   const box = scene.art(7, 1, 'hand_truck').setVisible(false);
   driver.add(box);
@@ -618,7 +619,7 @@ export async function deliver(scene: StoreScene): Promise<void> {
   const trips = Math.min(scene.awaitingBoxes, 4);
   for (let trip = 0; trip < trips && driver.active; trip++) {
     box.setVisible(true);
-    await scene.walkVia(driver, route, SELLER_SPEED);
+    await persons.walkVia(scene, driver, route, SELLER_SPEED);
     if (!driver.active) return;
     await scene.wait(300);
     box.setVisible(false);
@@ -627,9 +628,9 @@ export async function deliver(scene: StoreScene): Promise<void> {
     scene.refreshWarehouse();
     // Коробка легла на склад — картонный стук, каждая следующая чуть выше.
     sound.place('box', trip, driver.x);
-    if (trip < trips - 1) await scene.walkVia(driver, [...route].reverse(), SELLER_SPEED);
+    if (trip < trips - 1) await persons.walkVia(scene, driver, [...route].reverse(), SELLER_SPEED);
   }
-  await scene.walkVia(driver, [...[...route].reverse(), { x: vanX, y: scene.streetY + 10 }], SELLER_SPEED);
+  await persons.walkVia(scene, driver, [...[...route].reverse(), { x: vanX, y: scene.streetY + 10 }], SELLER_SPEED);
   driver.destroy();
   if (!van.active) return;
   // Двери закрываются — и в путь.

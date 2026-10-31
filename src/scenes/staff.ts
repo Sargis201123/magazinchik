@@ -68,6 +68,7 @@ import * as effects from './effects';
 import * as deliveries from './deliveries';
 import * as food from './food';
 import * as shoppers from './shoppers';
+import * as persons from './persons';
 
 // ---------- Продавец: уборка и выкладка ----------
 
@@ -78,7 +79,7 @@ export async function doChore(scene: StoreScene, steps: ChoreStep[]): Promise<vo
   scene.sellerBusy = true;
   haptic.tap();
   for (const step of steps) {
-    await scene.walk(scene.seller, step.x, step.y, SELLER_SPEED);
+    await persons.walk(scene, scene.seller, step.x, step.y, SELLER_SPEED);
     if (id !== scene.choreId) return;
     step.arrive?.();
     if (step.ms) await scene.wait(step.ms);
@@ -119,7 +120,7 @@ export async function returnSeller(scene: StoreScene): Promise<void> {
   const home = ownerHome(scene);
   // С улицы — через дверь, а не сквозь стену.
   if (scene.seller.y > scene.layout.h - 2) {
-    await scene.walkVia(
+    await persons.walkVia(scene, 
       scene.seller,
       [
         { x: scene.layout.door.x, y: scene.layout.h + FACADE_H + 6 },
@@ -130,7 +131,7 @@ export async function returnSeller(scene: StoreScene): Promise<void> {
     if (id !== scene.choreId) return;
   }
   // После дела — всегда к своей кассе, даже если наняты кассиры: первая касса — его.
-  await scene.walk(scene.seller, home.x, home.y, SELLER_SPEED);
+  await persons.walk(scene, scene.seller, home.x, home.y, SELLER_SPEED);
   if (id === scene.choreId) scene.sellerBusy = false;
 }
 
@@ -521,7 +522,7 @@ export function syncStaff(scene: StoreScene): void {
   food.flushCooking(scene);
   for (const w of scene.workers.values()) {
     stopMop(scene, w.sprite);
-    scene.haltWalk(w.sprite);
+    persons.haltWalk(w.sprite);
     scene.tweens.killTweensOf(w.sprite);
     w.sprite.destroy();
   }
@@ -553,7 +554,7 @@ export function syncStaff(scene: StoreScene): void {
     // Новенький в первый день не стоит сразу на месте, а входит с улицы.
     const fresh = scene.dayOpen && scene.newHires.has(staffKey(member));
     const at = fresh ? scene.streetSpawn() : home;
-    const sprite = scene.makePerson(at.x ?? home.x, at.y ?? home.y, {
+    const sprite = persons.makePerson(scene, at.x ?? home.x, at.y ?? home.y, {
       ...randomLook(UNIFORMS[member.role]),
       style: STAFF_HAIR[member.role],
       acc: STAFF_ACC[member.role].acc,
@@ -651,12 +652,12 @@ export function workerHome(scene: StoreScene, role: StaffRole): { x: number; y: 
 
 /** Шаг сотрудника с учётом его скорости. */
 export function workerWalk(scene: StoreScene, w: Worker, x: number, y: number): Promise<void> {
-  return scene.walk(w.sprite, x, y, STAFF_SPEED * workerPace(scene, w));
+  return persons.walk(scene, w.sprite, x, y, STAFF_SPEED * workerPace(scene, w));
 }
 
 /** Сотрудник идёт через несколько точек одним ходом (дверь склада, пекарни) — не встаёт в каждой. */
 export function workerWalkVia(scene: StoreScene, w: Worker, points: Point[]): Promise<void> {
-  return scene.walkVia(w.sprite, points, STAFF_SPEED * workerPace(scene, w));
+  return persons.walkVia(scene, w.sprite, points, STAFF_SPEED * workerPace(scene, w));
 }
 
 export function workerWait(scene: StoreScene, w: Worker, ms: number): Promise<void> {
