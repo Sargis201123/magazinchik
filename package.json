@@ -14,6 +14,7 @@
     "sim:features": "vite-node scripts/sim-features.ts",
     "sim:final": "vite-node scripts/sim-final.ts",
     "sim:restock": "vite-node scripts/sim-restock.ts",
+    "sim:quests": "vite-node scripts/sim-quests.ts",
     "e2e": "vite-node scripts/e2e.ts",
     "taps": "vite-node scripts/taps.ts"
   },

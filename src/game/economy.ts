@@ -809,6 +809,10 @@ export interface DayStats {
   lostWhy?: Partial<Record<LostReason, number>>;
   missing?: Partial<Record<ProductId, number>>;
   pricey?: Partial<Record<ProductId, number>>;
+  /** Активные моменты дня (moments.ts): сколько показали, сколько поймали и сколько из них — искорки к рейтингу. */
+  momentsShown?: number;
+  moments?: number;
+  momentStars?: number;
 }
 
 export type LostReason = 'queue' | 'empty' | 'expensive' | 'eduard';
