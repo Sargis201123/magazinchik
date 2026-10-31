@@ -9,6 +9,7 @@
 
 import { markWeek } from './guild.js';
 import { markWeekend } from './weekend.js';
+import { markLeague } from './league.js';
 import { ready, saveHooks } from './social.js';
 import { rivalKey } from './rival.js';
 import { json, verifyInitData, type D1, type Env } from './telegram.js';
@@ -90,6 +91,8 @@ export async function progress(request: Request, env: Env): Promise<Response> {
   // Начало недели и выходных — по счёту сервера до этого отчёта.
   await markWeek(db, user.id, before, now);
   await markWeekend(db, user.id, before, revenue, now);
+  // Турнир района (league.ts): выручка на начало дня и лига недели. Сбой турнира отчёту не мешает.
+  await markLeague(db, user.id, int(body.level, 10), before, now).catch((e) => console.error(e));
   if (throttled) return json({ ok: false, error: 'too_often' });
   const events = Array.isArray(body.events) ? body.events.slice(0, MAX_EVENTS) : [];
   for (const e of events as Record<string, unknown>[]) {

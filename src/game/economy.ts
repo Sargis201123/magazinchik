@@ -686,6 +686,9 @@ export interface StoreState {
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */
   rush?: boolean;
   rushClaimed?: number;
+  /** Турнир района (social.ts): за какую неделю забрана награда; полка памяти — открытки друзей и кубки. */
+  leagueClaimed?: number;
+  keepsakes?: import('./social').Keepsake[];
   /** «Позвать на помощь» (help.ts): в какой день друзья на подмоге и в какой день уже звал. */
   helpDay?: number;
   helpAsked?: number;

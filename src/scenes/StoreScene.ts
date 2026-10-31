@@ -74,6 +74,7 @@ import {
 } from '../game/endless';
 import { lastSavedAt, loadGame, pauseSaving, saveGame, savingPaused } from '../game/save';
 import { friendState } from '../game/friendShop';
+import { presentGiven, presentsOn, showGiftPicker } from '../ui/presents';
 import { applyPranks, bonusGuests, bossLeft, bossShop, messToday, PRANK_COINS, takeRivalDay, takeThanks, THANK_COINS, usePrank, type PrankIn, type PrankKind } from '../game/rival';
 import { fetchRivalShop, rivalAct, rivalInbox, thankRival } from '../platform/rival';
 import { rivalBar, showRivalNews } from '../ui/rival';
@@ -3371,8 +3372,22 @@ export class StoreScene extends Phaser.Scene {
     track('visit_shop', home.day);
     const bar = el('div', 'ui-arrange');
     const shop = guest.shopName?.trim() || t(storeLevel(guest).nameKey);
+    // Подарок другу (ui/presents.ts): один в день, кнопка гаснет, когда подарен.
+    const gift = presentsOn()
+      ? button(presentGiven(id) ? t('social.give.done') : t('social.give.btn'), () => {
+          // Полоса внизу не перекрывает окно подарка.
+          bar.style.visibility = 'hidden';
+          showGiftPicker({ id, name: res!.name || name }, home.day, home.level, (ok) => {
+            bar.style.visibility = '';
+            if (!ok) return;
+            gift!.textContent = t('social.give.done');
+            gift!.disabled = true;
+          });
+        }, 'ui-btn secondary', presentGiven(id))
+      : null;
     bar.append(
       el('div', 'ui-arrange-hint', t('visitShop.bar', { name: res!.name || name, shop, rating: guest.rating.toFixed(1), day: guest.day })),
+      ...(gift ? [gift] : []),
       button(`🏠 ${t('visitShop.home')}`, () => {
         bar.remove();
         this.state = home;

@@ -19,7 +19,7 @@ export const friendCode = (id: number): string => id.toString(36).toUpperCase();
 const fromCode = (code: string): number => (/^[0-9A-Z]{1,12}$/i.test(code) ? parseInt(code, 36) : 0);
 
 /** Друзья: по приглашениям (кого пригласил, кто пригласил, кого пригласил он же) и добавленные по коду. */
-async function network(db: D1, me: number, since: number): Promise<{ id: number; name: string; level: number }[]> {
+export async function network(db: D1, me: number, since: number): Promise<{ id: number; name: string; level: number }[]> {
   return (
     await db
       .prepare(

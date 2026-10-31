@@ -3,6 +3,8 @@
 
 import { openTelegramLink, telegramInitData } from './telegram';
 import { post, socialInfo } from './social';
+import { fetchPresents } from './presents';
+import { fetchLeague } from './league';
 
 export interface DuelInfo {
   week: number;
@@ -89,7 +91,7 @@ export const guildReward = (level: number): number => 500 + 500 * level;
 
 /** При запуске: торговая неделя и гильдия; когда пришло — событие MP_EVENT. */
 export async function loadMultiplayer(): Promise<void> {
-  await Promise.all([fetchDuel(), guildAction('status'), fetchWeekend(), fetchVisits()]);
+  await Promise.all([fetchDuel(), guildAction('status'), fetchWeekend(), fetchVisits(), fetchPresents(), fetchLeague()]);
   window.dispatchEvent(new Event(MP_EVENT));
 }
 

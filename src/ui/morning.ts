@@ -238,6 +238,8 @@ import { newTag, tabHint } from './onboarding';
 import { seeWeek, tutAt, tutIndex, tutNext, tutPass, tutReplay, tutSkip, tutStep, tutTell, weekNote, type TutStep, type WeekNote } from '../game/tutorial';
 import type { Coach, Spot } from './coach';
 import { showLeaderboard } from './leaderboard';
+import { keepsakeBox, presentsBox } from './presents';
+import { leagueBox, leagueClaimBox, leaguePlace } from './league';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { anchorScroll, button, el, foldUp, holdPlace, openModal, toast, unfold, who } from './dom';
@@ -829,6 +831,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
       ...giftsBox(),
+      ...presentsBox(getState, update),
+      ...leagueClaimBox(state, getState, update),
       ...(touring ? [] : liveBox(state)),
       ...staffEventBox(state),
       ...districtBox(state),
@@ -837,7 +841,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...taleBox(state),
       ...guildClaimBox(state),
       today,
-      todayCard(state, touring, [...friendShopsBox(), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),
+      todayCard(state, touring, [...friendShopsBox(), ...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: getState().level })), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),
       ...(hint ? [hint] : []),
       tabs,
       body,
@@ -953,6 +957,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if (weekly?.length) chip(`📅 ${weekly.filter((c) => c.done).length}/${weekly.length}`);
     const ready = state.pass ? passReady(state) : 0;
     if (state.pass) chip(`🎫 ${passLevel(state.pass)}${ready ? ` · 🎁${ready}` : ''}`, ready > 0);
+    // Турнир района (ui/league.ts): место в лиге этой недели.
+    const place = leaguePlace();
+    if (place) chip(`🏆 ${place}`, place <= 3);
     head.append(el('b', '', `${open ? '▾' : '▸'} ${t('today.title')}`), chips);
     head.addEventListener('click', () => {
       if (touring) return;
@@ -3188,7 +3195,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       endTour();
       close();
       onRival(key, name);
-    })), 'ui-btn'));
+    }), { level: getState().level }), 'ui-btn'));
     const box = el('div', 'ui-box');
     box.append(el('b', '', `🤝 ${t('social.title')}`), el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT })));
     if (info.friends) box.append(el('div', 'ui-muted', t('social.count', { n: info.friends })));
@@ -3953,6 +3960,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...trophiesBox(state),
       recordsBox(state),
       albumBox(state),
+      ...keepsakeBox(state),
       ...(early ? [] : [replay]),
       again,
     ];
