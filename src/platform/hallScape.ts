@@ -49,6 +49,8 @@ const rand = (a: number, b: number): number => a + Math.random() * (b - a);
 function noiseSource(ac: AudioContext, at: number, dur: number): AudioBufferSourceNode {
   const src = ac.createBufferSource();
   src.buffer = noise;
+  // По кругу: тележка длиннее куска шума — иначе обрывалась бы со щелчком.
+  src.loop = true;
   src.start(at, Math.random() * 1.5);
   src.stop(at + dur + 0.02);
   src.onended = () => src.disconnect();
@@ -81,11 +83,19 @@ function trolley(ac: AudioContext, gain: number): void {
   const at = ac.currentTime + 0.05;
   const dur = rand(1.2, 2.6);
   const from = rand(-0.8, 0.8);
-  const panner = ac.createStereoPanner();
-  panner.pan.setValueAtTime(from, at);
-  panner.pan.linearRampToValueAtTime(Math.max(-0.9, Math.min(0.9, from + rand(-0.8, 0.8))), at + dur);
-  const out = busInput(ac, 'hall', 0, gain * level * rand(0.6, 1));
-  panner.connect(out);
+  const vol = gain * level * rand(0.6, 1);
+  let panner: AudioNode;
+  if (typeof ac.createStereoPanner === 'function') {
+    // Едет через зал: сторона плывёт.
+    const p = ac.createStereoPanner();
+    p.pan.setValueAtTime(from, at);
+    p.pan.linearRampToValueAtTime(Math.max(-0.9, Math.min(0.9, from + rand(-0.8, 0.8))), at + dur);
+    p.connect(busInput(ac, 'hall', 0, vol));
+    panner = p;
+  } else {
+    panner = ac.createGain();
+    panner.connect(busInput(ac, 'hall', 0, vol));
+  }
   const rattle = ac.createBiquadFilter();
   rattle.type = 'bandpass';
   rattle.frequency.value = rand(1400, 2200);
@@ -256,7 +266,8 @@ function radioHiss(ac: AudioContext, target: number): void {
 /** Расписать звук по промежутку: при долгом перерыве — не выдавать всё разом. */
 function due(key: keyof typeof next, gap: Gap, now: number): boolean {
   if (!gap) {
-    next[key] = now + 1;
+    // Ниже «давно» — когда звук снова нужен, первый придёт в случайный момент промежутка, а не через секунду.
+    next[key] = -Infinity;
     return false;
   }
   if (next[key] < now - 1) next[key] = now + nextGap(gap, Math.random) * Math.random();
