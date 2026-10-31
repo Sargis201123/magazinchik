@@ -43,6 +43,7 @@ import {
 } from './common';
 import * as lighting from './lighting';
 import * as deliveries from './deliveries';
+import * as food from './food';
 
 /**
  * Ярмарка: флажки над фасадом и шарики у входа. Перерисовывается каждое утро
@@ -376,8 +377,8 @@ export function buildUpgrades(scene: StoreScene): void {
   buildHallDecor(scene);
   buildHolidayDecor(scene);
   scene.buildGearProps();
-  scene.buildCoffee();
-  scene.buildOven();
+  food.buildCoffee(scene);
+  food.buildOven(scene);
   buildRadio(scene);
   buildCup(scene);
   deliveries.buildDelivery(scene);
