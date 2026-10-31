@@ -110,6 +110,7 @@ import { buyRadio, hasRadio, radioPatience, RADIO_PRICE, radioTolerance, setStat
 import { buyKiosk, kioskCount, kioskTier, laneGuests, nextKioskPrice, nextKioskTier, upgradeKiosks } from './lanes';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, nextBranchTier, upgradeBranch } from './branch';
 import { buyHood, HOOD, nextHood } from './hood';
+import { simMoments } from './moments';
 import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
 
 export { rng };
@@ -137,6 +138,8 @@ export interface SimDay {
   branch: number;
   /** Сколько потрачено на рекламу сегодня. */
   ads: number;
+  /** Награды за задания дня (endless.ts questsFor). */
+  quests: number;
   expenses: number;
   /** Выручка − закупка − расходы (без вложений в полки и расширение). */
   profit: number;
@@ -188,6 +191,12 @@ export interface SimOptions {
   buyMode?: 'smart' | 'restock' | 'naive' | 'auto';
   /** Замер одной рекламы: держать её всегда, пока магазин на этом уровне (индекс STORE_LEVELS) и есть запас. */
   adAlways?: { id: AdId; level: number };
+  /**
+   * Какую долю активных моментов дня ловит игрок (moments.ts). По умолчанию 0 — как раньше, до моментов
+   * (на этом откалиброваны прежние проверки баланса); их вклад меряют отдельно: SIM_CATCH против 0
+   * на тех же сидах (tests/moments.test.ts, npm run sim:quests).
+   */
+  momentCatch?: number;
 }
 
 export type Feature =
@@ -335,6 +344,7 @@ export function simulate({
   ovenBatches = 3,
   ovenBurn = 0.1,
   adAlways,
+  momentCatch = 0,
 }: SimOptions): SimResult {
   const random = rng(seed);
   // Случайности новых механик — отдельно: тогда прогоны с механикой и без идут по одним и тем же
@@ -1052,6 +1062,14 @@ export function simulate({
       state = inspectionDone(state, inspect(state, { trash: clean ? 0 : 3, toiletDirt: clean ? 0 : 70 }));
     }
 
+    // Активные моменты дня (moments.ts): пойманные — чаевые сразу в кассу, искорки к рейтингу вечером.
+    // Своя случайность: остальные события дня от моментов не сдвигаются.
+    const moments = simMoments(state, rng(seed * 7919 + state.day * 104729), momentCatch);
+    state = { ...state, money: state.money + moments.money };
+    stats.momentsShown = moments.shown;
+    stats.moments = moments.caught;
+    stats.momentStars = moments.stars;
+
     // ---------- Ночь ----------
     // Навык кассы растёт у хозяина: его доля пробитых (за первой кассой он всегда сам).
     const byOwner = serveCap > 0 ? Math.min(capacity.owner, Math.round((stats.served * capacity.owner) / serveCap)) : 0;
@@ -1094,6 +1112,7 @@ export function simulate({
       night: nightProfit,
       branch: night.branch,
       ads: adSpent,
+      quests: night.quests.earned,
     });
     void moneyStart;
   }

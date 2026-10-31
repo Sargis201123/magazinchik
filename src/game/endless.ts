@@ -76,13 +76,15 @@ export const perceivedBase = (state: StoreState, id: ProductId): number =>
 
 // ---------------------------------------------------------------- задания дня
 
-export type QuestKind = 'serve' | 'revenue' | 'sell' | 'noComplaints' | 'catchThief' | 'cleanTrash';
+export type QuestKind = 'serve' | 'revenue' | 'sell' | 'noComplaints' | 'catchThief' | 'cleanTrash' | 'moments';
 
 export interface Quest {
   kind: QuestKind;
   target: number;
   product?: ProductId;
   reward: number;
+  /** Награда уже выдана днём, сразу как выполнили (payQuests) — вечером второй раз не платим. */
+  paid?: boolean;
 }
 
 export const QUEST_TEXT: Record<QuestKind, TextKey> = {
@@ -92,6 +94,7 @@ export const QUEST_TEXT: Record<QuestKind, TextKey> = {
   noComplaints: 'quest.noComplaints',
   catchThief: 'quest.catchThief',
   cleanTrash: 'quest.cleanTrash',
+  moments: 'quest.moments',
 };
 
 /** Награда за задание дня растёт с магазином: в ларьке 15, в универмаге ~120. */
@@ -102,8 +105,11 @@ export const ALL_QUESTS_RATING = 0.1;
 /** С этого дня появляются задания: первые дни игрок только осваивается. */
 export const QUESTS_FROM_DAY = 3;
 
-/** Три задания на день; цели растут вместе с магазином и потоком гостей. */
-export function questsFor(state: StoreState, guests: number): Quest[] {
+/**
+ * Три задания на день; цели растут вместе с магазином и потоком гостей. moments — сколько сегодня будет
+ * активных моментов (moments.ts momentCount; передаёт day.ts — отсюда модуль моментов не тянем).
+ */
+export function questsFor(state: StoreState, guests: number, moments = 0): Quest[] {
   if (state.day < QUESTS_FROM_DAY) return [];
   const random = rng(state.day * 31337 + 11);
   const reward = questReward(state.level);
@@ -119,6 +125,8 @@ export function questsFor(state: StoreState, guests: number): Quest[] {
     pool.push({ kind: 'sell', product, target: Math.max(3, Math.round((guests * 0.9) / sellable.length)), reward });
   }
   if (state.day > 3) pool.push({ kind: 'catchThief', target: 1, reward: reward + 20 });
+  // Активные моменты: поймать на один меньше, чем их будет за день.
+  if (moments >= 2) pool.push({ kind: 'moments', target: moments - 1, reward });
   const quests: Quest[] = [];
   while (quests.length < 3 && pool.length) quests.push(pool.splice(Math.floor(random() * pool.length), 1)[0]);
   return quests;
@@ -139,22 +147,42 @@ export function questProgress(q: Quest, stats: DayStats): number {
       return stats.caught;
     case 'cleanTrash':
       return stats.trashCleaned;
+    case 'moments':
+      return stats.moments ?? 0;
   }
 }
 
 export const questGoal = (q: Quest): number => (q.kind === 'noComplaints' ? 1 : q.target);
 export const questDone = (q: Quest, stats: DayStats): boolean => questProgress(q, stats) >= questGoal(q);
 
-/** Награды за задания вечером. */
+/**
+ * Награды за задания вечером: выполненное, но ещё не оплаченное днём (в симуляторе — всё), плюс бонус к
+ * рейтингу за все три. earned — за все выполненные, вместе с выданными днём (для итогов дня).
+ */
 export function rewardQuests(state: StoreState, quests: Quest[], stats: DayStats): { state: StoreState; earned: number; done: number } {
-  const done = quests.filter((q) => questDone(q, stats));
+  const done = quests.filter((q) => q.paid || questDone(q, stats));
   const earned = done.reduce((s, q) => s + q.reward, 0);
+  const owed = done.filter((q) => !q.paid).reduce((s, q) => s + q.reward, 0);
   const allDone = quests.length > 0 && done.length === quests.length;
   return {
-    state: { ...state, money: state.money + earned, rating: Math.min(5, state.rating + (allDone ? ALL_QUESTS_RATING : 0)) },
+    state: { ...state, money: state.money + owed, rating: Math.min(5, state.rating + (allDone ? ALL_QUESTS_RATING : 0)) },
     earned,
     done: done.length,
   };
+}
+
+/**
+ * Днём: задание выполнено — награда сразу (и отметка в плане дня, чтобы вечером не заплатить второй раз,
+ * даже если игру перезапустят посреди дня). paid — что выдали сейчас.
+ */
+export function payQuests(state: StoreState, stats: DayStats): { state: StoreState; paid: Quest[] } {
+  const quests = state.plan?.quests ?? [];
+  // «Ни одной жалобы» решается только к вечеру: жалоба может прийти и последним покупателем.
+  const paid = quests.filter((q) => !q.paid && q.kind !== 'noComplaints' && questDone(q, stats));
+  if (!paid.length || !state.plan) return { state, paid: [] };
+  const plan = { ...state.plan, quests: quests.map((q) => (paid.includes(q) ? { ...q, paid: true } : q)) };
+  const money = paid.reduce((s, q) => s + q.reward, 0);
+  return { state: { ...state, money: state.money + money, plan }, paid };
 }
 
 // ---------------------------------------------------------------- альбом редких гостей

@@ -1,3 +1,4 @@
+import { momentCount } from '../game/moments';
 import { getLang, memberName, t } from '../i18n';
 import { pluralForm } from '../i18n/plural';
 import type { TextKey } from '../i18n/ru';
@@ -323,6 +324,8 @@ const TOUR: { key: TextKey; focus: TourFocus; tab?: Tab; mood?: 'happy' | 'sad' 
   { key: 'tour.hall', focus: 'open', mood: 'happy' },
 ];
 
+/** До какого дня утро напоминает про активные моменты дня. */
+const MOMENT_TIP_LAST_DAY = 5;
 const productLabel = (id: ProductId) => `${PRODUCTS[id].icon} ${t(PRODUCTS[id].nameKey)}`;
 
 /** Строка товара: крупная пиксельная иконка, название (и ценник), подпись и кнопки справа. */
@@ -2008,7 +2011,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const goalsBox = (state: StoreState): HTMLElement[] => {
     const quests = state.plan?.quests ?? [];
     const weekly = state.weekly;
-    if (!quests.length && !weekly) return [];
+    const momentTip = momentCount(state) > 0 && state.day <= MOMENT_TIP_LAST_DAY;
+    if (!quests.length && !weekly && !momentTip) return [];
     const box = el('div', 'ui-box ui-goals');
     if (quests.length) {
       box.append(el('b', '', t('quest.title')));
@@ -2017,8 +2021,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         r.append(el('span', '', `• ${questText(q)}`), el('b', 'ui-goal-reward', `+${q.reward} 💰`));
         box.append(r);
       }
-      box.append(el('div', 'ui-muted', t('quest.allBonus', { r: ALL_QUESTS_RATING })));
+      box.append(el('div', 'ui-muted', `${t('quest.now')} ${t('quest.allBonus', { r: ALL_QUESTS_RATING })}`));
     }
+    // Первые дни с активными моментами (game/moments.ts) — одной строкой, что ловить днём.
+    if (momentTip) box.append(el('div', 'ui-muted', t('moment.morning')));
     if (weekly) {
       box.append(el('b', 'ui-goals-week', t('weekly.title', { day: weeklyUntil(state) })));
       for (const c of weekly.challenges as Challenge[]) {

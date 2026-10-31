@@ -14,6 +14,7 @@ import { haptic } from '../platform/telegram';
 import { injectAudioStyles, muteIcon, toggleMute } from './audio';
 import type { Goal } from '../game/nudge';
 import { goalText } from './nudge';
+import { QuestChip, type QuestRow } from './today';
 
 /** Сколько штук на полках считается «мало» и сколько таких товаров показывать в панели. */
 const LOW_ON_SHELF = 3;
@@ -111,6 +112,9 @@ export class Hud {
   private goalKey = '';
   private goalHow: TextKey | null = null;
   private goalTimer = 0;
+  /** «Задания на сегодня»: фишка «🎯 1/3» рядом с целью, по нажатию — список (ui/today.ts). */
+  private readonly quests = new QuestChip();
+  private questRows: QuestRow[] = [];
 
   constructor() {
     injectStyles();
@@ -140,7 +144,9 @@ export class Hud {
     // Касание полоски — не касание улицы под ней (там хозяин пробивает покупки).
     for (const type of ['pointerdown', 'touchstart', 'mousedown'] as const) this.goal.addEventListener(type, (e) => e.stopPropagation(), { passive: true });
     this.goal.addEventListener('click', () => this.explainGoal());
-    this.goalWrap.append(this.goal, this.goalNext);
+    const row = el('div', 'ui-goal-row');
+    row.append(this.goal, this.quests.chip);
+    this.goalWrap.append(row, this.goalNext, this.quests.list);
     this.stock.append(this.goalWrap);
     document.body.append(this.top, this.stock, this.hint, this.speed, this.urgent, this.help, this.mute);
   }
@@ -187,8 +193,14 @@ export class Hud {
     pixelize(this.mute);
   }
 
+  /** Строки списка заданий дня (подпись фишки приходит в update — пустая прячет её). */
+  setQuests(rows: QuestRow[]): void {
+    this.questRows = rows;
+  }
+
   update(state: StoreState, secondsLeft: number, quests = '', night = false): void {
     this.day = state.day;
+    this.quests.set(quests, this.questRows);
     this.showMute();
     this.setMoney(state.money);
     const clock = `${night ? t('hud.night') : t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
@@ -211,14 +223,13 @@ export class Hud {
       .filter((p) => p.n <= LOW_ON_SHELF)
       .sort((a, b) => a.n - b.n);
     const shown = low.slice(0, LOW_SHOWN);
-    const key = `${shown.map((p) => `${p.id}${p.n}`).join()}|${low.length}|${warehouseCount(state)}/${warehouseCapacity(state)}|${quests}`;
+    const key = `${shown.map((p) => `${p.id}${p.n}`).join()}|${low.length}|${warehouseCount(state)}/${warehouseCapacity(state)}`;
     // Перерисовываем только когда что-то изменилось: update зовётся каждый кадр.
     if (key === this.lastStock) return;
     this.lastStock = key;
     const parts: HTMLElement[] = [el('span', 'ui-stock-wh', `📦 ${warehouseCount(state)}/${warehouseCapacity(state)}`)];
     for (const p of shown) parts.push(el('span', p.n === 0 ? 'ui-stock-out' : 'ui-stock-low', `${PRODUCTS[p.id].icon}${p.n}`));
     if (low.length > shown.length) parts.push(el('span', 'ui-stock-low', `+${low.length - shown.length}`));
-    if (quests) parts.push(el('span', 'ui-stock-wh', quests));
     this.stock.replaceChildren(...parts, this.goalWrap);
     for (const p of parts) pixelize(p);
   }

@@ -8,6 +8,9 @@ export const TRASH_KEYS = ['trash', 'trash_banana', 'trash_cup', 'trash_wrapper'
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
 export const SPRITES = [
+  // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
+  'tip_jar',
+  'jam_splat',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
   // Праздники по календарю (art/holidays.py): вещи за открытки и новогодний набор за звёзды.

@@ -64,6 +64,8 @@ import {
   pickRareGuest,
   pickWanted,
   questDone,
+  questProgress,
+  payQuests,
   rankName,
   rankOf,
   RARE_GUESTS,
@@ -223,6 +225,9 @@ import { hasRadio, nextStation, radioPatience, radioTolerance, radioSpeed, setSt
 import { managerPick, orderUrgent, receiveUrgent, URGENT_QTYS, URGENT_SECONDS } from '../game/urgent';
 import { autoArrived, autoTopUp } from '../game/autoorder';
 import { liveEventsFor, type LiveKind } from '../game/minievents';
+import { momentGain, momentsFor, noteMoment, type MomentKind } from '../game/moments';
+import { Moments } from './moments';
+import { questRows } from '../ui/today';
 import { showUrgent } from '../ui/urgent';
 import {
   bargainRows,
@@ -1664,6 +1669,25 @@ export class StoreScene extends Phaser.Scene {
   private helpBusy = false;
   /** Сколько заданий дня уже отпраздновали всплывашкой. */
   private questsSeen = 0;
+  /** Прогресс заданий, по которому в последний раз строился список в HUD. */
+  private questRowsKey = '';
+  /** Активные моменты дня (game/moments.ts, scenes/moments.ts): монетка, чаевые, гость машет… */
+  private readonly moments = new Moments({
+    scene: this,
+    lite: () => this.lite,
+    blocked: () => this.momentBlocked(),
+    hallGuest: () => this.momentGuest(),
+    queueGuest: () => this.queue.find((c) => !c.gone && !c.thief && !c.serving && c.sprite.active)?.sprite ?? null,
+    till: () => this.registers[0]?.counter ?? this.layout.counter,
+    floor: () => this.freeFloorPoint(),
+    popup: (x, y, text, color) => this.popup(x, y, text, color),
+    emote: (person, key) => this.emote(person, key),
+    coins: (x, y, n) => this.flyCoins(x, y, n),
+    puff: (x, y) => this.puff(x, y),
+    tap: (action) => this.tap(action),
+    caught: (kind) => this.momentCaught(kind),
+    missed: () => noteMoment(this.stats, false),
+  });
   /** Кассы: основная и (если куплена) вторая слева от очереди. Очередь одна — идёт к свободной. */
   private registers: Register[] = [];
   /** Ведро с мусором в зале: сколько в нём, картинка, выносят ли его сейчас и сколько несут в мешке. */
@@ -2039,6 +2063,7 @@ export class StoreScene extends Phaser.Scene {
     if (!this.night && this.jury === 'pending' && elapsed >= JURY_AT) void this.runJury();
     if (!this.night && this.sonya === 'pending' && elapsed >= SONYA_AT) void this.runSonya();
     if (!this.night && this.liveGuest?.phase === 'pending' && elapsed >= LIVE_GUEST_AT) void this.runLiveGuest();
+    if (!this.night) this.moments.tick(elapsed, deltaMs);
 
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;
@@ -2086,22 +2111,40 @@ export class StoreScene extends Phaser.Scene {
     this.hud.update(this.state, this.timeLeft, this.questsLine(), this.night);
   }
 
-  /** «📋 1/3» в верхней панели: сколько заданий дня уже выполнено. */
+  /** «🎯 1/3» рядом с целью дня: сколько заданий дня уже выполнено (по нажатию — список, ui/today.ts). */
   private questsLine(): string {
     const quests = this.state.plan?.quests ?? [];
     if (!quests.length) return '';
-    const done = quests.filter((q) => questDone(q, this.stats)).length;
+    const done = quests.filter((q) => q.paid || questDone(q, this.stats)).length;
+    // Выполнено — награда сразу (вечером второй раз не платим: endless.ts payQuests). Только в идущий день
+    // и по его же плану: статистика вчерашнего дня сегодняшние задания не закрывает.
+    const pay = this.running && this.state.plan?.day === this.state.day ? payQuests(this.state, this.stats) : { state: this.state, paid: [] };
+    if (pay.paid.length) {
+      this.state = pay.state;
+      const { sellerHome } = this.layout;
+      const n = pay.paid.reduce((sum, q) => sum + q.reward, 0);
+      this.time.delayedCall(700, () => this.popup(sellerHome.x - 20, sellerHome.y - 30, t('popup.questPaid', { n }), '#c8ffb0'));
+      this.flyCoins(sellerHome.x - 20, sellerHome.y - 30, Math.min(6, 2 + pay.paid.length * 2));
+      haptic.success();
+    }
     if (done > this.questsSeen) {
       this.questsSeen = done;
       sound.good();
       const { sellerHome } = this.layout;
       this.popup(sellerHome.x - 20, sellerHome.y - 46, t('popup.questDone', { done, total: quests.length }), '#fee761');
     }
-    return t('quest.hud', { done, total: quests.length });
+    // Список для HUD — только когда прогресс сдвинулся (questsLine зовётся каждый кадр).
+    const key = `${this.state.day}|${quests.map((q) => `${q.paid ? 'p' : ''}${questProgress(q, this.stats)}`).join()}`;
+    if (key !== this.questRowsKey) {
+      this.questRowsKey = key;
+      this.hud.setQuests(questRows(quests, this.stats));
+    }
+    return t('quest.chip', { done, total: quests.length });
   }
 
   private currentHint(): string {
     if (this.liveEvent) return t(`hint.${this.liveEvent}` as TextKey);
+    if (this.moments.showing) return t('hint.moment');
     if (this.oven?.state === 'ready') return t('hint.ovenReady');
     // Первый звонок с карточкой — подсказка подробнее: куда нажать (и тем, у кого доставка была и раньше).
     if (this.call) return t((this.state.seenTips ?? []).includes(CALL_CARD_TIP) ? 'hint.order' : 'hint.orderFirst');
@@ -2360,6 +2403,7 @@ export class StoreScene extends Phaser.Scene {
    */
   private disposeWorld(): void {
     this.worldGen++;
+    this.moments.clear();
     // killAll не вызывает onStop: незаконченный шаг продавца никогда не завершится, и он
     // навсегда остался бы «занят» (не убирал бы мусор и не носил товар). Начинаем его дела заново.
     this.tweens.killAll();
@@ -5949,6 +5993,8 @@ export class StoreScene extends Phaser.Scene {
 
   /** Вечер: если куплена ночная смена — спросить, работать ли ещё; иначе закрываемся. */
   private endOfDay(): void {
+    // Момент, не дождавшийся нажатия к закрытию, уходит вместе с днём (и в ночную смену не остаётся).
+    this.moments.stop();
     // Срочный заказ не успел доехать до закрытия — водитель всё равно выгрузил.
     this.receiveUrgentOrders();
     if (this.night || this.nightAsked || !canWorkNight(this.state)) {
@@ -6585,6 +6631,46 @@ export class StoreScene extends Phaser.Scene {
       sound.bad();
     }
     saveGame(this.state);
+  }
+
+  // ---------- Активные моменты дня (game/moments.ts, scenes/moments.ts) ----------
+
+  /**
+   * Момент не начинается (и начатый ждёт), пока игроку не до него: окно поверх зала, карточка звонка
+   * доставки, бабушкина стрелка или реплика, мини-событие, перестановка, вечер.
+   */
+  private momentBlocked(): boolean {
+    return (
+      !this.running ||
+      this.night ||
+      this.arranging ||
+      Boolean(this.call) ||
+      Boolean(this.liveEvent) ||
+      (this.hallCoach && this.coach.pointing) ||
+      this.say.visible ||
+      modalOpen()
+    );
+  }
+
+  /** Гость в зале, не в очереди и не у кассы (постоянный — первым): ему махать и за ним звёздочка. */
+  private momentGuest(): Phaser.GameObjects.Container | null {
+    const { wallH, h, w } = this.layout;
+    const busy = new Set<Customer>([...this.queue, ...this.registers.map((r) => r.customer).filter((c): c is Customer => Boolean(c))]);
+    const free = [...this.customers].filter(
+      (c) => !c.gone && !c.thief && !busy.has(c) && c.sprite.active && c.sprite.visible && c.sprite.x > 12 && c.sprite.x < w - 12 && c.sprite.y > wallH + 12 && c.sprite.y < h - 8,
+    );
+    return (free.find((c) => c.regular) ?? free[0])?.sprite ?? null;
+  }
+
+  /** Поймали момент: чаевые в кассу сразу, искорка к рейтингу — вечером (day.ts), лёгкая вибрация. */
+  private momentCaught(kind: MomentKind): string {
+    const gain = momentGain(kind, this.state.level);
+    noteMoment(this.stats, true, gain.star);
+    if (gain.money) this.state = { ...this.state, money: Math.max(0, this.state.money + gain.money) };
+    if (gain.money > 0) sound.coin();
+    else sound.good();
+    haptic.tap();
+    return t(`moment.${kind}Got` as TextKey, { n: Math.abs(gain.money) });
   }
 
   /** Начало мини-события дня. */
@@ -15084,7 +15170,10 @@ export class StoreScene extends Phaser.Scene {
     this.inspection = null;
     this.rushAnnounced = false;
     this.helpUntil = 0;
-    this.questsSeen = 0;
+    // После перезапуска посреди дня оплаченное уже празднование не повторяет.
+    this.questsSeen = (this.state.plan?.day === this.state.day ? this.state.plan.quests ?? [] : []).filter((q) => q.paid).length;
+    // Активные моменты дня: расписание по секундам дня (game/moments.ts).
+    this.moments.start(momentsFor(this.state, Math.random));
     this.valyaCame = false;
     this.syncStaff();
     // Повар на смене — кухня сама закупает у поставщиков продукты на день (из кассы; видно утром у кухни и в итогах).
@@ -15872,6 +15961,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   private finishDay(): void {
+    this.moments.stop();
     this.dayOpen = false;
     // Захват не успел закончиться (день досрочно закрыт) — персонал возвращается к работе.
     if (this.siege) {
@@ -15925,6 +16015,7 @@ export class StoreScene extends Phaser.Scene {
     if (wedding) extra.push([t('summary.wedding'), t(wedding.complete ? 'summary.weddingFull' : 'summary.weddingPart', { n: wedding.earned })]);
     if (filmed) extra.push(['🎬', t('summary.filming')]);
     if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
+    if (this.stats.momentsShown) extra.push([t('summary.moments'), t('summary.momentsValue', { n: this.stats.moments ?? 0, total: this.stats.momentsShown })]);
     if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
     // Филиал за дорогой (branch.ts): чистый доход за день одной строкой.
     if (branch) extra.push([t('branch.summary'), t('branch.summaryValue', { n: branch })]);
@@ -15983,6 +16074,12 @@ export class StoreScene extends Phaser.Scene {
     this.hallCoachOff();
     saveGame(this.state);
     track('day_end', finishedDay, this.stats.revenue);
+    // Вовлечённость: сколько моментов дня поймали из показанных и сколько заданий дня выполнили.
+    if (this.stats.momentsShown) {
+      track('moments_seen', finishedDay, this.stats.momentsShown);
+      track('moments', finishedDay, this.stats.moments ?? 0);
+    }
+    if (quests.total) track('quests', finishedDay, quests.done);
     // Сколько процентов своих покупателей хозяин пробил касанием улицы, а не кассы.
     if (this.serves.owner) track('serve_street', finishedDay, (100 * Math.min(this.serves.street, this.serves.owner)) / this.serves.owner);
     // Друзья на работе раз в неделю получают свою долю — монеты в своей игре (через «угощение»).

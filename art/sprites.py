@@ -5237,6 +5237,9 @@ def main():
     import kiosk
 
     kiosk.main()
+    import moments
+
+    moments.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
