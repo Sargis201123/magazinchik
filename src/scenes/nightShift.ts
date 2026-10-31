@@ -56,6 +56,7 @@ import * as staff from './staff';
 import * as persons from './persons';
 import * as visitors from './visitors';
 import * as bigDays from './bigDays';
+import * as morningFlow from './morningFlow';
 
 // ---------- Ночная смена ----------
 
@@ -403,15 +404,15 @@ export function finishDay(scene: StoreScene): void {
           saveGame(scene.state);
         }
         // Первая сессия кончается на подъёме: бабушкин подарок карточкой, потом — ночь.
-        if (gifted) firstGiftCard(() => nightPass(scene, () => scene.showMorning()));
-        else nightPass(scene, () => scene.showMorning());
+        if (gifted) firstGiftCard(() => nightPass(scene, () => morningFlow.showMorning(scene)));
+        else nightPass(scene, () => morningFlow.showMorning(scene));
       },
       (button) => void shareDay(scene, button, finishedDay),
       teaser,
       scene.state.bankrupt ? undefined : tomorrowLines(scene),
       firstDay,
     );
-    scene.summaryLesson(firstDay);
+    morningFlow.summaryLesson(scene, firstDay);
   });
 }
 
