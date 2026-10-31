@@ -198,6 +198,7 @@ import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable,
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
+import { arcBox, arcLines } from './arcs';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { showSupport } from './support';
 import { rushPrize } from '../game/rush';
@@ -817,6 +818,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...weatherLine(state),
       ...warLine(state),
       ...districtLines(state),
+      ...arcLines(state),
       ...trickLines(state),
       ...nightGuestLines(state),
       ...holidayLine(state),
@@ -849,6 +851,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...lifeBox(state),
       ...trickBox(state),
       ...taleBox(state),
+      ...arcBox(state, getState, update),
       ...guildClaimBox(state),
       today,
       todayCard(state, touring, [...friendShopsBox(), ...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: getState().level })), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),

@@ -8,6 +8,7 @@ import { loanOptions, takeLoan } from './bank';
 import { cook, cookBatch, cookRoundsPerDay, DISHES, DISH_IDS, kitchenWorking, sellDish, servePortions, stockKitchen, takeIngredients, topUpKitchen } from './kitchen';
 import { answerStaffEvent, eventCost } from './staffEvents';
 import { answerTale, taleToday } from './tales';
+import { answerArc, arcDeliver, arcToday } from './arcs';
 import { answerOpening, BUILDINGS, districtNews } from './district';
 import { answerTrick, counterCost, trickToday } from './tricks';
 import { answerNightStory, nightStory } from './nightGuests';
@@ -635,6 +636,7 @@ export function simulate({
     // Просьбы сотрудников и истории покупателей: соглашается, если деньги есть с запасом.
     if (state.staffEvent) state = answerStaffEvent(state, state.money >= eventCost(state.staffEvent) + reserve * 2) ?? answerStaffEvent(state, false) ?? state;
     if (taleToday(state)) state = answerTale(state, 0) ?? answerTale(state, 1) ?? state;
+    if (arcToday(state)) state = answerArc(state, 0) ?? answerArc(state, 1) ?? answerArc(state, 2) ?? state;
     // Открылось здание в районе — поздравляет, если деньги есть с запасом и не копит на расширение.
     // Козни конкурента: отвечает, если деньги есть с запасом и не копит на расширение; иначе жалуется (или молчит).
     const trick = trickToday(state);
@@ -821,7 +823,10 @@ export function simulate({
     // Кафе по соседству забирает заказ, как только магазин открылся.
     const cafeRes = cafeDeliver(state);
     state = cafeRes.state;
-    const cafeIncome = cafeRes.result?.pay ?? 0;
+    // Кафе Ахмеда (хроники района) забирает хлеб в день поставки.
+    const arcRes = arcDeliver(state);
+    state = arcRes.state;
+    const cafeIncome = (cafeRes.result?.pay ?? 0) + (arcRes.result?.pay ?? 0);
     state.shelves.forEach((_, i) => (state = moveToShelf(state, i).state));
 
     // ---------- День ----------

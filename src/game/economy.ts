@@ -326,6 +326,8 @@ export interface StaffMember {
   inspired?: number;
   /** Друг из Telegram (staff.ts): работает под своим именем, раз в неделю получает долю. */
   friend?: { id: number; name: string };
+  /** Сын Светы на летней подработке (arcs.ts): уйдёт учиться в конце лета. */
+  summer?: boolean;
 }
 
 /** Воодушевлённый сотрудник работает быстрее. */
@@ -700,6 +702,8 @@ export interface StoreState {
   supporter?: number;
   /** Истории постоянных покупателей (tales.ts). */
   tales?: TalesState;
+  /** Хроники района после финала: истории постоянных, договор с кафе, летний помощник (arcs.ts). */
+  arcs?: import('./arcs').ArcsState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */
   legacy?: Legacy;
   /** Сколько должна добрая бабушка, которой дали хлеба в долг (special.ts). */

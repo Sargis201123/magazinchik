@@ -63,6 +63,7 @@ import * as cars from './cars';
 import * as staff from './staff';
 import * as shoppers from './shoppers';
 import * as visitors from './visitors';
+import * as arcsFx from './arcsFx';
 import * as bigDays from './bigDays';
 import * as liveFx from './liveFx';
 import * as nightShift from './nightShift';
@@ -599,6 +600,8 @@ export function prepareDay(scene: StoreScene): void {
     scene.refreshShelves();
     building.refreshWarehouse(scene);
   }
+  // Кафе Ахмеда (хроники района) забирает хлеб в день поставки.
+  arcsFx.dealAtOpening(scene);
   visitors.scheduleStoryGuests(scene);
   const season = seasonFor(scene.state.day);
   if (season) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
