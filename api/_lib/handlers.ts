@@ -215,7 +215,7 @@ export async function starsRefund(request: Request, env: Env): Promise<Response>
     await bot(token, 'refundStarPayment', { user_id: user, telegram_payment_charge_id: charge });
     // Вернули звёзды за поддержку — золотая табличка в рейтинге снимается (supporters.ts).
     resetStarsCache();
-    if (env.DB) await syncSupporter(env.DB, user, ownedFrom(await allTransactions(token), user)).catch((e) => console.error(e));
+    if (env.DB) await syncSupporter(env.DB, user, ownedFrom(await allTransactions(token), user), true).catch((e) => console.error(e));
     return json({ ok: true, refunded: charge });
   }
   const all = await allTransactions(token);

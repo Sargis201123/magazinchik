@@ -60,6 +60,18 @@ describe('эксклюзив звёздного пропуска', () => {
     expect(claimPass({ ...unpaid, pass: { ...unpaid.pass!, xp: XP_PER_LEVEL * 20 } }, EXCLUSIVE_LEVELS.outfit!, 'premium')).toBeNull();
   });
 
+  it('уровень забран до обновления — эксклюзив выдаётся при загрузке, один раз', () => {
+    const s = paidPass(START, 20);
+    const old = { ...s, pass: { ...s.pass!, premium: [1, EXCLUSIVE_LEVELS.outfit!] } };
+    const fixed = ensureSeason(old, START + DAY);
+    expect(activeDecor(fixed, 'outfit')?.id).toBe(passExclusive(1, EXCLUSIVE_LEVELS.outfit!));
+    expect(fixed.decor.owned).not.toContain(passExclusive(1, EXCLUSIVE_LEVELS.sign!));
+    expect(ensureSeason(fixed, START + DAY)).toBe(fixed);
+    // Без оплаченного пропуска ничего не выдаётся.
+    const unpaid = { ...old, pass: { ...old.pass!, paid: false } };
+    expect(ensureSeason(unpaid, START + DAY)).toBe(unpaid);
+  });
+
   it('второй сезон даёт свои вещи (по seasonOf)', () => {
     const s = claimPass(paidPass(START + 28 * DAY, 20), EXCLUSIVE_LEVELS.sign!, 'premium')!;
     expect(s.pass!.season).toBe(2);
@@ -231,6 +243,16 @@ describe.skipIf(!Database)('золотая табличка в рейтинге 
     expect(res.status).toBe(200);
     top = (await board(env, 3)).top;
     expect(top.find((r) => r.name === 'Игрок1')?.gold).toBeUndefined();
+  });
+
+  it('запуск игры со старым списком платежей не снимает только что оплаченное золото', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, WEBHOOK_SECRET: SECRET, DB: d1() };
+    await progress(await post(6, { level: 1, revenue: 100 }), env);
+    const update = { message: { chat: { id: 6 }, from: { id: 6, language_code: 'ru' }, successful_payment: { invoice_payload: payloadFor('support_250') } } };
+    await telegramWebhook(new Request('https://x/api/telegram', { method: 'POST', headers: { 'x-telegram-bot-api-secret-token': SECRET }, body: JSON.stringify(update) }), env);
+    transactions = [];
+    await starsOwned(await post(6), env);
+    expect((await board(env, 6)).top[0].gold).toBe(true);
   });
 
   it('вебхук оплаты сразу отмечает поддержку и благодарит; секреты не попадают в ответы', async () => {

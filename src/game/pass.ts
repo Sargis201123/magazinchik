@@ -46,11 +46,28 @@ export const passItem = (season: number): string => `pass_${season}`;
 export const passOf = (state: StoreState, season: number): PassState =>
   state.pass && state.pass.season === season ? state.pass : { season, xp: 0, free: [], premium: [] };
 
-/** Новый сезон — пропуск с нуля. */
+/** Новый сезон — пропуск с нуля. Заодно — эксклюзив за уже забранные уровни (claimedExclusives). */
 export const ensureSeason = (state: StoreState, now: number): StoreState => {
   const season = seasonOf(now);
-  return state.pass?.season === season ? state : { ...state, pass: passOf(state, season) };
+  return claimedExclusives(state.pass?.season === season ? state : { ...state, pass: passOf(state, season) });
 };
+
+/**
+ * Премиальный уровень с эксклюзивом забрали ещё до того, как эксклюзив появился в игре
+ * (сезон 1 шёл уже две недели): выдать его и поставить. Повторно ничего не делает.
+ */
+export function claimedExclusives(state: StoreState): StoreState {
+  const pass = state.pass;
+  if (!pass?.paid) return state;
+  let s = state;
+  for (const level of pass.premium) {
+    const id = passExclusive(pass.season, level);
+    if (!id || s.decor.owned.includes(id)) continue;
+    const kind = DECOR.find((d) => d.id === id)!.kind;
+    s = { ...s, decor: { ...s.decor, owned: [...s.decor.owned, id], active: { ...s.decor.active, [kind]: id } } };
+  }
+  return s;
+}
 
 export const passLevel = (pass: PassState): number => Math.min(PASS_LEVELS, Math.floor(pass.xp / XP_PER_LEVEL));
 
