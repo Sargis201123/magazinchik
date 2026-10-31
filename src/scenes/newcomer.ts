@@ -23,13 +23,7 @@ import { tryNudge } from '../ui/nudge';
 import {
   ART,
   TUTORIAL_DAYS,
-  NUDGE_SHOW_MS,
   LIGHT_DEPTH,
-  ONB_FIRST_AT,
-  ONB_HELLO_AT,
-  ONB_NEXT_GUEST,
-  ONB_BYE_AFTER,
-  GRANNY_SPEED,
   TOILET_DIRTY,
   PICKUP_MS,
   PLACE_MS,
@@ -49,6 +43,19 @@ import * as persons from './persons';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+
+/** Сколько мс видна подсказка «что дальше» в зале (если игрок так и не коснулся экрана). */
+const NUDGE_SHOW_MS = 7000;
+/**
+ * Новое начало, первый день (секунды игры): когда входит первый покупатель, когда бабушка
+ * здоровается, когда за ним придёт следующий и когда после первой продажи бабушка уходит на дачу.
+ */
+const ONB_FIRST_AT = 0.6;
+const ONB_HELLO_AT = 0.9;
+const ONB_NEXT_GUEST = 8;
+const ONB_BYE_AFTER = 5.5;
+/** Бабушка ходит не спеша — медленнее сотрудников. */
+const GRANNY_SPEED = 42;
 
 export function currentHint(scene: StoreScene): string {
   if (scene.liveEvent) return t(`hint.${scene.liveEvent}` as TextKey);

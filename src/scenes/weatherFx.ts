@@ -9,10 +9,15 @@ import { sound } from '../platform/sound';
 import { isWet, weatherFor } from '../game/weather';
 import { yearTime } from '../game/calendar';
 import { WING_OUTER } from './layout';
-import { ART, STREET_VIEW, WALL, FACADE_H, GUST_SPEED, GUST_MS, GUST_TILT, LIGHT_DEPTH, CAR_COLORS, type CrownPart } from './common';
+import { ART, STREET_VIEW, WALL, FACADE_H, LIGHT_DEPTH, CAR_COLORS, type CrownPart } from './common';
 import * as pets from './pets';
 import * as lighting from './lighting';
 import * as decorations from './decorations';
+
+/** Порыв ветра: как быстро волна идёт по кварталу (px/с), сколько длится наклон дерева и на сколько градусов. */
+const GUST_SPEED = 140;
+const GUST_MS = 1400;
+const GUST_TILT = 4;
 
 /**
  * Погода дня: дождь с брызгами и зонтами, снег (белый газон, гирлянда на фасаде, ёлка в зале),

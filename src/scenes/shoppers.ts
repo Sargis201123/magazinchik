@@ -46,7 +46,7 @@ import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular } from '../game/regulars';
 import { CART_SHARE, cartPatience, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { DOG_DAY_CATCH } from '../game/watch';
-import { guestCoins, seeGuest } from '../game/live';
+import { guestCoins, seeGuest, type GuestId } from '../game/live';
 import { onbDone } from '../game/onboarding';
 import { treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
 import { servePortions } from '../game/kitchen';
@@ -71,45 +71,20 @@ import { fairTolerance } from '../game/fair';
 import { gentleDay, grannyServesAfter, grannyStays } from '../game/firstday';
 import {
   ART,
-  FRIEND_VISITS,
-  FRIEND_TIP,
-  FRIEND_GIFT,
   LIGHT_DEPTH,
   PATIENCE_MS,
-  FIRST_PATIENCE,
-  GRANNY_PATIENCE_MS,
-  GRANNY_SHELF_WAIT_MS,
   SELLER_SPEED,
-  RELIEF_TAP_MS,
-  RELIEF_HURRY_MAX_MS,
-  RELIEF_HURRY_SHARE,
-  TRASH_CHANCE,
-  TRASH_COMPLAINT,
-  MUD_CHANCE,
-  MAX_MUD,
-  SPILL_CHANCE,
-  COMBO_WINDOW_MS,
-  TOILET_CHANCE,
-  TOILET_DIRT_PER_VISIT,
   TOILET_DIRTY,
   SHIRTS,
   type Look,
-  DOOR_TURN,
-  DOOR_EDGE,
   randomLook,
   customerLook,
   nightLook,
   nightGuestLook,
   withCompanionItems,
-  THIEF_SHIRT,
   type ParkSpot,
-  THIEF_SPEED,
   STAFF_SPEED,
-  INSPECTOR_SHIRT,
   VALYA,
-  SONYA,
-  LIVE_GUEST_LOOKS,
-  JURY_LOOKS,
   SKINS,
   type Customer,
   type Register,
@@ -128,6 +103,61 @@ import * as newcomer from './newcomer';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+
+/** Друзья в гостях: сколько за день, чаевые за уровень их магазина, подарок за угощение (как на сервере). */
+const FRIEND_VISITS = 2;
+const FRIEND_TIP = 40;
+const FRIEND_GIFT = 300;
+/** Первый покупатель нового начала ждёт у кассы вчетверо дольше: новичок мог засмотреться. */
+const FIRST_PATIENCE = 4;
+/** Первый день: покупатель в очереди, которого держит бабушка, ждёт ещё столько, а потом снова решает. */
+const GRANNY_PATIENCE_MS = 5000;
+/** Первый день: сколько покупатель подождёт у пустой полки, пока бабушка несёт товар. */
+const GRANNY_SHELF_WAIT_MS = 12_000;
+/** Касание кассы, за которой сменщик, срезает столько мс пробивки; про запас — не больше стольких. */
+const RELIEF_TAP_MS = 250;
+const RELIEF_HURRY_MAX_MS = 1200;
+/** Какую долю пробивки сменщика можно срезать касаниями (в симуляторе — RELIEF_TAPS). */
+const RELIEF_HURRY_SHARE = 0.3;
+const TRASH_CHANCE = 0.15;
+/** Столько мусора на полу — и покупатели начинают жаловаться. */
+const TRASH_COMPLAINT = 3;
+/** В дождь, грозу и снег столько покупателей приносят грязь на ногах. */
+const MUD_CHANCE = 0.15;
+/** Больше двух грязных пятен разом не бывает — иначе гроза засыпает жалобами. */
+const MAX_MUD = 2;
+/** Покупатель иногда роняет покупку и разливает: молоко, сок, газировка. */
+const SPILL_CHANCE = 0.035;
+/** Следующий покупатель обслужен за столько после предыдущего — серия продолжается. */
+const COMBO_WINDOW_MS = 7000;
+const TOILET_CHANCE = 0.25;
+const TOILET_DIRT_PER_VISIT = 20;
+/** За сколько точек до двери покупатель сворачивает с тротуара ко входу (дуга поворота — половина). */
+const DOOR_TURN = 16;
+/** Насколько в сторону от середины двери можно пройти проём (дверь — около 24 точек шириной). */
+const DOOR_EDGE = 8;
+/** Тёмная кофта — так игрок может заметить вора. */
+const THIEF_SHIRT = 0x45444f;
+const THIEF_SPEED = 52;
+/** Сколько кассир пробивает одного покупателя при обычной скорости. */
+const INSPECTOR_SHIRT = 0x222034;
+/** Соня: каштановые волосы, сиреневая толстовка, жёлтый рюкзак (как на портрете, art/family.py). */
+const SONYA: Look = { shirt: 0xffffff, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x8f563b, style: 'long', outfit: 'hoodie', outfitTint: 0x68386c, bag: 'backpack', bagTint: 0xfee761 };
+/**
+ * Праздничные гости: Дед Мороз — весь в красном, с белой бородой, меховым воротником и посохом;
+ * Снегурочка — в голубом, с белым воротником, в диадеме и с косой. Шуба из гардероба (furcoat)
+ * нарисована коричневой и в красный не красится — поэтому пуховик с оттенком (coat) и шарф-воротник.
+ */
+const LIVE_GUEST_LOOKS: Record<GuestId, Look> = {
+  moroz: { shirt: 0xe43b44, pants: 0xe43b44, coat: 0xe43b44, scarf: 0xffffff, hair: 0xffffff, style: 'bald', skin: 0xf2d3ab, hat: 'ushanka', hatTint: 0xe43b44, face: 'beard', faceTint: 0xffffff, prop: 'cane' },
+  snegurochka: { shirt: 0x9cd8ff, pants: 0x9cd8ff, coat: 0x9cd8ff, scarf: 0xffffff, hair: 0xead4aa, style: 'long', skin: 0xf2d3ab, hat: 'tiara' },
+};
+/** Жюри: строгие костюмы, у одного портфель, у другого блокнот (как у инспектора). */
+const JURY_LOOKS: Look[] = [
+  { shirt: 0xffffff, skin: 0xf2d3ab, pants: 0x262b44, hair: 0xc0cbdc, outfit: 'suit', outfitTint: 0x3a4466, prop: 'briefcase', propTint: 0x733e39 },
+  { shirt: 0xf6757a, skin: 0xeec39a, pants: 0x262b44, hair: 0x4a2c1a, style: 'long', outfit: 'suit', outfitTint: 0x68386c, face: 'sunglasses' },
+  { shirt: 0xffffff, skin: 0xd9a066, pants: 0x181425, hair: 0x181425, outfit: 'suit', outfitTint: 0x265c42, prop: 'newspaper' },
+];
 
 /** Шоколадка со стойки у кассы летит в руки стоящему в очереди. */
 export function grabCandy(scene: StoreScene, c: Customer): void {

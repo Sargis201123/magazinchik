@@ -17,6 +17,8 @@ import {
   turnVia,
   type Facing,
   type Passer,
+  type Pace,
+  type Route,
 } from './stride';
 import { BIG_LAYER_DY } from './wardrobe';
 import { hasUpgrade } from '../game/upgrades';
@@ -29,22 +31,96 @@ import {
   type EmoteKey,
   VIEW_SUFFIX,
   type Look,
-  GAIT,
-  OWN_SPEED,
-  QUEUE_SNUG,
-  QUEUE_STAGGER,
-  TURN_MS,
-  LANE_SPEED,
-  LANE_EVERY,
   STEP_GRACE,
-  type Stride,
-  gaitOf,
   customerLook,
-  FRONT_ONLY,
   type Customer,
+  type Gait,
 } from './common';
 import * as effects from './effects';
 import * as weatherFx from './weatherFx';
+
+/** Седые волосы (у пенсионеров, бабушек, Деда Мороза): по ним видно, что человек в годах. */
+const GREY_HAIR = new Set([0xd8d8e0, 0xc0cbdc, 0xffffff]);
+
+/**
+ * Свой шаг у походки: speed — во сколько раз быстрее обычного идёт своим ходом (когда не спешит
+ * по делу), stride — во сколько раз шире шаг. Старик идёт медленно и мелко (ноги перебирают реже),
+ * ребёнок — чуть быстрее и короче (семенит), спортсмен — бодро и широко.
+ */
+const GAIT: Record<Gait, { speed: number; stride: number }> = {
+  cane: { speed: 0.8, stride: 0.85 },
+  elder: { speed: 0.92, stride: 0.9 },
+  kid: { speed: 1.05, stride: 0.95 },
+  sporty: { speed: 1.12, stride: 1.06 },
+  bouncy: { speed: 1.05, stride: 1 },
+};
+/**
+ * Разброс шага у каждого (от и до). Середина чуть выше единицы: медленных стариков уравновешивают
+ * остальные, и в среднем покупатели ходят столько же, сколько прежде, — поток через кассу не меняется.
+ */
+const OWN_SPEED: [number, number] = [0.93, 1.09];
+/** Очередь теснее этого (точки мира) — встают ёлочкой, через одного на столько левее. */
+const QUEUE_SNUG = 12;
+const QUEUE_STAGGER = 5;
+/** Поворот кругом (мс времени игры): на миг — промежуточная сторона, а не мгновенный разворот. */
+const TURN_MS = 90;
+/** Как быстро отходит вбок, чтобы разойтись со встречным (точек мира в секунду). */
+const LANE_SPEED = 16;
+/** Как часто заново смотрит, нет ли кого впереди (мс времени игры). */
+const LANE_EVERY = 110;
+/**
+ * Шаг человека — всё, что меняется каждый кадр, в одном объекте (а не в setData: тот на каждую
+ * запись рассылает события). Кадр шага растёт с пройденным путём, а не по часам.
+ */
+interface Stride {
+  /** Кадр шага (дробный): 0…4 — два шага, растёт на пройденный путь. */
+  phase: number;
+  /** Где был в прошлом кадре: сколько прошёл. */
+  lastX: number;
+  lastY: number;
+  /** Свой шаг: множители скорости (своим ходом) и ширины шага — у каждого чуть свои. */
+  speed: number;
+  stride: number;
+  /** Каким по счёту шагом трогается: то с левой ноги, то с правой. */
+  foot: number;
+  /** Когда (время сцены) закончил прошлый путь и с какой скоростью шёл (точек в мс времени игры). */
+  endAt: number;
+  vel: number;
+  /** Доля крейсерской скорости сейчас (разгон и торможение): наклон на бегу растёт с ней. */
+  ratio: number;
+  /** Кадр шага в прошлый раз: пыль и звук — один раз на шаг. */
+  frame: number;
+  /** Текущий путь: точки, скорость по нему, на каком отрезке и сколько прошло времени (мс игры). */
+  route?: Route;
+  pace?: Pace;
+  seg: number;
+  t: number;
+  /** Сдвиг вбок от пути (разойтись со встречным): сейчас и куда тянется, когда снова посмотреть вперёд. */
+  lane: number;
+  laneGoal: number;
+  laneAt: number;
+  /** Направление пути сейчас: по нему другие решают, встречный это или попутчик. */
+  dirX: number;
+  dirY: number;
+  /** Поворот кругом: какой стороной встать и когда (время пути). */
+  turn?: { to: Facing; at: number };
+  /** Глубина по высоте не как в зале (за зданием, на парковке, — своя); нет — глубина = y. */
+  depthOf?: (y: number) => number;
+}
+const gaitOf = (look: Look): Gait | undefined =>
+  look.prop === 'cane'
+    ? 'cane'
+    : look.kid
+      ? 'kid'
+      : look.outfit === 'tracksuit' || look.outfit === 'runner'
+        ? 'sporty'
+        : look.hat === 'headphones'
+          ? 'bouncy'
+          : look.hair !== undefined && GREY_HAIR.has(look.hair)
+            ? 'elder'
+            : undefined;
+/** Аксессуары, которые видны только спереди. */
+const FRONT_ONLY = new Set(['acc_badge', 'acc_tie', 'acc_glasses', 'p_pat_print']);
 
 /** Человечек из слоёв: тень, штаны, рубашка, форма, кожа, волосы — каждый слой перекрашивается тинтом. */
 export function makePerson(scene: StoreScene, x: number, y: number, look: Look): Phaser.GameObjects.Container {

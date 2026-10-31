@@ -28,19 +28,7 @@ import { hasRadio, nextStation, setStation, STATION_INFO, stationOf } from '../g
 import { gearTier } from '../game/gear';
 import { idleRegisters, registerCount, registerSlots } from '../game/registers';
 import { isFairDay, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fair';
-import {
-  ART,
-  WALL,
-  FACADE_H,
-  LIGHT_DEPTH,
-  EVENING_FROM,
-  MUSIC_MORNING,
-  KIOSK_SPRITES,
-  KIOSK_SCREEN,
-  KIOSK_GLOW,
-  WING_DOOR_CLEAR,
-  type CrownPart,
-} from './common';
+import { ART, WALL, FACADE_H, LIGHT_DEPTH, EVENING_FROM, KIOSK_GLOW, type CrownPart } from './common';
 import * as lighting from './lighting';
 import * as deliveries from './deliveries';
 import * as food from './food';
@@ -48,6 +36,14 @@ import * as persons from './persons';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+
+/** До какой доли дня музыка выбирает утренний трек (дальше — дневной, с вечера — вечерний). */
+const MUSIC_MORNING = 0.3;
+/** Картинки киосков по модели (lanes.ts, KIOSK_TIERS), где у них экран (от центра) и чем он светится. */
+const KIOSK_SPRITES = ['kiosk', 'kiosk1', 'kiosk2'];
+const KIOSK_SCREEN = { x: 0, y: -5.5, w: 8, h: 5 };
+/** Сколько у левой стены держим свободным у дверей флигеля (как iceboxSpotFor и roomZones). */
+const WING_DOOR_CLEAR = 32;
 
 /**
  * Ярмарка: флажки над фасадом и шарики у входа. Перерисовывается каждое утро

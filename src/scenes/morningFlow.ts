@@ -50,7 +50,7 @@ import { catHome } from '../game/cat';
 import { isFairDay } from '../game/fair';
 import { takeLiteNote } from '../platform/quality';
 import { quietDays } from '../game/firstday';
-import { ART, WALL, FACADE_H, LIGHT_DEPTH, UNBOX, UNBOX_STEP, NEW_TAG_MS, LIVE_WINDOW, LIVE_WINDOWS, type Kin, staffKey } from './common';
+import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
 import * as lighting from './lighting';
@@ -71,6 +71,25 @@ import * as rivals from './rivals';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+
+/**
+ * Что распаковывают из коробки, когда оно впервые появилось в зале: оборудование (терминал, касса
+ * самообслуживания, радио, кассы, климат, камеры, склад, кофемашина, печь) и украшения.
+ */
+const UNBOX =
+  /^(card_terminal|kiosk\d?|radio|phone|counter\d|bin_t\d_0|fan_base|ac_wall|cam|air_curtain|mat_grate|autostore|pallet_jack|forklift|carts|coffee_machine\d?|cafe_table|oven\d?|rug|neon|plant_big|art_[a-z]+|light_(sconce|pendant|lantern|chandelier)|gumball|aquarium|lucky_cat|fountain|jukebox)$/;
+/** Новинки распаковывают по очереди, с таким шагом. */
+const UNBOX_STEP = 350;
+/** Флажок «НОВОЕ» висит над новинкой два часа по часам зала (смена идёт с 8:00 до 20:00). */
+const NEW_TAG_MS = (DAY_SECONDS * 1000 * 2) / 12;
+/** Когда (доли дня) случается мини-событие; если их два — первое до обеда, второе к вечеру. */
+const LIVE_WINDOW: [number, number] = [0.2, 0.6];
+const LIVE_WINDOWS: [number, number][] = [
+  [0.15, 0.4],
+  [0.55, 0.8],
+];
+/** Мелочь вещи (лопасти, огонёк, экран): прячется и появляется вместе с ней при распаковке. */
+type Kin = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Visible;
 
 // ---------- День ----------
 

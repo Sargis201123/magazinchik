@@ -5,7 +5,7 @@
 
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
-import { PRODUCT_IDS, HYPER_LEVEL, unitSalePrice, warehouseCapacity } from '../game/economy';
+import { PRODUCT_IDS, HYPER_LEVEL, unitSalePrice, warehouseCapacity, type StoreState } from '../game/economy';
 import { saveGame } from '../game/save';
 import { t } from '../i18n';
 import { sound } from '../platform/sound';
@@ -15,7 +15,7 @@ import { weatherFor } from '../game/weather';
 import { yearTime } from '../game/calendar';
 import { hasUpgrade } from '../game/upgrades';
 import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskTier } from '../game/lanes';
-import { activeDecor } from '../game/decor';
+import { activeDecor, type DecorId } from '../game/decor';
 import { kitchenOpen } from '../game/kitchen';
 import { blockedZones, slotSide, overlapsRect, propFootprint, propRect, tillZones } from './placement';
 import { kioskZones, REGISTER_ROW, registerSpot, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Room } from './layout';
@@ -29,21 +29,13 @@ import {
   FURNITURE_TOP,
   WALL,
   FACADE_H,
-  FACADE_STYLES,
-  FLOORS,
   ITEM_VARIANTS,
   KIOSK_GLOW,
-  KIOSK_ALARM,
-  BARGAIN_BOTTOM,
-  BARGAIN_BASE,
-  BARGAIN_STEP,
-  BAG_MS,
-  DUMP_MS,
   TOILET_DIRTY,
-  ownerLook,
   type Customer,
   type Register,
   type ChoreStep,
+  type Look,
 } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -57,6 +49,47 @@ import * as liveFx from './liveFx';
 import * as nightShift from './nightShift';
 import * as camera from './camera';
 import * as shelves from './shelves';
+
+const OWNER: Look = { shirt: 0x8fd16a, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short' };
+/** Наряды хозяина за звёзды (decor.ts, раздел «Наряд»). Должно совпадать с art/costumes.py. */
+const COSTUMES: Partial<Record<DecorId, Partial<Look>>> = {
+  outfit_farmer: { hat: 'straw', outfit: 'overalls', pants: 0x3b5a9a },
+  outfit_retro: { hat: 'papercap', outfit: 'soda', face: 'mustache', pants: 0x262b44 },
+  outfit_tuxedo: { hat: 'silkhat', outfit: 'tuxedo', face: 'monocle', back: 'tails', pants: 0x181425 },
+  outfit_cyber: { hat: 'cyberhelmet', outfit: 'cyber', back: 'jetpack', pants: 0x262b44 },
+  // Эксклюзив звёздного пропуска (pass.ts, art/season.py).
+  outfit_s1: { hat: 'leafcap', outfit: 'trench', pants: 0x4f2c17 },
+  outfit_s2: { hat: 'pompom', outfit: 'nordic', pants: 0x262b44 },
+};
+
+/**
+ * Вид фасада по уровню магазина: ларёк в досках, кирпич, светлая плитка и стеклянный
+ * супермаркет. У двух старших вместо навесиков над окнами — сплошной козырёк фирменного
+ * цвета (у супермаркета — с подсветкой), главный навес над входом того же цвета.
+ */
+const FACADE_STYLES: { texture: string; awning?: number; canopy?: number; led?: boolean }[] = [
+  { texture: 'facade_wood', awning: 0x8fd16a },
+  { texture: 'facade' },
+  { texture: 'facade', awning: 0xfee761 },
+  { texture: 'facade_tile', canopy: 0x3e8948 },
+  { texture: 'facade_glass', canopy: 0x262b44, led: true },
+  // Гипермаркет: светлые колонны, тёмное стекло, красный козырёк с подсветкой.
+  { texture: 'facade_hyper', canopy: 0xa22633, led: true },
+];
+/** Пол по уровням помещения. */
+const FLOORS = ['floor', 'floor', 'floor2', 'floor2', 'floor3', 'floor3'];
+const KIOSK_ALARM = 0xe43b44;
+/** Полка «Уценка» (art/bargain_shelf.py, в точках мира): низ горки ниже точки места, высота цоколя и шаг рядов. */
+const BARGAIN_BOTTOM = 8;
+const BARGAIN_BASE = 6;
+const BARGAIN_STEP = 4;
+/** Завязать мешок и бросить его в контейнер на улице. */
+const BAG_MS = 600;
+const DUMP_MS = 450;
+const ownerLook = (state: StoreState): Look => {
+  const outfit = activeDecor(state, 'outfit');
+  return { ...OWNER, ...(outfit ? COSTUMES[outfit.id] : {}) };
+};
 
 export function buildStore(scene: StoreScene): void {
   const { w, h, wallH, wc, counter, sellerHome } = scene.layout;

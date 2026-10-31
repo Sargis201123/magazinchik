@@ -4,13 +4,12 @@
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { UI_FONT } from '../ui/dom';
-import { BIG_DAYS, bigDayFor, MASKS } from '../game/bigday';
+import { BIG_DAYS, bigDayFor, MASKS, type BigDayId } from '../game/bigday';
 import type { Layout } from './layout';
 import type { Light } from './light';
 import {
   ART,
   TUTORIAL_DAYS,
-  HEADLIGHT,
   HEADLIGHT_POWER,
   LIGHT_DEPTH,
   CUSTOMER_SPEED,
@@ -21,32 +20,78 @@ import {
   type LotCar,
   type ParkingLot,
   type RoadCar,
-  straight,
-  bend,
-  cruise,
-  type CarLeg,
   LOT,
-  LOT_CARS,
-  LOT_FOOT,
-  LOT_DRIVE,
   LOT_DRIVE_END,
-  LOT_MOUTH,
-  LOT_DEPTH,
-  CAR_ROAD,
-  CAR_DRIVE,
-  CAR_LOT,
-  CAR_CREEP,
-  LOT_NEIGHBORS,
-  LOT_NEIGHBORS_LITE,
-  CAR_CUSTOMERS,
-  CAR_LAST_SECONDS,
-  LOT_ROAD_DAYS,
   CAR_COLORS,
+  CAR_TYPES,
 } from './common';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as persons from './persons';
 import * as visitors from './visitors';
+
+/** Путь машины по прямой. */
+const straight = (x0: number, y0: number, x1: number, y1: number): Phaser.Curves.Path => new Phaser.Curves.Path(x0, y0).lineTo(x1, y1);
+/**
+ * Отрезок пути машины: по прямой или дугой поворота (path), скорость равномерно меняется от v0 до v1
+ * (точек мира в секунду), back — задним ходом, turn — какой поворотник мигает.
+ */
+interface CarLeg {
+  path: Phaser.Curves.Path;
+  v0: number;
+  v1: number;
+  back?: boolean;
+  turn?: 'left' | 'right';
+}
+
+/** Фары в карте освещения: конус (ширина у дальнего края и длина, точки мира) и сила к ночи. */
+const HEADLIGHT = { w: 24, h: 50 };
+/** Поворот: плавная дуга от (x0, y0) к (x1, y1) через угол (cx, cy). */
+const bend = (x0: number, y0: number, cx: number, cy: number, x1: number, y1: number): Phaser.Curves.Path =>
+  new Phaser.Curves.Path(x0, y0).quadraticBezierTo(x1, y1, cx, cy);
+/**
+ * Прямой участок: разгон от v0 до v на первых up точках, дальше ровно, на последних down — торможение
+ * до v1 (поворотник turn мигает, пока тормозит). На коротком участке ровного куска нет.
+ */
+function cruise(x0: number, y0: number, x1: number, y1: number, v0: number, v: number, v1: number, up: number, down: number, turn?: CarLeg['turn']): CarLeg[] {
+  const length = Math.hypot(x1 - x0, y1 - y0);
+  const speedUp = Math.min(up, length / 2);
+  const slowDown = Math.min(down, length / 2);
+  const at = (d: number): [number, number] => [x0 + ((x1 - x0) * d) / length, y0 + ((y1 - y0) * d) / length];
+  const legs: CarLeg[] = [{ path: straight(x0, y0, ...at(speedUp)), v0, v1: v }];
+  if (length - speedUp - slowDown > 0.5) legs.push({ path: straight(...at(speedUp), ...at(length - slowDown)), v0: v, v1: v });
+  legs.push({ path: straight(...at(length - slowDown), x1, y1), v0: v, v1, turn });
+  return legs;
+}
+/** Кто паркуется: легковые и фургоны (грузовики — только по улице). */
+const LOT_CARS = CAR_TYPES.filter(([key]) => key !== 'car_truck');
+/**
+ * Проезд к парковке — справа от зала (от его правого края, точки мира): дорожка для пешеходов вдоль
+ * стены (FOOT…DRIVE), за ней асфальт шириной в машину с запасом (DRIVE…DRIVE_END), дальше — соседний дом.
+ */
+const LOT_FOOT = 7;
+const LOT_DRIVE = 14;
+/** Полоса тротуара перед въездом, которую переезжает машина: полкузова и шаг прохожего от середины въезда. */
+const LOT_MOUTH = 12;
+/** Глубина машин и людей на парковке (за зданием глубина отрицательная): над асфальтом, под кронами. */
+const LOT_DEPTH = -9.41;
+/** Скорости машины у парковки (точек мира в секунду): по улице, в проезде, по парковке, на месте. */
+const CAR_ROAD = 85;
+const CAR_DRIVE = 80;
+const CAR_LOT = 30;
+const CAR_CREEP = 12;
+/** Сколько мест утром заняты машинами соседей (в лёгкой графике машин меньше). */
+const LOT_NEIGHBORS = 0.4;
+const LOT_NEIGHBORS_LITE = 0.25;
+/** Сколько покупателей приезжает на машине, если на парковке есть место (в лёгкой графике — реже). */
+const CAR_CUSTOMERS = 0.5;
+/** Позже этого (секунд до закрытия) на машине уже не приезжают: пока доедет и дойдёт — магазин закроется. */
+const CAR_LAST_SECONDS = 50;
+/**
+ * В какие особые дни к парковке можно проехать по улице: в наводнение, ремонт дороги, шествия,
+ * съёмки, свадьбу, автобус туристов и ограбление улица занята — машины стоят, где стоят.
+ */
+const LOT_ROAD_DAYS: BigDayId[] = ['heatwave', 'frost', 'quake', 'blackout', 'starfall', 'pigeons', 'sanitary', 'epidemic'];
 
 /**
  * Парковка за магазином и проезд к ней с улицы вдоль правой стены: площадка с бордюром и разметкой

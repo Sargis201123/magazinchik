@@ -45,7 +45,7 @@ import { fpsSummary } from '../platform/quality';
 import { firstDayGift, firstDayRating, gentleDay, grannyStays } from '../game/firstday';
 import { tomorrowTeaser } from '../game/nudge';
 import { teaserText } from '../ui/nudge';
-import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, WATCHMAN, nightGuestLook } from './common';
+import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook, type Look } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
 import * as pets from './pets';
@@ -61,6 +61,20 @@ import * as newcomer from './newcomer';
 import * as rivals from './rivals';
 import * as camera from './camera';
 import * as building from './building';
+
+/** Ночной сторож Михалыч: ушанка, ватник цвета хаки, седые усы, фонарик (как в art/security.py). */
+const WATCHMAN: Look = {
+  skin: 0xeec39a,
+  shirt: 0x5a6988,
+  pants: 0x262b44,
+  hair: 0xc0cbdc,
+  hat: 'ushanka',
+  hatTint: 0x8f563b,
+  outfit: 'cardigan',
+  outfitTint: 0x7a8a5a,
+  face: 'mustache',
+  prop: 'flashlight',
+};
 
 // ---------- Ночная смена ----------
 

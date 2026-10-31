@@ -22,30 +22,20 @@ import { BUILDINGS, BUILDING_IDS, buildingStage, districtKey, isMatchDay, type B
 import { COURIER_SPAN, freeStreetX, ICE_CART_SPAN, type StreetSpan } from './placement';
 import { WING_OUTER, type Layout } from './layout';
 import { lawnShade, lawnTexture } from './floor';
-import { eduardLook } from '../game/eduard';
+import { eduardLook, type EduardLook } from '../game/eduard';
 import { cleanHall } from '../game/firstday';
 import {
   ART,
   WALL,
   FACADE_H,
-  type Neighbor,
-  RIVAL_LOOKS,
-  PARK_TREES,
-  RIVAL_ACROSS_H,
   LIGHT_DEPTH,
   CUSTOMER_SPEED,
-  TV_SPOTS,
-  TV_SPAN,
-  STAR_SPOTS,
-  BLOGGER_SPAN,
-  COLLAB_SPAN,
   SHIRTS,
   type Look,
   randomLook,
   customerLook,
   SIDE_SHOP_X,
   SIDE_SHOP_W,
-  VERANDA_D,
   discard,
   type Pigeon,
 } from './common';
@@ -56,6 +46,36 @@ import * as cars from './cars';
 import * as persons from './persons';
 import * as newcomer from './newcomer';
 import * as building from './building';
+
+/** Здание по соседству; back — отступ от тротуара (у кафе перед ним веранда). */
+/** Особая крыша: вертолётная площадка, красный крест, бельё, солнечные панели (art/rooftops.py). */
+type RoofKit = 'office' | 'clinic' | 'dorm' | 'school';
+
+type Neighbor = { x: number; w: number; h: number; name: TextKey; label?: string; sign: number; awning: number; roof: number; neon: number; dark?: boolean; back?: number; roofKit?: RoofKit };
+
+/** Помещение конкурента: пустует, «МегаМарт» по сюжету, а после сюжета — боссы района по очереди. */
+const RIVAL_LOOKS: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
+  vacant: { h: 130, name: 'eduard.stage0', sign: 0x5a6988, awning: 0x8b9bb4, roof: 0xc0cbdc, neon: 0, dark: true },
+  mega: { h: 140, name: 'eduard.mega', sign: 0x124e89, awning: 0x0099db, roof: 0xc4d0ec, neon: 0x6cd8ff },
+  kiosk: { h: 110, name: 'eduard.stage1', sign: 0x68386c, awning: 0xb55088, roof: 0xe0c8dc, neon: 0xff8ad8 },
+  discount: { h: 145, name: 'eduard.stage2', sign: 0xb13e53, awning: 0xfee761, roof: 0xf2e6c8, neon: 0xffd040 },
+  farm: { h: 135, name: 'eduard.stage3', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd8e4c0, neon: 0x9cff7a },
+  mall: { h: 190, name: 'eduard.stage4', sign: 0xa22633, awning: 0xe43b44, roof: 0xf2e6c8, neon: 0xffd040, roofKit: 'office' },
+};
+const PARK_TREES = ['tree', 'tree', 'tree_round', 'tree_birch', 'tree_pine'];
+/** Высота здания босса за дорогой: умещается на месте «Гиганта». */
+const RIVAL_ACROSS_H = 106;
+/**
+ * Реклама у входа (x от двери): съёмочная группа ТВ (оператор, камера, ведущая) и блогер — один или
+ * звезда с фанатами. Первое место — обычное, следующие — если оно занято курьером или тележкой (freeStreetX).
+ */
+const TV_SPOTS = [-48, 84, -100];
+const TV_SPAN: StreetSpan = [-5, 25];
+const STAR_SPOTS = [-20, 104, 136];
+const BLOGGER_SPAN: StreetSpan = [-5, 5];
+const COLLAB_SPAN: StreetSpan = [-19, 17];
+/** Глубина веранды перед кафе «Пончик». */
+const VERANDA_D = 28;
 
 /**
  * Реклама видна на улице, пока работает: баннер на фасаде, промоутер с листовками, блогер у входа,

@@ -48,7 +48,7 @@ import {
   takeOutBread,
   wholesaleToBake,
 } from '../game/bakery';
-import { ART, LIGHT_DEPTH, PLACE_MS, COOK_LATE, COFFEE_WAITING, COFFEE_ORDERS, type Customer, type KitchenView, type Worker } from './common';
+import { ART, LIGHT_DEPTH, PLACE_MS, type Customer, type KitchenView, type Worker } from './common';
 import * as motion from './motion';
 import * as lighting from './lighting';
 import * as staff from './staff';
@@ -56,6 +56,15 @@ import * as persons from './persons';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+
+/**
+ * Дорога за продуктами, нарезка и раздача — столько секунд на закладку сверх варки у повара обычной скорости
+ * (у медленного — дольше). До закрытия меньше — новое не ставит; сколько ставить — по спросу после того, как сварится.
+ */
+const COOK_LATE = 14;
+/** Сколько человек может ждать кофе сразу и что заказывают у стойки. */
+const COFFEE_WAITING = 3;
+const COFFEE_ORDERS: TextKey[] = ['popup.order1', 'popup.order2', 'popup.order3', 'popup.order4'];
 
 /** Кофейня во флигеле: кофемашина у стены, стойка, за ней бариста; в углу столик. */
 export function buildCoffee(scene: StoreScene): void {

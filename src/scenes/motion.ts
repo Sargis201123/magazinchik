@@ -14,14 +14,12 @@ import { NIGHT_MARKUP } from '../game/night';
 import {
   ART,
   FACADE_H,
-  SWING_LAYERS,
   LIGHT_DEPTH,
   QUAKE_WAVE_MS,
   QUAKE_SHAKE_MS,
   QUAKE_SHAKE_PX,
   CUSTOMER_SPEED,
   RUN_PACE,
-  MAX_DUST,
   VIEW_SUFFIX,
   type Gait,
   STEP_GRACE,
@@ -31,6 +29,12 @@ import {
 } from './common';
 import * as persons from './persons';
 import * as building from './building';
+
+/** Деревья сквера: обычное чаще, остальные для разнообразия. */
+/** Слои, у которых есть кадры взмаха рук при ходьбе (art/walk.py). */
+const SWING_LAYERS = new Set(['p_shirt', 'p_skin', 'p_skin_happy', 'p_skin_frown']);
+/** Пыли и брызг из-под ног одновременно не больше стольких (марафон — это толпа бегунов). */
+const MAX_DUST = 24;
 
 /**
  * Шаги в 4 кадра (ноги: шаг, вместе, другой шаг, вместе; тело чуть подпрыгивает)

@@ -12,8 +12,22 @@ import { crispZoom, homeFrame } from './pixels';
 import { deferLiteNote, fpsSummary, fpsVerdict, lowerQuality, qualityChosen } from '../platform/quality';
 import { quietDays } from '../game/firstday';
 import { framesThrottled } from '../platform/frameCap';
-import { HUD_TOP, HUD_BOTTOM, FRAME_PAD, SIGN_TOP, ART, CAMERA_REACH, FACADE_H, LIGHT_DEPTH, ONB_ROAD_MS, STREET_TAP_MS } from './common';
+import { HUD_TOP, ART, FACADE_H, LIGHT_DEPTH } from './common';
 import * as motion from './motion';
+
+/** Снизу подсказки — магазин рисуем над ними (в базовых точках, × res; сверху — HUD_TOP в common.ts). */
+const HUD_BOTTOM = 80;
+/** Запас по бокам обычного кадра (в точках мира): наружная стена флигеля и правая стена не впритык к краю экрана. */
+const FRAME_PAD = 1;
+/** Верх вывески над стеной магазина: под верхнюю панель — без полосы пустого газона. */
+const SIGN_TOP = -16;
+/** На сколько выше по залу стоит следующая пара касс. */
+/** Насколько далеко можно отвести камеру от магазина пальцем. */
+const CAMERA_REACH = 200;
+/** Перед уходом бабушка показывает, что пробивать можно и касанием улицы: столько мс до прощания. */
+const ONB_ROAD_MS = 4500;
+/** Касание улицы короче этого (мс) — нажатие; дольше — палец лежал или начинал жест. */
+const STREET_TAP_MS = 450;
 
 /**
  * Обычный кадр — масштаб и середина (baseZoom, home) под нынешний холст: при постройке зала и когда

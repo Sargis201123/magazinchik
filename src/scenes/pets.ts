@@ -12,11 +12,22 @@ import { UI_FONT } from '../ui/dom';
 import { hasDog } from '../game/watch';
 import { CAT_BEDS, catHome, fedToday } from '../game/cat';
 import { note } from '../game/reviews';
-import { ART, LIGHT_DEPTH, MOUSE_BITE_MS, MOUSE_STAY_MS, type EmoteKey, CAT_WALK_EVERY, CAT_SPEED, CAT_TICK, CAT_WALK } from './common';
+import { ART, LIGHT_DEPTH, type EmoteKey } from './common';
 import * as effects from './effects';
 import * as liveFx from './liveFx';
 import * as camera from './camera';
 import * as building from './building';
+
+/** Мышь грызёт товар раз в столько секунд; сама уходит через столько. */
+const MOUSE_BITE_MS = 4000;
+const MOUSE_STAY_MS = 25_000;
+/** Кот гуляет по залу раз в столько секунд (если захочет). */
+const CAT_WALK_EVERY = 18_000;
+const CAT_SPEED = 26;
+/** Кот в зале живёт тиками по 130 мс: хвост, моргание, умывание. */
+const CAT_TICK = 130;
+/** Кадры походки кота: лапы врозь, проходят мимо, врозь наоборот, снова мимо. */
+const CAT_WALK = ['cat_walk0', 'cat_walk2', 'cat_walk1', 'cat_walk3'];
 
 // ---------- Мышь на складе ----------
 

@@ -10,22 +10,23 @@ import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { haptic } from '../platform/telegram';
 import { ICON_RE, ICONS, UI_FONT } from '../ui/dom';
-import {
-  ART,
-  FACADE_H,
-  type Popup,
-  POPUP,
-  LIGHT_DEPTH,
-  popupTextWidth,
-  COMBO_COLORS,
-  SHIRTS,
-  type EmoteKey,
-  randomLook,
-  customerLook,
-  GRANDMA,
-} from './common';
+import { ART, FACADE_H, type Popup, LIGHT_DEPTH, SHIRTS, type EmoteKey, randomLook, customerLook, GRANDMA } from './common';
 import * as persons from './persons';
 import * as building from './building';
+
+/** Плашка всплывающей надписи (в точках мира): поля, скругление, хвостик, высота значка вместо эмодзи. */
+const POPUP = { padX: 3, padY: 1.5, radius: 3, tail: 3, icon: 9, gap: 0.5, font: '8.5px' };
+/** Холст для замеров: по ширине слов надпись со значками переносится по строкам. */
+let measureCtx: CanvasRenderingContext2D | null = null;
+
+/** Ширина строки шрифтом всплывающих надписей (в точках мира). */
+function popupTextWidth(text: string): number {
+  if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+  if (!measureCtx) return text.length * 4.5;
+  measureCtx.font = `bold ${POPUP.font} ${UI_FONT}`;
+  return measureCtx.measureText(text).width;
+}
+const COMBO_COLORS = ['#fee761', '#feae34', '#f77622', '#e43b44', '#b55088', '#2ce8f5'];
 
 /**
  * Расширение — событие: утреннее окно прячется, на участке леса и строители стучат молотками,

@@ -58,27 +58,45 @@ import { fillBargain } from '../game/bargain';
 import { gearTier, registerSprite } from '../game/gear';
 import { registerSlots } from '../game/registers';
 import { cleanHall, dreamShelf } from '../game/firstday';
-import {
-  HUD_TOP,
-  ART,
-  LOW_STOCK,
-  FURNITURE_TOP,
-  LIGHT_DEPTH,
-  QUAKE_SHAKE_PX,
-  ITEM_VARIANTS,
-  SHELF_LOOK,
-  DEPT_INLAY_DEPTH,
-  ITEM_AREA,
-  FLORIST_SPOTS,
-  BROKEN_TINT,
-  type ShelfView,
-} from './common';
+import { HUD_TOP, ART, FURNITURE_TOP, LIGHT_DEPTH, QUAKE_SHAKE_PX, ITEM_VARIANTS, type ShelfView } from './common';
 import * as motion from './motion';
 import * as lighting from './lighting';
 import * as staff from './staff';
 import * as morningFlow from './morningFlow';
 import * as camera from './camera';
 import * as building from './building';
+
+/** Сколько штук на полке считается «почти пусто» — табличка «Осталось N». */
+const LOW_STOCK = 2;
+/** Одна коробка на складе изображает минимум столько штук товара. */
+
+
+const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
+  bakery: { texture: 'shelf', tint: 0xffffff },
+  produce: { texture: 'stand', tint: 0xffffff },
+  dairy: { texture: 'fridge', tint: 0xd8ecff },
+  meat: { texture: 'fridge', tint: 0xffd6d6 },
+  drinks: { texture: 'drinks', tint: 0xffffff },
+  // Морозильник — тот же холодильник, но ледяной.
+  frozen: { texture: 'fridge', tint: 0xc4f4ff },
+  household: { texture: 'chem', tint: 0xffffff },
+  // Ларь с мороженым у входа и вёдра с цветами у кассы — свои картинки и свои места.
+  icebox: { texture: 'icebox', tint: 0xffffff },
+  florist: { texture: 'florist', tint: 0xffffff },
+};
+/** Плиточная вставка отдела под полкой — на плитке пола, под тенями живого пола (FLOOR_SHADE_DEPTH). */
+const DEPT_INLAY_DEPTH = 0.2;
+/** Где на картинке лежит товар (относительно центра места): x, ширина, верхний ряд, шаг рядов. */
+const ITEM_AREA: Partial<Record<Category, { x: number; w: number; y: number; row: number }>> = {
+  icebox: { x: -13, w: 26, y: -6, row: 4 },
+};
+/** Вёдра с цветами: в каждом ведре по три букета (заднее ведро выше). */
+const FLORIST_SPOTS = [
+  [0, -9], [-2, -9.5], [2, -9.5],
+  [-6.5, -3], [-8.5, -3.5], [-4.5, -3.5],
+  [6.5, -3], [4.5, -3.5], [8.5, -3.5],
+];
+const BROKEN_TINT = 0x8a8a8a;
 
 /**
  * Разметка свободного места под полку. Новичку первой недели — только когда на новую полку хватает

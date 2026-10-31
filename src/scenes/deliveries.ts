@@ -30,19 +30,7 @@ import {
   type Vehicle,
 } from '../game/delivery';
 import { clock } from '../ui/delivery';
-import {
-  ART,
-  FACADE_H,
-  LIGHT_DEPTH,
-  SELLER_SPEED,
-  randomLook,
-  type Worker,
-  type Parcel,
-  RETRY_CALL,
-  packMs,
-  VAN_TINT,
-  CALL_CARD_TIP,
-} from './common';
+import { ART, FACADE_H, LIGHT_DEPTH, SELLER_SPEED, randomLook, type Worker, type Parcel, CALL_CARD_TIP } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
 import * as cars from './cars';
@@ -50,6 +38,16 @@ import * as staff from './staff';
 import * as persons from './persons';
 import * as camera from './camera';
 import * as building from './building';
+
+/** Сколько мс укладывают одну штуку заказа в коробку (и ещё немного — закрыть и заклеить). */
+const PACK_UNIT_MS = 380;
+const PACK_CLOSE_MS = 450;
+
+/** Если позвонить некуда (курьеру некуда брать или телефон занят) — перезвонят через столько секунд. */
+const RETRY_CALL = 4;
+const packMs = (order: HomeOrder): number => orderUnits(order) * PACK_UNIT_MS + PACK_CLOSE_MS;
+/** Фургончик курьера — оранжевый, как его кепка. */
+const VAN_TINT = 0xf9a25c;
 
 // ---------- Доставка на дом ----------
 

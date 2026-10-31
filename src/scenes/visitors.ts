@@ -31,10 +31,8 @@ import {
   SIDE_SHOP_W,
   CAR_COLORS,
   GRANDMA,
-  EDUARD,
-  GRANDMA_LINES_KEYS,
-  ORDER_GUESTS,
   SKINS,
+  VALYA,
 } from './common';
 import * as effects from './effects';
 import * as weatherFx from './weatherFx';
@@ -43,6 +41,18 @@ import * as cars from './cars';
 import * as persons from './persons';
 import * as camera from './camera';
 import * as building from './building';
+import type { ClientId } from '../game/events';
+
+const MARAT: Look = { shirt: 0xffffff, skin: 0xd9a066, pants: 0x262b44, hair: 0xffffff, style: 'cap' };
+const SCHOOL_COOK: Look = { shirt: 0x5fcde4, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xc0cbdc, style: 'cap', acc: 'apron' };
+
+const EDUARD: Look = { shirt: 0x3a4466, skin: 0xf2d3ab, pants: 0x262b44, hair: 0x181425, style: 'short', acc: 'tie' };
+const GRANDMA_LINES_KEYS: TextKey[] = ['visit.grandma1', 'visit.grandma2', 'visit.grandma3'];
+const ORDER_GUESTS: Record<ClientId, [Look, TextKey]> = {
+  chef: [MARAT, 'who.marat'],
+  school: [SCHOOL_COOK, 'client.school'],
+  valya: [VALYA, 'who.valya'],
+};
 
 /** Прохожий идёт по тротуару, машина проезжает по дороге. */
 export function streetLife(scene: StoreScene): void {

@@ -12,29 +12,42 @@ import { activeDecor } from '../game/decor';
 import { WING_OUTER, type Layout } from './layout';
 import { ambientAt, lerpKeys } from './daylight';
 import { gearTier } from '../game/gear';
-import {
-  ART,
-  LAMP_POOL_ALPHA,
-  LIGHT_REACH,
-  HALL_LAMP,
-  HALL_WARM,
-  HALL_LED,
-  SHELF_WARM,
-  SHELF_COLD,
-  SHELF_MEAT,
-  LIGHT_DEPTH,
-  EVENING_FROM,
-  LAMP_BLINK,
-  LAMP_WARMUP,
-  VENDING_BLINK,
-  LOT,
-  LOT_DRIVE_END,
-  type GlowMap,
-  type NightLight,
-  type Lamp,
-} from './common';
+import { ART, LIGHT_DEPTH, EVENING_FROM, LOT, LOT_DRIVE_END, type NightLight, type Lamp } from './common';
 import * as shelves from './shelves';
 import * as building from './building';
+
+/** Яркость пятен света от потолочных ламп на полу. */
+const LAMP_POOL_ALPHA = 0.09;
+/** На сколько точек мира в стороны от магазина тянется карта освещения (дальше — ровный фон улицы). */
+const LIGHT_REACH = 560;
+/** Потолочная лампа зала в карте освещения: размер пятна света (точки мира) и сила. */
+const HALL_LAMP = { w: 94, h: 74, power: 0.58 };
+/** Цвет потолочных ламп: накаливания — тёплый, светодиодные (оборудование «Свет») — белее, но не синий. */
+const HALL_WARM = 0xff9c48;
+const HALL_LED = 0xffc88c;
+/** Свет полок в карте освещения: тёплая подсветка товара и холодное свечение холодильников. */
+const SHELF_WARM = 0xffd8a0;
+const SHELF_COLD = 0x8cd0ff;
+const SHELF_MEAT = 0xffb4bc;
+/** Фонарь зажигается не сразу: яркость по шагам в 70 мс — вспыхнул, погас, ещё раз — и горит. */
+const LAMP_BLINK = [0.9, 0.9, 0.15, 0, 0, 0.75, 0.2, 0, 0, 0, 0.45, 0.85];
+/** За сколько мс свет фонаря из оранжевого становится тёплым жёлтым. */
+const LAMP_WARMUP = 2500;
+/** Стекло автомата утром: вспыхнуло, погасло, ещё раз — и разгорается (ease для твина 0→1). */
+const VENDING_BLINK = (k: number): number => (k < 0.12 ? 1 : k < 0.3 ? 0.08 : k < 0.42 ? 1 : k < 0.6 ? 0.15 : Math.min(1, (k - 0.6) / 0.25));
+/** Как вечерний огонь ложится в карту освещения (nightGlow): своя картинка и размер, сила и дымка. */
+interface GlowMap {
+  key?: string;
+  w?: number;
+  h?: number;
+  /** Без своей картинки — во сколько раз свет больше самой картинки огня. */
+  scale?: number;
+  dy?: number;
+  /** Сила света в карте относительно яркости огня. */
+  gain?: number;
+  /** Насколько видна сама картинка (дымка в воздухе): 0 — только свет в карте. */
+  haze?: number;
+}
 
 /**
  * Карта освещения под новый мир (scenes/light.ts): где есть свет (квартал вокруг магазина, за ним — фон

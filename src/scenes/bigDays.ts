@@ -36,12 +36,7 @@ import {
   FACADE_H,
   LIGHT_DEPTH,
   QUAKE_WAVE_MS,
-  QUAKE_SETTLE_MS,
-  QUAKE_SHATTER_MAX,
-  QUAKE_DUST,
-  QUAKE_GRIT,
   RUN_PACE,
-  WHITE_SHIRT,
   SHIRTS,
   type Look,
   randomLook,
@@ -50,13 +45,31 @@ import {
   SKINS,
   discard,
   type ShelfView,
-  type QuakeFall,
 } from './common';
 import * as motion from './motion';
 import * as staff from './staff';
 import * as persons from './persons';
 import * as visitors from './visitors';
 import * as liveFx from './liveFx';
+
+/** После волны: осколки улеглись — полки перерисовываются. */
+const QUAKE_SETTLE_MS = 700;
+/** У скольких упавших штук самое большее разлетаются осколки (остальные просто бьются). */
+const QUAKE_SHATTER_MAX = 20;
+/** Цвет пыли и штукатурки; крошки потемнее — их видно и на светлом полу. */
+const QUAKE_DUST = 0xc8b8a0;
+const QUAKE_GRIT = 0x8f7f6a;
+/** Белая рубашка под майкой бегуна: номер на груди — прорезь, в ней видна рубашка. */
+const WHITE_SHIRT = 0xffffff;
+/** Штука, которую разбил толчок: какая картинка на полке и как она выглядела. */
+interface QuakeFall {
+  img: Phaser.GameObjects.Image;
+  key: string;
+  x: number;
+  y: number;
+  scale: number;
+  tint: number;
+}
 
 /** Особый день: второй и дальше день — сразу, первый — сначала новость (день стоит, пока её читают). */
 export function startBigDayIfAny(scene: StoreScene): void {

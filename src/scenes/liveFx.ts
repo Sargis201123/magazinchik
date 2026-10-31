@@ -12,12 +12,18 @@ import { haptic } from '../platform/telegram';
 import type { LiveKind } from '../game/minievents';
 import { momentGain, noteMoment, type MomentKind } from '../game/moments';
 import { modalOpen } from '../platform/frameCap';
-import { ART, LIGHT_DEPTH, LIVE_RETRY_MS, LIVE_LATEST, FIX_MS, LEAK_FIX_MS, randomLook, type Customer, discard } from './common';
+import { ART, LIGHT_DEPTH, randomLook, type Customer, discard } from './common';
 import * as effects from './effects';
 import * as pets from './pets';
 import * as staff from './staff';
 import * as persons from './persons';
 import * as camera from './camera';
+
+/** Мини-событие ждёт, пока кончится прошлое, и не начинается, если до закрытия меньше этой доли дня. */
+const LIVE_RETRY_MS = 5000;
+const LIVE_LATEST = 0.1;
+const FIX_MS = 1600;
+const LEAK_FIX_MS = 2200;
 
 // ---------- Активные моменты дня (game/moments.ts, scenes/moments.ts) ----------
 

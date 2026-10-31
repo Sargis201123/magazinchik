@@ -38,30 +38,18 @@ import {
   ART,
   FACADE_H,
   SELLER_SPEED,
-  CALL_EVERY_MS,
-  MAX_TRASH,
-  MOP_MS,
-  BIN_DROP_MS,
-  MAX_RESTOCK_TRIPS,
   SPILL_TINTS,
-  SPILL_MOP_MS,
-  TOILET_CLEAN_MS,
-  TRASH_CLEAN_MS,
   PICKUP_MS,
   PLACE_MS,
-  POLISH_EVERY_MS,
-  POLISH_MIN_WEAR,
   HAIR_COLORS,
   randomLook,
-  STAFF_ACC,
-  UNIFORMS,
   STAFF_SPEED,
-  STAFF_HAIR,
-  type TrashKind,
   type Worker,
   staffKey,
   type ChoreStep,
   ROT_TIP,
+  type HairStyle,
+  type Accessory,
 } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -73,6 +61,40 @@ import * as visitors from './visitors';
 import * as newcomer from './newcomer';
 import * as shelves from './shelves';
 import * as building from './building';
+
+/** Как часто покупатель у пустой кассы зовёт продавца. */
+const CALL_EVERY_MS = 3000;
+const MAX_TRASH = 8;
+const MOP_MS = 1300;
+/** Сколько мусора влезает в ведро. Полное ведро пахнет — покупатели жалуются, проверка снимает баллы. */
+const BIN_DROP_MS = 250;
+/** Больше стольких ходок за одно касание полки продавец не делает (дальше — новое касание). */
+const MAX_RESTOCK_TRIPS = 4;
+const SPILL_MOP_MS = 1700;
+const TOILET_CLEAN_MS = 1000;
+const TRASH_CLEAN_MS = 400;
+/** Уборщик без дела натирает самое потёртое место — не чаще, чем раз в столько мс, и если потёрто не меньше. */
+const POLISH_EVERY_MS = 9000;
+const POLISH_MIN_WEAR = 0.25;
+/** Форма персонала. */
+const STAFF_ACC: Record<StaffRole, { acc: Accessory; tint: number }> = {
+  cashier: { acc: 'apron', tint: 0xffffff },
+  cashier2: { acc: 'apron', tint: 0xffffff },
+  cashier3: { acc: 'apron', tint: 0xffffff },
+  cashier4: { acc: 'apron', tint: 0xffffff },
+  cashier5: { acc: 'apron', tint: 0xffffff },
+  cleaner: { acc: 'apron', tint: 0x5fcde4 },
+  loader: { acc: 'vest', tint: 0xffffff },
+  guard: { acc: 'badge', tint: 0xffffff },
+  manager: { acc: 'tie', tint: 0xffffff },
+  baker: { acc: 'apron', tint: 0xffffff },
+  barista: { acc: 'apron', tint: 0x8f563b },
+  cook: { acc: 'apron', tint: 0xffffff },
+};
+/** Форма сотрудников. */
+const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cashier5: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4, baker: 0xf4f4f4, barista: 0x3e8948, cook: 0xf4f4f4 };
+const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cashier5: 'curly', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short', baker: 'cap', barista: 'ponytail', cook: 'short' };
+type TrashKind = 'trash' | 'mud' | 'spill';
 
 // ---------- Продавец: уборка и выкладка ----------
 
