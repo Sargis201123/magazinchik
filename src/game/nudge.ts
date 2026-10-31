@@ -10,12 +10,13 @@ import { seasonFor } from './endless';
 import { holidayFor } from './calendar';
 import { weatherFor, WEATHER_EFFECTS } from './weather';
 import { openTabs } from './onboarding';
+import { dreamGoal, quietDays } from './firstday';
 
 type Params = Record<string, number | string>;
 
 /** Главная цель: строка, полоска 0…1 и что делать дальше (одной строкой, по нажатию на полоску). */
 export interface Goal {
-  id: 'debt' | 'orders' | 'level' | 'rating' | 'inspections' | 'weekly';
+  id: 'debt' | 'orders' | 'level' | 'rating' | 'inspections' | 'weekly' | 'dream';
   icon: string;
   key: TextKey;
   params: Params;
@@ -53,6 +54,9 @@ function weeklyGoal(s: StoreState): Goal | null {
  * некуда — испытания недели. null — показывать нечего.
  */
 export function mainGoal(s: StoreState): Goal | null {
+  // Первые дни новичка — мечта (новая полка, потом расширение), а не долг (firstday.ts).
+  const dream = dreamGoal(s);
+  if (dream) return dream;
   switch (CHAPTERS[s.story.chapter] ? s.story.chapter : -1) {
     case 0:
       return {
@@ -154,6 +158,8 @@ export const TEASER_NEAR = 0.75;
  */
 export function tomorrowTeaser(s: StoreState): Teaser {
   const day = s.day;
+  // После первого дня новичка — обещание: утром позвонит бабушка с гостинцем, и закупка — своя.
+  if (quietDays(s) && day === 2) return { key: 'teaser.first', params: {} };
   const chapter = CHAPTERS[s.story.chapter];
   if (chapter && s.story.introSeen && chapter.done(s)) return { key: 'teaser.chapter', params: { title: chapter.titleKey } };
   const goal = mainGoal(s);

@@ -134,6 +134,21 @@ export function lowerQuality(tier: Quality, now = Date.now()): void {
   current = null;
 }
 
+/**
+ * Записка «включили лёгкую графику» отложена: в первые тихие дни новичка (game/firstday.ts) окно не
+ * всплывает посреди зала — покажем потом (утром 4-го дня). Хранится в браузере, а не в сохранении.
+ */
+const LITE_NOTE_KEY = 'magazinchik.liteNote';
+export function deferLiteNote(): void {
+  write(LITE_NOTE_KEY, '1');
+}
+/** Отложенная записка есть — забрать (true) и больше не показывать. */
+export function takeLiteNote(): boolean {
+  if (read(LITE_NOTE_KEY) !== '1') return false;
+  write(LITE_NOTE_KEY, null);
+  return true;
+}
+
 /** Медиана и «просадка» (10-й процентиль) по посекундным замерам FPS. */
 export function fpsSummary(samples: number[]): { median: number; low: number } | null {
   if (samples.length < 10) return null;

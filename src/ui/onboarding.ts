@@ -8,7 +8,9 @@ import { liteMode } from '../platform/quality';
 import { Babbler, voiceOf } from '../platform/babble';
 import { sound } from '../platform/sound';
 import { liveFace } from './dialog';
-import { button, el, injectStyles, pixelize, UI_FONT } from './dom';
+import { png } from '../platform/assets';
+import { haptic } from '../platform/telegram';
+import { button, el, injectStyles, openModal, pixelize, UI_FONT } from './dom';
 import { stamp } from './hud';
 
 const css = `
@@ -55,6 +57,11 @@ const css = `
 .ui-onb-stamp .ui-stamp b { font-size: 26px; }
 .ui-onb-stamp .ui-stamp span { font-size: 15px; max-width: none; }
 @media (prefers-reduced-motion: reduce) { .ui-say, .ui-say.inline, .ui-tab.ui-tab-new { animation: none; } }
+/* Бабушкин подарок после первого дня: вещь крупно, под ней — её слова. */
+.ui-first-gift { text-align: center; }
+.ui-first-gift img.ui-first-item { display: block; width: 96px; height: 96px; margin: 6px auto 4px; image-rendering: pixelated;
+  animation: ui-pop .45s cubic-bezier(.3, 1.45, .5, 1) both; }
+.ui-first-gift .ui-say.inline { text-align: left; }
 `;
 
 let styled = false;
@@ -206,6 +213,36 @@ export function firstSaleStamp(total: number): void {
   document.body.append(wrap);
   setTimeout(() => wrap.classList.add('gone'), 2600);
   setTimeout(() => wrap.remove(), 3200);
+}
+
+/**
+ * Подарок от бабушки после первого дня новичка (game/firstday.ts): короткая праздничная карточка —
+ * сама вещь крупно и её слова. Закрыли — дальше ночь и утро.
+ */
+export function firstGiftCard(onClose: () => void): void {
+  styles();
+  const { card, close } = openModal();
+  card.classList.add('ui-first-gift');
+  const item = el('img', 'ui-first-item');
+  item.src = png('counter_vase');
+  item.alt = '';
+  const say = el('div', 'ui-say inline');
+  const body = el('div', 'ui-say-body');
+  body.append(el('div', 'ui-say-name', t(CHARACTERS.grandma.nameKey)), el('p', 'ui-say-text', t('first.giftText')));
+  say.append(liveFace('assets/portrait_grandma_happy.png', () => false, 'ui-say-face'), body);
+  card.append(
+    el('h2', '', `🎁 ${t('first.giftTitle')}`),
+    item,
+    say,
+    button(t('first.giftOk'), () => {
+      haptic.tap();
+      close();
+      onClose();
+    }, 'ui-btn'),
+  );
+  pixelize(card);
+  sound.fanfare();
+  haptic.success();
 }
 
 /** Подсказка бабушки к только что открытой вкладке утра: одна строчка и «Понятно». */
