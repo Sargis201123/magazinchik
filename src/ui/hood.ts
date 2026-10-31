@@ -49,7 +49,7 @@ export function hoodBox(state: StoreState, getState: () => StoreState, update: (
     const img = el('img');
     img.src = sheetPng(ART[id]);
     img.alt = '';
-    img.style.cssText = `width: 44px; height: 44px; object-fit: contain; flex: none; image-rendering: pixelated;${lock && !owned ? ' filter: grayscale(0.8) opacity(0.6);' : ''}`;
+    img.style.cssText = `width: 34px; height: 40px; object-fit: contain; image-rendering: pixelated;${lock && !owned ? ' filter: grayscale(0.8) opacity(0.6);' : ''}`;
     const body = el('div');
     body.append(el('div', 'ui-item-name', `${item.icon} ${t(hoodName(id))}`), el('div', 'ui-item-sub', t(hoodDesc(id))), el('div', 'ui-item-sub', effects(id)));
     const actions = el('div', 'ui-item-actions');
