@@ -14,6 +14,7 @@ import { CAT_BEDS, catHome, fedToday } from '../game/cat';
 import { note } from '../game/reviews';
 import { ART, LIGHT_DEPTH, MOUSE_BITE_MS, MOUSE_STAY_MS, type EmoteKey, CAT_WALK_EVERY, CAT_SPEED, CAT_TICK, CAT_WALK } from './common';
 import * as effects from './effects';
+import * as liveFx from './liveFx';
 
 // ---------- Мышь на складе ----------
 
@@ -75,7 +76,7 @@ export function mouseGone(scene: StoreScene, mouse: Phaser.GameObjects.Image, ca
   if (caught) {
     sound.meow(mouse.x);
     scene.popup(mouse.x, mouse.y - 10, t('popup.mouseCaught', { name: scene.state.cat?.name ?? '' }), '#c8ffb0');
-    scene.time.delayedCall(300, () => scene.endLiveEvent());
+    scene.time.delayedCall(300, () => liveFx.endLiveEvent(scene));
     return;
   }
   if (!timeout) {
@@ -84,7 +85,7 @@ export function mouseGone(scene: StoreScene, mouse: Phaser.GameObjects.Image, ca
   }
   const { x: wx, h: wh, y: wy } = scene.layout.warehouse;
   mouse.setFlipX(false);
-  scene.tweens.add({ targets: mouse, x: wx + 2, y: wy + wh - 4, alpha: 0, duration: 700, onComplete: () => scene.endLiveEvent() });
+  scene.tweens.add({ targets: mouse, x: wx + 2, y: wy + wh - 4, alpha: 0, duration: 700, onComplete: () => liveFx.endLiveEvent(scene) });
 }
 
 /** Кот бежит на склад и ловит мышь. */
@@ -345,7 +346,7 @@ export async function catVisit(scene: StoreScene): Promise<void> {
   cat.setScale(1 / ART).setOrigin(0.5, 1).setTexture('cat_walk0');
   sound.meow(cat.x);
   const { door, h } = scene.layout;
-  const spot = scene.freeFloorPoint();
+  const spot = liveFx.freeFloorPoint(scene);
   const route = [
     { x: door.x + 6, y: scene.catHome.y },
     { x: door.x + 6, y: h - 6 },

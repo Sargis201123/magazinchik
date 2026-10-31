@@ -142,7 +142,7 @@ import { showChoice } from '../ui/choice';
 import { BRAND_BATCH } from '../game/brand';
 import { hasRadio, radioSpeed } from '../game/radio';
 import { liveEventsFor, type LiveKind } from '../game/minievents';
-import { momentGain, momentsFor, noteMoment, type MomentKind } from '../game/moments';
+import { momentsFor, noteMoment } from '../game/moments';
 import { Moments } from './moments';
 import { questRows } from '../ui/today';
 import { bargainRows, bargainSprite, binCapacity, binSprite, fridgeLeak, gearTier, type GearId, registerSprite } from '../game/gear';
@@ -156,7 +156,7 @@ import { lossAdvice } from '../game/losses';
 import { isFairDay } from '../game/fair';
 import { deferLiteNote, fpsSummary, fpsVerdict, lowerQuality, quality, qualityChosen, takeLiteNote, type Quality } from '../platform/quality';
 import { cleanHall, dreamShelf, firstDayGift, firstDayRating, gentleDay, GRANNY_SCAN_SLOW, grannyServesAfter, grannyStays, grannyStocksNow, praiseAt, quietDays } from '../game/firstday';
-import { framesThrottled, modalOpen } from '../platform/frameCap';
+import { framesThrottled } from '../platform/frameCap';
 import type { HomeOrder } from '../game/delivery';
 import { DeliveryUi } from '../ui/delivery';
 import { hallNudge, mainGoal, NUDGE_IDLE_MS, tomorrowTeaser, type HallNudge } from '../game/nudge';
@@ -201,11 +201,7 @@ import {
   SPILL_TINTS,
   LIVE_WINDOW,
   LIVE_WINDOWS,
-  LIVE_RETRY_MS,
-  LIVE_LATEST,
   AUTO_CHECK_SECONDS,
-  FIX_MS,
-  LEAK_FIX_MS,
   TOILET_DIRTY,
   PICKUP_MS,
   PLACE_MS,
@@ -239,7 +235,6 @@ import {
   type KitchenView,
   type Worker,
   type Kin,
-  discard,
   staffKey,
   type ShelfView,
   type TakenSpot,
@@ -266,6 +261,7 @@ import * as shoppers from './shoppers';
 import * as persons from './persons';
 import * as visitors from './visitors';
 import * as bigDays from './bigDays';
+import * as liveFx from './liveFx';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -313,11 +309,11 @@ export class StoreScene extends Phaser.Scene {
   private shutters: Phaser.GameObjects.Image[] = [];
   private arrow?: Phaser.GameObjects.Image;
   /** Новое начало (game/onboarding.ts): облачко бабушки, она сама у входа и кольцо у кассы до первой продажи. */
-  private readonly say = new SayBubble();
+  readonly say = new SayBubble();
   /** Бабушкино обучение (game/tutorial.ts): подсветка и стрелка у того, что нажать. */
-  private readonly coach = new Coach();
+  readonly coach = new Coach();
   /** Подсветку сейчас показывает зал (а не утро или итоги). */
-  private hallCoach = false;
+  hallCoach = false;
   /** Какой шаг обучения уже ушёл в аналитику, и сколько он ждёт без цели и с целью (мс дня). */
   private tutTracked: TutStep | null = null;
   private tutIdleMs = 0;
@@ -520,10 +516,10 @@ export class StoreScene extends Phaser.Scene {
   /** Сменщик дошёл до кассы хозяина и пробивает (новенький — с той минуты, как встал за неё). */
   reliefReady = false;
   /** Мини-событие дня: что сейчас происходит и всё, что его рисует. */
-  private liveEvent: LiveKind | null = null;
-  private liveObjs: { destroy: () => void }[] = [];
+  liveEvent: LiveKind | null = null;
+  liveObjs: { destroy: () => void }[] = [];
   blackout = false;
-  private fuseBox?: Phaser.GameObjects.Image;
+  fuseBox?: Phaser.GameObjects.Image;
   fuseGlow?: Halo;
   /** Утренняя закупка: сколько было на складе в начале утра и сколько коробок ещё ждут доставки. */
   morningStock = 0;
@@ -586,17 +582,17 @@ export class StoreScene extends Phaser.Scene {
   private readonly moments = new Moments({
     scene: this,
     lite: () => this.lite,
-    blocked: () => this.momentBlocked(),
-    hallGuest: () => this.momentGuest(),
+    blocked: () => liveFx.momentBlocked(this),
+    hallGuest: () => liveFx.momentGuest(this),
     queueGuest: () => this.queue.find((c) => !c.gone && !c.thief && !c.serving && c.sprite.active)?.sprite ?? null,
     till: () => this.registers[0]?.counter ?? this.layout.counter,
-    floor: () => this.freeFloorPoint(),
+    floor: () => liveFx.freeFloorPoint(this),
     popup: (x, y, text, color) => this.popup(x, y, text, color),
     emote: (person, key) => effects.emote(this, person, key),
     coins: (x, y, n) => effects.flyCoins(this, x, y, n),
     puff: (x, y) => effects.puff(this, x, y),
     tap: (action) => this.tap(action),
-    caught: (kind) => this.momentCaught(kind),
+    caught: (kind) => liveFx.momentCaught(this, kind),
     missed: () => noteMoment(this.stats, false),
   });
   /** Кассы: основная и (если куплена) вторая слева от очереди. Очередь одна — идёт к свободной. */
@@ -1452,7 +1448,7 @@ export class StoreScene extends Phaser.Scene {
     // (placement.ts), а если в старом сохранении полка уже стоит там — щиток висит левее, на открытой стене.
     const fuseX = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12).find((x) => x > 10 && !this.behindShelf(x, 6)) ?? wc.x - 24;
     this.fuseBox = this.art(fuseX, 18, 'fusebox').setDepth(3);
-    this.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.fixFuse()));
+    this.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => liveFx.fixFuse(this)));
     this.fuseGlow = new Halo(this, this.fuseBox, 0xfee761);
     // Свет отключили — у щитка мигает аварийная лампочка: в тёмном зале видно, куда нажать. Мигает
     // ступеньками (ярко — тускло), а не плавно: карту перерисовывать дважды за мигание, а не каждый кадр.
@@ -2486,291 +2482,6 @@ export class StoreScene extends Phaser.Scene {
     }
     shoppers.finishCheckout(this, c, { x: img.x - 10, y: img.y - 12 });
     return true;
-  }
-
-  // ---------- Активные моменты дня (game/moments.ts, scenes/moments.ts) ----------
-
-  /**
-   * Момент не начинается (и начатый ждёт), пока игроку не до него: окно поверх зала, карточка звонка
-   * доставки, бабушкина стрелка или реплика, мини-событие, перестановка, вечер.
-   */
-  private momentBlocked(): boolean {
-    return (
-      !this.running ||
-      this.night ||
-      this.arranging ||
-      Boolean(this.call) ||
-      Boolean(this.liveEvent) ||
-      (this.hallCoach && this.coach.pointing) ||
-      this.say.visible ||
-      modalOpen()
-    );
-  }
-
-  /** Гость в зале, не в очереди и не у кассы (постоянный — первым): ему махать и за ним звёздочка. */
-  private momentGuest(): Phaser.GameObjects.Container | null {
-    const { wallH, h, w } = this.layout;
-    const busy = new Set<Customer>([...this.queue, ...this.registers.map((r) => r.customer).filter((c): c is Customer => Boolean(c))]);
-    const free = [...this.customers].filter(
-      (c) => !c.gone && !c.thief && !busy.has(c) && c.sprite.active && c.sprite.visible && c.sprite.x > 12 && c.sprite.x < w - 12 && c.sprite.y > wallH + 12 && c.sprite.y < h - 8,
-    );
-    return (free.find((c) => c.regular) ?? free[0])?.sprite ?? null;
-  }
-
-  /** Поймали момент: чаевые в кассу сразу, искорка к рейтингу — вечером (day.ts), лёгкая вибрация. */
-  private momentCaught(kind: MomentKind): string {
-    const gain = momentGain(kind, this.state.level);
-    noteMoment(this.stats, true, gain.star);
-    if (gain.money) this.state = { ...this.state, money: Math.max(0, this.state.money + gain.money) };
-    if (gain.money > 0) sound.coin();
-    else sound.good();
-    haptic.tap();
-    return t(`moment.${kind}Got` as TextKey, { n: Math.abs(gain.money) });
-  }
-
-  /** Начало мини-события дня. */
-  /** Прошлое мини-событие ещё не кончилось — подождать; к вечеру уже не начинать. */
-  private tryLiveEvent(kind: LiveKind): void {
-    if (!this.running || this.night || this.timeLeft < DAY_SECONDS * LIVE_LATEST) return;
-    if (this.liveEvent) this.time.delayedCall(LIVE_RETRY_MS, () => this.tryLiveEvent(kind));
-    else this.startLiveEvent(kind);
-  }
-
-  private startLiveEvent(kind: LiveKind): void {
-    if (this.liveEvent) return;
-    this.liveEvent = kind;
-    const { w, h } = this.layout;
-    sound.bell();
-    haptic.tap();
-    this.popup(w / 2, h / 2 - 20, t(`live.${kind}` as TextKey), '#fff3b0');
-    const keep = <T extends { destroy: () => void }>(obj: T): T => {
-      this.liveObjs.push(obj);
-      return obj;
-    };
-    if (kind === 'blackout') {
-      this.blackout = true;
-      this.updateLighting();
-      // Если не починить — через 20 секунд свет дадут сами.
-      keep(this.time.delayedCall(20000, () => this.restoreLight()));
-    }
-    // Что-то стряслось — покупатели оглядываются, продавец настораживается.
-    persons.everyoneLooks(this, w / 2, h / 2, kind === 'pigeon' || kind === 'mouse' ? 'emo_question' : 'emo_alert', 0.3);
-    if (this.seller?.active) effects.emote(this, this.seller, 'emo_alert');
-    if (kind === 'leak') this.startLeak(keep);
-    if (kind === 'pigeon') this.pigeonInside(keep);
-    if (kind === 'courier') void this.courierVisit(keep);
-    if (kind === 'mouse') pets.mouseInWarehouse(this, keep);
-  }
-
-  endLiveEvent(): void {
-    for (const obj of this.liveObjs) discard(obj);
-    this.liveObjs = [];
-    this.liveEvent = null;
-    if (this.blackout) {
-      this.blackout = false;
-      this.updateLighting();
-    }
-  }
-
-  /** Продавец идёт к щитку и включает свет. */
-  private fixFuse(): void {
-    if (!this.blackout || this.sellerBusy || this.ownerScanning() || !this.fuseBox) return;
-    this.carried.setTexture('wrench').setPosition(5, -1).setVisible(true);
-    effects.emote(this, this.seller, 'emo_alert');
-    void staff.doChore(this, [
-      {
-        x: this.fuseBox.x,
-        y: this.layout.wallH + 16,
-        ms: FIX_MS,
-        action: () => {
-          this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
-          this.restoreLight();
-        },
-      },
-    ]);
-  }
-
-  private restoreLight(): void {
-    if (!this.blackout) return;
-    this.blackout = false;
-    this.liveEvent = null;
-    this.updateLighting();
-    sound.good();
-    this.popup(this.layout.w / 2, this.layout.h / 2 - 20, t('live.lightOn'), '#c8ffb0');
-  }
-
-  /** Свободная точка пола посреди зала (не в мебели и не у кассы). */
-  freeFloorPoint(): { x: number; y: number } {
-    const { w, h, wallH } = this.layout;
-    const tries = [
-      [0.5, 0.45],
-      [0.4, 0.55],
-      [0.6, 0.35],
-      [0.35, 0.4],
-      [0.55, 0.6],
-      [0.45, 0.3],
-    ];
-    for (const [fx, fy] of tries) {
-      const x = w * fx;
-      const y = wallH + (h - wallH) * fy;
-      if (this.obstacles.every((o) => x < o.x - 8 || x > o.x + o.w + 8 || y < o.y - 8 || y > o.y + o.h + 8)) return { x, y };
-    }
-    return { x: this.layout.door.x, y: h - 40 };
-  }
-
-  /** Прорвало трубу: с потолка капает, натекают лужи. Нажми — продавец починит ключом. */
-  private startLeak(keep: <T extends { destroy: () => void }>(obj: T) => T): void {
-    const at = this.freeFloorPoint();
-    const drops = keep(
-      this.add.particles(at.x, at.y - 34, 'raindrop', {
-        speedY: 140,
-        lifespan: 240,
-        frequency: 110,
-        x: { min: -3, max: 3 },
-        scale: 1 / ART,
-        tint: 0x9fd8ff,
-      }),
-    ).setDepth(LIGHT_DEPTH - 1);
-    const ring = keep(this.art(at.x, at.y, 'ripple').setTint(0x9fd8ff).setDepth(0.7));
-    this.tweens.add({ targets: ring, scale: 1.6 / ART, alpha: { from: 1, to: 0.2 }, duration: 700, repeat: -1 });
-    const puddle = () => {
-      const piece = staff.dropTrash(this, at.x + Phaser.Math.Between(-8, 8), at.y - 6, 'spill');
-      piece?.setTint(0xbfe4ff);
-    };
-    puddle();
-    const more = keep(this.time.addEvent({ delay: 7000, repeat: 2, callback: puddle }));
-    const stop = () => {
-      drops.destroy();
-      ring.destroy();
-      more.remove();
-      this.liveEvent = null;
-    };
-    keep(this.time.delayedCall(40000, stop));
-    const zone = keep(this.add.zone(at.x, at.y - 10, 26, 30).setInteractive({ useHandCursor: true }).setDepth(LIGHT_DEPTH));
-    zone.on('pointerup', () =>
-      this.tap(() => {
-        if (this.sellerBusy || this.ownerScanning() || !drops.active) return;
-        this.carried.setTexture('wrench').setPosition(5, -1).setVisible(true);
-        void staff.doChore(this, [
-          {
-            x: at.x + 9,
-            y: at.y + 2,
-            ms: LEAK_FIX_MS,
-            action: () => {
-              this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
-              stop();
-              zone.destroy();
-              sound.good();
-              this.popup(at.x, at.y - 16, t('live.leakFixed'), '#c8ffb0');
-            },
-          },
-        ]);
-      }),
-    );
-  }
-
-  /** В зал залетел голубь: скачет по полу и пугает покупателей. Нажми — улетит. */
-  pigeonInside(keep: <T extends { destroy: () => void }>(obj: T) => T): void {
-    const { door, h } = this.layout;
-    const bird = keep(this.art(door.x, h + 20, 'pigeon_fly').setScale(1.6 / ART).setDepth(LIGHT_DEPTH - 1));
-    const scared = new Set<Customer>();
-    let done = false;
-    const flyOut = () => {
-      if (done || !bird.active) return;
-      done = true;
-      this.liveEvent = null;
-      bird.setTexture('pigeon_fly').setDepth(LIGHT_DEPTH - 1);
-      this.tweens.add({ targets: bird, x: door.x, y: h + 30, duration: 900, ease: 'Sine.easeIn', onComplete: () => bird.destroy() });
-    };
-    const hop = () => {
-      if (done || !bird.active) return;
-      const to = this.freeFloorPoint();
-      const x = to.x + Phaser.Math.Between(-40, 40);
-      const y = to.y + Phaser.Math.Between(-30, 30);
-      bird.setTexture('pigeon_fly').setDepth(LIGHT_DEPTH - 1).setFlipX(x < bird.x);
-      this.tweens.add({
-        targets: bird,
-        x,
-        y,
-        duration: 700,
-        ease: 'Sine.easeInOut',
-        onComplete: () => bird.active && bird.setTexture('pigeon0').setDepth(y),
-      });
-    };
-    hop();
-    keep(this.time.addEvent({ delay: 2200, loop: true, callback: hop }));
-    // Кто окажется рядом — пугается и уходит недовольным.
-    keep(
-      this.time.addEvent({
-        delay: 500,
-        loop: true,
-        callback: () => {
-          if (done || !bird.active) return;
-          for (const c of this.customers) {
-            if (scared.has(c) || c.thief || Phaser.Math.Distance.Between(c.sprite.x, c.sprite.y + 8, bird.x, bird.y) > 14) continue;
-            scared.add(c);
-            c.unhappy = true;
-            effects.emote(this, c.sprite, 'emo_angry');
-          }
-        },
-      }),
-    );
-    bird.setInteractive(new Phaser.Geom.Rectangle(-6, -6, 21, 19), Phaser.Geom.Rectangle.Contains).on('pointerup', () =>
-      this.tap(() => {
-        sound.tap();
-        flyOut();
-      }),
-    );
-    keep(this.time.delayedCall(25000, flyOut));
-  }
-
-  /** Курьер с посылкой: ждёт у входа; продавец успел принять — в посылке деньги. */
-  private async courierVisit(keep: <T extends { destroy: () => void }>(obj: T) => T): Promise<void> {
-    const { door } = this.layout;
-    const courier = keep(persons.makePerson(this, door.x + 60, this.streetY, { ...randomLook(0xe43b44), style: 'cap', hair: 0xe43b44 }));
-    const parcel = this.art(0, 3, 'box').setTint(0xc28569);
-    courier.add(parcel);
-    await persons.walkVia(this, courier, [
-      { x: door.x, y: this.streetY },
-      { x: door.x - 10, y: door.y - 14 },
-    ]);
-    if (!courier.active) return;
-    let taken = false;
-    const leave = async (left: boolean) => {
-      if (!courier.active) return;
-      this.liveEvent = null;
-      courier.disableInteractive();
-      if (left) this.popup(courier.x, courier.y - 18, t('live.courierLeft'), '#ffd0d0');
-      await persons.walkVia(this, courier, [
-        { x: door.x, y: this.streetY },
-        { x: door.x - 80, y: this.streetY },
-      ]);
-      courier.destroy();
-    };
-    courier.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () =>
-      this.tap(() => {
-        if (taken || this.sellerBusy || this.ownerScanning()) return;
-        taken = true;
-        void staff.doChore(this, [
-          {
-            x: courier.x + 9,
-            y: courier.y,
-            ms: 600,
-            action: () => {
-              parcel.destroy();
-              const gift = 40 + 40 * this.state.level;
-              this.state = { ...this.state, money: this.state.money + gift };
-              saveGame(this.state);
-              sound.coin(courier.x);
-              this.popup(courier.x, courier.y - 18, t('live.courierGift', { n: gift }), '#c8ffb0');
-              effects.flyCoins(this, courier.x, courier.y, 3);
-              void leave(false);
-            },
-          },
-        ]);
-      }),
-    );
-    keep(this.time.delayedCall(15000, () => !taken && void leave(true)));
   }
 
   /** Нажатие засчитывается, только если палец не двигал камеру. */
@@ -4921,7 +4632,7 @@ export class StoreScene extends Phaser.Scene {
     this.combo = 0;
     this.lastSaleAt = -Infinity;
     if (this.awaitingBoxes > 0) void deliveries.deliver(this);
-    this.endLiveEvent();
+    liveFx.endLiveEvent(this);
     shoppers.scheduleRegulars(this);
     shoppers.scheduleFriends(this);
     food.refreshKitchen(this);
@@ -4935,7 +4646,7 @@ export class StoreScene extends Phaser.Scene {
     this.state = live.state;
     live.kinds.forEach((kind, i) => {
       const [from, to] = live.kinds.length > 1 ? LIVE_WINDOWS[i] : LIVE_WINDOW;
-      this.time.delayedCall(Phaser.Math.FloatBetween(from, to) * DAY_SECONDS * 1000, () => this.tryLiveEvent(kind));
+      this.time.delayedCall(Phaser.Math.FloatBetween(from, to) * DAY_SECONDS * 1000, () => liveFx.tryLiveEvent(this, kind));
     });
     this.eveningMarkdown = false;
     this.toiletDirt = 0;

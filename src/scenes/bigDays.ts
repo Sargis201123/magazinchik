@@ -56,6 +56,7 @@ import * as motion from './motion';
 import * as staff from './staff';
 import * as persons from './persons';
 import * as visitors from './visitors';
+import * as liveFx from './liveFx';
 
 /** Особый день: второй и дальше день — сразу, первый — сначала новость (день стоит, пока её читают). */
 export function startBigDayIfAny(scene: StoreScene): void {
@@ -286,7 +287,7 @@ export function startBigDayScene(
       }),
     );
   }
-  if (id === 'pigeons') for (const share of [0.1, 0.3, 0.5, 0.7]) at(share, () => scene.pigeonInside(keep));
+  if (id === 'pigeons') for (const share of [0.1, 0.3, 0.5, 0.7]) at(share, () => liveFx.pigeonInside(scene, keep));
   if (id === 'roadworks') {
     keep(scene.art(door.x + 44, road, 'road_pit').setDepth(road - 4));
     keep(scene.art(door.x + 100, road - 4, 'digger').setDepth(road + 8));
