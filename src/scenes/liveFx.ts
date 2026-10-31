@@ -18,6 +18,7 @@ import * as pets from './pets';
 import * as staff from './staff';
 import * as persons from './persons';
 import * as camera from './camera';
+import * as collections from './collections';
 
 /** Мини-событие ждёт, пока кончится прошлое, и не начинается, если до закрытия меньше этой доли дня. */
 const LIVE_RETRY_MS = 5000;
@@ -58,6 +59,7 @@ export function momentGuest(scene: StoreScene): Phaser.GameObjects.Container | n
 export function momentCaught(scene: StoreScene, kind: MomentKind): string {
   const gain = momentGain(kind, scene.state.level);
   noteMoment(scene.stats, true, gain.star);
+  collections.note(scene, 'moments', kind);
   if (gain.money) scene.state = { ...scene.state, money: Math.max(0, scene.state.money + gain.money) };
   if (gain.money > 0) sound.coin();
   else sound.good();

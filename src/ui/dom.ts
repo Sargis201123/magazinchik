@@ -316,7 +316,7 @@ const css = `
 .ui-tab-label { font-size: 10.5px; line-height: 1.1; white-space: nowrap; }
 .ui-tab-dot { position: absolute; top: -6px; right: -4px; min-width: 16px; height: 16px; padding: 0 3px; box-sizing: border-box;
   border-radius: 8px; background: #e43b44; color: #fff; border: 2px solid #2b2233; font: 700 10px/12px ${UI_FONT}; }
-.ui-profile-btn { margin-left: 6px; padding: 2px 6px; }
+.ui-profile-btn { position: relative; margin-left: 6px; padding: 2px 6px; }
 .ui-card h2 { align-items: center; }
 .ui-card h2 > span:nth-child(2) { margin-left: auto; }
 /* «Открыть магазин» прилипает к низу окна. */

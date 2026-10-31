@@ -710,6 +710,8 @@ export interface StoreState {
   giant?: import('./giant').GiantState;
   /** Филиал в здании «Гиганта» (branch.ts): куплен после победы над ним, на последнем помещении. */
   branch?: import('./branch').BranchState;
+  /** Альбом коллекций (collections.ts): собранное по наборам, закрытые наборы, новое в альбоме. */
+  collections?: import('./collections').CollectionState;
   /** Что копится без игрока и ждёт его утром: сундучок выручки, письмо, заказ соседа (returns.ts). */
   ret?: import('./returns').ReturnState;
   /** Благоустройство района (hood.ts): что куплено и в какой день. */

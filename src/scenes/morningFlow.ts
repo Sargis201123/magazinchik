@@ -71,6 +71,7 @@ import * as rivals from './rivals';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+import * as collections from './collections';
 
 /**
  * Что распаковывают из коробки, когда оно впервые появилось в зале: оборудование (терминал, касса
@@ -120,7 +121,10 @@ export function offerReturn(scene: StoreScene, then: () => void): void {
   scene.ritualDay = scene.state.day;
   const chest = scene.state.ret?.chest;
   const letter = takeLetter(scene.state, todayLocal());
-  if (letter) scene.state = letter.state;
+  if (letter) {
+    scene.state = letter.state;
+    collections.note(scene, 'cards', letter.gift.letter.from);
+  }
   const order = collectOrder(scene.state);
   // Заказ не на сегодня (устарел) — сосед просто не пришёл, окно о нём не нужно.
   const fresh = order && order.order.day === scene.state.day ? order : null;

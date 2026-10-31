@@ -19,6 +19,16 @@ export const SPRITES = [
   'holiday_mimosa',
   'sign_frost',
   'wall_winter',
+  // Альбом коллекций (art/album.py): витрина трофеев в зале и трофеи наборов.
+  'trophy_case',
+  'trophy_case_gold',
+  'trophy_guests',
+  'trophy_cards',
+  'trophy_recipes',
+  'trophy_holidays',
+  'trophy_friends',
+  'trophy_shops',
+  'trophy_moments',
   // Кубки конкурсов «Лучший магазин…» (art/contest.py).
   'cup_district',
   'cup_city',

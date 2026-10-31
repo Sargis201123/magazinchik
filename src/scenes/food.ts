@@ -56,6 +56,7 @@ import * as persons from './persons';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+import * as collections from './collections';
 
 /**
  * Дорога за продуктами, нарезка и раздача — столько секунд на закладку сверх варки у повара обычной скорости
@@ -518,7 +519,10 @@ export function tapShowcase(scene: StoreScene, at?: { x: number; y: number }): v
 export function flushCooking(scene: StoreScene): void {
   const k = scene.kitchenView;
   if (!k) return;
-  for (const id of k.cooking.splice(0)) scene.state = servePortions(scene.state, id);
+  for (const id of k.cooking.splice(0)) {
+    scene.state = servePortions(scene.state, id);
+    collections.note(scene, 'recipes', id);
+  }
   k.onPass = false;
   stopPots(scene);
   refreshKitchen(scene);
@@ -770,6 +774,7 @@ export async function carryToFood(scene: StoreScene, w: Worker, gen: number, k: 
   k.cooking.splice(0).forEach((id, i) => {
     const before = portionsOf(scene.state, id);
     scene.state = servePortions(scene.state, id);
+    collections.note(scene, 'recipes', id);
     const text = t('popup.cooked', { icon: DISHES[id].icon, name: t(`dish.${id}` as TextKey), n: portionsOf(scene.state, id) - before });
     scene.time.delayedCall(i * 450, () => scene.popup(at.x, at.y - 8, text, '#c8ffb0'));
   });

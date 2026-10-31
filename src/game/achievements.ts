@@ -8,6 +8,7 @@ import { CHAPTERS } from './story';
 import { registerCount } from './registers';
 import { gearMaxed, gearUpgrades } from './gear';
 import { hasHood, hoodOwned } from './hood';
+import { SET_IDS, setsDone } from './collections';
 
 export type AchievementId =
   | 'first_day'
@@ -46,7 +47,8 @@ export type AchievementId =
   | 'hypermarket'
   | 'hood_first'
   | 'hood_half'
-  | 'hood_all';
+  | 'hood_all'
+  | 'collections';
 
 export type Tier = 'bronze' | 'silver' | 'gold';
 
@@ -109,6 +111,8 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'hood_first', tier: 'bronze', progress: ({ state }) => count(hoodOwned(state).length, 1) },
   { id: 'hood_half', tier: 'silver', progress: ({ state }) => count(hoodOwned(state).length, 6) },
   { id: 'hood_all', tier: 'gold', progress: ({ state }) => flag(hasHood(state, 'statue')) },
+  // Альбом коллекций (collections.ts): все наборы собраны — золотая обложка.
+  { id: 'collections', tier: 'gold', progress: ({ state }) => count(setsDone(state), SET_IDS.length) },
 ];
 
 export const achievementName = (id: AchievementId): TextKey => `ach.${id}` as TextKey;

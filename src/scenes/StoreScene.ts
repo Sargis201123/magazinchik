@@ -133,6 +133,7 @@ import * as newcomer from './newcomer';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+import * as collections from './collections';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -612,6 +613,10 @@ export class StoreScene extends Phaser.Scene {
   private playTime = 0;
   /** В какой игровой день уже был ритуал возвращения (offerReturn): утро открывается не раз за день. */
   ritualDay = -1;
+  /** Витрина трофеев коллекций в зале (collections.ts): где стоит и какие трофеи уже на полках. */
+  trophyCase?: { x: number; y: number; img: Phaser.GameObjects.Image; shown: import('../game/collections').SetId[] };
+  /** Что из «Новое в альбоме» уже показано надписью над кассой (collections.tick). */
+  collectSeen?: Set<string>;
 
   constructor() {
     super('store');
@@ -736,6 +741,8 @@ export class StoreScene extends Phaser.Scene {
     this.time.addEvent({ delay: 650, loop: true, callback: () => this.running && this.time.now < this.aromaUntil && effects.aromaWisp(this) });
     // Достижения проверяются и посреди дня: серия, сотый покупатель — сразу всплывашка.
     this.time.addEvent({ delay: 1000, loop: true, callback: () => this.running && this.checkAchievements(true) });
+    // Альбом коллекций добирает заработанное и празднует собранный набор (collections.ts).
+    this.time.addEvent({ delay: 1000, loop: true, callback: () => collections.tick(this) });
     // Сначала вывеска, потом утро. Первая встреча с сюжетом (письмо бабушки) — на утреннем экране.
     // Музыка заиграет с первым касанием: на титуле — тема «Магазинчика».
     this.winterTune = decorations.isWinterMusic(this);
