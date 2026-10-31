@@ -86,6 +86,8 @@ export interface AmbScene {
   night: boolean;
   /** Облегчённый режим (слабый телефон). */
   lite: boolean;
+  /** Гомон громче в больших залах: множитель (hallLayers.ts); нет — как в магазинчике. */
+  murmur?: number;
 }
 
 const wet = (w: Weather): boolean => w === 'rain' || w === 'storm';

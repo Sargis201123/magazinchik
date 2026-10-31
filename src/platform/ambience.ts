@@ -13,6 +13,8 @@ import type { Weather } from '../game/weather';
 import { ambFiles, SYNTH_RAIN_UNDER, type Neon } from './ambienceFiles';
 import { birdGap, type AmbScene } from './ambienceLayers';
 import { brownNoise, rainTexture, seeded } from './ambienceSynth';
+import type { HallScene } from './hallLayers';
+import { hallScape } from './hallScape';
 import { fetched } from './audioFiles';
 import { jitter, type VoiceRule } from './mix';
 import { admitVoice, allowVoice, busInput, existingAudioContext, mixer, noteStart, placeAt, setDoorAir, STREET_LOW, type Bus } from './mixer';
@@ -35,6 +37,10 @@ export interface AmbLife {
   lite: boolean;
   /** Неоновая вывеска, которая сейчас горит (или null). */
   neon: Neon | null;
+  /** Помещение (индекс в STORE_LEVELS): от него звук зала (hallLayers.ts). */
+  level?: number;
+  /** Работающих касс. */
+  tills?: number;
 }
 
 interface Bed {
@@ -260,6 +266,9 @@ function schedule(ac: AudioContext, weather: Weather, evening: number, season: Y
   } else next.cricket = now + 1;
 }
 
+/** Что в зале — для звука по размеру магазина: один объект на все кадры. */
+const hallScene: HallScene = { level: 1, people: 0, tills: 1, open: false, night: false, lite: false };
+
 /** Шаги продавца: левая-правая нога чуть по разные стороны, каждый шаг немного другой. */
 let foot = 1;
 
@@ -291,6 +300,19 @@ export const ambience = {
       night: life?.night ?? false,
       lite: life?.lite ?? false,
     };
+    // Звук зала по размеру магазина: гомон и гул холодильников — громче в больших залах.
+    let hum = 1;
+    if (life) {
+      hallScene.level = life.level ?? 1;
+      hallScene.people = scene.customers;
+      hallScene.tills = life.tills ?? 1;
+      hallScene.open = open;
+      hallScene.night = scene.night;
+      hallScene.lite = scene.lite;
+      const mix = hallScape.update(ac, hallScene);
+      scene.murmur = mix?.murmur;
+      hum = mix?.hum ?? 1;
+    }
     if (life) ambFiles.update(ac, scene, life.neon);
     // Громкость задаёт канал (ползунок «Окружение»); здесь — только что звучит при такой погоде.
     // Дождь — на ~9 дБ тише музыки, ливень с ветром — на ~6: слышно, но музыку не перекрывает.
@@ -302,7 +324,7 @@ export const ambience = {
     // его не глушит — без прибавки канала улицы (STREET_LOW).
     const windy = weather === 'storm' ? 0.06 : weather === 'snow' ? 0.018 : weather === 'leaves' ? 0.012 : 0;
     fade(beds!.wind, ac, windy * STREET_LOW);
-    fade(beds!.hum, ac, !open ? 0 : 0.0005);
+    fade(beds!.hum, ac, !open ? 0 : 0.0005 * hum);
     if (mixer.audible('street')) schedule(ac, weather, evening, season, Boolean(life) && birdGap(scene) !== null && ambFiles.birdsReady());
   },
 
@@ -389,5 +411,6 @@ export const ambience = {
 // Отладка: ?debug открывает атмосферу из консоли (что нужно, что скачано, что звучит, сколько раз).
 if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug'))
   Object.assign(window, {
-    ambienceDebug: () => ({ ...ambFiles.debug(), fetched: fetched.filter((f) => f.url.includes('audio/amb/')).map((f) => f.url) }),
+    hallPreview: (kind: 'trolley' | 'beep' | 'pa') => hallScape.preview(kind),
+    ambienceDebug: () => ({ ...ambFiles.debug(), hall: hallScape.debug(), fetched: fetched.filter((f) => f.url.includes('audio/amb/')).map((f) => f.url) }),
   });
