@@ -8,6 +8,7 @@
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
 import { guestsToday } from './day';
+import { WEATHER_EFFECTS, weatherFor } from './weather';
 
 export type AdId = 'flyers' | 'banner' | 'blogger' | 'radio' | 'billboard' | 'tv' | 'collab' | 'city';
 
@@ -128,11 +129,12 @@ export const adUnlocked = (state: StoreState, id: AdId): boolean => state.level 
 
 /**
  * Поток, от которого считается цена: сегодняшние гости со всеми прибавками (касса, отделы, сезон…),
- * кроме уже идущей рекламы — иначе вторая реклама дорожала бы от первой. Раньше цена шла от потока
+ * кроме уже идущей рекламы — иначе вторая реклама дорожала бы от первой — и кроме погоды: реклама идёт
+ * несколько дней, и купленная в дождь не должна выходить дешевле (решение автора 31.10). Раньше цена шла от потока
  * без прибавок, а прибавка рекламы множила настоящий поток: на ур.5 он в 1,7 раза больше, и реклама
  * возвращала 4–9 монет на монету.
  */
-const adFlow = (state: StoreState): number => guestsToday(state) / adBoost(state);
+const adFlow = (state: StoreState): number => guestsToday(state) / adBoost(state) / WEATHER_EFFECTS[weatherFor(state.day)].guests;
 
 /** Цена: поток гостей × дни × цена гостя-дня, округлено до 10. Больше магазин — дороже реклама. */
 export function adPrice(state: StoreState, id: AdId): number {
