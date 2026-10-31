@@ -102,7 +102,7 @@ import { ambience, type AmbLife } from '../platform/ambience';
 import { realNewYear } from '../platform/ambienceLayers';
 import { setListener } from '../platform/mixer';
 import { haptic, telegramUserId, trustedNow } from '../platform/telegram';
-import { button, el, ICON_RE, ICONS, openModal, toast, UI_FONT } from '../ui/dom';
+import { button, el, openModal, toast, UI_FONT } from '../ui/dom';
 import {
   BIG_DAYS,
   BLACKOUT_CHECKOUT,
@@ -304,7 +304,6 @@ import {
   SHELF_MEAT,
   CAR_TYPES,
   type Popup,
-  POPUP,
   type Neighbor,
   RIVAL_LOOKS,
   FRIEND_VISITS,
@@ -330,7 +329,6 @@ import {
   LAMP_BLINK,
   LAMP_WARMUP,
   VENDING_BLINK,
-  popupTextWidth,
   ITEM_VARIANTS,
   PATIENCE_MS,
   FIRST_PATIENCE,
@@ -380,7 +378,6 @@ import {
   FIX_MS,
   LEAK_FIX_MS,
   COMBO_WINDOW_MS,
-  COMBO_COLORS,
   TOILET_CHANCE,
   TOILET_DIRT_PER_VISIT,
   TOILET_DIRTY,
@@ -513,16 +510,17 @@ import {
   ROT_TIP,
 } from './common';
 import * as motion from './motion';
+import * as effects from './effects';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
   layout!: Layout;
   /** Для какого уровня помещения построен зал (при расширении перестраиваем). */
-  private builtLevel = -1;
+  builtLevel = -1;
   /** Каким было помещение Эдуарда, когда рисовали улицу. */
   private builtEduard: EduardLook | null = null;
   /** Всплывающие надписи на экране: чтобы не налезали друг на друга и склеивались. */
-  private popups: Popup[] = [];
+  popups: Popup[] = [];
   /** Кухня во флигеле: плита, стол повара, витрина с тарелками (кухни нет — пусто). */
   private kitchenView?: KitchenView;
   /** Полка «Еда» у входа (kitchen.ts): где стоит, картинка и тарелки на ней. */
@@ -550,8 +548,8 @@ export class StoreScene extends Phaser.Scene {
   private trickTimers: Phaser.Time.TimerEvent[] = [];
   /** Ночью у входа играет музыкант — ночных гостей больше (nightGuests.ts). */
   private busker = false;
-  private stats: DayStats = emptyDayStats();
-  private hud!: Hud;
+  stats: DayStats = emptyDayStats();
+  hud!: Hud;
   shelfViews: ShelfView[] = [];
   /** Сколько раз перерисовывали полки: толчок по нему узнаёт, что товар на картинках уже другой. */
   /** Толчок: уронить разбитое, до чего волна ещё не дошла, — сразу, пока полки не перерисовали. */
@@ -591,9 +589,9 @@ export class StoreScene extends Phaser.Scene {
   /** Палец двигал камеру — это не нажатие. */
   dragged = false;
   /** Сколько звёзд рейтинга уже отпраздновали волной искр (-1 — ещё не знаем). */
-  private starsCheered = -1;
+  starsCheered = -1;
   /** Рекорд выручки сегодня уже отметили конфетти. */
-  private recordCheered = false;
+  recordCheered = false;
   /** Куда камера возвращается после осмотра квартала. */
   private home = { x: 0, y: 0 };
   private homeTimer?: Phaser.Time.TimerEvent;
@@ -784,7 +782,7 @@ export class StoreScene extends Phaser.Scene {
   /** Поддон с водой или стойка «Акция» на местах, где полки ещё нет. */
   private slotDecor: Phaser.GameObjects.Image[] = [];
   /** Планировка следующего уровня: камера и улица рассчитаны на неё. */
-  private next!: Layout;
+  next!: Layout;
   /** Линия тротуара, по которой ходят прохожие и приходят покупатели. */
   private streetY = 0;
   /** За сегодня: сколько покупателей пробил сам хозяин и скольких из них — касанием улицы (аналитика). */
@@ -839,9 +837,9 @@ export class StoreScene extends Phaser.Scene {
     till: () => this.registers[0]?.counter ?? this.layout.counter,
     floor: () => this.freeFloorPoint(),
     popup: (x, y, text, color) => this.popup(x, y, text, color),
-    emote: (person, key) => this.emote(person, key),
-    coins: (x, y, n) => this.flyCoins(x, y, n),
-    puff: (x, y) => this.puff(x, y),
+    emote: (person, key) => effects.emote(this, person, key),
+    coins: (x, y, n) => effects.flyCoins(this, x, y, n),
+    puff: (x, y) => effects.puff(this, x, y),
     tap: (action) => this.tap(action),
     caught: (kind) => this.momentCaught(kind),
     missed: () => noteMoment(this.stats, false),
@@ -893,7 +891,7 @@ export class StoreScene extends Phaser.Scene {
   private combo = 0;
   private lastSaleAt = -Infinity;
   private nextSpawn = 1;
-  private running = false;
+  running = false;
   /** Подсказка «что дальше» в зале (game/nudge.ts): когда игрок последний раз касался экрана, какая подсказка и до каких пор. */
   private lastTouch = 0;
   private nudge: HallNudge | null = null;
@@ -1113,7 +1111,7 @@ export class StoreScene extends Phaser.Scene {
     this.time.addEvent({ delay: 1300, loop: true, callback: () => this.running && this.queueIdle() });
     this.time.addEvent({ delay: 4200, loop: true, callback: () => this.running && this.sellerIdle() });
     // Пока пахнет свежей выпечкой, из пекарни в зал тянутся волны запаха.
-    this.time.addEvent({ delay: 650, loop: true, callback: () => this.running && this.time.now < this.aromaUntil && this.aromaWisp() });
+    this.time.addEvent({ delay: 650, loop: true, callback: () => this.running && this.time.now < this.aromaUntil && effects.aromaWisp(this) });
     // Достижения проверяются и посреди дня: серия, сотый покупатель — сразу всплывашка.
     this.time.addEvent({ delay: 1000, loop: true, callback: () => this.running && this.checkAchievements(true) });
     // Сначала вывеска, потом утро. Первая встреча с сюжетом (письмо бабушки) — на утреннем экране.
@@ -1267,7 +1265,7 @@ export class StoreScene extends Phaser.Scene {
     motion.animatePeople(this);
     this.updateOven();
     this.petCatNearby();
-    this.cheerProgress();
+    effects.cheerProgress(this);
     this.updateDelivery();
     this.hud.update(this.state, this.timeLeft, this.questsLine(), this.night);
   }
@@ -1285,7 +1283,7 @@ export class StoreScene extends Phaser.Scene {
       const { sellerHome } = this.layout;
       const n = pay.paid.reduce((sum, q) => sum + q.reward, 0);
       this.time.delayedCall(700, () => this.popup(sellerHome.x - 20, sellerHome.y - 30, t('popup.questPaid', { n }), '#c8ffb0'));
-      this.flyCoins(sellerHome.x - 20, sellerHome.y - 30, Math.min(6, 2 + pay.paid.length * 2));
+      effects.flyCoins(this, sellerHome.x - 20, sellerHome.y - 30, Math.min(6, 2 + pay.paid.length * 2));
       haptic.success();
     }
     if (done > this.questsSeen) {
@@ -1409,7 +1407,7 @@ export class StoreScene extends Phaser.Scene {
   // ---------- Магазин ----------
 
   /** Во сколько раз холст плотнее базовых 720 точек по ширине: от этого — размеры на холсте под интерфейсом. */
-  private get res(): number {
+  get res(): number {
     return this.scale.width / BASE_W;
   }
 
@@ -1453,7 +1451,7 @@ export class StoreScene extends Phaser.Scene {
    * Строит зал под текущий уровень помещения. При расширении зал строится заново.
    * bought — перестроили из-за покупки оборудования или украшения: новое утром распакуют из коробки.
    */
-  private buildWorld(bought = false): void {
+  buildWorld(bought = false): void {
     this.disposeWorld();
     this.choreId++;
     this.sellerBusy = false;
@@ -2133,7 +2131,7 @@ export class StoreScene extends Phaser.Scene {
       this.popup(b.x, b.y - 22, t('rival.say.lure'), '#fff3b0');
       this.time.delayedCall(1100, () => {
         if (!b.active) return;
-        this.emote(b, 'emo_heart');
+        effects.emote(this, b, 'emo_heart');
         this.popup(b.x, b.y - 34, t('rival.say.yes'), '#c8ffb0');
         void this.strollAway(b);
       });
@@ -2155,7 +2153,7 @@ export class StoreScene extends Phaser.Scene {
     this.popup(p.x, p.y - 16, t(kind === 'spill' ? 'rival.popup.spill' : 'rival.popup.trash'), '#ffd0d0');
     // Хозяин чужого магазина замечает.
     if (this.seller?.active) {
-      this.emote(this.seller, 'emo_question');
+      effects.emote(this, this.seller, 'emo_question');
       this.popup(this.seller.x, this.seller.y - 30, t('rival.say.owner'), '#ffffff');
     }
   }
@@ -3977,7 +3975,7 @@ export class StoreScene extends Phaser.Scene {
     haptic.success();
     this.popup(courier.x, courier.y - 16, t('popup.orderPaid', { icon: vehicle.icon, n: pay }), '#c8ffb0');
     if (tips) this.time.delayedCall(450, () => courier.active && this.popup(courier.x, courier.y - 16, t('popup.orderTip', { n: tips }), '#fee761'));
-    this.flyCoins(courier.x, courier.y, Math.min(6, 2 + batch.length * 2));
+    effects.flyCoins(this, courier.x, courier.y, Math.min(6, 2 + batch.length * 2));
   }
 
   /** Каждый кадр: кольцо на карточке звонка, хозяин идёт собирать заказ, плашка-статус доставки. */
@@ -4675,7 +4673,7 @@ export class StoreScene extends Phaser.Scene {
     const res = answerNightStory(this.state, story, yes, avgCheck);
     this.state = res.state;
     this.hud.update(this.state, this.timeLeft);
-    this.emote(sprite, yes ? 'emo_heart' : 'emo_angry');
+    effects.emote(this, sprite, yes ? 'emo_heart' : 'emo_angry');
     if (yes) this.popup(sprite.x, sprite.y - 18, t('nightStory.thanks'), '#c8ffb0');
     if (res.money) {
       sound.coin(sprite.x);
@@ -4870,8 +4868,8 @@ export class StoreScene extends Phaser.Scene {
    */
   private petEmote(pet: Phaser.GameObjects.Image, key: EmoteKey): void {
     if (!pet.active) return;
-    this.dropEmote(pet);
-    const box = this.emoteBox(key, 0.8).setPosition(pet.x + 1, pet.y - pet.displayHeight - 0.5).setDepth(LIGHT_DEPTH - 1);
+    effects.dropEmote(this, pet);
+    const box = effects.emoteBox(this, key, 0.8).setPosition(pet.x + 1, pet.y - pet.displayHeight - 0.5).setDepth(LIGHT_DEPTH - 1);
     pet.setData('emote', box);
   }
 
@@ -4962,7 +4960,7 @@ export class StoreScene extends Phaser.Scene {
       if (Math.abs(c.sprite.x - cat.x) > 14 || Math.abs(c.sprite.y + 8 - cat.y) > 10) continue;
       c.petted = true;
       note(this.stats, 'cat');
-      this.emote(c.sprite, 'emo_heart');
+      effects.emote(this, c.sprite, 'emo_heart');
       this.heartAt(cat.x, cat.y - 10);
       // Кот трётся о ноги: поворачивается к покупателю, покачивается и довольно жмурится.
       cat.setFlipX(c.sprite.x > cat.x);
@@ -5134,7 +5132,7 @@ export class StoreScene extends Phaser.Scene {
         if (customer.friend!.treated) return this.popup(sprite.x, sprite.y - 30, t('visit.treated', { name: f.name }), '#fff3b0');
         customer.friend = { ...customer.friend!, treated: true };
         void treatFriend(f.id).then((ok) => ok && sprite.active && this.popup(sprite.x, sprite.y - 30, t('visit.treat', { name: f.name, n: FRIEND_GIFT }), '#c8ffb0'));
-        this.emote(sprite, 'emo_heart');
+        effects.emote(this, sprite, 'emo_heart');
       }),
     );
     this.customers.add(customer);
@@ -5166,7 +5164,7 @@ export class StoreScene extends Phaser.Scene {
     const name = t(r.nameKey);
     const y = c.sprite.y - 24;
     if (result === 'up') {
-      this.emote(c.sprite, 'emo_heart');
+      effects.emote(this, c.sprite, 'emo_heart');
       this.popup(c.sprite.x, y, t('regular.up', { name }), '#c8ffb0');
       const total = c.items.reduce((sum, item) => sum + unitSalePrice(this.state, item.id, item.unit), 0);
       // Благоустроенный район (hood.ts): постоянные щедрее.
@@ -5176,7 +5174,7 @@ export class StoreScene extends Phaser.Scene {
         this.time.delayedCall(900, () => this.popup(c.sprite.x, y - 8, t('regular.tip', { n: tip }), '#fee761'));
       }
     } else {
-      this.emote(c.sprite, 'emo_angry');
+      effects.emote(this, c.sprite, 'emo_angry');
       this.popup(c.sprite.x, y, t(result === 'left' ? 'regular.left' : 'regular.down', { name }), '#ffd0d0');
       sound.bad();
     }
@@ -5250,7 +5248,7 @@ export class StoreScene extends Phaser.Scene {
     }
     // Что-то стряслось — покупатели оглядываются, продавец настораживается.
     this.everyoneLooks(w / 2, h / 2, kind === 'pigeon' || kind === 'mouse' ? 'emo_question' : 'emo_alert', 0.3);
-    if (this.seller?.active) this.emote(this.seller, 'emo_alert');
+    if (this.seller?.active) effects.emote(this, this.seller, 'emo_alert');
     if (kind === 'leak') this.startLeak(keep);
     if (kind === 'pigeon') this.pigeonInside(keep);
     if (kind === 'courier') void this.courierVisit(keep);
@@ -5271,7 +5269,7 @@ export class StoreScene extends Phaser.Scene {
   private fixFuse(): void {
     if (!this.blackout || this.sellerBusy || this.ownerScanning() || !this.fuseBox) return;
     this.carried.setTexture('wrench').setPosition(5, -1).setVisible(true);
-    this.emote(this.seller, 'emo_alert');
+    effects.emote(this, this.seller, 'emo_alert');
     void this.doChore([
       {
         x: this.fuseBox.x,
@@ -5405,7 +5403,7 @@ export class StoreScene extends Phaser.Scene {
             if (scared.has(c) || c.thief || Phaser.Math.Distance.Between(c.sprite.x, c.sprite.y + 8, bird.x, bird.y) > 14) continue;
             scared.add(c);
             c.unhappy = true;
-            this.emote(c.sprite, 'emo_angry');
+            effects.emote(this, c.sprite, 'emo_angry');
           }
         },
       }),
@@ -5458,7 +5456,7 @@ export class StoreScene extends Phaser.Scene {
               saveGame(this.state);
               sound.coin(courier.x);
               this.popup(courier.x, courier.y - 18, t('live.courierGift', { n: gift }), '#c8ffb0');
-              this.flyCoins(courier.x, courier.y, 3);
+              effects.flyCoins(this, courier.x, courier.y, 3);
               void leave(false);
             },
           },
@@ -5733,119 +5731,6 @@ export class StoreScene extends Phaser.Scene {
     const umbrella = this.art(0, -13, 'umbrella').setTint(Phaser.Utils.Array.GetRandom(CAR_COLORS));
     person.add(umbrella);
     person.setData('umbrella', umbrella);
-  }
-
-  /**
-   * Расширение — событие: утреннее окно прячется, на участке леса и строители стучат молотками,
-   * вспышка — и зал уже больше, летит конфетти, звучат фанфары.
-   */
-  private async celebrateExpansion(): Promise<void> {
-    const modal = document.querySelector<HTMLElement>('.ui-modal:not(.closing)');
-    if (modal) modal.style.visibility = 'hidden';
-    // Пока стучат молотки, заставка успеет скачаться.
-    music.prefetch('expand');
-    if (this.state.level >= HYPER_LEVEL && this.builtLevel < HYPER_LEVEL) return this.celebrateMove(modal);
-    const { w, h } = this.layout;
-    const next = this.next;
-    const spots: { x: number; y: number }[] = [];
-    if (next.w > w) spots.push({ x: w + (next.w - w) / 2, y: next.h * 0.3 }, { x: w + (next.w - w) / 2, y: next.h * 0.7 });
-    if (next.h > h) spots.push({ x: w * 0.3, y: h + (next.h - h) / 2 }, { x: w * 0.7, y: h + (next.h - h) / 2 });
-    const crew: Phaser.GameObjects.GameObject[] = [];
-    for (const spot of spots) {
-      crew.push(this.art(spot.x, spot.y, 'scaffold').setDepth(spot.y));
-      const builder = this.makePerson(spot.x + 14, spot.y + 10, { ...randomLook(0xfeae34), style: 'cap', hair: 0xfeae34, acc: 'vest' });
-      this.tweens.add({ targets: builder, scaleY: 0.92, duration: 140, yoyo: true, repeat: -1 });
-      crew.push(builder);
-    }
-    this.popup(next.w / 2, next.h / 2, t('popup.construction'), '#fee761');
-    const hammer = this.time.addEvent({
-      delay: 260,
-      loop: true,
-      callback: () => {
-        sound.tap();
-        const spot = Phaser.Utils.Array.GetRandom(spots);
-        if (spot) this.puff(spot.x + Phaser.Math.Between(-14, 14), spot.y + Phaser.Math.Between(-10, 14));
-      },
-    });
-    // Паузы — переживающие перестройку: эта сцена сама перестраивает зал, а окно утра надо вернуть в любом случае.
-    await this.delay(2400);
-    hammer.remove();
-    for (const obj of crew) obj.destroy();
-    this.cameras.main.flash(300, 255, 250, 235);
-    this.buildWorld();
-    this.refreshShelves();
-    this.refreshWarehouse();
-    this.hud.update(this.state, DAY_SECONDS);
-    const confetti = this.add.particles(this.layout.w / 2, this.layout.h / 2, 'confetti', {
-      speed: { min: 60, max: 170 },
-      angle: { min: 200, max: 340 },
-      gravityY: 160,
-      rotate: { min: 0, max: 360 },
-      scale: 1 / ART,
-      lifespan: 1800,
-      tint: [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xb55088],
-      emitting: false,
-    });
-    confetti.setDepth(LIGHT_DEPTH + 10).explode(70);
-    if (!music.sting('expand')) sound.fanfare();
-    haptic.success();
-    this.popup(this.layout.w / 2, this.layout.h / 2 - 20, t('popup.expanded', { name: t(storeLevel(this.state).nameKey) }), '#fee761');
-    await this.delay(1600);
-    confetti.destroy();
-    if (modal) modal.style.visibility = '';
-  }
-
-  /**
-   * Переезд в гипермаркет: не стройка, а новоселье. Зал меняется на большой, у входа собираются бабушка
-   * и постоянные покупатели — поздравляют, над вывеской и у двери — конфетти. Камера стоит на месте.
-   */
-  private async celebrateMove(modal: HTMLElement | null): Promise<void> {
-    this.popup(this.layout.w / 2, this.layout.h / 2, t('hyper.title'), '#fee761');
-    await this.delay(900);
-    this.cameras.main.flash(300, 255, 250, 235);
-    this.buildWorld();
-    this.refreshShelves();
-    this.refreshWarehouse();
-    this.hud.update(this.state, DAY_SECONDS);
-    const { w, h, door } = this.layout;
-    const y = h + FACADE_H + 12;
-    const guests = [GRANDMA, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day), customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)];
-    const crowd = guests.map((look, i) => {
-      const person = this.makePerson(door.x + [-20, 20, -38][i], y + [0, 2, 4][i], look);
-      this.setFacing(person, 'up');
-      return person;
-    });
-    const burst = (x: number, by: number, n: number) => {
-      const confetti = this.add.particles(x, by, 'confetti', {
-        speed: { min: 50, max: 150 },
-        angle: { min: 200, max: 340 },
-        gravityY: 160,
-        rotate: { min: 0, max: 360 },
-        scale: 1 / ART,
-        lifespan: 1800,
-        tint: [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xb55088],
-        emitting: false,
-      });
-      confetti.setDepth(LIGHT_DEPTH + 10).explode(this.lite ? Math.round(n / 2) : n);
-      this.time.delayedCall(2000, () => confetti.destroy());
-    };
-    burst(w / 2, -6, 60);
-    burst(door.x, h, 40);
-    if (!music.sting('expand')) sound.fanfare();
-    haptic.success();
-    this.popup(w / 2, h / 2 - 20, t('popup.expanded', { name: t(storeLevel(this.state).nameKey) }), '#fee761');
-    const cheers: TextKey[] = ['hyper.cheer1', 'hyper.cheer2', 'hyper.cheer3'];
-    for (const [i, person] of crowd.entries()) {
-      this.time.delayedCall(300 + i * 450, () => {
-        if (!person.active) return;
-        this.emote(person, i === 0 ? 'emo_heart' : 'emo_star');
-        this.popup(person.x, person.y - 22, t(cheers[i]), '#ffffff');
-      });
-    }
-    await this.delay(2600);
-    // Поздравили — расходятся: тают у входа (зал уже мог перестроиться — тогда их нет).
-    for (const person of crowd) if (person.active) this.tweens.add({ targets: person, alpha: 0, duration: 500, onComplete: () => person.destroy() });
-    if (modal) modal.style.visibility = '';
   }
 
   /** Нажатие засчитывается, только если палец не двигал камеру. */
@@ -7778,7 +7663,7 @@ export class StoreScene extends Phaser.Scene {
     this.trickObjs.push(person);
     await this.walk(person, promoter.x + 8, promoter.y + 2);
     if (!person.active) return;
-    this.emote(person, 'emo_question');
+    effects.emote(this, person, 'emo_question');
     await this.wait(600);
     await this.walk(person, this.layout.door.x + Phaser.Math.Between(-30, 30), this.streetY + 74);
     if (person.active) this.tweens.add({ targets: person, alpha: 0, duration: 400, onComplete: () => person.destroy() });
@@ -8290,7 +8175,7 @@ export class StoreScene extends Phaser.Scene {
     this.binBy = null;
     sound.coin();
     const dump = this.dumpSpot();
-    this.puff(dump.x, dump.y - 6);
+    effects.puff(this, dump.x, dump.y - 6);
   }
 
   /** Продавец выносит мусор: долго, касса в это время пустует. */
@@ -9231,7 +9116,7 @@ export class StoreScene extends Phaser.Scene {
    * товаре (третий батон — всегда третий батон): взяли одну — остальные съезжают на освободившееся
    * место (slide). При выкладке (stockShelf) не съезжают — там штуки сами летят из рук.
    */
-  private refreshShelves(slide = true): void {
+  refreshShelves(slide = true): void {
     // Разбитое толчком падает раньше, чем полку перерисуют: иначе его картинку займёт уцелевшая штука.
     this.quakeFlush?.();
     this.layout.slots.forEach((slot, i) => {
@@ -9620,7 +9505,7 @@ export class StoreScene extends Phaser.Scene {
     return { x: counter.x + 20, y: h - 40 };
   }
 
-  private refreshWarehouse(): void {
+  refreshWarehouse(): void {
     // На складе помещается ~30 коробок: в большом складе одна коробка изображает больше штук.
     const perBox = unitsPerBox(warehouseCapacity(this.state));
     const boxes = PRODUCT_IDS.flatMap((id) =>
@@ -9675,7 +9560,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Человечек из слоёв: тень, штаны, рубашка, форма, кожа, волосы — каждый слой перекрашивается тинтом. */
-  private makePerson(x: number, y: number, look: Look): Phaser.GameObjects.Container {
+  makePerson(x: number, y: number, look: Look): Phaser.GameObjects.Container {
     const shadow = this.art(0, 8.5, 'shadow');
     const legs = this.art(0, 0, 'p_legs0').setTint(look.pants ?? 0x3a4466);
     const shirt = this.art(0, 0, 'p_shirt').setTint(look.shirt);
@@ -9815,7 +9700,7 @@ export class StoreScene extends Phaser.Scene {
     const hearts = this.time.addEvent({
       delay: 5000,
       loop: true,
-      callback: () => companion.active && Math.random() < 0.35 && this.emote(companion, 'emo_heart'),
+      callback: () => companion.active && Math.random() < 0.35 && effects.emote(this, companion, 'emo_heart'),
     });
     companion.once('destroy', () => hearts.remove());
   }
@@ -9921,7 +9806,7 @@ export class StoreScene extends Phaser.Scene {
     if (ms) this.time.delayedCall(ms, () => person.getData('moodToken') === token && this.setMood(person, null));
   }
 
-  private setFacing(person: Phaser.GameObjects.Container, facing: Facing): void {
+  setFacing(person: Phaser.GameObjects.Container, facing: Facing): void {
     if (person.getData('facing') === facing) return;
     person.setData('facing', facing);
     const suffix = VIEW_SUFFIX[facing];
@@ -9944,81 +9829,9 @@ export class StoreScene extends Phaser.Scene {
     this.placeStroller(person, facing);
   }
 
-  /** Монетки летят от кассы к счётчику денег в углу экрана. */
-  private flyCoins(x: number, y: number, count: number): void {
-    const target = this.cameras.main.getWorldPoint(70 * this.res, 52 * this.res);
-    for (let i = 0; i < count; i++) {
-      const coin = this.art(x + Phaser.Math.Between(-4, 4), y - 10, 'coin').setDepth(LIGHT_DEPTH + 5);
-      this.tweens.add({
-        targets: coin,
-        x: target.x,
-        y: target.y,
-        scale: 0.8 / ART,
-        delay: i * 70,
-        duration: 650,
-        ease: 'Cubic.easeIn',
-        onComplete: () => {
-          coin.destroy();
-          if (i === count - 1) this.hud.bumpMoney();
-        },
-      });
-    }
-  }
-
-  /** «Серия ×3!» над кассой: крупная цифра, звёздочки, нота всё выше. */
+  /** Переходник к effects.celebrateCombo: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
   private celebrateCombo(n: number): void {
-    const { counter } = this.layout;
-    const color = COMBO_COLORS[Math.min(n - 2, COMBO_COLORS.length - 1)];
-    const label = this.add
-      .text(counter.x - 14, counter.y - 40, t('popup.combo', { n }), {
-        fontFamily: UI_FONT,
-        fontSize: `${Math.min(9 + n, 15)}px`,
-        fontStyle: 'bold',
-        color,
-        stroke: '#181425',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5)
-      .setResolution(this.textRes(5))
-      .setDepth(LIGHT_DEPTH + 6)
-      .setScale(0.2)
-      .setAngle(-8);
-    this.tweens.add({ targets: label, scale: 1, angle: 0, duration: 260, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: label, y: label.y - 12, alpha: 0, delay: 900, duration: 500, onComplete: () => label.destroy() });
-    const burst = this.add.particles(counter.x - 14, counter.y - 40, 'spark', {
-      speed: { min: 20, max: 40 + n * 6 },
-      lifespan: 600,
-      scale: { start: 0.7, end: 0 },
-      tint: [0xfee761, 0xffffff, 0xfeae34],
-      quantity: 6 + n * 2,
-      emitting: false,
-    });
-    burst.setDepth(LIGHT_DEPTH + 5).explode(6 + n * 2);
-    this.time.delayedCall(800, () => burst.destroy());
-    sound.combo(n);
-  }
-
-  /** Облачко пыли: мусор убрали. */
-  private puff(x: number, y: number): void {
-    const cloud = this.art(x, y - 2, 'puff').setDepth(y + 5);
-    this.tweens.add({ targets: cloud, y: y - 8, scale: 0.8 / ART, alpha: 0, duration: 500, onComplete: () => cloud.destroy() });
-  }
-
-  /** Пузыри: туалет отмыт. */
-  private bubbles(x: number, y: number): void {
-    for (let i = 0; i < 6; i++) {
-      const b = this.art(x + Phaser.Math.Between(-7, 7), y + Phaser.Math.Between(-4, 8), 'bubble_s').setDepth(y + 40);
-      this.tweens.add({ targets: b, y: b.y - Phaser.Math.Between(10, 18), alpha: 0, delay: i * 80, duration: 700, onComplete: () => b.destroy() });
-    }
-  }
-
-  /** Волна запаха выпечки: три тёплые точки змейкой плывут из двери пекарни в зал. */
-  private aromaWisp(): void {
-    const door = this.layout.bakery.doorway;
-    const wisp = this.add.container(door.x + 2, door.y - 6).setDepth(LIGHT_DEPTH - 2);
-    for (let i = 0; i < 3; i++) wisp.add(this.add.rectangle(i * 3, Math.sin(i * 2) * 1.5, 2, 1, 0xfeae34, 0.85));
-    this.tweens.add({ targets: wisp, x: wisp.x + Phaser.Math.Between(30, 60), y: wisp.y - Phaser.Math.Between(10, 24), alpha: 0, duration: 2200, onComplete: () => wisp.destroy() });
-    this.tweens.add({ targets: wisp.list, y: '+=2', duration: 300, yoyo: true, repeat: 3, ease: 'Sine.easeInOut' });
+    return effects.celebrateCombo(this, n);
   }
 
   /** Сколько терпения осталось у ждущего покупателя (1 — только встал, 0 — уходит). */
@@ -10044,7 +9857,7 @@ export class StoreScene extends Phaser.Scene {
       return;
     }
     if (left < 0.6 && Math.random() < 0.6) {
-      this.emote(p, Math.random() < 0.55 ? 'emo_clock' : 'emo_sigh');
+      effects.emote(this, p, Math.random() < 0.55 ? 'emo_clock' : 'emo_sigh');
       return;
     }
     if (Math.random() < 0.5) {
@@ -10066,7 +9879,7 @@ export class StoreScene extends Phaser.Scene {
     const { counter } = this.layout;
     if (Math.hypot(s.x - counter.x, s.y - counter.y) > 40) return;
     if (this.evening > 0.4 && Math.random() < 0.45) {
-      this.emote(s, 'emo_zzz');
+      effects.emote(this, s, 'emo_zzz');
       this.setMood(s, 'frown', 1200);
       return;
     }
@@ -10097,138 +9910,7 @@ export class StoreScene extends Phaser.Scene {
       const dx = x - p.x;
       const dy = y - p.y;
       this.setFacing(p, Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down');
-      if (Math.random() < share) this.time.delayedCall(Phaser.Math.Between(0, 300), () => this.emote(p, key));
-    }
-  }
-
-  /** Эмоция над головой: облачко выпрыгивает над макушкой (над шляпой — повыше). Новая эмоция сменяет прежнюю. */
-  private emote(person: Phaser.GameObjects.Container, key: EmoteKey): void {
-    if (!person.active) return;
-    this.dropEmote(person);
-    const hat = person.list.some((o) => (o as Phaser.GameObjects.Image).texture?.key.startsWith('w_hat_'));
-    const box = this.emoteBox(key, 1).setPosition(1.5, hat ? -14 : -10.5);
-    person.add(box);
-    person.setData('emote', box);
-  }
-
-  /** Убирает облачко, которое ещё висит над человеком или зверем, вместе с его анимациями. */
-  private dropEmote(owner: Phaser.GameObjects.GameObject): void {
-    const old = owner.getData('emote') as Phaser.GameObjects.Container | undefined;
-    if (!old?.active) return;
-    this.tweens.killTweensOf([old, ...old.list]);
-    old.destroy();
-  }
-
-  /**
-   * Белое облачко с хвостиком (хвостик — в точке 0, 0) и значком внутри. Выпрыгивает с пружинкой,
-   * значок двигается по-своему (emoteMotion), через полторы секунды облачко тает.
-   */
-  private emoteBox(key: EmoteKey, scale: number): Phaser.GameObjects.Container {
-    const bubble = this.art(0, 0, 'emo_bubble').setOrigin(0.375, 1);
-    const icon = this.art(1.2, -4, key).setScale(0.85 / ART);
-    const box = this.add.container(0, 0, [bubble, icon]).setScale(0).setAngle(-10);
-    this.tweens.add({ targets: box, scale, angle: 0, duration: 220, ease: 'Back.easeOut', easeParams: [2.5] });
-    this.tweens.add({ targets: box, alpha: 0, delay: 1350, duration: 300, onComplete: () => box.destroy() });
-    this.emoteMotion(box, icon, key);
-    return box;
-  }
-
-  /**
-   * У каждой эмоции своё движение: сердечко бьётся, злость краснеет и пыхтит паром, «z» плывут
-   * волной, вопрос качается маятником, звезда крутится с искрами, часы тикают, вздох оседает,
-   * «дорого» подпрыгивает, «!» вздрагивает. Мини-сердечки, искры и пар — не на слабом телефоне.
-   */
-  private emoteMotion(box: Phaser.GameObjects.Container, icon: Phaser.GameObjects.Image, key: EmoteKey): void {
-    const { x, y } = icon;
-    const s = icon.scaleX;
-    const fx = !this.lite;
-    // Значок оживает, когда облачко уже выпрыгнуло.
-    const delay = 200;
-    switch (key) {
-      case 'emo_heart':
-        // Тук-тук: на каждом ударе из облачка вылетает маленькое сердечко.
-        this.tweens.add({
-          targets: icon,
-          scale: s * 1.3,
-          delay,
-          duration: 110,
-          yoyo: true,
-          repeat: 3,
-          repeatDelay: 140,
-          ease: 'Quad.easeOut',
-          onYoyo: () => fx && this.emoteBit(box, 'emo_heart', x + Phaser.Math.FloatBetween(-3, 4), y - 2),
-        });
-        break;
-      case 'emo_angry': {
-        // Облачко наливается красным, значок пыхтит, из-под облачка — клубы пара.
-        const flush = this.art(0, 0, 'emo_bubble').setOrigin(0.375, 1).setTint(0xff7070).setAlpha(0);
-        box.addAt(flush, 1);
-        this.tweens.add({ targets: flush, alpha: 0.9, delay, duration: 350, ease: 'Sine.easeOut' });
-        let side = 1;
-        this.tweens.add({
-          targets: icon,
-          scale: s * 1.18,
-          delay,
-          duration: 100,
-          yoyo: true,
-          repeat: 3,
-          repeatDelay: 160,
-          onYoyo: () => {
-            side = -side;
-            if (fx) this.emoteBit(box, 'puff', x + side * 4.5, y - 3, side);
-          },
-        });
-        break;
-      }
-      case 'emo_zzz':
-        // Плывут волной: вверх-вниз и чуть вбок со сдвигом по фазе.
-        this.tweens.add({ targets: icon, y: y - 1.2, delay, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut' });
-        this.tweens.add({ targets: icon, x: x + 0.8, angle: 8, delay: delay + 150, duration: 300, yoyo: true, repeat: 1, ease: 'Sine.easeInOut' });
-        break;
-      case 'emo_question':
-        // Маятник: подвешен за макушку, качается и затихает.
-        icon.setOrigin(0.5, 0).setY(y - 6 * s).setAngle(-18);
-        this.tweens.add({ targets: icon, angle: 0, delay: 100, duration: 1300, ease: (t: number) => 1 - Math.cos(Math.PI * 4 * t) * (1 - t) });
-        break;
-      case 'emo_star':
-        // Крутится, замедляясь, а по краям облачка вспыхивают искры.
-        this.tweens.add({ targets: icon, angle: 360, delay: 120, duration: 900, ease: 'Cubic.easeOut' });
-        if (fx) [[-2.5, -7.5], [5.5, -6], [-3.5, -2]].forEach(([sx, sy], i) => this.emoteBit(box, 'spark', sx, sy, 0, delay + i * 150));
-        break;
-      case 'emo_clock':
-        // Тик-так: качнётся и замрёт, качнётся обратно.
-        this.tweens.add({ targets: icon, angle: { from: -10, to: 10 }, delay, duration: 90, hold: 200, yoyo: true, repeat: 1, repeatDelay: 200, ease: 'Back.easeOut' });
-        break;
-      case 'emo_sigh':
-        // Выдох: значок оседает и расплывается.
-        this.tweens.add({ targets: icon, y: y + 1, scaleX: s * 1.15, scaleY: s * 0.88, delay: delay + 100, duration: 520, hold: 200, yoyo: true, ease: 'Sine.easeInOut' });
-        break;
-      case 'emo_pricey':
-        // Цена прыгает вверх.
-        this.tweens.add({ targets: icon, y: y - 1.3, delay, duration: 130, yoyo: true, repeat: 2, repeatDelay: 120, ease: 'Quad.easeOut' });
-        break;
-      case 'emo_alert':
-        // Вздрагивает: вытягивается вверх.
-        this.tweens.add({ targets: icon, y: y - 0.8, scaleX: s * 0.85, scaleY: s * 1.25, delay, duration: 80, yoyo: true, repeat: 2, repeatDelay: 220 });
-        break;
-    }
-  }
-
-  /** Мелочь вокруг облачка: мини-сердечко, клуб пара (dir — в какую сторону) или искра. Живёт внутри облачка. */
-  private emoteBit(box: Phaser.GameObjects.Container, key: 'emo_heart' | 'puff' | 'spark', x: number, y: number, dir = 0, delay = 0): void {
-    if (!box.active) return;
-    const bit = this.art(x, y, key).setAlpha(0);
-    box.add(bit);
-    const done = () => bit.destroy();
-    if (key === 'emo_heart') {
-      bit.setScale(0.4 / ART);
-      this.tweens.add({ targets: bit, y: y - 6, scale: 0.6 / ART, alpha: { from: 1, to: 0 }, delay, duration: 600, ease: 'Quad.easeOut', onComplete: done });
-    } else if (key === 'puff') {
-      bit.setScale(0.4 / ART).setFlipX(dir < 0);
-      this.tweens.add({ targets: bit, x: x + dir * 2.5, y: y - 3, scale: 0.7 / ART, alpha: { from: 1, to: 0 }, delay, duration: 450, ease: 'Sine.easeOut', onComplete: done });
-    } else {
-      bit.setScale(0.3 / ART);
-      this.tweens.add({ targets: bit, scale: 1 / ART, angle: 90, alpha: { from: 1, to: 0 }, delay, duration: 420, ease: 'Quad.easeOut', onComplete: done });
+      if (Math.random() < share) this.time.delayedCall(Phaser.Math.Between(0, 300), () => effects.emote(this, p, key));
     }
   }
 
@@ -10448,8 +10130,8 @@ export class StoreScene extends Phaser.Scene {
         action: () => {
           this.toiletDirt = 0;
           this.refreshToilet();
-          this.bubbles(this.layout.wc.x, this.layout.wc.y);
-          this.cleanSparkle(this.layout.wc.x, this.layout.wc.spotY - 4, 20);
+          effects.bubbles(this, this.layout.wc.x, this.layout.wc.y);
+          effects.cleanSparkle(this, this.layout.wc.x, this.layout.wc.spotY - 4, 20);
         },
       },
     ]);
@@ -10529,7 +10211,7 @@ export class StoreScene extends Phaser.Scene {
             this.stopMop(this.seller);
             this.carried.setVisible(false).setTexture('box').setPosition(0, 3);
             if (kind === 'spill') this.wetSign(piece.x, piece.y);
-            this.cleanSparkle(piece.x, piece.y, 16);
+            effects.cleanSparkle(this, piece.x, piece.y, 16);
             this.removeTrash(piece);
           },
         },
@@ -10537,78 +10219,6 @@ export class StoreScene extends Phaser.Scene {
     });
     this.trash.add(piece);
     return piece;
-  }
-
-  /** Чисто! Звёздочки на вымытом месте и блик, пробегающий по полу. */
-  private cleanSparkle(x: number, y: number, w: number): void {
-    if (this.lite) return;
-    for (let i = 0; i < 4; i++) {
-      const spark = this.art(x + Phaser.Math.Between(-w / 2, w / 2), y + Phaser.Math.Between(-4, 3), 'spark').setScale(0.2 / ART).setDepth(y + 4);
-      this.tweens.add({ targets: spark, scale: 0.8 / ART, angle: 90, alpha: 0, delay: i * 110, duration: 420, ease: 'Quad.easeOut', onComplete: () => spark.destroy() });
-    }
-    const glint = this.add.rectangle(x - w / 2, y + 1, 3, 6, 0xffffff, 0.55).setAngle(25).setBlendMode(Phaser.BlendModes.ADD).setDepth(0.58);
-    this.tweens.add({ targets: glint, x: x + w / 2, alpha: 0, duration: 380, ease: 'Sine.easeIn', onComplete: () => glint.destroy() });
-  }
-
-  /** Прибавилась звезда рейтинга — по залу волной бегут золотые искры; побит рекорд выручки — конфетти. */
-  private cheerProgress(): void {
-    const stars = Math.round(this.state.rating);
-    // Рейтинг около «x,5» качается туда-сюда — звезда считается потерянной, только когда он ушёл вниз
-    // заметно: иначе волна искр и звон медали шли на каждое покачивание.
-    if (this.starsCheered < 0 || this.state.rating < this.starsCheered - 0.75) this.starsCheered = stars;
-    if (stars > this.starsCheered) {
-      this.starsCheered = stars;
-      this.starWave();
-    }
-    const best = this.state.records?.revenue?.n;
-    if (!this.recordCheered && this.running && !this.night && best && this.stats.revenue > best) {
-      this.recordCheered = true;
-      this.recordConfetti();
-    }
-  }
-
-  private starWave(): void {
-    sound.medal();
-    if (this.lite) return;
-    const { w, h } = this.layout;
-    for (let i = 0; i < 18; i++) {
-      const x = 8 + (i / 17) * (w - 16);
-      const y = Phaser.Math.Between(20, h - 20);
-      const spark = this.art(x, y, 'spark').setTint(0xfee761).setScale(0).setDepth(LIGHT_DEPTH + 12).setBlendMode(Phaser.BlendModes.ADD);
-      this.tweens.add({
-        targets: spark,
-        scale: { from: 0.2 / ART, to: 1.1 / ART },
-        y: y - 10,
-        angle: 120,
-        alpha: { from: 1, to: 0 },
-        delay: i * 45,
-        duration: 600,
-        ease: 'Quad.easeOut',
-        onComplete: () => spark.destroy(),
-      });
-    }
-  }
-
-  private recordConfetti(): void {
-    const { w } = this.layout;
-    this.popup(w / 2, 40, t('records.broken', { name: t('records.revenue') }), '#fee761');
-    if (!music.sting('record')) sound.fanfare();
-    haptic.success();
-    if (this.lite) return;
-    // Короткая тёплая вспышка света — без тряски.
-    this.cameras.main.flash(220, 255, 246, 210);
-    const confetti = this.add.particles(w / 2, 10, 'confetti', {
-      speed: { min: 50, max: 150 },
-      angle: { min: 30, max: 150 },
-      gravityY: 140,
-      rotate: { min: 0, max: 360 },
-      scale: 1 / ART,
-      lifespan: 1700,
-      tint: [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xb55088],
-      emitting: false,
-    });
-    confetti.setDepth(LIGHT_DEPTH + 10).explode(50);
-    this.time.delayedCall(1900, () => confetti.destroy());
   }
 
   /** После мытья — табличка «Мокрый пол» и влажный блеск, пока пол сохнет. */
@@ -10659,7 +10269,7 @@ export class StoreScene extends Phaser.Scene {
       c.unhappy = true;
       note(this.stats, 'slip');
       this.tweens.add({ targets: c.sprite, angle: { from: -14, to: 12 }, duration: 110, yoyo: true, repeat: 1, onComplete: () => c.sprite.setAngle(0) });
-      this.emote(c.sprite, 'emo_angry');
+      effects.emote(this, c.sprite, 'emo_angry');
       this.popup(c.sprite.x, c.sprite.y - 18, t('popup.slip'), '#ffd0d0');
     }
   }
@@ -10702,9 +10312,9 @@ export class StoreScene extends Phaser.Scene {
     if (piece.getData('rot') && !this.state.seenTips?.includes(ROT_TIP)) this.state = { ...this.state, seenTips: [...(this.state.seenTips ?? []), ROT_TIP] };
     this.trash.delete(piece);
     this.claimedTrash.delete(piece);
-    if (piece.getData('kind') === 'trash') this.puff(piece.x, piece.y);
+    if (piece.getData('kind') === 'trash') effects.puff(this, piece.x, piece.y);
     else {
-      this.bubbles(piece.x, piece.y);
+      effects.bubbles(this, piece.x, piece.y);
       // Мыли шваброй — заодно стёрли и потёртость пола вокруг.
       this.polishFloor(piece.x, piece.y);
     }
@@ -10847,7 +10457,7 @@ export class StoreScene extends Phaser.Scene {
     await this.workerWalk(w, door.x, door.y - 10);
     this.newcomers.delete(w.sprite);
     if (!this.alive(gen)) return;
-    this.emote(w.sprite, 'emo_heart');
+    effects.emote(this, w.sprite, 'emo_heart');
     motion.squash(this, w.sprite, 1.1, 0.9, 120);
     await this.workerWalk(w, w.home.x, w.home.y);
   }
@@ -11141,7 +10751,7 @@ export class StoreScene extends Phaser.Scene {
         if (!this.alive(gen)) return;
         this.toiletDirt = 0;
         this.refreshToilet();
-        this.bubbles(this.layout.wc.x, this.layout.wc.y);
+        effects.bubbles(this, this.layout.wc.x, this.layout.wc.y);
         continue;
       }
       // Делать нечего — натирает шваброй самое потёртое место пола (не чаще раза в POLISH_EVERY_MS).
@@ -11154,7 +10764,7 @@ export class StoreScene extends Phaser.Scene {
         await this.workerWait(w, MOP_MS);
         this.stopMop(w.sprite);
         if (!this.alive(gen)) return;
-        this.bubbles(worn.x, worn.y);
+        effects.bubbles(this, worn.x, worn.y);
         this.polishFloor(worn.x, worn.y);
         continue;
       }
@@ -11768,7 +11378,7 @@ export class StoreScene extends Phaser.Scene {
     if (declines) {
       if (price <= fair) return 'skipped';
       this.popup(c.sprite.x, c.sprite.y - 14, t('popup.expensive'), '#ffd0d0');
-      this.emote(c.sprite, 'emo_pricey');
+      effects.emote(this, c.sprite, 'emo_pricey');
       note(this.stats, 'expensive');
       return 'expensive';
     }
@@ -12079,7 +11689,7 @@ export class StoreScene extends Phaser.Scene {
     this.lastSaleAt = this.time.now;
     this.stats.bestCombo = Math.max(this.stats.bestCombo, this.combo);
     // В серии монет летит больше.
-    this.flyCoins(where?.x ?? at?.counter.x ?? this.layout.counter.x, where?.y ?? at?.counter.y ?? this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)) + Math.min(this.combo - 1, 5));
+    effects.flyCoins(this, where?.x ?? at?.counter.x ?? this.layout.counter.x, where?.y ?? at?.counter.y ?? this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)) + Math.min(this.combo - 1, 5));
     if (this.combo >= 2) this.celebrateCombo(this.combo);
     // Серия от пяти — весь зал оборачивается на кассу.
     if (this.combo === 5 || this.combo === 10) this.everyoneLooks(this.layout.counter.x, this.layout.counter.y, 'emo_star');
@@ -12096,11 +11706,11 @@ export class StoreScene extends Phaser.Scene {
       else if (smelly) note(this.stats, 'smell');
       const why = badGoods ? t('popup.badProduct') : dirty ? t('popup.dirty') : smelly ? t('popup.smell') : '😣';
       this.popup(c.sprite.x, c.sprite.y - 26, why, '#ffd0d0');
-      this.emote(c.sprite, 'emo_angry');
+      effects.emote(this, c.sprite, 'emo_angry');
       this.setMood(c.sprite, 'frown');
     } else {
       this.setMood(c.sprite, 'happy', 2500);
-      if (Math.random() < 0.5) this.emote(c.sprite, 'emo_heart');
+      if (Math.random() < 0.5) effects.emote(this, c.sprite, 'emo_heart');
     }
     this.layoutQueue();
     if (this.state.onboarding && !onbDone(this.state, 'sale')) this.firstSale(total);
@@ -12141,7 +11751,7 @@ export class StoreScene extends Phaser.Scene {
     haptic.error();
     sound.bad();
     this.popup(c.sprite.x, c.sprite.y - 14, t('popup.leftAngry'), '#ffd0d0');
-    this.emote(c.sprite, 'emo_angry');
+    effects.emote(this, c.sprite, 'emo_angry');
     this.setMood(c.sprite, 'frown');
     this.layoutQueue();
     await this.leave(c);
@@ -12468,7 +12078,7 @@ export class StoreScene extends Phaser.Scene {
     }
     if (res.rating > 0) this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `★ +${res.rating}`, '#fee761'));
     if (res.rating < 0) this.time.delayedCall(500, () => this.popup(sprite.x, sprite.y - 26, `★ ${res.rating}`, '#ffd0d0'));
-    this.emote(sprite, yes ? 'emo_heart' : 'emo_angry');
+    effects.emote(this, sprite, yes ? 'emo_heart' : 'emo_angry');
     if (yes && visit.kind === 'business') sprite.add(this.art(0, 3, 'box'));
     if (yes) sprite.add(this.art(5, 1, `item_${visit.product}`).setScale(1 / ART));
     await this.wait(1200);
@@ -12503,7 +12113,7 @@ export class StoreScene extends Phaser.Scene {
     if (!sprite.active) return;
     this.setFacing(sprite, 'right');
     this.popup(sprite.x, sprite.y - 18, line, '#fff3b0');
-    this.emote(sprite, 'emo_heart');
+    effects.emote(this, sprite, 'emo_heart');
     onArrive?.();
     await this.wait(2200);
     if (carriesBox && sprite.active) sprite.add(this.art(0, 3, 'box'));
@@ -12524,7 +12134,7 @@ export class StoreScene extends Phaser.Scene {
     ]);
     if (!sprite.active) return;
     this.setFacing(sprite, 'up');
-    this.emote(sprite, 'emo_question');
+    effects.emote(this, sprite, 'emo_question');
     this.popup(sprite.x, sprite.y - 18, t('popup.eduard'), '#d0e0ff');
     await this.wait(2500);
     // Его магазин за дорогой, напротив входа — переходит по зебре; иначе — по соседству справа.
@@ -12792,202 +12402,13 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Пауза, которая переживает перестройку мира: для сцен, что перестраивают его сами (расширение). */
-  private delay(ms: number): Promise<void> {
+  delay(ms: number): Promise<void> {
     return new Promise((resolve) => this.time.delayedCall(ms, resolve));
   }
 
-  /**
-   * Всплывающая надпись: жирная, на тёмной плашке-пилюле со светлой полоской сверху и хвостиком к тому,
-   * над кем всплыла. Эмодзи, у которых в меню есть пиксельный значок, — тем же значком, а не эмодзи телефона.
-   * Выпрыгивает из кончика хвостика, потом поднимается и тает. На слабом телефоне — без хвостика и полоски.
-   */
-  private popup(x: number, y: number, text: string, color: string): void {
-    this.popups = this.popups.filter((p) => p.box.active);
-    const hold = Math.min(1800, 500 + 40 * text.length);
-    // Та же фраза ещё висит — не новая надпись, а счётчик: «Ушёл без покупки! ×3».
-    const same = this.popups.find((p) => p.text === text);
-    if (same) {
-      same.count++;
-      // Прежние выпрыгивание и таяние — прочь: иначе конец выпрыгивания запустил бы второе таяние.
-      this.tweens.killTweensOf(same.box);
-      this.fillPopup(same, `${text} ×${same.count}`);
-      same.box.setAlpha(1).setY(same.y);
-      this.tweens.add({ targets: same.box, scale: { from: 1.2, to: 1 }, duration: 180, ease: 'Back.easeOut' });
-      this.fadePopup(same, hold);
-      return;
-    }
-    // Кончик хвостика — чуть ниже точки: плашка висит над головой, хвостик указывает на макушку.
-    const bg = this.add.graphics();
-    const box = this.add.container(x, y + 4, [bg]).setDepth(1000).setScale(0.4);
-    const entry: Popup = { box, bg, text, color, count: 1, x, y: box.y, w: 0, h: 0, dx: 0, tail: !this.lite };
-    this.fillPopup(entry, text);
-    // Не налезать на другие надписи: если место занято — встаём над ними. Хвостик тогда показал бы
-    // на соседнюю надпись, а не на хозяина, — без него.
-    let stacked = false;
-    for (let i = 0; i < 6; i++) {
-      const hit = this.popups.find((p) => Phaser.Geom.Intersects.RectangleToRectangle(this.popupRect(entry), this.popupRect(p)));
-      if (!hit) break;
-      box.y = this.popupRect(hit).y - 1 + POPUP.tail;
-      stacked = true;
-    }
-    entry.y = box.y;
-    if (stacked && entry.tail) {
-      entry.tail = false;
-      this.drawPopupBg(entry);
-    }
-    this.popups.push(entry);
-    this.tweens.add({ targets: box, scale: 1, duration: 220, ease: 'Back.easeOut', onComplete: () => this.fadePopup(entry, hold) });
-  }
-
-  /**
-   * Содержимое надписи: текст кусками, а эмодзи из ICONS (ui/dom.ts) — пиксельными значками, как в меню
-   * (значки меню — из атласа 'ico', монета, товары и коробка — свои картинки). Длинная фраза переносится
-   * по словам, чтобы не вылезать за край магазина. Размер плашки и сдвиг от хвостика — в entry.
-   */
-  private fillPopup(e: Popup, text: string): void {
-    // Прежнее содержимое (при склейке «×N») — прочь, фон остаётся первым, под всем.
-    for (const o of e.box.list.filter((o) => o !== e.bg)) o.destroy();
-    const maxW = Math.min(110, this.layout.w - 10);
-    // Слова (с пробелом после) и значки по порядку; нечётные куски split — эмодзи из таблицы.
-    type Bit = { text: string; key?: string };
-    const bits: Bit[] = [];
-    text.split(ICON_RE).forEach((part, i) => {
-      const key = i % 2 ? ICONS[part] : undefined;
-      if (key && this.hasIcon(key)) bits.push({ text: part, key });
-      else for (const word of part.match(/\S+\s*|\s+/g) ?? []) bits.push({ text: word });
-    });
-    const iconW = (key: string) => {
-      const f = this.iconFrame(key);
-      return (f.width * POPUP.icon) / f.height + 2 * POPUP.gap;
-    };
-    const lines: Bit[][] = [[]];
-    let lineW = 0;
-    for (const bit of bits) {
-      const w = bit.key ? iconW(bit.key) : popupTextWidth(bit.text);
-      if (lineW > 0 && lineW + (bit.key ? w : popupTextWidth(bit.text.trimEnd())) > maxW) {
-        lines.push([]);
-        lineW = 0;
-      }
-      // Пробелы в начале строки после переноса не нужны.
-      if (lineW === 0 && !bit.key && !bit.text.trim()) continue;
-      lines[lines.length - 1].push(bit);
-      lineW += w;
-    }
-    // Строка: соседние слова — одним текстом, значки — картинками; пробелы по краям строки не в счёт.
-    const rows = lines.map((line) => {
-      const runs: Bit[] = [];
-      for (const bit of line) {
-        const last = runs[runs.length - 1];
-        if (!bit.key && last && !last.key) last.text += bit.text;
-        else runs.push({ ...bit });
-      }
-      if (runs.length && !runs[0].key) runs[0].text = runs[0].text.trimStart();
-      if (runs.length && !runs[runs.length - 1].key) runs[runs.length - 1].text = runs[runs.length - 1].text.trimEnd();
-      const items = runs
-        .filter((r) => r.key || r.text)
-        .map((r) => {
-          if (r.key) return this.popupIcon(r.key);
-          return this.add.text(0, 0, r.text, { fontFamily: UI_FONT, fontSize: POPUP.font, fontStyle: 'bold', color: e.color, resolution: this.textRes(5) }).setOrigin(0, 0.5);
-        });
-      const gaps = (o: Phaser.GameObjects.Image | Phaser.GameObjects.Text) => (o instanceof Phaser.GameObjects.Image ? 2 * POPUP.gap : 0);
-      return {
-        items,
-        w: items.reduce((sum, o) => sum + o.displayWidth + gaps(o), 0),
-        h: Math.max(POPUP.icon, ...items.map((o) => o.displayHeight)),
-      };
-    });
-    e.w = Math.max(...rows.map((r) => r.w)) + 2 * POPUP.padX;
-    e.h = rows.reduce((sum, r) => sum + r.h, 0) + 2 * POPUP.padY;
-    // Длинная надпись не вылезает за край магазина: плашка сдвигается, хвостик остаётся над хозяином.
-    const half = e.w / 2 + 2;
-    e.dx = Phaser.Math.Clamp(e.x, half, Math.max(half, this.layout.w - half)) - e.x;
-    let y = -POPUP.tail - e.h + POPUP.padY;
-    for (const row of rows) {
-      let x = e.dx - row.w / 2;
-      for (const o of row.items) {
-        const gap = o instanceof Phaser.GameObjects.Image ? POPUP.gap : 0;
-        // Значок чуть выше середины строки — вровень с заглавными буквами, а не с хвостиками «у» и «р».
-        o.setPosition(x + gap, y + row.h / 2 - (gap ? 0.5 : 0));
-        x += o.displayWidth + 2 * gap;
-      }
-      y += row.h;
-      e.box.add(row.items);
-    }
-    this.drawPopupBg(e);
-  }
-
-  /** Есть ли картинка для значка: значки меню — кадры атласа 'ico', остальное — отдельные текстуры. */
-  private hasIcon(key: string): boolean {
-    return key.startsWith('ico_') ? this.textures.get('ico').has(key) : this.textures.exists(key);
-  }
-
-  /** Кадр значка — по его размеру строка переносится ещё до того, как значок создан. */
-  private iconFrame(key: string): Phaser.Textures.Frame {
-    return key.startsWith('ico_') ? this.textures.getFrame('ico', key) : this.textures.getFrame(key);
-  }
-
-  /** Значок в надписи — высотой POPUP.icon, как в меню (там все значки в строку высотой 1,15 буквы). */
-  private popupIcon(key: string): Phaser.GameObjects.Image {
-    const img = key.startsWith('ico_') ? this.add.image(0, 0, 'ico', key) : this.add.image(0, 0, key);
-    return img.setOrigin(0, 0.5).setScale(POPUP.icon / img.height);
-  }
-
-  /** Фон надписи: тёмная пилюля, светлая полоска сверху — тоном надписи — и хвостик к тому, над кем всплыла. */
-  private drawPopupBg(e: Popup): void {
-    const { w, h, dx } = e;
-    const r = POPUP.radius;
-    const left = dx - w / 2;
-    const top = -POPUP.tail - h;
-    const g = e.bg.clear();
-    if (this.lite) {
-      g.fillStyle(0x181425, 0.85);
-      this.fillPill(g, left, top, w, h);
-      return;
-    }
-    // Мягкая тень на пиксель ниже — плашка чуть приподнята над полом.
-    g.fillStyle(0x0b0911, 0.3);
-    this.fillPill(g, left, top + 1, w, h);
-    g.fillStyle(0x181425, 0.85);
-    this.fillPill(g, left, top, w, h);
-    g.fillStyle(Phaser.Display.Color.HexStringToColor(e.color).color, 0.35).fillRect(left + r, top + 1, w - 2 * r, 1);
-    if (!e.tail) return;
-    // Хвостик — от низа плашки к точке 0, 0; если плашка прижата к стене — не на скруглении, а рядом.
-    const bx = Phaser.Math.Clamp(0, left + r + 2.5, left + w - r - 2.5);
-    g.fillStyle(0x181425, 0.85).fillTriangle(bx - 2.5, -POPUP.tail, bx + 2.5, -POPUP.tail, Phaser.Math.Clamp(0, bx - 2, bx + 2), 0);
-  }
-
-  /**
-   * Плашка со ступенчатыми пиксельными углами из пяти прямоугольников без наложений (прозрачность ровная).
-   * fillRoundedRect в WebGL каждый кадр заново режет 4 дуги на ~400 точек — а надписей бывает много сразу.
-   */
-  private fillPill(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number): void {
-    g.fillRect(x + 2, y, w - 4, 1)
-      .fillRect(x + 1, y + 1, w - 2, 1)
-      .fillRect(x, y + 2, w, h - 4)
-      .fillRect(x + 1, y + h - 2, w - 2, 1)
-      .fillRect(x + 2, y + h - 1, w - 4, 1);
-  }
-
-  /** Где плашка надписи в мире — чтобы новые надписи не налезали на прежние. */
-  private popupRect(p: Popup): Phaser.Geom.Rectangle {
-    return new Phaser.Geom.Rectangle(p.box.x + p.dx - p.w / 2, p.box.y - POPUP.tail - p.h, p.w, p.h);
-  }
-
-  /** Надпись повисит и уплывёт вверх, растворяясь. */
-  private fadePopup(entry: Popup, hold: number): void {
-    const { box } = entry;
-    this.tweens.add({
-      targets: box,
-      y: box.y - 12,
-      alpha: 0,
-      delay: hold,
-      duration: 600,
-      ease: 'Quad.easeIn',
-      onComplete: () => {
-        box.destroy();
-        this.popups = this.popups.filter((p) => p !== entry);
-      },
-    });
+  /** Переходник к effects.popup: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
+  popup(x: number, y: number, text: string, color: string): void {
+    return effects.popup(this, x, y, text, color);
   }
 
   // ---------- День ----------
@@ -13123,7 +12544,7 @@ export class StoreScene extends Phaser.Scene {
         if (staffChanged) for (const m of s.staff) if (!was.staff.some((o) => staffKey(o) === staffKey(m))) this.newHires.add(staffKey(m));
         this.state = s;
         saveGame(s);
-        if (s.level > this.builtLevel) void this.celebrateExpansion();
+        if (s.level > this.builtLevel) void effects.celebrateExpansion(this);
         else if (s.level !== this.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== this.builtEduard || giantLook(s) !== this.builtGiant || branchLook(s) !== this.builtBranch || hoodLook(s) !== this.builtHood) this.buildWorld(bought);
         else if (staffChanged) this.syncStaff();
         if (adsChanged) this.applyAds();
@@ -13376,7 +12797,7 @@ export class StoreScene extends Phaser.Scene {
     if (mark === this.praisedAt) return;
     this.praisedAt = mark;
     const n = this.praised++ % 3;
-    this.emote(granny, 'emo_heart');
+    effects.emote(this, granny, 'emo_heart');
     this.setMood(granny, 'happy', 2500);
     this.grannySays({ id: `praise${this.praised}`, text: t(`first.praise.${n}` as TextKey), mood: 'happy', hold: 2200 });
   }
@@ -13467,7 +12888,7 @@ export class StoreScene extends Phaser.Scene {
     if (!playDayOne(this.state)) return;
     const granny = this.granny;
     if (granny?.active) {
-      this.emote(granny, 'emo_heart');
+      effects.emote(this, granny, 'emo_heart');
       this.setMood(granny, 'happy', 3000);
       if (!this.lite) this.tweens.add({ targets: granny, y: granny.y - 4, duration: 140, yoyo: true, repeat: 1, ease: 'Quad.easeOut' });
     }
@@ -13781,8 +13202,8 @@ export class StoreScene extends Phaser.Scene {
       onComplete: () => {
         sound.boxLand(img.x);
         ripped = sound.unbox(img.x, 0.06);
-        this.puff(img.x - 7 * s, bottom);
-        this.puff(img.x + 7 * s, bottom);
+        effects.puff(this, img.x - 7 * s, bottom);
+        effects.puff(this, img.x + 7 * s, bottom);
         this.tweens.add({ targets: box, scaleX: s * 1.18, scaleY: s * 0.8, duration: 90, yoyo: true, completeDelay: 80, ease: 'Quad.easeOut', onComplete: open });
       },
     });
