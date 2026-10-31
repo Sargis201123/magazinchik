@@ -67,6 +67,7 @@ import * as motion from './motion';
 import * as effects from './effects';
 import * as deliveries from './deliveries';
 import * as food from './food';
+import * as shoppers from './shoppers';
 
 // ---------- Продавец: уборка и выкладка ----------
 
@@ -740,7 +741,7 @@ export async function reliefLoop(scene: StoreScene, w: Worker, gen: number): Pro
       await scene.wait(150);
       continue;
     }
-    await scene.scanCustomer(r, front, withUpgrades(scene.state, cashierScan(w.member)), false);
+    await shoppers.scanCustomer(scene, r, front, withUpgrades(scene.state, cashierScan(w.member)), false);
   }
 }
 
@@ -757,7 +758,7 @@ export async function cashierLoop(scene: StoreScene, w: Worker, gen: number, ind
       await scene.wait(100);
       continue;
     }
-    await scene.scanCustomer(r, front, withUpgrades(scene.state, cashierScan(w.member)), false);
+    await shoppers.scanCustomer(scene, r, front, withUpgrades(scene.state, cashierScan(w.member)), false);
   }
 }
 

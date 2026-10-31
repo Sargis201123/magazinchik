@@ -1,23 +1,16 @@
 import Phaser from 'phaser';
 import {
-  BAD_COMPLAINT_CHANCE,
-  buyChance,
-  CHEAP_RATIO,
   canPlace,
   promoKind,
   PRODUCTS,
   SHELF_LEVELS,
-  checkout,
   DAY_SECONDS,
   emptyDayStats,
   billTotal,
-  guardCatchChance,
   markdownSurplus,
   markdownExpiring,
   expiringIn,
   SHELF_KINDS,
-  thiefChance,
-  hasUnmarkedBad,
   shelveAll,
   newGame,
   PRODUCT_IDS,
@@ -29,41 +22,20 @@ import {
   slotOf,
   STORE_LEVELS,
   HYPER_LEVEL,
-  sellableProducts,
   storeLevel,
   takeFromShelf,
-  recordSale,
   unitSalePrice,
-  checkoutSeconds,
-  ownerLevel,
-  type ScanTiming,
   warehouseCapacity,
   warehouseCount,
   type Category,
   type DayStats,
-  type LostReason,
   type ProductId,
   type StaffRole,
   type StoreState,
 } from '../game/economy';
-import { ensurePlan, inspectionDone, nightCycle, spawnIntervalToday } from '../game/day';
-import { inspect, RUSH_SECONDS, type InspectionResult } from '../game/events';
-import {
-  ALBUM_REWARD,
-  collectRareGuest,
-  perceivedBase,
-  pickRareGuest,
-  pickWanted,
-  questDone,
-  questProgress,
-  payQuests,
-  rankName,
-  rankOf,
-  RARE_GUESTS,
-  RARE_TIP,
-  rareGuestChance,
-  seasonFor,
-} from '../game/endless';
+import { ensurePlan, nightCycle, spawnIntervalToday } from '../game/day';
+import { RUSH_SECONDS, type InspectionResult } from '../game/events';
+import { pickWanted, questDone, questProgress, payQuests, rankName, rankOf, RARE_GUESTS, seasonFor } from '../game/endless';
 import { lastSavedAt, loadGame, pauseSaving, saveGame, savingPaused } from '../game/save';
 import { friendState } from '../game/friendShop';
 import { presentGiven, presentsOn, showGiftPicker } from '../ui/presents';
@@ -72,7 +44,7 @@ import { fetchRivalShop, rivalAct, rivalInbox, thankRival } from '../platform/ri
 import { rivalBar, showRivalNews } from '../ui/rival';
 import { awayTrade } from '../game/away';
 import { branchAway, branchLook } from '../game/branch';
-import { hoodLook, hoodTips } from '../game/hood';
+import { hoodLook } from '../game/hood';
 import { getLang, t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
@@ -96,26 +68,21 @@ import { haptic, telegramUserId, trustedNow } from '../platform/telegram';
 import { button, el, openModal, toast, UI_FONT } from '../ui/dom';
 import {
   BIG_DAYS,
-  BLACKOUT_CHECKOUT,
   BLACKOUT_UNTIL,
   ROBBERY_AT,
   ROBBERY_RATING,
   ROBBERY_RELEASE,
   ROBBERY_STORM,
-  bigDayExtraItems,
   bigDayFor,
   bigDayNightGuests,
   bigDayProgress,
   blackoutWarm,
   CROWD_EXTRA_GUESTS,
-  CROWD_PATIENCE,
   filmingReward,
   fulfillWedding,
   isCrowdDay,
-  MASKS,
   quakeBreak,
   setBigDaySeed,
-  ROADWORKERS,
   TOURISTS,
   weddingOrder,
   weddingText,
@@ -134,20 +101,19 @@ import { yearTime } from '../game/calendar';
 import { liveProgress, recordDay, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
 import { claimGift, giftTomorrow } from '../game/gift';
-import { adExtraItems, adGuests, adRareBoost, adTrust } from '../game/ads';
-import { companionOf, livedRegular } from '../game/life';
-import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular } from '../game/regulars';
-import { CART_SHARE, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, loyaltyTolerance, withUpgrades } from '../game/upgrades';
+import { adGuests } from '../game/ads';
+import { regularById } from '../game/regulars';
+import { ETAGS_EVENING, eveningSales, hasUpgrade, withUpgrades } from '../game/upgrades';
 import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskTier } from '../game/lanes';
 import { showGift } from '../ui/gift';
 import { collectOrder, dropOrder, noteSeen, openChest, orderTeaser, planLetter, planOrder, stashAway, takeLetter } from '../game/returns';
 import { showReturn } from '../ui/returns';
 import { activeDecor, decorFromPurchases, grantDecor } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
-import { DOG_DAY_CATCH, hasDog, hasWatchman } from '../game/watch';
+import { hasDog, hasWatchman } from '../game/watch';
 import { contestOf, juryDay } from '../game/contest';
 import { dramaHeld, sonyaVisits, sunflowersPlanted } from '../game/drama';
-import { activeEvent, guestCoins, guestDue, liveLook, seeGuest, type GuestId } from '../game/live';
+import { activeEvent, guestDue, liveLook, type GuestId } from '../game/live';
 import { liveEvents, loadLiveEvents, todayLocal } from '../platform/live';
 import { comebackHooks } from '../game/comeback';
 import { askForHelp, askWriteAccessOnce, claimHelp, sendHelp, socialInfo, socialPing, WELCOME_GIFT } from '../platform/social';
@@ -159,26 +125,15 @@ import { firstGiftCard, firstSaleStamp, SayBubble, type SayLine } from '../ui/on
 import { TUT_IGNORE_MS, TUT_WAIT_MS, tutAt, tutDayEnd, tutIndex, tutMorning, tutNext, tutPass, tutPatient, tutSkip, tutStep, tutTell, type TutStep } from '../game/tutorial';
 import { Coach, type Spot } from '../ui/coach';
 import { shareDay } from '../platform/shareCard';
-import { duelInfo, fetchFriendShop, loadMultiplayer, treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
+import { duelInfo, fetchFriendShop, loadMultiplayer, treatFriend } from '../platform/multiplayer';
 import { friendsAtWork } from '../game/staff';
 import { ensureSeason, grantPass } from '../game/pass';
 import { grantSupport } from '../game/support';
 import { ensureRush } from '../game/rush';
-import { kitchenOpen, servePortions, stockKitchen } from '../game/kitchen';
+import { kitchenOpen, stockKitchen } from '../game/kitchen';
 import { activeTrick, seeTrickResult, trickResult } from '../game/tricks';
-import {
-  answerNightStory,
-  BUSKER_GUESTS,
-  DEBT_UNITS,
-  debtLabel,
-  debtProduct,
-  NIGHT_GUEST_TYPES,
-  nightStory,
-  pickNightGuest,
-  STORY_GUEST,
-  type NightStoryId,
-} from '../game/nightGuests';
-import { districtGuest, districtKey } from '../game/district';
+import { answerNightStory, BUSKER_GUESTS, DEBT_UNITS, debtLabel, debtProduct, nightStory, STORY_GUEST, type NightStoryId } from '../game/nightGuests';
+import { districtKey } from '../game/district';
 import { reportError, setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propFootprint, propIssues, propPosFor, propRect, savedLayout, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withTill, type Prop } from './placement';
 import {
@@ -204,49 +159,30 @@ import { Halo, personGlow } from './halo';
 import { castsShadow, FloorShade, furnitureCasters, type WearLayer } from './floor';
 import { decodeWear, wearGrid, type WearGrid } from '../game/wear';
 import { dayDemand } from '../game/demand';
-import { CLASH_FACTOR, PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
+import { PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { BARGAIN_CHANCE, BARGAIN_PER_ROW, bargainCapacity, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
-import { smellChance } from '../game/rot';
 import { Rotting } from './rotting';
-import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
-import { charmPatience, eyeTheft, ownerTiming } from '../game/owner';
+import { ownerTiming } from '../game/owner';
 import { EDUARD_STAGES, eduardLook, eduardStage, type EduardLook } from '../game/eduard';
 import { updateRecords } from '../game/records';
 import { cafeDeliver, type CafeDelivery } from '../game/cafe';
 import { answerSpecial, grannyRepays, makeSpecial, type SpecialKind, type SpecialVisit } from '../game/special';
 import { showChoice } from '../ui/choice';
 import { BRAND_BATCH } from '../game/brand';
-import { hasRadio, radioPatience, radioTolerance, radioSpeed } from '../game/radio';
+import { hasRadio, radioSpeed } from '../game/radio';
 import { liveEventsFor, type LiveKind } from '../game/minievents';
 import { momentGain, momentsFor, noteMoment, type MomentKind } from '../game/moments';
 import { Moments } from './moments';
 import { questRows } from '../ui/today';
-import {
-  bargainRows,
-  bargainSprite,
-  binCapacity,
-  binSprite,
-  cameraTheft,
-  climatePatience,
-  entranceMud,
-  fridgeLeak,
-  gearTier,
-  type GearId,
-  signagePatience,
-  REGISTER_JAM_SECONDS,
-  registerJam,
-  registerSprite,
-  wcDirt,
-} from '../game/gear';
+import { bargainRows, bargainSprite, binCapacity, binSprite, fridgeLeak, gearTier, type GearId, registerSprite } from '../game/gear';
 import { idleRegisters, nextRegisterCount, nextRegisterPrice, registerSlots, RELIEF_ROLE, tillRole } from '../game/registers';
 import { seeTip } from '../game/tips';
-import { AROMA_TOLERANCE, sellWholesale, takeOutBread } from '../game/bakery';
-import { canWorkNight, NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from '../game/night';
-import { CAT_TIP, catHome, catPatience, catTipChance } from '../game/cat';
-import { note, reviewsFor } from '../game/reviews';
-import { warLeaves } from '../game/war';
-import { lossAdvice, noteLost } from '../game/losses';
-import { fairTolerance, isFairDay } from '../game/fair';
+import { sellWholesale, takeOutBread } from '../game/bakery';
+import { canWorkNight, NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, startNight } from '../game/night';
+import { catHome } from '../game/cat';
+import { reviewsFor } from '../game/reviews';
+import { lossAdvice } from '../game/losses';
+import { isFairDay } from '../game/fair';
 import { deferLiteNote, fpsSummary, fpsVerdict, lowerQuality, quality, qualityChosen, takeLiteNote, type Quality } from '../platform/quality';
 import { cleanHall, dreamShelf, firstDayGift, firstDayRating, gentleDay, GRANNY_SCAN_SLOW, grannyServesAfter, grannyStays, grannyStocksNow, praiseAt, quietDays } from '../game/firstday';
 import { framesThrottled, modalOpen } from '../platform/frameCap';
@@ -273,9 +209,6 @@ import {
   HEADLIGHT_POWER,
   CAR_TYPES,
   type Popup,
-  FRIEND_VISITS,
-  FRIEND_TIP,
-  FRIEND_GIFT,
   LIGHT_DEPTH,
   QUAKE_WAVE_MS,
   QUAKE_SHAKE_PX,
@@ -288,34 +221,22 @@ import {
   NEW_TAG_MS,
   ITEM_VARIANTS,
   PATIENCE_MS,
-  FIRST_PATIENCE,
   ONB_FIRST_AT,
   ONB_HELLO_AT,
   ONB_NEXT_GUEST,
   ONB_BYE_AFTER,
   ONB_ROAD_MS,
   GRANNY_SPEED,
-  GRANNY_PATIENCE_MS,
-  GRANNY_SHELF_WAIT_MS,
   STREET_TAP_MS,
   CUSTOMER_SPEED,
-  SELLER_SPEED,
   RUN_PACE,
   KIOSK_GLOW,
   KIOSK_ALARM,
-  RELIEF_TAP_MS,
-  RELIEF_HURRY_MAX_MS,
-  RELIEF_HURRY_SHARE,
   BARGAIN_BOTTOM,
   BARGAIN_BASE,
   BARGAIN_STEP,
-  TRASH_CHANCE,
-  TRASH_COMPLAINT,
-  MUD_CHANCE,
-  MAX_MUD,
   BAG_MS,
   DUMP_MS,
-  SPILL_CHANCE,
   SPILL_TINTS,
   LIVE_WINDOW,
   LIVE_WINDOWS,
@@ -324,9 +245,6 @@ import {
   AUTO_CHECK_SECONDS,
   FIX_MS,
   LEAK_FIX_MS,
-  COMBO_WINDOW_MS,
-  TOILET_CHANCE,
-  TOILET_DIRT_PER_VISIT,
   TOILET_DIRTY,
   PICKUP_MS,
   PLACE_MS,
@@ -345,8 +263,6 @@ import {
   OWN_SPEED,
   QUEUE_SNUG,
   QUEUE_STAGGER,
-  DOOR_TURN,
-  DOOR_EDGE,
   TURN_MS,
   LANE_SPEED,
   LANE_EVERY,
@@ -358,20 +274,14 @@ import {
   HAT_COLORS,
   DOG_COLORS,
   customerLook,
-  nightLook,
   nightGuestLook,
   withCompanionItems,
-  THIEF_SHIRT,
   type ParkSpot,
   type ParkingLot,
   type RoadCar,
   SIDE_SHOP_X,
   SIDE_SHOP_W,
   CAR_COLORS,
-  THIEF_SPEED,
-  STAFF_SPEED,
-  INSPECTOR_SHIRT,
-  VALYA,
   GRANDMA,
   EDUARD,
   FRONT_ONLY,
@@ -380,11 +290,8 @@ import {
   ownerLook,
   INSPECTOR_AT,
   SONYA_AT,
-  SONYA,
   LIVE_GUEST_AT,
-  LIVE_GUEST_LOOKS,
   JURY_AT,
-  JURY_LOOKS,
   BROKEN_TINT,
   SKINS,
   type Customer,
@@ -418,6 +325,7 @@ import * as food from './food';
 import * as streets from './streets';
 import * as cars from './cars';
 import * as staff from './staff';
+import * as shoppers from './shoppers';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -460,7 +368,7 @@ export class StoreScene extends Phaser.Scene {
   shelfViews: ShelfView[] = [];
   /** Сколько раз перерисовывали полки: толчок по нему узнаёт, что товар на картинках уже другой. */
   /** Толчок: уронить разбитое, до чего волна ещё не дошла, — сразу, пока полки не перерисовали. */
-  private quakeFlush?: () => void;
+  quakeFlush?: () => void;
   private boxes: Phaser.GameObjects.Image[] = [];
   private shutters: Phaser.GameObjects.Image[] = [];
   private arrow?: Phaser.GameObjects.Image;
@@ -474,7 +382,7 @@ export class StoreScene extends Phaser.Scene {
   private tutTracked: TutStep | null = null;
   private tutIdleMs = 0;
   private tutShownMs = 0;
-  private granny?: Phaser.GameObjects.Container;
+  granny?: Phaser.GameObjects.Container;
   /** Коробка в руках бабушки (раскладывает полку в первый день, firstday.ts). */
   private grannyBox?: Phaser.GameObjects.Image;
   /** Бабушка занята делом (полка, касса) в этой постройке зала: worldGen, при котором дело начато. */
@@ -647,7 +555,7 @@ export class StoreScene extends Phaser.Scene {
   /** Лёгкая графика: без виньетки и облаков (холст поменьше — со следующего запуска). */
   lite = this.gfx === 'lite';
   /** Покупатель только что взял товар (tryTake): с каких мест полки — reachShelf пускает его оттуда. */
-  private takenFrom: TakenSpot[] = [];
+  takenFrom: TakenSpot[] = [];
   /** Посекундные замеры FPS за день: медиана уходит в аналитику, при тормозах — лёгкая графика. */
   private fpsSamples: number[] = [];
   private fpsFrames = 0;
@@ -668,7 +576,7 @@ export class StoreScene extends Phaser.Scene {
   /** Кассы самообслуживания (сколько куплено) — у правой стены над кассами. */
   kiosks: Kiosk[] = [];
   /** Когда последний раз всплывало «быстрее» над кассой (касания сменщику). */
-  private lastHurry = 0;
+  lastHurry = 0;
   /** Сменщик дошёл до кассы хозяина и пробивает (новенький — с той минуты, как встал за неё). */
   reliefReady = false;
   /** Мини-событие дня: что сейчас происходит и всё, что его рисует. */
@@ -693,11 +601,11 @@ export class StoreScene extends Phaser.Scene {
   /** Линия тротуара, по которой ходят прохожие и приходят покупатели. */
   streetY = 0;
   /** За сегодня: сколько покупателей пробил сам хозяин и скольких из них — касанием улицы (аналитика). */
-  private serves = { owner: 0, street: 0 };
+  serves = { owner: 0, street: 0 };
   customers = new Set<Customer>();
-  private queue: Customer[] = [];
+  queue: Customer[] = [];
   /** Сколько встало в очередь за всё время: чётный — ровно, нечётный — чуть левее (queueSpot). */
-  private queueTurn = 0;
+  queueTurn = 0;
   trash = new Set<Phaser.GameObjects.Image>();
   /** Мусор, за которым уже кто-то пошёл. */
   claimedTrash = new Set<Phaser.GameObjects.Image>();
@@ -724,8 +632,8 @@ export class StoreScene extends Phaser.Scene {
   lastCall = 0;
   timeLeft = DAY_SECONDS;
   /** Инспектор: 'pending' — ещё не пришёл, 'here' — ходит по залу, 'done' — ушёл. */
-  private inspector: 'none' | 'pending' | 'here' | 'done' = 'none';
-  private inspection: InspectionResult | null = null;
+  inspector: 'none' | 'pending' | 'here' | 'done' = 'none';
+  inspection: InspectionResult | null = null;
   private rushAnnounced = false;
   /** «Позвать на помощь»: до какого момента видна кнопка и ждём ли окно «Поделиться» (help.ts). */
   private helpUntil = 0;
@@ -793,10 +701,10 @@ export class StoreScene extends Phaser.Scene {
   ambLife: AmbLife = { customers: 0, morning: 0, newYear: false, lateAutumn: false, night: false, lite: false, neon: null };
   /** Для какого состояния посчитаны работающие кассы (звук зала). */
   tillsFor: StoreState | null = null;
-  private valyaCame = false;
+  valyaCame = false;
   /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
-  private combo = 0;
-  private lastSaleAt = -Infinity;
+  combo = 0;
+  lastSaleAt = -Infinity;
   private nextSpawn = 1;
   running = false;
   /** Подсказка «что дальше» в зале (game/nudge.ts): когда игрок последний раз касался экрана, какая подсказка и до каких пор. */
@@ -843,11 +751,11 @@ export class StoreScene extends Phaser.Scene {
   private nightWatch: Phaser.GameObjects.GameObject[] = [];
   /** Сколько кубков стоит на прилавке; жюри конкурса сегодня: ждём, пришло, ушло. */
   builtCup = 0;
-  private jury: 'none' | 'pending' | 'here' | 'done' = 'none';
+  jury: 'none' | 'pending' | 'here' | 'done' = 'none';
   /** Соня сегодня заглянет в магазин (сюжет «Папа и Соня»). */
-  private sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
+  sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
   /** Праздничный гость сегодня (game/live.ts): кто, ждём / пришёл / ушёл и настоящая дата визита. */
-  private liveGuest: { who: GuestId; phase: 'pending' | 'here' | 'done'; date: string } | null = null;
+  liveGuest: { who: GuestId; phase: 'pending' | 'here' | 'done'; date: string } | null = null;
   catHome = { x: 0, y: 0 };
   catOut = false;
   /** Кот сидит посреди зала: таймер, который водит его хвостом, моргает и умывает (есть, пока сидит). */
@@ -1122,10 +1030,10 @@ export class StoreScene extends Phaser.Scene {
     }
     // Час пик или очередь до двери — можно позвать друзей на помощь (кнопка держится ещё пару секунд).
     if (!this.night && (rush || this.queue.length >= HELP_QUEUE)) this.helpUntil = this.time.now + HELP_HOLD;
-    if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void this.runInspector();
-    if (!this.night && this.jury === 'pending' && elapsed >= JURY_AT) void this.runJury();
+    if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void shoppers.runInspector(this);
+    if (!this.night && this.jury === 'pending' && elapsed >= JURY_AT) void shoppers.runJury(this);
     if (!this.night && this.sonya === 'pending' && elapsed >= SONYA_AT) void this.runSonya();
-    if (!this.night && this.liveGuest?.phase === 'pending' && elapsed >= LIVE_GUEST_AT) void this.runLiveGuest();
+    if (!this.night && this.liveGuest?.phase === 'pending' && elapsed >= LIVE_GUEST_AT) void shoppers.runLiveGuest(this);
     if (!this.night) this.moments.tick(elapsed, deltaMs);
 
     if (this.timeLeft > 0) {
@@ -1148,7 +1056,7 @@ export class StoreScene extends Phaser.Scene {
     for (const r of this.registers) if (r.customer) this.updateBubble(r.customer);
     staff.checkSlips(this);
     staff.updateRot(this, dt);
-    this.updateScanBar();
+    shoppers.updateScanBar(this);
     staff.callSellerIfNeeded(this);
     // Пока говорит бабушка (облачком или у подсветки обучения), та же подсказка снизу не повторяется.
     const raw = this.currentHint();
@@ -1506,7 +1414,7 @@ export class StoreScene extends Phaser.Scene {
       // Ещё не заплатил — взятое возвращается на полки, как у ушедшего из очереди (заплативший уже уходит: gone).
       if (!c.gone) {
         this.state = returnToShelf(this.state, c.items);
-        this.returnExtras(c);
+        shoppers.returnExtras(this, c);
       }
       c.gone = true;
       c.patience?.remove();
@@ -1663,7 +1571,7 @@ export class StoreScene extends Phaser.Scene {
    * Кто работает за кассой. Первая — хозяина, но если нанят сменщик и он вышел на смену, за ней весь
    * день он (новенький — с той минуты, как дошёл до кассы, reliefLoop). За остальными — их кассиры, а без кассира касса закрыта (null).
    */
-  private operator(index: number): Worker | 'owner' | null {
+  operator(index: number): Worker | 'owner' | null {
     if (index === 0) {
       const relief = this.workers.get(RELIEF_ROLE);
       return relief && relief.member.role === RELIEF_ROLE && this.reliefReady ? relief : 'owner';
@@ -1704,7 +1612,7 @@ export class StoreScene extends Phaser.Scene {
     return this.registers.find((r, i) => this.operator(i) === 'owner' && r.customer && !r.customer.serving);
   }
 
-  private registerOf(c: Customer): Register | undefined {
+  registerOf(c: Customer): Register | undefined {
     return this.registers.find((r) => r.customer === c);
   }
 
@@ -2412,29 +2320,6 @@ export class StoreScene extends Phaser.Scene {
     return this.playTime;
   }
 
-  /** Шоколадка со стойки у кассы летит в руки стоящему в очереди. */
-  private grabCandy(c: Customer): void {
-    const next = takeCandy(this.state);
-    if (!next) return;
-    this.state = next;
-    c.extras = [...(c.extras ?? []), { kind: 'candy', price: CANDY_PRICE }];
-    const { counter } = this.layout;
-    const candy = this.art(counter.x, counter.y + 36, 'candy').setDepth(1000);
-    this.tweens.add({
-      targets: candy,
-      x: c.sprite.x + 4,
-      y: c.sprite.y - 2,
-      duration: 420,
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        candy.destroy();
-        // Конфета в шуршащей обёртке.
-        sound.place('paper', 3, c.sprite.x);
-        if (c.sprite.active && !c.gone) this.popup(c.sprite.x, c.sprite.y - 18, t('popup.candy', { n: CANDY_PRICE }), '#fff3b0');
-      },
-    });
-  }
-
   // ---------- Ночная смена ----------
 
   /** Вечер: если куплена ночная смена — спросить, работать ли ещё; иначе закрываемся. */
@@ -2615,7 +2500,7 @@ export class StoreScene extends Phaser.Scene {
    * касс очередь, а без очереди — каждый третий (KIOSK_PREFER). Сколько штук, как быстро, как часто
    * «ошибка» и непробитый товар — по модели киосков (lanes.ts).
    */
-  private async useKiosk(c: Customer): Promise<boolean> {
+  async useKiosk(c: Customer): Promise<boolean> {
     const tier = kioskTier(this.state);
     if (!this.kiosks.length || c.thief || !c.items.length || c.items.length > tier.maxItems) return false;
     if (this.waiting() === 0 && Math.random() >= KIOSK_PREFER) return false;
@@ -2659,94 +2544,8 @@ export class StoreScene extends Phaser.Scene {
       this.stats.stolen += value;
       this.popup(c.sprite.x, c.sprite.y - 14, t('popup.kioskSkip', { n: value }), '#ffd0d0');
     }
-    this.finishCheckout(c, { x: img.x - 10, y: img.y - 12 });
+    shoppers.finishCheckout(this, c, { x: img.x - 10, y: img.y - 12 });
     return true;
-  }
-
-  /** Постоянные покупатели на сегодня: каждый заходит в своё случайное время. */
-  private scheduleRegulars(): void {
-    const coming = regularsToday(this.state).filter((r) => Math.random() < livedRegular(this.state, r).every);
-    for (const r of coming) {
-      // Пара (life.ts) приходит вместе: второй — спутником первого, отдельно не приходит.
-      const partner = companionOf(this.state, r.id)?.regular;
-      if (partner && coming.indexOf(regularById(partner)) < coming.indexOf(r)) continue;
-      this.time.delayedCall(Phaser.Math.FloatBetween(0.1, 0.75) * DAY_SECONDS * 1000, () => this.running && this.timeLeft > 0 && this.spawnRegular(r));
-    }
-  }
-
-  /** Друзья в гостях: до FRIEND_VISITS друзей за день, каждый в своё время. */
-  private scheduleFriends(): void {
-    const friends = Phaser.Utils.Array.Shuffle([...(visitsInfo()?.friends ?? [])]).slice(0, FRIEND_VISITS);
-    for (const f of friends) {
-      this.time.delayedCall(Phaser.Math.FloatBetween(0.15, 0.7) * DAY_SECONDS * 1000, () => this.running && this.timeLeft > 0 && this.spawnFriend(f));
-    }
-  }
-
-  private spawnFriend(f: VisitFriend): void {
-    const start = this.streetSpawn();
-    const sprite = this.makePerson(start.x, start.y, customerLook(SHIRTS[f.id % SHIRTS.length], this.state.day));
-    weatherFx.addUmbrella(this, sprite);
-    const bubble = this.art(0, -14, 'bubble').setVisible(false);
-    // Имя над головой — видно, что это друг.
-    const tag = this.add
-      .text(0, -24, `👋 ${f.name}`, { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#fee761', backgroundColor: 'rgba(24, 20, 37, 0.75)', padding: { x: 2, y: 1 } })
-      .setOrigin(0.5)
-      .setResolution(this.textRes(5));
-    sprite.add([bubble, tag]);
-    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief: false, friend: f, wants: this.wanted(2) };
-    // Нажми на друга — угостить кофе: он получит монеты при следующем запуске.
-    sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () =>
-      this.tap(() => {
-        if (customer.friend!.treated) return this.popup(sprite.x, sprite.y - 30, t('visit.treated', { name: f.name }), '#fff3b0');
-        customer.friend = { ...customer.friend!, treated: true };
-        void treatFriend(f.id).then((ok) => ok && sprite.active && this.popup(sprite.x, sprite.y - 30, t('visit.treat', { name: f.name, n: FRIEND_GIFT }), '#c8ffb0'));
-        effects.emote(this, sprite, 'emo_heart');
-      }),
-    );
-    this.customers.add(customer);
-    void this.runCustomer(customer);
-  }
-
-  private spawnRegular(r: Regular): void {
-    const start = this.streetSpawn();
-    const sprite = this.makePerson(start.x, start.y, { ...livedRegular(this.state, r).look });
-    weatherFx.addUmbrella(this, sprite);
-    const bubble = this.art(0, -14, 'bubble').setVisible(false);
-    sprite.add(bubble);
-    // Жизнь района: Пётр Ильич с Ольгой Николаевной, Костя с женой — вдвоём.
-    const companion = companionOf(this.state, r.id);
-    if (companion) this.addCompanion(sprite, companion.look);
-    // Любимый товар — всегда; иногда ещё что-нибудь.
-    const extra = Math.random() < 0.4 ? this.wanted(1).filter((id) => id !== r.favorite) : [];
-    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief: false, regular: r.id, wants: [r.favorite, ...extra] };
-    this.customers.add(customer);
-    void this.runCustomer(customer);
-  }
-
-  /** Постоянный покупатель нашёл любимое по своей цене — доверие растёт (и чаевые), нет — падает. */
-  private regularVerdict(c: Customer): void {
-    const r = regularById(c.regular!);
-    const happy = c.items.some((item) => item.id === r.favorite);
-    const { state, result } = recordVisit(this.state, r.id, happy);
-    this.state = state;
-    const name = t(r.nameKey);
-    const y = c.sprite.y - 24;
-    if (result === 'up') {
-      effects.emote(this, c.sprite, 'emo_heart');
-      this.popup(c.sprite.x, y, t('regular.up', { name }), '#c8ffb0');
-      const total = c.items.reduce((sum, item) => sum + unitSalePrice(this.state, item.id, item.unit), 0);
-      // Благоустроенный район (hood.ts): постоянные щедрее.
-      const tip = Math.round(tipFor(regularState(this.state, r.id).loyalty, total) * hoodTips(this.state));
-      if (tip > 0) {
-        this.state = { ...this.state, money: this.state.money + tip };
-        this.time.delayedCall(900, () => this.popup(c.sprite.x, y - 8, t('regular.tip', { n: tip }), '#fee761'));
-      }
-    } else {
-      effects.emote(this, c.sprite, 'emo_angry');
-      this.popup(c.sprite.x, y, t(result === 'left' ? 'regular.left' : 'regular.down', { name }), '#ffd0d0');
-      sound.bad();
-    }
-    saveGame(this.state);
   }
 
   // ---------- Активные моменты дня (game/moments.ts, scenes/moments.ts) ----------
@@ -3541,7 +3340,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Покупатель по пути заглядывает на полку уценки и берёт одну штуку сверх списка — прямо с её места на горке. */
-  private async visitBargain(c: Customer): Promise<void> {
+  async visitBargain(c: Customer): Promise<void> {
     const at = this.bargainAt;
     if (!at || c.thief || !bargainCount(this.state) || Math.random() >= BARGAIN_CHANCE) return;
     await this.walk(c.sprite, at.x + Phaser.Math.Between(-8, 8), this.bargainStand(at));
@@ -4077,14 +3876,14 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Рядом с этой полкой еды стоит химия. */
-  private clashes(index: number): boolean {
+  clashes(index: number): boolean {
     const slot = slotOf(this.state, index);
     if (slot < 0 || this.state.shelves[index].kind === 'household') return false;
     return this.links().some((l) => l.kind === 'clash' && (l.a === slot || l.b === slot));
   }
 
   /** Что прихватить заодно с соседней полки-пары (или ничего). */
-  private pairPick(index: number, wanted: ProductId[]): { id: ProductId; index: number } | null {
+  pairPick(index: number, wanted: ProductId[]): { id: ProductId; index: number } | null {
     const slot = slotOf(this.state, index);
     if (slot < 0 || Math.random() >= PAIR_CHANCE) return null;
     const partners = this.links()
@@ -4111,7 +3910,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Куда встать, чтобы взять с полки: к полке — снизу, к ларю — сверху (со стороны зала), к вёдрам — слева. */
-  private standOf(index: number): { x: number; y: number } {
+  standOf(index: number): { x: number; y: number } {
     const p = this.spotOf(index);
     const kind = this.state.shelves[index]?.kind;
     if (kind === 'icebox') return { x: p.x, y: p.y - 16 };
@@ -4327,7 +4126,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Вторая половинка пары идёт следом за первой — тем же путём, чуть позади. */
-  private addCompanion(leader: Phaser.GameObjects.Container, look?: Look): void {
+  addCompanion(leader: Phaser.GameObjects.Container, look?: Look): void {
     const companion = this.makePerson(leader.x - 8, leader.y + 1, look ?? customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
     weatherFx.addUmbrella(this, companion);
     companion.setData('leader', leader);
@@ -4393,7 +4192,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Покупатель берёт тележку у входа и катит её перед собой (как коляску). */
-  private giveTrolley(person: Phaser.GameObjects.Container): void {
+  giveTrolley(person: Phaser.GameObjects.Container): void {
     const trolley = this.art(0, 9, 'trolley');
     person.add(trolley);
     person.setData('stroller', trolley);
@@ -4401,7 +4200,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** У выхода тележку оставляют. */
-  private dropTrolley(person: Phaser.GameObjects.Container): void {
+  dropTrolley(person: Phaser.GameObjects.Container): void {
     if (person.getData('push') !== 'trolley') return;
     (person.getData('stroller') as Phaser.GameObjects.Image | undefined)?.destroy();
     person.setData('stroller', undefined);
@@ -4467,7 +4266,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Переходник к effects.celebrateCombo: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
-  private celebrateCombo(n: number): void {
+  celebrateCombo(n: number): void {
     return effects.celebrateCombo(this, n);
   }
 
@@ -4540,7 +4339,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Все в зале оборачиваются на кассу: что-то случилось (серия, рекорд). */
-  private everyoneLooks(x: number, y: number, key: EmoteKey, share = 0.35): void {
+  everyoneLooks(x: number, y: number, key: EmoteKey, share = 0.35): void {
     for (const c of this.customers) {
       const p = c.sprite;
       if (!p.active || c.gone || p.getData('walking') || p.y > this.layout.h) continue;
@@ -4555,931 +4354,33 @@ export class StoreScene extends Phaser.Scene {
     return gen === this.staffGen && this.scene.isActive();
   }
 
-  // ---------- Проверка ----------
-
-  /** Инспектор обходит полки, туалет и кассу, потом выносит решение. */
-  private async runInspector(): Promise<void> {
-    this.inspector = 'here';
-    const { door, wc, sellerHome } = this.layout;
-    const start = this.streetSpawn();
-    const sprite = this.makePerson(start.x, start.y, { shirt: INSPECTOR_SHIRT, skin: SKINS[0], pants: INSPECTOR_SHIRT, hair: 0x181425, style: 'short' });
-    const look = (x: number, y: number) => this.walk(sprite, x, y, 35).then(() => this.wait(700));
-    this.popup(door.x, door.y - 24, t('popup.inspector'), '#fff3b0');
-    haptic.tap();
-    sound.bell();
-    await this.walkVia(
-      sprite,
-      [
-        { x: door.x, y: this.streetY },
-        { x: door.x, y: door.y - 10 },
-      ],
-      35,
-    );
-    // Полки в зале и вёдра у кассы (ларь у входа он видел, когда заходил).
-    for (const i of this.state.shelves.map((_, i) => i)) if (this.state.shelves[i].kind !== 'icebox') await look(this.standOf(i).x, this.standOf(i).y);
-    await look(wc.x - 6, wc.spotY + 4);
-    await look(sellerHome.x - 30, sellerHome.y - 10);
-    if (!this.sys.isActive()) return;
-
-    // Переполненное ведро инспектор считает как две кучки мусора.
-    const result = inspect(this.state, { trash: this.trash.size + (this.binFull() ? 2 : 0) + ([...this.trash].some((piece) => piece.getData('rot')) ? 1 : 0), toiletDirt: this.toiletDirt });
-    this.inspection = result;
-    this.state = inspectionDone(this.state, result);
-    if (result.passed) {
-      haptic.success();
-      sound.good();
-      this.popup(sprite.x, sprite.y - 16, t('popup.inspectionPassed'), '#c8ffb0');
-    } else {
-      haptic.error();
-      sound.bad();
-      this.popup(sprite.x, sprite.y - 16, t('popup.inspectionFailed', { n: result.fine }), '#ffd0d0');
-    }
-    await this.walk(sprite, door.x, this.layout.h + 16, 35);
-    void this.strollAway(sprite);
-    this.inspector = 'done';
+  /** Переходник к shoppers.runSonya: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
+  private runSonya(): Promise<void> {
+    return shoppers.runSonya(this);
   }
 
-  /** Соня заходит после школы: стоит у прилавка рядом с папой, потом уходит. */
-  private async runSonya(): Promise<void> {
-    this.sonya = 'here';
-    const { door, sellerHome } = this.layout;
-    const start = this.streetSpawn();
-    const sprite = this.makePerson(start.x, start.y, SONYA);
-    await this.walkVia(
-      sprite,
-      [
-        { x: door.x, y: this.streetY },
-        { x: door.x, y: door.y - 10 },
-        { x: sellerHome.x - 18, y: sellerHome.y + 8 },
-      ],
-      40,
-    );
-    if (!this.sys.isActive()) return;
-    pets.heartAt(this, sprite.x, sprite.y - 14);
-    music.sting('story');
-    this.popup(sprite.x, sprite.y - 20, t('drama.visit'), '#fff3b0');
-    await this.wait(9000);
-    await this.walkVia(
-      sprite,
-      [
-        { x: door.x, y: door.y - 10 },
-        { x: door.x, y: this.layout.h + 16 },
-      ],
-      40,
-    );
-    void this.strollAway(sprite);
-    this.sonya = 'done';
-  }
-
-  /**
-   * Праздничный гость (game/live.ts): Дед Мороз или Снегурочка заходит, поздравляет у прилавка,
-   * оставляет подарок монетами и уходит. Подарок — сразу, как дошёл: ушёл ли гость, уже неважно.
-   */
-  private async runLiveGuest(): Promise<void> {
-    const guest = this.liveGuest;
-    if (!guest) return;
-    guest.phase = 'here';
-    const { door, sellerHome, queue } = this.layout;
-    const start = this.streetSpawn();
-    const sprite = this.makePerson(start.x, start.y, LIVE_GUEST_LOOKS[guest.who]);
-    if (!this.lite) personGlow(this, sprite, 0xcfe8ff, 3);
-    sound.bell(door.x);
-    await this.walkVia(
-      sprite,
-      [
-        { x: door.x, y: this.streetY },
-        { x: door.x, y: door.y - 10 },
-        // Рядом с тем, кто платит, — а не на самом прилавке и не в очереди.
-        { x: queue.x - 14, y: queue.y + 10 },
-      ],
-      34,
-    );
-    if (!this.sys.isActive()) return;
-    const coins = guestCoins(this.state);
-    this.state = seeGuest(this.state, guest.date);
-    saveGame(this.state);
-    pets.heartAt(this, sprite.x, sprite.y - 14);
-    if (!music.sting('coin')) sound.coin(sellerHome.x);
-    haptic.success();
-    this.popup(sprite.x, sprite.y - 20, `«${t(`live.guest.${guest.who}.line` as TextKey)}»`, '#cfe8ff');
-    this.time.delayedCall(1400, () => this.popup(sellerHome.x - 20, sellerHome.y - 40, t('live.guest.gift', { n: coins }), '#fee761'));
-    await this.wait(7000);
-    await this.walkVia(
-      sprite,
-      [
-        { x: door.x, y: door.y - 10 },
-        { x: door.x, y: this.layout.h + 16 },
-      ],
-      34,
-    );
-    void this.strollAway(sprite);
-    guest.phase = 'done';
-  }
-
-  /** Жюри конкурса: трое заходят вместе, обходят полки, что-то записывают и уходят. */
-  private async runJury(): Promise<void> {
-    this.jury = 'here';
-    const { door, slots, sellerHome } = this.layout;
-    const start = this.streetSpawn();
-    this.popup(door.x, door.y - 24, t('popup.jury'), '#fee761');
-    haptic.tap();
-    sound.bell();
-    const walkOne = async (look: Look, i: number) => {
-      await this.wait(i * 700);
-      const sprite = this.makePerson(start.x + i * 6, start.y, look);
-      const dx = (i - 1) * 9;
-      await this.walkVia(
-        sprite,
-        [
-          { x: door.x + dx, y: this.streetY },
-          { x: door.x + dx, y: door.y - 10 },
-        ],
-        32,
-      );
-      const order = slots.map((_, k) => k).filter((k) => k % 3 === i % 3 || slots.length < 4);
-      for (const k of order.slice(0, 3)) {
-        const stand = standFor(this.layout, slots[k]);
-        await this.walk(sprite, stand.x + dx / 2, stand.y, 32);
-        if (!this.sys.isActive()) return;
-        this.popup(sprite.x, sprite.y - 16, t('popup.juryNote'), '#ffffff');
-        await this.wait(900);
-      }
-      await this.walk(sprite, sellerHome.x - 24 + dx, sellerHome.y - 8, 32);
-      await this.wait(600);
-      await this.walk(sprite, door.x + dx, this.layout.h + 16, 32);
-      void this.strollAway(sprite);
-    };
-    await Promise.all(JURY_LOOKS.map((look, i) => walkOne(look, i)));
-    this.jury = 'done';
-  }
-
-  // ---------- Покупатели ----------
-
-  /**
-   * Новый покупатель с улицы. forced — заданный (друг, первый покупатель); arrived — уже идёт по
-   * тротуару от парковки (carCustomer): человечек готов, после покупок он вернётся к своей машине.
-   */
+  /** Переходник к shoppers.spawnCustomer: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
   spawnCustomer(
     forced?: { look: Look; at: Phaser.Types.Math.Vector2Like; wants?: ProductId[]; first?: boolean },
     arrived?: { sprite: Phaser.GameObjects.Container; look: Look; car: ParkSpot },
   ): void {
-    const thief = !forced && !arrived && Math.random() < thiefChance(this.state.level) * cameraTheft(this.state) * eyeTheft(this.state);
-    const valya = !forced && !arrived && !thief && !this.night && !this.valyaCame && this.state.day > 1 && Math.random() < 0.15;
-    const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
-    // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще.
-    const rareChance = rareGuestChance(this.state.level) * adRareBoost(this.state);
-    const rare = !forced && !arrived && !thief && !valya && !this.night && Math.random() < rareChance ? pickRareGuest(this.state, Math.random) : null;
-    let look: Look = forced
-      ? forced.look
-      : arrived
-        ? arrived.look
-        : rare
-          ? (rare.look as Look)
-          : valya
-            ? VALYA
-            : thief
-              ? { ...randomLook(shirt), style: 'long' as const, hair: THIEF_SHIRT }
-              : this.night
-                ? nightLook()
-                : withCompanionItems(customerLook(shirt, this.state.day));
-    // Ночью — гость с характером: свой образ, свой список и реплика у входа (nightGuests.ts).
-    const nightGuest = this.night && !forced && !arrived && !thief && !rare && !valya ? pickNightGuest(Math.random) : null;
-    if (nightGuest) look = nightGuestLook(nightGuest);
-    const big = bigDayFor(this.state.day);
-    // Приехавший на машине уже одет (маска в эпидемию — ещё у машины, carCustomer).
-    if (!rare && !thief && !valya && !arrived) {
-      // Ремонт дороги: рабочие в касках приходят за обедом. Болезнь: почти все в масках.
-      if (big === 'roadworks' && !forced && !this.night && Math.random() < ROADWORKERS) look = { ...look, ...wearOf('builder', Math.random) };
-      if (big && BIG_DAYS[big].masks && !look.face && Math.random() < MASKS) look = { ...look, face: 'medmask' };
-    }
-    // Гость из здания района: свой образ и свой список покупок (district.ts).
-    let wants: ProductId[] | undefined = forced?.wants;
-    const fromDistrict = !forced && !arrived && !rare && !thief && !valya && !this.night ? districtGuest(this.state, Math.random) : null;
-    if (nightGuest) {
-      const sellable = sellableProducts(this.state);
-      const pool = NIGHT_GUEST_TYPES[nightGuest].wants.filter((id) => sellable.includes(id));
-      if (pool.length) wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
-    }
-    if (fromDistrict) {
-      const sellable = sellableProducts(this.state);
-      const pool = fromDistrict.wants.filter((id) => sellable.includes(id));
-      if (pool.length) {
-        look = { ...look, ...wearOf(fromDistrict.look, Math.random) };
-        wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
-      }
-    }
-    const start = forced?.at ?? this.streetSpawn();
-    const sprite = arrived?.sprite ?? this.makePerson(start.x, start.y, look);
-    if (!arrived) weatherFx.addUmbrella(this, sprite);
-    // Иногда приходят парой.
-    if (!arrived && !thief && !rare && !valya && !forced?.first && look.stroller === undefined && Math.random() < 0.08) this.addCompanion(sprite);
-    if (rare) {
-      sound.bell();
-      // Редкий гость сверкает, пока он в магазине.
-      const sparkles = this.add.particles(0, 0, 'spark', {
-        lifespan: 700,
-        speed: { min: 4, max: 14 },
-        scale: { start: 0.5, end: 0 },
-        alpha: { start: 1, end: 0 },
-        frequency: 160,
-        x: { min: -7, max: 7 },
-        y: { min: -16, max: 4 },
-      });
-      sparkles.startFollow(sprite).setDepth(LIGHT_DEPTH - 1);
-      sprite.once('destroy', () => sparkles.destroy());
-      this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.rareGuest', { name: `${rare.icon} ${t(rare.nameKey)}` }), '#fee761'));
-    }
-    if (nightGuest && Math.random() < 0.45) {
-      const line = t(`nightGuest.${nightGuest}.${Phaser.Math.Between(0, NIGHT_GUEST_TYPES[nightGuest].lines - 1)}` as TextKey);
-      this.time.delayedCall(1300, () => sprite.active && this.popup(sprite.x, sprite.y - 16, line, '#cfe8ff'));
-    }
-    if (valya) {
-      this.valyaCame = true;
-      this.time.delayedCall(1500, () => this.popup(sprite.x, sprite.y - 16, t('popup.valya'), '#fff3b0'));
-    }
-    const bubble = this.art(0, -14, 'bubble').setVisible(false);
-    sprite.add(bubble);
-    const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief, rare: rare?.id, wants, first: forced?.first, car: arrived?.car };
-    // Вора без охранника видно по красному контуру — его можно поймать касанием. Редкий гость — в золотом.
-    if (thief && !this.workers.has('guard')) personGlow(this, sprite, 0xe43b44, 3);
-    if (rare) personGlow(this, sprite, 0xfee761, 3);
-    this.customers.add(customer);
-    if (thief) {
-      // Вора можно поймать касанием.
-      sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.catchThief(customer, 'owner')));
-      void this.runThief(customer);
-    } else {
-      void this.runCustomer(customer);
-    }
-  }
-
-  // ---------- Воры ----------
-
-  private async runThief(c: Customer): Promise<void> {
-    const { door } = this.layout;
-    await this.walkVia(c.sprite, [
-      { x: door.x, y: this.streetY },
-      { x: door.x, y: door.y - 10 },
-    ]);
-    // С тележкой у входа покупатель иногда берёт что-то сверх списка.
-    const wanted = this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day) + adExtraItems(this.state, Math.random));
-    for (const id of wanted) {
-      const index = shelfFor(this.state, id);
-      // Ларь у кассы на виду — вор туда не идёт.
-      if (index < 0 || c.gone || this.state.shelves[index].kind === 'icebox') continue;
-      const stand = this.standOf(index);
-      await this.walk(c.sprite, stand.x + Phaser.Math.Between(-8, 8), stand.y);
-      if (c.gone) return;
-      await this.wait(400);
-      const taken = takeFromShelf(this.state, index, id);
-      if (taken && !c.gone) {
-        this.state = taken.state;
-        c.items.push({ id, unit: taken.unit });
-        this.refreshShelves();
-      }
-    }
-    if (c.gone) return;
-    // Мимо кассы — сразу к выходу.
-    await this.walk(c.sprite, door.x, door.y - 10, THIEF_SPEED);
-    if (c.gone) return;
-    const guard = this.workers.get('guard');
-    if (guard && c.items.length && Math.random() < guardCatchChance(guard.member)) {
-      void this.walk(guard.sprite, c.sprite.x + 10, c.sprite.y, STAFF_SPEED * 1.5).then(() =>
-        this.walk(guard.sprite, guard.home.x, guard.home.y, STAFF_SPEED),
-      );
-      this.catchThief(c, 'guard');
-      return;
-    }
-    // Бобик у входа лает — воришка с перепугу бросает товар.
-    if (this.bobik?.active && c.items.length && Math.random() < DOG_DAY_CATCH) {
-      pets.bobikBark(this);
-      this.catchThief(c, 'dog');
-      return;
-    }
-    if (c.items.length) {
-      const value = c.items.reduce((sum, { id, unit }) => sum + unitSalePrice(this.state, id, unit), 0);
-      this.stats.stolen += value;
-      note(this.stats, 'thief');
-      haptic.error();
-      sound.bad();
-      this.popup(c.sprite.x, c.sprite.y - 14, `${t('popup.stolen')} −${value} 💰`, '#ffd0d0');
-    }
-    await this.leave(c);
-  }
-
-  /** Вора поймали: товар возвращается на полки, вор уходит ни с чем. */
-  private catchThief(c: Customer, by: 'owner' | 'guard' | 'dog'): void {
-    if (c.gone || !this.running) return;
-    c.sprite.disableInteractive();
-    this.state = returnToShelf(this.state, c.items);
-    c.items = [];
-    this.refreshShelves();
-    this.refreshWarehouse();
-    this.stats.caught++;
-    haptic.success();
-    sound.good();
-    this.popup(c.sprite.x, c.sprite.y - 14, t(by === 'guard' ? 'popup.guardCaught' : by === 'dog' ? 'popup.dogCaught' : 'popup.thiefCaught'), '#c8ffb0');
-    void this.leave(c);
-  }
-
-  private async runCustomer(c: Customer): Promise<void> {
-    const { door } = this.layout;
-    // Первый покупатель нового начала появляется уже на дорожке у двери — с улицы не идёт.
-    // Остальные идут по тротуару почти до двери: тележку берут здесь, а к двери заворачивают дугой.
-    const gap = c.sprite.x - door.x;
-    if (!c.first) await this.walk(c.sprite, door.x + Math.sign(gap) * Math.min(Math.abs(gap), DOOR_TURN), this.streetY);
-    // Тележки у входа: часть покупателей берёт их — кому удобнее.
-    if (this.cartsAtDoor() && Math.random() < CART_SHARE && !c.sprite.getData('stroller') && !c.thief) this.giveTrolley(c.sprite);
-    const wanted = c.wants ?? this.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(this.state.day) + adExtraItems(this.state, Math.random));
-    let disappointed = false;
-    let why: { reason: LostReason; id: ProductId } | undefined;
-    // Подойти, поискать глазами, взять: к полке в зале, к ларю и к вёдрам у кассы — одинаково.
-    const visit = async (id: ProductId, index: number): Promise<ReturnType<StoreScene['tryTake']> | null> => {
-      const stand = this.standOf(index);
-      const fixture = SHELF_KINDS[this.state.shelves[index].kind].fixture;
-      // Над головой облачко: что покупатель ищет.
-      const thought = motion.think(this, c.sprite, id);
-      // У боковой полки встают вдоль неё (по вертикали), у обычной — вдоль по горизонтали.
-      const along = !fixture && slotSide(this.layout, this.spotOf(index)) ? 'y' : 'x';
-      const jitter = Phaser.Math.Between(-8, 8) * (fixture ? 0.4 : 1);
-      await this.walk(c.sprite, stand.x + (along === 'x' ? jitter : 0), stand.y + (along === 'y' ? jitter : 0));
-      await this.wait(500);
-      // Пока шёл — магазин захватили (или ушёл по другой причине): к полке уже не тянется.
-      if (c.gone) {
-        motion.endThought(this, thought, false);
-        return null;
-      }
-      // Первый день новичка: товар кончился на полке, а на складе есть — покупатель ждёт, пока его поднесут.
-      // Проверка — без await: у всех остальных путь к полке не сдвигается ни на микрозадачу (порядок случайных чисел — как был).
-      if (this.shelfWaitNeeded(c, index, id) && (await this.waitForShelf(c, index, id))) {
-        motion.endThought(this, thought, false);
-        return null;
-      }
-      const result = this.tryTake(c, id);
-      motion.reachShelf(this, c, this.spotOf(index), result === 'taken' ? id : null, result === 'taken' ? this.takenFrom : []);
-      if (result === 'taken' && c.sprite.y < this.layout.h && Math.random() < SPILL_CHANCE) staff.spill(this, c.sprite.x, c.sprite.y + 2);
-      const failed = result === 'empty' || result === 'expensive' || result === 'eduard';
-      motion.endThought(this, thought, failed);
-      if (failed) {
-        disappointed = true;
-        // Первая неудача — причина ухода, если покупатель так ничего и не возьмёт.
-        why ??= { reason: result, id };
-      }
-      return result;
-    };
-    await this.walkVia(c.sprite, c.first ? [{ x: door.x, y: door.y - 10 }] : [{ x: door.x, y: this.streetY }, { x: door.x, y: door.y - 10 }]);
-    if (c.gone) return;
-    // В дождь и снег с улицы несут грязь.
-    const muddy = isWet(this.weather) || this.weather === 'snow';
-    const mud = [...this.trash].filter((piece) => piece.texture.key === 'mud').length;
-    if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE * entranceMud(this.state)) staff.dropTrash(this, this.layout.door.x, this.layout.door.y - 30, 'mud');
-
-    if (c.regular) this.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
-    if (c.friend) this.popup(c.sprite.x, c.sprite.y - 20, t('visit.hello', { name: c.friend.name }), '#fee761');
-    await this.visitBargain(c);
-    if (c.gone) return;
-    // Соседняя полка-пара: взяв хлеб, заодно берут и молоко (один раз за покупку).
-    let extra: { id: ProductId; index: number } | null = null;
-    for (const id of wanted) {
-      if (c.gone) return;
-      const index = shelfFor(this.state, id);
-      if (index < 0) continue;
-      const result = await visit(id, index);
-      if (result === 'taken' && !extra && !c.thief && !c.first) extra = this.pairPick(index, wanted);
-    }
-    if (c.gone) return;
-    if (extra) {
-      this.popup(c.sprite.x, c.sprite.y - 20, t('popup.pair', { name: t(PRODUCTS[extra.id].nameKey) }), '#d6f5c4');
-      await visit(extra.id, extra.index);
-      if (c.gone) return;
-    }
-
-    if (!c.first && Math.random() < TRASH_CHANCE) staff.dropTrash(this, c.sprite.x, c.sprite.y);
-    if (c.regular) this.regularVerdict(c);
-    // Друг оставляет чаевые — больше, если у него самого магазин побольше.
-    if (c.friend && c.items.length) {
-      const tip = FRIEND_TIP * (c.friend.level + 1);
-      this.state = { ...this.state, money: this.state.money + tip };
-      this.popup(c.sprite.x, c.sprite.y - 28, t('visit.tip', { name: c.friend.name, n: tip }), '#fee761');
-    }
-
-    if (c.items.length === 0) {
-      // Не нашёл товар или всё слишком дорого — ушёл недовольным, это бьёт по рейтингу.
-      // Ночью после рабочего дня полупустые полки — норма: ночные гости рейтинг не роняют.
-      // Первый день новичка: «всё раскупили» — не провал, ушедшим без покупки не считается (firstday.ts).
-      if (disappointed && !this.night && !(gentleDay(this.state) && why?.reason === 'empty')) {
-        this.stats.lost++;
-        if (why) noteLost(this.stats, why.reason, why.id);
-      }
-      await this.leave(c);
-      return;
-    }
-
-    // По пути к кассе — к полке «Еда» за порцией готового (если кухня открыта).
-    await food.visitFood(this, c);
-    if (c.gone) return;
-    if (!c.first && Math.random() < TOILET_CHANCE) await this.visitToilet(c);
-    if (c.gone) return;
-    await food.buyCoffee(this, c);
-    if (c.gone) return;
-
-    if (await this.useKiosk(c)) return;
-    if (c.gone) return;
-    // Через одного, по порядку прихода: в тесной очереди встают ёлочкой, и сторона у каждого своя —
-    // очередь подвинулась, а люди не перескакивают из ряда в ряд.
-    c.queueSide = this.queueTurn++ % 2;
-    this.queue.push(c);
-    this.layoutQueue();
-    const spot = this.registerOf(c)?.spot ?? this.queueSpot(c, this.queue.indexOf(c));
-    await this.walk(c.sprite, spot.x, spot.y);
-    if (c.gone) return;
-    // Заскучал в очереди — тянется к стойке со сладостями.
-    if (!c.serving && Math.random() < impulseChance(this.state, this.queue.indexOf(c) + 1)) this.grabCandy(c);
-    c.waitStart = this.time.now;
-    c.bubble.setVisible(true);
-    // С котом рядом ждут дольше.
-    c.patienceMs =
-      PATIENCE_MS *
-      catPatience(this.state) *
-      climatePatience(this.state, weatherFor(this.state.day)) *
-      charmPatience(this.state) *
-      radioPatience(this.state) *
-      signagePatience(this.state) *
-      cartPatience(this.state) *
-      (isCrowdDay(this.state.day) ? CROWD_PATIENCE : 1) *
-      (c.first ? FIRST_PATIENCE : 1);
-    c.patience = this.time.delayedCall(c.patienceMs, () => void this.giveUp(c));
-    this.layoutQueue();
+    return shoppers.spawnCustomer(this, forced, arrived);
   }
 
   /** Корзина покупателя с учётом спроса дня: погода, ценовая война, запах хлеба. */
-  private wanted(count: number): ProductId[] {
+  wanted(count: number): ProductId[] {
     const aroma = this.aroma();
     return pickWanted(this.state, Math.random, count, (id) => dayDemand(this.state, id, aroma));
   }
 
   /** В зале пахнет свежим хлебом из печи. */
-  private aroma(): boolean {
+  aroma(): boolean {
     return this.time.now < this.aromaUntil;
   }
 
-  /**
-   * Первый день новичка, пока бабушка за прилавком: на полке товар кончился, а на складе он есть —
-   * покупатель говорит «сейчас поднесут» и ждёт (бабушка или игрок разложат). true — ушёл, пока ждал.
-   */
-  private shelfWaitNeeded(c: Customer, index: number, id: ProductId): boolean {
-    if (!gentleDay(this.state) || this.night || !this.granny?.active || c.thief) return false;
-    return (this.state.shelves[index]?.items[id]?.length ?? 0) === 0 && (this.state.warehouse[id] ?? []).some((u) => !u.pending);
-  }
-
-  private async waitForShelf(c: Customer, index: number, id: ProductId): Promise<boolean> {
-    const has = () => (this.state.shelves[index]?.items[id]?.length ?? 0) > 0;
-    this.popup(c.sprite.x, c.sprite.y - 14, t('first.wait'), '#fff3b0');
-    for (let waited = 0; waited < GRANNY_SHELF_WAIT_MS && !has(); waited += 300) {
-      await this.wait(300);
-      if (c.gone) return true;
-    }
-    return c.gone;
-  }
-
-  /** Покупатель у полки: берёт товар, если он есть и цена устраивает. */
-  private tryTake(c: Customer, id: ProductId): 'taken' | 'empty' | 'expensive' | 'eduard' | 'skipped' {
-    const index = shelfFor(this.state, id);
-    if (this.state.shelves[index]?.broken) {
-      this.popup(c.sprite.x, c.sprite.y - 14, t('popup.broken'), '#ffd0d0');
-      return 'empty';
-    }
-    const oldest = this.state.shelves[index]?.items[id]?.[0];
-    if (!oldest) {
-      this.popup(c.sprite.x, c.sprite.y - 14, t('popup.noStock'), '#ffd0d0');
-      note(this.stats, 'noStock');
-      return 'empty';
-    }
-    // Ценовая война: у Эдуарда дешевле — часть покупателей уходит к нему.
-    if (Math.random() < warLeaves(this.state, id)) {
-      this.popup(c.sprite.x, c.sprite.y - 14, t('popup.toEduard'), '#ffd0d0');
-      note(this.stats, 'expensive');
-      return 'eduard';
-    }
-    // Ночью — наценка, зато к ценам не придираются; пока пахнет свежим хлебом, за него готовы платить больше.
-    const price = Math.ceil(unitSalePrice(this.state, id, oldest) * (this.night ? NIGHT_MARKUP : 1));
-    const fair =
-      perceivedBase(this.state, id) *
-      (this.night ? NIGHT_TOLERANCE : 1) *
-      (id === 'bread' && this.aroma() ? AROMA_TOLERANCE : 1) *
-      fairTolerance(this.state.day) *
-      loyaltyTolerance(this.state) *
-      radioTolerance(this.state) *
-      adTrust(this.state) *
-      // Химия рядом с едой — к еде с этой полки придираются сильнее.
-      (this.clashes(index) ? CLASH_FACTOR : 1);
-    // «2 по цене 1»: за штуку выходит вдвое дешевле.
-    const bogo = promoKind(this.state, id) === 'bogo';
-    const perUnit = bogo ? price / 2 : price;
-    // Постоянный покупатель решает не по случаю, а по своей границе цены.
-    const regular = c.regular ? regularById(c.regular) : undefined;
-    // Первый покупатель нового начала берёт без раздумий: первая продажа не должна сорваться.
-    const declines =
-      !c.first && (regular?.favorite === id ? !acceptsPrice(this.state, livedRegular(this.state, regular), perUnit) : Math.random() >= buyChance(perUnit, fair));
-    if (declines) {
-      if (price <= fair) return 'skipped';
-      this.popup(c.sprite.x, c.sprite.y - 14, t('popup.expensive'), '#ffd0d0');
-      effects.emote(this, c.sprite, 'emo_pricey');
-      note(this.stats, 'expensive');
-      return 'expensive';
-    }
-    const taken = takeFromShelf(this.state, index, id);
-    if (!taken) return 'empty';
-    if (id === 'bread' && this.aroma()) note(this.stats, 'fresh');
-    // Заметно дешевле, чем ждали, — запомнят и напишут в отзыве.
-    if (perUnit <= fair * CHEAP_RATIO) {
-      note(this.stats, 'cheap');
-      if (Math.random() < 0.25) this.popup(c.sprite.x, c.sprite.y - 14, t('popup.cheap'), '#d6f5c4');
-    }
-    this.state = taken.state;
-    c.items.push({ id, unit: taken.unit });
-    let count = 1;
-    // По акции «2 по цене 1» берут вторую штуку бесплатно.
-    if (bogo) {
-      const second = takeFromShelf(this.state, index, id);
-      if (second) {
-        this.state = second.state;
-        c.items.push({ id, unit: second.unit, free: true });
-        this.popup(c.sprite.x, c.sprite.y - 22, t('popup.bogo'), '#fee761');
-        count++;
-      }
-    }
-    // С полки пропадают последние штуки этого товара (остальное съедет на их место) — запоминаем,
-    // где и какими они были: оттуда товар и полетит в руки (reachShelf), там качнутся соседи.
-    const view = this.shelfViews[index];
-    // Разбитое толчком — не товар: оно уже падает с полки, а не летит в руки.
-    this.quakeFlush?.();
-    const mine = view?.items.filter((img) => img.visible && (img.getData('stock') as string | null | undefined)?.startsWith(`${id}:`)) ?? [];
-    this.takenFrom = mine
-      .slice(-count)
-      .reverse()
-      .map((img) => ({ x: img.x, y: img.y, texture: img.texture.key, scale: img.scaleX, tint: img.tintTopLeft }));
-    this.refreshShelves();
-    if (view && this.takenFrom.length) motion.jostleShelf(this, view, this.takenFrom[0]);
-    return 'taken';
-  }
-
-  private async visitToilet(c: Customer): Promise<void> {
-    await this.walk(c.sprite, this.layout.wc.x, this.layout.wc.spotY);
-    if (this.toiletDirt >= 100) {
-      c.unhappy = true;
-      note(this.stats, 'toilet');
-      this.popup(c.sprite.x - 10, c.sprite.y - 14, t('popup.toiletAwful'), '#ffd0d0');
-      return;
-    }
-    if (this.toiletDirt >= TOILET_DIRTY) {
-      c.unhappy = true;
-      note(this.stats, 'toilet');
-    }
-    c.sprite.setVisible(false);
-    await this.wait(1200);
-    c.sprite.setVisible(true);
-    this.toiletDirt = Math.min(100, this.toiletDirt + TOILET_DIRT_PER_VISIT * wcDirt(this.state));
-    this.refreshToilet();
-  }
-
-  /** Касание кассы (или улицы внизу): хозяин пробивает того, кто ждёт у его кассы, или возвращается с дела. */
-  private async serveNext(from = 0): Promise<void> {
-    // За кассой хозяина сменщик: касание его кассы (или улицы) торопит пробивку, касание чужой — ничего.
-    if (this.operator(0) !== 'owner') {
-      if (from === 0) this.hurryRelief();
-      return;
-    }
-    if (this.ownerScanning()) return;
-    const r = this.ownerRegister();
-    if (this.sellerBusy) {
-      if (r) staff.recallSeller(this);
-      return;
-    }
-    const c = r?.customer;
-    if (!r || !c || c.serving || !this.atSpot(r)) return;
-    haptic.tap();
-    // Хозяин не у кассы (его отвели в сторону — ограбление, перестройка) — сначала к ней.
-    if (Phaser.Math.Distance.Between(this.seller.x, this.seller.y, r.clerk.x, r.clerk.y) > 2) {
-      const id = ++this.choreId;
-      this.sellerBusy = true;
-      await this.walk(this.seller, r.clerk.x, r.clerk.y, SELLER_SPEED);
-      if (id !== this.choreId) return;
-      this.sellerBusy = false;
-      if (r.customer !== c || c.serving || c.gone) return;
-    }
-    void this.scanCustomer(r, c, withUpgrades(this.state, ownerTiming(this.state)), true);
-  }
-
-  /**
-   * За кассой хозяина сменщик: касание торопит его пробивку (срезает RELIEF_TAP_MS), а сам хозяин
-   * за кассу не встаёт. true — касание ушло сменщику.
-   */
-  private hurryRelief(): boolean {
-    const r = this.registers[0];
-    if (!r || this.operator(0) === 'owner') return false;
-    if (!r.scan || r.scan.byOwner || (r.scan.cut ?? 0) >= r.scan.total * RELIEF_HURRY_SHARE) return true;
-    r.hurry = Math.min(RELIEF_HURRY_MAX_MS, r.hurry + RELIEF_TAP_MS);
-    haptic.tap();
-    if (r.img) motion.squash(this, r.img, 1.04, 0.94, 70);
-    if (this.time.now - this.lastHurry > 1500) {
-      this.lastHurry = this.time.now;
-      this.popup(r.counter.x, r.counter.y - 36, t('popup.hurry'), '#fff3b0');
-    }
-    return true;
-  }
-
-  /** Пауза пробивки. У кассы хозяина её срезают касания (r.hurry), пока за кассой сменщик. */
-  private async scanWait(r: Register, ms: number): Promise<void> {
-    if (this.registers.indexOf(r) !== 0 || r.scan?.byOwner) return this.wait(ms);
-    let left = ms;
-    while (left > 0) {
-      // Касаниями пробивку не сделать мгновенной: срезать можно не больше RELIEF_HURRY_SHARE от неё.
-      const room = r.scan ? r.scan.total * RELIEF_HURRY_SHARE - (r.scan.cut ?? 0) : 0;
-      const cut = Math.min(left, r.hurry, Math.max(0, room));
-      if (cut > 0) {
-        r.hurry -= cut;
-        left -= cut;
-        r.scan!.start -= cut;
-        r.scan!.cut = (r.scan!.cut ?? 0) + cut;
-        continue;
-      }
-      const step = Math.min(left, 100);
-      await this.wait(step);
-      if (!this.sys.isActive()) return;
-      left -= step;
-    }
-  }
-
-  /**
-   * Пробивка: товары по одному уезжают по ленте, потом оплата. Время зависит от навыка
-   * того, кто стоит за кассой (хозяин или кассир) и от размера корзины.
-   */
-  async scanCustomer(r: Register, c: Customer, timing: ScanTiming, byOwner: boolean, by?: Phaser.GameObjects.Container): Promise<void> {
-    c.serving = true;
-    c.patience?.remove();
-    c.bubble.setVisible(false);
-    // Без света касса не работает — ждём.
-    while (this.blackout && this.sys.isActive()) await this.wait(250);
-    // В блэкаут на весь район касса считает вручную — медленнее.
-    const manual = this.powerCut ? BLACKOUT_CHECKOUT : 1;
-    r.scan = { start: this.time.now, total: checkoutSeconds(timing, c.items.length) * 1000 * manual, byOwner };
-    const { counter } = r;
-    const index = this.registers.indexOf(r);
-    // by — кто пробивает вместо хозяина у его кассы (бабушка в первый день, firstday.ts).
-    const clerk = by ?? (byOwner ? this.seller : (this.operator(index) as Worker | null)?.sprite);
-    // Товар и пакет — к тому, кто пробивает: сменщик стоит у стойки чуть выше хозяина.
-    const hand = clerk?.active ? { x: clerk.x, y: clerk.y } : r.clerk;
-    for (const [n, { id }] of c.items.entries()) {
-      await this.scanWait(r, timing.item * 1000 * manual);
-      if (!this.sys.isActive()) return;
-      // Товар — на ленту, под красный луч сканера (вспышка), и дальше к кассиру в пакет.
-      const item = this.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2 / ART).setDepth(1000);
-      this.tweens.chain({
-        targets: item,
-        tweens: [
-          { x: counter.x, y: counter.y - 8, duration: 180, ease: 'Quad.easeOut' },
-          { x: hand.x, y: hand.y - 8, scale: 1 / ART, alpha: 0.3, duration: 160, ease: 'Quad.easeIn' },
-        ],
-        onComplete: () => item.destroy(),
-      });
-      this.time.delayedCall(170, () => {
-        const flash = this.add.rectangle(counter.x, counter.y - 8, 10, 3, 0xff4a4a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1001);
-        this.tweens.add({ targets: flash, alpha: 0, scaleX: 1.6, duration: 160, onComplete: () => flash.destroy() });
-        // Касса чуть вздрагивает на «пик».
-        if (r.img) motion.squash(this, r.img, 1.04, 0.94, 70);
-      });
-      // Кассир берёт товар: короткий кивок-подпрыгивание.
-      if (clerk?.active) {
-        const base = (clerk.getData('baseScale') as number) ?? 1;
-        this.tweens.add({ targets: clerk, scaleY: base * 1.06, duration: 90, yoyo: true, onComplete: () => clerk.setScale(base) });
-      }
-      // Без вибрации на каждый товар: на телефоне она щёлкает громче самого сканера. «Пик» — пачкой:
-      // первый товар ясно, дальше через один и тише (sound.ts).
-      sound.scan(counter.x, n);
-    }
-    // Старая касса иногда заедает: пока продавец стучит по ней, очередь ждёт.
-    if (Math.random() < registerJam(this.state)) {
-      r.scan.total += REGISTER_JAM_SECONDS * 1000;
-      this.popup(counter.x, counter.y - 22, t('popup.jam'), '#ffd0d0');
-      haptic.error();
-      this.tweens.add({ targets: r.screen, alpha: 0, duration: 120, yoyo: true, repeat: 4 });
-      await this.wait(REGISTER_JAM_SECONDS * 1000);
-      if (!this.sys.isActive()) return;
-    }
-    await this.scanWait(r, timing.pay * 1000);
-    r.scan = null;
-    r.hurry = 0;
-    if (!this.sys.isActive()) return;
-    // Кассир отдаёт пакет из рук в руки (с тележкой — товар уже в ней).
-    if (c.items.length && c.sprite.getData('push') !== 'trolley' && c.sprite.active) {
-      const bag = this.art(hand.x, hand.y - 6, 'paper_bag').setScale(0.85 / ART).setDepth(1000);
-      await new Promise<void>((done) =>
-        this.tweens.add({
-          targets: bag,
-          x: c.sprite.x + 6,
-          y: c.sprite.y + 3,
-          duration: 260,
-          ease: 'Sine.easeInOut',
-          onUpdate: (tw) => bag.setY(Phaser.Math.Linear(hand.y - 6, c.sprite.y + 3, tw.progress) - Math.sin(tw.progress * Math.PI) * 8),
-          onComplete: () => {
-            bag.destroy();
-            done();
-          },
-        }),
-      );
-      if (!this.sys.isActive()) return;
-    }
-    this.finishCheckout(c, undefined, byOwner);
-    if (byOwner) this.ownerServedOne();
-    // Хвалит бабушка только за то, что пробил сам новичок, — уже с этой покупкой в счёте.
-    if (byOwner && grannyStays(this.state)) this.grannyPraise();
-  }
-
-  /** Редкий гость оставляет чаевые; первый раз — попадает в альбом. */
-  private rareGuestServed(c: Customer, total: number): void {
-    const tip = Math.round(total * RARE_TIP);
-    this.state = { ...this.state, money: this.state.money + tip };
-    this.stats.revenue += tip;
-    const guest = RARE_GUESTS.find((g) => g.id === c.rare)!;
-    const result = collectRareGuest(this.state, guest.id);
-    this.state = result.state;
-    const { sellerHome } = this.layout;
-    const text = result.isNew
-      ? t('popup.albumNew', { name: `${guest.icon} ${t(guest.nameKey)}`, tip })
-      : t('popup.tip', { tip });
-    this.popup(sellerHome.x - 24, sellerHome.y - 40, text, '#fee761');
-    if (result.isNew && !music.sting('coin')) sound.fanfare();
-    if (result.completed) {
-      haptic.success();
-      this.time.delayedCall(1200, () => this.popup(sellerHome.x - 24, sellerHome.y - 52, t('popup.albumDone', { money: ALBUM_REWARD.money }), '#fee761'));
-    }
-  }
-
-  /** Хозяин обслужил покупателя: растёт навык кассы. */
-  private ownerServedOne(): void {
-    this.serves.owner++;
-    const before = ownerLevel(this.state.ownerServed);
-    this.state = { ...this.state, ownerServed: this.state.ownerServed + 1 };
-    const after = ownerLevel(this.state.ownerServed);
-    if (after > before) {
-      haptic.success();
-      sound.good();
-      const { sellerHome } = this.layout;
-      this.popup(sellerHome.x - 20, sellerHome.y - 34, t('popup.skillUp', { stars: '★'.repeat(after) }), '#fee761');
-    }
-  }
-
-  private updateScanBar(): void {
-    for (const r of this.registers) {
-      const scan = r.scan;
-      r.bar.setVisible(Boolean(scan));
-      r.fill.setVisible(Boolean(scan));
-      if (scan) r.fill.width = 16 * Math.min(1, (this.time.now - scan.start) / scan.total);
-      r.screen.setVisible(Boolean(scan));
-      // У кассового аппарата нет сканера — луча нет.
-      r.beam.setVisible(Boolean(scan) && gearTier(this.state, 'register') > 0);
-      if (scan) {
-        const blink = Math.floor(this.time.now / 140) % 2;
-        r.screen.setAlpha(blink ? 0.95 : 0.45);
-        r.beam.setAlpha(blink ? 0.15 : 0.6);
-      }
-    }
-  }
-
-  /** Покупатель расплатился; own — пробивал хозяин (полный звук кассы — награда игроку). */
-  private finishCheckout(c: Customer, where?: { x: number; y: number }, own = false): void {
-    // Шаг обучения «Пробей покупку» — пробил сам, касанием кассы или улицы.
-    if (own) this.passTut('serve');
-    this.queue = this.queue.filter((q) => q !== c);
-    const at = this.registerOf(c);
-    if (at) at.customer = null;
-
-    // Порцию с полки «Еда» покупатель взял сам по пути (visitFood) — платит за неё здесь, вместе с покупками.
-    const { state, total: goods } = checkout(this.state, c.items, this.night ? NIGHT_MARKUP : 1);
-    // Шоколадка и кофе — сверху к товару.
-    const extras = (c.extras ?? []).reduce((sum, e) => sum + e.price, 0);
-    const total = goods + extras;
-    this.state = { ...state, money: state.money + extras };
-    for (const e of c.extras ?? []) {
-      if (e.kind === 'dish') this.stats.dishes = (this.stats.dishes ?? 0) + 1;
-      else note(this.stats, e.kind);
-    }
-    // Чаевые «за котика».
-    if (catHome(this.state) && Math.random() < catTipChance(this.state)) {
-      this.state = { ...this.state, money: this.state.money + CAT_TIP };
-      this.stats.revenue += CAT_TIP;
-      note(this.stats, 'cat');
-      this.time.delayedCall(500, () => this.popup(c.sprite.x, c.sprite.y - 30, t('popup.catTip', { n: CAT_TIP }), '#fff3b0'));
-    }
-    if (this.night) {
-      this.stats.nightRevenue = (this.stats.nightRevenue ?? 0) + total;
-      note(this.stats, 'night');
-    }
-    this.stats.revenue += total;
-    this.stats.served++;
-    recordSale(this.stats, c.items);
-    if (c.rare) this.rareGuestServed(c, total);
-    haptic.success();
-    // Касса: рычаг, «дзынь», ящик выезжает; мелочь или купюры — смотря по сумме; большая корзина — «спасибо».
-    sound.till(c.sprite.x, total, { own, items: c.items.length });
-    const base = (c.sprite.getData('baseScale') as number) ?? 1;
-    this.tweens.add({ targets: c.sprite, scaleY: base * 1.12, duration: 110, yoyo: true, onComplete: () => c.sprite.setScale(base) });
-    // Пакет, который передал кассир, теперь в руке: с ним покупатель и уходит.
-    if (c.items.length && c.sprite.getData('push') !== 'trolley') {
-      c.sprite.add(this.art(6, 3, 'paper_bag').setScale(0.85 / ART));
-    }
-    const shown = where ?? (at ? { x: at.counter.x + (at === this.registers[0] ? 8 : -8), y: at.counter.y + 0 } : { x: this.layout.sellerHome.x - 8, y: this.layout.sellerHome.y - 18 });
-    this.popup(shown.x, shown.y, `+${total} 💰`, '#c8ffb0');
-    this.combo = this.time.now - this.lastSaleAt < COMBO_WINDOW_MS ? this.combo + 1 : 1;
-    this.lastSaleAt = this.time.now;
-    this.stats.bestCombo = Math.max(this.stats.bestCombo, this.combo);
-    // В серии монет летит больше.
-    effects.flyCoins(this, where?.x ?? at?.counter.x ?? this.layout.counter.x, where?.y ?? at?.counter.y ?? this.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)) + Math.min(this.combo - 1, 5));
-    if (this.combo >= 2) this.celebrateCombo(this.combo);
-    // Серия от пяти — весь зал оборачивается на кассу.
-    if (this.combo === 5 || this.combo === 10) this.everyoneLooks(this.layout.counter.x, this.layout.counter.y, 'emo_star');
-
-    const dirty = this.trash.size >= TRASH_COMPLAINT || this.binFull();
-    const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
-    // Гнилой мусор и давно полное ведро пахнут: чем сильнее, тем чаще морщатся (rot.ts).
-    // (Полное ведро и так «грязно» — его запах здесь не добавляется второй раз.)
-    const smelly = !c.unhappy && !dirty && Math.random() < smellChance(staff.smell(this));
-    if (c.unhappy || dirty || badGoods || smelly) {
-      this.stats.complaints++;
-      if (badGoods) note(this.stats, 'badGoods');
-      else if (dirty) note(this.stats, 'dirty');
-      else if (smelly) note(this.stats, 'smell');
-      const why = badGoods ? t('popup.badProduct') : dirty ? t('popup.dirty') : smelly ? t('popup.smell') : '😣';
-      this.popup(c.sprite.x, c.sprite.y - 26, why, '#ffd0d0');
-      effects.emote(this, c.sprite, 'emo_angry');
-      this.setMood(c.sprite, 'frown');
-    } else {
-      this.setMood(c.sprite, 'happy', 2500);
-      if (Math.random() < 0.5) effects.emote(this, c.sprite, 'emo_heart');
-    }
-    this.layoutQueue();
-    if (this.state.onboarding && !onbDone(this.state, 'sale')) this.firstSale(total);
-    void this.leave(c, true);
-  }
-
-  /** Ушёл, не заплатив: шоколадка — обратно на стойку, порция — обратно на полку «Еда». */
-  private returnExtras(c: Customer): void {
-    for (const extra of c.extras ?? []) {
-      if (extra.kind === 'candy') this.state = returnCandy(this.state);
-      if (extra.dish) this.state = servePortions(this.state, extra.dish, 1);
-    }
-    if (c.extras?.some((e) => e.dish)) food.refreshFood(this);
-  }
-
-  private async giveUp(c: Customer): Promise<void> {
-    if (c.gone || c.serving) return;
-    // Первый день новичка после первой продажи: очередь держит бабушка — покупатель ещё подождёт,
-    // а у кассы его пробьёт она (firstday.ts grannyServesAfter).
-    if (this.running && !this.night && this.granny?.active && grannyServesAfter(this.state, false) !== null) {
-      c.patience = this.time.delayedCall(GRANNY_PATIENCE_MS, () => void this.giveUp(c));
-      return;
-    }
-    this.queue = this.queue.filter((q) => q !== c);
-    const at = this.registerOf(c);
-    if (at) at.customer = null;
-    c.bubble.setVisible(false);
-    this.state = returnToShelf(this.state, c.items);
-    c.items = [];
-    this.returnExtras(c);
-    c.extras = [];
-    this.refreshShelves();
-    this.refreshWarehouse();
-    if (!this.night) this.stats.lost++;
-    note(this.stats, 'queue');
-    noteLost(this.stats, 'queue');
-    this.combo = 0;
-    haptic.error();
-    sound.bad();
-    this.popup(c.sprite.x, c.sprite.y - 14, t('popup.leftAngry'), '#ffd0d0');
-    effects.emote(this, c.sprite, 'emo_angry');
-    this.setMood(c.sprite, 'frown');
-    this.layoutQueue();
-    await this.leave(c);
-  }
-
-  private async leave(c: Customer, pastCounter = false): Promise<void> {
-    c.gone = true;
-    const { door, h, queue, counter } = this.layout;
-    const route: Point[] = pastCounter ? [{ x: queue.x, y: counter.y + 40 }] : [];
-    // Из зала — в обход полок и в дверной проём (с ближнего к себе края), а не наискосок сквозь мебель
-    // и стену у входа. Крюк выходит в пару шагов: на поток покупателей не влияет.
-    if (c.sprite.y < h - 2) {
-      const from = route[0] ?? c.sprite;
-      route.push({ x: door.x + Phaser.Math.Clamp(from.x - door.x, -DOOR_EDGE, DOOR_EDGE), y: door.y - 4 });
-    }
-    route.push({ x: door.x, y: h + 16 });
-    await this.walkVia(c.sprite, route);
-    this.dropTrolley(c.sprite);
-    this.customers.delete(c);
-    // Приехавший на машине идёт к ней на парковку, остальные — по тротуару за край кадра.
-    if (c.car) void cars.driveHome(this, c.sprite, c.car);
-    else void this.strollAway(c.sprite);
+  /** Переходник к shoppers.serveNext: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
+  private serveNext(from = 0): Promise<void> {
+    return shoppers.serveNext(this, from);
   }
 
   /** Прохожий идёт по тротуару, машина проезжает по дороге. */
@@ -5902,7 +4803,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Свободные кассы забирают первых из очереди; остальные стоят в линию за кассами. */
-  private layoutQueue(): void {
+  layoutQueue(): void {
     this.registers.forEach((r, i) => {
       if (r.customer || !this.operator(i) || !this.queue.length) return;
       const c = this.queue.shift()!;
@@ -5930,7 +4831,7 @@ export class StoreScene extends Phaser.Scene {
    * ларьке стоит плотнее, чтобы не упираться в полки). Сжалась теснее роста человека — встают
    * «ёлочкой», через одного чуть левее: видно каждого, а не стопку голов друг в друге.
    */
-  private queueSpot(c: Customer, index: number): Point {
+  queueSpot(c: Customer, index: number): Point {
     const { x, y, step, minY } = this.layout.queue;
     const top = (this.registers.length ? Math.min(...this.registers.map((r) => r.spot.y)) : y + step) - step;
     const fit = this.queue.length > 1 ? (top - minY) / (this.queue.length - 1) : step;
@@ -6490,12 +5391,12 @@ export class StoreScene extends Phaser.Scene {
     this.grannyJob = gen;
     if (!this.onbSaid.has('help')) this.grannySays({ id: 'help', text: t('first.help'), mood: 'happy', hold: 2200 });
     const timing = withUpgrades(this.state, ownerTiming(this.state));
-    await this.scanCustomer(r, c, { item: timing.item * GRANNY_SCAN_SLOW, pay: timing.pay * GRANNY_SCAN_SLOW }, false, granny);
+    await shoppers.scanCustomer(this, r, c, { item: timing.item * GRANNY_SCAN_SLOW, pay: timing.pay * GRANNY_SCAN_SLOW }, false, granny);
     if (this.grannyJob === gen) this.grannyJob = -1;
   }
 
   /** Бабушка хвалит новичка за серию покупок (firstday.ts praiseAt) — когда больше никто не говорит. */
-  private grannyPraise(): void {
+  grannyPraise(): void {
     const granny = this.granny;
     if (!granny?.active || !praiseAt(this.state, this.combo, this.serves.owner) || this.say.visible || this.coach.active) return;
     // Каждый порог — один раз: пока счёт стоит, бабушкины же пробивки похвалу не повторяют.
@@ -6567,7 +5468,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Первая продажа новичка. В новом начале — маленький праздник: печать, фанфары, конфетти, бабушка радуется. */
-  private firstSale(total: number): void {
+  firstSale(total: number): void {
     this.onbStep('sale');
     saveGame(this.state);
     if (this.state.onboarding !== 'play') return;
@@ -7037,8 +5938,8 @@ export class StoreScene extends Phaser.Scene {
     this.lastSaleAt = -Infinity;
     if (this.awaitingBoxes > 0) void deliveries.deliver(this);
     this.endLiveEvent();
-    this.scheduleRegulars();
-    this.scheduleFriends();
+    shoppers.scheduleRegulars(this);
+    shoppers.scheduleFriends(this);
     food.refreshKitchen(this);
     // Старые холодильники иногда подтекают: лужа у одного из них посреди дня.
     if (Math.random() < fridgeLeak(this.state)) {
