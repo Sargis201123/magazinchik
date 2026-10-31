@@ -38,7 +38,9 @@ const schemaReady = new WeakSet<D1>();
 async function presentsReady(db: D1): Promise<void> {
   await ready(db);
   if (schemaReady.has(db)) return;
-  for (const sql of SCHEMA) await db.prepare(sql).run();
+  // Таблицы уже есть (база живёт дольше воркера) — не тратить запросы: у D1 предел на один вызов.
+  const known = await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('presents', 'present_pings')").first<{ n: number }>();
+  if ((known?.n ?? 0) < 2) for (const sql of SCHEMA) await db.prepare(sql).run();
   schemaReady.add(db);
 }
 
@@ -133,9 +135,15 @@ export async function presents(request: Request, env: Env, now = Date.now()): Pr
         .bind(user.id)
         .all<{ receiver: number }>()
     ).results;
-    await db.prepare('DELETE FROM presents WHERE receiver = ? AND opened = 1 AND thanked = 1 AND day < ?').bind(user.id, day - KEEP_DAYS).run();
-    const names = new Map<number, string>();
-    for (const id of new Set([...rows.map((r) => r.sender), ...thanks.map((r) => r.receiver)])) names.set(id, await nameOf(db, id));
+    // Старые подарки (и неоткрытые, и без «спасибо») — прочь, чтобы таблица не росла.
+    await db.prepare('DELETE FROM presents WHERE (receiver = ?1 OR sender = ?1) AND day < ?2').bind(user.id, day - KEEP_DAYS).run();
+    // Имена — одним запросом, сколько бы ни было друзей.
+    const ids = [...new Set([...rows.map((r) => r.sender), ...thanks.map((r) => r.receiver)])];
+    const names = new Map<number, string>(
+      ids.length
+        ? (await db.prepare('SELECT id, name FROM progress WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(ids)).all<{ id: number; name: string }>()).results.map((r) => [r.id, r.name || '—'])
+        : [],
+    );
     return json({
       presents: rows
         .filter((r) => PRESENT_KINDS.includes(r.kind as PresentKind))

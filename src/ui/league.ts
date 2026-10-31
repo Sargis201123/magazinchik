@@ -3,7 +3,7 @@
 
 import { t, type TextKey } from '../i18n';
 import { track } from '../platform/analytics';
-import { fetchLeague, leagueInfo, type LeagueInfo } from '../platform/league';
+import { fetchLeague, leagueAskedAt, leagueInfo, type LeagueInfo } from '../platform/league';
 import { MP_EVENT } from '../platform/multiplayer';
 import { liteMode } from '../platform/quality';
 import { claimLeague, leagueReward, LEAGUE_SIZE, myStanding, TIER_ICON, type LeagueRow } from '../game/social';
@@ -15,18 +15,17 @@ const tierName = (tier: number): string => `${TIER_ICON[Math.max(0, Math.min(2, 
 
 /** Таблицу освежаем не чаще раза в минуту (утро после дня — счёт подрос). */
 const FRESH_MS = 60_000;
-let fetchedAt = 0;
 function refreshSoon(): void {
-  if (Date.now() - fetchedAt < FRESH_MS) return;
-  fetchedAt = Date.now();
+  // Ещё не спрашивали (запуск — спросит loadMultiplayer) или спрашивали недавно — не дублировать.
+  if (!leagueAskedAt() || Date.now() - leagueAskedAt() < FRESH_MS) return;
   void fetchLeague().then((info) => {
     if (info) window.dispatchEvent(new Event(MP_EVENT));
   });
 }
 
-/** Конфетти поверх окна — в облегчённом режиме без него, только всплывашка. */
+/** Конфетти поверх окна — в облегчённом режиме и при «меньше движения» без него, только всплывашка. */
 function confetti(): void {
-  if (liteMode() || typeof document === 'undefined') return;
+  if (liteMode() || typeof document === 'undefined' || !document.body.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const layer = el('div');
   layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden';
   const colors = ['#fee761', '#e43b44', '#63c74d', '#2ce8f5', '#feae34', '#b55088'];

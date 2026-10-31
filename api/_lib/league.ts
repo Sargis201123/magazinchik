@@ -32,7 +32,11 @@ const schemaReady = new WeakSet<D1>();
 export async function leagueReady(db: D1): Promise<void> {
   await ready(db);
   if (schemaReady.has(db)) return;
-  for (const sql of SCHEMA) await db.prepare(sql).run();
+  // Таблицы уже есть (база живёт дольше воркера) — не тратить запросы: у D1 предел на один вызов.
+  const known = await db
+    .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('leagues', 'league_members', 'league_days', 'league_results')")
+    .first<{ n: number }>();
+  if ((known?.n ?? 0) < 4) for (const sql of SCHEMA) await db.prepare(sql).run();
   schemaReady.add(db);
 }
 
@@ -90,30 +94,41 @@ interface Member {
   level: number;
 }
 
-/** Ступень на эту неделю: по итогу последней сыгранной недели (повышение/понижение) или Бронза. */
-async function tierFor(db: D1, id: number, week: number): Promise<number> {
-  await finalize(db, id, week - 1);
-  const last = await db.prepare('SELECT next FROM league_results WHERE id = ? AND week < ? ORDER BY week DESC LIMIT 1').bind(id, week).first<{ next: number }>();
-  return last?.next ?? 0;
+/**
+ * Итог последней сыгранной недели до этой (не обязательно прошлой: игрок мог неделю не заходить) —
+ * от него ступень лиги и награда, которую ещё не забрали.
+ */
+export async function lastResult(db: D1, id: number, week: number): Promise<(LeagueResultRow & { week: number }) | null> {
+  const played = await db.prepare('SELECT MAX(week) AS w FROM league_members WHERE id = ? AND week < ?').bind(id, week).first<{ w: number | null }>();
+  if (!played?.w) return null;
+  const result = await finalize(db, id, played.w);
+  return result ? { week: played.w, ...result } : null;
 }
 
-/** Записать игрока в лигу недели (если ещё не записан): лига своей ступени и группы со свободным местом или новая. */
-export async function joinLeague(db: D1, id: number, level: number, now: number): Promise<Member> {
+/**
+ * Записать игрока в лигу недели (если ещё не записан): лига своей ступени и группы со свободным
+ * местом или новая. tier — ступень, если уже известна (иначе — по итогу последней недели).
+ */
+export async function joinLeague(db: D1, id: number, level: number, now: number, tier?: number): Promise<Member> {
   const week = weekOf(now);
   const known = await db.prepare('SELECT id, league, tier, level FROM league_members WHERE week = ? AND id = ?').bind(week, id).first<Member>();
   if (known) return known;
-  const tier = await tierFor(db, id, week);
+  const t = tier ?? (await lastResult(db, id, week))?.next ?? 0;
   const band = bandOf(level);
   let league = await db
     .prepare('SELECT l.id AS id FROM leagues l WHERE l.week = ?1 AND l.tier = ?2 AND l.band = ?3 AND (SELECT COUNT(*) FROM league_members m WHERE m.league = l.id) < ?4 ORDER BY l.id LIMIT 1')
-    .bind(week, tier, band, LEAGUE_SIZE)
+    .bind(week, t, band, LEAGUE_SIZE)
     .first<{ id: number }>();
   if (!league) {
     const seed = Math.floor(Math.random() * 2 ** 31);
-    league = await db.prepare('INSERT INTO leagues (week, tier, band, seed) VALUES (?, ?, ?, ?) RETURNING id').bind(week, tier, band, seed).first<{ id: number }>();
+    league = await db.prepare('INSERT INTO leagues (week, tier, band, seed) VALUES (?, ?, ?, ?) RETURNING id').bind(week, t, band, seed).first<{ id: number }>();
   }
-  await db.prepare('INSERT OR IGNORE INTO league_members (week, id, league, tier, level, joined) VALUES (?, ?, ?, ?, ?, ?)').bind(week, id, league!.id, tier, level, now).run();
-  return (await db.prepare('SELECT id, league, tier, level FROM league_members WHERE week = ? AND id = ?').bind(week, id).first<Member>())!;
+  // Два запроса разом: запишется один, второй вернёт уже записанную лигу.
+  const row = await db
+    .prepare('INSERT INTO league_members (week, id, league, tier, level, joined) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(week, id) DO UPDATE SET joined = league_members.joined RETURNING id, league, tier, level')
+    .bind(week, id, league!.id, t, level, now)
+    .first<Member>();
+  return row!;
 }
 
 /**
@@ -164,9 +179,11 @@ async function standings(db: D1, league: number, viewer: number, frac: number, e
 /** Место в таблице: 1 + сколько набрали строго больше. */
 const placeOf = (rows: LeagueRow[], score: number): number => rows.filter((r) => r.score > score).length + 1;
 
+type LeagueResultRow = { place: number; size: number; tier: number; next: number; score: number };
+
 /** Итог недели игрока: считается один раз (неделя кончилась) и запоминается. */
-export async function finalize(db: D1, id: number, week: number): Promise<{ place: number; size: number; tier: number; next: number; score: number } | null> {
-  const saved = await db.prepare('SELECT place, size, tier, next, score FROM league_results WHERE week = ? AND id = ?').bind(week, id).first<{ place: number; size: number; tier: number; next: number; score: number }>();
+export async function finalize(db: D1, id: number, week: number): Promise<LeagueResultRow | null> {
+  const saved = await db.prepare('SELECT place, size, tier, next, score FROM league_results WHERE week = ? AND id = ?').bind(week, id).first<LeagueResultRow>();
   if (saved) return saved;
   const member = await db.prepare('SELECT league FROM league_members WHERE week = ? AND id = ?').bind(week, id).first<{ league: number }>();
   if (!member) return null;
@@ -184,7 +201,7 @@ export async function finalize(db: D1, id: number, week: number): Promise<{ plac
 
 /**
  * POST /api/league { initData } → { enabled, week, daysLeft, tier?, rows?: [{ name, score, level, me? }], place?, last? }:
- * лига этой недели (игрок записывается, если уже играл) и итог прошлой — last: { week, place, size, tier, next, score }.
+ * лига этой недели (игрок записывается, если уже играл) и итог последней сыгранной — last: { week, place, size, tier, next, score }.
  */
 export async function league(request: Request, env: Env, now = Date.now()): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
@@ -196,12 +213,11 @@ export async function league(request: Request, env: Env, now = Date.now()): Prom
   await leagueReady(db);
   const week = weekOf(now);
   const en = !(user.language_code ?? 'ru').startsWith('ru');
-  const lastResult = await finalize(db, user.id, week - 1);
-  const last = lastResult ? { week: week - 1, ...lastResult } : undefined;
+  const last = (await lastResult(db, user.id, week)) ?? undefined;
   // В лигу — только тот, кто уже играл (есть прогресс); иначе запишет первый отчёт.
   const progress = await db.prepare('SELECT level FROM progress WHERE id = ?').bind(user.id).first<{ level: number }>();
   if (!progress) return json({ enabled: true, week, daysLeft: daysLeft(now), last });
-  const member = await joinLeague(db, user.id, progress.level, now);
+  const member = await joinLeague(db, user.id, progress.level, now, last?.next ?? 0);
   const frac = (now - weekStart(week)) / (7 * DAY);
   const { rows, tier } = await standings(db, member.league, user.id, frac, en);
   const me = rows.find((r) => r.me);

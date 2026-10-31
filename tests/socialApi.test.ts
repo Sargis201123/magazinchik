@@ -168,6 +168,20 @@ describe.skipIf(!Database)('турнир района (сервер)', () => {
     expect((await json<League>(league(await post(1), env))).last).toEqual(next.last);
   });
 
+  it('пропустил неделю — лига и награда не теряются', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
+    const mon = WED - 2 * DAY;
+    vi.setSystemTime(mon);
+    await progress(await post(1, { level: 0, revenue: 0 }), env);
+    vi.setSystemTime(mon + 3600_000);
+    await progress(await post(1, { level: 0, revenue: 100_000 }), env);
+    // Через неделю не заходил; вернулся ещё через одну.
+    vi.setSystemTime(mon + 14 * DAY + 3600_000);
+    const back = await json<League>(league(await post(1), env));
+    expect(back.last).toMatchObject({ week: weekOf(mon), place: 1, next: 1 });
+    expect(back.tier).toBe(1);
+  });
+
   it('соседи одинаковы для всех зрителей и растут с неделей', () => {
     const a = neighbors(42, 1, 0, 5, 0.5);
     expect(neighbors(42, 1, 0, 5, 0.5)).toEqual(a);

@@ -17,10 +17,14 @@ export interface LeagueInfo {
 
 let cache: LeagueInfo | null = null;
 export const leagueInfo = (): LeagueInfo | null => cache;
+/** Когда последний раз спрашивали сервер (0 — ни разу): утро не просит таблицу второй раз сразу после запуска. */
+let askedAt = 0;
+export const leagueAskedAt = (): number => askedAt;
 
 export async function fetchLeague(): Promise<LeagueInfo | null> {
   const initData = telegramInitData();
   if (!initData) return null;
+  askedAt = Date.now();
   const res = await post<LeagueInfo & { enabled?: boolean }>('/api/league', { initData });
   cache = res?.enabled ? res : null;
   return cache;
