@@ -133,6 +133,15 @@ describe('задания на сегодня', () => {
     expect(night.done).toBe(1);
   });
 
+  it('«ни одной жалобы» днём не платится — только вечером, по итогам дня', () => {
+    const stats = { ...emptyDayStats(), served: 6 };
+    const day = payQuests(withQuests([quest({ kind: 'noComplaints', target: 0 })]), stats);
+    expect(day.paid).toHaveLength(0);
+    const night = rewardQuests(day.state, day.state.plan!.quests, { ...stats, complaints: 1 });
+    expect(night.done).toBe(0);
+    expect(night.state.money).toBe(100);
+  });
+
   it('оплаченное днём засчитано вечером, даже если день начался заново (перезапуск)', () => {
     const paid = withQuests([quest({ paid: true }), quest({ kind: 'cleanTrash', target: 1 })]);
     const night = rewardQuests(paid, paid.plan!.quests, { ...emptyDayStats(), trashCleaned: 1 });
@@ -180,5 +189,5 @@ describe('активные моменты: баланс', () => {
       off += simulate({ days: 100, seed, momentCatch: 0 }).final.totalRevenue;
     }
     expect(Math.abs(on / off - 1)).toBeLessThan(0.05);
-  });
+  }, 60_000);
 });

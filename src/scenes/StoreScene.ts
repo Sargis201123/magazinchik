@@ -64,6 +64,7 @@ import {
   pickRareGuest,
   pickWanted,
   questDone,
+  questProgress,
   payQuests,
   rankName,
   rankOf,
@@ -1656,6 +1657,8 @@ export class StoreScene extends Phaser.Scene {
   private helpBusy = false;
   /** Сколько заданий дня уже отпраздновали всплывашкой. */
   private questsSeen = 0;
+  /** Прогресс заданий, по которому в последний раз строился список в HUD. */
+  private questRowsKey = '';
   /** Активные моменты дня (game/moments.ts, scenes/moments.ts): монетка, чаевые, гость машет… */
   private readonly moments = new Moments({
     scene: this,
@@ -2101,7 +2104,12 @@ export class StoreScene extends Phaser.Scene {
       const { sellerHome } = this.layout;
       this.popup(sellerHome.x - 20, sellerHome.y - 46, t('popup.questDone', { done, total: quests.length }), '#fee761');
     }
-    this.hud.setQuests(questRows(quests, this.stats));
+    // Список для HUD — только когда прогресс сдвинулся (questsLine зовётся каждый кадр).
+    const key = `${this.state.day}|${quests.map((q) => `${q.paid ? 'p' : ''}${questProgress(q, this.stats)}`).join()}`;
+    if (key !== this.questRowsKey) {
+      this.questRowsKey = key;
+      this.hud.setQuests(questRows(quests, this.stats));
+    }
     return t('quest.chip', { done, total: quests.length });
   }
 
@@ -5929,6 +5937,8 @@ export class StoreScene extends Phaser.Scene {
 
   /** Вечер: если куплена ночная смена — спросить, работать ли ещё; иначе закрываемся. */
   private endOfDay(): void {
+    // Момент, не дождавшийся нажатия к закрытию, уходит вместе с днём (и в ночную смену не остаётся).
+    this.moments.stop();
     // Срочный заказ не успел доехать до закрытия — водитель всё равно выгрузил.
     this.receiveUrgentOrders();
     if (this.night || this.nightAsked || !canWorkNight(this.state)) {
@@ -6576,7 +6586,6 @@ export class StoreScene extends Phaser.Scene {
     return (
       !this.running ||
       this.night ||
-      this.timeLeft <= 0 ||
       this.arranging ||
       Boolean(this.call) ||
       Boolean(this.liveEvent) ||
@@ -14877,7 +14886,8 @@ export class StoreScene extends Phaser.Scene {
     this.inspection = null;
     this.rushAnnounced = false;
     this.helpUntil = 0;
-    this.questsSeen = 0;
+    // После перезапуска посреди дня оплаченное уже празднование не повторяет.
+    this.questsSeen = (this.state.plan?.day === this.state.day ? this.state.plan.quests ?? [] : []).filter((q) => q.paid).length;
     // Активные моменты дня: расписание по секундам дня (game/moments.ts).
     this.moments.start(momentsFor(this.state, Math.random));
     this.valyaCame = false;

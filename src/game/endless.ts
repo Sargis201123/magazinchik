@@ -177,7 +177,8 @@ export function rewardQuests(state: StoreState, quests: Quest[], stats: DayStats
  */
 export function payQuests(state: StoreState, stats: DayStats): { state: StoreState; paid: Quest[] } {
   const quests = state.plan?.quests ?? [];
-  const paid = quests.filter((q) => !q.paid && questDone(q, stats));
+  // «Ни одной жалобы» решается только к вечеру: жалоба может прийти и последним покупателем.
+  const paid = quests.filter((q) => !q.paid && q.kind !== 'noComplaints' && questDone(q, stats));
   if (!paid.length || !state.plan) return { state, paid: [] };
   const plan = { ...state.plan, quests: quests.map((q) => (paid.includes(q) ? { ...q, paid: true } : q)) };
   const money = paid.reduce((s, q) => s + q.reward, 0);

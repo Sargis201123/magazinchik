@@ -18,6 +18,7 @@ const GOLD = 0xfee761;
 /** Палец — не мышь: зона нажатия не меньше стольких точек экрана (CSS) и не меньше HIT точек мира. */
 const HIT_CSS = 52;
 const HIT = 30;
+const HIT_TILL = 22;
 /** Значок и кольцо на дальнем плане (большой магазин целиком) крупнее: не мельче стольких точек экрана на точку мира. */
 const LOOK_CSS = 1.8;
 
@@ -88,21 +89,21 @@ export class Moments {
    * (или подождать, если зал занят; опоздал больше чем на MOMENT_PATIENCE — пропустить), идущий — отсчитать.
    */
   tick(elapsed: number, realMs: number): void {
-    const blocked = this.host.blocked();
     if (this.active) {
       this.follow(this.active);
-      if (!blocked) this.active.left -= realMs;
+      if (!this.host.blocked()) this.active.left -= realMs;
       this.drawRing(this.active);
       if (this.active.left <= 0 || !this.active.icon.active) this.fade(this.active);
       return;
     }
     const next = this.plan[0];
+    // Ждать нечего — и проверять, свободен ли зал (это запрос к странице), незачем.
     if (!next || elapsed < next.at) return;
     if (elapsed > next.at + MOMENT_PATIENCE) {
       this.plan.shift();
       return;
     }
-    if (blocked) return;
+    if (this.host.blocked()) return;
     this.plan.shift();
     this.show(next.kind);
   }
@@ -141,7 +142,8 @@ export class Moments {
       }
       case 'tipjar': {
         const till = host.till();
-        at = { x: till.x - 12, y: till.y - 10 };
+        // Сбоку от кассы, а не на ней: касание кассы остаётся касанием кассы.
+        at = { x: till.x - 26, y: till.y - 12 };
         key = 'tip_jar';
         break;
       }
@@ -159,13 +161,16 @@ export class Moments {
     const canvas = scene.game.canvas;
     const css = (cam.zoom * (canvas.clientWidth || canvas.width)) / canvas.width;
     const size = Phaser.Math.Clamp(LOOK_CSS / css, 1, 3);
-    const hit = Math.max(HIT, HIT_CSS / css);
+    // У кассы (банка чаевых, «уступите?» над первым в очереди) зона не больше HIT_TILL: игрок там жмёт
+    // кассу часто и быстро, «уступить» по ошибке стоило бы денег.
+    const nearTill = kind === 'tipjar' || kind === 'haggle';
+    const hit = nearTill ? HIT_TILL : Math.max(HIT, HIT_CSS / css);
     const scale = ((kind === 'coin' ? 1.4 : 1) * size) / ART;
     const icon = scene.add.image(at.x, at.y, key).setScale(scale).setDepth(DEPTH);
     const ring = scene.add.graphics().setDepth(DEPTH - 1);
     // Область касания — в точках картинки (у неё свой масштаб); над гостем — вниз, до его ног.
     const local = hit / scale;
-    const down = follow ? 10 / scale : 0;
+    const down = follow && !nearTill ? 10 / scale : nearTill ? -4 / scale : 0;
     icon.setInteractive({
       hitArea: new Phaser.Geom.Rectangle(icon.width / 2 - local / 2, icon.height / 2 - local / 2 + down, local, local),
       hitAreaCallback: Phaser.Geom.Rectangle.Contains,
