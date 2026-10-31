@@ -97,8 +97,8 @@ export const QUEST_TEXT: Record<QuestKind, TextKey> = {
   moments: 'quest.moments',
 };
 
-/** Награда за задание дня растёт с магазином: в ларьке 15, в универмаге ~120. */
-export const questReward = (level: number): number => Math.round((15 + 15 * level ** 1.4) / 5) * 5;
+/** Награда за задание дня растёт с магазином: в ларьке 10, в универмаге ~80 — около 5% прибыли дня (решение автора 31.10). */
+export const questReward = (level: number): number => Math.round((10 + 10 * level ** 1.4) / 5) * 5;
 /** Все три задания за день — бонус к рейтингу. */
 export const ALL_QUESTS_RATING = 0.1;
 
