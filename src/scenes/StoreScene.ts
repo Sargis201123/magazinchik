@@ -302,9 +302,6 @@ import {
   FRIEND_GIFT,
   PARK_TREES,
   RIVAL_ACROSS_H,
-  GUST_SPEED,
-  GUST_MS,
-  GUST_TILT,
   LIGHT_DEPTH,
   QUAKE_WAVE_MS,
   QUAKE_SHAKE_PX,
@@ -494,6 +491,7 @@ import * as motion from './motion';
 import * as effects from './effects';
 import * as pets from './pets';
 import * as lighting from './lighting';
+import * as weatherFx from './weatherFx';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -525,7 +523,7 @@ export class StoreScene extends Phaser.Scene {
   /** Где на тротуаре за дорогой висят вывески зданий (середины): новые фонари района их обходят. */
   private signsAcross: number[] = [];
   /** Снежные покрывала на крышах соседей: видны в снегопад. */
-  private roofSnow: Phaser.GameObjects.Rectangle[] = [];
+  roofSnow: Phaser.GameObjects.Rectangle[] = [];
   /** Козни конкурента на улице сегодня (tricks.ts): промоутеры, перетяжки, их таймеры. */
   private trickObjs: Phaser.GameObjects.GameObject[] = [];
   private trickTimers: Phaser.Time.TimerEvent[] = [];
@@ -597,7 +595,7 @@ export class StoreScene extends Phaser.Scene {
   doorOpen = 0;
   /** Погода дня и всё, что её рисует (частицы, снег на газоне, гирлянда, ёлка). */
   weather: Weather = 'clear';
-  private weatherObjs: Phaser.GameObjects.GameObject[] = [];
+  weatherObjs: Phaser.GameObjects.GameObject[] = [];
   /** Дождь дня: капли, брызги, круги и лужи — разгоняется утром и в иные дни к вечеру кончается. */
   rainFx?: { rain: Phaser.GameObjects.Particles.ParticleEmitter; splash: Phaser.GameObjects.Particles.ParticleEmitter; base: number; puddles: Phaser.GameObjects.Image[]; ripple?: Phaser.GameObjects.Particles.ParticleEmitter; sheen?: Phaser.GameObjects.Rectangle };
   /** Дождь сегодня уже кончился: зонты закрыты, лужи сохнут. */
@@ -630,7 +628,7 @@ export class StoreScene extends Phaser.Scene {
   /** Цвета осколков разбитого товара по картинке — чтобы не читать пиксели каждый раз. */
   private shardColors = new Map<string, number[]>();
   /** Пруд в парке: рядом летают светлячки. */
-  private parkPond?: { x: number; y: number };
+  parkPond?: { x: number; y: number };
   /** Солнечные пятна от окон на полу зала. */
   sunPatches: Phaser.GameObjects.Image[] = [];
   /** Вечернее солнце из окон правой стены (updateDaylight). */
@@ -659,8 +657,8 @@ export class StoreScene extends Phaser.Scene {
   fogs: Phaser.GameObjects.Image[] = [];
   /** Табличка «Открыто / Закрыто» на двери. */
   private doorSign?: Phaser.GameObjects.Image;
-  private lawns: { x: number; y: number; w: number; h: number }[] = [];
-  private greenery: Phaser.GameObjects.Image[] = [];
+  lawns: { x: number; y: number; w: number; h: number }[] = [];
+  greenery: Phaser.GameObjects.Image[] = [];
   /** Снимок зала перед закрытием — для карточки итогов дня. */
   private dayShot: HTMLImageElement | null = null;
   doorImg!: Phaser.GameObjects.Image;
@@ -675,7 +673,7 @@ export class StoreScene extends Phaser.Scene {
   /** Неподвижные картинки мира (деревья, дома, клумбы) с их рамками — для отсечения за краем экрана. */
   private cullables: { obj: Phaser.GameObjects.GameObject & { cameraFilter: number }; box: Phaser.Geom.Rectangle }[] = [];
   /** Мир перестроен — список для отсечения собрать заново (на следующем кадре, когда всё уже на месте). */
-  private cullDirty = true;
+  cullDirty = true;
   /** Идёт перестановка полок: камера не ездит, полки — «призраки», которые тянут пальцем. */
   arranging = false;
   /** Парковка за магазином и проезд к ней: места, машины на них и кто сейчас едет (живая днём). */
@@ -687,19 +685,19 @@ export class StoreScene extends Phaser.Scene {
   private flockTimer?: Phaser.Time.TimerEvent;
   /** Порывы ветра (windGust): таймер, деревья с кронами и навесы соседей с зонтиками веранды. */
   private windTimer?: Phaser.Time.TimerEvent;
-  private windTrees: Phaser.GameObjects.Image[] = [];
-  private awnings: Phaser.GameObjects.Image[] = [];
+  windTrees: Phaser.GameObjects.Image[] = [];
+  awnings: Phaser.GameObjects.Image[] = [];
   /** Часы грозового качания (мс, идут с ускорением игры). */
-  private windClock = 0;
+  windClock = 0;
   /**
    * Последний порыв: сколько мс прошло (по часам твинов — чтобы деревья гнулись в такт с кустами
    * и листьями), от какого края кадра пошла волна и дует ли ещё.
    */
-  private gust = { t: 0, x: 0, on: false };
+  gust = { t: 0, x: 0, on: false };
   /** Сила грозового качания (0…1): нарастает и стихает плавно — гроза кончилась, деревья не замирают рывком. */
-  private windSway = 0;
+  windSway = 0;
   /** Деревья стоят ровно — каждый кадр их не трогаем. */
-  private windStill = true;
+  windStill = true;
   /** Дневная живность и тени облаков: к вечеру исчезают (updateLighting). */
   dayLife: { obj: Phaser.GameObjects.Image; alpha: number }[] = [];
   /** Вещи зала, которые двигают при перестановке (автомат, ведро, растения): место и «след» на полу. */
@@ -1150,8 +1148,8 @@ export class StoreScene extends Phaser.Scene {
     this.watchStall(deltaMs);
     this.scarePigeons();
     ambience.update(this.rainStopped ? 'clear' : this.weather, this.evening, this.running, yearTime(this.state.day), this.ambienceLife());
-    this.updateRain();
-    this.windTick(deltaMs);
+    weatherFx.updateRain(this);
+    weatherFx.windTick(this, deltaMs);
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     this.hud.showUrgent(this.running && !this.night && this.state.day > TUTORIAL_DAYS);
     this.hud.showHelp(this.running && !this.night && this.time.now < this.helpUntil && this.canCallForHelp(), this.helpBusy);
@@ -1486,7 +1484,7 @@ export class StoreScene extends Phaser.Scene {
     this.refreshToilet();
     this.workers.clear();
     this.syncStaff();
-    this.applyWeather();
+    weatherFx.applyWeather(this);
     this.fairObjs = [];
     this.applyFair();
     this.noteNewProps(bought);
@@ -2432,184 +2430,6 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Погода дня: дождь с брызгами и зонтами, снег (белый газон, гирлянда на фасаде, ёлка в зале),
-   * листопад (рыжие деревья). Частицы падают только снаружи: здание рисуется поверх них.
-   */
-  private applyWeather(): void {
-    this.cullDirty = true;
-    // Бесконечные твины (мигание гирлянды и огоньков, туман, мотыльки) со своими вещами сами не
-    // умирают: без этого каждая смена погоды утром оставляла их сотнями крутиться впустую до пересборки.
-    this.tweens.killTweensOf(this.weatherObjs);
-    for (const obj of this.weatherObjs) obj.destroy();
-    this.weatherObjs = [];
-    this.nightLights = this.nightLights.filter((light) => light.obj.active);
-    this.bats = [];
-    this.weather = weatherFor(this.state.day);
-    // Камера ещё не пересчитала видимую область — берём её с запасом от планировки.
-    const area = { x: -80, y: -140, w: this.next.w + 160, h: this.next.h + STREET_VIEW + 220 };
-    const keep = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
-      this.weatherObjs.push(obj);
-      return obj;
-    };
-    const tree = this.weather === 'leaves' ? 0xffb868 : 0xffffff;
-    this.roofSnow = this.roofSnow.filter((r) => r.active);
-    for (const r of this.roofSnow) r.setVisible(this.weather === 'snow');
-    for (const g of this.greenery) {
-      // В снег — деревья и кусты в снежных шапках (tree_snow, bush_snow).
-      const base = (g.getData('base') as string | undefined) ?? g.texture.key;
-      g.setData('base', base);
-      const snowy = `${base}_snow`;
-      g.setTexture(this.weather === 'snow' && this.textures.exists(snowy) ? snowy : base).setTint(tree);
-    }
-
-    this.rainFx = undefined;
-    this.rainStopped = false;
-    if (isWet(this.weather)) {
-      const storm = this.weather === 'storm';
-      const rain = keep(this.add.particles(0, 0, 'raindrop', {
-        x: { min: area.x, max: area.x + area.w },
-        y: area.y,
-        speedY: { min: 240, max: 300 },
-        speedX: storm ? -60 : -30,
-        scale: 1 / ART,
-        lifespan: (area.h / 260) * 1000,
-        quantity: storm ? 4 : 3,
-        frequency: storm ? 18 : 25,
-      })).setDepth(-5);
-      this.rainFx = { rain, splash: rain, base: storm ? 18 : 25, puddles: [] };
-      this.wetStreet(keep);
-      if (storm) this.lightning(keep);
-      this.rainFx.splash = keep(this.add.particles(0, 0, 'splash', {
-        x: { min: area.x, max: area.x + area.w },
-        y: { min: area.y, max: area.y + area.h },
-        scale: { start: 0.3 / ART, end: 1 / ART },
-        alpha: { start: 1, end: 0 },
-        lifespan: 280,
-        frequency: 30,
-      })).setDepth(-5);
-    }
-    if (this.weather === 'snow') {
-      for (const lawn of this.lawns) {
-        keep(this.add.tileSprite(lawn.x, lawn.y, lawn.w, lawn.h, 'snow_ground').setOrigin(0).setTileScale(1 / ART).setDepth(-9.5));
-      }
-      keep(this.add.particles(0, 0, 'snowflake', {
-        x: { min: area.x, max: area.x + area.w },
-        y: area.y,
-        speedY: { min: 14, max: 30 },
-        speedX: { min: -10, max: 10 },
-        scale: { min: 1.2 / ART, max: 2.2 / ART },
-        lifespan: (area.h / 18) * 1000,
-        quantity: 2,
-        frequency: 30,
-      })).setDepth(-5);
-      // Гирлянда на фасаде — в applySeason (одна на все праздники); ёлка — на улице у входа,
-      // чтобы не занимать место в зале.
-      const { door, h } = this.layout;
-      keep(this.art(door.x - 26, h + 12, 'xmas_tree').setDepth(h + 30));
-    }
-    if (this.weather === 'leaves') {
-      keep(this.add.particles(0, 0, 'leaf', {
-        x: { min: area.x, max: area.x + area.w },
-        y: area.y,
-        speedY: { min: 10, max: 22 },
-        speedX: { min: -14, max: 6 },
-        rotate: { min: 0, max: 360 },
-        tint: [0xf77622, 0xfeae34, 0xb86f50, 0xe43b44],
-        scale: 1.6 / ART,
-        lifespan: (area.h / 12) * 1000,
-        frequency: 150,
-      })).setDepth(-5);
-    }
-    if (this.weather === 'heat') {
-      // Жара: над асфальтом дрожит марево.
-      keep(this.add.particles(0, 0, 'glow', {
-        x: { min: area.x, max: area.x + area.w },
-        y: { min: this.layout.h + 8, max: area.y + area.h },
-        speedY: { min: -9, max: -4 },
-        scale: { start: 0.05, end: 0.16 },
-        alpha: { start: 0.14, end: 0 },
-        tint: 0xfff0b8,
-        lifespan: 2400,
-        frequency: 70,
-        blendMode: Phaser.BlendModes.ADD,
-      })).setDepth(-5);
-    }
-    this.weatherExtras(keep);
-    this.applySeason(keep);
-    this.updateLighting(this.running ? undefined : 0);
-  }
-
-  /**
-   * Погода с настроением: в иные утра над улицей стелется туман, осенью у бордюров кучи листьев,
-   * летними вечерами у пруда светлячки, весной и летом у фонарей — мотыльки.
-   */
-  private weatherExtras(keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
-    const { h } = this.layout;
-    const next = this.next;
-    this.fogs = [];
-    const rnd = new Phaser.Math.RandomDataGenerator([`mood${this.state.day}`]);
-    if (this.weather !== 'heat' && this.weather !== 'storm' && this.state.day % 3 === 1) {
-      for (let i = 0; i < 16; i++) {
-        const fog = keep(this.art(-200 + rnd.frac() * (next.w + 400), h + 20 + rnd.frac() * 320, 'glow'))
-          .setDisplaySize(rnd.between(220, 340), rnd.between(70, 110))
-          .setTint(0xf4f6ff)
-          .setAlpha(0)
-          .setDepth(LIGHT_DEPTH + 2);
-        this.tweens.add({ targets: fog, x: fog.x + rnd.between(30, 60), duration: rnd.between(14000, 22000), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-        this.fogs.push(fog);
-      }
-    }
-    if (this.weather === 'leaves') {
-      const tones = [0xf77622, 0xfeae34, 0xb86f50, 0xe43b44];
-      for (let i = 0; i < 16; i++) {
-        const cx = -160 + rnd.frac() * (next.w + 320);
-        const cy = rnd.pick([this.streetY - 6, this.streetY + 6, next.h + 4 + 88, next.h + 4 + 92]);
-        for (let k = 0; k < 7; k++) {
-          keep(this.art(cx + rnd.between(-5, 5), cy + rnd.between(-2, 2), 'leaf'))
-            .setScale(1.5 / ART)
-            .setAngle(rnd.between(0, 359))
-            .setTint(rnd.pick(tones))
-            .setDepth(-8.5);
-        }
-      }
-    }
-    const pond = this.parkPond;
-    if (pond && yearTime(this.state.day) === 'summer' && !isWet(this.weather)) {
-      for (let i = 0; i < 12; i++) {
-        const fly = keep(this.art(pond.x + rnd.between(-90, 90), pond.y + rnd.between(-50, 40), 'glow')).setScale(11 / 64).setTint(0xd8ff7a);
-        lighting.nightGlow(this, fly, 0.9, undefined, { twinkle: i * 2.3 });
-        this.tweens.add({ targets: fly, x: fly.x + rnd.between(-16, 16), y: fly.y + rnd.between(-10, 10), duration: rnd.between(2400, 4200), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      }
-    }
-    // Весной и летом в сухой вечер вокруг горящих фонарей кружат мотыльки (updateMoths).
-    this.moths = [];
-    const season = yearTime(this.state.day);
-    if (!this.lite && (season === 'spring' || season === 'summer') && !isWet(this.weather) && this.weather !== 'snow') {
-      for (const lamp of this.lamps.filter((l) => l.street)) {
-        for (let i = 0, n = rnd.between(2, 3); i < n; i++) {
-          const img = keep(this.art(lamp.x, lamp.y, 'butterfly0')).setTint(0xf4ead0).setScale(1 / ART).setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 1).setAlpha(0);
-          this.moths.push({ img, lamp, phase: rnd.frac() * 100 });
-        }
-      }
-    }
-  }
-
-  /** После дождя над районом на полминуты встаёт радуга. */
-  private rainbow(): void {
-    const cx = this.layout.door.x;
-    const cy = this.next.h + 4 + 330;
-    const g = this.add.graphics().setDepth(LIGHT_DEPTH + 2).setAlpha(0).setBlendMode(Phaser.BlendModes.ADD);
-    [0xe43b44, 0xf77622, 0xfee761, 0x63c74d, 0x0099db, 0x68386c].forEach((color, i) => {
-      g.lineStyle(5, color, 1);
-      g.beginPath();
-      g.arc(cx, cy, 250 - i * 5, Math.PI * 1.08, Math.PI * 1.92);
-      g.strokePath();
-    });
-    this.weatherObjs.push(g);
-    this.tweens.add({ targets: g, alpha: 0.32, duration: 4000, hold: 26000, yoyo: true, onComplete: () => g.destroy() });
-  }
-
-  /**
    * Ярмарка: флажки над фасадом и шарики у входа. Перерисовывается каждое утро
    * (ярмарка — один день в месяц, погода при этом может не меняться).
    */
@@ -2697,7 +2517,7 @@ export class StoreScene extends Phaser.Scene {
    * осенью желтеют деревья и лежат листья; 8 Марта — тюльпаны и розовая гирлянда,
    * Хэллоуин — тыквы со светом и летучие мыши, Новый год — снеговик и огоньки на деревьях.
    */
-  private applySeason(keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
+  applySeason(keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
     const day = this.state.day;
     const time = yearTime(day);
     const holiday = holidayFor(day);
@@ -4300,7 +4120,7 @@ export class StoreScene extends Phaser.Scene {
   private spawnFriend(f: VisitFriend): void {
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, customerLook(SHIRTS[f.id % SHIRTS.length], this.state.day));
-    this.addUmbrella(sprite);
+    weatherFx.addUmbrella(this, sprite);
     const bubble = this.art(0, -14, 'bubble').setVisible(false);
     // Имя над головой — видно, что это друг.
     const tag = this.add
@@ -4325,7 +4145,7 @@ export class StoreScene extends Phaser.Scene {
   private spawnRegular(r: Regular): void {
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, { ...livedRegular(this.state, r).look });
-    this.addUmbrella(sprite);
+    weatherFx.addUmbrella(this, sprite);
     const bubble = this.art(0, -14, 'bubble').setVisible(false);
     sprite.add(bubble);
     // Жизнь района: Пётр Ильич с Ольгой Николаевной, Костя с женой — вдвоём.
@@ -4820,100 +4640,6 @@ export class StoreScene extends Phaser.Scene {
       extra(x + 20, y + 1, { shirt: 0x3a4466, pants: 0x262b44, hair: 0x3b2a35, style: 'short', skin: 0xe4a672 }, 'left');
       extra(x, y - 2, { shirt: 0xe43b44, pants: 0x262b44, hair: 0x733e39, style: 'long', skin: 0xf2d3ab }, 'right');
     }
-  }
-
-  /** Мокрая улица: асфальт блестит, в нём отражаются фонари, по лужам идут круги. */
-  private wetStreet(keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
-    const top = this.next.h + 4;
-    const sheen = keep(this.add.rectangle(-400, top, this.next.w + 800, 88, 0xa8c0f0).setOrigin(0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.06).setDepth(-8.9));
-    if (this.rainFx) this.rainFx.sheen = sheen;
-    for (const lamp of this.lamps.filter((l) => l.street)) {
-      // Отражение загорается вместе со своим фонарём.
-      const streak = keep(lighting.lampGlow(this, lamp, this.art(lamp.x, top + 34, 'glow').setDisplaySize(9, 46).setTint(0xffd27a), 0.4));
-      this.tweens.add({ targets: streak, scaleX: streak.scaleX * 0.65, duration: Phaser.Math.Between(600, 1100), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    }
-    const rnd = new Phaser.Math.RandomDataGenerator([`puddles${this.state.day}`]);
-    const puddles: Phaser.Types.Math.Vector2Like[] = [];
-    for (let i = 0; i < 10; i++) {
-      const x = -120 + rnd.frac() * (this.next.w + 240);
-      if (Math.abs(x - this.layout.door.x) < 16) continue;
-      const y = rnd.pick([top + 17, top + 19, top + 74, top + 80]);
-      puddles.push({ x, y });
-      const puddle = keep(this.art(x, y, 'puddle_wet').setDepth(-8.8));
-      this.rainFx?.puddles.push(puddle);
-    }
-    if (!puddles.length) return;
-    const source = {
-      getRandomPoint: (point: Phaser.Types.Math.Vector2Like) => {
-        const at = Phaser.Utils.Array.GetRandom(puddles);
-        point.x = (at.x ?? 0) + Phaser.Math.FloatBetween(-6, 6);
-        point.y = (at.y ?? 0) + Phaser.Math.FloatBetween(-1.5, 1.5);
-      },
-    };
-    const ripple = keep(this.add.particles(0, 0, 'ripple', {
-      emitZone: { type: 'random', source },
-      scale: { start: 0.15 / ART, end: 0.9 / ART },
-      alpha: { start: 0.8, end: 0 },
-      lifespan: 650,
-      frequency: 70,
-    })).setDepth(-8.7);
-    if (this.rainFx) this.rainFx.ripple = ripple;
-  }
-
-  /**
-   * Дождь не включается рывком: первые секунды дня редкие капли, потом ливень. В обычный дождь
-   * через день к вечеру он кончается: зонты закрываются, лужи сохнут.
-   */
-  private updateRain(): void {
-    const fx = this.rainFx;
-    if (!fx || this.rainStopped || !this.running || !fx.rain.active) return;
-    const p = Phaser.Math.Clamp(1 - this.timeLeft / DAY_SECONDS, 0, 1);
-    const strength = Phaser.Math.Clamp(p / 0.08, 0.12, 1);
-    fx.rain.frequency = fx.base / strength;
-    fx.splash.frequency = 30 / strength;
-    if (this.weather !== 'rain' || this.state.day % 2 !== 0 || p < 0.72) return;
-    this.rainStopped = true;
-    this.time.delayedCall(2500, () => this.rainbow());
-    fx.rain.stop();
-    fx.splash.stop();
-    fx.ripple?.stop();
-    if (fx.sheen) this.tweens.add({ targets: fx.sheen, alpha: 0, duration: 20000 });
-    for (const puddle of fx.puddles) {
-      this.tweens.add({ targets: puddle, scaleX: puddle.scaleX * 0.4, scaleY: puddle.scaleY * 0.4, alpha: 0, delay: Phaser.Math.Between(2000, 9000), duration: 15000 });
-    }
-  }
-
-  /** Гроза: время от времени вспышка молнии на весь квартал, через миг — раскат грома. */
-  private lightning(keep: <T extends Phaser.GameObjects.GameObject>(obj: T) => T): void {
-    const flash = keep(this.add.rectangle(-1200, -1200, 4000, 4000, 0xdde6ff).setOrigin(0).setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 5).setAlpha(0));
-    const strike = () => {
-      if (!flash.active) return;
-      if (this.running) {
-        this.tweens.chain({
-          targets: flash,
-          tweens: [
-            { alpha: 0.26, duration: 50 },
-            { alpha: 0.05, duration: 90 },
-            { alpha: 0.18, duration: 45 },
-            { alpha: 0, duration: 550 },
-          ],
-        });
-        this.time.delayedCall(Phaser.Math.Between(250, 1100), () => {
-          sound.thunder();
-          pets.petsStartled(this);
-        });
-      }
-      this.time.delayedCall(Phaser.Math.Between(7000, 15000), strike);
-    };
-    this.time.delayedCall(Phaser.Math.Between(2500, 5000), strike);
-  }
-
-  /** Зонт над головой: только в дождь и только на улице. */
-  private addUmbrella(person: Phaser.GameObjects.Container): void {
-    if (!isWet(this.weather) || this.rainStopped) return;
-    const umbrella = this.art(0, -13, 'umbrella').setTint(Phaser.Utils.Array.GetRandom(CAR_COLORS));
-    person.add(umbrella);
-    person.setData('umbrella', umbrella);
   }
 
   /** Нажатие засчитывается, только если палец не двигал камеру. */
@@ -5639,175 +5365,9 @@ export class StoreScene extends Phaser.Scene {
       loop: true,
       callback: () => {
         ticks++;
-        if (ticks % (this.weather === 'storm' && !this.rainStopped ? 2 : 5) === 0) this.windGust();
+        if (ticks % (this.weather === 'storm' && !this.rainStopped ? 2 : 5) === 0) weatherFx.windGust(this);
       },
     });
-  }
-
-  /**
-   * Порыв ветра: волна идёт через кадр слева направо — деревья по очереди клонятся и выпрямляются
-   * (windTick), кусты приминаются, навесы соседей вздуваются, зонтики веранды вздрагивают, а с крон
-   * срывает несколько листьев (весной — лепестков, с заснеженных — снега). Экран неподвижен, и трогаем
-   * только то, что в кадре: за краем порыв всё равно никто не увидит.
-   */
-  private windGust(): void {
-    if (this.lite || !this.sys.isActive()) return;
-    const v = this.cameras.main.worldView;
-    const seen = (obj: Phaser.GameObjects.Image) =>
-      obj.active && obj.x + obj.displayWidth / 2 > v.x && obj.x - obj.displayWidth / 2 < v.right && obj.y + obj.displayHeight / 2 > v.y && obj.y - obj.displayHeight < v.bottom;
-    // Когда волна дойдёт до этой точки (мс от начала порыва).
-    const reach = (x: number) => (Math.max(0, x - v.x) / GUST_SPEED) * 1000;
-    const gust = { t: 0, x: v.x, on: true };
-    this.gust = gust;
-    const span = reach(v.right) + GUST_MS;
-    this.tweens.addCounter({
-      from: 0,
-      to: span,
-      duration: span,
-      onUpdate: (tw) => {
-        gust.t = tw.getValue() ?? span;
-      },
-      onComplete: () => {
-        gust.on = false;
-      },
-    });
-    for (const bush of this.greenery) {
-      const key = (bush.getData('base') as string | undefined) ?? bush.texture.key;
-      // Прошлый порыв ещё не отпустил куст — второй твин запомнил бы его примятым навсегда.
-      if (!key.startsWith('bush') || !seen(bush) || this.tweens.isTweening(bush)) continue;
-      // Куст приминает к земле: ниже и шире, чуть клонится по ветру — низ стоит на месте.
-      this.tweens.add({
-        targets: bush,
-        scaleX: 1.08 / ART,
-        scaleY: 0.82 / ART,
-        y: bush.y + bush.displayHeight * 0.09,
-        angle: 4,
-        duration: 260,
-        delay: reach(bush.x) + 140,
-        yoyo: true,
-        ease: 'Sine.easeOut',
-      });
-    }
-    for (const awning of this.awnings) {
-      if (!seen(awning) || this.tweens.isTweening(awning)) continue;
-      const umbrella = awning.texture.key === 'umbrella';
-      // Навес хлопает парусом дважды, зонтик вздрагивает по ветру.
-      this.tweens.add({
-        targets: awning,
-        ...(umbrella ? { angle: 6 } : { scaleY: 0.8 / ART }),
-        duration: 190,
-        delay: reach(awning.x) + 60,
-        yoyo: true,
-        repeat: 1,
-        ease: 'Sine.easeOut',
-      });
-    }
-    // Что срывает с кроны: весной лепестки, осенью рыжие листья, с заснеженных — снег, летом — зелёные.
-    const time = yearTime(this.state.day);
-    const autumn = time === 'autumn' || this.weather === 'leaves';
-    // Сквозь стены листья в зал не залетают.
-    const { w, h } = this.layout;
-    const indoors = (x: number, y: number) => x > -WING_OUTER - WALL - 2 && x < w + WALL + 2 && y > -WALL - 2 && y < h + FACADE_H + 2;
-    let torn = 0;
-    for (const tree of this.windTrees) {
-      if (torn >= 30 || !seen(tree)) continue;
-      const key = tree.texture.key;
-      const snowy = key.endsWith('_snow');
-      // Хвоя не облетает — с ели только снег.
-      if (key.startsWith('tree_pine') && !snowy) continue;
-      const look = snowy
-        ? { tex: 'snowflake', tints: [0xffffff, 0xe4ecff], scale: 1.4 }
-        : time === 'spring'
-          ? { tex: 'leaf', tints: [0xffd2e2, 0xffffff, 0xf6a5c0], scale: 1.2 }
-          : autumn
-            ? { tex: 'leaf', tints: [0xf77622, 0xfeae34, 0xb86f50, 0xe43b44], scale: 1.8 }
-            : { tex: 'leaf', tints: [0x265c42, 0x3e8948, 0xa8e05a], scale: 1.8 };
-      // С заснеженной кроны ещё и сдувает облачко снежной пыли.
-      if (snowy && !indoors(tree.x + 16, tree.y - 12)) {
-        const dust = this.art(tree.x + 2, tree.y - 18, 'glow').setScale(0.14, 0.1).setTint(0xffffff).setAlpha(0).setDepth(tree.depth + 0.6);
-        this.tweens.add({
-          targets: dust,
-          x: dust.x + 14,
-          y: dust.y + 6,
-          scaleX: 0.42,
-          scaleY: 0.26,
-          alpha: { value: 0.8, ease: (k: number) => Math.sin(Math.PI * k) },
-          duration: 1300,
-          delay: reach(tree.x) + GUST_MS * 0.15,
-          ease: 'Quad.easeOut',
-          onComplete: () => dust.destroy(),
-        });
-      }
-      for (let n = Phaser.Math.Between(snowy ? 2 : 1, snowy ? 4 : 3); n > 0 && torn < 30; n--) {
-        const x = tree.x + Phaser.Math.Between(-8, 8);
-        const y = tree.y - Phaser.Math.Between(12, 26);
-        const dx = Phaser.Math.Between(30, 60) * (snowy ? 0.4 : 1);
-        const dy = Phaser.Math.Between(16, 30);
-        if (indoors(x, y) || indoors(x + dx, y + dy)) continue;
-        torn++;
-        const leaf = this.art(x, y, look.tex)
-          .setScale(look.scale / ART)
-          .setTint(Phaser.Utils.Array.GetRandom(look.tints))
-          .setAngle(Phaser.Math.Between(0, 359))
-          .setDepth(tree.depth + 0.6)
-          .setVisible(false);
-        const duration = Phaser.Math.Between(1700, 2500);
-        // Ветер несёт вправо и стихает, лист падает всё быстрее и под конец тает. Снег сыплется почти отвесно.
-        this.tweens.add({
-          targets: leaf,
-          x: { value: x + dx, ease: 'Quad.easeOut' },
-          y: { value: y + dy, ease: 'Sine.easeIn' },
-          angle: leaf.angle + Phaser.Math.Between(240, 520),
-          alpha: { value: 0, ease: (k: number) => Math.max(0, (k - 0.6) / 0.4) },
-          duration,
-          delay: reach(tree.x) + GUST_MS * 0.12 + n * 110,
-          onStart: () => leaf.setVisible(true),
-          onComplete: () => leaf.destroy(),
-        });
-      }
-    }
-  }
-
-  /**
-   * Деревья на ветру: порыв (windGust) идёт волной слева направо — каждое дерево клонится по ветру,
-   * пружинит назад и выпрямляется; в грозу кроны ещё и всё время качаются. Каждый кадр, но только пока
-   * дует, и только деревья в кадре. Ели жёстче — клонятся меньше.
-   */
-  private windTick(deltaMs: number): void {
-    const dt = deltaMs * this.tweens.timeScale;
-    this.windClock += dt;
-    const storm = !this.lite && this.weather === 'storm' && !this.rainStopped;
-    this.windSway += ((storm ? 1 : 0) - this.windSway) * Math.min(1, dt / 1500);
-    if (!storm && this.windSway < 0.02) this.windSway = 0;
-    const gusting = !this.lite && this.gust.on;
-    if (!this.windSway && !gusting) {
-      if (!this.windStill) for (const tree of this.windTrees) if (tree.active) this.tiltTree(tree, 0);
-      this.windStill = true;
-      return;
-    }
-    this.windStill = false;
-    const v = this.cameras.main.worldView;
-    for (const tree of this.windTrees) {
-      if (!tree.active || tree.x < v.x - 16 || tree.x > v.right + 16 || tree.y < v.y - 8 || tree.y - 32 > v.bottom) continue;
-      let tilt = this.windSway * (1.2 + Math.sin(this.windClock / 320 - tree.x / 28) * 1.6);
-      if (gusting) {
-        // 0 → +4° → −1.6° → 0: резко клонится, пружинит назад и успокаивается.
-        const k = (this.gust.t - ((tree.x - this.gust.x) / GUST_SPEED) * 1000) / GUST_MS;
-        if (k > 0 && k < 1) tilt += GUST_TILT * 1.27 * Math.sin(k * Math.PI * 2) * Math.pow(1 - k, 0.83);
-      }
-      this.tiltTree(tree, tree.texture.key.startsWith('tree_pine') ? tilt * 0.6 : tilt);
-    }
-  }
-
-  /** Дерево клонится на ветру — вместе с украшением кроны (осенние пятна, весенний цвет, огоньки). */
-  private tiltTree(tree: Phaser.GameObjects.Image, angle: number): void {
-    tree.setAngle(angle);
-    const parts = tree.getData('crown') as CrownPart[] | undefined;
-    if (!parts) return;
-    const r = Phaser.Math.DegToRad(angle);
-    const cos = Math.cos(r);
-    const sin = Math.sin(r);
-    for (const { obj, dx, dy } of parts) if (obj.active) obj.setPosition(tree.x + dx * cos - dy * sin, tree.y + dx * sin + dy * cos).setAngle(angle);
   }
 
   /**
@@ -6564,7 +6124,7 @@ export class StoreScene extends Phaser.Scene {
     const door = this.carDoor(spot);
     const driver = this.makePerson(door.x, door.y, look);
     driver.setDepth(this.outsideDepth(door.y)).setAlpha(0);
-    this.addUmbrella(driver);
+    weatherFx.addUmbrella(this, driver);
     this.tweens.add({ targets: driver, alpha: 1, duration: 250 });
     await this.stroll(driver, [{ x: door.x, y: aisleY + 3 }, { x: lot.footX, y: aisleY + 3 }, { x: lot.footX, y: lot.bottom }]);
     lot.busy.aisle = false;
@@ -6687,7 +6247,7 @@ export class StoreScene extends Phaser.Scene {
     const driver = this.makePerson(this.next.w + 60, this.streetY + Phaser.Math.Between(-3, 3), customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
     driver.setAlpha(0);
     this.tweens.add({ targets: driver, alpha: 1, duration: 250 });
-    this.addUmbrella(driver);
+    weatherFx.addUmbrella(this, driver);
     void this.driveHome(driver, spot);
   }
 
@@ -8701,7 +8261,7 @@ export class StoreScene extends Phaser.Scene {
   /** Вторая половинка пары идёт следом за первой — тем же путём, чуть позади. */
   private addCompanion(leader: Phaser.GameObjects.Container, look?: Look): void {
     const companion = this.makePerson(leader.x - 8, leader.y + 1, look ?? customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
-    this.addUmbrella(companion);
+    weatherFx.addUmbrella(this, companion);
     companion.setData('leader', leader);
     leader.setData('trail', [] as { x: number; y: number }[]);
     leader.once('destroy', () => companion.destroy());
@@ -10073,7 +9633,7 @@ export class StoreScene extends Phaser.Scene {
     }
     const start = forced?.at ?? this.streetSpawn();
     const sprite = arrived?.sprite ?? this.makePerson(start.x, start.y, look);
-    if (!arrived) this.addUmbrella(sprite);
+    if (!arrived) weatherFx.addUmbrella(this, sprite);
     // Иногда приходят парой.
     if (!arrived && !thief && !rare && !valya && !forced?.first && look.stroller === undefined && Math.random() < 0.08) this.addCompanion(sprite);
     if (rare) {
@@ -10799,7 +10359,7 @@ export class StoreScene extends Phaser.Scene {
       const fromLeft = Math.random() < 0.5;
       const y = this.streetY + Phaser.Math.Between(-5, 5);
       const person = this.makePerson(fromLeft ? left : right, y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)));
-      this.addUmbrella(person);
+      weatherFx.addUmbrella(this, person);
       if (Math.random() < 0.1) this.addCompanion(person);
       void this.walk(person, fromLeft ? right : left, y, this.ownPace(person, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.75, 1.1))).then(() => person.destroy());
     }
@@ -10878,7 +10438,7 @@ export class StoreScene extends Phaser.Scene {
       return;
     }
     const walker = this.makePerson(fromLeft ? left : right, y, { ...base, dog: Phaser.Utils.Array.GetRandom(DOG_COLORS) });
-    this.addUmbrella(walker);
+    weatherFx.addUmbrella(this, walker);
     void this.walk(walker, fromLeft ? right : left, y, this.ownPace(walker, CUSTOMER_SPEED * 0.8)).then(() => walker.destroy());
   }
 
@@ -10934,7 +10494,7 @@ export class StoreScene extends Phaser.Scene {
           this.time.delayedCall(300 + i * 350, () => {
             const y = this.streetY + Phaser.Math.Between(-4, 4);
             const p = this.makePerson(stopX + Phaser.Math.Between(-8, 8), this.streetY + 10, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day));
-            this.addUmbrella(p);
+            weatherFx.addUmbrella(this, p);
             const to = Math.random() < 0.5 ? -100 : this.next.w + 100;
             void this.walk(p, p.x, y).then(() => this.walk(p, to, y, CUSTOMER_SPEED * 0.9)).then(() => p.destroy());
           });
@@ -11113,7 +10673,7 @@ export class StoreScene extends Phaser.Scene {
     const { door, sellerHome } = this.layout;
     const start = this.streetSpawn();
     const sprite = this.makePerson(start.x, start.y, look);
-    this.addUmbrella(sprite);
+    weatherFx.addUmbrella(this, sprite);
     await this.walkVia(sprite, [
       { x: door.x, y: this.streetY },
       { x: door.x, y: door.y - 10 },
@@ -11503,7 +11063,7 @@ export class StoreScene extends Phaser.Scene {
     this.applyFair();
     this.awaitingBoxes = 0;
     this.hud.update(this.state, DAY_SECONDS);
-    if (weatherFor(this.state.day) !== this.weather) this.applyWeather();
+    if (weatherFor(this.state.day) !== this.weather) weatherFx.applyWeather(this);
     // Примерка премиальной вещи кончилась вчера — убрать её из зала.
     const trial = this.state.decor.trial;
     const trialOver = Boolean(trial && trial.day < this.state.day);
