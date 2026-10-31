@@ -66,6 +66,7 @@ import * as visitors from './visitors';
 import * as bigDays from './bigDays';
 import * as liveFx from './liveFx';
 import * as nightShift from './nightShift';
+import * as newcomer from './newcomer';
 
 // ---------- День ----------
 
@@ -159,7 +160,7 @@ export function showMorning(scene: StoreScene): void {
   const cupChanged = (contestOf(scene.state)?.wins ?? 0) !== scene.builtCup;
   const gift = scene.giftRebuild;
   scene.giftRebuild = false;
-  if (gift || scene.cleanKey() !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood) scene.buildWorld();
+  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood) scene.buildWorld();
   cars.refillParking(scene);
   scene.updateLighting(0);
   nightShift.openShop(scene);
@@ -277,7 +278,7 @@ export function startDay(scene: StoreScene): void {
     scene.time.paused = false;
     scene.running = true;
   }
-  if (scene.state.onboarding && scene.state.day <= 2) scene.onboardingDay();
+  if (scene.state.onboarding && scene.state.day <= 2) newcomer.onboardingDay(scene);
 }
 
 /**
@@ -295,7 +296,7 @@ export function summaryLesson(scene: StoreScene, firstDay = false): void {
   }
   if (firstDay) return;
   const tiles = () => document.querySelector<HTMLElement>('.ui-sum .ui-sum-tiles');
-  scene.coach.onSkip = () => scene.skipTutorial();
+  scene.coach.onSkip = () => newcomer.skipTutorial(scene);
   scene.coach.skipButton(true, true);
   scene.coach.show({
     id: 'summary',

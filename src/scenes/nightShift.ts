@@ -57,6 +57,7 @@ import * as persons from './persons';
 import * as visitors from './visitors';
 import * as bigDays from './bigDays';
 import * as morningFlow from './morningFlow';
+import * as newcomer from './newcomer';
 
 // ---------- Ночная смена ----------
 
@@ -267,7 +268,7 @@ export function finishDay(scene: StoreScene): void {
   // Первый день новичка (firstday.ts): итоги праздничные, рейтинг не падает, бабушка вечером уезжает на дачу.
   const firstDay = gentleDay(scene.state);
   const grannyHome = grannyStays(scene.state);
-  if (grannyHome) scene.onbStep('bye');
+  if (grannyHome) newcomer.onbStep(scene, 'bye');
   const night = nightCycle(scene.state, scene.stats);
   const { spoiled, bill, shortfall, skimmed, order, quests, weekly, branch } = night;
   const state = firstDay ? { ...night.state, rating: firstDayRating(scene.state, ratingBefore, night.state.rating) } : night.state;
@@ -328,7 +329,7 @@ export function finishDay(scene: StoreScene): void {
   const unlocked = scene.checkAchievements(false);
   if (unlocked.length) extra.push([t('ach.summary'), unlocked.map((id) => t(`ach.${id}` as TextKey)).join(', ')]);
   // Новичок доиграл первый день: сколько секунд прошло от «Играть».
-  if (finishedDay === 1) scene.onbStep('day1', 1);
+  if (finishedDay === 1) newcomer.onbStep(scene, 'day1', 1);
   // «Приходи завтра»: сцена Сони готова, но сегодня их уже было довольно — намёк в итогах дня.
   const teaser = dramaHeld(scene.state, todayLocal()) ? t('drama.teaser') : undefined;
   if (teaser) track('drama_held', finishedDay);
@@ -344,7 +345,7 @@ export function finishDay(scene: StoreScene): void {
     scene.giftRebuild = true;
     track('onb_gift', 1, scene.sincePlay());
   }
-  scene.hallCoachOff();
+  newcomer.hallCoachOff(scene);
   saveGame(scene.state);
   track('day_end', finishedDay, scene.stats.revenue);
   // Вовлечённость: сколько моментов дня поймали из показанных и сколько заданий дня выполнили.

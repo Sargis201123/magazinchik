@@ -124,6 +124,7 @@ import * as cars from './cars';
 import * as staff from './staff';
 import * as persons from './persons';
 import * as visitors from './visitors';
+import * as newcomer from './newcomer';
 
 /** Шоколадка со стойки у кассы летит в руки стоящему в очереди. */
 export function grabCandy(scene: StoreScene, c: Customer): void {
@@ -962,7 +963,7 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
   finishCheckout(scene, c, undefined, byOwner);
   if (byOwner) ownerServedOne(scene);
   // Хвалит бабушка только за то, что пробил сам новичок, — уже с этой покупкой в счёте.
-  if (byOwner && grannyStays(scene.state)) scene.grannyPraise();
+  if (byOwner && grannyStays(scene.state)) newcomer.grannyPraise(scene);
 }
 
 /** Редкий гость оставляет чаевые; первый раз — попадает в альбом. */
@@ -1019,7 +1020,7 @@ export function updateScanBar(scene: StoreScene): void {
 /** Покупатель расплатился; own — пробивал хозяин (полный звук кассы — награда игроку). */
 export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: number; y: number }, own = false): void {
   // Шаг обучения «Пробей покупку» — пробил сам, касанием кассы или улицы.
-  if (own) scene.passTut('serve');
+  if (own) newcomer.passTut(scene, 'serve');
   scene.queue = scene.queue.filter((q) => q !== c);
   const at = scene.registerOf(c);
   if (at) at.customer = null;
@@ -1088,7 +1089,7 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
     if (Math.random() < 0.5) effects.emote(scene, c.sprite, 'emo_heart');
   }
   persons.layoutQueue(scene);
-  if (scene.state.onboarding && !onbDone(scene.state, 'sale')) scene.firstSale(total);
+  if (scene.state.onboarding && !onbDone(scene.state, 'sale')) newcomer.firstSale(scene, total);
   void leave(scene, c, true);
 }
 

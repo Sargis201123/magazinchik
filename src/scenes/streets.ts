@@ -54,6 +54,7 @@ import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as cars from './cars';
 import * as persons from './persons';
+import * as newcomer from './newcomer';
 
 /**
  * Реклама видна на улице, пока работает: баннер на фасаде, промоутер с листовками, блогер у входа,
@@ -170,7 +171,7 @@ export function buildNeighbors(scene: StoreScene, next: Layout): void {
   const base = next.h + 4;
   const look = eduardLook(scene.state);
   scene.builtEduard = look;
-  scene.builtClean = scene.cleanKey();
+  scene.builtClean = newcomer.cleanKey(scene);
   // Босс района открывается за дорогой, на месте закрытого «Гиганта»; сбоку тогда — хозтовары.
   // Сбоку, когда босс за дорогой, — магазин друга по торговой неделе (или хозтовары).
   // Пустующее помещение тоже занимает друг.

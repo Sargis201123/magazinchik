@@ -38,7 +38,7 @@ import { fetchRivalShop, rivalAct, rivalInbox, thankRival } from '../platform/ri
 import { rivalBar, showRivalNews } from '../ui/rival';
 import { awayTrade } from '../game/away';
 import { branchAway } from '../game/branch';
-import { getLang, t, type TextKey } from '../i18n';
+import { getLang, t } from '../i18n';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import type { Rect } from './paths';
@@ -55,7 +55,7 @@ import { weatherFor, type Weather } from '../game/weather';
 import { yearTime } from '../game/calendar';
 import { liveProgress, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
-import { ETAGS_EVENING, eveningSales, hasUpgrade, withUpgrades } from '../game/upgrades';
+import { ETAGS_EVENING, eveningSales, hasUpgrade } from '../game/upgrades';
 import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskTier } from '../game/lanes';
 import { noteSeen, stashAway } from '../game/returns';
 import { activeDecor, decorFromPurchases, grantDecor } from '../game/decor';
@@ -65,11 +65,11 @@ import { liveEvents, loadLiveEvents, todayLocal } from '../platform/live';
 import { comebackHooks } from '../game/comeback';
 import { socialPing, WELCOME_GIFT } from '../platform/social';
 import { HELP_HOLD, HELP_QUEUE } from '../game/help';
-import { flushSoon, reportProgress, setProgressSource, track } from '../platform/analytics';
-import { firstWant, markOnb, onbDone, pickCohort, playDayOne, startCohort, type Cohort, type OnbStep } from '../game/onboarding';
-import { firstSaleStamp, SayBubble, type SayLine } from '../ui/onboarding';
-import { TUT_IGNORE_MS, TUT_WAIT_MS, tutAt, tutIndex, tutNext, tutPass, tutPatient, tutSkip, tutStep, tutTell, type TutStep } from '../game/tutorial';
-import { Coach, type Spot } from '../ui/coach';
+import { reportProgress, setProgressSource, track } from '../platform/analytics';
+import { pickCohort, startCohort, type Cohort } from '../game/onboarding';
+import { SayBubble } from '../ui/onboarding';
+import type { TutStep } from '../game/tutorial';
+import { Coach } from '../ui/coach';
 import { duelInfo, fetchFriendShop, loadMultiplayer } from '../platform/multiplayer';
 import { ensureSeason, grantPass } from '../game/pass';
 import { grantSupport } from '../game/support';
@@ -104,7 +104,6 @@ import { dayDemand } from '../game/demand';
 import { PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { BARGAIN_CHANCE, BARGAIN_PER_ROW, bargainCapacity, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
 import { Rotting } from './rotting';
-import { ownerTiming } from '../game/owner';
 import { EDUARD_STAGES, eduardLook, eduardStage, type EduardLook } from '../game/eduard';
 import type { CafeDelivery } from '../game/cafe';
 import { radioSpeed } from '../game/radio';
@@ -113,16 +112,14 @@ import { noteMoment } from '../game/moments';
 import { Moments } from './moments';
 import { questRows } from '../ui/today';
 import { bargainRows, bargainSprite, binCapacity, binSprite, gearTier, type GearId, registerSprite } from '../game/gear';
-import { idleRegisters, nextRegisterCount, nextRegisterPrice, registerSlots, RELIEF_ROLE, tillRole } from '../game/registers';
-import { seeTip } from '../game/tips';
+import { registerSlots, RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
 import { deferLiteNote, fpsSummary, fpsVerdict, lowerQuality, quality, qualityChosen, type Quality } from '../platform/quality';
-import { cleanHall, dreamShelf, GRANNY_SCAN_SLOW, grannyServesAfter, grannyStays, grannyStocksNow, praiseAt, quietDays } from '../game/firstday';
+import { cleanHall, dreamShelf, grannyStays, quietDays } from '../game/firstday';
 import { framesThrottled } from '../platform/frameCap';
 import type { HomeOrder } from '../game/delivery';
 import { DeliveryUi } from '../ui/delivery';
-import { hallNudge, mainGoal, NUDGE_IDLE_MS, type HallNudge } from '../game/nudge';
-import { tryNudge } from '../ui/nudge';
+import { mainGoal, type HallNudge } from '../game/nudge';
 import {
   HUD_TOP,
   HUD_BOTTOM,
@@ -130,7 +127,6 @@ import {
   SIGN_TOP,
   ART,
   TUTORIAL_DAYS,
-  NUDGE_SHOW_MS,
   LOW_STOCK,
   FURNITURE_TOP,
   CAMERA_REACH,
@@ -142,12 +138,7 @@ import {
   LIGHT_DEPTH,
   QUAKE_SHAKE_PX,
   ITEM_VARIANTS,
-  ONB_FIRST_AT,
-  ONB_HELLO_AT,
-  ONB_NEXT_GUEST,
-  ONB_BYE_AFTER,
   ONB_ROAD_MS,
-  GRANNY_SPEED,
   STREET_TAP_MS,
   CUSTOMER_SPEED,
   KIOSK_GLOW,
@@ -160,8 +151,6 @@ import {
   SPILL_TINTS,
   AUTO_CHECK_SECONDS,
   TOILET_DIRTY,
-  PICKUP_MS,
-  PLACE_MS,
   SHELF_LOOK,
   DEPT_INLAY_DEPTH,
   FLOOR_SHADE_DEPTH,
@@ -176,7 +165,6 @@ import {
   type ParkSpot,
   type ParkingLot,
   type RoadCar,
-  GRANDMA,
   ownerLook,
   INSPECTOR_AT,
   SONYA_AT,
@@ -196,8 +184,6 @@ import {
   type Pigeon,
   type ChoreStep,
   type Parcel,
-  CALL_CARD_TIP,
-  ROT_TIP,
 } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -216,6 +202,7 @@ import * as visitors from './visitors';
 import * as liveFx from './liveFx';
 import * as nightShift from './nightShift';
 import * as morningFlow from './morningFlow';
+import * as newcomer from './newcomer';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -261,7 +248,7 @@ export class StoreScene extends Phaser.Scene {
   quakeFlush?: () => void;
   private boxes: Phaser.GameObjects.Image[] = [];
   shutters: Phaser.GameObjects.Image[] = [];
-  private arrow?: Phaser.GameObjects.Image;
+  arrow?: Phaser.GameObjects.Image;
   /** Новое начало (game/onboarding.ts): облачко бабушки, она сама у входа и кольцо у кассы до первой продажи. */
   readonly say = new SayBubble();
   /** Бабушкино обучение (game/tutorial.ts): подсветка и стрелка у того, что нажать. */
@@ -269,24 +256,24 @@ export class StoreScene extends Phaser.Scene {
   /** Подсветку сейчас показывает зал (а не утро или итоги). */
   hallCoach = false;
   /** Какой шаг обучения уже ушёл в аналитику, и сколько он ждёт без цели и с целью (мс дня). */
-  private tutTracked: TutStep | null = null;
-  private tutIdleMs = 0;
-  private tutShownMs = 0;
+  tutTracked: TutStep | null = null;
+  tutIdleMs = 0;
+  tutShownMs = 0;
   granny?: Phaser.GameObjects.Container;
   /** Коробка в руках бабушки (раскладывает полку в первый день, firstday.ts). */
-  private grannyBox?: Phaser.GameObjects.Image;
+  grannyBox?: Phaser.GameObjects.Image;
   /** Бабушка занята делом (полка, касса) в этой постройке зала: worldGen, при котором дело начато. */
-  private grannyJob = -1;
+  grannyJob = -1;
   /** С какого момента (time.now) в зале пустует полка, которую есть чем пополнить; -1 — не пустует. */
-  private shelfEmptySince = -1;
+  shelfEmptySince = -1;
   tillRing?: Phaser.GameObjects.Ellipse;
   /** Когда нажали «Играть» (мс, performance.now): шаги первых минут считаются от него. */
   private playAt = 0;
   /** Какие реплики бабушка уже сказала в этот запуск (убранная касанием не возвращается). */
-  private readonly onbSaid = new Set<string>();
+  readonly onbSaid = new Set<string>();
   /** Сколько раз бабушка уже похвалила в этот запуск (реплики идут по кругу). */
-  private praised = 0;
-  private praisedAt = '';
+  praised = 0;
+  praisedAt = '';
   /** Как построен зал первой недели (firstday.ts cleanHall): поменялось — утром перестроить. */
   builtClean = '';
   /** Бабушка подарила вещь на прилавок — утром зал перестроить, чтобы она появилась. */
@@ -598,9 +585,9 @@ export class StoreScene extends Phaser.Scene {
   nextSpawn = 1;
   running = false;
   /** Подсказка «что дальше» в зале (game/nudge.ts): когда игрок последний раз касался экрана, какая подсказка и до каких пор. */
-  private lastTouch = 0;
-  private nudge: HallNudge | null = null;
-  private nudgeUntil = 0;
+  lastTouch = 0;
+  nudge: HallNudge | null = null;
+  nudgeUntil = 0;
   /** Для какого состояния нарисована цель в HUD (состояние меняется целиком — сравниваем ссылку). */
   private goalFor: StoreState | null = null;
   /** Кофемашина (если куплена) и занята ли она. */
@@ -881,7 +868,7 @@ export class StoreScene extends Phaser.Scene {
     // Дверь двигается только в рабочие часы: день кончился — стекло снова закрывает улицу.
     if (!this.running) {
       // День стоит (итоги, ночь, окно) — подсветка зала гаснет; утро и итоги показывают свою.
-      this.hallCoachOff();
+      newcomer.hallCoachOff(this);
       // Мухи над неубранным не замирают и между сменами.
       this.rotting.tick(this.time.now);
       ambience.door(0);
@@ -949,10 +936,10 @@ export class StoreScene extends Phaser.Scene {
     shoppers.updateScanBar(this);
     staff.callSellerIfNeeded(this);
     // Пока говорит бабушка (облачком или у подсветки обучения), та же подсказка снизу не повторяется.
-    const raw = this.currentHint();
+    const raw = newcomer.currentHint(this);
     // Та же подсказка, что у подсветки обучения (касса, полка), снизу не повторяется; другие (вор, мусор) — да.
     const coached = this.hallCoach && this.coach.pointing && (raw === t('hint.serve') || raw === t('hint.restock'));
-    let hint = this.say.visible || coached ? '' : raw || this.nudgeHint();
+    let hint = this.say.visible || coached ? '' : raw || newcomer.nudgeHint(this);
     // Одна подсказка в одном месте: пока о кассе и полках говорят бабушка или подсветка обучения,
     // снизу о том же молчим (firstday.ts).
     if ((grannyStays(this.state) || (this.hallCoach && this.coach.active)) && (hint === t('hint.serve') || hint === t('hint.restock'))) hint = '';
@@ -961,9 +948,9 @@ export class StoreScene extends Phaser.Scene {
       this.goalFor = this.state;
       this.hud.setGoal(mainGoal(this.state));
     }
-    this.updateTutorialArrow();
-    if (this.state.onboarding && this.state.day === 1) this.onboardingTick();
-    this.tutorialTick(deltaMs);
+    newcomer.updateTutorialArrow(this);
+    if (this.state.onboarding && this.state.day === 1) newcomer.onboardingTick(this);
+    newcomer.tutorialTick(this, deltaMs);
     this.updateLighting(this.night ? 1 : undefined);
     motion.updateDoor(this);
     motion.pulseHighlights(this);
@@ -1006,90 +993,6 @@ export class StoreScene extends Phaser.Scene {
     return t('quest.chip', { done, total: quests.length });
   }
 
-  private currentHint(): string {
-    if (this.liveEvent) return t(`hint.${this.liveEvent}` as TextKey);
-    if (this.moments.showing) return t('hint.moment');
-    if (this.oven?.state === 'ready') return t('hint.ovenReady');
-    // Первый звонок с карточкой — подсказка подробнее: куда нажать (и тем, у кого доставка была и раньше).
-    if (this.call) return t((this.state.seenTips ?? []).includes(CALL_CARD_TIP) ? 'hint.order' : 'hint.orderFirst');
-    if (!deliveries.staffPacks(this) && !this.packRequested && this.parcels.some((p) => p.stage === 'wait')) return t('hint.orderPack');
-    if (this.inspector === 'here') return t('hint.inspector');
-    if (!this.workers.has('guard') && [...this.customers].some((c) => c.thief && !c.gone)) return t('hint.thief');
-    if (this.sellerBusy && this.ownerRegister()) return t('hint.recall');
-    if (this.ownerRegister() && this.state.day <= 2 && this.stats.served < 3) return t('hint.serve');
-    // Очередь растёт — подсказать, что поможет. За первой кассой и так хозяин: кассир за свободную
-    // кассу, ещё одна касса или помещение, где под неё есть место.
-    if (this.queue.length >= 4 && this.state.day > TUTORIAL_DAYS) {
-      if (idleRegisters(this.state) > 0) return t('hint.queueHire');
-      if (nextRegisterPrice(this.state) !== null) return t('hint.queueBuy');
-      if ((nextRegisterCount(this.state) ?? 0) > registerSlots(this.state)) return t('hint.queueRegister');
-    }
-    if (this.state.day <= 4 && this.shelfNeedsRestock()) return t('hint.restock');
-    if (!this.state.seenTips?.includes(ROT_TIP) && [...this.trash].some((piece) => piece.getData('rot')))
-      return t(this.state.staff.some((m) => m.role === 'cleaner') ? 'hint.rot' : 'hint.rotSolo');
-    if (this.binFull() && !this.binBusy) return t('hint.bin');
-    if ((this.trash.size > 0 || this.toiletDirt >= TOILET_DIRTY) && this.state.day <= 4) return t('hint.clean');
-    return '';
-  }
-
-  /**
-   * Игрок застыл на NUDGE_IDLE_MS, а в зале ждёт дело: покупатель у кассы хозяина или пустая полка при
-   * товаре на складе. Одна строка снизу и стрелка на несколько секунд; каждая — раз в день, всего не
-   * больше трёх в день и только в первые две недели (game/nudge.ts). Касание экрана — гаснет.
-   */
-  private nudgeHint(): string {
-    const now = this.time.now;
-    if (!this.running || this.night || !this.dayOpen) {
-      this.lastTouch = now;
-      this.nudge = null;
-      return '';
-    }
-    if (this.nudge && this.nudgeUntil > now) return t(this.nudge === 'serve' ? 'hint.serve' : 'hint.restock');
-    this.nudge = null;
-    if (now - this.lastTouch < NUDGE_IDLE_MS) return '';
-    const kind = hallNudge({ waiting: Boolean(this.ownerRegister()) && !this.sellerBusy, emptyShelf: this.shelfNeedsRestock() });
-    if (!kind || !tryNudge(this.state.day, kind, now - this.lastTouch)) return '';
-    this.nudge = kind;
-    this.nudgeUntil = now + NUDGE_SHOW_MS;
-    return t(kind === 'serve' ? 'hint.serve' : 'hint.restock');
-  }
-
-  /**
-   * Обучение первых дней: над тем, что нужно нажать сейчас, прыгает стрелка —
-   * касса, пустая полка, мусор или грязный туалет, вор.
-   */
-  private updateTutorialArrow(): void {
-    const target = this.state.day <= TUTORIAL_DAYS || this.inspector === 'here' || this.nudgeUntil > this.time.now ? this.tutorialTarget() : null;
-    // Ту же цель бабушкино обучение показывает своей стрелкой (ui/coach.ts) — вторая не нужна.
-    const own = this.hallCoach && this.coach.pointing && this.tutTracked ? this.tutWorldSpot(this.tutTracked) : null;
-    if (!target || (own && Math.abs(own.x - target.x) < 24 && Math.abs(own.y - target.y) < 40)) {
-      this.arrow?.setVisible(false);
-      return;
-    }
-    if (!this.arrow?.active) {
-      this.arrow = this.art(0, 0, 'arrow').setScale(1.3 / ART).setDepth(LIGHT_DEPTH + 20);
-    }
-    const bob = Math.sin(this.time.now / 160) * 2;
-    this.arrow.setVisible(true).setPosition(target.x, target.y - 12 + bob);
-  }
-
-  private tutorialTarget(): { x: number; y: number } | null {
-    const { counter, wc } = this.layout;
-    const thief = !this.workers.has('guard') ? [...this.customers].find((c) => c.thief && !c.gone) : undefined;
-    if (thief) return { x: thief.sprite.x, y: thief.sprite.y - 12 };
-    const waitingAt = this.ownerRegister();
-    if (waitingAt && (this.sellerBusy || this.stats.served < 3 || this.nudge === 'serve')) return { x: waitingAt.counter.x, y: waitingAt.counter.y - 28 };
-    void counter;
-    if (this.shelfNeedsRestock()) {
-      const index = this.shelfViews.findIndex((v) => v.needsStock);
-      if (index >= 0) return { x: this.spotOf(index).x, y: this.spotOf(index).y - 18 };
-    }
-    const trash = [...this.trash].find((piece) => !this.claimedTrash.has(piece));
-    if (trash) return { x: trash.x, y: trash.y - 2 };
-    if (this.toiletDirt >= TOILET_DIRTY) return { x: wc.x, y: wc.y - 14 };
-    return null;
-  }
-
   /**
    * Разметка свободного места под полку. Новичку первой недели — только когда на новую полку хватает
    * денег: до этого пустое место в киоске — просто пол.
@@ -1101,7 +1004,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Есть товар на складе, а на его полке он закончился. */
-  private shelfNeedsRestock(): boolean {
+  shelfNeedsRestock(): boolean {
     return PRODUCT_IDS.some(
       (id) =>
         (this.state.warehouse[id]?.length ?? 0) > 0 &&
@@ -2403,7 +2306,7 @@ export class StoreScene extends Phaser.Scene {
    * Бабушка показывает касание улицы: на дороге под её словами прыгает стрелка и расходятся круги,
    * как от пальца. Точка — в кадре, даже если дорога ниже края экрана (тогда — на участке у входа).
    */
-  private showStreetTap(): void {
+  showStreetTap(): void {
     const view = this.cameras.main.worldView;
     const x = Phaser.Math.Clamp(this.layout.door.x + 34, view.x + 24, view.right - 24);
     const y = Phaser.Math.Clamp(this.streetY + 32, this.layout.h + FACADE_H + 14, view.bottom - 28);
@@ -3515,399 +3418,6 @@ export class StoreScene extends Phaser.Scene {
   /** Секунды от «Играть» — по ним видно, как быстро новичок дошёл до шага. */
   sincePlay(): number {
     return this.playAt ? (performance.now() - this.playAt) / 1000 : 0;
-  }
-
-  /** Шаг первых минут: отмечается один раз, уходит в аналитику (onb_<шаг>) и на сервер — поскорее. */
-  onbStep(step: OnbStep, day = this.state.day): void {
-    if (!this.state.onboarding || onbDone(this.state, step)) return;
-    this.state = markOnb(this.state, step);
-    track(`onb_${step}`, day, this.sincePlay());
-    flushSoon();
-  }
-
-  /**
-   * Открытие в первые два дня новичка: шаг в аналитику. В новом начале в первый день бабушка
-   * встречает у входа, первый покупатель входит почти сразу, а следующий — чуть погодя.
-   */
-  onboardingDay(): void {
-    this.onbStep(this.state.day === 1 ? 'open' : 'day2');
-    if (!playDayOne(this.state)) return;
-    if (!onbDone(this.state, 'bye')) this.placeGranny();
-    // Игру закрыли после первой продажи: бабушка так и стоит у кассы до вечера (firstday.ts).
-    if (onbDone(this.state, 'sale')) return;
-    this.nextSpawn = ONB_NEXT_GUEST;
-    this.time.delayedCall(ONB_FIRST_AT * 1000, () => this.spawnFirst());
-    if (onbDone(this.state, 'hello')) return;
-    this.time.delayedCall(ONB_HELLO_AT * 1000, () => {
-      if (!this.running || onbDone(this.state, 'sale')) return;
-      this.onbStep('hello');
-      this.grannySays({ id: 'hello', text: t('onb.hello'), mood: 'happy', hold: 2800 });
-      // Пока покупатель выбирает — как тут всё устроено.
-      this.time.delayedCall(4800, () => {
-        if (this.running && !onbDone(this.state, 'sale') && !this.onbSaid.has('serve')) this.grannySays({ id: 'shop', text: t('onb.shop'), hold: 2600 });
-      });
-    });
-  }
-
-  /** Первый покупатель нового начала: входит от самой двери и берёт то, что по пути к кассе. */
-  private spawnFirst(): void {
-    if (!this.running || onbDone(this.state, 'sale')) return;
-    const { door } = this.layout;
-    const till = this.registers[0]?.spot ?? this.layout.counter;
-    const want = firstWant(this.state, (i) => this.standOf(i), door, till);
-    const look = customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day);
-    // Уже на дорожке у двери: камера ещё подлетает, а он входит.
-    this.spawnCustomer({ look, at: { x: door.x, y: door.y + 24 }, wants: want ? [want] : undefined, first: true });
-  }
-
-  /**
-   * Бабушка в первый день нового начала: весь день за прилавком, рядом с кассой хозяина (там, где
-   * встаёт хозяин при сменщике), — смотрит в зал. Вечером, с итогами дня, уезжает на дачу.
-   */
-  private placeGranny(): void {
-    if (this.granny?.active) return;
-    const home = this.grannyHome();
-    this.granny = persons.makePerson(this, home.x, home.y, GRANDMA);
-    this.grannyBox = this.art(0, 3, 'box').setVisible(false);
-    this.granny.add(this.grannyBox);
-    persons.setFacing(this.granny, 'down');
-  }
-
-  /**
-   * Что в зале первой недели скрыто (firstday.ts): надписи закрытых пристроек и «Сдаётся» (пока на переезд
-   * не хватает). Сменилось — утром зал перестраивается, и они появляются.
-   */
-  cleanKey(): string {
-    const next = STORE_LEVELS[this.state.level + 1];
-    return cleanHall(this.state) ? `clean:${next ? this.state.money >= next.cost : ''}` : '';
-  }
-
-  private grannyHome(): { x: number; y: number } {
-    return staff.reliefSpot(this);
-  }
-
-  /** Бабушка сейчас занята делом (полка, касса). Дело прошлой постройки зала не считается. */
-  private grannyBusy(): boolean {
-    return this.grannyJob === this.worldGen;
-  }
-
-  /** Полка, на которой кончился товар, а на складе он есть (как shelfNeedsRestock); -1 — нет такой. */
-  private emptyShelfIndex(): number {
-    return this.state.shelves.findIndex(
-      (shelf) =>
-        !shelf.broken &&
-        shelfFree(shelf) > 0 &&
-        PRODUCT_IDS.some((id) => canPlace(id, shelf) && (shelf.items[id]?.length ?? 0) === 0 && (this.state.warehouse[id] ?? []).some((u) => !u.pending)),
-    );
-  }
-
-  /**
-   * Первый день новичка, каждый кадр: бабушка раскладывает опустевшую полку (в первый раз — сразу,
-   * показывая как; потом — если новичок не нажал её сам) и пробивает покупателя, который заждался
-   * у кассы хозяина (после первой продажи: её делает сам игрок). Всё — game/firstday.ts.
-   */
-  private grannyHelps(): void {
-    const granny = this.granny;
-    if (!granny?.active || !this.running || this.night || this.grannyBusy() || !grannyStays(this.state)) return;
-    const r = this.registers[0];
-    const c = r?.customer;
-    const after = grannyServesAfter(this.state, this.sellerBusy);
-    if (r && c && after !== null && this.operator(0) === 'owner' && !c.serving && !r.scan && this.atSpot(r) && c.waitStart && this.time.now - c.waitStart > after) {
-      void this.grannyServe(r, c);
-      return;
-    }
-    const index = this.emptyShelfIndex();
-    if (index < 0) {
-      this.shelfEmptySince = -1;
-      return;
-    }
-    if (this.shelfEmptySince < 0) this.shelfEmptySince = this.time.now;
-    // Хозяин уже несёт товар — бабушка не мешает.
-    if (this.sellerBusy) return;
-    if (grannyStocksNow(this.state, this.time.now - this.shelfEmptySince, this.onbSaid.has('stockDemo'))) void this.grannyRestock(index);
-  }
-
-  /** Бабушка идёт на склад, берёт коробку и раскладывает полку (как грузчик); в первый раз — с присказкой. */
-  private async grannyRestock(index: number): Promise<void> {
-    const granny = this.granny;
-    if (!granny?.active) return;
-    const gen = this.worldGen;
-    this.grannyJob = gen;
-    const ok = () => gen === this.worldGen && granny.active && this.running;
-    const done = () => {
-      if (this.grannyJob === gen) this.grannyJob = -1;
-      this.shelfEmptySince = -1;
-    };
-    if (!this.onbSaid.has('stockDemo')) {
-      this.grannySays({ id: 'stockDemo', text: t('first.stockDemo'), mood: 'happy', hold: 2600 });
-      track('first_granny_stock', this.state.day, this.sincePlay());
-    }
-    const { doorway, pickup } = this.layout.warehouse;
-    const route = this.routeTo(index);
-    await persons.walkVia(this, granny, [doorway, pickup], GRANNY_SPEED);
-    if (!ok()) return done();
-    await this.wait(PICKUP_MS);
-    if (!ok()) return done();
-    this.grannyBox?.setVisible(true);
-    await persons.walkVia(this, granny, [doorway, ...route], GRANNY_SPEED);
-    if (!ok()) return done();
-    await this.wait(PLACE_MS);
-    if (!ok()) return done();
-    this.grannyBox?.setVisible(false);
-    // Пока шла, полку мог разложить сам игрок — тогда коробка просто возвращается на склад.
-    if (shelfFree(this.state.shelves[index]) > 0) staff.stockShelf(this, index, granny);
-    const home = this.grannyHome();
-    await persons.walkVia(this, granny, [...route.slice(0, -1).reverse(), doorway, home], GRANNY_SPEED);
-    if (granny.active) persons.setFacing(granny, 'down');
-    done();
-  }
-
-  /** Покупатель заждался у кассы хозяина — бабушка пробивает его сама, не спеша. */
-  private async grannyServe(r: Register, c: Customer): Promise<void> {
-    const granny = this.granny;
-    if (!granny?.active) return;
-    const gen = this.worldGen;
-    this.grannyJob = gen;
-    if (!this.onbSaid.has('help')) this.grannySays({ id: 'help', text: t('first.help'), mood: 'happy', hold: 2200 });
-    const timing = withUpgrades(this.state, ownerTiming(this.state));
-    await shoppers.scanCustomer(this, r, c, { item: timing.item * GRANNY_SCAN_SLOW, pay: timing.pay * GRANNY_SCAN_SLOW }, false, granny);
-    if (this.grannyJob === gen) this.grannyJob = -1;
-  }
-
-  /** Бабушка хвалит новичка за серию покупок (firstday.ts praiseAt) — когда больше никто не говорит. */
-  grannyPraise(): void {
-    const granny = this.granny;
-    if (!granny?.active || !praiseAt(this.state, this.combo, this.serves.owner) || this.say.visible || this.coach.active) return;
-    // Каждый порог — один раз: пока счёт стоит, бабушкины же пробивки похвалу не повторяют.
-    const mark = `${this.combo}:${this.serves.owner}`;
-    if (mark === this.praisedAt) return;
-    this.praisedAt = mark;
-    const n = this.praised++ % 3;
-    effects.emote(this, granny, 'emo_heart');
-    persons.setMood(this, granny, 'happy', 2500);
-    this.grannySays({ id: `praise${this.praised}`, text: t(`first.praise.${n}` as TextKey), mood: 'happy', hold: 2200 });
-  }
-
-  /** Реплика бабушки облачком под ней — она стоит у входа (её уже нет в зале — у двери). */
-  private grannySays(line: SayLine): void {
-    this.onbSaid.add(line.id);
-    this.say.show(line);
-    this.placeSay();
-  }
-
-  private placeSay(): void {
-    if (!this.say.visible) return;
-    const granny = this.granny?.active ? this.granny : null;
-    const { door } = this.layout;
-    const p = this.screenPoint(granny ? granny.x : door.x, granny ? granny.y + 10 : door.y + 4);
-    this.say.place(p.x, p.y, true);
-  }
-
-  /** Точка мира → точка на экране в CSS-пикселях (холст вписан в окно и бывает уже его). */
-  private screenPoint(x: number, y: number): { x: number; y: number } {
-    const cam = this.cameras.main;
-    const rect = this.game.canvas.getBoundingClientRect();
-    const k = rect.width / this.scale.width;
-    return { x: rect.left + (x - cam.worldView.x) * cam.zoom * k, y: rect.top + (y - cam.worldView.y) * cam.zoom * k };
-  }
-
-  /**
-   * Первый день новичка, каждый кадр: покупатель встал у кассы — шаг «cust». В новом начале
-   * бабушка зовёт нажать на кассу, вокруг кассы — мягкое кольцо; облачко держится у бабушки.
-   */
-  private onboardingTick(): void {
-    const r = onbDone(this.state, 'sale') ? undefined : this.ownerRegister();
-    const waiting = r && this.atSpot(r) ? r : null;
-    if (waiting) this.onbStep('cust');
-    if (this.state.onboarding === 'play') {
-      // Зал перестроили — бабушка снова у кассы (пока не уехала на дачу).
-      if (!onbDone(this.state, 'bye') && !this.granny?.active) this.placeGranny();
-      this.grannyHelps();
-      if (waiting) {
-        if (!this.onbSaid.has('serve')) this.grannySays({ id: 'serve', text: t('onb.serve'), hold: 0 });
-        this.ringTill(waiting);
-      } else if (!this.registers.some((r, i) => this.operator(i) === 'owner' && r.customer)) {
-        // Покупатель не дождался и ушёл — звать к кассе некого: облачко и кольцо гаснут, подсказки
-        // внизу возвращаются, а к следующему покупателю бабушка позовёт снова.
-        if (this.say.line === 'serve') this.say.hide();
-        this.onbSaid.delete('serve');
-        this.tillRing?.destroy();
-        this.tillRing = undefined;
-      }
-    }
-    this.placeSay();
-  }
-
-  /** Мягкое золотое кольцо вокруг кассы: «сюда нажать». На слабом телефоне — без пульса. */
-  private ringTill(r: Register): void {
-    if (this.tillRing?.active) return;
-    const ring = this.add.ellipse(r.counter.x, r.counter.y + 2, 30, 14).setStrokeStyle(1.5, 0xfee761, 0.95).setDepth(LIGHT_DEPTH + 19);
-    this.tillRing = ring;
-    if (!this.lite) this.tweens.add({ targets: ring, scale: 1.25, alpha: 0.35, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-  }
-
-  /** Первая продажа новичка. В новом начале — маленький праздник: печать, фанфары, конфетти, бабушка радуется. */
-  firstSale(total: number): void {
-    this.onbStep('sale');
-    saveGame(this.state);
-    if (this.state.onboarding !== 'play') return;
-    this.tillRing?.destroy();
-    this.tillRing = undefined;
-    sound.fanfare();
-    firstSaleStamp(total);
-    if (!this.lite) {
-      const { counter } = this.layout;
-      const confetti = this.add.particles(counter.x, counter.y - 24, 'confetti', {
-        speed: { min: 40, max: 120 },
-        angle: { min: 200, max: 340 },
-        gravityY: 150,
-        rotate: { min: 0, max: 360 },
-        scale: 1 / ART,
-        lifespan: 1500,
-        tint: [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xb55088],
-        emitting: false,
-      });
-      confetti.setDepth(LIGHT_DEPTH + 10).explode(36);
-      this.time.delayedCall(1700, () => confetti.destroy());
-    }
-    // Первый день прошёл без продажи — бабушка уже на даче: праздник есть, а её реплики нет.
-    if (!playDayOne(this.state)) return;
-    const granny = this.granny;
-    if (granny?.active) {
-      effects.emote(this, granny, 'emo_heart');
-      persons.setMood(this, granny, 'happy', 3000);
-      if (!this.lite) this.tweens.add({ targets: granny, y: granny.y - 4, duration: 140, yoyo: true, repeat: 1, ease: 'Quad.easeOut' });
-    }
-    this.grannySays({ id: 'sold', text: t('onb.sold'), mood: 'happy', hold: 2400 });
-    this.time.delayedCall(ONB_BYE_AFTER * 1000, () => this.grannyRoad());
-  }
-
-  /**
-   * После первой продажи бабушка показывает, как пробивать, не дотягиваясь до кассы: касанием улицы
-   * внизу (утренняя карточка об этом тогда уже не нужна). Сама остаётся за прилавком до вечера: на дачу
-   * уезжает с итогами дня (finishDay), прощание — строчкой в итогах. Таймер, а не wait: переживёт перестройку зала.
-   */
-  private grannyRoad(): void {
-    if (!this.running || !grannyStays(this.state) || this.onbSaid.has('road')) return;
-    this.grannySays({ id: 'road', text: t('onb.road'), mood: 'happy', hold: 2800 });
-    if (!this.state.seenTips?.includes('ownerTill')) this.state = seeTip(this.state, 'ownerTill');
-    this.showStreetTap();
-  }
-
-  // ---------- Бабушкино обучение (game/tutorial.ts) ----------
-
-  /**
-   * Каждый кадр дня: шаг обучения в зале — светлое окошко и стрелка у кассы с покупателем или у пустой
-   * полки, строчка бабушки рядом. Цели нет — ждём (в первый день — сколько надо, иначе TUT_WAIT_MS);
-   * цель есть, а её не трогают — через TUT_IGNORE_MS шаг идёт дальше сам: обучение игру не держит.
-   * Состояние шага — в сохранении, а цель ищется заново каждый кадр: перестройка зала ему не мешает.
-   */
-  private tutorialTick(deltaMs: number): void {
-    const step = tutAt(this.state, 'hall');
-    if (!step || this.night || this.arranging || savingPaused()) {
-      this.hallCoachOff();
-      return;
-    }
-    this.coach.onSkip = () => this.skipTutorial();
-    this.coach.skipButton(true);
-    this.hallCoach = true;
-    // В первый день, пока бабушка в зале, она сама говорит облачком (onboardingTick): подсветка — без строчки,
-    // а до полок дело дойдёт, когда она попрощается.
-    // Полку первой раскладывает бабушка (показывает как, firstday.ts); пока она занята — тоже без подсветки.
-    const granny = playDayOne(this.state) && !onbDone(this.state, 'bye');
-    if (granny && step === 'restock' && (!this.onbSaid.has('stockDemo') || this.grannyBusy())) {
-      this.coach.hide();
-      return;
-    }
-    if (this.tutTracked !== step) {
-      this.tutTracked = step;
-      this.tutIdleMs = 0;
-      this.tutShownMs = 0;
-      // В аналитику — один раз на шаг, и после перезапуска тоже (отметка в сохранении).
-      const told = tutTell(this.state);
-      if (told) {
-        track('tut_step', this.state.day, tutIndex(this.state));
-        flushSoon();
-        this.state = told;
-      }
-    }
-    const spot = this.tutWorldSpot(step);
-    const ms = deltaMs * this.speed;
-    if (spot) this.tutShownMs += ms;
-    // Хозяин уже несёт товар или пробивает — это не «цели нет».
-    else if (!this.sellerBusy && !this.ownerScanning()) this.tutIdleMs += ms;
-    const patient = tutPatient(this.state, step);
-    if ((!patient && this.tutIdleMs > TUT_WAIT_MS) || (!(patient && step === 'serve') && this.tutShownMs > TUT_IGNORE_MS)) {
-      track('tut_auto', this.state.day, tutIndex(this.state));
-      this.advanceTut(tutNext(this.state));
-      return;
-    }
-    const text = step === 'serve' ? (granny ? '' : t('tut.serve')) : t('tut.restock');
-    this.coach.show({ id: `hall:${step}`, text, target: () => this.tutScreenSpot(step), under: () => this.game.canvas });
-  }
-
-  /** Цель шага в мире: касса, у которой ждёт покупатель хозяина, или полка, которую пора пополнить. */
-  private tutWorldSpot(step: TutStep): { x: number; y: number; w: number; h: number } | null {
-    if (step === 'serve') {
-      const r = this.ownerRegister();
-      return r && this.atSpot(r) ? { x: r.counter.x, y: r.counter.y - 8, w: 30, h: 26 } : null;
-    }
-    if (step !== 'restock' || this.sellerBusy || this.grannyBusy()) return null;
-    // Полка, которую можно пополнить прямо сейчас: товар уже на складе, а не в пути.
-    const index = this.shelfViews.findIndex(
-      (v, i) => v.needsStock && PRODUCT_IDS.some((id) => canPlace(id, this.state.shelves[i]) && (this.state.warehouse[id] ?? []).some((u) => !u.pending)),
-    );
-    if (index < 0) return null;
-    const at = this.spotOf(index);
-    return { x: at.x, y: at.y - 12, w: 30, h: 30 };
-  }
-
-  /** То же на экране, CSS-пиксели (камера могла сдвинуться). */
-  private tutScreenSpot(step: TutStep): Spot | null {
-    if (!this.hallCoach || !this.running) return null;
-    const box = this.tutWorldSpot(step);
-    if (!box) return null;
-    const a = this.screenPoint(box.x - box.w / 2, box.y - box.h / 2);
-    const b = this.screenPoint(box.x + box.w / 2, box.y + box.h / 2);
-    return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
-  }
-
-  /** Игрок сделал то, чего ждал шаг зала. */
-  passTut(step: TutStep): void {
-    if (tutStep(this.state) !== step || !this.running) return;
-    this.advanceTut(tutPass(this.state, step));
-  }
-
-  private advanceTut(next: StoreState): void {
-    const was = tutIndex(this.state);
-    this.state = next;
-    this.tutTracked = null;
-    this.coach.hide();
-    saveGame(this.state);
-    if (!tutStep(next)) {
-      track('tut_done', next.day, was);
-      flushSoon();
-      this.hallCoachOff();
-      this.coach.note(t('tut.done'), 4500);
-    }
-  }
-
-  /** Подсветка зала гаснет (день встал, шаг ушёл в утро или обучение кончилось). */
-  hallCoachOff(): void {
-    if (!this.hallCoach) return;
-    this.hallCoach = false;
-    this.coach.hide();
-    this.coach.skipButton(false);
-  }
-
-  /** «Пропустить обучение» подтвердили: шаги кончаются, все вкладки утра открыты. */
-  skipTutorial(): void {
-    if (!tutStep(this.state)) return;
-    track('tut_skip', this.state.day, tutIndex(this.state));
-    flushSoon();
-    this.state = tutSkip(this.state);
-    this.hallCoachOff();
-    saveGame(this.state);
   }
 
   /** Переходник к morningFlow.unboxables: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */

@@ -70,6 +70,7 @@ import * as food from './food';
 import * as shoppers from './shoppers';
 import * as persons from './persons';
 import * as visitors from './visitors';
+import * as newcomer from './newcomer';
 
 // ---------- Продавец: уборка и выкладка ----------
 
@@ -209,9 +210,9 @@ export function restockShelf(scene: StoreScene, index: number): void {
   ];
   void doChore(scene, Array.from({ length: Math.min(trips, MAX_RESTOCK_TRIPS) }, () => trip).flat());
   // Шаг обучения «Разложи товар»: полку нажали — хозяин уже несёт коробку.
-  scene.passTut('restock');
+  newcomer.passTut(scene, 'restock');
   // Новичок разложил полку сам (до этого в первый день её раскладывала бабушка).
-  if (playDayOne(scene.state)) scene.onbStep('stock');
+  if (playDayOne(scene.state)) newcomer.onbStep(scene, 'stock');
 }
 
 /** Товар из коробки на полку: штуки вылетают по одной и встают на место с «чпок». */
