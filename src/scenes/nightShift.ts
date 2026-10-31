@@ -58,6 +58,7 @@ import * as visitors from './visitors';
 import * as bigDays from './bigDays';
 import * as morningFlow from './morningFlow';
 import * as newcomer from './newcomer';
+import * as rivals from './rivals';
 
 // ---------- Ночная смена ----------
 
@@ -377,7 +378,7 @@ export function finishDay(scene: StoreScene): void {
   scene.game.renderer.snapshot((image) => {
     scene.dayShot = image instanceof HTMLImageElement ? image : null;
   });
-  scene.clearTrick();
+  rivals.clearTrick(scene);
   // Магазин закрывается: опускаются роллеты, потом — итоги дня.
   closeShop(scene);
   scene.time.delayedCall(1500, () => {

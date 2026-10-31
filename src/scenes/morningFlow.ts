@@ -67,6 +67,7 @@ import * as bigDays from './bigDays';
 import * as liveFx from './liveFx';
 import * as nightShift from './nightShift';
 import * as newcomer from './newcomer';
+import * as rivals from './rivals';
 
 // ---------- День ----------
 
@@ -176,9 +177,9 @@ export function showMorning(scene: StoreScene): void {
   }
   showMorningMenu({
     onArrange: () => scene.arrange(),
-    onVisit: (id, name) => void scene.visitFriend(id, name),
-    onRival: (key, name) => void scene.visitRival(key, name),
-    onBoss: eduardLook(scene.state) !== 'vacant' ? () => void scene.visitRival(null, '') : undefined,
+    onVisit: (id, name) => void rivals.visitFriend(scene, id, name),
+    onRival: (key, name) => void rivals.visitRival(scene, key, name),
+    onBoss: eduardLook(scene.state) !== 'vacant' ? () => void rivals.visitRival(scene, null, '') : undefined,
     onTourDone: () => offerReturn(scene, () => offerGift(scene)),
     onStoryDone: afterStory ? () => offerReturn(scene, () => offerGift(scene)) : undefined,
     coach: scene.coach,
@@ -214,7 +215,7 @@ export function showMorning(scene: StoreScene): void {
     onOpen: () => startDay(scene),
   });
   scene.inMorning = true;
-  void scene.checkRivals();
+  void rivals.checkRivals(scene);
 }
 
 /**
@@ -254,7 +255,7 @@ export function startDay(scene: StoreScene): void {
   // Утром то, что испортится к ночи, само уходит на полку уценки.
   scene.sendToBargain();
   try {
-    scene.openRivalDay();
+    rivals.openRivalDay(scene);
   } catch (error) {
     reportError(error, 'rivalDay');
   }
@@ -267,7 +268,7 @@ export function startDay(scene: StoreScene): void {
     scene.time.delayedCall(2400, () => scene.running && scene.popup(sellerHome.x - 20, sellerHome.y - 46, t('popup.helpDay'), '#a8f0c8'));
   }
   try {
-    scene.setupTrick();
+    rivals.setupTrick(scene);
   } catch (error) {
     reportError(error, 'trick');
   }

@@ -30,12 +30,8 @@ import {
 import { ensurePlan, spawnIntervalToday } from '../game/day';
 import { RUSH_SECONDS, type InspectionResult } from '../game/events';
 import { pickWanted, questDone, questProgress, payQuests } from '../game/endless';
-import { lastSavedAt, loadGame, pauseSaving, saveGame, savingPaused } from '../game/save';
-import { friendState } from '../game/friendShop';
-import { presentGiven, presentsOn, showGiftPicker } from '../ui/presents';
-import { applyPranks, bonusGuests, bossLeft, bossShop, messToday, PRANK_COINS, takeRivalDay, takeThanks, THANK_COINS, usePrank, type PrankIn, type PrankKind } from '../game/rival';
-import { fetchRivalShop, rivalAct, rivalInbox, thankRival } from '../platform/rival';
-import { rivalBar, showRivalNews } from '../ui/rival';
+import { lastSavedAt, loadGame, saveGame, savingPaused } from '../game/save';
+import type { PrankIn } from '../game/rival';
 import { awayTrade } from '../game/away';
 import { branchAway } from '../game/branch';
 import { getLang, t } from '../i18n';
@@ -70,12 +66,11 @@ import { pickCohort, startCohort, type Cohort } from '../game/onboarding';
 import { SayBubble } from '../ui/onboarding';
 import type { TutStep } from '../game/tutorial';
 import { Coach } from '../ui/coach';
-import { duelInfo, fetchFriendShop, loadMultiplayer } from '../platform/multiplayer';
+import { duelInfo, loadMultiplayer } from '../platform/multiplayer';
 import { ensureSeason, grantPass } from '../game/pass';
 import { grantSupport } from '../game/support';
 import { ensureRush } from '../game/rush';
 import { kitchenOpen } from '../game/kitchen';
-import { activeTrick } from '../game/tricks';
 import { BUSKER_GUESTS } from '../game/nightGuests';
 import { setErrorContext } from '../platform/errors';
 import { blockedZones, canShortenQueue, slotRect, slotSide, standFor, wallSnap, SIDE_X, clampTill, iceboxFits, overlapsRect, propFootprint, propIssues, propPosFor, propRect, savedLayout, slotIssues, slotPosFor, snap, tillZones, vendingFootprint, vendingSide, withTill, type Prop } from './placement';
@@ -104,7 +99,7 @@ import { dayDemand } from '../game/demand';
 import { PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { BARGAIN_CHANCE, BARGAIN_PER_ROW, bargainCapacity, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
 import { Rotting } from './rotting';
-import { EDUARD_STAGES, eduardLook, eduardStage, type EduardLook } from '../game/eduard';
+import type { EduardLook } from '../game/eduard';
 import type { CafeDelivery } from '../game/cafe';
 import { radioSpeed } from '../game/radio';
 import type { LiveKind } from '../game/minievents';
@@ -148,7 +143,6 @@ import {
   BARGAIN_STEP,
   BAG_MS,
   DUMP_MS,
-  SPILL_TINTS,
   AUTO_CHECK_SECONDS,
   TOILET_DIRTY,
   SHELF_LOOK,
@@ -157,11 +151,7 @@ import {
   WEAR_SAMPLE_MS,
   ITEM_AREA,
   FLORIST_SPOTS,
-  SHIRTS,
   type Look,
-  randomLook,
-  customerLook,
-  withCompanionItems,
   type ParkSpot,
   type ParkingLot,
   type RoadCar,
@@ -616,13 +606,13 @@ export class StoreScene extends Phaser.Scene {
   /** Рабочий день идёт (от «Открыть магазин» до итогов) — для сторожа зависаний. */
   dayOpen = false;
   /** «Заглянуть к конкуренту» (game/rival.ts): сейчас в чужом магазине; сколько гостей сегодня увели. */
-  private rivalVisit = false;
+  rivalVisit = false;
   /** На экране утро своего магазина (до «Открыть магазин»): только тогда — новости о проделках и ответный визит. */
   inMorning = false;
-  private rivalLost = 0;
+  rivalLost = 0;
   /** Когда спрашивали сервер, что натворили у нас; что пришло, пока мы были в гостях. */
-  private rivalCheckedAt = 0;
-  private rivalPending: { pranks: PrankIn[]; thanks: string[] } | null = null;
+  rivalCheckedAt = 0;
+  rivalPending: { pranks: PrankIn[]; thanks: string[] } | null = null;
   /** Сколько мс день стоит без открытых окон — сторож запускает его дальше. */
   stallMs = 0;
   nightWatch: Phaser.GameObjects.GameObject[] = [];
@@ -1426,265 +1416,6 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * В гостях у друга: на экране его магазин по снимку с сервера (только смотреть). Свой магазин
-   * не сохраняется, пока мы в гостях; «Домой» — вернуть свой и утро.
-   */
-  async visitFriend(id: number, name: string): Promise<void> {
-    const res = await fetchFriendShop(id);
-    const home = this.state;
-    const guest = res && friendState(res.shop, home);
-    if (!guest) {
-      toast('assets/ico_cross.png', t('visitShop.title'), t('visitShop.none', { name }));
-      morningFlow.showMorning(this);
-      return;
-    }
-    pauseSaving(true);
-    this.state = guest;
-    this.buildWorld();
-    track('visit_shop', home.day);
-    const bar = el('div', 'ui-arrange');
-    const shop = guest.shopName?.trim() || t(storeLevel(guest).nameKey);
-    // Подарок другу (ui/presents.ts): один в день, кнопка гаснет, когда подарен.
-    const gift = presentsOn()
-      ? button(presentGiven(id) ? t('social.give.done') : t('social.give.btn'), () => {
-          // Полоса внизу не перекрывает окно подарка.
-          bar.style.visibility = 'hidden';
-          showGiftPicker({ id, name: res!.name || name }, home.day, home.level, (ok) => {
-            bar.style.visibility = '';
-            if (!ok) return;
-            gift!.textContent = t('social.give.done');
-            gift!.disabled = true;
-          });
-        }, 'ui-btn secondary', presentGiven(id))
-      : null;
-    bar.append(
-      el('div', 'ui-arrange-hint', t('visitShop.bar', { name: res!.name || name, shop, rating: guest.rating.toFixed(1), day: guest.day })),
-      ...(gift ? [gift] : []),
-      button(`🏠 ${t('visitShop.home')}`, () => {
-        bar.remove();
-        this.state = home;
-        pauseSaving(false);
-        this.buildWorld();
-        morningFlow.showMorning(this);
-      }, 'ui-btn'),
-    );
-    document.body.append(bar);
-  }
-
-  /**
-   * «Заглянуть к конкуренту» (game/rival.ts): чужой магазин по снимку с сервера (ключ из рейтинга)
-   * или босс через дорогу (key — null, сервер не нужен). По залу бродят покупатели; внизу — проделки,
-   * их число считает сервер (у босса — мы сами). Награда — в свой магазин; он не сохраняется, пока
-   * мы в гостях, «Домой» — вернуть свой и утро.
-   */
-  async visitRival(key: string | null, name: string): Promise<void> {
-    this.inMorning = false;
-    const res = key ? await fetchRivalShop(key) : null;
-    // Свой магазин — после ответа сервера: пока ждали, в него могли прийти монеты или новости.
-    let home = this.state;
-    const look = eduardLook(home);
-    const stage = EDUARD_STAGES[eduardStage(home) ?? 0];
-    const bossName = look === 'mega' ? t('eduard.mega') : t(stage.nameKey);
-    const guest = key ? res && friendState(res.shop, home) : friendState(bossShop(home, bossName, stage.rating || 4.2), home);
-    if (!guest) {
-      toast('assets/ico_cross.png', t('visitShop.title'), t('rival.none', { name }));
-      morningFlow.showMorning(this);
-      return;
-    }
-    pauseSaving(true);
-    this.rivalVisit = true;
-    this.state = guest;
-    this.buildWorld();
-    track('visit_rival', home.day);
-    const owner = key ? res!.name || name : bossName;
-    const browsers: Phaser.GameObjects.Container[] = [];
-    // Покупатели бродят от полки к полке; позванный к нам уходит на улицу.
-    const wander = this.time.addEvent({
-      delay: 2400,
-      loop: true,
-      callback: () => {
-        for (const b of browsers) {
-          if (!b.active || b.getData('lured') || b.getData('walking') || Math.random() < 0.5) continue;
-          const p = this.rivalSpot();
-          void persons.walk(this, b, p.x, p.y, this.customerSpeed() * 0.7);
-        }
-      },
-    });
-    for (let i = 0; i < (this.lite ? 2 : 3); i++) {
-      const p = this.rivalSpot();
-      const b = persons.makePerson(this, p.x, p.y, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), guest.day));
-      persons.setFacing(b, Math.random() < 0.5 ? 'left' : 'right');
-      browsers.push(b);
-    }
-    let left = key ? res!.left : bossLeft(home);
-    const prank = async (kind: PrankKind): Promise<void> => {
-      bar.setBusy(true);
-      const done = key ? await rivalAct(key, kind) : { ok: bossLeft(home) > 0, left: 0, error: 'limit' };
-      bar.setBusy(false);
-      // Пока ждали сервер, ушли домой — проделка засчитана: награда сразу в свой магазин.
-      if (this.state !== guest) {
-        if (done.ok && !savingPaused()) {
-          this.state = usePrank(this.state, kind, !key);
-          saveGame(this.state);
-        }
-        return;
-      }
-      const { sellerHome } = this.layout;
-      if (!done.ok) {
-        if (done.error !== 'too_often' && done.error !== 'offline') bar.setLeft((left = 0));
-        // Неизвестная ошибка (не лимит) — тоже без кнопок, но с понятной надписью.
-        if (done.error === 'bad_kind') done.error = 'gone';
-        this.popup(sellerHome.x - 20, sellerHome.y - 40, t(`rival.err.${done.error === 'pair' || done.error === 'victim' || done.error === 'too_often' || done.error === 'offline' || done.error === 'gone' ? done.error : 'limit'}`), '#ffd0d0');
-        sound.bad();
-        return;
-      }
-      home = usePrank(home, kind, !key);
-      left = key ? done.left : bossLeft(home);
-      bar.setLeft(left);
-      this.hud.update({ ...guest, money: home.money }, DAY_SECONDS);
-      this.rivalPrank(kind, browsers);
-      this.time.delayedCall(900, () => {
-        if (this.state !== guest) return;
-        this.popup(sellerHome.x - 20, sellerHome.y - 52, t(kind === 'lure' ? 'rival.reward.guest' : 'rival.reward', { n: PRANK_COINS[kind] }), '#c8ffb0');
-        sound.coin();
-      });
-    };
-    const bar = rivalBar(t('rival.bar', { name: owner, rating: guest.rating.toFixed(1) }), left, (kind) => void prank(kind), () => {
-      bar.remove();
-      wander.remove();
-      this.rivalVisit = false;
-      this.state = home;
-      pauseSaving(false);
-      saveGame(this.state);
-      this.buildWorld();
-      morningFlow.showMorning(this);
-    });
-  }
-
-  /** Место в чужом зале, куда встать: перед случайной полкой, чуть вразброс. */
-  private rivalSpot(): { x: number; y: number } {
-    const n = this.state.shelves.length;
-    const p = n ? this.standOf(Phaser.Math.Between(0, n - 1)) : { x: this.layout.door.x, y: this.layout.door.y - 20 };
-    return { x: p.x + Phaser.Math.Between(-6, 6), y: p.y + Phaser.Math.Between(0, 4) };
-  }
-
-  /** Проделка в чужом зале: лужа или мусор на полу (хозяин удивляется), а позванный покупатель уходит к нам. */
-  private rivalPrank(kind: PrankKind, browsers: Phaser.GameObjects.Container[]): void {
-    if (kind === 'lure') {
-      const b = browsers.find((p) => p.active && !p.getData('lured'));
-      if (!b) return;
-      b.setData('lured', true);
-      persons.haltWalk(b);
-      this.popup(b.x, b.y - 22, t('rival.say.lure'), '#fff3b0');
-      this.time.delayedCall(1100, () => {
-        if (!b.active) return;
-        effects.emote(this, b, 'emo_heart');
-        this.popup(b.x, b.y - 34, t('rival.say.yes'), '#c8ffb0');
-        void visitors.strollAway(this, b);
-      });
-      return;
-    }
-    const p = this.rivalSpot();
-    const piece = staff.dropTrash(this, p.x, p.y, kind);
-    if (piece) {
-      // Убирать чужое не наше дело: лужа и мусор только для вида.
-      piece.removeAllListeners('pointerup').disableInteractive();
-      if (kind === 'spill') {
-        piece.setTint(Phaser.Utils.Array.GetRandom(SPILL_TINTS));
-        const pack = this.art(piece.x + 9, piece.y - 3, 'spill_pack').setAngle(70).setDepth(0.6);
-        piece.once('destroy', () => pack.destroy());
-      }
-    }
-    if (kind === 'spill') sound.bad();
-    else sound.pop();
-    this.popup(p.x, p.y - 16, t(kind === 'spill' ? 'rival.popup.spill' : 'rival.popup.trash'), '#ffd0d0');
-    // Хозяин чужого магазина замечает.
-    if (this.seller?.active) {
-      effects.emote(this, this.seller, 'emo_question');
-      this.popup(this.seller.x, this.seller.y - 30, t('rival.say.owner'), '#ffffff');
-    }
-  }
-
-  /**
-   * Утром — что натворили у нас конкуренты и кто поблагодарил за наш визит (не чаще раза в 10 минут:
-   * сервер отдаёт это один раз). Пришло, пока мы в гостях, — покажем, когда вернёмся.
-   */
-  async checkRivals(): Promise<void> {
-    // Вернулись из гостей — показать то, что пришло, пока гуляли.
-    if (this.rivalPending) return void (this.inMorning && !savingPaused() && this.applyRivalInbox());
-    const now = Date.now();
-    if (now - this.rivalCheckedAt < 10 * 60_000) return;
-    this.rivalCheckedAt = now;
-    const inbox = await rivalInbox();
-    if (!inbox || (!inbox.pranks.length && !inbox.thanks.length)) return;
-    this.rivalPending = inbox;
-    // Последствия — только к утру этого дня: иначе подождут следующего утра.
-    if (this.inMorning && !this.rivalVisit && !savingPaused()) this.applyRivalInbox();
-  }
-
-  private applyRivalInbox(): void {
-    const inbox = this.rivalPending;
-    if (!inbox) return;
-    this.rivalPending = null;
-    if (inbox.thanks.length) {
-      this.state = takeThanks(this.state, inbox.thanks);
-      toast('assets/ico_coffee.png', t('rival.thanks.title'), t('rival.thanks', { names: inbox.thanks.slice(0, 3).join(', '), n: THANK_COINS * Math.min(5, inbox.thanks.length) }));
-    }
-    // Магазин уже открыт — беспорядок подождёт завтрашнего утра.
-    const { state, news } = applyPranks(this.state, inbox.pranks, this.dayOpen ? this.state.day + 1 : this.state.day);
-    this.state = state;
-    saveGame(this.state);
-    this.hud.update(this.state, DAY_SECONDS);
-    if (!news) return;
-    track('rival_news', this.state.day, inbox.pranks.length);
-    // Окно — когда закроются другие (гостинец бабушки, сюжет): поверх утра, но не поверх них.
-    const show = this.time.addEvent({
-      delay: 500,
-      loop: true,
-      callback: () => {
-        if (document.querySelector('.ui-dialog') || document.querySelectorAll('.ui-modal').length > 1 || this.rivalVisit || savingPaused()) return;
-        show.remove();
-        // Ответный визит — только с утра: утреннее окно закрываем.
-        const morning = this.inMorning && !this.dayOpen;
-        showRivalNews(
-          news,
-          morning
-            ? (key, name) => {
-                for (const m of document.querySelectorAll('.ui-modal')) m.remove();
-                void this.visitRival(key, name);
-              }
-            : null,
-          thankRival,
-        );
-      },
-    });
-  }
-
-  /** Открытие: беспорядок от конкурентов — в зал, увели гостей — столько не придёт, позванные нами — придут. */
-  openRivalDay(): void {
-    const mess = messToday(this.state);
-    const guests = bonusGuests(this.state);
-    this.rivalLost = mess?.lost ?? 0;
-    this.state = takeRivalDay(this.state);
-    const { door } = this.layout;
-    if (mess && mess.spill + mess.trash) {
-      for (let i = 0; i < mess.spill + mess.trash; i++) {
-        const p = this.rivalSpot();
-        const piece = staff.dropTrash(this, p.x, p.y, i < mess.spill ? 'spill' : 'trash');
-        if (piece && i < mess.spill) piece.setTint(Phaser.Utils.Array.GetRandom(SPILL_TINTS));
-      }
-      this.time.delayedCall(2600, () => this.running && this.popup(door.x, door.y - 30, t('rival.mess'), '#ffd0d0'));
-    }
-    for (let i = 0; i < guests; i++) {
-      this.time.delayedCall(6000 + i * 7000, () => {
-        if (!this.running || this.night || this.timeLeft <= 0) return;
-        this.spawnCustomer();
-        this.popup(door.x, door.y - 24, t('rival.guest'), '#c8ffb0');
-      });
-    }
-  }
-
-  /**
    * Перестановка полок утром: зал целиком в кадре, каждое место под полку — «призрак», который тянут
    * пальцем по сетке. Место, куда ставить нельзя (вплотную к проходу, на кассе, у двери, так, что к
    * полке не подойти), — красное; «Готово» — только когда красных нет.
@@ -2366,102 +2097,6 @@ export class StoreScene extends Phaser.Scene {
       cam.pan(this.home.x, this.home.y, 700, 'Sine.easeInOut');
       cam.zoomTo(this.baseZoom, 700, 'Sine.easeInOut');
     });
-  }
-
-  // ---------- Козни конкурента (tricks.ts) ----------
-
-  clearTrick(): void {
-    this.busker = false;
-    this.trickTimers.forEach((e) => e.remove());
-    this.trickTimers = [];
-    this.trickObjs.forEach((o) => o.destroy());
-    this.trickObjs = [];
-  }
-
-  /** Утром выбрали ответ — днём это видно на улице: промоутеры, перетяжки, «проверяющий». */
-  setupTrick(): void {
-    this.clearTrick();
-    const trick = activeTrick(this.state);
-    if (!trick) return;
-    const { door } = this.layout;
-    const sidewalk = this.streetY - 2;
-    const every = (ms: number, fn: () => void) => this.trickTimers.push(this.time.addEvent({ delay: ms, loop: true, callback: fn }));
-    if (trick.kind === 'promoter') {
-      const ours = trick.answer === 'counter';
-      if (!ours && trick.stopped) return;
-      const look: Look = ours
-        ? { ...randomLook(0x63c74d), acc: 'apron', accTint: 0xffffff, prop: 'balloon', propTint: 0x63c74d }
-        : { ...randomLook(0xe43b44), acc: 'vest', accTint: 0xfee761, hat: 'papercap', hatTint: 0xe43b44, prop: 'balloon', propTint: 0xe43b44 };
-      const promoter = persons.makePerson(this, door.x + 24, sidewalk, look);
-      this.people.delete(promoter);
-      this.trickObjs.push(promoter);
-      every(5200, () => this.running && this.popup(promoter.x, promoter.y - 22, t(ours ? 'popup.ownPromoter' : 'popup.rivalPromoter'), ours ? '#c8ffb0' : '#ffd0d0'));
-      // Чужой промоутер уводит прохожих через дорогу — видно, куда уходят гости.
-      if (!ours) every(6500, () => this.running && void this.lureAway(promoter));
-      return;
-    }
-    if (trick.kind === 'banner') {
-      const ours = trick.answer === 'counter';
-      const top = this.next.h + 4;
-      // Чужая — над тротуаром за дорогой, своя — над нашим тротуаром.
-      const y = ours ? this.streetY - 18 : top + 66;
-      const color = ours ? 0x3e8948 : 0xe43b44;
-      // Поверх вывески конкурента — её видно с нашей стороны улицы.
-      const depth = top + 200;
-      for (const dx of [-62, 62]) this.trickObjs.push(this.add.rectangle(door.x + dx, y + 6, 2, 20, 0x3a4466).setDepth(depth));
-      this.trickObjs.push(this.add.rectangle(door.x, y, 128, 11, color).setStrokeStyle(1, 0xffffff).setDepth(depth + 1));
-      this.trickObjs.push(
-        this.add
-          .text(door.x, y, t(ours ? 'trick.banner.own' : 'trick.banner.sign'), { fontFamily: UI_FONT, fontSize: '7px', color: '#ffffff', fontStyle: 'bold' })
-          .setOrigin(0.5)
-          .setResolution(this.textRes(4))
-          .setDepth(depth + 2),
-      );
-      return;
-    }
-    // «Проверяющий» заходит, когда прошла треть дня.
-    if (trick.kind === 'inspector' && trick.day === this.state.day) {
-      this.trickTimers.push(this.time.delayedCall((DAY_SECONDS * 1000) / 3, () => this.running && void this.fakeInspector()));
-    }
-  }
-
-  /** Прохожий идёт к промоутеру конкурента и уходит через дорогу к нему в магазин. */
-  private async lureAway(promoter: Phaser.GameObjects.Container): Promise<void> {
-    const start = visitors.streetSpawn(this);
-    const person = persons.makePerson(this, start.x, start.y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.state.day)));
-    this.people.delete(person);
-    this.trickObjs.push(person);
-    await persons.walk(this, person, promoter.x + 8, promoter.y + 2);
-    if (!person.active) return;
-    effects.emote(this, person, 'emo_question');
-    await this.wait(600);
-    await persons.walk(this, person, this.layout.door.x + Phaser.Math.Between(-30, 30), this.streetY + 74);
-    if (person.active) this.tweens.add({ targets: person, alpha: 0, duration: 400, onComplete: () => person.destroy() });
-  }
-
-  /** Подставной «проверяющий»: проходит по залу с портфелем, цокает и уходит. */
-  private async fakeInspector(): Promise<void> {
-    const { door } = this.layout;
-    const look: Look = { ...randomLook(0x262b44), outfit: 'suit', outfitTint: 0x3a4466, prop: 'briefcase', glasses: true, face: 'mustache' };
-    const start = visitors.streetSpawn(this);
-    const man = persons.makePerson(this, start.x, start.y, look);
-    this.people.delete(man);
-    this.trickObjs.push(man);
-    await persons.walkVia(this, man, [
-      { x: door.x, y: this.streetY },
-      { x: door.x, y: door.y - 10 },
-    ]);
-    for (let i = 0; i < 3 && man.active; i++) {
-      const index = Phaser.Math.Between(0, Math.max(0, this.state.shelves.length - 1));
-      const stand = this.standOf(index);
-      await persons.walk(this, man, stand.x, stand.y);
-      if (!man.active) return;
-      this.popup(man.x, man.y - 20, t('popup.fakeInspector'), '#fff3b0');
-      await this.wait(900);
-    }
-    if (!man.active) return;
-    await persons.walk(this, man, door.x, this.layout.h + 16);
-    void visitors.strollAway(this, man);
   }
 
   private buildShell(): void {
