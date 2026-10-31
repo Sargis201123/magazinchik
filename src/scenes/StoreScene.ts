@@ -79,7 +79,7 @@ import { fetchRivalShop, rivalAct, rivalInbox, thankRival } from '../platform/ri
 import { rivalBar, showRivalNews } from '../ui/rival';
 import { awayTrade } from '../game/away';
 import { branchAway, branchInOldShop, branchLook, branchSignName, branchTier, branchUpgrades } from '../game/branch';
-import { hasHood, hoodLook, hoodTips, type HoodId } from '../game/hood';
+import { hasHood, HOOD_SQUARE, hoodLook, hoodTips, type HoodId } from '../game/hood';
 import { getLang, t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { music, type MusicMood } from '../platform/music';
@@ -1384,6 +1384,8 @@ export class StoreScene extends Phaser.Scene {
   private builtDistrict = '';
   /** Что из благоустройства района стояло на улице (hood.ts). */
   private builtHood = '';
+  /** Где на тротуаре за дорогой висят вывески зданий (середины): новые фонари района их обходят. */
+  private signsAcross: number[] = [];
   /** Снежные покрывала на крышах соседей: видны в снегопад. */
   private roofSnow: Phaser.GameObjects.Rectangle[] = [];
   /** Козни конкурента на улице сегодня (tricks.ts): промоутеры, перетяжки, их таймеры. */
@@ -2576,7 +2578,9 @@ export class StoreScene extends Phaser.Scene {
     const left = -WING_OUTER;
     // Карта — от парковки за магазином до сквера за дорогой и на квартал в стороны (докуда отводят камеру):
     // там фонари, окна соседей и фары.
-    const area = { x: -LIGHT_REACH, y: LOT.top - 80, w: next.w + 2 * LIGHT_REACH, h: next.h - LOT.top + 80 + 320 };
+    // Площадь района в парке (hood.ts) — ниже: тогда карта длиннее, чтобы фонари и подсветка памятника ложились на плитку.
+    const square = HOOD_SQUARE.some((id) => hasHood(this.state, id));
+    const area = { x: -LIGHT_REACH, y: LOT.top - 80, w: next.w + 2 * LIGHT_REACH, h: next.h - LOT.top + 80 + (square ? 470 : 320) };
     const rooms = [
       { x: -3, y: -3, w: w + 6, h: h + 6 },
       { x: left - 3, y: wing.y - 4, w: -left, h: h - wing.y + 7 },
@@ -7404,11 +7408,14 @@ export class StoreScene extends Phaser.Scene {
     if (!n.dark && hasHood(this.state, 'facades')) {
       for (let x = n.x + 14; x < n.x + n.w - 10; x += 24) if (Math.abs(x - doorX) >= 22) this.art(x, front - 0.5, 'hood_flowerbox').setDepth(front - 3.9);
       const colors = [0xfee761, 0xe43b44, 0x63c74d, 0x0099db];
-      for (let i = 0, fx = n.x + 2; fx <= n.x + n.w - 6; fx += 7, i++) this.add.triangle(fx, front - FACADE_H, 0, 0, 4, 0, 2, 3.5, colors[i % colors.length]).setOrigin(0).setDepth(front - 3.8);
+      // Флажки одной фигурой на дом — не десятки отдельных треугольников.
+      const flags = this.add.graphics().setDepth(front - 3.8);
+      for (let i = 0, fx = n.x + 2; fx <= n.x + n.w - 6; fx += 7, i++) flags.fillStyle(colors[i % colors.length], 1).fillTriangle(fx, front - FACADE_H, fx + 4, front - FACADE_H, fx + 2, front - FACADE_H + 3.5);
     }
     this.awnings.push(this.art(doorX, front - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(front + 40));
     // Вывеска на краю крыши (за дорогой — над витринами, у самой дороги).
     const signY = across ? top - 12 : bottom - FACADE_H - 8;
+    if (across) this.signsAcross.push(n.x + n.w / 2);
     const signDepth = across ? front + 41 : front - 3;
     this.art(n.x + n.w / 2, signY, 'sign').setTint(n.sign).setDepth(signDepth);
     this.add
@@ -7511,6 +7518,7 @@ export class StoreScene extends Phaser.Scene {
   /** Улица вокруг здания: газон с деревьями, тротуар с фонарями и скамейкой, дорога. */
   private buildStreet(next: Layout): void {
     const { h, door } = this.layout;
+    this.signsAcross = [];
     const tile = (x: number, y: number, w: number, hh: number, key: string) =>
       this.add.tileSprite(x, y, w, hh, key).setOrigin(0).setTileScale(1 / ART).setDepth(-10);
     const left = -400;
@@ -8194,9 +8202,10 @@ export class StoreScene extends Phaser.Scene {
     // Нижний край тротуара за дорогой: фонари стоят на нём, не мешая пешеходам.
     const far = top + 85;
     if (has('lamps')) {
-      // Свои фонари — через 72 от −100; эти — между ними, за дорогой, и не на переходе.
+      // Свои фонари — через 72 от −100; эти — между ними, за дорогой. Не на переходе, не за вывесками
+      // зданий и не в рекламном щите (он у тротуара справа от входа, ads).
       for (let x = -352, i = 0; x < next.w + 340; x += 72, i++) {
-        if (Math.abs(x - d) < 24) continue;
+        if (Math.abs(x - d) < 40 || Math.abs(x - d - 70) < 30 || this.signsAcross.some((c) => Math.abs(x - c) < 40)) continue;
         this.art(x, far, 'hood_lamp').setOrigin(0.5, 0.95).setDepth(far);
         const lamp = this.addLamp(x, far - 20, 0.06 + i * 0.015, 0.4);
         for (const dx of [-3.75, 4.25]) this.lampGlow(lamp, this.art(x + dx, far - 20.5, 'glow').setScale(10 / 64).setTint(0xfff0b0), 0.9);
@@ -8216,7 +8225,7 @@ export class StoreScene extends Phaser.Scene {
     const alley = top + 268;
     // Между клумбами аллеи (d−260 и d−120) к площади ведёт дорожка.
     const sq = { x: d - 258, y: alley + 56, w: 200, h: 100 };
-    const plaza = (['benches', 'fir', 'fair', 'statue', 'mural'] as HoodId[]).some(has);
+    const plaza = HOOD_SQUARE.some(has);
     if (plaza) {
       this.add.rectangle(sq.x - 2, sq.y - 2, sq.w + 4, sq.h + 4, 0xc0cbdc).setOrigin(0).setDepth(-9.47);
       this.add.tileSprite(sq.x, sq.y, sq.w, sq.h, 'paving').setOrigin(0).setTileScale(1 / ART).setDepth(-9.46);
@@ -8965,6 +8974,7 @@ export class StoreScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) this.add.rectangle(a.x + 16 + i * 22, a.y + a.h * 0.35, 3, a.h * 0.45, 0xc0cbdc).setOrigin(0).setDepth(a.y + a.h * 0.8);
     this.add.rectangle(a.x + 14, a.y + a.h * 0.35, 50, 3, 0xc0cbdc).setOrigin(0).setDepth(a.y + a.h * 0.8);
     const signY = a.across ? a.y - 6 : base + 4;
+    if (a.across) this.signsAcross.push(a.x + a.w / 2);
     this.add.rectangle(a.x + a.w / 2, signY, 70, 11, 0xfee761).setDepth(signY + 20);
     this.add
       .text(a.x + a.w / 2, signY, t('district.soon', { name }), { fontFamily: UI_FONT, fontSize: '5px', color: '#262b44' })
@@ -9009,6 +9019,7 @@ export class StoreScene extends Phaser.Scene {
       this.add.rectangle(px - 3, py - 30, 8, 5, 0xe6e1d6).setOrigin(0).setDepth(a.y + a.h);
     }
     this.art(a.x + a.w / 2, a.y - 10, 'sign').setTint(0x3e8948).setDepth(a.y + a.h + 1);
+    this.signsAcross.push(a.x + a.w / 2);
     this.add
       .text(a.x + a.w / 2, a.y - 10, `${BUILDINGS.stadium.icon} ${name}`, { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
       .setOrigin(0.5)

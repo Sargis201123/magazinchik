@@ -47,6 +47,9 @@ export const HOOD: Record<HoodId, HoodItem> = {
 
 export const HOOD_IDS = Object.keys(HOOD) as HoodId[];
 
+/** Что стоит на площади в парке: с любым из них там появляется плитка (и карта освещения длиннее). */
+export const HOOD_SQUARE: HoodId[] = ['benches', 'fir', 'fair', 'statue', 'mural'];
+
 /** Памятник бабушке — последним, когда весь остальной район уже готов. */
 export const HOOD_FINAL: HoodId = 'statue';
 
