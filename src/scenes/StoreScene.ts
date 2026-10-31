@@ -251,7 +251,7 @@ import { idleRegisters, nextRegisterCount, nextRegisterPrice, registerCount, reg
 import { seeTip } from '../game/tips';
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, OVEN_BURN_SECONDS, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from '../game/bakery';
 import { canWorkNight, NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from '../game/night';
-import { CAT_BEDS, CAT_TIP, catHome, catPatience, catTipChance, fedToday } from '../game/cat';
+import { CAT_TIP, catHome, catPatience, catTipChance } from '../game/cat';
 import { note, reviewsFor } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { lossAdvice, noteLost } from '../game/losses';
@@ -373,8 +373,6 @@ import {
   LIVE_RETRY_MS,
   LIVE_LATEST,
   AUTO_CHECK_SECONDS,
-  MOUSE_BITE_MS,
-  MOUSE_STAY_MS,
   FIX_MS,
   LEAK_FIX_MS,
   COMBO_WINDOW_MS,
@@ -484,10 +482,6 @@ import {
   type Kiosk,
   type Oven,
   type KitchenView,
-  CAT_WALK_EVERY,
-  CAT_SPEED,
-  CAT_TICK,
-  CAT_WALK,
   type TrashKind,
   type Worker,
   type Kin,
@@ -511,6 +505,7 @@ import {
 } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
+import * as pets from './pets';
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -755,7 +750,7 @@ export class StoreScene extends Phaser.Scene {
   /** Неоновая вывеска в зале (декор), если висит, — по x: жужжит. */
   private neonDecorX?: number;
   /** Мебель в зале (в координатах центра человека): люди обходят её. */
-  private obstacles: Rect[] = [];
+  obstacles: Rect[] = [];
   /** Люди этого кадра для обхода встречных (passers): считаем раз за кадр, а не на каждого идущего. */
   private crowd: { frame: number; list: Passer[] } = { frame: -1, list: [] };
   /** Кассы самообслуживания (сколько куплено) — у правой стены над кассами. */
@@ -869,7 +864,7 @@ export class StoreScene extends Phaser.Scene {
   /** Голуби на тротуаре: разлетаются, когда рядом проходит человек. */
   private pigeons: Pigeon[] = [];
   /** Таймеры кота и голубей: при перестройке мира старые останавливаются. */
-  private critterTimers: Phaser.Time.TimerEvent[] = [];
+  critterTimers: Phaser.Time.TimerEvent[] = [];
   /** Как кафе забрало утром заказ по договору — для итогов дня. */
   private cafeToday: CafeDelivery | null = null;
   /** Ноты над радио, пока оно играет. */
@@ -915,12 +910,12 @@ export class StoreScene extends Phaser.Scene {
   night = false;
   private nightAsked = false;
   /** Кот у входа: картинка, где его лежанка и гуляет ли он сейчас по залу. */
-  private catImg?: Phaser.GameObjects.Image;
+  catImg?: Phaser.GameObjects.Image;
   /** Пёс Бобик у будки и таймер, который машет его хвостом. */
-  private bobik?: Phaser.GameObjects.Image;
-  private bobikWag?: Phaser.Time.TimerEvent;
+  bobik?: Phaser.GameObjects.Image;
+  bobikWag?: Phaser.Time.TimerEvent;
   /** Магазин закрыт на ночь (роллеты опущены): Бобик сидит настороже, у двери — сторож. */
-  private closed = false;
+  closed = false;
   /** Рабочий день идёт (от «Открыть магазин» до итогов) — для сторожа зависаний. */
   private dayOpen = false;
   /** «Заглянуть к конкуренту» (game/rival.ts): сейчас в чужом магазине; сколько гостей сегодня увели. */
@@ -941,12 +936,12 @@ export class StoreScene extends Phaser.Scene {
   private sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
   /** Праздничный гость сегодня (game/live.ts): кто, ждём / пришёл / ушёл и настоящая дата визита. */
   private liveGuest: { who: GuestId; phase: 'pending' | 'here' | 'done'; date: string } | null = null;
-  private catHome = { x: 0, y: 0 };
-  private catOut = false;
+  catHome = { x: 0, y: 0 };
+  catOut = false;
   /** Кот сидит посреди зала: таймер, который водит его хвостом, моргает и умывает (есть, пока сидит). */
-  private catSitTimer?: Phaser.Time.TimerEvent;
+  catSitTimer?: Phaser.Time.TimerEvent;
   /** Сколько ещё тиков кот жмурится (погладили — медленно моргает). */
-  private catBlink = 0;
+  catBlink = 0;
   /** Флажки, шарики и лоток ярмарки; лоток продаёт со склада по таймеру. */
   private fairObjs: Phaser.GameObjects.GameObject[] = [];
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
@@ -1264,7 +1259,7 @@ export class StoreScene extends Phaser.Scene {
     motion.pulseHighlights(this);
     motion.animatePeople(this);
     this.updateOven();
-    this.petCatNearby();
+    pets.petCatNearby(this);
     effects.cheerProgress(this);
     this.updateDelivery();
     this.hud.update(this.state, this.timeLeft, this.questsLine(), this.night);
@@ -4053,109 +4048,6 @@ export class StoreScene extends Phaser.Scene {
     return [t('summary.delivery'), value];
   }
 
-  // ---------- Мышь на складе ----------
-
-  /**
-   * Мышь бегает по складу и раз в несколько секунд грызёт товар. Нажми на неё — убежит.
-   * Сытый кот сам прибегает и ловит её.
-   */
-  private mouseInWarehouse(keep: <T extends { destroy: () => void }>(obj: T) => T): void {
-    const { warehouse } = this.layout;
-    const point = () => ({ x: warehouse.x + 8 + Math.random() * (warehouse.w - 16), y: warehouse.y + 16 + Math.random() * Math.max(4, warehouse.h - 24) });
-    const start = point();
-    const mouse = keep(this.art(start.x, start.y, 'mouse0').setDepth(LIGHT_DEPTH - 3));
-    mouse.setInteractive(new Phaser.Geom.Circle(6, 3.5, 16), Phaser.Geom.Circle.Contains).on('pointerup', () => this.tap(() => this.mouseGone(mouse, false)));
-    const run = () => {
-      if (!mouse.active || mouse.getData('caught')) return;
-      const p = point();
-      mouse.setFlipX(p.x > mouse.x);
-      this.tweens.add({
-        targets: mouse,
-        x: p.x,
-        y: p.y,
-        duration: 500 + Math.random() * 400,
-        onUpdate: () => mouse.setTexture(Math.floor(this.time.now / 90) % 2 ? 'mouse0' : 'mouse1'),
-      });
-    };
-    keep(this.time.addEvent({ delay: 1100, loop: true, callback: run }));
-    // Грызёт: штука товара со склада пропадает.
-    keep(
-      this.time.addEvent({
-        delay: MOUSE_BITE_MS,
-        loop: true,
-        callback: () => {
-          if (!mouse.active || mouse.getData('caught')) return;
-          const id = PRODUCT_IDS.find((p) => (this.state.warehouse[p] ?? []).some((u) => !u.pending));
-          if (!id) return;
-          const units = this.state.warehouse[id]!;
-          const i = units.findIndex((u) => !u.pending);
-          this.state = { ...this.state, warehouse: { ...this.state.warehouse, [id]: units.filter((_, n) => n !== i) } };
-          this.stats.spoiled++;
-          this.refreshWarehouse();
-          sound.tap();
-          this.popup(mouse.x, mouse.y - 8, t('popup.mouseBite', { icon: PRODUCTS[id].icon }), '#ffd0d0');
-        },
-      }),
-    );
-    keep(this.time.delayedCall(MOUSE_STAY_MS, () => mouse.active && this.mouseGone(mouse, false, true)));
-    // Сытый кот чует мышь и прибегает.
-    if (this.catImg?.active && !this.catOut && this.state.cat && fedToday(this.state)) {
-      keep(this.time.delayedCall(3000, () => mouse.active && void this.catHunt(mouse)));
-    }
-  }
-
-  /** Мышь убежала (прогнали или сама ушла) или её поймал кот. */
-  private mouseGone(mouse: Phaser.GameObjects.Image, caught: boolean, timeout = false): void {
-    if (!mouse.active || mouse.getData('caught')) return;
-    mouse.setData('caught', true);
-    this.tweens.killTweensOf(mouse);
-    if (!timeout) this.stats.mice = (this.stats.mice ?? 0) + 1;
-    if (caught) {
-      sound.meow(mouse.x);
-      this.popup(mouse.x, mouse.y - 10, t('popup.mouseCaught', { name: this.state.cat?.name ?? '' }), '#c8ffb0');
-      this.time.delayedCall(300, () => this.endLiveEvent());
-      return;
-    }
-    if (!timeout) {
-      sound.good();
-      this.popup(mouse.x, mouse.y - 10, t('popup.mouseScared'), '#c8ffb0');
-    }
-    const { x: wx, h: wh, y: wy } = this.layout.warehouse;
-    mouse.setFlipX(false);
-    this.tweens.add({ targets: mouse, x: wx + 2, y: wy + wh - 4, alpha: 0, duration: 700, onComplete: () => this.endLiveEvent() });
-  }
-
-  /** Кот бежит на склад и ловит мышь. */
-  private async catHunt(mouse: Phaser.GameObjects.Image): Promise<void> {
-    const cat = this.catImg;
-    if (!cat?.active || this.catOut) return;
-    this.catOut = true;
-    this.tweens.killTweensOf(cat);
-    cat.setScale(1 / ART).setOrigin(0.5, 1).setTexture('cat_walk0');
-    sound.meow(cat.x);
-    const { door, h, warehouse } = this.layout;
-    const route = [{ x: door.x + 6, y: this.catHome.y }, { x: door.x + 6, y: h - 6 }, warehouse.doorway, warehouse.inside];
-    for (const p of route) {
-      await this.catStep(p.x, p.y);
-      if (!cat.active) return;
-    }
-    if (mouse.active && !mouse.getData('caught')) {
-      await this.catStep(mouse.x, mouse.y + 4);
-      if (mouse.active && !mouse.getData('caught')) {
-        this.mouseGone(mouse, true);
-        this.heartAt(cat.x, cat.y - 10);
-      }
-    }
-    const back = [warehouse.inside, warehouse.doorway, { x: door.x + 6, y: h - 6 }, { x: door.x + 6, y: this.catHome.y }, this.catHome];
-    for (const p of back) {
-      await this.catStep(p.x, p.y);
-      if (!cat.active) return;
-    }
-    cat.setTexture('cat').setFlipX(false).setDepth(this.catHome.y + 7.5);
-    this.tweens.add({ targets: cat, scaleY: 1.08 / ART, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.catOut = false;
-  }
-
   /** Кофейня во флигеле: кофемашина у стены, стойка, за ней бариста; в углу столик. */
   private buildCoffee(): void {
     this.coffeeImg = undefined;
@@ -4699,339 +4591,9 @@ export class StoreScene extends Phaser.Scene {
     await this.strollAway(sprite);
   }
 
-  // ---------- Кот ----------
-
-  /**
-   * Кот у входа. Бродячий просто спит; свой — на лежанке, мурчит, если погладить,
-   * и иногда заходит в зал посидеть среди покупателей. Голодный три дня — уходит гулять.
-   */
-  private buildCat(x: number, y: number): void {
-    this.catImg = undefined;
-    this.catOut = false;
-    this.catSitTimer?.remove();
-    this.catSitTimer = undefined;
-    const own = this.state.cat;
-    if (own && !catHome(this.state)) return;
-    this.catHome = { x, y };
-    if (own?.bed) this.art(x, y + 1.5, CAT_BEDS[own.bed].texture).setOrigin(0.5, 1).setDepth(y + 6);
-    const cat = this.art(x, y, 'cat').setOrigin(0.5, 1).setDepth(y + 7.5);
-    this.catImg = cat;
-    this.tweens.add({ targets: cat, scaleY: 1.08 / ART, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    const snore = () => {
-      if (!cat.active || this.catOut) return;
-      const z = this.add
-        .text(cat.x - 3, cat.y - 6, 'z', { fontFamily: UI_FONT, fontSize: '6px', fontStyle: 'bold', color: '#e8f0ff' })
-        .setOrigin(0.5)
-        .setResolution(this.textRes(4))
-        .setDepth(cat.depth + 1)
-        .setScale(0.6);
-      this.tweens.add({ targets: z, x: z.x - 4, y: z.y - 9, scale: 1, alpha: 0, duration: 1800, onComplete: () => z.destroy() });
-    };
-    this.critterTimers.push(this.time.addEvent({ delay: 2600, loop: true, callback: snore }));
-    // Во сне изредка дёргает кончиком хвоста: дёрг-дёрг.
-    this.critterTimers.push(
-      this.time.addEvent({
-        delay: 2300,
-        loop: true,
-        callback: () => {
-          if (this.catOut || !cat.active || cat.texture.key !== 'cat' || Math.random() > 0.3) return;
-          this.time.addEvent({
-            delay: 130,
-            repeat: 3,
-            callback: () => {
-              if (this.catOut || !cat.active || !['cat', 'cat_flick'].includes(cat.texture.key)) return;
-              cat.setTexture(cat.texture.key === 'cat' ? 'cat_flick' : 'cat');
-            },
-          });
-        },
-      }),
-    );
-    // Иногда просыпается: потягивается или следит за мухой.
-    this.critterTimers.push(this.time.addEvent({ delay: 9000, loop: true, callback: () => !this.catOut && cat.active && this.catWake(cat) }));
-    if (!own) return;
-    cat.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.petCat()));
-    this.critterTimers.push(
-      this.time.addEvent({
-        delay: CAT_WALK_EVERY,
-        loop: true,
-        callback: () => {
-          if (this.running && !this.catOut && fedToday(this.state) && Math.random() < 0.55) void this.catVisit();
-        },
-      }),
-    );
-  }
-
-  private catWake(cat: Phaser.GameObjects.Image): void {
-    if (Math.random() < 0.5) {
-      this.tweens.add({ targets: cat, scaleX: 1.3 / ART, duration: 420, yoyo: true, hold: 300, ease: 'Sine.easeInOut' });
-      return;
-    }
-    // Муха кружит над котом, кот поворачивается за ней и в конце подпрыгивает.
-    this.petEmote(cat, 'emo_question');
-    const fly = this.add.rectangle(cat.x, cat.y - 10, 1.2, 1.2, 0x181425).setDepth(cat.depth + 2);
-    const t0 = this.time.now;
-    const buzz = this.time.addEvent({
-      delay: 50,
-      repeat: 50,
-      callback: () => {
-        const k = (this.time.now - t0) / 260;
-        fly.setPosition(cat.x + Math.cos(k) * 7, cat.y - 9 + Math.sin(k * 1.7) * 3);
-        cat.setFlipX(fly.x < cat.x);
-      },
-    });
-    this.time.delayedCall(2600, () => {
-      buzz.remove();
-      if (cat.active) this.tweens.add({ targets: cat, y: cat.y - 3, duration: 140, yoyo: true, ease: 'Quad.easeOut' });
-      this.tweens.add({ targets: fly, x: fly.x + 20, y: fly.y - 20, alpha: 0, duration: 500, onComplete: () => fly.destroy() });
-    });
-  }
-
-  // ---------- Пёс Бобик ----------
-
-  /** Будка у входа, Бобик спит рядом. Погладить — сядет и повиляет хвостом. */
-  private buildBobik(x: number, y: number): void {
-    this.bobik = undefined;
-    this.bobikWag?.remove();
-    if (!hasDog(this.state)) return;
-    // Бобик лежит перед будкой — слева от неё мусорный контейнер, справа ходят к двери.
-    this.art(x, y - 2, 'kennel').setOrigin(0.5, 1).setDepth(y + 4);
-    const dog = this.art(x + 1, y + 4, 'bobik_lie').setOrigin(0.5, 1).setDepth(y + 6);
-    this.bobik = dog;
-    if (this.closed) this.bobikSit(900);
-    else this.bobikRest();
-    dog.setInteractive({ useHandCursor: true }).on('pointerup', () => this.tap(() => this.petBobik()));
-    // Днём Бобик дремлет — иногда над ним «z-z-z».
-    this.critterTimers.push(
-      this.time.addEvent({ delay: 11000, loop: true, callback: () => !this.closed && dog.texture.key === 'bobik_lie' && Math.random() < 0.5 && this.petEmote(dog, 'emo_zzz') }),
-    );
-  }
-
-  /** Бобик ложится: дышит во сне, иногда «z». */
-  private bobikRest(): void {
-    this.bobikWag?.remove();
-    const dog = this.bobik;
-    if (!dog?.active) return;
-    this.tweens.killTweensOf(dog);
-    dog.setTexture('bobik_lie').setScale(1 / ART);
-    this.tweens.add({ targets: dog, scaleY: 1.07 / ART, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-  }
-
-  /** Бобик сидит и виляет хвостом: pace — как часто машет. */
-  private bobikSit(pace: number): void {
-    const dog = this.bobik;
-    if (!dog?.active) return;
-    this.tweens.killTweensOf(dog);
-    this.bobikWag?.remove();
-    dog.setScale(1 / ART).setTexture('bobik_sit0');
-    this.bobikWag = this.time.addEvent({ delay: pace, loop: true, callback: () => dog.active && dog.setTexture(dog.texture.key === 'bobik_sit0' ? 'bobik_sit1' : 'bobik_sit0') });
-  }
-
-  private petBobik(): void {
-    const dog = this.bobik;
-    if (!dog?.active) return;
-    haptic.tap();
-    this.bobikSit(150);
-    this.heartAt(dog.x, dog.y - 12);
-    this.petEmote(dog, 'emo_heart');
-    this.popup(dog.x, dog.y - 18, t('popup.dogWag'), '#fff3b0');
-    this.time.delayedCall(1800, () => !this.closed && this.bobikRest());
-  }
-
-  /** Гав! — на воришку. */
-  private bobikBark(): void {
-    const dog = this.bobik;
-    if (!dog?.active) return;
-    sound.bark(dog.x);
-    this.bobikWag?.remove();
-    this.tweens.killTweensOf(dog);
-    dog.setScale(1 / ART).setTexture('bobik_bark');
-    this.petEmote(dog, 'emo_alert');
-    this.tweens.add({ targets: dog, y: dog.y - 1.5, duration: 90, yoyo: true, repeat: 3 });
-    this.time.delayedCall(1400, () => !this.closed && this.bobikRest());
-  }
-
-  /** Погладили кота: мурчит, сердечко. */
-  private petCat(): void {
-    const cat = this.catImg;
-    if (!cat?.active || !this.state.cat) return;
-    sound.purr(cat.x);
-    haptic.tap();
-    this.heartAt(cat.x, cat.y - 10);
-    this.rub(cat);
-    this.catSlowBlink();
-    this.popup(cat.x, cat.y - 16, t('popup.catPurr', { name: this.state.cat.name }), '#fff3b0');
-  }
-
-  /**
-   * Облачко с эмоцией над котом или Бобиком — как у людей, только поменьше. Поверх всего, кроме
-   * ночного затемнения: у входа облачко иначе пряталось бы за карнизом фасада.
-   */
-  private petEmote(pet: Phaser.GameObjects.Image, key: EmoteKey): void {
-    if (!pet.active) return;
-    effects.dropEmote(this, pet);
-    const box = effects.emoteBox(this, key, 0.8).setPosition(pet.x + 1, pet.y - pet.displayHeight - 0.5).setDepth(LIGHT_DEPTH - 1);
-    pet.setData('emote', box);
-  }
-
-  /** Ласкается: покачивается из стороны в сторону. */
-  private rub(pet: Phaser.GameObjects.Image): void {
-    if (!pet.active) return;
-    this.tweens.add({ targets: pet, angle: { from: -8, to: 8 }, duration: 160, yoyo: true, repeat: 2, onComplete: () => pet.setAngle(0) });
-  }
-
-  /** Гром: кот вздрагивает, Бобик настораживается. */
-  private petsStartled(): void {
-    const cat = this.catImg;
-    if (cat?.active) {
-      this.petEmote(cat, 'emo_alert');
-      this.tweens.add({ targets: cat, y: cat.y - 3, duration: 110, yoyo: true, ease: 'Quad.easeOut' });
-    }
-    if (this.bobik?.active) this.petEmote(this.bobik, 'emo_alert');
-  }
-
-  private heartAt(x: number, y: number): void {
-    const heart = this.art(x, y, 'emo_heart').setDepth(1000).setScale(0.6 / ART);
-    this.tweens.add({ targets: heart, y: y - 8, scale: 1 / ART, alpha: { from: 1, to: 0 }, duration: 1000, ease: 'Quad.easeOut', onComplete: () => heart.destroy() });
-  }
-
-  /** Кот идёт: перебирает лапами (4 кадра: врозь, мимо, врозь, мимо) и смотрит туда, куда идёт (спрайт смотрит влево). */
-  private catStep(x: number, y: number): Promise<void> {
-    const cat = this.catImg;
-    if (!cat?.active) return Promise.resolve();
-    const distance = Phaser.Math.Distance.Between(cat.x, cat.y, x, y);
-    if (Math.abs(x - cat.x) > 0.5) cat.setFlipX(x > cat.x);
-    return new Promise((resolve) => {
-      this.tweens.add({
-        targets: cat,
-        x,
-        y,
-        duration: (distance / CAT_SPEED) * 1000,
-        onUpdate: () => {
-          cat.setDepth(cat.y);
-          const frame = CAT_WALK[Math.floor(this.time.now / 90) % CAT_WALK.length];
-          if (cat.texture.key !== frame) cat.setTexture(frame);
-        },
-        onComplete: () => resolve(),
-        onStop: () => resolve(),
-      });
-    });
-  }
-
-  /** Кот заходит в зал, садится посреди и через несколько секунд возвращается на лежанку. */
-  private async catVisit(): Promise<void> {
-    const cat = this.catImg;
-    if (!cat?.active) return;
-    this.catOut = true;
-    this.tweens.killTweensOf(cat);
-    cat.setScale(1 / ART).setOrigin(0.5, 1).setTexture('cat_walk0');
-    sound.meow(cat.x);
-    const { door, h } = this.layout;
-    const spot = this.freeFloorPoint();
-    const route = [
-      { x: door.x + 6, y: this.catHome.y },
-      { x: door.x + 6, y: h - 6 },
-      ...findPath({ x: door.x + 6, y: h - 6 }, { x: spot.x, y: spot.y + 8 }, this.obstacles),
-    ];
-    for (const p of route) {
-      await this.catStep(p.x, p.y);
-      if (!cat.active) return;
-    }
-    this.catSit(cat);
-    await this.wait(Phaser.Math.Between(9000, 13000));
-    if (!cat.active) return;
-    this.catStand();
-    sound.meow(cat.x);
-    const back = [...findPath({ x: cat.x, y: cat.y }, { x: door.x + 6, y: h - 6 }, this.obstacles), { x: door.x + 6, y: this.catHome.y }, this.catHome];
-    for (const p of back) {
-      await this.catStep(p.x, p.y);
-      if (!cat.active) return;
-    }
-    cat.setTexture('cat').setFlipX(false).setDepth(this.catHome.y + 7.5);
-    this.tweens.add({ targets: cat, scaleY: 1.08 / ART, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.catOut = false;
-  }
-
-  /** Покупатель проходит мимо кота в зале — гладит (сердечко, кот мурчит). Это попадёт в отзывы. */
-  private petCatNearby(): void {
-    const cat = this.catImg;
-    if (!this.catOut || !cat?.active || !this.catSitTimer) return;
-    for (const c of this.customers) {
-      if (c.petted || c.gone || c.thief) continue;
-      if (Math.abs(c.sprite.x - cat.x) > 14 || Math.abs(c.sprite.y + 8 - cat.y) > 10) continue;
-      c.petted = true;
-      note(this.stats, 'cat');
-      effects.emote(this, c.sprite, 'emo_heart');
-      this.heartAt(cat.x, cat.y - 10);
-      // Кот трётся о ноги: поворачивается к покупателю, покачивается и довольно жмурится.
-      cat.setFlipX(c.sprite.x > cat.x);
-      this.rub(cat);
-      this.catSlowBlink();
-      if (Math.random() < 0.5) sound.purr(cat.x);
-    }
-  }
-
-  /**
-   * Кот сидит посреди зала и живёт: лениво водит хвостом (вниз — посередине — вверх — посередине,
-   * по 260 мс), раз в 3–6 с моргает, раз в 6–10 с умывается лапой. Моргание и умывание начинаются,
-   * когда хвост посередине, — кадры сменяются без рывка. Всё считается в тиках таймера, поэтому
-   * на ускорении ×2 кот живёт вдвое быстрее, а на паузе замирает.
-   */
-  private catSit(cat: Phaser.GameObjects.Image): void {
-    this.catSitTimer?.remove();
-    cat.setTexture('cat_sit1').setFlipX(false);
-    const ticks = (min: number, max: number) => Math.round(Phaser.Math.Between(min, max) / CAT_TICK);
-    const tail = [0, 1, 2, 1];
-    let step = 1;
-    let tick = 0;
-    let groomLeft = 0;
-    let blinkIn = ticks(3000, 6000);
-    let groomIn = ticks(6000, 10000);
-    this.catBlink = 0;
-    const timer = this.time.addEvent({
-      delay: CAT_TICK,
-      loop: true,
-      callback: () => {
-        if (!cat.active) return void timer.remove();
-        tick++;
-        blinkIn--;
-        groomIn--;
-        let frame: string;
-        if (this.catBlink > 0) {
-          this.catBlink--;
-          frame = 'cat_sit_blink';
-        } else if (groomLeft > 0) {
-          groomLeft--;
-          frame = Math.floor(groomLeft / 2) % 2 ? 'cat_groom1' : 'cat_groom0';
-        } else if (tail[step] === 1 && groomIn <= 0) {
-          // Лижет лапу и трёт ею мордочку.
-          groomLeft = ticks(1300, 1900);
-          groomIn = groomLeft + ticks(6000, 10000);
-          frame = 'cat_groom0';
-        } else if (tail[step] === 1 && blinkIn <= 0) {
-          blinkIn = ticks(3000, 6000);
-          frame = 'cat_sit_blink';
-        } else {
-          if (tick % 2 === 0) step = (step + 1) % tail.length;
-          frame = `cat_sit${tail[step]}`;
-        }
-        if (cat.texture.key !== frame) cat.setTexture(frame);
-      },
-    });
-    this.catSitTimer = timer;
-  }
-
-  /** Кот встаёт: хвост и моргание больше не нужны. */
-  private catStand(): void {
-    this.catSitTimer?.remove();
-    this.catSitTimer = undefined;
-  }
-
-  /** Погладили сидящего кота — медленно и довольно жмурится. */
-  private catSlowBlink(): void {
-    const cat = this.catImg;
-    if (!cat?.active || !this.catSitTimer) return;
-    this.catBlink = Math.round(600 / CAT_TICK);
-    cat.setTexture('cat_sit_blink');
+  /** Переходник к pets.catVisit: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
+  catVisit(): Promise<void> {
+    return pets.catVisit(this);
   }
 
   // ---------- Доска отзывов ----------
@@ -5252,10 +4814,10 @@ export class StoreScene extends Phaser.Scene {
     if (kind === 'leak') this.startLeak(keep);
     if (kind === 'pigeon') this.pigeonInside(keep);
     if (kind === 'courier') void this.courierVisit(keep);
-    if (kind === 'mouse') this.mouseInWarehouse(keep);
+    if (kind === 'mouse') pets.mouseInWarehouse(this, keep);
   }
 
-  private endLiveEvent(): void {
+  endLiveEvent(): void {
     for (const obj of this.liveObjs) discard(obj);
     this.liveObjs = [];
     this.liveEvent = null;
@@ -5293,7 +4855,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Свободная точка пола посреди зала (не в мебели и не у кассы). */
-  private freeFloorPoint(): { x: number; y: number } {
+  freeFloorPoint(): { x: number; y: number } {
     const { w, h, wallH } = this.layout;
     const tries = [
       [0.5, 0.45],
@@ -5717,7 +5279,7 @@ export class StoreScene extends Phaser.Scene {
         });
         this.time.delayedCall(Phaser.Math.Between(250, 1100), () => {
           sound.thunder();
-          this.petsStartled();
+          pets.petsStartled(this);
         });
       }
       this.time.delayedCall(Phaser.Math.Between(7000, 15000), strike);
@@ -5734,7 +5296,7 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Нажатие засчитывается, только если палец не двигал камеру. */
-  private tap(action: () => void): void {
+  tap(action: () => void): void {
     if (!this.dragged) action();
   }
 
@@ -7744,8 +7306,8 @@ export class StoreScene extends Phaser.Scene {
     // а в самом большом магазине — на тротуаре (кот спит на скамейке).
     const atStreet = next === this.layout;
     const front = this.layout.h + FACADE_H;
-    this.buildCat(door.x + 47, atStreet ? top + 8.5 : front + 10);
-    this.buildBobik(door.x - 24, atStreet ? top + 8.5 : front + 10);
+    pets.buildCat(this, door.x + 47, atStreet ? top + 8.5 : front + 10);
+    pets.buildBobik(this, door.x - 24, atStreet ? top + 8.5 : front + 10);
     // Подсолнухи, которые посадила Соня, — у самого входа.
     if (sunflowersPlanted(this.state)) {
       const y = atStreet ? top + 8.5 : front + 10;
@@ -10909,7 +10471,7 @@ export class StoreScene extends Phaser.Scene {
       40,
     );
     if (!this.sys.isActive()) return;
-    this.heartAt(sprite.x, sprite.y - 14);
+    pets.heartAt(this, sprite.x, sprite.y - 14);
     music.sting('story');
     this.popup(sprite.x, sprite.y - 20, t('drama.visit'), '#fff3b0');
     await this.wait(9000);
@@ -10952,7 +10514,7 @@ export class StoreScene extends Phaser.Scene {
     const coins = guestCoins(this.state);
     this.state = seeGuest(this.state, guest.date);
     saveGame(this.state);
-    this.heartAt(sprite.x, sprite.y - 14);
+    pets.heartAt(this, sprite.x, sprite.y - 14);
     if (!music.sting('coin')) sound.coin(sellerHome.x);
     haptic.success();
     this.popup(sprite.x, sprite.y - 20, `«${t(`live.guest.${guest.who}.line` as TextKey)}»`, '#cfe8ff');
@@ -11146,7 +10708,7 @@ export class StoreScene extends Phaser.Scene {
     }
     // Бобик у входа лает — воришка с перепугу бросает товар.
     if (this.bobik?.active && c.items.length && Math.random() < DOG_DAY_CATCH) {
-      this.bobikBark();
+      pets.bobikBark(this);
       this.catchThief(c, 'dog');
       return;
     }
@@ -12396,7 +11958,7 @@ export class StoreScene extends Phaser.Scene {
    * Пауза в деле. Если за это время мир перестроили, дело старого мира на ней и обрывается: его люди
    * и вещи уже уничтожены (так же обрывается шаг walk — killAll гасит его твин без onStop).
    */
-  private wait(ms: number): Promise<void> {
+  wait(ms: number): Promise<void> {
     const world = this.worldGen;
     return new Promise((resolve) => this.time.delayedCall(ms, () => world === this.worldGen && resolve()));
   }
@@ -14553,7 +14115,7 @@ export class StoreScene extends Phaser.Scene {
   /** Ночь: Бобик сидит настороже, к двери выходит сторож с фонариком. */
   private nightGuard(): void {
     this.closed = true;
-    this.bobikSit(900);
+    pets.bobikSit(this, 900);
     if (!hasWatchman(this.state)) return;
     const { door } = this.layout;
     const y = this.bobik?.y ?? this.layout.h + FACADE_H + 10;
@@ -14575,7 +14137,7 @@ export class StoreScene extends Phaser.Scene {
   /** Утром роллеты поднимаются. */
   private openShop(): void {
     this.closed = false;
-    this.bobikRest();
+    pets.bobikRest(this);
     this.nightWatch.forEach((o) => o.destroy());
     this.nightWatch = [];
     for (const shutter of this.shutters) {
