@@ -198,7 +198,8 @@ import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable,
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
-import { claimPass, grantPass, passCoins, passDecor, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
+import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
+import { showSupport } from './support';
 import { rushPrize } from '../game/rush';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
@@ -1570,7 +1571,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const rows = el('div', 'ui-box');
       for (let l = 1; l <= PASS_LEVELS; l++) {
         const row = el('div', `ui-pass-row${l <= level ? ' open' : ''}`);
-        const decor = passDecor(state, l);
+        const decor = passExclusive(pass.season, l) ?? passDecor(state, l);
         const cell = (track: 'free' | 'premium', label: string) => {
           const got = pass[track].includes(l);
           const can = l <= level && !got && (track === 'free' || pass.paid);
@@ -1603,6 +1604,21 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         bar,
         el('div', 'ui-muted', t('pass.note', { d: XP_DAY, q: XP_QUEST, w: XP_WEEKLY, x: XP_PER_LEVEL, days: PASS_DAYS })),
       ];
+      // Эксклюзив сезона: вывеска и наряд крупно — ради них и стоит взять звёздный пропуск.
+      const exclusive = seasonExclusives(pass.season);
+      if (exclusive.length) {
+        const show = el('div', 'ui-pass-excl');
+        for (const id of exclusive) {
+          const item = decorItem(id);
+          const got = state.decor.owned.includes(id);
+          const cardEl = el('div', `ui-decor premium${got ? ' active' : ''}`);
+          cardEl.append(decorPreview(item, item.kind), el('div', 'ui-decor-name', t(item.nameKey)), el('div', 'ui-decor-status', got ? `✓ ${t('pass.exclusiveGot')}` : t('pass.exclusiveAt', { l: EXCLUSIVE_LEVELS[item.kind] ?? 0 })));
+          show.append(cardEl);
+        }
+        head.push(el('b', '', t('pass.exclusive')), show, el('div', 'ui-muted', t('pass.exclusiveNote')));
+        const next = seasonExclusives(pass.season + 1);
+        if (next.length) head.push(el('div', 'ui-muted', t('pass.nextSeason', { items: next.map((id) => t(decorItem(id).nameKey)).join(', ') })));
+      }
       if (pass.paid) head.push(el('div', 'ui-note', t('pass.paid')));
       else {
         const note = el('div', 'ui-muted', t('pass.buyNote'));
@@ -3209,11 +3225,16 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const decorBox = (state: StoreState) =>
     foldBox('decor', t('decor.title'), (box) => {
       box.append(el('div', 'ui-muted', t('decor.note')));
+      // Эксклюзив пропуска — свой сезон и уже забранное; подарки за поддержку — только полученные.
+      const shown = (d: DecorItem) =>
+        state.decor.owned.includes(d.id) || (d.season === undefined ? !d.support : d.season === state.pass?.season);
       for (const kind of DECOR_KINDS) {
+        const items = DECOR.filter((d) => d.kind === kind && shown(d));
+        if (!items.length) continue;
         box.append(el('div', 'ui-decor-kind', t(`decor.kind.${kind}` as TextKey)));
         const grid = el('div', 'ui-decor-grid');
         grid.append(decorCard(state, kind, null));
-        for (const item of DECOR.filter((d) => d.kind === kind)) grid.append(decorCard(state, kind, item));
+        for (const item of items) grid.append(decorCard(state, kind, item));
         box.append(grid);
       }
     });
@@ -3259,11 +3280,15 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           holidayDecorModal(item);
           return;
         }
+        if (item && (item.season !== undefined || item.support) && !owned) {
+          exclusiveDecorModal(item);
+          return;
+        }
         if (active) return;
         if (owned) update(setDecor(getState(), kind, item?.id ?? null));
         else if (item) update(buyDecor(getState(), item.id), 'success');
       },
-      `ui-decor${active ? ' active' : ''}${premium ? ' premium' : ''}`,
+      `ui-decor${active ? ' active' : ''}${premium || item?.season !== undefined || item?.support ? ' premium' : ''}`,
       !owned && !premium && !holiday && !canBuy,
     );
     const status = trying
@@ -3276,6 +3301,10 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
             ? `${item.price} 💰`
             : item?.holiday
               ? t('decor.holidayEarn')
+              : item?.season !== undefined
+                ? t('decor.seasonEarn')
+                : item?.support
+                  ? t('decor.supportEarn')
               : `⭐ ${item?.stars ?? (item?.pack ? STAR_PACKS[item.pack]?.stars : 0) ?? 0}`;
     card.append(decorPreview(item, kind), el('div', 'ui-decor-name', item ? t(item.nameKey) : t('decor.none')), el('div', 'ui-decor-status', status));
     return card;
@@ -3332,6 +3361,29 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     } else if ((state.decor.tried ?? []).includes(item.id)) modal.append(el('div', 'ui-muted', t('decor.triedAlready')));
     modal.append(button(t('decor.close'), close, 'ui-btn secondary'));
     if (!starsAvailable()) note.textContent = t('decor.starsOff');
+  };
+
+  /**
+   * Эксклюзив пропуска или подарок за поддержку, которых ещё нет: крупно и откуда они берутся.
+   * Эксклюзив своего сезона можно один раз примерить на день — как премиальное.
+   */
+  const exclusiveDecorModal = (item: DecorItem) => {
+    const { card: modal, close } = openModal();
+    const state = getState();
+    const current = item.season !== undefined && item.season === state.pass?.season;
+    const text = item.support
+      ? t('decor.supportNote')
+      : current
+        ? t('decor.seasonNote', { n: item.season!, l: EXCLUSIVE_LEVELS[item.kind] ?? 0 })
+        : t('decor.seasonGone');
+    modal.append(el('h2', '', t(item.nameKey)), decorPreview(item, item.kind, true), el('div', 'ui-muted', text));
+    if (current && canTry(state, item.id)) {
+      modal.append(button(t('decor.try'), () => {
+        close();
+        update(tryDecor(getState(), item.id));
+      }, 'ui-btn secondary'));
+    } else if (current && (state.decor.tried ?? []).includes(item.id)) modal.append(el('div', 'ui-muted', t('decor.triedAlready')));
+    modal.append(button(t('decor.close'), close, 'ui-btn secondary'));
   };
 
   /** Праздничная вещь, которой ещё нет: крупно и откуда она берётся (открытки праздника). */
@@ -3890,6 +3942,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
 
   // ---------- Магазин: помещение, долг, расходы ----------
 
+  /** «Поддержать автора» (ui/support.ts): скромная строчка среди настроек профиля. */
+  const supportBox = () => {
+    const box = el('div', 'ui-box');
+    box.append(button(t('support.open'), () => showSupport(getState, update), 'ui-btn secondary'));
+    return box;
+  };
+
   /** Профиль (кнопка 🏆 в заголовке): достижения, звание, наследие, друзья, альбом, настройки. */
   const profileTab = (state: StoreState): HTMLElement[] => {
     const replay = el('div', 'ui-box');
@@ -3946,6 +4005,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       named,
       sounds,
       gfx,
+      supportBox(),
       rankBox(state),
       ...legacyBox(state),
       ...inviteBox(),

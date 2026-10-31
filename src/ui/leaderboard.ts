@@ -14,11 +14,14 @@ type OnRival = (key: string, name: string) => void;
 function table(rows: BoardRow[], start = 1, onRival?: OnRival): HTMLElement {
   const list = el('div', 'ui-board');
   rows.forEach((r, i) => {
-    const row = el('div', `ui-board-row${r.me ? ' me' : ''}`);
+    // Золотая табличка — поддержал автора звёздами (game/support.ts).
+    const row = el('div', `ui-board-row${r.me ? ' me' : ''}${r.gold ? ' gold' : ''}`);
+    if (r.gold) row.title = t('support.gold');
     const place = start + i;
     const medal = ['🥇', '🥈', '🥉'][place - 1] ?? `${place}.`;
     const who = el('div', 'ui-board-who');
-    who.append(el('b', '', r.me ? t('board.you', { name: r.name }) : r.name), el('span', 'ui-item-sub', `${t(STORE_LEVELS[Math.min(r.level, STORE_LEVELS.length - 1)].nameKey)} · ★${r.rating.toFixed(1)} · ${t('hud.day', { n: r.day })}`));
+    const name = r.me ? t('board.you', { name: r.name }) : r.name;
+    who.append(el('b', '', r.gold ? `🏅 ${name}` : name), el('span', 'ui-item-sub', `${t(STORE_LEVELS[Math.min(r.level, STORE_LEVELS.length - 1)].nameKey)} · ★${r.rating.toFixed(1)} · ${t('hud.day', { n: r.day })}`));
     row.append(el('span', 'ui-board-place', medal), who, el('b', 'ui-board-sum', `${r.revenue.toLocaleString('ru-RU')} 💰`));
     const key = r.key;
     // Узкая строка: только значок, подпись — в пояснении над таблицей и во всплывающей подсказке.

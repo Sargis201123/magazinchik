@@ -11,7 +11,7 @@ import { markWeek } from './guild.js';
 import { markWeekend } from './weekend.js';
 import { ready, saveHooks } from './social.js';
 import { rivalKey } from './rival.js';
-import { json, verifyInitData, type D1, type Env } from './telegram.js';
+import { GOLD_SUPPORT, json, verifyInitData, type D1, type Env } from './telegram.js';
 
 const DAY = 24 * 3600_000;
 /** Сколько событий за раз принимаем и как они называются (с цифрами — onb_day1, onb_day2). */
@@ -40,6 +40,8 @@ export interface BoardRow {
   me?: boolean;
   /** Ключ для «Заглянуть к конкуренту» (rival.ts): у своей строки нет. */
   key?: string;
+  /** Золотая табличка: поддержал автора (supporters.ts, ступень GOLD_SUPPORT). */
+  gold?: true;
 }
 
 /** Самый большой снимок магазина (символов), который сохраняем. */
@@ -198,10 +200,10 @@ async function onboardingStats(db: D1, now: number): Promise<Record<(typeof COHO
   return out;
 }
 
-const ROW = 'SELECT id, name, day, level, rating, revenue FROM progress';
-type Row = BoardRow & { id: number };
+const ROW = `SELECT id, name, day, level, rating, revenue, EXISTS (SELECT 1 FROM supporters s WHERE s.id = progress.id AND s.stars >= ${GOLD_SUPPORT}) AS gold FROM progress`;
+type Row = Omit<BoardRow, 'gold'> & { id: number; gold?: number | boolean };
 const strip = (rows: Row[], me: number): BoardRow[] =>
-  rows.map(({ id, name, day, level, rating, revenue }) => ({ name, day, level, rating: Math.round(rating * 10) / 10, revenue, ...(id === me ? { me: true } : {}) }));
+  rows.map(({ id, name, day, level, rating, revenue, gold }) => ({ name, day, level, rating: Math.round(rating * 10) / 10, revenue, ...(id === me ? { me: true } : {}), ...(gold ? { gold: true as const } : {}) }));
 
 /**
  * POST /api/leaderboard { initData } → { enabled, top, friends, rank, total }:

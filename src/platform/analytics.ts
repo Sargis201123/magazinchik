@@ -127,6 +127,8 @@ export interface BoardRow {
   me?: boolean;
   /** Ключ для «Заглянуть к конкуренту» (api/_lib/rival.ts). */
   key?: string;
+  /** Золотая табличка: поддержал автора (game/support.ts, api/_lib/supporters.ts). */
+  gold?: boolean;
 }
 
 export interface Board {

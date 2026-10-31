@@ -4,7 +4,8 @@
 import { commandReply, setupProfile, startCaption, type StartInfo } from './botProfile.js';
 import { ready, recordReferral, recordSource } from './social.js';
 import { recordGuildInvite } from './guild.js';
-import { bot, canBuy, itemFromPayload, json, catalogItem, ownedFrom, payloadFor, verifyInitData, type D1, type Env, type StarTransaction } from './telegram.js';
+import { addSupporter, syncSupporter } from './supporters.js';
+import { bot, canBuy, isSupport, itemFromPayload, json, catalogItem, ownedFrom, payloadFor, verifyInitData, type D1, type Env, type StarTransaction } from './telegram.js';
 
 /** POST /api/stars-invoice { initData, item } → { link }: счёт в звёздах на одну вещь оформления. */
 export async function starsInvoice(request: Request, env: Env): Promise<Response> {
@@ -19,7 +20,11 @@ export async function starsInvoice(request: Request, env: Env): Promise<Response
   const title = ru ? item.ru : item.en;
   const link = await bot<string>(token, 'createInvoiceLink', {
     title,
-    description: body.item!.startsWith('pass_')
+    description: isSupport(body.item!)
+      ? ru
+        ? `${title}: спасибо, что поддерживаешь «Магазинчик»! Только украшения и благодарность — без преимуществ в игре.`
+        : `${title}: thank you for supporting the game! Cosmetics and thanks only — no gameplay advantage.`
+      : body.item!.startsWith('pass_')
       ? ru
         ? `${title}: открывает премиальные награды сезона — звёздный декор и двойные монеты.`
         : `${title}: unlocks the season's premium rewards — star decor and double coins.`
@@ -69,7 +74,10 @@ export async function starsOwned(request: Request, env: Env): Promise<Response> 
   const body = (await request.json().catch(() => ({}))) as { initData?: string };
   const user = await verifyInitData(body.initData ?? '', token);
   if (!user) return json({ error: 'bad_init_data' }, 401);
-  return json({ items: ownedFrom(await allTransactions(token), user.id) });
+  const items = ownedFrom(await allTransactions(token), user.id);
+  // Золотая табличка в рейтинге — по тем же платежам (supporters.ts); база недоступна — не беда.
+  await syncSupporter(env.DB, user.id, items).catch((e) => console.error(e));
+  return json({ items });
 }
 
 interface Update {
@@ -146,9 +154,17 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
       resetStarsCache();
       const id = itemFromPayload(message.successful_payment.invoice_payload);
       const name = id ? catalogItem(id)![ru ? 'ru' : 'en'] : '';
+      if (id && isSupport(id) && message.from) await addSupporter(env.DB, message.from.id, catalogItem(id)!.stars).catch((e) => console.error(e));
       await bot(token, 'sendMessage', {
         chat_id: message.chat.id,
-        text: ru ? `Спасибо! ${name} — уже в твоём магазине ✨` : `Thank you! ${name} is already in your store ✨`,
+        text:
+          id && isSupport(id)
+            ? ru
+              ? `Огромное спасибо за поддержку! 💛 «${name}» — табличка «Спасибо!» уже стоит у твоей кассы.`
+              : `Thank you so much for your support! 💛 "${name}" — the «Thank you!» plaque is already by your register.`
+            : ru
+              ? `Спасибо! ${name} — уже в твоём магазине ✨`
+              : `Thank you! ${name} is already in your store ✨`,
       });
     } else if (message.text && commandReply(message.text, ru)) {
       // /paysupport и /terms — Telegram требует их от ботов, которые продают за звёзды.
@@ -197,6 +213,9 @@ export async function starsRefund(request: Request, env: Env): Promise<Response>
   const charge = url.searchParams.get('charge');
   if (charge) {
     await bot(token, 'refundStarPayment', { user_id: user, telegram_payment_charge_id: charge });
+    // Вернули звёзды за поддержку — золотая табличка в рейтинге снимается (supporters.ts).
+    resetStarsCache();
+    if (env.DB) await syncSupporter(env.DB, user, ownedFrom(await allTransactions(token), user)).catch((e) => console.error(e));
     return json({ ok: true, refunded: charge });
   }
   const all = await allTransactions(token);

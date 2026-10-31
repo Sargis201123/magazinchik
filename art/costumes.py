@@ -18,6 +18,9 @@ COSTUMES = {
     "outfit_retro": ({"hat": "papercap", "outfit": "soda", "face": "mustache"}, {"pants": 0x262B44}, ((0xF6757A, 0xA22633))),
     "outfit_tuxedo": ({"hat": "silkhat", "outfit": "tuxedo", "face": "monocle", "back": "tails"}, {"pants": 0x181425}, ((0xFEE761, 0xB86F50))),
     "outfit_cyber": ({"hat": "cyberhelmet", "outfit": "cyber", "back": "jetpack"}, {"pants": 0x262B44}, ((0x2CE8F5, 0x68386C))),
+    # Эксклюзив звёздного пропуска (art/season.py): «Листопад» и «Северное сияние».
+    "outfit_s1": ({"hat": "leafcap", "outfit": "trench"}, {"pants": 0x4F2C17}, ((0xF2C14E, 0xB8452A))),
+    "outfit_s2": ({"hat": "pompom", "outfit": "nordic"}, {"pants": 0x262B44}, ((0x52E0A0, 0x14244A))),
 }
 
 
