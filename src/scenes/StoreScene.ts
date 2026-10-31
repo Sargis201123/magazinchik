@@ -1445,6 +1445,9 @@ export class StoreScene extends Phaser.Scene {
   private readonly onbSaid = new Set<string>();
   /** Сколько раз бабушка уже похвалила в этот запуск (реплики идут по кругу). */
   private praised = 0;
+  private praisedAt = '';
+  /** Как построен зал первой недели (firstday.ts cleanHall): поменялось — утром перестроить. */
+  private builtClean = '';
   /** Бабушка подарила вещь на прилавок — утром зал перестроить, чтобы она появилась. */
   private giftRebuild = false;
   /** Палец двигал камеру — это не нажатие. */
@@ -7522,6 +7525,7 @@ export class StoreScene extends Phaser.Scene {
     const base = next.h + 4;
     const look = eduardLook(this.state);
     this.builtEduard = look;
+    this.builtClean = this.cleanKey();
     // Босс района открывается за дорогой, на месте закрытого «Гиганта»; сбоку тогда — хозтовары.
     // Сбоку, когда босс за дорогой, — магазин друга по торговой неделе (или хозтовары).
     // Пустующее помещение тоже занимает друг.
@@ -13453,6 +13457,8 @@ export class StoreScene extends Phaser.Scene {
     }
     this.finishCheckout(c, undefined, byOwner);
     if (byOwner) this.ownerServedOne();
+    // Хвалит бабушка только за то, что пробил сам новичок, — уже с этой покупкой в счёте.
+    if (byOwner && grannyStays(this.state)) this.grannyPraise();
   }
 
   /** Редкий гость оставляет чаевые; первый раз — попадает в альбом. */
@@ -13558,7 +13564,6 @@ export class StoreScene extends Phaser.Scene {
     if (this.combo >= 2) this.celebrateCombo(this.combo);
     // Серия от пяти — весь зал оборачивается на кассу.
     if (this.combo === 5 || this.combo === 10) this.everyoneLooks(this.layout.counter.x, this.layout.counter.y, 'emo_star');
-    if (grannyStays(this.state)) this.grannyPraise();
 
     const dirty = this.trash.size >= TRASH_COMPLAINT || this.binFull();
     const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
@@ -14558,7 +14563,7 @@ export class StoreScene extends Phaser.Scene {
     const cupChanged = (contestOf(this.state)?.wins ?? 0) !== this.builtCup;
     const gift = this.giftRebuild;
     this.giftRebuild = false;
-    if (gift || trialOver || cupChanged || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant || branchLook(this.state) !== this.builtBranch || districtKey(this.state) !== this.builtDistrict || hoodLook(this.state) !== this.builtHood) this.buildWorld();
+    if (gift || this.cleanKey() !== this.builtClean || trialOver || cupChanged || eduardLook(this.state) !== this.builtEduard || giantLook(this.state) !== this.builtGiant || branchLook(this.state) !== this.builtBranch || districtKey(this.state) !== this.builtDistrict || hoodLook(this.state) !== this.builtHood) this.buildWorld();
     this.refillParking();
     this.updateLighting(0);
     this.openShop();
@@ -14742,6 +14747,15 @@ export class StoreScene extends Phaser.Scene {
     this.setFacing(this.granny, 'down');
   }
 
+  /**
+   * Что в зале первой недели скрыто (firstday.ts): надписи закрытых пристроек и «Сдаётся» (пока на переезд
+   * не хватает). Сменилось — утром зал перестраивается, и они появляются.
+   */
+  private cleanKey(): string {
+    const next = STORE_LEVELS[this.state.level + 1];
+    return cleanHall(this.state) ? `clean:${next ? this.state.money >= next.cost : ''}` : '';
+  }
+
   private grannyHome(): { x: number; y: number } {
     return this.reliefSpot();
   }
@@ -14838,6 +14852,10 @@ export class StoreScene extends Phaser.Scene {
   private grannyPraise(): void {
     const granny = this.granny;
     if (!granny?.active || !praiseAt(this.state, this.combo, this.serves.owner) || this.say.visible || this.coach.active) return;
+    // Каждый порог — один раз: пока счёт стоит, бабушкины же пробивки похвалу не повторяют.
+    const mark = `${this.combo}:${this.serves.owner}`;
+    if (mark === this.praisedAt) return;
+    this.praisedAt = mark;
     const n = this.praised++ % 3;
     this.emote(granny, 'emo_heart');
     this.setMood(granny, 'happy', 2500);
