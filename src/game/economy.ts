@@ -326,6 +326,8 @@ export interface StaffMember {
   inspired?: number;
   /** Друг из Telegram (staff.ts): работает под своим именем, раз в неделю получает долю. */
   friend?: { id: number; name: string };
+  /** Сын Светы на летней подработке (arcs.ts): уйдёт учиться в конце лета. */
+  summer?: boolean;
 }
 
 /** Воодушевлённый сотрудник работает быстрее. */

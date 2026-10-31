@@ -4,7 +4,7 @@
 
 import { t, type TextKey } from '../i18n';
 import { PRODUCTS, staffOf, type StoreState } from '../game/economy';
-import { ARC_DEAL, ARC_HELPER, ARCS, arcsOf, arcToday, canChooseArc, dealPay, helperRole, answerArc, type ArcChoice } from '../game/arcs';
+import { ARC_DEAL, ARCS, arcsOf, arcToday, canChooseArc, dealPay, helperRole, answerArc, type ArcChoice } from '../game/arcs';
 import { button, el } from './dom';
 
 type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void;
@@ -58,7 +58,7 @@ export function arcLines(state: StoreState): HTMLElement[] {
       ),
     );
   }
-  if (arcs.helper && staffOf(state, arcs.helper.role)?.name === ARC_HELPER.name) out.push(el('div', 'ui-muted', t('arc.helper.line')));
+  if (arcs.helper && staffOf(state, arcs.helper.role)?.summer) out.push(el('div', 'ui-muted', t('arc.helper.line')));
   const boost = arcsOf(state).boost;
   if (boost && boost.until >= state.day) out.push(el('div', 'ui-muted', t('arc.boost', { p: Math.round(boost.pct * 100), n: boost.until - state.day + 1 })));
   return out;

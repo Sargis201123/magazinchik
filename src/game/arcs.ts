@@ -192,10 +192,11 @@ export const ARCS: Record<ArcId, Arc> = {
     icon: '🎂',
     who: 'valya',
     beats: [
-      { show: ['visit'], choices: [ok()], gap: [2, 3] },
+      { show: ['visit'], choices: [ok()] },
       {
         show: ['festive', 'visit'],
         prop: 'balloon',
+        gap: [2, 3],
         choices: [{ effect: { money: -150, rating: 0.1 }, require: { money: 150 } }, ok({ loyalty: [['all', 1]] })],
         last: true,
       },
@@ -415,7 +416,7 @@ function apply(state: StoreState, e: ArcEffect): StoreState {
     const role = helperRole(s);
     if (role) {
       const wage = Math.round((wageFor(role, 2, 'hardworker') * ARC_HELPER.wage) / 10) * 10;
-      const member: StaffMember = { role, name: ARC_HELPER.name, skill: 2, trait: 'hardworker', wage, months: 0 };
+      const member: StaffMember = { role, name: ARC_HELPER.name, skill: 2, trait: 'hardworker', wage, months: 0, summer: true };
       const hired = hire(s, member);
       if (hired) {
         s = hired;
@@ -425,7 +426,7 @@ function apply(state: StoreState, e: ArcEffect): StoreState {
   }
   if (e.leave && arcs.helper) {
     const role = arcs.helper.role;
-    s = { ...s, staff: s.staff.filter((m) => !(m.role === role && m.name === ARC_HELPER.name && !m.friend)) };
+    s = { ...s, staff: s.staff.filter((m) => !(m.role === role && m.summer)) };
     arcs = { ...arcs, helper: undefined };
   }
   return { ...s, arcs };
@@ -465,7 +466,7 @@ export interface DealDelivery {
   ended: boolean;
 }
 
-/** Открылись: в день поставки кафе Ахмеда забирает хлеб. Нет хлеба — без обид, в другой раз. */
+/** Открылись: в день поставки кафе Ахмеда забирает хлеб. Нет хлеба — без обид, через неделю. */
 export function arcDeliver(state: StoreState): { state: StoreState; result: DealDelivery | null } {
   const arcs = arcsOf(state);
   const deal = arcs.deal;
@@ -473,7 +474,8 @@ export function arcDeliver(state: StoreState): { state: StoreState; result: Deal
   const delivered = stockOf(state, deal.pid) >= deal.qty;
   let s = state;
   if (delivered) s = { ...take(s, deal.pid, deal.qty), money: s.money + deal.pay };
-  const left = deal.left - (delivered ? 1 : 0);
+  // Неделя прошла в любом случае: договор на ARC_DEAL.times недель, недовезённое не копится.
+  const left = deal.left - 1;
   const ended = left <= 0;
   const after = ended ? undefined : { ...deal, left, next: state.day + ARC_DEAL.every };
   return { state: { ...s, arcs: { ...arcsOf(s), deal: after } }, result: { delivered, pay: delivered ? deal.pay : 0, ended } };
@@ -484,7 +486,7 @@ export function arcGuests(state: StoreState): number {
   const arcs = state.arcs;
   if (!arcs) return 1;
   const boost = arcs.boost && state.day <= arcs.boost.until ? 1 + arcs.boost.pct : 1;
-  const helper = arcs.helper && onShift(state, arcs.helper.role) && staffOf(state, arcs.helper.role)?.name === ARC_HELPER.name ? ARC_HELPER.guests : 1;
+  const helper = arcs.helper && onShift(state, arcs.helper.role) && staffOf(state, arcs.helper.role)?.summer ? ARC_HELPER.guests : 1;
   return boost * helper;
 }
 

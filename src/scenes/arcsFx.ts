@@ -58,7 +58,8 @@ export function scheduleArcScene(scene: StoreScene): void {
   }
   if (today.show.includes('festive')) at(0.03, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, t('arc.festive'), '#fee761'));
   if (today.show.includes('car')) at(0.3, () => weddingCar(scene));
-  if (today.show.includes('truck')) at(0.08, () => movingTruck(scene));
+  // Не в одно время с мусоровозом (visitors.morningCrew, 6–10 с дня): оба стоят в одной полосе.
+  if (today.show.includes('truck')) at(0.2, () => movingTruck(scene));
   if (today.show.includes('runners')) at(0.12, () => runners(scene));
 }
 

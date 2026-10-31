@@ -154,6 +154,7 @@ describe('хроники района', () => {
     expect(res.result).toEqual({ delivered: false, pay: 0, ended: false });
     expect({ money: res.state.money, rating: res.state.rating }).toEqual(before);
     expect(arcsOf(res.state).deal!.next).toBe(s.day + ARC_DEAL.every);
+    expect(arcsOf(res.state).deal!.left).toBe(ARC_DEAL.times - 1);
     // Хлеб есть — забирает и платит.
     s = { ...next(res.state, ARC_DEAL.every), warehouse: { ...res.state.warehouse, bread: Array(30).fill(0) } };
     res = arcDeliver(s);
@@ -191,6 +192,7 @@ describe('хроники района', () => {
     const role = arcsOf(s).helper!.role;
     const misha = s.staff.find((m) => m.role === role)!;
     expect(misha.name).toBe(ARC_HELPER.name);
+    expect(misha.summer).toBe(true);
     expect(misha.skill).toBeGreaterThanOrEqual(2);
     expect(arcGuests(s)).toBeCloseTo(ARC_HELPER.guests);
     s = untilBeat(s);
@@ -209,6 +211,25 @@ describe('хроники района', () => {
     expect(answerArc(s, 0)).toBeNull();
     const other = answerArc(s, 1)!;
     expect(arcsOf(other).cur?.beat).toBe(3);
+  });
+
+  it('летняя подработка: уходит только сам Миша, а не тёзка, нанятый на его место', () => {
+    let s = start(after(60, { staff: [] }), 'summer');
+    s = answerArc(s, 0)!;
+    const role = arcsOf(s).helper!.role;
+    // Игрок уволил Мишу и нанял другого с тем же именем.
+    s = { ...s, staff: [{ role, name: ARC_HELPER.name, skill: 1, wage: 300, months: 0 }] };
+    expect(arcGuests(s)).toBe(1);
+    s = { ...s, arcs: { ...arcsOf(s), cur: { id: 'summer', beat: 2, due: s.day } } };
+    s = answerArc(s, 0)!;
+    expect(s.staff.length).toBe(1);
+  });
+
+  it('договор с кафе кончается через 6 недель, даже если хлеба не хватало', () => {
+    let s = answerArc(start(after(60), 'cafe'), 0)!;
+    s = { ...s, warehouse: { ...s.warehouse, bread: [] }, shelves: s.shelves.map((sh) => ({ ...sh, items: { ...sh.items, bread: [] } })) };
+    for (let i = 0; i < ARC_DEAL.times; i++) s = arcDeliver({ ...s, day: arcsOf(s).deal!.next }).state;
+    expect(arcsOf(s).deal).toBeUndefined();
   });
 
   it('«Завтра:» в итогах дня называет шаг истории', () => {
