@@ -80,14 +80,10 @@ const DAY_NAMES: Record<Lang, string[]> = {
   tr: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
   es: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
   kk: ['қаңтар', 'ақпан', 'наурыз', 'сәуір', 'мамыр', 'маусым', 'шілде', 'тамыз', 'қыркүйек', 'қазан', 'қараша', 'желтоқсан'],
-};
-/** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre», «5 желтоқсан». */
   uz: ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'],
-};
-/** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre», «5-dekabr». */
   pt: ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
 };
-/** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre», «5 de dezembro». */
+/** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre», «5 желтоқсан», «5-dekabr», «5 de dezembro». */
 const DAY_FORMAT: Record<Lang, (d: number, month: string) => string> = {
   ru: (d, month) => `${d} ${month}`,
   en: (d, month) => `${month} ${d}`,
@@ -241,6 +237,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'also.letter': 'хат — {from}',
     'also.chest': 'сандықша ≈{sum} 💰',
     play: '▶ Ойнау',
+  },
   uz: {
     sonya: '👧 Sonya: «Dada, bugun doʻkonga kirasanmi? Senga bir gap aytmoqchi edim…»',
     helped: '👵 Buvi: «Nevaram, {name} senga yordam yubordi! Kirib oʻt — bugun kassa tezroq ishlaydi»',
@@ -268,6 +265,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'also.letter': '{from} xat',
     'also.chest': 'sandiqcha ≈{sum} 💰',
     play: '▶ Oʻynash',
+  },
   pt: {
     sonya: '👧 Sônia: “Pai, você vai passar na loja hoje? Eu queria te contar uma coisa…”',
     helped: '👵 Vovó: “Querido, {name} te mandou uma ajuda! Passe aqui — hoje o caixa vai atender mais rápido”',
@@ -367,6 +365,7 @@ export const PEOPLE: Record<Lang, Record<string, { from: string; who: string }>>
     olga: { from: 'Ольга Николаевнадан', who: 'Ольга Николаевнаны' },
     misha: { from: 'Мишадан', who: 'Мишаны' },
     staff: { from: 'бұрынғы қызметкерден', who: 'Бұрынғы қызметкерді' },
+  },
   // По-узбекски имя стоит без падежного окончания: тексты построены так, чтобы оно не требовалось.
   uz: {
     grandma: { from: 'buvidan', who: 'buvi' },
@@ -379,6 +378,7 @@ export const PEOPLE: Record<Lang, Record<string, { from: string; who: string }>>
     olga: { from: 'Olga Nikolayevnadan', who: 'Olga Nikolayevna' },
     misha: { from: 'Mishadan', who: 'Misha' },
     staff: { from: 'sobiq xodimdan', who: 'sobiq xodim' },
+  },
   pt: {
     grandma: { from: 'da vovó', who: 'a vovó' },
     valya: { from: 'da Valentina', who: 'a Valentina' },
@@ -399,17 +399,11 @@ export const ITEMS: Record<Lang, Record<string, string>> = {
   tr: { bread: '🍞 ekmek', milk: '🥛 süt', potatoes: '🥔 patates', meat: '🥩 et', apples: '🍎 elma', juice: '🧃 meyve suyu' },
   es: { bread: '🍞 pan', milk: '🥛 leche', potatoes: '🥔 papas', meat: '🥩 carne', apples: '🍎 manzanas', juice: '🧃 jugo' },
   kk: { bread: '🍞 нан', milk: '🥛 сүт', potatoes: '🥔 картоп', meat: '🥩 ет', apples: '🍎 алма', juice: '🧃 шырын' },
-};
-/** Товар без названия (метка из игры, которой нет в ITEMS). */
-const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía', kk: 'тауар' };
   uz: { bread: '🍞 non', milk: '🥛 sut', potatoes: '🥔 kartoshka', meat: '🥩 goʻsht', apples: '🍎 olma', juice: '🧃 sharbat' },
-};
-/** Товар без названия (метка из игры, которой нет в ITEMS). */
-const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía', uz: 'mahsulot' };
   pt: { bread: '🍞 pão', milk: '🥛 leite', potatoes: '🥔 batatas', meat: '🥩 carne', apples: '🍎 maçãs', juice: '🧃 suco' },
 };
 /** Товар без названия (метка из игры, которой нет в ITEMS). */
-const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía', pt: 'mercadoria' };
+const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía', kk: 'тауар', uz: 'mahsulot', pt: 'mercadoria' };
 /** Своё поле словаря (не «constructor» из прототипа): метки приходят от игры. */
 const own = <T>(table: Record<string, T>, key: string): T | undefined => (Object.hasOwn(table, key) ? table[key] : undefined);
 /** Сундучок меньше этого — не повод писать (кассир едва начал торговать). */

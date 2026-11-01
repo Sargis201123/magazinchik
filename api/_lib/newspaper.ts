@@ -84,6 +84,7 @@ const HEADLINES: Record<Lang, Record<Headline, string>> = {
     growth: 'РЕКОРДТЫҚ ӨСУ: түсім күрт өсті',
     quiet: 'ТЫНЫШ АПТА: сатып алушылар дүкен иесін күтіп отыр',
     done: 'АПТА АРТТА ҚАЛДЫ: дүкен жұмыс істеп тұр, аудан риза',
+  },
   uz: {
     weekend: 'MAHALLANING ENG ZOʻR DAM OLISH KUNLARI: doʻkoning «Qora juma» oʻntaligiga kirdi!',
     king: 'MAHALLA QIROLI: doʻkoning hamma doʻstlaringdan koʻp ishladi!',
@@ -91,6 +92,7 @@ const HEADLINES: Record<Lang, Record<Headline, string>> = {
     growth: 'REKORD OʻSISH: tushum osmonga chiqdi',
     quiet: 'SOKIN HAFTA: xaridorlar xoʻjayinni sogʻinishdi',
     done: 'YANA BIR HAFTA ORTDA: doʻkon ishlayapti, mahalla mamnun',
+  },
   pt: {
     weekend: 'O MELHOR FIM DE SEMANA DO BAIRRO: sua loja entrou no top 10 da Black Friday!',
     king: 'REI DO QUARTEIRÃO: sua loja faturou mais que todos os seus amigos!',
@@ -185,6 +187,7 @@ const PAPER: Record<Lang, PaperTexts> = {
     revenue: (sum, trend) => `💰 Апталық түсім: ${sum}${trend}`,
     footer: 'Жаңа апта басталып кетті — сатып алушылар күтіп тұр!',
     open: '▶ Дүкенді ашу',
+  },
   uz: {
     friends: (rank, total) => `🏅 Doʻstlar orasida: ${total} tadan ${rank}-oʻrin`,
     duelWon: (name, mine, theirs) => `⚔️ Duel: «${name} va Ko» ustidan gʻalaba (${mine} – ${theirs})`,
@@ -196,6 +199,7 @@ const PAPER: Record<Lang, PaperTexts> = {
     revenue: (sum, trend) => `💰 Haftalik tushum: ${sum}${trend}`,
     footer: 'Yangi hafta boshlandi — xaridorlar kutyapti!',
     open: '▶ Doʻkonni ochish',
+  },
   pt: {
     friends: (rank, total) => `🏅 Entre amigos: ${rank}º lugar de ${total}`,
     duelWon: (name, mine, theirs) => `⚔️ Duelo: vitória sobre ${name} e Cia. (${mine} contra ${theirs})`,

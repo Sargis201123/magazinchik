@@ -172,9 +172,7 @@ export function canBuy(id: string, now = Date.now()): boolean {
 export function catalogItem(id: string): CatalogItem | undefined {
   if (STARS_CATALOG[id]) return STARS_CATALOG[id];
   const season = PASS_RE.exec(id)?.[1];
-  return season ? { stars: PASS_STARS, ru: `Сезонный пропуск №${season}`, en: `Season pass #${season}`, tr: `Sezon kartı #${season}`, es: `Pase de temporada n.º ${season}`, kk: `№${season} маусым билеті` } : undefined;
-  return season ? { stars: PASS_STARS, ru: `Сезонный пропуск №${season}`, en: `Season pass #${season}`, tr: `Sezon kartı #${season}`, es: `Pase de temporada n.º ${season}`, uz: `Mavsumiy chipta №${season}` } : undefined;
-  return season ? { stars: PASS_STARS, ru: `Сезонный пропуск №${season}`, en: `Season pass #${season}`, tr: `Sezon kartı #${season}`, es: `Pase de temporada n.º ${season}`, pt: `Passe da temporada nº ${season}` } : undefined;
+  return season ? { stars: PASS_STARS, ru: `Сезонный пропуск №${season}`, en: `Season pass #${season}`, tr: `Sezon kartı #${season}`, es: `Pase de temporada n.º ${season}`, kk: `№${season} маусым билеті`, uz: `Mavsumiy chipta №${season}`, pt: `Passe da temporada nº ${season}` } : undefined;
 }
 
 /** Полезная нагрузка счёта: по ней видно, какую вещь купили. */
