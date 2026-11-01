@@ -3220,6 +3220,33 @@ export const es: Record<TextKey, string> = {
   "zar.tale.tolik.1": "¡Soy Tolik! Estoy de visita en casa de la abuela Nina. Una barra de pan para mí y para los patos: los del muelle son los más hambrientos.",
   "zar.tale.tolik.2": "¡Hoy pesqué un lucio! ¡Así de grande! Bueno, vale, uno pequeño. Pero Som dijo que no está mal para empezar.",
   "zar.tale.tolik.3": "Esto es de mi parte y de los patos: ahorraba para una caña, pero ya tengo una. ¡Tómalo, eres bueno!",
+
+  // «Почта» утра и сводка «Сегодня» (ui/mail.ts, ui/morning.ts; ветка nx-morning).
+  "today.more": "{n} más",
+  "mail.title": "Correo",
+  "mail.takeAll": "Recoger todo",
+  "mail.total": "Llegó: +{n} 💰",
+  "mail.read": "Leer",
+  "mail.readPresents": "Lo que dejaron tus amigos",
+  "mail.readCard": "La postal de hoy",
+  "mail.empty": "Vacío por ahora — mañana llegará algo",
+  "mail.chest": "Cofre de ingresos — se llenó en {h} h",
+  "mail.letter": "Carta: {name}",
+  "mail.order.paid": "{name}: recogió lo apartado {icon}×{qty}",
+  "mail.order.wait": "{name}: vendrá por {icon}×{qty} antes del cierre",
+  "mail.gift": "Regalito de la abuela — día {n} seguido",
+  "mail.treats": "Te invitaron a un café: {names}",
+  "mail.presents": "Regalos de amigos: {n}",
+  "mail.presentsThanks": "“Gracias” por tus regalos: {n}",
+  "mail.thanks": "Gracias por la visita: {names}",
+  "mail.rival": "Noticias de los rivales",
+  "mail.league": "Liga: puesto {place} de {size}",
+  "mail.guild": "Gremio “{name}”: meta de la semana cumplida",
+  "mail.duel.won": "Semana de ventas: le ganaste a {name}",
+  "mail.duel.lost": "Semana de ventas con {name}: por participar",
+  "mail.rush": "Black Friday: puesto {rank} de {players}",
+  "mail.pass": "Pase de temporada: premios — {n}",
+  "mail.advent": "La postal festiva de hoy",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

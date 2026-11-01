@@ -120,7 +120,7 @@ export function showGiftPicker(friend: { id: number; name: string }, day: number
 }
 
 /** Окно с открытыми подарками: кто заходил, что оставил, добрая фраза, отзыв и что получили. */
-function showOpened(presents: Present[], thanks: string[], got: { money: number; rating: number; cards: number }, level: number): void {
+export function showOpened(presents: Present[], thanks: string[], got: { money: number; rating: number; cards: number }, level: number): void {
   socialStyles();
   const { card, close } = openModal();
   card.append(el('h2', '', `🎁 ${t('social.open.title')}`));

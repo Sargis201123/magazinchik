@@ -3229,6 +3229,33 @@ export const uz: Record<TextKey, string> = {
   "zar.tale.tolik.1": "Men Tolikman! Nina buvimnikida mehmonman. Baton — menga va oʻrdaklarga, iskaladagilari eng ochlari.",
   "zar.tale.tolik.2": "Bugun choʻrtan baliq tutdim! Mana shunaqa! Xoʻp, kichkinasini. Lekin Som boshlanishiga yomon emas, dedi.",
   "zar.tale.tolik.3": "Bu mendan va oʻrdaklardan: qarmoqqa pul yigʻayotgandim, lekin menda bittasi bor ekan. Ol, sen mehribonsan!",
+
+  // «Почта» утра и сводка «Сегодня» (ui/mail.ts, ui/morning.ts; ветка nx-morning).
+  "today.more": "Yana {n}",
+  "mail.title": "Pochta",
+  "mail.takeAll": "Hammasini olish",
+  "mail.total": "Keldi: +{n} 💰",
+  "mail.read": "Oʻqish",
+  "mail.readPresents": "Doʻstlar nima qoldirdi",
+  "mail.readCard": "Bugungi otkritka",
+  "mail.empty": "Hozircha boʻsh — ertaga nimadir keladi",
+  "mail.chest": "Tushum sandiqchasi — {h} soat yigʻildi",
+  "mail.letter": "Xat: {name}",
+  "mail.order.paid": "{name}: ajratilgan {icon}×{qty} ni olib ketdi",
+  "mail.order.wait": "{name}: {icon}×{qty} uchun yopilishga yaqin keladi",
+  "mail.gift": "Buvidan sovgʻa — ketma-ket {n}-kun",
+  "mail.treats": "Qahva bilan siylashdi: {names}",
+  "mail.presents": "Doʻstlardan sovgʻalar: {n}",
+  "mail.presentsThanks": "Sovgʻalaring uchun «rahmat»: {n}",
+  "mail.thanks": "Tashrif uchun rahmat: {names}",
+  "mail.rival": "Raqiblardan yangiliklar",
+  "mail.league": "Liga: {size} tadan {place}-oʻrin",
+  "mail.guild": "«{name}» gildiyasi: hafta maqsadi bajarildi",
+  "mail.duel.won": "Savdo haftasi: {name} yengildi",
+  "mail.duel.lost": "{name} bilan savdo haftasi: qatnashganing uchun",
+  "mail.rush": "«Qora juma»: {players} tadan {rank}-oʻrin",
+  "mail.pass": "Mavsum chiptasi: mukofotlar — {n}",
+  "mail.advent": "Bugungi bayram otkritkasi",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

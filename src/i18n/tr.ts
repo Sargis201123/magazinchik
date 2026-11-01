@@ -3220,6 +3220,33 @@ export const tr: Record<TextKey, string> = {
   "zar.tale.tolik.1": "Ben Tolik! Nina ninemin yanında kalıyorum. Bir somun — bana ve ördeklere, iskeledekiler en aç olanlar.",
   "zar.tale.tolik.2": "Bugün turna balığı tuttum! Şu kadar! Tamam, küçük bir tane. Ama Som başlangıç için fena değil dedi.",
   "zar.tale.tolik.3": "Bu benden ve ördeklerden: olta için para biriktiriyordum ama zaten bir tane var. Al, sen iyisin!",
+
+  // «Почта» утра и сводка «Сегодня» (ui/mail.ts, ui/morning.ts; ветка nx-morning).
+  "today.more": "{n} tane daha",
+  "mail.title": "Posta",
+  "mail.takeAll": "Hepsini al",
+  "mail.total": "Gelen: +{n} 💰",
+  "mail.read": "Oku",
+  "mail.readPresents": "Arkadaşların bıraktıkları",
+  "mail.readCard": "Günün kartı",
+  "mail.empty": "Şimdilik boş — yarın bir şey gelir",
+  "mail.chest": "Hasılat sandığı — {h} saat doldu",
+  "mail.letter": "Mektup: {name}",
+  "mail.order.paid": "{name}: ayrılan {icon}×{qty} siparişini aldı",
+  "mail.order.wait": "{name}: {icon}×{qty} için kapanışa doğru uğrayacak",
+  "mail.gift": "Nineden hediye — üst üste {n}. gün",
+  "mail.treats": "Kahve ısmarlayanlar: {names}",
+  "mail.presents": "Arkadaşlardan hediyeler: {n}",
+  "mail.presentsThanks": "Hediyelerin için “teşekkür”: {n}",
+  "mail.thanks": "Ziyaret için teşekkürler: {names}",
+  "mail.rival": "Rakiplerden haberler",
+  "mail.league": "Lig: {size} içinde {place}. sıra",
+  "mail.guild": "“{name}” loncası: haftanın hedefi tamam",
+  "mail.duel.won": "Ticaret haftası: {name} yenildi",
+  "mail.duel.lost": "{name} ile ticaret haftası: katılım ödülü",
+  "mail.rush": "Black Friday: {players} içinde {rank}. sıra",
+  "mail.pass": "Sezon kartı: ödüller — {n}",
+  "mail.advent": "Günün bayram kartı",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

@@ -3263,6 +3263,33 @@ export const ru = {
   "zar.tale.tolik.1": "Я Толик! У бабушки Нины гощу. Батон — мне и уткам, они у пристани самые голодные.",
   "zar.tale.tolik.2": "Я сегодня щуку поймал! Вот такую! Ну ладно, маленькую. Но Сом сказал — для начала неплохо.",
   "zar.tale.tolik.3": "Это тебе от меня и от уток: я копил на удочку, но у меня уже есть одна. Бери, ты добрый!",
+
+  // «Почта» утра и сводка «Сегодня» (ui/mail.ts, ui/morning.ts; ветка nx-morning).
+  "today.more": "Ещё {n}",
+  "mail.title": "Почта",
+  "mail.takeAll": "Забрать всё",
+  "mail.total": "Пришло: +{n} 💰",
+  "mail.read": "Читать",
+  "mail.readPresents": "Что оставили друзья",
+  "mail.readCard": "Открытка дня",
+  "mail.empty": "Пока пусто — завтра что-нибудь придёт",
+  "mail.chest": "Сундучок выручки — копился {h} ч",
+  "mail.letter": "Письмо: {name}",
+  "mail.order.paid": "{name}: забрали отложенное {icon}×{qty}",
+  "mail.order.wait": "{name}: зайдут за {icon}×{qty} к закрытию",
+  "mail.gift": "Гостинец от бабушки — {n}-й день подряд",
+  "mail.treats": "Угостили кофе: {names}",
+  "mail.presents": "Подарки от друзей: {n}",
+  "mail.presentsThanks": "«Спасибо» за твои подарки: {n}",
+  "mail.thanks": "Спасибо за визит: {names}",
+  "mail.rival": "Новости от конкурентов",
+  "mail.league": "Лига: {place}-е место из {size}",
+  "mail.guild": "Гильдия «{name}»: цель недели выполнена",
+  "mail.duel.won": "Торговая неделя: победа над {name}",
+  "mail.duel.lost": "Торговая неделя с {name}: за участие",
+  "mail.rush": "«Чёрная пятница»: {rank}-е место из {players}",
+  "mail.pass": "Сезонный пропуск: наград — {n}",
+  "mail.advent": "Праздничная открытка дня",
 } as const;
 
 export type TextKey = keyof typeof ru;

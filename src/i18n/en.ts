@@ -3265,6 +3265,33 @@ export const en: Record<TextKey, string> = {
   "zar.tale.tolik.1": "I'm Tolik! I'm staying with Grandma Nina. A loaf for me and the ducks — the ones by the pier are the hungriest.",
   "zar.tale.tolik.2": "I caught a pike today! This big! Well, okay, a small one. But Som said it's not bad for a start.",
   "zar.tale.tolik.3": "This is from me and the ducks: I was saving up for a fishing rod, but I already have one. Take it, you're kind!",
+
+  // «Почта» утра и сводка «Сегодня» (ui/mail.ts, ui/morning.ts; ветка nx-morning).
+  "today.more": "{n} more",
+  "mail.title": "Mail",
+  "mail.takeAll": "Take it all",
+  "mail.total": "Arrived: +{n} 💰",
+  "mail.read": "Read",
+  "mail.readPresents": "What friends left",
+  "mail.readCard": "Today's card",
+  "mail.empty": "Empty for now — something will come tomorrow",
+  "mail.chest": "Takings chest — filled for {h} h",
+  "mail.letter": "Letter: {name}",
+  "mail.order.paid": "{name}: picked up the set-aside {icon}×{qty}",
+  "mail.order.wait": "{name}: will come for {icon}×{qty} by closing",
+  "mail.gift": "Grandma's gift — day {n} in a row",
+  "mail.treats": "Coffee treats: {names}",
+  "mail.presents": "Presents from friends: {n}",
+  "mail.presentsThanks": "“Thanks” for your presents: {n}",
+  "mail.thanks": "Thanks for visiting: {names}",
+  "mail.rival": "News from rivals",
+  "mail.league": "League: place {place} of {size}",
+  "mail.guild": "Guild “{name}”: weekly goal reached",
+  "mail.duel.won": "Trade week: you beat {name}",
+  "mail.duel.lost": "Trade week with {name}: for taking part",
+  "mail.rush": "Black Friday: place {rank} of {players}",
+  "mail.pass": "Season pass: rewards — {n}",
+  "mail.advent": "Today's holiday card",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */
