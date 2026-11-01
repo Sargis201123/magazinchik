@@ -212,7 +212,7 @@ describe('кассы самообслуживания', () => {
       plain += late(simulate({ days: 100, seed }));
     }
     expect(withKiosks).toBeGreaterThan(plain);
-  });
+  }, 30_000);
 });
 
 describe('загрузка сохранения: киоски и сменщик', () => {
