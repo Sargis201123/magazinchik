@@ -1,15 +1,17 @@
-// «Недельный турнир района»: каждую неделю (с понедельника, UTC — как guild.ts) игрок попадает в
+// «Недельный турнир района»: каждую неделю (с понедельника, UTC — week.ts) игрок попадает в
 // лигу из LEAGUE_SIZE магазинов похожего размера и своей ступени (Бронза/Серебро/Золото). Лигу
 // назначает сервер при первом отчёте недели (progress() в stats.ts); пустые места занимают соседи —
 // придуманные сервером магазины, у которых счёт растёт с неделей (из зерна лиги, без базы).
 //
 // Очки — выручка недели по счёту сервера (stats.ts уже режет невозможный прирост за минуту), и
 // каждый настоящий день — не больше потолка по помещению (src/game/social.ts → dayCap). Помещение
-// для потолка — то, с которым вступил в лигу, плюс одно (переехал посреди недели).
+// для потолка — то, с которым вступил в лигу, плюс одно (переехал посреди недели). По выходным
+// очки дня ×WEEKEND_BONUS (бывшая «Чёрная пятница района»).
 // Итог недели считается один раз и запоминается (league_results); награду выдаёт игра.
 
 import { bandOf, dayCap, LEAGUE_SIZE, leagueScore, nextTier, type LeagueRow } from '../../src/game/social.js';
-import { daysLeft, weekOf } from './guild.js';
+import { daysLeft, isWeekend, weekOf } from './week.js';
+import { farewell } from './farewell.js';
 import { ready } from './social.js';
 import { json, verifyInitData, type D1, type Env } from './telegram.js';
 
@@ -200,8 +202,9 @@ export async function finalize(db: D1, id: number, week: number): Promise<League
 }
 
 /**
- * POST /api/league { initData } → { enabled, week, daysLeft, tier?, rows?: [{ name, score, level, me? }], place?, last? }:
- * лига этой недели (игрок записывается, если уже играл) и итог последней сыгранной — last: { week, place, size, tier, next, score }.
+ * POST /api/league { initData } → { enabled, week, daysLeft, weekend, tier?, rows?: [{ name, score, level, me? }], place?, last?, farewell? }:
+ * лига этой недели (игрок записывается, если уже играл), итог последней сыгранной — last: { week, place, size, tier, next, score },
+ * идут ли выходные (бонус очков) и прощальный расчёт за дуэль, гильдию и выходные (farewell.ts).
  */
 export async function league(request: Request, env: Env, now = Date.now()): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
@@ -214,9 +217,11 @@ export async function league(request: Request, env: Env, now = Date.now()): Prom
   const week = weekOf(now);
   const en = !(user.language_code ?? 'ru').startsWith('ru');
   const last = (await lastResult(db, user.id, week)) ?? undefined;
+  const bye = await farewell(db, user.id, now);
+  const weekend = isWeekend(now);
   // В лигу — только тот, кто уже играл (есть прогресс); иначе запишет первый отчёт.
   const progress = await db.prepare('SELECT level FROM progress WHERE id = ?').bind(user.id).first<{ level: number }>();
-  if (!progress) return json({ enabled: true, week, daysLeft: daysLeft(now), last });
+  if (!progress) return json({ enabled: true, week, daysLeft: daysLeft(now), weekend, last, farewell: bye });
   const member = await joinLeague(db, user.id, progress.level, now, last?.next ?? 0);
   const frac = (now - weekStart(week)) / (7 * DAY);
   const { rows, tier } = await standings(db, member.league, user.id, frac, en);
@@ -225,11 +230,13 @@ export async function league(request: Request, env: Env, now = Date.now()): Prom
     enabled: true,
     week,
     daysLeft: daysLeft(now),
+    weekend,
     tier,
     // Номера Telegram клиенту не отдаём.
     rows: rows.map(({ id: _id, ...r }) => r),
     place: me ? placeOf(rows, me.score) : null,
     cap: dayCap(progress.level),
     last,
+    farewell: bye,
   });
 }

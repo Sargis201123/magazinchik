@@ -17,7 +17,6 @@ import { yearTime } from '../game/calendar';
 import { activeAds } from '../game/ads';
 import { hasUpgrade } from '../game/upgrades';
 import { sunflowersPlanted } from '../game/drama';
-import { duelInfo } from '../platform/multiplayer';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { COURIER_SPAN, freeStreetX, ICE_CART_SPAN, type StreetSpan } from './placement';
 import * as linesFx from './brandLines';
@@ -208,10 +207,10 @@ export function buildNeighbors(scene: StoreScene, next: Layout): void {
     return;
   }
   // Босс района открывается за дорогой, на месте закрытого «Гиганта»; сбоку тогда — хозтовары.
-  // Сбоку, когда босс за дорогой, — магазин друга по торговой неделе (или хозтовары).
+  // Сбоку, когда босс за дорогой, — магазин друга, который заходил последним (улица друзей), или хозтовары.
   // Пустующее помещение тоже занимает друг.
   const free = scene.rivalAcross || look === 'vacant';
-  const friend = free ? duelInfo()?.rival?.name : undefined;
+  const friend = free ? streetInfo()?.[0]?.name || undefined : undefined;
   scene.builtFriend = friend;
   const side: Omit<Neighbor, 'x' | 'w'> = friend
     ? { h: 125, name: 'neighbor.friend', label: t('neighbor.friend', { name: friend }), sign: 0x3e8948, awning: 0xfee761, roof: 0xe8dcc0, neon: 0xfee761 }

@@ -1,17 +1,26 @@
 // Друзья в гостях. Друзья по приглашениям (как «свои» в рейтинге), игравшие за последнюю неделю,
 // днём заходят в магазин игрока: их персонаж с именем покупает и оставляет чаевые. Нажал на
-// друга — «угостил кофе»: друг получит монеты при следующем запуске (один раз в день каждому).
+// друга — «угостил кофе»: с 01.11 это обычный подарок-пирог (presents.ts), друг откроет его утром.
+// Таблицу gifts больше не пишем; старые неоткрытые монеты открываются с подарками (presents.ts).
 
 import { ready } from './social.js';
+import { treatPresent } from './presents.js';
 import { json, verifyInitData, type D1, type Env } from './telegram.js';
 
 const DAY = 24 * 3600_000;
-/** Сколько монет получает друг за угощение. */
-export const GIFT = 300;
 /** Друзья, игравшие за столько дней, приходят в гости. */
 const ACTIVE_DAYS = 7;
 
 const today = (now: number): number => Math.floor(now / DAY);
+
+/** Кому игрок сегодня уже подарил подарок (таблицы подарков может ещё не быть — тогда никому). */
+async function presentsToday(db: D1, me: number, now: number): Promise<number[]> {
+  try {
+    return (await db.prepare('SELECT receiver FROM presents WHERE sender = ? AND day = ?').bind(me, today(now)).all<{ receiver: number }>()).results.map((r) => r.receiver);
+  } catch {
+    return [];
+  }
+}
 /** Больше стольких друзей по коду (и по «Помоги!», share.ts) не добавить. */
 export const MAX_FRIENDS = 50;
 /** Код игрока для друзей: его номер в Telegram в 36-ричной записи. */
@@ -110,7 +119,8 @@ const forgetStreet = (db: D1, ...ids: number[]) => {
  * list: { enabled, code, friends: [{ id, name, level, treated }], gifts: [{ name, amount }] };
  * street: { enabled, friends: [{ id, name, level, day, rating, ago, shop?, sign? }] } — «Улица друзей»;
  * add: { ok, name? | error } — добавить друга по его коду;
- * gift: { ok }; claim: { amount }; shop: { shop, name } — снимок магазина друга (null — нет).
+ * gift: { ok } — угощение кофе, теперь подарок-пирог (presents.ts); claim: { amount } — старые монеты (для старых игр);
+ * shop: { shop, name } — снимок магазина друга (null — нет).
  */
 export async function visits(request: Request, env: Env, now = Date.now()): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
@@ -126,8 +136,7 @@ export async function visits(request: Request, env: Env, now = Date.now()): Prom
   if (body.action === 'gift') {
     const to = Number(body.to);
     if (!friends.some((f) => f.id === to)) return json({ ok: false });
-    const res = await db.prepare('INSERT OR IGNORE INTO gifts (sender, receiver, day, amount) VALUES (?, ?, ?, ?)').bind(user.id, to, today(now), GIFT).run();
-    return json({ ok: (res.meta?.changes ?? 0) > 0 });
+    return json({ ok: await treatPresent(env, db, user.id, to, now) });
   }
   if (body.action === 'add') {
     // Добавить друга по коду: он должен уже открывать игру; связь — в обе стороны.
@@ -161,9 +170,11 @@ export async function visits(request: Request, env: Env, now = Date.now()): Prom
     const rows = (await db.prepare('UPDATE gifts SET claimed = 1 WHERE receiver = ? AND claimed = 0 RETURNING amount').bind(user.id).all<{ amount: number }>()).results;
     return json({ amount: rows.reduce((sum, r) => sum + r.amount, 0) });
   }
-  const treated = new Set(
-    (await db.prepare('SELECT receiver FROM gifts WHERE sender = ? AND day = ?').bind(user.id, today(now)).all<{ receiver: number }>()).results.map((r) => r.receiver),
-  );
+  // Кого сегодня уже угостил: подарок этому другу сегодня (presents.ts) или старое угощение.
+  const treated = new Set([
+    ...(await db.prepare('SELECT receiver FROM gifts WHERE sender = ? AND day = ?').bind(user.id, today(now)).all<{ receiver: number }>()).results.map((r) => r.receiver),
+    ...(await presentsToday(db, user.id, now)),
+  ]);
   const gifts = (
     await db
       .prepare('SELECT COALESCE(p.name, \'—\') AS name, g.amount AS amount FROM gifts g LEFT JOIN progress p ON p.id = g.sender WHERE g.receiver = ? AND g.claimed = 0')

@@ -3,7 +3,6 @@
 
 import { commandReply, setupProfile, startCaption, type StartInfo } from './botProfile.js';
 import { ready, recordReferral, recordSource } from './social.js';
-import { recordGuildInvite } from './guild.js';
 import { addSupporter, syncSupporter } from './supporters.js';
 import { langOf, type Lang } from './lang.js';
 import { bot, canBuy, isSupport, itemFromPayload, json, catalogItem, ownedFrom, payloadFor, verifyInitData, type D1, type Env, type StarTransaction } from './telegram.js';
@@ -239,8 +238,7 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
       if (payload && message.from) await recordReferral(env, message.from.id, payload).catch((e) => console.error(e));
       // «/start src_tgads» — пришёл по рекламной ссылке: запомнить канал (social.ts).
       if (payload && message.from) await recordSource(env, message.from.id, payload).catch((e) => console.error(e));
-      // «/start guild_ABC123» — приглашение в гильдию района (guild.ts).
-      if (payload && message.from) await recordGuildInvite(env, message.from.id, payload).catch((e) => console.error(e));
+      // «/start guild_ABC123» — старое приглашение в гильдию: гильдий больше нет, просто приветствие.
       await greet(token, env, message.chat.id, message.from, payload, lang, origin);
     }
   }

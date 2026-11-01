@@ -15,8 +15,6 @@ export const RIVAL_ACTIONS = 3;
 /** Монеты за проделку; позванный покупатель придёт к нам назавтра. */
 export const PRANK_COINS: Record<PrankKind, number> = { spill: 15, trash: 10, lure: 5 };
 export const MAX_BONUS_GUESTS = 3;
-/** Кофе от того, кто поблагодарил за визит. */
-export const THANK_COINS = 30;
 /** Больше стольких луж, мусора и ушедших гостей за день от чужих проделок не бывает. */
 export const MAX_SPILLS = 2;
 export const MAX_TRASH = 3;
@@ -131,10 +129,6 @@ export function applyPranks(state: StoreState, pranks: PrankIn[], day = state.da
     news: { visitors, spill: mess.spill - was.spill, trash: mess.trash - was.trash, lost: mess.lost - was.lost, helped, hint: messy && !guard && !cleaner },
   };
 }
-
-/** Кофе от тех, кто поблагодарил за наш визит. */
-export const takeThanks = (state: StoreState, names: string[]): StoreState =>
-  names.length ? { ...state, money: state.money + THANK_COINS * Math.min(5, names.length) } : state;
 
 /**
  * Магазин босса через дорогу — по образцу нашего зала (он всё подсмотрел у нас): те же полки,

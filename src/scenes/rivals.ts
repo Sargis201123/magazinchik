@@ -16,8 +16,6 @@ import {
   messToday,
   PRANK_COINS,
   takeRivalDay,
-  takeThanks,
-  THANK_COINS,
   usePrank,
   type PrankKind,
 } from '../game/rival';
@@ -239,10 +237,8 @@ export function applyRivalInbox(scene: StoreScene): void {
   const inbox = scene.rivalPending;
   if (!inbox) return;
   scene.rivalPending = null;
-  if (inbox.thanks.length) {
-    scene.state = takeThanks(scene.state, inbox.thanks);
-    toast('assets/ico_coffee.png', t('rival.thanks.title'), t('rival.thanks', { names: inbox.thanks.slice(0, 3).join(', '), n: THANK_COINS * Math.min(5, inbox.thanks.length) }));
-  }
+  // «Спасибо за визит» — только тёплая строчка: монеты другу дарят подарками (presents.ts, решено 01.11).
+  if (inbox.thanks.length) toast('assets/ico_coffee.png', t('rival.thanks.title'), t('rival.thanks', { names: inbox.thanks.slice(0, 3).join(', ') }));
   // Магазин уже открыт — беспорядок подождёт завтрашнего утра.
   const { state, news } = applyPranks(scene.state, inbox.pranks, scene.dayOpen ? scene.state.day + 1 : scene.state.day);
   scene.state = state;

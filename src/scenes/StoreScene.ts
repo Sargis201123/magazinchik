@@ -52,7 +52,7 @@ import { pickCohort, startCohort, type Cohort } from '../game/onboarding';
 import { SayBubble } from '../ui/onboarding';
 import type { TutStep } from '../game/tutorial';
 import { Coach } from '../ui/coach';
-import { duelInfo, loadMultiplayer, streetInfo } from '../platform/multiplayer';
+import { loadMultiplayer, streetInfo } from '../platform/multiplayer';
 import { streetKey } from '../game/street';
 import { ensureSeason, grantPass } from '../game/pass';
 import { grantSupport } from '../game/support';
@@ -722,9 +722,9 @@ export class StoreScene extends Phaser.Scene {
       if (!this.running && this.sys.isActive() && liveLook(events, todayLocal()) !== lookBefore) this.buildWorld();
     });
     void socialPing(getLang(), comebackHooks(this.state)).then((info) => {
-      // Торговая неделя и гильдия: магазин друга появится на улице, если соперник есть.
+      // Друзья: магазин друга встанет на улице рядом, если место свободно (streets.ts).
       void loadMultiplayer().then(() => {
-        const friend = (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend;
+        const friend = (this.rivalAcross || this.builtEduard === 'vacant') && (streetInfo()?.[0]?.name || undefined) !== this.builtFriend;
         // Улица друзей пришла или поменялась — домики встают, пока магазин закрыт (днём — завтра утром).
         // На титуле не трогаем: перестройка оборвала бы пролёт камеры — улицу поставит утро (showMorning).
         const street = !this.onTitle && streetKey(streetInfo()) !== this.builtStreet;

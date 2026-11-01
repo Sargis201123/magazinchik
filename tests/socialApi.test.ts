@@ -3,7 +3,9 @@ import { recordReferral, socialPing } from '../api/_lib/social';
 import { progress } from '../api/_lib/stats';
 import { GET_DAY, GIVE_DAY, presents } from '../api/_lib/presents';
 import { league, neighbors } from '../api/_lib/league';
-import { weekOf } from '../api/_lib/guild';
+import { markWeek, weekOf } from '../api/_lib/week';
+import { FAREWELL_UNTIL, gone } from '../api/_lib/farewell';
+import worker from '../worker/index';
 import { dayCap, LEAGUE_SIZE } from '../src/game/social';
 import type { D1, D1Statement, Env } from '../api/_lib/telegram';
 
@@ -88,10 +90,10 @@ describe.skipIf(!Database)('подарки друзьям (сервер)', () =>
     expect(JSON.stringify(sent)).not.toContain(TOKEN);
     expect((await json<List>(presents(await post(1, { action: 'list' }), env))).given).toEqual([2]);
     expect(await json<List>(presents(await post(2, { action: 'list' }), env))).toMatchObject({ waiting: 1, thanks: 0 });
-    expect(await json<Open>(presents(await post(2, { action: 'open' }), env))).toEqual({ presents: [{ name: 'Игрок1', kind: 'pie', phrase: 3, stars: 5 }], thanks: [] });
+    expect(await json<Open>(presents(await post(2, { action: 'open' }), env))).toEqual({ presents: [{ name: 'Игрок1', kind: 'pie', phrase: 3, stars: 5 }], thanks: [], coins: 0, from: [] });
     expect((await json<Open>(presents(await post(2, { action: 'open' }), env))).presents).toEqual([]);
     expect(await json<List>(presents(await post(1, { action: 'list' }), env))).toMatchObject({ waiting: 1, thanks: 1 });
-    expect(await json<Open>(presents(await post(1, { action: 'open' }), env))).toEqual({ presents: [{ name: 'Игрок3', kind: 'flowers', phrase: 1, stars: 0 }], thanks: ['Игрок2'] });
+    expect(await json<Open>(presents(await post(1, { action: 'open' }), env))).toEqual({ presents: [{ name: 'Игрок3', kind: 'flowers', phrase: 1, stars: 0 }], thanks: ['Игрок2'], coins: 0, from: [] });
     // Назавтра — снова можно.
     vi.setSystemTime(WED + DAY);
     expect(await json<Give>(presents(await post(1, { action: 'give', to: 2, kind: 'card', phrase: 0 }), env))).toEqual({ ok: true });
@@ -189,5 +191,49 @@ describe.skipIf(!Database)('турнир района (сервер)', () => {
     const later = neighbors(42, 1, 0, 5, 1);
     later.forEach((r, i) => expect(r.score).toBeGreaterThanOrEqual(a[i].score));
     expect(neighbors(42, 1, 0, 5, 1, true)[0].name).toMatch(/^[A-Za-z' ]+$/);
+  });
+});
+
+describe.skipIf(!Database)('дуэль, гильдия и «Чёрная пятница» закрыты (сервер)', () => {
+  it('старые адреса отвечают спокойным «выключено», а не 500', async () => {
+    expect(await json(gone())).toEqual({ enabled: false });
+    const env = { BOT_TOKEN: TOKEN, DB: d1(), ASSETS: { fetch: async () => new Response('asset') } };
+    for (const path of ['/api/duel', '/api/guild', '/api/weekend']) {
+      const res = await worker.fetch(new Request(`https://x${path}`, { method: 'POST', body: JSON.stringify({ initData: await initData(1), action: 'create', name: 'X' }) }), env);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ enabled: false });
+    }
+  });
+
+  it('прощальный расчёт за прошлую неделю приходит с турниром; выходные — флаг бонуса; после срока — ничего', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
+    for (const id of [1, 2]) await socialPing(await post(id), env);
+    const db = env.DB!;
+    const week = weekOf(WED) - 1;
+    const mon = (week * 7 - 3) * DAY;
+    // Прошлая неделя: 1-й заработал 6000, его соперник по дуэли 2-й — 4000; гильдия выполнила цель; выходные — 3-е место из 30.
+    await markWeek(db, 1, 0, mon + 3600_000);
+    await markWeek(db, 1, 6000, mon + 7 * DAY + 60_000);
+    await markWeek(db, 2, 0, mon + 3600_000);
+    await markWeek(db, 2, 4000, mon + 7 * DAY + 60_000);
+    await progress(await post(1, { level: 1, revenue: 100 }), env);
+    await db.prepare('INSERT INTO duels (id, week, rival) VALUES (1, ?, 2)').bind(week).run();
+    await db.prepare("INSERT INTO guilds (id, code, name, owner, created) VALUES (7, 'ABC234', 'Соседи', 1, 0)").run();
+    await db.prepare('INSERT INTO guild_members (player, guild, joined) VALUES (1, 7, 0)').run();
+    await db.prepare('INSERT INTO guild_results (guild, week, reached) VALUES (7, ?, 1)').bind(week).run();
+    for (let i = 0; i < 30; i++) await db.prepare('INSERT INTO weekend (id, week, start, last) VALUES (?, ?, 0, ?)').bind(100 + i, week, i < 2 ? 9000 : 100).run();
+    await db.prepare('INSERT INTO weekend (id, week, start, last) VALUES (1, ?, 0, 5000)').bind(week).run();
+    type L = { weekend: boolean; farewell?: { duel?: { week: number; won: boolean }; guild?: { week: number; name: string }; rush?: { week: number; rank: number; players: number } } };
+    const res = await json<L>(league(await post(1), env));
+    expect(res.weekend).toBe(false);
+    expect(res.farewell).toEqual({ duel: { week, won: true }, guild: { week, name: 'Соседи' }, rush: { week, rank: 3, players: 31 } });
+    // Ничего не было — поля нет; в субботу — бонус выходных.
+    vi.setSystemTime(WED + 3 * DAY);
+    const other = await json<L>(league(await post(2), env));
+    expect(other.weekend).toBe(true);
+    expect(other.farewell).toBeUndefined();
+    // Срок прошёл — старые таблицы больше не читаем.
+    vi.setSystemTime(FAREWELL_UNTIL + DAY);
+    expect((await json<L>(league(await post(1), env))).farewell).toBeUndefined();
   });
 });

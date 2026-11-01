@@ -3,7 +3,7 @@
 
 import { telegramInitData } from './telegram';
 import { post } from './social';
-import type { LeagueResult, LeagueRow } from '../game/social';
+import type { Farewell, LeagueResult, LeagueRow } from '../game/social';
 
 export interface LeagueInfo {
   week: number;
@@ -13,6 +13,10 @@ export interface LeagueInfo {
   rows?: LeagueRow[];
   place?: number | null;
   last?: LeagueResult;
+  /** Идут выходные: очки дня ×WEEKEND_BONUS (game/social.ts). */
+  weekend?: boolean;
+  /** Прощальный расчёт за закрытые дуэль, гильдию и выходные (api/_lib/farewell.ts). */
+  farewell?: Farewell;
 }
 
 let cache: LeagueInfo | null = null;

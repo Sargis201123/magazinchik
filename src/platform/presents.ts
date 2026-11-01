@@ -34,12 +34,21 @@ export async function givePresent(to: number, kind: PresentKind, phrase: number,
   return { ok: Boolean(res.ok), error: res.error };
 }
 
-/** Открыть подарки друзей и забрать «спасибо» за свои (один раз — сервер отмечает). */
-export async function openPresentsBox(): Promise<{ presents: Present[]; thanks: string[] } | null> {
+/** Угощение кофе ушло (multiplayer.ts → treatFriend) — сегодня этому другу уже подарено. */
+export function markGiven(to: number): void {
+  if (cache && !cache.given.includes(to)) cache = { ...cache, given: [...cache.given, to] };
+}
+
+/**
+ * Открыть подарки друзей и забрать «спасибо» за свои (один раз — сервер отмечает); coins — монеты
+ * старых угощений кофе (до 01.11), from — от кого они.
+ */
+export async function openPresentsBox(): Promise<{ presents: Present[]; thanks: string[]; coins: number; from: string[] } | null> {
   const initData = telegramInitData();
   if (!initData) return null;
-  const res = await post<{ presents?: Present[]; thanks?: string[] }>('/api/presents', { initData, action: 'open' });
+  const res = await post<{ presents?: Present[]; thanks?: string[]; coins?: number; from?: string[] }>('/api/presents', { initData, action: 'open' });
   if (!res) return null;
   if (cache) cache = { ...cache, waiting: 0, thanks: 0 };
-  return { presents: res.presents ?? [], thanks: res.thanks ?? [] };
+  const coins = Math.max(0, Math.min(100_000, Math.round(Number(res.coins) || 0)));
+  return { presents: res.presents ?? [], thanks: res.thanks ?? [], coins, from: (res.from ?? []).map((n) => String(n).slice(0, 20)) };
 }

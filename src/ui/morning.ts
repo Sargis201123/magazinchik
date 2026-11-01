@@ -207,12 +207,11 @@ import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
 import { arcBox, arcLines } from './arcs';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { showSupport } from './support';
-import { rushPrize } from '../game/rush';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
 import { answerOpening, BUILDINGS, districtNews, districtSite, isMatchDay, OPENING_DAYS, type BuildingId } from '../game/district';
 import { canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, foodSlots, foodSprite, kitchenOpen, kitchenWorking, menuAuto, morningOrder, orderCost, pantryOf, portionsOf, portionsTotal, stoveSprite, toggleMenu } from '../game/kitchen';
-import { addFriend, duelInfo, duelReward, MP_EVENT, guildAction, guildInfo, guildReward, guildsEnabled, inviteToGuild, weekendInfo, visitsInfo, claimGifts } from '../platform/multiplayer';
+import { addFriend, MP_EVENT, visitsInfo } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
 import { flushCloud, saveGame } from '../game/save';
@@ -291,6 +290,7 @@ interface MorningOptions {
 // Вкладки в одну строку: значок и короткая подпись. Профиль (достижения, наследие, настройки) —
 // кнопкой в углу заголовка, не вкладкой.
 type Tab = 'buy' | 'hall' | 'extras' | 'staff' | 'grow' | 'profile';
+type ProfilePage = 'trophies' | 'friends' | 'settings';
 /**
  * Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. Видевшие прежнюю
  * (2: звук, перестановка, друзья…) увидят новую один раз.
@@ -542,6 +542,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
   const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
   let tab: Tab = 'buy';
+  /** Страница профиля: «Трофеи» (главная), «Друзья», ⚙ настройки. */
+  let profilePage: ProfilePage = 'trophies';
   /** Какие товары показывать в закупке: заканчивающиеся, все или сезонные. */
   let buyFilter: 'low' | 'all' | 'season' = 'low';
   /** Какая полка во вкладке «Зал» раскрыта (улучшить, продать, починить). */
@@ -881,7 +883,6 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
       ...(touring ? [] : zarSwitchBox(state, (where) => update(switchToday(getState(), where)))),
-      ...giftsBox(),
       ...presentsBox(getState, update),
       ...leagueClaimBox(state, getState, update),
       ...(touring ? [] : liveBox(state)),
@@ -894,9 +895,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...(zarHere ? [] : trickBox(state)),
       ...taleBox(state),
       ...(zarHere ? [] : arcBox(state, getState, update)),
-      ...guildClaimBox(state),
       today,
-      todayCard(state, touring, [...friendShopsBox(), ...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: homeLevel(getState()) })), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...(zarHere ? [] : giantBox(state)), ...(zarHere ? [] : contestBox(state))]),
+      todayCard(state, touring, [...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: homeLevel(getState()) })), ...passBox(state), ...goalsBox(state), info, ...(zarHere ? [] : giantBox(state)), ...(zarHere ? [] : contestBox(state))]),
       ...(hint ? [hint] : []),
       tabs,
       body,
@@ -1892,20 +1892,6 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return out;
   };
 
-  /** Подарки друзей: «угостили кофе» — забрать монеты. */
-  const giftsBox = (): HTMLElement[] => {
-    const gifts = visitsInfo()?.gifts ?? [];
-    if (!gifts.length) return [];
-    const total = gifts.reduce((sum, g) => sum + g.amount, 0);
-    const box = el('div', 'ui-box ui-duel');
-    const claim = button(t('visit.claim', { n: total }), () => {
-      claim.disabled = true;
-      void claimGifts().then((n) => update({ ...getState(), money: getState().money + n }, n ? 'success' : 'tap'));
-    });
-    box.append(el('div', 'ui-note', t('visit.gifts', { names: [...new Set(gifts.map((g) => g.name))].join(', ') })), claim);
-    return [box];
-  };
-
   /**
    * Праздник по настоящему календарю (game/live.ts): открытки по дням — сегодняшнюю открыть,
    * сколько до праздничной вещи, когда заглянет гость и, по желанию, набор за звёзды.
@@ -1988,50 +1974,6 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return [box];
   };
 
-  /** Магазины друзей: зайти в гости — посмотреть, как у них всё устроено. */
-  const friendShopsBox = (): HTMLElement[] => {
-    const friends = visitsInfo()?.friends ?? [];
-    if (!friends.length || !onVisit) return [];
-    const box = el('div', 'ui-box');
-    box.append(el('b', '', `🏠 ${t('visitShop.title')}`));
-    for (const f of friends.slice(0, 6)) {
-      const row = el('div', 'ui-row');
-      row.append(
-        el('span', '', `${f.name} · ${t(STORE_LEVELS[Math.min(f.level, STORE_LEVELS.length - 1)].nameKey)}`),
-        button(t('visitShop.go'), () => {
-          endTour();
-          close();
-          onVisit(f.id, f.name);
-        }, 'ui-chip'),
-      );
-      box.append(row);
-    }
-    return [box];
-  };
-
-  /** «Чёрная пятница района»: общий счётчик и место в выходные, приз — после. */
-  const rushBox = (state: StoreState): HTMLElement[] => {
-    const w = weekendInfo();
-    if (!w) return [];
-    const box = el('div', 'ui-box ui-rush');
-    if (w.last && state.rushClaimed !== w.last.week) {
-      const prize = rushPrize(state.level, w.last.rank, w.last.players);
-      box.append(
-        el('div', 'ui-note', t('rush.result', { rank: w.last.rank, players: w.last.players, revenue: money(w.last.revenue) })),
-        button(t('rush.claim', { n: prize }), () => update({ ...getState(), money: getState().money + prize, rushClaimed: w.last!.week }, 'success')),
-      );
-    }
-    if (w.active) {
-      box.append(
-        el('b', '', t('rush.title')),
-        el('div', '', t('rush.text', { total: money(w.total), players: w.players })),
-        el('div', 'ui-muted', w.me.rank ? t('rush.me', { rank: w.me.rank, revenue: money(w.me.revenue), h: w.endsIn }) : t('rush.meNone', { h: w.endsIn })),
-        ...w.top.slice(0, 3).map((r, i) => el('div', `ui-item-sub${r.me ? ' ui-me' : ''}`, t('rush.top', { place: i + 1, name: r.name, revenue: money(r.revenue) }))),
-      );
-    }
-    return box.childElementCount ? [box] : [];
-  };
-
   /** Строка сезона сверху утра: уровень, дни до конца, сколько наград ждёт. */
   const passBox = (state: StoreState): HTMLElement[] => {
     const pass = state.pass;
@@ -2041,97 +1983,6 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     box.append(
       el('b', '', t('pass.line', { n: pass.season, l: passLevel(pass), max: PASS_LEVELS, d: seasonDaysLeft(trustedNow()) })),
       button(ready ? t('pass.ready', { n: ready }) : t('pass.open'), passModal, ready ? 'ui-btn' : 'ui-btn secondary'),
-    );
-    return [box];
-  };
-
-  const money = (n: number) => n.toLocaleString('ru-RU');
-
-  /** Торговая неделя с другом: счёт этой недели и награда за прошлую. */
-  const duelBox = (state: StoreState): HTMLElement[] => {
-    const duel = duelInfo();
-    if (!duel?.rival && !duel?.last) return [];
-    const box = el('div', 'ui-box ui-duel');
-    if (duel.last && state.duelClaimed !== duel.last.week) {
-      const { won, mine, theirs, name } = duel.last;
-      const reward = duelReward(homeLevel(state), won);
-      box.append(
-        el('div', 'ui-note', t(won ? 'duel.won' : 'duel.lost', { name, mine: money(mine), theirs: money(theirs) })),
-        button(t('duel.claim', { n: reward }), () => update({ ...getState(), money: getState().money + reward, duelClaimed: duel.last!.week }, 'success')),
-      );
-    }
-    if (duel.rival) {
-      const { name, mine, theirs } = duel.rival;
-      const bar = el('div', 'ui-duel-bar');
-      const fill = el('div');
-      fill.style.width = `${Math.round((mine / Math.max(1, mine + theirs)) * 100)}%`;
-      bar.append(fill);
-      box.append(
-        el('b', '', t('duel.title', { name })),
-        el('div', '', t('duel.score', { name, mine: money(mine), theirs: money(theirs) })),
-        bar,
-        el('div', 'ui-muted', t('duel.left', { n: duel.daysLeft, r: duelReward(homeLevel(state), true) })),
-      );
-    }
-    return box.childElementCount ? [box] : [];
-  };
-
-  /** Награда гильдии за выполненную цель прошлой недели — сверху утра. */
-  const guildClaimBox = (state: StoreState): HTMLElement[] => {
-    const g = guildInfo();
-    if (!g?.last?.reached || state.guildClaimed === g.last.week) return [];
-    const reward = guildReward(homeLevel(state));
-    const box = el('div', 'ui-box ui-duel');
-    box.append(
-      el('div', 'ui-note', t('guild.reached', { name: g.name })),
-      button(t('guild.claim', { n: reward }), () => update({ ...getState(), money: getState().money + reward, guildClaimed: g.last!.week }, 'success')),
-    );
-    return [box];
-  };
-
-  /** Гильдия в профиле: основать, вступить, участники и цель недели. */
-  let guildError = '';
-  const guildBox = (state: StoreState): HTMLElement[] => {
-    if (!guildsEnabled()) return [];
-    const box = el('div', 'ui-box');
-    const act = (action: 'create' | 'join' | 'leave', extra: { name?: string; code?: string } = {}) =>
-      void guildAction(action, extra).then((res) => {
-        guildError = res.error ? t(`guild.err.${res.error}` as TextKey) : '';
-        update(getState(), res.error ? 'error' : 'success');
-      });
-    const g = guildInfo();
-    if (!g) {
-      const name = el('input', 'ui-input');
-      name.placeholder = t('guild.namePlaceholder');
-      name.maxLength = 24;
-      const code = el('input', 'ui-input');
-      code.placeholder = t('guild.codePlaceholder');
-      code.maxLength = 6;
-      box.append(
-        el('b', '', t('guild.title')),
-        el('div', 'ui-muted', t('guild.note')),
-        name,
-        button(t('guild.create'), () => act('create', { name: name.value }), 'ui-btn'),
-        code,
-        button(t('guild.join'), () => act('join', { code: code.value }), 'ui-btn secondary'),
-      );
-      if (guildError) box.append(el('div', 'ui-note', guildError));
-      return [box];
-    }
-    const bar = el('div', 'ui-goal-bar');
-    const fill = el('div');
-    fill.style.width = `${Math.min(100, Math.round((g.total / Math.max(1, g.target)) * 100))}%`;
-    bar.append(fill);
-    box.append(
-      el('b', '', t('guild.head', { name: g.name, code: g.code })),
-      el('div', '', t('guild.goal', { total: money(g.total), target: money(g.target), n: g.daysLeft })),
-      bar,
-      el('div', 'ui-muted', t('guild.reward', { r: guildReward(homeLevel(state)) })),
-    );
-    for (const m of g.members) box.append(el('div', `ui-item-sub${m.me ? ' ui-me' : ''}`, t('guild.member', { name: m.name, n: money(m.week) })));
-    box.append(
-      button(t('guild.invite'), () => inviteToGuild(g.code, t('guild.share')), 'ui-btn'),
-      button(t('guild.leave'), () => act('leave'), 'ui-btn secondary'),
     );
     return [box];
   };
@@ -3333,8 +3184,30 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     adding.append(input, add);
     box.append(mine, adding);
     if (friendMsg) box.append(el('div', 'ui-note', friendMsg));
-    box.append(button(`📨 ${t('friends.invite')}`, () => void inviteFriends(t('social.share')), 'ui-btn secondary'));
+    box.append(...inviteLines());
     return [box];
+  };
+
+  /**
+   * Пригласить новичка — одна кнопка, внутри «Друзей»: ссылка через «Поделиться» Telegram, награда
+   * за каждого, кто начал играть (раньше была ещё отдельная карточка — убрали 01.11).
+   */
+  const inviteLines = (): HTMLElement[] => {
+    const info = socialInfo();
+    const out: HTMLElement[] = [el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT }))];
+    if (info?.friends) out.push(el('div', 'ui-muted', t('social.count', { n: info.friends })));
+    out.push(button(`📨 ${t('friends.invite')}`, () => void inviteFriends(t('social.share')), 'ui-btn secondary'));
+    if (info?.unclaimed) {
+      const claim = button(t('social.claim', { n: info.unclaimed, r: INVITE_REWARD, sum: info.unclaimed * INVITE_REWARD }), () => {
+        claim.disabled = true;
+        void claimFriends().then((n) => {
+          const now = getState();
+          update(n ? { ...now, money: now.money + n * INVITE_REWARD } : now, n ? 'success' : 'tap');
+        });
+      }, 'ui-btn');
+      out.push(claim);
+    }
+    return out;
   };
 
   /** Что нового в игре: один раз, с кнопками прямо к новинкам. */
@@ -3358,33 +3231,6 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       }, 'ui-chip'));
     box.append(row, button(t('news.ok'), () => update({ ...getState(), whatsNew: WHATS_NEW }), 'ui-btn secondary'));
     return [box];
-  };
-
-  /** «Пригласи друзей»: ссылка через «Поделиться» Telegram, награда за каждого, кто начал играть. */
-  const inviteBox = (): HTMLElement[] => {
-    const info = socialInfo();
-    if (!info) return [];
-    const board = el('div', 'ui-box');
-    board.append(button(t('board.open'), () => showLeaderboard(onRival && ((key, name) => {
-      endTour();
-      close();
-      onRival(key, name);
-    }), { level: homeLevel(getState()) }), 'ui-btn'));
-    const box = el('div', 'ui-box');
-    box.append(el('b', '', `🤝 ${t('social.title')}`), el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT })));
-    if (info.friends) box.append(el('div', 'ui-muted', t('social.count', { n: info.friends })));
-    box.append(button(t('social.invite'), () => void inviteFriends(t('social.share')), 'ui-btn'));
-    if (info.unclaimed) {
-      const claim = button(t('social.claim', { n: info.unclaimed, r: INVITE_REWARD, sum: info.unclaimed * INVITE_REWARD }), () => {
-        claim.disabled = true;
-        void claimFriends().then((n) => {
-          const now = getState();
-          update(n ? { ...now, money: now.money + n * INVITE_REWARD } : now, n ? 'success' : 'tap');
-        });
-      }, 'ui-btn');
-      box.append(claim);
-    }
-    return [board, box];
   };
 
   const decorBox = (state: StoreState) =>
@@ -4139,7 +3985,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return box;
   };
 
-  /** Профиль (кнопка 🏆 в заголовке): достижения, звание, наследие, друзья, альбом, настройки. */
+  /**
+   * Профиль (кнопка 🏆 в заголовке) — три страницы, чтобы не листать шестнадцать блоков (решено автором 01.11):
+   * «Трофеи» — альбом и достижения, внутри свёрнуто звание, рекорды, кубки конкурса и полка памяти, наследие;
+   * «Друзья» — список, код, приглашение, турнир района и подарки; ⚙ — название, звук, графика, обучение,
+   * «Поддержать автора» и «Начать заново».
+   */
   const profileTab = (state: StoreState): HTMLElement[] => {
     const replay = el('div', 'ui-box');
     replay.append(
@@ -4186,27 +4037,52 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       input,
       button(t('shopName.save'), () => update({ ...getState(), shopName: input.value.trim().slice(0, SHOP_NAME_MAX) || undefined }, 'success'), 'ui-chip'),
     );
-    // В новом начале обход вкладок не показывают сразу — первую неделю он повыше, на виду.
+    // В новом начале обход вкладок не показывают сразу — первую неделю он повыше, на виду (в «Трофеях»).
     const early = state.onboarding === 'play' && state.day <= 7;
-    return [
-      achievementsButton(state),
-      albumBox(state),
-      ...(early ? [replay] : []),
-      ...friendsBox(),
-      named,
-      sounds,
-      gfx,
-      supportBox(),
-      rankBox(state),
-      ...legacyBox(state),
-      ...inviteBox(),
-      ...guildBox(state),
-      ...trophiesBox(state),
-      recordsBox(state),
-      ...keepsakeBox(state),
-      ...(early ? [] : [replay]),
-      again,
-    ];
+    const pages = el('div', 'ui-chips ui-profile-pages');
+    const page = (id: ProfilePage, label: string) =>
+      button(label, () => {
+        if (profilePage === id) return;
+        profilePage = id;
+        haptic.tap();
+        render();
+      }, `ui-chip${profilePage === id ? ' active' : ''}`);
+    const gear = page('settings', '⚙');
+    gear.title = t('profile.settings');
+    gear.ariaLabel = t('profile.settings');
+    pages.append(page('trophies', `🏆 ${t('profile.trophies')}`), page('friends', `👥 ${t('profile.friends')}`), gear);
+    if (profilePage === 'friends') return [pages, ...friendsPage()];
+    if (profilePage === 'settings') return [pages, el('h3', '', `⚙ ${t('profile.settings')}`), named, sounds, gfx, ...(early ? [] : [replay]), supportBox(), again];
+    return [pages, ...(early ? [replay] : []), ...trophiesPage(state)];
+  };
+
+  /** Содержимое свёрнутого блока — без своего заголовка (он уже на складке). */
+  const inner = (box: HTMLElement): HTMLElement[] => [...box.children].slice(1) as HTMLElement[];
+
+  /** «Трофеи»: альбом и достижения на виду; звание, рекорды, кубки и полка памяти — свёрнуты. */
+  const trophiesPage = (state: StoreState): HTMLElement[] => {
+    const out: HTMLElement[] = [achievementsButton(state), albumBox(state)];
+    out.push(foldBox('prof-rank', t('rank.title', { name: rankName(rankOf(state.totalRevenue), t) }), (body) => body.append(...inner(rankBox(getState())))));
+    out.push(foldBox('prof-records', t('records.title'), (body) => body.append(...inner(recordsBox(getState())))));
+    if (contestOf(state)?.wins) out.push(foldBox('prof-cups', t('contest.trophies'), (body) => body.append(...trophiesBox(getState()).flatMap(inner))));
+    if (state.keepsakes?.length) out.push(foldBox('prof-keep', `📨 ${t('social.shelf.title')}`, (body) => body.append(...keepsakeBox(getState()).flatMap(inner))));
+    out.push(...legacyBox(state));
+    return out;
+  };
+
+  /** «Друзья»: друзья и приглашение, турнир района (таблица и общий рейтинг), подарки. */
+  const friendsPage = (): HTMLElement[] => {
+    const level = homeLevel(getState());
+    const boards = el('div', 'ui-box');
+    boards.append(
+      ...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level })).flatMap((box) => [...box.children] as HTMLElement[]),
+      button(t('board.open'), () => showLeaderboard(onRival && ((key, name) => {
+        endTour();
+        close();
+        onRival(key, name);
+      }), { level }), 'ui-btn secondary'),
+    );
+    return [...friendsBox(), ...presentsBox(getState, update), boards];
   };
 
   /**
