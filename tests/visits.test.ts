@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordReferral, socialPing } from '../api/_lib/social';
 import { progress } from '../api/_lib/stats';
-import { visits, GIFT } from '../api/_lib/visits';
+import { visits, GIFT, STREET_SIZE } from '../api/_lib/visits';
 import type { D1, D1Statement, Env } from '../api/_lib/telegram';
 
 // Настоящая SQLite из Node (22.5+) вместо Cloudflare D1: те же запросы, та же логика.
@@ -106,5 +106,43 @@ describe.skipIf(!Database)('друзья в гостях (сервер)', () => 
     expect(await json<A>(visits(await post(10, { action: 'add', code: theirs.code.toLowerCase() }), env))).toEqual({ ok: true, name: 'Тест' });
     expect((await json<L>(visits(await post(10, { action: 'list' }), env))).friends.map((f) => f.id)).toEqual([20]);
     expect((await json<L>(visits(await post(20, { action: 'list' }), env))).friends.map((f) => f.id)).toEqual([10]);
+  });
+
+  it('улица друзей: только сеть друзей, сначала недавние, не больше STREET_SIZE; название и вывеска из снимка', async () => {
+    const db = d1();
+    const env: Env = { BOT_TOKEN: TOKEN, DB: db };
+    await socialPing(await post(1), env);
+    // Восемь приглашённых друзей и один чужой.
+    for (let id = 2; id <= 9; id++) await recordReferral(env, id, 'ref_1');
+    const shop = { level: 3, day: 77, rating: 4.4, shopName: 'Ромашка', decor: { owned: ['sign_gold'], active: { sign: 'sign_gold' } }, shelves: [] };
+    for (let id = 1; id <= 10; id++) await progress(await post(id, { level: 3, day: 77, rating: 4.4, revenue: 100, ...(id === 2 ? { shop } : {}) }), env);
+    // Кто когда заходил: 2 — сегодня, 3…9 — по дню раньше каждый; 9 — 10 дней назад (за неделей — не на улице).
+    const DAY = 24 * 3600_000;
+    const now = Date.now();
+    for (let id = 2; id <= 9; id++) await db.prepare('UPDATE progress SET updated = ? WHERE id = ?').bind(now - (id === 9 ? 10 : id - 2) * DAY, id).run();
+    await db.prepare('UPDATE progress SET updated = ? WHERE id = 10').bind(now).run();
+    type St = { enabled: boolean; friends: { id: number; name: string; level: number; day: number; rating: number; ago: number; shop?: string; sign?: string }[] };
+    const res = await json<St>(visits(await post(1, { action: 'street' }), env, now));
+    expect(res.enabled).toBe(true);
+    expect(res.friends).toHaveLength(STREET_SIZE);
+    expect(res.friends.map((f) => f.id)).toEqual([2, 3, 4, 5, 6]);
+    expect(res.friends.map((f) => f.ago)).toEqual([0, 1, 2, 3, 4]);
+    expect(res.friends[0]).toEqual({ id: 2, name: 'Тест', level: 3, day: 77, rating: 4.4, ago: 0, shop: 'Ромашка', sign: 'sign_gold' });
+    // Ни денег, ни выручки, ни точного времени — только то, что видно в гостях, и дни.
+    expect(Object.keys(res.friends[1]).sort()).toEqual(['ago', 'day', 'id', 'level', 'name', 'rating']);
+    // Чужой (10) не на улице, хоть и играл сегодня.
+    expect(res.friends.some((f) => f.id === 10)).toBe(false);
+  });
+
+  it('улица друзей: без друзей — пусто; ответ помнится, но новый друг по коду виден сразу; без базы — выключена', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
+    for (const id of [10, 20]) await progress(await post(id, { level: 1, revenue: 50 }), env);
+    type St = { enabled: boolean; friends: { id: number }[] };
+    expect(await json<St>(visits(await post(10, { action: 'street' }), env))).toEqual({ enabled: true, friends: [] });
+    const theirs = await json<{ code: string }>(visits(await post(20, { action: 'list' }), env));
+    await visits(await post(10, { action: 'add', code: theirs.code }), env);
+    expect((await json<St>(visits(await post(10, { action: 'street' }), env))).friends.map((f) => f.id)).toEqual([20]);
+    expect((await json<St>(visits(await post(20, { action: 'street' }), env))).friends.map((f) => f.id)).toEqual([10]);
+    expect(await json<{ enabled: boolean }>(visits(await post(10, { action: 'street' }), { BOT_TOKEN: TOKEN }))).toEqual({ enabled: false });
   });
 });

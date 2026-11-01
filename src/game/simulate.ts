@@ -2,6 +2,7 @@
 // Нужен для баланса: на какой день игрок расширяет магазин, сколько зарабатывает, где застревает.
 // Запуск: npm run sim
 
+import { grantPets, petItem, type PetId } from './pets';
 import { noteLost } from './losses';
 import { isBroke } from './tips';
 import { loanOptions, takeLoan } from './bank';
@@ -184,6 +185,8 @@ export interface SimOptions {
   features?: Partial<Record<Feature, boolean>>;
   /** С features.lines: какие линейки своей марки открывать (по умолчанию — все; замер одной — для окупаемости). */
   lineIds?: LineId[];
+  /** Питомец за звёзды в зале с первого дня (pets.ts): только для проверки, что он ничего не меняет. */
+  pet?: PetId;
   /** Как отвечать на ценовую войну. */
   war?: WarAnswer;
   /** Сколько закладок в печь игрок успевает за день и как часто забывает вынуть. */
@@ -358,6 +361,7 @@ export function simulate({
   adAlways,
   momentCatch = 0,
   lineIds = LINE_IDS,
+  pet,
 }: SimOptions): SimResult {
   const random = rng(seed);
   // Случайности новых механик — отдельно: тогда прогоны с механикой и без идут по одним и тем же
@@ -368,6 +372,7 @@ export function simulate({
   const bigDaySeedBefore = bigDaySeed();
   setBigDaySeed(seed);
   let state = ensurePlan(newGame());
+  if (pet) state = grantPets(state, [petItem(pet)]);
   for (const id of PRODUCT_IDS) state = setPrice(state, id, Math.round((PRODUCTS[id].basePrice * priceMult) / 5) * 5);
   const out: SimDay[] = [];
   // Гипермаркет — отдельная механика: с одним филиалом «разумный игрок» туда не переезжает и на него не копит.

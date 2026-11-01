@@ -51,9 +51,11 @@ import { pickCohort, startCohort, type Cohort } from '../game/onboarding';
 import { SayBubble } from '../ui/onboarding';
 import type { TutStep } from '../game/tutorial';
 import { Coach } from '../ui/coach';
-import { duelInfo, loadMultiplayer } from '../platform/multiplayer';
+import { duelInfo, loadMultiplayer, streetInfo } from '../platform/multiplayer';
+import { streetKey } from '../game/street';
 import { ensureSeason, grantPass } from '../game/pass';
 import { grantSupport } from '../game/support';
+import { grantPets } from '../game/pets';
 import { ensureRush } from '../game/rush';
 import { BUSKER_GUESTS } from '../game/nightGuests';
 import { setErrorContext } from '../platform/errors';
@@ -120,6 +122,7 @@ import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
 import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
+import * as starPets from './starPets';
 import * as deliveries from './deliveries';
 import * as food from './food';
 import * as streets from './streets';
@@ -164,6 +167,10 @@ export class StoreScene extends Phaser.Scene {
   builtDistrict = '';
   /** Что из благоустройства района стояло на улице (hood.ts). */
   builtHood = '';
+  /** Какие домики друзей стоят на «Улице друзей» (friendStreet.ts, game/street.ts streetKey). */
+  builtStreet = '';
+  /** Днём собрались в гости к другу с улицы — утром окно предложит зайти (friendStreet.ts). */
+  pendingVisit?: { id: number; name: string };
   /** Какие имена висели на доске почёта (game/career.ts, decorations.honorLook). */
   builtHonor = '';
   /** Где на тротуаре за дорогой висят вывески зданий (середины): новые фонари района их обходят. */
@@ -583,6 +590,11 @@ export class StoreScene extends Phaser.Scene {
   /** Уголки своей марки (brandLines.ts): табурет с вареньем, бочки солений и кваса, доска с пельменями; пар над тазом. */
   lineObjs: Phaser.GameObjects.GameObject[] = [];
   lineTimers: (() => void)[] = [];
+  /** Питомец за звёзды в зале (starPets.ts): картинка, остановка его тиков, до какого времени он радуется, сколько гостей было в прошлый тик. */
+  starPet?: Phaser.GameObjects.Image;
+  starPetStop?: () => void;
+  starPetBusy = 0;
+  starPetGuests = 0;
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
   bigObjs: { destroy: () => void }[] = [];
   /** Блэкаут на весь район: темно, касса считает вручную (щиток не поможет). */
@@ -690,7 +702,8 @@ export class StoreScene extends Phaser.Scene {
       // Наборы за звёзды (новогодний) раскрываются в свои вещи.
       const owned = decorFromPurchases(ids ?? []);
       // Поддержка автора (support.ts): табличка и кот, ступень — для меню «Поддержать автора».
-      const next = grantSupport(grantPass(grantDecor(this.state, owned, !save), ids ?? []), ids ?? [], !save);
+      // Питомцы за звёзды (pets.ts): купленные на другом телефоне или до «Начать заново» — дома.
+      const next = grantPets(grantSupport(grantPass(grantDecor(this.state, owned, !save), ids ?? []), ids ?? [], !save), ids ?? [], !save);
       if (next === this.state) return;
       this.state = next;
       saveGame(next);
@@ -705,7 +718,11 @@ export class StoreScene extends Phaser.Scene {
     void socialPing(getLang(), comebackHooks(this.state)).then((info) => {
       // Торговая неделя и гильдия: магазин друга появится на улице, если соперник есть.
       void loadMultiplayer().then(() => {
-        if (!this.running && (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend) this.buildWorld();
+        const friend = (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend;
+        // Улица друзей пришла или поменялась — домики встают, пока магазин закрыт (днём — завтра утром).
+        // На титуле не трогаем: перестройка оборвала бы пролёт камеры — улицу поставит утро (showMorning).
+        const street = !this.onTitle && streetKey(streetInfo()) !== this.builtStreet;
+        if (!this.running && (friend || street)) this.buildWorld();
       });
       // Открыли по ссылке «Помоги!» друга — подмога уходит сама; друзья откликнулись на нашу — забрать.
       void nightShift.sendFriendHelp(this);
@@ -1024,6 +1041,7 @@ export class StoreScene extends Phaser.Scene {
     this.lineObjs = [];
     this.lineTimers = [];
     linesFx.applyLines(this);
+    starPets.buildStarPet(this);
     morningFlow.noteNewProps(this, bought);
     // Пол — последним: тени ложатся от всей мебели, что уже стоит в зале и во флигеле.
     this.loadWear();

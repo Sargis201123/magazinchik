@@ -6,6 +6,7 @@ import { migrateAutoOrder, settleInbound } from './autoorder';
 import { migrateTut } from './tutorial';
 import { migrateCollections } from './collections';
 import { migrateCareer } from './career';
+import { normalizePets } from './pets';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId, trustedNow } from '../platform/telegram';
 
@@ -65,6 +66,10 @@ export function loadGame(): StoreState | null {
   // Новые товары появляются в старых сохранениях со своей ценой по умолчанию.
   const fresh = newGame();
   const merged = { ...fresh, ...save.state, prices: { ...fresh.prices, ...save.state.prices }, decor: normalizeDecor(save.state.decor), weeks: normalizeWeeks(save.state.weeks) };
+  // Питомцы за звёзды (pets.ts): неизвестных выкидываем, имена чистим; нет ни одного — поля нет.
+  const pets = normalizePets(save.state.pets);
+  if (pets) merged.pets = pets;
+  else delete merged.pets;
   // Раньше кассир стоял за первой кассой, теперь она хозяина: кассир переходит за свою (registers.ts).
   // Смотрим на само сохранение — в новой игре поле уже есть, и после слияния оно было бы всегда.
   // Новичок посреди первых дней (обновился до бабушкиного обучения) получает его с того шага, где он сейчас.

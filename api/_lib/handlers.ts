@@ -30,6 +30,21 @@ const INVOICE: Record<Lang, { support: (title: string) => string; pass: (title: 
     pass: (title) => `${title}: desbloquea las recompensas premium de la temporada: decoración estelar y monedas dobles.`,
     item: (title) => `${title} para tu tienda. Es tuyo para siempre.`,
   },
+  kk: {
+    support: (title) => `${title}: «Магазинчикті» қолдағаның үшін рақмет! Тек әшекей мен алғыс — ойында артықшылық жоқ.`,
+    pass: (title) => `${title}: маусымның премиум сыйлықтарын ашады — жұлдызды әшекей мен екі есе ақша.`,
+    item: (title) => `${title} — дүкенің үшін. Мәңгі сенікі.`,
+  },
+  uz: {
+    support: (title) => `${title}: «Magazinchik»ni qoʻllab-quvvatlaganing uchun rahmat! Faqat bezak va minnatdorchilik — oʻyinda ustunlik yoʻq.`,
+    pass: (title) => `${title}: mavsumning premium mukofotlarini ochadi — yulduzli bezaklar va ikki barobar pul.`,
+    item: (title) => `${title} — doʻkoning uchun. Abadiy seniki.`,
+  },
+  pt: {
+    support: (title) => `${title}: obrigado por apoiar o Magazinchik! Só enfeites e gratidão — nenhuma vantagem no jogo.`,
+    pass: (title) => `${title}: libera os prêmios premium da temporada — decoração estelar e moedas em dobro.`,
+    item: (title) => `${title} para a sua loja. É seu para sempre.`,
+  },
 };
 
 /** Бот в чате: спасибо после оплаты (name — название вещи на языке игрока) и кнопка «Играть» под приветствием. */
@@ -53,6 +68,21 @@ const PAID: Record<Lang, { support: (name: string) => string; item: (name: strin
     support: (name) => `¡Muchísimas gracias por tu apoyo! 💛 “${name}”: el letrero «¡Gracias!» ya está junto a tu caja.`,
     item: (name) => `¡Gracias! ${name} ya está en tu tienda ✨`,
     play: '▶ Jugar',
+  },
+  kk: {
+    support: (name) => `Қолдауың үшін зор рақмет! 💛 «${name}» — «Рақмет!» тақтайшасы кассаңның жанында тұр.`,
+    item: (name) => `Рақмет! ${name} — енді дүкеніңде ✨`,
+    play: '▶ Ойнау',
+  },
+  uz: {
+    support: (name) => `Qoʻllab-quvvatlaganing uchun katta rahmat! 💛 «${name}» — «Rahmat!» lavhasi allaqachon kassang yonida turibdi.`,
+    item: (name) => `Rahmat! ${name} allaqachon doʻkoningda ✨`,
+    play: '▶ Oʻynash',
+  },
+  pt: {
+    support: (name) => `Muito obrigado pelo apoio! 💛 “${name}” — a plaquinha «Obrigado!» já está ao lado do seu caixa.`,
+    item: (name) => `Obrigado! ${name} já está na sua loja ✨`,
+    play: '▶ Jogar',
   },
 };
 

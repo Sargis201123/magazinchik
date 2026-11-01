@@ -222,6 +222,8 @@ import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420, sonya: 760, father: 300 };
 import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, STAR_PACKS, tryDecor, type DecorItem, type DecorKind, decorItem } from '../game/decor';
 import { buyWithStars, starsAvailable } from '../platform/stars';
+import { petsBox } from './pets';
+import { petDefaultKey } from '../game/pets';
 import {
   adoptDog,
   burglaryChance,
@@ -272,6 +274,8 @@ interface MorningOptions {
   onArrange?: () => void;
   /** Зайти в гости в магазин друга (id в Telegram, имя). */
   onVisit?: (id: number, name: string) => void;
+  /** Собирались в гости с «Улицы друзей» (scenes/friendStreet.ts): карточка сверху — зайти первым делом. */
+  visit?: { id: number; name: string };
   /** «Заглянуть к конкуренту» из рейтинга (ключ с сервера, имя) и к боссу через дорогу (game/rival.ts). */
   onRival?: (key: string, name: string) => void;
   onBoss?: () => void;
@@ -530,7 +534,7 @@ const rectOf = (node: HTMLElement): Spot | null => {
 };
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach }: MorningOptions): void {
+export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach, visit }: MorningOptions): void {
   const { card, close } = openModal();
   // Нажатый заголовок или кнопка остаются на месте, когда блоки сворачиваются и окно перерисовывается.
   anchorScroll(card);
@@ -847,6 +851,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     // Сверху — только то, где нужно решить или забрать; остальное утро — в свёрнутой карточке «Сегодня».
     card.replaceChildren(
       title,
+      ...(touring ? [] : plannedVisitBox()),
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
       ...giftsBox(),
@@ -1940,6 +1945,21 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return [box];
   };
 
+  /** Днём на «Улице друзей» нажали «Зайти в гости» — утром первым делом: одна кнопка. */
+  const plannedVisitBox = (): HTMLElement[] => {
+    if (!visit || !onVisit) return [];
+    const box = el('div', 'ui-box ui-duel');
+    box.append(
+      el('b', '', `🏠 ${t('street.morning.title', { name: visit.name })}`),
+      button(`🚪 ${t('street.card.visit')}`, () => {
+        endTour();
+        close();
+        onVisit(visit.id, visit.name);
+      }),
+    );
+    return [box];
+  };
+
   /** Магазины друзей: зайти в гости — посмотреть, как у них всё устроено. */
   const friendShopsBox = (): HTMLElement[] => {
     const friends = visitsInfo()?.friends ?? [];
@@ -2214,6 +2234,14 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         status: !state.cat ? '—' : catAway(state) ? t('corner.catAway') : fedToday(state) ? t('corner.catFed') : t('corner.catHungry'),
         alert: Boolean(state.cat) && !catAway(state) && !fedToday(state),
         details: () => [catBox(getState())],
+      },
+      // Уголок питомцев за звёзды (ui/pets.ts): кто сейчас в зале, позвать другого.
+      {
+        id: 'pets',
+        icon: '🐾',
+        title: t('pets.title'),
+        status: state.pets?.active ? (state.pets.names?.[state.pets.active] ?? t(petDefaultKey(state.pets.active))) : '—',
+        details: () => petsBox(getState(), getState, update),
       },
       {
         id: 'watch',
@@ -4326,7 +4354,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         ),
       );
     }
-    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), ...branchBox(state), ...linesBox(state, getState, update), ...hoodBox(state, getState, update), bankBox(state));
+    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...petsBox(state, getState, update), ...eduardBox(state), ...branchBox(state), ...linesBox(state, getState, update), ...hoodBox(state, getState, update), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {

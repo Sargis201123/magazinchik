@@ -97,42 +97,49 @@ export type CatalogItem = { stars: number } & Record<Lang, string>;
 
 /** Что продаётся за звёзды: цена и название для счёта. Должно совпадать с src/game/decor.ts — вещи и наборы (проверяет тест). */
 export const STARS_CATALOG: Record<string, CatalogItem> = {
-  outfit_farmer: { stars: 30, ru: 'Наряд «Фермер»', en: 'Farmer outfit', tr: '“Çiftçi” kıyafeti', es: 'Atuendo “Granjero”' },
-  outfit_retro: { stars: 50, ru: 'Наряд «Ретро-лавочник»', en: 'Retro shopkeeper outfit', tr: '“Retro bakkal” kıyafeti', es: 'Atuendo “Tendero retro”' },
-  outfit_tuxedo: { stars: 70, ru: 'Наряд «Миллионер»', en: 'Millionaire outfit', tr: '“Milyoner” kıyafeti', es: 'Atuendo “Millonario”' },
-  outfit_cyber: { stars: 100, ru: 'Наряд «Кибер-продавец»', en: 'Cyber seller outfit', tr: '“Siber satıcı” kıyafeti', es: 'Atuendo “Cibervendedor”' },
-  sign_wood: { stars: 50, ru: 'Вывеска «Деревенская»', en: 'Rustic wooden sign', tr: 'Ahşap köy tabelası', es: 'Letrero rústico de madera' },
-  sign_neon: { stars: 75, ru: 'Вывеска «Неон»', en: 'Neon sign', tr: 'Neon tabela', es: 'Letrero de neón' },
-  sign_candy: { stars: 75, ru: 'Вывеска «Кондитерская»', en: 'Candy shop sign', tr: 'Şekerci tabelası', es: 'Letrero de dulcería' },
-  sign_marquee: { stars: 100, ru: 'Вывеска «Бродвей»', en: 'Broadway marquee sign', tr: '“Broadway” tabelası', es: 'Letrero “Broadway”' },
-  sign_gold: { stars: 100, ru: 'Вывеска «Золото»', en: 'Gold sign', tr: 'Altın tabela', es: 'Letrero dorado' },
-  wall_brick: { stars: 50, ru: 'Стены «Кирпичный лофт»', en: 'Brick loft walls', tr: 'Tuğla loft duvarlar', es: 'Paredes de ladrillo loft' },
-  wall_metro: { stars: 50, ru: 'Стены «Метро-плитка»', en: 'Subway tile walls', tr: 'Metro karosu duvarlar', es: 'Paredes de azulejo metro' },
-  wall_provence: { stars: 50, ru: 'Стены «Прованс»', en: 'Provence walls', tr: 'Provence duvarlar', es: 'Paredes Provenza' },
-  wall_walnut: { stars: 75, ru: 'Стены «Тёмный орех»', en: 'Walnut panel walls', tr: 'Koyu ceviz duvarlar', es: 'Paredes de nogal oscuro' },
-  wall_damask: { stars: 75, ru: 'Стены «Дамаск»', en: 'Damask wallpaper', tr: 'Damask duvar kâğıdı', es: 'Papel tapiz damasco' },
-  floor_gold: { stars: 50, ru: 'Пол «Золотой мрамор»', en: 'Golden marble floor', tr: 'Altın mermer zemin', es: 'Piso de mármol dorado' },
-  floor_chevron: { stars: 50, ru: 'Пол «Французская ёлка»', en: 'Chevron parquet floor', tr: 'Balıksırtı parke', es: 'Parqué en espiga' },
-  floor_terracotta: { stars: 50, ru: 'Пол «Терракота»', en: 'Terracotta floor', tr: 'Terrakota zemin', es: 'Piso de terracota' },
-  floor_azulejo: { stars: 75, ru: 'Пол «Азулежу»', en: 'Azulejo tile floor', tr: 'Azulejo karo zemin', es: 'Piso de azulejos' },
-  floor_noir: { stars: 100, ru: 'Пол «Чёрный мрамор»', en: 'Black marble floor', tr: 'Siyah mermer zemin', es: 'Piso de mármol negro' },
-  light_sconce: { stars: 50, ru: 'Латунные бра', en: 'Brass sconces', tr: 'Pirinç aplikler', es: 'Apliques de latón' },
-  light_pendant: { stars: 50, ru: 'Лофт-лампы', en: 'Loft pendant lamps', tr: 'Loft sarkıt lambalar', es: 'Lámparas colgantes loft' },
-  light_lantern: { stars: 50, ru: 'Кованые фонари', en: 'Iron lanterns', tr: 'Ferforje fenerler', es: 'Faroles de hierro' },
-  light_garland: { stars: 75, ru: 'Гирлянда', en: 'String lights', tr: 'Işık zinciri', es: 'Guirnalda de luces' },
-  light_chandelier: { stars: 100, ru: 'Хрустальные люстры', en: 'Crystal chandeliers', tr: 'Kristal avizeler', es: 'Candelabros de cristal' },
-  gumball: { stars: 50, ru: 'Автомат с жвачкой', en: 'Gumball machine', tr: 'Sakız makinesi', es: 'Máquina de chicles' },
-  aquarium: { stars: 75, ru: 'Аквариум с рыбками', en: 'Aquarium', tr: 'Balıklı akvaryum', es: 'Acuario con peces' },
-  lucky_cat: { stars: 75, ru: 'Кот-удача', en: 'Lucky cat', tr: 'Şans kedisi', es: 'Gato de la suerte' },
-  fountain: { stars: 100, ru: 'Фонтан', en: 'Fountain', tr: 'Çeşme', es: 'Fuente' },
-  jukebox: { stars: 100, ru: 'Музыкальный автомат', en: 'Jukebox', tr: 'Müzik kutusu', es: 'Rocola' },
-  neon_open: { stars: 30, ru: 'Неон «ОТКРЫТО»', en: 'OPEN neon', tr: '“AÇIK” neonu', es: 'Neón “ABIERTO”' },
+  outfit_farmer: { stars: 30, ru: 'Наряд «Фермер»', en: 'Farmer outfit', tr: '“Çiftçi” kıyafeti', es: 'Atuendo “Granjero”', kk: '«Фермер» киімі', uz: '«Fermer» libosi', pt: 'Roupa «Fazendeiro»' },
+  outfit_retro: { stars: 50, ru: 'Наряд «Ретро-лавочник»', en: 'Retro shopkeeper outfit', tr: '“Retro bakkal” kıyafeti', es: 'Atuendo “Tendero retro”', kk: '«Ретро дүкенші» киімі', uz: '«Retro doʻkonchi» libosi', pt: 'Roupa «Vendeiro retrô»' },
+  outfit_tuxedo: { stars: 70, ru: 'Наряд «Миллионер»', en: 'Millionaire outfit', tr: '“Milyoner” kıyafeti', es: 'Atuendo “Millonario”', kk: '«Миллионер» киімі', uz: '«Millioner» libosi', pt: 'Roupa «Milionário»' },
+  outfit_cyber: { stars: 100, ru: 'Наряд «Кибер-продавец»', en: 'Cyber seller outfit', tr: '“Siber satıcı” kıyafeti', es: 'Atuendo “Cibervendedor”', kk: '«Кибер-сатушы» киімі', uz: '«Kiber-sotuvchi» libosi', pt: 'Roupa «Cibervendedor»' },
+  sign_wood: { stars: 50, ru: 'Вывеска «Деревенская»', en: 'Rustic wooden sign', tr: 'Ahşap köy tabelası', es: 'Letrero rústico de madera', kk: '«Ауылдық» маңдайша', uz: '«Qishloqcha» yogʻoch peshlavha', pt: 'Letreiro rústico de madeira' },
+  sign_neon: { stars: 75, ru: 'Вывеска «Неон»', en: 'Neon sign', tr: 'Neon tabela', es: 'Letrero de neón', kk: '«Неон» маңдайша', uz: '«Neon» peshlavha', pt: 'Letreiro de neon' },
+  sign_candy: { stars: 75, ru: 'Вывеска «Кондитерская»', en: 'Candy shop sign', tr: 'Şekerci tabelası', es: 'Letrero de dulcería', kk: '«Кәмпит дүкені» маңдайша', uz: '«Qandolatchi» peshlavha', pt: 'Letreiro de doceria' },
+  sign_marquee: { stars: 100, ru: 'Вывеска «Бродвей»', en: 'Broadway marquee sign', tr: '“Broadway” tabelası', es: 'Letrero “Broadway”', kk: '«Бродвей» маңдайша', uz: '«Brodvey» peshlavha', pt: 'Letreiro «Broadway»' },
+  sign_gold: { stars: 100, ru: 'Вывеска «Золото»', en: 'Gold sign', tr: 'Altın tabela', es: 'Letrero dorado', kk: '«Алтын» маңдайша', uz: '«Oltin» peshlavha', pt: 'Letreiro dourado' },
+  wall_brick: { stars: 50, ru: 'Стены «Кирпичный лофт»', en: 'Brick loft walls', tr: 'Tuğla loft duvarlar', es: 'Paredes de ladrillo loft', kk: '«Кірпіш лофт» қабырға', uz: '«Gʻishtli loft» devorlar', pt: 'Paredes de tijolo loft' },
+  wall_metro: { stars: 50, ru: 'Стены «Метро-плитка»', en: 'Subway tile walls', tr: 'Metro karosu duvarlar', es: 'Paredes de azulejo metro', kk: '«Метро тақтайшасы» қабырға', uz: '«Metro kafeli» devorlar', pt: 'Paredes de azulejo metrô' },
+  wall_provence: { stars: 50, ru: 'Стены «Прованс»', en: 'Provence walls', tr: 'Provence duvarlar', es: 'Paredes Provenza', kk: '«Прованс» қабырға', uz: '«Provans» devorlar', pt: 'Paredes Provença' },
+  wall_walnut: { stars: 75, ru: 'Стены «Тёмный орех»', en: 'Walnut panel walls', tr: 'Koyu ceviz duvarlar', es: 'Paredes de nogal oscuro', kk: '«Қара жаңғақ» қабырға', uz: '«Toʻq yongʻoq» devorlar', pt: 'Paredes de nogueira escura' },
+  wall_damask: { stars: 75, ru: 'Стены «Дамаск»', en: 'Damask wallpaper', tr: 'Damask duvar kâğıdı', es: 'Papel tapiz damasco', kk: '«Дамаск» тұсқағаз', uz: '«Damask» gulqogʻoz', pt: 'Papel de parede damasco' },
+  floor_gold: { stars: 50, ru: 'Пол «Золотой мрамор»', en: 'Golden marble floor', tr: 'Altın mermer zemin', es: 'Piso de mármol dorado', kk: '«Алтын мәрмәр» еден', uz: '«Oltin marmar» pol', pt: 'Piso de mármore dourado' },
+  floor_chevron: { stars: 50, ru: 'Пол «Французская ёлка»', en: 'Chevron parquet floor', tr: 'Balıksırtı parke', es: 'Parqué en espiga', kk: '«Француз шыршасы» паркет', uz: '«Archa» parket', pt: 'Taco espinha de peixe' },
+  floor_terracotta: { stars: 50, ru: 'Пол «Терракота»', en: 'Terracotta floor', tr: 'Terrakota zemin', es: 'Piso de terracota', kk: '«Терракота» еден', uz: '«Terrakota» pol', pt: 'Piso de terracota' },
+  floor_azulejo: { stars: 75, ru: 'Пол «Азулежу»', en: 'Azulejo tile floor', tr: 'Azulejo karo zemin', es: 'Piso de azulejos', kk: '«Азулежу» еден', uz: '«Azulejo» kafel pol', pt: 'Piso de azulejos' },
+  floor_noir: { stars: 100, ru: 'Пол «Чёрный мрамор»', en: 'Black marble floor', tr: 'Siyah mermer zemin', es: 'Piso de mármol negro', kk: '«Қара мәрмәр» еден', uz: '«Qora marmar» pol', pt: 'Piso de mármore negro' },
+  light_sconce: { stars: 50, ru: 'Латунные бра', en: 'Brass sconces', tr: 'Pirinç aplikler', es: 'Apliques de latón', kk: 'Жез бра шамдары', uz: 'Jez bralar', pt: 'Arandelas de latão' },
+  light_pendant: { stars: 50, ru: 'Лофт-лампы', en: 'Loft pendant lamps', tr: 'Loft sarkıt lambalar', es: 'Lámparas colgantes loft', kk: 'Лофт шамдары', uz: 'Loft chiroqlar', pt: 'Pendentes loft' },
+  light_lantern: { stars: 50, ru: 'Кованые фонари', en: 'Iron lanterns', tr: 'Ferforje fenerler', es: 'Faroles de hierro', kk: 'Соғылған шамдар', uz: 'Temir fonuslar', pt: 'Lanternas de ferro' },
+  light_garland: { stars: 75, ru: 'Гирлянда', en: 'String lights', tr: 'Işık zinciri', es: 'Guirnalda de luces', kk: 'Гирлянда', uz: 'Gulchambar chiroqlar', pt: 'Varal de luzes' },
+  light_chandelier: { stars: 100, ru: 'Хрустальные люстры', en: 'Crystal chandeliers', tr: 'Kristal avizeler', es: 'Candelabros de cristal', kk: 'Хрусталь аспашамдар', uz: 'Billur qandillar', pt: 'Lustres de cristal' },
+  gumball: { stars: 50, ru: 'Автомат с жвачкой', en: 'Gumball machine', tr: 'Sakız makinesi', es: 'Máquina de chicles', kk: 'Сағыз автоматы', uz: 'Saqich avtomati', pt: 'Máquina de chicletes' },
+  aquarium: { stars: 75, ru: 'Аквариум с рыбками', en: 'Aquarium', tr: 'Balıklı akvaryum', es: 'Acuario con peces', kk: 'Балықты аквариум', uz: 'Baliqli akvarium', pt: 'Aquário com peixinhos' },
+  lucky_cat: { stars: 75, ru: 'Кот-удача', en: 'Lucky cat', tr: 'Şans kedisi', es: 'Gato de la suerte', kk: 'Бақыт мысығы', uz: 'Omad mushugi', pt: 'Gato da sorte' },
+  fountain: { stars: 100, ru: 'Фонтан', en: 'Fountain', tr: 'Çeşme', es: 'Fuente', kk: 'Субұрқақ', uz: 'Favvora', pt: 'Fonte' },
+  jukebox: { stars: 100, ru: 'Музыкальный автомат', en: 'Jukebox', tr: 'Müzik kutusu', es: 'Rocola', kk: 'Музыкалық автомат', uz: 'Musiqa avtomati', pt: 'Jukebox' },
+  neon_open: { stars: 30, ru: 'Неон «ОТКРЫТО»', en: 'OPEN neon', tr: '“AÇIK” neonu', es: 'Neón “ABIERTO”', kk: '«АШЫҚ» неоны', uz: '«OCHIQ» neoni', pt: 'Neon «ABERTO»' },
   // Наборы (src/game/decor.ts → STAR_PACKS): одна покупка — несколько вещей.
-  pack_newyear: { stars: 100, ru: 'Новогодний набор', en: 'New Year pack', tr: 'Yılbaşı seti', es: 'Paquete de Año Nuevo' },
+  pack_newyear: { stars: 100, ru: 'Новогодний набор', en: 'New Year pack', tr: 'Yılbaşı seti', es: 'Paquete de Año Nuevo', kk: 'Жаңа жыл жинағы', uz: 'Yangi yil toʻplami', pt: 'Pacote de Ano-Novo' },
+  // Питомцы за звёзды (src/game/pets.ts): только для красоты, в зале живёт выбранный.
+  pet_hamster: { stars: 25, ru: 'Хомяк в клетке', en: 'Hamster in a cage', tr: 'Kafesteki hamster', es: 'Hámster en su jaula', kk: 'Торлы үйдегі хомяк', uz: 'Qafasdagi xomyak', pt: 'Hamster na gaiola' },
+  pet_turtle: { stars: 35, ru: 'Черепаха', en: 'Tortoise', tr: 'Kaplumbağa', es: 'Tortuga', kk: 'Тасбақа', uz: 'Toshbaqa', pt: 'Tartaruga' },
+  pet_parrot: { stars: 50, ru: 'Попугай на жёрдочке', en: 'Parrot on a perch', tr: 'Tüneğinde papağan', es: 'Loro en su percha', kk: 'Қонақтағы тотықұс', uz: 'Qoʻnoqdagi toʻtiqush', pt: 'Papagaio no poleiro' },
+  pet_bunny: { stars: 50, ru: 'Крольчиха', en: 'Bunny', tr: 'Tavşan', es: 'Conejita', kk: 'Қоянша', uz: 'Quyoncha', pt: 'Coelhinha' },
+  pet_corgi: { stars: 75, ru: 'Корги у входа', en: 'Corgi by the door', tr: 'Kapıdaki corgi', es: 'Corgi en la entrada', kk: 'Есік алдындағы корги', uz: 'Eshik oldidagi korgi', pt: 'Corgi na entrada' },
+  pet_raccoon: { stars: 100, ru: 'Енот со склада', en: 'Stockroom raccoon', tr: 'Depo rakunu', es: 'Mapache del almacén', kk: 'Қоймадағы енот', uz: 'Ombordagi yenot', pt: 'Guaxinim do estoque' },
   // «Поддержать автора» (src/game/support.ts): только спасибо и красота, без преимуществ в игре.
-  support_25: { stars: 25, ru: 'Кофе автору', en: 'A coffee for the author', tr: 'Yapımcıya bir kahve', es: 'Un café para el autor' },
-  support_100: { stars: 100, ru: 'Кот в цилиндре', en: 'Cat in a top hat', tr: 'Silindir şapkalı kedi', es: 'Gato con sombrero de copa' },
-  support_250: { stars: 250, ru: 'Золотой меценат', en: 'Golden patron', tr: 'Altın hami', es: 'Mecenas de oro' },
+  support_25: { stars: 25, ru: 'Кофе автору', en: 'A coffee for the author', tr: 'Yapımcıya bir kahve', es: 'Un café para el autor', kk: 'Авторға кофе', uz: 'Muallifga bir finjon qahva', pt: 'Um café para o autor' },
+  support_100: { stars: 100, ru: 'Кот в цилиндре', en: 'Cat in a top hat', tr: 'Silindir şapkalı kedi', es: 'Gato con sombrero de copa', kk: 'Цилиндр киген мысық', uz: 'Silindr shlyapali mushuk', pt: 'Gato de cartola' },
+  support_250: { stars: 250, ru: 'Золотой меценат', en: 'Golden patron', tr: 'Altın hami', es: 'Mecenas de oro', kk: 'Алтын демеуші', uz: 'Oltin homiy', pt: 'Mecenas de ouro' },
 };
 
 /** Покупка — поддержка автора (support_*), а не вещь для магазина. */
@@ -165,7 +172,7 @@ export function canBuy(id: string, now = Date.now()): boolean {
 export function catalogItem(id: string): CatalogItem | undefined {
   if (STARS_CATALOG[id]) return STARS_CATALOG[id];
   const season = PASS_RE.exec(id)?.[1];
-  return season ? { stars: PASS_STARS, ru: `Сезонный пропуск №${season}`, en: `Season pass #${season}`, tr: `Sezon kartı #${season}`, es: `Pase de temporada n.º ${season}` } : undefined;
+  return season ? { stars: PASS_STARS, ru: `Сезонный пропуск №${season}`, en: `Season pass #${season}`, tr: `Sezon kartı #${season}`, es: `Pase de temporada n.º ${season}`, kk: `№${season} маусым билеті`, uz: `Mavsumiy chipta №${season}`, pt: `Passe da temporada nº ${season}` } : undefined;
 }
 
 /** Полезная нагрузка счёта: по ней видно, какую вещь купили. */

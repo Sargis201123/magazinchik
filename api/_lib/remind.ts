@@ -79,13 +79,19 @@ const DAY_NAMES: Record<Lang, string[]> = {
   en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
   tr: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
   es: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
+  kk: ['қаңтар', 'ақпан', 'наурыз', 'сәуір', 'мамыр', 'маусым', 'шілде', 'тамыз', 'қыркүйек', 'қазан', 'қараша', 'желтоқсан'],
+  uz: ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'],
+  pt: ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
 };
-/** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre». */
+/** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre», «5 желтоқсан», «5-dekabr», «5 de dezembro». */
 const DAY_FORMAT: Record<Lang, (d: number, month: string) => string> = {
   ru: (d, month) => `${d} ${month}`,
   en: (d, month) => `${month} ${d}`,
   tr: (d, month) => `${d} ${month}`,
   es: (d, month) => `${d} de ${month}`,
+  kk: (d, month) => `${d} ${month}`,
+  uz: (d, month) => `${d}-${month}`,
+  pt: (d, month) => `${d} de ${month}`,
 };
 const dayName = (date: string, lang: Lang): string => DAY_FORMAT[lang](Number(date.slice(8)), DAY_NAMES[lang][Number(date.slice(5, 7)) - 1]);
 
@@ -203,6 +209,91 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'also.chest': 'el cofre ≈{sum} 💰',
     play: '▶ Jugar',
   },
+  // Имена в {who}/{from} уже в нужном падеже (PEOPLE.kk): who — табыс («кімді»), from — шығыс («кімнен»).
+  kk: {
+    sonya: '👧 Соня: «Әке, бүгін дүкенге соғасың ба? Саған бір нәрсе айтайын деп едім…»',
+    helped: '👵 Әже: «Балам, саған көмек келді — жіберген: {name}! Кір — бүгін касса тезірек жұмыс істейді»',
+    'guest.moroz': '🎅 Аяз Ата: «Хо-хо! Бүгін дүкеніңе сыйлықпен соғамын — ашық бол, ұйықтап қалма!»',
+    'guest.snegurochka': '❄️ Ақшақар: «Бүгін дүкеніңе сыйлықпен келемін. Мені күт!»',
+    'card.newyear': '🎄 Ақшақар: «Ашықхат ({date}) дүкенде сені күтіп тұр. Жаңа жылға дейін — {left}!»',
+    'card.newyear.eve': '🎆 Ақшақар: «Бүгін жылдың соңғы күні! Ашықхат дүкенде сені күтіп тұр. Жаңа жылың құтты болсын!»',
+    'card.newyear.jan': '🎄 Ақшақар: «Жаңа жылың құтты болсын! Ашықхат ({date}) дүкенде сені күтіп тұр»',
+    'card.feb23': '🎖 Әже: «Балам, мерекең құтты болсын! Дүкенде сені 23 ақпанға арналған ашықхат күтіп тұр»',
+    'card.march8': '🌷 Валентина: «Көктем мерекесі құтты болсын! Дүкенде сені ашықхат күтіп тұр — мимозамен бірге»',
+    gift: '👵 Әже: «Балам, сәлемдеме дайын — 7 күннің {n}-күні! Бүгін соқ, әйтпесе серия басынан басталады»',
+    'gift.big': '👵 Әже: «Балам, алты күн қатарынан келдің — бүгін ең үлкен сәлемдеме! Өткізіп алма»',
+    spoil: '🧓 Валентина: «Естідім, дүкеніңде {n} дана тауардың соңғы күні екен. Бүлінбей тұрғанда бағасын түсір!»',
+    weekend: '📺 Аудан жаңалықтары: «Демалыс күнгі сауда! Ауданның барлық дүкені кім көп сатады деп жарысады. Орныңды ал»',
+    cashier: '👵 Әже: «Кассир сенсіз сатып жатыр, бірақ сөрелер босап барады. Соғып, тауар сатып алсаң етті»',
+    day: '👵 Әже: «{day}-күн: есік алдында сатып алушылар жиналып қалды. Ашамыз ба?»',
+    'day.0': '👵 Әженің сәлемдемесі күтіп тұр! Дүкенге соқ — сатып алушылар сағынды.',
+    order: '🧓 Валентина: «{who} кездестірдім — тапсырысын сұрап жатыр: {item}, {qty} дана. Сақтап қоямын деп уәде бергенсің ғой!»',
+    letter: '👵 Әже: «Балам, саған хат бар — {from}! Кассаның жанында жатыр»',
+    'letter.grandma': '👵 Әже: «Балам, саған хат жаздым — ішіне бір нәрсе де салдым. Соқ!»',
+    'letter.sonya': '👧 Соня: «Әке, саған ашықхат салдым! Ол дүкенде, кассаның жанында»',
+    chest: '👵 Әже: «Түсім сандықшасы ауырлап қалды — шамамен {sum} 💰. Кел, аш!»',
+    also: 'Тағы күтіп тұр: {list}',
+    'also.order': 'тапсырыс — {who}',
+    'also.letter': 'хат — {from}',
+    'also.chest': 'сандықша ≈{sum} 💰',
+    play: '▶ Ойнау',
+  },
+  uz: {
+    sonya: '👧 Sonya: «Dada, bugun doʻkonga kirasanmi? Senga bir gap aytmoqchi edim…»',
+    helped: '👵 Buvi: «Nevaram, {name} senga yordam yubordi! Kirib oʻt — bugun kassa tezroq ishlaydi»',
+    'guest.moroz': '🎅 Qor bobo: «Xo-xo! Bugun doʻkonchangga sovgʻa bilan kiraman — ochiq tur, uxlab qolma!»',
+    'guest.snegurochka': '❄️ Qorqiz: «Bugun doʻkoningga sovgʻa bilan kiraman. Meni kut!»',
+    'card.newyear': '🎄 Qorqiz: «{date} otkritkang doʻkonchada seni kutyapti. Yangi yilgacha — {left}!»',
+    'card.newyear.eve': '🎆 Qorqiz: «Bugun yilning oxirgi kuni! Otkritkang doʻkonchada kutyapti. Yangi yiling muborak!»',
+    'card.newyear.jan': '🎄 Qorqiz: «Yangi yil muborak! {date} otkritkang doʻkonchada seni kutyapti»',
+    'card.feb23': '🎖 Buvi: «Nevaram, bayraming muborak! Doʻkonda seni 23-fevral otkritkasi kutyapti»',
+    'card.march8': '🌷 Valentina: «Bahor bayrami muborak! Doʻkonchada seni otkritka kutyapti — mimoza bilan»',
+    gift: '👵 Buvi: «Nevaram, sovgʻa tayyor — 7 kundan {n}-kun! Bugun kir, boʻlmasa seriya boshidan boshlanadi»',
+    'gift.big': '👵 Buvi: «Nevaram, olti kun ketma-ket kelding — bugun eng katta sovgʻa! Qoʻldan boy berma»',
+    spoil: '🧓 Valentina: «Eshitdim, doʻkoningda {n} ta mahsulotning oxirgi kuni ekan. Buzilmasidan arzonlashtir!»',
+    weekend: '📺 Mahalla yangiliklari: «Dam olish kunlari savdosi! Mahalladagi hamma doʻkonlar kim koʻproq sotishini bellashyapti. Joyingni egalla»',
+    cashier: '👵 Buvi: «Kassir sensiz savdo qilyapti, lekin javonlar boʻshab qolyapti. Kirib, mol xarid qilsang boʻlardi»',
+    day: '👵 Buvi: «{day}-kun: eshik oldida xaridorlar yigʻilib qoldi. Ochamizmi?»',
+    'day.0': '👵 Buvining sovgʻasi kutyapti! Doʻkonchaga kir — xaridorlar seni sogʻinishdi.',
+    order: '🧓 Valentina: «Yoʻlda {who} uchradi — buyurtmasini soʻrayapti: {item}, {qty} ta. Olib qoʻyaman degan eding-ku!»',
+    letter: '👵 Buvi: «Nevaram, senga {from} xat keldi! Kassa yonida kutyapti»',
+    'letter.grandma': '👵 Buvi: «Nevaram, senga xat yozdim — ichiga bir narsa ham solib qoʻydim. Kirib oʻt!»',
+    'letter.sonya': '👧 Sonya: «Dada, senga otkritka chizdim! U doʻkonda, kassa yonida»',
+    chest: '👵 Buvi: «Tushum sandiqchasi ogʻirlashib qoldi — taxminan {sum} 💰. Kelib och!»',
+    also: 'Yana kutyapti: {list}',
+    'also.order': '{who} buyurtma',
+    'also.letter': '{from} xat',
+    'also.chest': 'sandiqcha ≈{sum} 💰',
+    play: '▶ Oʻynash',
+  },
+  pt: {
+    sonya: '👧 Sônia: “Pai, você vai passar na loja hoje? Eu queria te contar uma coisa…”',
+    helped: '👵 Vovó: “Querido, {name} te mandou uma ajuda! Passe aqui — hoje o caixa vai atender mais rápido”',
+    'guest.moroz': '🎅 Ded Moroz: “Ho-ho-ho! Hoje vou passar na sua lojinha com um presente — abra cedo, não perca a hora!”',
+    'guest.snegurochka': '❄️ Snegurochka: “Hoje vou passar na sua loja com um presente. Me espere!”',
+    'card.newyear': '🎄 Snegurochka: “Seu cartão de {date} está esperando na lojinha. Faltam {left} para o Ano-Novo!”',
+    'card.newyear.eve': '🎆 Snegurochka: “Hoje é o último dia do ano! Seu cartão está esperando na lojinha. Feliz Ano-Novo!”',
+    'card.newyear.jan': '🎄 Snegurochka: “Feliz Ano-Novo! Seu cartão de {date} está esperando na lojinha”',
+    'card.feb23': '🎖 Vovó: “Querido, feliz dia! Tem um cartão do 23 de Fevereiro esperando por você na loja”',
+    'card.march8': '🌷 Valentina: “Feliz festa da primavera! Tem um cartão esperando por você na lojinha — e mimosas”',
+    gift: '👵 Vovó: “Querido, seu mimo já está pronto — dia {n} de 7! Passe hoje, senão a sequência recomeça”',
+    'gift.big': '👵 Vovó: “Querido, seis dias seguidos — hoje é o maior mimo de todos! Não perca”',
+    spoil: '🧓 Valentina: “Fiquei sabendo que {n} un. de mercadoria estão no último dia. Faça um desconto antes que estraguem!”',
+    weekend: '📺 Notícias do bairro: “Liquidação de fim de semana! Todas as lojas do bairro disputam quem vende mais. Garanta seu lugar”',
+    cashier: '👵 Vovó: “O caixa está vendendo sem você, mas as prateleiras estão esvaziando. Passe aqui para repor”',
+    day: '👵 Vovó: “Dia {day}: já tem clientes na porta. Vamos abrir?”',
+    'day.0': '👵 O mimo da vovó está esperando! Passe na lojinha — os clientes estão com saudade.',
+    order: '🧓 Valentina: “Encontrei {who} — perguntou da encomenda: {item}, {qty} un. Você prometeu separar!”',
+    letter: '👵 Vovó: “Querido, chegou uma carta {from} para você! Está esperando no caixa”',
+    'letter.grandma': '👵 Vovó: “Querido, escrevi uma carta para você — e coloquei uma coisinha dentro. Passe aqui!”',
+    'letter.sonya': '👧 Sônia: “Pai, desenhei um cartão para você! Está na loja, ao lado do caixa”',
+    chest: '👵 Vovó: “O baú do faturamento já está pesadinho — umas {sum} 💰. Venha abrir!”',
+    also: 'Também esperando: {list}',
+    'also.order': 'encomenda {who}',
+    'also.letter': 'carta {from}',
+    'also.chest': 'baú ≈{sum} 💰',
+    play: '▶ Jogar',
+  },
 };
 
 const fill = (text: string, params: Record<string, string | number>): string => text.replace(/\{(\w+)\}/g, (_, k: string) => String(params[k] ?? ''));
@@ -210,6 +301,7 @@ const fill = (text: string, params: Record<string, string | number>): string => 
 /**
  * Кто пишет письма и приходит за заказом (src/game/regulars.ts, returns.ts): имя «от кого» (родительный
  * падеж) и «встретила кого» (винительный). Неизвестная метка — повода нет.
+ * По-португальски «от кого» — сразу с предлогом и артиклем («da vovó», «do Misha»), «кого» — с артиклем.
  */
 export const PEOPLE: Record<Lang, Record<string, { from: string; who: string }>> = {
   ru: {
@@ -261,6 +353,44 @@ export const PEOPLE: Record<Lang, Record<string, { from: string; who: string }>>
     misha: { from: 'Misha', who: 'Misha' },
     staff: { from: 'un antiguo empleado', who: 'a un antiguo empleado' },
   },
+  // Казахский: from — шығыс септік («кімнен»: хат — әжеден), who — табыс септік («кімді»: әжені кездестірдім).
+  kk: {
+    grandma: { from: 'әжеден', who: 'Әжені' },
+    valya: { from: 'Валентинадан', who: 'Валентинаны' },
+    sonya: { from: 'Сонядан', who: 'Соняны' },
+    petr: { from: 'Пётр Ильичтен', who: 'Пётр Ильичті' },
+    sveta: { from: 'Светадан', who: 'Светаны' },
+    kostya: { from: 'Костядан', who: 'Костяны' },
+    akhmed: { from: 'Ахмедтен', who: 'Ахмедті' },
+    olga: { from: 'Ольга Николаевнадан', who: 'Ольга Николаевнаны' },
+    misha: { from: 'Мишадан', who: 'Мишаны' },
+    staff: { from: 'бұрынғы қызметкерден', who: 'Бұрынғы қызметкерді' },
+  },
+  // По-узбекски имя стоит без падежного окончания: тексты построены так, чтобы оно не требовалось.
+  uz: {
+    grandma: { from: 'buvidan', who: 'buvi' },
+    valya: { from: 'Valentinadan', who: 'Valentina' },
+    sonya: { from: 'Sonyadan', who: 'Sonya' },
+    petr: { from: 'Pyotr Ilichdan', who: 'Pyotr Ilich' },
+    sveta: { from: 'Svetadan', who: 'Sveta' },
+    kostya: { from: 'Kostyadan', who: 'Kostya' },
+    akhmed: { from: 'Axmeddan', who: 'Axmed' },
+    olga: { from: 'Olga Nikolayevnadan', who: 'Olga Nikolayevna' },
+    misha: { from: 'Mishadan', who: 'Misha' },
+    staff: { from: 'sobiq xodimdan', who: 'sobiq xodim' },
+  },
+  pt: {
+    grandma: { from: 'da vovó', who: 'a vovó' },
+    valya: { from: 'da Valentina', who: 'a Valentina' },
+    sonya: { from: 'da Sônia', who: 'a Sônia' },
+    petr: { from: 'do Piotr Ilitch', who: 'o Piotr Ilitch' },
+    sveta: { from: 'da Sveta', who: 'a Sveta' },
+    kostya: { from: 'do Kostia', who: 'o Kostia' },
+    akhmed: { from: 'do Akhmed', who: 'o Akhmed' },
+    olga: { from: 'da Olga Nikoláievna', who: 'a Olga Nikoláievna' },
+    misha: { from: 'do Misha', who: 'o Misha' },
+    staff: { from: 'de um ex-funcionário', who: 'um ex-funcionário' },
+  },
 };
 /** Любимые товары постоянных покупателей — то, что они просят отложить. */
 export const ITEMS: Record<Lang, Record<string, string>> = {
@@ -268,9 +398,12 @@ export const ITEMS: Record<Lang, Record<string, string>> = {
   en: { bread: '🍞 bread', milk: '🥛 milk', potatoes: '🥔 potatoes', meat: '🥩 meat', apples: '🍎 apples', juice: '🧃 juice' },
   tr: { bread: '🍞 ekmek', milk: '🥛 süt', potatoes: '🥔 patates', meat: '🥩 et', apples: '🍎 elma', juice: '🧃 meyve suyu' },
   es: { bread: '🍞 pan', milk: '🥛 leche', potatoes: '🥔 papas', meat: '🥩 carne', apples: '🍎 manzanas', juice: '🧃 jugo' },
+  kk: { bread: '🍞 нан', milk: '🥛 сүт', potatoes: '🥔 картоп', meat: '🥩 ет', apples: '🍎 алма', juice: '🧃 шырын' },
+  uz: { bread: '🍞 non', milk: '🥛 sut', potatoes: '🥔 kartoshka', meat: '🥩 goʻsht', apples: '🍎 olma', juice: '🧃 sharbat' },
+  pt: { bread: '🍞 pão', milk: '🥛 leite', potatoes: '🥔 batatas', meat: '🥩 carne', apples: '🍎 maçãs', juice: '🧃 suco' },
 };
 /** Товар без названия (метка из игры, которой нет в ITEMS). */
-const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía' };
+const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía', kk: 'тауар', uz: 'mahsulot', pt: 'mercadoria' };
 /** Своё поле словаря (не «constructor» из прототипа): метки приходят от игры. */
 const own = <T>(table: Record<string, T>, key: string): T | undefined => (Object.hasOwn(table, key) ? table[key] : undefined);
 /** Сундучок меньше этого — не повод писать (кассир едва начал торговать). */
@@ -309,9 +442,13 @@ function waiting(p: Player): { reason: Reason; face: Face; text: string; short: 
 function daysLeft(date: string, lang: Lang): string {
   const n = daysBetween(date, `${Number(date.slice(0, 4)) + 1}-01-01`);
   if (lang === 'en') return `${n} day${n === 1 ? '' : 's'}`;
-  // По-турецки после числа — единственное число: «5 gün».
+  // По-турецки и по-узбекски после числа — единственное число: «5 gün», «5 kun».
   if (lang === 'tr') return `${n} gün`;
+  if (lang === 'uz') return `${n} kun`;
   if (lang === 'es') return `${n} día${n === 1 ? '' : 's'}`;
+  // По-казахски тоже: «5 күн».
+  if (lang === 'kk') return `${n} күн`;
+  if (lang === 'pt') return `${n} dia${n === 1 ? '' : 's'}`;
   const tail = n % 10 === 1 && n % 100 !== 11 ? 'день' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'дня' : 'дней';
   return `${n} ${tail}`;
 }

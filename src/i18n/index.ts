@@ -8,7 +8,7 @@ import { lookup } from './lookup';
 export type { Lang, TextKey };
 export { LANGS, NATIVE, SHIPPED } from './langs';
 
-/** Словарь языка: у готовых языков — все ключи, у заготовок (kk, uz, pt) — сколько успели перевести. */
+/** Словарь языка: у готовых языков — все ключи, у заготовок (kk, pt) — сколько успели перевести. */
 type Dictionary = Partial<Record<TextKey, string>>;
 
 // Словари, кроме русского, грузятся отдельными файлами, только если нужны (loadLang): русским

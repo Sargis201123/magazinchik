@@ -19,9 +19,9 @@ const emoji = (s: string) => [...s.matchAll(/\p{Extended_Pictographic}/gu)].map(
 const complete = (lang: Lang) => keys.every((k) => typeof dicts[lang][k] === 'string' && dicts[lang][k] !== '');
 
 describe('словари языков', () => {
-  it('в выборе языка — только языки с полным словарём (заготовки kk/uz/pt не показываются)', () => {
+  it('в выборе языка — только языки с полным словарём', () => {
     for (const lang of LANGS) if (!complete(lang)) expect(SHIPPED, `${lang} не переведён целиком`).not.toContain(lang);
-    expect(SHIPPED).toEqual(['ru', 'en', 'tr', 'es']);
+    expect(SHIPPED).toEqual(['ru', 'en', 'tr', 'es', 'kk', 'uz', 'pt']);
   });
 
   for (const lang of SHIPPED.filter((l) => l !== 'ru')) {
@@ -43,18 +43,16 @@ describe('словари языков', () => {
     });
   }
 
-  for (const lang of ['tr', 'es'] as const) {
+  for (const lang of ['tr', 'es', 'uz', 'pt'] as const) {
     it(`${lang}: ни одной русской буквы`, () => {
       expect(keys.filter((k) => /[а-яё]/i.test(dicts[lang][k]!))).toEqual([]);
     });
   }
 
-  it('у заготовок лишних ключей нет и подстановки совпадают', () => {
-    for (const lang of ['kk', 'uz', 'pt'] as const)
-      for (const [k, v] of Object.entries(dicts[lang])) {
-        expect(k in ru, `${lang}: ${k}`).toBe(true);
-        expect(placeholders(v!)).toBe(placeholders(ru[k as TextKey]));
-      }
+  it('kk: казахский, а не русский — казахские буквы в большинстве строк, после числа слово не меняется', () => {
+    const withLetters = keys.filter((k) => /[әғқңөұүһі]/i.test(kk[k]!)).length;
+    expect(withLetters / keys.length).toBeGreaterThan(0.8);
+    expect(new Set([kk['live.box.cards.one'], kk['live.box.cards.few'], kk['live.box.cards.many']]).size).toBe(1);
   });
 
   it('у каждого языка есть название на нём самом и буквы для шрифта', () => {
@@ -81,26 +79,30 @@ describe('нет строки — берём английскую, потом р
 });
 
 describe('язык игрока', () => {
-  it('Telegram и браузер: tr, es, es-MX, pt-BR, kk, uz', () => {
+  it('Telegram и браузер: tr, es, es-MX, pt-BR, pt-PT, kk, kk-KZ, uz', () => {
     expect(detectLang(null, null, 'tr')).toBe('tr');
     expect(detectLang(null, null, 'TR-tr')).toBe('tr');
     expect(detectLang(null, null, 'es')).toBe('es');
     expect(detectLang(null, null, 'es-MX')).toBe('es');
     expect(detectLang(null, null, 'es_AR')).toBe('es');
-    // Португальский ещё не готов — английский; казахский и узбекский — русский, как и раньше.
-    expect(detectLang(null, null, 'pt-BR')).toBe('en');
-    expect(detectLang(null, null, 'kk')).toBe('ru');
-    expect(detectLang(null, null, 'uz')).toBe('ru');
+    // Все готовы — свои; португальский и бразильский, и европейский — один словарь.
+    expect(detectLang(null, null, 'pt-BR')).toBe('pt');
+    expect(detectLang(null, null, 'pt_PT')).toBe('pt');
+    expect(detectLang(null, null, 'kk')).toBe('kk');
+    expect(detectLang(null, null, 'kk-KZ')).toBe('kk');
+    expect(detectLang(null, null, 'uz')).toBe('uz');
+    expect(detectLang(null, null, 'uz-Latn-UZ')).toBe('uz');
     expect(detectLang(null, null, 'de-DE')).toBe('en');
   });
   it('выбор игрока важнее Telegram', () => {
     expect(detectLang(null, 'es', 'ru')).toBe('es');
     expect(detectLang(null, 'tr', 'en')).toBe('tr');
   });
-  it('?lang= открывает и заготовку (для переводчика), а сохранённая заготовка — нет', () => {
+  it('?lang= и сохранённый выбор — любой готовый язык', () => {
     expect(detectLang('kk', 'ru')).toBe('kk');
     expect(detectLang('PT')).toBe('pt');
-    expect(detectLang(null, 'kk')).toBe('ru');
+    expect(detectLang(null, 'kk')).toBe('kk');
+    expect(detectLang(null, 'uz')).toBe('uz');
     expect(detectLang('es', 'ru')).toBe('es');
   });
 });
@@ -117,5 +119,20 @@ describe('форма слова после числа в новых языках
   it('испанская строка приза: «2 postales»', () => {
     expect(es[`live.box.cards.${pluralForm(2, 'es')}`]).toBe(es['live.box.cards.many']);
     expect(es['live.box.cards.one']).not.toBe(es['live.box.cards.many']);
+  });
+  it('узбекский: слово после числа не меняется — три ключа одинаковые', () => {
+    for (const k of keys.filter((k) => k.endsWith('.one'))) {
+      const base = k.slice(0, -4);
+      expect(new Set([uz[k], uz[`${base}.few` as TextKey], uz[`${base}.many` as TextKey]]).size, base).toBe(1);
+    }
+  });
+  it('узбекский: oʻ и gʻ — знаком U+02BB, а не апострофом', () => {
+    expect(keys.filter((k) => /[oOgG][\u0027\u2019\u02BC`]/.test(uz[k]))).toEqual([]);
+  });
+  it('португальский: 0 и 1 — one (так по-бразильски, Intl.PluralRules), остальное — many; в словаре few = many', () => {
+    expect([0, 1, 2, 5, 21].map((n) => pluralForm(n, 'pt'))).toEqual(['one', 'one', 'many', 'many', 'many']);
+    const plural = keys.filter((k) => k.endsWith('.few'));
+    expect(plural.filter((k) => pt[k] !== pt[k.replace(/\.few$/, '.many') as TextKey])).toEqual([]);
+    expect(pt[`live.box.cards.${pluralForm(2, 'pt')}`]).toBe(pt['live.box.cards.many']);
   });
 });
