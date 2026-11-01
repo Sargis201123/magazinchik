@@ -125,10 +125,11 @@ export const ZAR_PRICE = 45000;
 export const ZAR_CARD_AGAIN = 14;
 
 /**
- * Гипермаркет в Центре без игрока: доля его обычной выручки — как у филиала со всеми улучшениями
- * (BRANCH_BASE_SHARE + все ступени ≈ 0,155): там своя обученная команда. Расчёт тот же, что у филиала.
+ * Гипермаркет в Центре без игрока: доля его обычной выручки. Расчёт тот же, что у филиала, но доля выше,
+ * чем у филиала со всеми улучшениями (≈ 0,155): решение автора — Заречье «в ноль», ходить туда не в убыток
+ * (через день — прибыль поздней игры −3…+0,4%, npm run sim:zar; docs/BALANCE.md «Заречье»).
  */
-export const ZAR_HOME_SHARE = 0.155;
+export const ZAR_HOME_SHARE = 0.21;
 
 export const zarOf = (state: StoreState): ZarState | undefined => state.zar;
 export const hasZar = (state: StoreState): boolean => Boolean(state.zar);
