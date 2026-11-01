@@ -34,7 +34,7 @@ export const isShipped = (lang: Lang): boolean => SHIPPED.includes(lang);
 
 /**
  * Буквы языка, которых нет в основном (латинском) куске шрифта Nunito: по ним браузер догружает нужный кусок
- * (latin-ext, cyrillic-ext) до того, как сцена нарисует надписи на холсте (BootScene). Русскому и английскому
- * хватает того, что грузилось и раньше.
+ * (latin-ext, cyrillic, cyrillic-ext) до того, как сцена нарисует надписи на холсте (BootScene): надписи на
+ * холсте рисуются один раз, и без этого остались бы системным шрифтом. Английскому хватает латиницы.
  */
-export const FONT_SAMPLE: Record<Lang, string> = { ru: '', en: '', tr: 'ğşİı', es: 'ñá¿', kk: 'әғқңөұүһі', uz: 'ʻʼ', pt: 'ãõç' };
+export const FONT_SAMPLE: Record<Lang, string> = { ru: 'Жж', en: '', tr: 'ğşİı', es: 'ñá¿', kk: 'Жжәғқңөұүһі', uz: 'ʻʼ', pt: 'ãõç' };
