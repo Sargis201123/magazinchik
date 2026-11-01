@@ -3069,8 +3069,10 @@ export const ru = {
   "lines.summarySold": "продано {n} на {money} 💰",
   "lines.summaryMade": "ночью: {list}",
   "lines.summaryShort": "не хватило сырья: {list}",
-  "lines.label": "СВОЁ",
   "prices.ownLine": "Своя марка — открой линейку в «Развитии» («Своя марка на полках»)",
+  "goods.kvass": "🍺 Квас своей марки — весной и летом, на полке «Напитки»",
+  "goods.when.kvass": "весной и летом",
+  "lines.summarySpent": "на банки и сахар −{n} 💰",
 } as const;
 
 export type TextKey = keyof typeof ru;

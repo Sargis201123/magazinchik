@@ -124,6 +124,12 @@ describe('своя марка на полках', () => {
     expect(lineWants(shop({ lines: { pickles: 1 }, shelves: [] }), 'pickles')).toBe(0);
   });
 
+  it('квас вне сезона не продают: ни заданий, ни кафе, ни войны цен на него', () => {
+    expect(sellableProducts(shop({ lines: { kvass: 1 }, day: dayIn('summer') }))).toContain('kvass');
+    expect(sellableProducts(shop({ lines: { kvass: 1 }, day: dayIn('autumn') }))).not.toContain('kvass');
+    expect(sellableProducts(shop({ lines: { kvass: 1 }, day: dayIn('winter') }))).not.toContain('kvass');
+  });
+
   it('соленья: осенью солят больше и дешевле; без сырья со склада', () => {
     const autumn = shop({ lines: { pickles: 1 }, day: dayIn('autumn') });
     const spring = shop({ lines: { pickles: 1 }, day: dayIn('spring') });

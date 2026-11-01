@@ -1363,6 +1363,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('goods.title')));
     for (const pid of Object.keys(SEASONAL) as ProductId[]) {
+      // Квас своей марки — только когда линейка открыта (lines.ts).
+      if (!ownProductOpen(state, pid)) continue;
       const left = daysUntilSeason(pid, state.day);
       box.append(el('div', '', `${t(`goods.${pid}` as TextKey)} · ${left === 0 ? t('goods.now') : t('goods.in', { n: left })}`));
       if (state.shelves.some((s) => canPlace(pid, s))) continue;

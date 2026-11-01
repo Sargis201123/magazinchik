@@ -3071,8 +3071,10 @@ export const en: Record<TextKey, string> = {
   "lines.summarySold": "sold {n} for {money} 💰",
   "lines.summaryMade": "overnight: {list}",
   "lines.summaryShort": "not enough ingredients: {list}",
-  "lines.label": "OWN",
   "prices.ownLine": "Own brand — open the line in Growth (“Own brand on the shelves”)",
+  "goods.kvass": "🍺 Own-brand kvass — in spring and summer, on the Drinks shelf",
+  "goods.when.kvass": "in spring and summer",
+  "lines.summarySpent": "jars and sugar −{n} 💰",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

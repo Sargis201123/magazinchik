@@ -6,7 +6,7 @@
 // прибавляет «славу марки»: вся своя продукция (и выпечка) идёт чуть лучше. Ни одна линейка не обязательна.
 
 import { yearTime, type YearTime } from './calendar';
-import { canPlace, onShift, PRODUCTS, shelfFree, warehouseCapacity, warehouseCount, type ProductId, type StoreState, type Unit } from './economy';
+import { canPlace, onShift, productAvailable, PRODUCTS, shelfFree, warehouseCapacity, warehouseCount, type ProductId, type StoreState, type Unit } from './economy';
 import { hasUpgrade } from './upgrades';
 import { usualSales } from './bakery';
 import type { TextKey } from '../i18n/ru';
@@ -82,12 +82,13 @@ export function buyLineTier(state: StoreState, id: LineId): StoreState | null {
   return { ...state, money: state.money - cost, lines: { ...state.lines, [id]: lineTier(state, id) + 1 } };
 }
 
-/** Делают ли линейку в это время года: квас — только в тепло. */
-export const lineSeason = (id: LineId, day: number): boolean => id !== 'kvass' || ['spring', 'summer'].includes(yearTime(day));
+/** Делают ли линейку в это время года: квас — только в тепло (SEASONAL в economy.ts: вне сезона его и не продают). */
+export const lineSeason = (id: LineId, day: number): boolean => productAvailable(LINES[id].product, day);
 
-/** Спрос на товар линейки по времени года: квас — летом, соленья — в холода, варенье — к зимнему чаю. */
+/** Спрос на товар линейки по времени года: квас — летом (вне тепла его нет), соленья — в холода, варенье — к зимнему чаю. */
 const SEASON_DEMAND: Partial<Record<LineId, Partial<Record<YearTime, number>>>> = {
-  kvass: { summer: 1.5, autumn: 0.6, winter: 0.4 },
+  // Квас — сезонный товар: в сезон его и так берут в полтора раза охотнее (seasonalDemand), весной — чуть меньше.
+  kvass: { spring: 0.8 },
   pickles: { autumn: 1.3, winter: 1.4, summer: 0.8 },
   jam: { winter: 1.3, summer: 0.9 },
 };
@@ -128,16 +129,22 @@ const inputHave = (state: StoreState, id: ProductId): number =>
  * Линейка сегодня работает: открыта, сезон (квас — в тепло), есть полка отдела (иначе ставить некуда),
  * а для пельменей повар сегодня на смене.
  */
-export function lineWorking(state: StoreState, id: LineId): boolean {
+export function lineWorking(state: StoreState, id: LineId, night?: LineNightCtx): boolean {
   const line = LINES[id];
-  if (!lineTier(state, id) || !lineSeason(id, state.day + 1)) return false;
+  if (!lineTier(state, id) || !lineSeason(id, night ? night.day + 1 : state.day + 1)) return false;
   if (!state.shelves.some((s) => canPlace(line.product, s))) return false;
-  return line.needs !== 'kitchen' || onShift(state, 'cook');
+  return line.needs !== 'kitchen' || (night ? night.cook : onShift(state, 'cook'));
+}
+
+/** Какой день кончился и был ли на смене повар: ночью (после счетов) день уже сменился. */
+export interface LineNightCtx {
+  day: number;
+  cook: boolean;
 }
 
 /** Сколько штук линейка хочет сделать сегодня ночью (до нормы, без оглядки на сырьё и деньги). */
-export const lineWants = (state: StoreState, id: LineId): number =>
-  lineWorking(state, id) ? Math.max(0, lineStock(state, id) - stockOf(state, LINES[id].product)) : 0;
+export const lineWants = (state: StoreState, id: LineId, night?: LineNightCtx): number =>
+  lineWorking(state, id, night) ? Math.max(0, lineStock(state, id) - stockOf(state, LINES[id].product)) : 0;
 
 /**
  * Сколько сырья ночью уйдёт на линейки: «Закупить нужное» берёт его сверху (restock.ts). Утром запас
@@ -209,14 +216,14 @@ function room(state: StoreState, id: ProductId): number {
 
 /**
  * Ночь: каждая открытая линейка доделывает запас до нормы — сколько хватит сырья, денег и места.
- * Зовётся из nightCycle (day.ts) до счетов: и игрой, и симулятором.
+ * Зовётся из nightCycle (day.ts) после счетов (ctx — кончившийся день): и игрой, и симулятором.
  */
-export function makeLines(state: StoreState): { state: StoreState; night: LinesNight } {
+export function makeLines(state: StoreState, ctx?: LineNightCtx): { state: StoreState; night: LinesNight } {
   let s = state;
   const made: LineMade[] = [];
   let spent = 0;
   for (const id of LINE_IDS) {
-    const want = lineWants(s, id);
+    const want = lineWants(s, id, ctx);
     if (!want) continue;
     const line = LINES[id];
     const extra = lineExtra(s, id);

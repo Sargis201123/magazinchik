@@ -764,6 +764,7 @@ function linesSummary(state: StoreState, stats: DayStats, night: LinesNight): st
   if (sold.n) parts.push(t('lines.summarySold', { n: sold.n, money: sold.revenue }));
   const made = night.made.filter((m) => m.made > 0).map((m) => `${LINES[m.id].icon}+${m.made}`);
   if (made.length) parts.push(t('lines.summaryMade', { list: made.join(' ') }));
+  if (night.spent) parts.push(t('lines.summarySpent', { n: night.spent }));
   const short = night.made.filter((m) => m.short).map((m) => LINES[m.id].icon);
   if (short.length) parts.push(t('lines.summaryShort', { list: short.join(' ') }));
   return parts.join(' · ');

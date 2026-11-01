@@ -125,6 +125,8 @@ export const homemade = (id: ProductId): boolean => OWN_PRODUCTS.includes(id) ||
 
 export const PRODUCT_IDS = Object.keys(PRODUCTS) as ProductId[];
 
+/** Квас своей марки (lines.ts) — весной и летом (месяцы 4…10, как yearTime в calendar.ts): зимой бочку увозят. */
+const KVASS_MONTHS = [4, 5, 6, 7, 8, 9, 10];
 /** Месяцев в игровом году (= YEAR_MONTHS в calendar.ts, проверяется тестом). */
 const YEAR_MONTHS = 16;
 /**
@@ -132,7 +134,7 @@ const YEAR_MONTHS = 16;
  * Мороженое — летом, мандарины — перед Новым годом и в новогоднюю неделю, цветы — весной;
  * арбузы и тыквы — только в свою сезонную неделю (weeks.ts WEEKS.*.month; совпадение проверяет тест).
  */
-export const SEASONAL: Partial<Record<ProductId, number[]>> = { tangerines: [2, 3], flowers: [4, 5, 6], watermelons: [9], pumpkins: [13] };
+export const SEASONAL: Partial<Record<ProductId, number[]>> = { tangerines: [2, 3], flowers: [4, 5, 6], watermelons: [9], pumpkins: [13], kvass: KVASS_MONTHS };
 
 export const monthInYear = (day: number): number => (monthOf(day) - 1) % YEAR_MONTHS;
 export const productAvailable = (id: ProductId, day: number): boolean => (SEASONAL[id]?.includes(monthInYear(day)) ?? true) && weekProductOk(id, day);
