@@ -13,6 +13,8 @@ import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { haptic } from '../platform/telegram';
 import { dialogBox } from './dialog';
+import type { StoreState } from '../game/economy';
+import { notebookPage, openNotebook } from './notebook';
 import { button, el, injectStyles, openModal, rollNumber, staffFace, UI_FONT } from './dom';
 
 const css = `
@@ -70,6 +72,8 @@ export interface ReturnRitual {
   chest?: Chest;
   letter?: LetterGift;
   order?: OrderResult;
+  /** Состояние после письма: сюжетное письмо с тетрадью показывает её страницу (ui/notebook.ts). */
+  state?: StoreState;
   /** Сундучок открыт — деньги в кассу (сцена сохраняет). */
   onChest: () => void;
   /** Ритуал закончен — дальше утро (гостинец и прочее). */
@@ -101,7 +105,7 @@ export function showReturn(r: ReturnRitual): void {
   if (calm) card.classList.add('ui-ret-calm');
   const steps: ((last: boolean, next: () => void) => HTMLElement)[] = [];
   if (r.chest) steps.push((last, next) => chestStep(r.chest!, calm, r.onChest, last, next));
-  if (r.letter) steps.push((last, next) => letterStep(r.letter!, last, next));
+  if (r.letter) steps.push((last, next) => letterStep(r.letter!, last, next, r.state));
   if (r.order) steps.push((last, next) => orderStep(r.order!, last, next));
   const title = el('h2', '', `✉ ${t('ret.title')}`);
   const stage = el('div');
@@ -157,7 +161,7 @@ function chestStep(chest: Chest, calm: boolean, onOpen: () => void, last: boolea
   return box;
 }
 
-function letterStep(gift: LetterGift, last: boolean, next: () => void): HTMLElement {
+function letterStep(gift: LetterGift, last: boolean, next: () => void, state?: StoreState): HTMLElement {
   const box = el('div', 'ui-ret-stage');
   const pic = el('button', 'ui-ret-pic wait');
   pic.type = 'button';
@@ -177,7 +181,10 @@ function letterStep(gift: LetterGift, last: boolean, next: () => void): HTMLElem
     const after: HTMLElement[] = [];
     if (gift.money) after.push(el('div', 'ui-ret-reward', t('ret.letter.money', { n: gift.money })));
     if (gift.loyalty) after.push(el('div', 'ui-ret-reward', t('ret.letter.loyal', { name })));
-    after.push(el('div', 'ui-ret-hint', t('ret.letter.ps')));
+    // «Бабушкина тетрадь»: в конверте — сама тетрадь, последняя страница вырвана.
+    const notebook = gift.letter.story === 'notebook' && state ? state : null;
+    if (notebook) after.push(button(`📓 ${t('nb.open')}`, () => openNotebook(notebook), 'ui-btn secondary'));
+    else after.push(el('div', 'ui-ret-hint', t('ret.letter.ps')));
     const fav = regular ? REGULARS.find((x) => x.id === regular)!.favorite : null;
     const text = t(letterKey(gift.letter), {
       item: fav ? t(PRODUCTS[fav].nameKey).toLowerCase() : '',
@@ -185,6 +192,7 @@ function letterStep(gift: LetterGift, last: boolean, next: () => void): HTMLElem
     });
     box.replaceChildren(
       dialogBox({
+        figure: notebook ? notebookPage(notebook, 'torn') : null,
         portrait: regular ? FACES[regular] : from === 'grandma' ? 'portrait_grandma_happy' : farewell ? `portrait_${staffFace(farewell.name)}` : `portrait_${from}`,
         name,
         text: `«${text}»`,

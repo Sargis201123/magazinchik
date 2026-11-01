@@ -782,6 +782,8 @@ export interface StoreState {
   contest?: import('./contest').ContestState;
   /** Сюжет «Папа и Соня»: сколько сцен показано (drama.ts). На экономику не влияет. */
   drama?: import('./drama').DramaState;
+  /** «Бабушкина тетрадь» — стержень сюжета (notebook.ts): пришла ли, ответ Эдуарду, строчка Сони. */
+  nb?: import('./notebook').NotebookState;
   /** Праздники по настоящему календарю (live.ts): открытые открытки и когда заходил гость. */
   live?: import('./live').LiveState;
   /** Сезонные недели игрового года (weeks.ts): дорожки и вечер распродажи. */

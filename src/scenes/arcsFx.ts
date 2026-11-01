@@ -9,6 +9,7 @@ import { DAY_SECONDS } from '../game/economy';
 import { ARCS, arcDeliver, arcSceneToday, type ArcWho } from '../game/arcs';
 import { regularById, type RegularId } from '../game/regulars';
 import { livedRegular } from '../game/life';
+import { repayDay } from '../game/notebook';
 import { t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { CUSTOMER_SPEED, GRANDMA, VALYA, randomLook, SHIRTS, type Look } from './common';
@@ -45,12 +46,13 @@ export function arcLook(scene: StoreScene, who: ArcWho, prop?: string): Look {
 
 /** Утро после открытия: что из истории дня видно в мире (зовётся вместе с гостями сюжета). */
 export function scheduleArcScene(scene: StoreScene): void {
-  const today = arcSceneToday(scene.state);
-  if (!today) return;
   const at = (share: number, fn: () => void | Promise<void>) =>
     scene.time.delayedCall(DAY_SECONDS * share * 1000, () => {
       if (scene.running) void fn();
     });
+  if (repayDay(scene.state)) scheduleRepay(scene, at);
+  const today = arcSceneToday(scene.state);
+  if (!today) return;
   const icon = ARCS[today.id].icon;
   if (today.show.includes('visit')) {
     const line = `${icon} ${t(`arc.${today.id}.${today.beat}.line` as TextKey)}`;
@@ -66,8 +68,9 @@ export function scheduleArcScene(scene: StoreScene): void {
 /** Нарядить случайного покупателя, если сегодня праздник (свадьба, сюрприз постоянных) или день детей. */
 export function dressUp(scene: StoreScene, look: Look): Look {
   const today = arcSceneToday(scene.state);
-  if (!today) return look;
-  if (today.show.includes('festive') && Math.random() < FESTIVE_SHARE) {
+  const repay = repayDay(scene.state);
+  if (!today && !repay) return look;
+  if ((repay || today?.show.includes('festive')) && Math.random() < FESTIVE_SHARE) {
     const prop: PropId = Math.random() < 0.5 ? 'bouquet' : 'balloon';
     return {
       ...look,
@@ -78,10 +81,27 @@ export function dressUp(scene: StoreScene, look: Look): Look {
       coat: undefined,
     };
   }
+  if (!today) return look;
   if (today.show.includes('kids') && Math.random() < KIDS_SHARE)
     return { ...look, kid: true, stroller: undefined, dog: undefined, bag: 'backpack', bagTint: Phaser.Utils.Array.GetRandom([0xe43b44, 0x5fcde4, 0xfeae34]), prop: 'balloon', propTint: 0xfee761 };
   if (today.show.includes('runners') && Math.random() < KIDS_SHARE) return { ...look, outfit: 'runner', outfitTint: Phaser.Utils.Array.GetRandom(FESTIVE_TINTS), coat: undefined, prop: undefined };
   return look;
+}
+
+/**
+ * «Бабушкина тетрадь», кульминация (game/notebook.ts repayDay): в день жюри, он же последний день битвы
+ * с «Гигантом», люди из тетради приходят «вернуть долги» — нарядные гости весь день и знакомые лица
+ * у кассы с цветами: Валентина, Эдуард, баба Зина. Тот же праздник, что у хроник района.
+ */
+function scheduleRepay(scene: StoreScene, at: (share: number, fn: () => void | Promise<void>) => void): void {
+  at(0.03, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, t('nb.repay.banner'), '#fee761'));
+  const guests: [Exclude<ArcWho, RegularId>, TextKey, PropId][] = [
+    ['valya', 'nb.repay.valya', 'bouquet'],
+    ['eduard', 'nb.repay.eduard', 'bouquet'],
+    ['zina', 'nb.repay.zina', 'balloon'],
+  ];
+  // В лёгкой графике — один гость, чтобы не толпились рядом с жюри.
+  guests.slice(0, scene.lite ? 1 : guests.length).forEach(([who, key, prop], i) => at(0.1 + i * 0.12, () => visitors.runVisitor(scene, arcLook(scene, who, prop), `📓 ${t(key)}`)));
 }
 
 /** Свадебная машина: белая, с лентой и шарами, медленно проезжает мимо магазина. */

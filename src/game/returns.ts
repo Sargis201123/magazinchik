@@ -21,6 +21,7 @@ import { branchAway, BRANCH_AWAY_MAX_HOURS } from './branch';
 import { take } from './tales';
 import { takeFarewellLetter, type Farewell } from './career';
 import type { TextKey } from '../i18n/ru';
+import { notebookDue, receiveNotebook } from './notebook';
 
 export interface Chest {
   /** Сколько денег внутри. */
@@ -43,6 +44,8 @@ export interface Letter {
   date: string;
   /** Прощальное письмо сотрудника, ушедшего по своим делам (career.ts): кто и сколько проработал. */
   farewell?: Farewell;
+  /** Сюжетное письмо: бабушка присылает свою тетрадь (notebook.ts). Приходит следующим же утром. */
+  story?: 'notebook';
 }
 
 export interface NeighbourOrder {
@@ -113,7 +116,7 @@ export const letterCoins = (state: StoreState): number => 15 + 15 * homeLevel(st
 export const letterGroup = (from: LetterFrom): keyof typeof LETTER_VARIANTS =>
   from === 'grandma' || from === 'valya' || from === 'sonya' || from === 'staff' ? from : 'regular';
 
-export const letterKey = (l: Pick<Letter, 'from' | 'n'>): TextKey => `letter.${letterGroup(l.from)}.${l.n}` as TextKey;
+export const letterKey = (l: Pick<Letter, 'from' | 'n' | 'story'>): TextKey => (l.story ? 'nb.letter' : (`letter.${letterGroup(l.from)}.${l.n}` as TextKey));
 
 /** Кто может написать: бабушка и Валентина всегда, Соня — с пятого дня, постоянные — кто уже знаком. */
 export function letterSenders(state: StoreState): LetterFrom[] {
@@ -126,10 +129,15 @@ export function letterSenders(state: StoreState): LetterFrom[] {
 
 /** Вечером: написать письмо на завтра, если ещё не ждёт. today — местная дата. */
 export function planLetter(state: StoreState, today: string, random: () => number): StoreState {
-  if (state.ret?.letter || state.bankrupt) return state;
+  if (state.bankrupt) return state;
+  const waiting = state.ret?.letter;
   // Ушёл давний сотрудник — его прощальное письмо идёт первым (career.ts).
-  const farewell = takeFarewellLetter(state);
+  const farewell = waiting ? null : takeFarewellLetter(state);
   if (farewell) return { ...farewell.state, ret: { ...farewell.state.ret, letter: { from: 'staff', n: farewell.farewell.why, date: today, farewell: farewell.farewell } } };
+  // «Бабушкина тетрадь»: письмо с ней — вместо обычного, если то ещё не пришло, и не ждёт настоящего
+  // дня — сюжет идёт по событиям, а не по календарю: дата пустая, придёт следующим утром.
+  if (notebookDue(state) && !waiting?.story && !waiting?.farewell) return { ...state, ret: { ...state.ret, letter: { from: 'grandma', n: 0, date: '', story: 'notebook' } } };
+  if (waiting) return state;
   const senders = letterSenders(state);
   // Бабушка — чаще остальных: она пишет внуку каждый день.
   const from = random() < 0.35 ? 'grandma' : senders[Math.floor(random() * senders.length)];
@@ -153,7 +161,10 @@ export function takeLetter(state: StoreState, today: string): { state: StoreStat
   delete ret.letter;
   let next: StoreState = { ...state, ret };
   const gift: LetterGift = { letter };
-  if (letter.from === 'grandma') {
+  if (letter.story === 'notebook') {
+    // Вместо монет — сама тетрадь.
+    next = receiveNotebook(next);
+  } else if (letter.from === 'grandma') {
     gift.money = letterCoins(state);
     next = { ...next, money: next.money + gift.money };
   } else if (letterGroup(letter.from) === 'regular') {
@@ -243,7 +254,8 @@ export function waitingHooks(state: StoreState): Waiting {
   const o = state.ret?.order;
   return {
     chest: roundSum(chestEstimate(state)),
-    letter: state.ret?.letter?.from ?? '',
+    // Тетрадь — свой текст у бота: «В тетради нашлась ещё одна страница…» (api/_lib/remind.ts).
+    letter: state.ret?.letter?.story ?? state.ret?.letter?.from ?? '',
     order: o ? `${o.who}:${o.pid}` : '',
     qty: o?.qty ?? 0,
   };

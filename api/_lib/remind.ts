@@ -118,6 +118,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     letter: '👵 Бабушка: «Внучек, тебе письмо от {from}! Лежит у кассы, ждёт»',
     'letter.grandma': '👵 Бабушка: «Внучек, я тебе письмо написала — и кое-что в него вложила. Загляни!»',
     'letter.sonya': '👧 Соня: «Пап, я тебе открытку нарисовала! Она в магазине, у кассы»',
+    'letter.notebook': '👵 Бабушка: «Внучек, в тетради нашлась ещё одна страница… Я положила её в письмо. Загляни!»',
     chest: '👵 Бабушка: «Сундучок выручки уже тяжёленький — около {sum} 💰. Загляни, открой!»',
     also: 'Ещё ждут: {list}',
     'also.order': 'заказ для {who}',
@@ -146,6 +147,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     letter: '👵 Grandma: "Dear, there\'s a letter for you from {from}! It\'s waiting by the till"',
     'letter.grandma': '👵 Grandma: "Dear, I wrote you a letter — and tucked a little something inside. Drop by!"',
     'letter.sonya': '👧 Sonya: "Dad, I drew you a card! It\'s in the shop, by the till"',
+    'letter.notebook': '👵 Grandma: "Dear, I found one more page in my notebook… It\'s in a letter for you. Drop by!"',
     chest: '👵 Grandma: "The takings chest is getting heavy — about {sum} 💰. Come open it!"',
     also: 'Also waiting: {list}',
     'also.order': "{who}'s order",
@@ -174,6 +176,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     letter: '👵 Nine: “Yavrum, {from} sana mektup göndermiş! Kasanın yanında seni bekliyor”',
     'letter.grandma': '👵 Nine: “Yavrum, sana bir mektup yazdım — içine de küçük bir şey koydum. Uğra!”',
     'letter.sonya': '👧 Sonya: “Baba, sana bir kart çizdim! Dükkânda, kasanın yanında”',
+    'letter.notebook': '👵 Nine: “Yavrum, defterde bir sayfa daha buldum… Mektubun içine koydum. Uğra!”',
     chest: '👵 Nine: “Hasılat sandığı ağırlaştı — yaklaşık {sum} 💰. Gel de aç!”',
     also: 'Seni bekleyenler: {list}',
     'also.order': '{who} için sipariş',
@@ -202,6 +205,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     letter: '👵 La abuela: “Cariño, ¡te llegó una carta de {from}! Te espera junto a la caja”',
     'letter.grandma': '👵 La abuela: “Cariño, te escribí una carta… y metí algo adentro. ¡Pásate!”',
     'letter.sonya': '👧 Sonia: “Papá, ¡te dibujé una tarjeta! Está en la tienda, junto a la caja”',
+    'letter.notebook': '👵 La abuela: “Cariño, encontré una página más en mi cuaderno… Te la mandé en una carta. ¡Pásate!”',
     chest: '👵 La abuela: “El cofre de las ganancias ya pesa: unas {sum} 💰. ¡Ven a abrirlo!”',
     also: 'También te esperan: {list}',
     'also.order': 'el pedido de {who}',
@@ -231,6 +235,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     letter: '👵 Әже: «Балам, саған хат бар — {from}! Кассаның жанында жатыр»',
     'letter.grandma': '👵 Әже: «Балам, саған хат жаздым — ішіне бір нәрсе де салдым. Соқ!»',
     'letter.sonya': '👧 Соня: «Әке, саған ашықхат салдым! Ол дүкенде, кассаның жанында»',
+    'letter.notebook': '👵 Әже: «Балам, дәптерден тағы бір бет табылды… Хатқа салып жібердім. Соқ!»',
     chest: '👵 Әже: «Түсім сандықшасы ауырлап қалды — шамамен {sum} 💰. Кел, аш!»',
     also: 'Тағы күтіп тұр: {list}',
     'also.order': 'тапсырыс — {who}',
@@ -259,6 +264,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     letter: '👵 Buvi: «Nevaram, senga {from} xat keldi! Kassa yonida kutyapti»',
     'letter.grandma': '👵 Buvi: «Nevaram, senga xat yozdim — ichiga bir narsa ham solib qoʻydim. Kirib oʻt!»',
     'letter.sonya': '👧 Sonya: «Dada, senga otkritka chizdim! U doʻkonda, kassa yonida»',
+    'letter.notebook': '👵 Buvi: «Nevaram, daftardan yana bir varaq topildi… Uni xatga solib qoʻydim. Kirib oʻt!»',
     chest: '👵 Buvi: «Tushum sandiqchasi ogʻirlashib qoldi — taxminan {sum} 💰. Kelib och!»',
     also: 'Yana kutyapti: {list}',
     'also.order': '{who} buyurtma',
@@ -287,6 +293,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     letter: '👵 Vovó: “Querido, chegou uma carta {from} para você! Está esperando no caixa”',
     'letter.grandma': '👵 Vovó: “Querido, escrevi uma carta para você — e coloquei uma coisinha dentro. Passe aqui!”',
     'letter.sonya': '👧 Sônia: “Pai, desenhei um cartão para você! Está na loja, ao lado do caixa”',
+    'letter.notebook': '👵 Vovó: “Querido, achei mais uma página no meu caderno… Coloquei numa carta para você. Passe aqui!”',
     chest: '👵 Vovó: “O baú do faturamento já está pesadinho — umas {sum} 💰. Venha abrir!”',
     also: 'Também esperando: {list}',
     'also.order': 'encomenda {who}',
@@ -426,9 +433,10 @@ function waiting(p: Player): { reason: Reason; face: Face; text: string; short: 
     const item = own(ITEMS[lang], pid) ?? GOODS[lang];
     out.push({ reason: 'order', face: 'valya', text: fill(t.order, { who: who.who, item, qty: p.qty ?? 0 }), short: fill(t['also.order'], { who: who.from }) });
   }
-  const from = p.letter ? own(PEOPLE[lang], p.letter) : undefined;
+  // «Бабушкина тетрадь» (src/game/notebook.ts): письмо с тетрадью — от бабушки, но со своим текстом.
+  const from = p.letter ? own(PEOPLE[lang], p.letter === 'notebook' ? 'grandma' : p.letter) : undefined;
   if (from) {
-    const key = p.letter === 'grandma' ? 'letter.grandma' : p.letter === 'sonya' ? 'letter.sonya' : 'letter';
+    const key = p.letter === 'notebook' ? 'letter.notebook' : p.letter === 'grandma' ? 'letter.grandma' : p.letter === 'sonya' ? 'letter.sonya' : 'letter';
     out.push({ reason: 'letter', face: p.letter === 'sonya' ? 'sonya' : 'grandma', text: fill(t[key], { from: from.from }), short: fill(t['also.letter'], { from: from.from }) });
   }
   if ((p.chest ?? 0) >= CHEST_MIN) {

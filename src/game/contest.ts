@@ -1,4 +1,4 @@
-// Финал истории и бесконечная слава. Когда «Гигант» побеждён, районная администрация объявляет
+// Финал истории и бесконечная слава. Во вторую неделю битвы с «Гигантом» районная администрация объявляет
 // конкурс «Лучший магазин района»: неделя подготовки, в последний день приходит жюри. Оценивают
 // четыре вещи — рейтинг, выручку недели, довольных покупателей и полные полки; хватает трёх.
 // Первая победа — финал истории: церемония со всеми героями и кубок. Дальше раз в месяц —
@@ -6,6 +6,7 @@
 // Каждая победа — новое звание, кубок, деньги и немного славы (гостей больше навсегда).
 
 import type { DayStats, StoreState } from './economy';
+import { GIANT_BATTLE_DAYS } from './giant';
 
 /** Сколько дней после победы над «Гигантом» до первого конкурса. */
 export const CONTEST_AFTER_GIANT = 5;
@@ -110,7 +111,12 @@ export function contestNight(state: StoreState, stats: DayStats): StoreState {
   const day = state.day;
   if (!c) {
     const giant = state.giant;
-    if (giant?.phase !== 'won' || day - giant.since < CONTEST_AFTER_GIANT) return state;
+    // «Бабушкина тетрадь» (notebook.ts): первый конкурс объявляют во вторую неделю битвы с «Гигантом» —
+    // день жюри совпадает с её последним днём, и в этот день люди из тетради приходят «вернуть долги».
+    // Сохранения, где «Гигант» уже побеждён, а конкурса не было, — как раньше, через несколько дней.
+    const climax = giant?.phase === 'battle' && day - giant.since >= GIANT_BATTLE_DAYS - CONTEST_DAYS;
+    const after = giant?.phase === 'won' && day - giant.since >= CONTEST_AFTER_GIANT;
+    if (!climax && !after) return state;
     return { ...state, contest: newWeek(state, 0, 0) };
   }
   if (c.phase === 'wait') {

@@ -32,6 +32,8 @@ const unit = () => ({ age: 0 });
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({
   ...newGame(),
   day: 10,
+  // «Бабушкина тетрадь» уже пришла — дальше обычные письма (notebook.test.ts).
+  nb: { got: true },
   staff: [{ role: 'cashier', name: 0, skill: 1, wage: 420, months: 0 }] as StoreState['staff'],
   shelves: [{ kind: 'bakery', level: 0, items: { bread: Array.from({ length: 20 }, unit) } }],
   reports: [{ day: 1, sold: { bread: 30 }, missing: {} }] as unknown as StoreState['reports'],

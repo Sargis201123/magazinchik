@@ -147,7 +147,9 @@ import { liveEvents, todayLocal } from '../platform/live';
 import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
 import { weekBox, weekSoonLine } from './weeks';
 import { WEEK_IDS, type WeekId } from '../game/weeks';
-import { CHARACTERS, currentChapter, finishChapter, finishIntro, pendingStory, type Chapter, type CharacterId } from '../game/story';
+import { CHARACTERS, currentChapter, finishChapter, finishIntro, linesFor, pendingStory, type Chapter, type CharacterId, type Line } from '../game/story';
+import { answerEduard, EDUARD_DEBT, writeSonya } from '../game/notebook';
+import { notebookButton, notebookPage, storyPage } from './notebook';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { WEATHER_EFFECTS, weatherDemand, weatherFor } from '../game/weather';
@@ -554,6 +556,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   let slideTab = false;
   /** Какая реплика сюжетного диалога сейчас на экране. */
   let storyLine = 0;
+  /** Когда открылась сцена сюжета или «Папы и Сони» — грубое время чтения для аналитики. */
+  let readFrom = 0;
   /** Реплика финальной церемонии (0 — новость ведущей, дальше — герои). */
   let finaleLine = 0;
   /** Реплика сцены «Папа и Соня». */
@@ -648,6 +652,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const opened = buyZar(getState());
     if (!opened) return;
     track('zar_open', opened.day, ZAR_PRICE);
+    // «Бабушкина тетрадь»: лавка у моста снова открыта — последняя страница дописана.
+    track('story_seen', opened.day, 70);
     toast('assets/ico_shop.png', t('zar.opened'), t('zar.openedText'));
     update(opened, 'success');
   };
@@ -2797,6 +2803,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const dramaBox = (scene: DramaScene) => {
     const line = scene.lines[Math.min(dramaLine, scene.lines.length - 1)];
     const last = dramaLine >= scene.lines.length - 1;
+    if (dramaLine === 0) readFrom = performance.now();
     const after = last && isLastScene(scene) ? [el('div', 'ui-note', t('drama.end'))] : [];
     return dialogBox({
       caption: t(scene.place),
@@ -2815,6 +2822,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           return;
         }
         dramaLine = 0;
+        track('drama_seen', getState().day, scene.day);
+        track('drama_read', getState().day, readSeconds());
         update(seeDrama(getState(), todayLocal()));
       },
     });
@@ -2864,13 +2873,21 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return [box];
   };
 
-  /** Первая победа — финал истории: после новости по очереди говорят герои. */
-  const FINALE: { who: CharacterId; key: TextKey; mood: 'happy' | 'surprised' }[] = [
+  /**
+   * Первая победа — финал истории: после новости по очереди говорят все герои, Соня — всегда; в конце
+   * бабушка отдаёт тетрадь Соне, и та пишет на чистой странице (game/notebook.ts).
+   */
+  const finaleLines = (state: StoreState): Line[] => [
     { who: 'grandma', key: 'contest.finale.1', mood: 'happy' },
     { who: 'valya', key: 'contest.finale.2', mood: 'happy' },
     { who: 'marat', key: 'contest.finale.3', mood: 'happy' },
-    { who: 'eduard', key: 'contest.finale.4', mood: 'surprised' },
+    { who: 'inspector', key: 'contest.finale.insp', mood: 'happy' },
+    { who: 'eduard', key: 'contest.finale.4', mood: 'happy' },
+    // Если история «Папа и Соня» рассказана — Соня говорит о маме; если нет — о себе.
+    { who: 'sonya', key: dramaDone(state) ? 'contest.finale.sonya' : 'contest.finale.sonya2', mood: 'happy' },
     { who: 'grandma', key: 'contest.finale.5', mood: 'happy' },
+    { who: 'grandma', key: 'contest.finale.nb1', mood: 'happy' },
+    { who: 'sonya', key: 'contest.finale.nb2', mood: 'happy', page: 'sonya' },
   ];
 
   /** Итоги конкурса: новость ведущей, оценки жюри, награда; первая победа — церемония. */
@@ -2878,18 +2895,24 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const finale = r.won && r.tier === 0;
     const done = () => {
       finaleLine = 0;
-      update(seeResult(getState()), r.won ? 'success' : 'tap');
+      const s = getState();
+      if (finale) {
+        track('story_seen', s.day, 60);
+        track('story_read', s.day, readSeconds());
+      }
+      update(finale ? writeSonya(seeResult(s)) : seeResult(s), r.won ? 'success' : 'tap');
     };
-    // Если история «Папа и Соня» рассказана — Соня тоже на церемонии, перед последними словами бабушки.
-    const lines = dramaDone(getState())
-      ? [...FINALE.slice(0, -1), { who: 'sonya' as const, key: 'contest.finale.sonya' as TextKey, mood: 'happy' as const }, FINALE[FINALE.length - 1]]
-      : FINALE;
+    const lines = finaleLines(getState());
     if (finale && finaleLine > 0) {
       const line = lines[finaleLine - 1];
       const last = finaleLine >= lines.length;
+      if (finaleLine === 1) readFrom = performance.now();
+      // Последняя строчка — на чистой странице тетради: показываем, какой она станет.
+      const figure = line.page ? notebookPage(writeSonya(getState()), line.page) : null;
       return dialogBox({
         caption: t('contest.finale.caption'),
-        art: last ? 'assets/news_contest_won.png' : undefined,
+        art: last && !figure ? 'assets/news_contest_won.png' : undefined,
+        figure,
         portrait: `portrait_${line.who}_${line.mood}`,
         name: t(CHARACTERS[line.who].nameKey),
         text: `«${t(line.key)}»`,
@@ -3692,14 +3715,32 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return el('div', 'ui-note', text);
   };
 
+  /** Грубое время чтения сцены в секундах (до 5 минут, шагом 5 с): кто читает, а кто пролистывает. */
+  const readSeconds = () => Math.min(300, Math.round((performance.now() - readFrom) / 5000) * 5);
+
   const storyBox = (state: StoreState, kind: 'intro' | 'outro', chapter: Chapter) => {
-    const lines = kind === 'intro' ? chapter.intro : chapter.outro;
+    // «Бабушкина тетрадь»: из двух ответов Эдуарду — выбранный (story.ts linesFor).
+    const lines = linesFor(state, kind === 'intro' ? chapter.intro : chapter.outro);
     const current = lines[Math.min(storyLine, lines.length - 1)];
     const speaker = CHARACTERS[current.who];
     const last = storyLine >= lines.length - 1;
+    if (storyLine === 0) readFrom = performance.now();
     const key = warmKey(state, current.key);
     const mood = key !== current.key ? 'happy' : current.mood;
     const after: HTMLElement[] = [];
+    // Выбор: Эдуард принёс долг «за батоны». Ответ — и сцена идёт дальше (реплика по ответу).
+    const choosing = current.choice && !state.nb?.eduard;
+    if (choosing) {
+      const answer = (a: 'took' | 'kept') => {
+        track('nb_eduard', getState().day, a === 'took' ? 1 : 0);
+        storyLine++;
+        update(answerEduard(getState(), a), a === 'took' ? 'success' : 'tap', a === 'took' && music.sting('coin'));
+      };
+      after.push(
+        button(t('nb.eduard.take', { n: EDUARD_DEBT }), () => answer('took')),
+        button(t('nb.eduard.keep'), () => answer('kept'), 'ui-btn secondary'),
+      );
+    }
     if (last && kind === 'intro') after.push(el('div', 'ui-note', `🎯 ${t(warmKey(state, chapter.goalKey), chapter.progress(state))}`));
     if (last && kind === 'outro') {
       const reward = [
@@ -3710,11 +3751,14 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         .join(' ');
       after.push(el('div', 'ui-note', t('story.reward', { reward })));
     }
-    // Картинка — на первой реплике главы и на последней реплике финала.
+    // Картинка — на первой реплике главы и на последней реплике финала; страница тетради — вместо неё.
     const art = kind === 'intro' ? (storyLine === 0 ? chapter.introArt : undefined) : last ? chapter.outroArt : undefined;
+    const figure = current.page ? (kind === 'outro' ? storyPage(state, current.page) : notebookPage(state, current.page)) : null;
     return dialogBox({
       caption: t('story.chapter', { n: state.story.chapter + 1, title: t(chapter.titleKey) }),
-      art,
+      art: figure ? undefined : art,
+      figure,
+      noNext: choosing,
       // Новичку о бабушкином долге — тёплой семейной историей, с улыбкой (firstday.ts warmKey).
       portrait: `portrait_${current.who}${mood ? `_${mood}` : ''}`,
       name: t(speaker.nameKey),
@@ -3729,7 +3773,11 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
           return;
         }
         storyLine = 0;
-        if (kind === 'intro') track('chapter_intro', getState().day, getState().story.chapter + 1);
+        const s = getState();
+        if (kind === 'intro') track('chapter_intro', s.day, s.story.chapter + 1);
+        // Сюжет: какую сцену досмотрели (глава ×10, +1 — концовка) и сколько её читали.
+        track('story_seen', s.day, (s.story.chapter + 1) * 10 + (kind === 'outro' ? 1 : 0));
+        track('story_read', s.day, readSeconds());
         // Глава пройдена — награда под заставку «монетка» в тональности музыки.
         const done = kind === 'outro';
         update(done ? finishChapter(getState()) : finishIntro(getState()), done ? 'success' : 'tap', done && music.sting('coin'));
@@ -4190,6 +4238,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const early = state.onboarding === 'play' && state.day <= 7;
     return [
       achievementsButton(state),
+      // «Бабушкина тетрадь» (ui/notebook.ts) — одна кнопка, её легко перенести в «Трофеи».
+      ...notebookButton(state),
       albumBox(state),
       ...(early ? [replay] : []),
       ...friendsBox(),

@@ -37,13 +37,14 @@ export function zarOfferBox(state: StoreState, onOpen: () => void, onLater: () =
     ...(short ? [el('div', 'ui-note', t(state.debt > 0 ? 'zar.offer.debt' : 'zar.offer.short', { cost: ZAR_PRICE }))] : []),
     button(t('zar.offer.yes', { cost: ZAR_PRICE }), onOpen, 'ui-btn', short),
   ];
+  // «Бабушкина тетрадь», открытие третье: Заречье открывает не управа, а бабушкино письмо о лавке у моста.
   return dialogBox({
     caption: t('zar.offer.caption'),
     art: 'assets/zar_offer.png',
-    portrait: 'portrait_anchor_happy',
+    portrait: 'portrait_grandma_happy',
     name: t('zar.offer.who'),
-    text: t('zar.offer.text'),
-    pitch: 520,
+    text: `«${t('zar.offer.text')}»`,
+    pitch: 620,
     after,
     nextLabel: t('zar.offer.later'),
     onNext: onLater,

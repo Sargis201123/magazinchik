@@ -153,6 +153,8 @@ export function offerReturn(scene: StoreScene, then: () => void): void {
     if (order?.paid) scene.refreshShelves();
   }
   if (letter) track('ret_letter', scene.state.day);
+  // Сюжет: письмо с «Бабушкиной тетрадью» (notebook.ts) — первая сцена истории.
+  if (letter?.gift.letter.story) track('story_seen', scene.state.day, 2);
   if (fresh) track(fresh.paid ? 'ret_order' : 'ret_order_wait', scene.state.day, fresh.paid);
   if (!chest && !letter && !fresh) {
     then();
@@ -163,6 +165,7 @@ export function offerReturn(scene: StoreScene, then: () => void): void {
       chest,
       letter: letter?.gift,
       order: fresh ?? undefined,
+      state: scene.state,
       onChest: () => {
         const opened = openChest(scene.state);
         if (!opened) return;
