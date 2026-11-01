@@ -48,6 +48,7 @@ import { firstDayGift, firstDayRating, gentleDay, grannyStays } from '../game/fi
 import { tomorrowTeaser } from '../game/nudge';
 import { teaserText } from '../ui/nudge';
 import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook, type Look } from './common';
+import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
 import * as pets from './pets';
@@ -353,6 +354,8 @@ export function finishDay(scene: StoreScene): void {
   // Повод вернуться (returns.ts): сосед просит отложить на завтра, письмо придёт на следующий настоящий день.
   scene.state = planLetter(planOrder(scene.state, Math.random), todayLocal(), Math.random);
   for (const id of best.broken) stamps.push({ kind: 'record', id });
+  // Рекорд — питомец за звёзды радуется вместе с хозяином (starPets.ts).
+  if (best.broken.length) starPets.cheerStarPet(scene);
   scene.stats.spoiled = spoiled;
   scene.stats.skimmed = skimmed;
   // Непроданное с кухни списано — тарелки из витрины убираем.

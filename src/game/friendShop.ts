@@ -5,6 +5,7 @@
 import { newGame, PRODUCT_IDS, SHELF_KINDS, STORE_LEVELS, type Category, type ProductId, type Shelf, type StoreState } from './economy';
 import { isDecorId, normalizeDecor, type DecorId } from './decor';
 import { REGISTERS_BY_LEVEL } from './registers';
+import { activePet, cleanPetName, isPetId } from './pets';
 
 export interface ShopSnapshot {
   day: number;
@@ -16,6 +17,8 @@ export interface ShopSnapshot {
   tillPos?: { level: number; dx: number; short?: boolean };
   decor?: { owned: string[]; active: Record<string, string> };
   registers?: number;
+  /** Питомец за звёзды в зале (pets.ts) и его имя — друг тоже его увидит. Старые снимки — без поля. */
+  pet?: { id: string; name?: string };
 }
 
 /** Снимок своего магазина: сколько чего на полках, без складов и денег. */
@@ -35,6 +38,7 @@ export function shopSnapshot(state: StoreState): ShopSnapshot {
     ...(state.tillPos ? { tillPos: state.tillPos } : {}),
     decor: { owned: Object.values(state.decor.active).filter(Boolean) as string[], active: state.decor.active as Record<string, string> },
     ...(state.registers ? { registers: state.registers } : {}),
+    ...(activePet(state) ? { pet: activePet(state) } : {}),
   };
 }
 
@@ -63,6 +67,9 @@ export function friendState(raw: unknown, home: StoreState): StoreState | null {
   });
   const slotAt = snap.slotPos && Array.isArray(snap.slotPos.at) ? snap.slotPos.at.slice(0, 40).map((p) => ({ x: int(p?.x, 0, 400), y: int(p?.y, 0, 500) })) : null;
   const shopName = typeof snap.shopName === 'string' ? snap.shopName.slice(0, 16) : undefined;
+  // Питомец друга: только известный, имя — почищенное (его видно в мире над питомцем).
+  const petId = snap.pet && typeof snap.pet === 'object' && isPetId(snap.pet.id) ? snap.pet.id : undefined;
+  const petName = petId ? cleanPetName(snap.pet!.name) : '';
   return {
     ...fresh,
     // Свои деньги и день остаются на виду — в гостях ничего не меняется.
@@ -82,5 +89,6 @@ export function friendState(raw: unknown, home: StoreState): StoreState | null {
       active: snap.decor?.active && typeof snap.decor.active === 'object' ? (Object.fromEntries(Object.entries(snap.decor.active).filter(([, id]) => typeof id === 'string' && isDecorId(id))) as StoreState['decor']['active']) : {},
     }),
     ...(snap.registers ? { registers: int(snap.registers, 1, Math.max(...REGISTERS_BY_LEVEL), 1) } : {}),
+    ...(petId ? { pets: { owned: [petId], active: petId, ...(petName ? { names: { [petId]: petName } } : {}) } } : {}),
   };
 }
