@@ -18,6 +18,7 @@ import { MAX_LOYALTY, regularState, REGULARS, type RegularId } from './regulars'
 import { awayTrade, AWAY_MAX_HOURS } from './away';
 import { branchAway, BRANCH_AWAY_MAX_HOURS } from './branch';
 import { take } from './tales';
+import { takeFarewellLetter, type Farewell } from './career';
 import type { TextKey } from '../i18n/ru';
 
 export interface Chest {
@@ -31,7 +32,7 @@ export interface Chest {
   units: number;
 }
 
-export type LetterFrom = 'grandma' | 'valya' | 'sonya' | RegularId;
+export type LetterFrom = 'grandma' | 'valya' | 'sonya' | 'staff' | RegularId;
 
 export interface Letter {
   from: LetterFrom;
@@ -39,6 +40,8 @@ export interface Letter {
   n: number;
   /** Местная дата, когда письмо «отправили»: придёт на следующий день или позже. */
   date: string;
+  /** Прощальное письмо сотрудника, ушедшего по своим делам (career.ts): кто и сколько проработал. */
+  farewell?: Farewell;
 }
 
 export interface NeighbourOrder {
@@ -100,14 +103,14 @@ export const roundSum = (n: number): number => (n >= 10_000 ? Math.round(n / 100
 // ---------- Письма ----------
 
 /** Сколько вариантов текста у каждого отправителя (letter.<кто>.<n>, n с 1). */
-export const LETTER_VARIANTS = { grandma: 8, valya: 6, sonya: 6, regular: 8 } as const;
+export const LETTER_VARIANTS = { grandma: 8, valya: 6, sonya: 6, regular: 8, staff: 4 } as const;
 /** Соня пишет с этого дня (до того игрок её ещё толком не знает). */
 export const SONYA_LETTERS_FROM = 5;
 /** Бабушка вкладывает в письмо немного денег: столько + столько за каждое помещение. */
 export const letterCoins = (state: StoreState): number => 15 + 15 * state.level;
 
 export const letterGroup = (from: LetterFrom): keyof typeof LETTER_VARIANTS =>
-  from === 'grandma' || from === 'valya' || from === 'sonya' ? from : 'regular';
+  from === 'grandma' || from === 'valya' || from === 'sonya' || from === 'staff' ? from : 'regular';
 
 export const letterKey = (l: Pick<Letter, 'from' | 'n'>): TextKey => `letter.${letterGroup(l.from)}.${l.n}` as TextKey;
 
@@ -122,6 +125,9 @@ export function letterSenders(state: StoreState): LetterFrom[] {
 /** Вечером: написать письмо на завтра, если ещё не ждёт. today — местная дата. */
 export function planLetter(state: StoreState, today: string, random: () => number): StoreState {
   if (state.ret?.letter || state.bankrupt) return state;
+  // Ушёл давний сотрудник — его прощальное письмо идёт первым (career.ts).
+  const farewell = takeFarewellLetter(state);
+  if (farewell) return { ...farewell.state, ret: { ...farewell.state.ret, letter: { from: 'staff', n: farewell.farewell.why, date: today, farewell: farewell.farewell } } };
   const senders = letterSenders(state);
   // Бабушка — чаще остальных: она пишет внуку каждый день.
   const from = random() < 0.35 ? 'grandma' : senders[Math.floor(random() * senders.length)];

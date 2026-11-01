@@ -15,6 +15,7 @@
 import { ready, username } from './social.js';
 import { MAX_FRIENDS } from './visits.js';
 import { bot, json, verifyInitData, type Env, type TgUser } from './telegram.js';
+import { langOf, type Lang } from './lang.js';
 
 const DAY = 24 * 3600_000;
 /** Просьба о помощи действует сутки. */
@@ -28,7 +29,6 @@ export const SHARE_GAP = 4000;
 const today = (now: number): number => Math.floor(now / DAY);
 
 export type ShareKind = 'invite' | 'help' | 'card';
-type Lang = 'ru' | 'en';
 
 /** Подписи к карточкам: имя — того, кто делится (из подписанных данных Telegram); итоги дня — от первого лица. */
 const CAPTIONS: Record<Lang, Record<ShareKind, (name: string) => string>> = {
@@ -42,12 +42,28 @@ const CAPTIONS: Record<Lang, Record<ShareKind, (name: string) => string>> = {
     help: (name) => `🆘 ${name}: "Help! It's rush hour, the queue goes all the way to the door!"\nTap "Help" — your help goes to the shop, and you get a gift too 🎁`,
     card: () => "🏪 My shop in Magazinchik — today's results. Play and beat me!",
   },
+  tr: {
+    invite: (name) => `🛒 ${name} seni Magazinchik’e çağırıyor — doğrudan Telegram’da oynanan sıcacık bir piksel oyunu.\nNine sana küçük bir dükkân bıraktı: kuyruk, kasa, kapıda bir kedi ve camda yağmur. Başlangıç hediyen hazır 🎁`,
+    help: (name) => `🆘 ${name}: “İmdat! Dükkânda yoğun saat, kuyruk kapıya kadar!”\n“Yardım et”e dokun — yardımın dükkâna gitsin, sana da bir hediye çıksın 🎁`,
+    card: () => '🏪 Magazinchik’teki dükkânım — günün sonuçları. Oyna ve beni geç!',
+  },
+  es: {
+    invite: (name) => `🛒 ${name} te invita a Magazinchik, un acogedor juego pixel art dentro de Telegram.\nLa abuela te dejó una tiendita: una fila, una caja, un gato en la puerta y lluvia afuera. Te espera un regalo de bienvenida 🎁`,
+    help: (name) => `🆘 ${name}: “¡Ayuda! Es hora pico y la fila llega hasta la puerta”\nToca “Ayudar”: tu ayuda llegará a la tienda y tú también recibirás un regalo 🎁`,
+    card: () => '🏪 Mi tienda en Magazinchik: los resultados del día. ¡Juega y supérame!',
+  },
 };
 
 const BUTTONS: Record<Lang, { play: string; help: string }> = {
   ru: { play: '▶ Играть', help: '🤝 Помочь' },
   en: { play: '▶ Play', help: '🤝 Help' },
+  tr: { play: '▶ Oyna', help: '🤝 Yardım et' },
+  es: { play: '▶ Jugar', help: '🤝 Ayudar' },
 };
+/** Имя, если Telegram его не прислал. */
+const SOMEONE: Record<Lang, string> = { ru: 'Друг', en: 'A friend', tr: 'Bir arkadaş', es: 'Un amigo' };
+/** Картинки карточек (public/promo/<kind>_<lang>.jpg) есть только ru и en: остальным — английская. */
+const PROMO: Record<Lang, 'ru' | 'en'> = { ru: 'ru', en: 'en', tr: 'en', es: 'en' };
 
 /** Ссылка, которая сразу открывает игру с меткой (главное мини-приложение бота). */
 export const appLink = (botName: string, payload: string): string => `https://t.me/${botName}?startapp=${payload}`;
@@ -58,7 +74,7 @@ export const appLink = (botName: string, payload: string): string => `https://t.
  * номер сообщения для WebApp.shareMessage; не вышло (например, у бота выключен инлайн-режим) — ошибка.
  */
 export async function prepareMessage(token: string, user: TgUser, kind: ShareKind, photo: string, lang: Lang, now = Date.now()): Promise<string> {
-  const name = (user.first_name ?? '').trim().slice(0, 30) || (lang === 'ru' ? 'Друг' : 'A friend');
+  const name = (user.first_name ?? '').trim().slice(0, 30) || SOMEONE[lang];
   const link = appLink(await username(token), `${kind === 'help' ? 'help' : 'ref'}_${user.id}`);
   const prepared = await bot<{ id: string }>(token, 'savePreparedInlineMessage', {
     user_id: user.id,
@@ -78,7 +94,8 @@ export async function prepareMessage(token: string, user: TgUser, kind: ShareKin
   return prepared.id;
 }
 
-export const langOf = (lang: unknown): Lang => (lang === 'en' ? 'en' : 'ru');
+/** Язык из запроса игры (card.ts берёт его отсюда). */
+export { langOf };
 
 /**
  * POST /api/share { initData, kind: 'invite' | 'help', lang? } → { id } — номер подготовленного
@@ -102,7 +119,7 @@ export async function share(request: Request, env: Env, now = Date.now()): Promi
   await db.prepare('INSERT OR REPLACE INTO shares (id, at) VALUES (?, ?)').bind(user.id, now).run();
   const lang = langOf(body.lang);
   try {
-    const id = await prepareMessage(token, user, kind, `${new URL(request.url).origin}/promo/${kind}_${lang}.jpg`, lang, now);
+    const id = await prepareMessage(token, user, kind, `${new URL(request.url).origin}/promo/${kind}_${PROMO[lang]}.jpg`, lang, now);
     // Позвал на помощь — сутки друзья могут откликнуться.
     if (kind === 'help') await db.prepare('INSERT OR REPLACE INTO help_asks (id, at) VALUES (?, ?)').bind(user.id, now).run();
     return json({ id });

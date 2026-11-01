@@ -1,6 +1,6 @@
 // Персонал с характером: иногда утром сотрудник приходит с просьбой или случается история —
 // отпроситься на свадьбу сестры, оплатить курсы, аванс до зарплаты, ссора двух коллег,
-// своя идея для магазина, «сотрудник месяца». Решение игрока сказывается: поддержанный
+// своя идея для магазина, премия за отличную смену. Решение игрока сказывается: поддержанный
 // воодушевлён и несколько дней работает быстрее, обиженный — медленнее и может уйти.
 
 import type { StaffMember, StaffRole, StoreState } from './economy';
@@ -29,6 +29,7 @@ const KINDS: StaffEventKind[] = ['wedding', 'course', 'advance', 'quarrel', 'ide
 /** Утро: может случиться история с сотрудниками (если их хотя бы двое). */
 export function staffMorning(state: StoreState, random: () => number): StoreState {
   if (state.staffEvent || state.day < STAFF_EVENT_FROM || state.staff.length < 2 || random() >= STAFF_EVENT_CHANCE) return state;
+  // «Лучшая смена» (best) — похвала за один день; «сотрудника месяца» выбирают по делу раз в четыре недели (career.ts).
   const kinds = KINDS.filter((k) => k !== 'course' || state.staff.some((m) => m.skill < 3));
   const kind = kinds[Math.floor(random() * kinds.length)];
   const pool = kind === 'course' ? state.staff.filter((m) => m.skill < 3) : state.staff;

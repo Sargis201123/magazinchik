@@ -5,6 +5,7 @@ import { migrateOwnerTill } from './registers';
 import { migrateAutoOrder, settleInbound } from './autoorder';
 import { migrateTut } from './tutorial';
 import { migrateCollections } from './collections';
+import { migrateCareer } from './career';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId, trustedNow } from '../platform/telegram';
 
@@ -70,7 +71,8 @@ export function loadGame(): StoreState | null {
   const state = migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? merged : migrateOwnerTill(merged))));
   // До версии 11 мороженое и цветы стояли на обычных полках (теперь — ларь у входа и вёдра у кассы).
   // Альбом коллекций появился позже: старое сохранение сразу получает уже заработанное (collections.ts).
-  return migrateCollections(normalizeShelves(state, save.version < 11));
+  // Карьера сотрудников появилась позже: опыт старых сотрудников — по их стажу (career.ts).
+  return migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11)));
 }
 
 let pending: string | null = null;

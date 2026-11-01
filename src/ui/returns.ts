@@ -2,9 +2,9 @@
 // выручки (касание — крышка откидывается, монеты сыплются, сумма докручивается), конверт с письмом
 // (касание — письмо читается голосом отправителя) и сосед, пришедший за отложенным заказом.
 
-import { t } from '../i18n';
+import { memberName, t } from '../i18n';
 import type { TextKey } from '../i18n/ru';
-import { PRODUCTS } from '../game/economy';
+import { PRODUCTS, STAFF_ROLES } from '../game/economy';
 import { REGULARS, type RegularId } from '../game/regulars';
 import { letterGroup, letterKey, type Chest, type LetterGift, type OrderResult } from '../game/returns';
 import { png } from '../platform/assets';
@@ -13,7 +13,7 @@ import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { haptic } from '../platform/telegram';
 import { dialogBox } from './dialog';
-import { button, el, injectStyles, openModal, rollNumber, UI_FONT } from './dom';
+import { button, el, injectStyles, openModal, rollNumber, staffFace, UI_FONT } from './dom';
 
 const css = `
 .ui-ret-stage { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
@@ -168,7 +168,9 @@ function letterStep(gift: LetterGift, last: boolean, next: () => void): HTMLElem
   const { from } = gift.letter;
   const group = letterGroup(from);
   const regular = group === 'regular' ? (from as RegularId) : null;
-  const name = regular ? regularName(regular) : t(`who.${from}` as TextKey);
+  // Прощальное письмо сотрудника (career.ts) — от его имени и с его портретом.
+  const farewell = gift.letter.farewell;
+  const name = regular ? regularName(regular) : farewell ? memberName({ name: farewell.name, friend: farewell.friend ? { name: farewell.friend } : undefined }) : t(`who.${from}` as TextKey);
   const read = () => {
     haptic.tap();
     sound.pop(0);
@@ -177,10 +179,13 @@ function letterStep(gift: LetterGift, last: boolean, next: () => void): HTMLElem
     if (gift.loyalty) after.push(el('div', 'ui-ret-reward', t('ret.letter.loyal', { name })));
     after.push(el('div', 'ui-ret-hint', t('ret.letter.ps')));
     const fav = regular ? REGULARS.find((x) => x.id === regular)!.favorite : null;
-    const text = t(letterKey(gift.letter), { item: fav ? t(PRODUCTS[fav].nameKey).toLowerCase() : '' });
+    const text = t(letterKey(gift.letter), {
+      item: fav ? t(PRODUCTS[fav].nameKey).toLowerCase() : '',
+      ...(farewell ? { days: farewell.days, best: farewell.best, role: t(STAFF_ROLES[farewell.role].nameKey).toLowerCase() } : {}),
+    });
     box.replaceChildren(
       dialogBox({
-        portrait: regular ? FACES[regular] : from === 'grandma' ? 'portrait_grandma_happy' : `portrait_${from}`,
+        portrait: regular ? FACES[regular] : from === 'grandma' ? 'portrait_grandma_happy' : farewell ? `portrait_${staffFace(farewell.name)}` : `portrait_${from}`,
         name,
         text: `«${text}»`,
         pitch: from === 'sonya' ? 900 : from === 'grandma' ? 620 : 700,

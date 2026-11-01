@@ -594,6 +594,7 @@ export function catchThief(scene: StoreScene, c: Customer, by: 'owner' | 'guard'
   scene.refreshShelves();
   building.refreshWarehouse(scene);
   scene.stats.caught++;
+  if (by === 'guard') staff.credit(scene, 'guard');
   haptic.success();
   sound.good();
   scene.popup(c.sprite.x, c.sprite.y - 14, t(by === 'guard' ? 'popup.guardCaught' : by === 'dog' ? 'popup.dogCaught' : 'popup.thiefCaught'), '#c8ffb0');

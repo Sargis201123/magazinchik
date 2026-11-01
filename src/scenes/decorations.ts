@@ -6,7 +6,7 @@ import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { PRODUCTS, DAY_SECONDS } from '../game/economy';
 import { saveGame } from '../game/save';
-import { t } from '../i18n';
+import { memberName, t } from '../i18n';
 import { sound } from '../platform/sound';
 import { music, type MusicMood } from '../platform/music';
 import { winterMusic } from '../platform/playlist';
@@ -542,9 +542,27 @@ export function buildDecor(scene: StoreScene): void {
   const art = activeDecor(scene.state, 'art')?.texture ?? 'poster';
   scene.sunPatches = [];
   scene.sunRays = [];
+  // Доска почёта (game/career.ts) висит вместо самого правого плаката, не закрытого полкой; плакаты
+  // все за полками — вместо самого правого окна (в большом зале вдоль стены почти одни полки).
+  let honorX: number | undefined;
+  if (scene.state.career?.plaques?.length) {
+    // Доска шире плаката (26 точек против 12): не заходит на полки и на дверь туалета.
+    const open = (x: number) => !shelves.behindShelf(scene, x, 13) && x + 13 <= wc.x - 12;
+    const free = (i: number, x: number) => i % 2 === 0 && open(x);
+    const freeWindow = (i: number, x: number) => i % 2 === 1 && open(x);
+    for (const fits of [free, freeWindow]) {
+      for (let x = 30, i = 0; x < wc.x - 16; x += 64, i++) if (fits(i, x)) honorX = x;
+      if (honorX !== undefined) break;
+    }
+  }
+  scene.builtHonor = honorLook(scene.state);
   for (let x = 30, i = 0; x < wc.x - 16; x += 64, i++) {
     // Полки стоят вплотную к стене и закрывают её: за полкой картину и окно не вешаем.
     if (shelves.behindShelf(scene, x, 10)) continue;
+    if (x === honorX) {
+      honorBoard(scene, x);
+      continue;
+    }
     scene.art(x, 9, i % 2 ? 'window' : art).setDepth(1);
     // Из окна на пол ложится солнечное пятно (updateDaylight).
     if (i % 2) {
@@ -645,6 +663,41 @@ export function buildCounterDecor(scene: StoreScene): void {
   if (!item?.texture) return;
   const { counter } = scene.layout;
   scene.art(counter.x + 2, counter.y - 20, item.texture).setOrigin(0.5, 1).setDepth(counter.y + 21);
+}
+
+/** Что висит на доске почёта: перерисовать зал утром, когда добавилось имя. */
+export const honorLook = (state: StoreScene['state']): string => (state.career?.plaques ?? []).map((p) => `${p.day}:${p.name}`).join(',');
+
+/**
+ * Доска почёта «Сотрудник месяца» (game/career.ts): деревянная доска со звездой, на золотых табличках —
+ * имена последних лучших, новое сверху. Касание — имена со днями надписью над доской.
+ */
+export function honorBoard(scene: StoreScene, x: number): void {
+  const plaques = [...(scene.state.career?.plaques ?? [])].reverse();
+  // Под доской на той же стене бывает электрощиток (в большом зале у стены одни полки и свободен один
+  // пролёт): тогда доска поменьше и повыше, щиток остаётся виден и доступен.
+  // Полуширины доски и щитка — 13 и 4 точки, с зазором.
+  const k = Math.abs(x - building.fuseSpot(scene)) < 19 ? 0.6 : 1;
+  const top = k < 1 ? 0.5 : 2.5;
+  const board = scene.art(x, top, 'honor_board').setOrigin(0.5, 0).setDepth(1);
+  board.setScale(board.scaleX * k);
+  plaques.forEach((p, i) => {
+    // Гнёзда — в точках картинки на 13, 20 и 27-й строке (art/career.py), в мире вдвое мельче.
+    const y = top + ((13 + 7 * i) / ART + 1.25) * k;
+    const plate = scene.art(x, y, 'honor_plate').setDepth(1.05);
+    plate.setScale(plate.scaleX * k);
+    scene.add
+      .text(x, y, memberName({ name: p.name, friend: p.friend ? { name: p.friend } : undefined }).replace('👋 ', '').slice(0, 9), { fontFamily: UI_FONT, fontSize: `${2.6 * k}px`, fontStyle: 'bold', color: '#4a2c1a' })
+      .setOrigin(0.5)
+      .setResolution(scene.textRes(8 / k))
+      .setDepth(1.1);
+  });
+  board.setInteractive({ useHandCursor: true }).on('pointerup', () =>
+    camera.tap(scene, () => {
+      const names = plaques.map((p) => memberName({ name: p.name, friend: p.friend ? { name: p.friend } : undefined })).join(', ');
+      scene.popup(x, top + 20 * k, t('career.board', { names }), '#fff3b0');
+    }),
+  );
 }
 
 /**

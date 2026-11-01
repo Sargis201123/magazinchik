@@ -31,14 +31,20 @@ import type { Page } from 'playwright';
 import { DAY_SECONDS, STORE_LEVELS } from '../src/game/economy';
 import { NIGHT_SECONDS } from '../src/game/night';
 import { weatherFor } from '../src/game/weather';
-import { ru } from '../src/i18n/ru';
+import { ru, type TextKey } from '../src/i18n/ru';
+import { isLang, type Lang } from '../src/i18n/langs';
 import { decodePng, encodePng } from './png';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIR = `${ROOT}e2e/`;
-const SHOTS = `${DIR}shots/`;
+/** Язык прогона (--lang tr): кадры другого языка снимаются в e2e/shots/<язык>/ и с эталоном не сравниваются. */
+const LANG = (process.argv.includes('--lang') ? process.argv[process.argv.indexOf('--lang') + 1] : 'ru') as Lang;
+const SHOTS = LANG === 'ru' ? `${DIR}shots/` : `${DIR}shots/${LANG}/`;
 const BASELINE = `${DIR}baseline/`;
 const DIFF = `${DIR}diff/`;
+
+/** Надписи кнопок для прогона: русские, или словарь --lang. */
+let text: Record<TextKey, string> = ru;
 
 const args = process.argv.slice(2);
 const flag = (name: string): boolean => args.includes(`--${name}`);
@@ -309,9 +315,9 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     save: JSON.stringify({ ...save, state }),
     seed: SEED,
     start: NOW,
-    labels: { open: ru['morning.open'], night: ru['night.yes'] },
+    labels: { open: text['morning.open'], night: text['night.yes'] },
   });
-  await page.goto(`${url}?lang=ru&debug`);
+  await page.goto(`${url}?lang=${LANG}&debug`);
   await until(page, 'window.game?.isRunning === true', 'запуска Phaser');
   await page.evaluate(() => {
     const game = (window as any).game;
@@ -344,10 +350,10 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     if (i > 80) throw new Error('не дошли до открытия магазина');
     await tick(250);
     const s = await look();
-    if (s.title) await press(ru['title.continue']);
+    if (s.title) await press(text['title.continue']);
     else if (s.dialog) await press();
     else if (s.open && s.modals <= 1) {
-      await press(ru['morning.open']);
+      await press(text['morning.open']);
       break;
     } else if (s.modals) await press();
   }
@@ -367,7 +373,7 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
       const s = (await page.evaluate((ms) => (window as any).__e2e.fast(ms), STEP_MS)) as Look;
       if (done(s)) return s;
       if (t > limitMs) throw new Error(`не дождались: ${what}`);
-      if ((s.dialog || s.modals) && !s.summary) await press(s.nightAsk ? ru['night.yes'] : undefined);
+      if ((s.dialog || s.modals) && !s.summary) await press(s.nightAsk ? text['night.yes'] : undefined);
     }
   };
   /**
@@ -481,6 +487,17 @@ async function main(): Promise<void> {
     console.error('Нужен Playwright: npm i -D playwright && npx playwright install chromium');
     process.exit(1);
   }
+  if (!isLang(LANG)) {
+    console.error(`Нет языка «${LANG}»`);
+    process.exit(1);
+  }
+  // Надписи кнопок, которые нажимает прогон, — на языке прогона.
+  // У заготовки (kk, uz, pt) недостающее берётся как в игре: из английского, потом из русского.
+  if (LANG !== 'ru') {
+    const { en } = await import('../src/i18n/en');
+    const own = ((await import(`../src/i18n/${LANG}.ts`)) as Record<string, Partial<Record<TextKey, string>>>)[LANG];
+    text = { ...ru, ...en, ...own } as Record<TextKey, string>;
+  }
   const only = option('only');
   const runs = RUNS.filter((r) => !only || r.name === only);
   if (!runs.length) {
@@ -543,6 +560,8 @@ async function main(): Promise<void> {
   for (const e of errors) console.error(`ОШИБКА ${e}`);
   if (flag('update') && !ok) {
     console.log('С ошибками эталон не обновляем.');
+  } else if (LANG !== 'ru') {
+    console.log(`Кадры на языке «${LANG}» с эталоном не сравниваются.`);
   } else if (flag('update')) {
     // Полный прогон заменяет эталон целиком, прогон с --only — только свои кадры.
     if (!only) rmSync(BASELINE, { recursive: true, force: true });

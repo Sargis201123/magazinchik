@@ -5,7 +5,56 @@ import { commandReply, setupProfile, startCaption, type StartInfo } from './botP
 import { ready, recordReferral, recordSource } from './social.js';
 import { recordGuildInvite } from './guild.js';
 import { addSupporter, syncSupporter } from './supporters.js';
+import { langOf, type Lang } from './lang.js';
 import { bot, canBuy, isSupport, itemFromPayload, json, catalogItem, ownedFrom, payloadFor, verifyInitData, type D1, type Env, type StarTransaction } from './telegram.js';
+
+/** Описание в счёте за звёзды: поддержка автора, сезонный пропуск или вещь для магазина. */
+const INVOICE: Record<Lang, { support: (title: string) => string; pass: (title: string) => string; item: (title: string) => string }> = {
+  ru: {
+    support: (title) => `${title}: спасибо, что поддерживаешь «Магазинчик»! Только украшения и благодарность — без преимуществ в игре.`,
+    pass: (title) => `${title}: открывает премиальные награды сезона — звёздный декор и двойные монеты.`,
+    item: (title) => `${title} — для твоего магазина. Остаётся навсегда.`,
+  },
+  en: {
+    support: (title) => `${title}: thank you for supporting the game! Cosmetics and thanks only — no gameplay advantage.`,
+    pass: (title) => `${title}: unlocks the season's premium rewards — star decor and double coins.`,
+    item: (title) => `${title} for your store. Yours forever.`,
+  },
+  tr: {
+    support: (title) => `${title}: Magazinchik’i desteklediğin için teşekkürler! Yalnızca süs ve teşekkür — oyunda avantaj yok.`,
+    pass: (title) => `${title}: sezonun premium ödüllerini açar — yıldızlı süsler ve iki kat para.`,
+    item: (title) => `${title} — dükkânın için. Sonsuza kadar senin.`,
+  },
+  es: {
+    support: (title) => `${title}: ¡gracias por apoyar Magazinchik! Solo decoración y agradecimiento, sin ventajas en el juego.`,
+    pass: (title) => `${title}: desbloquea las recompensas premium de la temporada: decoración estelar y monedas dobles.`,
+    item: (title) => `${title} para tu tienda. Es tuyo para siempre.`,
+  },
+};
+
+/** Бот в чате: спасибо после оплаты (name — название вещи на языке игрока) и кнопка «Играть» под приветствием. */
+const PAID: Record<Lang, { support: (name: string) => string; item: (name: string) => string; play: string }> = {
+  ru: {
+    support: (name) => `Огромное спасибо за поддержку! 💛 «${name}» — табличка «Спасибо!» уже стоит у твоей кассы.`,
+    item: (name) => `Спасибо! ${name} — уже в твоём магазине ✨`,
+    play: '▶ Играть',
+  },
+  en: {
+    support: (name) => `Thank you so much for your support! 💛 "${name}" — the «Thank you!» plaque is already by your register.`,
+    item: (name) => `Thank you! ${name} is already in your store ✨`,
+    play: '▶ Play',
+  },
+  tr: {
+    support: (name) => `Desteğin için çok teşekkürler! 💛 “${name}” — “Teşekkürler!” tabelası şimdiden kasanın yanında.`,
+    item: (name) => `Teşekkürler! ${name} artık dükkânında ✨`,
+    play: '▶ Oyna',
+  },
+  es: {
+    support: (name) => `¡Muchísimas gracias por tu apoyo! 💛 “${name}”: el letrero «¡Gracias!» ya está junto a tu caja.`,
+    item: (name) => `¡Gracias! ${name} ya está en tu tienda ✨`,
+    play: '▶ Jugar',
+  },
+};
 
 /** POST /api/stars-invoice { initData, item } → { link }: счёт в звёздах на одну вещь оформления. */
 export async function starsInvoice(request: Request, env: Env): Promise<Response> {
@@ -16,21 +65,13 @@ export async function starsInvoice(request: Request, env: Env): Promise<Response
   if (!user) return json({ error: 'bad_init_data' }, 401);
   const item = body.item && canBuy(body.item) ? catalogItem(body.item) : undefined;
   if (!item) return json({ error: 'unknown_item' }, 400);
-  const ru = (user.language_code ?? 'ru').startsWith('ru') || !user.language_code;
-  const title = ru ? item.ru : item.en;
+  // Язык Telegram игрока; не прислан — ru, как раньше.
+  const lang = langOf(user.language_code);
+  const title = item[lang];
+  const invoice = INVOICE[lang];
   const link = await bot<string>(token, 'createInvoiceLink', {
     title,
-    description: isSupport(body.item!)
-      ? ru
-        ? `${title}: спасибо, что поддерживаешь «Магазинчик»! Только украшения и благодарность — без преимуществ в игре.`
-        : `${title}: thank you for supporting the game! Cosmetics and thanks only — no gameplay advantage.`
-      : body.item!.startsWith('pass_')
-      ? ru
-        ? `${title}: открывает премиальные награды сезона — звёздный декор и двойные монеты.`
-        : `${title}: unlocks the season's premium rewards — star decor and double coins.`
-      : ru
-        ? `${title} — для твоего магазина. Остаётся навсегда.`
-        : `${title} for your store. Yours forever.`,
+    description: isSupport(body.item!) ? invoice.support(title) : body.item!.startsWith('pass_') ? invoice.pass(title) : invoice.item(title),
     payload: payloadFor(body.item!),
     currency: 'XTR',
     prices: [{ label: title, amount: item.stars }],
@@ -110,10 +151,10 @@ async function startInfo(db: D1 | undefined, id: number, payload: string): Promi
 }
 
 /** Приветствие на /start: короткий ролик с личной подписью и кнопкой «Играть»; ролика нет — просто текст. */
-async function greet(token: string, env: Env, chat: number, from: { id: number } | undefined, payload: string, ru: boolean, origin: string): Promise<void> {
+async function greet(token: string, env: Env, chat: number, from: { id: number } | undefined, payload: string, lang: Lang, origin: string): Promise<void> {
   const info = from ? await startInfo(env.DB, from.id, payload).catch((e) => (console.error(e), {})) : {};
-  const caption = startCaption(ru, info);
-  const reply_markup = { inline_keyboard: [[{ text: ru ? '▶ Играть' : '▶ Play', web_app: { url: `${origin}/` } }]] };
+  const caption = startCaption(lang, info);
+  const reply_markup = { inline_keyboard: [[{ text: PAID[lang].play, web_app: { url: `${origin}/` } }]] };
   try {
     const sent = await bot<{ animation?: { file_id: string }; document?: { file_id: string }; video?: { file_id: string } }>(token, 'sendAnimation', {
       chat_id: chat,
@@ -147,28 +188,21 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
   }
   const message = update.message;
   if (message) {
-    const ru = (message.from?.language_code ?? 'ru').startsWith('ru');
+    const lang = langOf(message.from?.language_code);
     const origin = `https://${new URL(request.url).host}`;
     if (message.successful_payment) {
       // Новая покупка: при следующем восстановлении перечитать платежи.
       resetStarsCache();
       const id = itemFromPayload(message.successful_payment.invoice_payload);
-      const name = id ? catalogItem(id)![ru ? 'ru' : 'en'] : '';
+      const name = id ? catalogItem(id)![lang] : '';
       if (id && isSupport(id) && message.from) await addSupporter(env.DB, message.from.id, catalogItem(id)!.stars).catch((e) => console.error(e));
       await bot(token, 'sendMessage', {
         chat_id: message.chat.id,
-        text:
-          id && isSupport(id)
-            ? ru
-              ? `Огромное спасибо за поддержку! 💛 «${name}» — табличка «Спасибо!» уже стоит у твоей кассы.`
-              : `Thank you so much for your support! 💛 "${name}" — the «Thank you!» plaque is already by your register.`
-            : ru
-              ? `Спасибо! ${name} — уже в твоём магазине ✨`
-              : `Thank you! ${name} is already in your store ✨`,
+        text: id && isSupport(id) ? PAID[lang].support(name) : PAID[lang].item(name),
       });
-    } else if (message.text && commandReply(message.text, ru)) {
+    } else if (message.text && commandReply(message.text, lang)) {
       // /paysupport и /terms — Telegram требует их от ботов, которые продают за звёзды.
-      await bot(token, 'sendMessage', { chat_id: message.chat.id, text: commandReply(message.text, ru, message.from?.id) });
+      await bot(token, 'sendMessage', { chat_id: message.chat.id, text: commandReply(message.text, lang, message.from?.id) });
     } else if (message.text?.startsWith('/start')) {
       // «/start ref_123» — друга пригласили по ссылке: записать, кто пригласил (social.ts).
       const payload = message.text.slice('/start'.length).trim();
@@ -177,7 +211,7 @@ export async function telegramWebhook(request: Request, env: Env): Promise<Respo
       if (payload && message.from) await recordSource(env, message.from.id, payload).catch((e) => console.error(e));
       // «/start guild_ABC123» — приглашение в гильдию района (guild.ts).
       if (payload && message.from) await recordGuildInvite(env, message.from.id, payload).catch((e) => console.error(e));
-      await greet(token, env, message.chat.id, message.from, payload, ru, origin);
+      await greet(token, env, message.chat.id, message.from, payload, lang, origin);
     }
   }
   return new Response('ok');

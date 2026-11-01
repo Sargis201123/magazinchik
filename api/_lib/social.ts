@@ -11,6 +11,7 @@
 // Сюда игра присылает часовой пояс и поводы для напоминания (hooks, src/game/comeback.ts).
 
 import { bot, json, verifyInitData, type D1, type Env } from './telegram.js';
+import { langOf } from './lang.js';
 
 const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS players (id INTEGER PRIMARY KEY, lang TEXT, joined INTEGER, last_seen INTEGER, reminded_at INTEGER, misses INTEGER DEFAULT 0)',
@@ -207,7 +208,8 @@ export async function socialPing(request: Request, env: Env): Promise<Response> 
     .prepare(
       'INSERT INTO players (id, lang, joined, last_seen, misses) VALUES (?, ?, ?, ?, 0) ON CONFLICT(id) DO UPDATE SET lang = excluded.lang, last_seen = excluded.last_seen, misses = 0',
     )
-    .bind(user.id, body.lang === 'en' ? 'en' : 'ru', now, now)
+    // Язык игры (ru/en/tr/es) — на нём бот потом пишет напоминания, газету, про подарки.
+    .bind(user.id, langOf(body.lang), now, now)
     .run();
   const welcome = await db.prepare('UPDATE referrals SET welcomed = 1 WHERE invitee = ? AND welcomed = 0').bind(user.id).run();
   const mine = await friends(db, user.id);

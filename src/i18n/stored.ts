@@ -1,6 +1,6 @@
 // Язык, который игрок выбрал сам, — важнее языка Telegram и браузера.
 
-import type { Lang } from './detect';
+import type { Lang } from './langs';
 
 const KEY = 'magazinchik.lang';
 
