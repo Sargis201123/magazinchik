@@ -15,7 +15,7 @@ import { music } from '../platform/music';
 import { trustedNow } from '../platform/telegram';
 import { toast, UI_FONT } from '../ui/dom';
 import { giantLook } from '../game/giant';
-import { showMorning as showMorningMenu } from '../ui/morning';
+import { lazy, prefetch, withLazy } from '../platform/lazy';
 import { weatherFor } from '../game/weather';
 import { claimGift, giftTomorrow } from '../game/gift';
 import { showGift } from '../ui/gift';
@@ -75,6 +75,16 @@ import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
 import * as collections from './collections';
+
+/**
+ * Утреннее окно (ui/morning.ts и всё, что открывается только из него) — отдельным файлом сборки:
+ * у новичка в первый день утра нет, а титул без него приходит быстрее. Подкачивается, пока виден
+ * титул (prefetchMorning), так что к «Играть» / «Продолжить» обычно уже на месте.
+ */
+const morningUi = lazy('morning', () => import('../ui/morning'));
+/** Через сколько после открытия дня подкачивать утреннее окно (у новичка его до завтра не будет). */
+const MORNING_PREFETCH_MS = 20_000;
+export const prefetchMorning = (): void => prefetch(morningUi);
 
 /**
  * Что распаковывают из коробки, когда оно впервые появилось в зале: оборудование (терминал, касса
@@ -207,7 +217,7 @@ export function showMorning(scene: StoreScene): void {
     startDay(scene);
     return;
   }
-  showMorningMenu({
+  withLazy(morningUi, ({ showMorning: showMorningMenu }) => showMorningMenu({
     onArrange: () => shelves.arrange(scene),
     onVisit: (id, name) => void rivals.visitFriend(scene, id, name),
     onRival: (key, name) => void rivals.visitRival(scene, key, name),
@@ -245,7 +255,7 @@ export function showMorning(scene: StoreScene): void {
       scene.hud.update(s, DAY_SECONDS);
     },
     onOpen: () => startDay(scene),
-  });
+  }));
   scene.inMorning = true;
   void rivals.checkRivals(scene);
 }
@@ -265,6 +275,8 @@ export function watchStall(scene: StoreScene, deltaMs: number): void {
 }
 
 export function startDay(scene: StoreScene): void {
+  // Утреннее окно понадобится завтра — подкачать, когда первые звуки дня уже пришли (platform/lazy.ts).
+  setTimeout(prefetchMorning, MORNING_PREFETCH_MS);
   scene.dayOpen = true;
   scene.inMorning = false;
   // Магазин открылся: колокольчик двери и мотив «Магазинчика».

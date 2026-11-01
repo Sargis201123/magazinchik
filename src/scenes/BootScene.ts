@@ -53,6 +53,47 @@ function shareSheets(textures: Phaser.Textures.TextureManager): void {
   });
 }
 
+/**
+ * Лист атласа — через fetch(), а не XHR Phaser: index.html просит браузер скачать листы заранее,
+ * вместе с кодом игры (<link rel="preload" as="fetch">, vite.config.ts), а XHR с ответом-картинкой
+ * (blob) Chromium с такой заготовкой не сопоставляет и качал лист второй раз. Прогресс — по кускам
+ * ответа, как XHR onprogress; дальше файл Phaser живёт как обычно (onLoad → картинка → текстура),
+ * не дошёл — его же повтор (onError) или запасной путь по одной картинке в create().
+ */
+function fetchSheet(file: Phaser.Loader.File, bytes: number): void {
+  const self = file as Omit<Phaser.Loader.File, 'xhrLoader'> & { xhrLoader: unknown; onLoad(xhr: unknown, event: unknown): void; onError(): void; onProgress(event: unknown): void };
+  self.load = function (this: typeof self) {
+    this.state = Phaser.Loader.FILE_LOADING;
+    this.src = Phaser.Loader.GetURL(this as unknown as Phaser.Loader.File, this.loader.baseURL) as string;
+    const src = this.src;
+    void (async () => {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error(`${res.status}`);
+      const total = Number(res.headers.get('content-length')) || bytes;
+      const reader = res.body?.getReader();
+      if (!reader) return res.blob();
+      const parts: Uint8Array[] = [];
+      let loaded = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value);
+        loaded += value.length;
+        this.onProgress({ lengthComputable: true, loaded: Math.min(loaded, total), total });
+      }
+      return new Blob(parts as BlobPart[], { type: 'image/png' });
+    })().then(
+      (blob) => {
+        // Как ответ XHR: картинку из него берёт ImageFile.onProcess (xhrLoader.response).
+        const done = { response: blob, status: 200, readyState: 4, responseURL: '' };
+        this.xhrLoader = done;
+        this.onLoad(done, { target: done });
+      },
+      () => this.onError(),
+    );
+  };
+}
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('boot');
@@ -74,6 +115,9 @@ export class BootScene extends Phaser.Scene {
     for (const key of atlas.loose) this.load.image(key, png(key));
     // Значки меню (ico_*) одним атласом — для всплывающих надписей в зале (art/icons.py → atlas).
     this.load.atlas('ico', png('ico_atlas'), assetUrl('assets/ico_atlas.json'));
+    // Картинки листов — заготовкой из index.html (fetchSheet): ico — около 15 КБ.
+    const sheetBytes = new Map<string, number>([...atlas.pages.map((p): [string, number] => [p.name, p.bytes]), ['ico', 15_000]]);
+    for (const file of this.load.list.getArray()) if (file.type === 'image' && sheetBytes.has(file.key)) fetchSheet(file, sheetBytes.get(file.key) ?? 0);
     // Полоска — по байтам, а не по числу готовых файлов: файлов теперь несколько, и почти всё время
     // качается лист атласа — по файлам полоска стояла бы, а потом прыгала.
     const bytes = new Map(atlas.pages.map((p) => [p.name, p.bytes]));

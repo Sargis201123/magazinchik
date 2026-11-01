@@ -325,6 +325,9 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
   // Ждём загрузку, не двигая часы: магазин запустится на первом же кадре — в любой сборке в один момент.
   await until(page, "!!document.querySelector('#splash.gone')", 'загрузки картинок');
   await tick(16);
+  // Утреннее окно — отдельный файл, его подкачка начинается с титулом (platform/lazy.ts): ждём по
+  // настоящим часам, не двигая часы игры, — окно откроется в тот же момент игры, что и без разбивки.
+  await page.evaluate(() => (window as any).lazyIdle?.());
   // Картинки мира должны прийти листом атласа: не дошёл лист — игра тихо грузит их по одной (BootScene),
   // и проверка этого бы не заметила.
   const sheet = await page.evaluate(() => {

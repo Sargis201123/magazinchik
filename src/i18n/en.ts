@@ -3035,6 +3035,9 @@ export const en: Record<TextKey, string> = {
   "teaser.week": "the {icon} {name} week begins!",
   "week.summaryStep": "step {step} of {total} · +{n} 💰",
   "week.summaryPrize": "“{item}” is in the shop now!",
+  // Скорость загрузки: часть игры не догрузилась (platform/lazy.ts).
+  "lazy.offTitle": "Connection lost",
+  "lazy.offText": "Part of the game didn’t load — restarting, your progress is saved.",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

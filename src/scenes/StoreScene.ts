@@ -764,6 +764,9 @@ export class StoreScene extends Phaser.Scene {
         morningFlow.showMorning(this);
       },
     });
+    // Титул на экране — подкачать утреннее окно, пока игрок на него смотрит (platform/lazy.ts).
+    // У новичка в первый день утра нет: связь сейчас нужнее звукам дня — подкачка позже (startDay).
+    if (save) morningFlow.prefetchMorning();
   }
 
   /**

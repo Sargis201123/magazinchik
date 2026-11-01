@@ -3033,6 +3033,9 @@ export const ru = {
   "teaser.week": "начинается неделя {icon} {name}!",
   "week.summaryStep": "шаг {step} из {total} · +{n} 💰",
   "week.summaryPrize": "«{item}» — уже в зале!",
+  // Скорость загрузки: часть игры не догрузилась (platform/lazy.ts).
+  "lazy.offTitle": "Связь пропала",
+  "lazy.offText": "Не догрузилась часть игры — перезапускаем, всё сохранено.",
 } as const;
 
 export type TextKey = keyof typeof ru;

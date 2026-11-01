@@ -8,7 +8,8 @@ import { atlasKeys, buildAtlas, type Atlas } from './scripts/atlas';
 const PHASER_FLAGS: Record<string, boolean> = {
   WEBGL_RENDERER: true,
   CANVAS_RENDERER: true,
-  FEATURE_SOUND: true,
+  // Звук у игры свой (platform/mixer.ts), Phaser создаёт его без звука (audio.noAudio) — модуль не нужен.
+  FEATURE_SOUND: false,
   WEBGL_DEBUG: false,
   EXPERIMENTAL: false,
   PLUGIN_3D: false,
@@ -50,27 +51,29 @@ const VERSIONS_ID = 'virtual:asset-versions';
  * и адрес. Листы атласа (их в public/ нет — их пишет сборка) получают отпечаток так же.
  * Таблица отпечатков — модуль virtual:asset-versions; в разработке она пустая (кэша там нет).
  */
-const assetVersions = (build: boolean): Plugin => {
-  let versions: Record<string, string> | null = null;
-  const scan = (): Record<string, string> => {
-    if (versions) return versions;
-    const found: Record<string, string> = {};
-    // Музыка лежит глубже (audio/music/suno/…) — обходим и вложенные папки.
-    const walk = (dir: string): void => {
-      const root = fileURLToPath(new URL(`./public/${dir}/`, import.meta.url));
-      for (const name of readdirSync(root).sort()) {
-        if (statSync(root + name).isDirectory()) walk(`${dir}/${name}`);
-        else found[`${dir}/${name}`] = hash(readFileSync(root + name));
-      }
-    };
-    for (const dir of VERSIONED_DIRS) walk(dir);
-    for (const page of atlas().pages) {
-      found[`assets/${page.name}.png`] = hash(page.png);
-      found[`assets/${page.name}.json`] = hash(page.json);
+let versions: Record<string, string> | null = null;
+const scan = (): Record<string, string> => {
+  if (versions) return versions;
+  const found: Record<string, string> = {};
+  // Музыка лежит глубже (audio/music/suno/…) — обходим и вложенные папки.
+  const walk = (dir: string): void => {
+    const root = fileURLToPath(new URL(`./public/${dir}/`, import.meta.url));
+    for (const name of readdirSync(root).sort()) {
+      if (statSync(root + name).isDirectory()) walk(`${dir}/${name}`);
+      else found[`${dir}/${name}`] = hash(readFileSync(root + name));
     }
-    versions = found;
-    return versions;
   };
+  for (const dir of VERSIONED_DIRS) walk(dir);
+  for (const page of atlas().pages) {
+    found[`assets/${page.name}.png`] = hash(page.png);
+    found[`assets/${page.name}.json`] = hash(page.json);
+  }
+  versions = found;
+  return versions;
+};
+const versioned = (path: string): string => (scan()[path] ? `${path}?v=${scan()[path]}` : path);
+
+const assetVersions = (build: boolean): Plugin => {
   return {
     name: 'asset-versions',
     // Пересборка в режиме --watch: картинки могли перерисовать — считаем заново.
@@ -80,11 +83,58 @@ const assetVersions = (build: boolean): Plugin => {
     },
     resolveId: (id) => (id === VERSIONS_ID ? `\0${VERSIONS_ID}` : null),
     load: (id) => (id === `\0${VERSIONS_ID}` ? `export default ${JSON.stringify(build ? scan() : {})};` : null),
-    // Заставка в index.html (портрет бабушки) — тоже с отпечатком.
+    // Заставка в index.html (портрет бабушки) — тоже с отпечатком. Маленькая картинка (до 4 КБ) —
+    // прямо в страницу (data:): заставка рисуется сразу, не дожидаясь отдельного запроса, который
+    // на медленной связи стоит в очереди за кодом игры и атласом.
     transformIndexHtml: (html) =>
-      build ? html.replace(/(["(])((?:assets|story)\/[\w.-]+)(?=[")])/g, (all, open: string, path: string) => (scan()[path] ? `${open}${path}?v=${scan()[path]}` : all)) : html,
+      build
+        ? html.replace(/(["(])((?:assets|story)\/[\w.-]+)(?=[")])/g, (all, open: string, path: string) => {
+            if (!scan()[path]) return all;
+            const file = fileURLToPath(new URL(`./public/${path}`, import.meta.url));
+            if (path.endsWith('.png') && statSync(file).size <= 4096) return `${open}data:image/png;base64,${readFileSync(file).toString('base64')}`;
+            return `${open}${versioned(path)}`;
+          })
+        : html,
   };
 };
+
+/**
+ * Подсказки браузеру (docs/PERFORMANCE.md): без них лист атласа, значки и шрифт начинали качаться,
+ * только когда скачан и запущен весь код игры, — на медленной связи сеть полсекунды и больше
+ * простаивала. Теперь они идут вместе с кодом. Адреса — ровно те, что потом попросят BootScene
+ * (Phaser грузит картинки через XHR — отсюда as="fetch" и crossorigin) и CSS шрифта.
+ * Шрифт — латиница Nunito: её ждёт BootScene. Кириллицу браузер просит сам, когда на холсте
+ * появляется русская надпись (уже после атласа): заранее её не качаем, чтобы надписи остались
+ * ровно такими, как были (docs/PERFORMANCE.md, «Что не сделано»).
+ */
+const preloadHints = (): Plugin => ({
+  name: 'preload-hints',
+  transformIndexHtml: {
+    order: 'post',
+    handler: (html, ctx) => {
+      // Стили сборки — это только @font-face шрифта (полтора килобайта): отдельный файл держал
+      // первую отрисовку заставки до своего прихода, а прямо в странице не держит.
+      for (const [file, out] of Object.entries(ctx.bundle ?? {})) {
+        if (out.type !== 'asset' || !file.endsWith('.css')) continue;
+        const link = new RegExp(`<link rel="stylesheet"[^>]*href="\\./${file.replace(/[.]/g, '\\.')}"[^>]*>`);
+        const css = String(out.source).replace(/url\(\.\//g, 'url(assets/');
+        if (link.test(html)) html = html.replace(link, () => `<style>${css}</style>`);
+      }
+      const fonts = Object.keys(ctx.bundle ?? {}).filter((file) => /\/nunito-latin-wght-normal-[\w-]+\.woff2$/.test(file));
+      const sheets = [...atlas().pages.map((p) => p.name), 'ico_atlas'].flatMap((name) => [`assets/${name}.json`, `assets/${name}.png`]);
+      const tags = [
+        // Картинки листов — пониже кода: код нужен раньше (пока он запускается, лист докачивается).
+        ...sheets.map((path) => ({
+          tag: 'link',
+          attrs: { rel: 'preload', href: versioned(path), as: 'fetch', crossorigin: '', ...(path.endsWith('.png') ? { fetchpriority: 'low' } : {}) },
+          injectTo: 'head' as const,
+        })),
+        ...fonts.map((file) => ({ tag: 'link', attrs: { rel: 'preload', href: file, as: 'font', type: 'font/woff2', crossorigin: '' }, injectTo: 'head' as const })),
+      ];
+      return { html, tags };
+    },
+  },
+});
 
 const ATLAS_ID = 'virtual:atlas';
 
@@ -128,7 +178,7 @@ const atlasPlugin = (build: boolean): Plugin => ({
 
 export default defineConfig(({ command }) => ({
   base: './',
-  plugins: command === 'build' ? [phaserFlags(), assetVersions(true), atlasPlugin(true)] : [assetVersions(false), atlasPlugin(false)],
+  plugins: command === 'build' ? [phaserFlags(), assetVersions(true), atlasPlugin(true), preloadHints()] : [assetVersions(false), atlasPlugin(false)],
   resolve: {
     // В production — Phaser без физики и тайловых карт (src/vendor/phaser-lite.js).
     alias: command === 'build' ? [{ find: /^phaser$/, replacement: fileURLToPath(new URL('./src/vendor/phaser-lite.js', import.meta.url)) }] : [],
