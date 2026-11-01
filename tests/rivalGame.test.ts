@@ -14,8 +14,6 @@ import {
   PRANK_COINS,
   RIVAL_ACTIONS,
   takeRivalDay,
-  takeThanks,
-  THANK_COINS,
   usePrank,
   type PrankIn,
 } from '../src/game/rival';
@@ -71,11 +69,9 @@ describe('«Заглянуть к конкуренту»', () => {
     expect(both.news?.helped).toEqual(['cameras', 'cleaner']);
   });
 
-  it('открытие забирает беспорядок дня; «спасибо» — кофе', () => {
+  it('открытие забирает беспорядок дня', () => {
     const { state } = applyPranks(base(), [prank({ trash: 2 })]);
     expect(messToday(takeRivalDay(state))).toBeNull();
-    expect(takeThanks(base(), ['А', 'Б']).money).toBe(1000 + 2 * THANK_COINS);
-    expect(takeThanks(base(), Array(9).fill('А')).money).toBe(1000 + 5 * THANK_COINS);
   });
 
   it('магазин босса строится из нашего зала и читается как магазин друга', () => {

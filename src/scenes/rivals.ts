@@ -16,8 +16,6 @@ import {
   messToday,
   PRANK_COINS,
   takeRivalDay,
-  takeThanks,
-  THANK_COINS,
   usePrank,
   type PrankKind,
 } from '../game/rival';
@@ -240,13 +238,13 @@ export function applyRivalInbox(scene: StoreScene): void {
   const inbox = scene.rivalPending;
   if (!inbox) return;
   scene.rivalPending = null;
-  // Утром, пока открыто утреннее окно, «спасибо» и новости — строками «Почты» (ui/mail.ts), без окон поверх.
+  // «Спасибо за визит» — только тёплая строчка, без монет (подарки друзьям — presents.ts, решено 01.11).
+  // Утром, пока открыто утреннее окно, — строкой «Почты» (ui/mail.ts), без окон поверх.
   const mail = scene.inMorning && !scene.dayOpen;
   if (inbox.thanks.length) {
-    scene.state = takeThanks(scene.state, inbox.thanks);
-    const n = THANK_COINS * Math.min(5, inbox.thanks.length);
-    if (mail) postMail(scene.state.day, { thanks: { names: inbox.thanks.slice(0, 3), n } });
-    else toast('assets/ico_coffee.png', t('rival.thanks.title'), t('rival.thanks', { names: inbox.thanks.slice(0, 3).join(', '), n }));
+    const names = inbox.thanks.slice(0, 3);
+    if (mail) postMail(scene.state.day, { thanks: { names, n: 0 } });
+    else toast('assets/ico_coffee.png', t('rival.thanks.title'), t('rival.thanks', { names: names.join(', ') }));
   }
   // Магазин уже открыт — беспорядок подождёт завтрашнего утра.
   const { state, news } = applyPranks(scene.state, inbox.pranks, scene.dayOpen ? scene.state.day + 1 : scene.state.day);

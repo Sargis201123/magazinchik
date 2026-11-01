@@ -12,12 +12,10 @@ import type { StoreState } from '../game/economy';
 import { openChest } from '../game/returns';
 import { GIFT_DAYS } from '../game/gift';
 import { PRODUCTS } from '../game/economy';
-import { claimLeague, leagueReward, openPresents } from '../game/social';
+import { claimFarewell, claimLeague, farewellReward, leagueReward, openPresents } from '../game/social';
 import { homeLevel } from '../game/zarshop';
-import { rushPrize } from '../game/rush';
 import { claimPass, passCoins, passLevel } from '../game/pass';
 import { activeEvent, cardWaiting, openCard } from '../game/live';
-import { claimGifts, duelInfo, duelReward, guildInfo, guildReward, visitsInfo, weekendInfo } from '../platform/multiplayer';
 import { leagueInfo } from '../platform/league';
 import { openPresentsBox, presentsInfo } from '../platform/presents';
 import { liveEvents, todayLocal } from '../platform/live';
@@ -104,23 +102,6 @@ const giftSource: Source = ({ bag }) => {
   return { id: 'gift', icon: '🎁', text: `${t('mail.gift', { n: g.day })}${extra ? ` · ${extra}` : ''}`, coins: g.money };
 };
 
-/** Друзья угостили кофе в гостях (multiplayer.ts): монеты — с сервера. */
-const treatsSource: Source = ({ getState, update }) => {
-  const gifts = visitsInfo()?.gifts ?? [];
-  if (!gifts.length) return null;
-  return {
-    id: 'treats',
-    icon: '☕',
-    text: t('mail.treats', { names: [...new Set(gifts.map((g) => g.name))].slice(0, 3).join(', ') }),
-    coins: gifts.reduce((sum, g) => sum + g.amount, 0),
-    online: true,
-    take: async () => {
-      const n = await claimGifts();
-      if (n) update({ ...getState(), money: getState().money + n });
-      return true;
-    },
-  };
-};
 
 /** Подарки друзей и «спасибо» за мои (presents.ts): открыть — с сервера; что оставили — прочитать. */
 let opened: { day: number; res: NonNullable<Awaited<ReturnType<typeof openPresentsBox>>>; got: ReturnType<typeof openPresents>; level: number } | null = null;
@@ -135,10 +116,10 @@ const presentsSource: Source = ({ getState, update }) => {
     take: async () => {
       const res = await openPresentsBox();
       if (!res) return false;
-      const got = openPresents(getState(), res.presents, res.thanks.length);
+      const got = openPresents(getState(), res.presents, res.thanks.length, res.coins);
       track('present_open', getState().day, res.presents.length);
       update(got.state);
-      if (res.presents.length || res.thanks.length) opened = { day: getState().day, res, got, level: getState().level };
+      if (res.presents.length || res.thanks.length || res.coins) opened = { day: getState().day, res, got, level: getState().level };
       return true;
     },
   };
@@ -148,7 +129,7 @@ const presentsSource: Source = ({ getState, update }) => {
 const thanksSource: Source = ({ bag }) => {
   const thanks = bag?.thanks;
   if (!thanks) return null;
-  return { id: 'thanks', icon: '🙏', text: t('mail.thanks', { names: thanks.names.join(', ') }), coins: thanks.n };
+  return { id: 'thanks', icon: '🙏', text: t('mail.thanks', { names: thanks.names.join(', ') }), coins: thanks.n || undefined };
 };
 
 /** Что натворили конкуренты (rivals.ts): прочитать — окно с ответом. */
@@ -178,56 +159,23 @@ const leagueSource: Source = ({ state, getState, update }) => {
   };
 };
 
-/** Гильдия выполнила цель прошлой недели. */
-const guildSource: Source = ({ state, getState, update }) => {
-  const g = guildInfo();
-  if (!g?.last?.reached || state.guildClaimed === g.last.week) return null;
-  const week = g.last.week;
-  const reward = guildReward(homeLevel(state));
-  return {
-    id: 'guild',
-    icon: '🤝',
-    text: t('mail.guild', { name: g.name }),
-    coins: reward,
-    take: () => {
-      if (getState().guildClaimed === week) return false;
-      update({ ...getState(), money: getState().money + reward, guildClaimed: week });
-      return true;
-    },
-  };
-};
 
-/** Торговая неделя с другом закончилась: награда победителю (и утешительная). */
-const duelSource: Source = ({ state, getState, update }) => {
-  const last = duelInfo()?.last;
-  if (!last || state.duelClaimed === last.week) return null;
-  const reward = duelReward(homeLevel(state), last.won);
-  return {
-    id: 'duel',
-    icon: '⚔️',
-    text: t(last.won ? 'mail.duel.won' : 'mail.duel.lost', { name: last.name }),
-    coins: reward,
-    take: () => {
-      if (getState().duelClaimed === last.week) return false;
-      update({ ...getState(), money: getState().money + reward, duelClaimed: last.week });
-      return true;
-    },
-  };
-};
 
-/** «Чёрная пятница района» прошла: приз за место. */
-const rushSource: Source = ({ state, getState, update }) => {
-  const last = weekendInfo()?.last;
-  if (!last || state.rushClaimed === last.week) return null;
-  const prize = rushPrize(state.level, last.rank, last.players);
+
+/** Дуэль, гильдия и «Чёрная пятница» закрылись (решено 01.11): незабранная награда за них — один раз (social.ts). */
+const farewellSource: Source = ({ state, getState, update }) => {
+  const bye = farewellReward(state, leagueInfo()?.farewell);
+  if (!bye) return null;
   return {
-    id: 'rush',
-    icon: '🛍',
-    text: t('mail.rush', { rank: last.rank, players: last.players }),
-    coins: prize,
+    id: 'farewell',
+    icon: '🎁',
+    text: t('farewell.note'),
+    coins: bye,
     take: () => {
-      if (getState().rushClaimed === last.week) return false;
-      update({ ...getState(), money: getState().money + prize, rushClaimed: last.week });
+      const old = claimFarewell(getState(), leagueInfo()?.farewell);
+      if (!old) return false;
+      track('farewell_claim', getState().day, old.money);
+      update(old.state);
       return true;
     },
   };
@@ -279,10 +227,10 @@ const adventSource: Source = ({ state, getState, update }) => {
 };
 
 /**
- * Все источники почты по порядку строк. Убрать механику — убрать строку (nx-social2 убирает торговую
- * неделю и гильдию и сводит подарки в один вид: duelSource, guildSource, treatsSource/presentsSource).
+ * Все источники почты по порядку строк. Убрать механику — убрать строку. Торговая неделя, гильдия,
+ * «Чёрная пятница» и угощения кофе убраны 01.11 (nx-social2): их незабранное — farewellSource и подарки.
  */
-const SOURCES: Source[] = [chestSource, giftSource, letterSource, orderSource, treatsSource, presentsSource, thanksSource, rivalSource, leagueSource, guildSource, duelSource, rushSource, passSource, adventSource];
+const SOURCES: Source[] = [chestSource, giftSource, letterSource, orderSource, presentsSource, thanksSource, rivalSource, leagueSource, farewellSource, passSource, adventSource];
 
 // ---------- Карточка ----------
 
@@ -415,7 +363,7 @@ export function mailBox(state: StoreState, getState: () => StoreState, update: U
     for (const e of list) if (e.read) chips.append(button(`📖 ${e.text}`, () => e.read!(), 'ui-chip'));
     if (opened?.day === state.day && bag?.taken.includes('presents')) {
       const o = opened;
-      chips.append(button(`📖 ${t('mail.readPresents')}`, () => showOpened(o.res.presents, o.res.thanks, o.got, o.level), 'ui-chip'));
+      chips.append(button(`📖 ${t('mail.readPresents')}`, () => showOpened(o.res.presents, o.res.thanks, o.res, o.got, o.level), 'ui-chip'));
     }
     if (liveOpened?.day === state.day && bag?.taken.includes('advent')) {
       const l = liveOpened;

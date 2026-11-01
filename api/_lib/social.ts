@@ -26,8 +26,10 @@ const SCHEMA = [
   // Откуда пришёл новый игрок: рекламная ссылка src_<канал> или приглашение друга (только первый раз).
   'CREATE TABLE IF NOT EXISTS sources (id INTEGER PRIMARY KEY, source TEXT, at INTEGER)',
   'CREATE INDEX IF NOT EXISTS events_kind ON events (kind, at)',
-  // Торговая неделя с другом и гильдии района (guild.ts).
+  // Начало недели — для турнира и газеты (week.ts).
   'CREATE TABLE IF NOT EXISTS week_start (id INTEGER, week INTEGER, revenue INTEGER, PRIMARY KEY (id, week))',
+  // Дуэль, гильдии и «Чёрная пятница» закрыты (farewell.ts): таблицы НЕ удаляем и не пишем — только
+  // прощальный расчёт читает их до FAREWELL_UNTIL.
   'CREATE TABLE IF NOT EXISTS duels (id INTEGER, week INTEGER, rival INTEGER, PRIMARY KEY (id, week))',
   'CREATE TABLE IF NOT EXISTS guilds (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE, name TEXT, owner INTEGER, created INTEGER)',
   'CREATE TABLE IF NOT EXISTS guild_members (player INTEGER PRIMARY KEY, guild INTEGER, joined INTEGER)',
@@ -36,15 +38,15 @@ const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS guild_weeks (guild INTEGER, week INTEGER, target INTEGER, PRIMARY KEY (guild, week))',
   // Выполнила ли гильдия цель недели: записывается один раз, когда неделя кончилась.
   'CREATE TABLE IF NOT EXISTS guild_results (guild INTEGER, week INTEGER, reached INTEGER, PRIMARY KEY (guild, week))',
-  // «Чёрная пятница района» по выходным (weekend.ts): выручка за выходные.
   'CREATE TABLE IF NOT EXISTS weekend (id INTEGER, week INTEGER, start INTEGER, last INTEGER, PRIMARY KEY (id, week))',
   'CREATE INDEX IF NOT EXISTS weekend_week ON weekend (week)',
-  // Друзья в гостях: угостить кофе (visits.ts).
   // Газета района: кому какой номер уже отправлен (newspaper.ts).
   'CREATE TABLE IF NOT EXISTS newspaper (id INTEGER, week INTEGER, PRIMARY KEY (id, week))',
   // Карточки итогов для сторис: картинка в base64, живёт пару дней (card.ts).
   'CREATE TABLE IF NOT EXISTS cards (id TEXT PRIMARY KEY, owner INTEGER, at INTEGER, data TEXT)',
   'CREATE INDEX IF NOT EXISTS cards_owner ON cards (owner, at)',
+  // Монеты от друзей (visits.ts): старые угощения кофе и недельная доля друга-сотрудника (pay);
+  // открываются вместе с подарками (presents.ts).
   'CREATE TABLE IF NOT EXISTS gifts (sender INTEGER, receiver INTEGER, day INTEGER, amount INTEGER, claimed INTEGER DEFAULT 0, PRIMARY KEY (sender, receiver, day))',
   'CREATE INDEX IF NOT EXISTS gifts_receiver ON gifts (receiver, claimed)',
   // Как выглядит магазин (для «в гости к другу», visits.ts): снимок от игры, JSON.

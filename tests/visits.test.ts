@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordReferral, socialPing } from '../api/_lib/social';
 import { progress } from '../api/_lib/stats';
-import { visits, GIFT, STREET_SIZE } from '../api/_lib/visits';
+import { FRIEND_PAY, visits, STREET_SIZE } from '../api/_lib/visits';
+import { presents } from '../api/_lib/presents';
 import type { D1, D1Statement, Env } from '../api/_lib/telegram';
 
 // Настоящая SQLite из Node (22.5+) вместо Cloudflare D1: те же запросы, та же логика.
@@ -57,22 +58,49 @@ afterEach(() => vi.unstubAllGlobals());
 const json = async <T>(r: Response | Promise<Response>) => (await (await r).json()) as T;
 
 describe.skipIf(!Database)('друзья в гостях (сервер)', () => {
-  it('друзья по приглашениям приходят; угостить кофе — раз в день; друг забирает подарок', async () => {
+  it('друзья по приглашениям приходят; угостить кофе — раз в день, это подарок-пирог; друг открывает его с подарками', async () => {
     const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
     await socialPing(await post(1), env);
     await recordReferral(env, 2, 'ref_1');
     for (const id of [1, 2, 3]) await progress(await post(id, { level: 2, revenue: 100 }), env);
-    type L = { friends: { id: number; name: string; treated: boolean }[]; gifts: { name: string; amount: number }[] };
+    type L = { friends: { id: number; name: string; treated: boolean }[] };
     const mine = await json<L>(visits(await post(1, { action: 'list' }), env));
     expect(mine.friends.map((f) => f.id)).toEqual([2]);
     expect(await json<{ ok: boolean }>(visits(await post(1, { action: 'gift', to: 3 }), env))).toEqual({ ok: false });
     expect(await json<{ ok: boolean }>(visits(await post(1, { action: 'gift', to: 2 }), env))).toEqual({ ok: true });
     expect(await json<{ ok: boolean }>(visits(await post(1, { action: 'gift', to: 2 }), env))).toEqual({ ok: false });
     expect((await json<L>(visits(await post(1, { action: 'list' }), env))).friends[0].treated).toBe(true);
-    const friend = await json<L>(visits(await post(2, { action: 'list' }), env));
-    expect(friend.gifts).toEqual([{ name: 'Тест', amount: GIFT }]);
-    expect(await json<{ amount: number }>(visits(await post(2, { action: 'claim' }), env))).toEqual({ amount: GIFT });
-    expect(await json<{ amount: number }>(visits(await post(2, { action: 'claim' }), env))).toEqual({ amount: 0 });
+    // Угощение — обычный подарок: в списке подарков «уже подарено», у друга — подарок ждёт.
+    expect((await json<{ given: number[] }>(presents(await post(1, { action: 'list' }), env))).given).toEqual([2]);
+    expect((await json<{ waiting: number }>(presents(await post(2, { action: 'list' }), env))).waiting).toBe(1);
+    const opened = await json<{ presents: { name: string; kind: string }[]; coins: number }>(presents(await post(2, { action: 'open' }), env));
+    expect(opened.presents).toMatchObject([{ name: 'Тест', kind: 'pie' }]);
+    expect(opened.coins).toBe(0);
+    // Подарок другу сегодня уже был — угостить кофе второй раз нельзя (и наоборот).
+    expect(await json<{ ok: boolean; error?: string }>(presents(await post(1, { action: 'give', to: 2, kind: 'card', phrase: 1 }), env))).toEqual({ ok: false, error: 'already' });
+  });
+
+  it('старые угощения кофе (до 01.11) не теряются: монеты открываются с подарками, старая игра забирает их по-старому', async () => {
+    const env: Env = { BOT_TOKEN: TOKEN, DB: d1() };
+    await socialPing(await post(1), env);
+    await recordReferral(env, 2, 'ref_1');
+    for (const id of [1, 2]) await progress(await post(id, { level: 2, revenue: 100 }), env);
+    const db = env.DB!;
+    await db.prepare('INSERT INTO gifts (sender, receiver, day, amount) VALUES (1, 2, 1, 300), (1, 2, 2, 300)').run();
+    expect((await json<{ waiting: number }>(presents(await post(2, { action: 'list' }), env))).waiting).toBe(2);
+    const opened = await json<{ coins: number; from: string[] }>(presents(await post(2, { action: 'open' }), env));
+    expect(opened).toMatchObject({ coins: 600, from: ['Тест'] });
+    expect((await json<{ coins: number }>(presents(await post(2, { action: 'open' }), env))).coins).toBe(0);
+    // Старая игра: «забрать» по-старому — то, что ещё не открыто.
+    await db.prepare('INSERT INTO gifts (sender, receiver, day, amount) VALUES (1, 2, 3, 300)').run();
+    expect(await json<{ amount: number }>(visits(await post(2, { action: 'claim' }), env))).toEqual({ amount: 300 });
+    expect((await json<{ coins: number }>(presents(await post(2, { action: 'open' }), env))).coins).toBe(0);
+    // Недельная доля друга-сотрудника — монеты, раз в день; подарок другу в тот же день не занимает.
+    expect(await json<{ ok: boolean }>(visits(await post(1, { action: 'pay', to: 2 }), env))).toEqual({ ok: true });
+    expect(await json<{ ok: boolean }>(visits(await post(1, { action: 'pay', to: 2 }), env))).toEqual({ ok: false });
+    expect(await json<{ ok: boolean }>(visits(await post(1, { action: 'pay', to: 99 }), env))).toEqual({ ok: false });
+    expect(await json<{ ok: boolean }>(presents(await post(1, { action: 'give', to: 2, kind: 'card', phrase: 1 }), env))).toEqual({ ok: true });
+    expect((await json<{ coins: number }>(presents(await post(2, { action: 'open' }), env))).coins).toBe(FRIEND_PAY);
   });
 
   it('магазин друга: виден только своим, большой снимок не сохраняется', async () => {

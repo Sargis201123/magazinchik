@@ -1,5 +1,6 @@
-// Подарки друзьям (game/social.ts, api/_lib/presents.ts): окно «Оставить подарок» в гостях у друга,
-// утренняя карточка «Подарки от друзей» и полка памяти в профиле — открытки друзей и кубки турнира.
+// Подарки друзьям (game/social.ts, api/_lib/presents.ts) — единственный вид подарка другу (01.11:
+// угощение кофе стало подарком-пирогом): окно «Оставить подарок» в гостях у друга, утренняя карточка
+// «Подарки от друзей» и полка памяти в профиле — открытки друзей и кубки турнира.
 
 import { t, type TextKey } from '../i18n';
 import { track } from '../platform/analytics';
@@ -119,8 +120,8 @@ export function showGiftPicker(friend: { id: number; name: string }, day: number
   render();
 }
 
-/** Окно с открытыми подарками: кто заходил, что оставил, добрая фраза, отзыв и что получили. */
-export function showOpened(presents: Present[], thanks: string[], got: { money: number; rating: number; cards: number }, level: number): void {
+/** Окно с открытыми подарками: кто заходил, что оставил, добрая фраза, отзыв и что получили (и старые угощения кофе). */
+export function showOpened(presents: Present[], thanks: string[], coffee: { coins: number; from: string[] }, got: { money: number; rating: number; cards: number }, level: number): void {
   socialStyles();
   const { card, close } = openModal();
   card.append(el('h2', '', `🎁 ${t('social.open.title')}`));
@@ -136,6 +137,7 @@ export function showOpened(presents: Present[], thanks: string[], got: { money: 
     );
     card.append(box);
   }
+  if (coffee.coins) card.append(el('div', 'ui-note', t('social.open.coffee', { names: coffee.from.slice(0, 5).join(', '), n: coffee.coins })));
   if (thanks.length) card.append(el('div', 'ui-note', t('social.open.thanks', { names: [...new Set(thanks)].slice(0, 5).join(', ') })));
   card.append(el('div', 'ui-note', t('social.open.total', { n: got.money })));
   card.append(button(t('social.open.ok'), close, 'ui-btn'));
@@ -155,10 +157,10 @@ export function presentsBox(getState: () => StoreState, update: (next: StoreStat
         open.disabled = false;
         return;
       }
-      const opened = openPresents(getState(), res.presents, res.thanks.length);
+      const opened = openPresents(getState(), res.presents, res.thanks.length, res.coins);
       track('present_open', getState().day, res.presents.length);
       update(opened.state, 'success');
-      if (res.presents.length || res.thanks.length) showOpened(res.presents, res.thanks, opened, getState().level);
+      if (res.presents.length || res.thanks.length || res.coins) showOpened(res.presents, res.thanks, res, opened, getState().level);
     });
   });
   box.append(el('b', '', `🎁 ${t('social.open.title')}`), el('div', 'ui-note', text), open);

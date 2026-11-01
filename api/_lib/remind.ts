@@ -17,7 +17,7 @@ import { liveEventsFor } from './live.js';
 import { ready } from './social.js';
 import { bot, type Env } from './telegram.js';
 import { langOf, type Lang } from './lang.js';
-import { isWeekend } from './weekend.js';
+import { isWeekend } from './week.js';
 
 const HOUR = 3600_000;
 /** Не заходил столько — напомнить; не чаще раза в REMIND_EVERY; не больше MAX_MISSES подряд. */
@@ -110,7 +110,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     gift: '👵 Бабушка: «Внучек, гостинец уже собран — день {n} из 7! Загляни сегодня, а то серия начнётся сначала»',
     'gift.big': '👵 Бабушка: «Внучек, шесть дней подряд заходил — сегодня самый большой гостинец! Не пропусти»',
     spoil: '🧓 Валентина: «Слышала, у тебя {n} шт. товара доживают последний день. Уцени, пока не пропали!»',
-    weekend: '📺 Новости района: «Выходная распродажа! Все магазины района соревнуются, кто наторгует больше. Успей занять место»',
+    weekend: '📺 Новости района: «Выходные! В турнире района каждая монета сейчас идёт в очки в полтора раза. Самое время обогнать соседей»',
     cashier: '👵 Бабушка: «Кассир торгует без тебя, но полки пустеют. Заглянул бы, закупил товара»',
     day: '👵 Бабушка: «День {day}: у дверей уже собрались покупатели. Открываем?»',
     'day.0': '👵 Бабушкин гостинец уже ждёт! Загляни в магазинчик — покупатели скучают.',
@@ -139,7 +139,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     gift: '👵 Grandma: "Dear, your gift is ready — day {n} of 7! Come today, or the streak starts over"',
     'gift.big': '👵 Grandma: "Dear, six days in a row — today is the biggest gift! Don\'t miss it"',
     spoil: '🧓 Valentina: "I heard {n} items in your shop are on their last day. Mark them down before they spoil!"',
-    weekend: '📺 District news: "Weekend sale! All the shops in the district compete for the best takings. Grab your spot"',
+    weekend: '📺 District news: "It\'s the weekend! Every coin counts 1.5× in the district tournament right now. Time to overtake the neighbours"',
     cashier: '👵 Grandma: "Your cashier is trading without you, but the shelves are emptying. Come restock"',
     day: '👵 Grandma: "Day {day}: customers are already at the door. Shall we open?"',
     'day.0': "👵 Grandma's gift is waiting! Drop by the shop — the customers miss you.",
@@ -168,7 +168,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     gift: '👵 Nine: “Yavrum, hediyen hazır — 7 günün {n}. günü! Bugün uğra, yoksa seri baştan başlar”',
     'gift.big': '👵 Nine: “Yavrum, altı gündür üst üste geliyorsun — bugün en büyük hediye seni bekliyor! Kaçırma”',
     spoil: '🧓 Valentina: “Duydum ki dükkânında {n} ürünün son günüymüş. Bozulmadan indirime koy!”',
-    weekend: '📺 Mahalle haberleri: “Hafta sonu indirimi! Mahalledeki bütün dükkânlar en çok satış için yarışıyor. Yerini kap”',
+    weekend: '📺 Mahalle haberleri: “Hafta sonu geldi! Mahalle turnuvasında şu an her para 1,5 kat puan. Komşuları geçmenin tam zamanı”',
     cashier: '👵 Nine: “Kasiyer sensiz satış yapıyor ama raflar boşalıyor. Bir uğra da mal al”',
     day: '👵 Nine: “{day}. gün: kapıda müşteriler toplandı bile. Açıyor muyuz?”',
     'day.0': '👵 Ninenin hediyesi seni bekliyor! Dükkâna uğra — müşteriler seni özledi.',
@@ -197,7 +197,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     gift: '👵 La abuela: “Cariño, tu regalo ya está listo: ¡día {n} de 7! Pásate hoy o la racha empieza de nuevo”',
     'gift.big': '👵 La abuela: “Cariño, seis días seguidos: ¡hoy toca el regalo más grande! No te lo pierdas”',
     spoil: '🧓 Valentina: “Me contaron que tienes mercancía en su último día: {n} uds. ¡Rebájala antes de que se eche a perder!”',
-    weekend: '📺 Noticias del barrio: “¡Ofertas de fin de semana! Todas las tiendas del barrio compiten por vender más. Asegura tu lugar”',
+    weekend: '📺 Noticias del barrio: “¡Es fin de semana! En el torneo del barrio cada moneda vale 1,5 veces en puntos. Es el momento de adelantar a los vecinos”',
     cashier: '👵 La abuela: “Tu cajero vende sin ti, pero los estantes se están vaciando. Pásate a reponer”',
     day: '👵 La abuela: “Día {day}: ya hay clientes en la puerta. ¿Abrimos?”',
     'day.0': '👵 ¡El regalo de la abuela te espera! Pásate por la tienda: los clientes te extrañan.',
@@ -227,7 +227,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     gift: '👵 Әже: «Балам, сәлемдеме дайын — 7 күннің {n}-күні! Бүгін соқ, әйтпесе серия басынан басталады»',
     'gift.big': '👵 Әже: «Балам, алты күн қатарынан келдің — бүгін ең үлкен сәлемдеме! Өткізіп алма»',
     spoil: '🧓 Валентина: «Естідім, дүкеніңде {n} дана тауардың соңғы күні екен. Бүлінбей тұрғанда бағасын түсір!»',
-    weekend: '📺 Аудан жаңалықтары: «Демалыс күнгі сауда! Ауданның барлық дүкені кім көп сатады деп жарысады. Орныңды ал»',
+    weekend: '📺 Аудан жаңалықтары: «Демалыс! Аудан турнирінде қазір әр тиын 1,5 есе ұпай береді. Көршілерді озатын кез»',
     cashier: '👵 Әже: «Кассир сенсіз сатып жатыр, бірақ сөрелер босап барады. Соғып, тауар сатып алсаң етті»',
     day: '👵 Әже: «{day}-күн: есік алдында сатып алушылар жиналып қалды. Ашамыз ба?»',
     'day.0': '👵 Әженің сәлемдемесі күтіп тұр! Дүкенге соқ — сатып алушылар сағынды.',
@@ -256,7 +256,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     gift: '👵 Buvi: «Nevaram, sovgʻa tayyor — 7 kundan {n}-kun! Bugun kir, boʻlmasa seriya boshidan boshlanadi»',
     'gift.big': '👵 Buvi: «Nevaram, olti kun ketma-ket kelding — bugun eng katta sovgʻa! Qoʻldan boy berma»',
     spoil: '🧓 Valentina: «Eshitdim, doʻkoningda {n} ta mahsulotning oxirgi kuni ekan. Buzilmasidan arzonlashtir!»',
-    weekend: '📺 Mahalla yangiliklari: «Dam olish kunlari savdosi! Mahalladagi hamma doʻkonlar kim koʻproq sotishini bellashyapti. Joyingni egalla»',
+    weekend: '📺 Mahalla yangiliklari: «Dam olish kunlari! Mahalla turnirida hozir har bir tanga 1,5 barobar ochko beradi. Qoʻshnilardan oʻzib ketish vaqti»',
     cashier: '👵 Buvi: «Kassir sensiz savdo qilyapti, lekin javonlar boʻshab qolyapti. Kirib, mol xarid qilsang boʻlardi»',
     day: '👵 Buvi: «{day}-kun: eshik oldida xaridorlar yigʻilib qoldi. Ochamizmi?»',
     'day.0': '👵 Buvining sovgʻasi kutyapti! Doʻkonchaga kir — xaridorlar seni sogʻinishdi.',
@@ -285,7 +285,7 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     gift: '👵 Vovó: “Querido, seu mimo já está pronto — dia {n} de 7! Passe hoje, senão a sequência recomeça”',
     'gift.big': '👵 Vovó: “Querido, seis dias seguidos — hoje é o maior mimo de todos! Não perca”',
     spoil: '🧓 Valentina: “Fiquei sabendo que {n} un. de mercadoria estão no último dia. Faça um desconto antes que estraguem!”',
-    weekend: '📺 Notícias do bairro: “Liquidação de fim de semana! Todas as lojas do bairro disputam quem vende mais. Garanta seu lugar”',
+    weekend: '📺 Notícias do bairro: “É fim de semana! No torneio do bairro cada moeda vale 1,5 vez em pontos. Hora de passar os vizinhos”',
     cashier: '👵 Vovó: “O caixa está vendendo sem você, mas as prateleiras estão esvaziando. Passe aqui para repor”',
     day: '👵 Vovó: “Dia {day}: já tem clientes na porta. Vamos abrir?”',
     'day.0': '👵 O mimo da vovó está esperando! Passe na lojinha — os clientes estão com saudade.',
