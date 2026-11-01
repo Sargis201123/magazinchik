@@ -1,5 +1,5 @@
 import { t, type TextKey } from '../i18n';
-import { onShelves, PRODUCTS, sellableProducts, warehouseCapacity, warehouseCount, type DayStats, type StoreState } from '../game/economy';
+import { homemade, onShelves, PRODUCTS, sellableProducts, warehouseCapacity, warehouseCount, type DayStats, type StoreState } from '../game/economy';
 import { button, curtain, el, injectStyles, openModal, pixelize, replay, rollNumber } from './dom';
 import type { Review } from '../game/reviews';
 import { reviewCards } from './reviews';
@@ -218,7 +218,9 @@ export class Hud {
       }
     }
     // Только то, что на полках кончается: пусто — красным, мало — жёлтым. Остальное — в закупке.
+    // Своё (выпечку, банки своей марки) не закупают — пустая полка тут не к закупке.
     const low = sellableProducts(state)
+      .filter((id) => !homemade(id))
       .map((id) => ({ id, n: onShelves(state, id) }))
       .filter((p) => p.n <= LOW_ON_SHELF)
       .sort((a, b) => a.n - b.n);

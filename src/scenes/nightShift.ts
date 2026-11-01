@@ -4,7 +4,7 @@
 
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
-import { PRODUCTS, billTotal, shelfFor, takeFromShelf } from '../game/economy';
+import { PRODUCTS, billTotal, shelfFor, takeFromShelf, type DayStats, type StoreState } from '../game/economy';
 import { nightCycle } from '../game/day';
 import { rankName, rankOf } from '../game/endless';
 import { saveGame } from '../game/save';
@@ -63,6 +63,7 @@ import * as newcomer from './newcomer';
 import * as rivals from './rivals';
 import * as camera from './camera';
 import * as building from './building';
+import { LINES, linesSold, type LinesNight } from '../game/lines';
 
 /** Ночной сторож Михалыч: ушанка, ватник цвета хаки, седые усы, фонарик (как в art/security.py). */
 const WATCHMAN: Look = {
@@ -314,6 +315,9 @@ export function finishDay(scene: StoreScene): void {
   }
   // Филиал за дорогой (branch.ts): чистый доход за день одной строкой.
   if (branch) extra.push([t('branch.summary'), t('branch.summaryValue', { n: branch })]);
+  // Своя марка на полках (lines.ts): сколько продали за день и что наделали за ночь.
+  const brandLine = linesSummary(scene.state, scene.stats, night.lines);
+  if (brandLine) extra.push([t('lines.summary'), brandLine]);
   const rankAfter = rankOf(state.totalRevenue);
   if (rankAfter > rankBefore) stamps.push({ kind: 'rank', name: rankName(rankAfter, t) });
   if (order) extra.push([t('summary.order'), order.delivered ? t('summary.orderDone', { n: order.earned }) : t('summary.orderFailed')]);
@@ -748,4 +752,19 @@ export function openShop(scene: StoreScene): void {
     scene.tweens.add({ targets: shutter, displayHeight: 0.1, duration: 600, ease: 'Quad.easeIn', onComplete: () => shutter.destroy() });
   }
   scene.shutters = [];
+}
+
+/**
+ * Строка итогов дня о своей марке: «продано 12 на 860 💰 · ночью: 🍯+6 🥒+4 · 🥟 не из чего».
+ * Пусто — ни одна линейка не открыта или сегодня нечего сказать.
+ */
+function linesSummary(state: StoreState, stats: DayStats, night: LinesNight): string {
+  const sold = linesSold(state, stats.sold);
+  const parts: string[] = [];
+  if (sold.n) parts.push(t('lines.summarySold', { n: sold.n, money: sold.revenue }));
+  const made = night.made.filter((m) => m.made > 0).map((m) => `${LINES[m.id].icon}+${m.made}`);
+  if (made.length) parts.push(t('lines.summaryMade', { list: made.join(' ') }));
+  const short = night.made.filter((m) => m.short).map((m) => LINES[m.id].icon);
+  if (short.length) parts.push(t('lines.summaryShort', { list: short.join(' ') }));
+  return parts.join(' · ');
 }

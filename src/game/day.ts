@@ -43,6 +43,7 @@ import { nightBoostGuests, nightMorning } from './nightGuests';
 import { laneGuests } from './lanes';
 import { momentCount, momentRating } from './moments';
 import { branchNight, branchReport } from './branch';
+import { makeLines, type LinesNight } from './lines';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -53,6 +54,8 @@ export interface NightSummary extends NightResult {
   branch: number;
   /** Пройденный сегодня шаг сезонной недели (weeks.ts) или null. */
   week: WeekNight | null;
+  /** Что наделали за ночь линейки своей марки (lines.ts). */
+  lines: LinesNight;
 }
 
 export function nightCycle(state: StoreState, stats: DayStats, random: () => number = Math.random): NightSummary {
@@ -85,6 +88,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Филиал отдаёт доход за день до счетов: им можно расплатиться.
   const branch = branchNight(s, day);
   s = branch.state;
+  // Своя марка: после закрытия варят варенье, солят, лепят пельмени, ставят квас — из того, что на складе.
+  const lines = makeLines(s);
+  s = lines.state;
   const ended = endDay(s, stats, random);
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
@@ -98,6 +104,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
     week: week.done,
+    lines: lines.night,
   };
 }
 

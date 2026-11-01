@@ -119,6 +119,7 @@ import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
 import * as weeksFx from './weeks';
+import * as linesFx from './brandLines';
 import * as deliveries from './deliveries';
 import * as food from './food';
 import * as streets from './streets';
@@ -577,6 +578,9 @@ export class StoreScene extends Phaser.Scene {
   weekObjs: Phaser.GameObjects.GameObject[] = [];
   weekTimers: (() => void)[] = [];
   weekSign?: Phaser.GameObjects.Image;
+  /** Уголки своей марки (brandLines.ts): табурет с вареньем, бочки солений и кваса, доска с пельменями; пар над тазом. */
+  lineObjs: Phaser.GameObjects.GameObject[] = [];
+  lineTimers: (() => void)[] = [];
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
   bigObjs: { destroy: () => void }[] = [];
   /** Блэкаут на весь район: темно, касса считает вручную (щиток не поможет). */
@@ -1012,6 +1016,9 @@ export class StoreScene extends Phaser.Scene {
     this.weekObjs = [];
     this.weekTimers = [];
     weeksFx.applyWeek(this);
+    this.lineObjs = [];
+    this.lineTimers = [];
+    linesFx.applyLines(this);
     morningFlow.noteNewProps(this, bought);
     // Пол — последним: тени ложатся от всей мебели, что уже стоит в зале и во флигеле.
     this.loadWear();

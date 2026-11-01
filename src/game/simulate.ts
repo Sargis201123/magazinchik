@@ -89,7 +89,7 @@ import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { badBatch, haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } from './suppliers';
 import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
-import { CARRY, OWN_PRODUCTS } from './economy';
+import { CARRY, homemade } from './economy';
 import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
 import { endSale, SALE_CROWD, saleExtraItems, startSale, weekFor } from './weeks';
 import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole, RELIEF_ROLE, TILL_ROLES } from './registers';
@@ -107,6 +107,7 @@ import { dayDemand } from './demand';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
 import { deliveryDay } from './delivery';
+import { buyLineTier, LINE_IDS, LINES, lineLock, lineUnitCost, nextLineCost, type LineId } from './lines';
 import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
 import { buyRadio, hasRadio, radioPatience, RADIO_PRICE, radioTolerance, setStation } from './radio';
 import { buyKiosk, kioskCount, kioskTier, laneGuests, nextKioskPrice, nextKioskTier, upgradeKiosks } from './lanes';
@@ -140,6 +141,8 @@ export interface SimDay {
   branch: number;
   /** Сколько потрачено на рекламу сегодня. */
   ads: number;
+  /** Своя марка на полках (lines.ts): выручка за проданное минус сырьё и банки (по себестоимости штуки). */
+  lines: number;
   /** Награды за задания дня (endless.ts questsFor). */
   quests: number;
   expenses: number;
@@ -178,6 +181,8 @@ export interface SimOptions {
   hireStaff?: boolean;
   /** Какие новые механики использует игрок (по умолчанию — никакие, как раньше). */
   features?: Partial<Record<Feature, boolean>>;
+  /** С features.lines: какие линейки своей марки открывать (по умолчанию — все; замер одной — для окупаемости). */
+  lineIds?: LineId[];
   /** Как отвечать на ценовую войну. */
   war?: WarAnswer;
   /** Сколько закладок в печь игрок успевает за день и как часто забывает вынуть. */
@@ -215,6 +220,8 @@ export type Feature =
   | 'skills'
   | 'radio'
   | 'brand'
+  // Линейки своей марки (lines.ts): открывает и улучшает, когда есть запас и не копит на помещение.
+  | 'lines'
   | 'cafe'
   | 'kitchen'
   | 'rush'
@@ -347,6 +354,7 @@ export function simulate({
   ovenBurn = 0.1,
   adAlways,
   momentCatch = 0,
+  lineIds = LINE_IDS,
 }: SimOptions): SimResult {
   const random = rng(seed);
   // Случайности новых механик — отдельно: тогда прогоны с механикой и без идут по одним и тем же
@@ -547,6 +555,15 @@ export function simulate({
         state = buyBrandLevel(state) ?? state;
       }
     }
+    // Своя марка на полках: по одной ступени за день — самую дешёвую из доступных, с запасом.
+    if (features.lines) {
+      const next = lineIds.filter((id) => !lineLock(state, id) && nextLineCost(state, id) !== null).sort((a, b) => nextLineCost(state, a)! - nextLineCost(state, b)!)[0];
+      const cost = next && nextLineCost(state, next);
+      if (next && cost && state.money >= cost + reserve * 2 && canSplurge(cost)) {
+        investments += cost;
+        state = buyLineTier(state, next) ?? state;
+      }
+    }
     // Радио: купить, когда есть запас; со сладостями у кассы — хиты, иначе ретро.
     if (features.radio) {
       if (!hasRadio(state) && state.money >= RADIO_PRICE + reserve) state = buyRadio(state) ?? state;
@@ -720,11 +737,11 @@ export function simulate({
     // Гостей, которых привели открытые кассы (lanes.ts), закупка учитывает отдельно — см. ниже.
     const itemWants = (guests / laneGuests(state)) * (AVG_WANTS + adBasket(state));
     // Свою выпечку хотят, только пока она на полке: раскупили — хотят другое.
-    const ownWanted = OWN_PRODUCTS.filter((p) => sellable.includes(p)).reduce(
+    const ownWanted = sellable.filter((p) => homemade(p)).reduce(
       (sum, p) => sum + Math.min(onShelves(state, p), (itemWants * weight(p)) / totalWeight),
       0,
     );
-    const otherWeight = sellable.filter((p) => !OWN_PRODUCTS.includes(p)).reduce((sum, p) => sum + weight(p), 0);
+    const otherWeight = sellable.filter((p) => !homemade(p)).reduce((sum, p) => sum + weight(p), 0);
     // Кухня с поваром закупает продукты в свою кладовую сама — из кассы, на день вперёд (полки зала не трогает).
     if (features.kitchen) {
       const pantry = stockKitchen(state);
@@ -754,7 +771,7 @@ export function simulate({
       const shelfRoom = state.shelves
         .filter((s) => s.kind === PRODUCTS[id].category)
         .reduce((sum, s) => sum + shelfCapacity(s), 0);
-      const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category && !OWN_PRODUCTS.includes(p)).length;
+      const shareOfShelf = shelfRoom / sellable.filter((p) => PRODUCTS[p].category === PRODUCTS[id].category && !homemade(p)).length;
       const order = (state.plan?.order?.product === id ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[id] ?? 0);
       const target = Math.ceil(Math.min(demand * 1.1, shareOfShelf + CARRY * 2)) + order;
       return Math.max(0, target - onShelves(state, id) - warehouseOf(state, id));
@@ -762,10 +779,10 @@ export function simulate({
     // Под рекламу закупаются с умом: места на складе не хватит на всё — режут закупку поровну, а не по
     // порядку списка. Иначе при наплыве гостей первые по списку дешёвые товары забивают склад, а мясо и
     // цветы не влезают. В обычные дни — по списку, как было (баланс теперь считают по 'restock').
-    const toBuy = buyMode === 'smart' && activeAds(state).length ? sellable.filter((p) => !OWN_PRODUCTS.includes(p)).reduce((sum, p) => sum + lacking(p), 0) : 0;
+    const toBuy = buyMode === 'smart' && activeAds(state).length ? sellable.filter((p) => !homemade(p)).reduce((sum, p) => sum + lacking(p), 0) : 0;
     const fit = toBuy > 0 ? Math.min(1, (warehouseCapacity(state) - warehouseCount(state)) / toBuy) : 1;
     for (const id of buyMode === 'smart' || buyMode === 'naive' ? sellable : []) {
-      if (OWN_PRODUCTS.includes(id)) continue;
+      if (homemade(id)) continue;
       if (buyMode === 'naive') {
         // Новичок: всего поровну, у первого же поставщика, у кого товар есть.
         const sid = SUPPLIER_IDS.find((x) => supplierOpen(SUPPLIERS[x], state.shelves) && unitPrice(SUPPLIERS[x], deals[x], id) !== null);
@@ -798,7 +815,7 @@ export function simulate({
     if (buyMode === 'smart' && laneGuests(state) > 1) {
       const allWants = guests * (AVG_WANTS + adBasket(state)) - ownWanted;
       const extra = sellable
-        .filter((id) => !OWN_PRODUCTS.includes(id))
+        .filter((id) => !homemade(id))
         .map((id) => {
           const offers = SUPPLIER_IDS.map((sid) => ({ sid, price: unitPrice(SUPPLIERS[sid], deals[sid], id) })).filter(
             (o): o is { sid: (typeof SUPPLIER_IDS)[number]; price: number } => o.price !== null,
@@ -1088,6 +1105,8 @@ export function simulate({
     state = recordDay(state, stats);
     stats.adGuests = adGuests(state, stats.served + stats.lost);
     const night = nightCycle(state, stats, random);
+    // Сахар, банки и рассол своей марки (lines.ts) — та же закупка, только ночью.
+    purchases += night.lines.spent;
     const before = night.state;
     state = night.state;
     const news = before.security?.news;
@@ -1123,6 +1142,7 @@ export function simulate({
       night: nightProfit,
       branch: night.branch,
       ads: adSpent,
+      lines: LINE_IDS.reduce((sum, id) => sum + (stats.sold[LINES[id].product] ?? 0) * (state.prices[LINES[id].product] - lineUnitCost(id)), 0),
       quests: night.quests.earned,
     });
     void moneyStart;
