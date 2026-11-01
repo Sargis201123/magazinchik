@@ -53,6 +53,14 @@ const DESCRIPTION: Record<Lang, string> = {
     'Ал үйде қызың Соня күтіп отыр. Екеуіңнің өз оқиғаларың бар — ол бірден ашылмайды…',
     '',
     '«Ойнау» батырмасын бас 👇',
+  uz: [
+    '🛒 Magazinchik — Telegramning oʻzida oʻynaladigan shinam piksel doʻkon simulyatori.',
+    '',
+    'Buvi senga kichkina kiosk qoldirdi. Mol xarid qil, narx qoʻy, sotuvchilar yolla, univermaggacha kengay va «Gigant» gipermarketiga bas kel.',
+    '',
+    'Uyda esa qizing Sonya kutyapti. Ikkovingizning oʻz hikoyangiz bor — u asta-sekin ochiladi…',
+    '',
+    '«Oʻynash»ni bos 👇',
   ].join('\n'),
 };
 
@@ -62,6 +70,7 @@ const SHORT: Record<Lang, string> = {
   tr: 'Dokunaklı bir hikâyesi olan piksel dükkân simülatörü. Doğrudan Telegram’da oyna 🛒',
   es: 'Un simulador de tienda en pixel art con una historia conmovedora. Juega directo en Telegram 🛒',
   kk: 'Жүрек жылытар оқиғасы бар пиксель дүкен симуляторы. Telegram-да бірден ойна 🛒',
+  uz: 'Taʼsirli hikoyali piksel doʻkon simulyatori. Telegramning oʻzida oʻyna 🛒',
 };
 
 const COMMANDS: Record<Lang, { command: string; description: string }[]> = {
@@ -89,6 +98,10 @@ const COMMANDS: Record<Lang, { command: string; description: string }[]> = {
     { command: 'start', description: 'Ойынды ашу' },
     { command: 'paysupport', description: 'Жұлдызбен төлеу бойынша көмек' },
     { command: 'terms', description: 'Шарттар және жұлдызды қайтару' },
+  uz: [
+    { command: 'start', description: 'Oʻyinni ochish' },
+    { command: 'paysupport', description: 'Yulduzlar bilan toʻlovda yordam' },
+    { command: 'terms', description: 'Shartlar va yulduzlarni qaytarish' },
   ],
 };
 
@@ -178,6 +191,18 @@ const CHAT: Record<Lang, ChatTexts> = {
     paysupport: (id) =>
       `💬 Жұлдызбен төлеу бойынша көмек\n\nЖұлдыз есептен шығып, бірақ сатып алған зат шықпаса немесе қате нәрсе алсаң — ${SUPPORT} жаз: не алдың және қашан. 1–2 күнде жауап береміз, қажет болса жұлдызды қайтарамыз.\n\nСатып алғандарың Telegram-нан өзі қалпына келеді — алдымен ойынды қайта ашып көр.${id}`,
     terms: `📄 «Магазинчик» шарттары\n\n• Ойын тегін. Telegram жұлдыздарына тек дүкен әшекейлері сатылады — ойынның өтуіне әсер етпейді.\n• Әр затты сатып алмас бұрын бір күн тегін байқап көруге болады.\n• Сатып алған зат мәңгі сенікі және осы Telegram аккаунты бар кез келген телефонда қайтып келеді.\n• Жұлдызды қайтару: сатып алған зат шықпаса немесе қателесіп алсаң — 30 күн ішінде /paysupport арқылы жаз.\n• Біз тек Telegram нөміріңді сақтаймыз — сатып алу, достарды шақыру және боттың сирек еске салулары үшін. Еске салу келмесін десең, ботты тоқтат.\n\nСұрақтар: ${SUPPORT}`,
+  uz: {
+    days: (day) => [
+      `${day}-kun. Kechqurun Sonya seni kutyapti 🌙\nDoʻkoncha eshigi oldida xaridorlar allaqachon yigʻilyapti.`,
+      `${day}-kun. Qorongʻi tushyapti, koʻcha chiroqlari yondi 🏮\nDoʻkonchaga bir kirib oʻt — kechqurun Sonya seni uyda kutyapti.`,
+      `${day}-kun. Kassadagi navbat uzayib boryapti 🛒\nSmenani boshla — Sonya kechqurun seni kutyapti.`,
+    ],
+    friend: (friend) => `${friend} seni «Magazinchik»ka chaqiryapti 🎁\nBoshlash uchun sovgʻang tayyor — ${WELCOME_COINS} tanga. Buvining doʻkoni seni kutyapti!`,
+    newcomer: 'Buvi senga doʻkonchasini qoldirdi 🛒\nEshiklarni och — birinchi xaridorlar allaqachon kutyapti!',
+    buyer: (userId) => `\n\nXaridor raqaming: ${userId} — xabaringda uni ham yoz.`,
+    paysupport: (id) =>
+      `💬 Yulduzlar bilan toʻlovda yordam\n\nAgar yulduzlar yechilgan-u, xarid paydo boʻlmagan boʻlsa yoki notoʻgʻri narsa olib qoʻygan boʻlsang — ${SUPPORT} ga yoz: nima olding va qachon. 1–2 kun ichida javob beramiz, kerak boʻlsa yulduzlarni qaytaramiz.\n\nXaridlar Telegramdan oʻzi tiklanadi — avval oʻyinni qayta ishga tushirib koʻr.${id}`,
+    terms: `📄 «Magazinchik» shartlari\n\n• Oʻyin bepul. Telegram yulduzlariga faqat doʻkon bezaklari sotiladi — ular oʻyin borishiga taʼsir qilmaydi.\n• Har bir narsani sotib olishdan oldin bir kun bepul sinab koʻrish mumkin.\n• Xarid abadiy seniki va shu Telegram akkaunti bor har qanday telefonda qaytadi.\n• Yulduzlarni qaytarish: xarid paydo boʻlmagan boʻlsa yoki adashib olingan boʻlsa — 30 kun ichida /paysupport orqali yoz.\n• Biz faqat Telegram raqamingni saqlaymiz — xaridlar, doʻstlarni taklif qilish va botning kamdan-kam eslatmalari uchun. Eslatmalar kelmasin desang, botni toʻxtat.\n\nSavollar: ${SUPPORT}`,
   },
 };
 
@@ -211,6 +236,7 @@ export function commandReply(text: string, lang: Lang | boolean, userId?: number
 
 /**
  * Заполнить профиль бота: описание, короткое описание, команды (ru, tr, es, kk и для остальных — en)
+ * Заполнить профиль бота: описание, короткое описание, команды (ru, tr, es, uz и для остальных — en)
  * и кнопку меню «Играть». Возвращает, что не получилось (пусто — всё хорошо).
  */
 export async function setupProfile(token: string, appUrl: string): Promise<string[]> {
@@ -218,6 +244,7 @@ export async function setupProfile(token: string, appUrl: string): Promise<strin
   const call = (method: string, body: Record<string, unknown>) => bot(token, method, body).catch((e: Error) => failed.push(e.message));
   for (const lang of LANGS) {
     // Для «en» задаём язык по умолчанию (без language_code) — его видят все, у кого Telegram не на ru, tr, es или kk.
+    // Для «en» задаём язык по умолчанию (без language_code) — его видят все, у кого Telegram не на ru, tr, es или uz.
     const scope = lang === 'en' ? {} : { language_code: lang };
     await call('setMyDescription', { description: DESCRIPTION[lang], ...scope });
     await call('setMyShortDescription', { short_description: SHORT[lang], ...scope });

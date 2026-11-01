@@ -22,6 +22,9 @@ describe('словари языков', () => {
   it('в выборе языка — только языки с полным словарём (заготовки uz/pt не показываются)', () => {
     for (const lang of LANGS) if (!complete(lang)) expect(SHIPPED, `${lang} не переведён целиком`).not.toContain(lang);
     expect(SHIPPED).toEqual(['ru', 'en', 'tr', 'es', 'kk']);
+  it('в выборе языка — только языки с полным словарём (заготовки kk/pt не показываются)', () => {
+    for (const lang of LANGS) if (!complete(lang)) expect(SHIPPED, `${lang} не переведён целиком`).not.toContain(lang);
+    expect(SHIPPED).toEqual(['ru', 'en', 'tr', 'es', 'uz']);
   });
 
   for (const lang of SHIPPED.filter((l) => l !== 'ru')) {
@@ -43,7 +46,7 @@ describe('словари языков', () => {
     });
   }
 
-  for (const lang of ['tr', 'es'] as const) {
+  for (const lang of ['tr', 'es', 'uz'] as const) {
     it(`${lang}: ни одной русской буквы`, () => {
       expect(keys.filter((k) => /[а-яё]/i.test(dicts[lang][k]!))).toEqual([]);
     });
@@ -57,6 +60,7 @@ describe('словари языков', () => {
 
   it('у заготовок лишних ключей нет и подстановки совпадают', () => {
     for (const lang of ['uz', 'pt'] as const)
+    for (const lang of ['kk', 'pt'] as const)
       for (const [k, v] of Object.entries(dicts[lang])) {
         expect(k in ru, `${lang}: ${k}`).toBe(true);
         expect(placeholders(v!)).toBe(placeholders(ru[k as TextKey]));
@@ -98,6 +102,11 @@ describe('язык игрока', () => {
     expect(detectLang(null, null, 'kk')).toBe('kk');
     expect(detectLang(null, null, 'kk-KZ')).toBe('kk');
     expect(detectLang(null, null, 'uz')).toBe('ru');
+    // Португальский ещё не готов — английский; казахский — русский, как и раньше. Узбекский готов — свой.
+    expect(detectLang(null, null, 'pt-BR')).toBe('en');
+    expect(detectLang(null, null, 'kk')).toBe('ru');
+    expect(detectLang(null, null, 'uz')).toBe('uz');
+    expect(detectLang(null, null, 'uz-Latn-UZ')).toBe('uz');
     expect(detectLang(null, null, 'de-DE')).toBe('en');
   });
   it('выбор игрока важнее Telegram', () => {
@@ -125,5 +134,14 @@ describe('форма слова после числа в новых языках
   it('испанская строка приза: «2 postales»', () => {
     expect(es[`live.box.cards.${pluralForm(2, 'es')}`]).toBe(es['live.box.cards.many']);
     expect(es['live.box.cards.one']).not.toBe(es['live.box.cards.many']);
+  });
+  it('узбекский: слово после числа не меняется — три ключа одинаковые', () => {
+    for (const k of keys.filter((k) => k.endsWith('.one'))) {
+      const base = k.slice(0, -4);
+      expect(new Set([uz[k], uz[`${base}.few` as TextKey], uz[`${base}.many` as TextKey]]).size, base).toBe(1);
+    }
+  });
+  it('узбекский: oʻ и gʻ — знаком U+02BB, а не апострофом', () => {
+    expect(keys.filter((k) => /[oOgG][\u0027\u2019\u02BC`]/.test(uz[k]))).toEqual([]);
   });
 });

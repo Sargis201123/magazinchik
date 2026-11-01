@@ -84,6 +84,13 @@ const HEADLINES: Record<Lang, Record<Headline, string>> = {
     growth: 'РЕКОРДТЫҚ ӨСУ: түсім күрт өсті',
     quiet: 'ТЫНЫШ АПТА: сатып алушылар дүкен иесін күтіп отыр',
     done: 'АПТА АРТТА ҚАЛДЫ: дүкен жұмыс істеп тұр, аудан риза',
+  uz: {
+    weekend: 'MAHALLANING ENG ZOʻR DAM OLISH KUNLARI: doʻkoning «Qora juma» oʻntaligiga kirdi!',
+    king: 'MAHALLA QIROLI: doʻkoning hamma doʻstlaringdan koʻp ishladi!',
+    duel: 'DUEL YUTILDI: raqibing magʻlubiyatni tan olyapti',
+    growth: 'REKORD OʻSISH: tushum osmonga chiqdi',
+    quiet: 'SOKIN HAFTA: xaridorlar xoʻjayinni sogʻinishdi',
+    done: 'YANA BIR HAFTA ORTDA: doʻkon ishlayapti, mahalla mamnun',
   },
 };
 
@@ -171,6 +178,17 @@ const PAPER: Record<Lang, PaperTexts> = {
     revenue: (sum, trend) => `💰 Апталық түсім: ${sum}${trend}`,
     footer: 'Жаңа апта басталып кетті — сатып алушылар күтіп тұр!',
     open: '▶ Дүкенді ашу',
+  uz: {
+    friends: (rank, total) => `🏅 Doʻstlar orasida: ${total} tadan ${rank}-oʻrin`,
+    duelWon: (name, mine, theirs) => `⚔️ Duel: «${name} va Ko» ustidan gʻalaba (${mine} – ${theirs})`,
+    duelLost: (name, mine, theirs) => `⚔️ Duel: «${name} va Ko» oldinda (${theirs} – ${mine}) — shu hafta qasos olamiz!`,
+    guildReached: (guild) => `🛡 «${guild}» gildiyasi: haftalik maqsad bajarildi — mukofot oʻyinda kutyapti`,
+    guildMissed: (guild) => `🛡 «${guild}» gildiyasi: maqsadga ozgina yetmadi — shu hafta uddalaymiz!`,
+    weekend: (rank, players) => `🛍 «Qora juma»: ${players} tadan ${rank}-oʻrin — sovrin oʻyinda kutyapti`,
+    title: (dates) => `🗞 <b>Mahalla xabarnomasi</b> · ${dates}`,
+    revenue: (sum, trend) => `💰 Haftalik tushum: ${sum}${trend}`,
+    footer: 'Yangi hafta boshlandi — xaridorlar kutyapti!',
+    open: '▶ Doʻkonni ochish',
   },
 };
 

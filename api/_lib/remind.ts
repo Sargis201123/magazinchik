@@ -82,12 +82,16 @@ const DAY_NAMES: Record<Lang, string[]> = {
   kk: ['қаңтар', 'ақпан', 'наурыз', 'сәуір', 'мамыр', 'маусым', 'шілде', 'тамыз', 'қыркүйек', 'қазан', 'қараша', 'желтоқсан'],
 };
 /** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre», «5 желтоқсан». */
+  uz: ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'],
+};
+/** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre», «5-dekabr». */
 const DAY_FORMAT: Record<Lang, (d: number, month: string) => string> = {
   ru: (d, month) => `${d} ${month}`,
   en: (d, month) => `${month} ${d}`,
   tr: (d, month) => `${d} ${month}`,
   es: (d, month) => `${d} de ${month}`,
   kk: (d, month) => `${d} ${month}`,
+  uz: (d, month) => `${d}-${month}`,
 };
 const dayName = (date: string, lang: Lang): string => DAY_FORMAT[lang](Number(date.slice(8)), DAY_NAMES[lang][Number(date.slice(5, 7)) - 1]);
 
@@ -233,6 +237,33 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'also.letter': 'хат — {from}',
     'also.chest': 'сандықша ≈{sum} 💰',
     play: '▶ Ойнау',
+  uz: {
+    sonya: '👧 Sonya: «Dada, bugun doʻkonga kirasanmi? Senga bir gap aytmoqchi edim…»',
+    helped: '👵 Buvi: «Nevaram, {name} senga yordam yubordi! Kirib oʻt — bugun kassa tezroq ishlaydi»',
+    'guest.moroz': '🎅 Qor bobo: «Xo-xo! Bugun doʻkonchangga sovgʻa bilan kiraman — ochiq tur, uxlab qolma!»',
+    'guest.snegurochka': '❄️ Qorqiz: «Bugun doʻkoningga sovgʻa bilan kiraman. Meni kut!»',
+    'card.newyear': '🎄 Qorqiz: «{date} otkritkang doʻkonchada seni kutyapti. Yangi yilgacha — {left}!»',
+    'card.newyear.eve': '🎆 Qorqiz: «Bugun yilning oxirgi kuni! Otkritkang doʻkonchada kutyapti. Yangi yiling muborak!»',
+    'card.newyear.jan': '🎄 Qorqiz: «Yangi yil muborak! {date} otkritkang doʻkonchada seni kutyapti»',
+    'card.feb23': '🎖 Buvi: «Nevaram, bayraming muborak! Doʻkonda seni 23-fevral otkritkasi kutyapti»',
+    'card.march8': '🌷 Valentina: «Bahor bayrami muborak! Doʻkonchada seni otkritka kutyapti — mimoza bilan»',
+    gift: '👵 Buvi: «Nevaram, sovgʻa tayyor — 7 kundan {n}-kun! Bugun kir, boʻlmasa seriya boshidan boshlanadi»',
+    'gift.big': '👵 Buvi: «Nevaram, olti kun ketma-ket kelding — bugun eng katta sovgʻa! Qoʻldan boy berma»',
+    spoil: '🧓 Valentina: «Eshitdim, doʻkoningda {n} ta mahsulotning oxirgi kuni ekan. Buzilmasidan arzonlashtir!»',
+    weekend: '📺 Mahalla yangiliklari: «Dam olish kunlari savdosi! Mahalladagi hamma doʻkonlar kim koʻproq sotishini bellashyapti. Joyingni egalla»',
+    cashier: '👵 Buvi: «Kassir sensiz savdo qilyapti, lekin javonlar boʻshab qolyapti. Kirib, mol xarid qilsang boʻlardi»',
+    day: '👵 Buvi: «{day}-kun: eshik oldida xaridorlar yigʻilib qoldi. Ochamizmi?»',
+    'day.0': '👵 Buvining sovgʻasi kutyapti! Doʻkonchaga kir — xaridorlar seni sogʻinishdi.',
+    order: '🧓 Valentina: «Yoʻlda {who} uchradi — buyurtmasini soʻrayapti: {item}, {qty} ta. Olib qoʻyaman degan eding-ku!»',
+    letter: '👵 Buvi: «Nevaram, senga {from} xat keldi! Kassa yonida kutyapti»',
+    'letter.grandma': '👵 Buvi: «Nevaram, senga xat yozdim — ichiga bir narsa ham solib qoʻydim. Kirib oʻt!»',
+    'letter.sonya': '👧 Sonya: «Dada, senga otkritka chizdim! U doʻkonda, kassa yonida»',
+    chest: '👵 Buvi: «Tushum sandiqchasi ogʻirlashib qoldi — taxminan {sum} 💰. Kelib och!»',
+    also: 'Yana kutyapti: {list}',
+    'also.order': '{who} buyurtma',
+    'also.letter': '{from} xat',
+    'also.chest': 'sandiqcha ≈{sum} 💰',
+    play: '▶ Oʻynash',
   },
 };
 
@@ -304,6 +335,18 @@ export const PEOPLE: Record<Lang, Record<string, { from: string; who: string }>>
     olga: { from: 'Ольга Николаевнадан', who: 'Ольга Николаевнаны' },
     misha: { from: 'Мишадан', who: 'Мишаны' },
     staff: { from: 'бұрынғы қызметкерден', who: 'Бұрынғы қызметкерді' },
+  // По-узбекски имя стоит без падежного окончания: тексты построены так, чтобы оно не требовалось.
+  uz: {
+    grandma: { from: 'buvidan', who: 'buvi' },
+    valya: { from: 'Valentinadan', who: 'Valentina' },
+    sonya: { from: 'Sonyadan', who: 'Sonya' },
+    petr: { from: 'Pyotr Ilichdan', who: 'Pyotr Ilich' },
+    sveta: { from: 'Svetadan', who: 'Sveta' },
+    kostya: { from: 'Kostyadan', who: 'Kostya' },
+    akhmed: { from: 'Axmeddan', who: 'Axmed' },
+    olga: { from: 'Olga Nikolayevnadan', who: 'Olga Nikolayevna' },
+    misha: { from: 'Mishadan', who: 'Misha' },
+    staff: { from: 'sobiq xodimdan', who: 'sobiq xodim' },
   },
 };
 /** Любимые товары постоянных покупателей — то, что они просят отложить. */
@@ -316,6 +359,10 @@ export const ITEMS: Record<Lang, Record<string, string>> = {
 };
 /** Товар без названия (метка из игры, которой нет в ITEMS). */
 const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía', kk: 'тауар' };
+  uz: { bread: '🍞 non', milk: '🥛 sut', potatoes: '🥔 kartoshka', meat: '🥩 goʻsht', apples: '🍎 olma', juice: '🧃 sharbat' },
+};
+/** Товар без названия (метка из игры, которой нет в ITEMS). */
+const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía', uz: 'mahsulot' };
 /** Своё поле словаря (не «constructor» из прототипа): метки приходят от игры. */
 const own = <T>(table: Record<string, T>, key: string): T | undefined => (Object.hasOwn(table, key) ? table[key] : undefined);
 /** Сундучок меньше этого — не повод писать (кассир едва начал торговать). */
@@ -354,8 +401,9 @@ function waiting(p: Player): { reason: Reason; face: Face; text: string; short: 
 function daysLeft(date: string, lang: Lang): string {
   const n = daysBetween(date, `${Number(date.slice(0, 4)) + 1}-01-01`);
   if (lang === 'en') return `${n} day${n === 1 ? '' : 's'}`;
-  // По-турецки после числа — единственное число: «5 gün».
+  // По-турецки и по-узбекски после числа — единственное число: «5 gün», «5 kun».
   if (lang === 'tr') return `${n} gün`;
+  if (lang === 'uz') return `${n} kun`;
   if (lang === 'es') return `${n} día${n === 1 ? '' : 's'}`;
   // По-казахски тоже: «5 күн».
   if (lang === 'kk') return `${n} күн`;

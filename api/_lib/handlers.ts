@@ -34,6 +34,10 @@ const INVOICE: Record<Lang, { support: (title: string) => string; pass: (title: 
     support: (title) => `${title}: «Магазинчикті» қолдағаның үшін рақмет! Тек әшекей мен алғыс — ойында артықшылық жоқ.`,
     pass: (title) => `${title}: маусымның премиум сыйлықтарын ашады — жұлдызды әшекей мен екі есе ақша.`,
     item: (title) => `${title} — дүкенің үшін. Мәңгі сенікі.`,
+  uz: {
+    support: (title) => `${title}: «Magazinchik»ni qoʻllab-quvvatlaganing uchun rahmat! Faqat bezak va minnatdorchilik — oʻyinda ustunlik yoʻq.`,
+    pass: (title) => `${title}: mavsumning premium mukofotlarini ochadi — yulduzli bezaklar va ikki barobar pul.`,
+    item: (title) => `${title} — doʻkoning uchun. Abadiy seniki.`,
   },
 };
 
@@ -63,6 +67,10 @@ const PAID: Record<Lang, { support: (name: string) => string; item: (name: strin
     support: (name) => `Қолдауың үшін зор рақмет! 💛 «${name}» — «Рақмет!» тақтайшасы кассаңның жанында тұр.`,
     item: (name) => `Рақмет! ${name} — енді дүкеніңде ✨`,
     play: '▶ Ойнау',
+  uz: {
+    support: (name) => `Qoʻllab-quvvatlaganing uchun katta rahmat! 💛 «${name}» — «Rahmat!» lavhasi allaqachon kassang yonida turibdi.`,
+    item: (name) => `Rahmat! ${name} allaqachon doʻkoningda ✨`,
+    play: '▶ Oʻynash',
   },
 };
 

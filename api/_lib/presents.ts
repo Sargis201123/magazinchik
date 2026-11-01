@@ -52,6 +52,7 @@ const NOTIFY: Record<Lang, { text: (from: string) => string; open: string }> = {
   tr: { text: (from) => `🎁 ${from} dükkânına uğradı ve sana bir hediye bıraktı. Sabah aç!`, open: '▶ Aç' },
   es: { text: (from) => `🎁 ${from} pasó por tu tienda y te dejó un regalo. ¡Ábrelo por la mañana!`, open: '▶ Abrir' },
   kk: { text: (from) => `🎁 ${from} дүкеніңе соғып, саған сыйлық қалдырды. Таңертең аш!`, open: '▶ Ашу' },
+  uz: { text: (from) => `🎁 ${from} doʻkoningga kirib, senga sovgʻa qoldirdi. Ertalab och!`, open: '▶ Ochish' },
 };
 
 const nameOf = async (db: D1, id: number): Promise<string> => (await db.prepare('SELECT name FROM progress WHERE id = ?').bind(id).first<{ name: string }>())?.name || '—';

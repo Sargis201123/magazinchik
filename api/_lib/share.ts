@@ -56,6 +56,10 @@ const CAPTIONS: Record<Lang, Record<ShareKind, (name: string) => string>> = {
     invite: (name) => `🛒 ${name} сені «Магазинчикке» шақырады — Telegram-дағы жып-жылы пиксель ойын.\nӘже саған дүкен қалдырды: кезек, касса, есік алдында мысық, терезе сыртында жаңбыр. Бастауға сыйлық дайын 🎁`,
     help: (name) => `🆘 ${name}: «Көмектесіңдер! Дүкенде қарбалас, кезек есікке дейін созылды!»\n«Көмектесу» батырмасын бас — көмегің дүкенге жетеді, саған да сыйлық бар 🎁`,
     card: () => '🏪 «Магазинчиктегі» дүкенім — күн қорытындысы. Ойна да, мені озып көр!',
+  uz: {
+    invite: (name) => `🛒 ${name} seni «Magazinchik»ka chaqiryapti — Telegramning oʻzida oʻynaladigan shinam piksel oʻyin.\nBuvi senga kichkina doʻkon qoldirdi: navbat, kassa, eshik oldida mushuk va derazada yomgʻir. Boshlash uchun sovgʻang tayyor 🎁`,
+    help: (name) => `🆘 ${name}: «Yordam beringlar! Doʻkonda tirband payt, navbat eshikkacha choʻzildi!»\n«Yordam berish»ni bos — yordaming doʻkonga yetib boradi, senga esa sovgʻa tegadi 🎁`,
+    card: () => '🏪 «Magazinchik»dagi doʻkonim — kun yakunlari. Oʻyna va meni quvib oʻt!',
   },
 };
 
@@ -70,6 +74,15 @@ const BUTTONS: Record<Lang, { play: string; help: string }> = {
 const SOMEONE: Record<Lang, string> = { ru: 'Друг', en: 'A friend', tr: 'Bir arkadaş', es: 'Un amigo', kk: 'Досың' };
 /** Картинки карточек (public/promo/<kind>_<lang>.jpg) есть только ru и en: казахам — русская (на ней «Магазинчик»), остальным — английская. */
 const PROMO: Record<Lang, 'ru' | 'en'> = { ru: 'ru', en: 'en', tr: 'en', es: 'en', kk: 'ru' };
+  uz: { play: '▶ Oʻynash', help: '🤝 Yordam berish' },
+};
+/** Имя, если Telegram его не прислал. */
+const SOMEONE: Record<Lang, string> = { ru: 'Друг', en: 'A friend', tr: 'Bir arkadaş', es: 'Un amigo', uz: 'Doʻsting' };
+/**
+ * Картинки карточек (public/promo/<kind>_<lang>.jpg) есть только ru и en: остальным — английская,
+ * узбекам — русская (её они получали и раньше, а русский в Узбекистане понимают чаще английского).
+ */
+const PROMO: Record<Lang, 'ru' | 'en'> = { ru: 'ru', en: 'en', tr: 'en', es: 'en', uz: 'ru' };
 
 /** Ссылка, которая сразу открывает игру с меткой (главное мини-приложение бота). */
 export const appLink = (botName: string, payload: string): string => `https://t.me/${botName}?startapp=${payload}`;

@@ -18,6 +18,8 @@ const B64_RE = /^[A-Za-z0-9+/]+=*$/;
 
 /** Кнопка под карточкой в чате: название игры (по-турецки и по-испански — латиницей). */
 const PLAY: Record<Lang, string> = { ru: '▶ Магазинчик', en: '▶ Магазинчик', tr: '▶ Magazinchik', es: '▶ Magazinchik', kk: '▶ Магазинчик' };
+/** Кнопка под карточкой в чате: название игры (по-турецки, по-испански и по-узбекски — латиницей). */
+const PLAY: Record<Lang, string> = { ru: '▶ Магазинчик', en: '▶ Магазинчик', tr: '▶ Magazinchik', es: '▶ Magazinchik', uz: '▶ Magazinchik' };
 
 const newId = (): string => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
 
