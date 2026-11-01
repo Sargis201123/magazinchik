@@ -115,7 +115,9 @@ function buyModal(id: PetId, getState: () => StoreState, update: Update): void {
 function nameModal(id: PetId, getState: () => StoreState, update: Update, fresh = false): void {
   const { card, close } = openModal();
   const input = el('input', 'ui-input');
-  input.value = shownName(getState(), id);
+  // Имя по умолчанию — подсказкой: «Готово» без своего имени оставляет его переводимым (другой язык, друг в гостях).
+  input.value = getState().pets?.names?.[id] ?? '';
+  input.placeholder = t(petDefaultKey(id));
   input.maxLength = PET_NAME_MAX;
   const done = () => {
     close();

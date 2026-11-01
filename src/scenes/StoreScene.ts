@@ -583,12 +583,13 @@ export class StoreScene extends Phaser.Scene {
   weekTimers: (() => void)[] = [];
   weekSign?: Phaser.GameObjects.Image;
   /** Уголки своей марки (brandLines.ts): табурет с вареньем, бочки солений и кваса, доска с пельменями; пар над тазом. */
-  /** Питомец за звёзды в зале (starPets.ts), до какого времени он радуется и сколько гостей было в прошлый тик. */
-  starPet?: Phaser.GameObjects.Image;
-  starPetBusy = 0;
-  starPetGuests = 0;
   lineObjs: Phaser.GameObjects.GameObject[] = [];
   lineTimers: (() => void)[] = [];
+  /** Питомец за звёзды в зале (starPets.ts): картинка, остановка его тиков, до какого времени он радуется, сколько гостей было в прошлый тик. */
+  starPet?: Phaser.GameObjects.Image;
+  starPetStop?: () => void;
+  starPetBusy = 0;
+  starPetGuests = 0;
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
   bigObjs: { destroy: () => void }[] = [];
   /** Блэкаут на весь район: темно, касса считает вручную (щиток не поможет). */

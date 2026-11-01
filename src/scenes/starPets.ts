@@ -22,6 +22,8 @@ const TICK_MS = 420;
 const REACT_MS = 1600;
 /** Черепаха ночью идёт через зал: точек в секунду. */
 const TURTLE_SPEED = 3;
+/** Проход вдоль левой стены к дверям флигеля (как WING_DOOR_CLEAR в decorations.ts) — корги туда не ложится. */
+const WING_DOOR_GAP = 42;
 
 /** Кадры: покой (по очереди), сон, радость; у хомяка ещё бег в колесе, у корги — виляние, у черепахи — шаг. */
 const FRAMES: Record<PetId, { idle: string[]; sleep: string; happy: string[]; move?: string[] }> = {
@@ -45,14 +47,15 @@ const VOICE: Record<PetId, Parameters<typeof sound.pet>[0]> = {
 
 /** Где живёт питомец (низ картинки): у касс, у стены, у входа, в углу, у двери склада. */
 export function petSpot(layout: Layout, spot: PetSpot): { x: number; y: number } {
-  const { queue, counter, door, h, w, wallH, warehouse } = layout;
+  const { counter, door, h, w, wallH, warehouse } = layout;
   switch (spot) {
+    // У самой кассы, ниже начала очереди: на маленьких залах левее стоят островные полки (их касание не отнимаем).
     case 'perch':
-      return { x: queue.x - 24, y: counter.y + 4 };
     case 'counter':
-      return { x: queue.x - 24, y: counter.y + 2 };
+      return { x: counter.x - 18, y: counter.y + 30 };
     case 'door':
-      return { x: door.x - 28, y: h - 8 };
+      // Чуть выше корзин и тележек у двери (decorations.ts) и не в проходе к дверям флигеля.
+      return { x: Math.max(WING_DOOR_GAP, door.x - 30), y: h - 20 };
     case 'wall':
       // Справа от входа, за тележками: ночью идёт отсюда влево через зал.
       return { x: Math.min(w - 30, door.x + 68), y: h - 7 };
@@ -73,6 +76,9 @@ const asleep = (scene: StoreScene, id: PetId): boolean => scene.closed || (scene
 
 /** Питомец в зал: при каждой перестройке мира (buildWorld) — заново. */
 export function buildStarPet(scene: StoreScene): void {
+  scene.starPetStop?.();
+  scene.starPetStop = undefined;
+  scene.starPet?.destroy();
   scene.starPet = undefined;
   scene.starPetBusy = 0;
   scene.starPetGuests = scene.customers.size;
@@ -89,7 +95,7 @@ export function buildStarPet(scene: StoreScene): void {
     .on('pointerup', () => camera.tap(scene, () => petStarPet(scene)));
   let n = 0;
   const lite = scene.lite;
-  scene.worldTimer(lite ? TICK_MS * 2 : TICK_MS, () => {
+  scene.starPetStop = scene.worldTimer(lite ? TICK_MS * 2 : TICK_MS, () => {
     if (!img.active) return;
     n++;
     tick(scene, img, id, n, home);

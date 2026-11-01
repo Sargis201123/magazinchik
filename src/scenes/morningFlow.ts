@@ -256,7 +256,11 @@ export function showMorning(scene: StoreScene): void {
       saveGame(s);
       if (s.level > scene.builtLevel) void effects.celebrateExpansion(scene);
       else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood) scene.buildWorld(bought);
-      else if (staffChanged) staff.syncStaff(scene);
+      else {
+        if (staffChanged) staff.syncStaff(scene);
+        // Купили, позвали другого или отправили домой питомца за звёзды — только он, без перестройки зала.
+        if (s.pets?.active !== was.pets?.active || s.pets?.owned !== was.pets?.owned) starPets.buildStarPet(scene);
+      }
       if (adsChanged) streets.applyAds(scene);
       if (radioChanged) decorations.applyRadio(scene, true);
       // Открыли линейку своей марки — её уголок сразу на тротуаре или на кухне.
