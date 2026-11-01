@@ -77,6 +77,14 @@ const HEADLINES: Record<Lang, Record<Headline, string>> = {
     quiet: 'UNA SEMANA TRANQUILA: los clientes extrañan al dueño',
     done: 'OTRA SEMANA CUMPLIDA: la tienda está abierta y el barrio, contento',
   },
+  pt: {
+    weekend: 'O MELHOR FIM DE SEMANA DO BAIRRO: sua loja entrou no top 10 da Black Friday!',
+    king: 'REI DO QUARTEIRÃO: sua loja faturou mais que todos os seus amigos!',
+    duel: 'DUELO VENCIDO: o rival admite a derrota',
+    growth: 'CRESCIMENTO RECORDE: o faturamento disparou',
+    quiet: 'UMA SEMANA TRANQUILA: os clientes estão com saudade do dono',
+    done: 'MAIS UMA SEMANA: a loja está aberta e o bairro, contente',
+  },
 };
 
 /** Заголовок номера — по главному событию недели игрока. */
@@ -151,6 +159,18 @@ const PAPER: Record<Lang, PaperTexts> = {
     revenue: (sum, trend) => `💰 Ingresos de la semana: ${sum}${trend}`,
     footer: '¡Ya empezó una nueva semana y los clientes te esperan!',
     open: '▶ Abrir la tienda',
+  },
+  pt: {
+    friends: (rank, total) => `🏅 Entre amigos: ${rank}º lugar de ${total}`,
+    duelWon: (name, mine, theirs) => `⚔️ Duelo: vitória sobre ${name} e Cia. (${mine} contra ${theirs})`,
+    duelLost: (name, mine, theirs) => `⚔️ Duelo: ${name} e Cia. na frente (${theirs} contra ${mine}) — revanche nesta semana!`,
+    guildReached: (guild) => `🛡 Guilda “${guild}”: meta da semana cumprida — o prêmio está esperando no jogo`,
+    guildMissed: (guild) => `🛡 Guilda “${guild}”: faltou pouco para a meta — nesta semana a gente consegue!`,
+    weekend: (rank, players) => `🛍 Black Friday: ${rank}º lugar de ${players} — o prêmio está esperando no jogo`,
+    title: (dates) => `🗞 <b>Gazeta do Bairro</b> · ${dates}`,
+    revenue: (sum, trend) => `💰 Faturamento da semana: ${sum}${trend}`,
+    footer: 'Uma nova semana já começou — os clientes estão esperando!',
+    open: '▶ Abrir a loja',
   },
 };
 

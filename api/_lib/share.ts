@@ -52,6 +52,11 @@ const CAPTIONS: Record<Lang, Record<ShareKind, (name: string) => string>> = {
     help: (name) => `🆘 ${name}: “¡Ayuda! Es hora pico y la fila llega hasta la puerta”\nToca “Ayudar”: tu ayuda llegará a la tienda y tú también recibirás un regalo 🎁`,
     card: () => '🏪 Mi tienda en Magazinchik: los resultados del día. ¡Juega y supérame!',
   },
+  pt: {
+    invite: (name) => `🛒 ${name} está chamando você para o Magazinchik — um joguinho aconchegante em pixel art direto no Telegram.\nA vovó deixou uma lojinha: fila, caixa, um gato na porta e chuva lá fora. Tem um presente de boas-vindas esperando 🎁`,
+    help: (name) => `🆘 ${name}: “Socorro! É hora do rush, a fila vai até a porta!”\nToque em “Ajudar” — sua ajuda chega na loja, e você também ganha um presente 🎁`,
+    card: () => '🏪 Minha loja no Magazinchik — o resumo do dia. Jogue e me supere!',
+  },
 };
 
 const BUTTONS: Record<Lang, { play: string; help: string }> = {
@@ -59,11 +64,12 @@ const BUTTONS: Record<Lang, { play: string; help: string }> = {
   en: { play: '▶ Play', help: '🤝 Help' },
   tr: { play: '▶ Oyna', help: '🤝 Yardım et' },
   es: { play: '▶ Jugar', help: '🤝 Ayudar' },
+  pt: { play: '▶ Jogar', help: '🤝 Ajudar' },
 };
 /** Имя, если Telegram его не прислал. */
-const SOMEONE: Record<Lang, string> = { ru: 'Друг', en: 'A friend', tr: 'Bir arkadaş', es: 'Un amigo' };
+const SOMEONE: Record<Lang, string> = { ru: 'Друг', en: 'A friend', tr: 'Bir arkadaş', es: 'Un amigo', pt: 'Um amigo' };
 /** Картинки карточек (public/promo/<kind>_<lang>.jpg) есть только ru и en: остальным — английская. */
-const PROMO: Record<Lang, 'ru' | 'en'> = { ru: 'ru', en: 'en', tr: 'en', es: 'en' };
+const PROMO: Record<Lang, 'ru' | 'en'> = { ru: 'ru', en: 'en', tr: 'en', es: 'en', pt: 'en' };
 
 /** Ссылка, которая сразу открывает игру с меткой (главное мини-приложение бота). */
 export const appLink = (botName: string, payload: string): string => `https://t.me/${botName}?startapp=${payload}`;

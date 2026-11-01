@@ -1,22 +1,22 @@
 // Язык сервера: на нём бот пишет игроку (напоминания, газета, подарки, ответы на команды), подписывает
 // карточки «Поделиться» и называет вещи в счёте за звёзды. Игра присылает свой язык (getLang());
-// бот видит language_code из Telegram. Здесь — четыре языка: остальные сводим к ближайшему.
+// бот видит language_code из Telegram. Здесь — пять языков: остальные сводим к ближайшему.
 
-export type Lang = 'ru' | 'en' | 'tr' | 'es';
-export const LANGS: readonly Lang[] = ['ru', 'en', 'tr', 'es'];
+export type Lang = 'ru' | 'en' | 'tr' | 'es' | 'pt';
+export const LANGS: readonly Lang[] = ['ru', 'en', 'tr', 'es', 'pt'];
 
 /** Кто скорее поймёт русский, чем английский: игра для них тоже по-русски (казахский, узбекский — пока без своих текстов). */
 const RU_LIKE = new Set(['ru', 'uk', 'be', 'kk', 'uz', 'ky', 'hy', 'az', 'tg']);
 
 /**
  * Язык из того, что прислали: «es-MX», «pt_BR», «TR» — по первой части, без учёта регистра.
- * Русскоязычные соседи — ru, турецкий и испанский — свои, всё прочее — en (португальский тоже).
+ * Русскоязычные соседи — ru, турецкий, испанский и португальский (pt-BR и pt-PT) — свои, всё прочее — en.
  * Ничего не прислали — ru: так было до остальных языков (старые записи в players, старая игра).
  */
 export const langOf = (x: unknown): Lang => {
   const code = typeof x === 'string' ? x.trim().toLowerCase().split(/[-_]/)[0] : '';
   if (!code) return 'ru';
   if (RU_LIKE.has(code)) return 'ru';
-  if (code === 'tr' || code === 'es') return code;
+  if (code === 'tr' || code === 'es' || code === 'pt') return code;
   return 'en';
 };

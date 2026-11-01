@@ -30,6 +30,11 @@ const INVOICE: Record<Lang, { support: (title: string) => string; pass: (title: 
     pass: (title) => `${title}: desbloquea las recompensas premium de la temporada: decoración estelar y monedas dobles.`,
     item: (title) => `${title} para tu tienda. Es tuyo para siempre.`,
   },
+  pt: {
+    support: (title) => `${title}: obrigado por apoiar o Magazinchik! Só enfeites e gratidão — nenhuma vantagem no jogo.`,
+    pass: (title) => `${title}: libera os prêmios premium da temporada — decoração estelar e moedas em dobro.`,
+    item: (title) => `${title} para a sua loja. É seu para sempre.`,
+  },
 };
 
 /** Бот в чате: спасибо после оплаты (name — название вещи на языке игрока) и кнопка «Играть» под приветствием. */
@@ -53,6 +58,11 @@ const PAID: Record<Lang, { support: (name: string) => string; item: (name: strin
     support: (name) => `¡Muchísimas gracias por tu apoyo! 💛 “${name}”: el letrero «¡Gracias!» ya está junto a tu caja.`,
     item: (name) => `¡Gracias! ${name} ya está en tu tienda ✨`,
     play: '▶ Jugar',
+  },
+  pt: {
+    support: (name) => `Muito obrigado pelo apoio! 💛 “${name}” — a plaquinha «Obrigado!» já está ao lado do seu caixa.`,
+    item: (name) => `Obrigado! ${name} já está na sua loja ✨`,
+    play: '▶ Jogar',
   },
 };
 

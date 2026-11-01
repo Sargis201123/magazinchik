@@ -140,9 +140,9 @@ describe('оплата звёздами (сервер)', () => {
     expect(await res.json()).toEqual({ ok: true, webhook: 'https://shop.example/api/telegram', profile: 'ok' });
     expect(calls[0].body).toMatchObject({ url: 'https://shop.example/api/telegram', secret_token: SECRET });
     const methods = calls.map((c) => c.method);
-    // ru, en (по умолчанию), tr, es.
-    for (const m of ['setMyDescription', 'setMyShortDescription', 'setMyCommands']) expect(methods.filter((x) => x === m)).toHaveLength(4);
-    expect(calls.filter((c) => c.method === 'setMyCommands').map((c) => c.body.language_code ?? '')).toEqual(['ru', '', 'tr', 'es']);
+    // ru, en (по умолчанию), tr, es, pt.
+    for (const m of ['setMyDescription', 'setMyShortDescription', 'setMyCommands']) expect(methods.filter((x) => x === m)).toHaveLength(5);
+    expect(calls.filter((c) => c.method === 'setMyCommands').map((c) => c.body.language_code ?? '')).toEqual(['ru', '', 'tr', 'es', 'pt']);
     const commands = calls.find((c) => c.method === 'setMyCommands' && c.body.language_code === 'ru')!.body.commands as { command: string }[];
     expect(commands.map((c) => c.command)).toEqual(['start', 'paysupport', 'terms']);
     for (const c of calls.filter((c) => c.method === 'setMyDescription')) expect(String(c.body.description).length).toBeLessThanOrEqual(512);
@@ -160,7 +160,7 @@ describe('оплата звёздами (сервер)', () => {
     const res = await starsSetup(new Request(`https://shop.example/api/stars-setup?key=${SECRET}`), env);
     const body = (await res.json()) as { ok: boolean; profile: string[] };
     expect(body.ok).toBe(true);
-    expect(body.profile).toHaveLength(4);
+    expect(body.profile).toHaveLength(5);
     expect(body.profile[0]).toContain('setMyDescription');
   });
 
