@@ -541,13 +541,13 @@ export function polishFloor(scene: StoreScene, x: number, y: number): void {
 
 // ---------- Сотрудники ----------
 
-/** Расставляет нанятых сотрудников по местам и запускает их работу. */
 /** Сотрудник сделал дело — для «сотрудника месяца» (game/career.ts): пробил, убрал, разложил, испёк. */
 export function credit(scene: StoreScene, role: StaffRole, n = 1): void {
   const work = (scene.stats.work ??= {});
   work[role] = (work[role] ?? 0) + n;
 }
 
+/** Расставляет нанятых сотрудников по местам и запускает их работу. */
 export function syncStaff(scene: StoreScene): void {
   const gen = ++scene.staffGen;
   // Повара переставляют посреди варки — сваренное не пропадает, а встаёт в витрину.

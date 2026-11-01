@@ -157,6 +157,8 @@ const PEOPLE: Record<'ru' | 'en', Record<string, { from: string; who: string }>>
     akhmed: { from: 'Ахмеда', who: 'Ахмеда' },
     olga: { from: 'Ольги Николаевны', who: 'Ольгу Николаевну' },
     misha: { from: 'Миши', who: 'Мишу' },
+    // Прощальное письмо ушедшего сотрудника (src/game/career.ts).
+    staff: { from: 'бывшего сотрудника', who: 'бывшего сотрудника' },
   },
   en: {
     grandma: { from: 'Grandma', who: 'Grandma' },
@@ -168,6 +170,7 @@ const PEOPLE: Record<'ru' | 'en', Record<string, { from: string; who: string }>>
     akhmed: { from: 'Akhmed', who: 'Akhmed' },
     olga: { from: 'Olga Nikolaevna', who: 'Olga Nikolaevna' },
     misha: { from: 'Misha', who: 'Misha' },
+    staff: { from: 'a former employee', who: 'a former employee' },
   },
 };
 /** Любимые товары постоянных покупателей — то, что они просят отложить. */

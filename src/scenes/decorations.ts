@@ -546,8 +546,10 @@ export function buildDecor(scene: StoreScene): void {
   // все за полками — вместо самого правого окна (в большом зале вдоль стены почти одни полки).
   let honorX: number | undefined;
   if (scene.state.career?.plaques?.length) {
-    const free = (i: number, x: number) => i % 2 === 0 && !shelves.behindShelf(scene, x, 13);
-    const freeWindow = (i: number, x: number) => i % 2 === 1 && !shelves.behindShelf(scene, x, 13);
+    // Доска шире плаката (26 точек против 12): не заходит на полки и на дверь туалета.
+    const open = (x: number) => !shelves.behindShelf(scene, x, 13) && x + 13 <= wc.x - 12;
+    const free = (i: number, x: number) => i % 2 === 0 && open(x);
+    const freeWindow = (i: number, x: number) => i % 2 === 1 && open(x);
     for (const fits of [free, freeWindow]) {
       for (let x = 30, i = 0; x < wc.x - 16; x += 64, i++) if (fits(i, x)) honorX = x;
       if (honorX !== undefined) break;
@@ -674,7 +676,8 @@ export function honorBoard(scene: StoreScene, x: number): void {
   const plaques = [...(scene.state.career?.plaques ?? [])].reverse();
   // Под доской на той же стене бывает электрощиток (в большом зале у стены одни полки и свободен один
   // пролёт): тогда доска поменьше и повыше, щиток остаётся виден и доступен.
-  const k = Math.abs(x - building.fuseSpot(scene)) < 17 ? 0.6 : 1;
+  // Полуширины доски и щитка — 13 и 4 точки, с зазором.
+  const k = Math.abs(x - building.fuseSpot(scene)) < 19 ? 0.6 : 1;
   const top = k < 1 ? 0.5 : 2.5;
   const board = scene.art(x, top, 'honor_board').setOrigin(0.5, 0).setDepth(1);
   board.setScale(board.scaleX * k);

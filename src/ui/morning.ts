@@ -119,7 +119,7 @@ import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
 import { pendingTip, seeTip, soloExpandRisk, TIP_ICONS } from '../game/tips';
 import { markdownSurplus, toggleDonate } from '../game/economy';
 import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
-import { answerCeremony, answerOffer, BEST_EVERY, BEST_REWARDS, bestBonus, bestGift, careerOf, dismissLeft, nextRank, promotedWage, rankKey, xpToNext, type BestReward } from '../game/career';
+import { answerCeremony, answerOffer, holderOf, BEST_EVERY, BEST_REWARDS, bestBonus, bestGift, careerOf, dismissLeft, nextRank, promotedWage, rankKey, xpToNext, type BestReward } from '../game/career';
 import { BRANCH_HEAD_BONUS } from '../game/branch';
 import {
   CONTEST_DAYS,
@@ -1779,7 +1779,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const career = state.career;
     const out: HTMLElement[] = [];
     const ceremony = career?.ceremony;
-    const crowned = ceremony && state.staff.find((m) => m.role === ceremony.role);
+    const crowned = holderOf(state, ceremony);
     if (ceremony && crowned) {
       const box = el('div', 'ui-box ui-tale ui-career');
       const name = el('div');
@@ -1806,7 +1806,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       out.push(box);
     }
     const offer = career?.offer;
-    const asking = offer && state.staff.find((m) => m.role === offer.role);
+    const asking = holderOf(state, offer);
     if (offer && asking) {
       const box = el('div', 'ui-box ui-tale ui-career');
       const role = t(STAFF_ROLES[asking.role].nameKey);

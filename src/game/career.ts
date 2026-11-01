@@ -58,6 +58,8 @@ export interface Plaque {
 /** Церемония «сотрудник месяца», ждущая выбора награды. */
 export interface Ceremony {
   role: StaffRole;
+  /** Кто именно (на ту же должность могли нанять другого). */
+  name: number;
   day: number;
   shifts: number;
   work: number;
@@ -66,6 +68,7 @@ export interface Ceremony {
 
 export interface PromoOffer {
   role: StaffRole;
+  name: number;
   to: Rank | 'branch';
   day: number;
 }
@@ -261,6 +264,10 @@ export function bestOfPeriod(state: StoreState): StaffMember | null {
 const resetPeriod = (staff: StaffMember[]): StaffMember[] =>
   staff.map((m) => (m.career ? { ...m, career: { ...m.career, shifts: 0, work: 0, miss: 0 } } : m));
 
+/** Тот самый человек: должность и имя (уволился, ушёл, переманили — на его место мог прийти другой). */
+export const holderOf = (state: StoreState, who: { role: StaffRole; name: number } | undefined): StaffMember | undefined =>
+  who && state.staff.find((m) => m.role === who.role && m.name === who.name);
+
 const plaqueOf = (m: StaffMember, day: number): Plaque => ({ name: m.name, ...(m.friend ? { friend: m.friend.name } : {}), role: m.role, day });
 
 /** Кто может уйти по своим делам: давний, не друг, не на лето, не лучший недавно. */
@@ -274,11 +281,11 @@ export function promotionFor(state: StoreState): PromoOffer | null {
     .sort((a, b) => careerOf(b, state.day).xp - careerOf(a, state.day).xp);
   for (const m of ready) {
     const next = nextRank(m);
-    if (next && careerOf(m, state.day).xp >= rankXp(next)) return { role: m.role, to: next, day: state.day };
+    if (next && careerOf(m, state.day).xp >= rankXp(next)) return { role: m.role, name: m.name, to: next, day: state.day };
   }
   if (state.branch && !state.career?.head && (state.career?.branchAfter ?? 0) <= state.day) {
     const m = ready.find((x) => !x.summer && careerOf(x, state.day).xp >= XP_BRANCH);
-    if (m) return { role: m.role, to: 'branch', day: state.day };
+    if (m) return { role: m.role, name: m.name, to: 'branch', day: state.day };
   }
   return null;
 }
@@ -292,15 +299,17 @@ export function careerMorning(state: StoreState): StoreState {
   let s = state;
   const career: CareerState = { ...s.career };
   if (career.offer && career.offer.day < s.day) {
-    const { role, to } = career.offer;
+    const { role, name, to } = career.offer;
     delete career.offer;
     if (to === 'branch') career.branchAfter = s.day + NO_ANSWER_AGAIN;
-    else s = { ...s, staff: s.staff.map((m) => (m.role === role && m.career ? { ...m, career: { ...m.career, askAfter: s.day + NO_ANSWER_AGAIN } } : m)) };
+    else s = { ...s, staff: s.staff.map((m) => (m.role === role && m.name === name && m.career ? { ...m, career: { ...m.career, askAfter: s.day + NO_ANSWER_AGAIN } } : m)) };
   }
   // Наградить так и не собрались — через неделю церемония тихо закрывается (имя на доске остаётся).
-  if (career.ceremony && s.day - career.ceremony.day >= MONTH_DAYS) delete career.ceremony;
+  // Наградить так и не собрались, или награждённый ушёл (уволился, переманили) — церемония закрывается.
+  if (career.ceremony && (s.day - career.ceremony.day >= MONTH_DAYS || !holderOf(s, career.ceremony))) delete career.ceremony;
   s = { ...s, career };
-  if (!s.staff.length || career.asked === s.day || s.staffEvent?.day === s.day || s.bankrupt) return s;
+  // Не больше одной карьерной карточки на утро и не рядом с историей персонала (staffEvents.ts).
+  if (!s.staff.length || career.asked === s.day || s.staffEvent || s.bankrupt) return s;
   const random = rng(s.day * 48611 + (s.seed ?? 0) * 7 + 3);
   const since = career.since ?? s.day;
   // Церемония: срок вышел — лучший на доску почёта; некого (все новенькие) — срок начинается заново.
@@ -308,7 +317,7 @@ export function careerMorning(state: StoreState): StoreState {
     const best = bestOfPeriod(s);
     if (!best) return { ...s, career: { ...career, since: s.day } };
     const c = careerOf(best, s.day);
-    const ceremony: Ceremony = { role: best.role, day: s.day, shifts: c.shifts ?? 0, work: Math.round(c.work ?? 0), miss: c.miss ?? 0 };
+    const ceremony: Ceremony = { role: best.role, name: best.name, day: s.day, shifts: c.shifts ?? 0, work: Math.round(c.work ?? 0), miss: c.miss ?? 0 };
     const crowned = { ...best, career: { ...c, best: (c.best ?? 0) + 1, log: note(c, s.day, 'best') } };
     return {
       ...s,
@@ -316,16 +325,16 @@ export function careerMorning(state: StoreState): StoreState {
       career: { ...career, since: s.day, ceremony, asked: s.day, plaques: [...(career.plaques ?? []), plaqueOf(best, s.day)].slice(-PLAQUES) },
     };
   }
+  if (career.ceremony || career.left) return s;
   // Давний сотрудник уходит по своим делам: редко, без штрафа, с запиской и письмом.
   const leaving = s.staff.filter((m) => mayLeave(s, m));
   if (leaving.length && random() < LEAVE_CHANCE) {
     const m = leaving[Math.floor(random() * leaving.length)];
     const c = careerOf(m, s.day);
     const farewell: Farewell = { name: m.name, role: m.role, days: Math.round(c.xp), best: c.best ?? 0, day: s.day, why: 1 + Math.floor(random() * LEAVE_REASONS) };
-    const ceremony = career.ceremony?.role === m.role ? undefined : career.ceremony;
-    return { ...s, staff: s.staff.filter((x) => x !== m), career: { ...career, ceremony, left: farewell, letter: farewell, asked: s.day } };
+    return { ...s, staff: s.staff.filter((x) => x !== m), career: { ...career, left: farewell, letter: farewell, asked: s.day } };
   }
-  if (career.ceremony || career.offer) return s;
+  if (career.offer) return s;
   const offer = promotionFor(s);
   return offer ? { ...s, career: { ...career, offer, asked: s.day } } : s;
 }
@@ -343,8 +352,10 @@ export function answerCeremony(state: StoreState, reward: BestReward): StoreStat
   if (!ceremony) return null;
   const career: CareerState = { ...state.career };
   delete career.ceremony;
-  const m = state.staff.find((x) => x.role === ceremony.role);
+  const m = holderOf(state, ceremony);
   if (!m) return { ...state, career };
+  // Выходной на завтра нельзя, если он отдыхает сегодня: сегодняшний отгул пропал бы.
+  if (reward === 'off' && m.offDay === state.day) return null;
   const cost = rewardCost(state, reward);
   if (state.money < cost) return null;
   const days = REWARD_INSPIRED[reward];
@@ -369,7 +380,7 @@ export function answerOffer(state: StoreState, yes: boolean): StoreState {
   if (!offer) return state;
   const career: CareerState = { ...state.career };
   delete career.offer;
-  const m = state.staff.find((x) => x.role === offer.role);
+  const m = holderOf(state, offer);
   if (!m) return { ...state, career };
   const c = careerOf(m, state.day);
   if (!yes) {
@@ -408,5 +419,3 @@ export function takeFarewellLetter(state: StoreState): { state: StoreState; fare
   return { state: { ...state, career }, farewell };
 }
 
-/** Есть ли сегодня карьерное событие, ждущее игрока (для утреннего окна и подсказок). */
-export const careerPending = (state: StoreState): boolean => Boolean(state.career?.ceremony || state.career?.offer || state.career?.left);
