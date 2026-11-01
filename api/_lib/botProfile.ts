@@ -45,6 +45,15 @@ const DESCRIPTION: Record<Lang, string> = {
     '',
     'Toca «Jugar» 👇',
   ].join('\n'),
+  uz: [
+    '🛒 Magazinchik — Telegramning oʻzida oʻynaladigan shinam piksel doʻkon simulyatori.',
+    '',
+    'Buvi senga kichkina kiosk qoldirdi. Mol xarid qil, narx qoʻy, sotuvchilar yolla, univermaggacha kengay va «Gigant» gipermarketiga bas kel.',
+    '',
+    'Uyda esa qizing Sonya kutyapti. Sizning oʻz hikoyangiz bor — u asta-sekin ochiladi…',
+    '',
+    '«Oʻynash»ni bos 👇',
+  ].join('\n'),
 };
 
 const SHORT: Record<Lang, string> = {
@@ -52,6 +61,7 @@ const SHORT: Record<Lang, string> = {
   en: 'A pixel-art shop simulator with a touching story. Play right in Telegram 🛒',
   tr: 'Dokunaklı bir hikâyesi olan piksel dükkân simülatörü. Doğrudan Telegram’da oyna 🛒',
   es: 'Un simulador de tienda en pixel art con una historia conmovedora. Juega directo en Telegram 🛒',
+  uz: 'Taʼsirli hikoyali piksel doʻkon simulyatori. Telegramning oʻzida oʻyna 🛒',
 };
 
 const COMMANDS: Record<Lang, { command: string; description: string }[]> = {
@@ -74,6 +84,11 @@ const COMMANDS: Record<Lang, { command: string; description: string }[]> = {
     { command: 'start', description: 'Abrir el juego' },
     { command: 'paysupport', description: 'Ayuda con pagos en Stars' },
     { command: 'terms', description: 'Condiciones y reembolsos de Stars' },
+  ],
+  uz: [
+    { command: 'start', description: 'Oʻyinni ochish' },
+    { command: 'paysupport', description: 'Yulduzlar bilan toʻlovda yordam' },
+    { command: 'terms', description: 'Shartlar va yulduzlarni qaytarish' },
   ],
 };
 
@@ -150,6 +165,19 @@ const CHAT: Record<Lang, ChatTexts> = {
     paysupport: (id) =>
       `💬 Ayuda con pagos en Stars\n\nSi se cobraron Stars pero la compra no apareció, o compraste algo por error, escribe a ${SUPPORT}: qué compraste y cuándo. Respondemos en 1–2 días y, si hace falta, te devolvemos las Stars.\n\nLas compras se recuperan solas desde Telegram: primero intenta reiniciar el juego.${id}`,
     terms: `📄 Condiciones de Magazinchik\n\n• El juego es gratis. Con las Stars de Telegram solo se compran decoraciones para la tienda: no afectan el progreso.\n• Puedes probar gratis cada objeto durante un día antes de comprarlo.\n• Lo que compras es tuyo para siempre y se recupera en cualquier teléfono con esta cuenta de Telegram.\n• Reembolso de Stars: si una compra no apareció o fue un error, escríbenos dentro de 30 días por /paysupport.\n• Solo guardamos tu ID de Telegram: para compras, invitaciones de amigos y algún recordatorio del bot. Para no recibir recordatorios, detén el bot.\n\nPreguntas: ${SUPPORT}`,
+  },
+  uz: {
+    days: (day) => [
+      `${day}-kun. Kechqurun Sonya seni kutyapti 🌙\nDoʻkoncha eshigi oldida xaridorlar allaqachon yigʻilyapti.`,
+      `${day}-kun. Qorongʻi tushyapti, koʻcha chiroqlari yondi 🏮\nDoʻkonchaga bir kirib oʻt — kechqurun Sonya seni uyda kutyapti.`,
+      `${day}-kun. Kassadagi navbat uzayib boryapti 🛒\nSmenani boshla — Sonya kechqurun seni kutyapti.`,
+    ],
+    friend: (friend) => `${friend} seni «Magazinchik»ka chaqiryapti 🎁\nBoshlash uchun sovgʻang tayyor — ${WELCOME_COINS} tanga. Buvining doʻkoni seni kutyapti!`,
+    newcomer: 'Buvi senga doʻkonchasini qoldirdi 🛒\nEshiklarni och — birinchi xaridorlar allaqachon kutyapti!',
+    buyer: (userId) => `\n\nXaridor raqaming: ${userId} — xabaringda uni ham yoz.`,
+    paysupport: (id) =>
+      `💬 Yulduzlar bilan toʻlovda yordam\n\nAgar yulduzlar yechilgan-u, xarid paydo boʻlmagan boʻlsa yoki notoʻgʻri narsa olib qoʻygan boʻlsang — ${SUPPORT} ga yoz: nima olding va qachon. 1–2 kun ichida javob beramiz, kerak boʻlsa yulduzlarni qaytaramiz.\n\nXaridlar Telegramdan oʻzi tiklanadi — avval oʻyinni qayta ishga tushirib koʻr.${id}`,
+    terms: `📄 «Magazinchik» shartlari\n\n• Oʻyin bepul. Telegram yulduzlariga faqat doʻkon bezaklari sotiladi — ular oʻyin borishiga taʼsir qilmaydi.\n• Har bir narsani sotib olishdan oldin bir kun bepul sinab koʻrish mumkin.\n• Xarid abadiy seniki va shu Telegram akkaunti bor har qanday telefonda qaytadi.\n• Yulduzlarni qaytarish: xarid paydo boʻlmagan boʻlsa yoki adashib olingan boʻlsa — 30 kun ichida /paysupport orqali yoz.\n• Biz faqat Telegram raqamingni saqlaymiz — xaridlar, doʻstlarni taklif qilish va botning kamdan-kam eslatmalari uchun. Eslatmalar kelmasin desang, botni toʻxtat.\n\nSavollar: ${SUPPORT}`,
   },
 };
 

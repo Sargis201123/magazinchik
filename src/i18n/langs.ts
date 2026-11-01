@@ -10,7 +10,7 @@ export type Lang = (typeof LANGS)[number];
  * Остальные — заготовки: их можно открыть только через ?lang=kk (для переводчика),
  * а недостающие строки берутся из английского, потом из русского.
  */
-export const SHIPPED: readonly Lang[] = ['ru', 'en', 'tr', 'es'];
+export const SHIPPED: readonly Lang[] = ['ru', 'en', 'tr', 'es', 'uz'];
 
 /** Название языка на нём самом — так его ищут в списке. */
 export const NATIVE: Record<Lang, string> = {
@@ -24,10 +24,10 @@ export const NATIVE: Record<Lang, string> = {
 };
 
 /**
- * Куда идёт игрок, чей язык ещё не готов. Казахам и узбекам привычнее русский (так было и раньше),
+ * Куда идёт игрок, чей язык ещё не готов. Казахам привычнее русский (так было и раньше),
  * португальцам — английский. Когда язык попадёт в SHIPPED, эта строчка перестанет действовать.
  */
-export const UNSHIPPED_TO: Record<Lang, Lang> = { ru: 'ru', en: 'en', tr: 'tr', es: 'es', kk: 'ru', uz: 'ru', pt: 'en' };
+export const UNSHIPPED_TO: Record<Lang, Lang> = { ru: 'ru', en: 'en', tr: 'tr', es: 'es', kk: 'ru', uz: 'uz', pt: 'en' };
 
 export const isLang = (s: string): s is Lang => (LANGS as readonly string[]).includes(s);
 export const isShipped = (lang: Lang): boolean => SHIPPED.includes(lang);
