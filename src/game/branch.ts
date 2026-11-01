@@ -1,6 +1,6 @@
 // Филиал в здании «Гиганта». Когда гипермаркет побеждён и закрылся (giant.ts), а свой магазин уже
 // стал универмагом, пустое здание за дорогой можно купить — это второй магазин, «Магазинчик №2».
-// Им правит нанятый управляющий: каждый сыгранный день филиал приносит чистый доход (его аренда
+// Им правит нанятый управляющий (или свой человек из зала — career.ts): каждый сыгранный день филиал приносит чистый доход (его аренда
 // и зарплаты уже вычтены), строкой в итогах дня и в отчёте за неделю.
 //
 // Доход — доля обычной выручки своего магазина за последнюю неделю: управляющий работает по твоему
@@ -183,13 +183,20 @@ export function branchRef(state: StoreState): number {
   return Math.min(BRANCH_REF_MAX, Math.max(BRANCH_REF_MIN, avg));
 }
 
+/**
+ * Свой управляющий (career.ts): филиалом правит человек из зала, который знает магазин, — доход чуть
+ * больше (его прибавка уже вычтена). Без него филиалом правит нанятый со стороны, как раньше.
+ */
+export const BRANCH_HEAD_BONUS = 0.08;
+export const branchHeadBonus = (state: StoreState): number => (state.branch && state.career?.head ? BRANCH_HEAD_BONUS : 0);
+
 /** Обычный доход филиала в день — без погоды и случая (для «Развития» и прогноза). */
-export const branchUsual = (state: StoreState): number => (state.branch ? Math.round(branchRef(state) * branchShare(state)) : 0);
+export const branchUsual = (state: StoreState): number => (state.branch ? Math.round(branchRef(state) * branchShare(state) * (1 + branchHeadBonus(state))) : 0);
 
 /** На сколько в день вырастет доход, если купить следующую ступень направления. */
 export function branchGain(state: StoreState, track: BranchTrack): number {
   const next = nextBranchTier(state, track);
-  return next ? Math.round(branchRef(state) * next.share) : 0;
+  return next ? Math.round(branchRef(state) * next.share * (1 + branchHeadBonus(state))) : 0;
 }
 
 /** Настроение дня: погода и сезон — вполовину слабее, чем у своего магазина, рейтинг — чуть-чуть. */

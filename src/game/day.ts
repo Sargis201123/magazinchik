@@ -36,6 +36,7 @@ import { addPassXp } from './pass';
 import { rushGuests } from './rush';
 import { spoilDishes } from './kitchen';
 import { staffMorning } from './staffEvents';
+import { careerMorning, careerNight } from './career';
 import { districtGuests } from './district';
 import { hoodGuests } from './hood';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
@@ -78,6 +79,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const dishes = spoilDishes(s);
   s = dishes.state;
   // Усталость считаем до смены плана: сегодняшний отгул обнуляет её, ночная смена — удваивает.
+  // Карьера: смены, сделанное за день и неявки — пока сегодняшние выходные ещё видны (career.ts).
+  s = careerNight(s, stats.work);
   s = restStaff(s, (stats.nightRevenue ?? 0) > 0);
   // «Проверяющий» от конкурента: штраф, ушёл ни с чем или разоблачили (tricks.ts).
   s = trickNight(s, random, Boolean(staffOf(s, 'cleaner')));
@@ -89,7 +92,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = branchReport(contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random), random), random), stats.revenue), stats.revenue, random), stats), day, branch.income);
+  const next = branchReport(contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue), stats.revenue, random), stats), day, branch.income);
   return {
     ...night,
     state: next,

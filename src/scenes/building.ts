@@ -159,8 +159,7 @@ export function buildStore(scene: StoreScene): void {
   food.buildFood(scene);
   // Электрощиток на стене: нужен, когда отключат свет. Перестановка не даёт закрыть его полкой
   // (placement.ts), а если в старом сохранении полка уже стоит там — щиток висит левее, на открытой стене.
-  const fuseX = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12).find((x) => x > 10 && !shelves.behindShelf(scene, x, 6)) ?? wc.x - 24;
-  scene.fuseBox = scene.art(fuseX, 18, 'fusebox').setDepth(3);
+  scene.fuseBox = scene.art(fuseSpot(scene), 18, 'fusebox').setDepth(3);
   scene.fuseBox.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => liveFx.fixFuse(scene)));
   scene.fuseGlow = new Halo(scene, scene.fuseBox, 0xfee761);
   // Свет отключили — у щитка мигает аварийная лампочка: в тёмном зале видно, куда нажать. Мигает
@@ -840,4 +839,10 @@ export function potTile(scene: StoreScene, key: string): string {
     canvas?.refresh();
   }
   return padded;
+}
+
+/** Где на стене висит электрощиток (в точках мира по x): первое открытое место левее туалета. */
+export function fuseSpot(scene: StoreScene): number {
+  const { wc } = scene.layout;
+  return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12).find((x) => x > 10 && !shelves.behindShelf(scene, x, 6)) ?? wc.x - 24;
 }

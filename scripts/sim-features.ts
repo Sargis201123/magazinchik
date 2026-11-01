@@ -39,6 +39,9 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['филиал в здании «Гиганта»', { features: { branch: true } }],
   // Переезд в гипермаркет — только с филиалом (~110-й день): заметен при прогоне от 200 дней, разница — к прогону без механик.
   ['филиал + гипермаркет', { features: { branch: true, hyper: true } }],
+  // Карьера сотрудников: повышения (быстрее, с прибавкой), премии лучшему, свой управляющий филиала.
+  ['карьера сотрудников', { features: { career: true } }],
+  ['карьера + филиал', { features: { career: true, branch: true } }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, cart: true, loyalty: true, gear: true, etags: true, departments: true, skills: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 

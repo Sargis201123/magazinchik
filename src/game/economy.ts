@@ -340,7 +340,14 @@ export interface StaffMember {
   friend?: { id: number; name: string };
   /** Сын Светы на летней подработке (arcs.ts): уйдёт учиться в конце лета. */
   summer?: boolean;
+  /** Карьера (career.ts): с какого дня работает, опыт, звание, «сотрудник месяца», летопись. */
+  career?: import('./career').Career;
 }
+
+/** Звание (career.ts): старший работает чуть быстрее, администратор зала — ещё быстрее. */
+export const RANK_SPEED: Record<import('./career').Rank, number> = { senior: 1.06, admin: 1.1 };
+/** Администратор зала на смене — весь зал чуть собраннее (вместе с менеджером, если он есть). */
+export const ADMIN_BOOST = 1.03;
 
 /** Воодушевлённый сотрудник работает быстрее. */
 export const INSPIRED_SPEED = 1.15;
@@ -352,7 +359,7 @@ export function wageFor(role: StaffRole, skill: number, trait?: Trait): number {
 
 /** Множитель скорости работы: 1 — обычная. */
 export const workSpeed = (m: StaffMember): number =>
-  SKILL_SPEED[m.skill - 1] * (m.trait ? TRAITS[m.trait].speed : 1) * (m.upset ? UPSET_SPEED : 1) * (isTired(m) ? TIRED_SPEED : 1) * (m.inspired ? INSPIRED_SPEED : 1);
+  SKILL_SPEED[m.skill - 1] * (m.trait ? TRAITS[m.trait].speed : 1) * (m.upset ? UPSET_SPEED : 1) * (isTired(m) ? TIRED_SPEED : 1) * (m.inspired ? INSPIRED_SPEED : 1) * (m.career?.rank ? RANK_SPEED[m.career.rank] : 1);
 
 /** Без выходных столько дней подряд — устаёт и работает медленнее. */
 export const TIRED_DAYS = 6;
@@ -371,7 +378,8 @@ export function giveDayOff(state: StoreState, role: StaffRole): StoreState | nul
 /** Менеджер зала на месте — все работают быстрее (и хозяин за кассой тоже). */
 export const MANAGER_BOOST = 1.1;
 export const managerBoost = (state: StoreState): number =>
-  state.staff.some((m) => m.role === 'manager' && !isAbsent(state, m)) ? MANAGER_BOOST : 1;
+  (state.staff.some((m) => m.role === 'manager' && !isAbsent(state, m)) ? MANAGER_BOOST : 1) *
+  (state.staff.some((m) => m.career?.rank === 'admin' && !isAbsent(state, m)) ? ADMIN_BOOST : 1);
 
 /** Ночная смена выматывает: за такой день усталость растёт вдвое. */
 export const NIGHT_FATIGUE = 2;
@@ -414,12 +422,17 @@ export function hire(state: StoreState, member: StaffMember): StoreState | null 
   if (staffOf(state, member.role) || state.staff.length >= staffLimit(state)) return null;
   const jobSearch = state.jobSearch && { ...state.jobSearch, candidates: state.jobSearch.candidates.filter((c) => c !== member) };
   // Опытные знакомые (наследие): новичок приходит на ступень-две опытнее.
-  const hired = legacyMentor(state) ? { ...member, skill: Math.min(3, member.skill + legacyMentor(state)) } : member;
+  const skilled = legacyMentor(state) ? { ...member, skill: Math.min(3, member.skill + legacyMentor(state)) } : member;
+  // Летопись карьеры — с дня найма (career.ts).
+  const hired: StaffMember = { ...skilled, career: { hired: state.day, xp: 0, log: [{ day: state.day, kind: 'hired' }] } };
   return { ...state, staff: [...state.staff, hired], jobSearch };
 }
 
 export function fire(state: StoreState, role: StaffRole): StoreState {
-  return { ...state, staff: state.staff.filter((m) => m.role !== role) };
+  // Церемония и повышение уволенного снимаются: на его место придёт другой человек.
+  const c = state.career;
+  const career = c && (c.offer?.role === role || c.ceremony?.role === role) ? { ...c, offer: c.offer?.role === role ? undefined : c.offer, ceremony: c.ceremony?.role === role ? undefined : c.ceremony } : c;
+  return { ...state, staff: state.staff.filter((m) => m.role !== role), career };
 }
 
 /**
@@ -685,6 +698,8 @@ export interface StoreState {
   guildClaimed?: number;
   /** Ситуация с сотрудниками, ждущая решения (staffEvents.ts). */
   staffEvent?: StaffEvent;
+  /** Карьера сотрудников (career.ts): «сотрудник месяца», доска почёта, повышения, управляющий филиалом. */
+  career?: import('./career').CareerState;
   /** Район: о каких открытиях рассказали и кого поздравили (district.ts). */
   district?: DistrictState;
   /** Козни конкурента на улице (tricks.ts). */
@@ -834,6 +849,8 @@ export interface DayStats {
   dishWanted?: number;
   /** Сколько кухня потратила за день на продукты в свою кладовую (утром и докупая днём). */
   kitchenSpent?: number;
+  /** Сделано сотрудниками за день по должностям: пробили, убрали, разложили, испекли (career.ts). */
+  work?: Partial<Record<StaffRole, number>>;
   /** Почему ушли без покупки (losses.ts) и каких товаров не хватило или показались дорогими. */
   lostWhy?: Partial<Record<LostReason, number>>;
   missing?: Partial<Record<ProductId, number>>;

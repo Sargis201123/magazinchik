@@ -90,6 +90,12 @@ const css = `
 .ui-me { font-weight: 800; color: #2b2233; }
 .ui-box.ui-tale { background: #e8f4ff; border-color: #5fb4f0; }
 .ui-tale p { margin: 6px 0 8px; line-height: 1.35; }
+.ui-box.ui-career { background: #fff6d8; border-color: #feae34; }
+.ui-career h3 { margin: 0 0 2px; }
+.ui-career-rewards { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 4px; }
+.ui-career-rewards .ui-btn { margin: 0; }
+.ui-career-log { margin-top: 4px; padding: 4px 6px; border-left: 3px solid #feae34; }
+.ui-rank { margin-left: 4px; font-size: 10px; color: #feae34; text-shadow: 0 0 1px #181425, 0 0 1px #181425; letter-spacing: -1px; }
 .ui-box.ui-goals { background: #fff3b0; border-color: #f7c948; }
 .ui-goals .ui-goals-week { display: block; margin-top: 8px; }
 .ui-goal-reward { color: #3e8948; white-space: nowrap; }
@@ -1095,6 +1101,10 @@ export function pixelize(root: Node): void {
     node.replaceWith(frag);
   }
 }
+
+/** Портрет сотрудника для who() (assets/portrait_staff<n>.png, art/career.py): восемь лиц, чётные имена — мужские, нечётные — женские (как в списке имён). */
+export const STAFF_FACES = 8;
+export const staffFace = (name: number): string => `staff${((name % STAFF_FACES) + STAFF_FACES) % STAFF_FACES}`;
 
 /** Пиксельный портрет персонажа или поставщика (assets/portrait_<id>.png) рядом с именем. */
 export function who(portraitId: string, name: HTMLElement): HTMLDivElement {

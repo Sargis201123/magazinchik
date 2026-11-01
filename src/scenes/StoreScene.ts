@@ -163,6 +163,8 @@ export class StoreScene extends Phaser.Scene {
   builtDistrict = '';
   /** Что из благоустройства района стояло на улице (hood.ts). */
   builtHood = '';
+  /** Какие имена висели на доске почёта (game/career.ts, decorations.honorLook). */
+  builtHonor = '';
   /** Где на тротуаре за дорогой висят вывески зданий (середины): новые фонари района их обходят. */
   signsAcross: number[] = [];
   /** Снежные покрывала на крышах соседей: видны в снегопад. */

@@ -184,6 +184,7 @@ export async function baristaLoop(scene: StoreScene, w: Worker, gen: number): Pr
     scene.popup(w.sprite.x, w.sprite.y - 18, t('popup.coffeeReady'), '#c8ffb0');
     if (scene.coffeeOrders[0] === order) scene.coffeeOrders.shift();
     order.done();
+    staff.credit(scene, w.member.role);
     await scene.wait(500);
   }
 }
@@ -331,8 +332,10 @@ export async function bakerLoop(scene: StoreScene, w: Worker, gen: number): Prom
         sound.coin(room.inside.x);
         scene.popup(room.inside.x + 10, room.inside.y - 14, t('popup.wholesale', { n: ovenBatch(scene.state), pay: sold.pay }), '#c8ffb0');
         scene.hud.update(scene.state, scene.timeLeft);
+        staff.credit(scene, w.member.role, 3);
         continue;
       }
+      staff.credit(scene, w.member.role, 3);
       w.carried.setTexture('bread_tray').setPosition(0, 1).setVisible(true);
       const index = breadShelfIndex(scene, product);
       const slot = index >= 0 ? shelves.spotOf(scene, index) : null;
@@ -721,6 +724,7 @@ export async function cookLoop(scene: StoreScene, w: Worker, gen: number): Promi
       if (!scene.alive(gen)) return;
     }
     stopPots(scene);
+    staff.credit(scene, w.member.role, 3);
     // Магазин закрылся, пока варилось: сваренное уже на полке (flushCooking) — нести нечего.
     if (!k.cooking.length) continue;
     sound.ding(k.stove.x);
