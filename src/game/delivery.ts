@@ -8,11 +8,14 @@
 import { DAY_SECONDS, onShelves, sellableProducts, warehouseOf, type ProductId, type StoreState } from './economy';
 import { gearTier } from './gear';
 
-/** Через сколько секунд звонят (случайно в этих пределах; транспорт и рейтинг — чаще) и сколько ждут ответа. */
-export const ORDER_EVERY: [number, number] = [16, 30];
+/**
+ * Через сколько секунд звонят (случайно в этих пределах; транспорт и рейтинг — чаще) и сколько ждут ответа.
+ * Звонок — редкий и крупный: один-два за день, а не каждые двадцать секунд (день спокойнее, доход тот же).
+ */
+export const ORDER_EVERY: [number, number] = [40, 70];
 export const ORDER_TIMEOUT = 15;
-/** Наценка за доставку. */
-export const DELIVERY_FEE = 30;
+/** Наценка за доставку (заказ крупный — и наценка за него больше). */
+export const DELIVERY_FEE = 130;
 
 /** Кто звонит: портреты assets/portrait_caller<N>.png (art/delivery.py) и имена delivery.caller<N>. */
 export const CALLERS = 6;
@@ -81,12 +84,22 @@ export function nextCallIn(state: StoreState, random: () => number): number {
   return (lo + random() * (hi - lo)) / (vehicleOf(state).calls * ratingCalls(state));
 }
 
+/**
+ * Сколько звонков вообще может успеть за день (для бюджета внимания, attention.ts): второй — только если
+ * даже при самых частых звонках он приходится раньше, чем телефон перестаёт звонить к закрытию.
+ */
+export function callsPossible(state: StoreState, max: number): number {
+  const fastest = ORDER_EVERY[0] / (vehicleOf(state).calls * ratingCalls(state));
+  const last = DAY_SECONDS - ORDER_TIMEOUT - 3;
+  return Math.max(0, Math.min(max, Math.floor(last / fastest)));
+}
+
 // ---------- Чаевые ----------
 
 /** Чаевые за скорость: от звонка до двери клиента не дольше стольких секунд — столько монет. */
 export const TIPS: [number, number][] = [
-  [20, 20],
-  [30, 10],
+  [20, 40],
+  [30, 20],
 ];
 export const deliveryTip = (seconds: number): number => TIPS.find(([limit]) => seconds <= limit)?.[1] ?? 0;
 /** Быстрая доставка (с чаевыми) поднимает рейтинг сильнее. */
@@ -96,15 +109,18 @@ export const outcomeFor = (tip: number): DeliveryOutcome => (tip > 0 ? 'fast' : 
 
 const inStock = (state: StoreState, id: ProductId): number => warehouseOf(state, id) + onShelves(state, id);
 
-/** Заказ из того, что есть в магазине: 1–2 товара по 1–3 штуки (не больше, чем есть: звонят «по наличию»). */
+/**
+ * Заказ из того, что есть в магазине: 2–3 товара по 2–5 штук (не больше, чем есть: звонят «по наличию»).
+ * Звонят редко, зато берут на всю семью — как раньше два-три маленьких заказа вместе.
+ */
 export function makeHomeOrder(state: StoreState, random: () => number): HomeOrder | null {
   const options = sellableProducts(state).filter((id) => inStock(state, id) > 0);
   if (!options.length) return null;
   const items: HomeOrder['items'] = [];
-  const kinds = Math.min(options.length, random() < 0.5 ? 1 : 2);
+  const kinds = Math.min(options.length, random() < 0.5 ? 2 : 3);
   while (items.length < kinds) {
     const id = options.splice(Math.floor(random() * options.length), 1)[0];
-    items.push({ id, qty: Math.min(inStock(state, id), 1 + Math.floor(random() * 3)) });
+    items.push({ id, qty: Math.min(inStock(state, id), 2 + Math.floor(random() * 4)) });
   }
   const pay = items.reduce((sum, { id, qty }) => sum + state.prices[id] * qty, 0) + DELIVERY_FEE;
   return { items, pay, caller: Math.floor(random() * CALLERS) };

@@ -794,6 +794,8 @@ export interface StoreState {
   lines?: Partial<Record<LineId, number>>;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */
   records?: import('./records').Records;
+  /** Очередь утренних новостей: одна за утро, остальные ждут (headlines.ts). */
+  newsQ?: import('./headlines').NewsQueue;
   /** Последние мини-события дня — чтобы не повторялись подряд (live.ts). */
   liveRecent?: import('./minievents').LiveKind[];
   /** Автозаказ: включён ли, лимит и что купил сегодня (autoorder.ts). */

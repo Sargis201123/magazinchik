@@ -111,11 +111,14 @@ export function ringPhone(scene: StoreScene): void {
     scheduleOrder(scene, RETRY_CALL);
     return;
   }
+  // Звонков на сегодня больше нет (бюджет внимания дня, game/attention.ts) — телефон молчит до завтра.
+  if (scene.attention.calls <= 0) return;
   const order = makeHomeOrder(scene.state, Math.random);
   if (!order) {
     scheduleOrder(scene);
     return;
   }
+  scene.attention = { ...scene.attention, calls: scene.attention.calls - 1 };
   scene.call = {
     order,
     at: scene.dayClock(),
