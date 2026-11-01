@@ -3,7 +3,7 @@ import { ATTENTION_CAP, attentionTotal, CALLS_MAX, planAttention, thin } from '.
 import { momentsFor } from '../src/game/moments';
 import { liveEventsFor } from '../src/game/minievents';
 import { makeSpecial } from '../src/game/special';
-import { deliveryDay, nextCallIn } from '../src/game/delivery';
+import { callsPossible, deliveryDay, nextCallIn } from '../src/game/delivery';
 import { DAY_SECONDS, newGame, type StoreState } from '../src/game/economy';
 import { rng } from '../src/game/simulate';
 
@@ -26,6 +26,12 @@ describe('бюджет внимания', () => {
   it('звонков не больше CALLS_MAX; нулевой бюджет — тишина', () => {
     expect(planAttention({ moments: 0, live: 0, special: false, calls: 9 }).calls).toBe(CALLS_MAX);
     expect(attentionTotal(planAttention({ moments: 3, live: 2, special: true, calls: 2 }, 0))).toBe(0);
+  });
+
+  it('второй звонок держит место в бюджете, только если может успеть до закрытия', () => {
+    const shop = { ...newGame(), upgrades: ['delivery'] } as StoreState;
+    expect(callsPossible(shop, CALLS_MAX)).toBe(1);
+    expect(callsPossible({ ...shop, gear: { courier: 2 }, deliveryRating: 5 } as StoreState, CALLS_MAX)).toBe(2);
   });
 
   it('thin оставляет равномерно по дню и не меняет порядок', () => {

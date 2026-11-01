@@ -21,7 +21,6 @@ import { claimGifts, duelInfo, duelReward, guildInfo, guildReward, visitsInfo, w
 import { leagueInfo } from '../platform/league';
 import { openPresentsBox, presentsInfo } from '../platform/presents';
 import { liveEvents, todayLocal } from '../platform/live';
-import { askWriteAccessOnce } from '../platform/social';
 import { flushSoon, track } from '../platform/analytics';
 import { png } from '../platform/assets';
 import { liteMode } from '../platform/quality';
@@ -124,7 +123,7 @@ const treatsSource: Source = ({ getState, update }) => {
 };
 
 /** Подарки друзей и «спасибо» за мои (presents.ts): открыть — с сервера; что оставили — прочитать. */
-let opened: { res: NonNullable<Awaited<ReturnType<typeof openPresentsBox>>>; got: ReturnType<typeof openPresents>; level: number } | null = null;
+let opened: { day: number; res: NonNullable<Awaited<ReturnType<typeof openPresentsBox>>>; got: ReturnType<typeof openPresents>; level: number } | null = null;
 const presentsSource: Source = ({ getState, update }) => {
   const info = presentsInfo();
   if (!info || (!info.waiting && !info.thanks)) return null;
@@ -139,7 +138,7 @@ const presentsSource: Source = ({ getState, update }) => {
       const got = openPresents(getState(), res.presents, res.thanks.length);
       track('present_open', getState().day, res.presents.length);
       update(got.state);
-      if (res.presents.length || res.thanks.length) opened = { res, got, level: getState().level };
+      if (res.presents.length || res.thanks.length) opened = { day: getState().day, res, got, level: getState().level };
       return true;
     },
   };
@@ -191,6 +190,7 @@ const guildSource: Source = ({ state, getState, update }) => {
     text: t('mail.guild', { name: g.name }),
     coins: reward,
     take: () => {
+      if (getState().guildClaimed === week) return false;
       update({ ...getState(), money: getState().money + reward, guildClaimed: week });
       return true;
     },
@@ -208,6 +208,7 @@ const duelSource: Source = ({ state, getState, update }) => {
     text: t(last.won ? 'mail.duel.won' : 'mail.duel.lost', { name: last.name }),
     coins: reward,
     take: () => {
+      if (getState().duelClaimed === last.week) return false;
       update({ ...getState(), money: getState().money + reward, duelClaimed: last.week });
       return true;
     },
@@ -225,6 +226,7 @@ const rushSource: Source = ({ state, getState, update }) => {
     text: t('mail.rush', { rank: last.rank, players: last.players }),
     coins: prize,
     take: () => {
+      if (getState().rushClaimed === last.week) return false;
       update({ ...getState(), money: getState().money + prize, rushClaimed: last.week });
       return true;
     },
@@ -256,7 +258,7 @@ const passSource: Source = ({ state, getState, update }) => {
 };
 
 /** Праздник по календарю (live.ts): открытка дня — монеты сразу, саму открытку — посмотреть касанием. */
-let liveOpened: { theme: Parameters<typeof showLiveCard>[0]; gift: Parameters<typeof showLiveCard>[1] } | null = null;
+let liveOpened: { day: number; theme: Parameters<typeof showLiveCard>[0]; gift: Parameters<typeof showLiveCard>[1] } | null = null;
 const adventSource: Source = ({ state, getState, update }) => {
   const today = todayLocal();
   const e = activeEvent(liveEvents(), today);
@@ -270,7 +272,7 @@ const adventSource: Source = ({ state, getState, update }) => {
       if (!got) return false;
       track('live_card', getState().day, got.gift.n);
       update(got.state);
-      liveOpened = { theme: e.theme, gift: got.gift };
+      liveOpened = { day: getState().day, theme: e.theme, gift: got.gift };
       return true;
     },
   };
@@ -309,6 +311,10 @@ const css = `
 .ui-mail-days i.done { background: #e3f5d6; color: #3e8948; }
 .ui-mail-days i.today { background: #fee761; }
 .ui-mail-empty { font: 600 12px/1.3 ${UI_FONT}; color: #8b7a8e; }
+.ui-infos-more summary { cursor: pointer; list-style: none; font: 700 12px/1.6 ${UI_FONT}; }
+.ui-infos-more summary::-webkit-details-marker { display: none; }
+.ui-infos-more summary::before { content: '▸ '; }
+.ui-infos-more[open] summary::before { content: '▾ '; }
 .ui-mail-sum { font: 800 14px ${UI_FONT}; color: #3e8948; }
 .ui-mail-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .ui-mail-chips .ui-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -336,7 +342,11 @@ function entries(c: MailCtx): MailEntry[] {
   return out;
 }
 
-const isTaken = (bag: MailBag | null, id: string) => Boolean(bag?.taken.includes(id));
+/** Строки, которые забираются прямо сейчас (ждём сервер): их не забрать второй раз ни кнопкой, ни «Открыть магазин». */
+const claiming = new Set<string>();
+const isTaken = (bag: MailBag | null, id: string) => Boolean(bag?.taken.includes(id)) || claiming.has(id);
+/** Идёт «Забрать всё» (ждём сервер). */
+export const mailBusy = (): boolean => claiming.size > 0;
 
 /** Сколько всего в почте, что ещё не забрано (для аналитики и для «Открыть магазин»). */
 export function mailWaiting(state: StoreState, getState: () => StoreState, update: Update): number {
@@ -403,11 +413,11 @@ export function mailBox(state: StoreState, getState: () => StoreState, update: U
     box.append(line);
     const chips = el('div', 'ui-mail-chips');
     for (const e of list) if (e.read) chips.append(button(`📖 ${e.text}`, () => e.read!(), 'ui-chip'));
-    if (opened && bag?.taken.includes('presents')) {
+    if (opened?.day === state.day && bag?.taken.includes('presents')) {
       const o = opened;
       chips.append(button(`📖 ${t('mail.readPresents')}`, () => showOpened(o.res.presents, o.res.thanks, o.got, o.level), 'ui-chip'));
     }
-    if (liveOpened && bag?.taken.includes('advent')) {
+    if (liveOpened?.day === state.day && bag?.taken.includes('advent')) {
       const l = liveOpened;
       chips.append(button(`📖 ${t('mail.readCard')}`, () => showLiveCard(l.theme, l.gift), 'ui-chip'));
     }
@@ -436,23 +446,41 @@ export function mailBox(state: StoreState, getState: () => StoreState, update: U
   const coins = waiting.reduce((sum, e) => sum + (e.coins ?? 0), 0);
   const total = el('div', 'ui-mail-total', coins ? t('mail.total', { n: coins }) : '');
   const take = button(t('mail.takeAll'), () => {
-    if (take.disabled) return;
+    if (take.disabled || mailBusy()) return;
     take.disabled = true;
-    void (async () => {
-      const got: string[] = [];
-      for (const e of waiting) {
-        let ok = true;
-        try {
-          ok = e.take ? await e.take() : true;
-        } catch {
-          ok = false;
-        }
-        if (ok) got.push(e.id);
+    const day = getState().day;
+    const got: string[] = [];
+    const coinsOf = (ids: string[]) => waiting.filter((e) => ids.includes(e.id)).reduce((sum, e) => sum + (e.coins ?? 0), 0);
+    const tryTake = (ok: boolean | undefined, e: MailEntry) => {
+      if (ok !== false) got.push(e.id);
+    };
+    // Сначала всё, что без сервера, — сразу и отмечено: перерисовка или «Открыть магазин» его уже не возьмут.
+    for (const e of waiting.filter((x) => !x.online)) {
+      try {
+        tryTake(e.take ? (e.take() as boolean) : true, e);
+      } catch {
+        /* строка останется в почте */
       }
-      const day = getState().day;
-      markTaken(day, got, waiting.filter((e) => got.includes(e.id)).reduce((sum, e) => sum + (e.coins ?? 0), 0));
+    }
+    markTaken(day, got, coinsOf(got));
+    // Потом — с сервера (угощения, подарки друзей): пока ждём, строки «забираются» и второй раз не берутся.
+    const online = waiting.filter((x) => x.online);
+    for (const e of online) claiming.add(e.id);
+    void (async () => {
+      for (const e of online) {
+        try {
+          tryTake(await e.take?.(), e);
+        } catch {
+          /* нет связи — заберём завтра */
+        }
+        claiming.delete(e.id);
+      }
+      const late = got.filter((id) => online.some((e) => e.id === id));
+      if (late.length) markTaken(day, late, coinsOf(late));
       track('mail_claim', day, got.length);
       flushSoon();
+      // Утро уже закрыли (открыли магазин) — праздновать и перерисовывать некому.
+      if (!box.isConnected) return;
       // Тёплое: крышка сундучка, монеты брызгами, сумма докручивается.
       if (chest && chestImg && got.includes('chest')) {
         chest.classList.remove('wait');
@@ -461,17 +489,16 @@ export function mailBox(state: StoreState, getState: () => StoreState, update: U
       }
       if (!music.sting('coin')) sound.coin();
       haptic.success();
-      const after = () => window.setTimeout(render, calm ? 0 : 700);
+      const after = () => window.setTimeout(() => box.isConnected && render(), calm ? 0 : 700);
       if (coins) {
         rollNumber(total, 0, coins, calm ? 0 : 600, (n) => t('mail.total', { n }), () => {
           total.classList.add('got');
           after();
         });
       } else after();
-      // Со второго дня — один раз спросить, можно ли боту напоминать (раньше — после окна гостинца).
-      if (day > 1) window.setTimeout(askWriteAccessOnce, 1500);
     })();
   });
+  if (mailBusy()) take.disabled = true;
   box.append(total, take);
   return [box];
 }

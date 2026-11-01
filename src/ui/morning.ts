@@ -208,7 +208,7 @@ import { arcBox, arcLines } from './arcs';
 import { mailBox, takeQuietly } from './mail';
 import { MAIL_EVENT } from './mailbag';
 import { arcToday } from '../game/arcs';
-import { lateBurglaryNews, lateContestResult, pickNews, type NewsId } from '../game/headlines';
+import { lateBurglaryNews, lateContestAnnounce, lateContestResult, pickNews, type NewsId } from '../game/headlines';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { showSupport } from './support';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
@@ -273,6 +273,8 @@ const CLIENT_PORTRAIT: Record<ClientId, string> = { chef: 'marat', school: 'scho
 interface MorningOptions {
   getState: () => StoreState;
   setState: (s: StoreState) => void;
+  /** Записать состояние, когда утро уже закрыто (поздний ответ сервера для «Почты»): без перестроек мира. */
+  lateState?: (s: StoreState) => void;
   onOpen: () => void;
   /** «Переставить полки»: утро закрывается, в зале — перестановка; потом утро откроется снова. */
   onArrange?: () => void;
@@ -538,7 +540,7 @@ const rectOf = (node: HTMLElement): Spot | null => {
 };
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach, visit }: MorningOptions): void {
+export function showMorning({ getState, setState, lateState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach, visit }: MorningOptions): void {
   const { card, close } = openModal();
   // Нажатый заголовок или кнопка остаются на месте, когда блоки сворачиваются и окно перерисовывается.
   anchorScroll(card);
@@ -652,6 +654,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     render();
   };
 
+  /**
+   * Почта записывает состояние: пока утро открыто — как обычно; ответ сервера пришёл, когда магазин уже
+   * открыли (угощения друзей на медленной связи), — только деньги в кассу, без утренних перестроек.
+   */
+  const mailUpdate = (next: StoreState) => (card.isConnected ? setState(shelveAll(next)) : lateState?.(next));
+
   /** Открыть лавку в Заречье: деньги — городу, первый день там можно начать прямо сейчас (переключатель сверху). */
   const openZar = () => {
     const opened = buyZar(getState());
@@ -706,7 +714,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const news = eduardNews(state);
     const giantPhase = giantNews(state);
     const result = contestResult(state) ?? lateContestResult(state);
-    const announce = contestAnnounce(state);
+    const announce = contestAnnounce(state) ?? lateContestAnnounce(state);
     const night = burglaryNews(state) ?? lateBurglaryNews(state);
     const asking = state.staff.find((m) => m.raiseAsk);
     const som = zarBossNews(state);
@@ -903,7 +911,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     );
     const openButton = button(t('morning.open'), () => {
       // Почту не открыли — забранное без сети само ложится в кассу (ничего не пропадает).
-      if (!touring) takeQuietly(getState, (next) => setState(shelveAll(next)));
+      if (!touring) takeQuietly(getState, mailUpdate);
       endTour();
       if (tutStep(getState()) === 'open') setState(tutPass(getState(), 'open'));
       coach?.hide();
@@ -920,7 +928,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       title,
       ...(touring ? [] : plannedVisitBox()),
       // «Почта» (ui/mail.ts): всё, что просто забрать, — одной карточкой и одной кнопкой.
-      ...(touring ? [] : mailBox(state, getState, (next) => setState(shelveAll(next)), render)),
+      ...(touring ? [] : mailBox(state, getState, mailUpdate, render)),
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
       ...(touring ? [] : zarSwitchBox(state, (where) => update(switchToday(getState(), where)))),

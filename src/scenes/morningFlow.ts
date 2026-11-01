@@ -22,6 +22,7 @@ import { lazy, prefetch, withLazy } from '../platform/lazy';
 import { weatherFor } from '../game/weather';
 import { claimGift, giftTomorrow } from '../game/gift';
 import { postMail } from '../ui/mailbag';
+import { askWriteAccessOnce } from '../platform/social';
 import { collectOrder, takeLetter } from '../game/returns';
 import { hasDog } from '../game/watch';
 import { contestOf, juryDay } from '../game/contest';
@@ -46,6 +47,7 @@ import { cafeDeliver } from '../game/cafe';
 import { hasRadio } from '../game/radio';
 import { LIVE_REPEAT, liveEventsFor } from '../game/minievents';
 import { CALLS_MAX, planAttention, thin } from '../game/attention';
+import { callsPossible } from '../game/delivery';
 import { momentsFor } from '../game/moments';
 import { fridgeLeak } from '../game/gear';
 import { catHome } from '../game/cat';
@@ -143,6 +145,8 @@ export function collectMail(scene: StoreScene): void {
     saveGame(scene.state);
     scene.hud.update(scene.state, DAY_SECONDS);
   }
+  // Со второго дня, когда бабушка прислала гостинец, — один раз спросить, можно ли боту напоминать о магазине.
+  if (claimed && day > 1) scene.time.delayedCall(4000, askWriteAccessOnce);
   postMail(day, {
     letter: letter?.gift,
     order: fresh ?? undefined,
@@ -254,6 +258,12 @@ export function showMorning(scene: StoreScene): void {
       scene.awaitingBoxes = deliveries.boxesToDeliver(scene);
       scene.refreshShelves();
       building.refreshWarehouse(scene);
+      scene.hud.update(s, DAY_SECONDS);
+    },
+    // Поздний ответ сервера для «Почты» (угощения друзей пришли, когда магазин уже открыт) — только в кассу.
+    lateState: (s) => {
+      scene.state = s;
+      saveGame(s);
       scene.hud.update(s, DAY_SECONDS);
     },
     onOpen: () => startDay(scene),
@@ -655,7 +665,7 @@ export function prepareDay(scene: StoreScene): void {
   const live = liveEventsFor(scene.state, Math.random);
   // Бюджет внимания дня (game/attention.ts): особый гость, звонки, моменты и мини-события делят пять
   // просьб «нажми». Что не влезло — сегодня просто не случается (сюжет и беды — вне бюджета).
-  scene.attention = planAttention({ moments: momentPlan.length, live: live.kinds.length, special: scene.specialToday, calls: scene.phone ? CALLS_MAX : 0 });
+  scene.attention = planAttention({ moments: momentPlan.length, live: live.kinds.length, special: scene.specialToday, calls: scene.phone ? callsPossible(scene.state, CALLS_MAX) : 0 });
   scene.moments.start(thin(momentPlan, scene.attention.moments));
   const kinds = live.kinds.slice(0, scene.attention.live);
   // В очередь недавних — только то, что правда будет (не случившееся не мешает ему завтра).

@@ -8,7 +8,7 @@
 // Сами карточки и их условия остались у своих модулей — здесь только кто первый и сколько за утро.
 
 import type { StoreState } from './economy';
-import { contestOf, type ContestResult } from './contest';
+import { contestOf, type ContestResult, type ContestState } from './contest';
 import type { BurglaryNews } from './watch';
 
 /** Что может прийти утром. Порядок — внутри одного вида, при равном ожидании. */
@@ -74,18 +74,26 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
  */
 export const TODAY_ONLY: ReadonlySet<NewsId> = new Set<NewsId>(['event', 'trick']);
 
-/** Сколько новостей за утро. */
+/** Сколько новостей за утро (глава сюжета не в счёт). */
 export const NEWS_PER_MORNING = 1;
 /**
  * Итог конкурса и ночь со взломом в своих модулях — «только в тот же день». Очередь держит их столько
  * дней (game/contest.ts contestResult, game/watch.ts burglaryNews), чтобы главное не пропадало молча.
  */
 export const NEWS_KEEP_DAYS = 7;
+/** Начало конкурса объявляем в первые дни недели конкурса, позже — уже незачем (идёт в «Сегодня»). */
+export const NEWS_ANNOUNCE_DAYS = 3;
 
 /** Итог конкурса, который отложили (contestResult — только в день итога): ждёт, пока идёт перерыв. */
 export function lateContestResult(state: StoreState): ContestResult | null {
   const c = contestOf(state);
   return c?.phase === 'wait' && c.last && !c.last.seen && state.day >= c.since && state.day - c.since <= NEWS_KEEP_DAYS ? c.last : null;
+}
+
+/** Начало конкурса, которое отложили (contestAnnounce — только в первый день недели): ждёт, пока неделя идёт. */
+export function lateContestAnnounce(state: StoreState): ContestState | null {
+  const c = contestOf(state);
+  return c?.phase === 'run' && !c.announced && state.day >= c.since && state.day - c.since < NEWS_ANNOUNCE_DAYS ? c : null;
 }
 
 /** Новость о ночи со взломом, которую отложили (burglaryNews — только в тот же день). */
@@ -117,7 +125,8 @@ export function pickNews(state: StoreState, ready: readonly NewsId[]): { id: New
   const old = state.newsQ;
   let q: NewsQueue = old && old.day === state.day ? old : { day: state.day, done: 0, wait: old?.wait };
   // Показанная закрыта (на неё ответили, её условия больше не выполняются) — засчитать.
-  if (q.shown && !ready.includes(q.shown)) q = { ...q, done: q.done + 1, shown: undefined };
+  // Глава сюжета утро не занимает: после неё ещё одна новость (иначе событие дня в утро главы пропало бы).
+  if (q.shown && !ready.includes(q.shown)) q = { ...q, done: q.done + (q.shown === 'story' ? 0 : 1), shown: undefined };
   let id: NewsId | null = q.shown ?? null;
   if (!id && q.done < NEWS_PER_MORNING && ready.length) {
     const wait = q.wait ?? {};

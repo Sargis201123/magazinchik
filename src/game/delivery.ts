@@ -84,6 +84,16 @@ export function nextCallIn(state: StoreState, random: () => number): number {
   return (lo + random() * (hi - lo)) / (vehicleOf(state).calls * ratingCalls(state));
 }
 
+/**
+ * Сколько звонков вообще может успеть за день (для бюджета внимания, attention.ts): второй — только если
+ * даже при самых частых звонках он приходится раньше, чем телефон перестаёт звонить к закрытию.
+ */
+export function callsPossible(state: StoreState, max: number): number {
+  const fastest = ORDER_EVERY[0] / (vehicleOf(state).calls * ratingCalls(state));
+  const last = DAY_SECONDS - ORDER_TIMEOUT - 3;
+  return Math.max(0, Math.min(max, Math.floor(last / fastest)));
+}
+
 // ---------- Чаевые ----------
 
 /** Чаевые за скорость: от звонка до двери клиента не дольше стольких секунд — столько монет. */

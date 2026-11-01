@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { lateBurglaryNews, lateContestResult, normalizeNews, NEWS_KEEP_DAYS, pickNews, type NewsId } from '../src/game/headlines';
+import { lateBurglaryNews, lateContestAnnounce, lateContestResult, normalizeNews, NEWS_ANNOUNCE_DAYS, NEWS_KEEP_DAYS, pickNews, type NewsId } from '../src/game/headlines';
 import { newGame, type StoreState } from '../src/game/economy';
 
 // Одна новость за утро: очередь с приоритетом, остальные ждут следующего утра.
@@ -27,6 +27,21 @@ describe('очередь утренних новостей', () => {
     expect(pickNews(at(5), ['event', 'story', 'giant']).id).toBe('story');
     expect(pickNews(at(5), ['giant', 'event']).id).toBe('event');
     expect(pickNews(at(5), ['tale', 'contestResult']).id).toBe('contestResult');
+  });
+
+  it('глава сюжета утро не занимает: после неё — ещё одна новость (событие дня не пропадает)', () => {
+    const first = pickNews(at(8), ['story', 'event', 'tale']);
+    expect(first.id).toBe('story');
+    const second = pickNews(first.state, ['event', 'tale']);
+    expect(second.id).toBe('event');
+    expect(pickNews(second.state, ['tale']).id).toBeNull();
+  });
+
+  it('начало конкурса ждёт первые дни недели', () => {
+    const contest = { tier: 0, phase: 'run', since: 30, target: 1, revenue: 0, served: 0, unhappy: 0, empty: 0, wins: 0 } as NonNullable<StoreState['contest']>;
+    expect(lateContestAnnounce(at(31, { contest }))).toBe(contest);
+    expect(lateContestAnnounce(at(30 + NEWS_ANNOUNCE_DAYS, { contest }))).toBeNull();
+    expect(lateContestAnnounce(at(31, { contest: { ...contest, announced: true } }))).toBeNull();
   });
 
   it('кто дольше ждал — тот раньше (при равной важности)', () => {
