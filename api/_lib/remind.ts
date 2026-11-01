@@ -247,6 +247,7 @@ export const PEOPLE: Record<Lang, Record<string, { from: string; who: string }>>
     akhmed: { from: 'Akhmed', who: 'Akhmed' },
     olga: { from: 'Olga Nikolaevna', who: 'Olga Nikolaevna' },
     misha: { from: 'Misha', who: 'Misha' },
+    staff: { from: 'eski bir çalışan', who: 'eski bir çalışanı' },
   },
   es: {
     grandma: { from: 'la abuela', who: 'la abuela' },
@@ -258,6 +259,7 @@ export const PEOPLE: Record<Lang, Record<string, { from: string; who: string }>>
     akhmed: { from: 'Ajmed', who: 'Ajmed' },
     olga: { from: 'Olga Nikoláyevna', who: 'Olga Nikoláyevna' },
     misha: { from: 'Misha', who: 'Misha' },
+    staff: { from: 'un antiguo empleado', who: 'a un antiguo empleado' },
   },
 };
 /** Любимые товары постоянных покупателей — то, что они просят отложить. */
