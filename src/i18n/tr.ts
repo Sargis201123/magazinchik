@@ -159,7 +159,7 @@ export const tr: Record<TextKey, string> = {
   "rival.news.hint": "Bekçi ya da temizlikçi işe yarardı.",
   "rival.news.back": "🥷 Karşılık ver: {name}",
   "rival.news.thank": "☕ “Ziyaretin için sağ ol”",
-  "rival.news.thanked": "Gönderildi — {name} bir kahve alacak.",
+  "rival.news.thanked": "Gönderildi — {name} teşekkürünü alacak.",
   "rival.news.ok": "Tamam",
   "rival.thanks.title": "Ziyaret için teşekkürler",
   "rival.thanks": "{names}: “ziyaretin için sağ ol” ☕",
@@ -3195,7 +3195,7 @@ export const tr: Record<TextKey, string> = {
   "league.weekendNote": "Cumartesi ve pazar günleri puanlar ×1,5.",
   "farewell.note": "Düello, lonca ve Black Friday kapandı — artık mahalle turnuvasında yarışıyoruz. Onlardan kazandığın ödül senin.",
   "farewell.reward": "🎁 Geçen haftanın ödülü: +{n} 💰",
-  "social.open.coffee": "☕ {names} sana kahve ısmarladı: +{n} 💰",
+  "social.open.coffee": "☕ Arkadaşlardan para ({names}): +{n} 💰",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

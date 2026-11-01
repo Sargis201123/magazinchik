@@ -45,8 +45,8 @@ const SCHEMA = [
   // Карточки итогов для сторис: картинка в base64, живёт пару дней (card.ts).
   'CREATE TABLE IF NOT EXISTS cards (id TEXT PRIMARY KEY, owner INTEGER, at INTEGER, data TEXT)',
   'CREATE INDEX IF NOT EXISTS cards_owner ON cards (owner, at)',
-  // Старые «угостить кофе» (visits.ts): теперь угощение — подарок (presents.ts); неоткрытые монеты
-  // отсюда открываются вместе с подарками.
+  // Монеты от друзей (visits.ts): старые угощения кофе и недельная доля друга-сотрудника (pay);
+  // открываются вместе с подарками (presents.ts).
   'CREATE TABLE IF NOT EXISTS gifts (sender INTEGER, receiver INTEGER, day INTEGER, amount INTEGER, claimed INTEGER DEFAULT 0, PRIMARY KEY (sender, receiver, day))',
   'CREATE INDEX IF NOT EXISTS gifts_receiver ON gifts (receiver, claimed)',
   // Как выглядит магазин (для «в гости к другу», visits.ts): снимок от игры, JSON.

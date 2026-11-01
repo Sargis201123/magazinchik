@@ -169,7 +169,7 @@ export const kk: Record<TextKey, string> = {
   "rival.news.hint": "Күзетші не тазалаушы көмектесер еді.",
   "rival.news.back": "🥷 Жауап: {name}",
   "rival.news.thank": "☕ «Келгенің үшін рақмет»",
-  "rival.news.thanked": "Жіберілді — {name} кофе алады.",
+  "rival.news.thanked": "Жіберілді — {name} алғысыңды алады.",
   "rival.news.ok": "Жарайды",
   "rival.thanks.title": "Келгенің үшін рақмет",
   "rival.thanks": "{names}: «келгенің үшін рақмет» ☕",
@@ -3202,7 +3202,7 @@ export const kk: Record<TextKey, string> = {
   "league.weekendNote": "Сенбі мен жексенбіде ұпай ×1,5.",
   "farewell.note": "Жекпе-жек, гильдия және «Қара жұма» жабылды — енді аудан турнирінде жарысамыз. Олардағы сыйлығың — өзіңе.",
   "farewell.reward": "🎁 Өткен аптаның сыйлығы: +{n} 💰",
-  "social.open.coffee": "☕ {names} саған кофе ұсынды: +{n} 💰",
+  "social.open.coffee": "☕ Достардан тиын ({names}): +{n} 💰",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

@@ -3142,7 +3142,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const box = el('div', 'ui-box ui-friends');
     box.append(el('b', '', `🏠 ${t('friends.title')}`), el('div', '', t('friends.what')));
     if (!info) {
-      box.append(el('div', 'ui-note', t('friends.offline')));
+      // Друзья не пришли — приглашение и награда за приглашённых всё равно на месте (socialInfo).
+      box.append(el('div', 'ui-note', t('friends.offline')), ...inviteLines());
       return [box];
     }
     if (!info.friends.length) box.append(el('div', 'ui-note', t('friends.none')));

@@ -165,7 +165,7 @@ export const en: Record<TextKey, string> = {
   'rival.news.hint': 'A guard or a cleaner would help.',
   'rival.news.back': '🥷 Pay back: {name}',
   'rival.news.thank': '☕ “Thanks for visiting”',
-  'rival.news.thanked': 'Sent — {name} will get a coffee.',
+  'rival.news.thanked': "Sent — {name} will get your thanks.",
   'rival.news.ok': 'OK',
   'rival.thanks.title': 'Thanks for visiting',
   'rival.thanks': "{names}: “thanks for visiting” ☕",
@@ -3240,7 +3240,7 @@ export const en: Record<TextKey, string> = {
   "league.weekendNote": "On Saturdays and Sundays points count ×1.5.",
   "farewell.note": "The duel, the guild and Black Friday are closed — now we compete in the district tournament. Here is what you earned in them.",
   "farewell.reward": "🎁 Reward for last week: +{n} 💰",
-  "social.open.coffee": "☕ {names} treated you to coffee: +{n} 💰",
+  "social.open.coffee": "☕ Coins from friends ({names}): +{n} 💰",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

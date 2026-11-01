@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordReferral, socialPing } from '../api/_lib/social';
 import { progress } from '../api/_lib/stats';
-import { visits, STREET_SIZE } from '../api/_lib/visits';
+import { FRIEND_PAY, visits, STREET_SIZE } from '../api/_lib/visits';
 import { presents } from '../api/_lib/presents';
 import type { D1, D1Statement, Env } from '../api/_lib/telegram';
 
@@ -95,6 +95,12 @@ describe.skipIf(!Database)('друзья в гостях (сервер)', () => 
     await db.prepare('INSERT INTO gifts (sender, receiver, day, amount) VALUES (1, 2, 3, 300)').run();
     expect(await json<{ amount: number }>(visits(await post(2, { action: 'claim' }), env))).toEqual({ amount: 300 });
     expect((await json<{ coins: number }>(presents(await post(2, { action: 'open' }), env))).coins).toBe(0);
+    // Недельная доля друга-сотрудника — монеты, раз в день; подарок другу в тот же день не занимает.
+    expect(await json<{ ok: boolean }>(visits(await post(1, { action: 'pay', to: 2 }), env))).toEqual({ ok: true });
+    expect(await json<{ ok: boolean }>(visits(await post(1, { action: 'pay', to: 2 }), env))).toEqual({ ok: false });
+    expect(await json<{ ok: boolean }>(visits(await post(1, { action: 'pay', to: 99 }), env))).toEqual({ ok: false });
+    expect(await json<{ ok: boolean }>(presents(await post(1, { action: 'give', to: 2, kind: 'card', phrase: 1 }), env))).toEqual({ ok: true });
+    expect((await json<{ coins: number }>(presents(await post(2, { action: 'open' }), env))).coins).toBe(FRIEND_PAY);
   });
 
   it('магазин друга: виден только своим, большой снимок не сохраняется', async () => {

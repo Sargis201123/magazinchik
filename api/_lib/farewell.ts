@@ -4,7 +4,7 @@
 // Старые игры ещё зовут /api/duel, /api/guild и /api/weekend — им спокойный пустой ответ
 // { enabled: false } (старая игра так и понимает «выключено»), а не 500.
 // Таблицы duels, guild*, weekend в базе НЕ удаляем (social.ts их по-прежнему объявляет) и больше не
-// пишем. Один раз читаем — прощальный расчёт: награда за последнюю неделю, которую игрок ещё не
+// пишем (кроме одной строки итога гильдии в guild_results, чтобы не считать его заново). Один раз читаем — прощальный расчёт: награда за последнюю неделю, которую игрок ещё не
 // забрал, приходит вместе с турниром (league.ts → farewell) и выдаётся игрой следующим утром.
 // После FAREWELL_UNTIL не читаем и их.
 
@@ -32,10 +32,14 @@ async function guildReached(db: D1, guild: number, week: number): Promise<boolea
   if (saved) return saved.reached === 1;
   const target = await db.prepare('SELECT target FROM guild_weeks WHERE guild = ? AND week = ?').bind(guild, week).first<{ target: number }>();
   if (!target) return false;
-  const ids = (await db.prepare('SELECT player FROM guild_members WHERE guild = ? AND joined < ?').bind(guild, weekStart(week + 1)).all<{ player: number }>()).results;
+  // Не больше прежнего предела гильдии (20): у D1 предел запросов на один вызов.
+  const ids = (await db.prepare('SELECT player FROM guild_members WHERE guild = ? AND joined < ? LIMIT 20').bind(guild, weekStart(week + 1)).all<{ player: number }>()).results;
   let sum = 0;
   for (const { player } of ids) sum += await weekRevenue(db, player, week);
-  return sum >= target.target;
+  const reached = sum >= target.target;
+  // Итог считается один раз: следующий вызов (и любой участник) прочтёт сохранённый.
+  await db.prepare('INSERT OR IGNORE INTO guild_results (guild, week, reached) VALUES (?, ?, ?)').bind(guild, week, reached ? 1 : 0).run();
+  return reached;
 }
 
 /**

@@ -171,7 +171,7 @@ export const uz: Record<TextKey, string> = {
   "rival.news.hint": "Qorovul yoki farrosh yordam berardi.",
   "rival.news.back": "🥷 Javoban: {name}",
   "rival.news.thank": "☕ «Tashrif uchun rahmat»",
-  "rival.news.thanked": "Yuborildi — {name} qahva oladi.",
+  "rival.news.thanked": "Yuborildi — {name} rahmatingni oladi.",
   "rival.news.ok": "Mayli",
   "rival.thanks.title": "Tashrif uchun rahmat",
   "rival.thanks": "{names}: «tashrif uchun rahmat» ☕",
@@ -3204,7 +3204,7 @@ export const uz: Record<TextKey, string> = {
   "league.weekendNote": "Shanba va yakshanba kunlari ochkolar ×1,5.",
   "farewell.note": "Duel, gildiya va «Qora juma» yopildi — endi mahalla turnirida bellashamiz. Ulardagi mukofoting — seniki.",
   "farewell.reward": "🎁 Oʻtgan hafta mukofoti: +{n} 💰",
-  "social.open.coffee": "☕ {names} seni qahva bilan siylashdi: +{n} 💰",
+  "social.open.coffee": "☕ Doʻstlardan tangalar ({names}): +{n} 💰",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

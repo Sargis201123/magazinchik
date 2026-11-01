@@ -163,7 +163,7 @@ export const ru = {
   'rival.news.hint': 'Охрана или уборщица помогли бы.',
   'rival.news.back': '🥷 В ответ: {name}',
   'rival.news.thank': '☕ «Спасибо за визит»',
-  'rival.news.thanked': 'Отправлено — {name} получит кофе.',
+  'rival.news.thanked': "Отправлено — {name} получит твоё «спасибо».",
   'rival.news.ok': 'Ладно',
   'rival.thanks.title': 'Спасибо за визит',
   'rival.thanks': "{names}: «спасибо за визит» ☕",
@@ -3238,7 +3238,7 @@ export const ru = {
   "league.weekendNote": "По субботам и воскресеньям очки ×1,5.",
   "farewell.note": "Дуэль, гильдия и «Чёрная пятница» закрылись — теперь соревнуемся в турнире района. Награда за них — тебе.",
   "farewell.reward": "🎁 Награда за прошлую неделю: +{n} 💰",
-  "social.open.coffee": "☕ {names} угощали тебя кофе: +{n} 💰",
+  "social.open.coffee": "☕ Монеты от друзей ({names}): +{n} 💰",
 } as const;
 
 export type TextKey = keyof typeof ru;

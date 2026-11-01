@@ -50,6 +50,14 @@ export async function treatFriend(id: number): Promise<boolean> {
   return ok;
 }
 
+/** Недельная доля друга, который работает у нас (nightShift.ts): монеты — он откроет их с подарками. */
+export async function payFriend(id: number): Promise<boolean> {
+  const initData = telegramInitData();
+  if (!initData) return false;
+  const res = await post<{ ok?: boolean }>('/api/visits', { initData, action: 'pay', to: id });
+  return Boolean(res?.ok);
+}
+
 /** Магазин друга (снимок с сервера, ещё не проверенный) и его имя. null — недоступно. */
 export async function fetchFriendShop(id: number): Promise<{ shop: unknown; name: string } | null> {
   const initData = telegramInitData();
