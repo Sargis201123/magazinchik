@@ -52,6 +52,7 @@ describe('новоселье', () => {
   });
 });
 
+// Симуляции по 10 прогонов на 90–100 дней: на медленной машине дольше 5 с — отсюда явный предел 30 с.
 describe('цены', () => {
   const run = (priceMult: number) => {
     const runs = 10;
@@ -62,11 +63,11 @@ describe('цены', () => {
 
   it('задирать цены невыгодно: супермаркет откроется позже, чем при честных ценах', () => {
     expect(run(1.3)).toBeGreaterThan(run(1));
-  });
+  }, 30_000);
 
   it('демпинг тоже невыгоден', () => {
     expect(run(0.8)).toBeGreaterThan(run(1));
-  });
+  }, 30_000);
 });
 
 describe('персонал', () => {
@@ -113,7 +114,7 @@ describe('новые механики', () => {
     const m = money({ [feature]: true });
     expect(m).toBeGreaterThan(base * 0.9);
     expect(m).toBeLessThan(base * 2);
-  });
+  }, 30_000);
 
 });
 

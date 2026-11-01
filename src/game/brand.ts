@@ -4,7 +4,8 @@
 // Печёт пекарь, когда хлеба на полках хватает; у поставщиков такой выпечки нет.
 
 import { gearTier, GEAR } from './gear';
-import { canPlace, OWN_PRODUCTS, onShelves, ownProductOpen, PRODUCTS, shelfFree, type ProductId, type StoreState } from './economy';
+import { canPlace, homemade, OWN_PRODUCTS, onShelves, ownProductOpen, PRODUCTS, shelfFree, type ProductId, type StoreState } from './economy';
+import { lineDemand } from './lines';
 import { bakeModeOf, bakeryWorking, needsBaking } from './bakery';
 
 export const BRAND_COSTS = [1000, 2000, 4000];
@@ -29,8 +30,9 @@ export function buyBrandLevel(state: StoreState): StoreState | null {
 
 export const isOwnProduct = (id: ProductId): boolean => OWN_PRODUCTS.includes(id);
 
-/** Своя выпечка идёт лучше с каждой ступенью марки. */
-export const brandDemand = (state: StoreState, id: ProductId): number => (isOwnProduct(id) ? 1 + BRAND_DEMAND_STEP * brandLevel(state) : 1);
+/** Своя выпечка идёт лучше с каждой ступенью марки; линейки своей марки и «слава марки» — lines.ts. */
+export const brandDemand = (state: StoreState, id: ProductId): number =>
+  (isOwnProduct(id) ? 1 + BRAND_DEMAND_STEP * brandLevel(state) : 1) * lineDemand(state, id, homemade(id));
 
 /** Сколько стоит закладка своей выпечки. */
 export const brandBatchCost = (id: ProductId): number => PRODUCTS[id].cost * BRAND_BATCH;

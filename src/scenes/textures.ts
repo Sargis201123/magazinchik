@@ -352,6 +352,11 @@ export const SPRITES = [
   'food_shelf1',
   'food_shelf2',
   'food_glass2',
+  // Уголки своей марки (art/brand_lines.py, game/lines.ts): таз варенья, бочка солений, доска с пельменями, бочка кваса.
+  'line_jam',
+  'line_pickles',
+  'line_pelmeni',
+  'line_kvass',
   'umbrella',
   'carts',
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),

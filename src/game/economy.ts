@@ -5,6 +5,7 @@ import { legacyMentor, legacyPurchase, type Legacy } from './legacy';
 import type { TalesState } from './tales';
 import type { PassState } from './pass';
 import type { DishId } from './kitchen';
+import type { LineId } from './lines';
 import type { StaffEvent } from './staffEvents';
 import type { DistrictState } from './district';
 import type { Trick } from './tricks';
@@ -50,7 +51,12 @@ export type ProductId =
   // Своя выпечка «От бабушки» (brand.ts): печёт пекарь, у поставщиков её нет.
   | 'pies'
   | 'buns'
-  | 'honeycake';
+  | 'honeycake'
+  // Линейки своей марки (lines.ts): делают ночью из сырья со склада, у поставщиков их нет.
+  | 'jam'
+  | 'pickles'
+  | 'pelmeni'
+  | 'kvass';
 
 export interface Product {
   id: ProductId;
@@ -93,18 +99,34 @@ export const PRODUCTS: Record<ProductId, Product> = {
   pies: { id: 'pies', nameKey: 'product.pies', icon: '🥧', category: 'bakery', cost: 16, basePrice: 45, shelfLife: 2, color: 0xfeae34 },
   buns: { id: 'buns', nameKey: 'product.buns', icon: '🥐', category: 'bakery', cost: 14, basePrice: 40, shelfLife: 2, color: 0xead4aa },
   honeycake: { id: 'honeycake', nameKey: 'product.honeycake', icon: '🍰', category: 'bakery', cost: 40, basePrice: 110, shelfLife: 3, color: 0xb86f50 },
+  // Своя марка (lines.ts): cost — сырьё и банка на штуку (как считает lineUnitCost).
+  jam: { id: 'jam', nameKey: 'product.jam', icon: '🍯', category: 'produce', cost: 28, basePrice: 75, shelfLife: 40, color: 0xa22633 },
+  pickles: { id: 'pickles', nameKey: 'product.pickles', icon: '🥒', category: 'produce', cost: 24, basePrice: 60, shelfLife: 40, color: 0x3e8948 },
+  pelmeni: { id: 'pelmeni', nameKey: 'product.pelmeni', icon: '🥟', category: 'frozen', cost: 57, basePrice: 130, shelfLife: 20, color: 0xf4ecd8 },
+  kvass: { id: 'kvass', nameKey: 'product.kvass', icon: '🍺', category: 'drinks', cost: 14, basePrice: 45, shelfLife: 4, color: 0x8f563b },
 };
 
 /** Своя выпечка по ступеням марки «От бабушки»: первая ступень — пирожки, вторая — булочки, третья — медовик. */
 export const OWN_PRODUCTS: ProductId[] = ['pies', 'buns', 'honeycake'];
 /** Своя выпечка открыта на этой ступени марки (обычные товары — всегда). */
-export const ownProductOpen = (state: { brand?: number }, id: ProductId): boolean => {
+export const ownProductOpen = (state: { brand?: number; lines?: StoreState['lines'] }, id: ProductId): boolean => {
+  const line = LINE_OF[id];
+  if (line) return (state.lines?.[line] ?? 0) > 0;
   const i = OWN_PRODUCTS.indexOf(id);
   return i < 0 || i < (state.brand ?? 0);
 };
+/** Товар линейки своей марки → линейка (lines.ts; здесь — чтобы не тянуть её в экономику). */
+const LINE_OF: Partial<Record<ProductId, LineId>> = { jam: 'jam', pickles: 'pickles', pelmeni: 'pelmeni', kvass: 'kvass' };
+/**
+ * Своё, сделанное в магазине: выпечка «От бабушки» и линейки своей марки. У поставщиков его нет,
+ * специально за ним не идут — берут, когда видят на полке.
+ */
+export const homemade = (id: ProductId): boolean => OWN_PRODUCTS.includes(id) || LINE_OF[id] !== undefined;
 
 export const PRODUCT_IDS = Object.keys(PRODUCTS) as ProductId[];
 
+/** Квас своей марки (lines.ts) — весной и летом (месяцы 4…10, как yearTime в calendar.ts): зимой бочку увозят. */
+const KVASS_MONTHS = [4, 5, 6, 7, 8, 9, 10];
 /** Месяцев в игровом году (= YEAR_MONTHS в calendar.ts, проверяется тестом). */
 const YEAR_MONTHS = 16;
 /**
@@ -112,7 +134,7 @@ const YEAR_MONTHS = 16;
  * Мороженое — летом, мандарины — перед Новым годом и в новогоднюю неделю, цветы — весной;
  * арбузы и тыквы — только в свою сезонную неделю (weeks.ts WEEKS.*.month; совпадение проверяет тест).
  */
-export const SEASONAL: Partial<Record<ProductId, number[]>> = { tangerines: [2, 3], flowers: [4, 5, 6], watermelons: [9], pumpkins: [13] };
+export const SEASONAL: Partial<Record<ProductId, number[]>> = { tangerines: [2, 3], flowers: [4, 5, 6], watermelons: [9], pumpkins: [13], kvass: KVASS_MONTHS };
 
 export const monthInYear = (day: number): number => (monthOf(day) - 1) % YEAR_MONTHS;
 export const productAvailable = (id: ProductId, day: number): boolean => (SEASONAL[id]?.includes(monthInYear(day)) ?? true) && weekProductOk(id, day);
@@ -759,6 +781,8 @@ export interface StoreState {
   weeks?: import('./weeks').WeeksState;
   /** Ступень своей марки «От бабушки» (0 — нет, brand.ts). */
   brand?: number;
+  /** Ступени линеек своей марки: варенье, соленья, пельмени, квас (lines.ts; нет — не открыты). */
+  lines?: Partial<Record<LineId, number>>;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */
   records?: import('./records').Records;
   /** Последние мини-события дня — чтобы не повторялись подряд (live.ts). */
@@ -904,7 +928,7 @@ export const newGame = (): StoreState => ({
     // Вёдра для цветов у кассы — с самого начала, весной в них ставят букеты.
     { kind: 'florist', level: 0, items: {} },
   ],
-  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70, pumpkins: 45, watermelons: 60, water: 25, juice: 50, dumplings: 80, fish: 110, soap: 35, detergent: 99, pies: 45, buns: 40, honeycake: 110 },
+  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70, pumpkins: 45, watermelons: 60, water: 25, juice: 50, dumplings: 80, fish: 110, soap: 35, detergent: 99, pies: 45, buns: 40, honeycake: 110, jam: 75, pickles: 60, pelmeni: 130, kvass: 45 },
 });
 
 export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];

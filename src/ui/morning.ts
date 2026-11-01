@@ -250,6 +250,8 @@ import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toast, unfold, who } from './dom';
 import { hoodBox } from './hood';
+import { linesBox } from './lines';
+import { lineOfProduct } from '../game/lines';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
 import { tryNudge } from './nudge';
@@ -1364,6 +1366,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('goods.title')));
     for (const pid of Object.keys(SEASONAL) as ProductId[]) {
+      // Квас своей марки — только когда линейка открыта (lines.ts).
+      if (!ownProductOpen(state, pid)) continue;
       const left = daysUntilSeason(pid, state.day);
       box.append(el('div', '', `${t(`goods.${pid}` as TextKey)} · ${left === 0 ? t('goods.now') : t('goods.in', { n: left })}`));
       if (state.shelves.some((s) => canPlace(pid, s))) continue;
@@ -4322,7 +4326,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         ),
       );
     }
-    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), ...branchBox(state), ...hoodBox(state, getState, update), bankBox(state));
+    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...eduardBox(state), ...branchBox(state), ...linesBox(state, getState, update), ...hoodBox(state, getState, update), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
@@ -4391,7 +4395,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         card.classList.add('ui-price-locked');
         // Сезонный товар вне сезона — «только летом», иначе — какая полка нужна.
         const why = !ownProductOpen(state, pid)
-          ? t('prices.brand')
+          ? t(lineOfProduct(pid) ? 'prices.ownLine' : 'prices.brand')
           : productAvailable(pid, state.day)
             ? t('prices.locked', { shelf: t(SHELF_KINDS[product.category].nameKey) })
             : `${t(`goods.${pid}` as TextKey)} · ${t('goods.in', { n: daysUntilSeason(pid, state.day) })}`;
