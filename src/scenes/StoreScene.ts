@@ -76,6 +76,7 @@ import { radioSpeed } from '../game/radio';
 import type { LiveKind } from '../game/minievents';
 import { noteMoment } from '../game/moments';
 import { Moments } from './moments';
+import type { AttentionPlan } from '../game/attention';
 import { questRows } from '../ui/today';
 import { RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
@@ -618,6 +619,13 @@ export class StoreScene extends Phaser.Scene {
   call: { order: HomeOrder; at: number; timer: Phaser.Time.TimerEvent; ringer: Phaser.Time.TimerEvent; shake: Phaser.Time.TimerEvent; covered?: boolean } | null = null;
   /** Когда позвонят в следующий раз. */
   callTimer?: Phaser.Time.TimerEvent;
+  /**
+   * Бюджет внимания на сегодня (game/attention.ts): сколько ещё звонков, будет ли особый гость.
+   * Делится утром в prepareDay; моменты и мини-события урезаются там же, при планировании.
+   */
+  attention: AttentionPlan = { moments: 0, live: 0, special: false, calls: 0 };
+  /** Особый гость с выбором сегодня задуман (visitors.scheduleStoryGuests) — его место в бюджете внимания. */
+  specialToday = false;
   /** Принятые заказы: ждут сборки, собираются, стоят коробкой у двери или едут с курьером. */
   parcels: Parcel[] = [];
   /** Хозяин сам соберёт ждущий заказ, как только освободится (принял звонок или нажал «Собрать»). */

@@ -1,4 +1,4 @@
-// Сколько дают новые механики: npm run sim:features [дней] [прогонов]
+// Сколько дают новые механики: npm run sim:features [дней] [прогонов] [часть названия механики]
 // Парное сравнение: каждый прогон «с механикой» идёт с тем же сидом, что и прогон без неё,
 // а случайности механик берутся из отдельного генератора — так разница видна сквозь шум.
 import { simulate, type SimOptions } from '../src/game/simulate';
@@ -6,6 +6,8 @@ import { STORE_LEVELS } from '../src/game/economy';
 
 const days = Number(process.argv[2] ?? 100);
 const runs = Number(process.argv[3] ?? 40);
+/** Только механики, в названии которых есть это слово («доставка»): весь список идёт дольше десяти минут. */
+const only = process.argv[4];
 
 const scenarios: [string, Partial<SimOptions>][] = [
   ['кот', { features: { cat: true } }],
@@ -58,6 +60,7 @@ STORE_LEVELS.forEach((_, level) => {
 });
 console.log('\nМеханика                 деньги к концу (± ошибка)   лучше, чем без неё');
 for (const [name, options] of scenarios) {
+  if (only && !name.includes(only)) continue;
   const diff = Array.from({ length: runs }, (_, i) => simulate({ days, seed: i + 1, ...options }).days[days - 1].money - money[i]);
   const m = mean(diff);
   const se = Math.sqrt(mean(diff.map((d) => (d - m) ** 2)) / runs);

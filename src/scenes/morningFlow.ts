@@ -46,7 +46,8 @@ import { castsShadow } from './floor';
 import { eduardLook } from '../game/eduard';
 import { cafeDeliver } from '../game/cafe';
 import { hasRadio } from '../game/radio';
-import { liveEventsFor } from '../game/minievents';
+import { LIVE_REPEAT, liveEventsFor } from '../game/minievents';
+import { CALLS_MAX, planAttention, thin } from '../game/attention';
 import { momentsFor } from '../game/moments';
 import { fridgeLeak } from '../game/gear';
 import { catHome } from '../game/cat';
@@ -629,8 +630,9 @@ export function prepareDay(scene: StoreScene): void {
   scene.helpUntil = 0;
   // После перезапуска посреди дня оплаченное уже празднование не повторяет.
   scene.questsSeen = (scene.state.plan?.day === scene.state.day ? scene.state.plan.quests ?? [] : []).filter((q) => q.paid).length;
-  // Активные моменты дня: расписание по секундам дня (game/moments.ts).
-  scene.moments.start(momentsFor(scene.state, Math.random));
+  // Активные моменты дня: расписание по секундам дня (game/moments.ts). Запускаются ниже, когда
+  // поделен бюджет внимания (game/attention.ts) — случайные числа берём на том же месте, что и раньше.
+  const momentPlan = momentsFor(scene.state, Math.random);
   scene.valyaCame = false;
   staff.syncStaff(scene);
   // Повар на смене — кухня сама закупает у поставщиков продукты на день (из кассы; видно утром у кухни и в итогах).
@@ -678,9 +680,15 @@ export function prepareDay(scene: StoreScene): void {
   // Мини-события (свет, труба, голубь, курьер, мышь): почти каждый день, по очереди (live.ts).
   // Два за день — первое до обеда, второе ближе к вечеру, чтобы не наложились.
   const live = liveEventsFor(scene.state, Math.random);
-  scene.state = live.state;
-  live.kinds.forEach((kind, i) => {
-    const [from, to] = live.kinds.length > 1 ? LIVE_WINDOWS[i] : LIVE_WINDOW;
+  // Бюджет внимания дня (game/attention.ts): особый гость, звонки, моменты и мини-события делят пять
+  // просьб «нажми». Что не влезло — сегодня просто не случается (сюжет и беды — вне бюджета).
+  scene.attention = planAttention({ moments: momentPlan.length, live: live.kinds.length, special: scene.specialToday, calls: scene.phone ? CALLS_MAX : 0 });
+  scene.moments.start(thin(momentPlan, scene.attention.moments));
+  const kinds = live.kinds.slice(0, scene.attention.live);
+  // В очередь недавних — только то, что правда будет (не случившееся не мешает ему завтра).
+  scene.state = kinds.length === live.kinds.length ? live.state : { ...live.state, liveRecent: kinds.length ? [...(scene.state.liveRecent ?? []), ...kinds].slice(-LIVE_REPEAT) : scene.state.liveRecent };
+  kinds.forEach((kind, i) => {
+    const [from, to] = kinds.length > 1 ? LIVE_WINDOWS[i] : LIVE_WINDOW;
     scene.time.delayedCall(Phaser.Math.FloatBetween(from, to) * DAY_SECONDS * 1000, () => liveFx.tryLiveEvent(scene, kind));
   });
   scene.eveningMarkdown = false;
