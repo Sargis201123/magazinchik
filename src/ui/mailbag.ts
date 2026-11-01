@@ -23,6 +23,8 @@ export interface MailBag {
   rival?: { news: RivalNews; read: () => void };
   /** Что уже забрали этим утром (ид строк почты). */
   taken: string[];
+  /** Сколько монет пришло по «Забрать всё» (для строки «Всё забрано»). */
+  got?: number;
 }
 
 /** Почта пополнилась (пришла новость конкурента) — карточку перерисовать. */
@@ -42,8 +44,8 @@ export function postMail(day: number, patch: Partial<Omit<MailBag, 'day' | 'take
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(MAIL_EVENT));
 }
 
-/** Отметить строки забранными. */
-export function markTaken(day: number, ids: string[]): void {
-  const cur = mailBag(day);
-  if (cur) bag = { ...cur, taken: [...new Set([...cur.taken, ...ids])] };
+/** Отметить строки забранными (coins — сколько монет было в них). Почты сцены ещё нет — заводим. */
+export function markTaken(day: number, ids: string[], coins = 0): void {
+  const cur = mailBag(day) ?? { day, taken: [] };
+  bag = { ...cur, taken: [...new Set([...cur.taken, ...ids])], got: (cur.got ?? 0) + coins };
 }

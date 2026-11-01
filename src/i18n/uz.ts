@@ -3256,6 +3256,7 @@ export const uz: Record<TextKey, string> = {
   "mail.rush": "«Qora juma»: {players} tadan {rank}-oʻrin",
   "mail.pass": "Mavsum chiptasi: mukofotlar — {n}",
   "mail.advent": "Bugungi bayram otkritkasi",
+  "mail.taken": "Hammasi olindi",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

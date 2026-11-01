@@ -3257,6 +3257,7 @@ export const pt: Record<TextKey, string> = {
   "mail.rush": "Black Friday: {rank}º lugar de {players}",
   "mail.pass": "Passe da temporada: prêmios — {n}",
   "mail.advent": "O cartão festivo de hoje",
+  "mail.taken": "Tudo pego",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

@@ -309,6 +309,9 @@ const css = `
 .ui-mail-days i.done { background: #e3f5d6; color: #3e8948; }
 .ui-mail-days i.today { background: #fee761; }
 .ui-mail-empty { font: 600 12px/1.3 ${UI_FONT}; color: #8b7a8e; }
+.ui-mail-sum { font: 800 14px ${UI_FONT}; color: #3e8948; }
+.ui-mail-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ui-mail-chips .ui-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ui-calm .ui-mail-chest.wait img, .ui-calm .ui-mail-total.got { animation: none; }
 @media (prefers-reduced-motion: reduce) { .ui-mail-chest.wait img, .ui-mail-total.got { animation: none; } }
 `;
@@ -350,7 +353,7 @@ export function takeQuietly(getState: () => StoreState, update: Update): void {
   const bag = mailBag(state.day);
   const list = entries({ state, getState, update, bag }).filter((e) => !isTaken(bag, e.id) && !e.online);
   for (const e of list) e.take?.();
-  if (list.length) markTaken(state.day, list.map((e) => e.id));
+  if (list.length) markTaken(state.day, list.map((e) => e.id), list.reduce((sum, e) => sum + (e.coins ?? 0), 0));
 }
 
 /**
@@ -392,6 +395,28 @@ export function mailBox(state: StoreState, getState: () => StoreState, update: U
     box.append(days, gran);
   }
 
+  // Всё забрано — коротко: сколько пришло, значки пришедшего, письма и новости — прочитать.
+  if (!waiting.length && (list.length || bag?.taken.length)) {
+    head.append(el('span', 'ui-mail-sum', bag?.got ? `+${bag.got} 💰` : ''));
+    const line = el('div', 'ui-mail-row done');
+    line.append(el('span', 'ico', '✓'), el('span', 'txt', `${t('mail.taken')} ${list.map((e) => e.icon).join(' ')}`));
+    box.append(line);
+    const chips = el('div', 'ui-mail-chips');
+    for (const e of list) if (e.read) chips.append(button(`📖 ${e.text}`, () => e.read!(), 'ui-chip'));
+    if (opened && bag?.taken.includes('presents')) {
+      const o = opened;
+      chips.append(button(`📖 ${t('mail.readPresents')}`, () => showOpened(o.res.presents, o.res.thanks, o.got, o.level), 'ui-chip'));
+    }
+    if (liveOpened && bag?.taken.includes('advent')) {
+      const l = liveOpened;
+      chips.append(button(`📖 ${t('mail.readCard')}`, () => showLiveCard(l.theme, l.gift), 'ui-chip'));
+    }
+    if (chips.childElementCount) box.append(chips);
+    const tm = gift?.tomorrow;
+    if (tm) box.append(el('div', 'ui-mail-empty', tm.day === 1 ? t('gift.restart', { treat: t(`gift.treat.${tm.day}` as TextKey) }) : t('gift.tomorrow', { n: tm.day, treat: t(`gift.treat.${tm.day}` as TextKey) })));
+    return [box];
+  }
+
   const rows = el('div', 'ui-mail-rows');
   for (const e of list) {
     const done = isTaken(bag, e.id);
@@ -404,27 +429,10 @@ export function mailBox(state: StoreState, getState: () => StoreState, update: U
   }
   if (list.length) box.append(rows);
   else {
-    const tomorrow = gift?.tomorrow;
+    // Ничего не пришло: строка о том, что завтра (гостинец уже взят вчера — серия ждёт).
     box.append(el('div', 'ui-mail-empty', t('mail.empty')));
-    if (tomorrow) box.append(el('div', 'ui-mail-empty', t('gift.tomorrow', { n: tomorrow.day, treat: t(`gift.treat.${tomorrow.day}` as TextKey) })));
-  }
-  // Открытые подарки друзей и открытка праздника — прочитать после «Забрать всё».
-  if (opened && bag?.taken.includes('presents')) {
-    const o = opened;
-    rows.append(button(`📖 ${t('mail.readPresents')}`, () => showOpened(o.res.presents, o.res.thanks, o.got, o.level), 'ui-chip'));
-  }
-  if (liveOpened && bag?.taken.includes('advent')) {
-    const l = liveOpened;
-    rows.append(button(`📖 ${t('mail.readCard')}`, () => showLiveCard(l.theme, l.gift), 'ui-chip'));
-  }
-  if (!waiting.length) {
-    if (list.length && gift?.tomorrow) {
-      const tm = gift.tomorrow;
-      box.append(el('div', 'ui-mail-empty', tm.day === 1 ? t('gift.restart', { treat: t(`gift.treat.${tm.day}` as TextKey) }) : t('gift.tomorrow', { n: tm.day, treat: t(`gift.treat.${tm.day}` as TextKey) })));
-    }
     return [box];
   }
-
   const coins = waiting.reduce((sum, e) => sum + (e.coins ?? 0), 0);
   const total = el('div', 'ui-mail-total', coins ? t('mail.total', { n: coins }) : '');
   const take = button(t('mail.takeAll'), () => {
@@ -442,7 +450,7 @@ export function mailBox(state: StoreState, getState: () => StoreState, update: U
         if (ok) got.push(e.id);
       }
       const day = getState().day;
-      markTaken(day, got);
+      markTaken(day, got, waiting.filter((e) => got.includes(e.id)).reduce((sum, e) => sum + (e.coins ?? 0), 0));
       track('mail_claim', day, got.length);
       flushSoon();
       // Тёплое: крышка сундучка, монеты брызгами, сумма докручивается.

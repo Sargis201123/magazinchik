@@ -3247,6 +3247,7 @@ export const tr: Record<TextKey, string> = {
   "mail.rush": "Black Friday: {players} içinde {rank}. sıra",
   "mail.pass": "Sezon kartı: ödüller — {n}",
   "mail.advent": "Günün bayram kartı",
+  "mail.taken": "Hepsi alındı",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

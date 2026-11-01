@@ -3290,6 +3290,7 @@ export const ru = {
   "mail.rush": "«Чёрная пятница»: {rank}-е место из {players}",
   "mail.pass": "Сезонный пропуск: наград — {n}",
   "mail.advent": "Праздничная открытка дня",
+  "mail.taken": "Всё забрано",
 } as const;
 
 export type TextKey = keyof typeof ru;
