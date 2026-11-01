@@ -31,9 +31,9 @@ const FACADE = 12;
 const SIGN_TINT = [0xa22633, 0x3e8948, 0x124e89, 0xb86f50, 0x68386c, 0x262b44];
 
 /**
- * Домики друзей (или участок «Сдаётся») на северной стороне аллеи парка. Возвращает место ряда —
- * всегда одно и то же, есть друзья или нет, чтобы сквер не сажал туда деревья (когда список придёт
- * позже, мир перестроится — и деревья не встанут поперёк домиков).
+ * Домики друзей (или участок «Сдаётся») на северной стороне аллеи парка. Возвращает место ряда, если
+ * что-то нарисовано, — сквер не сажает туда деревья. Улица выключена — сквер прежний: список придёт
+ * позже — мир перестроится, и деревья рассадятся заново, уже в обход домиков.
  */
 export function buildFriendStreet(scene: StoreScene, top: number): { x: number; y: number; w: number; h: number }[] {
   const alley = top + 268;
@@ -42,7 +42,7 @@ export function buildFriendStreet(scene: StoreScene, top: number): { x: number; 
   const list = streetInfo();
   scene.builtStreet = streetKey(list);
   // В гостях у друга (rivals.ts) на улице — не наши друзья: ряд пустой.
-  if (!list || savingPaused()) return [area];
+  if (!list || savingPaused()) return [];
   if (!list.length) {
     buildLot(scene, SLOT_X[2], bottom);
     return [area];
