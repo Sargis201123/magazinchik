@@ -11,6 +11,8 @@ import { DEFAULT_EVENTS } from '../src/game/live';
 // Серверные тексты на турецком и испанском — так же, как ru/en.
 
 const CYRILLIC = /[А-Яа-яЁё]/;
+/** Языки на кириллице: им проверка «без русских букв» не нужна (казахский пишется кириллицей). */
+const CYRILLIC_LANGS: readonly string[] = ['ru', 'kk'];
 const EMOJI = /\p{Extended_Pictographic}/gu;
 const placeholders = (s: string): string[] => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
@@ -27,7 +29,9 @@ describe('langOf', () => {
     expect(langOf('pt')).toBe('en');
     expect(langOf('en-US')).toBe('en');
     expect(langOf('de')).toBe('en');
-    for (const code of ['ru', 'RU', 'ru-RU', 'uk', 'be', 'kk', 'uz', 'ky', 'hy', 'az', 'tg']) expect(langOf(code)).toBe('ru');
+    expect(langOf('kk')).toBe('kk');
+    expect(langOf('kk-KZ')).toBe('kk');
+    for (const code of ['ru', 'RU', 'ru-RU', 'uk', 'be', 'uz', 'ky', 'hy', 'az', 'tg']) expect(langOf(code)).toBe('ru');
     expect(langOf(undefined)).toBe('ru');
     expect(langOf(null)).toBe('ru');
     expect(langOf('')).toBe('ru');
@@ -63,7 +67,7 @@ describe('напоминания на tr и es', () => {
         expect(placeholders(TEXTS[lang][key]), `${lang}.${key}`).toEqual(placeholders(TEXTS.ru[key]));
         expect(TEXTS[lang][key].match(EMOJI) ?? [], `${lang}.${key}`).toEqual(TEXTS.ru[key].match(EMOJI) ?? []);
       }
-      if (lang !== 'ru') for (const text of Object.values(TEXTS[lang])) expect(text).not.toMatch(CYRILLIC);
+      if (!CYRILLIC_LANGS.includes(lang)) for (const text of Object.values(TEXTS[lang])) expect(text).not.toMatch(CYRILLIC);
     }
   });
 
@@ -128,12 +132,19 @@ describe('бот: профиль, команды, каталог', () => {
     expect(startCaption(false, {})).toBe(startCaption('en', {}));
   });
 
+  it('казахский: приветствие, команды и напоминание — по-казахски', () => {
+    expect(startCaption('kk', { day: 14 })).toMatch(/^14-күн\. .*Соня/s);
+    expect(commandReply('/terms', 'kk')).toContain('«Магазинчик» шарттары');
+    expect(commandReply('/paysupport', 'kk', 77)).toContain('77');
+    expect(TEXTS.kk.play).toBe('▶ Ойнау');
+  });
+
   it('у каждой вещи за звёзды — название на всех языках (не длиннее 32 знаков)', () => {
     for (const item of [...Object.values(STARS_CATALOG), catalogItem('pass_3')!]) {
       for (const lang of LANGS) {
         expect(item[lang]).toBeTruthy();
         expect(item[lang].length).toBeLessThanOrEqual(32);
-        if (lang !== 'ru') expect(item[lang]).not.toMatch(CYRILLIC);
+        if (!CYRILLIC_LANGS.includes(lang)) expect(item[lang]).not.toMatch(CYRILLIC);
       }
     }
   });
@@ -205,13 +216,13 @@ const DAY = 24 * 3600_000;
 const MON = Date.UTC(2026, 10, 2, 12);
 
 describe.skipIf(!Database)('газета: язык игрока из players', () => {
-  it('игра прислала tr / es-MX / pt / kk — газета на турецком, испанском, английском, русском', async () => {
+  it('игра прислала tr / es-MX / pt / kk — газета на турецком, испанском, английском, казахском', async () => {
     const env: Env = { BOT_TOKEN: TOKEN, DB: d1(), APP_URL: 'https://app/' };
     const langs: Record<number, string> = { 1: 'tr', 2: 'es-MX', 3: 'pt', 4: 'kk' };
     for (const [id, lang] of Object.entries(langs)) await socialPing(await ping(Number(id), lang), env);
     const db = env.DB!;
     const stored = (await db.prepare('SELECT id, lang FROM players ORDER BY id').all<{ id: number; lang: string }>()).results;
-    expect(stored.map((r) => r.lang)).toEqual(['tr', 'es', 'en', 'ru']);
+    expect(stored.map((r) => r.lang)).toEqual(['tr', 'es', 'en', 'kk']);
     for (const id of [1, 2, 3, 4]) {
       await markWeek(db, id, 0, MON - 7 * DAY);
       await markWeek(db, id, 12500, MON);
@@ -225,7 +236,9 @@ describe.skipIf(!Database)('газета: язык игрока из players', (
     expect(paper(2).text).toContain('Ingresos de la semana: 12 500');
     expect(paper(2).reply_markup!.inline_keyboard[0][0].text).toBe('▶ Abrir la tienda');
     expect(paper(3).text).toContain('The Town Gazette');
-    expect(paper(4).text).toContain('Вестник района');
+    expect(paper(4).text).toContain('<b>Аудан хабаршысы</b>');
+    expect(paper(4).text).toContain('Апталық түсім: 12 500');
+    expect(paper(4).reply_markup!.inline_keyboard[0][0].text).toBe('▶ Дүкенді ашу');
     for (const id of [1, 2, 3]) expect(paper(id).text).not.toMatch(CYRILLIC);
     expect(await paperFor(db, 1, weekOf(MON) - 1, 'es')).toContain('🗞 <b>La Gaceta del Barrio</b>');
   });

@@ -52,6 +52,11 @@ const CAPTIONS: Record<Lang, Record<ShareKind, (name: string) => string>> = {
     help: (name) => `🆘 ${name}: “¡Ayuda! Es hora pico y la fila llega hasta la puerta”\nToca “Ayudar”: tu ayuda llegará a la tienda y tú también recibirás un regalo 🎁`,
     card: () => '🏪 Mi tienda en Magazinchik: los resultados del día. ¡Juega y supérame!',
   },
+  kk: {
+    invite: (name) => `🛒 ${name} сені «Магазинчикке» шақырады — Telegram-дағы жып-жылы пиксель ойын.\nӘже саған дүкен қалдырды: кезек, касса, есік алдында мысық, терезе сыртында жаңбыр. Бастауға сыйлық дайын 🎁`,
+    help: (name) => `🆘 ${name}: «Көмектесіңдер! Дүкенде қарбалас, кезек есікке дейін созылды!»\n«Көмектесу» батырмасын бас — көмегің дүкенге жетеді, саған да сыйлық бар 🎁`,
+    card: () => '🏪 «Магазинчиктегі» дүкенім — күн қорытындысы. Ойна да, мені озып көр!',
+  },
 };
 
 const BUTTONS: Record<Lang, { play: string; help: string }> = {
@@ -59,11 +64,12 @@ const BUTTONS: Record<Lang, { play: string; help: string }> = {
   en: { play: '▶ Play', help: '🤝 Help' },
   tr: { play: '▶ Oyna', help: '🤝 Yardım et' },
   es: { play: '▶ Jugar', help: '🤝 Ayudar' },
+  kk: { play: '▶ Ойнау', help: '🤝 Көмектесу' },
 };
 /** Имя, если Telegram его не прислал. */
-const SOMEONE: Record<Lang, string> = { ru: 'Друг', en: 'A friend', tr: 'Bir arkadaş', es: 'Un amigo' };
-/** Картинки карточек (public/promo/<kind>_<lang>.jpg) есть только ru и en: остальным — английская. */
-const PROMO: Record<Lang, 'ru' | 'en'> = { ru: 'ru', en: 'en', tr: 'en', es: 'en' };
+const SOMEONE: Record<Lang, string> = { ru: 'Друг', en: 'A friend', tr: 'Bir arkadaş', es: 'Un amigo', kk: 'Досың' };
+/** Картинки карточек (public/promo/<kind>_<lang>.jpg) есть только ru и en: казахам — русская (на ней «Магазинчик»), остальным — английская. */
+const PROMO: Record<Lang, 'ru' | 'en'> = { ru: 'ru', en: 'en', tr: 'en', es: 'en', kk: 'ru' };
 
 /** Ссылка, которая сразу открывает игру с меткой (главное мини-приложение бота). */
 export const appLink = (botName: string, payload: string): string => `https://t.me/${botName}?startapp=${payload}`;

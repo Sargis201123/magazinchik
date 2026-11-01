@@ -45,6 +45,15 @@ const DESCRIPTION: Record<Lang, string> = {
     '',
     'Toca «Jugar» 👇',
   ].join('\n'),
+  kk: [
+    '🛒 Магазинчик — Telegram ішіндегі жып-жылы пиксель дүкен симуляторы.',
+    '',
+    'Әже саған кішкентай дүңгіршек қалдырды. Тауар сатып ал, баға қой, сатушы жалда, әмбебап дүкенге дейін өс және «Гигант» гипермаркетіне төтеп бер.',
+    '',
+    'Ал үйде қызың Соня күтіп отыр. Екеуіңнің өз оқиғаларың бар — ол бірден ашылмайды…',
+    '',
+    '«Ойнау» батырмасын бас 👇',
+  ].join('\n'),
 };
 
 const SHORT: Record<Lang, string> = {
@@ -52,6 +61,7 @@ const SHORT: Record<Lang, string> = {
   en: 'A pixel-art shop simulator with a touching story. Play right in Telegram 🛒',
   tr: 'Dokunaklı bir hikâyesi olan piksel dükkân simülatörü. Doğrudan Telegram’da oyna 🛒',
   es: 'Un simulador de tienda en pixel art con una historia conmovedora. Juega directo en Telegram 🛒',
+  kk: 'Жүрек жылытар оқиғасы бар пиксель дүкен симуляторы. Telegram-да бірден ойна 🛒',
 };
 
 const COMMANDS: Record<Lang, { command: string; description: string }[]> = {
@@ -74,6 +84,11 @@ const COMMANDS: Record<Lang, { command: string; description: string }[]> = {
     { command: 'start', description: 'Abrir el juego' },
     { command: 'paysupport', description: 'Ayuda con pagos en Stars' },
     { command: 'terms', description: 'Condiciones y reembolsos de Stars' },
+  ],
+  kk: [
+    { command: 'start', description: 'Ойынды ашу' },
+    { command: 'paysupport', description: 'Жұлдызбен төлеу бойынша көмек' },
+    { command: 'terms', description: 'Шарттар және жұлдызды қайтару' },
   ],
 };
 
@@ -151,6 +166,19 @@ const CHAT: Record<Lang, ChatTexts> = {
       `💬 Ayuda con pagos en Stars\n\nSi se cobraron Stars pero la compra no apareció, o compraste algo por error, escribe a ${SUPPORT}: qué compraste y cuándo. Respondemos en 1–2 días y, si hace falta, te devolvemos las Stars.\n\nLas compras se recuperan solas desde Telegram: primero intenta reiniciar el juego.${id}`,
     terms: `📄 Condiciones de Magazinchik\n\n• El juego es gratis. Con las Stars de Telegram solo se compran decoraciones para la tienda: no afectan el progreso.\n• Puedes probar gratis cada objeto durante un día antes de comprarlo.\n• Lo que compras es tuyo para siempre y se recupera en cualquier teléfono con esta cuenta de Telegram.\n• Reembolso de Stars: si una compra no apareció o fue un error, escríbenos dentro de 30 días por /paysupport.\n• Solo guardamos tu ID de Telegram: para compras, invitaciones de amigos y algún recordatorio del bot. Para no recibir recordatorios, detén el bot.\n\nPreguntas: ${SUPPORT}`,
   },
+  kk: {
+    days: (day) => [
+      `${day}-күн. Кешке Соня сені күтеді 🌙\nАл дүкен есігінің алдында сатып алушылар жинала бастады.`,
+      `${day}-күн. Терезе сырты қараңғыланып, шамдар жанды 🏮\nДүкенге соқ — ал кешке Соня сені үйде күтеді.`,
+      `${day}-күн. Кассадағы кезек ұзарып барады 🛒\nАуысымды аш — Соня кешке сені күтеді.`,
+    ],
+    friend: (friend) => `${friend} сені «Магазинчикке» шақырады 🎁\nБастауға сыйлық — ${WELCOME_COINS} ақша. Әженің дүкені күтіп тұр!`,
+    newcomer: 'Әже саған шағын дүкенін қалдырды 🛒\nЕсікті аш — алғашқы сатып алушылар күтіп тұр!',
+    buyer: (userId) => `\n\nСатып алушы нөмірің: ${userId} — хатыңа осыны қос.`,
+    paysupport: (id) =>
+      `💬 Жұлдызбен төлеу бойынша көмек\n\nЖұлдыз есептен шығып, бірақ сатып алған зат шықпаса немесе қате нәрсе алсаң — ${SUPPORT} жаз: не алдың және қашан. 1–2 күнде жауап береміз, қажет болса жұлдызды қайтарамыз.\n\nСатып алғандарың Telegram-нан өзі қалпына келеді — алдымен ойынды қайта ашып көр.${id}`,
+    terms: `📄 «Магазинчик» шарттары\n\n• Ойын тегін. Telegram жұлдыздарына тек дүкен әшекейлері сатылады — ойынның өтуіне әсер етпейді.\n• Әр затты сатып алмас бұрын бір күн тегін байқап көруге болады.\n• Сатып алған зат мәңгі сенікі және осы Telegram аккаунты бар кез келген телефонда қайтып келеді.\n• Жұлдызды қайтару: сатып алған зат шықпаса немесе қателесіп алсаң — 30 күн ішінде /paysupport арқылы жаз.\n• Біз тек Telegram нөміріңді сақтаймыз — сатып алу, достарды шақыру және боттың сирек еске салулары үшін. Еске салу келмесін десең, ботты тоқтат.\n\nСұрақтар: ${SUPPORT}`,
+  },
 };
 
 /** Язык чата: true/false — по-старому (ru или en). */
@@ -182,14 +210,14 @@ export function commandReply(text: string, lang: Lang | boolean, userId?: number
 }
 
 /**
- * Заполнить профиль бота: описание, короткое описание, команды (ru, tr, es и для остальных — en)
+ * Заполнить профиль бота: описание, короткое описание, команды (ru, tr, es, kk и для остальных — en)
  * и кнопку меню «Играть». Возвращает, что не получилось (пусто — всё хорошо).
  */
 export async function setupProfile(token: string, appUrl: string): Promise<string[]> {
   const failed: string[] = [];
   const call = (method: string, body: Record<string, unknown>) => bot(token, method, body).catch((e: Error) => failed.push(e.message));
   for (const lang of LANGS) {
-    // Для «en» задаём язык по умолчанию (без language_code) — его видят все, у кого Telegram не на ru, tr или es.
+    // Для «en» задаём язык по умолчанию (без language_code) — его видят все, у кого Telegram не на ru, tr, es или kk.
     const scope = lang === 'en' ? {} : { language_code: lang };
     await call('setMyDescription', { description: DESCRIPTION[lang], ...scope });
     await call('setMyShortDescription', { short_description: SHORT[lang], ...scope });
