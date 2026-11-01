@@ -272,6 +272,8 @@ interface MorningOptions {
   onArrange?: () => void;
   /** Зайти в гости в магазин друга (id в Telegram, имя). */
   onVisit?: (id: number, name: string) => void;
+  /** Собирались в гости с «Улицы друзей» (scenes/friendStreet.ts): карточка сверху — зайти первым делом. */
+  visit?: { id: number; name: string };
   /** «Заглянуть к конкуренту» из рейтинга (ключ с сервера, имя) и к боссу через дорогу (game/rival.ts). */
   onRival?: (key: string, name: string) => void;
   onBoss?: () => void;
@@ -530,7 +532,7 @@ const rectOf = (node: HTMLElement): Spot | null => {
 };
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach }: MorningOptions): void {
+export function showMorning({ getState, setState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach, visit }: MorningOptions): void {
   const { card, close } = openModal();
   // Нажатый заголовок или кнопка остаются на месте, когда блоки сворачиваются и окно перерисовывается.
   anchorScroll(card);
@@ -847,6 +849,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     // Сверху — только то, где нужно решить или забрать; остальное утро — в свёрнутой карточке «Сегодня».
     card.replaceChildren(
       title,
+      ...(touring ? [] : plannedVisitBox()),
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
       ...giftsBox(),
@@ -1936,6 +1939,21 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       el('p', '', t(news.textKey)),
       button(t('life.gift', { n: LIFE_GIFT }), () => update(answerLife(getState(), news, true), 'success'), 'ui-btn', state.money < LIFE_GIFT),
       button(t('life.congrats'), () => update(answerLife(getState(), news, false)), 'ui-btn secondary'),
+    );
+    return [box];
+  };
+
+  /** Днём на «Улице друзей» нажали «Зайти в гости» — утром первым делом: одна кнопка. */
+  const plannedVisitBox = (): HTMLElement[] => {
+    if (!visit || !onVisit) return [];
+    const box = el('div', 'ui-box ui-duel');
+    box.append(
+      el('b', '', `🏠 ${t('street.morning.title', { name: visit.name })}`),
+      button(`🚪 ${t('street.card.visit')}`, () => {
+        endTour();
+        close();
+        onVisit(visit.id, visit.name);
+      }),
     );
     return [box];
   };

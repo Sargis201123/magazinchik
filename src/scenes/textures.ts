@@ -8,6 +8,20 @@ export const TRASH_KEYS = ['trash', 'trash_banana', 'trash_cup', 'trash_wrapper'
 
 /** Все спрайты нарисованы скриптом art/sprites.py и лежат в public/assets. */
 export const SPRITES = [
+  // «Улица друзей» (art/friend_street.py): домики магазинов друзей по помещению, свет в их витринах, участок «Сдаётся».
+  'fshop_0',
+  'fshop_1',
+  'fshop_2',
+  'fshop_3',
+  'fshop_4',
+  'fshop_5',
+  'fshop_0_lit',
+  'fshop_1_lit',
+  'fshop_2_lit',
+  'fshop_3_lit',
+  'fshop_4_lit',
+  'fshop_5_lit',
+  'fshop_lot',
   // Карьера сотрудников (art/career.py): доска почёта на стене, таблички с именами, нашивки звания.
   'honor_board',
   'honor_plate',

@@ -9,6 +9,8 @@ import { seasonFor } from '../game/endless';
 import { saveGame } from '../game/save';
 import { branchLook } from '../game/branch';
 import { hoodLook } from '../game/hood';
+import { streetKey } from '../game/street';
+import { fetchStreet, streetInfo } from '../platform/multiplayer';
 import { t } from '../i18n';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
@@ -191,6 +193,8 @@ export function showMorning(scene: StoreScene): void {
   const afterStory = scene.state.onboarding === 'play' && pendingStory(scene.state)?.kind === 'intro';
   // Сначала то, что накопилось без игрока (сундучок, письмо, сосед за заказом), потом гостинец.
   if (scene.state.tourDone !== false && !noMorning && !afterStory) offerReturn(scene, () => offerGift(scene));
+  // Улица друзей — свежая к следующему утру (чаще раза в 10 минут не спрашиваем).
+  void fetchStreet();
   // Старые сохранения сразу получают значки за то, что уже сделано.
   scene.checkAchievements(false);
   // Лёгкую графику включили молча в тихие дни новичка — теперь можно и сказать.
@@ -212,7 +216,7 @@ export function showMorning(scene: StoreScene): void {
   const cupChanged = (contestOf(scene.state)?.wins ?? 0) !== scene.builtCup;
   const gift = scene.giftRebuild;
   scene.giftRebuild = false;
-  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || decorations.honorLook(scene.state) !== scene.builtHonor) scene.buildWorld();
+  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   cars.refillParking(scene);
   scene.updateLighting(0);
   nightShift.openShop(scene);
@@ -228,7 +232,12 @@ export function showMorning(scene: StoreScene): void {
   }
   withLazy(morningUi, ({ showMorning: showMorningMenu }) => showMorningMenu({
     onArrange: () => shelves.arrange(scene),
-    onVisit: (id, name) => void rivals.visitFriend(scene, id, name),
+    onVisit: (id, name) => {
+      scene.pendingVisit = undefined;
+      void rivals.visitFriend(scene, id, name);
+    },
+    // Днём собрались в гости с «Улицы друзей» (friendStreet.ts) — окно предложит зайти первым делом.
+    visit: scene.pendingVisit,
     onRival: (key, name) => void rivals.visitRival(scene, key, name),
     onBoss: eduardLook(scene.state) !== 'vacant' ? () => void rivals.visitRival(scene, null, '') : undefined,
     onTourDone: () => offerReturn(scene, () => offerGift(scene)),
@@ -290,6 +299,8 @@ export function startDay(scene: StoreScene): void {
   setTimeout(prefetchMorning, MORNING_PREFETCH_MS);
   scene.dayOpen = true;
   scene.inMorning = false;
+  // Утром в гости не пошли — приглашение с улицы на сегодня отпадает.
+  scene.pendingVisit = undefined;
   // Магазин открылся: колокольчик двери и мотив «Магазинчика».
   music.sting('day_open');
   // Купленное с утра ждёт в коробках: камера подлетит к магазину — и его распакуют.

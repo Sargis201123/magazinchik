@@ -3129,6 +3129,19 @@ export const ru = {
   "goods.kvass": "🍺 Квас своей марки — весной и летом, на полке «Напитки»",
   "goods.when.kvass": "весной и летом",
   "lines.summarySpent": "на банки и сахар −{n} 💰",
+  // «Улица друзей» (game/street.ts, scenes/friendStreet.ts, ui/street.ts).
+  "street.sign": "У {name}",
+  "street.lot.title": "СДАЁТСЯ",
+  "street.lot.text": "пригласи друга",
+  "street.seen.today": "В игре: сегодня",
+  "street.seen.yesterday": "В игре: вчера",
+  "street.seen.days": "В игре: {n} дн. назад",
+  "street.card.who": "{name} · {shop}",
+  "street.card.stats": "День {day} · ★ {rating}",
+  "street.card.visit": "Зайти в гости",
+  "street.visit.title": "В гости к другу",
+  "street.visit.later": "Сейчас магазин открыт — к {name} зайдём утром, до открытия.",
+  "street.morning.title": "Пора в гости к {name}!",
 } as const;
 
 export type TextKey = keyof typeof ru;

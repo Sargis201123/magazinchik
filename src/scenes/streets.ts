@@ -47,6 +47,7 @@ import * as cars from './cars';
 import * as persons from './persons';
 import * as newcomer from './newcomer';
 import * as building from './building';
+import * as friendStreet from './friendStreet';
 
 /** Здание по соседству; back — отступ от тротуара (у кафе перед ним веранда). */
 /** Особая крыша: вертолётная площадка, красный крест, бельё, солнечные панели (art/rooftops.py). */
@@ -480,7 +481,7 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
     scene.art(door.x, top + 92, key).setOrigin(0.5, 0).setDepth(top + 92 + 88);
   }
   // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
-  const districtAreas = [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildHood(scene, next, top)];
+  const districtAreas = [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildHood(scene, next, top), ...friendStreet.buildFriendStreet(scene, top)];
   const inArea = (px: number, py: number, a: { x: number; y: number; w: number; h: number }) => px > a.x - 6 && px < a.x + a.w + 6 && py > a.y - 6 && py < a.y + a.h + 14;
   const scatter = (y0: number, y1: number) => {
     for (let y = y0; y < y1; y += 40) {

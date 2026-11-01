@@ -3131,6 +3131,19 @@ export const en: Record<TextKey, string> = {
   "goods.kvass": "🍺 Own-brand kvass — in spring and summer, on the Drinks shelf",
   "goods.when.kvass": "in spring and summer",
   "lines.summarySpent": "jars and sugar −{n} 💰",
+  // «Улица друзей» (game/street.ts, scenes/friendStreet.ts, ui/street.ts).
+  "street.sign": "{name}'s",
+  "street.lot.title": "FOR RENT",
+  "street.lot.text": "invite a friend",
+  "street.seen.today": "Played: today",
+  "street.seen.yesterday": "Played: yesterday",
+  "street.seen.days": "Played: {n} days ago",
+  "street.card.who": "{name} · {shop}",
+  "street.card.stats": "Day {day} · ★ {rating}",
+  "street.card.visit": "Pay a visit",
+  "street.visit.title": "Visiting a friend",
+  "street.visit.later": "Your store is open now — we'll drop by {name}'s in the morning, before opening.",
+  "street.morning.title": "Time to visit {name}!",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

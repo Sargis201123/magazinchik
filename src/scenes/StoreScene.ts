@@ -51,7 +51,8 @@ import { pickCohort, startCohort, type Cohort } from '../game/onboarding';
 import { SayBubble } from '../ui/onboarding';
 import type { TutStep } from '../game/tutorial';
 import { Coach } from '../ui/coach';
-import { duelInfo, loadMultiplayer } from '../platform/multiplayer';
+import { duelInfo, loadMultiplayer, streetInfo } from '../platform/multiplayer';
+import { streetKey } from '../game/street';
 import { ensureSeason, grantPass } from '../game/pass';
 import { grantSupport } from '../game/support';
 import { ensureRush } from '../game/rush';
@@ -164,6 +165,10 @@ export class StoreScene extends Phaser.Scene {
   builtDistrict = '';
   /** Что из благоустройства района стояло на улице (hood.ts). */
   builtHood = '';
+  /** Какие домики друзей стоят на «Улице друзей» (friendStreet.ts, game/street.ts streetKey). */
+  builtStreet = '';
+  /** Днём собрались в гости к другу с улицы — утром окно предложит зайти (friendStreet.ts). */
+  pendingVisit?: { id: number; name: string };
   /** Какие имена висели на доске почёта (game/career.ts, decorations.honorLook). */
   builtHonor = '';
   /** Где на тротуаре за дорогой висят вывески зданий (середины): новые фонари района их обходят. */
@@ -705,7 +710,9 @@ export class StoreScene extends Phaser.Scene {
     void socialPing(getLang(), comebackHooks(this.state)).then((info) => {
       // Торговая неделя и гильдия: магазин друга появится на улице, если соперник есть.
       void loadMultiplayer().then(() => {
-        if (!this.running && (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend) this.buildWorld();
+        const friend = (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend;
+        // Улица друзей пришла или поменялась — домики встают, пока магазин закрыт (днём — завтра утром).
+        if (!this.running && (friend || streetKey(streetInfo()) !== this.builtStreet)) this.buildWorld();
       });
       // Открыли по ссылке «Помоги!» друга — подмога уходит сама; друзья откликнулись на нашу — забрать.
       void nightShift.sendFriendHelp(this);
