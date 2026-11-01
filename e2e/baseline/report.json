@@ -1,57 +1,57 @@
 [
   {
     "shot": "l5-morning.png",
-    "drawCalls": 129,
+    "drawCalls": 130,
     "textureBinds": 125
   },
   {
     "shot": "l5-day.png",
-    "drawCalls": 135,
-    "textureBinds": 129
+    "drawCalls": 138,
+    "textureBinds": 132
   },
   {
     "shot": "l5-evening.png",
-    "drawCalls": 154,
-    "textureBinds": 141
+    "drawCalls": 157,
+    "textureBinds": 144
   },
   {
     "shot": "l5-night.png",
-    "drawCalls": 163,
-    "textureBinds": 159
+    "drawCalls": 152,
+    "textureBinds": 143
   },
   {
     "shot": "l5-summary.png",
-    "drawCalls": 152,
-    "textureBinds": 141
+    "drawCalls": 142,
+    "textureBinds": 132
   },
   {
     "shot": "rain-rain.png",
-    "drawCalls": 182,
-    "textureBinds": 179
+    "drawCalls": 179,
+    "textureBinds": 176
   },
   {
     "shot": "l3-day.png",
-    "drawCalls": 126,
-    "textureBinds": 122
-  },
-  {
-    "shot": "l2-day.png",
     "drawCalls": 123,
     "textureBinds": 119
   },
   {
+    "shot": "l2-day.png",
+    "drawCalls": 127,
+    "textureBinds": 123
+  },
+  {
     "shot": "l6-day.png",
-    "drawCalls": 128,
-    "textureBinds": 125
+    "drawCalls": 141,
+    "textureBinds": 138
   },
   {
     "shot": "l6-evening.png",
-    "drawCalls": 159,
-    "textureBinds": 145
+    "drawCalls": 153,
+    "textureBinds": 139
   },
   {
     "shot": "pl4-day.png",
-    "drawCalls": 137,
-    "textureBinds": 132
+    "drawCalls": 134,
+    "textureBinds": 130
   }
 ]
