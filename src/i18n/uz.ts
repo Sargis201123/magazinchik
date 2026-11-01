@@ -3228,6 +3228,7 @@ export const uz: Record<TextKey, string> = {
   "zar.tale.tolik.3": "Bu mendan va oʻrdaklardan: qarmoqqa pul yigʻayotgandim, lekin menda bittasi bor ekan. Ol, sen mehribonsan!",
 
   // ---------- «Бабушкина тетрадь» (game/notebook.ts) ----------
+  "contest.giantFirst": "📓 Hakamlar baholari yigʻildi, lekin «Gigant» bardosh berdi. Mahalla kubogi uni yenggan kuning topshiriladi — butun daftar tabriklashga keladi.",
   "story.ch1.outroNb": "Daftarning oʻng yarmida nima borligini bilasanmi? U qarz bergan hamma odamlar. Men ham oʻshandaman. Oʻsha yarmini u hech kimdan qaytarib olmagan. Mendan ham.",
   "story.ch2.outroNb": "Buvingiz bir paytlar birinchi tortim uchun menga qarzga un bergan — pulini ham olmagan. Usiz «Uyut» boʻlmasdi. Endi navbat menda.",
   "story.ch3.outroNb1": "Nevaram, daftarning varagʻini agʻdar. Mana bu qatorni men hech qachon chizib tashlamaganman.",

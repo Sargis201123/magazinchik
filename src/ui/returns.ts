@@ -15,6 +15,7 @@ import { haptic } from '../platform/telegram';
 import { dialogBox } from './dialog';
 import type { StoreState } from '../game/economy';
 import { notebookPage, openNotebook } from './notebook';
+import { track } from '../platform/analytics';
 import { button, el, injectStyles, openModal, rollNumber, staffFace, UI_FONT } from './dom';
 
 const css = `
@@ -176,6 +177,8 @@ function letterStep(gift: LetterGift, last: boolean, next: () => void, state?: S
   const farewell = gift.letter.farewell;
   const name = regular ? regularName(regular) : farewell ? memberName({ name: farewell.name, friend: farewell.friend ? { name: farewell.friend } : undefined }) : t(`who.${from}` as TextKey);
   const read = () => {
+    // Сюжет: письмо с «Бабушкиной тетрадью» прочитано — первая сцена истории (game/notebook.ts).
+    if (gift.letter.story && state) track('story_seen', state.day, 2);
     haptic.tap();
     sound.pop(0);
     const after: HTMLElement[] = [];

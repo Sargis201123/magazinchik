@@ -134,9 +134,9 @@ export function planLetter(state: StoreState, today: string, random: () => numbe
   // Ушёл давний сотрудник — его прощальное письмо идёт первым (career.ts).
   const farewell = waiting ? null : takeFarewellLetter(state);
   if (farewell) return { ...farewell.state, ret: { ...farewell.state.ret, letter: { from: 'staff', n: farewell.farewell.why, date: today, farewell: farewell.farewell } } };
-  // «Бабушкина тетрадь»: письмо с ней — вместо обычного, если то ещё не пришло, и не ждёт настоящего
+  // «Бабушкина тетрадь»: письмо с ней — следующее после того, что уже ждёт, и не ждёт настоящего
   // дня — сюжет идёт по событиям, а не по календарю: дата пустая, придёт следующим утром.
-  if (notebookDue(state) && !waiting?.story && !waiting?.farewell) return { ...state, ret: { ...state.ret, letter: { from: 'grandma', n: 0, date: '', story: 'notebook' } } };
+  if (notebookDue(state) && !waiting) return { ...state, ret: { ...state.ret, letter: { from: 'grandma', n: 0, date: '', story: 'notebook' } } };
   if (waiting) return state;
   const senders = letterSenders(state);
   // Бабушка — чаще остальных: она пишет внуку каждый день.

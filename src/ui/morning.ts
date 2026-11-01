@@ -558,6 +558,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   let storyLine = 0;
   /** Когда открылась сцена сюжета или «Папы и Сони» — грубое время чтения для аналитики. */
   let readFrom = 0;
+  let readScene = '';
+  /** Отметить начало чтения сцены — один раз на сцену (утро перерисовывается часто). */
+  const startRead = (scene: string) => {
+    if (scene === readScene) return;
+    readScene = scene;
+    readFrom = performance.now();
+  };
   /** Реплика финальной церемонии (0 — новость ведущей, дальше — герои). */
   let finaleLine = 0;
   /** Реплика сцены «Папа и Соня». */
@@ -2803,7 +2810,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const dramaBox = (scene: DramaScene) => {
     const line = scene.lines[Math.min(dramaLine, scene.lines.length - 1)];
     const last = dramaLine >= scene.lines.length - 1;
-    if (dramaLine === 0) readFrom = performance.now();
+    startRead(`drama:${scene.day}`);
     const after = last && isLastScene(scene) ? [el('div', 'ui-note', t('drama.end'))] : [];
     return dialogBox({
       caption: t(scene.place),
@@ -2906,7 +2913,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     if (finale && finaleLine > 0) {
       const line = lines[finaleLine - 1];
       const last = finaleLine >= lines.length;
-      if (finaleLine === 1) readFrom = performance.now();
+      startRead(`finale:${r.tier}`);
       // Последняя строчка — на чистой странице тетради: показываем, какой она станет.
       const figure = line.page ? notebookPage(writeSonya(getState()), line.page) : null;
       return dialogBox({
@@ -2929,6 +2936,8 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const marks = el('div', 'ui-note');
     marks.append(...CRITERIA.map((k) => el('div', '', `${r.passed[k] ? '✅' : '❌'} ${t(`contest.crit.${k}` as TextKey)}`)));
     const after: HTMLElement[] = [marks];
+    // Оценки набраны, но «Гигант» устоял — кубок района вручат вместе с победой над ним (game/contest.ts).
+    if (r.giant) after.push(el('div', 'ui-note', t('contest.giantFirst')));
     if (r.won) {
       after.push(el('div', 'ui-note', t('contest.won.reward', { prize: r.prize, next: contestName(r.tier + 1), n: CONTEST_EVERY_WON })));
     }
@@ -3724,7 +3733,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const current = lines[Math.min(storyLine, lines.length - 1)];
     const speaker = CHARACTERS[current.who];
     const last = storyLine >= lines.length - 1;
-    if (storyLine === 0) readFrom = performance.now();
+    startRead(`story:${kind}:${state.story.chapter}`);
     const key = warmKey(state, current.key);
     const mood = key !== current.key ? 'happy' : current.mood;
     const after: HTMLElement[] = [];

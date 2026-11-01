@@ -527,6 +527,8 @@ const css = `
 @keyframes ui-tour-pulse { 50% { outline-color: #feae34; } }
 .ui-tour-lit { position: relative; z-index: 5; background: #f4ecd8; border-radius: 6px; box-shadow: 0 0 0 4px #f4ecd8; }
 .ui-dialog-after { opacity: 0; transform: translateY(4px); transition: opacity .25s, transform .25s; }
+/* Пока текст печатается, кнопок под ним не видно — и нажать их нельзя (выбор в сюжете не сделать случайно). */
+.ui-dialog-after:not(.shown) { pointer-events: none; }
 .ui-dialog-after.shown { opacity: 1; transform: none; }
 /* Поле ввода (имя кота) и пиксельная картинка в строке. */
 .ui-input { width: 100%; box-sizing: border-box; font: 700 16px ${UI_FONT}; padding: 9px 10px; margin: 6px 0;

@@ -3264,6 +3264,7 @@ export const en: Record<TextKey, string> = {
   "zar.tale.tolik.3": "This is from me and the ducks: I was saving up for a fishing rod, but I already have one. Take it, you're kind!",
 
   // ---------- «Бабушкина тетрадь» (game/notebook.ts) ----------
+  "contest.giantFirst": "📓 You earned the jury's marks, but the Giant held on. The district cup will be awarded on the day you beat it — the whole notebook will come to celebrate.",
   "story.ch1.outroNb": "Do you know what's on the right side of her notebook? Everyone she ever lent to. I'm in there too. She never took her half back from anyone. Not from me either.",
   "story.ch2.outroNb": "Your grandma once lent me flour for my very first cake — and never took a penny back. Without her there'd be no “Cosy”. Now it's my turn.",
   "story.ch3.outroNb1": "Dear, turn the page in the notebook. That's the one line I never crossed out.",

@@ -3219,6 +3219,7 @@ export const tr: Record<TextKey, string> = {
   "zar.tale.tolik.3": "Bu benden ve ördeklerden: olta için para biriktiriyordum ama zaten bir tane var. Al, sen iyisin!",
 
   // ---------- «Бабушкина тетрадь» (game/notebook.ts) ----------
+  "contest.giantFirst": "📓 Jüriden puanları aldın ama Giant ayakta kaldı. Mahalle kupası onu yendiğin gün verilecek — tüm defter kutlamaya gelecek.",
   "story.ch1.outroNb": "Defterin sağ yarısında ne var, biliyor musun? Borç verdiği herkes. Ben de oradayım. O yarıdaki borcu kimseden geri almadı. Benden de.",
   "story.ch2.outroNb": "Nineniz bir zamanlar ilk pastam için bana veresiye un vermişti — parasını da hiç almadı. O olmasa Cosy Café olmazdı. Şimdi sıra bende.",
   "story.ch3.outroNb1": "Yavrum, defterde sayfayı çevir. İşte bu satırın üstünü hiç çizmedim.",

@@ -121,6 +121,26 @@ describe('«Бабушкина тетрадь»: кульминация', () => 
   });
 });
 
+describe('«Бабушкина тетрадь»: «Гигант» устоял', () => {
+  it('оценки набраны, но битва проиграна — финала нет; новый конкурс района — только после победы над «Гигантом»', () => {
+    const stats = { ...emptyDayStats(), revenue: 1000, served: 30 };
+    let s = shop({ day: 70, rating: 4.8, history: Array(7).fill(1000), story: { chapter: 5, introSeen: false, ordersDone: 0, inspectionsPassed: 0 } });
+    // Цель битвы недостижима — «Гигант» устоит; оценки конкурса (рейтинг, довольные, полки) — набраны.
+    s = { ...s, giant: { phase: 'battle', since: 70, revenue: 0, target: 10 ** 9, seen: 'battle' } };
+    for (let d = 71; d <= 70 + GIANT_BATTLE_DAYS; d++) s = contestNight(giantNight({ ...s, day: d }, 1000), stats);
+    expect(s.giant?.phase).toBe('lost');
+    expect(s.contest?.last).toMatchObject({ won: false, giant: true });
+    expect(s.contest?.wins).toBe(0);
+    for (let d = s.day + 1; d < s.day + 25; d++) s = contestNight({ ...s, day: d }, stats);
+    expect(s.contest?.phase).toBe('wait');
+  });
+
+  it('сохранение посреди битвы (конкурса ещё нет, вторая неделя уже идёт) — ждёт победы, как раньше', () => {
+    const s = shop({ day: 80, history: Array(7).fill(1000), giant: { phase: 'battle', since: 70, revenue: 0, target: 1 } });
+    expect(contestNight(s, emptyDayStats()).contest).toBeUndefined();
+  });
+});
+
 describe('мелкие правки сюжета', () => {
   it('у Валентины больше нет повторяющегося «Ой, что это я»', () => {
     const keys = SCENES.flatMap((s) => s.lines.map((l) => l.key));

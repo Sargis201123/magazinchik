@@ -3219,6 +3219,7 @@ export const es: Record<TextKey, string> = {
   "zar.tale.tolik.3": "Esto es de mi parte y de los patos: ahorraba para una caña, pero ya tengo una. ¡Tómalo, eres bueno!",
 
   // ---------- «Бабушкина тетрадь» (game/notebook.ts) ----------
+  "contest.giantFirst": "📓 Conseguiste las notas del jurado, pero Giant resistió. La copa del barrio te la darán el día que lo venzas: todo el cuaderno vendrá a celebrarlo.",
   "story.ch1.outroNb": "¿Sabes qué hay en la mitad derecha del cuaderno? Todos a los que ella les fió. Yo también estoy ahí. Esa mitad nunca se la cobró a nadie. Tampoco a mí.",
   "story.ch2.outroNb": "Su abuela una vez me fió la harina para mi primer pastel, y nunca me la cobró. Sin ella no existiría el Café Acogedor. Ahora me toca a mí.",
   "story.ch3.outroNb1": "Cariño, pasa la página del cuaderno. Esta es la única línea que nunca taché.",
