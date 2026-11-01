@@ -223,7 +223,6 @@ const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 33
 import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, STAR_PACKS, tryDecor, type DecorItem, type DecorKind, decorItem } from '../game/decor';
 import { buyWithStars, starsAvailable } from '../platform/stars';
 import { petsBox } from './pets';
-import { petDefaultKey } from '../game/pets';
 import {
   adoptDog,
   burglaryChance,
@@ -2234,14 +2233,6 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         status: !state.cat ? '—' : catAway(state) ? t('corner.catAway') : fedToday(state) ? t('corner.catFed') : t('corner.catHungry'),
         alert: Boolean(state.cat) && !catAway(state) && !fedToday(state),
         details: () => [catBox(getState())],
-      },
-      // Уголок питомцев за звёзды (ui/pets.ts): кто сейчас в зале, позвать другого.
-      {
-        id: 'pets',
-        icon: '🐾',
-        title: t('pets.title'),
-        status: state.pets?.active ? (state.pets.names?.[state.pets.active] ?? t(petDefaultKey(state.pets.active))) : '—',
-        details: () => petsBox(getState(), getState, update),
       },
       {
         id: 'watch',
