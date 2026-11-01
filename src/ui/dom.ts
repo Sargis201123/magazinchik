@@ -508,6 +508,10 @@ const css = `
    выключен, чтобы он не спорил с нашим; --keep — запас снизу, пока прокрутка стоит ниже нового конца. */
 .ui-card.ui-anchored { overflow-anchor: none; overscroll-behavior: contain; padding-bottom: calc(2px + var(--keep, 0px)); }
 .ui-card.ui-anchored.ui-full { height: calc(100dvh - var(--safe-top, env(safe-area-inset-top)) - var(--safe-bottom, env(safe-area-inset-bottom)) - 32px); }
+/* В окне с липкой «Открыть магазин» запас --keep — над кнопкой, а не отступом окна: липкий блок отсчитывает
+   низ от внутреннего края окна, и отступ снизу поднимал бы кнопку на всю высоту запаса, в середину списка. */
+.ui-card.ui-anchored.ui-full { padding-bottom: 2px; }
+.ui-card.ui-anchored.ui-full .ui-open-bar { margin-top: calc(8px + var(--keep, 0px)); }
 .ui-folding { overflow: hidden; }
 .ui-card.touring { padding-bottom: 230px; }
 /* Пока идёт обучение, низ окна закрыт репликой бабушки — кнопка «Открыть» стоит на своём месте в списке. */
