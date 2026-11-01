@@ -57,6 +57,7 @@ import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
 import * as weeksFx from './weeks';
+import * as linesFx from './brandLines';
 import { endSale } from '../game/weeks';
 import * as deliveries from './deliveries';
 import * as food from './food';
@@ -199,6 +200,7 @@ export function showMorning(scene: StoreScene): void {
   // Отметка вечерней распродажи из сохранения посреди дня — утром не действует (weeks.ts).
   scene.state = endSale(scene.state);
   weeksFx.applyWeek(scene);
+  linesFx.applyLines(scene);
   scene.awaitingBoxes = 0;
   scene.hud.update(scene.state, DAY_SECONDS);
   if (weatherFor(scene.state.day) !== scene.weather) weatherFx.applyWeather(scene);
@@ -256,6 +258,8 @@ export function showMorning(scene: StoreScene): void {
       else if (staffChanged) staff.syncStaff(scene);
       if (adsChanged) streets.applyAds(scene);
       if (radioChanged) decorations.applyRadio(scene, true);
+      // Открыли линейку своей марки — её уголок сразу на тротуаре или на кухне.
+      if (s.lines !== was.lines) linesFx.applyLines(scene);
       scene.awaitingBoxes = deliveries.boxesToDeliver(scene);
       scene.refreshShelves();
       building.refreshWarehouse(scene);

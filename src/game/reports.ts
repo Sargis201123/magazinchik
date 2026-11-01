@@ -1,8 +1,9 @@
 // Отчёт за неделю: что продавалось, что портилось, где дорого и чего не хватало — и советы,
 // что поменять в закупке и ценах. Каждый вечер в отчёт ложится строка за прошедший день.
 
+import { lineOfProduct, lineUnitCost } from './lines';
 import type { TextKey } from '../i18n/ru';
-import { PRODUCT_IDS, type DayStats, type ProductId, type StoreState } from './economy';
+import { homemade, PRODUCT_IDS, PRODUCTS, type DayStats, type ProductId, type StoreState } from './economy';
 import { newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
 
 /** Сколько последних дней в отчёте. */
@@ -81,7 +82,9 @@ export function weekReport(state: StoreState): WeekReport {
     const pricey = sum(days, (r) => r.pricey[id] ?? 0);
     const missing = sum(days, (r) => r.missing[id] ?? 0);
     const price = state.prices[id] ?? 0;
-    const cost = usualCost(id) ?? 0;
+    // Своё у поставщиков не купить: себестоимость своей марки — сырьё и банки (lines.ts), выпечки — PRODUCTS.cost.
+    const line0 = lineOfProduct(id);
+    const cost = usualCost(id) ?? (line0 ? lineUnitCost(line0) : homemade(id) ? PRODUCTS[id].cost : 0);
     const line: ProductLine = { id, sold, revenue: sold * price, profit: sold * (price - cost) - spoiled * cost, spoiled, pricey, missing };
     // Совет — по самой заметной беде товара.
     if (spoiled >= 3 && spoiled > sold * 0.25) line.advice = 'report.advice.spoils';

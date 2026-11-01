@@ -20,6 +20,7 @@ import { sunflowersPlanted } from '../game/drama';
 import { duelInfo } from '../platform/multiplayer';
 import { BUILDINGS, BUILDING_IDS, buildingStage, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { COURIER_SPAN, freeStreetX, ICE_CART_SPAN, type StreetSpan } from './placement';
+import * as linesFx from './brandLines';
 import { WING_OUTER, type Layout } from './layout';
 import { lawnShade, lawnTexture } from './floor';
 import { eduardLook, type EduardLook } from '../game/eduard';
@@ -154,6 +155,8 @@ export function applyAds(scene: StoreScene): void {
   const taken: StreetSpan[] = [
     ...(hasUpgrade(scene.state, 'delivery') ? [COURIER_SPAN] : []),
     ...(yearTime(scene.state.day) === 'summer' ? [ICE_CART_SPAN] : []),
+    // Уголки своей марки: табурет с вареньем, бочки солений и кваса (brandLines.ts).
+    ...linesFx.lineStreetSpots(scene.state, door.x).spans,
   ];
   const tvX = freeStreetX(TV_SPOTS, TV_SPAN, taken);
   if (ads.has('tv')) taken.push([tvX + TV_SPAN[0], tvX + TV_SPAN[1]]);

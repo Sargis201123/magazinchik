@@ -5,7 +5,7 @@ import { burglaryNight } from './watch';
 import { contestGuests, contestNight } from './contest';
 import { lightsGuests } from './gear';
 import { addReport } from './reports';
-import { departmentGuests, endDay, priceAppeal, restStaff, staffOf, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
+import { departmentGuests, endDay, onShift, priceAppeal, restStaff, staffOf, expectedGuests, spawnInterval, type DayStats, type NightResult, type StoreState } from './economy';
 import {
   applyInspection,
   fulfillOrder,
@@ -44,6 +44,7 @@ import { nightBoostGuests, nightMorning } from './nightGuests';
 import { laneGuests } from './lanes';
 import { momentCount, momentRating } from './moments';
 import { branchNight, branchReport } from './branch';
+import { makeLines, type LinesNight } from './lines';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -54,6 +55,8 @@ export interface NightSummary extends NightResult {
   branch: number;
   /** Пройденный сегодня шаг сезонной недели (weeks.ts) или null. */
   week: WeekNight | null;
+  /** Что наделали за ночь линейки своей марки (lines.ts). */
+  lines: LinesNight;
 }
 
 export function nightCycle(state: StoreState, stats: DayStats, random: () => number = Math.random): NightSummary {
@@ -88,9 +91,15 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Филиал отдаёт доход за день до счетов: им можно расплатиться.
   const branch = branchNight(s, day);
   s = branch.state;
+  // Повар сегодня работал — ночью лепит пельмени (после смены дня план уже завтрашний).
+  const lineCtx = { day, cook: onShift(s, 'cook') };
   const ended = endDay(s, stats, random);
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
-  const night = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
+  const billed = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
+  // Своя марка: после закрытия и счетов (деньги на них — первыми) варят варенье, солят, лепят пельмени,
+  // ставят квас — из того, что осталось на складе и полках.
+  const lines = makeLines(billed.state, lineCtx);
+  const night = { ...billed, state: lines.state };
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
   const next = branchReport(contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue), stats.revenue, random), stats), day, branch.income);
   return {
@@ -101,6 +110,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
     week: week.done,
+    lines: lines.night,
   };
 }
 
