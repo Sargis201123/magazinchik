@@ -103,9 +103,9 @@ const assetVersions = (build: boolean): Plugin => {
  * только когда скачан и запущен весь код игры, — на медленной связи сеть полсекунды и больше
  * простаивала. Теперь они идут вместе с кодом. Адреса — ровно те, что потом попросят BootScene
  * (Phaser грузит картинки через XHR — отсюда as="fetch" и crossorigin) и CSS шрифта.
- * Шрифт — латиница Nunito: её ждёт BootScene. Кириллицу браузер просит сам, когда на холсте
- * появляется русская надпись (уже после атласа): заранее её не качаем, чтобы надписи остались
- * ровно такими, как были (docs/PERFORMANCE.md, «Что не сделано»).
+ * Шрифт — латиница и кириллица Nunito: их ждёт BootScene (FONT_SAMPLE). Раньше кириллицу браузер
+ * просил сам, когда на холсте появлялась русская надпись, — и надписи зала (КУХНЯ, вывески) так и
+ * оставались системным шрифтом. Кириллица — +21 КБ, но игроки в основном русскоязычные.
  */
 const preloadHints = (): Plugin => ({
   name: 'preload-hints',
@@ -120,7 +120,7 @@ const preloadHints = (): Plugin => ({
         const css = String(out.source).replace(/url\(\.\//g, 'url(assets/');
         if (link.test(html)) html = html.replace(link, () => `<style>${css}</style>`);
       }
-      const fonts = Object.keys(ctx.bundle ?? {}).filter((file) => /\/nunito-latin-wght-normal-[\w-]+\.woff2$/.test(file));
+      const fonts = Object.keys(ctx.bundle ?? {}).filter((file) => /\/nunito-(latin|cyrillic)-wght-normal-[\w-]+\.woff2$/.test(file));
       const sheets = [...atlas().pages.map((p) => p.name), 'ico_atlas'].flatMap((name) => [`assets/${name}.json`, `assets/${name}.png`]);
       const tags = [
         // Картинки листов — пониже кода: код нужен раньше (пока он запускается, лист докачивается).
