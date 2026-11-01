@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { recordReferral, socialPing } from '../api/_lib/social';
 
-import { markWeek, weekOf } from '../api/_lib/guild';
-import { markWeekend } from '../api/_lib/weekend';
+import { markWeek, weekOf } from '../api/_lib/week';
+import { markLeague } from '../api/_lib/league';
 import { paperFor, sendNewspapers } from '../api/_lib/newspaper';
 import type { D1, D1Statement, Env } from '../api/_lib/telegram';
 
@@ -60,13 +60,12 @@ const DAY = 24 * 3600_000;
 const MON = Date.UTC(2026, 10, 2, 12);
 
 describe.skipIf(!Database)('газета района', () => {
-  it('в понедельник — один номер каждому, кто торговал; с дуэлью, местом среди своих и выходными', async () => {
+  it('в понедельник — один номер каждому, кто торговал; с местом среди своих и в турнире района', async () => {
     const env: Env = { BOT_TOKEN: TOKEN, DB: d1(), APP_URL: 'https://app/' };
     await socialPing(await post(1), env);
     await recordReferral(env, 2, 'ref_1');
     for (const id of [2, 3]) await socialPing(await post(id), env);
     const db = env.DB!;
-    const week = weekOf(MON) - 1;
     // Прошлая неделя: у 1-го +6000 (неделей раньше было +4000), у 2-го +4000, 3-й не торговал.
     await markWeek(db, 1, 0, MON - 14 * DAY);
     await markWeek(db, 1, 4000, MON - 7 * DAY);
@@ -74,16 +73,17 @@ describe.skipIf(!Database)('газета района', () => {
     await markWeek(db, 2, 0, MON - 7 * DAY);
     await markWeek(db, 2, 4000, MON);
     await db.prepare("INSERT INTO progress (id, name, revenue, updated) VALUES (1, 'Аня', 10000, 0), (2, '<Петя>', 4000, 0)").run();
-    await db.prepare('INSERT INTO duels (id, week, rival) VALUES (1, ?, 2)').bind(week).run();
-    await markWeekend(db, 1, 5000, 9000, MON - 2 * DAY);
+    // Турнир прошлой недели: 1-й записан в лигу в понедельник (дуэли и «Чёрной пятницы» больше нет).
+    await markLeague(db, 1, 0, 4000, MON - 7 * DAY + 3600_000);
     expect(await sendNewspapers(env, MON - DAY)).toBe(0); // воскресенье — нет
     expect(await sendNewspapers(env, MON)).toBe(2);
     const mine = sent.find((m) => m.chat_id === 1)!.text;
     expect(mine).toContain('Вестник района</b> · 26.10–01.11');
     expect(mine).toContain('6 000 (▲ 50%)');
     expect(mine).toContain('1-е место из 2');
-    expect(mine).toContain('победа над «&lt;Петя&gt; и Ко»');
-    expect(mine).toContain('«Чёрная пятница»: 1-е место');
+    expect(mine).toMatch(/🏆 Турнир района, 🥉 Бронза: \d+-е место из 10/);
+    expect(mine).not.toContain('Дуэль');
+    expect(mine).not.toContain('Чёрная пятница');
     expect(sent.some((m) => m.chat_id === 3)).toBe(false);
     // Второй раз тот же номер не приходит.
     expect(await sendNewspapers(env, MON + 3600_000)).toBe(0);

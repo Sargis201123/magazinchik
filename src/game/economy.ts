@@ -782,6 +782,8 @@ export interface StoreState {
   contest?: import('./contest').ContestState;
   /** Сюжет «Папа и Соня»: сколько сцен показано (drama.ts). На экономику не влияет. */
   drama?: import('./drama').DramaState;
+  /** «Бабушкина тетрадь» — стержень сюжета (notebook.ts): пришла ли, ответ Эдуарду, строчка Сони. */
+  nb?: import('./notebook').NotebookState;
   /** Праздники по настоящему календарю (live.ts): открытые открытки и когда заходил гость. */
   live?: import('./live').LiveState;
   /** Сезонные недели игрового года (weeks.ts): дорожки и вечер распродажи. */
@@ -792,6 +794,8 @@ export interface StoreState {
   lines?: Partial<Record<LineId, number>>;
   /** Личные рекорды игрока (records.ts) — переживают новую игру. */
   records?: import('./records').Records;
+  /** Очередь утренних новостей: одна за утро, остальные ждут (headlines.ts). */
+  newsQ?: import('./headlines').NewsQueue;
   /** Последние мини-события дня — чтобы не повторялись подряд (live.ts). */
   liveRecent?: import('./minievents').LiveKind[];
   /** Автозаказ: включён ли, лимит и что купил сегодня (autoorder.ts). */

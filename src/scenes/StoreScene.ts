@@ -52,7 +52,7 @@ import { pickCohort, startCohort, type Cohort } from '../game/onboarding';
 import { SayBubble } from '../ui/onboarding';
 import type { TutStep } from '../game/tutorial';
 import { Coach } from '../ui/coach';
-import { duelInfo, loadMultiplayer, streetInfo } from '../platform/multiplayer';
+import { loadMultiplayer, streetInfo } from '../platform/multiplayer';
 import { streetKey } from '../game/street';
 import { ensureSeason, grantPass } from '../game/pass';
 import { grantSupport } from '../game/support';
@@ -76,6 +76,7 @@ import { radioSpeed } from '../game/radio';
 import type { LiveKind } from '../game/minievents';
 import { noteMoment } from '../game/moments';
 import { Moments } from './moments';
+import type { AttentionPlan } from '../game/attention';
 import { questRows } from '../ui/today';
 import { RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
@@ -618,6 +619,13 @@ export class StoreScene extends Phaser.Scene {
   call: { order: HomeOrder; at: number; timer: Phaser.Time.TimerEvent; ringer: Phaser.Time.TimerEvent; shake: Phaser.Time.TimerEvent; covered?: boolean } | null = null;
   /** Когда позвонят в следующий раз. */
   callTimer?: Phaser.Time.TimerEvent;
+  /**
+   * Бюджет внимания на сегодня (game/attention.ts): сколько ещё звонков, будет ли особый гость.
+   * Делится утром в prepareDay; моменты и мини-события урезаются там же, при планировании.
+   */
+  attention: AttentionPlan = { moments: 0, live: 0, special: false, calls: 0 };
+  /** Особый гость с выбором сегодня задуман (visitors.scheduleStoryGuests) — его место в бюджете внимания. */
+  specialToday = false;
   /** Принятые заказы: ждут сборки, собираются, стоят коробкой у двери или едут с курьером. */
   parcels: Parcel[] = [];
   /** Хозяин сам соберёт ждущий заказ, как только освободится (принял звонок или нажал «Собрать»). */
@@ -722,9 +730,9 @@ export class StoreScene extends Phaser.Scene {
       if (!this.running && this.sys.isActive() && liveLook(events, todayLocal()) !== lookBefore) this.buildWorld();
     });
     void socialPing(getLang(), comebackHooks(this.state)).then((info) => {
-      // Торговая неделя и гильдия: магазин друга появится на улице, если соперник есть.
+      // Друзья: магазин друга встанет на улице рядом, если место свободно (streets.ts).
       void loadMultiplayer().then(() => {
-        const friend = (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend;
+        const friend = (this.rivalAcross || this.builtEduard === 'vacant') && (streetInfo()?.[0]?.name || undefined) !== this.builtFriend;
         // Улица друзей пришла или поменялась — домики встают, пока магазин закрыт (днём — завтра утром).
         // На титуле не трогаем: перестройка оборвала бы пролёт камеры — улицу поставит утро (showMorning).
         const street = !this.onTitle && streetKey(streetInfo()) !== this.builtStreet;

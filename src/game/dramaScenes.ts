@@ -46,7 +46,6 @@ export const SCENES: DramaScene[] = [
     visit: true,
     lines: [
       line('valya', 'drama.5.1', 'happy'),
-      line('valya', 'drama.5.2', 'surprised'),
     ],
   },
   {
@@ -194,7 +193,6 @@ export const SCENES: DramaScene[] = [
     place: 'drama.place.shop',
     lines: [
       line('valya', 'drama.21.1', 'happy'),
-      line('valya', 'drama.21.2', 'surprised'),
       line('father', 'drama.21.3', 'sad'),
     ],
   },
@@ -264,7 +262,6 @@ export const SCENES: DramaScene[] = [
     place: 'drama.place.shop',
     lines: [
       line('valya', 'drama.28.1', 'happy'),
-      line('valya', 'drama.28.2', 'sad'),
     ],
   },
   {

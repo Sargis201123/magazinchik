@@ -4,6 +4,7 @@
 import type { TextKey } from '../i18n/ru';
 import type { EventChances } from './events';
 import type { StoreState } from './economy';
+import type { PageId } from './notebook';
 
 export type CharacterId = 'grandma' | 'valya' | 'marat' | 'eduard' | 'inspector' | 'sonya' | 'father';
 
@@ -25,6 +26,12 @@ export interface Line {
   who: CharacterId;
   key: TextKey;
   mood?: Mood;
+  /** Над репликой — страница «Бабушкиной тетради» с этой строчкой (notebook.ts). */
+  page?: PageId;
+  /** На этой реплике — выбор: взять долг Эдуарда или «не брать» (notebook.ts answerEduard). */
+  choice?: true;
+  /** Реплика только для этого ответа Эдуарду (до выбора считаем «не брать» — число реплик то же). */
+  when?: 'took' | 'kept';
 }
 
 export interface StoryState {
@@ -53,7 +60,10 @@ export interface Chapter {
   chances?: Partial<EventChances>;
 }
 
-export const line = (who: CharacterId, key: TextKey, mood?: Mood): Line => ({ who, key, mood });
+export const line = (who: CharacterId, key: TextKey, mood?: Mood, more?: Pick<Line, 'page' | 'choice' | 'when'>): Line => ({ who, key, mood, ...more });
+
+/** Реплики сцены для этого игрока: из двух ответов Эдуарду — только выбранный (до выбора — «не брать»). */
+export const linesFor = (s: StoreState, lines: Line[]): Line[] => lines.filter((l) => !l.when || l.when === (s.nb?.eduard ?? 'kept'));
 
 export const CHAPTERS: Chapter[] = [
   {
@@ -61,7 +71,8 @@ export const CHAPTERS: Chapter[] = [
     introArt: 'story/ch1.png',
     goalKey: 'story.ch1.goal',
     intro: [line('grandma', 'story.ch1.intro1', 'happy'), line('grandma', 'story.ch1.intro2', 'sad'), line('valya', 'story.ch1.intro3', 'happy')],
-    outro: [line('valya', 'story.ch1.outro1', 'happy'), line('valya', 'story.ch1.outro2')],
+    // «Бабушкина тетрадь»: Валентина знает, что в правой половине — и она тоже.
+    outro: [line('valya', 'story.ch1.outro1', 'happy'), line('valya', 'story.ch1.outroNb', 'sad', { page: 'valya' }), line('valya', 'story.ch1.outro2')],
     done: (s) => s.debt === 0,
     progress: (s) => ({ n: s.debt }),
     reward: { rating: 0.3 },
@@ -71,7 +82,8 @@ export const CHAPTERS: Chapter[] = [
     introArt: 'story/ch2.png',
     goalKey: 'story.ch2.goal',
     intro: [line('marat', 'story.ch2.intro1', 'happy'), line('marat', 'story.ch2.intro2')],
-    outro: [line('marat', 'story.ch2.outro1', 'happy')],
+    // Тетрадь: «Уют» начался с бабушкиной муки в долг — ты в этой цепочке.
+    outro: [line('marat', 'story.ch2.outro1', 'happy'), line('marat', 'story.ch2.outroNb', 'happy', { page: 'marat' })],
     done: (s) => s.story.ordersDone >= 2 && s.staff.length >= 1,
     progress: (s) => ({ n: Math.min(2, s.story.ordersDone), staff: s.staff.length ? '✓' : '✗' }),
     reward: { money: 300 },
@@ -82,7 +94,14 @@ export const CHAPTERS: Chapter[] = [
     introArt: 'story/ch3.png',
     goalKey: 'story.ch3.goal',
     intro: [line('eduard', 'story.ch3.intro1'), line('eduard', 'story.ch3.intro2', 'angry'), line('valya', 'story.ch3.intro3', 'angry')],
-    outro: [line('eduard', 'story.ch3.outro1', 'surprised')],
+    // Открытие первое: «Эдик, 9 лет» — злодей оказывается тем мальчиком.
+    outro: [
+      line('eduard', 'story.ch3.outro1', 'surprised'),
+      line('grandma', 'story.ch3.outroNb1', 'sad', { page: 'edik' }),
+      line('grandma', 'story.ch3.outroNb2', 'sad'),
+      line('eduard', 'story.ch3.outroNb3', 'sad'),
+      line('valya', 'story.ch3.outroNb4', 'sad'),
+    ],
     done: (s) => s.level >= 2 && s.rating >= 4,
     progress: (s) => ({ r: s.rating.toFixed(1) }),
     reward: { rating: 0.3 },
@@ -93,7 +112,8 @@ export const CHAPTERS: Chapter[] = [
     introArt: 'story/ch4.png',
     goalKey: 'story.ch4.goal',
     intro: [line('inspector', 'story.ch4.intro1'), line('inspector', 'story.ch4.intro2', 'angry'), line('valya', 'story.ch4.intro3', 'angry')],
-    outro: [line('inspector', 'story.ch4.outro1', 'happy'), line('valya', 'story.ch4.outro2', 'surprised')],
+    // «Это Эдуард нажаловался» (вступление) — нет: жалоба не его.
+    outro: [line('inspector', 'story.ch4.outro1', 'happy'), line('eduard', 'story.ch4.outroNb', 'sad'), line('valya', 'story.ch4.outro2', 'surprised')],
     done: (s) => s.story.inspectionsPassed >= 2,
     progress: (s) => ({ n: Math.min(2, s.story.inspectionsPassed) }),
     reward: { money: 1000 },
@@ -104,8 +124,15 @@ export const CHAPTERS: Chapter[] = [
     introArt: 'story/ch5.png',
     outroArt: 'story/finale.png',
     goalKey: 'story.ch5.goal',
-    intro: [line('eduard', 'story.ch5.intro1', 'sad'), line('eduard', 'story.ch5.intro2')],
-    outro: [line('grandma', 'story.ch5.outro1', 'happy'), line('valya', 'story.ch5.outro2', 'happy'), line('grandma', 'story.ch5.outro3', 'happy')],
+    // Звонок бабушки, Эдуард с долгом «за батоны» и выбор; «МегаМарт» закрывается его решением.
+    intro: [
+      line('grandma', 'story.ch5.intro1', 'happy'),
+      line('eduard', 'story.ch5.intro2', 'sad', { page: 'edik', choice: true }),
+      line('eduard', 'story.ch5.took', 'happy', { when: 'took' }),
+      line('eduard', 'story.ch5.kept', 'surprised', { when: 'kept' }),
+    ],
+    // Открытие второе: бабушка уехала не на дачу.
+    outro: [line('grandma', 'story.ch5.outro1', 'sad'), line('valya', 'story.ch5.outro2', 'happy'), line('grandma', 'story.ch5.outro3', 'happy', { page: 'torn' })],
     done: (s) => s.level >= 4,
     progress: () => ({}),
     reward: { rating: 0.5 },

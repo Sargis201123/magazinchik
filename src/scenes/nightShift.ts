@@ -32,7 +32,7 @@ import { onbDone } from '../game/onboarding';
 import { firstGiftCard } from '../ui/onboarding';
 import { tutDayEnd, tutPass, tutStep } from '../game/tutorial';
 import { shareDay as shareDayCard } from '../platform/shareCard';
-import { treatFriend } from '../platform/multiplayer';
+import { payFriend } from '../platform/multiplayer';
 import { friendsAtWork } from '../game/staff';
 import { kitchenOpen } from '../game/kitchen';
 import { answerNightStory, DEBT_UNITS, debtLabel, debtProduct, nightStory, STORY_GUEST, type NightStoryId } from '../game/nightGuests';
@@ -393,8 +393,8 @@ export function finishDay(scene: StoreScene): void {
   if (quests.total) track('quests', finishedDay, quests.done);
   // Сколько процентов своих покупателей хозяин пробил касанием улицы, а не кассы.
   if (scene.serves.owner) track('serve_street', finishedDay, (100 * Math.min(scene.serves.street, scene.serves.owner)) / scene.serves.owner);
-  // Друзья на работе раз в неделю получают свою долю — монеты в своей игре (через «угощение»).
-  if (finishedDay % 7 === 0) for (const m of friendsAtWork(state)) void treatFriend(m.friend!.id);
+  // Друзья на работе раз в неделю получают свою долю — монеты в своей игре (откроют с подарками).
+  if (finishedDay % 7 === 0) for (const m of friendsAtWork(state)) void payFriend(m.friend!.id);
   const fps = fpsSummary(scene.fpsSamples);
   if (fps) {
     track('fps', finishedDay, fps.median);

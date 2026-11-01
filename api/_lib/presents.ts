@@ -6,6 +6,10 @@
 // Клиенту не доверяем: кто дарит — из подписанных данных Telegram; кому — только другу из своей
 // сети (visits.ts); лимиты в день — одним запросом, чтобы два касания разом их не обошли.
 // Бот может написать другу «тебе подарок» — не чаще раза в день и только днём по его времени.
+//
+// Подарок — единственный вид подарка другу (решено автором 01.11): «угостить кофе» друга в гостях
+// (visits.ts → gift) теперь тоже пирог-подарок, а неоткрытые монеты старых угощений (таблица gifts)
+// открываются вместе с подарками — ничего не теряется.
 
 import { PHRASES, PRESENT_KINDS, type PresentKind } from '../../src/game/social.js';
 import { ready } from './social.js';
@@ -36,7 +40,7 @@ const SCHEMA = [
 ];
 
 const schemaReady = new WeakSet<D1>();
-async function presentsReady(db: D1): Promise<void> {
+export async function presentsReady(db: D1): Promise<void> {
   await ready(db);
   if (schemaReady.has(db)) return;
   // Таблицы уже есть (база живёт дольше воркера) — не тратить запросы: у D1 предел на один вызов.
@@ -90,10 +94,41 @@ async function notify(env: Env, db: D1, to: number, from: string, now: number): 
 }
 
 /**
+ * Записать подарок (друг уже проверен): все лимиты и запись — одним запросом. null — записан,
+ * иначе причина: already (этому другу сегодня уже), limit (свой лимит в день), full (другу хватит).
+ */
+export async function insertPresent(db: D1, from: number, to: number, kind: PresentKind, phrase: number, stars: number, now: number): Promise<'already' | 'limit' | 'full' | null> {
+  await presentsReady(db);
+  const day = today(now);
+  const res = await db
+    .prepare(
+      `INSERT OR IGNORE INTO presents (sender, receiver, day, kind, phrase, stars, at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7
+       WHERE (SELECT COUNT(*) FROM presents WHERE sender = ?1 AND day = ?3) < ?8
+         AND (SELECT COUNT(*) FROM presents WHERE receiver = ?2 AND day = ?3) < ?9`,
+    )
+    .bind(from, to, day, kind, phrase, stars, now, GIVE_DAY, GET_DAY)
+    .run();
+  if ((res.meta?.changes ?? 0) > 0) return null;
+  const again = await db.prepare('SELECT 1 AS n FROM presents WHERE sender = ? AND receiver = ? AND day = ?').bind(from, to, day).first<{ n: number }>();
+  if (again) return 'already';
+  const mine = (await db.prepare('SELECT COUNT(*) AS n FROM presents WHERE sender = ? AND day = ?').bind(from, day).first<{ n: number }>())?.n ?? 0;
+  return mine >= GIVE_DAY ? 'limit' : 'full';
+}
+
+/** Угощение кофе друга в гостях (visits.ts → gift): пирог с доброй фразой. Ушёл — true. */
+export async function treatPresent(env: Env, db: D1, from: number, to: number, now: number): Promise<boolean> {
+  const error = await insertPresent(db, from, to, 'pie', Math.floor(Math.random() * PHRASES), 0, now);
+  if (error) return false;
+  await notify(env, db, to, await nameOf(db, from), now).catch(() => false);
+  return true;
+}
+
+/**
  * POST /api/presents { initData, action, to?, kind?, phrase?, stars? } →
  * list: { enabled, given: [id] — кому уже дарил сегодня, waiting — сколько подарков ждёт, thanks — сколько «спасибо» ждёт };
  * give: { ok } | { ok: false, error: friend | bad | already | limit | full };
- * open: { presents: [{ name, kind, phrase, stars }], thanks: [name] } — подарки мне и «спасибо» за мои (забираются один раз).
+ * open: { presents: [{ name, kind, phrase, stars }], thanks: [name], coins, from: [name] } — подарки мне, «спасибо» за мои
+ * и монеты старых угощений кофе (coins, от кого — from); всё забирается один раз.
  */
 export async function presents(request: Request, env: Env, now = Date.now()): Promise<Response> {
   const token = env.BOT_TOKEN ?? '';
@@ -112,21 +147,8 @@ export async function presents(request: Request, env: Env, now = Date.now()): Pr
     if (!PRESENT_KINDS.includes(kind) || !Number.isInteger(phrase) || phrase < 0 || phrase >= PHRASES || !Number.isInteger(stars) || stars < 0 || stars > 5) return json({ ok: false, error: 'bad' }, 400);
     const friends = await network(db, user.id, now - ACTIVE_DAYS * DAY);
     if (!friends.some((f) => f.id === to)) return json({ ok: false, error: 'friend' });
-    // Все проверки и запись — одним запросом.
-    const res = await db
-      .prepare(
-        `INSERT OR IGNORE INTO presents (sender, receiver, day, kind, phrase, stars, at) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7
-         WHERE (SELECT COUNT(*) FROM presents WHERE sender = ?1 AND day = ?3) < ?8
-           AND (SELECT COUNT(*) FROM presents WHERE receiver = ?2 AND day = ?3) < ?9`,
-      )
-      .bind(user.id, to, day, kind, phrase, stars, now, GIVE_DAY, GET_DAY)
-      .run();
-    if ((res.meta?.changes ?? 0) === 0) {
-      const again = await db.prepare('SELECT 1 AS n FROM presents WHERE sender = ? AND receiver = ? AND day = ?').bind(user.id, to, day).first<{ n: number }>();
-      if (again) return json({ ok: false, error: 'already' });
-      const mine = (await db.prepare('SELECT COUNT(*) AS n FROM presents WHERE sender = ? AND day = ?').bind(user.id, day).first<{ n: number }>())?.n ?? 0;
-      return json({ ok: false, error: mine >= GIVE_DAY ? 'limit' : 'full' });
-    }
+    const error = await insertPresent(db, user.id, to, kind, phrase, stars, now);
+    if (error) return json({ ok: false, error });
     await notify(env, db, to, await nameOf(db, user.id), now).catch(() => false);
     return json({ ok: true });
   }
@@ -147,10 +169,12 @@ export async function presents(request: Request, env: Env, now = Date.now()): Pr
         .bind(user.id)
         .all<{ receiver: number }>()
     ).results;
+    // Старые угощения кофе (visits.ts, до 01.11): монеты — вместе с подарками, тоже одним запросом.
+    const coffee = (await db.prepare('UPDATE gifts SET claimed = 1 WHERE receiver = ? AND claimed = 0 RETURNING sender, amount').bind(user.id).all<{ sender: number; amount: number }>()).results;
     // Старые подарки (и неоткрытые, и без «спасибо») — прочь, чтобы таблица не росла.
     await db.prepare('DELETE FROM presents WHERE (receiver = ?1 OR sender = ?1) AND day < ?2').bind(user.id, day - KEEP_DAYS).run();
     // Имена — одним запросом, сколько бы ни было друзей.
-    const ids = [...new Set([...rows.map((r) => r.sender), ...thanks.map((r) => r.receiver)])];
+    const ids = [...new Set([...rows.map((r) => r.sender), ...thanks.map((r) => r.receiver), ...coffee.map((r) => r.sender)])];
     const names = new Map<number, string>(
       ids.length
         ? (await db.prepare('SELECT id, name FROM progress WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(ids)).all<{ id: number; name: string }>()).results.map((r) => [r.id, r.name || '—'])
@@ -161,11 +185,16 @@ export async function presents(request: Request, env: Env, now = Date.now()): Pr
         .filter((r) => PRESENT_KINDS.includes(r.kind as PresentKind))
         .map((r) => ({ name: names.get(r.sender) ?? '—', kind: r.kind, phrase: Math.max(0, Math.min(PHRASES - 1, r.phrase)), stars: Math.max(0, Math.min(5, r.stars)) })),
       thanks: thanks.map((r) => names.get(r.receiver) ?? '—'),
+      coins: coffee.reduce((sum, r) => sum + Math.max(0, Math.min(1000, Number(r.amount) || 0)), 0),
+      from: [...new Set(coffee.map((r) => names.get(r.sender) ?? '—'))],
     });
   }
   if (body.action && body.action !== 'list') return json({ error: 'bad_action' }, 400);
   const given = (await db.prepare('SELECT receiver FROM presents WHERE sender = ? AND day = ?').bind(user.id, day).all<{ receiver: number }>()).results.map((r) => r.receiver);
-  const waiting = (await db.prepare('SELECT COUNT(*) AS n FROM presents WHERE receiver = ? AND opened = 0').bind(user.id).first<{ n: number }>())?.n ?? 0;
+  // Ждут — подарки и неоткрытые старые угощения кофе.
+  const waiting =
+    ((await db.prepare('SELECT COUNT(*) AS n FROM presents WHERE receiver = ? AND opened = 0').bind(user.id).first<{ n: number }>())?.n ?? 0) +
+    ((await db.prepare('SELECT COUNT(*) AS n FROM gifts WHERE receiver = ? AND claimed = 0').bind(user.id).first<{ n: number }>())?.n ?? 0);
   const thanks = (await db.prepare('SELECT COUNT(*) AS n FROM presents WHERE sender = ? AND opened = 1 AND thanked = 0').bind(user.id).first<{ n: number }>())?.n ?? 0;
   return json({ enabled: true, given, waiting, thanks });
 }

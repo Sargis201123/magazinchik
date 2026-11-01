@@ -21,15 +21,14 @@ import { giantLook } from '../game/giant';
 import { lazy, prefetch, withLazy } from '../platform/lazy';
 import { weatherFor } from '../game/weather';
 import { claimGift, giftTomorrow } from '../game/gift';
-import { showGift } from '../ui/gift';
-import { collectOrder, openChest, takeLetter } from '../game/returns';
-import { showReturn } from '../ui/returns';
+import { postMail } from '../ui/mailbag';
+import { askWriteAccessOnce } from '../platform/social';
+import { collectOrder, takeLetter } from '../game/returns';
 import { hasDog } from '../game/watch';
 import { contestOf, juryDay } from '../game/contest';
 import { sonyaVisits, sunflowersPlanted } from '../game/drama';
 import { activeEvent, guestDue } from '../game/live';
 import { liveEvents, todayLocal } from '../platform/live';
-import { askWriteAccessOnce } from '../platform/social';
 import { helpScan } from '../game/help';
 import { flushSoon, track } from '../platform/analytics';
 import { playDayOne } from '../game/onboarding';
@@ -46,7 +45,9 @@ import { castsShadow } from './floor';
 import { eduardLook } from '../game/eduard';
 import { cafeDeliver } from '../game/cafe';
 import { hasRadio } from '../game/radio';
-import { liveEventsFor } from '../game/minievents';
+import { LIVE_REPEAT, liveEventsFor } from '../game/minievents';
+import { CALLS_MAX, planAttention, thin } from '../game/attention';
+import { callsPossible } from '../game/delivery';
 import { momentsFor } from '../game/moments';
 import { fridgeLeak } from '../game/gear';
 import { catHome } from '../game/cat';
@@ -112,68 +113,45 @@ type Kin = Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Visible
 
 // ---------- День ----------
 
-/** Подарок за ежедневный вход: деньги (и товар) сразу в состоянии, окно — поверх утра. */
-export function offerGift(scene: StoreScene): void {
-  const claimed = claimGift(scene.state, todayLocal(), Math.random);
-  if (!claimed) return;
-  // Товар из гостинца сразу встаёт на полки, если есть место.
-  scene.state = shelveAll(claimed.state);
-  saveGame(scene.state);
-  scene.hud.update(scene.state, DAY_SECONDS);
-  building.refreshWarehouse(scene);
-  scene.time.delayedCall(400, () => showGift(claimed.gift, giftTomorrow(scene.state, todayLocal())));
-  // Со второго дня — один раз спросить, можно ли боту напоминать о магазине.
-  if (scene.state.day > 1) scene.time.delayedCall(4000, askWriteAccessOnce);
-}
-
 /**
- * Ритуал возвращения (returns.ts): сундучок выручки, письмо, сосед за отложенным — одним окном
- * поверх утра; после него — then (гостинец). Нечего показать — сразу then.
+ * Почта утра (ui/mail.ts): что накопилось без игрока — письмо, сосед за отложенным заказом — и подарок
+ * за ежедневный вход. Деньги и товар — сразу в состоянии, как и раньше; рассказ о них — одной карточкой
+ * «Почта» в утреннем окне, а не окнами поверх него. Сундучок открывает сама карточка («Забрать всё»).
  */
-export function offerReturn(scene: StoreScene, then: () => void): void {
-  // Утро открывают заново (расстановка, возврат из гостей) — ритуал второй раз не показываем.
-  if (scene.ritualDay === scene.state.day) {
-    then();
-    return;
-  }
+export function collectMail(scene: StoreScene): void {
+  // Утро открывают заново (расстановка, возврат из гостей) — письма второй раз не приходят.
+  if (scene.ritualDay === scene.state.day) return;
   scene.ritualDay = scene.state.day;
-  const chest = scene.state.ret?.chest;
+  const day = scene.state.day;
   const letter = takeLetter(scene.state, todayLocal());
   if (letter) {
     scene.state = letter.state;
     collections.note(scene, 'cards', letter.gift.letter.from);
   }
   const order = collectOrder(scene.state);
-  // Заказ не на сегодня (устарел) — сосед просто не пришёл, окно о нём не нужно.
-  const fresh = order && order.order.day === scene.state.day ? order : null;
+  // Заказ не на сегодня (устарел) — сосед просто не пришёл, говорить о нём не нужно.
+  const fresh = order && order.order.day === day ? order : null;
   if (order) scene.state = order.state;
-  if (letter || order) {
+  if (order?.paid) scene.refreshShelves();
+  if (letter) track('ret_letter', day);
+  if (fresh) track(fresh.paid ? 'ret_order' : 'ret_order_wait', day, fresh.paid);
+  const claimed = claimGift(scene.state, todayLocal(), Math.random);
+  // Товар из гостинца сразу встаёт на полки, если есть место.
+  if (claimed) {
+    scene.state = shelveAll(claimed.state);
+    building.refreshWarehouse(scene);
+  }
+  if (letter || order || claimed) {
     saveGame(scene.state);
     scene.hud.update(scene.state, DAY_SECONDS);
-    if (order?.paid) scene.refreshShelves();
   }
-  if (letter) track('ret_letter', scene.state.day);
-  if (fresh) track(fresh.paid ? 'ret_order' : 'ret_order_wait', scene.state.day, fresh.paid);
-  if (!chest && !letter && !fresh) {
-    then();
-    return;
-  }
-  scene.time.delayedCall(400, () =>
-    showReturn({
-      chest,
-      letter: letter?.gift,
-      order: fresh ?? undefined,
-      onChest: () => {
-        const opened = openChest(scene.state);
-        if (!opened) return;
-        scene.state = opened.state;
-        saveGame(scene.state);
-        scene.hud.update(scene.state, DAY_SECONDS);
-        track('ret_chest', scene.state.day, opened.chest.sum);
-      },
-      onDone: then,
-    }),
-  );
+  // Со второго дня, когда бабушка прислала гостинец, — один раз спросить, можно ли боту напоминать о магазине.
+  if (claimed && day > 1) scene.time.delayedCall(4000, askWriteAccessOnce);
+  postMail(day, {
+    letter: letter?.gift,
+    order: fresh ?? undefined,
+    gift: claimed ? { gift: claimed.gift, tomorrow: giftTomorrow(scene.state, todayLocal()) } : undefined,
+  });
 }
 
 export function showMorning(scene: StoreScene): void {
@@ -193,8 +171,8 @@ export function showMorning(scene: StoreScene): void {
   // Игру закрыли на итогах дня — утром о них уже не говорим.
   scene.state = tutMorning(scene.state);
   const afterStory = scene.state.onboarding === 'play' && pendingStory(scene.state)?.kind === 'intro';
-  // Сначала то, что накопилось без игрока (сундучок, письмо, сосед за заказом), потом гостинец.
-  if (scene.state.tourDone !== false && !noMorning && !afterStory) offerReturn(scene, () => offerGift(scene));
+  // Почта утра: что накопилось без игрока (письмо, сосед за заказом) и гостинец — в карточку «Почта».
+  if (scene.state.tourDone !== false && !noMorning && !afterStory) collectMail(scene);
   // Улица друзей — свежая к следующему утру (чаще раза в 10 минут не спрашиваем).
   void fetchStreet();
   // Старые сохранения сразу получают значки за то, что уже сделано.
@@ -242,8 +220,8 @@ export function showMorning(scene: StoreScene): void {
     visit: scene.pendingVisit,
     onRival: (key, name) => void rivals.visitRival(scene, key, name),
     onBoss: eduardLook(scene.state) !== 'vacant' ? () => void rivals.visitRival(scene, null, '') : undefined,
-    onTourDone: () => offerReturn(scene, () => offerGift(scene)),
-    onStoryDone: afterStory ? () => offerReturn(scene, () => offerGift(scene)) : undefined,
+    onTourDone: () => collectMail(scene),
+    onStoryDone: afterStory ? () => collectMail(scene) : undefined,
     coach: scene.coach,
     getState: () => scene.state,
     setState: (s) => {
@@ -280,6 +258,12 @@ export function showMorning(scene: StoreScene): void {
       scene.awaitingBoxes = deliveries.boxesToDeliver(scene);
       scene.refreshShelves();
       building.refreshWarehouse(scene);
+      scene.hud.update(s, DAY_SECONDS);
+    },
+    // Поздний ответ сервера для «Почты» (угощения друзей пришли, когда магазин уже открыт) — только в кассу.
+    lateState: (s) => {
+      scene.state = s;
+      saveGame(s);
       scene.hud.update(s, DAY_SECONDS);
     },
     onOpen: () => startDay(scene),
@@ -629,8 +613,9 @@ export function prepareDay(scene: StoreScene): void {
   scene.helpUntil = 0;
   // После перезапуска посреди дня оплаченное уже празднование не повторяет.
   scene.questsSeen = (scene.state.plan?.day === scene.state.day ? scene.state.plan.quests ?? [] : []).filter((q) => q.paid).length;
-  // Активные моменты дня: расписание по секундам дня (game/moments.ts).
-  scene.moments.start(momentsFor(scene.state, Math.random));
+  // Активные моменты дня: расписание по секундам дня (game/moments.ts). Запускаются ниже, когда
+  // поделен бюджет внимания (game/attention.ts) — случайные числа берём на том же месте, что и раньше.
+  const momentPlan = momentsFor(scene.state, Math.random);
   scene.valyaCame = false;
   staff.syncStaff(scene);
   // Повар на смене — кухня сама закупает у поставщиков продукты на день (из кассы; видно утром у кухни и в итогах).
@@ -678,9 +663,15 @@ export function prepareDay(scene: StoreScene): void {
   // Мини-события (свет, труба, голубь, курьер, мышь): почти каждый день, по очереди (live.ts).
   // Два за день — первое до обеда, второе ближе к вечеру, чтобы не наложились.
   const live = liveEventsFor(scene.state, Math.random);
-  scene.state = live.state;
-  live.kinds.forEach((kind, i) => {
-    const [from, to] = live.kinds.length > 1 ? LIVE_WINDOWS[i] : LIVE_WINDOW;
+  // Бюджет внимания дня (game/attention.ts): особый гость, звонки, моменты и мини-события делят пять
+  // просьб «нажми». Что не влезло — сегодня просто не случается (сюжет и беды — вне бюджета).
+  scene.attention = planAttention({ moments: momentPlan.length, live: live.kinds.length, special: scene.specialToday, calls: scene.phone ? callsPossible(scene.state, CALLS_MAX) : 0 });
+  scene.moments.start(thin(momentPlan, scene.attention.moments));
+  const kinds = live.kinds.slice(0, scene.attention.live);
+  // В очередь недавних — только то, что правда будет (не случившееся не мешает ему завтра).
+  scene.state = kinds.length === live.kinds.length ? live.state : { ...live.state, liveRecent: kinds.length ? [...(scene.state.liveRecent ?? []), ...kinds].slice(-LIVE_REPEAT) : scene.state.liveRecent };
+  kinds.forEach((kind, i) => {
+    const [from, to] = kinds.length > 1 ? LIVE_WINDOWS[i] : LIVE_WINDOW;
     scene.time.delayedCall(Phaser.Math.FloatBetween(from, to) * DAY_SECONDS * 1000, () => liveFx.tryLiveEvent(scene, kind));
   });
   scene.eveningMarkdown = false;

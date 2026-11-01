@@ -1,11 +1,11 @@
 // «Вестник района»: по понедельникам бот присылает каждому, кто торговал на прошлой неделе,
-// газету о его неделе — выручка (и как изменилась), место среди своих, дуэль с другом, цель
-// гильдии и место в «Чёрной пятнице». Повод вернуться в начале новой недели.
+// газету о его неделе — выручка (и как изменилась), место среди своих и место в турнире района
+// (league.ts; дуэль, гильдию и «Чёрную пятницу» убрали 01.11). Повод вернуться в начале новой недели.
 // Шлёт cron (worker/index.ts) понемногу каждый час понедельника; один номер — один раз.
 
-import { guildOf, lastResult, nameOf, weekOf, weekRevenue } from './guild.js';
+import { weekOf, weekRevenue } from './week.js';
+import { finalize, leagueReady } from './league.js';
 import { ready } from './social.js';
-import { standing, summary } from './weekend.js';
 import { bot, type D1, type Env } from './telegram.js';
 import { langOf, type Lang } from './lang.js';
 
@@ -14,8 +14,6 @@ export const PAPERS_PER_RUN = 150;
 /** Понедельник, днём по Москве (UTC+3): с 9 до 21. */
 const HOURS = { from: 6, to: 18 };
 
-/** Имена игроков и гильдий — в HTML-разметке сообщения. */
-const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 /** Разряды пробелом — на всех языках газеты (по-турецки и по-испански «1,200» читалось бы как дробь). */
 const fmt = (n: number): string => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
@@ -42,61 +40,54 @@ const dd = (ms: number): string => {
 };
 export const weekDates = (week: number): string => `${dd((week * 7 - 3) * DAY)}–${dd((week * 7 + 3) * DAY)}`;
 
-type Headline = 'weekend' | 'king' | 'duel' | 'growth' | 'quiet' | 'done';
+type Headline = 'league' | 'king' | 'growth' | 'quiet' | 'done';
 /** Заголовки номера на каждом языке. */
 const HEADLINES: Record<Lang, Record<Headline, string>> = {
   ru: {
-    weekend: 'ЛУЧШИЕ ВЫХОДНЫЕ РАЙОНА: ваш магазин в десятке «Чёрной пятницы»!',
+    league: 'ТУРНИР РАЙОНА: ваш магазин в тройке лучших лиги!',
     king: 'КОРОЛЬ КВАРТАЛА: ваш магазин заработал больше всех друзей!',
-    duel: 'ДУЭЛЬ ВЫИГРАНА: конкурент признаёт поражение',
     growth: 'РЕКОРДНЫЙ РОСТ: выручка взлетела',
     quiet: 'ТИХАЯ НЕДЕЛЯ: покупатели ждут возвращения хозяина',
     done: 'НЕДЕЛЯ ПОЗАДИ: магазин работает, район доволен',
   },
   en: {
-    weekend: 'BEST WEEKEND IN TOWN: your shop made the Black Friday top 10!',
+    league: 'DISTRICT TOURNAMENT: your shop is in the league\'s top 3!',
     king: 'KING OF THE BLOCK: your shop out-earned all your friends!',
-    duel: 'DUEL WON: your rival admits defeat',
     growth: 'RECORD GROWTH: revenue soared',
     quiet: 'A QUIET WEEK: customers miss the owner',
     done: 'ANOTHER WEEK DONE: the shop is open, the town is happy',
   },
   tr: {
-    weekend: 'MAHALLENİN EN İYİ HAFTA SONU: dükkânın Black Friday’de ilk 10’a girdi!',
+    league: 'MAHALLE TURNUVASI: dükkânın ligin ilk 3’ünde!',
     king: 'MAHALLENİN KRALI: dükkânın bütün arkadaşlarından fazla kazandı!',
-    duel: 'DÜELLO KAZANILDI: rakibin yenilgiyi kabul ediyor',
     growth: 'REKOR BÜYÜME: hasılat uçtu',
     quiet: 'SAKİN BİR HAFTA: müşteriler dükkân sahibini özledi',
     done: 'BİR HAFTA DAHA GERİDE: dükkân açık, mahalle memnun',
   },
   es: {
-    weekend: 'EL MEJOR FIN DE SEMANA DEL BARRIO: ¡tu tienda entró al top 10 del Black Friday!',
+    league: 'TORNEO DEL BARRIO: ¡tu tienda está entre los 3 mejores de la liga!',
     king: 'REY DE LA CUADRA: ¡tu tienda ganó más que todos tus amigos!',
-    duel: 'DUELO GANADO: tu rival admite la derrota',
     growth: 'CRECIMIENTO RÉCORD: los ingresos se dispararon',
     quiet: 'UNA SEMANA TRANQUILA: los clientes extrañan al dueño',
     done: 'OTRA SEMANA CUMPLIDA: la tienda está abierta y el barrio, contento',
   },
   kk: {
-    weekend: 'АУДАННЫҢ ЕҢ ҮЗДІК ДЕМАЛЫСЫ: дүкенің «Қара жұманың» алғашқы ондығында!',
+    league: 'АУДАН ТУРНИРІ: дүкенің лиганың үздік үштігінде!',
     king: 'КВАРТАЛ КӨШБАСШЫСЫ: дүкенің барлық достарыңнан көп тапты!',
-    duel: 'ЖЕКПЕ-ЖЕКТЕ ЖЕҢІС: бәсекелес жеңілгенін мойындады',
     growth: 'РЕКОРДТЫҚ ӨСУ: түсім күрт өсті',
     quiet: 'ТЫНЫШ АПТА: сатып алушылар дүкен иесін күтіп отыр',
     done: 'АПТА АРТТА ҚАЛДЫ: дүкен жұмыс істеп тұр, аудан риза',
   },
   uz: {
-    weekend: 'MAHALLANING ENG ZOʻR DAM OLISH KUNLARI: doʻkoning «Qora juma» oʻntaligiga kirdi!',
+    league: 'MAHALLA TURNIRI: doʻkoning liganing eng yaxshi uchligida!',
     king: 'MAHALLA QIROLI: doʻkoning hamma doʻstlaringdan koʻp ishladi!',
-    duel: 'DUEL YUTILDI: raqibing magʻlubiyatni tan olyapti',
     growth: 'REKORD OʻSISH: tushum osmonga chiqdi',
     quiet: 'SOKIN HAFTA: xaridorlar xoʻjayinni sogʻinishdi',
     done: 'YANA BIR HAFTA ORTDA: doʻkon ishlayapti, mahalla mamnun',
   },
   pt: {
-    weekend: 'O MELHOR FIM DE SEMANA DO BAIRRO: sua loja entrou no top 10 da Black Friday!',
+    league: 'TORNEIO DO BAIRRO: sua loja está entre as 3 melhores da liga!',
     king: 'REI DO QUARTEIRÃO: sua loja faturou mais que todos os seus amigos!',
-    duel: 'DUELO VENCIDO: o rival admite a derrota',
     growth: 'CRESCIMENTO RECORDE: o faturamento disparou',
     quiet: 'UMA SEMANA TRANQUILA: os clientes estão com saudade do dono',
     done: 'MAIS UMA SEMANA: a loja está aberta e o bairro, contente',
@@ -104,11 +95,10 @@ const HEADLINES: Record<Lang, Record<Headline, string>> = {
 };
 
 /** Заголовок номера — по главному событию недели игрока. */
-export function headline(lang: Lang, p: { revenue: number; prev: number; duelWon?: boolean; rank?: number; friends: number; weekendRank?: number | null }): string {
+export function headline(lang: Lang, p: { revenue: number; prev: number; rank?: number; friends: number; leaguePlace?: number | null }): string {
   const h = HEADLINES[lang];
-  if (p.weekendRank && p.weekendRank <= 10) return h.weekend;
+  if (p.leaguePlace && p.leaguePlace <= 3) return h.league;
   if (p.friends > 1 && p.rank === 1) return h.king;
-  if (p.duelWon) return h.duel;
   if (p.prev > 0 && p.revenue >= p.prev * 1.2) return h.growth;
   if (p.prev > 0 && p.revenue < p.prev * 0.8) return h.quiet;
   return h.done;
@@ -117,11 +107,8 @@ export function headline(lang: Lang, p: { revenue: number; prev: number; duelWon
 /** Строки газеты: суммы уже с разрядами, имена — уже экранированы. */
 interface PaperTexts {
   friends: (rank: number, total: number) => string;
-  duelWon: (name: string, mine: string, theirs: string) => string;
-  duelLost: (name: string, mine: string, theirs: string) => string;
-  guildReached: (guild: string) => string;
-  guildMissed: (guild: string) => string;
-  weekend: (rank: number, players: number) => string;
+  /** Турнир района: место, сколько магазинов в лиге, лига (0 — Бронза, 1 — Серебро, 2 — Золото). */
+  league: (place: number, size: number, tier: number) => string;
   title: (dates: string) => string;
   revenue: (sum: string, trend: string) => string;
   footer: string;
@@ -130,11 +117,7 @@ interface PaperTexts {
 const PAPER: Record<Lang, PaperTexts> = {
   ru: {
     friends: (rank, total) => `🏅 Среди своих: ${rank}-е место из ${total}`,
-    duelWon: (name, mine, theirs) => `⚔️ Дуэль: победа над «${name} и Ко» (${mine} против ${theirs})`,
-    duelLost: (name, mine, theirs) => `⚔️ Дуэль: «${name} и Ко» впереди (${theirs} против ${mine}) — реванш на этой неделе!`,
-    guildReached: (guild) => `🛡 Гильдия «${guild}»: цель недели выполнена — награда ждёт в игре`,
-    guildMissed: (guild) => `🛡 Гильдия «${guild}»: до цели не хватило — на этой неделе добьём!`,
-    weekend: (rank, players) => `🛍 «Чёрная пятница»: ${rank}-е место из ${players} — приз ждёт в игре`,
+    league: (place, size, tier) => `🏆 Турнир района, ${['🥉 Бронза', '🥈 Серебро', '🥇 Золото'][tier]}: ${place}-е место из ${size}`,
     title: (dates) => `🗞 <b>Вестник района</b> · ${dates}`,
     revenue: (sum, trend) => `💰 Выручка за неделю: ${sum}${trend}`,
     footer: 'Новая неделя уже началась — покупатели ждут!',
@@ -142,11 +125,7 @@ const PAPER: Record<Lang, PaperTexts> = {
   },
   en: {
     friends: (rank, total) => `🏅 Among friends: #${rank} of ${total}`,
-    duelWon: (name, mine, theirs) => `⚔️ Duel: you beat ${name} & Co (${mine} vs ${theirs})`,
-    duelLost: (name, mine, theirs) => `⚔️ Duel: ${name} & Co won (${theirs} vs ${mine}) — rematch this week!`,
-    guildReached: (guild) => `🛡 Guild “${guild}”: weekly goal reached — the reward is waiting`,
-    guildMissed: (guild) => `🛡 Guild “${guild}”: fell short — let's make it this week!`,
-    weekend: (rank, players) => `🛍 Black Friday: #${rank} of ${players} — your prize is waiting`,
+    league: (place, size, tier) => `🏆 District tournament, ${['🥉 Bronze', '🥈 Silver', '🥇 Gold'][tier]}: #${place} of ${size}`,
     title: (dates) => `🗞 <b>The Town Gazette</b> · ${dates}`,
     revenue: (sum, trend) => `💰 Weekly revenue: ${sum}${trend}`,
     footer: 'A new week has begun — customers are waiting!',
@@ -154,11 +133,7 @@ const PAPER: Record<Lang, PaperTexts> = {
   },
   tr: {
     friends: (rank, total) => `🏅 Arkadaşlar arasında: ${total} kişi içinde ${rank}. sıra`,
-    duelWon: (name, mine, theirs) => `⚔️ Düello: ${name} & Co. karşısında zafer (${mine} – ${theirs})`,
-    duelLost: (name, mine, theirs) => `⚔️ Düello: ${name} & Co. önde (${theirs} – ${mine}) — bu hafta rövanş!`,
-    guildReached: (guild) => `🛡 “${guild}” loncası: haftanın hedefi tamam — ödül oyunda seni bekliyor`,
-    guildMissed: (guild) => `🛡 “${guild}” loncası: hedefe biraz kalmıştı — bu hafta başaracağız!`,
-    weekend: (rank, players) => `🛍 Black Friday: ${players} kişi içinde ${rank}. sıra — ödülün oyunda seni bekliyor`,
+    league: (place, size, tier) => `🏆 Mahalle turnuvası, ${['🥉 Bronz', '🥈 Gümüş', '🥇 Altın'][tier]}: ${size} dükkân içinde ${place}. sıra`,
     title: (dates) => `🗞 <b>Mahalle Gazetesi</b> · ${dates}`,
     revenue: (sum, trend) => `💰 Haftalık hasılat: ${sum}${trend}`,
     footer: 'Yeni hafta başladı bile — müşteriler bekliyor!',
@@ -166,11 +141,7 @@ const PAPER: Record<Lang, PaperTexts> = {
   },
   es: {
     friends: (rank, total) => `🏅 Entre amigos: puesto ${rank} de ${total}`,
-    duelWon: (name, mine, theirs) => `⚔️ Duelo: le ganaste a ${name} y Cía. (${mine} contra ${theirs})`,
-    duelLost: (name, mine, theirs) => `⚔️ Duelo: ${name} y Cía. va adelante (${theirs} contra ${mine}). ¡Revancha esta semana!`,
-    guildReached: (guild) => `🛡 Gremio “${guild}”: ¡meta semanal cumplida! El premio te espera en el juego`,
-    guildMissed: (guild) => `🛡 Gremio “${guild}”: no llegamos a la meta. ¡Esta semana sí!`,
-    weekend: (rank, players) => `🛍 Black Friday: puesto ${rank} de ${players}. Tu premio te espera en el juego`,
+    league: (place, size, tier) => `🏆 Torneo del barrio, ${['🥉 Bronce', '🥈 Plata', '🥇 Oro'][tier]}: puesto ${place} de ${size}`,
     title: (dates) => `🗞 <b>La Gaceta del Barrio</b> · ${dates}`,
     revenue: (sum, trend) => `💰 Ingresos de la semana: ${sum}${trend}`,
     footer: '¡Ya empezó una nueva semana y los clientes te esperan!',
@@ -178,11 +149,7 @@ const PAPER: Record<Lang, PaperTexts> = {
   },
   kk: {
     friends: (rank, total) => `🏅 Достар арасында: ${total} адамның ішінде ${rank}-орын`,
-    duelWon: (name, mine, theirs) => `⚔️ Жекпе-жек: «${name} және К°» жеңілді (${mine} — ${theirs})`,
-    duelLost: (name, mine, theirs) => `⚔️ Жекпе-жек: «${name} және К°» алда (${theirs} — ${mine}) — осы аптада қайта сынасамыз!`,
-    guildReached: (guild) => `🛡 «${guild}» гильдиясы: апта мақсаты орындалды — сыйлық ойында күтіп тұр`,
-    guildMissed: (guild) => `🛡 «${guild}» гильдиясы: мақсатқа сәл жетпеді — осы аптада жетеміз!`,
-    weekend: (rank, players) => `🛍 «Қара жұма»: ${players} дүкеннің ішінде ${rank}-орын — сыйлық ойында күтіп тұр`,
+    league: (place, size, tier) => `🏆 Аудан турнирі, ${['🥉 Қола', '🥈 Күміс', '🥇 Алтын'][tier]}: ${size} дүкеннің ішінде ${place}-орын`,
     title: (dates) => `🗞 <b>Аудан хабаршысы</b> · ${dates}`,
     revenue: (sum, trend) => `💰 Апталық түсім: ${sum}${trend}`,
     footer: 'Жаңа апта басталып кетті — сатып алушылар күтіп тұр!',
@@ -190,11 +157,7 @@ const PAPER: Record<Lang, PaperTexts> = {
   },
   uz: {
     friends: (rank, total) => `🏅 Doʻstlar orasida: ${total} tadan ${rank}-oʻrin`,
-    duelWon: (name, mine, theirs) => `⚔️ Duel: «${name} va Ko» ustidan gʻalaba (${mine} – ${theirs})`,
-    duelLost: (name, mine, theirs) => `⚔️ Duel: «${name} va Ko» oldinda (${theirs} – ${mine}) — shu hafta qasos olamiz!`,
-    guildReached: (guild) => `🛡 «${guild}» gildiyasi: haftalik maqsad bajarildi — mukofot oʻyinda kutyapti`,
-    guildMissed: (guild) => `🛡 «${guild}» gildiyasi: maqsadga ozgina yetmadi — shu hafta uddalaymiz!`,
-    weekend: (rank, players) => `🛍 «Qora juma»: ${players} tadan ${rank}-oʻrin — sovrin oʻyinda kutyapti`,
+    league: (place, size, tier) => `🏆 Mahalla turniri, ${['🥉 Bronza', '🥈 Kumush', '🥇 Oltin'][tier]}: ${size} tadan ${place}-oʻrin`,
     title: (dates) => `🗞 <b>Mahalla xabarnomasi</b> · ${dates}`,
     revenue: (sum, trend) => `💰 Haftalik tushum: ${sum}${trend}`,
     footer: 'Yangi hafta boshlandi — xaridorlar kutyapti!',
@@ -202,11 +165,7 @@ const PAPER: Record<Lang, PaperTexts> = {
   },
   pt: {
     friends: (rank, total) => `🏅 Entre amigos: ${rank}º lugar de ${total}`,
-    duelWon: (name, mine, theirs) => `⚔️ Duelo: vitória sobre ${name} e Cia. (${mine} contra ${theirs})`,
-    duelLost: (name, mine, theirs) => `⚔️ Duelo: ${name} e Cia. na frente (${theirs} contra ${mine}) — revanche nesta semana!`,
-    guildReached: (guild) => `🛡 Guilda “${guild}”: meta da semana cumprida — o prêmio está esperando no jogo`,
-    guildMissed: (guild) => `🛡 Guilda “${guild}”: faltou pouco para a meta — nesta semana a gente consegue!`,
-    weekend: (rank, players) => `🛍 Black Friday: ${rank}º lugar de ${players} — o prêmio está esperando no jogo`,
+    league: (place, size, tier) => `🏆 Torneio do bairro, ${['🥉 Bronze', '🥈 Prata', '🥇 Ouro'][tier]}: ${place}º lugar de ${size}`,
     title: (dates) => `🗞 <b>Gazeta do Bairro</b> · ${dates}`,
     revenue: (sum, trend) => `💰 Faturamento da semana: ${sum}${trend}`,
     footer: 'Uma nova semana já começou — os clientes estão esperando!',
@@ -229,34 +188,16 @@ export async function paperFor(db: D1, id: number, week: number, lang: Lang): Pr
     rank = scores.filter((s) => s.w > revenue).length + 1;
     lines.push(t.friends(rank, friends.length));
   }
-  // Дуэль недели.
-  let duelWon: boolean | undefined;
-  const duel = await db.prepare('SELECT rival FROM duels WHERE id = ? AND week = ?').bind(id, week).first<{ rival: number }>();
-  if (duel) {
-    const theirs = await weekRevenue(db, duel.rival, week);
-    const name = esc(await nameOf(db, duel.rival));
-    duelWon = revenue > theirs;
-    lines.push((duelWon ? t.duelWon : t.duelLost)(name, fmt(revenue), fmt(theirs)));
-  }
-  // Гильдия.
-  const g = await guildOf(db, id);
-  if (g) {
-    const gname = esc(g.name);
-    const reached = await lastResult(db, g.id, week);
-    if (reached !== null) lines.push(reached ? t.guildReached(gname) : t.guildMissed(gname));
-  }
-  // «Чёрная пятница района».
-  const w = await standing(db, id, week);
-  if (w.rank) {
-    const { players } = await summary(db, week);
-    lines.push(t.weekend(w.rank, players));
-  }
+  // Турнир района: итог недели (считается один раз и запоминается, league.ts).
+  await leagueReady(db);
+  const cup = await finalize(db, id, week);
+  if (cup && cup.score > 0) lines.push(t.league(cup.place, cup.size, Math.max(0, Math.min(2, cup.tier))));
   const change = prev > 0 ? Math.round(((revenue - prev) / prev) * 100) : null;
   const trend = change === null ? '' : change >= 0 ? ` (▲ ${change}%)` : ` (▼ ${-change}%)`;
   return [
     t.title(weekDates(week)),
     '',
-    `<b>${headline(lang, { revenue, prev, duelWon, rank, friends: friends.length, weekendRank: w.rank })}</b>`,
+    `<b>${headline(lang, { revenue, prev, rank, friends: friends.length, leaguePlace: cup && cup.score > 0 ? cup.place : null })}</b>`,
     '',
     t.revenue(fmt(revenue), trend),
     ...lines,

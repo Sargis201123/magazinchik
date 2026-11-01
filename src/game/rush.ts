@@ -1,6 +1,6 @@
-// «Чёрная пятница района» по выходным (api/_lib/weekend.ts): в субботу и воскресенье (UTC)
-// все магазины торгуют одновременно — на улицах толпы, гостей больше. Флаг ставит игра
-// по настоящим часам каждое утро; игровая логика только читает его.
+// Выходные района: в субботу и воскресенье (UTC) на улицах толпы, гостей больше, а очки турнира
+// идут ×WEEKEND_BONUS (game/social.ts). Флаг ставит игра по настоящим часам каждое утро; игровая
+// логика только читает его. Своего соревнования и приза у выходных больше нет — они часть турнира.
 
 import type { StoreState } from './economy';
 
@@ -15,10 +15,3 @@ export const ensureRush = (state: StoreState, now: number): StoreState => {
 };
 
 export const rushGuests = (state: StoreState): number => (state.rush ? RUSH_GUESTS : 1);
-
-/** Приз за выходные: всем участникам; топ-10 — втрое, топ-100 — вдвое, лучшая десятая часть — в полтора раза. */
-export function rushPrize(level: number, rank: number, players: number): number {
-  const base = 300 + 300 * level;
-  const k = rank <= 10 ? 3 : rank <= 100 ? 2 : rank <= Math.ceil(players / 10) ? 1.5 : 1;
-  return Math.round((base * k) / 10) * 10;
-}

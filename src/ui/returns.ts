@@ -1,19 +1,20 @@
-// Окно «Пока тебя не было» (game/returns.ts): маленький ритуал возвращения по шагам — сундучок
-// выручки (касание — крышка откидывается, монеты сыплются, сумма докручивается), конверт с письмом
-// (касание — письмо читается голосом отправителя) и сосед, пришедший за отложенным заказом.
+// Ритуал возвращения (game/returns.ts) в карточке «Почта» (ui/mail.ts): монеты брызгами из сундучка,
+// письмо голосом отправителя, лица соседей. Раньше это было отдельное окно по шагам — теперь всё в одной
+// карточке утра, а здесь — то, из чего она собирает тёплые мелочи.
 
 import { memberName, t } from '../i18n';
 import type { TextKey } from '../i18n/ru';
 import { PRODUCTS, STAFF_ROLES } from '../game/economy';
 import { REGULARS, type RegularId } from '../game/regulars';
-import { letterGroup, letterKey, type Chest, type LetterGift, type OrderResult } from '../game/returns';
+import { letterGroup, letterKey, type LetterGift } from '../game/returns';
 import { png } from '../platform/assets';
-import { liteMode } from '../platform/quality';
 import { sound } from '../platform/sound';
-import { music } from '../platform/music';
 import { haptic } from '../platform/telegram';
 import { dialogBox } from './dialog';
-import { button, el, injectStyles, openModal, rollNumber, staffFace, UI_FONT } from './dom';
+import type { StoreState } from '../game/economy';
+import { notebookPage, openNotebook } from './notebook';
+import { track } from '../platform/analytics';
+import { button, el, injectStyles, openModal, staffFace, UI_FONT } from './dom';
 
 const css = `
 .ui-ret-stage { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
@@ -45,7 +46,7 @@ const css = `
 `;
 
 let styled = false;
-function styles(): void {
+export function returnStyles(): void {
   injectStyles();
   if (styled) return;
   styled = true;
@@ -55,7 +56,7 @@ function styles(): void {
 }
 
 /** Портреты постоянных покупателей — из тех, кто звонит с заказом на дом (art/delivery.py). */
-const FACES: Record<RegularId, string> = {
+export const FACES: Record<RegularId, string> = {
   petr: 'portrait_caller5',
   sveta: 'portrait_caller2',
   kostya: 'portrait_caller1',
@@ -64,20 +65,10 @@ const FACES: Record<RegularId, string> = {
   misha: 'portrait_caller1',
 };
 
-const regularName = (id: RegularId): string => t(REGULARS.find((r) => r.id === id)!.nameKey);
-
-export interface ReturnRitual {
-  chest?: Chest;
-  letter?: LetterGift;
-  order?: OrderResult;
-  /** Сундучок открыт — деньги в кассу (сцена сохраняет). */
-  onChest: () => void;
-  /** Ритуал закончен — дальше утро (гостинец и прочее). */
-  onDone: () => void;
-}
+export const regularName = (id: RegularId): string => t(REGULARS.find((r) => r.id === id)!.nameKey);
 
 /** Монеты брызгами из сундучка: в лёгкой графике и при «меньше движения» — без них. */
-function burst(host: HTMLElement, calm: boolean): void {
+export function burst(host: HTMLElement, calm: boolean): void {
   if (calm) return;
   const n = 14;
   for (let i = 0; i < n; i++) {
@@ -94,132 +85,44 @@ function burst(host: HTMLElement, calm: boolean): void {
   }
 }
 
-export function showReturn(r: ReturnRitual): void {
-  styles();
-  const { card, close } = openModal();
-  const calm = liteMode() || matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (calm) card.classList.add('ui-ret-calm');
-  const steps: ((last: boolean, next: () => void) => HTMLElement)[] = [];
-  if (r.chest) steps.push((last, next) => chestStep(r.chest!, calm, r.onChest, last, next));
-  if (r.letter) steps.push((last, next) => letterStep(r.letter!, last, next));
-  if (r.order) steps.push((last, next) => orderStep(r.order!, last, next));
-  const title = el('h2', '', `✉ ${t('ret.title')}`);
-  const stage = el('div');
-  const dots = el('div', 'ui-ret-dots');
-  card.append(title, stage, dots);
-  let at = 0;
-  const show = () => {
-    if (at >= steps.length) {
-      close();
-      r.onDone();
-      return;
-    }
-    stage.replaceChildren(steps[at](at === steps.length - 1, () => {
-      at++;
-      show();
-    }));
-    dots.replaceChildren(...(steps.length > 1 ? steps.map((_, i) => el('i', i === at ? 'on' : '')) : []));
-  };
-  show();
-}
-
-function chestStep(chest: Chest, calm: boolean, onOpen: () => void, last: boolean, next: () => void): HTMLElement {
-  const box = el('div', 'ui-ret-stage');
-  const pic = el('button', 'ui-ret-pic wait');
-  pic.type = 'button';
-  const img = el('img', 'ui-ret-chest');
-  img.src = png('chest_closed');
-  img.alt = t('ret.chest.title');
-  pic.append(img);
-  const sum = el('div', 'ui-ret-sum', '?');
-  const lines = el('div');
-  if (chest.cashier) lines.append(el('div', 'ui-ret-line', t('ret.chest.cashier', { n: chest.units, sum: chest.cashier })));
-  if (chest.branch) lines.append(el('div', 'ui-ret-line', t('ret.chest.branch', { sum: chest.branch })));
-  lines.append(el('div', 'ui-ret-hint', t('ret.chest.hours', { h: Math.max(1, Math.floor(chest.hours)) })));
-  const hint = el('div', 'ui-ret-hint', t('ret.chest.tap'));
-  let opened = false;
-  const go: HTMLButtonElement = button(t('ret.chest.open'), () => (opened ? next() : open()));
-  const open = () => {
-    if (opened) return;
-    opened = true;
-    pic.classList.remove('wait');
-    img.src = png('chest_open');
-    burst(pic, calm);
-    if (!music.sting('coin')) sound.coin();
-    haptic.success();
-    onOpen();
-    rollNumber(sum, 0, chest.sum, calm ? 0 : 700, (n) => t('ret.chest.got', { sum: n }), () => sum.classList.add('got'));
-    hint.textContent = '';
-    go.textContent = t(last ? 'ret.done' : 'ret.next');
-  };
-  pic.addEventListener('click', open);
-  box.append(el('div', 'ui-ret-name', t('ret.chest.title')), pic, sum, lines, hint, go);
-  return box;
-}
-
-function letterStep(gift: LetterGift, last: boolean, next: () => void): HTMLElement {
-  const box = el('div', 'ui-ret-stage');
-  const pic = el('button', 'ui-ret-pic wait');
-  pic.type = 'button';
-  const img = el('img', 'ui-ret-env');
-  img.src = png('envelope');
-  img.alt = '';
-  pic.append(img);
+/** Кто написал письмо: имя, портрет и голос (бабушка — бабушкин, прощальное — от сотрудника). */
+export function letterFrom(gift: LetterGift): { name: string; portrait: string; pitch: number } {
   const { from } = gift.letter;
-  const group = letterGroup(from);
-  const regular = group === 'regular' ? (from as RegularId) : null;
+  const regular = letterGroup(from) === 'regular' ? (from as RegularId) : null;
   // Прощальное письмо сотрудника (career.ts) — от его имени и с его портретом.
   const farewell = gift.letter.farewell;
   const name = regular ? regularName(regular) : farewell ? memberName({ name: farewell.name, friend: farewell.friend ? { name: farewell.friend } : undefined }) : t(`who.${from}` as TextKey);
-  const read = () => {
-    haptic.tap();
-    sound.pop(0);
-    const after: HTMLElement[] = [];
-    if (gift.money) after.push(el('div', 'ui-ret-reward', t('ret.letter.money', { n: gift.money })));
-    if (gift.loyalty) after.push(el('div', 'ui-ret-reward', t('ret.letter.loyal', { name })));
-    after.push(el('div', 'ui-ret-hint', t('ret.letter.ps')));
-    const fav = regular ? REGULARS.find((x) => x.id === regular)!.favorite : null;
-    const text = t(letterKey(gift.letter), {
-      item: fav ? t(PRODUCTS[fav].nameKey).toLowerCase() : '',
-      ...(farewell ? { days: farewell.days, best: farewell.best, role: t(STAFF_ROLES[farewell.role].nameKey).toLowerCase() } : {}),
-    });
-    box.replaceChildren(
-      dialogBox({
-        portrait: regular ? FACES[regular] : from === 'grandma' ? 'portrait_grandma_happy' : farewell ? `portrait_${staffFace(farewell.name)}` : `portrait_${from}`,
-        name,
-        text: `«${text}»`,
-        pitch: from === 'sonya' ? 900 : from === 'grandma' ? 620 : 700,
-        after,
-        nextLabel: t(last ? 'ret.done' : 'ret.next'),
-        onNext: next,
-      }),
-    );
-  };
-  pic.addEventListener('click', read);
-  box.append(el('div', 'ui-ret-name', name), pic, el('div', 'ui-ret-hint', t('ret.letter.tap')), button(t('ret.letter.open'), read));
-  return box;
+  const portrait = regular ? FACES[regular] : from === 'grandma' ? 'portrait_grandma_happy' : farewell ? `portrait_${staffFace(farewell.name)}` : `portrait_${from}`;
+  return { name, portrait, pitch: from === 'sonya' ? 900 : from === 'grandma' ? 620 : 700 };
 }
 
-function orderStep(res: OrderResult, last: boolean, next: () => void): HTMLElement {
-  const { order } = res;
-  const icon = PRODUCTS[order.pid].icon;
-  const after = res.paid ? [el('div', 'ui-ret-reward', `+${res.paid} 💰`)] : [];
-  if (res.paid) haptic.success();
-  const box = el('div', 'ui-ret-stage');
-  box.append(
-    el('div', 'ui-ret-name', t('ret.order.title')),
-    dialogBox({
-      portrait: FACES[order.who],
-      name: regularName(order.who),
-      text: `«${t(res.paid ? 'ret.order.done' : 'ret.order.wait', { qty: order.qty, icon, pay: res.paid })}»`,
-      pitch: 700,
-      after,
-      nextLabel: t(last ? 'ret.done' : 'ret.next'),
-      onNext: () => {
-        if (res.paid && !music.sting('coin')) sound.coin();
-        next();
-      },
-    }),
+/** Прочитать письмо: окно с голосом отправителя, вложенное (деньги, доверие) — строкой под ним. */
+/** Письмо из «Почты». Сюжетное письмо с «Бабушкиной тетрадью» показывает её страницу (ui/notebook.ts). */
+export function showLetter(gift: LetterGift, state?: StoreState): void {
+  returnStyles();
+  const { card, close } = openModal();
+  const { from } = gift.letter;
+  const regular = letterGroup(from) === 'regular' ? (from as RegularId) : null;
+  const farewell = gift.letter.farewell;
+  const who = letterFrom(gift);
+  // Сюжет: письмо с «Бабушкиной тетрадью» прочитано — первая сцена истории (game/notebook.ts).
+  if (gift.letter.story && state) track('story_seen', state.day, 2);
+  haptic.tap();
+  sound.pop(0);
+  const after: HTMLElement[] = [];
+  if (gift.money) after.push(el('div', 'ui-ret-reward', t('ret.letter.money', { n: gift.money })));
+  if (gift.loyalty) after.push(el('div', 'ui-ret-reward', t('ret.letter.loyal', { name: who.name })));
+  // «Бабушкина тетрадь»: в конверте — сама тетрадь, последняя страница вырвана.
+  const notebook = gift.letter.story === 'notebook' && state ? state : null;
+  if (notebook) after.push(button(`📓 ${t('nb.open')}`, () => openNotebook(notebook), 'ui-btn secondary'));
+  else after.push(el('div', 'ui-ret-hint', t('ret.letter.ps')));
+  const fav = regular ? REGULARS.find((x) => x.id === regular)!.favorite : null;
+  const text = t(letterKey(gift.letter), {
+    item: fav ? t(PRODUCTS[fav].nameKey).toLowerCase() : '',
+    ...(farewell ? { days: farewell.days, best: farewell.best, role: t(STAFF_ROLES[farewell.role].nameKey).toLowerCase() } : {}),
+  });
+  card.append(
+    el('h2', '', `✉ ${who.name}`),
+    dialogBox({ figure: notebook ? notebookPage(notebook, 'torn') : null, portrait: who.portrait, name: who.name, text: `«${text}»`, pitch: who.pitch, after, nextLabel: t('ret.done'), onNext: close }),
   );
-  return box;
 }

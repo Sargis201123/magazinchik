@@ -1,4 +1,4 @@
-// Финал истории и бесконечная слава. Когда «Гигант» побеждён, районная администрация объявляет
+// Финал истории и бесконечная слава. Во вторую неделю битвы с «Гигантом» районная администрация объявляет
 // конкурс «Лучший магазин района»: неделя подготовки, в последний день приходит жюри. Оценивают
 // четыре вещи — рейтинг, выручку недели, довольных покупателей и полные полки; хватает трёх.
 // Первая победа — финал истории: церемония со всеми героями и кубок. Дальше раз в месяц —
@@ -6,6 +6,7 @@
 // Каждая победа — новое звание, кубок, деньги и немного славы (гостей больше навсегда).
 
 import type { DayStats, StoreState } from './economy';
+import { GIANT_BATTLE_DAYS } from './giant';
 
 /** Сколько дней после победы над «Гигантом» до первого конкурса. */
 export const CONTEST_AFTER_GIANT = 5;
@@ -35,6 +36,8 @@ export interface ContestResult {
   passed: Record<ContestCriterion, boolean>;
   prize: number;
   seen?: boolean;
+  /** Оценки набраны, но «Гигант» устоял: первый кубок — только вместе с победой над ним (финал истории). */
+  giant?: boolean;
 }
 
 export interface ContestState {
@@ -110,12 +113,19 @@ export function contestNight(state: StoreState, stats: DayStats): StoreState {
   const day = state.day;
   if (!c) {
     const giant = state.giant;
-    if (giant?.phase !== 'won' || day - giant.since < CONTEST_AFTER_GIANT) return state;
+    // «Бабушкина тетрадь» (notebook.ts): первый конкурс объявляют во вторую неделю битвы с «Гигантом» —
+    // день жюри совпадает с её последним днём, и в этот день люди из тетради приходят «вернуть долги».
+    // Сохранения, где «Гигант» уже побеждён, а конкурса не было, — как раньше, через несколько дней.
+    const climax = giant?.phase === 'battle' && day - giant.since === GIANT_BATTLE_DAYS - CONTEST_DAYS;
+    const after = giant?.phase === 'won' && day - giant.since >= CONTEST_AFTER_GIANT;
+    if (!climax && !after) return state;
     return { ...state, contest: newWeek(state, 0, 0) };
   }
   if (c.phase === 'wait') {
     const every = c.last?.won ? CONTEST_EVERY_WON : CONTEST_EVERY_LOST;
     if (day - c.since < every) return state;
+    // Первый кубок ждёт победы над «Гигантом»: пока он стоит, конкурс района не объявляют снова.
+    if (c.wins === 0 && state.giant?.phase !== 'won') return state;
     return { ...state, contest: newWeek(state, c.tier, c.wins, c.last) };
   }
   const counted = day - 1 >= c.since;
@@ -130,9 +140,12 @@ export function contestNight(state: StoreState, stats: DayStats): StoreState {
     : c;
   if (day - c.since < CONTEST_DAYS) return { ...state, contest: week };
   const passed = judge(state, week);
-  const won = CRITERIA.filter((k) => passed[k]).length >= CONTEST_NEED;
+  const enough = CRITERIA.filter((k) => passed[k]).length >= CONTEST_NEED;
+  // Финал истории (первый кубок) — только если «Гигант» в ту же ночь побеждён.
+  const giantStands = week.wins === 0 && state.giant?.phase !== 'won';
+  const won = enough && !giantStands;
   const prize = won ? contestPrize(state, week.tier) : 0;
-  const result: ContestResult = { won, tier: week.tier, passed, prize };
+  const result: ContestResult = { won, tier: week.tier, passed, prize, ...(enough && giantStands ? { giant: true } : {}) };
   const next: ContestState = { ...week, phase: 'wait', since: day, tier: won ? week.tier + 1 : week.tier, wins: week.wins + (won ? 1 : 0), last: result };
   return {
     ...state,

@@ -278,7 +278,9 @@ export function scheduleStoryGuests(scene: StoreScene): void {
   if (scene.cafeToday) at(0.08, () => runCafeWaiter(scene));
   // Особый гость с выбором (бизнесмен, бабушка без денег, ребёнок с мелочью).
   const special = makeSpecial(scene.state, Math.random);
-  if (special) at(Phaser.Math.FloatBetween(0.2, 0.6), () => runSpecial(scene, special));
+  scene.specialToday = Boolean(special);
+  // Придёт, если влез в бюджет внимания дня (game/attention.ts; делится чуть позже, в prepareDay).
+  if (special) at(Phaser.Math.FloatBetween(0.2, 0.6), () => (scene.attention.special ? runSpecial(scene, special) : Promise.resolve()));
   // Добрая бабушка возвращает долг.
   if (scene.state.grannyOwed && Math.random() < 0.5) at(0.35, () => runGrannyRepay(scene));
   // Хроники района: герой истории у кассы, свадебная машина, грузовик с вещами, забег (arcsFx.ts).

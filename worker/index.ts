@@ -8,8 +8,7 @@ import { socialClaim, socialPing } from '../api/_lib/social.js';
 import { sendReminders } from '../api/_lib/remind.js';
 import { events, eventsEdit } from '../api/_lib/live.js';
 import { leaderboard, progress, stats } from '../api/_lib/stats.js';
-import { duel, guild } from '../api/_lib/guild.js';
-import { weekend } from '../api/_lib/weekend.js';
+import { gone } from '../api/_lib/farewell.js';
 import { visits } from '../api/_lib/visits.js';
 import { rival } from '../api/_lib/rival.js';
 import { presents } from '../api/_lib/presents.js';
@@ -35,9 +34,10 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   '/api/progress': { method: 'POST', handler: progress },
   '/api/leaderboard': { method: 'POST', handler: leaderboard },
   '/api/stats': { method: 'GET', handler: stats },
-  '/api/duel': { method: 'POST', handler: duel },
-  '/api/guild': { method: 'POST', handler: guild },
-  '/api/weekend': { method: 'POST', handler: weekend },
+  // Дуэль, гильдия и «Чёрная пятница» закрыты (farewell.ts): старым играм — пустой ответ, не 500.
+  '/api/duel': { method: 'POST', handler: gone },
+  '/api/guild': { method: 'POST', handler: gone },
+  '/api/weekend': { method: 'POST', handler: gone },
   '/api/visits': { method: 'POST', handler: visits },
   '/api/rival': { method: 'POST', handler: rival },
   // Подарки друзьям в гостях и недельный турнир района (presents.ts, league.ts).

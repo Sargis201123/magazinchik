@@ -16,13 +16,12 @@ import {
   messToday,
   PRANK_COINS,
   takeRivalDay,
-  takeThanks,
-  THANK_COINS,
   usePrank,
   type PrankKind,
 } from '../game/rival';
 import { fetchRivalShop, rivalAct, rivalInbox, thankRival } from '../platform/rival';
 import { rivalBar, showRivalNews } from '../ui/rival';
+import { postMail } from '../ui/mailbag';
 import { t } from '../i18n';
 import { sound } from '../platform/sound';
 import { button, el, toast, UI_FONT } from '../ui/dom';
@@ -239,9 +238,13 @@ export function applyRivalInbox(scene: StoreScene): void {
   const inbox = scene.rivalPending;
   if (!inbox) return;
   scene.rivalPending = null;
+  // «Спасибо за визит» — только тёплая строчка, без монет (подарки друзьям — presents.ts, решено 01.11).
+  // Утром, пока открыто утреннее окно, — строкой «Почты» (ui/mail.ts), без окон поверх.
+  const mail = scene.inMorning && !scene.dayOpen;
   if (inbox.thanks.length) {
-    scene.state = takeThanks(scene.state, inbox.thanks);
-    toast('assets/ico_coffee.png', t('rival.thanks.title'), t('rival.thanks', { names: inbox.thanks.slice(0, 3).join(', '), n: THANK_COINS * Math.min(5, inbox.thanks.length) }));
+    const names = inbox.thanks.slice(0, 3);
+    if (mail) postMail(scene.state.day, { thanks: { names, n: 0 } });
+    else toast('assets/ico_coffee.png', t('rival.thanks.title'), t('rival.thanks', { names: names.join(', ') }));
   }
   // Магазин уже открыт — беспорядок подождёт завтрашнего утра.
   const { state, news } = applyPranks(scene.state, inbox.pranks, scene.dayOpen ? scene.state.day + 1 : scene.state.day);
@@ -250,6 +253,26 @@ export function applyRivalInbox(scene: StoreScene): void {
   scene.hud.update(scene.state, DAY_SECONDS);
   if (!news) return;
   track('rival_news', scene.state.day, inbox.pranks.length);
+  if (mail) {
+    // Прочитать — то же окно, что и раньше; ответный визит — только пока магазин не открыт.
+    postMail(scene.state.day, {
+      rival: {
+        news,
+        read: () =>
+          showRivalNews(
+            news,
+            scene.inMorning && !scene.dayOpen
+              ? (key, name) => {
+                  for (const m of document.querySelectorAll('.ui-modal')) m.remove();
+                  void visitRival(scene, key, name);
+                }
+              : null,
+            thankRival,
+          ),
+      },
+    });
+    return;
+  }
   // Окно — когда закроются другие (гостинец бабушки, сюжет): поверх утра, но не поверх них.
   const show = scene.time.addEvent({
     delay: 500,

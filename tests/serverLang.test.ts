@@ -5,7 +5,7 @@ import { headline, paperFor, sendNewspapers } from '../api/_lib/newspaper';
 import { commandReply, startCaption } from '../api/_lib/botProfile';
 import { catalogItem, STARS_CATALOG, type D1, type D1Statement, type Env } from '../api/_lib/telegram';
 import { socialPing } from '../api/_lib/social';
-import { markWeek, weekOf } from '../api/_lib/guild';
+import { markWeek, weekOf } from '../api/_lib/week';
 import { DEFAULT_EVENTS } from '../src/game/live';
 
 // Серверные тексты на турецком, испанском, казахском, узбекском и португальском — так же, как ru/en.
@@ -176,9 +176,8 @@ describe('бот: профиль, команды, каталог', () => {
 describe('газета на tr, es, uz и pt', () => {
   it('заголовки на всех языках, без кириллицы — кроме ru', () => {
     const cases = [
-      { revenue: 100, prev: 0, friends: 1, weekendRank: 3 },
+      { revenue: 100, prev: 0, friends: 1, leaguePlace: 3 },
       { revenue: 100, prev: 0, friends: 3, rank: 1 },
-      { revenue: 100, prev: 0, friends: 1, duelWon: true },
       { revenue: 200, prev: 100, friends: 1 },
       { revenue: 50, prev: 100, friends: 1 },
       { revenue: 100, prev: 100, friends: 1 },
@@ -188,7 +187,7 @@ describe('газета на tr, es, uz и pt', () => {
       expect(new Set(all).size).toBe(cases.length);
       for (const h of all) expect(h).not.toMatch(CYRILLIC);
     }
-    expect(headline('ru', cases[5])).toBe('НЕДЕЛЯ ПОЗАДИ: магазин работает, район доволен');
+    expect(headline('ru', cases[4])).toBe('НЕДЕЛЯ ПОЗАДИ: магазин работает, район доволен');
   });
 });
 

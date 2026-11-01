@@ -24,6 +24,10 @@ export interface DialogOptions {
   pitch: number;
   /** Что появится, когда текст допечатан (цель главы, награда). */
   after?: HTMLElement[];
+  /** Вместо иллюстрации — свой элемент над диалогом (страница «Бабушкиной тетради», ui/notebook.ts). */
+  figure?: HTMLElement | null;
+  /** Без кнопки «Дальше»: ответ — кнопками в after (выбор в сюжете); касание по тексту допечатывает его. */
+  noNext?: boolean;
   nextLabel: string;
   onNext: () => void;
 }
@@ -117,6 +121,7 @@ export function dialogBox(o: DialogOptions): HTMLElement {
     art.addEventListener('error', () => art.remove());
     box.append(art);
   }
+  if (o.figure) box.append(o.figure);
   const row = el('div', 'ui-dialog-row');
   const face = liveFace(`assets/${o.portrait}.png`, () => !done);
   face.classList.add('talking');
@@ -135,7 +140,8 @@ export function dialogBox(o: DialogOptions): HTMLElement {
     }
     o.onNext();
   });
-  box.append(row, after, next);
+  box.append(row, after);
+  if (!o.noNext) box.append(next);
 
   const chars = [...o.text];
   const talk = new Babbler(voiceOf(o.portrait, o.pitch), chars);
