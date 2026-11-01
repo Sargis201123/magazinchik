@@ -25,6 +25,8 @@ export interface DayReport {
   branch?: number;
   /** Сколько принёс Центр без игрока, пока он работал в Заречье (zarechye.ts). */
   home?: number;
+  /** День торговли в Заречье: спрос лавки у реки считаем по её дням (bakery.ts usualSales). */
+  zar?: boolean;
 }
 
 export function addReport(state: StoreState, day: number, stats: DayStats, spoiled: Partial<Record<ProductId, number>>, dishSpoiled = 0): StoreState {
@@ -37,6 +39,7 @@ export function addReport(state: StoreState, day: number, stats: DayStats, spoil
     spoiled: { ...spoiled },
     pricey: { ...(stats.pricey ?? {}) },
     missing: { ...(stats.missing ?? {}) },
+    ...(state.zar?.at === 'zar' ? { zar: true } : {}),
     // Кухня работала: по этой строке повар «по спросу» и закупка знают, сколько порций берут.
     ...(stats.dishWanted !== undefined || dishSpoiled || stats.kitchenSpent
       ? { kitchen: { sold: stats.dishes ?? 0, wanted: stats.dishWanted ?? 0, spoiled: dishSpoiled, ...(stats.kitchenSpent ? { spent: stats.kitchenSpent } : {}) } }

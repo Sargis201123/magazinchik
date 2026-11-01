@@ -17,7 +17,9 @@ export const setBakeMode = (state: StoreState, mode: BakeMode): StoreState => ({
 
 /** Сколько штук товара обычно разбирают за день: среднее за последние три дня (с теми, кому не хватило). */
 export function usualSales(state: StoreState, id: ProductId): number | null {
-  const days = (state.reports ?? []).slice(-3);
+  // Два магазина (zarechye.ts): спрос — по дням того магазина, где работаем сегодня.
+  const here = state.zar?.at === 'zar';
+  const days = (state.reports ?? []).filter((r) => Boolean(r.zar) === here).slice(-3);
   if (!days.length) return null;
   return days.reduce((sum, d) => sum + (d.sold[id] ?? 0) + (d.missing[id] ?? 0), 0) / days.length;
 }

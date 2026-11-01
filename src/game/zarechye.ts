@@ -24,9 +24,9 @@ import { BRANCH_AWAY_MAX_HOURS, BRANCH_AWAY_MIN_HOURS, BRANCH_AWAY_RATE, BRANCH_
 import { yearTime } from './calendar';
 import { rng } from './random';
 import type { TextKey } from '../i18n/ru';
-import { inZar, ZAR_LEVEL_COST, ZAR_MAX_LEVEL, zarBillShare, zarAwayBill, zarNextLevel } from './zarshop';
+import { homeLevel, inZar, ZAR_LEVEL_COST, ZAR_MAX_LEVEL, zarBillShare, zarAwayBill, zarNextLevel } from './zarshop';
 
-export { inZar, ZAR_LEVEL_COST, ZAR_MAX_LEVEL, zarBillShare, zarAwayBill, zarNextLevel };
+export { homeLevel, inZar, ZAR_LEVEL_COST, ZAR_MAX_LEVEL, zarBillShare, zarAwayBill, zarNextLevel };
 import type { ZarRegularId } from './regulars';
 import { ensurePlan } from './day';
 
@@ -65,7 +65,7 @@ export const SHOP_KEYS = [
   'jobSearch',
   'quitNotice',
   'staffEvent',
-  'career',
+  // Карьера (career.ts) — общая: «свой человек на филиале» и доска почёта — одни на хозяина.
   'regulars',
   'reviews',
   'promo',

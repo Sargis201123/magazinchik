@@ -249,3 +249,35 @@ describe('сохранения', () => {
     expect(fixed.zar!.away.prices!.bread).toBeGreaterThan(0);
   });
 });
+
+describe('после ревью', () => {
+  it('прогноз счёта в начале месяца не занижен: оставшиеся дни — сегодняшнему магазину', () => {
+    const opened = buyZar({ ...lateGame(), day: 197 })!;
+    const there = switchDistrict(opened, 'zar');
+    // Первый день месяца в Заречье: Центру — ни дня, Заречью — весь месяц вперёд.
+    expect(zarBillShare(there, 'zar')).toBe(1);
+    expect(zarBillShare(there, 'home')).toBe(0);
+  });
+
+  it('«новоселье» второго магазина кончается со счётом', async () => {
+    const { payBill } = await import('../src/game/economy');
+    const opened = buyZar(lateGame())!;
+    const s = { ...opened, zar: { ...opened.zar!, away: { ...opened.zar!.away, level: 1, movedFrom: 0 } } };
+    expect(payBill(s).state.zar!.away.movedFrom).toBeUndefined();
+  });
+
+  it('награды недели и письма считаются по Центру', async () => {
+    const { letterCoins } = await import('../src/game/returns');
+    const there = switchToday(buyZar(lateGame())!, 'zar');
+    expect(letterCoins(there)).toBe(letterCoins(lateGame()));
+  });
+
+  it('спрос дня каждый магазин считает по своим дням', async () => {
+    const { usualSales } = await import('../src/game/bakery');
+    const row = (day: number, bread: number, zar?: boolean) => ({ day, revenue: 0, served: 0, lost: 0, sold: { bread }, spoiled: {}, pricey: {}, missing: {}, ...(zar ? { zar } : {}) });
+    const there = switchToday(buyZar(lateGame())!, 'zar');
+    const s = { ...there, reports: [row(1, 100), row(2, 4, true), row(3, 100), row(4, 6, true)] };
+    expect(usualSales(s, 'bread')).toBe(5);
+    expect(usualSales(switchToday(s, 'home'), 'bread')).toBe(100);
+  });
+});

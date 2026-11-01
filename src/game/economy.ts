@@ -1314,7 +1314,9 @@ export function payBill(state: StoreState): { state: StoreState; bill: Bill; sho
   const shortfall = total - paid;
   const penalty = Math.round(shortfall * LATE_PENALTY);
   // Новоселье — на один счёт: дальше аренда по новому помещению.
-  const { movedFrom: _movedFrom, ...rest } = state;
+  const { movedFrom: _movedFrom, ...cleared } = state;
+  // Второй магазин (zarechye.ts) тоже заплатил свою долю — его «новоселье» тоже кончилось.
+  const rest = cleared.zar?.away.movedFrom !== undefined ? { ...cleared, zar: { ...cleared.zar, away: Object.fromEntries(Object.entries(cleared.zar.away).filter(([k]) => k !== 'movedFrom')) } } : cleared;
   return {
     // Платёж банку засчитан в любом случае: не хватило — недостача ушла в долг вместе со счетами.
     state: afterLoanPayment({ ...rest, money: state.money - paid, debt: state.debt - bill.debt + shortfall + penalty }, bill.loan ?? 0),

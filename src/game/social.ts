@@ -10,6 +10,7 @@
 // на каждый день по размеру магазина. В конце недели — награда по месту, кубок за тройку лучших
 // и переход между лигами Бронза → Серебро → Золото.
 
+import { homeLevel } from './zarshop';
 import type { StoreState } from './economy';
 
 export const PRESENT_KINDS = ['flowers', 'pie', 'card'] as const;
@@ -54,7 +55,7 @@ export function addKeepsake(list: Keepsake[] | undefined, item: Keepsake): Keeps
 
 /** Открыть подарки друзей и «спасибо» за свои: всё сразу в магазин. */
 export function openPresents(state: StoreState, presents: Present[], thanks: number): { state: StoreState; money: number; rating: number; cards: number } {
-  let money = thanks * thankCoins(state.level);
+  let money = thanks * thankCoins(homeLevel(state));
   let rating = 0;
   let keep = state.keepsakes;
   let cards = 0;
@@ -136,7 +137,7 @@ export interface LeagueResult {
 /** Забрать награду недели: монеты, кубок за тройку лучших; второй раз за ту же неделю — нельзя. */
 export function claimLeague(state: StoreState, last: LeagueResult): { state: StoreState; money: number; cup: boolean } | null {
   if (state.leagueClaimed !== undefined && state.leagueClaimed >= last.week) return null;
-  const money = last.score > 0 ? leagueReward(state.level, last.place, last.tier) : 0;
+  const money = last.score > 0 ? leagueReward(homeLevel(state), last.place, last.tier) : 0;
   const cup = last.score > 0 && last.place <= 3;
   return {
     state: {

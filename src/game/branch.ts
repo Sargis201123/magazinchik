@@ -216,7 +216,7 @@ export function branchIncome(state: StoreState, day: number): number {
   if (!state.branch) return 0;
   const random = rng(day * 92821 + (state.seed ?? 0) + monthOf(day));
   const luck = 1 + (random() * 2 - 1) * BRANCH_SPREAD;
-  return Math.max(BRANCH_MIN_INCOME, Math.round(branchUsual(state) * branchMood(state, day) * luck));
+  return Math.max(BRANCH_MIN_INCOME, Math.round(branchUsual(state) * branchMood(homeShop(state), day) * luck));
 }
 
 /**

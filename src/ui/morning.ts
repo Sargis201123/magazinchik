@@ -194,7 +194,7 @@ import {
 import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
 import { zarBossBox, zarGrowBox, zarOfferBox, zarSwitchBox, zarTaleBox } from './zarechye';
-import { buyZar, inZar, seeZarBoss, seeZarTale, switchToday, zarBossNews, zarCardDue, zarLater, zarTaleToday, ZAR_PRICE } from '../game/zarechye';
+import { buyZar, homeLevel, inZar, seeZarBoss, seeZarTale, switchToday, zarBossNews, zarCardDue, zarLater, zarTaleToday, ZAR_PRICE } from '../game/zarechye';
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
 import { sheetAsset, sheetPng } from './sheet';
@@ -896,7 +896,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...(zarHere ? [] : arcBox(state, getState, update)),
       ...guildClaimBox(state),
       today,
-      todayCard(state, touring, [...friendShopsBox(), ...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: getState().level })), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...(zarHere ? [] : giantBox(state)), ...(zarHere ? [] : contestBox(state))]),
+      todayCard(state, touring, [...friendShopsBox(), ...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: homeLevel(getState()) })), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...(zarHere ? [] : giantBox(state)), ...(zarHere ? [] : contestBox(state))]),
       ...(hint ? [hint] : []),
       tabs,
       body,
@@ -2054,7 +2054,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const box = el('div', 'ui-box ui-duel');
     if (duel.last && state.duelClaimed !== duel.last.week) {
       const { won, mine, theirs, name } = duel.last;
-      const reward = duelReward(state.level, won);
+      const reward = duelReward(homeLevel(state), won);
       box.append(
         el('div', 'ui-note', t(won ? 'duel.won' : 'duel.lost', { name, mine: money(mine), theirs: money(theirs) })),
         button(t('duel.claim', { n: reward }), () => update({ ...getState(), money: getState().money + reward, duelClaimed: duel.last!.week }, 'success')),
@@ -2070,7 +2070,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         el('b', '', t('duel.title', { name })),
         el('div', '', t('duel.score', { name, mine: money(mine), theirs: money(theirs) })),
         bar,
-        el('div', 'ui-muted', t('duel.left', { n: duel.daysLeft, r: duelReward(state.level, true) })),
+        el('div', 'ui-muted', t('duel.left', { n: duel.daysLeft, r: duelReward(homeLevel(state), true) })),
       );
     }
     return box.childElementCount ? [box] : [];
@@ -2080,7 +2080,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const guildClaimBox = (state: StoreState): HTMLElement[] => {
     const g = guildInfo();
     if (!g?.last?.reached || state.guildClaimed === g.last.week) return [];
-    const reward = guildReward(state.level);
+    const reward = guildReward(homeLevel(state));
     const box = el('div', 'ui-box ui-duel');
     box.append(
       el('div', 'ui-note', t('guild.reached', { name: g.name })),
@@ -2126,7 +2126,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       el('b', '', t('guild.head', { name: g.name, code: g.code })),
       el('div', '', t('guild.goal', { total: money(g.total), target: money(g.target), n: g.daysLeft })),
       bar,
-      el('div', 'ui-muted', t('guild.reward', { r: guildReward(state.level) })),
+      el('div', 'ui-muted', t('guild.reward', { r: guildReward(homeLevel(state)) })),
     );
     for (const m of g.members) box.append(el('div', `ui-item-sub${m.me ? ' ui-me' : ''}`, t('guild.member', { name: m.name, n: money(m.week) })));
     box.append(
@@ -3369,7 +3369,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       endTour();
       close();
       onRival(key, name);
-    }), { level: getState().level }), 'ui-btn'));
+    }), { level: homeLevel(getState()) }), 'ui-btn'));
     const box = el('div', 'ui-box');
     box.append(el('b', '', `🤝 ${t('social.title')}`), el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT })));
     if (info.friends) box.append(el('div', 'ui-muted', t('social.count', { n: info.friends })));

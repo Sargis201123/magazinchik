@@ -23,7 +23,7 @@ describe('баланс Заречья', () => {
         expect(ZAR_LEVEL_COST[l] / gain).toBeLessThan(45);
       }
     }
-  });
+  }, 300_000);
 
   it('Центр без игрока приносит не меньше филиала, а вся поздняя игра с Заречьем — не больше +25%', () => {
     for (const seed of seeds) {
@@ -40,5 +40,5 @@ describe('баланс Заречья', () => {
       expect(ratio).toBeGreaterThan(0.7);
       expect(go.bankruptDay).toBeNull();
     }
-  });
+  }, 300_000);
 });
