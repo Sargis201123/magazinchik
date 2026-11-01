@@ -68,8 +68,11 @@ const BUTTONS: Record<Lang, { play: string; help: string }> = {
 };
 /** Имя, если Telegram его не прислал. */
 const SOMEONE: Record<Lang, string> = { ru: 'Друг', en: 'A friend', tr: 'Bir arkadaş', es: 'Un amigo', uz: 'Doʻsting' };
-/** Картинки карточек (public/promo/<kind>_<lang>.jpg) есть только ru и en: остальным — английская. */
-const PROMO: Record<Lang, 'ru' | 'en'> = { ru: 'ru', en: 'en', tr: 'en', es: 'en', uz: 'en' };
+/**
+ * Картинки карточек (public/promo/<kind>_<lang>.jpg) есть только ru и en: остальным — английская,
+ * узбекам — русская (её они получали и раньше, а русский в Узбекистане понимают чаще английского).
+ */
+const PROMO: Record<Lang, 'ru' | 'en'> = { ru: 'ru', en: 'en', tr: 'en', es: 'en', uz: 'ru' };
 
 /** Ссылка, которая сразу открывает игру с меткой (главное мини-приложение бота). */
 export const appLink = (botName: string, payload: string): string => `https://t.me/${botName}?startapp=${payload}`;

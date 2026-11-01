@@ -50,7 +50,7 @@ const DESCRIPTION: Record<Lang, string> = {
     '',
     'Buvi senga kichkina kiosk qoldirdi. Mol xarid qil, narx qoʻy, sotuvchilar yolla, univermaggacha kengay va «Gigant» gipermarketiga bas kel.',
     '',
-    'Uyda esa qizing Sonya kutyapti. Sizning oʻz hikoyangiz bor — u asta-sekin ochiladi…',
+    'Uyda esa qizing Sonya kutyapti. Ikkovingizning oʻz hikoyangiz bor — u asta-sekin ochiladi…',
     '',
     '«Oʻynash»ni bos 👇',
   ].join('\n'),
@@ -210,14 +210,14 @@ export function commandReply(text: string, lang: Lang | boolean, userId?: number
 }
 
 /**
- * Заполнить профиль бота: описание, короткое описание, команды (ru, tr, es и для остальных — en)
+ * Заполнить профиль бота: описание, короткое описание, команды (ru, tr, es, uz и для остальных — en)
  * и кнопку меню «Играть». Возвращает, что не получилось (пусто — всё хорошо).
  */
 export async function setupProfile(token: string, appUrl: string): Promise<string[]> {
   const failed: string[] = [];
   const call = (method: string, body: Record<string, unknown>) => bot(token, method, body).catch((e: Error) => failed.push(e.message));
   for (const lang of LANGS) {
-    // Для «en» задаём язык по умолчанию (без language_code) — его видят все, у кого Telegram не на ru, tr или es.
+    // Для «en» задаём язык по умолчанию (без language_code) — его видят все, у кого Telegram не на ru, tr, es или uz.
     const scope = lang === 'en' ? {} : { language_code: lang };
     await call('setMyDescription', { description: DESCRIPTION[lang], ...scope });
     await call('setMyShortDescription', { short_description: SHORT[lang], ...scope });
