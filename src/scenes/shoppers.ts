@@ -68,7 +68,7 @@ import { CAT_TIP, catHome, catPatience, catTipChance } from '../game/cat';
 import { note } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { noteLost } from '../game/losses';
-import { fairTolerance } from '../game/fair';
+import { fairTodayTolerance } from '../game/fair';
 import { gentleDay, grannyServesAfter, grannyStays } from '../game/firstday';
 import {
   ART,
@@ -775,7 +775,7 @@ export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' 
     perceivedBase(scene.state, id) *
     (scene.night ? NIGHT_TOLERANCE : 1) *
     (id === 'bread' && scene.aroma() ? AROMA_TOLERANCE : 1) *
-    fairTolerance(scene.state.day) *
+    fairTodayTolerance(scene.state) *
     loyaltyTolerance(scene.state) *
     radioTolerance(scene.state) *
     adTrust(scene.state) *

@@ -15,6 +15,7 @@
 
 import { onShelves, PRODUCTS, sellableProducts, warehouseOf, type ProductId, type StoreState } from './economy';
 import { MAX_LOYALTY, regularState, REGULARS, type RegularId } from './regulars';
+import { homeLevel } from './zarshop';
 import { awayTrade, AWAY_MAX_HOURS } from './away';
 import { branchAway, BRANCH_AWAY_MAX_HOURS } from './branch';
 import { take } from './tales';
@@ -107,7 +108,7 @@ export const LETTER_VARIANTS = { grandma: 8, valya: 6, sonya: 6, regular: 8, sta
 /** Соня пишет с этого дня (до того игрок её ещё толком не знает). */
 export const SONYA_LETTERS_FROM = 5;
 /** Бабушка вкладывает в письмо немного денег: столько + столько за каждое помещение. */
-export const letterCoins = (state: StoreState): number => 15 + 15 * state.level;
+export const letterCoins = (state: StoreState): number => 15 + 15 * homeLevel(state);
 
 export const letterGroup = (from: LetterFrom): keyof typeof LETTER_VARIANTS =>
   from === 'grandma' || from === 'valya' || from === 'sonya' || from === 'staff' ? from : 'regular';
@@ -118,7 +119,8 @@ export const letterKey = (l: Pick<Letter, 'from' | 'n'>): TextKey => `letter.${l
 export function letterSenders(state: StoreState): LetterFrom[] {
   const out: LetterFrom[] = ['grandma', 'valya'];
   if (state.day >= SONYA_LETTERS_FROM) out.push('sonya');
-  for (const r of REGULARS) if (state.day >= r.from && regularState(state, r.id).awayUntil < state.day) out.push(r.id);
+  // В Заречье постоянные свои (zarechye.ts): письма от соседей Центра — когда игрок дома.
+  if (state.zar?.at !== 'zar') for (const r of REGULARS) if (state.day >= r.from && regularState(state, r.id).awayUntil < state.day) out.push(r.id);
   return out;
 }
 
@@ -181,7 +183,8 @@ export const orderQty = (state: StoreState): number => Math.min(8, 3 + state.lev
  * отложить свой любимый товар. Только знакомые, не в обиде, и товар здесь продаётся.
  */
 export function planOrder(state: StoreState, random: () => number): StoreState {
-  if (state.ret?.order || state.bankrupt || state.day < ORDER_FROM_DAY || random() >= ORDER_CHANCE) return state;
+  // В Заречье соседи свои (zarechye.ts) — заказ «отложи мне» просят только в Центре.
+  if (state.ret?.order || state.bankrupt || state.zar?.at === 'zar' || state.day < ORDER_FROM_DAY || random() >= ORDER_CHANCE) return state;
   const sellable = sellableProducts(state);
   const who = REGULARS.filter((r) => state.day >= r.from && regularState(state, r.id).awayUntil < state.day && sellable.includes(r.favorite));
   if (!who.length) return state;

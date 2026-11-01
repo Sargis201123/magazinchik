@@ -111,6 +111,8 @@ const RUNS: Run[] = [
     name: 'l6',
     patch: (s) => ({
       level: 5,
+      // Финал пройден и это гипермаркет — утром пришла бы карточка «Заречья» (zarechye.ts): здесь она уже была.
+      zarCard: s.day,
       branch: { since: s.day - 30, tiers: { repair: 3, ads: 2, shelves: 1 }, earned: 40000 },
       registers: 5,
       kiosks: { n: 4, tier: 1 },

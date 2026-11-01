@@ -9,7 +9,7 @@ import type { Facing } from './stride';
 import { pickWear } from './archetypes';
 import type { BackId, FaceId, HatId, OutfitId, PropId } from './wardrobe';
 import { yearTime } from '../game/calendar';
-import type { RegularId } from '../game/regulars';
+import type { RegularId, ZarRegularId } from '../game/regulars';
 import type { VisitFriend } from '../platform/multiplayer';
 import type { DishId } from '../game/kitchen';
 import type { NightGuestId } from '../game/nightGuests';
@@ -369,7 +369,7 @@ export interface Customer {
   /** Уже поскользнулся на луже (второй раз не падает). */
   slipped?: boolean;
   /** Постоянный покупатель: кто и за чем пришёл. */
-  regular?: RegularId;
+  regular?: RegularId | ZarRegularId;
   /** Друг из Telegram зашёл в гости (platform/multiplayer.ts → visits). */
   friend?: VisitFriend;
   wants?: ProductId[];

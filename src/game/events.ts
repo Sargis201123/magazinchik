@@ -118,6 +118,8 @@ export const inspectionFine = (level: number): number => 150 + 100 * level;
  * больной сотрудник, проверка, заказ, выгодная партия. Первые дни — спокойные.
  */
 export function planDay(state: StoreState, chances: EventChances = { order: 0.15, inspection: 0.1 }): DayPlan {
+  // Эдуард (война цен, переманивание, жалоба) — сосед Центра; в Заречье его нет (zarechye.ts).
+  const home = state.zar?.at !== 'zar';
   const random = rng(state.day * 92821 + 7);
   const plan: DayPlan = { day: state.day, decided: false, inspection: false, quests: [] };
   if (state.day <= 3) return plan;
@@ -155,15 +157,15 @@ export function planDay(state: StoreState, chances: EventChances = { order: 0.15
     plan.event = makeOrder(state, random);
   } else if (dealRoll < 0.12 && state.day >= DEAL_FROM_DAY) {
     plan.event = makeDeal(state, random);
-  } else if (state.day >= WAR_FROM_DAY && !state.war && random() < WAR_CHANCE * eduardWar(state)) {
+  } else if (home && state.day >= WAR_FROM_DAY && !state.war && random() < WAR_CHANCE * eduardWar(state)) {
     // Эдуард через дорогу снижает цену — отвечать или нет, решает игрок (war.ts).
     const war = makeWar(state, random);
     if (war) plan.event = { kind: 'priceWar', ...war };
-  } else if (state.day >= POACH_FROM_DAY && state.staff.length && random() < POACH_CHANCE) {
+  } else if (home && state.day >= POACH_FROM_DAY && state.staff.length && random() < POACH_CHANCE) {
     // Эдуард переманивает лучшего сотрудника: перебить его предложение или отпустить.
     const best = [...state.staff].sort((a, b) => b.skill - a.skill || b.wage - a.wage)[0];
     plan.event = { kind: 'poach', role: best.role, wage: Math.round((best.wage * POACH_RAISE) / 10) * 10 };
-  } else if (state.day >= SNITCH_FROM_DAY && random() < SNITCH_CHANCE) {
+  } else if (home && state.day >= SNITCH_FROM_DAY && random() < SNITCH_CHANCE) {
     // Эдуард нажаловался — сегодня внеплановая проверка.
     plan.inspection = true;
     plan.event = { kind: 'snitch' };

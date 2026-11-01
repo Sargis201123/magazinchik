@@ -5,6 +5,7 @@
 
 import { MONTH_DAYS, PRODUCT_IDS, PRODUCTS, type ProductId, type StoreState } from './economy';
 import { holidayFor } from './calendar';
+import { zarFairDay } from './zarechye';
 
 export const FAIR_DAY_IN_MONTH = 5;
 export const FAIR_FROM_DAY = 8;
@@ -19,6 +20,11 @@ export const isFairDay = (day: number): boolean =>
   day >= FAIR_FROM_DAY && ((day - 1) % MONTH_DAYS) + 1 === FAIR_DAY_IN_MONTH && !holidayFor(day);
 
 export const fairGuests = (day: number): number => (isFairDay(day) ? FAIR_GUESTS : 1);
+
+/** Ярмарка в этом магазине сегодня: обычная раз в месяц или речная в Заречье по выходным (zarechye.ts). */
+export const fairToday = (state: StoreState): boolean => isFairDay(state.day) || zarFairDay(state);
+/** Терпимость к ценам в ярмарочный день этого магазина. */
+export const fairTodayTolerance = (state: StoreState): number => (fairToday(state) ? FAIR_TOLERANCE : 1);
 export const fairTolerance = (day: number): number => (isFairDay(day) ? FAIR_TOLERANCE : 1);
 
 /** Ближайшая ярмарка (через сколько дней), чтобы подготовиться. */

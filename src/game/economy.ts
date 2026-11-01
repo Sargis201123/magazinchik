@@ -23,6 +23,7 @@ import type { FloorWear } from './wear';
 import { afterLoanPayment, loanDue } from './bank';
 import { SALE_DISCOUNT, saleOn, weekDemand, weekProductOk } from './weeks';
 import { fridgeLife, fridgePower, lightsPower, solarPower, warehouseRoom, type GearId } from './gear';
+import { inZar, zarAwayBill, zarBillShare, zarNextLevel } from './zarshop';
 
 /**
  * Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу.
@@ -765,6 +766,10 @@ export interface StoreState {
   giant?: import('./giant').GiantState;
   /** Филиал в здании «Гиганта» (branch.ts): куплен после победы над ним, на последнем помещении. */
   branch?: import('./branch').BranchState;
+  /** Второй магазин в Заречье (zarechye.ts): где работаем сегодня и второй магазин целиком. */
+  zar?: import('./zarechye').ZarState;
+  /** В какой день показали карточку «В Заречье пустует торговая улица» (и ответили «Потом» или открыли). */
+  zarCard?: number;
   /** Альбом коллекций (collections.ts): собранное по наборам, закрытые наборы, новое в альбоме. */
   collections?: import('./collections').CollectionState;
   /** Что копится без игрока и ждёт его утром: сундучок выручки, письмо, заказ соседа (returns.ts). */
@@ -935,7 +940,8 @@ export const newGame = (): StoreState => ({
 
 export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];
 export const nextStoreLevel = (state: StoreState): StoreLevel | undefined =>
-  state.level + 1 === HYPER_LEVEL && !state.branch ? undefined : STORE_LEVELS[state.level + 1];
+  // В Заречье — своя, короткая лестница помещений (zarechye.ts).
+  inZar(state) ? zarNextLevel(state) : state.level + 1 === HYPER_LEVEL && !state.branch ? undefined : STORE_LEVELS[state.level + 1];
 /** Сколько мест на складе: по помещению и оборудованию склада (gear.ts). */
 export const warehouseCapacity = (state: StoreState): number => Math.round(storeLevel(state).warehouse * warehouseRoom(state));
 export const freeSlots = (state: StoreState): number => storeLevel(state).slots - state.shelves.filter((s) => !isFixture(s)).length;
@@ -1278,12 +1284,16 @@ export function monthlyBill(state: StoreState): Bill {
   // Аренда и коммуналка — по старому помещению, если переехали после прошлых счетов; свет — уже новый.
   const old = billLevel(state);
   const fridges = state.shelves.filter((s) => fridgeOn(state, s)).length;
+  // Два магазина (zarechye.ts): каждый платит за дни месяца, что в нём работали; без Заречья доля — 1.
+  const share = state.zar ? zarBillShare(state, state.zar.at) : 1;
+  const other = zarAwayBill(state);
+  const part = (n: number) => Math.round(n * share);
   return {
-    rent: STORE_LEVELS[old].rent,
-    utilities: STORE_LEVELS[old].utilities,
+    rent: part(STORE_LEVELS[old].rent) + other.rent,
+    utilities: part(STORE_LEVELS[old].utilities) + other.utilities,
     // Свет в зале дешевле с LED, холодильники — с новыми моделями, всё вместе — с солнечными панелями (gear.ts).
-    power: Math.round((level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state)) * solarPower(state)),
-    salaries: state.staff.reduce((sum, m) => sum + m.wage, 0),
+    power: part(Math.round((level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state)) * solarPower(state))) + other.power,
+    salaries: part(state.staff.reduce((sum, m) => sum + m.wage, 0)) + other.salaries,
     debt: Math.min(DEBT_PAYMENT, state.debt),
     loan: loanDue(state),
     ...(old < state.level ? { housewarming: true } : {}),
@@ -1304,7 +1314,9 @@ export function payBill(state: StoreState): { state: StoreState; bill: Bill; sho
   const shortfall = total - paid;
   const penalty = Math.round(shortfall * LATE_PENALTY);
   // Новоселье — на один счёт: дальше аренда по новому помещению.
-  const { movedFrom: _movedFrom, ...rest } = state;
+  const { movedFrom: _movedFrom, ...cleared } = state;
+  // Второй магазин (zarechye.ts) тоже заплатил свою долю — его «новоселье» тоже кончилось.
+  const rest = cleared.zar?.away.movedFrom !== undefined ? { ...cleared, zar: { ...cleared.zar, away: Object.fromEntries(Object.entries(cleared.zar.away).filter(([k]) => k !== 'movedFrom')) } } : cleared;
   return {
     // Платёж банку засчитан в любом случае: не хватило — недостача ушла в долг вместе со счетами.
     state: afterLoanPayment({ ...rest, money: state.money - paid, debt: state.debt - bill.debt + shortfall + penalty }, bill.loan ?? 0),

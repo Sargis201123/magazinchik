@@ -4,7 +4,7 @@
 // подрастает и ходит за соком сам. Новость приходит утром: можно сделать подарок (доверие растёт
 // сильнее) или просто поздравить. События по дням игры; кто начал давно — видит уже прожитое.
 
-import { MAX_LOYALTY, regularById, regularState, type Regular, type RegularId, type RegularLook } from './regulars';
+import { MAX_LOYALTY, regularById, regularState, type Regular, type RegularId, type RegularLook, type ZarRegularId } from './regulars';
 import type { StoreState } from './economy';
 import type { TextKey } from '../i18n/ru';
 
@@ -73,7 +73,7 @@ export function livedRegular(state: StoreState, r: Regular): Regular {
 }
 
 /** С кем приходит: Пётр Ильич с Ольгой Николаевной, Костя с женой. null — один. */
-export function companionOf(state: StoreState, id: RegularId): { look: RegularLook; regular?: RegularId } | null {
+export function companionOf(state: StoreState, id: RegularId | ZarRegularId): { look: RegularLook; regular?: RegularId } | null {
   if (happened(state, 'petr_olga') && (id === 'petr' || id === 'olga')) {
     const other: RegularId = id === 'petr' ? 'olga' : 'petr';
     return { look: livedRegular(state, regularById(other)).look, regular: other };

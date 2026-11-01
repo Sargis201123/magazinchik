@@ -114,7 +114,7 @@ import { stockOf, usualSales } from '../game/bakery';
 const surplus = (state: StoreState) => markdownSurplus(state, (id) => usualSales(state, id) ?? 0);
 import { activePromo, setPromo, type PromoKind } from '../game/promo';
 import { deliverContracts, type Delivery } from '../game/contracts';
-import { daysToFair, isFairDay } from '../game/fair';
+import { daysToFair, fairToday, isFairDay } from '../game/fair';
 import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
 import { pendingTip, seeTip, soloExpandRisk, TIP_ICONS } from '../game/tips';
 import { markdownSurplus, toggleDonate } from '../game/economy';
@@ -193,6 +193,8 @@ import {
 } from '../game/cat';
 import { holidayFor } from '../game/calendar';
 import { dialogBox } from './dialog';
+import { zarBossBox, zarGrowBox, zarOfferBox, zarSwitchBox, zarTaleBox } from './zarechye';
+import { buyZar, homeLevel, inZar, seeZarBoss, seeZarTale, switchToday, zarBossNews, zarCardDue, zarLater, zarTaleToday, ZAR_PRICE } from '../game/zarechye';
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
 import { sheetAsset, sheetPng } from './sheet';
@@ -641,6 +643,15 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     render();
   };
 
+  /** Открыть лавку в Заречье: деньги — городу, первый день там можно начать прямо сейчас (переключатель сверху). */
+  const openZar = () => {
+    const opened = buyZar(getState());
+    if (!opened) return;
+    track('zar_open', opened.day, ZAR_PRICE);
+    toast('assets/ico_shop.png', t('zar.opened'), t('zar.openedText'));
+    update(opened, 'success');
+  };
+
   /** Сюжетный момент или мягкая неудача — заставка один раз на сцену (утро перерисовывается часто). */
   let cued = '';
   const cue = (id: 'story' | 'fail', scene: string) => {
@@ -732,6 +743,21 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       card.replaceChildren(title, eventBox(state, state.plan.event));
       return;
     }
+    // Заречье (game/zarechye.ts): письмо от города, новости Сома, истории жителей — по одной за утро.
+    if (zarCardDue(state)) {
+      card.replaceChildren(zarOfferBox(state, () => openZar(), () => update(zarLater(getState()))));
+      return;
+    }
+    const som = zarBossNews(state);
+    if (som) {
+      card.replaceChildren(zarBossBox(som.stage, som.step, () => update(seeZarBoss(getState()), som.step.reward ? 'success' : 'tap')));
+      return;
+    }
+    const zarTale = zarTaleToday(state);
+    if (zarTale) {
+      card.replaceChildren(zarTaleBox(zarTale.tale, zarTale.beat, () => update(seeZarTale(getState(), zarTale.tale.id), zarTale.tale.beats[zarTale.beat].reward ? 'success' : 'tap')));
+      return;
+    }
 
     const touring = state.tourDone === false;
     const step = touring ? TOUR[Math.min(tourStep, TOUR.length - 1)] : null;
@@ -816,6 +842,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     body.append(...(tab === 'staff' || tab === 'grow' || tab === 'profile' ? tuckAll(content) : content));
     slideTab = false;
     const today = todoBox(state);
+    const zarHere = inZar(state);
     const info = infos(
       ...deliveryLine(),
       ...fairLine(state),
@@ -827,9 +854,9 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...weekSoonLine(state),
       ...weatherLine(state),
       ...warLine(state),
-      ...districtLines(state),
-      ...arcLines(state),
-      ...trickLines(state),
+      ...(zarHere ? [] : districtLines(state)),
+      ...(zarHere ? [] : arcLines(state)),
+      ...(zarHere ? [] : trickLines(state)),
       ...nightGuestLines(state),
       ...holidayLine(state),
       el('div', 'ui-muted', t('morning.guests', { r: state.rating.toFixed(1), n: guestsToday(state) })),
@@ -853,6 +880,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...(touring ? [] : plannedVisitBox()),
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
+      ...(touring ? [] : zarSwitchBox(state, (where) => update(switchToday(getState(), where)))),
       ...giftsBox(),
       ...presentsBox(getState, update),
       ...leagueClaimBox(state, getState, update),
@@ -860,14 +888,15 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...(touring ? [] : weekBox(state, guestsToday(state))),
       ...staffEventBox(state),
       ...careerBox(state),
-      ...districtBox(state),
-      ...lifeBox(state),
-      ...trickBox(state),
+      // Район Центра (здания, жизнь района, проделки, хроники) — в Центре; в Заречье свой район.
+      ...(zarHere ? [] : districtBox(state)),
+      ...(zarHere ? [] : lifeBox(state)),
+      ...(zarHere ? [] : trickBox(state)),
       ...taleBox(state),
-      ...arcBox(state, getState, update),
+      ...(zarHere ? [] : arcBox(state, getState, update)),
       ...guildClaimBox(state),
       today,
-      todayCard(state, touring, [...friendShopsBox(), ...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: getState().level })), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...giantBox(state), ...contestBox(state)]),
+      todayCard(state, touring, [...friendShopsBox(), ...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: homeLevel(getState()) })), ...rushBox(state), ...passBox(state), ...duelBox(state), ...goalsBox(state), info, ...(zarHere ? [] : giantBox(state)), ...(zarHere ? [] : contestBox(state))]),
       ...(hint ? [hint] : []),
       tabs,
       body,
@@ -2025,7 +2054,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     const box = el('div', 'ui-box ui-duel');
     if (duel.last && state.duelClaimed !== duel.last.week) {
       const { won, mine, theirs, name } = duel.last;
-      const reward = duelReward(state.level, won);
+      const reward = duelReward(homeLevel(state), won);
       box.append(
         el('div', 'ui-note', t(won ? 'duel.won' : 'duel.lost', { name, mine: money(mine), theirs: money(theirs) })),
         button(t('duel.claim', { n: reward }), () => update({ ...getState(), money: getState().money + reward, duelClaimed: duel.last!.week }, 'success')),
@@ -2041,7 +2070,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         el('b', '', t('duel.title', { name })),
         el('div', '', t('duel.score', { name, mine: money(mine), theirs: money(theirs) })),
         bar,
-        el('div', 'ui-muted', t('duel.left', { n: duel.daysLeft, r: duelReward(state.level, true) })),
+        el('div', 'ui-muted', t('duel.left', { n: duel.daysLeft, r: duelReward(homeLevel(state), true) })),
       );
     }
     return box.childElementCount ? [box] : [];
@@ -2051,7 +2080,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   const guildClaimBox = (state: StoreState): HTMLElement[] => {
     const g = guildInfo();
     if (!g?.last?.reached || state.guildClaimed === g.last.week) return [];
-    const reward = guildReward(state.level);
+    const reward = guildReward(homeLevel(state));
     const box = el('div', 'ui-box ui-duel');
     box.append(
       el('div', 'ui-note', t('guild.reached', { name: g.name })),
@@ -2097,7 +2126,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       el('b', '', t('guild.head', { name: g.name, code: g.code })),
       el('div', '', t('guild.goal', { total: money(g.total), target: money(g.target), n: g.daysLeft })),
       bar,
-      el('div', 'ui-muted', t('guild.reward', { r: guildReward(state.level) })),
+      el('div', 'ui-muted', t('guild.reward', { r: guildReward(homeLevel(state)) })),
     );
     for (const m of g.members) box.append(el('div', `ui-item-sub${m.me ? ' ui-me' : ''}`, t('guild.member', { name: m.name, n: money(m.week) })));
     box.append(
@@ -3340,7 +3369,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       endTour();
       close();
       onRival(key, name);
-    }), { level: getState().level }), 'ui-btn'));
+    }), { level: homeLevel(getState()) }), 'ui-btn'));
     const box = el('div', 'ui-box');
     box.append(el('b', '', `🤝 ${t('social.title')}`), el('div', 'ui-muted', t('social.note', { n: INVITE_REWARD, g: WELCOME_GIFT })));
     if (info.friends) box.append(el('div', 'ui-muted', t('social.count', { n: info.friends })));
@@ -3644,7 +3673,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
   };
 
   const fairLine = (state: StoreState): HTMLElement[] => {
-    if (isFairDay(state.day)) return [el('div', 'ui-note', t('fair.today'))];
+    if (fairToday(state)) return [el('div', 'ui-note', t(isFairDay(state.day) ? 'fair.today' : 'zar.fair.today'))];
     const n = daysToFair(state.day);
     return n > 0 && n <= 2 ? [el('div', 'ui-muted', t('fair.soon', { n }))] : [];
   };
@@ -4301,7 +4330,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       const lock = state.giant.phase !== 'won' ? 'giant' : hyperLock(state);
       grow.append(el('b', '', `🏬 ${t('hyper.title')}`), hyperArt(true), el('div', '', `🔒 ${t(lock === 'giant' ? 'hyper.lock.giant' : 'hyper.lock.branch')}`));
     } else if (!next) {
-      grow.append(el('div', 'ui-muted', t('store.max')));
+      grow.append(el('div', 'ui-muted', t(inZar(state) ? 'zar.max' : 'store.max')));
     } else {
       if (hyper) {
         grow.append(
@@ -4345,7 +4374,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
         ),
       );
     }
-    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...petsBox(state, getState, update), ...eduardBox(state), ...branchBox(state), ...linesBox(state, getState, update), ...hoodBox(state, getState, update), bankBox(state));
+    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...petsBox(state, getState, update), ...(inZar(state) ? [] : eduardBox(state)), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update), ...(inZar(state) ? [] : hoodBox(state, getState, update)), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
