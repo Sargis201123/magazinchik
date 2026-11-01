@@ -5,7 +5,7 @@
 
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
-import { STORE_LEVELS } from '../game/economy';
+import { nextStoreLevel, STORE_LEVELS } from '../game/economy';
 import { branchInOldShop, branchLook, branchSignName, branchTier, branchUpgrades } from '../game/branch';
 import { hasHood, HOOD_SQUARE, hoodLook, type HoodId } from '../game/hood';
 import { t, type TextKey } from '../i18n';
@@ -48,6 +48,10 @@ import * as persons from './persons';
 import * as newcomer from './newcomer';
 import * as building from './building';
 import * as friendStreet from './friendStreet';
+import * as zarFx from './zarechye';
+import { inZar } from '../game/zarechye';
+import { streetKey } from '../game/street';
+import { streetInfo } from '../platform/multiplayer';
 
 /** Здание по соседству; back — отступ от тротуара (у кафе перед ним веранда). */
 /** Особая крыша: вертолётная площадка, красный крест, бельё, солнечные панели (art/rooftops.py). */
@@ -197,6 +201,12 @@ export function buildNeighbors(scene: StoreScene, next: Layout): void {
   const look = eduardLook(scene.state);
   scene.builtEduard = look;
   scene.builtClean = newcomer.cleanKey(scene);
+  // Заречье (game/zarechye.ts): свои соседи у реки.
+  if (inZar(scene.state)) {
+    scene.builtFriend = undefined;
+    zarFx.buildNeighbors(scene, next);
+    return;
+  }
   // Босс района открывается за дорогой, на месте закрытого «Гиганта»; сбоку тогда — хозтовары.
   // Сбоку, когда босс за дорогой, — магазин друга по торговой неделе (или хозтовары).
   // Пустующее помещение тоже занимает друг.
@@ -374,9 +384,11 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
   tile(lawn.x, lawn.y, lawn.w, lawn.h, scene.lite ? 'grass' : lawnTexture(scene));
   if (!scene.lite) lawnShade(scene, lawn, -10);
   scene.streetY = top + 12;
+  // В Заречье за дорогой река (scenes/zarechye.ts): снег ложится только на тот берег.
+  const zar = inZar(scene.state);
   scene.lawns = [
     { x: left, y: -400, w: width, h: top + 400 },
-    { x: left, y: top + 88, w: width, h: 300 },
+    zar ? { x: left, y: top + 260, w: width, h: 128 } : { x: left, y: top + 88, w: width, h: 300 },
     // Газон за краями квартала (снег зимой — и там).
     { x: left - 400, y: -800, w: width + 800, h: 400 },
     { x: left - 400, y: top + 388, w: width + 800, h: 412 },
@@ -467,8 +479,10 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
   const look = eduardLook(scene.state);
   // Купили здание под филиал (branch.ts) — босс района возвращается на своё место сбоку, рядом с магазином.
   scene.builtBranch = branchLook(scene.state);
-  scene.rivalAcross = !scene.builtBranch && look !== 'vacant' && look !== 'mega' && (giant === 'none' || giant === 'closed');
-  if (scene.builtBranch && branchInOldShop(scene.state)) {
+  scene.rivalAcross = !zar && !scene.builtBranch && look !== 'vacant' && look !== 'mega' && (giant === 'none' || giant === 'closed');
+  if (zar) {
+    // За дорогой — река, ни «Гиганта», ни филиала: они в Центре.
+  } else if (scene.builtBranch && branchInOldShop(scene.state)) {
     buildOldBranch(scene, door.x, top + 92);
   } else if (scene.builtBranch) {
     buildBranch(scene, door.x, top + 92);
@@ -481,14 +495,20 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
     scene.art(door.x, top + 92, key).setOrigin(0.5, 0).setDepth(top + 92 + 88);
   }
   // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
-  const districtAreas = [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildHood(scene, next, top), ...friendStreet.buildFriendStreet(scene, top)];
+  const districtAreas = zar ? [...zarFx.buildRiver(scene, next, top, left, width), ...cars.buildParking(scene, next, top)] : [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildHood(scene, next, top), ...friendStreet.buildFriendStreet(scene, top)];
+  if (zar) {
+    // Район, благоустройство и улица друзей — в Центре: ключи те же, чтобы утро не перестраивало мир зря.
+    scene.builtDistrict = districtKey(scene.state);
+    scene.builtHood = hoodLook(scene.state);
+    scene.builtStreet = streetKey(streetInfo());
+  }
   const inArea = (px: number, py: number, a: { x: number; y: number; w: number; h: number }) => px > a.x - 6 && px < a.x + a.w + 6 && py > a.y - 6 && py < a.y + a.h + 14;
   const scatter = (y0: number, y1: number) => {
     for (let y = y0; y < y1; y += 40) {
       for (let x = left + 10; x < left + width - 10; x += 46) {
         const px = x + rnd.between(-14, 14);
         const py = y + rnd.between(-12, 12);
-        if ((giant !== 'none' || scene.rivalAcross) && px > giantArea.x && px < giantArea.x + giantArea.w && py > giantArea.y && py < giantArea.y + giantArea.h) continue;
+        if (!zar && (giant !== 'none' || scene.rivalAcross) && px > giantArea.x && px < giantArea.x + giantArea.w && py > giantArea.y && py < giantArea.y + giantArea.h) continue;
         if (districtAreas.some((a) => inArea(px, py, a))) continue;
         const roll = rnd.frac();
         // За зданием глубина отрицательная — держим над газоном (-10), но под крышами соседей (-3).
@@ -1175,7 +1195,7 @@ export function scatterLot(scene: StoreScene, next: Layout): void {
 /** Пустая соседняя площадь «Сдаётся» за забором — туда магазин вырастет при расширении. */
 export function buildForRent(scene: StoreScene, next: Layout): void {
   const { w, h, door } = scene.layout;
-  const cost = STORE_LEVELS[scene.state.level + 1].cost;
+  const cost = nextStoreLevel(scene.state)?.cost ?? STORE_LEVELS[scene.state.level + 1].cost;
   const tile = (x: number, y: number, ww: number, hh: number, key: string, depth = -5) =>
     scene.add.tileSprite(x, y, ww, hh, building.potTile(scene, key)).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
   if (next.w > w) tile(w + 3, 0, next.w - w - 3, next.h, 'lot', -8);

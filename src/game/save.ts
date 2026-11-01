@@ -7,6 +7,7 @@ import { migrateTut } from './tutorial';
 import { migrateCollections } from './collections';
 import { migrateCareer } from './career';
 import { normalizePets } from './pets';
+import { normalizeZar } from './zarechye';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId, trustedNow } from '../platform/telegram';
 
@@ -77,7 +78,8 @@ export function loadGame(): StoreState | null {
   // До версии 11 мороженое и цветы стояли на обычных полках (теперь — ларь у входа и вёдра у кассы).
   // Альбом коллекций появился позже: старое сохранение сразу получает уже заработанное (collections.ts).
   // Карьера сотрудников появилась позже: опыт старых сотрудников — по их стажу (career.ts).
-  return migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11)));
+  // Второй магазин в Заречье (zarechye.ts): срез второго магазина дополняем тем, чего в нём не было.
+  return normalizeZar(migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11))));
 }
 
 let pending: string | null = null;

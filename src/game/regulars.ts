@@ -8,6 +8,8 @@ import { perceivedBase } from './endless';
 import { sellableProducts, type ProductId, type StoreState } from './economy';
 
 export type RegularId = 'petr' | 'sveta' | 'kostya' | 'akhmed' | 'olga' | 'misha';
+/** Жители Заречья (zarechye.ts): ходят только в лавку у реки, знакомятся по дням, сыгранным там. */
+export type ZarRegularId = 'nina' | 'yegor' | 'stepan' | 'lida' | 'tolik';
 
 export interface RegularLook {
   shirt: number;
@@ -25,7 +27,7 @@ export interface RegularLook {
 }
 
 export interface Regular {
-  id: RegularId;
+  id: RegularId | ZarRegularId;
   nameKey: TextKey;
   habitKey: TextKey;
   favorite: ProductId;
@@ -38,7 +40,7 @@ export interface Regular {
   look: RegularLook;
 }
 
-export const REGULARS: Regular[] = [
+export const REGULARS: (Regular & { id: RegularId })[] = [
   {
     id: 'petr',
     nameKey: 'regular.petr',
@@ -102,6 +104,68 @@ export const REGULARS: Regular[] = [
   },
 ];
 
+/**
+ * Жители Заречья: свои лица у реки. from — с какого дня в Заречье (zar.played) начинают ходить;
+ * их доверие хранится в постоянных лавки (regulars — поле магазина, zarechye.ts SHOP_KEYS).
+ */
+export const ZAR_REGULARS: (Regular & { id: ZarRegularId })[] = [
+  {
+    // Нина Петровна — бакенщица на пенсии, всю жизнь зажигала огни на реке.
+    id: 'nina',
+    nameKey: 'zar.res.nina',
+    habitKey: 'zar.res.nina.habit',
+    favorite: 'bread',
+    tolerance: 1.1,
+    every: 0.8,
+    from: 0,
+    look: { shirt: 0x124e89, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xd8d8e0, style: 'bun', glasses: true, bag: 'bag', bagTint: 0x3e8948 },
+  },
+  {
+    // Егор — студент речного техникума, бегом на пары.
+    id: 'yegor',
+    nameKey: 'zar.res.yegor',
+    habitKey: 'zar.res.yegor.habit',
+    favorite: 'apples',
+    tolerance: 1.0,
+    every: 0.7,
+    from: 1,
+    look: { shirt: 0x63c74d, skin: 0xeec39a, pants: 0x262b44, hair: 0x4a2c1a, style: 'beanie', bag: 'backpack', bagTint: 0x0099db },
+  },
+  {
+    // Степан Ильич — лодочник, держит лодочную станцию у моста.
+    id: 'stepan',
+    nameKey: 'zar.res.stepan',
+    habitKey: 'zar.res.stepan.habit',
+    favorite: 'potatoes',
+    tolerance: 1.15,
+    every: 0.6,
+    from: 3,
+    look: { shirt: 0x8f563b, skin: 0xd9a066, pants: 0x3a4466, hair: 0x8b9bb4, style: 'cap' },
+  },
+  {
+    // Лида — художница: рисует мост с набережной в любую погоду.
+    id: 'lida',
+    nameKey: 'zar.res.lida',
+    habitKey: 'zar.res.lida.habit',
+    favorite: 'milk',
+    tolerance: 1.2,
+    every: 0.6,
+    from: 5,
+    look: { shirt: 0xf6757a, skin: 0xf2d3ab, pants: 0x5a6988, hair: 0xe43b44, style: 'long', bag: 'bag', bagTint: 0xfee761 },
+  },
+  {
+    // Толик — внук Нины Петровны, с удочкой и вечно мокрыми кедами.
+    id: 'tolik',
+    nameKey: 'zar.res.tolik',
+    habitKey: 'zar.res.tolik.habit',
+    favorite: 'bread',
+    tolerance: 1.1,
+    every: 0.6,
+    from: 8,
+    look: { shirt: 0xfeae34, skin: 0xeec39a, pants: 0x124e89, hair: 0xb86f50, style: 'cap', kid: true },
+  },
+];
+
 export const START_LOYALTY = 3;
 export const MAX_LOYALTY = 5;
 /** Обиделся — столько дней не приходит. */
@@ -109,19 +173,19 @@ export const AWAY_DAYS = 7;
 /** На полном доверии оставляет чаевые: такую долю от покупки. */
 export const TIP_SHARE = 0.15;
 
-export const regularById = (id: RegularId): Regular => REGULARS.find((r) => r.id === id)!;
+export const regularById = (id: RegularId | ZarRegularId): Regular => REGULARS.find((r) => r.id === id) ?? ZAR_REGULARS.find((r) => r.id === id)!;
 
-export function regularState(state: StoreState, id: RegularId): { loyalty: number; awayUntil: number } {
+export function regularState(state: StoreState, id: RegularId | ZarRegularId): { loyalty: number; awayUntil: number } {
   return state.regulars?.[id] ?? { loyalty: START_LOYALTY, awayUntil: 0 };
 }
 
 /** Уже знакомы (пора ходить по дням). */
-export const met = (state: StoreState, r: Regular): boolean => state.day >= r.from;
+export const met = (state: StoreState, r: Regular): boolean => (ZAR_REGULARS.some((z) => z.id === r.id) ? (state.zar?.played ?? 0) >= r.from : state.day >= r.from);
 
-/** Кто может прийти сегодня: знакомы, не в обиде, и любимый товар здесь вообще продаётся. */
+/** Кто может прийти сегодня: знакомы, не в обиде, и любимый товар здесь вообще продаётся. В Заречье — свои жители. */
 export function regularsToday(state: StoreState): Regular[] {
   const sellable = sellableProducts(state);
-  return REGULARS.filter((r) => met(state, r) && regularState(state, r.id).awayUntil < state.day && sellable.includes(r.favorite));
+  return (state.zar?.at === 'zar' ? ZAR_REGULARS : REGULARS).filter((r) => met(state, r) && regularState(state, r.id).awayUntil < state.day && sellable.includes(r.favorite));
 }
 
 /** Согласен ли на эту цену любимого товара. */
@@ -130,7 +194,7 @@ export const acceptsPrice = (state: StoreState, r: Regular, price: number): bool
 export type VisitResult = 'up' | 'down' | 'left';
 
 /** Итог визита: доверие растёт или падает; упало до нуля — обиделся на неделю. */
-export function recordVisit(state: StoreState, id: RegularId, happy: boolean): { state: StoreState; result: VisitResult } {
+export function recordVisit(state: StoreState, id: RegularId | ZarRegularId, happy: boolean): { state: StoreState; result: VisitResult } {
   const cur = regularState(state, id);
   let loyalty = happy ? Math.min(MAX_LOYALTY, cur.loyalty + 1) : cur.loyalty - 2;
   let awayUntil = cur.awayUntil;

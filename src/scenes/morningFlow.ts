@@ -5,6 +5,7 @@
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { DAY_SECONDS, emptyDayStats, shelveAll, warehouseCount } from '../game/economy';
+import { zarLook } from '../game/zarechye';
 import { seasonFor } from '../game/endless';
 import { saveGame } from '../game/save';
 import { branchLook } from '../game/branch';
@@ -49,7 +50,7 @@ import { liveEventsFor } from '../game/minievents';
 import { momentsFor } from '../game/moments';
 import { fridgeLeak } from '../game/gear';
 import { catHome } from '../game/cat';
-import { isFairDay } from '../game/fair';
+import { fairToday } from '../game/fair';
 import { takeLiteNote } from '../platform/quality';
 import { quietDays } from '../game/firstday';
 import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
@@ -217,7 +218,7 @@ export function showMorning(scene: StoreScene): void {
   const cupChanged = (contestOf(scene.state)?.wins ?? 0) !== scene.builtCup;
   const gift = scene.giftRebuild;
   scene.giftRebuild = false;
-  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
+  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   cars.refillParking(scene);
   scene.updateLighting(0);
   nightShift.openShop(scene);
@@ -263,8 +264,10 @@ export function showMorning(scene: StoreScene): void {
       if (staffChanged) for (const m of s.staff) if (!was.staff.some((o) => staffKey(o) === staffKey(m))) scene.newHires.add(staffKey(m));
       scene.state = s;
       saveGame(s);
-      if (s.level > scene.builtLevel) void effects.celebrateExpansion(scene);
-      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood) scene.buildWorld(bought);
+      // Переехали на сегодня в другой район (game/zarechye.ts) — другой магазин целиком, а не расширение.
+      if (zarLook(s) !== scene.builtZar) scene.buildWorld();
+      else if (s.level > scene.builtLevel) void effects.celebrateExpansion(scene);
+      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || zarLook(s) !== scene.builtZar) scene.buildWorld(bought);
       else {
         if (staffChanged) staff.syncStaff(scene);
         // Купили, позвали другого или отправили домой питомца за звёзды — только он, без перестройки зала.
@@ -651,8 +654,8 @@ export function prepareDay(scene: StoreScene): void {
   visitors.scheduleStoryGuests(scene);
   const season = seasonFor(scene.state.day);
   if (season) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
-  else if (isFairDay(scene.state.day)) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, t('popup.fair'), '#fee761'));
-  if (isFairDay(scene.state.day)) scene.stats.fair = true;
+  else if (fairToday(scene.state)) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, t('popup.fair'), '#fee761'));
+  if (fairToday(scene.state)) scene.stats.fair = true;
   weeksFx.morning(scene);
   decorations.startStall(scene);
   scene.setSpeed(1);

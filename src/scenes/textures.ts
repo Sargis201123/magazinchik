@@ -484,6 +484,18 @@ export const SPRITES = [
   'butterfly0',
   // Циферблат без стрелок: стрелки идут по ходу смены (art/clockface.py).
   'clock_face',
+  // «Заречье» (art/zarechye.py, scenes/zarechye.ts): вода, набережная, тот берег, мост, дома, пристань, ива, теплоход, вывеска Сома.
+  'zar_water',
+  'zar_bank',
+  'zar_shore',
+  'zar_bridge',
+  'zar_house_0',
+  'zar_house_1',
+  'zar_house_2',
+  'zar_pier',
+  'zar_willow',
+  'zar_tourboat',
+  'zar_fish_sign',
 ];
 
 /**

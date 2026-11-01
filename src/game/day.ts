@@ -45,6 +45,7 @@ import { laneGuests } from './lanes';
 import { momentCount, momentRating } from './moments';
 import { branchNight, branchReport } from './branch';
 import { makeLines, type LinesNight } from './lines';
+import { countZarDay, inZar, zarBossMorning, zarDuelNight, zarGuests, zarHomeNight, zarReport } from './zarechye';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -53,6 +54,8 @@ export interface NightSummary extends NightResult {
   weekly: { completed: Challenge[]; earned: number };
   /** Чистый доход филиала за день (branch.ts; 0 — филиала нет). */
   branch: number;
+  /** Сколько принёс Центр без игрока, пока он работал в Заречье (zarechye.ts; 0 — был в Центре). */
+  home: number;
   /** Пройденный сегодня шаг сезонной недели (weeks.ts) или null. */
   week: WeekNight | null;
   /** Что наделали за ночь линейки своей марки (lines.ts). */
@@ -91,17 +94,24 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Филиал отдаёт доход за день до счетов: им можно расплатиться.
   const branch = branchNight(s, day);
   s = branch.state;
+  // Игрок в Заречье — гипермаркет в Центре торговал сам и тоже отдаёт доход до счетов (zarechye.ts).
+  const home = zarHomeNight(s, day);
+  s = home.state;
+  // «Рыбный день» с Сомом: сколько рыбы продали.
+  s = zarDuelNight(s, stats.sold.fish ?? 0);
   // Повар сегодня работал — ночью лепит пельмени (после смены дня план уже завтрашний).
   const lineCtx = { day, cook: onShift(s, 'cook') };
   const ended = endDay(s, stats, random);
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const billed = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
+  // День засчитан магазину, где работали (счета двух магазинов — по дням); после счетов — с нуля.
+  billed.state = countZarDay(billed.state, ended.bill !== null);
   // Своя марка: после закрытия и счетов (деньги на них — первыми) варят варенье, солят, лепят пельмени,
   // ставят квас — из того, что осталось на складе и полках.
   const lines = makeLines(billed.state, lineCtx);
   const night = { ...billed, state: lines.state };
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = branchReport(contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue), stats.revenue, random), stats), day, branch.income);
+  const next = zarReport(zarBossMorning(branchReport(contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue), stats.revenue, random), stats), day, branch.income)), day, home.income);
   return {
     ...night,
     state: next,
@@ -109,6 +119,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     quests: { earned: rewarded.earned, done: rewarded.done, total: quests.length },
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
+    home: home.income,
     week: week.done,
     lines: lines.night,
   };
@@ -134,7 +145,7 @@ export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
   legacyGuests(state) *
   taleGuests(state) *
-  arcGuests(state) *
+  homeOnly(state, arcGuests) *
   rushGuests(state) *
   priceAppeal(state) *
   coffeeTablesGuests(state) *
@@ -147,15 +158,22 @@ export const guestFactor = (state: StoreState): number =>
   weekGuests(state.day) *
   lightsGuests(state) *
   departmentGuests(state) *
-  eduardGuests(state) *
-  districtGuests(state) *
-  hoodGuests(state) *
-  trickGuests(state) *
+  homeOnly(state, eduardGuests) *
+  homeOnly(state, districtGuests) *
+  homeOnly(state, hoodGuests) *
+  homeOnly(state, trickGuests) *
   nightBoostGuests(state) *
-  giantGuests(state) *
-  contestGuests(state) *
+  homeOnly(state, giantGuests) *
+  homeOnly(state, contestGuests) *
   laneGuests(state) *
-  knownBigDayGuests(state.day);
+  knownBigDayGuests(state.day) *
+  zarGuests(state);
+
+/**
+ * Гости, которые бывают только в Центре: его район и соседи (здания района, благоустройство, Эдуард,
+ * «Гигант», конкурс, проделки конкурента, хроники района). В Заречье вместо них — свой район (zarGuests).
+ */
+const homeOnly = (state: StoreState, factor: (state: StoreState) => number): number => (inZar(state) ? 1 : factor(state));
 
 /**
  * Секунд между гостями сегодня: рейтинг, помещение, сюжет, сезон и звание. Особый день

@@ -27,7 +27,7 @@ import { iceboxRect, kioskSpot } from './layout';
 import { hasRadio, nextStation, setStation, STATION_INFO, stationOf } from '../game/radio';
 import { gearTier } from '../game/gear';
 import { idleRegisters, registerCount, registerSlots } from '../game/registers';
-import { isFairDay, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fair';
+import { fairToday, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fair';
 import { ART, WALL, FACADE_H, LIGHT_DEPTH, EVENING_FROM, KIOSK_GLOW, type CrownPart } from './common';
 import * as lighting from './lighting';
 import * as deliveries from './deliveries';
@@ -57,7 +57,7 @@ export function applyFair(scene: StoreScene): void {
   for (const obj of scene.fairObjs) obj.destroy();
   scene.fairObjs = [];
   scene.stall = undefined;
-  if (!isFairDay(scene.state.day)) return;
+  if (!fairToday(scene.state)) return;
   const { w, h, door } = scene.layout;
   const keep = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
     scene.fairObjs.push(obj);
@@ -88,7 +88,7 @@ export function applyFair(scene: StoreScene): void {
 export function startStall(scene: StoreScene): void {
   scene.stallTimer?.remove();
   scene.stallTimer = undefined;
-  if (!isFairDay(scene.state.day)) return;
+  if (!fairToday(scene.state)) return;
   let sold = 0;
   scene.stallTimer = scene.time.addEvent({
     delay: STALL_EVERY_SECONDS * 1000,

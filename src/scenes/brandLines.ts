@@ -6,7 +6,7 @@
 
 import type { StoreScene } from './StoreScene';
 import type Phaser from 'phaser';
-import { isFairDay } from '../game/fair';
+import { fairToday } from '../game/fair';
 import { weekFor } from '../game/weeks';
 import { lineSeason, lineTier } from '../game/lines';
 import { kitchenOpen } from '../game/kitchen';
@@ -58,7 +58,7 @@ export function lineStreetSpots(state: StoreState, doorX: number): { jam: number
     spans.push([x + span[0], x + span[1]]);
     return x;
   };
-  const leftFree = !isFairDay(state.day) && !weekFor(state.day);
+  const leftFree = !fairToday(state) && !weekFor(state.day);
   // Бочка кваса — первой: её место справа; табурет и бочка солений — слева, где свободно.
   const kvass = lineTier(state, 'kvass') && lineSeason('kvass', state.day) ? place(KVASS_SPOTS, KVASS_SPAN) : null;
   const jam = leftFree && lineTier(state, 'jam') ? place(JAM_SPOTS, JAM_SPAN) : null;

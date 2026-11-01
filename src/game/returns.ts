@@ -181,7 +181,8 @@ export const orderQty = (state: StoreState): number => Math.min(8, 3 + state.lev
  * отложить свой любимый товар. Только знакомые, не в обиде, и товар здесь продаётся.
  */
 export function planOrder(state: StoreState, random: () => number): StoreState {
-  if (state.ret?.order || state.bankrupt || state.day < ORDER_FROM_DAY || random() >= ORDER_CHANCE) return state;
+  // В Заречье соседи свои (zarechye.ts) — заказ «отложи мне» просят только в Центре.
+  if (state.ret?.order || state.bankrupt || state.zar?.at === 'zar' || state.day < ORDER_FROM_DAY || random() >= ORDER_CHANCE) return state;
   const sellable = sellableProducts(state);
   const who = REGULARS.filter((r) => state.day >= r.from && regularState(state, r.id).awayUntil < state.day && sellable.includes(r.favorite));
   if (!who.length) return state;

@@ -18,6 +18,7 @@ import { HYPER_LEVEL, monthOf, type StoreState } from './economy';
 import { WEATHER_EFFECTS, weatherFor } from './weather';
 import { seasonFor } from './endless';
 import { rng } from './random';
+import { homeShop } from './zarechye';
 import type { TextKey } from '../i18n/ru';
 
 export type BranchTrack = 'shelves' | 'manager' | 'ads' | 'repair';
@@ -162,7 +163,7 @@ export function branchShare(state: StoreState): number {
 }
 
 /** Филиал — в старом магазине: главный переехал в гипермаркет. */
-export const branchInOldShop = (state: StoreState): boolean => hasBranch(state) && state.level >= HYPER_LEVEL;
+export const branchInOldShop = (state: StoreState): boolean => hasBranch(state) && homeShop(state).level >= HYPER_LEVEL;
 
 /**
  * Во сколько раз старый магазин меньше гипермаркета по выручке: после переезда образец выручки
@@ -173,7 +174,9 @@ export const branchInOldShop = (state: StoreState): boolean => hasBranch(state) 
 export const OLD_SHOP_SCALE = 0.5;
 
 /** Обычная выручка своего магазина в день — средняя за последнюю неделю, в разумных пределах. */
-export function branchRef(state: StoreState): number {
+export function branchRef(given: StoreState): number {
+  // Филиал работает по образцу главного магазина в Центре — даже когда игрок сегодня в Заречье (zarechye.ts).
+  const state = homeShop(given);
   const week = (state.history ?? []).slice(-BRANCH_REF_DAYS);
   // Выручка дня day−1 записана последней: уменьшаем только дни гипермаркета (с дня переезда), дни
   // универмага до него и так — образец старого магазина. Иначе в день переезда доход упал бы на четверть.
@@ -188,7 +191,7 @@ export function branchRef(state: StoreState): number {
  * больше (его прибавка уже вычтена). Без него филиалом правит нанятый со стороны, как раньше.
  */
 export const BRANCH_HEAD_BONUS = 0.08;
-export const branchHeadBonus = (state: StoreState): number => (state.branch && state.career?.head ? BRANCH_HEAD_BONUS : 0);
+export const branchHeadBonus = (state: StoreState): number => (state.branch && homeShop(state).career?.head ? BRANCH_HEAD_BONUS : 0);
 
 /** Обычный доход филиала в день — без погоды и случая (для «Развития» и прогноза). */
 export const branchUsual = (state: StoreState): number => (state.branch ? Math.round(branchRef(state) * branchShare(state) * (1 + branchHeadBonus(state))) : 0);

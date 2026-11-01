@@ -23,6 +23,8 @@ export interface DayReport {
   kitchen?: { sold: number; wanted: number; spoiled: number; spent?: number };
   /** Чистый доход филиала за этот день (branch.ts). */
   branch?: number;
+  /** Сколько принёс Центр без игрока, пока он работал в Заречье (zarechye.ts). */
+  home?: number;
 }
 
 export function addReport(state: StoreState, day: number, stats: DayStats, spoiled: Partial<Record<ProductId, number>>, dishSpoiled = 0): StoreState {
@@ -69,6 +71,8 @@ export interface WeekReport {
   lost: number;
   /** Доход филиала за эти дни (0 — филиала нет). */
   branch: number;
+  /** Доход Центра без игрока за неделю (дни в Заречье). */
+  home: number;
   lines: ProductLine[];
 }
 
@@ -95,5 +99,5 @@ export function weekReport(state: StoreState): WeekReport {
   })
     .filter((l) => l.sold || l.spoiled || l.pricey || l.missing)
     .sort((a, b) => b.profit - a.profit);
-  return { days, revenue: sum(days, (r) => r.revenue), served: sum(days, (r) => r.served), lost: sum(days, (r) => r.lost), branch: sum(days, (r) => r.branch ?? 0), lines };
+  return { days, revenue: sum(days, (r) => r.revenue), served: sum(days, (r) => r.served), lost: sum(days, (r) => r.lost), branch: sum(days, (r) => r.branch ?? 0), home: sum(days, (r) => r.home ?? 0), lines };
 }

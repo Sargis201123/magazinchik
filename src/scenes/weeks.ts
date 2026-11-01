@@ -10,7 +10,7 @@ import { t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
 import { track } from '../platform/analytics';
-import { isFairDay } from '../game/fair';
+import { fairToday } from '../game/fair';
 import { FIREWORKS_DAY, PIE_CONTEST_DAY, SALE_CROWD, SALE_EVENING, saleOn, startSale, WEEKS, weekFor, type WeekId } from '../game/weeks';
 import { UI_FONT } from '../ui/dom';
 import { FACADE_H, LIGHT_DEPTH, randomLook, type Look } from './common';
@@ -81,7 +81,7 @@ function harvest(scene: StoreScene, n: number, keep: Keep): void {
   const { door, h } = scene.layout;
   const front = h + FACADE_H;
   // В день обычной ярмарки слева стоит её лоток — тогда наш только справа.
-  const sides = isFairDay(scene.state.day) ? [1] : [-1, 1];
+  const sides = fairToday(scene.state) ? [1] : [-1, 1];
   for (const side of sides) {
     const at = { x: door.x + side * 60, y: front + 14 };
     keep(scene.art(at.x, at.y, 'week_stall').setOrigin(0.5, 1).setFlipX(side > 0).setDepth(at.y));

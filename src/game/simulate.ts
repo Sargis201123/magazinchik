@@ -80,6 +80,7 @@ import {
 } from './economy';
 import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd, type AdId } from './ads';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
+import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from './zarechye';
 import { restockPlan } from './restock';
 import { buyLine } from './reorder';
 import { bigDaySeed, setBigDaySeed } from './bigday';
@@ -92,7 +93,7 @@ import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { badBatch, haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } from './suppliers';
 import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY, homemade } from './economy';
-import { fairTolerance, isFairDay, STALL_MAX, stallSale } from './fair';
+import { fairToday, fairTodayTolerance, STALL_MAX, stallSale } from './fair';
 import { endSale, SALE_CROWD, saleExtraItems, startSale, weekFor } from './weeks';
 import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole, RELIEF_ROLE, TILL_ROLES } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
@@ -141,6 +142,11 @@ export interface SimDay {
   night: number;
   /** Чистый доход филиала за день (branch.ts). */
   branch: number;
+  /** Работали в Заречье (zarechye.ts) и сколько принёс за день Центр без игрока. */
+  zar: boolean;
+  home: number;
+  /** Постоянные расходы сегодняшнего магазина на день: аренда, вода, свет, зарплаты — месячные ÷ 7 (для окупаемости помещений). */
+  fixed: number;
   /** Сколько потрачено на рекламу сегодня. */
   ads: number;
   /** Своя марка на полках (lines.ts): выручка за проданное минус сырьё и банки (по себестоимости штуки). */
@@ -166,6 +172,8 @@ export interface SimResult {
   /** Смены фаз «Гиганта» и итоги конкурсов — по дням. */
   giant: { day: number; phase: string }[];
   contests: { day: number; tier: number; won: boolean }[];
+  /** Заречье: в какой день открыли и на какой день достигнуто каждое помещение там (индекс = уровень). */
+  zarLevelDay: (number | null)[];
   /** Состояние в конце прогона. */
   final: StoreState;
 }
@@ -208,6 +216,12 @@ export interface SimOptions {
    * на тех же сидах (tests/moments.test.ts, npm run sim:quests).
    */
   momentCatch?: number;
+  /**
+   * Заречье (zarechye.ts): с какого дня игрок готов его открыть (как только Центр — гипермаркет и денег
+   * хватает; финал в симуляторе не обязателен — иначе до Заречья не дожить) и в какие дни там работает:
+   * every = 2 — через день, 1 — каждый день.
+   */
+  zar?: { from: number; every: number; cap?: number };
 }
 
 export type Feature =
@@ -362,6 +376,7 @@ export function simulate({
   momentCatch = 0,
   lineIds = LINE_IDS,
   pet,
+  zar,
 }: SimOptions): SimResult {
   const random = rng(seed);
   // Случайности новых механик — отдельно: тогда прогоны с механикой и без идут по одним и тем же
@@ -384,11 +399,24 @@ export function simulate({
   const burglaries: SimResult['burglaries'] = [];
   const giantLog: SimResult['giant'] = [];
   const contests: SimResult['contests'] = [];
+  const zarLevelDay: (number | null)[] = Array.from({ length: ZAR_MAX_LEVEL + 1 }, () => null);
 
   for (let d = 0; d < days; d++) {
     const moneyStart = state.money;
     let investments = 0;
     let adSpent = 0;
+    // ---------- Утро: Заречье ----------
+    if (zar) {
+      if (!state.zar && state.day >= zar.from && homeShop(state).level >= HYPER_LEVEL && state.money >= ZAR_PRICE * 1.5) {
+        const opened = buyZar(state, true);
+        if (opened) {
+          investments += ZAR_PRICE;
+          state = opened;
+          zarLevelDay[0] = state.day;
+        }
+      }
+      if (state.zar) state = switchToday(state, (state.day - state.zar.since) % zar.every === 0 ? 'zar' : 'home');
+    }
     // Запас на закупку плюс копилка на счета в конце месяца.
     const bill = billTotal(monthlyBill(state));
     const reserve = 150 + 100 * state.level + Math.round(bill * (1 - daysUntilBill(state.day) / MONTH_DAYS));
@@ -398,7 +426,7 @@ export function simulate({
     if (isBroke(state)) state = takeLoan(state, loanOptions(state)[0]) ?? state;
     if (state.debt > 0 && state.money - state.debt >= reserve) state = payDebt(state, state.debt) ?? state;
 
-    const next = nextFor(state);
+    const next = zar?.cap !== undefined && inZar(state) && state.level >= zar.cap ? undefined : nextFor(state);
     // Расширяется, только если после стройки останется на ближайший счёт — так же, как предупреждает
     // утро (morning.ts): первый счёт после переезда — по старой аренде («новоселье»).
     const nextBill = next ? billTotal(monthlyBill({ ...state, level: state.level + 1, movedFrom: state.movedFrom ?? state.level })) : 0;
@@ -407,7 +435,8 @@ export function simulate({
       if (expanded) {
         investments += next.cost;
         state = expanded;
-        levelDay[state.level] = state.day;
+        if (inZar(state)) zarLevelDay[state.level] ??= state.day;
+        else levelDay[state.level] = state.day;
       }
     }
 
@@ -720,7 +749,7 @@ export function simulate({
     const sellable = sellableProducts(state);
     // Ярмарка: докупить на склад под лоток и продать через него (мимо кассы).
     let stallRevenue = 0;
-    if (isFairDay(state.day) && sellable.length) {
+    if (fairToday(state) && sellable.length) {
       for (let n = 0; n < STALL_MAX; n++) {
         const id = sellable[n % sellable.length];
         const best = SUPPLIER_IDS.map((sid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), id)).filter((p): p is number => p !== null).sort((a, b) => a - b)[0];
@@ -962,7 +991,7 @@ export function simulate({
       const aroma = random() < aromaShare;
       const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + adExtraItems(state, extraRandom) + saleExtraItems(state, extraRandom), (p) => dayDemand(state, p, aroma));
       const fair = (p: ProductId) =>
-        perceivedBase(state, p) * tolerance * fairTolerance(state.day) * loyaltyTolerance(state) * radioTolerance(state) * adTrust(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
+        perceivedBase(state, p) * tolerance * fairTodayTolerance(state) * loyaltyTolerance(state) * radioTolerance(state) * adTrust(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
       const cart: CartItem[] = [];
       let sawEmpty = false;
       // Чего не хватило — записываем в отчёт дня (по нему «Закупить нужное» и печь считают спрос).
@@ -1152,6 +1181,9 @@ export function simulate({
       oven: breadBaked,
       night: nightProfit,
       branch: night.branch,
+      zar: inZar(before),
+      fixed: Math.round((STORE_LEVELS[before.level].rent + STORE_LEVELS[before.level].utilities + STORE_LEVELS[before.level].power + before.staff.reduce((sum, m) => sum + m.wage, 0)) / MONTH_DAYS),
+      home: night.home,
       ads: adSpent,
       lines: LINE_IDS.reduce((sum, id) => sum + (stats.sold[LINES[id].product] ?? 0) * (state.prices[LINES[id].product] - lineUnitCost(id)), 0),
       quests: night.quests.earned,
@@ -1159,7 +1191,7 @@ export function simulate({
     void moneyStart;
   }
   setBigDaySeed(bigDaySeedBefore);
-  return { days: out, levelDay, chapterDay, rescueDay, bankruptDay, burglaries, giant: giantLog, contests, final: state };
+  return { days: out, levelDay, chapterDay, rescueDay, bankruptDay, burglaries, giant: giantLog, contests, zarLevelDay, final: state };
 }
 
 

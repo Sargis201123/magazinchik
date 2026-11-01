@@ -5,7 +5,7 @@ import {
   markdownSurplus,
   newGame,
   returnToShelf,
-  STORE_LEVELS,
+  nextStoreLevel,
   HYPER_LEVEL,
   storeLevel,
   type DayStats,
@@ -19,7 +19,8 @@ import { pickWanted, questDone, questProgress, payQuests } from '../game/endless
 import { lastSavedAt, loadGame, saveGame, savingPaused } from '../game/save';
 import type { PrankIn } from '../game/rival';
 import { awayTrade } from '../game/away';
-import { branchAway } from '../game/branch';
+import { branchAway, BRANCH_AWAY_MAX_HOURS } from '../game/branch';
+import { zarHomeAway, zarLook } from '../game/zarechye';
 import { getLang, t } from '../i18n';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
@@ -167,6 +168,8 @@ export class StoreScene extends Phaser.Scene {
   builtDistrict = '';
   /** Что из благоустройства района стояло на улице (hood.ts). */
   builtHood = '';
+  /** Какой район построен (game/zarechye.ts zarLook): Центр или Заречье, шаг Сома, теплоход. */
+  builtZar = '';
   /** Какие домики друзей стоят на «Улице друзей» (friendStreet.ts, game/street.ts streetKey). */
   builtStreet = '';
   /** Днём собрались в гости к другу с улицы — утром окно предложит зайти (friendStreet.ts). */
@@ -674,12 +677,15 @@ export class StoreScene extends Phaser.Scene {
     // Филиал (branch.ts) тоже работал — понемногу, без кассира: им правит управляющий.
     const branchAwayTrade = save && savedAt ? branchAway(this.state, trustedNow() - savedAt) : null;
     if (branchAwayTrade) this.state = branchAwayTrade.state;
+    // Закрыли игру в Заречье — гипермаркет в Центре тоже торговал понемногу, как филиал (zarechye.ts).
+    const homeAway = save && savedAt ? zarHomeAway(this.state, Math.min(BRANCH_AWAY_MAX_HOURS, (trustedNow() - savedAt) / 3_600_000)) : 0;
+    if (homeAway > 0) this.state = { ...this.state, money: this.state.money + homeAway };
     // Всё заработанное без игрока — не сразу в кассу, а в сундучок выручки (returns.ts): утром его
     // открывают касанием. Не открыл — копится дальше.
-    if (away || branchAwayTrade) {
+    if (away || branchAwayTrade || homeAway > 0) {
       this.state = stashAway(this.state, {
         cashier: away?.revenue ?? 0,
-        branch: branchAwayTrade?.income ?? 0,
+        branch: (branchAwayTrade?.income ?? 0) + homeAway,
         hours: Math.max(away?.hours ?? 0, branchAwayTrade?.hours ?? 0),
         units: away?.units ?? 0,
       });
@@ -1010,7 +1016,9 @@ export class StoreScene extends Phaser.Scene {
 
     // Камера показывает и соседнюю площадь, куда магазин вырастет: ларёк выглядит маленьким.
     // Гипермаркет — не пристройка, а здание «Гиганта» за дорогой: участка «Сдаётся» рядом нет.
-    const next = STORE_LEVELS[this.state.level + 1] && this.state.level + 1 < HYPER_LEVEL ? layoutFor(this.state.level + 1) : this.layout;
+    // В Заречье своя лестница помещений (game/zarechye.ts): после последнего — участка «Сдаётся» нет.
+    const next = nextStoreLevel(this.state) && this.state.level + 1 < HYPER_LEVEL ? layoutFor(this.state.level + 1) : this.layout;
+    this.builtZar = zarLook(this.state);
     this.next = next;
     camera.frameCamera(this);
     this.cameras.main.setZoom(this.baseZoom).centerOn(this.home.x, this.home.y);

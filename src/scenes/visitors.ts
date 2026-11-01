@@ -153,9 +153,10 @@ export function passerby(scene: StoreScene): void {
 }
 
 /** Наводнение: по затопленной дороге проплывает лодка с гребцом (иногда — с пассажиром). */
-export function rowBoat(scene: StoreScene, left: number, right: number): void {
+export function rowBoat(scene: StoreScene, left: number, right: number, at?: number): void {
   const toRight = Math.random() < 0.5;
-  const y = scene.streetY + Phaser.Math.Between(26, 40);
+  // at — своя вода (река в Заречье, scenes/zarechye.ts); без него — затопленная дорога.
+  const y = at ?? scene.streetY + Phaser.Math.Between(26, 40);
   const hull = scene.art(0, 4, 'boat');
   const oar = scene.art(4, 4, 'boat_oar').setOrigin(0.1, 0.2);
   const rower = persons.makePerson(scene, 4, -4, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day));

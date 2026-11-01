@@ -41,6 +41,7 @@ export function showReport(state: StoreState): void {
     el('div', 'ui-muted', t('report.total', { rev: report.revenue, served: report.served, lost: report.lost })),
     // Филиал (branch.ts) — одной строкой: его выручку не смешиваем со своей.
     ...(report.branch ? [el('div', 'ui-muted', t('report.branch', { n: report.branch }))] : []),
+    ...(report.home ? [el('div', 'ui-muted', t('zar.report.home', { n: report.home }))] : []),
     chart,
     el('h3', '', t('report.products')),
     ...lines,
