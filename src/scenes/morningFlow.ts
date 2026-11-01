@@ -51,6 +51,7 @@ import { isFairDay } from '../game/fair';
 import { takeLiteNote } from '../platform/quality';
 import { quietDays } from '../game/firstday';
 import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
+import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
 import * as lighting from './lighting';
@@ -335,6 +336,8 @@ export function startDay(scene: StoreScene): void {
     scene.running = true;
   }
   if (scene.state.onboarding && scene.state.day <= 2) newcomer.onboardingDay(scene);
+  // Питомец за звёзды здоровается с хозяином (starPets.ts).
+  starPets.greetStarPet(scene);
 }
 
 /**

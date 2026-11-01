@@ -60,6 +60,7 @@ const RULE = {
   meow: { gap: 0.6, max: 1 },
   bark: { gap: 0.5, max: 1 },
   purr: { gap: 1, max: 1 },
+  pet: { gap: 0.5, max: 1 },
   hiss: { gap: 0.3, max: 2 },
   ding: { gap: 0.25, max: 2 },
   courier: { gap: 0.4, max: 1 },
@@ -572,6 +573,41 @@ export const sound = {
     );
   },
   purr,
+  /**
+   * Питомец за звёзды (game/pets.ts) отозвался на ласку: мягкий голосок своего зверя — канал мира,
+   * с той стороны, где он сидит. Синус и треугольник, верх срезан: тихо и кругло, без писка.
+   */
+  pet: (kind: 'chirp' | 'squeak' | 'yip' | 'hum' | 'sniff' | 'chitter', x?: number) => {
+    const notes: Record<typeof kind, Note[]> = {
+      // Попугай: «фьюить» вверх и вниз.
+      chirp: [
+        { freq: 1300, dur: 0.09, wave: 'sine', vol: 0.03, slide: 1900, attack: 0.015 },
+        { freq: 1800, at: 0.11, dur: 0.12, wave: 'sine', vol: 0.026, slide: 1250 },
+      ],
+      // Хомяк: два крошечных писка.
+      squeak: [
+        { freq: 1650, dur: 0.05, wave: 'sine', vol: 0.022, slide: 1900 },
+        { freq: 1700, at: 0.09, dur: 0.05, wave: 'sine', vol: 0.02, slide: 2000 },
+      ],
+      // Корги: довольное «тяв» вполголоса.
+      yip: [{ freq: 520, dur: 0.11, wave: 'triangle', vol: 0.034, slide: 380, attack: 0.012 }],
+      // Черепаха: сонное «хм-м» внизу.
+      hum: [{ freq: 210, dur: 0.32, wave: 'sine', vol: 0.04, slide: 180, attack: 0.06 }],
+      // Крольчиха: шмыг-шмыг носом.
+      sniff: [
+        { freq: 900, dur: 0.04, wave: 'triangle', vol: 0.014, slide: 700 },
+        { freq: 950, at: 0.08, dur: 0.04, wave: 'triangle', vol: 0.014, slide: 720 },
+        { freq: 1000, at: 0.16, dur: 0.04, wave: 'triangle', vol: 0.012, slide: 760 },
+      ],
+      // Енот: быстрое «чир-чир-чир».
+      chitter: [
+        { freq: 1100, dur: 0.05, wave: 'triangle', vol: 0.022, slide: 1350 },
+        { freq: 1150, at: 0.07, dur: 0.05, wave: 'triangle', vol: 0.02, slide: 1400 },
+        { freq: 1200, at: 0.14, dur: 0.06, wave: 'triangle', vol: 0.018, slide: 1000 },
+      ],
+    };
+    play(notes[kind], { bus: 'world', x, lp: 2400, cents: 60, db: 1.5, limit: ['pet', RULE.pet] });
+  },
   /** Гав: «гав», «гав-гав» или «тяв-тяв-тяв» (пока нет записи — два хриплых тявка, пила через фильтр). */
   bark: (x?: number) => {
     if (sample('bark', { x, cents: 70, db: 2, limit: ['bark', RULE.bark] }) !== null) return;

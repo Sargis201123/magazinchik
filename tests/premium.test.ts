@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { newGame, type StoreState } from '../src/game/economy';
 import { activeDecor, canTry, DECOR, DECOR_KINDS, grantDecor, normalizeDecor, STAR_PACKS, tryDecor, type DecorState } from '../src/game/decor';
 import { SUPPORT_TIERS } from '../src/game/support';
+import { PET_IDS, PETS, petItem } from '../src/game/pets';
 import { ownedFrom, STARS_CATALOG, verifyInitData, itemFromPayload, payloadFor } from '../api/_lib/telegram';
 
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 10, ...patch });
@@ -20,6 +21,8 @@ describe('премиальное оформление', () => {
     for (const [id, pack] of Object.entries(STAR_PACKS)) premium[id] = pack.stars;
     // Ступени «Поддержать автора» (support.ts).
     for (const tier of SUPPORT_TIERS) premium[tier.id] = tier.stars;
+    // Питомцы за звёзды (pets.ts).
+    for (const id of PET_IDS) premium[petItem(id)] = PETS[id].stars;
     expect(Object.fromEntries(Object.entries(STARS_CATALOG).map(([id, v]) => [id, v.stars]))).toEqual(premium);
     // Вещь набора знает свой набор, а в продаже по отдельности её нет.
     for (const [id, pack] of Object.entries(STAR_PACKS)) for (const item of pack.items) expect(DECOR.find((d) => d.id === item)?.pack).toBe(id);

@@ -54,6 +54,7 @@ import { Coach } from '../ui/coach';
 import { duelInfo, loadMultiplayer } from '../platform/multiplayer';
 import { ensureSeason, grantPass } from '../game/pass';
 import { grantSupport } from '../game/support';
+import { grantPets } from '../game/pets';
 import { ensureRush } from '../game/rush';
 import { BUSKER_GUESTS } from '../game/nightGuests';
 import { setErrorContext } from '../platform/errors';
@@ -120,6 +121,7 @@ import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
 import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
+import * as starPets from './starPets';
 import * as deliveries from './deliveries';
 import * as food from './food';
 import * as streets from './streets';
@@ -581,6 +583,10 @@ export class StoreScene extends Phaser.Scene {
   weekTimers: (() => void)[] = [];
   weekSign?: Phaser.GameObjects.Image;
   /** Уголки своей марки (brandLines.ts): табурет с вареньем, бочки солений и кваса, доска с пельменями; пар над тазом. */
+  /** Питомец за звёзды в зале (starPets.ts), до какого времени он радуется и сколько гостей было в прошлый тик. */
+  starPet?: Phaser.GameObjects.Image;
+  starPetBusy = 0;
+  starPetGuests = 0;
   lineObjs: Phaser.GameObjects.GameObject[] = [];
   lineTimers: (() => void)[] = [];
   /** Особый день (bigday.ts): что на улице — марево, вода, шествие; убирается к вечеру. */
@@ -690,7 +696,8 @@ export class StoreScene extends Phaser.Scene {
       // Наборы за звёзды (новогодний) раскрываются в свои вещи.
       const owned = decorFromPurchases(ids ?? []);
       // Поддержка автора (support.ts): табличка и кот, ступень — для меню «Поддержать автора».
-      const next = grantSupport(grantPass(grantDecor(this.state, owned, !save), ids ?? []), ids ?? [], !save);
+      // Питомцы за звёзды (pets.ts): купленные на другом телефоне или до «Начать заново» — дома.
+      const next = grantPets(grantSupport(grantPass(grantDecor(this.state, owned, !save), ids ?? []), ids ?? [], !save), ids ?? [], !save);
       if (next === this.state) return;
       this.state = next;
       saveGame(next);
@@ -1024,6 +1031,7 @@ export class StoreScene extends Phaser.Scene {
     this.lineObjs = [];
     this.lineTimers = [];
     linesFx.applyLines(this);
+    starPets.buildStarPet(this);
     morningFlow.noteNewProps(this, bought);
     // Пол — последним: тени ложатся от всей мебели, что уже стоит в зале и во флигеле.
     this.loadWear();

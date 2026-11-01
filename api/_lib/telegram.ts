@@ -129,6 +129,13 @@ export const STARS_CATALOG: Record<string, CatalogItem> = {
   neon_open: { stars: 30, ru: 'Неон «ОТКРЫТО»', en: 'OPEN neon', tr: '“AÇIK” neonu', es: 'Neón “ABIERTO”' },
   // Наборы (src/game/decor.ts → STAR_PACKS): одна покупка — несколько вещей.
   pack_newyear: { stars: 100, ru: 'Новогодний набор', en: 'New Year pack', tr: 'Yılbaşı seti', es: 'Paquete de Año Nuevo' },
+  // Питомцы за звёзды (src/game/pets.ts): только для красоты, в зале живёт выбранный.
+  pet_hamster: { stars: 25, ru: 'Хомяк в клетке', en: 'Hamster in a cage', tr: 'Kafesteki hamster', es: 'Hámster en su jaula' },
+  pet_turtle: { stars: 35, ru: 'Черепаха', en: 'Tortoise', tr: 'Kaplumbağa', es: 'Tortuga' },
+  pet_parrot: { stars: 50, ru: 'Попугай на жёрдочке', en: 'Parrot on a perch', tr: 'Tüneğinde papağan', es: 'Loro en su percha' },
+  pet_bunny: { stars: 50, ru: 'Крольчиха', en: 'Bunny', tr: 'Tavşan', es: 'Conejita' },
+  pet_corgi: { stars: 75, ru: 'Корги у входа', en: 'Corgi by the door', tr: 'Kapıdaki corgi', es: 'Corgi en la entrada' },
+  pet_raccoon: { stars: 100, ru: 'Енот со склада', en: 'Stockroom raccoon', tr: 'Depo rakunu', es: 'Mapache del almacén' },
   // «Поддержать автора» (src/game/support.ts): только спасибо и красота, без преимуществ в игре.
   support_25: { stars: 25, ru: 'Кофе автору', en: 'A coffee for the author', tr: 'Yapımcıya bir kahve', es: 'Un café para el autor' },
   support_100: { stars: 100, ru: 'Кот в цилиндре', en: 'Cat in a top hat', tr: 'Silindir şapkalı kedi', es: 'Gato con sombrero de copa' },
