@@ -14,6 +14,8 @@ const RETRY_MS = [1000, 2000, 4000, 8000];
 const pending = new Set<Promise<unknown>>();
 
 export interface Lazy<T> {
+  /** Имя для отчёта об ошибке. */
+  name: string;
   /** Уже загружено — сразу модуль, нет — null. */
   get(): T | null;
   /** Загрузить (один раз; повторный вызов ждёт ту же загрузку). */
@@ -34,6 +36,7 @@ export function lazy<T>(name: string, importer: () => Promise<T>): Lazy<T> {
     }
   };
   return {
+    name,
     get: () => mod,
     load: () => {
       if (loading) return loading;
@@ -42,7 +45,6 @@ export function lazy<T>(name: string, importer: () => Promise<T>): Lazy<T> {
         (error: unknown) => {
           // Следующий load() попробует заново.
           loading = null;
-          reportError(error, `lazy:${name}`);
           throw error;
         },
       );
@@ -59,24 +61,27 @@ export function withLazy<T>(part: Lazy<T>, use: (mod: T) => void): void {
   const ready = part.get();
   if (ready) use(ready);
   else
-    void part.load().then(use, () => {
+    void part.load().then(use, (error: unknown) => {
       // Файл игры так и не пришёл: без него дальше не пройти — перезапуск с титула (Chromium помнит
-      // неудачный import() до перезагрузки страницы, повторять его бесполезно). Не чаще раза в минуту:
-      // без связи страница не должна перезапускаться по кругу.
+      // неудачный import() до перезагрузки страницы, повторять его бесполезно). Только что уже
+      // перезапускали — ждём дольше, чтобы без связи страница не моргала по кругу, но не застревала.
+      reportError(error, `lazy:${part.name}`);
       toast('assets/ico_phone.png', t('lazy.offTitle'), t('lazy.offText'));
-      if (Date.now() - lastReload() < RELOAD_GAP_MS) return;
+      const again = Date.now() - lastReload() < RELOAD_GAP_MS;
       try {
         sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
       } catch {
         // Хранилище недоступно — перезапуск всё равно нужен.
       }
       // Надпись встаёт в очередь за другими (достижения) — даём ей показаться.
-      setTimeout(() => location.reload(), 5000);
+      setTimeout(() => location.reload(), again ? RELOAD_SLOW_MS : RELOAD_MS);
     });
 }
 
 const RELOAD_KEY = 'magazinchik.lazyReload';
 const RELOAD_GAP_MS = 60_000;
+const RELOAD_MS = 5000;
+const RELOAD_SLOW_MS = 30_000;
 const lastReload = (): number => {
   try {
     return Number(sessionStorage.getItem(RELOAD_KEY)) || 0;
@@ -85,7 +90,7 @@ const lastReload = (): number => {
   }
 };
 
-/** Подкачать заранее, без ожидания и без шума об ошибке (при настоящей надобности load() повторит). */
+/** Подкачать заранее, без ожидания и без шума об ошибке (при настоящей надобности withLazy повторит и сообщит). */
 export function prefetch(part: Lazy<unknown>): void {
   void part.load().catch(() => undefined);
 }

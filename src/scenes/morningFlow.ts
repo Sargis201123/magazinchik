@@ -172,6 +172,13 @@ export function offerReturn(scene: StoreScene, then: () => void): void {
 }
 
 export function showMorning(scene: StoreScene): void {
+  // Утреннее окно ещё в пути (медленная связь) — дождаться его и только потом всё утро целиком:
+  // гостинец, письма и новости соперника открываются поверх окна, как и без разбивки (окно — первым).
+  // У новичка в первый день окна нет — ждать нечего.
+  if (!morningUi.get() && !playDayOne(scene.state)) {
+    withLazy(morningUi, () => showMorning(scene));
+    return;
+  }
   // За ночь склад доливает полки: утром всё, что влезает, уже стоит в зале (просрочку списали ночью).
   // По настоящим часам: новый сезон пропуска и выходные «Чёрной пятницы района».
   scene.state = ensureRush(ensureSeason(shelveAll(scene.state), trustedNow()), trustedNow());
