@@ -30,10 +30,12 @@ describe('«Бабушкина тетрадь»: письмо', () => {
     expect(planLetter(got.state, '2026-11-02', () => 0.9).ret?.letter?.story).toBeUndefined();
   });
 
-  it('старое сохранение без тетради получает её следующим вечером — вместо обычного письма, если то не пришло', () => {
+  it('старое сохранение без тетради получает её после уже ждущего письма — то не пропадает', () => {
     const old = shop({ day: 40, story: { chapter: 3, introSeen: true, ordersDone: 0, inspectionsPassed: 0 }, ret: { letter: { from: 'valya', n: 2, date: '2026-11-01' } } });
     expect(old.nb).toBeUndefined();
-    const planned = planLetter(old, '2026-11-01', () => 0.5);
+    expect(planLetter(old, '2026-11-01', () => 0.5).ret?.letter?.from).toBe('valya');
+    const delivered = takeLetter(old, '2026-11-02')!.state;
+    const planned = planLetter(delivered, '2026-11-02', () => 0.5);
     expect(planned.ret?.letter?.story).toBe('notebook');
     // Уже открытые главы сразу видны в тетради.
     expect(ids(takeLetter(planned, '2026-11-01')!.state)).toEqual(['debts', 'valya', 'marat', 'edik', 'many', 'torn']);
@@ -131,7 +133,8 @@ describe('«Бабушкина тетрадь»: «Гигант» устоял',
     expect(s.giant?.phase).toBe('lost');
     expect(s.contest?.last).toMatchObject({ won: false, giant: true });
     expect(s.contest?.wins).toBe(0);
-    for (let d = s.day + 1; d < s.day + 25; d++) s = contestNight({ ...s, day: d }, stats);
+    const from = s.day;
+    for (let d = from + 1; d < from + 25; d++) s = contestNight({ ...s, day: d }, stats);
     expect(s.contest?.phase).toBe('wait');
   });
 
