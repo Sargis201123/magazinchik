@@ -234,22 +234,33 @@ export function setupStreetTap(scene: StoreScene): void {
     if (over.length || scene.dragged || scene.arranging || !scene.running || p.upTime - p.downTime > STREET_TAP_MS) return;
     const at = scene.cameras.main.getWorldPoint(p.x, p.y);
     if (at.y < scene.layout.h + FACADE_H) return;
-    // За кассой хозяина сменщик: касание улицы торопит его, пока он пробивает.
-    const first = scene.registers[0];
-    if (scene.operator(0) !== 'owner') {
-      if (!first?.scan || first.scan.byOwner) return;
-      motion.ripple(scene, at.x, at.y);
-      void scene.serveNext();
-      return;
-    }
-    // Касание ничего не изменит (у кассы никого, хозяин уже пробивает) — и отклика нет.
-    const r = scene.ownerRegister();
-    if (!r || scene.ownerScanning() || (!scene.sellerBusy && !scene.atSpot(r))) return;
-    motion.ripple(scene, at.x, at.y);
-    if (r.img) motion.squash(scene, r.img, 1.06, 0.9, 80);
-    if (!scene.sellerBusy) scene.serves.street++;
-    void scene.serveNext();
+    serveFromStreet(scene, at.x, at.y);
   });
+}
+
+/**
+ * Касание улицы в точке мира: пробить того, кто ждёт у кассы хозяина, или поторопить сменщика.
+ * false — касание ничего бы не изменило (и отклика нет); тогда его может взять то, что под пальцем
+ * (домик друга на улице, friendStreet.ts).
+ */
+export function serveFromStreet(scene: StoreScene, x: number, y: number): boolean {
+  if (!scene.running) return false;
+  // За кассой хозяина сменщик: касание улицы торопит его, пока он пробивает.
+  const first = scene.registers[0];
+  if (scene.operator(0) !== 'owner') {
+    if (!first?.scan || first.scan.byOwner) return false;
+    motion.ripple(scene, x, y);
+    void scene.serveNext();
+    return true;
+  }
+  // Касание ничего не изменит (у кассы никого, хозяин уже пробивает) — и отклика нет.
+  const r = scene.ownerRegister();
+  if (!r || scene.ownerScanning() || (!scene.sellerBusy && !scene.atSpot(r))) return false;
+  motion.ripple(scene, x, y);
+  if (r.img) motion.squash(scene, r.img, 1.06, 0.9, 80);
+  if (!scene.sellerBusy) scene.serves.street++;
+  void scene.serveNext();
+  return true;
 }
 
 /**

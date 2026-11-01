@@ -712,7 +712,9 @@ export class StoreScene extends Phaser.Scene {
       void loadMultiplayer().then(() => {
         const friend = (this.rivalAcross || this.builtEduard === 'vacant') && duelInfo()?.rival?.name !== this.builtFriend;
         // Улица друзей пришла или поменялась — домики встают, пока магазин закрыт (днём — завтра утром).
-        if (!this.running && (friend || streetKey(streetInfo()) !== this.builtStreet)) this.buildWorld();
+        // На титуле не трогаем: перестройка оборвала бы пролёт камеры — улицу поставит утро (showMorning).
+        const street = !this.onTitle && streetKey(streetInfo()) !== this.builtStreet;
+        if (!this.running && (friend || street)) this.buildWorld();
       });
       // Открыли по ссылке «Помоги!» друга — подмога уходит сама; друзья откликнулись на нашу — забрать.
       void nightShift.sendFriendHelp(this);

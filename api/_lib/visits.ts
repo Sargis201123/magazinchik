@@ -66,24 +66,28 @@ export async function street(db: D1, me: number, now: number): Promise<StreetRow
   const rows = (
     await db
       .prepare(
+        // Сначала пятеро последних (по индексам сети), и только у них — два поля снимка: json_extract
+        // в общем списке разбирал бы снимок каждого друга сети до сортировки.
         `SELECT p.id AS id, p.name AS name, p.level AS level, p.day AS day, p.rating AS rating, p.updated AS updated,
                 json_extract(s.data, '$.shopName') AS shop, json_extract(s.data, '$.decor.active.sign') AS sign
-           FROM progress p LEFT JOIN shops s ON s.id = p.id
-          WHERE p.id != ?1 AND p.updated > ?2 AND ${inNetwork('p.id')}
-          ORDER BY p.updated DESC LIMIT ${STREET_SIZE}`,
+           FROM (SELECT id, name, level, day, rating, updated FROM progress
+                  WHERE id != ?1 AND updated > ?2 AND ${inNetwork('id')}
+                  ORDER BY updated DESC LIMIT ${STREET_SIZE}) p
+           LEFT JOIN shops s ON s.id = p.id
+          ORDER BY p.updated DESC`,
       )
       .bind(me, now - ACTIVE_DAYS * DAY)
       .all<{ id: number; name: string | null; level: number | null; day: number | null; rating: number | null; updated: number; shop: unknown; sign: unknown }>()
   ).results;
   const friends = rows.map((r) => ({
     id: r.id,
-    name: String(r.name ?? '').slice(0, 32),
+    name: cut(String(r.name ?? ''), 32),
     level: Number(r.level) || 0,
     day: Number(r.day) || 1,
     rating: Math.round((Number(r.rating) || 0) * 10) / 10,
     ago: Math.max(0, today(now) - today(Number(r.updated) || 0)),
-    ...(typeof r.shop === 'string' && r.shop ? { shop: r.shop.slice(0, 32) } : {}),
-    ...(typeof r.sign === 'string' && r.sign ? { sign: r.sign.slice(0, 32) } : {}),
+    ...(typeof r.shop === 'string' && r.shop ? { shop: cut(r.shop, 32) } : {}),
+    ...(typeof r.sign === 'string' && r.sign ? { sign: cut(r.sign, 32) } : {}),
   }));
   let mine = streetCache.get(db);
   if (!mine) streetCache.set(db, (mine = new Map()));
@@ -94,6 +98,9 @@ export async function street(db: D1, me: number, now: number): Promise<StreetRow
 }
 
 /** Друг добавился — его улица и наша собираются заново, не дожидаясь, пока ответ устареет. */
+/** Не длиннее n знаков — по знакам, а не половинкам эмодзи. */
+const cut = (v: string, n: number): string => Array.from(v).slice(0, n).join('');
+
 const forgetStreet = (db: D1, ...ids: number[]) => {
   for (const id of ids) streetCache.get(db)?.delete(id);
 };

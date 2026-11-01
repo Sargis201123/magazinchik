@@ -33,12 +33,13 @@ const num = (v: unknown, min: number, max: number, fallback: number): number => 
 };
 
 /**
- * Имя от другого игрока: только печатные знаки (без управляющих и переворачивающих строку),
+ * Имя от другого игрока: без управляющих знаков и тех, что переворачивают строку (склейки эмодзи и
+ * ZWNJ в именах остаются),
  * пробелы схлопнуты, не длиннее STREET_NAME. Пустое — пусто.
  */
 export function cleanName(v: unknown): string {
   if (typeof v !== 'string') return '';
-  const plain = v.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, '').replace(/\s+/g, ' ').trim();
+  const plain = v.replace(/[\p{Cc}\u200e\u200f\u202a-\u202e\u2066-\u2069\u2028\u2029\ufeff]/gu, '').replace(/\s+/g, ' ').trim();
   // По знакам, не по половинкам эмодзи: обрезка не оставит битый символ.
   return [...plain].slice(0, STREET_NAME).join('').trim();
 }

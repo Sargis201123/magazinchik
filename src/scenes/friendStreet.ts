@@ -102,11 +102,18 @@ function buildLot(scene: StoreScene, x: number, bottom: number): void {
   });
 }
 
-/** Короткое касание без сдвига камеры: щипок и перетаскивание квартала работают как раньше. */
+/**
+ * Короткое касание без сдвига камеры: щипок и перетаскивание квартала работают как раньше. Днём домик
+ * стоит там, куда пальцем пробивают покупателей (касание улицы, camera.ts): есть кого пробить — сначала
+ * пробиваем, карточка — когда у кассы пусто.
+ */
 function onShortTap(scene: StoreScene, obj: Phaser.GameObjects.Image, action: () => void): void {
   obj.setInteractive({ useHandCursor: true }).on('pointerup', (p: Phaser.Input.Pointer) => {
     if (scene.arranging || p.upTime - p.downTime > STREET_TAP_MS) return;
-    camera.tap(scene, action);
+    camera.tap(scene, () => {
+      const at = scene.cameras.main.getWorldPoint(p.x, p.y);
+      if (!camera.serveFromStreet(scene, at.x, at.y)) action();
+    });
   });
 }
 
