@@ -11,6 +11,7 @@ import { startSync } from './game/save';
 import { installFrameCap } from './platform/frameCap';
 import { measureCanvas, watchScreen } from './platform/screen';
 import { installClickSounds } from './ui/audio';
+import { lazyIdle } from './platform/lazy';
 
 const BG = '#1d1a26';
 
@@ -52,5 +53,6 @@ function start(): void {
   // Размер на странице, отступы и новые размеры, когда окно меняется (полный экран Telegram, поворот).
   watchScreen(game);
   // Отладка: ?debug открывает доступ к игре из консоли браузера.
-  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { game });
+  // lazyIdle — дождаться частей игры, что подкачиваются отдельно (platform/lazy.ts; ждёт scripts/e2e.ts).
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { game, lazyIdle });
 }

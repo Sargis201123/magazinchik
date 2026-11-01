@@ -3088,6 +3088,9 @@ export const en: Record<TextKey, string> = {
   "letter.staff.2": "I'm studying! Hard, but fun. I tell my classmates about our shop — they don't believe shops can be that nice. Thank you for letting me go.",
   "letter.staff.3": "We've settled in. There's a shop here, but it's not the same — no cat, no grandma's pies. Say hi to everyone and scratch the cat behind the ear.",
   "letter.staff.4": "Resting, planting tomatoes. I tell the grandkids about our shop — so many shifts, imagine! If it ever gets really busy — call me, I'll show them how it's done.",
+  // Скорость загрузки: часть игры не догрузилась (platform/lazy.ts).
+  "lazy.offTitle": "Connection lost",
+  "lazy.offText": "Part of the game didn’t load — restarting, your progress is saved.",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

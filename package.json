@@ -17,6 +17,7 @@
     "sim:restock": "vite-node scripts/sim-restock.ts",
     "sim:quests": "vite-node scripts/sim-quests.ts",
     "e2e": "vite-node scripts/e2e.ts",
+    "loadtime": "vite-node scripts/loadtime.ts",
     "taps": "vite-node scripts/taps.ts",
     "sim:career": "vite-node scripts/sim-career.ts"
   },

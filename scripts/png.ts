@@ -112,9 +112,17 @@ const chunk = (kind: string, body: Buffer): Buffer => {
 
 /**
  * Записать RGBA в PNG. Фильтр строки выбираем как libpng: с наименьшей суммой модулей байтов —
- * так файл почти не больше, чем у PIL с optimize.
+ * так файл почти не больше, чем у PIL с optimize. Пиксель-арт (лист атласа: ровные заливки, мало
+ * цветов) часто жмётся лучше вовсе без фильтров — у листа мира на ~18 % (docs/PERFORMANCE.md);
+ * пробуем оба способа и берём меньший файл. Точки одни и те же — меняется только размер.
  */
-export function encodePng({ width, height, data }: Rgba): Buffer {
+export function encodePng(img: Rgba): Buffer {
+  const picked = encodeWith(img, true);
+  const plain = encodeWith(img, false);
+  return plain.length < picked.length ? plain : picked;
+}
+
+function encodeWith({ width, height, data }: Rgba, filters: boolean): Buffer {
   const stride = width * 4;
   const out = Buffer.alloc((stride + 1) * height);
   const line = Buffer.alloc(stride);
@@ -122,7 +130,7 @@ export function encodePng({ width, height, data }: Rgba): Buffer {
     const row = y * stride;
     let best = 0;
     let bestSum = Infinity;
-    for (let f = 0; f <= 4; f++) {
+    for (let f = 0; f <= (filters ? 4 : 0); f++) {
       let sum = 0;
       for (let i = 0; i < stride; i++) {
         const a = i >= 4 ? data[row + i - 4] : 0;
