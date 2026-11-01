@@ -5,6 +5,7 @@
 import { ready, username } from './social.js';
 import { appLink, langOf, prepareMessage } from './share.js';
 import { bot, json, verifyInitData, type D1, type Env } from './telegram.js';
+import type { Lang } from './lang.js';
 
 /** Картинка в base64 не больше этого (≈ 700 КБ JPEG). */
 export const CARD_MAX = 950_000;
@@ -14,6 +15,9 @@ export const CARD_GAP = 20_000;
 export const CARD_TTL = 3 * 24 * 3600_000;
 const ID_RE = /^[a-z0-9]{16}$/;
 const B64_RE = /^[A-Za-z0-9+/]+=*$/;
+
+/** Кнопка под карточкой в чате: название игры (по-турецки и по-испански — латиницей). */
+const PLAY: Record<Lang, string> = { ru: '▶ Магазинчик', en: '▶ Магазинчик', tr: '▶ Magazinchik', es: '▶ Magazinchik' };
 
 const newId = (): string => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
 
@@ -51,7 +55,8 @@ export async function card(request: Request, env: Env, now = Date.now()): Promis
     // ссылка t.me/<бот>?startapp=ref_<id> работает везде и сразу открывает игру с приглашением.
     const app = env.APP_URL ?? '';
     const name = await username(token).catch(() => '');
-    const play = name ? { text: '▶ Магазинчик', url: appLink(name, `ref_${user.id}`) } : app ? { text: '▶ Магазинчик', web_app: { url: app } } : null;
+    const text = PLAY[langOf(body.lang)];
+    const play = name ? { text, url: appLink(name, `ref_${user.id}`) } : app ? { text, web_app: { url: app } } : null;
     await bot(token, 'sendPhoto', {
       chat_id: user.id,
       photo: url,

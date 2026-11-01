@@ -12,6 +12,7 @@ import { ready } from './social.js';
 import { network } from './visits.js';
 import { daytime, DEFAULT_TZ } from './remind.js';
 import { bot, json, verifyInitData, type D1, type Env } from './telegram.js';
+import { langOf, type Lang } from './lang.js';
 
 const DAY = 24 * 3600_000;
 const today = (now: number): number => Math.floor(now / DAY);
@@ -44,6 +45,14 @@ async function presentsReady(db: D1): Promise<void> {
   schemaReady.add(db);
 }
 
+/** Письмо бота другу: кто оставил подарок, и кнопка в игру. */
+const NOTIFY: Record<Lang, { text: (from: string) => string; open: string }> = {
+  ru: { text: (from) => `🎁 ${from} заглядывает к тебе в магазин и оставляет подарок. Открой его утром!`, open: '▶ Открыть' },
+  en: { text: (from) => `🎁 ${from} dropped by your store and left a present. Open it in the morning!`, open: '▶ Open' },
+  tr: { text: (from) => `🎁 ${from} dükkânına uğradı ve sana bir hediye bıraktı. Sabah aç!`, open: '▶ Aç' },
+  es: { text: (from) => `🎁 ${from} pasó por tu tienda y te dejó un regalo. ¡Ábrelo por la mañana!`, open: '▶ Abrir' },
+};
+
 const nameOf = async (db: D1, id: number): Promise<string> => (await db.prepare('SELECT name FROM progress WHERE id = ?').bind(id).first<{ name: string }>())?.name || '—';
 
 /**
@@ -61,14 +70,14 @@ async function notify(env: Env, db: D1, to: number, from: string, now: number): 
     .bind(to, today(now))
     .run();
   if ((res.meta?.changes ?? 0) === 0) return false;
-  const ru = p.lang !== 'en';
-  const text = ru ? `🎁 ${from} заглядывает к тебе в магазин и оставляет подарок. Открой его утром!` : `🎁 ${from} dropped by your store and left a present. Open it in the morning!`;
+  const t = NOTIFY[langOf(p.lang)];
+  const text = t.text(from);
   const url = env.APP_URL;
   try {
     await bot(env.BOT_TOKEN ?? '', 'sendMessage', {
       chat_id: to,
       text,
-      ...(url ? { reply_markup: { inline_keyboard: [[{ text: ru ? '▶ Открыть' : '▶ Open', web_app: { url } }]] } } : {}),
+      ...(url ? { reply_markup: { inline_keyboard: [[{ text: t.open, web_app: { url } }]] } } : {}),
     });
     return true;
   } catch (error) {

@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import atlas from 'virtual:atlas';
 import { startSync } from '../game/save';
-import { t } from '../i18n';
+import { getLang, t } from '../i18n';
+import { FONT_SAMPLE } from '../i18n/langs';
 import { assetUrl, png } from '../platform/assets';
 import { useSheet } from '../ui/sheet';
 import { TEXTURES } from './worldTextures';
@@ -63,7 +64,9 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     // Надписи на холсте рисуются один раз — магазин ждёт шрифт (create), иначе останутся системным.
-    this.font = document.fonts?.load(`600 16px "Nunito Variable"`).catch(() => []) ?? Promise.resolve([]);
+    // У турецкого, испанского и других — ещё кусок шрифта со своими буквами (FONT_SAMPLE).
+    const sample = FONT_SAMPLE[getLang()];
+    this.font = (sample ? document.fonts?.load(`600 16px "Nunito Variable"`, `Aa${sample}`) : document.fonts?.load(`600 16px "Nunito Variable"`))?.catch(() => []) ?? Promise.resolve([]);
     const splash = document.getElementById('splash');
     const bar = splash?.querySelector<HTMLElement>('.bar');
     const txt = splash?.querySelector('.txt');
