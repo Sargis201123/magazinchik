@@ -63,6 +63,8 @@ export type Popup = {
 
 /** Слой света: выше людей и мебели, ниже всплывающих надписей (1000). */
 export const LIGHT_DEPTH = 900;
+/** Касание улицы короче этого (мс) — нажатие; дольше — палец лежал или начинал жест (camera.ts, friendStreet.ts). */
+export const STREET_TAP_MS = 450;
 /** Толчок: дрожь доходит до полки через x·QUAKE_WAVE_MS мс (слева направо), полка дрожит QUAKE_SHAKE_MS мс на ±QUAKE_SHAKE_PX. */
 export const QUAKE_WAVE_MS = 1.5;
 export const QUAKE_SHAKE_MS = 560;

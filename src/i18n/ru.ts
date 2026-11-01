@@ -3173,6 +3173,19 @@ export const ru = {
   "pets.raccoon.about": "Живёт у двери склада: то выглянет, то спрячется. Ночью не прячется вовсе.",
   "pets.raccoon.life": "Машет лапкой утром и на рекорд, когда магазин закрыт — спит в коробке.",
   "pets.greet.raccoon": "{name} машет лапкой из-за двери",
+  // «Улица друзей» (game/street.ts, scenes/friendStreet.ts, ui/street.ts).
+  "street.sign": "У {name}",
+  "street.lot.title": "СДАЁТСЯ",
+  "street.lot.text": "пригласи друга",
+  "street.seen.today": "В игре: сегодня",
+  "street.seen.yesterday": "В игре: вчера",
+  "street.seen.days": "В игре: {n} дн. назад",
+  "street.card.who": "{name} · {shop}",
+  "street.card.stats": "День {day} · ★ {rating}",
+  "street.card.visit": "Зайти в гости",
+  "street.visit.title": "В гости к другу",
+  "street.visit.later": "Сейчас магазин открыт — к {name} зайдём утром, до открытия.",
+  "street.morning.title": "Пора в гости к {name}!",
 } as const;
 
 export type TextKey = keyof typeof ru;

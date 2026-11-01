@@ -3130,6 +3130,19 @@ export const tr: Record<TextKey, string> = {
   "pets.raccoon.about": "Depo kapısının yanında yaşar: bir bakar, bir saklanır. Gece hiç saklanmaz.",
   "pets.raccoon.life": "Sabah ve rekorda pati sallar, dükkân kapalıyken kutuda uyur.",
   "pets.greet.raccoon": "{name} kapının arkasından pati sallıyor",
+  // «Улица друзей» (game/street.ts, scenes/friendStreet.ts, ui/street.ts).
+  "street.sign": "{name} Dükkânı",
+  "street.lot.title": "KİRALIK",
+  "street.lot.text": "bir arkadaşını davet et",
+  "street.seen.today": "Oyunda: bugün",
+  "street.seen.yesterday": "Oyunda: dün",
+  "street.seen.days": "Oyunda: {n} gün önce",
+  "street.card.who": "{name} · {shop}",
+  "street.card.stats": "Gün {day} · ★ {rating}",
+  "street.card.visit": "Misafirliğe git",
+  "street.visit.title": "Arkadaşa misafirlik",
+  "street.visit.later": "Dükkânın şu an açık — {name} arkadaşına sabah, açılıştan önce uğrarız.",
+  "street.morning.title": "{name} seni bekliyor, misafirliğe git!",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

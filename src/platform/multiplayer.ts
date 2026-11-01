@@ -5,6 +5,7 @@ import { openTelegramLink, telegramInitData } from './telegram';
 import { post, socialInfo } from './social';
 import { fetchPresents } from './presents';
 import { fetchLeague } from './league';
+import { streetFriends, type StreetFriend } from '../game/street';
 
 export interface DuelInfo {
   week: number;
@@ -91,7 +92,7 @@ export const guildReward = (level: number): number => 500 + 500 * level;
 
 /** При запуске: торговая неделя и гильдия; когда пришло — событие MP_EVENT. */
 export async function loadMultiplayer(): Promise<void> {
-  await Promise.all([fetchDuel(), guildAction('status'), fetchWeekend(), fetchVisits(), fetchPresents(), fetchLeague()]);
+  await Promise.all([fetchDuel(), guildAction('status'), fetchWeekend(), fetchVisits(), fetchPresents(), fetchLeague(), fetchStreet()]);
   window.dispatchEvent(new Event(MP_EVENT));
 }
 
@@ -146,6 +147,25 @@ export async function addFriend(code: string): Promise<{ ok: boolean; name?: str
   if (!initData) return { ok: false, error: 'offline' };
   const res = await post<{ ok?: boolean; name?: string; error?: string }>('/api/visits', { initData, action: 'add', code });
   if (!res) return { ok: false, error: 'offline' };
-  if (res.ok) await fetchVisits();
+  if (res.ok) await Promise.all([fetchVisits(), fetchStreet(true)]);
   return { ok: Boolean(res.ok), name: res.name, error: res.error };
+}
+
+/** «Улица друзей» (game/street.ts): домики друзей за дорогой. null — улица выключена (нет Telegram или базы). */
+let streetCache: StreetFriend[] | null = null;
+let streetAt = 0;
+/** Чаще не спрашиваем: сервер тоже помнит ответ несколько минут. */
+const STREET_FRESH = 10 * 60_000;
+export const streetInfo = (): StreetFriend[] | null => streetCache;
+
+/** Улица с сервера одним запросом; ответ проверен (имена обрезаны, уровни в пределах). Без связи — прежний список. */
+export async function fetchStreet(force = false): Promise<StreetFriend[] | null> {
+  const initData = telegramInitData();
+  if (!initData) return null;
+  if (!force && streetAt && Date.now() - streetAt < STREET_FRESH) return streetCache;
+  const res = await post<{ enabled?: boolean; friends?: unknown }>('/api/visits', { initData, action: 'street' });
+  if (!res) return streetCache;
+  streetAt = Date.now();
+  streetCache = res.enabled ? streetFriends(res.friends) : null;
+  return streetCache;
 }

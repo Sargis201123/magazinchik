@@ -3175,6 +3175,19 @@ export const en: Record<TextKey, string> = {
   "pets.raccoon.about": "Lives by the stockroom door: peeks out, hides again. Doesn't hide at night at all.",
   "pets.raccoon.life": "Waves a paw in the morning and on a record, sleeps in a box when the shop is closed.",
   "pets.greet.raccoon": "{name} waves a paw from behind the door",
+  // «Улица друзей» (game/street.ts, scenes/friendStreet.ts, ui/street.ts).
+  "street.sign": "{name}'s",
+  "street.lot.title": "FOR RENT",
+  "street.lot.text": "invite a friend",
+  "street.seen.today": "Played: today",
+  "street.seen.yesterday": "Played: yesterday",
+  "street.seen.days": "Played: {n} days ago",
+  "street.card.who": "{name} · {shop}",
+  "street.card.stats": "Day {day} · ★ {rating}",
+  "street.card.visit": "Pay a visit",
+  "street.visit.title": "Visiting a friend",
+  "street.visit.later": "Your store is open now — we'll drop by {name}'s in the morning, before opening.",
+  "street.morning.title": "Time to visit {name}!",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */
