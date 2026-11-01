@@ -542,6 +542,12 @@ export function polishFloor(scene: StoreScene, x: number, y: number): void {
 // ---------- Сотрудники ----------
 
 /** Расставляет нанятых сотрудников по местам и запускает их работу. */
+/** Сотрудник сделал дело — для «сотрудника месяца» (game/career.ts): пробил, убрал, разложил, испёк. */
+export function credit(scene: StoreScene, role: StaffRole, n = 1): void {
+  const work = (scene.stats.work ??= {});
+  work[role] = (work[role] ?? 0) + n;
+}
+
 export function syncStaff(scene: StoreScene): void {
   const gen = ++scene.staffGen;
   // Повара переставляют посреди варки — сваренное не пропадает, а встаёт в витрину.
@@ -590,6 +596,9 @@ export function syncStaff(scene: StoreScene): void {
       // Повар — в поварском колпаке и белом кителе.
       ...(member.role === 'cook' ? { hat: 'toque' as const, outfit: 'chefcoat' as const } : {}),
     });
+    // Звание (game/career.ts): золотая нашивка на плече — старший одна полоска, администратор две.
+    const rank = member.career?.rank;
+    if (rank) sprite.add(scene.art(-3, rank === 'admin' ? -1.5 : -1, `rank_${rank}`));
     const carried = scene.art(0, 3, 'box').setVisible(false);
     sprite.add(carried);
     const worker: Worker = { member, sprite, carried, home };
@@ -728,18 +737,23 @@ export async function managerLoop(scene: StoreScene, w: Worker, gen: number): Pr
     const parcel = deliveries.nextParcel(scene);
     if (parcel) {
       await deliveries.packParcel(scene, w, gen, parcel);
+      credit(scene, w.member.role);
       continue;
     }
     if (scene.call && scene.phone) {
       await workerWalk(scene, w, scene.phone.x - 10, scene.phone.y + 14);
       if (!scene.alive(gen)) return;
       if (scene.call) deliveries.acceptOrder(scene);
+      credit(scene, w.member.role);
       continue;
     }
     const pick = managerPick(scene.state);
     if (pick && !scene.urgentOrders.some((o) => o.id === pick)) {
       const qty = URGENT_QTYS[0];
-      if (deliveries.orderUrgentDelivery(scene, pick, qty, true)) scene.popup(w.sprite.x, w.sprite.y - 20, t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
+      if (deliveries.orderUrgentDelivery(scene, pick, qty, true)) {
+        scene.popup(w.sprite.x, w.sprite.y - 20, t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
+        credit(scene, w.member.role, 2);
+      }
     }
     const slot = Phaser.Utils.Array.GetRandom(scene.layout.slots.slice(0, Math.max(1, scene.state.shelves.length)));
     if (slot) {
@@ -769,6 +783,7 @@ export async function reliefLoop(scene: StoreScene, w: Worker, gen: number): Pro
       continue;
     }
     await shoppers.scanCustomer(scene, r, front, withUpgrades(scene.state, cashierScan(w.member)), false);
+    credit(scene, w.member.role);
   }
 }
 
@@ -786,6 +801,7 @@ export async function cashierLoop(scene: StoreScene, w: Worker, gen: number, ind
       continue;
     }
     await shoppers.scanCustomer(scene, r, front, withUpgrades(scene.state, cashierScan(w.member)), false);
+    credit(scene, w.member.role);
   }
 }
 
@@ -831,6 +847,7 @@ export async function cleanerLoop(scene: StoreScene, w: Worker, gen: number): Pr
       stopMop(scene, w.sprite);
       if (!scene.alive(gen)) return;
       if (!piece.active) continue;
+      credit(scene, w.member.role);
       if (kind !== 'trash') {
         removeTrash(scene, piece);
         continue;
@@ -854,6 +871,7 @@ export async function cleanerLoop(scene: StoreScene, w: Worker, gen: number): Pr
       scene.toiletDirt = 0;
       building.refreshToilet(scene);
       effects.bubbles(scene, scene.layout.wc.x, scene.layout.wc.y);
+      credit(scene, w.member.role, 2);
       continue;
     }
     // Делать нечего — натирает шваброй самое потёртое место пола (не чаще раза в POLISH_EVERY_MS).
@@ -927,6 +945,7 @@ export async function loaderLoop(scene: StoreScene, w: Worker, gen: number): Pro
     if (!scene.alive(gen)) return;
     w.carried.setVisible(false);
     stockShelf(scene, index, w.sprite);
+    credit(scene, w.member.role);
     // От ларя на улице — обратно в зал через дверь.
     await workerWalkVia(scene, w, route.slice(0, -1).reverse());
   }

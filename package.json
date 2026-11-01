@@ -17,7 +17,8 @@
     "sim:restock": "vite-node scripts/sim-restock.ts",
     "sim:quests": "vite-node scripts/sim-quests.ts",
     "e2e": "vite-node scripts/e2e.ts",
-    "taps": "vite-node scripts/taps.ts"
+    "taps": "vite-node scripts/taps.ts",
+    "sim:career": "vite-node scripts/sim-career.ts"
   },
   "dependencies": {
     "@fontsource-variable/nunito": "^5.3.0",

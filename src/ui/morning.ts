@@ -119,6 +119,8 @@ import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
 import { pendingTip, seeTip, soloExpandRisk, TIP_ICONS } from '../game/tips';
 import { markdownSurplus, toggleDonate } from '../game/economy';
 import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
+import { answerCeremony, answerOffer, BEST_EVERY, BEST_REWARDS, bestBonus, bestGift, careerOf, dismissLeft, nextRank, promotedWage, rankKey, xpToNext, type BestReward } from '../game/career';
+import { BRANCH_HEAD_BONUS } from '../game/branch';
 import {
   CONTEST_DAYS,
   CONTEST_EMPTY,
@@ -246,7 +248,7 @@ import { keepsakeBox, presentsBox } from './presents';
 import { leagueBox, leagueClaimBox, leaguePlace } from './league';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
-import { anchorScroll, button, el, foldUp, holdPlace, openModal, toast, unfold, who } from './dom';
+import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toast, unfold, who } from './dom';
 import { hoodBox } from './hood';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
@@ -851,6 +853,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       ...(touring ? [] : liveBox(state)),
       ...(touring ? [] : weekBox(state, guestsToday(state))),
       ...staffEventBox(state),
+      ...careerBox(state),
       ...districtBox(state),
       ...lifeBox(state),
       ...trickBox(state),
@@ -1766,6 +1769,90 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       button(t(`staffEvent.${event.kind}.no` as TextKey, params), () => update(answerStaffEvent(getState(), false)), 'ui-btn secondary'),
     );
     return [box];
+  };
+
+  /**
+   * Карьера (game/career.ts): церемония «сотрудник месяца» с наградой на выбор, предложение повысить
+   * или поставить на филиал, записка об уходе давнего сотрудника. Всё необязательно, не больше одного в день.
+   */
+  const careerBox = (state: StoreState): HTMLElement[] => {
+    const career = state.career;
+    const out: HTMLElement[] = [];
+    const ceremony = career?.ceremony;
+    const crowned = ceremony && state.staff.find((m) => m.role === ceremony.role);
+    if (ceremony && crowned) {
+      const box = el('div', 'ui-box ui-tale ui-career');
+      const name = el('div');
+      name.append(el('b', '', memberName(crowned)), el('div', 'ui-item-sub', t(STAFF_ROLES[crowned.role].nameKey)));
+      box.append(
+        el('h3', '', t('career.best.title')),
+        who(staffFace(crowned.name), name),
+        el('p', '', t('career.best.say')),
+        el('div', 'ui-muted', t('career.best.stats', { shifts: ceremony.shifts, miss: ceremony.miss })),
+        el('p', '', t('career.best.text')),
+        el('b', '', t('career.best.ask')),
+      );
+      const label: Record<BestReward, string> = {
+        cash: t('career.best.cash', { n: bestBonus(state) }),
+        off: t('career.best.off'),
+        gift: t('career.best.gift', { n: bestGift(state) }),
+      };
+      const row = el('div', 'ui-career-rewards');
+      for (const reward of BEST_REWARDS) {
+        const next = answerCeremony(state, reward);
+        row.append(button(label[reward], () => update(answerCeremony(getState(), reward), 'success'), reward === 'cash' ? 'ui-btn' : 'ui-btn secondary', !next));
+      }
+      box.append(row, el('div', 'ui-muted', t('career.best.hint')));
+      out.push(box);
+    }
+    const offer = career?.offer;
+    const asking = offer && state.staff.find((m) => m.role === offer.role);
+    if (offer && asking) {
+      const box = el('div', 'ui-box ui-tale ui-career');
+      const role = t(STAFF_ROLES[asking.role].nameKey);
+      const days = Math.round(careerOf(asking, state.day).xp);
+      const name = el('div');
+      name.append(el('b', '', memberName(asking)), el('div', 'ui-item-sub', role));
+      if (offer.to === 'branch') {
+        box.append(
+          el('h3', '', t('career.branch.title')),
+          who(staffFace(asking.name), name),
+          el('p', '', t('career.branch.text')),
+          el('div', 'ui-muted', t('career.branch.note', { p: Math.round(BRANCH_HEAD_BONUS * 100) })),
+          button(t('career.branch.yes'), () => update(answerOffer(getState(), true), 'success')),
+          button(t('career.branch.no'), () => update(answerOffer(getState(), false)), 'ui-btn secondary'),
+          el('div', 'ui-muted', t('career.promo.noHint')),
+        );
+      } else {
+        box.append(
+          el('h3', '', t('career.promo.title')),
+          who(staffFace(asking.name), name),
+          el('p', '', t('career.promo.text', { days, rank: t(rankKey(asking, offer.to).replace('career.rank.', 'career.to.') as TextKey) })),
+          el('div', 'ui-muted', t(offer.to === 'admin' ? 'career.promo.admin' : 'career.promo.senior')),
+          el('div', '', t('career.promo.wage', { from: asking.wage, to: promotedWage(asking) })),
+          button(t('career.promo.yes'), () => update(answerOffer(getState(), true), 'success')),
+          button(t('career.promo.no'), () => update(answerOffer(getState(), false)), 'ui-btn secondary'),
+          el('div', 'ui-muted', t('career.promo.noHint')),
+        );
+      }
+      out.push(box);
+    }
+    const left = career?.left;
+    if (left) {
+      const box = el('div', 'ui-box ui-tale');
+      const whoName = memberName({ name: left.name, friend: left.friend ? { name: left.friend } : undefined });
+      const name = el('div');
+      name.append(el('b', '', whoName), el('div', 'ui-item-sub', t(STAFF_ROLES[left.role].nameKey)));
+      box.append(
+        el('h3', '', t('career.left.title', { name: whoName })),
+        who(staffFace(left.name), name),
+        el('p', '', t(`career.leave.${left.why}` as TextKey)),
+        el('div', 'ui-muted', t('career.left.note', { days: left.days })),
+        button(t('career.left.ok'), () => update(dismissLeft(getState()))),
+      );
+      out.push(box);
+    }
+    return out;
   };
 
   /** Подарки друзей: «угостили кофе» — забрать монеты. */
@@ -3824,6 +3911,23 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     return box;
   };
 
+  /** Карьера в карточке сотрудника: с какого дня, опыт и путь до звания, «сотрудник месяца», короткая история. */
+  const careerLines = (state: StoreState, m: StaffMember): HTMLElement[] => {
+    const c = careerOf(m, state.day);
+    const next = nextRank(m);
+    const left = xpToNext(m, state.day);
+    const out: HTMLElement[] = [el('div', 'ui-item-sub', `${t('career.xp', { n: Math.floor(c.xp) })} · ${t('career.hired', { day: c.hired })}`)];
+    if (next && left !== null) out.push(el('div', 'ui-muted', left > 0 ? t('career.next', { rank: t(rankKey(m, next)), n: left }) : t('career.ready')));
+    if (c.best) out.push(el('div', 'ui-note', t('career.bestCount', { n: c.best })));
+    const log = (c.log ?? []).slice().reverse();
+    if (log.length) {
+      const list = el('div', 'ui-career-log');
+      list.append(el('b', '', t('career.log')), ...log.map((n) => el('div', 'ui-muted', t(`career.log.${n.kind}` as TextKey, { day: n.day }))));
+      out.push(list);
+    }
+    return out;
+  };
+
   /** Сотрудник одной строкой: роль, имя, полоска усталости, метки; действия — по нажатию. */
   const staffRow = (state: StoreState, m: StaffMember): HTMLElement => {
     const box = el('div', 'ui-box ui-staff');
@@ -3844,7 +3948,13 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     fill.style.background = tired >= 1 ? '#e43b44' : isTired(m) ? '#feae34' : '#63c74d';
     bar.append(fill);
     const name = el('span', 'ui-staff-name');
-    name.append(el('b', '', memberName(m)), el('span', 'ui-item-sub', ` · ${t(STAFF_ROLES[m.role].nameKey)} · ${t('staffTab.wage', { n: m.wage })}`));
+    // Звание (game/career.ts) — золотой нашивкой рядом с именем, как на плече в зале.
+    const rank = m.career?.rank;
+    name.append(
+      el('b', '', memberName(m)),
+      ...(rank ? [el('span', `ui-rank ui-rank-${rank}`, rank === 'admin' ? '▮▮' : '▮')] : []),
+      el('span', 'ui-item-sub', ` · ${rank ? t(rankKey(m, rank)) : t(STAFF_ROLES[m.role].nameKey)} · ${t('staffTab.wage', { n: m.wage })}`),
+    );
     head.append(name, bar, ...(tags.length ? [el('span', 'ui-staff-tags', tags.join(' '))] : []));
     box.append(head);
     if (openStaff !== m.role) return box;
@@ -3852,6 +3962,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       el('div', 'ui-muted', t(STAFF_ROLES[m.role].descKey)),
       el('div', 'ui-item-sub', traitLine(m)),
       el('div', 'ui-item-sub', m.months ? t('staffTab.months', { n: m.months }) : t('staffTab.new')),
+      ...careerLines(state, m),
     );
     if (m.upset) box.append(el('div', 'ui-note', t('staffTab.upset')));
     const actions = el('div', 'ui-chips');
@@ -3887,6 +3998,12 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
     ];
     if (state.staff.length === 0) out.push(el('div', 'ui-note', t('staffTab.none')));
     for (const m of state.staff) out.push(staffRow(state, m));
+    // Карьера: когда следующий «сотрудник месяца», кто на доске почёта, кто правит филиалом.
+    if (state.staff.length && state.career?.since !== undefined) out.push(el('div', 'ui-muted', t('career.nextBest', { n: Math.max(1, BEST_EVERY - (state.day - state.career.since)) })));
+    const plaques = state.career?.plaques ?? [];
+    if (plaques.length) out.push(el('div', 'ui-muted', t('career.board', { names: plaques.slice().reverse().map((p) => memberName({ name: p.name, friend: p.friend ? { name: p.friend } : undefined })).join(', ') })));
+    const head = state.branch && state.career?.head;
+    if (head) out.push(el('div', 'ui-note', t('career.head', { name: memberName(head), day: head.since, p: Math.round(BRANCH_HEAD_BONUS * 100) })));
 
     const full = state.staff.length >= limit;
     const hiring: HTMLElement[] = [helpRow(t('staffTab.searchShort', { cost: JOB_AD_COST }), t('staffTab.searchNote', { cost: JOB_AD_COST }))];
@@ -4088,6 +4205,7 @@ export function showMorning({ getState, setState, onOpen, onArrange, onVisit, on
       el('div', 'ui-muted', t('branch.week', { n: branchWeek(state), total: branch.earned ?? 0 })),
       el('div', 'ui-muted', t('branch.usual', { n: branchUsual(state), p: Math.round(branchShare(state) * 100) })),
       el('div', 'ui-muted', t('branch.note')),
+      ...(state.career?.head ? [el('div', 'ui-note', t('career.head', { name: memberName(state.career.head), day: state.career.head.since, p: Math.round(BRANCH_HEAD_BONUS * 100) }))] : []),
     );
     for (const id of BRANCH_TRACK_IDS) {
       const info = BRANCH_TRACKS[id];

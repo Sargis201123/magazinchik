@@ -7,6 +7,7 @@ import { isBroke } from './tips';
 import { loanOptions, takeLoan } from './bank';
 import { cook, cookBatch, cookRoundsPerDay, DISHES, DISH_IDS, kitchenWorking, sellDish, servePortions, stockKitchen, takeIngredients, topUpKitchen } from './kitchen';
 import { answerStaffEvent, eventCost } from './staffEvents';
+import { answerCeremony, answerOffer, bestBonus } from './career';
 import { answerTale, taleToday } from './tales';
 import { answerArc, arcDeliver, arcToday } from './arcs';
 import { answerOpening, BUILDINGS, districtNews } from './district';
@@ -226,7 +227,9 @@ export type Feature =
   // Переезд в гипермаркет (economy.ts, HYPER_LEVEL): только вместе с филиалом — без него переезд закрыт.
   | 'hyper'
   // Благоустройство района (hood.ts): тратит лишнее — самое дешёвое, когда не копит на помещение.
-  | 'hood';
+  | 'hood'
+  // Карьера сотрудников (career.ts): награждает «сотрудника месяца», соглашается на повышения и филиал.
+  | 'career';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -635,6 +638,9 @@ export function simulate({
     // «Чёрная пятница района» — каждые 6-й и 7-й дни недели (как суббота и воскресенье).
     state = { ...state, rush: (features.rush && state.day % 7 >= 5) || undefined };
     // Просьбы сотрудников и истории покупателей: соглашается, если деньги есть с запасом.
+    // Карьера: премия лучшему, если деньги есть с запасом (иначе выходной), повышения — да.
+    if (features.career && state.career?.ceremony) state = answerCeremony(state, state.money >= bestBonus(state) + reserve * 2 ? 'cash' : 'off') ?? state;
+    if (features.career && state.career?.offer) state = answerOffer(state, true);
     if (state.staffEvent) state = answerStaffEvent(state, state.money >= eventCost(state.staffEvent) + reserve * 2) ?? answerStaffEvent(state, false) ?? state;
     if (taleToday(state)) state = answerTale(state, 0) ?? answerTale(state, 1) ?? state;
     if (arcToday(state)) state = answerArc(state, 0) ?? answerArc(state, 1) ?? answerArc(state, 2) ?? state;
