@@ -146,6 +146,9 @@ describe('оплата звёздами (сервер)', () => {
     // ru, en (по умолчанию), tr, es, uz.
     for (const m of ['setMyDescription', 'setMyShortDescription', 'setMyCommands']) expect(methods.filter((x) => x === m)).toHaveLength(5);
     expect(calls.filter((c) => c.method === 'setMyCommands').map((c) => c.body.language_code ?? '')).toEqual(['ru', '', 'tr', 'es', 'uz']);
+    // ru, en (по умолчанию), tr, es, pt.
+    for (const m of ['setMyDescription', 'setMyShortDescription', 'setMyCommands']) expect(methods.filter((x) => x === m)).toHaveLength(5);
+    expect(calls.filter((c) => c.method === 'setMyCommands').map((c) => c.body.language_code ?? '')).toEqual(['ru', '', 'tr', 'es', 'pt']);
     const commands = calls.find((c) => c.method === 'setMyCommands' && c.body.language_code === 'ru')!.body.commands as { command: string }[];
     expect(commands.map((c) => c.command)).toEqual(['start', 'paysupport', 'terms']);
     for (const c of calls.filter((c) => c.method === 'setMyDescription')) expect(String(c.body.description).length).toBeLessThanOrEqual(512);

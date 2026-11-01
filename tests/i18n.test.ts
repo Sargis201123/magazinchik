@@ -25,6 +25,9 @@ describe('словари языков', () => {
   it('в выборе языка — только языки с полным словарём (заготовки kk/pt не показываются)', () => {
     for (const lang of LANGS) if (!complete(lang)) expect(SHIPPED, `${lang} не переведён целиком`).not.toContain(lang);
     expect(SHIPPED).toEqual(['ru', 'en', 'tr', 'es', 'uz']);
+  it('в выборе языка — только языки с полным словарём (заготовки kk/uz не показываются)', () => {
+    for (const lang of LANGS) if (!complete(lang)) expect(SHIPPED, `${lang} не переведён целиком`).not.toContain(lang);
+    expect(SHIPPED).toEqual(['ru', 'en', 'tr', 'es', 'pt']);
   });
 
   for (const lang of SHIPPED.filter((l) => l !== 'ru')) {
@@ -47,6 +50,7 @@ describe('словари языков', () => {
   }
 
   for (const lang of ['tr', 'es', 'uz'] as const) {
+  for (const lang of ['tr', 'es', 'pt'] as const) {
     it(`${lang}: ни одной русской буквы`, () => {
       expect(keys.filter((k) => /[а-яё]/i.test(dicts[lang][k]!))).toEqual([]);
     });
@@ -61,6 +65,7 @@ describe('словари языков', () => {
   it('у заготовок лишних ключей нет и подстановки совпадают', () => {
     for (const lang of ['uz', 'pt'] as const)
     for (const lang of ['kk', 'pt'] as const)
+    for (const lang of ['kk', 'uz'] as const)
       for (const [k, v] of Object.entries(dicts[lang])) {
         expect(k in ru, `${lang}: ${k}`).toBe(true);
         expect(placeholders(v!)).toBe(placeholders(ru[k as TextKey]));
@@ -92,6 +97,7 @@ describe('нет строки — берём английскую, потом р
 
 describe('язык игрока', () => {
   it('Telegram и браузер: tr, es, es-MX, pt-BR, kk, kk-KZ, uz', () => {
+  it('Telegram и браузер: tr, es, es-MX, pt-BR, pt-PT, kk, uz', () => {
     expect(detectLang(null, null, 'tr')).toBe('tr');
     expect(detectLang(null, null, 'TR-tr')).toBe('tr');
     expect(detectLang(null, null, 'es')).toBe('es');
@@ -104,6 +110,9 @@ describe('язык игрока', () => {
     expect(detectLang(null, null, 'uz')).toBe('ru');
     // Португальский ещё не готов — английский; казахский — русский, как и раньше. Узбекский готов — свой.
     expect(detectLang(null, null, 'pt-BR')).toBe('en');
+    // Португальский готов (и бразильский, и европейский — один словарь); казахский и узбекский — пока русский.
+    expect(detectLang(null, null, 'pt-BR')).toBe('pt');
+    expect(detectLang(null, null, 'pt_PT')).toBe('pt');
     expect(detectLang(null, null, 'kk')).toBe('ru');
     expect(detectLang(null, null, 'uz')).toBe('uz');
     expect(detectLang(null, null, 'uz-Latn-UZ')).toBe('uz');
@@ -143,5 +152,10 @@ describe('форма слова после числа в новых языках
   });
   it('узбекский: oʻ и gʻ — знаком U+02BB, а не апострофом', () => {
     expect(keys.filter((k) => /[oOgG][\u0027\u2019\u02BC`]/.test(uz[k]))).toEqual([]);
+  it('португальский: 0 и 1 — one (так по-бразильски, Intl.PluralRules), остальное — many; в словаре few = many', () => {
+    expect([0, 1, 2, 5, 21].map((n) => pluralForm(n, 'pt'))).toEqual(['one', 'one', 'many', 'many', 'many']);
+    const plural = keys.filter((k) => k.endsWith('.few'));
+    expect(plural.filter((k) => pt[k] !== pt[k.replace(/\.few$/, '.many') as TextKey])).toEqual([]);
+    expect(pt[`live.box.cards.${pluralForm(2, 'pt')}`]).toBe(pt['live.box.cards.many']);
   });
 });

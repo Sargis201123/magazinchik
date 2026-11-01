@@ -9,6 +9,7 @@ import { markWeek, weekOf } from '../api/_lib/guild';
 import { DEFAULT_EVENTS } from '../src/game/live';
 
 // Серверные тексты на турецком, испанском и узбекском — так же, как ru/en.
+// Серверные тексты на турецком, испанском и португальском — так же, как ru/en.
 
 const CYRILLIC = /[А-Яа-яЁё]/;
 /** Языки на кириллице: им проверка «без русских букв» не нужна (казахский пишется кириллицей). */
@@ -29,6 +30,9 @@ describe('langOf', () => {
     expect(langOf('uz-Latn-UZ')).toBe('uz');
     expect(langOf('pt_BR')).toBe('en');
     expect(langOf('pt')).toBe('en');
+    expect(langOf('pt_BR')).toBe('pt');
+    expect(langOf('pt')).toBe('pt');
+    expect(langOf('pt-PT')).toBe('pt');
     expect(langOf('en-US')).toBe('en');
     expect(langOf('de')).toBe('en');
     expect(langOf('kk')).toBe('kk');
@@ -58,7 +62,7 @@ const player = (patch: Partial<Player> = {}): Player => ({
   ...patch,
 });
 
-describe('напоминания на tr и es', () => {
+describe('напоминания на tr, es и pt', () => {
   it('у всех таблиц remind.ts одни ключи и одни подстановки на всех языках', () => {
     for (const table of [TEXTS, ITEMS, PEOPLE] as Record<Lang, Record<string, unknown>>[]) {
       const keys = Object.keys(table.ru).sort();
@@ -74,7 +78,7 @@ describe('напоминания на tr и es', () => {
     }
   });
 
-  it('pickReminder: турецкий и испанский — без кириллицы, с эмодзи и припиской', () => {
+  it('pickReminder: турецкий, испанский и португальский — без кириллицы, с эмодзи и припиской', () => {
     const now = Date.UTC(2026, 10, 4, 9, 0);
     const busy = { sonya: 1, spoil: 4, streak: 3, gift: '2026-11-03', cashier: 1, order: 'petr:bread', qty: 3, letter: 'valya', chest: 1250 };
     const tr = pickReminder(player({ lang: 'tr', ...busy }), now, DEFAULT_EVENTS);
@@ -97,6 +101,14 @@ describe('напоминания на tr и es', () => {
     expect(uz.text).not.toMatch(CYRILLIC);
     // Повод «день»: и тут без кириллицы.
     for (const lang of ['tr', 'es', 'uz'] as const) {
+    const pt = pickReminder(player({ lang: 'pt', ...busy }), now, DEFAULT_EVENTS);
+    expect(pt.text).toMatch(/^👧 Sônia: “Pai/);
+    expect(pt.text).toContain('encomenda do Piotr Ilitch');
+    expect(pt.text).toContain('carta da Valentina');
+    expect(pt.text).toContain('1 250 💰');
+    expect(pt.text).not.toMatch(CYRILLIC);
+    // Повод «день»: и тут без кириллицы.
+    for (const lang of ['tr', 'es', 'pt'] as const) {
       const r = pickReminder(player({ lang, reason: 'day' }), now, DEFAULT_EVENTS);
       expect(r.text).toMatch(/^👵 /);
       expect(r.text).toContain('14');
@@ -120,6 +132,10 @@ describe('напоминания на tr и es', () => {
     expect(uz.find((x) => x.reason === 'card')!.text).toContain('13-dekabr');
     expect(uz.find((x) => x.reason === 'card')!.text).toContain('19 kun');
     for (const r of [...tr, ...es, ...uz]) expect(r.text).not.toMatch(CYRILLIC);
+    const pt = reasons(player({ lang: 'pt' }), guestDay, DEFAULT_EVENTS);
+    expect(pt.find((x) => x.reason === 'card')!.text).toContain('13 de dezembro');
+    expect(pt.find((x) => x.reason === 'card')!.text).toContain('19 dias');
+    for (const r of [...tr, ...es, ...pt]) expect(r.text).not.toMatch(CYRILLIC);
   });
 
   it('суммы: ru, tr, es — разряды пробелом, en — запятой', () => {
@@ -127,6 +143,7 @@ describe('напоминания на tr и es', () => {
     expect(money(1200, 'tr')).toBe('1 200');
     expect(money(1200, 'es')).toBe('1 200');
     expect(money(1200, 'uz')).toBe('1 200');
+    expect(money(1200, 'pt')).toBe('1 200');
     expect(money(1200, 'en')).toBe('1,200');
   });
 });
@@ -134,6 +151,8 @@ describe('напоминания на tr и es', () => {
 describe('бот: профиль, команды, каталог', () => {
   it('приветствие и ответы на команды на tr, es и uz', () => {
     for (const lang of ['tr', 'es', 'uz'] as const) {
+  it('приветствие и ответы на команды на tr, es и pt', () => {
+    for (const lang of ['tr', 'es', 'pt'] as const) {
       for (const info of [{}, { day: 14 }, { friend: 'Ana' }]) expect(startCaption(lang, info)).not.toMatch(CYRILLIC);
       expect(commandReply('/terms', lang)).not.toMatch(CYRILLIC);
       expect(commandReply('/paysupport', lang, 77)).toContain('77');
@@ -142,6 +161,7 @@ describe('бот: профиль, команды, каталог', () => {
     expect(startCaption('es', { day: 14 })).toMatch(/^Día 14\. .*Sonia/s);
     expect(startCaption('tr', { day: 14 })).toMatch(/^14\. gün\. .*Sonya/s);
     expect(startCaption('uz', { day: 14 })).toMatch(/^14-kun\. .*Sonya/s);
+    expect(startCaption('pt', { day: 14 })).toMatch(/^Dia 14\. .*Sônia/s);
     // Как раньше: true — ru, false — en.
     expect(startCaption(true, {})).toBe(startCaption('ru', {}));
     expect(startCaption(false, {})).toBe(startCaption('en', {}));
@@ -165,7 +185,7 @@ describe('бот: профиль, команды, каталог', () => {
   });
 });
 
-describe('газета на tr и es', () => {
+describe('газета на tr, es и pt', () => {
   it('заголовки на всех языках, без кириллицы — кроме ru', () => {
     const cases = [
       { revenue: 100, prev: 0, friends: 1, weekendRank: 3 },
@@ -176,6 +196,7 @@ describe('газета на tr и es', () => {
       { revenue: 100, prev: 100, friends: 1 },
     ];
     for (const lang of ['en', 'tr', 'es', 'uz'] as const) {
+    for (const lang of ['en', 'tr', 'es', 'pt'] as const) {
       const all = cases.map((c) => headline(lang, c));
       expect(new Set(all).size).toBe(cases.length);
       for (const h of all) expect(h).not.toMatch(CYRILLIC);
@@ -232,12 +253,14 @@ const MON = Date.UTC(2026, 10, 2, 12);
 
 describe.skipIf(!Database)('газета: язык игрока из players', () => {
   it('игра прислала tr / es-MX / pt / kk — газета на турецком, испанском, английском, казахском', async () => {
+  it('игра прислала tr / es-MX / pt / kk — газета на турецком, испанском, португальском, русском', async () => {
     const env: Env = { BOT_TOKEN: TOKEN, DB: d1(), APP_URL: 'https://app/' };
     const langs: Record<number, string> = { 1: 'tr', 2: 'es-MX', 3: 'pt', 4: 'kk' };
     for (const [id, lang] of Object.entries(langs)) await socialPing(await ping(Number(id), lang), env);
     const db = env.DB!;
     const stored = (await db.prepare('SELECT id, lang FROM players ORDER BY id').all<{ id: number; lang: string }>()).results;
     expect(stored.map((r) => r.lang)).toEqual(['tr', 'es', 'en', 'kk']);
+    expect(stored.map((r) => r.lang)).toEqual(['tr', 'es', 'pt', 'ru']);
     for (const id of [1, 2, 3, 4]) {
       await markWeek(db, id, 0, MON - 7 * DAY);
       await markWeek(db, id, 12500, MON);
@@ -254,6 +277,10 @@ describe.skipIf(!Database)('газета: язык игрока из players', (
     expect(paper(4).text).toContain('<b>Аудан хабаршысы</b>');
     expect(paper(4).text).toContain('Апталық түсім: 12 500');
     expect(paper(4).reply_markup!.inline_keyboard[0][0].text).toBe('▶ Дүкенді ашу');
+    expect(paper(3).text).toContain('<b>Gazeta do Bairro</b>');
+    expect(paper(3).text).toContain('Faturamento da semana: 12 500');
+    expect(paper(3).reply_markup!.inline_keyboard[0][0].text).toBe('▶ Abrir a loja');
+    expect(paper(4).text).toContain('Вестник района');
     for (const id of [1, 2, 3]) expect(paper(id).text).not.toMatch(CYRILLIC);
     expect(await paperFor(db, 1, weekOf(MON) - 1, 'es')).toContain('🗞 <b>La Gaceta del Barrio</b>');
   });

@@ -38,6 +38,10 @@ const INVOICE: Record<Lang, { support: (title: string) => string; pass: (title: 
     support: (title) => `${title}: «Magazinchik»ni qoʻllab-quvvatlaganing uchun rahmat! Faqat bezak va minnatdorchilik — oʻyinda ustunlik yoʻq.`,
     pass: (title) => `${title}: mavsumning premium mukofotlarini ochadi — yulduzli bezaklar va ikki barobar pul.`,
     item: (title) => `${title} — doʻkoning uchun. Abadiy seniki.`,
+  pt: {
+    support: (title) => `${title}: obrigado por apoiar o Magazinchik! Só enfeites e gratidão — nenhuma vantagem no jogo.`,
+    pass: (title) => `${title}: libera os prêmios premium da temporada — decoração estelar e moedas em dobro.`,
+    item: (title) => `${title} para a sua loja. É seu para sempre.`,
   },
 };
 
@@ -71,6 +75,10 @@ const PAID: Record<Lang, { support: (name: string) => string; item: (name: strin
     support: (name) => `Qoʻllab-quvvatlaganing uchun katta rahmat! 💛 «${name}» — «Rahmat!» lavhasi allaqachon kassang yonida turibdi.`,
     item: (name) => `Rahmat! ${name} allaqachon doʻkoningda ✨`,
     play: '▶ Oʻynash',
+  pt: {
+    support: (name) => `Muito obrigado pelo apoio! 💛 “${name}” — a plaquinha «Obrigado!» já está ao lado do seu caixa.`,
+    item: (name) => `Obrigado! ${name} já está na sua loja ✨`,
+    play: '▶ Jogar',
   },
 };
 

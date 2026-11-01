@@ -85,6 +85,9 @@ const DAY_NAMES: Record<Lang, string[]> = {
   uz: ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'],
 };
 /** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre», «5-dekabr». */
+  pt: ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'],
+};
+/** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre», «5 de dezembro». */
 const DAY_FORMAT: Record<Lang, (d: number, month: string) => string> = {
   ru: (d, month) => `${d} ${month}`,
   en: (d, month) => `${month} ${d}`,
@@ -92,6 +95,7 @@ const DAY_FORMAT: Record<Lang, (d: number, month: string) => string> = {
   es: (d, month) => `${d} de ${month}`,
   kk: (d, month) => `${d} ${month}`,
   uz: (d, month) => `${d}-${month}`,
+  pt: (d, month) => `${d} de ${month}`,
 };
 const dayName = (date: string, lang: Lang): string => DAY_FORMAT[lang](Number(date.slice(8)), DAY_NAMES[lang][Number(date.slice(5, 7)) - 1]);
 
@@ -264,6 +268,33 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'also.letter': '{from} xat',
     'also.chest': 'sandiqcha ≈{sum} 💰',
     play: '▶ Oʻynash',
+  pt: {
+    sonya: '👧 Sônia: “Pai, você vai passar na loja hoje? Eu queria te contar uma coisa…”',
+    helped: '👵 Vovó: “Querido, {name} te mandou uma ajuda! Passe aqui — hoje o caixa vai atender mais rápido”',
+    'guest.moroz': '🎅 Ded Moroz: “Ho-ho-ho! Hoje vou passar na sua lojinha com um presente — abra cedo, não perca a hora!”',
+    'guest.snegurochka': '❄️ Snegurochka: “Hoje vou passar na sua loja com um presente. Me espere!”',
+    'card.newyear': '🎄 Snegurochka: “Seu cartão de {date} está esperando na lojinha. Faltam {left} para o Ano-Novo!”',
+    'card.newyear.eve': '🎆 Snegurochka: “Hoje é o último dia do ano! Seu cartão está esperando na lojinha. Feliz Ano-Novo!”',
+    'card.newyear.jan': '🎄 Snegurochka: “Feliz Ano-Novo! Seu cartão de {date} está esperando na lojinha”',
+    'card.feb23': '🎖 Vovó: “Querido, feliz dia! Tem um cartão do 23 de Fevereiro esperando por você na loja”',
+    'card.march8': '🌷 Valentina: “Feliz festa da primavera! Tem um cartão esperando por você na lojinha — e mimosas”',
+    gift: '👵 Vovó: “Querido, seu mimo já está pronto — dia {n} de 7! Passe hoje, senão a sequência recomeça”',
+    'gift.big': '👵 Vovó: “Querido, seis dias seguidos — hoje é o maior mimo de todos! Não perca”',
+    spoil: '🧓 Valentina: “Fiquei sabendo que {n} un. de mercadoria estão no último dia. Faça um desconto antes que estraguem!”',
+    weekend: '📺 Notícias do bairro: “Liquidação de fim de semana! Todas as lojas do bairro disputam quem vende mais. Garanta seu lugar”',
+    cashier: '👵 Vovó: “O caixa está vendendo sem você, mas as prateleiras estão esvaziando. Passe aqui para repor”',
+    day: '👵 Vovó: “Dia {day}: já tem clientes na porta. Vamos abrir?”',
+    'day.0': '👵 O mimo da vovó está esperando! Passe na lojinha — os clientes estão com saudade.',
+    order: '🧓 Valentina: “Encontrei {who} — perguntou da encomenda: {item}, {qty} un. Você prometeu separar!”',
+    letter: '👵 Vovó: “Querido, chegou uma carta {from} para você! Está esperando no caixa”',
+    'letter.grandma': '👵 Vovó: “Querido, escrevi uma carta para você — e coloquei uma coisinha dentro. Passe aqui!”',
+    'letter.sonya': '👧 Sônia: “Pai, desenhei um cartão para você! Está na loja, ao lado do caixa”',
+    chest: '👵 Vovó: “O baú do faturamento já está pesadinho — umas {sum} 💰. Venha abrir!”',
+    also: 'Também esperando: {list}',
+    'also.order': 'encomenda {who}',
+    'also.letter': 'carta {from}',
+    'also.chest': 'baú ≈{sum} 💰',
+    play: '▶ Jogar',
   },
 };
 
@@ -272,6 +303,7 @@ const fill = (text: string, params: Record<string, string | number>): string => 
 /**
  * Кто пишет письма и приходит за заказом (src/game/regulars.ts, returns.ts): имя «от кого» (родительный
  * падеж) и «встретила кого» (винительный). Неизвестная метка — повода нет.
+ * По-португальски «от кого» — сразу с предлогом и артиклем («da vovó», «do Misha»), «кого» — с артиклем.
  */
 export const PEOPLE: Record<Lang, Record<string, { from: string; who: string }>> = {
   ru: {
@@ -347,6 +379,17 @@ export const PEOPLE: Record<Lang, Record<string, { from: string; who: string }>>
     olga: { from: 'Olga Nikolayevnadan', who: 'Olga Nikolayevna' },
     misha: { from: 'Mishadan', who: 'Misha' },
     staff: { from: 'sobiq xodimdan', who: 'sobiq xodim' },
+  pt: {
+    grandma: { from: 'da vovó', who: 'a vovó' },
+    valya: { from: 'da Valentina', who: 'a Valentina' },
+    sonya: { from: 'da Sônia', who: 'a Sônia' },
+    petr: { from: 'do Piotr Ilitch', who: 'o Piotr Ilitch' },
+    sveta: { from: 'da Sveta', who: 'a Sveta' },
+    kostya: { from: 'do Kostia', who: 'o Kostia' },
+    akhmed: { from: 'do Akhmed', who: 'o Akhmed' },
+    olga: { from: 'da Olga Nikoláievna', who: 'a Olga Nikoláievna' },
+    misha: { from: 'do Misha', who: 'o Misha' },
+    staff: { from: 'de um ex-funcionário', who: 'um ex-funcionário' },
   },
 };
 /** Любимые товары постоянных покупателей — то, что они просят отложить. */
@@ -363,6 +406,10 @@ const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün
 };
 /** Товар без названия (метка из игры, которой нет в ITEMS). */
 const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía', uz: 'mahsulot' };
+  pt: { bread: '🍞 pão', milk: '🥛 leite', potatoes: '🥔 batatas', meat: '🥩 carne', apples: '🍎 maçãs', juice: '🧃 suco' },
+};
+/** Товар без названия (метка из игры, которой нет в ITEMS). */
+const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía', pt: 'mercadoria' };
 /** Своё поле словаря (не «constructor» из прототипа): метки приходят от игры. */
 const own = <T>(table: Record<string, T>, key: string): T | undefined => (Object.hasOwn(table, key) ? table[key] : undefined);
 /** Сундучок меньше этого — не повод писать (кассир едва начал торговать). */
@@ -407,6 +454,7 @@ function daysLeft(date: string, lang: Lang): string {
   if (lang === 'es') return `${n} día${n === 1 ? '' : 's'}`;
   // По-казахски тоже: «5 күн».
   if (lang === 'kk') return `${n} күн`;
+  if (lang === 'pt') return `${n} dia${n === 1 ? '' : 's'}`;
   const tail = n % 10 === 1 && n % 100 !== 11 ? 'день' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'дня' : 'дней';
   return `${n} ${tail}`;
 }
