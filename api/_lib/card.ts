@@ -17,7 +17,7 @@ const ID_RE = /^[a-z0-9]{16}$/;
 const B64_RE = /^[A-Za-z0-9+/]+=*$/;
 
 /** Кнопка под карточкой в чате: название игры (по-турецки и по-испански — латиницей). */
-const PLAY: Record<Lang, string> = { ru: '▶ Магазинчик', en: '▶ Магазинчик', tr: '▶ Magazinchik', es: '▶ Magazinchik' };
+const PLAY: Record<Lang, string> = { ru: '▶ Магазинчик', en: '▶ Магазинчик', tr: '▶ Magazinchik', es: '▶ Magazinchik', kk: '▶ Магазинчик' };
 
 const newId = (): string => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => 'abcdefghijklmnopqrstuvwxyz0123456789'[b % 36]).join('');
 

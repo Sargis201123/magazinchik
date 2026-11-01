@@ -30,6 +30,11 @@ const INVOICE: Record<Lang, { support: (title: string) => string; pass: (title: 
     pass: (title) => `${title}: desbloquea las recompensas premium de la temporada: decoración estelar y monedas dobles.`,
     item: (title) => `${title} para tu tienda. Es tuyo para siempre.`,
   },
+  kk: {
+    support: (title) => `${title}: «Магазинчикті» қолдағаның үшін рақмет! Тек әшекей мен алғыс — ойында артықшылық жоқ.`,
+    pass: (title) => `${title}: маусымның премиум сыйлықтарын ашады — жұлдызды әшекей мен екі есе ақша.`,
+    item: (title) => `${title} — дүкенің үшін. Мәңгі сенікі.`,
+  },
 };
 
 /** Бот в чате: спасибо после оплаты (name — название вещи на языке игрока) и кнопка «Играть» под приветствием. */
@@ -53,6 +58,11 @@ const PAID: Record<Lang, { support: (name: string) => string; item: (name: strin
     support: (name) => `¡Muchísimas gracias por tu apoyo! 💛 “${name}”: el letrero «¡Gracias!» ya está junto a tu caja.`,
     item: (name) => `¡Gracias! ${name} ya está en tu tienda ✨`,
     play: '▶ Jugar',
+  },
+  kk: {
+    support: (name) => `Қолдауың үшін зор рақмет! 💛 «${name}» — «Рақмет!» тақтайшасы кассаңның жанында тұр.`,
+    item: (name) => `Рақмет! ${name} — енді дүкеніңде ✨`,
+    play: '▶ Ойнау',
   },
 };
 

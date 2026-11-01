@@ -77,6 +77,14 @@ const HEADLINES: Record<Lang, Record<Headline, string>> = {
     quiet: 'UNA SEMANA TRANQUILA: los clientes extrañan al dueño',
     done: 'OTRA SEMANA CUMPLIDA: la tienda está abierta y el barrio, contento',
   },
+  kk: {
+    weekend: 'АУДАННЫҢ ЕҢ ҮЗДІК ДЕМАЛЫСЫ: дүкенің «Қара жұманың» алғашқы ондығында!',
+    king: 'КВАРТАЛ КӨШБАСШЫСЫ: дүкенің барлық достарыңнан көп тапты!',
+    duel: 'ЖЕКПЕ-ЖЕКТЕ ЖЕҢІС: бәсекелес жеңілгенін мойындады',
+    growth: 'РЕКОРДТЫҚ ӨСУ: түсім күрт өсті',
+    quiet: 'ТЫНЫШ АПТА: сатып алушылар дүкен иесін күтіп отыр',
+    done: 'АПТА АРТТА ҚАЛДЫ: дүкен жұмыс істеп тұр, аудан риза',
+  },
 };
 
 /** Заголовок номера — по главному событию недели игрока. */
@@ -151,6 +159,18 @@ const PAPER: Record<Lang, PaperTexts> = {
     revenue: (sum, trend) => `💰 Ingresos de la semana: ${sum}${trend}`,
     footer: '¡Ya empezó una nueva semana y los clientes te esperan!',
     open: '▶ Abrir la tienda',
+  },
+  kk: {
+    friends: (rank, total) => `🏅 Достар арасында: ${total} адамның ішінде ${rank}-орын`,
+    duelWon: (name, mine, theirs) => `⚔️ Жекпе-жек: «${name} және К°» жеңілді (${mine} — ${theirs})`,
+    duelLost: (name, mine, theirs) => `⚔️ Жекпе-жек: «${name} және К°» алда (${theirs} — ${mine}) — осы аптада қайта сынасамыз!`,
+    guildReached: (guild) => `🛡 «${guild}» гильдиясы: апта мақсаты орындалды — сыйлық ойында күтіп тұр`,
+    guildMissed: (guild) => `🛡 «${guild}» гильдиясы: мақсатқа сәл жетпеді — осы аптада жетеміз!`,
+    weekend: (rank, players) => `🛍 «Қара жұма»: ${players} дүкеннің ішінде ${rank}-орын — сыйлық ойында күтіп тұр`,
+    title: (dates) => `🗞 <b>Аудан хабаршысы</b> · ${dates}`,
+    revenue: (sum, trend) => `💰 Апталық түсім: ${sum}${trend}`,
+    footer: 'Жаңа апта басталып кетті — сатып алушылар күтіп тұр!',
+    open: '▶ Дүкенді ашу',
   },
 };
 
