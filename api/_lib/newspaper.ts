@@ -7,15 +7,16 @@ import { guildOf, lastResult, nameOf, weekOf, weekRevenue } from './guild.js';
 import { ready } from './social.js';
 import { standing, summary } from './weekend.js';
 import { bot, type D1, type Env } from './telegram.js';
+import { langOf, type Lang } from './lang.js';
 
 /** Сколько газет за один запуск cron (лимиты Telegram и время воркера). */
 export const PAPERS_PER_RUN = 150;
 /** Понедельник, днём по Москве (UTC+3): с 9 до 21. */
 const HOURS = { from: 6, to: 18 };
 
-type Lang = 'ru' | 'en';
 /** Имена игроков и гильдий — в HTML-разметке сообщения. */
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** Разряды пробелом — на всех языках газеты (по-турецки и по-испански «1,200» читалось бы как дробь). */
 const fmt = (n: number): string => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 /** Свои — как в рейтинге (stats.ts): кого пригласил, кто пригласил, кого пригласил тот же друг. */
@@ -41,22 +42,123 @@ const dd = (ms: number): string => {
 };
 export const weekDates = (week: number): string => `${dd((week * 7 - 3) * DAY)}–${dd((week * 7 + 3) * DAY)}`;
 
+type Headline = 'weekend' | 'king' | 'duel' | 'growth' | 'quiet' | 'done';
+/** Заголовки номера на каждом языке. */
+const HEADLINES: Record<Lang, Record<Headline, string>> = {
+  ru: {
+    weekend: 'ЛУЧШИЕ ВЫХОДНЫЕ РАЙОНА: ваш магазин в десятке «Чёрной пятницы»!',
+    king: 'КОРОЛЬ КВАРТАЛА: ваш магазин заработал больше всех друзей!',
+    duel: 'ДУЭЛЬ ВЫИГРАНА: конкурент признаёт поражение',
+    growth: 'РЕКОРДНЫЙ РОСТ: выручка взлетела',
+    quiet: 'ТИХАЯ НЕДЕЛЯ: покупатели ждут возвращения хозяина',
+    done: 'НЕДЕЛЯ ПОЗАДИ: магазин работает, район доволен',
+  },
+  en: {
+    weekend: 'BEST WEEKEND IN TOWN: your shop made the Black Friday top 10!',
+    king: 'KING OF THE BLOCK: your shop out-earned all your friends!',
+    duel: 'DUEL WON: your rival admits defeat',
+    growth: 'RECORD GROWTH: revenue soared',
+    quiet: 'A QUIET WEEK: customers miss the owner',
+    done: 'ANOTHER WEEK DONE: the shop is open, the town is happy',
+  },
+  tr: {
+    weekend: 'MAHALLENİN EN İYİ HAFTA SONU: dükkânın Black Friday’de ilk 10’a girdi!',
+    king: 'MAHALLENİN KRALI: dükkânın bütün arkadaşlarından fazla kazandı!',
+    duel: 'DÜELLO KAZANILDI: rakibin yenilgiyi kabul ediyor',
+    growth: 'REKOR BÜYÜME: hasılat uçtu',
+    quiet: 'SAKİN BİR HAFTA: müşteriler dükkân sahibini özledi',
+    done: 'BİR HAFTA DAHA GERİDE: dükkân açık, mahalle memnun',
+  },
+  es: {
+    weekend: 'EL MEJOR FIN DE SEMANA DEL BARRIO: ¡tu tienda entró al top 10 del Black Friday!',
+    king: 'REY DE LA CUADRA: ¡tu tienda ganó más que todos tus amigos!',
+    duel: 'DUELO GANADO: tu rival admite la derrota',
+    growth: 'CRECIMIENTO RÉCORD: los ingresos se dispararon',
+    quiet: 'UNA SEMANA TRANQUILA: los clientes extrañan al dueño',
+    done: 'OTRA SEMANA CUMPLIDA: la tienda está abierta y el barrio, contento',
+  },
+};
+
 /** Заголовок номера — по главному событию недели игрока. */
-function headline(lang: Lang, p: { revenue: number; prev: number; duelWon?: boolean; rank?: number; friends: number; weekendRank?: number | null }): string {
-  const ru = lang === 'ru';
-  if (p.weekendRank && p.weekendRank <= 10) return ru ? 'ЛУЧШИЕ ВЫХОДНЫЕ РАЙОНА: ваш магазин в десятке «Чёрной пятницы»!' : 'BEST WEEKEND IN TOWN: your shop made the Black Friday top 10!';
-  if (p.friends > 1 && p.rank === 1) return ru ? 'КОРОЛЬ КВАРТАЛА: ваш магазин заработал больше всех друзей!' : 'KING OF THE BLOCK: your shop out-earned all your friends!';
-  if (p.duelWon) return ru ? 'ДУЭЛЬ ВЫИГРАНА: конкурент признаёт поражение' : 'DUEL WON: your rival admits defeat';
-  if (p.prev > 0 && p.revenue >= p.prev * 1.2) return ru ? 'РЕКОРДНЫЙ РОСТ: выручка взлетела' : 'RECORD GROWTH: revenue soared';
-  if (p.prev > 0 && p.revenue < p.prev * 0.8) return ru ? 'ТИХАЯ НЕДЕЛЯ: покупатели ждут возвращения хозяина' : 'A QUIET WEEK: customers miss the owner';
-  return ru ? 'НЕДЕЛЯ ПОЗАДИ: магазин работает, район доволен' : 'ANOTHER WEEK DONE: the shop is open, the town is happy';
+export function headline(lang: Lang, p: { revenue: number; prev: number; duelWon?: boolean; rank?: number; friends: number; weekendRank?: number | null }): string {
+  const h = HEADLINES[lang];
+  if (p.weekendRank && p.weekendRank <= 10) return h.weekend;
+  if (p.friends > 1 && p.rank === 1) return h.king;
+  if (p.duelWon) return h.duel;
+  if (p.prev > 0 && p.revenue >= p.prev * 1.2) return h.growth;
+  if (p.prev > 0 && p.revenue < p.prev * 0.8) return h.quiet;
+  return h.done;
 }
+
+/** Строки газеты: суммы уже с разрядами, имена — уже экранированы. */
+interface PaperTexts {
+  friends: (rank: number, total: number) => string;
+  duelWon: (name: string, mine: string, theirs: string) => string;
+  duelLost: (name: string, mine: string, theirs: string) => string;
+  guildReached: (guild: string) => string;
+  guildMissed: (guild: string) => string;
+  weekend: (rank: number, players: number) => string;
+  title: (dates: string) => string;
+  revenue: (sum: string, trend: string) => string;
+  footer: string;
+  open: string;
+}
+const PAPER: Record<Lang, PaperTexts> = {
+  ru: {
+    friends: (rank, total) => `🏅 Среди своих: ${rank}-е место из ${total}`,
+    duelWon: (name, mine, theirs) => `⚔️ Дуэль: победа над «${name} и Ко» (${mine} против ${theirs})`,
+    duelLost: (name, mine, theirs) => `⚔️ Дуэль: «${name} и Ко» впереди (${theirs} против ${mine}) — реванш на этой неделе!`,
+    guildReached: (guild) => `🛡 Гильдия «${guild}»: цель недели выполнена — награда ждёт в игре`,
+    guildMissed: (guild) => `🛡 Гильдия «${guild}»: до цели не хватило — на этой неделе добьём!`,
+    weekend: (rank, players) => `🛍 «Чёрная пятница»: ${rank}-е место из ${players} — приз ждёт в игре`,
+    title: (dates) => `🗞 <b>Вестник района</b> · ${dates}`,
+    revenue: (sum, trend) => `💰 Выручка за неделю: ${sum}${trend}`,
+    footer: 'Новая неделя уже началась — покупатели ждут!',
+    open: '▶ Открыть магазин',
+  },
+  en: {
+    friends: (rank, total) => `🏅 Among friends: #${rank} of ${total}`,
+    duelWon: (name, mine, theirs) => `⚔️ Duel: you beat ${name} & Co (${mine} vs ${theirs})`,
+    duelLost: (name, mine, theirs) => `⚔️ Duel: ${name} & Co won (${theirs} vs ${mine}) — rematch this week!`,
+    guildReached: (guild) => `🛡 Guild “${guild}”: weekly goal reached — the reward is waiting`,
+    guildMissed: (guild) => `🛡 Guild “${guild}”: fell short — let's make it this week!`,
+    weekend: (rank, players) => `🛍 Black Friday: #${rank} of ${players} — your prize is waiting`,
+    title: (dates) => `🗞 <b>The Town Gazette</b> · ${dates}`,
+    revenue: (sum, trend) => `💰 Weekly revenue: ${sum}${trend}`,
+    footer: 'A new week has begun — customers are waiting!',
+    open: '▶ Open the shop',
+  },
+  tr: {
+    friends: (rank, total) => `🏅 Arkadaşlar arasında: ${total} kişi içinde ${rank}. sıra`,
+    duelWon: (name, mine, theirs) => `⚔️ Düello: ${name} & Co. karşısında zafer (${mine} – ${theirs})`,
+    duelLost: (name, mine, theirs) => `⚔️ Düello: ${name} & Co. önde (${theirs} – ${mine}) — bu hafta rövanş!`,
+    guildReached: (guild) => `🛡 “${guild}” loncası: haftanın hedefi tamam — ödül oyunda seni bekliyor`,
+    guildMissed: (guild) => `🛡 “${guild}” loncası: hedefe biraz kalmıştı — bu hafta başaracağız!`,
+    weekend: (rank, players) => `🛍 Black Friday: ${players} kişi içinde ${rank}. sıra — ödülün oyunda seni bekliyor`,
+    title: (dates) => `🗞 <b>Mahalle Gazetesi</b> · ${dates}`,
+    revenue: (sum, trend) => `💰 Haftalık hasılat: ${sum}${trend}`,
+    footer: 'Yeni hafta başladı bile — müşteriler bekliyor!',
+    open: '▶ Dükkânı aç',
+  },
+  es: {
+    friends: (rank, total) => `🏅 Entre amigos: puesto ${rank} de ${total}`,
+    duelWon: (name, mine, theirs) => `⚔️ Duelo: le ganaste a ${name} y Cía. (${mine} contra ${theirs})`,
+    duelLost: (name, mine, theirs) => `⚔️ Duelo: ${name} y Cía. va adelante (${theirs} contra ${mine}). ¡Revancha esta semana!`,
+    guildReached: (guild) => `🛡 Gremio “${guild}”: ¡meta semanal cumplida! El premio te espera en el juego`,
+    guildMissed: (guild) => `🛡 Gremio “${guild}”: no llegamos a la meta. ¡Esta semana sí!`,
+    weekend: (rank, players) => `🛍 Black Friday: puesto ${rank} de ${players}. Tu premio te espera en el juego`,
+    title: (dates) => `🗞 <b>La Gaceta del Barrio</b> · ${dates}`,
+    revenue: (sum, trend) => `💰 Ingresos de la semana: ${sum}${trend}`,
+    footer: '¡Ya empezó una nueva semana y los clientes te esperan!',
+    open: '▶ Abrir la tienda',
+  },
+};
 
 /** Текст газеты для игрока за неделю week (null — не торговал). */
 export async function paperFor(db: D1, id: number, week: number, lang: Lang): Promise<string | null> {
   const revenue = await weekRevenue(db, id, week);
   if (revenue <= 0) return null;
-  const ru = lang === 'ru';
+  const t = PAPER[lang];
   const prev = await weekRevenue(db, id, week - 1);
   const lines: string[] = [];
   // Свои: место по выручке за неделю.
@@ -65,7 +167,7 @@ export async function paperFor(db: D1, id: number, week: number, lang: Lang): Pr
   if (friends.length > 1) {
     const scores = await Promise.all(friends.map(async (f) => ({ f, w: await weekRevenue(db, f, week) })));
     rank = scores.filter((s) => s.w > revenue).length + 1;
-    lines.push(ru ? `🏅 Среди своих: ${rank}-е место из ${friends.length}` : `🏅 Among friends: #${rank} of ${friends.length}`);
+    lines.push(t.friends(rank, friends.length));
   }
   // Дуэль недели.
   let duelWon: boolean | undefined;
@@ -74,41 +176,32 @@ export async function paperFor(db: D1, id: number, week: number, lang: Lang): Pr
     const theirs = await weekRevenue(db, duel.rival, week);
     const name = esc(await nameOf(db, duel.rival));
     duelWon = revenue > theirs;
-    lines.push(
-      duelWon
-        ? ru ? `⚔️ Дуэль: победа над «${name} и Ко» (${fmt(revenue)} против ${fmt(theirs)})` : `⚔️ Duel: you beat ${name} & Co (${fmt(revenue)} vs ${fmt(theirs)})`
-        : ru ? `⚔️ Дуэль: «${name} и Ко» впереди (${fmt(theirs)} против ${fmt(revenue)}) — реванш на этой неделе!` : `⚔️ Duel: ${name} & Co won (${fmt(theirs)} vs ${fmt(revenue)}) — rematch this week!`,
-    );
+    lines.push((duelWon ? t.duelWon : t.duelLost)(name, fmt(revenue), fmt(theirs)));
   }
   // Гильдия.
   const g = await guildOf(db, id);
   if (g) {
     const gname = esc(g.name);
     const reached = await lastResult(db, g.id, week);
-    if (reached !== null)
-      lines.push(
-        reached
-          ? ru ? `🛡 Гильдия «${gname}»: цель недели выполнена — награда ждёт в игре` : `🛡 Guild “${gname}”: weekly goal reached — the reward is waiting`
-          : ru ? `🛡 Гильдия «${gname}»: до цели не хватило — на этой неделе добьём!` : `🛡 Guild “${gname}”: fell short — let's make it this week!`,
-      );
+    if (reached !== null) lines.push(reached ? t.guildReached(gname) : t.guildMissed(gname));
   }
   // «Чёрная пятница района».
   const w = await standing(db, id, week);
   if (w.rank) {
     const { players } = await summary(db, week);
-    lines.push(ru ? `🛍 «Чёрная пятница»: ${w.rank}-е место из ${players} — приз ждёт в игре` : `🛍 Black Friday: #${w.rank} of ${players} — your prize is waiting`);
+    lines.push(t.weekend(w.rank, players));
   }
   const change = prev > 0 ? Math.round(((revenue - prev) / prev) * 100) : null;
   const trend = change === null ? '' : change >= 0 ? ` (▲ ${change}%)` : ` (▼ ${-change}%)`;
   return [
-    ru ? `🗞 <b>Вестник района</b> · ${weekDates(week)}` : `🗞 <b>The Town Gazette</b> · ${weekDates(week)}`,
+    t.title(weekDates(week)),
     '',
     `<b>${headline(lang, { revenue, prev, duelWon, rank, friends: friends.length, weekendRank: w.rank })}</b>`,
     '',
-    ru ? `💰 Выручка за неделю: ${fmt(revenue)}${trend}` : `💰 Weekly revenue: ${fmt(revenue)}${trend}`,
+    t.revenue(fmt(revenue), trend),
     ...lines,
     '',
-    ru ? 'Новая неделя уже началась — покупатели ждут!' : 'A new week has begun — customers are waiting!',
+    t.footer,
   ].join('\n');
 }
 
@@ -132,7 +225,8 @@ export async function sendNewspapers(env: Env, now = Date.now()): Promise<number
   const app = env.APP_URL ?? '';
   let sent = 0;
   for (const p of results) {
-    const lang: Lang = p.lang === 'en' ? 'en' : 'ru';
+    // Язык из players (social.ts); старые записи без языка — ru.
+    const lang = langOf(p.lang);
     // Отметка — до отправки: если что-то упадёт, второй раз тот же номер не придёт.
     await db.prepare('INSERT OR IGNORE INTO newspaper (id, week) VALUES (?, ?)').bind(p.id, week).run();
     const text = await paperFor(db, p.id, week, lang);
@@ -142,7 +236,7 @@ export async function sendNewspapers(env: Env, now = Date.now()): Promise<number
         chat_id: p.id,
         text,
         parse_mode: 'HTML',
-        ...(app ? { reply_markup: { inline_keyboard: [[{ text: lang === 'ru' ? '▶ Открыть магазин' : '▶ Open the shop', web_app: { url: app } }]] } } : {}),
+        ...(app ? { reply_markup: { inline_keyboard: [[{ text: PAPER[lang].open, web_app: { url: app } }]] } } : {}),
       });
       sent++;
     } catch (e) {

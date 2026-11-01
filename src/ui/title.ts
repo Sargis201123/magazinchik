@@ -1,6 +1,6 @@
 // Стартовый экран: вывеска магазина, «Играть», язык и звук. За ним уже виден зал.
 
-import { getLang, setLang, t, type Lang } from '../i18n';
+import { getLang, NATIVE, setLang, SHIPPED, t } from '../i18n';
 import { saveLang } from '../i18n/stored';
 import { sound } from '../platform/sound';
 import { mixer } from '../platform/mixer';
@@ -73,6 +73,7 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
   document.body.classList.add('ui-on-title');
 
   let homeReady = false;
+  let picking = false;
   void homeScreenStatus().then((ok) => {
     homeReady = ok;
     if (ok && root.isConnected) render();
@@ -94,15 +95,28 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
     const progress = save ? el('div', 'ui-muted', t('title.progress', { day: save.day, money: save.money })) : null;
 
     const langs = el('div', 'ui-chips');
-    for (const lang of ['ru', 'en'] as Lang[]) {
-      const chip = button(lang.toUpperCase(), () => {
-        if (lang === getLang()) return;
-        setLang(lang);
-        saveLang(lang);
-        // Надписи в самой сцене строятся при запуске — проще перезапустить игру.
-        location.reload();
-      }, `ui-chip${lang === getLang() ? ' active' : ''}`);
-      langs.append(chip);
+    // Язык: одна фишка с названием текущего; по нажатию — список готовых языков, каждый на нём самом.
+    if (picking) {
+      for (const lang of SHIPPED) {
+        langs.append(button(NATIVE[lang], () => {
+          picking = false;
+          if (lang === getLang()) return render();
+          setLang(lang);
+          saveLang(lang);
+          // Надписи в самой сцене строятся при запуске — проще перезапустить игру. ?lang= в адресе
+          // важнее выбора — убираем его, иначе язык не сменится.
+          const url = new URL(location.href);
+          if (url.searchParams.has('lang')) {
+            url.searchParams.delete('lang');
+            location.replace(url.href);
+          } else location.reload();
+        }, `ui-chip${lang === getLang() ? ' active' : ''}`));
+      }
+    } else {
+      langs.append(button(`🌐 ${NATIVE[getLang()]}`, () => {
+        picking = true;
+        render();
+      }, 'ui-chip'));
     }
     // Звук — одной кнопкой; громкость по каналам — в профиле (🏆 → «Звук»).
     langs.append(muteChip(() => save?.day ?? 1, render));

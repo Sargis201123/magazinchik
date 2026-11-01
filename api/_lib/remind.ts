@@ -16,6 +16,7 @@ import { activeEvent, addDays, cardOf, dateAt, daysBetween, guestOn, type GuestI
 import { liveEventsFor } from './live.js';
 import { ready } from './social.js';
 import { bot, type Env } from './telegram.js';
+import { langOf, type Lang } from './lang.js';
 import { isWeekend } from './weekend.js';
 
 const HOUR = 3600_000;
@@ -44,7 +45,7 @@ export type Face = 'sonya' | 'grandma' | 'valya' | 'anchor' | GuestId;
 /** Что известно об игроке для напоминания: поводы из игры (hooks) и что знает сервер. */
 export interface Player {
   id: number;
-  lang: 'ru' | 'en';
+  lang: Lang;
   tz: number;
   sonya: number;
   spoil: number;
@@ -73,15 +74,23 @@ export interface Reminder {
 
 /** Дней в серии бабушкиных гостинцев (как GIFT_DAYS в src/game/gift.ts: тот тянет за собой всю экономику). */
 const GIFT_DAYS = 7;
-const DAY_NAMES = {
+const DAY_NAMES: Record<Lang, string[]> = {
   ru: ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'],
   en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+  tr: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
+  es: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'],
 };
-const dayName = (date: string, lang: 'ru' | 'en'): string =>
-  lang === 'ru' ? `${Number(date.slice(8))} ${DAY_NAMES.ru[Number(date.slice(5, 7)) - 1]}` : `${DAY_NAMES.en[Number(date.slice(5, 7)) - 1]} ${Number(date.slice(8))}`;
+/** Дата словами: «5 декабря», «December 5», «5 Aralık», «5 de diciembre». */
+const DAY_FORMAT: Record<Lang, (d: number, month: string) => string> = {
+  ru: (d, month) => `${d} ${month}`,
+  en: (d, month) => `${month} ${d}`,
+  tr: (d, month) => `${d} ${month}`,
+  es: (d, month) => `${d} de ${month}`,
+};
+const dayName = (date: string, lang: Lang): string => DAY_FORMAT[lang](Number(date.slice(8)), DAY_NAMES[lang][Number(date.slice(5, 7)) - 1]);
 
 /** Тексты от лица героев. В {…} — подстановки. */
-const TEXTS: Record<'ru' | 'en', Record<string, string>> = {
+export const TEXTS: Record<Lang, Record<string, string>> = {
   ru: {
     sonya: '👧 Соня: «Пап, ты сегодня зайдёшь в магазин? Я хотела тебе кое-что сказать…»',
     helped: '👵 Бабушка: «Внучек, {name} прислал тебе подмогу! Заходи — сегодня касса будет пробивать быстрее»',
@@ -138,6 +147,62 @@ const TEXTS: Record<'ru' | 'en', Record<string, string>> = {
     'also.chest': 'the chest ≈{sum} 💰',
     play: '▶ Play',
   },
+  tr: {
+    sonya: '👧 Sonya: “Baba, bugün dükkâna uğrayacak mısın? Sana bir şey söylemek istiyordum…”',
+    helped: '👵 Nine: “Yavrum, {name} sana yardım gönderdi! Uğra — bugün kasa daha hızlı çalışacak”',
+    'guest.moroz': '🎅 Ayaz Dede: “Ho-ho! Bugün dükkânına hediyeyle uğrayacağım — açık ol, uyuya kalma!”',
+    'guest.snegurochka': '❄️ Kar Kızı: “Bugün dükkânına hediyeyle uğrayacağım. Beni bekle!”',
+    'card.newyear': '🎄 Kar Kızı: “{date} kartın dükkânda seni bekliyor. Yılbaşına {left} kaldı!”',
+    'card.newyear.eve': '🎆 Kar Kızı: “Bugün yılın son günü! Kartın dükkânda seni bekliyor. Yeni yılın şimdiden kutlu olsun!”',
+    'card.newyear.jan': '🎄 Kar Kızı: “Mutlu yıllar! {date} kartın dükkânda seni bekliyor”',
+    'card.feb23': '🎖 Nine: “Yavrum, bayramın kutlu olsun! Dükkânda seni 23 Şubat kartı bekliyor”',
+    'card.march8': '🌷 Valentina: “Bahar bayramın kutlu olsun! Dükkânda seni bir kart bekliyor — bir de mimoza”',
+    gift: '👵 Nine: “Yavrum, hediyen hazır — 7 günün {n}. günü! Bugün uğra, yoksa seri baştan başlar”',
+    'gift.big': '👵 Nine: “Yavrum, altı gündür üst üste geliyorsun — bugün en büyük hediye seni bekliyor! Kaçırma”',
+    spoil: '🧓 Valentina: “Duydum ki dükkânında {n} ürünün son günüymüş. Bozulmadan indirime koy!”',
+    weekend: '📺 Mahalle haberleri: “Hafta sonu indirimi! Mahalledeki bütün dükkânlar en çok satış için yarışıyor. Yerini kap”',
+    cashier: '👵 Nine: “Kasiyer sensiz satış yapıyor ama raflar boşalıyor. Bir uğra da mal al”',
+    day: '👵 Nine: “{day}. gün: kapıda müşteriler toplandı bile. Açıyor muyuz?”',
+    'day.0': '👵 Ninenin hediyesi seni bekliyor! Dükkâna uğra — müşteriler seni özledi.',
+    order: '🧓 Valentina: “{who} ile karşılaştım — siparişini soruyor: {item}, {qty} adet. Ayıracağına söz vermiştin!”',
+    letter: '👵 Nine: “Yavrum, {from} sana mektup göndermiş! Kasanın yanında seni bekliyor”',
+    'letter.grandma': '👵 Nine: “Yavrum, sana bir mektup yazdım — içine de küçük bir şey koydum. Uğra!”',
+    'letter.sonya': '👧 Sonya: “Baba, sana bir kart çizdim! Dükkânda, kasanın yanında”',
+    chest: '👵 Nine: “Hasılat sandığı ağırlaştı — yaklaşık {sum} 💰. Gel de aç!”',
+    also: 'Seni bekleyenler: {list}',
+    'also.order': '{who} için sipariş',
+    'also.letter': 'mektup: {from}',
+    'also.chest': 'sandık ≈{sum} 💰',
+    play: '▶ Oyna',
+  },
+  es: {
+    sonya: '👧 Sonia: “Papá, ¿vas a pasar hoy por la tienda? Quería decirte algo…”',
+    helped: '👵 La abuela: “Cariño, ¡{name} te mandó ayuda! Pásate: hoy la caja cobrará más rápido”',
+    'guest.moroz': '🎅 El Abuelo Frío: “¡Jo, jo, jo! Hoy paso por tu tienda con un regalo. ¡Ten todo abierto y no te quedes dormido!”',
+    'guest.snegurochka': '❄️ La Doncella de Nieve: “Hoy paso por tu tienda con un regalo. ¡Espérame!”',
+    'card.newyear': '🎄 La Doncella de Nieve: “Tu tarjeta del {date} te espera en la tienda. ¡Faltan {left} para Año Nuevo!”',
+    'card.newyear.eve': '🎆 La Doncella de Nieve: “¡Es el último día del año! Tu tarjeta te espera en la tienda. ¡Feliz Año Nuevo!”',
+    'card.newyear.jan': '🎄 La Doncella de Nieve: “¡Feliz Año Nuevo! Tu tarjeta del {date} te espera en la tienda”',
+    'card.feb23': '🎖 La abuela: “Cariño, ¡feliz día! En la tienda te espera una tarjeta por el 23 de febrero”',
+    'card.march8': '🌷 Valentina: “¡Feliz fiesta de la primavera! En la tienda te espera una tarjeta… y mimosas”',
+    gift: '👵 La abuela: “Cariño, tu regalo ya está listo: ¡día {n} de 7! Pásate hoy o la racha empieza de nuevo”',
+    'gift.big': '👵 La abuela: “Cariño, seis días seguidos: ¡hoy toca el regalo más grande! No te lo pierdas”',
+    spoil: '🧓 Valentina: “Me contaron que tienes mercancía en su último día: {n} uds. ¡Rebájala antes de que se eche a perder!”',
+    weekend: '📺 Noticias del barrio: “¡Ofertas de fin de semana! Todas las tiendas del barrio compiten por vender más. Asegura tu lugar”',
+    cashier: '👵 La abuela: “Tu cajero vende sin ti, pero los estantes se están vaciando. Pásate a reponer”',
+    day: '👵 La abuela: “Día {day}: ya hay clientes en la puerta. ¿Abrimos?”',
+    'day.0': '👵 ¡El regalo de la abuela te espera! Pásate por la tienda: los clientes te extrañan.',
+    order: '🧓 Valentina: “Me encontré con {who} y me preguntó por su pedido: {item}, {qty} uds. ¡Prometiste apartarlo!”',
+    letter: '👵 La abuela: “Cariño, ¡te llegó una carta de {from}! Te espera junto a la caja”',
+    'letter.grandma': '👵 La abuela: “Cariño, te escribí una carta… y metí algo adentro. ¡Pásate!”',
+    'letter.sonya': '👧 Sonia: “Papá, ¡te dibujé una tarjeta! Está en la tienda, junto a la caja”',
+    chest: '👵 La abuela: “El cofre de las ganancias ya pesa: unas {sum} 💰. ¡Ven a abrirlo!”',
+    also: 'También te esperan: {list}',
+    'also.order': 'el pedido de {who}',
+    'also.letter': 'una carta de {from}',
+    'also.chest': 'el cofre ≈{sum} 💰',
+    play: '▶ Jugar',
+  },
 };
 
 const fill = (text: string, params: Record<string, string | number>): string => text.replace(/\{(\w+)\}/g, (_, k: string) => String(params[k] ?? ''));
@@ -146,7 +211,7 @@ const fill = (text: string, params: Record<string, string | number>): string => 
  * Кто пишет письма и приходит за заказом (src/game/regulars.ts, returns.ts): имя «от кого» (родительный
  * падеж) и «встретила кого» (винительный). Неизвестная метка — повода нет.
  */
-const PEOPLE: Record<'ru' | 'en', Record<string, { from: string; who: string }>> = {
+export const PEOPLE: Record<Lang, Record<string, { from: string; who: string }>> = {
   ru: {
     grandma: { from: 'бабушки', who: 'бабушку' },
     valya: { from: 'Валентины', who: 'Валентину' },
@@ -169,19 +234,48 @@ const PEOPLE: Record<'ru' | 'en', Record<string, { from: string; who: string }>>
     olga: { from: 'Olga Nikolaevna', who: 'Olga Nikolaevna' },
     misha: { from: 'Misha', who: 'Misha' },
   },
+  tr: {
+    grandma: { from: 'Nine', who: 'Nine' },
+    valya: { from: 'Valentina', who: 'Valentina' },
+    sonya: { from: 'Sonya', who: 'Sonya' },
+    petr: { from: 'Pyotr Ilyich', who: 'Pyotr Ilyich' },
+    sveta: { from: 'Sveta', who: 'Sveta' },
+    kostya: { from: 'Kostya', who: 'Kostya' },
+    akhmed: { from: 'Akhmed', who: 'Akhmed' },
+    olga: { from: 'Olga Nikolaevna', who: 'Olga Nikolaevna' },
+    misha: { from: 'Misha', who: 'Misha' },
+  },
+  es: {
+    grandma: { from: 'la abuela', who: 'la abuela' },
+    valya: { from: 'Valentina', who: 'Valentina' },
+    sonya: { from: 'Sonia', who: 'Sonia' },
+    petr: { from: 'Piotr Ilich', who: 'Piotr Ilich' },
+    sveta: { from: 'Sveta', who: 'Sveta' },
+    kostya: { from: 'Kostia', who: 'Kostia' },
+    akhmed: { from: 'Ajmed', who: 'Ajmed' },
+    olga: { from: 'Olga Nikoláyevna', who: 'Olga Nikoláyevna' },
+    misha: { from: 'Misha', who: 'Misha' },
+  },
 };
 /** Любимые товары постоянных покупателей — то, что они просят отложить. */
-const ITEMS: Record<'ru' | 'en', Record<string, string>> = {
+export const ITEMS: Record<Lang, Record<string, string>> = {
   ru: { bread: '🍞 хлеб', milk: '🥛 молоко', potatoes: '🥔 картошка', meat: '🥩 мясо', apples: '🍎 яблоки', juice: '🧃 сок' },
   en: { bread: '🍞 bread', milk: '🥛 milk', potatoes: '🥔 potatoes', meat: '🥩 meat', apples: '🍎 apples', juice: '🧃 juice' },
+  tr: { bread: '🍞 ekmek', milk: '🥛 süt', potatoes: '🥔 patates', meat: '🥩 et', apples: '🍎 elma', juice: '🧃 meyve suyu' },
+  es: { bread: '🍞 pan', milk: '🥛 leche', potatoes: '🥔 papas', meat: '🥩 carne', apples: '🍎 manzanas', juice: '🧃 jugo' },
 };
+/** Товар без названия (метка из игры, которой нет в ITEMS). */
+const GOODS: Record<Lang, string> = { ru: 'товар', en: 'goods', tr: 'ürün', es: 'mercancía' };
 /** Своё поле словаря (не «constructor» из прототипа): метки приходят от игры. */
 const own = <T>(table: Record<string, T>, key: string): T | undefined => (Object.hasOwn(table, key) ? table[key] : undefined);
 /** Сундучок меньше этого — не повод писать (кассир едва начал торговать). */
 export const CHEST_MIN = 100;
 
-/** Сумма с разрядами: «1 200» (ru, неразрывный пробел) или «1,200» (en). */
-export const money = (n: number, lang: 'ru' | 'en'): string => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, lang === 'ru' ? '\u00a0' : ',');
+/**
+ * Сумма с разрядами: «1 200» (неразрывный пробел) или «1,200» (en). По-турецки и по-испански
+ * «1,200» читается как дробь — у них разряды пробелом, как у нас.
+ */
+export const money = (n: number, lang: Lang): string => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, lang === 'en' ? ',' : '\u00a0');
 
 /** Что ждёт в магазине — по отдельности: повод, текст, и короткая строка для приписки «Ещё ждут». */
 function waiting(p: Player): { reason: Reason; face: Face; text: string; short: string }[] {
@@ -191,7 +285,7 @@ function waiting(p: Player): { reason: Reason; face: Face; text: string; short: 
   const [whoId, pid] = (p.order ?? '').split(':');
   const who = own(PEOPLE[lang], whoId ?? '');
   if (who && pid && (p.qty ?? 0) > 0) {
-    const item = own(ITEMS[lang], pid) ?? (lang === 'ru' ? 'товар' : 'goods');
+    const item = own(ITEMS[lang], pid) ?? GOODS[lang];
     out.push({ reason: 'order', face: 'valya', text: fill(t.order, { who: who.who, item, qty: p.qty ?? 0 }), short: fill(t['also.order'], { who: who.from }) });
   }
   const from = p.letter ? own(PEOPLE[lang], p.letter) : undefined;
@@ -207,9 +301,12 @@ function waiting(p: Player): { reason: Reason; face: Face; text: string; short: 
 }
 
 /** Сколько дней до Нового года — словами (дата — в декабре). */
-function daysLeft(date: string, lang: 'ru' | 'en'): string {
+function daysLeft(date: string, lang: Lang): string {
   const n = daysBetween(date, `${Number(date.slice(0, 4)) + 1}-01-01`);
   if (lang === 'en') return `${n} day${n === 1 ? '' : 's'}`;
+  // По-турецки после числа — единственное число: «5 gün».
+  if (lang === 'tr') return `${n} gün`;
+  if (lang === 'es') return `${n} día${n === 1 ? '' : 's'}`;
   const tail = n % 10 === 1 && n % 100 !== 11 ? 'день' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'дня' : 'дней';
   return `${n} ${tail}`;
 }
@@ -268,7 +365,7 @@ export const resetReminderPhotos = (): void => photoIds.clear();
 export const faceUrl = (app: string, face: Face): string => new URL(`promo/remind_${face}.png`, app).href;
 
 /** Отправить напоминание: картинка с подписью и кнопкой «Играть»; картинка не прошла — просто текстом. */
-async function deliver(token: string, app: string, chat: number, r: Reminder, lang: 'ru' | 'en'): Promise<void> {
+async function deliver(token: string, app: string, chat: number, r: Reminder, lang: Lang): Promise<void> {
   const reply_markup = app ? { inline_keyboard: [[{ text: TEXTS[lang].play, web_app: { url: app } }]] } : undefined;
   if (app) {
     const url = faceUrl(app, r.face);
@@ -312,7 +409,8 @@ export async function sendReminders(env: Env, now = Date.now()): Promise<number>
   const events = await liveEventsFor(env);
   let sent = 0;
   for (const row of results) {
-    const lang = row.lang === 'en' ? 'en' : 'ru';
+    // Язык из players (social.ts); старые записи без языка — ru.
+    const lang = langOf(row.lang);
     const player: Player = {
       id: row.id,
       lang,
