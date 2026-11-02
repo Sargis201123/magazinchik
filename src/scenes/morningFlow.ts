@@ -23,7 +23,7 @@ import { weatherFor } from '../game/weather';
 import { claimGift, giftTomorrow } from '../game/gift';
 import { postMail } from '../ui/mailbag';
 import { askWriteAccessOnce } from '../platform/social';
-import { collectOrder, takeLetter } from '../game/returns';
+import { dropOrder, takeLetter } from '../game/returns';
 import { hasDog } from '../game/watch';
 import { contestOf, juryDay } from '../game/contest';
 import { sonyaVisits, sunflowersPlanted } from '../game/drama';
@@ -128,20 +128,18 @@ export function collectMail(scene: StoreScene): void {
     scene.state = letter.state;
     collections.note(scene, 'cards', letter.gift.letter.from);
   }
-  const order = collectOrder(scene.state);
-  // Заказ не на сегодня (устарел) — сосед просто не пришёл, говорить о нём не нужно.
-  const fresh = order && order.order.day === day ? order : null;
-  if (order) scene.state = order.state;
-  if (order?.paid) scene.refreshShelves();
+  // Сосед, просивший отложить (returns.ts), теперь ждёт на доске «Заказы» (orders.ts): отдать утром одним
+  // касанием или он сам зайдёт к закрытию. Устаревший (день прошёл) — просто забываем.
+  const stale = scene.state.ret?.order && scene.state.ret.order.day < day;
+  if (stale) scene.state = dropOrder(scene.state);
   if (letter) track('ret_letter', day);
-  if (fresh) track(fresh.paid ? 'ret_order' : 'ret_order_wait', day, fresh.paid);
   const claimed = claimGift(scene.state, todayLocal(), Math.random);
   // Товар из гостинца сразу встаёт на полки, если есть место.
   if (claimed) {
     scene.state = shelveAll(claimed.state);
     building.refreshWarehouse(scene);
   }
-  if (letter || order || claimed) {
+  if (letter || stale || claimed) {
     saveGame(scene.state);
     scene.hud.update(scene.state, DAY_SECONDS);
   }
@@ -149,7 +147,6 @@ export function collectMail(scene: StoreScene): void {
   if (claimed && day > 1) scene.time.delayedCall(4000, askWriteAccessOnce);
   postMail(day, {
     letter: letter?.gift,
-    order: fresh ?? undefined,
     gift: claimed ? { gift: claimed.gift, tomorrow: giftTomorrow(scene.state, todayLocal()) } : undefined,
   });
 }

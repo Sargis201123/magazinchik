@@ -25,8 +25,8 @@ export const ownerGrowth = (state: StoreState): number => (ownerLevelOf(state) -
 
 /** Пробивка: до −15% времени. */
 export const OWNER_HANDS = 0.15;
-/** Торг: до +8% к шансу сбить цену. */
-export const OWNER_HAGGLE = 0.08;
+/** Скидка у поставщиков от опыта хозяина: до +6% (suppliers.ts supplierDiscount). */
+export const OWNER_HAGGLE = 0.06;
 /** Со склада: до +3 штук за ходку. */
 export const OWNER_CARRY = 3;
 /** Очередь: ждут до 12% дольше. */
@@ -40,6 +40,7 @@ export function ownerTiming(state: StoreState): ScanTiming {
   const k = handsFactor(state);
   return { item: base.item * k, pay: base.pay * k };
 }
+/** Сколько скидки у поставщиков даёт опыт хозяина (suppliers.ts supplierDiscount). */
 export const haggleBonus = (state: StoreState): number => OWNER_HAGGLE * ownerGrowth(state);
 export const carryBonus = (state: StoreState): number => Math.round(OWNER_CARRY * ownerGrowth(state));
 export const eyeTheft = (state: StoreState): number => 1 - OWNER_EYE * ownerGrowth(state);

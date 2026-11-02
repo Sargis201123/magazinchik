@@ -24,7 +24,6 @@ import { isFairDay } from '../src/game/fair';
 import { weatherFor } from '../src/game/weather';
 import { badBatch, CLEAN_BATCH_DAYS } from '../src/game/suppliers';
 import { CAT_FROM_DAY, catOffer } from '../src/game/cat';
-import { DEAL_FROM_DAY, planDay } from '../src/game/events';
 import { ru } from '../src/i18n/ru';
 import { en } from '../src/i18n/en';
 
@@ -166,11 +165,7 @@ describe('меньше решений в первые дни', () => {
   });
 
   it('за первую неделю не открываются мини-события, особые гости и договор с кафе', () => {
-    for (const from of [LIVE_FROM_DAY, SPECIAL_FROM_DAY, CAFE_FROM_DAY, CAT_FROM_DAY, DEAL_FROM_DAY]) expect(from).toBeGreaterThan(7);
-  });
-
-  it('«выгодной партии» нет в первую неделю', () => {
-    for (let day = 4; day < DEAL_FROM_DAY; day++) expect(planDay(game({ day, money: 9999 })).event?.kind).not.toBe('deal');
+    for (const from of [LIVE_FROM_DAY, SPECIAL_FROM_DAY, CAFE_FROM_DAY, CAT_FROM_DAY]) expect(from).toBeGreaterThan(7);
   });
 });
 

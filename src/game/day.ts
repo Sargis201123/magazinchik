@@ -22,7 +22,6 @@ import { eduardGuests, growEduard } from './eduard';
 import { afterBills } from './bankruptcy';
 import { cafeMorning } from './cafe';
 import { giantGuests, giantNight } from './giant';
-import { promoGuests } from './promo';
 import { fairGuests } from './fair';
 import { weekGoal, weekGuests, weekNight, type WeekNight } from './weeks';
 import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
@@ -151,7 +150,6 @@ export const guestFactor = (state: StoreState): number =>
   rankGuests(state) *
   adBoost(state) *
   WEATHER_EFFECTS[weatherFor(state.day)].guests *
-  promoGuests(state) *
   fairGuests(state.day) *
   weekGuests(state.day) *
   lightsGuests(state) *

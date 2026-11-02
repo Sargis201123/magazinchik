@@ -37,7 +37,8 @@ function calmMember(m: StaffMember): StaffMember {
 
 function calmPlan(plan: DayPlan): DayPlan {
   let out = strip(plan, ['sick']);
-  if (out.event && !EVENT_KINDS.has(out.event.kind)) {
+  // Заказ клиента не трогаем: его переносит на доску «Заказы» buyMigrate.ts (идёт после).
+  if (out.event && !EVENT_KINDS.has(out.event.kind) && (out.event.kind as string) !== 'order') {
     out = { ...out };
     delete out.event;
   }

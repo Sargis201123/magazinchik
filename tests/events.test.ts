@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { emptyDayStats, newGame, onShelves, warehouseOf, type StoreState, type Unit } from '../src/game/economy';
 import { ensurePlan, guestsToday, inspectionDone, nightCycle } from '../src/game/day';
 import {
-  answerEvent,
   EVENT_KINDS,
+  answerOrder,
   fulfillOrder,
   inspect,
   ORDER_DONE_RATING,
   ORDER_FAILED_RATING,
   planDay,
+  type ClientOrder,
   type DayPlan,
   type MorningEvent,
 } from '../src/game/events';
@@ -41,21 +42,28 @@ describe('план дня', () => {
   it('за много дней случаются все виды событий', () => {
     const kinds = new Set<string>();
     const base = { ...shop(), staff: [{ role: 'cashier' as const, name: 0, skill: 1, wage: 300, months: 0 }] };
+    let offers = 0;
     for (let day = 4; day < 400; day++) {
-      const e = planDay({ ...base, day }).event;
-      if (e) kinds.add(e.kind);
+      const plan = planDay({ ...base, day });
+      if (plan.event) kinds.add(plan.event.kind);
+      // Заказ клиента — не событие утра, а строка доски «Заказы» (orders.ts); «выгодной партии» нет (02.11).
+      if (plan.offer) offers++;
+      expect(plan.event && plan.offer).toBeFalsy();
     }
-    // Наказаний без выбора (холодильник, болезнь, отгул, счёт, переманивание) больше нет — только эти.
-    expect([...kinds].sort()).toEqual(['deal', 'inspection', 'order', 'priceWar', 'snitch']);
+    // Наказаний без выбора (холодильник, болезнь, отгул, счёт, переманивание) больше нет; заказ клиента — на доске
+    // «Заказы», «выгодной партии» нет (02.11).
+    expect([...kinds].sort()).toEqual(['inspection', 'priceWar', 'snitch']);
     expect([...EVENT_KINDS].sort()).toEqual([...kinds].sort());
+    expect(offers).toBeGreaterThan(20);
   });
 });
 
 describe('заказ', () => {
-  const order: MorningEvent = { kind: 'order', client: 'school', product: 'milk', qty: 7, pay: 78 };
+  const order: ClientOrder = { kind: 'order', client: 'school', product: 'milk', qty: 7, pay: 78 };
+  const offered = (o: ClientOrder = order) => shop(undefined, { offer: o });
 
   it('принятый заказ забирают вечером: склад, потом полки, деньги и рейтинг', () => {
-    const s = answerEvent(shop(order), true)!;
+    const s = answerOrder(offered(), true)!;
     const r = fulfillOrder(s)!;
     expect(r.delivered).toBe(true);
     expect(r.earned).toBe(7 * 78);
@@ -65,7 +73,7 @@ describe('заказ', () => {
   });
 
   it('не хватило товара — рейтинг падает, товар не трогаем', () => {
-    const s = answerEvent(shop({ ...order, qty: 20 }), true)!;
+    const s = answerOrder(offered({ ...order, qty: 20 }), true)!;
     const r = fulfillOrder(s)!;
     expect(r.delivered).toBe(false);
     expect(r.state.rating).toBeCloseTo(s.rating - ORDER_FAILED_RATING);
@@ -73,21 +81,13 @@ describe('заказ', () => {
   });
 
   it('отказ — заказа нет', () => {
-    expect(fulfillOrder(answerEvent(shop(order), false)!)).toBeNull();
+    expect(fulfillOrder(answerOrder(offered(), false)!)).toBeNull();
   });
 
   it('выполненный заказ засчитывается в сюжет', () => {
-    const night = nightCycle(answerEvent(shop(order), true)!, emptyDayStats());
+    const night = nightCycle(answerOrder(offered(), true)!, emptyDayStats());
     expect(night.order?.delivered).toBe(true);
     expect(night.state.story.ordersDone).toBe(1);
-  });
-});
-
-describe('выгодная партия', () => {
-  it('покупается на склад по сниженной цене, не больше места', () => {
-    const s = answerEvent(shop({ kind: 'deal', supplier: 'dairy', product: 'milk', qty: 100, price: 18 }), true)!;
-    expect(warehouseOf(s, 'milk')).toBe(35); // склад магазинчика — 35 мест
-    expect(s.money).toBe(1000 - 30 * 18);
   });
 });
 

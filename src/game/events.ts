@@ -1,21 +1,18 @@
 // События дня: то, что сотрудники за игрока не решат. Утром — одно решение
-// (заказ, выгодная партия, ход Эдуарда), днём — проверка и час пик.
+// (ход Эдуарда), днём — проверка и час пик. Крупный заказ клиента — не событие, а строка доски
+// «Заказы» (orders.ts) рядом с кафе и соседями.
 // Всё случайное зависит от номера дня, поэтому перезапуск игры не меняет события.
 // 02.11 убраны наказания без выбора: поломка холодильника, болезнь сотрудника, «отпроситься»,
 // неожиданный счёт и переманивание — они стоили игроку внимания и денег, а решать там было нечего.
 
 import type { TextKey } from '../i18n/ru';
 import {
-  buyStock,
   PRODUCTS,
   sellableProducts,
-  warehouseCapacity,
-  warehouseCount,
   type ProductId,
   type StoreState,
 } from './economy';
 import { rng } from './random';
-import { SUPPLIER_IDS, SUPPLIERS, type SupplierId } from './suppliers';
 import type { Quest } from './endless';
 import { makeWar, WAR_CHANCE, WAR_FROM_DAY } from './war';
 import { eduardWar } from './eduard';
@@ -31,8 +28,6 @@ export const CLIENTS: Record<ClientId, { nameKey: TextKey; askKey: TextKey; prod
 
 /** Заказ платит дороже обычной цены. */
 export const ORDER_MARKUP = 1.3;
-/** Выгодная партия — за полцены. */
-export const DEAL_DISCOUNT = 0.5;
 export const ORDER_DONE_RATING = 0.1;
 export const ORDER_FAILED_RATING = 0.3;
 export const INSPECTION_PASS_RATING = 0.2;
@@ -42,17 +37,22 @@ export const RUSH_SECONDS = 20;
 /** Эдуард жалуется инспектору — внеплановая проверка. */
 export const SNITCH_FROM_DAY = 14;
 export const SNITCH_CHANCE = 0.05;
-/** «Выгодная партия» (купить или пропустить) — не в первую неделю: новичку хватает своих решений (02.11: было 6). */
-export const DEAL_FROM_DAY = 9;
+/** Крупный заказ клиента: заберут вечером и заплатят дороже (доска «Заказы», orders.ts). */
+export interface ClientOrder {
+  kind: 'order';
+  client: ClientId;
+  product: ProductId;
+  qty: number;
+  pay: number;
+}
+
 export type MorningEvent =
-  | { kind: 'order'; client: ClientId; product: ProductId; qty: number; pay: number }
-  | { kind: 'deal'; supplier: SupplierId; product: ProductId; qty: number; price: number }
   | { kind: 'inspection' }
   | { kind: 'priceWar'; product: ProductId; price: number; days: number }
   | { kind: 'snitch' };
 
 /** Виды утренних событий, которые ещё бывают: у старого сохранения в плане может лежать убранное (save.ts). */
-export const EVENT_KINDS: ReadonlySet<string> = new Set<MorningEvent['kind']>(['order', 'deal', 'inspection', 'priceWar', 'snitch']);
+export const EVENT_KINDS: ReadonlySet<string> = new Set<MorningEvent['kind']>(['inspection', 'priceWar', 'snitch']);
 
 /** План дня: утреннее событие и что произойдёт днём. */
 export interface DayPlan {
@@ -60,8 +60,10 @@ export interface DayPlan {
   event?: MorningEvent;
   /** Игрок уже ответил на утреннее событие. */
   decided: boolean;
+  /** Заказ клиента ждёт ответа на доске «Заказы» (orders.ts). */
+  offer?: ClientOrder;
   /** Принятый заказ: его заберут вечером. */
-  order?: Extract<MorningEvent, { kind: 'order' }>;
+  order?: ClientOrder;
   /** Сегодня придёт инспектор. */
   inspection: boolean;
   /** На какой секунде дня начнётся час пик. */
@@ -80,8 +82,8 @@ export interface EventChances {
 export const inspectionFine = (level: number): number => 150 + 100 * level;
 
 /**
- * Что случится в этот день. Одно утреннее событие по приоритету: проверка, заказ, выгодная партия,
- * ходы Эдуарда. Первые дни — спокойные.
+ * Что случится в этот день. Одно утреннее событие по приоритету: проверка, ходы Эдуарда; заказ
+ * клиента — на доску «Заказы», не в новости. Первые дни — спокойные.
  */
 export function planDay(state: StoreState, chances: EventChances = { order: 0.15, inspection: 0.1 }): DayPlan {
   // Эдуард (война цен, жалоба) — сосед Центра; в Заречье его нет (zarechye.ts).
@@ -96,15 +98,16 @@ export function planDay(state: StoreState, chances: EventChances = { order: 0.15
   random();
   const inspectionRoll = random();
   const orderRoll = random();
+  // «Выгодной партии» больше нет (02.11), но её случайное число тянем: ряд событий по дням не сдвигается.
   const dealRoll = random();
 
   if (inspectionRoll < chances.inspection) {
     plan.inspection = true;
     plan.event = { kind: 'inspection' };
   } else if (orderRoll < chances.order) {
-    plan.event = makeOrder(state, random);
-  } else if (dealRoll < 0.12 && state.day >= DEAL_FROM_DAY) {
-    plan.event = makeDeal(state, random);
+    plan.offer = makeOrder(state, random);
+  } else if (dealRoll < 0.12 && state.day >= 6) {
+    // Раньше здесь была «выгодная партия»: в этот день просто тихо (и Эдуард не приходит — как и раньше).
   } else if (home && state.day >= WAR_FROM_DAY && !state.war && random() < WAR_CHANCE * eduardWar(state)) {
     // Эдуард через дорогу снижает цену — отвечать или нет, решает игрок (war.ts).
     const war = makeWar(state, random);
@@ -117,7 +120,7 @@ export function planDay(state: StoreState, chances: EventChances = { order: 0.15
   return plan;
 }
 
-function makeOrder(state: StoreState, random: () => number): MorningEvent | undefined {
+function makeOrder(state: StoreState, random: () => number): ClientOrder | undefined {
   const sellable = sellableProducts(state);
   const clients = (Object.keys(CLIENTS) as ClientId[]).filter((c) => CLIENTS[c].products.some((p) => sellable.includes(p)));
   if (!clients.length) return undefined;
@@ -128,39 +131,21 @@ function makeOrder(state: StoreState, random: () => number): MorningEvent | unde
   return { kind: 'order', client, product, qty, pay: Math.round(PRODUCTS[product].basePrice * ORDER_MARKUP) };
 }
 
-function makeDeal(state: StoreState, random: () => number): MorningEvent | undefined {
-  const sellable = sellableProducts(state);
-  const offers = SUPPLIER_IDS.flatMap((supplier) =>
-    sellable.filter((p) => SUPPLIERS[supplier].products[p] !== undefined).map((product) => ({ supplier, product })),
-  );
-  if (!offers.length) return undefined;
-  const { supplier, product } = offers[Math.floor(random() * offers.length)];
-  const qty = 8 + Math.floor(random() * 8);
-  const price = Math.max(1, Math.round(PRODUCTS[product].cost * DEAL_DISCOUNT));
-  return { kind: 'deal', supplier, product, qty, price };
-}
-
 /**
- * Ответ на утреннее событие. Заказ: принять — вечером его заберут. Партия: купить
- * на склад. Проверка — просто уведомление.
+ * Ответ на утреннее событие. Проверка — просто уведомление.
  */
-export function answerEvent(state: StoreState, accept: boolean): StoreState | null {
+export function answerEvent(state: StoreState, _accept: boolean): StoreState | null {
   const plan = state.plan;
   const event = plan?.event;
   if (!plan || !event || plan.decided) return null;
-  const decided = { ...plan, decided: true };
-  switch (event.kind) {
-    case 'order':
-      return { ...state, plan: { ...decided, order: accept ? event : undefined } };
-    case 'deal': {
-      if (!accept) return { ...state, plan: decided };
-      const qty = Math.min(event.qty, warehouseCapacity(state) - warehouseCount(state), Math.floor(state.money / event.price));
-      const bought = qty > 0 ? buyStock(state, event.product, qty, event.price) : null;
-      return bought ? { ...bought, plan: decided } : null;
-    }
-    default:
-      return { ...state, plan: decided };
-  }
+  return { ...state, plan: { ...plan, decided: true } };
+}
+
+/** Ответ на заказ клиента с доски «Заказы»: принять — вечером заберут, отказать — заказ уходит. */
+export function answerOrder(state: StoreState, accept: boolean): StoreState | null {
+  const offer = state.plan?.offer;
+  if (!state.plan || !offer) return null;
+  return { ...state, plan: { ...state.plan, offer: undefined, order: accept ? offer : state.plan.order } };
 }
 
 export interface OrderResult {

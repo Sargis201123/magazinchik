@@ -121,7 +121,7 @@ describe('новые механики', () => {
 describe('кухня с поваром', () => {
   // Опытный игрок со всеми механиками: кухня (повар, своя закупка продуктов, полка «Еда», списание) окупается,
   // но главной статьёй не становится.
-  const ALL = { candy: true, coffee: true, oven: true, night: true, cat: true, loyalty: true, gear: true, etags: true, departments: true, skills: true, radio: true, brand: true, cafe: true, rush: true };
+  const ALL = { candy: true, coffee: true, oven: true, night: true, cat: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, rush: true };
   const lateProfit = (kitchen: boolean) => {
     let sum = 0;
     for (let seed = 1; seed <= 4; seed++) {

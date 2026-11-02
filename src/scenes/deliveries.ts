@@ -13,7 +13,6 @@ import { unitsPerBox } from './layout';
 import { Halo } from './halo';
 import { orderUrgent, receiveUrgent, URGENT_SECONDS } from '../game/urgent';
 import { autoArrived, autoTopUp } from '../game/autoorder';
-import { showUrgent } from '../ui/urgent';
 import { modalOpen } from '../platform/frameCap';
 import {
   deliveryRating,
@@ -652,9 +651,9 @@ export function urgentOnTheWay(scene: StoreScene): number {
   return scene.urgentOrders.reduce((sum, o) => sum + o.qty, 0);
 }
 
-/** Оплатить срочный заказ и отправить фургон. false — нет денег, места или товара. */
-export function orderUrgentDelivery(scene: StoreScene, id: ProductId, qty: number, byManager = false): boolean {
-  const next = orderUrgent(scene.state, id, qty, urgentOnTheWay(scene), byManager);
+/** Оплатить срочный заказ менеджера и отправить фургон. false — нет денег, места или товара. */
+export function orderUrgentDelivery(scene: StoreScene, id: ProductId, qty: number): boolean {
+  const next = orderUrgent(scene.state, id, qty, urgentOnTheWay(scene));
   if (!next) return false;
   scene.state = next;
   scene.urgentOrders.push({ id, qty });
@@ -707,16 +706,4 @@ export function receiveUrgentOrders(scene: StoreScene): void {
   sound.place('box', 0);
   const { warehouse } = scene.layout;
   scene.popup(warehouse.x + warehouse.w / 2, warehouse.y - 4, t('popup.urgent', { list }), '#fff3b0');
-}
-
-export function openUrgent(scene: StoreScene): void {
-  if (!scene.running || scene.night) return;
-  showUrgent({
-    getState: () => scene.state,
-    onTheWay: () => urgentOnTheWay(scene),
-    onTheWayList: () => scene.urgentOrders.map((o) => `${PRODUCTS[o.id].icon}×${o.qty}`).join(' '),
-    order: (id, qty) => {
-      if (orderUrgentDelivery(scene, id, qty)) sound.coin();
-    },
-  });
 }

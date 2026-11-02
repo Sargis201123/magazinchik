@@ -3,7 +3,7 @@ import { emptyDayStats, monthlyBill, newGame, newLifetime, ownerScan, payBill, t
 import { afterLoanPayment, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../src/game/bank';
 import { carryBonus, eyeTheft, haggleBonus, OWNER_CARRY, OWNER_EYE, OWNER_HAGGLE, OWNER_LEVEL_MAX, ownerGrowth, ownerLevelOf, ownerTiming, XP_LEVELS } from '../src/game/owner';
 import { addReport, REPORT_DAYS, weekReport } from '../src/game/reports';
-import { haggleChance, SUPPLIERS } from '../src/game/suppliers';
+import { supplierDiscount } from '../src/game/suppliers';
 
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 20, money: 5000, ...patch });
 const served = (n: number): Partial<StoreState> => ({ lifetime: { ...newLifetime(), served: n } });
@@ -32,8 +32,8 @@ describe('уровень хозяина', () => {
     }
     const top = prev;
     expect(haggleBonus(top)).toBeCloseTo(OWNER_HAGGLE);
-    const zina = SUPPLIERS[Object.keys(SUPPLIERS)[0] as keyof typeof SUPPLIERS];
-    expect(haggleChance(zina, 0.1, 3, haggleBonus(top))).toBeGreaterThan(haggleChance(zina, 0.1, 3));
+    // Торга нет (02.11): опыт хозяина прибавляет к постоянной скидке поставщиков.
+    expect(supplierDiscount(top) - supplierDiscount(base)).toBeCloseTo(OWNER_HAGGLE);
     expect(carryBonus(top)).toBe(OWNER_CARRY);
     expect(eyeTheft(top)).toBeCloseTo(1 - OWNER_EYE);
   });

@@ -4,6 +4,7 @@ import { normalizeWeeks } from './weeks';
 import { migrateOwnerTill } from './registers';
 import { migrateAutoOrder, settleInbound } from './autoorder';
 import { migrateTut } from './tutorial';
+import { migrateBuying } from './buyMigrate';
 import { migrateCollections } from './collections';
 import { migrateCareer } from './career';
 import { migrateGear } from './gear';
@@ -83,7 +84,8 @@ export function loadGame(): StoreState | null {
   // Новичок посреди первых дней (обновился до бабушкиного обучения) получает его с того шага, где он сейчас.
   // Убранные 02.11 механики (calm.ts): поломки, болезни и выходные, прибавки, ночные кражи, навыки — снимаем первыми.
   const calm = migrateCalm(merged);
-  const state = migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? calm : migrateOwnerTill(calm))));
+  // Закупка и продажи упрощены (02.11): снятые улучшения, акция дня, договоры, «выгодная партия» (buyMigrate.ts).
+  const state = migrateBuying(migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? calm : migrateOwnerTill(calm)))));
   // До версии 11 мороженое и цветы стояли на обычных полках (теперь — ларь у входа и вёдра у кассы).
   // Альбом коллекций появился позже: старое сохранение сразу получает уже заработанное (collections.ts).
   // Карьера сотрудников появилась позже: опыт старых сотрудников — по их стажу (career.ts).
