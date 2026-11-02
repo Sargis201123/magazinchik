@@ -48,12 +48,12 @@ export const AROMA_TOLERANCE = 1.2;
 
 /** Сколько свежего хлеба сейчас есть куда положить: свободное место на хлебных полках и на складе. */
 export const breadRoom = (state: StoreState): number =>
-  state.shelves.reduce((sum, s) => sum + (!s.broken && canPlace('bread', s) ? shelfFree(s) : 0), 0) +
+  state.shelves.reduce((sum, s) => sum + (canPlace('bread', s) ? shelfFree(s) : 0), 0) +
   Math.max(0, warehouseCapacity(state) - warehouseCount(state));
 
 /** Свободное место на хлебных полках в зале. */
 export const breadShelfRoom = (state: StoreState): number =>
-  state.shelves.reduce((sum, s) => sum + (!s.broken && canPlace('bread', s) ? shelfFree(s) : 0), 0);
+  state.shelves.reduce((sum, s) => sum + (canPlace('bread', s) ? shelfFree(s) : 0), 0);
 
 /** Пекарня работает: печь куплена и пекарь сегодня на смене. */
 export const bakeryWorking = (state: StoreState): boolean => (state.upgrades ?? []).includes('oven') && onShift(state, 'baker');
@@ -68,7 +68,7 @@ export function bakerShouldBake(state: StoreState, dayLeft = 1): boolean {
   if (mode === 'off' || (mode === 'auto' && !needsBaking(state, 'bread', ovenBatch(state), dayLeft))) return false;
   // Со своей маркой хлеб занимает половину хлебных полок — остальное под выпечку «От бабушки».
   if (!(state.brand ?? 0)) return true;
-  const capacity = state.shelves.reduce((sum, s) => sum + (!s.broken && canPlace('bread', s) ? shelfCapacity(s) : 0), 0);
+  const capacity = state.shelves.reduce((sum, s) => sum + (canPlace('bread', s) ? shelfCapacity(s) : 0), 0);
   return onShelves(state, 'bread') < capacity * BREAD_SHARE_WITH_BRAND;
 }
 
@@ -87,7 +87,7 @@ export function takeOutBread(state: StoreState, qty = ovenBatch(state), id: Prod
   let placed = 0;
   const fresh = (): Unit => ({ age: 0 });
   const shelves = state.shelves.map((shelf) => {
-    if (left === 0 || shelf.broken || !canPlace(id, shelf)) return shelf;
+    if (left === 0 || !canPlace(id, shelf)) return shelf;
     const n = Math.min(left, shelfFree(shelf));
     if (n <= 0) return shelf;
     left -= n;

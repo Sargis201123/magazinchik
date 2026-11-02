@@ -43,7 +43,7 @@ export const brandBatchCost = (id: ProductId): number => PRODUCTS[id].cost * BRA
  */
 export function brandToBake(state: StoreState, dayLeft = 1): ProductId | null {
   if (!bakeryWorking(state)) return null;
-  const room = (id: ProductId) => state.shelves.reduce((sum, s) => sum + (!s.broken && canPlace(id, s) ? shelfFree(s) : 0), 0);
+  const room = (id: ProductId) => state.shelves.reduce((sum, s) => sum + (canPlace(id, s) ? shelfFree(s) : 0), 0);
   // «Сколько влезет» — как раньше; иначе своё тоже печём по спросу, чтобы не портилось.
   const wanted = (id: ProductId) => bakeModeOf(state) === 'full' || needsBaking(state, id, BRAND_BATCH, dayLeft);
   const options = OWN_PRODUCTS.filter((id) => ownProductOpen(state, id) && room(id) >= BRAND_BATCH / 2 && state.money >= brandBatchCost(id) && wanted(id));

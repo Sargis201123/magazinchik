@@ -53,7 +53,6 @@ import {
   warehouseCapacity,
   warehouseCount,
   warehouseOf,
-  answerRaise,
   cashierScan,
   servePerDay,
   fire,
@@ -70,11 +69,7 @@ import {
   type ProductId,
   type StoreState,
   shelfKindOpen,
-  EXHAUSTED_DAYS,
-  giveDayOff,
-  isTired,
   roleOpen,
-  isAbsent,
 } from '../game/economy';
 import {
   canHaggle,
@@ -101,7 +96,7 @@ import {
   seasonFor,
   type Quest,
 } from '../game/endless';
-import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
+import { answerEvent, CLIENTS, type ClientId, type MorningEvent } from '../game/events';
 import { applyReorder } from '../game/reorder';
 import { AUTO_SHARES, AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoCancel, autoDay, autoLimit, autoMorning, autoResume, autoReturn, autoSetShare, autoShare, autoToggle } from '../game/autoorder';
 import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
@@ -118,7 +113,7 @@ import { daysToFair, fairToday, isFairDay } from '../game/fair';
 import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
 import { pendingTip, seeTip, soloExpandRisk, TIP_ICONS } from '../game/tips';
 import { markdownSurplus, toggleDonate } from '../game/economy';
-import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
+import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingStep } from '../game/staff';
 import { answerCeremony, answerOffer, holderOf, BEST_EVERY, BEST_REWARDS, bestBonus, bestGift, careerOf, dismissLeft, nextRank, promotedWage, rankKey, xpToNext, type BestReward } from '../game/career';
 import { BRANCH_HEAD_BONUS } from '../game/branch';
 import {
@@ -169,7 +164,7 @@ import {
   type GiantPhase,
 } from '../game/giant';
 import { CANDY_COST, CANDY_PRICE, nextRack, rackCapacity, rackOf, refillRack, upgradeRack } from '../game/impulse';
-import { haggleBonus, learnSkill, nextLevelXp, ownerLevelOf, ownerTiming, ownerXp, SKILL_IDS, SKILL_MAX, skillLevel, skillPoints, SKILLS } from '../game/owner';
+import { carryBonus, handsFactor, haggleBonus, nextLevelXp, ownerGrowth, ownerLevelOf, ownerTiming, ownerXp } from '../game/owner';
 import { LOAN_INTEREST, LOAN_MONTHS, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../game/bank';
 import { showReport } from './report';
 import { buyCups, COFFEE_CHANCE, CUP_COST, cupsOf, CUPS_MAX, TABLES_COFFEE } from '../game/coffee';
@@ -210,7 +205,7 @@ import { arcBox, arcLines } from './arcs';
 import { mailBox, takeQuietly } from './mail';
 import { MAIL_EVENT } from './mailbag';
 import { arcToday } from '../game/arcs';
-import { lateBurglaryNews, lateContestAnnounce, lateContestResult, pickNews, type NewsId } from '../game/headlines';
+import { lateContestAnnounce, lateContestResult, pickNews, type NewsId } from '../game/headlines';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { showSupport } from './support';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
@@ -230,21 +225,7 @@ const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 33
 import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, STAR_PACKS, tryDecor, type DecorItem, type DecorKind, decorItem } from '../game/decor';
 import { buyWithStars, starsAvailable } from '../platform/stars';
 import { petsBox } from './pets';
-import {
-  adoptDog,
-  burglaryChance,
-  burglaryNews,
-  DOG_FOOD,
-  DOG_FROM_DAY,
-  DOG_PRICE,
-  hasWatchman,
-  securityOf,
-  seeBurglaryNews,
-  setWatchman,
-  WATCHMAN_BOUNTY,
-  WATCHMAN_WAGE,
-  type BurglaryNews,
-} from '../game/watch';
+import { adoptDog, DOG_FOOD, DOG_FROM_DAY, DOG_PRICE, securityOf } from '../game/watch';
 import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
 import { flushSoon, track } from '../platform/analytics';
 import { MORNING_TABS, openAllTabs, openTabs, seeTab, tabNew, tabOpen, unlockTab } from '../game/onboarding';
@@ -556,10 +537,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
   let buyFilter: 'low' | 'all' | 'season' = 'low';
   /** Какая полка во вкладке «Зал» раскрыта (улучшить, продать, починить). */
   let openShelf = -1;
-  /** Какая плитка «Уголков» раскрыта, чей ряд в «Персонале» и какой навык хозяина. */
+  /** Какая плитка «Уголков» раскрыта и чей ряд в «Персонале». */
   let openCorner: string | null = null;
   let openStaff: string | null = null;
-  let openSkill: string | null = null;
   /** Вкладку только что переключили — содержимое въезжает сбоку (при покупках не дёргается). */
   let slideTab = false;
   /** Какая реплика сюжетного диалога сейчас на экране. */
@@ -731,8 +711,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     const giantPhase = giantNews(state);
     const result = contestResult(state) ?? lateContestResult(state);
     const announce = contestAnnounce(state) ?? lateContestAnnounce(state);
-    const night = burglaryNews(state) ?? lateBurglaryNews(state);
-    const asking = state.staff.find((m) => m.raiseAsk);
     const som = zarBossNews(state);
     const zarTale = zarTaleToday(state);
     const ready: NewsId[] = [];
@@ -745,10 +723,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     add('zarBoss', som);
     add('contestResult', result);
     add('contestAnnounce', announce);
-    add('burglary', night);
     add('event', state.plan?.event && !state.plan.decided);
-    add('quit', state.quitNotice?.length);
-    add('raise', asking);
     add('career', careerDue(state));
     add('trick', !zarHere && trickToday(state));
     add('tale', taleToday(state));
@@ -785,18 +760,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     }
     if (announce && picked.id === 'contestAnnounce') {
       card.replaceChildren(contestAnnounceBox(announce));
-      return;
-    }
-    if (night && picked.id === 'burglary') {
-      card.replaceChildren(burglaryBox(night));
-      return;
-    }
-    if (state.quitNotice?.length && picked.id === 'quit') {
-      card.replaceChildren(title, quitBox(state.quitNotice));
-      return;
-    }
-    if (asking && picked.id === 'raise') {
-      card.replaceChildren(title, raiseBox(asking));
       return;
     }
     if (picked.id === 'cat') {
@@ -1043,12 +1006,12 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
   /** Красные цифры на вкладках: где утром нужно что-то сделать. */
   const tabBadges = (state: StoreState): Partial<Record<Tab, number>> => {
     const empty = sellableProducts(state).filter((pid) => canStock(state, pid) && stockOf(state, pid) === 0).length;
-    const broken = state.shelves.filter((sh) => sh.broken).length + (surplus(state).count ? 1 : 0);
+    const hall = surplus(state).count ? 1 : 0;
     const rack = rackOf(state);
     const extras = (state.cat && !fedToday(state) ? 1 : 0) + (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0);
     const next = nextStoreLevel(state);
     const grow = next && state.debt === 0 && state.money >= next.cost ? 1 : 0;
-    return { buy: empty, hall: broken, extras, grow };
+    return { buy: empty, hall, extras, grow };
   };
 
   /**
@@ -1210,7 +1173,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
 
   /** Сколько товара стоит на полках и сколько всего мест (сломанные холодильники и ларь не в сезон не в счёт). */
   const shelfSpace = (state: StoreState) => {
-    const working = state.shelves.filter((sh) => !sh.broken && PRODUCT_IDS.some((pid) => canPlace(pid, sh) && productAvailable(pid, state.day)));
+    const working = state.shelves.filter((sh) => PRODUCT_IDS.some((pid) => canPlace(pid, sh) && productAvailable(pid, state.day)));
     return { s: working.reduce((a, sh) => a + shelfCount(sh), 0), smax: working.reduce((a, sh) => a + shelfCapacity(sh), 0) };
   };
 
@@ -1500,13 +1463,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     box.append(head, el('div', 'ui-muted', t('shelves.only', { list: allowed })));
     if (shelf.kind === 'icebox') box.append(el('div', 'ui-muted', t('shelves.iceboxNote')));
     if (shelf.kind === 'florist') box.append(el('div', 'ui-muted', t('shelves.floristNote')));
-    if (shelf.broken) {
-      const cost = fridgeRepairCost(state.level);
-      box.append(
-        el('div', 'ui-note', `🔧 ${t('shelves.broken')}`),
-        button(t('shelves.repair', { cost }), () => update(repairShelf(getState(), i), 'success'), 'ui-btn', state.money < cost),
-      );
-    }
     const cost = upgradeCost(shelf);
     if (cost === null) box.append(el('div', 'ui-muted', t('shelves.maxLevel')));
     else
@@ -1548,15 +1504,15 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
           else if (openShelf === i) openShelf = -1;
           render();
         });
-      }, `ui-shelf-card${openShelf === i ? ' active' : ''}${shelf.broken ? ' broken' : ''}`);
+      }, `ui-shelf-card${openShelf === i ? ' active' : ''}`);
       const bar = el('div', 'ui-bar');
       const fill = el('div', 'ui-bar-fill');
       fill.style.width = `${Math.round((n / Math.max(1, max)) * 100)}%`;
-      fill.style.background = shelf.broken ? '#e43b44' : n / Math.max(1, max) < 0.25 ? '#feae34' : '#63c74d';
+      fill.style.background = n / Math.max(1, max) < 0.25 ? '#feae34' : '#63c74d';
       bar.append(fill);
       const icons = PRODUCT_IDS.filter((pid) => (shelf.items[pid]?.length ?? 0) > 0).slice(0, 3).map((pid) => PRODUCTS[pid].icon).join('');
       cell.append(
-        el('b', '', `${shelf.broken ? '🔧 ' : ''}${t(SHELF_KINDS[shelf.kind].nameKey)}`),
+        el('b', '', t(SHELF_KINDS[shelf.kind].nameKey)),
         el('span', 'ui-shelf-meta', `${icons} ${n}/${max} · ${'★'.repeat(shelf.level + 1)}`),
         bar,
       );
@@ -1879,13 +1835,12 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         el('h3', '', t('career.best.title')),
         who(staffFace(crowned.name), name),
         el('p', '', t('career.best.say')),
-        el('div', 'ui-muted', t('career.best.stats', { shifts: ceremony.shifts, miss: ceremony.miss })),
+        el('div', 'ui-muted', t('career.best.stats', { shifts: ceremony.shifts })),
         el('p', '', t('career.best.text')),
         el('b', '', t('career.best.ask')),
       );
       const label: Record<BestReward, string> = {
         cash: t('career.best.cash', { n: bestBonus(state) }),
-        off: t('career.best.off'),
         gift: t('career.best.gift', { n: bestGift(state) }),
       };
       const row = el('div', 'ui-career-rewards');
@@ -1901,31 +1856,17 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     if (offer && asking) {
       const box = el('div', 'ui-box ui-tale ui-career');
       const role = t(STAFF_ROLES[asking.role].nameKey);
-      const days = Math.round(careerOf(asking, state.day).xp);
       const name = el('div');
       name.append(el('b', '', memberName(asking)), el('div', 'ui-item-sub', role));
-      if (offer.to === 'branch') {
-        box.append(
-          el('h3', '', t('career.branch.title')),
-          who(staffFace(asking.name), name),
-          el('p', '', t('career.branch.text')),
-          el('div', 'ui-muted', t('career.branch.note', { p: Math.round(BRANCH_HEAD_BONUS * 100) })),
-          button(t('career.branch.yes'), () => update(answerOffer(getState(), true), 'success')),
-          button(t('career.branch.no'), () => update(answerOffer(getState(), false)), 'ui-btn secondary'),
-          el('div', 'ui-muted', t('career.promo.noHint')),
-        );
-      } else {
-        box.append(
-          el('h3', '', t('career.promo.title')),
-          who(staffFace(asking.name), name),
-          el('p', '', t('career.promo.text', { days, rank: t(rankKey(asking, offer.to).replace('career.rank.', 'career.to.') as TextKey) })),
-          el('div', 'ui-muted', t(offer.to === 'admin' ? 'career.promo.admin' : 'career.promo.senior')),
-          el('div', '', t('career.promo.wage', { from: asking.wage, to: promotedWage(asking) })),
-          button(t('career.promo.yes'), () => update(answerOffer(getState(), true), 'success')),
-          button(t('career.promo.no'), () => update(answerOffer(getState(), false)), 'ui-btn secondary'),
-          el('div', 'ui-muted', t('career.promo.noHint')),
-        );
-      }
+      box.append(
+        el('h3', '', t('career.branch.title')),
+        who(staffFace(asking.name), name),
+        el('p', '', t('career.branch.text')),
+        el('div', 'ui-muted', t('career.branch.note', { p: Math.round(BRANCH_HEAD_BONUS * 100) })),
+        button(t('career.branch.yes'), () => update(answerOffer(getState(), true), 'success')),
+        button(t('career.branch.no'), () => update(answerOffer(getState(), false)), 'ui-btn secondary'),
+        el('div', 'ui-muted', t('career.promo.noHint')),
+      );
       out.push(box);
     }
     const left = part === 'left' ? career?.left : undefined;
@@ -2202,8 +2143,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       {
         id: 'watch',
         icon: '🐕',
-        title: t('watch.title'),
-        status: [securityOf(state).dog ? '🐕' : '', hasWatchman(state) ? '🔦' : ''].join(' ').trim() || '—',
+        title: t('watch.dog.name'),
+        status: securityOf(state).dog ? '🐕' : '—',
         details: () => [securityBox(getState())],
       },
       { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${LISTED_UPGRADES.length}`, details: () => [upgradesBox(getState())] },
@@ -2233,7 +2174,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     shelf.append(shelfImg, el('div', 'ui-item-sub', t('kitchen.shelf', { name: t(GEAR.foodShelf.models[gearTier(state, 'foodShelf')].nameKey), n: portionsTotal(state), max: foodSlots(state) })));
     box.append(shelf);
     const chef = staffOf(state, 'cook');
-    const who = chef ? t(isAbsent(state, chef) ? 'kitchen.chefOff' : 'kitchen.chef', { name: memberName(chef) }) : t('kitchen.noChef');
+    const who = chef ? t('kitchen.chef', { name: memberName(chef) }) : t('kitchen.noChef');
     // Кто готовит — главное правило кухни: строкой на виду, а не за «❔».
     box.append(el('div', 'ui-note', who));
     // Повар на смене: что кухня сама закупит при открытии и почём (деньги — из кассы магазина).
@@ -2893,63 +2834,18 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     return [box];
   };
 
-  /** Утро после ночных воров: участковый рассказывает, что случилось. */
-  const burglaryBox = (news: BurglaryNews) => {
-    const state = getState();
-    const lost = [
-      ...news.goods.map((g) => `${g.n}× ${productLabel(g.id)}`),
-      ...(news.cash ? [t('watch.stolen.cash', { n: news.cash })] : []),
-    ];
-    const after: HTMLElement[] = [];
-    if (news.outcome === 'stolen') {
-      if (news.dogSlept) after.push(el('div', 'ui-note', t('watch.stolen.dogSlept')));
-      else if (!hasWatchman(state)) after.push(el('div', 'ui-note', t('watch.stolen.hint')));
-    }
-    const art = { stolen: 'burglary', dog: 'dog', watchman: 'watchman' }[news.outcome];
-    return dialogBox({
-      art: `assets/news_${art}.png`,
-      portrait: news.outcome === 'stolen' ? 'portrait_police_surprised' : 'portrait_police_happy',
-      name: t('who.police'),
-      text:
-        news.outcome === 'stolen'
-          ? t('watch.stolen.news', { goods: lost.join(', ') || t('watch.stolen.nothing'), repair: news.repair })
-          : news.outcome === 'dog'
-            ? t('watch.dog.news')
-            : t('watch.watchman.news', { n: news.bounty }),
-      pitch: 300,
-      after,
-      nextLabel: t(news.outcome === 'stolen' ? 'watch.ok' : 'watch.hooray'),
-      onNext: () => update(seeBurglaryNews(getState()), news.outcome === 'stolen' ? 'tap' : 'success'),
-    });
-  };
-
-  /** Ночная охрана во вкладке «Уголки»: шанс воров, пёс Бобик и ночной сторож. */
+  /** Пёс Бобик во вкладке «Уголки»: днём у входа, лает на воришек (ночных краж больше нет, game/watch.ts). */
   const securityBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
-    const security = securityOf(state);
-    const chance = burglaryChance(state, state.day + 1);
-    box.append(el('b', '', `🐕 ${t('watch.title')}`));
-    box.append(el('div', 'ui-muted', state.day + 1 < DOG_FROM_DAY ? t('watch.calm') : t('watch.note', { p: Math.round(chance * 100) })));
-    if (gearTier(state, 'cameras') > 0) box.append(el('div', 'ui-muted', t('watch.cameras')));
-    const dog = security.dog;
+    const dog = securityOf(state).dog;
     box.append(
       artRow('bobik_sit0', {
         name: t('watch.dog.name'),
         price: dog ? undefined : DOG_PRICE,
-        sub: dog ? t('watch.dog.home', { n: dog.since, k: security.scared ?? 0, f: DOG_FOOD }) : t('watch.dog.desc', { f: DOG_FOOD }),
+        sub: dog ? t('watch.dog.home', { n: dog.since, f: DOG_FOOD }) : t('watch.dog.desc', { f: DOG_FOOD }),
         actions: dog
           ? [el('span', 'ui-tag', '✓')]
           : [button(t('watch.dog.adopt'), () => update(adoptDog(getState()), 'success'), 'ui-chip', state.money < DOG_PRICE || state.day < DOG_FROM_DAY)],
-      }),
-    );
-    const on = hasWatchman(state);
-    box.append(
-      artRow('watchman_card', {
-        name: t('watch.watchman.name'),
-        sub: on
-          ? t('watch.watchman.on', { k: security.caught ?? 0, w: WATCHMAN_WAGE })
-          : t('watch.watchman.desc', { b: WATCHMAN_BOUNTY, w: WATCHMAN_WAGE }),
-        actions: [button(t(on ? 'watch.watchman.fire' : 'watch.watchman.hire'), () => update(setWatchman(getState(), !on)), 'ui-chip')],
       }),
     );
     return box;
@@ -3586,11 +3482,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     }
     const expiring = surplus(state).count;
     if (expiring) row(t('todo.expiring', { n: expiring }), button(t('todo.expiringBtn'), () => update(surplus(getState()).state, 'success'), 'ui-chip'));
-    state.shelves.forEach((sh, i) => {
-      if (!sh.broken) return;
-      const cost = fridgeRepairCost(state.level);
-      row(t('todo.fridge', { shelf: t(SHELF_KINDS[sh.kind].nameKey) }), button(t('todo.fridgeBtn', { n: cost }), () => update(repairShelf(getState(), i), 'success'), 'ui-chip', state.money < cost));
-    });
     if (state.cat && !fedToday(state)) {
       row(t('todo.cat', { name: state.cat.name }), button(t('todo.catBtn', { n: FEED_COST }), () => update(feedCat(getState()), 'success'), 'ui-chip', state.money < FEED_COST));
     }
@@ -3761,24 +3652,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         );
         break;
       }
-      case 'fridgeBroken':
-        box.append(
-          el('h3', '', `🔧 ${t('event.fridge.title')}`),
-          el('p', '', t('event.fridge.text', { shelf: t(SHELF_KINDS[state.shelves[event.shelf].kind].nameKey) })),
-          button(t('event.fridge.repair', { cost: event.cost }), () => answer(true), 'ui-btn', state.money < event.cost),
-          button(t('event.fridge.later'), () => answer(false), 'ui-btn secondary'),
-          el('div', 'ui-muted', t('event.fridge.laterNote')),
-        );
-        break;
-      case 'sick': {
-        const m = staffOf(state, event.role);
-        box.append(
-          el('h3', '', `🤒 ${t('event.sick.title')}`),
-          el('p', '', t('event.sick.text', { name: m ? memberName(m) : '', role: t(STAFF_ROLES[event.role].nameKey) })),
-          button(t('event.ok'), () => answer(true)),
-        );
-        break;
-      }
       case 'priceWar': {
         const running = Boolean(activeAd(state));
         const adCost = adPrice(state, 'banner');
@@ -3797,46 +3670,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         );
         break;
       }
-      case 'poach': {
-        const m = staffOf(state, event.role);
-        const name = m ? memberName(m) : '';
-        box.append(
-          el('h3', '', `🕴️ ${t('event.poach.title')}`),
-          who('eduard_happy', el('b', '', t(CHARACTERS.eduard.nameKey))),
-          el('p', '', t('event.poach.text', { name, wage: event.wage })),
-          el('div', 'ui-muted', t('event.poach.note', { name, role: t(STAFF_ROLES[event.role].nameKey), now: m?.wage ?? 0 })),
-          button(t('event.poach.keep', { wage: event.wage }), () => answer(true)),
-          button(t('event.poach.let'), () => answer(false), 'ui-btn secondary'),
-        );
-        break;
-      }
-      case 'dayOff':
-      case 'goHome': {
-        const m = staffOf(state, event.role);
-        const name = m ? memberName(m) : '';
-        const role = t(STAFF_ROLES[event.role].nameKey);
-        const reason = t(`event.${event.kind}.reason${event.reason}` as TextKey);
-        box.append(
-          el('h3', '', `${event.kind === 'dayOff' ? '🏖' : '🏠'} ${t(`event.${event.kind}.title` as TextKey)}`),
-          el('p', '', t(`event.${event.kind}.text` as TextKey, { name, role, reason })),
-        );
-        if (event.kind === 'dayOff' && m && isTired(m)) box.append(el('div', 'ui-note', t('event.dayOff.tired', { n: m.streak ?? 0 })));
-        box.append(
-          el('div', 'ui-muted', t('event.personal.note')),
-          button(t(`event.${event.kind}.yes` as TextKey), () => answer(true)),
-          button(t(`event.${event.kind}.no` as TextKey), () => answer(false), 'ui-btn secondary'),
-        );
-        break;
-      }
-      case 'bill':
-        box.append(
-          el('h3', '', `🧾 ${t(`event.bill.${event.reason}.title` as TextKey)}`),
-          el('p', '', t(`event.bill.${event.reason}.text` as TextKey, { n: event.amount })),
-          el('div', 'ui-muted', t('event.bill.note', { p: DEBT_PAYMENT })),
-          button(t('event.bill.pay', { n: event.amount }), () => answer(true), 'ui-btn', state.money < event.amount),
-          button(t('event.bill.debt'), () => answer(false), 'ui-btn secondary'),
-        );
-        break;
       case 'snitch':
         box.append(
           el('h3', '', `📮 ${t('event.snitch.title')}`),
@@ -3858,37 +3691,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
 
   // ---------- Персонал ----------
 
-  const quitBox = (quit: StaffMember[]) => {
-    const box = el('div', 'ui-box');
-    box.append(el('h3', '', `😤 ${t('staffTab.quitTitle')}`));
-    for (const m of quit) box.append(el('p', '', t('staffTab.quitText', { name: memberName(m), role: t(STAFF_ROLES[m.role].nameKey) })));
-    box.append(button(t('staffTab.ok'), () => update({ ...getState(), quitNotice: undefined })));
-    return box;
-  };
-
-  const raiseBox = (m: StaffMember) => {
-    const box = el('div', 'ui-box');
-    box.append(
-      el('h3', '', `💬 ${t('staffTab.raiseTitle')}`),
-      el(
-        'p',
-        '',
-        t('staffTab.raiseText', {
-          name: memberName(m),
-          role: t(STAFF_ROLES[m.role].nameKey),
-          from: m.wage,
-          to: m.raiseAsk ?? m.wage,
-        }),
-      ),
-      el('div', 'ui-muted', `${'★'.repeat(m.skill).padEnd(3, '☆')} · ${t('staffTab.months', { n: m.months })}`),
-      button(t('staffTab.raiseYes', { n: m.raiseAsk ?? m.wage }), () => update(answerRaise(getState(), m.role, true), 'success')),
-      el('div', 'ui-muted', t('staffTab.raiseYesHint')),
-      button(t('staffTab.raiseNo'), () => update(answerRaise(getState(), m.role, false), 'error'), 'ui-btn secondary'),
-      el('div', 'ui-muted', t('staffTab.raiseNoHint')),
-    );
-    return box;
-  };
-
   /** Кассир: сколько покупателей в день пробьёт (с терминалом — быстрее). */
   const isCashier = (m: StaffMember) => isCashierRole(m.role);
   const perDay = (state: StoreState, m: StaffMember) => servePerDay(withUpgrades(state, cashierScan(m)));
@@ -3899,15 +3701,14 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     return `${stars}${speed}${trait}`;
   };
 
-  /** Хозяин: уровень за обслуженных покупателей и навыки, в которые вкладывают очки. */
-  /** Хозяин: уровень, навыки рядом значков (нажать — описание и «Изучить»), скорость за кассой. */
+  /** Хозяин: уровень растёт сам (за обслуженных покупателей) и понемногу делает его ловчее; скорость за кассой. */
   const ownerBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     const next = nextLevelXp(state);
-    const points = skillPoints(state);
     const lvl = ownerLevel(state.ownerServed);
     const scanNext = ownerNextLevelAt(state.ownerServed);
     const scan = ownerScan(state.ownerServed);
+    const grown = ownerGrowth(state);
     box.append(
       el('b', '', t('skill.title', { n: ownerLevelOf(state) })),
       el('div', 'ui-item-sub', `${t('staffTab.ownerSkill')} ${'★'.repeat(lvl).padEnd(5, '☆')} · ${t('staffTab.ownerPerDay', { n: servePerDay(withUpgrades(state, ownerTiming(state))) })}`),
@@ -3916,6 +3717,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       el('div', 'ui-muted', t('staffTab.ownerTillNote')),
       ...(staffOf(state, 'cashier') ? [el('div', 'ui-note', t('staffTab.reliefOn'))] : []),
       el('div', 'ui-muted', next === null ? t('skill.xpMax', { xp: ownerXp(state) }) : t('skill.xp', { xp: ownerXp(state), next })),
+      // Что дал опыт: те же плавные бонусы, что раньше давали навыки на выбор (game/owner.ts).
+      ...(grown > 0
+        ? [el('div', 'ui-item-sub', t('skill.grown', { hands: Math.round((1 - handsFactor(state)) * 100), haggle: Math.round(haggleBonus(state) * 100), carry: carryBonus(state) }))]
+        : [el('div', 'ui-muted', t('skill.auto'))]),
       el(
         'div',
         'ui-muted',
@@ -3924,28 +3729,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
           : t('staffTab.ownerSkillNext', { n: state.ownerServed, next: scanNext, s: scan.item.toFixed(2) }),
       ),
     );
-    if (points) box.append(el('div', 'ui-note', t('skill.points', { n: points })));
-    const row = el('div', 'ui-skill-row');
-    for (const id of SKILL_IDS) {
-      const skill = SKILLS[id];
-      const level = skillLevel(state, id);
-      row.append(
-        button(`${skill.icon}${'●'.repeat(level)}${'○'.repeat(SKILL_MAX - level)}`, () => {
-          openSkill = openSkill === id ? null : id;
-          render();
-        }, `ui-chip ui-skill-chip${openSkill === id ? ' active' : ''}${points && level < SKILL_MAX ? ' hot' : ''}`),
-      );
-    }
-    box.append(row);
-    const open = SKILL_IDS.find((id) => id === openSkill);
-    if (open) {
-      const skill = SKILLS[open];
-      const level = skillLevel(state, open);
-      const detail = el('div', 'ui-skill-detail');
-      detail.append(el('b', '', t(skill.nameKey)), el('div', 'ui-item-sub', t(skill.descKey)));
-      if (level < SKILL_MAX) detail.append(button(t('skill.learn'), () => update(learnSkill(getState(), open), 'success'), 'ui-chip', points <= 0));
-      box.append(detail);
-    }
     return box;
   };
 
@@ -3955,7 +3738,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     const next = nextRank(m);
     const left = xpToNext(m, state.day);
     const out: HTMLElement[] = [el('div', 'ui-item-sub', `${t('career.xp', { n: Math.floor(c.xp) })} · ${t('career.hired', { day: c.hired })}`)];
-    if (next && left !== null) out.push(el('div', 'ui-muted', left > 0 ? t('career.next', { rank: t(rankKey(m, next)), n: left }) : t('career.ready')));
+    // «Можно повысить» — только когда следующая ступень «Учить» и правда повышение (после 3★ и «тормоза»).
+    const promoNow = trainingStep(m, state.day)?.kind === 'rank';
+    if (next && left !== null && (left > 0 || promoNow)) out.push(el('div', 'ui-muted', left > 0 ? t('career.next', { rank: t(rankKey(m, next)), n: left }) : t('career.ready')));
     if (c.best) out.push(el('div', 'ui-note', t('career.bestCount', { n: c.best })));
     const log = (c.log ?? []).slice().reverse();
     if (log.length) {
@@ -3966,24 +3751,22 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     return out;
   };
 
-  /** Сотрудник одной строкой: роль, имя, полоска усталости, метки; действия — по нажатию. */
+  /** Сотрудник одной строкой: роль, имя, полоска роста (курсы и звания), метки; действия — по нажатию. */
   const staffRow = (state: StoreState, m: StaffMember): HTMLElement => {
     const box = el('div', 'ui-box ui-staff');
-    const streak = m.streak ?? 0;
     const tags: string[] = [];
-    if (isAbsent(state, m)) tags.push(t('staffTab.tagOff'));
-    else if (isTired(m)) tags.push(t('staffTab.tagTired'));
-    if (m.upset) tags.push(t('staffTab.tagUpset'));
     if (isCashier(m) && m.trait === 'slowpoke') tags.push(t('staffTab.tagSlow'));
     const head = button('', () => {
       openStaff = openStaff === m.role ? null : m.role;
       render();
     }, 'ui-staff-head');
+    // Полоска — сколько пройдено по лесенке «Учить»: навык 1–3★, потом звания (у кассиров — до администратора).
     const bar = el('div', 'ui-bar ui-staff-bar');
     const fill = el('div', 'ui-bar-fill');
-    const tired = Math.min(1, streak / EXHAUSTED_DAYS);
-    fill.style.width = `${Math.round(tired * 100)}%`;
-    fill.style.background = tired >= 1 ? '#e43b44' : isTired(m) ? '#feae34' : '#63c74d';
+    const steps = isCashier(m) ? 4 : 3;
+    const done = m.skill - 1 + (m.career?.rank === 'admin' ? 2 : m.career?.rank ? 1 : 0);
+    fill.style.width = `${Math.round((Math.min(steps, done) / steps) * 100)}%`;
+    fill.style.background = '#63c74d';
     bar.append(fill);
     const name = el('span', 'ui-staff-name');
     // Звание (game/career.ts) — золотой нашивкой рядом с именем, как на плече в зале.
@@ -4002,24 +3785,27 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       el('div', 'ui-item-sub', m.months ? t('staffTab.months', { n: m.months }) : t('staffTab.new')),
       ...careerLines(state, m),
     );
-    if (m.upset) box.append(el('div', 'ui-note', t('staffTab.upset')));
     const actions = el('div', 'ui-chips');
-    // Люди устают: неделя без выходных — работают медленнее. Выходной можно дать заранее.
-    if (isAbsent(state, m)) box.append(el('div', 'ui-note', t('staffTab.offToday')));
-    else if (m.offDay === state.day + 1) box.append(el('div', 'ui-note', t(streak >= EXHAUSTED_DAYS ? 'staffTab.exhausted' : 'staffTab.offTomorrow')));
-    else {
-      box.append(el('div', isTired(m) ? 'ui-note' : 'ui-item-sub', isTired(m) ? t('staffTab.tired', { n: streak }) : t('staffTab.streak', { n: streak })));
-      actions.append(button(t('staffTab.giveOff'), () => update(giveDayOff(getState(), m.role)), 'ui-chip'));
-    }
     // «Тормоз» за кассой упирает весь магазин в потолок — предупредить и предложить курсы.
     if (isCashier(m) && m.trait === 'slowpoke') {
       const warn = el('div', 'ui-note', t('staffTab.slowWarn', { n: perDay(state, m) }));
       warn.style.color = '#b13e53';
       box.append(warn);
     }
-    const cost = trainingCost(m);
-    if (cost !== null)
-      actions.append(button(m.skill < 3 ? t('staffTab.train', { n: cost }) : t('staffTab.fixSlow', { n: cost }), () => update(train(getState(), m.role), 'success'), 'ui-chip', state.money < cost));
+    // Одна лесенка: курсы до 3★, «тормоз», потом повышение (старший, администратор) — когда хватит смен.
+    const step = trainingStep(m, state.day);
+    if (step?.kind === 'rank') box.append(el('div', 'ui-muted', t(step.to === 'admin' ? 'career.promo.admin' : 'career.promo.senior')));
+    if (step) {
+      const label =
+        step.kind === 'skill'
+          ? t('staffTab.train', { n: step.cost })
+          : step.kind === 'slowpoke'
+            ? t('staffTab.fixSlow', { n: step.cost })
+            : t('staffTab.promote', { rank: t(rankKey(m, step.to)), n: step.cost });
+      const waiting = step.kind === 'rank' && step.xpLeft > 0;
+      actions.append(button(label, () => update(train(getState(), m.role), 'success'), 'ui-chip', waiting || state.money < step.cost));
+      if (step.kind === 'rank') box.append(el('div', 'ui-muted', t('career.wageAfter', { from: m.wage, to: promotedWage(m) })));
+    }
     actions.append(button(t('staffTab.fire'), () => {
       openStaff = null;
       update(fire(getState(), m.role));

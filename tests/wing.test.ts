@@ -44,8 +44,6 @@ describe('флигель: склад, пекарня, кофейня', () => {
     expect(bakeryWorking(withBaker)).toBe(true);
     expect(breadShelfRoom(withBaker)).toBeGreaterThan(0);
     expect(bakerShouldBake(withBaker)).toBe(true);
-    // Выходной — пекарня стоит.
-    expect(bakeryWorking({ ...withBaker, staff: [{ ...baker, offDay: 20 }] })).toBe(false);
     // Полки с хлебом полны — новую закладку не ставит.
     const full = { ...withBaker, shelves: [{ kind: 'bakery' as const, level: 1, items: { bread: Array.from({ length: 99 }, () => ({ age: 0 })) } }] };
     expect(bakerShouldBake(full)).toBe(false);

@@ -1,5 +1,5 @@
 // Одна новость за утро. Игра росла фича за фичей, и утро середины игры могло выложить подряд главу
-// сюжета, сцену «Папа и Соня», новость про Эдуарда, итог конкурса, кражу, кота, событие дня и ещё
+// сюжета, сцену «Папа и Соня», новость про Эдуарда, итог конкурса, кота, событие дня и ещё
 // пять карточек «человек, абзац, две кнопки» в меню. Теперь все они встают в одну очередь, и перед
 // меню — не больше одной: сначала сюжет и главные повороты, потом то, что сегодня кончится, потом
 // истории для души. Остальное ждёт следующего утра (очередь — в сохранении, state.newsQ): главное
@@ -9,7 +9,6 @@
 
 import type { StoreState } from './economy';
 import { contestOf, type ContestResult, type ContestState } from './contest';
-import type { BurglaryNews } from './watch';
 
 /** Что может прийти утром. Порядок — внутри одного вида, при равном ожидании. */
 export const NEWS_IDS = [
@@ -20,13 +19,12 @@ export const NEWS_IDS = [
   'giant',
   'zarCard',
   'zarBoss',
-  // Сегодня кончится: итог и начало конкурса, ночь со взломом, решение дня, сотрудники.
+  // Сегодня кончится: итог и начало конкурса, решение дня, сотрудники (церемония, филиал).
+  // Ночных краж, увольнений от обиды и просьб о прибавке больше нет (02.11): старые id из очереди
+  // в сохранении снимает normalizeNews.
   'contestResult',
   'contestAnnounce',
-  'burglary',
   'event',
-  'quit',
-  'raise',
   'career',
   'trick',
   // Для души: истории района и постоянных.
@@ -52,10 +50,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   zarBoss: 'main',
   contestResult: 'timed',
   contestAnnounce: 'timed',
-  burglary: 'timed',
   event: 'timed',
-  quit: 'timed',
-  raise: 'timed',
   career: 'timed',
   trick: 'timed',
   tale: 'flavour',
@@ -77,8 +72,8 @@ export const TODAY_ONLY: ReadonlySet<NewsId> = new Set<NewsId>(['event', 'trick'
 /** Сколько новостей за утро (глава сюжета не в счёт). */
 export const NEWS_PER_MORNING = 1;
 /**
- * Итог конкурса и ночь со взломом в своих модулях — «только в тот же день». Очередь держит их столько
- * дней (game/contest.ts contestResult, game/watch.ts burglaryNews), чтобы главное не пропадало молча.
+ * Итог конкурса в своём модуле — «только в тот же день». Очередь держит его столько дней
+ * (game/contest.ts contestResult), чтобы главное не пропадало молча.
  */
 export const NEWS_KEEP_DAYS = 7;
 /** Начало конкурса объявляем в первые дни недели конкурса, позже — уже незачем (идёт в «Сегодня»). */
@@ -94,12 +89,6 @@ export function lateContestResult(state: StoreState): ContestResult | null {
 export function lateContestAnnounce(state: StoreState): ContestState | null {
   const c = contestOf(state);
   return c?.phase === 'run' && !c.announced && state.day >= c.since && state.day - c.since < NEWS_ANNOUNCE_DAYS ? c : null;
-}
-
-/** Новость о ночи со взломом, которую отложили (burglaryNews — только в тот же день). */
-export function lateBurglaryNews(state: StoreState): BurglaryNews | null {
-  const news = state.security?.news;
-  return news && !news.seen && state.day >= news.day && state.day - news.day <= NEWS_KEEP_DAYS ? news : null;
 }
 
 /** Очередь утра в сохранении. */

@@ -17,8 +17,8 @@ export interface SpecialVisit {
   pay: number;
 }
 
-/** С какого дня заходят особые гости и с каким шансом за день. */
-export const SPECIAL_FROM_DAY = 5;
+/** С какого дня заходят особые гости (02.11: было с 5-го) и с каким шансом за день. */
+export const SPECIAL_FROM_DAY = 10;
 export const SPECIAL_CHANCE = 0.55;
 export const BUSINESS_DISCOUNT = 0.8;
 export const KIND_RATING = 0.05;

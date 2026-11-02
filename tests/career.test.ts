@@ -25,6 +25,7 @@ import {
 import { BRANCH_HEAD_BONUS, branchUsual } from '../src/game/branch';
 import { letterGroup, planLetter, takeLetter } from '../src/game/returns';
 import { nightCycle } from '../src/game/day';
+import { RANK_COST, train, trainingStep } from '../src/game/staff';
 
 const career = (patch: Partial<Career> = {}): Career => ({ hired: 1, xp: 0, ...patch });
 const member = (role: StaffMember['role'], patch: Partial<StaffMember> = {}): StaffMember => ({ role, name: 1, skill: 2, wage: 400, months: 1, career: career(), ...patch });
@@ -45,13 +46,12 @@ describe('карьера сотрудников', () => {
     expect(migrateCareer(s)).toBe(s);
   });
 
-  it('вечер: смена и опыт тем, кто вышел; заболевшему — неявка; выходной — ни то ни другое', () => {
-    const s = at({ plan: { day: 40, sick: 'cleaner' } as StoreState['plan'], staff: [member('cashier2'), member('cleaner', { name: 2 }), member('loader', { offDay: 40 })] });
+  it('вечер: смена и опыт у каждого (болезней и выходных больше нет)', () => {
+    const s = at({ staff: [member('cashier2'), member('cleaner', { name: 2 })] });
     const n = careerNight(s, { cashier2: 40 });
-    const [cash, clean, load] = n.staff.map((m) => m.career!);
+    const [cash, clean] = n.staff.map((m) => m.career!);
     expect(cash).toMatchObject({ xp: 1, shifts: 1, work: 10 });
-    expect(clean).toMatchObject({ xp: 0, miss: 1 });
-    expect(load.shifts).toBeUndefined();
+    expect(clean).toMatchObject({ xp: 1, shifts: 1 });
     expect(n.career?.since).toBe(40);
   });
 
@@ -72,14 +72,14 @@ describe('карьера сотрудников', () => {
 
   it('раз в четыре недели — «сотрудник месяца»: лучший по делу, имя на доске, срок с нуля', () => {
     const staff = [
-      member('cashier2', { career: career({ shifts: 20, work: 300, miss: 0 }) }),
-      member('cleaner', { name: 2, career: career({ shifts: 26, work: 400, miss: 1 }) }),
+      member('cashier2', { career: career({ shifts: 20, work: 300 }) }),
+      member('cleaner', { name: 2, career: career({ shifts: 26, work: 400 }) }),
       member('loader', { name: 4, career: career({ shifts: 3, work: 60 }) }),
     ];
     const early = careerMorning(at({ staff, career: { since: 40 - BEST_EVERY + 1 } }));
     expect(early.career?.ceremony).toBeUndefined();
     const s = careerMorning(at({ staff, career: { since: 40 - BEST_EVERY } }));
-    expect(s.career?.ceremony).toMatchObject({ role: 'cleaner', shifts: 26, miss: 1 });
+    expect(s.career?.ceremony).toMatchObject({ role: 'cleaner', shifts: 26 });
     expect(s.career?.plaques).toEqual([{ name: 2, role: 'cleaner', day: 40 }]);
     expect(s.career?.since).toBe(40);
     const crowned = s.staff.find((m) => m.role === 'cleaner')!.career!;
@@ -98,51 +98,59 @@ describe('карьера сотрудников', () => {
     expect(next.career?.plaques?.at(-1)?.day).toBe(40);
   });
 
-  it('награды: премия стоит денег, выходной бесплатный, подарок дешевле; все воодушевляют', () => {
-    const s = at({ career: { ceremony: { role: 'cashier2', name: 1, day: 40, shifts: 20, work: 100, miss: 0 } } });
+  it('награды: премия стоит денег, подарок дешевле; обе воодушевляют', () => {
+    const s = at({ career: { ceremony: { role: 'cashier2', name: 1, day: 40, shifts: 20, work: 100 } } });
     const cash = answerCeremony(s, 'cash')!;
     expect(cash.money).toBe(5000 - bestBonus(s));
     expect(cash.staff[0].inspired).toBeGreaterThan(0);
     expect(cash.career?.ceremony).toBeUndefined();
-    const off = answerCeremony(s, 'off')!;
-    expect(off.money).toBe(5000);
-    expect(off.staff[0]).toMatchObject({ offDay: 41, streak: 0 });
-    expect(answerCeremony(s, 'gift')!.money).toBe(5000 - bestGift(s));
+    const gift = answerCeremony(s, 'gift')!;
+    expect(gift.money).toBe(5000 - bestGift(s));
+    expect(gift.staff[0].inspired).toBeGreaterThan(0);
     expect(bestGift(s)).toBeLessThan(bestBonus(s));
     expect(answerCeremony({ ...s, money: 10 }, 'cash')).toBeNull();
     // Ушёл, пока ждали, — церемония просто закрывается.
     expect(answerCeremony({ ...s, staff: [] }, 'cash')!.money).toBe(5000);
   });
 
-  it('повышение: по опыту, с прибавкой; отказ — спросит позже, без обиды', () => {
-    const ready = at({ staff: [member('cashier2', { career: career({ xp: XP_SENIOR }) })] });
-    const s = careerMorning(ready);
-    expect(s.career?.offer).toEqual({ role: 'cashier2', name: 1, to: 'senior', day: 40 });
-    const yes = answerOffer(s, true);
+  it('повышение — ступень «Учить»: после 3★ и с опытом смен, за деньги, с прибавкой; утром не спрашивают', () => {
+    const ready = at({ staff: [member('cashier2', { skill: 3, career: career({ xp: XP_SENIOR }) })] });
+    expect(careerMorning(ready).career?.offer).toBeUndefined();
+    const step = trainingStep(ready.staff[0], 40);
+    expect(step).toEqual({ kind: 'rank', to: 'senior', cost: RANK_COST.senior, xpLeft: 0 });
+    const yes = train(ready, 'cashier2')!;
+    expect(yes.money).toBe(5000 - RANK_COST.senior);
     expect(yes.staff[0].career?.rank).toBe('senior');
     expect(yes.staff[0].wage).toBe(promotedWage(ready.staff[0]));
     expect(yes.staff[0].wage).toBeGreaterThan(400);
     expect(yes.staff[0].career?.log?.at(-1)).toEqual({ day: 40, kind: 'senior' });
-    const no = answerOffer(s, false);
-    expect(no.staff[0].upset).toBeFalsy();
-    expect(no.staff[0].career?.askAfter).toBe(40 + ASK_AGAIN);
-    expect(careerMorning({ ...no, day: 41 }).career?.offer).toBeUndefined();
-    // Не ответили утром — предложение снимается, спросит через неделю.
-    const ignored = careerMorning({ ...s, day: 41 });
-    expect(ignored.career?.offer).toBeUndefined();
-    expect(ignored.staff[0].career?.askAfter).toBe(41 + NO_ANSWER_AGAIN);
+    // Смен не хватает — кнопка закрыта; навык ниже 3★ — сначала курсы.
+    const green = at({ staff: [member('cashier2', { skill: 3, career: career({ xp: XP_SENIOR - 5 }) })] });
+    expect(trainingStep(green.staff[0], 40)).toMatchObject({ kind: 'rank', xpLeft: 5 });
+    expect(train(green, 'cashier2')).toBeNull();
+    expect(trainingStep(member('cashier2', { career: career({ xp: 999 }) }), 40)?.kind).toBe('skill');
+    expect(train({ ...ready, money: RANK_COST.senior - 1 }, 'cashier2')).toBeNull();
   });
 
   it('администратор зала — только из старших кассиров', () => {
-    const cashier = at({ staff: [member('cashier2', { career: career({ xp: XP_ADMIN, rank: 'senior' }) })] });
-    expect(careerMorning(cashier).career?.offer?.to).toBe('admin');
-    const cleaner = at({ staff: [member('cleaner', { career: career({ xp: XP_ADMIN, rank: 'senior' }) })] });
-    expect(careerMorning(cleaner).career?.offer).toBeUndefined();
+    const cashier = member('cashier2', { skill: 3, career: career({ xp: XP_ADMIN, rank: 'senior' }) });
+    expect(trainingStep(cashier, 40)).toMatchObject({ kind: 'rank', to: 'admin', xpLeft: 0 });
+    expect(train(at({ staff: [cashier] }), 'cashier2')!.staff[0].career?.rank).toBe('admin');
+    const cleaner = member('cleaner', { skill: 3, career: career({ xp: XP_ADMIN, rank: 'senior' }) });
+    expect(trainingStep(cleaner, 40)).toBeNull();
+  });
+
+  it('филиал: отказ — спросим позже, без обиды; не ответили утром — через неделю', () => {
+    const s = at({ level: 4, branch: { since: 30 } as StoreState['branch'], staff: [member('cashier2', { career: career({ xp: XP_BRANCH }) })] });
+    const offered = careerMorning(s);
+    expect(offered.career?.offer).toEqual({ role: 'cashier2', name: 1, to: 'branch', day: 40 });
+    expect(answerOffer(offered, false).career?.branchAfter).toBe(40 + ASK_AGAIN);
+    expect(careerMorning({ ...offered, day: 41 }).career?.branchAfter).toBe(41 + NO_ANSWER_AGAIN);
   });
 
   it('с утра уже есть история с персоналом — карьера ждёт', () => {
-    const s = at({ staff: [member('cashier2', { career: career({ xp: XP_SENIOR }) }), member('cleaner')], staffEvent: { kind: 'idea', roles: ['cleaner'], day: 40 } });
-    expect(careerMorning(s).career?.offer).toBeUndefined();
+    const s = at({ staff: [member('cashier2', { career: career({ shifts: 20 }) }), member('cleaner')], staffEvent: { kind: 'idea', roles: ['cleaner'], day: 40 }, career: { since: 40 - BEST_EVERY } });
+    expect(careerMorning(s).career?.ceremony).toBeUndefined();
   });
 
   it('свой управляющий филиала: уходит из зала, доход филиала растёт', () => {
@@ -188,25 +196,19 @@ describe('карьера сотрудников', () => {
   });
 
   it('награждённый ушёл, на его место наняли другого — церемония не переходит к новенькому', () => {
-    const s = at({ career: { ceremony: { role: 'cashier2', name: 1, day: 40, shifts: 20, work: 0, miss: 0 } } });
+    const s = at({ career: { ceremony: { role: 'cashier2', name: 1, day: 40, shifts: 20, work: 0 } } });
     const replaced = { ...s, day: 41, staff: [member('cashier2', { name: 7 }), member('cleaner', { name: 2 })] };
     expect(answerCeremony(replaced, 'cash')!.money).toBe(5000);
     expect(careerMorning(replaced).career?.ceremony).toBeUndefined();
   });
 
-  it('выходной в награду не отменяет сегодняшний отгул', () => {
-    const s = at({ staff: [member('cashier2', { offDay: 40 })], career: { ceremony: { role: 'cashier2', name: 1, day: 40, shifts: 20, work: 0, miss: 0 } } });
-    expect(answerCeremony(s, 'off')).toBeNull();
-    expect(answerCeremony(s, 'cash')!.staff[0].offDay).toBe(40);
-  });
-
   it('неотвеченная история персонала с прошлого дня — карьера всё равно ждёт', () => {
-    const s = at({ staff: [member('cashier2', { career: career({ xp: XP_SENIOR }) })], staffEvent: { kind: 'idea', roles: ['cashier2'], day: 38 } });
-    expect(careerMorning(s).career?.offer).toBeUndefined();
+    const s = at({ staff: [member('cashier2', { career: career({ shifts: 20 }) })], staffEvent: { kind: 'idea', roles: ['cashier2'], day: 38 }, career: { since: 40 - BEST_EVERY } });
+    expect(careerMorning(s).career?.ceremony).toBeUndefined();
   });
 
-  it('уволили — его повышение и церемония снимаются', () => {
-    const s = at({ career: { offer: { role: 'cashier2', name: 1, to: 'senior', day: 40 }, ceremony: { role: 'cleaner', name: 1, day: 40, shifts: 9, work: 0, miss: 0 } } });
+  it('уволили — его предложение (филиал) и церемония снимаются', () => {
+    const s = at({ career: { offer: { role: 'cashier2', name: 1, to: 'branch', day: 40 }, ceremony: { role: 'cleaner', name: 1, day: 40, shifts: 9, work: 0 } } });
     expect(fire(s, 'cashier2').career?.offer).toBeUndefined();
     expect(fire(s, 'cashier2').career?.ceremony).toBeDefined();
     expect(fire(s, 'cleaner').career?.ceremony).toBeUndefined();

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { lateBurglaryNews, lateContestAnnounce, lateContestResult, normalizeNews, NEWS_ANNOUNCE_DAYS, NEWS_KEEP_DAYS, pickNews, type NewsId } from '../src/game/headlines';
+import { lateContestAnnounce, lateContestResult, normalizeNews, NEWS_ANNOUNCE_DAYS, NEWS_KEEP_DAYS, pickNews, type NewsId } from '../src/game/headlines';
 import { newGame, type StoreState } from '../src/game/economy';
 
 // Одна новость за утро: очередь с приоритетом, остальные ждут следующего утра.
@@ -82,13 +82,14 @@ describe('очередь утренних новостей', () => {
     expect(normalizeNews({ day: 3, done: 1, shown: 'nope', wait: { tale: 2, bad: 1 } })).toEqual({ day: 3, done: 1, wait: { tale: 2 } });
   });
 
-  it('итог конкурса и ночь со взломом ждут до недели, а не только свой день', () => {
+  it('итог конкурса ждёт до недели, а не только свой день', () => {
     const last = { won: true, tier: 0, revenue: 1, target: 1, rating: 4, unhappy: 0, served: 1, empty: 0 } as unknown as NonNullable<StoreState['contest']>['last'];
     const contest = { tier: 1, phase: 'wait', since: 10, target: 1, revenue: 0, served: 0, unhappy: 0, empty: 0, wins: 1, last } as NonNullable<StoreState['contest']>;
     expect(lateContestResult(at(12, { contest }))).toBe(last);
     expect(lateContestResult(at(10 + NEWS_KEEP_DAYS + 1, { contest }))).toBeNull();
-    const news = { day: 20, goods: [], cash: 10, repair: 0 } as unknown as NonNullable<NonNullable<StoreState['security']>['news']>;
-    expect(lateBurglaryNews(at(21, { security: { news } }))).toBe(news);
-    expect(lateBurglaryNews(at(21, { security: { news: { ...news, seen: true } } }))).toBeNull();
+  });
+
+  it('убранные новости (ночь со взломом, обида, прибавка) из старой очереди выпадают', () => {
+    expect(normalizeNews({ day: 5, done: 0, shown: 'burglary', wait: { raise: 3, quit: 4, tale: 2 } })).toEqual({ day: 5, done: 0, wait: { tale: 2 } });
   });
 });

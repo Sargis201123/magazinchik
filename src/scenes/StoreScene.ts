@@ -571,7 +571,6 @@ export class StoreScene extends Phaser.Scene {
   rivalPending: { pranks: PrankIn[]; thanks: string[] } | null = null;
   /** Сколько мс день стоит без открытых окон — сторож запускает его дальше. */
   stallMs = 0;
-  nightWatch: Phaser.GameObjects.GameObject[] = [];
   /** Сколько кубков стоит на прилавке; жюри конкурса сегодня: ждём, пришло, ушло. */
   builtCup = 0;
   jury: 'none' | 'pending' | 'here' | 'done' = 'none';

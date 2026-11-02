@@ -38,8 +38,12 @@ export const GIANT_PULL_MIN = 0.08;
 /** Нужный рейтинг в конце битвы и слава района после победы. */
 export const GIANT_RATING = 4;
 export const GIANT_FAME = 1.05;
-/** Цель по выручке: столько от обычной выручки за 14 дней. */
-export const GIANT_TARGET_SHARE = 0.85;
+/**
+ * Цель по выручке: столько от обычной выручки за 14 дней. 02.11 — 0,85 → 0,75: без ночных краж, болезней
+ * и прочих наказаний неделя перед битвой ровнее и богаче, цель выросла, и первую битву выигрывали 7 из 16
+ * прогонов вместо 13; с 0,75 — 14 из 16 (docs/BALANCE.md, «Спокойный персонал»).
+ */
+export const GIANT_TARGET_SHARE = 0.75;
 
 const freePlay = (state: StoreState): boolean => state.story.chapter >= CHAPTERS.length;
 

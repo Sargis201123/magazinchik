@@ -219,7 +219,6 @@ export function grannyBusy(scene: StoreScene): boolean {
 export function emptyShelfIndex(scene: StoreScene): number {
   return scene.state.shelves.findIndex(
     (shelf) =>
-      !shelf.broken &&
       shelfFree(shelf) > 0 &&
       PRODUCT_IDS.some((id) => canPlace(id, shelf) && (shelf.items[id]?.length ?? 0) === 0 && (scene.state.warehouse[id] ?? []).some((u) => !u.pending)),
   );

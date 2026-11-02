@@ -3,15 +3,12 @@ import { emptyDayStats, newGame, onShelves, warehouseOf, type StoreState, type U
 import { ensurePlan, guestsToday, inspectionDone, nightCycle } from '../src/game/day';
 import {
   answerEvent,
-  breakShelf,
-  fridgeRepairCost,
+  EVENT_KINDS,
   fulfillOrder,
   inspect,
   ORDER_DONE_RATING,
   ORDER_FAILED_RATING,
   planDay,
-  repairShelf,
-  warmBrokenFridges,
   type DayPlan,
   type MorningEvent,
 } from '../src/game/events';
@@ -48,7 +45,9 @@ describe('план дня', () => {
       const e = planDay({ ...base, day }).event;
       if (e) kinds.add(e.kind);
     }
-    expect([...kinds].sort()).toEqual(['bill', 'dayOff', 'deal', 'fridgeBroken', 'goHome', 'inspection', 'order', 'poach', 'priceWar', 'sick', 'snitch']);
+    // Наказаний без выбора (холодильник, болезнь, отгул, счёт, переманивание) больше нет — только эти.
+    expect([...kinds].sort()).toEqual(['deal', 'inspection', 'order', 'priceWar', 'snitch']);
+    expect([...EVENT_KINDS].sort()).toEqual([...kinds].sort());
   });
 });
 
@@ -92,24 +91,6 @@ describe('выгодная партия', () => {
   });
 });
 
-describe('сломанный холодильник', () => {
-  const broke: MorningEvent = { kind: 'fridgeBroken', shelf: 1, cost: fridgeRepairCost(1) };
-
-  it('починить сразу — платим и всё работает', () => {
-    const s = answerEvent(shop(broke), true)!;
-    expect(s.shelves[1].broken).toBe(false);
-    expect(s.money).toBe(1000 - fridgeRepairCost(1));
-  });
-
-  it('потом — полка не продаёт, товар греется и портится быстрее; чинится во вкладке', () => {
-    const s = answerEvent(shop(broke), false)!;
-    expect(s.shelves[1].broken).toBe(true);
-    expect(warmBrokenFridges(s).shelves[1].items.milk![0].age).toBe(1);
-    expect(repairShelf(s, 1)!.shelves[1].broken).toBe(false);
-    expect(repairShelf({ ...s, money: 0 }, 1)).toBeNull();
-  });
-});
-
 describe('проверка', () => {
   it('чисто — пройдена, плюс к рейтингу и к сюжету', () => {
     const s = shop();
@@ -120,13 +101,10 @@ describe('проверка', () => {
     expect(after.story.inspectionsPassed).toBe(1);
   });
 
-  it('мусор, туалет, брак и тёплый холодильник — штраф', () => {
-    const s = breakShelf(
-      { ...shop(), shelves: [{ kind: 'bakery', level: 0, items: { bread: units(2, { bad: true }) } }, shop().shelves[1]] },
-      1,
-    );
+  it('мусор, туалет и брак — штраф', () => {
+    const s: StoreState = { ...shop(), shelves: [{ kind: 'bakery', level: 0, items: { bread: units(2, { bad: true }) } }, shop().shelves[1]] };
     const r = inspect(s, { trash: 3, toiletDirt: 80 });
-    expect(r.problems).toEqual(['inspection.trash', 'inspection.toilet', 'inspection.badGoods', 'inspection.warmFridge']);
+    expect(r.problems).toEqual(['inspection.trash', 'inspection.toilet', 'inspection.badGoods']);
     const after = inspectionDone(s, r);
     expect(after.money).toBe(1000 - r.fine);
     expect(after.rating).toBeLessThan(s.rating);

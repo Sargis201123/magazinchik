@@ -142,7 +142,7 @@ export function packHomeOrder(state: StoreState, order: HomeOrder): StoreState |
     warehouse = { ...warehouse, [id]: (warehouse[id] ?? []).filter((u, i, all) => u.pending || all.slice(0, i + 1).filter((x) => !x.pending).length > fromWarehouse) };
     need -= fromWarehouse;
     shelves = shelves.map((s) => {
-      if (need === 0 || s.broken) return s;
+      if (need === 0) return s;
       const units = s.items[id] ?? [];
       const take = Math.min(need, units.length);
       need -= take;

@@ -35,10 +35,10 @@ describe('новоселье', () => {
 
   it('ночь со счетами отдаёт счёт с пометкой и забирает новоселье; ночь без счетов его не трогает', () => {
     const moved = expandStore(start({ day: MONTH_DAYS * 2 - 1 }))!;
-    const quiet = endDay(moved, emptyDayStats(), () => 0.5);
+    const quiet = endDay(moved, emptyDayStats());
     expect(quiet.bill).toBeNull();
     expect(quiet.state.movedFrom).toBe(0);
-    const night = endDay(quiet.state, emptyDayStats(), () => 0.5);
+    const night = endDay(quiet.state, emptyDayStats());
     expect(night.bill?.housewarming).toBe(true);
     expect(night.bill?.rent).toBe(STORE_LEVELS[0].rent);
     expect(night.state.movedFrom).toBeUndefined();

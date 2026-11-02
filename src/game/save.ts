@@ -10,6 +10,7 @@ import { migrateGear } from './gear';
 import { normalizePets } from './pets';
 import { normalizeZar } from './zarechye';
 import { normalizeNews } from './headlines';
+import { migrateCalm } from './calm';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId, trustedNow } from '../platform/telegram';
 
@@ -80,7 +81,9 @@ export function loadGame(): StoreState | null {
   // Раньше кассир стоял за первой кассой, теперь она хозяина: кассир переходит за свою (registers.ts).
   // Смотрим на само сохранение — в новой игре поле уже есть, и после слияния оно было бы всегда.
   // Новичок посреди первых дней (обновился до бабушкиного обучения) получает его с того шага, где он сейчас.
-  const state = migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? merged : migrateOwnerTill(merged))));
+  // Убранные 02.11 механики (calm.ts): поломки, болезни и выходные, прибавки, ночные кражи, навыки — снимаем первыми.
+  const calm = migrateCalm(merged);
+  const state = migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? calm : migrateOwnerTill(calm))));
   // До версии 11 мороженое и цветы стояли на обычных полках (теперь — ларь у входа и вёдра у кассы).
   // Альбом коллекций появился позже: старое сохранение сразу получает уже заработанное (collections.ts).
   // Карьера сотрудников появилась позже: опыт старых сотрудников — по их стажу (career.ts).

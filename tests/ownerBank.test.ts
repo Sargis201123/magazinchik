@@ -1,48 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import { emptyDayStats, monthlyBill, newGame, newLifetime, ownerScan, payBill, type StoreState } from '../src/game/economy';
 import { afterLoanPayment, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../src/game/bank';
-import { carryBonus, eyeTheft, haggleBonus, learnSkill, ownerLevelOf, ownerTiming, SKILL_IDS, SKILL_MAX, skillPoints, XP_LEVELS } from '../src/game/owner';
+import { carryBonus, eyeTheft, haggleBonus, OWNER_CARRY, OWNER_EYE, OWNER_HAGGLE, OWNER_LEVEL_MAX, ownerGrowth, ownerLevelOf, ownerTiming, XP_LEVELS } from '../src/game/owner';
 import { addReport, REPORT_DAYS, weekReport } from '../src/game/reports';
 import { haggleChance, SUPPLIERS } from '../src/game/suppliers';
 
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 20, money: 5000, ...patch });
 const served = (n: number): Partial<StoreState> => ({ lifetime: { ...newLifetime(), served: n } });
 
-describe('навыки хозяина', () => {
-  it('уровень растёт с обслуженными покупателями, за уровень — очко', () => {
+describe('уровень хозяина', () => {
+  it('уровень растёт с обслуженными покупателями, сам, без очков и выбора', () => {
     expect(ownerLevelOf(shop())).toBe(1);
-    expect(skillPoints(shop())).toBe(0);
+    expect(ownerGrowth(shop())).toBe(0);
     const s = shop(served(XP_LEVELS[3]));
     expect(ownerLevelOf(s)).toBe(4);
-    expect(skillPoints(s)).toBe(3);
+    expect(ownerLevelOf(shop(served(XP_LEVELS[XP_LEVELS.length - 1])))).toBe(OWNER_LEVEL_MAX);
+    expect(ownerGrowth(shop(served(XP_LEVELS[XP_LEVELS.length - 1])))).toBe(1);
   });
 
-  it('очко тратится на навык, без очков и сверх максимума — нельзя', () => {
-    expect(learnSkill(shop(), 'hands')).toBeNull();
-    let s = shop(served(XP_LEVELS[XP_LEVELS.length - 1]));
-    for (let i = 0; i < SKILL_MAX; i++) s = learnSkill(s, 'hands')!;
-    expect(s.skills?.hands).toBe(SKILL_MAX);
-    expect(learnSkill(s, 'hands')).toBeNull();
-    // Очков не больше, чем ещё можно вложить: у четырёх навыков всего 12 ступеней.
-    expect(skillPoints(s)).toBe(Math.min(XP_LEVELS.length - 1, SKILL_IDS.length * SKILL_MAX) - SKILL_MAX);
-  });
-
-  it('навыки действуют: быстрее пробивка, торг, ноша, меньше воров', () => {
+  it('с уровнем плавно растут бонусы: пробивка, торг, ноша, терпение, меньше воров', () => {
     const base = shop();
-    const s = shop({ skills: { hands: 3, haggle: 2, strong: 1, eye: 2 } });
-    expect(ownerTiming(s).item).toBeLessThan(ownerTiming(base).item);
     expect(ownerTiming(base)).toEqual(ownerScan(base.ownerServed));
-    expect(haggleBonus(s)).toBeCloseTo(0.12);
+    expect(haggleBonus(base)).toBe(0);
+    expect(carryBonus(base)).toBe(0);
+    let prev = base;
+    for (const xp of XP_LEVELS.slice(1)) {
+      const s = shop({ ...served(xp), ownerServed: base.ownerServed });
+      expect(ownerTiming(s).item).toBeLessThan(ownerTiming(prev).item);
+      expect(haggleBonus(s)).toBeGreaterThan(haggleBonus(prev));
+      prev = s;
+    }
+    const top = prev;
+    expect(haggleBonus(top)).toBeCloseTo(OWNER_HAGGLE);
     const zina = SUPPLIERS[Object.keys(SUPPLIERS)[0] as keyof typeof SUPPLIERS];
-    expect(haggleChance(zina, 0.1, 3, haggleBonus(s))).toBeGreaterThan(haggleChance(zina, 0.1, 3));
-    expect(carryBonus(s)).toBe(2);
-    expect(eyeTheft(s)).toBeLessThan(1);
+    expect(haggleChance(zina, 0.1, 3, haggleBonus(top))).toBeGreaterThan(haggleChance(zina, 0.1, 3));
+    expect(carryBonus(top)).toBe(OWNER_CARRY);
+    expect(eyeTheft(top)).toBeCloseTo(1 - OWNER_EYE);
   });
 
-  it('обаяние из старого сохранения (убрано 02.11) не читается — очки снова свободны', () => {
-    const old = shop({ ...served(XP_LEVELS[5]), skills: { hands: 1, charm: 3 } as StoreState['skills'] });
-    expect(skillPoints(old)).toBe(5 - 1);
-  });
 });
 
 describe('банк', () => {

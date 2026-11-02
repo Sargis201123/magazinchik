@@ -14,7 +14,7 @@ describe('баланс гипермаркета', () => {
   }));
   const moved = (r: (typeof runs)[number]) => r.move.levelDay[HYPER_LEVEL]!;
 
-  it('переезжают за 200 дней, обычно через 2–3 недели после филиала', () => {
+  it('переезжают за 200 дней, обычно через 1–3 недели после филиала', () => {
     const gaps = runs.map((r) => {
       expect(r.move.levelDay[HYPER_LEVEL]).not.toBeNull();
       // Без механики «гипермаркет» в симуляторе не переезжают (и в старых тестах всё как было).
@@ -23,8 +23,10 @@ describe('баланс гипермаркета', () => {
     });
     for (const g of gaps) expect(g).toBeLessThanOrEqual(30);
     // Если «Гигант» сдался только с реванша, денег к покупке филиала уже много — тогда переезд сразу.
+    // 02.11 без ночных краж, болезней и счетов денег к филиалу больше — медиана с 2–3 недель сдвинулась к ~1
+    // (гипермаркет по-прежнему 120 000 по решению автора 31.10; docs/BALANCE.md «Спокойный персонал»).
     const median = [...gaps].sort((a, b) => a - b)[gaps.length >> 1];
-    expect(median).toBeGreaterThanOrEqual(10);
+    expect(median).toBeGreaterThanOrEqual(3);
     expect(median).toBeLessThanOrEqual(28);
   });
 
@@ -49,7 +51,8 @@ describe('баланс гипермаркета', () => {
     for (const r of runs) {
       const ratio = r.move.final.money / r.stay.final.money;
       expect(ratio).toBeGreaterThan(1.05);
-      expect(ratio).toBeLessThan(1.4);
+      // 02.11: переезжают раньше (см. выше) — у гипермаркета на неделю-две больше дней; лучший сид дал 1,40.
+      expect(ratio).toBeLessThan(1.45);
     }
   });
 

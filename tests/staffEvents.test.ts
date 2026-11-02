@@ -20,13 +20,15 @@ describe('персонал с характером', () => {
     expect(staffMorning(at(), () => 0.99).staffEvent).toBeUndefined();
   });
 
-  it('свадьба: отпустил — выходной и воодушевление; отказал — обида', () => {
+  it('свадьба: отпустил — воодушевление; отказ ничем не грозит (история для души)', () => {
     const yes = answerStaffEvent(withEvent('wedding'), true)!;
     const m = yes.staff[0];
-    expect(m).toMatchObject({ offDay: 21, inspired: INSPIRED_DAYS });
+    expect(m.inspired).toBe(INSPIRED_DAYS);
     expect(workSpeed(m)).toBeGreaterThan(workSpeed(member('cashier')));
-    expect(answerStaffEvent(withEvent('wedding'), false)!.staff[0].upset).toBe(true);
+    const no = answerStaffEvent(withEvent('wedding'), false)!;
+    expect(no.staff[0]).toEqual(withEvent('wedding').staff[0]);
     expect(yes.staffEvent).toBeUndefined();
+    expect(no.staffEvent).toBeUndefined();
   });
 
   it('курсы повышают навык за деньги; без денег — нельзя', () => {
@@ -36,11 +38,11 @@ describe('персонал с характером', () => {
     expect(answerStaffEvent({ ...withEvent('course'), money: 10 }, true)).toBeNull();
   });
 
-  it('ссора: пицца мирит, иначе оба обижены; воодушевление проходит со временем', () => {
+  it('ссора: пицца мирит и воодушевляет обоих, не вмешался — ничего; воодушевление проходит со временем', () => {
     const peace = answerStaffEvent(withEvent('quarrel', ['cashier', 'loader']), true)!;
-    expect(peace.staff.every((m) => !m.upset)).toBe(true);
+    expect(peace.staff.every((m) => m.inspired === INSPIRED_DAYS)).toBe(true);
     const sulk = answerStaffEvent(withEvent('quarrel', ['cashier', 'loader']), false)!;
-    expect(sulk.staff.every((m) => m.upset)).toBe(true);
+    expect(sulk.staff.every((m) => !m.inspired)).toBe(true);
     let s = answerStaffEvent(withEvent('best'), true)!;
     for (let i = 0; i < INSPIRED_DAYS; i++) s = restStaff(s);
     expect(s.staff[0].inspired).toBeUndefined();

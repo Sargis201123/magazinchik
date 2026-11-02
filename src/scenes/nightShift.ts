@@ -20,7 +20,6 @@ import { giftTomorrow } from '../game/gift';
 import { adGuests } from '../game/ads';
 import { regularById } from '../game/regulars';
 import { collectOrder, dropOrder, orderTeaser, planLetter, planOrder } from '../game/returns';
-import { hasWatchman } from '../game/watch';
 import { dramaHeld } from '../game/drama';
 import { todayLocal } from '../platform/live';
 import { askForHelp, claimHelp, sendHelp, socialInfo } from '../platform/social';
@@ -47,7 +46,7 @@ import { fpsSummary } from '../platform/quality';
 import { firstDayGift, firstDayRating, gentleDay, grannyStays } from '../game/firstday';
 import { tomorrowTeaser } from '../game/nudge';
 import { teaserText } from '../ui/nudge';
-import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook, type Look } from './common';
+import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook } from './common';
 import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -65,20 +64,6 @@ import * as rivals from './rivals';
 import * as camera from './camera';
 import * as building from './building';
 import { LINES, linesSold, type LinesNight } from '../game/lines';
-
-/** Ночной сторож Михалыч: ушанка, ватник цвета хаки, седые усы, фонарик (как в art/security.py). */
-const WATCHMAN: Look = {
-  skin: 0xeec39a,
-  shirt: 0x5a6988,
-  pants: 0x262b44,
-  hair: 0xc0cbdc,
-  hat: 'ushanka',
-  hatTint: 0x8f563b,
-  outfit: 'cardigan',
-  outfitTint: 0x7a8a5a,
-  face: 'mustache',
-  prop: 'flashlight',
-};
 
 // ---------- Ночная смена ----------
 
@@ -725,34 +710,16 @@ export function closeShop(scene: StoreScene): void {
   nightGuard(scene);
 }
 
-/** Ночь: Бобик сидит настороже, к двери выходит сторож с фонариком. */
+/** Ночь: магазин закрыт, Бобик (если есть) сидит у двери. */
 export function nightGuard(scene: StoreScene): void {
   scene.closed = true;
   pets.bobikSit(scene, 900);
-  if (!hasWatchman(scene.state)) return;
-  const { door } = scene.layout;
-  const y = scene.bobik?.y ?? scene.layout.h + FACADE_H + 10;
-  const watchman = persons.makePerson(scene, door.x + 18, y - 9, WATCHMAN).setDepth(y + 2);
-  watchman.setAlpha(0);
-  scene.tweens.add({ targets: watchman, alpha: 1, duration: 600 });
-  const beam = scene.add.graphics({ x: door.x + 22, y: y - 6 }).setDepth(y + 1).setBlendMode(Phaser.BlendModes.ADD);
-  beam.fillStyle(0xfff3b0, 0.22);
-  beam.fillTriangle(0, 0, 22, 8, 16, 16);
-  scene.tweens.add({ targets: beam, rotation: { from: -0.25, to: 0.35 }, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-  // Луч фонарика в карте освещения: ходит по тротуару вместе с рукой сторожа — ступеньками по 1/8 радиана
-  // (свет мягкий, шагов не видно), а не каждый кадр: карту всю ночь перерисовывали бы непрерывно.
-  const torch = scene.light.add('light_cone', beam.x, beam.y, 16, 28, 0xfff3c8, 0.7).attach(beam);
-  torch.originY = 0;
-  torch.sync = () => (torch.rotation = Math.round(beam.rotation * 8) / 8 + Math.atan2(12, 19) - Math.PI / 2);
-  scene.nightWatch.push(watchman, beam);
 }
 
 /** Утром роллеты поднимаются. */
 export function openShop(scene: StoreScene): void {
   scene.closed = false;
   pets.bobikRest(scene);
-  scene.nightWatch.forEach((o) => o.destroy());
-  scene.nightWatch = [];
   for (const shutter of scene.shutters) {
     scene.tweens.add({ targets: shutter, displayHeight: 0.1, duration: 600, ease: 'Quad.easeIn', onComplete: () => shutter.destroy() });
   }

@@ -5,18 +5,18 @@
 // убрал, разложил; прогулы — минус). Утром — маленькая церемония: портрет, итоги и награда на выбор —
 // премия, выходной или подарок. Имя попадает на доску почёта на стене зала (последние несколько).
 //
-// Повышения: опыт растёт с каждой сменой, на пороге игрок может повысить — кассир → старший кассир
-// (чуть быстрее и понемногу учит остальных) → администратор зала (ещё быстрее, весь зал чуть собраннее).
-// Остальные должности дорастают до «старшего». Любой опытный может возглавить филиал (branch.ts): уходит
-// из зала, а филиал под человеком, который знает магазин, приносит чуть больше. Повышение — с умеренной
-// прибавкой; отказаться можно, без обид — через пару недель спросит снова.
+// Повышения — продолжение обучения (staff.ts, одна лесенка «Учить»): после 3★ и с опытом смен игрок
+// повышает кассира до старшего кассира (чуть быстрее и понемногу учит остальных) и до администратора зала
+// (ещё быстрее, весь зал чуть собраннее). Остальные должности дорастают до «старшего». Повышение — с
+// умеренной прибавкой. Утренних предложений повысить больше нет (02.11): только «возглавить филиал» —
+// любой опытный может уйти из зала управлять филиалом (branch.ts); отказаться можно, без обид.
 //
 // Давние сотрудники иногда уходят по своим причинам (своё дело, учёба, переезд) — без штрафов, с
 // прощальным письмом (returns.ts). Всё необязательно: не больше одного предложения в день, и только
 // если с утра нет другой истории с персоналом (staffEvents.ts). Случай — свой, по дню и зерну игры:
 // общий генератор симулятора не сдвигается.
 
-import { isAbsent, MONTH_DAYS, type StaffMember, type StaffRole, type StoreState } from './economy';
+import { MONTH_DAYS, type StaffMember, type StaffRole, type StoreState } from './economy';
 import { isCashierRole } from './registers';
 import { rng } from './random';
 
@@ -37,12 +37,9 @@ export interface Career {
   rank?: Rank;
   /** Сколько раз был «сотрудником месяца». */
   best?: number;
-  /** Текущий срок «сотрудника месяца»: смены, очки за дело, неявки. */
+  /** Текущий срок «сотрудника месяца»: смены и очки за дело (неявок больше нет — поле miss старых сохранений не читается). */
   shifts?: number;
   work?: number;
-  miss?: number;
-  /** Отказался от повышения (или не ответили): снова спросим не раньше этого дня. */
-  askAfter?: number;
   /** Короткая летопись (последние CAREER_LOG записей). */
   log?: CareerNote[];
 }
@@ -63,13 +60,13 @@ export interface Ceremony {
   day: number;
   shifts: number;
   work: number;
-  miss: number;
 }
 
+/** Предложение утром: поставить опытного сотрудника управлять филиалом. */
 export interface PromoOffer {
   role: StaffRole;
   name: number;
-  to: Rank | 'branch';
+  to: 'branch';
   day: number;
 }
 
@@ -129,7 +126,7 @@ export const XP_ADMIN = 75;
 export const XP_BRANCH = 45;
 /** Прибавка при повышении (к нынешней зарплате). */
 export const PROMO_RAISE = 0.1;
-/** Отказались — спросит снова через столько дней (не ответили утром — через неделю). */
+/** Отказались поставить на филиал — спросим снова через столько дней (не ответили утром — через неделю). */
 export const ASK_AGAIN = 14;
 export const NO_ANSWER_AGAIN = 7;
 /** Наставник на смене: остальным за смену столько опыта сверху (старший, администратор). */
@@ -143,19 +140,18 @@ export const LOYAL_DAYS = 2 * BEST_EVERY;
 /** Сколько вариантов причины ухода (career.leave.<n>, letter.staff.<n>). */
 export const LEAVE_REASONS = 4;
 
-/** Награды «сотрудника месяца»: премия, выходной, подарок. */
-export type BestReward = 'cash' | 'off' | 'gift';
-export const BEST_REWARDS: BestReward[] = ['cash', 'off', 'gift'];
+/** Награды «сотрудника месяца»: премия или подарок (выходных у персонала больше нет). */
+export type BestReward = 'cash' | 'gift';
+export const BEST_REWARDS: BestReward[] = ['cash', 'gift'];
 /** Премия: столько + столько за каждое помещение; подарок — вдвое дешевле. */
 export const bestBonus = (state: StoreState): number => 150 + 50 * state.level;
 export const bestGift = (state: StoreState): number => Math.round(bestBonus(state) / 20) * 10;
 export const rewardCost = (state: StoreState, reward: BestReward): number => (reward === 'cash' ? bestBonus(state) : reward === 'gift' ? bestGift(state) : 0);
 /** Сколько дней воодушевлён после награды. */
-const REWARD_INSPIRED: Record<BestReward, number> = { cash: 5, off: 4, gift: 3 };
+const REWARD_INSPIRED: Record<BestReward, number> = { cash: 5, gift: 3 };
 
-/** За что очки в срок «сотрудника месяца»: смена, дело дня (сколько за штуку, не больше DAY_WORK_CAP), неявка. */
+/** За что очки в срок «сотрудника месяца»: смена и дело дня (сколько за штуку, не больше DAY_WORK_CAP). */
 export const SHIFT_POINTS = 10;
-export const MISS_POINTS = 15;
 export const DAY_WORK_CAP = 20;
 const WORK_WEIGHT: Record<StaffRole, number> = {
   cashier: 0.25,
@@ -226,16 +222,14 @@ export function migrateCareer(state: StoreState): StoreState {
 export const dayWorkPoints = (role: StaffRole, done = 0): number => Math.min(DAY_WORK_CAP, done * WORK_WEIGHT[role] + (POST_POINTS[role] ?? 0));
 
 /**
- * Вечер (до restStaff, пока сегодняшние выходные видны): кто вышел — смена и опыт (с наставником рядом —
- * чуть больше), кто заболел — неявка. work — сделанное за день по должностям (сцена; в симуляторе нет).
+ * Вечер: у каждого смена и опыт (с наставником рядом — чуть больше). work — сделанное за день по
+ * должностям (сцена; в симуляторе нет).
  */
 export function careerNight(state: StoreState, work: Partial<Record<StaffRole, number>> = {}): StoreState {
   if (!state.staff.length) return state.career?.since === undefined ? { ...state, career: { ...state.career, since: state.day } } : state;
-  const mentors = state.staff.filter((m) => m.career?.rank && !isAbsent(state, m));
+  const mentors = state.staff.filter((m) => m.career?.rank);
   const staff = state.staff.map((m) => {
     const c = careerOf(m, state.day);
-    if (state.plan?.sick === m.role) return { ...m, career: { ...c, miss: (c.miss ?? 0) + 1 } };
-    if (isAbsent(state, m)) return { ...m, career: c };
     const mentor = Math.max(0, ...mentors.filter((x) => x !== m).map((x) => MENTOR_XP[x.career!.rank!]));
     return {
       ...m,
@@ -247,11 +241,11 @@ export function careerNight(state: StoreState, work: Partial<Record<StaffRole, n
 
 // ---------- Утро: церемония, уход, повышение ----------
 
-/** Очки за срок: смены, дело, неявки; обиженному — минус, мастерство — немного сверху. */
+/** Очки за срок: смены и дело; мастерство — немного сверху. */
 export function bestScore(m: StaffMember): number {
   const c = m.career;
   if (!c) return 0;
-  return (c.shifts ?? 0) * SHIFT_POINTS + (c.work ?? 0) - (c.miss ?? 0) * MISS_POINTS - (m.upset ? 20 : 0) + m.skill * 2;
+  return (c.shifts ?? 0) * SHIFT_POINTS + (c.work ?? 0) + m.skill * 2;
 }
 
 /** Лучший за срок (null — никто не отработал BEST_MIN_SHIFTS смен). */
@@ -262,7 +256,7 @@ export function bestOfPeriod(state: StoreState): StaffMember | null {
 
 /** Новый срок: счётчики смен и дела у всех — с нуля. */
 const resetPeriod = (staff: StaffMember[]): StaffMember[] =>
-  staff.map((m) => (m.career ? { ...m, career: { ...m.career, shifts: 0, work: 0, miss: 0 } } : m));
+  staff.map((m) => (m.career ? { ...m, career: { ...m.career, shifts: 0, work: 0 } } : m));
 
 /** Тот самый человек: должность и имя (уволился, ушёл, переманили — на его место мог прийти другой). */
 export const holderOf = (state: StoreState, who: { role: StaffRole; name: number } | undefined): StaffMember | undefined =>
@@ -274,15 +268,9 @@ const plaqueOf = (m: StaffMember, day: number): Plaque => ({ name: m.name, ...(m
 const mayLeave = (state: StoreState, m: StaffMember): boolean =>
   !m.friend && !m.summer && careerOf(m, state.day).xp >= LEAVE_XP && !(careerOf(m, state.day).log ?? []).some((n) => n.kind === 'best' && state.day - n.day < LOYAL_DAYS);
 
-/** Кого и куда можно повысить сегодня (null — некого). Сначала звания, потом филиал. */
+/** Кого можно поставить на филиал сегодня (null — некого или филиала нет). */
 export function promotionFor(state: StoreState): PromoOffer | null {
-  const ready = state.staff
-    .filter((m) => (m.career?.askAfter ?? 0) <= state.day)
-    .sort((a, b) => careerOf(b, state.day).xp - careerOf(a, state.day).xp);
-  for (const m of ready) {
-    const next = nextRank(m);
-    if (next && careerOf(m, state.day).xp >= rankXp(next)) return { role: m.role, name: m.name, to: next, day: state.day };
-  }
+  const ready = [...state.staff].sort((a, b) => careerOf(b, state.day).xp - careerOf(a, state.day).xp);
   if (state.branch && !state.career?.head && (state.career?.branchAfter ?? 0) <= state.day) {
     const m = ready.find((x) => !x.summer && careerOf(x, state.day).xp >= XP_BRANCH);
     if (m) return { role: m.role, name: m.name, to: 'branch', day: state.day };
@@ -291,18 +279,16 @@ export function promotionFor(state: StoreState): PromoOffer | null {
 }
 
 /**
- * Утро (после ночи, день уже новый): не ответили вчера на повышение — снимаем (спросим через неделю).
+ * Утро (после ночи, день уже новый): не ответили вчера про филиал — снимаем (спросим через неделю).
  * Дальше не больше одного события: церемония (раз в BEST_EVERY дней), уход давнего сотрудника (редко)
- * или предложение повысить. С утра уже есть история с персоналом — сегодня без карьеры.
+ * или предложение возглавить филиал. С утра уже есть история с персоналом — сегодня без карьеры.
  */
 export function careerMorning(state: StoreState): StoreState {
   let s = state;
   const career: CareerState = { ...s.career };
   if (career.offer && career.offer.day < s.day) {
-    const { role, name, to } = career.offer;
     delete career.offer;
-    if (to === 'branch') career.branchAfter = s.day + NO_ANSWER_AGAIN;
-    else s = { ...s, staff: s.staff.map((m) => (m.role === role && m.name === name && m.career ? { ...m, career: { ...m.career, askAfter: s.day + NO_ANSWER_AGAIN } } : m)) };
+    career.branchAfter = s.day + NO_ANSWER_AGAIN;
   }
   // Наградить так и не собрались — через неделю церемония тихо закрывается (имя на доске остаётся).
   // Наградить так и не собрались, или награждённый ушёл (уволился, переманили) — церемония закрывается.
@@ -317,7 +303,7 @@ export function careerMorning(state: StoreState): StoreState {
     const best = bestOfPeriod(s);
     if (!best) return { ...s, career: { ...career, since: s.day } };
     const c = careerOf(best, s.day);
-    const ceremony: Ceremony = { role: best.role, name: best.name, day: s.day, shifts: c.shifts ?? 0, work: Math.round(c.work ?? 0), miss: c.miss ?? 0 };
+    const ceremony: Ceremony = { role: best.role, name: best.name, day: s.day, shifts: c.shifts ?? 0, work: Math.round(c.work ?? 0) };
     const crowned = { ...best, career: { ...c, best: (c.best ?? 0) + 1, log: note(c, s.day, 'best') } };
     return {
       ...s,
@@ -354,27 +340,24 @@ export function answerCeremony(state: StoreState, reward: BestReward): StoreStat
   delete career.ceremony;
   const m = holderOf(state, ceremony);
   if (!m) return { ...state, career };
-  // Выходной на завтра нельзя, если он отдыхает сегодня: сегодняшний отгул пропал бы.
-  if (reward === 'off' && m.offDay === state.day) return null;
   const cost = rewardCost(state, reward);
   if (state.money < cost) return null;
   const days = REWARD_INSPIRED[reward];
-  return withMember({ ...state, money: state.money - cost, career }, m.role, (x) => ({
-    ...x,
-    upset: false,
-    inspired: Math.max(x.inspired ?? 0, days),
-    // Выходной — на завтра (если завтра он и так не отдыхает), усталость уходит.
-    ...(reward === 'off' ? { offDay: state.day + 1, streak: 0 } : {}),
-  }));
+  return withMember({ ...state, money: state.money - cost, career }, m.role, (x) => ({ ...x, inspired: Math.max(x.inspired ?? 0, days) }));
 }
 
 /** Сколько будет получать после повышения: +PROMO_RAISE к нынешней, кругло до десятков. */
 export const promotedWage = (m: StaffMember): number => Math.round((m.wage * (1 + PROMO_RAISE)) / 10) * 10;
 
-/**
- * Ответ на повышение. Согласие: звание и прибавка; филиал — человек уходит из зала управлять филиалом.
- * Отказ — без обид, спросит через ASK_AGAIN дней.
- */
+/** Повысить до звания (ступень обучения, staff.ts train): звание, прибавка, строчка в летописи. */
+export function promote(state: StoreState, role: StaffRole, to: Rank): StoreState {
+  return withMember(state, role, (x) => {
+    const c = careerOf(x, state.day);
+    return { ...x, wage: promotedWage(x), career: { ...c, rank: to, log: note(c, state.day, to) } };
+  });
+}
+
+/** Ответ на предложение возглавить филиал: человек уходит из зала управлять им. Отказ — без обид, спросим через ASK_AGAIN дней. */
 export function answerOffer(state: StoreState, yes: boolean): StoreState {
   const offer = state.career?.offer;
   if (!offer) return state;
@@ -382,24 +365,11 @@ export function answerOffer(state: StoreState, yes: boolean): StoreState {
   delete career.offer;
   const m = holderOf(state, offer);
   if (!m) return { ...state, career };
+  if (!yes) return { ...state, career: { ...career, branchAfter: state.day + ASK_AGAIN } };
+  if (!state.branch || career.head) return { ...state, career };
   const c = careerOf(m, state.day);
-  if (!yes) {
-    if (offer.to === 'branch') return { ...state, career: { ...career, branchAfter: state.day + ASK_AGAIN } };
-    return withMember({ ...state, career }, m.role, (x) => ({ ...x, career: { ...c, askAfter: state.day + ASK_AGAIN } }));
-  }
-  if (offer.to === 'branch') {
-    if (!state.branch || career.head) return { ...state, career };
-    const head: BranchHead = { name: m.name, ...(m.friend ? { friend: m.friend } : {}), role: m.role, skill: m.skill, since: state.day, xp: Math.round(c.xp), best: c.best };
-    return { ...state, staff: state.staff.filter((x) => x !== m), career: { ...career, head } };
-  }
-  const to = offer.to;
-  return withMember({ ...state, career }, m.role, (x) => ({
-    ...x,
-    wage: promotedWage(x),
-    raiseAsk: undefined,
-    upset: false,
-    career: { ...c, rank: to, askAfter: undefined, log: note(c, state.day, to) },
-  }));
+  const head: BranchHead = { name: m.name, ...(m.friend ? { friend: m.friend } : {}), role: m.role, skill: m.skill, since: state.day, xp: Math.round(c.xp), best: c.best };
+  return { ...state, staff: state.staff.filter((x) => x !== m), career: { ...career, head } };
 }
 
 /** Утренняя записка об уходе прочитана. */

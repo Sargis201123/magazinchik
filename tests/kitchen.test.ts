@@ -135,11 +135,9 @@ describe('повар', () => {
     expect(STAFF_LIMIT[5]).toBeGreaterThanOrEqual(STAFF_ROLE_IDS.length);
   });
 
-  it('без повара (или в его выходной) кухня сама не готовит', () => {
+  it('без повара кухня сама не готовит', () => {
     expect(kitchenWorking(at())).toBe(false);
     expect(cookBatch(at())).toEqual([]);
-    const off = at({ staff: [chef({ offDay: 1 })] });
-    expect(kitchenWorking(off)).toBe(false);
     expect(kitchenWorking(at({ staff: [chef()] }))).toBe(true);
   });
 
@@ -218,9 +216,8 @@ describe('повар', () => {
     expect(pantryOf(bought.state, 'meat')).toBe(needs.meat);
     // Наутро в кладовой ещё осталось — докупает только недостающее.
     expect(morningOrder(bought.state)).toEqual({});
-    // Без повара (и в его выходной) кухня ничего не покупает.
+    // Без повара кухня ничего не покупает.
     expect(stockKitchen({ ...s, staff: [] }).spent).toBe(0);
-    expect(stockKitchen({ ...s, staff: [chef({ offDay: 1 })] }).spent).toBe(0);
     // Денег мало — берёт, на что хватает, в минус не уходит.
     const poor = stockKitchen({ ...s, money: 100 });
     expect(poor.state.money).toBeGreaterThanOrEqual(0);

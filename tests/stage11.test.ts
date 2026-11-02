@@ -5,7 +5,7 @@ import { cancelContract, contractOf, deliverContracts, signContract } from '../s
 import { daysToFair, isFairDay, stallSale, STALL_MARKUP } from '../src/game/fair';
 import { ensureWeekly, progressWeekly } from '../src/game/weekly';
 import { pendingTip, seeTip } from '../src/game/tips';
-import { answerEvent, planDay } from '../src/game/events';
+import { planDay } from '../src/game/events';
 import { carryOf, CART_CARRY } from '../src/game/upgrades';
 import { guestFactor } from '../src/game/day';
 
@@ -87,17 +87,7 @@ describe('испытания недели', () => {
   });
 });
 
-describe('Эдуард переманивает и доносит', () => {
-  it('переманивание: перебить — зарплата растёт, отпустить — сотрудник уходит', () => {
-    const staff = [{ role: 'cashier' as const, name: 0, skill: 2, wage: 400, months: 3 }];
-    const days = Array.from({ length: 300 }, (_, i) => i + 15);
-    const day = days.find((d) => planDay(rich({ day: d, staff })).event?.kind === 'poach')!;
-    expect(day).toBeDefined();
-    const s = { ...rich({ day, staff }), plan: planDay(rich({ day, staff })) };
-    const kept = answerEvent(s, true)!;
-    expect(kept.staff[0].wage).toBe(500);
-    expect(answerEvent(s, false)!.staff).toHaveLength(0);
-  });
+describe('Эдуард доносит', () => {
 
   it('донос — внеплановая проверка', () => {
     const days = Array.from({ length: 300 }, (_, i) => i + 14);

@@ -1,7 +1,8 @@
 // Персонал с характером: иногда утром сотрудник приходит с просьбой или случается история —
 // отпроситься на свадьбу сестры, оплатить курсы, аванс до зарплаты, ссора двух коллег,
-// своя идея для магазина, премия за отличную смену. Решение игрока сказывается: поддержанный
-// воодушевлён и несколько дней работает быстрее, обиженный — медленнее и может уйти.
+// своя идея для магазина, премия за отличную смену. Это истории для души в очереди новостей
+// (headlines.ts): поддержанный воодушевлён и несколько дней работает быстрее, а отказ ничем не грозит
+// (с 02.11 обид, выходных и увольнений из-за них больше нет).
 
 import type { StaffMember, StaffRole, StoreState } from './economy';
 
@@ -47,7 +48,7 @@ const change = (state: StoreState, role: StaffRole, f: (m: StaffMember) => Staff
   ...state,
   staff: state.staff.map((m) => (m.role === role ? f(m) : m)),
 });
-const inspire = (m: StaffMember): StaffMember => ({ ...m, inspired: INSPIRED_DAYS, upset: false });
+const inspire = (m: StaffMember): StaffMember => ({ ...m, inspired: INSPIRED_DAYS });
 
 /** Ответ игрока: yes — поддержать (согласиться, заплатить), no — отказать. */
 export function answerStaffEvent(state: StoreState, yes: boolean): StoreState | null {
@@ -61,20 +62,18 @@ export function answerStaffEvent(state: StoreState, yes: boolean): StoreState | 
   const [a, b] = event.roles;
   switch (event.kind) {
     case 'wedding':
-      // Отпустили — завтра выходной, вернётся воодушевлённым; не отпустили — обида.
-      return yes ? change(s, a, (m) => ({ ...inspire(m), offDay: s.day + 1 })) : change(s, a, (m) => ({ ...m, upset: true }));
+    case 'advance':
+      // Отпустили на свадьбу (смену прикроют), дали аванс — вернётся воодушевлённым.
+      return yes ? change(s, a, inspire) : s;
     case 'course':
       return yes ? change(s, a, (m) => ({ ...inspire(m), skill: Math.min(3, m.skill + 1) })) : s;
-    case 'advance':
-      return yes ? change(s, a, inspire) : change(s, a, (m) => ({ ...m, upset: true }));
     case 'quarrel':
-      // Пицца на всех — помирились; не вмешался — оба дуются.
-      if (yes) return change(change(s, a, (m) => ({ ...m, upset: false })), b, (m) => ({ ...m, upset: false }));
-      return change(change(s, a, (m) => ({ ...m, upset: true })), b, (m) => ({ ...m, upset: true }));
+      // Пицца на всех — помирились и работают дружнее.
+      return yes ? change(change(s, a, inspire), b, inspire) : s;
     case 'idea':
       if (yes) s = { ...s, rating: Math.round(Math.min(5, s.rating + IDEA_RATING) * 100) / 100 };
       return yes ? change(s, a, inspire) : s;
     case 'best':
-      return yes ? change(s, a, (m) => ({ ...inspire(m), streak: 0 })) : s;
+      return yes ? change(s, a, inspire) : s;
   }
 }

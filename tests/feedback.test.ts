@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newGame, type StoreState } from '../src/game/economy';
 import { FIRST_STORM_DAY, MAX_CLEAR_STREAK, weatherFor } from '../src/game/weather';
-import { answerEvent, billAmount } from '../src/game/events';
 import { SUPPLIERS } from '../src/game/suppliers';
 
 describe('погода разнообразнее', () => {
@@ -20,33 +18,6 @@ describe('погода разнообразнее', () => {
     expect(first).toContain('rain');
     expect(first).toContain('storm');
     expect(first).toContain('leaves');
-  });
-});
-
-describe('неожиданный счёт', () => {
-  const withBill = (patch: Partial<StoreState>): StoreState => ({
-    ...newGame(),
-    day: 20,
-    debt: 0,
-    plan: { day: 20, decided: false, inspection: false, quests: [], event: { kind: 'bill', reason: 'flood', amount: 400 } },
-    ...patch,
-  });
-
-  it('заплатить сразу — уходят деньги', () => {
-    const s = answerEvent(withBill({ money: 1000 }), true)!;
-    expect(s.money).toBe(600);
-    expect(s.debt).toBe(0);
-  });
-
-  it('без денег сразу не заплатить, но можно занять', () => {
-    expect(answerEvent(withBill({ money: 100 }), true)).toBeNull();
-    const s = answerEvent(withBill({ money: 100 }), false)!;
-    expect(s.debt).toBe(400);
-    expect(s.money).toBe(100);
-  });
-
-  it('в большом магазине и счёт больше', () => {
-    expect(billAmount(4, 0.5)).toBeGreaterThan(billAmount(0, 0.5));
   });
 });
 

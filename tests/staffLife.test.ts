@@ -1,60 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import {
-  giveDayOff,
-  isAbsent,
-  isTired,
-  managerBoost,
-  newGame,
-  restStaff,
-  roleOpen,
-  TIRED_DAYS,
-  NIGHT_FATIGUE,
-  EXHAUSTED_DAYS,
-  workSpeed,
-  type StaffMember,
-  type StoreState,
-} from '../src/game/economy';
-import { answerEvent } from '../src/game/events';
+import { managerBoost, newGame, onShift, restStaff, roleOpen, workSpeed, type StaffMember, type StoreState } from '../src/game/economy';
 import { managerPick, orderUrgent, receiveUrgent, URGENT_FEE, urgentCost, urgentUnitPrice } from '../src/game/urgent';
 
 const cashier: StaffMember = { role: 'cashier', name: 0, skill: 2, wage: 420, months: 1 };
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 20, money: 5000, level: 3, staff: [cashier], ...patch });
 
-describe('персонал — люди', () => {
-  it(`без выходных ${TIRED_DAYS} дней — устаёт и работает медленнее; выходной снимает усталость`, () => {
+describe('персонал — без усталости и выходных (02.11)', () => {
+  it('сколько ни работай подряд, днём и ночью, — скорость та же, и все на смене', () => {
     let s = shop();
-    for (let i = 0; i < TIRED_DAYS; i++) s = restStaff({ ...s, day: s.day + 1 });
-    const m = s.staff[0];
-    expect(isTired(m)).toBe(true);
-    expect(workSpeed(m)).toBeLessThan(workSpeed(cashier));
-    s = giveDayOff(s, 'cashier')!;
-    s = { ...s, day: s.day + 1 };
-    expect(isAbsent(s, s.staff[0])).toBe(true);
+    for (let i = 0; i < 30; i++) s = restStaff({ ...s, day: s.day + 1 });
+    expect(s.staff[0]).toEqual(cashier);
+    expect(workSpeed(s.staff[0])).toBe(workSpeed(cashier));
+    expect(onShift(s, 'cashier')).toBe(true);
+  });
+
+  it('воодушевление тает по дню за ночь', () => {
+    let s = shop({ staff: [{ ...cashier, inspired: 2 }] });
+    expect(workSpeed(s.staff[0])).toBeGreaterThan(workSpeed(cashier));
     s = restStaff(s);
-    expect(s.staff[0].streak).toBe(0);
-  });
-
-  it('ночная смена утомляет вдвое; вымотанный сам берёт выходной на завтра', () => {
-    let s = shop();
-    s = restStaff(s, true);
-    expect(s.staff[0].streak).toBe(NIGHT_FATIGUE);
-    for (let i = 0; s.staff[0].streak! < EXHAUSTED_DAYS; i++) s = restStaff({ ...s, day: s.day + 1 }, true);
-    expect(s.staff[0].offDay).toBe(s.day + 1);
-    s = { ...s, day: s.day + 1 };
-    expect(isAbsent(s, s.staff[0])).toBe(true);
-  });
-
-  it('просьба о выходном: отпустить — завтра не выйдет; отказать — обида', () => {
-    const ask = (patch: Partial<StoreState> = {}) =>
-      shop({ plan: { day: 20, decided: false, inspection: false, quests: [], event: { kind: 'dayOff', role: 'cashier', reason: 0 } }, ...patch });
-    expect(answerEvent(ask(), true)!.staff[0].offDay).toBe(21);
-    expect(answerEvent(ask(), false)!.staff[0].upset).toBe(true);
-  });
-
-  it('отпроситься сегодня: отпустить — сегодня его нет', () => {
-    const s = shop({ plan: { day: 20, decided: false, inspection: false, quests: [], event: { kind: 'goHome', role: 'cashier', reason: 1 } } });
-    const r = answerEvent(s, true)!;
-    expect(isAbsent(r, r.staff[0])).toBe(true);
+    expect(s.staff[0].inspired).toBe(1);
+    s = restStaff(s);
+    expect(s.staff[0].inspired).toBeUndefined();
   });
 });
 
