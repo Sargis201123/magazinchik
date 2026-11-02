@@ -1273,7 +1273,7 @@ export const pt: Record<TextKey, string> = {
   "supplier.wholesale.angry": "Chega. Hoje é preço de tabela e com acréscimo.",
   "popup.slotEmpty": "Lugar para prateleira — compre de manhã na aba «Salão»",
   "staff.manager": "Gerente do salão",
-  "staff.manager.desc": "Todos trabalham 10% mais rápido; ele pede reposição urgente (mais barata: +10% e sem taxa de frete), atende o telefone, separa os pedidos de entrega e leva ao entregador, fica no caixa no lugar de quem faltou. A partir do Supermercado",
+  "staff.manager.desc": "Todos trabalham 10% mais rápido; ele pede reposição urgente (mais barata: +10% e sem taxa de frete), atende o telefone, separa os pedidos de entrega e leva ao entregador. A partir do Supermercado",
   "staffTab.lockedRole": "{role} — a partir do ponto «{name}»",
   "urgent.title": "🚚 Reposição urgente",
   "urgent.note": "Chega em poucos segundos. Mais caro que a compra da manhã: +25% e {fee} 💰 de frete (o gerente pede mais barato).",

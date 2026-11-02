@@ -1260,7 +1260,7 @@ export const tr: Record<TextKey, string> = {
   "supplier.wholesale.angry": "Tamam, yeter. Bugün liste fiyatı, üstüne de zam.",
   "popup.slotEmpty": "Raf yeri — sabah “Salon” sekmesinden bir raf al",
   "staff.manager": "Mağaza müdürü",
-  "staff.manager.desc": "Herkes %10 daha hızlı çalışır; acil teslimat siparişi verir (daha ucuz: +%10, yol ücreti yok), telefona bakar, eve siparişleri hazırlayıp kuryeye verir, olmayanın yerine kasaya geçer. Süpermarketten itibaren",
+  "staff.manager.desc": "Herkes %10 daha hızlı çalışır; acil teslimat siparişi verir (daha ucuz: +%10, yol ücreti yok), telefona bakar, eve siparişleri hazırlayıp kuryeye verir. Süpermarketten itibaren",
   "staffTab.lockedRole": "{role} — “{name}” mekânından itibaren",
   "urgent.title": "🚚 Acil teslimat",
   "urgent.note": "Birkaç saniyede gelir. Sabah alımından pahalı: +%25 ve yol ücreti {fee} 💰 (müdür daha ucuza sipariş eder).",

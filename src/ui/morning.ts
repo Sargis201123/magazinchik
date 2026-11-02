@@ -3736,7 +3736,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     const next = nextRank(m);
     const left = xpToNext(m, state.day);
     const out: HTMLElement[] = [el('div', 'ui-item-sub', `${t('career.xp', { n: Math.floor(c.xp) })} · ${t('career.hired', { day: c.hired })}`)];
-    if (next && left !== null) out.push(el('div', 'ui-muted', left > 0 ? t('career.next', { rank: t(rankKey(m, next)), n: left }) : t('career.ready')));
+    // «Можно повысить» — только когда следующая ступень «Учить» и правда повышение (после 3★ и «тормоза»).
+    const promoNow = trainingStep(m, state.day)?.kind === 'rank';
+    if (next && left !== null && (left > 0 || promoNow)) out.push(el('div', 'ui-muted', left > 0 ? t('career.next', { rank: t(rankKey(m, next)), n: left }) : t('career.ready')));
     if (c.best) out.push(el('div', 'ui-note', t('career.bestCount', { n: c.best })));
     const log = (c.log ?? []).slice().reverse();
     if (log.length) {

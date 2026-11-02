@@ -1272,7 +1272,7 @@ export const uz: Record<TextKey, string> = {
   "supplier.wholesale.angry": "Boʻldi, yetar. Bugun — prays boʻyicha va ustamasi bilan.",
   "popup.slotEmpty": "Javon joyi — uni ertalab «Zal» boʻlimida sotib ol",
   "staff.manager": "Zal menejeri",
-  "staff.manager.desc": "Hamma 10% tezroq ishlaydi, shoshilinch yetkazishni oʻzi buyuradi (arzonroq: +10% va chiqish haqisiz), telefonga javob beradi, uyga buyurtmalarni yigʻib kuryerga chiqaradi, yoʻq xodim oʻrniga kassaga turadi. Supermarketdan boshlab",
+  "staff.manager.desc": "Hamma 10% tezroq ishlaydi, shoshilinch yetkazishni oʻzi buyuradi (arzonroq: +10% va chiqish haqisiz), telefonga javob beradi, uyga buyurtmalarni yigʻib kuryerga chiqaradi. Supermarketdan boshlab",
   "staffTab.lockedRole": "{role} — «{name}» binosidan",
   "urgent.title": "🚚 Shoshilinch yetkazish",
   "urgent.note": "Bir necha soniyada keladi. Ertalabki xariddan qimmat: +25% va chiqish uchun {fee} 💰 (menejer arzonroq buyuradi).",

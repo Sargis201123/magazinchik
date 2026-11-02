@@ -111,6 +111,11 @@ describe('опыт и ставка', () => {
     expect(staff.every((m) => m.skill === 3 && m.wage === wageFor(m.role, 3))).toBe(true);
   });
 
+  it('друг и летний помощник со скидкой: ставка не догоняет обычную, пока навык не вырос', () => {
+    const friend = member({ role: 'loader', skill: 2, months: 0, wage: 280, friend: { id: 1, name: 'Петя' } });
+    expect(monthForStaff([friend])[0].wage).toBe(280);
+  });
+
   it('в конце месяца зарплата в счёте, все остаются', () => {
     const s: StoreState = { ...newGame(), day: MONTH_DAYS, money: 5000, debt: 0, staff: [member()] };
     const night = endDay(s, emptyDayStats());

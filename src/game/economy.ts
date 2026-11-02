@@ -423,7 +423,8 @@ export function monthForStaff(staff: StaffMember[]): StaffMember[] {
   return staff.map((m) => {
     const months = m.months + 1;
     const skill = months % MONTHS_PER_SKILL === 0 ? Math.min(3, m.skill + 1) : m.skill;
-    return { ...m, months, skill, wage: Math.max(m.wage, wageFor(m.role, skill, m.trait)) };
+    // Только когда навык вырос: друг и летний помощник (arcs.ts) работают дешевле ставки и так и остаются.
+    return { ...m, months, skill, wage: skill > m.skill ? Math.max(m.wage, wageFor(m.role, skill, m.trait)) : m.wage };
   });
 }
 

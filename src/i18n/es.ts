@@ -1260,7 +1260,7 @@ export const es: Record<TextKey, string> = {
   "supplier.wholesale.angry": "Ya basta. Hoy, precio de lista y con recargo.",
   "popup.slotEmpty": "Lugar para un estante: cómpralo por la mañana en la pestaña “Sala”",
   "staff.manager": "Encargado",
-  "staff.manager.desc": "Todos trabajan un 10% más rápido; pide entregas urgentes (más baratas: +10% y sin costo de envío), contesta el teléfono, arma los pedidos a domicilio y se los da al repartidor, y cubre la caja si falta alguien. Desde el supermercado",
+  "staff.manager.desc": "Todos trabajan un 10% más rápido; pide entregas urgentes (más baratas: +10% y sin costo de envío), contesta el teléfono, arma los pedidos a domicilio y se los da al repartidor. Desde el supermercado",
   "staffTab.lockedRole": "{role}: desde el local “{name}”",
   "urgent.title": "🚚 Entrega urgente",
   "urgent.note": "Llega en unos segundos. Más cara que la compra de la mañana: +25% y {fee} 💰 de envío (el encargado la pide más barata).",

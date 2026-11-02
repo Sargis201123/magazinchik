@@ -1276,7 +1276,7 @@ export const en: Record<TextKey, string> = {
   "supplier.wholesale.angry": "Enough. Today it's list price plus extra.",
   "popup.slotEmpty": "Room for a shelf — buy one in the morning, “Hall” tab",
   "staff.manager": "Floor manager",
-  "staff.manager.desc": "Everyone works 10% faster; orders urgent deliveries (cheaper: +10%, no trip fee), answers the phone, packs home orders and hands them to the courier, covers the till for anyone absent. From the supermarket",
+  "staff.manager.desc": "Everyone works 10% faster; orders urgent deliveries (cheaper: +10%, no trip fee), answers the phone, packs home orders and hands them to the courier. From the supermarket",
   "staffTab.lockedRole": "{role} — from “{name}” premises",
   "urgent.title": "🚚 Urgent delivery",
   "urgent.note": "Arrives in a few seconds. Pricier than the morning order: +25% and {fee} 💰 for the trip (the manager orders cheaper).",

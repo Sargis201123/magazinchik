@@ -71,6 +71,6 @@ export function migrateCalm(state: StoreState): StoreState {
   }
   const ceremony = s.career?.ceremony;
   if (ceremony && 'miss' in ceremony) s = { ...s, career: { ...s.career, ceremony: strip(ceremony, ['miss']) } };
-  if (s.zar?.away) s = { ...s, zar: { ...s.zar, away: calmShop(s.zar.away) } };
+  if (s.zar?.away) s = { ...s, zar: { ...s.zar, away: calmShop(strip(s.zar.away, OLD_STATE)) } };
   return s;
 }
