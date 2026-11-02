@@ -22,7 +22,7 @@ import type { AdId } from './ads';
 import type { FloorWear } from './wear';
 import { afterLoanPayment, loanDue } from './bank';
 import { SALE_DISCOUNT, saleOn, weekDemand, weekProductOk } from './weeks';
-import { fridgeLife, fridgePower, lightsPower, solarPower, warehouseRoom, type GearId } from './gear';
+import { fridgeLife, fridgePower, lightsPower, warehouseRoom, type GearId } from './gear';
 import { inZar, zarAwayBill, zarBillShare, zarNextLevel } from './zarshop';
 
 /**
@@ -694,8 +694,8 @@ export interface StoreState {
   weekly?: { month: number; challenges: { kind: string; target: number; product?: ProductId; progress: number; reward: number; done?: boolean }[] };
   /** Какие подсказки о новых механиках уже показаны (tips.ts). */
   seenTips?: string[];
-  /** Навыки хозяина: ступень каждого (owner.ts). */
-  skills?: Partial<Record<'hands' | 'haggle' | 'strong' | 'charm' | 'eye', number>>;
+  /** Навыки хозяина: ступень каждого (owner.ts). Старое «charm» (обаяние убрано 02.11) не читается — очки снова свободны. */
+  skills?: Partial<Record<'hands' | 'haggle' | 'strong' | 'eye', number>>;
   /** Кредит в банке: сколько осталось вернуть и платёж в месяц (bank.ts). */
   /** day — когда взят (в старых сохранениях нет): в тот же вечер платёж не берут. */
   loan?: { left: number; payment: number; day?: number };
@@ -1295,8 +1295,8 @@ export function monthlyBill(state: StoreState): Bill {
   return {
     rent: part(STORE_LEVELS[old].rent) + other.rent,
     utilities: part(STORE_LEVELS[old].utilities) + other.utilities,
-    // Свет в зале дешевле с LED, холодильники — с новыми моделями, всё вместе — с солнечными панелями (gear.ts).
-    power: part(Math.round((level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state)) * solarPower(state))) + other.power,
+    // Свет в зале дешевле с LED, холодильники — с новыми моделями (gear.ts; солнечные панели убраны 02.11).
+    power: part(Math.round(level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state))) + other.power,
     salaries: part(state.staff.reduce((sum, m) => sum + m.wage, 0)) + other.salaries,
     debt: Math.min(DEBT_PAYMENT, state.debt),
     loan: loanDue(state),

@@ -21,7 +21,9 @@
     "loadtime": "vite-node scripts/loadtime.ts",
     "taps": "vite-node scripts/taps.ts",
     "sim:career": "vite-node scripts/sim-career.ts",
-    "sim:zar": "vite-node scripts/sim-zar.ts"
+    "sim:zar": "vite-node scripts/sim-zar.ts",
+    "sim:gear": "vite-node scripts/sim-gear.ts",
+    "gear:count": "vite-node scripts/gear-count.ts"
   },
   "dependencies": {
     "@fontsource-variable/nunito": "^5.3.0",

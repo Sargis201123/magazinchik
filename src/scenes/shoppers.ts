@@ -40,12 +40,12 @@ import { haptic } from '../platform/telegram';
 import { UI_FONT } from '../ui/dom';
 import { BIG_DAYS, BLACKOUT_CHECKOUT, bigDayExtraItems, bigDayFor, CROWD_PATIENCE, isCrowdDay, MASKS, ROADWORKERS } from '../game/bigday';
 import { wearOf } from './archetypes';
-import { isWet, weatherFor } from '../game/weather';
+import { isWet } from '../game/weather';
 import { adExtraItems, adRareBoost, adTrust } from '../game/ads';
 import { saleExtraItems } from '../game/weeks';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular } from '../game/regulars';
-import { CART_SHARE, cartPatience, loyaltyTolerance, withUpgrades } from '../game/upgrades';
+import { CART_SHARE, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { DOG_DAY_CATCH } from '../game/watch';
 import { guestCoins, seeGuest, type GuestId } from '../game/live';
 import { onbDone } from '../game/onboarding';
@@ -59,9 +59,9 @@ import { personGlow } from './halo';
 import { CLASH_FACTOR } from '../game/neighbors';
 import { smellChance } from '../game/rot';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
-import { charmPatience, eyeTheft, ownerTiming } from '../game/owner';
+import { eyeTheft, ownerTiming } from '../game/owner';
 import { radioPatience, radioTolerance } from '../game/radio';
-import { cameraTheft, climatePatience, entranceMud, gearTier, signagePatience, REGISTER_JAM_SECONDS, registerJam, wcDirt } from '../game/gear';
+import { cameraTheft, entranceMud, gearTier, REGISTER_JAM_SECONDS, registerJam, wcDirt } from '../game/gear';
 import { AROMA_TOLERANCE } from '../game/bakery';
 import { NIGHT_MARKUP, NIGHT_TOLERANCE } from '../game/night';
 import { CAT_TIP, catHome, catPatience, catTipChance } from '../game/cat';
@@ -716,15 +716,11 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   if (!c.serving && Math.random() < impulseChance(scene.state, scene.queue.indexOf(c) + 1)) grabCandy(scene, c);
   c.waitStart = scene.time.now;
   c.bubble.setVisible(true);
-  // С котом рядом ждут дольше.
+  // С котом рядом и под радио ждут дольше (климат, указатели, тележки и обаяние убраны 02.11 — gear.ts).
   c.patienceMs =
     PATIENCE_MS *
     catPatience(scene.state) *
-    climatePatience(scene.state, weatherFor(scene.state.day)) *
-    charmPatience(scene.state) *
     radioPatience(scene.state) *
-    signagePatience(scene.state) *
-    cartPatience(scene.state) *
     (isCrowdDay(scene.state.day) ? CROWD_PATIENCE : 1) *
     (c.first ? FIRST_PATIENCE : 1);
   c.patience = scene.time.delayedCall(c.patienceMs, () => void giveUp(scene, c));

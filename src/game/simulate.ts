@@ -91,16 +91,15 @@ import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { badBatch, haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } from './suppliers';
-import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
+import { buyUpgrade, carryOf, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
 import { CARRY, homemade } from './economy';
 import { fairToday, fairTodayTolerance, STALL_MAX, stallSale } from './fair';
 import { endSale, SALE_CROWD, saleExtraItems, startSale, weekFor } from './weeks';
 import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole, RELIEF_ROLE, TILL_ROLES } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
-import { weatherFor } from './weather';
 import { simSmellComplaint } from './rot';
-import { brewSeconds, cameraTheft, climatePatience, coffeePrice, entranceMud, fridgeLeak, GEAR_IDS, gearAvailable, nextGear, ovenBatch, ovenBatchCost, REGISTER_JAM_SECONDS, registerJam, signagePatience, upgradeGear, wcDirt } from './gear';
+import { brewSeconds, cameraTheft, coffeePrice, entranceMud, fridgeLeak, gearAvailable, MANUAL_GEAR, nextGear, ovenBatch, ovenBatchCost, REGISTER_JAM_SECONDS, registerJam, upgradeGear, wcDirt } from './gear';
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from './bakery';
 import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
 import { adoptDog, DOG_FROM_DAY, DOG_PRICE, hasDog } from './watch';
@@ -117,7 +116,7 @@ import { buyKiosk, kioskCount, kioskTier, laneGuests, nextKioskPrice, nextKioskT
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, nextBranchTier, upgradeBranch } from './branch';
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
-import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
+import { carryBonus, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
 
 export { rng };
 
@@ -230,7 +229,6 @@ export type Feature =
   | 'oven'
   | 'night'
   | 'cat'
-  | 'cart'
   | 'loyalty'
   | 'gear'
   | 'etags'
@@ -518,7 +516,6 @@ export function simulate({
       ['coffee', 'coffee'],
       ['oven', 'oven'],
       ['night', 'nightShift'],
-      ['cart', 'cart'],
       ['loyalty', 'loyalty'],
       ['etags', 'eTags'],
       ['oven', 'wholesale'],
@@ -569,23 +566,18 @@ export function simulate({
         }
       }
     }
-    // Новые модели оборудования — когда хватает денег с запасом и не копит на расширение.
+    // Новые модели оборудования — когда хватает денег с запасом и не копит на расширение. Покупает только
+    // четыре ручные линейки: остальное встаёт само с помещением (gear.ts).
     if (features.gear) {
-      for (const id of GEAR_IDS) {
+      for (const id of MANUAL_GEAR) {
         const next = nextGear(state, id);
-        // Полка «Уценка» в симуляторе не моделируется (fillBargain) — места на ней не покупаем.
-        if (id === 'bargain' || !next || !gearAvailable(state, id) || state.money < next.price + reserve * 2 || !canSplurge(next.price)) continue;
+        if (!next || !gearAvailable(state, id) || state.money < next.price + reserve * 2 || !canSplurge(next.price)) continue;
         investments += next.price;
         state = upgradeGear(state, id) ?? state;
       }
     }
-    // Своя марка: печь до лучшей модели, потом рецепты «От бабушки» — когда есть запас.
+    // Своя марка: рецепты «От бабушки» — когда есть запас (лучшая печь встаёт сама в третьем помещении, gear.ts).
     if (features.brand && hasUpgrade(state, 'oven')) {
-      const oven = nextGear(state, 'oven');
-      if (oven && state.money >= oven.price + reserve * 2) {
-        investments += oven.price;
-        state = upgradeGear(state, 'oven') ?? state;
-      }
       const cost = nextBrandCost(state);
       if (cost !== null && brandAvailable(state) && state.money >= cost + reserve * 2) {
         investments += cost;
@@ -895,9 +887,9 @@ export function simulate({
     // Один игрок не успевает всё: чем больше магазин, тем больше теряется без персонала.
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
-    // С котом в очереди ждут дольше — уходят реже.
-    const lossInQueue =
-      (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state) / radioPatience(state) / signagePatience(state) / cartPatience(state);
+    // С котом и радио в очереди ждут дольше — уходят реже. Климат, указатели, тележки и обаяние хозяина
+    // убраны 02.11: из шести «терпений» остались два, что игрок замечает (docs/BALANCE.md).
+    const lossInQueue = (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / radioPatience(state);
     // Доставка на дом: звонки идут весь день, а здесь заказы забирают товар раньше покупателей
     // (осторожная оценка). Без менеджера и грузчика заказ собирает хозяин — это время не за кассой
     // (сменщик, если нанят, в это время стоит за его кассой).

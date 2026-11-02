@@ -6,6 +6,7 @@ import { migrateAutoOrder, settleInbound } from './autoorder';
 import { migrateTut } from './tutorial';
 import { migrateCollections } from './collections';
 import { migrateCareer } from './career';
+import { migrateGear } from './gear';
 import { normalizePets } from './pets';
 import { normalizeZar } from './zarechye';
 import { normalizeNews } from './headlines';
@@ -84,7 +85,8 @@ export function loadGame(): StoreState | null {
   // Альбом коллекций появился позже: старое сохранение сразу получает уже заработанное (collections.ts).
   // Карьера сотрудников появилась позже: опыт старых сотрудников — по их стажу (career.ts).
   // Второй магазин в Заречье (zarechye.ts): срез второго магазина дополняем тем, чего в нём не было.
-  return normalizeZar(migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11))));
+  // Оборудование упростили 02.11: за убранные указатели, солнечные панели и тележки — монеты назад (gear.ts).
+  return normalizeZar(migrateGear(migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11)))));
 }
 
 let pending: string | null = null;

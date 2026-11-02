@@ -64,8 +64,9 @@ describe('кофе', () => {
 
 describe('печь', () => {
   it('закладка стоит денег, хлеб идёт на полки, излишек — на склад', () => {
-    expect(startBatch(rich({ money: 10 }))).toBeNull();
-    const s = startBatch(rich())!;
+    // Простая печь — в «Магазинчике»: в третьем помещении встаёт пекарский шкаф (gear.ts, 02.11).
+    expect(startBatch(rich({ money: 10, level: 1 }))).toBeNull();
+    const s = startBatch(rich({ level: 1 }))!;
     expect(s.money).toBe(10000 - OVEN_BATCH_COST);
     const out = takeOutBread(s);
     // На хлебной полке новой игры 4 из 8 — 4 места.

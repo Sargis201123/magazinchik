@@ -272,13 +272,13 @@ describe('повар', () => {
 });
 
 describe('плита', () => {
-  it('новые модели — только с кухней: быстрее, две кастрюли, у плиты шефа лишняя порция', () => {
+  it('новые модели встают сами с помещением: быстрее, две кастрюли, у плиты шефа лишняя порция', () => {
     expect(GEAR_IDS).toContain('stove');
-    expect(gearAvailable({ ...at(), upgrades: [] }, 'stove')).toBe(false);
     const s = at({ money: 10000 });
-    expect(gearAvailable(s, 'stove')).toBe(true);
-    const t1 = upgradeGear(s, 'stove')!;
-    const t2 = upgradeGear(t1, 'stove')!;
+    expect(gearAvailable(s, 'stove')).toBe(false);
+    expect(upgradeGear(s, 'stove')).toBeNull();
+    const t1 = at({ level: 4 });
+    const t2 = at({ level: 5 });
     expect(stoveSeconds(t1)).toBeLessThan(stoveSeconds(s));
     expect(stoveSeconds(t2)).toBeLessThan(stoveSeconds(t1));
     expect([stovePots(s), stovePots(t1), stovePots(t2)]).toEqual([1, 2, 2]);
@@ -288,12 +288,12 @@ describe('плита', () => {
 });
 
 describe('полка «Еда»', () => {
-  it('улучшается только с кухней: больше порций, холодильник держит часть до утра, у витрины берут чаще', () => {
+  it('с помещением — больше порций, холодильник держит часть до утра, у витрины берут чаще', () => {
     expect(GEAR_IDS).toContain('foodShelf');
-    expect(gearAvailable({ ...at(), upgrades: [] }, 'foodShelf')).toBe(false);
+    expect(gearAvailable(at(), 'foodShelf')).toBe(false);
     const s = at({ money: 10000 });
-    const t1 = upgradeGear(s, 'foodShelf')!;
-    const t2 = upgradeGear(t1, 'foodShelf')!;
+    const t1 = at({ level: 4 });
+    const t2 = at({ level: 5 });
     expect([foodSlots(s), foodSlots(t1), foodSlots(t2)]).toEqual(FOOD_SLOTS);
     // Деревянная полка: к утру списывается всё; в холодильнике — половина, в витрине-горке — три четверти.
     expect(spoilDishes({ ...s, kitchen: { borscht: 8 } })).toMatchObject({ spoiled: 8, state: { kitchen: {} } });

@@ -99,7 +99,8 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'fair_3', tier: 'bronze', progress: ({ life }) => count(life.fairs ?? 0, 3) },
   // Оборудование: первая новая модель, десять улучшений и всё лучших моделей.
   { id: 'gear_first', tier: 'bronze', progress: ({ state }) => count(gearUpgrades(state), 1) },
-  { id: 'gear_10', tier: 'silver', progress: ({ state }) => count(gearUpgrades(state), 10) },
+  // 8 из 10 моделей, что игрок ставит сам (касса, холодильники, склад, камеры — gear.ts MANUAL_GEAR); id прежний — полученное не теряется.
+  { id: 'gear_10', tier: 'silver', progress: ({ state }) => count(gearUpgrades(state), 8) },
   { id: 'gear_all', tier: 'gold', progress: ({ state }) => flag(gearMaxed(state)) },
   // Победа над гипермаркетом «Гигант» (giant.ts).
   { id: 'giant', tier: 'gold', progress: ({ state }) => flag(state.giant?.phase === 'won') },

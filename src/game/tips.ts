@@ -6,7 +6,7 @@ import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount } from './registers';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'promo' | 'contract' | 'markdown' | 'weekly' | 'fair' | 'cart' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'promo' | 'contract' | 'markdown' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -40,7 +40,6 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['markdown', (s) => s.day >= 3 && expiringCount(s) > 0],
   ['promo', (s) => s.day >= 5],
   ['fair', (s) => isFairDay(s.day)],
-  ['cart', (s) => hasUpgrade(s, 'cart')],
   ['loyalty', (s) => hasUpgrade(s, 'loyalty')],
   ['delivery', (s) => hasUpgrade(s, 'delivery')],
   ['register2', (s) => registerCount(s) >= 2],
@@ -58,7 +57,6 @@ export const TIP_ICONS: Record<TipId, string> = {
   markdown: '🏷',
   weekly: '🗓',
   fair: '🎪',
-  cart: '🛒',
   loyalty: '💳',
   delivery: '🚲',
   register2: '🧾',

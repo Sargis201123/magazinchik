@@ -387,7 +387,7 @@ const css = `
 .ui-staff-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ui-staff-bar { height: 7px; }
 .ui-staff-tags { grid-column: 1 / -1; font-size: 12px; color: #b13e53; }
-.ui-skill-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 6px; }
+.ui-skill-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 6px; }
 .ui-skill-chip { padding: 5px 2px; font-size: 11px; letter-spacing: -0.5px; }
 .ui-skill-chip.hot { background: #fee761; }
 .ui-skill-detail { margin-top: 6px; padding: 6px 8px; background: #fff8e0; border-radius: 6px; }

@@ -173,7 +173,7 @@ import { haggleBonus, learnSkill, nextLevelXp, ownerLevelOf, ownerTiming, ownerX
 import { LOAN_INTEREST, LOAN_MONTHS, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../game/bank';
 import { showReport } from './report';
 import { buyCups, COFFEE_CHANCE, CUP_COST, cupsOf, CUPS_MAX, TABLES_COFFEE } from '../game/coffee';
-import { coffeePrice, coffeeSprite, GEAR, GEAR_IDS, gearAvailable, gearTier, nextGear, ovenBake, ovenBatch, ovenBatchCost, ovenSprite, upgradeGear, type GearId } from '../game/gear';
+import { AUTO_GEAR, coffeePrice, coffeeSprite, GEAR, gearArriving, gearAvailable, gearTier, MANUAL_GEAR, nextGear, ovenBake, ovenBatch, ovenBatchCost, upgradeGear, type GearId } from '../game/gear';
 import { BAKE_MODES, bakeModeOf, setBakeMode } from '../game/bakery';
 import { buyRegister, isCashierRole, nextRegisterCount, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from '../game/registers';
 import { activeWar, answerWar } from '../game/war';
@@ -216,7 +216,7 @@ import { showSupport } from './support';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
 import { answerOpening, BUILDINGS, districtNews, districtSite, isMatchDay, OPENING_DAYS, type BuildingId } from '../game/district';
-import { canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, foodSlots, foodSprite, kitchenOpen, kitchenWorking, menuAuto, morningOrder, orderCost, pantryOf, portionsOf, portionsTotal, stoveSprite, toggleMenu } from '../game/kitchen';
+import { canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, foodSlots, foodSprite, kitchenOpen, kitchenWorking, menuAuto, morningOrder, orderCost, pantryOf, portionsOf, portionsTotal, toggleMenu } from '../game/kitchen';
 import { addFriend, MP_EVENT, visitsInfo } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
@@ -3076,25 +3076,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     return box;
   };
 
-  /** Картинка модели в списке оборудования (у кого нет своей картинки — значок). */
-  const gearArt = (state: StoreState, id: GearId, tier: number): string | null => {
-    // Кассу показываем крупным планом: сам стол слишком длинный для строки.
-    const at = { ...state, gear: { ...state.gear, [id]: tier } };
-    const art: Partial<Record<GearId, string>> = {
-      register: `counter_icon${tier}`,
-      bin: tier ? `bin_t${tier}_0` : 'bin0',
-      bargain: `bargain_shelf${tier}`,
-      coffee: coffeeSprite(at),
-      oven: ovenSprite(at),
-      // Транспорт курьера: велосипед и мопед сбоку, фургончик — значком (сверху он как все машины).
-      courier: ['bike', 'scooter', 'ico_van'][tier],
-      stove: stoveSprite(at),
-      foodShelf: foodSprite(at),
-    };
-    return art[id] ?? null;
-  };
+  /** Картинка модели в списке оборудования: у кассы — крупным планом (сам стол слишком длинный для строки), у остальных — значок. */
+  const gearArt = (id: GearId, tier: number): string | null => (id === 'register' ? `counter_icon${tier}` : null);
 
-  /** Оборудование: по строке на каждую линейку — что стоит, на что поменять, что это даст. */
   /** Кассы: места под них даёт помещение, сами кассы — покупаются по одной, когда очередь того стоит. */
   const registersBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
@@ -3105,7 +3089,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     const actions = price === null ? [] : [button(t('registers.buy', { cost: price }), () => update(buyRegister(getState()), 'success'), 'ui-chip', state.money < price)];
     const model = GEAR.register.models[gearTier(state, 'register')];
     const sub = `${t(model.nameKey)} · ${price !== null ? t('registers.free', { n: slots - n }) : nextRegisterCount(state) && (nextRegisterCount(state) ?? 0) > slots ? t('registers.full') : t('registers.max')}`;
-    box.append(artRow(gearArt(state, 'register', gearTier(state, 'register')) ?? 'counter0', { name: t('registers.count', { n, max: slots }), sub, actions }));
+    box.append(artRow(gearArt('register', gearTier(state, 'register')) ?? 'counter0', { name: t('registers.count', { n, max: slots }), sub, actions }));
     // Открытые кассы зовут гостей (lanes.ts): сколько уже дают и сколько даст следующая касса с кассиром.
     const till = withNextTill(state);
     const now = Math.round(guestsToday(state) * (1 - 1 / laneGuests(state)));
@@ -3154,17 +3138,20 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     return box;
   };
 
+  /**
+   * Оборудование: четыре линейки игрок выбирает сам — строка на каждую (что стоит, на что поменять, что даст);
+   * остальное обновляется само с помещением — одна строка: что стоит сейчас и что встанет после переезда (gear.ts).
+   */
   const gearBox = (state: StoreState) => {
     const box = el('div', 'ui-box');
     box.append(el('b', '', t('gear.title')), el('div', 'ui-muted', t('gear.note')));
-    for (const id of GEAR_IDS) {
+    for (const id of MANUAL_GEAR) {
       const gear = GEAR[id];
       const tier = gearTier(state, id);
       const now = gear.models[tier];
       const next = nextGear(state, id);
-      const needs = gear.needs && !hasUpgrade(state, gear.needs);
       const row = el('div', 'ui-item');
-      const texture = gearArt(state, id, next && !needs ? tier + 1 : tier);
+      const texture = gearArt(id, next ? tier + 1 : tier);
       if (texture) {
         const img = el('img', 'ui-item-art');
         img.src = sheetPng(texture);
@@ -3174,10 +3161,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       const body = el('div');
       const name = el('div', 'ui-item-name', t(gear.nameKey));
       const actions = el('div', 'ui-item-actions');
-      if (needs) {
-        body.append(name, el('div', 'ui-item-sub', t(`gear.needs.${gear.needs}` as TextKey)));
-      } else if (!next) {
-        body.append(name, el('div', 'ui-item-sub', `${t(now.nameKey)} — ${t(now.effectKey)}`));
+      if (!next) {
+        body.append(name, el('div', 'ui-item-sub', `${t(now.nameKey)}${now.effectKey ? ` — ${t(now.effectKey)}` : ''}`));
         actions.append(el('span', 'ui-tag', t('gear.max')));
       } else {
         name.append(el('span', 'ui-tag', `${next.price} 💰`));
@@ -3185,7 +3170,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         body.append(
           name,
           el('div', 'ui-item-sub', t('gear.upgrade', { from: t(now.nameKey), to: t(next.nameKey) })),
-          el('div', 'ui-item-sub', locked ? t('upgrade.needLevel', { name: t(STORE_LEVELS[next.minLevel].nameKey) }) : t(next.effectKey)),
+          el('div', 'ui-item-sub', locked ? t('upgrade.needLevel', { name: t(STORE_LEVELS[next.minLevel].nameKey) }) : next.effectKey ? t(next.effectKey) : ''),
         );
         actions.append(
           button(t('gear.buy'), () => update(upgradeGear(getState(), id), 'success'), 'ui-chip', !gearAvailable(state, id) || state.money < next.price),
@@ -3194,6 +3179,22 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       row.append(body, actions);
       box.append(row);
     }
+    // Всё, что обновляется само: только то, что уже есть в магазине (кофемашина — с кофейным уголком и т. п.).
+    const mine = AUTO_GEAR.filter((id) => !GEAR[id].needs || hasUpgrade(state, GEAR[id].needs!));
+    const row = el('div', 'ui-item');
+    row.append(el('div', 'ui-ad-icon', '🔄'));
+    const body = el('div');
+    body.append(
+      el('div', 'ui-item-name', t('gear.auto')),
+      el('div', 'ui-item-sub', mine.map((id) => `${GEAR[id].icon} ${t(GEAR[id].models[gearTier(state, id)].nameKey)}`).join(' · ')),
+    );
+    const nextLevel = state.level + 1 < STORE_LEVELS.length ? state.level + 1 : null;
+    const coming = nextLevel === null ? [] : gearArriving(state, nextLevel);
+    if (nextLevel !== null && coming.length) {
+      body.append(el('div', 'ui-note', t('gear.autoNext', { name: t(STORE_LEVELS[nextLevel].nameKey), list: coming.map((c) => `${GEAR[c.id].icon} ${t(c.model.nameKey)}`).join(' · ') })));
+    }
+    row.append(body);
+    box.append(row);
     return box;
   };
 

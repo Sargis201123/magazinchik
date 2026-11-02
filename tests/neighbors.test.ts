@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isClash, isPair, nextTo, shelfLinks } from '../src/game/neighbors';
-import { gearAvailable, upgradeGear, bargainSprite } from '../src/game/gear';
+import { gearAvailable, bargainSprite } from '../src/game/gear';
 import { bargainCapacity, bargainCount, fillBargain, takeBargain } from '../src/game/bargain';
 import { emptyDayStats, endDay, newGame, PRODUCTS, type Category, type StoreState } from '../src/game/economy';
 import { layoutFor } from '../src/scenes/layout';
@@ -70,17 +70,17 @@ describe('полка «Уценка»', () => {
     expect(night.spoiled).toBeGreaterThanOrEqual(BARGAIN_CAPACITY - 1);
   });
 
-  it('модели полки прибавляют мест: 12 → 18 → 24; без полки улучшать нечего', () => {
-    const s = { ...withBread(0, 30), money: 10_000, level: 2 };
-    expect(gearAvailable({ ...s, upgrades: [] }, 'bargain')).toBe(false);
-    const one = upgradeGear(s, 'bargain')!;
+  it('модели полки прибавляют мест с помещением: 12 → 18 → 24; не покупаются', () => {
+    const s = { ...withBread(0, 30), money: 10_000, level: 1 };
+    expect(gearAvailable({ ...s, level: 2 }, 'bargain')).toBe(false);
+    expect(bargainCapacity(s)).toBe(12);
+    const one = { ...s, level: 2 };
     expect(bargainCapacity(one)).toBe(18);
     expect(bargainSprite(one)).toBe('bargain_shelf1');
-    const two = upgradeGear(one, 'bargain')!;
+    const two = { ...s, level: 3 };
     expect(bargainCapacity(two)).toBe(24);
-    expect(upgradeGear(two, 'bargain')).toBeNull();
     expect(fillBargain(two).count).toBe(24);
-    // Старые сохранения без модели — начальная горка на 12.
+    // Старые сохранения без модели — по помещению.
     expect(bargainCapacity({ ...s, gear: undefined })).toBe(12);
   });
 });

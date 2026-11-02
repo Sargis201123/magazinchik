@@ -106,9 +106,10 @@ describe('Эдуард переманивает и доносит', () => {
   });
 });
 
-describe('тележка и подсказки', () => {
-  it('с тележкой несут больше', () => {
-    expect(carryOf(rich({ upgrades: ['cart'] }))).toBe(CART_CARRY);
+describe('рохля на складе и подсказки', () => {
+  it('со складом с рохлей несут больше (раньше — улучшение «Тележки»)', () => {
+    expect(carryOf(rich({ gear: { warehouse: 1 } }))).toBe(CART_CARRY);
+    expect(carryOf(rich({ gear: {} }))).toBeLessThan(CART_CARRY);
   });
 
   it('подсказки показываются по одной и один раз', () => {

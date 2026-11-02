@@ -20,9 +20,10 @@ const shop = (patch: Partial<StoreState> = {}): StoreState => ({
 });
 
 describe('своя марка «От бабушки»', () => {
-  it('открывается только с лучшей печью; ступени по очереди', () => {
-    expect(brandAvailable(shop({ gear: { oven: 0 } }))).toBe(false);
-    expect(buyBrandLevel(shop({ gear: { oven: 0 } }))).toBeNull();
+  it('открывается только с лучшей печью (она встаёт сама в третьем помещении); ступени по очереди', () => {
+    expect(brandAvailable(shop({ level: 2, gear: { oven: 0 } }))).toBe(false);
+    expect(buyBrandLevel(shop({ level: 2, gear: { oven: 0 } }))).toBeNull();
+    expect(brandAvailable(shop({ gear: {} }))).toBe(true);
     let s = shop();
     expect(sellableProducts(s)).not.toContain('pies');
     s = buyBrandLevel(s)!;

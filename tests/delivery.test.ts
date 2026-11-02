@@ -101,16 +101,15 @@ describe('чаевые за скорость', () => {
 });
 
 describe('транспорт курьера', () => {
-  it('без доставки улучшать нечего; велосипед → мопед → фургончик', () => {
-    expect(gearAvailable(shop({ upgrades: [] }), 'courier')).toBe(false);
+  it('транспорт не покупается, а меняется с помещением: велосипед → мопед → фургончик', () => {
+    expect(gearAvailable(shop({ level: 4 }), 'courier')).toBe(false);
+    expect(upgradeGear(shop({ level: 4 }), 'courier')).toBeNull();
     expect(GEAR.courier.models).toHaveLength(VEHICLES.length);
-    let s = shop();
-    expect(vehicleOf(s).id).toBe('bike');
-    s = upgradeGear(s, 'courier')!;
-    expect(vehicleOf(s).id).toBe('scooter');
-    s = upgradeGear(s, 'courier')!;
-    expect(vehicleOf(s).id).toBe('van');
-    expect(upgradeGear(s, 'courier')).toBeNull();
+    expect(vehicleOf(shop({ level: 3 })).id).toBe('bike');
+    expect(vehicleOf(shop({ level: 4 })).id).toBe('scooter');
+    expect(vehicleOf(shop({ level: 5 })).id).toBe('van');
+    // Купленный до 02.11 фургончик остаётся и в маленьком помещении.
+    expect(vehicleOf(shop({ level: 3, gear: { courier: 2 } })).id).toBe('van');
   });
 
   it('каждая следующая модель: быстрее или больше заказов, и звонят чаще', () => {

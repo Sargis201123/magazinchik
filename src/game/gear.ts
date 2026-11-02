@@ -1,10 +1,14 @@
-// Оборудование: у всего в магазине есть модели — от простой к современной. Новую модель покупают
-// утром во вкладке «Развитие»; она заменяет старую (на всех кассах сразу).
+// Оборудование: у всего в магазине есть модели — от простой к современной. Сам игрок выбирает только
+// четыре линейки — кассу, холодильники, склад и камеры (утром во вкладке «Развитие», новая модель
+// заменяет старую на всех кассах сразу). Остальное обновляется само, когда магазин переезжает в новое
+// помещение (решение автора 02.11: всё оборудование вместе давало +2% денег к 100-му дню, а в начале
+// съедало кассу — docs/BALANCE.md «Оборудование: само с помещением»).
 // Касса пробивает быстрее и реже заедает, бак вмещает больше мусора, кофемашина варит быстрее
 // и вкуснее, печь печёт больше, плита на кухне варит быстрее и в двух кастрюлях, полка «Еда» вмещает больше
 // и в холоде держит готовое до утра; холодильники не текут и дольше держат свежесть, склад вмещает
-// больше, климат и свет — уют и экономия, камеры отпугивают воров, вход и туалет — чистота,
-// курьер доставки пересаживается с велосипеда на мопед и фургончик.
+// больше, вентиляторы и кондиционер — только для вида, свет — экономия, камеры отпугивают воров,
+// вход и туалет — чистота, курьер доставки пересаживается с велосипеда на мопед и фургончик.
+// Указатели над рядами и солнечные панели убраны 02.11 (купленное вернули монетами — migrateGear).
 
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
@@ -24,19 +28,17 @@ export type GearId =
   | 'cameras'
   | 'entrance'
   | 'wc'
-  | 'signage'
-  | 'solar'
   | 'courier'
   | 'bargain';
 
 export interface GearModel {
   nameKey: TextKey;
-  /** Цена перехода на эту модель (у начальной — 0). */
+  /** Цена перехода на эту модель (у начальной и у тех, что встают сами, — 0). */
   price: number;
-  /** С какого уровня помещения можно поставить. */
+  /** С какого уровня помещения можно поставить (у линеек, что обновляются сами, — с какого встаёт сама). */
   minLevel: number;
-  /** Чем модель лучше — для подписи (подставляется в effectKey). */
-  effectKey: TextKey;
+  /** Чем модель лучше — для подписи; у тех, что встают сами, подписи нет. */
+  effectKey?: TextKey;
 }
 
 export interface Gear {
@@ -45,10 +47,14 @@ export interface Gear {
   nameKey: TextKey;
   /** Без чего нет смысла улучшать (кофемашину — без кофейного уголка). */
   needs?: UpgradeId;
+  /** Обновляется само с помещением (models[i].minLevel — где встаёт i-я модель); не покупается. */
+  auto?: true;
   models: GearModel[];
 }
 
 const model = (nameKey: TextKey, price: number, minLevel: number, effectKey: TextKey): GearModel => ({ nameKey, price, minLevel, effectKey });
+/** Модель, которая встаёт сама в помещении level (индекс STORE_LEVELS). */
+const free = (nameKey: TextKey, level: number): GearModel => ({ nameKey, price: 0, minLevel: level });
 
 export const GEAR: Record<GearId, Gear> = {
   register: {
@@ -87,11 +93,12 @@ export const GEAR: Record<GearId, Gear> = {
     id: 'bin',
     icon: '🗑',
     nameKey: 'gear.bin',
+    auto: true,
     models: [
-      model('gear.bin.0', 0, 0, 'gear.bin.0.fx'),
-      model('gear.bin.1', 250, 0, 'gear.bin.1.fx'),
-      model('gear.bin.2', 800, 1, 'gear.bin.2.fx'),
-      model('gear.bin.3', 2000, 2, 'gear.bin.3.fx'),
+      free('gear.bin.0', 0),
+      free('gear.bin.1', 1),
+      free('gear.bin.2', 2),
+      free('gear.bin.3', 3),
     ],
   },
   coffee: {
@@ -99,10 +106,11 @@ export const GEAR: Record<GearId, Gear> = {
     icon: '☕',
     nameKey: 'gear.coffee',
     needs: 'coffee',
+    auto: true,
     models: [
-      model('gear.coffee.0', 0, 0, 'gear.coffee.0.fx'),
-      model('gear.coffee.1', 1200, 2, 'gear.coffee.1.fx'),
-      model('gear.coffee.2', 3000, 3, 'gear.coffee.2.fx'),
+      free('gear.coffee.0', 0),
+      free('gear.coffee.1', 3),
+      free('gear.coffee.2', 4),
     ],
   },
   oven: {
@@ -110,10 +118,11 @@ export const GEAR: Record<GearId, Gear> = {
     icon: '🥖',
     nameKey: 'gear.oven',
     needs: 'oven',
+    auto: true,
     models: [
-      model('gear.oven.0', 0, 0, 'gear.oven.0.fx'),
-      model('gear.oven.1', 1400, 1, 'gear.oven.1.fx'),
-      model('gear.oven.2', 3500, 3, 'gear.oven.2.fx'),
+      free('gear.oven.0', 0),
+      free('gear.oven.1', 2),
+      free('gear.oven.2', 3),
     ],
   },
   // Плита на кухне: варит быстрее, потом — в двух кастрюлях сразу, у плиты шефа из закладки лишняя порция (kitchen.ts).
@@ -122,10 +131,11 @@ export const GEAR: Record<GearId, Gear> = {
     icon: '🍳',
     nameKey: 'gear.stove',
     needs: 'kitchen',
+    auto: true,
     models: [
-      model('gear.stove.0', 0, 0, 'gear.stove.0.fx'),
-      model('gear.stove.1', 1600, 3, 'gear.stove.1.fx'),
-      model('gear.stove.2', 3800, 3, 'gear.stove.2.fx'),
+      free('gear.stove.0', 0),
+      free('gear.stove.1', 4),
+      free('gear.stove.2', 5),
     ],
   },
   // Полка «Еда» у входа: больше порций, холодильник держит часть готового до утра, нарядную витрину замечают (kitchen.ts).
@@ -134,30 +144,33 @@ export const GEAR: Record<GearId, Gear> = {
     icon: '🥡',
     nameKey: 'gear.foodShelf',
     needs: 'kitchen',
+    auto: true,
     models: [
-      model('gear.foodShelf.0', 0, 0, 'gear.foodShelf.0.fx'),
-      model('gear.foodShelf.1', 700, 3, 'gear.foodShelf.1.fx'),
-      model('gear.foodShelf.2', 3400, 3, 'gear.foodShelf.2.fx'),
+      free('gear.foodShelf.0', 0),
+      free('gear.foodShelf.1', 4),
+      free('gear.foodShelf.2', 5),
     ],
   },
   climate: {
     id: 'climate',
     icon: '🌀',
     nameKey: 'gear.climate',
+    auto: true,
     models: [
-      model('gear.climate.0', 0, 0, 'gear.climate.0.fx'),
-      model('gear.climate.1', 400, 0, 'gear.climate.1.fx'),
-      model('gear.climate.2', 2000, 2, 'gear.climate.2.fx'),
+      free('gear.climate.0', 0),
+      free('gear.climate.1', 1),
+      free('gear.climate.2', 3),
     ],
   },
   lights: {
     id: 'lights',
     icon: '💡',
     nameKey: 'gear.lights',
+    auto: true,
     models: [
-      model('gear.lights.0', 0, 0, 'gear.lights.0.fx'),
-      model('gear.lights.1', 250, 1, 'gear.lights.1.fx'),
-      model('gear.lights.2', 3000, 3, 'gear.lights.2.fx'),
+      free('gear.lights.0', 0),
+      free('gear.lights.1', 2),
+      free('gear.lights.2', 4),
     ],
   },
   cameras: {
@@ -174,30 +187,22 @@ export const GEAR: Record<GearId, Gear> = {
     id: 'entrance',
     icon: '🚪',
     nameKey: 'gear.entrance',
+    auto: true,
     models: [
-      model('gear.entrance.0', 0, 0, 'gear.entrance.0.fx'),
-      model('gear.entrance.1', 150, 0, 'gear.entrance.1.fx'),
-      model('gear.entrance.2', 600, 2, 'gear.entrance.2.fx'),
+      free('gear.entrance.0', 0),
+      free('gear.entrance.1', 1),
+      free('gear.entrance.2', 3),
     ],
   },
   wc: {
     id: 'wc',
     icon: '🚽',
     nameKey: 'gear.wc',
+    auto: true,
     models: [
-      model('gear.wc.0', 0, 0, 'gear.wc.0.fx'),
-      model('gear.wc.1', 200, 1, 'gear.wc.1.fx'),
-      model('gear.wc.2', 800, 2, 'gear.wc.2.fx'),
-    ],
-  },
-  signage: {
-    id: 'signage',
-    icon: '🪧',
-    nameKey: 'gear.signage',
-    models: [
-      model('gear.signage.0', 0, 0, 'gear.signage.0.fx'),
-      model('gear.signage.1', 600, 1, 'gear.signage.1.fx'),
-      model('gear.signage.2', 2500, 3, 'gear.signage.2.fx'),
+      free('gear.wc.0', 0),
+      free('gear.wc.1', 2),
+      free('gear.wc.2', 3),
     ],
   },
   // Транспорт курьера доставки на дом (delivery.ts): велосипед, мопед, фургончик.
@@ -206,10 +211,11 @@ export const GEAR: Record<GearId, Gear> = {
     icon: '🚲',
     nameKey: 'gear.courier',
     needs: 'delivery',
+    auto: true,
     models: [
-      model('gear.courier.0', 0, 0, 'gear.courier.0.fx'),
-      model('gear.courier.1', 900, 1, 'gear.courier.1.fx'),
-      model('gear.courier.2', 2400, 2, 'gear.courier.2.fx'),
+      free('gear.courier.0', 0),
+      free('gear.courier.1', 4),
+      free('gear.courier.2', 5),
     ],
   },
   // Полка «Уценка» (bargain.ts): горка в два ряда, в три ряда и большая металлическая в четыре — по 6 мест в ряду.
@@ -218,45 +224,100 @@ export const GEAR: Record<GearId, Gear> = {
     icon: '🏷',
     nameKey: 'gear.bargain',
     needs: 'bargain',
+    auto: true,
     models: [
-      model('gear.bargain.0', 0, 0, 'gear.bargain.0.fx'),
-      model('gear.bargain.1', 600, 1, 'gear.bargain.1.fx'),
-      model('gear.bargain.2', 1600, 2, 'gear.bargain.2.fx'),
-    ],
-  },
-  solar: {
-    id: 'solar',
-    icon: '☀️',
-    nameKey: 'gear.solar',
-    models: [
-      model('gear.solar.0', 0, 0, 'gear.solar.0.fx'),
-      model('gear.solar.1', 2500, 2, 'gear.solar.1.fx'),
-      model('gear.solar.2', 6000, 3, 'gear.solar.2.fx'),
+      free('gear.bargain.0', 0),
+      free('gear.bargain.1', 2),
+      free('gear.bargain.2', 3),
     ],
   },
 };
 
 
 /** Порядок в списке: сначала то, что влияет на торговлю, потом удобства. */
-export const GEAR_IDS: GearId[] = ['register', 'fridge', 'warehouse', 'bin', 'bargain', 'coffee', 'oven', 'stove', 'foodShelf', 'courier', 'climate', 'lights', 'signage', 'cameras', 'entrance', 'wc', 'solar'];
+export const GEAR_IDS: GearId[] = ['register', 'fridge', 'warehouse', 'bin', 'bargain', 'coffee', 'oven', 'stove', 'foodShelf', 'courier', 'climate', 'lights', 'cameras', 'entrance', 'wc'];
+/** Что игрок выбирает сам — четыре линейки (решение автора 02.11). */
+export const MANUAL_GEAR: GearId[] = GEAR_IDS.filter((id) => !GEAR[id].auto);
+/** Что обновляется само с помещением. */
+export const AUTO_GEAR: GearId[] = GEAR_IDS.filter((id) => GEAR[id].auto);
+/** Строк в блоке «Оборудование» утром: по одной на ручную линейку и одна на всё, что само (для замеров). */
+export const gearRows = (): number => MANUAL_GEAR.length + 1;
 
-/** Какая модель стоит сейчас (номер в списке моделей). */
-export const gearTier = (state: StoreState, id: GearId): number => Math.min(state.gear?.[id] ?? 0, GEAR[id].models.length - 1);
+/** Какая модель стоит в помещении level у линейки, что обновляется сама (у ручных — 0). */
+export const autoTier = (level: number, id: GearId): number =>
+  GEAR[id].auto ? GEAR[id].models.reduce((tier, m, i) => (m.minLevel <= level ? i : tier), 0) : 0;
+
+/**
+ * Какая модель стоит сейчас (номер в списке моделей): купленная или та, что встала сама с помещением, —
+ * какая лучше. Купленное раньше (до 02.11 всё покупалось) никогда не откатывается назад.
+ */
+export const gearTier = (state: StoreState, id: GearId): number => Math.min(Math.max(state.gear?.[id] ?? 0, autoTier(state.level, id)), GEAR[id].models.length - 1);
 
 /** Следующая модель (null — уже лучшая). */
 export const nextGear = (state: StoreState, id: GearId): GearModel | null => GEAR[id].models[gearTier(state, id) + 1] ?? null;
 
-/** Можно ли сейчас поставить следующую модель (без учёта денег). */
+/** Можно ли сейчас поставить следующую модель (без учёта денег). То, что обновляется само, не покупается. */
 export function gearAvailable(state: StoreState, id: GearId): boolean {
   const next = nextGear(state, id);
   const needs = GEAR[id].needs;
-  return Boolean(next) && state.level >= next!.minLevel && (!needs || (state.upgrades ?? []).includes(needs));
+  return !GEAR[id].auto && Boolean(next) && state.level >= next!.minLevel && (!needs || (state.upgrades ?? []).includes(needs));
 }
 
 export function upgradeGear(state: StoreState, id: GearId): StoreState | null {
   const next = nextGear(state, id);
   if (!next || !gearAvailable(state, id) || state.money < next.price) return null;
   return { ...state, money: state.money - next.price, gear: { ...state.gear, [id]: gearTier(state, id) + 1 } };
+}
+
+/** Что встанет само при переезде в помещение level: линейки, у которых там модель лучше нынешней. */
+export function gearArriving(state: StoreState, level: number): { id: GearId; model: GearModel }[] {
+  return AUTO_GEAR.filter((id) => !GEAR[id].needs || (state.upgrades ?? []).includes(GEAR[id].needs!))
+    .filter((id) => autoTier(level, id) > gearTier(state, id))
+    .map((id) => ({ id, model: GEAR[id].models[autoTier(level, id)] }));
+}
+
+/** Убранные 02.11 линейки (указатели, солнечные панели): во сколько монет обходились купленные модели. */
+const REMOVED_GEAR: Record<string, number[]> = { signage: [0, 600, 2500], solar: [0, 2500, 6000] };
+/** Убранное 02.11 улучшение «Тележки» (upgrades.ts): его цена. Носить по 12 штук теперь умеет склад с рохлей. */
+const REMOVED_CART = 700;
+
+type GearSlice = Pick<StoreState, 'gear' | 'upgrades'>;
+
+/** Одна лавка: сколько вернуть монетами и что остаётся (null — возвращать нечего). */
+function stripRemoved(shop: Partial<GearSlice>): { refund: number; gear?: StoreState['gear']; upgrades?: StoreState['upgrades'] } | null {
+  const gear = shop.gear as Record<string, number> | undefined;
+  const upgrades = (shop.upgrades ?? []) as string[];
+  const oldGear = Boolean(gear) && Object.keys(REMOVED_GEAR).some((id) => id in gear!);
+  const oldCart = upgrades.includes('cart');
+  if (!oldGear && !oldCart) return null;
+  let refund = oldCart ? REMOVED_CART : 0;
+  const rest: Record<string, number> = { ...gear };
+  for (const [id, prices] of Object.entries(REMOVED_GEAR)) {
+    const tier = Math.min(Math.max(0, Math.floor(Number(rest[id]) || 0)), prices.length - 1);
+    refund += prices.slice(1, tier + 1).reduce((a, b) => a + b, 0);
+    delete rest[id];
+  }
+  return {
+    refund,
+    gear: gear ? (rest as StoreState['gear']) : shop.gear,
+    upgrades: shop.upgrades ? (upgrades.filter((id) => id !== 'cart') as StoreState['upgrades']) : shop.upgrades,
+  };
+}
+
+/**
+ * Старое сохранение (до 02.11): за указатели, солнечные панели и тележки — монеты назад (сумма всех
+ * купленных ступеней), сами записи убираем — в обеих лавках, если открыто Заречье (у него своё оборудование,
+ * zarechye.ts SHOP_KEYS). Остальное купленное остаётся как есть и считается своим (gearTier).
+ * Повторно ничего не возвращает: записей уже нет.
+ */
+export function migrateGear(state: StoreState): StoreState {
+  const here = stripRemoved(state);
+  const away = state.zar ? stripRemoved(state.zar.away) : null;
+  if (!here && !away) return state;
+  let next: StoreState = { ...state, money: state.money + (here?.refund ?? 0) + (away?.refund ?? 0) };
+  if (here) next = { ...next, gear: here.gear, upgrades: here.upgrades };
+  if (away && state.zar) next = { ...next, zar: { ...state.zar, away: { ...state.zar.away, gear: away.gear, upgrades: away.upgrades } } };
+  return next;
 }
 
 /** Касса: во сколько раз дольше пробивается товар (оплата — отдельно, её ускоряет терминал). */
@@ -313,29 +374,11 @@ export const fridgePower = (state: StoreState): number => FRIDGE_POWER_SHARE[gea
 
 // ---------- Склад ----------
 
-/** Склад вмещает больше, грузчик носит быстрее. */
+/** Склад вмещает больше, грузчик носит быстрее; с рохлей за раз несут вдвое больше (раньше — улучшение «Тележки»). */
 export const WAREHOUSE_ROOM = [1, 1.2, 1.4, 1.6];
 export const WAREHOUSE_SPEED = [1, 1.15, 1.3, 1.5];
 export const warehouseRoom = (state: StoreState): number => WAREHOUSE_ROOM[gearTier(state, 'warehouse')];
 export const warehouseSpeed = (state: StoreState): number => WAREHOUSE_SPEED[gearTier(state, 'warehouse')];
-
-// ---------- Климат ----------
-
-/**
- * Насколько дольше ждут в очереди. Без ничего в жару и мороз ждут меньше; вентиляторы спасают
- * от жары, но не от холода; кондиционер с обогревом — всегда уютно.
- */
-export function climatePatience(state: StoreState, weather: string): number {
-  const extreme = weather === 'heat' ? 'heat' : weather === 'snow' ? 'cold' : null;
-  switch (gearTier(state, 'climate')) {
-    case 0:
-      return extreme ? 0.75 : 1;
-    case 1:
-      return extreme === 'cold' ? 0.75 : 1;
-    default:
-      return 1.1;
-  }
-}
 
 // ---------- Свет ----------
 
@@ -357,21 +400,12 @@ export const entranceMud = (state: StoreState): number => ENTRANCE_MUD[gearTier(
 export const WC_DIRT = [1, 0.6, 0.25];
 export const wcDirt = (state: StoreState): number => WC_DIRT[gearTier(state, 'wc')];
 
-// ---------- Указатели и солнечные панели ----------
-
-/** Указатели над рядами: нужное находят сразу — в очереди ждут спокойнее. */
-export const SIGNAGE_PATIENCE = [1, 1.08, 1.15];
-export const signagePatience = (state: StoreState): number => SIGNAGE_PATIENCE[gearTier(state, 'signage')];
-/** Солнечные панели на крыше: такая доля счёта за свет остаётся. */
-export const SOLAR_POWER = [1, 0.7, 0.45];
-export const solarPower = (state: StoreState): number => SOLAR_POWER[gearTier(state, 'solar')];
-
 // Полка «Уценка»: рядов на горке и картинка модели (art/bargain_shelf.py). Мест — по 6 в ряду (bargain.ts).
 export const BARGAIN_ROWS = [2, 3, 4];
 export const bargainRows = (state: StoreState): number => BARGAIN_ROWS[gearTier(state, 'bargain')];
 export const bargainSprite = (state: StoreState): string => `bargain_shelf${gearTier(state, 'bargain')}`;
 
-/** Сколько всего новых моделей поставлено (для достижений). */
-export const gearUpgrades = (state: StoreState): number => GEAR_IDS.reduce((sum, id) => sum + gearTier(state, id), 0);
-/** Всё оборудование — лучших моделей. */
-export const gearMaxed = (state: StoreState): boolean => GEAR_IDS.every((id) => !nextGear(state, id));
+/** Сколько новых моделей поставил сам игрок (для достижений): только ручные линейки, «само» не в счёт. */
+export const gearUpgrades = (state: StoreState): number => MANUAL_GEAR.reduce((sum, id) => sum + gearTier(state, id), 0);
+/** Всё, что игрок выбирает сам, — лучших моделей. */
+export const gearMaxed = (state: StoreState): boolean => MANUAL_GEAR.every((id) => !nextGear(state, id));
