@@ -76,19 +76,7 @@ import {
   roleOpen,
   isAbsent,
 } from '../game/economy';
-import {
-  canHaggle,
-  haggle,
-  HAGGLE_ASKS,
-  newDeal,
-  SUPPLIER_IDS,
-  SUPPLIERS,
-  unitPrice,
-  type Deal,
-  type SupplierId,
-  supplierOpen,
-  badBatch,
-} from '../game/suppliers';
+import { SUPPLIER_IDS, SUPPLIERS, unitPrice, type SupplierId, supplierOpen, badBatch, priceFor, supplierDiscount } from '../game/suppliers';
 import { guestsGain, guestsToday } from '../game/day';
 import { buyKiosk, KIOSK_TIERS, kioskCount, kioskSlots, KIOSKS_BY_LEVEL, kioskTier, kioskTierIndex, laneGuests, nextKioskPrice, nextKioskTier, openRegisters, upgradeKiosks, withNextTill } from '../game/lanes';
 import {
@@ -101,23 +89,18 @@ import {
   seasonFor,
   type Quest,
 } from '../game/endless';
-import { answerEvent, CLIENTS, fridgeRepairCost, repairShelf, type ClientId, type MorningEvent } from '../game/events';
+import { answerEvent, answerOrder, CLIENTS, fridgeRepairCost, repairShelf, type MorningEvent } from '../game/events';
 import { applyReorder } from '../game/reorder';
-import { AUTO_SHARES, AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoCancel, autoDay, autoLimit, autoMorning, autoResume, autoReturn, autoSetShare, autoShare, autoToggle } from '../game/autoorder';
+import { AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoAvailable, autoDay, autoMorning, autoToggle } from '../game/autoorder';
+import { declineNeighbour, giveNeighbour, orderBoard, type OrderRow } from '../game/orders';
 import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
-import { stockOf, usualSales } from '../game/bakery';
+import { stockOf } from '../game/bakery';
+import { regularName } from './returns';
 
-/**
- * Утренняя уценка — только лишнее сверх обычных продаж (как вечерние электронные ценники): старое покупатели
- * берут первым, и то, что и так купят по полной цене, уценивать — себе в убыток.
- */
-const surplus = (state: StoreState) => markdownSurplus(state, (id) => usualSales(state, id) ?? 0);
-import { activePromo, setPromo, type PromoKind } from '../game/promo';
-import { deliverContracts, type Delivery } from '../game/contracts';
 import { daysToFair, fairToday, isFairDay } from '../game/fair';
 import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
 import { pendingTip, seeTip, soloExpandRisk, TIP_ICONS } from '../game/tips';
-import { markdownSurplus, toggleDonate } from '../game/economy';
+import { toggleDonate } from '../game/economy';
 import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingCost } from '../game/staff';
 import { answerCeremony, answerOffer, holderOf, BEST_EVERY, BEST_REWARDS, bestBonus, bestGift, careerOf, dismissLeft, nextRank, promotedWage, rankKey, xpToNext, type BestReward } from '../game/career';
 import { BRANCH_HEAD_BONUS } from '../game/branch';
@@ -169,7 +152,7 @@ import {
   type GiantPhase,
 } from '../game/giant';
 import { CANDY_COST, CANDY_PRICE, nextRack, rackCapacity, rackOf, refillRack, upgradeRack } from '../game/impulse';
-import { haggleBonus, learnSkill, nextLevelXp, ownerLevelOf, ownerTiming, ownerXp, SKILL_IDS, SKILL_MAX, skillLevel, skillPoints, SKILLS } from '../game/owner';
+import { learnSkill, nextLevelXp, ownerLevelOf, ownerTiming, ownerXp, SKILL_IDS, SKILL_MAX, skillLevel, skillPoints, SKILLS } from '../game/owner';
 import { LOAN_INTEREST, LOAN_MONTHS, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../game/bank';
 import { showReport } from './report';
 import { buyCups, COFFEE_CHANCE, CUP_COST, cupsOf, CUPS_MAX, TABLES_COFFEE } from '../game/coffee';
@@ -201,7 +184,7 @@ import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
 import { sheetAsset, sheetPng } from './sheet';
 import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adExtraGuests, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
-import { answerCafe, CAFE_DAYS, CAFE_MISSES, cafeCanDeliver, cafeDaysLeft, cafeLoyalty, cafeOf } from '../game/cafe';
+import { answerCafe, CAFE_DAYS, cafeDaysLeft, cafeLoyalty } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
 import { premiumDecor, restartGame } from '../game/restart';
@@ -270,7 +253,6 @@ import { albumButton, showAlbum } from './album';
 import { freshCount } from '../game/collections';
 
 /** Портрет заказчика: шеф — это Марат. */
-const CLIENT_PORTRAIT: Record<ClientId, string> = { chef: 'marat', school: 'school', valya: 'valya' };
 
 interface MorningOptions {
   getState: () => StoreState;
@@ -453,7 +435,8 @@ function artRow(texture: string, opts: { name: string; price?: number; sub?: str
 const SHOP_NAME_MAX = 16;
 
 /** Улучшения в списке «Уголков»: кассы самообслуживания живут отдельно, рядом с кассами (их бывает несколько). */
-const LISTED_UPGRADES = UPGRADE_IDS.filter((id) => id !== 'selfCheckout');
+// Поставки хлеба соседям — на доске «Заказы» (orders.ts), не в списке улучшений.
+const LISTED_UPGRADES = UPGRADE_IDS.filter((id) => id !== 'selfCheckout' && id !== 'wholesale');
 
 const percent = (k: number): string => `${k >= 1 ? '+' : '−'}${Math.round(Math.abs(k - 1) * 100)}%`;
 
@@ -547,8 +530,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
   const { card, close } = openModal();
   // Нажатый заголовок или кнопка остаются на месте, когда блоки сворачиваются и окно перерисовывается.
   anchorScroll(card);
-  const deals = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, newDeal(SUPPLIERS[id])])) as Record<SupplierId, Deal>;
-  const quotes = Object.fromEntries(SUPPLIER_IDS.map((id) => [id, SUPPLIERS[id].lines.hello])) as Record<SupplierId, TextKey>;
   let tab: Tab = 'buy';
   /** Страница профиля: «Трофеи» (главная), «Друзья», ⚙ настройки. */
   let profilePage: ProfilePage = 'trophies';
@@ -595,14 +576,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
   };
   /** Бракованная партия, по которой ждём решения игрока. */
   let pendingBad: { sid: SupplierId; pid: ProductId; qty: number; price: number } | null = null;
-  /** Утром по договорам приехал товар — показать строкой в сводке. */
-  const morningDelivery = deliverContracts(getState(), (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid));
-  const delivered: Delivery[] = morningDelivery.deliveries;
-  if (morningDelivery.deliveries.length) setState(morningDelivery.state);
-  /** Автозаказ: утром сам закупает нужное на день в пределах лимита (по обычной цене, без брака). */
-  const autoPrice = (sid: SupplierId, pid: ProductId) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid);
-  /** Утренняя закупка автозаказа — сразу на полки (повторно докупает только недостающее). */
-  const autoBuy = (state: StoreState): StoreState => shelveAll(autoMorning(state, autoPrice, guestsToday(state)));
+  /** Цены поставщиков сегодня — со скидкой постоянного покупателя (suppliers.ts supplierDiscount). */
+  const priceOf = (sid: SupplierId, pid: ProductId) => priceFor(getState())(sid, pid);
+  /** «Закупать сам»: утром жмёт «Закупить нужное» за игрока (без брака), купленное — сразу на полки. */
+  const autoBuy = (state: StoreState): StoreState => shelveAll(autoMorning(state, priceFor(state), guestsToday(state)));
   if (autoActive(getState())) setState(autoBuy(getState()));
 
   /**
@@ -911,12 +888,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       ...debtLine(state),
       ...bigDayLine(state),
       goalLine(state),
-      ...deliveryLine(),
+      ...autoLine(),
       billForecast(state),
       ...weatherLine(state),
       ...warLine(state),
       ...fairLine(state),
-      ...promoLine(state),
       ...holidayLine(state),
       ...seasonLine(state),
       ...weekSoonLine(state),
@@ -1043,7 +1019,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
   /** Красные цифры на вкладках: где утром нужно что-то сделать. */
   const tabBadges = (state: StoreState): Partial<Record<Tab, number>> => {
     const empty = sellableProducts(state).filter((pid) => canStock(state, pid) && stockOf(state, pid) === 0).length;
-    const broken = state.shelves.filter((sh) => sh.broken).length + (surplus(state).count ? 1 : 0);
+    const broken = state.shelves.filter((sh) => sh.broken).length;
     const rack = rackOf(state);
     const extras = (state.cat && !fedToday(state) ? 1 : 0) + (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0);
     const next = nextStoreLevel(state);
@@ -1142,69 +1118,103 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
   // ---------- Закупка ----------
 
   /**
-   * Автозаказ — первой карточкой закупки, крупно: включён ли, лимит на день, что купил утром (товар можно
-   * вернуть по одному или весь). Не куплен — та же карточка с кнопкой покупки.
+   * «Закупать сам» — бесплатный переключатель с 7-го дня (autoorder.ts): каждое утро жмёт «Закупить нужное»
+   * за игрока, днём подвозит кончившееся. Включён — одной строкой видно, что купил.
    */
   const autoCard = (state: StoreState): HTMLElement[] => {
-    if (state.day <= 3) return [];
-    const up = UPGRADES.autoOrder;
-    const owned = hasUpgrade(state, 'autoOrder');
-    if (!owned && state.level < up.minLevel) return [];
+    if (!autoAvailable(state)) return [];
     const on = autoActive(state);
     const box = el('div', `ui-box ui-auto${on ? ' on' : ''}`);
     const head = el('div', 'ui-auto-head');
-    head.append(el('b', '', t('auto.title')), el('span', 'ui-auto-state', owned ? t(on ? 'auto.stateOn' : 'auto.stateOff') : `${up.price} 💰`));
+    head.append(el('b', '', t('auto.title')), el('span', 'ui-auto-state', t(on ? 'auto.stateOn' : 'auto.stateOff')));
     box.append(head);
-    if (!owned) {
-      box.append(
-        el('div', 'ui-muted', t('auto.teaser')),
-        button(t('auto.buy', { n: up.price }), () => {
-          const bought = buyUpgrade(getState(), 'autoOrder');
-          update(bought && autoBuy({ ...bought, autoOrder: { ...bought.autoOrder, on: true } }), 'success');
-        }, 'ui-btn', state.money < up.price),
-      );
-      return [box];
-    }
     if (!on) {
       box.append(el('div', 'ui-muted', t('auto.offText')), button(t('auto.enable'), () => update(autoBuy(autoToggle(getState())), 'success'), 'ui-btn'));
       return [box];
     }
-    // Лимит: доля денег на утро — сразу видно, сколько это в монетах.
-    const limitRow = el('div', 'ui-row ui-auto-limit');
-    const shares = el('div', 'ui-chips');
-    for (const share of AUTO_SHARES) {
-      shares.append(
-        // Подняли лимит — сразу докупает до нового; опустили — купленное остаётся (вернуть можно ниже).
-        button(
-          t('auto.share', { p: Math.round(share * 100) }),
-          () => {
-            const next = autoSetShare(getState(), share);
-            update(share > autoShare(getState()) ? autoBuy(next) : next);
-          },
-          `ui-chip${autoShare(state) === share ? ' active' : ''}`,
-        ),
-      );
-    }
-    limitRow.append(el('span', '', t('auto.limit', { n: autoLimit(state) })), shares);
-    box.append(limitRow);
     const today = autoDay(state);
-    const off = button(t('auto.disable'), () => update(autoToggle(getState())), 'ui-chip');
-    const actions = el('div', 'ui-chips ui-auto-actions');
-    if (today.canceled) {
-      box.append(el('div', 'ui-note', t('auto.canceled')), button(t('auto.resume'), () => update(autoBuy(autoResume(getState())), 'success'), 'ui-btn secondary'));
-    } else if (today.lines.length) {
-      box.append(el('div', 'ui-muted', t('auto.bought', { spent: today.spent, limit: autoLimit(state) })));
-      const lines = el('div', 'ui-chips ui-auto-lines');
-      for (const line of today.lines) lines.append(button(`${PRODUCTS[line.pid].icon}×${line.qty} ✕`, () => update(autoReturn(getState(), line.pid)), 'ui-chip'));
-      box.append(lines);
-      if (today.cut) box.append(el('div', 'ui-note', t('auto.cut')));
-      const refund = today.lines.reduce((sum, l) => sum + l.paid, 0);
-      actions.append(button(t('auto.cancel', { n: refund }), () => update(autoCancel(getState())), 'ui-chip'));
-    } else {
-      box.append(el('div', 'ui-muted', t(today.cut ? 'auto.cut' : 'auto.nothing')));
-    }
-    actions.append(off);
-    box.append(el('div', 'ui-muted', t('auto.day', { n: AUTO_TOPUPS, p: Math.round((AUTO_TOPUP_MARKUP - 1) * 100) })), actions);
+    if (today.lines.length) box.append(el('div', 'ui-muted', t('auto.delivered', { list: today.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: today.spent })));
+    else if (!today.cut) box.append(el('div', 'ui-muted', t('auto.nothing')));
+    if (today.cut) box.append(el('div', 'ui-note', t('auto.cut')));
+    box.append(
+      el('div', 'ui-muted', t('auto.day', { n: AUTO_TOPUPS, p: Math.round((AUTO_TOPUP_MARKUP - 1) * 100) })),
+      button(t('auto.disable'), () => update(autoToggle(getState())), 'ui-chip'),
+    );
+    return [box];
+  };
+
+  /**
+   * Доска «Заказы» (orders.ts): кто что берёт оптом — заказ клиента, кафе, сосед «отложи мне», хлеб соседним
+   * магазинам. Строка — кто, что, сколько, почём; справа ответ. Пусто — блока нет.
+   */
+  const ordersBox = (state: StoreState): HTMLElement[] => {
+    const rows = orderBoard(state);
+    if (!rows.length) return [];
+    const box = el('div', 'ui-box ui-orders');
+    box.append(el('b', '', t('orders.title')));
+    const list = (items: Partial<Record<ProductId, number>>) =>
+      Object.entries(items)
+        .map(([id, n]) => `${PRODUCTS[id as ProductId].icon}×${n}`)
+        .join(' ');
+    const status = (ok: boolean, short: TextKey = 'orders.short') => {
+      const note = el('div', 'ui-note', t(ok ? 'orders.ready' : short));
+      if (!ok) note.style.color = '#b13e53';
+      return note;
+    };
+    const line = (row: OrderRow): HTMLElement => {
+      const wrap = el('div', 'ui-order');
+      const text = el('div', 'ui-order-text');
+      const actions = el('div', 'ui-chips');
+      switch (row.kind) {
+        case 'client': {
+          const o = row.order;
+          text.append(el('div', '', t('orders.client', { name: t(CLIENTS[o.client].nameKey), qty: o.qty, icon: PRODUCTS[o.product].icon, pay: o.pay })));
+          if (row.accepted) text.append(status(row.ready, 'orders.shortEvening'));
+          else
+            actions.append(
+              button(t('orders.accept'), () => update(answerOrder(getState(), true), 'success'), 'ui-chip'),
+              button(t('orders.decline'), () => update(answerOrder(getState(), false)), 'ui-chip'),
+            );
+          break;
+        }
+        case 'cafeOffer': {
+          const loyal = cafeLoyalty(state);
+          text.append(el('div', '', t('orders.cafeOffer', { list: list(row.offer.items), pay: row.offer.pay, days: CAFE_DAYS })));
+          if (loyal) text.append(el('div', 'ui-muted', t('cafe.loyal', { n: Math.round(loyal * 100) })));
+          actions.append(
+            button(t('orders.accept'), () => update(answerCafe(getState(), true), 'success'), 'ui-chip'),
+            button(t('orders.decline'), () => update(answerCafe(getState(), false)), 'ui-chip'),
+          );
+          break;
+        }
+        case 'cafeDeal':
+          text.append(el('div', '', t('orders.cafeDeal', { list: list(row.deal.items), pay: row.deal.pay, n: cafeDaysLeft(state) })), status(row.ready));
+          break;
+        case 'neighbour': {
+          const o = row.order;
+          text.append(el('div', '', t('orders.neighbour', { name: regularName(o.who), qty: o.qty, icon: PRODUCTS[o.pid].icon, pay: row.pay })));
+          if (!row.ready) text.append(status(false, 'orders.neighbourLater'));
+          actions.append(
+            button(t('orders.give'), () => update(giveNeighbour(getState())?.state ?? null, 'success'), 'ui-chip', !row.ready),
+            button(t('orders.decline'), () => update(declineNeighbour(getState())), 'ui-chip'),
+          );
+          break;
+        }
+        case 'bread': {
+          text.append(el('div', '', t('orders.bread', { n: row.perDay })));
+          if (row.owned) text.append(el('div', 'ui-muted', t('orders.breadOn')));
+          else {
+            const price = UPGRADES.wholesale.price;
+            actions.append(button(t('orders.breadBuy', { n: price }), () => update(buyUpgrade(getState(), 'wholesale'), 'success'), 'ui-chip', state.money < price));
+          }
+          break;
+        }
+      }
+      wrap.append(text);
+      if (actions.childElementCount) wrap.append(actions);
+      return wrap;
+    };
+    box.append(...rows.map(line));
     return [box];
   };
 
@@ -1213,8 +1223,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     const working = state.shelves.filter((sh) => !sh.broken && PRODUCT_IDS.some((pid) => canPlace(pid, sh) && productAvailable(pid, state.day)));
     return { s: working.reduce((a, sh) => a + shelfCount(sh), 0), smax: working.reduce((a, sh) => a + shelfCapacity(sh), 0) };
   };
-
-  const priceOf = (sid: SupplierId, pid: ProductId) => unitPrice(SUPPLIERS[sid], deals[sid], pid);
 
   /** Купить у поставщика: брак — с той же вероятностью, что и раньше. */
   const buyFrom = (sid: SupplierId, pid: ProductId, qty: number, price: number) => {
@@ -1309,71 +1317,41 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       const req = SUPPLIERS[sid].requires;
       return !Array.isArray(req) || req.some((k) => shelfKindOpen(state, k));
     });
+    // Одна кнопка закупки (02.11): «Закупить нужное» — главная; ручные строки и поставщики — под «Подробнее».
     return [
+      ...ordersBox(state),
       ...autoCard(state),
-      ...cafeBox(state),
       // Купленное сразу уходит на полки — показываем и полки, и склад, иначе кажется, что ничего не купил.
       helpRow(t('buy.space', { ...shelfSpace(state), n: warehouseCount(state), max: warehouseCapacity(state) }), t('buy.note')),
       restockBox(state),
-      filters,
-      ...productRows(state),
-      foldBox('suppliers', `🤝 ${t('restock.suppliers')}`, (body) => body.append(...suppliers.map((sid) => supplierBox(sid, getState())))),
+      foldBox('more', `📋 ${t('buy.more')}`, (body) => {
+        const now = getState();
+        body.append(
+          filters,
+          ...productRows(now),
+          el('div', 'ui-muted', `🤝 ${t('buy.discountNote', { p: Math.round(supplierDiscount(now) * 100) })}`),
+          ...suppliers.map((sid) => supplierBox(sid, now)),
+        );
+      }),
       foldBox('prices', `🏷 ${t('tab.prices')}`, (body) => body.append(helpRow(t('prices.title'), t('prices.note', { g: percent(priceAppeal(getState())) })), ...pricesTab(getState()))),
     ];
   };
 
+  /** Поставщик: приветствие и что у него сегодня почём (со скидкой). Покупать — в списке выше или кнопкой. */
   const supplierBox = (sid: SupplierId, state: StoreState) => {
     const s = SUPPLIERS[sid];
-    const deal = deals[sid];
     const box = el('div', 'ui-box');
-    box.append(who(sid, el('b', '', t(s.nameKey))), el('div', 'ui-quote', `«${t(quotes[sid])}»`));
-
+    box.append(who(sid, el('b', '', t(s.nameKey))), el('div', 'ui-quote', `«${t(s.hello)}»`));
     if (!supplierOpen(s, state.shelves)) {
       const kinds = Array.isArray(s.requires) ? s.requires.filter((k) => shelfKindOpen(state, k)) : [s.requires!];
       box.append(el('div', 'ui-muted', t('buy.needShelf', { shelf: kinds.map((k) => t(SHELF_KINDS[k].nameKey)).join(' / ') })));
       return box;
     }
-
-    // Что у него есть сегодня и почём; покупать — в списке выше (там сразу самая низкая цена).
+    const discount = supplierDiscount(state);
     const offers = PRODUCT_IDS.filter((pid) => canStock(state, pid))
-      .map((pid) => ({ pid, price: unitPrice(s, deal, pid) }))
+      .map((pid) => ({ pid, price: unitPrice(s, pid, discount) }))
       .filter((o): o is { pid: ProductId; price: number } => o.price !== null);
     box.append(el('div', 'ui-item-sub', offers.map((o) => `${PRODUCTS[o.pid].icon}${o.price}`).join('  ')));
-
-    // Торг одной строкой: слева «Торг» и сердечки терпения поставщика, справа три одинаковые кнопки.
-    const haggleRow = el('div', 'ui-haggle');
-    if (deal.discount > 0) {
-      haggleRow.classList.add('done');
-      haggleRow.append(el('b', '', `✅ ${t('buy.discount', { p: Math.round(deal.discount * 100) })}`));
-    } else if (deal.angry) {
-      haggleRow.classList.add('angry');
-      haggleRow.append(el('b', '', `😤 ${t('buy.angryNote')}`));
-    } else {
-      const label = el('div', 'ui-haggle-label');
-      const hearts = '♥'.repeat(deal.attemptsLeft) + '♡'.repeat(Math.max(0, s.patience - deal.attemptsLeft));
-      const pips = el('span', 'ui-haggle-pips', hearts);
-      pips.title = t('buy.attempts', { n: deal.attemptsLeft });
-      label.append(el('b', '', `🤝 ${t('buy.haggle')}`), pips);
-      const asks = el('div', 'ui-haggle-asks');
-      for (const ask of HAGGLE_ASKS) {
-        asks.append(
-          button(
-            `−${Math.round(ask * 100)}%`,
-            () => {
-              const result = haggle(s, deals[sid], ask, getState().rating, Math.random(), haggleBonus(getState()));
-              deals[sid] = result.deal;
-              quotes[sid] = result.success ? s.lines.yes : result.deal.angry ? s.lines.angry : s.lines.no;
-              haptic[result.success ? 'success' : 'error']();
-              render();
-            },
-            'ui-chip',
-            !canHaggle(deal),
-          ),
-        );
-      }
-      haggleRow.append(label, asks);
-    }
-    box.append(haggleRow);
     return box;
   };
 
@@ -1405,16 +1383,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
 
   /** Склад во вкладке «Зал»: что не влезло на полки — строкой значков; разложить одной кнопкой. */
   const stockBox = (state: StoreState): HTMLElement[] => {
+    // Уценять вручную больше не нужно: вечером то, что не успеют продать, уценится само (02.11).
     const out: HTMLElement[] = [];
-    const expiring = surplus(state).count;
-    if (expiring) {
-      const box = el('div', 'ui-box');
-      box.append(
-        el('div', 'ui-note', t('markdown.note', { n: expiring })),
-        button(t('markdown.button', { n: expiring }), () => update(surplus(getState()).state, 'success'), 'ui-chip'),
-      );
-      out.push(box);
-    }
     const present = PRODUCT_IDS.filter((pid) => warehouseOf(state, pid) > 0);
     const box = el('div', 'ui-box');
     box.append(el('b', '', `📦 ${t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })}`));
@@ -2346,42 +2316,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     const chips = el('div', 'ui-chips');
     for (const m of BAKE_MODES) chips.append(button(t(`bake.${m}` as TextKey), () => update(setBakeMode(getState(), m)), `ui-chip${m === mode ? ' active' : ''}`));
     return [el('h3', '', t('bake.title')), chips, el('div', 'ui-muted', t(`bake.${mode}Note` as TextKey))];
-  };
-
-  /** Кафе «Пончик» по соседству: предложение договора на неделю или как идёт текущий. */
-  const cafeBox = (state: StoreState): HTMLElement[] => {
-    const cafe = cafeOf(state);
-    const list = (items: Partial<Record<ProductId, number>>) =>
-      Object.entries(items)
-        .map(([id, n]) => `${PRODUCTS[id as ProductId].icon}×${n}`)
-        .join(' ');
-    const box = el('div', 'ui-box');
-    if (cafe.offer) {
-      const loyal = cafeLoyalty(state);
-      box.append(
-        el('b', '', t('cafe.offerTitle')),
-        el('div', '', t('cafe.offer', { list: list(cafe.offer.items), pay: cafe.offer.pay, days: CAFE_DAYS })),
-        el('div', 'ui-muted', t('cafe.offerNote', { misses: CAFE_MISSES })),
-        ...(loyal ? [el('div', 'ui-note', t('cafe.loyal', { n: Math.round(loyal * 100) }))] : []),
-      );
-      const chips = el('div', 'ui-chips');
-      chips.append(
-        button(t('cafe.accept'), () => update(answerCafe(getState(), true), 'success'), 'ui-chip'),
-        button(t('cafe.decline'), () => update(answerCafe(getState(), false)), 'ui-chip'),
-      );
-      box.append(chips);
-      return [box];
-    }
-    if (!cafe.deal) return [];
-    const ok = cafeCanDeliver(state);
-    const status = el('div', 'ui-note', ok ? t('cafe.ready') : t('cafe.short'));
-    if (!ok) status.style.color = '#b13e53';
-    box.append(
-      el('b', '', t('cafe.dealTitle', { n: cafeDaysLeft(state) })),
-      el('div', 'ui-muted', t('cafe.deal', { list: list(cafe.deal.items), pay: cafe.deal.pay })),
-      status,
-    );
-    return [box];
   };
 
   /** Своя марка «От бабушки»: ступени с новыми рецептами (после лучшей печи). */
@@ -3582,8 +3516,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         }, 'ui-chip'),
       );
     }
-    const expiring = surplus(state).count;
-    if (expiring) row(t('todo.expiring', { n: expiring }), button(t('todo.expiringBtn'), () => update(surplus(getState()).state, 'success'), 'ui-chip'));
     state.shelves.forEach((sh, i) => {
       if (!sh.broken) return;
       const cost = fridgeRepairCost(state.level);
@@ -3610,24 +3542,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     return box;
   };
 
-  const deliveryLine = (): HTMLElement[] => {
-    if (!delivered.length) return autoLine();
-    const got = delivered.filter((d) => d.qty > 0);
-    const lines: HTMLElement[] = [];
-    if (got.length) {
-      lines.push(
-        el('div', 'ui-muted', t('contract.delivered', { list: got.map((d) => `${PRODUCTS[d.pid].icon}×${d.qty}`).join(' '), cost: got.reduce((sum, d) => sum + d.cost, 0) })),
-      );
-    }
-    if (delivered.some((d) => d.skipped)) lines.push(el('div', 'ui-note', t('contract.skipped')));
-    return [...lines, ...autoLine()];
-  };
-
-  /** Строка сводки утра: что автозаказ уже купил (подробно и с отменой — во вкладке закупки). */
+  /** Строка сводки утра: что «Закупать сам» уже купил. */
   const autoLine = (): HTMLElement[] => {
     const state = getState();
     const today = state.autoOrder?.today;
-    if (!autoActive(state) || today?.day !== state.day || today.canceled || !today.lines.length) return [];
+    if (!autoActive(state) || today?.day !== state.day || !today.lines.length) return [];
     return [el('div', 'ui-muted', t('auto.delivered', { list: today.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' '), cost: today.spent }))];
   };
 
@@ -3635,11 +3554,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     if (fairToday(state)) return [el('div', 'ui-note', t(isFairDay(state.day) ? 'fair.today' : 'zar.fair.today'))];
     const n = daysToFair(state.day);
     return n > 0 && n <= 2 ? [el('div', 'ui-muted', t('fair.soon', { n }))] : [];
-  };
-
-  const promoLine = (state: StoreState): HTMLElement[] => {
-    const promo = activePromo(state);
-    return promo ? [el('div', 'ui-muted', t('promo.active', { product: productLabel(promo.product), kind: t(`promo.kind.${promo.kind}` as TextKey) }))] : [];
   };
 
   /** Испытания недели: прогресс каждой цели и награда. */
@@ -3726,39 +3640,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     const box = el('div', 'ui-box');
     const answer = (accept: boolean) => update(answerEvent(getState(), accept), accept ? 'success' : 'tap');
     switch (event.kind) {
-      case 'order': {
-        const client = CLIENTS[event.client];
-        const have = warehouseOf(state, event.product) + onShelves(state, event.product);
-        box.append(
-          el('h3', '', `🍽 ${t('event.order.title')}`),
-          who(CLIENT_PORTRAIT[event.client], el('b', '', t(client.nameKey))),
-          el('p', '', `«${t(client.askKey, { qty: event.qty, product: productLabel(event.product), pay: event.pay })}»`),
-          el('div', 'ui-muted', `${t('buy.inWarehouse', { n: have })} · ${t('event.order.note')}`),
-          button(t('event.order.accept'), () => answer(true)),
-          button(t('event.order.decline'), () => answer(false), 'ui-btn secondary'),
-        );
-        break;
-      }
-      case 'deal': {
-        const free = warehouseCapacity(state) - warehouseCount(state);
-        box.append(
-          el('h3', '', `💸 ${t('event.deal.title')}`),
-          el(
-            'p',
-            '',
-            t('event.deal.text', {
-              supplier: t(SUPPLIERS[event.supplier].nameKey),
-              qty: event.qty,
-              product: productLabel(event.product),
-              price: event.price,
-            }),
-          ),
-          el('div', 'ui-muted', t('warehouse.capacity', { n: warehouseCount(state), max: warehouseCapacity(state) })),
-          button(t('event.deal.accept'), () => answer(true), 'ui-btn', free <= 0 || state.money < event.price),
-          button(t('event.deal.decline'), () => answer(false), 'ui-btn secondary'),
-        );
-        break;
-      }
       case 'fridgeBroken':
         box.append(
           el('h3', '', `🔧 ${t('event.fridge.title')}`),
@@ -4477,16 +4358,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         bar,
         el('div', 'ui-muted', t('prices.line', { p: Math.round(demand * 100), n: product.basePrice, m: price - product.cost })),
       );
-      // Акция дня: −20% или «2 по цене 1» (одна на день; повторное нажатие отменяет).
-      const promo = activePromo(state);
-      const promoRow = el('div', 'ui-chips ui-promo');
-      for (const kind of ['discount', 'bogo'] as PromoKind[]) {
-        const on = promo?.product === pid && promo.kind === kind;
-        // «2 по цене 1» в убыток (пара дешевле двух закупок) не предлагаем; уже поставленную можно снять.
-        if (kind === 'bogo' && !on && price < 2 * product.cost) continue;
-        promoRow.append(button(`🏷 ${t(`promo.${kind}` as TextKey)}`, () => update(setPromo(getState(), pid, kind)), `ui-chip${on ? ' active' : ''}`));
-      }
-      info.append(promoRow);
       const change = (delta: number) => () => update(setPrice(getState(), pid, getState().prices[pid] + delta));
       const chips = el('div', 'ui-chips');
       chips.append(button('−', change(-PRICE_STEP), 'ui-chip'), el('b', 'ui-price-value', `${price} 💰`), button('+', change(PRICE_STEP), 'ui-chip'));

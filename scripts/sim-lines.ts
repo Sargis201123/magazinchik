@@ -9,7 +9,7 @@ import { MONTH_DAYS } from '../src/game/economy';
 
 const days = Number(process.argv[2] ?? 200);
 const runs = Number(process.argv[3] ?? 20);
-const ALL: SimOptions['features'] = { candy: true, coffee: true, oven: true, cart: true, loyalty: true, gear: true, etags: true, departments: true, skills: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true };
+const ALL: SimOptions['features'] = { candy: true, coffee: true, oven: true, cart: true, loyalty: true, gear: true, departments: true, skills: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true };
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
 /** Стандартная ошибка среднего. */

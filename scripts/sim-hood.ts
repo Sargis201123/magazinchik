@@ -9,7 +9,7 @@ const days = Number(process.argv[2] ?? 250);
 const runs = Number(process.argv[3] ?? 12);
 const med = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[xs.length >> 1] : NaN);
 const ALL: SimOptions['features'] = {
-  cat: true, candy: true, coffee: true, oven: true, night: true, cart: true, loyalty: true, gear: true, etags: true, departments: true,
+  cat: true, candy: true, coffee: true, oven: true, night: true, cart: true, loyalty: true, gear: true, departments: true,
   skills: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true, branch: true, hyper: true,
 };
 const players: [string, Partial<SimOptions>][] = [

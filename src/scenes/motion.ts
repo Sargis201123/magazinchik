@@ -421,7 +421,7 @@ export function reachShelf(scene: StoreScene, c: Customer, slot: { x: number; y:
     });
   });
   const unit = [...c.items].reverse().find((i) => i.id === id);
-  if (unit && !unit.free) priceFlash(scene, spots[0].x, slot.y - 12, Math.ceil(unitSalePrice(scene.state, id, unit.unit) * (scene.night ? NIGHT_MARKUP : 1)));
+  if (unit) priceFlash(scene, spots[0].x, slot.y - 12, Math.ceil(unitSalePrice(scene.state, id, unit.unit) * (scene.night ? NIGHT_MARKUP : 1)));
 }
 
 /** «+45» над полкой: золотая цифра подпрыгивает и тает. Не всплывающая надпись — без подложки, мелко. */

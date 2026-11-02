@@ -575,8 +575,6 @@ export interface Unit {
   age: number;
   /** Брак: портится на день раньше, покупатели могут жаловаться. */
   bad?: boolean;
-  /** Куплен автозаказом утром: только такие штуки он и возвращает поставщику (autoorder.ts). */
-  auto?: boolean;
   /** Уценён: продаётся дешевле, жалоб нет. */
   markdown?: boolean;
   /** Бракованная партия, по которой игрок ещё не принял решение. */
@@ -686,10 +684,6 @@ export interface StoreState {
   catAsk?: number;
   /** Отзывы за последний день (reviews.ts). */
   reviews?: Review[];
-  /** Акция дня на один товар (promo.ts). */
-  promo?: { day: number; product: ProductId; kind: 'discount' | 'bogo' };
-  /** Договоры с поставщиками: товар приезжает каждое утро сам (contracts.ts). */
-  contracts?: { sid: string; pid: ProductId; qty: number; until: number; last?: number }[];
   /** Испытания недели (weekly.ts). */
   weekly?: { month: number; challenges: { kind: string; target: number; product?: ProductId; progress: number; reward: number; done?: boolean }[] };
   /** Какие подсказки о новых механиках уже показаны (tips.ts). */
@@ -906,8 +900,6 @@ export function recordSale(stats: DayStats, items: CartItem[]): void {
 export interface CartItem {
   id: ProductId;
   unit: Unit;
-  /** Вторая штука по акции «2 по цене 1» — бесплатно. */
-  free?: boolean;
 }
 
 const fresh = (n: number): Unit[] => Array.from({ length: n }, () => ({ age: 0 }));
@@ -1018,15 +1010,9 @@ export function priceAppeal(state: StoreState): number {
   return Math.min(1.15, Math.max(0.85, 1 + (1 - avg) * 0.6));
 }
 
-/** Акция «−20%» на товар сегодня (promo.ts). */
-export const PROMO_DISCOUNT = 0.8;
-export const promoKind = (state: StoreState, id: ProductId): 'discount' | 'bogo' | undefined =>
-  state.promo?.day === state.day && state.promo.product === id ? state.promo.kind : undefined;
-
 export const unitSalePrice = (state: StoreState, id: ProductId, unit: Unit): number => {
-  const promo = promoKind(state, id) === 'discount' ? Math.max(1, Math.round(state.prices[id] * PROMO_DISCOUNT)) : state.prices[id];
-  // Вечер «Ночи распродаж» (weeks.ts): всё на 20% дешевле.
-  const price = saleOn(state) ? Math.max(1, Math.round(promo * SALE_DISCOUNT)) : promo;
+  // Вечер «Ночи распродаж» (weeks.ts): всё на 20% дешевле. «Акции дня» больше нет (02.11: в минус по марже).
+  const price = saleOn(state) ? Math.max(1, Math.round(state.prices[id] * SALE_DISCOUNT)) : state.prices[id];
   return unit.markdown ? Math.max(1, Math.round(price * MARKDOWN)) : price;
 };
 
@@ -1366,7 +1352,7 @@ export function returnToShelf(state: StoreState, items: CartItem[]): StoreState 
 
 /** markup — ночная наценка (цена на ценнике × markup, округляя вверх). */
 export function checkout(state: StoreState, items: CartItem[], markup = 1): { state: StoreState; total: number } {
-  const total = items.reduce((sum, { id, unit, free }) => sum + (free ? 0 : Math.ceil(unitSalePrice(state, id, unit) * markup)), 0);
+  const total = items.reduce((sum, { id, unit }) => sum + Math.ceil(unitSalePrice(state, id, unit) * markup), 0);
   return { state: { ...state, money: state.money + total }, total };
 }
 
@@ -1425,28 +1411,9 @@ export function expiringCount(state: StoreState): number {
   return expiringIn(state, state.warehouse) + state.shelves.reduce((sum, s) => sum + expiringIn(state, s.items), 0);
 }
 
-/** «Уценить старое»: то, что испортится ночью, продаётся за полцены, а не выбрасывается. */
-export function markdownExpiring(state: StoreState): { state: StoreState; count: number } {
-  let count = 0;
-  const mark = (stock: Stock): Stock => {
-    const next: Stock = {};
-    for (const id of PRODUCT_IDS) {
-      const units = stock[id];
-      if (!units) continue;
-      next[id] = units.map((u) => {
-        if (u.markdown || u.pending || u.age + 1 < unitLife(id, u, fridgeLife(state))) return u;
-        count++;
-        return { ...u, markdown: true };
-      });
-    }
-    return next;
-  };
-  const next = { ...state, warehouse: mark(state.warehouse), shelves: state.shelves.map((s) => ({ ...s, items: mark(s.items) })) };
-  return { state: count ? next : state, count };
-}
-
 /**
- * Электронные ценники вечером: уценить из того, что испортится ночью, только лишнее — сверх того,
+ * Вечерняя уценка (сама у всех с 02.11; раньше — электронные ценники и кнопка «Уценить»): уценить из того,
+ * что испортится ночью, только лишнее — сверх того,
  * что ещё успеют купить по полной цене (expected: сколько штук товара продадут до закрытия).
  * Покупатели берут сначала старое, поэтому первые expected штук продадутся и так.
  */

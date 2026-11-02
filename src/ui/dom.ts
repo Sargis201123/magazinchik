@@ -352,9 +352,13 @@ const css = `
 .ui-auto-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 16px; }
 .ui-auto-state { flex: none; font: 700 12px ${UI_FONT}; padding: 2px 8px; border-radius: 10px; background: #2b2233; color: #f4ecd8; }
 .ui-auto.on .ui-auto-state { background: #3e8948; }
-.ui-auto-limit { flex-wrap: wrap; font-size: 14px; }
-.ui-auto-lines { margin: 4px 0; }
-.ui-auto-actions { margin-top: 6px; }
+/* Доска «Заказы» (orders.ts): строка — кто, что, почём; справа ответ. */
+.ui-orders { background: #fff8e0; }
+.ui-order { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 0; border-top: 1px dashed #d8c9a8; font-size: 14px; }
+.ui-order:first-of-type { border-top: none; }
+.ui-order-text { flex: 1 1 180px; min-width: 0; }
+.ui-order .ui-note { margin: 2px 0 0; }
+.ui-order .ui-chips { flex: none; }
 .ui-chip.active { background: #2b2233; color: #f4ecd8; }
 /* Зал: склад строкой, полки сеткой. */
 .ui-stock-line { font-size: 14px; margin: 4px 0 6px; line-height: 1.6; }
@@ -418,17 +422,6 @@ const css = `
 .ui-item-actions.stack { flex-direction: column; align-items: stretch; }
 .ui-tag { display: inline-flex; align-items: center; gap: 2px; background: #fee761; border: 2px solid #2b2233; border-radius: 6px;
   padding: 0 5px; font: 800 13px ${UI_FONT}; line-height: 1.5; }
-.ui-haggle { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; padding: 7px 8px 7px 10px; background: #f4ecd8;
-  border: 2px dashed #d8ccb0; border-radius: 8px; }
-.ui-haggle-label { display: flex; flex-direction: column; flex: none; line-height: 1.15; }
-.ui-haggle-label b { font-size: 14px; white-space: nowrap; }
-.ui-haggle-pips { font-size: 12px; color: #e43b44; letter-spacing: 2px; }
-/* На узком телефоне кнопки торга уходят под подпись, а не сжимаются. */
-.ui-haggle-asks { flex: 1 1 150px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.ui-haggle-asks .ui-chip { width: 100%; padding: 7px 0; }
-.ui-haggle.done, .ui-haggle.angry { justify-content: center; text-align: center; font-size: 14px; padding: 9px 10px; }
-.ui-haggle.done { background: #e3f5d6; border: 2px solid #8fd16a; color: #2f6b2a; }
-.ui-haggle.angry { background: #fbe0dc; border: 2px solid #e8a9a2; color: #8a2a2a; }
 /* Оформление: сетка карточек с превью. Поставленное — зелёное, премиум — с золотой рамкой. */
 .ui-decor-kind { font: 700 14px ${UI_FONT}; margin: 12px 0 4px; }
 .ui-decor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -546,9 +539,8 @@ const css = `
   background: rgba(24, 20, 37, .72); color: #fff; text-shadow: 0 1px 0 #000; box-shadow: 0 2px 0 rgba(0, 0, 0, .45); }
 .ui-speed:active { transform: translateY(1px); box-shadow: none; }
 .ui-speed.on { background: rgba(254, 231, 97, .92); color: #2b2233; text-shadow: none; border-color: #2b2233; }
-.ui-urgent { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 84px); }
-/* «Позвать на помощь»: над срочным подвозом, мягко светится, пока идёт час пик. */
-.ui-help { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 128px); border-color: rgba(99, 199, 77, .9);
+/* «Позвать на помощь»: над ускорением (кнопки срочного подвоза больше нет — 02.11), мягко светится, пока идёт час пик. */
+.ui-help { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 84px); border-color: rgba(99, 199, 77, .9);
   animation: ui-help-glow 1.6s ease-in-out infinite; }
 .ui-help:disabled { opacity: .55; animation: none; }
 @keyframes ui-help-glow { 50% { box-shadow: 0 2px 0 rgba(0, 0, 0, .45), 0 0 10px rgba(99, 199, 77, .75); } }
@@ -567,8 +559,6 @@ const css = `
 .ui-todo-row .ui-chip { flex: none; padding: 6px 8px; font-size: 13px; }
 .ui-contract { margin-top: 8px; padding: 6px 8px; border: 2px dashed #b8a98a; border-radius: 8px; }
 .ui-contract .ui-chips { margin-top: 4px; }
-.ui-promo { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px; }
-.ui-promo .ui-chip { padding: 4px 8px; font-size: 12px; }
 .ui-loss-bar { display: flex; height: 14px; border: 2px solid #2b2233; border-radius: 6px; overflow: hidden; margin: 6px 0 2px; }
 .ui-loss-row { display: grid; grid-template-columns: 14px 1fr; gap: 6px; align-items: start; padding: 5px 0; }
 .ui-loss-row + .ui-loss-row { border-top: 1px dashed #d8ccb0; }

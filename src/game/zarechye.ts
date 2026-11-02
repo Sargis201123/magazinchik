@@ -68,8 +68,6 @@ export const SHOP_KEYS = [
   // Карьера (career.ts) — общая: «свой человек на филиале» и доска почёта — одни на хозяина.
   'regulars',
   'reviews',
-  'promo',
-  'contracts',
   'autoOrder',
   'ads',
   'adRuns',

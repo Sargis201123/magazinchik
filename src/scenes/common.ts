@@ -489,10 +489,8 @@ export interface ShelfView {
   lights: Phaser.GameObjects.GameObject[];
   /** Табличка «Осталось 2» над почти пустой полкой. */
   low: Phaser.GameObjects.Text;
-  /** «⏳ −50%?»: на полке товар, который испортится ночью; нажать — уценить всё такое. */
+  /** «⏳ −50% вечером»: на полке товар, который испортится ночью, — вечером он уценится сам. */
   expire: Phaser.GameObjects.Text;
-  /** Ценник «АКЦИЯ», если товар этой полки — товар дня. */
-  promo: Phaser.GameObjects.Text;
   /** Подсветка: полка пустая, а на складе её товар есть — пора нести. */
   glow?: Halo;
   needsStock: boolean;

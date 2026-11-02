@@ -15,7 +15,8 @@ import {
   type StoreState,
 } from '../src/game/economy';
 import { answerEvent } from '../src/game/events';
-import { managerPick, orderUrgent, receiveUrgent, URGENT_FEE, urgentCost, urgentUnitPrice } from '../src/game/urgent';
+import { MANAGER_MARKUP, managerPick, orderUrgent, receiveUrgent, urgentCost, urgentUnitPrice } from '../src/game/urgent';
+import { listPrice } from '../src/game/suppliers';
 
 const cashier: StaffMember = { role: 'cashier', name: 0, skill: 2, wage: 420, months: 1 };
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 20, money: 5000, level: 3, staff: [cashier], ...patch });
@@ -68,21 +69,16 @@ describe('менеджер', () => {
   });
 });
 
-describe('срочный подвоз', () => {
-  it('дороже обычного, платится сразу, товар приезжает потом', () => {
+describe('срочный подвоз (только менеджер — у игрока кнопки нет с 02.11)', () => {
+  it('дороже обычного (+10%), платится сразу, товар приезжает потом', () => {
     const s = shop({ warehouse: {}, shelves: [{ kind: 'dairy', level: 0, items: {} }] });
     const unit = urgentUnitPrice(s, 'milk')!;
-    expect(urgentCost(s, 'milk', 6)).toBe(unit * 6 + URGENT_FEE);
+    expect(unit).toBe(Math.round(listPrice('milk')! * MANAGER_MARKUP));
+    expect(urgentCost(s, 'milk', 6)).toBe(unit * 6);
     const paid = orderUrgent(s, 'milk', 6)!;
     expect(paid.money).toBe(s.money - urgentCost(s, 'milk', 6)!);
     expect(paid.warehouse.milk ?? []).toHaveLength(0);
     expect(receiveUrgent(paid, 'milk', 6).warehouse.milk).toHaveLength(6);
-  });
-
-  it('менеджер заказывает дешевле: меньше наценка и без платы за выезд', () => {
-    const s = shop({ warehouse: {}, shelves: [{ kind: 'dairy', level: 0, items: {} }] });
-    expect(urgentCost(s, 'milk', 6, true)!).toBeLessThan(urgentCost(s, 'milk', 6)! - URGENT_FEE);
-    expect(orderUrgent(s, 'milk', 6, 0, true)!.money).toBe(s.money - urgentCost(s, 'milk', 6, true)!);
   });
 
   it('нет денег — не заказать; менеджер видит, что кончилось', () => {

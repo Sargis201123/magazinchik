@@ -44,7 +44,7 @@ import {
   type StoreState,
   type Unit,
 } from '../src/game/economy';
-import { canHaggle, haggle, newDeal, SUPPLIERS, unitPrice } from '../src/game/suppliers';
+import { DISCOUNT_BASE, DISCOUNT_MAX, DISCOUNT_PER_SKILL, DISCOUNT_PER_STAR, priceFor, supplierDiscount, SUPPLIERS, unitPrice } from '../src/game/suppliers';
 import { detectLang } from '../src/i18n/detect';
 
 const u = (age = 0, extra: Partial<Unit> = {}): Unit => ({ age, ...extra });
@@ -332,26 +332,25 @@ describe('брак', () => {
   });
 });
 
-describe('торг', () => {
+describe('скидка постоянного покупателя (вместо торга, 02.11)', () => {
   const farmer = SUPPLIERS.farmer;
+  const at = (patch: Partial<StoreState>): StoreState => ({ ...newGame(), ...patch });
 
-  it('удачный торг даёт скидку, больше торговаться нельзя', () => {
-    const { deal, success } = haggle(farmer, newDeal(farmer), 0.1, 3, 0);
-    expect(success).toBe(true);
-    expect(unitPrice(farmer, deal, 'bread')).toBe(Math.round(PRODUCTS.bread.cost * 0.9));
-    expect(canHaggle(deal)).toBe(false);
+  it('растёт с рейтингом и навыком «Торгаш», не меньше нуля и не больше потолка', () => {
+    expect(supplierDiscount(at({ rating: 3 }))).toBeCloseTo(DISCOUNT_BASE);
+    expect(supplierDiscount(at({ rating: 5 }))).toBeGreaterThan(supplierDiscount(at({ rating: 3 })));
+    expect(supplierDiscount(at({ rating: 3, skills: { haggle: 2 } }))).toBeCloseTo(DISCOUNT_BASE + 2 * DISCOUNT_PER_SKILL);
+    expect(supplierDiscount(at({ rating: 0 }))).toBeCloseTo(Math.max(0, DISCOUNT_BASE - 3 * DISCOUNT_PER_STAR));
+    expect(supplierDiscount(at({ rating: 0 }))).toBeLessThan(supplierDiscount(at({ rating: 3 })));
+    expect(supplierDiscount(at({ rating: 5, skills: { haggle: 3 } }))).toBeLessThanOrEqual(DISCOUNT_MAX);
   });
 
-  it('после всех неудач поставщик обижается и поднимает цену', () => {
-    let deal = newDeal(farmer);
-    for (let i = 0; i < farmer.patience; i++) deal = haggle(farmer, deal, 0.2, 3, 0.99).deal;
-    expect(deal.angry).toBe(true);
-    expect(unitPrice(farmer, deal, 'bread')).toBe(Math.round(PRODUCTS.bread.cost * 1.1));
-  });
-
-  it('поставщик не продаёт чужой товар', () => {
-    expect(unitPrice(farmer, newDeal(farmer), 'milk')).toBeNull();
-    expect(unitPrice(SUPPLIERS.butcher, newDeal(SUPPLIERS.butcher), 'meat')).toBe(PRODUCTS.meat.cost);
+  it('цена дня — прайс со скидкой; у поставщика нет чужого товара', () => {
+    const s = at({ rating: 5, skills: { haggle: 3 } });
+    expect(priceFor(s)('farmer', 'bread')).toBe(Math.round(PRODUCTS.bread.cost * (1 - supplierDiscount(s))));
+    expect(priceFor(s)('farmer', 'bread')!).toBeLessThan(unitPrice(farmer, 'bread')!);
+    expect(unitPrice(farmer, 'milk')).toBeNull();
+    expect(unitPrice(SUPPLIERS.butcher, 'meat')).toBe(PRODUCTS.meat.cost);
   });
 });
 

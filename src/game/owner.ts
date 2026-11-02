@@ -1,6 +1,6 @@
 // Хозяин растёт вместе с магазином: опыт — за каждого покупателя, которого обслужил магазин,
 // с новым уровнем — очко навыка. Навыков пять, у каждого три ступени:
-// ловкие руки (быстрее пробиваешь), торгаш (легче сбить цену), силач (больше носишь со склада),
+// ловкие руки (быстрее пробиваешь), торгаш (поставщики уступают больше — suppliers.ts supplierDiscount), силач (больше носишь со склада),
 // обаяние (в очереди ждут дольше) и зоркий глаз (воры обходят магазин стороной).
 
 import type { TextKey } from '../i18n/ru';
@@ -47,8 +47,7 @@ export function ownerTiming(state: StoreState): ScanTiming {
   const k = handsFactor(state);
   return { item: base.item * k, pay: base.pay * k };
 }
-/** Торгаш: +6% к шансу сбить цену за ступень. */
-export const haggleBonus = (state: StoreState): number => 0.06 * skillLevel(state, 'haggle');
+// Торгаш: скидка у поставщиков больше на 2% за ступень — считает suppliers.ts (supplierDiscount).
 /** Силач: +2 штуки за ходку со склада за ступень. */
 export const carryBonus = (state: StoreState): number => 2 * skillLevel(state, 'strong');
 /** Обаяние: в очереди ждут на 8% дольше за ступень. */

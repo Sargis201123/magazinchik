@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { emptyDayStats, monthlyBill, newGame, newLifetime, ownerScan, payBill, type StoreState } from '../src/game/economy';
 import { afterLoanPayment, loanOptions, loanPayment, loanTotal, repayLoan, takeLoan } from '../src/game/bank';
-import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerLevelOf, ownerTiming, SKILL_MAX, skillPoints, XP_LEVELS } from '../src/game/owner';
+import { carryBonus, charmPatience, eyeTheft, learnSkill, ownerLevelOf, ownerTiming, SKILL_MAX, skillPoints, XP_LEVELS } from '../src/game/owner';
 import { addReport, REPORT_DAYS, weekReport } from '../src/game/reports';
-import { haggleChance, SUPPLIERS } from '../src/game/suppliers';
+import { DISCOUNT_PER_SKILL, supplierDiscount } from '../src/game/suppliers';
 
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 20, money: 5000, ...patch });
 const served = (n: number): Partial<StoreState> => ({ lifetime: { ...newLifetime(), served: n } });
@@ -26,14 +26,13 @@ describe('навыки хозяина', () => {
     expect(skillPoints(s)).toBe(XP_LEVELS.length - 1 - SKILL_MAX);
   });
 
-  it('навыки действуют: быстрее пробивка, торг, ноша, терпение, меньше воров', () => {
+  it('навыки действуют: быстрее пробивка, скидка у поставщиков, ноша, терпение, меньше воров', () => {
     const base = shop();
     const s = shop({ skills: { hands: 3, haggle: 2, strong: 1, charm: 3, eye: 2 } });
     expect(ownerTiming(s).item).toBeLessThan(ownerTiming(base).item);
     expect(ownerTiming(base)).toEqual(ownerScan(base.ownerServed));
-    expect(haggleBonus(s)).toBeCloseTo(0.12);
-    const zina = SUPPLIERS[Object.keys(SUPPLIERS)[0] as keyof typeof SUPPLIERS];
-    expect(haggleChance(zina, 0.1, 3, haggleBonus(s))).toBeGreaterThan(haggleChance(zina, 0.1, 3));
+    // «Торгаш» (02.11): не шанс сбить цену, а постоянная скидка у поставщиков — +2% за ступень.
+    expect(supplierDiscount(s) - supplierDiscount(base)).toBeCloseTo(2 * DISCOUNT_PER_SKILL);
     expect(carryBonus(s)).toBe(2);
     expect(charmPatience(s)).toBeGreaterThan(1);
     expect(eyeTheft(s)).toBeLessThan(1);

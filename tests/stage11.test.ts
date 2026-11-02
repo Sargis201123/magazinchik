@@ -1,60 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { checkout, emptyDayStats, expiringCount, markdownExpiring, newGame, unitSalePrice, type StoreState } from '../src/game/economy';
-import { activePromo, promoDemand, setPromo } from '../src/game/promo';
-import { cancelContract, contractOf, deliverContracts, signContract } from '../src/game/contracts';
+import { emptyDayStats, expiringCount, newGame, type StoreState } from '../src/game/economy';
 import { daysToFair, isFairDay, stallSale, STALL_MARKUP } from '../src/game/fair';
 import { ensureWeekly, progressWeekly } from '../src/game/weekly';
 import { pendingTip, seeTip } from '../src/game/tips';
 import { answerEvent, planDay } from '../src/game/events';
 import { carryOf, CART_CARRY } from '../src/game/upgrades';
-import { guestFactor } from '../src/game/day';
 
 const rich = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), money: 10000, level: 3, ...patch });
 
-describe('акция дня', () => {
-  it('−20% меняет цену, «2=1» — вторая штука бесплатно; повтор отменяет', () => {
-    const s = setPromo(rich(), 'bread', 'discount');
-    expect(unitSalePrice(s, 'bread', { age: 0 })).toBe(32);
-    expect(promoDemand(s, 'bread')).toBeGreaterThan(1);
-    expect(guestFactor(s)).toBeGreaterThan(guestFactor(rich()));
-    expect(activePromo(setPromo(s, 'bread', 'discount'))).toBeUndefined();
-    expect(activePromo({ ...s, day: s.day + 1 })).toBeUndefined();
-    const total = checkout(rich(), [{ id: 'bread', unit: { age: 0 } }, { id: 'bread', unit: { age: 0 }, free: true }]).total;
-    expect(total).toBe(40);
-  });
-});
-
 describe('уценка того, что испортится ночью', () => {
-  it('уценивает только старое', () => {
+  it('считает только старое и не уценённое', () => {
     const s = rich({ warehouse: { bread: [{ age: 1 }, { age: 0 }], potatoes: [{ age: 6 }] } });
     expect(expiringCount(s)).toBe(2);
-    const done = markdownExpiring(s);
-    expect(done.count).toBe(2);
-    expect(done.state.warehouse.bread![0].markdown).toBe(true);
-    expect(done.state.warehouse.bread![1].markdown).toBeUndefined();
-    expect(expiringCount(done.state)).toBe(0);
-  });
-});
-
-describe('договор с поставщиком', () => {
-  it('везут каждое утро со скидкой, до конца срока; можно расторгнуть', () => {
-    let s = signContract(rich({ day: 10 }), 'farmer', 'bread', 10);
-    expect(deliverContracts(s, () => 20).deliveries).toEqual([]);
-    s = { ...s, day: 11 };
-    const before = s.warehouse.bread?.length ?? 0;
-    const morning = deliverContracts(s, () => 20);
-    expect(morning.deliveries[0]).toMatchObject({ qty: 10, cost: 180 });
-    expect(morning.state.warehouse.bread).toHaveLength(before + 10);
-    expect(deliverContracts(morning.state, () => 20).deliveries).toEqual([]);
-    // Подписан на 10-й день: везут с 11-го по 17-й.
-    expect(contractOf({ ...morning.state, day: 17 }, 'farmer')).toBeDefined();
-    expect(contractOf({ ...morning.state, day: 18 }, 'farmer')).toBeUndefined();
-    expect(contractOf(cancelContract(morning.state, 'farmer'), 'farmer')).toBeUndefined();
-  });
-
-  it('без денег не везут', () => {
-    const s = { ...signContract(rich({ day: 10 }), 'farmer', 'bread', 10), day: 11, money: 0 };
-    expect(deliverContracts(s, () => 20).deliveries[0]).toMatchObject({ qty: 0, skipped: true });
+    expect(expiringCount({ ...s, warehouse: { bread: [{ age: 1, markdown: true }] } })).toBe(0);
   });
 });
 

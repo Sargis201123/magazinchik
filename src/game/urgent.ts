@@ -1,39 +1,36 @@
-// Срочный подвоз днём: товар кончился — звонишь поставщику, через несколько секунд приезжает
-// фургон. Дороже утренней закупки (наценка и плата за выезд), зато магазин не стоит пустым.
-// Менеджер зала заказывает сам, когда видит, что товар закончился и на полке, и на складе.
+// Срочный подвоз днём: товар кончился и на полке, и на складе — менеджер зала звонит поставщику, через
+// несколько секунд приезжает фургон. Чуть дороже утренней закупки, зато магазин не стоит пустым.
+// Сам игрок срочно не заказывает (02.11: одна кнопка закупки) — днём подвозят менеджер и автозакупка
+// (autoorder.ts), тем же фургоном.
 
 import { onShelves, productAvailable, sellableProducts, warehouseCapacity, warehouseCount, warehouseOf, type ProductId, type StoreState } from './economy';
-import { newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
+import { listPrice } from './suppliers';
 
-/** Наценка за срочность к обычной цене поставщика и плата за выезд. */
-export const URGENT_MARKUP = 1.25;
-export const URGENT_FEE = 25;
-/** Менеджер договаривается лучше: наценка меньше, выезд бесплатный. */
+/** Наценка менеджера за срочность к самой низкой цене поставщиков (выезд бесплатный). */
 export const MANAGER_MARKUP = 1.1;
 /** Сколько секунд дня едет фургон. */
 export const URGENT_SECONDS = 8;
-/** Сколько штук можно заказать за раз. */
-export const URGENT_QTYS = [6, 12] as const;
+/** Сколько штук менеджер заказывает за раз. */
+export const MANAGER_QTY = 6;
 
-/** Цена штуки при срочном заказе: самый дешёвый поставщик × наценка (у менеджера — меньше). null — никто не продаёт. */
-export function urgentUnitPrice(state: StoreState, id: ProductId, byManager = false): number | null {
+/** Цена штуки при срочном заказе менеджера: самый дешёвый поставщик × наценка. null — никто не продаёт. */
+export function urgentUnitPrice(state: StoreState, id: ProductId): number | null {
   if (!productAvailable(id, state.day)) return null;
-  const prices = SUPPLIER_IDS.map((sid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), id)).filter((p): p is number => p !== null);
-  if (!prices.length) return null;
-  return Math.round(Math.min(...prices) * (byManager ? MANAGER_MARKUP : URGENT_MARKUP));
+  const price = listPrice(id);
+  return price === null ? null : Math.round(price * MANAGER_MARKUP);
 }
 
-export const urgentCost = (state: StoreState, id: ProductId, qty: number, byManager = false): number | null => {
-  const unit = urgentUnitPrice(state, id, byManager);
-  return unit === null ? null : unit * qty + (byManager ? 0 : URGENT_FEE);
+export const urgentCost = (state: StoreState, id: ProductId, qty: number): number | null => {
+  const unit = urgentUnitPrice(state, id);
+  return unit === null ? null : unit * qty;
 };
 
 /** Сколько ещё влезет на склад с учётом того, что уже едет. */
 export const urgentRoom = (state: StoreState, onTheWay: number): number => warehouseCapacity(state) - warehouseCount(state) - onTheWay;
 
 /** Оплатить срочный заказ (товар приедет позже, см. receiveUrgent). null — нет денег, места или товара. */
-export function orderUrgent(state: StoreState, id: ProductId, qty: number, onTheWay = 0, byManager = false): StoreState | null {
-  const cost = urgentCost(state, id, qty, byManager);
+export function orderUrgent(state: StoreState, id: ProductId, qty: number, onTheWay = 0): StoreState | null {
+  const cost = urgentCost(state, id, qty);
   if (cost === null || cost > state.money || qty > urgentRoom(state, onTheWay)) return null;
   return { ...state, money: state.money - cost };
 }

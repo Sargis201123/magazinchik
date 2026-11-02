@@ -1,5 +1,5 @@
 // Улучшения магазина: терминал для карт (оплата быстрее), касса самообслуживания
-// (есть хотя бы один киоск — их число и модель в lanes.ts), тележки, карта лояльности, доставка, автозаказ, электронные ценники,
+// (есть хотя бы один киоск — их число и модель в lanes.ts), тележки, карта лояльности, доставка, полка уценки,
 // кофейный уголок, своя печь и ночная смена.
 
 import type { TextKey } from '../i18n/ru';
@@ -7,7 +7,12 @@ import { CARRY, managerBoost, type ScanTiming, type StoreState } from './economy
 import { registerScan } from './gear';
 import { helpScan } from './help';
 
-export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'autoOrder' | 'eTags' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables' | 'kitchen' | 'bargain';
+export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables' | 'kitchen' | 'bargain';
+/**
+ * Убраны 02.11: «Автозаказ» стал бесплатным переключателем «Закупать сам» (autoorder.ts), электронные
+ * ценники — вечерней уценкой у всех. Из старых сохранений их убирает buyMigrate.ts (ценники — с возвратом денег).
+ */
+export const RETIRED_UPGRADES = { autoOrder: 1200, eTags: 300 } as const;
 
 export interface Upgrade {
   id: UpgradeId;
@@ -26,9 +31,7 @@ export const UPGRADES: Record<UpgradeId, Upgrade> = {
   cart: { id: 'cart', icon: '🛒', nameKey: 'upgrade.cart', descKey: 'upgrade.cart.desc', price: 700, minLevel: 1 },
   loyalty: { id: 'loyalty', icon: '💳', nameKey: 'upgrade.loyalty', descKey: 'upgrade.loyalty.desc', price: 1500, minLevel: 1 },
   delivery: { id: 'delivery', icon: '🚲', nameKey: 'upgrade.delivery', descKey: 'upgrade.delivery.desc', price: 1500, minLevel: 3 },
-  autoOrder: { id: 'autoOrder', icon: '🤖', nameKey: 'upgrade.autoOrder', descKey: 'upgrade.autoOrder.desc', price: 1200, minLevel: 1 },
   bargain: { id: 'bargain', icon: '🏷', nameKey: 'upgrade.bargain', descKey: 'upgrade.bargain.desc', price: 900, minLevel: 2 },
-  eTags: { id: 'eTags', icon: '🏷', nameKey: 'upgrade.eTags', descKey: 'upgrade.eTags.desc', price: 300, minLevel: 1 },
   selfCheckout: { id: 'selfCheckout', icon: '🖥', nameKey: 'upgrade.selfCheckout', descKey: 'upgrade.selfCheckout.desc', price: 2500, minLevel: 2 },
   coffee: { id: 'coffee', icon: '☕', nameKey: 'upgrade.coffee', descKey: 'upgrade.coffee.desc', price: 1500, minLevel: 2 },
   oven: { id: 'oven', icon: '🥖', nameKey: 'upgrade.oven', descKey: 'upgrade.oven.desc', price: 1800, minLevel: 1 },
@@ -78,13 +81,14 @@ export const loyaltyTolerance = (state: StoreState): number => (hasUpgrade(state
 
 
 /**
- * Электронные ценники: в последнюю четверть дня то, что испортится ночью и не успеет продаться
- * по полной цене при сегодняшнем темпе продаж, уценяется само.
+ * Вечерняя уценка (02.11 — сама у всех; раньше её давали электронные ценники за 300, а утром была
+ * кнопка «Уценить»): в последнюю четверть дня то, что испортится ночью и не успеет продаться по полной
+ * цене при сегодняшнем темпе продаж, уценяется само (economy.ts markdownSurplus).
  */
-export const ETAGS_EVENING = 0.25;
+export const MARKDOWN_EVENING = 0.25;
 /**
  * Сколько ещё могут купить до закрытия: темп продаж за день (к вечеру прошло 3/4) с запасом ×2 —
  * вечером бывает наплыв, а лишняя уценка отнимает продажи по полной цене (видно в симуляторе).
  */
-export const ETAGS_CAUTION = 2;
-export const eveningSales = (soldToday: number): number => (soldToday * ETAGS_EVENING * ETAGS_CAUTION) / (1 - ETAGS_EVENING);
+export const MARKDOWN_CAUTION = 2;
+export const eveningSales = (soldToday: number): number => (soldToday * MARKDOWN_EVENING * MARKDOWN_CAUTION) / (1 - MARKDOWN_EVENING);

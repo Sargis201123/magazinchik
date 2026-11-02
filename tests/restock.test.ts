@@ -72,7 +72,7 @@ import { shelfRoom } from '../src/game/restock';
 import { stockOf } from '../src/game/bakery';
 import { simulate } from '../src/game/simulate';
 import { guestsToday } from '../src/game/day';
-import { newDeal, SUPPLIERS, unitPrice, type SupplierId } from '../src/game/suppliers';
+import { SUPPLIERS, unitPrice, type SupplierId } from '../src/game/suppliers';
 import type { ProductId } from '../src/game/economy';
 
 describe('«Закупить нужное» за одно нажатие', () => {
@@ -151,7 +151,7 @@ describe('«Закупить нужное» за одно нажатие', () =>
 
   it('на настоящих утрах симулятора одно нажатие тратит ровно показанное, и докупать нечего', () => {
     // Хвост прошлой строки лежал на складе и не давал купить следующие — первые утра ларька (дни 7–10).
-    const price = (sid: SupplierId, pid: ProductId) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid);
+    const price = (sid: SupplierId, pid: ProductId) => unitPrice(SUPPLIERS[sid], pid);
     let mornings = 0;
     for (const seed of [1, 2, 3]) {
       for (const days of [7, 8, 9, 10, 25]) {

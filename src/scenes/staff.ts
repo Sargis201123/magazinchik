@@ -30,7 +30,7 @@ import { addStep, encodeWear, mopWear, MOP_RADIUS, settleWear, WEAR_CELL, wornSp
 import { binSmell, ROTS, rotStage, smellLevel, type RotStage } from '../game/rot';
 import { TRASH_KEYS } from './textures';
 import { carryBonus } from '../game/owner';
-import { managerPick, URGENT_QTYS } from '../game/urgent';
+import { MANAGER_QTY, managerPick } from '../game/urgent';
 import { binCapacity, gearTier, warehouseSpeed } from '../game/gear';
 import { registerOfRole, RELIEF_ROLE, TILL_ROLES } from '../game/registers';
 import { note } from '../game/reviews';
@@ -749,8 +749,7 @@ export async function managerLoop(scene: StoreScene, w: Worker, gen: number): Pr
     }
     const pick = managerPick(scene.state);
     if (pick && !scene.urgentOrders.some((o) => o.id === pick)) {
-      const qty = URGENT_QTYS[0];
-      if (deliveries.orderUrgentDelivery(scene, pick, qty, true)) {
+      if (deliveries.orderUrgentDelivery(scene, pick, MANAGER_QTY)) {
         scene.popup(w.sprite.x, w.sprite.y - 20, t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
         credit(scene, w.member.role, 2);
       }

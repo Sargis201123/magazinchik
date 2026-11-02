@@ -8,7 +8,6 @@ import {
   BAD_COMPLAINT_CHANCE,
   buyChance,
   CHEAP_RATIO,
-  promoKind,
   PRODUCTS,
   checkout,
   DAY_SECONDS,
@@ -781,9 +780,7 @@ export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' 
     adTrust(scene.state) *
     // Химия рядом с едой — к еде с этой полки придираются сильнее.
     (shelves.clashes(scene, index) ? CLASH_FACTOR : 1);
-  // «2 по цене 1»: за штуку выходит вдвое дешевле.
-  const bogo = promoKind(scene.state, id) === 'bogo';
-  const perUnit = bogo ? price / 2 : price;
+  const perUnit = price;
   // Постоянный покупатель решает не по случаю, а по своей границе цены.
   const regular = c.regular ? regularById(c.regular) : undefined;
   // Первый покупатель нового начала берёт без раздумий: первая продажа не должна сорваться.
@@ -806,17 +803,7 @@ export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' 
   }
   scene.state = taken.state;
   c.items.push({ id, unit: taken.unit });
-  let count = 1;
-  // По акции «2 по цене 1» берут вторую штуку бесплатно.
-  if (bogo) {
-    const second = takeFromShelf(scene.state, index, id);
-    if (second) {
-      scene.state = second.state;
-      c.items.push({ id, unit: second.unit, free: true });
-      scene.popup(c.sprite.x, c.sprite.y - 22, t('popup.bogo'), '#fee761');
-      count++;
-    }
-  }
+  const count = 1;
   // С полки пропадают последние штуки этого товара (остальное съедет на их место) — запоминаем,
   // где и какими они были: оттуда товар и полетит в руки (reachShelf), там качнутся соседи.
   const view = scene.shelfViews[index];

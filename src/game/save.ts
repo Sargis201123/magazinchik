@@ -4,6 +4,7 @@ import { normalizeWeeks } from './weeks';
 import { migrateOwnerTill } from './registers';
 import { migrateAutoOrder, settleInbound } from './autoorder';
 import { migrateTut } from './tutorial';
+import { migrateBuying } from './buyMigrate';
 import { migrateCollections } from './collections';
 import { migrateCareer } from './career';
 import { normalizePets } from './pets';
@@ -79,7 +80,8 @@ export function loadGame(): StoreState | null {
   // Раньше кассир стоял за первой кассой, теперь она хозяина: кассир переходит за свою (registers.ts).
   // Смотрим на само сохранение — в новой игре поле уже есть, и после слияния оно было бы всегда.
   // Новичок посреди первых дней (обновился до бабушкиного обучения) получает его с того шага, где он сейчас.
-  const state = migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? merged : migrateOwnerTill(merged))));
+  // Закупка и продажи упрощены (02.11): снятые улучшения, акция дня, договоры, «выгодная партия» (buyMigrate.ts).
+  const state = migrateBuying(migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? merged : migrateOwnerTill(merged)))));
   // До версии 11 мороженое и цветы стояли на обычных полках (теперь — ларь у входа и вёдра у кассы).
   // Альбом коллекций появился позже: старое сохранение сразу получает уже заработанное (collections.ts).
   // Карьера сотрудников появилась позже: опыт старых сотрудников — по их стажу (career.ts).
