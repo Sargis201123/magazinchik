@@ -57,7 +57,6 @@ describe('начать заново', () => {
     debt: 1200,
     achievements: ['firstDay', 'cat'],
     decor: { owned: ['floor_gold', 'wall_mint', 'aquarium', 'neon_open'], active: { floor: 'floor_gold', wall: 'wall_mint', showpiece: 'aquarium' } },
-    skills: { hands: 2 },
     bankrupt: true,
     gift: { lastDate: '2026-10-10', streak: 4 },
   });
@@ -69,7 +68,6 @@ describe('начать заново', () => {
     expect(s.money).toBe(fresh.money);
     expect(s.level).toBe(0);
     expect(s.debt).toBe(fresh.debt);
-    expect(s.skills).toBeUndefined();
     expect(s.bankrupt).toBeUndefined();
     expect(s.story).toEqual(fresh.story);
     // Премиальное (за звёзды) осталось и стоит на месте, купленное за монеты — нет.

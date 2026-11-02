@@ -6,9 +6,7 @@ import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import {
   canPlace,
-  promoKind,
   SHELF_LEVELS,
-  markdownExpiring,
   expiringIn,
   SHELF_KINDS,
   PRODUCT_IDS,
@@ -21,7 +19,6 @@ import {
 } from '../game/economy';
 import { saveGame } from '../game/save';
 import { t } from '../i18n';
-import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal, UI_FONT } from '../ui/dom';
 import { kioskCount } from '../game/lanes';
@@ -54,7 +51,6 @@ import { iceboxRect, iceboxSpotFor, layoutFor, WALL_ROW_Y } from './layout';
 import { crispZoom } from './pixels';
 import { Halo } from './halo';
 import { PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
-import { fillBargain } from '../game/bargain';
 import { gearTier, registerSprite } from '../game/gear';
 import { registerSlots } from '../game/registers';
 import { cleanHall, dreamShelf } from '../game/firstday';
@@ -64,7 +60,6 @@ import * as lighting from './lighting';
 import * as staff from './staff';
 import * as morningFlow from './morningFlow';
 import * as camera from './camera';
-import * as building from './building';
 
 /** Сколько штук на полке считается «почти пусто» — табличка «Осталось N». */
 const LOW_STOCK = 2;
@@ -96,7 +91,6 @@ const FLORIST_SPOTS = [
   [-6.5, -3], [-8.5, -3.5], [-4.5, -3.5],
   [6.5, -3], [4.5, -3.5], [8.5, -3.5],
 ];
-const BROKEN_TINT = 0x8a8a8a;
 
 /**
  * Разметка свободного места под полку. Новичку первой недели — только когда на новую полку хватает
@@ -494,17 +488,16 @@ export function refreshShelves(scene: StoreScene, slide = true): void {
       }
     });
     view.pips.forEach((pip, n) => pip.setVisible(n < shelf.level));
-    view.promo.setVisible(PRODUCT_IDS.some((id) => canPlace(id, shelf) && promoKind(scene.state, id)));
-    const few = !shelf.broken && units.length > 0 && units.length <= LOW_STOCK;
+    const few = units.length > 0 && units.length <= LOW_STOCK;
     // Пустая полка — серая табличка «пусто»: видно, что кончился товар, а не что полка сломана.
-    const empty = !shelf.broken && units.length === 0 && shelf.kind !== 'florist';
+    const empty = units.length === 0 && shelf.kind !== 'florist';
     if (few) view.low.setText(t('shelf.low', { n: units.length })).setBackgroundColor('#d95763');
     else if (empty) view.low.setText(t('shelf.empty')).setBackgroundColor('#5a6988');
     view.low.setVisible(few || empty);
-    if (view.meter) drawMeter(view.meter, units.length, capacity, Boolean(shelf.broken));
-    view.expire.setVisible(!shelf.broken && expiringIn(scene.state, shelf.items) > 0);
-    view.needsStock = !shelf.broken && units.length === 0 && PRODUCT_IDS.some((id) => canPlace(id, shelf) && (scene.state.warehouse[id]?.length ?? 0) > 0);
-    view.bg.setTint(shelf.broken ? BROKEN_TINT : SHELF_LOOK[shelf.kind].tint);
+    if (view.meter) drawMeter(view.meter, units.length, capacity);
+    view.expire.setVisible(expiringIn(scene.state, shelf.items) > 0);
+    view.needsStock = units.length === 0 && PRODUCT_IDS.some((id) => canPlace(id, shelf) && (scene.state.warehouse[id]?.length ?? 0) > 0);
+    view.bg.setTint(SHELF_LOOK[shelf.kind].tint);
   });
   // В перестановке тени спрятаны (там «призраки») — запечём, когда расстановку примут.
   if (moved && scene.floor.ready() && !scene.arranging) scene.bakeFloor();
@@ -531,15 +524,6 @@ export function buildShelf(scene: StoreScene, index: number, kind: Category): Sh
   const backItems = items.map(() => scene.art(slot.x, slot.y, 'item').setDepth(d - 13.5).setTint(0x8f8278).setVisible(false));
   // Уровень улучшения — жёлтые точки над полкой.
   const pips = [0, 1, 2].map((n) => scene.art(slot.x + (fixture ? -6 : -17) + n * 4, slot.y - (kind === 'florist' ? 18 : 16), 'pip').setDepth(d - 12));
-  // Красный ценник «АКЦИЯ» над полкой с товаром дня.
-  const promo = scene.add
-    .text(slot.x - 12, slot.y - 22, t('shelf.promo'), { fontFamily: UI_FONT, fontSize: '5px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#e43b44', padding: { x: 2, y: 1 } })
-    .setOrigin(0.5)
-    .setResolution(scene.textRes(6))
-    .setDepth(990)
-    .setAngle(-8)
-    .setVisible(false);
-  scene.tweens.add({ targets: promo, angle: 8, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   const glow = new Halo(scene, bg, 0xfee761);
   const low = scene.add
     .text(slot.x + 6, slot.y - 22, '', {
@@ -561,7 +545,6 @@ export function buildShelf(scene: StoreScene, index: number, kind: Category): Sh
     .setResolution(scene.textRes(6))
     .setDepth(991)
     .setVisible(false);
-  expire.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => markdownNow(scene, expire.x, expire.y)));
   const lights: Phaser.GameObjects.GameObject[] = [];
   // Плиточная вставка отдела в полу под полкой и перед ней, шириной с полку (art/livefloor.py): узор
   // и кайма в тон отдела. У задней стены вставка начинается от плинтуса — на стену не заходит.
@@ -619,7 +602,7 @@ export function buildShelf(scene: StoreScene, index: number, kind: Category): Sh
   // Тень от полки на пол запекается вместе с полом (bakeFloor): свет сверху слева — вниз и вправо.
   if (fixture) lighting.shelfLight(scene, bg, kind, 50, 40, 4);
   else lighting.shelfLight(scene, bg, kind, 58, 50, look.texture === 'fridge' ? 10 : 6);
-  return { kind, at: { x: slot.x, y: slot.y }, cover, bg, front, shadow, items, backItems, pips, lights, low, expire, promo, glow, needsStock: false };
+  return { kind, at: { x: slot.x, y: slot.y }, cover, bg, front, shadow, items, backItems, pips, lights, low, expire, glow, needsStock: false };
 }
 
 /**
@@ -655,10 +638,8 @@ export function buildSideShelf(scene: StoreScene, index: number, kind: Category,
       .setResolution(scene.textRes(6))
       .setDepth(990)
       .setVisible(false);
-  const promo = label(t('shelf.promo'), -26, '#e43b44');
   const low = label('', -18, '#d95763');
   const expire = label(t('shelf.expiring'), -34, '#fee761', '#2b2233');
-  expire.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => markdownNow(scene, expire.x, expire.y)));
   const glow = new Halo(scene, bg, 0xfee761);
   const lights: Phaser.GameObjects.GameObject[] = [
     deptInlay(scene, `deptfloor_${kind}_side`, slot.x + (right ? -6 : 6), slot.y + 25, 50, 50),
@@ -666,40 +647,24 @@ export function buildSideShelf(scene: StoreScene, index: number, kind: Category,
   ];
   const meter = scene.add.graphics({ x: slot.x + (right ? -12 : 12), y: slot.y }).setDepth(d - 11);
   lighting.shelfLight(scene, bg, kind, 40, 70, 0);
-  return { kind, at: { x: slot.x, y: slot.y }, cover: undefined, bg, front, shadow, items, backItems, pips, lights, low, expire, promo, glow, needsStock: false, meter };
+  return { kind, at: { x: slot.x, y: slot.y }, cover: undefined, bg, front, shadow, items, backItems, pips, lights, low, expire, glow, needsStock: false, meter };
 }
 
 /** Шкала запаса боковой полки: зелёная — полно, жёлтая — половина, красная — пора нести товар. */
-export function drawMeter(meter: Phaser.GameObjects.Graphics, units: number, capacity: number, broken: boolean): void {
+export function drawMeter(meter: Phaser.GameObjects.Graphics, units: number, capacity: number): void {
   const H = 36;
   const share = capacity > 0 ? Math.min(1, units / capacity) : 0;
-  const color = broken ? 0x8b9bb4 : share > 0.5 ? 0x63c74d : share > 0.2 ? 0xfee761 : 0xe43b44;
+  const color = share > 0.5 ? 0x63c74d : share > 0.2 ? 0xfee761 : 0xe43b44;
   const fill = Math.round(H * share);
   meter.clear();
   meter.fillStyle(0x2b2233, 0.75).fillRect(-1.5, -H / 2 - 1, 3, H + 2);
   if (fill > 0) meter.fillStyle(color, 1).fillRect(-0.5, H / 2 - fill, 1, fill);
   // Пустая полка — красная точка внизу шкалы, чтобы было видно издалека.
-  else if (!broken) meter.fillStyle(0xe43b44, 1).fillRect(-1, H / 2 - 2, 2, 2);
-}
-
-/** Уценить всё, что испортится ночью (на полках и складе), прямо в зале — по ценнику «⏳». */
-export function markdownNow(scene: StoreScene, x: number, y: number): void {
-  // Есть полка уценки — старое уходит туда, под табличку «АКЦИЯ».
-  if (scene.bargainAt && fillBargain(scene.state).count) {
-    building.sendToBargain(scene);
-    return;
-  }
-  const { state, count } = markdownExpiring(scene.state);
-  if (!count) return;
-  scene.state = state;
-  saveGame(state);
-  sound.coin();
-  scene.popup(x, y - 6, t('popup.markdown', { n: count }), '#fff3b0');
-  scene.refreshShelves();
+  else meter.fillStyle(0xe43b44, 1).fillRect(-1, H / 2 - 2, 2, 2);
 }
 
 export function destroyShelfView(view: ShelfView): void {
-  for (const obj of [view.bg, view.front, view.shadow, view.low, view.expire, view.promo, view.cover, view.meter, ...view.items, ...view.backItems, ...view.pips, ...view.lights]) obj?.destroy();
+  for (const obj of [view.bg, view.front, view.shadow, view.low, view.expire, view.cover, view.meter, ...view.items, ...view.backItems, ...view.pips, ...view.lights]) obj?.destroy();
 }
 
 /** Сколько обычных полок стоит на местах в зале (ларь и вёдра — не в счёт). */
@@ -733,7 +698,7 @@ export function pairPick(scene: StoreScene, index: number, wanted: ProductId[]):
   const partners = links(scene)
     .filter((l) => l.kind === 'pair' && (l.a === slot || l.b === slot))
     .map((l) => shelfAtSlot(scene, l.a === slot ? l.b : l.a))
-    .filter((i) => i >= 0 && !scene.state.shelves[i].broken);
+    .filter((i) => i >= 0);
   const options = partners.flatMap((i) =>
     PRODUCT_IDS.filter((id) => !wanted.includes(id) && (scene.state.shelves[i].items[id]?.length ?? 0) > 0).map((id) => ({ id, index: i })),
   );

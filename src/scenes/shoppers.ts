@@ -8,7 +8,6 @@ import {
   BAD_COMPLAINT_CHANCE,
   buyChance,
   CHEAP_RATIO,
-  promoKind,
   PRODUCTS,
   checkout,
   DAY_SECONDS,
@@ -40,12 +39,12 @@ import { haptic } from '../platform/telegram';
 import { UI_FONT } from '../ui/dom';
 import { BIG_DAYS, BLACKOUT_CHECKOUT, bigDayExtraItems, bigDayFor, CROWD_PATIENCE, isCrowdDay, MASKS, ROADWORKERS } from '../game/bigday';
 import { wearOf } from './archetypes';
-import { isWet, weatherFor } from '../game/weather';
+import { isWet } from '../game/weather';
 import { adExtraItems, adRareBoost, adTrust } from '../game/ads';
 import { saleExtraItems } from '../game/weeks';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular } from '../game/regulars';
-import { CART_SHARE, cartPatience, loyaltyTolerance, withUpgrades } from '../game/upgrades';
+import { CART_SHARE, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { DOG_DAY_CATCH } from '../game/watch';
 import { guestCoins, seeGuest, type GuestId } from '../game/live';
 import { onbDone } from '../game/onboarding';
@@ -59,9 +58,9 @@ import { personGlow } from './halo';
 import { CLASH_FACTOR } from '../game/neighbors';
 import { smellChance } from '../game/rot';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
-import { charmPatience, eyeTheft, ownerTiming } from '../game/owner';
+import { eyeTheft, ownerTiming } from '../game/owner';
 import { radioPatience, radioTolerance } from '../game/radio';
-import { cameraTheft, climatePatience, entranceMud, gearTier, signagePatience, REGISTER_JAM_SECONDS, registerJam, wcDirt } from '../game/gear';
+import { cameraTheft, entranceMud, gearTier, REGISTER_JAM_SECONDS, registerJam, wcDirt } from '../game/gear';
 import { AROMA_TOLERANCE } from '../game/bakery';
 import { NIGHT_MARKUP, NIGHT_TOLERANCE } from '../game/night';
 import { CAT_TIP, catHome, catPatience, catTipChance } from '../game/cat';
@@ -716,15 +715,11 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   if (!c.serving && Math.random() < impulseChance(scene.state, scene.queue.indexOf(c) + 1)) grabCandy(scene, c);
   c.waitStart = scene.time.now;
   c.bubble.setVisible(true);
-  // С котом рядом ждут дольше.
+  // С котом рядом и под радио ждут дольше (климат, указатели, тележки и обаяние убраны 02.11 — gear.ts).
   c.patienceMs =
     PATIENCE_MS *
     catPatience(scene.state) *
-    climatePatience(scene.state, weatherFor(scene.state.day)) *
-    charmPatience(scene.state) *
     radioPatience(scene.state) *
-    signagePatience(scene.state) *
-    cartPatience(scene.state) *
     (isCrowdDay(scene.state.day) ? CROWD_PATIENCE : 1) *
     (c.first ? FIRST_PATIENCE : 1);
   c.patience = scene.time.delayedCall(c.patienceMs, () => void giveUp(scene, c));
@@ -753,10 +748,6 @@ export async function waitForShelf(scene: StoreScene, c: Customer, index: number
 /** Покупатель у полки: берёт товар, если он есть и цена устраивает. */
 export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' | 'empty' | 'expensive' | 'eduard' | 'skipped' {
   const index = shelfFor(scene.state, id);
-  if (scene.state.shelves[index]?.broken) {
-    scene.popup(c.sprite.x, c.sprite.y - 14, t('popup.broken'), '#ffd0d0');
-    return 'empty';
-  }
   const oldest = scene.state.shelves[index]?.items[id]?.[0];
   if (!oldest) {
     scene.popup(c.sprite.x, c.sprite.y - 14, t('popup.noStock'), '#ffd0d0');
@@ -781,9 +772,7 @@ export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' 
     adTrust(scene.state) *
     // Химия рядом с едой — к еде с этой полки придираются сильнее.
     (shelves.clashes(scene, index) ? CLASH_FACTOR : 1);
-  // «2 по цене 1»: за штуку выходит вдвое дешевле.
-  const bogo = promoKind(scene.state, id) === 'bogo';
-  const perUnit = bogo ? price / 2 : price;
+  const perUnit = price;
   // Постоянный покупатель решает не по случаю, а по своей границе цены.
   const regular = c.regular ? regularById(c.regular) : undefined;
   // Первый покупатель нового начала берёт без раздумий: первая продажа не должна сорваться.
@@ -806,17 +795,7 @@ export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' 
   }
   scene.state = taken.state;
   c.items.push({ id, unit: taken.unit });
-  let count = 1;
-  // По акции «2 по цене 1» берут вторую штуку бесплатно.
-  if (bogo) {
-    const second = takeFromShelf(scene.state, index, id);
-    if (second) {
-      scene.state = second.state;
-      c.items.push({ id, unit: second.unit, free: true });
-      scene.popup(c.sprite.x, c.sprite.y - 22, t('popup.bogo'), '#fee761');
-      count++;
-    }
-  }
+  const count = 1;
   // С полки пропадают последние штуки этого товара (остальное съедет на их место) — запоминаем,
   // где и какими они были: оттуда товар и полетит в руки (reachShelf), там качнутся соседи.
   const view = scene.shelfViews[index];

@@ -8,7 +8,6 @@ import {
   canPlace,
   PRODUCTS,
   staffOf,
-  isAbsent,
   managerBoost,
   SHELF_KINDS,
   workSpeed,
@@ -30,9 +29,9 @@ import { addStep, encodeWear, mopWear, MOP_RADIUS, settleWear, WEAR_CELL, wornSp
 import { binSmell, ROTS, rotStage, smellLevel, type RotStage } from '../game/rot';
 import { TRASH_KEYS } from './textures';
 import { carryBonus } from '../game/owner';
-import { managerPick, URGENT_QTYS } from '../game/urgent';
+import { MANAGER_QTY, managerPick } from '../game/urgent';
 import { binCapacity, gearTier, warehouseSpeed } from '../game/gear';
-import { registerOfRole, RELIEF_ROLE, TILL_ROLES } from '../game/registers';
+import { registerOfRole, RELIEF_ROLE } from '../game/registers';
 import { note } from '../game/reviews';
 import {
   ART,
@@ -167,10 +166,9 @@ export function ownerHome(scene: StoreScene): { x: number; y: number } {
   return scene.registers[0]?.clerk ?? scene.layout.sellerHome;
 }
 
-/** Сменщик нанят и сегодня на смене: тогда касса хозяина — его на весь день. */
+/** Сменщик нанят (а значит, на смене): тогда касса хозяина — его на весь день. */
 export function reliefOnDuty(scene: StoreScene): boolean {
-  const m = staffOf(scene.state, RELIEF_ROLE);
-  return Boolean(m && !isAbsent(scene.state, m));
+  return Boolean(staffOf(scene.state, RELIEF_ROLE));
 }
 
 /** Место рядом с кассой хозяина, у той же стойки: тут стоит хозяин, когда за его кассой сменщик. */
@@ -195,10 +193,6 @@ export function restockShelf(scene: StoreScene, index: number): void {
   if (!scene.running || scene.sellerBusy) return;
   const shelf = scene.state.shelves[index];
   const slot = shelves.spotOf(scene, index);
-  if (shelf.broken) {
-    scene.popup(slot.x, slot.y - 18, t('popup.broken'), '#ffd0d0');
-    return;
-  }
   if (shelfFree(shelf) === 0) {
     scene.popup(slot.x, slot.y - 18, t('popup.shelfFull'), '#fff3b0');
     return;
@@ -570,19 +564,8 @@ export function syncStaff(scene: StoreScene): void {
     scene.binBy = null;
     building.refreshBin(scene);
   }
-  // Кассир не вышел, а менеджер на месте — менеджер встаёт за его кассу. Сменщика не подменяет:
-  // за первой кассой и так хозяин, а у менеджера свои дела.
-  const manager = scene.state.staff.find((m) => m.role === 'manager' && !isAbsent(scene.state, m));
-  const cover = manager
-    ? TILL_ROLES.slice(0, scene.registers.length - 1).find((role) => {
-        const m = staffOf(scene.state, role);
-        return m && isAbsent(scene.state, m);
-      })
-    : undefined;
   for (const member of scene.state.staff) {
-    if (isAbsent(scene.state, member)) continue;
-    const covering = member.role === 'manager' && cover ? cover : undefined;
-    const home = covering ? workerHome(scene, covering) : workerHome(scene, member.role);
+    const home = workerHome(scene, member.role);
     // Новенький в первый день не стоит сразу на месте, а входит с улицы.
     const fresh = scene.dayOpen && scene.newHires.has(staffKey(member));
     const at = fresh ? visitors.streetSpawn(scene) : home;
@@ -603,13 +586,6 @@ export function syncStaff(scene: StoreScene): void {
     sprite.add(carried);
     const worker: Worker = { member, sprite, carried, home };
     scene.workers.set(member.role, worker);
-    if (covering) {
-      scene.workers.set(covering, worker);
-      const serve = () => void cashierLoop(scene, worker, gen, registerOfRole(covering));
-      if (fresh) void walkIn(scene, worker, gen).then(serve);
-      else serve();
-      continue;
-    }
     const loop = {
       cashier: reliefLoop,
       cashier2: cashierLoop,
@@ -749,8 +725,7 @@ export async function managerLoop(scene: StoreScene, w: Worker, gen: number): Pr
     }
     const pick = managerPick(scene.state);
     if (pick && !scene.urgentOrders.some((o) => o.id === pick)) {
-      const qty = URGENT_QTYS[0];
-      if (deliveries.orderUrgentDelivery(scene, pick, qty, true)) {
+      if (deliveries.orderUrgentDelivery(scene, pick, MANAGER_QTY)) {
         scene.popup(w.sprite.x, w.sprite.y - 20, t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
         credit(scene, w.member.role, 2);
       }
@@ -957,7 +932,6 @@ export function shelfToRestock(scene: StoreScene): number {
   let best = -1;
   let bestScore = 0;
   scene.state.shelves.forEach((shelf, i) => {
-    if (shelf.broken) return;
     const free = shelfFree(shelf);
     const hasGoods = PRODUCT_IDS.some((id) => canPlace(id, shelf) && (scene.state.warehouse[id] ?? []).some((u) => !u.pending));
     const runningOut = PRODUCT_IDS.some(

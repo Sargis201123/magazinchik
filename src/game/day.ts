@@ -1,7 +1,7 @@
 // Смена дня целиком: заказ забирают, холодильники греются, товар портится, счета,
 // сюжетные счётчики и план на завтра. Этим пользуются и игра, и симулятор.
 
-import { burglaryNight } from './watch';
+import { dogNight } from './watch';
 import { contestGuests, contestNight } from './contest';
 import { lightsGuests } from './gear';
 import { addReport } from './reports';
@@ -10,7 +10,6 @@ import {
   applyInspection,
   fulfillOrder,
   planDay,
-  warmBrokenFridges,
   type InspectionResult,
   type OrderResult,
 } from './events';
@@ -23,7 +22,6 @@ import { eduardGuests, growEduard } from './eduard';
 import { afterBills } from './bankruptcy';
 import { cafeMorning } from './cafe';
 import { giantGuests, giantNight } from './giant';
-import { promoGuests } from './promo';
 import { fairGuests } from './fair';
 import { weekGoal, weekGuests, weekNight, type WeekNight } from './weeks';
 import { ensureWeekly, progressWeekly, type Challenge } from './weekly';
@@ -63,7 +61,7 @@ export interface NightSummary extends NightResult {
 }
 
 export function nightCycle(state: StoreState, stats: DayStats, random: () => number = Math.random): NightSummary {
-  let s = warmBrokenFridges(state);
+  let s = state;
   const order = fulfillOrder(s);
   if (order) {
     s = order.state;
@@ -84,10 +82,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Непроданное с кухни ночью списывается (сколько — в отчёт дня).
   const dishes = spoilDishes(s);
   s = dishes.state;
-  // Усталость считаем до смены плана: сегодняшний отгул обнуляет её, ночная смена — удваивает.
-  // Карьера: смены, сделанное за день и неявки — пока сегодняшние выходные ещё видны (career.ts).
+  // Карьера: смены и сделанное за день (career.ts); воодушевление тает на день.
   s = careerNight(s, stats.work);
-  s = restStaff(s, (stats.nightRevenue ?? 0) > 0);
+  s = restStaff(s);
   // «Проверяющий» от конкурента: штраф, ушёл ни с чем или разоблачили (tricks.ts).
   s = trickNight(s, random, Boolean(staffOf(s, 'cleaner')));
   const day = s.day;
@@ -101,7 +98,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   s = zarDuelNight(s, stats.sold.fish ?? 0);
   // Повар сегодня работал — ночью лепит пельмени (после смены дня план уже завтрашний).
   const lineCtx = { day, cook: onShift(s, 'cook') };
-  const ended = endDay(s, stats, random);
+  const ended = endDay(s, stats);
   // После счетов — проверка долга: предупреждение, бабушка или банкротство.
   const billed = ended.bill ? { ...ended, state: afterBills(ended.state) } : ended;
   // День засчитан магазину, где работали (счета двух магазинов — по дням); после счетов — с нуля.
@@ -111,7 +108,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const lines = makeLines(billed.state, lineCtx);
   const night = { ...billed, state: lines.state };
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = zarReport(zarBossMorning(branchReport(contestNight(burglaryNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue), stats.revenue, random), stats), day, branch.income)), day, home.income);
+  const next = zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income);
   return {
     ...night,
     state: next,
@@ -153,7 +150,6 @@ export const guestFactor = (state: StoreState): number =>
   rankGuests(state) *
   adBoost(state) *
   WEATHER_EFFECTS[weatherFor(state.day)].guests *
-  promoGuests(state) *
   fairGuests(state.day) *
   weekGuests(state.day) *
   lightsGuests(state) *

@@ -45,8 +45,6 @@ function worst(s: StoreState): StoreState {
     staffEvent: { kind: 'idea', roles: ['baker'], day },
     cat: undefined,
     catAsk: undefined,
-    quitNotice: [s.staff.find((m) => m.role === 'cleaner')!],
-    security: { ...s.security, news: { day, outcome: 'stolen', goods: [{ id: 'bread', n: 3 }], cash: 200, repair: 60, bounty: 0 } },
   };
 }
 

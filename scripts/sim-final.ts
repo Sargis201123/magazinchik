@@ -7,7 +7,7 @@ import { simulate, type Feature, type SimOptions, type SimResult } from '../src/
 const DAYS = Number(process.argv[2] ?? 180);
 const RUNS = Number(process.argv[3] ?? 40);
 const ALL: Partial<Record<Feature, boolean>> = Object.fromEntries(
-  (['candy', 'coffee', 'oven', 'night', 'cat', 'cart', 'loyalty', 'gear', 'etags', 'departments', 'skills', 'radio', 'brand', 'cafe', 'kitchen', 'rush'] as Feature[]).map((f) => [f, true]),
+  (['candy', 'coffee', 'oven', 'night', 'cat', 'loyalty', 'gear', 'departments', 'radio', 'brand', 'cafe', 'kitchen', 'rush'] as Feature[]).map((f) => [f, true]),
 );
 
 const PROFILES: { name: string; opts: Omit<SimOptions, 'days' | 'seed'> }[] = [
@@ -48,11 +48,6 @@ for (const profile of PROFILES) {
   const tries = runs.flatMap((r) => r.contests);
   console.log(
     `Конкурсы: первая победа у ${pct(firstWin.length)} (день ${trio(firstWin)}); попыток ${tries.length}, побед ${tries.filter((c) => c.won).length}; макс. звание: ${Math.max(0, ...runs.map((r) => r.final.contest?.wins ?? 0))}`,
-  );
-  const thefts = runs.flatMap((r) => r.burglaries);
-  const stolen = thefts.filter((b) => b.outcome === 'stolen');
-  console.log(
-    `Ночные воры: ${(thefts.length / RUNS).toFixed(1)} за прогон; украли ${pct(runs.filter((r) => r.burglaries.some((b) => b.outcome === 'stolen')).length)} прогонов, потеря за кражу ${trio(stolen.map((b) => b.loss), stolen.length)}; Бобик прогнал ${thefts.filter((b) => b.outcome === 'dog').length}`,
   );
   console.log(`Рейтинг в конце: ${trio(runs.map((r) => r.final.rating * 10)).replace(/(\d+)/g, (m) => (Number(m) / 10).toFixed(1))}`);
 }

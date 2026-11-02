@@ -1,19 +1,16 @@
 import type { TextKey } from '../i18n/ru';
-import { PRODUCTS, type Category, type ProductId } from './economy';
+import { PRODUCTS, type Category, type ProductId, type StoreState } from './economy';
+import { haggleBonus } from './owner';
 
 export type SupplierId = 'farmer' | 'dairy' | 'butcher' | 'wholesale';
 
 export interface Supplier {
   id: SupplierId;
   nameKey: TextKey;
-  /** Реплики: приветствие, согласие, отказ, обида. */
-  lines: { hello: TextKey; yes: TextKey; no: TextKey; angry: TextKey };
+  /** Приветствие в списке поставщиков. */
+  hello: TextKey;
   /** Что продаёт и с какой наценкой к базовой цене закупки. */
   products: Partial<Record<ProductId, number>>;
-  /** 0..1: насколько легко уступает в цене. */
-  flexibility: number;
-  /** Сколько неудачных попыток торга вытерпит за день. */
-  patience: number;
   /** Шанс, что партия окажется бракованной (редкое событие). */
   badChance: number;
   /** Без полки этого типа закупать нечего (мясо без холодильника не продать). Список — хватит любой. */
@@ -25,43 +22,34 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
   farmer: {
     id: 'farmer',
     nameKey: 'supplier.farmer',
-    lines: { hello: 'supplier.farmer.hello', yes: 'supplier.farmer.yes', no: 'supplier.farmer.no', angry: 'supplier.farmer.angry' },
+    hello: 'supplier.farmer.hello',
     products: { bread: 1, apples: 0.9, potatoes: 1, tangerines: 1, flowers: 1.1, pumpkins: 1, watermelons: 1 },
-    // Был 0,9: скидка 20% за три попытки удавалась в 87,5% случаев — торговаться было выгодно всегда.
-    flexibility: 0.75,
-    patience: 3,
     badChance: 0.03,
     color: 0x6abe30,
   },
   dairy: {
     id: 'dairy',
     nameKey: 'supplier.dairy',
-    lines: { hello: 'supplier.dairy.hello', yes: 'supplier.dairy.yes', no: 'supplier.dairy.no', angry: 'supplier.dairy.angry' },
+    hello: 'supplier.dairy.hello',
     products: { milk: 1, icecream: 1 },
-    flexibility: 0.6,
-    patience: 2,
     badChance: 0.025,
     color: 0x5b6ee1,
   },
   butcher: {
     id: 'butcher',
     nameKey: 'supplier.butcher',
-    lines: { hello: 'supplier.butcher.hello', yes: 'supplier.butcher.yes', no: 'supplier.butcher.no', angry: 'supplier.butcher.angry' },
+    hello: 'supplier.butcher.hello',
     products: { meat: 1 },
-    flexibility: 0.7,
-    patience: 2,
     badChance: 0.05,
     requires: 'meat',
     color: 0xb83a4b,
   },
-  // Оптовик: напитки, заморозка и бытовая химия для новых отделов — дёшево, но торгуется туго.
+  // Оптовик: напитки, заморозка и бытовая химия для новых отделов.
   wholesale: {
     id: 'wholesale',
     nameKey: 'supplier.wholesale',
-    lines: { hello: 'supplier.wholesale.hello', yes: 'supplier.wholesale.yes', no: 'supplier.wholesale.no', angry: 'supplier.wholesale.angry' },
+    hello: 'supplier.wholesale.hello',
     products: { water: 1, juice: 1, dumplings: 1, fish: 1, soap: 1, detergent: 1 },
-    flexibility: 0.5,
-    patience: 2,
     badChance: 0.03,
     requires: ['drinks', 'frozen', 'household'],
     color: 0x3a4466,
@@ -74,25 +62,22 @@ export const supplierOpen = (s: Supplier, shelves: { kind: Category }[]): boolea
 
 export const SUPPLIER_IDS = Object.keys(SUPPLIERS) as SupplierId[];
 
-export const HAGGLE_ASKS = [0.05, 0.1, 0.2] as const;
-/** Обиженный поставщик поднимает цену на сегодня. */
-export const ANGRY_MARKUP = 0.1;
+/**
+ * Скидка постоянного покупателя (02.11, вместо утреннего торга: 4 поставщика × до 3 нажатий каждое утро).
+ * Поставщики уступают сами — тем больше, чем лучше рейтинг магазина и чем опытнее хозяин (owner.ts).
+ * Откалибровано симулятором так, чтобы обычный игрок получал примерно то, что раньше давал торг «иногда»
+ * (одна просьба о −5% у каждого поставщика), а не максимальный торг. Одна функция — на неё смотрят
+ * закупка, автозаказ, симулятор и опыт хозяина (owner.ts) — менять только здесь.
+ */
+export const DISCOUNT_BASE = 0.02;
+/** За каждую звезду рейтинга выше трёх (ниже — меньше, но не меньше нуля). */
+export const DISCOUNT_PER_STAR = 0.01;
+/** Плюс опыт хозяина (owner.ts haggleBonus, растёт сам с 02.11): на последнем уровне +6%, как прежний «Торгаш». */
+export const DISCOUNT_MAX = 0.12;
 
-/** Итог торга с поставщиком за сегодняшний день. */
-export interface Deal {
-  discount: number;
-  attemptsLeft: number;
-  angry: boolean;
-}
-
-export const newDeal = (s: Supplier): Deal => ({ discount: 0, attemptsLeft: s.patience, angry: false });
-
-export const canHaggle = (deal: Deal): boolean => deal.discount === 0 && !deal.angry && deal.attemptsLeft > 0;
-
-/** Чем больше просишь, тем меньше шанс. Рейтинг магазина немного помогает. */
-/** bonus — навык хозяина «Торгаш» (owner.ts). */
-export function haggleChance(s: Supplier, ask: number, rating: number, bonus = 0): number {
-  return Math.min(0.95, Math.max(0.05, s.flexibility - ask * 2 + (rating - 3) * 0.03 + bonus));
+export function supplierDiscount(state: StoreState): number {
+  const d = DISCOUNT_BASE + (state.rating - 3) * DISCOUNT_PER_STAR + haggleBonus(state);
+  return Math.min(DISCOUNT_MAX, Math.max(0, d));
 }
 
 /** Первые дни поставщики брака не привозят: новичку и так хватает решений (окно «Брак» — с 4-го утра). */
@@ -100,17 +85,21 @@ export const CLEAN_BATCH_DAYS = 3;
 /** Партия бракованная? roll — случайное число 0…1 (его тянут всегда — ряд случайных чисел не сдвигается). */
 export const badBatch = (sid: SupplierId, day: number, roll: number): boolean => roll < SUPPLIERS[sid].badChance && day > CLEAN_BATCH_DAYS;
 
-/** roll — случайное число 0..1 (передаётся снаружи, чтобы торг можно было тестировать). */
-export function haggle(s: Supplier, deal: Deal, ask: number, rating: number, roll: number, bonus = 0): { deal: Deal; success: boolean } {
-  if (!canHaggle(deal)) return { deal, success: false };
-  if (roll < haggleChance(s, ask, rating, bonus)) return { deal: { ...deal, discount: ask }, success: true };
-  const attemptsLeft = deal.attemptsLeft - 1;
-  return { deal: { ...deal, attemptsLeft, angry: attemptsLeft === 0 }, success: false };
-}
-
-export function unitPrice(s: Supplier, deal: Deal, id: ProductId): number | null {
+/** Цена штуки у поставщика со скидкой discount (0 — по прайсу). null — у него такого нет. */
+export function unitPrice(s: Supplier, id: ProductId, discount = 0): number | null {
   const markup = s.products[id];
   if (markup === undefined) return null;
-  const mood = deal.angry ? 1 + ANGRY_MARKUP : 1 - deal.discount;
-  return Math.max(1, Math.round(PRODUCTS[id].cost * markup * mood));
+  return Math.max(1, Math.round(PRODUCTS[id].cost * markup * (1 - discount)));
+}
+
+/** Цены сегодня для этого магазина — со скидкой постоянного покупателя (закупка, автозаказ, подвоз). */
+export const priceFor = (state: StoreState) => {
+  const discount = supplierDiscount(state);
+  return (sid: SupplierId, pid: ProductId): number | null => unitPrice(SUPPLIERS[sid], pid, discount);
+};
+
+/** Самая низкая цена товара по прайсу (без скидки) у всех поставщиков. null — никто не продаёт. */
+export function listPrice(pid: ProductId): number | null {
+  const prices = SUPPLIER_IDS.map((sid) => unitPrice(SUPPLIERS[sid], pid)).filter((p): p is number => p !== null);
+  return prices.length ? Math.min(...prices) : null;
 }

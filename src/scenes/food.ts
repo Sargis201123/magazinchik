@@ -368,7 +368,7 @@ export async function bakerLoop(scene: StoreScene, w: Worker, gen: number): Prom
 
 /** Хлебная полка, где есть место (первая по порядку); -1 — нет. */
 export function breadShelfIndex(scene: StoreScene, product: ProductId = 'bread'): number {
-  return scene.state.shelves.findIndex((s) => !s.broken && canPlace(product, s) && shelfFree(s) > 0);
+  return scene.state.shelves.findIndex((s) => canPlace(product, s) && shelfFree(s) > 0);
 }
 
 /** Свежий хлеб из печи — на полки (лишнее на склад); по залу от двери пекарни идёт запах. */
@@ -808,7 +808,7 @@ export async function fetchIngredients(scene: StoreScene, w: Worker, gen: number
   const pantry = [...need].every(([p, n]) => pantryOf(scene.state, p) >= n);
   const fromStore = !pantry && [...need.keys()].some((p) => warehouseOf(scene.state, p) > 0);
   const short = pantry ? undefined : [...need].find(([p, n]) => warehouseOf(scene.state, p) < n)?.[0];
-  const shelf = short ? scene.state.shelves.findIndex((sh) => !sh.broken && (sh.items[short]?.length ?? 0) > 0) : -1;
+  const shelf = short ? scene.state.shelves.findIndex((sh) => (sh.items[short]?.length ?? 0) > 0) : -1;
   if (pantry) {
     // Ящик-кладовая в углу кухни: встаёт перед ним и набирает корзинку.
     await staff.workerWalk(scene, w, k.crate.x - 2, w.home.y);

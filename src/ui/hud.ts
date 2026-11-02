@@ -86,10 +86,7 @@ export class Hud {
   /** Ускорение дня ×2 — когда магазин работает сам. */
   private readonly speed = el('button', 'ui-speed');
   onSpeed: () => void = () => {};
-  /** Срочный подвоз: кнопка над ускорением. */
-  private readonly urgent = el('button', 'ui-speed ui-urgent', '🚚');
-  onUrgent: () => void = () => {};
-  /** «Позвать на помощь» в час пик (game/help.ts): над срочным подвозом, пока очередь длинная. */
+  /** «Позвать на помощь» в час пик (game/help.ts): над ускорением, пока очередь длинная. */
   private readonly help = el('button', 'ui-speed ui-help');
   onHelp: () => void = () => {};
   /** Быстрое «без звука» — напротив ускорения, видно всегда, пока идёт игра. */
@@ -125,8 +122,6 @@ export class Hud {
     this.top.append(this.money, this.clock, this.stars);
     this.speed.addEventListener('click', () => this.onSpeed());
     this.speed.style.display = 'none';
-    this.urgent.addEventListener('click', () => this.onUrgent());
-    this.urgent.style.display = 'none';
     this.help.addEventListener('click', () => this.onHelp());
     this.help.style.display = 'none';
     injectAudioStyles();
@@ -148,7 +143,7 @@ export class Hud {
     row.append(this.goal, this.quests.chip);
     this.goalWrap.append(row, this.goalNext, this.quests.list);
     this.stock.append(this.goalWrap);
-    document.body.append(this.top, this.stock, this.hint, this.speed, this.urgent, this.help, this.mute);
+    document.body.append(this.top, this.stock, this.hint, this.speed, this.help, this.mute);
   }
 
   /** Цель на полоске; null — спрятать. Перерисовывается, только когда что-то поменялось. */
@@ -260,15 +255,6 @@ export class Hud {
   private moneyLabel(value: number): string {
     this.shownMoney = value;
     return ` ${value}`;
-  }
-
-  /** Кнопка ускорения: видна только днём; ×1 или ×2. */
-  showUrgent(visible: boolean): void {
-    const display = visible ? '' : 'none';
-    if (this.urgent.style.display !== display) {
-      this.urgent.style.display = display;
-      if (visible) pixelize(this.urgent);
-    }
   }
 
   /** «Позвать на помощь»: видна в час пик; busy — ждём окно «Поделиться» (кнопка гаснет). */

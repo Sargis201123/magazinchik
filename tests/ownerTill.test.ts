@@ -93,13 +93,10 @@ describe('старые сохранения: кассир переходит з�
 
   it('вместе с ролью переезжает всё, что на неё ссылается', () => {
     const before = shop(2, 2, ['cashier'], {
-      plan: { day: 40, decided: false, inspection: false, quests: [], sick: 'cashier', event: { kind: 'dayOff', role: 'cashier', reason: 0 } },
       staffEvent: { kind: 'best', roles: ['cashier'], day: 40 },
       jobSearch: { day: 40, role: 'cashier2', candidates: [member('cashier2', { months: 0 })] },
     });
     const s = migrateOwnerTill(before);
-    expect(s.plan?.sick).toBe('cashier2');
-    expect(s.plan?.event).toEqual({ kind: 'dayOff', role: 'cashier2', reason: 0 });
     expect(s.staffEvent?.roles).toEqual(['cashier2']);
     // Объявление на вторую кассу (её место уже занято переехавшим) становится объявлением на сменщика.
     expect(s.jobSearch?.role).toBe('cashier');

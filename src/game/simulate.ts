@@ -42,8 +42,6 @@ import {
   setPrice,
   sellableProducts,
   seasonalDemand,
-  giveDayOff,
-  isTired,
   markdownSurplus,
   shelfKindOpen,
   SHELF_KINDS,
@@ -62,7 +60,6 @@ import {
   BAD_COMPLAINT_CHANCE,
   hasUnmarkedBad,
   freeSlots,
-  answerRaise,
   guardCatchChance,
   hire,
   staffLimit,
@@ -84,26 +81,24 @@ import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from '
 import { restockPlan } from './restock';
 import { buyLine } from './reorder';
 import { bigDaySeed, setBigDaySeed } from './bigday';
-import { autoActive, autoArrived, autoMorning, autoTopUp } from './autoorder';
-import { answerEvent, inspect } from './events';
-import { candidatesFor } from './staff';
+import { autoActive, autoArrived, autoMorning, autoTopUp, autoAvailable, autoToggle } from './autoorder';
+import { answerEvent, inspect, answerOrder } from './events';
+import { candidatesFor, train, trainingStep } from './staff';
 import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
-import { badBatch, haggle, newDeal, SUPPLIER_IDS, SUPPLIERS, supplierOpen, unitPrice } from './suppliers';
-import { buyUpgrade, carryOf, cartPatience, ETAGS_EVENING, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId } from './upgrades';
+import { badBatch, SUPPLIER_IDS, SUPPLIERS, supplierOpen, listPrice, priceFor } from './suppliers';
+import { buyUpgrade, carryOf, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId, MARKDOWN_EVENING } from './upgrades';
 import { CARRY, homemade } from './economy';
 import { fairToday, fairTodayTolerance, STALL_MAX, stallSale } from './fair';
 import { endSale, SALE_CROWD, saleExtraItems, startSale, weekFor } from './weeks';
 import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole, RELIEF_ROLE, TILL_ROLES } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
-import { weatherFor } from './weather';
 import { simSmellComplaint } from './rot';
-import { brewSeconds, cameraTheft, climatePatience, coffeePrice, entranceMud, fridgeLeak, GEAR_IDS, gearAvailable, nextGear, ovenBatch, ovenBatchCost, REGISTER_JAM_SECONDS, registerJam, signagePatience, upgradeGear, wcDirt } from './gear';
+import { brewSeconds, cameraTheft, coffeePrice, entranceMud, fridgeLeak, gearAvailable, MANUAL_GEAR, nextGear, ovenBatch, ovenBatchCost, REGISTER_JAM_SECONDS, registerJam, upgradeGear, wcDirt } from './gear';
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from './bakery';
 import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
-import { adoptDog, DOG_FROM_DAY, DOG_PRICE, hasDog } from './watch';
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
@@ -117,7 +112,7 @@ import { buyKiosk, kioskCount, kioskTier, laneGuests, nextKioskPrice, nextKioskT
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, nextBranchTier, upgradeBranch } from './branch';
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
-import { carryBonus, charmPatience, eyeTheft, haggleBonus, learnSkill, ownerTiming, SKILL_IDS, skillPoints } from './owner';
+import { carryBonus, eyeTheft, ownerTiming } from './owner';
 
 export { rng };
 
@@ -167,8 +162,6 @@ export interface SimResult {
   /** В какой день бабушка выручила с долгами и в какой магазин закрыли за долги (null — не было). */
   rescueDay: number | null;
   bankruptDay: number | null;
-  /** Ночные воры: день, чем кончилось, во сколько обошлось (товар по закупке + касса + замок). */
-  burglaries: { day: number; outcome: string; loss: number }[];
   /** Смены фаз «Гиганта» и итоги конкурсов — по дням. */
   giant: { day: number; phase: string }[];
   contests: { day: number; tier: number; won: boolean }[];
@@ -222,6 +215,8 @@ export interface SimOptions {
    * every = 2 — через день, 1 — каждый день.
    */
   zar?: { from: number; every: number; cap?: number };
+  /** Каждое утро до решений игрока — посмотреть состояние (scripts/decisions.ts считает, что видит игрок). */
+  onMorning?: (state: StoreState) => void;
 }
 
 export type Feature =
@@ -230,12 +225,9 @@ export type Feature =
   | 'oven'
   | 'night'
   | 'cat'
-  | 'cart'
   | 'loyalty'
   | 'gear'
-  | 'etags'
   | 'departments'
-  | 'skills'
   | 'radio'
   | 'brand'
   // Линейки своей марки (lines.ts): открывает и улучшает, когда есть запас и не копит на помещение.
@@ -252,7 +244,7 @@ export type Feature =
   | 'hyper'
   // Благоустройство района (hood.ts): тратит лишнее — самое дешёвое, когда не копит на помещение.
   | 'hood'
-  // Карьера сотрудников (career.ts): награждает «сотрудника месяца», соглашается на повышения и филиал.
+  // Карьера сотрудников (career.ts): награждает «сотрудника месяца», повышает (ступень обучения) и ставит на филиал.
   | 'career';
 
 /** В каком порядке разумный игрок докупает полки. */
@@ -377,6 +369,7 @@ export function simulate({
   lineIds = LINE_IDS,
   pet,
   zar,
+  onMorning,
 }: SimOptions): SimResult {
   const random = rng(seed);
   // Случайности новых механик — отдельно: тогда прогоны с механикой и без идут по одним и тем же
@@ -396,12 +389,12 @@ export function simulate({
   let rescueDay: number | null = null;
   let bankruptDay: number | null = null;
   const chapterDay: (number | null)[] = [...CHAPTERS, null].map((_, i) => (i === 0 ? 1 : null));
-  const burglaries: SimResult['burglaries'] = [];
   const giantLog: SimResult['giant'] = [];
   const contests: SimResult['contests'] = [];
   const zarLevelDay: (number | null)[] = Array.from({ length: ZAR_MAX_LEVEL + 1 }, () => null);
 
   for (let d = 0; d < days; d++) {
+    onMorning?.(state);
     const moneyStart = state.money;
     let investments = 0;
     let adSpent = 0;
@@ -482,18 +475,14 @@ export function simulate({
     if (event?.kind === 'priceWar' && !state.plan?.decided) {
       state = answerWar(state, event, war) ?? answerWar(state, event, 'wait')!;
     } else if (event && !state.plan?.decided) {
-      // Заказ берём, если товар сейчас продаётся: под него докупим в закупке ниже.
-      const accept = event.kind !== 'order' || sellableProducts(state).includes(event.product);
-      state = answerEvent(state, accept) ?? answerEvent(state, false) ?? state;
+      state = answerEvent(state, true) ?? answerEvent(state, false) ?? state;
     }
+    // Доска «Заказы» (orders.ts): заказ клиента берём, если товар сейчас продаётся, — под него докупим в закупке ниже.
+    const offer = state.plan?.offer;
+    if (offer) state = answerOrder(state, sellableProducts(state).includes(offer.product)) ?? state;
 
     // Кафе по соседству: договор на неделю — соглашаемся (и докупаем под него товар ниже).
     if (features.cafe && state.cafe?.offer) state = answerCafe(state, state.money > reserve * 3);
-    // Разумный игрок соглашается на прибавки: обиженный сотрудник работает хуже.
-    for (const m of state.staff) if (m.raiseAsk) state = answerRaise(state, m.role, true);
-    // И даёт выходной тому, кто устал (по одному за раз).
-    const tired = state.staff.find((m) => isTired(m) && m.offDay !== state.day + 1);
-    if (tired) state = giveDayOff(state, tired.role) ?? state;
     if (hireStaff) {
       const role = HIRE_WHEN.reduce<StaffRole | null>((found, next) => found ?? next(state), null);
       // Под нового кассира сначала ставим кассу.
@@ -518,9 +507,7 @@ export function simulate({
       ['coffee', 'coffee'],
       ['oven', 'oven'],
       ['night', 'nightShift'],
-      ['cart', 'cart'],
       ['loyalty', 'loyalty'],
-      ['etags', 'eTags'],
       ['oven', 'wholesale'],
       ['coffee', 'coffeeTables'],
       ['kitchen', 'kitchen'],
@@ -529,17 +516,11 @@ export function simulate({
     // Дорогое «для удобства» (ночная смена, новые модели) разумный игрок берёт, когда уже не копит на расширение.
     const nextLevel = nextFor(state);
     const canSplurge = (price: number) => !nextLevel || state.money - price >= nextLevel.cost + reserve;
-    // Автозаказ: берёт, как только хватает с запасом, и сразу включает.
-    if (buyMode === 'auto' && !hasUpgrade(state, 'autoOrder') && state.level >= UPGRADES.autoOrder.minLevel && state.money >= UPGRADES.autoOrder.price + reserve) {
-      const bought = buyUpgrade(state, 'autoOrder');
-      if (bought) {
-        investments += UPGRADES.autoOrder.price;
-        state = { ...bought, autoOrder: { on: true } };
-      }
-    }
+    // «Закупать сам» (бесплатно): включает, как только переключатель появился.
+    if (buyMode === 'auto' && !autoActive(state) && autoAvailable(state)) state = autoToggle(state);
     for (const [feature, id] of wants) {
       if (!features[feature] || hasUpgrade(state, id) || state.money < UPGRADES[id].price + reserve) continue;
-      if ((id === 'nightShift' || id === 'eTags' || id === 'coffeeTables' || id === 'kitchen') && !canSplurge(UPGRADES[id].price)) continue;
+      if ((id === 'nightShift' || id === 'coffeeTables' || id === 'kitchen') && !canSplurge(UPGRADES[id].price)) continue;
       const bought = buyUpgrade(state, id);
       if (bought) {
         investments += UPGRADES[id].price;
@@ -569,23 +550,18 @@ export function simulate({
         }
       }
     }
-    // Новые модели оборудования — когда хватает денег с запасом и не копит на расширение.
+    // Новые модели оборудования — когда хватает денег с запасом и не копит на расширение. Покупает только
+    // четыре ручные линейки: остальное встаёт само с помещением (gear.ts).
     if (features.gear) {
-      for (const id of GEAR_IDS) {
+      for (const id of MANUAL_GEAR) {
         const next = nextGear(state, id);
-        // Полка «Уценка» в симуляторе не моделируется (fillBargain) — места на ней не покупаем.
-        if (id === 'bargain' || !next || !gearAvailable(state, id) || state.money < next.price + reserve * 2 || !canSplurge(next.price)) continue;
+        if (!next || !gearAvailable(state, id) || state.money < next.price + reserve * 2 || !canSplurge(next.price)) continue;
         investments += next.price;
         state = upgradeGear(state, id) ?? state;
       }
     }
-    // Своя марка: печь до лучшей модели, потом рецепты «От бабушки» — когда есть запас.
+    // Своя марка: рецепты «От бабушки» — когда есть запас (лучшая печь встаёт сама в третьем помещении, gear.ts).
     if (features.brand && hasUpgrade(state, 'oven')) {
-      const oven = nextGear(state, 'oven');
-      if (oven && state.money >= oven.price + reserve * 2) {
-        investments += oven.price;
-        state = upgradeGear(state, 'oven') ?? state;
-      }
       const cost = nextBrandCost(state);
       if (cost !== null && brandAvailable(state) && state.money >= cost + reserve * 2) {
         investments += cost;
@@ -655,12 +631,6 @@ export function simulate({
         state = buyHood(state, id) ?? state;
       }
     }
-    // Навыки хозяина: очки — по кругу во все навыки.
-    if (features.skills) {
-      for (let i = 0; skillPoints(state) > 0 && i < SKILL_IDS.length * 3; i++) {
-        state = learnSkill(state, SKILL_IDS[i % SKILL_IDS.length]) ?? state;
-      }
-    }
     if (features.cat) {
       if (catOffer(state)) state = adoptCat(state, 'Барсик');
       state = feedCat(state) ?? state;
@@ -670,11 +640,7 @@ export function simulate({
         state = buyBed(state, bed) ?? state;
       }
     }
-    // Бобик — как только по карману: ночные воры обходятся дороже корма.
-    if (!hasDog(state) && state.day >= DOG_FROM_DAY && state.money >= DOG_PRICE + reserve * 3) {
-      investments += DOG_PRICE;
-      state = adoptDog(state) ?? state;
-    }
+    // Бобика симулятор не берёт: ночных воров больше нет (02.11), днём он только помогает поймать воришку.
     if (features.candy) {
       const next = nextRack(state);
       if (next && state.money >= next.cost + reserve * 2) {
@@ -690,8 +656,15 @@ export function simulate({
     state = { ...state, rush: (features.rush && state.day % 7 >= 5) || undefined };
     // Просьбы сотрудников и истории покупателей: соглашается, если деньги есть с запасом.
     // Карьера: премия лучшему, если деньги есть с запасом (иначе выходной), повышения — да.
-    if (features.career && state.career?.ceremony) state = answerCeremony(state, state.money >= bestBonus(state) + reserve * 2 ? 'cash' : 'off') ?? state;
+    if (features.career && state.career?.ceremony) state = answerCeremony(state, state.money >= bestBonus(state) + reserve * 2 ? 'cash' : 'gift') ?? state;
     if (features.career && state.career?.offer) state = answerOffer(state, true);
+    // Повышение — ступень обучения (staff.ts): как только хватает смен и денег с запасом.
+    if (features.career) {
+      for (const m of state.staff) {
+        const step = trainingStep(m, state.day);
+        if (step?.kind === 'rank' && !step.xpLeft && state.money >= step.cost + reserve * 2) state = train(state, m.role) ?? state;
+      }
+    }
     if (state.staffEvent) state = answerStaffEvent(state, state.money >= eventCost(state.staffEvent) + reserve * 2) ?? answerStaffEvent(state, false) ?? state;
     if (taleToday(state)) state = answerTale(state, 0) ?? answerTale(state, 1) ?? state;
     if (arcToday(state)) state = answerArc(state, 0) ?? answerArc(state, 1) ?? answerArc(state, 2) ?? state;
@@ -752,7 +725,7 @@ export function simulate({
     if (fairToday(state) && sellable.length) {
       for (let n = 0; n < STALL_MAX; n++) {
         const id = sellable[n % sellable.length];
-        const best = SUPPLIER_IDS.map((sid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), id)).filter((p): p is number => p !== null).sort((a, b) => a - b)[0];
+        const best = listPrice(id) ?? undefined;
         const bought = best !== undefined && state.money > reserve + best ? buyStock(state, id, 1, best) : null;
         if (!bought) break;
         state = bought;
@@ -764,12 +737,11 @@ export function simulate({
     }
     const guests = actualGuestsToday(state);
     let purchases = 0;
-    const deals = Object.fromEntries(
-      SUPPLIER_IDS.map((sid) => {
-        const s = SUPPLIERS[sid];
-        return [sid, haggle(s, newDeal(s), 0.05, state.rating, random(), haggleBonus(state)).deal];
-      }),
-    );
+    // Цены дня со скидкой постоянного покупателя (suppliers.ts supplierDiscount) — торга больше нет (02.11).
+    // Случайные числа, которые раньше уходили на торг, тянем по-прежнему: ряд не сдвигается, и прогоны
+    // до и после упрощения идут по тем же событиям дня.
+    for (let i = 0; i < SUPPLIER_IDS.length; i++) random();
+    const priceOf = priceFor(state);
     // Доля спроса на товар: в сезон любимые товары берут чаще.
     const weight = (p: ProductId) =>
       (seasonFor(state.day)?.demand[p] ?? 1) * seasonalDemand(p, state.day) * dayDemand(state, p, aromaShare > 0.5);
@@ -789,14 +761,14 @@ export function simulate({
       purchases += pantry.spent;
     }
     if (buyMode === 'auto' && autoActive(state)) {
-      // Закупщик платит обычную цену (без торга) и брака не берёт.
+      // «Закупать сам»: тот же расчёт и те же цены, что у кнопки, только без брака.
       const before = state.money;
-      state = autoMorning(state, (sid, pid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), pid), guestsToday(state));
+      state = autoMorning(state, priceOf, guestsToday(state));
       purchases += before - state.money;
     } else if (buyMode === 'restock' || buyMode === 'auto') {
       // Одно нажатие: купленное сразу встаёт на полки, лишнее — на склад (buyLine).
       // Печь в симуляторе печёт до закупки: её хлеб уже в запасе, вычитать его из плана второй раз не нужно.
-      const plan = restockPlan(state, (sid, pid) => unitPrice(SUPPLIERS[sid], deals[sid], pid), guestsToday(state), [], 0);
+      const plan = restockPlan(state, priceOf, guestsToday(state), [], 0);
       for (const line of plan.lines) {
         const before = state.money;
         const got = buyLine(state, line, badBatch(line.sid, state.day, random()));
@@ -825,9 +797,9 @@ export function simulate({
       if (homemade(id)) continue;
       if (buyMode === 'naive') {
         // Новичок: всего поровну, у первого же поставщика, у кого товар есть.
-        const sid = SUPPLIER_IDS.find((x) => supplierOpen(SUPPLIERS[x], state.shelves) && unitPrice(SUPPLIERS[x], deals[x], id) !== null);
+        const sid = SUPPLIER_IDS.find((x) => supplierOpen(SUPPLIERS[x], state.shelves) && priceOf(x, id) !== null);
         if (!sid) continue;
-        const price = unitPrice(SUPPLIERS[sid], deals[sid], id)!;
+        const price = priceOf(sid, id)!;
         const qty = Math.min(Math.max(0, NAIVE_STOCK - onShelves(state, id) - warehouseOf(state, id)), Math.floor(state.money / price), warehouseCapacity(state) - warehouseCount(state));
         if (qty <= 0) continue;
         const bad = badBatch(sid, state.day, random());
@@ -838,7 +810,7 @@ export function simulate({
       }
       let qty = Math.ceil(lacking(id) * fit);
       // Самый дешёвый поставщик этого товара.
-      const offers = SUPPLIER_IDS.map((sid) => ({ sid, price: unitPrice(SUPPLIERS[sid], deals[sid], id) })).filter(
+      const offers = SUPPLIER_IDS.map((sid) => ({ sid, price: priceOf(sid, id) })).filter(
         (o): o is { sid: (typeof SUPPLIER_IDS)[number]; price: number } => o.price !== null,
       );
       const best = offers.sort((a, b) => a.price - b.price)[0];
@@ -857,7 +829,7 @@ export function simulate({
       const extra = sellable
         .filter((id) => !homemade(id))
         .map((id) => {
-          const offers = SUPPLIER_IDS.map((sid) => ({ sid, price: unitPrice(SUPPLIERS[sid], deals[sid], id) })).filter(
+          const offers = SUPPLIER_IDS.map((sid) => ({ sid, price: priceOf(sid, id) })).filter(
             (o): o is { sid: (typeof SUPPLIER_IDS)[number]; price: number } => o.price !== null,
           );
           const best = offers.sort((a, b) => a.price - b.price)[0];
@@ -895,9 +867,9 @@ export function simulate({
     // Один игрок не успевает всё: чем больше магазин, тем больше теряется без персонала.
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
     let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
-    // С котом в очереди ждут дольше — уходят реже.
-    const lossInQueue =
-      (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / climatePatience(state, weatherFor(state.day)) / charmPatience(state) / radioPatience(state) / signagePatience(state) / cartPatience(state);
+    // С котом и радио в очереди ждут дольше — уходят реже. Климат, указатели, тележки и обаяние хозяина
+    // убраны 02.11: из шести «терпений» остались два, что игрок замечает (docs/BALANCE.md).
+    const lossInQueue = (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / radioPatience(state);
     // Доставка на дом: звонки идут весь день, а здесь заказы забирают товар раньше покупателей
     // (осторожная оценка). Без менеджера и грузчика заказ собирает хозяин — это время не за кассой
     // (сменщик, если нанят, в это время стоит за его кассой).
@@ -1000,7 +972,7 @@ export function simulate({
       for (const id of new Set(wanted)) {
         const index = shelfFor(state, id);
         const shelf = state.shelves[index];
-        const oldest = shelf && !shelf.broken ? shelf.items[id]?.[0] : undefined;
+        const oldest = shelf ? shelf.items[id]?.[0] : undefined;
         if (!oldest) {
           sawEmpty = true;
           emptyId ??= id;
@@ -1086,14 +1058,14 @@ export function simulate({
     };
     // Вечер «Ночи распродаж» (weeks.ts): последняя четверть дня — всё на 20% дешевле, гостей больше.
     const sale = weekFor(state.day)?.id === 'sale';
-    if (hasUpgrade(state, 'eTags') || sale) {
-      // Электронные ценники: к вечеру то, что испортится ночью, уценяется само (вечер у них тот же — SALE_EVENING).
-      const evening = Math.round(dayGuests * ETAGS_EVENING);
-      dayPart(dayGuests - evening, 0, 1 - ETAGS_EVENING);
-      if (hasUpgrade(state, 'eTags')) state = markdownSurplus(state, (id) => eveningSales(stats.sold[id] ?? 0)).state;
+    {
+      // Вечерняя уценка (у всех с 02.11): к вечеру то, что испортится ночью, уценяется само (вечер тот же, что у распродажи, — SALE_EVENING).
+      const evening = Math.round(dayGuests * MARKDOWN_EVENING);
+      dayPart(dayGuests - evening, 0, 1 - MARKDOWN_EVENING);
+      state = markdownSurplus(state, (id) => eveningSales(stats.sold[id] ?? 0)).state;
       if (sale) state = startSale(state);
-      dayPart(sale ? Math.round(evening * SALE_CROWD) : evening, 1 - ETAGS_EVENING, ETAGS_EVENING);
-    } else dayPart(dayGuests, 0, 1);
+      dayPart(sale ? Math.round(evening * SALE_CROWD) : evening, 1 - MARKDOWN_EVENING, MARKDOWN_EVENING);
+    }
     // Ночная смена: гостей меньше, к ценам терпимее, касса успевает пропорционально времени.
     let nightProfit = 0;
     // Вечерняя распродажа кончается с закрытием (как в игре — nightShift.startNightShift).
@@ -1149,12 +1121,6 @@ export function simulate({
     purchases += night.lines.spent;
     const before = night.state;
     state = night.state;
-    const news = before.security?.news;
-    if (news && news.day === state.day && !news.seen) {
-      const goods = news.goods.reduce((sum, g) => sum + g.n * PRODUCTS[g.id].cost, 0);
-      burglaries.push({ day: state.day, outcome: news.outcome, loss: goods + news.cash + news.repair - news.bounty });
-      state = { ...state, security: { ...state.security, news: { ...news, seen: true } } };
-    }
     if (state.giant && state.giant.phase !== giantLog[giantLog.length - 1]?.phase) giantLog.push({ day: state.day, phase: state.giant.phase });
     const contest = state.contest;
     if (contest?.last && contest.phase === 'wait' && contest.since === state.day) contests.push({ day: state.day, tier: contest.last.tier, won: contest.last.won });
@@ -1191,7 +1157,7 @@ export function simulate({
     void moneyStart;
   }
   setBigDaySeed(bigDaySeedBefore);
-  return { days: out, levelDay, chapterDay, rescueDay, bankruptDay, burglaries, giant: giantLog, contests, zarLevelDay, final: state };
+  return { days: out, levelDay, chapterDay, rescueDay, bankruptDay, giant: giantLog, contests, zarLevelDay, final: state };
 }
 
 

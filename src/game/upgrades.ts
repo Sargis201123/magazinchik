@@ -1,13 +1,19 @@
 // Улучшения магазина: терминал для карт (оплата быстрее), касса самообслуживания
-// (есть хотя бы один киоск — их число и модель в lanes.ts), тележки, карта лояльности, доставка, автозаказ, электронные ценники,
-// кофейный уголок, своя печь и ночная смена.
+// (есть хотя бы один киоск — их число и модель в lanes.ts), карта лояльности, доставка,
+// кофейный уголок, своя печь и ночная смена. «Тележки» убраны 02.11: носить по 12 штук стал склад с рохлей
+// (gear.ts), а терпение в очереди от них — одно из шести, что почти ничего не меняли (за купленные — монеты, migrateGear).
 
 import type { TextKey } from '../i18n/ru';
 import { CARRY, managerBoost, type ScanTiming, type StoreState } from './economy';
-import { registerScan } from './gear';
+import { gearTier, registerScan } from './gear';
 import { helpScan } from './help';
 
-export type UpgradeId = 'terminal' | 'selfCheckout' | 'cart' | 'loyalty' | 'delivery' | 'autoOrder' | 'eTags' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables' | 'kitchen' | 'bargain';
+export type UpgradeId = 'terminal' | 'selfCheckout' | 'loyalty' | 'delivery' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables' | 'kitchen' | 'bargain';
+/**
+ * Убраны 02.11: «Автозаказ» стал бесплатным переключателем «Закупать сам» (autoorder.ts), электронные
+ * ценники — вечерней уценкой у всех. Из старых сохранений их убирает buyMigrate.ts (ценники — с возвратом денег).
+ */
+export const RETIRED_UPGRADES = { autoOrder: 1200, eTags: 300 } as const;
 
 export interface Upgrade {
   id: UpgradeId;
@@ -23,12 +29,9 @@ export interface Upgrade {
 
 export const UPGRADES: Record<UpgradeId, Upgrade> = {
   terminal: { id: 'terminal', icon: '💳', nameKey: 'upgrade.terminal', descKey: 'upgrade.terminal.desc', price: 600, minLevel: 1 },
-  cart: { id: 'cart', icon: '🛒', nameKey: 'upgrade.cart', descKey: 'upgrade.cart.desc', price: 700, minLevel: 1 },
   loyalty: { id: 'loyalty', icon: '💳', nameKey: 'upgrade.loyalty', descKey: 'upgrade.loyalty.desc', price: 1500, minLevel: 1 },
   delivery: { id: 'delivery', icon: '🚲', nameKey: 'upgrade.delivery', descKey: 'upgrade.delivery.desc', price: 1500, minLevel: 3 },
-  autoOrder: { id: 'autoOrder', icon: '🤖', nameKey: 'upgrade.autoOrder', descKey: 'upgrade.autoOrder.desc', price: 1200, minLevel: 1 },
   bargain: { id: 'bargain', icon: '🏷', nameKey: 'upgrade.bargain', descKey: 'upgrade.bargain.desc', price: 900, minLevel: 2 },
-  eTags: { id: 'eTags', icon: '🏷', nameKey: 'upgrade.eTags', descKey: 'upgrade.eTags.desc', price: 300, minLevel: 1 },
   selfCheckout: { id: 'selfCheckout', icon: '🖥', nameKey: 'upgrade.selfCheckout', descKey: 'upgrade.selfCheckout.desc', price: 2500, minLevel: 2 },
   coffee: { id: 'coffee', icon: '☕', nameKey: 'upgrade.coffee', descKey: 'upgrade.coffee.desc', price: 1500, minLevel: 2 },
   oven: { id: 'oven', icon: '🥖', nameKey: 'upgrade.oven', descKey: 'upgrade.oven.desc', price: 1800, minLevel: 1 },
@@ -57,16 +60,10 @@ export const withUpgrades = (state: StoreState, timing: ScanTiming): ScanTiming 
   pay: (hasUpgrade(state, 'terminal') ? timing.pay * TERMINAL_PAY : timing.pay) / managerBoost(state) / helpScan(state),
 });
 
-/** Тележки: за один поход со склада несут вдвое больше, а у входа — тележки для покупателей. */
+/** Со склада с рохлей (gear.ts, склад от 1-й модели) за один поход несут вдвое больше. */
 export const CART_CARRY = 12;
-export const carryOf = (state: StoreState): number => (hasUpgrade(state, 'cart') ? CART_CARRY : CARRY);
-/**
- * Тележки у входа: с тележкой в очереди стоять удобнее — ждут на 10% дольше. Раньше тележка давала
- * «товар сверх списка», но лишняя покупка опустошала полки и следующие уходили ни с чем (симулятор).
- */
-export const CART_PATIENCE = 1.1;
-export const cartPatience = (state: StoreState): number => (hasUpgrade(state, 'cart') ? CART_PATIENCE : 1);
-/** Какая доля покупателей катит тележку (только для вида). */
+export const carryOf = (state: StoreState): number => (gearTier(state, 'warehouse') > 0 ? CART_CARRY : CARRY);
+/** Какая доля покупателей катит тележку (только для вида; тележки у входа — с мини-маркета, persons.ts). */
 export const CART_SHARE = 0.3;
 
 /**
@@ -78,13 +75,14 @@ export const loyaltyTolerance = (state: StoreState): number => (hasUpgrade(state
 
 
 /**
- * Электронные ценники: в последнюю четверть дня то, что испортится ночью и не успеет продаться
- * по полной цене при сегодняшнем темпе продаж, уценяется само.
+ * Вечерняя уценка (02.11 — сама у всех; раньше её давали электронные ценники за 300, а утром была
+ * кнопка «Уценить»): в последнюю четверть дня то, что испортится ночью и не успеет продаться по полной
+ * цене при сегодняшнем темпе продаж, уценяется само (economy.ts markdownSurplus).
  */
-export const ETAGS_EVENING = 0.25;
+export const MARKDOWN_EVENING = 0.25;
 /**
  * Сколько ещё могут купить до закрытия: темп продаж за день (к вечеру прошло 3/4) с запасом ×2 —
  * вечером бывает наплыв, а лишняя уценка отнимает продажи по полной цене (видно в симуляторе).
  */
-export const ETAGS_CAUTION = 2;
-export const eveningSales = (soldToday: number): number => (soldToday * ETAGS_EVENING * ETAGS_CAUTION) / (1 - ETAGS_EVENING);
+export const MARKDOWN_CAUTION = 2;
+export const eveningSales = (soldToday: number): number => (soldToday * MARKDOWN_EVENING * MARKDOWN_CAUTION) / (1 - MARKDOWN_EVENING);

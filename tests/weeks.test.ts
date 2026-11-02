@@ -7,7 +7,7 @@ import { restartGame } from '../src/game/restart';
 import { tomorrowTeaser } from '../src/game/nudge';
 import { ensurePlan, guestFactor, nightCycle } from '../src/game/day';
 import { simulate } from '../src/game/simulate';
-import { ETAGS_EVENING } from '../src/game/upgrades';
+import { MARKDOWN_EVENING } from '../src/game/upgrades';
 import {
   nextWeek,
   normalizeWeeks,
@@ -86,7 +86,7 @@ describe('сезонные недели: календарь', () => {
   });
 
   it('вечер распродажи — та же четверть дня, что у электронных ценников (симулятор делит день один раз)', () => {
-    expect(SALE_EVENING).toBe(ETAGS_EVENING);
+    expect(SALE_EVENING).toBe(MARKDOWN_EVENING);
   });
 });
 

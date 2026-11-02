@@ -1,12 +1,12 @@
 // Карточки «Новое!»: при первом появлении механики утро объясняет её в двух словах.
 // Каждую показываем один раз (seenTips в сохранении).
 
-import { expiringCount, nextStoreLevel, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } from './economy';
+import { nextStoreLevel, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount } from './registers';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'promo' | 'contract' | 'markdown' | 'weekly' | 'fair' | 'cart' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -37,10 +37,7 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   // Раньше 20-го дня карточку показывает вкладка «Развитие» — у кнопки расширения (soloExpandRisk).
   ['alone', (s) => s.level >= 2 && s.day >= 20 && !hasFloorStaff(s)],
   ['weekly', (s) => Boolean(s.weekly)],
-  ['markdown', (s) => s.day >= 3 && expiringCount(s) > 0],
-  ['promo', (s) => s.day >= 5],
   ['fair', (s) => isFairDay(s.day)],
-  ['cart', (s) => hasUpgrade(s, 'cart')],
   ['loyalty', (s) => hasUpgrade(s, 'loyalty')],
   ['delivery', (s) => hasUpgrade(s, 'delivery')],
   ['register2', (s) => registerCount(s) >= 2],
@@ -53,12 +50,8 @@ export const TIP_ICONS: Record<TipId, string> = {
   broke: '🏦',
   ownerTill: '👆',
   alone: '🧑‍🤝‍🧑',
-  promo: '🏷',
-  contract: '📃',
-  markdown: '🏷',
   weekly: '🗓',
   fair: '🎪',
-  cart: '🛒',
   loyalty: '💳',
   delivery: '🚲',
   register2: '🧾',

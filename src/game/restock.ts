@@ -73,7 +73,7 @@ export const canStock = (state: StoreState, pid: ProductId): boolean =>
  * складе (его разложат первым). Бракованная партия ждёт решения и на полки не идёт.
  */
 export function shelfRoom(state: StoreState, category: Category): number {
-  const free = state.shelves.filter((sh) => !sh.broken && sh.kind === category).reduce((sum, sh) => sum + Math.max(0, shelfFree(sh)), 0);
+  const free = state.shelves.filter((sh) => sh.kind === category).reduce((sum, sh) => sum + Math.max(0, shelfFree(sh)), 0);
   const waiting = PRODUCT_IDS.filter((id) => PRODUCTS[id].category === category).reduce(
     (sum, id) => sum + (state.warehouse[id] ?? []).filter((u) => !u.pending).length,
     0,
@@ -98,10 +98,12 @@ export function restockPlan(
   const wants = sellableProducts(state)
     .filter((pid) => canStock(state, pid) && !skip.includes(pid))
     .map((pid) => {
-      // Сверху — то, что сегодня заберут по заказу и по договору с кафе: иначе полки опустеют к открытию.
-      // Повар продукты не трогает — у кухни своя кладовая, она закупает сама (kitchen.ts).
-      // И сырьё, которое ночью уйдёт на свою марку: яблоки на варенье, мясо на пельмени, хлеб на квас (lines.ts).
-      const reserved = (state.plan?.order?.product === pid ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[pid] ?? 0) + lineInputNeed(state, pid);
+      // Сверху — то, что сегодня заберут с доски «Заказы» (orders.ts): заказ клиента, кафе и сосед, просивший
+      // отложить, — иначе полки опустеют к открытию. Повар продукты не трогает — у кухни своя кладовая,
+      // она закупает сама (kitchen.ts). И сырьё, которое ночью уйдёт на свою марку: яблоки на варенье,
+      // мясо на пельмени, хлеб на квас (lines.ts).
+      const neighbour = state.ret?.order?.day === state.day && state.ret.order.pid === pid ? state.ret.order.qty : 0;
+      const reserved = (state.plan?.order?.product === pid ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[pid] ?? 0) + neighbour + lineInputNeed(state, pid);
       const target = Math.max(0, restockTarget(state, pid, guests) - (pid === 'bread' ? ownBread : 0)) + reserved;
       const have = stockOf(state, pid);
       return { pid, need: target - have, fill: have / Math.max(1, target), offer: bestOffer(state, pid, priceOf) };

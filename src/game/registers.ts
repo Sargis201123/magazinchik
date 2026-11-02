@@ -89,15 +89,9 @@ export function migrateOwnerTill(state: StoreState): StoreState {
   if (!to) return done;
   const swap = (role: StaffRole): StaffRole => (role === RELIEF_ROLE ? to : role === to ? RELIEF_ROLE : role);
   const member = (m: StaffMember): StaffMember => ({ ...m, role: swap(m.role) });
-  const plan = state.plan && {
-    ...state.plan,
-    sick: state.plan.sick && swap(state.plan.sick),
-    event: state.plan.event && 'role' in state.plan.event ? { ...state.plan.event, role: swap(state.plan.event.role) } : state.plan.event,
-  };
   return {
     ...done,
     staff: state.staff.map(member),
-    plan,
     staffEvent: state.staffEvent && { ...state.staffEvent, roles: state.staffEvent.roles.map(swap) },
     jobSearch: state.jobSearch && { ...state.jobSearch, role: swap(state.jobSearch.role), candidates: state.jobSearch.candidates.map(member) },
   };

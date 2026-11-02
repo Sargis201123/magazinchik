@@ -4,7 +4,7 @@
 import { lineOfProduct, lineUnitCost } from './lines';
 import type { TextKey } from '../i18n/ru';
 import { homemade, PRODUCT_IDS, PRODUCTS, type DayStats, type ProductId, type StoreState } from './economy';
-import { newDeal, SUPPLIER_IDS, SUPPLIERS, unitPrice } from './suppliers';
+import { listPrice } from './suppliers';
 
 /** Сколько последних дней в отчёте. */
 export const REPORT_DAYS = 7;
@@ -48,11 +48,8 @@ export function addReport(state: StoreState, day: number, stats: DayStats, spoil
   return { ...state, reports: [...(state.reports ?? []), row].slice(-REPORT_DAYS) };
 }
 
-/** Почём сейчас обычно закупаешь штуку: самый дешёвый поставщик без торга. */
-export function usualCost(id: ProductId): number | null {
-  const prices = SUPPLIER_IDS.map((sid) => unitPrice(SUPPLIERS[sid], newDeal(SUPPLIERS[sid]), id)).filter((p): p is number => p !== null);
-  return prices.length ? Math.min(...prices) : null;
-}
+/** Почём сейчас обычно закупаешь штуку: самый дешёвый поставщик по прайсу (без скидки постоянного покупателя). */
+export const usualCost = (id: ProductId): number | null => listPrice(id);
 
 export interface ProductLine {
   id: ProductId;

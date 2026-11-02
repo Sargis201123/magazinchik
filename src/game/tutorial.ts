@@ -151,15 +151,15 @@ export function migrateTut(state: StoreState): StoreState {
 
 // ---------- Первая неделя: что ни день — что-то новое ----------
 
-/** Дни первой недели, в которые бабушка говорит о новом (2-й — сами шаги обучения). */
-export const WEEK_DAYS = [3, 4, 5, 6, 7] as const;
+/** Дни первой недели (и 8-й), в которые бабушка говорит о новом (2-й — сами шаги обучения). */
+export const WEEK_DAYS = [3, 4, 5, 6, 7, 8] as const;
 
 /** Гостинец с дачи в конце первой недели: на склад, бесплатно, как запас в первый день. */
 export const WEEK_GIFT: Partial<Record<ProductId, number>> = { apples: 4, potatoes: 4 };
 
 export interface WeekNote {
   day: number;
-  key: 'tut.week.product' | 'tut.week.price' | 'tut.week.event' | 'tut.week.staff' | 'tut.week.grow' | 'tut.week.gift';
+  key: 'tut.week.product' | 'tut.week.price' | 'tut.week.orders' | 'tut.week.event' | 'tut.week.staff' | 'tut.week.grow' | 'tut.week.gift';
   /** Новый товар (3-й день). */
   product?: ProductId;
   /** Цена следующего помещения (6-й день). */
@@ -167,9 +167,10 @@ export interface WeekNote {
 }
 
 /**
- * Что нового сегодня (новичок первой недели): 3-й — товар, которого ещё нет в магазине, 4-й — в зале
- * бывают мелкие хлопоты (мини-события), 5-й — первый помощник, 6-й — первое расширение, 7-й — гостинец.
- * null — сегодня ничего или уже сказано.
+ * Что нового сегодня (новичок первой недели): 3-й — товар, которого ещё нет в магазине, 4-й — утром бывают
+ * заказы и проверка, 5-й — первый помощник, 6-й — первое расширение, 7-й — гостинец, 8-й — в зале бывают
+ * мелкие хлопоты (мини-события; 02.11 их отодвинули с 4-го дня за первую неделю, дальше кот, особые гости
+ * и кафе приходят сами — по одному в день, со своими карточками). null — сегодня ничего или уже сказано.
  */
 export function weekNote(state: StoreState): WeekNote | null {
   const day = state.day;
@@ -178,12 +179,13 @@ export function weekNote(state: StoreState): WeekNote | null {
     const product = sellableProducts(state).find((id) => PRODUCTS[id] && onShelves(state, id) + warehouseOf(state, id) === 0);
     return product ? { day, key: 'tut.week.product', product } : { day, key: 'tut.week.price' };
   }
-  if (day === 4) return { day, key: 'tut.week.event' };
+  if (day === 4) return { day, key: 'tut.week.orders' };
   if (day === 5) return { day, key: 'tut.week.staff' };
   if (day === 6) {
     const next = nextStoreLevel(state);
     return next ? { day, key: 'tut.week.grow', cost: next.cost } : null;
   }
+  if (day === 8) return { day, key: 'tut.week.event' };
   return { day, key: 'tut.week.gift' };
 }
 

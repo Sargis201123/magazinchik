@@ -4,11 +4,14 @@ import { normalizeWeeks } from './weeks';
 import { migrateOwnerTill } from './registers';
 import { migrateAutoOrder, settleInbound } from './autoorder';
 import { migrateTut } from './tutorial';
+import { migrateBuying } from './buyMigrate';
 import { migrateCollections } from './collections';
 import { migrateCareer } from './career';
+import { migrateGear } from './gear';
 import { normalizePets } from './pets';
 import { normalizeZar } from './zarechye';
 import { normalizeNews } from './headlines';
+import { migrateCalm } from './calm';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId, trustedNow } from '../platform/telegram';
 
@@ -79,12 +82,16 @@ export function loadGame(): StoreState | null {
   // Раньше кассир стоял за первой кассой, теперь она хозяина: кассир переходит за свою (registers.ts).
   // Смотрим на само сохранение — в новой игре поле уже есть, и после слияния оно было бы всегда.
   // Новичок посреди первых дней (обновился до бабушкиного обучения) получает его с того шага, где он сейчас.
-  const state = migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? merged : migrateOwnerTill(merged))));
+  // Убранные 02.11 механики (calm.ts): поломки, болезни и выходные, прибавки, ночные кражи, навыки — снимаем первыми.
+  const calm = migrateCalm(merged);
+  // Закупка и продажи упрощены (02.11): снятые улучшения, акция дня, договоры, «выгодная партия» (buyMigrate.ts).
+  const state = migrateBuying(migrateTut(settleInbound(migrateAutoOrder(save.state.ownerTill ? calm : migrateOwnerTill(calm)))));
   // До версии 11 мороженое и цветы стояли на обычных полках (теперь — ларь у входа и вёдра у кассы).
   // Альбом коллекций появился позже: старое сохранение сразу получает уже заработанное (collections.ts).
   // Карьера сотрудников появилась позже: опыт старых сотрудников — по их стажу (career.ts).
   // Второй магазин в Заречье (zarechye.ts): срез второго магазина дополняем тем, чего в нём не было.
-  return normalizeZar(migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11))));
+  // Оборудование упростили 02.11: за убранные указатели, солнечные панели и тележки — монеты назад (gear.ts).
+  return normalizeZar(migrateGear(migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11)))));
 }
 
 let pending: string | null = null;

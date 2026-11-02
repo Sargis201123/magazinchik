@@ -20,7 +20,7 @@ import { kitchenOpen } from '../game/kitchen';
 import { blockedZones, slotSide, overlapsRect, propFootprint, propRect, tillZones } from './placement';
 import { kioskZones, REGISTER_ROW, registerSpot, unitsPerBox, WAREHOUSE_COLS, WING_OUTER, type Room } from './layout';
 import { Halo, personGlow } from './halo';
-import { BARGAIN_CHANCE, BARGAIN_PER_ROW, bargainCapacity, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
+import { BARGAIN_CHANCE, BARGAIN_PER_ROW, bargainCount, fillBargain, hasBargain, takeBargain } from '../game/bargain';
 import { bargainRows, bargainSprite, binCapacity, binSprite, gearTier, type GearId, registerSprite } from '../game/gear';
 import { registerSlots } from '../game/registers';
 import { cleanHall } from '../game/firstday';
@@ -518,7 +518,6 @@ export function buildBargain(scene: StoreScene): void {
   const tex = bargainSprite(scene.state);
   // Низом — на пол у точки at: у моделей побольше горка растёт вверх.
   const img = scene.art(at.x, at.y + BARGAIN_BOTTOM, tex).setOrigin(0.5, 1).setDepth(at.y + 4);
-  img.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => sendToBargain(scene, true)));
   scene.bargainItems = Array.from({ length: rows * BARGAIN_PER_ROW }, (_, n) => {
     const spot = bargainSlot(at, n);
     // Передний ряд — поверх задних.
@@ -553,8 +552,8 @@ export function refreshBargain(scene: StoreScene): void {
   });
 }
 
-/** Снести на полку уценки то, что испортится ночью (по нажатию — с подсказкой, если нечего). */
-export function sendToBargain(scene: StoreScene, byTap = false): void {
+/** Снести на полку уценки то, что испортится ночью: сама, утром и вечером при уценке (нажимать на неё не нужно). */
+export function sendToBargain(scene: StoreScene): void {
   if (!scene.bargainAt) return;
   const moved = fillBargain(scene.state);
   if (moved.count) {
@@ -564,9 +563,6 @@ export function sendToBargain(scene: StoreScene, byTap = false): void {
     scene.popup(scene.bargainAt.x, scene.bargainAt.y - 18, t('popup.bargain', { n: moved.count }), '#ffd0d0');
     scene.refreshShelves();
     refreshWarehouse(scene);
-  } else if (byTap) {
-    const full = bargainCount(scene.state) >= bargainCapacity(scene.state);
-    scene.popup(scene.bargainAt.x, scene.bargainAt.y - 18, t(full ? 'popup.bargainFull' : 'popup.bargainNone'), '#fff3b0');
   }
   refreshBargain(scene);
 }

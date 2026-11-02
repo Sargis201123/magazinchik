@@ -82,26 +82,23 @@ describe('модели оборудования', () => {
     expect(upgradeGear(s, 'register')).toBeNull();
   });
 
-  it('мусорка вмещает больше', () => {
-    let s = at(2);
-    expect(binCapacity(s)).toBe(5);
-    s = upgradeGear(upgradeGear(s, 'bin')!, 'bin')!;
-    expect(binCapacity(s)).toBe(12);
+  it('мусорка вмещает больше — с каждым помещением (02.11: встаёт сама)', () => {
+    expect(binCapacity(at(0))).toBe(5);
+    expect(binCapacity(at(2))).toBe(12);
+    expect(upgradeGear(at(2), 'bin')).toBeNull();
   });
 
-  it('кофемашину и печь улучшают, только когда они есть', () => {
-    expect(upgradeGear(at(3), 'coffee')).toBeNull();
-    let s = at(3, { upgrades: ['coffee', 'oven'] });
-    s = upgradeGear(upgradeGear(s, 'coffee')!, 'coffee')!;
-    expect(brewSeconds(s)).toBeLessThan(brewSeconds(at(3)));
+  it('кофемашина и печь лучше в большом помещении; не покупаются', () => {
+    expect(upgradeGear(at(3, { upgrades: ['coffee'] }), 'coffee')).toBeNull();
+    const s = at(4, { upgrades: ['coffee', 'oven'] });
+    expect(brewSeconds(s)).toBeLessThan(brewSeconds(at(2)));
     expect(coffeePrice(s)).toBe(50);
-    s = upgradeGear(s, 'oven')!;
-    expect(ovenBatch(s)).toBe(9);
-    expect(ovenBatchCost(s)).toBe(9 * FLOUR_PER_LOAF);
+    expect(ovenBatch(at(2))).toBe(9);
+    expect(ovenBatchCost(at(2))).toBe(9 * FLOUR_PER_LOAF);
   });
 
   it('большая печь закладывает и выдаёт больше хлеба', () => {
-    const s = upgradeGear(at(3, { upgrades: ['oven'] }), 'oven')!;
+    const s = at(2, { upgrades: ['oven'] });
     const started = startBatch(s)!;
     expect(started.money).toBe(s.money - 9 * FLOUR_PER_LOAF);
     const out = takeOutBread(started);
@@ -149,13 +146,9 @@ describe('новые линейки оборудования', () => {
     expect(monthlyBill({ ...s, shelves }).power).toBeLessThan(monthlyBill({ ...lvl(2), shelves }).power);
   });
 
-  it('свет, климат, камеры, вход, туалет', async () => {
+  it('свет, камеры, вход, туалет', async () => {
     const g = await import('../src/game/gear');
     expect(g.lightsGuests(lvl(3, { lights: 2 }))).toBeGreaterThan(1);
-    expect(g.climatePatience(lvl(2), 'heat')).toBeLessThan(1);
-    expect(g.climatePatience(lvl(2, { climate: 1 }), 'heat')).toBe(1);
-    expect(g.climatePatience(lvl(2, { climate: 1 }), 'snow')).toBeLessThan(1);
-    expect(g.climatePatience(lvl(2, { climate: 2 }), 'snow')).toBeGreaterThan(1);
     expect(g.cameraTheft(lvl(2, { cameras: 2 }))).toBeLessThan(g.cameraTheft(lvl(2)));
     expect(g.entranceMud(lvl(2, { entrance: 1 }))).toBe(0.5);
     expect(g.wcDirt(lvl(2, { wc: 2 }))).toBeLessThan(0.5);
@@ -169,16 +162,16 @@ describe('новые линейки оборудования', () => {
     expect(g.fridgeLeak(lvl(1, { fridge: 1 }))).toBe(0);
   });
 
-  it('достижения за оборудование считают модели', async () => {
+  it('достижения за оборудование считают модели, которые игрок ставит сам', async () => {
     const g = await import('../src/game/gear');
-    expect(g.gearUpgrades(lvl(2, { register: 2, bin: 1 }))).toBe(3);
+    expect(g.gearUpgrades(lvl(2, { register: 2, bin: 1 }))).toBe(2);
     const max = Object.fromEntries(g.GEAR_IDS.map((id) => [id, g.GEAR[id].models.length - 1]));
     expect(g.gearMaxed(lvl(4, max))).toBe(true);
     expect(g.gearMaxed(lvl(4, { register: 3 }))).toBe(false);
   });
 });
 
-describe('ценники, тележки', () => {
+describe('ценники', () => {
   it('умные ценники уценяют только то, что не успеют купить', async () => {
     const { markdownSurplus, PRODUCTS } = await import('../src/game/economy');
     const old = PRODUCTS.milk.shelfLife - 1;
@@ -187,12 +180,6 @@ describe('ценники, тележки', () => {
     expect(r.count).toBe(2);
     expect(r.state.shelves[0].items.milk!.filter((u) => u.markdown)).toHaveLength(2);
     expect(markdownSurplus(s, () => 10).count).toBe(0);
-  });
-
-  it('с тележками в очереди ждут дольше', async () => {
-    const { cartPatience } = await import('../src/game/upgrades');
-    expect(cartPatience(at(1))).toBe(1);
-    expect(cartPatience({ ...at(1), upgrades: ['cart'] })).toBeGreaterThan(1);
   });
 });
 

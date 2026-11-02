@@ -22,7 +22,7 @@ import type { AdId } from './ads';
 import type { FloorWear } from './wear';
 import { afterLoanPayment, loanDue } from './bank';
 import { SALE_DISCOUNT, saleOn, weekDemand, weekProductOk } from './weeks';
-import { fridgeLife, fridgePower, lightsPower, solarPower, warehouseRoom, type GearId } from './gear';
+import { fridgeLife, fridgePower, lightsPower, warehouseRoom, type GearId } from './gear';
 import { inZar, zarAwayBill, zarBillShare, zarNextLevel } from './zarshop';
 
 /**
@@ -206,7 +206,7 @@ export const NEW_DEPARTMENTS: Category[] = ['drinks', 'frozen', 'household'];
 /** Каждый открытый новый отдел приводит столько гостей сверху. */
 export const DEPARTMENT_GUESTS = 0.06;
 export const departmentGuests = (state: StoreState): number =>
-  1 + DEPARTMENT_GUESTS * NEW_DEPARTMENTS.filter((k) => state.shelves.some((s) => s.kind === k && !s.broken)).length;
+  1 + DEPARTMENT_GUESTS * NEW_DEPARTMENTS.filter((k) => state.shelves.some((s) => s.kind === k)).length;
 
 /** Можно ли поставить полку такого типа в этом помещении. */
 export const shelfKindOpen = (state: StoreState, kind: Category): boolean => state.level >= (SHELF_KINDS[kind].minLevel ?? 0);
@@ -254,8 +254,8 @@ export const STORE_LEVELS: StoreLevel[] = [
   { nameKey: 'store.l1', cost: 0, slots: 3, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 5 },
   { nameKey: 'store.l2', cost: 1500, slots: 7, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 7 },
   { nameKey: 'store.l3', cost: 4000, slots: 9, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
-  { nameKey: 'store.l4', cost: 16000, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
-  { nameKey: 'store.l5', cost: 32000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
+  { nameKey: 'store.l4', cost: 20000, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
+  { nameKey: 'store.l5', cost: 40000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
   // Гипермаркет — переезд в здание «Гиганта» за дорогой, когда там уже открыт свой филиал (branch.ts):
   // старый магазин становится филиалом. Цена подобрана симулятором (docs/BALANCE.md «Гипермаркет»).
   { nameKey: 'store.l6', cost: 120000, slots: 22, warehouse: 150, rent: 2300, utilities: 340, power: 260, guests: 5, maxCustomers: 20 },
@@ -349,14 +349,6 @@ export interface StaffMember {
   wage: number;
   /** Сколько месяцев проработал. */
   months: number;
-  /** Просит прибавку до этой суммы — ждёт ответа игрока. */
-  raiseAsk?: number;
-  /** Обиделся (отказали в прибавке): работает медленнее, может уволиться. */
-  upset?: boolean;
-  /** Сколько дней подряд вышел на работу (усталость; выходной обнуляет). */
-  streak?: number;
-  /** В этот день не выйдет: выходной. */
-  offDay?: number;
   /** Воодушевлён (поддержали, похвалили): столько дней работает быстрее (staffEvents.ts). */
   inspired?: number;
   /** Друг из Telegram (staff.ts): работает под своим именем, раз в неделю получает долю. */
@@ -382,62 +374,26 @@ export function wageFor(role: StaffRole, skill: number, trait?: Trait): number {
 
 /** Множитель скорости работы: 1 — обычная. */
 export const workSpeed = (m: StaffMember): number =>
-  SKILL_SPEED[m.skill - 1] * (m.trait ? TRAITS[m.trait].speed : 1) * (m.upset ? UPSET_SPEED : 1) * (isTired(m) ? TIRED_SPEED : 1) * (m.inspired ? INSPIRED_SPEED : 1) * (m.career?.rank ? RANK_SPEED[m.career.rank] : 1);
+  SKILL_SPEED[m.skill - 1] * (m.trait ? TRAITS[m.trait].speed : 1) * (m.inspired ? INSPIRED_SPEED : 1) * (m.career?.rank ? RANK_SPEED[m.career.rank] : 1);
 
-/** Без выходных столько дней подряд — устаёт и работает медленнее. */
-export const TIRED_DAYS = 6;
-export const TIRED_SPEED = 0.85;
-export const isTired = (m: StaffMember): boolean => (m.streak ?? 0) >= TIRED_DAYS;
-/** Сотрудник сегодня не на работе: заболел, отпросился или выходной. */
-export const isAbsent = (state: StoreState, m: StaffMember): boolean => state.plan?.sick === m.role || m.offDay === state.day;
-
-/** Дать выходной на завтра (сегодня он уже на работе). */
-export function giveDayOff(state: StoreState, role: StaffRole): StoreState | null {
-  const m = staffOf(state, role);
-  if (!m || m.offDay === state.day + 1) return null;
-  return { ...state, staff: state.staff.map((x) => (x.role === role ? { ...x, offDay: state.day + 1 } : x)) };
-}
+// 02.11: у персонала больше нет усталости, выходных, «отпроситься», болезней, просьб о прибавке и обид —
+// всё это стоило игроку внимания почти каждое утро, а на итог влияло на проценты. Кто нанят — тот на смене.
 
 /** Менеджер зала на месте — все работают быстрее (и хозяин за кассой тоже). */
 export const MANAGER_BOOST = 1.1;
 export const managerBoost = (state: StoreState): number =>
-  (state.staff.some((m) => m.role === 'manager' && !isAbsent(state, m)) ? MANAGER_BOOST : 1) *
-  (state.staff.some((m) => m.career?.rank === 'admin' && !isAbsent(state, m)) ? ADMIN_BOOST : 1);
+  (state.staff.some((m) => m.role === 'manager') ? MANAGER_BOOST : 1) *
+  (state.staff.some((m) => m.career?.rank === 'admin') ? ADMIN_BOOST : 1);
 
-/** Ночная смена выматывает: за такой день усталость растёт вдвое. */
-export const NIGHT_FATIGUE = 2;
-/** Столько дней без выходных — вымотался и сам не выходит завтра. */
-export const EXHAUSTED_DAYS = 10;
-
-/**
- * Конец дня: кто работал — устаёт (после ночной смены — вдвое), кто отдыхал — отдохнул.
- * Совсем вымотанный (EXHAUSTED_DAYS) берёт выходной сам — пекарня или кофейня завтра без него.
- */
-export const restStaff = (state: StoreState, night = false): StoreState => ({
-  ...state,
-  staff: state.staff.map((m) => {
-    const inspired = m.inspired ? m.inspired - 1 || undefined : undefined;
-    if (isAbsent(state, m)) return { ...m, streak: 0, inspired };
-    const streak = (m.streak ?? 0) + (night ? NIGHT_FATIGUE : 1);
-    return { ...m, streak, inspired, offDay: streak >= EXHAUSTED_DAYS && (m.offDay ?? 0) <= state.day ? state.day + 1 : m.offDay };
-  }),
-});
-
-/** Обиженный сотрудник работает медленнее. */
-export const UPSET_SPEED = 0.75;
-/** Шанс, что обиженный уволится в конце месяца. */
-export const UPSET_QUIT_CHANCE = 0.5;
-/** Шанс, что опытный сотрудник сам попросит прибавку в конце месяца (кроме роста навыка). */
-export const RAISE_ASK_CHANCE = 0.2;
-/** На сколько просят прибавку, если навык не вырос. */
-export const RAISE_STEP = 0.1;
+/** Конец дня для персонала: воодушевление (staffEvents.ts, «сотрудник месяца») тает на день. */
+export const restStaff = (state: StoreState): StoreState =>
+  state.staff.some((m) => m.inspired)
+    ? { ...state, staff: state.staff.map((m) => (m.inspired ? { ...m, inspired: m.inspired - 1 || undefined } : m)) }
+    : state;
 
 export const staffOf = (state: StoreState, role: StaffRole): StaffMember | undefined => state.staff.find((m) => m.role === role);
-/** Сотрудник на этой должности есть и сегодня на работе. */
-export const onShift = (state: StoreState, role: StaffRole): boolean => {
-  const m = staffOf(state, role);
-  return Boolean(m) && !isAbsent(state, m!);
-};
+/** Сотрудник на этой должности есть (а раз есть — он на смене: выходных больше нет). */
+export const onShift = (state: StoreState, role: StaffRole): boolean => Boolean(staffOf(state, role));
 export const staffLimit = (state: StoreState): number => STAFF_LIMIT[Math.min(state.level, STAFF_LIMIT.length - 1)];
 
 /** Нанять: одна роль — один человек, не больше лимита помещения. */
@@ -459,54 +415,17 @@ export function fire(state: StoreState, role: StaffRole): StoreState {
 }
 
 /**
- * Прибавки «просто так» — не выше ставки по навыку × RAISE_CAP: работает он с той же скоростью, и
- * без потолка кассир с 420 доходил до 760–1010. Кто уже получает больше, тому не урезаем — просто
- * больше не просит.
+ * Конец месяца для персонала: опыт растёт, раз в MONTHS_PER_SKILL месяцев — и навык. Ставка сама
+ * поднимается до положенной по навыку (раньше сотрудник просил прибавку, а отказ обижал его).
+ * Кто уже получает больше, тому не урезаем.
  */
-export const RAISE_CAP = 1.3;
-const raiseCap = (role: StaffRole, skill: number, trait: StaffMember['trait']): number => Math.round((wageFor(role, skill, trait) * RAISE_CAP) / 10) * 10;
-
-/**
- * Конец месяца для персонала. Обиженные могут уволиться, остальные успокаиваются.
- * Опыт растёт; раз в MONTHS_PER_SKILL месяцев растёт навык — и сотрудник просит
- * прибавку. Опытные иногда просят прибавку и просто так.
- */
-export function monthForStaff(staff: StaffMember[], random: () => number): { staff: StaffMember[]; quit: StaffMember[] } {
-  const quit: StaffMember[] = [];
-  const kept: StaffMember[] = [];
-  // За месяц о прибавке заговаривает только один: остальные (даже с выросшим навыком) — в следующие месяцы.
-  let asked = staff.some((m) => m.raiseAsk);
-  for (const m of staff) {
-    if (m.upset && random() < UPSET_QUIT_CHANCE) {
-      quit.push(m);
-      continue;
-    }
+export function monthForStaff(staff: StaffMember[]): StaffMember[] {
+  return staff.map((m) => {
     const months = m.months + 1;
     const skill = months % MONTHS_PER_SKILL === 0 ? Math.min(3, m.skill + 1) : m.skill;
-    let raiseAsk = m.raiseAsk;
-    if (!raiseAsk && !asked) {
-      // Навык вырос, а платят по-старому — просит по новому навыку; опытные иногда просят и просто так.
-      if (m.wage < wageFor(m.role, skill, m.trait)) raiseAsk = wageFor(m.role, skill, m.trait);
-      else if (months >= 3 && random() < RAISE_ASK_CHANCE) raiseAsk = Math.min(Math.round((m.wage * (1 + RAISE_STEP)) / 10) * 10, raiseCap(m.role, skill, m.trait));
-      asked = Boolean(raiseAsk && raiseAsk > m.wage);
-    }
-    kept.push({ ...m, months, skill, raiseAsk: raiseAsk && raiseAsk > m.wage ? raiseAsk : undefined, upset: false });
-  }
-  return { staff: kept, quit };
-}
-
-/** Ответ на просьбу о прибавке: согласиться — платить больше, отказать — обида. */
-export function answerRaise(state: StoreState, role: StaffRole, accept: boolean): StoreState {
-  return {
-    ...state,
-    staff: state.staff.map((m) =>
-      m.role !== role || !m.raiseAsk
-        ? m
-        : accept
-          ? { ...m, wage: m.raiseAsk, raiseAsk: undefined, upset: false }
-          : { ...m, raiseAsk: undefined, upset: true },
-    ),
-  };
+    // Только когда навык вырос: друг и летний помощник (arcs.ts) работают дешевле ставки и так и остаются.
+    return { ...m, months, skill, wage: skill > m.skill ? Math.max(m.wage, wageFor(m.role, skill, m.trait)) : m.wage };
+  });
 }
 
 /** Сколько за день унесли из кассы сотрудники «нечист на руку». */
@@ -575,8 +494,6 @@ export interface Unit {
   age: number;
   /** Брак: портится на день раньше, покупатели могут жаловаться. */
   bad?: boolean;
-  /** Куплен автозаказом утром: только такие штуки он и возвращает поставщику (autoorder.ts). */
-  auto?: boolean;
   /** Уценён: продаётся дешевле, жалоб нет. */
   markdown?: boolean;
   /** Бракованная партия, по которой игрок ещё не принял решение. */
@@ -590,8 +507,6 @@ export interface Shelf {
   level: number;
   /** Товар на полке, у каждого товара самые старые штуки — в начале. */
   items: Stock;
-  /** Сломанный холодильник: с него не продают и не раскладывают, товар портится быстрее. */
-  broken?: boolean;
   /** Старая отметка «в первую очередь» из прежних сохранений — больше не используется. */
   priority?: boolean;
 }
@@ -629,8 +544,6 @@ export interface StoreState {
   album: string[];
   /** Сегодняшнее объявление о вакансии и кандидаты по нему. */
   jobSearch?: { day: number; role: StaffRole; candidates: StaffMember[] };
-  /** Кто уволился в конце месяца (показываем утром). */
-  quitNotice?: StaffMember[];
   /** План сегодняшнего дня: событие утра, проверка, час пик. */
   plan?: DayPlan;
   story: StoryState;
@@ -686,16 +599,10 @@ export interface StoreState {
   catAsk?: number;
   /** Отзывы за последний день (reviews.ts). */
   reviews?: Review[];
-  /** Акция дня на один товар (promo.ts). */
-  promo?: { day: number; product: ProductId; kind: 'discount' | 'bogo' };
-  /** Договоры с поставщиками: товар приезжает каждое утро сам (contracts.ts). */
-  contracts?: { sid: string; pid: ProductId; qty: number; until: number; last?: number }[];
   /** Испытания недели (weekly.ts). */
   weekly?: { month: number; challenges: { kind: string; target: number; product?: ProductId; progress: number; reward: number; done?: boolean }[] };
   /** Какие подсказки о новых механиках уже показаны (tips.ts). */
   seenTips?: string[];
-  /** Навыки хозяина: ступень каждого (owner.ts). */
-  skills?: Partial<Record<'hands' | 'haggle' | 'strong' | 'charm' | 'eye', number>>;
   /** Кредит в банке: сколько осталось вернуть и платёж в месяц (bank.ts). */
   /** day — когда взят (в старых сохранениях нет): в тот же вечер платёж не берут. */
   loan?: { left: number; payment: number; day?: number };
@@ -906,8 +813,6 @@ export function recordSale(stats: DayStats, items: CartItem[]): void {
 export interface CartItem {
   id: ProductId;
   unit: Unit;
-  /** Вторая штука по акции «2 по цене 1» — бесплатно. */
-  free?: boolean;
 }
 
 const fresh = (n: number): Unit[] => Array.from({ length: n }, () => ({ age: 0 }));
@@ -982,7 +887,7 @@ export const onShelves = (state: StoreState, id: ProductId): number =>
 
 /** Индекс полки, куда идти за этим товаром (первая, где он есть, иначе первая подходящая). */
 export function shelfFor(state: StoreState, id: ProductId): number {
-  const withStock = state.shelves.findIndex((s) => !s.broken && (s.items[id]?.length ?? 0) > 0);
+  const withStock = state.shelves.findIndex((s) => (s.items[id]?.length ?? 0) > 0);
   return withStock >= 0 ? withStock : state.shelves.findIndex((s) => canPlace(id, s));
 }
 
@@ -1018,15 +923,9 @@ export function priceAppeal(state: StoreState): number {
   return Math.min(1.15, Math.max(0.85, 1 + (1 - avg) * 0.6));
 }
 
-/** Акция «−20%» на товар сегодня (promo.ts). */
-export const PROMO_DISCOUNT = 0.8;
-export const promoKind = (state: StoreState, id: ProductId): 'discount' | 'bogo' | undefined =>
-  state.promo?.day === state.day && state.promo.product === id ? state.promo.kind : undefined;
-
 export const unitSalePrice = (state: StoreState, id: ProductId, unit: Unit): number => {
-  const promo = promoKind(state, id) === 'discount' ? Math.max(1, Math.round(state.prices[id] * PROMO_DISCOUNT)) : state.prices[id];
-  // Вечер «Ночи распродаж» (weeks.ts): всё на 20% дешевле.
-  const price = saleOn(state) ? Math.max(1, Math.round(promo * SALE_DISCOUNT)) : promo;
+  // Вечер «Ночи распродаж» (weeks.ts): всё на 20% дешевле. «Акции дня» больше нет (02.11: в минус по марже).
+  const price = saleOn(state) ? Math.max(1, Math.round(state.prices[id] * SALE_DISCOUNT)) : state.prices[id];
   return unit.markdown ? Math.max(1, Math.round(price * MARKDOWN)) : price;
 };
 
@@ -1085,7 +984,7 @@ export function moveToShelf(
   limit = Infinity,
 ): { state: StoreState; moved: number } {
   const shelf = state.shelves[shelfIndex];
-  if (!shelf || shelf.broken) return { state, moved: 0 };
+  if (!shelf) return { state, moved: 0 };
   const candidates = (id ? [id] : PRODUCT_IDS).filter((p) => canPlace(p, shelf));
   const warehouse: Stock = { ...state.warehouse };
   const items: Stock = { ...shelf.items };
@@ -1226,7 +1125,7 @@ export function storeShelf(state: StoreState, shelfIndex: number): StoreState | 
     ...state,
     warehouse,
     shelves: state.shelves.filter((_, i) => i !== shelfIndex),
-    storedShelves: [...(state.storedShelves ?? []), { kind: shelf.kind, level: shelf.level, items: {}, ...(shelf.broken ? { broken: true } : {}) }],
+    storedShelves: [...(state.storedShelves ?? []), { kind: shelf.kind, level: shelf.level, items: {} }],
   };
 }
 
@@ -1295,8 +1194,8 @@ export function monthlyBill(state: StoreState): Bill {
   return {
     rent: part(STORE_LEVELS[old].rent) + other.rent,
     utilities: part(STORE_LEVELS[old].utilities) + other.utilities,
-    // Свет в зале дешевле с LED, холодильники — с новыми моделями, всё вместе — с солнечными панелями (gear.ts).
-    power: part(Math.round((level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state)) * solarPower(state))) + other.power,
+    // Свет в зале дешевле с LED, холодильники — с новыми моделями (gear.ts; солнечные панели убраны 02.11).
+    power: part(Math.round(level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state))) + other.power,
     salaries: part(state.staff.reduce((sum, m) => sum + m.wage, 0)) + other.salaries,
     debt: Math.min(DEBT_PAYMENT, state.debt),
     loan: loanDue(state),
@@ -1338,7 +1237,6 @@ export function takeFromShelf(
   id: ProductId,
 ): { state: StoreState; unit: Unit } | null {
   const shelf = state.shelves[shelfIndex];
-  if (shelf?.broken) return null;
   const [unit, ...rest] = shelf?.items[id] ?? [];
   if (!unit) return null;
   const shelves = state.shelves.map((s, i) => (i === shelfIndex ? { ...s, items: { ...s.items, [id]: rest } } : s));
@@ -1366,7 +1264,7 @@ export function returnToShelf(state: StoreState, items: CartItem[]): StoreState 
 
 /** markup — ночная наценка (цена на ценнике × markup, округляя вверх). */
 export function checkout(state: StoreState, items: CartItem[], markup = 1): { state: StoreState; total: number } {
-  const total = items.reduce((sum, { id, unit, free }) => sum + (free ? 0 : Math.ceil(unitSalePrice(state, id, unit) * markup)), 0);
+  const total = items.reduce((sum, { id, unit }) => sum + Math.ceil(unitSalePrice(state, id, unit) * markup), 0);
   return { state: { ...state, money: state.money + total }, total };
 }
 
@@ -1425,28 +1323,9 @@ export function expiringCount(state: StoreState): number {
   return expiringIn(state, state.warehouse) + state.shelves.reduce((sum, s) => sum + expiringIn(state, s.items), 0);
 }
 
-/** «Уценить старое»: то, что испортится ночью, продаётся за полцены, а не выбрасывается. */
-export function markdownExpiring(state: StoreState): { state: StoreState; count: number } {
-  let count = 0;
-  const mark = (stock: Stock): Stock => {
-    const next: Stock = {};
-    for (const id of PRODUCT_IDS) {
-      const units = stock[id];
-      if (!units) continue;
-      next[id] = units.map((u) => {
-        if (u.markdown || u.pending || u.age + 1 < unitLife(id, u, fridgeLife(state))) return u;
-        count++;
-        return { ...u, markdown: true };
-      });
-    }
-    return next;
-  };
-  const next = { ...state, warehouse: mark(state.warehouse), shelves: state.shelves.map((s) => ({ ...s, items: mark(s.items) })) };
-  return { state: count ? next : state, count };
-}
-
 /**
- * Электронные ценники вечером: уценить из того, что испортится ночью, только лишнее — сверх того,
+ * Вечерняя уценка (сама у всех с 02.11; раньше — электронные ценники и кнопка «Уценить»): уценить из того,
+ * что испортится ночью, только лишнее — сверх того,
  * что ещё успеют купить по полной цене (expected: сколько штук товара продадут до закрытия).
  * Покупатели берут сначала старое, поэтому первые expected штук продадутся и так.
  */
@@ -1517,7 +1396,7 @@ export const toggleDonate = (state: StoreState): StoreState => ({ ...state, dona
  * Ночь: товар стареет и портится (и на складе, и на полках), рейтинг двигается
  * от довольства покупателей, в конце месяца приходят счета.
  */
-export function endDay(state: StoreState, stats: DayStats, random: () => number = Math.random): NightResult {
+export function endDay(state: StoreState, stats: DayStats): NightResult {
   const spoiledBy: Partial<Record<ProductId, number>> = {};
   const warehouse = ageStock(state.warehouse, fridgeLife(state), spoiledBy);
   let spoiled = warehouse.spoiled;
@@ -1545,9 +1424,8 @@ export function endDay(state: StoreState, stats: DayStats, random: () => number 
   };
   if (daysUntilBill(state.day) !== 0) return { state: aged, spoiled, spoiledBy, bill: null, shortfall: 0, skimmed };
   const paid = payBill(aged);
-  // Зарплату выплатили — сотрудники набираются опыта, просят прибавку или увольняются.
-  const month = monthForStaff(paid.state.staff, random);
-  const promoted = { ...paid.state, staff: month.staff, quitNotice: month.quit.length ? month.quit : undefined };
+  // Зарплату выплатили — сотрудники набираются опыта (ставка растёт сама вместе с навыком).
+  const promoted = { ...paid.state, staff: monthForStaff(paid.state.staff) };
   return { state: promoted, spoiled, spoiledBy, bill: paid.bill, shortfall: paid.shortfall, skimmed };
 }
 

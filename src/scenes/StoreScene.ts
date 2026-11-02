@@ -38,7 +38,7 @@ import type { Weather } from '../game/weather';
 import { yearTime } from '../game/calendar';
 import { liveProgress, unlockAchievements, type AchievementId } from '../game/achievements';
 import { announceAchievement } from '../ui/achievements';
-import { ETAGS_EVENING, eveningSales, hasUpgrade } from '../game/upgrades';
+import { eveningSales, MARKDOWN_EVENING } from '../game/upgrades';
 import { noteSeen, stashAway } from '../game/returns';
 import { decorFromPurchases, grantDecor } from '../game/decor';
 import { restorePurchases } from '../platform/stars';
@@ -571,7 +571,6 @@ export class StoreScene extends Phaser.Scene {
   rivalPending: { pranks: PrankIn[]; thanks: string[] } | null = null;
   /** Сколько мс день стоит без открытых окон — сторож запускает его дальше. */
   stallMs = 0;
-  nightWatch: Phaser.GameObjects.GameObject[] = [];
   /** Сколько кубков стоит на прилавке; жюри конкурса сегодня: ждём, пришло, ушло. */
   builtCup = 0;
   jury: 'none' | 'pending' | 'here' | 'done' = 'none';
@@ -749,7 +748,6 @@ export class StoreScene extends Phaser.Scene {
     });
     this.hud = new Hud();
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
-    this.hud.onUrgent = () => deliveries.openUrgent(this);
     this.hud.onHelp = () => void nightShift.callForHelp(this);
     // Карточка звонка и плашка доставки живут в DOM — уходят вместе со сценой.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.deliveryUi.destroy());
@@ -842,7 +840,6 @@ export class StoreScene extends Phaser.Scene {
     weatherFx.updateRain(this);
     weatherFx.windTick(this, deltaMs);
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
-    this.hud.showUrgent(this.running && !this.night && this.state.day > TUTORIAL_DAYS);
     this.hud.showHelp(this.running && !this.night && this.time.now < this.helpUntil && nightShift.canCallForHelp(this), this.helpBusy);
     music.setMood(decorations.musicMood(this), this.winterTune);
     // Дверь двигается только в рабочие часы: день кончился — стекло снова закрывает улицу.
@@ -859,8 +856,9 @@ export class StoreScene extends Phaser.Scene {
     this.playTime += dt;
 
     const elapsed = DAY_SECONDS - this.timeLeft;
-    // Электронные ценники: к вечеру то, что испортится ночью, уценяется само.
-    if (!this.night && !this.eveningMarkdown && hasUpgrade(this.state, 'eTags') && this.timeLeft <= DAY_SECONDS * ETAGS_EVENING) {
+    // Вечерняя уценка (02.11 — сама у всех, раньше только с электронными ценниками): в последнюю четверть
+    // дня то, что испортится ночью и не успеет продаться по полной цене, уценяется само.
+    if (!this.night && !this.eveningMarkdown && this.timeLeft <= DAY_SECONDS * MARKDOWN_EVENING) {
       this.eveningMarkdown = true;
       const marked = markdownSurplus(this.state, (id) => eveningSales(this.stats.sold[id] ?? 0));
       if (marked.count) {

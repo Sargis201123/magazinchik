@@ -11,9 +11,7 @@ const only = process.argv[4];
 
 const scenarios: [string, Partial<SimOptions>][] = [
   ['кот', { features: { cat: true } }],
-  ['тележка', { features: { cart: true } }],
   ['карта лояльности', { features: { loyalty: true } }],
-  ['электронные ценники', { features: { etags: true } }],
   ['новые отделы', { features: { departments: true } }],
   ['сладости у кассы', { features: { candy: true } }],
   ['кофе', { features: { coffee: true } }],
@@ -21,7 +19,6 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['печь + марка «От бабушки»', { features: { oven: true, brand: true } }],
   ['ночная смена', { features: { night: true } }],
   ['всё оборудование', { features: { gear: true } }],
-  ['навыки хозяина', { features: { skills: true } }],
   ['договор с кафе', { features: { cafe: true } }],
   ['доставка на дом', { features: { delivery: true } }],
   ['доставка + оборудование', { features: { delivery: true, gear: true } }],
@@ -44,7 +41,7 @@ const scenarios: [string, Partial<SimOptions>][] = [
   // Карьера сотрудников: повышения (быстрее, с прибавкой), премии лучшему, свой управляющий филиала.
   ['карьера сотрудников', { features: { career: true } }],
   ['карьера + филиал', { features: { career: true, branch: true } }],
-  ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, cart: true, loyalty: true, gear: true, etags: true, departments: true, skills: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
+  ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;

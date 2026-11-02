@@ -105,7 +105,7 @@ function stateFor(day, patch = {}) {
     story: { ...SAVE.story, introSeen: true },
     gift: { lastDate: `${d.getFullYear()}-${q(d.getMonth() + 1)}-${q(d.getDate())}`, streak: 1 },
     drama: { upTo: 999 },
-    seenTips: ['promo', 'contract', 'markdown', 'weekly', 'fair', 'cart', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'dog', 'watchman'],
+    seenTips: ['promo', 'contract', 'markdown', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'dog', 'watchman'],
     plan: undefined,
     // Кот сыт — сидит у входа, а не ушёл гулять.
     cat: SAVE.cat && { ...SAVE.cat, fedDay: day },

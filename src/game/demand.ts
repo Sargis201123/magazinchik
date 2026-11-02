@@ -5,7 +5,6 @@ import type { ProductId, StoreState } from './economy';
 import { weatherDemand, weatherFor } from './weather';
 import { warDemand } from './war';
 import { AROMA_DEMAND } from './bakery';
-import { promoDemand } from './promo';
 import { brandDemand, isOwnProduct } from './brand';
 import { bigDayDemand } from './bigday';
 import { districtDemand } from './district';
@@ -15,7 +14,6 @@ export const dayDemand = (state: StoreState, id: ProductId, aroma = false): numb
   weatherDemand(weatherFor(state.day), id) *
   bigDayDemand(state.day, id) *
   warDemand(state, id) *
-  promoDemand(state, id) *
   brandDemand(state, id) *
   // Здания района — в Центре; в Заречье свой спрос: рыба у реки, студенты, туристы (zarechye.ts).
   (inZar(state) ? zarDemand(state, id) : districtDemand(state, id)) *

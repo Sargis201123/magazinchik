@@ -3,6 +3,7 @@
 
 import { wageFor, type StaffMember, type StaffRole, type StoreState, type Trait } from './economy';
 import { rng } from './random';
+import { careerOf, nextRank, promote, rankXp, type Rank } from './career';
 
 /** Сколько имён в списке (сами имена — в переводах). */
 export const NAME_COUNT = 16;
@@ -43,26 +44,48 @@ export function startJobSearch(state: StoreState, role: StaffRole): StoreState |
 export const currentCandidates = (state: StoreState): StaffMember[] =>
   state.jobSearch && state.jobSearch.day === state.day ? state.jobSearch.candidates : [];
 
-// ---------- Обучение ----------
+// ---------- Обучение и повышение: одна лесенка ----------
+// Курсы поднимают навык до 3★ (на 3★ — отучить «тормоза»), дальше та же кнопка повышает: старший
+// (все должности), администратор зала (только старший кассир). Для повышения нужен опыт смен (career.ts).
+// Раньше повышения предлагались утром отдельной карточкой — с 02.11 это следующая ступень «Учить».
 
 /** Курсы: поднять навык (до 3★) или, на 3★, отучить «тормоза». Цена — по текущему навыку. */
 export const TRAINING_COST = [250, 600];
 export const SLOWPOKE_FIX_COST = 500;
+/** Повышение на ступени обучения: старший, администратор зала. */
+export const RANK_COST: Record<Rank, number> = { senior: 300, admin: 600 };
 
-export function trainingCost(m: StaffMember): number | null {
-  if (m.skill < 3) return TRAINING_COST[m.skill - 1];
-  return m.trait === 'slowpoke' ? SLOWPOKE_FIX_COST : null;
+export type TrainingStep =
+  | { kind: 'skill'; cost: number }
+  | { kind: 'slowpoke'; cost: number }
+  /** xpLeft > 0 — смен ещё не хватает: кнопка видна, но закрыта. */
+  | { kind: 'rank'; to: Rank; cost: number; xpLeft: number };
+
+/** Следующая ступень лесенки (null — расти некуда). day — сегодня (для опыта старых сохранений). */
+export function trainingStep(m: StaffMember, day: number): TrainingStep | null {
+  if (m.skill < 3) return { kind: 'skill', cost: TRAINING_COST[m.skill - 1] };
+  if (m.trait === 'slowpoke') return { kind: 'slowpoke', cost: SLOWPOKE_FIX_COST };
+  const to = nextRank(m);
+  if (!to) return null;
+  return { kind: 'rank', to, cost: RANK_COST[to], xpLeft: Math.max(0, Math.ceil(rankXp(to) - careerOf(m, day).xp)) };
 }
 
-/** Отправить на курсы: навык растёт (или уходит «тормоз»), зарплата — не меньше положенной по навыку. */
+/** Цена следующей ступени (null — расти некуда). */
+export function trainingCost(m: StaffMember, day = 0): number | null {
+  return trainingStep(m, day)?.cost ?? null;
+}
+
+/** Отправить на курсы или повысить: навык растёт (или уходит «тормоз»), или новое звание с прибавкой. */
 export function train(state: StoreState, role: StaffRole): StoreState | null {
   const m = state.staff.find((s) => s.role === role);
-  const cost = m && trainingCost(m);
-  if (!m || cost === null || cost === undefined || state.money < cost) return null;
+  const step = m && trainingStep(m, state.day);
+  if (!m || !step || state.money < step.cost) return null;
+  const paid = { ...state, money: state.money - step.cost };
+  if (step.kind === 'rank') return step.xpLeft > 0 ? null : promote(paid, role, step.to);
   const skill = m.skill < 3 ? m.skill + 1 : m.skill;
   const trait: Trait | undefined = m.skill < 3 ? m.trait : undefined;
   const trained: StaffMember = { ...m, skill, trait, wage: Math.max(m.wage, wageFor(role, skill, trait)) };
-  return { ...state, money: state.money - cost, staff: state.staff.map((s) => (s.role === role ? trained : s)) };
+  return { ...paid, staff: paid.staff.map((s) => (s.role === role ? trained : s)) };
 }
 
 // ---------- Друзья на работе ----------

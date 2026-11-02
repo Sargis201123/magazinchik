@@ -26,7 +26,7 @@ import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { haptic } from '../platform/telegram';
 import { markTaken, mailBag, type MailBag } from './mailbag';
-import { burst, letterFrom, regularName, returnStyles, showLetter } from './returns';
+import { burst, letterFrom, returnStyles, showLetter } from './returns';
 import { showOpened } from './presents';
 import { showLiveCard } from './live';
 import { button, el, rollNumber, toast, UI_FONT } from './dom';
@@ -84,14 +84,6 @@ const letterSource: Source = ({ bag, getState }) => {
   const gift = bag?.letter;
   if (!gift) return null;
   return { id: 'letter', icon: '✉️', text: t('mail.letter', { name: letterFrom(gift).name }), coins: gift.money, read: () => showLetter(gift, getState()) };
-};
-
-/** Сосед за отложенным заказом: забрал и заплатил (деньги в кассе) или зайдёт к закрытию. */
-const orderSource: Source = ({ bag }) => {
-  const res = bag?.order;
-  if (!res) return null;
-  const params = { name: regularName(res.order.who), qty: res.order.qty, icon: PRODUCTS[res.order.pid].icon };
-  return { id: 'order', icon: PRODUCTS[res.order.pid].icon, text: t(res.paid ? 'mail.order.paid' : 'mail.order.wait', params), coins: res.paid || undefined };
 };
 
 /** Бабушкин гостинец за ежедневный вход (gift.ts): деньги и товар уже в кассе и на полках. */
@@ -230,7 +222,7 @@ const adventSource: Source = ({ state, getState, update }) => {
  * Все источники почты по порядку строк. Убрать механику — убрать строку. Торговая неделя, гильдия,
  * «Чёрная пятница» и угощения кофе убраны 01.11 (nx-social2): их незабранное — farewellSource и подарки.
  */
-const SOURCES: Source[] = [chestSource, giftSource, letterSource, orderSource, presentsSource, thanksSource, rivalSource, leagueSource, farewellSource, passSource, adventSource];
+const SOURCES: Source[] = [chestSource, giftSource, letterSource, presentsSource, thanksSource, rivalSource, leagueSource, farewellSource, passSource, adventSource];
 
 // ---------- Карточка ----------
 

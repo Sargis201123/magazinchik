@@ -9,7 +9,6 @@ import {
   nextStoreLevel,
   PRODUCT_IDS,
   PRODUCTS,
-  PROMO_DISCOUNT,
   resolveBadBatch,
   sellShelf,
   setPrice,
@@ -33,7 +32,7 @@ import { nextRack, upgradeRack, CANDY_COST, CANDY_PRICE } from '../src/game/impu
 import { CUP_COST } from '../src/game/coffee';
 import { loanOptions, repayLoan, takeLoan } from '../src/game/bank';
 import { stallPrice, STALL_MARKUP } from '../src/game/fair';
-import { ANGRY_MARKUP, SUPPLIERS, unitPrice, newDeal } from '../src/game/suppliers';
+import { DISCOUNT_MAX, SUPPLIERS, unitPrice } from '../src/game/suppliers';
 import { cafePay } from '../src/game/cafe';
 import { simulate } from '../src/game/simulate';
 
@@ -145,26 +144,19 @@ describe('экономика единицы: купить и продать — 
 });
 
 describe('экономика единицы: маржа', () => {
-  it('любой товар от любого поставщика продаётся по обычной цене с прибылью — даже у злого поставщика', () => {
+  it('любой товар от любого поставщика продаётся по обычной цене с прибылью — и по прайсу, и с самой большой скидкой', () => {
     for (const s of Object.values(SUPPLIERS)) {
       for (const id of Object.keys(s.products) as (keyof typeof PRODUCTS)[]) {
-        const normal = unitPrice(s, newDeal(s), id)!;
-        const angry = unitPrice(s, { ...newDeal(s), angry: true }, id)!;
-        const haggled = unitPrice(s, { ...newDeal(s), discount: 0.2 }, id)!;
-        expect(angry).toBeLessThan(PRODUCTS[id].basePrice);
-        expect(angry).toBeGreaterThanOrEqual(Math.round(normal * (1 + ANGRY_MARKUP)) - 1);
-        expect(haggled).toBeGreaterThan(0);
-        expect(haggled).toBeLessThan(normal);
+        const normal = unitPrice(s, id)!;
+        const best = unitPrice(s, id, DISCOUNT_MAX)!;
+        expect(normal).toBeLessThan(PRODUCTS[id].basePrice);
+        expect(best).toBeGreaterThan(0);
+        expect(best).toBeLessThanOrEqual(normal);
       }
     }
   });
 
-  it('акция −20% всё ещё в плюс к закупке; уценка — это продажа в убыток, чтобы не выкинуть', () => {
-    for (const s of Object.values(SUPPLIERS)) {
-      for (const id of Object.keys(s.products) as (keyof typeof PRODUCTS)[]) {
-        expect(Math.round(PRODUCTS[id].basePrice * PROMO_DISCOUNT)).toBeGreaterThan(unitPrice(s, newDeal(s), id)!);
-      }
-    }
+  it('уценка — это продажа в убыток, чтобы не выкинуть', () => {
     expect(MARKDOWN).toBeLessThan(1);
   });
 
@@ -177,15 +169,12 @@ describe('экономика единицы: маржа', () => {
 });
 
 describe('экономика единицы: касса и счета', () => {
-  it('касса: цена с полки, акция −20%, уценка, «2=1», ночная наценка', () => {
+  it('касса: цена с полки, уценка, ночная наценка', () => {
     const s = setPrice(rich(), 'bread', 40);
     const unit = { age: 0 };
     expect(checkout(s, [{ id: 'bread', unit }]).total).toBe(40);
     expect(checkout(s, [{ id: 'bread', unit: { age: 0, markdown: true } }]).total).toBe(Math.round(40 * MARKDOWN));
-    expect(checkout(s, [{ id: 'bread', unit }, { id: 'bread', unit, free: true }]).total).toBe(40);
     expect(checkout(s, [{ id: 'bread', unit }], 1.25).total).toBe(50);
-    const promo = { ...s, promo: { product: 'bread' as const, kind: 'discount' as const, day: s.day } };
-    expect(checkout(promo, [{ id: 'bread', unit }]).total).toBe(Math.round(40 * PROMO_DISCOUNT));
     const { state, total } = checkout(s, [{ id: 'bread', unit }, { id: 'bread', unit }]);
     expect(state.money - s.money).toBe(total);
   });

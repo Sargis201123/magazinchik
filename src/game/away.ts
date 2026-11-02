@@ -35,7 +35,7 @@ export function awayTrade(state: StoreState, awayMs: number): AwayTrade | null {
     for (const sh of shelves) {
       if (want <= 0) break;
       const stock = sh.items[pid as ProductId];
-      if (!stock?.length || sh.broken) continue;
+      if (!stock?.length) continue;
       // Самое старое уходит первым.
       const taken = Math.min(want, stock.length);
       sh.items[pid as ProductId] = stock.slice(taken);

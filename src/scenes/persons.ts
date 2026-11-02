@@ -21,7 +21,6 @@ import {
   type Route,
 } from './stride';
 import { BIG_LAYER_DY } from './wardrobe';
-import { hasUpgrade } from '../game/upgrades';
 import type { Point } from './layout';
 import {
   ART,
@@ -303,9 +302,9 @@ export function updateDog(scene: StoreScene, person: Phaser.GameObjects.Containe
   dog.setDepth(dog.y + 3);
 }
 
-/** Тележки стоят у входа: в большом магазине всегда, в «Магазинчике» — если куплены. */
+/** Тележки стоят у входа — с третьего помещения (улучшения «Тележки» больше нет, 02.11). */
 export function cartsAtDoor(scene: StoreScene): boolean {
-  return scene.state.level >= 2 || (scene.state.level >= 1 && hasUpgrade(scene.state, 'cart'));
+  return scene.state.level >= 2;
 }
 
 /** Покупатель берёт тележку у входа и катит её перед собой (как коляску). */
