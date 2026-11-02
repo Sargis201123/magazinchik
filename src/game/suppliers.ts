@@ -69,7 +69,7 @@ export const SUPPLIER_IDS = Object.keys(SUPPLIERS) as SupplierId[];
  * (одна просьба о −5% у каждого поставщика), а не максимальный торг. Одна функция — на неё смотрят
  * закупка, автозаказ, симулятор и опыт хозяина (owner.ts) — менять только здесь.
  */
-export const DISCOUNT_BASE = 0.05;
+export const DISCOUNT_BASE = 0.02;
 /** За каждую звезду рейтинга выше трёх (ниже — меньше, но не меньше нуля). */
 export const DISCOUNT_PER_STAR = 0.01;
 /** Плюс опыт хозяина (owner.ts haggleBonus, растёт сам с 02.11): на последнем уровне +6%, как прежний «Торгаш». */
