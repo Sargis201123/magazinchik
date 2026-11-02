@@ -21,8 +21,8 @@
   },
   {
     "shot": "l5-summary.png",
-    "drawCalls": 142,
-    "textureBinds": 132
+    "drawCalls": 149,
+    "textureBinds": 139
   },
   {
     "shot": "rain-rain.png",
@@ -36,8 +36,8 @@
   },
   {
     "shot": "l2-day.png",
-    "drawCalls": 127,
-    "textureBinds": 123
+    "drawCalls": 123,
+    "textureBinds": 120
   },
   {
     "shot": "l6-day.png",

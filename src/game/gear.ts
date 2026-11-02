@@ -251,7 +251,15 @@ export const autoTier = (level: number, id: GearId): number =>
  * Какая модель стоит сейчас (номер в списке моделей): купленная или та, что встала сама с помещением, —
  * какая лучше. Купленное раньше (до 02.11 всё покупалось) никогда не откатывается назад.
  */
-export const gearTier = (state: StoreState, id: GearId): number => Math.min(Math.max(state.gear?.[id] ?? 0, autoTier(state.level, id)), GEAR[id].models.length - 1);
+export const gearTier = (state: StoreState, id: GearId): number => Math.min(Math.max(state.gear?.[id] ?? 0, autoTier(autoLevel(state, state.level), id)), GEAR[id].models.length - 1);
+
+/**
+ * По какому помещению ставить то, что встаёт само. Лавка в Заречье (zarechye.ts) растёт только до 4-го
+ * помещения, а открывают её после гипермаркета: там оборудование на два помещения новее — иначе лучшие
+ * плита, полка «Еда», мопед и кофемашина туда бы не доехали никогда.
+ */
+export const ZAR_GEAR_BONUS = 2;
+export const autoLevel = (state: StoreState, level: number): number => level + (state.zar?.at === 'zar' ? ZAR_GEAR_BONUS : 0);
 
 /** Следующая модель (null — уже лучшая). */
 export const nextGear = (state: StoreState, id: GearId): GearModel | null => GEAR[id].models[gearTier(state, id) + 1] ?? null;
@@ -272,8 +280,8 @@ export function upgradeGear(state: StoreState, id: GearId): StoreState | null {
 /** Что встанет само при переезде в помещение level: линейки, у которых там модель лучше нынешней. */
 export function gearArriving(state: StoreState, level: number): { id: GearId; model: GearModel }[] {
   return AUTO_GEAR.filter((id) => !GEAR[id].needs || (state.upgrades ?? []).includes(GEAR[id].needs!))
-    .filter((id) => autoTier(level, id) > gearTier(state, id))
-    .map((id) => ({ id, model: GEAR[id].models[autoTier(level, id)] }));
+    .filter((id) => autoTier(autoLevel(state, level), id) > gearTier(state, id))
+    .map((id) => ({ id, model: GEAR[id].models[autoTier(autoLevel(state, level), id)] }));
 }
 
 /** Убранные 02.11 линейки (указатели, солнечные панели): во сколько монет обходились купленные модели. */

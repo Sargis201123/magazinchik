@@ -3188,10 +3188,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       el('div', 'ui-item-name', t('gear.auto')),
       el('div', 'ui-item-sub', mine.map((id) => `${GEAR[id].icon} ${t(GEAR[id].models[gearTier(state, id)].nameKey)}`).join(' · ')),
     );
-    const nextLevel = state.level + 1 < STORE_LEVELS.length ? state.level + 1 : null;
-    const coming = nextLevel === null ? [] : gearArriving(state, nextLevel);
-    if (nextLevel !== null && coming.length) {
-      body.append(el('div', 'ui-note', t('gear.autoNext', { name: t(STORE_LEVELS[nextLevel].nameKey), list: coming.map((c) => `${GEAR[c.id].icon} ${t(c.model.nameKey)}`).join(' · ') })));
+    // Следующее помещение — как у кнопки расширения (без филиала гипермаркета нет, Заречье короче).
+    const nextLevel = nextStoreLevel(state);
+    const coming = nextLevel ? gearArriving(state, state.level + 1) : [];
+    if (nextLevel && coming.length) {
+      body.append(el('div', 'ui-note', t('gear.autoNext', { name: t(nextLevel.nameKey), list: coming.map((c) => `${GEAR[c.id].icon} ${t(c.model.nameKey)}`).join(' · ') })));
     }
     row.append(body);
     box.append(row);

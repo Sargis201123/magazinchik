@@ -77,3 +77,13 @@ describe('старые сохранения (до 02.11)', () => {
     expect(hasUpgrade(at(1), 'loyalty')).toBe(false);
   });
 });
+
+describe('Заречье (второй магазин, до 4-го помещения)', () => {
+  it('оборудование там на два помещения новее — лучшие модели доезжают', () => {
+    const zar = (level: number): StoreState => at(level, { zar: { at: 'zar', since: 1, away: {} } });
+    expect(gearTier(zar(3), 'stove')).toBe(GEAR.stove.models.length - 1);
+    expect(gearTier(zar(3), 'courier')).toBe(GEAR.courier.models.length - 1);
+    expect(gearTier(at(3, { zar: { at: 'home', since: 1, away: {} } }), 'courier')).toBe(0);
+    expect(gearArriving(zar(1), 2).map((c) => c.id)).toContain('lights');
+  });
+});
