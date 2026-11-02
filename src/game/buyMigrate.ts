@@ -42,13 +42,23 @@ export function migrateBuying(state: StoreState): StoreState {
   }
   const home = stripUpgrades(next.upgrades);
   let money = next.money + home.refund;
-  let auto = home.auto;
   let zar = next.zar;
   if (zar?.away) {
+    // Автозаказ, план дня и улучшения — у каждого магазина свои (SHOP_KEYS): второй магазин — отдельно.
     const away = stripUpgrades(zar.away.upgrades);
     money += away.refund;
-    auto ||= away.auto;
-    if (away.upgrades !== zar.away.upgrades) zar = { ...zar, away: { ...zar.away, upgrades: away.upgrades } };
+    const awayPlan = migratePlan(zar.away.plan);
+    if (away.upgrades !== zar.away.upgrades || awayPlan !== zar.away.plan) {
+      zar = {
+        ...zar,
+        away: {
+          ...zar.away,
+          upgrades: away.upgrades,
+          plan: awayPlan,
+          ...(away.auto ? { autoOrder: { ...zar.away.autoOrder, on: zar.away.autoOrder?.on ?? true } } : {}),
+        },
+      };
+    }
   }
   const plan = migratePlan(next.plan);
   if (next === old && home.upgrades === next.upgrades && zar === next.zar && plan === next.plan) return state;
@@ -58,7 +68,7 @@ export function migrateBuying(state: StoreState): StoreState {
     ...(home.upgrades ? { upgrades: home.upgrades } : {}),
     ...(zar ? { zar } : {}),
     ...(plan ? { plan } : {}),
-    // Купленный автозаказ остаётся как был; купили, но ни разу не трогали переключатель — включён.
-    ...(auto ? { autoOrder: { ...next.autoOrder, on: next.autoOrder?.on ?? true } } : {}),
+    // Купленный в этом магазине автозаказ остаётся как был; купили, но не трогали переключатель — включён.
+    ...(home.auto ? { autoOrder: { ...next.autoOrder, on: next.autoOrder?.on ?? true } } : {}),
   };
 }

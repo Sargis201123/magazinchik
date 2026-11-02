@@ -31,13 +31,19 @@ const have = (state: StoreState, id: ProductId): number => warehouseOf(state, id
 export function orderBoard(state: StoreState): OrderRow[] {
   const rows: OrderRow[] = [];
   const plan = state.plan?.day === state.day ? state.plan : undefined;
-  if (plan?.offer) rows.push({ kind: 'client', order: plan.offer, accepted: false, ready: have(state, plan.offer.product) >= plan.offer.qty });
   const cafe = cafeOf(state);
+  const n = state.ret?.order?.day === state.day ? state.ret.order : undefined;
+  // «Хватает» — с учётом того, что уже обещано другим на сегодня: кафе (утром), принятому клиенту и соседу.
+  const promised = (id: ProductId, except: 'client' | 'neighbour' | 'cafe'): number =>
+    (except !== 'cafe' ? (cafe.deal?.items[id] ?? 0) : 0) +
+    (except !== 'client' && plan?.order?.product === id ? plan.order.qty : 0) +
+    (except !== 'neighbour' && n?.pid === id ? n.qty : 0);
+  const enough = (id: ProductId, qty: number, who: 'client' | 'neighbour' | 'cafe') => have(state, id) - promised(id, who) >= qty;
+  if (plan?.offer) rows.push({ kind: 'client', order: plan.offer, accepted: false, ready: enough(plan.offer.product, plan.offer.qty, 'client') });
   if (cafe.offer) rows.push({ kind: 'cafeOffer', offer: cafe.offer });
-  const n = state.ret?.order;
-  if (n && n.day === state.day) rows.push({ kind: 'neighbour', order: n, pay: orderPay(state, n), ready: have(state, n.pid) >= n.qty });
-  if (plan?.order) rows.push({ kind: 'client', order: plan.order, accepted: true, ready: have(state, plan.order.product) >= plan.order.qty });
-  if (cafe.deal) rows.push({ kind: 'cafeDeal', deal: cafe.deal, ready: cafeCanDeliver(state) });
+  if (n) rows.push({ kind: 'neighbour', order: n, pay: orderPay(state, n), ready: enough(n.pid, n.qty, 'neighbour') });
+  if (plan?.order) rows.push({ kind: 'client', order: plan.order, accepted: true, ready: enough(plan.order.product, plan.order.qty, 'client') });
+  if (cafe.deal) rows.push({ kind: 'cafeDeal', deal: cafe.deal, ready: cafeCanDeliver(state) && Object.entries(cafe.deal.items).every(([id, q]) => enough(id as ProductId, q ?? 0, 'cafe')) });
   if (hasUpgrade(state, 'oven')) rows.push({ kind: 'bread', owned: hasUpgrade(state, 'wholesale'), perDay: WHOLESALE_BATCHES * ovenBatch(state) * WHOLESALE_PRICE });
   return rows;
 }

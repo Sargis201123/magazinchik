@@ -46,6 +46,16 @@ describe('старые сохранения (02.11)', () => {
     expect(s.zar?.away.upgrades).toEqual([]);
   });
 
+  it('автозаказ и план дня — у каждого магазина свои: включается только там, где его купили', () => {
+    const away = { upgrades: ['autoOrder'], plan: { day: 10, decided: false, inspection: false, quests: [], event: order } };
+    const old = { ...shop({ upgrades: [] }), zar: { at: 'home', since: 1, away } } as unknown as StoreState;
+    const s = migrateBuying(old);
+    expect(s.autoOrder?.on).toBeFalsy();
+    expect(s.zar?.away.autoOrder?.on).toBe(true);
+    expect(s.zar?.away.plan?.event).toBeUndefined();
+    expect(s.zar?.away.plan?.offer).toEqual(order);
+  });
+
   it('акция дня и договоры забываются; «выгодная партия» пропадает, заказ без ответа — на доску', () => {
     const old = { ...shop(), promo: { day: 10, product: 'bread', kind: 'bogo' }, contracts: [{ sid: 'farmer', pid: 'bread', qty: 5, until: 12 }] } as unknown as StoreState;
     const s = migrateBuying(old) as StoreState & { promo?: unknown; contracts?: unknown };
@@ -92,6 +102,16 @@ describe('доска «Заказы»', () => {
     const price = () => 10;
     const need = (st: StoreState) => restockPlan(st, price, 30).lines.find((l) => l.pid === 'milk')?.qty ?? 0;
     expect(need(shop({ ret: { order: { ...n, qty: 20 } } }))).toBeGreaterThan(need(shop()));
+  });
+
+  it('«хватает» считает обещанное другим: принятый заказ и сосед на один товар не делят одни штуки', () => {
+    // 8 штук молока: клиенту обещано 6, соседу нужно 4 — хватает только одному.
+    const s = shop({ plan: { ...shop().plan!, order }, ret: { order: { who: 'sveta', pid: 'milk', qty: 4, day: 10 } } });
+    const rows = orderBoard(s);
+    expect(rows.find((r) => r.kind === 'neighbour')).toMatchObject({ ready: false });
+    expect(rows.find((r) => r.kind === 'client')).toMatchObject({ ready: false });
+    const alone = orderBoard(shop({ plan: { ...shop().plan!, order } }));
+    expect(alone[0]).toMatchObject({ kind: 'client', ready: true });
   });
 
   it('кафе и хлеб соседям — тоже на доске; кафе платит как раньше', () => {

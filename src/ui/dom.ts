@@ -557,8 +557,6 @@ const css = `
 .ui-todo-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 0; font-size: 13.5px; }
 .ui-todo-row + .ui-todo-row { border-top: 1px dashed #d8ccb0; }
 .ui-todo-row .ui-chip { flex: none; padding: 6px 8px; font-size: 13px; }
-.ui-contract { margin-top: 8px; padding: 6px 8px; border: 2px dashed #b8a98a; border-radius: 8px; }
-.ui-contract .ui-chips { margin-top: 4px; }
 .ui-loss-bar { display: flex; height: 14px; border: 2px solid #2b2233; border-radius: 6px; overflow: hidden; margin: 6px 0 2px; }
 .ui-loss-row { display: grid; grid-template-columns: 14px 1fr; gap: 6px; align-items: start; padding: 5px 0; }
 .ui-loss-row + .ui-loss-row { border-top: 1px dashed #d8ccb0; }

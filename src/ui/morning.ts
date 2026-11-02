@@ -252,7 +252,6 @@ import { keepPlaces, kioskSpotFree } from '../scenes/placement';
 import { albumButton, showAlbum } from './album';
 import { freshCount } from '../game/collections';
 
-/** Портрет заказчика: шеф — это Марат. */
 
 interface MorningOptions {
   getState: () => StoreState;
