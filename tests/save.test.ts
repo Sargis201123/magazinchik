@@ -60,7 +60,7 @@ describe('сохранение в телефоне', () => {
     const state = {
       ...newGame(),
       day: 120,
-      security: { dog: { since: 9 }, watchman: true, caught: 2 },
+      security: { dog: { since: 9 } },
       contest: { tier: 1, phase: 'wait' as const, since: 110, target: 7000, revenue: 0, served: 0, unhappy: 0, empty: 0, wins: 1 },
       drama: { upTo: 91, last: 100 },
     };
@@ -69,6 +69,52 @@ describe('сохранение в телефоне', () => {
     expect(s.security).toEqual(state.security);
     expect(s.contest).toEqual(state.contest);
     expect(s.drama).toEqual(state.drama);
+  });
+
+  it('старое сохранение с убранными 02.11 механиками грузится: поля сняты, Бобик и купленное остаются', async () => {
+    const { loadGame } = await import('../src/game/save');
+    const fresh = newGame();
+    const old = {
+      ...fresh,
+      day: 50,
+      money: 3210,
+      skills: { hands: 3, eye: 1 },
+      quitNotice: [{ role: 'loader', name: 3, skill: 1, wage: 300, months: 2 }],
+      shelves: [{ ...fresh.shelves[0], broken: true }, ...fresh.shelves.slice(1)],
+      storedShelves: [{ kind: 'dairy', level: 1, items: {}, broken: true }],
+      staff: [
+        { role: 'cashier2', name: 1, skill: 2, wage: 520, months: 4, raiseAsk: 560, upset: true, streak: 9, offDay: 51, inspired: 2, career: { hired: 10, xp: 33, miss: 2, askAfter: 60, rank: 'senior' } },
+      ],
+      plan: { day: 50, decided: false, inspection: false, quests: [], sick: 'cashier2', event: { kind: 'bill', reason: 'tax', amount: 400 } },
+      security: { dog: { since: 9 }, watchman: true, caught: 2, scared: 1, lastBurglary: 48, news: { day: 50, outcome: 'stolen', goods: [], cash: 10, repair: 0, bounty: 0 } },
+      career: { since: 30, offer: { role: 'cashier2', name: 1, to: 'admin', day: 50 }, ceremony: { role: 'cashier2', name: 1, day: 49, shifts: 9, work: 30, miss: 1 } },
+      newsQ: { day: 50, done: 0, shown: 'raise', wait: { burglary: 50, quit: 49, tale: 48 } },
+    };
+    local[KEY] = JSON.stringify({ version: 11, state: old });
+    const s = loadGame()! as unknown as Record<string, unknown> & ReturnType<typeof newGame>;
+    expect(s.money).toBe(3210);
+    expect(s.skills).toBeUndefined();
+    expect(s.quitNotice).toBeUndefined();
+    expect(s.shelves.some((sh) => 'broken' in sh)).toBe(false);
+    expect((s.storedShelves ?? []).some((sh) => 'broken' in sh)).toBe(false);
+    const m = s.staff[0];
+    // Прибавку, что уже платили, оставили; просьба, обида, усталость и выходной сняты; звание и воодушевление — на месте.
+    expect(m).toMatchObject({ wage: 520, inspired: 2, career: { hired: 10, xp: 33, rank: 'senior' } });
+    for (const k of ['raiseAsk', 'upset', 'streak', 'offDay']) expect(k in m).toBe(false);
+    expect('miss' in m.career! || 'askAfter' in m.career!).toBe(false);
+    expect(s.plan?.event).toBeUndefined();
+    expect(s.plan && 'sick' in s.plan).toBe(false);
+    expect(s.security).toEqual({ dog: { since: 9 } });
+    expect(s.career?.offer).toBeUndefined();
+    expect(s.career?.ceremony).toEqual({ role: 'cashier2', name: 1, day: 49, shifts: 9, work: 30 });
+    expect(s.newsQ).toEqual({ day: 50, done: 0, wait: { tale: 48 } });
+  });
+
+  it('новое сохранение миграция «спокойного персонала» не трогает', async () => {
+    const { migrateCalm } = await import('../src/game/calm');
+    const s = { ...newGame(), security: { dog: { since: 3 } } };
+    expect(migrateCalm(s)).toEqual(s);
+    expect(migrateCalm(newGame())).toEqual(newGame());
   });
 
   it('хранилище недоступно (приватный режим) — игра идёт без сохранения, не падает', async () => {

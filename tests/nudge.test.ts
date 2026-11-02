@@ -1,3 +1,6 @@
+import { LIVE_FROM_DAY } from '../src/game/minievents';
+import { SPECIAL_FROM_DAY } from '../src/game/special';
+import { CAFE_FROM_DAY } from '../src/game/cafe';
 import { describe, expect, it } from 'vitest';
 import { newGame, START_DEBT, STORE_LEVELS, type StoreState } from '../src/game/economy';
 import {
@@ -157,9 +160,13 @@ describe('меньше решений в первые дни', () => {
     expect(badBatch('dairy', CLEAN_BATCH_DAYS + 1, 0.99)).toBe(false);
   });
 
-  it('кот просится не раньше седьмого утра', () => {
-    expect(CAT_FROM_DAY).toBe(7);
-    expect(catOffer(game({ day: 5, money: 9999 }))).toBe(false);
+  it('кот просится только после первой недели (02.11: с 9-го утра)', () => {
+    expect(CAT_FROM_DAY).toBe(9);
+    expect(catOffer(game({ day: CAT_FROM_DAY - 1, money: 9999 }))).toBe(false);
+  });
+
+  it('за первую неделю не открываются мини-события, особые гости и договор с кафе', () => {
+    for (const from of [LIVE_FROM_DAY, SPECIAL_FROM_DAY, CAFE_FROM_DAY, CAT_FROM_DAY, DEAL_FROM_DAY]) expect(from).toBeGreaterThan(7);
   });
 
   it('«выгодной партии» нет в первую неделю', () => {

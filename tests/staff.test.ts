@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  answerRaise,
   emptyDayStats,
   endDay,
   fire,
@@ -13,10 +12,8 @@ import {
   STAFF_LIMIT,
   STAFF_ROLES,
   thiefChance,
-  UPSET_SPEED,
   wageFor,
   workSpeed,
-  RAISE_CAP,
   type StaffMember,
   type StoreState,
 } from '../src/game/economy';
@@ -30,8 +27,6 @@ const member = (extra: Partial<StaffMember> = {}): StaffMember => ({
   months: 0,
   ...extra,
 });
-const never = () => 0.99;
-const always = () => 0;
 
 describe('поиск сотрудников', () => {
   it('кандидаты появляются только после объявления, объявление стоит денег', () => {
@@ -97,73 +92,30 @@ describe('найм', () => {
   });
 });
 
-describe('опыт и прибавки', () => {
-  it('раз в два месяца растёт навык — и сотрудник просит прибавку', () => {
-    const first = monthForStaff([member()], never).staff[0];
+describe('опыт и ставка', () => {
+  it('раз в два месяца растёт навык — и ставка сама поднимается до положенной (просить не надо)', () => {
+    const first = monthForStaff([member()])[0];
     expect(first.months).toBe(1);
-    expect(first.raiseAsk).toBeUndefined();
-    const second = monthForStaff([first], never).staff[0];
+    expect(first.wage).toBe(wageFor('cashier', 1));
+    const second = monthForStaff([first])[0];
     expect(second.skill).toBe(2);
-    expect(second.wage).toBe(wageFor('cashier', 1)); // сама зарплата не растёт
-    expect(second.raiseAsk).toBe(wageFor('cashier', 2));
+    expect(second.wage).toBe(wageFor('cashier', 2));
   });
 
-  it('опытные иногда просят прибавку и без роста навыка', () => {
-    const wage = wageFor('cashier', 3);
-    const veteran = member({ skill: 3, months: 4, wage });
-    expect(monthForStaff([veteran], always).staff[0].raiseAsk).toBe(Math.round((wage * 1.1) / 10) * 10);
-    expect(monthForStaff([veteran], never).staff[0].raiseAsk).toBeUndefined();
+  it('кто получает больше ставки, тому не урезают; просьб, обид и увольнений нет', () => {
+    const rich = member({ skill: 3, months: 40, wage: wageFor('cashier', 3) + 300 });
+    expect(monthForStaff([rich])[0].wage).toBe(rich.wage);
+    let staff = [member(), member({ role: 'loader', wage: wageFor('loader', 1) })];
+    for (let i = 0; i < 12; i++) staff = monthForStaff(staff);
+    expect(staff).toHaveLength(2);
+    expect(staff.every((m) => m.skill === 3 && m.wage === wageFor(m.role, 3))).toBe(true);
   });
 
-  it('прибавки «просто так» — не выше ставки по навыку × 1,3; кто уже выше, тому не урезают', () => {
-    const cap = Math.round((wageFor('cashier', 3) * RAISE_CAP) / 10) * 10;
-    let m = member({ skill: 3, months: 4, wage: wageFor('cashier', 3) });
-    for (let i = 0; i < 30; i++) {
-      m = monthForStaff([m], always).staff[0];
-      if (m.raiseAsk) m = { ...m, wage: m.raiseAsk, raiseAsk: undefined };
-    }
-    expect(m.wage).toBe(cap);
-    const rich = member({ skill: 3, months: 40, wage: cap + 300 });
-    const after = monthForStaff([rich], always).staff[0];
-    expect(after.raiseAsk).toBeUndefined();
-    expect(after.wage).toBe(cap + 300);
-  });
-
-  it('за месяц о прибавке просит только один; остальные — в следующие месяцы', () => {
-    const team = (['cashier', 'loader', 'cleaner'] as const).map((role) => member({ role, skill: 3, months: 4, wage: wageFor(role, 3) }));
-    let staff = monthForStaff(team, always).staff;
-    expect(staff.filter((m) => m.raiseAsk)).toHaveLength(1);
-    // Пока просьба висит — новых нет.
-    expect(monthForStaff(staff, always).staff.filter((m) => m.raiseAsk)).toHaveLength(1);
-    // Ответили — в следующем месяце попросит следующий.
-    staff = staff.map((m) => (m.raiseAsk ? { ...m, wage: m.raiseAsk, raiseAsk: undefined } : m));
-    expect(monthForStaff(staff, always).staff.filter((m) => m.raiseAsk)).toHaveLength(1);
-  });
-
-  it('согласился — зарплата выше', () => {
-    const s = { ...newGame(), staff: [member({ raiseAsk: 500 })] };
-    const after = answerRaise(s, 'cashier', true).staff[0];
-    expect(after.wage).toBe(500);
-    expect(after.raiseAsk).toBeUndefined();
-  });
-
-  it('отказал — обида: медленнее и может уволиться в конце месяца', () => {
-    const s = { ...newGame(), staff: [member({ raiseAsk: 500 })] };
-    const upset = answerRaise(s, 'cashier', false).staff[0];
-    expect(upset.upset).toBe(true);
-    expect(workSpeed(upset)).toBeCloseTo(workSpeed(member()) * UPSET_SPEED);
-    expect(monthForStaff([upset], always).quit).toHaveLength(1);
-    const stayed = monthForStaff([upset], never);
-    expect(stayed.quit).toHaveLength(0);
-    expect(stayed.staff[0].upset).toBe(false);
-  });
-
-  it('в конце месяца зарплата в счёте, ушедшие — в уведомлении', () => {
-    const s: StoreState = { ...newGame(), day: MONTH_DAYS, money: 5000, debt: 0, staff: [member({ upset: true })] };
-    const night = endDay(s, emptyDayStats(), always);
+  it('в конце месяца зарплата в счёте, все остаются', () => {
+    const s: StoreState = { ...newGame(), day: MONTH_DAYS, money: 5000, debt: 0, staff: [member()] };
+    const night = endDay(s, emptyDayStats());
     expect(night.bill!.salaries).toBe(member().wage);
-    expect(night.state.staff).toEqual([]);
-    expect(night.state.quitNotice).toHaveLength(1);
+    expect(night.state.staff).toHaveLength(1);
   });
 });
 

@@ -363,7 +363,6 @@ const css = `
   border: 2px solid #2b2233; border-radius: 6px; background: #fbf6ea; font: 13px/1.25 ${UI_FONT}; min-width: 0; }
 .ui-shelf-card b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ui-shelf-card.active { background: #fee761; }
-.ui-shelf-card.broken { border-color: #b13e53; }
 .ui-shelf-meta { font-size: 11.5px; color: #5a5048; }
 .ui-shelf-span { grid-column: 1 / -1; margin: 0; }
 .ui-arrange { position: fixed; z-index: 30; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 10px); transform: translateX(-50%);
@@ -387,10 +386,6 @@ const css = `
 .ui-staff-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ui-staff-bar { height: 7px; }
 .ui-staff-tags { grid-column: 1 / -1; font-size: 12px; color: #b13e53; }
-.ui-skill-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 6px; }
-.ui-skill-chip { padding: 5px 2px; font-size: 11px; letter-spacing: -0.5px; }
-.ui-skill-chip.hot { background: #fee761; }
-.ui-skill-detail { margin-top: 6px; padding: 6px 8px; background: #fff8e0; border-radius: 6px; }
 /* Итоги дня: «Подробнее» свёрнуто. */
 .ui-more { border: 2px solid #2b2233; border-radius: 6px; background: #fbf6ea; padding: 6px 8px; margin: 6px 0; }
 .ui-more summary { cursor: pointer; font-weight: 700; font-size: 14px; }
@@ -558,7 +553,6 @@ const css = `
 .ui-report-bar { width: 100%; background: #63c74d; border: 2px solid #2b2233; border-radius: 4px 4px 0 0; }
 .ui-report-val { font-size: 10px; color: #6a5f58; margin-bottom: 2px; }
 .ui-report-day { font-size: 11px; color: #2b2233; margin-top: 2px; }
-.ui-skill-pips { color: #feae34; letter-spacing: 1px; }
 .ui-tip { background: #fff3b0; }
 .ui-tip > div { font-size: 14px; line-height: 1.35; margin: 4px 0 6px; color: #2b2233; }
 .ui-todo { background: #fbf6ea; }

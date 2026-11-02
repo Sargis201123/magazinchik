@@ -10,8 +10,8 @@ import { bigDayFor, type BigDayId } from './bigday';
 export const LIVE_KINDS = ['blackout', 'leak', 'pigeon', 'courier', 'mouse'] as const;
 export type LiveKind = (typeof LIVE_KINDS)[number];
 
-/** С какого дня (обучение позади). */
-export const LIVE_FROM_DAY = 4;
+/** С какого дня (первая неделя позади; 02.11: было с 4-го). */
+export const LIVE_FROM_DAY = 8;
 /** Шанс события в обычный день и второго — в тот же день. */
 export const LIVE_CHANCE = 0.85;
 export const LIVE_SECOND_CHANCE = 0.3;

@@ -12,7 +12,7 @@ export interface ShopSnapshot {
   level: number;
   rating: number;
   shopName?: string;
-  shelves: { kind: string; level: number; items: Record<string, number>; broken?: boolean }[];
+  shelves: { kind: string; level: number; items: Record<string, number> }[];
   slotPos?: { level: number; at: { x: number; y: number }[] };
   tillPos?: { level: number; dx: number; short?: boolean };
   decor?: { owned: string[]; active: Record<string, string> };
@@ -32,7 +32,6 @@ export function shopSnapshot(state: StoreState): ShopSnapshot {
       kind: sh.kind,
       level: sh.level,
       items: Object.fromEntries(PRODUCT_IDS.filter((id) => sh.items[id]?.length).map((id) => [id, sh.items[id]!.length])),
-      ...(sh.broken ? { broken: true } : {}),
     })),
     ...(state.slotPos ? { slotPos: state.slotPos } : {}),
     ...(state.tillPos ? { tillPos: state.tillPos } : {}),
@@ -63,7 +62,7 @@ export function friendState(raw: unknown, home: StoreState): StoreState | null {
     for (const [id, n] of Object.entries(sh.items && typeof sh.items === 'object' ? sh.items : {})) {
       if (PRODUCT_IDS.includes(id as ProductId)) items[id as ProductId] = Array.from({ length: int(n, 0, 60) }, () => ({ age: 0 }));
     }
-    return [{ kind: sh.kind as Category, level: int(sh.level, 0, 4), items, ...(sh.broken ? { broken: true } : {}) }];
+    return [{ kind: sh.kind as Category, level: int(sh.level, 0, 4), items }];
   });
   const slotAt = snap.slotPos && Array.isArray(snap.slotPos.at) ? snap.slotPos.at.slice(0, 40).map((p) => ({ x: int(p?.x, 0, 400), y: int(p?.y, 0, 500) })) : null;
   const shopName = typeof snap.shopName === 'string' ? snap.shopName.slice(0, 16) : undefined;

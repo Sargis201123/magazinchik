@@ -73,7 +73,7 @@ export const canStock = (state: StoreState, pid: ProductId): boolean =>
  * складе (его разложат первым). Бракованная партия ждёт решения и на полки не идёт.
  */
 export function shelfRoom(state: StoreState, category: Category): number {
-  const free = state.shelves.filter((sh) => !sh.broken && sh.kind === category).reduce((sum, sh) => sum + Math.max(0, shelfFree(sh)), 0);
+  const free = state.shelves.filter((sh) => sh.kind === category).reduce((sum, sh) => sum + Math.max(0, shelfFree(sh)), 0);
   const waiting = PRODUCT_IDS.filter((id) => PRODUCTS[id].category === category).reduce(
     (sum, id) => sum + (state.warehouse[id] ?? []).filter((u) => !u.pending).length,
     0,

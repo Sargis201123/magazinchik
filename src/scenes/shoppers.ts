@@ -753,10 +753,6 @@ export async function waitForShelf(scene: StoreScene, c: Customer, index: number
 /** Покупатель у полки: берёт товар, если он есть и цена устраивает. */
 export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' | 'empty' | 'expensive' | 'eduard' | 'skipped' {
   const index = shelfFor(scene.state, id);
-  if (scene.state.shelves[index]?.broken) {
-    scene.popup(c.sprite.x, c.sprite.y - 14, t('popup.broken'), '#ffd0d0');
-    return 'empty';
-  }
   const oldest = scene.state.shelves[index]?.items[id]?.[0];
   if (!oldest) {
     scene.popup(c.sprite.x, c.sprite.y - 14, t('popup.noStock'), '#ffd0d0');

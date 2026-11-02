@@ -25,7 +25,6 @@ import {
   type Unit,
 } from '../src/game/economy';
 import { YEAR_MONTHS } from '../src/game/calendar';
-import { planDay } from '../src/game/events';
 
 // Особые места: ларь с мороженым в зале у входа и вёдра с цветами у кассы. Это «полки», но на своих
 // местах: мест под полки в зале не занимают, ларь — один (с «Магазинчика»), вёдра — бесплатные и есть у всех.
@@ -117,12 +116,6 @@ describe('ларь с мороженым и вёдра с цветами', () =>
     const extra = (day: number) => monthlyBill({ ...s, day }).power - monthlyBill({ ...base, day }).power;
     expect(extra(spring)).toBe(FRIDGE_POWER);
     expect(extra(winter)).toBe(FRIDGE_POWER);
-  });
-
-  it('ларь может сломаться в любое время года', () => {
-    const s = buyShelf(rich(), 'icebox')!;
-    const days = Array.from({ length: 3 * year.length }, (_, i) => i + 4);
-    expect(days.some((day) => planDay({ ...s, day }).event?.kind === 'fridgeBroken')).toBe(true);
   });
 
   it('сколько ждать сезона: 0 — сезон сейчас, иначе через столько дней он начнётся', () => {

@@ -198,7 +198,7 @@ function takeInput(state: StoreState, id: ProductId, n: number): StoreState {
 function putMade(state: StoreState, id: ProductId, qty: number): StoreState {
   let left = qty;
   const shelves = state.shelves.map((shelf) => {
-    if (!left || shelf.broken || !canPlace(id, shelf)) return shelf;
+    if (!left || !canPlace(id, shelf)) return shelf;
     const n = Math.min(left, Math.max(0, shelfFree(shelf)));
     if (!n) return shelf;
     left -= n;
@@ -210,7 +210,7 @@ function putMade(state: StoreState, id: ProductId, qty: number): StoreState {
 
 /** Сколько своего сейчас встанет: свободные места на полках отдела и на складе. */
 function room(state: StoreState, id: ProductId): number {
-  const shelf = state.shelves.reduce((sum, s) => sum + (!s.broken && canPlace(id, s) ? Math.max(0, shelfFree(s)) : 0), 0);
+  const shelf = state.shelves.reduce((sum, s) => sum + (canPlace(id, s) ? Math.max(0, shelfFree(s)) : 0), 0);
   return shelf + Math.max(0, warehouseCapacity(state) - warehouseCount(state));
 }
 

@@ -148,7 +148,7 @@ describe('бабушкино обучение: шаги первых дней', 
 });
 
 describe('первая неделя: что ни день — что-то новое', () => {
-  it('с 3-го по 7-й день — по новости, каждая один раз; у старых сохранений — ничего', () => {
+  it('с 3-го по 8-й день — по новости, каждая один раз; у старых сохранений — ничего', () => {
     let s = fresh();
     expect(weekNote(s)).toBeNull();
     expect(weekNote(day(s, 2))).toBeNull();
@@ -161,8 +161,9 @@ describe('первая неделя: что ни день — что-то нов
       s = seeWeek(s, note!);
       expect(weekNote(s)).toBeNull();
     }
-    expect(keys).toEqual([expect.stringMatching(/^tut\.week\.(product|price)$/), 'tut.week.event', 'tut.week.staff', 'tut.week.grow', 'tut.week.gift']);
-    expect(weekNote(day(s, 8))).toBeNull();
+    // 4-й — утренние заказы и проверка; мини-события зала (02.11 отодвинуты за первую неделю) — на 8-й.
+    expect(keys).toEqual([expect.stringMatching(/^tut\.week\.(product|price)$/), 'tut.week.orders', 'tut.week.staff', 'tut.week.grow', 'tut.week.gift', 'tut.week.event']);
+    expect(weekNote(day(s, 9))).toBeNull();
     expect(weekNote({ ...newGame(), day: 4 })).toBeNull();
   });
 

@@ -6,8 +6,8 @@
 
 import { onShelves, PRODUCTS, SEASONAL, sellableProducts, warehouseOf, type ProductId, type StoreState } from './economy';
 
-/** С какого дня кафе начинает предлагать договор, на сколько дней и сколько срывов терпит. */
-export const CAFE_FROM_DAY = 6;
+/** С какого дня кафе начинает предлагать договор (02.11: было с 6-го), на сколько дней и сколько срывов терпит. */
+export const CAFE_FROM_DAY = 11;
 export const CAFE_DAYS = 7;
 export const CAFE_MISSES = 2;
 /** Кафе платит на 15% дороже обычной цены (было 30%): за гарантированную поставку каждое утро. */

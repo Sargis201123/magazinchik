@@ -434,7 +434,7 @@ export function fulfillWedding(state: StoreState, order: WeddingOrder): { state:
       return false;
     });
     const shelves = s.shelves.map((shelf) => {
-      if (need === 0 || shelf.broken) return shelf;
+      if (need === 0) return shelf;
       const units = shelf.items[product] ?? [];
       const take = Math.min(need, units.length);
       need -= take;

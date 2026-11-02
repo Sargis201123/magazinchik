@@ -244,14 +244,10 @@ describe('загрузка сохранения: киоски и сменщик'
   });
 });
 
-describe('открытая касса — где кассир сегодня на месте', () => {
-  it('кассир на больничном или выходном кассу не открывает (и гостей не зовёт); менеджер на смене встаёт за одну пустую', () => {
-    const s = shop(3, ['cashier2', 'cashier3'], { plan: { ...ensurePlan(newGame()).plan!, sick: 'cashier2' } });
+describe('открытая касса — где есть кассир', () => {
+  it('каждый нанятый кассир открывает свою кассу и зовёт гостей (болезней и выходных больше нет)', () => {
     expect(staffedTills(shop(3, ['cashier2', 'cashier3']))).toBe(2);
-    expect(staffedTills(s)).toBe(1);
-    expect(laneGuests(s)).toBeLessThan(laneGuests(shop(3, ['cashier2', 'cashier3'])));
-    const off = shop(3, ['cashier2', 'cashier3'], { staff: [{ ...member('cashier2'), offDay: 40 }, member('cashier3')] });
-    expect(staffedTills(off)).toBe(1);
-    expect(staffedTills({ ...s, staff: [...s.staff, member('manager')] })).toBe(2);
+    expect(staffedTills(shop(3, ['cashier2']))).toBe(1);
+    expect(laneGuests(shop(3, ['cashier2']))).toBeLessThan(laneGuests(shop(3, ['cashier2', 'cashier3'])));
   });
 });
