@@ -45,16 +45,16 @@ AMBIENCE = ROOT / "public/audio/amb/street.m4a"
 AMB = ROOT / "public/audio/amb"
 #: Звук погоды под сценой (файл из public/audio/amb, громкость): живёт ровно на своём клипе.
 BEDS = {
-    "granny": ("birds", 0.22),
-    "morning": ("birds", 0.2),
-    "rain": ("rain", 0.45),
-    "storm": ("downpour", 0.5),
-    "leaves": ("crows", 0.18),
-    "zar": ("birds", 0.12),
+    "granny": ("birds", 0.12),
+    "morning": ("birds", 0.11),
+    "rain": ("rain", 0.25),
+    "storm": ("downpour", 0.28),
+    "leaves": ("crows", 0.1),
+    "zar": ("birds", 0.07),
 }
 #: Гром в грозу: секунды от начала клипа (молнии снимает promo/record.ts в STORM_FLASHES = 1.1, 4.4 —
 #: гром чуть позже вспышки, как в игре).
-THUNDER_AT = {"storm": [(0.05, 0.85), (1.55, 0.6), (4.75, 0.5)]}
+THUNDER_AT = {"storm": [(0.05, 0.45), (1.55, 0.32), (4.75, 0.26)]}
 #: Цвет по сценам (ffmpeg): ночь в грозу темнее и синее, зима холоднее, осень теплее, дождь серее.
 GRADE = {
     "rain": "eq=saturation=0.85:brightness=-0.03,colorbalance=bs=0.06:bm=0.04",
@@ -65,8 +65,8 @@ GRADE = {
 }
 SFX = ROOT / "public/audio/sfx/sfx.m4a"
 #: Музыка: громкость темы и доля, до которой она уходит под голос.
-MUSIC_VOL = 0.42
-MUSIC_UNDER_VOICE = 0.3
+MUSIC_VOL = 0.28
+MUSIC_UNDER_VOICE = 0.28
 #: Портрет бабушки над названием в концовке (64×64, увеличиваем пикселями).
 PORTRAIT = ROOT / "public/assets/portrait_grandma_happy.png"
 
@@ -445,7 +445,7 @@ def main() -> None:
         )
         af.append(
             f"[1:a]atrim=0:{total:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,"
-            f"volume=0.09,volume='{envelope(windows, 0.6)}':eval=frame,afade=t=in:d=1.5,afade=t=out:st={total - 2.5:.3f}:d=2.5[amb]"
+            f"volume=0.05,volume='{envelope(windows, 0.6)}':eval=frame,afade=t=in:d=1.5,afade=t=out:st={total - 2.5:.3f}:d=2.5[amb]"
         )
         mix = ["[mus]", "[amb]"]
         # Акценты из звуков игры.
@@ -454,7 +454,7 @@ def main() -> None:
             af.append(f"[2:a]aformat=sample_rates=48000:channel_layouts=stereo,asplit={len(accents)}" + "".join(f"[s{k}]" for k in range(len(accents))))
             for k, (name, at, vol) in enumerate(accents):
                 a, dur = SFX_CUTS[name]
-                af.append(f"[s{k}]atrim={a:.4f}:{a + dur:.4f},asetpts=PTS-STARTPTS,volume={vol},adelay={int(at * 1000)}|{int(at * 1000)}[e{k}]")
+                af.append(f"[s{k}]atrim={a:.4f}:{a + dur:.4f},asetpts=PTS-STARTPTS,volume={vol * 0.55:.3f},adelay={int(at * 1000)}|{int(at * 1000)}[e{k}]")
                 mix.append(f"[e{k}]")
         n_in = 3
         # Звук погоды: свой кусок под каждой сценой, с мягким входом и выходом на наплывах.
