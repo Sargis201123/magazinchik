@@ -2,6 +2,7 @@
 // после него (персонал, украшения, реклама), сторож зависшей паузы, утренние дела перед открытием, урок
 // итогов первого дня, распаковка новинок в зале (коробка, кольцо с искрами, флажок «НОВОЕ»).
 
+import { setPlaying } from '../platform/yandex';
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { DAY_SECONDS, emptyDayStats, shelveAll, warehouseCount } from '../game/economy';
@@ -284,6 +285,8 @@ export function watchStall(scene: StoreScene, deltaMs: number): void {
 }
 
 export function startDay(scene: StoreScene): void {
+  // Яндекс Игры: идёт смена — GameplayAPI.start (platform/yandex.ts; в Telegram ничего не делает).
+  setPlaying(true);
   // Утреннее окно понадобится завтра — подкачать, когда первые звуки дня уже пришли (platform/lazy.ts).
   setTimeout(prefetchMorning, MORNING_PREFETCH_MS);
   scene.dayOpen = true;

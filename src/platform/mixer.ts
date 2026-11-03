@@ -347,10 +347,18 @@ function watchScreen(): void {
 
 let pageHidden = typeof document !== 'undefined' && document.hidden;
 let appHidden = false;
+/** Площадка просит тишины: реклама на экране или игра потеряла фокус (Яндекс Игры, platform/yandex.ts). */
+let platformHold = false;
+
+/** Заглушить весь звук по просьбе площадки (true) и вернуть (false). */
+export function holdSound(on: boolean): void {
+  platformHold = on;
+  sync();
+}
 
 /** Звук должен идти: игра на экране, не выключена, общая громкость не на нуле и слышен хоть один канал. */
 const wanted = (): boolean =>
-  !pageHidden && !appHidden && !muted && volumes.master > 0 && (volumes.music > 0 || volumes.ambience > 0 || volumes.effects > 0 || volumes.voices > 0);
+  !pageHidden && !appHidden && !platformHold && !muted && volumes.master > 0 && (volumes.music > 0 || volumes.ambience > 0 || volumes.effects > 0 || volumes.voices > 0);
 
 let napTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -369,7 +377,7 @@ function sync(): void {
   const nap = () => {
     if (!wanted() && ac.state === 'running') void ac.suspend().catch(() => {});
   };
-  if (pageHidden || appHidden) nap();
+  if (pageHidden || appHidden || platformHold) nap();
   else napTimer = setTimeout(nap, 300);
 }
 

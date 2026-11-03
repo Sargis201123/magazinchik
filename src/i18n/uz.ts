@@ -1339,6 +1339,7 @@ export const uz: Record<TextKey, string> = {
   "decor.buyStars": "⭐ {n} ga olish",
   "decor.paying": "Toʻlov ochilyapti…",
   "decor.starsOff": "Yulduzlarga xarid oʻyin Telegramda ochilganda ishlaydi.",
+  "decor.payOff": "Oʻyinning bu versiyasida xaridlar mavjud emas.",
   "decor.payCancelled": "Toʻlov bekor qilindi — hech narsa yechilmadi.",
   "decor.payFailed": "Toʻlov oʻtmadi. Birozdan keyin yana urinib koʻr.",
   "decor.try": "👀 Bugunga sinab koʻr — bepul",

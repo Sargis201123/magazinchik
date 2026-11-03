@@ -176,14 +176,32 @@ const atlasPlugin = (build: boolean): Plugin => ({
   },
 });
 
-export default defineConfig(({ command }) => ({
+/**
+ * Сборка для Яндекс Игр (`vite build --mode yandex`, npm run build:yandex): вместо скрипта Telegram —
+ * SDK Яндекса (/sdk.js отдаёт сама площадка), игра узнаёт площадку по __PLATFORM__ (src/platform/target.ts).
+ */
+const yandexHtml = (): Plugin => ({
+  name: 'yandex-html',
+  transformIndexHtml: (html) =>
+    html
+      .replace(/<!-- Скрипт Telegram[\s\S]*?-->\s*/, '')
+      .replace('<script src="https://telegram.org/js/telegram-web-app.js"></script>', '<script src="/sdk.js"></script>')
+      .replace('href="/favicon.png"', 'href="favicon.png"'),
+});
+
+export default defineConfig(({ command, mode }) => ({
   base: './',
-  plugins: command === 'build' ? [phaserFlags(), assetVersions(true), atlasPlugin(true), preloadHints()] : [assetVersions(false), atlasPlugin(false)],
+  define: { __PLATFORM__: JSON.stringify(mode === 'yandex' ? 'yandex' : 'telegram') },
+  plugins: [
+    ...(command === 'build' ? [phaserFlags(), assetVersions(true), atlasPlugin(true), preloadHints()] : [assetVersions(false), atlasPlugin(false)]),
+    ...(mode === 'yandex' ? [yandexHtml()] : []),
+  ],
   resolve: {
     // В production — Phaser без физики и тайловых карт (src/vendor/phaser-lite.js).
     alias: command === 'build' ? [{ find: /^phaser$/, replacement: fileURLToPath(new URL('./src/vendor/phaser-lite.js', import.meta.url)) }] : [],
   },
   build: {
+    outDir: mode === 'yandex' ? 'dist-yandex' : 'dist',
     target: 'es2020',
     chunkSizeWarningLimit: 1600,
     rollupOptions: {

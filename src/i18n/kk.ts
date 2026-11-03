@@ -1337,6 +1337,7 @@ export const kk: Record<TextKey, string> = {
   "decor.buyStars": "Алу: ⭐ {n}",
   "decor.paying": "Төлемді ашып жатырмын…",
   "decor.starsOff": "Жұлдызбен сатып алу ойын Telegram ішінде ашық болғанда жұмыс істейді.",
+  "decor.payOff": "Ойынның бұл нұсқасында сатып алу қолжетімсіз.",
   "decor.payCancelled": "Төлем тоқтатылды — ештеңе есептен шығарылған жоқ.",
   "decor.payFailed": "Төлем өтпеді. Сәл кейінірек тағы байқап көр.",
   "decor.try": "👀 Бүгінге байқап көр — тегін",

@@ -7,7 +7,7 @@ import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
 import { flushCloud } from '../game/save';
 import { activePet, grantPets, ownsPet, PET_IDS, PET_NAME_MAX, petDefaultKey, petItem, petNameKey, PETS, renamePet, setActivePet, type PetId } from '../game/pets';
-import { buyWithStars, starsAvailable } from '../platform/stars';
+import { buyWithStars, starsAvailable, starsOffKey } from '../platform/stars';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal } from './dom';
 import { sheetPng } from './sheet';
@@ -94,7 +94,7 @@ function buyModal(id: PetId, getState: () => StoreState, update: Update): void {
         return;
       }
       buy.disabled = false;
-      note.textContent = t(result === 'unavailable' ? 'decor.starsOff' : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
+      note.textContent = t(result === 'unavailable' ? starsOffKey : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
       if (result === 'unavailable') haptic.error();
     });
   }, 'ui-btn ui-btn-stars');
@@ -108,7 +108,7 @@ function buyModal(id: PetId, getState: () => StoreState, update: Update): void {
     buy,
     button(t('decor.close'), close, 'ui-btn secondary'),
   );
-  if (!starsAvailable()) note.textContent = t('decor.starsOff');
+  if (!starsAvailable()) note.textContent = t(starsOffKey);
 }
 
 /** Имя питомца (как у кота): поле с именем, «Готово». fresh — сразу после покупки, с приветствием. */

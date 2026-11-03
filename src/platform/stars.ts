@@ -3,6 +3,10 @@
 // так покупки возвращаются на любом телефоне и после «Начать заново».
 
 import { openInvoice, telegramInitData } from './telegram';
+import { IS_YANDEX } from './target';
+
+/** Почему купить нельзя: вне Telegram — «откройте в Telegram», на Яндекс Играх — без упоминания Telegram. */
+export const starsOffKey = IS_YANDEX ? ('decor.payOff' as const) : ('decor.starsOff' as const);
 
 export type BuyResult = 'paid' | 'cancelled' | 'failed' | 'unavailable';
 

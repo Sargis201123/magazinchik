@@ -2,6 +2,8 @@
 // Cloudflare (Observability). Так видно, что сломалось у живых людей, а не только у нас.
 // Не больше нескольких за запуск и без повторов — чтобы не засыпать логи.
 
+import { IS_YANDEX } from './target';
+
 const MAX_REPORTS = 5;
 const sent = new Set<string>();
 let context: () => Record<string, unknown> = () => ({});
@@ -15,7 +17,8 @@ export function reportError(error: unknown, where = 'window'): void {
   const err = error instanceof Error ? error : new Error(String(error));
   const key = `${where}:${err.message}`;
   console.error(where, err);
-  if (sent.has(key) || sent.size >= MAX_REPORTS || location.hostname === 'localhost') return;
+  // На Яндекс Играх нашего сервера нет — только в консоль.
+  if (IS_YANDEX || sent.has(key) || sent.size >= MAX_REPORTS || location.hostname === 'localhost') return;
   sent.add(key);
   let extra: Record<string, unknown> = {};
   try {

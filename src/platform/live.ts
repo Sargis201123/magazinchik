@@ -2,6 +2,7 @@
 // Календарь берём при запуске и держим копию в памяти телефона: без сети и сервера игра
 // празднует по последней копии, а если её нет — по встроенной (DEFAULT_EVENTS, game/live.ts).
 
+import { IS_YANDEX } from './target';
 import { localDate } from '../game/gift';
 import { DEFAULT_EVENTS, parseEvents, type LiveEvent } from '../game/live';
 import { trustedNow } from './telegram';
@@ -36,6 +37,8 @@ export async function loadLiveEvents(): Promise<LiveEvent[]> {
     events = copy.events;
     return events;
   }
+  // На Яндекс Играх нашего сервера нет — встроенный календарь.
+  if (IS_YANDEX) return liveEvents();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {

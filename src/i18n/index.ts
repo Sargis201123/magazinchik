@@ -34,6 +34,16 @@ let lang: Lang = detectLang(
 // Язык страницы — для переносов слов и экранного диктора.
 document.documentElement.lang = lang;
 
+/**
+ * Язык площадки, который стал известен уже после запуска (Яндекс Игры: ysdk.environment.i18n.lang, main.ts).
+ * Выбор игрока в настройках и ?lang= в адресе важнее.
+ */
+export function usePlatformLang(code: string | undefined): void {
+  if (!code) return;
+  lang = detectLang(new URLSearchParams(location.search).get('lang'), storedLang(), code);
+  document.documentElement.lang = lang;
+}
+
 export const getLang = (): Lang => lang;
 export const setLang = (next: Lang): void => {
   lang = next;

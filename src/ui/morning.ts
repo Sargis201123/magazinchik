@@ -206,7 +206,8 @@ import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../
 /** Высота «голоса» героев в диалогах. */
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420, sonya: 760, father: 300 };
 import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, STAR_PACKS, tryDecor, type DecorItem, type DecorKind, decorItem } from '../game/decor';
-import { buyWithStars, starsAvailable } from '../platform/stars';
+import { IS_YANDEX } from '../platform/target';
+import { buyWithStars, starsAvailable, starsOffKey } from '../platform/stars';
 import { petsBox } from './pets';
 import { adoptDog, DOG_FOOD, DOG_FROM_DAY, DOG_PRICE, securityOf } from '../game/watch';
 import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
@@ -1678,7 +1679,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
               return;
             }
             buy.disabled = false;
-            note.textContent = t(result === 'unavailable' ? 'decor.starsOff' : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
+            note.textContent = t(result === 'unavailable' ? starsOffKey : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
           });
         }, 'ui-btn');
         head.push(buy, note);
@@ -3289,7 +3290,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
           return;
         }
         buy.disabled = false;
-        note.textContent = t(result === 'unavailable' ? 'decor.starsOff' : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
+        note.textContent = t(result === 'unavailable' ? starsOffKey : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
         if (result === 'unavailable') haptic.error();
       });
     });
@@ -3308,7 +3309,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       );
     } else if ((state.decor.tried ?? []).includes(item.id)) modal.append(el('div', 'ui-muted', t('decor.triedAlready')));
     modal.append(button(t('decor.close'), close, 'ui-btn secondary'));
-    if (!starsAvailable()) note.textContent = t('decor.starsOff');
+    if (!starsAvailable()) note.textContent = t(starsOffKey);
   };
 
   /**
@@ -3857,9 +3858,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     const gear = page('settings', '⚙');
     gear.title = t('profile.settings');
     gear.ariaLabel = t('profile.settings');
-    pages.append(page('trophies', `🏆 ${t('profile.trophies')}`), page('friends', `👥 ${t('profile.friends')}`), gear);
-    if (profilePage === 'friends') return [pages, ...friendsPage()];
-    if (profilePage === 'settings') return [pages, el('h3', '', `⚙ ${t('profile.settings')}`), named, sounds, gfx, ...(early ? [] : [replay]), supportBox(), again];
+    // Яндекс Игры: друзья, турнир и рейтинг живут на нашем сервере через Telegram, «Поддержать автора» — звёзды;
+    // там их нет (platform/target.ts).
+    pages.append(page('trophies', `🏆 ${t('profile.trophies')}`), ...(IS_YANDEX ? [] : [page('friends', `👥 ${t('profile.friends')}`)]), gear);
+    if (profilePage === 'friends' && !IS_YANDEX) return [pages, ...friendsPage()];
+    if (profilePage === 'settings') return [pages, el('h3', '', `⚙ ${t('profile.settings')}`), named, sounds, gfx, ...(early ? [] : [replay]), ...(IS_YANDEX ? [] : [supportBox()]), again];
     return [pages, ...(early ? [replay] : []), ...trophiesPage(state)];
   };
 

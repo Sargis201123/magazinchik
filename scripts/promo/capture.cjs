@@ -34,7 +34,8 @@ const ROOT = path.resolve(__dirname, '../..');
 const PORT = Number(process.argv[2] || 4173);
 const WHAT = process.argv[3] || 'all';
 const LANGS = (process.argv[4] || 'both') === 'both' ? ['ru', 'en'] : [process.argv[4]];
-const STORE = path.join(ROOT, 'docs/store');
+/** Куда класть ролики и кадры (PROMO_STORE — для витрины Яндекс Игр, scripts/promo/yandex.cjs). */
+const STORE = process.env.PROMO_STORE || path.join(ROOT, 'docs/store');
 const PROMO = path.join(ROOT, 'public/promo');
 /** Кадры до склейки — во временной папке (удаляется в конце). */
 let tmp = '';
