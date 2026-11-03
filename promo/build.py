@@ -150,31 +150,54 @@ def find_voice(lines: list[dict], folder: Path | None) -> tuple[str, list[Path] 
     sys.exit(f"В {folder.relative_to(ROOT)} нет голоса: voice.mp3 или lines/01.mp3 … (promo/voice/tts.py)")
 
 
-def split_whole(path: Path, n: int, total: float) -> list[tuple[float, float]]:
-    """Один файл на весь текст → n кусков (начало, конец) по самым длинным паузам."""
-    for noise in (-38, -34, -30, -42):
-        log = run("ffmpeg", "-hide_banner", "-i", path, "-af", f"silencedetect=noise={noise}dB:d=0.25", "-f", "null", "-", capture=True)
-        starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", log)]
-        ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", log)]
-        gaps = [(e - s, s, e) for s, e in zip(starts, ends) if s > 0.05 and e < total - 0.05]
-        if len(gaps) < n - 1:
-            continue
-        cuts = sorted(sorted(gaps, reverse=True)[: n - 1], key=lambda g: g[1])
-        bounds: list[tuple[float, float]] = []
-        prev = 0.0
-        # Начало речи: после тишины в самом начале файла.
-        lead = next((e for s, e in zip(starts, ends) if s <= 0.05), 0.0)
-        prev = lead
-        for _, s, e in cuts:
-            bounds.append((prev, s))
-            prev = e
-        tail_silence = next((s for s, e in zip(starts, ends) if e >= total - 0.05), total)
-        bounds.append((prev, max(prev + 0.3, tail_silence)))
-        return bounds
-    sys.exit(
-        f"В promo/voice/{path.name} не нашлось {n - 1} пауз между репликами. Сгенерируйте текст из блока "
-        "«ВСТАВИТЬ ЦЕЛИКОМ» (с «...» между репликами) или положите реплики по одной: promo/voice/01.mp3 …"
-    )
+def split_whole(path: Path, texts: list[str], total: float) -> list[tuple[float, float]]:
+    """Один файл на весь текст → куски по репликам. Пауз в речи больше, чем границ между репликами
+    (тире, «…» внутри фразы), поэтому границы выбираются так, чтобы доли кусков совпали с долями
+    текста реплик, а среди близких вариантов — по более длинной паузе (динамика по паузам)."""
+    n = len(texts)
+    log = run("ffmpeg", "-hide_banner", "-i", path, "-af", "silencedetect=noise=-38dB:d=0.18", "-f", "null", "-", capture=True)
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", log)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", log)]
+    lead = next((e for s, e in zip(starts, ends) if s <= 0.05), 0.0)
+    tail = next((s for s, e in zip(starts, ends) if e >= total - 0.05), total)
+    gaps = [(s, e) for s, e in zip(starts, ends) if s > lead + 0.3 and e < tail - 0.3]
+    if len(gaps) < n - 1:
+        sys.exit(f"В {path.name} не нашлось {n - 1} пауз между репликами — сгенерируйте с «...» между репликами.")
+    weights = [max(1, len(clean(t))) for t in texts]
+    span = tail - lead
+    exp = [span * w / sum(weights) for w in weights]
+    INF = float("inf")
+    m = len(gaps)
+    mids = [(s + e) / 2 for s, e in gaps]
+
+    # Цена куска k от точки a до b: насколько его длина отличается от ожидаемой по тексту (в долях).
+    def piece(k: int, a: float, b: float) -> float:
+        return ((b - a) - exp[k]) ** 2 / exp[k]
+
+    # cost[k][j]: лучшая цена, если конец k-го куска — пауза j (кусков до неё k+1).
+    cost = [[INF] * m for _ in range(n - 1)]
+    back = [[-1] * m for _ in range(n - 1)]
+    for j in range(m):
+        cost[0][j] = piece(0, lead, gaps[j][0])
+    for k in range(1, n - 1):
+        for j in range(k, m):
+            for i in range(k - 1, j):
+                c = cost[k - 1][i] + piece(k, gaps[i][1], gaps[j][0])
+                if c < cost[k][j]:
+                    cost[k][j], back[k][j] = c, i
+    j = min(range(m), key=lambda x: cost[n - 2][x] + piece(n - 1, gaps[x][1], tail))
+    picks = []
+    for k in range(n - 2, -1, -1):
+        picks.append(j)
+        j = back[k][j]
+    picks.reverse()
+    bounds, prev = [], lead
+    for j in picks:
+        s, e = gaps[j]
+        bounds.append((prev, s))
+        prev = e
+    bounds.append((prev, max(prev + 0.3, tail)))
+    return bounds
 
 
 # ---------- Субтитры ----------
@@ -324,7 +347,7 @@ def main() -> None:
             vpieces = list(src)  # type: ignore[arg-type]
         elif mode == "whole":
             total_voice = duration(src)  # type: ignore[arg-type]
-            bounds = split_whole(src, len(voiced), total_voice)  # type: ignore[arg-type]
+            bounds = split_whole(src, [l["voice"] for l in voiced], total_voice)  # type: ignore[arg-type]
             vdurs = []
             for i, (a, b) in enumerate(bounds):
                 a = max(0.0, a - 0.04)
