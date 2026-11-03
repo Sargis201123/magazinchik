@@ -406,7 +406,7 @@ def main() -> None:
                 fl.append(f"[{k}:v]fps={FPS},scale={W}:{H}:flags=lanczos,setsar=1,setpts=PTS-STARTPTS[m{k}]")
             n = len(p["montage"])
             fl.append("".join(f"[m{k}]" for k in range(n)) + f"concat=n={n}:v=1:a=0[mv]")
-            hook = tmp / "hook.mp4"
+            hook = tmp / f"montage_{p['id']}.mp4"
             run("ffmpeg", "-v", "error", "-y", *parts, "-filter_complex", ";".join(fl), "-map", "[mv]", "-c:v", "libx264", "-crf", "12", "-preset", "fast", hook)
             p["clip"] = hook
 
