@@ -1,81 +1,208 @@
 {
-  "_": "Единственный источник текста ролика: реплики голоса, субтитры, подписи сверху и призыв в конце. Его читают promo/record.ts (какие сцены снимать), promo/build.py (тайминг, субтитры, концовка) и promo/voice/make_texts.py (тексты для ElevenLabs). Правите текст — запустите python3 promo/voice/make_texts.py и bash promo/build.sh.",
-  "title": "Магазинчик",
-  "cta": "Найди «Магазинчик» в Telegram",
+  "_": "Единственный источник текста ролика на всех языках: реплики голоса, субтитры, подписи сверху и призыв в конце. Сцены (scene) общие для языков, тексты — свои. Его читают promo/record.ts (какие сцены снимать), promo/build.py (тайминг, субтитры, звук, концовка) и promo/voice/make_texts.py (тексты для ElevenLabs). Правите текст — python3 promo/voice/make_texts.py, затем bash promo/build.sh <язык> <голос>.",
   "link": "",
-  "_link": "BOT_LINK: ссылка на бота (например @magazinchik_bot или t.me/magazinchik_bot). Пусто — в концовке её нет. Это единственное место, где её менять.",
-  "lines": [
-    {
-      "id": "01",
-      "scene": "granny",
-      "voice": "Бабушка оставила тебе свой маленький ларёк.",
-      "caption": "Свой магазинчик"
+  "_link": "Ссылка на бота (например @magazinchik_bot). Пусто — в концовке её нет. Одна на все языки.",
+  "langs": {
+    "ru": {
+      "title": "Магазинчик",
+      "cta": "Найди «Магазинчик» в Telegram",
+      "cps": 13.5,
+      "voices": {
+        "alexandr": "Alexandr Vlasov – Vibrant and Energetic",
+        "veronica": "Veronica – Energetic, Clear and Rich"
+      },
+      "lines": [
+        {
+          "id": "01",
+          "scene": "granny",
+          "voice": "Бабушка оставила тебе свой маленький ларёк.",
+          "caption": "Свой магазинчик"
+        },
+        {
+          "id": "02",
+          "scene": "morning",
+          "voice": "Утро. Звенит колокольчик — первые покупатели!",
+          "caption": "Первые покупатели"
+        },
+        {
+          "id": "03",
+          "scene": "tap",
+          "voice": "Тап по кассе — и звенят монетки.",
+          "caption": "Тап — и продано!"
+        },
+        {
+          "id": "04",
+          "scene": "grow",
+          "voice": "День за днём ларёк растёт в настоящий магазин.",
+          "caption": "Расширяйся"
+        },
+        {
+          "id": "05",
+          "scene": "food",
+          "voice": "Кассиры, пекарня, кофейня... и своя кухня.",
+          "caption": "Свои люди и своя кухня"
+        },
+        {
+          "id": "06",
+          "scene": "rain",
+          "voice": "А потом — дождь. Лужи, зонтики... и все спешат к тебе.",
+          "caption": "Дождь"
+        },
+        {
+          "id": "07",
+          "scene": "storm",
+          "voice": "Гроза? Свет горит, касса работает!",
+          "caption": "Гроза"
+        },
+        {
+          "id": "08",
+          "scene": "leaves",
+          "voice": "Осень раскрасит улицу листьями...",
+          "caption": "Осень"
+        },
+        {
+          "id": "09",
+          "scene": "winter",
+          "voice": "...а зима — снегом и гирляндами.",
+          "caption": "Зима"
+        },
+        {
+          "id": "10",
+          "scene": "cat",
+          "voice": "Кот Барсик тоже на работе. Погладь его!",
+          "caption": "Кот магазина"
+        },
+        {
+          "id": "11",
+          "scene": "street",
+          "voice": "Через дорогу — магазины твоих друзей.",
+          "caption": "Улица друзей"
+        },
+        {
+          "id": "12",
+          "scene": "notebook",
+          "voice": "А в бабушкиной тетради... вырвана одна страница.",
+          "caption": "Бабушкина тетрадь"
+        },
+        {
+          "id": "13",
+          "scene": "zar",
+          "voice": "«Лавка у моста»... Что ждёт тебя в Заречье?",
+          "caption": "Заречье"
+        },
+        {
+          "id": "14",
+          "scene": "cta",
+          "voice": "Найди «Магазинчик» в Телеграме!",
+          "caption": "",
+          "sub": "Найди «Магазинчик» в Telegram!"
+        }
+      ],
+      "stress": [
+        "Заречье — ударение на «е»: ЗарЕчье.",
+        "ларёк — с «ё» (ларЁк).",
+        "Барсик — ударение на «а»: БАрсик.",
+        "Телеграме — в голосе по-русски, в субтитрах — Telegram латиницей.",
+        "Текст подходит и мужскому, и женскому голосу: всё на «ты», без «я сделал/сделала»."
+      ]
     },
-    {
-      "id": "02",
-      "scene": "morning",
-      "voice": "Утро... Первые покупатели уже на пороге.",
-      "caption": "Первые покупатели"
-    },
-    {
-      "id": "03",
-      "scene": "tap",
-      "voice": "Тап по кассе — и звенят монетки!",
-      "caption": "Тап — и продано!"
-    },
-    {
-      "id": "04",
-      "scene": "grow",
-      "voice": "День за днём ларёк растёт в настоящий магазин.",
-      "caption": "Расширяйся"
-    },
-    {
-      "id": "05",
-      "scene": "food",
-      "voice": "Кассиры, пекарня, кофейня... и своя кухня.",
-      "caption": "Свои люди и своя пекарня"
-    },
-    {
-      "id": "06",
-      "scene": "cat",
-      "voice": "А ещё у нас живёт кот. Погладь его!",
-      "caption": "Кот магазина"
-    },
-    {
-      "id": "07",
-      "scene": "winter",
-      "voice": "Снег, гирлянды, тёплые окна по вечерам.",
-      "caption": "Времена года"
-    },
-    {
-      "id": "08",
-      "scene": "street",
-      "voice": "Через дорогу — магазины твоих друзей.",
-      "caption": "Улица друзей"
-    },
-    {
-      "id": "09",
-      "scene": "notebook",
-      "voice": "А бабушкина тетрадь... хранит одну тайну.",
-      "caption": "Бабушкина тетрадь"
-    },
-    {
-      "id": "10",
-      "scene": "zar",
-      "voice": "А за мостом тебя ждёт Заречье.",
-      "caption": "Заречье"
-    },
-    {
-      "id": "11",
-      "scene": "cta",
-      "voice": "Найди «Магазинчик» в Телеграме!",
-      "sub": "Найди «Магазинчик» в Telegram!",
-      "caption": ""
+    "en": {
+      "title": "Magazinchik",
+      "cta": "Find \"Magazinchik\" on Telegram",
+      "cps": 15.5,
+      "voices": {
+        "jesse": "Jesse – Elearning, Casual Friendly Male"
+      },
+      "lines": [
+        {
+          "id": "01",
+          "scene": "granny",
+          "voice": "Grandma left you her tiny corner kiosk.",
+          "caption": "Your own little shop"
+        },
+        {
+          "id": "02",
+          "scene": "morning",
+          "voice": "Morning. The bell rings — your first customers!",
+          "caption": "First customers"
+        },
+        {
+          "id": "03",
+          "scene": "tap",
+          "voice": "Tap the register — hear the coins jingle.",
+          "caption": "Tap — sold!"
+        },
+        {
+          "id": "04",
+          "scene": "grow",
+          "voice": "Day by day, the kiosk grows into a real store.",
+          "caption": "Grow"
+        },
+        {
+          "id": "05",
+          "scene": "food",
+          "voice": "Cashiers, a bakery, a coffee corner... even a kitchen.",
+          "caption": "Your team, your kitchen"
+        },
+        {
+          "id": "06",
+          "scene": "rain",
+          "voice": "Then the rain comes. Puddles, umbrellas — everyone ducks inside.",
+          "caption": "Rain"
+        },
+        {
+          "id": "07",
+          "scene": "storm",
+          "voice": "A thunderstorm? Lights on, register open!",
+          "caption": "Thunderstorm"
+        },
+        {
+          "id": "08",
+          "scene": "leaves",
+          "voice": "Autumn paints the street with leaves...",
+          "caption": "Autumn"
+        },
+        {
+          "id": "09",
+          "scene": "winter",
+          "voice": "...and winter brings snow and twinkling lights.",
+          "caption": "Winter"
+        },
+        {
+          "id": "10",
+          "scene": "cat",
+          "voice": "Barsik the cat works here too. Give him a pet!",
+          "caption": "The shop cat"
+        },
+        {
+          "id": "11",
+          "scene": "street",
+          "voice": "Across the road — your friends' shops.",
+          "caption": "Friends' street"
+        },
+        {
+          "id": "12",
+          "scene": "notebook",
+          "voice": "But Grandma's notebook... is missing a page.",
+          "caption": "Grandma's notebook"
+        },
+        {
+          "id": "13",
+          "scene": "zar",
+          "voice": "\"The shop by the bridge...\" What's waiting across the river?",
+          "caption": "Across the river"
+        },
+        {
+          "id": "14",
+          "scene": "cta",
+          "voice": "Find \"Magazinchik\" on Telegram!",
+          "caption": ""
+        }
+      ],
+      "stress": [
+        "Magazinchik — ma-ga-ZEEN-chik (Russian for \"little shop\").",
+        "Barsik — BAR-sik."
+      ]
     }
-  ],
-  "stress": [
-    "Заречье — ударение на «е»: ЗарЕчье.",
-    "ларёк — с «ё» (ларЁк); если голос читает «ларек», оставьте букву ё — v4 её понимает.",
-    "Телеграме — в голосе по-русски, в субтитрах — Telegram латиницей."
-  ]
+  }
 }

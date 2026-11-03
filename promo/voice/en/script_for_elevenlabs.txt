@@ -1,0 +1,87 @@
+Magazinchik — promo video, voice-over (ElevenLabs)
+model: Eleven v4 · language: English (American)
+Mood: warm, cosy, smiling; don't rush. Stability ~45–55 %, Similarity ~75 %, Style ~20–30 %.
+
+Voices (folder <voice>):
+- jesse: Jesse – Elearning, Casual Friendly Male
+
+=== PASTE AS ONE (single file) ===
+Save to: promo/voice/en/<voice>/voice.mp3
+(copy everything between the lines; the "..." between lines are pauses the build cuts on)
+------------------------------------------------------------
+Grandma left you her tiny corner kiosk.
+
+...
+
+Morning. The bell rings — your first customers!
+
+...
+
+Tap the register — hear the coins jingle.
+
+...
+
+Day by day, the kiosk grows into a real store.
+
+...
+
+Cashiers, a bakery, a coffee corner... even a kitchen.
+
+...
+
+Then the rain comes. Puddles, umbrellas — everyone ducks inside.
+
+...
+
+A thunderstorm? Lights on, register open!
+
+...
+
+Autumn paints the street with leaves...
+
+...
+
+...and winter brings snow and twinkling lights.
+
+...
+
+Barsik the cat works here too. Give him a pet!
+
+...
+
+Across the road — your friends' shops.
+
+...
+
+But Grandma's notebook... is missing a page.
+
+...
+
+"The shop by the bridge..." What's waiting across the river?
+
+...
+
+Find "Magazinchik" on Telegram!
+------------------------------------------------------------
+
+=== ONE LINE AT A TIME ===
+Texts: promo/voice/en/lines/01.txt …; audio → promo/voice/en/<voice>/lines/01.mp3 …
+01. Grandma left you her tiny corner kiosk.
+02. Morning. The bell rings — your first customers!
+03. Tap the register — hear the coins jingle.
+04. Day by day, the kiosk grows into a real store.
+05. Cashiers, a bakery, a coffee corner... even a kitchen.
+06. Then the rain comes. Puddles, umbrellas — everyone ducks inside.
+07. A thunderstorm? Lights on, register open!
+08. Autumn paints the street with leaves...
+09. ...and winter brings snow and twinkling lights.
+10. Barsik the cat works here too. Give him a pet!
+11. Across the road — your friends' shops.
+12. But Grandma's notebook... is missing a page.
+13. "The shop by the bridge..." What's waiting across the river?
+14. Find "Magazinchik" on Telegram!
+
+=== PRONUNCIATION ===
+- Magazinchik — ma-ga-ZEEN-chik (Russian for "little shop").
+- Barsik — BAR-sik.
+- "..." is a breath pause; "—" a short one. Exclamation marks = a smile, not a shout.
