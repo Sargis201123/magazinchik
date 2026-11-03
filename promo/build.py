@@ -40,7 +40,7 @@ FONTS = PROMO / "fonts"
 #: Музыка ролика: свой трек (promo/music/promo_theme.mp3, Suno), если он есть, иначе главная тема игры.
 MUSIC = next((p for p in [PROMO / "music/promo_theme.mp3"] if p.exists()), ROOT / "public/audio/music/suno/theme.m4a")
 #: Темп трека — чтобы удлинять его целыми тактами.
-MUSIC_BPM = 100
+MUSIC_BPM = 120
 AMBIENCE = ROOT / "public/audio/amb/street.m4a"
 AMB = ROOT / "public/audio/amb"
 #: Звук погоды под сценой (файл из public/audio/amb, громкость): живёт ровно на своём клипе.

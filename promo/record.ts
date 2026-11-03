@@ -614,6 +614,58 @@ const weatherScene =
     return errors;
   };
 
+/**
+ * Перемотка игрового дня к доле share (0…1): таймеры сцены (особые дни, scenes/bigDays.ts — at(share))
+ * срабатывают, как будто время прошло. Повторяющиеся (мигалки, огоньки) не трогаем.
+ */
+const jumpTo = (page: Page, share: number) =>
+  page.evaluate((share) => {
+    const s = (window as any).__scene;
+    const DAY = 90;
+    const now = DAY - s.timeLeft;
+    const d = Math.max(0, share * DAY - now);
+    const clock = s.time as any;
+    for (const ev of [...(clock._active ?? []), ...(clock._pendingInsertion ?? [])]) if (!ev.loop) ev.elapsed += d * 1000;
+    s.timeLeft -= d;
+  }, share);
+
+/**
+ * Особые дни (game/bigday.ts bigDayFor): 129 — ограбление с заложниками (ОМОН строится в 0.72 дня,
+ * штурм — в 0.8), 203 — наводнение, 176 — жара.
+ */
+const eventScene =
+  (scene: 'robbery' | 'flood' | 'heat'): SceneFn =>
+  async (browser, clips) => {
+    const day = { robbery: 129, flood: 203, heat: 176 }[scene];
+    const { page, errors, close } = await boot(browser, { state: midGame(day), seed: day });
+    await page.evaluate((light) => Object.assign(window, { __light: light, __topUp: true }), scene === 'robbery' ? 0.45 : 0.2);
+    await boostWeather(page);
+    const at = await where(page);
+    await crowd(page, 8);
+    await steps(page, sec(2));
+    if (scene === 'robbery') {
+      await jumpTo(page, 0.15);
+      await steps(page, sec(4));
+      await jumpTo(page, 0.71);
+      await steps(page, sec(2));
+    } else {
+      await jumpTo(page, 0.3);
+      await crowd(page, 6);
+      await steps(page, sec(3));
+    }
+    await ui(page);
+    const views: Record<string, [View, View]> = {
+      robbery: [{ x: at.door.x, y: at.h - 10, zoom: 1.35 }, { x: at.door.x, y: at.h - 20, zoom: 1.5 }],
+      flood: [{ x: at.door.x - 40, y: at.h + 40, zoom: 1.2 }, { x: at.door.x + 40, y: at.h + 30, zoom: 1.3 }],
+      heat: [{ x: at.door.x + 30, y: at.h - 30, zoom: 1.5 }, { x: at.door.x - 20, y: at.h - 40, zoom: 1.6 }],
+    };
+    const frames = sec(scene === 'robbery' ? 8.5 : CLIP_S);
+    await camera(page, views[scene][0], views[scene][1], frames);
+    await clips[scene].record(page, frames);
+    await close();
+    return errors;
+  };
+
 /** Зима и Новый год вечером: снег, гирлянды, окна светятся. */
 const winter: SceneFn = async (browser, clips) => {
   const { page, errors, close } = await boot(browser, { state: midGame(135), seed: 135 });
@@ -795,6 +847,9 @@ const SHOOTERS: { scenes: string[]; run: SceneFn }[] = [
   { scenes: ['notebook'], run: notebook },
   { scenes: ['zar'], run: zar },
   { scenes: ['sonya'], run: sonya },
+  { scenes: ['robbery'], run: eventScene('robbery') },
+  { scenes: ['flood'], run: eventScene('flood') },
+  { scenes: ['heat'], run: eventScene('heat') },
   { scenes: ['cta'], run: finale },
 ];
 
@@ -810,7 +865,8 @@ async function main(): Promise<void> {
   const browser = await playwright.chromium.launch(path && existsSync(path) ? { executablePath: path } : {});
   const name = (scene: string) => {
     const line = SCRIPT.lines.find((l) => l.scene === scene);
-    return line ? `${line.id}_${scene}` : scene;
+    // Сцены, которых нет в тексте напрямую, идут в монтаж других реплик (lines.json montage): src_<сцена>.
+    return line ? `${line.id}_${scene}` : `src_${scene}`;
   };
   const failed: string[] = [];
   for (const shooter of SHOOTERS) {
