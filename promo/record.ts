@@ -194,12 +194,14 @@ async function boot(browser: Browser, session: Session): Promise<{ page: Page; e
   await context.route(/telegram\.org/, (r) => r.abort());
   await context.route(/\/api\//, (r) => {
     const body = r.request().postData() ?? '';
+    if (process.env.PROMO_DEBUG && /rror|stack/.test(body)) console.log('api:', body.slice(0, 600));
     if (session.telegram && body.includes('"street"')) return r.fulfill({ json: { enabled: true, friends: FRIENDS } });
     return r.fulfill({ status: 503, body: '' });
   });
   const page = await context.newPage();
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
+  if (process.env.PROMO_DEBUG) page.on('console', (m) => (m.type() === 'error' || m.type() === 'warning') && console.log('console:', m.text().slice(0, 300)));
   await page.goto(`http://localhost:${PORT}/?lang=${LANG}&debug${session.state ? '' : '&onb=play'}`);
   await page.waitForSelector('.ui-play', { timeout: 90_000 });
   await page.click('.ui-play', { force: true });
@@ -219,6 +221,14 @@ async function boot(browser: Browser, session: Session): Promise<{ page: Page; e
       await page.waitForTimeout(400);
     }
     await page.click('.ui-open-bar .ui-btn', { force: true });
+    if (process.env.PROMO_DEBUG)
+      for (let k = 0; k < 15; k++) {
+        await page.waitForTimeout(200);
+        console.log('open', k, JSON.stringify(await page.evaluate(() => {
+          const s = (window as any).game?.scene.getScene('store');
+          return { open: s?.dayOpen, run: s?.running, paused: s?.time.paused, big: s?.bigObjs.length, m: [...document.querySelectorAll('.ui-modal')].map((x) => (x as HTMLElement).innerText.slice(0, 60)) };
+        })));
+      }
     await page.waitForTimeout(1500);
   }
   // Новая игра: останавливаем время, как только бабушка заговорила («Внучек, ларёк теперь твой!»).
@@ -630,14 +640,18 @@ const jumpTo = (page: Page, share: number) =>
   }, share);
 
 /**
- * Особые дни (game/bigday.ts bigDayFor): 129 — ограбление с заложниками (ОМОН строится в 0.72 дня,
- * штурм — в 0.8), 203 — наводнение, 176 — жара.
+ * Особые дни (game/bigday.ts bigDayFor, зерно 1): 113 — ограбление с заложниками (ОМОН строится в 0.72 дня,
+ * штурм — в 0.8), 152 — наводнение, 276 — жара.
  */
 const eventScene =
   (scene: 'robbery' | 'flood' | 'heat'): SceneFn =>
   async (browser, clips) => {
-    const day = { robbery: 129, flood: 203, heat: 176 }[scene];
-    const { page, errors, close } = await boot(browser, { state: midGame(day), seed: day });
+    const day = { robbery: 113, flood: 152, heat: 276 }[scene];
+    // Расписание особых дней зависит от зерна магазина (state.seed, game/bigday.ts) — с нулевым дни те же, что выше.
+    const { page, errors, close } = await boot(browser, { state: midGame(day, { seed: 1 } as Partial<StoreState>), seed: day });
+    if (process.env.PROMO_DEBUG) {
+      console.log('probe', JSON.stringify(await page.evaluate(() => ({ day: (window as any).__scene.state.day, modals: [...document.querySelectorAll('.ui-modal')].map((m) => (m as HTMLElement).innerText.slice(0, 120)), running: (window as any).__scene.running, paused: (window as any).__scene.time.paused }))));
+    }
     await page.evaluate((light) => Object.assign(window, { __light: light, __topUp: true }), scene === 'robbery' ? 0.45 : 0.2);
     await boostWeather(page);
     const at = await where(page);
@@ -653,6 +667,10 @@ const eventScene =
       await crowd(page, 6);
       await steps(page, sec(3));
     }
+    console.log(scene, JSON.stringify(await page.evaluate(() => {
+      const s = (window as any).__scene;
+      return { day: s.state.day, wet: s.weather, big: s.bigObjs.length, running: s.running, paused: s.time.paused, siege: s.siege, left: Math.round(s.timeLeft), modals: document.querySelectorAll('.ui-modal').length, text: [...document.querySelectorAll('.ui-modal')].map((m) => (m as HTMLElement).innerText.slice(0, 80)) };
+    })));
     await ui(page);
     const views: Record<string, [View, View]> = {
       robbery: [{ x: at.door.x, y: at.h - 10, zoom: 1.35 }, { x: at.door.x, y: at.h - 20, zoom: 1.5 }],
