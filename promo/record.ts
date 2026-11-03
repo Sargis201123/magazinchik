@@ -267,6 +267,8 @@ async function boot(browser: Browser, session: Session): Promise<{ page: Page; e
     w.__step = (n = 1) => {
       for (let i = 0; i < n; i++) {
         if (count++ % 20 === 0) topUp();
+        // Таблички «пусто» над полками в ролике не нужны (полки доливает topUp, табличка отстаёт).
+        if (w.__hideEmpty) for (const o of scene.children.list) if (o.type === 'Text' && o.visible && o.text === w.__hideEmpty) o.setVisible(false);
         // Окна посреди дня (особые гости, истории) закрываем, если сцена не просит их оставить.
         if (!w.__keepModals) {
           document.querySelector<HTMLElement>('.ui-dialog')?.click();
@@ -282,8 +284,28 @@ async function boot(browser: Browser, session: Session): Promise<{ page: Page; e
       }
     };
   });
+  await page.evaluate((empty) => ((window as any).__hideEmpty = empty), DICT['shelf.empty']);
   return { page, errors, close: () => context.close() };
 }
+
+/**
+ * Погода крупнее, чем в игре: на телефоне капли и снежинки видны, а в ролике 1080×1920 их почти не
+ * разглядеть. Частицы погоды (scenes/weatherFx.ts) сыплются чаще и крупнее; дождь — во всю силу.
+ */
+const boostWeather = (page: Page) =>
+  page.evaluate(() => {
+    const s = (window as any).__scene;
+    for (const o of s.weatherObjs) {
+      if (o.type !== 'ParticleEmitter') continue;
+      o.setFrequency(Math.max(4, o.frequency / 2.5));
+      const k = s.rainFx && o === s.rainFx.rain ? 1.2 : 1.6;
+      o.setParticleScale?.(o.scaleX * k, o.scaleY * k);
+    }
+    if (s.rainFx) {
+      s.rainFx.base = Math.max(4, s.rainFx.base / 2.5);
+      s.rainFx.rain.setQuantity?.(6);
+    }
+  });
 
 type View = { x: number; y: number; zoom: number };
 
@@ -548,6 +570,13 @@ const weatherScene =
     const light = { rain: 0.35, storm: 0.9, leaves: 0.3 }[scene];
     await page.evaluate((light) => Object.assign(window, { __light: light, __topUp: true }), light);
     const at = await where(page);
+    // Дождь в игре разгорается к ~8% дня (weatherFx.updateRain) — переводим часы на треть дня,
+    // чтобы лило в полную силу (свет при этом задаёт __light, а не время).
+    await page.evaluate(() => {
+      const s = (window as any).__scene;
+      s.timeLeft = Math.round(s.timeLeft * 0.68);
+    });
+    await boostWeather(page);
     await crowd(page, 8);
     await steps(page, sec(3));
     await crowd(page, 4);
@@ -571,7 +600,7 @@ const weatherScene =
       });
     }
     const views: Record<string, [View, View]> = {
-      rain: [{ x: at.door.x - 50, y: at.h + 18, zoom: 1.3 }, { x: at.door.x + 30, y: at.h + 6, zoom: 1.45 }],
+      rain: [{ x: at.door.x - 30, y: at.h + 25, zoom: 1.6 }, { x: at.door.x + 25, y: at.h + 15, zoom: 1.75 }],
       storm: [{ x: at.w / 2, y: at.h - 30, zoom: 0.95 }, { x: at.w / 2, y: at.h - 20, zoom: 1.08 }],
       leaves: [{ x: at.door.x + 70, y: at.h + 30, zoom: 1.35 }, { x: at.door.x - 30, y: at.h + 20, zoom: 1.35 }],
     };
@@ -588,6 +617,7 @@ const weatherScene =
 const winter: SceneFn = async (browser, clips) => {
   const { page, errors, close } = await boot(browser, { state: midGame(135), seed: 135 });
   await page.evaluate(() => Object.assign(window, { __light: 0.97, __topUp: true }));
+  await boostWeather(page);
   const at = await where(page);
   await crowd(page, 6);
   await steps(page, sec(3));

@@ -52,6 +52,14 @@ BEDS = {
 #: Гром в грозу: секунды от начала клипа (молнии снимает promo/record.ts в STORM_FLASHES = 1.1, 4.4 —
 #: гром чуть позже вспышки, как в игре).
 THUNDER_AT = {"storm": [(1.55, 0.9), (4.75, 0.7)]}
+#: Цвет по сценам (ffmpeg): ночь в грозу темнее и синее, зима холоднее, осень теплее, дождь серее.
+GRADE = {
+    "rain": "eq=saturation=0.85:brightness=-0.03,colorbalance=bs=0.06:bm=0.04",
+    "storm": "eq=brightness=-0.13:saturation=0.75:gamma=0.92,colorbalance=bs=0.12:bm=0.08:rs=-0.04",
+    "leaves": "colorbalance=rm=0.07:gm=0.02:bm=-0.07,eq=saturation=1.12",
+    "winter": "colorbalance=bs=0.08:bm=0.06:rs=-0.03,eq=brightness=-0.04",
+    "zar": "colorbalance=rm=0.05:bm=-0.03",
+}
 SFX = ROOT / "public/audio/sfx/sfx.m4a"
 #: Портрет бабушки над названием в концовке (64×64, увеличиваем пикселями).
 PORTRAIT = ROOT / "public/assets/portrait_grandma_happy.png"
@@ -323,6 +331,7 @@ def main() -> None:
             pad = max(0.0, p["length"] - have + 0.05)
             filters.append(
                 f"[{i}:v]fps={FPS},scale={W}:{H}:flags=lanczos,setsar=1,"
+                + (GRADE[p["scene"]] + "," if p["scene"] in GRADE else "")
                 + (f"tpad=stop_mode=clone:stop_duration={pad:.3f}," if pad > 0 else "")
                 + f"trim=duration={p['length']:.3f},setpts=PTS-STARTPTS[c{i}]"
             )
