@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
-"""Сборка промо-ролика из снятых клипов (promo/footage), голоса и музыки игры. Запуск: bash promo/build.sh
+"""Сборка промо-ролика из снятых клипов (promo/footage/<язык>), голоса и музыки игры.
+Запуск: bash promo/build.sh <язык> [<голос>]   (например: ru alexandr, ru veronica, en jesse; без голоса — превью)
 
 Что делает:
-  1. Голос. Есть promo/voice/voice.mp3 (один файл на весь текст) — режет его по паузам на реплики;
-     есть promo/voice/01.mp3 … — берёт их; нет ничего — ПРЕВЬЮ: голос тихий, длительность каждой
-     реплики оценивается по тексту (~13.5 знака в секунду). Длительности меряет ffprobe.
+  1. Голос. Есть promo/voice/<язык>/<голос>/voice.mp3 (один файл на весь текст) — режет его по паузам
+     на реплики; есть promo/voice/<язык>/<голос>/lines/01.mp3 … (их делает promo/voice/tts.py) — берёт их;
+     нет ничего — ПРЕВЬЮ без голоса, длительность реплики оценивается по тексту. Длительности меряет ffprobe.
   2. Монтаж. Каждой реплике — свой клип (promo/lines.json, scene), длиной «голос + воздух»;
      между клипами мягкий наплыв, в начале и в конце — из чёрного и в чёрный. Тряски нет.
   3. Звук. Голос сверху; музыка игры (Suno, public/audio/music/suno/theme) и уличный фон приглушаются
-     под голосом; звон монет, дверь, мяу — тихими акцентами из звуков игры. Громкость ~ -14 LUFS.
+     под голосом; под погодой — её звук из игры (дождь, ливень с громом, птицы, вороны осенью);
+     звон монет, дверь, мяу — тихими акцентами из звуков игры. Громкость ~ -14 LUFS.
   4. Субтитры. Nunito, белые с тёмной обводкой, над нижним краем (выше кнопок Telegram), по голосу;
      сверху — короткая подпись сцены; в конце — название и призыв (lines.json: title, cta, link).
      Отдельно — .srt.
-  5. Выход (promo/out): magazinchik_promo_ru.mp4 (или ..._preview.mp4 без голоса), .srt, кадр-постер
-     1080×1920 и квадрат 1080×1080.
+  5. Выход (promo/out): promo_<язык>_<голос>.mp4 (или promo_<язык>_preview.mp4 без голоса), .srt,
+     кадр-постер 1080×1920 и квадрат 1080×1080.
 
 Нужны только python3 и ffmpeg/ffprobe.
 """
@@ -37,13 +39,26 @@ OUT = PROMO / "out"
 FONTS = PROMO / "fonts"
 MUSIC = ROOT / "public/audio/music/suno/theme.m4a"
 AMBIENCE = ROOT / "public/audio/amb/street.m4a"
+AMB = ROOT / "public/audio/amb"
+#: Звук погоды под сценой (файл из public/audio/amb, громкость): живёт ровно на своём клипе.
+BEDS = {
+    "granny": ("birds", 0.35),
+    "morning": ("birds", 0.3),
+    "rain": ("rain", 0.75),
+    "storm": ("downpour", 0.85),
+    "leaves": ("crows", 0.3),
+    "zar": ("birds", 0.18),
+}
+#: Гром в грозу: секунды от начала клипа (молнии снимает promo/record.ts в STORM_FLASHES = 1.1, 4.4 —
+#: гром чуть позже вспышки, как в игре).
+THUNDER_AT = {"storm": [(1.55, 0.9), (4.75, 0.7)]}
 SFX = ROOT / "public/audio/sfx/sfx.m4a"
 #: Портрет бабушки над названием в концовке (64×64, увеличиваем пикселями).
 PORTRAIT = ROOT / "public/assets/portrait_grandma_happy.png"
 
 W, H, FPS = 1080, 1920, 30
 #: Оценка длительности реплики без голоса: знаков в секунду (русский, спокойный темп).
-CPS = 13.5
+CPS = 13.5  # для русского; у языка в lines.json может быть свой (cps)
 #: Голос начинается через столько секунд после начала клипа (после наплыва) …
 LEAD = 0.55
 #: … и после него до следующей склейки столько воздуха.
@@ -101,22 +116,24 @@ def clean(text: str) -> str:
 # ---------- Голос ----------
 
 
-def find_voice(lines: list[dict]) -> tuple[str, list[Path] | Path | None]:
+def find_voice(lines: list[dict], folder: Path | None) -> tuple[str, list[Path] | Path | None]:
+    if folder is None:
+        return "none", None
     for ext in ("mp3", "wav", "m4a", "ogg", "flac"):
-        whole = VOICE / f"voice.{ext}"
+        whole = folder / f"voice.{ext}"
         if whole.exists():
             return "whole", whole
     per: list[Path] = []
     for l in lines:
-        hit = next((VOICE / f"{l['id']}.{e}" for e in ("mp3", "wav", "m4a", "ogg", "flac") if (VOICE / f"{l['id']}.{e}").exists()), None)
+        hit = next((folder / "lines" / f"{l['id']}.{e}" for e in ("mp3", "wav", "m4a", "ogg", "flac") if (folder / "lines" / f"{l['id']}.{e}").exists()), None)
         if hit:
             per.append(hit)
     if per and len(per) == len(lines):
         return "lines", per
     if per:
         missing = [l["id"] for l in lines if not any(p.stem == l["id"] for p in per)]
-        sys.exit(f"Голос по репликам неполный: нет {', '.join(missing)} (promo/voice/<номер>.mp3)")
-    return "none", None
+        sys.exit(f"Голос по репликам неполный: нет {', '.join(missing)} ({folder.relative_to(ROOT)}/lines/<номер>.mp3)")
+    sys.exit(f"В {folder.relative_to(ROOT)} нет голоса: voice.mp3 или lines/01.mp3 … (promo/voice/tts.py)")
 
 
 def split_whole(path: Path, n: int, total: float) -> list[tuple[float, float]]:
@@ -235,15 +252,25 @@ def envelope(windows: list[tuple[float, float]], low: float, ramp: float = 0.25)
 
 
 def main() -> None:
-    script = json.loads((PROMO / "lines.json").read_text(encoding="utf-8"))
+    doc = json.loads((PROMO / "lines.json").read_text(encoding="utf-8"))
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    lang = args[0] if args else "ru"
+    if lang not in doc["langs"]:
+        sys.exit(f"Нет языка {lang}: есть {', '.join(doc['langs'])}")
+    script = {**doc["langs"][lang], "link": doc.get("link", "")}
+    who = args[1] if len(args) > 1 else None
+    if who and who not in script["voices"]:
+        sys.exit(f"Нет голоса {who} для {lang}: есть {', '.join(script['voices'])}")
     lines = script["lines"]
+    cps = script.get("cps", CPS)
+    footage = FOOTAGE / lang
     if not shutil.which("ffmpeg"):
         sys.exit("Нужен ffmpeg")
     for l in lines:
-        if not (FOOTAGE / f"{l['id']}_{l['scene']}.mp4").exists():
-            sys.exit(f"Нет клипа promo/footage/{l['id']}_{l['scene']}.mp4 — снимите: npx vite-node promo/record.ts")
+        if not (footage / f"{l['id']}_{l['scene']}.mp4").exists():
+            sys.exit(f"Нет клипа promo/footage/{lang}/{l['id']}_{l['scene']}.mp4 — снимите: npx vite-node promo/record.ts -- --lang {lang}")
 
-    mode, src = find_voice(lines)
+    mode, src = find_voice(lines, VOICE / lang / who if who else None)
     preview = mode == "none"
     tmp = Path(tempfile.mkdtemp(prefix="promo-build-"))
     try:
@@ -264,7 +291,7 @@ def main() -> None:
                 pieces.append(piece)
                 durs.append(b - a)
         else:
-            durs = [max(1.2, len(clean(l["voice"])) / CPS) for l in lines]
+            durs = [max(1.2, len(clean(l["voice"])) / cps) for l in lines]
             pieces = [None] * len(lines)
 
         # 2. План: клип каждой реплики, его начало на общей ленте, окно субтитра.
@@ -278,7 +305,7 @@ def main() -> None:
             lead = LEAD + (0.3 if i == 0 else 0)
             v_in = t + lead
             plan.append({
-                "id": l["id"], "scene": l["scene"], "clip": FOOTAGE / f"{l['id']}_{l['scene']}.mp4",
+                "id": l["id"], "scene": l["scene"], "clip": footage / f"{l['id']}_{l['scene']}.mp4",
                 "start": t, "length": length, "end": t + length,
                 "voice_in": v_in, "voice_dur": d,
                 "sub_in": v_in - 0.08, "sub_out": v_in + d + 0.3,
@@ -330,6 +357,32 @@ def main() -> None:
                 af.append(f"[s{k}]atrim={a:.4f}:{a + dur:.4f},asetpts=PTS-STARTPTS,volume={vol},adelay={int(at * 1000)}|{int(at * 1000)}[e{k}]")
                 mix.append(f"[e{k}]")
         n_in = 3
+        # Звук погоды: свой кусок под каждой сценой, с мягким входом и выходом на наплывах.
+        for i, p in enumerate(plan):
+            bed = BEDS.get(p["scene"])
+            if not bed:
+                continue
+            name, vol = bed
+            a_args += ["-stream_loop", "-1", "-i", str(AMB / f"{name}.m4a")]
+            ms = int(p["start"] * 1000)
+            ln = p["length"]
+            af.append(
+                f"[{n_in}:a]atrim=0:{ln:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,"
+                f"volume={vol},afade=t=in:d=0.5,afade=t=out:st={ln - 0.6:.3f}:d=0.6,adelay={ms}|{ms}[bed{i}]"
+            )
+            mix.append(f"[bed{i}]")
+            n_in += 1
+        # Гром: низкий гул из шума (как синтез грома в игре, platform/sound.ts) с треском в начале.
+        thunders = [(p["start"] + at, vol) for p in plan for at, vol in THUNDER_AT.get(p["scene"], []) if at < p["length"] - 0.5]
+        for k, (at, vol) in enumerate(thunders):
+            ms = int(at * 1000)
+            a_args += ["-f", "lavfi", "-i", f"anoisesrc=color=brown:amplitude=1:duration=3.6:seed={11 + k}"]
+            af.append(
+                f"[{n_in}:a]lowpass=f=160,lowpass=f=220,volume=6,afade=t=in:d=0.08,afade=t=out:st=0.25:d=3.3:curve=exp,"
+                f"aformat=sample_rates=48000:channel_layouts=stereo,volume={vol},adelay={ms}|{ms}[th{k}]"
+            )
+            mix.append(f"[th{k}]")
+            n_in += 1
         for i, (p, piece) in enumerate(zip(plan, pieces)):
             if piece is None:
                 continue
@@ -354,8 +407,8 @@ def main() -> None:
 
         # 5. Субтитры и выход.
         OUT.mkdir(parents=True, exist_ok=True)
-        name = "magazinchik_promo_ru" + ("_preview" if preview else "")
-        (OUT / "magazinchik_promo_ru.srt").write_text(make_srt(plan), encoding="utf-8")
+        name = f"promo_{lang}_" + ("preview" if preview else who)
+        (OUT / f"promo_{lang}.srt").write_text(make_srt(plan), encoding="utf-8")
         ass = tmp / "subs.ass"
         ass.write_text(make_ass(script, plan, total, W, H), encoding="utf-8")
         kbps = int(MAX_MB * 8 * 1024 / total) - 140
@@ -380,7 +433,7 @@ def main() -> None:
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(base), "-i", str(mixed), *portrait,
                         "-filter_complex", ending(320, H // 2 - 70 - 120 - 330, vf), "-map", "[v]", "-map", "1:a", *encode, str(final)], check=True, cwd=tmp)
         # Постер: кадр концовки с названием (за 1.25 с до конца, до затемнения в чёрный).
-        poster = OUT / "magazinchik_promo_ru_poster.png"
+        poster = OUT / f"promo_{lang}_poster.png"
         run("ffmpeg", "-v", "error", "-y", "-ss", f"{total - 1.25:.3f}", "-i", final, "-frames:v", "1", poster)
         # Квадрат 1080×1080: середина кадра, свои субтитры под квадрат.
         sq_ass = tmp / "square.ass"
@@ -396,13 +449,13 @@ def main() -> None:
                         "-filter_complex", ending(192, W // 2 - 70 - 100 - 200, f"ass={sq_ass.name}:fontsdir={fonts}", f"crop={W}:{W}:0:{(H - W) // 2 - 60}"),
                         "-map", "[v]", "-map", "1:a", *sq_encode, str(square)], check=True, cwd=tmp)
         timing = [{k: (round(v, 3) if isinstance(v, float) else str(v) if isinstance(v, Path) else v) for k, v in p.items()} for p in plan]
-        (OUT / "timing.json").write_text(json.dumps({"mode": mode, "total": round(total, 3), "plan": timing}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        (OUT / f"timing_{name}.json").write_text(json.dumps({"mode": mode, "total": round(total, 3), "plan": timing}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
         size = final.stat().st_size / 1e6
         print(f"{'ПРЕВЬЮ (без голоса, тайминг по оценке)' if preview else 'Голос: ' + ('один файл' if mode == 'whole' else 'по репликам')}")
         print(f"Ролик: {final.relative_to(ROOT)} — {total:.1f} с, {size:.1f} МБ")
         print(f"Квадрат: {square.relative_to(ROOT)} — {square.stat().st_size / 1e6:.1f} МБ")
-        print(f"Субтитры: {(OUT / 'magazinchik_promo_ru.srt').relative_to(ROOT)}; постер: {poster.relative_to(ROOT)}")
+        print(f"Субтитры: {(OUT / f'promo_{lang}.srt').relative_to(ROOT)}; постер: {poster.relative_to(ROOT)}")
         for p in plan:
             print(f"  {p['start']:5.1f}–{p['end']:5.1f} с  {p['id']} {p['scene']:<9} {p['sub']}")
     finally:

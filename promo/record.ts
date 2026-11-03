@@ -12,7 +12,8 @@
 //
 // Запуск (из корня репозитория):
 //   npx vite build && (npx vite preview --port 4173 --strictPort &)
-//   npx vite-node promo/record.ts [-- --port 4173] [--only cat,zar] [--explore]
+//   npx vite-node promo/record.ts [-- --port 4173] [--lang ru|en] [--only cat,zar] [--explore]
+// --lang — язык игры в кадре (окна, облачка, письмо); клипы ложатся в promo/footage/<язык>/.
 // --explore — вместо клипов по три кадра каждой сцены в promo/.explore (посмотреть, что в кадре).
 // Нужны Playwright с Chromium (глобальный тоже годится: NODE_PATH=$(npm root -g)) и ffmpeg.
 
@@ -26,24 +27,26 @@ import type { Browser, Page } from 'playwright';
 import { buyZar, switchToday } from '../src/game/zarechye';
 import type { StoreState } from '../src/game/economy';
 import { ru } from '../src/i18n/ru';
+import { en } from '../src/i18n/en';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const FOOTAGE = join(ROOT, 'promo/footage');
-const EXPLORE = join(ROOT, 'promo/.explore');
+const args = process.argv.slice(2);
+const option = (name: string): string | undefined => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
+const LANG = (option('lang') ?? 'ru') as 'ru' | 'en';
+const DICT: Record<string, string> = LANG === 'en' ? en : ru;
+const FOOTAGE = join(ROOT, 'promo/footage', LANG);
+const EXPLORE = join(ROOT, 'promo/.explore', LANG);
 const FPS = 30;
 /** Сколько секунд снимать на сцену: реплика голоса ~2–4 с плюс воздух; лишнее срежет сборка. */
 const CLIP_S = 7;
 /** Телефон 360×640 при плотности 3 — ровно 1080×1920 (9:16). */
-const PHONE = { viewport: { width: 360, height: 640 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: 'ru-RU' };
-
-const args = process.argv.slice(2);
-const option = (name: string): string | undefined => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
+const PHONE = { viewport: { width: 360, height: 640 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: LANG === 'en' ? 'en-US' : 'ru-RU' };
 const PORT = Number(option('port') ?? 4173);
 const ONLY = option('only')?.split(',');
 const EXPLORING = args.includes('--explore');
 
-type Script = { lines: { id: string; scene: string }[] };
-const SCRIPT = JSON.parse(readFileSync(join(ROOT, 'promo/lines.json'), 'utf8')) as Script;
+type Script = { langs: Record<string, { lines: { id: string; scene: string }[] }> };
+const SCRIPT = JSON.parse(readFileSync(join(ROOT, 'promo/lines.json'), 'utf8')).langs[LANG] as Script['langs'][string];
 const SAVE = JSON.parse(readFileSync(join(ROOT, 'e2e/save.json'), 'utf8')) as { version: number; state: StoreState };
 
 // ---------- Сохранения для сцен ----------
@@ -100,13 +103,22 @@ function zarechye(day: number): StoreState {
 }
 
 /** Друзья на «Улице друзей» (ответ сервера api/_lib/visits.ts, action 'street'). */
-const FRIENDS = [
-  { id: 11, name: 'Аня', level: 2, day: 60, rating: 4.6, ago: 0, shop: 'У Ани' },
-  { id: 12, name: 'Тимур', level: 4, day: 140, rating: 4.8, ago: 0, shop: 'Тимур и К°' },
-  { id: 13, name: 'Оля', level: 1, day: 21, rating: 4.2, ago: 1, shop: 'Олина лавка' },
-  { id: 14, name: 'Дима', level: 3, day: 95, rating: 4.5, ago: 0 },
-  { id: 15, name: 'Лейла', level: 2, day: 48, rating: 4.7, ago: 2, shop: 'Сладкий угол' },
-];
+const FRIENDS =
+  LANG === 'en'
+    ? [
+        { id: 11, name: 'Anna', level: 2, day: 60, rating: 4.6, ago: 0, shop: "Anna's" },
+        { id: 12, name: 'Tim', level: 4, day: 140, rating: 4.8, ago: 0, shop: 'Tim & Co' },
+        { id: 13, name: 'Olivia', level: 1, day: 21, rating: 4.2, ago: 1, shop: 'Corner Shop' },
+        { id: 14, name: 'Dan', level: 3, day: 95, rating: 4.5, ago: 0 },
+        { id: 15, name: 'Leila', level: 2, day: 48, rating: 4.7, ago: 2, shop: 'Sweet Spot' },
+      ]
+    : [
+        { id: 11, name: 'Аня', level: 2, day: 60, rating: 4.6, ago: 0, shop: 'У Ани' },
+        { id: 12, name: 'Тимур', level: 4, day: 140, rating: 4.8, ago: 0, shop: 'Тимур и К°' },
+        { id: 13, name: 'Оля', level: 1, day: 21, rating: 4.2, ago: 1, shop: 'Олина лавка' },
+        { id: 14, name: 'Дима', level: 3, day: 95, rating: 4.5, ago: 0 },
+        { id: 15, name: 'Лейла', level: 2, day: 48, rating: 4.7, ago: 2, shop: 'Сладкий угол' },
+      ];
 
 // ---------- Страница ----------
 
@@ -188,7 +200,7 @@ async function boot(browser: Browser, session: Session): Promise<{ page: Page; e
   const page = await context.newPage();
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto(`http://localhost:${PORT}/?lang=ru&debug${session.state ? '' : '&onb=play'}`);
+  await page.goto(`http://localhost:${PORT}/?lang=${LANG}&debug${session.state ? '' : '&onb=play'}`);
   await page.waitForSelector('.ui-play', { timeout: 90_000 });
   await page.click('.ui-play', { force: true });
   if (session.state && !session.morning) {
@@ -228,7 +240,7 @@ async function boot(browser: Browser, session: Session): Promise<{ page: Page; e
     // Жалобы («Фу, грязно!», «Дорого!») и служебные надписи (задания, рекорды) в ролике не нужны.
     const popup = scene.popup;
     scene.popup = function (x: number, y: number, text: string, color?: string) {
-      if (color === '#ffd0d0' || /Задани|Испытани|Рекорд|провер|штраф|долг/i.test(text)) return;
+      if (color === '#ffd0d0' || /Задани|Испытани|Рекорд|провер|штраф|долг|Task|Challenge|Record|inspect|fine|debt/i.test(text)) return;
       return popup.call(this, x, y, text, color);
     };
     if (scene.sonya === 'pending') scene.sonya = 'none';
@@ -444,7 +456,7 @@ const firstDay: SceneFn = async (browser, clips) => {
         Object.assign(root.style, { left: `${left}px`, top: `${Math.round(tail.y - root.offsetHeight - 12)}px` });
         root.style.setProperty('--tail', `${Math.round(Math.min(Math.max(16, tail.x - left), root.offsetWidth - 16))}px`);
       },
-      { tail, name: ru['who.grandma'], text: ru['onb.hello'] },
+      { tail, name: DICT['who.grandma'], text: DICT['onb.hello'] },
     );
     await page.waitForTimeout(500);
     await clips.granny.record(page, sec(CLIP_S), async (i) => {
@@ -522,6 +534,56 @@ const bigShop: SceneFn = async (browser, clips) => {
   return errors;
 };
 
+/**
+ * Погода. День выбран так, чтобы игра сама дала нужную погоду (game/weather.ts weatherFor):
+ * 116 — дождь, 121 — гроза, 130 — листопад. В грозу молнии бьют по съёмке, в известные секунды
+ * (под них сборка кладёт гром, promo/build.py THUNDER_AT).
+ */
+const STORM_FLASHES = [1.1, 4.4];
+const weatherScene =
+  (scene: 'rain' | 'storm' | 'leaves'): SceneFn =>
+  async (browser, clips) => {
+    const day = { rain: 116, storm: 121, leaves: 130 }[scene];
+    const { page, errors, close } = await boot(browser, { state: midGame(day), seed: day });
+    const light = { rain: 0.35, storm: 0.9, leaves: 0.3 }[scene];
+    await page.evaluate((light) => Object.assign(window, { __light: light, __topUp: true }), light);
+    const at = await where(page);
+    await crowd(page, 8);
+    await steps(page, sec(3));
+    await crowd(page, 4);
+    await ui(page);
+    if (scene === 'storm') {
+      // Свои молнии вместо случайных игры: вспышка тем же светом, что в weatherFx.lightning.
+      await page.evaluate(() => {
+        const s = (window as any).__scene;
+        const flash = s.weatherObjs.find((o: any) => o.fillColor === 0xdde6ff);
+        (window as any).__flash = () =>
+          flash &&
+          s.tweens.chain({
+            targets: flash,
+            tweens: [
+              { alpha: 0.3, duration: 50 },
+              { alpha: 0.06, duration: 90 },
+              { alpha: 0.22, duration: 45 },
+              { alpha: 0, duration: 600 },
+            ],
+          });
+      });
+    }
+    const views: Record<string, [View, View]> = {
+      rain: [{ x: at.door.x - 50, y: at.h + 18, zoom: 1.3 }, { x: at.door.x + 30, y: at.h + 6, zoom: 1.45 }],
+      storm: [{ x: at.w / 2, y: at.h - 30, zoom: 0.95 }, { x: at.w / 2, y: at.h - 20, zoom: 1.08 }],
+      leaves: [{ x: at.door.x + 70, y: at.h + 30, zoom: 1.35 }, { x: at.door.x - 30, y: at.h + 20, zoom: 1.35 }],
+    };
+    const [from, to] = views[scene];
+    await camera(page, from, to, sec(CLIP_S));
+    await clips[scene].record(page, sec(CLIP_S), async (i) => {
+      if (scene === 'storm' && STORM_FLASHES.some((t) => i === sec(t))) await page.evaluate(() => (window as any).__flash?.());
+    });
+    await close();
+    return errors;
+  };
+
 /** Зима и Новый год вечером: снег, гирлянды, окна светятся. */
 const winter: SceneFn = async (browser, clips) => {
   const { page, errors, close } = await boot(browser, { state: midGame(135), seed: 135 });
@@ -570,8 +632,8 @@ const notebook: SceneFn = async (browser, clips) => {
       return !!b;
     }, text);
   // Утренние карточки поверх «Почты» (проверка и т. п.) — «Понятно», потом «Читать» у письма.
-  for (let i = 0; i < 20 && !(await press('Читать')); i++) {
-    await press('Понятно');
+  for (let i = 0; i < 20 && !(await press(DICT['mail.read'])); i++) {
+    await press(DICT['event.ok']);
     await page.waitForTimeout(500);
   }
   // Текст письма печатается — касание дописывает его сразу.
@@ -629,6 +691,9 @@ const finale: SceneFn = async (browser, clips) => {
 const SHOOTERS: { scenes: string[]; run: SceneFn }[] = [
   { scenes: ['granny', 'morning', 'tap'], run: firstDay },
   { scenes: ['grow', 'food', 'cat'], run: bigShop },
+  { scenes: ['rain'], run: weatherScene('rain') },
+  { scenes: ['storm'], run: weatherScene('storm') },
+  { scenes: ['leaves'], run: weatherScene('leaves') },
   { scenes: ['winter'], run: winter },
   { scenes: ['street'], run: street },
   { scenes: ['notebook'], run: notebook },
