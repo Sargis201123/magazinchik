@@ -1612,6 +1612,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       const pass = state.pass;
       if (!pass) return close();
       const level = passLevel(pass);
+      const starTrack = !IS_YANDEX || Boolean(pass.paid);
       const rows = el('div', 'ui-box');
       for (let l = 1; l <= PASS_LEVELS; l++) {
         const row = el('div', `ui-pass-row${l <= level ? ' open' : ''}`);
@@ -1634,7 +1635,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         row.append(
           el('b', 'ui-pass-level', t('pass.level', { n: l })),
           cell('free', t('pass.free', { n: passCoins(state, l) })),
-          cell('premium', `${t('pass.premium', { n: passCoins(state, l) * 2 })}${decor ? ` + ${t(decorItem(decor).nameKey)}` : ''}`),
+          // Яндекс Игры: звёздной дорожки нет (если пропуск не куплен раньше).
+          ...(starTrack ? [cell('premium', `${t('pass.premium', { n: passCoins(state, l) * 2 })}${decor ? ` + ${t(decorItem(decor).nameKey)}` : ''}`)] : []),
         );
         rows.append(row);
       }
@@ -1649,7 +1651,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         el('div', 'ui-muted', t('pass.note', { d: XP_DAY, q: XP_QUEST, w: XP_WEEKLY, x: XP_PER_LEVEL, days: PASS_DAYS })),
       ];
       // Эксклюзив сезона: вывеска и наряд крупно — ради них и стоит взять звёздный пропуск.
-      const exclusive = seasonExclusives(pass.season);
+      const exclusive = starTrack ? seasonExclusives(pass.season) : [];
       if (exclusive.length) {
         const show = el('div', 'ui-pass-excl');
         for (const id of exclusive) {
@@ -1664,7 +1666,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         if (next.length) head.push(el('div', 'ui-muted', t('pass.nextSeason', { items: next.map((id) => t(decorItem(id).nameKey)).join(', ') })));
       }
       if (pass.paid) head.push(el('div', 'ui-note', t('pass.paid')));
-      else {
+      else if (!IS_YANDEX) {
         const note = el('div', 'ui-muted', t('pass.buyNote'));
         const buy = button(t('pass.buy', { n: PASS_STARS }), () => {
           buy.disabled = true;
@@ -1923,7 +1925,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     else if (next) box.append(el('div', 'ui-muted', t('live.box.guestNext', { icon: GUEST_ICON[next.who], who: t(`who.${next.who}`), date: dateLabel(next.date) })));
     // Набор за звёзды — только по желанию: когда бесплатная открытка уже открыта и пока набор не куплен.
     const pack = e.pack ? STAR_PACKS[e.pack] : undefined;
-    if (pack && !cardWaiting(state, e, today) && !pack.items.every((id) => state.decor.owned.includes(id))) {
+    if (!IS_YANDEX && pack && !cardWaiting(state, e, today) && !pack.items.every((id) => state.decor.owned.includes(id))) {
       box.append(
         button(t('live.box.pack', { name: t(pack.nameKey), n: pack.stars }), () => premiumDecorModal(decorItem(pack.items[0])), 'ui-btn secondary'),
         el('div', 'ui-muted', t('live.box.packNote')),
@@ -3175,8 +3177,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     foldBox('decor', t('decor.title'), (box) => {
       box.append(el('div', 'ui-muted', t('decor.note')));
       // Эксклюзив пропуска — свой сезон и уже забранное; подарки за поддержку — только полученные.
+      // Яндекс Игры: звёзд нет — некупленные звёздные вещи и эксклюзив звёздного пропуска не показываем
+      // (купленное остаётся на месте).
+      const starOnly = (d: DecorItem) => IS_YANDEX && !state.pass?.paid && (d.stars !== undefined || d.pack !== undefined || d.season !== undefined);
       const shown = (d: DecorItem) =>
-        state.decor.owned.includes(d.id) || (d.season === undefined ? !d.support : d.season === state.pass?.season);
+        state.decor.owned.includes(d.id) || (!starOnly(d) && (d.season === undefined ? !d.support : d.season === state.pass?.season));
       for (const kind of DECOR_KINDS) {
         const items = DECOR.filter((d) => d.kind === kind && shown(d));
         if (!items.length) continue;

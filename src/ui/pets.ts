@@ -3,6 +3,7 @@
 // в зал, убрать или дать имя. В зале одновременно один. Оплата — тем же счётом, что и премиальное
 // оформление (platform/stars.ts); питомец сразу дома, сервер подтвердит покупку при следующем запуске.
 
+import { IS_YANDEX } from '../platform/target';
 import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
 import { flushCloud } from '../game/save';
@@ -54,7 +55,10 @@ export function petsBox(state: StoreState, getState: () => StoreState, update: U
   const box = el('div', 'ui-box');
   box.append(el('b', '', `🐾 ${t('pets.title')}`), el('div', 'ui-muted', t('pets.note')));
   const active = activePet(state)?.id;
-  for (const id of PET_IDS) {
+  // Яндекс Игры: питомцы — только за звёзды; там показываем лишь уже купленных (или ничего).
+  const ids = IS_YANDEX ? PET_IDS.filter((id) => ownsPet(state, id)) : PET_IDS;
+  if (!ids.length) return [];
+  for (const id of ids) {
     const owned = ownsPet(state, id);
     const row = el('div', 'ui-item');
     const body = el('div');

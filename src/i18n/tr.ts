@@ -1328,6 +1328,7 @@ export const tr: Record<TextKey, string> = {
   "decor.paying": "Ödeme açılıyor…",
   "decor.starsOff": "Yıldızla alım, oyun Telegram'da açıkken çalışır.",
   "decor.payOff": "Bu oyun sürümünde satın alımlar kullanılamaz.",
+  "ad.doubleGift": "Reklam izle, hediyeyi ikiye katla: +{n} 💰",
   "decor.payCancelled": "Ödeme iptal edildi — hiçbir şey çekilmedi.",
   "decor.payFailed": "Ödeme başarısız. Biraz sonra yine dene.",
   "decor.try": "👀 Bugün için dene — ücretsiz",

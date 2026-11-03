@@ -1341,6 +1341,7 @@ export const pt: Record<TextKey, string> = {
   "decor.paying": "Abrindo o pagamento…",
   "decor.starsOff": "A compra com estrelas funciona quando o jogo está aberto no Telegram.",
   "decor.payOff": "As compras não estão disponíveis nesta versão do jogo.",
+  "ad.doubleGift": "Dobre o presente vendo um anúncio: +{n} 💰",
   "decor.payCancelled": "Pagamento cancelado — nada foi cobrado.",
   "decor.payFailed": "O pagamento não passou. Tente de novo daqui a pouco.",
   "decor.try": "👀 Provar hoje — grátis",
