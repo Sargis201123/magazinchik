@@ -281,6 +281,7 @@ async function boot(browser: Browser, session: Session): Promise<{ page: Page; e
         t += 1000 / 30;
         w.__clock(t);
         g.loop.step(t);
+        w.__afterStep?.();
       }
     };
   });
@@ -686,6 +687,71 @@ const notebook: SceneFn = async (browser, clips) => {
   return errors;
 };
 
+/**
+ * «Папа и Соня»: утренняя сцена 48-го дня (game/dramaScenes.ts) — ссора, Соня говорит главное.
+ * Проматываем первые реплики, а её реплику снимаем, пока она печатается. Конец реплики («я тоже её
+ * потеряла») в ролик не берём — это тайна сюжета: обрезаем текст на «Мне нужен ты!».
+ */
+const sonya: SceneFn = async (browser, clips) => {
+  // Утром у игры своя очередь новостей (game/headlines.ts) — сцена может не выпасть. Поэтому окно
+  // собираем сами из тех же классов, что dialogBox (ui/dialog.ts): портрет, имя, печать по буквам.
+  const { page, errors, close } = await boot(browser, { state: midGame(48), seed: 48 });
+  await page.evaluate(() => Object.assign(window, { __light: 0.92, __topUp: true }));
+  await crowd(page, 6);
+  await steps(page, sec(2));
+  const full = DICT['drama.33.3'];
+  const keep = full.slice(0, full.indexOf('!') + 1);
+  await page.evaluate(
+    ({ place, name }) => {
+      const el = (tag: string, cls: string, text?: string) => {
+        const e = document.createElement(tag);
+        e.className = cls;
+        if (text) e.textContent = text;
+        return e;
+      };
+      const overlay = el('div', 'ui-modal promo-keep');
+      overlay.id = 'promo-drama';
+      const card = el('div', 'ui-card');
+      const box = el('div', 'ui-dialog');
+      box.append(el('div', 'ui-muted', place));
+      const row = el('div', 'ui-dialog-row');
+      const face = el('img', 'ui-dialog-face talking') as HTMLImageElement;
+      face.src = 'assets/portrait_sonya_angry.png';
+      const speech = el('div', 'ui-dialog-speech');
+      speech.append(el('div', 'ui-dialog-name', name), el('p', 'ui-dialog-text'));
+      row.append(face, speech);
+      box.append(row);
+      card.append(box);
+      overlay.append(card);
+      document.body.append(overlay);
+    },
+    { place: DICT['drama.place.home_evening'], name: DICT['who.sonya'] },
+  );
+  await ui(page, ['#promo-drama']);
+  const at = await where(page);
+  await camera(page, { x: at.w / 2, y: at.h / 2, zoom: 0.9 }, { x: at.w / 2, y: at.h / 2, zoom: 0.9 }, 1);
+  const frames = sec(CLIP_S);
+  // Реплика печатается чуть медленнее, чем в игре (драма), начинает через полсекунды.
+  const CHAR_FRAMES = 1.6;
+  await clips.sonya.record(page, frames, async (i) => {
+    const k = i / (frames - 1);
+    const z = 1 + 0.07 * k * k * (3 - 2 * k);
+    const n = Math.max(0, Math.min(keep.length, Math.floor((i - 15) / CHAR_FRAMES)));
+    await page.evaluate(
+      ({ z, text, talking }) => {
+        const top = document.getElementById('promo-drama');
+        if (!top) return;
+        Object.assign(top.style, { transform: `scale(${z})`, transformOrigin: '50% 50%', transition: 'none' });
+        top.querySelector('.ui-dialog-text')!.textContent = text;
+        top.querySelector('.ui-dialog-face')!.classList.toggle('talking', talking);
+      },
+      { z, text: keep.slice(0, n), talking: n < keep.length },
+    );
+  });
+  await close();
+  return errors;
+};
+
 /** Заречье: река, мост, пристань. */
 const zar: SceneFn = async (browser, clips) => {
   const { page, errors, close } = await boot(browser, { state: zarechye(128), seed: 128 });
@@ -728,6 +794,7 @@ const SHOOTERS: { scenes: string[]; run: SceneFn }[] = [
   { scenes: ['street'], run: street },
   { scenes: ['notebook'], run: notebook },
   { scenes: ['zar'], run: zar },
+  { scenes: ['sonya'], run: sonya },
   { scenes: ['cta'], run: finale },
 ];
 

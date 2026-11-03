@@ -3,7 +3,7 @@ model: Eleven v4 · language: English (American)
 Mood: warm, cosy, smiling; don't rush. Stability ~45–55 %, Similarity ~75 %, Style ~20–30 %.
 
 Voices (folder <voice>):
-- jesse: Jesse – Elearning, Casual Friendly Male
+- adam: Adam – Distinct, Deep and Engaging
 
 === PASTE AS ONE (single file) ===
 Save to: promo/voice/en/<voice>/voice.mp3

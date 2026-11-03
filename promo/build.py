@@ -45,16 +45,16 @@ AMBIENCE = ROOT / "public/audio/amb/street.m4a"
 AMB = ROOT / "public/audio/amb"
 #: Звук погоды под сценой (файл из public/audio/amb, громкость): живёт ровно на своём клипе.
 BEDS = {
-    "granny": ("birds", 0.35),
-    "morning": ("birds", 0.3),
-    "rain": ("rain", 0.75),
-    "storm": ("downpour", 0.85),
-    "leaves": ("crows", 0.3),
-    "zar": ("birds", 0.18),
+    "granny": ("birds", 0.22),
+    "morning": ("birds", 0.2),
+    "rain": ("rain", 0.45),
+    "storm": ("downpour", 0.5),
+    "leaves": ("crows", 0.18),
+    "zar": ("birds", 0.12),
 }
 #: Гром в грозу: секунды от начала клипа (молнии снимает promo/record.ts в STORM_FLASHES = 1.1, 4.4 —
 #: гром чуть позже вспышки, как в игре).
-THUNDER_AT = {"storm": [(1.55, 0.9), (4.75, 0.7)]}
+THUNDER_AT = {"storm": [(0.05, 0.85), (1.55, 0.6), (4.75, 0.5)]}
 #: Цвет по сценам (ffmpeg): ночь в грозу темнее и синее, зима холоднее, осень теплее, дождь серее.
 GRADE = {
     "rain": "eq=saturation=0.85:brightness=-0.03,colorbalance=bs=0.06:bm=0.04",
@@ -65,8 +65,8 @@ GRADE = {
 }
 SFX = ROOT / "public/audio/sfx/sfx.m4a"
 #: Музыка: громкость темы и доля, до которой она уходит под голос.
-MUSIC_VOL = 0.55
-MUSIC_UNDER_VOICE = 0.38
+MUSIC_VOL = 0.42
+MUSIC_UNDER_VOICE = 0.3
 #: Портрет бабушки над названием в концовке (64×64, увеличиваем пикселями).
 PORTRAIT = ROOT / "public/assets/portrait_grandma_happy.png"
 
@@ -74,15 +74,15 @@ W, H, FPS = 1080, 1920, 30
 #: Оценка длительности реплики без голоса: знаков в секунду (русский, спокойный темп).
 CPS = 13.5  # для русского; у языка в lines.json может быть свой (cps)
 #: Голос начинается через столько секунд после начала клипа (после наплыва) …
-LEAD = 0.55
+LEAD = 0.2
 #: … и после него до следующей склейки столько воздуха.
-TAIL = 0.75
+TAIL = 0.3
 #: Наплыв между клипами, секунд.
-XFADE = 0.4
+XFADE = 0.3
 #: Последний клип держится после голоса — под название и призыв.
 END_HOLD = 3.2
 #: Самый короткий клип.
-MIN_CLIP = 2.8
+MIN_CLIP = 2.2
 #: Видео не больше стольких мегабайт (Telegram и соцсети): битрейт считается от длины.
 MAX_MB = 19.0
 
@@ -138,14 +138,14 @@ def find_voice(lines: list[dict], folder: Path | None) -> tuple[str, list[Path] 
         if whole.exists():
             return "whole", whole
     per: list[Path] = []
-    for l in lines:
+    for l in [l for l in lines if l["voice"]]:
         hit = next((folder / "lines" / f"{l['id']}.{e}" for e in ("mp3", "wav", "m4a", "ogg", "flac") if (folder / "lines" / f"{l['id']}.{e}").exists()), None)
         if hit:
             per.append(hit)
-    if per and len(per) == len(lines):
+    if per and len(per) == len([l for l in lines if l["voice"]]):
         return "lines", per
     if per:
-        missing = [l["id"] for l in lines if not any(p.stem == l["id"] for p in per)]
+        missing = [l["id"] for l in lines if l["voice"] and not any(p.stem == l["id"] for p in per)]
         sys.exit(f"Голос по репликам неполный: нет {', '.join(missing)} ({folder.relative_to(ROOT)}/lines/<номер>.mp3)")
     sys.exit(f"В {folder.relative_to(ROOT)} нет голоса: voice.mp3 или lines/01.mp3 … (promo/voice/tts.py)")
 
@@ -220,6 +220,8 @@ Style: Sub,Nunito Promo,{sub_size},&H00FFFFFF,&H00FFFFFF,&H38261A1D,&H00000000,0
 Style: Cap,Nunito Promo,{cap_size},&H0034AEFE,&H0034AEFE,&H00332B2B,&H66000000,0,0,0,0,100,100,1,0,1,5,2,8,60,60,{cap_margin},1
 Style: Title,Nunito Promo,{150 if not square else 130},&H0034AEFE,&H0034AEFE,&H00332B2B,&H80000000,0,0,0,0,100,100,0,0,1,9,5,5,40,40,0,1
 Style: Call,Nunito Promo,{62 if not square else 54},&H00E0EFF4,&H00E0EFF4,&H00332B2B,&H80000000,0,0,0,0,100,100,0,0,1,5,2,5,60,60,0,1
+Style: Hook,Nunito Promo,{92 if not square else 78},&H00FFFFFF,&H00FFFFFF,&H00261A1D,&H99000000,0,0,0,0,100,100,0,0,1,8,4,5,50,50,0,1
+Style: Link,Nunito Promo,{76 if not square else 64},&H0034AEFE,&H0034AEFE,&H00332B2B,&H80000000,0,0,0,0,100,100,0,0,1,6,3,5,40,40,0,1
 Style: Shade,Nunito Promo,10,&H00261A1D,&H00261A1D,&H00261A1D,&H00261A1D,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 
 [Events]
@@ -229,21 +231,27 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     for p in plan:
         if p["caption"]:
             ev.append(f"Dialogue: 1,{ass_time(p['start'] + 0.25)},{ass_time(p['end'] - 0.1)},Cap,,0,0,0,,{{\\fad(300,250)}}{ass_escape(p['caption'])}")
-        ev.append(f"Dialogue: 2,{ass_time(p['sub_in'])},{ass_time(p['sub_out'])},Sub,,0,0,0,,{{\\fad(120,160)}}{ass_escape(p['sub'])}")
+        if not p.get("silent"):
+            ev.append(f"Dialogue: 2,{ass_time(p['sub_in'])},{ass_time(p['sub_out'])},Sub,,0,0,0,,{{\\fad(120,160)}}{ass_escape(p['sub'])}")
+    # Хук: крупная фраза в первые секунды — многие смотрят без звука.
+    if script.get("hook"):
+        hook_end = plan[0]["end"] - 0.2
+        ev.append(f"Dialogue: 4,{ass_time(0.1)},{ass_time(hook_end)},Hook,,0,0,0,,{{\\fad(150,200)\\pos({w // 2},{int(h * (0.3 if not square else 0.25))})}}{script['hook']}")
     # Концовка: затемнение, название, призыв и ссылка на бота (если есть).
     last = plan[-1]
     end_in = last["sub_out"] - 0.2
     ev.append(f"Dialogue: 0,{ass_time(end_in)},{ass_time(total)},Shade,,0,0,0,,{{\\fad(600,0)\\alpha&H50&\\p1}}m 0 0 l {w} 0 {w} {h} 0 {h}{{\\p0}}")
     cy = h // 2
     ev.append(f"Dialogue: 3,{ass_time(end_in + 0.15)},{ass_time(total)},Title,,0,0,0,,{{\\fad(500,0)\\pos({w // 2},{cy - 70})}}{ass_escape(script['title'])}")
-    call = script["cta"] + (f"\\N{script['link']}" if script.get("link") else "")
-    ev.append(f"Dialogue: 3,{ass_time(end_in + 0.45)},{ass_time(total)},Call,,0,0,0,,{{\\fad(500,0)\\pos({w // 2},{cy + 70 + (30 if script.get('link') else 0)})}}{ass_escape(call)}")
+    ev.append(f"Dialogue: 3,{ass_time(end_in + 0.45)},{ass_time(total)},Call,,0,0,0,,{{\\fad(500,0)\\pos({w // 2},{cy + 60})}}{ass_escape(script['cta'])}")
+    if script.get("link"):
+        ev.append(f"Dialogue: 3,{ass_time(end_in + 0.75)},{ass_time(total)},Link,,0,0,0,,{{\\fad(500,0)\\pos({w // 2},{cy + 160})}}{ass_escape(script['link'])}")
     return head + "\n".join(ev) + "\n"
 
 
 def make_srt(plan: list[dict]) -> str:
     out = []
-    for i, p in enumerate(plan, 1):
+    for i, p in enumerate([p for p in plan if not p.get("silent")], 1):
         out.append(f"{i}\n{srt_time(p['sub_in'])} --> {srt_time(p['sub_out'])}\n{p['sub']}\n")
     return "\n".join(out)
 
@@ -300,7 +308,7 @@ def main() -> None:
     if not shutil.which("ffmpeg"):
         sys.exit("Нужен ffmpeg")
     for l in lines:
-        if not (footage / f"{l['id']}_{l['scene']}.mp4").exists():
+        if not l.get("montage") and not (footage / f"{l['id']}_{l['scene']}.mp4").exists():
             sys.exit(f"Нет клипа promo/footage/{lang}/{l['id']}_{l['scene']}.mp4 — снимите: npx vite-node promo/record.ts -- --lang {lang}")
 
     mode, src = find_voice(lines, VOICE / lang / who if who else None)
@@ -308,34 +316,46 @@ def main() -> None:
     tmp = Path(tempfile.mkdtemp(prefix="promo-build-"))
     try:
         # 1. Голос: длительность каждой реплики и её кусок звука.
-        pieces: list[Path | None] = []
+        # Реплики без голоса (voice: "") — пауза под картинку на hold секунд, например сцена из игры.
+        voiced = [l for l in lines if l["voice"]]
+        vpieces: list[Path | None] = []
         if mode == "lines":
-            durs = [duration(p) for p in src]  # type: ignore[union-attr]
-            pieces = list(src)  # type: ignore[arg-type]
+            vdurs = [duration(p) for p in src]  # type: ignore[union-attr]
+            vpieces = list(src)  # type: ignore[arg-type]
         elif mode == "whole":
             total_voice = duration(src)  # type: ignore[arg-type]
-            bounds = split_whole(src, len(lines), total_voice)  # type: ignore[arg-type]
-            durs = []
+            bounds = split_whole(src, len(voiced), total_voice)  # type: ignore[arg-type]
+            vdurs = []
             for i, (a, b) in enumerate(bounds):
-                a = max(0.0, a - 0.06)
-                b = min(total_voice, b + 0.12)
+                a = max(0.0, a - 0.04)
+                b = min(total_voice, b + 0.08)
                 piece = tmp / f"v{i:02d}.wav"
                 run("ffmpeg", "-v", "error", "-y", "-i", src, "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-ac", "1", "-ar", "48000", piece)
-                pieces.append(piece)
-                durs.append(b - a)
+                vpieces.append(piece)
+                vdurs.append(b - a)
         else:
-            durs = [max(1.2, len(clean(l["voice"])) / cps) for l in lines]
-            pieces = [None] * len(lines)
+            vdurs = [max(1.2, len(clean(l["voice"])) / cps) for l in voiced]
+            vpieces = [None] * len(voiced)
+        it = iter(zip(vdurs, vpieces))
+        durs, pieces = [], []
+        for l in lines:
+            if l["voice"]:
+                d, pc = next(it)
+            else:
+                d, pc = float(l.get("hold", 3.0)), None
+            durs.append(d)
+            pieces.append(pc)
 
         # 2. План: клип каждой реплики, его начало на общей ленте, окно субтитра.
         plan: list[dict] = []
         t = 0.0
         for i, (l, d) in enumerate(zip(lines, durs)):
             last = i == len(lines) - 1
-            length = max(MIN_CLIP, LEAD + d + TAIL + XFADE + (END_HOLD if last else 0))
+            silent = not l["voice"]
+            length = max(MIN_CLIP, (d + XFADE) if silent else LEAD + d + TAIL + XFADE + (END_HOLD if last else 0))
             if i == 0:
-                length += 0.3
-            lead = LEAD + (0.3 if i == 0 else 0)
+                length += 0.15
+            lead = LEAD + (0.15 if i == 0 else 0)
             v_in = t + lead
             plan.append({
                 "id": l["id"], "scene": l["scene"], "clip": footage / f"{l['id']}_{l['scene']}.mp4",
@@ -343,9 +363,29 @@ def main() -> None:
                 "voice_in": v_in, "voice_dur": d,
                 "sub_in": v_in - 0.08, "sub_out": v_in + d + 0.3,
                 "sub": l.get("sub") or clean(l["voice"]), "caption": l.get("caption", ""),
+                "silent": silent, "montage": l.get("montage"),
             })
             t += length - XFADE
         total = plan[-1]["end"]
+
+        # Хук: быстрый монтаж из кусков других клипов (ларёк → магазин → гипермаркет).
+        for p in plan:
+            if not p["montage"]:
+                continue
+            parts, fl = [], []
+            rest = p["length"] - sum(seg[2] for seg in p["montage"])
+            for k, (scene, at, dur) in enumerate(p["montage"]):
+                src_clip = next(iter(sorted(footage.glob(f"*_{scene}.mp4"))), None)
+                if src_clip is None:
+                    sys.exit(f"Для монтажа нет клипа сцены {scene} в promo/footage/{lang}")
+                dur = dur or max(1.0, rest + 0.1)
+                parts += ["-ss", f"{at:.3f}", "-t", f"{dur:.3f}", "-i", str(src_clip)]
+                fl.append(f"[{k}:v]fps={FPS},scale={W}:{H}:flags=lanczos,setsar=1,setpts=PTS-STARTPTS[m{k}]")
+            n = len(p["montage"])
+            fl.append("".join(f"[m{k}]" for k in range(n)) + f"concat=n={n}:v=1:a=0[mv]")
+            hook = tmp / "hook.mp4"
+            run("ffmpeg", "-v", "error", "-y", *parts, "-filter_complex", ";".join(fl), "-map", "[mv]", "-c:v", "libx264", "-crf", "12", "-preset", "fast", hook)
+            p["clip"] = hook
 
         # 3. Видео: клипы нужной длины (короче — последний кадр держится), наплывы, из чёрного и в чёрный.
         args: list[str] = ["ffmpeg", "-v", "error", "-y"]
@@ -363,7 +403,9 @@ def main() -> None:
         prev = "c0"
         for i in range(1, len(plan)):
             offset = plan[i]["start"]
-            filters.append(f"[{prev}][c{i}]xfade=transition=fade:duration={XFADE}:offset={offset:.3f}[x{i}]")
+            # Из хука в грозу — белой вспышкой, как молния; остальное — мягкий наплыв.
+            kind = "fadewhite" if plan[i - 1]["montage"] else "fade"
+            filters.append(f"[{prev}][c{i}]xfade=transition={kind}:duration={XFADE if kind == 'fade' else 0.25}:offset={offset:.3f}[x{i}]")
             prev = f"x{i}"
         filters.append(f"[{prev}]fade=t=in:st=0:d=0.6,fade=t=out:st={total - 0.9:.3f}:d=0.9,format=yuv420p[v]")
         base = tmp / "base.mp4"
@@ -373,14 +415,14 @@ def main() -> None:
         music = fit_music(MUSIC, total, tmp)
         a_args = ["ffmpeg", "-v", "error", "-y", "-stream_loop", "-1", "-i", str(music), "-stream_loop", "-1", "-i", str(AMBIENCE), "-i", str(SFX)]
         af: list[str] = []
-        windows = [(p["voice_in"], p["voice_in"] + p["voice_dur"]) for p in plan]
+        windows = [(p["voice_in"], p["voice_in"] + p["voice_dur"]) for p in plan if not p["silent"]]
         af.append(
             f"[0:a]atrim=0:{total:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,"
             f"volume={MUSIC_VOL},volume='{envelope(windows, MUSIC_UNDER_VOICE)}':eval=frame,afade=t=in:d=1.0,afade=t=out:st={total - 2.2:.3f}:d=2.2[mus]"
         )
         af.append(
             f"[1:a]atrim=0:{total:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,"
-            f"volume=0.16,volume='{envelope(windows, 0.6)}':eval=frame,afade=t=in:d=1.5,afade=t=out:st={total - 2.5:.3f}:d=2.5[amb]"
+            f"volume=0.09,volume='{envelope(windows, 0.6)}':eval=frame,afade=t=in:d=1.5,afade=t=out:st={total - 2.5:.3f}:d=2.5[amb]"
         )
         mix = ["[mus]", "[amb]"]
         # Акценты из звуков игры.

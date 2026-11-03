@@ -46,7 +46,7 @@ HEAD = {
 def main() -> None:
     for lang, spec in SCRIPT["langs"].items():
         h = HEAD[lang]
-        lines = spec["lines"]
+        lines = [l for l in spec["lines"] if l["voice"]]
         out = HERE / lang
         out.mkdir(exist_ok=True)
         paste = "\n\n...\n\n".join(l["voice"] for l in lines)
