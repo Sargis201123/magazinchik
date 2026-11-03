@@ -128,7 +128,7 @@
     },
     "en": {
       "title": "Magazinchik",
-      "cta": "Find \"Magazinchik\" on Telegram",
+      "cta": "Free on Telegram",
       "cps": 15.5,
       "voices": {
         "adam": "Adam – Distinct, Deep and Engaging"
@@ -137,92 +137,113 @@
         {
           "id": "01",
           "scene": "granny",
-          "voice": "Grandma left you her tiny corner kiosk.",
-          "caption": "Your own little shop"
+          "voice": "Grandma left you her corner shop. And her debt."
         },
         {
           "id": "02",
-          "scene": "morning",
-          "voice": "Morning. The bell rings — your first customers!",
-          "caption": "First customers"
+          "scene": "tap",
+          "voice": "At first you do it all: the register, the shelves, even the puddles."
         },
         {
           "id": "03",
-          "scene": "tap",
-          "voice": "Tap the register — hear the coins jingle.",
-          "caption": "Tap — sold!"
+          "scene": "staff",
+          "montage": [
+            [
+              "grow",
+              0.0,
+              2.2
+            ],
+            [
+              "food",
+              0.5,
+              0
+            ]
+          ],
+          "voice": "Then you hire people — and they do the work for you."
         },
         {
           "id": "04",
-          "scene": "grow",
-          "voice": "Day by day, the kiosk grows into a real store.",
-          "caption": "Grow"
+          "scene": "growth",
+          "montage": [
+            [
+              "granny",
+              5.2,
+              1.0
+            ],
+            [
+              "grow",
+              5.4,
+              1.2
+            ],
+            [
+              "cta",
+              0.4,
+              0
+            ]
+          ],
+          "voice": "From a tiny kiosk to a department store, and then a hypermarket."
         },
         {
           "id": "05",
-          "scene": "food",
-          "voice": "Cashiers, a bakery, a coffee corner... even a kitchen.",
-          "caption": "Your team, your kitchen"
+          "scene": "weather",
+          "montage": [
+            [
+              "rain",
+              1.0,
+              2.6
+            ],
+            [
+              "heat",
+              1.0,
+              0
+            ]
+          ],
+          "voice": "Weather changes demand: rain means bread and milk, heat means ice cream."
         },
         {
           "id": "06",
-          "scene": "rain",
-          "voice": "Then the rain comes. Puddles, umbrellas — everyone ducks inside.",
-          "caption": "Rain"
+          "scene": "chaos",
+          "montage": [
+            [
+              "flood",
+              1.0,
+              2.0
+            ],
+            [
+              "robbery",
+              4.4,
+              0
+            ]
+          ],
+          "voice": "Plus floods, inspections… and even a hostage robbery!"
         },
         {
           "id": "07",
-          "scene": "storm",
-          "voice": "A thunderstorm? Lights on, register open!",
-          "caption": "Thunderstorm"
+          "scene": "story",
+          "montage": [
+            [
+              "sonya",
+              3.6,
+              0
+            ]
+          ],
+          "voice": "And every character has a story."
         },
         {
           "id": "08",
-          "scene": "leaves",
-          "voice": "Autumn paints the street with leaves...",
-          "caption": "Autumn"
+          "scene": "street",
+          "voice": "Your friends' shops are right across the street. Whose is better?"
         },
         {
           "id": "09",
-          "scene": "winter",
-          "voice": "...and winter brings snow and twinkling lights.",
-          "caption": "Winter"
-        },
-        {
-          "id": "10",
-          "scene": "cat",
-          "voice": "Barsik the cat works here too. Give him a pet!",
-          "caption": "The shop cat"
-        },
-        {
-          "id": "11",
-          "scene": "street",
-          "voice": "Across the road — your friends' shops.",
-          "caption": "Friends' street"
-        },
-        {
-          "id": "12",
-          "scene": "notebook",
-          "voice": "But Grandma's notebook... is missing a page.",
-          "caption": "Grandma's notebook"
-        },
-        {
-          "id": "13",
-          "scene": "zar",
-          "voice": "\"The shop by the bridge...\" What's waiting across the river?",
-          "caption": "Across the river"
-        },
-        {
-          "id": "14",
           "scene": "cta",
-          "voice": "Find \"Magazinchik\" on Telegram!",
-          "caption": ""
+          "voice": "Magazinchik. Free on Telegram. Open yours!"
         }
       ],
       "stress": [
-        "Magazinchik — ma-ga-ZEEN-chik (Russian for \"little shop\").",
-        "Barsik — BAR-sik."
-      ]
+        "Magazinchik — ma-ga-ZEEN-chik (Russian for \"little shop\")."
+      ],
+      "hook": "POV: you inherited\\NGrandma's corner shop"
     }
   }
 }

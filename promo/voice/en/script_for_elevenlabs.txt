@@ -9,79 +9,53 @@ Voices (folder <voice>):
 Save to: promo/voice/en/<voice>/voice.mp3
 (copy everything between the lines; the "..." between lines are pauses the build cuts on)
 ------------------------------------------------------------
-Grandma left you her tiny corner kiosk.
+Grandma left you her corner shop. And her debt.
 
 ...
 
-Morning. The bell rings — your first customers!
+At first you do it all: the register, the shelves, even the puddles.
 
 ...
 
-Tap the register — hear the coins jingle.
+Then you hire people — and they do the work for you.
 
 ...
 
-Day by day, the kiosk grows into a real store.
+From a tiny kiosk to a department store, and then a hypermarket.
 
 ...
 
-Cashiers, a bakery, a coffee corner... even a kitchen.
+Weather changes demand: rain means bread and milk, heat means ice cream.
 
 ...
 
-Then the rain comes. Puddles, umbrellas — everyone ducks inside.
+Plus floods, inspections… and even a hostage robbery!
 
 ...
 
-A thunderstorm? Lights on, register open!
+And every character has a story.
 
 ...
 
-Autumn paints the street with leaves...
+Your friends' shops are right across the street. Whose is better?
 
 ...
 
-...and winter brings snow and twinkling lights.
-
-...
-
-Barsik the cat works here too. Give him a pet!
-
-...
-
-Across the road — your friends' shops.
-
-...
-
-But Grandma's notebook... is missing a page.
-
-...
-
-"The shop by the bridge..." What's waiting across the river?
-
-...
-
-Find "Magazinchik" on Telegram!
+Magazinchik. Free on Telegram. Open yours!
 ------------------------------------------------------------
 
 === ONE LINE AT A TIME ===
 Texts: promo/voice/en/lines/01.txt …; audio → promo/voice/en/<voice>/lines/01.mp3 …
-01. Grandma left you her tiny corner kiosk.
-02. Morning. The bell rings — your first customers!
-03. Tap the register — hear the coins jingle.
-04. Day by day, the kiosk grows into a real store.
-05. Cashiers, a bakery, a coffee corner... even a kitchen.
-06. Then the rain comes. Puddles, umbrellas — everyone ducks inside.
-07. A thunderstorm? Lights on, register open!
-08. Autumn paints the street with leaves...
-09. ...and winter brings snow and twinkling lights.
-10. Barsik the cat works here too. Give him a pet!
-11. Across the road — your friends' shops.
-12. But Grandma's notebook... is missing a page.
-13. "The shop by the bridge..." What's waiting across the river?
-14. Find "Magazinchik" on Telegram!
+01. Grandma left you her corner shop. And her debt.
+02. At first you do it all: the register, the shelves, even the puddles.
+03. Then you hire people — and they do the work for you.
+04. From a tiny kiosk to a department store, and then a hypermarket.
+05. Weather changes demand: rain means bread and milk, heat means ice cream.
+06. Plus floods, inspections… and even a hostage robbery!
+07. And every character has a story.
+08. Your friends' shops are right across the street. Whose is better?
+09. Magazinchik. Free on Telegram. Open yours!
 
 === PRONUNCIATION ===
 - Magazinchik — ma-ga-ZEEN-chik (Russian for "little shop").
-- Barsik — BAR-sik.
 - "..." is a breath pause; "—" a short one. Exclamation marks = a smile, not a shout.
