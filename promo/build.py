@@ -61,9 +61,9 @@ GRADE = {
     "zar": "colorbalance=rm=0.05:bm=-0.03",
 }
 SFX = ROOT / "public/audio/sfx/sfx.m4a"
-#: Музыка — заметно, а не фоном «где-то там»: громкость темы и доля, до которой она уходит под голос.
-MUSIC_VOL = 0.9
-MUSIC_UNDER_VOICE = 0.55
+#: Музыка: громкость темы и доля, до которой она уходит под голос.
+MUSIC_VOL = 0.55
+MUSIC_UNDER_VOICE = 0.38
 #: Портрет бабушки над названием в концовке (64×64, увеличиваем пикселями).
 PORTRAIT = ROOT / "public/assets/portrait_grandma_happy.png"
 
@@ -357,7 +357,7 @@ def main() -> None:
         )
         af.append(
             f"[1:a]atrim=0:{total:.3f},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,"
-            f"volume=0.12,volume='{envelope(windows, 0.6)}':eval=frame,afade=t=in:d=1.5,afade=t=out:st={total - 2.5:.3f}:d=2.5[amb]"
+            f"volume=0.16,volume='{envelope(windows, 0.6)}':eval=frame,afade=t=in:d=1.5,afade=t=out:st={total - 2.5:.3f}:d=2.5[amb]"
         )
         mix = ["[mus]", "[amb]"]
         # Акценты из звуков игры.
