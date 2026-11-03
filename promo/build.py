@@ -37,7 +37,10 @@ FOOTAGE = PROMO / "footage"
 VOICE = PROMO / "voice"
 OUT = PROMO / "out"
 FONTS = PROMO / "fonts"
-MUSIC = ROOT / "public/audio/music/suno/theme.m4a"
+#: Музыка ролика: свой трек (promo/music/promo_theme.mp3, Suno), если он есть, иначе главная тема игры.
+MUSIC = next((p for p in [PROMO / "music/promo_theme.mp3"] if p.exists()), ROOT / "public/audio/music/suno/theme.m4a")
+#: Темп трека — чтобы удлинять его целыми тактами.
+MUSIC_BPM = 100
 AMBIENCE = ROOT / "public/audio/amb/street.m4a"
 AMB = ROOT / "public/audio/amb"
 #: Звук погоды под сценой (файл из public/audio/amb, громкость): живёт ровно на своём клипе.
@@ -262,6 +265,25 @@ def envelope(windows: list[tuple[float, float]], low: float, ramp: float = 0.25)
     return f"1-({1 - low:.3f})*{dip}"
 
 
+def fit_music(path: Path, total: float, tmp: Path) -> Path:
+    """Трек короче ролика — удлиняем его повтором куска из середины (целыми тактами, с наплывом), чтобы
+    своя концовка песни пришлась на финал ролика, а не обрывалась и не начиналась заново."""
+    have = duration(path)
+    need = total + 0.5 - have
+    if need <= 0:
+        return path
+    bar = 60 / MUSIC_BPM * 4
+    ext = -(-need // bar) * bar
+    xf = 1.5
+    t1 = have * 0.55
+    t2 = max(0.0, t1 - ext - xf)
+    out = tmp / "music.wav"
+    run("ffmpeg", "-v", "error", "-y", "-i", path, "-filter_complex",
+        f"[0:a]atrim=0:{t1:.3f},asetpts=PTS-STARTPTS[a];[0:a]atrim={t2:.3f},asetpts=PTS-STARTPTS[b];[a][b]acrossfade=d={xf}[m]",
+        "-map", "[m]", "-ar", "48000", out)
+    return out
+
+
 def main() -> None:
     doc = json.loads((PROMO / "lines.json").read_text(encoding="utf-8"))
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
@@ -348,7 +370,8 @@ def main() -> None:
         run(*args, "-filter_complex", ";".join(filters), "-map", "[v]", "-c:v", "libx264", "-preset", "medium", "-crf", "12", "-r", str(FPS), base)
 
         # 4. Звук: музыка + улица (приглушаются под голосом), голос, акценты, громкость -14 LUFS.
-        a_args = ["ffmpeg", "-v", "error", "-y", "-stream_loop", "-1", "-i", str(MUSIC), "-stream_loop", "-1", "-i", str(AMBIENCE), "-i", str(SFX)]
+        music = fit_music(MUSIC, total, tmp)
+        a_args = ["ffmpeg", "-v", "error", "-y", "-stream_loop", "-1", "-i", str(music), "-stream_loop", "-1", "-i", str(AMBIENCE), "-i", str(SFX)]
         af: list[str] = []
         windows = [(p["voice_in"], p["voice_in"] + p["voice_dur"]) for p in plan]
         af.append(
