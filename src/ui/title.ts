@@ -9,6 +9,7 @@ import { addToHomeScreen, canFullscreen, homeScreenStatus, isFullscreen, setFull
 import type { StoreState } from '../game/economy';
 import { button, el, injectStyles, pixelize } from './dom';
 import { muteChip } from './audio';
+import { markReady } from '../platform/yandex';
 
 const css = `
 .ui-title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between;
@@ -145,4 +146,6 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
     pixelize(root);
   };
   render();
+  // Яндекс Игры: загрузка закончилась, кнопка «Играть» на экране — LoadingAPI.ready() (п. 1.19.2).
+  markReady();
 }

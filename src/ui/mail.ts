@@ -30,6 +30,25 @@ import { burst, letterFrom, returnStyles, showLetter } from './returns';
 import { showOpened } from './presents';
 import { showLiveCard } from './live';
 import { button, el, rollNumber, toast, UI_FONT } from './dom';
+import { IS_YANDEX } from '../platform/target';
+import { rewardedAvailable, showRewardedAd } from '../platform/yandex';
+
+const DOUBLED_KEY = 'magazinchik.giftDoubled';
+/** Гостинец этого дня уже удвоен рекламой (Яндекс Игры). */
+function giftDoubled(day: number): boolean {
+  try {
+    return localStorage.getItem(DOUBLED_KEY) === String(day);
+  } catch {
+    return false;
+  }
+}
+function markGiftDoubled(day: number): void {
+  try {
+    localStorage.setItem(DOUBLED_KEY, String(day));
+  } catch {
+    // без хранилища — до перезапуска страницы кнопки всё равно не будет (render после рекламы)
+  }
+}
 
 /** Записать состояние без перерисовки утра: карточка доигрывает своё и перерисует сама. */
 type Update = (next: StoreState) => void;
@@ -343,6 +362,24 @@ export function mailBox(state: StoreState, getState: () => StoreState, update: U
     face.alt = '';
     gran.append(face, el('span', '', `«${t(gift.gift.day === GIFT_DAYS ? 'gift.textBig' : 'gift.text', { n: gift.gift.day, total: GIFT_DAYS })}»`));
     box.append(days, gran);
+    // Яндекс Игры: по желанию — реклама за награду, гостинец ещё раз (п. 4.5: бонус, без него игра идёт так же).
+    // Раз в игровой день; помним в памяти браузера, чтобы перезапуск не дал второй раз.
+    if (IS_YANDEX && rewardedAvailable() && gift.gift.money > 0 && !giftDoubled(state.day)) {
+      const bonus = gift.gift.money;
+      const offer = button(`🎬 ${t('ad.doubleGift', { n: bonus })}`, () => {
+        offer.disabled = true;
+        void showRewardedAd().then((ok) => {
+          if (ok && !giftDoubled(state.day)) {
+            markGiftDoubled(state.day);
+            const now = getState();
+            update({ ...now, money: now.money + bonus });
+            sound.coin();
+          }
+          render();
+        });
+      }, 'ui-btn secondary');
+      box.append(offer);
+    }
   }
 
   // Всё забрано — коротко: сколько пришло, значки пришедшего, письма и новости — прочитать.

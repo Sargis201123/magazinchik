@@ -1,4 +1,6 @@
 import { t, type TextKey } from '../i18n';
+import { IS_YANDEX } from '../platform/target';
+import { showFullscreenAd } from '../platform/yandex';
 import { homemade, onShelves, PRODUCTS, sellableProducts, warehouseCapacity, warehouseCount, type DayStats, type StoreState } from '../game/economy';
 import { button, curtain, el, injectStyles, openModal, pixelize, replay, rollNumber } from './dom';
 import type { Review } from '../game/reviews';
@@ -486,13 +488,21 @@ export class Hud {
     row(t('summary.rating'), `${rating.before.toFixed(1)} → ${rating.after.toFixed(1)}★ ${arrowRating}`);
     // Что написали посетители — сразу видно, что исправить завтра.
     if (reviews.length) more.append(el('h3', '', t('summary.reviews')), ...reviewCards(reviews));
+    let leaving = false;
     card.append(
       button(t('summary.next'), () => {
+        // Второе нажатие, пока идёт реклама или опускается роллет, ничего не делает.
+        if (leaving) return;
+        leaving = true;
         // Роллет опускается с номером нового дня — и поднимается уже утром.
-        curtain(t('hud.day', { n: day + 1 }), () => {
-          close();
-          onNext();
-        });
+        const next = (): void =>
+          curtain(t('hud.day', { n: day + 1 }), () => {
+            close();
+            onNext();
+          });
+        // Яндекс Игры: полноэкранная реклама — в паузе между днями, по нажатию игрока (частоту режет площадка).
+        if (IS_YANDEX) void showFullscreenAd().then(next);
+        else next();
       }),
     );
   }

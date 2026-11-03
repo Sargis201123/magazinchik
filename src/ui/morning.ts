@@ -206,7 +206,8 @@ import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../
 /** Высота «голоса» героев в диалогах. */
 const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420, sonya: 760, father: 300 };
 import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, STAR_PACKS, tryDecor, type DecorItem, type DecorKind, decorItem } from '../game/decor';
-import { buyWithStars, starsAvailable } from '../platform/stars';
+import { IS_YANDEX } from '../platform/target';
+import { buyWithStars, starsAvailable, starsOffKey } from '../platform/stars';
 import { petsBox } from './pets';
 import { adoptDog, DOG_FOOD, DOG_FROM_DAY, DOG_PRICE, securityOf } from '../game/watch';
 import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
@@ -1611,6 +1612,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       const pass = state.pass;
       if (!pass) return close();
       const level = passLevel(pass);
+      const starTrack = !IS_YANDEX || Boolean(pass.paid);
       const rows = el('div', 'ui-box');
       for (let l = 1; l <= PASS_LEVELS; l++) {
         const row = el('div', `ui-pass-row${l <= level ? ' open' : ''}`);
@@ -1633,7 +1635,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         row.append(
           el('b', 'ui-pass-level', t('pass.level', { n: l })),
           cell('free', t('pass.free', { n: passCoins(state, l) })),
-          cell('premium', `${t('pass.premium', { n: passCoins(state, l) * 2 })}${decor ? ` + ${t(decorItem(decor).nameKey)}` : ''}`),
+          // Яндекс Игры: звёздной дорожки нет (если пропуск не куплен раньше).
+          ...(starTrack ? [cell('premium', `${t('pass.premium', { n: passCoins(state, l) * 2 })}${decor ? ` + ${t(decorItem(decor).nameKey)}` : ''}`)] : []),
         );
         rows.append(row);
       }
@@ -1648,7 +1651,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         el('div', 'ui-muted', t('pass.note', { d: XP_DAY, q: XP_QUEST, w: XP_WEEKLY, x: XP_PER_LEVEL, days: PASS_DAYS })),
       ];
       // Эксклюзив сезона: вывеска и наряд крупно — ради них и стоит взять звёздный пропуск.
-      const exclusive = seasonExclusives(pass.season);
+      const exclusive = starTrack ? seasonExclusives(pass.season) : [];
       if (exclusive.length) {
         const show = el('div', 'ui-pass-excl');
         for (const id of exclusive) {
@@ -1663,7 +1666,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
         if (next.length) head.push(el('div', 'ui-muted', t('pass.nextSeason', { items: next.map((id) => t(decorItem(id).nameKey)).join(', ') })));
       }
       if (pass.paid) head.push(el('div', 'ui-note', t('pass.paid')));
-      else {
+      else if (!IS_YANDEX) {
         const note = el('div', 'ui-muted', t('pass.buyNote'));
         const buy = button(t('pass.buy', { n: PASS_STARS }), () => {
           buy.disabled = true;
@@ -1678,7 +1681,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
               return;
             }
             buy.disabled = false;
-            note.textContent = t(result === 'unavailable' ? 'decor.starsOff' : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
+            note.textContent = t(result === 'unavailable' ? starsOffKey : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
           });
         }, 'ui-btn');
         head.push(buy, note);
@@ -1922,7 +1925,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     else if (next) box.append(el('div', 'ui-muted', t('live.box.guestNext', { icon: GUEST_ICON[next.who], who: t(`who.${next.who}`), date: dateLabel(next.date) })));
     // Набор за звёзды — только по желанию: когда бесплатная открытка уже открыта и пока набор не куплен.
     const pack = e.pack ? STAR_PACKS[e.pack] : undefined;
-    if (pack && !cardWaiting(state, e, today) && !pack.items.every((id) => state.decor.owned.includes(id))) {
+    if (!IS_YANDEX && pack && !cardWaiting(state, e, today) && !pack.items.every((id) => state.decor.owned.includes(id))) {
       box.append(
         button(t('live.box.pack', { name: t(pack.nameKey), n: pack.stars }), () => premiumDecorModal(decorItem(pack.items[0])), 'ui-btn secondary'),
         el('div', 'ui-muted', t('live.box.packNote')),
@@ -3174,8 +3177,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     foldBox('decor', t('decor.title'), (box) => {
       box.append(el('div', 'ui-muted', t('decor.note')));
       // Эксклюзив пропуска — свой сезон и уже забранное; подарки за поддержку — только полученные.
+      // Яндекс Игры: звёзд нет — некупленные звёздные вещи и эксклюзив звёздного пропуска не показываем
+      // (купленное остаётся на месте).
+      const starOnly = (d: DecorItem) => IS_YANDEX && !state.pass?.paid && (d.stars !== undefined || d.pack !== undefined || d.season !== undefined);
       const shown = (d: DecorItem) =>
-        state.decor.owned.includes(d.id) || (d.season === undefined ? !d.support : d.season === state.pass?.season);
+        state.decor.owned.includes(d.id) || (!starOnly(d) && (d.season === undefined ? !d.support : d.season === state.pass?.season));
       for (const kind of DECOR_KINDS) {
         const items = DECOR.filter((d) => d.kind === kind && shown(d));
         if (!items.length) continue;
@@ -3289,7 +3295,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
           return;
         }
         buy.disabled = false;
-        note.textContent = t(result === 'unavailable' ? 'decor.starsOff' : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
+        note.textContent = t(result === 'unavailable' ? starsOffKey : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
         if (result === 'unavailable') haptic.error();
       });
     });
@@ -3308,7 +3314,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       );
     } else if ((state.decor.tried ?? []).includes(item.id)) modal.append(el('div', 'ui-muted', t('decor.triedAlready')));
     modal.append(button(t('decor.close'), close, 'ui-btn secondary'));
-    if (!starsAvailable()) note.textContent = t('decor.starsOff');
+    if (!starsAvailable()) note.textContent = t(starsOffKey);
   };
 
   /**
@@ -3857,9 +3863,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
     const gear = page('settings', '⚙');
     gear.title = t('profile.settings');
     gear.ariaLabel = t('profile.settings');
-    pages.append(page('trophies', `🏆 ${t('profile.trophies')}`), page('friends', `👥 ${t('profile.friends')}`), gear);
-    if (profilePage === 'friends') return [pages, ...friendsPage()];
-    if (profilePage === 'settings') return [pages, el('h3', '', `⚙ ${t('profile.settings')}`), named, sounds, gfx, ...(early ? [] : [replay]), supportBox(), again];
+    // Яндекс Игры: друзья, турнир и рейтинг живут на нашем сервере через Telegram, «Поддержать автора» — звёзды;
+    // там их нет (platform/target.ts).
+    pages.append(page('trophies', `🏆 ${t('profile.trophies')}`), ...(IS_YANDEX ? [] : [page('friends', `👥 ${t('profile.friends')}`)]), gear);
+    if (profilePage === 'friends' && !IS_YANDEX) return [pages, ...friendsPage()];
+    if (profilePage === 'settings') return [pages, el('h3', '', `⚙ ${t('profile.settings')}`), named, sounds, gfx, ...(early ? [] : [replay]), ...(IS_YANDEX ? [] : [supportBox()]), again];
     return [pages, ...(early ? [replay] : []), ...trophiesPage(state)];
   };
 

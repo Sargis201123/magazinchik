@@ -3,11 +3,12 @@
 // в зал, убрать или дать имя. В зале одновременно один. Оплата — тем же счётом, что и премиальное
 // оформление (platform/stars.ts); питомец сразу дома, сервер подтвердит покупку при следующем запуске.
 
+import { IS_YANDEX } from '../platform/target';
 import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
 import { flushCloud } from '../game/save';
 import { activePet, grantPets, ownsPet, PET_IDS, PET_NAME_MAX, petDefaultKey, petItem, petNameKey, PETS, renamePet, setActivePet, type PetId } from '../game/pets';
-import { buyWithStars, starsAvailable } from '../platform/stars';
+import { buyWithStars, starsAvailable, starsOffKey } from '../platform/stars';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal } from './dom';
 import { sheetPng } from './sheet';
@@ -54,7 +55,10 @@ export function petsBox(state: StoreState, getState: () => StoreState, update: U
   const box = el('div', 'ui-box');
   box.append(el('b', '', `🐾 ${t('pets.title')}`), el('div', 'ui-muted', t('pets.note')));
   const active = activePet(state)?.id;
-  for (const id of PET_IDS) {
+  // Яндекс Игры: питомцы — только за звёзды; там показываем лишь уже купленных (или ничего).
+  const ids = IS_YANDEX ? PET_IDS.filter((id) => ownsPet(state, id)) : PET_IDS;
+  if (!ids.length) return [];
+  for (const id of ids) {
     const owned = ownsPet(state, id);
     const row = el('div', 'ui-item');
     const body = el('div');
@@ -94,7 +98,7 @@ function buyModal(id: PetId, getState: () => StoreState, update: Update): void {
         return;
       }
       buy.disabled = false;
-      note.textContent = t(result === 'unavailable' ? 'decor.starsOff' : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
+      note.textContent = t(result === 'unavailable' ? starsOffKey : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
       if (result === 'unavailable') haptic.error();
     });
   }, 'ui-btn ui-btn-stars');
@@ -108,7 +112,7 @@ function buyModal(id: PetId, getState: () => StoreState, update: Update): void {
     buy,
     button(t('decor.close'), close, 'ui-btn secondary'),
   );
-  if (!starsAvailable()) note.textContent = t('decor.starsOff');
+  if (!starsAvailable()) note.textContent = t(starsOffKey);
 }
 
 /** Имя питомца (как у кота): поле с именем, «Готово». fresh — сразу после покупки, с приветствием. */

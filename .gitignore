@@ -10,3 +10,5 @@ art/build
 # кадры повторяются точка в точку, так что любая правка графики видна. Поменял картинку нарочно — npm run e2e -- --update.
 e2e/shots
 e2e/diff
+dist-yandex
+dist-yandex.zip

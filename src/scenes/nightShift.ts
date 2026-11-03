@@ -2,6 +2,7 @@
 // историями, итоги дня («Завтра:», «Позвать на помощь», «Поделиться»), роллеты и табличка на двери, сторож
 // и Бобик настороже, ночь между днями (луна, гаснут окна, такси, рассвет) и утреннее открытие.
 
+import { setPlaying } from '../platform/yandex';
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { PRODUCTS, billTotal, shelfFor, takeFromShelf, type DayStats, type StoreState } from '../game/economy';
@@ -69,6 +70,8 @@ import { LINES, linesSold, type LinesNight } from '../game/lines';
 
 /** Вечер: если куплена ночная смена — спросить, работать ли ещё; иначе закрываемся. */
 export function endOfDay(scene: StoreScene): void {
+  // Яндекс Игры: магазин закрылся — GameplayAPI.stop (platform/yandex.ts).
+  setPlaying(false);
   // Момент, не дождавшийся нажатия к закрытию, уходит вместе с днём (и в ночную смену не остаётся).
   scene.moments.stop();
   // Срочный заказ не успел доехать до закрытия — водитель всё равно выгрузил.
