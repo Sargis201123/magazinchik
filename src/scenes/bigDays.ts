@@ -51,6 +51,7 @@ import * as staff from './staff';
 import * as persons from './persons';
 import * as visitors from './visitors';
 import * as liveFx from './liveFx';
+import * as pixelFx from './pixelFx';
 
 /** После волны: осколки улеглись — полки перерисовываются. */
 const QUAKE_SETTLE_MS = 700;
@@ -285,6 +286,7 @@ export function startBigDayScene(
   }
   if (id === 'tourbus') at(0.3, () => tourBus(scene, keep));
   if (id === 'starfall') {
+    let starTick = 0;
     keep(
       scene.time.addEvent({
         delay: 700,
@@ -294,6 +296,18 @@ export function startBigDayScene(
           const view = scene.cameras.main.worldView;
           const x = Phaser.Math.Between(view.x, view.x + view.width * 0.7);
           const y = Phaser.Math.Between(view.y, view.y + view.height * 0.4);
+          // С пиксельными эффектами — раз в два с небольшим секунды настоящий звездопад pixelfx: звёзды
+          // падают на хвостах и гаснут кольцом на земле. Место — те же случайные x, y, что у чёрточек:
+          // ход дня от эффектов не меняется. Только снаружи: падает в зал (на крышу магазина) — сдвигаем
+          // на улицу перед магазином.
+          if (!pixelFx.calm(scene)) {
+            if (++starTick % 3 !== 0) return;
+            const lx = x + 28;
+            let ly = y + view.height * 0.3;
+            if (lx > -60 && lx < w + 60 && ly > -30 && ly < h + FACADE_H + 20) ly = h + FACADE_H + 36;
+            pixelFx.burst(scene, 'starfall', lx, ly, { depth: LIGHT_DEPTH + 2, zoom: 2 });
+            return;
+          }
           const star = scene.add.rectangle(x, y, 10, 0.8, 0xffffff).setOrigin(1, 0.5).setRotation(0.45).setDepth(LIGHT_DEPTH + 2).setBlendMode(Phaser.BlendModes.ADD);
           scene.tweens.add({ targets: star, x: x + 56, y: y + 27, alpha: 0, duration: 800, onComplete: () => star.destroy() });
         },

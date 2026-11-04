@@ -65,6 +65,9 @@ const RAMP = {
   confetti: ['#e43b44', '#f77622', '#fee761', '#63c74d', '#0099db', '#b55088', '#2ce8f5'],
   wood: ['#181425', '#262b44', '#3b2a35', '#733e39', '#8f563b', '#b86f50', '#c28569'],
   purple: ['#181425', '#262b44', '#68386c', '#b55088', '#f6757a', '#c0cbdc', '#ffffff'],
+  hearts: ['#3b2a35', '#9e2835', '#e43b44', '#f6757a', '#ffc4bc', '#f8ebcf', '#ffffff'],
+  // Звездопад: холодный белый с голубым — звёзды, а не магия.
+  stars: ['#181425', '#3a4466', '#5a6988', '#8b9bb4', '#c0cbdc', '#2ce8f5', '#ffffff'],
 };
 
 // ---------- что печём ----------
@@ -98,6 +101,10 @@ const EFFECTS = [
   { key: 'beam', id: 'pickups/loot-beam', fps: 8, down: 1, to: 1.25, opts: { palette: RAMP.purple }, light: 0.3, alphaMin: 0.35, only: RAMP.purple, blend: 'add' },
   // Чаевые: монетки высыпаются, подскакивают и гаснут. Дымок «пуф» pixelfx (враг исчез) — прочь: красим
   // его меткой drop и стираем.
+  // Постоянный покупатель привязался сильнее: облачко сердечек над ним (кусок петли — игра гасит его).
+  { key: 'hearts', id: 'status/charmed', fps: 10, down: 1, to: 1.6, opts: { palette: RAMP.hearts }, light: 0.3, alphaMin: 0.3, only: RAMP.hearts },
+  // «Звездопад»: звёзды падают на длинных хвостах и гаснут кольцом на земле — вместо прежних белых чёрточек.
+  { key: 'starfall', id: 'arcane/star-fall', fps: 10, down: 1, opts: { palette: RAMP.stars }, light: 0.5, alphaMin: 0.3, only: RAMP.stars, blend: 'add' },
   { key: 'coindrop', id: 'spawn/coin-drop', fps: 10, down: 1, opts: { palette: RAMP.gold, smoke: ['#ff00ff', '#ff00ff', '#ff00ff', '#ff00ff'], coins: 5 }, light: 0.3, alphaMin: 0.3, only: RAMP.gold, drop: true },
 ];
 
