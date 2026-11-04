@@ -20,6 +20,13 @@ import { jitter, type VoiceRule } from './mix';
 import { admitVoice, allowVoice, busInput, existingAudioContext, mixer, noteStart, placeAt, setDoorAir, STREET_LOW, type Bus } from './mixer';
 import { noiseBuffer } from './sound';
 
+/**
+ * Случайность звука — своя, не общий Math.random: «пик», «чпок» и раскаты грома не должны менять, кто
+ * зайдёт в магазин и что купит (общий генератор дня, его же фиксирует e2e). Звуки зовутся и без аудио
+ * (e2e, выключенный звук) и в любой момент — сдвинь звук на миг, и сдвинулся бы весь день.
+ */
+const rnd = seeded(Date.now() ^ 0xa4b1e);
+
 export type { Neon } from './ambienceFiles';
 
 /** Жизнь вокруг — для атмосферы из файлов: покупатели, утро, Новый год, поздняя осень, ночная смена, неон. */
@@ -92,7 +99,7 @@ function loopBed(ac: AudioContext, buffer: AudioBuffer, type: BiquadFilterType, 
   const gain = ac.createGain();
   gain.gain.value = 0;
   src.connect(filter).connect(mod).connect(gain).connect(street!);
-  src.start(0, Math.random() * buffer.duration);
+  src.start(0, rnd() * buffer.duration);
   return { gain };
 }
 
@@ -195,8 +202,8 @@ function tone(ac: AudioContext, out: AudioNode, at: number, dur: number, f0: num
 /** Капля с водостока в лужу: короткий «плинк», звенящий вверх. */
 function drip(ac: AudioContext, out: AudioNode, at: number): void {
   noteStart('drip', 'street', 'weather');
-  const f = 700 + Math.random() * 600;
-  tone(ac, out, at, 0.07, f, f * 1.9, 0.02, Math.random() * 1.4 - 0.7);
+  const f = 700 + rnd() * 600;
+  tone(ac, out, at, 0.07, f, f * 1.9, 0.02, rnd() * 1.4 - 0.7);
 }
 
 /**
@@ -205,21 +212,21 @@ function drip(ac: AudioContext, out: AudioNode, at: number): void {
  */
 function bird(ac: AudioContext, out: AudioNode, at: number, vol: number): void {
   if (!allowVoice('synthBird', BIRD_RULE, 1, 'street')) return;
-  const pan = Math.random() * 1.6 - 0.8;
-  const kind = Math.random();
+  const pan = rnd() * 1.6 - 0.8;
+  const kind = rnd();
   if (kind < 0.45) {
     // Воробей: 2–4 коротких «чик» сверху вниз.
-    const notes = 2 + Math.floor(Math.random() * 3);
-    const base = 3200 + Math.random() * 1200;
+    const notes = 2 + Math.floor(rnd() * 3);
+    const base = 3200 + rnd() * 1200;
     for (let i = 0; i < notes; i++) tone(ac, out, at + i * 0.13, 0.07, base * 1.25, base * 0.8, vol, pan);
   } else if (kind < 0.8) {
     // Синица-трель: частые одинаковые ноты.
-    const notes = 6 + Math.floor(Math.random() * 5);
-    const base = 4300 + Math.random() * 900;
+    const notes = 6 + Math.floor(rnd() * 5);
+    const base = 4300 + rnd() * 900;
     for (let i = 0; i < notes; i++) tone(ac, out, at + i * 0.055, 0.035, base, base * (i % 2 ? 0.92 : 1.05), vol * 0.8, pan);
   } else {
     // Дрозд: протяжный свист с переливом вверх и вниз.
-    const base = 1900 + Math.random() * 600;
+    const base = 1900 + rnd() * 600;
     tone(ac, out, at, 0.22, base, base * 1.45, vol * 0.9, pan);
     tone(ac, out, at + 0.24, 0.3, base * 1.4, base * 1.1, vol * 0.9, pan);
   }
@@ -240,11 +247,11 @@ function schedule(ac: AudioContext, weather: Weather, evening: number, season: Y
   const horizon = now + 0.5;
   const wet = weather === 'rain' || weather === 'storm';
   // Если долго не планировали (вкладка была свёрнута) — не выдавать всё разом.
-  for (const key of Object.keys(next) as (keyof typeof next)[]) if (next[key] < now - 1) next[key] = now + Math.random();
+  for (const key of Object.keys(next) as (keyof typeof next)[]) if (next[key] < now - 1) next[key] = now + rnd();
   if (wet) {
     while (next.drip < horizon) {
       drip(ac, street!, Math.max(now, next.drip));
-      next.drip += (weather === 'storm' ? 0.25 : 0.45) + Math.random() * 1.2;
+      next.drip += (weather === 'storm' ? 0.25 : 0.45) + rnd() * 1.2;
     }
   } else next.drip = now + 1;
   const dayBirds = !recordedBirds && !wet && weather !== 'snow' && evening < 0.55 && season !== 'winter';
@@ -252,7 +259,7 @@ function schedule(ac: AudioContext, weather: Weather, evening: number, season: Y
     while (next.bird < horizon) {
       bird(ac, street!, Math.max(now, next.bird), season === 'autumn' ? 0.016 : 0.024);
       // Редко: птица — раз в 8–22 с (осенью — в 16–36), а не каждые две-три секунды.
-      next.bird += (season === 'autumn' ? 16 : 8) + Math.random() * (season === 'autumn' ? 20 : 14);
+      next.bird += (season === 'autumn' ? 16 : 8) + rnd() * (season === 'autumn' ? 20 : 14);
     }
   } else next.bird = now + 2;
   const crickets = (weather === 'clear' || weather === 'heat') && evening >= 0.45 && (season === 'summer' || season === 'spring');
@@ -260,8 +267,8 @@ function schedule(ac: AudioContext, weather: Weather, evening: number, season: Y
     while (next.cricket < horizon) {
       const at = Math.max(now, next.cricket);
       cricket(ac, street!, at, 4300, -0.5);
-      if (Math.random() < 0.7) cricket(ac, street!, at + 0.21, 4650, 0.45);
-      next.cricket += 0.55 + Math.random() * 0.25;
+      if (rnd() < 0.7) cricket(ac, street!, at + 0.21, 4650, 0.45);
+      next.cricket += 0.55 + rnd() * 0.25;
     }
   } else next.cricket = now + 1;
 }
@@ -349,23 +356,23 @@ export const ambience = {
       const level = admitVoice('step', STEP_RULE, 0.08, 'hall');
       if (!level) return;
       foot = -foot;
-      const j = jitter(Math.random, 0, 3);
+      const j = jitter(rnd, 0, 3);
       const out = busInput(ac, 'hall', Math.max(-1, Math.min(1, where.pan + foot * 0.06)), where.gain * j.gain * level);
       const now = ac.currentTime;
       const src = ac.createBufferSource();
       src.buffer = noise;
       const filter = ac.createBiquadFilter();
       filter.type = 'bandpass';
-      filter.frequency.value = 450 + Math.random() * 450;
+      filter.frequency.value = 450 + rnd() * 450;
       filter.Q.value = 1.1;
       const gain = ac.createGain();
       gain.gain.value = 0;
-      const dur = 0.045 + Math.random() * 0.025;
+      const dur = 0.045 + rnd() * 0.025;
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(0.06, now + 0.004);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
       src.connect(filter).connect(gain).connect(out);
-      src.start(now, Math.random() * 1.8);
+      src.start(now, rnd() * 1.8);
       src.stop(now + dur + 0.01);
     });
   },
@@ -378,13 +385,13 @@ export const ambience = {
     blip('hall', (ac) => {
       if (!allowVoice('chime', preview ? { gap: 0, max: 2, tier: 'feedback', game: false } : CHIME_RULE, 0.8, 'hall')) return;
       const where = placeAt(x);
-      const j = jitter(Math.random, 20, 1.5);
+      const j = jitter(rnd, 20, 1.5);
       const out = busInput(ac, 'hall', where.pan, where.gain * j.gain * (preview ? 1 : 0.55));
       const now = ac.currentTime;
       // Язычок задевает колокольчик то сверху вниз, то снизу вверх.
-      const pair = Math.random() < 0.5 ? [2093, 2637] : [2637, 2093];
+      const pair = rnd() < 0.5 ? [2093, 2637] : [2637, 2093];
       pair.forEach((f, i) => {
-        const at = now + i * (0.06 + Math.random() * 0.03);
+        const at = now + i * (0.06 + rnd() * 0.03);
         for (const [ratio, level, ring] of [
           [1, 1, 0.7],
           [2.76, 0.35, 0.3],

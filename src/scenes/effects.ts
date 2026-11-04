@@ -157,13 +157,18 @@ export function flyCoins(scene: StoreScene, x: number, y: number, count: number)
   for (let i = 0; i < count; i++) {
     const cx = x + Phaser.Math.Between(-4, 4);
     const coin = spin ? pixelFx.play(scene, 'coin', cx, y - 10, { random: true }) : scene.art(cx, y - 10, 'coin').setDepth(LIGHT_DEPTH + 5);
+    // Монетка выскакивает белой вспышкой и на миг зависает (замах) — потом летит к счётчику.
+    if (!scene.lite) {
+      coin.setTintFill(0xffffff);
+      scene.time.delayedCall(50, () => coin.active && coin.clearTint());
+    }
     scene.tweens.add({
       targets: coin,
       x: target.x,
       y: target.y,
       // Монетка pixelfx крупнее нашей (14 точек против 10): в полёте — к размеру значка счётчика.
       scale: spin ? 0.6 / ART : 0.8 / ART,
-      delay: i * 70,
+      delay: i * 70 + (scene.lite ? 0 : 70),
       duration: 650,
       ease: 'Cubic.easeIn',
       onComplete: () => {

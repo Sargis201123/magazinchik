@@ -11,6 +11,14 @@ import { BufferCache, fetched, loadAudio, prefetchAudio } from './audioFiles';
 import { duckMusic, existingAudioContext, mixer, busInput } from './mixer';
 import { LoopPlayer, type LoopWant } from './radioSound';
 import { Playlist, RESUME_GAP, STINGS, stingPath, TRACKS, type Key, type MusicMood, type StationId, type StingId, type TrackId } from './playlist';
+import { seeded } from './ambienceSynth';
+
+/**
+ * Случайность звука — своя, не общий Math.random: «пик», «чпок» и раскаты грома не должны менять, кто
+ * зайдёт в магазин и что купит (общий генератор дня, его же фиксирует e2e). Звуки зовутся и без аудио
+ * (e2e, выключенный звук) и в любой момент — сдвинь звук на миг, и сдвинулся бы весь день.
+ */
+const rnd = seeded(Date.now() ^ 0x4d051c);
 
 export type { MusicMood, StationId, StingId } from './playlist';
 
@@ -27,7 +35,7 @@ const LATE_MS = 1500;
 /** Заставки, которые звучат чаще других: их держим скачанными в тональности текущей музыки. */
 const COMMON_STINGS: StingId[] = ['coin', 'purchase', 'record', 'rank_up'];
 
-const playlist = new Playlist(Math.random);
+const playlist = new Playlist(rnd);
 const loops = new LoopPlayer();
 const stingBuffers = new BufferCache(6);
 
