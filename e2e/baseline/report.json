@@ -11,8 +11,8 @@
   },
   {
     "shot": "l5-evening.png",
-    "drawCalls": 164,
-    "textureBinds": 150
+    "drawCalls": 165,
+    "textureBinds": 151
   },
   {
     "shot": "l5-night.png",
@@ -26,8 +26,8 @@
   },
   {
     "shot": "rain-rain.png",
-    "drawCalls": 185,
-    "textureBinds": 180
+    "drawCalls": 184,
+    "textureBinds": 179
   },
   {
     "shot": "l3-day.png",
@@ -46,8 +46,8 @@
   },
   {
     "shot": "l6-evening.png",
-    "drawCalls": 160,
-    "textureBinds": 145
+    "drawCalls": 162,
+    "textureBinds": 147
   },
   {
     "shot": "pl4-day.png",

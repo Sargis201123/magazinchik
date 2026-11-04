@@ -12,7 +12,7 @@ describe('список картинок атласа', () => {
 
   it('семейства по началу имени не задевают обычные спрайты', () => {
     const families = TEXTURES.filter((key) => FAMILIES.some((re) => re.test(key)));
-    expect(families.every((key) => /^(item_|crate_|w_)/.test(key))).toBe(true);
+    expect(families.every((key) => /^(item_|crate_|w_|fx_)/.test(key))).toBe(true);
     expect(families.length).toBeGreaterThan(300);
   });
 });

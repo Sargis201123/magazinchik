@@ -13,6 +13,7 @@ import { ICON_RE, ICONS, UI_FONT } from '../ui/dom';
 import { ART, FACADE_H, type Popup, LIGHT_DEPTH, SHIRTS, type EmoteKey, randomLook, customerLook, GRANDMA } from './common';
 import * as persons from './persons';
 import * as building from './building';
+import * as pixelFx from './pixelFx';
 
 /** Плашка всплывающей надписи (в точках мира): поля, скругление, хвостик, высота значка вместо эмодзи. */
 const POPUP = { padX: 3, padY: 1.5, radius: 3, tail: 3, icon: 9, gap: 0.5, font: '8.5px' };
@@ -79,7 +80,8 @@ export async function celebrateExpansion(scene: StoreScene): Promise<void> {
     tint: [0xe43b44, 0xfee761, 0x63c74d, 0x0099db, 0xb55088],
     emitting: false,
   });
-  confetti.setDepth(LIGHT_DEPTH + 10).explode(70);
+  // Пиксельное конфетти посреди зала — и редкий дождик прежнего сверху, для объёма.
+  confetti.setDepth(LIGHT_DEPTH + 10).explode(pixelConfetti(scene, scene.layout.w / 2, scene.layout.h / 2 + 60) ? 24 : 70);
   if (!music.sting('expand')) sound.fanfare();
   haptic.success();
   scene.popup(scene.layout.w / 2, scene.layout.h / 2 - 20, t('popup.expanded', { name: t(storeLevel(scene.state).nameKey) }), '#fee761');
@@ -122,8 +124,9 @@ export async function celebrateMove(scene: StoreScene, modal: HTMLElement | null
     confetti.setDepth(LIGHT_DEPTH + 10).explode(scene.lite ? Math.round(n / 2) : n);
     scene.time.delayedCall(2000, () => confetti.destroy());
   };
+  // Пиксельное конфетти у входа, где собрались гости (pixelfx), — прежнее над вывеской остаётся.
   burst(w / 2, -6, 60);
-  burst(door.x, h, 40);
+  if (!pixelConfetti(scene, door.x, h + FACADE_H + 10)) burst(door.x, h, 40);
   if (!music.sting('expand')) sound.fanfare();
   haptic.success();
   scene.popup(w / 2, h / 2 - 20, t('popup.expanded', { name: t(storeLevel(scene.state).nameKey) }), '#fee761');
@@ -141,25 +144,42 @@ export async function celebrateMove(scene: StoreScene, modal: HTMLElement | null
   if (modal) modal.style.visibility = '';
 }
 
-/** Монетки летят от кассы к счётчику денег в углу экрана. */
+/**
+ * Монетки летят от кассы к счётчику денег в углу экрана. С пиксельными эффектами (pixelFx.ts) монетка
+ * крутится на лету (pickups/coin-spin pixelfx), а у счётчика последнюю встречает золотой всплеск (collect-burst).
+ */
 export function flyCoins(scene: StoreScene, x: number, y: number, count: number): void {
   const target = scene.cameras.main.getWorldPoint(70 * scene.res, 52 * scene.res);
+  const spin = !pixelFx.calm(scene);
   for (let i = 0; i < count; i++) {
-    const coin = scene.art(x + Phaser.Math.Between(-4, 4), y - 10, 'coin').setDepth(LIGHT_DEPTH + 5);
+    const cx = x + Phaser.Math.Between(-4, 4);
+    const coin = spin ? pixelFx.play(scene, 'coin', cx, y - 10, { random: true }) : scene.art(cx, y - 10, 'coin').setDepth(LIGHT_DEPTH + 5);
     scene.tweens.add({
       targets: coin,
       x: target.x,
       y: target.y,
-      scale: 0.8 / ART,
+      // Монетка pixelfx крупнее нашей (14 точек против 10): в полёте — к размеру значка счётчика.
+      scale: spin ? 0.6 / ART : 0.8 / ART,
       delay: i * 70,
       duration: 650,
       ease: 'Cubic.easeIn',
       onComplete: () => {
         coin.destroy();
-        if (i === count - 1) scene.hud.bumpMoney();
+        if (i !== count - 1) return;
+        scene.hud.bumpMoney();
+        if (spin) pixelFx.play(scene, 'coinpop', target.x, target.y, { depth: LIGHT_DEPTH + 6 });
       },
     });
   }
+}
+
+/** Конфетти pixelfx (ui/confetti): бумажки и серпантин вылетают, зависают, кувыркаются и опадают; к концу тают. */
+function pixelConfetti(scene: StoreScene, x: number, y: number): boolean {
+  if (pixelFx.calm(scene)) return false;
+  // Вдвое крупнее сетки рисунка: в сетку 1:1 праздник — облачко на четверть зала.
+  const sprite = pixelFx.play(scene, 'confetti', x, y, { depth: LIGHT_DEPTH + 10, zoom: 2 });
+  scene.tweens.add({ targets: sprite, alpha: 0, delay: 1700, duration: 700 });
+  return true;
 }
 
 /** «Серия ×3!» над кассой: крупная цифра, звёздочки, нота всё выше. */
