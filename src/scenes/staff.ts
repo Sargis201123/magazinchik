@@ -127,7 +127,8 @@ export function dropChore(scene: StoreScene): void {
   scene.choreId++;
   stopMop(scene, scene.seller);
   scene.tweens.killTweensOf(scene.carried);
-  scene.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+  // Ключ мог замереть посреди поворота (liveFx.wrenchTurns) — ровно.
+  scene.carried.setVisible(false).setTexture('box').setPosition(0, 3).setAngle(0);
   // Несли мусор — роняем обратно; несли мешок — он «возвращается» в ведро.
   if (scene.carryingTrash) dropTrash(scene, scene.seller.x, scene.seller.y - 6);
   scene.carryingTrash = false;
@@ -249,6 +250,8 @@ export function stockShelf(scene: StoreScene, index: number, by: Phaser.GameObje
   // Задний ряд проявляется, когда штука долетела до полки.
   backs.forEach((back, n) => n >= before && back.visible && back.setAlpha(0));
   scene.time.delayedCall(fresh.length * 90 + 300, () => backs.forEach((back) => back.active && back.alpha < 1 && scene.tweens.add({ targets: back, alpha: 1, duration: 200 })));
+  // Кто выкладывает — замах и толчок, когда первая штука ложится на полку (летит 280 мс).
+  if (fresh.length) scene.time.delayedCall(210, () => motion.beat(scene, by, 0.7));
   fresh.forEach((img, n) => {
     const { x, y } = img;
     const scale = img.scaleX;
@@ -263,8 +266,6 @@ export function stockShelf(scene: StoreScene, index: number, by: Phaser.GameObje
       duration: 280,
       onStart: () => {
         img.setAlpha(1);
-        // Звук материала отдела (бутылки звенят, хлеб ложится мягко…), через штуку — без «пулемёта».
-        if (n % 2 === 0 && kind) sound.shelf(kind, n, x);
       },
       onUpdate: (tween) => {
         const k = tween.getValue() ?? 0;
@@ -273,6 +274,10 @@ export function stockShelf(scene: StoreScene, index: number, by: Phaser.GameObje
       },
       onComplete: () => {
         img.setPosition(x, y).setData('flying', false);
+        // Касание: звук материала отдела (бутылки звенят, хлеб ложится мягко…) — когда штука встала, а не
+        // когда вылетела; через штуку — без «пулемёта». Белый кадр и пружинка.
+        if (n % 2 === 0 && kind) sound.shelf(kind, n, x);
+        motion.flashWhite(scene, img, 40);
         scene.tweens.add({ targets: img, scale: { from: scale * 1.35, to: scale }, duration: 140, ease: 'Back.easeOut' });
         // Свежий товар поблёскивает; из коробки сыплется пыль.
         if (n === fresh.length - 1) {
@@ -374,7 +379,8 @@ export function dropTrash(scene: StoreScene, x: number, y: number, kind: TrashKi
         x: piece.x + 7,
         y: piece.y,
         action: () => {
-          scrub = scene.tweens.add({ targets: scene.carried, x: 1, duration: 160, yoyo: true, repeat: -1 });
+          // Каждый мах шваброй — с телом: продавец чуть подаётся вслед (motion.squash).
+          scrub = scene.tweens.add({ targets: scene.carried, x: 1, duration: 160, yoyo: true, repeat: -1, onYoyo: () => motion.squash(scene, scene.seller, 1.03, 0.96, 70) });
           mopSound(scene, scene.seller, piece.x, mopMs);
         },
       },
@@ -388,6 +394,7 @@ export function dropTrash(scene: StoreScene, x: number, y: number, kind: TrashKi
           scene.carried.setVisible(false).setTexture('box').setPosition(0, 3);
           if (kind === 'spill') wetSign(scene, piece.x, piece.y);
           effects.cleanSparkle(scene, piece.x, piece.y, 16);
+          motion.beat(scene, scene.seller, 0.6);
           removeTrash(scene, piece);
         },
       },

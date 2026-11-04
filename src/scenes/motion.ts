@@ -480,6 +480,51 @@ export function squash(scene: StoreScene, obj: Phaser.GameObjects.Image | Phaser
 }
 
 /**
+ * «У действия есть тело» (приём pixelfx): замах — касание с короткой паузой — отдача. Человек чуть
+ * приседает перед действием, на касании рывком вытягивается и на миг замирает, потом пружинит назад.
+ * Только масштаб контейнера (позу и шаги ведёт animatePeople), без тряски камеры. Начать за ~70 мс до
+ * касания; пока прежний не доиграл — новый не накладывается. hit — сила (1 — пик на кассе).
+ */
+export function beat(scene: StoreScene, person: Phaser.GameObjects.Container | undefined, hit = 1): void {
+  if (scene.lite || !person?.active || person.getData('growing')) return;
+  // Не флаг, а срок: если твин убьют посреди (перестройка зала), человек не застрянет «в ударе».
+  if (((person.getData('beatUntil') as number | undefined) ?? 0) > scene.time.now) return;
+  const s = (person.getData('baseScale') as number | undefined) ?? 1;
+  person.setData('beatUntil', scene.time.now + 320);
+  const up = { scaleX: s * (1 - 0.03 * hit), scaleY: s * (1 + 0.07 * hit) };
+  scene.tweens.chain({
+    targets: person,
+    tweens: [
+      { scaleX: s * (1 + 0.04 * hit), scaleY: s * (1 - 0.07 * hit), duration: 70, ease: 'Quad.easeOut' },
+      { ...up, duration: 45, ease: 'Expo.easeOut' },
+      { ...up, duration: 45 },
+      { scaleX: s, scaleY: s, duration: 140, ease: 'Back.easeOut' },
+    ],
+    onComplete: () => person.active && person.setScale(s),
+  });
+}
+
+/**
+ * Белый кадр в миг касания (pixelfx: «1–2 белых кадра — и удар не вялый»): картинка на 40–60 мс
+ * заливается белым. Уже окрашенные (tint — порча, уценка) не трогаем: у них свой смысл.
+ */
+export function flashWhite(scene: StoreScene, img: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite, ms = 50): void {
+  if (scene.lite || !img.active || img.isTinted) return;
+  img.setTintFill(0xffffff);
+  scene.time.delayedCall(ms, () => img.active && img.clearTint());
+}
+
+/**
+ * Пауза в миг касания (hit-stop): только этот твин замирает на ms и идёт дальше. Ход игры (таймеры дел,
+ * очередь) не ждёт — меняется только картинка. Твин убили за это время — ничего не делаем.
+ */
+export function hold(scene: StoreScene, tween: Phaser.Tweens.Tween | Phaser.Tweens.TweenChain, ms = 50): void {
+  if (scene.lite || !tween.isPlaying()) return;
+  tween.pause();
+  scene.time.delayedCall(ms, () => !tween.isDestroyed() && tween.resume());
+}
+
+/**
  * Полка подпрыгивает целиком — с товаром и кромкой: после выкладки и от касания. Штуки, которые
  * сейчас съезжают на новое место (slideItem), не подпрыгивают: высоту у них ведёт съезд.
  */
