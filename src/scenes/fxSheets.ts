@@ -24,6 +24,12 @@ export const FX_SHEETS = {
   coinpop: {"key":"coinpop","source":"pickups/collect-burst","frames":21,"fps":15,"loop":false,"w":35,"h":39,"ox":0.4571,"oy":0.9744,"down":2,"blend":"normal"},
   confetti: {"key":"confetti","source":"ui/confetti","frames":29,"fps":12,"loop":false,"w":148,"h":82,"ox":0.5,"oy":0.9878,"down":1,"blend":"normal"},
   firework: {"key":"firework","source":"explosions/firework-burst","frames":40,"fps":12,"loop":false,"w":91,"h":96,"ox":0.5165,"oy":0.3021,"down":2,"blend":"add"},
+  levelup: {"key":"levelup","source":"ui/level-up","frames":13,"fps":10,"loop":false,"w":154,"h":114,"ox":0.5,"oy":0.8596,"down":1,"blend":"normal"},
+  chest: {"key":"chest","source":"pickups/chest-open","frames":24,"fps":8,"loop":false,"w":153,"h":55,"ox":0.5163,"oy":0.9636,"down":1,"blend":"normal"},
+  star: {"key":"star","source":"pickups/power-star","frames":10,"fps":10,"loop":false,"w":63,"h":63,"ox":0.5079,"oy":0.8889,"down":1,"blend":"normal"},
+  sunburst: {"key":"sunburst","source":"holy/sunburst","frames":10,"fps":10,"loop":false,"w":44,"h":45,"ox":0.5455,"oy":0.4889,"down":2,"blend":"normal"},
+  beam: {"key":"beam","source":"pickups/loot-beam","frames":10,"fps":8,"loop":false,"w":54,"h":154,"ox":0.5,"oy":0.961,"down":1,"blend":"add"},
+  coindrop: {"key":"coindrop","source":"spawn/coin-drop","frames":31,"fps":10,"loop":false,"w":104,"h":61,"ox":0.5962,"oy":0.9016,"down":1,"blend":"normal"},
 } as const satisfies Record<string, FxSheet>;
 
 export type FxKey = keyof typeof FX_SHEETS;

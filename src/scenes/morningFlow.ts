@@ -59,6 +59,8 @@ import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
 import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
+import * as pixelFx from './pixelFx';
+import { isPremium } from '../game/decor';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
@@ -139,6 +141,8 @@ export function collectMail(scene: StoreScene): void {
   if (claimed) {
     scene.state = shelveAll(claimed.state);
     building.refreshWarehouse(scene);
+    // Гостинец открывают в окне «Почта», а сундук с монетами откроется в зале, когда магазин откроется.
+    scene.openFx.push('chest');
   }
   if (letter || stale || claimed) {
     saveGame(scene.state);
@@ -236,6 +240,9 @@ export function showMorning(scene: StoreScene): void {
       const catChanged = Boolean(s.cat) !== Boolean(was.cat) || s.cat?.bed !== was.cat?.bed || catHome(s) !== catHome(was) || hasDog(s) !== hasDog(was) || sunflowersPlanted(s) !== sunflowersPlanted(was);
       // Купили оборудование или украшение — при открытии его распакуют. Перестановка — не покупка.
       const bought = (decorChanged || upgradesChanged) && !placesChanged && s.level === scene.builtLevel;
+      // Купили за звёзды (вещь или питомца) — при открытии над хозяином встанет луч (pixelFx.openMoments).
+      const starBuy = s.decor.owned.some((id) => !was.decor.owned.includes(id) && isPremium(id)) || (s.pets?.owned.length ?? 0) > (was.pets?.owned.length ?? 0);
+      if (starBuy && !scene.openFx.includes('beam')) scene.openFx.push('beam');
       // Наняли — новенький при открытии войдёт в дверь.
       if (staffChanged) for (const m of s.staff) if (!was.staff.some((o) => staffKey(o) === staffKey(m))) scene.newHires.add(staffKey(m));
       scene.state = s;
@@ -298,6 +305,7 @@ export function startDay(scene: StoreScene): void {
   // Купленное с утра ждёт в коробках: камера подлетит к магазину — и его распакуют.
   scene.packFresh();
   camera.flyIn(scene);
+  pixelFx.openMoments(scene);
   lighting.lightsOn(scene);
   nightShift.flipDoorSign(scene, true);
   visitors.morningCrew(scene);

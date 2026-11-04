@@ -6,34 +6,10 @@ import { FONT_SAMPLE } from '../i18n/langs';
 import { assetUrl, png } from '../platform/assets';
 import { useSheet } from '../ui/sheet';
 import { TEXTURES } from './worldTextures';
+import { SheetFrame, spreadSheet } from './sheetFrames';
 
-/**
- * Текстура-кадр общего листа атласа под старым именем ('shelf', 'p_legs1_s'…). Своей картинки
- * у неё нет: источник — лист, поэтому и в видеокарте это одна текстура на всех, и соседние спрайты
- * рисуются одной пачкой, а this.art(), setTexture() и texture.key работают как с отдельной картинкой.
- */
-class SheetFrame extends Phaser.Textures.Texture {
-  constructor(manager: Phaser.Textures.TextureManager, key: string, sheet: Phaser.Textures.Texture, frame: Phaser.Textures.Frame) {
-    super(manager, key, []);
-    this.source.push(sheet.source[0]);
-    this.add('__BASE', 0, frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight);
-  }
-
-  /** Лист общий: убрать одну текстуру — не повод освобождать его в видеокарте. */
-  destroy(): void {
-    this.source = [];
-    super.destroy();
-  }
-}
-
-/** Разложить лист атласа обратно по именам: каждая картинка мира — текстура со своим ключом. */
-function spreadSheet(textures: Phaser.Textures.TextureManager, name: string): void {
-  const sheet = textures.get(name);
-  const list = textures.list as Record<string, Phaser.Textures.Texture>;
-  for (const key of sheet.getFrameNames()) {
-    if (!textures.exists(key)) list[key] = new SheetFrame(textures, key, sheet, sheet.get(key));
-  }
-}
+/** Листы эффектов грузить вместе с миром, а не после (адрес ?fx=eager — для e2e). */
+const FX_EAGER = new URLSearchParams(location.search).get('fx') === 'eager';
 
 /**
  * Меню (DOM) берут картинки мира и значки ico_* из тех же листов (ui/sheet.ts): кадр листа атласа
@@ -114,7 +90,9 @@ export class BootScene extends Phaser.Scene {
     if (txt) txt.textContent = t('boot.loading');
     // Картинки мира — листами атласа (собирает сборка, scripts/atlas.ts), а не восемью сотнями файлов.
     // Адреса — с отпечатком содержимого (platform/assets.ts): перерисованная картинка не застрянет в кэше.
-    for (const page of atlas.pages) this.load.atlas(page.name, png(page.name), assetUrl(`assets/${page.name}.json`));
+    // Листы эффектов (lazy) — потом, из магазина (pixelFx.loadSheets): на заставке они не нужны.
+    // ?fx=eager — сразу (scripts/e2e.ts): погода первого дня строится с эффектами, кадры не зависят от сети.
+    for (const page of atlas.pages) if (!page.lazy || FX_EAGER) this.load.atlas(page.name, png(page.name), assetUrl(`assets/${page.name}.json`));
     for (const key of atlas.loose) this.load.image(key, png(key));
     // Значки меню (ico_*) одним атласом — для всплывающих надписей в зале (art/icons.py → atlas).
     this.load.atlas('ico', png('ico_atlas'), assetUrl('assets/ico_atlas.json'));
@@ -140,9 +118,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    for (const page of atlas.pages) spreadSheet(this.textures, page.name);
-    // Лист не догрузился (оборвалась связь) — недостающие картинки по одной, как до атласа.
-    const missing = TEXTURES.filter((key) => !this.textures.exists(key));
+    for (const page of atlas.pages) if ((!page.lazy || FX_EAGER) && this.textures.exists(page.name)) spreadSheet(this.textures, page.name);
+    // Лист не догрузился (оборвалась связь) — недостающие картинки по одной, как до атласа. Кадры эффектов
+    // (fx_*) — не здесь: их лист докачивает магазин, а без него эффекты просто прежние (pixelFx.calm).
+    const missing = TEXTURES.filter((key) => !key.startsWith('fx_') && !this.textures.exists(key));
     if (!missing.length) return this.ready();
     for (const key of missing) this.load.image(key, png(key));
     this.load.once('complete', () => this.ready());

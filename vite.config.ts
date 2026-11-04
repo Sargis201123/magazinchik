@@ -121,7 +121,8 @@ const preloadHints = (): Plugin => ({
         if (link.test(html)) html = html.replace(link, () => `<style>${css}</style>`);
       }
       const fonts = Object.keys(ctx.bundle ?? {}).filter((file) => /\/nunito-(latin|cyrillic)-wght-normal-[\w-]+\.woff2$/.test(file));
-      const sheets = [...atlas().pages.map((p) => p.name), 'ico_atlas'].flatMap((name) => [`assets/${name}.json`, `assets/${name}.png`]);
+      // Листы эффектов (lazy) — не заранее: игра докачивает их уже из магазина.
+      const sheets = [...atlas().pages.filter((p) => !p.lazy).map((p) => p.name), 'ico_atlas'].flatMap((name) => [`assets/${name}.json`, `assets/${name}.png`]);
       const tags = [
         // Картинки листов — пониже кода: код нужен раньше (пока он запускается, лист докачивается).
         ...sheets.map((path) => ({
@@ -149,7 +150,7 @@ const atlasPlugin = (build: boolean): Plugin => ({
   load: (id) => {
     if (id !== `\0${ATLAS_ID}`) return null;
     const { pages, loose } = atlas();
-    return `export default ${JSON.stringify({ pages: pages.map((p) => ({ name: p.name, bytes: p.png.length })), loose })};`;
+    return `export default ${JSON.stringify({ pages: pages.map((p) => ({ name: p.name, bytes: p.png.length, lazy: !!p.lazy })), loose })};`;
   },
   generateBundle() {
     if (!build) return;
@@ -166,7 +167,7 @@ const atlasPlugin = (build: boolean): Plugin => ({
       if (mod) server.moduleGraph.invalidateModule(mod);
     });
     server.middlewares.use((req, res, next) => {
-      const m = /^\/assets\/(atlas\d+)\.(png|json)(?:\?|$)/.exec(req.url ?? '');
+      const m = /^\/assets\/((?:atlas|fx)\d+)\.(png|json)(?:\?|$)/.exec(req.url ?? '');
       const page = m && atlas().pages.find((p) => p.name === m[1]);
       if (!m || !page) return next();
       res.setHeader('Content-Type', m[2] === 'png' ? 'image/png' : 'application/json');

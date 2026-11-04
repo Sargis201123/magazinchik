@@ -259,7 +259,10 @@ export function regularVerdict(scene: StoreScene, c: Customer): void {
     const tip = Math.round(tipFor(regularState(scene.state, r.id).loyalty, total) * hoodTips(scene.state));
     if (tip > 0) {
       scene.state = { ...scene.state, money: scene.state.money + tip };
-      scene.time.delayedCall(900, () => scene.popup(c.sprite.x, y - 8, t('regular.tip', { n: tip }), '#fee761'));
+      scene.time.delayedCall(900, () => {
+        scene.popup(c.sprite.x, y - 8, t('regular.tip', { n: tip }), '#fee761');
+        effects.tipCoins(scene, c.sprite);
+      });
     }
   } else {
     effects.emote(scene, c.sprite, 'emo_angry');
@@ -679,6 +682,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     const tip = FRIEND_TIP * (c.friend.level + 1);
     scene.state = { ...scene.state, money: scene.state.money + tip };
     scene.popup(c.sprite.x, c.sprite.y - 28, t('visit.tip', { name: c.friend.name, n: tip }), '#fee761');
+    effects.tipCoins(scene, c.sprite);
   }
 
   if (c.items.length === 0) {
@@ -1057,7 +1061,10 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
     scene.state = { ...scene.state, money: scene.state.money + CAT_TIP };
     scene.stats.revenue += CAT_TIP;
     note(scene.stats, 'cat');
-    scene.time.delayedCall(500, () => scene.popup(c.sprite.x, c.sprite.y - 30, t('popup.catTip', { n: CAT_TIP }), '#fff3b0'));
+    scene.time.delayedCall(500, () => {
+      scene.popup(c.sprite.x, c.sprite.y - 30, t('popup.catTip', { n: CAT_TIP }), '#fff3b0');
+      effects.tipCoins(scene, c.sprite);
+    });
   }
   if (scene.night) {
     scene.stats.nightRevenue = (scene.stats.nightRevenue ?? 0) + total;
