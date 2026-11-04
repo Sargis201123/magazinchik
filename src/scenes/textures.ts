@@ -500,10 +500,11 @@ export const SPRITES = [
 
 /**
  * Семейства картинок, чьи имена складывает игровой код: товары (item_<товар>, item_<товар>_0…2, ящики
- * crate_<товар>) и гардероб (w_<вид>_<вещь>, wardrobe.ts). Сборка берёт их по началу имени файла в
+ * crate_<товар>), гардероб (w_<вид>_<вещь>, wardrobe.ts) и кадры пиксельных эффектов (fx_<эффект>_<номер>,
+ * fxSheets.ts — scripts/fx-bake.mjs). Сборка берёт их по началу имени файла в
  * public/assets, игра — из своих списков (worldTextures.ts); что списки совпадают, следит tests/textures.test.ts.
  */
-export const FAMILIES: readonly RegExp[] = [/^item_/, /^crate_/, /^w_/];
+export const FAMILIES: readonly RegExp[] = [/^item_/, /^crate_/, /^w_/, /^fx_/];
 
 /** Что класть в атлас, по именам файлов public/assets (без .png): спрайты из списка и найденные семейства. */
 export const atlasKeysFrom = (names: readonly string[]): string[] => [

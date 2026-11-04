@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import '@fontsource-variable/nunito';
 import { BootScene } from './scenes/BootScene';
 import { StoreScene } from './scenes/StoreScene';
+import * as effects from './scenes/effects';
 
 import { initTelegram } from './platform/telegram';
 import { installErrorReporting } from './platform/errors';
@@ -71,5 +72,6 @@ function start(): void {
   if (IS_YANDEX) setFreeze((on) => (on ? game.loop.sleep() : game.loop.wake()), holdSound);
   // Отладка: ?debug открывает доступ к игре из консоли браузера.
   // lazyIdle — дождаться частей игры, что подкачиваются отдельно (platform/lazy.ts; ждёт scripts/e2e.ts).
-  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { game, lazyIdle });
+  // effects — праздники и монетки по команде (съёмка scripts/promo/pixelfx-pilot.cjs).
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { game, lazyIdle, effects });
 }

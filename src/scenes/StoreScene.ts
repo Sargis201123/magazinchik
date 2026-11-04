@@ -118,6 +118,7 @@ import {
 } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
+import * as pixelFx from './pixelFx';
 import * as pets from './pets';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
@@ -254,7 +255,7 @@ export class StoreScene extends Phaser.Scene {
   weather: Weather = 'clear';
   weatherObjs: Phaser.GameObjects.GameObject[] = [];
   /** Дождь дня: капли, брызги, круги и лужи — разгоняется утром и в иные дни к вечеру кончается. */
-  rainFx?: { rain: Phaser.GameObjects.Particles.ParticleEmitter; splash: Phaser.GameObjects.Particles.ParticleEmitter; base: number; puddles: Phaser.GameObjects.Image[]; ripple?: Phaser.GameObjects.Particles.ParticleEmitter; sheen?: Phaser.GameObjects.Rectangle };
+  rainFx?: { rain: Phaser.GameObjects.Particles.ParticleEmitter; splash: Phaser.GameObjects.Particles.ParticleEmitter; base: number; puddles: (Phaser.GameObjects.Image | Phaser.GameObjects.Sprite)[]; ripple?: Phaser.GameObjects.Particles.ParticleEmitter; sheen?: Phaser.GameObjects.Rectangle };
   /** Дождь сегодня уже кончился: зонты закрыты, лужи сохнут. */
   rainStopped = false;
   /** Доля прошедшего дня (0 — утро, 1 — конец смены): солнце, туман, тени. */
@@ -551,6 +552,9 @@ export class StoreScene extends Phaser.Scene {
   wholesaleBaked = 0;
   /** Идёт ночная смена; уже спрашивали про неё сегодня. */
   night = false;
+  /** Залпы салюта в небе (pixelFx.updateFireworks) и когда следующий. */
+  fireworks: Phaser.GameObjects.Sprite[] = [];
+  fireworkAt = 0;
   nightAsked = false;
   /** Кот у входа: картинка, где его лежанка и гуляет ли он сейчас по залу. */
   catImg?: Phaser.GameObjects.Image;
@@ -931,6 +935,7 @@ export class StoreScene extends Phaser.Scene {
     if (this.state.onboarding && this.state.day === 1) newcomer.onboardingTick(this);
     newcomer.tutorialTick(this, deltaMs);
     this.updateLighting(this.night ? 1 : undefined);
+    pixelFx.updateFireworks(this);
     motion.updateDoor(this);
     motion.pulseHighlights(this);
     motion.animatePeople(this);

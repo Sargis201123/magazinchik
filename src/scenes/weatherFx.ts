@@ -13,6 +13,7 @@ import { ART, STREET_VIEW, WALL, FACADE_H, LIGHT_DEPTH, CAR_COLORS, type CrownPa
 import * as pets from './pets';
 import * as lighting from './lighting';
 import * as decorations from './decorations';
+import * as pixelFx from './pixelFx';
 
 /** Порыв ветра: как быстро волна идёт по кварталу (px/с), сколько длится наклон дерева и на сколько градусов. */
 const GUST_SPEED = 140;
@@ -162,7 +163,31 @@ export function weatherExtras(scene: StoreScene, keep: <T extends Phaser.GameObj
     }
   }
   const pond = scene.parkPond;
-  if (pond && yearTime(scene.state.day) === 'summer' && !isWet(scene.weather)) {
+  const summerNight = yearTime(scene.state.day) === 'summer' && !isWet(scene.weather);
+  if (summerNight && !pixelFx.calm(scene)) {
+    // Светлячки pixelfx: у пруда и над газоном парка за дорогой — пиксельные, с крылышками и фонариком;
+    // загораются к вечеру (nightGlow), каждый мигает в свой черёд и не спеша блуждает.
+    const park = scene.lawns[1];
+    const spots = [...(pond ? Array.from({ length: 10 }, () => ({ x: pond.x + rnd.between(-90, 90), y: pond.y + rnd.between(-50, 40) })) : [])];
+    if (park) for (let i = 0; i < 14; i++) spots.push({ x: park.x + rnd.frac() * park.w, y: park.y + 20 + rnd.frac() * (park.h - 40) });
+    for (const at of spots) {
+      const fly = keep(pixelFx.play(scene, 'firefly', at.x, at.y, { depth: LIGHT_DEPTH + 1, random: true }));
+      lighting.nightGlow(scene, fly, 1);
+      const dx = rnd.between(-18, 18);
+      fly.setFlipX(dx < 0);
+      scene.tweens.add({
+        targets: fly,
+        x: fly.x + dx,
+        y: fly.y + rnd.between(-10, 10),
+        duration: rnd.between(2600, 4600),
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        onYoyo: () => fly.setFlipX(!fly.flipX),
+        onRepeat: () => fly.setFlipX(!fly.flipX),
+      });
+    }
+  } else if (pond && summerNight) {
     for (let i = 0; i < 12; i++) {
       const fly = keep(scene.art(pond.x + rnd.between(-90, 90), pond.y + rnd.between(-50, 40), 'glow')).setScale(11 / 64).setTint(0xd8ff7a);
       lighting.nightGlow(scene, fly, 0.9, undefined, { twinkle: i * 2.3 });
@@ -216,8 +241,10 @@ export function wetStreet(scene: StoreScene, keep: <T extends Phaser.GameObjects
     puddles.push({ x, y });
     const puddle = keep(scene.art(x, y, 'puddle_wet').setDepth(-8.8));
     scene.rainFx?.puddles.push(puddle);
+    // Рябь pixelfx (pixelFx.ts): кольца расходятся по самой луже, у каждой — своя фаза.
+    if (!pixelFx.calm(scene)) scene.rainFx?.puddles.push(keep(pixelFx.play(scene, 'ripple', x, y, { depth: -8.7, random: true })));
   }
-  if (!puddles.length) return;
+  if (!puddles.length || !pixelFx.calm(scene)) return;
   const source = {
     getRandomPoint: (point: Phaser.Types.Math.Vector2Like) => {
       const at = Phaser.Utils.Array.GetRandom(puddles);
