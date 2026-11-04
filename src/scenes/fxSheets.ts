@@ -29,6 +29,8 @@ export const FX_SHEETS = {
   star: {"key":"star","source":"pickups/power-star","frames":10,"fps":10,"loop":false,"w":63,"h":63,"ox":0.5079,"oy":0.8889,"down":1,"blend":"normal"},
   sunburst: {"key":"sunburst","source":"holy/sunburst","frames":10,"fps":10,"loop":false,"w":44,"h":45,"ox":0.5455,"oy":0.4889,"down":2,"blend":"normal"},
   beam: {"key":"beam","source":"pickups/loot-beam","frames":10,"fps":8,"loop":false,"w":54,"h":154,"ox":0.5,"oy":0.961,"down":1,"blend":"add"},
+  hearts: {"key":"hearts","source":"status/charmed","frames":16,"fps":10,"loop":false,"w":40,"h":51,"ox":0.5,"oy":1.1765,"down":1,"blend":"normal"},
+  starfall: {"key":"starfall","source":"arcane/star-fall","frames":26,"fps":10,"loop":false,"w":152,"h":136,"ox":0.5592,"oy":0.9412,"down":1,"blend":"add"},
   coindrop: {"key":"coindrop","source":"spawn/coin-drop","frames":31,"fps":10,"loop":false,"w":104,"h":61,"ox":0.5962,"oy":0.9016,"down":1,"blend":"normal"},
 } as const satisfies Record<string, FxSheet>;
 

@@ -92,6 +92,7 @@ import {
 } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
+import * as pixelFx from './pixelFx';
 import * as pets from './pets';
 import * as weatherFx from './weatherFx';
 import * as food from './food';
@@ -253,6 +254,8 @@ export function regularVerdict(scene: StoreScene, c: Customer): void {
   const y = c.sprite.y - 24;
   if (result === 'up') {
     effects.emote(scene, c.sprite, 'emo_heart');
+    // Облачко сердечек pixelfx вокруг него — привязался к магазину сильнее.
+    pixelFx.burst(scene, 'hearts', c.sprite.x, c.sprite.y, { fade: 1100, zoom: 1 });
     scene.popup(c.sprite.x, y, t('regular.up', { name }), '#c8ffb0');
     const total = c.items.reduce((sum, item) => sum + unitSalePrice(scene.state, item.id, item.unit), 0);
     // Благоустроенный район (hood.ts): постоянные щедрее.
