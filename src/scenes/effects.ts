@@ -14,6 +14,7 @@ import { ART, FACADE_H, type Popup, LIGHT_DEPTH, SHIRTS, type EmoteKey, randomLo
 import * as persons from './persons';
 import * as building from './building';
 import * as pixelFx from './pixelFx';
+import { look } from './look';
 
 /** Плашка всплывающей надписи (в точках мира): поля, скругление, хвостик, высота значка вместо эмодзи. */
 const POPUP = { padX: 3, padY: 1.5, radius: 3, tail: 3, icon: 9, gap: 0.5, font: '8.5px' };
@@ -57,8 +58,8 @@ export async function celebrateExpansion(scene: StoreScene): Promise<void> {
     loop: true,
     callback: () => {
       sound.tap();
-      const spot = Phaser.Utils.Array.GetRandom(spots);
-      if (spot) puff(scene, spot.x + Phaser.Math.Between(-14, 14), spot.y + Phaser.Math.Between(-10, 14));
+      const spot = look.pick(spots);
+      if (spot) puff(scene, spot.x + look.between(-14, 14), spot.y + look.between(-10, 14));
     },
   });
   // Паузы — переживающие перестройку: эта сцена сама перестраивает зал, а окно утра надо вернуть в любом случае.
@@ -106,7 +107,7 @@ export async function celebrateMove(scene: StoreScene, modal: HTMLElement | null
   scene.hud.update(scene.state, DAY_SECONDS);
   const { w, h, door } = scene.layout;
   const y = h + FACADE_H + 12;
-  const guests = [GRANDMA, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day), customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day)];
+  const guests = [GRANDMA, customerLook(look.pick(SHIRTS), scene.state.day), customerLook(look.pick(SHIRTS), scene.state.day)];
   const crowd = guests.map((look, i) => {
     const person = persons.makePerson(scene, door.x + [-20, 20, -38][i], y + [0, 2, 4][i], look);
     persons.setFacing(person, 'up');
@@ -155,7 +156,7 @@ export function flyCoins(scene: StoreScene, x: number, y: number, count: number)
   const target = scene.cameras.main.getWorldPoint(70 * scene.res, 52 * scene.res);
   const spin = !pixelFx.calm(scene);
   for (let i = 0; i < count; i++) {
-    const cx = x + Phaser.Math.Between(-4, 4);
+    const cx = x + look.between(-4, 4);
     const coin = spin ? pixelFx.play(scene, 'coin', cx, y - 10, { random: true }) : scene.art(cx, y - 10, 'coin').setDepth(LIGHT_DEPTH + 5);
     // Монетка выскакивает белой вспышкой и на миг зависает (замах) — потом летит к счётчику.
     if (!scene.lite) {
@@ -240,8 +241,8 @@ export function puff(scene: StoreScene, x: number, y: number): void {
 /** Пузыри: туалет отмыт. */
 export function bubbles(scene: StoreScene, x: number, y: number): void {
   for (let i = 0; i < 6; i++) {
-    const b = scene.art(x + Phaser.Math.Between(-7, 7), y + Phaser.Math.Between(-4, 8), 'bubble_s').setDepth(y + 40);
-    scene.tweens.add({ targets: b, y: b.y - Phaser.Math.Between(10, 18), alpha: 0, delay: i * 80, duration: 700, onComplete: () => b.destroy() });
+    const b = scene.art(x + look.between(-7, 7), y + look.between(-4, 8), 'bubble_s').setDepth(y + 40);
+    scene.tweens.add({ targets: b, y: b.y - look.between(10, 18), alpha: 0, delay: i * 80, duration: 700, onComplete: () => b.destroy() });
   }
 }
 
@@ -250,7 +251,7 @@ export function aromaWisp(scene: StoreScene): void {
   const door = scene.layout.bakery.doorway;
   const wisp = scene.add.container(door.x + 2, door.y - 6).setDepth(LIGHT_DEPTH - 2);
   for (let i = 0; i < 3; i++) wisp.add(scene.add.rectangle(i * 3, Math.sin(i * 2) * 1.5, 2, 1, 0xfeae34, 0.85));
-  scene.tweens.add({ targets: wisp, x: wisp.x + Phaser.Math.Between(30, 60), y: wisp.y - Phaser.Math.Between(10, 24), alpha: 0, duration: 2200, onComplete: () => wisp.destroy() });
+  scene.tweens.add({ targets: wisp, x: wisp.x + look.between(30, 60), y: wisp.y - look.between(10, 24), alpha: 0, duration: 2200, onComplete: () => wisp.destroy() });
   scene.tweens.add({ targets: wisp.list, y: '+=2', duration: 300, yoyo: true, repeat: 3, ease: 'Sine.easeInOut' });
 }
 
@@ -281,7 +282,8 @@ export function emoteBox(scene: StoreScene, key: EmoteKey, scale: number): Phase
   const icon = scene.art(1.2, -4, key).setScale(0.85 / ART);
   const box = scene.add.container(0, 0, [bubble, icon]).setScale(0).setAngle(-10);
   scene.tweens.add({ targets: box, scale, angle: 0, duration: 220, ease: 'Back.easeOut', easeParams: [2.5] });
-  scene.tweens.add({ targets: box, alpha: 0, delay: 1350, duration: 300, onComplete: () => box.destroy() });
+  // Облачко гаснет тремя ступенями, а не тает (на слабом телефоне — плавно).
+  scene.tweens.add({ targets: box, alpha: 0, delay: 1350, duration: 300, ...(scene.lite ? {} : { ease: 'Stepped', easeParams: [3] }), onComplete: () => box.destroy() });
   emoteMotion(scene, box, icon, key);
   return box;
 }
@@ -309,7 +311,7 @@ export function emoteMotion(scene: StoreScene, box: Phaser.GameObjects.Container
         repeat: 3,
         repeatDelay: 140,
         ease: 'Quad.easeOut',
-        onYoyo: () => fx && emoteBit(scene, box, 'emo_heart', x + Phaser.Math.FloatBetween(-3, 4), y - 2),
+        onYoyo: () => fx && emoteBit(scene, box, 'emo_heart', x + look.float(-3, 4), y - 2),
       });
       break;
     case 'emo_angry': {
@@ -389,7 +391,7 @@ export function emoteBit(scene: StoreScene, box: Phaser.GameObjects.Container, k
 export function cleanSparkle(scene: StoreScene, x: number, y: number, w: number): void {
   if (scene.lite) return;
   for (let i = 0; i < 4; i++) {
-    const spark = scene.art(x + Phaser.Math.Between(-w / 2, w / 2), y + Phaser.Math.Between(-4, 3), 'spark').setScale(0.2 / ART).setDepth(y + 4);
+    const spark = scene.art(x + look.between(-w / 2, w / 2), y + look.between(-4, 3), 'spark').setScale(0.2 / ART).setDepth(y + 4);
     scene.tweens.add({ targets: spark, scale: 0.8 / ART, angle: 90, alpha: 0, delay: i * 110, duration: 420, ease: 'Quad.easeOut', onComplete: () => spark.destroy() });
   }
   const glint = scene.add.rectangle(x - w / 2, y + 1, 3, 6, 0xffffff, 0.55).setAngle(25).setBlendMode(Phaser.BlendModes.ADD).setDepth(0.58);
@@ -419,7 +421,7 @@ export function starWave(scene: StoreScene): void {
   const { w, h } = scene.layout;
   for (let i = 0; i < 18; i++) {
     const x = 8 + (i / 17) * (w - 16);
-    const y = Phaser.Math.Between(20, h - 20);
+    const y = look.between(20, h - 20);
     const spark = scene.art(x, y, 'spark').setTint(0xfee761).setScale(0).setDepth(LIGHT_DEPTH + 12).setBlendMode(Phaser.BlendModes.ADD);
     scene.tweens.add({
       targets: spark,
@@ -637,10 +639,13 @@ export function popupRect(p: Popup): Phaser.Geom.Rectangle {
 /** Надпись повисит и уплывёт вверх, растворяясь. */
 export function fadePopup(scene: StoreScene, entry: Popup, hold: number): void {
   const { box } = entry;
+  // Плывёт вверх плавно, а гаснет ступенями — как в пиксельных играх (pixelfx: мягкость — не в цвете):
+  // четыре шага прозрачности вместо «мыльного» таяния. На слабом телефоне — плавно, как раньше.
+  if (!scene.lite) scene.tweens.add({ targets: box, alpha: 0, delay: hold, duration: 600, ease: 'Stepped', easeParams: [4] });
   scene.tweens.add({
     targets: box,
     y: box.y - 12,
-    alpha: 0,
+    ...(scene.lite ? { alpha: 0 } : {}),
     delay: hold,
     duration: 600,
     ease: 'Quad.easeIn',
