@@ -17,6 +17,8 @@ import * as motion from './motion';
 
 /** Снизу подсказки — магазин рисуем над ними (в базовых точках, × res; сверху — HUD_TOP в common.ts). */
 const HUD_BOTTOM = 80;
+/** Сколько первых дней ларёк снят ближе (флигель — только склад): см. frameCamera. */
+const KIOSK_CLOSE_DAYS = 3;
 /** Запас по бокам обычного кадра (в точках мира): наружная стена флигеля и правая стена не впритык к краю экрана. */
 const FRAME_PAD = 1;
 /** Верх вывески над стеной магазина: под верхнюю панель — без полосы пустого газона. */
@@ -44,7 +46,11 @@ export function frameCamera(scene: StoreScene): void {
   // Масштаб ровный (пиксель рисунка — целое число пикселей экрана), но не крупнее «впритык» и не намного
   // мельче; иначе дробный — весь магазин в кадре важнее ровных пикселей (scenes/pixels.ts).
   const span = buildingSpan(scene.layout);
-  const { zoom, x } = homeFrame(width, height - top - bottom, { left: span.left - FRAME_PAD, right: span.right + FRAME_PAD }, h + 40, ART);
+  // Первые дни в ларьке: от флигеля в кадре только склад с дверью в зал (запертые пекарня и кофейня ещё
+  // пусты) — камера на шаг ближе, ларёк на телефоне крупнее там, где новичок решает, остаться ли в игре.
+  const closeKiosk = scene.state.level === 0 && scene.state.day <= KIOSK_CLOSE_DAYS;
+  const left = closeKiosk ? Math.round(span.left / 2) : span.left - FRAME_PAD;
+  const { zoom, x } = homeFrame(width, height - top - bottom, { left, right: span.right + FRAME_PAD }, h + (closeKiosk ? 34 : 40), ART);
   const midY = top + (height - top - bottom) / 2;
   scene.baseZoom = zoom;
   // Если по высоте есть запас, вывеска прижимается под верхнюю панель — снизу видно больше улицы.
@@ -311,6 +317,8 @@ export function flyIn(scene: StoreScene): void {
   const cam = scene.cameras.main;
   if (scene.input.pointer1.isDown || scene.input.pointer2.isDown) return;
   scene.homeTimer?.remove();
+  // Кадр зависит от дня (ближний ларёк первых дней) — пересчитать к началу каждого дня.
+  frameCamera(scene);
   const wide = scene.baseZoom * 0.55;
   const x = Phaser.Math.Clamp(scene.home.x + 70, -CAMERA_REACH, scene.next.w + CAMERA_REACH);
   const y = Phaser.Math.Clamp(scene.home.y + 30, -CAMERA_REACH / 2, scene.next.h + CAMERA_REACH / 2);
