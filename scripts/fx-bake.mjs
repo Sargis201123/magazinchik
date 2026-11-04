@@ -63,6 +63,8 @@ const RAMP = {
   // Салют печётся светлым: цвет каждому залпу даёт игра (tint) — один набор кадров на все цвета.
   white: ['#3a4466', '#5a6988', '#8b9bb4', '#c0cbdc', '#ffffff', '#ffffff', '#ffffff'],
   confetti: ['#e43b44', '#f77622', '#fee761', '#63c74d', '#0099db', '#b55088', '#2ce8f5'],
+  wood: ['#181425', '#262b44', '#3b2a35', '#733e39', '#8f563b', '#b86f50', '#c28569'],
+  purple: ['#181425', '#262b44', '#68386c', '#b55088', '#f6757a', '#c0cbdc', '#ffffff'],
 };
 
 // ---------- что печём ----------
@@ -83,6 +85,20 @@ const EFFECTS = [
   // Конфетти без хлопушек (mask — конусы у пола): в зале они стояли бы посреди плитки.
   { key: 'confetti', id: 'ui/confetti', fps: 12, down: 1, to: 2.4, opts: { palette: RAMP.confetti }, light: 0.3, mask: [[-74, -1, -0.95], [74, -1, -2.19]] },
   { key: 'firework', id: 'explosions/firework-burst', fps: 12, down: 2, from: 0.3, opts: { palette: RAMP.white, core: RAMP.white }, light: 1, blend: 'add' },
+  // Моменты награды. Надписи pixelfx («LEVEL UP!») — по-английски и не нашим шрифтом: текст пустой, остаются свет и искры.
+  // Магазин вырос: столб золотого света с кольцами — только начало (дальше pixelfx обводит контур героя-бойца).
+  { key: 'levelup', id: 'ui/level-up', fps: 10, down: 1, to: 1.3, opts: { palette: RAMP.gold, text: ' ' }, light: 0.25, alphaMin: 0.35, only: RAMP.gold },
+  // Бабушкин гостинец: сундук открывается, монеты рассыпаются.
+  { key: 'chest', id: 'pickups/chest-open', fps: 8, down: 1, to: 3.0, opts: { palette: RAMP.gold, wood: RAMP.wood }, light: 0.3, alphaMin: 0.3 },
+  // Цель дня выполнена: звезда с лучами (кусок петли — игра гасит её к концу).
+  { key: 'star', id: 'pickups/power-star', fps: 10, down: 1, to: 1.0, opts: { palette: RAMP.gold }, light: 0.3, alphaMin: 0.3, only: RAMP.gold },
+  // Достижение: солнце-медаль с лучами, вдвое мельче сетки pixelfx.
+  { key: 'sunburst', id: 'holy/sunburst', fps: 10, down: 2, to: 1.0, opts: { palette: RAMP.gold, rays: 8 }, light: 0.4, alphaMin: 0.3, only: RAMP.gold },
+  // Покупка за звёзды: фиолетовый луч добычи над новой вещью (кусок петли — игра гасит его к концу).
+  { key: 'beam', id: 'pickups/loot-beam', fps: 8, down: 1, to: 1.25, opts: { palette: RAMP.purple }, light: 0.3, alphaMin: 0.35, only: RAMP.purple, blend: 'add' },
+  // Чаевые: монетки высыпаются, подскакивают и гаснут. Дымок «пуф» pixelfx (враг исчез) — прочь: красим
+  // его меткой drop и стираем.
+  { key: 'coindrop', id: 'spawn/coin-drop', fps: 10, down: 1, opts: { palette: RAMP.gold, smoke: ['#ff00ff', '#ff00ff', '#ff00ff', '#ff00ff'], coins: 5 }, light: 0.3, alphaMin: 0.3, only: RAMP.gold, drop: true },
 ];
 
 /**
@@ -276,6 +292,8 @@ async function bake(e, lib, core, PAL, encodePNG) {
         }
       }
     }
+    // Метка drop (#ff00ff, см. coindrop): эту часть эффекта не берём.
+    if (e.drop) for (let i = 0; i < out.length; i += 4) if (out[i] > 150 && out[i + 2] > 150 && out[i + 1] < 110) out[i + 3] = 0;
     return out;
   });
   const pal = e.only ? e.only.map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]) : PAL;

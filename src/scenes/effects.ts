@@ -85,6 +85,8 @@ export async function celebrateExpansion(scene: StoreScene): Promise<void> {
   if (!music.sting('expand')) sound.fanfare();
   haptic.success();
   scene.popup(scene.layout.w / 2, scene.layout.h / 2 - 20, t('popup.expanded', { name: t(storeLevel(scene.state).nameKey) }), '#fee761');
+  // Столб золотого света с кольцами посреди нового зала (pixelfx ui/level-up — без надписи).
+  pixelFx.burst(scene, 'levelup', scene.layout.w / 2, scene.layout.h / 2 + 30, { fade: 1000 });
   await scene.delay(1600);
   confetti.destroy();
   if (modal) modal.style.visibility = '';
@@ -127,6 +129,7 @@ export async function celebrateMove(scene: StoreScene, modal: HTMLElement | null
   // Пиксельное конфетти у входа, где собрались гости (pixelfx), — прежнее над вывеской остаётся.
   burst(w / 2, -6, 60);
   if (!pixelConfetti(scene, door.x, h + FACADE_H + 10)) burst(door.x, h, 40);
+  pixelFx.burst(scene, 'levelup', w / 2, h / 2 + 30, { fade: 1000 });
   if (!music.sting('expand')) sound.fanfare();
   haptic.success();
   scene.popup(w / 2, h / 2 - 20, t('popup.expanded', { name: t(storeLevel(scene.state).nameKey) }), '#fee761');
@@ -171,6 +174,14 @@ export function flyCoins(scene: StoreScene, x: number, y: number, count: number)
       },
     });
   }
+}
+
+/**
+ * Чаевые: монетки pixelfx (spawn/coin-drop) высыпаются к ногам того, кто их оставил, подскакивают и гаснут.
+ * Человек ушёл (спрайт уже убран) — не показываем.
+ */
+export function tipCoins(scene: StoreScene, who: { x: number; y: number; active: boolean }): void {
+  if (who.active) pixelFx.burst(scene, 'coindrop', who.x, who.y + 2);
 }
 
 /** Конфетти pixelfx (ui/confetti): бумажки и серпантин вылетают, зависают, кувыркаются и опадают; к концу тают. */

@@ -4,6 +4,9 @@
 // отрисовки). В лёгкой графике и при «меньше движения» в системе — не играют (calm): там прежние эффекты.
 
 import Phaser from 'phaser';
+import atlas from 'virtual:atlas';
+import { assetUrl, png } from '../platform/assets';
+import { spreadSheet } from './sheetFrames';
 import type { StoreScene } from './StoreScene';
 import { ART, LIGHT_DEPTH } from './common';
 import { FX_SHEETS, fxFrames, type FxKey } from './fxSheets';
@@ -22,7 +25,33 @@ const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMe
 
 /** Пиксельные эффекты не играют: лёгкая графика, меньше движения или кадров нет (лист не догрузился). */
 export function calm(scene: StoreScene): boolean {
-  return scene.lite || reducedMotion() || !scene.textures.exists(`fx_ripple_0`);
+  if (scene.lite || reducedMotion()) return true;
+  // Лист эффектов ещё не просили (графику переключили с лёгкой на полную) — попросить.
+  if (!sheets) void loadSheets(scene);
+  return !scene.textures.exists(`fx_ripple_0`);
+}
+
+let sheets: Promise<void> | null = null;
+
+/**
+ * Докачать листы эффектов (fx0…, scripts/atlas.ts — lazy): на заставке они не нужны, первая загрузка
+ * без них легче. Пока лист в пути (или не дошёл), calm() — и всё играет по-старому. Один раз на игру;
+ * ответ — обещание (e2e ждёт его, чтобы кадры не зависели от скорости сети).
+ */
+export function loadSheets(scene: Phaser.Scene): Promise<void> {
+  if (sheets) return sheets;
+  const lazy = atlas.pages.filter((p) => p.lazy && !scene.textures.exists(p.name));
+  sheets = new Promise<void>((done) => {
+    if (!lazy.length) return done();
+    for (const page of lazy) scene.load.atlas(page.name, png(page.name), assetUrl(`assets/${page.name}.json`));
+    scene.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      for (const page of lazy) if (scene.textures.exists(page.name)) spreadSheet(scene.textures, page.name);
+      done();
+    });
+    scene.load.start();
+  });
+  (window as unknown as { fxSheets?: Promise<void> }).fxSheets = sheets;
+  return sheets;
 }
 
 /** Анимации эффектов — один раз на игру (общий менеджер анимаций). */
@@ -92,4 +121,36 @@ export function updateFireworks(scene: StoreScene): void {
   const y = look.between(top + 70, top + 260);
   const burst = play(scene, 'firework', x, y, { depth: LIGHT_DEPTH + 3, tint: look.pick(FIREWORK_TINTS) });
   scene.fireworks.push(burst);
+}
+
+/**
+ * Разовый эффект награды в точке мира (поверх зала, без тряски камеры), вдвое крупнее сетки рисунка. fade — через сколько мс начать
+ * гасить: у кусков петли (звезда, луч) нет своего конца. Ответ — сыграл ли (в лёгкой графике — нет).
+ */
+export function burst(scene: StoreScene, key: FxKey, x: number, y: number, o: PlayOpts & { fade?: number } = {}): boolean {
+  if (calm(scene)) return false;
+  // Вдвое крупнее сетки рисунка, как конфетти: в сетку 1:1 награда на телефоне — пара точек (монетки пилота).
+  const sprite = play(scene, key, x, y, { depth: LIGHT_DEPTH + 8, zoom: 2, ...o });
+  if (o.fade !== undefined) scene.tweens.add({ targets: sprite, alpha: 0, delay: o.fade, duration: 300 });
+  return true;
+}
+
+/** Что показать, когда магазин откроется: утро решает (гостинец, покупка за звёзды), а видно — уже в зале. */
+export type OpenFx = 'chest' | 'beam';
+
+/**
+ * Утренние награды — в зале, когда камера подлетела (startDay → flyIn, 1,6 с): сундук бабушкиного
+ * гостинца у входа (монеты рассыпаются по полу) и фиолетовый луч над хозяином за кассой — вещь за звёзды.
+ */
+export function openMoments(scene: StoreScene): void {
+  const list = scene.openFx;
+  scene.openFx = [];
+  const { w, h, sellerHome } = scene.layout;
+  list.forEach((fx, i) =>
+    scene.time.delayedCall(1800 + i * 1400, () => {
+      if (!scene.running) return;
+      if (fx === 'chest') burst(scene, 'chest', w / 2, h - 30);
+      else burst(scene, 'beam', sellerHome.x, sellerHome.y + 2, { fade: 900 });
+    }),
+  );
 }
