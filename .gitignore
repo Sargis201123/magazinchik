@@ -12,3 +12,8 @@ e2e/shots
 e2e/diff
 dist-yandex
 dist-yandex.zip
+
+# ролики сравнения pixelfx (переснимаются scripts/promo/pixelfx-pilot.cjs)
+promo/pixelfx-pilot/*.mp4
+promo/pixelfx-pilot/*.gif
+promo/pixelfx-pilot/*_contact.jpg
