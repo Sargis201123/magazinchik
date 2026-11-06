@@ -17,6 +17,12 @@ import { FX_SHEETS, fxFrames, type FxKey } from './fxSheets';
  */
 const look = new Phaser.Math.RandomDataGenerator(['pixelfx']);
 
+/**
+ * Чему можно сыграть эффект: любой сцене с лёгкой графикой и скоростью дня — магазину и ферме
+ * (src/farm/FarmScene.ts). Магазин подходит целиком.
+ */
+export type FxScene = Phaser.Scene & { lite: boolean; speed: number };
+
 /** Анимация эффекта в Phaser: 'fx:<эффект>'. */
 const animKey = (key: FxKey): string => `fx:${key}`;
 
@@ -24,7 +30,7 @@ const animKey = (key: FxKey): string => `fx:${key}`;
 const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** Пиксельные эффекты не играют: лёгкая графика, меньше движения или кадров нет (лист не догрузился). */
-export function calm(scene: StoreScene): boolean {
+export function calm(scene: FxScene): boolean {
   if (scene.lite || reducedMotion()) return true;
   // Лист эффектов ещё не просили (графику переключили с лёгкой на полную) — попросить.
   if (!sheets) void loadSheets(scene);
@@ -77,7 +83,7 @@ interface PlayOpts {
  * Эффект в точке мира: спрайт в сетке рисунка (точка эффекта — down точек рисунка, ART точек на точку мира).
  * Разовый эффект убирает себя сам по концу анимации; петлю — тот, кто её завёл.
  */
-export function play(scene: StoreScene, key: FxKey, x: number, y: number, o: PlayOpts = {}): Phaser.GameObjects.Sprite {
+export function play(scene: FxScene, key: FxKey, x: number, y: number, o: PlayOpts = {}): Phaser.GameObjects.Sprite {
   ensureAnims(scene);
   const s = FX_SHEETS[key];
   const sprite = scene.add
@@ -127,7 +133,7 @@ export function updateFireworks(scene: StoreScene): void {
  * Разовый эффект награды в точке мира (поверх зала, без тряски камеры), вдвое крупнее сетки рисунка. fade — через сколько мс начать
  * гасить: у кусков петли (звезда, луч) нет своего конца. Ответ — сыграл ли (в лёгкой графике — нет).
  */
-export function burst(scene: StoreScene, key: FxKey, x: number, y: number, o: PlayOpts & { fade?: number } = {}): boolean {
+export function burst(scene: FxScene, key: FxKey, x: number, y: number, o: PlayOpts & { fade?: number } = {}): boolean {
   if (calm(scene)) return false;
   // Вдвое крупнее сетки рисунка, как конфетти: в сетку 1:1 награда на телефоне — пара точек (монетки пилота).
   const sprite = play(scene, key, x, y, { depth: LIGHT_DEPTH + 8, zoom: 2, ...o });

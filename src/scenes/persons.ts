@@ -122,8 +122,11 @@ const gaitOf = (look: Look): Gait | undefined =>
 /** Аксессуары, которые видны только спереди. */
 const FRONT_ONLY = new Set(['acc_badge', 'acc_tie', 'acc_glasses', 'p_pat_print']);
 
+/** Кому собрать человечка: магазину или любой сцене с картинками мира и списком людей (ферма, src/farm). */
+export type PersonScene = Pick<StoreScene, 'art' | 'people' | 'add'>;
+
 /** Человечек из слоёв: тень, штаны, рубашка, форма, кожа, волосы — каждый слой перекрашивается тинтом. */
-export function makePerson(scene: StoreScene, x: number, y: number, look: Look): Phaser.GameObjects.Container {
+export function makePerson(scene: PersonScene, x: number, y: number, look: Look): Phaser.GameObjects.Container {
   const shadow = scene.art(0, 8.5, 'shadow');
   const legs = scene.art(0, 0, 'p_legs0').setTint(look.pants ?? 0x3a4466);
   const shirt = scene.art(0, 0, 'p_shirt').setTint(look.shirt);
@@ -346,7 +349,7 @@ export function placeStroller(person: Phaser.GameObjects.Container, facing: Faci
  * Настроение на лице: радуется найденному товару, хмурится в долгой очереди.
  * С ms — через столько вернётся обычное лицо (если за это время его не сменили).
  */
-export function setMood(scene: StoreScene, person: Phaser.GameObjects.Container, mood: 'happy' | 'frown' | null, ms?: number): void {
+export function setMood(scene: Pick<StoreScene, 'time'>, person: Phaser.GameObjects.Container, mood: 'happy' | 'frown' | null, ms?: number): void {
   const layers = person.getData('layers') as [Phaser.GameObjects.Image, string][] | undefined;
   const entry = layers?.find(([, base]) => base.startsWith('p_skin'));
   if (!entry || !person.active) return;

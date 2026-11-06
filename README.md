@@ -18,6 +18,7 @@ python3 art/sprites.py  # перерисовать спрайты в public/asse
 
 - `src/game` — игровая логика без Phaser (экономика, сохранения), покрыта тестами.
 - `src/scenes` — сцены Phaser: `BootScene` (загрузка спрайтов), `StoreScene` (магазин), `layout.ts` (планировки помещений).
+- `src/farm`, `src/game/farm` — вторая игра «Бабушкина ферма» (прототип, вход с титульного экрана): сцена, окна и правила; план и решения — `docs/FARM.md`.
 - `art/sprites.py` — вся пиксельная графика: пиксельные карты и палитра, результат в `public/assets`. Там же иконка `public/favicon.png` и `public/icon-512.png` (аватарка бота: BotFather → /setuserpic).
 - Атлас: картинки мира, которые грузит Phaser (список — `src/scenes/textures.ts`), сборка сама складывает
   в один лист `assets/atlas0.png` + `atlas0.json` (`scripts/atlas.ts`, плагин в `vite.config.ts`; в

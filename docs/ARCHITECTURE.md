@@ -92,6 +92,15 @@ export function petCat(scene: StoreScene): void {
 Как раньше: таймеры, которые должны пережить перестройку мира, — через `worldTimer`; остановить ходьбу —
 `persons.haltWalk(scene, person)`, а не `tweens.killTweensOf`; тяжёлое — с оглядкой на `scene.lite`; тряски камеры нет.
 
+## «Бабушкина ферма» (src/farm, docs/FARM.md)
+
+Вторая игра — своя сцена `FarmScene` (ключ `farm`), не модуль магазина: её состояние живёт в ней самой.
+Код — отдельным куском сборки (`farm/enter.ts` грузит его, когда на титуле выбрали ферму); магазин за титулом
+не останавливается, а засыпает (`scene.sleep`). Из движка магазина ферма берёт то, что о сцене магазина не
+знает или знает узко: `persons.makePerson` (нужны только `art`, `people`, `add` — тип `PersonScene`),
+`persons.setFacing` / `setMood`, `pixelFx.play` / `burst` / `calm` (тип `FxScene`: `lite` и `speed`), `ColorGrade`,
+`crispZoom`, `SayBubble`, `ui/dom`. Правила и деньги — `game/farm/*`, без Phaser. Картинки фермы — не в атласе: сцена грузит их сама (`farm/textures.ts`).
+
 ## Друзья и соревнования (не сцена, для справки)
 
 После сокращения 01.11 у друзей одно соревнование и один вид подарка:

@@ -5240,6 +5240,10 @@ def main():
     import moments
 
     moments.main()
+    # «Бабушкина ферма» (src/farm): грядки, ростки, урожай, лавка у дороги.
+    import farm
+
+    farm.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 

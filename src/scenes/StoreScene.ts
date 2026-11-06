@@ -34,6 +34,8 @@ import { bigDayNightGuests, CROWD_EXTRA_GUESTS, isCrowdDay, setBigDaySeed, type 
 import type { GiantLook } from '../game/giant';
 import { Hud } from '../ui/hud';
 import { showTitle } from '../ui/title';
+import { lastChoice, loadFarm } from '../game/farm/save';
+import { enterFarm } from '../farm/enter';
 import type { Weather } from '../game/weather';
 import { yearTime } from '../game/calendar';
 import { liveProgress, unlockAchievements, type AchievementId } from '../game/achievements';
@@ -805,6 +807,13 @@ export class StoreScene extends Phaser.Scene {
         // Сколько секунд новичок смотрел на вывеску до «Играть».
         if (!save) track('onb_play', 1, (this.playAt - titleAt) / 1000);
         morningFlow.showMorning(this);
+      },
+      // Вторая вывеска — «Бабушкина ферма» (src/farm): своя сцена, магазин за ней засыпает.
+      farm: loadFarm(),
+      choice: lastChoice(),
+      onFarm: () => {
+        stopShow();
+        enterFarm(this);
       },
     });
     // Титул на экране — подкачать утреннее окно, пока игрок на него смотрит (platform/lazy.ts).

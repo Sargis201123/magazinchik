@@ -1,4 +1,5 @@
 // Стартовый экран: вывеска магазина, «Играть», язык и звук. За ним уже виден зал.
+// С «Бабушкиной фермой» (src/farm) вывесок две: выбранная светится, «Играть» ведёт в неё; выбор запоминается.
 
 import { getLang, NATIVE, setLang, SHIPPED, t } from '../i18n';
 import { saveLang } from '../i18n/stored';
@@ -10,6 +11,7 @@ import type { StoreState } from '../game/economy';
 import { button, el, injectStyles, pixelize } from './dom';
 import { muteChip } from './audio';
 import { markReady } from '../platform/yandex';
+import { saveChoice, type GameChoice } from '../game/farm/save';
 
 const css = `
 .ui-title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between;
@@ -52,6 +54,25 @@ const css = `
 @keyframes ui-play-shine { 0% { left: -40%; } 45%, 100% { left: 120%; } }
 @media (prefers-reduced-motion: reduce) { .ui-title .ui-btn.ui-play, .ui-title .ui-btn.ui-play::after { animation: none; } }
 .ui-title .ui-muted { color: #8b9bb4; }
+/* Две вывески рядом: «Магазинчик» и «Бабушкина ферма». Выбранная — во весь свет, с бегущими лампочками;
+   другая — притушена и чуть меньше. Касание вывески — выбрать. */
+.ui-signs { display: flex; gap: 10px; width: min(340px, 94vw); align-items: flex-start; }
+.ui-signs .ui-sign { flex: 1 1 0; width: auto; min-width: 0; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: filter .25s, opacity .25s, scale .25s; }
+.ui-signs .ui-sign h1 { font-size: 21px; padding: 12px 4px 3px; overflow-wrap: anywhere; }
+.ui-signs .ui-sign p { font-size: 12px; padding: 0 6px 12px; }
+.ui-signs .ui-sign.dim { filter: saturate(.55) brightness(.6); scale: .92; }
+.ui-signs .ui-sign.dim .ui-bulbs, .ui-signs .ui-sign.dim h1 { animation: none; }
+.ui-signs .ui-sign.dim h1 { text-shadow: 0 3px 0 #b86f50, 0 5px 0 #181425; }
+.ui-signs .ui-sign.dim .ui-bulbs { border-color: #8b9bb4; }
+.ui-sign.farm { background: #5c3a2a; animation-delay: .25s, 1.15s; }
+.ui-sign.farm .ui-awning { background: repeating-linear-gradient(90deg, #63c74d 0 24px, #ead4aa 24px 48px); }
+.ui-sign.farm h1 { color: #ead4aa; text-shadow: 0 0 10px rgba(99,199,77,.7), 0 3px 0 #3e8948, 0 5px 0 #181425; }
+.ui-sign.farm p { color: #ead4aa; }
+.ui-sign .ui-new { position: absolute; top: 4px; right: -4px; padding: 2px 6px; background: #e43b44; color: #fff; border: 2px solid #181425;
+  border-radius: 4px; font: 800 11px/1.1 system-ui, sans-serif; transform: rotate(8deg); animation: ui-new 1.6s ease-in-out infinite; z-index: 1; }
+@keyframes ui-new { 50% { transform: rotate(8deg) scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .ui-sign .ui-new { animation: none; } }
 `;
 
 let styled = false;
@@ -59,9 +80,16 @@ let styled = false;
 export interface TitleOptions {
   save: StoreState | null;
   onPlay: () => void;
+  /**
+   * Вторая игра — «Бабушкина ферма» (src/farm): её прогресс (нет сохранения — null), выбор в прошлый раз
+   * и что делать по «Играть» с выбранной фермой. Нет onFarm — одна вывеска, как раньше.
+   */
+  farm?: { day: number; money: number } | null;
+  choice?: GameChoice;
+  onFarm?: () => void;
 }
 
-export function showTitle({ save, onPlay }: TitleOptions): void {
+export function showTitle({ save, onPlay, farm = null, choice = 'store', onFarm }: TitleOptions): void {
   injectStyles();
   if (!styled) {
     styled = true;
@@ -75,6 +103,8 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
 
   let homeReady = false;
   let picking = false;
+  // Какая игра выбрана: что выбирал в прошлый раз (у новичка и старого игрока без выбора — «Магазинчик»).
+  let picked: GameChoice = onFarm ? choice : 'store';
   void homeScreenStatus().then((ok) => {
     homeReady = ok;
     if (ok && root.isConnected) render();
@@ -83,17 +113,49 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
   const render = () => {
     const sign = el('div', 'ui-sign');
     sign.append(el('div', 'ui-awning'), el('h1', '', t('title.name')), el('p', '', t('title.tagline')), el('div', 'ui-bulbs'));
+    let signs: HTMLElement = sign;
+    const farmSign = el('div', 'ui-sign farm');
+    if (onFarm) {
+      // Две вывески: касание — выбрать (кнопка «Играть» и строка прогресса — под выбранную; вывески
+      // не перестраиваются, иначе снова падали бы сверху).
+      farmSign.append(el('div', 'ui-awning'), el('h1', '', t('title.farmName')), el('p', '', t('title.farmTagline')), el('div', 'ui-bulbs'));
+      if (!farm) farmSign.append(el('div', 'ui-new', t('title.new')));
+      const pick = (game: GameChoice) => () => {
+        if (picked === game) return;
+        picked = game;
+        sound.tap();
+        mark();
+      };
+      sign.addEventListener('click', pick('store'));
+      farmSign.addEventListener('click', pick('farm'));
+      signs = el('div', 'ui-signs');
+      signs.append(sign, farmSign);
+    }
 
-    const play = button(save ? t('title.continue') : t('title.play'), () => {
+    const play = button('', () => {
       sound.coin();
       // Раз за запуск: играют ли без звука (или без части каналов) — главный признак, нравится ли звук.
       const silent = mixer.silenceMask();
       if (silent) track('sound_off', save?.day ?? 1, silent);
       root.remove();
       document.body.classList.remove('ui-on-title');
-      onPlay();
+      if (onFarm) saveChoice(picked);
+      if (picked === 'farm') onFarm?.();
+      else onPlay();
     }, 'ui-btn ui-play');
-    const progress = save ? el('div', 'ui-muted', t('title.progress', { day: save.day, money: save.money })) : null;
+    const progress = el('div', 'ui-muted');
+    /** Вывески, «Играть» и строка прогресса — под выбранную игру. */
+    const mark = () => {
+      const toFarm = picked === 'farm';
+      sign.classList.toggle('dim', Boolean(onFarm) && toFarm);
+      farmSign.classList.toggle('dim', !toFarm);
+      play.textContent = toFarm ? t('title.farmPlay') : save ? t('title.continue') : t('title.play');
+      const line = toFarm ? (farm ? t('title.farmProgress', { day: farm.day, money: farm.money }) : '') : save ? t('title.progress', { day: save.day, money: save.money }) : '';
+      progress.textContent = line;
+      progress.hidden = !line;
+      pixelize(progress);
+    };
+    mark();
 
     const langs = el('div', 'ui-chips');
     // Язык: одна фишка с названием текущего; по нажатию — список готовых языков, каждый на нём самом.
@@ -141,8 +203,8 @@ export function showTitle({ save, onPlay }: TitleOptions): void {
     }
 
     const controls = el('div', 'ui-title-controls');
-    controls.append(play, ...(progress ? [progress] : []), langs);
-    root.replaceChildren(sign, controls);
+    controls.append(play, progress, langs);
+    root.replaceChildren(signs, controls);
     pixelize(root);
   };
   render();
