@@ -1,0 +1,17 @@
+{
+  "link": "@magazinchik_game_bot",
+  "langs": {
+    "ru": {
+      "title": "Магазинчик",
+      "cta": "Бесплатно в Telegram",
+      "hook": "Я сделал игру\\Nпро магазинчик",
+      "cps": 13.5,
+      "voices": { "alexandr": "Alexandr Vlasov – Vibrant and Energetic" },
+      "lines": [
+        { "id": "01", "scene": "cozy", "voice": "Я сделал игру про маленький магазинчик. Уютно, правда?", "montage": [["cat", 0.3, 2.2], ["rain", 1.0, 0]] },
+        { "id": "02", "scene": "robbery", "voice": "А потом в него заходят грабители.", "montage": [["robbery", 3.6, 0]] },
+        { "id": "03", "scene": "cta", "voice": "И это ещё не самое странное. Магазинчик — в Телеграме.", "sub": "И это ещё не самое странное.", "montage": [["flood", 1.0, 1.6], ["cta", 0.3, 0]] }
+      ]
+    }
+  }
+}

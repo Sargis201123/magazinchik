@@ -1,0 +1,17 @@
+{
+  "link": "@magazinchik_game_bot",
+  "langs": {
+    "ru": {
+      "title": "Магазинчик",
+      "cta": "Бесплатно в Telegram",
+      "hook": "",
+      "cps": 13.5,
+      "voices": { "alexandr": "Alexandr Vlasov – Vibrant and Energetic" },
+      "lines": [
+        { "id": "01", "scene": "asmr_in", "voice": "Сейчас будет очень приятно.", "montage": [["asmr", 0.0, 0]] },
+        { "id": "02", "scene": "asmr", "voice": "", "hold": 6.5, "montage": [["asmr", "cont", 0]] },
+        { "id": "03", "scene": "cta", "voice": "Ещё раз?", "montage": [["asmr", "cont", 0]] }
+      ]
+    }
+  }
+}

@@ -18,7 +18,7 @@
 // Нужны Playwright с Chromium (глобальный тоже годится: NODE_PATH=$(npm root -g)) и ffmpeg.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -839,6 +839,75 @@ const zar: SceneFn = async (browser, clips) => {
   return errors;
 };
 
+/**
+ * ASMR-выкладка (promo/shorts/asmr.json): камера близко у ряда полок; полка пустеет и тут же
+ * заполняется по штуке (staff.stockShelf — та же выкладка, что в игре, с замахом и «чпок»), по очереди.
+ * Звуков в съёмке нет — когда каждая штука легла на место, пишем в src_asmr.json (accents), сборка
+ * ставит туда «чпок» материала отдела.
+ */
+const asmr: SceneFn = async (browser, clips) => {
+  const { page, errors, close } = await boot(browser, { state: midGame(123), seed: 123 });
+  // Сначала все полки — полные (вокруг в кадре не должно быть «пусто»), потом доливку выключаем.
+  await page.evaluate(() => Object.assign(window, { __light: 0.2, __topUp: true }));
+  await steps(page, sec(1.5));
+  await page.evaluate(() => ((window as any).__topUp = false));
+  // Две соседние полки одного ряда посреди зала — те, где товара больше всего (вкуснее заполняются).
+  const row = await page.evaluate(() => {
+    const s = (window as any).__scene;
+    const views = (s.shelfViews as ({ at: { x: number; y: number }; items: { visible: boolean }[] } | undefined)[])
+      .map((v, i) => (v ? { i, x: v.at.x, y: v.at.y, n: v.items.filter((img) => img.visible).length } : null))
+      .filter(Boolean) as { i: number; x: number; y: number; n: number }[];
+    const rows = new Map<number, typeof views>();
+    for (const v of views) rows.set(Math.round(v.y / 10), [...(rows.get(Math.round(v.y / 10)) ?? []), v]);
+    // Островной ряд посреди зала, не стенной (самый верхний ряд — у стены).
+    const top = Math.min(...views.map((v) => v.y));
+    // Пара соседей в одном ряду с наибольшим товаром.
+    let pair: typeof views = [];
+    for (const r of [...rows.values()].filter((r) => r[0].y > top + 10)) {
+      const sorted = [...r].sort((a, b) => a.x - b.x);
+      for (let j = 0; j + 1 < sorted.length; j++) if (!pair.length || sorted[j].n + sorted[j + 1].n > pair[0].n + pair[1].n) pair = [sorted[j], sorted[j + 1]];
+    }
+    return pair;
+  });
+  await ui(page);
+  const cx = row.reduce((s, v) => s + v.x, 0) / row.length;
+  const cy = row[0].y;
+  const frames = sec(10.5);
+  await camera(page, { x: cx, y: cy + 4, zoom: 4.0 }, { x: cx, y: cy + 2, zoom: 4.2 }, frames);
+  const MATERIAL = ['glass', 'soft', 'bump', 'tin'];
+  const accents: [string, number, number][] = [];
+  // Полка пустеет, и её заполняют в три подхода подряд (за раз продавец несёт немного) — доверху.
+  const at = new Map<number, [number, boolean]>();
+  for (let k = 0; k < 4; k++) for (let r = 0; r < 3; r++) at.set(sec(0.8 + k * 2.4 + r * 0.55), [k, r === 0]);
+  await clips.asmr.record(page, frames, async (i) => {
+    const hit = at.get(i);
+    if (hit === undefined) return;
+    const [k, empty] = hit;
+    const shelf = row[k % row.length];
+    const n = await page.evaluate(({ idx, empty }) => {
+      const s = (window as any).__scene;
+      // Первый подход: полку — пустой (товар — обратно на склад). Продавец — к полке, и выкладка.
+      if (empty) {
+        const sh = s.state.shelves[idx];
+        const back = { ...s.state.warehouse };
+        for (const [id, list] of Object.entries(sh.items as Record<string, unknown[]>)) back[id] = [...(back[id] ?? []), ...list];
+        s.state = { ...s.state, warehouse: back, shelves: s.state.shelves.map((x: { items: object }, j: number) => (j === idx ? { ...x, items: Object.fromEntries(Object.keys(x.items).map((id) => [id, []])) } : x)) };
+        s.refreshShelves(false);
+      }
+      const v = s.shelfViews[idx];
+      s.seller.setPosition(v.at.x + 2, v.at.y + 16);
+      const before = v.items.filter((img: { visible: boolean }) => img.visible).length;
+      (window as any).staff.stockShelf(s, idx, s.seller);
+      return v.items.filter((img: { visible: boolean }) => img.visible).length - before;
+    }, { idx: shelf.i, empty });
+    // Штука n летит 280 мс и стартует через n·90 мс (staff.stockShelf): касание — тогда.
+    for (let m = 0; m < n; m++) accents.push([`${MATERIAL[k % MATERIAL.length]}${m % 3 === 0 ? '' : m % 3 === 1 ? '2' : '3'}`.replace(/(bump|tin|soft)3$/, '$1'), +((i + 1) / FPS + 0.28 + m * 0.09).toFixed(3), 0.85]);
+  });
+  writeFileSync(join(FOOTAGE, 'src_asmr.json'), JSON.stringify({ accents }, null, 1) + '\n');
+  await close();
+  return errors;
+};
+
 /** Финал: гипермаркет вечером, огни; камера медленно отъезжает — под название и призыв. */
 const finale: SceneFn = async (browser, clips) => {
   const { page, errors, close } = await boot(browser, { state: hyper(131), seed: 131 });
@@ -869,6 +938,7 @@ const SHOOTERS: { scenes: string[]; run: SceneFn }[] = [
   { scenes: ['flood'], run: eventScene('flood') },
   { scenes: ['heat'], run: eventScene('heat') },
   { scenes: ['cta'], run: finale },
+  { scenes: ['asmr'], run: asmr },
 ];
 
 async function main(): Promise<void> {

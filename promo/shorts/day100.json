@@ -1,0 +1,53 @@
+{
+  "link": "@magazinchik_game_bot",
+  "langs": {
+    "ru": {
+      "title": "Магазинчик",
+      "cta": "Бесплатно в Telegram",
+      "hook": "Начал с ларька.\\NЧерез 100 дней…",
+      "cps": 13.5,
+      "voices": {
+        "alexandr": "Alexandr Vlasov – Vibrant and Energetic"
+      },
+      "lines": [
+        {
+          "id": "01",
+          "scene": "kiosk",
+          "voice": "День первый. Ларёк, три полки и одна касса.",
+          "montage": [
+            [
+              "tap",
+              0.6,
+              0
+            ]
+          ]
+        },
+        {
+          "id": "02",
+          "scene": "reveal",
+          "voice": "День сотый.",
+          "montage": [
+            [
+              "cta",
+              0.2,
+              0
+            ]
+          ]
+        },
+        {
+          "id": "03",
+          "scene": "cta",
+          "voice": "Сколько дней продержишься ты? Магазинчик — в Телеграме.",
+          "sub": "Сколько дней продержишься ты?",
+          "montage": [
+            [
+              "cta",
+              "cont",
+              0
+            ]
+          ]
+        }
+      ]
+    }
+  }
+}

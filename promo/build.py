@@ -95,6 +95,17 @@ SFX_CUTS = {
     "ding": (22.9821, 1.38),
     "meow": (32.4274, 0.62),
     "page": (37.0065, 0.20),
+    # Материалы полок (src/platform/sfxData.ts): «чпок» выкладки в ASMR-ролике.
+    "glass": (6.6078, 0.18),
+    "glass2": (6.8657, 0.17),
+    "glass3": (7.1131, 0.17),
+    "tin": (7.8638, 0.15),
+    "tin2": (8.0891, 0.12),
+    "bump": (8.8901, 0.13),
+    "bump2": (9.0943, 0.11),
+    "soft": (9.6849, 0.21),
+    "soft2": (9.9737, 0.21),
+    "box": (10.9344, 0.23),
 }
 #: Акценты по сценам: (звук, секунда от начала клипа, громкость).
 ACCENTS = {
@@ -316,8 +327,11 @@ def fit_music(path: Path, total: float, tmp: Path) -> Path:
 
 
 def main() -> None:
-    doc = json.loads((PROMO / "lines.json").read_text(encoding="utf-8"))
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    # --short <имя>: короткий ролик promo/shorts/<имя>.json (тот же формат, что lines.json). Клипы — общие
+    # (promo/footage/<язык>), голос — promo/voice/<язык>/<голос>/<имя>/voice.mp3, выход — <имя>_<язык>_<голос>.
+    short = sys.argv[sys.argv.index("--short") + 1] if "--short" in sys.argv else None
+    doc = json.loads((PROMO / (f"shorts/{short}.json" if short else "lines.json")).read_text(encoding="utf-8"))
+    args = [a for a in sys.argv[1:] if not a.startswith("-") and a != short]
     lang = args[0] if args else "ru"
     if lang not in doc["langs"]:
         sys.exit(f"Нет языка {lang}: есть {', '.join(doc['langs'])}")
@@ -334,7 +348,7 @@ def main() -> None:
         if not l.get("montage") and not (footage / f"{l['id']}_{l['scene']}.mp4").exists():
             sys.exit(f"Нет клипа promo/footage/{lang}/{l['id']}_{l['scene']}.mp4 — снимите: npx vite-node promo/record.ts -- --lang {lang}")
 
-    mode, src = find_voice(lines, VOICE / lang / who if who else None)
+    mode, src = find_voice(lines, (VOICE / lang / who / short if short else VOICE / lang / who) if who else None)
     preview = mode == "none"
     tmp = Path(tempfile.mkdtemp(prefix="promo-build-"))
     try:
@@ -392,16 +406,28 @@ def main() -> None:
         total = plan[-1]["end"]
 
         # Хук: быстрый монтаж из кусков других клипов (ларёк → магазин → гипермаркет).
+        # Начало куска "cont" — с того места клипа, где его оставила прошлая реплика (сплошной кадр через
+        # несколько реплик, как ASMR-выкладка). Акценты клипа (src_<сцена>.json, accents) — вместе с куском.
+        cont: dict[str, float] = {}
         for p in plan:
             if not p["montage"]:
                 continue
             parts, fl = [], []
             rest = p["length"] - sum(seg[2] for seg in p["montage"])
+            seg_at = p["start"]
             for k, (scene, at, dur) in enumerate(p["montage"]):
                 src_clip = next(iter(sorted(footage.glob(f"*_{scene}.mp4"))), None)
                 if src_clip is None:
                     sys.exit(f"Для монтажа нет клипа сцены {scene} в promo/footage/{lang}")
                 dur = dur or max(1.0, rest + 0.1)
+                at = cont.get(scene, 0.0) if at == "cont" else float(at)
+                cont[scene] = at + dur - XFADE
+                side = src_clip.with_suffix(".json")
+                if side.exists():
+                    for name, t_clip, vol in json.loads(side.read_text(encoding="utf-8")).get("accents", []):
+                        if at <= t_clip < at + dur - 0.05:
+                            p.setdefault("extra", []).append((name, seg_at - p["start"] + t_clip - at, vol))
+                seg_at += dur
                 parts += ["-ss", f"{at:.3f}", "-t", f"{dur:.3f}", "-i", str(src_clip)]
                 fl.append(f"[{k}:v]fps={FPS},scale={W}:{H}:flags=lanczos,setsar=1,setpts=PTS-STARTPTS[m{k}]")
             n = len(p["montage"])
@@ -449,7 +475,7 @@ def main() -> None:
         )
         mix = ["[mus]", "[amb]"]
         # Акценты из звуков игры.
-        accents = [(name, p["start"] + at, vol) for p in plan for name, at, vol in ACCENTS.get(p["scene"], []) if at < p["length"] - 0.3]
+        accents = [(name, p["start"] + at, vol) for p in plan for name, at, vol in ACCENTS.get(p["scene"], []) + p.get("extra", []) if at < p["length"] - 0.3]
         if accents:
             af.append(f"[2:a]aformat=sample_rates=48000:channel_layouts=stereo,asplit={len(accents)}" + "".join(f"[s{k}]" for k in range(len(accents))))
             for k, (name, at, vol) in enumerate(accents):
@@ -507,8 +533,8 @@ def main() -> None:
 
         # 5. Субтитры и выход.
         OUT.mkdir(parents=True, exist_ok=True)
-        name = f"promo_{lang}_" + ("preview" if preview else who)
-        (OUT / f"promo_{lang}.srt").write_text(make_srt(plan), encoding="utf-8")
+        name = (f"{short}_{lang}_" if short else f"promo_{lang}_") + ("preview" if preview else who)
+        (OUT / f"{name}.srt").write_text(make_srt(plan), encoding="utf-8")
         ass = tmp / "subs.ass"
         ass.write_text(make_ass(script, plan, total, W, H), encoding="utf-8")
         kbps = int(MAX_MB * 8 * 1024 / total) - 140
@@ -533,7 +559,7 @@ def main() -> None:
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(base), "-i", str(mixed), *portrait,
                         "-filter_complex", ending(320, H // 2 - 70 - 120 - 330, vf), "-map", "[v]", "-map", "1:a", *encode, str(final)], check=True, cwd=tmp)
         # Постер: кадр концовки с названием (за 1.25 с до конца, до затемнения в чёрный).
-        poster = OUT / f"promo_{lang}_poster.png"
+        poster = OUT / f"{name}_poster.png"
         run("ffmpeg", "-v", "error", "-y", "-ss", f"{total - 1.25:.3f}", "-i", final, "-frames:v", "1", poster)
         # Квадрат 1080×1080: середина кадра, свои субтитры под квадрат.
         sq_ass = tmp / "square.ass"
@@ -555,7 +581,7 @@ def main() -> None:
         print(f"{'ПРЕВЬЮ (без голоса, тайминг по оценке)' if preview else 'Голос: ' + ('один файл' if mode == 'whole' else 'по репликам')}")
         print(f"Ролик: {final.relative_to(ROOT)} — {total:.1f} с, {size:.1f} МБ")
         print(f"Квадрат: {square.relative_to(ROOT)} — {square.stat().st_size / 1e6:.1f} МБ")
-        print(f"Субтитры: {(OUT / f'promo_{lang}.srt').relative_to(ROOT)}; постер: {poster.relative_to(ROOT)}")
+        print(f"Субтитры: {(OUT / f'{name}.srt').relative_to(ROOT)}; постер: {poster.relative_to(ROOT)}")
         for p in plan:
             print(f"  {p['start']:5.1f}–{p['end']:5.1f} с  {p['id']} {p['scene']:<9} {p['sub']}")
     finally:
