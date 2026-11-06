@@ -118,6 +118,7 @@ import {
 } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
+import * as pixelFx from './pixelFx';
 import * as pets from './pets';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
@@ -254,7 +255,7 @@ export class StoreScene extends Phaser.Scene {
   weather: Weather = 'clear';
   weatherObjs: Phaser.GameObjects.GameObject[] = [];
   /** Дождь дня: капли, брызги, круги и лужи — разгоняется утром и в иные дни к вечеру кончается. */
-  rainFx?: { rain: Phaser.GameObjects.Particles.ParticleEmitter; splash: Phaser.GameObjects.Particles.ParticleEmitter; base: number; puddles: Phaser.GameObjects.Image[]; ripple?: Phaser.GameObjects.Particles.ParticleEmitter; sheen?: Phaser.GameObjects.Rectangle };
+  rainFx?: { rain: Phaser.GameObjects.Particles.ParticleEmitter; splash: Phaser.GameObjects.Particles.ParticleEmitter; base: number; puddles: (Phaser.GameObjects.Image | Phaser.GameObjects.Sprite)[]; ripple?: Phaser.GameObjects.Particles.ParticleEmitter; sheen?: Phaser.GameObjects.Rectangle };
   /** Дождь сегодня уже кончился: зонты закрыты, лужи сохнут. */
   rainStopped = false;
   /** Доля прошедшего дня (0 — утро, 1 — конец смены): солнце, туман, тени. */
@@ -365,6 +366,8 @@ export class StoreScene extends Phaser.Scene {
   builtProps = new Set<string>();
   /** Купленное с утра: при открытии его распакуют из коробки. Ключ — «текстура@x,y», картинка — из последней постройки. */
   freshProps = new Map<string, Phaser.GameObjects.Image | undefined>();
+  /** Утренние награды, которые покажут в зале при открытии (pixelFx.openMoments): гостинец, покупка за звёзды. */
+  openFx: pixelFx.OpenFx[] = [];
   /** Отложенное запекание пола после распаковки новинок (bakeFloorSoon). */
   private floorBakeTimer?: Phaser.Time.TimerEvent;
   /** Наняли утром: при открытии новенький войдёт с улицы в дверь, а не появится сразу на месте. */
@@ -551,6 +554,9 @@ export class StoreScene extends Phaser.Scene {
   wholesaleBaked = 0;
   /** Идёт ночная смена; уже спрашивали про неё сегодня. */
   night = false;
+  /** Залпы салюта в небе (pixelFx.updateFireworks) и когда следующий. */
+  fireworks: Phaser.GameObjects.Sprite[] = [];
+  fireworkAt = 0;
   nightAsked = false;
   /** Кот у входа: картинка, где его лежанка и гуляет ли он сейчас по залу. */
   catImg?: Phaser.GameObjects.Image;
@@ -655,6 +661,8 @@ export class StoreScene extends Phaser.Scene {
 
   create(): void {
     setErrorContext(() => ({ day: this.state?.day, level: this.state?.level, running: this.running, ua: navigator.userAgent.slice(0, 120) }));
+    // Лист пиксельных эффектов — сразу, но без ожидания: магазин открывается, пока он докачивается.
+    if (!this.lite) void pixelFx.loadSheets(this);
     // Звук мира слышен с той стороны экрана, где он случился (касса слева — слева).
     setListener(() => {
       const v = this.cameras.main.worldView;
@@ -931,6 +939,7 @@ export class StoreScene extends Phaser.Scene {
     if (this.state.onboarding && this.state.day === 1) newcomer.onboardingTick(this);
     newcomer.tutorialTick(this, deltaMs);
     this.updateLighting(this.night ? 1 : undefined);
+    pixelFx.updateFireworks(this);
     motion.updateDoor(this);
     motion.pulseHighlights(this);
     motion.animatePeople(this);
@@ -962,6 +971,8 @@ export class StoreScene extends Phaser.Scene {
       sound.good();
       const { sellerHome } = this.layout;
       this.popup(sellerHome.x - 20, sellerHome.y - 46, t('popup.questDone', { done, total: quests.length }), '#fee761');
+      // Звезда над продавцом: задание дня закрыто (в первый кадр дня — не вспышка, а уже сделанное).
+      if (this.running) pixelFx.burst(this, 'star', sellerHome.x - 20, sellerHome.y - 14, { fade: 650 });
     }
     // Список для HUD — только когда прогресс сдвинулся (questsLine зовётся каждый кадр).
     const key = `${this.state.day}|${quests.map((q) => `${q.paid ? 'p' : ''}${questProgress(q, this.stats)}`).join()}`;
@@ -1266,7 +1277,13 @@ export class StoreScene extends Phaser.Scene {
     if (!unlocked.length) return unlocked;
     this.state = state;
     saveGame(state);
-    unlocked.forEach((id, i) => this.time.delayedCall(i * 3800, () => announceAchievement(id)));
+    unlocked.forEach((id, i) =>
+      this.time.delayedCall(i * 3800, () => {
+        announceAchievement(id);
+        // Значок выезжает сверху через полторы секунды — в тот же миг над продавцом вспыхивает медаль-солнце.
+        if (live) this.time.delayedCall(1500, () => this.running && pixelFx.burst(this, 'sunburst', this.layout.sellerHome.x - 20, this.layout.sellerHome.y - 40, { zoom: 1 }));
+      }),
+    );
     return unlocked;
   }
 

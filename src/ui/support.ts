@@ -7,7 +7,7 @@ import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
 import { flushCloud } from '../game/save';
 import { grantSupport, SUPPORT_TIERS } from '../game/support';
-import { buyWithStars, starsAvailable } from '../platform/stars';
+import { buyWithStars, starsAvailable, starsOffKey } from '../platform/stars';
 import { haptic } from '../platform/telegram';
 import { button, el, openModal } from './dom';
 import { sheetPng } from './sheet';
@@ -40,7 +40,7 @@ export function showSupport(getState: () => StoreState, update: (next: StoreStat
             return;
           }
           buy.disabled = false;
-          note.textContent = t(result === 'unavailable' ? 'decor.starsOff' : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
+          note.textContent = t(result === 'unavailable' ? starsOffKey : result === 'cancelled' ? 'decor.payCancelled' : 'decor.payFailed');
           if (result === 'unavailable') haptic.error();
         });
       }, 'ui-btn ui-btn-stars', got);
@@ -50,7 +50,7 @@ export function showSupport(getState: () => StoreState, update: (next: StoreStat
     }
     items.push(note, button(t('board.close'), close, 'ui-btn secondary'));
     if (message) note.textContent = message;
-    else if (!starsAvailable()) note.textContent = t('decor.starsOff');
+    else if (!starsAvailable()) note.textContent = t(starsOffKey);
     card.replaceChildren(...items);
   };
   render();

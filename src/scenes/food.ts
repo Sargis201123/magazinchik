@@ -57,6 +57,7 @@ import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
 import * as collections from './collections';
+import { look } from './look';
 
 /**
  * Дорога за продуктами, нарезка и раздача — столько секунд на закладку сверх варки у повара обычной скорости
@@ -191,7 +192,7 @@ export async function baristaLoop(scene: StoreScene, w: Worker, gen: number): Pr
 
 /** Облачко пара: поднимается и тает. */
 export function steamPuff(scene: StoreScene, x: number, y: number, tint = 0xffffff): void {
-  const puff = scene.art(x + Phaser.Math.FloatBetween(-2, 2), y, 'glow').setScale(0.08).setTint(tint).setAlpha(0.7).setDepth(LIGHT_DEPTH - 2);
+  const puff = scene.art(x + look.float(-2, 2), y, 'glow').setScale(0.08).setTint(tint).setAlpha(0.7).setDepth(LIGHT_DEPTH - 2);
   scene.tweens.add({ targets: puff, y: y - 10, scale: 0.16, alpha: 0, duration: 900, ease: 'Sine.easeOut', onComplete: () => puff.destroy() });
 }
 
@@ -415,7 +416,7 @@ export function updateOven(scene: StoreScene): void {
     oven.fill.setVisible(true).setFillStyle(0xfeae34);
     oven.fill.width = 15 * k;
     oven.glow.setAlpha(0.35 + 0.15 * Math.sin(now / 200));
-    if (Math.random() < 0.03) steamPuff(scene, oven.img.x + 3, oven.img.y - 16, 0xc0cbdc);
+    if (look.chance(0.03)) steamPuff(scene, oven.img.x + 3, oven.img.y - 16, 0xc0cbdc);
   } else if (oven.state === 'ready') {
     // Сколько осталось до «сгорит»: полоска краснеет и убывает.
     const k = 1 - Math.min(1, (now - oven.start) / (OVEN_BURN_SECONDS * 1000));
@@ -424,7 +425,7 @@ export function updateOven(scene: StoreScene): void {
     oven.fill.width = 15 * k;
     oven.glow.setAlpha(Math.floor(now / 250) % 2 ? 0.7 : 0.3);
     oven.halo?.set(2 + 2 * Math.sin(now / 120));
-    if (Math.random() < 0.06) steamPuff(scene, oven.img.x, oven.img.y - 6);
+    if (look.chance(0.06)) steamPuff(scene, oven.img.x, oven.img.y - 6);
   }
 }
 
@@ -659,7 +660,7 @@ export function startPots(scene: StoreScene, dishes: DishId[]): void {
   // Пар — облачками над каждой кастрюлей (сероватый: на белом кафеле белый не видно); в лёгкой графике реже.
   k.stopSteam?.();
   k.stopSteam = scene.worldTimer(scene.lite ? 700 : 320, () => {
-    for (const pot of k.pots) if (pot.visible && pot.active) steamPuff(scene, pot.x + Phaser.Math.FloatBetween(-1.5, 1.5), pot.y - 5, 0xc0cbdc);
+    for (const pot of k.pots) if (pot.visible && pot.active) steamPuff(scene, pot.x + look.float(-1.5, 1.5), pot.y - 5, 0xc0cbdc);
   });
 }
 
@@ -869,8 +870,8 @@ export async function chop(scene: StoreScene, w: Worker, gen: number, k: Kitchen
       motion.squash(scene, w.sprite, 1.03, 0.97, 90);
     }
     if (!scene.lite) {
-      const bit = scene.add.rectangle(knife.x - 2 + Math.random() * 3, knife.y, 1, 1, colors[i % colors.length]).setDepth(knife.depth + 1);
-      scene.tweens.add({ targets: bit, y: bit.y - 2.5, x: bit.x + Phaser.Math.FloatBetween(-2, 2), alpha: 0, duration: 420, ease: 'Quad.easeOut', onComplete: () => bit.destroy() });
+      const bit = scene.add.rectangle(knife.x - 2 + look.frac() * 3, knife.y, 1, 1, colors[i % colors.length]).setDepth(knife.depth + 1);
+      scene.tweens.add({ targets: bit, y: bit.y - 2.5, x: bit.x + look.float(-2, 2), alpha: 0, duration: 420, ease: 'Quad.easeOut', onComplete: () => bit.destroy() });
     }
     await staff.workerWait(scene, w, 240);
   }

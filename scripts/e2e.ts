@@ -319,7 +319,9 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     start: NOW,
     labels: { open: text['morning.open'], night: text['night.yes'] },
   });
-  await page.goto(`${url}?lang=${LANG}&debug`);
+  // fx=eager: лист пиксельных эффектов — вместе с миром (в игре он докачивается после старта), иначе
+  // погода первого дня строилась бы без них или с ними в зависимости от скорости диска.
+  await page.goto(`${url}?lang=${LANG}&debug&fx=eager`);
   await until(page, 'window.game?.isRunning === true', 'запуска Phaser');
   await page.evaluate(() => {
     const game = (window as any).game;

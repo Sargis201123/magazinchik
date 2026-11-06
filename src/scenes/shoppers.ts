@@ -92,6 +92,7 @@ import {
 } from './common';
 import * as motion from './motion';
 import * as effects from './effects';
+import * as pixelFx from './pixelFx';
 import * as pets from './pets';
 import * as weatherFx from './weatherFx';
 import * as food from './food';
@@ -253,13 +254,18 @@ export function regularVerdict(scene: StoreScene, c: Customer): void {
   const y = c.sprite.y - 24;
   if (result === 'up') {
     effects.emote(scene, c.sprite, 'emo_heart');
+    // Облачко сердечек pixelfx вокруг него — привязался к магазину сильнее.
+    pixelFx.burst(scene, 'hearts', c.sprite.x, c.sprite.y, { fade: 1100, zoom: 1 });
     scene.popup(c.sprite.x, y, t('regular.up', { name }), '#c8ffb0');
     const total = c.items.reduce((sum, item) => sum + unitSalePrice(scene.state, item.id, item.unit), 0);
     // Благоустроенный район (hood.ts): постоянные щедрее.
     const tip = Math.round(tipFor(regularState(scene.state, r.id).loyalty, total) * hoodTips(scene.state));
     if (tip > 0) {
       scene.state = { ...scene.state, money: scene.state.money + tip };
-      scene.time.delayedCall(900, () => scene.popup(c.sprite.x, y - 8, t('regular.tip', { n: tip }), '#fee761'));
+      scene.time.delayedCall(900, () => {
+        scene.popup(c.sprite.x, y - 8, t('regular.tip', { n: tip }), '#fee761');
+        effects.tipCoins(scene, c.sprite);
+      });
     }
   } else {
     effects.emote(scene, c.sprite, 'emo_angry');
@@ -679,6 +685,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     const tip = FRIEND_TIP * (c.friend.level + 1);
     scene.state = { ...scene.state, money: scene.state.money + tip };
     scene.popup(c.sprite.x, c.sprite.y - 28, t('visit.tip', { name: c.friend.name, n: tip }), '#fee761');
+    effects.tipCoins(scene, c.sprite);
   }
 
   if (c.items.length === 0) {
@@ -922,7 +929,7 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
     if (!scene.sys.isActive()) return;
     // Товар — на ленту, под красный луч сканера (вспышка), и дальше к кассиру в пакет.
     const item = scene.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2 / ART).setDepth(1000);
-    scene.tweens.chain({
+    const fly = scene.tweens.chain({
       targets: item,
       tweens: [
         { x: counter.x, y: counter.y - 8, duration: 180, ease: 'Quad.easeOut' },
@@ -930,20 +937,19 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
       ],
       onComplete: () => item.destroy(),
     });
+    // Кассир замахивается товаром — и на «пик» рывком вытягивается (motion.beat): касание — под лучом.
+    scene.time.delayedCall(100, () => motion.beat(scene, clerk));
     scene.time.delayedCall(170, () => {
       const flash = scene.add.rectangle(counter.x, counter.y - 8, 10, 3, 0xff4a4a).setBlendMode(Phaser.BlendModes.ADD).setDepth(1001);
       scene.tweens.add({ targets: flash, alpha: 0, scaleX: 1.6, duration: 160, onComplete: () => flash.destroy() });
-      // Касса чуть вздрагивает на «пик».
+      // Касса чуть вздрагивает на «пик»; товар на миг белеет и замирает под лучом.
       if (r.img) motion.squash(scene, r.img, 1.04, 0.94, 70);
+      motion.flashWhite(scene, item, 40);
+      motion.hold(scene, fly, 50);
+      // Без вибрации на каждый товар: на телефоне она щёлкает громче самого сканера. «Пик» — пачкой:
+      // первый товар ясно, дальше через один и тише (sound.ts). Звук — в миг касания, а не вылета.
+      sound.scan(counter.x, n);
     });
-    // Кассир берёт товар: короткий кивок-подпрыгивание.
-    if (clerk?.active) {
-      const base = (clerk.getData('baseScale') as number) ?? 1;
-      scene.tweens.add({ targets: clerk, scaleY: base * 1.06, duration: 90, yoyo: true, onComplete: () => clerk.setScale(base) });
-    }
-    // Без вибрации на каждый товар: на телефоне она щёлкает громче самого сканера. «Пик» — пачкой:
-    // первый товар ясно, дальше через один и тише (sound.ts).
-    sound.scan(counter.x, n);
   }
   // Старая касса иногда заедает: пока продавец стучит по ней, очередь ждёт.
   if (Math.random() < registerJam(scene.state)) {
@@ -1057,7 +1063,10 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
     scene.state = { ...scene.state, money: scene.state.money + CAT_TIP };
     scene.stats.revenue += CAT_TIP;
     note(scene.stats, 'cat');
-    scene.time.delayedCall(500, () => scene.popup(c.sprite.x, c.sprite.y - 30, t('popup.catTip', { n: CAT_TIP }), '#fff3b0'));
+    scene.time.delayedCall(500, () => {
+      scene.popup(c.sprite.x, c.sprite.y - 30, t('popup.catTip', { n: CAT_TIP }), '#fff3b0');
+      effects.tipCoins(scene, c.sprite);
+    });
   }
   if (scene.night) {
     scene.stats.nightRevenue = (scene.stats.nightRevenue ?? 0) + total;

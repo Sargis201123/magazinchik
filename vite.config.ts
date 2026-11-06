@@ -121,7 +121,8 @@ const preloadHints = (): Plugin => ({
         if (link.test(html)) html = html.replace(link, () => `<style>${css}</style>`);
       }
       const fonts = Object.keys(ctx.bundle ?? {}).filter((file) => /\/nunito-(latin|cyrillic)-wght-normal-[\w-]+\.woff2$/.test(file));
-      const sheets = [...atlas().pages.map((p) => p.name), 'ico_atlas'].flatMap((name) => [`assets/${name}.json`, `assets/${name}.png`]);
+      // Листы эффектов (lazy) — не заранее: игра докачивает их уже из магазина.
+      const sheets = [...atlas().pages.filter((p) => !p.lazy).map((p) => p.name), 'ico_atlas'].flatMap((name) => [`assets/${name}.json`, `assets/${name}.png`]);
       const tags = [
         // Картинки листов — пониже кода: код нужен раньше (пока он запускается, лист докачивается).
         ...sheets.map((path) => ({
@@ -149,7 +150,7 @@ const atlasPlugin = (build: boolean): Plugin => ({
   load: (id) => {
     if (id !== `\0${ATLAS_ID}`) return null;
     const { pages, loose } = atlas();
-    return `export default ${JSON.stringify({ pages: pages.map((p) => ({ name: p.name, bytes: p.png.length })), loose })};`;
+    return `export default ${JSON.stringify({ pages: pages.map((p) => ({ name: p.name, bytes: p.png.length, lazy: !!p.lazy })), loose })};`;
   },
   generateBundle() {
     if (!build) return;
@@ -166,7 +167,7 @@ const atlasPlugin = (build: boolean): Plugin => ({
       if (mod) server.moduleGraph.invalidateModule(mod);
     });
     server.middlewares.use((req, res, next) => {
-      const m = /^\/assets\/(atlas\d+)\.(png|json)(?:\?|$)/.exec(req.url ?? '');
+      const m = /^\/assets\/((?:atlas|fx)\d+)\.(png|json)(?:\?|$)/.exec(req.url ?? '');
       const page = m && atlas().pages.find((p) => p.name === m[1]);
       if (!m || !page) return next();
       res.setHeader('Content-Type', m[2] === 'png' ? 'image/png' : 'application/json');
@@ -176,14 +177,32 @@ const atlasPlugin = (build: boolean): Plugin => ({
   },
 });
 
-export default defineConfig(({ command }) => ({
+/**
+ * Сборка для Яндекс Игр (`vite build --mode yandex`, npm run build:yandex): вместо скрипта Telegram —
+ * SDK Яндекса (/sdk.js отдаёт сама площадка), игра узнаёт площадку по __PLATFORM__ (src/platform/target.ts).
+ */
+const yandexHtml = (): Plugin => ({
+  name: 'yandex-html',
+  transformIndexHtml: (html) =>
+    html
+      .replace(/<!-- Скрипт Telegram[\s\S]*?-->\s*/, '')
+      .replace('<script src="https://telegram.org/js/telegram-web-app.js"></script>', '<script src="/sdk.js"></script>')
+      .replace('href="/favicon.png"', 'href="favicon.png"'),
+});
+
+export default defineConfig(({ command, mode }) => ({
   base: './',
-  plugins: command === 'build' ? [phaserFlags(), assetVersions(true), atlasPlugin(true), preloadHints()] : [assetVersions(false), atlasPlugin(false)],
+  define: { __PLATFORM__: JSON.stringify(mode === 'yandex' ? 'yandex' : 'telegram') },
+  plugins: [
+    ...(command === 'build' ? [phaserFlags(), assetVersions(true), atlasPlugin(true), preloadHints()] : [assetVersions(false), atlasPlugin(false)]),
+    ...(mode === 'yandex' ? [yandexHtml()] : []),
+  ],
   resolve: {
     // В production — Phaser без физики и тайловых карт (src/vendor/phaser-lite.js).
     alias: command === 'build' ? [{ find: /^phaser$/, replacement: fileURLToPath(new URL('./src/vendor/phaser-lite.js', import.meta.url)) }] : [],
   },
   build: {
+    outDir: mode === 'yandex' ? 'dist-yandex' : 'dist',
     target: 'es2020',
     chunkSizeWarningLimit: 1600,
     rollupOptions: {

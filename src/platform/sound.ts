@@ -17,6 +17,13 @@ import { ready, segment } from './samples';
 import { SFX, SYLLABLES, type SfxId } from './sfxData';
 import type { Category } from '../game/economy';
 
+/**
+ * Случайность звука — своя, не общий Math.random: «пик», «чпок» и раскаты грома не должны менять, кто
+ * зайдёт в магазин и что купит (общий генератор дня, его же фиксирует e2e). Звуки зовутся и без аудио
+ * (e2e, выключенный звук) и в любой момент — сдвинь звук на миг, и сдвинулся бы весь день.
+ */
+const rnd = seeded(Date.now() ^ 0x50a4d);
+
 export { audioContext, existingAudioContext } from './mixer';
 
 /** Контекст для звука канала bus: null — канал не слышен (без звука, ползунок на нуле). */
@@ -121,7 +128,7 @@ function output(ac: AudioContext, o: Voice, dur: number): { out: AudioNode; rate
     level = admitVoice(key, rule, dur, bus);
     if (!level) return null;
   }
-  const j = jitter(Math.random, o.cents ?? 0, o.db ?? 0);
+  const j = jitter(rnd, o.cents ?? 0, o.db ?? 0);
   return { out: busInput(ac, bus, where.pan, where.gain * j.gain * level), rate: j.rate };
 }
 
@@ -192,7 +199,7 @@ function cutShort(ac: AudioContext, src: AudioBufferSourceNode, gain: GainNode, 
  */
 function sample(id: SfxId, o: SampleVoice = {}): boolean | null {
   const variants = SFX[id];
-  const v = pickVariant(lastVariant[id] ?? -1, variants.length, Math.random);
+  const v = pickVariant(lastVariant[id] ?? -1, variants.length, rnd);
   const piece = segment('sfx', variants[v]);
   if (!piece) return null;
   const ac = audio(busOf(o));
@@ -294,7 +301,7 @@ function ring(strikes: Strike[], partials: number[][], o: Voice = {}): void {
 export function noiseBuffer(ac: AudioContext, seconds: number): AudioBuffer {
   const buffer = ac.createBuffer(1, Math.floor(ac.sampleRate * seconds), ac.sampleRate);
   const data = buffer.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  for (let i = 0; i < data.length; i++) data[i] = rnd() * 2 - 1;
   return buffer;
 }
 
@@ -321,7 +328,7 @@ function noiseBurst(ac: AudioContext, out: AudioNode, at: number, dur: number, f
   gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
   src.connect(band).connect(gain).connect(out);
   // Случайное место в куске шума, но так, чтобы его хватило до конца звука.
-  src.start(at, Math.random() * Math.max(0, buffer.duration - dur - 0.05));
+  src.start(at, rnd() * Math.max(0, buffer.duration - dur - 0.05));
   src.stop(at + dur + 0.02);
 }
 
@@ -357,7 +364,7 @@ function thunder(): void {
   const ac = audio('street');
   if (!ac || !allowVoice('thunder', RULE.thunder, 6, 'street')) return;
   const now = ac.currentTime + 0.01;
-  const near = Math.random();
+  const near = rnd();
   if (!rumbleBuffer || rumbleBuffer.sampleRate !== ac.sampleRate) {
     const random = seeded(31);
     const n = Math.floor(ac.sampleRate * 6);
@@ -365,8 +372,8 @@ function thunder(): void {
     rumbleBuffer.copyToChannel(brownNoise(n, random) as Float32Array<ArrayBuffer>, 0);
   }
   const panner = ac.createStereoPanner();
-  panner.pan.setValueAtTime(Math.random() * 1.2 - 0.6, now);
-  panner.pan.linearRampToValueAtTime(Math.random() * 1.2 - 0.6, now + 5);
+  panner.pan.setValueAtTime(rnd() * 1.2 - 0.6, now);
+  panner.pan.linearRampToValueAtTime(rnd() * 1.2 - 0.6, now + 5);
   panner.connect(busInput(ac, 'street'));
   // Треск — только у близкого грома.
   if (near > 0.45) {
@@ -381,7 +388,7 @@ function thunder(): void {
     cg.gain.linearRampToValueAtTime(0.07 * near, now + 0.008);
     cg.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
     crack.connect(hp).connect(cg).connect(panner);
-    crack.start(now, Math.random());
+    crack.start(now, rnd());
     crack.stop(now + 0.4);
   }
   // Раскат: бурый шум, верха глохнут, громкость волнами.
@@ -399,13 +406,13 @@ function thunder(): void {
   gain.gain.setValueAtTime(0, now);
   gain.gain.linearRampToValueAtTime(peak, now + delay + 0.12);
   let t = now + delay + 0.12;
-  for (let i = 0; i < 3 + Math.floor(Math.random() * 3); i++) {
-    t += 0.35 + Math.random() * 0.6;
-    gain.gain.linearRampToValueAtTime(peak * (0.35 + Math.random() * 0.5) * (1 - i * 0.12), t);
+  for (let i = 0; i < 3 + Math.floor(rnd() * 3); i++) {
+    t += 0.35 + rnd() * 0.6;
+    gain.gain.linearRampToValueAtTime(peak * (0.35 + rnd() * 0.5) * (1 - i * 0.12), t);
   }
   gain.gain.exponentialRampToValueAtTime(0.0001, Math.max(t + 1.2, now + 4.5));
   src.connect(lp).connect(gain).connect(panner);
-  src.start(now, Math.random() * 0.5);
+  src.start(now, rnd() * 0.5);
   src.stop(now + 6);
 }
 
@@ -511,8 +518,8 @@ function rumble(): void {
   lfo.stop(now + 1.15);
   // Звякают бутылки на полках.
   for (let i = 0; i < 4; i++) {
-    const at = now + 0.1 + Math.random() * 0.8;
-    const f = 1800 + Math.random() * 1600;
+    const at = now + 0.1 + rnd() * 0.8;
+    const f = 1800 + rnd() * 1600;
     const osc = ac.createOscillator();
     osc.frequency.value = f;
     const g = ac.createGain();
@@ -521,7 +528,7 @@ function rumble(): void {
     g.gain.linearRampToValueAtTime(0.012, at + 0.002);
     g.gain.exponentialRampToValueAtTime(0.0001, at + 0.12);
     const p = ac.createStereoPanner();
-    p.pan.value = Math.random() * 1.2 - 0.6;
+    p.pan.value = rnd() * 1.2 - 0.6;
     osc.connect(g).connect(p).connect(out);
     osc.start(at);
     osc.stop(at + 0.14);
@@ -546,7 +553,7 @@ function synthMop(x: number | undefined, strokes: number): () => void {
   // Все взмахи — через один «кран»: дело бросили — он закрывается за ~40 мс.
   const valve = ac.createGain();
   valve.connect(target.out);
-  for (let i = 0; i < strokes; i++) noiseBurst(ac, valve, now + i * MOP_STROKE, 0.34, 1000 + Math.random() * 500, 0.9, 0.03, 0.12);
+  for (let i = 0; i < strokes; i++) noiseBurst(ac, valve, now + i * MOP_STROKE, 0.34, 1000 + rnd() * 500, 0.9, 0.03, 0.12);
   return () => valve.gain.setTargetAtTime(0, ac.currentTime, 0.012);
 }
 
@@ -562,7 +569,7 @@ export const sound = {
   /** Мяу: кот открывает и закрывает рот, тон вверх и вниз (пока нет записи — короткое скольжение). */
   meow: (x?: number) => {
     if (sample('meow', { x, cents: 90, db: 2, limit: ['meow', RULE.meow] }) !== null) return;
-    lastMeow = pickVariant(lastMeow, 3, Math.random);
+    lastMeow = pickVariant(lastMeow, 3, rnd);
     const k = [1, 1.14, 0.88][lastMeow];
     play(
       [
@@ -654,12 +661,12 @@ export const sound = {
     // Без места в мире — монетка из меню (подарок, награда, пример ползунка): ответ на касание, на ×2 не прореживается.
     const rule: VoiceRule = x === undefined ? { ...RULE.coin, game: false } : RULE.coin;
     if (sample('coin', { x, cents: 70, db: 1.5, limit: ['coin', rule] }) !== null) return;
-    lastCoin = pickVariant(lastCoin, COIN_NOTES.length, Math.random);
+    lastCoin = pickVariant(lastCoin, COIN_NOTES.length, rnd);
     const f = COIN_NOTES[lastCoin];
     ring(
       [
         { freq: f, vol: 0.028, ring: 0.16 },
-        { freq: f * 1.335, at: 0.055 + Math.random() * 0.02, vol: 0.024, ring: 0.32 },
+        { freq: f * 1.335, at: 0.055 + rnd() * 0.02, vol: 0.024, ring: 0.32 },
       ],
       COIN,
       { x, lp: 6000, cents: 20, db: 1.5, limit: ['coin', rule] },
@@ -711,8 +718,8 @@ export const sound = {
   bad: () => {
     const ac = audio('ui');
     if (!ac || !allowVoice('bad', RULE.bad, 0.4, 'ui')) return;
-    lastBad = pickVariant(lastBad, 2, Math.random);
-    const j = jitter(Math.random, 30, 1.5);
+    lastBad = pickVariant(lastBad, 2, rnd);
+    const j = jitter(rnd, 30, 1.5);
     const out = busInput(ac, 'ui', 0, j.gain);
     const now = ac.currentTime + 0.01;
     const f = (lastBad ? 415 : 392) * j.rate;
@@ -837,7 +844,7 @@ export const sound = {
     const cuts: (() => void)[] = [];
     const first = sample('mop', { x, cents: 80, db: 2, limit: ['mop', RULE.mop], skipOffscreen: true, cuts });
     if (first === null) return synthMop(x, strokes);
-    if (first) for (let i = 1; i < strokes; i++) sample('mop', { x, at: i * MOP_STROKE + Math.random() * 0.05, cents: 80, db: 2, cuts, layer: 'mopStroke' });
+    if (first) for (let i = 1; i < strokes; i++) sample('mop', { x, at: i * MOP_STROKE + rnd() * 0.05, cents: 80, db: 2, cuts, layer: 'mopStroke' });
     return () => {
       for (const cut of cuts.splice(0)) cut();
     };
@@ -867,7 +874,7 @@ export const sound = {
     }
     const ac = audio('voice');
     if (!ac) return;
-    const j = jitter(Math.random, 20, 1);
+    const j = jitter(rnd, 20, 1);
     // Не выше 1.6 и не ниже 0.7 от записи: дальше голос звучит «бурундуком» или гулко.
     const rate = Math.min(1.6, Math.max(0.7, v.rate * 2 ** (s.semitones / 12) * j.rate));
     const dur = piece.dur * v.clip;
@@ -914,9 +921,9 @@ export const sound = {
   },
   /** «Голос» героя в диалоге: короткий слог на его высоте, мягкий, каждый раз чуть другой. */
   voice: (pitch: number) =>
-    play([{ freq: pitch * (0.9 + Math.random() * 0.25), dur: 0.05, wave: 'square', vol: 0.03, attack: 0.006 }], {
+    play([{ freq: pitch * (0.9 + rnd() * 0.25), dur: 0.05, wave: 'square', vol: 0.03, attack: 0.006 }], {
       bus: 'voice',
-      lp: 1500 + Math.random() * 500,
+      lp: 1500 + rnd() * 500,
       db: 1.5,
       limit: ['voice', RULE.voice],
     }),

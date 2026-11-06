@@ -499,7 +499,12 @@ export function payParcels(scene: StoreScene, batch: Parcel[], vehicle: Vehicle,
   sound.coin(courier.x);
   haptic.success();
   scene.popup(courier.x, courier.y - 16, t('popup.orderPaid', { icon: vehicle.icon, n: pay }), '#c8ffb0');
-  if (tips) scene.time.delayedCall(450, () => courier.active && scene.popup(courier.x, courier.y - 16, t('popup.orderTip', { n: tips }), '#fee761'));
+  if (tips)
+    scene.time.delayedCall(450, () => {
+      if (!courier.active) return;
+      scene.popup(courier.x, courier.y - 16, t('popup.orderTip', { n: tips }), '#fee761');
+      effects.tipCoins(scene, courier);
+    });
   effects.flyCoins(scene, courier.x, courier.y, Math.min(6, 2 + batch.length * 2));
 }
 

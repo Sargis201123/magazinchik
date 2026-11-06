@@ -14,6 +14,7 @@ import { normalizeNews } from './headlines';
 import { migrateCalm } from './calm';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId, trustedNow } from '../platform/telegram';
+import { IS_YANDEX } from '../platform/target';
 
 // Сохранение: сразу в память телефона и, чуть погодя, в облако Telegram (platform/cloud.ts) —
 // так прогресс и покупки за звёзды не пропадут, если очистить телефон или сменить его.
@@ -21,8 +22,11 @@ const KEY = 'magazinchik.save';
 const VERSION = 11;
 /** Старые сохранения с этой версии и новее подходят: недостающие поля берутся из новой игры. */
 const MIN_COMPATIBLE = 9;
-/** В облако пишем не чаще, чем раз в столько миллисекунд. */
-const CLOUD_DELAY_MS = 3000;
+/**
+ * В облако пишем не чаще, чем раз в столько миллисекунд. У Яндекса предел — 100 записей за 5 минут
+ * (player.setData), поэтому там реже.
+ */
+const CLOUD_DELAY_MS = IS_YANDEX ? 6000 : 3000;
 
 interface SaveFile {
   version: number;

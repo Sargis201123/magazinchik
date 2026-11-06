@@ -4,6 +4,8 @@
 // «оглавление» — оборвётся связь посреди записи, останется целым прошлое сохранение.
 
 import { cloudStorage, type CloudStorage } from './telegram';
+import { IS_YANDEX } from './target';
+import { readYandexSave, writeYandexSave } from './yandex';
 
 const META = 'save_meta';
 const CHUNK = 4000;
@@ -44,6 +46,8 @@ async function readMeta(cloud: CloudStorage): Promise<Meta | null> {
 
 /** Прочитать сохранение из облака: текст и когда сохранено (null — нет или облака нет). */
 export async function readCloud(): Promise<{ text: string; savedAt: number } | null> {
+  // Яндекс Игры: облако игрока (player.getData) вместо CloudStorage Telegram; текст сохранения тот же.
+  if (IS_YANDEX) return readYandexSave();
   const cloud = cloudStorage();
   if (!cloud) return null;
   const meta = await readMeta(cloud);
@@ -58,6 +62,7 @@ let lastSlot: 'a' | 'b' | null = null;
 
 /** Записать сохранение в облако (в свободный слот, потом оглавление). */
 export async function writeCloud(text: string, savedAt: number): Promise<boolean> {
+  if (IS_YANDEX) return writeYandexSave(text, savedAt);
   const cloud = cloudStorage();
   if (!cloud) return false;
   if (!lastSlot) lastSlot = (await readMeta(cloud))?.slot ?? 'b';

@@ -34,7 +34,8 @@ const ROOT = path.resolve(__dirname, '../..');
 const PORT = Number(process.argv[2] || 4173);
 const WHAT = process.argv[3] || 'all';
 const LANGS = (process.argv[4] || 'both') === 'both' ? ['ru', 'en'] : [process.argv[4]];
-const STORE = path.join(ROOT, 'docs/store');
+/** Куда класть ролики и кадры (PROMO_STORE — для витрины Яндекс Игр, scripts/promo/yandex.cjs). */
+const STORE = process.env.PROMO_STORE || path.join(ROOT, 'docs/store');
 const PROMO = path.join(ROOT, 'public/promo');
 /** Кадры до склейки — во временной папке (удаляется в конце). */
 let tmp = '';
@@ -130,13 +131,13 @@ const HIDE_UI = `
 `;
 
 /** Открыть игру с сохранением и дойти до открытого магазина; цикл Phaser — на ручном управлении. */
-async function boot(browser, { lang, day, dsf, patch, size = { width: 360, height: 640 } }) {
-  const context = await browser.newContext({ viewport: size, deviceScaleFactor: dsf });
+async function boot(browser, { lang, day, dsf, patch, size = { width: 360, height: 640 }, port = PORT, ctx = {} }) {
+  const context = await browser.newContext({ viewport: size, deviceScaleFactor: dsf, ...ctx });
   await context.addInitScript(initScript, { state: stateFor(day, patch), seed: SEED + day });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto(`http://localhost:${PORT}/?lang=${lang}&debug`);
+  await page.goto(`http://localhost:${port}/?lang=${lang}&debug`);
   await page.waitForSelector('.ui-play', { timeout: 60000 });
   await page.click('.ui-play', { force: true });
   // Утро: окна поверх (подарки, новости) закрываем, пока не останется кнопка «Открыть магазин».

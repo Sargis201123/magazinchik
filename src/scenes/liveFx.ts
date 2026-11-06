@@ -19,6 +19,7 @@ import * as staff from './staff';
 import * as persons from './persons';
 import * as camera from './camera';
 import * as collections from './collections';
+import * as motion from './motion';
 
 /** Мини-событие ждёт, пока кончится прошлое, и не начинается, если до закрытия меньше этой доли дня. */
 const LIVE_RETRY_MS = 5000;
@@ -111,18 +112,45 @@ export function endLiveEvent(scene: StoreScene): void {
   }
 }
 
+/**
+ * Ключ в руке крутит: поворот — короткая пауза — назад, и на каждом повороте продавец подаётся вслед
+ * (motion.squash). Раньше ключ просто висел в руке, пока шла починка. Ответ — остановить и вернуть ключ ровно.
+ */
+function wrenchTurns(scene: StoreScene): () => void {
+  const key = scene.carried;
+  const turn = scene.tweens.add({
+    targets: key,
+    angle: -40,
+    duration: 140,
+    hold: 60,
+    yoyo: true,
+    repeat: -1,
+    repeatDelay: 120,
+    ease: 'Quad.easeOut',
+    onYoyo: () => motion.squash(scene, scene.seller, 1.04, 0.95, 70),
+  });
+  return () => {
+    turn.remove();
+    key.setAngle(0);
+  };
+}
+
 /** Продавец идёт к щитку и включает свет. */
 export function fixFuse(scene: StoreScene): void {
   if (!scene.blackout || scene.sellerBusy || scene.ownerScanning() || !scene.fuseBox) return;
   scene.carried.setTexture('wrench').setPosition(5, -1).setVisible(true);
   effects.emote(scene, scene.seller, 'emo_alert');
+  let stopTurns = (): void => undefined;
   void staff.doChore(scene, [
     {
       x: scene.fuseBox.x,
       y: scene.layout.wallH + 16,
       ms: FIX_MS,
+      arrive: () => (stopTurns = wrenchTurns(scene)),
       action: () => {
+        stopTurns();
         scene.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+        motion.beat(scene, scene.seller, 0.8);
         restoreLight(scene);
       },
     },
@@ -190,13 +218,17 @@ export function startLeak(scene: StoreScene, keep: <T extends { destroy: () => v
     camera.tap(scene, () => {
       if (scene.sellerBusy || scene.ownerScanning() || !drops.active) return;
       scene.carried.setTexture('wrench').setPosition(5, -1).setVisible(true);
+      let stopTurns = (): void => undefined;
       void staff.doChore(scene, [
         {
           x: at.x + 9,
           y: at.y + 2,
           ms: LEAK_FIX_MS,
+          arrive: () => (stopTurns = wrenchTurns(scene)),
           action: () => {
+            stopTurns();
             scene.carried.setVisible(false).setTexture('box').setPosition(0, 3);
+            motion.beat(scene, scene.seller, 0.8);
             stop();
             zone.destroy();
             sound.good();

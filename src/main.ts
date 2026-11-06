@@ -3,10 +3,15 @@ import Phaser from 'phaser';
 import '@fontsource-variable/nunito';
 import { BootScene } from './scenes/BootScene';
 import { StoreScene } from './scenes/StoreScene';
+import * as effects from './scenes/effects';
+import * as pixelFx from './scenes/pixelFx';
 
 import { initTelegram } from './platform/telegram';
 import { installErrorReporting } from './platform/errors';
-import { loadLang } from './i18n';
+import { loadLang, usePlatformLang } from './i18n';
+import { IS_YANDEX } from './platform/target';
+import { initYandex, setFreeze, yandexLang } from './platform/yandex';
+import { holdSound } from './platform/mixer';
 import { startSync } from './game/save';
 import { installFrameCap } from './platform/frameCap';
 import { measureCanvas, watchScreen } from './platform/screen';
@@ -16,12 +21,24 @@ import { lazyIdle } from './platform/lazy';
 const BG = '#1d1a26';
 
 installErrorReporting();
-initTelegram(BG);
-// Сохранение сверяется с облаком Telegram сразу, пока грузятся словарь и картинки (BootScene ждёт итог).
-void startSync();
+if (IS_YANDEX) {
+  // Яндекс Игры: сначала SDK (язык площадки и облако игрока), потом — как в Telegram.
+  void initYandex()
+    .catch(() => undefined)
+    .then(() => {
+      usePlatformLang(yandexLang());
+      void startSync();
+      return loadLang().catch(() => undefined);
+    })
+    .then(start);
+} else {
+  initTelegram(BG);
+  // Сохранение сверяется с облаком Telegram сразу, пока грузятся словарь и картинки (BootScene ждёт итог).
+  void startSync();
 
-// Словарь языка — до запуска: сцены строят надписи сразу.
-void loadLang().catch(() => undefined).then(start);
+  // Словарь языка — до запуска: сцены строят надписи сразу.
+  void loadLang().catch(() => undefined).then(start);
+}
 
 function start(): void {
   // Не больше 60 кадров на быстрых экранах и 30 — под окнами во весь экран (platform/frameCap.ts).
@@ -52,7 +69,10 @@ function start(): void {
   });
   // Размер на странице, отступы и новые размеры, когда окно меняется (полный экран Telegram, поворот).
   watchScreen(game);
+  // Яндекс Игры: на рекламе и паузе площадки цикл игры спит — время в магазине стоит (п. 4.7).
+  if (IS_YANDEX) setFreeze((on) => (on ? game.loop.sleep() : game.loop.wake()), holdSound);
   // Отладка: ?debug открывает доступ к игре из консоли браузера.
   // lazyIdle — дождаться частей игры, что подкачиваются отдельно (platform/lazy.ts; ждёт scripts/e2e.ts).
-  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { game, lazyIdle });
+  // effects, pixelFx — праздники, монетки и награды по команде (съёмка scripts/promo/pixelfx-*.cjs).
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { game, lazyIdle, effects, pixelFx });
 }

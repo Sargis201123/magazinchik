@@ -37,6 +37,7 @@ import {
 } from './common';
 import * as effects from './effects';
 import * as weatherFx from './weatherFx';
+import { look as cosmetic } from './look';
 
 /** Седые волосы (у пенсионеров, бабушек, Деда Мороза): по ним видно, что человек в годах. */
 const GREY_HAIR = new Set([0xd8d8e0, 0xc0cbdc, 0xffffff]);
@@ -211,7 +212,7 @@ export function makePerson(scene: StoreScene, x: number, y: number, look: Look):
   person.setData('facing', 'down');
   person.setData('baseScale', baseScale);
   // Сдвиг фазы: люди дышат и шагают не в унисон.
-  person.setData('phase', Math.random() * 1000);
+  person.setData('phase', cosmetic.frac() * 1000);
   if (look.stroller !== undefined) {
     const stroller = scene.art(0, 9, 'stroller').setTint(look.stroller);
     person.add(stroller);
@@ -228,7 +229,7 @@ export function makePerson(scene: StoreScene, x: number, y: number, look: Look):
 }
 
 export function newStride(x: number, y: number, speed = 1, stride = 1): Stride {
-  return { phase: 0, lastX: x, lastY: y, speed, stride, foot: Math.random() < 0.5 ? 0 : 2, endAt: -Infinity, vel: 0, ratio: 1, frame: 0, seg: 0, t: 0, lane: 0, laneGoal: 0, laneAt: 0, dirX: 0, dirY: 0 };
+  return { phase: 0, lastX: x, lastY: y, speed, stride, foot: cosmetic.chance(0.5) ? 0 : 2, endAt: -Infinity, vel: 0, ratio: 1, frame: 0, seg: 0, t: 0, lane: 0, laneGoal: 0, laneAt: 0, dirX: 0, dirY: 0 };
 }
 
 /** Шаг человека (makePerson заводит его сразу; у собранных иначе — заводится тут). */
@@ -243,7 +244,7 @@ export function strideOf(person: Phaser.GameObjects.Container): Stride {
 
 /** Вторая половинка пары идёт следом за первой — тем же путём, чуть позади. */
 export function addCompanion(scene: StoreScene, leader: Phaser.GameObjects.Container, look?: Look): void {
-  const companion = makePerson(scene, leader.x - 8, leader.y + 1, look ?? customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day));
+  const companion = makePerson(scene, leader.x - 8, leader.y + 1, look ?? customerLook(cosmetic.pick(SHIRTS), scene.state.day));
   weatherFx.addUmbrella(scene, companion);
   companion.setData('leader', leader);
   leader.setData('trail', [] as { x: number; y: number }[]);
@@ -252,7 +253,7 @@ export function addCompanion(scene: StoreScene, leader: Phaser.GameObjects.Conta
   const hearts = scene.time.addEvent({
     delay: 5000,
     loop: true,
-    callback: () => companion.active && Math.random() < 0.35 && effects.emote(scene, companion, 'emo_heart'),
+    callback: () => companion.active && cosmetic.chance(0.35) && effects.emote(scene, companion, 'emo_heart'),
   });
   companion.once('destroy', () => hearts.remove());
 }
@@ -395,7 +396,7 @@ export function queueIdle(scene: StoreScene): void {
     (c) => !c.serving && !c.gone && c.sprite.active && !c.sprite.getData('walking'),
   );
   if (!waiting.length) return;
-  const c = Phaser.Utils.Array.GetRandom(waiting);
+  const c = cosmetic.pick(waiting);
   const p = c.sprite;
   const left = patienceLeft(scene, c);
   const base = (p.getData('baseScale') as number) ?? 1;
@@ -403,11 +404,11 @@ export function queueIdle(scene: StoreScene): void {
     scene.tweens.add({ targets: p, y: p.y - 2, duration: 120, yoyo: true, repeat: 1, ease: 'Quad.easeOut' });
     return;
   }
-  if (left < 0.6 && Math.random() < 0.6) {
-    effects.emote(scene, p, Math.random() < 0.55 ? 'emo_clock' : 'emo_sigh');
+  if (left < 0.6 && cosmetic.chance(0.6)) {
+    effects.emote(scene, p, cosmetic.chance(0.55) ? 'emo_clock' : 'emo_sigh');
     return;
   }
-  if (Math.random() < 0.5) {
+  if (cosmetic.chance(0.5)) {
     // Переминается с ноги на ногу.
     scene.tweens.add({ targets: p, x: p.x + 0.7, duration: 160, yoyo: true, repeat: 2, ease: 'Sine.easeInOut' });
     return;
@@ -425,7 +426,7 @@ export function sellerIdle(scene: StoreScene): void {
   if (!s?.active || scene.sellerBusy || scene.ownerScanning() || s.getData('walking') || scene.waiting() > 0) return;
   const { counter } = scene.layout;
   if (Math.hypot(s.x - counter.x, s.y - counter.y) > 40) return;
-  if (scene.evening > 0.4 && Math.random() < 0.45) {
+  if (scene.evening > 0.4 && cosmetic.chance(0.45)) {
     effects.emote(scene, s, 'emo_zzz');
     setMood(scene, s, 'frown', 1200);
     return;
@@ -457,7 +458,7 @@ export function everyoneLooks(scene: StoreScene, x: number, y: number, key: Emot
     const dx = x - p.x;
     const dy = y - p.y;
     setFacing(p, Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down');
-    if (Math.random() < share) scene.time.delayedCall(Phaser.Math.Between(0, 300), () => effects.emote(scene, p, key));
+    if (cosmetic.chance(share)) scene.time.delayedCall(cosmetic.between(0, 300), () => effects.emote(scene, p, key));
   }
 }
 

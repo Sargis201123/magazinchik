@@ -13,3 +13,10 @@ e2e/diff
 # Разведка кадров промо-ролика (promo/record.ts --explore)
 promo/.explore
 promo/out/
+dist-yandex
+dist-yandex.zip
+
+# ролики сравнения pixelfx (переснимаются scripts/promo/pixelfx-pilot.cjs)
+promo/pixelfx-pilot/*.mp4
+promo/pixelfx-pilot/*.gif
+promo/pixelfx-pilot/*_contact.jpg

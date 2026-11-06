@@ -15,6 +15,7 @@ import { gearTier } from '../game/gear';
 import { ART, LIGHT_DEPTH, EVENING_FROM, LOT, LOT_DRIVE_END, type NightLight, type Lamp } from './common';
 import * as shelves from './shelves';
 import * as building from './building';
+import { look } from './look';
 
 /** Яркость пятен света от потолочных ламп на полу. */
 const LAMP_POOL_ALPHA = 0.09;
@@ -376,14 +377,14 @@ export function sunRay(scene: StoreScene, x: number, y: number, tint: number): P
 /** Случайная точка внутри одного из светящих лучей — там рождаются пылинки. */
 export function rayPoint(scene: StoreScene, point: Phaser.Types.Math.Vector2Like): void {
   const lit = [...scene.sunRays.map((r) => r.ray), ...scene.sideRays].filter((ray) => ray.active && ray.alpha > 0.01);
-  const ray = Phaser.Utils.Array.GetRandom(lit) as Phaser.GameObjects.Image | undefined;
+  const ray = look.pick(lit) as Phaser.GameObjects.Image | undefined;
   if (!ray) {
     point.x = point.y = -9999;
     return;
   }
   // Вдоль луча и поперёк него (он к полу шире), потом поворот вместе с лучом.
-  const along = Phaser.Math.FloatBetween(0.1, 0.75);
-  const across = Phaser.Math.FloatBetween(-0.4, 0.4) * ray.displayWidth * (0.5 + 0.5 * along);
+  const along = look.float(0.1, 0.75);
+  const across = look.float(-0.4, 0.4) * ray.displayWidth * (0.5 + 0.5 * along);
   const len = along * ray.displayHeight;
   const cos = Math.cos(ray.rotation);
   const sin = Math.sin(ray.rotation);
@@ -449,7 +450,7 @@ export function nightGlow<T extends NightLight['obj']>(scene: StoreScene, obj: T
 
 /** Вывеска-неон: ореол и светящиеся буквы поверх вечерней темноты. */
 export function neonSign(scene: StoreScene, x: number, y: number, text: string, size: string, color: number, width: number, store = false): void {
-  const seed = Math.random() * 1000;
+  const seed = look.frac() * 1000;
   // Ореол вывески — цветной свет на стене и тротуаре вокруг неё (и лёгкая дымка в воздухе).
   nightGlow(scene, scene.art(x, y, 'glow').setDisplaySize(width * 1.5, 34).setTint(color), 0.4, seed, { store, map: { scale: 1.3, gain: 1.5, haze: 0.45 } });
   const css = `#${color.toString(16).padStart(6, '0')}`;

@@ -29,6 +29,7 @@ import {
 } from './common';
 import * as persons from './persons';
 import * as building from './building';
+import { look } from './look';
 
 /** Деревья сквера: обычное чаще, остальные для разнообразия. */
 /** Слои, у которых есть кадры взмаха рук при ходьбе (art/walk.py). */
@@ -230,8 +231,8 @@ export function kickUp(scene: StoreScene, person: Phaser.GameObjects.Container, 
     scene.footDust.add(drops[0]);
     drops[0].once('destroy', () => scene.footDust.delete(drops[0]));
     const fly = drops.map((_, i) => ({
-      dx: back ? back * Phaser.Math.FloatBetween(2.5, 5.5) : (i - 1.5) * Phaser.Math.FloatBetween(1.5, 2.5),
-      up: Phaser.Math.FloatBetween(2.5, 4.5),
+      dx: back ? back * look.float(2.5, 5.5) : (i - 1.5) * look.float(1.5, 2.5),
+      up: look.float(2.5, 4.5),
     }));
     scene.tweens.addCounter({
       from: 0,
@@ -247,7 +248,7 @@ export function kickUp(scene: StoreScene, person: Phaser.GameObjects.Container, 
   }
   // Светлый клубок с тёмной каёмкой виден и на светлом полу, и на асфальте; в снег — белый.
   const [fill, edge] = !indoor && scene.weather === 'snow' ? [0xffffff, 0xc0cbdc] : [0xf4ece0, 0xb8a888];
-  const away = back || Phaser.Math.FloatBetween(-1, 1);
+  const away = back || look.float(-1, 1);
   // Облачко из двух клубков: побольше у ноги, поменьше чуть позади; растут, отлетают и тают.
   // Крошечный круг — восьмиугольником: по умолчанию Phaser режет его на ~100 сегментов.
   const puff = (px: number, py: number, r: number) => scene.add.circle(px, py, r, fill).setIterations(0.125).setStrokeStyle(0.5, edge);
@@ -272,12 +273,12 @@ export function idle(scene: StoreScene, person: Phaser.GameObjects.Container, no
   if (scene.lite || person === scene.seller) return;
   const at = person.getData('idleAt') as number | undefined;
   if (at === undefined) {
-    person.setData('idleAt', now + Phaser.Math.Between(2500, 7000));
+    person.setData('idleAt', now + look.between(2500, 7000));
     return;
   }
   if (now < at) return;
-  person.setData('idleAt', now + Phaser.Math.Between(5000, 11000));
-  const kind = Phaser.Math.Between(0, 3);
+  person.setData('idleAt', now + look.between(5000, 11000));
+  const kind = look.between(0, 3);
   if (kind === 0) person.setData('shiftUntil', now + 450);
   else if (kind === 3) person.setData('hitchUntil', now + 480);
   else if (kind === 1 && facing !== 'up') {
@@ -285,7 +286,7 @@ export function idle(scene: StoreScene, person: Phaser.GameObjects.Container, no
     const side = facing === 'left' ? -3 : 3;
     const phone = [scene.add.rectangle(side, 1.5, 2, 3, 0x262b44), scene.add.rectangle(side, 1, 1.2, 1.6, 0x9fd8f0)];
     person.add(phone);
-    scene.time.delayedCall(Phaser.Math.Between(1800, 3000), () => phone.forEach((o) => o.destroy()));
+    scene.time.delayedCall(look.between(1800, 3000), () => phone.forEach((o) => o.destroy()));
   } else if (!scene.tweens.isTweening(person)) {
     // Потянуться (зевнуть): медленно вытянуться и опуститься.
     const base = (person.getData('baseScale') as number | undefined) ?? 1;
@@ -327,7 +328,7 @@ export function breathe(scene: StoreScene, person: Phaser.GameObjects.Container,
   if (person.y < scene.layout.h + 4 && person.x > 0 && person.x < scene.layout.w) return;
   const next = (person.getData('breathAt') as number | undefined) ?? 0;
   if (now < next) return;
-  person.setData('breathAt', now + Phaser.Math.Between(1800, 2800));
+  person.setData('breathAt', now + look.between(1800, 2800));
   if (next === 0) return;
   const dx = facing === 'left' ? -3 : facing === 'right' ? 3 : 1;
   const puff = scene.add.circle(person.x + dx * person.scaleX, person.y - 7 * person.scaleY, 1.2, 0xffffff, 0.55).setIterations(0.125).setDepth(person.depth + 1);
@@ -400,7 +401,7 @@ export function reachShelf(scene: StoreScene, c: Customer, slot: { x: number; y:
   // Нашёл — улыбается, полка пустая — хмурится.
   persons.setMood(scene, c.sprite, id ? 'happy' : 'frown', id ? 1400 : 1200);
   if (!id) return;
-  const spots = from.length ? from : [{ x: slot.x + Phaser.Math.Between(-12, 12), y: slot.y - 5, texture: `item_${id}_0`, scale: 1 / ART, tint: 0xffffff }];
+  const spots = from.length ? from : [{ x: slot.x + look.between(-12, 12), y: slot.y - 5, texture: `item_${id}_0`, scale: 1 / ART, tint: 0xffffff }];
   // Товар перелетает дугой в руки (в корзину), над полкой — цена, которую принесёт. «2 по цене 1» — две штуки одна за другой.
   spots.forEach((spot, n) => {
     const item = scene.art(spot.x, spot.y, spot.texture).setScale(spot.scale).setTint(spot.tint).setDepth(c.sprite.y + 1).setVisible(n === 0);
@@ -477,6 +478,51 @@ export function squash(scene: StoreScene, obj: Phaser.GameObjects.Image | Phaser
       obj.setData({ sqX: undefined, sqY: undefined, sqPy: undefined });
     },
   });
+}
+
+/**
+ * «У действия есть тело» (приём pixelfx): замах — касание с короткой паузой — отдача. Человек чуть
+ * приседает перед действием, на касании рывком вытягивается и на миг замирает, потом пружинит назад.
+ * Только масштаб контейнера (позу и шаги ведёт animatePeople), без тряски камеры. Начать за ~70 мс до
+ * касания; пока прежний не доиграл — новый не накладывается. hit — сила (1 — пик на кассе).
+ */
+export function beat(scene: StoreScene, person: Phaser.GameObjects.Container | undefined, hit = 1): void {
+  if (scene.lite || !person?.active || person.getData('growing')) return;
+  // Не флаг, а срок: если твин убьют посреди (перестройка зала), человек не застрянет «в ударе».
+  if (((person.getData('beatUntil') as number | undefined) ?? 0) > scene.time.now) return;
+  const s = (person.getData('baseScale') as number | undefined) ?? 1;
+  person.setData('beatUntil', scene.time.now + 320);
+  const up = { scaleX: s * (1 - 0.03 * hit), scaleY: s * (1 + 0.07 * hit) };
+  scene.tweens.chain({
+    targets: person,
+    tweens: [
+      { scaleX: s * (1 + 0.04 * hit), scaleY: s * (1 - 0.07 * hit), duration: 70, ease: 'Quad.easeOut' },
+      { ...up, duration: 45, ease: 'Expo.easeOut' },
+      { ...up, duration: 45 },
+      { scaleX: s, scaleY: s, duration: 140, ease: 'Back.easeOut' },
+    ],
+    onComplete: () => person.active && person.setScale(s),
+  });
+}
+
+/**
+ * Белый кадр в миг касания (pixelfx: «1–2 белых кадра — и удар не вялый»): картинка на 40–60 мс
+ * заливается белым. Уже окрашенные (tint — порча, уценка) не трогаем: у них свой смысл.
+ */
+export function flashWhite(scene: StoreScene, img: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite, ms = 50): void {
+  if (scene.lite || !img.active || img.isTinted) return;
+  img.setTintFill(0xffffff);
+  scene.time.delayedCall(ms, () => img.active && img.clearTint());
+}
+
+/**
+ * Пауза в миг касания (hit-stop): только этот твин замирает на ms и идёт дальше. Ход игры (таймеры дел,
+ * очередь) не ждёт — меняется только картинка. Твин убили за это время — ничего не делаем.
+ */
+export function hold(scene: StoreScene, tween: Phaser.Tweens.Tween | Phaser.Tweens.TweenChain, ms = 50): void {
+  if (scene.lite || !tween.isPlaying()) return;
+  tween.pause();
+  scene.time.delayedCall(ms, () => !tween.isDestroyed() && tween.resume());
 }
 
 /**
@@ -646,14 +692,14 @@ export function updateDoor(scene: StoreScene): void {
   const key = scene.doorOpen < 0.34 ? 'door' : scene.doorOpen < 0.67 ? 'door_half' : 'door_open';
   if (scene.doorImg.texture.key !== key) scene.doorImg.setTexture(key);
   // В снегопад в открытые двери залетают снежинки и тают у входа.
-  if (scene.weather === 'snow' && scene.doorOpen > 0.6 && Math.random() < 0.3) {
-    const flake = scene.art(door.x + Phaser.Math.Between(-8, 8), h + 6, 'snowflake').setScale(1.4 / ART).setDepth(h + 4);
+  if (scene.weather === 'snow' && scene.doorOpen > 0.6 && look.chance(0.3)) {
+    const flake = scene.art(door.x + look.between(-8, 8), h + 6, 'snowflake').setScale(1.4 / ART).setDepth(h + 4);
     scene.tweens.add({
       targets: flake,
-      x: flake.x + Phaser.Math.Between(-6, 6),
-      y: h - Phaser.Math.Between(8, 22),
+      x: flake.x + look.between(-6, 6),
+      y: h - look.between(8, 22),
       alpha: 0,
-      duration: Phaser.Math.Between(700, 1200),
+      duration: look.between(700, 1200),
       ease: 'Sine.easeOut',
       onComplete: () => flake.destroy(),
     });

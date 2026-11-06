@@ -22,6 +22,11 @@ export interface AtlasPage {
   json: string;
   width: number;
   height: number;
+  /**
+   * Лист эффектов (fx0, fx1…): кадры pixelfx нужны не на заставке, а когда что-то случится, — игра
+   * докачивает их уже из магазина (pixelFx.loadSheets), первая загрузка от них не тяжелеет.
+   */
+  lazy?: boolean;
 }
 
 export interface Atlas {
@@ -35,6 +40,41 @@ interface Sprite {
   img: Rgba;
   x: number;
   y: number;
+  /** Пустые края срезаны (только кадры эффектов fx_*): где лежит вырезка в полном кадре и его размер. */
+  trim?: { x: number; y: number; w: number; h: number };
+}
+
+/**
+ * Кадры эффектов (fx_*, scripts/fx-bake.mjs) — общей рамки на всю анимацию, и в большинстве из них много
+ * пустоты: искры салюта или столб света занимают часть кадра. Пустые края срезаем, а в описании листа
+ * оставляем полный размер (trimmed, spriteSourceSize — формат JSON Hash): Phaser рисует кадр на прежнем
+ * месте, origin и анимация не меняются. Остальные картинки не трогаем: их режут меню (ui/sheet.ts).
+ */
+const TRIM_RE = /^fx_/;
+
+function trimmed(img: Rgba): { img: Rgba; trim: NonNullable<Sprite['trim']> } | null {
+  const { width: w, height: h, data } = img;
+  let x0 = w;
+  let y0 = h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!data[(y * w + x) * 4 + 3]) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  // Пустой кадр — точка: Phaser нужен хоть какой-то кусок листа.
+  if (x1 < 0) (x0 = 0), (y0 = 0), (x1 = 0), (y1 = 0);
+  const W = x1 - x0 + 1;
+  const H = y1 - y0 + 1;
+  if (W === w && H === h) return null;
+  const out = new Uint8Array(W * H * 4);
+  for (let y = 0; y < H; y++) out.set(data.subarray(((y + y0) * w + x0) * 4, ((y + y0) * w + x0 + W) * 4), y * W * 4);
+  return { img: { width: W, height: H, data: out }, trim: { x: x0, y: y0, w, h } };
 }
 
 const isPow2 = (n: number): boolean => (n & (n - 1)) === 0;
@@ -124,15 +164,26 @@ function blit(page: Uint8Array, pageW: number, { img, x, y }: Sprite): void {
  */
 export const atlasKeys = (dir: string): string[] => atlasKeysFrom(readdirSync(dir).filter((f) => f.endsWith('.png')).map((f) => f.slice(0, -4)));
 
-/** Сложить картинки dir/<key>.png в листы atlas0, atlas1… (второй — только если не влезло в один). */
+/**
+ * Сложить картинки dir/<key>.png в листы atlas0, atlas1… (второй — только если не влезло в один);
+ * кадры эффектов (fx_*) — в свои листы fx0… (lazy).
+ */
 export function buildAtlas(dir: string, keys: readonly string[]): Atlas {
   const loose: string[] = [];
-  let rest: Sprite[] = [];
+  const world: Sprite[] = [];
+  const fx: Sprite[] = [];
   for (const key of keys) {
     const img = decodePng(readFileSync(`${dir}/${key}.png`), `${key}.png`);
     if (img.width + 2 > PAGE_MAX || img.height + 2 > PAGE_MAX) loose.push(key);
-    else rest.push({ key, img, x: 0, y: 0 });
+    else if (TRIM_RE.test(key)) fx.push({ key, img, x: 0, y: 0, ...(trimmed(img) ?? {}) });
+    else world.push({ key, img, x: 0, y: 0 });
   }
+  return { pages: [...pack(world, 'atlas'), ...pack(fx, 'fx').map((p) => ({ ...p, lazy: true }))], loose };
+}
+
+/** Разложить картинки по листам <prefix>0, <prefix>1…: сколько войдёт в один, остальное — на следующий. */
+function pack(sprites: Sprite[], prefix: string): AtlasPage[] {
+  let rest = [...sprites];
   // Высокие — первыми, при равенстве — по имени: одинаковые картинки всегда дают одинаковый лист.
   rest.sort((a, b) => b.img.height - a.img.height || b.img.width - a.img.width || (a.key < b.key ? -1 : 1));
   const pages: AtlasPage[] = [];
@@ -163,11 +214,15 @@ export function buildAtlas(dir: string, keys: readonly string[]): Atlas {
     placed.forEach((s, i) => Object.assign(s, chosen.spots[i]));
     const data = new Uint8Array(chosen.width * chosen.height * 4);
     for (const s of placed) blit(data, chosen.width, s);
-    const name = `atlas${pages.length}`;
+    const name = `${prefix}${pages.length}`;
     // Кадры — в порядке имён: описание не зависит от порядка раскладки.
-    const frames: Record<string, { frame: { x: number; y: number; w: number; h: number } }> = {};
+    type Rect = { x: number; y: number; w: number; h: number };
+    const frames: Record<string, { frame: Rect; trimmed?: true; spriteSourceSize?: Rect; sourceSize?: { w: number; h: number } }> = {};
     for (const s of [...placed].sort((a, b) => (a.key < b.key ? -1 : 1))) {
-      frames[s.key] = { frame: { x: s.x + 1, y: s.y + 1, w: s.img.width, h: s.img.height } };
+      const frame = { x: s.x + 1, y: s.y + 1, w: s.img.width, h: s.img.height };
+      frames[s.key] = s.trim
+        ? { frame, trimmed: true, spriteSourceSize: { x: s.trim.x, y: s.trim.y, w: s.img.width, h: s.img.height }, sourceSize: { w: s.trim.w, h: s.trim.h } }
+        : { frame };
     }
     const meta = { image: `${name}.png`, size: { w: chosen.width, h: chosen.height }, scale: '1' };
     pages.push({
@@ -178,5 +233,5 @@ export function buildAtlas(dir: string, keys: readonly string[]): Atlas {
       height: chosen.height,
     });
   }
-  return { pages, loose };
+  return pages;
 }
