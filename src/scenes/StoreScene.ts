@@ -1355,7 +1355,12 @@ export class StoreScene extends Phaser.Scene {
 
   /** Переходник к effects.popup: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
   popup(x: number, y: number, text: string, color: string): void {
-    return effects.popup(this, x, y, text, color);
+    effects.popup(this, x, y, text, color);
+  }
+
+  /** Реплика человека над головой (на lift точек выше его) — светлым пузырём, идёт за ним (effects.say). */
+  speak(who: Phaser.GameObjects.Container, lift: number, text: string): void {
+    return effects.say(this, who, lift, text);
   }
 
   // ---------- Первые минуты новичка (game/onboarding.ts) ----------

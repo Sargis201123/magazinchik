@@ -347,7 +347,7 @@ export async function runSonya(scene: StoreScene): Promise<void> {
   if (!scene.sys.isActive()) return;
   pets.heartAt(scene, sprite.x, sprite.y - 14);
   music.sting('story');
-  scene.popup(sprite.x, sprite.y - 20, t('drama.visit'), '#fff3b0');
+  scene.speak(sprite, 20, t('drama.visit'));
   await scene.wait(9000);
   await persons.walkVia(scene, 
     sprite,
@@ -391,7 +391,7 @@ export async function runLiveGuest(scene: StoreScene): Promise<void> {
   pets.heartAt(scene, sprite.x, sprite.y - 14);
   if (!music.sting('coin')) sound.coin(sellerHome.x);
   haptic.success();
-  scene.popup(sprite.x, sprite.y - 20, `«${t(`live.guest.${guest.who}.line` as TextKey)}»`, '#cfe8ff');
+  scene.speak(sprite, 20, `«${t(`live.guest.${guest.who}.line` as TextKey)}»`);
   scene.time.delayedCall(1400, () => scene.popup(sellerHome.x - 20, sellerHome.y - 40, t('live.guest.gift', { n: coins }), '#fee761'));
   await scene.wait(7000);
   await persons.walkVia(scene, 
@@ -529,11 +529,11 @@ export function spawnCustomer(
   }
   if (nightGuest && Math.random() < 0.45) {
     const line = t(`nightGuest.${nightGuest}.${Phaser.Math.Between(0, NIGHT_GUEST_TYPES[nightGuest].lines - 1)}` as TextKey);
-    scene.time.delayedCall(1300, () => sprite.active && scene.popup(sprite.x, sprite.y - 16, line, '#cfe8ff'));
+    scene.time.delayedCall(1300, () => sprite.active && scene.speak(sprite, 16, line));
   }
   if (valya) {
     scene.valyaCame = true;
-    scene.time.delayedCall(1500, () => scene.popup(sprite.x, sprite.y - 16, t('popup.valya'), '#fff3b0'));
+    scene.time.delayedCall(1500, () => scene.speak(sprite, 16, t('popup.valya')));
   }
   const bubble = scene.art(0, -14, 'bubble').setVisible(false);
   sprite.add(bubble);
@@ -676,7 +676,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   if (c.hello) {
     // Первый постоянный новичка: знакомится или вернулся, как обещал, — реплика подольше и с сердечком.
     effects.emote(scene, c.sprite, 'emo_heart');
-    scene.popup(c.sprite.x, c.sprite.y - 20, t(c.hello === 'meet' ? 'first.regularMeet' : 'first.regularBack', { name: t(regularById(c.regular!).nameKey), shop: scene.shopTitle() }), '#fff3b0');
+    scene.speak(c.sprite, 20, t(c.hello === 'meet' ? 'first.regularMeet' : 'first.regularBack', { name: t(regularById(c.regular!).nameKey), shop: scene.shopTitle() }));
   } else if (c.regular) scene.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
   if (c.friend) scene.popup(c.sprite.x, c.sprite.y - 20, t('visit.hello', { name: c.friend.name }), '#fee761');
   await building.visitBargain(scene, c);
@@ -763,7 +763,7 @@ export function shelfWaitNeeded(scene: StoreScene, c: Customer, index: number, i
 
 export async function waitForShelf(scene: StoreScene, c: Customer, index: number, id: ProductId): Promise<boolean> {
   const has = () => (scene.state.shelves[index]?.items[id]?.length ?? 0) > 0;
-  scene.popup(c.sprite.x, c.sprite.y - 14, t('first.wait'), '#fff3b0');
+  scene.speak(c.sprite, 14, t('first.wait'));
   for (let waited = 0; waited < GRANNY_SHELF_WAIT_MS && !has(); waited += 300) {
     await scene.wait(300);
     if (c.gone) return true;
@@ -776,13 +776,13 @@ export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' 
   const index = shelfFor(scene.state, id);
   const oldest = scene.state.shelves[index]?.items[id]?.[0];
   if (!oldest) {
-    scene.popup(c.sprite.x, c.sprite.y - 14, t('popup.noStock'), '#ffd0d0');
+    scene.speak(c.sprite, 14, t('popup.noStock'));
     note(scene.stats, 'noStock');
     return 'empty';
   }
   // Ценовая война: у Эдуарда дешевле — часть покупателей уходит к нему.
   if (Math.random() < warLeaves(scene.state, id)) {
-    scene.popup(c.sprite.x, c.sprite.y - 14, t('popup.toEduard'), '#ffd0d0');
+    scene.speak(c.sprite, 14, t('popup.toEduard'));
     note(scene.stats, 'expensive');
     return 'eduard';
   }

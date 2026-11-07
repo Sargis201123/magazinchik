@@ -396,7 +396,7 @@ export async function runVisitor(scene: StoreScene, look: Look, line: string, ca
   ]);
   if (!sprite.active) return;
   persons.setFacing(sprite, 'right');
-  scene.popup(sprite.x, sprite.y - 18, line, '#fff3b0');
+  scene.speak(sprite, 18, line);
   effects.emote(scene, sprite, 'emo_heart');
   onArrive?.();
   await scene.wait(2200);
@@ -419,7 +419,7 @@ export async function runEduard(scene: StoreScene): Promise<void> {
   if (!sprite.active) return;
   persons.setFacing(sprite, 'up');
   effects.emote(scene, sprite, 'emo_question');
-  scene.popup(sprite.x, sprite.y - 18, t('popup.eduard'), '#d0e0ff');
+  scene.speak(sprite, 18, t('popup.eduard'));
   await scene.wait(2500);
   // Его магазин за дорогой, напротив входа — переходит по зебре; иначе — по соседству справа.
   const home = scene.rivalAcross ? { x: scene.layout.door.x, y: scene.streetY + 82 } : { x: scene.next.w + SIDE_SHOP_X + SIDE_SHOP_W * 0.62, y: scene.next.h - 2 };
@@ -443,7 +443,7 @@ export async function runCafeWaiter(scene: StoreScene): Promise<void> {
   ]);
   if (!sprite.active) return;
   persons.setFacing(sprite, 'up');
-  scene.popup(sprite.x, sprite.y - 18, t('popup.cafeWaiter'), '#fff3b0');
+  scene.speak(sprite, 18, t('popup.cafeWaiter'));
   await scene.wait(1500);
   const result = scene.cafeToday;
   if (!sprite.active) return;

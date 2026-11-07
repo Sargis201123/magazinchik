@@ -584,7 +584,7 @@ export async function visitBargain(scene: StoreScene, c: Customer): Promise<void
   const img = scene.bargainItems[n];
   const from = img?.active && img.visible ? [{ x: img.x, y: img.y, texture: img.texture.key, scale: img.scaleX, tint: 0xffffff }] : [];
   motion.reachShelf(scene, c, { x: at.x, y: at.y - 6 }, taken.id, from);
-  if (Math.random() < 0.5) scene.popup(c.sprite.x, c.sprite.y - 18, t('popup.bargainTake'), '#ffd0d0');
+  if (Math.random() < 0.5) scene.speak(c.sprite, 18, t('popup.bargainTake'));
   refreshBargain(scene);
 }
 
