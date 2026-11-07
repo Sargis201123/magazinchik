@@ -9,12 +9,18 @@
 "lavka_cart",
 "lavka_case",
 "lavka_chalk",
+"lavka_chick0",
+"lavka_chick1",
 "lavka_coop",
 "lavka_counter",
-"lavka_cow00",
-"lavka_cow01",
-"lavka_cow10",
-"lavka_cow11",
+"lavka_cow000",
+"lavka_cow001",
+"lavka_cow010",
+"lavka_cow011",
+"lavka_cow100",
+"lavka_cow101",
+"lavka_cow110",
+"lavka_cow111",
 "lavka_crop_cabbage1",
 "lavka_crop_cabbage2",
 "lavka_crop_cabbage3",
@@ -51,7 +57,9 @@
 "lavka_hen11",
 "lavka_hen20",
 "lavka_hen21",
-"lavka_hive",
+"lavka_hive0",
+"lavka_hive1",
+"lavka_hive2",
 "lavka_ico_apple",
 "lavka_ico_drop",
 "lavka_ico_grain",
@@ -328,19 +336,19 @@
 "y": 131.0
 },
 {
-"k": "lavka_hive",
+"k": "lavka_hive0",
 "x": 86.0,
-"y": 119.0
+"y": 123.0
 },
 {
-"k": "lavka_hive",
-"x": 99.0,
-"y": 122.0
+"k": "lavka_hive1",
+"x": 100.0,
+"y": 126.0
 },
 {
-"k": "lavka_hive",
-"x": 112.0,
-"y": 119.0
+"k": "lavka_hive2",
+"x": 114.0,
+"y": 123.0
 },
 {
 "k": "lavka_tree_apples",

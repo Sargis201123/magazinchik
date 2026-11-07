@@ -3,6 +3,8 @@
 //
 //   node scripts/fx-bake.mjs            кадры → public/assets/fx_*.png, описание → src/scenes/fxSheets.ts
 //   node scripts/fx-bake.mjs --preview  ещё и листы-превью (увеличенные, на тёмном фоне) → promo/pixelfx-pilot/sheets/
+//   node scripts/fx-bake.mjs --lavka    эффекты фермы «Лавки «Своё»» (src/lavka): полосой кадров в
+//                                       public/assets/lavka_fx_*.png, описание → src/lavka/fx.json (общий атлас не трогается)
 //
 // В игре pixelfx не работает вживую: его живой режим собирает весь кадр попиксельно на процессоре —
 // слабым Android в Telegram это не по силам. Здесь эффект один раз проигрывается в Node, кадры
@@ -68,6 +70,12 @@ const RAMP = {
   hearts: ['#3b2a35', '#9e2835', '#e43b44', '#f6757a', '#ffc4bc', '#f8ebcf', '#ffffff'],
   // Звездопад: холодный белый с голубым — звёзды, а не магия.
   stars: ['#181425', '#3a4466', '#5a6988', '#8b9bb4', '#c0cbdc', '#2ce8f5', '#ffffff'],
+  // Ферма лавки: вода для полива, молоко, листва урожая, перья, крылья бабочки.
+  drops: ['#124e89', '#0099db', '#2ce8f5', '#c0cbdc', '#ffffff'],
+  milk: ['#8b9bb4', '#c0cbdc', '#f8ebcf', '#ffffff'],
+  leaf: ['#265c42', '#3e8948', '#63c74d', '#98c95a', '#ffffff'],
+  feather: ['#8b9bb4', '#c0cbdc', '#ead4aa', '#f8ebcf', '#ffffff'],
+  wing: ['#733e39', '#f77622', '#feae34', '#fee761', '#ffffff'],
 };
 
 // ---------- что печём ----------
@@ -106,6 +114,25 @@ const EFFECTS = [
   // «Звездопад»: звёзды падают на длинных хвостах и гаснут кольцом на земле — вместо прежних белых чёрточек.
   { key: 'starfall', id: 'arcane/star-fall', fps: 10, down: 1, opts: { palette: RAMP.stars }, light: 0.5, alphaMin: 0.3, only: RAMP.stars, blend: 'add' },
   { key: 'coindrop', id: 'spawn/coin-drop', fps: 10, down: 1, opts: { palette: RAMP.gold, smoke: ['#ff00ff', '#ff00ff', '#ff00ff', '#ff00ff'], coins: 5 }, light: 0.3, alphaMin: 0.3, only: RAMP.gold, drop: true },
+];
+
+/**
+ * Эффекты фермы «Лавки «Своё»» (--lavka): живут не в общем атласе, а полосой кадров на эффект — сцена лавки
+ * грузит их сама (src/lavka), магазину они не нужны.
+ */
+const LAVKA_EFFECTS = [
+  // Полив: вода падает на грядку — корона брызг, кольца, капли (кусок до того, как всё уляжется).
+  { key: 'splash', id: 'water/splash', fps: 15, down: 3, from: 0.15, to: 1.3, opts: { palette: RAMP.drops }, light: 0.5, alphaMin: 0.3, only: RAMP.drops },
+  // Дойка: та же корона, но молоком и мельче.
+  { key: 'milk', id: 'water/splash', fps: 15, down: 4, from: 0.2, to: 1.1, opts: { palette: RAMP.milk }, light: 0.4, alphaMin: 0.35, only: RAMP.milk },
+  // Урожай: вспышка сбора листвой — крест света, кольцо, искры зелёным и золотым.
+  { key: 'leaves', id: 'pickups/collect-burst', fps: 15, down: 2, opts: { palette: RAMP.leaf }, light: 0.6, alphaMin: 0.3, only: RAMP.leaf },
+  // Яйцо: хлопок и перья, которые кружась опадают.
+  { key: 'feathers', id: 'holy/feather-burst', fps: 15, down: 4, to: 1.8, opts: { palette: RAMP.feather }, light: 0.3, alphaMin: 0.3, only: RAMP.feather },
+  // Посадка: росток пробивается, раскрывается бутон, вспышка (кусок до опадания лепестков).
+  { key: 'sprout', id: 'nature/healing-bloom', fps: 12, down: 3, from: 0.1, to: 1.4, opts: {}, light: 0.45, alphaMin: 0.3 },
+  // Бабочка над огородом: петля полёта, оранжевая (летает её по ферме уже игра).
+  { key: 'butterfly', id: 'critters/butterfly', fps: 15, down: 3, opts: { palette: RAMP.wing }, light: 0.25, alphaMin: 0.35, only: RAMP.wing },
 ];
 
 /**
@@ -386,6 +413,27 @@ function preview(s, encodePNG) {
   return encodePNG(W, H, out);
 }
 
+/** Эффекты фермы: кадры одной полосой (lavka_fx_<ключ>.png), описание — src/lavka/fx.json. */
+async function bakeLavka(lib, core, PAL, encodePNG) {
+  const out = {};
+  for (const e of LAVKA_EFFECTS) {
+    const s = await bake({ ...e, key: `tmp_${e.key}` }, lib, core, PAL, encodePNG);
+    for (let i = 0; i < s.frames; i++) rmSync(join(ASSETS, `${PREFIX}tmp_${e.key}_${i}.png`));
+    const strip = new Uint8ClampedArray(s.w * s.frames * s.h * 4);
+    s.images.forEach((img, n) => {
+      for (let y = 0; y < s.h; y++) strip.set(img.subarray(y * s.w * 4, (y + 1) * s.w * 4), (y * s.w * s.frames + n * s.w) * 4);
+    });
+    writeFileSync(join(ASSETS, `lavka_fx_${e.key}.png`), encodePNG(s.w * s.frames, s.h, strip));
+    out[e.key] = { source: s.source, frames: s.frames, fps: s.fps, loop: s.loop, w: s.w, h: s.h, ox: s.ox, oy: s.oy };
+    console.log(`lavka ${e.key.padEnd(9)} ${s.source.padEnd(24)} ${s.frames} кадров ${s.w}×${s.h}`);
+    if (process.argv.includes('--preview')) {
+      mkdirSync(PREVIEW, { recursive: true });
+      writeFileSync(join(PREVIEW, `lavka_${e.key}.png`), preview(s, encodePNG));
+    }
+  }
+  writeFileSync(join(ROOT, 'src', 'lavka', 'fx.json'), JSON.stringify(out, null, 1) + '\n');
+}
+
 async function main() {
   ensurePixelfx();
   const lib = await import(pathToFileURL(join(CACHE, 'tools', 'lib', 'fxlib.mjs')).href);
@@ -395,6 +443,7 @@ async function main() {
   // Ступени RAMP — только цвета палитры игры.
   const inPal = new Set(PAL.map((c) => c.map((v) => v.toString(16).padStart(2, '0')).join('')));
   for (const [name, ramp] of Object.entries(RAMP)) for (const h of ramp) if (!inPal.has(h.slice(1))) throw new Error(`RAMP.${name}: ${h} не из палитры Endesga 32`);
+  if (process.argv.includes('--lavka')) return bakeLavka(lib, core, PAL, encodePNG);
   // Старые кадры — прочь: число кадров могло уменьшиться.
   for (const f of readdirSync(ASSETS)) if (f.startsWith(PREFIX) && f.endsWith('.png')) rmSync(join(ASSETS, f));
   const sheets = [];

@@ -162,6 +162,8 @@ def build():
             for stage in (1, 2, 3):
                 own(f"crop_{crop}{stage}", F.crops(76, 36, crop, stage, seed=r * 3 + c))
     lay(F.pond(), 334, 388)
+    F.straw_floor(ground, 94, 296 + TOP, 234, 410 + TOP, seed=3)
+    dirt_blob([("e", 352, 302, 104, 36)], 41, base=H("#8a5a44"))
     lay(F.flowers_strip(80, 10, 2), 160, 250)
     # лавка: стены, полы, перегородки — три нешироких комнаты
     ink, wall = H("#181425"), H("#4a3b52")
@@ -208,7 +210,7 @@ def build():
             put("fence_h", x + 16, -6)
     put(own("scarecrow", F.scarecrow()), 128, 104)
     put(own("barrel", N.barrel()), 236, 60)
-    put(own("barn", F.barn()), 394, 150)
+    put(own("barn", F.weathervane_barn(F.barn())), 394, 150)
     put(own("hay", F.hay_stack()), 488, 230)
     # загон под амбаром
     for x in range(300, W, 32):
@@ -219,8 +221,8 @@ def build():
     put(own("trough", F.trough()), 400, 332)
     put(own("bucket", N.bucket()), 436, 322)
     put(own("greenhouse", F.greenhouse()), 80, 262)
-    for x, y in ((172, 238), (198, 244), (224, 238)):
-        put(own("hive", N.beehive()), x, y)
+    for i, (x, y) in enumerate(((172, 246), (200, 252), (228, 246))):
+        put(own(f"hive{i}", F.hive(i)), x, y)
     put(own("tree_apples", N.apples_on(src("tree"), 2)), 470, 410)
     put(own("tree_round_apples", N.apples_on(src("tree_round"), 3)), 300, 470)
     # курятник и выгул под сеткой
@@ -238,11 +240,14 @@ def build():
         put(own("milkcan", N.milk_can()), x, y)
     # живое и значки — картинки для сцены
     for v in (0, 1):
-        for down in (False, True):
-            own(f"cow{v}{int(down)}", N.cow("right", v, down))
+        for head in (0, 1):
+            for tail in (0, 1):
+                own(f"cow{v}{head}{tail}", F.cow(v, head, tail))
     for v in range(3):
         for peck in (False, True):
-            own(f"hen{v}{int(peck)}", N.hen(v, peck))
+            own(f"hen{v}{int(peck)}", F.hen(v, peck))
+    own("chick0", F.chick(False))
+    own("chick1", F.chick(True))
     own("bee", N.bee())
     own("duck0", F.duck(0))
     own("duck1", F.duck(1))
@@ -298,7 +303,12 @@ def build():
 
 def main():
     build()
+    F.meadow(ground, seed=5)
+    F.fringe(ground, seed=7)
     F.grass_detail(ground, (0, 0, W, HGT + TOP), seed=17)
+    # тени под деревьями и стогом: на землю, мягко
+    for k, x, y, rx in (("tree", 470, 410, 22), ("tree", 300, 470, 24), ("hay", 488, 230, 20), ("birch", 30, 760, 14)):
+        F.soft_shadow(ground, x + 4, y + TOP - 2, rx, rx * 0.32)
     ground.save(OUT / "lavka_ground.png")
     for key, img in made.items():
         img.save(OUT / f"{key}.png")

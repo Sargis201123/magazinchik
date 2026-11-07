@@ -1,0 +1,62 @@
+{
+ "splash": {
+  "source": "water/splash",
+  "frames": 18,
+  "fps": 15,
+  "loop": false,
+  "w": 42,
+  "h": 23,
+  "ox": 0.5317,
+  "oy": 0.7826
+ },
+ "milk": {
+  "source": "water/splash",
+  "frames": 14,
+  "fps": 15,
+  "loop": false,
+  "w": 31,
+  "h": 17,
+  "ox": 0.5161,
+  "oy": 0.7941
+ },
+ "leaves": {
+  "source": "pickups/collect-burst",
+  "frames": 21,
+  "fps": 15,
+  "loop": false,
+  "w": 35,
+  "h": 39,
+  "ox": 0.4571,
+  "oy": 0.9744
+ },
+ "feathers": {
+  "source": "holy/feather-burst",
+  "frames": 27,
+  "fps": 15,
+  "loop": false,
+  "w": 34,
+  "h": 30,
+  "ox": 0.4706,
+  "oy": 0.3667
+ },
+ "sprout": {
+  "source": "nature/healing-bloom",
+  "frames": 16,
+  "fps": 12,
+  "loop": false,
+  "w": 24,
+  "h": 26,
+  "ox": 0.4861,
+  "oy": 0.9615
+ },
+ "butterfly": {
+  "source": "critters/butterfly",
+  "frames": 48,
+  "fps": 15,
+  "loop": true,
+  "w": 30,
+  "h": 17,
+  "ox": 0.5111,
+  "oy": 0.5098
+ }
+}

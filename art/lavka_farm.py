@@ -687,3 +687,252 @@ def icon_apple():
     c.px(6, 0, LEAF)
     c.outline(INK)
     return c.img
+
+
+# ---------------------------------------------------------------- животные, крупнее и с объёмом
+
+
+def cow(variant=0, head=0, tail=0):
+    """Корова 46×36: пятнистая (чёрно-белая или рыжая), рога, ухо, вымя, копыта; head 0 — голова поднята,
+    1 — жуёт траву (опущена); tail 0/1 — хвост висит / отмахивается."""
+    w, h = 48, 38
+    c = Canvas(w, h)
+    body, body_l, body_d = WHITE, H("#f4ead6"), H("#c0cbdc")
+    spot, spot_l = (H("#262b44"), H("#3a4466")) if variant == 0 else (H("#8f563b"), H("#b86f50"))
+    # дальние ноги (темнее), ближние
+    for x, far in ((12, True), (17, False), (32, True), (37, False)):
+        col = body_d if far else body_l
+        c.rect(x, 24, 4, 9, col)
+        c.vline(x, 24, 9, lit(col, 0.2))
+        c.rect(x, 32, 4, 3, H("#3b2a35"))
+        c.hline(x, 32, 4, H("#5a4a5e"))
+    # тело: бочкой, свет сверху-слева
+    c.ellipse(24, 18, 17, 9.5, body)
+    c.ellipse(22, 15, 13, 5.5, WHITE)
+    for x in range(9, 41):
+        for y in range(18, 28):
+            if c.get(x, y)[3] and (y - 18) > 5 + (x % 3 == 0):
+                c.px(x, y, body_d if y > 24 else body_l)
+    # пятна
+    rnd = random.Random(variant * 5 + 3)
+    for sx, sy, rx, ry in ((16, 14, 5, 4), (29, 19, 5.5, 4), (36, 12, 3, 2.5), (11, 21, 2.5, 2)):
+        c.ellipse(sx + rnd.randint(-1, 1), sy, rx, ry, spot)
+        c.px(sx - 1, sy - 2, spot_l)
+    # вымя
+    c.ellipse(28, 26, 4, 2.6, H("#f6757a"))
+    c.px(26, 28, H("#c48878"))
+    c.px(30, 28, H("#c48878"))
+    c.px(27, 25, H("#ffc4bc"))
+    # хвост
+    if tail:
+        c.line(8, 13, 2, 9, body_d)
+        c.rect(0, 7, 3, 3, spot)
+    else:
+        c.vline(7, 13, 10, body_d)
+        c.rect(6, 22, 3, 3, spot)
+    # голова
+    hx, hy = (37, 12) if head else (37, 3)
+    c.round_rect(hx, hy, 11, 12, body, r=3)
+    c.vline(hx, hy + 2, 8, body_l)
+    c.rect(hx + 1, hy, 6, 4, spot)
+    c.rect(hx + 3, hy + 8, 8, 5, H("#f6757a"))
+    c.hline(hx + 3, hy + 8, 8, H("#ffc4bc"))
+    c.px(hx + 5, hy + 10, H("#9e2835"))
+    c.px(hx + 8, hy + 10, H("#9e2835"))
+    c.px(hx + 7, hy + 4, INK)
+    c.px(hx + 7, hy + 3, WHITE)
+    c.px(hx + 2, hy - 1, H("#e7cc9f"))
+    c.px(hx + 1, hy - 2, H("#e7cc9f"))
+    c.px(hx + 8, hy - 1, H("#e7cc9f"))
+    c.px(hx + 9, hy - 2, H("#e7cc9f"))
+    c.rect(hx - 3, hy + 3, 3, 3, body_d)  # ухо
+    if head:  # травинки у морды
+        for dx in (2, 5, 9):
+            c.px(hx + dx, hy + 13, LEAF)
+            c.px(hx + dx, hy + 12, LEAF_L)
+    c.outline(INK)
+    return c.img
+
+
+def hen(variant=0, peck=False):
+    """Курица 16×15 с объёмом: светлая спина, тёмное подхвостье, гребешок, бородка, лапки."""
+    c = Canvas(18, 16)
+    body = [WHITE, H("#b86f50"), H("#e7cc9f")][variant % 3]
+    by = 6 if not peck else 7
+    c.ellipse(8, by + 3, 5.5, 4, body)
+    c.ellipse(7, by + 2, 3.5, 2.2, lit(body, 0.25))
+    c.hline(4, by + 6, 9, lit(body, -0.25))
+    c.rect(2, by - 1, 3, 4, lit(body, -0.12))
+    c.px(2, by - 2, lit(body, -0.25))
+    c.px(9, by + 3, lit(body, -0.15))  # крыло
+    c.hline(7, by + 4, 4, lit(body, -0.18))
+    hx, hy = (12, by - 3) if not peck else (13, by + 2)
+    c.rect(hx, hy, 4, 4, body)
+    c.px(hx, hy, lit(body, 0.2))
+    c.px(hx + 1, hy - 1, H("#e43b44"))
+    c.px(hx + 2, hy - 1, H("#e43b44"))
+    c.px(hx + 2, hy - 2, H("#e43b44"))
+    c.px(hx + 4, hy + 1, H("#feae34"))
+    c.px(hx + 4, hy + 2, H("#f77622"))
+    c.px(hx + 2, hy + 1, INK)
+    if not peck:
+        c.px(hx + 3, hy + 3, H("#e43b44"))
+    c.vline(6, by + 7, 3, H("#feae34"))
+    c.vline(10, by + 7, 3, H("#feae34"))
+    c.px(5, by + 9, H("#feae34"))
+    c.px(11, by + 9, H("#feae34"))
+    c.outline(INK)
+    return c.img
+
+
+def chick(hop=False):
+    c = Canvas(8, 8)
+    y = 2 if not hop else 1
+    c.ellipse(4, y + 3, 2.6, 2.2, H("#fee761"))
+    c.px(3, y + 2, WHITE)
+    c.px(6, y + 2, H("#f77622"))
+    c.px(5, y + 2, INK)
+    c.px(3, y + 5, H("#feae34"))
+    c.px(5, y + 5, H("#feae34"))
+    c.outline(INK)
+    return c.img
+
+
+def hive(color=0):
+    """Улей 22×28: крашеные корпуса (жёлтый, голубой, белый), крыша-домик, леток с прилётной доской."""
+    paint = [(H("#fee761"), H("#feae34"), WHITE), (H("#8fd3ff"), H("#0099db"), WHITE), (WHITE, H("#c0cbdc"), WHITE)][color % 3]
+    base, dark, hi = paint
+    c = Canvas(22, 28)
+    for y in range(0, 6):
+        inset = max(0, 4 - y)
+        c.hline(inset, y, 22 - 2 * inset, ROOF if y < 3 else ROOF_D)
+    c.hline(4, 0, 14, ROOF_L)
+    for k, y in enumerate((6, 13)):
+        c.rect(2, y, 18, 7, base)
+        c.hline(2, y, 18, hi)
+        c.hline(2, y + 6, 18, dark)
+        c.vline(19, y, 7, dark)
+        c.vline(2, y + 1, 5, hi)
+    c.rect(2, 20, 18, 4, base)
+    c.hline(2, 23, 18, dark)
+    c.rect(7, 21, 8, 2, INK)
+    c.rect(5, 23, 12, 2, WOOD_L)
+    c.hline(5, 24, 12, WOOD)
+    c.rect(3, 25, 3, 3, WOOD_D)
+    c.rect(16, 25, 3, 3, WOOD_D)
+    c.outline(INK)
+    return ground_shadow(c.img, pad=2, alpha=45, squash=0.25)
+
+
+def weathervane_barn(img):
+    """Флюгер-петушок на коньке амбара (дорисовывается поверх готового амбара)."""
+    w, h = img.size
+    c = Canvas(w, h + 14)
+    c.img.alpha_composite(img, (0, 14))
+    x = w // 2
+    c.vline(x, 4, 13, STONE_D)
+    c.hline(x - 5, 9, 11, STONE_D)
+    c.px(x - 6, 9, STONE)
+    c.px(x + 6, 9, STONE)
+    c.rect(x - 3, 1, 6, 4, H("#feae34"))
+    c.px(x + 3, 1, H("#feae34"))
+    c.px(x + 4, 0, H("#feae34"))
+    c.px(x - 4, 2, H("#f77622"))
+    c.px(x - 4, 3, H("#f77622"))
+    c.px(x + 2, 1, INK)
+    return c.img
+
+
+# ---------------------------------------------------------------- земля сочнее
+
+GREENS = [H("#265c42"), H("#3e8948"), H("#5e9535"), H("#63c74d"), H("#7cb342"), H("#98c95a")]
+BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
+
+
+def _value_noise(w, h, cell, seed):
+    rnd = random.Random(seed)
+    gw, gh = w // cell + 2, h // cell + 2
+    grid = [[rnd.random() for _ in range(gw)] for _ in range(gh)]
+
+    def at(x, y):
+        gx, gy = x / cell, y / cell
+        x0, y0 = int(gx), int(gy)
+        fx, fy = gx - x0, gy - y0
+        fx, fy = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)
+        a = grid[y0][x0] * (1 - fx) + grid[y0][x0 + 1] * fx
+        b = grid[y0 + 1][x0] * (1 - fx) + grid[y0 + 1][x0 + 1] * fx
+        return a * (1 - fy) + b * fy
+    return at
+
+
+def meadow(img, seed=5):
+    """Луг пятнами: крупный шум сдвигает зелёный на ступень светлее или темнее, переход — дизерингом.
+    Трогает только траву (цвета из ступеней зелёного)."""
+    w, h = img.size
+    n1 = _value_noise(w, h, 56, seed)
+    n2 = _value_noise(w, h, 17, seed + 1)
+    px = img.load()
+    index = {g[:3]: i for i, g in enumerate(GREENS)}
+    for y in range(h):
+        for x in range(w):
+            p = px[x, y]
+            i = index.get(p[:3])
+            if i is None:
+                continue
+            v = n1(x, y) * 0.75 + n2(x, y) * 0.25
+            t = BAYER4[(y & 3) * 4 + (x & 3)] / 16
+            if v > 0.6 and (v - 0.6) * 4 > t and i < len(GREENS) - 1:
+                px[x, y] = GREENS[i + 1]
+            elif v < 0.4 and (0.4 - v) * 4 > t and i > 0:
+                px[x, y] = GREENS[i - 1]
+
+
+def fringe(img, seed=7):
+    """Край тропинок и земли: травинки заходят на землю, на кромке — камешки."""
+    w, h = img.size
+    px = img.load()
+    rnd = random.Random(seed)
+    greens = {g[:3] for g in GREENS}
+
+    def grass(x, y):
+        return 0 <= x < w and 0 <= y < h and px[x, y][:3] in greens
+    soil = []
+    for y in range(1, h - 1):
+        for x in range(1, w - 1):
+            p = px[x, y][:3]
+            if p in greens:
+                continue
+            if p[0] > 110 and p[1] < 140 and p[2] < 110 and (grass(x, y - 1) or grass(x, y + 1) or grass(x - 1, y) or grass(x + 1, y)):
+                soil.append((x, y))
+    for x, y in soil:
+        r = rnd.random()
+        if r < 0.22:
+            px[x, y] = GREENS[3]
+            if y > 0:
+                px[x, y - 1] = GREENS[4] if px[x, y - 1][:3] not in greens else px[x, y - 1]
+        elif r < 0.27:
+            px[x, y] = H("#c0cbdc")
+
+
+def soft_shadow(img, cx, cy, rx, ry, alpha=55):
+    """Мягкая тень на земле (дизерингом в два шага: край светлее)."""
+    d = Image.new("RGBA", img.size)
+    dd = ImageDraw.Draw(d)
+    dd.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=(24, 20, 37, alpha // 2))
+    dd.ellipse((cx - rx * 0.75, cy - ry * 0.7, cx + rx * 0.75, cy + ry * 0.7), fill=(24, 20, 37, alpha))
+    img.alpha_composite(d)
+
+
+def straw_floor(img, x0, y0, x1, y1, seed=3):
+    """Утоптанный выгул: земля с соломинками."""
+    px = img.load()
+    rnd = random.Random(seed)
+    cols = [H("#8f563b"), H("#8f563b"), H("#8f563b"), H("#733e39"), H("#b86f50")]
+    for y in range(y0, y1):
+        for x in range(x0, x1):
+            px[x, y] = rnd.choice(cols)
+    for _ in range((x1 - x0) * (y1 - y0) // 40):
+        x, y = rnd.randrange(x0, x1 - 3), rnd.randrange(y0, y1)
+        col = rnd.choice((HAY_D, HAY_D, HAY))
+        for k in range(rnd.randint(2, 3)):
+            px[x + k, y] = col

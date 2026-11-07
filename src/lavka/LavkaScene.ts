@@ -55,6 +55,7 @@ import * as persons from '../scenes/persons';
 import * as pixelFx from '../scenes/pixelFx';
 import { GOOD_ICON, LavkaHud, dowName, goodName, morningSheet, showSummary } from './lavkaUi';
 import layout from './layout.json';
+import fxSheets from './fx.json';
 
 /** Мир в точках (рисунок 512×940 пикселей, ART = 2; над ним ещё поле, layout.top). Полосы — как в art/lavka.py:
  *  ферма 0…262, лавка 262…380 (три узкие комнаты, справа — место под расширение), площадка и дорога 380…470. */
@@ -100,10 +101,10 @@ const TROUGH = { x: 200, y: 166 };
 const HAY = { x: 244, y: 115 };
 const FEEDER = { x: 80, y: 185 };
 const HIVES = [
-  { x: 86, y: 119 },
-  { x: 99, y: 122 },
-  { x: 112, y: 119 },
-];
+  { x: 86, y: 123 },
+  { x: 100, y: 126 },
+  { x: 114, y: 123 },
+]
 const TREES = [
   { x: 235, y: 205 },
   { x: 150, y: 235 },
@@ -194,6 +195,7 @@ export class LavkaScene extends Phaser.Scene {
   private nextPuff = 0;
   private nextServe = 0;
   private visible = 0;
+  private props = new Map<string, Phaser.GameObjects.Image>();
 
   constructor() {
     super('farm');
@@ -206,10 +208,22 @@ export class LavkaScene extends Phaser.Scene {
   /** Свои картинки (не из общего атласа, art/lavka.py) — один раз за игру. */
   preload(): void {
     for (const key of layout.keys) if (!this.textures.exists(key)) this.load.image(key, png(key));
+    // Эффекты фермы (scripts/fx-bake.mjs --lavka): полосой кадров на эффект.
+    for (const k of Object.keys(fxSheets)) {
+      const key = `lavka_fx_${k}`;
+      if (!this.textures.exists(key)) this.load.image(key, png(key));
+    }
   }
 
   create(): void {
     if (!this.lite) void pixelFx.loadSheets(this);
+    for (const [k, f] of Object.entries(fxSheets)) {
+      const key = `lavka_fx_${k}`;
+      // полоса кадров слева направо: режем сами (в облегчённом Phaser нет загрузчика spritesheet)
+      const tex = this.textures.get(key);
+      for (let n = 0; n < f.frames; n++) if (!tex.has(String(n))) tex.add(String(n), 0, n * f.w, 0, f.w, f.h);
+      if (!this.anims.exists(key)) this.anims.create({ key, frames: Array.from({ length: f.frames }, (_, n) => ({ key, frame: String(n) })), frameRate: f.fps, repeat: f.loop ? -1 : 0 });
+    }
     setListener(() => {
       const v = this.cameras.main.worldView;
       return { left: v.x, width: v.width };
@@ -250,6 +264,7 @@ export class LavkaScene extends Phaser.Scene {
       const img = this.art(p.x, p.y, p.k).setOrigin(0.5, 1).setDepth(p.z ?? p.y);
       if (p.tint !== undefined) img.setTint(p.tint);
       if (p.flip) img.setFlipX(true);
+      if (!this.props.has(p.k)) this.props.set(p.k, img);
       if (p.k === 'lavka_tree_apples' && p.y < 300) this.treeImgs[0] = img;
       if (p.k === 'lavka_tree_round_apples' && p.y < 300) this.treeImgs[1] = img;
     }
@@ -301,11 +316,23 @@ export class LavkaScene extends Phaser.Scene {
     const img = this.add.image(0, -0.5, icon).setScale(1.15 / ART);
     const box = this.add.container(x, y, [back, img]).setDepth(1003).setVisible(false);
     this.tweens.add({ targets: box, y: y - 1.5, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    // Появилось — выпрыгивает с пружинкой (а не просто загорается).
+    box.on('show', () => {
+      if (this.lite) return;
+      box.setScale(0.2);
+      this.tweens.add({ targets: box, scale: 1, duration: 320, ease: 'Back.easeOut' });
+    });
     if (onTap) {
       box.setSize(14, 14).setInteractive({ useHandCursor: true });
       box.on('pointerup', () => !this.drag.moved && onTap());
     }
     return { box, icon: img };
+  }
+
+  /** Облачко включается — с пружинкой, гаснет — сразу. */
+  private show(c: Callout, on: boolean): void {
+    if (on && !c.box.visible) c.box.emit('show');
+    c.box.setVisible(on);
   }
 
   private zone(x: number, y: number, w: number, h: number, fn: () => void): void {
@@ -352,19 +379,89 @@ export class LavkaScene extends Phaser.Scene {
     this.zone(CHEESE_ROOM.x, CHEESE_ROOM.y, CHEESE_ROOM.w, CHEESE_ROOM.h, () => this.cheese());
   }
 
-  /** Собрал — товар летит к задней двери лавки, над местом — «+N». */
+  // ---------- сочность: у каждого касания есть тело (как в магазине: motion.ts, pixelFx) ----------
+
+  /** Эффект фермы (pixelfx, запечён в нашей палитре): проигрывается один раз (бабочка — петлёй). */
+  private fx(key: keyof typeof fxSheets, x: number, y: number, scale = 1, depth = 1002): Phaser.GameObjects.Sprite | null {
+    if (this.lite) return null;
+    const f = fxSheets[key];
+    const spr = this.add.sprite(x, y, `lavka_fx_${key}`, '0').setOrigin(f.ox, f.oy).setScale(scale / ART).setDepth(depth);
+    spr.play(`lavka_fx_${key}`);
+    if (!f.loop) spr.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => spr.destroy());
+    return spr;
+  }
+
+  /** Пружинка: предмет приседает и вытягивается обратно, низ стоит на месте. */
+  private squash(img: Phaser.GameObjects.Image | undefined, sx = 1.1, sy = 0.86, ms = 90): void {
+    if (this.lite || !img?.active || img.getData('sq')) return;
+    const bx = img.scaleX;
+    const by = img.scaleY;
+    img.setData('sq', true);
+    this.tweens.add({ targets: img, scaleX: bx * sx, scaleY: by * sy, duration: ms, yoyo: true, ease: 'Quad.easeOut', onComplete: () => {
+      img.setScale(bx, by);
+      img.setData('sq', false);
+    } });
+  }
+
+  /** Белый кадр в миг касания — удар не вялый. */
+  private flash(img: Phaser.GameObjects.Image | undefined, ms = 60): void {
+    if (this.lite || !img?.active || img.isTinted) return;
+    img.setTintFill(0xffffff);
+    this.time.delayedCall(ms, () => img.active && img.clearTint());
+  }
+
+  /** Круг под пальцем: нажатие засчитано. */
+  private ripple(x: number, y: number): void {
+    const ring = this.add.circle(x, y, 3).setStrokeStyle(1, 0xffffff, 0.95).setDepth(1010);
+    this.tweens.add({ targets: ring, scale: 3, alpha: 0, duration: 320, ease: 'Quad.easeOut', onComplete: () => ring.destroy() });
+  }
+
+  /** Собрал — товар выскакивает белой вспышкой, зависает и, кувыркаясь, летит к задней двери; там — «шлёп». */
   private gather(g: Good, n: number, from: { x: number; y: number }): void {
     haptic.tap();
     sound.pop(Math.min(3, n), from.x);
-    this.popup(from.x, from.y - 10, `+${n}`, '#ffffff');
-    pixelFx.burst(this, 'star', from.x, from.y - 4, { zoom: 1 });
-    for (let k = 0; k < Math.min(n, 4); k++) {
-      const img = this.art(from.x, from.y - 4, GOOD_ICON[g]).setDepth(1001);
-      const tx = BACK_DOOR.x + Phaser.Math.Between(-4, 4);
-      this.tweens.add({ targets: img, x: tx, duration: 700, delay: k * 80, ease: 'Sine.easeInOut', onComplete: () => img.destroy() });
-      this.tweens.add({ targets: img, y: { from: from.y - 4, to: BACK_DOOR.y }, duration: 700, delay: k * 80, ease: (v: number) => v - 0.8 * Math.sin(v * Math.PI) });
+    this.popGood(from.x, from.y - 12, g, n);
+    const count = Math.min(n, 4);
+    for (let k = 0; k < count; k++) {
+      const sx = from.x + (k - (count - 1) / 2) * 4;
+      const img = this.art(sx, from.y - 4, GOOD_ICON[g]).setDepth(1001).setScale(0.4 / ART);
+      if (!this.lite) img.setTintFill(0xffffff);
+      // выпрыгнул
+      this.tweens.add({ targets: img, y: from.y - 12 - k * 2, scale: 1.4 / ART, duration: 180, delay: k * 60, ease: 'Back.easeOut', onComplete: () => {
+        img.clearTint();
+        const tx = BACK_DOOR.x + Phaser.Math.Between(-4, 4);
+        const sy = img.y;
+        this.tweens.add({ targets: img, x: tx, angle: Phaser.Math.Between(-200, 200), scale: 0.9 / ART, duration: 620, delay: 120, ease: 'Sine.easeInOut', onComplete: () => {
+          img.destroy();
+          if (k === count - 1) this.landAtDoor();
+        } });
+        this.tweens.add({ targets: img, y: { from: sy, to: BACK_DOOR.y }, duration: 620, delay: 120, ease: (v: number) => v - 0.7 * Math.sin(v * Math.PI) });
+      } });
     }
-    this.time.delayedCall(720, () => this.refreshStock());
+    this.time.delayedCall(950, () => this.refreshStock());
+  }
+
+  /** «+N» со значком товара: выпрыгивает пружиной, повисит и тает. */
+  private popGood(x: number, y: number, g: Good, n: number): void {
+    const label = this.worldText(-2, 0, `+${n}`, 6, '#ffffff').setStroke('#181425', 7).setOrigin(1, 0.5);
+    const icon = this.art(1, 0, GOOD_ICON[g]).setOrigin(0, 0.5).setScale(1.2 / ART);
+    const box = this.add.container(x, y, [label, icon]).setDepth(1006).setScale(0.3);
+    this.tweens.add({ targets: box, scale: 1, y: y - 4, duration: 260, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: box, y: y - 12, alpha: 0, delay: 700, duration: 500, ease: 'Quad.easeIn', onComplete: () => box.destroy() });
+  }
+
+  /** Товар долетел до лавки: пыль у двери и стук. */
+  private landAtDoor(): void {
+    sound.pop(2, BACK_DOOR.x);
+    if (this.lite) return;
+    for (const dx of [-5, 5]) {
+      const puff = this.art(BACK_DOOR.x + dx, BACK_DOOR.y + 1, 'lavka_puff').setDepth(BACK_DOOR.y + 5).setAlpha(0.9).setScale(0.6 / ART);
+      this.tweens.add({ targets: puff, x: puff.x + dx, y: puff.y - 3, alpha: 0, scale: 1.1 / ART, duration: 420, onComplete: () => puff.destroy() });
+    }
+  }
+
+  private propImg(key: string): Phaser.GameObjects.Image | undefined {
+    return this.props.get(key);
   }
 
   private nothing(x: number, y: number, key: TextKey = 'lavka.notReady'): void {
@@ -378,7 +475,10 @@ export class LavkaScene extends Phaser.Scene {
     if (!r.n) return this.nothing(cow.x, cow.y - 16);
     this.day = r.day;
     this.hinted.add('cow');
-    this.tweens.add({ targets: cow, scaleY: { from: 0.9 / ART, to: 1 / ART }, duration: 260, ease: 'Back.easeOut' });
+    this.ripple(cow.x, cow.y - 8);
+    this.squash(cow, 1.08, 0.9, 100);
+    this.flash(cow);
+    this.fx('milk', cow.x + (cow.flipX ? -3 : 3), cow.y - 2, 1.2);
     this.gather('milk', r.n, { x: cow.x, y: cow.y - 6 });
   }
 
@@ -390,8 +490,10 @@ export class LavkaScene extends Phaser.Scene {
     this.hinted.add('hay');
     haptic.tap();
     sound.pop(2, TROUGH.x);
+    this.ripple(HAY.x, HAY.y - 8);
+    this.squash(this.propImg('lavka_hay'), 1.12, 0.84);
     this.fly('lavka_ico_hayicon', HAY, TROUGH, 3);
-    this.popup(TROUGH.x, TROUGH.y - 14, '🌾', '#fee761');
+    this.time.delayedCall(560, () => this.fx('leaves', TROUGH.x, TROUGH.y - 2, 0.7));
   }
 
   private collectEgg(spot: number): void {
@@ -401,6 +503,8 @@ export class LavkaScene extends Phaser.Scene {
     this.day = r.day;
     this.hinted.add('egg');
     this.eggImgs[spot].setVisible(false);
+    this.ripple(EGG_SPOTS[spot].x, EGG_SPOTS[spot].y - 3);
+    this.fx('feathers', EGG_SPOTS[spot].x, EGG_SPOTS[spot].y - 4, 0.9);
     this.gather('eggs', 1, EGG_SPOTS[spot]);
   }
 
@@ -412,6 +516,8 @@ export class LavkaScene extends Phaser.Scene {
     this.hinted.add('grain');
     haptic.tap();
     sound.pop(1, FEEDER.x);
+    this.ripple(FEEDER.x, FEEDER.y - 4);
+    this.squash(this.propImg('lavka_feeder'), 1.15, 0.8);
     this.fly('lavka_ico_grain', { x: FEEDER.x - 16, y: FEEDER.y - 20 }, FEEDER, 2);
   }
 
@@ -422,18 +528,29 @@ export class LavkaScene extends Phaser.Scene {
     const r = tapBed(this.day, i);
     this.day = r.day;
     this.hinted.add('bed');
-    if (r.did === 'harvest') return this.gather('veg', r.n, { x, y });
+    this.ripple(x, y);
+    const crop = this.bedCrop[i];
+    if (r.did === 'harvest') {
+      this.flash(crop, 70);
+      this.fx('leaves', x, y + 2, 1);
+      return this.gather('veg', r.n, { x, y });
+    }
     haptic.tap();
     if (r.did === 'plant') {
       sound.pop(0, x);
-      this.popup(x, y - 6, '🌱', '#98c95a');
+      for (const dx of [-11, 0, 11]) this.fx('sprout', x + dx, y + 6, 0.8);
     } else if (r.did === 'water') {
       sound.pop(1, x);
-      for (let k = 0; k < (this.lite ? 4 : 10); k++) {
-        const d = this.art(x + Phaser.Math.Between(-16, 16), y - 12, 'raindrop').setDepth(1000);
-        this.tweens.add({ targets: d, y: y + Phaser.Math.Between(-4, 6), alpha: 0.3, duration: 300, delay: k * 35, onComplete: () => d.destroy() });
+      this.fx('splash', x - 8, y + 4, 0.9);
+      this.time.delayedCall(90, () => this.fx('splash', x + 8, y + 5, 0.9));
+      for (let k = 0; k < (this.lite ? 4 : 8); k++) {
+        const d = this.art(x + Phaser.Math.Between(-16, 16), y - 14, 'raindrop').setDepth(1000);
+        this.tweens.add({ targets: d, y: y + Phaser.Math.Between(-2, 6), alpha: 0.3, duration: 260, delay: k * 30, onComplete: () => d.destroy() });
       }
-    } else this.nothing(x, y - 8, 'lavka.growing');
+    } else {
+      this.squash(crop, 1.05, 0.92);
+      this.nothing(x, y - 8, 'lavka.growing');
+    }
   }
 
   private honey(i: number): void {
@@ -441,6 +558,9 @@ export class LavkaScene extends Phaser.Scene {
     const r = takeHoney(this.day, i);
     if (!r.n) return this.nothing(HIVES[i].x, HIVES[i].y - 14);
     this.day = r.day;
+    this.ripple(HIVES[i].x, HIVES[i].y - 8);
+    this.squash(this.propImg(`lavka_hive${i}`), 1.12, 0.86);
+    pixelFx.burst(this, 'coinpop', HIVES[i].x, HIVES[i].y - 6, { zoom: 1 });
     this.gather('honey', r.n, { x: HIVES[i].x, y: HIVES[i].y - 6 });
   }
 
@@ -451,8 +571,14 @@ export class LavkaScene extends Phaser.Scene {
     if (!r.n) return this.nothing(tr.x, tr.y - 30);
     this.day = r.day;
     const img = this.treeImgs[i];
-    if (img) this.tweens.add({ targets: img, angle: { from: -4, to: 0 }, duration: 380, ease: 'Elastic.easeOut' });
-    this.gather('veg', r.n, { x: tr.x, y: tr.y - 12 });
+    this.ripple(tr.x, tr.y - 16);
+    if (img) this.tweens.add({ targets: img, angle: { from: -6, to: 0 }, duration: 520, ease: 'Elastic.easeOut' });
+    // яблоки срываются с кроны, стукаются о землю — и уже оттуда летят в лавку
+    for (let k = 0; k < 3; k++) {
+      const a = this.art(tr.x + (k - 1) * 7, tr.y - 22, 'lavka_ico_apple').setDepth(tr.y + 2).setScale(0.9 / ART);
+      this.tweens.add({ targets: a, y: tr.y - 1, duration: 300, delay: k * 70, ease: 'Bounce.easeOut', onComplete: () => this.tweens.add({ targets: a, alpha: 0, delay: 200, duration: 150, onComplete: () => a.destroy() }) });
+    }
+    this.time.delayedCall(420, () => this.gather('veg', r.n, { x: tr.x, y: tr.y - 2 }));
   }
 
   private tomatoes(): void {
@@ -460,6 +586,9 @@ export class LavkaScene extends Phaser.Scene {
     const r = pickGreenhouse(this.day);
     if (!r.n) return this.nothing(GREENHOUSE.x, GREENHOUSE.y - GREENHOUSE.h);
     this.day = r.day;
+    this.ripple(GREENHOUSE.x, GREENHOUSE.y - 14);
+    this.squash(this.propImg('lavka_greenhouse'), 1.04, 0.95);
+    this.fx('leaves', GREENHOUSE.x, GREENHOUSE.y - 8, 1.1);
     this.gather('veg', r.n, { x: GREENHOUSE.x, y: GREENHOUSE.y - 10 });
   }
 
@@ -490,24 +619,24 @@ export class LavkaScene extends Phaser.Scene {
     const day = this.phase === 'day';
     this.cows.forEach((cow, i) => {
       const c = this.cowCalls[i];
-      c.box.setVisible(day && d.cows[i] >= 1);
+      this.show(c, day && d.cows[i] >= 1);
       c.box.x = cow.x;
       c.box.setData('baseY', cow.y - 22);
       if (c.box.visible && Math.abs(c.box.y - (cow.y - 22)) > 3) c.box.y = cow.y - 22;
     });
-    this.hayCall.box.setVisible(day && d.hay <= 1);
-    this.grainCall.box.setVisible(day && d.grain <= 1);
+    this.show(this.hayCall, day && d.hay <= 1);
+    this.show(this.grainCall, day && d.grain <= 1);
     this.eggImgs.forEach((egg, i) => egg.setVisible(d.eggs.includes(i)));
-    d.hives.forEach((h, i) => this.hiveCalls[i].box.setVisible(day && h >= 1));
-    d.trees.forEach((h, i) => this.treeCalls[i].box.setVisible(day && h >= 1));
-    this.houseCall.box.setVisible(day && d.house >= 1);
-    this.cheeseCall.box.setVisible(day && d.cheese === 0 && d.stock.milk >= CHEESE_MILK + 2);
+    d.hives.forEach((h, i) => this.show(this.hiveCalls[i], day && h >= 1));
+    d.trees.forEach((h, i) => this.show(this.treeCalls[i], day && h >= 1));
+    this.show(this.houseCall, day && d.house >= 1);
+    this.show(this.cheeseCall, day && d.cheese === 0 && d.stock.milk >= CHEESE_MILK + 2);
     d.beds.forEach((b, i) => {
       const action = bedAction(b);
       const stage = !b.planted ? 0 : b.grow >= 1 ? 3 : b.grow >= 0.45 ? 2 : 1;
       const key = `${stage}/${b.water > 0}/${action}`;
       const call = this.bedCalls[i];
-      call.box.setVisible(day && (action === 'water' || action === 'plant'));
+      this.show(call, day && (action === 'water' || action === 'plant'));
       if (key === this.bedShown[i]) return;
       this.bedShown[i] = key;
       call.icon.setTexture(action === 'plant' ? 'lavka_ico_seed' : 'lavka_ico_drop');
@@ -531,22 +660,35 @@ export class LavkaScene extends Phaser.Scene {
       [226, 104, 1],
     ];
     cows.slice(0, COWS).forEach(([x, y, v], i) => {
-      const cow = this.art(x, y, `lavka_cow${v}0`).setOrigin(0.5, 1).setDepth(y).setFlipX(Math.random() < 0.5);
+      const cow = this.art(x, y, `lavka_cow${v}00`).setOrigin(0.5, 1).setDepth(y).setFlipX(Math.random() < 0.5);
+      // мягкая тень под коровой — ходит вместе с ней
+      const shade = this.add.ellipse(x, y - 1, 30, 6, 0x1e3a1a, 0.28).setDepth(y - 1);
+      cow.on('destroy', () => shade.destroy());
+      cow.setData('shade', shade);
       cow.setInteractive(new Phaser.Geom.Rectangle(-4, -6, 44, 38), Phaser.Geom.Rectangle.Contains);
       cow.on('pointerup', () => !this.drag.moved && this.milkCow(i));
       this.cows[i] = cow;
       this.cowCalls[i] = this.callout(x, y - 22, 'item_milk', () => this.milkCow(i));
       const chew = (): void => {
         if (!cow.active) return;
-        const down = cow.texture.key.endsWith('0');
-        cow.setTexture(`lavka_cow${v}${down ? 1 : 0}`);
+        // жуёт: голова вверх-вниз; иногда — взмах хвостом
+        const head = cow.getData('head') ? 0 : 1;
+        cow.setData('head', head);
+        cow.setTexture(`lavka_cow${v}${head}0`);
+        if (!this.lite && Math.random() < 0.35) {
+          this.time.delayedCall(180, () => cow.active && cow.setTexture(`lavka_cow${v}${head}1`));
+          this.time.delayedCall(420, () => cow.active && cow.setTexture(`lavka_cow${v}${head}0`));
+        }
         // Полная корова стоит и ждёт дойки; сытая бродит; без сена — тянется к пустой поилке.
         if (this.day.cows[i] < 1 && Math.random() < 0.3) {
           const toTrough = this.day.hay <= 0;
           const nx = toTrough ? TROUGH.x + Phaser.Math.Between(-8, 8) : Phaser.Math.Clamp(cow.x + Phaser.Math.Between(-14, 14), PADDOCK.x0, PADDOCK.x1);
           const ny = toTrough ? TROUGH.y - 2 : Phaser.Math.Clamp(cow.y + Phaser.Math.Between(-6, 6), PADDOCK.y0, PADDOCK.y1);
           cow.setFlipX(nx < cow.x);
-          this.tweens.add({ targets: cow, x: nx, y: ny, duration: 2200, ease: 'Sine.easeInOut', onUpdate: () => cow.setDepth(cow.y) });
+          this.tweens.add({ targets: cow, x: nx, y: ny, duration: 2200, ease: 'Sine.easeInOut', onUpdate: () => {
+            cow.setDepth(cow.y);
+            shade.setPosition(cow.x, cow.y - 1).setDepth(cow.y - 1);
+          } });
         }
         this.time.delayedCall(Phaser.Math.Between(900, 2600), chew);
       };
@@ -574,6 +716,21 @@ export class LavkaScene extends Phaser.Scene {
           this.time.delayedCall(Phaser.Math.Between(500, 1800), peck);
         };
         this.time.delayedCall(Phaser.Math.Between(0, 1500), peck);
+        // за двумя курами — по паре цыплят, семенят следом
+        if (!this.lite && i < 2) {
+          for (let c = 0; c < 2; c++) {
+            const chick = this.art(hen.x + 4 + c * 4, hen.y + 1, 'lavka_chick0').setOrigin(0.5, 1).setDepth(hen.y + 1);
+            const follow = (): void => {
+              if (!chick.active) return;
+              const tx = hen.x + (hen.flipX ? 6 : -6) + c * 4;
+              const ty = hen.y + 1 + c;
+              chick.setFlipX(tx < chick.x).setTexture('lavka_chick1');
+              this.tweens.add({ targets: chick, x: tx, y: ty, duration: 260, onUpdate: () => chick.setDepth(chick.y), onComplete: () => chick.active && chick.setTexture('lavka_chick0') });
+              this.time.delayedCall(Phaser.Math.Between(350, 900), follow);
+            };
+            this.time.delayedCall(Phaser.Math.Between(0, 600), follow);
+          }
+        }
       }
     }
     for (let i = 0; i < 3; i++) {
@@ -588,15 +745,52 @@ export class LavkaScene extends Phaser.Scene {
       };
       swim();
     }
-    for (let i = 0; i < 7; i++) {
-      const bee = this.art(Phaser.Math.Between(182, 218), Phaser.Math.Between(66, 80), 'lavka_bee').setDepth(200);
+    for (let i = 0; i < (this.lite ? 3 : 7); i++) {
+      const h = HIVES[i % HIVES.length];
+      const bee = this.art(h.x, h.y - 14, 'lavka_bee').setDepth(500);
       const buzz = (): void => {
         if (!bee.active) return;
-        this.tweens.add({ targets: bee, x: Phaser.Math.Between(178, 222), y: Phaser.Math.Between(62, 84), duration: Phaser.Math.Between(400, 900), ease: 'Sine.easeInOut', onComplete: buzz });
+        this.tweens.add({ targets: bee, x: h.x + Phaser.Math.Between(-12, 12), y: h.y - Phaser.Math.Between(10, 24), duration: Phaser.Math.Between(400, 900), ease: 'Sine.easeInOut', onComplete: buzz });
       };
       buzz();
     }
+    this.ambient();
     this.tractorTrip();
+  }
+
+  /** Бабочки над огородом и цветами, тени облаков плывут по ферме, спелое поблёскивает. */
+  private ambient(): void {
+    if (this.lite) return;
+    for (let i = 0; i < 3; i++) {
+      const b = this.fx('butterfly', Phaser.Math.Between(20, 120), Phaser.Math.Between(-20, 60), 0.6, 600);
+      if (!b) continue;
+      const drift = (): void => {
+        if (!b.active) return;
+        const nx = Phaser.Math.Between(10, 240);
+        b.setFlipX(nx < b.x);
+        this.tweens.add({ targets: b, x: nx, y: Phaser.Math.Between(-30, 230), duration: Phaser.Math.Between(5000, 9000), ease: 'Sine.easeInOut', onComplete: drift });
+      };
+      drift();
+    }
+    for (let i = 0; i < 2; i++) {
+      const cloud = this.add.ellipse(-80 + i * 180, 40 + i * 110, 110, 46, 0x1a2a3a, 0.1).setDepth(900);
+      const sail = (): void => {
+        if (!cloud.active) return;
+        cloud.x = -70;
+        cloud.y = Phaser.Math.Between(-30, 220);
+        this.tweens.add({ targets: cloud, x: WORLD_W + 70, duration: Phaser.Math.Between(38000, 52000), onComplete: sail });
+      };
+      this.tweens.add({ targets: cloud, x: WORLD_W + 70, duration: 30000 + i * 12000, onComplete: sail });
+    }
+    this.time.addEvent({ delay: 900, loop: true, callback: () => {
+      if (this.phase !== 'day') return;
+      const ripe = this.day.beds.map((b, i) => (b.planted && b.grow >= 1 ? i : -1)).filter((i) => i >= 0);
+      if (!ripe.length) return;
+      const i = Phaser.Utils.Array.GetRandom(ripe);
+      const x = BED_X[i % 3] + BED_W / 2 + Phaser.Math.Between(-12, 12);
+      const y = BED_Y[Math.floor(i / 3)] + Phaser.Math.Between(0, 8);
+      pixelFx.burst(this, 'star', x, y, { zoom: 1, fade: 300 });
+    } });
   }
 
   /** Трактор с прицепом: стоит у задней двери, раз в полминуты едет по тропинке в поле и возвращается с урожаем. */
