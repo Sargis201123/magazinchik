@@ -3,54 +3,34 @@
 "lavka_badge",
 "lavka_badge_gold",
 "lavka_barn",
-"lavka_barrel",
-"lavka_bed_wet",
 "lavka_bee",
 "lavka_bench",
 "lavka_bucket",
 "lavka_cart",
 "lavka_case",
-"lavka_chalk",
 "lavka_chick0",
 "lavka_chick1",
 "lavka_coop",
 "lavka_counter",
-"lavka_cow000",
-"lavka_cow001",
-"lavka_cow010",
-"lavka_cow011",
-"lavka_cow100",
-"lavka_cow101",
-"lavka_cow110",
-"lavka_cow111",
-"lavka_crop_cabbage1",
-"lavka_crop_cabbage2",
-"lavka_crop_cabbage3",
+"lavka_cow00",
+"lavka_cow01",
+"lavka_cow10",
+"lavka_cow11",
 "lavka_crop_carrot1",
 "lavka_crop_carrot2",
 "lavka_crop_carrot3",
 "lavka_crop_dill1",
 "lavka_crop_dill2",
 "lavka_crop_dill3",
-"lavka_crop_potato1",
-"lavka_crop_potato2",
-"lavka_crop_potato3",
 "lavka_crop_pumpkin1",
 "lavka_crop_pumpkin2",
 "lavka_crop_pumpkin3",
 "lavka_crop_strawberry1",
 "lavka_crop_strawberry2",
 "lavka_crop_strawberry3",
-"lavka_crop_tomato1",
-"lavka_crop_tomato2",
-"lavka_crop_tomato3",
-"lavka_dough",
-"lavka_duck0",
-"lavka_duck1",
 "lavka_egg",
-"lavka_eggs",
+"lavka_egg_brown",
 "lavka_feeder",
-"lavka_greenhouse",
 "lavka_ground",
 "lavka_hay",
 "lavka_hen00",
@@ -61,641 +41,673 @@
 "lavka_hen21",
 "lavka_hive0",
 "lavka_hive1",
-"lavka_hive2",
 "lavka_ico_apple",
-"lavka_ico_cabbage",
 "lavka_ico_carrot",
 "lavka_ico_dill",
-"lavka_ico_drop",
 "lavka_ico_grain",
 "lavka_ico_hayicon",
 "lavka_ico_honey",
-"lavka_ico_potato",
 "lavka_ico_pumpkin",
 "lavka_ico_seed",
 "lavka_ico_strawberry",
-"lavka_ico_tomato",
 "lavka_jars",
 "lavka_milkcan",
+"lavka_nest",
 "lavka_press",
 "lavka_puff",
 "lavka_rack",
-"lavka_sacks",
-"lavka_scarecrow",
-"lavka_shelf_jam",
 "lavka_sign",
 "lavka_stand_veg",
 "lavka_timer",
 "lavka_tractor",
-"lavka_train",
 "lavka_tree_apples",
+"lavka_tree_bare",
 "lavka_tree_birch_r",
-"lavka_tree_round_apples",
 "lavka_trough",
 "lavka_vat",
 "lavka_wheel",
 "lavka_wire_h",
 "lavka_wire_v"
 ],
-"top": 40,
+"top": 20,
 "props": [
 {
 "k": "fence_h",
 "x": 8.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 8.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 24.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 24.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 40.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 40.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 56.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 56.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 72.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 72.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 88.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 88.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 104.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 104.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 120.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 136.0,
+"y": 2.0
 },
 {
 "k": "fence_h",
 "x": 152.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 152.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 168.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 168.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 184.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 184.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 200.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 200.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 216.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 216.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 232.0,
-"y": -3.0
+"y": 2.0
+},
+{
+"k": "fence_h",
+"x": 232.0,
+"y": 101.0
 },
 {
 "k": "fence_h",
 "x": 248.0,
-"y": -3.0
-},
-{
-"k": "lavka_scarecrow",
-"x": 64.0,
-"y": 52.0
-},
-{
-"k": "lavka_barrel",
-"x": 118.0,
-"y": 30.0
-},
-{
-"k": "lavka_barn",
-"x": 197.0,
-"y": 75.0
-},
-{
-"k": "lavka_hay",
-"x": 244.0,
-"y": 115.0
+"y": 2.0
 },
 {
 "k": "fence_h",
-"x": 158.0,
-"y": 84.0
-},
-{
-"k": "fence_h",
-"x": 158.0,
-"y": 170.0
-},
-{
-"k": "fence_h",
-"x": 174.0,
-"y": 84.0
-},
-{
-"k": "fence_h",
-"x": 174.0,
-"y": 170.0
-},
-{
-"k": "fence_h",
-"x": 190.0,
-"y": 84.0
-},
-{
-"k": "fence_h",
-"x": 190.0,
-"y": 170.0
-},
-{
-"k": "fence_h",
-"x": 206.0,
-"y": 84.0
-},
-{
-"k": "fence_h",
-"x": 206.0,
-"y": 170.0
-},
-{
-"k": "fence_h",
-"x": 222.0,
-"y": 84.0
-},
-{
-"k": "fence_h",
-"x": 222.0,
-"y": 170.0
-},
-{
-"k": "fence_h",
-"x": 238.0,
-"y": 84.0
-},
-{
-"k": "fence_h",
-"x": 238.0,
-"y": 170.0
-},
-{
-"k": "fence_h",
-"x": 254.0,
-"y": 84.0
-},
-{
-"k": "fence_h",
-"x": 254.0,
-"y": 170.0
+"x": 248.0,
+"y": 101.0
 },
 {
 "k": "fence_v",
-"x": 149.0,
-"y": 91.0
+"x": 2.0,
+"y": 18.0
 },
 {
 "k": "fence_v",
-"x": 149.0,
+"x": 254.0,
+"y": 18.0
+},
+{
+"k": "fence_v",
+"x": 2.0,
+"y": 34.0
+},
+{
+"k": "fence_v",
+"x": 254.0,
+"y": 34.0
+},
+{
+"k": "fence_v",
+"x": 2.0,
+"y": 50.0
+},
+{
+"k": "fence_v",
+"x": 254.0,
+"y": 50.0
+},
+{
+"k": "fence_v",
+"x": 2.0,
+"y": 66.0
+},
+{
+"k": "fence_v",
+"x": 254.0,
+"y": 66.0
+},
+{
+"k": "fence_v",
+"x": 2.0,
+"y": 82.0
+},
+{
+"k": "fence_v",
+"x": 254.0,
+"y": 82.0
+},
+{
+"k": "fence_v",
+"x": 2.0,
 "y": 98.0
 },
 {
 "k": "fence_v",
-"x": 149.0,
-"y": 105.0
+"x": 254.0,
+"y": 98.0
 },
 {
 "k": "fence_v",
-"x": 149.0,
-"y": 112.0
+"x": 2.0,
+"y": 114.0
 },
 {
 "k": "fence_v",
-"x": 149.0,
-"y": 119.0
-},
-{
-"k": "fence_v",
-"x": 149.0,
-"y": 126.0
-},
-{
-"k": "fence_v",
-"x": 149.0,
-"y": 133.0
-},
-{
-"k": "fence_v",
-"x": 149.0,
-"y": 140.0
-},
-{
-"k": "fence_v",
-"x": 149.0,
-"y": 147.0
-},
-{
-"k": "fence_v",
-"x": 149.0,
-"y": 154.0
-},
-{
-"k": "fence_v",
-"x": 149.0,
-"y": 161.0
-},
-{
-"k": "fence_v",
-"x": 149.0,
-"y": 168.0
-},
-{
-"k": "fence_v",
-"x": 149.0,
-"y": 175.0
-},
-{
-"k": "lavka_trough",
-"x": 200.0,
-"y": 166.0
-},
-{
-"k": "lavka_bucket",
-"x": 218.0,
-"y": 161.0
-},
-{
-"k": "lavka_greenhouse",
-"x": 40.0,
-"y": 131.0
+"x": 254.0,
+"y": 114.0
 },
 {
 "k": "lavka_hive0",
-"x": 86.0,
-"y": 123.0
+"x": 88.0,
+"y": 156.0
 },
 {
 "k": "lavka_hive1",
-"x": 100.0,
-"y": 126.0
-},
-{
-"k": "lavka_hive2",
-"x": 114.0,
-"y": 123.0
-},
-{
-"k": "lavka_tree_apples",
-"x": 235.0,
-"y": 205.0
-},
-{
-"k": "lavka_tree_round_apples",
-"x": 150.0,
-"y": 235.0
+"x": 107.0,
+"y": 156.0
 },
 {
 "k": "lavka_coop",
-"x": 23.0,
+"x": 25.0,
+"y": 225.0
+},
+{
+"k": "lavka_nest",
+"x": 84.0,
+"y": 192.0
+},
+{
+"k": "lavka_wire_h",
+"x": 58.0,
+"y": 168.0
+},
+{
+"k": "lavka_wire_h",
+"x": 58.0,
+"y": 233.0
+},
+{
+"k": "lavka_wire_h",
+"x": 74.0,
+"y": 168.0
+},
+{
+"k": "lavka_wire_h",
+"x": 74.0,
+"y": 233.0
+},
+{
+"k": "lavka_wire_h",
+"x": 90.0,
+"y": 168.0
+},
+{
+"k": "lavka_wire_h",
+"x": 90.0,
+"y": 233.0
+},
+{
+"k": "lavka_wire_h",
+"x": 106.0,
+"y": 168.0
+},
+{
+"k": "lavka_wire_h",
+"x": 106.0,
+"y": 233.0
+},
+{
+"k": "lavka_wire_h",
+"x": 122.0,
+"y": 168.0
+},
+{
+"k": "lavka_wire_h",
+"x": 122.0,
+"y": 233.0
+},
+{
+"k": "lavka_wire_v",
+"x": 117.0,
+"y": 184.0
+},
+{
+"k": "lavka_wire_v",
+"x": 117.0,
 "y": 200.0
 },
 {
-"k": "lavka_wire_h",
-"x": 54.0,
-"y": 146.0
-},
-{
-"k": "lavka_wire_h",
-"x": 54.0,
-"y": 206.0
-},
-{
-"k": "lavka_wire_h",
-"x": 70.0,
-"y": 146.0
-},
-{
-"k": "lavka_wire_h",
-"x": 70.0,
-"y": 206.0
-},
-{
-"k": "lavka_wire_h",
-"x": 86.0,
-"y": 146.0
-},
-{
-"k": "lavka_wire_h",
-"x": 86.0,
-"y": 206.0
-},
-{
-"k": "lavka_wire_h",
-"x": 102.0,
-"y": 146.0
-},
-{
-"k": "lavka_wire_h",
-"x": 102.0,
-"y": 206.0
-},
-{
-"k": "lavka_wire_h",
-"x": 118.0,
-"y": 146.0
-},
-{
-"k": "lavka_wire_h",
-"x": 118.0,
-"y": 206.0
+"k": "lavka_wire_v",
+"x": 117.0,
+"y": 216.0
 },
 {
 "k": "lavka_wire_v",
-"x": 118.0,
-"y": 162.0
+"x": 117.0,
+"y": 232.0
 },
 {
 "k": "lavka_wire_v",
-"x": 118.0,
-"y": 178.0
-},
-{
-"k": "lavka_wire_v",
-"x": 118.0,
-"y": 194.0
-},
-{
-"k": "lavka_wire_v",
-"x": 118.0,
-"y": 210.0
+"x": 117.0,
+"y": 248.0
 },
 {
 "k": "lavka_feeder",
-"x": 80.0,
-"y": 185.0
+"x": 106.0,
+"y": 226.0
 },
 {
-"k": "lavka_eggs",
-"x": 52.0,
+"k": "lavka_barn",
+"x": 224.0,
+"y": 159.0
+},
+{
+"k": "lavka_hay",
+"x": 150.0,
+"y": 165.0
+},
+{
+"k": "lavka_hay",
+"x": 165.0,
+"y": 165.0
+},
+{
+"k": "fence_h",
+"x": 148.0,
+"y": 167.0
+},
+{
+"k": "fence_h",
+"x": 148.0,
+"y": 233.0
+},
+{
+"k": "fence_h",
+"x": 164.0,
+"y": 167.0
+},
+{
+"k": "fence_h",
+"x": 164.0,
+"y": 233.0
+},
+{
+"k": "fence_h",
+"x": 180.0,
+"y": 167.0
+},
+{
+"k": "fence_h",
+"x": 180.0,
+"y": 233.0
+},
+{
+"k": "fence_h",
+"x": 196.0,
+"y": 167.0
+},
+{
+"k": "fence_h",
+"x": 196.0,
+"y": 233.0
+},
+{
+"k": "fence_h",
+"x": 212.0,
+"y": 167.0
+},
+{
+"k": "fence_h",
+"x": 212.0,
+"y": 233.0
+},
+{
+"k": "fence_h",
+"x": 228.0,
+"y": 167.0
+},
+{
+"k": "fence_h",
+"x": 228.0,
+"y": 233.0
+},
+{
+"k": "fence_h",
+"x": 244.0,
+"y": 167.0
+},
+{
+"k": "fence_h",
+"x": 244.0,
+"y": 233.0
+},
+{
+"k": "fence_h",
+"x": 260.0,
+"y": 167.0
+},
+{
+"k": "fence_h",
+"x": 260.0,
+"y": 233.0
+},
+{
+"k": "fence_v",
+"x": 140.0,
+"y": 183.0
+},
+{
+"k": "fence_v",
+"x": 140.0,
 "y": 199.0
 },
 {
-"k": "lavka_milkcan",
-"x": 107.0,
-"y": 252.0
+"k": "fence_v",
+"x": 140.0,
+"y": 215.0
+},
+{
+"k": "fence_v",
+"x": 140.0,
+"y": 231.0
+},
+{
+"k": "fence_v",
+"x": 140.0,
+"y": 247.0
+},
+{
+"k": "lavka_trough",
+"x": 166.0,
+"y": 180.0
+},
+{
+"k": "lavka_bucket",
+"x": 249.0,
+"y": 165.0
 },
 {
 "k": "lavka_milkcan",
-"x": 113.0,
+"x": 244.0,
 "y": 254.0
 },
 {
 "k": "lavka_milkcan",
-"x": 101.0,
+"x": 250.0,
 "y": 255.0
 },
 {
+"k": "lavka_milkcan",
+"x": 143.0,
+"y": 256.0
+},
+{
+"k": "lavka_milkcan",
+"x": 148.0,
+"y": 257.0
+},
+{
 "k": "lavka_rack",
-"x": 54.0,
-"y": 308.0
+"x": 52.0,
+"y": 300.0
 },
 {
 "k": "lavka_press",
-"x": 75.0,
-"y": 320.0
+"x": 76.0,
+"y": 301.0
 },
 {
 "k": "lavka_vat",
-"x": 54.0,
-"y": 350.0
-},
-{
-"k": "lavka_milkcan",
-"x": 46.0,
-"y": 372.0
-},
-{
-"k": "lavka_milkcan",
-"x": 53.0,
-"y": 372.5
-},
-{
-"k": "lavka_milkcan",
-"x": 60.0,
-"y": 372.0
-},
-{
-"k": "lavka_shelf_jam",
-"x": 152.0,
-"y": 314.0
+"x": 58.0,
+"y": 330.0
 },
 {
 "k": "lavka_stand_veg",
-"x": 112.0,
-"y": 362.0
+"x": 116.0,
+"y": 345.0
 },
 {
 "k": "lavka_counter",
-"x": 152.0,
-"y": 348.0
+"x": 200.0,
+"y": 333.0
 },
 {
-"k": "oven",
-"x": 186.0,
+"k": "fence_v",
+"x": 253.0,
+"y": 274.0
+},
+{
+"k": "fence_v",
+"x": 253.0,
+"y": 281.0
+},
+{
+"k": "fence_v",
+"x": 253.0,
+"y": 288.0
+},
+{
+"k": "fence_v",
+"x": 253.0,
+"y": 295.0
+},
+{
+"k": "fence_v",
+"x": 253.0,
 "y": 302.0
 },
 {
-"k": "oven",
-"x": 203.0,
-"y": 302.0
-},
-{
-"k": "bread_rack",
-"x": 205.0,
-"y": 350.0
-},
-{
-"k": "lavka_dough",
-"x": 192.0,
-"y": 328.0
-},
-{
-"k": "lavka_sacks",
-"x": 186.0,
-"y": 374.0
+"k": "fence_v",
+"x": 253.0,
+"y": 309.0
 },
 {
 "k": "fence_v",
 "x": 253.0,
-"y": 276.0
+"y": 316.0
 },
 {
 "k": "fence_v",
 "x": 253.0,
-"y": 283.0
+"y": 323.0
 },
 {
 "k": "fence_v",
 "x": 253.0,
-"y": 290.0
+"y": 330.0
 },
 {
 "k": "fence_v",
 "x": 253.0,
-"y": 297.0
+"y": 337.0
 },
 {
 "k": "fence_v",
 "x": 253.0,
-"y": 304.0
+"y": 344.0
 },
 {
 "k": "fence_v",
 "x": 253.0,
-"y": 311.0
+"y": 351.0
 },
 {
 "k": "fence_v",
 "x": 253.0,
-"y": 318.0
+"y": 358.0
 },
 {
 "k": "fence_v",
 "x": 253.0,
-"y": 325.0
-},
-{
-"k": "fence_v",
-"x": 253.0,
-"y": 332.0
-},
-{
-"k": "fence_v",
-"x": 253.0,
-"y": 339.0
-},
-{
-"k": "fence_v",
-"x": 253.0,
-"y": 346.0
-},
-{
-"k": "fence_v",
-"x": 253.0,
-"y": 353.0
-},
-{
-"k": "fence_v",
-"x": 253.0,
-"y": 360.0
-},
-{
-"k": "fence_v",
-"x": 253.0,
-"y": 367.0
-},
-{
-"k": "fence_v",
-"x": 253.0,
-"y": 374.0
-},
-{
-"k": "fence_v",
-"x": 253.0,
-"y": 381.0
+"y": 365.0
 },
 {
 "k": "fence_h",
 "x": 238.0,
-"y": 269.0
+"y": 267.0
 },
 {
 "k": "fence_h",
 "x": 238.0,
-"y": 376.0
+"y": 366.0
 },
 {
 "k": "awning",
-"x": 131.0,
-"y": 386.0,
-"z": 380.5
+"x": 155.0,
+"y": 376.0,
+"z": 370.5
 },
 {
 "k": "lavka_sign",
-"x": 131.0,
-"y": 379.0,
-"z": 381.0
+"x": 155.0,
+"y": 369.0,
+"z": 371.0
 },
 {
 "k": "mat",
-"x": 131.0,
-"y": 389.0,
-"z": 381.0
-},
-{
-"k": "hood_planter",
-"x": 107.0,
-"y": 391.0
-},
-{
-"k": "hood_planter",
 "x": 155.0,
-"y": 391.0
+"y": 379.0,
+"z": 371.0
+},
+{
+"k": "hood_planter",
+"x": 129.0,
+"y": 381.0
+},
+{
+"k": "hood_planter",
+"x": 181.0,
+"y": 381.0
 },
 {
 "k": "lavka_jars",
 "x": 60.0,
-"y": 403.0
-},
-{
-"k": "lavka_chalk",
-"x": 172.0,
-"y": 404.0
+"y": 393.0
 },
 {
 "k": "lavka_bench",
 "x": 205.0,
-"y": 400.0
+"y": 390.0
 },
 {
 "k": "bobik_lie",
-"x": 146.0,
-"y": 395.0
+"x": 100.0,
+"y": 385.0
 },
 {
 "k": "cat_sit",
 "x": 220.0,
-"y": 396.0
+"y": 386.0
 },
 {
 "k": "bus_stop",
 "x": 30.0,
-"y": 411.0
+"y": 399.0
 },
 {
 "k": "lavka_tree_birch_r",
 "x": 15.0,
-"y": 380.0
+"y": 372.0
 },
 {
 "k": "bush_flower",
 "x": 247.0,
-"y": 406.0
+"y": 396.0
 }
 ]
 }

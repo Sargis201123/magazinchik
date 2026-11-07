@@ -3,29 +3,30 @@ import {
   BEDS,
   CHEESE_MILK,
   CHEESE_TIME,
-  COWS,
   COW_FILL,
+  COW_YIELD,
   DAY_SECONDS,
+  EGGS_MAX,
   GRAIN_FULL,
-  GROW,
-  WATER_LAST,
   HAY_FULL,
   PLANS,
-  YIELD,
+  SEED,
+  SEEDS,
   bedAction,
   buy,
   clock,
   feedGrain,
   feedHay,
-  milk,
-  pickEgg,
-  pickGreenhouse,
+  harvest,
+  milkAll,
+  pickEggs,
+  plant,
+  plantAll,
   shakeTree,
   startCheese,
   startDay,
   summary,
   takeHoney,
-  tapBed,
   tick,
   visitors,
   type Day,
@@ -35,16 +36,16 @@ const sat = PLANS[0];
 
 /** Игрок, который всё успевает: каждую секунду делает всё, что можно сделать на ферме. */
 function busyFarmer(d: Day): Day {
-  let x = d;
-  for (let c = 0; c < COWS; c++) x = milk(x, c).day;
+  let x = milkAll(d).day;
   if (x.hay <= 1) x = feedHay(x).day;
-  for (const e of [...x.eggs]) x = pickEgg(x, e).day;
+  x = pickEggs(x).day;
   if (x.grain <= 1) x = feedGrain(x).day;
-  for (let b = 0; b < BEDS; b++) if (bedAction(x.beds[b]) !== 'growing') x = tapBed(x, b).day;
+  for (let b = 0; b < BEDS; b++) if (bedAction(x.beds[b]) === 'harvest') x = harvest(x, b).day;
+  x = plantAll(x, 'carrot').day;
   for (let h = 0; h < x.hives.length; h++) x = takeHoney(x, h).day;
   for (let t = 0; t < x.trees.length; t++) x = shakeTree(x, t).day;
-  x = pickGreenhouse(x).day;
-  if (x.stock.milk > 6) x = startCheese(x).day;
+  const wantCheese = x.orders.some((o) => o.good === 'cheese' && !o.done && !o.failed);
+  if (x.stock.milk > (wantCheese ? CHEESE_MILK - 1 : 6)) x = startCheese(x).day;
   return x;
 }
 
@@ -68,55 +69,71 @@ describe('лавка: ферма', () => {
     expect(clock(DAY_SECONDS)).toBe('20:00');
   });
 
-  it('корову доят, когда полна; без сена молоко не прибывает', () => {
-    let d = startDay(sat);
-    expect(milk(d, 0).n).toBe(1);
-    expect(milk(d, 2).n).toBe(0);
-    d = { ...milk(d, 0).day, hay: 0 };
+  it('полную корову доят одним касанием; без сена молоко не прибывает', () => {
+    let d: Day = { ...startDay(sat), cows: [1] };
+    const got = milkAll(d);
+    expect(got.n).toBe(COW_YIELD);
+    expect(milkAll(got.day).n).toBe(0);
+    d = { ...got.day, hay: 0 };
     d = tick(d, COW_FILL * 2);
     expect(d.cows[0]).toBe(0);
     d = feedHay(d).day;
     expect(d.hay).toBe(HAY_FULL);
     d = tick(d, COW_FILL);
-    expect(milk(d, 0).n).toBe(1);
+    expect(milkAll(d).n).toBe(COW_YIELD);
   });
 
-  it('куры несутся, пока есть зерно; яйца собирают по одному', () => {
-    let d: Day = { ...startDay(sat), eggs: [], grain: 0 };
+  it('коров станет больше — все полные доятся разом', () => {
+    const d: Day = { ...startDay(sat), cows: [1, 0.5, 1] };
+    const got = milkAll(d);
+    expect(got.n).toBe(2 * COW_YIELD);
+    expect(got.cows).toEqual([0, 2]);
+    expect(got.day.cows).toEqual([0, 0.5, 0]);
+  });
+
+  it('куры несутся в гнёзда, пока есть зерно и место; яйца собирают все разом', () => {
+    let d: Day = { ...startDay(sat), eggs: 0, grain: 0 };
     d = tick(d, 60);
-    expect(d.eggs).toHaveLength(0);
+    expect(d.eggs).toBe(0);
     d = feedGrain(d).day;
     expect(d.grain).toBe(GRAIN_FULL);
-    d = tick(d, 30);
-    expect(d.eggs.length).toBeGreaterThan(0);
-    const spot = d.eggs[0];
-    const got = pickEgg(d, spot);
-    expect(got.n).toBe(1);
-    expect(got.day.stock.eggs).toBe(d.stock.eggs + 1);
-    expect(pickEgg(got.day, spot).n).toBe(0);
+    d = tick(d, 200);
+    expect(d.eggs).toBe(EGGS_MAX);
+    const got = pickEggs(d);
+    expect(got.n).toBe(EGGS_MAX);
+    expect(got.day.eggs).toBe(0);
+    expect(pickEggs(got.day).n).toBe(0);
   });
 
-  it('грядка: посадить → полить → растёт → собрать', () => {
+  it('грядка: выбрать семена → растёт своё время → собрать', () => {
     let d = startDay(sat);
-    const i = 2; // пустая
+    const i = d.beds.findIndex((b) => !b.seed);
     expect(bedAction(d.beds[i])).toBe('plant');
-    d = tapBed(d, i).day;
-    d = { ...d, beds: d.beds.map((b, k) => (k === i ? { ...b, water: 0 } : b)) };
-    expect(bedAction(d.beds[i])).toBe('water');
-    d = tick(d, 10);
-    expect(d.beds[i].grow).toBe(0); // сухая не растёт
-    d = tapBed(d, i).day;
-    d = tick(d, WATER_LAST / 2);
+    d = plant(d, i, 'dill').day;
+    expect(plant(d, i, 'carrot').n).toBe(0);
+    d = tick(d, SEED.dill.grow - 1);
     expect(bedAction(d.beds[i])).toBe('growing');
-    // поливать, пока не созреет: каждый полив — на WATER_LAST секунд роста
-    for (let k = 0; k < Math.ceil(GROW / WATER_LAST) + 1 && bedAction(d.beds[i]) !== 'harvest'; k++) {
-      if (bedAction(d.beds[i]) === 'water') d = tapBed(d, i).day;
-      d = tick(d, WATER_LAST);
-    }
+    d = tick(d, 1);
     expect(bedAction(d.beds[i])).toBe('harvest');
-    const got = tapBed(d, i);
-    expect(got.n).toBe(YIELD);
+    const got = harvest(d, i);
+    expect(got.n).toBe(SEED.dill.yield);
     expect(bedAction(got.day.beds[i])).toBe('plant');
+  });
+
+  it('долгие семена дают больше за одно касание', () => {
+    for (let k = 1; k < SEEDS.length; k++) {
+      expect(SEED[SEEDS[k]].grow).toBeGreaterThan(SEED[SEEDS[k - 1]].grow);
+      expect(SEED[SEEDS[k]].yield).toBeGreaterThan(SEED[SEEDS[k - 1]].yield);
+    }
+  });
+
+  it('засеять все пустые грядки разом', () => {
+    const d = startDay(sat);
+    const empty = d.beds.filter((b) => !b.seed).length;
+    const got = plantAll(d, 'pumpkin');
+    expect(got.n).toBe(empty);
+    expect(got.day.beds.every((b) => b.seed)).toBe(true);
+    expect(plantAll(got.day, 'dill').n).toBe(0);
   });
 
   it('сыр: забирает молоко, через время — головка на складе', () => {
@@ -137,20 +154,21 @@ describe('лавка: ферма', () => {
     expect(d.missed.eggs).toBe(1);
   });
 
-  it('собранное идёт сначала в заказ; набрал к сроку — премия, не успел — собранное на склад', () => {
-    let d: Day = { ...startDay(sat), eggs: [0, 1, 2, 3, 4, 5, 6, 7] };
-    const o = d.orders.find((x) => x.good === 'eggs')!;
+  it('утренний запас и собранное идут сначала в заказ; набрал к сроку — премия, не успел — собранное на склад', () => {
+    const start = startDay(sat);
+    const o = start.orders.find((x) => x.good === 'eggs')!;
+    expect(o.have).toBeGreaterThan(0); // утренние яйца уже отложены
+    let d: Day = { ...start, eggs: o.need - o.have };
     const before = d.stock.eggs;
-    for (let e = 0; e < 8; e++) d = pickEgg(d, e).day;
+    d = pickEggs(d).day;
     expect(d.stock.eggs).toBe(before);
-    const done = d.orders.find((x) => x.id === o.id)!;
-    expect(done.done).toBe(o.need <= 8);
+    expect(d.orders.find((x) => x.id === o.id)!.done).toBe(true);
     expect(d.coins).toBe(o.need * 3 + o.bonus);
-    let late: Day = { ...startDay(sat), eggs: [0, 1, 2] };
-    for (let e = 0; e < 3; e++) late = pickEgg(late, e).day;
+    let late: Day = { ...start, eggs: 1 };
+    late = pickEggs(late).day;
     late = tick({ ...late, grain: 0 }, o.by + 1);
     expect(late.orders.find((x) => x.id === o.id)!.failed).toBe(true);
-    expect(late.stock.eggs).toBe(before + 3);
+    expect(late.stock.eggs).toBe(before + o.have + 1);
   });
 });
 

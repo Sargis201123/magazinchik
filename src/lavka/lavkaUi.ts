@@ -7,7 +7,7 @@ import { png } from '../platform/assets';
 import { sound } from '../platform/sound';
 import { button, el, injectStyles, openModal, pixelize, UI_FONT } from '../ui/dom';
 import { sheetPng } from '../ui/sheet';
-import { GOODS, clock, type Good, type Order, type Plan, type Summary } from '../game/lavka/day';
+import { GOODS, SEED, SEEDS, clock, type Good, type Order, type Plan, type Seed, type Summary } from '../game/lavka/day';
 
 /** Картинка товара: молоко и овощи — из атласа магазина, остальное — свои (art/lavka.py). */
 export const GOOD_ICON: Record<Good, string> = { milk: 'item_milk', eggs: 'lavka_egg', veg: 'item_apples', honey: 'lavka_ico_honey', cheese: 'lavka_wheel' };
@@ -75,6 +75,22 @@ const css = `
   border: 3px solid #2b2233; border-radius: 10px; font: 700 14px/1.3 ${UI_FONT}; }
 .lv-tip img { width: 44px; height: 44px; flex: none; image-rendering: pixelated; border: 2px solid #2b2233; border-radius: 6px; background: #f6e7c8; }
 .lv-tip p { margin: 0; }
+
+.lv-seeds { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 10px);
+  width: min(380px, 94vw); box-sizing: border-box; z-index: 7; background: #fbf6ea; color: #2b2233; border: 4px solid #2b2233;
+  border-radius: 12px; box-shadow: 0 6px 0 rgba(24,20,37,.65); padding: 10px; font: 700 13px/1.2 ${UI_FONT};
+  animation: lv-up .28s cubic-bezier(.3,1.4,.5,1); }
+.lv-seeds h2 { margin: 0 0 8px; font: 900 17px/1.1 ${UI_FONT}; display: flex; justify-content: space-between; align-items: center; }
+.lv-seeds .x { border: 0; background: none; font: 900 22px/1 ${UI_FONT}; color: #2b2233; padding: 0 4px; cursor: pointer; }
+.lv-seed-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.lv-seed { display: grid; justify-items: center; gap: 2px; padding: 8px 2px 6px; background: #f1e2c2; border: 3px solid #2b2233;
+  border-radius: 10px; cursor: pointer; font: 800 13px/1.15 ${UI_FONT}; color: #2b2233; box-shadow: 0 3px 0 #2b2233; }
+.lv-seed:active { transform: translateY(3px); box-shadow: none; }
+.lv-seed img { width: 36px; height: 36px; image-rendering: pixelated; }
+.lv-seed small { font-weight: 700; color: #6b5a4e; }
+.lv-seed b { color: #3e8948; }
+.lv-seed-all { display: flex; gap: 8px; align-items: center; margin: 8px 2px 0; font-weight: 800; cursor: pointer; user-select: none; }
+.lv-seed-all input { width: 20px; height: 20px; accent-color: #63c74d; }
 `;
 
 let styled = false;
@@ -285,4 +301,45 @@ export function showSummary(o: { title: string; s: Summary; nextDow: string; onN
       o.onStore();
     }),
   );
+}
+
+/** Что посадить: четыре семени (время роста в часах дня и урожай), галочка «на все пустые» (по умолчанию — да,
+ *  чтобы меньше нажимать). Ответ — onPick(семя, на все ли); закрыть — крестик. Вернёт функцию «закрыть». */
+export function seedPicker(empty: number, onPick: (seed: Seed, all: boolean) => void, onClose: () => void): () => void {
+  styles();
+  const box = el('div', 'lv-seeds');
+  const head = el('h2', '', t('lavka.seed.title'));
+  const x = el('button', 'x', '×');
+  head.append(x);
+  const row = el('div', 'lv-seed-row');
+  const allBox = el('label', 'lv-seed-all');
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.checked = empty > 1;
+  allBox.append(check, document.createTextNode(empty > 1 ? t('lavka.seed.all', { n: empty }) : t('lavka.seed.onlyThis')));
+  if (empty <= 1) check.disabled = true;
+  const hour = 20; // секунд в часе дня (day.ts: DAY_SECONDS / 12)
+  for (const seed of SEEDS) {
+    const card = el('button', 'lv-seed');
+    const img = el('img');
+    img.src = png(`lavka_ico_${seed}`);
+    img.alt = '';
+    const h = Math.round((SEED[seed].grow / hour) * 2) / 2;
+    card.append(img, el('span', '', t(`lavka.seed.${seed}` as TextKey)), el('small', '', `⏱ ${t('lavka.seed.hours', { h: String(h).replace('.', ',') })}`), el('b', '', `×${SEED[seed].yield}`));
+    card.addEventListener('click', () => {
+      sound.pop(1);
+      close();
+      onPick(seed, check.checked);
+    });
+    row.append(card);
+  }
+  box.append(head, row, allBox);
+  pixelize(box);
+  document.body.append(box);
+  const close = (): void => box.remove();
+  x.addEventListener('click', () => {
+    close();
+    onClose();
+  });
+  return close;
 }

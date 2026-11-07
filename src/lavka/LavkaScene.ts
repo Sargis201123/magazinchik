@@ -1,6 +1,7 @@
-// «Лавка «Своё»» — играбельный день второй игры (docs/farm/LAVKA.md). Главное — работа на ферме, касаниями:
-// подоить корову (и подложить сено), собрать яйца (и подсыпать зерна), посадить, полить и собрать грядку, снять
-// мёд, яблоки, помидоры, поставить сыр. Над тем, что ждёт рук, — облачко со значком. Собранное летит в лавку:
+// «Лавка «Своё»» — играбельный день второй игры (docs/farm/LAVKA.md). Главное — работа на ферме, касаниями, и
+// касаний немного: на пустую грядку — выбрать семена (можно сразу на все пустые), поспело — собрать; корова —
+// одним касанием доятся все полные; яйца — касание по гнездовому ящику собирает все; мёд и яблоки — с ульев и
+// яблонь. Пока растёт — над местом крутится таймер, готово — выпрыгивает золотой значок. Собранное летит в лавку:
 // сначала в заказы дня, остальное на склад, а лавка продаёт сама — папа за прилавком, покупатели с трассы,
 // автобуса и электрички. Правила и цифры — game/lavka/day.ts; картинки и раскладка — art/lavka.py (layout.json).
 // Из движка «Магазинчика» — люди и походка (persons), эффекты (pixelFx), цвет часа (ColorGrade), звук.
@@ -22,28 +23,31 @@ import {
   COWS,
   DAY_SECONDS,
   EGGS_MAX,
+  HENS,
   PRICE,
   bedAction,
   buy,
   feedGrain,
   feedHay,
+  harvest,
   isOver,
-  milk,
-  pickEgg,
-  pickGreenhouse,
+  milkAll,
+  pickEggs,
+  plant,
+  plantAll,
   planFor,
   shakeTree,
   startCheese,
   startDay,
   summary,
   takeHoney,
-  tapBed,
   tick,
   visitors,
   type Day,
   type From,
   type Good,
   type Plan,
+  type Seed,
   type Visitor,
 } from '../game/lavka/day';
 import { UI_FONT } from '../ui/dom';
@@ -53,78 +57,78 @@ import { crispZoom } from '../scenes/pixels';
 import { ColorGrade } from '../scenes/grade';
 import * as persons from '../scenes/persons';
 import * as pixelFx from '../scenes/pixelFx';
-import { GOOD_ICON, LavkaHud, dowName, goodName, morningSheet, showSummary } from './lavkaUi';
+import { GOOD_ICON, LavkaHud, dowName, goodName, morningSheet, seedPicker, showSummary } from './lavkaUi';
 import layout from './layout.json';
 import fxSheets from './fx.json';
 
-/** Мир в точках (рисунок 512×940 пикселей, ART = 2; над ним ещё поле, layout.top). Полосы — как в art/lavka.py:
- *  ферма 0…262, лавка 262…380 (три узкие комнаты, справа — место под расширение), площадка и дорога 380…470. */
+/** Мир в точках (рисунок 512×900 пикселей, ART = 2; над ним ещё полоска травы под панелью, layout.top). Полосы —
+ *  как в art/lavka.py: огород 0…100, сад, курятник, амбар и загон 100…237, дорожка 237…257, лавка 260…370
+ *  (уголок-сыроварня, зал, справа место под расширение), площадка и дорога 370…450. */
 const WORLD_W = 256;
-const WORLD_H = 470;
+const WORLD_H = 450;
 /** Ноги человечка ниже середины его картинки (тень у makePerson — на 8,5). */
 const FOOT = 8;
 
-const DOOR_IN = { x: 131, y: 370 };
-const DOOR_OUT = { x: 131, y: 388 };
-const PLAZA = { x: 131, y: 398 };
-const STREET_Y = 404;
-/** У какой полки покупатель выбирает свой товар (ноги); сыр и яйца — сразу у прилавка. */
+const DOOR_IN = { x: 155, y: 360 };
+const DOOR_OUT = { x: 155, y: 377 };
+const PLAZA = { x: 155, y: 388 };
+const STREET_Y = 393;
+/** Полки у задней стены зала (низ по середине): молоко в холодильнике, яйца, мёд. */
+const MILK_SHELF = { x: 115, y: 305 };
+const EGG_SHELF = { x: 155, y: 305 };
+const HONEY_SHELF = { x: 195, y: 305 };
+/** У какой полки покупатель выбирает свой товар (ноги); сыр — сразу у прилавка. */
 const SPOTS: Record<Good, { x: number; y: number }> = {
-  milk: { x: 115, y: 322 },
-  honey: { x: 152, y: 322 },
-  eggs: { x: 152, y: 356 },
-  veg: { x: 108, y: 370 },
-  cheese: { x: 152, y: 356 },
+  milk: { x: 115, y: 314 },
+  eggs: { x: 155, y: 314 },
+  honey: { x: 195, y: 314 },
+  veg: { x: 116, y: 352 },
+  cheese: { x: 200, y: 344 },
 };
 const QUEUE = [
-  { x: 152, y: 357 },
-  { x: 163, y: 363 },
-  { x: 143, y: 367 },
-  { x: 165, y: 371 },
+  { x: 200, y: 344 },
+  { x: 188, y: 350 },
+  { x: 176, y: 354 },
+  { x: 212, y: 353 },
 ];
-const MILK_SHELF = { x: 115, y: 314 };
-const CASE = { x: 70, y: 372 };
-const COUNTER = { x: 152, y: 348 };
-const VAT = { x: 54, y: 350 };
-/** Куда летит собранное: задняя дверь лавки. */
-const BACK_DOOR = { x: 130, y: 266 };
-const CHEESE_ROOM = { x: 40, y: 266, w: 48, h: 109 };
+/** Выше этой линии — полки у задней стены: туда и оттуда идут через середину зала. */
+const SHELF_ROW = 330;
+const CASE = { x: 64, y: 358 };
+const COUNTER = { x: 200, y: 333 };
+const VAT = { x: 58, y: 330 };
+/** Куда летит собранное: задняя дверь лавки (на средней тропинке фермы). */
+const BACK_DOOR = { x: 128, y: 262 };
+const CHEESE_ROOM = { x: 40, y: 264, w: 48, h: 100 };
 /** Место под расширение зала (справа от лавки). */
-const EXPAND = { x: 223, y: 269, w: 31, h: 106 };
-const BUS_STOP = { x: 44, y: 431 };
-/** Ферма (точки мира): загон, выгул кур, пруд, трактор, кормушки, ульи, деревья, теплица, грядки. */
-const PADDOCK = { x0: 162, x1: 236, y0: 100, y1: 162 };
-const RUN = { x0: 52, x1: 114, y0: 156, y1: 202 };
-const POND = { x0: 174, x1: 204, y0: 200, y1: 212 };
-const TRACTOR = { x: 168, y: 260 };
-const TROUGH = { x: 200, y: 166 };
-const HAY = { x: 244, y: 115 };
-const FEEDER = { x: 80, y: 185 };
-const HIVES = [
-  { x: 86, y: 123 },
-  { x: 100, y: 126 },
-  { x: 114, y: 123 },
-]
+const EXPAND = { x: 223, y: 267, w: 31, h: 103 };
+const BUS_STOP = { x: 30, y: 399 };
+/** Ферма (точки мира). Огород: 3×2 больших грядки; растения выше борта на CROP_TOP. */
+const BED_X = [9, 91, 173];
+const BED_Y = [8, 52];
+const BED_W = 74;
+const BED_H = 36;
+const CROP_TOP = 7;
+/** Сад и пасека: яблони и ульи (низ по середине). */
 const TREES = [
-  { x: 235, y: 205 },
-  { x: 150, y: 235 },
+  { x: 25, y: 152 },
+  { x: 59, y: 153 },
 ];
-const GREENHOUSE = { x: 40, y: 124, w: 56, h: 36 };
-const BED_X = [4, 45, 86];
-const BED_Y = [6, 30, 54];
-const BED_W = 38;
-const BED_H = 18;
-const CROPS = ['cabbage', 'carrot', 'tomato', 'strawberry', 'potato', 'pumpkin', 'dill', 'cabbage', 'strawberry'];
-const EGG_SPOTS = [
-  { x: 58, y: 165 },
-  { x: 74, y: 161 },
-  { x: 93, y: 167 },
-  { x: 109, y: 162 },
-  { x: 62, y: 185 },
-  { x: 92, y: 192 },
-  { x: 104, y: 182 },
-  { x: 111, y: 199 },
+const HIVES = [
+  { x: 88, y: 156 },
+  { x: 107, y: 156 },
 ];
+/** Курятник: гнездовой ящик (низ по середине), ячейки с яйцами, выгул, кормушка. */
+const NEST = { x: 84, y: 192 };
+const EGG_SLOTS = [69.5, 84, 98.5].flatMap((x) => [x - 2.6, x + 2.6]).map((x, i) => ({ x, y: 187.5 - (i % 2) * 0.5 }));
+const RUN = { x0: 56, x1: 112, y0: 200, y1: 230 };
+const FEEDER = { x: 106, y: 226 };
+/** Амбар, загон с коровой, тюки сена и поилка. */
+const PADDOCK = { x0: 150, x1: 246, y0: 182, y1: 230 };
+const TROUGH = { x: 166, y: 180 };
+const HAY = { x: 158, y: 165 };
+/** Трактор стоит на дорожке справа; ездит по ней туда-обратно. */
+const TRACTOR = { x: 226, y: 254 };
+const LANE_Y = 254;
 /** Папа рассчитывает очередь сам — раз в столько мс. */
 const SERVE_MS = 1300;
 const MAX_INSIDE = 9;
@@ -187,7 +191,6 @@ export class LavkaScene extends Phaser.Scene {
   private cows: Phaser.GameObjects.Image[] = [];
   private eggImgs: Phaser.GameObjects.Image[] = [];
   private bedCrop: Phaser.GameObjects.Image[] = [];
-  private bedWet: Phaser.GameObjects.Image[] = [];
   private bedSlots: Slot[] = [];
   private bedStage: number[] = [];
   private bedShown: string[] = [];
@@ -195,7 +198,10 @@ export class LavkaScene extends Phaser.Scene {
   private hiveSlots: Slot[] = [];
   private treeSlots: Slot[] = [];
   private treeImgs: Phaser.GameObjects.Image[] = [];
-  private houseSlot!: Slot;
+  private nestSlot!: Slot;
+  private eggShelf: Phaser.GameObjects.Image[] = [];
+  private honeyShelf: Phaser.GameObjects.Image[] = [];
+  private closeSeeds: (() => void) | null = null;
   private hayCall!: Callout;
   private grainCall!: Callout;
   private cheeseSlot!: Slot;
@@ -265,6 +271,7 @@ export class LavkaScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.fitCamera, this);
       this.hud.destroy();
       this.closeMorning?.();
+      this.closeSeeds?.();
     });
     if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { lavka: this });
     this.morning();
@@ -280,21 +287,23 @@ export class LavkaScene extends Phaser.Scene {
       if (p.tint !== undefined) img.setTint(p.tint);
       if (p.flip) img.setFlipX(true);
       if (!this.props.has(p.k)) this.props.set(p.k, img);
-      if (p.k === 'lavka_tree_apples' && p.y < 300) this.treeImgs[0] = img;
-      if (p.k === 'lavka_tree_round_apples' && p.y < 300) this.treeImgs[1] = img;
     }
-    this.worldText(131, 374, t('lavka.sign'), 3.8, '#fee761').setDepth(381).setStroke('#181425', 6);
-    this.plaque(64, 270, t('lavka.room.cheese'));
-    this.plaque(132, 270, t('lavka.room.shop'));
-    this.plaque(196, 270, t('lavka.room.bakery'));
+    this.worldText(DOOR_IN.x, 364, t('lavka.sign'), 3.8, '#fee761').setDepth(371).setStroke('#181425', 6);
+    this.plaque(64, 268, t('lavka.room.cheese'));
+    this.plaque(155, 268, t('lavka.room.shop'));
     this.plaque(EXPAND.x + EXPAND.w / 2, EXPAND.y + 18, t('lavka.expand'), 0x5a6988);
     this.zone(EXPAND.x, EXPAND.y, EXPAND.w, EXPAND.h, () => this.popup(EXPAND.x + EXPAND.w / 2, EXPAND.y + 40, t('lavka.expandSoon'), '#fee761'));
-    this.art(MILK_SHELF.x, MILK_SHELF.y, 'shelf').setOrigin(0.5, 1).setDepth(MILK_SHELF.y);
-    this.art(MILK_SHELF.x, MILK_SHELF.y, 'shelf_front').setOrigin(0.5, 1).setDepth(MILK_SHELF.y + 0.2);
-    // Витрина с готовым сыром — в сыроварне у окна.
+    // Полки у задней стены зала: товар на них — сколько есть на складе (refreshStock).
+    this.art(MILK_SHELF.x, MILK_SHELF.y, 'fridge').setOrigin(0.5, 1).setDepth(MILK_SHELF.y);
+    this.art(MILK_SHELF.x, MILK_SHELF.y, 'fridge_front').setOrigin(0.5, 1).setDepth(MILK_SHELF.y + 0.2);
+    for (const sh of [EGG_SHELF, HONEY_SHELF]) {
+      this.art(sh.x, sh.y, 'shelf').setOrigin(0.5, 1).setDepth(sh.y);
+      this.art(sh.x, sh.y, 'shelf_front').setOrigin(0.5, 1).setDepth(sh.y + 0.2);
+    }
+    // Витрина с готовым сыром — в сыроварне у проёма в зал.
     this.art(CASE.x, CASE.y, 'lavka_case').setOrigin(0.5, 1).setDepth(CASE.y);
-    this.vatBack = this.add.rectangle(VAT.x, VAT.y - 7, 22, 3, 0x262b44).setDepth(990).setStrokeStyle(0.5, 0x181425);
-    this.vatBar = this.add.rectangle(VAT.x - 11, VAT.y - 7, 0, 3, 0xfee761).setOrigin(0, 0.5).setDepth(991);
+    this.vatBack = this.add.rectangle(VAT.x, VAT.y - 7, 22, 3, 0x262b44).setDepth(990).setStrokeStyle(0.5, 0x181425).setVisible(false);
+    this.vatBar = this.add.rectangle(VAT.x - 11, VAT.y - 7, 0, 3, 0xfee761).setOrigin(0, 0.5).setDepth(991).setVisible(false);
     this.animals();
     this.farm();
     this.staff();
@@ -313,14 +322,23 @@ export class LavkaScene extends Phaser.Scene {
     this.add.rectangle(x, y + 0.2, w, 7, bg).setStrokeStyle(0.8, 0x8f563b).setDepth(639);
   }
 
+  /** Мир — между панелями: сверху монеты и часы, снизу склад и заказы. Влезает весь — посередине между ними;
+   *  не влезает — огород сразу под верхней панелью, остальное — пальцем. */
   private fitCamera(): void {
     const cam = this.cameras.main;
     const fit = this.scale.width / WORLD_W;
     cam.setZoom(crispZoom(fit, ART, fit * 0.9, fit * 1.04) || fit);
-    cam.setBounds(0, -layout.top, WORLD_W, WORLD_H + layout.top);
     this.visible = this.scale.height / cam.zoom;
-    // Главное — ферма: на коротком экране видна она и лавка под ней, остальное — пальцем.
-    cam.centerOn(WORLD_W / 2, this.visible >= WORLD_H + layout.top ? (WORLD_H - layout.top) / 2 : -layout.top + this.visible / 2);
+    const topPad = 62 / cam.zoom;
+    const bottomPad = 96 / cam.zoom;
+    const worldTop = -layout.top;
+    const worldH = WORLD_H + layout.top;
+    const room = this.visible - topPad - bottomPad;
+    // где на экране (в точках мира от верха экрана) окажется верх мира
+    const at = room >= worldH ? topPad + (room - worldH) / 2 : Math.max(0, topPad - layout.top);
+    const viewTop = worldTop - at;
+    cam.setBounds(0, viewTop, WORLD_W, Math.max(worldH + at + bottomPad, this.visible));
+    cam.centerOn(WORLD_W / 2, viewTop + this.visible / 2);
   }
 
   // ---------- ферма: что нажимается ----------
@@ -390,7 +408,7 @@ export class LavkaScene extends Phaser.Scene {
 
   /** Готовое время от времени подпрыгивает «та-да», чтобы глаз цеплялся. */
   private tada(): void {
-    const ready = [...this.cowSlots, ...this.bedSlots, ...this.hiveSlots, ...this.treeSlots, this.houseSlot]
+    const ready = [...this.cowSlots, ...this.bedSlots, ...this.hiveSlots, ...this.treeSlots, this.nestSlot]
       .filter((s) => s.mode === 'call' && s.call.box.visible && s.call.back.texture.key === 'lavka_badge_gold');
     ready.forEach((s, k) => {
       const box = s.call.box;
@@ -412,41 +430,40 @@ export class LavkaScene extends Phaser.Scene {
   }
 
   private farm(): void {
-    // Грядки: растения поверх пустого короба, влажная земля, облачко «полить»/«посадить».
+    // Грядки: растения поверх короба (выше борта), над грядкой — таймер или значок.
     for (let i = 0; i < BEDS; i++) {
       const x = BED_X[i % 3];
       const y = BED_Y[Math.floor(i / 3)];
-      this.bedWet[i] = this.art(x, y, 'lavka_bed_wet').setOrigin(0).setDepth(y - 30).setVisible(false);
-      this.bedCrop[i] = this.art(x, y - 3, `lavka_crop_${CROPS[i]}1`).setOrigin(0).setDepth(y + BED_H - 1).setVisible(false);
-      this.bedSlots[i] = this.slot(x + BED_W / 2, y + 2, 'lavka_ico_drop', () => this.tapBedAt(i), false);
+      this.bedCrop[i] = this.art(x, y - CROP_TOP, 'lavka_crop_carrot1').setOrigin(0).setDepth(y + BED_H - 1).setVisible(false);
+      this.bedSlots[i] = this.slot(x + BED_W / 2, y + 3, 'lavka_ico_seed', () => this.tapBedAt(i), false);
       this.zone(x, y, BED_W, BED_H, () => this.tapBedAt(i));
     }
-    // Яйца в выгуле.
-    this.eggImgs = EGG_SPOTS.slice(0, EGGS_MAX).map((s, i) => {
-      const egg = this.art(s.x, s.y, 'lavka_egg').setOrigin(0.5, 1).setDepth(s.y).setVisible(false);
-      egg.setInteractive(new Phaser.Geom.Rectangle(-5, -5, 17, 18), Phaser.Geom.Rectangle.Contains);
-      egg.on('pointerup', () => !this.drag.moved && this.collectEgg(i));
-      return egg;
-    });
-    // Кормушки, ульи, деревья, теплица, сыроварня.
+    // Яйца — в ячейках гнездового ящика; касание по ящику собирает все.
+    this.eggImgs = EGG_SLOTS.slice(0, EGGS_MAX).map((s, i) =>
+      this.art(s.x, s.y, i % 3 === 1 ? 'lavka_egg_brown' : 'lavka_egg').setOrigin(0.5, 1).setDepth(NEST.y + 0.5).setVisible(false),
+    );
+    this.nestSlot = this.slot(NEST.x, NEST.y - 30, 'lavka_egg', () => this.collectEggs());
+    this.zone(NEST.x - 22, NEST.y - 23, 44, 23, () => this.collectEggs());
+    // Сено и поилка, кормушка кур.
     this.hayCall = this.callout(TROUGH.x, TROUGH.y - 12, 'lavka_ico_hayicon', () => this.hay());
-    this.zone(HAY.x - 11, HAY.y - 17, 22, 19, () => this.hay());
+    this.zone(HAY.x - 10, HAY.y - 13, 26, 14, () => this.hay());
     this.zone(TROUGH.x - 11, TROUGH.y - 8, 22, 9, () => this.hay());
     this.grainCall = this.callout(FEEDER.x, FEEDER.y - 10, 'lavka_ico_grain', () => this.grain());
     this.zone(FEEDER.x - 8, FEEDER.y - 7, 16, 9, () => this.grain());
+    // Пасека и сад.
     HIVES.forEach((h, i) => {
-      this.hiveSlots[i] = this.slot(h.x, h.y - 18, 'lavka_ico_honey', () => this.honey(i));
-      this.zone(h.x - 6, h.y - 11, 12, 12, () => this.honey(i));
+      this.hiveSlots[i] = this.slot(h.x, h.y - 32, 'lavka_ico_honey', () => this.honey(i));
+      this.zone(h.x - 10, h.y - 27, 20, 27, () => this.honey(i));
     });
     TREES.forEach((tr, i) => {
-      this.treeSlots[i] = this.slot(tr.x, tr.y - 30, 'lavka_ico_apple', () => this.apples(i));
-      this.zone(tr.x - 13, tr.y - 28, 26, 28, () => this.apples(i));
+      this.treeImgs[i] = this.art(tr.x, tr.y, 'lavka_tree_bare').setOrigin(0.5, 1).setDepth(tr.y);
+      this.treeSlots[i] = this.slot(tr.x, tr.y - 49, 'lavka_ico_apple', () => this.apples(i));
+      this.zone(tr.x - 18, tr.y - 44, 36, 44, () => this.apples(i));
     });
-    this.houseSlot = this.slot(GREENHOUSE.x, GREENHOUSE.y - GREENHOUSE.h - 2, 'lavka_ico_tomato', () => this.tomatoes());
-    this.zone(GREENHOUSE.x - GREENHOUSE.w / 2, GREENHOUSE.y - GREENHOUSE.h, GREENHOUSE.w, GREENHOUSE.h, () => this.tomatoes());
+    // Сыроварня: касание по чану — поставить сыр.
     this.cheeseSlot = this.slot(VAT.x, VAT.y - 20, 'lavka_wheel', () => this.cheese(), false);
-    if (!this.lite) this.time.addEvent({ delay: 2600, loop: true, callback: () => this.tada() });
     this.zone(CHEESE_ROOM.x, CHEESE_ROOM.y, CHEESE_ROOM.w, CHEESE_ROOM.h, () => this.cheese());
+    if (!this.lite) this.time.addEvent({ delay: 2600, loop: true, callback: () => this.tada() });
   }
 
   // ---------- сочность: у каждого касания есть тело (как в магазине: motion.ts, pixelFx) ----------
@@ -538,19 +555,25 @@ export class LavkaScene extends Phaser.Scene {
     this.popup(x, y, t(key), '#c0cbdc');
   }
 
+  /** Касание по корове: доятся все полные коровы в загоне разом. */
   private milkCow(i: number): void {
     if (this.phase !== 'day') return;
-    const cow = this.cows[i];
-    const r = milk(this.day, i);
-    if (!r.n) return this.nothing(cow.x, cow.y - 16);
+    const tapped = this.cows[i];
+    const r = milkAll(this.day);
+    if (!r.n) return this.nothing(tapped.x, tapped.y - 16);
     this.day = r.day;
     this.hinted.add('cow');
-    this.ripple(cow.x, cow.y - 8);
-    this.squash(cow, 1.08, 0.9, 100);
-    this.flash(cow);
-    this.fx('milk', cow.x + (cow.flipX ? -3 : 3), cow.y - 2, 1.2);
-    pixelFx.burst(this, 'hearts', cow.x, cow.y - 22, { zoom: 1 });
-    this.gather('milk', r.n, { x: cow.x, y: cow.y - 6 });
+    r.cows.forEach((k, n) => {
+      const cow = this.cows[k];
+      this.time.delayedCall(n * 140, () => {
+        this.ripple(cow.x, cow.y - 10);
+        this.squash(cow, 1.08, 0.9, 100);
+        this.flash(cow);
+        this.fx('milk', cow.x + (cow.flipX ? -6 : 6), cow.y - 3, 1.3);
+        pixelFx.burst(this, 'hearts', cow.x, cow.y - 26, { zoom: 1 });
+      });
+    });
+    this.gather('milk', r.n, { x: tapped.x, y: tapped.y - 8 });
   }
 
   private hay(): void {
@@ -561,22 +584,24 @@ export class LavkaScene extends Phaser.Scene {
     this.hinted.add('hay');
     haptic.tap();
     sound.pop(2, TROUGH.x);
-    this.ripple(HAY.x, HAY.y - 8);
+    this.ripple(HAY.x, HAY.y - 6);
     this.squash(this.propImg('lavka_hay'), 1.12, 0.84);
     this.fly('lavka_ico_hayicon', HAY, TROUGH, 3);
     this.time.delayedCall(560, () => this.fx('leaves', TROUGH.x, TROUGH.y - 2, 0.7));
   }
 
-  private collectEgg(spot: number): void {
+  /** Касание по гнездовому ящику: все яйца из гнёзд — в лавку. */
+  private collectEggs(): void {
     if (this.phase !== 'day') return;
-    const r = pickEgg(this.day, spot);
-    if (!r.n) return;
+    const r = pickEggs(this.day);
+    if (!r.n) return this.nothing(NEST.x, NEST.y - 24);
     this.day = r.day;
     this.hinted.add('egg');
-    this.eggImgs[spot].setVisible(false);
-    this.ripple(EGG_SPOTS[spot].x, EGG_SPOTS[spot].y - 3);
-    this.fx('feathers', EGG_SPOTS[spot].x, EGG_SPOTS[spot].y - 4, 0.9);
-    this.gather('eggs', 1, EGG_SPOTS[spot]);
+    this.ripple(NEST.x, NEST.y - 10);
+    this.squash(this.propImg('lavka_nest'), 1.06, 0.92);
+    this.fx('feathers', NEST.x, NEST.y - 8, 1.1);
+    this.eggImgs.forEach((e) => e.setVisible(false));
+    this.gather('eggs', r.n, { x: NEST.x, y: NEST.y - 8 });
   }
 
   private grain(): void {
@@ -592,81 +617,101 @@ export class LavkaScene extends Phaser.Scene {
     this.fly('lavka_ico_grain', { x: FEEDER.x - 16, y: FEEDER.y - 20 }, FEEDER, 2);
   }
 
+  private bedCenter(i: number): { x: number; y: number } {
+    return { x: BED_X[i % 3] + BED_W / 2, y: BED_Y[Math.floor(i / 3)] + BED_H / 2 };
+  }
+
+  /** Касание грядки: пустая — выбрать семена, поспела — собрать, растёт — «растёт…». */
   private tapBedAt(i: number): void {
     if (this.phase !== 'day') return;
-    const x = BED_X[i % 3] + BED_W / 2;
-    const y = BED_Y[Math.floor(i / 3)] + BED_H / 2;
-    const r = tapBed(this.day, i);
-    this.day = r.day;
+    const { x, y } = this.bedCenter(i);
+    const action = bedAction(this.day.beds[i]);
     this.hinted.add('bed');
     this.ripple(x, y);
     const crop = this.bedCrop[i];
-    if (r.did === 'harvest') {
+    if (action === 'plant') {
+      haptic.tap();
+      sound.pop(0, x);
+      this.closeSeeds?.();
+      const empty = this.day.beds.filter((b) => !b.seed).length;
+      this.closeSeeds = seedPicker(
+        empty,
+        (seed, all) => {
+          this.closeSeeds = null;
+          this.sow(i, seed, all);
+        },
+        () => (this.closeSeeds = null),
+      );
+      return;
+    }
+    if (action === 'harvest') {
+      const r = harvest(this.day, i);
+      this.day = r.day;
       // растение выдёргивается из грядки и тает — грядка пустеет не мгновенно
       if (!this.lite && crop?.visible) {
         const ghost = this.art(crop.x, crop.y, crop.texture.key).setOrigin(0).setDepth(crop.depth + 1);
         ghost.setTintFill(0xffffff);
         this.time.delayedCall(50, () => ghost.active && ghost.clearTint());
-        this.tweens.add({ targets: ghost, y: crop.y - 7, alpha: 0, duration: 380, ease: 'Quad.easeOut', onComplete: () => ghost.destroy() });
+        this.tweens.add({ targets: ghost, y: crop.y - 8, alpha: 0, duration: 380, ease: 'Quad.easeOut', onComplete: () => ghost.destroy() });
       }
-      this.fx('leaves', x, y + 2, 1);
+      this.fx('leaves', x, y + 2, 1.2);
       return this.gather('veg', r.n, { x, y });
     }
-    haptic.tap();
-    if (r.did === 'plant') {
-      sound.pop(0, x);
-      for (const dx of [-11, 0, 11]) this.fx('sprout', x + dx, y + 6, 0.8);
-    } else if (r.did === 'water') {
-      sound.pop(1, x);
-      this.fx('splash', x - 8, y + 4, 0.9);
-      this.time.delayedCall(90, () => this.fx('splash', x + 8, y + 5, 0.9));
-      for (let k = 0; k < (this.lite ? 4 : 8); k++) {
-        const d = this.art(x + Phaser.Math.Between(-16, 16), y - 14, 'raindrop').setDepth(1000);
-        this.tweens.add({ targets: d, y: y + Phaser.Math.Between(-2, 6), alpha: 0.3, duration: 260, delay: k * 30, onComplete: () => d.destroy() });
-      }
+    this.squash(crop, 1.04, 0.94);
+    this.nothing(x, y - 8, 'lavka.growing');
+  }
+
+  /** Посадить выбранное: на эту грядку или на все пустые; ростки проклёвываются по очереди. */
+  private sow(i: number, seed: Seed, all: boolean): void {
+    if (this.phase !== 'day') return;
+    let beds: number[];
+    if (all) {
+      const r = plantAll(this.day, seed);
+      this.day = r.day;
+      beds = r.beds;
     } else {
-      this.squash(crop, 1.05, 0.92);
-      this.nothing(x, y - 8, 'lavka.growing');
+      const r = plant(this.day, i, seed);
+      this.day = r.day;
+      beds = r.n ? [i] : [];
     }
+    beds.forEach((b, n) => {
+      const { x, y } = this.bedCenter(b);
+      this.time.delayedCall(n * 120, () => {
+        sound.pop(0, x);
+        for (const dx of [-22, 0, 22]) this.fx('sprout', x + dx, y + 8, 0.9);
+      });
+    });
+    if (beds.length) haptic.tap();
   }
 
   private honey(i: number): void {
     if (this.phase !== 'day') return;
     const r = takeHoney(this.day, i);
-    if (!r.n) return this.nothing(HIVES[i].x, HIVES[i].y - 14);
+    if (!r.n) return this.nothing(HIVES[i].x, HIVES[i].y - 28);
     this.day = r.day;
-    this.ripple(HIVES[i].x, HIVES[i].y - 8);
-    this.squash(this.propImg(`lavka_hive${i}`), 1.12, 0.86);
-    pixelFx.burst(this, 'coinpop', HIVES[i].x, HIVES[i].y - 6, { zoom: 1 });
-    this.gather('honey', r.n, { x: HIVES[i].x, y: HIVES[i].y - 6 });
+    this.ripple(HIVES[i].x, HIVES[i].y - 12);
+    this.squash(this.propImg(`lavka_hive${i}`), 1.1, 0.88);
+    this.flash(this.propImg(`lavka_hive${i}`));
+    pixelFx.burst(this, 'coinpop', HIVES[i].x, HIVES[i].y - 14, { zoom: 1 });
+    this.gather('honey', r.n, { x: HIVES[i].x, y: HIVES[i].y - 14 });
   }
 
   private apples(i: number): void {
     if (this.phase !== 'day') return;
     const tr = TREES[i];
     const r = shakeTree(this.day, i);
-    if (!r.n) return this.nothing(tr.x, tr.y - 30);
+    if (!r.n) return this.nothing(tr.x, tr.y - 40);
     this.day = r.day;
     const img = this.treeImgs[i];
-    this.ripple(tr.x, tr.y - 16);
-    if (img) this.tweens.add({ targets: img, angle: { from: -6, to: 0 }, duration: 520, ease: 'Elastic.easeOut' });
+    this.ripple(tr.x, tr.y - 24);
+    img.setTexture('lavka_tree_bare');
+    this.tweens.add({ targets: img, angle: { from: -5, to: 0 }, duration: 560, ease: 'Elastic.easeOut' });
     // яблоки срываются с кроны, стукаются о землю — и уже оттуда летят в лавку
-    for (let k = 0; k < 3; k++) {
-      const a = this.art(tr.x + (k - 1) * 7, tr.y - 22, 'lavka_ico_apple').setDepth(tr.y + 2).setScale(0.9 / ART);
-      this.tweens.add({ targets: a, y: tr.y - 1, duration: 300, delay: k * 70, ease: 'Bounce.easeOut', onComplete: () => this.tweens.add({ targets: a, alpha: 0, delay: 200, duration: 150, onComplete: () => a.destroy() }) });
+    for (let k = 0; k < 4; k++) {
+      const a = this.art(tr.x + (k - 1.5) * 7, tr.y - 32 + (k % 2) * 6, 'lavka_ico_apple').setDepth(tr.y + 2);
+      this.tweens.add({ targets: a, y: tr.y - 1 + (k % 2), duration: 320, delay: k * 70, ease: 'Bounce.easeOut', onComplete: () => this.tweens.add({ targets: a, alpha: 0, delay: 200, duration: 150, onComplete: () => a.destroy() }) });
     }
-    this.time.delayedCall(420, () => this.gather('veg', r.n, { x: tr.x, y: tr.y - 2 }));
-  }
-
-  private tomatoes(): void {
-    if (this.phase !== 'day') return;
-    const r = pickGreenhouse(this.day);
-    if (!r.n) return this.nothing(GREENHOUSE.x, GREENHOUSE.y - GREENHOUSE.h);
-    this.day = r.day;
-    this.ripple(GREENHOUSE.x, GREENHOUSE.y - 14);
-    this.squash(this.propImg('lavka_greenhouse'), 1.04, 0.95);
-    this.fx('leaves', GREENHOUSE.x, GREENHOUSE.y - 8, 1.1);
-    this.gather('veg', r.n, { x: GREENHOUSE.x, y: GREENHOUSE.y - 10 });
+    this.time.delayedCall(440, () => this.gather('veg', r.n, { x: tr.x, y: tr.y - 3 }));
   }
 
   private cheese(): void {
@@ -677,7 +722,9 @@ export class LavkaScene extends Phaser.Scene {
     this.hinted.add('cheese');
     haptic.tap();
     sound.good();
-    this.fly('item_milk', BACK_DOOR, VAT, CHEESE_MILK);
+    this.ripple(VAT.x, VAT.y - 6);
+    this.squash(this.propImg('lavka_vat'), 1.1, 0.9);
+    this.fly('item_milk', MILK_SHELF, VAT, CHEESE_MILK);
     this.refreshStock();
   }
 
@@ -690,7 +737,7 @@ export class LavkaScene extends Phaser.Scene {
     }
   }
 
-  /** Ферма показывает своё состояние: значки над готовым, растения по стадиям, яйца, полив. */
+  /** Ферма показывает своё состояние: таймеры и значки, растения по стадиям, яйца в гнёздах, яблоки на ветках. */
   private showFarm(): void {
     const d = this.day;
     const day = this.phase === 'day';
@@ -699,15 +746,27 @@ export class LavkaScene extends Phaser.Scene {
       this.setSlot(sl, !day ? 'off' : d.cows[i] >= 1 ? 'call' : 'wait', d.cows[i]);
       const c = sl.call;
       c.box.x = cow.x;
-      sl.timer.setPosition(cow.x, cow.y - 22);
-      if (c.box.visible && Math.abs(c.box.y - (cow.y - 22)) > 3) c.box.y = cow.y - 22;
+      sl.timer.setPosition(cow.x, cow.y - 30);
+      if (c.box.visible && Math.abs(c.box.y - (cow.y - 30)) > 3) c.box.y = cow.y - 30;
     });
     this.show(this.hayCall, day && d.hay <= 1);
     this.show(this.grainCall, day && d.grain <= 1);
-    this.eggImgs.forEach((egg, i) => egg.setVisible(d.eggs.includes(i)));
+    this.eggImgs.forEach((egg, i) => {
+      const on = i < d.eggs;
+      if (on && !egg.visible && day && !this.lite) {
+        // снеслась — яйцо выпрыгивает в гнезде
+        egg.setScale(0.3 / ART);
+        this.tweens.add({ targets: egg, scale: 1 / ART, duration: 300, ease: 'Back.easeOut' });
+      }
+      egg.setVisible(on);
+    });
+    this.setSlot(this.nestSlot, !day ? 'off' : d.eggs > 0 ? 'call' : d.grain > 0 ? 'wait' : 'off', 1 - d.layIn / 10);
     d.hives.forEach((h, i) => this.setSlot(this.hiveSlots[i], !day ? 'off' : h >= 1 ? 'call' : 'wait', h));
-    d.trees.forEach((h, i) => this.setSlot(this.treeSlots[i], !day ? 'off' : h >= 1 ? 'call' : 'wait', h));
-    this.setSlot(this.houseSlot, !day ? 'off' : d.house >= 1 ? 'call' : 'wait', d.house);
+    d.trees.forEach((h, i) => {
+      this.setSlot(this.treeSlots[i], !day ? 'off' : h >= 1 ? 'call' : 'wait', h);
+      const key = h >= 1 || !day ? 'lavka_tree_apples' : 'lavka_tree_bare';
+      if (this.treeImgs[i].texture.key !== key) this.treeImgs[i].setTexture(key);
+    });
     this.setSlot(
       this.cheeseSlot,
       !day ? 'off' : d.cheese > 0 ? 'wait' : d.stock.milk >= CHEESE_MILK + 2 ? 'call' : 'off',
@@ -715,69 +774,67 @@ export class LavkaScene extends Phaser.Scene {
     );
     d.beds.forEach((b, i) => {
       const action = bedAction(b);
-      const stage = !b.planted ? 0 : b.grow >= 1 ? 3 : b.grow >= 0.45 ? 2 : 1;
+      const stage = !b.seed ? 0 : b.grow >= 1 ? 3 : b.grow >= 0.45 ? 2 : 1;
       const sl = this.bedSlots[i];
-      // сухая — капля, пустая — семечко, растёт — таймер, спелая — золотой значок с самой культурой
-      if (action === 'water' || action === 'plant') this.dress(sl.call, action === 'plant' ? 'lavka_ico_seed' : 'lavka_ico_drop', false);
-      else if (action === 'harvest') this.dress(sl.call, `lavka_ico_${CROPS[i]}`, true);
+      // пустая — семечко (кремовое), растёт — таймер, поспела — золотой значок с самой культурой
+      if (action === 'plant') this.dress(sl.call, 'lavka_ico_seed', false);
+      else if (action === 'harvest' && b.seed) this.dress(sl.call, `lavka_ico_${b.seed}`, true);
       this.setSlot(sl, !day ? 'off' : action === 'growing' ? 'wait' : 'call', b.grow);
-      const key = `${stage}/${b.water > 0}`;
+      const key = `${b.seed}/${stage}`;
       if (key === this.bedShown[i]) return;
       this.bedShown[i] = key;
-      this.bedWet[i].setVisible(b.water > 0);
       const crop = this.bedCrop[i];
       const grew = stage > (this.bedStage[i] ?? 0) && (this.bedStage[i] ?? 0) > 0;
       this.bedStage[i] = stage;
       this.tweens.killTweensOf(crop);
       crop.setScale(1 / ART).setVisible(stage > 0);
-      if (stage > 0) crop.setTexture(`lavka_crop_${CROPS[i]}${stage}`);
-      // подросло — растение «выстреливает» вверх пружинкой, разлетаются листики
+      if (stage > 0 && b.seed) crop.setTexture(`lavka_crop_${b.seed}${stage}`);
+      // подросло — растения «выстреливают» вверх пружинкой, разлетаются листики
       if (grew && !this.lite) {
-        crop.setScale(1 / ART, 0.55 / ART);
-        this.tweens.add({ targets: crop, scaleY: 1 / ART, duration: 420, ease: 'Back.easeOut' });
-        this.fx('leaves', crop.x + BED_W / 2, crop.y + BED_H / 2 + 3, 0.7);
+        crop.setScale(1 / ART, 0.6 / ART);
+        crop.y = BED_Y[Math.floor(i / 3)] - CROP_TOP + (BED_H + CROP_TOP) * 0.4;
+        this.tweens.add({ targets: crop, scaleY: 1 / ART, y: BED_Y[Math.floor(i / 3)] - CROP_TOP, duration: 420, ease: 'Back.easeOut' });
+        this.fx('leaves', crop.x + BED_W / 2, BED_Y[Math.floor(i / 3)] + BED_H / 2, 0.8);
       }
-      if (stage === 3) this.tweens.add({ targets: crop, scaleY: 1.06 / ART, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 420 + i * 60 });
     });
   }
 
   // ---------- жизнь вокруг ----------
 
   private animals(): void {
-    // Коровы пасутся по загону: жуют, бредут; полная — облачко с молоком, касание — подоить.
-    const cows: [number, number, number][] = [
-      [180, 118, 0],
-      [216, 130, 1],
-      [190, 156, 0],
-      [226, 104, 1],
+    // Корова (пока одна, загон на вырост): жуёт, бредёт; полная — значок с молоком, касание — подоить всех полных.
+    const spots: [number, number][] = [
+      [196, 212],
+      [228, 200],
+      [176, 224],
+      [214, 226],
     ];
-    cows.slice(0, COWS).forEach(([x, y, v], i) => {
-      const cow = this.art(x, y, `lavka_cow${v}00`).setOrigin(0.5, 1).setDepth(y).setFlipX(Math.random() < 0.5);
+    spots.slice(0, COWS).forEach(([x, y], i) => {
+      const cow = this.art(x, y, 'lavka_cow00').setOrigin(0.5, 1).setDepth(y).setFlipX(i % 2 === 1);
       // мягкая тень под коровой — ходит вместе с ней
-      const shade = this.add.ellipse(x, y - 1, 30, 6, 0x1e3a1a, 0.28).setDepth(y - 1);
+      const shade = this.add.ellipse(x, y - 1, 34, 7, 0x1e3a1a, 0.28).setDepth(y - 1);
       cow.on('destroy', () => shade.destroy());
-      cow.setData('shade', shade);
-      cow.setInteractive(new Phaser.Geom.Rectangle(-4, -6, 44, 38), Phaser.Geom.Rectangle.Contains);
+      cow.setInteractive(new Phaser.Geom.Rectangle(-4, -6, 74, 60), Phaser.Geom.Rectangle.Contains);
       cow.on('pointerup', () => !this.drag.moved && this.milkCow(i));
       this.cows[i] = cow;
-      this.cowSlots[i] = this.slot(x, y - 22, 'item_milk', () => this.milkCow(i));
+      this.cowSlots[i] = this.slot(x, y - 30, 'item_milk', () => this.milkCow(i));
       const chew = (): void => {
         if (!cow.active) return;
         // жуёт: голова вверх-вниз; иногда — взмах хвостом
         const head = cow.getData('head') ? 0 : 1;
         cow.setData('head', head);
-        cow.setTexture(`lavka_cow${v}${head}0`);
+        cow.setTexture(`lavka_cow${head}0`);
         if (!this.lite && Math.random() < 0.35) {
-          this.time.delayedCall(180, () => cow.active && cow.setTexture(`lavka_cow${v}${head}1`));
-          this.time.delayedCall(420, () => cow.active && cow.setTexture(`lavka_cow${v}${head}0`));
+          this.time.delayedCall(180, () => cow.active && cow.setTexture(`lavka_cow${head}1`));
+          this.time.delayedCall(420, () => cow.active && cow.setTexture(`lavka_cow${head}0`));
         }
-        // Полная корова стоит и ждёт дойки; сытая бродит; без сена — тянется к пустой поилке.
+        // Полная — стоит и ждёт; сытая бродит по загону; без сена — тянется к пустой поилке.
         if (this.day.cows[i] < 1 && Math.random() < 0.3) {
           const toTrough = this.day.hay <= 0;
-          const nx = toTrough ? TROUGH.x + Phaser.Math.Between(-8, 8) : Phaser.Math.Clamp(cow.x + Phaser.Math.Between(-14, 14), PADDOCK.x0, PADDOCK.x1);
-          const ny = toTrough ? TROUGH.y - 2 : Phaser.Math.Clamp(cow.y + Phaser.Math.Between(-6, 6), PADDOCK.y0, PADDOCK.y1);
+          const nx = toTrough ? TROUGH.x + 18 : Phaser.Math.Clamp(cow.x + Phaser.Math.Between(-16, 16), PADDOCK.x0 + 16, PADDOCK.x1 - 16);
+          const ny = toTrough ? TROUGH.y + 8 : Phaser.Math.Clamp(cow.y + Phaser.Math.Between(-6, 6), PADDOCK.y0 + 8, PADDOCK.y1);
           cow.setFlipX(nx < cow.x);
-          this.tweens.add({ targets: cow, x: nx, y: ny, duration: 2200, ease: 'Sine.easeInOut', onUpdate: () => {
+          this.tweens.add({ targets: cow, x: nx, y: ny, duration: 2400, ease: 'Sine.easeInOut', onUpdate: () => {
             cow.setDepth(cow.y);
             shade.setPosition(cow.x, cow.y - 1).setDepth(cow.y - 1);
           } });
@@ -786,63 +843,47 @@ export class LavkaScene extends Phaser.Scene {
       };
       this.time.delayedCall(Phaser.Math.Between(200, 1600), chew);
     });
-    const hens: [number, number, number, number, number][] = [
-      [RUN.x0, RUN.x1, RUN.y0, RUN.y1, 8],
-    ];
-    for (const [x0, x1, y0, y1, n] of hens) {
-      for (let i = 0; i < n; i++) {
-        const v = i % 3;
-        const hen = this.art(Phaser.Math.Between(x0, x1), Phaser.Math.Between(y0, y1), `lavka_hen${v}0`).setOrigin(0.5, 1);
-        hen.setDepth(hen.y).setFlipX(Math.random() < 0.5);
-        const peck = (): void => {
-          if (!hen.active) return;
-          if (Math.random() < 0.5) {
-            hen.setTexture(`lavka_hen${v}1`);
-            this.time.delayedCall(260, () => hen.active && hen.setTexture(`lavka_hen${v}0`));
-          } else {
-            const nx = Phaser.Math.Clamp(hen.x + Phaser.Math.Between(-9, 9), x0, x1);
-            const ny = Phaser.Math.Clamp(hen.y + Phaser.Math.Between(-4, 4), y0, y1);
-            hen.setFlipX(nx < hen.x);
-            this.tweens.add({ targets: hen, x: nx, y: ny, duration: 500, onUpdate: () => hen.setDepth(hen.y) });
-          }
-          this.time.delayedCall(Phaser.Math.Between(500, 1800), peck);
-        };
-        this.time.delayedCall(Phaser.Math.Between(0, 1500), peck);
-        // за двумя курами — по паре цыплят, семенят следом
-        if (!this.lite && i < 2) {
-          for (let c = 0; c < 2; c++) {
-            const chick = this.art(hen.x + 4 + c * 4, hen.y + 1, 'lavka_chick0').setOrigin(0.5, 1).setDepth(hen.y + 1);
-            const follow = (): void => {
-              if (!chick.active) return;
-              const tx = hen.x + (hen.flipX ? 6 : -6) + c * 4;
-              const ty = hen.y + 1 + c;
-              chick.setFlipX(tx < chick.x).setTexture('lavka_chick1');
-              this.tweens.add({ targets: chick, x: tx, y: ty, duration: 260, onUpdate: () => chick.setDepth(chick.y), onComplete: () => chick.active && chick.setTexture('lavka_chick0') });
-              this.time.delayedCall(Phaser.Math.Between(350, 900), follow);
-            };
-            this.time.delayedCall(Phaser.Math.Between(0, 600), follow);
-          }
+    // Куры в выгуле: клюют, перебегают; за двумя — цыплята.
+    for (let i = 0; i < HENS; i++) {
+      const v = i % 3;
+      const hen = this.art(Phaser.Math.Between(RUN.x0, RUN.x1), Phaser.Math.Between(RUN.y0, RUN.y1), `lavka_hen${v}0`).setOrigin(0.5, 1);
+      hen.setDepth(hen.y).setFlipX(Math.random() < 0.5);
+      const peck = (): void => {
+        if (!hen.active) return;
+        if (Math.random() < 0.5) {
+          hen.setTexture(`lavka_hen${v}1`);
+          this.time.delayedCall(260, () => hen.active && hen.setTexture(`lavka_hen${v}0`));
+        } else {
+          const nx = Phaser.Math.Clamp(hen.x + Phaser.Math.Between(-12, 12), RUN.x0, RUN.x1);
+          const ny = Phaser.Math.Clamp(hen.y + Phaser.Math.Between(-5, 5), RUN.y0, RUN.y1);
+          hen.setFlipX(nx < hen.x);
+          this.tweens.add({ targets: hen, x: nx, y: ny, duration: 520, onUpdate: () => hen.setDepth(hen.y) });
+        }
+        this.time.delayedCall(Phaser.Math.Between(500, 1800), peck);
+      };
+      this.time.delayedCall(Phaser.Math.Between(0, 1500), peck);
+      if (!this.lite && i < 2) {
+        for (let c = 0; c < 2; c++) {
+          const chick = this.art(hen.x + 5 + c * 5, hen.y + 1, 'lavka_chick0').setOrigin(0.5, 1).setDepth(hen.y + 1);
+          const follow = (): void => {
+            if (!chick.active) return;
+            const tx = hen.x + (hen.flipX ? 8 : -8) + c * 5;
+            const ty = hen.y + 1 + c;
+            chick.setFlipX(tx < chick.x).setTexture('lavka_chick1');
+            this.tweens.add({ targets: chick, x: tx, y: ty, duration: 260, onUpdate: () => chick.setDepth(chick.y), onComplete: () => chick.active && chick.setTexture('lavka_chick0') });
+            this.time.delayedCall(Phaser.Math.Between(350, 900), follow);
+          };
+          this.time.delayedCall(Phaser.Math.Between(0, 600), follow);
         }
       }
     }
-    for (let i = 0; i < 3; i++) {
-      const v = i === 1 ? 1 : 0;
-      const duck = this.art(Phaser.Math.Between(POND.x0, POND.x1), Phaser.Math.Between(POND.y0, POND.y1), `lavka_duck${v}`).setOrigin(0.5, 1);
-      duck.setDepth(duck.y);
-      const swim = (): void => {
-        if (!duck.active) return;
-        const nx = Phaser.Math.Between(POND.x0, POND.x1);
-        duck.setFlipX(nx < duck.x);
-        this.tweens.add({ targets: duck, x: nx, y: Phaser.Math.Between(POND.y0, POND.y1), duration: Phaser.Math.Between(2600, 4200), ease: 'Sine.easeInOut', onUpdate: () => duck.setDepth(duck.y), onComplete: () => this.time.delayedCall(Phaser.Math.Between(400, 1600), swim) });
-      };
-      swim();
-    }
-    for (let i = 0; i < (this.lite ? 3 : 7); i++) {
+    // Пчёлы вьются у ульев.
+    for (let i = 0; i < (this.lite ? 3 : 8); i++) {
       const h = HIVES[i % HIVES.length];
-      const bee = this.art(h.x, h.y - 14, 'lavka_bee').setDepth(500);
+      const bee = this.art(h.x, h.y - 20, 'lavka_bee').setDepth(500);
       const buzz = (): void => {
         if (!bee.active) return;
-        this.tweens.add({ targets: bee, x: h.x + Phaser.Math.Between(-12, 12), y: h.y - Phaser.Math.Between(10, 24), duration: Phaser.Math.Between(400, 900), ease: 'Sine.easeInOut', onComplete: buzz });
+        this.tweens.add({ targets: bee, x: h.x + Phaser.Math.Between(-14, 14), y: h.y - Phaser.Math.Between(12, 34), duration: Phaser.Math.Between(400, 900), ease: 'Sine.easeInOut', onComplete: buzz });
       };
       buzz();
     }
@@ -854,13 +895,13 @@ export class LavkaScene extends Phaser.Scene {
   private ambient(): void {
     if (this.lite) return;
     for (let i = 0; i < 3; i++) {
-      const b = this.fx('butterfly', Phaser.Math.Between(20, 120), Phaser.Math.Between(-20, 60), 0.6, 600);
+      const b = this.fx('butterfly', Phaser.Math.Between(20, 230), Phaser.Math.Between(10, 150), 0.6, 600);
       if (!b) continue;
       const drift = (): void => {
         if (!b.active) return;
         const nx = Phaser.Math.Between(10, 240);
         b.setFlipX(nx < b.x);
-        this.tweens.add({ targets: b, x: nx, y: Phaser.Math.Between(-30, 230), duration: Phaser.Math.Between(5000, 9000), ease: 'Sine.easeInOut', onComplete: drift });
+        this.tweens.add({ targets: b, x: nx, y: Phaser.Math.Between(0, 200), duration: Phaser.Math.Between(5000, 9000), ease: 'Sine.easeInOut', onComplete: drift });
       };
       drift();
     }
@@ -876,40 +917,54 @@ export class LavkaScene extends Phaser.Scene {
     }
     this.time.addEvent({ delay: 900, loop: true, callback: () => {
       if (this.phase !== 'day') return;
-      const ripe = this.day.beds.map((b, i) => (b.planted && b.grow >= 1 ? i : -1)).filter((i) => i >= 0);
+      const ripe = this.day.beds.map((b, i) => (b.seed && b.grow >= 1 ? i : -1)).filter((i) => i >= 0);
       if (!ripe.length) return;
       const i = Phaser.Utils.Array.GetRandom(ripe);
-      const x = BED_X[i % 3] + BED_W / 2 + Phaser.Math.Between(-12, 12);
-      const y = BED_Y[Math.floor(i / 3)] + Phaser.Math.Between(0, 8);
+      const x = BED_X[i % 3] + BED_W / 2 + Phaser.Math.Between(-28, 28);
+      const y = BED_Y[Math.floor(i / 3)] + Phaser.Math.Between(4, 26);
       pixelFx.burst(this, 'star', x, y, { zoom: 1, fade: 300 });
     } });
   }
 
-  /** Трактор с прицепом: стоит у задней двери, раз в полминуты едет по тропинке в поле и возвращается с урожаем. */
+  /** Трактор с прицепом: стоит на дорожке справа; время от времени едет по ней влево к саду и обратно — всегда
+   *  носом вперёд (едет влево — разворачивается, прицеп сзади). */
   private tractorTrip(): void {
-    const tractor = this.art(TRACTOR.x, TRACTOR.y, 'lavka_tractor').setOrigin(0.5, 1).setDepth(TRACTOR.y);
-    const cart = this.art(TRACTOR.x - 27, TRACTOR.y - 1, 'lavka_cart').setOrigin(0.5, 1).setDepth(TRACTOR.y - 1);
-    // Едет по тропинке (её середина — x 130): сначала встаёт на неё, потом вверх к полю и обратно.
-    const toPath = TRACTOR.x - 27 - 120;
-    const rise = TRACTOR.y + 2;
+    const tractor = this.art(TRACTOR.x, LANE_Y, 'lavka_tractor').setOrigin(0.5, 1).setDepth(LANE_Y).setFlipX(true);
+    const cart = this.art(TRACTOR.x + 27, LANE_Y - 1, 'lavka_cart').setOrigin(0.5, 1).setDepth(LANE_Y - 1).setFlipX(true);
+    const face = (left: boolean): void => {
+      tractor.setFlipX(left);
+      cart.setFlipX(left);
+      cart.x = tractor.x + (left ? 27 : -27);
+    };
+    const drive = (to: number, ms: number, done: () => void): void => {
+      this.tweens.add({ targets: tractor, x: to, duration: ms, ease: 'Sine.easeInOut', onUpdate: () => (cart.x = tractor.x + (tractor.flipX ? 27 : -27)), onComplete: done });
+    };
+    const puff = (): void => {
+      if (this.lite || !tractor.active) return;
+      const p = this.art(tractor.x + (tractor.flipX ? 10 : -10), LANE_Y - 26, 'lavka_puff').setDepth(LANE_Y + 1).setAlpha(0.7).setScale(0.4 / ART);
+      this.tweens.add({ targets: p, y: p.y - 8, alpha: 0, scale: 0.9 / ART, duration: 900, onComplete: () => p.destroy() });
+    };
+    this.time.addEvent({ delay: 450, loop: true, callback: () => tractor.getData('moving') && puff() });
     const go = (): void => {
       if (!tractor.active) return;
-      const up = { y: `-=${rise}`, duration: 9000, ease: 'Sine.easeInOut' };
-      const sync = (): void => {
-        tractor.setDepth(tractor.y);
-        cart.setDepth(cart.y);
-      };
-      this.tweens.add({ targets: [tractor, cart], x: `-=${toPath}`, duration: 1600, ease: 'Sine.easeInOut', onComplete: () =>
-        this.tweens.add({ targets: [tractor, cart], ...up, onUpdate: sync, onComplete: () =>
-          this.time.delayedCall(4000, () =>
-            this.tweens.add({ targets: [tractor, cart], y: `+=${rise}`, duration: 9000, ease: 'Sine.easeInOut', onUpdate: sync, onComplete: () =>
-              this.tweens.add({ targets: [tractor, cart], x: `+=${toPath}`, duration: 1600, ease: 'Sine.easeInOut', onComplete: () => this.time.delayedCall(Phaser.Math.Between(18000, 26000), go) }),
-            }),
-          ),
-        }),
+      tractor.setData('moving', true);
+      face(true);
+      drive(40, 7000, () => {
+        tractor.setData('moving', false);
+        this.time.delayedCall(2500, () => {
+          tractor.setData('moving', true);
+          face(false);
+          tractor.x = 40;
+          cart.x = 13;
+          drive(TRACTOR.x, 7000, () => {
+            tractor.setData('moving', false);
+            face(true);
+            this.time.delayedCall(Phaser.Math.Between(16000, 24000), go);
+          });
+        });
       });
     };
-    this.time.delayedCall(9000, go);
+    this.time.delayedCall(8000, go);
   }
 
   /** Пар над чаном, пока зреет сыр. */
@@ -932,7 +987,7 @@ export class LavkaScene extends Phaser.Scene {
     const right = Math.random() < 0.5;
     const key = Phaser.Utils.Array.GetRandom(['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck']) as string;
     const tint = key === 'car_taxi' ? 0xffffff : (Phaser.Utils.Array.GetRandom([0xe43b44, 0x5b6ee1, 0xffffff, 0x3e8948, 0xfee761, 0x8b9bb4]) as number);
-    const y = right ? 446 : 430;
+    const y = right ? 433 : 417;
     const car = this.art(right ? -40 : WORLD_W + 40, y, key).setOrigin(0.5, 1).setDepth(y).setFlipX(!right).setTint(tint);
     this.tweens.add({ targets: car, x: right ? WORLD_W + 40 : -40, duration: Phaser.Math.Between(4200, 6000), onComplete: () => car.destroy() });
   }
@@ -945,19 +1000,11 @@ export class LavkaScene extends Phaser.Scene {
       this.npcs.push({ p, say, turns });
       return p;
     };
-    // Ферма: Митя у трактора, доярка в загоне.
-    npc(108, 256, { shirt: 0xffffff, pants: 0x262b44, skin: 0xeec39a, hair: 0xc0cbdc, style: 'bald', outfit: 'overalls', hat: 'flatcap', hatTint: 0x5a6988, face: 'beard' }, 'down', 'lavka.say.mitya', ['down', 'left', 'right']);
-    npc(222, 156, { shirt: 0xf6757a, skin: 0xf2d3ab, hair: 0xfeae34, style: 'ponytail', hat: 'headscarf', hatTint: 0xe43b44, acc: 'apron' }, 'left', undefined, ['left', 'right', 'down']);
-    // Бабушка — на ферме, у теплицы: подсказывает.
-    npc(74, 136, { shirt: 0xb55088, skin: 0xf2d3ab, hair: 0xffffff, style: 'bun', outfit: 'cardigan', outfitTint: 0xc4a8e8, hat: 'headscarf', hatTint: 0xfee761, glasses: true }, 'down', 'lavka.say.granny', ['down', 'left', 'right']);
-    // Сыроварня.
-    this.cheesemaker = npc(72, 334, { shirt: 0xffffff, pants: 0x262b44, skin: 0xf2d3ab, hair: 0x733e39, style: 'bun', acc: 'apron', hat: 'headscarf', hatTint: 0xffffff }, 'down');
-    // Папа за прилавком.
-    this.father = npc(COUNTER.x, 336, { shirt: 0x37946e, pants: 0x3a4466, skin: 0xf2d3ab, hair: 0x4a2c1a, style: 'short', acc: 'apron', accTint: 0xe4a672 }, 'down');
-    // Пекарня.
-    npc(196, 338, { shirt: 0xffffff, skin: 0xeec39a, hair: 0x181425, style: 'short', outfit: 'chefcoat', hat: 'toque', face: 'mustache' }, 'down', 'lavka.say.marat', ['down', 'left']);
+    // На ферме людей пока нет — там работает игрок (сотрудники появятся позже). В лавке: сыровар и папа.
+    this.cheesemaker = npc(74, 322, { shirt: 0xffffff, pants: 0x262b44, skin: 0xf2d3ab, hair: 0x733e39, style: 'bun', acc: 'apron', hat: 'headscarf', hatTint: 0xffffff }, 'down');
+    this.father = npc(COUNTER.x, 324, { shirt: 0x37946e, pants: 0x3a4466, skin: 0xf2d3ab, hair: 0x4a2c1a, style: 'short', acc: 'apron', accTint: 0xe4a672 }, 'down');
     // Валя на лавочке у входа.
-    npc(205, 400, { shirt: 0xa22633, skin: 0xf2d3ab, hair: 0xc0cbdc, style: 'curly' }, 'down', 'lavka.say.valya', ['down', 'left']);
+    npc(205, 392, { shirt: 0xa22633, skin: 0xf2d3ab, hair: 0xc0cbdc, style: 'curly' }, 'down', 'lavka.say.valya', ['down', 'left']);
   }
 
   /** Стоят на месте, но живые: изредка поворачиваются и говорят. */
@@ -993,19 +1040,26 @@ export class LavkaScene extends Phaser.Scene {
     this.time.delayedCall(2600, () => this.tweens.add({ targets: c, alpha: 0, duration: 250, onComplete: () => c.destroy() }));
   }
 
-  /** Бутылки на молочной полке и головки на витрине — сколько есть на складе. */
+  /** Товар на полках — сколько есть на складе: бутылки в холодильнике, яйца и мёд на полках, сыр на витрине. */
   private refreshStock(): void {
-    for (const it of this.milkItems) it.destroy();
-    this.milkItems = [];
-    const left = MILK_SHELF.x - 20;
-    const variants = ['item_milk', 'item_milk_0', 'item_milk_1', 'item_milk_2'];
-    for (let k = 0; k < Math.min(6, this.day.stock.milk); k++) {
-      const x = left + (8 + k * 11 + 5.5) / ART;
-      this.milkItems.push(this.art(x, MILK_SHELF.y - 32 + 15, variants[k % variants.length]).setOrigin(0.5, 1).setDepth(MILK_SHELF.y + 0.1));
-    }
+    const fill = (list: Phaser.GameObjects.Image[], shelf: { x: number; y: number }, keys: string[], n: number, rows: [number, number]): Phaser.GameObjects.Image[] => {
+      for (const it of list) it.destroy();
+      const out: Phaser.GameObjects.Image[] = [];
+      const left = shelf.x - 20;
+      for (let k = 0; k < Math.min(12, n); k++) {
+        const row = Math.floor(k / 6);
+        const x = left + (8 + (k % 6) * 11 + 5.5) / ART;
+        out.push(this.art(x, shelf.y - 32 + rows[row] / ART, keys[k % keys.length]).setOrigin(0.5, 1).setDepth(shelf.y + 0.1));
+      }
+      return out;
+    };
+    const st = this.day.stock;
+    this.milkItems = fill(this.milkItems, MILK_SHELF, ['item_milk', 'item_milk_0', 'item_milk_1', 'item_milk_2'], st.milk, [30, 52]);
+    this.eggShelf = fill(this.eggShelf, EGG_SHELF, ['lavka_egg', 'lavka_egg_brown'], st.eggs, [30, 52]);
+    this.honeyShelf = fill(this.honeyShelf, HONEY_SHELF, ['lavka_ico_honey'], st.honey, [30, 52]);
     for (const it of this.caseItems) it.destroy();
     this.caseItems = [];
-    for (let k = 0; k < Math.min(4, this.day.stock.cheese); k++) {
+    for (let k = 0; k < Math.min(4, st.cheese); k++) {
       const x = CASE.x - 16 + (9 + k * 13) / ART;
       this.caseItems.push(this.art(x, CASE.y - 15 + 5.5, 'lavka_wheel').setOrigin(0.5, 1).setDepth(CASE.y + 0.1));
     }
@@ -1038,6 +1092,8 @@ export class LavkaScene extends Phaser.Scene {
 
   private closeDay(): void {
     this.phase = 'evening';
+    this.closeSeeds?.();
+    this.closeSeeds = null;
     this.hud.say(t('lavka.hint.closing'), 2500);
     for (const g of [...this.guests]) if (!g.gone) this.leave(g);
     const s = summary(this.day);
@@ -1129,7 +1185,7 @@ export class LavkaScene extends Phaser.Scene {
     };
     once('bed', d.beds.some((b) => bedAction(b) !== 'growing'), 'lavka.hint.bed') ||
       once('cow', d.cows.some((m) => m >= 1) && d.t > 6, 'lavka.hint.cow') ||
-      once('egg', d.eggs.length >= 3 && d.t > 12, 'lavka.hint.egg') ||
+      once('egg', d.eggs >= 3 && d.t > 12, 'lavka.hint.egg') ||
       once('hay', d.hay <= 1, 'lavka.hint.hay') ||
       once('grain', d.grain <= 1, 'lavka.hint.grain') ||
       once('cheese', d.stock.milk >= CHEESE_MILK + 2 && d.cheese === 0, 'lavka.hint.cheese');
@@ -1194,7 +1250,7 @@ export class LavkaScene extends Phaser.Scene {
     if (g.gone) return;
     // К полке со своим товаром — посмотреть, есть ли.
     const spot = SPOTS[v.wants];
-    const via = spot.y < 340 ? [{ x: DOOR_IN.x, y: spot.y + 4 }] : [];
+    const via = spot.y < SHELF_ROW ? [{ x: DOOR_IN.x, y: spot.y + 4 }] : [];
     await this.path(p, [...via, spot]);
     if (g.gone) return;
     persons.setFacing(p, 'up');
@@ -1242,7 +1298,7 @@ export class LavkaScene extends Phaser.Scene {
     const spot = QUEUE[Math.min(i, QUEUE.length - 1)];
     const feet = g.p.y + FOOT;
     // От полок — вниз по середине зала, потом к прилавку.
-    const via = feet < 340 ? [{ x: DOOR_IN.x, y: feet + 4 }, { x: DOOR_IN.x, y: 352 }] : [];
+    const via = feet < SHELF_ROW ? [{ x: DOOR_IN.x, y: feet + 4 }, { x: DOOR_IN.x, y: 348 }] : [];
     await this.path(g.p, [...via, spot]);
     if (g.gone) return;
     persons.setFacing(g.p, i === 0 ? 'up' : 'left');
@@ -1259,10 +1315,10 @@ export class LavkaScene extends Phaser.Scene {
     this.tweens.killTweensOf(p);
     p.setData('walking', false);
     const feet = p.y + FOOT;
-    const inside = feet < 378;
+    const inside = feet < 368;
     const back: { x: number; y: number }[] = [];
     if (inside) {
-      if (feet < 340) back.push({ x: DOOR_IN.x, y: feet + 4 });
+      if (feet < SHELF_ROW) back.push({ x: DOOR_IN.x, y: feet + 4 });
       back.push(DOOR_IN, DOOR_OUT);
     }
     back.push(PLAZA);
