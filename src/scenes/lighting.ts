@@ -10,13 +10,17 @@ import { ambience } from '../platform/ambience';
 import { UI_FONT } from '../ui/dom';
 import { activeDecor } from '../game/decor';
 import { WING_OUTER, type Layout } from './layout';
-import { ambientAt, lerpKeys } from './daylight';
+import { ambientAt, lerpKeys, mulColor } from './daylight';
 import { gearTier } from '../game/gear';
 import { ART, LIGHT_DEPTH, EVENING_FROM, LOT, LOT_DRIVE_END, type NightLight, type Lamp } from './common';
 import * as shelves from './shelves';
 import * as building from './building';
 import { look } from './look';
 
+/** Ночная смена: во сколько темнее фон зала (сумрак с лиловым оттенком, свет — от ламп и витрин). */
+const NIGHT_HALL = 0x6e6896;
+/** Ночью пятна ламп в карте света теплее и уже: свет лежит кругами под лампами, а не сплошь. */
+const NIGHT_POOL = 1.25;
 /** Яркость пятен света от потолочных ламп на полу. */
 const LAMP_POOL_ALPHA = 0.09;
 /** На сколько точек мира в стороны от магазина тянется карта освещения (дальше — ровный фон улицы). */
@@ -262,8 +266,11 @@ export function updateLighting(scene: StoreScene, progress?: number): void {
   if (!scene.light) return;
   const p = progress ?? Phaser.Math.Clamp(1 - scene.timeLeft / DAY_SECONDS, 0, 1);
   const ambient = ambientAt(p, scene.weather, scene.blackout || scene.powerCut);
+  // Ночная смена: за окнами ночь, и в зале не дневной свет, а приглушённый сумрак — светло под лампами,
+  // у холодильников и у кассы (их свет — в той же карте), между ними и в углах темнее.
+  const indoor = scene.night ? mulColor(ambient.indoor, NIGHT_HALL) : ambient.indoor;
   // В лёгкой графике цветокоррекции нет — оттенок часа ложится в ту же карту (поверх фона и огней).
-  scene.light.ambient(ambient.outdoor, ambient.indoor, scene.grade.tint(p, scene.weather));
+  scene.light.ambient(ambient.outdoor, indoor, scene.grade.tint(p, scene.weather));
   // Днём светло; вечер — последняя четверть смены: фонари, неон, тёплый свет.
   const evening = Phaser.Math.Clamp((p - EVENING_FROM) / (1 - EVENING_FROM), 0, 1);
   scene.evening = evening;
@@ -477,7 +484,7 @@ export function floorLight(scene: StoreScene, w: number, h: number, wallH: numbe
     for (let x = 34 + ((y / 62) % 2) * 20; x < w - 20; x += 66) {
       const img = scene.add.image(x, y, 'glow').setDisplaySize(84, 46).setTint(0xfff0cf).setBlendMode(Phaser.BlendModes.ADD).setAlpha(LAMP_POOL_ALPHA).setDepth(0.45);
       scene.lampPools.push({ img, row });
-      scene.light.follow(img, { key: 'light_pool', w: HALL_LAMP.w, h: HALL_LAMP.h, dy: -4, color, power: () => Math.min(1, (img.alpha / LAMP_POOL_ALPHA) * HALL_LAMP.power) * powerOn(scene) });
+      scene.light.follow(img, { key: 'light_pool', w: HALL_LAMP.w, h: HALL_LAMP.h, dy: -4, color, power: () => Math.min(1, (img.alpha / LAMP_POOL_ALPHA) * HALL_LAMP.power) * powerOn(scene) * (scene.night ? NIGHT_POOL : 1) });
     }
   }
 }
