@@ -234,6 +234,8 @@ export class StoreScene extends Phaser.Scene {
   /** Куда камера возвращается после осмотра квартала. */
   home = { x: 0, y: 0 };
   homeTimer?: Phaser.Time.TimerEvent;
+  /** Кадр часа пика (camera.ts rushFocus): пока он есть, камера после осмотра квартала возвращается сюда. */
+  rushView?: { x: number; y: number; zoom: number };
   /** Колёсико затихло — масштаб доходит до ровного. */
   wheelTimer?: Phaser.Time.TimerEvent;
   baseZoom = 1;
@@ -897,7 +899,10 @@ export class StoreScene extends Phaser.Scene {
       haptic.tap();
       sound.bell(this.layout.door.x);
       this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.rush'), '#fff3b0');
+      camera.rushFocus(this, true);
     }
+    // Час пик кончился (или день) — камера обратно к обычному кадру.
+    if (!rush && this.rushView) camera.rushFocus(this, false);
     // Час пик или очередь до двери — можно позвать друзей на помощь (кнопка держится ещё пару секунд).
     if (!this.night && (rush || this.queue.length >= HELP_QUEUE)) this.helpUntil = this.time.now + HELP_HOLD;
     if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void shoppers.runInspector(this);

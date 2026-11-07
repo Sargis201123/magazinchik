@@ -327,12 +327,58 @@ export function flyIn(scene: StoreScene): void {
   cam.zoomTo(scene.baseZoom, 1600, 'Cubic.easeInOut', true);
 }
 
-/** Через несколько секунд после осмотра камера возвращается к магазину. */
+/** Через несколько секунд после осмотра камера возвращается к магазину (в час пик — к кассам). */
 export function scheduleHome(scene: StoreScene): void {
   const cam = scene.cameras.main;
   scene.homeTimer?.remove();
   scene.homeTimer = scene.time.delayedCall(4000, () => {
-    cam.pan(scene.home.x, scene.home.y, 700, 'Sine.easeInOut');
-    cam.zoomTo(scene.baseZoom, 700, 'Sine.easeInOut');
+    const view = scene.rushView ?? { x: scene.home.x, y: scene.home.y, zoom: scene.baseZoom };
+    cam.pan(view.x, view.y, 700, 'Sine.easeInOut');
+    cam.zoomTo(view.zoom, 700, 'Sine.easeInOut');
   });
+}
+
+/** Час пик ближе: во сколько раз камера подходит (дальше — ровный масштаб crispZoom) и за сколько мс. */
+const RUSH_ZOOM = 1.5;
+const RUSH_MOVE_MS = 1400;
+
+/**
+ * Час пик в большом магазине: камера мягко подходит на шаг ближе — к кассам и очереди, люди крупнее; час пик
+ * кончился — так же мягко обратно. Без тряски. В ларьке (он и так крупный), при «меньше движения», пока
+ * игрок сам смотрит квартал или переставляет полки — не двигаем.
+ */
+export function rushFocus(scene: StoreScene, on: boolean): void {
+  const cam = scene.cameras.main;
+  if (!on) {
+    if (!scene.rushView) return;
+    scene.rushView = undefined;
+    if (atView(scene)) {
+      cam.pan(scene.home.x, scene.home.y, RUSH_MOVE_MS, 'Sine.easeInOut');
+      cam.zoomTo(scene.baseZoom, RUSH_MOVE_MS, 'Sine.easeInOut');
+    }
+    return;
+  }
+  if (scene.rushView || scene.arranging || scene.layout.w < RUSH_MIN_W || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const zoom = crispZoom(scene.baseZoom * RUSH_ZOOM, ART, scene.baseZoom * 1.25, scene.baseZoom * 2);
+  if (!zoom) return;
+  const { sellerHome, w, h, door } = scene.layout;
+  const viewW = cam.width / zoom;
+  const viewH = (cam.height - (HUD_TOP + HUD_BOTTOM) * scene.res) / zoom;
+  // Кассы у правой стены: кадр — от них влево, по высоте — от касс до входа; за стены не выходим.
+  const x = Phaser.Math.Clamp(sellerHome.x - viewW * 0.3, viewW / 2 - 4, w + 8 - viewW / 2);
+  const y = Phaser.Math.Clamp((sellerHome.y + door.y) / 2 - 10, viewH / 2 - 10, h + 24 - viewH / 2);
+  const wasHome = atView(scene);
+  scene.rushView = { x: Math.round(x), y: Math.round(y), zoom };
+  if (!wasHome || scene.input.pointer1.isDown) return;
+  cam.pan(scene.rushView.x, scene.rushView.y, RUSH_MOVE_MS, 'Sine.easeInOut', true);
+  cam.zoomTo(zoom, RUSH_MOVE_MS, 'Sine.easeInOut', true);
+}
+
+/** Не мельче этого зал (в точках мира) — камера в час пик подходит ближе; ларёк и так крупный. */
+const RUSH_MIN_W = 180;
+
+/** Камера стоит в обычном кадре (или в кадре часа пик) и не осматривает квартал. */
+function atView(scene: StoreScene): boolean {
+  if (scene.homeTimer && scene.homeTimer.getProgress() < 1) return false;
+  return !scene.dragged && !scene.pinch;
 }
