@@ -624,6 +624,7 @@ export function prepareDay(scene: StoreScene): void {
   scene.liveGuest = guest ? { who: guest, phase: 'pending', date: today } : null;
   scene.inspection = null;
   scene.rushAnnounced = false;
+  scene.rushView = undefined;
   scene.helpUntil = 0;
   // После перезапуска посреди дня оплаченное уже празднование не повторяет.
   scene.questsSeen = (scene.state.plan?.day === scene.state.day ? scene.state.plan.quests ?? [] : []).filter((q) => q.paid).length;
