@@ -27,9 +27,9 @@ export const GRAIN_FULL = 12;
 /** Сколько яиц может лежать в выгуле разом (дальше куры не несутся, пока не соберёшь). */
 export const EGGS_MAX = 8;
 /** Грядка: полита — растёт; сохнет за WATER_LAST секунд; созревает за GROW секунд роста; урожай — YIELD штук. */
-export const WATER_LAST = 22;
-export const GROW = 26;
-export const YIELD = 3;
+export const WATER_LAST = 15;
+export const GROW = 40;
+export const YIELD = 2;
 /** Ульи, яблони, теплица: через сколько секунд снова есть что снять и сколько. */
 export const HIVE_FILL = 40;
 export const TREE_FILL = 36;

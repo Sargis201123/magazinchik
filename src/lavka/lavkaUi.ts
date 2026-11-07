@@ -27,15 +27,16 @@ const css = `
 .lv-row .mid { justify-self: center; display: grid; justify-items: center; gap: 3px; }
 .lv-clock-bar { width: 86px; height: 5px; border-radius: 3px; background: #3a4466; overflow: hidden; }
 .lv-clock-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #fee761, #f77622); }
-.lv-stock { display: flex; gap: 4px; justify-content: center; }
+.lv-stock { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 12px);
+  display: flex; gap: 4px; justify-content: center; z-index: 5; pointer-events: none; font: 800 15px/1.15 ${UI_FONT}; color: #fff; }
 .lv-good { background: rgba(24, 20, 37, .84); border-radius: 8px; padding: 3px 7px; display: inline-flex; gap: 4px; align-items: center;
   font-size: 13px; transition: transform .15s; }
 .lv-good img { width: 14px; height: 14px; image-rendering: pixelated; object-fit: contain; }
 .lv-good.bump { transform: scale(1.25); }
 .lv-good.empty { color: #f6757a; }
 .lv-good.want { background: #a22633; animation: lv-breathe .8s ease-in-out 3; }
-.lv-orders { position: fixed; right: calc(10px + max(0px, (100vw - var(--game-w, 100vw)) / 2)); top: calc(var(--safe-top, env(safe-area-inset-top)) + 84px);
-  display: grid; gap: 5px; z-index: 5; pointer-events: none; }
+.lv-orders { position: fixed; right: calc(10px + max(0px, (100vw - var(--game-w, 100vw)) / 2)); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 48px);
+  display: flex; gap: 5px; z-index: 5; pointer-events: none; }
 .lv-order { background: #fbf6ea; color: #2b2233; border: 3px solid #2b2233; border-radius: 9px; padding: 3px 7px; font: 800 12px/1.2 ${UI_FONT};
   display: grid; grid-template-columns: auto auto; gap: 1px 6px; align-items: center; box-shadow: 0 3px 0 rgba(43,34,51,.6); min-width: 88px; }
 .lv-order img.who { width: 24px; height: 24px; grid-row: span 2; image-rendering: pixelated; border-radius: 4px; border: 2px solid #2b2233; }
@@ -44,7 +45,7 @@ const css = `
 .lv-order .by { font-size: 11px; color: #5a4a5e; }
 .lv-order.done { background: #c9eda4; }
 .lv-order.failed { opacity: .45; text-decoration: line-through; }
-.lv-note { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 16px);
+.lv-note { position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--safe-top, env(safe-area-inset-top)) + 58px);
   font: 800 13px/1.25 ${UI_FONT}; color: #2b2233; background: #fffbe8; border: 3px solid #2b2233; border-radius: 10px; padding: 6px 10px;
   pointer-events: none; z-index: 5; transition: opacity .3s; max-width: min(320px, 80vw); text-align: center; box-shadow: 0 3px 0 rgba(43,34,51,.6); }
 @keyframes lv-breathe { 50% { transform: scale(1.08); } }
@@ -101,7 +102,7 @@ export interface HudState {
   orders: Order[];
 }
 
-/** Верхняя панель: монеты, день и часы, склад лавки по товарам; справа — заказы дня. */
+/** Наверху — монеты, день и часы (ферма под ними главная); внизу, над дорогой, — склад лавки и заказы дня. */
 export class LavkaHud {
   private root: HTMLElement;
   private coins: HTMLElement;
@@ -109,6 +110,7 @@ export class LavkaHud {
   private bar: HTMLElement;
   private goods = new Map<Good, { box: HTMLElement; n: HTMLElement; last: number }>();
   private orders: HTMLElement;
+  private stock: HTMLElement;
   private note: HTMLElement;
   private shownOrders = '';
   private shown = '';
@@ -136,11 +138,12 @@ export class LavkaHud {
       stock.append(box);
       this.goods.set(g, { box, n, last: -1 });
     }
-    this.root.append(row, stock);
+    this.root.append(row);
+    this.stock = stock;
     this.orders = el('div', 'lv-orders');
     this.note = el('div', 'lv-note');
     this.note.style.opacity = '0';
-    document.body.append(this.root, this.orders, this.note);
+    document.body.append(this.root, this.stock, this.orders, this.note);
   }
 
   update(s: HudState): void {
@@ -204,6 +207,7 @@ export class LavkaHud {
 
   destroy(): void {
     this.root.remove();
+    this.stock.remove();
     this.orders.remove();
     this.note.remove();
   }

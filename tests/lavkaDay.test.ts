@@ -8,6 +8,7 @@ import {
   DAY_SECONDS,
   GRAIN_FULL,
   GROW,
+  WATER_LAST,
   HAY_FULL,
   PLANS,
   YIELD,
@@ -105,11 +106,13 @@ describe('лавка: ферма', () => {
     d = tick(d, 10);
     expect(d.beds[i].grow).toBe(0); // сухая не растёт
     d = tapBed(d, i).day;
-    d = tick(d, GROW / 2);
+    d = tick(d, WATER_LAST / 2);
     expect(bedAction(d.beds[i])).toBe('growing');
-    d = tick(d, GROW);
-    d = { ...d, beds: d.beds.map((b, k) => (k === i ? { ...b, water: 5 } : b)) };
-    d = tick(d, GROW);
+    // поливать, пока не созреет: каждый полив — на WATER_LAST секунд роста
+    for (let k = 0; k < Math.ceil(GROW / WATER_LAST) + 1 && bedAction(d.beds[i]) !== 'harvest'; k++) {
+      if (bedAction(d.beds[i]) === 'water') d = tapBed(d, i).day;
+      d = tick(d, WATER_LAST);
+    }
     expect(bedAction(d.beds[i])).toBe('harvest');
     const got = tapBed(d, i);
     expect(got.n).toBe(YIELD);
