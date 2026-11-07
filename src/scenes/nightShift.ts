@@ -206,7 +206,7 @@ export async function runNightStory(scene: StoreScene, story: NightStoryId): Pro
   scene.state = res.state;
   scene.hud.update(scene.state, scene.timeLeft);
   effects.emote(scene, sprite, yes ? 'emo_heart' : 'emo_angry');
-  if (yes) scene.popup(sprite.x, sprite.y - 18, t('nightStory.thanks'), '#c8ffb0');
+  if (yes) scene.speak(sprite, 18, t('nightStory.thanks'));
   if (res.money) {
     sound.coin(sprite.x);
     scene.stats.revenue += res.money;

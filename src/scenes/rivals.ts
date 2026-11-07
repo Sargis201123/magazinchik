@@ -187,11 +187,11 @@ export function rivalPrank(scene: StoreScene, kind: PrankKind, browsers: Phaser.
     if (!b) return;
     b.setData('lured', true);
     persons.haltWalk(b);
-    scene.popup(b.x, b.y - 22, t('rival.say.lure'), '#fff3b0');
+    scene.speak(b, 22, t('rival.say.lure'));
     scene.time.delayedCall(1100, () => {
       if (!b.active) return;
       effects.emote(scene, b, 'emo_heart');
-      scene.popup(b.x, b.y - 34, t('rival.say.yes'), '#c8ffb0');
+      scene.speak(b, 34, t('rival.say.yes'));
       void visitors.strollAway(scene, b);
     });
     return;
@@ -213,7 +213,7 @@ export function rivalPrank(scene: StoreScene, kind: PrankKind, browsers: Phaser.
   // Хозяин чужого магазина замечает.
   if (scene.seller?.active) {
     effects.emote(scene, scene.seller, 'emo_question');
-    scene.popup(scene.seller.x, scene.seller.y - 30, t('rival.say.owner'), '#ffffff');
+    scene.speak(scene.seller, 30, t('rival.say.owner'));
   }
 }
 
@@ -408,7 +408,7 @@ export async function fakeInspector(scene: StoreScene): Promise<void> {
     const stand = shelves.standOf(scene, index);
     await persons.walk(scene, man, stand.x, stand.y);
     if (!man.active) return;
-    scene.popup(man.x, man.y - 20, t('popup.fakeInspector'), '#fff3b0');
+    scene.speak(man, 20, t('popup.fakeInspector'));
     await scene.wait(900);
   }
   if (!man.active) return;

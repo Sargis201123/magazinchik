@@ -128,7 +128,7 @@ export async function buyCoffee(scene: StoreScene, c: Customer): Promise<void> {
     return;
   }
   persons.setFacing(c.sprite, 'up');
-  scene.popup(c.sprite.x, c.sprite.y - 18, t(Phaser.Utils.Array.GetRandom(COFFEE_ORDERS)), '#ffffff');
+  scene.speak(c.sprite, 18, t(Phaser.Utils.Array.GetRandom(COFFEE_ORDERS)));
   await scene.wait(900);
   scene.coffeeCounter = false;
   if (!alive()) return;

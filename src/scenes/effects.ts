@@ -139,7 +139,7 @@ export async function celebrateMove(scene: StoreScene, modal: HTMLElement | null
     scene.time.delayedCall(300 + i * 450, () => {
       if (!person.active) return;
       emote(scene, person, i === 0 ? 'emo_heart' : 'emo_star');
-      scene.popup(person.x, person.y - 22, t(cheers[i]), '#ffffff');
+      scene.speak(person, 22, t(cheers[i]));
     });
   }
   await scene.delay(2600);
@@ -273,10 +273,12 @@ function pixelConfetti(scene: StoreScene, x: number, y: number): boolean {
 export function celebrateCombo(scene: StoreScene, n: number): void {
   const { counter } = scene.layout;
   const color = COMBO_COLORS[Math.min(n - 2, COMBO_COLORS.length - 1)];
+  // Тот же размер на экране, что и у надписей: в крупном ларьке «Серия» не закрывает полкассы.
+  const k = popupScale(scene);
   const label = scene.add
     .text(counter.x - 14, counter.y - 40, t('popup.combo', { n }), {
       fontFamily: UI_FONT,
-      fontSize: `${Math.min(9 + n, 15)}px`,
+      fontSize: `${Math.min(8 + 0.6 * n, 12)}px`,
       fontStyle: 'bold',
       color,
       stroke: '#181425',
@@ -285,9 +287,9 @@ export function celebrateCombo(scene: StoreScene, n: number): void {
     .setOrigin(0.5)
     .setResolution(scene.textRes(5))
     .setDepth(LIGHT_DEPTH + 6)
-    .setScale(0.2)
+    .setScale(0.2 * k)
     .setAngle(-8);
-  scene.tweens.add({ targets: label, scale: 1, angle: 0, duration: 260, ease: 'Back.easeOut' });
+  scene.tweens.add({ targets: label, scale: k, angle: 0, duration: 260, ease: 'Back.easeOut' });
   scene.tweens.add({ targets: label, y: label.y - 12, alpha: 0, delay: 900, duration: 500, onComplete: () => label.destroy() });
   const burst = scene.add.particles(counter.x - 14, counter.y - 40, 'spark', {
     speed: { min: 20, max: 40 + n * 6 },
@@ -534,33 +536,43 @@ export function recordConfetti(scene: StoreScene): void {
  * над кем всплыла. Эмодзи, у которых в меню есть пиксельный значок, — тем же значком, а не эмодзи телефона.
  * Выпрыгивает из кончика хвостика, потом поднимается и тает. На слабом телефоне — без хвостика и полоски.
  */
-export function popup(scene: StoreScene, x: number, y: number, text: string, color: string): void {
+export function popup(scene: StoreScene, x: number, y: number, text: string, color: string, speech = false): Popup | undefined {
   scene.popups = scene.popups.filter((p) => p.box.active);
-  const hold = Math.min(1800, 500 + 40 * text.length);
+  // Реплику читают дольше, чем «+30»: длинная фраза висит до 3 с.
+  const hold = speech ? Math.min(3000, 900 + 45 * text.length) : Math.min(1800, 500 + 40 * text.length);
   // Та же фраза ещё висит — не новая надпись, а счётчик: «Ушёл без покупки! ×3».
-  const same = scene.popups.find((p) => p.text === text);
+  // Реплики не склеиваются: у каждой свой говорящий, за которым она идёт.
+  const same = speech ? undefined : scene.popups.find((p) => p.text === text && !p.leaving);
   if (same) {
     same.count++;
     // Прежние выпрыгивание и таяние — прочь: иначе конец выпрыгивания запустил бы второе таяние.
     scene.tweens.killTweensOf(same.box);
     fillPopup(scene, same, `${text} ×${same.count}`);
     same.box.setAlpha(1).setY(same.y);
-    scene.tweens.add({ targets: same.box, scale: { from: 1.2, to: 1 }, duration: 180, ease: 'Back.easeOut' });
+    scene.tweens.add({ targets: same.box, scale: { from: 1.2 * same.k, to: same.k }, duration: 180, ease: 'Back.easeOut' });
     fadePopup(scene, same, hold);
-    return;
+    return same;
   }
   // Кончик хвостика — чуть ниже точки: плашка висит над головой, хвостик указывает на макушку.
+  const k = popupScale(scene);
   const bg = scene.add.graphics();
-  const box = scene.add.container(x, y + 4, [bg]).setDepth(1000).setScale(0.4);
-  const entry: Popup = { box, bg, text, color, count: 1, x, y: box.y, w: 0, h: 0, dx: 0, tail: !scene.lite };
+  const box = scene.add.container(x, y + 4, [bg]).setDepth(1000).setScale(0.4 * k);
+  const entry: Popup = { box, bg, text, color: speech ? SPEECH.ink : color, count: 1, x, y: box.y, w: 0, h: 0, dx: 0, tail: speech || !scene.lite, k, speech };
   fillPopup(scene, entry, text);
-  // Не налезать на другие надписи: если место занято — встаём над ними. Хвостик тогда показал бы
-  // на соседнюю надпись, а не на хозяина, — без него.
+  // Не больше POPUP_MAX надписей сразу: самая старая уходит, не дожидаясь своего срока.
+  const live = scene.popups.filter((p) => !p.leaving);
+  for (const old of live.slice(0, Math.max(0, live.length - POPUP_MAX + 1))) dropPopup(scene, old);
+  // Не налезать на другие надписи: если место занято — встаём над ними, но не выше двух этажей; дальше
+  // мешающая надпись уходит. Хвостик над чужой надписью показал бы не на хозяина — без него.
   let stacked = false;
-  for (let i = 0; i < 6; i++) {
-    const hit = scene.popups.find((p) => Phaser.Geom.Intersects.RectangleToRectangle(popupRect(entry), popupRect(p)));
+  for (let i = 0; i < 3; i++) {
+    const hit = scene.popups.find((p) => !p.leaving && Phaser.Geom.Intersects.RectangleToRectangle(popupRect(entry), popupRect(p)));
     if (!hit) break;
-    box.y = popupRect(hit).y - 1 + POPUP.tail;
+    if (i === 2) {
+      dropPopup(scene, hit);
+      continue;
+    }
+    box.y = popupRect(hit).y - 1 + POPUP.tail * k;
     stacked = true;
   }
   entry.y = box.y;
@@ -569,7 +581,59 @@ export function popup(scene: StoreScene, x: number, y: number, text: string, col
     drawPopupBg(scene, entry);
   }
   scene.popups.push(entry);
-  scene.tweens.add({ targets: box, scale: 1, duration: 220, ease: 'Back.easeOut', onComplete: () => fadePopup(scene, entry, hold) });
+  scene.tweens.add({ targets: box, scale: k, duration: 220, ease: 'Back.easeOut', onComplete: () => fadePopup(scene, entry, hold) });
+  return entry;
+}
+
+/** Сколько надписей висит сразу (не считая уходящих). */
+const POPUP_MAX = 3;
+/** Реплика: светлый пузырь, тёмный контур и буквы. */
+const SPEECH = { fill: 0xfff4dc, ink: '#2b2135', line: 0x2b2135 };
+/** Размер букв надписи на экране в CSS-пикселях: при любом приближении камеры. */
+const POPUP_SCREEN_FONT = 10.5;
+
+/**
+ * Масштаб надписи: буквы на экране около POPUP_SCREEN_FONT пикселей и в крупном ларьке (там они были
+ * вдвое больше и закрывали людей), и в большом магазине (там — мелкие).
+ */
+export function popupScale(scene: StoreScene): number {
+  const canvas = scene.game.canvas;
+  const perWorld = scene.cameras.main.zoom * (canvas.clientWidth > 0 ? canvas.clientWidth / scene.scale.width : 1);
+  return Phaser.Math.Clamp(POPUP_SCREEN_FONT / (parseFloat(POPUP.font) * perWorld), 0.6, 1.5);
+}
+
+/** Надпись уходит раньше срока: быстро гаснет (новые надписи её уже не обходят). */
+export function dropPopup(scene: StoreScene, entry: Popup): void {
+  if (entry.leaving) return;
+  entry.leaving = true;
+  scene.tweens.killTweensOf(entry.box);
+  scene.tweens.add({
+    targets: entry.box,
+    alpha: 0,
+    duration: 160,
+    onComplete: () => {
+      entry.box.destroy();
+      scene.popups = scene.popups.filter((p) => p !== entry);
+    },
+  });
+}
+
+/**
+ * Реплика человека: светлый пузырь с хвостиком над головой (lift — на сколько точек выше его ног).
+ * Пузырь идёт за говорящим, пока висит; ушёл человек со сцены — пузырь гаснет.
+ */
+export function say(scene: StoreScene, who: Phaser.GameObjects.Container, lift: number, text: string): void {
+  if (!who.active) return;
+  const entry = popup(scene, who.x, who.y - lift, text, SPEECH.ink, true);
+  if (!entry) return;
+  const dy = entry.box.y - who.y;
+  const follow = () => {
+    if (!entry.box.active) return scene.events.off('update', follow);
+    if (!who.active) return dropPopup(scene, entry);
+    entry.box.x = who.x;
+    entry.box.y = who.y + dy;
+  };
+  scene.events.on('update', follow);
 }
 
 /**
@@ -580,7 +644,8 @@ export function popup(scene: StoreScene, x: number, y: number, text: string, col
 export function fillPopup(scene: StoreScene, e: Popup, text: string): void {
   // Прежнее содержимое (при склейке «×N») — прочь, фон остаётся первым, под всем.
   for (const o of e.box.list.filter((o) => o !== e.bg)) o.destroy();
-  const maxW = Math.min(110, scene.layout.w - 10);
+  // Реплика — узким пузырём в несколько строк; ширина — в точках плашки (на экране — × k).
+  const maxW = Math.min(e.speech ? 84 : 110, (scene.layout.w - 10) / e.k);
   // Слова (с пробелом после) и значки по порядку; нечётные куски split — эмодзи из таблицы.
   type Bit = { text: string; key?: string };
   const bits: Bit[] = [];
@@ -620,7 +685,7 @@ export function fillPopup(scene: StoreScene, e: Popup, text: string): void {
       .filter((r) => r.key || r.text)
       .map((r) => {
         if (r.key) return popupIcon(scene, r.key);
-        return scene.add.text(0, 0, r.text, { fontFamily: UI_FONT, fontSize: POPUP.font, fontStyle: 'bold', color: e.color, resolution: scene.textRes(5) }).setOrigin(0, 0.5);
+        return scene.add.text(0, 0, r.text, { fontFamily: UI_FONT, fontSize: POPUP.font, fontStyle: 'bold', color: e.color, resolution: scene.textRes(5 * e.k) }).setOrigin(0, 0.5);
       });
     const gaps = (o: Phaser.GameObjects.Image | Phaser.GameObjects.Text) => (o instanceof Phaser.GameObjects.Image ? 2 * POPUP.gap : 0);
     return {
@@ -632,8 +697,8 @@ export function fillPopup(scene: StoreScene, e: Popup, text: string): void {
   e.w = Math.max(...rows.map((r) => r.w)) + 2 * POPUP.padX;
   e.h = rows.reduce((sum, r) => sum + r.h, 0) + 2 * POPUP.padY;
   // Длинная надпись не вылезает за край магазина: плашка сдвигается, хвостик остаётся над хозяином.
-  const half = e.w / 2 + 2;
-  e.dx = Phaser.Math.Clamp(e.x, half, Math.max(half, scene.layout.w - half)) - e.x;
+  const half = (e.w / 2 + 2) * e.k;
+  e.dx = (Phaser.Math.Clamp(e.x, half, Math.max(half, scene.layout.w - half)) - e.x) / e.k;
   let y = -POPUP.tail - e.h + POPUP.padY;
   for (const row of rows) {
     let x = e.dx - row.w / 2;
@@ -672,6 +737,18 @@ export function drawPopupBg(scene: StoreScene, e: Popup): void {
   const left = dx - w / 2;
   const top = -POPUP.tail - h;
   const g = e.bg.clear();
+  if (e.speech) {
+    // Пузырь реплики: тёмный контур в точку, светлое нутро, хвостик того же цвета с контуром.
+    const bx = Phaser.Math.Clamp(0, left + r + 2.5, left + w - r - 2.5);
+    const tip = Phaser.Math.Clamp(0, bx - 2, bx + 2);
+    g.fillStyle(SPEECH.line, 1);
+    fillPill(g, left - 1, top - 1, w + 2, h + 2);
+    if (e.tail) g.fillTriangle(bx - 3.5, -POPUP.tail - 1, bx + 3.5, -POPUP.tail - 1, tip, 1);
+    g.fillStyle(SPEECH.fill, 1);
+    fillPill(g, left, top, w, h);
+    if (e.tail) g.fillTriangle(bx - 2.5, -POPUP.tail - 1, bx + 2.5, -POPUP.tail - 1, tip, -0.6);
+    return;
+  }
   if (scene.lite) {
     g.fillStyle(0x181425, 0.85);
     fillPill(g, left, top, w, h);
@@ -703,7 +780,7 @@ export function fillPill(g: Phaser.GameObjects.Graphics, x: number, y: number, w
 
 /** Где плашка надписи в мире — чтобы новые надписи не налезали на прежние. */
 export function popupRect(p: Popup): Phaser.Geom.Rectangle {
-  return new Phaser.Geom.Rectangle(p.box.x + p.dx - p.w / 2, p.box.y - POPUP.tail - p.h, p.w, p.h);
+  return new Phaser.Geom.Rectangle(p.box.x + (p.dx - p.w / 2) * p.k, p.box.y - (POPUP.tail + p.h) * p.k, p.w * p.k, p.h * p.k);
 }
 
 /** Надпись повисит и уплывёт вверх, растворяясь. */
@@ -714,7 +791,8 @@ export function fadePopup(scene: StoreScene, entry: Popup, hold: number): void {
   if (!scene.lite) scene.tweens.add({ targets: box, alpha: 0, delay: hold, duration: 600, ease: 'Stepped', easeParams: [4] });
   scene.tweens.add({
     targets: box,
-    y: box.y - 12,
+    // Реплика идёт за говорящим (say) и не уплывает — только гаснет.
+    y: entry.speech ? box.y : box.y - 12 * entry.k,
     ...(scene.lite ? { alpha: 0 } : {}),
     delay: hold,
     duration: 600,
