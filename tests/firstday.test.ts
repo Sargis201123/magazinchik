@@ -180,3 +180,23 @@ describe('Бабушкина шкатулка и первая монета в р
     expect(firstCoin(frameFirstCoin(old(), 37))).toBeUndefined();
   });
 });
+
+import { firstRegularVisit, guestOfDay, GUEST_OF_DAY_DAYS } from '../src/game/firstday';
+
+describe('Первый постоянный и гость дня', () => {
+  it('Пётр Ильич: в 1-й день знакомится, во 2-й возвращается с утра, дальше — как все', () => {
+    expect(firstRegularVisit(fresh({ day: 1 }))?.line).toBe('meet');
+    const back = firstRegularVisit(fresh({ day: 2 }));
+    expect(back?.line).toBe('back');
+    expect(back!.at).toBeLessThan(firstRegularVisit(fresh({ day: 1 }))!.at);
+    expect(firstRegularVisit(fresh({ day: 3 }))).toBeNull();
+    expect(firstRegularVisit(old({ day: 1 }))).toBeNull();
+  });
+
+  it('гость дня — только первые дни нового начала', () => {
+    expect(guestOfDay(fresh({ day: 1 }))).toBe(true);
+    expect(guestOfDay(fresh({ day: GUEST_OF_DAY_DAYS }))).toBe(true);
+    expect(guestOfDay(fresh({ day: GUEST_OF_DAY_DAYS + 1 }))).toBe(false);
+    expect(guestOfDay(old({ day: 1 }))).toBe(false);
+  });
+});
