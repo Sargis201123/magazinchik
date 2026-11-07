@@ -1086,12 +1086,11 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
     c.sprite.add(scene.art(6, 3, 'paper_bag').setScale(0.85 / ART));
   }
   const shown = where ?? (at ? { x: at.counter.x + (at === scene.registers[0] ? 8 : -8), y: at.counter.y + 0 } : { x: scene.layout.sellerHome.x - 8, y: scene.layout.sellerHome.y - 18 });
-  scene.popup(shown.x, shown.y, `+${total} 💰`, '#c8ffb0');
   scene.combo = scene.time.now - scene.lastSaleAt < COMBO_WINDOW_MS ? scene.combo + 1 : 1;
   scene.lastSaleAt = scene.time.now;
   scene.stats.bestCombo = Math.max(scene.stats.bestCombo, scene.combo);
-  // В серии монет летит больше.
-  effects.flyCoins(scene, where?.x ?? at?.counter.x ?? scene.layout.counter.x, where?.y ?? at?.counter.y ?? scene.layout.counter.y, Math.min(6, 2 + Math.floor(total / 40)) + Math.min(scene.combo - 1, 5));
+  // Оплата — событие: искры у кассы, монеты фонтаном к счётчику, крупная сумма (в серии — больше монет и «×N»).
+  effects.payBurst(scene, shown.x, shown.y, total, scene.combo);
   if (scene.combo >= 2) scene.celebrateCombo(scene.combo);
   // Серия от пяти — весь зал оборачивается на кассу.
   if (scene.combo === 5 || scene.combo === 10) persons.everyoneLooks(scene, scene.layout.counter.x, scene.layout.counter.y, 'emo_star');
