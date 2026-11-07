@@ -108,6 +108,12 @@ export function flushSoon(): void {
   }, Math.max(FLUSH_DELAY, lastSent + FLUSH_GAP - Date.now()));
 }
 
+/** Ответ игрока на просьбу боту писать (напоминания): write_access, 1 — разрешил, 0 — нет. Уходит сразу. */
+export function writeAnswer(day: number, granted: boolean): void {
+  track('write_access', day, granted ? 1 : 0);
+  flushSoon();
+}
+
 // Свернули Telegram — недоотправленное уходит сразу: запрос с keepalive доживёт, даже если игру закроют.
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {

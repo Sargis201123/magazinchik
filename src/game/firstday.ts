@@ -64,8 +64,25 @@ export const praiseAt = (s: StoreState, combo: number, own: number): boolean =>
  */
 export const gentleDay = (s: StoreState): boolean => playDayOne(s);
 
-/** Рейтинг первого дня не падает (А): before — утром, after — после ночи. */
-export const firstDayRating = (s: StoreState, before: number, after: number): number => (gentleDay(s) ? Math.max(before, after) : after);
+/**
+ * Рейтинг тихих дней не падает (может расти): before — утром, after — после ночи, s — ещё до ночи (день — тот,
+ * что кончился). Первый день — праздник с бабушкой (А); во 2-й и 3-й новичок впервые сам и за кассой, и у полок,
+ * пусть учится без штрафа (07.11: кто во 2-й день жал только кассу, получал «10 ушли» и минус рейтинга).
+ */
+export const quietRating = (s: StoreState, before: number, after: number): number => (quietDays(s) ? Math.max(before, after) : after);
+
+/**
+ * Вечер 2-го и 3-го дня новичка: за ушедших без покупки бабушка не ругает, а подсказывает, что делать
+ * (первый вечер — её прощание, с 4-го — обычные оценки дня). s — ещё до ночи.
+ */
+export const learningEvening = (s: StoreState): boolean => quietDays(s) && !playDayOne(s);
+
+/**
+ * Покупатель у полки, где товар кончился, а на складе он есть, говорит «сейчас поднесут» и ждёт.
+ * В первый день — пока бабушка в зале (она и разложит); во 2-й и 3-й — новичку: подсветка обучения
+ * и строчка снизу показывают полку, и он успевает нажать её сам.
+ */
+export const shelfWaits = (s: StoreState, grannyHere: boolean): boolean => (gentleDay(s) ? grannyHere : quietDays(s));
 
 // ---------- Цель-мечта (В) ----------
 

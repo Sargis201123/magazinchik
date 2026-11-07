@@ -99,10 +99,13 @@ export function openTelegramLink(url: string): boolean {
   return true;
 }
 
-/** Попросить разрешение боту писать игроку (Bot API 6.9+). Уже разрешено — Telegram не спросит. */
-export function requestWriteAccess(): void {
+/**
+ * Попросить разрешение боту писать игроку (Bot API 6.9+). Уже разрешено — Telegram не спросит.
+ * answer — что ответил игрок (true — разрешил); вне Telegram и в старом клиенте не зовётся.
+ */
+export function requestWriteAccess(answer?: (granted: boolean) => void): void {
   const app = webApp();
-  if (isInTelegram() && at('6.9')) app?.requestWriteAccess?.();
+  if (isInTelegram() && at('6.9')) app?.requestWriteAccess?.(answer);
 }
 
 /** Игрок Telegram (id) — чтобы не подхватить чужое сохранение на общем телефоне. */

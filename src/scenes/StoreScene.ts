@@ -81,7 +81,7 @@ import { questRows } from '../ui/today';
 import { RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
 import { quality, type Quality } from '../platform/quality';
-import { grannyStays } from '../game/firstday';
+import { grannyStays, quietDays } from '../game/firstday';
 import type { HomeOrder } from '../game/delivery';
 import { DeliveryUi } from '../ui/delivery';
 import { mainGoal, type HallNudge } from '../game/nudge';
@@ -937,6 +937,10 @@ export class StoreScene extends Phaser.Scene {
     // Одна подсказка в одном месте: пока о кассе и полках говорят бабушка или подсветка обучения,
     // снизу о том же молчим (firstday.ts).
     if ((grannyStays(this.state) || (this.hallCoach && this.coach.active)) && (hint === t('hint.serve') || hint === t('hint.restock'))) hint = '';
+    // Тихие дни: пока подсветка обучения показывает кассу или полку, про мусор и ведро снизу молчим — одно дело
+    // за раз (07.11: «Нажми на полку» и «Нажми на мусор» стояли на экране вместе). Мусор подождёт.
+    const chore = hint === t('hint.rot') || hint === t('hint.rotSolo') || hint === t('hint.bin') || hint === t('hint.clean');
+    if (chore && quietDays(this.state) && this.hallCoach && this.coach.pointing) hint = '';
     this.hud.setHint(hint, this.state.day <= TUTORIAL_DAYS || this.nudgeUntil > this.time.now);
     if (this.goalFor !== this.state) {
       this.goalFor = this.state;
@@ -1280,6 +1284,9 @@ export class StoreScene extends Phaser.Scene {
 
   /** Открывает выполненные достижения; новые — всплывашкой по очереди. Возвращает, что открылось. */
   checkAchievements(live: boolean): AchievementId[] {
+    // Тихие дни новичка (firstday.ts): открытое днём ждёт вечера — откроется в итогах дня (строка «Достижения»),
+    // а не всплывашкой поверх обучения. Сегодняшний счёт к вечеру уже в счётчиках (recordDay) — ничего не теряется.
+    if (live && quietDays(this.state)) return [];
     const { state, unlocked } = unlockAchievements(liveProgress(this.state, live ? this.stats : undefined));
     if (!unlocked.length) return unlocked;
     this.state = state;

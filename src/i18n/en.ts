@@ -677,6 +677,7 @@ export const en: Record<TextKey, string> = {
   'summary.granny.lost.1': 'People left without waiting. Empty shelves, or a long queue?',
   'summary.granny.down.0': 'The rating slipped a bit. Read the reviews — they will tell you why.',
   'summary.granny.down.1': "Customers weren't happy about something. We'll sort it out together!",
+  'summary.granny.learn': "That's okay, you're still learning! Tap an empty shelf to bring goods from storage. Tomorrow will go better.",
   'popup.combo': 'Combo ×{n}!',
   'popup.binFull': 'The bin is full — take out the trash!',
   'popup.spill': 'Oops, a spill!',

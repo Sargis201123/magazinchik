@@ -7,7 +7,7 @@ import {
   dreamShelf,
   FIRST_GIFT,
   firstDayGift,
-  firstDayRating,
+  quietRating,
   GRANNY_LATE_MS,
   GRANNY_SERVE_BUSY_MS,
   GRANNY_SERVE_MS,
@@ -40,7 +40,7 @@ describe('начало игры: только новичку нового нач
       expect(cleanHall(s)).toBe(false);
       expect(grannyStays(s)).toBe(false);
       expect(dreamGoal(s)).toBeNull();
-      expect(firstDayRating(s, 3, 2.6)).toBe(2.6);
+      expect(quietRating(s, 3, 2.6)).toBe(2.6);
     }
   });
 
@@ -73,10 +73,12 @@ describe('начало игры: только новичку нового нач
     expect(praiseAt(fresh({ day: 2 }), 3, 4)).toBe(false);
   });
 
-  it('рейтинг первого дня не падает, но растёт', () => {
-    expect(firstDayRating(fresh(), 3, 2.7)).toBe(3);
-    expect(firstDayRating(fresh(), 3, 3.2)).toBe(3.2);
-    expect(firstDayRating(fresh({ day: 2 }), 3, 2.7)).toBe(2.7);
+  it('рейтинг тихих дней (1–3) не падает, но растёт; с 4-го — как у всех', () => {
+    for (const day of [1, 2, QUIET_DAYS]) {
+      expect(quietRating(fresh({ day }), 3, 2.7)).toBe(3);
+      expect(quietRating(fresh({ day }), 3, 3.2)).toBe(3.2);
+    }
+    expect(quietRating(fresh({ day: QUIET_DAYS + 1 }), 3, 2.7)).toBe(2.7);
   });
 });
 
