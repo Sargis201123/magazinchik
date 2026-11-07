@@ -44,6 +44,7 @@ import { momentCount, momentRating } from './moments';
 import { branchNight, branchReport } from './branch';
 import { makeLines, type LinesNight } from './lines';
 import { countZarDay, inZar, zarBossMorning, zarDuelNight, zarGuests, zarHomeNight, zarReport } from './zarechye';
+import { forecastBonus } from './forecast';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -58,6 +59,8 @@ export interface NightSummary extends NightResult {
   week: WeekNight | null;
   /** Что наделали за ночь линейки своей марки (lines.ts). */
   lines: LinesNight;
+  /** Бонус «Угадал с погодой» (forecast.ts; 0 — запас под погоду не брали). */
+  forecast: number;
 }
 
 export function nightCycle(state: StoreState, stats: DayStats, random: () => number = Math.random): NightSummary {
@@ -75,6 +78,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   if (sparkle) s = { ...s, rating: Math.min(5, s.rating + sparkle) };
   const weekly = progressWeekly(s, stats);
   s = weekly.state;
+  // Взял утром запас под погоду — доля выручки с погодных товаров (forecast.ts).
+  const forecast = forecastBonus(s, stats);
+  if (forecast) s = { ...s, money: s.money + forecast };
   // Шаг сезонной недели (weeks.ts): цель — утренняя, из плана дня.
   const week = weekNight(s, stats, s.plan?.week !== undefined ? s.plan.week : weekGoal(s, guestsToday(s)));
   s = week.state;
@@ -119,6 +125,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     home: home.income,
     week: week.done,
     lines: lines.night,
+    forecast,
   };
 }
 
