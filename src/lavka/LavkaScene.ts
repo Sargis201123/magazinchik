@@ -79,6 +79,11 @@ const ICEBOX = { x: 62, y: 286 };
 const VAT = { x: 46, y: 248 };
 /** Сыроварня — вся левая комната: нажатие по ней относит готовый сыр. */
 const CHEESE_ROOM = { x: 9, y: 154, w: 75, h: 149 };
+/** Ферма (точки мира): загон, выгул кур, пруд, где стоит трактор. */
+const PADDOCK = { x0: 254, x1: 298, y0: 98, y1: 142 };
+const RUN = { x0: 52, x1: 114, y0: 92, y1: 134 };
+const POND = { x0: 192, x1: 220, y0: 108, y1: 118 };
+const TRACTOR = { x: 180, y: 148 };
 const BUS_STOP = { x: 46, y: 393 };
 const TRAIN_STOP = { x: 235, y: 650 };
 const PLATFORM_Y = 617;
@@ -137,6 +142,8 @@ export class LavkaScene extends Phaser.Scene {
   private nextCar = 2;
   private nextChat = 6;
   private nextPuff = 0;
+  private nextDrop = 0;
+  private waterer?: Phaser.GameObjects.Container;
   private visible = 0;
 
   constructor() {
@@ -189,7 +196,7 @@ export class LavkaScene extends Phaser.Scene {
 
   private buildWorld(): void {
     this.cameras.main.setBackgroundColor('#3e8948');
-    this.add.image(0, 0, 'lavka_ground').setOrigin(0).setScale(1 / ART).setDepth(-100);
+    this.add.image(0, -layout.top, 'lavka_ground').setOrigin(0).setScale(1 / ART).setDepth(-100);
     for (const p of layout.props as { k: string; x: number; y: number; z?: number; tint?: number; flip?: boolean }[]) {
       const img = this.art(p.x, p.y, p.k).setOrigin(0.5, 1).setDepth(p.z ?? p.y);
       if (p.tint !== undefined) img.setTint(p.tint);
@@ -230,42 +237,44 @@ export class LavkaScene extends Phaser.Scene {
     const cam = this.cameras.main;
     const fit = this.scale.width / WORLD_W;
     cam.setZoom(crispZoom(fit, ART, fit * 0.9, fit * 1.04) || fit);
-    cam.setBounds(0, -40, WORLD_W, WORLD_H + 60);
+    cam.setBounds(0, -layout.top, WORLD_W, WORLD_H + layout.top);
     this.visible = this.scale.height / cam.zoom;
-    // Весь мир влез — посередине; не влез — лавка и улица перед ней, остальное — пальцем.
-    cam.centerOn(WORLD_W / 2, this.visible >= WORLD_H ? WORLD_H / 2 : 262);
+    // Весь мир влез — посередине; не влез — ферма, лавка и улица перед ней, остальное — пальцем.
+    cam.centerOn(WORLD_W / 2, this.visible >= WORLD_H + layout.top ? (WORLD_H - layout.top) / 2 : 236);
   }
 
   // ---------- жизнь вокруг ----------
 
   private animals(): void {
-    const cows: [number, number, number, boolean][] = [
-      [274, 101, 0, true],
-      [302, 114, 1, false],
-      [260, 116, 0, true],
+    // Коровы пасутся по всему загону: жуют (голова то вверх, то к траве), бредут к поилке и обратно.
+    const cows: [number, number, number][] = [
+      [262, 112, 0],
+      [296, 124, 1],
+      [272, 140, 0],
+      [292, 102, 1],
     ];
-    for (const [x, y, v, flip] of cows) {
-      const cow = this.art(x, y, `lavka_cow${v}0`).setOrigin(0.5, 1).setDepth(y).setFlipX(flip);
-      // Жуёт: голова то вверх, то к траве; иногда переступает.
+    for (const [x, y, v] of cows) {
+      const cow = this.art(x, y, `lavka_cow${v}0`).setOrigin(0.5, 1).setDepth(y).setFlipX(Math.random() < 0.5);
       const chew = (): void => {
         if (!cow.active) return;
         const down = cow.texture.key.endsWith('0');
         cow.setTexture(`lavka_cow${v}${down ? 1 : 0}`);
-        if (Math.random() < 0.25) {
-          const nx = Phaser.Math.Clamp(cow.x + Phaser.Math.Between(-6, 6), 250, 312);
+        if (Math.random() < 0.3) {
+          const nx = Phaser.Math.Clamp(cow.x + Phaser.Math.Between(-14, 14), PADDOCK.x0, PADDOCK.x1);
+          const ny = Phaser.Math.Clamp(cow.y + Phaser.Math.Between(-6, 6), PADDOCK.y0, PADDOCK.y1);
           cow.setFlipX(nx < cow.x);
-          this.tweens.add({ targets: cow, x: nx, duration: 900, ease: 'Sine.easeInOut' });
+          this.tweens.add({ targets: cow, x: nx, y: ny, duration: 2200, ease: 'Sine.easeInOut', onUpdate: () => cow.setDepth(cow.y) });
         }
         this.time.delayedCall(Phaser.Math.Between(900, 2600), chew);
       };
       this.time.delayedCall(Phaser.Math.Between(200, 1600), chew);
     }
-    const hens: [number, number, number, number][] = [
-      [14, 84, 134, 148],
-      [76, 124, 540, 552],
+    const hens: [number, number, number, number, number][] = [
+      [RUN.x0, RUN.x1, RUN.y0, RUN.y1, 8],
+      [76, 124, 540, 552, 4],
     ];
-    for (const [x0, x1, y0, y1] of hens) {
-      for (let i = 0; i < (x0 < 50 ? 7 : 4); i++) {
+    for (const [x0, x1, y0, y1, n] of hens) {
+      for (let i = 0; i < n; i++) {
         const v = i % 3;
         const hen = this.art(Phaser.Math.Between(x0, x1), Phaser.Math.Between(y0, y1), `lavka_hen${v}0`).setOrigin(0.5, 1);
         hen.setDepth(hen.y).setFlipX(Math.random() < 0.5);
@@ -275,8 +284,8 @@ export class LavkaScene extends Phaser.Scene {
             hen.setTexture(`lavka_hen${v}1`);
             this.time.delayedCall(260, () => hen.active && hen.setTexture(`lavka_hen${v}0`));
           } else {
-            const nx = Phaser.Math.Clamp(hen.x + Phaser.Math.Between(-7, 7), x0, x1);
-            const ny = Phaser.Math.Clamp(hen.y + Phaser.Math.Between(-3, 3), y0, y1);
+            const nx = Phaser.Math.Clamp(hen.x + Phaser.Math.Between(-9, 9), x0, x1);
+            const ny = Phaser.Math.Clamp(hen.y + Phaser.Math.Between(-4, 4), y0, y1);
             hen.setFlipX(nx < hen.x);
             this.tweens.add({ targets: hen, x: nx, y: ny, duration: 500, onUpdate: () => hen.setDepth(hen.y) });
           }
@@ -285,15 +294,64 @@ export class LavkaScene extends Phaser.Scene {
         this.time.delayedCall(Phaser.Math.Between(0, 1500), peck);
       }
     }
+    // Утки плавают по пруду, оставляя круги.
+    for (let i = 0; i < 3; i++) {
+      const v = i === 1 ? 1 : 0;
+      const duck = this.art(Phaser.Math.Between(POND.x0, POND.x1), Phaser.Math.Between(POND.y0, POND.y1), `lavka_duck${v}`).setOrigin(0.5, 1);
+      duck.setDepth(duck.y);
+      const swim = (): void => {
+        if (!duck.active) return;
+        const nx = Phaser.Math.Between(POND.x0, POND.x1);
+        duck.setFlipX(nx < duck.x);
+        this.tweens.add({ targets: duck, x: nx, y: Phaser.Math.Between(POND.y0, POND.y1), duration: Phaser.Math.Between(2600, 4200), ease: 'Sine.easeInOut', onUpdate: () => duck.setDepth(duck.y), onComplete: () => this.time.delayedCall(Phaser.Math.Between(400, 1600), swim) });
+      };
+      swim();
+    }
     // Пчёлы у ульев.
-    for (let i = 0; i < 6; i++) {
-      const bee = this.art(Phaser.Math.Between(196, 226), Phaser.Math.Between(48, 62), 'lavka_bee').setDepth(120);
+    for (let i = 0; i < 7; i++) {
+      const bee = this.art(Phaser.Math.Between(182, 218), Phaser.Math.Between(66, 80), 'lavka_bee').setDepth(200);
       const buzz = (): void => {
         if (!bee.active) return;
-        this.tweens.add({ targets: bee, x: Phaser.Math.Between(192, 230), y: Phaser.Math.Between(44, 64), duration: Phaser.Math.Between(400, 900), ease: 'Sine.easeInOut', onComplete: buzz });
+        this.tweens.add({ targets: bee, x: Phaser.Math.Between(178, 222), y: Phaser.Math.Between(62, 84), duration: Phaser.Math.Between(400, 900), ease: 'Sine.easeInOut', onComplete: buzz });
       };
       buzz();
     }
+    this.tractorTrip();
+  }
+
+  /** Трактор с прицепом: стоит у задней двери, раз в полминуты едет по тропинке в поле и возвращается с урожаем. */
+  private tractorTrip(): void {
+    const tractor = this.art(TRACTOR.x, TRACTOR.y, 'lavka_tractor').setOrigin(0.5, 1).setDepth(TRACTOR.y);
+    const cart = this.art(TRACTOR.x - 27, TRACTOR.y - 1, 'lavka_cart').setOrigin(0.5, 1).setDepth(TRACTOR.y - 1);
+    const go = (): void => {
+      if (!tractor.active) return;
+      const up = { y: '-=150', duration: 7000, ease: 'Sine.easeInOut' };
+      const sync = (): void => {
+        tractor.setDepth(tractor.y);
+        cart.setDepth(cart.y);
+      };
+      this.tweens.add({ targets: [tractor, cart], x: '-=18', duration: 1200, ease: 'Sine.easeInOut', onComplete: () =>
+        this.tweens.add({ targets: [tractor, cart], ...up, onUpdate: sync, onComplete: () =>
+          this.time.delayedCall(4000, () =>
+            this.tweens.add({ targets: [tractor, cart], y: '+=150', duration: 7000, ease: 'Sine.easeInOut', onUpdate: sync, onComplete: () =>
+              this.tweens.add({ targets: [tractor, cart], x: '+=18', duration: 1200, ease: 'Sine.easeInOut', onComplete: () => this.time.delayedCall(Phaser.Math.Between(18000, 26000), go) }),
+            }),
+          ),
+        }),
+      });
+    };
+    this.time.delayedCall(9000, go);
+  }
+
+  /** Полив: из лейки сыплются капли на грядку. */
+  private watering(dt: number): void {
+    this.nextDrop -= dt;
+    if (this.nextDrop > 0 || !this.waterer?.active) return;
+    this.nextDrop = this.lite ? 0.5 : 0.18;
+    const x = this.waterer.x + 9 + Phaser.Math.Between(-2, 2);
+    const y = this.waterer.y + 2;
+    const d = this.art(x, y, 'raindrop').setDepth(this.waterer.y + 20);
+    this.tweens.add({ targets: d, y: y + 9, alpha: 0.2, duration: 380, onComplete: () => d.destroy() });
   }
 
   /** Дым из трубы бани и пар над чаном, пока зреет сыр. */
@@ -330,12 +388,12 @@ export class LavkaScene extends Phaser.Scene {
       this.npcs.push({ p, say, turns });
       return p;
     };
-    // Ферма.
-    npc(110, 80, { shirt: 0x5b6ee1, skin: 0xd9a066, hair: 0x733e39, style: 'short', outfit: 'overalls', hat: 'straw', prop: 'basket' }, 'down', undefined, ['down', 'left', 'right']);
-    npc(43, 56, { shirt: 0xd95763, skin: 0xf2d3ab, hair: 0xfeae34, style: 'ponytail', hat: 'bandana', hatTint: 0xe43b44 }, 'up', undefined, ['up', 'left', 'right']);
-    npc(210, 108, { shirt: 0xffffff, pants: 0x262b44, skin: 0xeec39a, hair: 0xc0cbdc, style: 'bald', outfit: 'overalls', hat: 'flatcap', hatTint: 0x5a6988, face: 'beard' }, 'down', 'lavka.say.mitya', ['down', 'left']);
-    npc(287, 111, { shirt: 0xf6757a, skin: 0xf2d3ab, hair: 0xfeae34, style: 'ponytail', hat: 'headscarf', hatTint: 0xe43b44, acc: 'apron' }, 'left');
-    npc(75, 127, { shirt: 0xfbf236, skin: 0xd9a066, hair: 0x181425, style: 'curly', prop: 'basket' }, 'down', undefined, ['down', 'left', 'right']);
+    // Ферма: огородник с корзиной, девушка поливает грядки, Митя у трактора, доярка в загоне, мальчишка кормит кур.
+    npc(46, 62, { shirt: 0x5b6ee1, skin: 0xd9a066, hair: 0x733e39, style: 'short', outfit: 'overalls', hat: 'straw', prop: 'basket' }, 'down', undefined, ['down', 'left', 'right']);
+    this.waterer = npc(88, 40, { shirt: 0xd95763, skin: 0xf2d3ab, hair: 0xfeae34, style: 'ponytail', hat: 'bandana', hatTint: 0xe43b44 }, 'right');
+    npc(146, 146, { shirt: 0xffffff, pants: 0x262b44, skin: 0xeec39a, hair: 0xc0cbdc, style: 'bald', outfit: 'overalls', hat: 'flatcap', hatTint: 0x5a6988, face: 'beard' }, 'down', 'lavka.say.mitya', ['down', 'left', 'right']);
+    npc(284, 134, { shirt: 0xf6757a, skin: 0xf2d3ab, hair: 0xfeae34, style: 'ponytail', hat: 'headscarf', hatTint: 0xe43b44, acc: 'apron' }, 'left', undefined, ['left', 'right', 'down']);
+    npc(84, 126, { shirt: 0xfbf236, skin: 0xd9a066, hair: 0x181425, style: 'curly', prop: 'basket' }, 'down', undefined, ['down', 'left', 'right']);
     // Сыроварня.
     this.cheesemaker = npc(68, 236, { shirt: 0xffffff, pants: 0x262b44, skin: 0xf2d3ab, hair: 0x733e39, style: 'bun', acc: 'apron', hat: 'headscarf', hatTint: 0xffffff }, 'down', 'lavka.say.cheesemaker');
     npc(22, 262, { shirt: 0xffffff, skin: 0xd9a066, hair: 0x181425, style: 'long', acc: 'apron' }, 'right', undefined, ['right', 'up']);
@@ -544,6 +602,7 @@ export class LavkaScene extends Phaser.Scene {
     this.idle(dt);
     this.puffs(dt);
     this.traffic(dt);
+    this.watering(dt);
     const progress = this.phase === 'morning' ? 0 : this.day.t / DAY_SECONDS;
     this.hud.update({
       dow: t(`lavka.dowShort.${this.plan.dow}` as TextKey),

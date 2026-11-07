@@ -18,6 +18,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+import lavka_farm as F
 import lavka_sprites as N
 from premium import H
 from sprites import OUT
@@ -34,8 +35,11 @@ PARK_B = 792            # парковка
 ROAD_B = 880            # трасса
 STATION = 1222          # платформа
 VY = ROAD_B + 14        # посёлок
+# Мир продолжается вверх полем: над фермой — пшеница, на неё ложится верхняя панель игры, а не амбар.
+# Земля на картинке начинается с y = -TOP (в точках мира — с -TOP / 2, сцена ставит её туда же).
+TOP = 100
 
-ground = Image.new("RGBA", (W, HGT), (0, 0, 0, 255))
+ground = Image.new("RGBA", (W, HGT + TOP), (0, 0, 0, 255))
 props = []              # {"k": ключ картинки, "x", "y" — низ по середине в точках мира, "z"?, "tint"?, "flip"?}
 made = {}               # свои картинки: ключ → Image
 
@@ -51,15 +55,15 @@ def tile(name, x0, y0, w, h):
     for yy in range(0, h, th):
         for xx in range(0, w, tw):
             region.alpha_composite(t.crop((0, 0, min(tw, w - xx), min(th, h - yy))), (xx, yy))
-    ground.alpha_composite(region, (x0, y0))
+    ground.alpha_composite(region, (x0, y0 + TOP))
 
 
 def lay(img, x, y):
-    ground.alpha_composite(img, (int(x), int(y)))
+    ground.alpha_composite(img, (int(x), int(y) + TOP))
 
 
 def rect(x, y, w, h, col):
-    ground.paste(Image.new("RGBA", (w, h), col), (x, y))
+    ground.paste(Image.new("RGBA", (w, h), col), (x, y + TOP))
 
 
 def own(key, img):
@@ -84,9 +88,10 @@ def put(key, x, y, z=None, tint=None, flip=False):
 
 def dirt_blob(shapes, seed, base=H("#c28569")):
     """Утоптанная земля неровной формы: тёмная кромка, камешки."""
-    mask = Image.new("L", (W, HGT), 0)
+    mask = Image.new("L", ground.size, 0)
     d = ImageDraw.Draw(mask)
     for kind, x, y, w, h in shapes:
+        y += TOP
         if kind == "e":
             d.ellipse((x, y, x + w, y + h), fill=255)
         else:
@@ -95,18 +100,19 @@ def dirt_blob(shapes, seed, base=H("#c28569")):
     m = mask.load()
     px = ground.load()
     cols = [H("#c28569"), H("#c28569"), H("#b86f50"), H("#e4a672"), H("#8f563b")]
-    for y in range(HGT):
+    gw, gh = ground.size
+    for y in range(gh):
         for x in range(W):
             if not m[x, y]:
                 continue
-            edge = any(not m[nx, ny] for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)) if 0 <= nx < W and 0 <= ny < HGT)
+            edge = any(not m[nx, ny] for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)) if 0 <= nx < W and 0 <= ny < gh)
             if edge:
                 if rnd.random() < 0.55:
                     px[x, y] = H("#8f563b")
             else:
                 px[x, y] = rnd.choice(cols) if rnd.random() < 0.18 else base
     for _ in range(80):
-        x, y = rnd.randrange(W - 1), rnd.randrange(HGT)
+        x, y = rnd.randrange(W - 1), rnd.randrange(gh)
         if m[x, y] and m[x + 1, y]:
             px[x, y] = H("#e4a672")
             px[x + 1, y] = H("#8f563b")
@@ -143,9 +149,12 @@ def stand_with(fills):
 
 def build():
     # ============================================================ ЗЕМЛЯ
-    tile("grass", 0, 0, W, HGT)
-    lay(N.wheat(250, 54, 1), 230, 0)
-    dirt_blob([("e", 176, 168, 300, 150), ("r", 300, 150, 60, 60), ("r", 236, 52, 18, 140), ("r", 444, 150, 46, 60)], 11)
+    tile("grass", 0, -TOP, W, HGT + TOP)
+    # Поле пшеницы и полевая дорога над фермой.
+    lay(N.wheat(W, 62, 1), 0, -TOP)
+    dirt_blob([("r", -10, -40, W + 20, 16)], 9)
+    # Тропинка от задней двери лавки к полю и площадка, где разгружается трактор.
+    dirt_blob([("r", 309, -30, 24, 300), ("e", 262, 236, 128, 70), ("r", 240, 126, 70, 14), ("r", 333, 166, 60, 12)], 11)
     tile("paving", 0, BY1, W, PLAZA_B - BY1)
     lay(N.deck(W - 16, 34), 8, BY1)
     rect(8, BY1 + 34, W - 16, 2, H("#8f563b"))
@@ -166,11 +175,13 @@ def build():
     rect(0, STATION + 36, W, 4, H("#fee761"))
     rect(0, STATION + 40, W, 1, H("#181425"))
 
-    # огород фермы
+    # огород фермы: девять грядок-коробов, между ними дорожки
     crops = [["cabbage", "carrot", "tomato"], ["strawberry", "potato", "pumpkin"], ["dill", "cabbage", "strawberry"]]
     for r, row in enumerate(crops):
         for c, crop in enumerate(row):
-            lay(N.bed(66, 30, crop, seed=r * 3 + c, wet=(r == 0 and c == 1)), 14 + c * 74, 66 + r * 38)
+            lay(F.bed(76, 36, crop, seed=r * 3 + c, wet=(r == 0 and c == 1)), 12 + c * 82, -6 + r * 44)
+    lay(F.pond(), 366, 196)
+    lay(F.flowers_strip(80, 10, 2), 360, 158)
 
     # лавка: стены, полы, перегородки
     ink, wall = H("#181425"), H("#4a3b52")
@@ -215,33 +226,40 @@ def build():
     lay(N.flower_bed(60, 14, 7), 390, VY + 186)
 
     # ============================================================ ФЕРМА
-    for x in range(6, 236, 32):
-        put("fence_h", x + 16, 62)
-        put("fence_h", x + 16, 186)
-    put(own("scarecrow", N.scarecrow()), 118, 140)
-    for i, x in enumerate(range(160, 236, 10)):
-        put(own("sunflower", N.sunflower()), x, 60 + (i % 2) * 2, z=50)
-    put(own("barrel", N.barrel()), 238, 196)
-    put(own("greenhouse", N.greenhouse()), 318, 150)
-    for x, y in ((398, 128), (422, 134), (446, 128)):
+    for x in range(0, W, 32):
+        if not 296 <= x <= 330:
+            put("fence_h", x + 16, -20)
+    put(own("scarecrow", F.scarecrow()), 135, 92)
+    put(own("barrel", N.barrel()), 266, 40)
+    put(own("hay", F.hay_stack()), 616, 214)
+    put(own("greenhouse", F.greenhouse()), 412, 104)
+    for x, y in ((372, 160), (398, 166), (424, 160)):
         put(own("hive", N.beehive()), x, y)
-    put(own("tree_apples", N.apples_on(src("tree"), 2)), 470, 98)
-    put(own("tree_round_apples", N.apples_on(src("tree_round"), 3)), 382, 88)
-    put(own("barn", N.barn()), 564, 154)
-    for x in range(484, 640, 32):
-        put("fence_h", x + 16, 238)
-    for y in range(156, 238, 14):
-        put("fence_v", 482, y + 14)
-    put(own("hay", N.hay()), 624, 188)
-    put("lavka_hay", 508, 180)
-    put(own("coop", N.coop()), 56, 258)
-    put(own("eggs", N.egg_basket()), 130, 262)
-    put(own("bucket", N.bucket()), 590, 222)
-    for x, y in ((456, 256), (468, 260), (444, 262)):
+    put(own("tree_apples", N.apples_on(src("tree"), 2)), 280, 18)
+    put(own("tree_round_apples", N.apples_on(src("tree_round"), 3)), 290, 196)
+    put(own("barn", F.barn()), 562, 136)
+    # загон: забор с трёх сторон, поилка
+    for x in range(480, W, 32):
+        put("fence_h", x + 16, 150)
+        put("fence_h", x + 16, 296)
+    for y in range(150, 296, 14):
+        put("fence_v", 478, y + 14)
+    put(own("trough", F.trough()), 526, 286)
+    # курятник и выгул под сеткой
+    put(own("coop", F.coop()), 50, 244)
+    wire = own("wire_h", F.wire_h())
+    for x in range(92, 236, 32):
+        put(wire, x + 16, 156)
+        put(wire, x + 16, 276)
+    wv = own("wire_v", F.wire_v())
+    for y in range(156, 276, 32):
+        put(wv, 236, y + 32)
+    put(own("feeder", F.feeder()), 150, 232)
+    put(own("eggs", N.egg_basket()), 104, 252)
+    put(own("bucket", N.bucket()), 552, 262)
+    for x, y in ((240, 132), (252, 136), (228, 138)):
         put(own("milkcan", N.milk_can()), x, y)
-    put(own("cart", N.cart()), 268, 290)
-    put(own("tractor", N.tractor()), 332, 292)
-    # коровы и куры — кадры для сцены (жуют, клюют)
+    # куры, утки, трактор с прицепом — живые (сцена), здесь только картинки
     for v in (0, 1):
         for down in (False, True):
             own(f"cow{v}{int(down)}", N.cow("right", v, down))
@@ -249,6 +267,10 @@ def build():
         for peck in (False, True):
             own(f"hen{v}{int(peck)}", N.hen(v, peck))
     own("bee", N.bee())
+    own("duck0", F.duck(0))
+    own("duck1", F.duck(1))
+    own("tractor", F.tractor())
+    own("cart", F.cart())
 
     # ============================================================ ЛАВКА
     # сыроварня
@@ -315,7 +337,7 @@ def build():
     fence_col(370, VY, 1180)
     fence_run(372, 640, 1186)
     put("zar_house_1", 574, VY + 92)
-    put(own("greenhouse_s", N.greenhouse().resize((80, 52), Image.NEAREST)), 486, VY + 84)
+    put(own("greenhouse_s", F.greenhouse_small()), 486, VY + 94)
     put("lavka_tree_round_apples", 610, VY + 176)
     put("lavka_barrel", 530, VY + 132)
     put("lavka_bucket", 490, VY + 132)
@@ -334,11 +356,12 @@ def build():
 
 def main():
     build()
+    F.grass_detail(ground, (0, 0, W, HGT + TOP), seed=17)
     ground.save(OUT / "lavka_ground.png")
     for key, img in made.items():
         img.save(OUT / f"{key}.png")
     LAYOUT.parent.mkdir(parents=True, exist_ok=True)
-    data = {"keys": sorted(["lavka_ground", *made]), "props": props}
+    data = {"keys": sorted(["lavka_ground", *made]), "top": TOP // ART, "props": props}
     LAYOUT.write_text(json.dumps(data, ensure_ascii=False, indent=0) + "\n")
     print(f"lavka: {len(made)} картинок, {len(props)} предметов")
 
