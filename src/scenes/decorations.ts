@@ -38,6 +38,7 @@ import * as shelves from './shelves';
 import * as building from './building';
 import * as collections from './collections';
 import * as weeksFx from './weeks';
+import * as keepsakes from './keepsakes';
 
 /** До какой доли дня музыка выбирает утренний трек (дальше — дневной, с вечера — вечерний). */
 const MUSIC_MORNING = 0.3;
@@ -594,6 +595,7 @@ export function buildDecor(scene: StoreScene): void {
   buildCounterDecor(scene);
   buildSupportDecor(scene);
   buildOutdoorDecor(scene);
+  keepsakes.buildKeepsakes(scene);
   // Стойка со сладостями у кассы, у входа — корзинки, в больших магазинах — тележки. Если справа
   // от двери у нижней стены встал ларь с мороженым (тесный зал), тележки — слева от неё (но не
   // в дверях склада), а корзинки — где осталось место: слева от двери или по ту сторону ларя.

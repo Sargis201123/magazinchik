@@ -26,7 +26,7 @@ export function pickCohort(userId: number | undefined, random: () => number, sha
  * stock — новичок сам разложил полку (до этого в первый день её раскладывает бабушка, firstday.ts);
  * gift — бабушкин подарок за первый день вручён.
  */
-export type OnbStep = 'open' | 'cust' | 'sale' | 'day1' | 'day2' | 'hello' | 'bye' | 'stock' | 'gift' | 'ribbon';
+export type OnbStep = 'open' | 'cust' | 'sale' | 'day1' | 'day2' | 'hello' | 'bye' | 'stock' | 'gift' | 'ribbon' | 'box';
 
 export interface OnbState {
   /** Пройденные шаги. */
@@ -35,6 +35,8 @@ export interface OnbState {
   tabs?: Record<string, boolean>;
   /** Первая неделя: о каком дне бабушка уже сказала, что нового (tutorial.ts, weekNote). */
   week?: number;
+  /** Первая выручка новичка нового начала: монета в рамке на стене зала (firstday.ts, firstCoin). */
+  firstCoin?: number;
 }
 
 /**

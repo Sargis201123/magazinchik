@@ -60,6 +60,7 @@ import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
 import * as pixelFx from './pixelFx';
+import * as keepsakes from './keepsakes';
 import { isPremium } from '../game/decor';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
@@ -309,6 +310,7 @@ export function startDay(scene: StoreScene): void {
   if (scene.skipFlyIn) scene.skipFlyIn = false;
   else camera.flyIn(scene);
   pixelFx.openMoments(scene);
+  keepsakes.buildKeepsakes(scene);
   lighting.lightsOn(scene);
   nightShift.flipDoorSign(scene, true);
   visitors.morningCrew(scene);

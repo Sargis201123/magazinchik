@@ -363,6 +363,75 @@ def counter_piggy():
     c.save("counter_piggy")
 
 
+# ---------------------------------------------------------------- бабушкина шкатулка и первая монета (первые дни)
+
+
+def granny_box(open_=False):
+    """Бабушкина шкатулка: тёмное дерево с латунными уголками и замочком. Закрытая — замок висит;
+    открытая — крышка откинута, внутри бархат и золотой отблеск."""
+    c = Canvas(18, 16)
+    wood, wood_d, wood_l = H("#8f563b"), H("#5e3a2a"), H("#b86f50")
+    brass, brass_d = H("#feae34"), H("#c27a1e")
+    # короб
+    c.rect(2, 8, 14, 7, wood)
+    c.hline(2, 8, 14, wood_l)
+    c.hline(2, 14, 14, wood_d)
+    c.vline(15, 8, 7, wood_d)
+    for x in (2, 14):
+        c.rect(x, 13, 2, 2, brass_d)
+    if open_:
+        # откинутая крышка сзади, внутри — бархат, на нём старый ключ
+        c.rect(2, 1, 14, 4, wood_d)
+        c.hline(2, 1, 14, wood)
+        c.rect(3, 5, 12, 4, H("#a22633"))
+        c.hline(3, 5, 12, H("#68203a"))
+        # кольцо ключа с дыркой, стержень, бородка
+        c.rect(4, 6, 3, 3, brass)
+        c.px(5, 7, H("#a22633"))
+        c.px(4, 6, H("#fff3a8"))
+        c.hline(7, 7, 6, brass)
+        c.hline(7, 6, 5, H("#fee761"))
+        c.px(11, 8, brass_d)
+        c.px(13, 8, brass_d)
+    else:
+        # крышка-горбик
+        c.rect(2, 4, 14, 4, wood)
+        c.hline(3, 3, 12, wood)
+        c.hline(3, 3, 12, wood_l)
+        c.hline(2, 7, 14, wood_d)
+        for x in (2, 14):
+            c.rect(x, 4, 2, 2, brass_d)
+        # замочек
+        c.rect(7, 7, 4, 4, brass)
+        c.px(8, 7, H("#fff3a8"))
+        c.px(9, 9, H("#181425"))
+        c.vline(9, 10, 1, H("#181425"))
+        c.hline(8, 6, 2, brass_d)
+    c.outline("k")
+    c.save("granny_box_open" if open_ else "granny_box")
+
+
+def coin_frame():
+    """Первая монета в рамке: золочёная рамка, тёмно-синий бархат, монета и табличка снизу."""
+    c = Canvas(18, 18)
+    gold, gold_d, gold_l = H("#feae34"), H("#c27a1e"), H("#fee761")
+    c.rect(1, 1, 16, 14, gold)
+    c.hline(1, 1, 16, gold_l)
+    c.vline(1, 1, 14, gold_l)
+    c.hline(1, 14, 16, gold_d)
+    c.vline(16, 1, 14, gold_d)
+    c.rect(3, 3, 12, 10, H("#262b44"))
+    c.ellipse(9, 8, 3.4, 3.4, gold)
+    c.ellipse(9, 8, 2.2, 2.2, gold_l)
+    c.px(9, 8, gold_d)
+    c.px(8, 6, H("#ffffff"))
+    # табличка
+    c.rect(6, 15, 6, 2, H("#c0cbdc"))
+    c.hline(7, 16, 4, H("#8b9bb4"))
+    c.outline("k")
+    c.save("coin_frame")
+
+
 # ---------------------------------------------------------------- у входа
 
 
@@ -491,6 +560,9 @@ def main():
     globe()
     counter_vase()
     counter_piggy()
+    granny_box()
+    granny_box(open_=True)
+    coin_frame()
     out_planters()
     out_chalkboard()
     ad_billboard()

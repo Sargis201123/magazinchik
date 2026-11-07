@@ -245,6 +245,34 @@ export function firstGiftCard(onClose: () => void): void {
   haptic.success();
 }
 
+/**
+ * Бабушкина шкатулка открылась (game/firstday.ts): монеты «на первые полки» и старый ключ с биркой
+ * «у моста» — зацепка к лавке в Заречье. Закрыли — день идёт дальше.
+ */
+export function grannyBoxCard(coins: number, onClose: () => void): void {
+  styles();
+  const { card, close } = openModal();
+  card.classList.add('ui-first-gift');
+  const item = el('img', 'ui-first-item');
+  item.src = png('granny_box_open');
+  item.alt = '';
+  const say = el('div', 'ui-say inline');
+  const body = el('div', 'ui-say-body');
+  body.append(el('div', 'ui-say-name', t(CHARACTERS.grandma.nameKey)), el('p', 'ui-say-text', t('keep.boxText', { n: coins })));
+  say.append(liveFace('assets/portrait_grandma_happy.png', () => false, 'ui-say-face'), body);
+  card.append(
+    el('h2', '', `🗝️ ${t('keep.boxTitle')}`),
+    item,
+    say,
+    button(t('keep.boxOk'), () => {
+      haptic.tap();
+      close();
+      onClose();
+    }, 'ui-btn'),
+  );
+  pixelize(card);
+}
+
 /** Подсказка бабушки к только что открытой вкладке утра: одна строчка и «Понятно». */
 export function tabHint(text: string, onOk: () => void): HTMLElement {
   styles();
