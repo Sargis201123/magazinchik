@@ -27,26 +27,27 @@ from sprites import OUT
 
 ROOT = Path(__file__).resolve().parent.parent
 LAYOUT = ROOT / "src" / "lavka" / "layout.json"
-# Мир узкий (256 точек): на телефоне всё крупнее. Третья раскладка (07.11, по просьбе автора): сверху — огород
-# из шести больших грядок; под ним слева сад с пасекой и курятник с гнёздами, справа маленький амбар и загон
-# с одной коровой; поперёк — дорожка с трактором; ниже лавка (уголок-сыроварня, широкий зал, место под
-# расширение), площадка и дорога.
+# Мир узкий (256 точек): на телефоне всё крупнее. Четвёртая раскладка (07.11, по замечаниям автора): огород
+# сверху слева — небольшой, справа — крупный амбар; под ними сад с ульями вразбивку и загон с коровой и прудом;
+# ещё ниже курятник с выгулом и сенник, куда трактор привозит сено по дорожке; лавка — один широкий зал (4 полки
+# и прилавок), справа площадка под стройку; улица с фонарями, скамейками и зеброй.
 W, HGT = 512, 900
 ART = 2
 
 # Полосы и места (пиксели рисунка); те же числа знает сцена (src/lavka/LavkaScene.ts, в точках — вдвое меньше).
-GARDEN_B = 200          # низ огорода (забор с калиткой)
-LANE0, LANE1 = 474, 514  # дорожка поперёк фермы
-BX0, BX1 = 72, 440      # лавка по ширине
-BY0, BY1 = 520, 740     # лавка по высоте
-NOOK1 = 176             # сыроварня: BX0…NOOK1, перегородка NOOK1…HALL0, зал HALL0…BX1
-HALL0 = 188
-PLAZA_B = 800           # площадка перед лавкой
-ROAD_B = 876            # дорога
-DOOR_X = 310            # вход в зал
-BACK_X = 256            # задняя дверь — на средней тропинке фермы
-BED_X = (18, 182, 346)
-BED_Y = (16, 104)
+GARDEN = (6, 4, 304, 158)   # x0, y0, x1, y1 — огород
+PATH_X = (204, 236)         # средняя тропинка
+LANE0, LANE1 = 474, 512     # дорожка поперёк фермы
+BX0, BX1 = 72, 440          # лавка по ширине
+BY0, BY1 = 518, 738         # лавка по высоте
+PLAZA_B = 800               # площадка перед лавкой
+ROAD_B = 876                # дорога
+DOOR_X = 256                # вход в зал
+BACK_X = 220                # задняя дверь — на средней тропинке фермы
+BED_X = (18, 112, 206)
+BED_Y = (24, 92)
+RUN = (4, 326, 200, 468)    # выгул кур
+PADDOCK = (244, 182, 508, 340)
 # Над миром — полоска травы под панелью игры (монеты, часы), ферма начинается под ней.
 TOP = 40
 
@@ -161,106 +162,109 @@ def stand_with(fills):
 def build():
     # ============================================================ ЗЕМЛЯ
     tile("grass", 0, -TOP, W, HGT + TOP)
-    # огород: утоптанные дорожки между грядками
-    dirt_blob([("r", 10, 6, W - 20, GARDEN_B - 10)], 3, base=H("#c28569"))
+    gx0, gy0, gx1, gy1 = GARDEN
+    dirt_blob([("r", gx0 + 4, gy0 + 4, gx1 - gx0 - 8, gy1 - gy0 - 6)], 3, base=H("#c28569"))
     for r, y in enumerate(BED_Y):
         for c, x in enumerate(BED_X):
             lay(V.raised_bed(seed=r * 3 + c), x, y)
-    # средняя тропинка от калитки огорода к задней двери лавки и дорожка поперёк
-    dirt_blob([("r", BACK_X - 18, GARDEN_B - 8, 36, LANE0 - GARDEN_B + 16), ("r", 0, LANE0, W, LANE1 - LANE0)], 11)
-    for y in (LANE0 + 12, LANE1 - 12):  # колеи
+    # тропинка: от калитки огорода вниз к задней двери лавки, дорожка поперёк, отводки к саду и сеннику
+    dirt_blob([("r", PATH_X[0], gy1 - 6, PATH_X[1] - PATH_X[0], LANE0 - gy1 + 12), ("r", 0, LANE0, W, LANE1 - LANE0)], 11)
+    for y in (LANE0 + 11, LANE1 - 11):  # колеи
         for x in range(0, W, 3):
             if (x // 3) % 5:
                 ground.putpixel((x, y + TOP), H("#8f563b"))
-    # курятник: соломенный выгул; загон: вытоптано у кормушки
-    F.straw_floor(ground, 100, 336 + TOP, 232, 464 + TOP, seed=3)
-    dirt_blob([("e", 296, 338, 70, 30)], 41, base=H("#8a5a44"))
-    lay(F.flowers_strip(96, 10, 2), 140, 312)
-    lay(F.flowers_strip(70, 10, 5), 8, 312)
-    # лавка: стены, полы, перегородка
+    # выгул: солома; загон: вытоптано у поилки
+    F.straw_floor(ground, RUN[0] + 2, RUN[1] + 2 + TOP, RUN[2] - 2, RUN[3] - 2 + TOP, seed=3)
+    dirt_blob([("e", 262, 300, 76, 30)], 41, base=H("#8a5a44"))
+    lay(F.pond(92, 46), 404, 276)
+    # сад: цветы по траве
+    lay(F.flowers_strip(70, 10, 2), 104, 296)
+    lay(F.flowers_strip(60, 10, 5), 8, 300)
+    lay(F.flowers_strip(70, 10, 6), 120, 206)
+    # лавка: стены и пол — один широкий зал
     ink, wall = H("#181425"), H("#4a3b52")
     rect(BX0, BY0, BX1 - BX0, BY1 - BY0, ink)
     rect(BX0 + 2, BY0 + 2, BX1 - BX0 - 4, BY1 - BY0 - 4, wall)
     back = 30
-    for (x0, x1), wall_t, floor_t in zip(((BX0 + 8, NOOK1), (HALL0, BX1 - 8)), ("wall_provence", "wall_walnut"), ("ktiles", "floor_wood")):
-        tile(wall_t, x0, BY0 + 8, x1 - x0, back)
-        rect(x0, BY0 + 8 + back, x1 - x0, 2, ink)
-        tile(floor_t, x0, BY0 + 10 + back, x1 - x0, BY1 - BY0 - 20 - back)
-    rect(NOOK1, BY0 + 8, HALL0 - NOOK1, BY1 - BY0 - 18, wall)
-    rect(NOOK1, BY0 + 8, 1, BY1 - BY0 - 18, ink)
-    rect(HALL0 - 1, BY0 + 8, 1, BY1 - BY0 - 18, ink)
-    rect(NOOK1, 640, HALL0 - NOOK1, 40, H("#b86f50"))   # проём сыроварня — зал
+    tile("wall_walnut", BX0 + 8, BY0 + 8, BX1 - BX0 - 16, back)
+    rect(BX0 + 8, BY0 + 8 + back, BX1 - BX0 - 16, 2, ink)
+    tile("floor_wood", BX0 + 8, BY0 + 10 + back, BX1 - BX0 - 16, BY1 - BY0 - 20 - back)
     fw = BY1 - 10
     rect(BX0, fw, BX1 - BX0, 10, wall)
     rect(BX0, fw, BX1 - BX0, 1, ink)
     rect(BX0, fw + 9, BX1 - BX0, 1, ink)
-    for wx in (96, 136, 214, 384):
-        rect(wx, fw + 2, 26, 6, H("#8fd3ff"))
-        rect(wx, fw + 2, 26, 1, H("#ffffff"))
+    for wx in (96, 150, 320, 380):
+        rect(wx, fw + 2, 30, 6, H("#8fd3ff"))
+        rect(wx, fw + 2, 30, 1, H("#ffffff"))
     rect(DOOR_X - 20, fw, 40, 10, H("#b86f50"))       # вход
-    rect(BACK_X - 18, BY0, 36, 10, H("#b86f50"))      # задняя дверь
-    # место под расширение справа: утоптанная площадка
-    dirt_blob([("r", 446, BY0 + 14, 60, BY1 - BY0 - 24)], 31)
-    # перед лавкой: веранда, плитка, дорога, тротуар
+    rect(BACK_X - 16, BY0, 32, 10, H("#b86f50"))      # задняя дверь
+    # площадка под стройку справа от лавки
+    dirt_blob([("r", 448, BY0 + 16, 58, BY1 - BY0 - 28)], 31)
+    # перед лавкой: веранда, плитка, дорога с зеброй, тротуар
     tile("paving", 0, BY1, W, PLAZA_B - BY1)
-    lay(N.deck(BX1 - BX0, 26), BX0, BY1)
-    rect(BX0, BY1 + 26, BX1 - BX0, 2, H("#8f563b"))
-    lay(N.flower_bed(40, 14, 3), 20, 752)
-    lay(N.flower_bed(40, 14, 4), 452, 752)
+    lay(N.deck(BX1 - BX0, 24), BX0, BY1)
+    rect(BX0, BY1 + 24, BX1 - BX0, 2, H("#8f563b"))
+    lay(N.flower_bed(40, 14, 3), 16, 748)
+    lay(N.flower_bed(40, 14, 4), 456, 748)
     rect(0, PLAZA_B, W, 4, H("#8b9bb4"))
     tile("asphalt", 0, PLAZA_B + 4, W, ROAD_B - PLAZA_B - 8)
     for x in range(8, W, 48):
-        rect(x, (PLAZA_B + ROAD_B) // 2 - 1, 26, 3, (240, 240, 240, 255))
+        if not DOOR_X - 40 < x + 13 < DOOR_X + 40:
+            rect(x, (PLAZA_B + ROAD_B) // 2 - 1, 26, 3, (240, 240, 240, 255))
+    for x in range(DOOR_X - 30, DOOR_X + 30, 10):   # зебра к входу
+        rect(x, PLAZA_B + 8, 6, ROAD_B - PLAZA_B - 16, (238, 238, 238, 255))
     rect(0, ROAD_B - 4, W, 4, H("#8b9bb4"))
     tile("paving", 0, ROAD_B, W, HGT - ROAD_B)
 
     # ============================================================ ОГОРОД
-    for x in range(0, W, 32):
-        put("fence_h", x + 16, 4)
-        if not BACK_X - 24 <= x + 16 <= BACK_X + 24:
-            put("fence_h", x + 16, GARDEN_B + 2)
-    for y in range(4, GARDEN_B, 32):
-        put("fence_v", 4, y + 32)
-        put("fence_v", W - 4, y + 32)
+    for x in range(gx0, gx1, 32):
+        put("fence_h", x + 16, gy0)
+        if not PATH_X[0] - 8 <= x + 16 <= PATH_X[1] + 8:
+            put("fence_h", x + 16, gy1)
+    for y in range(gy0, gy1 - 4, 32):
+        put("fence_v", gx0, min(gy1, y + 32))
+        put("fence_v", gx1, min(gy1, y + 32))
     for seed in ("dill", "carrot", "strawberry", "pumpkin"):
         for stage in (1, 2, 3):
-            for i in range(6):
-                pass
             own(f"crop_{seed}{stage}", V.crops(seed, stage, bed_seed=stage))
+    put(own("scarecrow", F.scarecrow()), 290, 150)
 
-    # ============================================================ САД И ПАСЕКА (слева)
+    # ============================================================ АМБАР, ЗАГОН, ПРУД
+    put(own("barn", V.barn_big()), 410, 174)
+    px0, py0, px1, py1 = PADDOCK
+    for x in range(px0, px1, 32):
+        if not 360 <= x + 16 <= 460:
+            put("fence_h", x + 16, py0)
+        put("fence_h", x + 16, py1)
+    for y in range(py0, py1, 32):
+        put("fence_v", px0, min(py1, y + 32))
+        put("fence_v", W - 4, min(py1, y + 32))
+    put(own("trough", F.trough()), 296, 328)
+
+    # ============================================================ САД И ПАСЕКА (вразбивку)
     own("tree_apples", V.apple_tree(True, seed=1))
     own("tree_bare", V.apple_tree(False, seed=1))
-    for i, x in enumerate((176, 214)):
-        put(own(f"hive{i}", V.hive(i)), x, 312)
+    own("hive", V.skep())
 
-    # ============================================================ КУРЯТНИК (слева внизу)
-    put(own("coop", F.coop()), 50, 450)
-    put(own("nest", V.nest_box()), 168, 384)
+    # ============================================================ КУРЯТНИК И ВЫГУЛ
+    put(own("coop", V.coop_big()), 72, 446)
     wire = own("wire_h", F.wire_h())
-    for x in range(100, 232, 32):
-        put(wire, x + 16, 336)
-        put(wire, x + 16, 466)
+    for x in range(RUN[0], RUN[2], 32):
+        put(wire, x + 16, RUN[1])
+        put(wire, x + 16, RUN[3])
     wv = own("wire_v", F.wire_v())
-    for y in range(336, 466, 32):
-        put(wv, 234, y + 32)
-    put(own("feeder", F.feeder()), 212, 452)
+    for y in range(RUN[1], RUN[3], 32):
+        put(wv, RUN[2], min(RUN[3], y + 32))
+        put(wv, RUN[0] + 2, min(RUN[3], y + 32))
+    put(own("feeder", F.feeder()), 176, 456)
 
-    # ============================================================ АМБАР И ЗАГОН (справа)
-    put(own("barn", V.barn()), 448, 318)
-    put(own("hay", V.hay_bale()), 300, 330)
-    put("lavka_hay", 330, 330)
-    for x in range(280, W, 32):
-        put("fence_h", x + 16, 334)
-        put("fence_h", x + 16, 466)
-    for y in range(334, 466, 32):
-        put("fence_v", 280, y + 32)
-    put(own("trough", F.trough()), 332, 360)
-    put(own("bucket", N.bucket()), 498, 330)
-    for x, y in ((488, 508), (500, 510)):
-        put(own("milkcan", N.milk_can()), x, y)
-    for x, y in ((BACK_X + 30, 512), (BACK_X + 40, 514)):
-        put("lavka_milkcan", x, y)
+    # ============================================================ СЕННИК (сюда трактор привозит сено)
+    put(own("shed", V.hay_shed()), 380, 464)
+    own("hay", V.hay_bale())
+    put(own("barrel", N.barrel()), 262, 456)
+    put(own("milkcan", N.milk_can()), 280, 462)
+    put("lavka_milkcan", 290, 464)
+    put(own("bucket", N.bucket()), 482, 462)
 
     # живое и значки — картинки для сцены
     for head in (0, 1):
@@ -274,6 +278,8 @@ def build():
     own("egg", V.egg())
     own("egg_brown", V.egg(True))
     own("bee", N.bee())
+    own("duck0", F.duck(0))
+    own("duck1", F.duck(1))
     own("tractor", F.tractor())
     own("cart", F.cart())
     own("badge", U.badge(False))
@@ -284,35 +290,35 @@ def build():
     for name, fn in (("honey", F.icon_honey), ("hayicon", F.icon_hay), ("grain", F.icon_grain), ("seed", F.icon_seed), ("apple", F.icon_apple)):
         own(f"ico_{name}", fn())
 
-    # ============================================================ ЛАВКА
-    # сыроварня (слева, уголок): стеллаж с головками, пресс, чан; витрина с готовым сыром — у проёма
-    put(own("rack", N.cheese_rack()), 104, BY0 + 80)
-    put(own("press", N.cheese_press()), 152, BY0 + 82)
-    put(own("vat", N.vat()), 116, 660)
-    own("case", N.cheese_case_empty(64))
-    own("wheel", N.cheese_wheel(small=True))
-    # зал: прилавок справа, ящики с овощами слева (полки с молоком, яйцами и мёдом ставит сцена — на них товар)
-    put(own("stand_veg", stand_with(["apple", "potato", "carrot", "cabbage", "apple", "pumpkin", "potato", "carrot"])), 232, 690)
-    put(own("counter", N.counter_wood(64, 24)), 400, 666)
-    # место под расширение
-    for y in range(BY0 + 14, BY1 - 10, 14):
+    # ============================================================ ЛАВКА (полки с товаром ставит сцена)
+    own("stand_veg", stand_with(["apple", "potato", "carrot", "cabbage", "apple", "pumpkin", "potato", "carrot"]))
+    put(own("counter", N.counter_wood(64, 24)), 396, 664)
+    put("baskets", 104, 676)
+    put(own("jars", N.table_jars()), 110, 712)
+    # стройка
+    put(own("build_sign", V.build_sign()), 476, 640)
+    put(own("planks", V.planks()), 478, 700)
+    for y in range(BY0 + 16, BY1 - 10, 14):
         put("fence_v", 506, y + 14)
-    put("fence_h", 476, BY0 + 14)
-    put("fence_h", 476, BY1 - 8)
+    put("fence_h", 478, BY0 + 16)
+    put("fence_h", 478, BY1 - 10)
 
-    # ============================================================ ПЕРЕД ЛАВКОЙ
-    put("awning", DOOR_X, BY1 + 12, z=BY1 + 1)
-    put(own("sign", N.sign_board(130)), DOOR_X, BY1 - 2, z=BY1 + 2)
-    put("mat", DOOR_X, BY1 + 18, z=BY1 + 2)
-    put("hood_planter", DOOR_X - 52, 762)
-    put("hood_planter", DOOR_X + 52, 762)
-    put(own("jars", N.table_jars()), 120, 786)
-    put(own("bench", N.bench_wood()), 410, 780)
-    put("bobik_lie", 200, 770)
-    put("cat_sit", 440, 772)
+    # ============================================================ УЛИЦА
+    put("awning", DOOR_X, BY1 + 10, z=BY1 + 1)
+    put("mat", DOOR_X, BY1 + 16, z=BY1 + 2)
+    put("hood_planter", DOOR_X - 50, 760)
+    put("hood_planter", DOOR_X + 50, 760)
+    for x in (24, 180, 336, 494):
+        put("hood_lamp", x, 796)
+    put("bench", 408, 782)
+    put("bench", 104, 782)
+    put("hood_bikes", 150, 790)
+    put("bin", 440, 790)
+    put("bobik_lie", 210, 772)
+    put("cat_sit", 430, 768)
     put("bus_stop", 60, PLAZA_B - 2)
-    put(own("tree_birch_r", src("tree_birch")), 30, 744)
-    put("bush_flower", 494, 792)
+    put(own("tree_birch_r", src("tree_birch")), 30, 742)
+    put("bush_flower", 494, 790)
     own("puff", N.puff())
 
 
@@ -322,7 +328,7 @@ def main():
     F.fringe(ground, seed=7)
     F.grass_detail(ground, (0, 0, W, HGT + TOP), seed=17)
     # тени под деревьями и стогом: на землю, мягко
-    for k, x, y, rx in (("tree", 50, 304, 24), ("tree", 118, 306, 24), ("barn", 448, 316, 52), ("birch", 30, 744, 14)):
+    for k, x, y, rx in (("tree", 52, 268, 24), ("tree", 150, 336, 24), ("barn", 410, 172, 70), ("coop", 72, 446, 40), ("shed", 380, 462, 60), ("birch", 30, 742, 14)):
         F.soft_shadow(ground, x + 4, y + TOP - 2, rx, rx * 0.32)
     ground.save(OUT / "lavka_ground.png")
     for key, img in made.items():

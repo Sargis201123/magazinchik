@@ -5,12 +5,12 @@
 import { t, type TextKey } from '../i18n';
 import { png } from '../platform/assets';
 import { sound } from '../platform/sound';
-import { button, el, injectStyles, openModal, pixelize, UI_FONT } from '../ui/dom';
+import { el, injectStyles, pixelize, UI_FONT } from '../ui/dom';
 import { sheetPng } from '../ui/sheet';
 import { GOODS, SEED, SEEDS, clock, type Good, type Order, type Plan, type Seed, type Summary } from '../game/lavka/day';
 
 /** Картинка товара: молоко и овощи — из атласа магазина, остальное — свои (art/lavka.py). */
-export const GOOD_ICON: Record<Good, string> = { milk: 'item_milk', eggs: 'lavka_egg', veg: 'item_apples', honey: 'lavka_ico_honey', cheese: 'lavka_wheel' };
+export const GOOD_ICON: Record<Good, string> = { milk: 'item_milk', eggs: 'lavka_egg', veg: 'item_apples', honey: 'lavka_ico_honey' };
 const iconUrl = (key: string): string => (key.startsWith('lavka_') ? png(key) : sheetPng(key));
 
 const css = `
@@ -51,31 +51,21 @@ const css = `
   font: 800 13px/1.25 ${UI_FONT}; color: #2b2233; background: #fffbe8; border: 3px solid #2b2233; border-radius: 10px; padding: 6px 10px;
   pointer-events: none; z-index: 5; transition: opacity .3s; max-width: min(320px, 80vw); text-align: center; box-shadow: 0 3px 0 rgba(43,34,51,.6); }
 @keyframes lv-breathe { 50% { transform: scale(1.08); } }
-@media (prefers-reduced-motion: reduce) { .lv-good.want, .lv-open { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .lv-good.want { animation: none !important; } }
 
-.lv-sheet { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 10px);
-  width: min(380px, 94vw); box-sizing: border-box; z-index: 6; background: #fbf6ea; color: #2b2233; border: 4px solid #2b2233;
-  border-radius: 12px; box-shadow: 0 6px 0 rgba(24,20,37,.65); padding: 12px 12px 10px; font: 600 14px/1.3 ${UI_FONT};
-  animation: lv-up .35s cubic-bezier(.3,1.4,.5,1); }
 @keyframes lv-up { from { transform: translate(-50%, 30px); opacity: 0; } }
-.lv-sheet h2 { margin: 0 0 6px; font: 900 18px/1.1 ${UI_FONT}; }
-.lv-say { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; }
-.lv-say img { width: 44px; height: 44px; flex: none; image-rendering: pixelated; border: 2px solid #2b2233; border-radius: 6px; background: #f6e7c8; }
-.lv-say p { margin: 0; font-weight: 700; }
-.lv-plan { list-style: none; margin: 0 0 10px; padding: 8px 10px; background: #f1e2c2; border-radius: 8px; display: grid; gap: 3px; font-size: 13px; }
-.lv-plan .ui-ico { width: 14px; height: 14px; vertical-align: -2px; image-rendering: pixelated; }
-.lv-plan b { font-weight: 900; }
-.lv-open { width: 100%; font-size: 19px !important; font-weight: 900; padding: 12px !important; color: #fff; text-shadow: 0 2px 0 #2b2233;
-  background-color: #7fc659 !important; border-width: 4px !important; border-radius: 10px !important; animation: lv-breathe 2.2s ease-in-out infinite; }
-.lv-sum { font: 600 15px/1.55 ${UI_FONT}; margin: 6px 0; }
-.lv-sum b { font-size: 19px; }
 .lv-stars { font-size: 26px; letter-spacing: 3px; text-align: center; color: #feae34; text-shadow: 0 2px 0 #2b2233; }
-.lv-title { margin: 0 0 4px; font: 900 20px/1.2 ${UI_FONT}; text-align: center; }
-.lv-tip { display: flex; gap: 8px; align-items: center; margin: 8px 0 6px; padding: 6px 10px 6px 6px; background: #fffbe8;
-  border: 3px solid #2b2233; border-radius: 10px; font: 700 14px/1.3 ${UI_FONT}; }
-.lv-tip img { width: 44px; height: 44px; flex: none; image-rendering: pixelated; border: 2px solid #2b2233; border-radius: 6px; background: #f6e7c8; }
-.lv-tip p { margin: 0; }
 
+.lv-home { justify-self: end; pointer-events: auto; cursor: pointer; border: 0; }
+.lv-day { position: fixed; left: 50%; top: calc(var(--safe-top, env(safe-area-inset-top)) + 64px); transform: translateX(-50%);
+  width: min(330px, 90vw); box-sizing: border-box; z-index: 6; background: #fbf6ea; color: #2b2233; border: 4px solid #2b2233;
+  border-radius: 12px; box-shadow: 0 5px 0 rgba(24,20,37,.6); padding: 8px 12px; font: 700 14px/1.35 ${UI_FONT}; text-align: center;
+  pointer-events: none; animation: lv-drop .4s cubic-bezier(.3,1.4,.5,1); transition: opacity .5s, transform .5s; }
+.lv-day.gone { opacity: 0; transform: translate(-50%, -20px); }
+@keyframes lv-drop { from { transform: translate(-50%, -30px); opacity: 0; } }
+.lv-day h3 { margin: 0; font: 900 17px/1.2 ${UI_FONT}; }
+.lv-day .lv-stars { font-size: 22px; }
+.lv-day p { margin: 2px 0 0; }
 .lv-seeds { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 10px);
   width: min(380px, 94vw); box-sizing: border-box; z-index: 7; background: #fbf6ea; color: #2b2233; border: 4px solid #2b2233;
   border-radius: 12px; box-shadow: 0 6px 0 rgba(24,20,37,.65); padding: 10px; font: 700 13px/1.2 ${UI_FONT};
@@ -89,8 +79,6 @@ const css = `
 .lv-seed img { width: 36px; height: 36px; image-rendering: pixelated; }
 .lv-seed small { font-weight: 700; color: #6b5a4e; }
 .lv-seed b { color: #3e8948; }
-.lv-seed-all { display: flex; gap: 8px; align-items: center; margin: 8px 2px 0; font-weight: 800; cursor: pointer; user-select: none; }
-.lv-seed-all input { width: 20px; height: 20px; accent-color: #63c74d; }
 `;
 
 let styled = false;
@@ -133,6 +121,8 @@ export class LavkaHud {
   private shownOrders = '';
   private shown = '';
   private lastCoins = -1;
+  /** Кнопка справа наверху — обратно в «Магазинчик». */
+  onHome?: () => void;
 
   constructor() {
     styles();
@@ -145,7 +135,10 @@ export class LavkaHud {
     this.bar = el('i');
     bar.append(this.bar);
     mid.append(this.clock, bar);
-    row.append(this.coins, mid, el('span'));
+    const home = el('button', 'lv-pill lv-home', '🏪');
+    home.title = t('lavka.toStore');
+    home.addEventListener('click', () => this.onHome?.());
+    row.append(this.coins, mid, home);
     const stock = el('div', 'lv-stock');
     for (const g of GOODS) {
       const box = el('span', 'lv-good');
@@ -238,86 +231,28 @@ export class LavkaHud {
   }
 }
 
-/** Утро: план дня и заказы. Возвращает «закрыть». */
-export function morningSheet(plan: Plan, onStart: () => void): () => void {
+/** Конец дня — коротко сверху, без кнопок (дни идут подряд): звёзды, выручка, заказы и совет бабушки. */
+export function dayToast(title: string, s: Summary, ms = 5200): void {
   styles();
-  const sheet = el('div', 'lv-sheet');
-  sheet.append(el('h2', '', t('lavka.morning.title', { dow: dowName(plan) })));
-  const say = el('div', 'lv-say');
-  const face = el('img');
-  face.src = png('portrait_grandma_happy');
-  face.alt = '';
-  say.append(face, el('p', '', t('lavka.morning.say')));
-  const list = el('ul', 'lv-plan');
-  list.append(el('li', '', plan.bus ? t('lavka.plan.bus', { time: clock(plan.bus.at), n: plan.bus.people }) : t('lavka.plan.noBus')));
-  for (const tr of plan.trains) list.append(el('li', '', `🚆 ${t('lavka.plan.train', { time: clock(tr.at), n: tr.people })}`));
-  const orders = el('ul', 'lv-plan');
-  orders.append(el('b', '', t('lavka.morning.orders')));
-  for (const o of plan.orders) orders.append(el('li', '', orderLine(o)));
-  const open = button(t('lavka.start'), () => {
-    sound.coin();
-    close();
-    onStart();
-  }, 'ui-btn lv-open');
-  sheet.append(say, list, orders, open);
-  pixelize(sheet);
-  document.body.append(sheet);
-  const close = (): void => sheet.remove();
-  return close;
+  const box = el('div', 'lv-day');
+  box.append(el('h3', '', title), el('div', 'lv-stars', '★'.repeat(s.stars) + '☆'.repeat(5 - s.stars)));
+  box.append(el('p', '', `${t('lavka.sum.coins', { n: s.coins })} · ${t('lavka.sum.orders', { done: s.ordersDone, total: s.ordersTotal })}`));
+  box.append(el('p', '', t(`lavka.tip.${s.tip}` as TextKey)));
+  pixelize(box);
+  document.body.append(box);
+  setTimeout(() => box.classList.add('gone'), ms);
+  setTimeout(() => box.remove(), ms + 600);
 }
 
-/** Вечерние итоги: звёзды, выручка, собрано, заказы, совет бабушки; дальше — следующий день, этот ещё раз или в магазин. */
-export function showSummary(o: { title: string; s: Summary; nextDow: string; onNext: () => void; onAgain: () => void; onStore: () => void }): void {
-  styles();
-  const { card, close } = openModal();
-  const s = o.s;
-  card.append(el('h2', 'lv-title', o.title));
-  card.append(el('div', 'lv-stars', '★'.repeat(s.stars) + '☆'.repeat(5 - s.stars)));
-  const rows = el('div', 'lv-sum');
-  const line = (text: string) => rows.append(el('div', '', text));
-  rows.append(el('b', '', t('lavka.sum.coins', { n: s.coins })));
-  line(t('lavka.sum.collected', s.collected));
-  line(t('lavka.sum.orders', { done: s.ordersDone, total: s.ordersTotal }));
-  line(t('lavka.sum.happy', { n: Math.round(s.happy * 100) }));
-  if (s.missedTotal) line(t('lavka.sum.missed', { n: s.missedTotal }));
-  card.append(rows);
-  const tip = el('div', 'lv-tip');
-  const face = el('img');
-  face.src = png(s.tip === 'good' ? 'portrait_grandma_happy' : 'portrait_grandma');
-  face.alt = '';
-  tip.append(face, el('p', '', t(`lavka.tip.${s.tip}` as TextKey)));
-  card.append(tip);
-  card.append(
-    button(t('lavka.next', { dow: o.nextDow }), () => {
-      close();
-      o.onNext();
-    }),
-    button(t('lavka.again'), () => {
-      close();
-      o.onAgain();
-    }),
-    button(t('lavka.toStore'), () => {
-      close();
-      o.onStore();
-    }),
-  );
-}
-
-/** Что посадить: четыре семени (время роста в часах дня и урожай), галочка «на все пустые» (по умолчанию — да,
- *  чтобы меньше нажимать). Ответ — onPick(семя, на все ли); закрыть — крестик. Вернёт функцию «закрыть». */
-export function seedPicker(empty: number, onPick: (seed: Seed, all: boolean) => void, onClose: () => void): () => void {
+/** Что посадить на эту грядку: четыре семени — время роста в часах дня и урожай. Ответ — onPick(семя);
+ *  закрыть — крестик. Вернёт функцию «закрыть». */
+export function seedPicker(onPick: (seed: Seed) => void, onClose: () => void): () => void {
   styles();
   const box = el('div', 'lv-seeds');
   const head = el('h2', '', t('lavka.seed.title'));
   const x = el('button', 'x', '×');
   head.append(x);
   const row = el('div', 'lv-seed-row');
-  const allBox = el('label', 'lv-seed-all');
-  const check = document.createElement('input');
-  check.type = 'checkbox';
-  check.checked = empty > 1;
-  allBox.append(check, document.createTextNode(empty > 1 ? t('lavka.seed.all', { n: empty }) : t('lavka.seed.onlyThis')));
-  if (empty <= 1) check.disabled = true;
   const hour = 20; // секунд в часе дня (day.ts: DAY_SECONDS / 12)
   for (const seed of SEEDS) {
     const card = el('button', 'lv-seed');
@@ -329,11 +264,11 @@ export function seedPicker(empty: number, onPick: (seed: Seed, all: boolean) => 
     card.addEventListener('click', () => {
       sound.pop(1);
       close();
-      onPick(seed, check.checked);
+      onPick(seed);
     });
     row.append(card);
   }
-  box.append(head, row, allBox);
+  box.append(head, row);
   pixelize(box);
   document.body.append(box);
   const close = (): void => box.remove();

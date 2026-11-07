@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   BEDS,
-  CHEESE_MILK,
-  CHEESE_TIME,
   COW_FILL,
   COW_YIELD,
   DAY_SECONDS,
@@ -19,11 +17,11 @@ import {
   feedHay,
   harvest,
   milkAll,
+  nextDay,
   pickEggs,
   plant,
   plantAll,
   shakeTree,
-  startCheese,
   startDay,
   summary,
   takeHoney,
@@ -44,8 +42,6 @@ function busyFarmer(d: Day): Day {
   x = plantAll(x, 'carrot').day;
   for (let h = 0; h < x.hives.length; h++) x = takeHoney(x, h).day;
   for (let t = 0; t < x.trees.length; t++) x = shakeTree(x, t).day;
-  const wantCheese = x.orders.some((o) => o.good === 'cheese' && !o.done && !o.failed);
-  if (x.stock.milk > (wantCheese ? CHEESE_MILK - 1 : 6)) x = startCheese(x).day;
   return x;
 }
 
@@ -136,17 +132,25 @@ describe('лавка: ферма', () => {
     expect(plantAll(got.day, 'dill').n).toBe(0);
   });
 
-  it('сыр: забирает молоко, через время — головка на складе', () => {
-    let d: Day = { ...startDay(sat), stock: { milk: CHEESE_MILK, eggs: 0, veg: 0, honey: 0, cheese: 0 } };
-    d = startCheese(d).day;
-    expect(d.stock.milk).toBe(0);
-    expect(startCheese(d).n).toBe(0);
-    d = tick(d, CHEESE_TIME);
-    expect(d.stock.cheese + d.orders.filter((o) => o.good === 'cheese').reduce((a, o) => a + o.have, 0)).toBe(1);
+  it('дни идут подряд: ферма, склад и монеты остаются, часы и заказы — новые', () => {
+    let d = startDay(sat);
+    d = plant(d, 2, 'pumpkin').day;
+    d = { ...tick(d, 100), coins: 300, stock: { milk: 5, eggs: 0, veg: 9, honey: 2 } };
+    const n = nextDay(d, PLANS[1]);
+    expect(n.t).toBe(0);
+    expect(n.coins).toBe(300);
+    expect(n.startCoins).toBe(300);
+    expect(n.beds[2]).toEqual(d.beds[2]);
+    expect(n.cows).toEqual(d.cows);
+    expect(n.orders.map((o) => o.id)).toEqual(PLANS[1].orders.map((o) => o.id));
+    // утренний запас уходит в заказы, остальное — на складе
+    const total = (x: typeof n) => Object.values(x.stock).reduce((a, b) => a + b, 0) + x.orders.reduce((a, o) => a + (o.done || o.failed ? 0 : o.have), 0);
+    expect(total(n)).toBe(total(d));
+    expect(summary(n).coins).toBe(0);
   });
 
   it('лавка продаёт со склада; нет товара — покупатель ушёл ни с чем', () => {
-    let d: Day = { ...startDay(sat), stock: { milk: 1, eggs: 0, veg: 0, honey: 0, cheese: 0 } };
+    let d: Day = { ...startDay(sat), stock: { milk: 1, eggs: 0, veg: 0, honey: 0 } };
     const a = buy(d, 'milk', 2);
     expect(a.n).toBe(1);
     expect(a.coins).toBe(8);

@@ -1,15 +1,15 @@
 // «Лавка «Своё»» — правила одного дня на ферме (вторая игра, docs/farm/LAVKA.md). Без Phaser: сцена (src/lavka)
 // показывает и зовёт эти функции, тесты — tests/lavkaDay.test.ts.
 //
-// Работа — на ферме, касаниями, и касаний немного: огород — шесть больших грядок, на каждую сам выбираешь семена
-// (укроп поспевает быстро и даёт мало, тыква — долго и много; можно засеять все пустые разом); корова одна, и все
-// готовые в загоне доятся одним касанием (их станет больше); яйца копятся в гнёздах, собираются все разом; сад —
-// яблони и ульи. Без сена молока нет, без зерна куры не несутся. Из молока в лавке варят сыр. Собранное идёт
-// сначала в заказы дня (набрал к сроку — цена и премия), остальное — в лавку, а лавка продаёт сама, папа за
-// прилавком. Чего нет на складе, того не купят.
+// Работа — на ферме, касаниями, и касаний немного: огород — шесть грядок, на каждую сам выбираешь семена (укроп
+// поспевает быстро и даёт мало, тыква — долго и много); корова одна, и все готовые в загоне доятся одним касанием
+// (их станет больше); яйца копятся в гнёздах, собираются все разом; сад — яблони и ульи. Без сена молока нет
+// (сено привозит трактор), без зерна куры не несутся. Собранное идёт сначала в заказы дня (набрал к сроку — цена и
+// премия), остальное — в лавку, а лавка продаёт сама, папа за прилавком. Чего нет на складе, того не купят.
+// Дни идут подряд: ферма, склад и монеты переходят в следующий день (nextDay).
 
-export type Good = 'milk' | 'eggs' | 'veg' | 'honey' | 'cheese';
-export const GOODS: Good[] = ['milk', 'eggs', 'veg', 'honey', 'cheese'];
+export type Good = 'milk' | 'eggs' | 'veg' | 'honey';
+export const GOODS: Good[] = ['milk', 'eggs', 'veg', 'honey'];
 export type From = 'road' | 'bus' | 'train';
 
 /** День с 8:00 до 20:00 за столько секунд (×1): час — 20 секунд. */
@@ -18,7 +18,7 @@ export const OPEN_HOUR = 8;
 export const CLOSE_HOUR = 20;
 const HOUR = DAY_SECONDS / (CLOSE_HOUR - OPEN_HOUR);
 
-export const PRICE: Record<Good, number> = { milk: 8, eggs: 3, veg: 5, honey: 18, cheese: 35 };
+export const PRICE: Record<Good, number> = { milk: 8, eggs: 3, veg: 5, honey: 18 };
 
 /** Семена: сколько секунд растёт и сколько овощей даёт. Чем дольше — тем больше за одно касание. */
 export type Seed = 'dill' | 'carrot' | 'strawberry' | 'pumpkin';
@@ -43,9 +43,6 @@ export const EGGS_MAX = 6;
 export const HIVE_FILL = 50;
 export const TREE_FILL = 45;
 export const TREE_YIELD = 4;
-/** Сыр: на головку уходит столько молока и столько секунд. */
-export const CHEESE_MILK = 3;
-export const CHEESE_TIME = 30;
 
 export const COWS = 1;
 export const HENS = 4;
@@ -94,11 +91,11 @@ export interface Day {
   beds: Bed[];
   hives: number[];
   trees: number[];
-  /** Сыр в сыроварне: сколько секунд до готовности (0 — не варится). */
-  cheese: number;
   /** Склад лавки: что собрано и ждёт покупателя. */
   stock: Record<Good, number>;
   coins: number;
+  /** Сколько монет было утром: выручка дня — coins - startCoins. */
+  startCoins: number;
   collected: Record<Good, number>;
   sold: Record<Good, number>;
   /** Хотели, а не было. */
@@ -109,17 +106,13 @@ export interface Day {
   idle: { cows: number; eggs: number; empty: number };
 }
 
-const zero = (): Record<Good, number> => ({ milk: 0, eggs: 0, veg: 0, honey: 0, cheese: 0 });
+const zero = (): Record<Good, number> => ({ milk: 0, eggs: 0, veg: 0, honey: 0 });
 
 /** Утро: корова почти полна, в гнёздах пара яиц, половина огорода засажена, ульи и яблони — в начале. */
 export function startDay(plan: Plan): Day {
   // Что лежит в лавке с утра, сразу откладывается в заказы дня.
-  const stock: Record<Good, number> = { milk: 2, eggs: 2, veg: 4, honey: 0, cheese: 1 };
-  const orders = plan.orders.map((o) => {
-    const have = Math.min(o.need - 1, stock[o.good]);
-    stock[o.good] -= have;
-    return { ...o, have, done: false, failed: false };
-  });
+  const stock: Record<Good, number> = { milk: 2, eggs: 2, veg: 4, honey: 0 };
+  const orders = reserve(plan, stock);
   return {
     t: 0,
     cows: [0.7],
@@ -137,9 +130,9 @@ export function startDay(plan: Plan): Day {
     ],
     hives: [0.6, 0.2],
     trees: [0.5, 0.85],
-    cheese: 0,
     stock,
     coins: 0,
+    startCoins: 0,
     collected: zero(),
     sold: zero(),
     missed: zero(),
@@ -147,6 +140,23 @@ export function startDay(plan: Plan): Day {
     orders,
     idle: { cows: 0, eggs: 0, empty: 0 },
   };
+}
+
+/** Заказы дня; что лежит в лавке с утра, сразу откладывается в них (stock меняется). */
+function reserve(plan: Plan, stock: Record<Good, number>): Order[] {
+  return plan.orders.map((o) => {
+    const have = Math.min(o.need - 1, stock[o.good]);
+    stock[o.good] -= have;
+    return { ...o, have, done: false, failed: false };
+  });
+}
+
+/** Новый день: ферма, склад и монеты остаются как были вечером; часы, заказы и счёт дня — с начала. */
+export function nextDay(d: Day, plan: Plan): Day {
+  const stock = { ...d.stock };
+  for (const o of d.orders) if (!o.done && !o.failed) stock[o.good] += o.have;
+  const orders = reserve(plan, stock);
+  return { ...d, t: 0, stock, orders, startCoins: d.coins, collected: zero(), sold: zero(), missed: zero(), served: 0, idle: { cows: 0, eggs: 0, empty: 0 } };
 }
 
 const fill = (v: number, dt: number, seconds: number): number => Math.min(1, v + dt / seconds);
@@ -176,8 +186,7 @@ export function tick(d: Day, dt: number): Day {
     }
     return b.grow >= 1 ? b : { ...b, grow: fill(b.grow, dt, SEED[b.seed].grow) };
   });
-  const cheese = d.cheese > 0 ? Math.max(0, d.cheese - dt) : 0;
-  let next: Day = {
+  const next: Day = {
     ...d,
     t,
     cows,
@@ -187,10 +196,8 @@ export function tick(d: Day, dt: number): Day {
     beds,
     hives: d.hives.map((h) => fill(h, dt, HIVE_FILL)),
     trees: d.trees.map((h) => fill(h, dt, TREE_FILL)),
-    cheese,
     idle,
   };
-  if (d.cheese > 0 && cheese === 0) next = add(next, 'cheese', 1);
   return settleOrders(next);
 }
 
@@ -280,12 +287,6 @@ export function shakeTree(d: Day, tree: number): { day: Day; n: number } {
   return { day: add({ ...d, trees: d.trees.map((h, i) => (i === tree ? 0 : h)) }, 'veg', TREE_YIELD), n: TREE_YIELD };
 }
 
-/** Поставить сыр: забирает молоко со склада лавки, через CHEESE_TIME секунд — головка на складе. */
-export function startCheese(d: Day): { day: Day; n: number } {
-  if (d.cheese > 0 || d.stock.milk < CHEESE_MILK) return { day: d, n: 0 };
-  return { day: { ...d, cheese: CHEESE_TIME, stock: { ...d.stock, milk: d.stock.milk - CHEESE_MILK } }, n: 1 };
-}
-
 // ---------------------------------------------------------------- лавка и заказы
 
 /** Не успел к сроку — заказ сорван, собранное для него уходит на склад лавки. */
@@ -326,7 +327,7 @@ export interface Arrival {
   people: number;
 }
 
-/** План дня (виден утром): автобус с туристами (мёд и сыр), электрички с дачниками (молоко, яйца, овощи), заказы. */
+/** План дня: автобус с туристами (мёд и овощи), электрички с дачниками (молоко, яйца, овощи), заказы. */
 export interface Plan {
   dow: 'sat' | 'sun' | 'mon';
   bus: Arrival | null;
@@ -352,7 +353,7 @@ export const PLANS: Plan[] = [
     trains: [{ at: atHour(17), people: 4 }],
     orders: [
       { id: 'tourists', good: 'honey', need: 3, by: atHour(13), bonus: 40 },
-      { id: 'fair', good: 'cheese', need: 2, by: atHour(17), bonus: 60 },
+      { id: 'fair', good: 'veg', need: 20, by: atHour(17), bonus: 60 },
     ],
   },
   {
@@ -397,8 +398,8 @@ export function visitors(plan: Plan = PLANS[0], seed = 1): Visitor[] {
   const add = (at: number, from: From, wants: Good): void => {
     out.push({ at, from, wants, qty: wants === 'eggs' ? 2 + Math.floor(r() * 3) : r() < 0.35 ? 2 : 1 });
   };
-  for (let at = 4; at < DAY_SECONDS - 10; at += 8 + r() * 4) add(at, 'road', pick(r, { milk: 3, eggs: 2.5, veg: 3, honey: 0.8, cheese: 0.8 }));
-  if (plan.bus) for (let i = 0; i < plan.bus.people; i++) add(plan.bus.at + 2 + i * 1.3, 'bus', pick(r, { honey: 4, cheese: 4, veg: 1 }));
+  for (let at = 4; at < DAY_SECONDS - 10; at += 8 + r() * 4) add(at, 'road', pick(r, { milk: 3, eggs: 2.5, veg: 3, honey: 1 }));
+  if (plan.bus) for (let i = 0; i < plan.bus.people; i++) add(plan.bus.at + 2 + i * 1.3, 'bus', pick(r, { honey: 4, veg: 3, milk: 1 }));
   for (const tr of plan.trains) for (let i = 0; i < tr.people; i++) add(tr.at + 3 + i * 1.6, 'train', pick(r, { milk: 5, eggs: 3, veg: 3 }));
   return out.sort((a, b) => a.at - b.at);
 }
@@ -436,5 +437,5 @@ export function summary(d: Day): Summary {
   ];
   worst.sort((a, b) => b[1] - a[1]);
   const tip: Tip = stars >= 5 || worst[0][1] < 1 ? 'good' : worst[0][0];
-  return { coins: d.coins, collected: d.collected, sold: d.sold, missedTotal, served: d.served, ordersDone, ordersTotal: d.orders.length, happy, stars, tip };
+  return { coins: d.coins - d.startCoins, collected: d.collected, sold: d.sold, missedTotal, served: d.served, ordersDone, ordersTotal: d.orders.length, happy, stars, tip };
 }

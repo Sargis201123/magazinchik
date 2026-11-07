@@ -25,48 +25,46 @@ GREY, GREY_D, GREY_L = H("#8b9bb4"), H("#5a6988"), H("#c0cbdc")
 STRAW, STRAW_D, STRAW_L = H("#e7cc9f"), H("#c49a6c"), H("#f8ebcf")
 PINK, PINK_D = H("#f6a5a5"), H("#e07b7b")
 
-BED_W, BED_H = 148, 72
+BED_W, BED_H = 84, 44
 CROP_TOP = 14  # растения выше борта: картинка культур на столько выше грядки
 
 
 # ---------------------------------------------------------------- огород
 
 
-def raised_bed(seed=0):
-    """Грядка-короб 148×72: толстые доски с торцами-столбиками, рыхлая тёмная земля тремя гребнями."""
-    w, h = BED_W, BED_H
+def raised_bed(seed=0, w=BED_W, h=BED_H):
+    """Грядка-короб: толстые доски с торцами-столбиками, рыхлая тёмная земля гребнями."""
     c = Canvas(w, h)
     rnd = random.Random(seed)
     # борт: верхняя кромка светлая, передняя стенка (низ) — высокая и темнее, видно, что короб приподнят
     c.rect(1, 1, w - 2, h - 2, WOOD)
     c.hline(1, 1, w - 2, WOOD_LL)
     c.hline(1, 2, w - 2, WOOD_L)
-    c.rect(1, h - 11, w - 2, 10, WOOD_D)
-    c.hline(1, h - 11, w - 2, WOOD)
-    c.hline(1, h - 6, w - 2, WOOD_DD)
-    for x in range(14, w - 8, 26):  # шляпки гвоздей и стыки досок
-        c.px(x, h - 9, WOOD_DD)
-        c.px(x, h - 4, WOOD_DD)
-        c.vline(x + 6, h - 10, 4, WOOD_DD)
+    c.rect(1, h - 9, w - 2, 8, WOOD_D)
+    c.hline(1, h - 9, w - 2, WOOD)
+    c.hline(1, h - 5, w - 2, WOOD_DD)
+    for x in range(12, w - 8, 22):  # шляпки гвоздей и стыки досок
+        c.px(x, h - 7, WOOD_DD)
+        c.px(x, h - 3, WOOD_DD)
     # земля
-    c.rect(7, 7, w - 14, h - 19, SOIL)
-    rows = 3
-    rh = (h - 19) / rows
+    c.rect(6, 6, w - 12, h - 15, SOIL)
+    rows = 2
+    rh = (h - 15) / rows
     for r in range(rows):
-        y0 = 7 + int(r * rh)
-        y1 = 7 + int((r + 1) * rh)
-        c.hline(7, y0, w - 14, SOIL_DD)            # борозда
-        c.hline(7, y0 + 1, w - 14, SOIL_D)
-        c.hline(7, y0 + 3, w - 14, SOIL_L)          # гребень на свету
-        for _ in range((w - 14) // 6):
-            x = rnd.randrange(8, w - 8)
+        y0 = 6 + int(r * rh)
+        y1 = 6 + int((r + 1) * rh)
+        c.hline(6, y0, w - 12, SOIL_DD)            # борозда
+        c.hline(6, y0 + 1, w - 12, SOIL_D)
+        c.hline(6, y0 + 3, w - 12, SOIL_L)          # гребень на свету
+        for _ in range((w - 12) // 5):
+            x = rnd.randrange(7, w - 7)
             y = rnd.randrange(y0 + 2, y1 - 1)
             c.px(x, y, rnd.choice((SOIL_L, SOIL_D, SOIL_L)))
     # торцы-столбики по углам
-    for x in (1, w - 8):
-        c.rect(x, 1, 7, 7, WOOD_D)
-        c.hline(x, 1, 7, WOOD_L)
-        c.px(x + 3, 4, WOOD_DD)
+    for x in (1, w - 7):
+        c.rect(x, 1, 6, 6, WOOD_D)
+        c.hline(x, 1, 6, WOOD_L)
+        c.px(x + 2, 3, WOOD_DD)
     c.outline(INK)
     return c.img
 
@@ -169,23 +167,19 @@ def _pumpkin(c, x, y, stage, rnd):
         c.px(px + 2, py - 7, LEAF_D)
 
 
-def crops(seed, stage, bed_seed=0):
-    """Культуры на грядке 148×(72+CROP_TOP): три ряда по гребням. stage 1 — всходы, 2 — растёт, 3 — поспело."""
-    w, h = BED_W, BED_H + CROP_TOP
-    c = Canvas(w, h)
+def crops(seed, stage, bed_seed=0, w=BED_W, h=BED_H):
+    """Культуры на грядке w×(h+CROP_TOP): два ряда по гребням. stage 1 — всходы, 2 — растёт, 3 — поспело."""
+    hh = h + CROP_TOP
+    c = Canvas(w, hh)
     rnd = random.Random(bed_seed * 13 + stage)
-    rows = (CROP_TOP + 22, CROP_TOP + 40, CROP_TOP + 57)
-    cols = 4 if seed == "pumpkin" else 5
+    rows = (CROP_TOP + 16, CROP_TOP + 30) if seed != "pumpkin" else (CROP_TOP + 26,)
+    cols = 3 if seed == "pumpkin" else 4
     for ri, ry in enumerate(rows):
-        if seed == "pumpkin" and ri == 1:
-            continue
         for k in range(cols):
-            span = (w - 30) / (cols - 1)
-            x = int(15 + k * span + (ri % 2) * (span / 2 if seed != "pumpkin" else 0)) - (6 if ri % 2 and seed != "pumpkin" else 0)
-            x = max(12, min(w - 13, x))
+            span = (w - 26) / (cols - 1)
+            x = int(13 + k * span + (ri % 2) * 6) - (3 if ri % 2 else 0)
+            x = max(11, min(w - 12, x))
             y = ry + rnd.randrange(-1, 2)
-            if seed == "pumpkin" and ri == 2:
-                y -= 7
             if stage == 1:
                 _sprout(c, x, y)
             elif seed == "dill":
@@ -533,5 +527,257 @@ def hay_bale():
     rnd = random.Random(4)
     for _ in range(40):
         c.px(rnd.randrange(3, 31), rnd.randrange(5, 20), rnd.choice((STRAW_D, STRAW_L)))
+    c.outline(INK)
+    return c.img
+
+
+# ---------------------------------------------------------------- четвёртая раскладка: крупные постройки
+
+
+def barn_big():
+    """Амбар 180×156 фасадом: двускатная крыша черепицей с коньком, сеновал с балкой и крюком, ворота
+    крест-накрест (одна створка приоткрыта — внутри сено), окошки с наличниками, фонарь, каменный цоколь."""
+    w, h = 180, 156
+    c = Canvas(w, h)
+    rnd = random.Random(7)
+    RED_B, RED_BD, RED_BL = H("#b13a3a"), H("#8a2a33"), H("#d9574f")
+    ROOF, ROOF_D, ROOF_L = H("#5a6988"), H("#3a4466"), H("#8b9bb4")
+    peak, eave, base = 6, 62, h - 8
+    mid = w // 2
+    # стена с фронтоном
+    for y in range(peak + 8, base):
+        half = 80 if y >= eave else int((y - peak) * 80 / (eave - peak))
+        c.hline(mid - half, y, 2 * half, RED_B)
+    for x in range(mid - 80, mid + 80, 7):
+        for y in range(peak + 8, base):
+            if c.get(x, y)[3]:
+                c.px(x, y, RED_BD)
+                if (y + x) % 23 == 0:
+                    c.px(x + 2, y, RED_BL)
+    for y in range(eave + 2, base, 9):  # свет на досках слева
+        c.hline(mid - 78, y, 2, RED_BL)
+    # крыша: толстые скаты черепицей, свес
+    for t in range(12):
+        for x in range(0, mid + 1):
+            y = eave - int(x * (eave - peak) / mid) + t - 10
+            col = ROOF_L if t < 2 else (ROOF if (x // 4 + t // 3) % 2 else lit(ROOF, -0.08)) if t < 9 else ROOF_D
+            c.px(x, y, col)
+            c.px(w - 1 - x, y, col)
+    c.rect(mid - 3, peak - 2, 6, 5, ROOF_D)
+    # белые углы и балка
+    c.rect(mid - 80, eave, 4, base - eave, CREAM)
+    c.rect(mid + 76, eave, 4, base - eave, CREAM)
+    c.rect(mid - 76, eave + 2, 152, 3, CREAM_D)
+    # сеновал: дверца, сено, балка с крюком
+    c.rect(mid - 16, 26, 32, 28, CREAM)
+    c.rect(mid - 13, 29, 26, 22, H("#2a1d26"))
+    c.rect(mid - 13, 38, 26, 13, STRAW)
+    for x in range(mid - 13, mid + 13, 2):
+        c.px(x, 37, STRAW_L)
+        c.px(x + 1, 50, STRAW_D)
+    c.rect(mid - 2, 18, 4, 8, WOOD_D)
+    c.vline(mid, 26, 6, GREY_D)
+    c.px(mid + 1, 31, GREY_D)
+    # окошки
+    for wx in (mid - 62, mid + 44):
+        c.rect(wx, eave + 14, 18, 16, CREAM)
+        c.rect(wx + 2, eave + 16, 14, 12, H("#3a4466"))
+        c.rect(wx + 3, eave + 17, 5, 4, H("#8fd3ff"))
+        c.vline(wx + 8, eave + 16, 12, CREAM)
+        c.hline(wx + 2, eave + 21, 14, CREAM)
+        c.rect(wx - 1, eave + 30, 20, 3, WOOD)
+        c.px(wx + 3, eave + 29, H("#e43b44"))       # цветы в ящике
+        c.px(wx + 9, eave + 29, YELLOW)
+        c.px(wx + 14, eave + 29, H("#e43b44"))
+    # ворота: левая створка закрыта (крест), правая приоткрыта — видно сено
+    gx, gy, gw, gh = mid - 34, eave + 20, 68, base - eave - 20
+    c.rect(gx - 3, gy - 3, gw + 6, gh + 3, CREAM)
+    c.rect(gx, gy, gw, gh, H("#2a1d26"))
+    c.rect(gx + 36, gy + gh - 18, 30, 18, STRAW)
+    for x in range(gx + 36, gx + 66, 2):
+        c.px(x, gy + gh - 19, STRAW_L)
+    c.rect(gx, gy, 33, gh, RED_B)
+    c.line(gx, gy, gx + 32, gy + gh - 1, CREAM)
+    c.line(gx + 32, gy, gx, gy + gh - 1, CREAM)
+    c.frame(gx, gy, 33, gh, CREAM)
+    c.rect(gx + 58, gy, 10, gh, RED_BD)               # приоткрытая створка — в тени
+    c.vline(gx + 58, gy, gh, CREAM)
+    # фонарь над воротами
+    c.rect(mid - 2, gy - 12, 5, 6, YELLOW)
+    c.px(mid - 1, gy - 11, WHITE)
+    c.hline(mid - 3, gy - 13, 7, INK)
+    # цоколь
+    c.rect(mid - 82, base, 164, 7, GREY)
+    for x in range(mid - 80, mid + 82, 9):
+        c.vline(x, base, 7, GREY_D)
+    c.hline(mid - 82, base, 164, GREY_L)
+    c.outline(INK)
+    return c.img
+
+
+def coop_big():
+    """Курятник 136×106: домик на ножках с красной крышей, круглым окном и трапом; справа пристроен
+    гнездовой ящик с откидной крышкой — три ячейки с соломой (яйца сцена кладёт: середины x 103, 115, 127,
+    низ — y 72)."""
+    w, h = 136, 106
+    c = Canvas(w, h)
+    rnd = random.Random(3)
+    ROOF, ROOF_D, ROOF_L = H("#c0392b"), H("#7a2230"), H("#e8604f")
+    WALL, WALL_D, WALL_L = H("#f2d3ab"), H("#c9a27a"), H("#fbe6c8")
+    # ножки
+    for x in (12, 30, 70, 84):
+        c.rect(x, 82, 4, 22, WOOD_D)
+        c.vline(x, 82, 22, WOOD)
+    # трап с перекладинами
+    for i in range(16):
+        c.hline(36 + i, 82 + i, 14, WOOD if i % 4 else WOOD_DD)
+    # стена домика
+    c.rect(6, 40, 84, 44, WALL)
+    for y in range(44, 84, 5):
+        c.hline(6, y, 84, WALL_D)
+        c.hline(6, y + 1, 84, WALL_L) if y % 10 == 4 else None
+    c.vline(6, 40, 44, WALL_L)
+    c.vline(89, 40, 44, WALL_D)
+    # круглое окно и дверца
+    c.ellipse(26, 58, 8, 8, CREAM)
+    c.ellipse(26, 58, 6, 6, H("#2a1d26"))
+    c.px(24, 56, H("#8fd3ff"))
+    c.rect(52, 56, 18, 28, H("#2a1d26"))
+    c.frame(51, 55, 20, 29, WOOD_D)
+    c.ellipse(60.5, 66, 3, 3, WHITE)                  # курица выглядывает
+    c.px(62, 65, INK)
+    c.px(64, 66, ORANGE_L)
+    c.px(60, 62, RED)
+    c.px(61, 62, RED)
+    # крыша-домик
+    for i in range(34):
+        x0 = 48 - int(i * 1.5) - 2
+        x1 = 48 + int(i * 1.5) + 2
+        col = ROOF_L if i < 3 else (ROOF if (i // 4) % 2 else lit(ROOF, -0.1))
+        c.hline(max(0, x0), 6 + i, min(w, x1) - max(0, x0), col)
+    c.hline(0, 40, 98, ROOF_D)
+    c.hline(0, 41, 98, ROOF_D)
+    c.rect(44, 2, 8, 6, ROOF_D)
+    # гнездовой ящик справа: короб с крышкой, три ячейки
+    bx, by = 92, 46
+    c.rect(bx, by, 42, 30, WOOD)
+    c.hline(bx, by, 42, WOOD_L)
+    for i in range(3):
+        cx = bx + 3 + i * 13
+        c.rect(cx, by + 6, 11, 18, H("#2a1d26"))
+        c.rect(cx, by + 18, 11, 6, STRAW)
+        c.hline(cx, by + 17, 11, STRAW_L)
+        c.hline(cx, by + 23, 11, STRAW_D)
+    c.rect(bx, by + 24, 42, 6, WOOD_D)
+    c.hline(bx, by + 24, 42, WOOD)
+    for i in range(6):                                 # наклонная крышка
+        c.hline(bx - 1, by - 6 + i, 44, ROOF if i > 1 else ROOF_L)
+    c.hline(bx - 1, by, 44, ROOF_D)
+    c.rect(bx + 4, by + 30, 3, 18, WOOD_D)
+    c.rect(bx + 36, by + 30, 3, 18, WOOD_D)
+    c.outline(INK)
+    return c.img
+
+
+def skep():
+    """Улей-колода 44×48: соломенный купол кольцами, тёмный леток, на деревянной подставке; на куполе — капля
+    мёда и пара пчёл."""
+    w, h = 44, 48
+    c = Canvas(w, h)
+    # подставка
+    c.rect(4, 38, 36, 4, WOOD)
+    c.hline(4, 38, 36, WOOD_L)
+    c.hline(4, 41, 36, WOOD_DD)
+    for x in (7, 34):
+        c.rect(x, 42, 3, 5, WOOD_D)
+    # купол
+    for y in range(4, 38):
+        t = (38 - y) / 34
+        half = int(18 * math.sqrt(max(0, 1 - (1 - t) ** 2 * 0.0 - t ** 2.2)) + 0.5) if t < 1 else 0
+        half = max(2, half)
+        ring = (y - 4) // 5
+        base = STRAW if ring % 2 == 0 else H("#d9b47a")
+        c.hline(22 - half, y, 2 * half, base)
+        if (y - 4) % 5 == 4:
+            c.hline(22 - half, y, 2 * half, STRAW_D)
+        c.px(22 - half, y, STRAW_D)
+        c.px(21 + half, y, H("#a8804e"))
+    for y in range(8, 30):                              # свет слева-сверху
+        t = (38 - y) / 34
+        half = int(18 * math.sqrt(max(0, 1 - t ** 2.2)))
+        c.px(22 - half + 3, y, STRAW_L)
+    # леток
+    c.ellipse(22, 33, 4, 3, H("#2a1d26"))
+    c.hline(19, 36, 7, WOOD_D)
+    # мёд течёт
+    c.vline(31, 26, 5, ORANGE_L)
+    c.px(31, 31, ORANGE)
+    c.px(30, 26, YELLOW)
+    # макушка
+    c.rect(20, 2, 4, 3, STRAW_D)
+    c.outline(INK)
+    return c.img
+
+
+def hay_shed():
+    """Сенник 156×100: навес на столбах, задняя стенка из досок, пол — утоптанная солома (тюки кладёт сцена)."""
+    w, h = 156, 100
+    c = Canvas(w, h)
+    ROOF, ROOF_D, ROOF_L = H("#8f563b"), H("#5e3a2a"), H("#b86f50")
+    # задняя стенка
+    c.rect(6, 22, w - 12, 64, WOOD_D)
+    for x in range(6, w - 6, 8):
+        c.vline(x, 22, 64, WOOD_DD)
+        c.vline(x + 1, 22, 64, WOOD)
+    # пол
+    c.rect(4, 80, w - 8, 14, STRAW_D)
+    rnd = random.Random(5)
+    for _ in range(90):
+        c.px(rnd.randrange(5, w - 5), rnd.randrange(81, 93), rnd.choice((STRAW, STRAW_L, STRAW_D)))
+    # столбы
+    for x in (4, w // 2 - 2, w - 9):
+        c.rect(x, 18, 5, 78, WOOD)
+        c.vline(x, 18, 78, WOOD_L)
+        c.vline(x + 4, 18, 78, WOOD_DD)
+    # крыша — односкатная, доски-тёс
+    for i in range(20):
+        c.hline(0, 2 + i, w, ROOF_L if i < 2 else (ROOF if (i // 3) % 2 else lit(ROOF, -0.1)))
+    for x in range(0, w, 12):
+        c.vline(x, 4, 18, ROOF_D)
+    c.hline(0, 21, w, ROOF_D)
+    c.outline(INK)
+    return c.img
+
+
+def build_sign():
+    """Табличка «здесь будет стройка» 34×44: столбик, доска с молотком и плюсом, у столбика — кирпич."""
+    w, h = 34, 44
+    c = Canvas(w, h)
+    c.rect(15, 18, 4, 24, WOOD_D)
+    c.vline(15, 18, 24, WOOD)
+    c.round_rect(2, 2, 30, 20, YELLOW, r=2)
+    c.hline(3, 2, 28, H("#fff3a8"))
+    c.hline(3, 21, 28, YELLOW_D)
+    # молоток
+    c.line(8, 17, 16, 9, WOOD_D)
+    c.line(9, 17, 17, 9, WOOD)
+    c.rect(14, 5, 7, 4, GREY_D)
+    c.hline(14, 5, 7, GREY_L)
+    # плюс
+    c.rect(23, 8, 6, 2, LEAF_D)
+    c.rect(25, 6, 2, 6, LEAF_D)
+    c.rect(5, 38, 10, 5, RED_D)
+    c.hline(5, 38, 10, RED)
+    c.outline(INK)
+    return c.img
+
+
+def planks():
+    """Стопка досок 44×12 у стройки."""
+    c = Canvas(44, 12)
+    for i, (x, y, ln) in enumerate(((1, 7, 40), (3, 4, 38), (2, 1, 36))):
+        c.rect(x, y, ln, 3, WOOD if i % 2 else WOOD_L)
+        c.hline(x, y + 2, ln, WOOD_D)
+        c.vline(x, y, 3, WOOD_DD)
     c.outline(INK)
     return c.img
