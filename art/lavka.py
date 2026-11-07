@@ -179,7 +179,10 @@ def build():
     crops = [["cabbage", "carrot", "tomato"], ["strawberry", "potato", "pumpkin"], ["dill", "cabbage", "strawberry"]]
     for r, row in enumerate(crops):
         for c, crop in enumerate(row):
-            lay(F.bed(76, 36, crop, seed=r * 3 + c, wet=(r == 0 and c == 1)), 12 + c * 82, -6 + r * 44)
+            lay(F.bed(76, 36, seed=r * 3 + c), 12 + c * 82, -6 + r * 44)
+            # растения по стадиям — сцена кладёт поверх пустой грядки (art: lavka_crop_<культура><стадия>)
+            for stage in (1, 2, 3):
+                own(f"crop_{crop}{stage}", F.crops(76, 36, crop, stage, seed=r * 3 + c))
     lay(F.pond(), 366, 196)
     lay(F.flowers_strip(80, 10, 2), 360, 158)
 
@@ -235,7 +238,7 @@ def build():
     put(own("greenhouse", F.greenhouse()), 412, 104)
     for x, y in ((372, 160), (398, 166), (424, 160)):
         put(own("hive", N.beehive()), x, y)
-    put(own("tree_apples", N.apples_on(src("tree"), 2)), 280, 18)
+    put(own("tree_apples", N.apples_on(src("tree"), 2)), 456, 150)
     put(own("tree_round_apples", N.apples_on(src("tree_round"), 3)), 290, 196)
     put(own("barn", F.barn()), 562, 136)
     # загон: забор с трёх сторон, поилка
@@ -270,6 +273,10 @@ def build():
     own("duck0", F.duck(0))
     own("duck1", F.duck(1))
     own("tractor", F.tractor())
+    own("bed_wet", F.bed_wet(76, 36))
+    own("egg", F.egg())
+    for name, fn in (("honey", F.icon_honey), ("drop", F.icon_drop), ("hayicon", F.icon_hay), ("grain", F.icon_grain), ("seed", F.icon_seed), ("tomato", F.icon_tomato), ("apple", F.icon_apple)):
+        own(f"ico_{name}", fn())
     own("cart", F.cart())
 
     # ============================================================ ЛАВКА

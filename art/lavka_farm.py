@@ -354,32 +354,57 @@ def scarecrow():
     return ground_shadow(c.img, alpha=40, squash=0.3)
 
 
-def bed(w, h, crop, seed=0, wet=False):
-    """Грядка-короб: борта из досок с торцами, рыхлая земля бороздами, растения крупно в несколько тонов."""
+def bed(w, h, seed=0):
+    """Пустая грядка-короб: борта из досок с торцами, рыхлая земля бороздами (растения — отдельным слоем, crops)."""
     c = Canvas(w, h)
     rnd = random.Random(seed)
-    soil, soil_d, soil_l = (H("#3d2a2a"), H("#2e1f22"), H("#5b3a2e")) if wet else (SOIL, SOIL_D, SOIL_L)
     c.rect(0, 0, w, h, WOOD)
     c.hline(0, 0, w, WOOD_LL)
     c.hline(0, 1, w, WOOD_L)
     c.hline(0, h - 2, w, WOOD_D)
     c.vline(0, 0, h, WOOD_L)
     c.vline(w - 1, 0, h, WOOD_D)
-    for x in (0, w - 3):  # торцы досок
+    for x in (0, w - 3):
         c.rect(x, 0, 3, 3, WOOD_D)
         c.px(x + 1, 1, WOOD_LL)
-    c.rect(3, 3, w - 6, h - 6, soil)
+    c.rect(3, 3, w - 6, h - 6, SOIL)
     for yy in range(5, h - 3, 3):
-        c.hline(3, yy, w - 6, soil_d)
-        c.hline(3, yy - 1, w - 6, soil_l if rnd.random() < 0.5 else soil)
+        c.hline(3, yy, w - 6, SOIL_D)
+        c.hline(3, yy - 1, w - 6, SOIL_L if rnd.random() < 0.5 else SOIL)
     for _ in range(w * h // 14):
-        c.px(rnd.randrange(3, w - 3), rnd.randrange(3, h - 3), rnd.choice((soil_l, soil_d)))
-    rows = [y for y in range(9, h - 3, 10)]
-    for ry in rows:
+        c.px(rnd.randrange(3, w - 3), rnd.randrange(3, h - 3), rnd.choice((SOIL_L, SOIL_D)))
+    c.outline(INK)
+    return c.img
+
+
+def bed_wet(w, h):
+    """Политая земля: тёмный влажный слой поверх борозд (полупрозрачный, только внутри борта)."""
+    c = Canvas(w, h)
+    c.rect(3, 3, w - 6, h - 6, (40, 24, 28, 120))
+    for x in range(6, w - 6, 9):
+        c.px(x, 6 + x % 5, (120, 170, 220, 200))
+    return c.img
+
+
+def crops(w, h, crop, stage, seed=0):
+    """Растения на грядке по стадиям: 1 — всходы, 2 — подросли, 3 — созрели (сам овощ видно)."""
+    c = Canvas(w, h + 6)
+    rnd = random.Random(seed)
+    for ry in range(9, h - 3, 10):
         step = 11 if crop in ("cabbage", "pumpkin") else 8
         for rx in range(8, w - 6, step):
-            plant(c, rx + rnd.randint(-1, 1), ry + rnd.randint(-1, 0), crop, rnd)
-    c.outline(INK)
+            x, y = rx + rnd.randint(-1, 1), ry + rnd.randint(-1, 0) + 6
+            if stage == 1:
+                c.px(x, y - 1, LEAF)
+                c.px(x - 1, y - 2, LEAF_L)
+                c.px(x + 1, y - 2, LEAF)
+            elif stage == 2:
+                c.ellipse(x, y - 1, 2.6, 2, LEAF_D)
+                c.px(x - 1, y - 2, LEAF)
+                c.px(x + 1, y - 3, LEAF_L)
+                c.px(x, y - 3, LEAF)
+            else:
+                plant(c, x, y, crop, rnd)
     return c.img
 
 
@@ -573,3 +598,92 @@ def greenhouse_sized(w, h):
     c.frame(w // 2 - 5, roof_h + 6, 10, h - roof_h - 6, WHITE)
     c.outline(INK)
     return ground_shadow(c.img, alpha=45)
+
+
+# ---------------------------------------------------------------- значки над работой (в облачке) и яйцо на земле
+
+
+def egg():
+    c = Canvas(7, 8)
+    c.ellipse(3.5, 4.4, 3, 3.6, TRIM)
+    c.px(2, 2, WHITE)
+    c.px(2, 3, WHITE)
+    c.hline(2, 7, 3, TRIM_D)
+    c.outline(INK)
+    return c.img
+
+
+def icon_honey():
+    c = Canvas(10, 11)
+    c.rect(1, 3, 8, 7, H("#feae34"))
+    c.vline(2, 4, 5, H("#fee761"))
+    c.hline(1, 9, 8, H("#f77622"))
+    c.rect(1, 1, 8, 2, H("#b86f50"))
+    c.rect(3, 5, 4, 3, TRIM)
+    c.px(4, 6, H("#feae34"))
+    c.outline(INK)
+    return c.img
+
+
+def icon_drop():
+    c = Canvas(8, 10)
+    c.ellipse(4, 6, 3, 3, H("#0099db"))
+    c.vline(4, 1, 3, H("#0099db"))
+    c.hline(3, 3, 3, H("#0099db"))
+    c.px(3, 5, H("#8fd3ff"))
+    c.px(3, 6, WHITE)
+    c.outline(INK)
+    return c.img
+
+
+def icon_hay():
+    c = Canvas(11, 9)
+    c.rect(0, 2, 11, 6, HAY)
+    c.hline(0, 2, 11, HAY_L)
+    for x in range(1, 11, 2):
+        c.vline(x, 3, 4, HAY_D)
+    c.vline(3, 2, 6, WOOD_D)
+    c.vline(7, 2, 6, WOOD_D)
+    c.outline(INK)
+    return c.img
+
+
+def icon_grain():
+    c = Canvas(10, 11)
+    c.round_rect(1, 2, 8, 8, TRIM, r=2)
+    c.rect(3, 0, 4, 3, TRIM_D)
+    for x, y in ((3, 5), (5, 6), (6, 4), (4, 7)):
+        c.px(x, y, H("#feae34"))
+    c.outline(INK)
+    return c.img
+
+
+def icon_seed():
+    c = Canvas(10, 10)
+    c.rect(1, 1, 8, 8, H("#e4a672"))
+    c.hline(1, 1, 8, H("#ead4aa"))
+    c.rect(3, 3, 4, 4, LEAF)
+    c.px(4, 2, LEAF_L)
+    c.outline(INK)
+    return c.img
+
+
+def icon_tomato():
+    c = Canvas(9, 9)
+    c.ellipse(4.5, 5, 3.6, 3.2, H("#e43b44"))
+    c.px(3, 4, H("#f6757a"))
+    c.hline(3, 1, 3, LEAF)
+    c.px(4, 0, LEAF_D)
+    c.outline(INK)
+    return c.img
+
+
+def icon_apple():
+    c = Canvas(9, 9)
+    c.ellipse(4.5, 5, 3.6, 3.4, H("#e43b44"))
+    c.px(3, 4, H("#f6757a"))
+    c.px(4, 1, WOOD_D)
+    c.px(5, 1, LEAF)
+    c.px(6, 0, LEAF)
+    c.outline(INK)
+    return c.img
