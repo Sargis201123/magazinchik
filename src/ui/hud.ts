@@ -319,6 +319,8 @@ export class Hud {
     tomorrow?: string | string[],
     /** Первый день новичка (game/firstday.ts): печать «Отличный первый день!», бабушка прощается до завтра. */
     firstDay = false,
+    /** Вечер 2-го и 3-го дня новичка (firstday.ts learningEvening): бабушка подсказывает, а не ругает. */
+    learning = false,
   ): void {
     const { card, close } = openModal();
     card.classList.add('ui-sum');
@@ -411,7 +413,7 @@ export class Hud {
       });
       card.append(row);
     }
-    card.append(grannySays(day, stats, rating, history, firstDay));
+    card.append(grannySays(day, stats, rating, history, firstDay, learning));
     const later = typeof tomorrow === 'string' ? [tomorrow] : (tomorrow ?? []);
     if (later.length) {
       const line = el('div', 'ui-tomorrow');
@@ -561,8 +563,12 @@ export function stamp(tone: 'gold' | 'red', top: string, big: string, note: stri
 type GrannyMood = 'great' | 'good' | 'slow' | 'lost' | 'down';
 const GRANNY_FACE: Record<GrannyMood, string> = { great: '_happy', good: '', slow: '_sad', lost: '_surprised', down: '_sad' };
 
-/** Бабушка одной фразой оценивает день: по выручке против недели, ушедшим и рейтингу. */
-function grannySays(day: number, stats: DayStats, rating: { before: number; after: number }, history: number[], firstDay = false): HTMLElement {
+/**
+ * Бабушка одной фразой оценивает день: по выручке против недели, ушедшим и рейтингу. learning — 2-й и 3-й
+ * вечер новичка: вместо «ушли», «просел» и «тихий денёк» (выручка ниже первого дня, где помогала она) —
+ * поддержка и главный урок дня: пустую полку нажать.
+ */
+function grannySays(day: number, stats: DayStats, rating: { before: number; after: number }, history: number[], firstDay = false, learning = false): HTMLElement {
   if (firstDay) {
     // Вечер первого дня: бабушка уезжает на дачу и прощается до завтра.
     const box = el('div', 'ui-granny');
@@ -582,11 +588,12 @@ function grannySays(day: number, stats: DayStats, rating: { before: number; afte
           : stats.revenue < avg * 0.8
             ? 'slow'
             : 'good';
+  const learn = learning && (mood === 'lost' || mood === 'down' || mood === 'slow');
   const box = el('div', 'ui-granny');
   const started = performance.now();
   box.append(
-    liveFace(`assets/portrait_grandma${GRANNY_FACE[mood]}.png`, () => performance.now() - started < 1600, 'ui-granny-face'),
-    el('p', '', t(`summary.granny.${mood}.${day % 2}` as TextKey)),
+    liveFace(`assets/portrait_grandma${learn ? '' : GRANNY_FACE[mood]}.png`, () => performance.now() - started < 1600, 'ui-granny-face'),
+    el('p', '', t(learn ? 'summary.granny.learn' : (`summary.granny.${mood}.${day % 2}` as TextKey))),
   );
   return box;
 }

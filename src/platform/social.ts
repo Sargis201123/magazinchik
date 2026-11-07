@@ -173,13 +173,16 @@ export async function claimHelp(): Promise<string[]> {
 
 const ASKED_KEY = 'magazinchik.writeAccess';
 
-/** Один раз спросить разрешение писать игроку (для напоминаний), если он пришёл не через бота. */
-export function askWriteAccessOnce(): void {
+/**
+ * Один раз спросить разрешение писать игроку (для напоминаний), если он пришёл не через бота.
+ * answer — ответ игрока (для аналитики: событие write_access, его шлёт тот, кто спрашивал).
+ */
+export function askWriteAccessOnce(answer?: (granted: boolean) => void): void {
   try {
     if (localStorage.getItem(ASKED_KEY)) return;
     localStorage.setItem(ASKED_KEY, '1');
   } catch {
     return;
   }
-  requestWriteAccess();
+  requestWriteAccess(answer);
 }

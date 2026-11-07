@@ -23,9 +23,9 @@ import { regularById } from '../game/regulars';
 import { collectOrder, dropOrder, orderTeaser, planLetter, planOrder } from '../game/returns';
 import { dramaHeld } from '../game/drama';
 import { todayLocal } from '../platform/live';
-import { askForHelp, claimHelp, sendHelp, socialInfo } from '../platform/social';
+import { askForHelp, askWriteAccessOnce, claimHelp, sendHelp, socialInfo } from '../platform/social';
 import { HELP_REWARD, HELP_THANKS, helpAsked, helpGiven, markHelpAsked, takeHelp } from '../game/help';
-import { reportProgress, track } from '../platform/analytics';
+import { reportProgress, track, writeAnswer } from '../platform/analytics';
 import { decorItem } from '../game/decor';
 import { endSale, WEEK_IDS, WEEK_STEPS, WEEKS } from '../game/weeks';
 import { onbDone } from '../game/onboarding';
@@ -44,7 +44,7 @@ import { canWorkNight, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, startNight } fr
 import { reviewsFor } from '../game/reviews';
 import { lossAdvice } from '../game/losses';
 import { fpsSummary } from '../platform/quality';
-import { BOX_FROM_DAY, BOX_OPENS_DAY, firstDayGift, firstDayRating, gentleDay, grannyBox, grannyStays } from '../game/firstday';
+import { BOX_FROM_DAY, BOX_OPENS_DAY, firstDayGift, gentleDay, grannyBox, grannyStays, learningEvening, quietRating } from '../game/firstday';
 import { tomorrowTeaser } from '../game/nudge';
 import { teaserText } from '../ui/nudge';
 import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook } from './common';
@@ -275,13 +275,15 @@ export function finishDay(scene: StoreScene): void {
   scene.stats.adGuests = adGuests(scene.state, scene.stats.served + scene.stats.lost);
   const ratingBefore = scene.state.rating;
   const rankBefore = rankOf(scene.state.totalRevenue);
-  // Первый день новичка (firstday.ts): итоги праздничные, рейтинг не падает, бабушка вечером уезжает на дачу.
+  // Первый день новичка (firstday.ts): итоги праздничные, бабушка вечером уезжает на дачу.
+  // Тихие дни (1–3): рейтинг не падает; во 2-й и 3-й вечер бабушка подсказывает, а не ругает за ушедших.
   const firstDay = gentleDay(scene.state);
+  const learning = learningEvening(scene.state);
   const grannyHome = grannyStays(scene.state);
   if (grannyHome) newcomer.onbStep(scene, 'bye');
   const night = nightCycle(scene.state, scene.stats);
   const { spoiled, bill, shortfall, skimmed, order, quests, weekly, branch, home } = night;
-  const state = firstDay ? { ...night.state, rating: firstDayRating(scene.state, ratingBefore, night.state.rating) } : night.state;
+  const state = { ...night.state, rating: quietRating(scene.state, ratingBefore, night.state.rating) };
   const cafe = scene.cafeToday;
   scene.cafeToday = null;
   const extra: [string, string][] = [];
@@ -437,10 +439,17 @@ export function finishDay(scene: StoreScene): void {
       teaser,
       scene.state.bankrupt ? undefined : tomorrowLines(scene),
       firstDay,
+      learning,
     );
     morningFlow.summaryLesson(scene, firstDay);
+    // Первый день доигран, бабушка обещала гостинец: спросить, можно ли боту завтра о нём напомнить. Утром
+    // второго дня (как было) — поздно: кто закрыл игру после первого дня, без разрешения напоминаний не получит.
+    if (firstDay) setTimeout(() => askWriteAccessOnce((granted) => writeAnswer(finishedDay, granted)), WRITE_ASK_MS);
   });
 }
+
+/** Через сколько мс после итогов первого дня спросить разрешение писать: печать «Отличный первый день!» уже легла. */
+export const WRITE_ASK_MS = 3000;
 
 /**
  * «Завтра:» в итогах дня: зацепка (nudge.ts), кто из соседей придёт за отложенным и что пришлёт

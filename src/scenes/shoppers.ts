@@ -68,7 +68,7 @@ import { note } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { noteLost } from '../game/losses';
 import { fairTodayTolerance } from '../game/fair';
-import { FIRST_REGULAR, firstRegularVisit, gentleDay, GUEST_OF_DAY_AT, guestOfDay, grannyServesAfter, grannyStays } from '../game/firstday';
+import { FIRST_REGULAR, firstRegularVisit, gentleDay, GUEST_OF_DAY_AT, guestOfDay, grannyServesAfter, grannyStays, quietDays, shelfWaits } from '../game/firstday';
 import {
   ART,
   LIGHT_DEPTH,
@@ -457,8 +457,9 @@ export function spawnCustomer(
   const thief = !forced && !arrived && Math.random() < thiefChance(scene.state.level) * cameraTheft(scene.state) * eyeTheft(scene.state);
   const valya = !forced && !arrived && !thief && !scene.night && !scene.valyaCame && scene.state.day > 1 && Math.random() < 0.15;
   const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
-  // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще.
-  const rareChance = rareGuestChance(scene.state.level) * adRareBoost(scene.state);
+  // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще. В тихие дни новичка (firstday.ts) случайных нет:
+  // редкий гость там один — «гость дня», с объявлением; второй, нечаянный, — лишний шум посреди обучения.
+  const rareChance = quietDays(scene.state) ? 0 : rareGuestChance(scene.state.level) * adRareBoost(scene.state);
   const dayGuest = scene.guestOfDayDue && !forced && !arrived && !thief && !valya && !scene.night;
   if (dayGuest) scene.guestOfDayDue = false;
   const rare = dayGuest || (!forced && !arrived && !thief && !valya && !scene.night && Math.random() < rareChance) ? pickRareGuest(scene.state, Math.random) : null;
@@ -752,11 +753,11 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
 }
 
 /**
- * Первый день новичка, пока бабушка за прилавком: на полке товар кончился, а на складе он есть —
- * покупатель говорит «сейчас поднесут» и ждёт (бабушка или игрок разложат). true — ушёл, пока ждал.
+ * Тихие дни новичка (firstday.ts shelfWaits): на полке товар кончился, а на складе он есть — покупатель
+ * говорит «сейчас поднесут» и ждёт. В первый день разложат бабушка или игрок, во 2-й и 3-й — сам игрок.
  */
 export function shelfWaitNeeded(scene: StoreScene, c: Customer, index: number, id: ProductId): boolean {
-  if (!gentleDay(scene.state) || scene.night || !scene.granny?.active || c.thief) return false;
+  if (!shelfWaits(scene.state, Boolean(scene.granny?.active)) || scene.night || c.thief) return false;
   return (scene.state.shelves[index]?.items[id]?.length ?? 0) === 0 && (scene.state.warehouse[id] ?? []).some((u) => !u.pending);
 }
 

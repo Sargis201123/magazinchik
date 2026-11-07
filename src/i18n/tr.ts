@@ -663,6 +663,7 @@ export const tr: Record<TextKey, string> = {
   "summary.granny.lost.1": "Millet beklemeden gitti. Raflar mı boştu, kuyruk mu uzundu?",
   "summary.granny.down.0": "Puan biraz düştü. Yorumları oku — nedenini orada bulursun.",
   "summary.granny.down.1": "Müşteriler bir şeyden memnun kalmamış. Birlikte hallederiz!",
+  "summary.granny.learn": "Sorun değil, daha öğreniyorsun! Boş rafa dokun, depodan ürün getir. Yarın daha iyi olacak.",
   "popup.combo": "Seri ×{n}!",
   "popup.binFull": "Çöp kovası dolu — çöpü çıkar!",
   "popup.spill": "Eyvah, döküldü!",

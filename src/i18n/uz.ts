@@ -675,6 +675,7 @@ export const uz: Record<TextKey, string> = {
   "summary.granny.lost.1": "Odamlar kutmay ketishdi. Javonlar boʻshmi yoki navbat uzunmi?",
   "summary.granny.down.0": "Reyting biroz tushdi. Sharhlarni oʻqi — oʻsha yerda maslahat bor.",
   "summary.granny.down.1": "Xaridorlar nimadandir norozi. Birga hal qilamiz!",
+  "summary.granny.learn": "Hechqisi yoʻq, sen hali oʻrganyapsan! Boʻsh javonni bos — ombordan mahsulot olib kelasan. Ertaga yaxshiroq boʻladi.",
   "popup.combo": "Seriya ×{n}!",
   "popup.binFull": "Chelak toʻla — axlatni chiqar!",
   "popup.spill": "Voy, toʻkildi!",

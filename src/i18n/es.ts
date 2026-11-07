@@ -663,6 +663,7 @@ export const es: Record<TextKey, string> = {
   "summary.granny.lost.1": "La gente se iba sin esperar. ¿Estantes vacíos o una fila muy larga?",
   "summary.granny.down.0": "La valoración bajó un poco. Lee las reseñas: ahí te dirán por qué.",
   "summary.granny.down.1": "Algo no les gustó a los clientes. ¡Lo resolvemos juntos!",
+  "summary.granny.learn": "¡No pasa nada, todavía estás aprendiendo! Toca un estante vacío para traer productos del almacén. Mañana irá mejor.",
   "popup.combo": "¡Racha ×{n}!",
   "popup.binFull": "¡El cesto está lleno, saca la basura!",
   "popup.spill": "¡Uy, un derrame!",

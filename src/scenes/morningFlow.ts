@@ -31,7 +31,7 @@ import { sonyaVisits, sunflowersPlanted } from '../game/drama';
 import { activeEvent, guestDue } from '../game/live';
 import { liveEvents, todayLocal } from '../platform/live';
 import { helpScan } from '../game/help';
-import { flushSoon, track } from '../platform/analytics';
+import { flushSoon, track, writeAnswer } from '../platform/analytics';
 import { needsRibbon, playDayOne } from '../game/onboarding';
 import { pendingStory } from '../game/story';
 import { tutAt, tutIndex, tutMorning, tutTell } from '../game/tutorial';
@@ -149,8 +149,9 @@ export function collectMail(scene: StoreScene): void {
     saveGame(scene.state);
     scene.hud.update(scene.state, DAY_SECONDS);
   }
-  // Со второго дня, когда бабушка прислала гостинец, — один раз спросить, можно ли боту напоминать о магазине.
-  if (claimed && day > 1) scene.time.delayedCall(4000, askWriteAccessOnce);
+  // Новичка спросили ещё в итогах первого дня (nightShift.ts); здесь — тех, кого не спросили тогда
+  // (прежнее начало, старые сохранения): со второго дня, когда бабушка прислала гостинец, — один раз.
+  if (claimed && day > 1) scene.time.delayedCall(4000, () => askWriteAccessOnce((granted) => writeAnswer(day, granted)));
   postMail(day, {
     letter: letter?.gift,
     gift: claimed ? { gift: claimed.gift, tomorrow: giftTomorrow(scene.state, todayLocal()) } : undefined,
