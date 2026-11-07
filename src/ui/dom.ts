@@ -2,7 +2,7 @@
 // а переводы и вёрстка меню проще, чем внутри Phaser.
 
 import { assetUrl, png } from '../platform/assets';
-import { sheetPng } from './sheet';
+import { sheetPng, uiIconKey } from './sheet';
 import { liteMode } from '../platform/quality';
 
 /**
@@ -407,6 +407,8 @@ const css = `
 .ui-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 8px; align-items: center; padding: 7px 0; }
 .ui-item + .ui-item { border-top: 1px dashed #d8ccb0; }
 .ui-item-icon { width: 30px; height: 36px; image-rendering: pixelated; justify-self: center; }
+/* Детальный значок товара (16×16, ui/sheet.ts UI_ITEMS) — ровно вдвое, без растяжения. */
+.ui-item-icon.ui-ico16, .ui-price-icon.ui-ico16 { width: 32px; height: 32px; align-self: center; }
 .ui-item-name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ui-item-sub { font-size: 12.5px; color: #6a5f58; margin-top: 1px; }
 .ui-item-actions { display: flex; gap: 6px; align-items: center; }
@@ -1078,7 +1080,7 @@ export function pixelize(root: Node): void {
         continue;
       }
       const img = el('img', 'ui-ico');
-      img.src = sheetPng(key);
+      img.src = sheetPng(uiIconKey(key));
       img.alt = part;
       frag.append(img);
     }

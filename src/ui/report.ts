@@ -3,7 +3,7 @@
 import { t } from '../i18n';
 import { PRODUCTS, type StoreState } from '../game/economy';
 import { weekReport } from '../game/reports';
-import { sheetPng } from './sheet';
+import { setItemIcon } from './sheet';
 import { button, el, openModal } from './dom';
 
 export function showReport(state: StoreState): void {
@@ -26,7 +26,7 @@ export function showReport(state: StoreState): void {
   const lines = report.lines.map((l) => {
     const row = el('div', 'ui-item');
     const img = el('img', 'ui-item-art');
-    img.src = sheetPng(`item_${l.id}`);
+    setItemIcon(img, `item_${l.id}`);
     img.alt = '';
     const body = el('div');
     const sub = [t('report.line', { sold: l.sold, profit: l.profit })];

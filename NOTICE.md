@@ -40,3 +40,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Pixel Food — Henry Software (CC0)
+
+Значки хлеба, мяса и рыбы в окнах игры (`public/assets/uiitem_*.png`) сделаны из набора
+[Pixel Food](https://henrysoftware.itch.io/pixel-food) (Henry Software) и переведены в палитру игры
+(`art/ui_items.py`). Лицензия набора — CC0 1.0 (общественное достояние): указывать автора не обязательно,
+указываем с благодарностью. Исходный лист и заметка о лицензии — `art/vendor/henry-pixel-food/`.
