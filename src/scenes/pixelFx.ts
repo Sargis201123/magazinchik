@@ -19,7 +19,7 @@ const look = new Phaser.Math.RandomDataGenerator(['pixelfx']);
 
 /**
  * Чему можно сыграть эффект: любой сцене с лёгкой графикой и скоростью дня — магазину и ферме
- * (src/farm/FarmScene.ts). Магазин подходит целиком.
+ * (src/lavka/LavkaScene.ts). Магазин подходит целиком.
  */
 export type FxScene = Phaser.Scene & { lite: boolean; speed: number };
 

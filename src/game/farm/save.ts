@@ -1,36 +1,10 @@
-// Сохранение «Бабушкиной фермы» — своё, под отдельным ключом: сохранение «Магазинчика» (game/save.ts)
-// ферма не читает и не трогает. Пока только в памяти телефона; облако Telegram — после прототипа.
-// Здесь же — какую игру игрок выбрал на титуле в прошлый раз.
+// Какую игру игрок выбрал на титуле в прошлый раз: «Магазинчик» или вторую — «Лавку «Своё»» (src/lavka).
+// Прогресса у лавки пока нет: это играбельный день, каждый раз с утра.
 
-import { normalizeFarm, type FarmState } from './farm';
-
-const KEY = 'magazinchik.farm';
-const VERSION = 1;
-/** Последний выбор на титульном экране: 'store' или 'farm'. */
+/** Последний выбор на титульном экране: 'store' или 'farm' (вторая игра). */
 const CHOICE_KEY = 'magazinchik.game';
 
 export type GameChoice = 'store' | 'farm';
-
-export function loadFarm(): FarmState | null {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const file = JSON.parse(raw) as { version?: number; state?: unknown };
-    if (file.version !== VERSION) return null;
-    return normalizeFarm(file.state);
-  } catch {
-    return null;
-  }
-}
-
-export function saveFarm(state: FarmState): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify({ version: VERSION, state, savedAt: Date.now() }));
-  } catch {
-    // Хранилища нет (приватный режим) — ферма живёт до закрытия.
-  }
-}
-
 /** Какую игру выбрать на титуле: что выбирал в прошлый раз; не выбирал — «Магазинчик». */
 export function lastChoice(): GameChoice {
   try {
