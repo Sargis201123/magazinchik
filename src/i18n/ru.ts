@@ -2203,6 +2203,12 @@ export const ru = {
   'teaser.tab': 'откроется вкладка «{tab}»',
   'teaser.clear': '{icon} ясно — хороший день для торговли',
   'teaser.weather': '{icon} {name} — утром загляни в прогноз',
+  "weatherStock.today": "{icon} Сегодня {name} — берут чаще: {list}",
+  "weatherStock.tomorrow": "{icon} Прогноз на завтра: {name} — возьмут больше: {list}",
+  "weatherStock.buy": "🌦 Закупить под погоду — {n} 💰",
+  "weatherStock.done": "Запас под погоду взят",
+  "weatherStock.bonus": "Угадал с погодой",
+  "weatherStock.bonusValue": "+{n} 💰",
   // Переезд в гипермаркет (branch.ts, HYPER_LEVEL).
   'store.l6': 'Гипермаркет',
   'hyper.title': 'Переезд в гипермаркет',

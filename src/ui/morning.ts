@@ -89,6 +89,8 @@ import { applyReorder } from '../game/reorder';
 import { AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoAvailable, autoDay, autoMorning, autoToggle } from '../game/autoorder';
 import { declineNeighbour, giveNeighbour, orderBoard, type OrderRow } from '../game/orders';
 import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
+import { forecastOnOpen, forecastTaken, markForecast, weatherBoosts } from '../game/forecast';
+import { forecastLine } from './forecast';
 import { stockOf } from '../game/bakery';
 import { regularName } from './returns';
 
@@ -869,6 +871,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       if (!touring) takeQuietly(getState, mailUpdate);
       endTour();
       if (tutStep(getState()) === 'open') setState(tutPass(getState(), 'open'));
+      // Запас под погоду уже лежит (докупил вручную или осталось со вчера) — вечером тоже бонус (forecast.ts).
+      setState(forecastOnOpen(getState(), guestsToday(getState())));
       coach?.hide();
       coach?.skipButton(false);
       close();
@@ -1224,7 +1228,32 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       el('div', 'ui-muted', list),
     );
     if (plan.cut) box.append(el('div', 'ui-note', t(plan.short === 'money' ? 'restock.cutMoney' : 'restock.cutRoom')));
+    weatherStock(state, box);
     return box;
+  };
+
+  /**
+   * Погода дня (forecast.ts): что сегодня берут чаще и кнопка «Под погоду» — запас с поправкой на погоду.
+   * «Закупить нужное» берёт по среднему, поэтому решение за игроком; взял — вечером «Угадал с погодой».
+   */
+  const weatherStock = (state: StoreState, box: HTMLElement): void => {
+    if (!weatherBoosts(state).length) return;
+    box.append(el('div', 'ui-forecast', forecastLine(state, state.day, 'today')));
+    const plan = restockPlan(state, priceOf, guestsToday(state), [], undefined, true);
+    if (!plan.lines.length) {
+      if (forecastTaken(state)) box.append(el('div', 'ui-muted', `✅ ${t('weatherStock.done')}`));
+      return;
+    }
+    box.append(
+      button(t('weatherStock.buy', { n: plan.total }), () => {
+        const fresh = restockPlan(getState(), priceOf, guestsToday(getState()), [], undefined, true);
+        if (!fresh.lines.length) return;
+        const result = applyReorder(getState(), fresh, (line) => badBatch(line.sid, getState().day, Math.random()));
+        if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
+        const bought = result.state.money < getState().money;
+        update(bought ? markForecast(result.state) : result.state, result.badLine || !bought ? 'error' : 'success');
+      }, 'ui-btn ui-btn-weather'),
+    );
   };
 
   /** Список по товарам: остаток, сколько нужно на день, лучшая цена и у кого, «+1» / «+5». */

@@ -707,6 +707,8 @@ export interface StoreState {
   liveRecent?: import('./minievents').LiveKind[];
   /** Автозаказ: включён ли, лимит и что купил сегодня (autoorder.ts). */
   autoOrder?: import('./autoorder').AutoOrder;
+  /** В какой день игрок взял запас под погоду (forecast.ts): вечером — бонус «Угадал с погодой». */
+  forecast?: { day: number };
   /** Бабушкино обучение: false — показать (новая игра или «пройти заново»), нет поля — старое сохранение. */
   tourDone?: boolean;
   /**
