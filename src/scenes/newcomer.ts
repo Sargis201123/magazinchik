@@ -11,6 +11,9 @@ import { sound } from '../platform/sound';
 import { withUpgrades } from '../game/upgrades';
 import { flushSoon, track } from '../platform/analytics';
 import { firstWant, markOnb, onbDone, playDayOne, type OnbStep } from '../game/onboarding';
+import { askShopName } from '../ui/opening';
+import { haptic } from '../platform/telegram';
+import * as pixelFx from './pixelFx';
 import { firstSaleStamp, type SayLine } from '../ui/onboarding';
 import { TUT_IGNORE_MS, TUT_WAIT_MS, tutAt, tutIndex, tutNext, tutPass, tutPatient, tutSkip, tutStep, tutTell, type TutStep } from '../game/tutorial';
 import type { Spot } from '../ui/coach';
@@ -171,6 +174,87 @@ export function onboardingDay(scene: StoreScene): void {
       if (scene.running && !onbDone(scene.state, 'sale') && !scene.onbSaid.has('serve')) grannySays(scene, { id: 'shop', text: t('onb.shop'), hold: 2600 });
     });
   });
+}
+
+/**
+ * Открытие магазина в начале новой игры (решение автора 07.11): бабушка спрашивает название — оно сразу
+ * загорается на вывеске; на входе натянута красная ленточка с бантом, касание — ножницы, половинки ленты
+ * разлетаются, конфетти и фанфары. Потом — обычный первый день (then). Без тряски камеры; в лёгкой — без конфетти.
+ */
+export function grandOpening(scene: StoreScene, then: () => void): void {
+  placeGranny(scene);
+  askShopName((name) => {
+    if (name) {
+      scene.state = { ...scene.state, shopName: name };
+      saveGame(scene.state);
+      // Вывеска — часть мира: перестроить (первый день, ларёк маленький — быстро).
+      scene.buildWorld();
+      placeGranny(scene);
+    }
+    track('onb_name', 1, name ? 1 : 0);
+    ribbon(scene, then);
+  });
+}
+
+/** Ленточка у входа: ждёт касания, режется пополам, половинки падают; конфетти, фанфары — и день. */
+function ribbon(scene: StoreScene, then: () => void): void {
+  const { door } = scene.layout;
+  const y = door.y - 6;
+  const half = 18;
+  const RED = 0xe43b44;
+  const DARK = 0xa22633;
+  const piece = (dir: -1 | 1): Phaser.GameObjects.Graphics => {
+    const g = scene.add.graphics().setDepth(door.y + 40);
+    const x0 = dir < 0 ? -half : 0;
+    g.fillStyle(0x181425, 1).fillRect(x0, -2.5, half, 5);
+    g.fillStyle(DARK, 1).fillRect(x0, -2, half, 4);
+    g.fillStyle(RED, 1).fillRect(x0, -2, half, 3);
+    g.fillStyle(0xf6757a, 1).fillRect(x0, -2, half, 1);
+    // столбик с золотым шариком на конце
+    const px = dir < 0 ? -half - 1 : half - 1;
+    g.fillStyle(0x181425, 1).fillRect(px - 0.5, -3, 3, 16);
+    g.fillStyle(0xc0cbdc, 1).fillRect(px, -2.5, 2, 15);
+    g.fillStyle(0xfee761, 1).fillCircle(px + 1, -4, 2);
+    g.setPosition(door.x, y);
+    return g;
+  };
+  const left = piece(-1);
+  const right = piece(1);
+  // Бант посередине: две петли и хвостики.
+  const bow = scene.add.graphics().setDepth(door.y + 41).setPosition(door.x, y);
+  bow.fillStyle(0x181425, 1).fillTriangle(0, 0, -8, -6, -8, 6).fillTriangle(0, 0, 8, -6, 8, 6);
+  bow.fillStyle(DARK, 1).fillTriangle(0, 0, -7, -5, -7, 5).fillTriangle(0, 0, 7, -5, 7, 5);
+  bow.fillStyle(RED, 1).fillTriangle(0, 0, -6, -4, -6, 3).fillTriangle(0, 0, 6, -4, 6, 3);
+  bow.fillStyle(DARK, 1).fillTriangle(-1, 1, -4, 9, 0, 8).fillTriangle(1, 1, 4, 9, 0, 8);
+  bow.fillStyle(0xfee761, 1).fillCircle(0, 0, 2);
+  scene.tweens.add({ targets: bow, scale: { from: 1, to: 1.15 }, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  grannySays(scene, { id: 'ribbon', text: t('opening.cut'), mood: 'happy', hold: 0 });
+  const zone = scene.add.zone(door.x, y, 56, 32).setDepth(2000).setInteractive({ useHandCursor: true });
+  let cut = false;
+  const snip = (): void => {
+    if (cut) return;
+    cut = true;
+    zone.destroy();
+    scene.tweens.killTweensOf(bow);
+    haptic.success();
+    sound.fanfare();
+    for (const [g, dir] of [[left, -1], [right, 1]] as const) {
+      scene.tweens.add({ targets: g, x: door.x + dir * 10, y: y + 16, angle: dir * 70, alpha: 0, duration: 700, ease: 'Quad.easeIn', onComplete: () => g.destroy() });
+    }
+    scene.tweens.add({ targets: bow, y: y - 10, scale: 1.6, alpha: 0, duration: 420, ease: 'Back.easeIn', onComplete: () => bow.destroy() });
+    if (!pixelFx.calm(scene)) {
+      pixelFx.burst(scene, 'confetti', door.x, y - 18);
+      pixelFx.burst(scene, 'sunburst', door.x, y - 4, { zoom: 1 });
+    }
+    grannySays(scene, { id: 'opened', text: t('opening.done', { name: scene.shopTitle() }), mood: 'happy', hold: 2600 });
+    onbStep(scene, 'ribbon');
+    saveGame(scene.state);
+    scene.skipFlyIn = true;
+    scene.time.delayedCall(900, then);
+  };
+  zone.on('pointerdown', snip);
+  // Сама не режется: это первое касание игрока; но если он ушёл, через 25 с бабушка режет сама.
+  scene.time.delayedCall(25_000, snip);
 }
 
 /** Первый покупатель нового начала: входит от самой двери и берёт то, что по пути к кассе. */

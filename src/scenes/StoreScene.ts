@@ -571,6 +571,8 @@ export class StoreScene extends Phaser.Scene {
   rivalVisit = false;
   /** На экране утро своего магазина (до «Открыть магазин»): только тогда — новости о проделках и ответный визит. */
   inMorning = false;
+  /** Только что открыли магазин ленточкой (newcomer.ts grandOpening): камера уже у входа — без подлёта. */
+  skipFlyIn = false;
   rivalLost = 0;
   /** Когда спрашивали сервер, что натворили у нас; что пришло, пока мы были в гостях. */
   rivalCheckedAt = 0;

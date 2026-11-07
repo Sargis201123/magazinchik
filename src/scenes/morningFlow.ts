@@ -32,7 +32,7 @@ import { activeEvent, guestDue } from '../game/live';
 import { liveEvents, todayLocal } from '../platform/live';
 import { helpScan } from '../game/help';
 import { flushSoon, track } from '../platform/analytics';
-import { playDayOne } from '../game/onboarding';
+import { needsRibbon, playDayOne } from '../game/onboarding';
 import { pendingStory } from '../game/story';
 import { tutAt, tutIndex, tutMorning, tutTell } from '../game/tutorial';
 import { ensureSeason } from '../game/pass';
@@ -207,9 +207,11 @@ export function showMorning(scene: StoreScene): void {
   scene.winterTune = decorations.isWinterMusic(scene);
   scene.newYearSound = decorations.isNewYearSound(scene);
   music.prefetch('day_open');
-  // Новое начало: первый день — сразу торговля, без утреннего окна.
+  // Новое начало: первый день — сразу торговля, без утреннего окна. В самой новой игре — сначала открытие:
+  // название на вывеске и ленточка у входа (newcomer.ts grandOpening).
   if (noMorning) {
-    startDay(scene);
+    if (needsRibbon(scene.state)) newcomer.grandOpening(scene, () => startDay(scene));
+    else startDay(scene);
     return;
   }
   withLazy(morningUi, ({ showMorning: showMorningMenu }) => showMorningMenu({
@@ -304,7 +306,8 @@ export function startDay(scene: StoreScene): void {
   music.sting('day_open');
   // Купленное с утра ждёт в коробках: камера подлетит к магазину — и его распакуют.
   scene.packFresh();
-  camera.flyIn(scene);
+  if (scene.skipFlyIn) scene.skipFlyIn = false;
+  else camera.flyIn(scene);
   pixelFx.openMoments(scene);
   lighting.lightsOn(scene);
   nightShift.flipDoorSign(scene, true);

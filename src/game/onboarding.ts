@@ -26,7 +26,7 @@ export function pickCohort(userId: number | undefined, random: () => number, sha
  * stock — новичок сам разложил полку (до этого в первый день её раскладывает бабушка, firstday.ts);
  * gift — бабушкин подарок за первый день вручён.
  */
-export type OnbStep = 'open' | 'cust' | 'sale' | 'day1' | 'day2' | 'hello' | 'bye' | 'stock' | 'gift';
+export type OnbStep = 'open' | 'cust' | 'sale' | 'day1' | 'day2' | 'hello' | 'bye' | 'stock' | 'gift' | 'ribbon';
 
 export interface OnbState {
   /** Пройденные шаги. */
@@ -67,6 +67,13 @@ export function markOnb(state: StoreState, step: OnbStep): StoreState {
 
 /** Первый день нового начала: утра нет, сразу торговля с бабушкой. */
 export const playDayOne = (state: StoreState): boolean => state.onboarding === 'play' && state.day === 1;
+
+/**
+ * Открытие магазина (решение автора 07.11): в самом начале новой игры — назвать магазин и перерезать ленточку
+ * у входа. Только новичку нового начала в первый день и только до первой продажи (перезапустил игру посреди
+ * торговли — открытие уже прошло).
+ */
+export const needsRibbon = (state: StoreState): boolean => playDayOne(state) && !onbDone(state, 'ribbon') && !onbDone(state, 'sale');
 
 /** Вкладки утра в том порядке, в каком они открываются новичку. */
 export const MORNING_TABS = ['buy', 'hall', 'staff', 'grow', 'extras'] as const;
