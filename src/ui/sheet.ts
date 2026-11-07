@@ -48,3 +48,22 @@ export const sheetAsset = (path: string): string => {
   const m = /^assets\/([\w-]+)\.png$/.exec(path);
   return m ? sheetPng(m[1]) : assetUrl(path);
 };
+
+/**
+ * Значки товаров в окнах (не на полках): у части товаров — детальные 16×16 из набора Henry Software «Pixel Food»
+ * (CC0, art/ui_items.py, решение автора 07.11), у остальных — те же, что на полке. Мир (зал, всплывашки) их не берёт.
+ */
+export const UI_ITEMS: readonly string[] = ['bread', 'meat', 'fish'];
+
+/** Ключ значка товара для окна: item_<товар> (и item_<товар>_0…) → uiitem_<товар>, если у товара есть детальный. */
+export function uiIconKey(key: string): string {
+  const m = /^item_([a-z]+)(?:_\d+)?$/.exec(key);
+  return m && UI_ITEMS.includes(m[1]) ? `uiitem_${m[1]}` : key;
+}
+
+/** Поставить значок товара в <img> окна: детальный получает класс ui-ico16 — свой размер, ровно вдвое (32 px). */
+export function setItemIcon(img: HTMLImageElement, key: string): void {
+  const k = uiIconKey(key);
+  img.src = sheetPng(k);
+  img.classList.toggle('ui-ico16', k !== key);
+}

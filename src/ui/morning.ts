@@ -177,7 +177,7 @@ import { zarBossBox, zarGrowBox, zarOfferBox, zarSwitchBox, zarTaleBox } from '.
 import { buyZar, homeLevel, inZar, seeZarBoss, seeZarTale, switchToday, zarBossNews, zarCardDue, zarLater, zarTaleToday, ZAR_PRICE } from '../game/zarechye';
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
-import { sheetAsset, sheetPng } from './sheet';
+import { setItemIcon, sheetAsset, sheetPng } from './sheet';
 import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adExtraGuests, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
 import { answerCafe, CAFE_DAYS, cafeDaysLeft, cafeLoyalty } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
@@ -316,7 +316,7 @@ const productLabel = (id: ProductId) => `${PRODUCTS[id].icon} ${t(PRODUCTS[id].n
 function itemRow(pid: ProductId, opts: { price?: number; sub?: string; actions: HTMLElement[]; name?: string }): HTMLElement {
   const row = el('div', 'ui-item');
   const icon = el('img', 'ui-item-icon');
-  icon.src = sheetPng(`item_${pid}_0`);
+  setItemIcon(icon, `item_${pid}_0`);
   icon.alt = '';
   const body = el('div');
   const name = el('div', 'ui-item-name', opts.name ?? t(PRODUCTS[pid].nameKey));
@@ -398,7 +398,7 @@ function flipSpan(cell: HTMLElement, key: string, shown: HTMLElement | null, app
 function artRow(texture: string, opts: { name: string; price?: number; sub?: string; actions: HTMLElement[] }): HTMLElement {
   const row = el('div', 'ui-item');
   const img = el('img', 'ui-item-art');
-  img.src = sheetPng(texture);
+  setItemIcon(img, texture);
   img.alt = '';
   const body = el('div');
   const name = el('div', 'ui-item-name', opts.name);
@@ -4127,7 +4127,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
       const product = PRODUCTS[pid];
       const card = el('div', 'ui-price');
       const icon = el('img', 'ui-price-icon');
-      icon.src = sheetPng(`item_${pid}`);
+      setItemIcon(icon, `item_${pid}`);
       icon.alt = '';
       const info = el('div', 'ui-price-info');
       info.append(el('b', '', t(product.nameKey)));
