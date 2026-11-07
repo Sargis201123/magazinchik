@@ -19,6 +19,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 import lavka_farm as F
+import lavka_ui as U
 import lavka_sprites as N
 from premium import H
 from sprites import OUT
@@ -255,6 +256,11 @@ def build():
     own("cart", F.cart())
     own("bed_wet", F.bed_wet(76, 36))
     own("egg", F.egg())
+    own("badge", U.badge(False))
+    own("badge_gold", U.badge(True))
+    own("timer", U.timer_strip())
+    for crop in ("cabbage", "carrot", "tomato", "strawberry", "potato", "pumpkin", "dill"):
+        own(f"ico_{crop}", U.crop_icon(crop))
     for name, fn in (("honey", F.icon_honey), ("drop", F.icon_drop), ("hayicon", F.icon_hay), ("grain", F.icon_grain), ("seed", F.icon_seed), ("tomato", F.icon_tomato), ("apple", F.icon_apple)):
         own(f"ico_{name}", fn())
 

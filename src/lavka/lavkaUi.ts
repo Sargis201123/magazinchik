@@ -33,6 +33,8 @@ const css = `
   font-size: 13px; transition: transform .15s; }
 .lv-good img { width: 14px; height: 14px; image-rendering: pixelated; object-fit: contain; }
 .lv-good.bump { transform: scale(1.25); }
+.lv-pill.left { transition: transform .12s; }
+.lv-pill.left.bump { transform: scale(1.18); }
 .lv-good.empty { color: #f6757a; }
 .lv-good.want { background: #a22633; animation: lv-breathe .8s ease-in-out 3; }
 .lv-orders { position: fixed; right: calc(10px + max(0px, (100vw - var(--game-w, 100vw)) / 2)); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 48px);
@@ -45,7 +47,7 @@ const css = `
 .lv-order .by { font-size: 11px; color: #5a4a5e; }
 .lv-order.done { background: #c9eda4; }
 .lv-order.failed { opacity: .45; text-decoration: line-through; }
-.lv-note { position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--safe-top, env(safe-area-inset-top)) + 58px);
+.lv-note { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 104px);
   font: 800 13px/1.25 ${UI_FONT}; color: #2b2233; background: #fffbe8; border: 3px solid #2b2233; border-radius: 10px; padding: 6px 10px;
   pointer-events: none; z-index: 5; transition: opacity .3s; max-width: min(320px, 80vw); text-align: center; box-shadow: 0 3px 0 rgba(43,34,51,.6); }
 @keyframes lv-breathe { 50% { transform: scale(1.08); } }
@@ -114,6 +116,7 @@ export class LavkaHud {
   private note: HTMLElement;
   private shownOrders = '';
   private shown = '';
+  private lastCoins = -1;
 
   constructor() {
     styles();
@@ -152,6 +155,12 @@ export class LavkaHud {
     if (key !== this.shown) {
       this.shown = key;
       this.coins.textContent = `💰 ${s.coins}`;
+      // деньги пришли — счётчик подпрыгивает
+      if (this.lastCoins >= 0 && s.coins > this.lastCoins) {
+        this.coins.classList.add('bump');
+        setTimeout(() => this.coins.classList.remove('bump'), 140);
+      }
+      this.lastCoins = s.coins;
       this.clock.textContent = `${s.dow} · ${clock(s.t)}`;
       pixelize(this.coins);
     }
