@@ -183,6 +183,76 @@ export function flyCoins(scene: StoreScene, x: number, y: number, count: number)
 }
 
 /**
+ * Оплата на кассе — событие, а не строчка: касса вспыхивает искрами, монеты фонтаном выпрыгивают вверх
+ * (чем больше сумма и серия — тем больше монет), крутятся, на миг зависают и по дуге летят к счётчику;
+ * над кассой — крупная золотая сумма пружиной. Камера не трясётся; в лёгкой графике и при
+ * «меньше движения» — без искр и фонтана: монеты летят прямо, как раньше, и сумма надписью.
+ */
+export function payBurst(scene: StoreScene, x: number, y: number, total: number, combo: number): void {
+  const calm = pixelFx.calm(scene);
+  const coins = Math.min(10, 3 + Math.floor(total / 30)) + Math.min(Math.max(0, combo - 1), 4);
+  if (calm) {
+    popup(scene, x, y, `+${total} 💰`, '#c8ffb0');
+    flyCoins(scene, x, y, Math.min(6, coins));
+    return;
+  }
+  // Касса: искры и вспышка там, где пробили.
+  pixelFx.play(scene, 'coinpop', x, y - 6, { depth: LIGHT_DEPTH + 6 });
+  if (total >= 100 || combo >= 3) pixelFx.burst(scene, 'star', x, y - 10, { zoom: 1, fade: 250 });
+  // Сумма: крупная, золотая, с тёмной обводкой; больше покупка — крупнее цифры.
+  const size = Math.min(15, 9 + Math.floor(total / 40));
+  // Серию показывает надпись «Серия ×N!» над кассой (celebrateCombo) — здесь только сумма.
+  const label = scene.add
+    .text(x, y - 16, `+${total}`, { fontFamily: UI_FONT, fontSize: `${size * 4}px`, fontStyle: '900', color: '#fee761', stroke: '#181425', strokeThickness: 12 })
+    .setOrigin(0.5, 1)
+    .setScale(0.08)
+    .setDepth(LIGHT_DEPTH + 9);
+  scene.tweens.add({ targets: label, scale: 0.25, y: y - 22, duration: 260, ease: 'Back.easeOut' });
+  scene.tweens.add({ targets: label, y: y - 34, alpha: 0, delay: 900, duration: 450, ease: 'Quad.easeIn', onComplete: () => label.destroy() });
+  // Монеты фонтаном → к счётчику.
+  const target = scene.cameras.main.getWorldPoint(70 * scene.res, 52 * scene.res);
+  for (let i = 0; i < coins; i++) {
+    const coin = pixelFx.play(scene, 'coin', x + look.between(-2, 2), y - 8, { random: true });
+    coin.setTintFill(0xffffff);
+    scene.time.delayedCall(60, () => coin.active && coin.clearTint());
+    const peakX = coin.x + look.between(-16, 16);
+    const peakY = y - look.between(20, 34);
+    const lag = i * 35;
+    // вверх — быстро, с замедлением к вершине
+    scene.tweens.add({ targets: coin, x: peakX, duration: 260, delay: lag, ease: 'Sine.easeOut' });
+    scene.tweens.add({
+      targets: coin,
+      y: peakY,
+      duration: 260,
+      delay: lag,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        // зависла — и по дуге к счётчику, уменьшаясь до значка
+        const sx = coin.x;
+        const sy = coin.y;
+        scene.tweens.add({
+          targets: coin,
+          duration: 520,
+          delay: 80 + look.between(0, 60),
+          ease: 'Cubic.easeIn',
+          scale: 0.55 / ART,
+          onUpdate: (tw) => {
+            const p = tw.progress;
+            coin.x = sx + (target.x - sx) * p;
+            coin.y = sy + (target.y - sy) * p - Math.sin(p * Math.PI) * 18;
+          },
+          onComplete: () => {
+            coin.destroy();
+            scene.hud.bumpMoney();
+            if (i === coins - 1) pixelFx.play(scene, 'coinpop', target.x, target.y, { depth: LIGHT_DEPTH + 6 });
+          },
+        });
+      },
+    });
+  }
+}
+
+/**
  * Чаевые: монетки pixelfx (spawn/coin-drop) высыпаются к ногам того, кто их оставил, подскакивают и гаснут.
  * Человек ушёл (спрайт уже убран) — не показываем.
  */
