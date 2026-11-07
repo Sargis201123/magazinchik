@@ -576,6 +576,8 @@ export class StoreScene extends Phaser.Scene {
   /** Памятные вещи новичка в зале (keepsakes.ts): рамка с первой монетой, бабушкина шкатулка. */
   keepsakeObjs: Phaser.GameObjects.GameObject[] = [];
   keepBox?: Phaser.GameObjects.Image;
+  /** Пора зайти «гостю дня» (первые дни новичка): следующий обычный покупатель — редкий гость. */
+  guestOfDayDue = false;
   rivalLost = 0;
   /** Когда спрашивали сервер, что натворили у нас; что пришло, пока мы были в гостях. */
   rivalCheckedAt = 0;

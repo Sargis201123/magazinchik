@@ -169,3 +169,24 @@ export function frameFirstCoin(s: StoreState, total: number): StoreState {
 
 /** Сколько было в первой выручке; нет рамки — undefined. */
 export const firstCoin = (s: StoreState): number | undefined => s.onb?.firstCoin;
+
+// ---------- Первый постоянный и гость дня ----------
+
+/** Первый постоянный новичка: Пётр Ильич (хлеб каждое утро). */
+export const FIRST_REGULAR = 'petr' as const;
+
+/**
+ * Когда (доля дня) заходит первый постоянный и что говорит: в 1-й день — знакомится («оставь батон на
+ * завтра»), во 2-й — с утра, как обещал, и зовёт магазин по имени. Дальше — как все постоянные.
+ */
+export function firstRegularVisit(s: StoreState): { at: number; line: 'meet' | 'back' } | null {
+  if (!newbie(s)) return null;
+  if (s.day === 1) return { at: 0.45, line: 'meet' };
+  if (s.day === 2) return { at: 0.12, line: 'back' };
+  return null;
+}
+
+/** Первые дни новичка в каждый день гарантированно заходит один редкий гость — «гость дня» (альбом). */
+export const GUEST_OF_DAY_DAYS = 3;
+export const GUEST_OF_DAY_AT = 0.6;
+export const guestOfDay = (s: StoreState): boolean => newbie(s) && s.day <= GUEST_OF_DAY_DAYS;

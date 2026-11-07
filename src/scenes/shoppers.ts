@@ -68,7 +68,7 @@ import { note } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { noteLost } from '../game/losses';
 import { fairTodayTolerance } from '../game/fair';
-import { gentleDay, grannyServesAfter, grannyStays } from '../game/firstday';
+import { FIRST_REGULAR, firstRegularVisit, gentleDay, GUEST_OF_DAY_AT, guestOfDay, grannyServesAfter, grannyStays } from '../game/firstday';
 import {
   ART,
   LIGHT_DEPTH,
@@ -186,7 +186,15 @@ export function grabCandy(scene: StoreScene, c: Customer): void {
 
 /** Постоянные покупатели на сегодня: каждый заходит в своё случайное время. */
 export function scheduleRegulars(scene: StoreScene): void {
-  const coming = regularsToday(scene.state).filter((r) => Math.random() < livedRegular(scene.state, r).every);
+  // Первые дни новичка (firstday.ts): Пётр Ильич знакомится в своё время, и редкий «гость дня».
+  const first = firstRegularVisit(scene.state);
+  if (first) {
+    const petr = regularById(FIRST_REGULAR);
+    scene.time.delayedCall(first.at * DAY_SECONDS * 1000, () => scene.running && scene.timeLeft > 0 && spawnRegular(scene, petr, first.line));
+  }
+  scene.guestOfDayDue = false;
+  if (guestOfDay(scene.state)) scene.time.delayedCall(GUEST_OF_DAY_AT * DAY_SECONDS * 1000, () => (scene.guestOfDayDue = true));
+  const coming = regularsToday(scene.state).filter((r) => (!first || r.id !== FIRST_REGULAR) && Math.random() < livedRegular(scene.state, r).every);
   for (const r of coming) {
     // Пара (life.ts) приходит вместе: второй — спутником первого, отдельно не приходит.
     const partner = companionOf(scene.state, r.id)?.regular;
@@ -228,7 +236,7 @@ export function spawnFriend(scene: StoreScene, f: VisitFriend): void {
   void runCustomer(scene, customer);
 }
 
-export function spawnRegular(scene: StoreScene, r: Regular): void {
+export function spawnRegular(scene: StoreScene, r: Regular, hello?: 'meet' | 'back'): void {
   const start = visitors.streetSpawn(scene);
   const sprite = persons.makePerson(scene, start.x, start.y, { ...livedRegular(scene.state, r).look });
   weatherFx.addUmbrella(scene, sprite);
@@ -239,7 +247,7 @@ export function spawnRegular(scene: StoreScene, r: Regular): void {
   if (companion) persons.addCompanion(scene, sprite, companion.look);
   // Любимый товар — всегда; иногда ещё что-нибудь.
   const extra = Math.random() < 0.4 ? scene.wanted(1).filter((id) => id !== r.favorite) : [];
-  const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief: false, regular: r.id, wants: [r.favorite, ...extra] };
+  const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief: false, regular: r.id, wants: [r.favorite, ...extra], hello };
   scene.customers.add(customer);
   void runCustomer(scene, customer);
 }
@@ -248,6 +256,8 @@ export function spawnRegular(scene: StoreScene, r: Regular): void {
 export function regularVerdict(scene: StoreScene, c: Customer): void {
   const r = regularById(c.regular!);
   const happy = c.items.some((item) => item.id === r.favorite);
+  // Знакомство в первый день: не нашёл хлеба — не беда, завтра придёт снова (доверие не падает).
+  if (c.hello === 'meet' && !happy) return;
   const { state, result } = recordVisit(scene.state, r.id, happy);
   scene.state = state;
   const name = t(r.nameKey);
@@ -449,7 +459,9 @@ export function spawnCustomer(
   const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
   // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще.
   const rareChance = rareGuestChance(scene.state.level) * adRareBoost(scene.state);
-  const rare = !forced && !arrived && !thief && !valya && !scene.night && Math.random() < rareChance ? pickRareGuest(scene.state, Math.random) : null;
+  const dayGuest = scene.guestOfDayDue && !forced && !arrived && !thief && !valya && !scene.night;
+  if (dayGuest) scene.guestOfDayDue = false;
+  const rare = dayGuest || (!forced && !arrived && !thief && !valya && !scene.night && Math.random() < rareChance) ? pickRareGuest(scene.state, Math.random) : null;
   let look: Look = forced
     ? forced.look
     : arrived
@@ -498,6 +510,8 @@ export function spawnCustomer(
   if (!arrived && !thief && !rare && !valya && !forced?.first && look.stroller === undefined && Math.random() < 0.08) persons.addCompanion(scene, sprite);
   if (rare) {
     sound.bell();
+    // Гость дня первых дней новичка — с объявлением, чтобы его заметили.
+    if (dayGuest) scene.popup(sprite.x, sprite.y - 22, t('first.guestOfDay', { name: t(rare.nameKey) }), '#fee761');
     // Редкий гость сверкает, пока он в магазине.
     const sparkles = scene.add.particles(0, 0, 'spark', {
       lifespan: 700,
@@ -658,7 +672,11 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   const mud = [...scene.trash].filter((piece) => piece.texture.key === 'mud').length;
   if (muddy && mud < MAX_MUD && Math.random() < MUD_CHANCE * entranceMud(scene.state)) staff.dropTrash(scene, scene.layout.door.x, scene.layout.door.y - 30, 'mud');
 
-  if (c.regular) scene.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
+  if (c.hello) {
+    // Первый постоянный новичка: знакомится или вернулся, как обещал, — реплика подольше и с сердечком.
+    effects.emote(scene, c.sprite, 'emo_heart');
+    scene.popup(c.sprite.x, c.sprite.y - 20, t(c.hello === 'meet' ? 'first.regularMeet' : 'first.regularBack', { name: t(regularById(c.regular!).nameKey), shop: scene.shopTitle() }), '#fff3b0');
+  } else if (c.regular) scene.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
   if (c.friend) scene.popup(c.sprite.x, c.sprite.y - 20, t('visit.hello', { name: c.friend.name }), '#fee761');
   await building.visitBargain(scene, c);
   if (c.gone) return;
