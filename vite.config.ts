@@ -1,8 +1,11 @@
 import { defineConfig, type Plugin } from 'vite';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { atlasKeys, buildAtlas, type Atlas } from './scripts/atlas';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 /** Флаги сборки Phaser из исходников (как DefinePlugin в его webpack-конфиге). */
 const PHASER_FLAGS: Record<string, boolean> = {
@@ -178,6 +181,75 @@ const atlasPlugin = (build: boolean): Plugin => ({
 });
 
 /**
+ * Картинки в сборке — без потерь мельче (oxipng через @napi-rs/image): после сборки каждый PNG в папке сборки
+ * пережимается, точки не меняются ни одной, меньше только файл (атласы — на 6–7 %, мелкие картинки — вдвое).
+ * Исходники в public/ не трогаем. Нет пакета под эту машину — сборка идёт как раньше, с предупреждением.
+ */
+const pngSlim = (): Plugin => {
+  let outDir = 'dist';
+  return {
+    name: 'png-slim',
+    apply: 'build',
+    configResolved: (c) => {
+      outDir = c.build.outDir;
+    },
+    async closeBundle() {
+      let lossless: ((png: Buffer, o: { strip: boolean }) => Promise<Buffer>) | undefined;
+      try {
+        ({ losslessCompressPng: lossless } = await import('@napi-rs/image'));
+      } catch {
+        this.warn('png-slim: нет @napi-rs/image под эту машину — картинки не пережаты');
+        return;
+      }
+      const files: string[] = [];
+      const walk = (dir: string): void => {
+        for (const name of readdirSync(dir)) {
+          const path = join(dir, name);
+          if (statSync(path).isDirectory()) walk(path);
+          else if (name.endsWith('.png')) files.push(path);
+        }
+      };
+      walk(outDir);
+      let before = 0;
+      let after = 0;
+      await Promise.all(
+        files.map(async (file) => {
+          const src = readFileSync(file);
+          const out = await lossless!(src, { strip: true });
+          before += src.length;
+          after += Math.min(src.length, out.length);
+          if (out.length < src.length) writeFileSync(file, out);
+        }),
+      );
+      console.log(`png-slim: ${files.length} PNG, ${(before / 1024).toFixed(0)} → ${(after / 1024).toFixed(0)} КБ`);
+    },
+  };
+};
+
+/**
+ * Предел веса кода (в сжатом виде, как его качает игрок): код игры и Phaser не должны тихо толстеть.
+ * Перешли предел — сборка падает с понятным сообщением; поднять предел можно, но осознанно (и записать почему).
+ * На 07.11: игра ≈ 398 КБ, Phaser ≈ 232 КБ. Что внутри — ANALYZE=1 npm run build → bundle-stats.html.
+ */
+const SIZE_BUDGET_KB: Record<string, number> = { index: 430, phaser: 245 };
+const sizeBudget = (): Plugin => ({
+  name: 'size-budget',
+  apply: 'build',
+  generateBundle(_options, bundle) {
+    const over: string[] = [];
+    for (const [file, out] of Object.entries(bundle)) {
+      if (out.type !== 'chunk') continue;
+      const name = /^assets\/([a-z]+)-/.exec(file)?.[1];
+      const limit = name ? SIZE_BUDGET_KB[name] : undefined;
+      if (!limit) continue;
+      const kb = gzipSync(out.code).length / 1024;
+      if (kb > limit) over.push(`${file}: ${kb.toFixed(0)} КБ сжатого кода при пределе ${limit} КБ`);
+    }
+    if (over.length) this.error(`Код стал тяжелее предела (vite.config.ts, SIZE_BUDGET_KB):\n${over.join('\n')}`);
+  },
+});
+
+/**
  * Сборка для Яндекс Игр (`vite build --mode yandex`, npm run build:yandex): вместо скрипта Telegram —
  * SDK Яндекса (/sdk.js отдаёт сама площадка), игра узнаёт площадку по __PLATFORM__ (src/platform/target.ts).
  */
@@ -194,8 +266,10 @@ export default defineConfig(({ command, mode }) => ({
   base: './',
   define: { __PLATFORM__: JSON.stringify(mode === 'yandex' ? 'yandex' : 'telegram') },
   plugins: [
-    ...(command === 'build' ? [phaserFlags(), assetVersions(true), atlasPlugin(true), preloadHints()] : [assetVersions(false), atlasPlugin(false)]),
+    ...(command === 'build' ? [phaserFlags(), assetVersions(true), atlasPlugin(true), preloadHints(), sizeBudget(), pngSlim()] : [assetVersions(false), atlasPlugin(false)]),
     ...(mode === 'yandex' ? [yandexHtml()] : []),
+    // ANALYZE=1 npm run build → bundle-stats.html: карта, из чего состоят файлы кода (сколько весит каждый модуль).
+    ...(process.env.ANALYZE ? [visualizer({ filename: 'bundle-stats.html', gzipSize: true, template: 'treemap' }) as Plugin] : []),
   ],
   resolve: {
     // В production — Phaser без физики и тайловых карт (src/vendor/phaser-lite.js).
