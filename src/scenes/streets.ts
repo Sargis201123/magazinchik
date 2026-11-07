@@ -241,7 +241,9 @@ export function drawNeighbor(scene: StoreScene, n: Neighbor, bottom: number, rnd
   // За дорогой витрины смотрят на дорогу: фасад сверху, крыша за ним.
   const roofY = across ? top + FACADE_H : top;
   const front = across ? top + FACADE_H : bottom;
-  scene.add.tileSprite(n.x, roofY, n.w, n.h - FACADE_H, 'roof').setOrigin(0).setTileScale(1 / ART).setTint(n.roof).setDepth(-3);
+  // Школа — под скатной черепичной крышей (сверху — четыре ската и конёк), остальные — плоская кровля.
+  const pitched = n.roofKit === 'school';
+  scene.add.tileSprite(n.x, roofY, n.w, n.h - FACADE_H, pitched ? 'roof_shingle' : 'roof').setOrigin(0).setTileScale(1 / ART).setTint(pitched ? PITCHED_TINT : n.roof).setDepth(-3);
   scene.add.tileSprite(n.x - 2, (across ? bottom : top) - 3, n.w + 4, 3, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(-3);
   scene.add.tileSprite(n.x, front - FACADE_H, n.w, FACADE_H, building.potTile(scene, 'facade')).setOrigin(0).setTileScale(1 / ART).setDepth(front - 5);
   dressRoof(scene, n, roofY, n.h - FACADE_H, across, rnd);
@@ -284,23 +286,31 @@ export function drawNeighbor(scene: StoreScene, n: Neighbor, bottom: number, rnd
  */
 export function dressRoof(scene: StoreScene, n: Neighbor, y: number, h: number, across: boolean, rnd: Phaser.Math.RandomDataGenerator): void {
   const { x, w } = n;
-  // Тень — вправо и (у зданий за дорогой) вниз, на газон.
-  scene.add.rectangle(x + w, y + 6, 6, h + (across ? FACADE_H - 6 : -6), 0x181425, 0.16).setOrigin(0).setDepth(-9.4);
-  if (across) scene.add.rectangle(x + 6, y + h, w, 6, 0x181425, 0.16).setOrigin(0).setDepth(-9.4);
+  // Тень — вправо и (у зданий за дорогой) вниз, на газон: дом высокий, тень длиннее.
+  scene.add.rectangle(x + w, y + 8, 9, h + (across ? FACADE_H - 8 : -8), 0x181425, 0.18).setOrigin(0).setDepth(-9.4);
+  if (across) scene.add.rectangle(x + 9, y + h, w, 9, 0x181425, 0.18).setOrigin(0).setDepth(-9.4);
+  if (n.roofKit === 'school') {
+    hipRoof(scene, x, y, w, h);
+    // Солнечные панели — на южном скате.
+    for (const dx of [-26, 0, 26]) scene.art(x + w / 2 + dx, y + h * 0.74, 'roof_solar').setScale(1.5 / ART).setDepth(-2);
+    return;
+  }
   // Парапет.
   const tone = Phaser.Display.Color.ValueToColor(n.roof);
   const light = tone.clone().lighten(14).color;
   const dark = tone.clone().darken(26).color;
   const edge = (ex: number, ey: number, ew: number, eh: number, color: number) => scene.add.rectangle(ex, ey, ew, eh, color).setOrigin(0).setDepth(-2.95);
-  edge(x, y, w, 3, light);
-  edge(x, y, 3, h, light);
-  edge(x, y + h - 3, w, 3, dark);
-  edge(x + w - 3, y, 3, h, dark);
+  // Парапет толще: у края крыши — бортик со светлым верхом, видно, что это стена, а не край пола.
+  edge(x, y, w, 4, light);
+  edge(x, y, 4, h, light);
+  edge(x, y + h - 4, w, 4, dark);
+  edge(x + w - 4, y, 4, h, dark);
+  edge(x + 4, y + 4, w - 8, 1, dark);
   // Снег на кровле — виден только в снегопад (applyWeather).
   scene.roofSnow.push(scene.add.rectangle(x + 3, y + 3, w - 6, h - 6, 0xf4f8ff, 0.7).setOrigin(0).setDepth(-2.97).setVisible(scene.weather === 'snow'));
   // Тень от парапета на кровле.
-  scene.add.rectangle(x + 3, y + 3, w - 6, 2, 0x181425, 0.12).setOrigin(0).setDepth(-2.94);
-  scene.add.rectangle(x + 3, y + 3, 2, h - 6, 0x181425, 0.12).setOrigin(0).setDepth(-2.94);
+  scene.add.rectangle(x + 4, y + 5, w - 8, 3, 0x181425, 0.14).setOrigin(0).setDepth(-2.94);
+  scene.add.rectangle(x + 4, y + 4, 3, h - 8, 0x181425, 0.14).setOrigin(0).setDepth(-2.94);
   // Особая крыша — в середине; остальное — по клеткам вокруг, без наложений.
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -318,10 +328,12 @@ export function dressRoof(scene: StoreScene, n: Neighbor, y: number, h: number, 
     put(cx - 6, cy - 12, 'roof_laundry', 30, 1.8);
     put(x + w - 22, y + h - 24, 'roof_tank', 16, 1.6);
   }
-  if (n.roofKit === 'school') {
-    for (const dx of [-26, 0, 26]) put(cx + dx, cy - 8, 'roof_solar', 18, 1.6);
+  // Будка выхода на крышу — в углу, у каждого плоского дома; рядом большой кондиционер.
+  if (w >= 60 && h >= 50) {
+    put(x + 18, y + 18, 'roof_stair', 16, 1.6);
+    put(x + w - 22, y + 16, 'roof_hvac', 15, 1.5);
   }
-  const kinds = ['roof_vent', 'ac_unit', 'roof_hatch', 'ac_unit', 'roof_dish', 'skylight', 'roof_vent', 'roof_pipe', 'roof_tank', 'ac_unit'];
+  const kinds = ['roof_vent', 'ac_unit', 'roof_hatch', 'roof_hvac', 'roof_dish', 'skylight', 'roof_vent', 'roof_pipe', 'roof_tank', 'ac_unit'];
   const count = Math.max(4, Math.round((w * h) / 1500));
   for (let i = 0, tries = 0; i < count && tries < count * 10; tries++) {
     const px = x + 14 + rnd.frac() * (w - 28);
@@ -330,6 +342,30 @@ export function dressRoof(scene: StoreScene, n: Neighbor, y: number, h: number, 
     put(px, py, kinds[rnd.between(0, kinds.length - 1)], 10);
     i++;
   }
+}
+
+/** Черепица скатной крыши (школа): терракота. */
+const PITCHED_TINT = 0xd0705a;
+
+/**
+ * Скатная крыша сверху: четыре ската сходятся к коньку. Северный скат светлее (солнце сверху слева), южный
+ * темнее, торцы между ними; конёк и рёбра — светлой линией, по краю — тёмный свес. Одна фигура на крышу.
+ */
+export function hipRoof(scene: StoreScene, x: number, y: number, w: number, h: number): void {
+  const d = Math.min(h / 2, w / 2);
+  const ridgeY = y + h / 2;
+  const g = scene.add.graphics().setDepth(-2.9);
+  g.fillStyle(0xffffff, 0.14).fillPoints([{ x, y }, { x: x + w, y }, { x: x + w - d, y: ridgeY }, { x: x + d, y: ridgeY }], true);
+  g.fillStyle(0x181425, 0.26).fillPoints([{ x, y: y + h }, { x: x + w, y: y + h }, { x: x + w - d, y: ridgeY }, { x: x + d, y: ridgeY }], true);
+  g.fillStyle(0x181425, 0.06).fillTriangle(x, y, x + d, ridgeY, x, y + h);
+  g.fillStyle(0x181425, 0.18).fillTriangle(x + w, y, x + w - d, ridgeY, x + w, y + h);
+  // Конёк и рёбра.
+  g.lineStyle(1.2, 0xffe0c8, 0.85).lineBetween(x + d, ridgeY, x + w - d, ridgeY);
+  g.lineStyle(0.8, 0xffe0c8, 0.6);
+  g.lineBetween(x, y, x + d, ridgeY).lineBetween(x + w, y, x + w - d, ridgeY);
+  g.lineBetween(x, y + h, x + d, ridgeY).lineBetween(x + w, y + h, x + w - d, ridgeY);
+  // Свес крыши — тёмный край.
+  g.lineStyle(1, 0x5a2a24, 0.9).strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 }
 
 /**
