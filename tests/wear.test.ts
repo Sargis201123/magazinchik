@@ -140,3 +140,19 @@ describe('потёртость пола: уборка', () => {
     expect(wornSpot(cells, grid, 0.3, () => false)).toBeNull();
   });
 });
+
+import { OLD_PATH_WEAR, oldPaths } from '../src/game/wear';
+
+describe('Старый пол бабушкиного ларька', () => {
+  it('дорожка стёрта посередине и сходит на нет к краям, уже стёртое не трогает', () => {
+    const grid = wearGrid(80, 80);
+    const cells = new Float32Array(grid.cols * grid.rows);
+    cells[0] = 0.9;
+    oldPaths(cells, grid, [[{ x: 40, y: 76 }, { x: 40, y: 4 }]]);
+    const at = (x: number, y: number) => cells[Math.floor(y / WEAR_CELL) * grid.cols + Math.floor(x / WEAR_CELL)];
+    expect(at(40, 40)).toBeGreaterThan(OLD_PATH_WEAR * 0.5);
+    expect(at(40, 40)).toBeLessThanOrEqual(OLD_PATH_WEAR);
+    expect(at(4, 40)).toBe(0);
+    expect(cells[0]).toBeCloseTo(0.9);
+  });
+});

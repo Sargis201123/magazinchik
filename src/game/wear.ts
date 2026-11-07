@@ -201,3 +201,39 @@ export function wornSpot(cells: Float32Array, grid: WearGrid, min = 0.3, reach?:
   }
   return best;
 }
+
+/**
+ * Старый пол: годами хоженые дорожки по точкам path (точки мира от левого верхнего угла пола) — бабушкин
+ * ларёк в новом начале не с иголочки. Потёртость к середине дорожки до peak, к краям (width клеток) сходит
+ * на нет; там, где уже потёрто больше, не трогает.
+ */
+export function oldPaths(cells: Float32Array, grid: WearGrid, paths: { x: number; y: number }[][], peak = OLD_PATH_WEAR, width = 1.6): void {
+  const { cols, rows } = grid;
+  for (let cy = 0; cy < rows; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      const px = (cx + 0.5) * WEAR_CELL;
+      const py = (cy + 0.5) * WEAR_CELL;
+      let near = Infinity;
+      for (const path of paths) {
+        for (let i = 1; i < path.length; i++) near = Math.min(near, segmentDistance(px, py, path[i - 1], path[i]) / WEAR_CELL);
+      }
+      const v = peak * clamp01(1 - near / width);
+      const k = cy * cols + cx;
+      if (v > WEAR_FLOOR && v > cells[k]) cells[k] = v;
+    }
+  }
+}
+
+/**
+ * Насколько стёрты старые дорожки: заметно (царапины — с 0,4, floor.ts), как пол после полугода работы.
+ * Натирает их только уборщик (его у новичка в ларьке нет) — подсказок и дел новичку они не прибавят.
+ */
+export const OLD_PATH_WEAR = 0.5;
+
+function segmentDistance(px: number, py: number, a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = dx * dx + dy * dy;
+  const t = len ? clamp01(((px - a.x) * dx + (py - a.y) * dy) / len) : 0;
+  return Math.hypot(px - (a.x + t * dx), py - (a.y + t * dy));
+}
