@@ -67,7 +67,7 @@ import { LightMap } from './light';
 import { ColorGrade } from './grade';
 import { Halo } from './halo';
 import { FloorShade, furnitureCasters, type WearLayer } from './floor';
-import { decodeWear, wearGrid, type WearGrid } from '../game/wear';
+import { decodeWear, encodeWear, oldPaths, wearGrid, type WearGrid } from '../game/wear';
 import { dayDemand } from '../game/demand';
 import { Rotting } from './rotting';
 import type { EduardLook } from '../game/eduard';
@@ -1097,6 +1097,16 @@ export class StoreScene extends Phaser.Scene {
     const was = this.wear;
     const same = was && was.level === level && was.grid.cols === grid.cols && was.grid.rows === grid.rows;
     this.wear = { level, grid, cells: decodeWear(this.state.floorWear, level, grid), steps: same ? was.steps : new Float32Array(grid.cols * grid.rows) };
+    // Новое начало: бабушкин ларёк не новый — от двери к кассе и к полкам годами протоптаны дорожки.
+    if (this.state.onboarding === 'play' && this.state.day === 1 && level === 0 && !this.state.floorWear) {
+      const { door, counter, slots } = this.layout;
+      const floorY = (y: number) => y - wallH;
+      const from = { x: door.x, y: floorY(h - 6) };
+      const paths = [[from, { x: door.x, y: floorY(counter.y + 8) }, { x: counter.x - 12, y: floorY(counter.y + 4) }]];
+      for (const s of slots.slice(0, this.state.shelves.length)) paths.push([from, { x: s.x, y: floorY(s.y + 18) }]);
+      oldPaths(this.wear.cells, grid, paths);
+      this.state = { ...this.state, floorWear: encodeWear(this.wear.cells, level, grid) };
+    }
   }
 
   /** Потёртость для картинки пола: сетка лежит от левого верхнего угла пола зала (под задней стеной). */
