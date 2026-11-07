@@ -47,7 +47,6 @@ import { fpsSummary } from '../platform/quality';
 import { firstDayGift, firstDayRating, gentleDay, grannyStays } from '../game/firstday';
 import { tomorrowTeaser } from '../game/nudge';
 import { teaserText } from '../ui/nudge';
-import { forecastLine } from '../ui/forecast';
 import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook } from './common';
 import * as starPets from './starPets';
 import * as motion from './motion';
@@ -295,9 +294,6 @@ export function finishDay(scene: StoreScene): void {
   if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
   if (scene.stats.momentsShown) extra.push([t('summary.moments'), t('summary.momentsValue', { n: scene.stats.moments ?? 0, total: scene.stats.momentsShown })]);
   if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
-  // Взял утром запас под погоду — доля выручки с погодных товаров (game/forecast.ts).
-  if (night.forecast) extra.push([`🌦 ${t('weatherStock.bonus')}`, t('weatherStock.bonusValue', { n: night.forecast })]);
-  if (night.forecast) track('forecast_bonus', finishedDay, night.forecast);
   // Шаг сезонной недели (weeks.ts): монеты, а за последний — памятная вещь в зал.
   if (night.week) {
     const w = night.week;
@@ -452,9 +448,6 @@ export function finishDay(scene: StoreScene): void {
  */
 export function tomorrowLines(scene: StoreScene): string[] {
   const lines = [teaserText(tomorrowTeaser(scene.state))];
-  // Погода завтра поднимет спрос — сразу видно, на что запастись утром (game/forecast.ts).
-  const sky = forecastLine(scene.state, scene.state.day, 'tomorrow');
-  if (sky) lines.push(sky);
   const order = orderTeaser(scene.state);
   if (order) lines.push(teaserText(order));
   const gift = giftTomorrow(scene.state, todayLocal());

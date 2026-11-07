@@ -79,7 +79,6 @@ import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, 
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from './zarechye';
 import { restockPlan } from './restock';
-import { markForecast, weatherBoosts } from './forecast';
 import { buyLine } from './reorder';
 import { bigDaySeed, setBigDaySeed } from './bigday';
 import { autoActive, autoArrived, autoMorning, autoTopUp, autoAvailable, autoToggle } from './autoorder';
@@ -769,10 +768,7 @@ export function simulate({
     } else if (buyMode === 'restock' || buyMode === 'auto') {
       // Одно нажатие: купленное сразу встаёт на полки, лишнее — на склад (buyLine).
       // Печь в симуляторе печёт до закупки: её хлеб уже в запасе, вычитать его из плана второй раз не нужно.
-      // Внимательный игрок: в погодный день берёт запас под погоду (forecast.ts) — кнопкой «Под погоду».
-      const underWeather = weatherBoosts(state).length > 0;
-      const plan = restockPlan(state, priceOf, guestsToday(state), [], 0, underWeather);
-      if (underWeather && plan.lines.length) state = markForecast(state);
+      const plan = restockPlan(state, priceOf, guestsToday(state), [], 0);
       for (const line of plan.lines) {
         const before = state.money;
         const got = buyLine(state, line, badBatch(line.sid, state.day, random()));

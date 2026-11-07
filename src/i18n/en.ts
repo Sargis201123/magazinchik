@@ -2205,12 +2205,6 @@ export const en: Record<TextKey, string> = {
   'teaser.tab': 'the "{tab}" tab opens',
   'teaser.clear': '{icon} clear skies — a good day for trade',
   'teaser.weather': '{icon} {name} — check the forecast in the morning',
-  "weatherStock.today": "{icon} Today: {name} — people buy more: {list}",
-  "weatherStock.tomorrow": "{icon} Tomorrow's forecast: {name} — they'll buy more: {list}",
-  "weatherStock.buy": "🌦 Stock up for the weather — {n} 💰",
-  "weatherStock.done": "Weather stock is in",
-  "weatherStock.bonus": "Read the weather",
-  "weatherStock.bonusValue": "+{n} 💰",
   // Moving into the hypermarket (branch.ts, HYPER_LEVEL).
   'store.l6': 'Hypermarket',
   'hyper.title': 'Move into the hypermarket',

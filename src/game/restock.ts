@@ -5,7 +5,6 @@
 import { buyChance, canPlace, CARRY, homemade, PRODUCT_IDS, PRODUCTS, shelfCapacity, shelfFree, shelveAll, productAvailable, seasonalDemand, sellableProducts, warehouseCapacity, warehouseCount, type Category, type ProductId, type StoreState } from './economy';
 import { perceivedBase, seasonFor } from './endless';
 import { dayDemand } from './demand';
-import { weatherDemand, weatherFor } from './weather';
 import { bigDayDemand } from './bigday';
 import { bakeModeOf, bakeryWorking, stockOf, usualSales } from './bakery';
 import { ovenBatch, ovenBatchCost } from './gear';
@@ -33,17 +32,13 @@ export function bestOffer(
 
 /**
  * Сколько штук держать к открытию — по той же модели спроса, по которой покупатели выбирают товар:
- * сезон, акции, ценовая война, своя марка, здания района, и насколько им нравится цена. Погоду — только
- * с weather: «Закупить нужное» берёт по среднему, а запас под погоду игрок берёт сам (forecast.ts).
+ * сезон, погода, акции, ценовая война, своя марка, здания района, и насколько им нравится цена.
  * Особый день не учитываем: о нём узнают только при открытии. Продажи прошлых дней занижают спрос
  * (чего не было на полке, того и не продали), поэтому из модели и истории берём большее.
  */
-export function restockTarget(state: StoreState, pid: ProductId, guests: number, weather = false): number {
-  const sky = weatherFor(state.day);
+export function restockTarget(state: StoreState, pid: ProductId, guests: number): number {
   const weight = (id: ProductId) =>
-    (seasonFor(state.day)?.demand[id] ?? 1) *
-    seasonalDemand(id, state.day) *
-    (dayDemand(state, id) / bigDayDemand(state.day, id) / (weather ? 1 : weatherDemand(sky, id)));
+    (seasonFor(state.day)?.demand[id] ?? 1) * seasonalDemand(id, state.day) * (dayDemand(state, id) / bigDayDemand(state.day, id));
   // Свою выпечку и банки своей марки специально не ищут — они не делят спрос с остальным.
   const pool = sellableProducts(state).filter((id) => !homemade(id));
   const total = pool.reduce((sum, id) => sum + weight(id), 0) || 1;
@@ -99,8 +94,6 @@ export function restockPlan(
   skip: ProductId[] = [],
   /** Сколько хлеба ещё испечёт своя печь сегодня (симулятор печёт до закупки и передаёт остаток). */
   ownBread = ownBreadToday(state),
-  /** С запасом под погоду (кнопка «Под погоду», forecast.ts); без — по среднему. */
-  weather = false,
 ): ReorderPlan {
   const wants = sellableProducts(state)
     .filter((pid) => canStock(state, pid) && !skip.includes(pid))
@@ -111,7 +104,7 @@ export function restockPlan(
       // мясо на пельмени, хлеб на квас (lines.ts).
       const neighbour = state.ret?.order?.day === state.day && state.ret.order.pid === pid ? state.ret.order.qty : 0;
       const reserved = (state.plan?.order?.product === pid ? state.plan.order.qty : 0) + (state.cafe?.deal?.items[pid] ?? 0) + neighbour + lineInputNeed(state, pid);
-      const target = Math.max(0, restockTarget(state, pid, guests, weather) - (pid === 'bread' ? ownBread : 0)) + reserved;
+      const target = Math.max(0, restockTarget(state, pid, guests) - (pid === 'bread' ? ownBread : 0)) + reserved;
       const have = stockOf(state, pid);
       return { pid, need: target - have, fill: have / Math.max(1, target), offer: bestOffer(state, pid, priceOf) };
     })

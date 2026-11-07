@@ -409,9 +409,6 @@ const css = `
 .ui-item-icon { width: 30px; height: 36px; image-rendering: pixelated; justify-self: center; }
 /* Детальный значок товара (16×16, ui/sheet.ts UI_ITEMS) — ровно вдвое, без растяжения. */
 .ui-item-icon.ui-ico16, .ui-price-icon.ui-ico16 { width: 32px; height: 32px; align-self: center; }
-/* Прогноз у закупки (game/forecast.ts): строка погоды и кнопка «Под погоду» — голубая, не спорит с «Закупить нужное». */
-.ui-forecast { margin: 8px 0 4px; font-weight: 700; }
-.ui-btn.ui-btn-weather { background-color: #8fd3ff; }
 .ui-item-name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .ui-item-sub { font-size: 12.5px; color: #6a5f58; margin-top: 1px; }
 .ui-item-actions { display: flex; gap: 6px; align-items: center; }
