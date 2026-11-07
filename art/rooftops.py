@@ -237,8 +237,72 @@ def roof():
     c.save("roof")
 
 
+def shingle():
+    """Черепица 32×32 под тинт: желобки от конька к краю (сверху черепичная крыша — столбики), ступеньки
+    рядов вразбежку, светлая грань у каждого столбика. Светлая — цвет даёт тинт (школа — терракота).
+    """
+    n = 32
+    c = Canvas(n, n)
+    base = (224, 220, 216, 255)
+    hi = (248, 246, 242, 255)
+    lo = (182, 174, 168, 255)
+    groove = (146, 138, 134, 255)
+    c.rect(0, 0, n, n, base)
+    for x in range(0, n, 4):
+        c.vline(x, 0, n, groove)
+        c.vline(x + 1, 0, n, hi)
+        c.vline(x + 3, 0, n, lo)
+        # Ступенька ряда: нижний край черепицы, у соседних столбиков — вразбежку.
+        shift = 0 if (x // 4) % 2 == 0 else 4
+        for y in range(shift, n, 8):
+            c.hline(x + 1, (y + 7) % n, 3, groove)
+            c.hline(x + 1, y % n, 3, hi)
+    rnd = random.Random(7)
+    for _ in range(9):
+        x, y = rnd.randrange(0, n, 4) + 2, rnd.randrange(1, n - 3)
+        c.vline(x, y, 3, (210, 204, 198, 255))
+    c.save("roof_shingle")
+
+
+def stair():
+    """Будка выхода на крышу 26×24: кирпичный короб, плоская крышка с бортиком, дверь, тень."""
+    c = Canvas(26, 24)
+    c.rect(2, 7, 20, 13, (178, 120, 94, 255))
+    c.rect(18, 7, 4, 13, (140, 92, 74, 255))
+    for y in (10, 14, 18):
+        c.hline(2, y, 16, (160, 104, 82, 255))
+    c.rect(1, 3, 22, 5, STEEL)
+    c.hline(1, 3, 22, STEEL_HI)
+    c.hline(1, 7, 22, STEEL_LO)
+    c.rect(8, 11, 6, 9, DARK)
+    c.rect(9, 12, 4, 7, (90, 104, 140, 255))
+    c.px(12, 15, (254, 231, 97, 255))
+    c.outline("k")
+    shadowed(c, 15, 21, 11, 2.2).save("roof_stair")
+
+
+def hvac():
+    """Большой кондиционер 22×16 на крыше: короб, два вентилятора сверху, решётка сбоку."""
+    c = Canvas(22, 16)
+    c.rect(1, 2, 20, 11, STEEL)
+    c.hline(1, 2, 20, STEEL_HI)
+    c.rect(1, 10, 20, 3, STEEL_LO)
+    for cx in (6, 15):
+        c.ellipse(cx, 6, 3.6, 3.2, DARK)
+        c.ellipse(cx, 6, 2.4, 2, (90, 104, 140, 255))
+        c.px(cx, 6, STEEL_HI)
+        c.line(cx - 2, 6, cx + 2, 6, STEEL_LO)
+    for x in range(3, 20, 2):
+        c.px(x, 11, DARK)
+    c.outline("k")
+    shadowed(c, 12, 14, 10, 1.8).save("roof_hvac")
+
+
 def main():
     roof()
+    shingle()
+    stair()
+    hvac()
     vent()
     tank()
     dish()
