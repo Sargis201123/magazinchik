@@ -14,13 +14,14 @@ import { firstWant, markOnb, onbDone, playDayOne, type OnbStep } from '../game/o
 import { askShopName } from '../ui/opening';
 import { haptic } from '../platform/telegram';
 import * as pixelFx from './pixelFx';
+import * as keepsakes from './keepsakes';
 import { firstSaleStamp, type SayLine } from '../ui/onboarding';
 import { TUT_IGNORE_MS, TUT_WAIT_MS, tutAt, tutIndex, tutNext, tutPass, tutPatient, tutSkip, tutStep, tutTell, type TutStep } from '../game/tutorial';
 import type { Spot } from '../ui/coach';
 import { ownerTiming } from '../game/owner';
 import { idleRegisters, nextRegisterCount, nextRegisterPrice, registerSlots } from '../game/registers';
 import { seeTip } from '../game/tips';
-import { cleanHall, GRANNY_SCAN_SLOW, grannyServesAfter, grannyStays, grannyStocksNow, praiseAt } from '../game/firstday';
+import { cleanHall, frameFirstCoin, GRANNY_SCAN_SLOW, grannyServesAfter, grannyStays, grannyStocksNow, praiseAt } from '../game/firstday';
 import { hallNudge, NUDGE_IDLE_MS } from '../game/nudge';
 import { tryNudge } from '../ui/nudge';
 import {
@@ -456,8 +457,12 @@ export function ringTill(scene: StoreScene, r: Register): void {
 /** Первая продажа новичка. В новом начале — маленький праздник: печать, фанфары, конфетти, бабушка радуется. */
 export function firstSale(scene: StoreScene, total: number): void {
   onbStep(scene, 'sale');
+  // Первая выручка — в рамку на стену (только новое начало).
+  scene.state = frameFirstCoin(scene.state, total);
   saveGame(scene.state);
   if (scene.state.onboarding !== 'play') return;
+  const till = scene.ownerRegister()?.counter ?? scene.layout.counter;
+  keepsakes.hangFirstCoin(scene, till.x, till.y);
   scene.tillRing?.destroy();
   scene.tillRing = undefined;
   sound.fanfare();

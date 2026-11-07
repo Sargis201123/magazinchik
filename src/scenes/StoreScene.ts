@@ -573,6 +573,9 @@ export class StoreScene extends Phaser.Scene {
   inMorning = false;
   /** Только что открыли магазин ленточкой (newcomer.ts grandOpening): камера уже у входа — без подлёта. */
   skipFlyIn = false;
+  /** Памятные вещи новичка в зале (keepsakes.ts): рамка с первой монетой, бабушкина шкатулка. */
+  keepsakeObjs: Phaser.GameObjects.GameObject[] = [];
+  keepBox?: Phaser.GameObjects.Image;
   rivalLost = 0;
   /** Когда спрашивали сервер, что натворили у нас; что пришло, пока мы были в гостях. */
   rivalCheckedAt = 0;

@@ -7,7 +7,7 @@
 import type { TextKey } from '../i18n/ru';
 import { CATEGORIES, freeSlots, nextStoreLevel, SHELF_KINDS, shelfKindOpen, type Category, type StoreState } from './economy';
 import { decorItem, type DecorId } from './decor';
-import { onbDone, playDayOne } from './onboarding';
+import { markOnb, onbDone, playDayOne } from './onboarding';
 import type { Goal } from './nudge';
 
 /** Сколько первых дней тихие: без технических окон, цель — мечта, о долге — только тёплой историей. */
@@ -138,3 +138,34 @@ export function firstDayGift(s: StoreState): StoreState | null {
   };
   return { ...s, decor, onb: { ...s.onb, done: [...(s.onb?.done ?? []), 'gift'] } };
 }
+
+// ---------- Бабушкина шкатулка: загадка первых вечеров ----------
+
+/** Со второго утра за прилавком стоит запертая шкатулка с запиской «не открывать до дня 4». */
+export const BOX_FROM_DAY = 2;
+export const BOX_OPENS_DAY = 4;
+/** Что внутри, кроме старого ключа с биркой «у моста» (зацепка к Заречью): монеты «на первые полки». */
+export const BOX_COINS = 150;
+
+/** Шкатулка в зале: заперта, ждёт касания или её уже нет (не новичок, рано, открыта). */
+export function grannyBox(s: StoreState): 'locked' | 'ready' | null {
+  if (!newbie(s) || onbDone(s, 'box') || s.day < BOX_FROM_DAY) return null;
+  return s.day >= BOX_OPENS_DAY ? 'ready' : 'locked';
+}
+
+/** Открыть шкатулку: монеты в кассу, шаг пройден. Не пора — состояние как было. */
+export function openGrannyBox(s: StoreState): StoreState {
+  if (grannyBox(s) !== 'ready') return s;
+  return markOnb({ ...s, money: s.money + BOX_COINS }, 'box');
+}
+
+// ---------- Первая монета в рамке ----------
+
+/** Первая выручка новичка — в рамку на стену (один раз, только в новом начале). */
+export function frameFirstCoin(s: StoreState, total: number): StoreState {
+  if (!newbie(s) || s.onb?.firstCoin) return s;
+  return { ...s, onb: { ...s.onb, done: s.onb?.done ?? [], firstCoin: Math.max(1, Math.round(total)) } };
+}
+
+/** Сколько было в первой выручке; нет рамки — undefined. */
+export const firstCoin = (s: StoreState): number | undefined => s.onb?.firstCoin;

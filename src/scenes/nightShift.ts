@@ -44,7 +44,7 @@ import { canWorkNight, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, startNight } fr
 import { reviewsFor } from '../game/reviews';
 import { lossAdvice } from '../game/losses';
 import { fpsSummary } from '../platform/quality';
-import { firstDayGift, firstDayRating, gentleDay, grannyStays } from '../game/firstday';
+import { BOX_FROM_DAY, BOX_OPENS_DAY, firstDayGift, firstDayRating, gentleDay, grannyBox, grannyStays } from '../game/firstday';
 import { tomorrowTeaser } from '../game/nudge';
 import { teaserText } from '../ui/nudge';
 import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook } from './common';
@@ -450,6 +450,10 @@ export function tomorrowLines(scene: StoreScene): string[] {
   const lines = [teaserText(tomorrowTeaser(scene.state))];
   const order = orderTeaser(scene.state);
   if (order) lines.push(teaserText(order));
+  // Бабушкина шкатулка (firstday.ts): вечером первого дня — что она её оставила, накануне — что завтра откроется.
+  const box = grannyBox(scene.state);
+  if (box && scene.state.day === BOX_FROM_DAY) lines.push(t('keep.boxLeft', { day: BOX_OPENS_DAY }));
+  else if (box === 'ready' && scene.state.day === BOX_OPENS_DAY) lines.push(t('keep.boxTomorrow'));
   const gift = giftTomorrow(scene.state, todayLocal());
   if (gift) {
     const treat = t(`gift.treat.${gift.day}` as TextKey);

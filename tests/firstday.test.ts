@@ -152,3 +152,31 @@ describe('тексты начала игры', () => {
     for (const k of ['hint.restock', 'hint.bin', 'hint.clean', 'hint.recall', 'tut.restock'] as const) expect(ru[k]).not.toMatch(/продав/);
   });
 });
+
+import { BOX_COINS, BOX_FROM_DAY, BOX_OPENS_DAY, firstCoin, frameFirstCoin, grannyBox, openGrannyBox } from '../src/game/firstday';
+
+describe('Бабушкина шкатулка и первая монета в рамке', () => {
+  it('шкатулка: со второго дня заперта, с четвёртого открывается один раз', () => {
+    expect(grannyBox(fresh({ day: 1 }))).toBeNull();
+    expect(grannyBox(fresh({ day: BOX_FROM_DAY }))).toBe('locked');
+    // Заперта — открыть нельзя, денег не прибавилось.
+    const locked = fresh({ day: BOX_FROM_DAY, money: 100 });
+    expect(openGrannyBox(locked)).toBe(locked);
+    const ready = fresh({ day: BOX_OPENS_DAY, money: 100 });
+    expect(grannyBox(ready)).toBe('ready');
+    const opened = openGrannyBox(ready);
+    expect(opened.money).toBe(100 + BOX_COINS);
+    expect(grannyBox(opened)).toBeNull();
+    // Второй раз не открывается.
+    expect(openGrannyBox(opened).money).toBe(opened.money);
+    // Старое сохранение и прежнее начало — без шкатулки.
+    expect(grannyBox(old({ day: BOX_OPENS_DAY }))).toBeNull();
+  });
+
+  it('первая выручка — в рамку один раз и только в новом начале', () => {
+    const s = frameFirstCoin(fresh(), 37);
+    expect(firstCoin(s)).toBe(37);
+    expect(firstCoin(frameFirstCoin(s, 90))).toBe(37);
+    expect(firstCoin(frameFirstCoin(old(), 37))).toBeUndefined();
+  });
+});
