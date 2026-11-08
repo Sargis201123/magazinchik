@@ -116,13 +116,18 @@ export function buildParking(scene: StoreScene, next: Layout, street: number): {
   scene.add.rectangle(left, top, LOT.w, 2, 0x181425, 0.25).setOrigin(0).setDepth(-9.45);
   scene.add.rectangle(left, top, 2, LOT.h, 0x181425, 0.2).setOrigin(0).setDepth(-9.45);
   // Проезд с улицы: асфальт от площадки до тротуара (бордюр площадки тут разобран), справа — бордюр,
-  // слева за поребриком — дорожка, по которой водители ходят в магазин и обратно.
-  tile(driveX, bottom, right - driveX, street - bottom, 'asphalt', -9.46);
-  scene.add.rectangle(right, bottom, 2, street - bottom, 0xc0cbdc).setOrigin(0).setDepth(-9.45);
+  // слева за поребриком — дорожка, по которой водители ходят в магазин и обратно. Тротуар улицы идёт
+  // через въезд сплошным (машины его переезжают), у дороги бордюр понижен. Две полосы: въезд справа,
+  // выезд слева, между ними — прерывистая линия.
+  const walkTop = street - 12;
+  tile(driveX, bottom, right - driveX, walkTop - bottom, 'asphalt', -9.46);
+  scene.add.rectangle(right, bottom, 2, walkTop - bottom, 0xc0cbdc).setOrigin(0).setDepth(-9.45);
+  const mid = Math.round((driveX + right) / 2);
+  for (let y = bottom + 4; y < walkTop - 6; y += 10) scene.add.rectangle(mid, y, 1.5, 6, 0xe6e1d6, 1).setOrigin(0.5, 0).setDepth(-9.45);
   tile(footX, bottom - 30, driveX - footX, street - bottom + 30, 'paving', -9.455);
   scene.add.rectangle(driveX - 1, bottom - 30, 1, street - bottom + 30, 0xc0cbdc).setOrigin(0).setDepth(-9.45);
   // На тротуаре — края въезда, у дороги — пониженный бордюр.
-  for (const x of [driveX, right]) scene.add.rectangle(x, street, 1, 22, 0x8b9bb4, 0.8).setOrigin(0).setDepth(-9.4);
+  for (const x of [driveX, right]) scene.add.rectangle(x, walkTop, 1, 22, 0x8b9bb4, 0.5).setOrigin(0).setDepth(-9.4);
   scene.add.rectangle(driveX, street + 22, right - driveX, 2, 0x5a6988).setOrigin(0).setDepth(-8.99);
   // Знак «P» у въезда: видно, куда сворачивают машины.
   const signX = right + 3;
@@ -193,7 +198,8 @@ export function buildParking(scene: StoreScene, next: Layout, street: number): {
     top,
     bottom,
     aisleY,
-    laneX: right - 12,
+    laneX: right - 9,
+    outX: driveX + 9,
     footX: (footX + driveX) / 2,
     mouthY: street,
     busy: { drive: false, aisle: false },
@@ -444,9 +450,13 @@ export function mouthClear(scene: StoreScene, lot: ParkingLot): boolean {
 
 /** На тротуаре перед въездом никого: машина переедет его, ни в кого не упершись. */
 export function sidewalkClear(scene: StoreScene, lot: ParkingLot): boolean {
-  for (const p of scene.people) if (Math.abs(p.x - lot.laneX) < LOT_MOUTH && Math.abs(p.y - scene.streetY) < 9) return false;
+  for (const p of scene.people) if (Math.abs(p.x - mouthX(lot)) < mouthHalf(lot) && Math.abs(p.y - scene.streetY) < 9) return false;
   return true;
 }
+
+/** Середина въезда на тротуаре и его полуширина: обе полосы (въезд и выезд) с запасом. */
+const mouthX = (lot: ParkingLot): number => (lot.laneX + lot.outX) / 2;
+const mouthHalf = (lot: ParkingLot): number => LOT_MOUTH + (lot.laneX - lot.outX) / 2;
 
 /**
  * Машина переезжает тротуар у въезда: прохожие, что подходят к въезду, останавливаются перед ним
@@ -463,10 +473,11 @@ export function holdWalkers(scene: StoreScene, lot: ParkingLot): () => void {
     onUpdate: () => {
       for (const p of scene.people) {
         if (held.has(p) || !p.getData('walking') || Math.abs(p.y - scene.streetY) >= 9) continue;
-        const dx = p.x - lot.laneX;
+        const dx = p.x - mouthX(lot);
         const pace = (p.getData('pace') as number | undefined) ?? CUSTOMER_SPEED;
+        const half = mouthHalf(lot);
         // Подходит к въезду и вот-вот на него ступит (за шаг-другой), а не уходит от него.
-        if (Math.abs(dx) < LOT_MOUTH || Math.abs(dx) > LOT_MOUTH + 2 + pace * 0.5 || p.getData('facing') !== (dx < 0 ? 'right' : 'left')) continue;
+        if (Math.abs(dx) < half || Math.abs(dx) > half + 2 + pace * 0.5 || p.getData('facing') !== (dx < 0 ? 'right' : 'left')) continue;
         const move = p.getData('move') as Phaser.Tweens.Tween | undefined;
         if (!move?.isPlaying()) continue;
         move.pause();
@@ -649,7 +660,8 @@ export async function boardCar(scene: StoreScene, lot: ParkingLot, spot: ParkSpo
  * и прохожих, мигает — и уезжает направо, за край.
  */
 export async function lotDepart(scene: StoreScene, lot: ParkingLot, spot: ParkSpot, car: LotCar): Promise<void> {
-  const { laneX, aisleY } = lot;
+  // Уезжает по своей полосе — левой (выезд), въезжающие идут по правой.
+  const { outX: laneX, aisleY } = lot;
   const r = 12;
   const back = 14;
   const dir = spot.up ? -1 : 1;

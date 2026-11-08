@@ -221,7 +221,7 @@ export function buildNeighbors(scene: StoreScene, next: Layout): void {
     { x: -136 - WING_OUTER, w: 112, h: 120, name: 'neighbor.cafe', sign: 0x733e39, awning: 0xb86f50, roof: 0xe8c8b0, neon: 0xffb860, back: VERANDA_D },
     { x: -268 - WING_OUTER, w: 116, h: 150, name: 'neighbor.pharmacy', sign: 0x3e8948, awning: 0x63c74d, roof: 0xd0e4d0, neon: 0x7cff8a },
     { x: next.w + SIDE_SHOP_X, w: SIDE_SHOP_W, ...side },
-    { x: next.w + 170, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc, neon: 0xff8ad8 },
+    { x: next.w + 182, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc, neon: 0xff8ad8 },
   ];
   const rnd = new Phaser.Math.RandomDataGenerator(['neighbors']);
   for (const n of neighbors) drawNeighbor(scene, n, base - (n.back ?? 0), rnd);
