@@ -331,6 +331,8 @@ function itemRow(pid: ProductId, opts: { price?: number; sub?: string; actions: 
 /** Строка с картинкой из игры (стойка, кофемашина, лежанка): название, ценник, подпись, кнопки. */
 /** Какие сворачиваемые блоки игрок раскрыл (помним между утрами, если есть хранилище). */
 const OPEN_KEY = 'magazinchik.open';
+/** С какого числа сотрудников список в «Персонале» свёрнут под сводкой. */
+const STAFF_FOLD_FROM = 3;
 const openFolds: Set<string> = (() => {
   try {
     return new Set(JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]') as string[]);
@@ -367,6 +369,42 @@ function foldBox(id: string, title: string, fill: (body: HTMLElement) => void): 
   });
   render();
   box.append(head, body);
+  return box;
+}
+
+/**
+ * Раздел «Развития» свёрнут (08.11, решение автора): виден только заголовок (первый элемент блока) со
+ * стрелкой ▸/▾ и строка-сводка summary, остальное раскрывается нажатием на заголовок. Раскрытые помним
+ * между утрами, как у foldBox. Вкладка короче — пролистывать её до нужного раздела не надо.
+ */
+export function foldSection(id: string, box: HTMLElement, summary?: string): HTMLElement {
+  const [head, ...rest] = [...box.children] as HTMLElement[];
+  if (!head || !rest.length) return box;
+  const body = el('div');
+  body.append(...rest);
+  const arrow = el('span', 'ui-fold-arrow');
+  const note = summary ? el('div', 'ui-muted ui-fold-sum', summary) : null;
+  head.prepend(arrow);
+  head.classList.add('ui-fold-head');
+  head.style.cursor = 'pointer';
+  const render = () => {
+    const open = openFolds.has(id);
+    arrow.textContent = open ? '▾ ' : '▸ ';
+    body.hidden = !open;
+    if (note) note.hidden = open;
+  };
+  head.addEventListener('click', (e) => {
+    // Кнопки в заголовке («?») — своё действие, раздел не трогают.
+    if ((e.target as HTMLElement).closest('button') && (e.target as HTMLElement).closest('button') !== head) return;
+    const open = !openFolds.has(id);
+    if (open) openFolds.add(id);
+    else openFolds.delete(id);
+    rememberFolds();
+    render();
+    if (open) unfold(body);
+  });
+  render();
+  box.append(...(note ? [note] : []), body);
   return box;
 }
 
@@ -3706,7 +3744,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       helpRow(`👥 ${t('staffTab.count', { n: state.staff.length, max: limit })}`, t('staffTab.wageNote')),
     ];
     if (state.staff.length === 0) out.push(el('div', 'ui-note', t('staffTab.none')));
-    for (const m of state.staff) out.push(staffRow(state, m));
+    // Больше трёх сотрудников — списком под сводкой (свёрнут): кто и сколько стоит в месяц, раскрыть — нажатием.
+    if (state.staff.length > STAFF_FOLD_FROM) {
+      const wages = state.staff.reduce((sum, m) => sum + m.wage, 0);
+      out.push(foldBox('staff:list', `👥 ${t('staffTab.list', { n: state.staff.length, w: wages })}`, (body) => body.append(...getState().staff.map((m) => staffRow(getState(), m)))));
+    } else for (const m of state.staff) out.push(staffRow(state, m));
     // Карьера: когда следующий «сотрудник месяца», кто на доске почёта, кто правит филиалом.
     if (state.staff.length && state.career?.since !== undefined) out.push(el('div', 'ui-muted', t('career.nextBest', { n: Math.max(1, BEST_EVERY - (state.day - state.career.since)) })));
     const plaques = state.career?.plaques ?? [];
@@ -4064,7 +4106,17 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         ),
       );
     }
-    out.push(grow, registersBox(state), kiosksBox(state), gearBox(state), adsBox(state), decorBox(state), ...petsBox(state, getState, update), ...(inZar(state) ? [] : eduardBox(state)), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update), ...(inZar(state) ? [] : hoodBox(state, getState, update)), bankBox(state));
+    // Разделы свёрнуты: заголовок и строка-сводка, остальное — нажатием.
+    const fold = (id: string, box: HTMLElement, summary?: string) => foldSection(`grow:${id}`, box, summary);
+    const pets = petsBox(state, getState, update);
+    out.push(
+      grow,
+      fold('registers', registersBox(state), t('registers.count', { n: registerCount(state), max: registerSlots(state) })),
+      fold('kiosks', kiosksBox(state)),
+      fold('gear', gearBox(state)),
+      fold('ads', adsBox(state)),
+      decorBox(state),
+      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...(inZar(state) ? [] : hoodBox(state, getState, update)), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
