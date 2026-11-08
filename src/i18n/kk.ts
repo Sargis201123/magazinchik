@@ -1692,6 +1692,7 @@ export const kk: Record<TextKey, string> = {
   "board.friends": "🤝 Достар",
   "board.noFriends": "Достарыңды шақыр — олардың дүкендері осында шығады, сонда жарысуға болады.",
   "board.top": "🌍 Telegram үздіктері",
+  "board.topIsFriends": "Қазір Telegram-дағы үздіктер — сенің достарың: кесте жоғарыдағыдай.",
   "board.you": "{name} (сен)",
   "board.close": "Жабу",
   "board.open": "🏆 Дүкендер рейтингі",

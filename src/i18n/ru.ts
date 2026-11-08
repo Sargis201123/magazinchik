@@ -1696,6 +1696,7 @@ export const ru = {
   "board.friends": "🤝 Свои",
   "board.noFriends": "Пригласи друзей — их магазины появятся здесь, и можно будет соревноваться.",
   "board.top": "🌍 Лучшие в Telegram",
+  "board.topIsFriends": "Лучшие в Telegram сейчас — это твои друзья: таблица та же, что выше.",
   "board.you": "{name} (ты)",
   "board.close": "Закрыть",
   "board.open": "🏆 Рейтинг магазинов",

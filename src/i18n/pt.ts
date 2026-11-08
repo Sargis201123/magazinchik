@@ -1695,6 +1695,7 @@ export const pt: Record<TextKey, string> = {
   "board.friends": "🤝 Amigos",
   "board.noFriends": "Convide amigos — as lojas deles aparecerão aqui e vocês poderão competir.",
   "board.top": "🌍 Top no Telegram",
+  "board.topIsFriends": "Agora os melhores do Telegram são seus amigos — a mesma tabela de cima.",
   "board.you": "{name} (você)",
   "board.close": "Fechar",
   "board.open": "🏆 Ranking de lojas",
