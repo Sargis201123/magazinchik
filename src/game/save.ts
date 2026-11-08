@@ -95,7 +95,18 @@ export function loadGame(): StoreState | null {
   // Карьера сотрудников появилась позже: опыт старых сотрудников — по их стажу (career.ts).
   // Второй магазин в Заречье (zarechye.ts): срез второго магазина дополняем тем, чего в нём не было.
   // Оборудование упростили 02.11: за убранные указатели, солнечные панели и тележки — монеты назад (gear.ts).
-  return normalizeZar(migrateGear(migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11)))));
+  // Перестановку полок убрали (08.11, решение автора): своя расстановка из старых сохранений больше не
+  // применяется — у всех стандартная планировка помещения (и у второго магазина в Заречье).
+  return dropPlacement(normalizeZar(migrateGear(migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11))))));
+}
+
+/** Своя расстановка полок, кассы и вещей зала (перестановка, убрана 08.11) — снять, в том числе у второго магазина. */
+export function dropPlacement(state: StoreState): StoreState {
+  const { slotPos: _s, tillPos: _t, propPos: _p, ...rest } = state;
+  const away = rest.zar?.away;
+  if (!away || !('slotPos' in away || 'tillPos' in away || 'propPos' in away)) return rest;
+  const { slotPos: _as, tillPos: _at, propPos: _ap, ...clean } = away;
+  return { ...rest, zar: { ...rest.zar!, away: clean } };
 }
 
 let pending: string | null = null;

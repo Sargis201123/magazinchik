@@ -242,7 +242,6 @@ interface MorningOptions {
   lateState?: (s: StoreState) => void;
   onOpen: () => void;
   /** «Переставить полки»: утро закрывается, в зале — перестановка; потом утро откроется снова. */
-  onArrange?: () => void;
   /** Зайти в гости в магазин друга (id в Telegram, имя). */
   onVisit?: (id: number, name: string) => void;
   /** Собирались в гости с «Улицы друзей» (scenes/friendStreet.ts): карточка сверху — зайти первым делом. */
@@ -507,7 +506,7 @@ const rectOf = (node: HTMLElement): Spot | null => {
 };
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, lateState, onOpen, onArrange, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach, visit }: MorningOptions): void {
+export function showMorning({ getState, setState, lateState, onOpen, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach, visit }: MorningOptions): void {
   const { card, close } = openModal();
   // Нажатый заголовок или кнопка остаются на месте, когда блоки сворачиваются и окно перерисовывается.
   anchorScroll(card);
@@ -1447,18 +1446,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onArrange, 
   const hallTab = (state: StoreState): HTMLElement[] => {
     const slots = storeLevel(state).slots;
     const space = shelfSpace(state);
-    const arrange = onArrange
-      ? [
-          button(`🔧 ${t('arrange.open')}`, () => {
-            endTour();
-            close();
-            onArrange();
-          }, 'ui-btn secondary'),
-        ]
-      : [];
     const out: HTMLElement[] = [
       helpRow(`🗄 ${t('shelves.slots', { n: slots - freeSlots(state), max: slots })} · ${t('hall.goods', { n: space.s, max: space.smax })}`, t('shelves.rule')),
-      ...arrange,
       ...stockBox(state),
     ];
     if (openShelf >= state.shelves.length) openShelf = -1;
