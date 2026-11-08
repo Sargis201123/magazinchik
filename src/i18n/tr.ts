@@ -324,6 +324,7 @@ export const tr: Record<TextKey, string> = {
   "trait.sticky.desc": "ucuz ama günlük hasılatın %4'ünü cebe atar",
   "tab.staff": "Personel",
   "staffTab.count": "Personel: {n} / {max} (büyük dükkâna daha çok sığar)",
+  "staffTab.list": "Çalışanlar: {n} · maaşlar ayda {w} 💰",
   "staffTab.wageNote": "Maaşlar ayda bir faturalarla ödenir. Deneyimle beceri artar — maaş da kendiliğinden ona göre yükselir.",
   "staffTab.none": "Henüz kimse yok. Her şeyi kendin yapıyorsun.",
   "staffTab.candidates": "“{role}” ilanına başvuranlar",

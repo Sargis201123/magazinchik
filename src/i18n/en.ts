@@ -331,6 +331,7 @@ export const en: Record<TextKey, string> = {
   'trait.sticky.desc': 'cheap, but pockets 4% of daily revenue',
   'tab.staff': 'Staff',
   'staffTab.count': 'Staff: {n} of {max} (a bigger store fits more)',
+  "staffTab.list": "Staff: {n} · wages {w} 💰 a month",
   'staffTab.wageNote': "Salaries are paid monthly with the bills. Skill grows with experience — and the pay rises to match on its own.",
   'staffTab.none': 'Nobody yet. You do everything yourself.',
   'staffTab.candidates': 'Applied for “{role}”',

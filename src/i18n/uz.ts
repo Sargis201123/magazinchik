@@ -336,6 +336,7 @@ export const uz: Record<TextKey, string> = {
   "trait.sticky.desc": "arzon, lekin kunlik tushumning 4% ini olib ketadi",
   "tab.staff": "Xodimlar",
   "staffTab.count": "Xodimlar: {n} / {max} (koʻprogʻi — kattaroq doʻkonda)",
+  "staffTab.list": "Xodimlar: {n} · maoshlar oyiga {w} 💰",
   "staffTab.wageNote": "Maosh — oyiga bir marta, toʻlovlar bilan birga. Tajriba bilan mahorat oshadi — maosh ham oʻzi unga yarasha koʻtariladi.",
   "staffTab.none": "Hozircha hech kim yoʻq. Hammasini oʻzing qilasan.",
   "staffTab.candidates": "«{role}» vakansiyasiga javob berganlar",
