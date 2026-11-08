@@ -316,7 +316,9 @@ export interface ParkingLot {
   top: number;
   bottom: number;
   aisleY: number;
+  /** Полоса въезда (к парковке, у правого края проезда) и выезда (к улице, у левого). */
   laneX: number;
+  outX: number;
   footX: number;
   mouthY: number;
   busy: { drive: boolean; aisle: boolean };
@@ -337,9 +339,10 @@ export interface RoadCar {
 
 /** Парковка за магазином: 5 мест в два ряда (по краям — островки), справа — въезд с проезда вдоль правой стены. */
 export const LOT = { w: 226, h: 96, top: -160, bay: 33, bays: 5 };
-export const LOT_DRIVE_END = 36;
+/** Конец проезда к парковке от правой стены: две полосы — въезд у правого края, выезд у левого. */
+export const LOT_DRIVE_END = 48;
 /** Соседний магазин справа: отступ от зала (за проездом к парковке) и ширина. */
-export const SIDE_SHOP_X = 40;
+export const SIDE_SHOP_X = 52;
 export const SIDE_SHOP_W = 126;
 
 export const CAR_COLORS = [0xe43b44, 0x0099db, 0x3e8948, 0xfeae34, 0xc0cbdc, 0x68386c, 0x262b44];
