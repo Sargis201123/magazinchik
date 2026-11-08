@@ -1694,6 +1694,7 @@ export const uz: Record<TextKey, string> = {
   "board.friends": "🤝 Oʻzimiznikilar",
   "board.noFriends": "Doʻstlarni taklif qil — ularning doʻkonlari shu yerda chiqadi va bellashish mumkin boʻladi.",
   "board.top": "🌍 Telegramdagi eng zoʻrlar",
+  "board.topIsFriends": "Hozir Telegramdagi eng yaxshilar — doʻstlaring: jadval yuqoridagi bilan bir xil.",
   "board.you": "{name} (sen)",
   "board.close": "Yopish",
   "board.open": "🏆 Doʻkonlar reytingi",

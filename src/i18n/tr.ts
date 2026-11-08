@@ -1682,6 +1682,7 @@ export const tr: Record<TextKey, string> = {
   "board.friends": "🤝 Arkadaşlar",
   "board.noFriends": "Arkadaşlarını davet et — dükkânları burada görünsün, yarışabilirsiniz.",
   "board.top": "🌍 Telegram'da en iyiler",
+  "board.topIsFriends": "Şu an Telegram'ın en iyileri senin arkadaşların — tablo yukarıdakiyle aynı.",
   "board.you": "{name} (sen)",
   "board.close": "Kapat",
   "board.open": "🏆 Dükkân sıralaması",

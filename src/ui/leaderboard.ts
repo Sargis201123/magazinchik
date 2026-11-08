@@ -36,6 +36,14 @@ function table(rows: BoardRow[], start = 1, onRival?: OnRival): HTMLElement {
   return list;
 }
 
+/** Все строки «лучших» уже есть среди своих (по имени, выручке и дню) — таблицы одинаковые. */
+export function sameRows(top: BoardRow[], friends: BoardRow[]): boolean {
+  if (friends.length < 2 || !top.length) return false;
+  const sig = (r: BoardRow) => `${r.name}|${r.revenue}|${r.day}`;
+  const mine = new Set(friends.map(sig));
+  return top.every((r) => mine.has(sig(r)));
+}
+
 /** Рейтинг; tab: 'league' — сразу вкладка «Турнир района» (level — для наград по месту). */
 export function showLeaderboard(onRival?: OnRival, opts: { tab?: 'board' | 'league'; level?: number } = {}): void {
   const { card, close } = openModal();
@@ -76,7 +84,9 @@ export function showLeaderboard(onRival?: OnRival, opts: { tab?: 'board' | 'leag
       if (board.rank) card.append(el('div', 'ui-note', t('board.rank', { n: board.rank, total: board.total })));
       card.append(el('h3', '', t('board.friends')));
       card.append(board.friends.length > 1 ? table(board.friends, 1, go) : el('div', 'ui-muted', t('board.noFriends')));
-      card.append(el('h3', '', t('board.top')), table(board.top, 1, go));
+      // Пока игроков мало, лучшие в Telegram — это те же свои: второй такой же таблицы не показываем.
+      if (sameRows(board.top, board.friends)) card.append(el('div', 'ui-muted', t('board.topIsFriends')));
+      else card.append(el('h3', '', t('board.top')), table(board.top, 1, go));
     }
     card.append(button(t('board.close'), close, 'ui-btn'));
   };

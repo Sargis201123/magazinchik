@@ -516,7 +516,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   /** Какие товары показывать в закупке: заканчивающиеся, все или сезонные. */
   let buyFilter: 'low' | 'all' | 'season' = 'low';
   /** Какая полка во вкладке «Зал» раскрыта (улучшить, продать, починить). */
-  let openShelf = -1;
+  /** Раскрытая группа полок во вкладке «Зал» (вид полки); '' — ни одна. */
+  let openKind: string = '';
   /** Какая плитка «Уголков» раскрыта и чей ряд в «Персонале». */
   let openCorner: string | null = null;
   let openStaff: string | null = null;
@@ -1419,12 +1420,12 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       el('b', '', t(SHELF_KINDS[shelf.kind].nameKey)),
       // Вёдра с цветами бесплатные — их не продают.
       ...(SHELF_KINDS[shelf.kind].price ? [button(t('shelves.sell', { n: shelfResale(shelf) }), () => {
-        openShelf = -1;
+        openKind = '';
         update(keepPlaces(getState(), sellShelf(getState(), i), i));
       }, 'ui-chip')] : []),
       // Обычную полку можно убрать в запас (товар — на склад) и поставить потом обратно бесплатно.
       ...(isFixture(shelf) ? [] : [button(`📦 ${t('shelves.store')}`, () => {
-        openShelf = -1;
+        openKind = '';
         update(keepPlaces(getState(), storeShelf(getState(), i), i));
       }, 'ui-chip', !storeShelf(state, i))]),
     );
@@ -1450,41 +1451,49 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       helpRow(`🗄 ${t('shelves.slots', { n: slots - freeSlots(state), max: slots })} · ${t('hall.goods', { n: space.s, max: space.smax })}`, t('shelves.rule')),
       ...stockBox(state),
     ];
-    if (openShelf >= state.shelves.length) openShelf = -1;
+    // Полки одного вида — одной карточкой: «Хлебный стеллаж ×3», запас — общий, полоска оранжевая, если хоть
+    // одна полка почти пуста. Нажать — под карточкой подробности каждой полки группы.
+    const groups = new Map<StoreState['shelves'][number]['kind'], number[]>();
+    state.shelves.forEach((shelf, i) => groups.set(shelf.kind, [...(groups.get(shelf.kind) ?? []), i]));
+    if (openKind && ![...groups.keys()].some((k) => k === openKind)) openKind = '';
     const grid = el('div', 'ui-shelf-grid');
-    state.shelves.forEach((shelf, i) => {
-      const n = shelfCount(shelf);
-      const max = shelfCapacity(shelf);
+    for (const [kind, list] of groups) {
+      const shelvesOf = list.map((i) => state.shelves[i]);
+      const n = shelvesOf.reduce((sum, sh) => sum + shelfCount(sh), 0);
+      const max = shelvesOf.reduce((sum, sh) => sum + shelfCapacity(sh), 0);
+      const low = shelvesOf.some((sh) => shelfCount(sh) / Math.max(1, shelfCapacity(sh)) < 0.25);
       const cell: HTMLButtonElement = button('', () => {
-        const shown = openShelf === i ? grid.querySelector<HTMLElement>(':scope > .ui-shelf-span') : null;
+        const shown = openKind === kind ? grid.querySelector<HTMLElement>(':scope > .ui-shelf-span') : null;
         const show = !shown;
-        flipSpan(cell, `shelf:${i}`, shown, () => {
-          // Явно, а не «наоборот»: закрытие ждёт конца анимации, а за это время могли раскрыть другую полку.
-          if (show) openShelf = i;
-          else if (openShelf === i) openShelf = -1;
+        flipSpan(cell, `shelf:${kind}`, shown, () => {
+          // Явно, а не «наоборот»: закрытие ждёт конца анимации, а за это время могли раскрыть другую группу.
+          if (show) openKind = kind;
+          else if (openKind === kind) openKind = '';
           render();
         });
-      }, `ui-shelf-card${openShelf === i ? ' active' : ''}`);
+      }, `ui-shelf-card${openKind === kind ? ' active' : ''}`);
       const bar = el('div', 'ui-bar');
       const fill = el('div', 'ui-bar-fill');
       fill.style.width = `${Math.round((n / Math.max(1, max)) * 100)}%`;
-      fill.style.background = n / Math.max(1, max) < 0.25 ? '#feae34' : '#63c74d';
+      fill.style.background = low ? '#feae34' : '#63c74d';
       bar.append(fill);
-      const icons = PRODUCT_IDS.filter((pid) => (shelf.items[pid]?.length ?? 0) > 0).slice(0, 3).map((pid) => PRODUCTS[pid].icon).join('');
+      const icons = PRODUCT_IDS.filter((pid) => shelvesOf.some((sh) => (sh.items[pid]?.length ?? 0) > 0)).slice(0, 3).map((pid) => PRODUCTS[pid].icon).join('');
+      const stars = '★'.repeat(Math.min(...shelvesOf.map((sh) => sh.level)) + 1);
       cell.append(
-        el('b', '', t(SHELF_KINDS[shelf.kind].nameKey)),
-        el('span', 'ui-shelf-meta', `${icons} ${n}/${max} · ${'★'.repeat(shelf.level + 1)}`),
+        el('b', '', t(SHELF_KINDS[kind].nameKey)),
+        // Сколько полок в группе — в строке под названием: длинное название обрезается многоточием.
+        el('span', 'ui-shelf-meta', `${list.length > 1 ? `×${list.length} · ` : ''}${icons} ${n}/${max} · ${stars}`),
         bar,
       );
       grid.append(cell);
-      // Подробности — сразу под строкой с выбранной полкой.
-      if (openShelf === i) {
-        const details = shelfDetails(state, i);
-        details.classList.add('ui-shelf-span');
-        details.dataset.fold = `shelf:${i}`;
+      // Подробности — сразу под строкой с выбранной группой: каждая полка своей карточкой.
+      if (openKind === kind) {
+        const details = el('div', 'ui-shelf-span');
+        details.dataset.fold = `shelf:${kind}`;
+        for (const i of list) details.append(shelfDetails(state, i));
         grid.append(details);
       }
-    });
+    }
     out.push(grid, foldBox('season', `🗓 ${t('goods.title')}`, (body) => body.append(seasonBox(getState()))));
     // Запас: убранные полки ставятся обратно на первое свободное место бесплатно.
     if (state.storedShelves?.length) {
