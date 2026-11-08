@@ -229,3 +229,17 @@ describe('место покупателя у киоска', () => {
     expect(kioskZone(layout, 1).x).toBeLessThan(customer.x - 4);
   });
 });
+
+import { dropPlacement } from '../src/game/save';
+import { newGame as freshGame } from '../src/game/economy';
+
+describe('Перестановка полок убрана', () => {
+  it('своя расстановка из старого сохранения снимается, у второго магазина тоже', () => {
+    const s = { ...freshGame(), slotPos: { level: 0, at: [{ x: 1, y: 2 }] }, tillPos: { level: 0, dx: -4 }, propPos: { level: 0, at: {} } };
+    const clean = dropPlacement(s as never);
+    expect('slotPos' in clean || 'tillPos' in clean || 'propPos' in clean).toBe(false);
+    const zar = { ...freshGame(), zar: { at: 'home', since: 1, away: { level: 0, slotPos: { level: 0, at: [] }, tillPos: { level: 0, dx: 0 } } } };
+    const away = dropPlacement(zar as never).zar!.away as Record<string, unknown>;
+    expect('slotPos' in away || 'tillPos' in away).toBe(false);
+  });
+});

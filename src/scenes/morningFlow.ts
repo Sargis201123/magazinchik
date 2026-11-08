@@ -82,7 +82,6 @@ import * as nightShift from './nightShift';
 import * as newcomer from './newcomer';
 import * as rivals from './rivals';
 import * as camera from './camera';
-import * as shelves from './shelves';
 import * as building from './building';
 import * as collections from './collections';
 
@@ -217,7 +216,6 @@ export function showMorning(scene: StoreScene): void {
     return;
   }
   withLazy(morningUi, ({ showMorning: showMorningMenu }) => showMorningMenu({
-    onArrange: () => shelves.arrange(scene),
     onVisit: (id, name) => {
       scene.pendingVisit = undefined;
       void rivals.visitFriend(scene, id, name);

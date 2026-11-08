@@ -1,6 +1,6 @@
 // Полки зала: постройка и обновление полок с товаром (refreshShelves), боковые полки со шкалой запаса, ларь
 // и вёдра у кассы, вставки отделов в полу, уценка прямо в зале, места и пути к полкам, пары и неудачное
-// соседство, утренняя перестановка полок пальцем. Где какие места — layout.ts и placement.ts.
+// соседство. Где какие места — layout.ts и placement.ts.
 
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
@@ -17,48 +17,26 @@ import {
   type Category,
   type ProductId,
 } from '../game/economy';
-import { saveGame } from '../game/save';
 import { t } from '../i18n';
-import { haptic } from '../platform/telegram';
-import { button, el, openModal, UI_FONT } from '../ui/dom';
+import { UI_FONT } from '../ui/dom';
 import { kioskCount } from '../game/lanes';
-import { track } from '../platform/analytics';
 import {
-  blockedZones,
-  canShortenQueue,
   slotRect,
   slotSide,
   standFor,
-  wallSnap,
-  SIDE_X,
-  clampTill,
-  iceboxFits,
-  overlapsRect,
   propFootprint,
-  propIssues,
-  propPosFor,
   propRect,
-  slotIssues,
-  slotPosFor,
-  snap,
-  tillZones,
-  vendingFootprint,
-  vendingSide,
-  withTill,
-  type Prop,
 } from './placement';
-import { iceboxRect, iceboxSpotFor, layoutFor, WALL_ROW_Y } from './layout';
-import { crispZoom } from './pixels';
+import { iceboxSpotFor, WALL_ROW_Y } from './layout';
 import { Halo } from './halo';
 import { PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
-import { gearTier, registerSprite } from '../game/gear';
+import { gearTier } from '../game/gear';
 import { registerSlots } from '../game/registers';
 import { cleanHall, dreamShelf } from '../game/firstday';
-import { HUD_TOP, ART, FURNITURE_TOP, LIGHT_DEPTH, QUAKE_SHAKE_PX, ITEM_VARIANTS, type ShelfView } from './common';
+import { ART, FURNITURE_TOP, QUAKE_SHAKE_PX, ITEM_VARIANTS, type ShelfView } from './common';
 import * as motion from './motion';
 import * as lighting from './lighting';
 import * as staff from './staff';
-import * as morningFlow from './morningFlow';
 import * as camera from './camera';
 
 /** Сколько штук на полке считается «почти пусто» — табличка «Осталось N». */
@@ -109,293 +87,6 @@ export function shelfNeedsRestock(scene: StoreScene): boolean {
       (scene.state.warehouse[id]?.length ?? 0) > 0 &&
       scene.state.shelves.some((s) => canPlace(id, s) && (s.items[id]?.length ?? 0) === 0 && shelfFree(s) > 0),
   );
-}
-
-/**
- * Перестановка полок утром: зал целиком в кадре, каждое место под полку — «призрак», который тянут
- * пальцем по сетке. Место, куда ставить нельзя (вплотную к проходу, на кассе, у двери, так, что к
- * полке не подойти), — красное; «Готово» — только когда красных нет.
- */
-export function arrange(scene: StoreScene): void {
-  if (scene.arranging) return;
-  scene.arranging = true;
-  const { w, h } = scene.layout;
-  const level = scene.state.level;
-  const plain = layoutFor(level);
-  const defaults = plain.slots;
-  const registers = registerSlots(scene.state);
-  let at = scene.layout.slots.map((p) => ({ ...p }));
-  // Касса переезжает целиком вдоль нижней стены: сдвиг от стандартного места.
-  let tillDx = scene.state.tillPos?.level === level ? scene.state.tillPos.dx : 0;
-  // Короткая очередь освобождает верх зала у правой стены.
-  let shortQueue = scene.state.tillPos?.level === level && Boolean(scene.state.tillPos.short);
-  const placed = () => withTill(plain, { level, dx: tillDx, short: shortQueue }, level);
-  // Настоящие полки и разметку прячем — вместо них «призраки»; тени мебели на полу — тоже.
-  for (const view of scene.shelfViews.splice(0)) destroyShelfView(view);
-  for (const mark of scene.slotDecor) mark?.setVisible(false);
-  scene.floor.hide();
-  const cam = scene.cameras.main;
-  // Весь зал целиком; масштаб ровный (или хотя бы целый) — чуть дальше, если ровно не влезает.
-  const fit = Math.min(scene.scale.width / (w + 24), (scene.scale.height - (HUD_TOP + 120) * scene.res) / (h + 24));
-  cam.setZoom(crispZoom(fit, ART, 0, fit) || fit).centerOn(w / 2, h / 2 + 10);
-  const grid = scene.add.graphics().setDepth(LIGHT_DEPTH + 10);
-  grid.lineStyle(0.4, 0x2b2233, 0.18);
-  for (let x = 0; x <= w; x += 8) grid.lineBetween(x, scene.layout.wallH, x, h);
-  for (let y = scene.layout.wallH; y <= h; y += 8) grid.lineBetween(0, y, w, y);
-  // Где полку не поставить (вход, двери флигеля, щиток) — видно сразу, а не только когда полка краснеет.
-  for (const z of blockedZones(scene.layout, defaults)) {
-    const r = { x: Math.max(0, z.x), y: Math.max(scene.layout.wallH, z.y), w: 0, h: 0 };
-    r.w = Math.min(w, z.x + z.w) - r.x;
-    r.h = Math.min(h, z.y + z.h) - r.y;
-    if (r.w <= 0 || r.h <= 0) continue;
-    grid.fillStyle(0xe43b44, 0.12).fillRect(r.x, r.y, r.w, r.h);
-    grid.lineStyle(0.6, 0xe43b44, 0.45).strokeRect(r.x, r.y, r.w, r.h);
-  }
-  // Соседство отделов: зелёная связь — пара (берут вместе), красная — химия рядом с едой.
-  const linkG = scene.add.graphics().setDepth(LIGHT_DEPTH + 13);
-  // Какая полка в каком месте: обычные полки занимают места по порядку покупки.
-  const kinds = scene.state.shelves.filter((sh) => !SHELF_KINDS[sh.kind].fixture).map((sh) => sh.kind);
-  // Полка у боковой стены — боком: картинка и место на полу другие.
-  const styleGhost = (ghost: Phaser.GameObjects.Container, i: number) => {
-    const kind = kinds[i];
-    const look = kind ? SHELF_LOOK[kind] : null;
-    const side = slotSide(scene.layout, at[i]);
-    const img = ghost.getData('img') as Phaser.GameObjects.Image;
-    if (side) img.setTexture(look ? `${look.texture}_side` : 'slot_empty').setPosition(0, 0).setAngle(look ? 0 : 90).setFlipX(side === 'right');
-    else img.setTexture(look ? look.texture : 'slot_empty').setPosition(0, look ? -FURNITURE_TOP / 2 : 2).setAngle(0).setFlipX(false);
-    if (look) img.setTint(look.tint);
-    const r = slotRect(scene.layout, at[i]);
-    ghost.setSize(Math.max(20, r.w + 4), Math.max(30, r.h + 6));
-    ghost.input?.hitArea.setTo(0, 0, ghost.width, ghost.height);
-  };
-  const ghosts = at.map((p, i) => {
-    const img = scene.art(0, 0, 'slot_empty');
-    const frame = scene.add.graphics();
-    const ghost = scene.add.container(p.x, p.y, [img, frame]).setDepth(LIGHT_DEPTH + 11);
-    ghost.setData('frame', frame).setData('img', img);
-    ghost.setSize(44, 30);
-    ghost.setInteractive({ draggable: true, useHandCursor: true });
-    styleGhost(ghost, i);
-    return ghost;
-  });
-  // Касса — тоже «призрак»: тянется только влево-вправо, вместе с очередью и всем, что при ней.
-  const tillFrame = scene.add.graphics();
-  const tillImg = scene.art(0, FURNITURE_TOP / 2, registerSprite(scene.state));
-  const till = scene.add.container(scene.layout.counter.x, scene.layout.counter.y, [tillFrame, tillImg]).setDepth(LIGHT_DEPTH + 11);
-  till.setSize(32, 62).setInteractive({ draggable: true, useHandCursor: true });
-  const drawTill = (bad: boolean) => {
-    const lay = placed();
-    tillFrame.clear();
-    for (const z of tillZones(lay, registers, kioskCount(scene.state))) {
-      const r = { x: z.x - lay.counter.x, y: z.y - lay.counter.y, w: z.w, h: z.h };
-      tillFrame.fillStyle(bad ? 0xe43b44 : 0x2ce8f5, 0.18).fillRect(r.x, r.y, r.w, r.h);
-      tillFrame.lineStyle(1, bad ? 0xe43b44 : 0x0099db, 0.9).strokeRect(r.x, r.y, r.w, r.h);
-    }
-  };
-  // Вещи зала (автомат, ведро, растения) — тоже «призраки», их тянут свободно.
-  const props: (Prop & { tex: string; oy?: number })[] = scene.propList.map((p) => ({ ...p, fp: { ...p.fp } }));
-  const propGhosts = props.map((p) => {
-    const img = scene.art(0, p.oy ?? 0, p.tex);
-    const frame = scene.add.graphics();
-    const ghost = scene.add.container(p.x, p.y, [frame, img]).setDepth(LIGHT_DEPTH + 11);
-    ghost.setSize(Math.max(16, p.fp.w), Math.max(16, p.fp.h)).setInteractive({ draggable: true, useHandCursor: true });
-    ghost.setData('frame', frame).setData('img', img);
-    return ghost;
-  });
-  const propDefault = (id: string) => scene.propDefaults[id];
-  const bar = el('div', 'ui-arrange');
-  const hint = el('div', 'ui-arrange-hint', t('arrange.hint'));
-  const done = button(t('arrange.done'), () => finish(true), 'ui-btn');
-  const reset = button(t('arrange.reset'), () => {
-    at = defaults.map((p) => ({ ...p }));
-    ghosts.forEach((g, i) => {
-      g.setPosition(at[i].x, at[i].y);
-      styleGhost(g, i);
-    });
-    tillDx = 0;
-    shortQueue = false;
-    queueBtn.textContent = t('arrange.queueShort');
-    till.setPosition(plain.counter.x, plain.counter.y);
-    props.forEach((p, i) => {
-      const d = propDefault(p.id);
-      if (d) movePropTo(i, d.x, d.y);
-    });
-    check();
-  }, 'ui-btn secondary');
-  const cancel = button(t('arrange.cancel'), () => finish(false), 'ui-btn secondary');
-  const row = el('div', 'ui-arrange-row');
-  row.append(cancel, reset, done);
-  // Длинная очередь тянется до задней стены, короткая — стоит плотнее и освобождает верх зала.
-  const queueBtn = button(t(shortQueue ? 'arrange.queueLong' : 'arrange.queueShort'), () => {
-    shortQueue = !shortQueue;
-    queueBtn.textContent = t(shortQueue ? 'arrange.queueLong' : 'arrange.queueShort');
-    check();
-  }, 'ui-btn secondary ui-arrange-queue');
-  if (canShortenQueue(plain)) bar.append(hint, queueBtn, row);
-  else bar.append(hint, row);
-  document.body.append(bar);
-  // Автомат у боковой стены разворачивается боком.
-  const movePropTo = (i: number, x: number, y: number) => {
-    const p = props[i];
-    p.x = x;
-    p.y = y;
-    if (p.id === 'vending') {
-      const side = vendingSide(plain, x);
-      p.tex = side ? 'vending_side' : 'vending';
-      p.fp = vendingFootprint(side);
-      (propGhosts[i].getData('img') as Phaser.GameObjects.Image).setTexture(p.tex).setFlipX(side && x < w / 2);
-    }
-    propGhosts[i].setPosition(x, y);
-  };
-  const check = () => {
-    const lay = placed();
-    const bad = slotIssues(lay, at, defaults, registers, props.map(propRect), kioskCount(scene.state));
-    const badProps = propIssues(lay, at, props, registers, kioskCount(scene.state));
-    // След праздничной вещи вырос книзу (чтобы гости обходили кадку), но проверять её место — по
-    // прежнему: ёлка, переставленная игроком раньше, не должна вдруг стать красной.
-    if (badProps.has('holiday')) {
-      const legacy = props.map((p) => (p.id === 'holiday' ? { ...p, fp: { x: -7, y: -8, w: 14, h: 12 } } : p));
-      if (!propIssues(lay, at, legacy, registers, kioskCount(scene.state)).has('holiday')) badProps.delete('holiday');
-    }
-    // Вещь на своём стандартном месте игра поставила сама так, чтобы не мешать (растение у будущей
-    // кассы, у двери склада) — красной она становится, только если на неё поставили полку.
-    for (const p of props) {
-      const d = propDefault(p.id);
-      if (d && d.x === p.x && d.y === p.y && !at.some((s) => overlapsRect(slotRect(lay, s), propRect(p)))) badProps.delete(p.id);
-    }
-    // Ларь ищет место сам — вещь не должна занять его место.
-    if (scene.state.shelves.some((sh) => sh.kind === 'icebox')) {
-      const ice = iceboxRect(iceboxSpotFor({ ...lay, slots: at }, registers, props.map(propRect), kioskCount(scene.state)));
-      for (const p of props) if (overlapsRect(propRect(p), ice)) badProps.add(p.id);
-    }
-    propGhosts.forEach((g, i) => {
-      const frame = g.getData('frame') as Phaser.GameObjects.Graphics;
-      const { fp, id } = props[i];
-      const red = badProps.has(id);
-      frame.clear();
-      frame.fillStyle(red ? 0xe43b44 : 0xfee761, 0.3).fillRect(fp.x, fp.y, fp.w, fp.h);
-      frame.lineStyle(1, red ? 0xe43b44 : 0xb86f50, 1).strokeRect(fp.x, fp.y, fp.w, fp.h);
-    });
-    // Кассу подсвечиваем красным, если на её месте или в очереди стоит красная полка.
-    drawTill(tillZones(lay, registers, kioskCount(scene.state)).some((z) => at.some((p, i) => bad.has(i) && overlapsRect(slotRect(lay, p), z))));
-    ghosts.forEach((g, i) => {
-      const frame = g.getData('frame') as Phaser.GameObjects.Graphics;
-      const abs = slotRect(lay, at[i]);
-      const r = { x: abs.x - at[i].x, y: abs.y - at[i].y, w: abs.w, h: abs.h };
-      frame.clear();
-      frame.fillStyle(bad.has(i) ? 0xe43b44 : 0x63c74d, 0.28).fillRect(r.x, r.y, r.w, r.h);
-      frame.lineStyle(1, bad.has(i) ? 0xe43b44 : 0x3e8948, 1).strokeRect(r.x, r.y, r.w, r.h);
-    });
-    linkG.clear();
-    for (const link of shelfLinks(at.map((p) => slotRect(lay, p)), at.map((_, i) => kinds[i]))) {
-      const [a, b] = [at[link.a], at[link.b]];
-      const color = link.kind === 'pair' ? 0x63c74d : 0xe43b44;
-      linkG.lineStyle(1.5, color, 0.95).lineBetween(a.x, a.y - 4, b.x, b.y - 4);
-      linkG.fillStyle(0xffffff, 1).fillCircle((a.x + b.x) / 2, (a.y + b.y) / 2 - 4, 2.6);
-      linkG.fillStyle(color, 1).fillCircle((a.x + b.x) / 2, (a.y + b.y) / 2 - 4, 1.8);
-    }
-    // Ларь ищет место сам — после перестановки ему должно найтись место у стены.
-    const iceless = scene.state.shelves.some((sh) => sh.kind === 'icebox') && !iceboxFits(lay, at, registers, props.map(propRect), kioskCount(scene.state));
-    done.disabled = bad.size > 0 || badProps.size > 0 || iceless;
-    hint.textContent = bad.size || badProps.size ? t('arrange.bad', { n: bad.size + badProps.size }) : iceless ? t('arrange.icebox') : t('arrange.hint');
-    return iceless || badProps.size ? new Set([...bad, -1]) : bad;
-  };
-  const onDrag = (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject, x: number, y: number) => {
-    if (obj === till) {
-      tillDx = clampTill(plain, registers, x - plain.counter.x);
-      till.setPosition(plain.counter.x + tillDx, plain.counter.y);
-      check();
-      return;
-    }
-    const k = propGhosts.indexOf(obj as Phaser.GameObjects.Container);
-    if (k >= 0) {
-      movePropTo(k, Phaser.Math.Clamp(snap(x), 6, w - 6), Phaser.Math.Clamp(snap(y), scene.layout.wallH + 8, h - 8));
-      propGhosts[k].setDepth(LIGHT_DEPTH + 12);
-      check();
-      return;
-    }
-    const i = ghosts.indexOf(obj as Phaser.GameObjects.Container);
-    if (i < 0) return;
-    // У боковой стены полка «прилипает» к ней и разворачивается боком.
-    let gx = snap(x);
-    gx = gx < 20 ? SIDE_X : gx > w - 20 ? w - SIDE_X : gx;
-    const sideNow = gx === SIDE_X || gx === w - SIDE_X;
-    // У задней стены — «прилипает» к ней вплотную.
-    const gy = Phaser.Math.Clamp(snap(y), scene.layout.wallH + (sideNow ? 22 : 4), h - (sideNow ? 24 : 28));
-    at[i] = { x: gx, y: wallSnap(scene.layout, { x: gx, y: gy }) };
-    ghosts[i].setPosition(at[i].x, at[i].y).setDepth(LIGHT_DEPTH + 12);
-    styleGhost(ghosts[i], i);
-    check();
-  };
-  // Откуда взяли полку: если бросить её на другую полку или на пустое место, они меняются местами.
-  let dragFrom: { x: number; y: number } | null = null;
-  const onDragStart = (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => {
-    const i = ghosts.indexOf(obj as Phaser.GameObjects.Container);
-    dragFrom = i >= 0 ? { ...at[i] } : null;
-  };
-  const onDragEnd = (_p: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => {
-    (obj as Phaser.GameObjects.Container).setDepth?.(LIGHT_DEPTH + 11);
-    haptic.tap();
-    const i = ghosts.indexOf(obj as Phaser.GameObjects.Container);
-    if (i < 0 || !dragFrom) return;
-    const mine = slotRect(scene.layout, at[i]);
-    const area = (j: number) => {
-      const o = slotRect(scene.layout, at[j]);
-      return Math.max(0, Math.min(mine.x + mine.w, o.x + o.w) - Math.max(mine.x, o.x)) * Math.max(0, Math.min(mine.y + mine.h, o.y + o.h) - Math.max(mine.y, o.y));
-    };
-    const others = at.map((_, j) => j).filter((j) => j !== i && area(j) > 0);
-    if (!others.length) return;
-    const j = others.reduce((a, b) => (area(b) > area(a) ? b : a));
-    at[i] = { ...at[j] };
-    at[j] = dragFrom;
-    for (const k of [i, j]) {
-      ghosts[k].setPosition(at[k].x, at[k].y);
-      styleGhost(ghosts[k], k);
-    }
-    check();
-  };
-  // В первый раз — коротко, что можно делать в перестановке.
-  if (!scene.state.arrangeIntro) {
-    scene.state = { ...scene.state, arrangeIntro: true };
-    saveGame(scene.state);
-    const { card, close } = openModal();
-    const list = el('ul', 'ui-arrange-intro');
-    for (const key of ['arrange.intro.drag', 'arrange.intro.side', 'arrange.intro.swap', 'arrange.intro.red', 'arrange.intro.links', 'arrange.intro.queue'] as const) {
-      if (key === 'arrange.intro.queue' && !canShortenQueue(plain)) continue;
-      list.append(el('li', '', t(key)));
-    }
-    card.append(el('h2', '', t('arrange.intro.title')), list, button(t('arrange.intro.ok'), close, 'ui-btn'));
-  }
-  scene.input.on('dragstart', onDragStart);
-  scene.input.on('drag', onDrag);
-  scene.input.on('dragend', onDragEnd);
-  check();
-  const finish = (save: boolean) => {
-    if (save && check().size) return;
-    scene.input.off('dragstart', onDragStart);
-    scene.input.off('drag', onDrag);
-    scene.input.off('dragend', onDragEnd);
-    bar.remove();
-    grid.destroy();
-    linkG.destroy();
-    ghosts.forEach((g) => g.destroy());
-    propGhosts.forEach((g) => g.destroy());
-    till.destroy();
-    scene.arranging = false;
-    if (save) {
-      scene.state = {
-        ...scene.state,
-        slotPos: slotPosFor(level, at),
-        tillPos: tillDx || shortQueue ? { level, dx: tillDx, ...(shortQueue ? { short: true } : {}) } : undefined,
-        propPos: propPosFor(level, props, scene.propDefaults),
-      };
-      saveGame(scene.state);
-      track('arrange', scene.state.day, at.length);
-    }
-    // Всё пересобираем по новым местам (обход, ларь, растения) и возвращаемся к утру.
-    scene.buildWorld();
-    morningFlow.showMorning(scene);
-  };
 }
 
 /**

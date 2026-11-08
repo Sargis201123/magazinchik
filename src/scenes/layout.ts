@@ -80,10 +80,27 @@ const SHELF_STEP = 46;
 const WALL_STEP = 40;
 /** Ряд у задней стены: полка стоит к ней вплотную — задний край на плинтусе, верх заходит на стену. */
 export const WALL_ROW_Y = WALL_H - 6;
-/** Ряды островов: первый ряд и шаг между рядами (полка 24 + проход 32); левый край — после прохода у стены. */
+/**
+ * Ряды островов (08.11, решение автора): первый ряд — сразу за проходом у стенных полок (не через пустое
+ * полузала), остальные — ровно до нижней трети зала: проход у входа — не уже BOTTOM_AISLE, шаг рядов — от
+ * ROW_STEP (полка 24 + проход 32) до ROW_STEP_MAX. Справа от островов — место касс (с ростом магазина там
+ * встают новые), туда острова не заходят. Левый край — после прохода у стены.
+ */
 const ISLAND_X = 50;
-const ISLAND_Y = 116;
+const ISLAND_Y = 88;
 const ROW_STEP = 56;
+const ROW_STEP_MAX = 72;
+const BOTTOM_AISLE = 76;
+/** Ларёк: единственное место острова — ниже и правее, у кассы, а не посреди прохода к стенным полкам. */
+const KIOSK_ISLAND = { x: 58, y: 118 };
+
+/** Высоты рядов островов в зале высотой h. */
+export function islandRowsY(rows: number, h: number): number[] {
+  if (rows <= 1) return [ISLAND_Y];
+  const last = Math.max(ISLAND_Y + ROW_STEP * (rows - 1), Math.min(h - BOTTOM_AISLE, ISLAND_Y + ROW_STEP_MAX * (rows - 1)));
+  const step = (last - ISLAND_Y) / (rows - 1);
+  return Array.from({ length: rows }, (_, r) => Math.round(ISLAND_Y + step * r));
+}
 /** Стена между залом и флигелем и стены флигеля (как WALL в сцене). */
 export const WING_WALL = 6;
 /** Ширина комнат флигеля внутри стен и высота пекарни и кофейни. */
@@ -122,7 +139,9 @@ export function layoutFor(level: number): Layout {
   const slots: Point[] = [
     // У задней стены полки стоят вплотную друг к другу (шаг — ширина полки), без щелей.
     ...Array.from({ length: wall }, (_, i) => ({ x: 20 + WALL_STEP * i, y: WALL_ROW_Y })),
-    ...Array.from({ length: islandRows * cols }, (_, i) => ({ x: ISLAND_X + SHELF_STEP * (i % cols), y: ISLAND_Y + ROW_STEP * Math.floor(i / cols) })),
+    ...(level === 0
+      ? [KIOSK_ISLAND]
+      : Array.from({ length: islandRows * cols }, (_, i) => ({ x: ISLAND_X + SHELF_STEP * (i % cols), y: islandRowsY(islandRows, h)[Math.floor(i / cols)] }))),
   ];
   const whW = WING_W;
   const rows = warehouseRows(STORE_LEVELS[Math.min(level, STORE_LEVELS.length - 1)].warehouse);
