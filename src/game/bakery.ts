@@ -113,3 +113,19 @@ export const sellWholesale = (state: StoreState): { state: StoreState; pay: numb
   const pay = ovenBatch(state) * WHOLESALE_PRICE;
   return { state: { ...state, money: state.money + pay }, pay };
 };
+
+/**
+ * Утренняя выпечка (09.11, решение автора): пекарь на смене печёт первый противень до открытия — к открытию
+ * на полках свежий хлеб, и у поставщика его брать не нужно. «По спросу» — только если хлеба на день не
+ * хватает; «не печь хлеб» — не печёт. null — не печёт (нет пекаря, муки на что купить, места).
+ */
+export function morningBake(state: StoreState): { state: StoreState; onShelves: number } | null {
+  if (!bakeryWorking(state) || bakeModeOf(state) === 'off') return null;
+  const batch = ovenBatch(state);
+  if (state.money < ovenBatchCost(state) || breadRoom(state) < batch) return null;
+  if (bakeModeOf(state) === 'auto' && !needsBaking(state, 'bread', batch)) return null;
+  return takeOutBread({ ...state, money: state.money - ovenBatchCost(state) });
+}
+
+/** Свой хлеб печётся сегодня: дневной подвоз и закупка хлеб у поставщика не берут. */
+export const ownBreadOn = (state: StoreState): boolean => bakeryWorking(state) && bakeModeOf(state) !== 'off';

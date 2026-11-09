@@ -779,6 +779,7 @@ export const en: Record<TextKey, string> = {
   "popup.ovenFull": "No room for bread — the warehouse is full",
   "popup.aroma": "Smells of fresh bread!",
   "popup.freshBread": "🥖 +{n} fresh",
+  "popup.morningBread": "🥖 The baker baked before opening: +{n}",
   "store.billWarn": "⚠️ After building you will have {left} 💰 left, but the next bills are ~{bill} 💰 in {n} days. Not enough means debt, empty shelves and a falling rating.",
   "store.soloWarn": "⛔ You can't go further alone: the till, shelves and storage are all on you, guests will walk out and the rent goes up. Without help a bigger shop earns less than the one you have now, and a department store several times less. Hire people in the Staff tab first.",
   "popup.toEduard": "Cheaper at Eduard's!",

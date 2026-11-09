@@ -33,6 +33,7 @@ import { liveEvents, todayLocal } from '../platform/live';
 import { helpScan } from '../game/help';
 import { flushSoon, track, writeAnswer } from '../platform/analytics';
 import { needsRibbon, playDayOne } from '../game/onboarding';
+import { morningBake } from '../game/bakery';
 import { pendingStory } from '../game/story';
 import { tutAt, tutIndex, tutMorning, tutTell } from '../game/tutorial';
 import { ensureSeason } from '../game/pass';
@@ -631,6 +632,14 @@ export function prepareDay(scene: StoreScene): void {
   const momentPlan = momentsFor(scene.state, Math.random);
   scene.valyaCame = false;
   staff.syncStaff(scene);
+  // Пекарь на смене печёт первый противень до открытия: к открытию на полках свежий хлеб (bakery.ts).
+  const baked = morningBake(scene.state);
+  if (baked) {
+    scene.state = baked.state;
+    scene.refreshShelves();
+    const door = scene.layout.bakery.doorway;
+    scene.time.delayedCall(1200, () => scene.running && scene.popup(door.x + 10, door.y - 8, t('popup.morningBread', { n: baked.onShelves }), '#c8ffb0'));
+  }
   // Повар на смене — кухня сама закупает у поставщиков продукты на день (из кассы; видно утром у кухни и в итогах).
   const pantry = stockKitchen(scene.state);
   if (pantry.spent) {

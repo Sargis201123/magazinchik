@@ -42,7 +42,7 @@ describe('«Закупить нужное»', () => {
     const plain = bread(s);
     expect(plain).toBeGreaterThan(0);
     const bakery = { ...s, upgrades: ['oven'], staff: [baker] } as StoreState;
-    expect(ownBreadToday(bakery)).toBe(ovenBatch(bakery) * (OVEN_DAY_BATCHES - 1));
+    expect(ownBreadToday(bakery)).toBe(ovenBatch(bakery) * OVEN_DAY_BATCHES);
     // Не на что купить муку — пекарь не печёт, хлеб берём как раньше.
     expect(ownBreadToday({ ...bakery, money: 0 })).toBe(0);
     expect(bread(bakery)).toBe(Math.max(0, plain - ownBreadToday(bakery)));
@@ -187,5 +187,33 @@ describe('«Закупить нужное» за одно нажатие', () =>
     expect(bad.bad).toBeGreaterThan(0);
     expect(bad.state.warehouse.bread!.filter((u) => u.pending)).toHaveLength(bad.bad);
     expect(bad.state.shelves.every((sh) => (sh.items.bread ?? []).every((u) => !u.pending))).toBe(true);
+  });
+});
+
+import { morningBake, ownBreadOn } from '../src/game/bakery';
+import { autoTopUp } from '../src/game/autoorder';
+
+describe('Своя пекарня: хлеб не закупают и не подвозят', () => {
+  const baker: StaffMember = { role: 'baker', name: 0, skill: 1, wage: 400, months: 1 };
+  const bakery = (patch: Partial<StoreState> = {}) => ({ ...newGame(), level: 2, money: 50000, upgrades: ['oven'], staff: [baker], ...patch }) as StoreState;
+
+  it('пекарь печёт первый противень до открытия — хлеб на полках, мука оплачена', () => {
+    const s = { ...bakery(), shelves: bakery().shelves.map((sh) => ({ ...sh, items: {} })), warehouse: {} };
+    const out = morningBake(s);
+    expect(out).not.toBeNull();
+    expect(out!.onShelves).toBeGreaterThan(0);
+    expect(out!.state.money).toBeLessThan(s.money);
+    // «Не печь хлеб» и без пекаря — не печёт.
+    expect(morningBake({ ...s, bakeMode: 'off' })).toBeNull();
+    expect(morningBake({ ...s, staff: [] })).toBeNull();
+  });
+
+  it('дневной подвоз хлеб при своей пекарне не везёт', () => {
+    const s = { ...bakery(), autoOrder: { on: true }, warehouse: {}, shelves: bakery().shelves.map((sh) => ({ ...sh, items: {} })) } as StoreState;
+    expect(ownBreadOn(s)).toBe(true);
+    const order = autoTopUp(s, (pid) => (pid === 'bread' ? 20 : 0));
+    expect(order?.pid).not.toBe('bread');
+    // Без пекарни — везёт.
+    expect(autoTopUp({ ...s, staff: [] }, (pid) => (pid === 'bread' ? 20 : 0))?.pid).toBe('bread');
   });
 });

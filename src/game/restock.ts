@@ -56,13 +56,12 @@ export function restockTarget(state: StoreState, pid: ProductId, guests: number)
 export const OVEN_DAY_BATCHES = 3;
 
 /**
- * Сколько хлеба сегодня испечёт своя пекарня (пекарь на смене, печь не выключена и есть на муку):
- * столько у поставщика не берём — иначе пекарю некуда класть свой, а купленный лежит и черствеет.
- * Первую закладку не считаем: свежий хлеб выйдет только через 12–15 секунд дня, к открытию на
- * полках должен быть купленный.
+ * Сколько хлеба за день испечёт своя пекарня (пекарь на смене, печь, режим не «не печь»): столько у
+ * поставщика не берём — иначе пекарю некуда класть свой, а купленный лежит и черствеет. Первый противень
+ * пекарь печёт до открытия (bakery.ts morningBake) — считаем все противни дня.
  */
 export const ownBreadToday = (state: StoreState): number =>
-  bakeryWorking(state) && bakeModeOf(state) !== 'off' && state.money >= ovenBatchCost(state) ? ovenBatch(state) * (OVEN_DAY_BATCHES - 1) : 0;
+  bakeryWorking(state) && bakeModeOf(state) !== 'off' && state.money >= ovenBatchCost(state) ? ovenBatch(state) * OVEN_DAY_BATCHES : 0;
 
 /** Товар можно закупить сегодня: сезон, есть полка, кто-то продаёт. Своё (выпечка, банки своей марки) не закупают. */
 export const canStock = (state: StoreState, pid: ProductId): boolean =>
