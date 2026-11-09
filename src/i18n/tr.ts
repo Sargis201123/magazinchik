@@ -765,6 +765,7 @@ export const tr: Record<TextKey, string> = {
   "popup.ovenFull": "Ekmeği koyacak yer yok — depo dolu",
   "popup.aroma": "Taze ekmek kokuyor!",
   "popup.freshBread": "🥖 +{n} taze",
+  "popup.morningBread": "🥖 Fırıncı açılıştan önce pişirdi: +{n}",
   "store.billWarn": "⚠️ İnşaattan sonra {left} 💰 kalacak, ama en yakın faturalar ~{bill} 💰 ve {n} gün sonra. Yetmezse borca girersin, raflar boşalır, puan düşer.",
   "store.soloWarn": "⛔ Tek başına buradan öteye gidemezsin: kasa, raflar ve depo hep sende, müşteriler gidip durur, kira da artar. Yardımcısız daha büyük bir dükkân şimdikinden az kazandırır, büyük mağaza ise kat kat az. Önce “Personel” sekmesinden eleman al.",
   "popup.toEduard": "Eduard'da daha ucuz!",

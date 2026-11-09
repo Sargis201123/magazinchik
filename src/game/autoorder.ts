@@ -6,6 +6,7 @@
 
 import { onShelves, sellableProducts, warehouseCapacity, warehouseCount, warehouseOf, type ProductId, type StoreState } from './economy';
 import { canStock, restockPlan } from './restock';
+import { ownBreadOn } from './bakery';
 import { buyLine } from './reorder';
 import { receiveUrgent } from './urgent';
 import { listPrice, type SupplierId } from './suppliers';
@@ -112,7 +113,8 @@ export function autoTopUp(
   const today = autoDay(state);
   if (today.topUps >= AUTO_TOPUPS) return null;
   const pid = sellableProducts(state)
-    .filter((id) => sold(id) > 0 && !busy.includes(id) && canStock(state, id))
+    // Хлеб при своей пекарне печёт пекарь — фургон его не везёт.
+    .filter((id) => sold(id) > 0 && !busy.includes(id) && canStock(state, id) && !(id === 'bread' && ownBreadOn(state)))
     .filter((id) => warehouseOf(state, id) === 0 && onShelves(state, id) <= AUTO_TOPUP_LOW)
     .sort((a, b) => sold(b) - sold(a))[0];
   if (!pid) return null;

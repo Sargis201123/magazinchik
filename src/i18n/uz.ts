@@ -777,6 +777,7 @@ export const uz: Record<TextKey, string> = {
   "popup.ovenFull": "Nonni qoʻyishga joy yoʻq — ombor toʻla",
   "popup.aroma": "Yangi non hidi!",
   "popup.freshBread": "🥖 +{n} issiq non",
+  "popup.morningBread": "🥖 Novvoy ochilishdan oldin pishirdi: +{n}",
   "store.billWarn": "⚠️ Qurilishdan keyin {left} 💰 qoladi, yaqin toʻlovlar esa ~{bill} 💰 — {n} kundan keyin. Yetmasa — qarzga botasan, javonlar boʻshaydi, reyting tushadi.",
   "store.soloWarn": "⛔ Yolgʻiz endi uddalay olmaysan: kassa, javonlar va ombor — hammasi senda, mehmonlar ketib qoladi, ijara esa oshadi. Yordamchilarsiz katta doʻkon hozirgisidan kam foyda beradi, univermag esa bir necha baravar kam. Avval «Xodimlar» boʻlimida odam yolla.",
   "popup.toEduard": "Eduardda arzonroq!",

@@ -778,6 +778,7 @@ export const pt: Record<TextKey, string> = {
   "popup.ovenFull": "Não há onde pôr o pão — o estoque está cheio",
   "popup.aroma": "Cheirinho de pão fresco!",
   "popup.freshBread": "🥖 +{n} frescos",
+  "popup.morningBread": "🥖 O padeiro assou antes de abrir: +{n}",
   "store.billWarn": "⚠️ Depois da obra vão sobrar {left} 💰, e as próximas contas são ~{bill} 💰 — em {n} dias. Se não der, você entra em dívida, as prateleiras esvaziam e a avaliação cai.",
   "store.soloWarn": "⛔ Sozinho não dá pra ir além: caixa, prateleiras e estoque — tudo nas suas costas, os clientes vão embora e o aluguel sobe. Sem ajudantes, uma loja maior rende menos que a atual, e uma loja de departamentos rende várias vezes menos. Primeiro contrate gente na aba «Equipe».",
   "popup.toEduard": "No Eduard é mais barato!",
