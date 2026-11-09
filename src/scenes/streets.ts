@@ -38,6 +38,8 @@ import {
   SIDE_SHOP_W,
   discard,
   type Pigeon,
+  LOT,
+  LOT_DRIVE_END,
 } from './common';
 import * as pets from './pets';
 import * as lighting from './lighting';
@@ -410,12 +412,16 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
     scene.add.tileSprite(x, y, w, hh, key).setOrigin(0).setTileScale(1 / ART).setDepth(-10);
   const left = -400;
   const width = next.w + 800;
+  // Дорога, тротуары и газон тянутся далеко за край квартала: отведёшь камеру вбок — улица не обрывается.
+  // Деревья, облака и прочее — в пределах квартала (left, width), их за краем не нужно.
+  const roadLeft = -1200;
+  const roadW = next.w + 2400;
   const top = next.h + 4;
   // Газон с запасом за краями квартала: когда отдаляешь камеру, мир не обрывается в темноту.
   // Плитки травы вразнобой и с отражениями (floor.ts) — повтора не видно, поверх — большие мягкие
   // пятна светлой и тёмной травы. Один газон на всё: дорожки и дома ложатся сверху. В лёгкой
   // графике — прежний газон одной плиткой, без пятен.
-  const lawn = { x: left - 400, y: -800, w: width + 800, h: top + 1600 };
+  const lawn = { x: roadLeft - 200, y: -800, w: roadW + 400, h: top + 1600 };
   tile(lawn.x, lawn.y, lawn.w, lawn.h, scene.lite ? 'grass' : lawnTexture(scene));
   if (!scene.lite) lawnShade(scene, lawn, -10);
   scene.streetY = top + 12;
@@ -430,10 +436,12 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
     { x: left - 400, y: -400, w: 400, h: top + 788 },
     { x: left + width, y: -400, w: 400, h: top + 788 },
   ];
-  tile(left, top, width, 22, 'paving');
-  scene.add.rectangle(left, top + 22, width, 2, 0x8b9bb4).setOrigin(0).setDepth(-9);
-  tile(left, top + 24, width, 40, 'asphalt');
-  for (let x = left; x < left + width; x += 24) scene.add.rectangle(x, top + 43.5, 12, 1.5, 0xe6e1d6).setOrigin(0).setDepth(-9);
+  tile(roadLeft, top, roadW, 22, 'paving');
+  scene.add.rectangle(roadLeft, top + 22, roadW, 2, 0x8b9bb4).setOrigin(0).setDepth(-9);
+  tile(roadLeft, top + 24, roadW, 40, 'asphalt');
+  // Разметка — одной фигурой на всю улицу, а не сотней прямоугольников.
+  const dashes = scene.add.graphics().setDepth(-9).fillStyle(0xe6e1d6, 1);
+  for (let x = roadLeft; x < roadLeft + roadW; x += 24) dashes.fillRect(x, top + 43.5, 12, 1.5);
   // Дорога живая: люки, заплаты и трещины (не на переходе).
   const road = scene.add.graphics().setDepth(-9.05);
   const roadRnd = new Phaser.Math.RandomDataGenerator(['road']);
@@ -460,8 +468,8 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
       }
     }
   }
-  scene.add.rectangle(left, top + 64, width, 2, 0x8b9bb4).setOrigin(0).setDepth(-9);
-  tile(left, top + 66, width, 22, 'paving');
+  scene.add.rectangle(roadLeft, top + 64, roadW, 2, 0x8b9bb4).setOrigin(0).setDepth(-9);
+  tile(roadLeft, top + 66, roadW, 22, 'paving');
   // Дорожка от двери до тротуара через пустой участок.
   if (top > h + FACADE_H) tile(door.x - 12, h + FACADE_H, 24, top - h - FACADE_H, 'paving');
   // Пешеходный переход напротив входа.
@@ -530,7 +538,7 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
     scene.art(door.x, top + 92, key).setOrigin(0.5, 0).setDepth(top + 92 + 88);
   }
   // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
-  const districtAreas = zar ? [...zarFx.buildRiver(scene, next, top, left, width), ...cars.buildParking(scene, next, top)] : [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildHood(scene, next, top), ...friendStreet.buildFriendStreet(scene, top)];
+  const districtAreas = zar ? [...zarFx.buildRiver(scene, next, top, left, width), ...cars.buildParking(scene, next, top)] : [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildBackStreet(scene, next), ...buildHood(scene, next, top), ...friendStreet.buildFriendStreet(scene, top)];
   if (zar) {
     // Район, благоустройство и улица друзей — в Центре: ключи те же, чтобы утро не перестраивало мир зря.
     scene.builtDistrict = districtKey(scene.state);
@@ -845,8 +853,9 @@ export function buildPark(scene: StoreScene, next: Layout, top: number): { x: nu
   const areas: { x: number; y: number; w: number; h: number }[] = [];
   // Аллея поперёк парка.
   const alley = top + 268;
-  scene.add.tileSprite(-560, alley, next.w + 1120, 12, 'paving').setOrigin(0).setTileScale(1 / ART).setDepth(-9.46);
-  scene.add.rectangle(-560, alley + 12, next.w + 1120, 1, 0x181425, 0.15).setOrigin(0).setDepth(-9.45);
+  // Аллея тянется, как и улица, далеко за край квартала.
+  scene.add.tileSprite(-1200, alley, next.w + 2400, 12, 'paving').setOrigin(0).setTileScale(1 / ART).setDepth(-9.46);
+  scene.add.rectangle(-1200, alley + 12, next.w + 2400, 1, 0x181425, 0.15).setOrigin(0).setDepth(-9.45);
   areas.push({ x: -560, y: alley - 4, w: next.w + 1120, h: 20 });
   for (let x = -520, i = 0; x < next.w + 520; x += 96, i++) {
     scene.art(x, alley + 2, 'lamp').setOrigin(0.5, 0.95).setDepth(alley + 2);
@@ -1264,4 +1273,104 @@ export function buildForRent(scene: StoreScene, next: Layout): void {
     .setOrigin(0.5)
     .setResolution(scene.textRes(8))
     .setDepth(signY + 9);
+}
+
+/** Дома вдоль задней улицы: ширина, шаг, высота (крыша и фасад) и тинты черепицы. */
+const HOME = { w: 84, step: 106, h: 74 };
+const HOME_ROOFS = [0xd0705a, 0x9a6a52, 0x7a8aa6, 0xc08a5a, 0x8f5a6a];
+/** Задняя улица за магазином: проезжая часть и тротуары (точки мира) — над парковкой. */
+const BACK_ST = { h: 26, walk: 8 };
+
+/**
+ * Задняя улица за магазином (09.11, решение автора: парковка висела посреди пустого газона, слева и сверху
+ * — пустое поле): асфальт с разметкой и тротуарами во всю ширину квартала, парковка выходит на неё
+ * въездом; вдоль улицы — жилые дома под скатными крышами (окна вечером загораются), с палисадниками.
+ * Возвращает занятые места — сквер туда деревья не сажает.
+ */
+export function buildBackStreet(scene: StoreScene, next: Layout): { x: number; y: number; w: number; h: number }[] {
+  const lotRight = next.w + LOT_DRIVE_END;
+  const lotLeft = lotRight - LOT.w;
+  const streetBottom = LOT.top - 6;
+  const streetTop = streetBottom - BACK_ST.h;
+  const x0 = -1200;
+  const w = next.w + 2400;
+  const tile = (x: number, y: number, tw: number, th: number, key: string, depth: number) =>
+    scene.add.tileSprite(x, y, tw, th, key).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
+  tile(x0, streetTop - BACK_ST.walk, w, BACK_ST.walk, 'paving', -9.46);
+  tile(x0, streetTop, w, BACK_ST.h, 'asphalt', -9.46);
+  tile(x0, streetBottom, w, BACK_ST.walk, 'paving', -9.46);
+  const g = scene.add.graphics().setDepth(-9.45);
+  g.fillStyle(0x8b9bb4, 1).fillRect(x0, streetTop - 1, w, 1).fillRect(x0, streetBottom, w, 1);
+  g.fillStyle(0xe6e1d6, 0.9);
+  for (let x = x0; x < x0 + w; x += 24) g.fillRect(x, streetTop + BACK_ST.h / 2 - 0.75, 12, 1.5);
+  // Въезд на парковку с задней улицы: асфальт через тротуар, бордюр понижен.
+  const gateX = lotLeft + LOT.w / 2 - 20;
+  tile(gateX, streetBottom, 40, LOT.top - streetBottom + 2, 'asphalt', -9.44);
+  g.fillStyle(0x5a6988, 1).fillRect(gateX, streetBottom, 40, 1);
+  const areas = [{ x: x0, y: streetTop - BACK_ST.walk - 4, w, h: BACK_ST.h + 2 * BACK_ST.walk + 8 }];
+  const rnd = new Phaser.Math.RandomDataGenerator(['homes']);
+  // Северная сторона — дома фасадом к улице (вниз), во всю ширину квартала.
+  const northBase = streetTop - BACK_ST.walk;
+  for (let x = -396, i = 0; x + HOME.w < next.w + 400; x += HOME.step, i++) {
+    home(scene, x, northBase - HOME.h, HOME.w, HOME.h, HOME_ROOFS[i % HOME_ROOFS.length], false, rnd);
+    areas.push({ x: x - 6, y: northBase - HOME.h - 12, w: HOME.w + 12, h: HOME.h + 12 });
+  }
+  // Южная сторона, слева от парковки (над флигелем) — дома фасадом к улице (вверх), до флигеля не доходят.
+  const southTop = streetBottom + BACK_ST.walk;
+  const southH = Math.min(HOME.h, -WALL_CLEAR - southTop);
+  if (southH >= 50) {
+    for (let x = lotLeft - 12 - HOME.w, i = 0; x > -400; x -= HOME.step, i++) {
+      home(scene, x, southTop, HOME.w, southH, HOME_ROOFS[(i + 2) % HOME_ROOFS.length], true, rnd);
+      areas.push({ x: x - 6, y: southTop - 4, w: HOME.w + 12, h: southH + 16 });
+    }
+    // И справа от проезда к парковке.
+    for (let x = lotRight + 16, i = 0; x + HOME.w < next.w + 400; x += HOME.step, i++) {
+      home(scene, x, southTop, HOME.w, southH, HOME_ROOFS[(i + 4) % HOME_ROOFS.length], true, rnd);
+      areas.push({ x: x - 6, y: southTop - 4, w: HOME.w + 12, h: southH + 16 });
+    }
+  }
+  return areas;
+}
+
+/** Сколько газона оставить над крышей магазина и флигеля (вывеска и кусты у задней стены). */
+const WALL_CLEAR = 30;
+
+/**
+ * Жилой дом сверху: скатная черепичная крыша (hipRoof), узкий фасад к улице с окнами и дверью, перед ним
+ * палисадник с заборчиком и дорожкой к тротуару. faceUp — фасад сверху (дом к югу от улицы).
+ */
+function home(scene: StoreScene, x: number, y: number, w: number, h: number, roof: number, faceUp: boolean, rnd: Phaser.Math.RandomDataGenerator): void {
+  const yard = 12;
+  const front = faceUp ? y + yard : y + h - yard - FACADE_H;
+  const roofY = faceUp ? front + FACADE_H : y;
+  const roofH = h - yard - FACADE_H;
+  // Тень дома на газон — вправо и вниз.
+  scene.add.rectangle(x + w, roofY + 6, 7, roofH, 0x181425, 0.16).setOrigin(0).setDepth(-9.4);
+  scene.add.tileSprite(x, roofY, w, roofH, 'roof_shingle').setOrigin(0).setTileScale(1 / ART).setTint(roof).setDepth(-3);
+  hipRoof(scene, x, roofY, w, roofH);
+  // Фасад: штукатурка, окна с рамами (вечером загораются) и дверь посередине.
+  const f = scene.add.graphics().setDepth(-2.8);
+  f.fillStyle(0xe8dcc4, 1).fillRect(x + 2, front, w - 4, FACADE_H);
+  f.fillStyle(0xb8a888, 1).fillRect(x + 2, faceUp ? front : front + FACADE_H - 1, w - 4, 1);
+  const doorX = x + w / 2;
+  f.fillStyle(0x733e39, 1).fillRect(doorX - 3, front + 2, 6, FACADE_H - 2);
+  f.fillStyle(0xfeae34, 1).fillRect(doorX + 1.5, front + 5, 1, 1);
+  for (const dx of [-28, -15, 15, 28]) {
+    const wx = doorX + dx;
+    f.fillStyle(0xffffff, 1).fillRect(wx - 4, front + 2, 8, 6);
+    f.fillStyle(0x4b6a9c, 1).fillRect(wx - 3, front + 3, 6, 4);
+    f.fillStyle(0xa8c8e8, 1).fillRect(wx - 3, front + 3, 2, 1);
+    lighting.nightGlow(scene, scene.add.rectangle(wx, front + 5, 6, 4, 0xffc870).setDepth(-2.7), 0.85, undefined, { from: rnd.frac() * 0.6 });
+  }
+  // Палисадник: газон потемнее, заборчик, дорожка от двери к тротуару, куст.
+  const yardY = faceUp ? y : y + h - yard;
+  const p = scene.add.graphics().setDepth(-9.42);
+  p.fillStyle(0x3e8948, 0.25).fillRect(x, yardY, w, yard);
+  p.fillStyle(0xc0cbdc, 1).fillRect(doorX - 3, yardY, 6, yard);
+  p.fillStyle(0xe6e1d6, 1);
+  const fenceY = faceUp ? yardY + 1 : yardY + yard - 2;
+  p.fillRect(x, fenceY, doorX - 4 - x, 1).fillRect(doorX + 4, fenceY, x + w - doorX - 4, 1);
+  for (let px = x; px <= x + w; px += 4) if (Math.abs(px - doorX) > 4) p.fillRect(px, fenceY - 1, 1, 3);
+  scene.art(x + 10, yardY + yard / 2 + 2, rnd.frac() < 0.5 ? 'bush_flower' : 'bush').setDepth(-9.41);
+  scene.art(x + w - 10, yardY + yard / 2 + 2, 'bush').setDepth(-9.41);
 }
