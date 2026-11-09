@@ -2,6 +2,7 @@
 // Нужен для баланса: на какой день игрок расширяет магазин, сколько зарабатывает, где застревает.
 // Запуск: npm run sim
 
+import { noThieves } from './firstday';
 import { grantPets, petItem, type PetId } from './pets';
 import { noteLost } from './losses';
 import { isBroke } from './tips';
@@ -932,7 +933,7 @@ export function simulate({
     };
     const runGuests = (count: number, tolerance: number, cap: number, night: boolean) => {
     for (let g = 0; g < count; g++) {
-      if (random() < thiefChance(state.level) * cameraTheft(state) * eyeTheft(state)) {
+      if (!noThieves(state) && random() < thiefChance(state.level) * cameraTheft(state) * eyeTheft(state)) {
         // Вор берёт товар; его ловит охранник или, реже, сам игрок.
         const id = sellable[Math.floor(random() * sellable.length)];
         const index = shelfFor(state, id);

@@ -68,7 +68,7 @@ import { note } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { noteLost } from '../game/losses';
 import { fairTodayTolerance } from '../game/fair';
-import { FIRST_REGULAR, firstRegularVisit, gentleDay, GUEST_OF_DAY_AT, guestOfDay, grannyServesAfter, grannyStays, quietDays, shelfWaits } from '../game/firstday';
+import { FIRST_REGULAR, firstRegularVisit, gentleDay, noThieves, GUEST_OF_DAY_AT, guestOfDay, grannyServesAfter, grannyStays, quietDays, shelfWaits } from '../game/firstday';
 import {
   ART,
   LIGHT_DEPTH,
@@ -454,7 +454,7 @@ export function spawnCustomer(
   forced?: { look: Look; at: Phaser.Types.Math.Vector2Like; wants?: ProductId[]; first?: boolean },
   arrived?: { sprite: Phaser.GameObjects.Container; look: Look; car: ParkSpot },
 ): void {
-  const thief = !forced && !arrived && Math.random() < thiefChance(scene.state.level) * cameraTheft(scene.state) * eyeTheft(scene.state);
+  const thief = !forced && !arrived && !noThieves(scene.state) && Math.random() < thiefChance(scene.state.level) * cameraTheft(scene.state) * eyeTheft(scene.state);
   const valya = !forced && !arrived && !thief && !scene.night && !scene.valyaCame && scene.state.day > 1 && Math.random() < 0.15;
   const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
   // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще. В тихие дни новичка (firstday.ts) случайных нет:
