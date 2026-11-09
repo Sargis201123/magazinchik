@@ -226,11 +226,14 @@ export class Hud {
     // Перерисовываем только когда что-то изменилось: update зовётся каждый кадр.
     if (key === this.lastStock) return;
     this.lastStock = key;
-    const parts: HTMLElement[] = [el('span', 'ui-stock-wh', `📦 ${warehouseCount(state)}/${warehouseCapacity(state)}`)];
-    for (const p of shown) parts.push(el('span', p.n === 0 ? 'ui-stock-out' : 'ui-stock-low', `${PRODUCTS[p.id].icon}${p.n}`));
-    if (low.length > shown.length) parts.push(el('span', 'ui-stock-low', `+${low.length - shown.length}`));
-    this.stock.replaceChildren(...parts, this.goalWrap);
-    for (const p of parts) pixelize(p);
+    // Одной плашкой: склад, черта, кончающееся на полках.
+    const bar = el('div', 'ui-stock-bar');
+    bar.append(el('span', 'ui-stock-wh', `📦 ${warehouseCount(state)}/${warehouseCapacity(state)}`));
+    if (shown.length) bar.append(el('i', 'ui-stock-sep'));
+    for (const p of shown) bar.append(el('span', p.n === 0 ? 'ui-stock-out' : 'ui-stock-low', `${PRODUCTS[p.id].icon}${p.n}`));
+    if (low.length > shown.length) bar.append(el('span', 'ui-stock-low', `+${low.length - shown.length}`));
+    this.stock.replaceChildren(bar, this.goalWrap);
+    pixelize(bar);
   }
 
   private lastStock = '';

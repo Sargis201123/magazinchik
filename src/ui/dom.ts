@@ -19,15 +19,25 @@ const css = `
   text-rendering: optimizeLegibility; }
 /* Панели HUD — по ширине игры (холст 9:16), а не всего окна: на компьютере не разъезжаются по краям. */
 .ui-hud, .ui-stock, .ui-hint { max-width: var(--game-w, min(100vw, 56.25dvh)); margin: 0 auto; box-sizing: border-box; }
-.ui-hud span { background: rgba(24, 20, 37, .72); padding: 4px 8px; border-radius: 6px; }
-.ui-hud { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
-  padding: calc(var(--safe-top, env(safe-area-inset-top)) + 8px) 12px 8px; font: 600 15px/1.2 ${UI_FONT};
-  color: #fff; text-shadow: 0 1px 0 #000; pointer-events: none; }
-.ui-stock { position: fixed; left: 0; right: 0; top: calc(var(--safe-top, env(safe-area-inset-top)) + 32px); padding: 0 10px;
-  text-align: center; font: 13px/1.5 ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
-/* Склад и только кончающиеся на полках товары — плашками. */
+/* Верх (09.11): одна пиксельная панель — деньги | день и время | звёзды, ровными ячейками с разделителями;
+   под ней одной строкой склад и то, что кончается на полках, ниже — цель и задания дня. */
+.ui-hud { position: fixed; top: calc(var(--safe-top, env(safe-area-inset-top)) + 6px); left: 8px; right: 8px;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  padding: 4px 4px; font: 700 15px/1.2 ${UI_FONT}; color: #fff; text-shadow: 0 1px 0 #000; pointer-events: none;
+  background: rgba(24, 20, 37, .86); border: 2px solid #0b0911; border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 2px 0 rgba(0, 0, 0, .35); }
+.ui-hud > span { padding: 1px 8px; white-space: nowrap; }
+.ui-hud > span:nth-child(1) { justify-self: start; }
+.ui-hud > span:nth-child(2) { justify-self: center; border-left: 1px solid rgba(255, 255, 255, .16); border-right: 1px solid rgba(255, 255, 255, .16); padding: 1px 12px; }
+.ui-hud > span:nth-child(3) { justify-self: end; color: #fee761; letter-spacing: 1px; }
+.ui-stock { position: fixed; left: 0; right: 0; top: calc(var(--safe-top, env(safe-area-inset-top)) + 44px); padding: 0 10px;
+  text-align: center; font: 600 12.5px/1.5 ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
+/* Склад и кончающиеся на полках товары — одной плашкой; пусто — красный значок, мало — жёлтый. */
 .ui-stock { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
-.ui-stock span { background: rgba(24, 20, 37, .72); padding: 1px 7px; border-radius: 6px; white-space: nowrap; }
+.ui-stock > .ui-stock-bar { display: inline-flex; align-items: center; gap: 6px; background: rgba(24, 20, 37, .86); border: 1.5px solid #0b0911;
+  border-radius: 8px; padding: 0 8px; white-space: nowrap; box-shadow: 0 1px 0 rgba(0, 0, 0, .3); }
+.ui-stock-bar > span { white-space: nowrap; }
+.ui-stock-bar .ui-stock-sep { width: 1px; align-self: stretch; margin: 3px 0; background: rgba(255, 255, 255, .16); }
 .ui-stock .ui-stock-low { color: #fee761; }
 /* Цель с полоской — своей строкой под складом; только она ловит касания (остальная строка — сквозная). */
 .ui-goal-wrap { flex-basis: 100%; display: flex; flex-direction: column; align-items: center; gap: 3px; }
@@ -53,7 +63,7 @@ const css = `
 .ui-tomorrow { margin: 8px 0; padding: 6px 8px; border: 2px dashed #f7c948; border-radius: 8px; background: #fff8d6; font-size: 14px; }
 .ui-tomorrow b { margin-right: 4px; }
 .ui-tomorrow-more { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #f7c948; }
-.ui-stock .ui-stock-out { color: #fff; background: rgba(228, 59, 68, .85); }
+.ui-stock .ui-stock-out { color: #fff; background: #b13e53; border-radius: 4px; padding: 0 4px; }
 .ui-hint { position: fixed; left: 0; right: 0; padding: 0 12px; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 12px);
   text-align: center; font: 13px ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
 /* Окно — ниже кнопок Telegram: в полном экране «Закрыть» и «⋯» лежат поверх игры и забирают касания себе
