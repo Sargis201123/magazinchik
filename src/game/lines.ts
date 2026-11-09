@@ -6,7 +6,7 @@
 // прибавляет «славу марки»: вся своя продукция (и выпечка) идёт чуть лучше. Ни одна линейка не обязательна.
 
 import { yearTime, type YearTime } from './calendar';
-import { canPlace, onShift, productAvailable, PRODUCTS, shelfFree, warehouseCapacity, warehouseCount, type ProductId, type StoreState, type Unit } from './economy';
+import { canPlace, onShift, productAvailable, PRODUCTS, shelfFree, warehouseCapacity, warehouseCount, type ProductId, type StoreState, type Unit, normalizeShelves } from './economy';
 import { hasUpgrade } from './upgrades';
 import { usualSales } from './bakery';
 import type { TextKey } from '../i18n/ru';
@@ -79,7 +79,8 @@ export const nextLineCost = (state: StoreState, id: LineId): number | null => LI
 export function buyLineTier(state: StoreState, id: LineId): StoreState | null {
   const cost = nextLineCost(state, id);
   if (cost === null || lineLock(state, id) || state.money < cost) return null;
-  return { ...state, money: state.money - cost, lines: { ...state.lines, [id]: lineTier(state, id) + 1 } };
+  // Первая линейка — у входа появляется полка «От бабушки» (economy.ts normalizeShelves).
+  return normalizeShelves({ ...state, money: state.money - cost, lines: { ...state.lines, [id]: lineTier(state, id) + 1 } });
 }
 
 /** Делают ли линейку в это время года: квас — только в тепло (SEASONAL в economy.ts: вне сезона его и не продают). */

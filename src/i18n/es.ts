@@ -18,6 +18,8 @@ export const es: Record<TextKey, string> = {
   "shelf.meat": "Refrigerador de carne",
   "shelf.icebox": "Congelador de helados",
   "shelf.florist": "Flores junto a la caja",
+  "shelf.brand": "Estante «De la abuela»",
+  "shelf.brandSign": "De la abuela",
   "goods.title": "🗓 De temporada",
   "goods.icecream": "🍦 Helado — todo el año en el congelador, en verano se vende más",
   "goods.tangerines": "🍊 Mandarinas — para Año Nuevo, en el «Puesto de verduras»",

@@ -429,6 +429,11 @@ export function buildShowcases(scene: StoreScene): void {
   // Место ларя обходят всегда, как и места под полки: его могут поставить утром.
   const ice = shelves.iceboxSpot(scene);
   scene.obstacles.push({ x: ice.x - 16, y: ice.y - 10, w: 32, h: 18 });
+  // Полка «От бабушки» (своя марка) — когда она есть.
+  if (scene.state.shelves.some((sh) => sh.kind === 'brand')) {
+    const b = shelves.brandSpot(scene);
+    scene.obstacles.push({ x: b.x - 15, y: b.y - 6, w: 30, h: 18 });
+  }
   // Левая стена: вдоль неё не ходят, во флигель — только через двери.
   const { h } = scene.layout;
   let from = -4;

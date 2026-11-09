@@ -30,6 +30,8 @@ export const uz: Record<TextKey, string> = {
   "shelf.meat": "Goʻsht muzlatgichi",
   "shelf.icebox": "Muzqaymoq",
   "shelf.florist": "Kassa yonida gullar",
+  "shelf.brand": "«Buvidan» javoni",
+  "shelf.brandSign": "Buvidan",
   "goods.title": "🗓 Mavsumiy mahsulotlar",
   "goods.icecream": "🍦 Muzqaymoq — yil boʻyi sandiqdan, yozda koʻproq olishadi",
   "goods.tangerines": "🍊 Mandarin — Yangi yilga, «Sabzavotlar»da",

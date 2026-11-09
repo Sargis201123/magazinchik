@@ -18,6 +18,8 @@ export const tr: Record<TextKey, string> = {
   "shelf.meat": "Et dolabı",
   "shelf.icebox": "Dondurma dolabı",
   "shelf.florist": "Kasada çiçekler",
+  "shelf.brand": "“Büyükanneden” rafı",
+  "shelf.brandSign": "Büyükanneden",
   "goods.title": "🗓 Mevsimlik ürünler",
   "goods.icecream": "🍦 Dondurma — dolaptan yıl boyu, yazın daha çok satılır",
   "goods.tangerines": "🍊 Mandalina — yılbaşına doğru, “Manav tezgâhı”nda",

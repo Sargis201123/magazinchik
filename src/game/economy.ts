@@ -30,7 +30,7 @@ import { inZar, zarAwayBill, zarBillShare, zarNextLevel } from './zarshop';
  * Ларь с мороженым (у входа) и цветы у кассы — тоже «полки», но стоят на своих местах,
  * а не на местах под полки в зале.
  */
-export type Category = 'bakery' | 'produce' | 'dairy' | 'meat' | 'drinks' | 'frozen' | 'household' | 'icebox' | 'florist';
+export type Category = 'bakery' | 'produce' | 'dairy' | 'meat' | 'drinks' | 'frozen' | 'household' | 'icebox' | 'florist' | 'brand';
 
 export type ProductId =
   | 'bread'
@@ -101,10 +101,10 @@ export const PRODUCTS: Record<ProductId, Product> = {
   buns: { id: 'buns', nameKey: 'product.buns', icon: '🥐', category: 'bakery', cost: 14, basePrice: 40, shelfLife: 2, color: 0xead4aa },
   honeycake: { id: 'honeycake', nameKey: 'product.honeycake', icon: '🍰', category: 'bakery', cost: 40, basePrice: 110, shelfLife: 3, color: 0xb86f50 },
   // Своя марка (lines.ts): cost — сырьё и банка на штуку (как считает lineUnitCost).
-  jam: { id: 'jam', nameKey: 'product.jam', icon: '🍯', category: 'produce', cost: 28, basePrice: 75, shelfLife: 40, color: 0xa22633 },
-  pickles: { id: 'pickles', nameKey: 'product.pickles', icon: '🥒', category: 'produce', cost: 24, basePrice: 60, shelfLife: 40, color: 0x3e8948 },
-  pelmeni: { id: 'pelmeni', nameKey: 'product.pelmeni', icon: '🥟', category: 'frozen', cost: 57, basePrice: 130, shelfLife: 20, color: 0xf4ecd8 },
-  kvass: { id: 'kvass', nameKey: 'product.kvass', icon: '🍺', category: 'drinks', cost: 14, basePrice: 45, shelfLife: 4, color: 0x8f563b },
+  jam: { id: 'jam', nameKey: 'product.jam', icon: '🍯', category: 'brand', cost: 28, basePrice: 75, shelfLife: 40, color: 0xa22633 },
+  pickles: { id: 'pickles', nameKey: 'product.pickles', icon: '🥒', category: 'brand', cost: 24, basePrice: 60, shelfLife: 40, color: 0x3e8948 },
+  pelmeni: { id: 'pelmeni', nameKey: 'product.pelmeni', icon: '🥟', category: 'brand', cost: 57, basePrice: 130, shelfLife: 20, color: 0xf4ecd8 },
+  kvass: { id: 'kvass', nameKey: 'product.kvass', icon: '🍺', category: 'brand', cost: 14, basePrice: 45, shelfLife: 4, color: 0x8f563b },
 };
 
 /** Своя выпечка по ступеням марки «От бабушки»: первая ступень — пирожки, вторая — булочки, третья — медовик. */
@@ -186,6 +186,9 @@ export const SHELF_KINDS: Record<Category, ShelfKind> = {
   household: { nameKey: 'shelf.household', price: 250, fridge: false, minLevel: 3 },
   icebox: { nameKey: 'shelf.icebox', price: 350, fridge: true, fixture: true, minLevel: 1 },
   florist: { nameKey: 'shelf.florist', price: 0, fridge: false, fixture: true },
+  // Полка «От бабушки» у входа (09.11, решение автора): вся своя марка — варенье, соленья, пельмени, квас —
+  // на ней, а не вперемешку на обычных полках. Появляется сама с первой открытой линейкой (lines.ts).
+  brand: { nameKey: 'shelf.brand', price: 0, fridge: true, fixture: true },
 };
 
 /** Ларь с мороженым у входа и цветы у кассы: стоят на своих местах, мест под полки не занимают. */
@@ -1054,9 +1057,14 @@ export function buyShelf(state: StoreState, kind: Category): StoreState | null {
  * прилавке. Переносим их в ларь и вёдра у кассы (что не влезло — на склад), вёдра ставим всем,
  * а тем, у кого был молочный холодильник (legacy), — ещё и ларь, чтобы летом мороженое не пропало.
  */
+/** Полка своей марки сразу большая (24 места): на ней четыре линейки. */
+export const BRAND_SHELF_LEVEL = 3;
+
 export function normalizeShelves(state: StoreState, legacy = false): StoreState {
   const shelves: Shelf[] = state.shelves.map((s) => ({ ...s, items: { ...s.items } }));
   if (!shelves.some((s) => s.kind === 'florist')) shelves.push({ kind: 'florist', level: 0, items: {} });
+  // Открыта своя марка — у входа её полка (товар линеек с обычных полок переедет на неё ниже).
+  if (Object.values(state.lines ?? {}).some((tier) => (tier ?? 0) > 0) && !shelves.some((s) => s.kind === 'brand')) shelves.push({ kind: 'brand', level: BRAND_SHELF_LEVEL, items: {} });
   if (legacy && !shelves.some((s) => s.kind === 'icebox') && shelves.some((s) => s.kind === 'dairy')) shelves.push({ kind: 'icebox', level: 0, items: {} });
   const warehouse: Stock = { ...state.warehouse };
   let moved = false;
