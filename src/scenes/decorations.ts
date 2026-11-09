@@ -36,7 +36,6 @@ import * as persons from './persons';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
-import * as collections from './collections';
 import * as weeksFx from './weeks';
 import * as keepsakes from './keepsakes';
 
@@ -379,7 +378,6 @@ export function buildUpgrades(scene: StoreScene): void {
   for (let i = 1; i < registerCount(scene.state); i++) building.buildRegister(scene, i);
   buildHallDecor(scene);
   buildHolidayDecor(scene);
-  collections.buildTrophyCase(scene);
   building.buildGearProps(scene);
   food.buildCoffee(scene);
   food.buildOven(scene);
