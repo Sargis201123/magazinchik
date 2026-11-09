@@ -19,6 +19,8 @@ export const en: Record<TextKey, string> = {
   'shelf.meat': 'Meat fridge',
   'shelf.icebox': 'Ice cream chest',
   'shelf.florist': 'Flowers at the till',
+  "shelf.brand": "“From Grandma” shelf",
+  "shelf.brandSign": "From Grandma",
   'goods.title': '🗓 Seasonal goods',
   'goods.icecream': '🍦 Ice cream — all year from the chest, more popular in summer',
   'goods.tangerines': '🍊 Tangerines — for New Year, on the produce stand',

@@ -27,7 +27,7 @@ import {
   propFootprint,
   propRect,
 } from './placement';
-import { iceboxSpotFor, WALL_ROW_Y } from './layout';
+import { brandSpotFor, iceboxRect, iceboxSpotFor, WALL_ROW_Y } from './layout';
 import { Halo } from './halo';
 import { PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { gearTier } from '../game/gear';
@@ -56,12 +56,15 @@ const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
   // Ларь с мороженым у входа и вёдра с цветами у кассы — свои картинки и свои места.
   icebox: { texture: 'icebox', tint: 0xffffff },
   florist: { texture: 'florist', tint: 0xffffff },
+  brand: { texture: 'brand_stand', tint: 0xffffff },
 };
 /** Плиточная вставка отдела под полкой — на плитке пола, под тенями живого пола (FLOOR_SHADE_DEPTH). */
 const DEPT_INLAY_DEPTH = 0.2;
 /** Где на картинке лежит товар (относительно центра места): x, ширина, верхний ряд, шаг рядов. */
 const ITEM_AREA: Partial<Record<Category, { x: number; w: number; y: number; row: number }>> = {
   icebox: { x: -13, w: 26, y: -6, row: 4 },
+  // Полка «От бабушки»: банки двумя ступенями — задняя повыше, передняя пониже.
+  brand: { x: -12, w: 24, y: -1, row: 6 },
 };
 /** Вёдра с цветами: в каждом ведре по три букета (заднее ведро выше). */
 const FLORIST_SPOTS = [
@@ -206,7 +209,7 @@ export function buildShelf(scene: StoreScene, index: number, kind: Category): Sh
   const bg = scene.art(slot.x, slot.y - top, look.texture).setTint(look.tint).setDepth(slot.y - 14);
   const front = scene.art(slot.x, slot.y - top, `${look.texture}_front`).setDepth(slot.y - 12);
   // Глубина по нижнему краю: ларь ниже обычной полки, его край — на 10 точек ниже центра.
-  const d = kind === 'icebox' ? slot.y + 10 : slot.y;
+  const d = kind === 'icebox' ? slot.y + 10 : kind === 'brand' ? slot.y + 12 : slot.y;
   bg.setDepth(d - 14);
   front.setDepth(d - 12);
   const cover = undefined;
@@ -293,6 +296,16 @@ export function buildShelf(scene: StoreScene, index: number, kind: Category): Sh
   // Тень от полки на пол запекается вместе с полом (bakeFloor): свет сверху слева — вниз и вправо.
   if (fixture) lighting.shelfLight(scene, bg, kind, 50, 40, 4);
   else lighting.shelfLight(scene, bg, kind, 58, 50, look.texture === 'fridge' ? 10 : 6);
+  // Полка своей марки: на табличке навеса — «От бабушки» (уходит вместе с полкой, как её свет).
+  if (kind === 'brand') {
+    lights.push(
+      scene.add
+        .text(slot.x, slot.y - 7.5, t('shelf.brandSign'), { fontFamily: UI_FONT, fontSize: '4.5px', fontStyle: 'bold', color: '#fee761' })
+        .setOrigin(0.5)
+        .setResolution(scene.textRes(8))
+        .setDepth(d - 11.9),
+    );
+  }
   return { kind, at: { x: slot.x, y: slot.y }, cover, bg, front, shadow, items, backItems, pips, lights, low, expire, glow, needsStock: false };
 }
 
@@ -406,6 +419,7 @@ export function spotOf(scene: StoreScene, index: number): { x: number; y: number
   const kind = scene.state.shelves[index]?.kind;
   if (kind === 'icebox') return iceboxSpot(scene);
   if (kind === 'florist') return floristSpot(scene);
+  if (kind === 'brand') return brandSpot(scene);
   return scene.layout.slots[Math.max(0, slotOf(scene.state, index))];
 }
 
@@ -415,6 +429,7 @@ export function standOf(scene: StoreScene, index: number): { x: number; y: numbe
   const kind = scene.state.shelves[index]?.kind;
   if (kind === 'icebox') return { x: p.x, y: p.y - 16 };
   if (kind === 'florist') return { x: p.x - 14, y: p.y + 6 };
+  if (kind === 'brand') return { x: p.x, y: p.y + 20 };
   // Обычная полка — снизу, боковая у стены — сбоку (placement.ts).
   return standFor(scene.layout, p);
 }
@@ -433,6 +448,12 @@ export function iceboxSpot(scene: StoreScene): { x: number; y: number } {
   const moved = scene.state.propPos?.level === scene.state.level ? Object.entries(scene.state.propPos.at) : [];
   const avoid = moved.map(([id, p]) => propRect({ id, x: p.x, y: p.y, fp: propFootprint(scene.layout, id, p.x) }));
   return iceboxSpotFor(scene.layout, registerSlots(scene.state), avoid, kioskCount(scene.state));
+}
+
+/** Полка «От бабушки» — у входа, на свободном полу у прохода к двери; ларь с мороженым обходит (layout.ts brandSpotFor). */
+export function brandSpot(scene: StoreScene): { x: number; y: number } {
+  const ice = scene.state.shelves.some((sh) => sh.kind === 'icebox') ? [iceboxRect(iceboxSpot(scene))] : [];
+  return brandSpotFor(scene.layout, registerSlots(scene.state), ice, kioskCount(scene.state));
 }
 
 /** Вёдра с цветами — у кассы, в углу у правой стены. */

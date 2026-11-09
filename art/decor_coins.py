@@ -432,6 +432,51 @@ def coin_frame():
     c.save("coin_frame")
 
 
+# ---------------------------------------------------------------- полка «От бабушки»
+
+
+def brand_stand():
+    """Полка своей марки у входа 60×56 (в мире 30×28): деревянная горка в две ступени под полосатым
+    навесом, на навесе — табличка (надпись «От бабушки» рисует сцена). Товар ставит сцена на ступени."""
+    c = Canvas(60, 56)
+    wood, wood_d, wood_l = H("#8f563b"), H("#5e3a2a"), H("#b86f50")
+    red, white = H("#e43b44"), H("#f4f4f4")
+    # Столбики навеса.
+    for x in (3, 55):
+        c.rect(x, 8, 2, 44, wood_d)
+    # Навес: красно-белые полосы, внизу — фестоны.
+    for x in range(0, 60):
+        col = red if (x // 6) % 2 == 0 else white
+        c.vline(x, 1, 7, col)
+        if x % 6 in (1, 2, 3, 4):
+            c.px(x, 8, col)
+    c.hline(0, 1, 60, H("#a22633"))
+    # Табличка на навесе.
+    c.rect(14, 9, 32, 9, wood_d)
+    c.rect(15, 10, 30, 7, H("#733e39"))
+    c.hline(15, 10, 30, wood)
+    # Задняя ступень — выше, передняя — ниже и ближе.
+    c.rect(4, 24, 52, 4, wood)
+    c.hline(4, 24, 52, wood_l)
+    c.hline(4, 27, 52, wood_d)
+    c.rect(2, 38, 56, 5, wood)
+    c.hline(2, 38, 56, wood_l)
+    c.hline(2, 42, 56, wood_d)
+    # Короб снизу.
+    c.rect(2, 43, 56, 9, wood_d)
+    for x in range(6, 56, 8):
+        c.vline(x, 44, 7, H("#4a2c1a"))
+    c.hline(2, 51, 56, H("#3a2418"))
+    c.outline("k")
+    c.save("brand_stand")
+    # Перед товаром — только короб снизу (товар стоит на ступенях над ним).
+    f = Canvas(60, 56)
+    for yy in range(43, 56):
+        for xx in range(60):
+            f.px(xx, yy, c.get(xx, yy))
+    f.save("brand_stand_front")
+
+
 # ---------------------------------------------------------------- у входа
 
 
@@ -561,6 +606,7 @@ def main():
     counter_vase()
     counter_piggy()
     granny_box()
+    brand_stand()
     granny_box(open_=True)
     coin_frame()
     out_planters()

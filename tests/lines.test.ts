@@ -27,7 +27,7 @@ import { MONTH_DAYS } from '../src/game/economy';
 
 const units = (n: number, age = 0): Unit[] => Array.from({ length: n }, () => ({ age }));
 const cook: StaffMember = { role: 'cook', name: 0, skill: 2, wage: 400, months: 0 };
-/** Магазин третьего помещения: полки овощей, заморозки и напитков, на складе яблоки, мясо и хлеб. */
+/** Магазин третьего помещения: полки овощей, заморозки, напитков и своей марки, на складе яблоки, мясо и хлеб. */
 const shop = (patch: Partial<StoreState> = {}): StoreState => ({
   ...newGame(),
   day: 30,
@@ -40,6 +40,8 @@ const shop = (patch: Partial<StoreState> = {}): StoreState => ({
     { kind: 'frozen', level: 1, items: {} },
     { kind: 'drinks', level: 1, items: {} },
     { kind: 'bakery', level: 1, items: { bread: units(4) } },
+    // Полка «От бабушки»: вся своя марка — на ней (economy.ts normalizeShelves).
+    { kind: 'brand', level: 3, items: {} },
   ],
   warehouse: { apples: units(10, 2), meat: units(6), bread: units(6) },
   ...patch,
@@ -100,7 +102,7 @@ describe('своя марка на полках', () => {
   });
 
   it('не хватило сырья — сделали сколько смогли и сказали об этом', () => {
-    const s = shop({ lines: { jam: 3 }, warehouse: { apples: units(2) }, shelves: [{ kind: 'produce', level: 3, items: { apples: units(1) } }] });
+    const s = shop({ lines: { jam: 3 }, warehouse: { apples: units(2) }, shelves: [{ kind: 'produce', level: 3, items: { apples: units(1) } }, { kind: 'brand', level: 3, items: {} }] });
     const { state, night } = makeLines(s);
     expect(night.made).toEqual([{ id: 'jam', made: 3, short: true }]);
     expect(state.warehouse.apples ?? []).toHaveLength(0);
@@ -108,7 +110,7 @@ describe('своя марка на полках', () => {
   });
 
   it('брак, ждущий решения, и уценку в варенье не пускают', () => {
-    const s = shop({ lines: { jam: 1 }, warehouse: { apples: [{ age: 0, bad: true, pending: true }, { age: 0, markdown: true }] }, shelves: [{ kind: 'produce', level: 1, items: {} }] });
+    const s = shop({ lines: { jam: 1 }, warehouse: { apples: [{ age: 0, bad: true, pending: true }, { age: 0, markdown: true }] }, shelves: [{ kind: 'produce', level: 1, items: {} }, { kind: 'brand', level: 3, items: {} }] });
     expect(makeLines(s).night.made).toEqual([{ id: 'jam', made: 0, short: true }]);
   });
 
@@ -187,5 +189,21 @@ describe('своя марка на полках', () => {
     expect(sellableProducts(loaded)).not.toContain('kvass');
     saveGame({ ...loaded, lines: { kvass: 2 } });
     expect(loadGame()!.lines).toEqual({ kvass: 2 });
+  });
+});
+
+import { normalizeShelves } from '../src/game/economy';
+
+describe('Полка «От бабушки»', () => {
+  it('появляется с первой линейкой, и банки со старых полок переезжают на неё', () => {
+    const before = shop({ shelves: shop().shelves.filter((sh) => sh.kind !== 'brand'), lines: {} });
+    const opened = buyLineTier(before, 'jam')!;
+    expect(opened.shelves.some((sh) => sh.kind === 'brand')).toBe(true);
+    // Старое сохранение: варенье стоит на овощной полке, линейка открыта — переезжает на свою полку.
+    const legacy = { ...before, lines: { jam: 1 }, shelves: [{ kind: 'produce' as const, level: 1, items: { apples: units(2), jam: units(3) } }] };
+    const moved = normalizeShelves(legacy);
+    const brand = moved.shelves.find((sh) => sh.kind === 'brand');
+    expect(brand?.items.jam).toHaveLength(3);
+    expect(moved.shelves.find((sh) => sh.kind === 'produce')?.items.jam).toBeUndefined();
   });
 });

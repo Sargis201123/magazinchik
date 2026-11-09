@@ -28,6 +28,8 @@ export const kk: Record<TextKey, string> = {
   "shelf.meat": "Ет тоңазытқышы",
   "shelf.icebox": "Балмұздақ сандығы",
   "shelf.florist": "Кассадағы гүл",
+  "shelf.brand": "«Әжеден» сөресі",
+  "shelf.brandSign": "Әжеден",
   "goods.title": "🗓 Маусымдық тауарлар",
   "goods.icecream": "🍦 Балмұздақ — жыл бойы сандықтан, жазда жиірек алады",
   "goods.tangerines": "🍊 Мандарин — Жаңа жылға қарай, «Көкөніс сөресінде»",

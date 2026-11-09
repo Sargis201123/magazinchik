@@ -21,6 +21,7 @@ export const MATERIAL: Record<Category, Material> = {
   household: 'tin',
   icebox: 'paper',
   florist: 'paper',
+  brand: 'glass',
 };
 
 /** С такой покупки платят бумажками — касса шуршит купюрами, а не звенит мелочью. */

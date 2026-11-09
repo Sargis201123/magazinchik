@@ -17,6 +17,8 @@ export const ru = {
   'shelf.meat': 'Мясной холодильник',
   'shelf.icebox': 'Ларь с мороженым',
   'shelf.florist': 'Цветы у кассы',
+  "shelf.brand": "Полка «От бабушки»",
+  "shelf.brandSign": "От бабушки",
   'goods.title': '🗓 Сезонные товары',
   'goods.icecream': '🍦 Мороженое — круглый год из ларя, летом берут охотнее',
   'goods.tangerines': '🍊 Мандарины — к Новому году, на «Овощном прилавке»',

@@ -236,19 +236,10 @@ export function kioskZone(layout: Layout, index: number): { x: number; y: number
 /** Ларь с мороженым на месте (x, y): рамка вместе с крышкой, витриной и местом покупателя над ним. */
 export const iceboxRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 15, y: y - 24, w: 30, h: 30 });
 
-/**
- * Куда поставить ларь с мороженым. Как в настоящих магазинах — у кассы: вплотную к правой стене
- * рядом с очередью (кто стоит в очереди, видит мороженое), между автоматом с напитками и кассами.
- * Если там тесно (маленький зал, на месте ларя полка) — у нижней стены поближе к кассе, потом — вдоль
- * левой стены. Место не задевает ни одно место под полку (даже пустое — полку могут купить завтра),
- * островные витрины, кассы (сколько их может стоять в этом помещении — registers) с очередью,
- * кассы самообслуживания (сколько стоит — kiosks), автомат на своём месте, стойку со сладостями, цветы, ведро, вход, двери
- * флигеля и то, что ещё велено обойти (avoid — вещи, переставленные игроком).
- */
-export function iceboxSpotFor(layout: Layout, registers = 1, avoid: { x: number; y: number; w: number; h: number }[] = [], kiosks = 1): Point {
+/** Что занято в зале для стоящих отдельно полок (ларь, полка «От бабушки»): места под полки, кассы, проходы, двери. */
+function fixtureBlocked(layout: Layout, registers: number, avoid: { x: number; y: number; w: number; h: number }[], kiosks: number): { x: number; y: number; w: number; h: number }[] {
   const { w, h, door, counter, queue, wallH } = layout;
-  const pad = 2;
-  const blocked = [
+  return [
     ...layout.slots.map(shelfRect),
     ...layout.showcases.map(shelfRect),
     { x: counter.x - 16, y: counter.y - 34, w: 32, h: 62 },
@@ -272,6 +263,21 @@ export function iceboxSpotFor(layout: Layout, registers = 1, avoid: { x: number;
     // Вещи, которые игрок переставил сам (автомат, ведро, растения), — ларь их обходит.
     ...avoid,
   ];
+}
+
+/**
+ * Куда поставить ларь с мороженым. Как в настоящих магазинах — у кассы: вплотную к правой стене
+ * рядом с очередью (кто стоит в очереди, видит мороженое), между автоматом с напитками и кассами.
+ * Если там тесно (маленький зал, на месте ларя полка) — у нижней стены поближе к кассе, потом — вдоль
+ * левой стены. Место не задевает ни одно место под полку (даже пустое — полку могут купить завтра),
+ * островные витрины, кассы (сколько их может стоять в этом помещении — registers) с очередью,
+ * кассы самообслуживания (сколько стоит — kiosks), автомат на своём месте, стойку со сладостями, цветы, ведро, вход, двери
+ * флигеля и то, что ещё велено обойти (avoid — вещи, переставленные игроком).
+ */
+export function iceboxSpotFor(layout: Layout, registers = 1, avoid: { x: number; y: number; w: number; h: number }[] = [], kiosks = 1): Point {
+  const { w, h, door, queue, wallH } = layout;
+  const pad = 2;
+  const blocked = fixtureBlocked(layout, registers, avoid, kiosks);
   const free = (p: Point) => {
     const r = iceboxRect(p);
     if (r.x < 2 || r.x + r.w > w - 2 || r.y < wallH + 6 || r.y + r.h > h + 4) return false;
@@ -287,4 +293,33 @@ export function iceboxSpotFor(layout: Layout, registers = 1, avoid: { x: number;
   candidates.push(...bottom);
   for (let cy = h - 38; cy >= wallH + 40; cy -= 2) candidates.push({ x: 18, y: cy });
   return candidates.find(free) ?? (door.x - 44 >= 36 ? { x: door.x - 44, y: h - 12 } : { x: 24, y: h - 38 });
+}
+
+/** Полка «От бабушки»: прямоугольник на полу (точки мира) вокруг её середины. */
+export const brandRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 16, y: y - 16, w: 32, h: 30 });
+
+/**
+ * Куда поставить полку «От бабушки» (своя марка): у входа, на свободном полу по обе стороны прохода к
+ * двери, чуть выше нижней стены (перед полкой встаёт покупатель); потом — выше по залу у левой стены.
+ * Не на местах под полки и кассы, не на ларе (ice), не в проходах и дверях.
+ */
+export function brandSpotFor(layout: Layout, registers = 1, avoid: { x: number; y: number; w: number; h: number }[] = [], kiosks = 1): Point {
+  const { w, h, door, wallH } = layout;
+  const pad = 2;
+  const blocked = [...fixtureBlocked(layout, registers, avoid, kiosks), { x: door.x - 16, y: h - 70, w: 32, h: 70 }];
+  const free = (p: Point) => {
+    const r = brandRect(p);
+    // Перед полкой — место покупателя (18 точек вниз).
+    const stand = { x: r.x, y: r.y, w: r.w, h: r.h + 18 };
+    if (stand.x < 2 || stand.x + stand.w > w - 2 || stand.y < wallH + 6 || stand.y + stand.h > h - 4) return false;
+    return blocked.every((b) => stand.x + stand.w + pad <= b.x || b.x + b.w + pad <= stand.x || stand.y + stand.h + pad <= b.y || b.y + b.h + pad <= stand.y);
+  };
+  const candidates: Point[] = [];
+  for (let y = h - 40; y >= wallH + 60; y -= 4) {
+    const row: Point[] = [];
+    for (let x = 20; x <= w - 20; x += 2) row.push({ x, y });
+    row.sort((a, b) => Math.abs(a.x - door.x) - Math.abs(b.x - door.x));
+    candidates.push(...row);
+  }
+  return candidates.find(free) ?? { x: Math.max(20, door.x - 46), y: h - 40 };
 }
