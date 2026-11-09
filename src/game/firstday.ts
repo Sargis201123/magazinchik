@@ -207,3 +207,6 @@ export function firstRegularVisit(s: StoreState): { at: number; line: 'meet' | '
 export const GUEST_OF_DAY_DAYS = 3;
 export const GUEST_OF_DAY_AT = 0.6;
 export const guestOfDay = (s: StoreState): boolean => newbie(s) && s.day <= GUEST_OF_DAY_DAYS;
+
+/** Первые тихие дни новичка (09.11, решение автора): воров нет — первые впечатления без «Украли!». */
+export const noThieves = (s: StoreState): boolean => quietDays(s);

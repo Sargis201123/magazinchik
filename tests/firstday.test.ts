@@ -202,3 +202,14 @@ describe('Первый постоянный и гость дня', () => {
     expect(guestOfDay(old({ day: 1 }))).toBe(false);
   });
 });
+
+import { noThieves } from '../src/game/firstday';
+
+describe('Воров в первые дни новичка нет', () => {
+  it('дни 1–3 нового начала — без воров, дальше и в прежнем начале — как обычно', () => {
+    expect(noThieves(fresh({ day: 1 }))).toBe(true);
+    expect(noThieves(fresh({ day: 3 }))).toBe(true);
+    expect(noThieves(fresh({ day: 4 }))).toBe(false);
+    expect(noThieves(old({ day: 1 }))).toBe(false);
+  });
+});
