@@ -488,6 +488,7 @@ export class Hud {
     row(t('summary.complaints'), stats.complaints);
     row(t('summary.spoiled'), stats.spoiled);
     if (stats.nightRevenue) row(t('summary.night'), `+${stats.nightRevenue} 💰`);
+    if (stats.seriesTips) row(t('summary.seriesTips'), `+${stats.seriesTips} 💰`);
     if (stats.stolen) row(t('summary.stolen'), `−${stats.stolen} 💰`);
     if (stats.caught) row(t('summary.caught'), stats.caught);
     if (stats.skimmed) row(t('summary.skimmed'), `−${stats.skimmed} 💰`);

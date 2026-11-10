@@ -371,6 +371,12 @@ export interface Customer {
   unhappy: boolean;
   patience?: Phaser.Time.TimerEvent;
   waitStart: number;
+  /** Когда дошёл до своей кассы (серия у кассы, game/series.ts): от этого мига считается, сколько его заставили ждать. */
+  readyAt?: number;
+  /** Сколько простоял у кассы до начала пробивки (мс игрового времени). */
+  reactMs?: number;
+  /** Пробил сам игрок: за своей кассой или поторопив сменщика касанием — идёт в серию. */
+  byPlayer?: boolean;
   gone: boolean;
   thief: boolean;
   /** Уже пробивается на кассе — из очереди не уйдёт. */

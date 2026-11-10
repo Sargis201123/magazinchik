@@ -57,6 +57,7 @@ import type { Point } from './layout';
 import { personGlow } from './halo';
 import { CLASH_FACTOR } from '../game/neighbors';
 import { smellChance } from '../game/rot';
+import { seriesAfter, seriesLost, seriesTip } from '../game/series';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { eyeTheft, ownerTiming } from '../game/owner';
 import { radioPatience, radioTolerance } from '../game/radio';
@@ -130,8 +131,6 @@ const MUD_CHANCE = 0.15;
 const MAX_MUD = 2;
 /** Покупатель иногда роняет покупку и разливает: молоко, сок, газировка. */
 const SPILL_CHANCE = 0.035;
-/** Следующий покупатель обслужен за столько после предыдущего — серия продолжается. */
-const COMBO_WINDOW_MS = 7000;
 const TOILET_CHANCE = 0.25;
 const TOILET_DIRT_PER_VISIT = 20;
 /** За сколько точек до двери покупатель сворачивает с тротуара ко входу (дуга поворота — половина). */
@@ -932,6 +931,8 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
   c.serving = true;
   c.patience?.remove();
   c.bubble.setVisible(false);
+  // Серия у кассы: сколько покупатель простоял у кассы, прежде чем его начали пробивать.
+  c.reactMs = c.readyAt === undefined ? 0 : scene.time.now - c.readyAt;
   // Без света касса не работает — ждём.
   while (scene.blackout && scene.sys.isActive()) await scene.wait(250);
   // В блэкаут на весь район касса считает вручную — медленнее.
@@ -980,6 +981,8 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
     if (!scene.sys.isActive()) return;
   }
   await scanWait(scene, r, timing.pay * 1000);
+  // Пробил сам игрок: стоял за кассой (не бабушка вместо него) или торопил сменщика касаниями.
+  c.byPlayer = (byOwner && !by) || (r.scan.cut ?? 0) > 0;
   r.scan = null;
   r.hurry = 0;
   if (!scene.sys.isActive()) return;
@@ -1059,6 +1062,26 @@ export function updateScanBar(scene: StoreScene): void {
   }
 }
 
+/**
+ * Покупатель дошёл до своей кассы: с этого мига считается, сколько его заставили ждать до пробивки
+ * (серия у кассы, game/series.ts). Зовётся каждый кадр идущего дня.
+ */
+export function markReady(scene: StoreScene): void {
+  for (const r of scene.registers) {
+    const c = r.customer;
+    if (c && c.readyAt === undefined && !c.serving && scene.atSpot(r)) c.readyAt = scene.time.now;
+  }
+}
+
+/** Серия прервалась (кто-то ушёл, не дождавшись): если уже шли чаевые — сказать об этом у кассы. */
+export function breakSeries(scene: StoreScene): void {
+  const lost = seriesLost(scene.combo, 0);
+  scene.combo = 0;
+  if (!lost) return;
+  const { counter } = scene.layout;
+  scene.popup(counter.x - 14, counter.y - 40, t('popup.comboLost'), '#ffd0d0');
+}
+
 /** Покупатель расплатился; own — пробивал хозяин (полный звук кассы — награда игроку). */
 export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: number; y: number }, own = false): void {
   // Шаг обучения «Пробей покупку» — пробил сам, касанием кассы или улицы.
@@ -1105,14 +1128,28 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
     c.sprite.add(scene.art(6, 3, 'paper_bag').setScale(0.85 / ART));
   }
   const shown = where ?? (at ? { x: at.counter.x + (at === scene.registers[0] ? 8 : -8), y: at.counter.y + 0 } : { x: scene.layout.sellerHome.x - 8, y: scene.layout.sellerHome.y - 18 });
-  scene.combo = scene.time.now - scene.lastSaleAt < COMBO_WINDOW_MS ? scene.combo + 1 : 1;
-  scene.lastSaleAt = scene.time.now;
-  scene.stats.bestCombo = Math.max(scene.stats.bestCombo, scene.combo);
+  // Серия у кассы (game/series.ts): в неё идёт только то, что пробил сам игрок. Не заставил ждать — растёт,
+  // и с третьей покупки подряд покупатель оставляет чаевые; заставил — начинается заново.
+  let series = 0;
+  let tip = 0;
+  if (c.byPlayer) {
+    const before = scene.combo;
+    series = scene.combo = seriesAfter(before, c.reactMs ?? 0);
+    scene.stats.bestCombo = Math.max(scene.stats.bestCombo, series);
+    tip = seriesTip(series, total);
+    if (tip) {
+      scene.state = { ...scene.state, money: scene.state.money + tip };
+      scene.stats.revenue += tip;
+      scene.stats.seriesTips = (scene.stats.seriesTips ?? 0) + tip;
+      effects.tipCoins(scene, c.sprite);
+    }
+    if (seriesLost(before, series)) scene.popup(scene.layout.counter.x - 14, scene.layout.counter.y - 54, t('popup.comboLost'), '#ffd0d0');
+  }
   // Оплата — событие: искры у кассы, монеты фонтаном к счётчику, крупная сумма (в серии — больше монет и «×N»).
-  effects.payBurst(scene, shown.x, shown.y, total, scene.combo);
-  if (scene.combo >= 2) scene.celebrateCombo(scene.combo);
+  effects.payBurst(scene, shown.x, shown.y, total, series);
+  if (series >= 2) scene.celebrateCombo(series, tip);
   // Серия от пяти — весь зал оборачивается на кассу.
-  if (scene.combo === 5 || scene.combo === 10) persons.everyoneLooks(scene, scene.layout.counter.x, scene.layout.counter.y, 'emo_star');
+  if (series === 5 || series === 10) persons.everyoneLooks(scene, scene.layout.counter.x, scene.layout.counter.y, 'emo_star');
 
   const dirty = scene.trash.size >= TRASH_COMPLAINT || building.binFull(scene);
   const badGoods = hasUnmarkedBad(c.items) && Math.random() < BAD_COMPLAINT_CHANCE;
@@ -1167,7 +1204,7 @@ export async function giveUp(scene: StoreScene, c: Customer): Promise<void> {
   if (!scene.night) scene.stats.lost++;
   note(scene.stats, 'queue');
   noteLost(scene.stats, 'queue');
-  scene.combo = 0;
+  breakSeries(scene);
   haptic.error();
   sound.bad();
   scene.popup(c.sprite.x, c.sprite.y - 14, t('popup.leftAngry'), '#ffd0d0');

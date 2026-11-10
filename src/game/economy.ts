@@ -771,8 +771,10 @@ export interface DayStats {
   sold: Partial<Record<ProductId, number>>;
   /** Сколько мусора убрали. */
   trashCleaned: number;
-  /** Самая длинная серия: покупатели, обслуженные подряд без долгих пауз. */
+  /** Самая длинная серия: покупатели, которых игрок пробил подряд, не заставив ждать у кассы (series.ts). */
   bestCombo: number;
+  /** Чаевые за серию у кассы за день (входят в revenue). */
+  seriesTips?: number;
   /** Что заметили покупатели — для отзывов (reviews.ts). */
   notes?: Partial<Record<ReviewTopic, number>>;
   /** Выручка ночной смены (входит в revenue). */

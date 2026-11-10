@@ -531,9 +531,8 @@ export class StoreScene extends Phaser.Scene {
   /** Для какого состояния посчитаны работающие кассы (звук зала). */
   tillsFor: StoreState | null = null;
   valyaCame = false;
-  /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
+  /** Серия у кассы (game/series.ts): сколько покупателей подряд игрок пробил, не заставив ждать. */
   combo = 0;
-  lastSaleAt = -Infinity;
   nextSpawn = 1;
   running = false;
   /** Подсказка «что дальше» в зале (game/nudge.ts): когда игрок последний раз касался экрана, какая подсказка и до каких пор. */
@@ -946,6 +945,7 @@ export class StoreScene extends Phaser.Scene {
       return;
     }
 
+    shoppers.markReady(this);
     for (const c of this.queue) persons.updateBubble(this, c);
     for (const r of this.registers) if (r.customer) persons.updateBubble(this, r.customer);
     staff.checkSlips(this);
@@ -1338,8 +1338,8 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Переходник к effects.celebrateCombo: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
-  celebrateCombo(n: number): void {
-    return effects.celebrateCombo(this, n);
+  celebrateCombo(n: number, tip = 0): void {
+    return effects.celebrateCombo(this, n, tip);
   }
 
   alive(gen: number): boolean {
