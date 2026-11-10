@@ -239,6 +239,7 @@ export const SPRITES = [
   'counter_piggy',
   'granny_box',
   'brand_stand',
+  'brand_sign',
   'brand_stand_front',
   'granny_box_open',
   'coin_frame',

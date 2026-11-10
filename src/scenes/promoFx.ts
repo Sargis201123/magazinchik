@@ -8,7 +8,8 @@ import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { yearTime } from '../game/calendar';
 import { SHIRTS, randomLook } from './common';
-import { shelfRect } from './layout';
+import { brandRect, shelfRect } from './layout';
+import { brandSpot } from './shelves';
 import { propRect } from './placement';
 import * as persons from './persons';
 
@@ -25,6 +26,8 @@ function promoSpot(scene: StoreScene): { x: number; y: number } | null {
     ...scene.obstacles,
     ...slots.map(shelfRect),
     ...scene.propList.map(propRect),
+    // Полка «От бабушки» с вывеской: промоутер раньше вставал прямо за ней.
+    ...(scene.state.shelves.some((shelf) => shelf.kind === 'brand') ? [brandRect(brandSpot(scene))] : []),
     // Проход к двери и очередь к кассам.
     { x: door.x - 20, y: h - 96, w: 40, h: 96 },
     { x: queue.x - 16, y: queue.minY - 12, w: 32, h: h - queue.minY + 12 },

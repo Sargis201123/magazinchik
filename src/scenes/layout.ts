@@ -317,7 +317,10 @@ export function iceboxSpotFor(layout: Layout, registers = 1, avoid: { x: number;
 }
 
 /** Полка «От бабушки»: прямоугольник на полу (точки мира) вокруг её середины. */
-export const brandRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 16, y: y - 16, w: 32, h: 30 });
+/** Над вывеской полки своей марки — не на подписи отдела у полки выше. */
+const LABEL_GAP = 12;
+/** Полка своей марки с вывеской над навесом (вывеска — до 22 точек выше центра). */
+export const brandRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 16, y: y - 22, w: 32, h: 36 });
 
 /**
  * Куда поставить полку «От бабушки» (своя марка): у входа, на свободном полу по обе стороны прохода к
@@ -330,9 +333,10 @@ export function brandSpotFor(layout: Layout, registers = 1, avoid: { x: number; 
   const blocked = [...fixtureBlocked(layout, registers, avoid, kiosks), { x: door.x - 16, y: h - 70, w: 32, h: 70 }];
   const free = (p: Point) => {
     const r = brandRect(p);
-    // Перед полкой — место покупателя (18 точек вниз).
-    const stand = { x: r.x, y: r.y, w: r.w, h: r.h + 18 };
-    if (stand.x < 2 || stand.x + stand.w > w - 2 || stand.y < wallH + 6 || stand.y + stand.h > h - 4) return false;
+    // Перед полкой — место покупателя (18 точек вниз); над вывеской — зазор под подпись отдела на полу перед полкой
+    // выше (она на 8–11 точек ниже её места, shelfRect его не покрывает).
+    const stand = { x: r.x, y: r.y - LABEL_GAP, w: r.w, h: r.h + 18 + LABEL_GAP };
+    if (stand.x < 2 || stand.x + stand.w > w - 2 || r.y < wallH + 6 || stand.y + stand.h > h - 4) return false;
     return blocked.every((b) => stand.x + stand.w + pad <= b.x || b.x + b.w + pad <= stand.x || stand.y + stand.h + pad <= b.y || b.y + b.h + pad <= stand.y);
   };
   const candidates: Point[] = [];
