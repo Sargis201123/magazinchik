@@ -66,7 +66,8 @@ const css = `
 .ui-tomorrow-more { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #f7c948; }
 .ui-stock .ui-stock-out { color: #fff; background: #b13e53; border-radius: 4px; padding: 0 4px; }
 .ui-hint { position: fixed; left: 0; right: 0; padding: 0 12px; bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 12px);
-  text-align: center; font: 13px ${UI_FONT}; color: #e6e1d6; pointer-events: none; }
+  text-align: center; font: 13px ${UI_FONT}; color: #f4efe6; pointer-events: none;
+  text-shadow: 0 1px 0 #181425, 1px 0 0 #181425, -1px 0 0 #181425, 0 -1px 0 #181425, 0 0 5px rgba(24, 20, 37, 0.85); }
 /* Окно — ниже кнопок Telegram: в полном экране «Закрыть» и «⋯» лежат поверх игры и забирают касания себе
    (из-за этого не нажимался кубок 🏆 в правом верхнем углу утра). Отступы — те же --safe-top / --safe-bottom, что у HUD. */
 .ui-modal { position: fixed; inset: 0; background: rgba(15, 12, 22, .78); display: flex; align-items: center;
@@ -196,7 +197,7 @@ const css = `
 .ui-price-locked { background: #e6dcc4; filter: grayscale(1); opacity: .7; }
 .ui-bar { height: 6px; margin: 4px 0 2px; background: #e6dcc4; border: 1px solid #2b2233; border-radius: 3px; overflow: hidden; }
 .ui-bar-fill { height: 100%; }
-.ui-hint-tip { color: #2b2233; font-weight: 700; }
+.ui-hint-tip { color: #2b2233; font-weight: 700; text-shadow: none; }
 .ui-hint.ui-hint-tip { background: #fee761; border: 2px solid #2b2233; border-radius: 8px; padding: 6px 10px;
   width: fit-content; max-width: min(92vw, 52dvh); box-shadow: 0 3px 0 #2b2233; animation: ui-tip 1.2s ease-in-out infinite; }
 @keyframes ui-tip { 50% { transform: translateY(-3px); } }

@@ -221,6 +221,10 @@ import { leagueBox, leaguePlace } from './league';
 import { haptic, trustedNow } from '../platform/telegram';
 import { showReviews } from './reviews';
 import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toast, unfold, who } from './dom';
+import { gardenBox, harvestNow } from './garden';
+import { gardenRipe, hasGarden } from '../game/garden';
+import { tenantsBox } from './tenants';
+import { tenantRooms, tenantsOf } from '../game/tenants';
 import { hoodBox } from './hood';
 import { linesBox } from './lines';
 import { lineOfProduct } from '../game/lines';
@@ -3488,6 +3492,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         }, 'ui-chip'),
       );
     }
+    // Теплица: урожай созрел — собрать прямо отсюда (game/garden.ts).
+    if (gardenRipe(state, Date.now())) row(`🌱 ${t('garden.ripe')}`, button(t('garden.harvest'), () => harvestNow(getState, update), 'ui-chip'));
     if (state.cat && !fedToday(state)) {
       row(t('todo.cat', { name: state.cat.name }), button(t('todo.catBtn', { n: FEED_COST }), () => update(feedCat(getState()), 'success'), 'ui-chip', state.money < FEED_COST));
     }
@@ -4152,7 +4158,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       fold('gear', gearBox(state)),
       fold('ads', adsBox(state)),
       decorBox(state),
-      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...(inZar(state) ? [] : hoodBox(state, getState, update)), bankBox(state));
+      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...(inZar(state) ? [] : hoodBox(state, getState, update)), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {

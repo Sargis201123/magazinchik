@@ -12,7 +12,7 @@ import { activeDecor } from '../game/decor';
 import { WING_OUTER, type Layout } from './layout';
 import { ambientAt, lerpKeys, mulColor } from './daylight';
 import { gearTier } from '../game/gear';
-import { ART, LIGHT_DEPTH, EVENING_FROM, LOT, LOT_DRIVE_END, type NightLight, type Lamp } from './common';
+import { ART, LIGHT_DEPTH, EVENING_FROM, LOT, LOT_DRIVE_END, STREET_LAMP_Y, type NightLight, type Lamp } from './common';
 import * as shelves from './shelves';
 import * as building from './building';
 import { look } from './look';
@@ -89,7 +89,7 @@ export function buildLighting(scene: StoreScene, next: Layout): void {
   for (let x = -100; x < next.w + 40; x += 72) {
     if (!lampAt(scene, x)) continue;
     // Вдоль улицы фонари загораются по очереди слева направо — как будто идёт фонарщик.
-    const lamp = addLamp(scene, x, top - 19, 0.04 + scene.lampXs.length * 0.035, 0.6, true);
+    const lamp = addLamp(scene, x, top + STREET_LAMP_Y - 22, 0.04 + scene.lampXs.length * 0.035, 0.6, true);
     scene.lampXs.push(x);
     // Под фонарём на тротуаре — тёплая лужа света.
     lampGlow(scene, lamp, scene.art(x, scene.streetY - 2, 'glow').setDisplaySize(44, 44).setTint(0xffc860), 0.7, { key: 'light_pool', w: 112, h: 58, gain: 1.25 });

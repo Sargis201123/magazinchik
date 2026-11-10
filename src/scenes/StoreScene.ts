@@ -172,6 +172,14 @@ export class StoreScene extends Phaser.Scene {
   builtDistrict = '';
   /** Что из благоустройства района стояло на улице (hood.ts). */
   builtHood = '';
+  /** Арендаторы флигеля, с которыми построен мир (tenants.ts, tenantsLook). */
+  builtTenants = '';
+  /** Сколько посетителей арендаторов сейчас идёт по залу (scenes/tenantsFx.ts). */
+  tenantGuests = 0;
+  /** «Бабушкина теплица» в мире (scenes/gardenFx.ts): её картинки, стадия, с которой нарисована, и где стоит. */
+  gardenBox?: Phaser.GameObjects.Container;
+  builtGarden = '';
+  gardenAt?: { next: import('./layout').Layout; top: number };
   /** Какой район построен (game/zarechye.ts zarLook): Центр или Заречье, шаг Сома, теплоход. */
   builtZar = '';
   /** Какие домики друзей стоят на «Улице друзей» (friendStreet.ts, game/street.ts streetKey). */
@@ -343,6 +351,8 @@ export class StoreScene extends Phaser.Scene {
   parkingTimer?: Phaser.Time.TimerEvent;
   /** Машины на улице и их полоса: с парковки выезжают в просвет. */
   roadTraffic = new Set<RoadCar>();
+  /** Когда последняя машина полосы доедет до края (время сцены): следующая приезжает не раньше — без обгонов насквозь. */
+  laneFreeAt: Record<'up' | 'down', number> = { up: 0, down: 0 };
   /** Стаи птиц над кварталом (buildAmbient). */
   flockTimer?: Phaser.Time.TimerEvent;
   /** Порывы ветра (windGust): таймер, деревья с кронами и навесы соседей с зонтиками веранды. */

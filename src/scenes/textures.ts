@@ -140,6 +140,8 @@ export const SPRITES = [
   'awning_small',
   'door_open',
   'door_half',
+  // Двери по размеру помещения (art/doors.py): деревянная — ларёк и «Магазинчик», широкая — универмаг и гипермаркет.
+  ...['door_wood', 'door_wide'].flatMap((k) => [k, `${k}_half`, `${k}_open`]),
   'raindrop',
   'roof',
   'roof_shingle',

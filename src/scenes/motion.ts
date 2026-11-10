@@ -689,7 +689,7 @@ export function updateDoor(scene: StoreScene): void {
   scene.doorOpen = Phaser.Math.Clamp(scene.doorOpen + (near ? 0.12 : -0.06), 0, 1);
   // Открытая дверь «впускает улицу»: пока кто-то входит, за стеклом слышно ярче и чуть громче.
   ambience.door(scene.doorOpen);
-  const key = scene.doorOpen < 0.34 ? 'door' : scene.doorOpen < 0.67 ? 'door_half' : 'door_open';
+  const key = building.doorKey(scene.state.level, scene.doorOpen);
   if (scene.doorImg.texture.key !== key) scene.doorImg.setTexture(key);
   // В снегопад в открытые двери залетают снежинки и тают у входа.
   if (scene.weather === 'snow' && scene.doorOpen > 0.6 && look.chance(0.3)) {

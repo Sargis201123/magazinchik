@@ -48,7 +48,7 @@ import {
   takeOutBread,
   wholesaleToBake,
 } from '../game/bakery';
-import { ART, LIGHT_DEPTH, PLACE_MS, type Customer, type KitchenView, type Worker } from './common';
+import { ART, LIGHT_DEPTH, PLACE_MS, SHIRTS, randomLook, type Customer, type KitchenView, type Worker } from './common';
 import * as motion from './motion';
 import * as lighting from './lighting';
 import * as staff from './staff';
@@ -78,6 +78,16 @@ export function buildCoffee(scene: StoreScene): void {
   scene.art(x + 47, y + 49, 'cafe_table').setDepth(y + 55);
   // Уют: фикус в углу и пар над кофемашиной.
   scene.art(x + 6, y + 52, 'plant').setDepth(y + 57);
+  if (!scene.lite) {
+    // За столиком в углу кто-нибудь сидит с чашкой: кофейня не пустует и между заказами (каждый день — другой гость).
+    const guest = persons.makePerson(scene, x + 53, y + 42, randomLook(Phaser.Utils.Array.GetRandom(SHIRTS)));
+    scene.people.delete(guest);
+    persons.setFacing(guest, 'left');
+    guest.setDepth(y + 54);
+    scene.add.rectangle(x + 46.5, y + 45.5, 2, 2, 0xffffff).setStrokeStyle(0.5, 0x8b9bb4).setDepth(y + 56);
+    const sip = scene.add.image(x + 46.5, y + 44, 'glow').setDisplaySize(4, 4).setTint(0xffffff).setAlpha(0).setDepth(y + 57);
+    scene.tweens.add({ targets: sip, y: y + 39, alpha: { from: 0.45, to: 0 }, duration: 1900, repeat: -1, repeatDelay: 1400, ease: 'Sine.easeOut' });
+  }
   if (!scene.lite) {
     for (let k = 0; k < 3; k++) {
       const steam = scene.add.image(x + 8 + k * 1.5, y + 9, 'glow').setDisplaySize(6, 6).setTint(0xffffff).setAlpha(0).setDepth(y + 22);

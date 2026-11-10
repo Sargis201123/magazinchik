@@ -23,6 +23,8 @@ const KIOSK_CLOSE_DAYS = 3;
 const FRAME_PAD = 1;
 /** Верх вывески над стеной магазина: под верхнюю панель — без полосы пустого газона. */
 const SIGN_TOP = -16;
+/** Третья строка верхней панели — полоска цели дня: вывеску сажаем под неё, а не под счётчик склада (в базовых точках). */
+const GOAL_ROW = 28;
 /** На сколько выше по залу стоит следующая пара касс. */
 /** Насколько далеко можно отвести камеру от магазина пальцем. */
 const CAMERA_REACH = 200;
@@ -55,7 +57,7 @@ export function frameCamera(scene: StoreScene): void {
   scene.baseZoom = zoom;
   // Если по высоте есть запас, вывеска прижимается под верхнюю панель — снизу видно больше улицы.
   const centered = (h + 4) / 2 + (height / 2 - midY) / zoom;
-  const signUnderHud = SIGN_TOP + (height / 2 - top) / zoom;
+  const signUnderHud = SIGN_TOP + (height / 2 - top - GOAL_ROW * scene.res) / zoom;
   // Середина — на целой точке мира: камера в покое не сдвинута на полпикселя рисунка.
   scene.home = { x, y: Math.round(Math.max(centered, signUnderHud)) };
 }

@@ -288,7 +288,7 @@ export function finishDay(scene: StoreScene): void {
   const grannyHome = grannyStays(scene.state);
   if (grannyHome) newcomer.onbStep(scene, 'bye');
   const night = nightCycle(scene.state, scene.stats);
-  const { spoiled, bill, shortfall, skimmed, order, quests, weekly, branch, home } = night;
+  const { spoiled, bill, shortfall, skimmed, order, quests, weekly, branch, home, rent } = night;
   const state = { ...night.state, rating: quietRating(scene.state, ratingBefore, night.state.rating) };
   const cafe = scene.cafeToday;
   scene.cafeToday = null;
@@ -312,6 +312,8 @@ export function finishDay(scene: StoreScene): void {
   }
   // Филиал за дорогой (branch.ts): чистый доход за день одной строкой.
   if (branch) extra.push([t('branch.summary'), t('branch.summaryValue', { n: branch })]);
+  // Арендаторы флигеля (tenants.ts): аренда за день одной строкой.
+  if (rent) extra.push([t('tenant.summary'), t('branch.summaryValue', { n: rent })]);
   // Работали в Заречье — гипермаркет в Центре торговал сам (zarechye.ts).
   if (home) extra.push([t('zar.summary.home'), t('branch.summaryValue', { n: home })]);
   // Своя марка на полках (lines.ts): сколько продали за день и что наделали за ночь.

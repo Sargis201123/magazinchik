@@ -37,6 +37,7 @@ import { staffMorning } from './staffEvents';
 import { careerMorning, careerNight } from './career';
 import { districtGuests } from './district';
 import { hoodGuests } from './hood';
+import { tenantGuests, tenantsNight } from './tenants';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
 import { laneGuests } from './lanes';
@@ -52,6 +53,8 @@ export interface NightSummary extends NightResult {
   weekly: { completed: Challenge[]; earned: number };
   /** Чистый доход филиала за день (branch.ts; 0 — филиала нет). */
   branch: number;
+  /** Аренда от арендаторов флигеля за день (tenants.ts). */
+  rent: number;
   /** Сколько принёс Центр без игрока, пока он работал в Заречье (zarechye.ts; 0 — был в Центре). */
   home: number;
   /** Пройденный сегодня шаг сезонной недели (weeks.ts) или null. */
@@ -91,6 +94,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Филиал отдаёт доход за день до счетов: им можно расплатиться.
   const branch = branchNight(s, day);
   s = branch.state;
+  // Арендаторы флигеля платят за день — тоже до счетов (tenants.ts).
+  const rent = tenantsNight(s);
+  s = rent.state;
   // Игрок в Заречье — гипермаркет в Центре торговал сам и тоже отдаёт доход до счетов (zarechye.ts).
   const home = zarHomeNight(s, day);
   s = home.state;
@@ -116,6 +122,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     quests: { earned: rewarded.earned, done: rewarded.done, total: quests.length },
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
+    rent: rent.income,
     home: home.income,
     week: week.done,
     lines: lines.night,
@@ -157,6 +164,7 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, eduardGuests) *
   homeOnly(state, districtGuests) *
   homeOnly(state, hoodGuests) *
+  homeOnly(state, tenantGuests) *
   homeOnly(state, trickGuests) *
   nightBoostGuests(state) *
   homeOnly(state, giantGuests) *

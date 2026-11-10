@@ -44,6 +44,9 @@ import * as building from './building';
 import * as arcsFx from './arcsFx';
 import type { ClientId } from '../game/events';
 
+/** Середина дальнего тротуара — на столько ниже середины нашего (тротуар 24, дорога 40, тот тротуар 22). */
+const FAR_WALK_Y = 65;
+
 const MARAT: Look = { shirt: 0xffffff, skin: 0xd9a066, pants: 0x262b44, hair: 0xffffff, style: 'cap' };
 const SCHOOL_COOK: Look = { shirt: 0x5fcde4, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xc0cbdc, style: 'cap', acc: 'apron' };
 
@@ -74,6 +77,14 @@ export function streetLife(scene: StoreScene): void {
     void persons.walk(scene, person, fromLeft ? right : left, y, persons.ownPace(scene, person, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.75, 1.1))).then(() => person.destroy());
   }
   if (flood) return;
+  // Та сторона улицы тоже живая: по дальнему тротуару идут свои прохожие (в лёгкой графике — нет).
+  if (!scene.lite && Math.random() < 0.3) {
+    const fromLeft = Math.random() < 0.5;
+    const y = scene.streetY + FAR_WALK_Y + Phaser.Math.Between(-4, 4);
+    const person = persons.makePerson(scene, fromLeft ? left : right, y, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day));
+    weatherFx.addUmbrella(scene, person);
+    void persons.walk(scene, person, fromLeft ? right : left, y, persons.ownPace(scene, person, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1))).then(() => person.destroy());
+  }
   if (Math.random() < 0.14) passerby(scene);
   // Автобус тоже не выезжает следом за машиной с парковки.
   if (Math.random() < 0.04 && !scene.parking?.onRoad) driveBus(scene);
@@ -81,6 +92,13 @@ export function streetLife(scene: StoreScene): void {
     const toRight = Math.random() < 0.5;
     // Машина с парковки сейчас на дороге (сворачивает к ней или выезжает) — новые не въезжают ей в бок и в багажник.
     if (scene.parking?.onRoad) return;
+    // В своей полосе никто никого не догоняет: за медленным (автобус, фургон) не выезжаем вовсе, а за
+    // обычной машиной едем не быстрее неё — иначе быстрая проезжала сквозь медленную.
+    const lane = toRight ? 'up' : 'down';
+    for (const v of scene.roadTraffic) if (v.slow && v.lane === lane) return;
+    const ahead = scene.laneFreeAt[lane] - scene.time.now;
+    const duration = Math.max(Phaser.Math.Between(2600, 4200), ahead > 0 && ahead < 8000 ? ahead + 450 : 0);
+    scene.laneFreeAt[lane] = scene.time.now + duration;
     const y = scene.streetY + (toRight ? 24 : 42);
     const total = CAR_TYPES.reduce((sum, [, , weight]) => sum + weight, 0);
     let roll = Math.random() * total;
@@ -115,8 +133,8 @@ export function streetLife(scene: StoreScene): void {
       lit.y = car.y;
       lit.set(HEADLIGHT_POWER * scene.evening);
     };
-    cars.onRoad(scene, car, toRight ? 'up' : 'down');
-    scene.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
+    cars.onRoad(scene, car, lane);
+    scene.tweens.add({ targets: car, x: toRight ? right : left, duration, onComplete: () => car.destroy() });
   }
 }
 

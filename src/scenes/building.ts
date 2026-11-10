@@ -41,6 +41,7 @@ import * as motion from './motion';
 import * as effects from './effects';
 import * as lighting from './lighting';
 import * as decorations from './decorations';
+import * as tenantsFx from './tenantsFx';
 import * as food from './food';
 import * as staff from './staff';
 import * as shoppers from './shoppers';
@@ -377,7 +378,7 @@ export function buildShell(scene: StoreScene): void {
   shade.fillRect(w + WALL, 2, 12, h + FACADE_H - 4);
   const style = facadeStyle(scene);
   scene.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, potTile(scene, style.texture)).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
-  scene.doorImg = scene.art(door.x, h + 5, 'door').setDepth(h + 2);
+  scene.doorImg = scene.art(door.x, h + 5, doorKey(scene.state.level, 0)).setDepth(h + 2);
   scene.doorSign = scene.art(door.x + 11, h + 8, scene.running ? 'door_sign_open' : 'door_sign_closed').setDepth(h + 42);
   // Витрины с маленькими навесами слева и справа от двери.
   const segments: [number, number][] = [
@@ -407,6 +408,15 @@ export function buildShell(scene: StoreScene): void {
       lighting.nightGlow(scene, scene.add.rectangle(-WALL, h + 1, w + 2 * WALL, 3, 0x9cd8ff).setOrigin(0), 0.6, undefined, { store: true });
     }
   }
+}
+
+/**
+ * Дверь по размеру помещения (art/doors.py): в ларьке и «Магазинчике» — деревянная с окошком и колокольчиком,
+ * в универмаге и гипермаркете — широкая раздвижная, между ними — прежняя стеклянная. open — насколько открыта (0…1).
+ */
+export function doorKey(level: number, open: number): string {
+  const base = level <= 1 ? 'door_wood' : level >= 4 ? 'door_wide' : 'door';
+  return open < 0.34 ? base : open < 0.67 ? `${base}_half` : `${base}_open`;
 }
 
 export function facadeStyle(scene: StoreScene): (typeof FACADE_STYLES)[number] {
@@ -683,7 +693,7 @@ export function freeSpot(scene: StoreScene, candidates: { x: number; y: number }
 /** Комнаты флигеля, в которые есть дверь из зала. */
 export function openRooms(scene: StoreScene): Room[] {
   const { warehouse, bakery, coffee, kitchen } = scene.layout;
-  return [warehouse, ...(food.bakeryOpen(scene) ? [bakery] : []), ...(food.coffeeOpen(scene) ? [coffee] : []), ...(kitchen && kitchenOpen(scene.state) ? [kitchen] : [])];
+  return [warehouse, ...(food.bakeryOpen(scene) ? [bakery] : []), ...(food.coffeeOpen(scene) ? [coffee] : []), ...(kitchen && kitchenOpen(scene.state) ? [kitchen] : []), ...tenantsFx.rentedRooms(scene)];
 }
 
 /**
@@ -710,6 +720,8 @@ export function buildWing(scene: StoreScene): void {
   buildRoom(scene, coffee, 'coffee', food.coffeeOpen(scene));
   if (scene.layout.kitchen) buildRoom(scene, scene.layout.kitchen, 'kitchen', kitchenOpen(scene.state));
   food.buildKitchen(scene);
+  // Комнаты под аренду над флигелем (game/tenants.ts).
+  tenantsFx.buildTenants(scene);
 }
 
 /**
@@ -724,8 +736,24 @@ export function buildWingDoor(scene: StoreScene, y: number): void {
   for (const jy of [y - 9.5, y + 7.5]) scene.add.rectangle(-WALL - 1, jy, WALL + 2, 2.5, 0x5a3a2a).setOrigin(0).setDepth(jy + 6);
   // Створка распахнута внутрь комнаты.
   scene.add.rectangle(-WALL - 11, y - 8, 11, 2, 0xb86f50).setOrigin(0).setStrokeStyle(0.5, 0x3b2a35).setDepth(y - 2);
-  // Коврик со стороны зала.
-  scene.add.rectangle(0.5, y - 6, 9, 12, room === warehouse ? 0x5a6988 : 0x9e2835, 0.85).setOrigin(0).setDepth(1);
+  // Коврик со стороны зала: кайма, узор-ромб и бахрома по коротким краям (у склада — серый, рабочий).
+  doorMat(scene, 0.5, y - 6, 9, 12, room === warehouse);
+}
+
+/** Придверный коврик: одна фигура — тёмная кайма, светлая строчка, ромб посередине, бахрома сверху и снизу. */
+export function doorMat(scene: StoreScene, x: number, y: number, w: number, h: number, plain = false): void {
+  const [base, edge, line, mark] = plain ? [0x5a6988, 0x3a4466, 0x8b9bb4, 0xc0cbdc] : [0x9e2835, 0x6e1a2c, 0xe6904e, 0xfee761];
+  const g = scene.add.graphics().setDepth(1);
+  g.fillStyle(edge, 0.95).fillRect(x, y, w, h);
+  g.fillStyle(base, 1).fillRect(x + 1, y + 1, w - 2, h - 2);
+  g.lineStyle(0.5, line, 0.9).strokeRect(x + 1.75, y + 1.75, w - 3.5, h - 3.5);
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  g.fillStyle(mark, 0.95).fillTriangle(cx, cy - 2.5, cx + 2, cy, cx, cy + 2.5).fillTriangle(cx, cy - 2.5, cx - 2, cy, cx, cy + 2.5);
+  g.fillStyle(base, 1).fillRect(cx - 0.5, cy - 0.5, 1, 1);
+  // Бахрома: короткие нитки через одну.
+  g.fillStyle(line, 0.9);
+  for (let fx = x + 0.5; fx < x + w - 0.4; fx += 1.5) g.fillRect(fx, y - 1, 0.5, 1).fillRect(fx, y + h, 0.5, 1);
 }
 
 /** Комната флигеля: пол, кусок стены с табличкой; закрытая — тёмная, с замком. */

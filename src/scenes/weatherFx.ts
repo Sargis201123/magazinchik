@@ -49,6 +49,8 @@ export function applyWeather(scene: StoreScene): void {
     g.setData('base', base);
     const snowy = `${base}_snow`;
     g.setTexture(scene.weather === 'snow' && scene.textures.exists(snowy) ? snowy : base).setTint(tree);
+    // Цветы на газоне под снегом не цветут.
+    if (base === 'flower' || base === 'tulips') g.setVisible(scene.weather !== 'snow');
   }
 
   scene.rainFx = undefined;

@@ -40,6 +40,7 @@ import {
   type Pigeon,
   LOT,
   LOT_DRIVE_END,
+  STREET_LAMP_Y,
 } from './common';
 import * as pets from './pets';
 import * as lighting from './lighting';
@@ -49,6 +50,7 @@ import * as persons from './persons';
 import * as newcomer from './newcomer';
 import * as building from './building';
 import * as friendStreet from './friendStreet';
+import * as gardenFx from './gardenFx';
 import * as zarFx from './zarechye';
 import { inZar } from '../game/zarechye';
 import { streetKey } from '../game/street';
@@ -72,6 +74,8 @@ const RIVAL_LOOKS: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
 const PARK_TREES = ['tree', 'tree', 'tree_round', 'tree_birch', 'tree_pine'];
 /** Высота здания босса за дорогой: умещается на месте «Гиганта». */
 const RIVAL_ACROSS_H = 106;
+/** Вывеска здания за дорогой сидит на кромке его стены у тротуара (середина таблички — на столько выше стены). */
+const ACROSS_SIGN_UP = 7;
 /**
  * Реклама у входа (x от двери): съёмочная группа ТВ (оператор, камера, ведущая) и блогер — один или
  * звезда с фанатами. Первое место — обычное, следующие — если оно занято курьером или тележкой (freeStreetX).
@@ -269,15 +273,17 @@ export function drawNeighbor(scene: StoreScene, n: Neighbor, bottom: number, rnd
   }
   scene.awnings.push(scene.art(doorX, front - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(front + 40));
   // Вывеска на краю крыши (за дорогой — над витринами, у самой дороги).
-  const signY = across ? top - 12 : bottom - FACADE_H - 8;
+  const signY = across ? top - ACROSS_SIGN_UP : bottom - FACADE_H - 8;
   if (across) scene.signsAcross.push(n.x + n.w / 2);
   const signDepth = across ? front + 41 : front - 3;
   scene.art(n.x + n.w / 2, signY, 'sign').setTint(n.sign).setDepth(signDepth);
-  scene.add
-    .text(n.x + n.w / 2, signY, n.label ?? t(n.name), { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
+  const signText = scene.add
+    .text(n.x + n.w / 2, signY, n.label ?? t(n.name), { fontFamily: UI_FONT, fontSize: '6px', fontStyle: across ? 'bold' : '', color: '#fee761' })
     .setOrigin(0.5)
     .setResolution(scene.textRes(4))
     .setDepth(signDepth + 1);
+  // Длинное название не вылезает за табличку (она 64 в ширину).
+  if (signText.width > 58) signText.setScale(58 / signText.width);
   if (n.neon) lighting.neonSign(scene, n.x + n.w / 2, signY, n.label ?? t(n.name), '6px', n.neon, 64);
 }
 
@@ -293,6 +299,8 @@ export function dressRoof(scene: StoreScene, n: Neighbor, y: number, h: number, 
   if (across) scene.add.rectangle(x + 9, y + h, w, 9, 0x181425, 0.18).setOrigin(0).setDepth(-9.4);
   if (n.roofKit === 'school') {
     hipRoof(scene, x, y, w, h);
+    // В снегопад скаты белеют, как плоские кровли соседей; конёк и рёбра проступают.
+    scene.roofSnow.push(scene.add.rectangle(x + 1.5, y + 1.5, w - 3, h - 3, 0xf4f8ff, 0.6).setOrigin(0).setDepth(-2.85).setVisible(scene.weather === 'snow'));
     // Солнечные панели — на южном скате.
     for (const dx of [-26, 0, 26]) scene.art(x + w / 2 + dx, y + h * 0.74, 'roof_solar').setScale(1.5 / ART).setDepth(-2);
     return;
@@ -477,7 +485,7 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
 
   // Фонари вдоль тротуара (не на дорожке), скамейка и урна у входа.
   for (let x = -100; x < next.w + 40; x += 72) {
-    if (lighting.lampAt(scene, x)) scene.art(x, top + 3, 'lamp').setOrigin(0.5, 0.95).setDepth(top + 3);
+    if (lighting.lampAt(scene, x)) scene.art(x, top + STREET_LAMP_Y, 'lamp').setOrigin(0.5, 0.95).setDepth(top + STREET_LAMP_Y);
   }
   scene.art(door.x + 44, top + 7, 'bench').setDepth(top + 7);
   scene.art(door.x - 32, top + 6, 'bin').setDepth(top + 6);
@@ -539,6 +547,9 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
   }
   // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
   const districtAreas = zar ? [...zarFx.buildRiver(scene, next, top, left, width), ...cars.buildParking(scene, next, top)] : [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildBackStreet(scene, next), ...buildHood(scene, next, top), ...friendStreet.buildFriendStreet(scene, top)];
+  // «Бабушкина теплица» (game/garden.ts): на газоне перед магазином или в парке; стадию проверяем раз в 10 с.
+  gardenFx.buildGarden(scene, next, top);
+  if (!zar) scene.worldTimer(10000, () => scene.sys.isActive() && gardenFx.tickGarden(scene));
   if (zar) {
     // Район, благоустройство и улица друзей — в Центре: ключи те же, чтобы утро не перестраивало мир зря.
     scene.builtDistrict = districtKey(scene.state);
@@ -837,7 +848,7 @@ export function buildDistrict(scene: StoreScene, next: Layout, top: number): { x
       buildStadium(scene, spot, name);
       continue;
     }
-    drawNeighbor(scene, { ...looks[id], x: spot.x, w: spot.w, h: spot.h, name: 'district.school', label: `${BUILDINGS[id].icon} ${name}`, roofKit: id }, spot.y + spot.h, rnd, true);
+    drawNeighbor(scene, { ...looks[id], x: spot.x, w: spot.w, h: spot.h, name: 'district.school', label: name, roofKit: id }, spot.y + spot.h, rnd, true);
     // У школы на тротуаре — флагшток.
     if (id === 'school') scene.art(spot.x + 8, spot.y + 4, 'flagpole').setOrigin(0.5, 1).setDepth(spot.y + 44);
   }
@@ -875,9 +886,9 @@ export function buildPark(scene: StoreScene, next: Layout, top: number): { x: nu
     lighting.nightGlow(scene, scene.add.rectangle(sx, sy, 1.2, 1.2, 0xffffff), 0.9, undefined, { twinkle: i * 1.7 });
   }
   scene.parkPond = { x: px, y: py };
-  scene.add.ellipse(px, py, 172, 78, 0xd8b88a).setDepth(-9.46);
-  // Зимой пруд замерзает: лёд с трещинками, уток нет.
+  // Зимой пруд замерзает: лёд со следами коньков, уток нет, берег и камыш под снегом, на льду катаются.
   const frozen = scene.weather === 'snow' || yearTime(scene.state.day) === 'winter';
+  scene.add.ellipse(px, py, 172, 78, frozen ? 0xe4ecf6 : 0xd8b88a).setDepth(-9.46);
   scene.add.ellipse(px, py, 160, 68, frozen ? 0xa8cce4 : 0x3b8fc8).setDepth(-9.45);
   scene.add.ellipse(px - 6, py - 4, 136, 50, frozen ? 0xd8ecf8 : 0x4aa3df).setDepth(-9.44);
   for (const [bx, by, bw] of [
@@ -893,7 +904,17 @@ export function buildPark(scene: StoreScene, next: Layout, top: number): { x: nu
     [72, -10],
     [76, 2],
   ] as const) {
-    for (let i = 0; i < 4; i++) scene.add.rectangle(px + rx + i * 2, py + ry - (i % 2) * 3, 1.2, 7 + (i % 2) * 3, 0x3e8948).setOrigin(0.5, 1).setDepth(py + ry);
+    for (let i = 0; i < 4; i++) {
+      const reedH = 7 + (i % 2) * 3;
+      scene.add.rectangle(px + rx + i * 2, py + ry - (i % 2) * 3, 1.2, reedH, frozen ? 0x9a7b4f : 0x3e8948).setOrigin(0.5, 1).setDepth(py + ry);
+      // Сухой камыш с шапочкой снега.
+      if (frozen) scene.add.rectangle(px + rx + i * 2, py + ry - (i % 2) * 3 - reedH, 1.8, 1.4, 0xf4f8ff).setOrigin(0.5, 1).setDepth(py + ry);
+    }
+  }
+  if (frozen) {
+    pondWinter(scene, px, py);
+    scene.art(px - 104, py + 6, 'snowman').setDepth(py + 12);
+    areas.push({ x: px - 114, y: py - 10, w: 20, h: 26 });
   }
   for (const [ux, uy] of frozen ? [] : ([
     [-22, -6],
@@ -913,7 +934,7 @@ export function buildPark(scene: StoreScene, next: Layout, top: number): { x: nu
     scene.add.rectangle(bx, by, 64, 22, 0x8f563b).setOrigin(0).setDepth(-9.46);
     scene.add.rectangle(bx + 2, by + 2, 60, 18, 0x733e39).setOrigin(0).setDepth(-9.45);
     // Зимой клумбы под снегом.
-    if (frozen) scene.add.rectangle(bx + 2, by + 2, 60, 18, 0xf4f8ff).setOrigin(0).setDepth(-9.44);
+    if (frozen) snowBed(scene, bx + 2, by + 2, 60, 18, rnd);
     for (let i = 0; i < (frozen ? 0 : 9); i++) {
       scene.art(bx + 7 + (i % 5) * 12 + rnd.between(-2, 2), by + 7 + Math.floor(i / 5) * 9, rnd.frac() < 0.6 ? 'flower' : 'tulips')
         .setTint(rnd.pick(flowers))
@@ -922,6 +943,69 @@ export function buildPark(scene: StoreScene, next: Layout, top: number): { x: nu
     areas.push({ x: bx, y: by, w: 64, h: 22 });
   }
   return areas;
+}
+
+/** Клумба под снегом: сугроб с голубыми тенями и сухие стебли — а не ровная белая плашка в рамке. */
+function snowBed(scene: StoreScene, x: number, y: number, w: number, h: number, rnd: Phaser.Math.RandomDataGenerator): void {
+  const g = scene.add.graphics().setDepth(-9.44);
+  g.fillStyle(0xe9f0fa, 1).fillRect(x, y, w, h);
+  // Снег лежит и на бортике клумбы.
+  g.fillStyle(0xf4f8ff, 1).fillRect(x - 2, y - 2, w + 4, 1.2).fillRect(x - 2, y - 2, 1.2, h + 4);
+  // Бугры сугроба: под каждым — голубая тень.
+  for (let i = 0; i < 7; i++) {
+    const cx = x + 5 + i * 8.3 + rnd.between(-2, 2);
+    const cy = y + 4 + rnd.between(0, h - 9);
+    g.fillStyle(0xc4d6ee, 1).fillEllipse(cx + 1, cy + 1.5, 10, 4.5);
+    g.fillStyle(0xffffff, 1).fillEllipse(cx, cy, 10, 4.5);
+  }
+  // Сухие стебли прошлогодних цветов.
+  g.fillStyle(0x8a6f4d, 1);
+  for (let i = 0; i < 6; i++) {
+    const sx = x + 4 + rnd.between(0, w - 8);
+    const sy = y + 5 + rnd.between(0, h - 7);
+    g.fillRect(sx, sy - 3.5, 0.6, 3.5).fillRect(sx - 1, sy - 2.6, 1.2, 0.6);
+  }
+}
+
+/** Зимний пруд: следы коньков на льду и двое катающихся по кругу (в лёгкой графике — только следы). */
+function pondWinter(scene: StoreScene, px: number, py: number): void {
+  const g = scene.add.graphics().setDepth(-9.43);
+  g.lineStyle(0.6, 0xffffff, 0.6);
+  for (const [cx, cy, r, a0, a1] of [
+    [-24, -2, 15, 0.3, 2.6],
+    [-2, 4, 13, 3.4, 5.9],
+    [26, -3, 16, 0.6, 2.9],
+    [40, 2, 9, 3.2, 6],
+  ] as const) {
+    g.beginPath();
+    g.arc(px + cx, py + cy, r, a0, a1);
+    g.strokePath();
+  }
+  if (scene.lite) return;
+  for (const [i, lap] of [
+    { rx: 46, ry: 14, ms: 9000 },
+    { rx: 28, ry: 8, ms: 6400 },
+  ].entries()) {
+    const skater = persons.makePerson(scene, px + lap.rx, py, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day));
+    // Не покупатели и не прохожие: в общий список людей не идут (как гости веранды).
+    scene.people.delete(skater);
+    let facing: Facing = 'right';
+    // Скользят без шагов — как на коньках; второй едет навстречу.
+    const dir = i ? -1 : 1;
+    const lapTween = scene.tweens.addCounter({
+      from: 0,
+      to: Math.PI * 2,
+      duration: lap.ms,
+      repeat: -1,
+      onUpdate: (tw) => {
+        const a = (tw.getValue() ?? 0) * dir + i * 2;
+        skater.setPosition(px - 6 + Math.cos(a) * lap.rx, py - 4 + Math.sin(a) * lap.ry).setDepth(py - 4 + Math.sin(a) * lap.ry);
+        const next: Facing = Math.sin(a) * dir > 0 ? 'left' : 'right';
+        if (next !== facing) persons.setFacing(skater, (facing = next));
+      },
+    });
+    skater.once(Phaser.GameObjects.Events.DESTROY, () => lapTween.remove());
+  }
 }
 
 /**
