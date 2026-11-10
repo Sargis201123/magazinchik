@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newGame, type StoreState } from '../src/game/economy';
-import { DRAMA_FREE_DAYS, DRAMA_PER_DAY, dramaDone, dramaHeld, dramaScene, dramaWaiting, eveningScene, NIGHT_NOTES, noteNight, PLACE_ART, sceneArt, SCENES, seeDrama, seeEvening, sonyaNightNote, sonyaVisits, sunflowersPlanted } from '../src/game/drama';
+import { DRAMA_FREE_DAYS, DRAMA_PER_DAY, dramaDone, dramaHeld, dramaScene, dramaWaiting, chooseDrama, choiceOf, choicePending, eveningScene, NIGHT_NOTES, noteNight, pancakeSunday, PLACE_ART, sceneArt, sceneLines, SCENES, seeDrama, seeEvening, sonyaNightNote, sonyaVisits, sunflowersPlanted } from '../src/game/drama';
 import { startCohort } from '../src/game/onboarding';
 import { addDays } from '../src/game/live';
 import { ru } from '../src/i18n/ru';
@@ -229,5 +229,68 @@ describe('картинки сцен: своя или фон места', () => {
   it('с картинкой — больше двух третей сцен (было 3 из 61)', () => {
     const drawn = SCENES.filter((s) => sceneArt(s)).length;
     expect(drawn / SCENES.length).toBeGreaterThan(2 / 3);
+  });
+});
+
+describe('развилки: что ответит отец', () => {
+  const LUNCH = SCENES.find((s) => s.choice?.id === 'lunch')!;
+  const PANCAKES = SCENES.find((s) => s.choice?.id === 'pancakes')!;
+
+  it('пока ответа нет — реплики только до развилки, и сцена ждёт выбора', () => {
+    const s = shop({ day: LUNCH.day, drama: { upTo: LUNCH.day - 1 } });
+    expect(choicePending(LUNCH, s)).toBe(LUNCH.choice);
+    expect(sceneLines(LUNCH, s)).toEqual(LUNCH.lines);
+    expect(choiceOf(s, 'lunch')).toBeUndefined();
+  });
+
+  it('ответил — к сцене добавляются слова отца и ответ Сони; второй раз не спрашиваем', () => {
+    const base = shop({ day: LUNCH.day, drama: { upTo: LUNCH.day - 1 } });
+    for (const option of LUNCH.choice!.options) {
+      const s = chooseDrama(base, 'lunch', option.answer);
+      expect(choiceOf(s, 'lunch')).toBe(option.answer);
+      expect(choicePending(LUNCH, s)).toBeNull();
+      expect(sceneLines(LUNCH, s)).toEqual([...LUNCH.lines, option.say, option.reply]);
+      // Игру закрыли посреди сцены: она ещё не отмечена, а ответ уже записан.
+      expect(dramaScene(s, TODAY)).toBe(LUNCH);
+    }
+  });
+
+  it('ответ переживает следующие сцены (seeDrama собирает состояние заново)', () => {
+    let s = chooseDrama(shop({ day: LUNCH.day, drama: { upTo: LUNCH.day - 1 } }), 'lunch', 'warm');
+    s = seeDrama(s, TODAY);
+    expect(s.drama?.upTo).toBe(LUNCH.day);
+    s = seeDrama({ ...s, day: s.day + 1 }, TODAY);
+    expect(choiceOf(s, 'lunch')).toBe('warm');
+  });
+
+  it('обед вместе — Соня заглядывает по субботам задолго до примирения; «потом» — как раньше', () => {
+    const saturday = 13;
+    expect(saturday % 7).toBe(6);
+    const warm = chooseDrama(shop({ day: saturday, drama: { upTo: LUNCH.day } }), 'lunch', 'warm');
+    const busy = chooseDrama(shop({ day: saturday, drama: { upTo: LUNCH.day } }), 'lunch', 'busy');
+    expect(sonyaVisits(warm)).toBe(true);
+    expect(sonyaVisits({ ...warm, day: saturday + 1 })).toBe(false);
+    expect(sonyaVisits(busy)).toBe(false);
+    // Старое сохранение: сцена прошла без выбора — как «потом».
+    expect(sonyaVisits(shop({ day: saturday, drama: { upTo: LUNCH.day } }))).toBe(false);
+  });
+
+  it('блины — по воскресеньям строчка в утренних делах; прежний ответ про инвентаризацию — один из двух', () => {
+    const warm = chooseDrama(shop({ day: 14, drama: { upTo: PANCAKES.day } }), 'pancakes', 'warm');
+    expect(pancakeSunday(warm)).toBe(true);
+    expect(pancakeSunday({ ...warm, day: 15 })).toBe(false);
+    expect(pancakeSunday(chooseDrama(shop({ day: 14 }), 'pancakes', 'busy'))).toBe(false);
+    const busy = PANCAKES.choice!.options.find((o) => o.answer === 'busy')!;
+    expect(busy.say.key).toBe('drama.6.4');
+    expect(busy.reply.key).toBe('drama.6.5');
+  });
+
+  it('у каждой реплики развилки есть текст на русском и английском', () => {
+    for (const scene of [LUNCH, PANCAKES])
+      for (const option of scene.choice!.options)
+        for (const key of [option.say.key, option.reply.key, ...(option.note ? [option.note] : [])]) {
+          expect(ru[key]).toBeTruthy();
+          expect(en[key]).toBeTruthy();
+        }
   });
 });

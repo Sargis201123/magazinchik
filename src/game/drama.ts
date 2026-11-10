@@ -14,6 +14,20 @@ import type { StoreState } from './economy';
 import type { Line } from './story';
 import { SCENES } from './dramaScenes';
 
+/** Развилки истории: что ответил отец. Старые сохранения, где сцена уже прошла без выбора, — как 'busy'. */
+export type ChoiceId = 'lunch' | 'pancakes';
+export type ChoiceAnswer = 'warm' | 'busy';
+
+/**
+ * Развилка в конце сцены: после её реплик игрок выбирает, что ответит отец. История от выбора не ветвится
+ * (беда и примирение впереди те же) — меняются ответ Сони и маленький след, который остаётся навсегда:
+ * обед вместе — Соня заглядывает в магазин по субботам; блины — по воскресеньям в утренних делах блины.
+ */
+export interface DramaChoice {
+  id: ChoiceId;
+  options: { answer: ChoiceAnswer; say: Line; reply: Line; note?: TextKey }[];
+}
+
 export interface DramaScene {
   /** С какого дня можно показать (если предыдущая уже показана). */
   day: number;
@@ -24,6 +38,8 @@ export interface DramaScene {
   /** В этот день Соня заходит в магазин. */
   visit?: boolean;
   lines: Line[];
+  /** Развилка после реплик сцены. */
+  choice?: DramaChoice;
 }
 
 export interface DramaState {
@@ -38,6 +54,8 @@ export interface DramaState {
   /** Настоящий день (дата игрока «ГГГГ-ММ-ДД»), когда показали последнюю сцену, и сколько сцен за него. */
   date?: string;
   today?: number;
+  /** Что игрок выбрал на развилках (DramaChoice). */
+  choices?: Partial<Record<ChoiceId, ChoiceAnswer>>;
 }
 
 /**
@@ -114,7 +132,7 @@ export function eveningScene(state: StoreState): DramaScene | null {
 export function seeEvening(state: StoreState, today: string): StoreState {
   const scene = eveningScene(state);
   if (!scene) return state;
-  return { ...state, drama: { upTo: scene.day, last: state.day, date: today, today: shownToday(state, today) + 1 } };
+  return { ...state, drama: { upTo: scene.day, last: state.day, date: today, today: shownToday(state, today) + 1, choices: state.drama?.choices } };
 }
 
 /**
@@ -128,7 +146,7 @@ export function seeDrama(state: StoreState, today: string): StoreState {
   if (!scene) return state;
   return {
     ...state,
-    drama: { upTo: scene.day, last: state.day, visit: scene.visit ? state.day : state.drama?.visit, date: today, today: shownToday(state, today) + 1 },
+    drama: { upTo: scene.day, last: state.day, visit: scene.visit ? state.day : state.drama?.visit, date: today, today: shownToday(state, today) + 1, choices: state.drama?.choices },
   };
 }
 
@@ -143,8 +161,34 @@ export const sunflowersPlanted = (state: StoreState): boolean => upToOf(state) >
 /** После примирения Соня помогает по субботам (каждый седьмой день). */
 const HELPS = SCENES.find((s) => s.visit && s.day >= 80)!.day;
 
-/** Соня сегодня заходит в магазин: в день сцены «в магазине» или по субботам после примирения. */
-export const sonyaVisits = (state: StoreState): boolean => state.drama?.visit === state.day || (upToOf(state) >= HELPS && state.day % 7 === 6);
+/** Поели вместе, когда она принесла обед (развилка 'lunch'): с тех пор Соня заглядывает по субботам — задолго до примирения. */
+const dropsBy = (state: StoreState): boolean => state.drama?.choices?.lunch === 'warm';
+
+/** Соня сегодня заходит в магазин: в день сцены «в магазине» или по субботам — после примирения или после общего обеда. */
+export const sonyaVisits = (state: StoreState): boolean => state.drama?.visit === state.day || ((upToOf(state) >= HELPS || dropsBy(state)) && state.day % 7 === 6);
+
+// ---------- Развилки ----------
+
+/** Что игрок ответил на развилке (undefined — ещё не отвечал). */
+export const choiceOf = (state: StoreState, id: ChoiceId): ChoiceAnswer | undefined => state.drama?.choices?.[id];
+
+/** Записать ответ. Сцена при этом ещё не показана: её отметит seeDrama, когда дочитают. */
+export function chooseDrama(state: StoreState, id: ChoiceId, answer: ChoiceAnswer): StoreState {
+  if (choiceOf(state, id) === answer) return state;
+  return { ...state, drama: { ...state.drama, choices: { ...state.drama?.choices, [id]: answer } } };
+}
+
+/** Реплики сцены с учётом развилки: пока ответа нет — только до неё; с ответом — ещё слова отца и ответ Сони. */
+export function sceneLines(scene: DramaScene, state: StoreState): Line[] {
+  const picked = scene.choice && scene.choice.options.find((o) => o.answer === choiceOf(state, scene.choice!.id));
+  return picked ? [...scene.lines, picked.say, picked.reply] : scene.lines;
+}
+
+/** Сцена ждёт ответа игрока: реплики до развилки дочитаны, а выбор не сделан. */
+export const choicePending = (scene: DramaScene, state: StoreState): DramaChoice | null => (scene.choice && !choiceOf(state, scene.choice.id) ? scene.choice : null);
+
+/** Воскресные блины (развилка 'pancakes'): каждый седьмой день — строчка в утренних делах. */
+export const pancakeSunday = (state: StoreState): boolean => state.drama?.choices?.pancakes === 'warm' && state.day % 7 === 0;
 
 // ---------- Соня замечает ночные смены ----------
 

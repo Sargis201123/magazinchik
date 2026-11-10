@@ -119,7 +119,7 @@ import {
   type ContestResult,
   type ContestState,
 } from '../game/contest';
-import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene, sceneArt } from '../game/drama';
+import { chooseDrama, choicePending, dramaDone, dramaScene, isLastScene, pancakeSunday, sceneArt, sceneLines, seeDrama, type DramaScene } from '../game/drama';
 import { activeEvent, addDays, cardOf, cardWaiting, guestDue, guestOn, nextGuest, openCard, openedCards, type LiveEvent } from '../game/live';
 import { liveEvents, todayLocal } from '../platform/live';
 import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
@@ -2652,10 +2652,34 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
 
   /** Сцена сюжета: место действия, реплики по одной; в конце последней — слова благодарности. */
   const dramaBox = (scene: DramaScene) => {
-    const line = scene.lines[Math.min(dramaLine, scene.lines.length - 1)];
-    const last = dramaLine >= scene.lines.length - 1;
+    // Реплики с учётом развилки (drama.ts): пока игрок не ответил — только до неё; ответил — ещё слова отца и ответ Сони.
+    const lines = sceneLines(scene, getState());
+    const line = lines[Math.min(dramaLine, lines.length - 1)];
+    const last = dramaLine >= lines.length - 1;
+    // Развилка: реплики сцены дочитаны, пора выбрать, что ответит отец, — вместо «Дальше» две кнопки.
+    const choice = last ? choicePending(scene, getState()) : null;
     startRead(`drama:${scene.day}`);
-    const after = last && isLastScene(scene) ? [el('div', 'ui-note', t('drama.end'))] : [];
+    const after: HTMLElement[] = last && isLastScene(scene) ? [el('div', 'ui-note', t('drama.end'))] : [];
+    if (choice) {
+      choice.options.forEach((option, i) =>
+        after.push(
+          button(
+            `«${t(option.say.key)}»`,
+            () => {
+              track('drama_choice', getState().day, i);
+              // Ответ записан сразу; сцену отметит seeDrama, когда её дочитают.
+              setState(chooseDrama(getState(), choice.id, option.answer));
+              dramaLine++;
+              render();
+            },
+            i === 0 ? 'ui-btn' : 'ui-btn secondary',
+          ),
+        ),
+      );
+    }
+    // След развилки — строчкой под ответом Сони: что теперь изменилось навсегда.
+    const picked = last && !choice ? scene.choice?.options.find((o) => o.reply === line) : undefined;
+    if (picked?.note) after.push(el('div', 'ui-note', t(picked.note)));
     return dialogBox({
       caption: t(scene.place),
       art: sceneArt(scene) && dramaLine === 0 ? `assets/${sceneArt(scene)}.png` : undefined,
@@ -2665,6 +2689,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       text: t(line.key).startsWith('(') || t(line.key) === '…' ? t(line.key) : `«${t(line.key)}»`,
       pitch: VOICE[line.who],
       after,
+      noNext: Boolean(choice),
       nextLabel: t('drama.next'),
       onNext: () => {
         if (!last) {
@@ -3481,6 +3506,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       row(t('goods.soon'), button(t('shelves.buy', { name: '🍦', cost: price }), () => update(buyShelf(getState(), 'icebox'), 'success'), 'ui-chip', state.money < price));
     }
     if (box.children.length === 1) box.append(el('div', 'ui-muted', t('todo.done')));
+    // Воскресные блины с Соней (развилка истории, drama.ts): каждое воскресенье — строчкой в делах дня.
+    // После «всё готово»: это не дело магазина, а напоминание, ради кого его закрывать вовремя.
+    if (pancakeSunday(state)) row(t('todo.pancakes'));
     return box;
   };
 
