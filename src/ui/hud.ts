@@ -91,6 +91,9 @@ export class Hud {
   /** «Позвать на помощь» в час пик (game/help.ts): над ускорением, пока очередь длинная. */
   private readonly help = el('button', 'ui-speed ui-help');
   onHelp: () => void = () => {};
+  /** Большой магазин: «🔍» — камера у касс или весь магазин целиком (scenes/camera.ts, closeView). */
+  private readonly view = el('button', 'ui-speed ui-view');
+  onView: () => void = () => {};
   /** Быстрое «без звука» — напротив ускорения, видно всегда, пока идёт игра. */
   private readonly mute = el('button', 'ui-speed ui-mute');
   private day = 1;
@@ -126,6 +129,9 @@ export class Hud {
     this.speed.style.display = 'none';
     this.help.addEventListener('click', () => this.onHelp());
     this.help.style.display = 'none';
+    this.view.addEventListener('click', () => this.onView());
+    this.view.style.display = 'none';
+    this.view.textContent = '🔍';
     injectAudioStyles();
     this.mute.title = t('audio.mute');
     this.mute.addEventListener('click', () => {
@@ -145,7 +151,7 @@ export class Hud {
     row.append(this.goal, this.quests.chip);
     this.goalWrap.append(row, this.goalNext, this.quests.list);
     this.stock.append(this.goalWrap);
-    document.body.append(this.top, this.stock, this.hint, this.speed, this.help, this.mute);
+    document.body.append(this.top, this.stock, this.hint, this.speed, this.help, this.view, this.mute);
   }
 
   /** Цель на полоске; null — спрятать. Перерисовывается, только когда что-то поменялось. */
@@ -276,6 +282,16 @@ export class Hud {
       }
     }
     if (this.help.disabled !== busy) this.help.disabled = busy;
+  }
+
+  /** Кнопка вида камеры: видна в большом магазине, пока идёт день; close — сейчас кадр у касс. */
+  showView(visible: boolean, close: boolean): void {
+    const display = visible ? '' : 'none';
+    if (this.view.style.display !== display) this.view.style.display = display;
+    if (this.view.classList.contains('on') !== close) {
+      this.view.classList.toggle('on', close);
+      this.view.setAttribute('aria-label', t(close ? 'hud.viewWide' : 'hud.viewClose'));
+    }
   }
 
   showSpeed(visible: boolean, speed: number): void {

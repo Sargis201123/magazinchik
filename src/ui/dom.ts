@@ -557,6 +557,9 @@ const css = `
 .ui-help:disabled { opacity: .55; animation: none; }
 @keyframes ui-help-glow { 50% { box-shadow: 0 2px 0 rgba(0, 0, 0, .45), 0 0 10px rgba(99, 199, 77, .75); } }
 @media (prefers-reduced-motion: reduce) { .ui-help { animation: none; } }
+/* Вид камеры в большом магазине: слева, над кнопкой звука. */
+.ui-view { right: auto; left: max(10px, calc((100vw - var(--game-w, min(100vw, 56.25dvh))) / 2 + 10px));
+  bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 84px); padding: 5px 8px; }
 .ui-report-chart { display: flex; align-items: flex-end; gap: 6px; height: 110px; margin: 10px 0; padding: 0 2px; }
 .ui-report-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
 .ui-report-bar { width: 100%; background: #63c74d; border: 2px solid #2b2233; border-radius: 4px 4px 0 0; }
