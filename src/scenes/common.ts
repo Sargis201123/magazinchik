@@ -34,6 +34,11 @@ export const FURNITURE_TOP = 6;
 /** Толщина наружных стен и высота фасада (в точках мира). */
 export const WALL = 6;
 export const FACADE_H = 10;
+/**
+ * Фонари вдоль нашего тротуара стоят у бордюра (от верхнего края тротуара): столб высотой 22 не заходит
+ * на зал — раньше они стояли у стены и в большом магазине выглядели фонарями внутри зала.
+ */
+export const STREET_LAMP_Y = 22;
 export const HEADLIGHT_POWER = 1;
 /** Машины на дороге: вид, цвет (null — свой, без перекраски), вес при выборе. */
 export const CAR_TYPES: [string, number | null, number][] = [

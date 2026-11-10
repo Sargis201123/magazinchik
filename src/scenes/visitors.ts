@@ -81,6 +81,13 @@ export function streetLife(scene: StoreScene): void {
     const toRight = Math.random() < 0.5;
     // Машина с парковки сейчас на дороге (сворачивает к ней или выезжает) — новые не въезжают ей в бок и в багажник.
     if (scene.parking?.onRoad) return;
+    // В своей полосе никто никого не догоняет: за медленным (автобус, фургон) не выезжаем вовсе, а за
+    // обычной машиной едем не быстрее неё — иначе быстрая проезжала сквозь медленную.
+    const lane = toRight ? 'up' : 'down';
+    for (const v of scene.roadTraffic) if (v.slow && v.lane === lane) return;
+    const ahead = scene.laneFreeAt[lane] - scene.time.now;
+    const duration = Math.max(Phaser.Math.Between(2600, 4200), ahead > 0 && ahead < 8000 ? ahead + 450 : 0);
+    scene.laneFreeAt[lane] = scene.time.now + duration;
     const y = scene.streetY + (toRight ? 24 : 42);
     const total = CAR_TYPES.reduce((sum, [, , weight]) => sum + weight, 0);
     let roll = Math.random() * total;
@@ -115,8 +122,8 @@ export function streetLife(scene: StoreScene): void {
       lit.y = car.y;
       lit.set(HEADLIGHT_POWER * scene.evening);
     };
-    cars.onRoad(scene, car, toRight ? 'up' : 'down');
-    scene.tweens.add({ targets: car, x: toRight ? right : left, duration: Phaser.Math.Between(2600, 4200), onComplete: () => car.destroy() });
+    cars.onRoad(scene, car, lane);
+    scene.tweens.add({ targets: car, x: toRight ? right : left, duration, onComplete: () => car.destroy() });
   }
 }
 

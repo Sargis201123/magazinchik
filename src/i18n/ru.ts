@@ -531,7 +531,7 @@ export const ru = {
   'regular.away': 'Обиделся(лась), придёт с дня {n}',
   'regular.unknown': 'Ещё не знакомы',
   'regular.hello': '{name} заходит 👋',
-  'regular.up': '{name} доволен(льна) 💚',
+  'regular.up': '{name}: доверие растёт 💚',
   'regular.down': '{name} расстроен(а) 💔',
   'regular.left': '{name} обиделся(лась) — неделю не придёт',
   'regular.tip': 'Чаевые: +{n} 💰',

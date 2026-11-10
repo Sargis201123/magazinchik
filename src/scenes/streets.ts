@@ -40,6 +40,7 @@ import {
   type Pigeon,
   LOT,
   LOT_DRIVE_END,
+  STREET_LAMP_Y,
 } from './common';
 import * as pets from './pets';
 import * as lighting from './lighting';
@@ -72,6 +73,8 @@ const RIVAL_LOOKS: Record<EduardLook, Omit<Neighbor, 'x' | 'w'>> = {
 const PARK_TREES = ['tree', 'tree', 'tree_round', 'tree_birch', 'tree_pine'];
 /** Высота здания босса за дорогой: умещается на месте «Гиганта». */
 const RIVAL_ACROSS_H = 106;
+/** Вывеска здания за дорогой сидит на кромке его стены у тротуара (середина таблички — на столько выше стены). */
+const ACROSS_SIGN_UP = 7;
 /**
  * Реклама у входа (x от двери): съёмочная группа ТВ (оператор, камера, ведущая) и блогер — один или
  * звезда с фанатами. Первое место — обычное, следующие — если оно занято курьером или тележкой (freeStreetX).
@@ -269,12 +272,12 @@ export function drawNeighbor(scene: StoreScene, n: Neighbor, bottom: number, rnd
   }
   scene.awnings.push(scene.art(doorX, front - 9, 'awning').setScale(1 / ART, 0.6 / ART).setTint(n.awning).setDepth(front + 40));
   // Вывеска на краю крыши (за дорогой — над витринами, у самой дороги).
-  const signY = across ? top - 12 : bottom - FACADE_H - 8;
+  const signY = across ? top - ACROSS_SIGN_UP : bottom - FACADE_H - 8;
   if (across) scene.signsAcross.push(n.x + n.w / 2);
   const signDepth = across ? front + 41 : front - 3;
   scene.art(n.x + n.w / 2, signY, 'sign').setTint(n.sign).setDepth(signDepth);
   scene.add
-    .text(n.x + n.w / 2, signY, n.label ?? t(n.name), { fontFamily: UI_FONT, fontSize: '6px', color: '#fee761' })
+    .text(n.x + n.w / 2, signY, n.label ?? t(n.name), { fontFamily: UI_FONT, fontSize: '6px', fontStyle: across ? 'bold' : '', color: '#fee761' })
     .setOrigin(0.5)
     .setResolution(scene.textRes(4))
     .setDepth(signDepth + 1);
@@ -477,7 +480,7 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
 
   // Фонари вдоль тротуара (не на дорожке), скамейка и урна у входа.
   for (let x = -100; x < next.w + 40; x += 72) {
-    if (lighting.lampAt(scene, x)) scene.art(x, top + 3, 'lamp').setOrigin(0.5, 0.95).setDepth(top + 3);
+    if (lighting.lampAt(scene, x)) scene.art(x, top + STREET_LAMP_Y, 'lamp').setOrigin(0.5, 0.95).setDepth(top + STREET_LAMP_Y);
   }
   scene.art(door.x + 44, top + 7, 'bench').setDepth(top + 7);
   scene.art(door.x - 32, top + 6, 'bin').setDepth(top + 6);
@@ -837,7 +840,7 @@ export function buildDistrict(scene: StoreScene, next: Layout, top: number): { x
       buildStadium(scene, spot, name);
       continue;
     }
-    drawNeighbor(scene, { ...looks[id], x: spot.x, w: spot.w, h: spot.h, name: 'district.school', label: `${BUILDINGS[id].icon} ${name}`, roofKit: id }, spot.y + spot.h, rnd, true);
+    drawNeighbor(scene, { ...looks[id], x: spot.x, w: spot.w, h: spot.h, name: 'district.school', label: name, roofKit: id }, spot.y + spot.h, rnd, true);
     // У школы на тротуаре — флагшток.
     if (id === 'school') scene.art(spot.x + 8, spot.y + 4, 'flagpole').setOrigin(0.5, 1).setDepth(spot.y + 44);
   }

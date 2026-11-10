@@ -343,6 +343,8 @@ export class StoreScene extends Phaser.Scene {
   parkingTimer?: Phaser.Time.TimerEvent;
   /** Машины на улице и их полоса: с парковки выезжают в просвет. */
   roadTraffic = new Set<RoadCar>();
+  /** Когда последняя машина полосы доедет до края (время сцены): следующая приезжает не раньше — без обгонов насквозь. */
+  laneFreeAt: Record<'up' | 'down', number> = { up: 0, down: 0 };
   /** Стаи птиц над кварталом (buildAmbient). */
   flockTimer?: Phaser.Time.TimerEvent;
   /** Порывы ветра (windGust): таймер, деревья с кронами и навесы соседей с зонтиками веранды. */
