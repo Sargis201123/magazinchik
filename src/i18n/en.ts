@@ -3253,6 +3253,9 @@ export const en: Record<TextKey, string> = {
   "pitch.invite": "Invite for a week",
   "pitch.left": "{n} d left",
   "pitch.invited": "{name}: setting up by the entrance, first rent this evening",
+  "news.yard": "🌱 Grandma's yard is to the left of the shop, behind the storeroom: the 🌱 button shows it. Three beds, each with its own crop; the bot will write when the harvest is ripe.",
+  "news.tenants": "🔑 Tenants have come alive: a barbershop, a photo booth and an ATM, a second fit-out, requests on the “Orders” board — and a seasonal trader by the entrance.",
+  "news.town": "🏘 District: a weekly goal shared by all players and the “Shop of the day” — drop in and leave an “I was here” mark.",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

@@ -104,7 +104,12 @@ const bedSpot = (yard: { x: number; y: number; w: number; h: number }, i: number
 
 /** Поставить (или перерисовать) двор: зовётся при постройке улицы и когда грядка перешла на новую стадию. */
 export function buildGarden(scene: StoreScene, next: Layout, top: number): void {
-  scene.gardenBox?.destroy();
+  // Бабочки, воробей и значки качаются бесконечными твинами — гасим их вместе с двором.
+  if (scene.gardenBox?.active) {
+    const old = scene.gardenBox.list.flatMap((part) => (part instanceof Phaser.GameObjects.Container ? [part, ...part.list] : [part]));
+    scene.tweens.killTweensOf(old);
+    scene.gardenBox.destroy();
+  }
   scene.gardenBox = undefined;
   scene.gardenAt = { next, top };
   const now = Date.now();

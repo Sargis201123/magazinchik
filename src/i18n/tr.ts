@@ -3208,6 +3208,9 @@ export const tr: Record<TextKey, string> = {
   "pitch.invite": "Bir haftalığına çağır",
   "pitch.left": "{n} gün daha",
   "pitch.invited": "{name}: girişe kuruluyor, ilk kira bu akşam",
+  "news.yard": "🌱 Ninenin bahçesi dükkânın solunda, deponun arkasında: 🌱 düğmesi gösterir. Üç tarh, her birinde ayrı ürün; hasat olgunlaşınca bot yazar.",
+  "news.tenants": "🔑 Kiracılar canlandı: berber, fotoğrafçı ve bankamatik, ikinci düzenleme, “Siparişler” panosunda ricalar — ve girişte mevsimlik satıcı.",
+  "news.town": "🏘 Mahalle: tüm oyuncuların ortak haftalık hedefi ve “Günün dükkânı” — uğra, “Buradaydım” işareti bırak.",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

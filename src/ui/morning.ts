@@ -271,9 +271,14 @@ type ProfilePage = 'trophies' | 'friends' | 'settings';
  * Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. Видевшие прежнюю
  * (2: звук, перестановка, друзья…) увидят новую один раз.
  */
-const WHATS_NEW = 5;
+const WHATS_NEW = 6;
+/** Сколько верхних строк — новые в этой карточке: видевшим прошлую показываем только их, а не весь список заново. */
+const WHATS_NEW_FRESH = 3;
 /** Строки карточки «Что нового» — самое свежее сверху. */
 const WHATS_NEW_LINES: TextKey[] = [
+  'news.yard',
+  'news.tenants',
+  'news.town',
   'news.hood',
   'news.hyper',
   'news.branch',
@@ -3259,7 +3264,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     if ((state.whatsNew ?? 0) >= WHATS_NEW) return [];
     const box = el('div', 'ui-box ui-duel');
     box.append(el('b', '', `✨ ${t('news.title')}`));
-    for (const key of WHATS_NEW_LINES) box.append(el('div', '', t(key)));
+    const lines = (state.whatsNew ?? 0) >= WHATS_NEW - 1 ? WHATS_NEW_LINES.slice(0, WHATS_NEW_FRESH) : WHATS_NEW_LINES;
+    for (const key of lines) box.append(el('div', '', t(key)));
     const row = el('div', 'ui-row');
     // Кассы самообслуживания и сменщик — во вкладке «Развитие» и «Персонал».
     // Новичку нового начала вкладки открываются по очереди — кнопки только к уже открытым.

@@ -61,7 +61,9 @@ export function tenantsBox(state: StoreState, getState: () => StoreState, update
     const body = el('div');
     const name = t(`pitch.${kind}` as TextKey);
     body.append(el('div', 'ui-item-name', `${t('pitch.title')} · ${name}`), el('div', 'ui-item-sub', t('pitch.note')), el('div', 'ui-item-sub', t('tenant.effect', { n: pitchRent(state), g: Math.round(PITCH_GUESTS * 100) })));
-    const actions = el('div', 'ui-item-actions stack');
+    // Кнопки — строкой под описанием: в правой колонке широкая кнопка сжимала текст в узкий столбик.
+    const actions = el('div', 'ui-chips');
+    actions.style.marginTop = '6px';
     if (pitchNow(state)) actions.append(el('span', 'ui-tag', t('pitch.left', { n: pitchDaysLeft(state) })));
     else
       actions.append(
@@ -77,7 +79,8 @@ export function tenantsBox(state: StoreState, getState: () => StoreState, update
           'ui-chip hood-buy',
         ),
       );
-    row.append(icon, body, actions);
+    if (actions.childElementCount) body.append(actions);
+    row.append(icon, body, el('div'));
     box.append(row);
   }
   if (!rooms) return [box];
@@ -93,7 +96,9 @@ export function tenantsBox(state: StoreState, getState: () => StoreState, update
     const body = el('div');
     const tier2 = lock === 'here' && tenantTier(state, id) === 2;
     body.append(el('div', 'ui-item-name', `${t(tenantName(id))}${tier2 ? ' ★' : ''}`), el('div', 'ui-item-sub', t(tenantDesc(id))), el('div', 'ui-item-sub', effect(state, id)));
-    const actions = el('div', 'ui-item-actions stack');
+    // Кнопки — строкой под описанием: в правой колонке широкая кнопка сжимала текст в узкий столбик.
+    const actions = el('div', 'ui-chips');
+    actions.style.marginTop = '6px';
     if (lock === 'here') {
       // Хозяин комнаты: лицо, имя и доверие (растёт, когда выполняешь его просьбы на доске «Заказы»).
       if (item.face !== undefined) {
@@ -148,7 +153,8 @@ export function tenantsBox(state: StoreState, getState: () => StoreState, update
         ),
       );
     }
-    row.append(icon, body, actions);
+    if (actions.childElementCount) body.append(actions);
+    row.append(icon, body, el('div'));
     box.append(row);
   }
   return [box];

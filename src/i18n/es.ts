@@ -3208,6 +3208,9 @@ export const es: Record<TextKey, string> = {
   "pitch.invite": "Invitar una semana",
   "pitch.left": "{n} d más",
   "pitch.invited": "{name}: se instala junto a la entrada, primer alquiler esta tarde",
+  "news.yard": "🌱 El huerto de la abuela está a la izquierda de la tienda, detrás del almacén: el botón 🌱 lo muestra. Tres bancales, cada uno con su cultivo; el bot avisará cuando madure la cosecha.",
+  "news.tenants": "🔑 Los inquilinos cobran vida: peluquería, fotos y cajero, segunda reforma, encargos en el tablón «Pedidos» y un vendedor de temporada junto a la entrada.",
+  "news.town": "🏘 Barrio: una meta semanal común para todos los jugadores y la «Tienda del día»: pásate y deja tu marca «Estuve aquí».",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

@@ -3217,6 +3217,9 @@ export const uz: Record<TextKey, string> = {
   "pitch.invite": "Bir haftaga chaqirish",
   "pitch.left": "yana {n} kun",
   "pitch.invited": "{name}: kirish oldiga joylashadi, birinchi ijara — bugun kechqurun",
+  "news.yard": "🌱 Buvining hovlisi doʻkonning chap tomonida, ombor ortida: 🌱 tugmasi koʻrsatadi. Uchta joʻyak, har birida oʻz ekini; hosil pishganda bot yozadi.",
+  "news.tenants": "🔑 Ijarachilar jonlandi: sartaroshxona, foto va bankomat, ikkinchi taʼmir, «Buyurtmalar» taxtasidagi iltimoslar — va kirish oldidagi mavsumiy sotuvchi.",
+  "news.town": "🏘 Mahalla: barcha oʻyinchilar uchun umumiy haftalik maqsad va «Kun doʻkoni» — mehmonga borib, «Shu yerda boʻldim» belgisini qoldir.",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */
