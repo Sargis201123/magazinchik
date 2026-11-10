@@ -380,7 +380,7 @@ export function buildShell(scene: StoreScene): void {
   scene.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, potTile(scene, style.texture)).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
   scene.doorImg = scene.art(door.x, h + 5, doorKey(scene.state.level, 0)).setDepth(h + 2);
   scene.doorSign = scene.art(door.x + 11, h + 8, scene.running ? 'door_sign_open' : 'door_sign_closed').setDepth(h + 42);
-  // Витрины с маленькими навесами слева и справа от двери.
+  // Витрины с маленькими навесами слева и справа от двери, в каждой — выкладка по времени года.
   const segments: [number, number][] = [
     [8, door.x - 18],
     [door.x + 18, w - 2],
@@ -391,6 +391,8 @@ export function buildShell(scene: StoreScene): void {
     for (let i = 0; i < n; i++) {
       const x = start + i * 24;
       scene.art(x, h + 5.5, 'shopwin').setDepth(h + 2);
+      // Сезонная выкладка в витрине (art/pitch.py vitrine): 11.11 «остров сезона» переехал сюда из середины зала.
+      scene.art(x, h + 8.5, `vitrine_${yearTime(scene.state.day)}`).setOrigin(0.5, 1).setDepth(h + 2.2);
       if (!style.canopy) scene.art(x, h + 1.5, 'awning_small').setTint(style.awning ?? 0xffffff).setDepth(h + 40);
       lighting.windowLight(scene, x, h + 5.5, h + 9, false, undefined, true);
     }
