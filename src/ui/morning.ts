@@ -90,7 +90,7 @@ import { AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoAvailable, autoDay, aut
 import { declineNeighbour, giveNeighbour, orderBoard, type OrderRow } from '../game/orders';
 import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
 import { stockOf } from '../game/bakery';
-import { regularName } from './returns';
+import { FACES, regularName } from './returns';
 
 import { daysToFair, fairToday, isFairDay } from '../game/fair';
 import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
@@ -119,7 +119,7 @@ import {
   type ContestResult,
   type ContestState,
 } from '../game/contest';
-import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene } from '../game/drama';
+import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene, sceneArt } from '../game/drama';
 import { activeEvent, addDays, cardOf, cardWaiting, guestDue, guestOn, nextGuest, openCard, openedCards, type LiveEvent } from '../game/live';
 import { liveEvents, todayLocal } from '../platform/live';
 import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
@@ -1194,7 +1194,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
           break;
         case 'neighbour': {
           const o = row.order;
-          text.append(el('div', '', t('orders.neighbour', { name: regularName(o.who), qty: o.qty, icon: PRODUCTS[o.pid].icon, pay: row.pay })));
+          text.append(who(FACES[o.who].replace(/^portrait_/, ''), el('div', '', t('orders.neighbour', { name: regularName(o.who), qty: o.qty, icon: PRODUCTS[o.pid].icon, pay: row.pay })), true));
           if (!row.ready) text.append(status(false, 'orders.neighbourLater'));
           actions.append(
             button(t('orders.give'), () => update(giveNeighbour(getState())?.state ?? null, 'success'), 'ui-chip', !row.ready),
@@ -2658,7 +2658,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const after = last && isLastScene(scene) ? [el('div', 'ui-note', t('drama.end'))] : [];
     return dialogBox({
       caption: t(scene.place),
-      art: scene.art && dramaLine === 0 ? `assets/${scene.art}.png` : undefined,
+      art: sceneArt(scene) && dramaLine === 0 ? `assets/${sceneArt(scene)}.png` : undefined,
       portrait: `portrait_${line.who}${line.mood ? `_${line.mood}` : ''}`,
       name: t(CHARACTERS[line.who].nameKey),
       // Мысли (в скобках) — без кавычек.
@@ -3706,7 +3706,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...(rank ? [el('span', `ui-rank ui-rank-${rank}`, rank === 'admin' ? '▮▮' : '▮')] : []),
       el('span', 'ui-item-sub', ` · ${rank ? t(rankKey(m, rank)) : t(STAFF_ROLES[m.role].nameKey)} · ${t('staffTab.wage', { n: m.wage })}`),
     );
-    head.append(name, bar, ...(tags.length ? [el('span', 'ui-staff-tags', tags.join(' '))] : []));
+    head.append(who(staffFace(m.name), name, true), bar, ...(tags.length ? [el('span', 'ui-staff-tags', tags.join(' '))] : []));
     box.append(head);
     if (openStaff !== m.role) return box;
     box.append(
@@ -3810,7 +3810,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       const head = el('div', 'ui-row');
       const taken = Boolean(staffOf(state, c.role));
       head.append(
-        el('b', '', memberName(c)),
+        // Лицо кандидата — то же, что будет у него в зале и в письмах (game/staffLook.ts).
+        who(staffFace(c.name), el('b', '', memberName(c)), true),
         button(
           taken ? t('staffTab.roleTaken') : full ? t('staffTab.full') : t('staffTab.hire'),
           () => update(hire(getState(), c), 'success'),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newGame, type StoreState } from '../src/game/economy';
-import { DRAMA_FREE_DAYS, DRAMA_PER_DAY, dramaDone, dramaHeld, dramaScene, dramaWaiting, eveningScene, NIGHT_NOTES, noteNight, SCENES, seeDrama, seeEvening, sonyaNightNote, sonyaVisits, sunflowersPlanted } from '../src/game/drama';
+import { DRAMA_FREE_DAYS, DRAMA_PER_DAY, dramaDone, dramaHeld, dramaScene, dramaWaiting, eveningScene, NIGHT_NOTES, noteNight, PLACE_ART, sceneArt, SCENES, seeDrama, seeEvening, sonyaNightNote, sonyaVisits, sunflowersPlanted } from '../src/game/drama';
 import { startCohort } from '../src/game/onboarding';
 import { addDays } from '../src/game/live';
 import { ru } from '../src/i18n/ru';
@@ -202,5 +202,32 @@ describe('Соня замечает ночные смены', () => {
         expect(ru[key]).toBeTruthy();
         expect(en[key]).toBeTruthy();
       }
+  });
+});
+
+describe('картинки сцен: своя или фон места', () => {
+  // Картинки в public/assets — как их видит сборка (без node:fs).
+  const files = Object.keys(import.meta.glob('../public/assets/drama_*.png')).map((f) => f.replace('../public/assets/', '').replace(/\.png$/, ''));
+
+  it('у каждой картинки сцены и у каждого фона места есть файл', () => {
+    for (const scene of SCENES) {
+      const art = sceneArt(scene);
+      if (art) expect(files, `сцена дня ${scene.day}`).toContain(art);
+    }
+    for (const art of Object.values(PLACE_ART)) expect(files).toContain(art);
+  });
+
+  it('своя картинка сцены важнее фона места; сцены в магазине — без фона', () => {
+    const rain = SCENES.find((s) => s.art === 'drama_rain')!;
+    expect(sceneArt(rain)).toBe('drama_rain');
+    const home = SCENES.find((s) => s.place === 'drama.place.home_evening' && !s.art)!;
+    expect(sceneArt(home)).toBe('drama_home');
+    const shop = SCENES.find((s) => s.place === 'drama.place.shop' && !s.art)!;
+    expect(sceneArt(shop)).toBeUndefined();
+  });
+
+  it('с картинкой — больше двух третей сцен (было 3 из 61)', () => {
+    const drawn = SCENES.filter((s) => sceneArt(s)).length;
+    expect(drawn / SCENES.length).toBeGreaterThan(2 / 3);
   });
 });

@@ -40,16 +40,14 @@ import {
   SPILL_TINTS,
   PICKUP_MS,
   PLACE_MS,
-  HAIR_COLORS,
   randomLook,
   STAFF_SPEED,
   type Worker,
   staffKey,
   type ChoreStep,
   ROT_TIP,
-  type HairStyle,
-  type Accessory,
 } from './common';
+import { staffLook } from '../game/staffLook';
 import * as motion from './motion';
 import * as effects from './effects';
 import * as deliveries from './deliveries';
@@ -75,24 +73,6 @@ const TRASH_CLEAN_MS = 400;
 /** Уборщик без дела натирает самое потёртое место — не чаще, чем раз в столько мс, и если потёрто не меньше. */
 const POLISH_EVERY_MS = 9000;
 const POLISH_MIN_WEAR = 0.25;
-/** Форма персонала. */
-const STAFF_ACC: Record<StaffRole, { acc: Accessory; tint: number }> = {
-  cashier: { acc: 'apron', tint: 0xffffff },
-  cashier2: { acc: 'apron', tint: 0xffffff },
-  cashier3: { acc: 'apron', tint: 0xffffff },
-  cashier4: { acc: 'apron', tint: 0xffffff },
-  cashier5: { acc: 'apron', tint: 0xffffff },
-  cleaner: { acc: 'apron', tint: 0x5fcde4 },
-  loader: { acc: 'vest', tint: 0xffffff },
-  guard: { acc: 'badge', tint: 0xffffff },
-  manager: { acc: 'tie', tint: 0xffffff },
-  baker: { acc: 'apron', tint: 0xffffff },
-  barista: { acc: 'apron', tint: 0x8f563b },
-  cook: { acc: 'apron', tint: 0xffffff },
-};
-/** Форма сотрудников. */
-const UNIFORMS: Record<StaffRole, number> = { cashier: 0x5fcde4, cashier2: 0x5fcde4, cashier3: 0x5fcde4, cashier4: 0x5fcde4, cashier5: 0x5fcde4, cleaner: 0xfbf236, loader: 0xdf7126, guard: 0x306082, manager: 0xf4f4f4, baker: 0xf4f4f4, barista: 0x3e8948, cook: 0xf4f4f4 };
-const STAFF_HAIR: Record<StaffRole, HairStyle> = { cashier: 'long', cashier2: 'ponytail', cashier3: 'bun', cashier4: 'short', cashier5: 'curly', cleaner: 'short', loader: 'short', guard: 'cap', manager: 'short', baker: 'cap', barista: 'ponytail', cook: 'short' };
 type TrashKind = 'trash' | 'mud' | 'spill';
 
 // ---------- Продавец: уборка и выкладка ----------
@@ -576,13 +556,16 @@ export function syncStaff(scene: StoreScene): void {
     // Новенький в первый день не стоит сразу на месте, а входит с улицы.
     const fresh = scene.dayOpen && scene.newHires.has(staffKey(member));
     const at = fresh ? visitors.streetSpawn(scene) : home;
+    // Кожа и волосы — как на портрете этого человека в окнах, и одни и те же каждый день (game/staffLook.ts).
+    const face = staffLook(member);
     const sprite = persons.makePerson(scene, at.x ?? home.x, at.y ?? home.y, {
-      ...randomLook(UNIFORMS[member.role]),
-      style: STAFF_HAIR[member.role],
-      acc: STAFF_ACC[member.role].acc,
-      accTint: STAFF_ACC[member.role].tint,
+      ...randomLook(face.shirt),
+      skin: face.skin,
+      style: face.style,
+      acc: face.acc,
+      accTint: face.accTint,
       // У охранника форменная кепка, у пекаря — белый колпак.
-      hair: member.role === 'guard' ? UNIFORMS.guard : member.role === 'baker' ? 0xffffff : Phaser.Utils.Array.GetRandom(HAIR_COLORS),
+      hair: face.hair,
       // Повар — в поварском колпаке и белом кителе.
       ...(member.role === 'cook' ? { hat: 'toque' as const, outfit: 'chefcoat' as const } : {}),
     });

@@ -40,6 +40,22 @@ export interface DramaState {
   today?: number;
 }
 
+/**
+ * Фон места, если у сцены нет своей картинки (art/family.py): до 10.11 из 61 сцены картинка была у трёх,
+ * а «Вечер, дома» шёл поверх зала магазина. Сцены «в магазине» и «у входа» — без фона: за окном диалога
+ * и так виден сам магазин.
+ */
+export const PLACE_ART: Partial<Record<TextKey, string>> = {
+  'drama.place.home_evening': 'drama_home',
+  'drama.place.kitchen': 'drama_kitchen',
+  'drama.place.empty_home': 'drama_kitchen',
+  'drama.place.call': 'drama_call',
+  'drama.place.night': 'drama_night',
+};
+
+/** Картинка над первой репликой сцены: своя или фон места. */
+export const sceneArt = (scene: DramaScene): string | undefined => scene.art ?? PLACE_ART[scene.place];
+
 /** Сколько сцен за один настоящий день. Остальные ждут завтра (решение автора о темпе — здесь). */
 export const DRAMA_PER_DAY = 2;
 /**

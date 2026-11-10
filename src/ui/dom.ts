@@ -1,6 +1,7 @@
 // Интерфейс поверх canvas делаем на DOM: текст остаётся чётким на любом экране,
 // а переводы и вёрстка меню проще, чем внутри Phaser.
 
+import { staffFaceIndex } from '../game/staffLook';
 import { assetUrl, png } from '../platform/assets';
 import { sheetPng, uiIconKey } from './sheet';
 import { liteMode } from '../platform/quality';
@@ -84,6 +85,9 @@ const css = `
 .ui-portrait { width: 48px; height: 48px; image-rendering: pixelated; border-radius: 6px; flex: none; }
 .ui-who { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
 .ui-who b, .ui-who h3 { margin: 0; }
+/* Маленький портрет в строке списка: кандидат, сотрудник, сосед с заказом. */
+.ui-portrait.small { width: 32px; height: 32px; border-radius: 5px; }
+.ui-who.tight { margin: 0; gap: 8px; min-width: 0; }
 .ui-card h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; }
 .ui-card h3 { margin: 14px 0 6px; font-size: 15px; }
 .ui-box.ui-rush { background: #2b2233; color: #fee761; border-color: #fee761; }
@@ -1106,13 +1110,12 @@ export function pixelize(root: Node): void {
 }
 
 /** Портрет сотрудника для who() (assets/portrait_staff<n>.png, art/career.py): восемь лиц, чётные имена — мужские, нечётные — женские (как в списке имён). */
-export const STAFF_FACES = 8;
-export const staffFace = (name: number): string => `staff${((name % STAFF_FACES) + STAFF_FACES) % STAFF_FACES}`;
+export const staffFace = (name: number): string => `staff${staffFaceIndex(name)}`;
 
 /** Пиксельный портрет персонажа или поставщика (assets/portrait_<id>.png) рядом с именем. */
-export function who(portraitId: string, name: HTMLElement): HTMLDivElement {
-  const row = el('div', 'ui-who');
-  const img = el('img', 'ui-portrait');
+export function who(portraitId: string, name: HTMLElement, small = false): HTMLDivElement {
+  const row = el('div', small ? 'ui-who tight' : 'ui-who');
+  const img = el('img', small ? 'ui-portrait small' : 'ui-portrait');
   img.src = png(`portrait_${portraitId}`);
   img.alt = '';
   row.append(img, name);

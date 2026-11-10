@@ -8,7 +8,7 @@ import { liteMode } from '../platform/quality';
 import { Babbler, voiceOf } from '../platform/babble';
 import { sound } from '../platform/sound';
 import { dialogBox, liveFace, VOICE } from './dialog';
-import type { DramaScene } from '../game/drama';
+import { sceneArt, type DramaScene } from '../game/drama';
 import { png } from '../platform/assets';
 import { haptic } from '../platform/telegram';
 import { button, el, injectStyles, openModal, pixelize, UI_FONT } from './dom';
@@ -240,7 +240,7 @@ export function eveningSceneCard(scene: DramaScene, onClose: () => void): void {
     card.replaceChildren(
       dialogBox({
         caption: t(scene.place),
-        art: scene.art && at === 0 ? `assets/${scene.art}.png` : undefined,
+        art: sceneArt(scene) && at === 0 ? `assets/${sceneArt(scene)}.png` : undefined,
         portrait: `portrait_${line.who}${line.mood ? `_${line.mood}` : ''}`,
         name: t(CHARACTERS[line.who].nameKey),
         // Мысли (в скобках) — без кавычек, как в утреннем окне.

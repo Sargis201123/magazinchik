@@ -414,6 +414,7 @@ export const SCENES: DramaScene[] = [
   {
     day: 68,
     place: 'drama.place.night',
+    art: 'drama_shopnight',
     lines: [
       line('father', 'drama.45.1', 'sad'),
     ],
