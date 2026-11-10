@@ -10,7 +10,7 @@ import Phaser from 'phaser';
 import { t } from '../i18n';
 import { UI_FONT } from '../ui/dom';
 import { WING_OUTER, type Layout } from './layout';
-import { ART, SIDE_SHOP_W, SIDE_SHOP_X, type Look } from './common';
+import { ART, SHIRTS, SIDE_SHOP_W, SIDE_SHOP_X, randomLook, type Look } from './common';
 import { zarBoatToday, zarBossLook } from '../game/zarechye';
 import { isWet, weatherFor } from '../game/weather';
 import * as streets from './streets';
@@ -72,6 +72,11 @@ export function buildRiver(scene: StoreScene, next: Layout, top: number, left: n
   }
   // Лодочник на вёслах — та же лодка, что в половодье (visitors.ts).
   if (!scene.lite) scene.worldTimer(30000, () => scene.sys.isActive() && Math.random() < 0.5 && visitors.rowBoat(scene, left, left + width, water + Phaser.Math.Between(50, 110)));
+  // Рыбаки у парапета (напротив магазина, по обе стороны от входа) и чайки над водой.
+  if (!scene.lite) {
+    for (const fx of [next.w / 2 - 74, next.w / 2 + 52]) fisherman(scene, fx, bank, water);
+    scene.worldTimer(17000, () => scene.sys.isActive() && !isWet(weatherFor(scene.state.day)) && gull(scene, left, left + width, water + Phaser.Math.Between(16, 90)));
+  }
   // Тот берег: дома с наличниками, ивы у воды.
   const rnd = new Phaser.Math.RandomDataGenerator(['zarechye']);
   const houseY = shore + 8;
@@ -93,6 +98,43 @@ export function buildRiver(scene: StoreScene, next: Layout, top: number, left: n
   }
   // Сквер, деревья и снег — не на воде.
   return [{ x: left - 400, y: bank - 4, w: width + 800, h: shore - bank + 60 }];
+}
+
+/** Рыбак у парапета: стоит лицом к реке, удочка над водой, поплавок покачивается. */
+function fisherman(scene: StoreScene, x: number, bank: number, water: number): void {
+  const man = persons.makePerson(scene, x, bank - 7, { ...randomLook(Phaser.Utils.Array.GetRandom(SHIRTS)), hat: 'flatcap' });
+  scene.people.delete(man);
+  persons.setFacing(man, 'down');
+  man.setDepth(bank + 1);
+  const tip = { x: x + 9, y: bank + 5 };
+  const float = { x: x + 9, y: water + 13 };
+  const g = scene.add.graphics().setDepth(bank + 2);
+  g.lineStyle(0.9, 0x8f563b, 1).lineBetween(x + 4, bank - 5, tip.x, tip.y);
+  g.lineStyle(0.3, 0xffffff, 0.7).lineBetween(tip.x, tip.y, float.x, float.y);
+  const bob = scene.add.container(float.x, float.y, [scene.add.circle(0, 0, 1.3, 0xffffff), scene.add.rectangle(0, -0.9, 2.2, 1.2, 0xe43b44)]).setDepth(-8.4);
+  scene.tweens.add({ targets: bob, y: float.y + 1.2, duration: 1300 + (x % 7) * 90, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  // Ведёрко с уловом.
+  scene.add.rectangle(x - 7, bank - 1, 4, 4, 0x5a6988).setStrokeStyle(0.5, 0x262b44).setDepth(bank + 1);
+}
+
+/** Чайка пролетает над водой: машет крыльями, чуть ныряет по дуге. */
+function gull(scene: StoreScene, left: number, right: number, y: number): void {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  const wings = [scene.add.rectangle(-2, 0, 4, 1, 0xffffff).setOrigin(1, 0.5), scene.add.rectangle(2, 0, 4, 1, 0xffffff).setOrigin(0, 0.5)];
+  const bird = scene.add.container(dir > 0 ? left - 20 : right + 20, y, [...wings, scene.add.rectangle(0, 0, 4, 1.6, 0xf4f8ff), scene.add.rectangle(dir * 2.5, 0, 1.2, 1, 0xfeae34)]).setDepth(-8.3);
+  const flap = scene.tweens.add({ targets: wings, angle: { from: -24, to: 22 }, duration: 260, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  wings[1].setAngle(24);
+  const dive = scene.tweens.add({ targets: bird, y: y + 8, duration: 2300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  scene.tweens.add({
+    targets: bird,
+    x: dir > 0 ? right + 20 : left - 20,
+    duration: Phaser.Math.Between(11000, 15000),
+    onComplete: () => {
+      flap.remove();
+      dive.remove();
+      bird.destroy();
+    },
+  });
 }
 
 /** Соседи по улице в Заречье: лодочная станция, кафе «Пристань», рыбная лавка Сома, общежитие техникума. */
