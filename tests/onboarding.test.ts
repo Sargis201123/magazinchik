@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { newGame, warehouseCount, warehouseCapacity, type StoreState } from '../src/game/economy';
+import { newGame, SHELF_KINDS, warehouseCount, warehouseCapacity, type StoreState } from '../src/game/economy';
 import {
+  dreamInReach,
+  dreamShelf,
   firstWant,
   markOnb,
   MORNING_TABS,
@@ -90,6 +92,22 @@ describe('первые минуты новичка: два начала (A/B)', 
     expect(seen).toEqual([['buy'], ['hall'], ['staff'], ['grow'], ['extras']]);
     // Открытая вкладка не прячется, даже если повод пропал.
     expect(openTabs(s).opened).toEqual([]);
+  });
+
+  it('«Зал» открывается на второй день, если на полку-мечту уже хватает: «купи утром» есть где исполнить', () => {
+    const s = day(startCohort(newGame(), 'play'), 2);
+    const cost = SHELF_KINDS[dreamShelf(s)!].price;
+    // Не хватает — как раньше: во втором утре только закупка, «Зал» — на третий день.
+    const poor = { ...s, money: cost - 1 };
+    expect(dreamInReach(poor)).toBe(false);
+    expect(openTabs(poor).opened).toEqual(['buy']);
+    expect(openTabs(day(poor, 3)).opened).toEqual(['buy', 'hall']);
+    // Хватает — «Зал» рядом с «Закупкой» уже во втором утре.
+    const rich = { ...s, money: cost };
+    expect(dreamInReach(rich)).toBe(true);
+    expect(openTabs(rich).opened).toEqual(['buy', 'hall']);
+    // В первый день утра нет вовсе: вкладки не открываются, сколько бы ни было денег.
+    expect(openTabs({ ...day(s, 1), money: cost * 10 }).opened).toEqual([]);
   });
 
   it('вкладка открывается раньше срока, когда она уже нужна', () => {

@@ -77,7 +77,8 @@ import type { LiveKind } from '../game/minievents';
 import { noteMoment } from '../game/moments';
 import { Moments } from './moments';
 import type { AttentionPlan } from '../game/attention';
-import { questRows } from '../ui/today';
+import { rushOutcome } from '../game/rushHour';
+import { allRows } from '../ui/today';
 import { RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
 import { quality, type Quality } from '../platform/quality';
@@ -99,6 +100,7 @@ import {
   type ParkSpot,
   type ParkingLot,
   type RoadCar,
+  CLOSING_HURRY,
   INSPECTOR_AT,
   SONYA_AT,
   LIVE_GUEST_AT,
@@ -470,6 +472,8 @@ export class StoreScene extends Phaser.Scene {
   questsSeen = 0;
   /** Прогресс заданий, по которому в последний раз строился список в HUD. */
   private questRowsKey = '';
+  /** Сверх заданий дня в счёте фишки «🎯»: шаг сезонной недели (сколько сделано и сколько всего). */
+  private questsExtra = { done: 0, total: 0 };
   /** Активные моменты дня (game/moments.ts, scenes/moments.ts): монетка, чаевые, гость машет… */
   readonly moments = new Moments({
     scene: this,
@@ -530,9 +534,8 @@ export class StoreScene extends Phaser.Scene {
   /** Для какого состояния посчитаны работающие кассы (звук зала). */
   tillsFor: StoreState | null = null;
   valyaCame = false;
-  /** Серия обслуживания: сколько подряд и когда была последняя продажа. */
+  /** Серия у кассы (game/series.ts): сколько покупателей подряд игрок пробил, не заставив ждать. */
   combo = 0;
-  lastSaleAt = -Infinity;
   nextSpawn = 1;
   running = false;
   /** Подсказка «что дальше» в зале (game/nudge.ts): когда игрок последний раз касался экрана, какая подсказка и до каких пор. */
@@ -657,6 +660,14 @@ export class StoreScene extends Phaser.Scene {
   managerOnFloor = false;
   /** Ускорение дня (×1 или ×2). */
   speed = 1;
+  /** Час пик идёт: сколько было обслужено и ушло из очереди к его началу (game/rushHour.ts). */
+  private rushGoal?: { served: number; lost: number };
+  /** Подписи отделов на полу сейчас видны (shelves.ts, showDeptNames): только в ближнем кадре. */
+  deptNamesOn = false;
+  /** Какой кадр сейчас просила сцена: ближний у касс (camera.ts, wantClose) или весь магазин. */
+  private closeWanted = false;
+  /** Спешка закрытия: во сколько раз быстрее идёт зал, когда время вышло, а у касс никто не ждёт (CLOSING_HURRY). */
+  private hurry = 1;
   /** Сколько игровых секунд магазин проработал (с ускорением, без пауз): часы доставки — чаевые и «в пути 0:06». */
   private playTime = 0;
   /** В какой игровой день уже был ритуал возвращения (offerReturn): утро открывается не раз за день. */
@@ -764,6 +775,7 @@ export class StoreScene extends Phaser.Scene {
     });
     this.hud = new Hud();
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
+    this.hud.onView = () => this.running && camera.toggleView(this);
     this.hud.onHelp = () => void nightShift.callForHelp(this);
     // Карточка звонка и плашка доставки живут в DOM — уходят вместе со сценой.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.deliveryUi.destroy());
@@ -827,10 +839,22 @@ export class StoreScene extends Phaser.Scene {
   /** Ускорение дня: время, движения и таймеры идут вдвое быстрее. */
   setSpeed(speed: number): void {
     this.speed = speed;
-    this.time.timeScale = speed;
-    this.tweens.timeScale = speed;
+    this.time.timeScale = speed * this.hurry;
+    this.tweens.timeScale = speed * this.hurry;
     // На ×2 событий вдвое больше — звуков мира за секунду столько же, сколько на ×1 (mix.ts, SoundBudget).
     sound.pace(speed);
+  }
+
+  /**
+   * Время вышло, а последние гости ещё бродят по залу: ждать их у пустой кассы скучно (10–30 секунд тишины).
+   * Пока у касс никто не стоит, зал идёт в CLOSING_HURRY раз быстрее; подошёл к кассе — снова обычный ход,
+   * чтобы терпение очереди не таяло быстрее, чем игрок успевает пробивать.
+   */
+  private setHurry(hurry: number): void {
+    if (hurry === this.hurry) return;
+    this.hurry = hurry;
+    this.time.timeScale = this.speed * hurry;
+    this.tweens.timeScale = this.speed * hurry;
   }
 
   private titleShow(): () => void {
@@ -849,6 +873,7 @@ export class StoreScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     camera.cullView(this);
+    shelves.showDeptNames(this);
     camera.measureFps(this, deltaMs);
     morningFlow.watchStall(this, deltaMs);
     streets.scarePigeons(this);
@@ -857,6 +882,7 @@ export class StoreScene extends Phaser.Scene {
     weatherFx.windTick(this, deltaMs);
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     this.hud.showHelp(this.running && !this.night && this.time.now < this.helpUntil && nightShift.canCallForHelp(this), this.helpBusy);
+    this.hud.showView(this.running && camera.bigStore(this) && !this.arranging, !camera.prefersWide());
     music.setMood(decorations.musicMood(this), this.winterTune);
     // Дверь двигается только в рабочие часы: день кончился — стекло снова закрывает улицу.
     if (!this.running) {
@@ -870,6 +896,7 @@ export class StoreScene extends Phaser.Scene {
     const dt = (deltaMs / 1000) * this.speed;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
     this.playTime += dt;
+    this.setHurry(this.timeLeft <= 0 && !this.queue.length && !this.registers.some((r) => r.customer) ? CLOSING_HURRY : 1);
 
     const elapsed = DAY_SECONDS - this.timeLeft;
     // Вечерняя уценка (02.11 — сама у всех, раньше только с электронными ценниками): в последнюю четверть
@@ -898,10 +925,33 @@ export class StoreScene extends Phaser.Scene {
       haptic.tap();
       sound.bell(this.layout.door.x);
       this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.rush'), '#fff3b0');
-      camera.rushFocus(this, true);
+      // Час пик без потерь (game/rushHour.ts): запомнить, с чего начали.
+      this.rushGoal = { served: this.stats.served, lost: this.stats.lostWhy?.queue ?? 0 };
     }
-    // Час пик кончился (или день) — камера обратно к обычному кадру.
-    if (!rush && this.rushView) camera.rushFocus(this, false);
+    // Час пик кончился: никто не ушёл из очереди — премия; ушли — сказать сколько (без штрафа).
+    if (!rush && this.rushGoal) {
+      const goal = this.rushGoal;
+      this.rushGoal = undefined;
+      const outcome = rushOutcome(this.stats.served - goal.served, (this.stats.lostWhy?.queue ?? 0) - goal.lost, this.state.level);
+      const { counter } = this.layout;
+      if (outcome.kind === 'clean') {
+        this.state = { ...this.state, money: this.state.money + outcome.bonus };
+        this.stats.rushBonus = (this.stats.rushBonus ?? 0) + outcome.bonus;
+        this.popup(counter.x - 14, counter.y - 56, t('popup.rushClean', { n: outcome.bonus }), '#c8ffb0');
+        effects.flyCoins(this, counter.x - 14, counter.y - 40, 5);
+        haptic.success();
+        sound.good();
+      } else if (outcome.kind === 'lost') {
+        this.popup(counter.x - 14, counter.y - 56, t('popup.rushLost', { n: outcome.lost }), '#ffd0d0');
+      }
+    }
+    // Кадр: в большом магазине днём — ближе к кассам (в час пик — всегда), а когда что-то в зале ждёт касания
+    // или игрок выбрал общий план — весь магазин (camera.ts, wantClose). Двигаем, только когда решение сменилось.
+    const close = camera.wantClose(this, rush, elapsed);
+    if (close !== this.closeWanted) {
+      this.closeWanted = close;
+      camera.rushFocus(this, close);
+    }
     // Час пик или очередь до двери — можно позвать друзей на помощь (кнопка держится ещё пару секунд).
     if (!this.night && (rush || this.queue.length >= HELP_QUEUE)) this.helpUntil = this.time.now + HELP_HOLD;
     if (!this.night && this.inspector === 'pending' && elapsed >= INSPECTOR_AT) void shoppers.runInspector(this);
@@ -925,8 +975,12 @@ export class StoreScene extends Phaser.Scene {
       }
     } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here' && this.liveGuest?.phase !== 'here') {
       this.endOfDay();
+      // День закрыт: остаток кадра (подсказка зала, часы «Закрываемся…») — уже не про него. Раньше подсказка,
+      // поставленная в этом же кадре, оставалась висеть под итогами и всё следующее утро.
+      return;
     }
 
+    shoppers.markReady(this);
     for (const c of this.queue) persons.updateBubble(this, c);
     for (const r of this.registers) if (r.customer) persons.updateBubble(this, r.customer);
     staff.checkSlips(this);
@@ -938,6 +992,8 @@ export class StoreScene extends Phaser.Scene {
     // Та же подсказка, что у подсветки обучения (касса, полка), снизу не повторяется; другие (вор, мусор) — да.
     const coached = this.hallCoach && this.coach.pointing && (raw === t('hint.serve') || raw === t('hint.restock'));
     let hint = this.say.visible || coached ? '' : raw || newcomer.nudgeHint(this);
+    // Час пик: пока ничто другое не зовёт — напомнить, что делать и за что премия.
+    if (rush && !raw && !this.say.visible) hint = t('hint.rush');
     // Одна подсказка в одном месте: пока о кассе и полках говорят бабушка или подсветка обучения,
     // снизу о том же молчим (firstday.ts).
     if ((grannyStays(this.state) || (this.hallCoach && this.coach.active)) && (hint === t('hint.serve') || hint === t('hint.restock'))) hint = '';
@@ -962,7 +1018,7 @@ export class StoreScene extends Phaser.Scene {
     pets.petCatNearby(this);
     effects.cheerProgress(this);
     deliveries.updateDelivery(this);
-    this.hud.update(this.state, this.timeLeft, this.questsLine(), this.night);
+    this.hud.update(this.state, this.timeLeft, this.questsLine(), this.night, this.timeLeft <= 0);
   }
 
   /** «🎯 1/3» рядом с целью дня: сколько заданий дня уже выполнено (по нажатию — список, ui/today.ts). */
@@ -970,6 +1026,7 @@ export class StoreScene extends Phaser.Scene {
     const quests = this.state.plan?.quests ?? [];
     if (!quests.length) return '';
     const done = quests.filter((q) => q.paid || questDone(q, this.stats)).length;
+
     // Выполнено — награда сразу (вечером второй раз не платим: endless.ts payQuests). Только в идущий день
     // и по его же плану: статистика вчерашнего дня сегодняшние задания не закрывает.
     const pay = this.running && this.state.plan?.day === this.state.day ? payQuests(this.state, this.stats) : { state: this.state, paid: [] };
@@ -990,12 +1047,19 @@ export class StoreScene extends Phaser.Scene {
       if (this.running) pixelFx.burst(this, 'star', sellerHome.x - 20, sellerHome.y - 14, { fade: 650 });
     }
     // Список для HUD — только когда прогресс сдвинулся (questsLine зовётся каждый кадр).
-    const key = `${this.state.day}|${quests.map((q) => `${q.paid ? 'p' : ''}${questProgress(q, this.stats)}`).join()}`;
+    // Общий список (ui/today.ts): задания дня, шаг сезонной недели и испытания недели. Пересобираем, только
+    // когда сдвинулось то, от чего зависит прогресс (questsLine зовётся каждый кадр).
+    const s = this.stats;
+    const key = `${this.state.day}|${quests.map((q) => `${q.paid ? 'p' : ''}${questProgress(q, s)}`).join()}|${s.served}|${s.revenue}|${s.caught}|${s.trashCleaned}|${s.coffees ?? 0}|${s.deliveries ?? 0}|${s.lost}`;
     if (key !== this.questRowsKey) {
       this.questRowsKey = key;
-      this.hud.setQuests(questRows(quests, this.stats));
+      const rows = allRows(this.state, quests, s);
+      this.hud.setQuests(rows);
+      // Шаг сезонной недели — тоже задание на сегодня: идёт в счёт фишки.
+      const today = rows.filter((r) => !r.week);
+      this.questsExtra = { done: today.filter((r) => r.done).length - done, total: today.length - quests.length };
     }
-    return t('quest.chip', { done, total: quests.length });
+    return t('quest.chip', { done: done + Math.max(0, this.questsExtra.done), total: quests.length + this.questsExtra.total });
   }
 
   // ---------- Магазин ----------
@@ -1273,6 +1337,13 @@ export class StoreScene extends Phaser.Scene {
 
   /** Переходник к nightShift.endOfDay: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
   private endOfDay(): void {
+    this.setHurry(1);
+    // Итоги и утро — в обычном кадре: ближний кадр у касс — только пока идёт торговля.
+    this.closeWanted = false;
+    this.rushGoal = undefined;
+    camera.rushFocus(this, false);
+    // Подсказку зала («Нажми на мусор…») ставит только идущий день — иначе она висела под итогами и всё утро.
+    this.hud.setHint('');
     return nightShift.endOfDay(this);
   }
 
@@ -1316,8 +1387,8 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /** Переходник к effects.celebrateCombo: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
-  celebrateCombo(n: number): void {
-    return effects.celebrateCombo(this, n);
+  celebrateCombo(n: number, tip = 0): void {
+    return effects.celebrateCombo(this, n, tip);
   }
 
   alive(gen: number): boolean {

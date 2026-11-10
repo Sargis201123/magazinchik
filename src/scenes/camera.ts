@@ -169,6 +169,11 @@ export function setupCameraDrag(scene: StoreScene): void {
   const settle = () => {
     if (!zoomed) return;
     zoomed = false;
+    // Большой магазин: развёл пальцы до общего плана — значит, хочет видеть весь магазин; свёл — ближе к кассам.
+    if (bigStore(scene) && scene.rushView) {
+      const mid = (scene.baseZoom + scene.rushView.zoom) / 2;
+      if (cam.zoom < mid && !prefersWide()) setPrefersWide(true);
+    } else if (bigStore(scene) && prefersWide() && cam.zoom > scene.baseZoom * 1.25) setPrefersWide(false);
     const target = crispZoom(cam.zoom, ART, scene.baseZoom * 0.5, scene.baseZoom * 2.2);
     if (target && target !== cam.zoom) cam.zoomTo(target, 160, 'Sine.easeOut', true);
   };
@@ -336,6 +341,68 @@ export function scheduleHome(scene: StoreScene): void {
     cam.pan(view.x, view.y, 700, 'Sine.easeInOut');
     cam.zoomTo(view.zoom, 700, 'Sine.easeInOut');
   });
+}
+
+// ---------- Ближний кадр у касс ----------
+// В большом магазине обычный кадр показывает всё здание, и человек на телефоне — восемь-десять точек.
+// С 10.11 днём камера по умолчанию стоит ближе — у касс и очереди (тот же кадр, что раньше был только в час
+// пик); весь магазин — кнопкой «🔍» или сведя два пальца, выбор запоминается. А когда в зале что-то ждёт
+// касания (момент дня, течь, вор без охранника, звонок доставки), камера сама отходит на общий план.
+
+/** Ключ в памяти браузера: какой вид выбрал игрок ('wide' — весь магазин; иначе — ближе к кассам). */
+const VIEW_KEY = 'magazinchik.view';
+/** Сколько секунд от начала дня камера не трогает кадр: идёт облёт (flyIn). */
+const CLOSE_AFTER = 3;
+
+let widePref: boolean | null = null;
+/** Игрок выбрал общий план. Память браузера может быть недоступна (закрытый режим) — тогда выбор живёт до перезапуска. */
+export function prefersWide(): boolean {
+  if (widePref === null) {
+    try {
+      widePref = localStorage.getItem(VIEW_KEY) === 'wide';
+    } catch {
+      widePref = false;
+    }
+  }
+  return widePref;
+}
+
+export function setPrefersWide(wide: boolean): void {
+  widePref = wide;
+  try {
+    localStorage.setItem(VIEW_KEY, wide ? 'wide' : 'close');
+  } catch {
+    // Не запомнилось — не беда: до перезапуска выбор действует.
+  }
+}
+
+/** Магазин достаточно велик, чтобы ближний кадр имел смысл (ларёк и так крупный). */
+export const bigStore = (scene: StoreScene): boolean => scene.layout.w >= RUSH_MIN_W;
+
+/** В зале что-то ждёт касания не у касс: камере лучше показать весь магазин. */
+function calledElsewhere(scene: StoreScene): boolean {
+  if (scene.liveEvent || scene.moments.showing || scene.call || scene.inspector === 'here') return true;
+  if (scene.oven?.state === 'ready') return true;
+  if (!scene.workers.has('guard')) for (const c of scene.customers) if (c.thief && !c.gone) return true;
+  return false;
+}
+
+/**
+ * Каким должен быть кадр сейчас: true — ближе к кассам. Час пик — всегда ближе (как раньше); в остальное время —
+ * если игрок не выбрал общий план и ничто не зовёт его в другой конец зала. elapsed — секунд от начала дня.
+ */
+export function wantClose(scene: StoreScene, rush: boolean, elapsed: number): boolean {
+  if (!bigStore(scene) || scene.arranging) return false;
+  if (rush) return true;
+  return elapsed >= CLOSE_AFTER && !prefersWide() && !calledElsewhere(scene);
+}
+
+/** Кнопка «🔍»: переключить вид и запомнить выбор. */
+export function toggleView(scene: StoreScene): void {
+  setPrefersWide(!prefersWide());
+  scene.homeTimer?.remove();
+  scene.dragged = false;
+  // Кадр подстроится в ближайшем кадре игры (StoreScene.update → rushFocus).
 }
 
 /** Час пик ближе: во сколько раз камера подходит (дальше — ровный масштаб crispZoom) и за сколько мс. */

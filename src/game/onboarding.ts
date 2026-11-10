@@ -5,7 +5,7 @@
 // где оно уже есть (и старые, без поля), идут как раньше. ?onb=tour — посмотреть его самому.
 // События и как их читать — docs/ONBOARDING.md.
 
-import { buyStock, PRODUCTS, type ProductId, type StoreState } from './economy';
+import { buyStock, CATEGORIES, freeSlots, PRODUCTS, SHELF_KINDS, shelfKindOpen, type Category, type ProductId, type StoreState } from './economy';
 
 export type Cohort = 'tour' | 'play';
 
@@ -81,14 +81,30 @@ export const needsRibbon = (state: StoreState): boolean => playDayOne(state) && 
 export const MORNING_TABS = ['buy', 'hall', 'staff', 'grow', 'extras'] as const;
 export type MorningTab = (typeof MORNING_TABS)[number];
 
+/** Самая дешёвая полка, которую уже можно поставить на свободное место и которой ещё нет (цель-мечта, firstday.ts). */
+export function dreamShelf(s: StoreState): Category | null {
+  if (freeSlots(s) <= 0) return null;
+  const have = new Set(s.shelves.map((sh) => sh.kind));
+  const open = CATEGORIES.filter((k) => shelfKindOpen(s, k) && !have.has(k) && SHELF_KINDS[k].price > 0);
+  open.sort((a, b) => SHELF_KINDS[a].price - SHELF_KINDS[b].price);
+  return open[0] ?? null;
+}
+
+/** На полку-мечту уже хватает: «Мечта» зовёт «купи утром» — значит, утром её должно быть где купить. */
+export function dreamInReach(s: StoreState): boolean {
+  const kind = dreamShelf(s);
+  return kind !== null && s.money >= SHELF_KINDS[kind].price;
+}
+
 /**
  * Когда вкладке пора открыться: по одной в утро (со 2-го дня), а раньше — если она уже нужна
- * (началась вторая глава, магазин подрос, завёлся кот). Сломанную полку и товар, который
- * испортится, утро и так предлагает починить и уценить одной кнопкой в «Главном на сегодня».
+ * (началась вторая глава, магазин подрос, завёлся кот, накопил на полку-мечту). Сломанную полку и товар,
+ * который испортится, утро и так предлагает починить и уценить одной кнопкой в «Главном на сегодня».
  */
 const OPENS: Record<MorningTab, (s: StoreState) => boolean> = {
   buy: (s) => s.day >= 2,
-  hall: (s) => s.day >= 3 || s.level >= 1,
+  // «Зал» — на 3-й день; на 2-й — только если на мечту уже хватает (иначе HUD зовёт купить то, чего негде купить).
+  hall: (s) => s.day >= 3 || s.level >= 1 || (s.day >= 2 && dreamInReach(s)),
   staff: (s) => s.day >= 4 || s.story.chapter >= 1 || s.level >= 1,
   grow: (s) => s.day >= 5 || s.story.chapter >= 1 || s.level >= 1,
   extras: (s) => s.day >= 6 || s.level >= 1 || Boolean(s.cat),

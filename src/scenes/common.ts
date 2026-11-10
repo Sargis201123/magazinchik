@@ -2,6 +2,7 @@
 // типы покупателя, полки и машины, мелкие помощники без состояния. Здесь нет ничего, что знает о сцене:
 // всё, чему нужна сцена, — в её модулях (карта — docs/ARCHITECTURE.md).
 
+import { HAIR_TONES, SKIN_TONES } from '../game/staffLook';
 import Phaser from 'phaser';
 import type { CartItem, Category, ProductId, StaffMember } from '../game/economy';
 import type { RareGuestId } from '../game/endless';
@@ -82,6 +83,8 @@ export const ITEM_VARIANTS = 3;
 
 /** Терпение в очереди. Отсчёт начинается, когда покупатель дошёл до очереди. */
 export const PATIENCE_MS = 20_000;
+/** Спешка закрытия: во сколько раз быстрее идёт зал, когда время дня вышло, а у касс никто не ждёт. */
+export const CLOSING_HURRY = 2.5;
 export const CUSTOMER_SPEED = 40; // пикселей мира в секунду
 export const SELLER_SPEED = 90;
 /** С такой скорости человек уже бежит: подпрыгивает, наклоняется вперёд, из-под ног летит пыль. */
@@ -99,7 +102,7 @@ export const FLOOR_SHADE_DEPTH = 0.25;
 export const WEAR_SAMPLE_MS = 250;
 export const SHIRTS = [0x5b6ee1, 0xd95763, 0x6abe30, 0xfbf236, 0x76428a, 0xdf7126, 0x37946e, 0xf6757a, 0x2ce8f5];
 export const PANTS = [0x3a4466, 0x262b44, 0x5a6988, 0x733e39, 0x265c42];
-export const HAIR_COLORS = [0x4a2c1a, 0x181425, 0x733e39, 0xfeae34, 0xb86f50, 0x8b9bb4];
+export const HAIR_COLORS = [...HAIR_TONES];
 export const HAIR_STYLES = ['short', 'short', 'long', 'long', 'bald', 'ponytail', 'curly'] as const;
 export type HairStyle = 'short' | 'long' | 'bun' | 'cap' | 'bald' | 'ponytail' | 'curly' | 'beanie';
 /** Поверх одежды: фартук (красится), жилет грузчика, значок охранника. */
@@ -359,7 +362,7 @@ export const SONYA_AT = 18;
 export const LIVE_GUEST_AT = 30;
 /** Жюри конкурса приходит на этой секунде дня. */
 export const JURY_AT = 40;
-export const SKINS = [0xf2d3ab, 0xd9a066, 0x8f563b, 0xeec39a];
+export const SKINS = [...SKIN_TONES];
 
 export interface Customer {
   sprite: Phaser.GameObjects.Container;
@@ -369,6 +372,12 @@ export interface Customer {
   unhappy: boolean;
   patience?: Phaser.Time.TimerEvent;
   waitStart: number;
+  /** Когда дошёл до своей кассы (серия у кассы, game/series.ts): от этого мига считается, сколько его заставили ждать. */
+  readyAt?: number;
+  /** Сколько простоял у кассы до начала пробивки (мс игрового времени). */
+  reactMs?: number;
+  /** Пробил сам игрок: за своей кассой или поторопив сменщика касанием — идёт в серию. */
+  byPlayer?: boolean;
   gone: boolean;
   thief: boolean;
   /** Уже пробивается на кассе — из очереди не уйдёт. */

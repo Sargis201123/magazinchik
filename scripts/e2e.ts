@@ -282,6 +282,8 @@ function prepare({ save, seed, start, labels }: { save: string; seed: number; st
   });
   localStorage.clear();
   localStorage.setItem('magazinchik.save', save);
+  // Эталонные кадры сняты в общем плане: ближний кадр у касс (scenes/camera.ts) здесь выключен.
+  localStorage.setItem('magazinchik.view', 'wide');
 }
 
 // ---------- Прогон ----------

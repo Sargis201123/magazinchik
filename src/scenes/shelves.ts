@@ -17,7 +17,8 @@ import {
   type Category,
   type ProductId,
 } from '../game/economy';
-import { t } from '../i18n';
+import { getLang, t } from '../i18n';
+import type { TextKey } from '../i18n/ru';
 import { UI_FONT } from '../ui/dom';
 import { kioskCount } from '../game/lanes';
 import {
@@ -60,6 +61,78 @@ const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
 };
 /** Плиточная вставка отдела под полкой — на плитке пола, под тенями живого пола (FLOOR_SHADE_DEPTH). */
 const DEPT_INLAY_DEPTH = 0.2;
+
+// ---------- Названия отделов на полу ----------
+// Значок отдела на шапке и цветная вставка в полу у каждой полки есть давно, но в большом зале полки
+// сливались в сетку похожих холодильников. С ближним кадром у касс (camera.ts) перед каждой полкой на вставке
+// видно название отдела — как наклейка на полу супермаркета. На общем плане буквы были бы рябью, поэтому
+// подписи видны только вблизи (showDeptNames).
+
+/** Отделы с подписью (полки на своих местах — ларь, цветы, своя марка — подписаны и так). */
+const NAMED: readonly Category[] = ['bakery', 'produce', 'dairy', 'meat', 'drinks', 'frozen', 'household'];
+/** Высота строки подписи в точках мира и её ширина (не шире вставки отдела). */
+const NAME_H = 5;
+const NAME_W = 30;
+/** С какого приближения к обычному кадру подписи видны. */
+const NAMES_FROM_ZOOM = 1.3;
+
+/**
+ * Все названия — на одном общем холсте (ключ зависит от языка и плотности): одна текстура на все подписи,
+ * а не по текстуре на полку — видеокарта рисует их одной пачкой.
+ */
+function deptNamesTexture(scene: StoreScene): string {
+  const res = scene.textRes(8);
+  const key = `dept_names2_${getLang()}_${res}`;
+  if (scene.textures.exists(key)) return key;
+  const w = NAME_W * res;
+  const h = NAME_H * res;
+  const tex = scene.textures.createCanvas(key, w, h * NAMED.length);
+  if (!tex) return key;
+  const ctx = tex.getContext();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  NAMED.forEach((kind, i) => {
+    const text = t(`dept.${kind}` as TextKey).toUpperCase();
+    // Длинное название ужимается под ширину вставки.
+    let size = 3.6 * res;
+    ctx.font = `800 ${size}px ${UI_FONT}`;
+    const fit = (w - res * 2) / Math.max(1, ctx.measureText(text).width);
+    if (fit < 1) {
+      size *= fit;
+      ctx.font = `800 ${size}px ${UI_FONT}`;
+    }
+    // Белые буквы с тёмной обводкой: читаются и на светлой вставке хлебного отдела, и на синей у холодильников.
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = res * 0.9;
+    ctx.strokeStyle = 'rgba(43, 34, 51, 0.9)';
+    ctx.strokeText(text, w / 2, h * i + h / 2 + res * 0.2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, w / 2, h * i + h / 2 + res * 0.2);
+    tex.add(kind, 0, 0, h * i, w, h);
+  });
+  tex.refresh();
+  return key;
+}
+
+/** Подпись отдела на полу перед полкой: видна только в ближнем кадре. */
+function deptName(scene: StoreScene, kind: Category, x: number, y: number): Phaser.GameObjects.Image | null {
+  if (!NAMED.includes(kind)) return null;
+  const key = deptNamesTexture(scene);
+  if (!scene.textures.exists(key) || !scene.textures.get(key).has(kind)) return null;
+  const img = scene.add.image(x, y, key, kind).setDisplaySize(NAME_W, NAME_H).setDepth(DEPT_INLAY_DEPTH + 0.05).setVisible(namesShown(scene));
+  img.setData('deptName', true);
+  return img;
+}
+
+const namesShown = (scene: StoreScene): boolean => scene.cameras.main.zoom >= scene.baseZoom * NAMES_FROM_ZOOM;
+
+/** Камера подошла или отошла — подписи отделов показать или спрятать. Зовётся каждый кадр: меняет только на переходе. */
+export function showDeptNames(scene: StoreScene): void {
+  const on = namesShown(scene);
+  if (on === scene.deptNamesOn) return;
+  scene.deptNamesOn = on;
+  for (const view of scene.shelfViews) for (const obj of view.lights) if (obj.getData('deptName')) (obj as Phaser.GameObjects.Image).setVisible(on);
+}
 /** Где на картинке лежит товар (относительно центра места): x, ширина, верхний ряд, шаг рядов. */
 const ITEM_AREA: Partial<Record<Category, { x: number; w: number; y: number; row: number }>> = {
   icebox: { x: -13, w: 26, y: -6, row: 4 },
@@ -244,6 +317,9 @@ export function buildShelf(scene: StoreScene, index: number, kind: Category): Sh
   // и кайма в тон отдела. У задней стены вставка начинается от плинтуса — на стену не заходит.
   const tileTop = Math.max(slot.y - 11, scene.layout.wallH);
   if (!fixture) lights.push(deptInlay(scene, `deptfloor_${kind}`, slot.x, slot.y + 19, 30, slot.y + 19 - tileTop));
+  // Название отдела — наклейкой на вставке перед полкой (видно в ближнем кадре).
+  const name = fixture ? null : deptName(scene, kind, slot.x, slot.y + 16);
+  if (name) lights.push(name);
   // На мраморе низ полки отражается в полу — бледно и перевёрнуто.
   if (!fixture && scene.glossyFloor) {
     // Только самый низ полки и коротко: блик у основания, а не призрачная копия полки.

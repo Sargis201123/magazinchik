@@ -14,6 +14,20 @@ import type { StoreState } from './economy';
 import type { Line } from './story';
 import { SCENES } from './dramaScenes';
 
+/** Развилки истории: что ответил отец. Старые сохранения, где сцена уже прошла без выбора, — как 'busy'. */
+export type ChoiceId = 'lunch' | 'pancakes';
+export type ChoiceAnswer = 'warm' | 'busy';
+
+/**
+ * Развилка в конце сцены: после её реплик игрок выбирает, что ответит отец. История от выбора не ветвится
+ * (беда и примирение впереди те же) — меняются ответ Сони и маленький след, который остаётся навсегда:
+ * обед вместе — Соня заглядывает в магазин по субботам; блины — по воскресеньям в утренних делах блины.
+ */
+export interface DramaChoice {
+  id: ChoiceId;
+  options: { answer: ChoiceAnswer; say: Line; reply: Line; note?: TextKey }[];
+}
+
 export interface DramaScene {
   /** С какого дня можно показать (если предыдущая уже показана). */
   day: number;
@@ -24,6 +38,8 @@ export interface DramaScene {
   /** В этот день Соня заходит в магазин. */
   visit?: boolean;
   lines: Line[];
+  /** Развилка после реплик сцены. */
+  choice?: DramaChoice;
 }
 
 export interface DramaState {
@@ -38,10 +54,34 @@ export interface DramaState {
   /** Настоящий день (дата игрока «ГГГГ-ММ-ДД»), когда показали последнюю сцену, и сколько сцен за него. */
   date?: string;
   today?: number;
+  /** Что игрок выбрал на развилках (DramaChoice). */
+  choices?: Partial<Record<ChoiceId, ChoiceAnswer>>;
 }
+
+/**
+ * Фон места, если у сцены нет своей картинки (art/family.py): до 10.11 из 61 сцены картинка была у трёх,
+ * а «Вечер, дома» шёл поверх зала магазина. Сцены «в магазине» и «у входа» — без фона: за окном диалога
+ * и так виден сам магазин.
+ */
+export const PLACE_ART: Partial<Record<TextKey, string>> = {
+  'drama.place.home_evening': 'drama_home',
+  'drama.place.kitchen': 'drama_kitchen',
+  'drama.place.empty_home': 'drama_kitchen',
+  'drama.place.call': 'drama_call',
+  'drama.place.night': 'drama_night',
+};
+
+/** Картинка над первой репликой сцены: своя или фон места. */
+export const sceneArt = (scene: DramaScene): string | undefined => scene.art ?? PLACE_ART[scene.place];
 
 /** Сколько сцен за один настоящий день. Остальные ждут завтра (решение автора о темпе — здесь). */
 export const DRAMA_PER_DAY = 2;
+/**
+ * Первая игровая неделя — без предела за настоящий день: новичок, который увлёкся в первый же вечер, не должен
+ * через десять минут упереться в «загляни завтра». Сцен на эти дни шесть, по одной в утро — не проглотить.
+ */
+export const DRAMA_FREE_DAYS = 7;
+const capped = (state: StoreState): boolean => state.day > DRAMA_FREE_DAYS;
 
 export { SCENES };
 
@@ -72,11 +112,28 @@ const shownToday = (state: StoreState, today: string): number => (state.drama?.d
 /** Сцена этого утра: следующая по порядку, если её день наступил и предел на сегодня не выбран. */
 export function dramaScene(state: StoreState, today: string): DramaScene | null {
   const scene = dueScene(state);
-  return scene && shownToday(state, today) < DRAMA_PER_DAY ? scene : null;
+  return scene && (!capped(state) || shownToday(state, today) < DRAMA_PER_DAY) ? scene : null;
 }
 
 /** Сцена готова, но сегодняшний предел выбран: Соня ждёт завтра (тизер в итогах дня). */
-export const dramaHeld = (state: StoreState, today: string): boolean => Boolean(dueScene(state)) && shownToday(state, today) >= DRAMA_PER_DAY;
+export const dramaHeld = (state: StoreState, today: string): boolean => capped(state) && Boolean(dueScene(state)) && shownToday(state, today) >= DRAMA_PER_DAY;
+
+/**
+ * Вечер первого дня новичка: первая сцена («Вечер, дома») играет сразу после итогов, а не утром третьего дня.
+ * Так завязка истории попадает в первую же сессию, а «первый день в магазине» звучит в первый день.
+ * state — уже после итогов (номер дня — следующий). Игру закрыли на итогах — сцена придёт утром, как раньше.
+ */
+export function eveningScene(state: StoreState): DramaScene | null {
+  if (state.onboarding !== 'play' || state.day !== 2 || upToOf(state) > 0) return null;
+  return SCENES[0];
+}
+
+/** Вечерняя сцена первого дня показана. */
+export function seeEvening(state: StoreState, today: string): StoreState {
+  const scene = eveningScene(state);
+  if (!scene) return state;
+  return { ...state, drama: { upTo: scene.day, last: state.day, date: today, today: shownToday(state, today) + 1, choices: state.drama?.choices } };
+}
 
 /**
  * Соне есть что сказать при следующей встрече: сцена ждёт сейчас или будет утром следующего
@@ -89,7 +146,7 @@ export function seeDrama(state: StoreState, today: string): StoreState {
   if (!scene) return state;
   return {
     ...state,
-    drama: { upTo: scene.day, last: state.day, visit: scene.visit ? state.day : state.drama?.visit, date: today, today: shownToday(state, today) + 1 },
+    drama: { upTo: scene.day, last: state.day, visit: scene.visit ? state.day : state.drama?.visit, date: today, today: shownToday(state, today) + 1, choices: state.drama?.choices },
   };
 }
 
@@ -104,5 +161,61 @@ export const sunflowersPlanted = (state: StoreState): boolean => upToOf(state) >
 /** После примирения Соня помогает по субботам (каждый седьмой день). */
 const HELPS = SCENES.find((s) => s.visit && s.day >= 80)!.day;
 
-/** Соня сегодня заходит в магазин: в день сцены «в магазине» или по субботам после примирения. */
-export const sonyaVisits = (state: StoreState): boolean => state.drama?.visit === state.day || (upToOf(state) >= HELPS && state.day % 7 === 6);
+/** Поели вместе, когда она принесла обед (развилка 'lunch'): с тех пор Соня заглядывает по субботам — задолго до примирения. */
+const dropsBy = (state: StoreState): boolean => state.drama?.choices?.lunch === 'warm';
+
+/** Соня сегодня заходит в магазин: в день сцены «в магазине» или по субботам — после примирения или после общего обеда. */
+export const sonyaVisits = (state: StoreState): boolean => state.drama?.visit === state.day || ((upToOf(state) >= HELPS || dropsBy(state)) && state.day % 7 === 6);
+
+// ---------- Развилки ----------
+
+/** Что игрок ответил на развилке (undefined — ещё не отвечал). */
+export const choiceOf = (state: StoreState, id: ChoiceId): ChoiceAnswer | undefined => state.drama?.choices?.[id];
+
+/** Записать ответ. Сцена при этом ещё не показана: её отметит seeDrama, когда дочитают. */
+export function chooseDrama(state: StoreState, id: ChoiceId, answer: ChoiceAnswer): StoreState {
+  if (choiceOf(state, id) === answer) return state;
+  return { ...state, drama: { ...state.drama, choices: { ...state.drama?.choices, [id]: answer } } };
+}
+
+/** Реплики сцены с учётом развилки: пока ответа нет — только до неё; с ответом — ещё слова отца и ответ Сони. */
+export function sceneLines(scene: DramaScene, state: StoreState): Line[] {
+  const picked = scene.choice && scene.choice.options.find((o) => o.answer === choiceOf(state, scene.choice!.id));
+  return picked ? [...scene.lines, picked.say, picked.reply] : scene.lines;
+}
+
+/** Сцена ждёт ответа игрока: реплики до развилки дочитаны, а выбор не сделан. */
+export const choicePending = (scene: DramaScene, state: StoreState): DramaChoice | null => (scene.choice && !choiceOf(state, scene.choice.id) ? scene.choice : null);
+
+/** Воскресные блины (развилка 'pancakes'): каждый седьмой день — строчка в утренних делах. */
+export const pancakeSunday = (state: StoreState): boolean => state.drama?.choices?.pancakes === 'warm' && state.day % 7 === 0;
+
+// ---------- Соня замечает ночные смены ----------
+
+/** На какую ночную смену подряд Соня пишет отцу; дальше — на каждую седьмую. */
+export const NIGHT_NOTES = [2, 4, 7] as const;
+
+/** День сцены у поворота под дождём: после неё Соня говорит о ночных сменах иначе — теплее и строже. */
+const RECONCILED = SCENES.find((s) => s.place === 'drama.place.road')!.day;
+
+/** Ночные смены подряд: отработал — на одну больше, закрылся вовремя — счёт сброшен. */
+export function noteNight(state: StoreState, worked: boolean): StoreState {
+  const run = worked ? (state.nightRun ?? 0) + 1 : 0;
+  if (run === (state.nightRun ?? 0)) return state;
+  return { ...state, nightRun: run || undefined };
+}
+
+/**
+ * Соня пишет отцу, когда он собирается остаться в магазине на ночь уже которую смену подряд (окно «Ночная
+ * смена?»). История — о том, что дочери нужен отец, а не продавец, а игра платит за ночную работу: пусть
+ * она это замечает. Только текст: ни на деньги, ни на саму смену не влияет. null — история ещё не началась
+ * или сегодня повода нет.
+ */
+export function sonyaNightNote(state: StoreState): TextKey | null {
+  const told = upToOf(state);
+  if (told <= 0) return null;
+  const night = (state.nightRun ?? 0) + 1;
+  const step = night >= 7 && night % 7 === 0 ? NIGHT_NOTES.length : (NIGHT_NOTES as readonly number[]).indexOf(night) + 1;
+  if (!step) return null;
+  return `drama.night.${told >= RECONCILED ? 'after' : 'before'}.${step}` as TextKey;
+}

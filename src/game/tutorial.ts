@@ -180,7 +180,8 @@ export function weekNote(state: StoreState): WeekNote | null {
     return product ? { day, key: 'tut.week.product', product } : { day, key: 'tut.week.price' };
   }
   if (day === 4) return { day, key: 'tut.week.orders' };
-  if (day === 5) return { day, key: 'tut.week.staff' };
+  // «Устаёшь один? Найми грузчика» — только тому, кто и правда один: помощника могли нанять ещё вчера.
+  if (day === 5) return state.staff.length ? null : { day, key: 'tut.week.staff' };
   if (day === 6) {
     const next = nextStoreLevel(state);
     return next ? { day, key: 'tut.week.grow', cost: next.cost } : null;

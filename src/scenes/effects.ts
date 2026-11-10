@@ -269,14 +269,14 @@ function pixelConfetti(scene: StoreScene, x: number, y: number): boolean {
   return true;
 }
 
-/** «Серия ×3!» над кассой: крупная цифра, звёздочки, нота всё выше. */
-export function celebrateCombo(scene: StoreScene, n: number): void {
+/** «Серия ×3!» над кассой: крупная цифра, звёздочки, нота всё выше; tip — чаевые за эту покупку (series.ts). */
+export function celebrateCombo(scene: StoreScene, n: number, tip = 0): void {
   const { counter } = scene.layout;
   const color = COMBO_COLORS[Math.min(n - 2, COMBO_COLORS.length - 1)];
   // Тот же размер на экране, что и у надписей: в крупном ларьке «Серия» не закрывает полкассы.
   const k = popupScale(scene);
   const label = scene.add
-    .text(counter.x - 14, counter.y - 40, t('popup.combo', { n }), {
+    .text(counter.x - 14, counter.y - 40, tip > 0 ? t('popup.comboTip', { n, tip }) : t('popup.combo', { n }), {
       fontFamily: UI_FONT,
       fontSize: `${Math.min(8 + 0.6 * n, 12)}px`,
       fontStyle: 'bold',

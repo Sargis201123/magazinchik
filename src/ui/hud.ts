@@ -91,6 +91,9 @@ export class Hud {
   /** «Позвать на помощь» в час пик (game/help.ts): над ускорением, пока очередь длинная. */
   private readonly help = el('button', 'ui-speed ui-help');
   onHelp: () => void = () => {};
+  /** Большой магазин: «🔍» — камера у касс или весь магазин целиком (scenes/camera.ts, closeView). */
+  private readonly view = el('button', 'ui-speed ui-view');
+  onView: () => void = () => {};
   /** Быстрое «без звука» — напротив ускорения, видно всегда, пока идёт игра. */
   private readonly mute = el('button', 'ui-speed ui-mute');
   private day = 1;
@@ -126,6 +129,9 @@ export class Hud {
     this.speed.style.display = 'none';
     this.help.addEventListener('click', () => this.onHelp());
     this.help.style.display = 'none';
+    this.view.addEventListener('click', () => this.onView());
+    this.view.style.display = 'none';
+    this.view.textContent = '🔍';
     injectAudioStyles();
     this.mute.title = t('audio.mute');
     this.mute.addEventListener('click', () => {
@@ -145,7 +151,7 @@ export class Hud {
     row.append(this.goal, this.quests.chip);
     this.goalWrap.append(row, this.goalNext, this.quests.list);
     this.stock.append(this.goalWrap);
-    document.body.append(this.top, this.stock, this.hint, this.speed, this.help, this.mute);
+    document.body.append(this.top, this.stock, this.hint, this.speed, this.help, this.view, this.mute);
   }
 
   /** Цель на полоске; null — спрятать. Перерисовывается, только когда что-то поменялось. */
@@ -195,12 +201,15 @@ export class Hud {
     this.questRows = rows;
   }
 
-  update(state: StoreState, secondsLeft: number, quests = '', night = false): void {
+  /** closing — время вышло, а последние гости ещё в зале: вместо «0:00» часы говорят, чего ждём. */
+  update(state: StoreState, secondsLeft: number, quests = '', night = false, closing = false): void {
     this.day = state.day;
     this.quests.set(quests, this.questRows);
     this.showMute();
     this.setMoney(state.money);
-    const clock = `${night ? t('hud.night') : t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
+    const clock = closing
+      ? t('hud.closing')
+      : `${night ? t('hud.night') : t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
     if (this.clock.textContent !== clock) this.clock.textContent = clock;
     const stars = '★'.repeat(Math.round(state.rating)).padEnd(5, '☆');
     if (this.stars.textContent !== stars) {
@@ -273,6 +282,16 @@ export class Hud {
       }
     }
     if (this.help.disabled !== busy) this.help.disabled = busy;
+  }
+
+  /** Кнопка вида камеры: видна в большом магазине, пока идёт день; close — сейчас кадр у касс. */
+  showView(visible: boolean, close: boolean): void {
+    const display = visible ? '' : 'none';
+    if (this.view.style.display !== display) this.view.style.display = display;
+    if (this.view.classList.contains('on') !== close) {
+      this.view.classList.toggle('on', close);
+      this.view.setAttribute('aria-label', t(close ? 'hud.viewWide' : 'hud.viewClose'));
+    }
   }
 
   showSpeed(visible: boolean, speed: number): void {
@@ -485,6 +504,8 @@ export class Hud {
     row(t('summary.complaints'), stats.complaints);
     row(t('summary.spoiled'), stats.spoiled);
     if (stats.nightRevenue) row(t('summary.night'), `+${stats.nightRevenue} 💰`);
+    if (stats.seriesTips) row(t('summary.seriesTips'), `+${stats.seriesTips} 💰`);
+    if (stats.rushBonus) row(t('summary.rushBonus'), `+${stats.rushBonus} 💰`);
     if (stats.stolen) row(t('summary.stolen'), `−${stats.stolen} 💰`);
     if (stats.caught) row(t('summary.caught'), stats.caught);
     if (stats.skimmed) row(t('summary.skimmed'), `−${stats.skimmed} 💰`);
@@ -494,7 +515,11 @@ export class Hud {
     // Что написали посетители — сразу видно, что исправить завтра.
     if (reviews.length) more.append(el('h3', '', t('summary.reviews')), ...reviewCards(reviews));
     let leaving = false;
-    card.append(
+    // «Следующий день» прилипает к низу окна, как «Открыть магазин» утром: итоги со 2-го дня длиннее экрана,
+    // и до кнопки приходилось листать.
+    const nextBar = el('div', 'ui-open-bar');
+    card.append(nextBar);
+    nextBar.append(
       button(t('summary.next'), () => {
         // Второе нажатие, пока идёт реклама или опускается роллет, ничего не делает.
         if (leaving) return;

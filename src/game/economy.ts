@@ -692,6 +692,8 @@ export interface StoreState {
   contest?: import('./contest').ContestState;
   /** Сюжет «Папа и Соня»: сколько сцен показано (drama.ts). На экономику не влияет. */
   drama?: import('./drama').DramaState;
+  /** Сколько ночных смен подряд отработано: Соня это замечает (drama.ts, sonyaNightNote). На экономику не влияет. */
+  nightRun?: number;
   /** «Бабушкина тетрадь» — стержень сюжета (notebook.ts): пришла ли, ответ Эдуарду, строчка Сони. */
   nb?: import('./notebook').NotebookState;
   /** Праздники по настоящему календарю (live.ts): открытые открытки и когда заходил гость. */
@@ -771,8 +773,12 @@ export interface DayStats {
   sold: Partial<Record<ProductId, number>>;
   /** Сколько мусора убрали. */
   trashCleaned: number;
-  /** Самая длинная серия: покупатели, обслуженные подряд без долгих пауз. */
+  /** Самая длинная серия: покупатели, которых игрок пробил подряд, не заставив ждать у кассы (series.ts). */
   bestCombo: number;
+  /** Чаевые за серию у кассы за день (входят в revenue). */
+  seriesTips?: number;
+  /** Премия за час пик без потерь (rushHour.ts; в revenue не входит — как награды заданий). */
+  rushBonus?: number;
   /** Что заметили покупатели — для отзывов (reviews.ts). */
   notes?: Partial<Record<ReviewTopic, number>>;
   /** Выручка ночной смены (входит в revenue). */

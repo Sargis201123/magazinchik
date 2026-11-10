@@ -1,6 +1,7 @@
 // Интерфейс поверх canvas делаем на DOM: текст остаётся чётким на любом экране,
 // а переводы и вёрстка меню проще, чем внутри Phaser.
 
+import { staffFaceIndex } from '../game/staffLook';
 import { assetUrl, png } from '../platform/assets';
 import { sheetPng, uiIconKey } from './sheet';
 import { liteMode } from '../platform/quality';
@@ -84,6 +85,9 @@ const css = `
 .ui-portrait { width: 48px; height: 48px; image-rendering: pixelated; border-radius: 6px; flex: none; }
 .ui-who { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
 .ui-who b, .ui-who h3 { margin: 0; }
+/* Маленький портрет в строке списка: кандидат, сотрудник, сосед с заказом. */
+.ui-portrait.small { width: 32px; height: 32px; border-radius: 5px; }
+.ui-who.tight { margin: 0; gap: 8px; min-width: 0; }
 .ui-card h2 { margin: 0 0 10px; font-size: 18px; display: flex; justify-content: space-between; }
 .ui-card h3 { margin: 14px 0 6px; font-size: 15px; }
 .ui-box.ui-rush { background: #2b2233; color: #fee761; border-color: #fee761; }
@@ -454,7 +458,8 @@ const css = `
   border-radius: 10px; box-shadow: 0 4px 0 #2b2233; font: 13px/1.3 ${UI_FONT}; pointer-events: none;
   transform: translate(-50%, -160%); transition: transform .45s cubic-bezier(.3, 1.4, .5, 1); max-width: 88vw; }
 .ui-toast.shown { transform: translate(-50%, 0); }
-.ui-toast-low { top: auto; bottom: calc(env(safe-area-inset-bottom) + 92px); transform: translate(-50%, 260%); }
+/* Прячется за нижний край целиком, как бы высоко ни стояла (над кнопкой окна — showToast): 260% своей высоты не хватало. */
+.ui-toast-low { top: auto; bottom: calc(env(safe-area-inset-bottom) + 92px); transform: translate(-50%, 50vh); }
 .ui-toast-low.shown { transform: translate(-50%, 0); }
 .ui-toast img { width: 36px; height: 42px; image-rendering: pixelated; animation: ui-badge 1.2s ease-in-out infinite; }
 @keyframes ui-badge { 50% { transform: rotate(-8deg) scale(1.08); } }
@@ -552,6 +557,9 @@ const css = `
 .ui-help:disabled { opacity: .55; animation: none; }
 @keyframes ui-help-glow { 50% { box-shadow: 0 2px 0 rgba(0, 0, 0, .45), 0 0 10px rgba(99, 199, 77, .75); } }
 @media (prefers-reduced-motion: reduce) { .ui-help { animation: none; } }
+/* Вид камеры в большом магазине: слева, над кнопкой звука. */
+.ui-view { right: auto; left: max(10px, calc((100vw - var(--game-w, min(100vw, 56.25dvh))) / 2 + 10px));
+  bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 84px); padding: 5px 8px; }
 .ui-report-chart { display: flex; align-items: flex-end; gap: 6px; height: 110px; margin: 10px 0; padding: 0 2px; }
 .ui-report-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
 .ui-report-bar { width: 100%; background: #63c74d; border: 2px solid #2b2233; border-radius: 4px 4px 0 0; }
@@ -845,7 +853,13 @@ function showToast(image: string, title: string, text: string, medal: boolean): 
   // Медаль достижения падает сверху в рамку и звенит; вокруг — искры.
   const box = el('div', medal ? 'ui-toast ui-toast-medal' : 'ui-toast');
   // Открыто окно (утро, итоги) — всплывашка снизу, чтобы не закрывать заголовок и вкладки.
-  if (document.querySelector('.ui-modal')) box.classList.add('ui-toast-low');
+  if (document.querySelector('.ui-modal')) {
+    box.classList.add('ui-toast-low');
+    // …и над нижней кнопкой окна («Открыть магазин», «Следующий день»), а не поверх её надписи.
+    const bars = document.querySelectorAll<HTMLElement>('.ui-modal .ui-open-bar');
+    const top = bars[bars.length - 1]?.getBoundingClientRect().top ?? 0;
+    if (top > 0 && top < innerHeight) box.style.bottom = `${Math.round(innerHeight - top + 8)}px`;
+  }
   const img = el('img');
   img.src = assetUrl(image);
   img.alt = '';
@@ -1099,13 +1113,12 @@ export function pixelize(root: Node): void {
 }
 
 /** Портрет сотрудника для who() (assets/portrait_staff<n>.png, art/career.py): восемь лиц, чётные имена — мужские, нечётные — женские (как в списке имён). */
-export const STAFF_FACES = 8;
-export const staffFace = (name: number): string => `staff${((name % STAFF_FACES) + STAFF_FACES) % STAFF_FACES}`;
+export const staffFace = (name: number): string => `staff${staffFaceIndex(name)}`;
 
 /** Пиксельный портрет персонажа или поставщика (assets/portrait_<id>.png) рядом с именем. */
-export function who(portraitId: string, name: HTMLElement): HTMLDivElement {
-  const row = el('div', 'ui-who');
-  const img = el('img', 'ui-portrait');
+export function who(portraitId: string, name: HTMLElement, small = false): HTMLDivElement {
+  const row = el('div', small ? 'ui-who tight' : 'ui-who');
+  const img = el('img', small ? 'ui-portrait small' : 'ui-portrait');
   img.src = png(`portrait_${portraitId}`);
   img.alt = '';
   row.append(img, name);

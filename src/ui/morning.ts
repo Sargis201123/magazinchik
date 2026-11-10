@@ -90,7 +90,7 @@ import { AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoAvailable, autoDay, aut
 import { declineNeighbour, giveNeighbour, orderBoard, type OrderRow } from '../game/orders';
 import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
 import { stockOf } from '../game/bakery';
-import { regularName } from './returns';
+import { FACES, regularName } from './returns';
 
 import { daysToFair, fairToday, isFairDay } from '../game/fair';
 import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
@@ -119,13 +119,13 @@ import {
   type ContestResult,
   type ContestState,
 } from '../game/contest';
-import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene } from '../game/drama';
+import { chooseDrama, choicePending, dramaDone, dramaScene, isLastScene, pancakeSunday, sceneArt, sceneLines, seeDrama, type DramaScene } from '../game/drama';
 import { activeEvent, addDays, cardOf, cardWaiting, guestDue, guestOn, nextGuest, openCard, openedCards, type LiveEvent } from '../game/live';
 import { liveEvents, todayLocal } from '../platform/live';
 import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
-import { weekBox, weekSoonLine } from './weeks';
-import { WEEK_IDS, type WeekId } from '../game/weeks';
-import { CHARACTERS, currentChapter, finishChapter, finishIntro, linesFor, pendingStory, type Chapter, type CharacterId, type Line } from '../game/story';
+import { goalText, weekBox, weekSoonLine } from './weeks';
+import { stepReward, WEEK_IDS, WEEKS, type WeekId } from '../game/weeks';
+import { CHARACTERS, currentChapter, finishChapter, finishIntro, linesFor, pendingStory, type Chapter, type Line } from '../game/story';
 import { answerEduard, EDUARD_DEBT, writeSonya } from '../game/notebook';
 import { notebookButton, notebookPage, storyPage } from './notebook';
 import { sound } from '../platform/sound';
@@ -172,7 +172,7 @@ import {
   setBed,
 } from '../game/cat';
 import { holidayFor } from '../game/calendar';
-import { dialogBox } from './dialog';
+import { dialogBox, VOICE } from './dialog';
 import { zarBossBox, zarGrowBox, zarOfferBox, zarSwitchBox, zarTaleBox } from './zarechye';
 import { buyZar, homeLevel, inZar, seeZarBoss, seeZarTale, switchToday, zarBossNews, zarCardDue, zarLater, zarTaleToday, ZAR_PRICE } from '../game/zarechye';
 import { achievementsButton } from './achievements';
@@ -204,7 +204,6 @@ import { BOSS_DAYS, bossActive, EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_
 import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../game/upgrades';
 
 /** Высота «голоса» героев в диалогах. */
-const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420, sonya: 760, father: 300 };
 import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, STAR_PACKS, tryDecor, type DecorItem, type DecorKind, decorItem } from '../game/decor';
 import { IS_YANDEX } from '../platform/target';
 import { buyWithStars, starsAvailable, starsOffKey } from '../platform/stars';
@@ -984,7 +983,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       target = tab === 'buy' ? body.querySelector<HTMLElement>('.ui-restock .ui-btn') : tabButton('buy');
       key = tab === 'buy' ? 'tut.reorder' : 'tut.buyTab';
     } else if (lesson === 'open') target = openButton;
-    else if (tab !== 'hall') {
+    // «Зал» мог открыться ещё вчера (накопил на мечту, onboarding.ts) — тогда звать в него заново незачем.
+    else if (tab !== 'hall' && tabNew(state, 'hall')) {
       target = tabButton('hall');
       key = 'tut.hall';
     }
@@ -1194,7 +1194,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
           break;
         case 'neighbour': {
           const o = row.order;
-          text.append(el('div', '', t('orders.neighbour', { name: regularName(o.who), qty: o.qty, icon: PRODUCTS[o.pid].icon, pay: row.pay })));
+          text.append(who(FACES[o.who].replace(/^portrait_/, ''), el('div', '', t('orders.neighbour', { name: regularName(o.who), qty: o.qty, icon: PRODUCTS[o.pid].icon, pay: row.pay })), true));
           if (!row.ready) text.append(status(false, 'orders.neighbourLater'));
           actions.append(
             button(t('orders.give'), () => update(giveNeighbour(getState())?.state ?? null, 'success'), 'ui-chip', !row.ready),
@@ -2057,6 +2057,13 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         r.append(el('span', '', `• ${questText(q)}`), el('b', 'ui-goal-reward', `+${q.reward} 💰`));
         box.append(r);
       }
+      // Шаг сезонной недели — ещё одно задание на сегодня: в том же списке, что и в зале (ui/today.ts).
+      const week = state.plan?.day === state.day ? state.plan.week : null;
+      if (week) {
+        const r = el('div', 'ui-row');
+        r.append(el('span', '', `• ${WEEKS[week.id].icon} ${goalText(week)}`), el('b', 'ui-goal-reward', `+${stepReward(state.level, week.step)} 💰`));
+        box.append(r);
+      }
       box.append(el('div', 'ui-muted', `${t('quest.now')} ${t('quest.allBonus', { r: ALL_QUESTS_RATING })}`));
     }
     // Первые дни с активными моментами (game/moments.ts) — одной строкой, что ловить днём.
@@ -2645,19 +2652,44 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
 
   /** Сцена сюжета: место действия, реплики по одной; в конце последней — слова благодарности. */
   const dramaBox = (scene: DramaScene) => {
-    const line = scene.lines[Math.min(dramaLine, scene.lines.length - 1)];
-    const last = dramaLine >= scene.lines.length - 1;
+    // Реплики с учётом развилки (drama.ts): пока игрок не ответил — только до неё; ответил — ещё слова отца и ответ Сони.
+    const lines = sceneLines(scene, getState());
+    const line = lines[Math.min(dramaLine, lines.length - 1)];
+    const last = dramaLine >= lines.length - 1;
+    // Развилка: реплики сцены дочитаны, пора выбрать, что ответит отец, — вместо «Дальше» две кнопки.
+    const choice = last ? choicePending(scene, getState()) : null;
     startRead(`drama:${scene.day}`);
-    const after = last && isLastScene(scene) ? [el('div', 'ui-note', t('drama.end'))] : [];
+    const after: HTMLElement[] = last && isLastScene(scene) ? [el('div', 'ui-note', t('drama.end'))] : [];
+    if (choice) {
+      choice.options.forEach((option, i) =>
+        after.push(
+          button(
+            `«${t(option.say.key)}»`,
+            () => {
+              track('drama_choice', getState().day, i);
+              // Ответ записан сразу; сцену отметит seeDrama, когда её дочитают.
+              setState(chooseDrama(getState(), choice.id, option.answer));
+              dramaLine++;
+              render();
+            },
+            i === 0 ? 'ui-btn' : 'ui-btn secondary',
+          ),
+        ),
+      );
+    }
+    // След развилки — строчкой под ответом Сони: что теперь изменилось навсегда.
+    const picked = last && !choice ? scene.choice?.options.find((o) => o.reply === line) : undefined;
+    if (picked?.note) after.push(el('div', 'ui-note', t(picked.note)));
     return dialogBox({
       caption: t(scene.place),
-      art: scene.art && dramaLine === 0 ? `assets/${scene.art}.png` : undefined,
+      art: sceneArt(scene) && dramaLine === 0 ? `assets/${sceneArt(scene)}.png` : undefined,
       portrait: `portrait_${line.who}${line.mood ? `_${line.mood}` : ''}`,
       name: t(CHARACTERS[line.who].nameKey),
       // Мысли (в скобках) — без кавычек.
       text: t(line.key).startsWith('(') || t(line.key) === '…' ? t(line.key) : `«${t(line.key)}»`,
       pitch: VOICE[line.who],
       after,
+      noNext: Boolean(choice),
       nextLabel: t('drama.next'),
       onNext: () => {
         if (!last) {
@@ -3474,6 +3506,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       row(t('goods.soon'), button(t('shelves.buy', { name: '🍦', cost: price }), () => update(buyShelf(getState(), 'icebox'), 'success'), 'ui-chip', state.money < price));
     }
     if (box.children.length === 1) box.append(el('div', 'ui-muted', t('todo.done')));
+    // Воскресные блины с Соней (развилка истории, drama.ts): каждое воскресенье — строчкой в делах дня.
+    // После «всё готово»: это не дело магазина, а напоминание, ради кого его закрывать вовремя.
+    if (pancakeSunday(state)) row(t('todo.pancakes'));
     return box;
   };
 
@@ -3699,7 +3734,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...(rank ? [el('span', `ui-rank ui-rank-${rank}`, rank === 'admin' ? '▮▮' : '▮')] : []),
       el('span', 'ui-item-sub', ` · ${rank ? t(rankKey(m, rank)) : t(STAFF_ROLES[m.role].nameKey)} · ${t('staffTab.wage', { n: m.wage })}`),
     );
-    head.append(name, bar, ...(tags.length ? [el('span', 'ui-staff-tags', tags.join(' '))] : []));
+    head.append(who(staffFace(m.name), name, true), bar, ...(tags.length ? [el('span', 'ui-staff-tags', tags.join(' '))] : []));
     box.append(head);
     if (openStaff !== m.role) return box;
     box.append(
@@ -3803,7 +3838,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       const head = el('div', 'ui-row');
       const taken = Boolean(staffOf(state, c.role));
       head.append(
-        el('b', '', memberName(c)),
+        // Лицо кандидата — то же, что будет у него в зале и в письмах (game/staffLook.ts).
+        who(staffFace(c.name), el('b', '', memberName(c)), true),
         button(
           taken ? t('staffTab.roleTaken') : full ? t('staffTab.full') : t('staffTab.hire'),
           () => update(hire(getState(), c), 'success'),

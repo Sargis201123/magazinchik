@@ -23,6 +23,14 @@ export const SCENES: DramaScene[] = [
       line('father', 'drama.2.2'),
       line('sonya', 'drama.2.3', 'sad'),
     ],
+    // Развилка: поесть вместе — и Соня станет заглядывать по субботам; «потом» — как было.
+    choice: {
+      id: 'lunch',
+      options: [
+        { answer: 'warm', say: line('father', 'drama.2.warm'), reply: line('sonya', 'drama.2.warmReply', 'happy'), note: 'drama.2.warmNote' },
+        { answer: 'busy', say: line('father', 'drama.2.busy'), reply: line('sonya', 'drama.2.busyReply', 'sad') },
+      ],
+    },
   },
   {
     day: 4,
@@ -55,9 +63,15 @@ export const SCENES: DramaScene[] = [
       line('sonya', 'drama.6.1'),
       line('father', 'drama.6.2'),
       line('sonya', 'drama.6.3', 'happy'),
-      line('father', 'drama.6.4'),
-      line('sonya', 'drama.6.5', 'sad'),
     ],
+    // Развилка: прежний ответ про инвентаризацию — один из двух; согласился — по воскресеньям теперь блины.
+    choice: {
+      id: 'pancakes',
+      options: [
+        { answer: 'warm', say: line('father', 'drama.6.warm'), reply: line('sonya', 'drama.6.warmReply', 'happy'), note: 'drama.6.warmNote' },
+        { answer: 'busy', say: line('father', 'drama.6.4'), reply: line('sonya', 'drama.6.5', 'sad') },
+      ],
+    },
   },
   {
     day: 9,
@@ -414,6 +428,7 @@ export const SCENES: DramaScene[] = [
   {
     day: 68,
     place: 'drama.place.night',
+    art: 'drama_shopnight',
     lines: [
       line('father', 'drama.45.1', 'sad'),
     ],
