@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newGame, type StoreState } from '../src/game/economy';
-import { DRAMA_FREE_DAYS, DRAMA_PER_DAY, dramaDone, dramaHeld, dramaScene, dramaWaiting, eveningScene, SCENES, seeDrama, seeEvening, sonyaVisits, sunflowersPlanted } from '../src/game/drama';
+import { DRAMA_FREE_DAYS, DRAMA_PER_DAY, dramaDone, dramaHeld, dramaScene, dramaWaiting, eveningScene, NIGHT_NOTES, noteNight, SCENES, seeDrama, seeEvening, sonyaNightNote, sonyaVisits, sunflowersPlanted } from '../src/game/drama';
 import { startCohort } from '../src/game/onboarding';
 import { addDays } from '../src/game/live';
 import { ru } from '../src/i18n/ru';
@@ -162,5 +162,45 @@ describe('«Приходи завтра»: сцены Сони по настоя
     expect(dramaScene(old, TODAY)).toBe(SCENES.find((sc) => sc.day > 20));
     const seen = seeDrama(old, TODAY);
     expect(seen.drama).toMatchObject({ date: TODAY, today: 1, last: 40 });
+  });
+});
+
+describe('Соня замечает ночные смены', () => {
+  const ROAD = SCENES.find((s) => s.place === 'drama.place.road')!.day;
+  /** История идёт: первая сцена уже показана. */
+  const told = (patch: Partial<StoreState> = {}): StoreState => shop({ day: 20, drama: { upTo: 2 }, ...patch });
+
+  it('счёт ночных смен подряд: отработал — растёт, закрылся вовремя — сброшен', () => {
+    let s = told();
+    expect(noteNight(s, false)).toBe(s);
+    s = noteNight(noteNight(s, true), true);
+    expect(s.nightRun).toBe(2);
+    s = noteNight(s, false);
+    expect(s.nightRun).toBeUndefined();
+  });
+
+  it('пишет на вторую, четвёртую и седьмую ночь подряд, дальше — на каждую седьмую', () => {
+    const noted: number[] = [];
+    for (let night = 1; night <= 21; night++) if (sonyaNightNote(told({ nightRun: night - 1 }))) noted.push(night);
+    expect(noted).toEqual([...NIGHT_NOTES, 14, 21]);
+    expect(sonyaNightNote(told({ nightRun: 1 }))).toBe('drama.night.before.1');
+    expect(sonyaNightNote(told({ nightRun: 3 }))).toBe('drama.night.before.2');
+    expect(sonyaNightNote(told({ nightRun: 6 }))).toBe('drama.night.before.3');
+    expect(sonyaNightNote(told({ nightRun: 13 }))).toBe('drama.night.before.3');
+  });
+
+  it('после сцены у поворота Соня говорит иначе; пока история не началась — молчит', () => {
+    expect(sonyaNightNote(told({ nightRun: 1, drama: { upTo: ROAD } }))).toBe('drama.night.after.1');
+    expect(sonyaNightNote(told({ nightRun: 1, drama: { upTo: ROAD - 1 } }))).toBe('drama.night.before.1');
+    expect(sonyaNightNote(shop({ day: 20, nightRun: 1 }))).toBeNull();
+  });
+
+  it('у каждой реплики есть текст на русском и английском', () => {
+    for (const when of ['before', 'after'] as const)
+      for (let step = 1; step <= NIGHT_NOTES.length; step++) {
+        const key = `drama.night.${when}.${step}` as keyof typeof ru;
+        expect(ru[key]).toBeTruthy();
+        expect(en[key]).toBeTruthy();
+      }
   });
 });

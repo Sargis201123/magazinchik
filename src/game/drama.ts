@@ -129,3 +129,33 @@ const HELPS = SCENES.find((s) => s.visit && s.day >= 80)!.day;
 
 /** Соня сегодня заходит в магазин: в день сцены «в магазине» или по субботам после примирения. */
 export const sonyaVisits = (state: StoreState): boolean => state.drama?.visit === state.day || (upToOf(state) >= HELPS && state.day % 7 === 6);
+
+// ---------- Соня замечает ночные смены ----------
+
+/** На какую ночную смену подряд Соня пишет отцу; дальше — на каждую седьмую. */
+export const NIGHT_NOTES = [2, 4, 7] as const;
+
+/** День сцены у поворота под дождём: после неё Соня говорит о ночных сменах иначе — теплее и строже. */
+const RECONCILED = SCENES.find((s) => s.place === 'drama.place.road')!.day;
+
+/** Ночные смены подряд: отработал — на одну больше, закрылся вовремя — счёт сброшен. */
+export function noteNight(state: StoreState, worked: boolean): StoreState {
+  const run = worked ? (state.nightRun ?? 0) + 1 : 0;
+  if (run === (state.nightRun ?? 0)) return state;
+  return { ...state, nightRun: run || undefined };
+}
+
+/**
+ * Соня пишет отцу, когда он собирается остаться в магазине на ночь уже которую смену подряд (окно «Ночная
+ * смена?»). История — о том, что дочери нужен отец, а не продавец, а игра платит за ночную работу: пусть
+ * она это замечает. Только текст: ни на деньги, ни на саму смену не влияет. null — история ещё не началась
+ * или сегодня повода нет.
+ */
+export function sonyaNightNote(state: StoreState): TextKey | null {
+  const told = upToOf(state);
+  if (told <= 0) return null;
+  const night = (state.nightRun ?? 0) + 1;
+  const step = night >= 7 && night % 7 === 0 ? NIGHT_NOTES.length : (NIGHT_NOTES as readonly number[]).indexOf(night) + 1;
+  if (!step) return null;
+  return `drama.night.${told >= RECONCILED ? 'after' : 'before'}.${step}` as TextKey;
+}

@@ -21,7 +21,7 @@ import { giftTomorrow } from '../game/gift';
 import { adGuests } from '../game/ads';
 import { regularById } from '../game/regulars';
 import { collectOrder, dropOrder, orderTeaser, planLetter, planOrder } from '../game/returns';
-import { dramaHeld, eveningScene, seeEvening } from '../game/drama';
+import { dramaHeld, eveningScene, noteNight, seeEvening, sonyaNightNote } from '../game/drama';
 import { todayLocal } from '../platform/live';
 import { askForHelp, askWriteAccessOnce, claimHelp, sendHelp, socialInfo } from '../platform/social';
 import { HELP_REWARD, HELP_THANKS, helpAsked, helpGiven, markHelpAsked, takeHelp } from '../game/help';
@@ -29,7 +29,7 @@ import { reportProgress, track, writeAnswer } from '../platform/analytics';
 import { decorItem } from '../game/decor';
 import { endSale, WEEK_IDS, WEEK_STEPS, WEEKS } from '../game/weeks';
 import { onbDone } from '../game/onboarding';
-import { eveningSceneCard, firstGiftCard } from '../ui/onboarding';
+import { eveningSceneCard, firstGiftCard, sayInline } from '../ui/onboarding';
 import { tutDayEnd, tutPass, tutStep } from '../game/tutorial';
 import { shareDay as shareDayCard } from '../platform/shareCard';
 import { payFriend } from '../platform/multiplayer';
@@ -85,10 +85,14 @@ export function endOfDay(scene: StoreScene): void {
   motion.straightenPeople(scene);
   scene.setSpeed(1);
   const { card, close } = openModal();
+  // Которую ночь подряд — Соня это замечает (drama.ts): только слова, на смену не влияют.
+  const sonya = sonyaNightNote(scene.state);
+  if (sonya) track('sonya_night', scene.state.day, (scene.state.nightRun ?? 0) + 1);
   card.append(
     el('h2', '', t('night.title')),
     el('p', '', t('night.text', { n: NIGHT_SECONDS, p: Math.round((NIGHT_MARKUP - 1) * 100) })),
     el('div', 'ui-muted', t('night.cost', { n: NIGHT_POWER })),
+    ...(sonya ? [sayInline('sonya', `«${t(sonya)}»`, 'sad')] : []),
     button(
       t('night.yes'),
       () => {
@@ -242,6 +246,8 @@ export function finishDay(scene: StoreScene): void {
   scene.running = false;
   motion.straightenPeople(scene);
   bigDays.clearBigDay(scene);
+  // Ночные смены подряд — для реплик Сони (drama.ts): отработал — счёт растёт, закрылся вовремя — сброшен.
+  scene.state = noteNight(scene.state, scene.night);
   scene.night = false;
   scene.setSpeed(1);
   scene.stallTimer?.remove();
