@@ -983,6 +983,8 @@ function pondWinter(scene: StoreScene, px: number, py: number): void {
     { rx: 28, ry: 8, ms: 6400 },
   ].entries()) {
     const skater = persons.makePerson(scene, px + lap.rx, py, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day));
+    // Не покупатели и не прохожие: в общий список людей не идут (как гости веранды).
+    scene.people.delete(skater);
     let facing: Facing = 'right';
     // Скользят без шагов — как на коньках; второй едет навстречу.
     const dir = i ? -1 : 1;

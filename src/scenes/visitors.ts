@@ -44,6 +44,9 @@ import * as building from './building';
 import * as arcsFx from './arcsFx';
 import type { ClientId } from '../game/events';
 
+/** Середина дальнего тротуара — на столько ниже середины нашего (тротуар 24, дорога 40, тот тротуар 22). */
+const FAR_WALK_Y = 65;
+
 const MARAT: Look = { shirt: 0xffffff, skin: 0xd9a066, pants: 0x262b44, hair: 0xffffff, style: 'cap' };
 const SCHOOL_COOK: Look = { shirt: 0x5fcde4, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xc0cbdc, style: 'cap', acc: 'apron' };
 
@@ -74,6 +77,14 @@ export function streetLife(scene: StoreScene): void {
     void persons.walk(scene, person, fromLeft ? right : left, y, persons.ownPace(scene, person, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.75, 1.1))).then(() => person.destroy());
   }
   if (flood) return;
+  // Та сторона улицы тоже живая: по дальнему тротуару идут свои прохожие (в лёгкой графике — нет).
+  if (!scene.lite && Math.random() < 0.3) {
+    const fromLeft = Math.random() < 0.5;
+    const y = scene.streetY + FAR_WALK_Y + Phaser.Math.Between(-4, 4);
+    const person = persons.makePerson(scene, fromLeft ? left : right, y, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day));
+    weatherFx.addUmbrella(scene, person);
+    void persons.walk(scene, person, fromLeft ? right : left, y, persons.ownPace(scene, person, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1))).then(() => person.destroy());
+  }
   if (Math.random() < 0.14) passerby(scene);
   // Автобус тоже не выезжает следом за машиной с парковки.
   if (Math.random() < 0.04 && !scene.parking?.onRoad) driveBus(scene);
