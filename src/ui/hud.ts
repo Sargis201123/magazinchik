@@ -195,12 +195,15 @@ export class Hud {
     this.questRows = rows;
   }
 
-  update(state: StoreState, secondsLeft: number, quests = '', night = false): void {
+  /** closing — время вышло, а последние гости ещё в зале: вместо «0:00» часы говорят, чего ждём. */
+  update(state: StoreState, secondsLeft: number, quests = '', night = false, closing = false): void {
     this.day = state.day;
     this.quests.set(quests, this.questRows);
     this.showMute();
     this.setMoney(state.money);
-    const clock = `${night ? t('hud.night') : t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
+    const clock = closing
+      ? t('hud.closing')
+      : `${night ? t('hud.night') : t('hud.day', { n: state.day })} · ${Math.floor(secondsLeft / 60)}:${String(Math.floor(secondsLeft % 60)).padStart(2, '0')}`;
     if (this.clock.textContent !== clock) this.clock.textContent = clock;
     const stars = '★'.repeat(Math.round(state.rating)).padEnd(5, '☆');
     if (this.stars.textContent !== stars) {
@@ -494,7 +497,11 @@ export class Hud {
     // Что написали посетители — сразу видно, что исправить завтра.
     if (reviews.length) more.append(el('h3', '', t('summary.reviews')), ...reviewCards(reviews));
     let leaving = false;
-    card.append(
+    // «Следующий день» прилипает к низу окна, как «Открыть магазин» утром: итоги со 2-го дня длиннее экрана,
+    // и до кнопки приходилось листать.
+    const nextBar = el('div', 'ui-open-bar');
+    card.append(nextBar);
+    nextBar.append(
       button(t('summary.next'), () => {
         // Второе нажатие, пока идёт реклама или опускается роллет, ничего не делает.
         if (leaving) return;

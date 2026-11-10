@@ -5,9 +5,9 @@
 // Всё — только для нового начала (onboarding === 'play'): старые сохранения и прежнее начало идут как раньше.
 
 import type { TextKey } from '../i18n/ru';
-import { CATEGORIES, freeSlots, nextStoreLevel, SHELF_KINDS, shelfKindOpen, type Category, type StoreState } from './economy';
+import { nextStoreLevel, SHELF_KINDS, type StoreState } from './economy';
 import { decorItem, type DecorId } from './decor';
-import { markOnb, onbDone, playDayOne } from './onboarding';
+import { dreamShelf, markOnb, onbDone, playDayOne } from './onboarding';
 import type { Goal } from './nudge';
 
 /** Сколько первых дней тихие: без технических окон, цель — мечта, о долге — только тёплой историей. */
@@ -86,14 +86,8 @@ export const shelfWaits = (s: StoreState, grannyHere: boolean): boolean => (gent
 
 // ---------- Цель-мечта (В) ----------
 
-/** Самая дешёвая полка, которую уже можно поставить на свободное место и которой ещё нет. */
-export function dreamShelf(s: StoreState): Category | null {
-  if (freeSlots(s) <= 0) return null;
-  const have = new Set(s.shelves.map((sh) => sh.kind));
-  const open = CATEGORIES.filter((k) => shelfKindOpen(s, k) && !have.has(k) && SHELF_KINDS[k].price > 0);
-  open.sort((a, b) => SHELF_KINDS[a].price - SHELF_KINDS[b].price);
-  return open[0] ?? null;
-}
+// Полка-мечта считается в onboarding.ts: по ней же «Зал» открывается на день раньше, когда на неё уже хватает.
+export { dreamShelf };
 
 const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
 

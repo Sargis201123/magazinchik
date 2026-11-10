@@ -6,6 +6,7 @@
 import { assetUrl } from '../platform/assets';
 import { Babbler, voiceOf } from '../platform/babble';
 import { sound } from '../platform/sound';
+import type { CharacterId } from '../game/story';
 import { button, el } from './dom';
 
 export interface DialogOptions {
@@ -33,6 +34,9 @@ export interface DialogOptions {
 }
 
 const CHAR_MS = 26;
+
+/** Высота «пика» голоса героев сюжета (см. pitch): общая для утреннего окна и сцен вне его. */
+export const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420, sonya: 760, father: 300 };
 
 /** Глаза портрета (art/sprites.py, face): левый край, верх и низ в сетке 64×64. */
 const EYES = [24, 38];

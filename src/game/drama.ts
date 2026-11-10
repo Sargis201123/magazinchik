@@ -42,6 +42,12 @@ export interface DramaState {
 
 /** Сколько сцен за один настоящий день. Остальные ждут завтра (решение автора о темпе — здесь). */
 export const DRAMA_PER_DAY = 2;
+/**
+ * Первая игровая неделя — без предела за настоящий день: новичок, который увлёкся в первый же вечер, не должен
+ * через десять минут упереться в «загляни завтра». Сцен на эти дни шесть, по одной в утро — не проглотить.
+ */
+export const DRAMA_FREE_DAYS = 7;
+const capped = (state: StoreState): boolean => state.day > DRAMA_FREE_DAYS;
 
 export { SCENES };
 
@@ -72,11 +78,28 @@ const shownToday = (state: StoreState, today: string): number => (state.drama?.d
 /** Сцена этого утра: следующая по порядку, если её день наступил и предел на сегодня не выбран. */
 export function dramaScene(state: StoreState, today: string): DramaScene | null {
   const scene = dueScene(state);
-  return scene && shownToday(state, today) < DRAMA_PER_DAY ? scene : null;
+  return scene && (!capped(state) || shownToday(state, today) < DRAMA_PER_DAY) ? scene : null;
 }
 
 /** Сцена готова, но сегодняшний предел выбран: Соня ждёт завтра (тизер в итогах дня). */
-export const dramaHeld = (state: StoreState, today: string): boolean => Boolean(dueScene(state)) && shownToday(state, today) >= DRAMA_PER_DAY;
+export const dramaHeld = (state: StoreState, today: string): boolean => capped(state) && Boolean(dueScene(state)) && shownToday(state, today) >= DRAMA_PER_DAY;
+
+/**
+ * Вечер первого дня новичка: первая сцена («Вечер, дома») играет сразу после итогов, а не утром третьего дня.
+ * Так завязка истории попадает в первую же сессию, а «первый день в магазине» звучит в первый день.
+ * state — уже после итогов (номер дня — следующий). Игру закрыли на итогах — сцена придёт утром, как раньше.
+ */
+export function eveningScene(state: StoreState): DramaScene | null {
+  if (state.onboarding !== 'play' || state.day !== 2 || upToOf(state) > 0) return null;
+  return SCENES[0];
+}
+
+/** Вечерняя сцена первого дня показана. */
+export function seeEvening(state: StoreState, today: string): StoreState {
+  const scene = eveningScene(state);
+  if (!scene) return state;
+  return { ...state, drama: { upTo: scene.day, last: state.day, date: today, today: shownToday(state, today) + 1 } };
+}
 
 /**
  * Соне есть что сказать при следующей встрече: сцена ждёт сейчас или будет утром следующего

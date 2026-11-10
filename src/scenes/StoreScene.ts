@@ -99,6 +99,7 @@ import {
   type ParkSpot,
   type ParkingLot,
   type RoadCar,
+  CLOSING_HURRY,
   INSPECTOR_AT,
   SONYA_AT,
   LIVE_GUEST_AT,
@@ -657,6 +658,8 @@ export class StoreScene extends Phaser.Scene {
   managerOnFloor = false;
   /** Ускорение дня (×1 или ×2). */
   speed = 1;
+  /** Спешка закрытия: во сколько раз быстрее идёт зал, когда время вышло, а у касс никто не ждёт (CLOSING_HURRY). */
+  private hurry = 1;
   /** Сколько игровых секунд магазин проработал (с ускорением, без пауз): часы доставки — чаевые и «в пути 0:06». */
   private playTime = 0;
   /** В какой игровой день уже был ритуал возвращения (offerReturn): утро открывается не раз за день. */
@@ -827,10 +830,22 @@ export class StoreScene extends Phaser.Scene {
   /** Ускорение дня: время, движения и таймеры идут вдвое быстрее. */
   setSpeed(speed: number): void {
     this.speed = speed;
-    this.time.timeScale = speed;
-    this.tweens.timeScale = speed;
+    this.time.timeScale = speed * this.hurry;
+    this.tweens.timeScale = speed * this.hurry;
     // На ×2 событий вдвое больше — звуков мира за секунду столько же, сколько на ×1 (mix.ts, SoundBudget).
     sound.pace(speed);
+  }
+
+  /**
+   * Время вышло, а последние гости ещё бродят по залу: ждать их у пустой кассы скучно (10–30 секунд тишины).
+   * Пока у касс никто не стоит, зал идёт в CLOSING_HURRY раз быстрее; подошёл к кассе — снова обычный ход,
+   * чтобы терпение очереди не таяло быстрее, чем игрок успевает пробивать.
+   */
+  private setHurry(hurry: number): void {
+    if (hurry === this.hurry) return;
+    this.hurry = hurry;
+    this.time.timeScale = this.speed * hurry;
+    this.tweens.timeScale = this.speed * hurry;
   }
 
   private titleShow(): () => void {
@@ -870,6 +885,7 @@ export class StoreScene extends Phaser.Scene {
     const dt = (deltaMs / 1000) * this.speed;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
     this.playTime += dt;
+    this.setHurry(this.timeLeft <= 0 && !this.queue.length && !this.registers.some((r) => r.customer) ? CLOSING_HURRY : 1);
 
     const elapsed = DAY_SECONDS - this.timeLeft;
     // Вечерняя уценка (02.11 — сама у всех, раньше только с электронными ценниками): в последнюю четверть
@@ -925,6 +941,9 @@ export class StoreScene extends Phaser.Scene {
       }
     } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here' && this.liveGuest?.phase !== 'here') {
       this.endOfDay();
+      // День закрыт: остаток кадра (подсказка зала, часы «Закрываемся…») — уже не про него. Раньше подсказка,
+      // поставленная в этом же кадре, оставалась висеть под итогами и всё следующее утро.
+      return;
     }
 
     for (const c of this.queue) persons.updateBubble(this, c);
@@ -962,7 +981,7 @@ export class StoreScene extends Phaser.Scene {
     pets.petCatNearby(this);
     effects.cheerProgress(this);
     deliveries.updateDelivery(this);
-    this.hud.update(this.state, this.timeLeft, this.questsLine(), this.night);
+    this.hud.update(this.state, this.timeLeft, this.questsLine(), this.night, this.timeLeft <= 0);
   }
 
   /** «🎯 1/3» рядом с целью дня: сколько заданий дня уже выполнено (по нажатию — список, ui/today.ts). */
@@ -1273,6 +1292,9 @@ export class StoreScene extends Phaser.Scene {
 
   /** Переходник к nightShift.endOfDay: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
   private endOfDay(): void {
+    this.setHurry(1);
+    // Подсказку зала («Нажми на мусор…») ставит только идущий день — иначе она висела под итогами и всё утро.
+    this.hud.setHint('');
     return nightShift.endOfDay(this);
   }
 

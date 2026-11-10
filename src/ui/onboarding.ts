@@ -7,7 +7,8 @@ import { CHARACTERS } from '../game/story';
 import { liteMode } from '../platform/quality';
 import { Babbler, voiceOf } from '../platform/babble';
 import { sound } from '../platform/sound';
-import { liveFace } from './dialog';
+import { dialogBox, liveFace, VOICE } from './dialog';
+import type { DramaScene } from '../game/drama';
 import { png } from '../platform/assets';
 import { haptic } from '../platform/telegram';
 import { button, el, injectStyles, openModal, pixelize, UI_FONT } from './dom';
@@ -213,6 +214,40 @@ export function firstSaleStamp(total: number): void {
   document.body.append(wrap);
   setTimeout(() => wrap.classList.add('gone'), 2600);
   setTimeout(() => wrap.remove(), 3200);
+}
+
+/**
+ * Вечер первого дня новичка (game/drama.ts, eveningScene): сцена «Папа и Соня» отдельным окном, сразу после
+ * итогов, — реплики по одной, как в утреннем окне. Дочитал — onClose (дальше ночь и утро).
+ */
+export function eveningSceneCard(scene: DramaScene, onClose: () => void): void {
+  styles();
+  const { card, close } = openModal();
+  let at = 0;
+  const draw = () => {
+    const line = scene.lines[at];
+    const text = t(line.key);
+    card.replaceChildren(
+      dialogBox({
+        caption: t(scene.place),
+        art: scene.art && at === 0 ? `assets/${scene.art}.png` : undefined,
+        portrait: `portrait_${line.who}${line.mood ? `_${line.mood}` : ''}`,
+        name: t(CHARACTERS[line.who].nameKey),
+        // Мысли (в скобках) — без кавычек, как в утреннем окне.
+        text: text.startsWith('(') || text === '…' ? text : `«${text}»`,
+        pitch: VOICE[line.who],
+        nextLabel: t('drama.next'),
+        onNext: () => {
+          at++;
+          if (at < scene.lines.length) return draw();
+          haptic.tap();
+          close();
+          onClose();
+        },
+      }),
+    );
+  };
+  draw();
 }
 
 /**

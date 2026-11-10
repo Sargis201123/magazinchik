@@ -33,15 +33,17 @@ const css = `
 .ui-coach-face { width: 36px; height: 36px; flex: none; image-rendering: pixelated; border: 2px solid #2b2233; border-radius: 6px; background: #fbf6ea; }
 .ui-coach-name { font: 800 10.5px/1.2 ${UI_FONT}; color: #b86f50; text-transform: uppercase; letter-spacing: .5px; }
 .ui-coach-text { margin: 1px 0 0; }
-/* «Пропустить обучение» — маленькая, всегда в одном месте: слева сверху, под деньгами, складом и полоской цели. */
-.ui-coach-skip { position: fixed; z-index: 46; left: 8px; top: calc(var(--safe-top, env(safe-area-inset-top)) + 86px);
+/* «Пропустить обучение» — маленькая, всегда в одном месте: слева внизу, над кнопкой звука. Раньше стояла под
+   полоской цели — и закрывала вывеску с названием, которое новичок только что выбрал. */
+.ui-coach-skip { position: fixed; z-index: 46; left: max(8px, calc((100vw - var(--game-w, min(100vw, 56.25dvh))) / 2 + 8px));
+  bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 126px);
   display: flex; gap: 4px; align-items: center; padding: 3px; border-radius: 8px; background: rgba(24, 20, 37, .72); color: #fff;
   font: 700 11px/1.2 ${UI_FONT}; }
 .ui-coach-skip .ui-chip { padding: 3px 7px; font-size: 11px; background: transparent; color: #fff; border-color: rgba(255, 255, 255, .55); box-shadow: none; }
 .ui-coach-skip .ui-chip:last-child:not(:first-child) { opacity: .8; }
 .ui-coach-skip span { padding: 0 4px; }
 /* Поверх окна (утро, итоги): у самого верхнего края, над заголовком окна. */
-.ui-coach-skip.edge { top: calc(var(--safe-top, env(safe-area-inset-top)) + 1px); left: 50%; transform: translateX(-50%); padding: 1px; white-space: nowrap; }
+.ui-coach-skip.edge { top: calc(var(--safe-top, env(safe-area-inset-top)) + 1px); bottom: auto; left: 50%; transform: translateX(-50%); padding: 1px; white-space: nowrap; }
 .ui-coach-skip.edge .ui-chip { padding: 1px 7px; }
 /* Лёгкая графика: без пульса и прыжков. */
 .ui-coach-hole.ui-coach-calm::after { animation: none; opacity: 0; }

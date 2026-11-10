@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { newGame, type StoreState } from '../src/game/economy';
-import { DRAMA_PER_DAY, dramaDone, dramaHeld, dramaScene, dramaWaiting, SCENES, seeDrama, sonyaVisits, sunflowersPlanted } from '../src/game/drama';
+import { DRAMA_FREE_DAYS, DRAMA_PER_DAY, dramaDone, dramaHeld, dramaScene, dramaWaiting, eveningScene, SCENES, seeDrama, seeEvening, sonyaVisits, sunflowersPlanted } from '../src/game/drama';
+import { startCohort } from '../src/game/onboarding';
 import { addDays } from '../src/game/live';
 import { ru } from '../src/i18n/ru';
 import { en } from '../src/i18n/en';
@@ -79,11 +80,14 @@ describe('сюжет «Папа и Соня»', () => {
 });
 
 describe('«Приходи завтра»: сцены Сони по настоящим дням', () => {
-  it(`за настоящий день — не больше ${DRAMA_PER_DAY} сцен, остальные ждут завтра`, () => {
-    let s = shop({ day: 2 });
+  /** Сцены первой недели: они идут без предела за настоящий день. */
+  const WEEK = SCENES.filter((sc) => sc.day <= DRAMA_FREE_DAYS);
+
+  it(`после первой недели за настоящий день — не больше ${DRAMA_PER_DAY} сцен, остальные ждут завтра`, () => {
+    let s = shop({ day: DRAMA_FREE_DAYS + 1, drama: { upTo: WEEK[WEEK.length - 1].day } });
     let shown = 0;
     // Игрок за один вечер прошёл тридцать игровых дней.
-    for (let day = 2; day <= 31; day++) {
+    for (let day = DRAMA_FREE_DAYS + 1; day <= DRAMA_FREE_DAYS + 30; day++) {
       s = { ...s, day };
       if (dramaScene(s, TODAY)) {
         s = seeDrama(s, TODAY);
@@ -96,11 +100,50 @@ describe('«Приходи завтра»: сцены Сони по настоя
     expect(dramaWaiting(s)).toBe(true);
     const tomorrow = addDays(TODAY, 1);
     expect(dramaHeld(s, tomorrow)).toBe(false);
-    expect(dramaScene({ ...s, day: s.day + 1 }, tomorrow)).toBe(SCENES[DRAMA_PER_DAY]);
+    expect(dramaScene({ ...s, day: s.day + 1 }, tomorrow)).toBe(SCENES[WEEK.length + DRAMA_PER_DAY]);
     // Новый день — снова свой предел.
     s = seeDrama({ ...s, day: s.day + 1 }, tomorrow);
     expect(s.drama?.date).toBe(tomorrow);
     expect(s.drama?.today).toBe(1);
+  });
+
+  it('первая неделя — без предела: увлёкшийся новичок не упирается в «загляни завтра»', () => {
+    let s = shop({ day: 2 });
+    let shown = 0;
+    for (let day = 2; day <= DRAMA_FREE_DAYS; day++) {
+      s = { ...s, day };
+      expect(dramaHeld(s, TODAY)).toBe(false);
+      if (dramaScene(s, TODAY)) {
+        s = seeDrama(s, TODAY);
+        shown++;
+      }
+    }
+    expect(shown).toBe(WEEK.length);
+    expect(shown).toBeGreaterThan(DRAMA_PER_DAY);
+    // Неделя кончилась — сегодняшние сцены в счёт: следующая ждёт завтра.
+    const next = SCENES[WEEK.length].day;
+    expect(dramaScene({ ...s, day: next }, TODAY)).toBeNull();
+    expect(dramaHeld({ ...s, day: next }, TODAY)).toBe(true);
+    expect(dramaScene({ ...s, day: next }, addDays(TODAY, 1))).toBe(SCENES[WEEK.length]);
+  });
+
+  it('вечер первого дня новичка: первая сцена — сразу после итогов, утром её уже не повторяют', () => {
+    const s = startCohort(newGame(), 'play');
+    // Первый день ещё идёт.
+    expect(eveningScene(s)).toBeNull();
+    // Итоги первого дня: номер дня уже следующий.
+    const after: StoreState = { ...s, day: 2 };
+    expect(eveningScene(after)).toBe(SCENES[0]);
+    const seen = seeEvening(after, TODAY);
+    expect(eveningScene(seen)).toBeNull();
+    // Утро второго дня — вступление главы, Соня молчит; на третий — следующая сцена, а не первая.
+    expect(dramaScene(seen, TODAY)).toBeNull();
+    expect(dramaScene({ ...seen, day: 3 }, TODAY)).toBe(SCENES[1]);
+    // Игру закрыли на итогах — первая сцена придёт утром третьего дня, как раньше.
+    expect(dramaScene({ ...after, day: 3 }, TODAY)).toBe(SCENES[0]);
+    // Не новичок нового начала (старое сохранение) — вечерней сцены нет.
+    expect(eveningScene(shop({ day: 2 }))).toBeNull();
+    expect(seeEvening(shop({ day: 2 }), TODAY).drama).toBeUndefined();
   });
 
   it('без сцены в запасе тизера нет: сцена просто покажется следующим утром', () => {

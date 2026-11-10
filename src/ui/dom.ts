@@ -454,7 +454,8 @@ const css = `
   border-radius: 10px; box-shadow: 0 4px 0 #2b2233; font: 13px/1.3 ${UI_FONT}; pointer-events: none;
   transform: translate(-50%, -160%); transition: transform .45s cubic-bezier(.3, 1.4, .5, 1); max-width: 88vw; }
 .ui-toast.shown { transform: translate(-50%, 0); }
-.ui-toast-low { top: auto; bottom: calc(env(safe-area-inset-bottom) + 92px); transform: translate(-50%, 260%); }
+/* Прячется за нижний край целиком, как бы высоко ни стояла (над кнопкой окна — showToast): 260% своей высоты не хватало. */
+.ui-toast-low { top: auto; bottom: calc(env(safe-area-inset-bottom) + 92px); transform: translate(-50%, 50vh); }
 .ui-toast-low.shown { transform: translate(-50%, 0); }
 .ui-toast img { width: 36px; height: 42px; image-rendering: pixelated; animation: ui-badge 1.2s ease-in-out infinite; }
 @keyframes ui-badge { 50% { transform: rotate(-8deg) scale(1.08); } }
@@ -845,7 +846,13 @@ function showToast(image: string, title: string, text: string, medal: boolean): 
   // Медаль достижения падает сверху в рамку и звенит; вокруг — искры.
   const box = el('div', medal ? 'ui-toast ui-toast-medal' : 'ui-toast');
   // Открыто окно (утро, итоги) — всплывашка снизу, чтобы не закрывать заголовок и вкладки.
-  if (document.querySelector('.ui-modal')) box.classList.add('ui-toast-low');
+  if (document.querySelector('.ui-modal')) {
+    box.classList.add('ui-toast-low');
+    // …и над нижней кнопкой окна («Открыть магазин», «Следующий день»), а не поверх её надписи.
+    const bars = document.querySelectorAll<HTMLElement>('.ui-modal .ui-open-bar');
+    const top = bars[bars.length - 1]?.getBoundingClientRect().top ?? 0;
+    if (top > 0 && top < innerHeight) box.style.bottom = `${Math.round(innerHeight - top + 8)}px`;
+  }
   const img = el('img');
   img.src = assetUrl(image);
   img.alt = '';

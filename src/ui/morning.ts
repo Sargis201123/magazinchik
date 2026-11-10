@@ -125,7 +125,7 @@ import { liveEvents, todayLocal } from '../platform/live';
 import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
 import { weekBox, weekSoonLine } from './weeks';
 import { WEEK_IDS, type WeekId } from '../game/weeks';
-import { CHARACTERS, currentChapter, finishChapter, finishIntro, linesFor, pendingStory, type Chapter, type CharacterId, type Line } from '../game/story';
+import { CHARACTERS, currentChapter, finishChapter, finishIntro, linesFor, pendingStory, type Chapter, type Line } from '../game/story';
 import { answerEduard, EDUARD_DEBT, writeSonya } from '../game/notebook';
 import { notebookButton, notebookPage, storyPage } from './notebook';
 import { sound } from '../platform/sound';
@@ -172,7 +172,7 @@ import {
   setBed,
 } from '../game/cat';
 import { holidayFor } from '../game/calendar';
-import { dialogBox } from './dialog';
+import { dialogBox, VOICE } from './dialog';
 import { zarBossBox, zarGrowBox, zarOfferBox, zarSwitchBox, zarTaleBox } from './zarechye';
 import { buyZar, homeLevel, inZar, seeZarBoss, seeZarTale, switchToday, zarBossNews, zarCardDue, zarLater, zarTaleToday, ZAR_PRICE } from '../game/zarechye';
 import { achievementsButton } from './achievements';
@@ -204,7 +204,6 @@ import { BOSS_DAYS, bossActive, EDUARD_GROWTH_DAYS, EDUARD_LOYAL_RATING, EDUARD_
 import { buyUpgrade, hasUpgrade, UPGRADE_IDS, UPGRADES, withUpgrades } from '../game/upgrades';
 
 /** Высота «голоса» героев в диалогах. */
-const VOICE: Record<CharacterId, number> = { grandma: 620, valya: 700, marat: 330, eduard: 240, inspector: 420, sonya: 760, father: 300 };
 import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, STAR_PACKS, tryDecor, type DecorItem, type DecorKind, decorItem } from '../game/decor';
 import { IS_YANDEX } from '../platform/target';
 import { buyWithStars, starsAvailable, starsOffKey } from '../platform/stars';
@@ -984,7 +983,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       target = tab === 'buy' ? body.querySelector<HTMLElement>('.ui-restock .ui-btn') : tabButton('buy');
       key = tab === 'buy' ? 'tut.reorder' : 'tut.buyTab';
     } else if (lesson === 'open') target = openButton;
-    else if (tab !== 'hall') {
+    // «Зал» мог открыться ещё вчера (накопил на мечту, onboarding.ts) — тогда звать в него заново незачем.
+    else if (tab !== 'hall' && tabNew(state, 'hall')) {
       target = tabButton('hall');
       key = 'tut.hall';
     }

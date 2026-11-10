@@ -167,6 +167,15 @@ describe('первая неделя: что ни день — что-то нов
     expect(weekNote({ ...newGame(), day: 4 })).toBeNull();
   });
 
+  it('5-й день: «Устаёшь один? Найми грузчика» — только тому, у кого ещё никого нет', () => {
+    const alone = day(fresh(), 5);
+    expect(weekNote(alone)?.key).toBe('tut.week.staff');
+    const hired: StoreState = { ...alone, staff: [{ role: 'loader', name: 0, skill: 1, wage: 300, months: 0 }] };
+    expect(weekNote(hired)).toBeNull();
+    // На следующий день новости идут как обычно.
+    expect(weekNote(day(hired, 6))?.key).toBe('tut.week.grow');
+  });
+
   it('3-й день — товар, которого в магазине ещё нет; 6-й — цена первого помещения', () => {
     const third = weekNote(day(fresh(), 3));
     if (third?.product) expect(warehouseCount(day(fresh(), 3))).toBeGreaterThan(0);

@@ -21,7 +21,7 @@ import { giftTomorrow } from '../game/gift';
 import { adGuests } from '../game/ads';
 import { regularById } from '../game/regulars';
 import { collectOrder, dropOrder, orderTeaser, planLetter, planOrder } from '../game/returns';
-import { dramaHeld } from '../game/drama';
+import { dramaHeld, eveningScene, seeEvening } from '../game/drama';
 import { todayLocal } from '../platform/live';
 import { askForHelp, askWriteAccessOnce, claimHelp, sendHelp, socialInfo } from '../platform/social';
 import { HELP_REWARD, HELP_THANKS, helpAsked, helpGiven, markHelpAsked, takeHelp } from '../game/help';
@@ -29,7 +29,7 @@ import { reportProgress, track, writeAnswer } from '../platform/analytics';
 import { decorItem } from '../game/decor';
 import { endSale, WEEK_IDS, WEEK_STEPS, WEEKS } from '../game/weeks';
 import { onbDone } from '../game/onboarding';
-import { firstGiftCard } from '../ui/onboarding';
+import { eveningSceneCard, firstGiftCard } from '../ui/onboarding';
 import { tutDayEnd, tutPass, tutStep } from '../game/tutorial';
 import { shareDay as shareDayCard } from '../platform/shareCard';
 import { payFriend } from '../platform/multiplayer';
@@ -431,9 +431,21 @@ export function finishDay(scene: StoreScene): void {
           scene.state = tutPass(scene.state, 'summary');
           saveGame(scene.state);
         }
-        // Первая сессия кончается на подъёме: бабушкин подарок карточкой, потом — ночь.
-        if (gifted) firstGiftCard(() => nightPass(scene, () => morningFlow.showMorning(scene)));
-        else nightPass(scene, () => morningFlow.showMorning(scene));
+        const night = (): void => nightPass(scene, () => morningFlow.showMorning(scene));
+        // Вечер первого дня: дома ждёт Соня — завязка истории в первой же сессии (drama.ts, eveningScene).
+        const evening = (): void => {
+          const home = eveningScene(scene.state);
+          if (!home) return night();
+          eveningSceneCard(home, () => {
+            scene.state = seeEvening(scene.state, todayLocal());
+            saveGame(scene.state);
+            track('drama_seen', finishedDay, home.day);
+            night();
+          });
+        };
+        // Первая сессия кончается на подъёме: бабушкин подарок карточкой, потом — вечер дома и ночь.
+        if (gifted) firstGiftCard(evening);
+        else evening();
       },
       (button) => void shareDay(scene, button, finishedDay),
       teaser,
