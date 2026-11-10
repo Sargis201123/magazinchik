@@ -11,7 +11,10 @@ import { buildingSpan } from './layout';
 import { crispZoom, homeFrame } from './pixels';
 import { deferLiteNote, fpsSummary, fpsVerdict, lowerQuality, qualityChosen } from '../platform/quality';
 import { quietDays } from '../game/firstday';
+import { hasGarden } from '../game/garden';
+import { inZar } from '../game/zarshop';
 import { framesThrottled } from '../platform/frameCap';
+import { INSETS_EVENT, safeTopCss } from '../platform/telegram';
 import { HUD_TOP, ART, FACADE_H, LIGHT_DEPTH, STREET_TAP_MS } from './common';
 import * as motion from './motion';
 
@@ -38,9 +41,19 @@ const ONB_ROAD_MS = 4500;
  * от наружной стены флигеля до правой стены зала, по высоте — от вывески до фасада; участок под
  * расширение и улицу видно краем, а весь квартал — свайпом или отдалив двумя пальцами.
  */
+/**
+ * Верхний отступ страницы в пикселях холста. В полном экране Telegram на телефоне поверх игры — шапка
+ * («Закрыть», «⋯») и вырез: панели интерфейса опущены под них (--safe-top), и кадр магазина опускаем на столько же.
+ * Раньше кадр считал панель от самого верха — на телефоне полоска склада и цель ложились на верхние полки и вывеску.
+ */
+export function safeTop(scene: StoreScene): number {
+  const cssW = scene.game.canvas?.getBoundingClientRect().width || 0;
+  return cssW > 0 ? Math.round((safeTopCss() * scene.scale.width) / cssW) : 0;
+}
+
 export function frameCamera(scene: StoreScene): void {
   const { width, height } = scene.scale;
-  const top = HUD_TOP * scene.res;
+  const top = HUD_TOP * scene.res + safeTop(scene);
   const bottom = HUD_BOTTOM * scene.res;
   const { h } = scene.layout;
   // В кадре целиком и флигель слева (склад, пекарня, кофейня, кухня — с табличками), и правая стена зала:
@@ -232,7 +245,20 @@ export function setupCameraDrag(scene: StoreScene): void {
   // Холст сменил размер (полный экран Telegram, поворот, окно на компьютере) — кадр под новый холст.
   // Масштабом холста ведает игра, а не сцена: подписка снимается вместе со сценой.
   scene.scale.on(Phaser.Scale.Events.RESIZE, scene.onResize, scene);
-  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.scale.off(Phaser.Scale.Events.RESIZE, scene.onResize, scene));
+  // Отступ сверху поменялся без смены холста (Telegram ушёл в полный экран — шапка легла поверх игры).
+  let safe = safeTop(scene);
+  const onInsets = (): void => {
+    const next = safeTop(scene);
+    if (next === safe || !scene.sys.isActive()) return;
+    safe = next;
+    scene.rushView = undefined;
+    reframe(scene);
+  };
+  window.addEventListener(INSETS_EVENT, onInsets);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    scene.scale.off(Phaser.Scale.Events.RESIZE, scene.onResize, scene);
+    window.removeEventListener(INSETS_EVENT, onInsets);
+  });
 }
 
 /**
@@ -302,6 +328,11 @@ export function showStreetTap(scene: StoreScene): void {
  */
 export function onResize(scene: StoreScene, size: Phaser.Structs.Size, _base: Phaser.Structs.Size, _display: Phaser.Structs.Size, prevW: number, prevH: number): void {
   if (size.width === prevW && size.height === prevH) return;
+  reframe(scene);
+}
+
+/** Поставить обычный кадр заново: холст сменил размер или съехала верхняя панель (отступ Telegram). */
+export function reframe(scene: StoreScene): void {
   const cam = scene.cameras.main;
   const mid = { x: cam.midPoint.x, y: cam.midPoint.y };
   const atHome = cam.zoom === scene.baseZoom && Math.abs(mid.x - scene.home.x) <= 1 && Math.abs(mid.y - scene.home.y) <= 1;
@@ -327,18 +358,20 @@ export function flyIn(scene: StoreScene): void {
   // Кадр зависит от дня (ближний ларёк первых дней) — пересчитать к началу каждого дня.
   frameCamera(scene);
   const wide = scene.baseZoom * 0.55;
-  const x = Phaser.Math.Clamp(scene.home.x + 70, -CAMERA_REACH, scene.next.w + CAMERA_REACH);
-  const y = Phaser.Math.Clamp(scene.home.y + 30, -CAMERA_REACH / 2, scene.next.h + CAMERA_REACH / 2);
+  // Есть бабушкин двор (слева от магазина, за флигелем) — облёт начинается над ним: каждое утро видно, где теплица.
+  const yard = !inZar(scene.state) && hasGarden(scene.state);
+  const x = Phaser.Math.Clamp(scene.home.x + (yard ? -90 : 70), -CAMERA_REACH, scene.next.w + CAMERA_REACH);
+  const y = Phaser.Math.Clamp(scene.home.y + (yard ? -10 : 30), -CAMERA_REACH / 2, scene.next.h + CAMERA_REACH / 2);
   cam.setZoom(wide).centerOn(x, y);
   cam.pan(scene.home.x, scene.home.y, 1600, 'Sine.easeInOut', true);
   cam.zoomTo(scene.baseZoom, 1600, 'Cubic.easeInOut', true);
 }
 
 /** Через несколько секунд после осмотра камера возвращается к магазину (в час пик — к кассам). */
-export function scheduleHome(scene: StoreScene): void {
+export function scheduleHome(scene: StoreScene, delay = 4000): void {
   const cam = scene.cameras.main;
   scene.homeTimer?.remove();
-  scene.homeTimer = scene.time.delayedCall(4000, () => {
+  scene.homeTimer = scene.time.delayedCall(delay, () => {
     const view = scene.rushView ?? { x: scene.home.x, y: scene.home.y, zoom: scene.baseZoom };
     cam.pan(view.x, view.y, 700, 'Sine.easeInOut');
     cam.zoomTo(view.zoom, 700, 'Sine.easeInOut');
@@ -432,10 +465,12 @@ export function rushFocus(scene: StoreScene, on: boolean): void {
   if (!zoom) return;
   const { sellerHome, w, h, door } = scene.layout;
   const viewW = cam.width / zoom;
-  const viewH = (cam.height - (HUD_TOP + HUD_BOTTOM) * scene.res) / zoom;
+  const safe = safeTop(scene);
+  const viewH = (cam.height - (HUD_TOP + HUD_BOTTOM) * scene.res - safe) / zoom;
   // Кассы у правой стены: кадр — от них влево, по высоте — от касс до входа; за стены не выходим.
+  // Шапка Telegram сверху: середина кадра выше на половину отступа — зал опускается из-под панели.
   const x = Phaser.Math.Clamp(sellerHome.x - viewW * 0.3, viewW / 2 - 4, w + 8 - viewW / 2);
-  const y = Phaser.Math.Clamp((sellerHome.y + door.y) / 2 - 10, viewH / 2 - 10, h + 24 - viewH / 2);
+  const y = Phaser.Math.Clamp((sellerHome.y + door.y) / 2 - 10, viewH / 2 - 10, h + 24 - viewH / 2) - safe / 2 / zoom;
   const wasHome = atView(scene);
   scene.rushView = { x: Math.round(x), y: Math.round(y), zoom };
   if (!wasHome || scene.input.pointer1.isDown) return;

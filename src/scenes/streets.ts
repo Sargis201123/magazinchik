@@ -547,7 +547,12 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
   }
   // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
   const districtAreas = zar ? [...zarFx.buildRiver(scene, next, top, left, width), ...cars.buildParking(scene, next, top)] : [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildBackStreet(scene, next), ...buildHood(scene, next, top), ...friendStreet.buildFriendStreet(scene, top)];
-  // «Бабушкина теплица» (game/garden.ts): на газоне перед магазином или в парке; стадию проверяем раз в 10 с.
+  // Бабушкин двор слева от магазина держит своё место всегда: сквер не сажает туда деревья (и не тасует их, когда двор появляется).
+  if (!zar) {
+    const yard = gardenFx.yardRect(next);
+    districtAreas.push(yard, { x: yard.x + yard.w - 4, y: yard.y + yard.h, w: 14, h: top - yard.y - yard.h });
+  }
+  // «Бабушкин двор» с теплицей (game/garden.ts): слева от магазина, за флигелем; стадию грядок проверяем раз в 10 с.
   gardenFx.buildGarden(scene, next, top);
   if (!zar) scene.worldTimer(10000, () => scene.sys.isActive() && gardenFx.tickGarden(scene));
   if (zar) {

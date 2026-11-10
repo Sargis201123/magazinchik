@@ -83,6 +83,7 @@ import { RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
 import { quality, type Quality } from '../platform/quality';
 import { grannyStays, quietDays } from '../game/firstday';
+import { gardenRipe, gardenVisible } from '../game/garden';
 import type { HomeOrder } from '../game/delivery';
 import { DeliveryUi } from '../ui/delivery';
 import { mainGoal, type HallNudge } from '../game/nudge';
@@ -141,6 +142,7 @@ import * as nightShift from './nightShift';
 import * as morningFlow from './morningFlow';
 import * as newcomer from './newcomer';
 import * as camera from './camera';
+import * as gardenFx from './gardenFx';
 import * as shelves from './shelves';
 import * as building from './building';
 import * as collections from './collections';
@@ -180,6 +182,12 @@ export class StoreScene extends Phaser.Scene {
   gardenBox?: Phaser.GameObjects.Container;
   builtGarden = '';
   gardenAt?: { next: import('./layout').Layout; top: number };
+  /** Созрел ли урожай — для кнопки «🌱»: пересчитываем раз в секунду, а не каждый кадр. */
+  private yardCheck = { at: -1e9, ripe: false };
+  yardRipe(): boolean {
+    if (this.time.now - this.yardCheck.at > 1000) this.yardCheck = { at: this.time.now, ripe: gardenRipe(this.state, Date.now()) };
+    return this.yardCheck.ripe;
+  }
   /** Какой район построен (game/zarechye.ts zarLook): Центр или Заречье, шаг Сома, теплоход. */
   builtZar = '';
   /** Какие домики друзей стоят на «Улице друзей» (friendStreet.ts, game/street.ts streetKey). */
@@ -786,6 +794,7 @@ export class StoreScene extends Phaser.Scene {
     this.hud = new Hud();
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
     this.hud.onView = () => this.running && camera.toggleView(this);
+    this.hud.onYard = () => this.running && gardenFx.showYard(this);
     this.hud.onHelp = () => void nightShift.callForHelp(this);
     // Карточка звонка и плашка доставки живут в DOM — уходят вместе со сценой.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.deliveryUi.destroy());
@@ -893,6 +902,7 @@ export class StoreScene extends Phaser.Scene {
     this.hud.showSpeed(this.running && this.state.day > TUTORIAL_DAYS, this.speed);
     this.hud.showHelp(this.running && !this.night && this.time.now < this.helpUntil && nightShift.canCallForHelp(this), this.helpBusy);
     this.hud.showView(this.running && camera.bigStore(this) && !this.arranging, !camera.prefersWide());
+    this.hud.showYard(this.running && !this.arranging && gardenVisible(this.state) && !quietDays(this.state), this.yardRipe());
     music.setMood(decorations.musicMood(this), this.winterTune);
     // Дверь двигается только в рабочие часы: день кончился — стекло снова закрывает улицу.
     if (!this.running) {
