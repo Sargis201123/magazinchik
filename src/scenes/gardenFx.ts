@@ -17,7 +17,6 @@ import { sound } from '../platform/sound';
 import { UI_FONT } from '../ui/dom';
 import { ART } from './common';
 import { WING_OUTER, type Layout } from './layout';
-import * as building from './building';
 import * as camera from './camera';
 
 /** Двор: ширина и глубина (точки мира), зазор до стены флигеля и до крыши кафе под ним. */
@@ -275,7 +274,7 @@ const leftText = (ms: number): string => {
   return t('garden.left', { h: Math.floor(minutes / 60), m: minutes % 60 });
 };
 
-/** Нажали на двор: созрело — урожай на склад, нет — сколько ещё расти. */
+/** Нажали на двор: созрело — урожай на прилавок, нет — сколько ещё расти. */
 function tapGarden(scene: StoreScene, x: number, y: number): void {
   // В гостях (свой магазин не сохраняется) двор только смотрят.
   if (savingPaused()) {
@@ -293,7 +292,7 @@ function tapGarden(scene: StoreScene, x: number, y: number): void {
   saveGame(scene.state);
   sound.tap();
   scene.popup(x, y - 4, t('garden.got', { list: done.got.map(({ id, qty }) => `${PRODUCTS[id].icon}×${qty}`).join(' ') }), '#d8f0d8');
-  building.refreshWarehouse(scene);
+  scene.refreshShelves();
   if (scene.gardenAt) buildGarden(scene, scene.gardenAt.next, scene.gardenAt.top);
 }
 

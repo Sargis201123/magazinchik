@@ -13,7 +13,7 @@ const cropName = (crop: CropId): string => t(`garden.crop.${crop}` as TextKey);
 /** Что даст грядка: «🍎×12 🥔×12». */
 const gives = (state: StoreState, crop: CropId): string => CROPS[crop].gives.map((id) => `${PRODUCTS[id].icon}×${cropQty(state, crop)}`).join(' ');
 
-/** Собрать урожай из меню: тост со списком; склад полон — тост об этом. */
+/** Собрать урожай из меню: тост со списком; прилавок полон — тост об этом. */
 export function harvestNow(getState: () => StoreState, update: Update): void {
   const done = harvest(getState(), Date.now());
   if (!done) {

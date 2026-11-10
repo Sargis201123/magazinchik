@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { buyStock, newGame, warehouseCapacity, warehouseCount, warehouseOf, type StoreState } from '../src/game/economy';
-import { addBed, BED_COSTS, bedsOf, CROPS, gardenRipeAt, growMs, OWN_JAM_DAYS, ownJam, plant, water, WATER_MS, buildGarden, cropQty, GARDEN_CROPS, GARDEN_FROM_DAY, GARDEN_PRICE, gardenLeft, gardenLook, gardenProgress, gardenRipe, gardenStage, gardenVisible, GROW_MS, harvest } from '../src/game/garden';
+import { canPlace, newGame, onShelves, shelfCapacity, SHELF_LEVELS, warehouseCount, type StoreState } from '../src/game/economy';
+import { addBed, BED_COSTS, bedsOf, CROPS, gardenRipeAt, growMs, OWN_JAM_DAYS, ownJam, plant, water, WATER_MS, buildGarden, cropQty, GARDEN_CROPS, GARDEN_FROM_DAY, GARDEN_PRICE, gardenLeft, gardenLook, gardenProgress, gardenRipe, gardenStage, gardenVisible, GROW_MS, harvest, shelfRoomFor } from '../src/game/garden';
 
-// «Бабушкина теплица» (garden.ts): растёт по настоящему времени, урожай — бесплатно на склад.
+// «Бабушкина теплица» (garden.ts): растёт по настоящему времени, урожай — бесплатно прямо на овощной прилавок.
 
 const NOW = Date.UTC(2026, 10, 10, 9, 0, 0);
 const shop = (over: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 5, money: 1000, ...over });
 const planted = (over: Partial<StoreState> = {}): StoreState => buildGarden(shop(over), NOW)!;
+/** Пустые полки побольше: урожаю есть куда встать. */
+const emptyShelves = (state: StoreState): StoreState => ({ ...state, shelves: state.shelves.map((s) => ({ ...s, level: SHELF_LEVELS.length - 1, items: {} })) });
 
 describe('теплица: поставить', () => {
   it('с третьего дня, за деньги, один раз', () => {
@@ -42,15 +44,16 @@ describe('теплица: урожай', () => {
     expect(harvest(shop(), NOW)).toBeNull();
   });
 
-  it('созрел — яблоки и картофель бесплатно на склад, рассада посажена заново', () => {
-    const state = planted({ warehouse: {} });
+  it('созрел — яблоки и картофель бесплатно прямо на прилавок, склад не трогает, рассада посажена заново', () => {
+    const state = emptyShelves(planted({ warehouse: {} }));
     const later = NOW + GROW_MS + 1000;
     const done = harvest(state, later)!;
     expect(done.got.map((g) => g.id)).toEqual(GARDEN_CROPS);
     for (const { id, qty } of done.got) {
       expect(qty).toBe(cropQty(state));
-      expect(warehouseOf(done.state, id)).toBe(qty);
+      expect(onShelves(done.state, id)).toBe(qty);
     }
+    expect(warehouseCount(done.state)).toBe(0);
     expect(done.state.money).toBe(state.money);
     expect(done.state.garden).toEqual({ since: later, harvests: 1, own: state.day + OWN_JAM_DAYS - 1 });
     expect(gardenRipe(done.state, later)).toBe(false);
@@ -60,19 +63,32 @@ describe('теплица: урожай', () => {
     expect(cropQty(shop({ level: 4 }))).toBeGreaterThan(cropQty(shop({ level: 0 })));
   });
 
-  it('на складе нет места — урожай ждёт, а не пропадает', () => {
+  it('прилавок полон — урожай ждёт на грядке, а не пропадает и не идёт на склад', () => {
     const state = planted({ warehouse: {} });
-    const stuffed = buyStock(state, 'apples', warehouseCapacity(state), 0)!;
-    expect(warehouseCount(stuffed)).toBe(warehouseCapacity(stuffed));
+    const stuffed = { ...state, shelves: state.shelves.map((s) => (canPlace('apples', s) ? { ...s, items: { apples: Array.from({ length: shelfCapacity(s) }, () => ({ age: 0 })) } } : s)) };
+    expect(shelfRoomFor(stuffed, 'apples')).toBe(0);
     const later = NOW + GROW_MS;
     expect(harvest(stuffed, later)).toBeNull();
     expect(gardenRipe(stuffed, later)).toBe(true);
+    expect(warehouseCount(stuffed)).toBe(0);
+  });
+
+  it('места на прилавке меньше урожая — встаёт сколько влезло', () => {
+    const state = emptyShelves(planted({ warehouse: {}, level: 4 }));
+    const room = shelfRoomFor(state, 'apples');
+    const tight = { ...state, shelves: state.shelves.map((s) => (canPlace('apples', s) ? { ...s, items: { apples: Array.from({ length: shelfCapacity(s) - 1 }, () => ({ age: 0 })) } } : s)) };
+    const free = shelfRoomFor(tight, 'apples');
+    expect(free).toBeGreaterThan(0);
+    expect(free).toBeLessThan(room);
+    const done = harvest(tight, NOW + GROW_MS)!;
+    expect(done.got.reduce((n, g) => n + g.qty, 0)).toBe(free);
+    expect(shelfRoomFor(done.state, 'apples')).toBe(0);
   });
 });
 
 describe('двор: грядки и культуры', () => {
   it('культуру можно сменить — рассада сажается заново, свои часы и свой урожай', () => {
-    const state = planted({ warehouse: {} });
+    const state = emptyShelves(planted({ warehouse: {} }));
     expect(plant(state, 0, 'mix', NOW)).toBeNull();
     expect(plant(state, 1, 'quick', NOW)).toBeNull();
     const quick = plant(state, 0, 'quick', NOW + 1000)!;
@@ -94,7 +110,7 @@ describe('двор: грядки и культуры', () => {
   });
 
   it('вторая и третья грядки — за деньги, собираются вместе со спелыми', () => {
-    let state = planted({ money: 5000, warehouse: {} });
+    let state = emptyShelves(planted({ money: 5000, warehouse: {}, level: 3 }));
     state = addBed(state, NOW)!;
     expect(state.money).toBe(5000 - GARDEN_PRICE - BED_COSTS[0]);
     state = addBed(state, NOW)!;
@@ -126,7 +142,7 @@ describe('двор: полив друга и своё варенье', () => {
   });
 
   it('после сбора яблок варенье пару дней — из своих (если линейка открыта)', () => {
-    const done = harvest(planted({ warehouse: {}, lines: { jam: 1 } }), NOW + GROW_MS)!;
+    const done = harvest(emptyShelves(planted({ warehouse: {}, lines: { jam: 1 } })), NOW + GROW_MS)!;
     expect(ownJam(done.state)).toBe(true);
     expect(ownJam({ ...done.state, day: done.state.day + OWN_JAM_DAYS })).toBe(false);
     expect(ownJam({ ...done.state, lines: {} })).toBe(false);
