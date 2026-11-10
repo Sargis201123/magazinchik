@@ -133,6 +133,9 @@ export function showDeptNames(scene: StoreScene): void {
   scene.deptNamesOn = on;
   for (const view of scene.shelfViews) for (const obj of view.lights) if (obj.getData('deptName')) (obj as Phaser.GameObjects.Image).setVisible(on);
 }
+/** Сколько места под надпись на вывеске полки своей марки (в мире): поле доски без сердечек по краям. */
+const BRAND_SIGN_TEXT_W = 19;
+
 /** Где на картинке лежит товар (относительно центра места): x, ширина, верхний ряд, шаг рядов. */
 const ITEM_AREA: Partial<Record<Category, { x: number; w: number; y: number; row: number }>> = {
   icebox: { x: -13, w: 26, y: -6, row: 4 },
@@ -290,7 +293,9 @@ export function buildShelf(scene: StoreScene, index: number, kind: Category): Sh
   const items = Array.from({ length: SHELF_LEVELS[SHELF_LEVELS.length - 1].capacity }, () => scene.art(slot.x, slot.y, 'item').setDepth(d - 13));
   const backItems = items.map(() => scene.art(slot.x, slot.y, 'item').setDepth(d - 13.5).setTint(0x8f8278).setVisible(false));
   // Уровень улучшения — жёлтые точки над полкой.
-  const pips = [0, 1, 2].map((n) => scene.art(slot.x + (fixture ? -6 : -17) + n * 4, slot.y - (kind === 'florist' ? 18 : 16), 'pip').setDepth(d - 12));
+  // У полки своей марки над навесом вывеска — точки уровня над ней.
+  const pipY = kind === 'florist' ? 18 : kind === 'brand' ? 25 : 16;
+  const pips = [0, 1, 2].map((n) => scene.art(slot.x + (fixture ? -6 : -17) + n * 4, slot.y - pipY, 'pip').setDepth(d - 12));
   const glow = new Halo(scene, bg, 0xfee761);
   const low = scene.add
     .text(slot.x + 6, slot.y - 22, '', {
@@ -372,15 +377,18 @@ export function buildShelf(scene: StoreScene, index: number, kind: Category): Sh
   // Тень от полки на пол запекается вместе с полом (bakeFloor): свет сверху слева — вниз и вправо.
   if (fixture) lighting.shelfLight(scene, bg, kind, 50, 40, 4);
   else lighting.shelfLight(scene, bg, kind, 58, 50, look.texture === 'fridge' ? 10 : 6);
-  // Полка своей марки: на табличке навеса — «От бабушки» (уходит вместе с полкой, как её свет).
+  // Полка своей марки: над навесом — вывеска «От бабушки» (art brand_sign), тёмные буквы на светлой доске; длинное
+  // название на другом языке сжимается по ширине доски. Уходит вместе с полкой, как её свет.
   if (kind === 'brand') {
-    lights.push(
-      scene.add
-        .text(slot.x, slot.y - 7.5, t('shelf.brandSign'), { fontFamily: UI_FONT, fontSize: '4.5px', fontStyle: 'bold', color: '#fee761' })
-        .setOrigin(0.5)
-        .setResolution(scene.textRes(8))
-        .setDepth(d - 11.9),
-    );
+    const signY = slot.y - 18;
+    lights.push(scene.art(slot.x, signY, 'brand_sign').setDepth(d - 11.95));
+    const label = scene.add
+      .text(slot.x, signY - 1.1, t('shelf.brandSign'), { fontFamily: UI_FONT, fontSize: '4.6px', fontStyle: 'bold', color: '#3e2731' })
+      .setOrigin(0.5)
+      .setResolution(scene.textRes(8))
+      .setDepth(d - 11.9);
+    if (label.width > BRAND_SIGN_TEXT_W) label.setScale(BRAND_SIGN_TEXT_W / label.width);
+    lights.push(label);
   }
   return { kind, at: { x: slot.x, y: slot.y }, cover, bg, front, shadow, items, backItems, pips, lights, low, expire, glow, needsStock: false };
 }

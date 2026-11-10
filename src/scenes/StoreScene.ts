@@ -179,7 +179,9 @@ export class StoreScene extends Phaser.Scene {
   /** Сколько посетителей арендаторов сейчас идёт по залу (scenes/tenantsFx.ts). */
   tenantGuests = 0;
   /** «Бабушкина теплица» в мире (scenes/gardenFx.ts): её картинки, стадия, с которой нарисована, и где стоит. */
-  gardenBox?: Phaser.GameObjects.Container;
+  /** Двор бабушки (gardenFx.ts): его картинки и огородник. */
+  gardenObjs: Phaser.GameObjects.GameObject[] = [];
+  gardener?: Phaser.GameObjects.Container;
   builtGarden = '';
   gardenAt?: { next: import('./layout').Layout; top: number };
   /** Созрел ли урожай — для кнопки «🌱»: пересчитываем раз в секунду, а не каждый кадр. */
