@@ -224,7 +224,7 @@ import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toas
 import { gardenBox, harvestNow } from './garden';
 import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
-import { tenantRooms, tenantsOf } from '../game/tenants';
+import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
 import { linesBox } from './lines';
 import { lineOfProduct } from '../game/lines';
@@ -1203,6 +1203,29 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
           actions.append(
             button(t('orders.give'), () => update(giveNeighbour(getState())?.state ?? null, 'success'), 'ui-chip', !row.ready),
             button(t('orders.decline'), () => update(declineNeighbour(getState())), 'ui-chip'),
+          );
+          break;
+        }
+        case 'tenant': {
+          const { id, product, qty, pay, ready } = row.ask;
+          const face = TENANTS[id].face;
+          const ask = el('div', '', t('tenant.ask', { name: t(tenantWho(id)), place: t(tenantName(id)), qty, icon: PRODUCTS[product].icon, pay }));
+          text.append(face === undefined ? ask : who(staffFace(face), ask, true), el('div', 'ui-muted', t(tenantSay(id))));
+          if (!ready) text.append(status(false));
+          actions.append(
+            button(
+              t('orders.give'),
+              () => {
+                const done = giveTenant(getState(), id);
+                if (!done) return;
+                track('tenant_ask', done.state.day, done.pal);
+                toast('assets/ico_shop.png', t(tenantWho(id)), t(done.pal >= PAL_MAX ? tenantPalLine(id) : 'tenant.thanks', { n: pay }));
+                update(done.state, 'success');
+              },
+              'ui-chip',
+              !ready,
+            ),
+            button(t('orders.decline'), () => update(skipTenant(getState(), id)), 'ui-chip'),
           );
           break;
         }
