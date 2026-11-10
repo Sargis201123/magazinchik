@@ -6,14 +6,16 @@ import { telegramInitData } from './telegram';
 import { post } from './social';
 import { fetchPresents, markGiven } from './presents';
 import { fetchLeague } from './league';
+import { fetchTown } from './town';
 import { streetFriends, type StreetFriend } from '../game/street';
 
 /** Событие окна: данные друзей, подарков и турнира пришли (утро перерисовывается). */
 export const MP_EVENT = 'magazinchik:multiplayer';
 
 /** При запуске: друзья, подарки, турнир и улица друзей; когда пришло — событие MP_EVENT. */
-export async function loadMultiplayer(): Promise<void> {
-  await Promise.all([fetchVisits(), fetchPresents(), fetchLeague(), fetchStreet()]);
+export async function loadMultiplayer(garden = false): Promise<void> {
+  // Район (town.ts): garden — у игрока есть теплица, тогда сервер отдаёт поливы друзей.
+  await Promise.all([fetchVisits(), fetchPresents(), fetchLeague(), fetchStreet(), fetchTown(garden).catch(() => null)]);
   window.dispatchEvent(new Event(MP_EVENT));
 }
 

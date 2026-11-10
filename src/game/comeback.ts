@@ -7,6 +7,7 @@ import { canTradeAway } from './away';
 import { dramaWaiting } from './drama';
 import { expiringCount, type StoreState } from './economy';
 import { waitingHooks } from './returns';
+import { gardenRipeAt } from './garden';
 
 export interface Hooks {
   /** 1 — Соне есть что сказать (сцена ждёт сейчас или следующим утром). */
@@ -27,6 +28,8 @@ export interface Hooks {
   /** Кто придёт за отложенным и за чем: «petr:bread»; '' — нет; qty — сколько штук. */
   order: string;
   qty: number;
+  /** Когда поспеет ближайшая грядка во дворе (секунды Unix; 0 — двора нет): бот напомнит про урожай. */
+  ripe: number;
 }
 
 export function comebackHooks(state: StoreState): Hooks {
@@ -38,5 +41,6 @@ export function comebackHooks(state: StoreState): Hooks {
     cashier: canTradeAway(state) ? 1 : 0,
     day: state.day,
     ...waitingHooks(state),
+    ripe: Math.round(gardenRipeAt(state) / 1000),
   };
 }

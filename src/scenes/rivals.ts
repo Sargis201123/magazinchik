@@ -35,6 +35,8 @@ import * as staff from './staff';
 import * as persons from './persons';
 import * as visitors from './visitors';
 import * as morningFlow from './morningFlow';
+import * as gardenFx from './gardenFx';
+import { fetchDayShop, likeDayShop, townInfo, waterFriend, wateredToday } from '../platform/town';
 import * as shelves from './shelves';
 
 /**
@@ -69,9 +71,65 @@ export async function visitFriend(scene: StoreScene, id: number, name: string): 
         });
       }, 'ui-btn secondary', presentGiven(id))
     : null;
+  // Полить теплицу друга (game/garden.ts): раз в день, его урожай поспеет на час раньше.
+  const pour = guest.garden
+    ? button(wateredToday(id) ? t('town.water.done') : `💧 ${t('town.water.btn')}`, () => {
+        pour!.disabled = true;
+        void waterFriend(id).then((ok) => {
+          pour!.textContent = t('town.water.done');
+          const yard = gardenFx.yardFocus(scene);
+          scene.cameras.main.pan(yard.x, yard.y, 500, 'Sine.easeInOut', true);
+          if (ok) {
+            track('water_friend', home.day);
+            scene.popup(yard.x, yard.y - 10, '💧💧💧', '#9cd8ff');
+          }
+        });
+      }, 'ui-btn secondary', wateredToday(id))
+    : null;
   bar.append(
     el('div', 'ui-arrange-hint', t('visitShop.bar', { name: res!.name || name, shop, rating: guest.rating.toFixed(1), day: guest.day })),
     ...(gift ? [gift] : []),
+    ...(pour ? [pour] : []),
+    button(`🏠 ${t('visitShop.home')}`, () => {
+      bar.remove();
+      scene.state = home;
+      pauseSaving(false);
+      scene.buildWorld();
+      morningFlow.showMorning(scene);
+    }, 'ui-btn'),
+  );
+  document.body.append(bar);
+}
+
+/**
+ * «Магазин дня» (platform/town.ts): магазин случайного настоящего игрока — один на весь район сегодня. Только
+ * смотреть; можно оставить отметку «Был тут» — хозяин утром узнает, что у него были гости, и получит чаевые.
+ */
+export async function visitDayShop(scene: StoreScene): Promise<void> {
+  const res = await fetchDayShop();
+  const home = scene.state;
+  const guest = res && friendState(res.shop, home);
+  if (!guest) {
+    toast('assets/ico_cross.png', t('town.title'), t('town.day.none'));
+    morningFlow.showMorning(scene);
+    return;
+  }
+  pauseSaving(true);
+  scene.state = guest;
+  scene.buildWorld();
+  track('visit_day', home.day);
+  const bar = el('div', 'ui-arrange');
+  const shop = guest.shopName?.trim() || t(storeLevel(guest).nameKey);
+  const done = Boolean(townInfo()?.liked);
+  const like = button(done ? `👍 ${t('town.like.done')}` : `👍 ${t('town.like.btn')}`, () => {
+    like.disabled = true;
+    like.textContent = `👍 ${t('town.like.done')}`;
+    scene.popup(scene.layout.door.x, scene.layout.door.y - 30, '👍', '#fff3b0');
+    void likeDayShop().then((ok) => ok && track('like_day', home.day));
+  }, 'ui-btn secondary', done);
+  bar.append(
+    el('div', 'ui-arrange-hint', t('visitShop.bar', { name: res!.name, shop, rating: guest.rating.toFixed(1), day: guest.day })),
+    like,
     button(`🏠 ${t('visitShop.home')}`, () => {
       bar.remove();
       scene.state = home;

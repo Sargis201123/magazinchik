@@ -12,6 +12,7 @@ import { collectOrder, dropOrder, orderPay, type NeighbourOrder } from './return
 import { hasUpgrade } from './upgrades';
 import { ovenBatch } from './gear';
 import { WHOLESALE_BATCHES, WHOLESALE_PRICE } from './bakery';
+import { tenantAsks, type TenantAsk } from './tenants';
 
 export type OrderRow =
   /** Заказ клиента: ждёт ответа или принят (заберут вечером). */
@@ -22,6 +23,8 @@ export type OrderRow =
   | { kind: 'cafeDeal'; deal: NonNullable<CafeState['deal']>; ready: boolean }
   /** Сосед просил отложить: отдать сейчас или он зайдёт к закрытию. */
   | { kind: 'neighbour'; order: NeighbourOrder; pay: number; ready: boolean }
+  /** Арендатор флигеля просит товар со склада (tenants.ts): отнести — заплатит и станет доверять. */
+  | { kind: 'tenant'; ask: TenantAsk }
   /** Хлеб соседним магазинам: пекарь печёт сам (договор куплен) или можно договориться. */
   | { kind: 'bread'; owned: boolean; perDay: number };
 
@@ -44,6 +47,7 @@ export function orderBoard(state: StoreState): OrderRow[] {
   if (n) rows.push({ kind: 'neighbour', order: n, pay: orderPay(state, n), ready: enough(n.pid, n.qty, 'neighbour') });
   if (plan?.order) rows.push({ kind: 'client', order: plan.order, accepted: true, ready: enough(plan.order.product, plan.order.qty, 'client') });
   if (cafe.deal) rows.push({ kind: 'cafeDeal', deal: cafe.deal, ready: cafeCanDeliver(state) && Object.entries(cafe.deal.items).every(([id, q]) => enough(id as ProductId, q ?? 0, 'cafe')) });
+  for (const ask of tenantAsks(state)) rows.push({ kind: 'tenant', ask });
   if (hasUpgrade(state, 'oven')) rows.push({ kind: 'bread', owned: hasUpgrade(state, 'wholesale'), perDay: WHOLESALE_BATCHES * ovenBatch(state) * WHOLESALE_PRICE });
   return rows;
 }

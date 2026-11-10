@@ -65,6 +65,8 @@ const SCHEMA = [
   // Что ждёт игрока в магазине (src/game/returns.ts, remind.ts): сколько примерно в сундучке выручки,
   // от кого письмо, кто придёт за отложенным («petr:bread») и сколько штук.
   'CREATE TABLE IF NOT EXISTS waiting (id INTEGER PRIMARY KEY, chest INTEGER, letter TEXT, ord TEXT, qty INTEGER, updated INTEGER)',
+  // Бабушкин двор (src/game/garden.ts): когда поспеет ближайшая грядка (секунды Unix; 0 — двора нет) — бот напомнит.
+  'CREATE TABLE IF NOT EXISTS garden (id INTEGER PRIMARY KEY, ripe INTEGER, updated INTEGER)',
   // Настройки, которые автор меняет без выпуска игры: календарь праздников (live.ts, docs/EVENTS.md).
   'CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, updated INTEGER)',
   // Поддержали автора звёздами (supporters.ts): самая щедрая ступень — для золотой таблички в рейтинге.
@@ -158,6 +160,12 @@ export async function saveHooks(db: D1, id: number, body: { tz?: unknown; hooks?
     )
     .bind(id, num(h.chest, 0, 1_000_000_000), letter, order, order ? num(h.qty, 0, 99) : 0, now)
     .run();
+  // Когда поспеет урожай во дворе (секунды Unix): старая игра поля не шлёт — тогда не трогаем.
+  if (typeof h.ripe === 'number')
+    await db
+      .prepare('INSERT INTO garden (id, ripe, updated) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET ripe = excluded.ripe, updated = excluded.updated')
+      .bind(id, num(h.ripe, 0, 4_102_444_800), now)
+      .run();
 }
 
 /** Сколько приглашённых уже играют и сколько из них ещё не забраны. */

@@ -103,7 +103,9 @@ export function lineDemand(state: StoreState, id: ProductId, own: boolean): numb
   const line = lineOfProduct(id);
   if (!line) return fame;
   const tier = lineTier(state, line);
-  return fame * (1 + LINE_DEMAND_STEP * Math.max(0, tier - 1)) * (SEASON_DEMAND[line]?.[yearTime(state.day)] ?? 1);
+  // Варенье из яблок со своей грядки (garden.ts, OWN_JAM_DEMAND): пару дней после сбора его берут охотнее.
+  const garden = line === 'jam' && tier > 0 && (state.garden?.own ?? 0) >= state.day ? 1.2 : 1;
+  return fame * (1 + LINE_DEMAND_STEP * Math.max(0, tier - 1)) * (SEASON_DEMAND[line]?.[yearTime(state.day)] ?? 1) * garden;
 }
 
 /** Норма запаса линейки сегодня (осенью соленьев — больше). */

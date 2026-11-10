@@ -94,6 +94,9 @@ export class Hud {
   /** Большой магазин: «🔍» — камера у касс или весь магазин целиком (scenes/camera.ts, closeView). */
   private readonly view = el('button', 'ui-speed ui-view');
   onView: () => void = () => {};
+  /** «🌱» — показать бабушкин двор (scenes/gardenFx.ts): над кнопкой вида; светится, когда урожай созрел. */
+  private readonly yard = el('button', 'ui-speed ui-view ui-yard');
+  onYard: () => void = () => {};
   /** Быстрое «без звука» — напротив ускорения, видно всегда, пока идёт игра. */
   private readonly mute = el('button', 'ui-speed ui-mute');
   private day = 1;
@@ -132,6 +135,9 @@ export class Hud {
     this.view.addEventListener('click', () => this.onView());
     this.view.style.display = 'none';
     this.view.textContent = '🔍';
+    this.yard.addEventListener('click', () => this.onYard());
+    this.yard.style.display = 'none';
+    this.yard.textContent = '🌱';
     injectAudioStyles();
     this.mute.title = t('audio.mute');
     this.mute.addEventListener('click', () => {
@@ -151,7 +157,7 @@ export class Hud {
     row.append(this.goal, this.quests.chip);
     this.goalWrap.append(row, this.goalNext, this.quests.list);
     this.stock.append(this.goalWrap);
-    document.body.append(this.top, this.stock, this.hint, this.speed, this.help, this.view, this.mute);
+    document.body.append(this.top, this.stock, this.hint, this.speed, this.help, this.view, this.yard, this.mute);
   }
 
   /** Цель на полоске; null — спрятать. Перерисовывается, только когда что-то поменялось. */
@@ -282,6 +288,16 @@ export class Hud {
       }
     }
     if (this.help.disabled !== busy) this.help.disabled = busy;
+  }
+
+  /** Кнопка двора: видна, пока идёт день и двор есть; ripe — урожай созрел (кнопка светится). */
+  showYard(visible: boolean, ripe: boolean): void {
+    const display = visible ? '' : 'none';
+    if (this.yard.style.display !== display) this.yard.style.display = display;
+    if (this.yard.classList.contains('ripe') !== ripe) {
+      this.yard.classList.toggle('ripe', ripe);
+      this.yard.setAttribute('aria-label', t(ripe ? 'garden.ripe' : 'garden.yard'));
+    }
   }
 
   /** Кнопка вида камеры: видна в большом магазине, пока идёт день; close — сейчас кадр у касс. */

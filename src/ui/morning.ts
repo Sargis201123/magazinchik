@@ -1,4 +1,4 @@
-import { warmKey } from '../game/firstday';
+import { quietDays, warmKey } from '../game/firstday';
 import { momentCount } from '../game/moments';
 import { getLang, memberName, t } from '../i18n';
 import { pluralForm } from '../i18n/plural';
@@ -224,7 +224,8 @@ import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toas
 import { gardenBox, harvestNow } from './garden';
 import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
-import { tenantRooms, tenantsOf } from '../game/tenants';
+import { applyTownGifts, townBox } from './town';
+import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
 import { linesBox } from './lines';
 import { lineOfProduct } from '../game/lines';
@@ -247,6 +248,8 @@ interface MorningOptions {
   /** «Переставить полки»: утро закрывается, в зале — перестановка; потом утро откроется снова. */
   /** Зайти в гости в магазин друга (id в Telegram, имя). */
   onVisit?: (id: number, name: string) => void;
+  /** Зайти в «Магазин дня» — магазин случайного настоящего игрока (platform/town.ts). */
+  onDayShop?: () => void;
   /** Собирались в гости с «Улицы друзей» (scenes/friendStreet.ts): карточка сверху — зайти первым делом. */
   visit?: { id: number; name: string };
   /** «Заглянуть к конкуренту» из рейтинга (ключ с сервера, имя) и к боссу через дорогу (game/rival.ts). */
@@ -268,9 +271,14 @@ type ProfilePage = 'trophies' | 'friends' | 'settings';
  * Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. Видевшие прежнюю
  * (2: звук, перестановка, друзья…) увидят новую один раз.
  */
-const WHATS_NEW = 5;
+const WHATS_NEW = 6;
+/** Сколько верхних строк — новые в этой карточке: видевшим прошлую показываем только их, а не весь список заново. */
+const WHATS_NEW_FRESH = 3;
 /** Строки карточки «Что нового» — самое свежее сверху. */
 const WHATS_NEW_LINES: TextKey[] = [
+  'news.yard',
+  'news.tenants',
+  'news.town',
   'news.hood',
   'news.hyper',
   'news.branch',
@@ -547,7 +555,7 @@ const rectOf = (node: HTMLElement): Spot | null => {
 };
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, lateState, onOpen, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach, visit }: MorningOptions): void {
+export function showMorning({ getState, setState, lateState, onOpen, onVisit, onDayShop, onRival, onBoss, onTourDone, onStoryDone, coach, visit }: MorningOptions): void {
   const { card, close } = openModal();
   // Нажатый заголовок или кнопка остаются на месте, когда блоки сворачиваются и окно перерисовывается.
   anchorScroll(card);
@@ -646,7 +654,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   // Торговая неделя и гильдия приходят с сервера чуть позже — перерисовать утро, когда пришли.
   const onMultiplayer = () => {
     if (!card.isConnected) window.removeEventListener(MP_EVENT, onMultiplayer);
-    else render();
+    else {
+      // Район прислал своё (отметки гостей, полив друзей) — забрать, утро перерисуется вместе с новым состоянием.
+      applyTownGifts(getState, update);
+      render();
+    }
   };
   window.addEventListener(MP_EVENT, onMultiplayer);
   // Почта пополнилась (новости и «спасибо» от конкурентов приходят с сервера чуть позже).
@@ -655,6 +667,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     else render();
   };
   window.addEventListener(MAIL_EVENT, onMail);
+  // Что район прислал, пока игрока не было (чаевые гостей, полив друзей), — когда утро уже на экране.
+  setTimeout(() => card.isConnected && applyTownGifts(getState, update), 700);
 
   /** quiet — звук уже сыграла заставка (награда главы), свой «дзынь» не нужен. */
   const update = (next: StoreState | null, feedback: 'tap' | 'success' | 'error' = 'tap', quiet = false) => {
@@ -933,7 +947,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       // Новость утра, если сегодня это история (game/headlines.ts): одна, остальные ждут завтра.
       ...newsBox(state, picked.id),
       today,
-      todayCard(state, touring, [...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: homeLevel(getState()) })), ...passBox(state), ...goalsBox(state), info, ...(zarHere ? [] : giantBox(state)), ...(zarHere ? [] : contestBox(state))]),
+      todayCard(state, touring, [...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: homeLevel(getState()) })), ...(touring || quietDays(state) ? [] : townBox(state, getState, update, onDayShop && (() => { close(); onDayShop(); }))), ...passBox(state), ...goalsBox(state), info, ...(zarHere ? [] : giantBox(state)), ...(zarHere ? [] : contestBox(state))]),
       ...(hint ? [hint] : []),
       tabs,
       body,
@@ -1203,6 +1217,29 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
           actions.append(
             button(t('orders.give'), () => update(giveNeighbour(getState())?.state ?? null, 'success'), 'ui-chip', !row.ready),
             button(t('orders.decline'), () => update(declineNeighbour(getState())), 'ui-chip'),
+          );
+          break;
+        }
+        case 'tenant': {
+          const { id, product, qty, pay, ready } = row.ask;
+          const face = TENANTS[id].face;
+          const ask = el('div', '', t('tenant.ask', { name: t(tenantWho(id)), place: t(tenantName(id)), qty, icon: PRODUCTS[product].icon, pay }));
+          text.append(face === undefined ? ask : who(staffFace(face), ask, true), el('div', 'ui-muted', t(tenantSay(id))));
+          if (!ready) text.append(status(false));
+          actions.append(
+            button(
+              t('orders.give'),
+              () => {
+                const done = giveTenant(getState(), id);
+                if (!done) return;
+                track('tenant_ask', done.state.day, done.pal);
+                toast('assets/ico_shop.png', t(tenantWho(id)), t(done.pal >= PAL_MAX ? tenantPalLine(id) : 'tenant.thanks', { n: pay }));
+                update(done.state, 'success');
+              },
+              'ui-chip',
+              !ready,
+            ),
+            button(t('orders.decline'), () => update(skipTenant(getState(), id)), 'ui-chip'),
           );
           break;
         }
@@ -3227,7 +3264,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     if ((state.whatsNew ?? 0) >= WHATS_NEW) return [];
     const box = el('div', 'ui-box ui-duel');
     box.append(el('b', '', `✨ ${t('news.title')}`));
-    for (const key of WHATS_NEW_LINES) box.append(el('div', '', t(key)));
+    const lines = (state.whatsNew ?? 0) >= WHATS_NEW - 1 ? WHATS_NEW_LINES.slice(0, WHATS_NEW_FRESH) : WHATS_NEW_LINES;
+    for (const key of lines) box.append(el('div', '', t(key)));
     const row = el('div', 'ui-row');
     // Кассы самообслуживания и сменщик — во вкладке «Развитие» и «Персонал».
     // Новичку нового начала вкладки открываются по очереди — кнопки только к уже открытым.

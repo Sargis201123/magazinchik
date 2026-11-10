@@ -38,6 +38,7 @@ import * as shelves from './shelves';
 import * as building from './building';
 import * as weeksFx from './weeks';
 import * as keepsakes from './keepsakes';
+import * as promoFx from './promoFx';
 
 /** До какой доли дня музыка выбирает утренний трек (дальше — дневной, с вечера — вечерний). */
 const MUSIC_MORNING = 0.3;
@@ -399,6 +400,8 @@ export function buildUpgrades(scene: StoreScene): void {
     scene.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
     scene.kiosks.push({ img, screen, busy: false });
   }
+  // Остров сезона в большом зале (promoFx.ts): после всего, что уже заняло пол.
+  promoFx.buildPromo(scene);
 }
 
 /** Кубок последнего выигранного конкурса — на прилавке, слегка поблёскивает. */

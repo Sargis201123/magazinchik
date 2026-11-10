@@ -561,6 +561,10 @@ const css = `
 /* Вид камеры в большом магазине: слева, над кнопкой звука. */
 .ui-view { right: auto; left: max(10px, calc((100vw - var(--game-w, min(100vw, 56.25dvh))) / 2 + 10px));
   bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 84px); padding: 5px 8px; }
+/* Бабушкин двор: над кнопкой вида; урожай созрел — жёлтая и мягко светится. */
+.ui-yard { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 128px); }
+.ui-yard.ripe { background: rgba(254, 231, 97, .92); border-color: #2b2233; animation: ui-help-glow 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .ui-yard.ripe { animation: none; } }
 .ui-report-chart { display: flex; align-items: flex-end; gap: 6px; height: 110px; margin: 10px 0; padding: 0 2px; }
 .ui-report-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
 .ui-report-bar { width: 100%; background: #63c74d; border: 2px solid #2b2233; border-radius: 4px 4px 0 0; }

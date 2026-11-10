@@ -1,24 +1,91 @@
 // Раздел «Арендаторы» во вкладке «Развитие» (game/tenants.ts): свободные комнаты флигеля и кого в них пустить.
-// У каждого — отделка (платит хозяин один раз), аренда за день и прибавка гостей. Сцена перестраивает
-// флигель по tenantsLook.
+// У каждого — отделка (платит хозяин один раз), аренда за день и прибавка гостей; у тех, кто уже работает, —
+// лицо и доверие хозяина комнаты и вторая отделка. Сцена перестраивает флигель по tenantsLook.
 
-import { t } from '../i18n';
+import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
-import { evict, rentLock, rentRoom, TENANT_IDS, tenantDesc, tenantGuests, tenantName, tenantRent, tenantRooms, TENANTS, tenantsOf, type TenantId } from '../game/tenants';
+import {
+  evict,
+  guestsOf,
+  invitePitch,
+  PITCH_DAYS,
+  PITCH_GUESTS,
+  PITCH_ICON,
+  pitchDaysLeft,
+  pitchNow,
+  pitchOffer,
+  pitchOpen,
+  pitchRent,
+  PAL_MAX,
+  PAL_RENT,
+  rentLock,
+  rentOf,
+  rentRoom,
+  TENANT_IDS,
+  tenantDesc,
+  tenantGuests,
+  tenantName,
+  tenantPal,
+  tenantPalLine,
+  tenantRent,
+  tenantRooms,
+  TENANTS,
+  tenantsOf,
+  tenantTier,
+  tenantWho,
+  TIER_GUESTS,
+  TIER_RENT,
+  upgradeCost,
+  upgradeLock,
+  upgradeTenant,
+  type TenantId,
+} from '../game/tenants';
 import { inZar } from '../game/zarshop';
 import { track } from '../platform/analytics';
-import { button, el, toast } from './dom';
+import { button, el, staffFace, toast, who } from './dom';
 
-const effect = (id: TenantId): string => t('tenant.effect', { n: TENANTS[id].rent, g: Math.round(TENANTS[id].guests * 100) });
+const effect = (state: StoreState, id: TenantId): string => t('tenant.effect', { n: rentOf(state, id), g: Math.round(guestsOf(state, id) * 100) });
 
 export function tenantsBox(state: StoreState, getState: () => StoreState, update: (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void): HTMLElement[] {
   const rooms = tenantRooms(state);
-  if (inZar(state) || !rooms) return [];
+  if (inZar(state) || (!rooms && !pitchOpen(state))) return [];
   const here = tenantsOf(state);
   const box = el('div', 'ui-box');
-  box.append(el('b', '', `🔑 ${t('tenant.title')}`), el('div', 'ui-muted', t('tenant.note')), el('div', '', t('tenant.rooms', { n: here.length, max: rooms })));
+  box.append(el('b', '', `🔑 ${t('tenant.title')}`));
+  // Площадка у входа: сезонный торговец на неделю (без отделки).
+  const kind = pitchNow(state) ?? pitchOffer(state);
+  if (kind) {
+    const row = el('div', 'ui-item');
+    const icon = el('div', '', PITCH_ICON[kind]);
+    icon.style.cssText = 'width: 34px; font-size: 24px; text-align: center;';
+    const body = el('div');
+    const name = t(`pitch.${kind}` as TextKey);
+    body.append(el('div', 'ui-item-name', `${t('pitch.title')} · ${name}`), el('div', 'ui-item-sub', t('pitch.note')), el('div', 'ui-item-sub', t('tenant.effect', { n: pitchRent(state), g: Math.round(PITCH_GUESTS * 100) })));
+    // Кнопки — строкой под описанием: в правой колонке широкая кнопка сжимала текст в узкий столбик.
+    const actions = el('div', 'ui-chips');
+    actions.style.marginTop = '6px';
+    if (pitchNow(state)) actions.append(el('span', 'ui-tag', t('pitch.left', { n: pitchDaysLeft(state) })));
+    else
+      actions.append(
+        button(
+          t('pitch.invite'),
+          () => {
+            const next = invitePitch(getState());
+            if (!next) return;
+            track('pitch', next.day, PITCH_DAYS);
+            toast('assets/ico_shop.png', t('tenant.rented'), t('pitch.invited', { name }));
+            update(next, 'success');
+          },
+          'ui-chip hood-buy',
+        ),
+      );
+    if (actions.childElementCount) body.append(actions);
+    row.append(icon, body, el('div'));
+    box.append(row);
+  }
+  if (!rooms) return [box];
+  box.append(el('div', 'ui-muted', t('tenant.note')), el('div', '', t('tenant.rooms', { n: here.length, max: rooms })));
   if (here.length) box.append(el('div', '', t('tenant.total', { n: tenantRent(state), g: Math.round((tenantGuests(state) - 1) * 100) })));
-  else if (here.length >= rooms) box.append(el('div', 'ui-note', t('tenant.full')));
   // Сначала те, кто уже работает, потом кого можно пустить.
   for (const id of [...here, ...TENANT_IDS.filter((other) => !here.includes(other))]) {
     const item = TENANTS[id];
@@ -27,9 +94,37 @@ export function tenantsBox(state: StoreState, getState: () => StoreState, update
     const icon = el('div', '', item.icon);
     icon.style.cssText = `width: 34px; font-size: 24px; text-align: center;${lock === 'full' ? ' filter: grayscale(0.8) opacity(0.6);' : ''}`;
     const body = el('div');
-    body.append(el('div', 'ui-item-name', t(tenantName(id))), el('div', 'ui-item-sub', t(tenantDesc(id))), el('div', 'ui-item-sub', effect(id)));
-    const actions = el('div', 'ui-item-actions');
+    const tier2 = lock === 'here' && tenantTier(state, id) === 2;
+    body.append(el('div', 'ui-item-name', `${t(tenantName(id))}${tier2 ? ' ★' : ''}`), el('div', 'ui-item-sub', t(tenantDesc(id))), el('div', 'ui-item-sub', effect(state, id)));
+    // Кнопки — строкой под описанием: в правой колонке широкая кнопка сжимала текст в узкий столбик.
+    const actions = el('div', 'ui-chips');
+    actions.style.marginTop = '6px';
     if (lock === 'here') {
+      // Хозяин комнаты: лицо, имя и доверие (растёт, когда выполняешь его просьбы на доске «Заказы»).
+      if (item.face !== undefined) {
+        const pal = tenantPal(state, id);
+        const line = pal >= PAL_MAX ? t(tenantPalLine(id)) : t('tenant.pal', { name: t(tenantWho(id)), n: pal, max: PAL_MAX, p: Math.round(PAL_RENT * 100) });
+        body.append(who(staffFace(item.face), el('div', 'ui-item-sub', line), true));
+      }
+      const up = upgradeLock(state, id);
+      if (up !== 'done') {
+        const cost = upgradeCost(id);
+        body.append(el('div', 'ui-item-sub', t('tenant.upgradeNote', { n: Math.round(item.rent * TIER_RENT), g: Math.round((item.guests + TIER_GUESTS) * 100) })));
+        actions.append(
+          button(
+            t('tenant.upgrade', { n: `${cost} 💰` }),
+            () => {
+              const next = upgradeTenant(getState(), id);
+              if (!next) return;
+              track('tenant_up', next.day, cost);
+              toast('assets/ico_shop.png', t(tenantName(id)), t('tenant.upgraded', { n: rentOf(next, id) }));
+              update(next, 'success');
+            },
+            'ui-chip hood-buy',
+            up === 'money',
+          ),
+        );
+      }
       actions.append(
         el('span', 'ui-tag', t('tenant.here')),
         button(
@@ -58,7 +153,8 @@ export function tenantsBox(state: StoreState, getState: () => StoreState, update
         ),
       );
     }
-    row.append(icon, body, actions);
+    if (actions.childElementCount) body.append(actions);
+    row.append(icon, body, el('div'));
     box.append(row);
   }
   return [box];

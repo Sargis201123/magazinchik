@@ -193,12 +193,33 @@ function applyInsets(): void {
   if (!tg?.isFullscreen) {
     root.setProperty('--safe-top', 'env(safe-area-inset-top)');
     root.setProperty('--safe-bottom', 'env(safe-area-inset-bottom)');
-    return;
+  } else {
+    const top = (tg?.safeAreaInset?.top ?? 0) + (tg?.contentSafeAreaInset?.top ?? 0);
+    const bottom = (tg?.safeAreaInset?.bottom ?? 0) + (tg?.contentSafeAreaInset?.bottom ?? 0);
+    root.setProperty('--safe-top', top ? `${top}px` : 'env(safe-area-inset-top)');
+    root.setProperty('--safe-bottom', bottom ? `${bottom}px` : 'env(safe-area-inset-bottom)');
   }
-  const top = (tg?.safeAreaInset?.top ?? 0) + (tg?.contentSafeAreaInset?.top ?? 0);
-  const bottom = (tg?.safeAreaInset?.bottom ?? 0) + (tg?.contentSafeAreaInset?.bottom ?? 0);
-  root.setProperty('--safe-top', top ? `${top}px` : 'env(safe-area-inset-top)');
-  root.setProperty('--safe-bottom', bottom ? `${bottom}px` : 'env(safe-area-inset-bottom)');
+  // Камера магазина ставит кадр под верхнюю панель — а панель съехала вместе с отступом (scenes/camera.ts).
+  window.dispatchEvent(new Event(INSETS_EVENT));
+}
+
+/** Отступы сверху и снизу поменялись (полный экран Telegram, вырез, поворот): событие окна. */
+export const INSETS_EVENT = 'magazinchik:insets';
+
+let safeProbe: HTMLElement | undefined;
+/**
+ * Верхний отступ в точках страницы — тот же, на который опущены панели интерфейса (--safe-top): шапка Telegram
+ * в полном экране («Закрыть» и «⋯») вместе с вырезом экрана. Мерим пробником, а не читаем переменную: в ней
+ * бывает и env(safe-area-inset-top).
+ */
+export function safeTopCss(): number {
+  if (typeof document === 'undefined' || !document.body) return 0;
+  if (!safeProbe) {
+    safeProbe = document.createElement('div');
+    safeProbe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:var(--safe-top, env(safe-area-inset-top));visibility:hidden;pointer-events:none;';
+    document.body.append(safeProbe);
+  }
+  return safeProbe.getBoundingClientRect().height || 0;
 }
 
 // ---------- Ярлык на главном экране ----------

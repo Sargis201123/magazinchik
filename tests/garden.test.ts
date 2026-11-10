@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buyStock, newGame, warehouseCapacity, warehouseCount, warehouseOf, type StoreState } from '../src/game/economy';
-import { buildGarden, cropQty, GARDEN_CROPS, GARDEN_FROM_DAY, GARDEN_PRICE, gardenLeft, gardenLook, gardenProgress, gardenRipe, gardenStage, gardenVisible, GROW_MS, harvest } from '../src/game/garden';
+import { addBed, BED_COSTS, bedsOf, CROPS, gardenRipeAt, growMs, OWN_JAM_DAYS, ownJam, plant, water, WATER_MS, buildGarden, cropQty, GARDEN_CROPS, GARDEN_FROM_DAY, GARDEN_PRICE, gardenLeft, gardenLook, gardenProgress, gardenRipe, gardenStage, gardenVisible, GROW_MS, harvest } from '../src/game/garden';
 
 // «Бабушкина теплица» (garden.ts): растёт по настоящему времени, урожай — бесплатно на склад.
 
@@ -52,7 +52,7 @@ describe('теплица: урожай', () => {
       expect(warehouseOf(done.state, id)).toBe(qty);
     }
     expect(done.state.money).toBe(state.money);
-    expect(done.state.garden).toEqual({ since: later, harvests: 1 });
+    expect(done.state.garden).toEqual({ since: later, harvests: 1, own: state.day + OWN_JAM_DAYS - 1 });
     expect(gardenRipe(done.state, later)).toBe(false);
   });
 
@@ -67,5 +67,68 @@ describe('теплица: урожай', () => {
     const later = NOW + GROW_MS;
     expect(harvest(stuffed, later)).toBeNull();
     expect(gardenRipe(stuffed, later)).toBe(true);
+  });
+});
+
+describe('двор: грядки и культуры', () => {
+  it('культуру можно сменить — рассада сажается заново, свои часы и свой урожай', () => {
+    const state = planted({ warehouse: {} });
+    expect(plant(state, 0, 'mix', NOW)).toBeNull();
+    expect(plant(state, 1, 'quick', NOW)).toBeNull();
+    const quick = plant(state, 0, 'quick', NOW + 1000)!;
+    expect(bedsOf(quick)).toEqual([{ crop: 'quick', since: NOW + 1000 }]);
+    expect(gardenRipe(quick, NOW + 1000 + growMs('quick') - 1)).toBe(false);
+    const done = harvest(quick, NOW + 1000 + growMs('quick'))!;
+    expect(done.got).toEqual([{ id: 'potatoes', qty: cropQty(quick, 'quick') }]);
+    // Картошка — не яблоки: варенье «из своих яблок» не объявляем.
+    expect(done.state.garden?.own).toBeUndefined();
+    expect(bedsOf(done.state)[0].crop).toBe('quick');
+  });
+
+  it('длинная культура даёт за заход больше, за час — не больше короткой', () => {
+    const state = shop({ level: 2 });
+    const perHour = (crop: 'quick' | 'mix' | 'apples') => (cropQty(state, crop) * CROPS[crop].gives.length) / CROPS[crop].hours;
+    expect(cropQty(state, 'apples')).toBeGreaterThan(cropQty(state, 'mix') * 2 - 1);
+    expect(perHour('apples')).toBeLessThanOrEqual(perHour('mix'));
+    expect(perHour('quick')).toBeLessThanOrEqual(perHour('mix'));
+  });
+
+  it('вторая и третья грядки — за деньги, собираются вместе со спелыми', () => {
+    let state = planted({ money: 5000, warehouse: {} });
+    state = addBed(state, NOW)!;
+    expect(state.money).toBe(5000 - GARDEN_PRICE - BED_COSTS[0]);
+    state = addBed(state, NOW)!;
+    expect(addBed(state, NOW)).toBeNull();
+    expect(bedsOf(state).map((b) => b.crop)).toEqual(['mix', 'quick', 'quick']);
+    expect(gardenRipeAt(state)).toBe(NOW + growMs('quick'));
+    // Через два часа спела только картошка: первая грядка растёт дальше со своего времени.
+    const early = harvest(state, NOW + growMs('quick'))!;
+    expect(early.got).toEqual([{ id: 'potatoes', qty: cropQty(state, 'quick') * 2 }]);
+    expect(bedsOf(early.state)[0].since).toBe(NOW);
+    expect(bedsOf(early.state)[1].since).toBe(NOW + growMs('quick'));
+    expect(gardenLook(early.state, NOW + growMs('quick'))).not.toBe(gardenLook(state, NOW + growMs('quick')));
+  });
+
+  it('мусор в сохранении грядки не ломает', () => {
+    const state = { ...planted(), garden: { since: NOW, harvests: 0, crop: 'cactus', more: [{ crop: 'apples', since: NOW }, { crop: 'x', since: 1 }, null] } } as unknown as StoreState;
+    expect(bedsOf(state)).toEqual([{ crop: 'mix', since: NOW }, { crop: 'apples', since: NOW }]);
+  });
+});
+
+describe('двор: полив друга и своё варенье', () => {
+  it('полив приближает урожай на час, спелое не трогает', () => {
+    const state = planted();
+    const wet = water(state, NOW + 1000)!;
+    expect(gardenLeft(wet, NOW + 1000)).toBe(gardenLeft(state, NOW + 1000) - WATER_MS);
+    expect(wet.garden?.watered).toBe(1);
+    expect(water(state, NOW + GROW_MS)).toBeNull();
+    expect(water(shop(), NOW)).toBeNull();
+  });
+
+  it('после сбора яблок варенье пару дней — из своих (если линейка открыта)', () => {
+    const done = harvest(planted({ warehouse: {}, lines: { jam: 1 } }), NOW + GROW_MS)!;
+    expect(ownJam(done.state)).toBe(true);
+    expect(ownJam({ ...done.state, day: done.state.day + OWN_JAM_DAYS })).toBe(false);
+    expect(ownJam({ ...done.state, lines: {} })).toBe(false);
   });
 });
