@@ -1,11 +1,18 @@
-// «Задания на сегодня» в HUD: маленькая фишка «🎯 1/3» рядом с целью дня; по нажатию — список заданий
-// с полосками и наградой (выполненные — галочкой) на несколько секунд. Сами задания — game/endless.ts
-// (questsFor, payQuests): награда приходит сразу, как выполнил.
+// «Задания» в HUD: маленькая фишка «🎯 1/3» рядом с целью дня; по нажатию — список с полосками и наградой
+// (выполненные — галочкой) на несколько секунд. С 10.11 список один на всё: задания дня (game/endless.ts —
+// награда сразу, как выполнил), шаг сезонной недели (game/weeks.ts) и испытания недели (game/weekly.ts) —
+// раньше это были три разных места (фишка, карточка утра, полоска цели), и игрок держал в голове три дорожки.
+// Правила и награды у каждой прежние: изменилось только то, что смотреть теперь в одно место.
 
 import { t } from '../i18n';
 import { PRODUCTS, type DayStats } from '../game/economy';
+import type { ProductId, StoreState } from '../game/economy';
 import { QUEST_TEXT, questDone, questGoal, questProgress, type Quest } from '../game/endless';
+import { allTasks } from '../game/tasks';
+import { WEEKLY_TEXT, weeklyUntil } from '../game/weekly';
+import { WEEKS } from '../game/weeks';
 import { el, pixelize, UI_FONT } from './dom';
+import { goalText } from './weeks';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
 
@@ -15,6 +22,10 @@ export interface QuestRow {
   goal: number;
   reward: number;
   done: boolean;
+  /** Заголовок перед строкой: с неё начинается новый раздел списка («Испытания недели — до дня 14»). */
+  head?: string;
+  /** Не задание дня (испытание недели): в счёт фишки «🎯 1/3» не идёт — она про сегодня. */
+  week?: boolean;
 }
 
 /** Строки списка: текст задания, сколько сделано из скольких, награда. */
@@ -24,6 +35,21 @@ export function questRows(quests: Quest[], stats: DayStats): QuestRow[] {
     const goal = questGoal(q);
     const done = Boolean(q.paid) || questDone(q, stats);
     return { text: t(QUEST_TEXT[q.kind], { n: q.target, product }), progress: done ? goal : Math.min(goal, questProgress(q, stats)), goal, reward: q.reward, done };
+  });
+}
+
+/** Весь список заданий (game/tasks.ts) словами: сегодня — задания дня и шаг сезонной недели, ниже — испытания недели. */
+export function allRows(state: StoreState, quests: Quest[], stats: DayStats): QuestRow[] {
+  const product = (id?: ProductId): string => (id ? `${PRODUCTS[id].icon} ${t(PRODUCTS[id].nameKey)}` : '');
+  let weekHead = false;
+  return allTasks(state, quests, stats).map((task): QuestRow => {
+    const base = { progress: task.progress, goal: task.goal, reward: task.reward, done: task.done };
+    if (task.kind === 'quest') return { ...base, text: t(QUEST_TEXT[task.quest.kind], { n: task.quest.target, product: product(task.quest.product) }) };
+    if (task.kind === 'step') return { ...base, text: `${WEEKS[task.step.id].icon} ${goalText(task.step)}` };
+    const c = task.challenge;
+    const head = weekHead ? undefined : t('weekly.title', { day: weeklyUntil(state) });
+    weekHead = true;
+    return { ...base, text: t(WEEKLY_TEXT[c.kind], { n: c.target, product: product(c.product) }), week: true, head };
   });
 }
 
@@ -40,6 +66,7 @@ const css = `
 .ui-quest-list { pointer-events: auto; width: min(100%, 320px); box-sizing: border-box; background: rgba(24, 20, 37, .92); border: 2px solid #fee761;
   border-radius: 8px; padding: 5px 8px 6px; text-align: left; font: 600 12.5px/1.3 ${UI_FONT}; color: #fff; }
 .ui-quest-list b { display: block; color: #fee761; margin-bottom: 3px; }
+.ui-quest-list b.ui-quest-head { margin-top: 7px; padding-top: 5px; border-top: 1px solid rgba(254, 231, 97, .35); }
 .ui-quest-item { display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; margin-top: 3px; align-items: start; }
 /* Список живёт в строке склада (.ui-stock): её плашки у span здесь не нужны. */
 .ui-stock .ui-quest-list span { background: none; padding: 0; border-radius: 0; white-space: normal; }
@@ -91,9 +118,11 @@ export class QuestChip {
       this.done = -1;
       return;
     }
-    const done = rows.filter((r) => r.done).length;
+    // Фишка — про сегодня: испытания недели в её счёт не идут (они копятся днями).
+    const today = rows.filter((r) => !r.week);
+    const done = today.filter((r) => r.done).length;
     this.chip.textContent = label;
-    this.chip.classList.toggle('all', rows.length > 0 && done === rows.length);
+    this.chip.classList.toggle('all', today.length > 0 && done === today.length);
     // Задание выполнено — фишка вспыхивает (в первый показ дня — нет).
     if (this.done >= 0 && done > this.done) {
       this.chip.classList.remove('pop');
@@ -112,7 +141,7 @@ export class QuestChip {
     this.render();
     this.list.hidden = false;
     clearTimeout(this.timer);
-    this.timer = window.setTimeout(() => this.hide(), 6000);
+    this.timer = window.setTimeout(() => this.hide(), this.rows.some((r) => r.week) ? 9000 : 6000);
   }
 
   private hide(): void {
@@ -121,8 +150,9 @@ export class QuestChip {
   }
 
   private render(): void {
-    const all = this.rows.length > 0 && this.rows.every((r) => r.done);
-    const items = this.rows.map((r) => {
+    const today = this.rows.filter((r) => !r.week);
+    const all = today.length > 0 && today.every((r) => r.done);
+    const items = this.rows.flatMap((r) => {
       const row = el('div', `ui-quest-item${r.done ? ' done' : ''}`);
       const bar = el('i');
       const fill = el('u');
@@ -130,7 +160,7 @@ export class QuestChip {
       bar.append(fill);
       row.append(el('span', '', `${r.done ? '✅' : '•'} ${r.text}`), el('span', 'ui-quest-reward', `+${r.reward} 💰`));
       if (!r.done && r.goal > 1) row.append(bar);
-      return row;
+      return r.head ? [el('b', 'ui-quest-head', r.head), row] : [row];
     });
     this.list.replaceChildren(el('b', '', all ? t('quest.allDone') : t('quest.listTitle')), ...items);
     pixelize(this.list);

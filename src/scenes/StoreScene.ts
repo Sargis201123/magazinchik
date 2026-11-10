@@ -77,7 +77,7 @@ import type { LiveKind } from '../game/minievents';
 import { noteMoment } from '../game/moments';
 import { Moments } from './moments';
 import type { AttentionPlan } from '../game/attention';
-import { questRows } from '../ui/today';
+import { allRows } from '../ui/today';
 import { RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
 import { quality, type Quality } from '../platform/quality';
@@ -471,6 +471,8 @@ export class StoreScene extends Phaser.Scene {
   questsSeen = 0;
   /** Прогресс заданий, по которому в последний раз строился список в HUD. */
   private questRowsKey = '';
+  /** Сверх заданий дня в счёте фишки «🎯»: шаг сезонной недели (сколько сделано и сколько всего). */
+  private questsExtra = { done: 0, total: 0 };
   /** Активные моменты дня (game/moments.ts, scenes/moments.ts): монетка, чаевые, гость машет… */
   readonly moments = new Moments({
     scene: this,
@@ -989,6 +991,7 @@ export class StoreScene extends Phaser.Scene {
     const quests = this.state.plan?.quests ?? [];
     if (!quests.length) return '';
     const done = quests.filter((q) => q.paid || questDone(q, this.stats)).length;
+
     // Выполнено — награда сразу (вечером второй раз не платим: endless.ts payQuests). Только в идущий день
     // и по его же плану: статистика вчерашнего дня сегодняшние задания не закрывает.
     const pay = this.running && this.state.plan?.day === this.state.day ? payQuests(this.state, this.stats) : { state: this.state, paid: [] };
@@ -1009,12 +1012,19 @@ export class StoreScene extends Phaser.Scene {
       if (this.running) pixelFx.burst(this, 'star', sellerHome.x - 20, sellerHome.y - 14, { fade: 650 });
     }
     // Список для HUD — только когда прогресс сдвинулся (questsLine зовётся каждый кадр).
-    const key = `${this.state.day}|${quests.map((q) => `${q.paid ? 'p' : ''}${questProgress(q, this.stats)}`).join()}`;
+    // Общий список (ui/today.ts): задания дня, шаг сезонной недели и испытания недели. Пересобираем, только
+    // когда сдвинулось то, от чего зависит прогресс (questsLine зовётся каждый кадр).
+    const s = this.stats;
+    const key = `${this.state.day}|${quests.map((q) => `${q.paid ? 'p' : ''}${questProgress(q, s)}`).join()}|${s.served}|${s.revenue}|${s.caught}|${s.trashCleaned}|${s.coffees ?? 0}|${s.deliveries ?? 0}|${s.lost}`;
     if (key !== this.questRowsKey) {
       this.questRowsKey = key;
-      this.hud.setQuests(questRows(quests, this.stats));
+      const rows = allRows(this.state, quests, s);
+      this.hud.setQuests(rows);
+      // Шаг сезонной недели — тоже задание на сегодня: идёт в счёт фишки.
+      const today = rows.filter((r) => !r.week);
+      this.questsExtra = { done: today.filter((r) => r.done).length - done, total: today.length - quests.length };
     }
-    return t('quest.chip', { done, total: quests.length });
+    return t('quest.chip', { done: done + Math.max(0, this.questsExtra.done), total: quests.length + this.questsExtra.total });
   }
 
   // ---------- Магазин ----------

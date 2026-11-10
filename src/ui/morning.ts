@@ -123,8 +123,8 @@ import { dramaDone, dramaScene, isLastScene, seeDrama, type DramaScene } from '.
 import { activeEvent, addDays, cardOf, cardWaiting, guestDue, guestOn, nextGuest, openCard, openedCards, type LiveEvent } from '../game/live';
 import { liveEvents, todayLocal } from '../platform/live';
 import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
-import { weekBox, weekSoonLine } from './weeks';
-import { WEEK_IDS, type WeekId } from '../game/weeks';
+import { goalText, weekBox, weekSoonLine } from './weeks';
+import { stepReward, WEEK_IDS, WEEKS, type WeekId } from '../game/weeks';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, linesFor, pendingStory, type Chapter, type Line } from '../game/story';
 import { answerEduard, EDUARD_DEBT, writeSonya } from '../game/notebook';
 import { notebookButton, notebookPage, storyPage } from './notebook';
@@ -2055,6 +2055,13 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       for (const q of quests) {
         const r = el('div', 'ui-row');
         r.append(el('span', '', `• ${questText(q)}`), el('b', 'ui-goal-reward', `+${q.reward} 💰`));
+        box.append(r);
+      }
+      // Шаг сезонной недели — ещё одно задание на сегодня: в том же списке, что и в зале (ui/today.ts).
+      const week = state.plan?.day === state.day ? state.plan.week : null;
+      if (week) {
+        const r = el('div', 'ui-row');
+        r.append(el('span', '', `• ${WEEKS[week.id].icon} ${goalText(week)}`), el('b', 'ui-goal-reward', `+${stepReward(state.level, week.step)} 💰`));
         box.append(r);
       }
       box.append(el('div', 'ui-muted', `${t('quest.now')} ${t('quest.allBonus', { r: ALL_QUESTS_RATING })}`));
