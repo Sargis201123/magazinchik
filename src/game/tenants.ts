@@ -13,6 +13,7 @@ import { PRODUCTS, sellableProducts, onShelves, warehouseOf, type ProductId, typ
 import type { TextKey } from '../i18n';
 import { take } from './tales';
 import { homeLevel, inZar } from './zarshop';
+import { yearTime, type YearTime } from './calendar';
 
 export type TenantId = 'pickup' | 'pharmacy' | 'repair' | 'toys' | 'barber' | 'photo' | 'atm';
 export const TENANT_IDS: TenantId[] = ['pickup', 'pharmacy', 'repair', 'toys', 'barber', 'photo', 'atm'];
@@ -161,13 +162,42 @@ export function skipTenant(state: StoreState, id: TenantId): StoreState {
   return done.includes(id) ? state : { ...state, tenantAsk: { day: state.day, done: [...done, id] } };
 }
 
+// ---------- Сезонная площадка у входа ----------
+// Торговец со своим товаром встаёт на тротуаре у входа на неделю: весной рассада, летом тележка с мороженым, осенью
+// тыквы, зимой ёлочный базар. Отделки нет: позвал — стоит, платит понемногу и приводит прохожих; неделя прошла — уехал,
+// зови снова (к тому времени может смениться сезон).
+
+export type PitchKind = 'seedlings' | 'icecream' | 'pumpkins' | 'trees';
+export const PITCH_BY_SEASON: Record<YearTime, PitchKind> = { spring: 'seedlings', summer: 'icecream', autumn: 'pumpkins', winter: 'trees' };
+export const PITCH_ICON: Record<PitchKind, string> = { seedlings: '🌷', icecream: '🍦', pumpkins: '🎃', trees: '🎄' };
+/** Сколько дней стоит торговец; с какого помещения и дня площадку можно сдавать; сколько гостей он приводит. */
+export const PITCH_DAYS = 7;
+export const PITCH_FROM_LEVEL = 1;
+export const PITCH_FROM_DAY = 8;
+export const PITCH_GUESTS = 0.02;
+export const pitchRent = (state: StoreState): number => 40 + 30 * homeLevel(state);
+
+/** Площадку можно сдавать: в Центре, с «Магазинчика» и второй недели. */
+export const pitchOpen = (state: StoreState): boolean => !inZar(state) && homeLevel(state) >= PITCH_FROM_LEVEL && state.day >= PITCH_FROM_DAY;
+/** Кто стоит у входа сегодня (null — никого). */
+export const pitchNow = (state: StoreState): PitchKind | null => (state.pitch && state.day <= state.pitch.until && state.pitch.kind in PITCH_ICON ? state.pitch.kind : null);
+/** Кого можно позвать сегодня: торговец этого времени года, если площадка свободна. */
+export const pitchOffer = (state: StoreState): PitchKind | null => (pitchOpen(state) && !pitchNow(state) ? PITCH_BY_SEASON[yearTime(state.day)] : null);
+export const pitchDaysLeft = (state: StoreState): number => (pitchNow(state) ? state.pitch!.until - state.day + 1 : 0);
+
+/** Позвать сезонного торговца на неделю. null — рано, уже стоит или мы в Заречье. */
+export function invitePitch(state: StoreState): StoreState | null {
+  const kind = pitchOffer(state);
+  return kind ? { ...state, pitch: { kind, until: state.day + PITCH_DAYS - 1 } } : null;
+}
+
 // ---------- Итоги ----------
 
-/** Аренда за день со всех комнат. */
-export const tenantRent = (state: StoreState): number => tenantsOf(state).reduce((sum, id) => sum + rentOf(state, id), 0);
+/** Аренда за день со всех комнат и с площадки у входа. */
+export const tenantRent = (state: StoreState): number => tenantsOf(state).reduce((sum, id) => sum + rentOf(state, id), 0) + (pitchNow(state) ? pitchRent(state) : 0);
 
 /** Множитель гостей зала от арендаторов (только в Центре — day.ts, homeOnly). */
-export const tenantGuests = (state: StoreState): number => 1 + tenantsOf(state).reduce((sum, id) => sum + guestsOf(state, id), 0);
+export const tenantGuests = (state: StoreState): number => 1 + tenantsOf(state).reduce((sum, id) => sum + guestsOf(state, id), 0) + (pitchNow(state) ? PITCH_GUESTS : 0);
 
 /** Вечером арендаторы платят за день — до счетов, как филиал. Платят и когда хозяин работает в Заречье. */
 export function tenantsNight(state: StoreState): { state: StoreState; income: number } {
@@ -181,7 +211,7 @@ export const tenantsLook = (state: StoreState): string =>
     ? ''
     : `${tenantRooms(state)}:${tenantsOf(state)
         .map((id) => (tenantTier(state, id) === 2 ? `${id}+` : id))
-        .join(',')}`;
+        .join(',')}|${pitchNow(state) ?? ''}`;
 
 export const tenantName = (id: TenantId): TextKey => `tenant.${id}.name` as TextKey;
 export const tenantDesc = (id: TenantId): TextKey => `tenant.${id}.desc` as TextKey;

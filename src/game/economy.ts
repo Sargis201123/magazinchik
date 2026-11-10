@@ -694,6 +694,8 @@ export interface StoreState {
   tenantUp?: Partial<Record<import('./tenants').TenantId, 1>>;
   tenantPal?: Partial<Record<import('./tenants').TenantId, number>>;
   tenantAsk?: { day: number; done: import('./tenants').TenantId[] };
+  /** Сезонный торговец у входа (tenants.ts): кто и до какого дня стоит. */
+  pitch?: { kind: import('./tenants').PitchKind; until: number };
   /** «Бабушкина теплица» (garden.ts): когда посажено и сколько урожаев собрано. */
   garden?: import('./garden').GardenState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */

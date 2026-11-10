@@ -2,11 +2,20 @@
 // У каждого — отделка (платит хозяин один раз), аренда за день и прибавка гостей; у тех, кто уже работает, —
 // лицо и доверие хозяина комнаты и вторая отделка. Сцена перестраивает флигель по tenantsLook.
 
-import { t } from '../i18n';
+import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
 import {
   evict,
   guestsOf,
+  invitePitch,
+  PITCH_DAYS,
+  PITCH_GUESTS,
+  PITCH_ICON,
+  pitchDaysLeft,
+  pitchNow,
+  pitchOffer,
+  pitchOpen,
+  pitchRent,
   PAL_MAX,
   PAL_RENT,
   rentLock,
@@ -39,10 +48,40 @@ const effect = (state: StoreState, id: TenantId): string => t('tenant.effect', {
 
 export function tenantsBox(state: StoreState, getState: () => StoreState, update: (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void): HTMLElement[] {
   const rooms = tenantRooms(state);
-  if (inZar(state) || !rooms) return [];
+  if (inZar(state) || (!rooms && !pitchOpen(state))) return [];
   const here = tenantsOf(state);
   const box = el('div', 'ui-box');
-  box.append(el('b', '', `🔑 ${t('tenant.title')}`), el('div', 'ui-muted', t('tenant.note')), el('div', '', t('tenant.rooms', { n: here.length, max: rooms })));
+  box.append(el('b', '', `🔑 ${t('tenant.title')}`));
+  // Площадка у входа: сезонный торговец на неделю (без отделки).
+  const kind = pitchNow(state) ?? pitchOffer(state);
+  if (kind) {
+    const row = el('div', 'ui-item');
+    const icon = el('div', '', PITCH_ICON[kind]);
+    icon.style.cssText = 'width: 34px; font-size: 24px; text-align: center;';
+    const body = el('div');
+    const name = t(`pitch.${kind}` as TextKey);
+    body.append(el('div', 'ui-item-name', `${t('pitch.title')} · ${name}`), el('div', 'ui-item-sub', t('pitch.note')), el('div', 'ui-item-sub', t('tenant.effect', { n: pitchRent(state), g: Math.round(PITCH_GUESTS * 100) })));
+    const actions = el('div', 'ui-item-actions stack');
+    if (pitchNow(state)) actions.append(el('span', 'ui-tag', t('pitch.left', { n: pitchDaysLeft(state) })));
+    else
+      actions.append(
+        button(
+          t('pitch.invite'),
+          () => {
+            const next = invitePitch(getState());
+            if (!next) return;
+            track('pitch', next.day, PITCH_DAYS);
+            toast('assets/ico_shop.png', t('tenant.rented'), t('pitch.invited', { name }));
+            update(next, 'success');
+          },
+          'ui-chip hood-buy',
+        ),
+      );
+    row.append(icon, body, actions);
+    box.append(row);
+  }
+  if (!rooms) return [box];
+  box.append(el('div', 'ui-muted', t('tenant.note')), el('div', '', t('tenant.rooms', { n: here.length, max: rooms })));
   if (here.length) box.append(el('div', '', t('tenant.total', { n: tenantRent(state), g: Math.round((tenantGuests(state) - 1) * 100) })));
   // Сначала те, кто уже работает, потом кого можно пустить.
   for (const id of [...here, ...TENANT_IDS.filter((other) => !here.includes(other))]) {

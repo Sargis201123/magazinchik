@@ -13,7 +13,7 @@ import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { t, type TextKey } from '../i18n';
 import { UI_FONT } from '../ui/dom';
-import { tenantsLook, tenantsOf, tenantTier, type TenantId } from '../game/tenants';
+import { PITCH_ICON, pitchNow, tenantsLook, tenantsOf, tenantTier, type TenantId } from '../game/tenants';
 import { sound } from '../platform/sound';
 import { inZar } from '../game/zarshop';
 import { ART, SHIRTS, WALL, customerLook, randomLook } from './common';
@@ -369,4 +369,95 @@ async function visit(scene: StoreScene): Promise<void> {
   // Мир перестроили — счётчик уже обнулён вместе с ним.
   if (scene.worldGen === world) scene.tenantGuests = Math.max(0, scene.tenantGuests - 1);
   if (guest.active) guest.destroy();
+}
+
+// ---------- Сезонная площадка у входа (game/tenants.ts, pitchNow) ----------
+
+/** Где встаёт торговец: на нашем тротуаре у бордюра, слева от перехода (или справа), не у фонарного столба. */
+function pitchSpot(scene: StoreScene, top: number): { x: number; y: number } {
+  const d = scene.layout.door.x;
+  // Фонари стоят через 72 от −100 (streets.ts): рядом со столбом тележку не ставим.
+  const nearLamp = (x: number) => Math.abs(((((x + 100) % 72) + 72) % 72) - 36) > 24;
+  const x = [d - 40, d - 52, d + 40, d + 52, d - 64].find((cx) => !nearLamp(cx)) ?? d - 40;
+  return { x, y: top + 19 };
+}
+
+/**
+ * Сезонный торговец у входа: весной стол с рассадой и цветами, летом тележка с мороженым под полосатым зонтом,
+ * осенью ящики с тыквами и тюк сена, зимой ёлочный базар с гирляндой. Рядом — продавец; время от времени над
+ * прилавком всплывает значок покупки. Зовётся при постройке улицы (streets.buildStreet), только в Центре.
+ */
+export function buildPitch(scene: StoreScene, top: number): void {
+  const kind = pitchNow(scene.state);
+  if (!kind || inZar(scene.state)) return;
+  const { x, y } = pitchSpot(scene, top);
+  const g = scene.add.graphics().setDepth(y);
+  g.fillStyle(0x181425, 0.2).fillEllipse(x, y + 1, 30, 5);
+  const seller = (dx: number, shirt: number) => clerk(scene, x + dx, y - 1, shirt, y - 0.5);
+  if (kind === 'icecream') {
+    // Тележка: белый ящик-морозилка на колёсах, полосатый зонт покачивается.
+    box(g, x - 9, y - 9, 18, 8, 0xf4f8ff, 0x5a6988);
+    g.fillStyle(0x5fcde4, 1).fillRect(x - 9, y - 5, 18, 1.4);
+    g.fillStyle(0xf6757a, 1).fillCircle(x - 4, y - 10.5, 1.8);
+    g.fillStyle(0xfee761, 1).fillCircle(x, y - 10.8, 1.8);
+    g.fillStyle(0xf4ecd8, 1).fillCircle(x + 4, y - 10.5, 1.8);
+    g.fillStyle(0x262b44, 1).fillCircle(x - 6, y, 2).fillCircle(x + 6, y, 2);
+    g.fillStyle(0x8b9bb4, 1).fillRect(x - 0.5, y - 26, 1, 17);
+    const umbrella = scene.add.graphics().setDepth(y + 1);
+    for (let i = 0; i < 6; i++) umbrella.fillStyle(i % 2 ? 0xf4f8ff : 0xf6757a, 1).fillTriangle(x, y - 31, x - 15 + i * 5, y - 23, x - 10 + i * 5, y - 23);
+    loop(scene, { targets: umbrella, y: 0.7, duration: 1400, yoyo: true });
+    seller(14, 0xf6757a);
+  } else if (kind === 'pumpkins') {
+    // Ящики с тыквами, тюк сена, табличка.
+    box(g, x - 14, y - 6, 12, 6, 0xb86f50, 0x5a3420);
+    box(g, x - 1, y - 6, 12, 6, 0xb86f50, 0x5a3420);
+    for (const [px, py, r] of [[-11, -8, 2.6], [-6, -8.5, 3], [2, -8.5, 3], [7, -8, 2.6], [-8, -12, 2.4], [5, -12, 2.4]]) {
+      g.fillStyle(0xa8491c, 1).fillCircle(x + px, y + py, r + 0.5);
+      g.fillStyle(0xf77622, 1).fillCircle(x + px, y + py, r);
+      g.fillStyle(0xfeae34, 1).fillRect(x + px - 0.4, y + py - r, 0.8, r * 1.6);
+      g.fillStyle(0x3e8948, 1).fillRect(x + px - 0.4, y + py - r - 1.2, 0.8, 1.4);
+    }
+    box(g, x + 13, y - 5, 8, 5, 0xfee761, 0xb89c3a);
+    g.fillStyle(0xd8b848, 1).fillRect(x + 13, y - 3, 8, 0.7);
+    seller(-20, 0x8f563b);
+  } else if (kind === 'trees') {
+    // Ёлочный базар: стойка, ёлки разного роста, гирляндой мигают огоньки.
+    g.fillStyle(0x8f563b, 1).fillRect(x - 17, y - 12, 34, 1).fillRect(x - 17, y - 12, 1, 12).fillRect(x + 16, y - 12, 1, 12);
+    for (let i = 0; i < 5; i++) {
+      const tx = x - 13 + i * 6.5;
+      const tall = 13 + (i % 3) * 3;
+      g.fillStyle(0x5a3420, 1).fillRect(tx - 0.6, y - 2, 1.2, 2.4);
+      for (let k = 0; k < 3; k++) g.fillStyle(k % 2 ? 0x3e8948 : 0x265c42, 1).fillTriangle(tx, y - 2 - tall + k * (tall / 4), tx - 3.4 - k * 0.5, y - 2 - (2 - k) * (tall / 4), tx + 3.4 + k * 0.5, y - 2 - (2 - k) * (tall / 4));
+      g.fillStyle(0xf4f8ff, 0.8).fillRect(tx - 1.2, y - 1 - tall + 2, 2.4, 0.8);
+    }
+    const lights = [0xfee761, 0xe43b44, 0x5fcde4, 0x63c74d];
+    for (let i = 0; i < 9; i++) {
+      const bulb = scene.add.circle(x - 16 + i * 4, y - 13.4 + (i % 2), 0.9, lights[i % lights.length]).setDepth(y + 1);
+      loop(scene, { targets: bulb, alpha: 0.25, duration: 480, yoyo: true, delay: (i % 4) * 140 });
+    }
+    seller(22, 0x3e8948);
+  } else {
+    // Весна: стол с рассадой в лотках и вёдра с тюльпанами.
+    box(g, x - 13, y - 8, 26, 3, 0xc8955a, 0x5a3420);
+    g.fillStyle(0x8f563b, 1).fillRect(x - 12, y - 5, 1.2, 5).fillRect(x + 11, y - 5, 1.2, 5);
+    for (let i = 0; i < 4; i++) {
+      box(g, x - 12 + i * 6.3, y - 11, 5, 3, 0x5a3420, 0x3b2a35);
+      for (let k = 0; k < 3; k++) g.fillStyle(0x63c74d, 1).fillRect(x - 11.4 + i * 6.3 + k * 1.6, y - 13 - (k % 2), 1, 2.2 + (k % 2));
+    }
+    for (const [bx, color] of [[-19, 0xe43b44], [17, 0xfee761]] as const) {
+      box(g, x + bx - 2.5, y - 5, 5, 5, 0x8b9bb4, 0x3a4466);
+      for (let k = 0; k < 3; k++) {
+        g.fillStyle(0x3e8948, 1).fillRect(x + bx - 1.6 + k * 1.4, y - 9, 0.6, 4);
+        g.fillStyle(color, 1).fillCircle(x + bx - 1.3 + k * 1.4, y - 9.6, 1);
+      }
+    }
+    seller(0, 0x63c74d).setY(y - 9);
+  }
+  // Табличка с названием и время от времени — значок покупки над прилавком.
+  scene.add
+    .text(x, y - (kind === 'icecream' ? 35 : 22), t(`pitch.${kind}` as TextKey), { fontFamily: UI_FONT, fontSize: '4px', color: '#f4ecd8', backgroundColor: '#3b2a35', padding: { x: 1.5, y: 0.6 } })
+    .setOrigin(0.5)
+    .setResolution(scene.textRes(8))
+    .setDepth(y + 2);
+  if (!scene.lite) scene.worldTimer(7000, () => scene.sys.isActive() && scene.running && scene.popup(x, y - 24, PITCH_ICON[kind], '#fff3b0'));
 }

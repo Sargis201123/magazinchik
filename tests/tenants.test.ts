@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buyStock, newGame, onShelves, PRODUCTS, STORE_LEVELS, warehouseOf, type StoreState } from '../src/game/economy';
-import { ASK_EVERY, giveTenant, PAL_MAX, rentOf, skipTenant, tenantAsks, tenantPal, tenantTier, TIER_RENT, upgradeCost, upgradeLock, upgradeTenant, type TenantId, evict, freeRooms, rentLock, rentRoom, TENANT_IDS, TENANT_ROOMS, tenantGuests, tenantRent, tenantRooms, TENANTS, tenantsLook, tenantsNight, tenantsOf } from '../src/game/tenants';
+import { invitePitch, PITCH_BY_SEASON, PITCH_DAYS, PITCH_FROM_DAY, PITCH_GUESTS, pitchDaysLeft, pitchNow, pitchOffer, pitchRent, ASK_EVERY, giveTenant, PAL_MAX, rentOf, skipTenant, tenantAsks, tenantPal, tenantTier, TIER_RENT, upgradeCost, upgradeLock, upgradeTenant, type TenantId, evict, freeRooms, rentLock, rentRoom, TENANT_IDS, TENANT_ROOMS, tenantGuests, tenantRent, tenantRooms, TENANTS, tenantsLook, tenantsNight, tenantsOf } from '../src/game/tenants';
 import { guestFactor } from '../src/game/day';
 import { layoutFor } from '../src/scenes/layout';
 import { ru } from '../src/i18n/ru';
@@ -168,5 +168,33 @@ describe('арендаторы: вторая отделка, доверие и �
     expect(tenantAsks(empty)[0].ready).toBe(false);
     expect(giveTenant(empty, 'pickup')).toBeNull();
     for (let day = 60; day < 60 + ASK_EVERY; day++) expect(tenantAsks({ ...rented(['atm']), day })).toEqual([]);
+  });
+});
+
+describe('сезонная площадка у входа (10.11)', () => {
+  it('с «Магазинчика» и второй недели; торговец — по времени года; стоит неделю и платит', () => {
+    expect(pitchOffer(shop({ level: 0 }))).toBeNull();
+    expect(pitchOffer(shop({ level: 1, day: PITCH_FROM_DAY - 1 }))).toBeNull();
+    const state = shop({ level: 2, day: 60 });
+    const kind = pitchOffer(state)!;
+    expect(Object.values(PITCH_BY_SEASON)).toContain(kind);
+    const on = invitePitch(state)!;
+    expect(pitchNow(on)).toBe(kind);
+    expect(on.money).toBe(state.money);
+    expect(invitePitch(on)).toBeNull();
+    expect(pitchDaysLeft(on)).toBe(PITCH_DAYS);
+    expect(tenantRent(on)).toBe(tenantRent(state) + pitchRent(state));
+    expect(tenantGuests(on)).toBeCloseTo(tenantGuests(state) + PITCH_GUESTS);
+    expect(tenantsLook(on)).not.toBe(tenantsLook(state));
+    // Последний день — ещё стоит, на следующий — уехал, можно звать снова.
+    expect(pitchNow({ ...on, day: 60 + PITCH_DAYS - 1 })).toBe(kind);
+    expect(pitchNow({ ...on, day: 60 + PITCH_DAYS })).toBeNull();
+    expect(pitchOffer({ ...on, day: 60 + PITCH_DAYS })).not.toBeNull();
+    expect(tenantsNight(on).income).toBe(pitchRent(on));
+  });
+
+  it('у каждого времени года свой торговец с названием', () => {
+    expect(new Set(Object.values(PITCH_BY_SEASON)).size).toBe(4);
+    for (const kind of Object.values(PITCH_BY_SEASON)) expect(ru[`pitch.${kind}` as keyof typeof ru]).toBeTruthy();
   });
 });

@@ -3199,6 +3199,15 @@ export const es: Record<TextKey, string> = {
   "town.watered": "Tus amigos regaron los bancales: la cosecha está {n} h más cerca",
   "town.water.btn": "Regar el invernadero",
   "town.water.done": "Regado",
+  "pitch.title": "Puesto junto a la entrada",
+  "pitch.note": "Un vendedor de temporada se instala una semana en la acera junto a la entrada: paga alquiler y atrae a los que pasan. Sin reforma: pasada la semana, vuelve a invitarlo.",
+  "pitch.seedlings": "Plantones y flores",
+  "pitch.icecream": "Carrito de helados",
+  "pitch.pumpkins": "Calabazas de granja",
+  "pitch.trees": "Mercado de abetos",
+  "pitch.invite": "Invitar una semana",
+  "pitch.left": "{n} d más",
+  "pitch.invited": "{name}: se instala junto a la entrada, primer alquiler esta tarde",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

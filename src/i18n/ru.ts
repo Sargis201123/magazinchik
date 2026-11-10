@@ -3242,6 +3242,15 @@ export const ru = {
   "town.watered": "Друзья полили грядки: урожай ближе на {n} ч",
   "town.water.btn": "Полить теплицу",
   "town.water.done": "Полито",
+  "pitch.title": "Площадка у входа",
+  "pitch.note": "Сезонный торговец встаёт на тротуаре у входа на неделю: платит аренду и приводит прохожих. Отделки не нужно — неделя прошла, зови снова.",
+  "pitch.seedlings": "Рассада и цветы",
+  "pitch.icecream": "Тележка с мороженым",
+  "pitch.pumpkins": "Тыквы с фермы",
+  "pitch.trees": "Ёлочный базар",
+  "pitch.invite": "Пустить на неделю",
+  "pitch.left": "ещё {n} дн.",
+  "pitch.invited": "{name}: встанет у входа, первая аренда — сегодня вечером",
 } as const;
 
 export type TextKey = keyof typeof ru;

@@ -3208,6 +3208,15 @@ export const uz: Record<TextKey, string> = {
   "town.watered": "Doʻstlar joʻyaklarni sugʻordi: hosil {n} soat yaqinlashdi",
   "town.water.btn": "Issiqxonani sugʻorish",
   "town.water.done": "Sugʻorildi",
+  "pitch.title": "Kirish oldidagi joy",
+  "pitch.note": "Mavsumiy sotuvchi kirish oldidagi yoʻlakka bir haftaga joylashadi: ijara toʻlaydi, oʻtkinchilarni jalb qiladi. Taʼmir kerak emas — hafta oʻtdi, yana chaqir.",
+  "pitch.seedlings": "Koʻchat va gullar",
+  "pitch.icecream": "Muzqaymoq aravachasi",
+  "pitch.pumpkins": "Fermadan qovoqlar",
+  "pitch.trees": "Archa bozori",
+  "pitch.invite": "Bir haftaga chaqirish",
+  "pitch.left": "yana {n} kun",
+  "pitch.invited": "{name}: kirish oldiga joylashadi, birinchi ijara — bugun kechqurun",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

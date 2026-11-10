@@ -3199,6 +3199,15 @@ export const tr: Record<TextKey, string> = {
   "town.watered": "Arkadaşlar tarhları suladı: hasat {n} sa yaklaştı",
   "town.water.btn": "Serayı sula",
   "town.water.done": "Sulandı",
+  "pitch.title": "Giriş önündeki yer",
+  "pitch.note": "Mevsimlik satıcı bir haftalığına kapının önündeki kaldırıma kurulur: kira öder, gelip geçeni çeker. Düzenleme gerekmez — hafta bitince yine çağır.",
+  "pitch.seedlings": "Fide ve çiçek",
+  "pitch.icecream": "Dondurma arabası",
+  "pitch.pumpkins": "Çiftlik balkabakları",
+  "pitch.trees": "Yılbaşı ağacı pazarı",
+  "pitch.invite": "Bir haftalığına çağır",
+  "pitch.left": "{n} gün daha",
+  "pitch.invited": "{name}: girişe kuruluyor, ilk kira bu akşam",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

@@ -51,6 +51,7 @@ import * as newcomer from './newcomer';
 import * as building from './building';
 import * as friendStreet from './friendStreet';
 import * as gardenFx from './gardenFx';
+import * as tenantsFx from './tenantsFx';
 import { townFlags } from '../game/town';
 import * as zarFx from './zarechye';
 import { inZar } from '../game/zarechye';
@@ -553,6 +554,8 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
     const yard = gardenFx.yardRect(next);
     districtAreas.push(yard, { x: yard.x + yard.w - 4, y: yard.y + yard.h, w: 14, h: top - yard.y - yard.h });
   }
+  // Сезонный торговец у входа (game/tenants.ts): тележка с мороженым, тыквы, ёлочный базар или рассада.
+  if (!zar) tenantsFx.buildPitch(scene, top);
   // Район набрал общую цель недели (game/town.ts) — над улицей флажки до конца следующей недели.
   if (!zar && townFlags(scene.state, Date.now())) townBunting(scene, next, top);
   // «Бабушкин двор» с теплицей (game/garden.ts): слева от магазина, за флигелем; стадию грядок проверяем раз в 10 с.

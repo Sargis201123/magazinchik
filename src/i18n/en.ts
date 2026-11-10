@@ -3244,6 +3244,15 @@ export const en: Record<TextKey, string> = {
   "town.watered": "Friends watered the beds: the crop is {n} h closer",
   "town.water.btn": "Water the greenhouse",
   "town.water.done": "Watered",
+  "pitch.title": "Pitch by the entrance",
+  "pitch.note": "A seasonal trader sets up on the pavement by your door for a week: pays rent and draws passers-by. No fit-out needed — when the week is over, invite again.",
+  "pitch.seedlings": "Seedlings and flowers",
+  "pitch.icecream": "Ice-cream cart",
+  "pitch.pumpkins": "Farm pumpkins",
+  "pitch.trees": "Christmas tree market",
+  "pitch.invite": "Invite for a week",
+  "pitch.left": "{n} d left",
+  "pitch.invited": "{name}: setting up by the entrance, first rent this evening",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */
