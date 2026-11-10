@@ -31,12 +31,8 @@ const PICKLES_SPOTS = [-38, -62, -88, -120];
 const KVASS_SPAN: StreetSpan = [-14, 14];
 const KVASS_SPOTS = [114, 142, -140];
 
-/**
- * Где у входа стоят уголки своей марки (x от двери): не на местах курьера, летней тележки с мороженым и
- * уличного украшения (кадки, доска-штендер). Слева от входа — только когда тротуар не занят ярмаркой и
- * лотками недели. Свободного места нет — уголок не ставят. Реклама у входа (streets.ts) их места обходит.
- */
-export function lineStreetSpots(state: StoreState, doorX: number): { jam: number | null; pickles: number | null; kvass: number | null; spans: StreetSpan[] } {
+/** Что уже стоит на тротуаре у входа постоянно (x от двери): бак, будка, подсолнухи, курьер, летняя тележка, украшение. */
+export function streetTaken(state: StoreState, doorX: number): StreetSpan[] {
   // Зелёный контейнер для мусора стоит на тротуаре у левого угла (building.dumpSpot, x = 18).
   const dump = 18 - doorX;
   const taken: StreetSpan[] = [
@@ -49,6 +45,16 @@ export function lineStreetSpots(state: StoreState, doorX: number): { jam: number
     const right = yearTime(state.day) === 'summer' ? 96 : 62;
     for (const x of outdoor.id === 'out_planters' ? [-60, right] : [-50]) taken.push([x - 6, x + 6]);
   }
+  return taken;
+}
+
+/**
+ * Где у входа стоят уголки своей марки (x от двери): не на местах курьера, летней тележки с мороженым и
+ * уличного украшения (кадки, доска-штендер). Слева от входа — только когда тротуар не занят ярмаркой и
+ * лотками недели. Свободного места нет — уголок не ставят. Реклама у входа (streets.ts) их места обходит.
+ */
+export function lineStreetSpots(state: StoreState, doorX: number): { jam: number | null; pickles: number | null; kvass: number | null; spans: StreetSpan[] } {
+  const taken = streetTaken(state, doorX);
   const spans: StreetSpan[] = [];
   // Всё занято — не ставим вовсе (своё и так видно на полках), а не друг на друга.
   const place = (spots: number[], span: StreetSpan): number | null => {
