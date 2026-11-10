@@ -465,12 +465,18 @@ export function rushFocus(scene: StoreScene, on: boolean): void {
   if (!zoom) return;
   const { sellerHome, w, h, door } = scene.layout;
   const viewW = cam.width / zoom;
-  const safe = safeTop(scene);
-  const viewH = (cam.height - (HUD_TOP + HUD_BOTTOM) * scene.res - safe) / zoom;
+  // Окно под панелями: сверху — панель до полоски цели (и шапка Telegram в полном экране), снизу — подсказки.
+  const topPx = (HUD_TOP + GOAL_ROW) * scene.res + safeTop(scene);
+  const viewH = (cam.height - topPx - HUD_BOTTOM * scene.res) / zoom;
   // Кассы у правой стены: кадр — от них влево, по высоте — от касс до входа; за стены не выходим.
-  // Шапка Telegram сверху: середина кадра выше на половину отступа — зал опускается из-под панели.
   const x = Phaser.Math.Clamp(sellerHome.x - viewW * 0.3, viewW / 2 - 4, w + 8 - viewW / 2);
-  const y = Phaser.Math.Clamp((sellerHome.y + door.y) / 2 - 10, viewH / 2 - 10, h + 24 - viewH / 2) - safe / 2 / zoom;
+  // Верх окна в мире: зал ниже окна — от вывески (она встаёт под панель, верхние полки не перекрыты);
+  // зал выше окна — середина между кассами и входом, но не выше вывески и не ниже улицы у входа.
+  const lo = SIGN_TOP - 2;
+  const hi = h + 24;
+  const winTop = viewH >= hi - lo ? lo : Phaser.Math.Clamp((sellerHome.y + door.y) / 2 - 10 - viewH / 2, lo, hi - viewH);
+  // Середина кадра — такая, чтобы верх окна пришёлся ровно под панель.
+  const y = winTop + (cam.height / 2 - topPx) / zoom;
   const wasHome = atView(scene);
   scene.rushView = { x: Math.round(x), y: Math.round(y), zoom };
   if (!wasHome || scene.input.pointer1.isDown) return;
