@@ -39,7 +39,7 @@ export const daytime = (now: number, tz: number): boolean => {
   return m >= QUIET.from * 60 && m < QUIET.to * 60;
 };
 
-export type Reason = 'sonya' | 'helped' | 'guest' | 'card' | 'gift' | 'order' | 'letter' | 'chest' | 'spoil' | 'weekend' | 'cashier' | 'day';
+export type Reason = 'sonya' | 'helped' | 'guest' | 'card' | 'gift' | 'order' | 'letter' | 'chest' | 'garden' | 'spoil' | 'weekend' | 'cashier' | 'day';
 export type Face = 'sonya' | 'grandma' | 'valya' | 'anchor' | GuestId;
 
 /** Что известно об игроке для напоминания: поводы из игры (hooks) и что знает сервер. */
@@ -64,6 +64,8 @@ export interface Player {
   /** Кто придёт за отложенным и за чем: «petr:bread», и сколько штук. */
   order?: string;
   qty?: number;
+  /** Когда поспеет урожай во дворе (секунды Unix; 0 — двора нет). */
+  ripe?: number;
 }
 
 export interface Reminder {
@@ -120,10 +122,12 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'letter.sonya': '👧 Соня: «Пап, я тебе открытку нарисовала! Она в магазине, у кассы»',
     'letter.notebook': '👵 Бабушка: «Внучек, в тетради нашлась ещё одна страница… Я положила её в письмо. Загляни!»',
     chest: '👵 Бабушка: «Сундучок выручки уже тяжёленький — около {sum} 💰. Загляни, открой!»',
+    garden: '👵 Бабушка: «Внучек, во дворе урожай созрел — сам на склад не дойдёт. Загляни, собери!»',
     also: 'Ещё ждут: {list}',
     'also.order': 'заказ для {who}',
     'also.letter': 'письмо от {from}',
     'also.chest': 'сундучок ≈{sum} 💰',
+    'also.garden': 'урожай во дворе',
     play: '▶ Играть',
   },
   en: {
@@ -149,10 +153,12 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'letter.sonya': '👧 Sonya: "Dad, I drew you a card! It\'s in the shop, by the till"',
     'letter.notebook': '👵 Grandma: "Dear, I found one more page in my notebook… It\'s in a letter for you. Drop by!"',
     chest: '👵 Grandma: "The takings chest is getting heavy — about {sum} 💰. Come open it!"',
+    garden: '👵 Grandma: "Dear, the crop in the yard is ripe — it will not walk to the storeroom by itself. Come and pick it!"',
     also: 'Also waiting: {list}',
     'also.order': "{who}'s order",
     'also.letter': 'a letter from {from}',
     'also.chest': 'the chest ≈{sum} 💰',
+    'also.garden': 'the crop in the yard',
     play: '▶ Play',
   },
   tr: {
@@ -178,10 +184,12 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'letter.sonya': '👧 Sonya: “Baba, sana bir kart çizdim! Dükkânda, kasanın yanında”',
     'letter.notebook': '👵 Nine: “Yavrum, defterde bir sayfa daha buldum… Mektubun içine koydum. Uğra!”',
     chest: '👵 Nine: “Hasılat sandığı ağırlaştı — yaklaşık {sum} 💰. Gel de aç!”',
+    garden: '👵 Nine: “Yavrum, bahçedeki ürün olgunlaştı — depoya kendi yürümez. Gel de topla!”',
     also: 'Seni bekleyenler: {list}',
     'also.order': '{who} için sipariş',
     'also.letter': 'mektup: {from}',
     'also.chest': 'sandık ≈{sum} 💰',
+    'also.garden': 'bahçedeki hasat',
     play: '▶ Oyna',
   },
   es: {
@@ -207,10 +215,12 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'letter.sonya': '👧 Sonia: “Papá, ¡te dibujé una tarjeta! Está en la tienda, junto a la caja”',
     'letter.notebook': '👵 La abuela: “Cariño, encontré una página más en mi cuaderno… Te la mandé en una carta. ¡Pásate!”',
     chest: '👵 La abuela: “El cofre de las ganancias ya pesa: unas {sum} 💰. ¡Ven a abrirlo!”',
+    garden: '👵 La abuela: “Cariño, la cosecha del huerto ya está madura: sola no llega al almacén. ¡Ven a recogerla!”',
     also: 'También te esperan: {list}',
     'also.order': 'el pedido de {who}',
     'also.letter': 'una carta de {from}',
     'also.chest': 'el cofre ≈{sum} 💰',
+    'also.garden': 'la cosecha del huerto',
     play: '▶ Jugar',
   },
   // Имена в {who}/{from} уже в нужном падеже (PEOPLE.kk): who — табыс («кімді»), from — шығыс («кімнен»).
@@ -237,10 +247,12 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'letter.sonya': '👧 Соня: «Әке, саған ашықхат салдым! Ол дүкенде, кассаның жанында»',
     'letter.notebook': '👵 Әже: «Балам, дәптерден тағы бір бет табылды… Хатқа салып жібердім. Соқ!»',
     chest: '👵 Әже: «Түсім сандықшасы ауырлап қалды — шамамен {sum} 💰. Кел, аш!»',
+    garden: '👵 Әже: «Балам, аулада өнім пісті — қоймаға өзі бармайды. Кел, жинап ал!»',
     also: 'Тағы күтіп тұр: {list}',
     'also.order': 'тапсырыс — {who}',
     'also.letter': 'хат — {from}',
     'also.chest': 'сандықша ≈{sum} 💰',
+    'also.garden': 'ауладағы өнім',
     play: '▶ Ойнау',
   },
   uz: {
@@ -266,10 +278,12 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'letter.sonya': '👧 Sonya: «Dada, senga otkritka chizdim! U doʻkonda, kassa yonida»',
     'letter.notebook': '👵 Buvi: «Nevaram, daftardan yana bir varaq topildi… Uni xatga solib qoʻydim. Kirib oʻt!»',
     chest: '👵 Buvi: «Tushum sandiqchasi ogʻirlashib qoldi — taxminan {sum} 💰. Kelib och!»',
+    garden: '👵 Buvi: «Bolam, hovlida hosil pishdi — omborga oʻzi bormaydi. Kelib yigʻib ol!»',
     also: 'Yana kutyapti: {list}',
     'also.order': '{who} buyurtma',
     'also.letter': '{from} xat',
     'also.chest': 'sandiqcha ≈{sum} 💰',
+    'also.garden': 'hovlidagi hosil',
     play: '▶ Oʻynash',
   },
   pt: {
@@ -295,10 +309,12 @@ export const TEXTS: Record<Lang, Record<string, string>> = {
     'letter.sonya': '👧 Sônia: “Pai, desenhei um cartão para você! Está na loja, ao lado do caixa”',
     'letter.notebook': '👵 Vovó: “Querido, achei mais uma página no meu caderno… Coloquei numa carta para você. Passe aqui!”',
     chest: '👵 Vovó: “O baú do faturamento já está pesadinho — umas {sum} 💰. Venha abrir!”',
+    garden: '👵 Vovó: “Querido, a colheita do quintal está madura — sozinha ela não chega ao depósito. Venha colher!”',
     also: 'Também esperando: {list}',
     'also.order': 'encomenda {who}',
     'also.letter': 'carta {from}',
     'also.chest': 'baú ≈{sum} 💰',
+    'also.garden': 'a colheita do quintal',
     play: '▶ Jogar',
   },
 };
@@ -423,7 +439,7 @@ export const CHEST_MIN = 100;
 export const money = (n: number, lang: Lang): string => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, lang === 'en' ? ',' : '\u00a0');
 
 /** Что ждёт в магазине — по отдельности: повод, текст, и короткая строка для приписки «Ещё ждут». */
-function waiting(p: Player): { reason: Reason; face: Face; text: string; short: string }[] {
+function waiting(p: Player, now: number): { reason: Reason; face: Face; text: string; short: string }[] {
   const lang = p.lang;
   const t = TEXTS[lang];
   const out: { reason: Reason; face: Face; text: string; short: string }[] = [];
@@ -443,6 +459,8 @@ function waiting(p: Player): { reason: Reason; face: Face; text: string; short: 
     const sum = money(p.chest ?? 0, lang);
     out.push({ reason: 'chest', face: 'grandma', text: fill(t.chest, { sum }), short: fill(t['also.chest'], { sum }) });
   }
+  // Урожай во дворе уже созрел (src/game/garden.ts): яблоки и картошка ждут, пока их соберут.
+  if ((p.ripe ?? 0) > 0 && (p.ripe ?? 0) * 1000 <= now) out.push({ reason: 'garden', face: 'grandma', text: t.garden, short: t['also.garden'] });
   return out;
 }
 
@@ -487,7 +505,7 @@ export function reasons(p: Player, now: number, events: LiveEvent[]): Reminder[]
   if (p.gift && p.gift === addDays(date, -1) && p.streak >= 1 && p.streak < GIFT_DAYS) {
     out.push({ reason: 'gift', face: 'grandma', text: p.streak === GIFT_DAYS - 1 ? t['gift.big'] : fill(t.gift, { n: p.streak + 1 }) });
   }
-  for (const w of waiting(p)) out.push({ reason: w.reason, face: w.face, text: w.text });
+  for (const w of waiting(p, now)) out.push({ reason: w.reason, face: w.face, text: w.text });
   if (p.spoil > 0) out.push({ reason: 'spoil', face: 'valya', text: fill(t.spoil, { n: p.spoil }) });
   if (isWeekend(now)) out.push({ reason: 'weekend', face: 'anchor', text: t.weekend });
   if (p.cashier) out.push({ reason: 'cashier', face: 'grandma', text: t.cashier });
@@ -502,7 +520,7 @@ export function reasons(p: Player, now: number, events: LiveEvent[]): Reminder[]
 export function pickReminder(p: Player, now: number, events: LiveEvent[]): Reminder {
   const all = reasons(p, now, events);
   const main = all.find((r) => r.reason !== p.reason) ?? all[0];
-  const rest = waiting(p).filter((w) => w.reason !== main.reason);
+  const rest = waiting(p, now).filter((w) => w.reason !== main.reason);
   if (!rest.length) return main;
   return { ...main, text: `${main.text}\n\n${fill(TEXTS[p.lang].also, { list: rest.map((w) => w.short).join(' · ') })}` };
 }
@@ -546,14 +564,14 @@ export async function sendReminders(env: Env, now = Date.now()): Promise<number>
       `SELECT p.id AS id, p.lang AS lang, p.misses AS misses, h.tz AS tz, h.sonya AS sonya, h.spoil AS spoil, h.streak AS streak, h.gift AS gift,
          h.cashier AS cashier, COALESCE(h.day, pr.day) AS day, h.reason AS reason,
          (SELECT g.name FROM helps hp JOIN progress g ON g.id = hp.helper WHERE hp.receiver = p.id AND hp.claimed = 0 LIMIT 1) AS helper,
-         w.chest AS chest, w.letter AS letter, w.ord AS ord, w.qty AS qty
-       FROM players p LEFT JOIN hooks h ON h.id = p.id LEFT JOIN progress pr ON pr.id = p.id LEFT JOIN waiting w ON w.id = p.id
+         w.chest AS chest, w.letter AS letter, w.ord AS ord, w.qty AS qty, gd.ripe AS ripe
+       FROM players p LEFT JOIN hooks h ON h.id = p.id LEFT JOIN progress pr ON pr.id = p.id LEFT JOIN waiting w ON w.id = p.id LEFT JOIN garden gd ON gd.id = p.id
        WHERE p.last_seen < ?1 AND (p.reminded_at IS NULL OR p.reminded_at < ?2) AND p.misses < ?3
          AND (?4 + COALESCE(h.tz, ?5)) % 1440 >= ?6 AND (?4 + COALESCE(h.tz, ?5)) % 1440 < ?7
        LIMIT ?8`,
     )
     .bind(now - IDLE_AFTER, now - REMIND_EVERY, MAX_MISSES, minute, DEFAULT_TZ, QUIET.from * 60, QUIET.to * 60, BATCH)
-    .all<{ id: number; lang: string; misses: number; tz: number | null; sonya: number | null; spoil: number | null; streak: number | null; gift: string | null; cashier: number | null; day: number | null; reason: string | null; helper: string | null; chest: number | null; letter: string | null; ord: string | null; qty: number | null }>();
+    .all<{ id: number; lang: string; misses: number; tz: number | null; sonya: number | null; spoil: number | null; streak: number | null; gift: string | null; cashier: number | null; day: number | null; reason: string | null; helper: string | null; chest: number | null; letter: string | null; ord: string | null; qty: number | null; ripe: number | null }>();
   if (!results.length) return 0;
   const app = env.APP_URL ?? '';
   const events = await liveEventsFor(env);
@@ -577,6 +595,7 @@ export async function sendReminders(env: Env, now = Date.now()): Promise<number>
       letter: row.letter ?? '',
       order: row.ord ?? '',
       qty: row.qty ?? 0,
+      ripe: row.ripe ?? 0,
     };
     // Запрос уже отобрал тех, у кого день; проверка ещё раз — тем же правилом, что в тестах.
     if (!daytime(now, player.tz)) continue;

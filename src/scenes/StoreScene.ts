@@ -775,7 +775,7 @@ export class StoreScene extends Phaser.Scene {
     });
     void socialPing(getLang(), comebackHooks(this.state)).then((info) => {
       // Друзья: магазин друга встанет на улице рядом, если место свободно (streets.ts).
-      void loadMultiplayer().then(() => {
+      void loadMultiplayer(Boolean(this.state.garden)).then(() => {
         const friend = (this.rivalAcross || this.builtEduard === 'vacant') && (streetInfo()?.[0]?.name || undefined) !== this.builtFriend;
         // Улица друзей пришла или поменялась — домики встают, пока магазин закрыт (днём — завтра утром).
         // На титуле не трогаем: перестройка оборвала бы пролёт камеры — улицу поставит утро (showMorning).

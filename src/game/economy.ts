@@ -688,6 +688,8 @@ export interface StoreState {
   hood?: import('./hood').HoodState;
   /** Арендаторы комнат флигеля (tenants.ts): кто снимает, по порядку комнат. */
   tenants?: import('./tenants').TenantId[];
+  /** Район (town.ts): общая цель недели — что забрано и когда победили. */
+  town?: import('./town').TownState;
   /** Вторая отделка комнаты арендатора, его доверие (0…3) и чьи просьбы сегодня уже закрыты (tenants.ts). */
   tenantUp?: Partial<Record<import('./tenants').TenantId, 1>>;
   tenantPal?: Partial<Record<import('./tenants').TenantId, number>>;

@@ -51,6 +51,7 @@ import * as newcomer from './newcomer';
 import * as building from './building';
 import * as friendStreet from './friendStreet';
 import * as gardenFx from './gardenFx';
+import { townFlags } from '../game/town';
 import * as zarFx from './zarechye';
 import { inZar } from '../game/zarechye';
 import { streetKey } from '../game/street';
@@ -552,6 +553,8 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
     const yard = gardenFx.yardRect(next);
     districtAreas.push(yard, { x: yard.x + yard.w - 4, y: yard.y + yard.h, w: 14, h: top - yard.y - yard.h });
   }
+  // Район набрал общую цель недели (game/town.ts) — над улицей флажки до конца следующей недели.
+  if (!zar && townFlags(scene.state, Date.now())) townBunting(scene, next, top);
   // «Бабушкин двор» с теплицей (game/garden.ts): слева от магазина, за флигелем; стадию грядок проверяем раз в 10 с.
   gardenFx.buildGarden(scene, next, top);
   if (!zar) scene.worldTimer(10000, () => scene.sys.isActive() && gardenFx.tickGarden(scene));
@@ -1301,6 +1304,29 @@ export function scarePigeons(scene: StoreScene): void {
         });
       },
     });
+  }
+}
+
+/**
+ * Флажки района над улицей: растяжки зигзагом через дорогу, от нашего тротуара к дальнему, на них — треугольные
+ * флажки вразнобой. Висят над машинами; в обычной графике слегка покачиваются.
+ */
+function townBunting(scene: StoreScene, next: Layout, top: number): void {
+  const colors = [0xe43b44, 0xfee761, 0x63c74d, 0x5fcde4, 0xf77622, 0xb55088];
+  const near = top + 16;
+  const far = top + 70;
+  for (let x = -172, k = 0; x < next.w + 172; x += 72, k++) {
+    const a = { x, y: k % 2 ? far : near };
+    const b = { x: x + 72, y: k % 2 ? near : far };
+    const g = scene.add.graphics().setDepth(top + 90);
+    g.lineStyle(0.5, 0x3b2a35, 0.9).lineBetween(a.x, a.y, b.x, b.y);
+    for (let i = 1; i < 9; i++) {
+      const px = a.x + ((b.x - a.x) * i) / 9;
+      const py = a.y + ((b.y - a.y) * i) / 9;
+      g.fillStyle(colors[(i + k) % colors.length], 1).fillTriangle(px - 1.8, py, px + 1.8, py, px, py + 4);
+      g.fillStyle(0xffffff, 0.35).fillTriangle(px - 1.8, py, px - 0.4, py, px - 0.9, py + 2);
+    }
+    if (!scene.lite) scene.tweens.add({ targets: g, y: 0.8, duration: 1500 + (k % 3) * 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 }
 

@@ -1,4 +1,4 @@
-import { warmKey } from '../game/firstday';
+import { quietDays, warmKey } from '../game/firstday';
 import { momentCount } from '../game/moments';
 import { getLang, memberName, t } from '../i18n';
 import { pluralForm } from '../i18n/plural';
@@ -224,6 +224,7 @@ import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toas
 import { gardenBox, harvestNow } from './garden';
 import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
+import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
 import { linesBox } from './lines';
@@ -247,6 +248,8 @@ interface MorningOptions {
   /** «Переставить полки»: утро закрывается, в зале — перестановка; потом утро откроется снова. */
   /** Зайти в гости в магазин друга (id в Telegram, имя). */
   onVisit?: (id: number, name: string) => void;
+  /** Зайти в «Магазин дня» — магазин случайного настоящего игрока (platform/town.ts). */
+  onDayShop?: () => void;
   /** Собирались в гости с «Улицы друзей» (scenes/friendStreet.ts): карточка сверху — зайти первым делом. */
   visit?: { id: number; name: string };
   /** «Заглянуть к конкуренту» из рейтинга (ключ с сервера, имя) и к боссу через дорогу (game/rival.ts). */
@@ -547,7 +550,7 @@ const rectOf = (node: HTMLElement): Spot | null => {
 };
 
 /** Утро: закупка (товар едет на склад), раскладка со склада на полки, полки и цены. */
-export function showMorning({ getState, setState, lateState, onOpen, onVisit, onRival, onBoss, onTourDone, onStoryDone, coach, visit }: MorningOptions): void {
+export function showMorning({ getState, setState, lateState, onOpen, onVisit, onDayShop, onRival, onBoss, onTourDone, onStoryDone, coach, visit }: MorningOptions): void {
   const { card, close } = openModal();
   // Нажатый заголовок или кнопка остаются на месте, когда блоки сворачиваются и окно перерисовывается.
   anchorScroll(card);
@@ -646,7 +649,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   // Торговая неделя и гильдия приходят с сервера чуть позже — перерисовать утро, когда пришли.
   const onMultiplayer = () => {
     if (!card.isConnected) window.removeEventListener(MP_EVENT, onMultiplayer);
-    else render();
+    else {
+      // Район прислал своё (отметки гостей, полив друзей) — забрать, утро перерисуется вместе с новым состоянием.
+      applyTownGifts(getState, update);
+      render();
+    }
   };
   window.addEventListener(MP_EVENT, onMultiplayer);
   // Почта пополнилась (новости и «спасибо» от конкурентов приходят с сервера чуть позже).
@@ -655,6 +662,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     else render();
   };
   window.addEventListener(MAIL_EVENT, onMail);
+  // Что район прислал, пока игрока не было (чаевые гостей, полив друзей), — когда утро уже на экране.
+  setTimeout(() => card.isConnected && applyTownGifts(getState, update), 700);
 
   /** quiet — звук уже сыграла заставка (награда главы), свой «дзынь» не нужен. */
   const update = (next: StoreState | null, feedback: 'tap' | 'success' | 'error' = 'tap', quiet = false) => {
@@ -933,7 +942,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       // Новость утра, если сегодня это история (game/headlines.ts): одна, остальные ждут завтра.
       ...newsBox(state, picked.id),
       today,
-      todayCard(state, touring, [...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: homeLevel(getState()) })), ...passBox(state), ...goalsBox(state), info, ...(zarHere ? [] : giantBox(state)), ...(zarHere ? [] : contestBox(state))]),
+      todayCard(state, touring, [...leagueBox(() => showLeaderboard(undefined, { tab: 'league', level: homeLevel(getState()) })), ...(touring || quietDays(state) ? [] : townBox(state, getState, update, onDayShop && (() => { close(); onDayShop(); }))), ...passBox(state), ...goalsBox(state), info, ...(zarHere ? [] : giantBox(state)), ...(zarHere ? [] : contestBox(state))]),
       ...(hint ? [hint] : []),
       tabs,
       body,

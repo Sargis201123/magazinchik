@@ -222,6 +222,7 @@ export function showMorning(scene: StoreScene): void {
       scene.pendingVisit = undefined;
       void rivals.visitFriend(scene, id, name);
     },
+    onDayShop: () => void rivals.visitDayShop(scene),
     // Днём собрались в гости с «Улицы друзей» (friendStreet.ts) — окно предложит зайти первым делом.
     visit: scene.pendingVisit,
     onRival: (key, name) => void rivals.visitRival(scene, key, name),

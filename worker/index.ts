@@ -13,6 +13,7 @@ import { visits } from '../api/_lib/visits.js';
 import { rival } from '../api/_lib/rival.js';
 import { presents } from '../api/_lib/presents.js';
 import { league } from '../api/_lib/league.js';
+import { town } from '../api/_lib/town.js';
 import { sendNewspapers } from '../api/_lib/newspaper.js';
 import { card, cardImage, cleanCards } from '../api/_lib/card.js';
 import { help, share } from '../api/_lib/share.js';
@@ -43,6 +44,8 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   // Подарки друзьям в гостях и недельный турнир района (presents.ts, league.ts).
   '/api/presents': { method: 'POST', handler: presents },
   '/api/league': { method: 'POST', handler: league },
+  // Район: магазин дня, отметки «Был тут», полив теплицы другу, общая цель недели (town.ts).
+  '/api/town': { method: 'POST', handler: town },
   '/api/card': { method: 'POST', handler: card },
   '/api/share': { method: 'POST', handler: share },
   '/api/help': { method: 'POST', handler: help },

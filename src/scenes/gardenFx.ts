@@ -12,7 +12,7 @@ import { PRODUCTS } from '../game/economy';
 import { BEDS_MAX, bedLeft, bedsOf, bedStage, gardenLook, gardenRipe, gardenVisible, harvest, hasGarden, type Bed, type CropId } from '../game/garden';
 import { yearTime } from '../game/calendar';
 import { inZar } from '../game/zarshop';
-import { saveGame } from '../game/save';
+import { saveGame, savingPaused } from '../game/save';
 import { sound } from '../platform/sound';
 import { UI_FONT } from '../ui/dom';
 import { ART } from './common';
@@ -272,6 +272,11 @@ const leftText = (ms: number): string => {
 
 /** Нажали на двор: созрело — урожай на склад, нет — сколько ещё расти. */
 function tapGarden(scene: StoreScene, x: number, y: number): void {
+  // В гостях (свой магазин не сохраняется) двор только смотрят.
+  if (savingPaused()) {
+    scene.popup(x, y - 4, '🌱', '#d8f0d8');
+    return;
+  }
   const now = Date.now();
   const done = harvest(scene.state, now);
   if (!done) {
