@@ -686,6 +686,8 @@ export interface StoreState {
   ret?: import('./returns').ReturnState;
   /** Благоустройство района (hood.ts): что куплено и в какой день. */
   hood?: import('./hood').HoodState;
+  /** Арендаторы комнат флигеля (tenants.ts): кто снимает, по порядку комнат. */
+  tenants?: import('./tenants').TenantId[];
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */

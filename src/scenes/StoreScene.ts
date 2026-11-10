@@ -172,6 +172,10 @@ export class StoreScene extends Phaser.Scene {
   builtDistrict = '';
   /** Что из благоустройства района стояло на улице (hood.ts). */
   builtHood = '';
+  /** Арендаторы флигеля, с которыми построен мир (tenants.ts, tenantsLook). */
+  builtTenants = '';
+  /** Сколько посетителей арендаторов сейчас идёт по залу (scenes/tenantsFx.ts). */
+  tenantGuests = 0;
   /** Какой район построен (game/zarechye.ts zarLook): Центр или Заречье, шаг Сома, теплоход. */
   builtZar = '';
   /** Какие домики друзей стоят на «Улице друзей» (friendStreet.ts, game/street.ts streetKey). */

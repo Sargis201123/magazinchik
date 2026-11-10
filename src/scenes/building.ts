@@ -41,6 +41,7 @@ import * as motion from './motion';
 import * as effects from './effects';
 import * as lighting from './lighting';
 import * as decorations from './decorations';
+import * as tenantsFx from './tenantsFx';
 import * as food from './food';
 import * as staff from './staff';
 import * as shoppers from './shoppers';
@@ -692,7 +693,7 @@ export function freeSpot(scene: StoreScene, candidates: { x: number; y: number }
 /** Комнаты флигеля, в которые есть дверь из зала. */
 export function openRooms(scene: StoreScene): Room[] {
   const { warehouse, bakery, coffee, kitchen } = scene.layout;
-  return [warehouse, ...(food.bakeryOpen(scene) ? [bakery] : []), ...(food.coffeeOpen(scene) ? [coffee] : []), ...(kitchen && kitchenOpen(scene.state) ? [kitchen] : [])];
+  return [warehouse, ...(food.bakeryOpen(scene) ? [bakery] : []), ...(food.coffeeOpen(scene) ? [coffee] : []), ...(kitchen && kitchenOpen(scene.state) ? [kitchen] : []), ...tenantsFx.rentedRooms(scene)];
 }
 
 /**
@@ -719,6 +720,8 @@ export function buildWing(scene: StoreScene): void {
   buildRoom(scene, coffee, 'coffee', food.coffeeOpen(scene));
   if (scene.layout.kitchen) buildRoom(scene, scene.layout.kitchen, 'kitchen', kitchenOpen(scene.state));
   food.buildKitchen(scene);
+  // Комнаты под аренду над флигелем (game/tenants.ts).
+  tenantsFx.buildTenants(scene);
 }
 
 /**

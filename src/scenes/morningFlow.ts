@@ -11,6 +11,7 @@ import { seasonFor } from '../game/endless';
 import { saveGame } from '../game/save';
 import { branchLook } from '../game/branch';
 import { hoodLook } from '../game/hood';
+import { tenantsLook } from '../game/tenants';
 import { streetKey } from '../game/street';
 import { fetchStreet, streetInfo } from '../platform/multiplayer';
 import { t } from '../i18n';
@@ -200,7 +201,7 @@ export function showMorning(scene: StoreScene): void {
   const cupChanged = (contestOf(scene.state)?.wins ?? 0) !== scene.builtCup;
   const gift = scene.giftRebuild;
   scene.giftRebuild = false;
-  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
+  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   cars.refillParking(scene);
   scene.updateLighting(0);
   nightShift.openShop(scene);
@@ -253,7 +254,7 @@ export function showMorning(scene: StoreScene): void {
       // Переехали на сегодня в другой район (game/zarechye.ts) — другой магазин целиком, а не расширение.
       if (zarLook(s) !== scene.builtZar) scene.buildWorld();
       else if (s.level > scene.builtLevel) void effects.celebrateExpansion(scene);
-      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || zarLook(s) !== scene.builtZar) scene.buildWorld(bought);
+      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || tenantsLook(s) !== scene.builtTenants || zarLook(s) !== scene.builtZar) scene.buildWorld(bought);
       else {
         if (staffChanged) staff.syncStaff(scene);
         // Купили, позвали другого или отправили домой питомца за звёзды — только он, без перестройки зала.

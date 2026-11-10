@@ -6,6 +6,7 @@
 // внизу склад (ворота на улицу для подвоза), над ним пекарня, выше кофейня, в больших помещениях
 // над кофейней ещё кухня.
 
+import { TENANT_ROOMS } from '../game/tenants';
 import { STORE_LEVELS } from '../game/economy';
 
 export interface Point {
@@ -40,6 +41,11 @@ export interface Layout {
   kitchen?: Room;
   /** Флигель целиком (внутренняя часть комнат, без наружных стен). */
   wing: { x: number; y: number; w: number; h: number };
+  /**
+   * Комнаты под аренду (game/tenants.ts) над верхней комнатой флигеля, снизу вверх. Во флигель (wing) не входят:
+   * их стены рисует scenes/tenantsFx.ts, и только в Центре.
+   */
+  tenants: Room[];
 }
 
 /** Комната флигеля: прямоугольник внутри стен и дверь в левой стене зала. */
@@ -108,6 +114,8 @@ export const WING_W = 60;
 const BAKERY_H = 52;
 const COFFEE_H = 60;
 const KITCHEN_H = 52;
+/** Комната под аренду (game/tenants.ts). */
+const TENANT_H = 48;
 /** С какого помещения во флигеле есть кухня (улучшение «Кухня» — с того же уровня). */
 export const KITCHEN_FROM = 3;
 /** Сколько занимает флигель слева от зала вместе со стенами. */
@@ -165,6 +173,12 @@ export function layoutFor(level: number): Layout {
   const kitchenY = coffeeY - WING_WALL - KITCHEN_H;
   const kitchen = level >= KITCHEN_FROM ? room(kitchenY, KITCHEN_H, kitchenY + KITCHEN_H - 7) : undefined;
   const showcases: Point[] = [];
+  // Комнаты под аренду — над кухней (а где её нет — над кофейней), сколько положено помещению.
+  const tenants: Room[] = [];
+  for (let i = 0, roof = kitchen ? kitchenY : coffeeY; i < (TENANT_ROOMS[level] ?? 0); i++) {
+    roof -= WING_WALL + TENANT_H;
+    tenants.push(room(roof, TENANT_H, roof + TENANT_H - 7));
+  }
   return {
     w,
     h,
@@ -181,8 +195,15 @@ export function layoutFor(level: number): Layout {
     coffee,
     kitchen,
     wing: { x: roomX, y: kitchen ? kitchenY : coffeeY, w: whW, h: h - (kitchen ? kitchenY : coffeeY) },
+    tenants,
   };
 }
+
+// Комнаты под аренду помещаются во флигель: верхняя не выше задней стены зала.
+TENANT_ROOMS.forEach((n, i) => {
+  const top = layoutFor(i).tenants[n - 1];
+  if (top && top.y < 4) throw new Error(`layout ${i}: комната под аренду выше зала (${top.y})`);
+});
 
 // Каждое место под полку должно быть в планировке своего уровня.
 STORE_LEVELS.forEach((l, i) => {
