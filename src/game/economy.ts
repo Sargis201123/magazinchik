@@ -777,6 +777,8 @@ export interface DayStats {
   bestCombo: number;
   /** Чаевые за серию у кассы за день (входят в revenue). */
   seriesTips?: number;
+  /** Премия за час пик без потерь (rushHour.ts; в revenue не входит — как награды заданий). */
+  rushBonus?: number;
   /** Что заметили покупатели — для отзывов (reviews.ts). */
   notes?: Partial<Record<ReviewTopic, number>>;
   /** Выручка ночной смены (входит в revenue). */

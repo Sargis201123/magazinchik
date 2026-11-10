@@ -77,6 +77,7 @@ import type { LiveKind } from '../game/minievents';
 import { noteMoment } from '../game/moments';
 import { Moments } from './moments';
 import type { AttentionPlan } from '../game/attention';
+import { rushOutcome } from '../game/rushHour';
 import { allRows } from '../ui/today';
 import { RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
@@ -659,6 +660,8 @@ export class StoreScene extends Phaser.Scene {
   managerOnFloor = false;
   /** Ускорение дня (×1 или ×2). */
   speed = 1;
+  /** Час пик идёт: сколько было обслужено и ушло из очереди к его началу (game/rushHour.ts). */
+  private rushGoal?: { served: number; lost: number };
   /** Подписи отделов на полу сейчас видны (shelves.ts, showDeptNames): только в ближнем кадре. */
   deptNamesOn = false;
   /** Какой кадр сейчас просила сцена: ближний у касс (camera.ts, wantClose) или весь магазин. */
@@ -922,6 +925,25 @@ export class StoreScene extends Phaser.Scene {
       haptic.tap();
       sound.bell(this.layout.door.x);
       this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.rush'), '#fff3b0');
+      // Час пик без потерь (game/rushHour.ts): запомнить, с чего начали.
+      this.rushGoal = { served: this.stats.served, lost: this.stats.lostWhy?.queue ?? 0 };
+    }
+    // Час пик кончился: никто не ушёл из очереди — премия; ушли — сказать сколько (без штрафа).
+    if (!rush && this.rushGoal) {
+      const goal = this.rushGoal;
+      this.rushGoal = undefined;
+      const outcome = rushOutcome(this.stats.served - goal.served, (this.stats.lostWhy?.queue ?? 0) - goal.lost, this.state.level);
+      const { counter } = this.layout;
+      if (outcome.kind === 'clean') {
+        this.state = { ...this.state, money: this.state.money + outcome.bonus };
+        this.stats.rushBonus = (this.stats.rushBonus ?? 0) + outcome.bonus;
+        this.popup(counter.x - 14, counter.y - 56, t('popup.rushClean', { n: outcome.bonus }), '#c8ffb0');
+        effects.flyCoins(this, counter.x - 14, counter.y - 40, 5);
+        haptic.success();
+        sound.good();
+      } else if (outcome.kind === 'lost') {
+        this.popup(counter.x - 14, counter.y - 56, t('popup.rushLost', { n: outcome.lost }), '#ffd0d0');
+      }
     }
     // Кадр: в большом магазине днём — ближе к кассам (в час пик — всегда), а когда что-то в зале ждёт касания
     // или игрок выбрал общий план — весь магазин (camera.ts, wantClose). Двигаем, только когда решение сменилось.
@@ -970,6 +992,8 @@ export class StoreScene extends Phaser.Scene {
     // Та же подсказка, что у подсветки обучения (касса, полка), снизу не повторяется; другие (вор, мусор) — да.
     const coached = this.hallCoach && this.coach.pointing && (raw === t('hint.serve') || raw === t('hint.restock'));
     let hint = this.say.visible || coached ? '' : raw || newcomer.nudgeHint(this);
+    // Час пик: пока ничто другое не зовёт — напомнить, что делать и за что премия.
+    if (rush && !raw && !this.say.visible) hint = t('hint.rush');
     // Одна подсказка в одном месте: пока о кассе и полках говорят бабушка или подсветка обучения,
     // снизу о том же молчим (firstday.ts).
     if ((grannyStays(this.state) || (this.hallCoach && this.coach.active)) && (hint === t('hint.serve') || hint === t('hint.restock'))) hint = '';
@@ -1316,6 +1340,7 @@ export class StoreScene extends Phaser.Scene {
     this.setHurry(1);
     // Итоги и утро — в обычном кадре: ближний кадр у касс — только пока идёт торговля.
     this.closeWanted = false;
+    this.rushGoal = undefined;
     camera.rushFocus(this, false);
     // Подсказку зала («Нажми на мусор…») ставит только идущий день — иначе она висела под итогами и всё утро.
     this.hud.setHint('');

@@ -857,7 +857,9 @@ export async function visitToilet(scene: StoreScene, c: Customer): Promise<void>
 
 /** Касание кассы (или улицы внизу): хозяин пробивает того, кто ждёт у его кассы, или возвращается с дела. */
 export async function serveNext(scene: StoreScene, from = 0): Promise<void> {
-  // За кассой хозяина сменщик: касание его кассы (или улицы) торопит пробивку, касание чужой — ничего.
+  // Касание чужой кассы, за которой сейчас пробивает кассир, торопит его — как сменщика за своей.
+  if (from > 0 && hurryRegister(scene, from)) return;
+  // За кассой хозяина сменщик: касание его кассы (или улицы) торопит пробивку.
   if (scene.operator(0) !== 'owner') {
     if (from === 0) hurryRelief(scene);
     return;
@@ -890,7 +892,25 @@ export async function serveNext(scene: StoreScene, from = 0): Promise<void> {
 export function hurryRelief(scene: StoreScene): boolean {
   const r = scene.registers[0];
   if (!r || scene.operator(0) === 'owner') return false;
-  if (!r.scan || r.scan.byOwner || (r.scan.cut ?? 0) >= r.scan.total * RELIEF_HURRY_SHARE) return true;
+  hurry(scene, r);
+  return true;
+}
+
+/**
+ * Касание кассы, за которой пробивает кассир (не первой — та хозяина): торопит его так же, как сменщика.
+ * С 10.11: раньше касание чужой кассы ничего не делало, и в большом магазине с кассирами игроку днём было
+ * нечего нажимать. true — касса с кассиром за работой, касание ушло ему.
+ */
+export function hurryRegister(scene: StoreScene, index: number): boolean {
+  const r = scene.registers[index];
+  if (!r || index === 0 || !r.scan || r.scan.byOwner) return false;
+  hurry(scene, r);
+  return true;
+}
+
+/** Поторопить пробивку на кассе r: срезать ещё RELIEF_TAP_MS (не больше RELIEF_HURRY_SHARE от всей пробивки). */
+function hurry(scene: StoreScene, r: Register): void {
+  if (!r.scan || r.scan.byOwner || (r.scan.cut ?? 0) >= r.scan.total * RELIEF_HURRY_SHARE) return;
   r.hurry = Math.min(RELIEF_HURRY_MAX_MS, r.hurry + RELIEF_TAP_MS);
   haptic.tap();
   if (r.img) motion.squash(scene, r.img, 1.04, 0.94, 70);
@@ -898,12 +918,11 @@ export function hurryRelief(scene: StoreScene): boolean {
     scene.lastHurry = scene.time.now;
     scene.popup(r.counter.x, r.counter.y - 36, t('popup.hurry'), '#fff3b0');
   }
-  return true;
 }
 
-/** Пауза пробивки. У кассы хозяина её срезают касания (r.hurry), пока за кассой сменщик. */
+/** Пауза пробивки. Пока пробивает кассир (сменщик за кассой хозяина или кассир своей кассы), её срезают касания (r.hurry). */
 export async function scanWait(scene: StoreScene, r: Register, ms: number): Promise<void> {
-  if (scene.registers.indexOf(r) !== 0 || r.scan?.byOwner) return scene.wait(ms);
+  if (r.scan?.byOwner) return scene.wait(ms);
   let left = ms;
   while (left > 0) {
     // Касаниями пробивку не сделать мгновенной: срезать можно не больше RELIEF_HURRY_SHARE от неё.
