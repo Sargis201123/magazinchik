@@ -377,7 +377,7 @@ export function buildShell(scene: StoreScene): void {
   shade.fillRect(w + WALL, 2, 12, h + FACADE_H - 4);
   const style = facadeStyle(scene);
   scene.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, potTile(scene, style.texture)).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
-  scene.doorImg = scene.art(door.x, h + 5, 'door').setDepth(h + 2);
+  scene.doorImg = scene.art(door.x, h + 5, doorKey(scene.state.level, 0)).setDepth(h + 2);
   scene.doorSign = scene.art(door.x + 11, h + 8, scene.running ? 'door_sign_open' : 'door_sign_closed').setDepth(h + 42);
   // Витрины с маленькими навесами слева и справа от двери.
   const segments: [number, number][] = [
@@ -407,6 +407,15 @@ export function buildShell(scene: StoreScene): void {
       lighting.nightGlow(scene, scene.add.rectangle(-WALL, h + 1, w + 2 * WALL, 3, 0x9cd8ff).setOrigin(0), 0.6, undefined, { store: true });
     }
   }
+}
+
+/**
+ * Дверь по размеру помещения (art/doors.py): в ларьке и «Магазинчике» — деревянная с окошком и колокольчиком,
+ * в универмаге и гипермаркете — широкая раздвижная, между ними — прежняя стеклянная. open — насколько открыта (0…1).
+ */
+export function doorKey(level: number, open: number): string {
+  const base = level <= 1 ? 'door_wood' : level >= 4 ? 'door_wide' : 'door';
+  return open < 0.34 ? base : open < 0.67 ? `${base}_half` : `${base}_open`;
 }
 
 export function facadeStyle(scene: StoreScene): (typeof FACADE_STYLES)[number] {

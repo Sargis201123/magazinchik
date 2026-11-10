@@ -5320,6 +5320,9 @@ def main():
     import snowy
 
     snowy.main()
+    import doors
+
+    doors.main()
     import trolley
 
     trolley.main()
