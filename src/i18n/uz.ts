@@ -3131,6 +3131,18 @@ export const uz: Record<TextKey, string> = {
   "tenant.repair.desc": "Usta telefon tuzatadi, kalit yasaydi. Kutayotganlar zalda aylanadi.",
   "tenant.toys.name": "Oʻyinchoq avtomati",
   "tenant.toys.desc": "Oʻyinchoq avtomati va saqich sharchalari. Oʻzi ishlaydi, bolalar ota-onasini shu yerga tortadi.",
+  "garden.title": "Buvining issiqxonasi",
+  "garden.note": "Buvi dala hovlidan koʻchat yubordi. Hosil oʻzi oʻsadi, sen oʻyinda boʻlmasang ham — taxminan olti soat. Pishganda olma va kartoshka omborga bepul tushadi, koʻchat qayta ekiladi.",
+  "garden.build": "Issiqxona qurish · {n}",
+  "garden.built": "Issiqxona qurildi",
+  "garden.builtText": "Koʻchat ekildi — bir necha soatdan keyin kel",
+  "garden.left": "Oʻsmoqda: hosilgacha {h} soat {m} daqiqa",
+  "garden.ripe": "Issiqxona: hosil pishdi",
+  "garden.harvest": "Yigʻish",
+  "garden.got": "Hosil: {list} — omborga",
+  "garden.noRoom": "Hosil pishdi, lekin omborda joy yoʻq",
+  "garden.growing": "Hali oʻsmoqda",
+  "garden.count": "Yigʻilgan hosil: {n}",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

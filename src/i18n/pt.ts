@@ -3132,6 +3132,18 @@ export const pt: Record<TextKey, string> = {
   "tenant.repair.desc": "Um técnico conserta celulares e faz chaves. Enquanto esperam, as pessoas passeiam pela loja.",
   "tenant.toys.name": "Máquina de pelúcias",
   "tenant.toys.desc": "Uma máquina de pelúcias e chicletes de bola. Funciona sozinha — as crianças arrastam os pais para cá.",
+  "garden.title": "A estufa da vovó",
+  "garden.note": "A vovó mandou mudas do sítio. A colheita cresce sozinha, mesmo com você fora do jogo — cerca de seis horas. Quando amadurece, maçãs e batatas vão de graça para o estoque e as mudas são replantadas.",
+  "garden.build": "Montar a estufa · {n}",
+  "garden.built": "A estufa está de pé",
+  "garden.builtText": "As mudas estão plantadas — volte em algumas horas",
+  "garden.left": "Crescendo: colheita em {h} h {m} min",
+  "garden.ripe": "Estufa: a colheita está madura",
+  "garden.harvest": "Colher",
+  "garden.got": "Colheita: {list} — para o estoque",
+  "garden.noRoom": "A colheita está madura, mas o estoque está cheio",
+  "garden.growing": "Ainda crescendo",
+  "garden.count": "Colheitas feitas: {n}",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

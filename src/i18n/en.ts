@@ -3167,6 +3167,18 @@ export const en: Record<TextKey, string> = {
   "tenant.repair.desc": "A craftsman fixes phones and cuts keys. While they wait, people wander your aisles.",
   "tenant.toys.name": "Toy claw machine",
   "tenant.toys.desc": "A claw machine and gumballs. Runs itself — kids drag their parents here.",
+  "garden.title": "Grandma's greenhouse",
+  "garden.note": "Grandma sent seedlings from her dacha. The crop grows by itself, even while you are away — about six hours. When it is ripe, apples and potatoes go to your storeroom for free and new seedlings are planted.",
+  "garden.build": "Build the greenhouse · {n}",
+  "garden.built": "The greenhouse is up",
+  "garden.builtText": "Seedlings are in — check back in a few hours",
+  "garden.left": "Growing: ripe in {h} h {m} min",
+  "garden.ripe": "Greenhouse: the crop is ripe",
+  "garden.harvest": "Harvest",
+  "garden.got": "Harvest: {list} — to the storeroom",
+  "garden.noRoom": "The crop is ripe, but the storeroom is full",
+  "garden.growing": "Still growing",
+  "garden.count": "Harvests so far: {n}",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении). */

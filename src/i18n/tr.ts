@@ -3122,6 +3122,18 @@ export const tr: Record<TextKey, string> = {
   "tenant.repair.desc": "Usta telefon tamir eder, anahtar yapar. Beklerken mağazada dolaşırlar.",
   "tenant.toys.name": "Oyuncak makinesi",
   "tenant.toys.desc": "Oyuncak makinesi ve sakız topları. Kendi çalışır, çocuklar anne babalarını buraya çeker.",
+  "garden.title": "Büyükannenin serası",
+  "garden.note": "Büyükanne yazlıktan fide yolladı. Ürün kendi büyür, sen oyunda yokken bile — yaklaşık altı saat. Olgunlaşınca elma ve patates bedavaya depoya gider, fideler yeniden dikilir.",
+  "garden.build": "Serayı kur · {n}",
+  "garden.built": "Sera kuruldu",
+  "garden.builtText": "Fideler dikildi — birkaç saat sonra uğra",
+  "garden.left": "Büyüyor: {h} sa {m} dk sonra hasat",
+  "garden.ripe": "Sera: ürün olgunlaştı",
+  "garden.harvest": "Topla",
+  "garden.got": "Hasat: {list} — depoya",
+  "garden.noRoom": "Ürün olgun ama depoda yer yok",
+  "garden.growing": "Hâlâ büyüyor",
+  "garden.count": "Toplanan hasat: {n}",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */

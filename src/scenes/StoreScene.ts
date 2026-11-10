@@ -176,6 +176,10 @@ export class StoreScene extends Phaser.Scene {
   builtTenants = '';
   /** Сколько посетителей арендаторов сейчас идёт по залу (scenes/tenantsFx.ts). */
   tenantGuests = 0;
+  /** «Бабушкина теплица» в мире (scenes/gardenFx.ts): её картинки, стадия, с которой нарисована, и где стоит. */
+  gardenBox?: Phaser.GameObjects.Container;
+  builtGarden = '';
+  gardenAt?: { next: import('./layout').Layout; top: number };
   /** Какой район построен (game/zarechye.ts zarLook): Центр или Заречье, шаг Сома, теплоход. */
   builtZar = '';
   /** Какие домики друзей стоят на «Улице друзей» (friendStreet.ts, game/street.ts streetKey). */

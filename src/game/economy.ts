@@ -688,6 +688,8 @@ export interface StoreState {
   hood?: import('./hood').HoodState;
   /** Арендаторы комнат флигеля (tenants.ts): кто снимает, по порядку комнат. */
   tenants?: import('./tenants').TenantId[];
+  /** «Бабушкина теплица» (garden.ts): когда посажено и сколько урожаев собрано. */
+  garden?: import('./garden').GardenState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */

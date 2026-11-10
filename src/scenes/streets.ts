@@ -50,6 +50,7 @@ import * as persons from './persons';
 import * as newcomer from './newcomer';
 import * as building from './building';
 import * as friendStreet from './friendStreet';
+import * as gardenFx from './gardenFx';
 import * as zarFx from './zarechye';
 import { inZar } from '../game/zarechye';
 import { streetKey } from '../game/street';
@@ -546,6 +547,9 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
   }
   // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
   const districtAreas = zar ? [...zarFx.buildRiver(scene, next, top, left, width), ...cars.buildParking(scene, next, top)] : [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildBackStreet(scene, next), ...buildHood(scene, next, top), ...friendStreet.buildFriendStreet(scene, top)];
+  // «Бабушкина теплица» (game/garden.ts): на газоне перед магазином или в парке; стадию проверяем раз в 10 с.
+  gardenFx.buildGarden(scene, next, top);
+  if (!zar) scene.worldTimer(10000, () => scene.sys.isActive() && gardenFx.tickGarden(scene));
   if (zar) {
     // Район, благоустройство и улица друзей — в Центре: ключи те же, чтобы утро не перестраивало мир зря.
     scene.builtDistrict = districtKey(scene.state);

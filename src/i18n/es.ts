@@ -3122,6 +3122,18 @@ export const es: Record<TextKey, string> = {
   "tenant.repair.desc": "Un técnico arregla móviles y hace llaves. Mientras esperan, pasean por la tienda.",
   "tenant.toys.name": "Máquina de peluches",
   "tenant.toys.desc": "Una máquina de peluches y chicles de bola. Funciona sola: los niños arrastran aquí a sus padres.",
+  "garden.title": "El invernadero de la abuela",
+  "garden.note": "La abuela mandó plantones desde su casa de campo. La cosecha crece sola, incluso cuando no estás — unas seis horas. Cuando madura, las manzanas y las patatas van gratis al almacén y se planta de nuevo.",
+  "garden.build": "Montar el invernadero · {n}",
+  "garden.built": "El invernadero está listo",
+  "garden.builtText": "Los plantones están en tierra — vuelve en unas horas",
+  "garden.left": "Creciendo: cosecha en {h} h {m} min",
+  "garden.ripe": "Invernadero: la cosecha está madura",
+  "garden.harvest": "Cosechar",
+  "garden.got": "Cosecha: {list} — al almacén",
+  "garden.noRoom": "La cosecha está madura, pero el almacén está lleno",
+  "garden.growing": "Todavía crece",
+  "garden.count": "Cosechas recogidas: {n}",
 };
 
 /** Имена сотрудников (индекс хранится в сохранении; мужские и женские через одного, как в ruNames). */
