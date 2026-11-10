@@ -323,19 +323,19 @@ const LABEL_GAP = 12;
 export const brandRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 16, y: y - 22, w: 32, h: 36 });
 
 /**
- * Куда поставить полку «От бабушки» (своя марка): у входа, на свободном полу по обе стороны прохода к
- * двери, чуть выше нижней стены (перед полкой встаёт покупатель); потом — выше по залу у левой стены.
+ * Куда поставить полку «От бабушки» (своя марка): у входа, в нижнем ряду у нижней стены — как можно левее, к
+ * стене (перед полкой встаёт покупатель); нет места — выше по залу.
  * Не на местах под полки и кассы, не на ларе (ice), не в проходах и дверях.
  */
 export function brandSpotFor(layout: Layout, registers = 1, avoid: { x: number; y: number; w: number; h: number }[] = [], kiosks = 1): Point {
   const { w, h, door, wallH } = layout;
   const pad = 2;
   const blocked = [...fixtureBlocked(layout, registers, avoid, kiosks), { x: door.x - 16, y: h - 70, w: 32, h: 70 }];
-  const free = (p: Point) => {
+  const free = (p: Point, gap: number) => {
     const r = brandRect(p);
     // Перед полкой — место покупателя (18 точек вниз); над вывеской — зазор под подпись отдела на полу перед полкой
     // выше (она на 8–11 точек ниже её места, shelfRect его не покрывает).
-    const stand = { x: r.x, y: r.y - LABEL_GAP, w: r.w, h: r.h + 18 + LABEL_GAP };
+    const stand = { x: r.x, y: r.y - gap, w: r.w, h: r.h + 18 + gap };
     if (stand.x < 2 || stand.x + stand.w > w - 2 || r.y < wallH + 6 || stand.y + stand.h > h - 4) return false;
     return blocked.every((b) => stand.x + stand.w + pad <= b.x || b.x + b.w + pad <= stand.x || stand.y + stand.h + pad <= b.y || b.y + b.h + pad <= stand.y);
   };
@@ -343,8 +343,10 @@ export function brandSpotFor(layout: Layout, registers = 1, avoid: { x: number; 
   for (let y = h - 40; y >= wallH + 60; y -= 4) {
     const row: Point[] = [];
     for (let x = 20; x <= w - 20; x += 2) row.push({ x, y });
-    row.sort((a, b) => Math.abs(a.x - door.x) - Math.abs(b.x - door.x));
+    // 11.11 (решение автора 1а): к стене — в нижнем ряду самое левое свободное место, в угол у входа, а не посреди зала.
+    row.sort((a, b) => a.x - b.x);
     candidates.push(...row);
   }
-  return candidates.find(free) ?? { x: Math.max(20, door.x - 46), y: h - 40 };
+  // Тесный зал (между нижним рядом полок и стеной нет места на зазор под подпись) — вывеска может её прикрыть.
+  return candidates.find((p) => free(p, LABEL_GAP)) ?? candidates.find((p) => free(p, 0)) ?? { x: Math.max(20, door.x - 46), y: h - 40 };
 }

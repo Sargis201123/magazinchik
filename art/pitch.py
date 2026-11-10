@@ -15,6 +15,7 @@ WOOD, WOOD_D, WOOD_L = H("#8f563b"), H("#5e3a2a"), H("#b86f50")
 LEAF, LEAF_D, LEAF_L = H("#3e8948"), H("#265c42"), H("#63c74d")
 SOIL, SOIL_D = H("#733e39"), H("#3e2731")
 TIN, TIN_D, TIN_L = H("#8b9bb4"), H("#5a6988"), H("#c0cbdc")
+INK = H("#181425")
 
 
 def sprout(c, x, y, tall, seed):
@@ -205,7 +206,57 @@ def pitch_sign():
     c.save("pitch_sign")
 
 
+# ---------------------------------------------------------------- витрины
+
+VW, VH = 38, 11
+
+
+def vitrine(season):
+    """Сезонная выкладка в витрине магазина 38×11 (в мире 19×5.5) — встаёт в нижнюю часть стекла (building.ts).
+    11.11 (решение автора 1а): «остров сезона» переехал из середины зала в витрины."""
+    c = Canvas(VW, VH)
+    b = VH - 1
+    if season == "autumn":
+        hay, hay_d = H("#fee761"), H("#d4b44a")
+        c.rect(13, b - 5, 12, 5, hay)
+        c.hline(13, b - 3, 12, hay_d)
+        c.vline(16, b - 5, 5, H("#be4a2f"))
+        c.vline(21, b - 5, 5, H("#be4a2f"))
+        for x, y, r in ((7, b - 2, 2.6), (31, b - 2, 2.6), (19, b - 7, 2.4), (3, b - 1.5, 1.6), (35, b - 1.5, 1.6)):
+            pumpkin(c, x, y, r)
+    elif season == "winter":
+        c.rect(0, b - 1, VW, 2, H("#f4f4f4"))
+        fir(c, 19, b, 10)
+        c.px(19, b - 11, H("#fee761"))
+        for x, col, rib in ((6, H("#e43b44"), H("#fee761")), (11, H("#0099db"), H("#f4f4f4")), (27, H("#63c74d"), H("#e43b44")), (32, H("#b55088"), H("#fee761"))):
+            c.rect(x - 2, b - 4, 5, 4, col)
+            c.vline(x, b - 4, 4, rib)
+            c.hline(x - 2, b - 3, 5, rib)
+    elif season == "spring":
+        for i, col in enumerate((H("#e43b44"), H("#fee761"), H("#f6757a"), H("#b55088"), H("#e43b44"))):
+            x = 4 + i * 7
+            c.rect(x - 2, b - 3, 5, 4, H("#be4a2f"))
+            c.hline(x - 2, b - 3, 5, H("#d77643"))
+            c.vline(x, b - 7, 4, LEAF)
+            c.px(x - 1, b - 5, LEAF_L)
+            c.rect(x - 1, b - 9, 3, 2, col)
+            c.px(x, b - 10, col)
+    else:
+        for x, y in ((7, b - 2.5), (14, b - 2.5), (24, b - 2.5), (10.5, b - 6.5)):
+            c.ellipse(x, y, 3.2, 2.8, LEAF)
+            c.vline(int(x), int(y - 2), 4, LEAF_D)
+            c.px(int(x - 1), int(y - 1.5), LEAF_L)
+        c.ellipse(32, b - 2, 3.4, 3, LEAF)
+        c.ellipse(32, b - 2, 2.6, 2.2, H("#e43b44"))
+        c.px(31, b - 2, INK)
+        c.px(33, b - 3, INK)
+    c.outline("k")
+    c.save(f"vitrine_{season}")
+
+
 def main():
+    for season in ("spring", "summer", "autumn", "winter"):
+        vitrine(season)
     seedlings()
     icecream()
     pumpkins()
