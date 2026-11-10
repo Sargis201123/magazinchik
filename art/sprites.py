@@ -4760,7 +4760,7 @@ def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None, mood=None):
                     diff.putpixel((x, y), e.img.getpixel((x, y)))
         c.img.alpha_composite(diff.resize((S, S), Image.NEAREST))
     c.save(f"portrait_{name}" + (f"_{mood}" if mood else ""))
-    # Тот же герой без подложки — для иллюстраций сюжета (art/story_scenes.py), в игру не идёт.
+    # Тот же герой без подложки — рабочая копия (art/build/figures), в игру не идёт.
     fig = big.img.copy()
     if extras:
         fig.alpha_composite(diff.resize((S, S), Image.NEAREST))
@@ -5310,6 +5310,10 @@ def main():
     import family
 
     family.main()
+    # Иллюстрации глав сюжета (public/story).
+    import chapters
+
+    chapters.main()
     import fixtures
 
     fixtures.main()
