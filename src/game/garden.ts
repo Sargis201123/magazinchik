@@ -1,5 +1,5 @@
 // «Бабушкина теплица»: растёт по настоящему времени — и пока игрока нет в игре. Вернулся — урожай созрел:
-// яблоки и картофель бесплатно на склад, и рассада сразу посажена заново. Это повод зайти ещё раз сегодня или
+// яблоки и картофель бесплатно на овощной прилавок (11.11: раньше — на склад), и рассада сразу посажена заново. Это повод зайти ещё раз сегодня или
 // завтра, который видно в мире (scenes/gardenFx.ts), в «Главном на сегодня» и в «Развитии» (ui/garden.ts).
 // Время приходит снаружи (now): правила не читают часы сами — так их можно проверить тестом.
 //
@@ -8,7 +8,7 @@
 // картошка поспевает за два часа, яблоки с картошкой — за шесть, яблони — за двенадцать (больше всего за раз).
 // Друг в гостях может полить — урожай на час ближе. Варенье своей марки пару дней варят «из своих яблок».
 
-import { buyStock, sellableProducts, warehouseCapacity, warehouseCount, type ProductId, type StoreState } from './economy';
+import { canPlace, sellableProducts, shelfFree, type ProductId, type StoreState } from './economy';
 import { inZar } from './zarshop';
 
 export type CropId = 'quick' | 'mix' | 'apples';
@@ -156,9 +156,27 @@ export function water(state: StoreState, now: number, times = 1): StoreState | n
 /** Варенье своей марки сейчас варят из своих яблок (lines.ts поднимает спрос, меню об этом пишет). */
 export const ownJam = (state: StoreState): boolean => (state.garden?.own ?? 0) >= state.day && (state.lines?.jam ?? 0) > 0;
 
+/** Сколько ещё влезет на полки, куда ставят этот товар (овощной прилавок). */
+export const shelfRoomFor = (state: StoreState, id: ProductId): number =>
+  state.shelves.reduce((sum, shelf) => sum + (canPlace(id, shelf) ? Math.max(0, shelfFree(shelf)) : 0), 0);
+
+/** Поставить свежие штуки прямо на подходящие полки, по порядку; сколько встало. */
+function putOnShelves(state: StoreState, id: ProductId, qty: number): { state: StoreState; put: number } {
+  let left = qty;
+  const shelves = state.shelves.map((shelf) => {
+    const room = canPlace(id, shelf) ? Math.min(left, Math.max(0, shelfFree(shelf))) : 0;
+    if (room <= 0) return shelf;
+    left -= room;
+    return { ...shelf, items: { ...shelf.items, [id]: [...(shelf.items[id] ?? []), ...Array.from({ length: room }, () => ({ age: 0 }))] } };
+  });
+  return left === qty ? { state, put: 0 } : { state: { ...state, shelves }, put: qty - left };
+}
+
 /**
- * Собрать урожай со всех спелых грядок: сколько влезет на склад, бесплатно; рассада сажается заново.
- * null — ничего не созрело, мы в Заречье или на складе нет ни одного места (урожай подождёт).
+ * Собрать урожай со всех спелых грядок: бабушка несёт его прямо на овощной прилавок, бесплатно, склад не трогает
+ * (11.11, просьба автора: урожай забивал склад и вытеснял закупку). Ставится сколько влезет на полки; грядка, с которой
+ * ничего не встало, ждёт. Рассада сажается заново.
+ * null — ничего не созрело, мы в Заречье или на прилавке нет ни одного места (урожай подождёт).
  */
 export function harvest(state: StoreState, now: number): { state: StoreState; got: { id: ProductId; qty: number }[] } | null {
   if (inZar(state) || !state.garden || !gardenRipe(state, now)) return null;
@@ -169,14 +187,13 @@ export function harvest(state: StoreState, now: number): { state: StoreState; go
     if (!bedRipe(bed, now)) return bed;
     let took = false;
     for (const id of CROPS[bed.crop].gives.filter((crop) => sell.includes(crop))) {
-      const qty = Math.min(cropQty(state, bed.crop), warehouseCapacity(next) - warehouseCount(next));
-      const stocked = qty > 0 ? buyStock(next, id, qty, 0) : null;
-      if (!stocked) continue;
-      next = stocked;
+      const placed = putOnShelves(next, id, cropQty(state, bed.crop));
+      if (!placed.put) continue;
+      next = placed.state;
       took = true;
       const same = got.find((g) => g.id === id);
-      if (same) same.qty += qty;
-      else got.push({ id, qty });
+      if (same) same.qty += placed.put;
+      else got.push({ id, qty: placed.put });
     }
     return took ? { ...bed, since: now } : bed;
   });

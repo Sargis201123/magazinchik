@@ -5,7 +5,9 @@ import { averageLevelDays, simulate } from '../src/game/simulate';
 const days = Number(process.argv[2] ?? 120);
 const runs = Number(process.argv[3] ?? 20);
 
-const { days: log } = simulate({ days, seed: 1 });
+// Игрок сдаёт комнаты флигеля и ведёт бабушкин двор (simulate.ts, features tenants и garden) — как в игре с 11.11.
+const features = { tenants: true, garden: true };
+const { days: log } = simulate({ days, seed: 1, features });
 console.log('день ур  деньги   долг  ★    гости обсл ушли выручка закупка расходы прибыль вложения порча');
 for (const d of log.filter((x) => x.day <= 12 || x.day % 5 === 0)) {
   console.log(
@@ -29,6 +31,6 @@ for (const d of log.filter((x) => x.day <= 12 || x.day % 5 === 0)) {
 }
 
 console.log(`\nСредний день достижения уровня (${runs} прогонов, ${days} дней):`);
-averageLevelDays(days, runs).forEach((day, level) =>
+averageLevelDays(days, runs, features).forEach((day, level) =>
   console.log(`  ${level + 1}. ${STORE_LEVELS[level].nameKey}: ${day === null ? 'не достигнут' : `день ${day}`}`),
 );

@@ -80,6 +80,8 @@ import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, 
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from './zarechye';
 import { restockPlan } from './restock';
+import { addBed, bedsOf, buildGarden, GARDEN_PRICE, harvest, nextBedCost, plant, type CropId } from './garden';
+import { freeRooms, giveTenant, invitePitch, rentRoom, TENANT_IDS, TENANTS, tenantAsks, tenantsOf, upgradeCost as tenantUpCost, upgradeTenant } from './tenants';
 import { buyLine } from './reorder';
 import { bigDaySeed, setBigDaySeed } from './bigday';
 import { autoActive, autoArrived, autoMorning, autoTopUp, autoAvailable, autoToggle } from './autoorder';
@@ -246,7 +248,13 @@ export type Feature =
   // Благоустройство района (hood.ts): тратит лишнее — самое дешёвое, когда не копит на помещение.
   | 'hood'
   // Карьера сотрудников (career.ts): награждает «сотрудника месяца», повышает (ступень обучения) и ставит на филиал.
-  | 'career';
+  | 'career'
+  // Арендаторы флигеля (tenants.ts): сдаёт комнаты (самые выгодные — первыми), отделывает второй раз, зовёт сезонного
+  // торговца и носит арендаторам, что просят.
+  | 'tenants'
+  // Бабушкин двор (garden.ts): ставит теплицу, докапывает грядки, сажает «яблоки и картошку» и собирает урожай
+  // каждое утро — прямо на овощной прилавок.
+  | 'garden';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -254,6 +262,9 @@ const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy
 const SHELF_PRIORITY_DEPTS: Category[] = ['dairy', 'meat', 'drinks', 'produce', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat', 'drinks', 'frozen', 'bakery', 'household', 'dairy', 'produce', 'meat'];
 
 const AVG_WANTS = 1.5;
+/** Двор в симуляторе: игрок заходит раз в день, утром; время двора — по игровым дням. */
+const DAY_MS = 86_400_000;
+const SIM_CROP: CropId = 'mix';
 /** Сколько штук каждого товара держит новичок (buyMode: 'naive'). */
 const NAIVE_STOCK = 8;
 
@@ -719,6 +730,53 @@ export function simulate({
     // Доля дня, когда в зале пахнет хлебом.
     const aromaShare = Math.min(1, ((batches * AROMA_SECONDS) / DAY_SECONDS) * (1 - ovenBurn));
 
+    // ---------- Утро: двор и флигель ----------
+    if (features.garden) {
+      const now = state.day * DAY_MS;
+      const built = buildGarden(state, now);
+      if (built) {
+        state = built;
+        investments += GARDEN_PRICE;
+      }
+      const bedCost = nextBedCost(state);
+      if (bedCost !== null && state.money >= bedCost * 2 + reserve && canSplurge(bedCost)) {
+        const dug = addBed(state, now);
+        if (dug) {
+          state = dug;
+          investments += bedCost;
+        }
+      }
+      // Новая грядка вскопана под картошку — пересаживает под «яблоки и картошку» (за один заход в день с неё больше всего,
+      // а два вида делят прилавок).
+      bedsOf(state).forEach((bed, i) => {
+        if (bed.crop !== SIM_CROP) state = plant(state, i, SIM_CROP, now) ?? state;
+      });
+      state = harvest(state, now)?.state ?? state;
+    }
+    if (features.tenants) {
+      const best = [...TENANT_IDS].sort((a, b) => TENANTS[b].rent / TENANTS[b].setup - TENANTS[a].rent / TENANTS[a].setup);
+      for (const id of best) {
+        if (freeRooms(state) <= 0) break;
+        if (state.money < TENANTS[id].setup * 2 + reserve) continue;
+        const rented = rentRoom(state, id);
+        if (rented) {
+          state = rented;
+          investments += TENANTS[id].setup;
+        }
+      }
+      for (const id of tenantsOf(state)) {
+        const cost = tenantUpCost(id);
+        if (state.money < cost * 3 + reserve || !canSplurge(cost)) continue;
+        const up = upgradeTenant(state, id);
+        if (up) {
+          state = up;
+          investments += cost;
+        }
+      }
+      state = invitePitch(state) ?? state;
+      for (const ask of tenantAsks(state)) state = giveTenant(state, ask.id)?.state ?? state;
+    }
+
     // ---------- Утро: закупка ----------
     const sellable = sellableProducts(state);
     // Ярмарка: докупить на склад под лоток и продать через него (мимо кассы).
@@ -1163,8 +1221,8 @@ export function simulate({
 
 
 /** Средний результат по нескольким прогонам: день достижения каждого уровня. */
-export function averageLevelDays(days: number, runs: number): (number | null)[] {
-  const results = Array.from({ length: runs }, (_, i) => simulate({ days, seed: i + 1 }).levelDay);
+export function averageLevelDays(days: number, runs: number, features: SimOptions['features'] = {}): (number | null)[] {
+  const results = Array.from({ length: runs }, (_, i) => simulate({ days, seed: i + 1, features }).levelDay);
   return STORE_LEVELS.map((_, level) => {
     const reached = results.map((r) => r[level]).filter((d): d is number => d !== null);
     if (reached.length < runs / 2) return null;
