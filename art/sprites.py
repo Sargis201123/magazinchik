@@ -4731,6 +4731,9 @@ def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None, mood=None):
     p.ellipse(19.5, 16, 3.5, 6, shade(skin, 0.92))
     p.px(8, 14, skin)
     p.px(24, 14, shade(skin, 0.9))
+    # У героев сюжета — свой овал лица (HEADS): щёки, челюсть, подбородок.
+    if name in HEADS:
+        HEADS[name](p, skin)
     draw_hair(p, hair)
     big = Canvas(S, S)
     big.img = p.img.resize((S, S), Image.NEAREST)
@@ -4740,6 +4743,9 @@ def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None, mood=None):
         if big.get(x, y) == skin:
             big.px(x, y, shade(skin, 1.07))
     face(big, skin, hair, mood)
+    # И свои черты поверх общего лица (FEATURES): морщины, скулы, серьги, родинка.
+    if name in FEATURES:
+        FEATURES[name](big, skin, hair, mood)
     c.img.alpha_composite(big.img)
     if extras:
         e = Canvas(32, 32)
@@ -4760,6 +4766,135 @@ def portrait(name, bg, skin, hair, shirt, draw_hair, extras=None, mood=None):
         fig.alpha_composite(diff.resize((S, S), Image.NEAREST))
     FIGURES.mkdir(parents=True, exist_ok=True)
     fig.save(FIGURES / (f"{name}" + (f"_{mood}" if mood else "") + ".png"))
+
+
+# ---- Свои черты героев сюжета. Глаза и рот у всех в одной сетке (по ней диалог моргает и говорит,
+# src/ui/dialog.ts), поэтому меняем овал лица и добавляем детали вокруг — не двигая глаза и рот.
+
+CLEAR = (0, 0, 0, 0)
+GOLD = (254, 174, 52, 255)
+LIP = (200, 80, 90, 255)
+
+
+def head_grandma(p, skin):
+    """Мягкие полные щёки, округлый подбородок."""
+    p.ellipse(16, 17, 8, 5, skin)
+    p.ellipse(20.5, 18, 3, 4, shade(skin, 0.92))
+
+
+def head_valya(p, skin):
+    """Круглое лицо."""
+    p.ellipse(16, 15, 8.2, 7.5, skin)
+    p.ellipse(20.5, 16, 3, 5.5, shade(skin, 0.92))
+
+
+def head_marat(p, skin):
+    """Широкая квадратная челюсть."""
+    p.rect(9, 14, 14, 6, skin)
+    p.rect(10, 20, 12, 2, skin)
+    p.rect(20, 14, 3, 7, shade(skin, 0.92))
+
+
+def head_eduard(p, skin):
+    """Узкое лицо с острым подбородком: срезаем щёки."""
+    for y, (lo, hi) in ((17, (10, 21)), (18, (10, 21)), (19, (11, 20)), (20, (12, 19)), (21, (13, 18)), (22, (14, 17))):
+        for x in range(6, 26):
+            if x < lo or x > hi:
+                p.px(x, y, CLEAR)
+
+
+def head_sonya(p, skin):
+    """Детские щёки, маленький подбородок."""
+    p.ellipse(16, 16, 7.8, 6.5, skin)
+    p.ellipse(20, 17, 3, 4.5, shade(skin, 0.93))
+
+
+def feat_grandma(b, skin, hair, mood):
+    line = shade(skin, 0.8)
+    soft = shade(skin, 0.89)
+    # «Гусиные лапки», мешочки под глазами, складки у рта и подбородок.
+    for x, y in ((22, 30), (21, 31), (43, 30), (44, 31)):
+        b.px(x, y, line)
+    for ex in (24, 38):
+        b.hline(ex, 34, 4, soft)
+    for x, y in ((27, 36), (26, 37), (26, 38), (38, 36), (39, 37), (39, 38)):
+        b.px(x, y, line)
+    b.hline(30, 44, 5, soft)
+    # Брошь на кофте.
+    b.rect(31, 54, 3, 3, GOLD)
+    b.px(32, 55, rgb("#e43b44"))
+    b.px(31, 54, rgb("#fff0b0"))
+
+
+def feat_valya(b, skin, hair, mood):
+    # Серьги-капли, ресницы, родинка, помада.
+    for x in (17, 46):
+        b.rect(x, 33, 2, 2, GOLD)
+        b.px(x, 35, rgb("#fff0b0"))
+    if mood != "happy":
+        b.px(23, 27, rgba("k"))
+        b.px(42, 27, rgba("k"))
+    b.px(41, 36, shade(skin, 0.5))
+    for x, y in ((27, 36), (38, 36)):
+        b.px(x, y, shade(skin, 0.86))
+    if mood is None:
+        b.hline(30, 40, 5, LIP)
+
+
+def feat_marat(b, skin, hair, mood):
+    dot = shade(skin, 0.8)
+    # Щетина по челюсти и ямочки.
+    for x, y in ((22, 41), (25, 43), (28, 44), (36, 44), (39, 43), (42, 41)):
+        b.px(x, y, dot)
+    for x, y in ((26, 37), (39, 37)):
+        b.px(x, y, shade(skin, 0.84))
+    # Красный шейный платок повара.
+    red = rgb("#e43b44")
+    b.rect(26, 47, 12, 3, red)
+    b.hline(26, 49, 12, shade(red, 0.78))
+    b.rect(30, 50, 4, 3, red)
+    b.px(31, 51, shade(red, 0.78))
+
+
+def feat_eduard(b, skin, hair, mood):
+    line = shade(skin, 0.84)
+    # Скулы, тени под глазами, седые виски.
+    for x, y in ((22, 35), (23, 36), (24, 37), (42, 35), (41, 36), (40, 37)):
+        b.px(x, y, line)
+    for ex in (24, 38):
+        b.hline(ex, 33, 4, shade(skin, 0.88))
+    grey = rgb("#8b9bb4")
+    for x in (17, 46):
+        b.vline(x, 19, 4, grey)
+    # Усмешка на одну сторону — только в спокойном лице.
+    if mood is None:
+        b.px(28, 38, skin)
+        b.px(37, 37, shade(skin, 0.5))
+
+
+def feat_inspector(b, skin, hair, mood):
+    # Строгий взгляд из-под век, тонкие губы, родинка, белый воротничок.
+    if mood in (None, "angry", "sad"):
+        for ex in (24, 38):
+            b.hline(ex, 28, 4, shade(skin, 0.8))
+    if mood is None:
+        b.hline(30, 40, 5, LIP)
+    b.px(27, 37, shade(skin, 0.55))
+    white = rgb("#ffffff")
+    for i in range(4):
+        b.hline(25 + i, 49 + i, 3, white)
+        b.hline(36 - i, 49 + i, 3, white)
+
+
+def feat_sonya(b, skin, hair, mood):
+    # Веснушки.
+    dot = shade(skin, 0.8)
+    for x, y in ((22, 35), (24, 36), (26, 35), (39, 35), (41, 36), (43, 35)):
+        b.px(x, y, dot)
+
+
+HEADS = {"grandma": head_grandma, "valya": head_valya, "marat": head_marat, "eduard": head_eduard, "sonya": head_sonya}
+FEATURES = {"grandma": feat_grandma, "valya": feat_valya, "marat": feat_marat, "eduard": feat_eduard, "inspector": feat_inspector, "sonya": feat_sonya}
 
 
 def face(p, skin, hair, mood):
