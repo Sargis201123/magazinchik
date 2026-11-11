@@ -23,6 +23,7 @@ import * as camera from './camera';
 import * as lighting from './lighting';
 import * as motion from './motion';
 import * as persons from './persons';
+import type { Facing } from './stride';
 import { lineStreetSpots, streetTaken } from './brandLines';
 import { fairToday } from '../game/fair';
 import { weekFor } from '../game/weeks';
@@ -101,6 +102,8 @@ function buildRoom(scene: StoreScene, room: Room, id?: TenantId): void {
     g.fillStyle(0xb13e53, 1).fillRect(x + w - 13, room.doorway.y + 8, 9, 5);
     g.fillStyle(0xfee761, 1).fillRect(x + w - 12, room.doorway.y + 9, 7, 0.7).fillRect(x + w - 12, room.doorway.y + 11.3, 7, 0.7);
   }
+  // Абажур под потолком: в комнате светло, вечером — тёплый свет, как в настоящем магазинчике.
+  lighting.roomLamp(scene, x + w / 2, y + 14, y + h - 10, w * 0.9);
   // Вечером вывеска светится своим цветом; аптечная — мерцает.
   lighting.nightGlow(scene, scene.add.rectangle(x + w - 16, y + 7, 26, 9, NEON[id]), 0.3, undefined, id === 'pharmacy' ? { twinkle: 1.3 } : {});
   // Нажатие на комнату: отклик — значок и кивок работника.
@@ -139,6 +142,30 @@ function clerk(scene: StoreScene, x: number, y: number, shirt: number, depth: nu
   return man;
 }
 
+/**
+ * Работник комнаты не стоит столбом и не «скользит» (11.11, автор: «больше движений, влево-вправо»): ходит
+ * своим шагом между местами комнаты (dx, dy от её угла), на каждом поворачивается к делу, тянется и стоит пару
+ * секунд. Глубина постоянная (комната — своя картинка). В лёгкой графике стоит на первом месте.
+ */
+function bustle(scene: StoreScene, man: Phaser.GameObjects.Container, room: { x: number; y: number }, depth: number, spots: [number, number, Facing][]): void {
+  if (scene.lite) return;
+  const world = scene.worldGen;
+  // Шаг анимируется вместе с людьми зала (ноги идут); в подсчёты покупателей работник не попадает.
+  scene.people.add(man);
+  const alive = () => man.active && scene.worldGen === world;
+  void (async () => {
+    await scene.wait(Phaser.Math.Between(300, 1800));
+    for (let i = 1; alive(); i++) {
+      const [dx, dy, face] = spots[i % spots.length];
+      await persons.walkVia(scene, man, [{ x: room.x + dx, y: room.y + dy }], 14, { depth: () => depth, direct: true });
+      if (!alive()) return;
+      persons.setFacing(man, face);
+      motion.squash(scene, man, 0.96, 1.05, 120);
+      await scene.wait(Phaser.Math.Between(1300, 2800));
+    }
+  })();
+}
+
 /** Полка у задней стены с рядом коробок или баночек. */
 function wallShelf(g: Draw, x: number, y: number, w: number, colors: number[], seed: string): void {
   const rnd = new Phaser.Math.RandomDataGenerator([seed]);
@@ -162,7 +189,7 @@ const FURNISH: Record<TenantId, (scene: StoreScene, room: Room, g: Draw, back: D
     wallShelf(back, x + 4, y + 20, 40, [...KRAFT, 0xd8e8f8], 'pickup-b');
     const man = clerk(scene, x + 14, y + 27, 0xf77622, y + 29);
     // Работница ходит от стеллажа к стойке и обратно; по стойке едет посылка, сканер мигает.
-    loop(scene, { targets: man, x: x + 31, duration: 2600, yoyo: true, hold: 900, repeatDelay: 700 });
+    bustle(scene, man, { x, y }, y + 29, [[12, 27, 'up'], [30, 29, 'down'], [40, 27, 'up'], [30, 29, 'down']]);
     const parcel = scene.add.rectangle(x + 9, y + 31, 5, 3.6, KRAFT[2]).setStrokeStyle(0.5, 0x5a3420).setDepth(y + 31);
     loop(scene, { targets: parcel, x: x + 37, duration: 2400, ease: 'Linear', repeatDelay: 1500, alpha: { from: 1, to: 0.9 } });
     const beam = scene.add.rectangle(x + 32.5, y + 30.7, 3, 1.5, 0xe43b44).setDepth(y + 31);
@@ -187,7 +214,8 @@ const FURNISH: Record<TenantId, (scene: StoreScene, room: Room, g: Draw, back: D
     wallShelf(back, x + 4, y + 13, 40, [0xffffff, 0x5fcde4, 0xf6757a, 0x63c74d], 'pharm-a');
     wallShelf(back, x + 4, y + 20, 40, [0xffffff, 0xfee761, 0x5fcde4, 0xb55088], 'pharm-b');
     const man = clerk(scene, x + 18, y + 27, 0xffffff, y + 29);
-    loop(scene, { targets: man, x: x + 30, duration: 3200, yoyo: true, hold: 1400, repeatDelay: 1100 });
+    // Аптекарь ходит: к левому шкафу за лекарством, к витрине — подать, к правому шкафу.
+    bustle(scene, man, { x, y }, y + 29, [[12, 27, 'up'], [24, 29, 'down'], [37, 27, 'up'], [24, 29, 'down'], [30, 28, 'right']]);
     // На витрине мигает ценник-подсветка.
     const tag = scene.add.rectangle(x + 37, y + 33.2, 3, 1, 0xfee761).setDepth(y + 31);
     loop(scene, { targets: tag, alpha: 0.2, duration: 800, yoyo: true });
@@ -278,7 +306,8 @@ const FURNISH: Record<TenantId, (scene: StoreScene, room: Room, g: Draw, back: D
     persons.setFacing(client, 'up');
     client.setDepth(y + 39);
     const man = clerk(scene, x + 27, y + 38, 0xb55088, y + 40, 'up');
-    loop(scene, { targets: man, x: x + 25, duration: 600, yoyo: true, repeatDelay: 500 });
+    // Парикмахер обходит кресло: сбоку, сзади, за флаконом на полку и обратно.
+    bustle(scene, man, { x, y }, y + 40, [[27, 38, 'left'], [24, 34, 'left'], [40, 31, 'up'], [27, 38, 'left'], [10, 37, 'right']]);
     // Ножницы щёлкают, обрезки падают на пол.
     const snip = scene.add.container(x + 22, y + 31, [scene.add.rectangle(-0.8, 0, 2.4, 0.5, 0xc0cbdc).setAngle(25), scene.add.rectangle(-0.8, 0, 2.4, 0.5, 0xc0cbdc).setAngle(-25)]).setDepth(y + 41);
     loop(scene, { targets: snip, scaleY: 0.2, duration: 150, yoyo: true, repeatDelay: 240 });
@@ -311,7 +340,8 @@ const FURNISH: Record<TenantId, (scene: StoreScene, room: Room, g: Draw, back: D
     const pop = scene.add.circle(x + 39, y + 36.2, 3.4, 0xffffff).setDepth(y + 46).setAlpha(0);
     loop(scene, { targets: pop, alpha: { from: 0.9, to: 0 }, scale: { from: 0.6, to: 1.6 }, duration: 300, delay: 1500, repeatDelay: 4100 });
     const man = clerk(scene, x + 48, y + 41, 0x262b44, y + 43, 'up');
-    loop(scene, { targets: man, x: x + 46, duration: 900, yoyo: true, repeatDelay: 2100 });
+    // Фотограф: к камере, поправить табурет, к фону — и снова к камере.
+    bustle(scene, man, { x, y }, y + 43, [[48, 41, 'up'], [42, 40, 'left'], [36, 33, 'up'], [48, 41, 'up']]);
     return man;
   },
   // Банкомат и терминал: работают сами — экран мигает, из щели выезжает купюра, на стене бегут огоньки.
