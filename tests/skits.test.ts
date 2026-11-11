@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { newGame, onShelves, type StoreState } from '../src/game/economy';
-import { canPick, finishSkit, SKIT_FROM, SKIT_GAP, SKIT_IDS, SKITS, skitGuests, skitsOf, skitToday, walkSkit, type SkitId } from '../src/game/skits';
+import { askedOnce, canPick, finishSkit, SKIT_FROM, SKIT_GAP, SKIT_IDS, SKITS, skitGuests, skitsOf, skitToday, walkSkit, type SkitId } from '../src/game/skits';
 import { ru } from '../src/i18n/ru';
 import { bigDayFor } from '../src/game/bigday';
 import { isWet, weatherFor } from '../src/game/weather';
@@ -63,19 +63,35 @@ describe('сценки: дерево разговора', () => {
     }
   });
 
-  it('детектив: вор — парень в капюшоне; ошибся — минус рейтинг', () => {
+  it('детектив: допрос, прижать уликой — признание и лучший финал; просто указать — хуже; ошибся — минус рейтинг', () => {
     const s = dayOf('robbery', 10);
-    // Описание → свидетель → полиция → поговорить с парнем → назад → указать на него.
-    const right = finishSkit(s, 'robbery', [0, 1, 0, 2, 0, 3, 2])!;
+    // Описание → свидетель → полиция → курьер: где был → другой вопрос → к остальным → парень: рукав → прижать уликой.
+    const path = [0, 1, 0, 0, 0, 0, 3, 2, 2, 0, 0];
+    expect(walkSkit('robbery', path)!.node).toBe('right');
+    const right = finishSkit(s, 'robbery', path)!;
     expect(right.tone).toBe('great');
-    expect(right.state.money).toBe(s.money + 300);
+    expect(right.state.money).toBe(s.money + 400);
     expect(right.state.rating).toBeGreaterThan(s.rating);
+    const guess = finishSkit(s, 'robbery', [1, 3, 2])!;
+    expect(guess.tone).toBe('good');
     const wrong = finishSkit(s, 'robbery', [1, 3, 1])!;
     expect(wrong.tone).toBe('bad');
     expect(wrong.state.rating).toBeLessThan(s.rating);
     expect(skitsOf(wrong.state).done).toContain('robbery');
     expect(skitsOf(wrong.state).nextAt).toBe(s.day + SKIT_GAP);
     expect(skitToday(wrong.state)).toBeNull();
+  });
+
+  it('выбранные ответы помнятся; заданный вопрос второй раз не задают, к подозреваемому вернуться можно', () => {
+    const walk = walkSkit('robbery', [1, 0, 0, 0, 3])!;
+    expect(walk.node).toBe('police');
+    expect(walk.picked.has('police:0')).toBe(true);
+    expect(walk.picked.has('ruslan:0')).toBe(true);
+    const police = SKITS.robbery.nodes.police.options!;
+    const ruslan = SKITS.robbery.nodes.ruslan.options!;
+    expect(askedOnce('robbery', 'police', police[0])).toBe(false);
+    expect(askedOnce('robbery', 'ruslan', ruslan[0])).toBe(true);
+    expect(askedOnce('robbery', 'ruslan', ruslan[3])).toBe(false);
   });
 
   it('прямой эфир: финал по очкам', () => {
