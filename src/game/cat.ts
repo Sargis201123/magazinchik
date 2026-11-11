@@ -42,6 +42,37 @@ export interface ShopCat {
   bed?: CatBedId;
   /** Сколько котик принёс за всё время: чаевые «за котика» и утренние находки (11.11). */
   tips?: number;
+  /** Купленные наряды и надетый сейчас (11.11). */
+  outfits?: CatOutfitId[];
+  outfit?: CatOutfitId;
+}
+
+/**
+ * Одежда котика (11.11, автор: «добавь одежду для собачек и кошек»): за монеты, носится в зале (scenes/pets.ts
+ * syncOutfits — слой поверх кадров). Нарядный кот чуть удачливее — покупатели улыбаются и щедрее на чаевые.
+ */
+export type CatOutfitId = 'bell' | 'bow' | 'scarf';
+export const CAT_OUTFITS: Record<CatOutfitId, { price: number; icon: string }> = {
+  bell: { price: 150, icon: '🔔' },
+  bow: { price: 200, icon: '🎀' },
+  scarf: { price: 250, icon: '🧣' },
+};
+export const CAT_OUTFIT_IDS = Object.keys(CAT_OUTFITS) as CatOutfitId[];
+/** Прибавка к удаче кота, пока он в наряде. */
+export const CAT_OUTFIT_LUCK = 0.01;
+
+/** Купить наряд и сразу надеть. null — кота нет, уже куплен или не хватает денег. */
+export function buyCatOutfit(state: StoreState, id: CatOutfitId): StoreState | null {
+  const cat = state.cat;
+  if (!cat || cat.outfits?.includes(id) || state.money < CAT_OUTFITS[id].price) return null;
+  return { ...state, money: state.money - CAT_OUTFITS[id].price, cat: { ...cat, outfits: [...(cat.outfits ?? []), id], outfit: id } };
+}
+
+/** Надеть купленный наряд (undefined — снять). */
+export function wearCatOutfit(state: StoreState, id: CatOutfitId | undefined): StoreState | null {
+  const cat = state.cat;
+  if (!cat || (id && !cat.outfits?.includes(id))) return null;
+  return { ...state, cat: { ...cat, outfit: id } };
 }
 
 export const catOffer = (state: StoreState): boolean => !state.cat && state.day >= CAT_FROM_DAY && (state.catAsk ?? 0) <= state.day;
@@ -87,12 +118,13 @@ export function feedCat(state: StoreState): StoreState | null {
 export function catLuck(state: StoreState): number {
   const cat = state.cat;
   if (!cat || catAway(state)) return 0;
-  const luck = cat.bed ? CAT_BEDS[cat.bed].luck : CAT_BASE_LUCK;
+  const luck = fedLuck(state);
   return fedToday(state) ? luck : luck / 2;
 }
 
 /** То же, если кот сыт сегодня — для карточки: «вот что даёт сытый котик». */
-const fedLuck = (state: StoreState): number => (state.cat?.bed ? CAT_BEDS[state.cat.bed].luck : CAT_BASE_LUCK);
+export const fedLuck = (state: StoreState): number =>
+  (state.cat?.bed ? CAT_BEDS[state.cat.bed].luck : CAT_BASE_LUCK) + (state.cat?.outfit ? CAT_OUTFIT_LUCK : 0);
 export const catPatienceFed = (state: StoreState): number => 1 + 2 * fedLuck(state);
 export const catTipChanceFed = (state: StoreState): number => 2.5 * fedLuck(state);
 

@@ -123,6 +123,7 @@ import * as motion from './motion';
 import * as effects from './effects';
 import * as pixelFx from './pixelFx';
 import * as pets from './pets';
+import * as petOutfits from './petOutfits';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
@@ -897,6 +898,8 @@ export class StoreScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     camera.cullView(this);
+    // Наряды питомцев — и пока день стоит (утро, итоги): кот дышит во сне и тогда.
+    petOutfits.syncOutfits(this);
     shelves.showDeptNames(this);
     camera.measureFps(this, deltaMs);
     morningFlow.watchStall(this, deltaMs);

@@ -559,7 +559,7 @@ export const SPRITES = [
  * fxSheets.ts — scripts/fx-bake.mjs). Сборка берёт их по началу имени файла в
  * public/assets, игра — из своих списков (worldTextures.ts); что списки совпадают, следит tests/textures.test.ts.
  */
-export const FAMILIES: readonly RegExp[] = [/^item_/, /^crate_/, /^w_/, /^fx_/];
+export const FAMILIES: readonly RegExp[] = [/^item_/, /^crate_/, /^w_/, /^fx_/, /^ovl_/];
 
 /** Что класть в атлас, по именам файлов public/assets (без .png): спрайты из списка и найденные семейства. */
 export const atlasKeysFrom = (names: readonly string[]): string[] => [

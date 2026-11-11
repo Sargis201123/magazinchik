@@ -160,7 +160,6 @@ import { activeWar, answerWar } from '../game/war';
 import {
   adoptCat,
   buyBed,
-  CAT_BASE_LUCK,
   CAT_BED_IDS,
   CAT_BEDS,
   CAT_FROM_DAY,
@@ -175,6 +174,12 @@ import {
   CAT_TIP,
   catPatienceFed,
   catTipChanceFed,
+  fedLuck,
+  buyCatOutfit,
+  wearCatOutfit,
+  CAT_OUTFITS,
+  CAT_OUTFIT_IDS,
+  CAT_OUTFIT_LUCK,
 } from '../game/cat';
 import { holidayFor } from '../game/calendar';
 import { dialogBox, VOICE } from './dialog';
@@ -213,7 +218,22 @@ import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, STAR_PACKS,
 import { IS_YANDEX } from '../platform/target';
 import { buyWithStars, starsAvailable, starsOffKey } from '../platform/stars';
 import { petsBox } from './pets';
-import { adoptDog, DOG_FOOD, DOG_FROM_DAY, DOG_PRICE, securityOf, dogCatch, KENNELS, kennelOf, upgradeKennel } from '../game/watch';
+import {
+  adoptDog,
+  buyDogOutfit,
+  DOG_FOOD,
+  DOG_FROM_DAY,
+  DOG_OUTFIT_CATCH,
+  DOG_OUTFIT_IDS,
+  DOG_OUTFITS,
+  DOG_PRICE,
+  securityOf,
+  dogCatch,
+  KENNELS,
+  kennelOf,
+  upgradeKennel,
+  wearDogOutfit,
+} from '../game/watch';
 import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
 import { flushSoon, track } from '../platform/analytics';
 import { MORNING_TABS, openAllTabs, openTabs, seeTab, tabNew, tabOpen, unlockTab } from '../game/onboarding';
@@ -461,6 +481,30 @@ function artRow(texture: string, opts: { name: string; price?: number; sub?: str
   const actions = el('div', 'ui-item-actions');
   actions.append(...opts.actions);
   row.append(img, body, actions);
+  return row;
+}
+
+/**
+ * Строка наряда питомца (11.11): питомец с надетой вещью (кадр и слой поверх — как в зале), цена или «Надеть»/«Снять».
+ */
+function outfitRow(base: string, overlay: string, opts: { name: string; price: number; owned: boolean; worn: boolean; sub: string; money: number; buy: () => void; wear: () => void; off: () => void }): HTMLElement {
+  const action = opts.worn
+    ? button(t('pet.outfit.off'), opts.off, 'ui-chip secondary')
+    : opts.owned
+      ? button(t('pet.outfit.wear'), opts.wear, 'ui-chip')
+      : button(t('upgrade.buy'), opts.buy, 'ui-chip', opts.money < opts.price);
+  const row = artRow(base, { name: opts.worn ? `${opts.name} ✓` : opts.name, price: opts.owned ? undefined : opts.price, sub: opts.sub, actions: [action] });
+  const img = row.querySelector('img');
+  if (img) {
+    const wrap = el('div');
+    wrap.style.cssText = 'position:relative;width:32px;height:32px;justify-self:center';
+    const top = el('img', 'ui-item-art');
+    top.src = sheetPng(overlay);
+    top.alt = '';
+    img.style.cssText = top.style.cssText = 'position:absolute;inset:0';
+    img.replaceWith(wrap);
+    wrap.append(img, top);
+  }
   return row;
 }
 
@@ -2408,7 +2452,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       box.append(el('b', '', '🐱'), el('div', 'ui-muted', state.day < CAT_FROM_DAY ? t('cat.none', { n: CAT_FROM_DAY }) : t('cat.later')));
       return box;
     }
-    const luck = Math.round((cat.bed ? CAT_BEDS[cat.bed].luck : CAT_BASE_LUCK) * 100);
+    const luck = Math.round(fedLuck(state) * 100);
     const status = catAway(state) ? t('cat.away') : fedToday(state) ? t('cat.fed', { n: luck }) : t('cat.hungry', { n: Math.round(luck / 2) });
     const fed = fedToday(state);
     box.append(
@@ -2440,7 +2484,24 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         }),
       );
     }
-    box.append(el('div', 'ui-muted', t('cat.starsSoon')));
+    // Одежда (11.11): носится в зале, нарядный кот чуть удачливее.
+    box.append(el('div', 'ui-decor-kind', t('pet.outfit.title')));
+    for (const id of CAT_OUTFIT_IDS) {
+      const item = CAT_OUTFITS[id];
+      box.append(
+        outfitRow('cat_sit0', `ovl_cat_sit0_${id}`, {
+          name: `${item.icon} ${t(`cat.outfit.${id}` as TextKey)}`,
+          price: item.price,
+          owned: Boolean(cat.outfits?.includes(id)),
+          worn: cat.outfit === id,
+          sub: t('cat.outfit.sub', { n: Math.round(CAT_OUTFIT_LUCK * 100) }),
+          money: state.money,
+          buy: () => update(buyCatOutfit(getState(), id), 'success'),
+          wear: () => update(wearCatOutfit(getState(), id)),
+          off: () => update(wearCatOutfit(getState(), undefined)),
+        }),
+      );
+    }
     return box;
   };
 
@@ -2933,6 +2994,24 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         }),
       );
     });
+    // Одежда Бобика (11.11): носится у входа, в наряде Бобик бодрее.
+    box.append(el('div', 'ui-decor-kind', t('pet.outfit.title')));
+    for (const id of DOG_OUTFIT_IDS) {
+      const item = DOG_OUTFITS[id];
+      box.append(
+        outfitRow('bobik_sit0', `ovl_bobik_sit0_${id}`, {
+          name: `${item.icon} ${t(`watch.outfit.${id}` as TextKey)}`,
+          price: item.price,
+          owned: Boolean(dog.outfits?.includes(id)),
+          worn: dog.outfit === id,
+          sub: t('watch.outfit.sub', { p: Math.round(DOG_OUTFIT_CATCH * 100) }),
+          money: state.money,
+          buy: () => update(buyDogOutfit(getState(), id), 'success'),
+          wear: () => update(wearDogOutfit(getState(), id)),
+          off: () => update(wearDogOutfit(getState(), undefined)),
+        }),
+      );
+    }
     return box;
   };
 
