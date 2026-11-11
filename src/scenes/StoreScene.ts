@@ -144,6 +144,7 @@ import * as newcomer from './newcomer';
 import * as camera from './camera';
 import * as gardenFx from './gardenFx';
 import * as shelves from './shelves';
+import * as skitsFx from './skitsFx';
 import * as building from './building';
 import * as collections from './collections';
 
@@ -614,6 +615,8 @@ export class StoreScene extends Phaser.Scene {
   jury: 'none' | 'pending' | 'here' | 'done' = 'none';
   /** Соня сегодня заглянет в магазин (сюжет «Папа и Соня»). */
   sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
+  /** Сценка дня (skitsFx.ts): какая и где она сейчас. */
+  skit: { id: import('../game/skits').SkitId; ep: number; phase: 'pending' | 'here' | 'done' } | null = null;
   /** Праздничный гость сегодня (game/live.ts): кто, ждём / пришёл / ушёл и настоящая дата визита. */
   liveGuest: { who: GuestId; phase: 'pending' | 'here' | 'done'; date: string } | null = null;
   catHome = { x: 0, y: 0 };
@@ -980,6 +983,9 @@ export class StoreScene extends Phaser.Scene {
     if (!this.night && this.jury === 'pending' && elapsed >= JURY_AT) void shoppers.runJury(this);
     if (!this.night && this.sonya === 'pending' && elapsed >= SONYA_AT) void this.runSonya();
     if (!this.night && this.liveGuest?.phase === 'pending' && elapsed >= LIVE_GUEST_AT) void shoppers.runLiveGuest(this);
+    // Сценка дня — когда остальные гости сюжета уже ушли: два разговора сразу не начинаются.
+    const busy = this.inspector === 'here' || this.jury === 'here' || this.sonya === 'here' || this.liveGuest?.phase === 'here';
+    if (!this.night && this.skit?.phase === 'pending' && elapsed >= skitsFx.SKIT_AT && this.timeLeft > 0 && !busy) void skitsFx.runSkit(this);
     if (!this.night) this.moments.tick(elapsed, deltaMs);
     weeksFx.tick(this);
 
@@ -995,7 +1001,7 @@ export class StoreScene extends Phaser.Scene {
           spawnIntervalToday(this.state) / (rush ? 2 : 1) / weeksFx.crowd(this) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : 1);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
       }
-    } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here' && this.liveGuest?.phase !== 'here') {
+    } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here' && this.liveGuest?.phase !== 'here' && this.skit?.phase !== 'here') {
       this.endOfDay();
       // День закрыт: остаток кадра (подсказка зала, часы «Закрываемся…») — уже не про него. Раньше подсказка,
       // поставленная в этом же кадре, оставалась висеть под итогами и всё следующее утро.
@@ -1282,6 +1288,7 @@ export class StoreScene extends Phaser.Scene {
     if (this.inspector === 'here') this.inspector = this.inspection ? 'done' : 'pending';
     if (this.jury === 'here') this.jury = 'pending';
     if (this.sonya === 'here') this.sonya = 'pending';
+    if (this.skit?.phase === 'here') this.skit.phase = 'pending';
     if (this.running) this.awaitingBoxes = 0;
   }
 

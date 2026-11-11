@@ -666,6 +666,8 @@ export interface StoreState {
   pets?: import('./pets').PetsState;
   /** Истории постоянных покупателей (tales.ts). */
   tales?: TalesState;
+  /** Сценки дня (skits.ts): идущая история, законченные, прибавка гостей. */
+  skits?: import('./skits').SkitsState;
   /** Хроники района после финала: истории постоянных, договор с кафе, летний помощник (arcs.ts). */
   arcs?: import('./arcs').ArcsState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */

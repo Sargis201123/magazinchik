@@ -58,6 +58,7 @@ import { fairToday } from '../game/fair';
 import { takeLiteNote } from '../platform/quality';
 import { quietDays } from '../game/firstday';
 import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
+import * as skitsFx from './skitsFx';
 import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -618,6 +619,7 @@ export function prepareDay(scene: StoreScene): void {
   scene.inspector = scene.state.plan?.inspection ? 'pending' : 'none';
   scene.jury = juryDay(scene.state) ? 'pending' : 'none';
   scene.sonya = sonyaVisits(scene.state) ? 'pending' : 'none';
+  skitsFx.armSkit(scene);
   // Праздничный гость — раз за настоящий день, сколько игровых дней ни сыграй. В первый день
   // (бабушка показывает магазин) не заходит: новичку и так есть на что смотреть.
   const today = todayLocal();
