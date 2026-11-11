@@ -14,8 +14,34 @@ export const DOG_DAY_CATCH = 0.4;
 export const DOG_FROM_DAY = 8;
 
 export interface Security {
-  /** kennel — какая будка (0 — простая, 1 — утеплённая, 2 — домик). */
-  dog?: { since: number; kennel?: number };
+  /** kennel — какая будка (0 — простая, 1 — утеплённая, 2 — домик); outfits/outfit — одежда (11.11). */
+  dog?: { since: number; kennel?: number; outfits?: DogOutfitId[]; outfit?: DogOutfitId };
+}
+
+/** Одежда Бобика (11.11): за монеты, носится в зале. В наряде Бобик бодрее — чаще замечает воришку. */
+export type DogOutfitId = 'bandana' | 'bowtie' | 'sweater';
+export const DOG_OUTFITS: Record<DogOutfitId, { price: number; icon: string }> = {
+  bandana: { price: 150, icon: '🧣' },
+  bowtie: { price: 200, icon: '🎀' },
+  sweater: { price: 300, icon: '🧶' },
+};
+export const DOG_OUTFIT_IDS = Object.keys(DOG_OUTFITS) as DogOutfitId[];
+/** Прибавка к поимке воришки, пока Бобик в наряде. */
+export const DOG_OUTFIT_CATCH = 0.03;
+
+/** Купить наряд Бобику и сразу надеть. */
+export function buyDogOutfit(state: StoreState, id: DogOutfitId): StoreState | null {
+  const dog = state.security?.dog;
+  if (!dog || dog.outfits?.includes(id) || state.money < DOG_OUTFITS[id].price) return null;
+  const next = { ...dog, outfits: [...(dog.outfits ?? []), id], outfit: id };
+  return { ...state, money: state.money - DOG_OUTFITS[id].price, security: { ...securityOf(state), dog: next } };
+}
+
+/** Надеть купленный наряд (undefined — снять). */
+export function wearDogOutfit(state: StoreState, id: DogOutfitId | undefined): StoreState | null {
+  const dog = state.security?.dog;
+  if (!dog || (id && !dog.outfits?.includes(id))) return null;
+  return { ...state, security: { ...securityOf(state), dog: { ...dog, outfit: id } } };
 }
 
 /**
@@ -30,7 +56,8 @@ export const KENNELS = [
 
 export const kennelOf = (state: StoreState): number => Math.min(KENNELS.length - 1, Math.max(0, state.security?.dog?.kennel ?? 0));
 /** Как часто Бобик днём ловит воришку — от будки. */
-export const dogCatch = (state: StoreState): number => (hasDog(state) ? KENNELS[kennelOf(state)].catch : 0);
+export const dogCatch = (state: StoreState): number =>
+  hasDog(state) ? KENNELS[kennelOf(state)].catch + (state.security?.dog?.outfit ? DOG_OUTFIT_CATCH : 0) : 0;
 /** Гости от домика Бобика (дети приходят погладить). */
 export const dogGuests = (state: StoreState): number => 1 + (hasDog(state) ? KENNELS[kennelOf(state)].guests : 0);
 
