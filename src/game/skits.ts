@@ -68,8 +68,10 @@ export interface Skit {
 const end = (who: string, mood: SkitMood, tone: SkitTone, effect: SkitEffect = {}): SkitNode => ({ who, mood, end: { tone, effect } });
 
 export const SKITS: Record<SkitId, Skit> = {
-  // Детектив: у входа вырвали сумочку. Улики — запах краски, капюшон, свежая краска на перилах (видел Фёдор
-  // Иванович) и пятно на рукаве (камера). Вор — парень в капюшоне: он «облокотился» на те самые перила.
+  // Детектив: у входа вырвали сумочку. Улики — запах краски, капюшон, свежая белая краска на перилах (видел Фёдор
+  // Иванович) и пятно на рукаве (камера). Подозреваемых трое, у каждого — три вопроса; кто-то путается в показаниях.
+  // Вор — парень в капюшоне: «облокотился» на те самые перила. Прижать его уликой — признается (лучший финал);
+  // просто указать на него — тоже поймали, но похуже; на другого — ошибка.
   robbery: {
     from: 10,
     guest: 'galina',
@@ -81,11 +83,22 @@ export const SKITS: Record<SkitId, Skit> = {
       witness: { who: 'fyodor', mood: 'surprised', options: [{ to: 'police' }, { to: 'camera' }] },
       camera: { who: 'galina', mood: 'surprised', options: [{ to: 'police' }] },
       police: { who: 'police', mood: null, options: [{ to: 'ruslan' }, { to: 'painter' }, { to: 'hoodie' }, { to: 'accuse' }] },
-      ruslan: { who: 'ruslan', mood: 'sad', options: [{ to: 'police' }] },
-      painter: { who: 'painter', mood: 'angry', options: [{ to: 'police' }] },
-      hoodie: { who: 'hoodie', mood: 'surprised', options: [{ to: 'police' }] },
-      accuse: { who: 'police', mood: null, options: [{ to: 'wrong' }, { to: 'wrong' }, { to: 'right' }] },
-      right: end('galina', 'happy', 'great', { money: 300, rating: 0.1, boost: [0.08, 5] }),
+      ruslan: { who: 'ruslan', mood: 'sad', options: [{ to: 'ruslanWhere' }, { to: 'ruslanRun' }, { to: 'ruslanSleeves' }, { to: 'police' }] },
+      ruslanWhere: { who: 'ruslan', mood: null, options: [{ to: 'ruslan' }] },
+      ruslanRun: { who: 'ruslan', mood: 'sad', options: [{ to: 'ruslan' }] },
+      ruslanSleeves: { who: 'ruslan', mood: 'happy', options: [{ to: 'ruslan' }] },
+      painter: { who: 'painter', mood: 'angry', options: [{ to: 'painterWhere' }, { to: 'painterSmell' }, { to: 'painterRun' }, { to: 'police' }] },
+      painterWhere: { who: 'painter', mood: null, options: [{ to: 'painter' }] },
+      painterSmell: { who: 'painter', mood: 'angry', options: [{ to: 'painter' }] },
+      painterRun: { who: 'painter', mood: null, options: [{ to: 'painter' }] },
+      hoodie: { who: 'hoodie', mood: 'surprised', options: [{ to: 'hoodieWhere' }, { to: 'hoodieRun' }, { to: 'hoodieSleeve' }, { to: 'police' }] },
+      hoodieWhere: { who: 'hoodie', mood: 'sad', options: [{ to: 'hoodie' }] },
+      hoodieRun: { who: 'hoodie', mood: 'surprised', options: [{ to: 'hoodie' }] },
+      hoodieSleeve: { who: 'hoodie', mood: 'surprised', options: [{ to: 'confess' }, { to: 'hoodie' }] },
+      confess: { who: 'hoodie', mood: 'sad', options: [{ to: 'right' }] },
+      accuse: { who: 'police', mood: null, options: [{ to: 'wrong' }, { to: 'wrong' }, { to: 'rightGuess' }] },
+      right: end('galina', 'happy', 'great', { money: 400, rating: 0.12, boost: [0.1, 5] }),
+      rightGuess: end('galina', 'happy', 'good', { money: 200, rating: 0.06 }),
       wrong: end('police', 'sad', 'bad', { rating: -0.04 }),
     },
   },
@@ -253,6 +266,8 @@ export function canPick(state: StoreState, option: SkitOption): boolean {
 export interface SkitWalk {
   /** Узел, на котором остановились: реплика с вариантами или финал. */
   node: string;
+  /** Какие ответы уже выбирали: «узел:номер» — окно показывает их серыми с галочкой. */
+  picked: Set<string>;
   score: number;
   /** Что ответы уже стоили по пути (товар, деньги). */
   spent: SkitEffect[];
@@ -264,6 +279,7 @@ export function walkSkit(id: SkitId, path: number[]): SkitWalk | null {
   let node = skit.start;
   let score = 0;
   const spent: SkitEffect[] = [];
+  const picked = new Set<string>();
   const settle = () => {
     for (let guard = 0; skit.nodes[node]?.byScore && guard < 4; guard++) node = skit.nodes[node].byScore!.find(([min]) => score >= min)?.[1] ?? skit.nodes[node].byScore!.at(-1)![1];
   };
@@ -271,12 +287,13 @@ export function walkSkit(id: SkitId, path: number[]): SkitWalk | null {
   for (const pick of path.slice(0, SKIT_MAX_STEPS)) {
     const option = skit.nodes[node]?.options?.[pick];
     if (!option) return null;
+    picked.add(`${node}:${pick}`);
     score += option.score ?? 0;
     if (option.effect) spent.push(option.effect);
     node = option.to;
     settle();
   }
-  return skit.nodes[node] ? { node, score, spent } : null;
+  return skit.nodes[node] ? { node, score, spent, picked } : null;
 }
 
 const applyEffect = (state: StoreState, e: SkitEffect): StoreState => {
@@ -309,6 +326,15 @@ export function finishSkit(state: StoreState, id: SkitId, path: number[]): { sta
   const skits = skitsOf(s);
   s = { ...s, skits: { ...skits, done: [...skits.done, id], nextAt: s.day + SKIT_GAP } };
   return { state: s, tone: node.end.tone, effect: node.end.effect };
+}
+
+/**
+ * Вопрос-ответ: ответ ведёт в реплику, из которой одна дорога — назад сюда (допрос: «Где вы были?» → ответ →
+ * «Другой вопрос»). Такой вопрос второй раз не задают — после ответа кнопка серая и неактивна.
+ */
+export function askedOnce(id: SkitId, node: string, option: SkitOption): boolean {
+  const next = SKITS[id].nodes[option.to]?.options;
+  return Boolean(next && next.length === 1 && next[0].to === node);
 }
 
 /** Множитель гостей от сценок (мама Тёмы, подписчики Карины, курьеры Руслана…). */

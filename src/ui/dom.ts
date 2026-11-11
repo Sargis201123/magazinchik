@@ -177,6 +177,8 @@ const css = `
 .ui-closed { text-align: center; }
 .ui-closed h2 { justify-content: center; }
 .ui-btn[disabled], .ui-chip[disabled] { background: #c9c0ad; color: #7a7066; }
+/* Сценки дня: уже выбранный ответ — серый, с галочкой (ui/skits.ts). */
+.ui-btn.ui-skit-seen { background: #ddd4c2; color: #5f564c; }
 .ui-chip { padding: 5px 9px; font: 600 13px ${UI_FONT}; border: 2px solid #2b2233; border-radius: 6px;
   background: #f2c14e; color: #2b2233; box-shadow: 0 2px 0 #2b2233; min-width: 36px; min-height: 36px; }
 .ui-chip.active { background: #2b2233; color: #f4ecd8; }

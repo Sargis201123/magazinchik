@@ -6,7 +6,7 @@
 import { t, type TextKey } from '../i18n';
 import { PRODUCTS } from '../game/economy';
 import type { StoreState } from '../game/economy';
-import { canPick, SKITS, skitPortrait, walkSkit, type SkitEffect, type SkitId, type SkitOption, type SkitTone } from '../game/skits';
+import { askedOnce, canPick, SKITS, skitPortrait, walkSkit, type SkitEffect, type SkitId, type SkitOption, type SkitTone } from '../game/skits';
 import { haptic } from '../platform/telegram';
 import { sound } from '../platform/sound';
 import { dialogBox } from './dialog';
@@ -96,16 +96,20 @@ export function showSkit(
     const options = (node.options ?? []).map((option, i) => {
       const box = el('div', 'ui-skit-choice');
       const cost = costLine(option);
+      // Уже выбирали — серая кнопка с галочкой: видно, кого допросил и что спросил. Заданный вопрос
+      // («Где вы были?») второй раз не нажать; к подозреваемому вернуться можно — спросить другое.
+      const seen = walk.picked.has(`${walk.node}:${i}`);
+      const label = t(`skit.${id}.${walk.node}.${i}` as TextKey);
       box.append(
         button(
-          t(`skit.${id}.${walk.node}.${i}` as TextKey),
+          seen ? `✓ ${label}` : label,
           () => {
             sound.tap();
             path.push(i);
             show();
           },
-          'ui-btn',
-          !canPick(state, option),
+          seen ? 'ui-btn secondary ui-skit-seen' : 'ui-btn',
+          !canPick(state, option) || (seen && askedOnce(id, walk.node, option)),
         ),
       );
       if (cost) box.append(el('div', 'ui-muted', cost));
