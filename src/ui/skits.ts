@@ -1,90 +1,117 @@
-// Окно «Сценки дня» (game/skits.ts): две реплики гостя с живым портретом, выбор ответа и его реплика в ответ.
-// Пока окно открыто, магазин стоит (scenes/skitsFx.ts). Под вариантами — что нужно отдать (деньги, товар);
-// что принесёт выбор — видно уже после: монетки, звёзды, гости на несколько дней, «продолжение следует».
+// Окно «Сценки дня» (game/skits.ts): разговор по узлам — реплика героя с живым портретом и ответы кнопками (2–4),
+// по ответам — следующая реплика, пока не придёт финал. Под ответом — что он стоит (деньги, товар); финал —
+// заголовок («Лучший финал», «Не повезло»), последняя реплика и что принёс разговор. Пока окно открыто, магазин
+// стоит (scenes/skitsFx.ts). Закрыть окно, не дойдя до конца, нельзя: у разговора всегда есть конец.
 
 import { t, type TextKey } from '../i18n';
 import { PRODUCTS } from '../game/economy';
 import type { StoreState } from '../game/economy';
-import { canAnswer, SKITS, skitPortrait, type SkitChoice, type SkitId } from '../game/skits';
+import { canPick, SKITS, skitPortrait, walkSkit, type SkitEffect, type SkitId, type SkitOption, type SkitTone } from '../game/skits';
 import { haptic } from '../platform/telegram';
 import { sound } from '../platform/sound';
 import { dialogBox } from './dialog';
 import { button, el, openModal } from './dom';
 
-/** Голос героя сценки (высота «пика», если банк слогов ещё не скачан). */
-const PITCH: Record<SkitId, number> = { puppy: 760, wallet: 260, pies: 420, gift: 720, blogger: 640, rain: 380 };
+/** Голос героя (высота «пика», если банк слогов ещё не скачан). */
+const PITCH: Record<string, number> = {
+  skit_tyoma: 760, skit_masha: 720, skit_karina: 640, skit_lyosha: 420, skit_ruslan: 380, skit_fyodor: 260,
+  skit_galina: 600, skit_hoodie: 400, skit_painter: 300, skit_viktor: 340, police: 320, caller2: 620, caller4: 360,
+};
 
-const key = (id: SkitId, ep: number, rest: string): TextKey => `skit.${id}.${ep}.${rest}` as TextKey;
-
-/** Что нужно отдать за вариант: «−150 💰», «🥛×1». */
-function costLine(choice: SkitChoice): string | null {
+/** Что стоит ответ: «нужно: 50 💰 · 🥛×1». */
+function costLine(option: SkitOption): string | null {
+  const e = option.effect;
+  if (!e) return null;
   const parts: string[] = [];
-  if (choice.effect.money && choice.effect.money < 0) parts.push(`${-choice.effect.money} 💰`);
-  if (choice.effect.take) parts.push(`${PRODUCTS[choice.effect.take[0]].icon}×${choice.effect.take[1]}`);
+  if (e.money && e.money < 0) parts.push(`${-e.money} 💰`);
+  if (e.take) parts.push(`${PRODUCTS[e.take[0]].icon}×${e.take[1]}`);
   return parts.length ? t('skit.cost', { list: parts.join(' · ') }) : null;
 }
 
-/** Что принёс выбор — строчками под ответом гостя. */
-function gainLines(choice: SkitChoice): HTMLElement[] {
-  const e = choice.effect;
+/** Итог финала строчкой: «+300 💰 · ★ +0.10 · гостей +8% на 5 дн.». */
+function gainLine(e: SkitEffect): string {
   const out: string[] = [];
-  if (e.money && e.money > 0) out.push(`+${e.money} 💰`);
-  if (e.rating) out.push(`★ +${e.rating.toFixed(2)}`);
+  if (e.money) out.push(`${e.money > 0 ? '+' : '−'}${Math.abs(e.money)} 💰`);
+  if (e.rating) out.push(`★ ${e.rating > 0 ? '+' : '−'}${Math.abs(e.rating).toFixed(2)}`);
   if (e.boost) out.push(t('skit.boost', { p: Math.round(e.boost[0] * 100), d: e.boost[1] }));
-  const lines = out.length ? [el('div', 'ui-gift-reward', out.join(' · '))] : [];
-  if (choice.next) lines.push(el('div', 'ui-note', t('skit.more')));
-  return lines;
+  return out.join(' · ');
 }
 
+const TONE_CLASS: Record<SkitTone, string> = { great: 'ui-gift-reward', good: 'ui-gift-reward', ok: 'ui-note', bad: 'ui-note' };
+
 /**
- * Показать сценку. answer(i) применяет выбор и возвращает новое состояние (null — нельзя); done() — окно закрыто,
- * магазин можно отпускать. Закрыть окно, не ответив, нельзя: у разговора всегда есть конец.
+ * Показать сценку. finish(path) — разговор дошёл до финала: применить итог (вернуть его или null), done() — окно
+ * закрыто, магазин можно отпускать; tone — каким вышел финал (для реакции гостя в зале).
  */
-export function showSkit(id: SkitId, ep: number, getState: () => StoreState, answer: (index: number) => StoreState | null, done: (index: number | null) => void): void {
+export function showSkit(
+  id: SkitId,
+  getState: () => StoreState,
+  finish: (path: number[]) => { tone: SkitTone; effect: SkitEffect } | null,
+  done: (tone: SkitTone | null) => void,
+): void {
   const { card, close } = openModal();
   const skit = SKITS[id];
-  const episode = skit.episodes[ep];
-  const name = t(`skit.${id}.name` as TextKey);
-  const say = (mood: (typeof episode.moods)[number], text: string, rest: Partial<Parameters<typeof dialogBox>[0]>) =>
-    dialogBox({ caption: t('skit.caption'), portrait: skitPortrait(id, mood), name, text: `«${text}»`, pitch: PITCH[id], nextLabel: t('skit.next'), onNext: () => {}, ...rest });
+  const caption = t('skit.caption', { title: t(`skit.${id}.title` as TextKey) });
+  const path: number[] = [];
 
-  const finish = (index: number) => {
-    const choice = episode.choices[index];
-    card.replaceChildren(
-      say(choice.mood, t(key(id, ep, `${index === 0 ? 'a' : 'b'}.reply`)), {
-        after: gainLines(choice),
-        nextLabel: t('skit.back'),
-        onNext: () => {
-          close();
-          done(index);
-        },
-      }),
-    );
-  };
-
-  const ask = () => {
+  const show = () => {
+    const walk = walkSkit(id, path);
+    if (!walk) {
+      close();
+      done(null);
+      return;
+    }
+    const node = skit.nodes[walk.node];
+    const base = skit.cast[node.who] ?? skit.cast[skit.guest];
+    const say = (rest: Partial<Parameters<typeof dialogBox>[0]>) =>
+      dialogBox({
+        caption,
+        portrait: skitPortrait(id, node.who, node.mood),
+        name: t(`skit.${id}.cast.${node.who}` as TextKey),
+        text: `«${t(`skit.${id}.${walk.node}` as TextKey)}»`,
+        pitch: PITCH[base] ?? 500,
+        nextLabel: t('skit.next'),
+        onNext: () => {},
+        ...rest,
+      });
+    if (node.end) {
+      const result = finish(path);
+      const tone = result?.tone ?? node.end.tone;
+      const gain = result ? gainLine(result.effect) : '';
+      if (tone === 'great' || tone === 'good') haptic.success();
+      card.replaceChildren(
+        el('h2', '', t(`skit.tone.${tone}` as TextKey)),
+        say({
+          after: gain ? [el('div', TONE_CLASS[tone], gain)] : [],
+          nextLabel: t('skit.back'),
+          onNext: () => {
+            close();
+            done(tone);
+          },
+        }),
+      );
+      return;
+    }
     const state = getState();
-    const options = episode.choices.map((choice, i) => {
+    const options = (node.options ?? []).map((option, i) => {
       const box = el('div', 'ui-skit-choice');
-      const cost = costLine(choice);
+      const cost = costLine(option);
       box.append(
         button(
-          t(key(id, ep, i === 0 ? 'a' : 'b')),
+          t(`skit.${id}.${walk.node}.${i}` as TextKey),
           () => {
-            if (!answer(i)) return;
-            haptic.success();
             sound.tap();
-            finish(i);
+            path.push(i);
+            show();
           },
           'ui-btn',
-          !canAnswer(state, choice),
+          !canPick(state, option),
         ),
       );
       if (cost) box.append(el('div', 'ui-muted', cost));
       return box;
     });
-    card.replaceChildren(say(episode.moods[1], t(key(id, ep, 'line2')), { noNext: true, after: options }));
+    card.replaceChildren(say({ noNext: true, after: options }));
   };
-
-  card.append(say(episode.moods[0], t(key(id, ep, 'line1')), { onNext: ask }));
+  show();
 }

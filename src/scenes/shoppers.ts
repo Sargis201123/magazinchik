@@ -91,6 +91,7 @@ import {
   type Register,
   type Worker,
 } from './common';
+import * as skitsFx from './skitsFx';
 import * as motion from './motion';
 import * as effects from './effects';
 import * as pixelFx from './pixelFx';
@@ -328,6 +329,9 @@ export async function runInspector(scene: StoreScene): Promise<void> {
   scene.inspector = 'done';
 }
 
+/** Сколько реплик у Сони при визите (sonya.visit.N). */
+const SONYA_LINES = 4;
+
 /** Соня заходит после школы: стоит у прилавка рядом с папой, потом уходит. */
 export async function runSonya(scene: StoreScene): Promise<void> {
   scene.sonya = 'here';
@@ -347,6 +351,8 @@ export async function runSonya(scene: StoreScene): Promise<void> {
   pets.heartAt(scene, sprite.x, sprite.y - 14);
   music.sting('story');
   scene.speak(sprite, 20, t('drama.visit'));
+  // 11.11 (автор: «во время спец сюжета магазин на паузе»): Соня говорит с папой — магазин ждёт.
+  skitsFx.talkPause(scene, { portrait: 'portrait_sonya_happy', name: t('who.sonya'), text: `«${t(`sonya.visit.${(scene.state.day % SONYA_LINES) + 1}` as TextKey)}»`, pitch: 760 });
   await scene.wait(9000);
   await persons.walkVia(scene, 
     sprite,
@@ -391,6 +397,13 @@ export async function runLiveGuest(scene: StoreScene): Promise<void> {
   if (!music.sting('coin')) sound.coin(sellerHome.x);
   haptic.success();
   scene.speak(sprite, 20, `«${t(`live.guest.${guest.who}.line` as TextKey)}»`);
+  // Праздничный гость поздравляет — магазин ждёт, пока он говорит (как в сценках дня).
+  skitsFx.talkPause(scene, {
+    portrait: `portrait_${guest.who}_happy`,
+    name: t(`who.${guest.who}` as TextKey),
+    text: `«${t(`live.guest.${guest.who}.line` as TextKey)}»`,
+    pitch: guest.who === 'moroz' ? 240 : 700,
+  });
   scene.time.delayedCall(1400, () => scene.popup(sellerHome.x - 20, sellerHome.y - 40, t('live.guest.gift', { n: coins }), '#fee761'));
   await scene.wait(7000);
   await persons.walkVia(scene, 

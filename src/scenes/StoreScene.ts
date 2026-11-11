@@ -616,7 +616,7 @@ export class StoreScene extends Phaser.Scene {
   /** Соня сегодня заглянет в магазин (сюжет «Папа и Соня»). */
   sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
   /** Сценка дня (skitsFx.ts): какая и где она сейчас. */
-  skit: { id: import('../game/skits').SkitId; ep: number; phase: 'pending' | 'here' | 'done' } | null = null;
+  skit: { id: import('../game/skits').SkitId; phase: 'pending' | 'here' | 'done' } | null = null;
   /** Праздничный гость сегодня (game/live.ts): кто, ждём / пришёл / ушёл и настоящая дата визита. */
   liveGuest: { who: GuestId; phase: 'pending' | 'here' | 'done'; date: string } | null = null;
   catHome = { x: 0, y: 0 };
