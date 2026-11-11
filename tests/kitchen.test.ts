@@ -33,6 +33,9 @@ import {
   toggleMenu,
   topUpKitchen,
   wantsDish,
+  autoCook,
+  selfCookOn,
+  toggleSelfCook,
 } from '../src/game/kitchen';
 import { addReport } from '../src/game/reports';
 import { nightCycle } from '../src/game/day';
@@ -317,5 +320,18 @@ describe('полка «Еда»', () => {
     expect(portionsTotal(old)).toBe(7);
     expect(pantryOf(old, 'meat')).toBe(0);
     expect(takeDish(old, () => 0)?.dish).toBe('olivier');
+  });
+});
+
+describe('кухня без повара готовит сама утром', () => {
+  it('из продуктов магазина — пока есть место на полке; выключено или есть повар — ничего', () => {
+    const s = at();
+    const done = autoCook(s);
+    expect(done.portions).toBeGreaterThan(0);
+    expect(portionsTotal(done.state)).toBe(done.portions);
+    expect(portionsTotal(done.state)).toBeLessThanOrEqual(foodSlots(done.state));
+    expect(autoCook({ ...s, kitchenSelf: false }).portions).toBe(0);
+    expect(selfCookOn(toggleSelfCook(s))).toBe(false);
+    expect(autoCook({ ...s, staff: [chef()] }).portions).toBe(0);
   });
 });

@@ -186,6 +186,28 @@ export function cook(state: StoreState, id: DishId): StoreState | null {
   return taken && servePortions(taken, id);
 }
 
+/** Без повара кухня готовит сама каждое утро (11.11, автор: «каждый раз закупать и готовить неудобно»). Выключить — в меню кухни. */
+export const selfCookOn = (state: StoreState): boolean => state.kitchenSelf !== false;
+export const toggleSelfCook = (state: StoreState): StoreState => ({ ...state, kitchenSelf: !selfCookOn(state) });
+
+/**
+ * Утро без повара: кухня сама готовит из продуктов магазина (склад, потом полки) блюда меню дня — сначала те,
+ * что сегодня охотнее берут (погода) и которых на полке меньше, — пока есть продукты и место на полке «Еда».
+ * Повар на смене ведёт кухню сам весь день — тогда здесь ничего.
+ */
+export function autoCook(state: StoreState): { state: StoreState; portions: number } {
+  if (!kitchenOpen(state) || kitchenWorking(state) || !selfCookOn(state)) return { state, portions: 0 };
+  let s = state;
+  const before = portionsTotal(state);
+  for (let guard = 0; guard < 16; guard++) {
+    const menu = cookMenu(s).filter((id) => canCook(s, id));
+    if (!menu.length) break;
+    const pick = menu.sort((a, b) => dishAppeal(s, b) - dishAppeal(s, a) || portionsOf(s, a) - portionsOf(s, b))[0];
+    s = cook(s, pick) ?? s;
+  }
+  return { state: s, portions: portionsTotal(s) - before };
+}
+
 // ---------- Спрос и меню дня ----------
 
 /**

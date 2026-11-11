@@ -39,7 +39,7 @@ import { pendingStory } from '../game/story';
 import { tutAt, tutIndex, tutMorning, tutTell } from '../game/tutorial';
 import { ensureSeason } from '../game/pass';
 import { ensureRush } from '../game/rush';
-import { stockKitchen } from '../game/kitchen';
+import { stockKitchen, autoCook } from '../game/kitchen';
 import { seeTrickResult, trickResult } from '../game/tricks';
 import { districtKey } from '../game/district';
 import { reportError } from '../platform/errors';
@@ -651,6 +651,16 @@ export function prepareDay(scene: StoreScene): void {
     scene.stats.kitchenSpent = pantry.spent;
     const crate = scene.kitchenView?.crate;
     if (crate) scene.time.delayedCall(900, () => crate.active && scene.popup(crate.x, crate.y - 12, t('popup.kitchenBought', { n: pantry.spent }), '#fff3b0'));
+  }
+  // Без повара кухня готовит сама из продуктов магазина — порции встают на полку «Еда» к открытию (kitchen.ts).
+  const selfCooked = autoCook(scene.state);
+  if (selfCooked.portions) {
+    scene.state = selfCooked.state;
+    food.refreshKitchen(scene);
+    scene.refreshShelves();
+    building.refreshWarehouse(scene);
+    const crate = scene.kitchenView?.crate;
+    if (crate) scene.time.delayedCall(1500, () => crate.active && scene.popup(crate.x, crate.y - 12, t('popup.kitchenSelf', { n: selfCooked.portions }), '#c8ffb0'));
   }
   // Кафе по соседству забирает свой заказ по договору — сразу, как открылись.
   const cafe = cafeDeliver(scene.state);
