@@ -89,6 +89,7 @@ import { applyReorder } from '../game/reorder';
 import { AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoAvailable, autoDay, autoMorning, autoToggle } from '../game/autoorder';
 import { declineNeighbour, giveNeighbour, orderBoard, type OrderRow } from '../game/orders';
 import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
+import { dealPrice, dealsToday } from '../game/deals';
 import { stockOf } from '../game/bakery';
 import { FACES, regularName } from './returns';
 
@@ -611,6 +612,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   let pendingBad: { sid: SupplierId; pid: ProductId; qty: number; price: number } | null = null;
   /** Цены поставщиков сегодня — со скидкой постоянного покупателя (suppliers.ts supplierDiscount). */
   const priceOf = (sid: SupplierId, pid: ProductId) => priceFor(getState())(sid, pid);
+  /** Цена закупки руками: со скидкой «предложения дня» (game/deals.ts) — «Закупать сам» её не получает. */
+  const manualPriceOf = (sid: SupplierId, pid: ProductId) => {
+    const p = priceOf(sid, pid);
+    return p === null ? null : dealPrice(getState(), pid, p);
+  };
   /** «Закупать сам»: утром жмёт «Закупить нужное» за игрока (без брака), купленное — сразу на полки. */
   const autoBuy = (state: StoreState): StoreState => shelveAll(autoMorning(state, priceFor(state), guestsToday(state)));
   if (autoActive(getState())) setState(autoBuy(getState()));
@@ -1153,7 +1159,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     head.append(el('b', '', t('auto.title')), el('span', 'ui-auto-state', t(on ? 'auto.stateOn' : 'auto.stateOff')));
     box.append(head);
     if (!on) {
-      box.append(el('div', 'ui-muted', t('auto.offText')), button(t('auto.enable'), () => update(autoBuy(autoToggle(getState())), 'success'), 'ui-btn'));
+      box.append(el('div', 'ui-muted', t('auto.offText')), el('div', 'ui-muted', t('deals.autoNo')), button(t('auto.enable'), () => update(autoBuy(autoToggle(getState())), 'success'), 'ui-btn'));
       return [box];
     }
     const today = autoDay(state);
@@ -1162,6 +1168,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     if (today.cut) box.append(el('div', 'ui-note', t('auto.cut')));
     box.append(
       el('div', 'ui-muted', t('auto.day', { n: AUTO_TOPUPS, p: Math.round((AUTO_TOPUP_MARKUP - 1) * 100) })),
+      el('div', 'ui-muted', t('deals.autoNo')),
       button(t('auto.disable'), () => update(autoToggle(getState())), 'ui-chip'),
     );
     return [box];
@@ -1284,8 +1291,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
    * на полки и на склад. «Не влезет» — только когда правда нет места или денег, и сказано, чего именно.
    */
   const restockBox = (state: StoreState): HTMLElement => {
-    const plan = restockPlan(state, priceOf, guestsToday(state));
+    const plan = restockPlan(state, manualPriceOf, guestsToday(state));
     const box = el('div', 'ui-box ui-restock');
+    // Предложение дня: скидки поставщиков только при закупке руками.
+    const deals = Object.entries(dealsToday(state)) as [ProductId, number][];
+    if (deals.length) box.append(el('div', 'ui-note', t('deals.today', { list: deals.map(([pid, cut]) => `${PRODUCTS[pid].icon} −${Math.round(cut * 100)}%`).join(' · ') })));
     if (!plan.lines.length) {
       if (!plan.cut) box.append(el('b', '', `✅ ${t('restock.enough')}`));
       else box.append(el('div', 'ui-note', t(plan.short === 'money' ? 'restock.noMoney' : 'restock.noRoom')));
@@ -1294,7 +1304,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const list = plan.lines.map((l) => `${PRODUCTS[l.pid].icon}×${l.qty}`).join(' ');
     box.append(
       button(t('restock.buy', { n: plan.total }), () => {
-        const fresh = restockPlan(getState(), priceOf, guestsToday(getState()));
+        const fresh = restockPlan(getState(), manualPriceOf, guestsToday(getState()));
         if (!fresh.lines.length) return;
         const result = applyReorder(getState(), fresh, (line) => badBatch(line.sid, getState().day, Math.random()));
         if (result.badLine) pendingBad = { sid: result.badLine.sid, pid: result.badLine.pid, qty: result.badLine.qty, price: result.badLine.price };
@@ -1317,7 +1327,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const seasonal = (pid: ProductId) => Boolean(SEASONAL[pid]);
     const shown = PRODUCT_IDS.filter((pid) => {
       if (buyFilter === 'season') return seasonal(pid);
-      if (!canStock(state, pid) || !bestOffer(state, pid, priceOf)) return false;
+      if (!canStock(state, pid) || !bestOffer(state, pid, manualPriceOf)) return false;
       return buyFilter === 'all' || stockOf(state, pid) < restockTarget(state, pid, guests) * 0.6;
     });
     const box = el('div', 'ui-box');
@@ -1326,7 +1336,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         box.append(el('div', 'ui-muted', `🗓 ${t('goods.offer', { name: productLabel(pid), when: t(`goods.when.${pid}` as TextKey), left: t('goods.in', { n: daysUntilSeason(pid, state.day) }) })}`));
         continue;
       }
-      const offer = bestOffer(state, pid, priceOf);
+      const offer = bestOffer(state, pid, manualPriceOf);
       if (!offer || !canStock(state, pid)) {
         box.append(el('div', 'ui-muted', `🔒 ${productLabel(pid)}: ${t('prices.locked', { shelf: t(SHELF_KINDS[PRODUCTS[pid].category].nameKey) })}`));
         continue;
@@ -1342,7 +1352,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         ),
       );
       const need = restockTarget(state, pid, guests);
-      const sub = `${t('buy.inWarehouse', { s: onShelves(state, pid), n: warehouseOf(state, pid) })} · ${t('restock.need', { n: need })} · ${t(SUPPLIERS[sid].nameKey)}`;
+      const cut = dealsToday(state)[pid];
+      const sub = `${cut ? `🏷 −${Math.round(cut * 100)}% · ` : ''}${t('buy.inWarehouse', { s: onShelves(state, pid), n: warehouseOf(state, pid) })} · ${t('restock.need', { n: need })} · ${t(SUPPLIERS[sid].nameKey)}`;
       box.append(itemRow(pid, { price, sub, actions: chips }));
     }
     if (!box.childElementCount) box.append(el('div', 'ui-muted', t(buyFilter === 'low' ? 'restock.noneLow' : 'restock.none')));

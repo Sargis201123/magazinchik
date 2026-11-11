@@ -3141,6 +3141,8 @@ export const es: Record<TextKey, string> = {
   "watch.kennel.2": "Casita con placa",
   "watch.kennel.sub": "atrapa al ladrón el {p}% de las veces",
   "watch.kennel.subGuests": "atrapa al ladrón el {p}% de las veces · clientes +{g}%: los niños vienen a acariciarlo",
+  "deals.today": "🏷 Oferta del día de los proveedores — solo si compras tú: {list}",
+  "deals.autoNo": "🏷 Los descuentos de la «oferta del día» solo son para la compra a mano: la compra automática paga precios normales.",
   "staffStats.title": "📊 Estadísticas",
   "staffStats.none": "📊 Las estadísticas empiezan en el próximo turno",
   "staffStats.deed.served": "clientes atendidos",

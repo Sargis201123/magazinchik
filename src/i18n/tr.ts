@@ -3141,6 +3141,8 @@ export const tr: Record<TextKey, string> = {
   "watch.kennel.2": "Tabelalı minik ev",
   "watch.kennel.sub": "hırsızı %{p} oranında yakalar",
   "watch.kennel.subGuests": "hırsızı %{p} oranında yakalar · misafir +%{g}: çocuklar sevmeye gelir",
+  "deals.today": "🏷 Tedarikçilerin günün fırsatı — yalnızca kendin alırsan: {list}",
+  "deals.autoNo": "🏷 «Günün fırsatı» indirimleri yalnızca elle alıma: otomatik alım normal fiyattan alır.",
   "staffStats.title": "📊 İstatistik",
   "staffStats.none": "📊 İstatistik bir sonraki vardiyada başlar",
   "staffStats.deed.served": "hizmet verilen müşteri",
