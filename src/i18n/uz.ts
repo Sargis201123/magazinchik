@@ -3152,6 +3152,8 @@ export const uz: Record<TextKey, string> = {
   "watch.kennel.2": "Lavhali uycha",
   "watch.kennel.sub": "oʻgʻrini {p}% hollarda ushlaydi",
   "watch.kennel.subGuests": "oʻgʻrini {p}% hollarda ushlaydi · mehmonlar +{g}%: bolalar silashga keladi",
+  "deals.today": "🏷 Yetkazib beruvchilarning kun taklifi — faqat oʻzing xarid qilsang: {list}",
+  "deals.autoNo": "🏷 «Kun taklifi» chegirmalari faqat qoʻlda xaridga: avtoxarid oddiy narxda oladi.",
   "staffStats.title": "📊 Statistika",
   "staffStats.none": "📊 Statistika keyingi smenadan boshlanadi",
   "staffStats.deed.served": "xizmat koʻrsatilgan xaridor",

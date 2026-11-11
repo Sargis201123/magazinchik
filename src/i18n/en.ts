@@ -3185,6 +3185,8 @@ export const en: Record<TextKey, string> = {
   "watch.kennel.2": "Little house with a nameplate",
   "watch.kennel.sub": "catches a thief {p}% of the time",
   "watch.kennel.subGuests": "catches a thief {p}% of the time · guests +{g}%: kids come to pet him",
+  "deals.today": "🏷 Suppliers' deal of the day — only when you buy yourself: {list}",
+  "deals.autoNo": "🏷 Deal-of-the-day discounts only go to buying by hand: auto-buy pays regular prices.",
   "staffStats.title": "📊 Stats",
   "staffStats.none": "📊 Stats start from the next shift",
   "staffStats.deed.served": "customers served",

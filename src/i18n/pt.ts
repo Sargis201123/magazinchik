@@ -3153,6 +3153,8 @@ export const pt: Record<TextKey, string> = {
   "watch.kennel.2": "Casinha com plaquinha",
   "watch.kennel.sub": "pega o ladrão em {p}% das vezes",
   "watch.kennel.subGuests": "pega o ladrão em {p}% das vezes · clientes +{g}%: as crianças vêm fazer carinho",
+  "deals.today": "🏷 Oferta do dia dos fornecedores — só comprando você mesmo: {list}",
+  "deals.autoNo": "🏷 Os descontos da «oferta do dia» são só para a compra manual: a compra automática paga preço normal.",
   "staffStats.title": "📊 Estatísticas",
   "staffStats.none": "📊 As estatísticas começam no próximo turno",
   "staffStats.deed.served": "clientes atendidos",
