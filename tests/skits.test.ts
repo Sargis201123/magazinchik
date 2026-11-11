@@ -95,27 +95,29 @@ describe('сценки: дерево разговора', () => {
   });
 
   it('прямой эфир: финал по очкам', () => {
-    expect(walkSkit('blogger', [0, 0, 0, 0])!.node).toBe('viral');
-    expect(walkSkit('blogger', [0, 1, 1, 1])!.node).toBe('flop');
-    expect(walkSkit('blogger', [1, 2, 1, 1])!.node).toBe('nice');
+    // Начало, кадр, три вопроса и тролль в чате.
+    expect(walkSkit('blogger', [0, 0, 0, 0, 0, 0])!.node).toBe('viral');
+    expect(walkSkit('blogger', [0, 1, 1, 2, 2, 2])!.node).toBe('flop');
+    expect(walkSkit('blogger', [1, 2, 2, 1, 1, 1])!.node).toBe('nice');
     const s = dayOf('blogger', 12);
-    const done = finishSkit(s, 'blogger', [0, 0, 0, 0])!;
+    const done = finishSkit(s, 'blogger', [0, 0, 0, 0, 0, 0])!;
     expect(skitGuests(done.state)).toBeCloseTo(1.15);
   });
 
-  it('пирожки: можно попробовать другие, лучшее — капуста, недорого, Лёше побольше', () => {
-    expect(walkSkit('pies', [1, 1, 0, 0, 0, 1])!.node).toBe('hit');
-    expect(walkSkit('pies', [2, 0, 2, 2])!.node).toBe('flop');
+  it('пирожки: можно расспросить и попробовать другие; лучшее — капуста, недорого, Лёше побольше, у кассы', () => {
+    expect(walkSkit('pies', [3, 0, 1, 1, 0, 0, 0, 1, 0])!.node).toBe('hit');
+    expect(walkSkit('pies', [2, 0, 2, 2, 2])!.node).toBe('flop');
   });
 
   it('ответ с ценой: товар и деньги уходят, нет — ответ недоступен', () => {
     const s = dayOf('puppy');
-    const meat = SKITS.puppy.nodes.where.options![0];
+    const meat = SKITS.puppy.nodes.lure.options![0];
     expect(canPick(s, meat)).toBe(onShelves(s, 'meat') + (s.warehouse.meat?.length ?? 0) > 0);
     const gift = SKITS.gift.nodes.tea.options![0];
     expect(canPick(shop({ money: 10 }), gift)).toBe(false);
     const g = dayOf('gift', 10);
-    const best = finishSkit(g, 'gift', [0, 0, 0])!;
+    // Расспросить → выбрать → чай и яблоки → добавить недостающее.
+    const best = finishSkit(g, 'gift', [0, 3, 0, 0])!;
     expect(best.tone).toBe('great');
     expect(best.state.money).toBe(g.money - 50);
   });

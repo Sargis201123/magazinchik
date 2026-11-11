@@ -102,101 +102,116 @@ export const SKITS: Record<SkitId, Skit> = {
       wrong: end('police', 'sad', 'bad', { rating: -0.04 }),
     },
   },
-  // Найти щенка: хитрее всего — выманить на запах колбасы.
+  // Найти щенка: обойти места (пекарня, парк, курьер) — следы ведут к парковке; выманить — лучше всего колбасой.
   puppy: {
     from: 6,
     guest: 'tyoma',
     cast: { tyoma: 'skit_tyoma', sveta: 'caller2', ruslan: 'skit_ruslan' },
     start: 'start',
     nodes: {
-      start: { who: 'tyoma', mood: 'sad', options: [{ to: 'where' }, { to: 'announce' }, { to: 'cold' }] },
+      start: { who: 'tyoma', mood: 'sad', options: [{ to: 'about' }, { to: 'announce' }, { to: 'cold' }] },
       cold: end('tyoma', 'sad', 'ok'),
-      where: { who: 'tyoma', mood: 'sad', options: [{ to: 'sausage', effect: { take: ['meat', 1] } }, { to: 'park' }, { to: 'courier' }] },
-      announce: { who: 'sveta', mood: null, options: [{ to: 'found' }, { to: 'found', effect: { take: ['bread', 1] } }] },
-      sausage: { who: 'tyoma', mood: 'surprised', options: [{ to: 'foundShop' }] },
-      park: { who: 'tyoma', mood: 'sad', options: [{ to: 'courier' }, { to: 'announce' }] },
-      courier: { who: 'ruslan', mood: 'happy', options: [{ to: 'found' }] },
+      about: { who: 'tyoma', mood: 'sad', options: [{ to: 'hub' }] },
+      announce: { who: 'sveta', mood: null, options: [{ to: 'hub' }] },
+      hub: { who: 'tyoma', mood: null, options: [{ to: 'bakery' }, { to: 'park' }, { to: 'courier' }, { to: 'lure' }] },
+      bakery: { who: 'tyoma', mood: 'sad', options: [{ to: 'hub' }] },
+      park: { who: 'tyoma', mood: 'surprised', options: [{ to: 'hub' }] },
+      courier: { who: 'ruslan', mood: 'happy', options: [{ to: 'hub' }] },
+      lure: { who: 'tyoma', mood: null, options: [{ to: 'foundShop', effect: { take: ['meat', 1] } }, { to: 'found' }, { to: 'waited' }] },
       found: end('tyoma', 'happy', 'good', { rating: 0.05, boost: [0.06, 5] }),
       foundShop: end('tyoma', 'happy', 'great', { rating: 0.07, boost: [0.1, 5] }),
+      waited: end('tyoma', null, 'ok', { rating: 0.02 }),
     },
   },
-  // Фальшивая купюра: проверить — и вызвать полицию; отпустить — и потерять сдачу.
+  // Фальшивая купюра: осмотреть её (просвет, бумага, откуда) — и решить; отдал сдачу — ещё можно догнать.
   counterfeit: {
     from: 8,
     guest: 'viktor',
-    cast: { viktor: 'skit_viktor', police: 'police' },
+    cast: { viktor: 'skit_viktor', police: 'police', me: 'father' },
     start: 'start',
     nodes: {
       start: { who: 'viktor', mood: 'happy', options: [{ to: 'accepted' }, { to: 'check' }, { to: 'refuse' }] },
       refuse: end('viktor', 'angry', 'ok'),
+      check: { who: 'viktor', mood: 'surprised', options: [{ to: 'light' }, { to: 'touch' }, { to: 'atm' }, { to: 'decide' }] },
+      light: { who: 'me', mood: 'surprised', options: [{ to: 'check' }] },
+      touch: { who: 'me', mood: null, options: [{ to: 'check' }] },
+      atm: { who: 'viktor', mood: 'angry', options: [{ to: 'check' }] },
+      decide: { who: 'viktor', mood: 'angry', options: [{ to: 'arrest' }, { to: 'card' }, { to: 'accepted' }] },
       accepted: { who: 'viktor', mood: 'happy', options: [{ to: 'chase' }, { to: 'lost' }] },
       lost: end('police', null, 'bad', { money: -400 }),
       chase: { who: 'viktor', mood: 'surprised', options: [{ to: 'caught' }, { to: 'gaveBack' }] },
       caught: end('police', 'happy', 'good', { money: 300, rating: 0.05 }),
       gaveBack: end('viktor', 'angry', 'ok'),
-      check: { who: 'viktor', mood: 'surprised', options: [{ to: 'fake' }, { to: 'fake' }, { to: 'accepted' }] },
-      fake: { who: 'viktor', mood: 'angry', options: [{ to: 'arrest' }, { to: 'card' }] },
       arrest: end('police', 'happy', 'great', { money: 500, rating: 0.08 }),
       card: end('viktor', 'sad', 'ok', { rating: 0.02 }),
     },
   },
-  // Пирожки: начинка, цена и доля — финал по очкам. Лучше всего — капуста, недорого и большая доля Лёше.
+  // Пирожки: расспросить Лёшу, выбрать начинку, цену, долю и место в зале — финал по очкам.
   pies: {
     from: 9,
     guest: 'lyosha',
     cast: { lyosha: 'skit_lyosha' },
     start: 'start',
     nodes: {
-      start: { who: 'lyosha', mood: 'happy', options: [{ to: 'cabbage' }, { to: 'cherry' }, { to: 'meat' }] },
+      start: { who: 'lyosha', mood: 'happy', options: [{ to: 'cabbage' }, { to: 'cherry' }, { to: 'meat' }, { to: 'about' }] },
+      about: { who: 'lyosha', mood: 'happy', options: [{ to: 'start' }] },
       cabbage: { who: 'lyosha', mood: 'happy', options: [{ to: 'price', score: 2 }, { to: 'start' }] },
       cherry: { who: 'lyosha', mood: null, options: [{ to: 'price', score: 1 }, { to: 'start' }] },
       meat: { who: 'lyosha', mood: 'sad', options: [{ to: 'price', score: 0 }, { to: 'start' }] },
       price: { who: 'lyosha', mood: null, options: [{ to: 'share', score: 2 }, { to: 'share', score: 1 }, { to: 'share', score: 0 }] },
-      share: { who: 'lyosha', mood: 'surprised', options: [{ to: 'verdict', score: 1 }, { to: 'verdict', score: 2 }, { to: 'verdict', score: 0 }] },
-      verdict: { who: 'lyosha', mood: null, byScore: [[5, 'hit'], [3, 'fine'], [0, 'flop']] },
+      share: { who: 'lyosha', mood: 'surprised', options: [{ to: 'place', score: 1 }, { to: 'place', score: 2 }, { to: 'place', score: 0 }] },
+      place: { who: 'lyosha', mood: null, options: [{ to: 'verdict', score: 2 }, { to: 'verdict', score: 1 }, { to: 'verdict', score: 0 }] },
+      verdict: { who: 'lyosha', mood: null, byScore: [[7, 'hit'], [4, 'fine'], [0, 'flop']] },
       hit: end('lyosha', 'happy', 'great', { money: 600, boost: [0.06, 5] }),
       fine: end('lyosha', 'happy', 'good', { money: 250 }),
       flop: end('lyosha', 'sad', 'bad', { money: -100 }),
     },
   },
-  // Подарок: учительница биологии, пьёт чай и чихает от цветов. Лучше всего — чай и яблоки, недостающее — от магазина.
+  // Подарок: расспросить про учительницу (биология, чай, чихает от цветов, не ест сладкое) — и угадать.
   gift: {
     from: 10,
     guest: 'masha',
     cast: { masha: 'skit_masha' },
     start: 'start',
     nodes: {
-      start: { who: 'masha', mood: null, options: [{ to: 'likes' }, { to: 'roses' }, { to: 'candy' }] },
-      likes: { who: 'masha', mood: 'happy', options: [{ to: 'tea' }, { to: 'roses' }, { to: 'candy' }] },
+      start: { who: 'masha', mood: null, options: [{ to: 'hub' }, { to: 'roses' }, { to: 'candy' }] },
+      hub: { who: 'masha', mood: 'happy', options: [{ to: 'subject' }, { to: 'loves' }, { to: 'hates' }, { to: 'choose' }] },
+      subject: { who: 'masha', mood: 'happy', options: [{ to: 'hub' }] },
+      loves: { who: 'masha', mood: 'happy', options: [{ to: 'hub' }] },
+      hates: { who: 'masha', mood: 'sad', options: [{ to: 'hub' }] },
+      choose: { who: 'masha', mood: 'surprised', options: [{ to: 'tea' }, { to: 'roses' }, { to: 'candy' }, { to: 'seedling' }] },
       roses: { who: 'masha', mood: 'sad', options: [{ to: 'tea' }, { to: 'rosesEnd' }] },
       rosesEnd: end('masha', 'sad', 'bad'),
       candy: { who: 'masha', mood: null, options: [{ to: 'tea' }, { to: 'candyEnd' }] },
       candyEnd: end('masha', 'happy', 'ok', { rating: 0.02 }),
+      seedling: end('masha', 'happy', 'good', { rating: 0.05 }),
       tea: { who: 'masha', mood: 'surprised', options: [{ to: 'best', effect: { money: -50 } }, { to: 'good' }, { to: 'later' }] },
       best: end('masha', 'happy', 'great', { rating: 0.08, boost: [0.05, 5] }),
       good: end('masha', 'happy', 'good', { rating: 0.04 }),
       later: end('masha', null, 'ok', { rating: 0.02 }),
     },
   },
-  // Прямой эфир: три вопроса подписчиков, финал — по очкам за честные и тёплые ответы.
+  // Прямой эфир: что показать в кадре, три вопроса и тролль в чате — финал по очкам.
   blogger: {
     from: 12,
     guest: 'karina',
     cast: { karina: 'skit_karina' },
     start: 'start',
     nodes: {
-      start: { who: 'karina', mood: 'happy', options: [{ to: 'q1' }, { to: 'q1', score: 1 }, { to: 'no' }] },
+      start: { who: 'karina', mood: 'happy', options: [{ to: 'frame' }, { to: 'frame', score: 1 }, { to: 'no' }] },
       no: end('karina', null, 'ok', { boost: [0.03, 2] }),
+      frame: { who: 'karina', mood: null, options: [{ to: 'q1', score: 2 }, { to: 'q1', score: 0 }, { to: 'q1', score: 1 }] },
       q1: { who: 'karina', mood: null, options: [{ to: 'q2', score: 2 }, { to: 'q2', score: 0 }, { to: 'q2', score: 1 }] },
-      q2: { who: 'karina', mood: null, options: [{ to: 'q3', score: 2 }, { to: 'q3', score: 1 }, { to: 'q3', score: 0 }] },
+      q2: { who: 'karina', mood: null, options: [{ to: 'troll', score: 2 }, { to: 'troll', score: 1 }, { to: 'troll', score: 0 }] },
+      troll: { who: 'karina', mood: 'surprised', options: [{ to: 'q3', score: 2 }, { to: 'q3', score: 0 }, { to: 'q3', score: -1 }] },
       q3: { who: 'karina', mood: 'surprised', options: [{ to: 'verdict', score: 2 }, { to: 'verdict', score: 1 }, { to: 'verdict', score: 0 }] },
-      verdict: { who: 'karina', mood: null, byScore: [[5, 'viral'], [3, 'nice'], [0, 'flop']] },
+      verdict: { who: 'karina', mood: null, byScore: [[8, 'viral'], [5, 'nice'], [-99, 'flop']] },
       viral: end('karina', 'surprised', 'great', { rating: 0.05, boost: [0.15, 5] }),
       nice: end('karina', 'happy', 'good', { boost: [0.08, 4] }),
       flop: end('karina', 'sad', 'bad', { rating: -0.03 }),
     },
   },
-  // Курьер в ливень: приютить, спасти мороженое, поговорить с диспетчером — и, может, сделать у себя точку курьеров.
+  // Курьер в ливень: что в заказах (лекарства — срочно!), спасти мороженое, зарядить самокат — и решить, как быть.
   rain: {
     from: 14,
     wet: true,
@@ -206,14 +221,18 @@ export const SKITS: Record<SkitId, Skit> = {
     nodes: {
       start: { who: 'ruslan', mood: 'sad', options: [{ to: 'inside' }, { to: 'door' }] },
       door: end('ruslan', 'sad', 'ok'),
-      inside: { who: 'ruslan', mood: null, options: [{ to: 'freezer' }, { to: 'dispatch' }, { to: 'charge' }] },
-      freezer: { who: 'ruslan', mood: 'happy', options: [{ to: 'dispatch' }, { to: 'charge' }] },
-      charge: { who: 'ruslan', mood: 'happy', options: [{ to: 'thanks', effect: { take: ['bread', 1] } }, { to: 'dispatch' }] },
+      inside: { who: 'ruslan', mood: null, options: [{ to: 'orders' }, { to: 'freezer' }, { to: 'charge' }, { to: 'plan' }] },
+      orders: { who: 'ruslan', mood: 'sad', options: [{ to: 'inside' }] },
+      freezer: { who: 'ruslan', mood: 'happy', options: [{ to: 'inside' }] },
+      charge: { who: 'ruslan', mood: 'happy', options: [{ to: 'inside' }] },
+      plan: { who: 'ruslan', mood: 'surprised', options: [{ to: 'meds', effect: { rating: 0.05 } }, { to: 'dispatch' }, { to: 'late' }] },
+      meds: { who: 'boss', mood: null, options: [{ to: 'deal' }, { to: 'good' }] },
       dispatch: { who: 'boss', mood: null, options: [{ to: 'thanks' }, { to: 'partner' }, { to: 'meh' }] },
       thanks: { who: 'boss', mood: null, options: [{ to: 'good' }] },
       partner: { who: 'boss', mood: null, options: [{ to: 'deal' }, { to: 'good' }] },
       good: end('ruslan', 'happy', 'good', { boost: [0.06, 4] }),
       deal: end('ruslan', 'happy', 'great', { money: 200, boost: [0.12, 7] }),
+      late: end('ruslan', 'sad', 'bad', { rating: -0.02 }),
       meh: end('ruslan', 'sad', 'ok'),
     },
   },
@@ -344,7 +363,7 @@ export const skitGuests = (state: StoreState): number => {
 };
 
 /** У каких портретов есть настроения (у остальных — одно лицо). */
-const MOODY = (base: string): boolean => base.startsWith('skit_') || base === 'police';
+const MOODY = (base: string): boolean => base.startsWith('skit_') || base === 'police' || base === 'father';
 
 /** Портрет героя сценки с настроением. */
 export function skitPortrait(id: SkitId, who: string, mood: SkitMood): string {
