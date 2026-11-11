@@ -665,6 +665,11 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     }
     return result;
   };
+  // 11.11 (автор: «после таймера магазин ещё долго не закрывается»): время вышло, пока шёл к двери, — не заходит.
+  if (closing(scene) && !c.thief) {
+    await leave(scene, c);
+    return;
+  }
   await persons.walkVia(scene, c.sprite, c.first ? [{ x: door.x, y: door.y - 10 }] : [{ x: door.x, y: scene.streetY }, { x: door.x, y: door.y - 10 }]);
   if (c.gone) return;
   // В дождь и снег с улицы несут грязь.
@@ -684,13 +689,15 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   let extra: { id: ProductId; index: number } | null = null;
   for (const id of wanted) {
     if (c.gone) return;
+    // Закрываемся: с тем, что уже в корзине, — сразу к кассе; с пустыми руками — к выходу (не в обиде).
+    if (closing(scene) && !c.thief) break;
     const index = shelfFor(scene.state, id);
     if (index < 0) continue;
     const result = await visit(id, index);
     if (result === 'taken' && !extra && !c.thief && !c.first) extra = shelves.pairPick(scene, index, wanted);
   }
   if (c.gone) return;
-  if (extra) {
+  if (extra && !closing(scene)) {
     scene.popup(c.sprite.x, c.sprite.y - 20, t('popup.pair', { name: t(PRODUCTS[extra.id].nameKey) }), '#d6f5c4');
     await visit(extra.id, extra.index);
     if (c.gone) return;
@@ -718,13 +725,15 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     return;
   }
 
-  // По пути к кассе — к полке «Еда» за порцией готового (если кухня открыта).
-  await food.visitFood(scene, c);
-  if (c.gone) return;
-  if (!c.first && Math.random() < TOILET_CHANCE) await visitToilet(scene, c);
-  if (c.gone) return;
-  await food.buyCoffee(scene, c);
-  if (c.gone) return;
+  // По пути к кассе — к полке «Еда» за порцией готового (если кухня открыта). Закрываемся — сразу к кассе.
+  if (!closing(scene)) {
+    await food.visitFood(scene, c);
+    if (c.gone) return;
+    if (!c.first && Math.random() < TOILET_CHANCE) await visitToilet(scene, c);
+    if (c.gone) return;
+    await food.buyCoffee(scene, c);
+    if (c.gone) return;
+  }
 
   if (await building.useKiosk(scene, c)) return;
   if (c.gone) return;
@@ -750,6 +759,9 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   c.patience = scene.time.delayedCall(c.patienceMs, () => void giveUp(scene, c));
   persons.layoutQueue(scene);
 }
+
+/** Рабочее время вышло: зал доживает последних покупателей (днём; ночная смена закрывается по-своему). */
+const closing = (scene: StoreScene): boolean => scene.timeLeft <= 0;
 
 /**
  * Тихие дни новичка (firstday.ts shelfWaits): на полке товар кончился, а на складе он есть — покупатель
@@ -1208,6 +1220,13 @@ export async function giveUp(scene: StoreScene, c: Customer): Promise<void> {
   // а у кассы его пробьёт она (firstday.ts grannyServesAfter).
   if (scene.running && !scene.night && scene.granny?.active && grannyServesAfter(scene.state, false) !== null) {
     c.patience = scene.time.delayedCall(GRANNY_PATIENCE_MS, () => void giveUp(scene, c));
+    return;
+  }
+  // Закрываемся: зал идёт быстрее (StoreScene, CLOSING_HURRY) — и терпение тает быстрее. Последним в очереди
+  // даём ещё столько же времени: пробить их до закрытия — нормальное дело, не повод уйти обиженным.
+  if (closing(scene) && !c.closingGrace) {
+    c.closingGrace = true;
+    c.patience = scene.time.delayedCall(c.patienceMs ?? PATIENCE_MS, () => void giveUp(scene, c));
     return;
   }
   scene.queue = scene.queue.filter((q) => q !== c);

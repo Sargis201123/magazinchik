@@ -88,8 +88,8 @@ export const ITEM_VARIANTS = 3;
 
 /** Терпение в очереди. Отсчёт начинается, когда покупатель дошёл до очереди. */
 export const PATIENCE_MS = 20_000;
-/** Спешка закрытия: во сколько раз быстрее идёт зал, когда время дня вышло, а у касс никто не ждёт. */
-export const CLOSING_HURRY = 2.5;
+/** Спешка закрытия: во сколько раз быстрее идёт зал (и кассы), когда время дня вышло (11.11: было 2,5 и без очереди). */
+export const CLOSING_HURRY = 3.5;
 export const CUSTOMER_SPEED = 40; // пикселей мира в секунду
 export const SELLER_SPEED = 90;
 /** С такой скорости человек уже бежит: подпрыгивает, наклоняется вперёд, из-под ног летит пыль. */
@@ -370,6 +370,8 @@ export const JURY_AT = 40;
 export const SKINS = [...SKIN_TONES];
 
 export interface Customer {
+  /** Время вышло, а он в очереди: терпение продлено один раз (shoppers.giveUp). */
+  closingGrace?: boolean;
   sprite: Phaser.GameObjects.Container;
   bubble: Phaser.GameObjects.Image;
   items: CartItem[];
