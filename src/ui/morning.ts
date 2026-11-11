@@ -97,6 +97,7 @@ import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
 import { pendingTip, seeTip, soloExpandRisk, TIP_ICONS } from '../game/tips';
 import { toggleDonate } from '../game/economy';
 import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingStep } from '../game/staff';
+import { DEED_ICON, DEED_OF, deedsPerShift, quirkOf } from '../game/staffStats';
 import { answerCeremony, answerOffer, holderOf, BEST_EVERY, BEST_REWARDS, bestBonus, bestGift, careerOf, dismissLeft, nextRank, promotedWage, rankKey, xpToNext, type BestReward } from '../game/career';
 import { BRANCH_HEAD_BONUS } from '../game/branch';
 import {
@@ -3753,6 +3754,23 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     return out;
   };
 
+  /** Статистика сотрудника (game/staffStats.ts): дела за всё время, рекорд смены, в среднем, пройденные метры, привычка. */
+  const statsBox = (_state: StoreState, m: StaffMember): HTMLElement => {
+    const box = el('div', 'ui-career-log');
+    const tally = m.tally;
+    const kind = DEED_OF[m.role];
+    box.append(el('b', '', t('staffStats.title')));
+    if (!tally?.shifts) box.append(el('div', 'ui-muted', t('staffStats.none')));
+    else {
+      box.append(el('div', 'ui-item-sub', t('staffStats.total', { icon: DEED_ICON[kind], what: t(`staffStats.deed.${kind}` as TextKey), n: tally.deeds })));
+      if (tally.best) box.append(el('div', 'ui-item-sub', t('staffStats.best', { n: tally.best, day: tally.bestDay ?? 0 })));
+      box.append(el('div', 'ui-item-sub', t('staffStats.avg', { n: deedsPerShift(tally) })));
+      if (tally.walked) box.append(el('div', 'ui-item-sub', t('staffStats.walked', { km: (tally.walked / 1000).toFixed(1) })));
+    }
+    box.append(el('div', 'ui-muted', t('staffStats.quirk', { text: t(`staffStats.quirk.${quirkOf(m)}` as TextKey) })));
+    return box;
+  };
+
   /** Сотрудник одной строкой: роль, имя, полоска роста (курсы и звания), метки; действия — по нажатию. */
   const staffRow = (state: StoreState, m: StaffMember): HTMLElement => {
     const box = el('div', 'ui-box ui-staff');
@@ -3786,6 +3804,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       el('div', 'ui-item-sub', traitLine(m)),
       el('div', 'ui-item-sub', m.months ? t('staffTab.months', { n: m.months }) : t('staffTab.new')),
       ...careerLines(state, m),
+      statsBox(state, m),
     );
     const actions = el('div', 'ui-chips');
     // «Тормоз» за кассой упирает весь магазин в потолок — предупредить и предложить курсы.
