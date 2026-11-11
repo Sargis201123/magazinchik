@@ -38,6 +38,7 @@ import { careerMorning, careerNight } from './career';
 import { districtGuests } from './district';
 import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
+import { tallyNight, type StaffRecord } from './staffStats';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
 import { laneGuests } from './lanes';
@@ -61,6 +62,8 @@ export interface NightSummary extends NightResult {
   week: WeekNight | null;
   /** Что наделали за ночь линейки своей марки (lines.ts). */
   lines: LinesNight;
+  /** Кто из персонала побил свой рекорд за смену (staffStats.ts). */
+  staffRecords: StaffRecord[];
 }
 
 export function nightCycle(state: StoreState, stats: DayStats, random: () => number = Math.random): NightSummary {
@@ -87,6 +90,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   s = dishes.state;
   // Карьера: смены и сделанное за день (career.ts); воодушевление тает на день.
   s = careerNight(s, stats.work);
+  // Статистика персонала (staffStats.ts): дела, рекорды, шаги.
+  const tally = tallyNight(s, stats.deeds, stats.walked);
+  s = tally.state;
   s = restStaff(s);
   // «Проверяющий» от конкурента: штраф, ушёл ни с чем или разоблачили (tricks.ts).
   s = trickNight(s, random, Boolean(staffOf(s, 'cleaner')));
@@ -126,6 +132,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     home: home.income,
     week: week.done,
     lines: lines.night,
+    staffRecords: tally.records,
   };
 }
 

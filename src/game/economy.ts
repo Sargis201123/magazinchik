@@ -360,6 +360,8 @@ export interface StaffMember {
   summer?: boolean;
   /** Карьера (career.ts): с какого дня работает, опыт, звание, «сотрудник месяца», летопись. */
   career?: import('./career').Career;
+  /** Статистика (staffStats.ts): дела за всё время, рекорд смены, пройденные метры. */
+  tally?: import('./staffStats').StaffTally;
 }
 
 /** Звание (career.ts): старший работает чуть быстрее, администратор зала — ещё быстрее. */
@@ -814,6 +816,9 @@ export interface DayStats {
   kitchenSpent?: number;
   /** Сделано сотрудниками за день по должностям: пробили, убрали, разложили, испекли (career.ts). */
   work?: Partial<Record<StaffRole, number>>;
+  /** То же поштучно (без весов «сотрудника месяца») и сколько прошли по залу, точек мира (staffStats.ts). */
+  deeds?: Partial<Record<StaffRole, number>>;
+  walked?: Partial<Record<StaffRole, number>>;
   /** Почему ушли без покупки (losses.ts) и каких товаров не хватило или показались дорогими. */
   lostWhy?: Partial<Record<LostReason, number>>;
   missing?: Partial<Record<ProductId, number>>;

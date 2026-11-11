@@ -526,6 +526,21 @@ export function polishFloor(scene: StoreScene, x: number, y: number): void {
 export function credit(scene: StoreScene, role: StaffRole, n = 1): void {
   const work = (scene.stats.work ??= {});
   work[role] = (work[role] ?? 0) + n;
+  // Поштучно — для статистики сотрудника (game/staffStats.ts): одно дело — одна штука.
+  const deeds = (scene.stats.deeds ??= {});
+  deeds[role] = (deeds[role] ?? 0) + 1;
+}
+
+/** Сотрудник прошёл путь — в его метры за смену (game/staffStats.ts). */
+function noteWalk(scene: StoreScene, w: Worker, points: Point[]): void {
+  let from: Point = { x: w.sprite.x, y: w.sprite.y };
+  let dist = 0;
+  for (const p of points) {
+    dist += Math.hypot(p.x - from.x, p.y - from.y);
+    from = p;
+  }
+  const walked = (scene.stats.walked ??= {});
+  walked[w.member.role] = (walked[w.member.role] ?? 0) + dist;
 }
 
 /** Расставляет нанятых сотрудников по местам и запускает их работу. */
@@ -653,11 +668,13 @@ export function workerHome(scene: StoreScene, role: StaffRole): { x: number; y: 
 
 /** Шаг сотрудника с учётом его скорости. */
 export function workerWalk(scene: StoreScene, w: Worker, x: number, y: number): Promise<void> {
+  noteWalk(scene, w, [{ x, y }]);
   return persons.walk(scene, w.sprite, x, y, STAFF_SPEED * workerPace(scene, w));
 }
 
 /** Сотрудник идёт через несколько точек одним ходом (дверь склада, пекарни) — не встаёт в каждой. */
 export function workerWalkVia(scene: StoreScene, w: Worker, points: Point[]): Promise<void> {
+  noteWalk(scene, w, points);
   return persons.walkVia(scene, w.sprite, points, STAFF_SPEED * workerPace(scene, w));
 }
 

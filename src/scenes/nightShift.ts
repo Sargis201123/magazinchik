@@ -9,7 +9,7 @@ import { PRODUCTS, billTotal, shelfFor, takeFromShelf, type DayStats, type Store
 import { nightCycle } from '../game/day';
 import { rankName, rankOf } from '../game/endless';
 import { saveGame } from '../game/save';
-import { t, type TextKey } from '../i18n';
+import { memberName, t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import { haptic } from '../platform/telegram';
@@ -302,6 +302,12 @@ export function finishDay(scene: StoreScene): void {
   if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
   if (scene.stats.momentsShown) extra.push([t('summary.moments'), t('summary.momentsValue', { n: scene.stats.moments ?? 0, total: scene.stats.momentsShown })]);
   if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
+  // Кто из персонала побил свой рекорд за смену (game/staffStats.ts).
+  if (night.staffRecords.length)
+    extra.push([
+      t('summary.staffRecord'),
+      night.staffRecords.map((r) => t('summary.staffRecordValue', { name: memberName({ name: r.name, friend: r.friend ? { name: r.friend } : undefined }), what: t(`staffStats.deed.${r.kind}` as TextKey), n: r.n })).join(' · '),
+    ]);
   // Шаг сезонной недели (weeks.ts): монеты, а за последний — памятная вещь в зал.
   if (night.week) {
     const w = night.week;
