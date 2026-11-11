@@ -53,7 +53,7 @@ import { CALLS_MAX, planAttention, thin } from '../game/attention';
 import { callsPossible } from '../game/delivery';
 import { momentsFor } from '../game/moments';
 import { fridgeLeak } from '../game/gear';
-import { catHome } from '../game/cat';
+import { catHome, catBrought, catFind } from '../game/cat';
 import { fairToday } from '../game/fair';
 import { takeLiteNote } from '../platform/quality';
 import { quietDays } from '../game/firstday';
@@ -651,6 +651,18 @@ export function prepareDay(scene: StoreScene): void {
     scene.stats.kitchenSpent = pantry.spent;
     const crate = scene.kitchenView?.crate;
     if (crate) scene.time.delayedCall(900, () => crate.active && scene.popup(crate.x, crate.y - 12, t('popup.kitchenBought', { n: pantry.spent }), '#fff3b0'));
+  }
+  // Сытый вчера кот иногда находит под прилавком монетку — так видно, что кормить его выгодно (cat.ts catFind).
+  const found = catFind(scene.state);
+  if (found) {
+    scene.state = catBrought(scene.state, found);
+    const name = scene.state.cat?.name ?? '';
+    scene.time.delayedCall(2200, () => {
+      if (!scene.running) return;
+      const at = scene.catImg?.active ? scene.catImg : scene.layout.counter;
+      scene.popup(at.x, at.y - 16, t('popup.catFind', { name, n: found }), '#fff3b0');
+      scene.hud.update(scene.state, scene.timeLeft);
+    });
   }
   // Без повара кухня готовит сама из продуктов магазина — порции встают на полку «Еда» к открытию (kitchen.ts).
   const selfCooked = autoCook(scene.state);

@@ -14,7 +14,32 @@ export const DOG_DAY_CATCH = 0.4;
 export const DOG_FROM_DAY = 8;
 
 export interface Security {
-  dog?: { since: number };
+  /** kennel — какая будка (0 — простая, 1 — утеплённая, 2 — домик). */
+  dog?: { since: number; kennel?: number };
+}
+
+/**
+ * Будки Бобика (11.11, автор: «у кота есть улучшения, а у пса нет — собачке условия лучше»). Чем уютнее, тем
+ * бодрее Бобик: чаще ловит воришку днём; домик с табличкой ещё и приводит детей погладить пса — гостей чуть больше.
+ */
+export const KENNELS = [
+  { texture: 'kennel', price: 0, catch: DOG_DAY_CATCH, guests: 0 },
+  { texture: 'kennel1', price: 800, catch: 0.55, guests: 0 },
+  { texture: 'kennel2', price: 2200, catch: 0.7, guests: 0.02 },
+] as const;
+
+export const kennelOf = (state: StoreState): number => Math.min(KENNELS.length - 1, Math.max(0, state.security?.dog?.kennel ?? 0));
+/** Как часто Бобик днём ловит воришку — от будки. */
+export const dogCatch = (state: StoreState): number => (hasDog(state) ? KENNELS[kennelOf(state)].catch : 0);
+/** Гости от домика Бобика (дети приходят погладить). */
+export const dogGuests = (state: StoreState): number => 1 + (hasDog(state) ? KENNELS[kennelOf(state)].guests : 0);
+
+/** Купить следующую будку. null — пса нет, будка лучшая или не хватает денег. */
+export function upgradeKennel(state: StoreState): StoreState | null {
+  const dog = state.security?.dog;
+  const next = kennelOf(state) + 1;
+  if (!dog || next >= KENNELS.length || state.money < KENNELS[next].price) return null;
+  return { ...state, money: state.money - KENNELS[next].price, security: { ...securityOf(state), dog: { ...dog, kennel: next } } };
 }
 
 export const securityOf = (state: StoreState): Security => state.security ?? {};

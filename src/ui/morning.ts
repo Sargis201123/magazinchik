@@ -171,6 +171,9 @@ import {
   feedCat,
   fedToday,
   setBed,
+  CAT_TIP,
+  catPatienceFed,
+  catTipChanceFed,
 } from '../game/cat';
 import { holidayFor } from '../game/calendar';
 import { dialogBox, VOICE } from './dialog';
@@ -209,7 +212,7 @@ import { buyDecor, canTry, DECOR, DECOR_KINDS, grantDecor, setDecor, STAR_PACKS,
 import { IS_YANDEX } from '../platform/target';
 import { buyWithStars, starsAvailable, starsOffKey } from '../platform/stars';
 import { petsBox } from './pets';
-import { adoptDog, DOG_FOOD, DOG_FROM_DAY, DOG_PRICE, securityOf } from '../game/watch';
+import { adoptDog, DOG_FOOD, DOG_FROM_DAY, DOG_PRICE, securityOf, dogCatch, KENNELS, kennelOf, upgradeKennel } from '../game/watch';
 import { claimFriends, INVITE_REWARD, inviteFriends, socialInfo, WELCOME_GIFT } from '../platform/social';
 import { flushSoon, track } from '../platform/analytics';
 import { MORNING_TABS, openAllTabs, openTabs, seeTab, tabNew, tabOpen, unlockTab } from '../game/onboarding';
@@ -2403,6 +2406,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         sub: status,
         actions: [button(fed ? t('cat.fedDone') : t('cat.feed', { n: FEED_COST }), () => update(feedCat(getState()), 'success'), 'ui-chip', fed || state.money < FEED_COST)],
       }),
+      // Что даёт котик — числами (11.11, автор: «кормишь, а взамен ничего»): терпение очереди, чаевые, находки.
+      el('div', 'ui-item-sub', t('cat.perks', { p: Math.round((catPatienceFed(state) - 1) * 100), t: Math.round(catTipChanceFed(state) * 100), n: CAT_TIP })),
+      ...(cat.tips ? [el('div', 'ui-note', t('cat.brought', { n: cat.tips }))] : []),
       el('div', 'ui-decor-kind', t('cat.bed.title')),
     );
     for (const id of CAT_BED_IDS) {
@@ -2892,7 +2898,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const box = el('div', 'ui-box');
     const dog = securityOf(state).dog;
     box.append(
-      artRow('bobik_sit0', {
+      artRow(dog ? KENNELS[kennelOf(state)].texture : 'bobik_sit0', {
         name: t('watch.dog.name'),
         price: dog ? undefined : DOG_PRICE,
         sub: dog ? t('watch.dog.home', { n: dog.since, f: DOG_FOOD }) : t('watch.dog.desc', { f: DOG_FOOD }),
@@ -2901,6 +2907,21 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
           : [button(t('watch.dog.adopt'), () => update(adoptDog(getState()), 'success'), 'ui-chip', state.money < DOG_PRICE || state.day < DOG_FROM_DAY)],
       }),
     );
+    if (!dog) return box;
+    // Будки (watch.ts KENNELS): чем уютнее — тем чаще Бобик ловит воришку; домик ещё и приводит детей.
+    box.append(el('div', 'ui-item-sub', t('watch.dog.perk', { p: Math.round(dogCatch(state) * 100) })), el('div', 'ui-decor-kind', t('watch.kennel.title')));
+    const have = kennelOf(state);
+    KENNELS.forEach((k, i) => {
+      const action = i <= have ? el('span', 'ui-tag', i === have ? '✓' : '·') : i === have + 1 ? button(t('upgrade.buy'), () => update(upgradeKennel(getState()), 'success'), 'ui-chip', state.money < k.price) : el('span', 'ui-tag', '🔒');
+      box.append(
+        artRow(k.texture, {
+          name: t(`watch.kennel.${i}` as TextKey),
+          price: i > have ? k.price : undefined,
+          sub: k.guests ? t('watch.kennel.subGuests', { p: Math.round(k.catch * 100), g: Math.round(k.guests * 100) }) : t('watch.kennel.sub', { p: Math.round(k.catch * 100) }),
+          actions: [action],
+        }),
+      );
+    });
     return box;
   };
 

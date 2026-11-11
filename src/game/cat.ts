@@ -40,6 +40,8 @@ export interface ShopCat {
   fedDay: number;
   beds: CatBedId[];
   bed?: CatBedId;
+  /** Сколько котик принёс за всё время: чаевые «за котика» и утренние находки (11.11). */
+  tips?: number;
 }
 
 export const catOffer = (state: StoreState): boolean => !state.cat && state.day >= CAT_FROM_DAY && (state.catAsk ?? 0) <= state.day;
@@ -57,6 +59,25 @@ export const catAway = (state: StoreState): boolean => Boolean(state.cat && stat
 /** Кот сегодня при магазине (свой и не ушёл). */
 export const catHome = (state: StoreState): boolean => Boolean(state.cat) && !catAway(state);
 
+/** Котик принёс монетку (чаевые «за котика» или утренняя находка): деньги — в кассу, в копилку кота — для карточки. */
+export function catBrought(state: StoreState, n: number): StoreState {
+  if (!state.cat) return state;
+  return { ...state, money: state.money + n, cat: { ...state.cat, tips: (state.cat.tips ?? 0) + n } };
+}
+
+/** Утренняя находка сытого кота: шанс и сколько монет (от зерна магазина и дня — без общего генератора). */
+export const CAT_FIND_CHANCE = 0.3;
+export const CAT_FIND = [20, 60] as const;
+export function catFind(state: StoreState): number {
+  const cat = state.cat;
+  // Кормили вчера (сегодняшнее утро) — кот довольный и шарит под прилавком.
+  if (!cat || catAway(state) || cat.fedDay < state.day - 1) return 0;
+  let h = ((state.seed ?? 1) * 2654435761 + state.day * 40503) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  const roll = (h % 1000) / 1000;
+  return roll < CAT_FIND_CHANCE ? CAT_FIND[0] + (h % (CAT_FIND[1] - CAT_FIND[0] + 1)) : 0;
+}
+
 export function feedCat(state: StoreState): StoreState | null {
   if (!state.cat || fedToday(state) || state.money < FEED_COST) return null;
   return { ...state, money: state.money - FEED_COST, cat: { ...state.cat, fedDay: state.day } };
@@ -69,6 +90,11 @@ export function catLuck(state: StoreState): number {
   const luck = cat.bed ? CAT_BEDS[cat.bed].luck : CAT_BASE_LUCK;
   return fedToday(state) ? luck : luck / 2;
 }
+
+/** То же, если кот сыт сегодня — для карточки: «вот что даёт сытый котик». */
+const fedLuck = (state: StoreState): number => (state.cat?.bed ? CAT_BEDS[state.cat.bed].luck : CAT_BASE_LUCK);
+export const catPatienceFed = (state: StoreState): number => 1 + 2 * fedLuck(state);
+export const catTipChanceFed = (state: StoreState): number => 2.5 * fedLuck(state);
 
 /** Во сколько раз дольше покупатели ждут в очереди, пока кот рядом. */
 export const catPatience = (state: StoreState): number => 1 + 2 * catLuck(state);

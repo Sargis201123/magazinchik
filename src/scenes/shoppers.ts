@@ -45,7 +45,7 @@ import { saleExtraItems } from '../game/weeks';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular } from '../game/regulars';
 import { CART_SHARE, loyaltyTolerance, withUpgrades } from '../game/upgrades';
-import { DOG_DAY_CATCH } from '../game/watch';
+import { dogCatch } from '../game/watch';
 import { guestCoins, seeGuest, type GuestId } from '../game/live';
 import { onbDone } from '../game/onboarding';
 import { treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplayer';
@@ -64,7 +64,7 @@ import { radioPatience, radioTolerance } from '../game/radio';
 import { cameraTheft, entranceMud, gearTier, REGISTER_JAM_SECONDS, registerJam, wcDirt } from '../game/gear';
 import { AROMA_TOLERANCE } from '../game/bakery';
 import { NIGHT_MARKUP, NIGHT_TOLERANCE } from '../game/night';
-import { CAT_TIP, catHome, catPatience, catTipChance } from '../game/cat';
+import { CAT_TIP, catBrought, catHome, catPatience, catTipChance } from '../game/cat';
 import { note } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { noteLost } from '../game/losses';
@@ -601,7 +601,7 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
     return;
   }
   // Бобик у входа лает — воришка с перепугу бросает товар.
-  if (scene.bobik?.active && c.items.length && Math.random() < DOG_DAY_CATCH) {
+  if (scene.bobik?.active && c.items.length && Math.random() < dogCatch(scene.state)) {
     pets.bobikBark(scene);
     catchThief(scene, c, 'dog');
     return;
@@ -1146,7 +1146,7 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   }
   // Чаевые «за котика».
   if (catHome(scene.state) && Math.random() < catTipChance(scene.state)) {
-    scene.state = { ...scene.state, money: scene.state.money + CAT_TIP };
+    scene.state = catBrought(scene.state, CAT_TIP);
     scene.stats.revenue += CAT_TIP;
     note(scene.stats, 'cat');
     scene.time.delayedCall(500, () => {

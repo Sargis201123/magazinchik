@@ -97,6 +97,79 @@ def kennel():
     return c
 
 
+def bobik_walk(frame):
+    """Идёт мордой влево 22×14 (как кот cat_walk): два кадра шага, хвост бубликом, красный ошейник."""
+    c = Canvas(22, 14)
+    legs = ((6, 0), (9, 1), (14, 0), (17, 1)) if frame == 0 else ((6, 1), (9, 0), (14, 1), (17, 0))
+    for x, lift in legs:
+        c.vline(x, 9, 4 - lift, FUR_D)
+        c.px(x, 12 - lift, CHEST)
+    c.ellipse(12, 7.5, 7, 3.4, FUR)
+    c.ellipse(12, 9, 5, 1.5, CHEST)
+    c.hline(10, 5, 5, FUR_L)
+    c.line(18, 6, 21, 2 + frame, FUR)
+    c.px(21, 1 + frame, FUR_L)
+    c.ellipse(4.5, 5, 3.4, 3, FUR)
+    c.ellipse(2.2, 6.5, 2, 1.4, CHEST)
+    c.px(0, 6, "k")
+    c.px(4, 4, "k")
+    c.rect(5, 2, 2, 5, EAR)
+    c.vline(8, 4, 5, "R")
+    c.px(8, 9, "Y")
+    c.outline("k")
+    return c
+
+
+def kennel_warm():
+    """Утеплённая будка: та же будка, крыша покрыта рубероидом, у входа — клетчатый плед, миска полная."""
+    c = kennel()
+    for y in range(1, 11):
+        for x in range(28):
+            if c.get(x, y)[:3] in (rgb("#a22633")[:3], rgb("#9e2835")[:3]):
+                c.px(x, y, "K" if (x + y) % 4 else "W")
+    for x in range(9, 18):
+        for y in range(21, 24):
+            c.px(x, y, "R" if (x + y) % 2 else "Y")
+    c.px(23, 21, "n")
+    c.px(25, 21, "n")
+    return c
+
+
+def kennel_house():
+    """Домик Бобика 34×30: дощатые стены, черепичная крыша с трубой, окошко, табличка, полная миска и косточка."""
+    body = Canvas(34, 30)
+    body.rect(4, 13, 24, 15, "n")
+    for x in range(6, 28, 4):
+        body.vline(x, 14, 14, "B")
+    body.hline(4, 27, 24, "a")
+    for y in range(13):
+        body.hline(15 - y - 1 - 2, y + 1, 2 * y + 5, "R" if y % 3 else "r")
+    body.hline(1, 13, 30, "r")
+    body.rect(22, 2, 3, 6, "a")
+    body.hline(21, 2, 5, "b")
+    body.ellipse(14, 22, 5, 5.5, "k")
+    body.rect(9, 22, 10, 6, "k")
+    body.ellipse(14, 22, 3.5, 4, "K")
+    body.rect(21, 17, 5, 4, "U")
+    body.hline(21, 19, 5, "W")
+    body.vline(23, 17, 4, "W")
+    body.rect(9, 15, 10, 3, "N")
+    body.hline(11, 16, 6, "a")
+    body.outline("k")
+    c = shadowed(body, 16, 28, 15, 2)
+    extra = Canvas(34, 30)
+    extra.ellipse(30, 27.5, 3, 1.6, "U")
+    extra.hline(28, 26, 5, "n")
+    extra.px(29, 25, "n")
+    extra.px(31, 25, "n")
+    extra.hline(1, 28, 5, "N")
+    extra.px(1, 27, "N")
+    extra.px(5, 27, "N")
+    extra.outline("k")
+    c.img.alpha_composite(extra.img)
+    return c
+
+
 def police_cap(p, hair):
     """Фуражка: синяя тулья, красный околыш, чёрный козырёк, золотая кокарда."""
     p.ellipse(16, 6, 11, 4, rgb("#3a4466"))
@@ -290,6 +363,10 @@ def main():
         bobik_sit(tail).save(f"bobik_sit{i}")
     bobik_sit(12, bark=True).save("bobik_bark")
     kennel().save("kennel")
+    kennel_warm().save("kennel1")
+    kennel_house().save("kennel2")
+    for i in range(2):
+        bobik_walk(i).save(f"bobik_walk{i}")
     for mood in (None, "happy", "sad", "surprised"):
         portrait("police", "#124e89", "#eec39a", "#262b44", "#3a4466", police_cap, police_extras, mood)
     news_burglary()
