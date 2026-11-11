@@ -1,7 +1,7 @@
 // Смена дня целиком: заказ забирают, холодильники греются, товар портится, счета,
 // сюжетные счётчики и план на завтра. Этим пользуются и игра, и симулятор.
 
-import { dogNight } from './watch';
+import { dogNight, dogGuests } from './watch';
 import { contestGuests, contestNight } from './contest';
 import { lightsGuests } from './gear';
 import { addReport } from './reports';
@@ -174,6 +174,7 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, districtGuests) *
   homeOnly(state, hoodGuests) *
   homeOnly(state, tenantGuests) *
+  homeOnly(state, dogGuests) *
   homeOnly(state, trickGuests) *
   nightBoostGuests(state) *
   homeOnly(state, giantGuests) *

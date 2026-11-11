@@ -9,7 +9,7 @@ import { sound } from '../platform/sound';
 import { findPath } from './paths';
 import { haptic } from '../platform/telegram';
 import { UI_FONT } from '../ui/dom';
-import { hasDog } from '../game/watch';
+import { hasDog, KENNELS, kennelOf } from '../game/watch';
 import { CAT_BEDS, catHome, fedToday } from '../game/cat';
 import { note } from '../game/reviews';
 import { ART, LIGHT_DEPTH, type EmoteKey } from './common';
@@ -226,10 +226,27 @@ export function buildBobik(scene: StoreScene, x: number, y: number): void {
   scene.bobik = undefined;
   scene.bobikWag?.remove();
   if (!hasDog(scene.state)) return;
-  // Бобик лежит перед будкой — слева от неё мусорный контейнер, справа ходят к двери.
-  scene.art(x, y - 2, 'kennel').setOrigin(0.5, 1).setDepth(y + 4);
+  // Бобик лежит перед будкой — слева от неё мусорный контейнер, справа ходят к двери. Будка — какую купили (watch.ts).
+  scene.art(x, y - 2, KENNELS[kennelOf(scene.state)].texture).setOrigin(0.5, 1).setDepth(y + 4);
   const dog = scene.art(x + 1, y + 4, 'bobik_lie').setOrigin(0.5, 1).setDepth(y + 6);
   scene.bobik = dog;
+  // Днём Бобик не только спит (11.11, автор: «котик гуляет, а собачку не видно»): встаёт, обходит тротуар у входа,
+  // садится повилять хвостом прохожим и возвращается к будке.
+  if (!scene.lite) {
+    const home = { x: dog.x, y: dog.y };
+    let busy = false;
+    scene.critterTimers.push(
+      scene.time.addEvent({
+        delay: 16000,
+        loop: true,
+        callback: () => {
+          if (busy || scene.closed || !scene.running || !dog.active || dog.texture.key !== 'bobik_lie' || Math.random() < 0.35) return;
+          busy = true;
+          void bobikStroll(scene, dog, home).finally(() => (busy = false));
+        },
+      }),
+    );
+  }
   if (scene.closed) bobikSit(scene, 900);
   else bobikRest(scene);
   dog.setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => petBobik(scene)));
@@ -237,6 +254,46 @@ export function buildBobik(scene: StoreScene, x: number, y: number): void {
   scene.critterTimers.push(
     scene.time.addEvent({ delay: 11000, loop: true, callback: () => !scene.closed && dog.texture.key === 'bobik_lie' && Math.random() < 0.5 && petEmote(scene, dog, 'emo_zzz') }),
   );
+}
+
+/** Бобик идёт к точке: два кадра шага, мордой туда, куда идёт (кадры смотрят влево). */
+function bobikTrot(scene: StoreScene, dog: Phaser.GameObjects.Image, x: number, y: number): Promise<void> {
+  return new Promise((resolve) => {
+    scene.tweens.killTweensOf(dog);
+    scene.bobikWag?.remove();
+    const dist = Math.hypot(x - dog.x, y - dog.y);
+    dog.setScale(1 / ART).setFlipX(x > dog.x);
+    let step = 0;
+    scene.tweens.add({
+      targets: dog,
+      x,
+      y,
+      duration: (dist / 22) * 1000,
+      onUpdate: () => {
+        const frame = Math.floor(scene.time.now / 140) % 2;
+        if (frame !== step || !dog.texture.key.startsWith('bobik_walk')) dog.setTexture(`bobik_walk${frame}`);
+        step = frame;
+      },
+      onComplete: () => resolve(),
+      onStop: () => resolve(),
+    });
+  });
+}
+
+/** Прогулка у входа: туда-сюда по тротуару, посидеть, повилять хвостом — и к будке. */
+async function bobikStroll(scene: StoreScene, dog: Phaser.GameObjects.Image, home: { x: number; y: number }): Promise<void> {
+  const side = Math.random() < 0.5 ? -1 : 1;
+  await bobikTrot(scene, dog, home.x + side * Phaser.Math.Between(30, 55), home.y + Phaser.Math.Between(1, 5));
+  if (!dog.active || scene.closed) return;
+  dog.setFlipX(false);
+  bobikSit(scene, 200);
+  if (Math.random() < 0.5) petEmote(scene, dog, 'emo_heart');
+  await scene.wait(2600);
+  if (!dog.active) return;
+  await bobikTrot(scene, dog, home.x, home.y);
+  if (!dog.active) return;
+  dog.setFlipX(false);
+  if (!scene.closed) bobikRest(scene);
 }
 
 /** Бобик ложится: дышит во сне, иногда «z». */
