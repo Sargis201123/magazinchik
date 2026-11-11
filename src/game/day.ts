@@ -29,6 +29,7 @@ import { hiddenBigDayGuests, knownBigDayGuests } from './bigday';
 import { coffeeTablesGuests } from './coffee';
 import { legacyGuests } from './legacy';
 import { taleGuests, talesMorning } from './tales';
+import { skitGuests } from './skits';
 import { arcGuests, arcsMorning } from './arcs';
 import { addPassXp } from './pass';
 import { rushGuests } from './rush';
@@ -156,6 +157,7 @@ export const guestFactor = (state: StoreState): number =>
   storyGuests(state) *
   legacyGuests(state) *
   taleGuests(state) *
+  skitGuests(state) *
   homeOnly(state, arcGuests) *
   rushGuests(state) *
   priceAppeal(state) *
