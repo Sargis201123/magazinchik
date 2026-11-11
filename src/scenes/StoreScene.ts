@@ -867,9 +867,9 @@ export class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * Время вышло, а последние гости ещё бродят по залу: ждать их у пустой кассы скучно (10–30 секунд тишины).
-   * Пока у касс никто не стоит, зал идёт в CLOSING_HURRY раз быстрее; подошёл к кассе — снова обычный ход,
-   * чтобы терпение очереди не таяло быстрее, чем игрок успевает пробивать.
+   * Время вышло, а последние гости ещё в зале: ждать их скучно (раньше — 20–30 секунд). Зал идёт в CLOSING_HURRY
+   * раз быстрее, и у касс тоже (11.11: очередь из 5–6 человек дообслуживалась ещё ~15 секунд); новые не заходят,
+   * бродящие — к кассе с тем, что взяли (shoppers.closing), а терпение очереди продлевается (shoppers.giveUp).
    */
   private setHurry(hurry: number): void {
     if (hurry === this.hurry) return;
@@ -918,7 +918,7 @@ export class StoreScene extends Phaser.Scene {
     const dt = (deltaMs / 1000) * this.speed;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
     this.playTime += dt;
-    this.setHurry(this.timeLeft <= 0 && !this.queue.length && !this.registers.some((r) => r.customer) ? CLOSING_HURRY : 1);
+    this.setHurry(this.timeLeft <= 0 ? CLOSING_HURRY : 1);
 
     const elapsed = DAY_SECONDS - this.timeLeft;
     // Вечерняя уценка (02.11 — сама у всех, раньше только с электронными ценниками): в последнюю четверть
