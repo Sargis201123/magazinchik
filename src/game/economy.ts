@@ -645,6 +645,8 @@ export interface StoreState {
   kitchen?: Partial<Record<DishId, number>>;
   /** Кладовая кухни (kitchen.ts): продукты, которые кухня сама закупила у поставщиков, — штук каждого. */
   pantry?: Partial<Record<ProductId, number>>;
+  /** Без повара кухня готовит сама каждое утро (kitchen.ts autoCook); false — выключено игроком. */
+  kitchenSelf?: boolean;
   /** Меню дня для повара (kitchen.ts): какие блюда готовить; не задано — «авто». */
   cookMenu?: DishId[];
   /** Идут выходные «Чёрной пятницы района» (rush.ts) и за какие выходные забран приз. */

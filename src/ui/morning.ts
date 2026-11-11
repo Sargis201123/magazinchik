@@ -195,7 +195,7 @@ import { showSupport } from './support';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
 import { answerOpening, BUILDINGS, districtNews, districtSite, isMatchDay, OPENING_DAYS, type BuildingId } from '../game/district';
-import { canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, foodSlots, foodSprite, kitchenOpen, kitchenWorking, menuAuto, morningOrder, orderCost, pantryOf, portionsOf, portionsTotal, toggleMenu } from '../game/kitchen';
+import { selfCookOn, toggleSelfCook, canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, foodSlots, foodSprite, kitchenOpen, kitchenWorking, menuAuto, morningOrder, orderCost, pantryOf, portionsOf, portionsTotal, toggleMenu } from '../game/kitchen';
 import { addFriend, MP_EVENT, visitsInfo } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
@@ -2264,6 +2264,12 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       }
       box.append(el('h3', '', t('kitchen.menu')), chips, el('div', 'ui-muted', t(auto ? 'kitchen.autoNote' : 'kitchen.menuNote')));
     }
+    // Без повара: кухня готовит сама каждое утро (kitchen.ts autoCook) — переключатель; кнопки ниже — доготовить руками.
+    if (!chef) {
+      const chips = el('div', 'ui-chips');
+      chips.append(button(`🍳 ${t('kitchen.selfAuto')}`, () => update(toggleSelfCook(getState())), `ui-chip${selfCookOn(state) ? ' active' : ''}`));
+      box.append(chips, el('div', 'ui-muted', t(selfCookOn(state) ? 'kitchen.selfOnNote' : 'kitchen.selfOffNote')));
+    }
     box.append(el('h3', '', t('kitchen.recipes')));
     for (const id of DISH_IDS) {
       const d = DISHES[id];
@@ -4215,7 +4221,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       fold('gear', gearBox(state)),
       fold('ads', adsBox(state)),
       decorBox(state),
-      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...(inZar(state) ? [] : hoodBox(state, getState, update)), bankBox(state));
+      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
