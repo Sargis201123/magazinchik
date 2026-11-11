@@ -216,6 +216,7 @@ export function buildOven(scene: StoreScene): void {
   const room = scene.layout.bakery;
   scene.art(room.x + 31, room.y + 24, 'bread_rack').setDepth(room.y + 33);
   scene.art(room.x + 26, room.y + 44, 'baker_table').setDepth(room.y + 50);
+  lighting.roomLamp(scene, room.x + room.w / 2 + 6, room.y + 14, room.y + room.h - 10, room.w * 0.9);
   const at = { x: room.x + 11, y: room.y + 25 };
   const img = scene.art(at.x, at.y, ovenSprite(scene.state)).setDepth(at.y + 9);
   const glow = scene.add.rectangle(at.x, at.y + 1.5, 7, 3, 0xf77622).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(at.y + 10);
@@ -370,11 +371,54 @@ export async function bakerLoop(scene: StoreScene, w: Worker, gen: number): Prom
       startOven(scene, next ?? 'bread', forShops);
       continue;
     }
-    // Пока печётся — месит тесто у стола.
-    if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await staff.workerWalk(scene, w, w.home.x, w.home.y);
-    persons.setFacing(w.sprite, 'up');
-    await scene.wait(600);
+    // Пока печётся — не стоит столбом (11.11, автор: «больше активных действий»): месит тесто у стола,
+    // раскладывает противни на стеллаже, заглядывает в печь, посыпает стол мукой.
+    await bakerIdle(scene, w, gen, atOven);
   }
+}
+
+/** Одно дело пекаря между закладками: месить, разложить на стеллаже, заглянуть в печь, присыпать стол мукой. */
+async function bakerIdle(scene: StoreScene, w: Worker, gen: number, atOven: { x: number; y: number }): Promise<void> {
+  const room = scene.layout.bakery;
+  const baking = scene.oven?.state === 'baking';
+  const roll = Math.random();
+  const flour = (x: number, y: number) => !scene.lite && steamPuff(scene, x, y, 0xffffff);
+  if (roll < 0.4 || scene.lite) {
+    // Месит тесто: несколько нажимов, над столом мука.
+    if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await staff.workerWalk(scene, w, w.home.x, w.home.y);
+    if (!scene.alive(gen)) return;
+    persons.setFacing(w.sprite, 'up');
+    for (let i = 0; i < 3; i++) {
+      motion.squash(scene, w.sprite, 1.06, 0.92, 140);
+      if (i === 1) flour(w.sprite.x, w.sprite.y - 6);
+      await scene.wait(380);
+      if (!scene.alive(gen)) return;
+    }
+  } else if (roll < 0.65) {
+    // К стеллажу: поправить противни.
+    await staff.workerWalk(scene, w, room.x + 31, room.y + 34);
+    if (!scene.alive(gen)) return;
+    persons.setFacing(w.sprite, 'up');
+    motion.squash(scene, w.sprite, 0.96, 1.05, 120);
+    await scene.wait(700);
+    motion.squash(scene, w.sprite, 0.96, 1.05, 120);
+    await scene.wait(500);
+  } else if (roll < 0.85 && baking) {
+    // Заглянуть в печь: как там хлеб.
+    await staff.workerWalk(scene, w, atOven.x, atOven.y);
+    if (!scene.alive(gen)) return;
+    persons.setFacing(w.sprite, 'up');
+    flour(atOven.x - 8, atOven.y - 14);
+    await scene.wait(900);
+  } else {
+    // Присыпать стол мукой с другого края.
+    await staff.workerWalk(scene, w, room.x + 16, room.y + 37);
+    if (!scene.alive(gen)) return;
+    persons.setFacing(w.sprite, 'up');
+    flour(room.x + 20, room.y + 38);
+    await scene.wait(800);
+  }
+  await scene.wait(300);
 }
 
 /** Хлебная полка, где есть место (первая по порядку); -1 — нет. */

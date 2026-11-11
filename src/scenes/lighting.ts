@@ -591,6 +591,19 @@ export function buildLights(scene: StoreScene): void {
 }
 
 /**
+ * Абажур под потолком маленькой комнаты (пекарня, комнаты арендаторов): лампа висит у потолка, под ней —
+ * тёплый круг света на полу. Днём горит вполсилы, вечером ярче — комната светится, как магазинчик;
+ * свет отключили — гаснет (11.11, автор: «освещение внутри магазинчиков»).
+ */
+export function roomLamp(scene: StoreScene, x: number, ceiling: number, floorY: number, w: number, warm = 0xffd27a): void {
+  scene.art(x, ceiling, 'light_shade').setOrigin(0.5, 0).setDepth(2.3);
+  const bulb = scene.add.image(x, ceiling + 11, 'glow').setDisplaySize(16, 10).setTint(warm).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.4).setDepth(2.4);
+  if (!scene.lite) scene.tweens.add({ targets: bulb, alpha: { from: 0.4, to: 0.28 }, duration: 1700, yoyo: true, repeat: -1 });
+  const pool = scene.add.image(x, floorY, 'glow').setDisplaySize(w, 18).setTint(warm).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.1).setDepth(1.2);
+  scene.light.follow(pool, { key: 'light_pool', w: w * 1.1, h: 34, color: warm, power: () => (0.25 + 0.6 * scene.evening) * powerOn(scene) });
+}
+
+/**
  * Свет полки в карте освещения — едет вместе с ней (перестановка, толчок): стеллаж подсвечен тёплыми
  * полосками над товаром, холодильник и ларь светятся холодным голубым (мясной — розоватым). Ночью товар
  * на полке виден и в полумраке зала; свет отключили — гаснет.
