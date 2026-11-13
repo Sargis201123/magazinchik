@@ -61,6 +61,10 @@ export const SPRITES = [
   // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
   'tip_jar',
   'jam_splat',
+  // «Эхо решений» (art/echoes.py): что герои давних сценок приносят в зал.
+  'echo_pies',
+  'echo_diploma',
+  'echo_card',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
   // Ломбард в подсобке (art/pawnshop.py, scenes/pawnFx.ts): полка «Разное» на стене склада, вещи и ценник.

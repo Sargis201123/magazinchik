@@ -18,6 +18,7 @@ import { quietDays } from './firstday';
 import { inZar } from './zarechye';
 import { isWet, weatherFor } from './weather';
 import { rng } from './random';
+import { plantSkitEcho, type EchoId } from './echoes';
 
 export type SkitId = 'robbery' | 'puppy' | 'counterfeit' | 'pies' | 'gift' | 'blogger' | 'rain';
 export type SkitMood = 'happy' | 'sad' | 'surprised' | 'angry' | null;
@@ -63,6 +64,11 @@ export interface Skit {
   cast: Record<string, string>;
   start: string;
   nodes: Record<string, SkitNode>;
+  /**
+   * Ключевые выборы, которые сценка запоминает (echoes.ts): «узел:номер ответа» → имя. Финал помнится и так;
+   * это — то, что финал не выдаёт: на кого указали, нагрубили ли в эфире, кто отнёс лекарства.
+   */
+  keys?: Record<string, string>;
 }
 
 const end = (who: string, mood: SkitMood, tone: SkitTone, effect: SkitEffect = {}): SkitNode => ({ who, mood, end: { tone, effect } });
@@ -71,7 +77,8 @@ export const SKITS: Record<SkitId, Skit> = {
   // Детектив: у входа вырвали сумочку. Улики — запах краски, капюшон, свежая белая краска на перилах (видел Фёдор
   // Иванович) и пятно на рукаве (камера). Подозреваемых трое, у каждого — три вопроса; кто-то путается в показаниях.
   // Вор — парень в капюшоне: «облокотился» на те самые перила. Прижать его уликой — признается (лучший финал);
-  // просто указать на него — тоже поймали, но похуже; на другого — ошибка.
+  // просто указать на него — тоже поймали, но похуже; на другого — ошибка. Признавшегося можно и отпустить
+  // (13.11, «Эхо решений»): премии нет, зато через недели Денис сам придёт проситься на работу.
   robbery: {
     from: 10,
     guest: 'galina',
@@ -95,12 +102,14 @@ export const SKITS: Record<SkitId, Skit> = {
       hoodieWhere: { who: 'hoodie', mood: 'sad', options: [{ to: 'hoodie' }] },
       hoodieRun: { who: 'hoodie', mood: 'surprised', options: [{ to: 'hoodie' }] },
       hoodieSleeve: { who: 'hoodie', mood: 'surprised', options: [{ to: 'confess' }, { to: 'hoodie' }] },
-      confess: { who: 'hoodie', mood: 'sad', options: [{ to: 'right' }] },
+      confess: { who: 'hoodie', mood: 'sad', options: [{ to: 'right' }, { to: 'forgive' }] },
       accuse: { who: 'police', mood: null, options: [{ to: 'wrong' }, { to: 'wrong' }, { to: 'rightGuess' }] },
       right: end('galina', 'happy', 'great', { money: 400, rating: 0.12, boost: [0.1, 5] }),
       rightGuess: end('galina', 'happy', 'good', { money: 200, rating: 0.06 }),
+      forgive: end('galina', 'happy', 'good', { rating: 0.06 }),
       wrong: end('police', 'sad', 'bad', { rating: -0.04 }),
     },
+    keys: { 'accuse:0': 'courier', 'accuse:1': 'painter' },
   },
   // Найти щенка: обойти места (пекарня, парк, курьер) — следы ведут к парковке; выманить — лучше всего колбасой.
   puppy: {
@@ -210,6 +219,8 @@ export const SKITS: Record<SkitId, Skit> = {
       nice: end('karina', 'happy', 'good', { boost: [0.08, 4] }),
       flop: end('karina', 'sad', 'bad', { rating: -0.03 }),
     },
+    // Нагрубил в эфире: «Удалите этот комментарий», «ходите куда хотите».
+    keys: { 'troll:2': 'rude', 'q3:2': 'rude' },
   },
   // Курьер в ливень: что в заказах (лекарства — срочно!), спасти мороженое, зарядить самокат — и решить, как быть.
   rain: {
@@ -235,6 +246,7 @@ export const SKITS: Record<SkitId, Skit> = {
       late: end('ruslan', 'sad', 'bad', { rating: -0.02 }),
       meh: end('ruslan', 'sad', 'ok'),
     },
+    keys: { 'plan:0': 'meds' },
   },
 };
 
@@ -247,15 +259,24 @@ export const SKIT_GAP = 2;
 /** Сколько шагов разговора самое большее (защита от зацикленного пути). */
 export const SKIT_MAX_STEPS = 24;
 
+/** Чем кончилась сценка: финал (узел), ключевые выборы (Skit.keys) и день — для эха (echoes.ts). */
+export interface SkitMemo {
+  end: string;
+  keys?: string[];
+  day: number;
+}
+
 export interface SkitsState {
   done: SkitId[];
   /** Раньше этого дня новая сценка не начнётся. */
   nextAt?: number;
   /** Прибавка гостей от сценок. */
   boost?: { pct: number; until: number };
+  /** Как кончились сыгранные сценки (с 13.11; у сыгранных раньше — нет). */
+  memo?: Partial<Record<SkitId, SkitMemo>>;
 }
 
-export const skitsOf = (state: StoreState): SkitsState => ({ done: state.skits?.done ?? [], nextAt: state.skits?.nextAt, boost: state.skits?.boost });
+export const skitsOf = (state: StoreState): SkitsState => ({ done: state.skits?.done ?? [], nextAt: state.skits?.nextAt, boost: state.skits?.boost, memo: state.skits?.memo });
 
 /** Случай дня: от зерна магазина и дня (не общий генератор — симулятор не сдвигается). */
 const roll = (state: StoreState, salt: number): number => rng(((state.seed ?? 1) ^ Math.imul(state.day * 131 + salt, 0x9e3779b1)) >>> 0)();
@@ -330,11 +351,18 @@ const applyEffect = (state: StoreState, e: SkitEffect): StoreState => {
   return s;
 };
 
+/** Ключевые выборы пути (Skit.keys) — без повторов, в порядке ответов. */
+export function skitKeys(id: SkitId, walk: SkitWalk): string[] {
+  const keys = SKITS[id].keys ?? {};
+  return [...new Set([...walk.picked].map((p) => keys[p]).filter(Boolean))];
+}
+
 /**
- * Разговор окончен: всё, что стоили ответы по пути, и итог финала; сценка больше не повторится. null — сегодня не
- * эта сценка или путь не ведёт к финалу.
+ * Разговор окончен: всё, что стоили ответы по пути, и итог финала; сценка больше не повторится. Сценка помнит,
+ * чем кончилась, и сажает своё эхо (echoes.ts) — оно вернётся через недели. null — сегодня не эта сценка или
+ * путь не ведёт к финалу.
  */
-export function finishSkit(state: StoreState, id: SkitId, path: number[]): { state: StoreState; tone: SkitTone; effect: SkitEffect } | null {
+export function finishSkit(state: StoreState, id: SkitId, path: number[]): { state: StoreState; tone: SkitTone; effect: SkitEffect; echo: EchoId | null } | null {
   if (skitToday(state) !== id) return null;
   const walk = walkSkit(id, path);
   const node = walk && SKITS[id].nodes[walk.node];
@@ -343,8 +371,11 @@ export function finishSkit(state: StoreState, id: SkitId, path: number[]): { sta
   for (const e of walk.spent) s = applyEffect(s, e);
   s = applyEffect(s, node.end.effect);
   const skits = skitsOf(s);
-  s = { ...s, skits: { ...skits, done: [...skits.done, id], nextAt: s.day + SKIT_GAP } };
-  return { state: s, tone: node.end.tone, effect: node.end.effect };
+  const keys = skitKeys(id, walk);
+  const memo: SkitMemo = keys.length ? { end: walk.node, keys, day: s.day } : { end: walk.node, day: s.day };
+  s = { ...s, skits: { ...skits, done: [...skits.done, id], nextAt: s.day + SKIT_GAP, memo: { ...skits.memo, [id]: memo } } };
+  const planted = plantSkitEcho(s, id, walk.node, keys);
+  return { state: planted.state, tone: node.end.tone, effect: node.end.effect, echo: planted.echo };
 }
 
 /**
