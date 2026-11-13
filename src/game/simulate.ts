@@ -339,7 +339,7 @@ const OWNER_SECONDS_PER_GUEST = 2.5;
 function serveCapacity(state: StoreState): { total: number; owner: number; kiosk: number } {
   // Старая касса иногда заедает — в среднем столько секунд на покупателя.
   const jam = registerJam(state) * REGISTER_JAM_SECONDS;
-  // Хозяин пробивает в ритме (tillRhythm.ts, 13.11): средний игрок — то в такт, то с лишним проездом товара.
+  // Хозяин пробивает в ритме (tillRhythm.ts, 13.11): средний игрок — то в такт (быстрее), то как прежде.
   const owner = rhythmSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
   const share = ownerAtRegister(state.level);
   const ownerCap = Math.floor((DAY_SECONDS * share) / owner);

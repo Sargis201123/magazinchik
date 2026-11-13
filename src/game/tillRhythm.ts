@@ -4,9 +4,12 @@
 // «пикнуть» касанием, когда он под лучом:
 // - точно в такт — «Идеально ×N»: растёт ритм, а с ним чаевые (складываются с чаевыми серии, series.ts);
 // - просто в окне — обычный «пик», ритм не рвётся;
-// - промах (рано или проехал без касания) — товар уезжает назад и проезжает ещё раз: покупатель ждёт чуть
+// - промах (коснулся, но не в окне) — товар уезжает назад и проезжает ещё раз: покупатель ждёт чуть
 //   дольше, денег за промах не берём. Второй промах на том же товаре — хозяин пробивает его сам, без бонуса:
-//   лента не должна держать покупателя у кассы вечно.
+//   лента не должна держать покупателя у кассы вечно;
+// - проехал без касания — хозяин пробивает его сам сразу, без «Ещё разок» (13.11, ревью: игрока в это время
+//   зовут и звонок, и вор, и «моменты» — не касался, значит, не промахивался). Ритм рвётся, ускорения нет,
+//   но и медленнее прежнего не выходит: кто ленту не трогает, пробивает как раньше (beltRest).
 // В такт пробивка на RHYTHM_PACE быстрее прежней — «руками выгоднее» и временем, а не только чаевыми.
 // Кассир-сотрудник пробивает сам, как раньше. Здесь только правила и счёт (без Phaser): лента — scenes/tillBelt.ts.
 // Случайностей нет: всё решает касание игрока; симулятор считает игрока средним по точности (SIM_HIT).
@@ -26,6 +29,12 @@ export const PERFECT_MS = 90;
 export const GOOD_MS = 200;
 /** Касание раньше этого (мс до прихода товара) — ещё не про этот товар, его не считаем вовсе. */
 export const EARLY_MS = 380;
+/**
+ * После окна прошлого товара столько мс касание не судим вовсе (13.11, ревью): на частой ленте опоздавшее
+ * касание по прошлому товару или дребезг пальца после «пик» иначе засчитались бы ранним промахом по следующему —
+ * одно касание, два «Ещё разок». Окно «пик» следующего товара это не трогает.
+ */
+export const CALM_MS = 100;
 /** Промах: товар отъезжает к началу ленты за столько мс. */
 export const RETURN_MS = 300;
 /** Сколько раз товар может проехать под лучом; на последнем проезде без касания хозяин пробивает его сам. */
@@ -36,11 +45,11 @@ export const RHYTHM_TIP_MAX = 0.06;
 /** В час пик чаевые за ритм вдвое: самое время держать такт. */
 export const RUSH_RHYTHM = 2;
 /**
- * Симулятор: средний игрок попадает в окно с первого проезда в 4 случаях из 5. На телефоне, одной рукой и
- * с первых дней ленты — скорее так, чем точнее; тогда средний игрок пробивает чуть медленнее прежнего (лишние
- * проезды), а выигрывает тот, кто держит такт.
+ * Симулятор: средний игрок пробивает товар ленты в такт в 3 случаях из 5 — то держит ритм, то отвлёкся на
+ * звонок или вора, а то и вовсе не трогает ленту. 13.11: не тронутая лента пробивает как прежде, так что
+ * средний игрок чуть быстрее прежнего, а заметно быстрее — тот, кто держит такт.
  */
-export const SIM_HIT = 0.8;
+export const SIM_HIT = 0.6;
 
 /** Лента включена, только когда карточку «Новое: Касса в ритме» уже прочли (tips.ts): правило не застаёт врасплох. */
 export const rhythmOn = (state: StoreState): boolean => (state.seenTips ?? []).includes('rhythm');
@@ -65,18 +74,31 @@ export interface BeltPlan {
 
 export function beltPlan(t: ScanTiming, items: number): BeltPlan {
   // Товарам ленты — их доля прежнего времени (быстрее на RHYTHM_PACE). Ловкому хозяину на хорошей кассе её
-  // не хватает и на шаг BEAT_MIN_MS за товар — тогда касаний меньше (хоть одно), остальное он пробивает сам.
+  // не хватает и на шаг BEAT_MIN_MS за товар — тогда касаний меньше, остальное он пробивает сам.
+  const total = checkoutSeconds(t, items) * 1000;
   const share = Math.min(RHYTHM_TAPS, items) * t.item * 1000 * RHYTHM_PACE;
-  const taps = items > 0 ? Math.max(1, Math.min(RHYTHM_TAPS, items, Math.round(share / BEAT_MIN_MS))) : 0;
-  const beat = taps ? Math.min(BEAT_MAX_MS, Math.max(BEAT_MIN_MS, share / taps)) : 0;
+  let taps = items > 0 ? Math.max(1, Math.min(RHYTHM_TAPS, items, Math.round(share / BEAT_MIN_MS))) : 0;
+  let beat = 0;
+  // Товар, проехавший без касания, хозяин пробивает в конце его окна. Лента, которую не трогали, не должна
+  // выйти дольше прежней пробивки (13.11, ревью) — иначе меньше касаний; совсем быстрому хозяину ленты нет.
+  for (; taps > 0; taps--) {
+    beat = Math.min(BEAT_MAX_MS, Math.max(BEAT_MIN_MS, share / taps));
+    if (taps * beat + GOOD_MS <= total) break;
+  }
+  if (!taps) return { taps: 0, beat: 0, rest: total };
   // Всё вместе — как прежняя пробивка, только быстрее на RHYTHM_PACE; лента берёт своё, остальное — после неё.
-  const rest = Math.max(0, checkoutSeconds(t, items) * 1000 * RHYTHM_PACE - taps * beat);
-  return { taps, beat, rest };
+  return { taps, beat, rest: Math.max(0, total * RHYTHM_PACE - taps * beat) };
 }
 
-/** Как засчитать касание: dt — на сколько мс оно позже (+) или раньше (−) прихода товара под луч. null — слишком рано, не считаем. */
-export function judge(dt: number): Grade | null {
-  if (dt < -EARLY_MS) return null;
+/** До скольких мс раньше прихода товара касание ещё про него (раннее — промах): на частой ленте — меньше, см. CALM_MS. */
+export const earlyFor = (beat: number): number => Math.max(GOOD_MS, Math.min(EARLY_MS, beat - GOOD_MS - CALM_MS));
+
+/**
+ * Как засчитать касание: dt — на сколько мс оно позже (+) или раньше (−) прихода товара под луч. null — слишком
+ * рано, не считаем (раньше early мс).
+ */
+export function judge(dt: number, early = EARLY_MS): Grade | null {
+  if (dt < -early) return null;
   const off = Math.abs(dt);
   return off <= PERFECT_MS ? 'perfect' : off <= GOOD_MS ? 'good' : 'miss';
 }
@@ -125,25 +147,39 @@ function miss(belt: Belt, item: BeltItem, now: number): { belt: Belt; event: Bel
   };
 }
 
-/** Касание в момент now (часы ленты). event null — касание не про ленту (рано или пробивать нечего). */
-export function beltTap(belt: Belt, now: number): { belt: Belt; event: BeltEvent | null } {
+/**
+ * Касание в момент at (часы ленты), засчитанное в now (по умолчанию тогда же): промах по полу сцена засчитывает,
+ * когда палец подняли, — товар уезжает на второй проезд от now. event null — касание не про ленту (рано или
+ * пробивать нечего).
+ */
+export function beltTap(belt: Belt, now: number, at = now): { belt: Belt; event: BeltEvent | null } {
   const item = nextItem(belt);
-  const grade = item ? judge(now - item.arrive) : null;
+  const grade = item ? judge(at - item.arrive, earlyFor(belt.beat)) : null;
   if (!item || !grade) return { belt, event: null };
   if (grade === 'miss') return miss(belt, item, now);
   return { belt: settle(belt, item.index, grade), event: { index: item.index, grade } };
 }
 
-/** Время идёт: товар, проехавший окно без касания, — промах. */
+/** Время идёт: товар, проехавший окно без касания, хозяин пробивает сам — не промах и второго проезда нет. */
 export function beltTick(belt: Belt, now: number): { belt: Belt; events: BeltEvent[] } {
   const events: BeltEvent[] = [];
   for (let item = nextItem(belt); item && now - item.arrive > GOOD_MS; item = nextItem(belt)) {
-    const r = miss(belt, item, now);
-    belt = r.belt;
-    events.push(r.event);
+    belt = settle(belt, item.index, 'auto');
+    events.push({ index: item.index, grade: 'auto' });
   }
   return { belt, events };
 }
+
+/** Корзина пробита в такт: каждый товар ленты — касанием в окне, с первого проезда. */
+export const beltClean = (belt: Belt): boolean => belt.items.every((i) => i.passes === 1 && (i.scanned === 'perfect' || i.scanned === 'good'));
+
+/**
+ * Сколько мс пробивать остаток корзины и оплату после ленты, которая шла elapsed мс. В такт — по плану
+ * (вся пробивка на RHYTHM_PACE быстрее прежней). Иначе ускорения нет, но вся пробивка не дольше прежней,
+ * пока лента сама не заняла больше: кто ленту не трогал, пробивает ровно как раньше (13.11, ревью).
+ */
+export const beltRest = (plan: BeltPlan, t: ScanTiming, items: number, belt: Belt, elapsed: number): number =>
+  beltClean(belt) ? plan.rest : Math.max(0, checkoutSeconds(t, items) * 1000 - elapsed);
 
 /** «Идеально ×N» после товара: идеально — +1, просто «пик» — как было, промах — с нуля. */
 export const rhythmAfter = (streak: number, grade: Grade | 'auto'): number => (grade === 'perfect' ? Math.max(0, streak) + 1 : grade === 'good' ? Math.max(0, streak) : 0);
@@ -163,10 +199,13 @@ export function tillTip(series: number, streak: number, total: number, rush = fa
 
 /**
  * Сколько секунд в среднем уходит на покупателя с items товарами, когда пробивает сам игрок в ритме (для
- * симулятора): товары ленты, остальное и оплата — и в среднем лишний проезд на каждый промах (hit — доля попаданий).
+ * симулятора): все товары ленты в такт (hit — доля попаданий на товар) — на RHYTHM_PACE быстрее прежнего;
+ * иначе — как прежде (beltRest). Лишний проезд после настоящего промаха обычно укладывается в прежнее время.
  */
 export function rhythmSeconds(t: ScanTiming, items: number, hit = SIM_HIT): number {
   const plan = beltPlan(t, items);
-  const again = plan.taps * (1 - hit) * (GOOD_MS + RETURN_MS + plan.beat);
-  return (plan.taps * plan.beat + plan.rest + again) / 1000;
+  const old = checkoutSeconds(t, items);
+  if (!plan.taps) return old;
+  const clean = hit ** plan.taps;
+  return clean * ((plan.taps * plan.beat + plan.rest) / 1000) + (1 - clean) * old;
 }

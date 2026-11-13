@@ -58,7 +58,7 @@ import { personGlow } from './halo';
 import { CLASH_FACTOR } from '../game/neighbors';
 import { smellChance } from '../game/rot';
 import { seriesAfter, seriesLost } from '../game/series';
-import { beltPlan, rhythmOn, RHYTHM_PACE, tillTip } from '../game/tillRhythm';
+import { beltPlan, beltRest, rhythmOn, RHYTHM_PACE, tillTip } from '../game/tillRhythm';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { eyeTheft, ownerTiming } from '../game/owner';
 import { radioPatience, radioTolerance } from '../game/radio';
@@ -986,7 +986,9 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
   // Касса в ритме (game/tillRhythm.ts, 13.11): пробивает сам игрок — первые товары едут по ленте под касание.
   // Не за бабушку и не в блэкаут (сканер стоит, считают вручную); не на ×2 и не в спешке закрытия — там зал
   // бежит быстрее, и такт стал бы неловимым. Лента — только после карточки «Новое» (rhythmOn).
-  const plan = byOwner && !by && !scene.powerCut && scene.speed === 1 && scene.timeLeft > 0 && c.items.length && rhythmOn(scene.state) ? beltPlan(timing, c.items.length) : null;
+  // Совсем быстрому хозяину ленты нет (taps 0): товар не успел бы доехать до луча быстрее, чем он пробивает сам.
+  const belt = byOwner && !by && !scene.powerCut && scene.speed === 1 && scene.timeLeft > 0 && c.items.length && rhythmOn(scene.state) ? beltPlan(timing, c.items.length) : null;
+  const plan = belt?.taps ? belt : null;
   r.scan = { start: scene.time.now, total: checkoutSeconds(timing, c.items.length) * 1000 * manual, byOwner, rhythm: Boolean(plan) };
   const { counter } = r;
   const index = scene.registers.indexOf(r);
@@ -997,12 +999,15 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
   let itemMs = timing.item * 1000 * manual;
   let payMs = timing.pay * 1000;
   if (plan) {
-    if (!(await tillBelt.runBelt(scene, r, c, plan, clerk, hand))) return;
+    const ran = await tillBelt.runBelt(scene, r, c, plan, clerk, hand);
+    if (!ran) return;
     c.rhythm = scene.rhythm;
-    // Что сверх ленты (больше RHYTHM_TAPS товаров) хозяин пробивает сам, как раньше, — в общем времени ленты.
+    // Что сверх ленты (больше RHYTHM_TAPS товаров) хозяин пробивает сам, как раньше, — в общем времени ленты:
+    // в такт — быстрее прежнего, иначе — не дольше прежнего (beltRest).
+    const rest = beltRest(plan, timing, c.items.length, ran.state, ran.clock);
     const extra = c.items.length - plan.taps;
-    itemMs = extra ? Math.min(timing.item * 1000 * RHYTHM_PACE, plan.rest / extra) : 0;
-    payMs = plan.rest - extra * itemMs;
+    itemMs = extra ? Math.min(timing.item * 1000 * RHYTHM_PACE, rest / extra) : 0;
+    payMs = rest - extra * itemMs;
   }
   for (const [n, { id }] of c.items.entries()) {
     if (plan && n < plan.taps) continue;

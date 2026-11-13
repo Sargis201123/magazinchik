@@ -1,13 +1,15 @@
 // Касса в ритме (game/tillRhythm.ts): товары покупателя, которого пробивает сам игрок, едут по ленте кассы к
 // сканеру, и игрок «пикает» каждый касанием в такт. Здесь — только как это выглядит и где ловится касание.
 // 13.11, автор: «Час пик глубже». Камера не трясётся. Касание считается по нажатию пальца (не по отпусканию —
-// так точнее) по кассе или в любом пустом месте кадра: зона большая, палец не ищет цель. К сканеру товар
+// так точнее) по кассе или в любом пустом месте кадра: зона большая, палец не ищет цель. Только промах по
+// пустому полу ждёт, пока палец поднимут не сдвинув: с касания начинается и сдвиг камеры, и щипок (ревью
+// 13.11) — им лента промахов не пишет. Попадание засчитываем сразу: оно игроку не во вред. К сканеру товар
 // ведёт сжимающийся круг — в миг, когда он сойдётся с рамкой, и надо жать. В лёгкой графике — без искр,
 // вспышек и прыжков: товар, рамка, круг и надпись.
 
 import Phaser from 'phaser';
 import type { StoreScene } from './StoreScene';
-import { ART, LIGHT_DEPTH, type Customer, type Register } from './common';
+import { ART, LIGHT_DEPTH, STREET_TAP_MS, type Customer, type Register } from './common';
 import { beltDone, beltTap, beltTick, GOOD_MS, nextItem, PERFECT_MS, RETURN_MS, RHYTHM_HIT_TIP, rhythmAfter, rhythmTaught, startBelt, type Belt, type BeltEvent, type BeltPlan } from '../game/tillRhythm';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
@@ -55,10 +57,11 @@ export interface TillBelt {
 }
 
 /**
- * Пробивка в ритме: первые plan.taps товаров корзины едут по ленте к сканеру. Обещание — когда все пробиты
- * (касанием или самим хозяином после второго промаха); false — мир перестроили, пробивка оборвалась.
+ * Пробивка в ритме: первые plan.taps товаров корзины едут по ленте к сканеру. Обещание — лента, когда все
+ * пробиты (касанием или самим хозяином), с её часами — сколько она шла (game/tillRhythm.ts beltRest);
+ * null — мир перестроили, пробивка оборвалась.
  */
-export function runBelt(scene: StoreScene, r: Register, c: Customer, plan: BeltPlan, clerk: Phaser.GameObjects.Container | undefined, hand: { x: number; y: number }): Promise<boolean> {
+export function runBelt(scene: StoreScene, r: Register, c: Customer, plan: BeltPlan, clerk: Phaser.GameObjects.Container | undefined, hand: { x: number; y: number }): Promise<TillBelt | null> {
   return new Promise((done) => {
     const gen = scene.worldGen;
     const x = r.counter.x + 0.5;
@@ -73,6 +76,8 @@ export function runBelt(scene: StoreScene, r: Register, c: Customer, plan: BeltP
     const belt: TillBelt = { state: startBelt(sprites.length, plan.beat, 0), clock: 0 };
     let label: Phaser.GameObjects.Text | undefined;
     let hot = false;
+    // Промах по пустому полу, который ждёт, поднимут ли палец не сдвинув: какой палец, когда коснулся, по какому товару.
+    let held: { id: number; at: number; index: number; passes: number; x: number; y: number } | null = null;
     scene.belt = belt;
 
     // Надпись — над кассой, по центру: не закрывает ни ленту с товаром, ни голову покупателя; гаснет раньше,
@@ -160,27 +165,48 @@ export function runBelt(scene: StoreScene, r: Register, c: Customer, plan: BeltP
     const finish = (ok: boolean) => {
       scene.events.off('update', onUpdate);
       scene.input.off('pointerdown', onDown);
+      scene.input.off('pointerup', onUp);
       if (scene.belt === belt) scene.belt = undefined;
       frame.destroy();
       ring.destroy();
       // Пробитые товары долетают до рук сами; оборвалась пробивка (мир перестроили) — убрать всё.
       if (!ok) for (const s of sprites) s.destroy();
-      done(ok);
+      done(ok ? belt : null);
+    };
+
+    /** Касание засчитано: круг под пальцем (по кассе его рисует сам отклик касания, motion.tapFx), отклик ленты. */
+    const take = (res: ReturnType<typeof beltTap>, ripple?: { x: number; y: number }) => {
+      if (!res.event) return;
+      belt.state = res.belt;
+      if (ripple) motion.ripple(scene, ripple.x, ripple.y);
+      apply(res.event);
+      if (beltDone(belt.state)) finish(true);
     };
 
     function onDown(p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void {
+      // Второй палец — щипок или ладонь: и ждущий промах, и само касание — не про кассу.
+      const two = scene.input.pointer1.isDown && scene.input.pointer2.isDown;
+      if (two) held = null;
       if (!scene.running || scene.time.paused) return;
       const at = scene.cameras.main.getWorldPoint(p.x, p.y);
       // Нажали что-то своё (вора, мусор, полку) — это не касса. Сама касса — всегда касса.
       const onTill = Math.abs(at.x - (r.counter.x + 6)) <= 20 && Math.abs(at.y - (r.counter.y + 6)) <= 32;
-      if (over.length && !onTill) return;
+      if (onTill) return take(beltTap(belt.state, belt.clock), over.length ? undefined : at);
+      if (over.length || two) return;
       const res = beltTap(belt.state, belt.clock);
-      if (!res.event) return;
-      belt.state = res.belt;
-      // Круг под пальцем; по кассе его нарисует сам отклик касания (motion.tapFx).
-      if (!over.length) motion.ripple(scene, at.x, at.y);
-      apply(res.event);
-      if (beltDone(belt.state)) finish(true);
+      const item = nextItem(belt.state);
+      if (res.event?.grade !== 'miss' || !item) return take(res, at);
+      held = { id: p.id, at: belt.clock, index: item.index, passes: item.passes, x: at.x, y: at.y };
+    }
+
+    // Палец поднят: не сдвинул камеру, не держал долго и товар всё тот же — промах всё-таки был.
+    function onUp(p: Phaser.Input.Pointer): void {
+      const h = held;
+      if (!h || h.id !== p.id) return;
+      held = null;
+      const item = nextItem(belt.state);
+      if (!scene.running || scene.time.paused || scene.dragged || p.upTime - p.downTime > STREET_TAP_MS || item?.index !== h.index || item.passes !== h.passes) return;
+      take(beltTap(belt.state, belt.clock, h.at), h);
     }
 
     function onUpdate(_time: number, delta: number): void {
@@ -225,5 +251,6 @@ export function runBelt(scene: StoreScene, r: Register, c: Customer, plan: BeltP
 
     scene.events.on('update', onUpdate);
     scene.input.on('pointerdown', onDown);
+    scene.input.on('pointerup', onUp);
   });
 }

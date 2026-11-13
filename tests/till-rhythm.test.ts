@@ -6,8 +6,10 @@ import { simulate } from '../src/game/simulate';
 import {
   BEAT_MAX_MS,
   BEAT_MIN_MS,
+  CALM_MS,
   beltDone,
   beltPlan,
+  beltRest,
   beltTap,
   beltTick,
   EARLY_MS,
@@ -65,19 +67,26 @@ describe('касса в ритме: план пробивки', () => {
   it('касаний не больше трёх, шаг ленты не чаще BEAT_MIN_MS и не реже BEAT_MAX_MS', () => {
     for (const item of [0.15, 0.3, 0.5, 0.85, 1, 1.5, 3]) {
       for (const items of [1, 2, 3, 4, 8]) {
-        const plan = beltPlan({ item, pay: item * 0.7 }, items);
-        expect(plan.taps).toBeGreaterThanOrEqual(1);
+        const t = { item, pay: item * 0.7 };
+        const plan = beltPlan(t, items);
         expect(plan.taps).toBeLessThanOrEqual(Math.min(RHYTHM_TAPS, items));
+        expect(plan.rest).toBeGreaterThanOrEqual(0);
+        if (!plan.taps) continue;
         expect(plan.beat).toBeGreaterThanOrEqual(BEAT_MIN_MS);
         expect(plan.beat).toBeLessThanOrEqual(BEAT_MAX_MS);
-        expect(plan.rest).toBeGreaterThanOrEqual(0);
+        // Лента, которую не трогали (каждый товар — в конце окна), не дольше прежней пробивки.
+        expect(plan.taps * plan.beat + GOOD_MS).toBeLessThanOrEqual(checkoutSeconds(t, items) * 1000);
       }
     }
   });
 
   it('ловкому хозяину на быстрой кассе — меньше касаний: лента не тормозит его до шага BEAT_MIN_MS за товар', () => {
-    expect(beltPlan({ item: 0.2, pay: 0.1 }, 3).taps).toBe(1);
+    expect(beltPlan({ item: 0.25, pay: 0.15 }, 3).taps).toBe(1);
     expect(beltPlan(owner, 3).taps).toBe(3);
+  });
+
+  it('совсем быстрому хозяину ленты нет: товар не доехал бы быстрее, чем он пробивает сам', () => {
+    expect(beltPlan({ item: 0.15, pay: 0.1 }, 1)).toMatchObject({ taps: 0, beat: 0 });
   });
 
   it('пустая корзина — ленты нет', () => {
@@ -112,31 +121,32 @@ describe('касса в ритме: лента', () => {
   });
 
   it('промах — товар уезжает в хвост ленты и проезжает ещё раз; денег не трогаем', () => {
-    let belt = startBelt(2, 500, 0);
+    let belt = startBelt(2, 800, 0);
     // Рано: товар 0 ещё в 300 мс от луча.
-    const r = tap(belt, 200);
+    const r = tap(belt, 500);
     expect(r.event).toEqual({ index: 0, grade: 'miss' });
     belt = r.belt;
     const again = belt.items[0];
     expect(again.passes).toBe(2);
     // В хвост: после товара 1 и не раньше, чем успеет вернуться к началу ленты.
-    expect(again.arrive).toBeGreaterThanOrEqual(belt.items[1].arrive + 500);
-    expect(again.arrive).toBeGreaterThanOrEqual(200 + RETURN_MS + 500);
+    expect(again.arrive).toBeGreaterThanOrEqual(belt.items[1].arrive + 800);
+    expect(again.arrive).toBeGreaterThanOrEqual(500 + RETURN_MS + 800);
     expect(nextItem(belt)?.index).toBe(1);
     expect(beltDone(belt)).toBe(false);
   });
 
-  it('проехал окно без касания — тоже промах (лента сама)', () => {
+  it('проехал окно без касания — не промах: хозяин пробивает сам, второго проезда нет', () => {
     const belt = startBelt(1, 500, 0);
     expect(beltTick(belt, 500 + GOOD_MS).events).toEqual([]);
     const r = beltTick(belt, 500 + GOOD_MS + 1);
-    expect(r.events).toEqual([{ index: 0, grade: 'miss' }]);
-    expect(r.belt.items[0].passes).toBe(2);
+    expect(r.events).toEqual([{ index: 0, grade: 'auto' }]);
+    expect(r.belt.items[0].passes).toBe(1);
+    expect(beltDone(r.belt)).toBe(true);
   });
 
-  it('на последнем проезде без касания хозяин пробивает сам — покупатель у кассы не застревает', () => {
-    let belt = startBelt(1, 500, 0);
-    let now = 0;
+  it('после настоящего промаха второй проезд без касания — хозяин пробивает сам; покупатель не застревает', () => {
+    let belt = tap(startBelt(1, 800, 0), 500).belt;
+    let now = 500;
     const seen: string[] = [];
     for (let i = 0; i < 100 && !beltDone(belt); i++) {
       now += 100;
@@ -144,10 +154,53 @@ describe('касса в ритме: лента', () => {
       belt = r.belt;
       seen.push(...r.events.map((e) => e.grade));
     }
-    expect(seen).toEqual([...Array(MAX_PASSES - 1).fill('miss'), 'auto']);
-    expect(beltDone(belt)).toBe(true);
-    // Ни одного касания — и всё равно не дольше двух проездов с возвратом (плюс шаг часов на каждый промах).
-    expect(now).toBeLessThanOrEqual(500 + GOOD_MS + RETURN_MS + 500 + GOOD_MS + 2 * 100);
+    expect(seen).toEqual(['auto']);
+    expect(belt.items[0].passes).toBe(MAX_PASSES);
+    expect(now).toBeLessThanOrEqual(500 + RETURN_MS + 800 + GOOD_MS + 100);
+  });
+
+  it('ленту не трогали — пробивка не дольше прежней; в такт — быстрее на RHYTHM_PACE', () => {
+    for (const t of [owner, { item: 0.48, pay: 0.336 }, { item: 0.6, pay: 0.42 }, { item: 1, pay: 0.7 }]) {
+      for (const items of [1, 2, 3, 5]) {
+        const plan = beltPlan(t, items);
+        if (!plan.taps) continue;
+        const old = checkoutSeconds(t, items) * 1000;
+        // Никто не касается: часы идут кадрами по 16 мс, пока лента не кончится.
+        let belt = startBelt(plan.taps, plan.beat, 0);
+        let now = 0;
+        while (!beltDone(belt)) belt = beltTick(belt, (now += 16)).belt;
+        expect(now + beltRest(plan, t, items, belt, now)).toBeLessThanOrEqual(old + 16);
+        // Каждый товар — точно в такт.
+        let clean = startBelt(plan.taps, plan.beat, 0);
+        for (const i of clean.items) clean = tap(clean, i.arrive).belt;
+        const end = plan.taps * plan.beat;
+        expect(end + beltRest(plan, t, items, clean, end)).toBeCloseTo(old * RHYTHM_PACE, 6);
+      }
+    }
+  });
+
+  it('частая лента: опоздавшее касание или дребезг пальца после «пик» не пишут промах следующему товару', () => {
+    const beat = BEAT_MIN_MS;
+    // Опоздал по первому: лента уже пробила его сама, касание не про второй.
+    let belt = beltTick(startBelt(3, beat, 0), beat + GOOD_MS + 1).belt;
+    expect(belt.items[0].scanned).toBe('auto');
+    expect(tap(belt, beat + GOOD_MS + 10).event).toBeNull();
+    // «Идеально» по первому — и тут же второе касание (дребезг или двойное).
+    belt = tap(startBelt(3, beat, 0), beat).belt;
+    for (const dt of [50, 100, 150, GOOD_MS]) expect(tap(belt, beat + dt).event).toBeNull();
+    // Окно «пик» второго товара от этого не уже.
+    expect(tap(belt, 2 * beat - GOOD_MS).event).toEqual({ index: 1, grade: 'good' });
+    // На неспешной ленте ранний промах остаётся: касание за EARLY_MS до товара.
+    const slow = startBelt(2, BEAT_MAX_MS, 0);
+    expect(tap(slow, BEAT_MAX_MS - EARLY_MS).event).toEqual({ index: 0, grade: 'miss' });
+    expect(BEAT_MAX_MS - GOOD_MS - CALM_MS).toBeGreaterThanOrEqual(EARLY_MS);
+  });
+
+  it('промах по полу засчитывают, когда палец подняли: товар едет на второй проезд от этого мига', () => {
+    const belt = startBelt(1, 800, 0);
+    const r = beltTap(belt, 800, 500);
+    expect(r.event).toEqual({ index: 0, grade: 'miss' });
+    expect(r.belt.items[0].arrive).toBeGreaterThanOrEqual(800 + RETURN_MS + 800);
   });
 
   it('одно и то же — один и тот же итог (никаких случайностей)', () => {
@@ -280,12 +333,13 @@ describe('касса в ритме: симулятор', () => {
     expect(a).toEqual(b);
   });
 
-  it('средний игрок пробивает примерно так же, как раньше; идеальный — быстрее', () => {
-    for (const t of [owner, { item: 1, pay: 0.7 }, { item: 0.6, pay: 0.42 }]) {
+  it('средний игрок пробивает не дольше прежнего и ненамного быстрее; идеальный — быстрее', () => {
+    for (const t of [owner, { item: 1, pay: 0.7 }, { item: 0.6, pay: 0.42 }, { item: 0.15, pay: 0.1 }]) {
       const before = checkoutSeconds(t, 1.4);
       expect(rhythmSeconds(t, 1.4) / before).toBeGreaterThan(0.9);
-      expect(rhythmSeconds(t, 1.4) / before).toBeLessThan(1.1);
-      expect(rhythmSeconds(t, 1.4, 1)).toBeLessThan(before);
+      expect(rhythmSeconds(t, 1.4)).toBeLessThanOrEqual(before);
+      expect(rhythmSeconds(t, 1.4, 0)).toBeCloseTo(before, 9);
+      if (beltPlan(t, 1.4).taps) expect(rhythmSeconds(t, 1.4, 1)).toBeLessThan(before);
     }
   });
 
