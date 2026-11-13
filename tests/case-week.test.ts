@@ -265,7 +265,7 @@ describe('дело недели: очередь дел и другие сист�
   });
 
   it('первая подсказка — когда открылось первое дело', () => {
-    const seen = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift'];
+    const seen = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'rhythm'];
     expect(pendingTip(shop({ seenTips: seen }))).toBeNull();
     expect(pendingTip(monday({ seenTips: seen }))).toBe('case');
   });
