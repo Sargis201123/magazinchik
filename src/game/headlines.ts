@@ -27,6 +27,8 @@ export const NEWS_IDS = [
   'event',
   'career',
   'trick',
+  // Лотерея у кассы (lottery.ts, 13.11): счастливый билет или запрет — пока идут свои дни.
+  'lottery',
   // Для души: истории района и постоянных.
   'tale',
   'life',
@@ -53,6 +55,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   event: 'timed',
   career: 'timed',
   trick: 'timed',
+  lottery: 'timed',
   tale: 'flavour',
   life: 'flavour',
   staffEvent: 'flavour',

@@ -414,6 +414,12 @@ export const SPRITES = [
   'p_pat_stripes_s',
   'p_pat_print',
   'candy_rack',
+  // Лотерея у кассы (art/lottery.py): стойка — работает, закрыта по запрету, «счастливая»; билет и торт счастливчика.
+  'lottery_stand',
+  'lottery_stand_closed',
+  'lottery_stand_lucky',
+  'lottery_ticket',
+  'lottery_cake',
   'icebox',
   'trolley',
   'boat',

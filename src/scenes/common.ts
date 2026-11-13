@@ -402,8 +402,8 @@ export interface Customer {
   wants?: ProductId[];
   /** Первый покупатель нового начала: берёт одно, без туалета и мусора — и сразу к кассе. */
   first?: boolean;
-  /** Шоколадка со стойки и кофе — оплачиваются на кассе вместе с товаром. */
-  extras?: { kind: 'candy' | 'coffee' | 'dish'; price: number; dish?: DishId }[];
+  /** Шоколадка со стойки, кофе и лотерейный билет — оплачиваются на кассе вместе с товаром. */
+  extras?: { kind: 'candy' | 'coffee' | 'dish' | 'ticket'; price: number; dish?: DishId }[];
   /** Уже погладил кота. */
   petted?: boolean;
   /** Сколько готов ждать в очереди. */

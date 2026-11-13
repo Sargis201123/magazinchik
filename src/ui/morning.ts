@@ -249,6 +249,8 @@ import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toas
 import { gardenBox, harvestNow } from './garden';
 import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
+import { lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
+import { lotteryNews } from '../game/lottery';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
@@ -812,6 +814,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('event', state.plan?.event && !state.plan.decided);
     add('career', careerDue(state));
     add('trick', !zarHere && trickToday(state));
+    add('lottery', lotteryNews(state));
     add('tale', taleToday(state));
     add('life', !zarHere && lifeNews(state));
     add('staffEvent', staffEventDue(state));
@@ -2015,6 +2018,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return districtBox(state);
       case 'trick':
         return trickBox(state);
+      case 'lottery':
+        return lotteryNewsBox(state, getState, update);
       case 'arc':
         return arcBox(state, getState, update);
       case 'career':
@@ -2219,6 +2224,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         status: hasRadio(state) ? `${STATION_INFO[stationOf(state)].icon} ${t(STATION_INFO[stationOf(state)].nameKey)}` : `${RADIO_PRICE} 💰`,
         details: () => [radioBox(getState())],
       },
+      // Лотерея у кассы (ui/lottery.ts, 13.11): стойка с билетами — рядом со сладостями.
+      { id: 'lottery', icon: 'assets/lottery_stand.png', title: t('lottery.title'), status: lotteryStatus(state), details: () => lotteryBox(getState(), getState, update) },
       {
         id: 'coffee',
         icon: '☕',

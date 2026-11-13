@@ -98,6 +98,7 @@ import { endSale, SALE_CROWD, saleExtraItems, startSale, weekFor } from './weeks
 import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole, RELIEF_ROLE, TILL_ROLES } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
+import { buyLottery, countTicket, hasLottery, LOTTERY_PRICE, ticketChance, TICKET_CUT } from './lottery';
 import { simSmellComplaint } from './rot';
 import { brewSeconds, cameraTheft, coffeePrice, entranceMud, fridgeLeak, gearAvailable, MANUAL_GEAR, nextGear, ovenBatch, ovenBatchCost, REGISTER_JAM_SECONDS, registerJam, upgradeGear, wcDirt } from './gear';
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from './bakery';
@@ -254,7 +255,9 @@ export type Feature =
   | 'tenants'
   // Бабушкин двор (garden.ts): ставит теплицу, докапывает грядки, сажает «яблоки и картошку» и собирает урожай
   // каждое утро — прямо на овощной прилавок.
-  | 'garden';
+  | 'garden'
+  // Лотерея у кассы (lottery.ts): ставит стойку, когда есть запас; тираж и запреты — в nightCycle, как в игре.
+  | 'lottery';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -661,6 +664,13 @@ export function simulate({
       }
       state = refillRack(state, 999) ?? state;
     }
+    if (features.lottery && !hasLottery(state) && state.money >= LOTTERY_PRICE + reserve * 2) {
+      const bought = buyLottery(state);
+      if (bought) {
+        investments += LOTTERY_PRICE;
+        state = bought;
+      }
+    }
     if (features.coffee && hasUpgrade(state, 'coffee')) state = buyCups(state, 999) ?? state;
     // Кухня без повара: утром по закладке каждого блюда, на что хватает продуктов (с поваром — днём, ниже).
     if (features.kitchen && !kitchenWorking(state)) for (const id of DISH_IDS) state = cook(state, id) ?? state;
@@ -967,6 +977,13 @@ export function simulate({
           extra += CANDY_PRICE;
           candy += CANDY_PRICE;
         }
+      }
+      // Лотерейный билет у кассы: доля магазина — к чеку (lottery.ts). Бросок — только пока стойка работает:
+      // до покупки ход случайностей тот же, что без лотереи (парные сравнения sim:features не шумят).
+      const ticket = features.lottery ? ticketChance(state) : 0;
+      if (ticket > 0 && extraRandom() < ticket) {
+        state = countTicket(state);
+        extra += TICKET_CUT;
       }
       if (features.coffee && coffees < coffeeCap && extraRandom() < coffeeChance(state)) {
         const next = useCup(state);

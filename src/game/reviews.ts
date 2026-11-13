@@ -22,10 +22,12 @@ export type ReviewTopic =
   | 'candy'
   | 'night'
   | 'quiet'
-  | 'cheap';
+  | 'cheap'
+  // Проигравшие в лотерею ворчат (lottery.ts): отзыв на три звезды — обида, а не жалоба на магазин.
+  | 'lottery';
 
 /** Сколько раз за день должно случиться, чтобы об этом написали. */
-const BAD: Partial<Record<ReviewTopic, number>> = { noStock: 2, expensive: 2, queue: 1, dirty: 1, smell: 1, toilet: 1, badGoods: 1, slip: 1, thief: 1 };
+const BAD: Partial<Record<ReviewTopic, number>> = { noStock: 2, expensive: 2, queue: 1, dirty: 1, smell: 1, toilet: 1, badGoods: 1, slip: 1, thief: 1, lottery: 3 };
 const GOOD: Partial<Record<ReviewTopic, number>> = { fresh: 2, coffee: 2, cat: 1, candy: 3, night: 3, cheap: 4 };
 
 /** Серия обслуживания, после которой хвалят за быструю кассу. */
@@ -72,7 +74,7 @@ export function reviewsFor(stats: DayStats, day: number): Review[] {
     let author = Math.floor(random() * REVIEW_AUTHORS);
     while (authors.has(author)) author = (author + 1) % REVIEW_AUTHORS;
     authors.add(author);
-    const stars = topic === 'quiet' ? 3 : isGood(topic) ? (random() < 0.7 ? 5 : 4) : random() < 0.6 ? 1 : 2;
+    const stars = topic === 'quiet' || topic === 'lottery' ? 3 : isGood(topic) ? (random() < 0.7 ? 5 : 4) : random() < 0.6 ? 1 : 2;
     return { topic, stars, variant: Math.floor(random() * REVIEW_VARIANTS), author };
   });
 }
