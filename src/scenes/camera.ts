@@ -416,7 +416,7 @@ export const bigStore = (scene: StoreScene): boolean => scene.layout.w >= RUSH_M
 
 /** В зале что-то ждёт касания не у касс: камере лучше показать весь магазин. */
 function calledElsewhere(scene: StoreScene): boolean {
-  if (scene.liveEvent || scene.moments.showing || scene.call || scene.inspector === 'here') return true;
+  if (scene.liveEvent || scene.moments.showing || scene.clue?.phase === 'shown' || scene.call || scene.inspector === 'here') return true;
   if (scene.oven?.state === 'ready') return true;
   if (!scene.workers.has('guard')) for (const c of scene.customers) if (c.thief && !c.gone) return true;
   return false;

@@ -126,6 +126,7 @@ import { activeEvent, addDays, cardOf, cardWaiting, guestDue, guestOn, nextGuest
 import { liveEvents, todayLocal } from '../platform/live';
 import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
 import { goalText, weekBox, weekSoonLine } from './weeks';
+import { caseBox, showCaseBoard } from './cases';
 import { stepReward, WEEK_IDS, WEEKS, type WeekId } from '../game/weeks';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, linesFor, pendingStory, type Chapter, type Line } from '../game/story';
 import { answerEduard, EDUARD_DEBT, writeSonya } from '../game/notebook';
@@ -998,6 +999,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...(touring ? [] : zarSwitchBox(state, (where) => update(switchToday(getState(), where)))),
       ...(touring ? [] : liveBox(state)),
       ...(touring ? [] : weekBox(state, guestsToday(state))),
+      // «Дело недели» (game/cases.ts): улики, допросы, в пятницу — обвинение. Доска — отдельным окном (ui/cases.ts).
+      ...(touring ? [] : caseBox(state, () => showCaseBoard(getState, (next) => {
+        setState(next);
+        render();
+      }))),
       // Новость утра, если сегодня это история (game/headlines.ts): одна, остальные ждут завтра.
       ...newsBox(state, picked.id),
       today,

@@ -64,6 +64,7 @@ import * as newcomer from './newcomer';
 import * as rivals from './rivals';
 import * as camera from './camera';
 import * as building from './building';
+import * as caseFx from './caseFx';
 import { LINES, linesSold, type LinesNight } from '../game/lines';
 
 // ---------- Ночная смена ----------
@@ -72,8 +73,9 @@ import { LINES, linesSold, type LinesNight } from '../game/lines';
 export function endOfDay(scene: StoreScene): void {
   // Яндекс Игры: магазин закрылся — GameplayAPI.stop (platform/yandex.ts).
   setPlaying(false);
-  // Момент, не дождавшийся нажатия к закрытию, уходит вместе с днём (и в ночную смену не остаётся).
+  // Момент, не дождавшийся нажатия к закрытию, уходит вместе с днём (и в ночную смену не остаётся), и улика тоже.
   scene.moments.stop();
+  caseFx.endClue(scene);
   // Срочный заказ не успел доехать до закрытия — водитель всё равно выгрузил.
   deliveries.receiveUrgentOrders(scene);
   if (scene.night || scene.nightAsked || !canWorkNight(scene.state)) {
@@ -237,6 +239,8 @@ export async function runNightStory(scene: StoreScene, story: NightStoryId): Pro
 
 export function finishDay(scene: StoreScene): void {
   scene.moments.stop();
+  // И улика дела недели (caseFx.ts): не нажали до закрытия — придёт утром, размытая.
+  caseFx.endClue(scene);
   scene.dayOpen = false;
   // Захват не успел закончиться (день досрочно закрыт) — персонал возвращается к работе.
   if (scene.siege) {
