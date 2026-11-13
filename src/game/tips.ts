@@ -6,7 +6,7 @@ import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount } from './registers';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'appr';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -44,6 +44,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['oven', (s) => hasUpgrade(s, 'oven')],
   ['coffee', (s) => hasUpgrade(s, 'coffee')],
   ['nightShift', (s) => hasUpgrade(s, 'nightShift')],
+  // Ученик (apprentice.ts): как только взяли — в двух словах, чем его место отличается и от чего зависит доверие.
+  ['appr', (s) => Boolean(s.appr)],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -58,6 +60,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   oven: '🥖',
   coffee: '☕',
   nightShift: '🌙',
+  appr: '🧢',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

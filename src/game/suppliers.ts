@@ -1,6 +1,7 @@
 import type { TextKey } from '../i18n/ru';
 import { PRODUCTS, type Category, type ProductId, type StoreState } from './economy';
 import { haggleBonus } from './owner';
+import { apprSupplies } from './apprentice';
 
 export type SupplierId = 'farmer' | 'dairy' | 'butcher' | 'wholesale';
 
@@ -77,7 +78,8 @@ export const DISCOUNT_MAX = 0.12;
 
 export function supplierDiscount(state: StoreState): number {
   const d = DISCOUNT_BASE + (state.rating - 3) * DISCOUNT_PER_STAR + haggleBonus(state);
-  return Math.min(DISCOUNT_MAX, Math.max(0, d));
+  // Лавка бывшего ученика со склада берёт товар вскладчину с нами (apprentice.ts) — сверх обычного предела.
+  return Math.min(DISCOUNT_MAX, Math.max(0, d)) + apprSupplies(state);
 }
 
 /** Первые дни поставщики брака не привозят: новичку и так хватает решений (окно «Брак» — с 4-го утра). */

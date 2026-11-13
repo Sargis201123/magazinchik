@@ -55,6 +55,8 @@ export const SPRITES = [
   'honor_plate',
   'rank_senior',
   'rank_admin',
+  // Ученик (art/apprentice.py): бумажный пакет, который он пакует на кассе.
+  'appr_bag',
   // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
   'tip_jar',
   'jam_splat',

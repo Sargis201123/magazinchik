@@ -199,6 +199,8 @@ import { mailBox, takeQuietly } from './mail';
 import { MAIL_EVENT } from './mailbag';
 import { arcToday } from '../game/arcs';
 import { lateContestAnnounce, lateContestResult, pickNews, type NewsId } from '../game/headlines';
+import { apprNews, apprOffer, apprWorry } from '../game/apprentice';
+import { apprCard, apprLines, apprOfferBox, apprOutBox, gradLines } from './apprentice';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { showSupport } from './support';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
@@ -817,6 +819,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('staffEvent', staffEventDue(state));
     add('district', !zarHere && districtNews(state));
     add('cat', catOffer(state));
+    add('appr', apprOffer(state));
+    add('apprOut', apprNews(state));
     add('zarTale', zarTale);
     add('careerLeft', state.career?.left);
     add('arc', !zarHere && arcToday(state));
@@ -960,6 +964,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...debtLine(state),
       ...bigDayLine(state),
       goalLine(state),
+      ...apprLines(state),
       ...autoLine(),
       billForecast(state),
       ...weatherLine(state),
@@ -1098,7 +1103,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const extras = (state.cat && !fedToday(state) ? 1 : 0) + (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0);
     const next = nextStoreLevel(state);
     const grow = next && state.debt === 0 && state.money >= next.cost ? 1 : 0;
-    return { buy: empty, hall, extras, grow };
+    // Ученик скучает, устал или без стипендии — точка на «Персонале» (game/apprentice.ts apprWorry).
+    return { buy: empty, hall, extras, grow, staff: apprWorry(state) ? 1 : 0 };
   };
 
   /**
@@ -2021,6 +2027,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return careerBox(state, 'offer');
       case 'careerLeft':
         return careerBox(state, 'left');
+      // Ученик (game/apprentice.ts): просится в ученики; отучился и открыл свою лавку.
+      case 'appr':
+        return apprOfferBox(state, getState, update);
+      case 'apprOut':
+        return apprOutBox(state, getState, update);
       default:
         return [];
     }
@@ -3964,6 +3975,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       const wages = state.staff.reduce((sum, m) => sum + m.wage, 0);
       out.push(foldBox('staff:list', `👥 ${t('staffTab.list', { n: state.staff.length, w: wages })}`, (body) => body.append(...getState().staff.map((m) => staffRow(getState(), m)))));
     } else for (const m of state.staff) out.push(staffRow(state, m));
+    // Ученик (game/apprentice.ts): где он сегодня, доверие, чему научился; ниже — лавки выпускников.
+    const appr = apprCard(state, getState, update);
+    if (appr) out.push(appr);
+    out.push(...gradLines(state));
     // Карьера: когда следующий «сотрудник месяца», кто на доске почёта, кто правит филиалом.
     if (state.staff.length && state.career?.since !== undefined) out.push(el('div', 'ui-muted', t('career.nextBest', { n: Math.max(1, BEST_EVERY - (state.day - state.career.since)) })));
     const plaques = state.career?.plaques ?? [];

@@ -65,6 +65,7 @@ import { cameraTheft, entranceMud, gearTier, REGISTER_JAM_SECONDS, registerJam, 
 import { AROMA_TOLERANCE } from '../game/bakery';
 import { NIGHT_MARKUP, NIGHT_TOLERANCE } from '../game/night';
 import { CAT_TIP, catBrought, catHome, catPatience, catTipChance } from '../game/cat';
+import { APPR_TIP, apprPatience, apprTipChance, apprTipped } from '../game/apprentice';
 import { note } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { noteLost } from '../game/losses';
@@ -767,6 +768,8 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     PATIENCE_MS *
     catPatience(scene.state) *
     radioPatience(scene.state) *
+    // Ученик в зале подсказывает и развлекает (game/apprentice.ts); ночью он дома.
+    (scene.night ? 1 : apprPatience(scene.state)) *
     (isCrowdDay(scene.state.day) ? CROWD_PATIENCE : 1) *
     (c.first ? FIRST_PATIENCE : 1);
   c.patience = scene.time.delayedCall(c.patienceMs, () => void giveUp(scene, c));
@@ -1151,6 +1154,15 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
     note(scene.stats, 'cat');
     scene.time.delayedCall(500, () => {
       scene.popup(c.sprite.x, c.sprite.y - 30, t('popup.catTip', { n: CAT_TIP }), '#fff3b0');
+      effects.tipCoins(scene, c.sprite);
+    });
+  }
+  // Чаевые «за помощь» ученику в зале (game/apprentice.ts).
+  if (!scene.night && Math.random() < apprTipChance(scene.state)) {
+    scene.state = apprTipped(scene.state, APPR_TIP);
+    scene.stats.revenue += APPR_TIP;
+    scene.time.delayedCall(700, () => {
+      scene.popup(c.sprite.x, c.sprite.y - 30, t('popup.apprTip', { n: APPR_TIP }), '#fff3b0');
       effects.tipCoins(scene, c.sprite);
     });
   }
