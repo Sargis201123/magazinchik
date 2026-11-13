@@ -33,7 +33,7 @@ import {
 import { guestFactor, nightCycle } from '../src/game/day';
 import { pickNews } from '../src/game/headlines';
 import { pendingTip, type TipId } from '../src/game/tips';
-import { note, reviewsFor } from '../src/game/reviews';
+import { isGood, isNeutral, note, reviewsFor } from '../src/game/reviews';
 import { simulate } from '../src/game/simulate';
 
 // Лотерея у кассы (13.11): стойка, доля с билетов, редкий крупный выигрыш («счастливый магазин»),
@@ -237,16 +237,30 @@ describe('утро: новость, подсказка, отзывы', () => {
     expect(pendingTip(buyLottery(seen)!)).toBe('lottery');
   });
 
-  it('проигравшие ворчат в отзывах — на три звезды, а не на одну', () => {
-    const stats = emptyDayStats();
-    stats.served = 2;
-    stats.complaints = 1;
-    note(stats, 'lottery', 3);
-    const review = reviewsFor(stats, 30).find((r) => r.topic === 'lottery');
-    expect(review?.stars).toBe(3);
+  it('проигравшие ворчат в отзывах редко, на три звезды и не вытесняя жалоб', () => {
+    const days = Array.from({ length: 300 }, (_, i) => i + 1);
+    const grumbly = () => {
+      const stats = emptyDayStats();
+      note(stats, 'lottery', 4);
+      return stats;
+    };
+    const shown = days.map((d) => reviewsFor(grumbly(), d).find((r) => r.topic === 'lottery')).filter((r) => r !== undefined);
+    // Редко: примерно в каждый третий день, когда ворчали хотя бы трое, — а таких дней около половины.
+    expect(shown.length).toBeGreaterThan(days.length * 0.15);
+    expect(shown.length).toBeLessThan(days.length * 0.45);
+    expect(shown.every((r) => r.stars === 3 && isNeutral(r.topic) && !isGood(r.topic))).toBe(true);
+    // Есть настоящая жалоба — о лотерее не пишут, место на доске ей.
+    for (const d of days) {
+      const stats = grumbly();
+      note(stats, 'queue');
+      const topics = reviewsFor(stats, d).map((r) => r.topic);
+      expect(topics).toContain('queue');
+      expect(topics).not.toContain('lottery');
+    }
+    // Двое заворчали — не повод.
     const few = emptyDayStats();
     note(few, 'lottery', 2);
-    expect(reviewsFor(few, 30).some((r) => r.topic === 'lottery')).toBe(false);
+    expect(days.some((d) => reviewsFor(few, d).some((r) => r.topic === 'lottery'))).toBe(false);
   });
 });
 

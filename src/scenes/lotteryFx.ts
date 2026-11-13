@@ -43,7 +43,11 @@ export function buildStand(scene: StoreScene): void {
   // Уходящие от кассы к двери обходят её.
   scene.obstacles.push({ x: at.x - 7, y: at.y - 9, w: 14, h: 10 });
   const img = stand;
-  img.setInteractive({ useHandCursor: true }).on('pointerup', () =>
+  // Касается только низ стойки (13.11): верх с вывеской заходит в зону кассы (building.ts, низ — counter.y + 38),
+  // а стойка рисуется поверх — касание «пробить» уходило бы в лотерею. Рамка в точках картинки (×ART), чуть
+  // шире стойки и ниже пола, чтобы в неё было легко попасть.
+  const hit = new Phaser.Geom.Rectangle(-4, img.height - (at.y - (scene.layout.counter.y + 39)) * ART, img.width + 8, 30);
+  img.setInteractive({ hitArea: hit, hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true }).on('pointerup', () =>
     camera.tap(scene, () => {
       sound.tap();
       scene.tweens.add({ targets: img, scaleY: img.scaleY * 1.06, duration: 90, yoyo: true });
