@@ -6,6 +6,7 @@ import {
   PAWN_POLICE_RATING,
   PAWN_SEIZED_KEEP,
   PAWN_SHARE,
+  pawnMet,
   pawnMorning,
   pawnNews,
   pawnOf,
@@ -20,6 +21,7 @@ import {
 } from '../src/game/pawnshop';
 import { nightCycle } from '../src/game/day';
 import { pendingTip } from '../src/game/tips';
+import { pickNews } from '../src/game/headlines';
 import { rng } from '../src/game/random';
 
 // Ломбард в подсобке (pawnshop.ts): гость с вещью утром, выкуп с процентом, невыкупленное — на полку «Разное»,
@@ -70,6 +72,26 @@ describe('гость с вещью', () => {
       expect(offer).not.toBeNull();
       expect(offer!.fate).not.toBe('stolen');
     }
+  });
+
+  it('первого гостя ждут только до первого показа: без ответа он не приходит каждое утро', () => {
+    const met = pawnMet(shop({ day: 40 }));
+    expect(met.pawn?.first).toBe(40);
+    // В утро показа гость остаётся тем же (перерисовка утра его не прогоняет) и его можно взять.
+    expect(pawnOffer(met)).toEqual(pawnOffer(shop({ day: 40 })));
+    expect(takePawn(met)?.pawn?.loans).toHaveLength(1);
+    expect(pawnMet(met)).toBe(met);
+    // Ответа не было, магазин открыли: дальше — как у всех, в треть утр.
+    const came = Array.from({ length: 100 }, (_, i) => pawnOffer({ ...met, day: 41 + i })).filter(Boolean).length;
+    expect(came).toBeGreaterThan(20);
+    expect(came).toBeLessThan(55);
+  });
+
+  it('гость — одна из новостей утра: событие дня и главные повороты — раньше, истории для души — позже', () => {
+    const s = shop();
+    expect(pickNews(s, ['event', 'pawn']).id).toBe('event');
+    expect(pickNews(s, ['drama', 'pawn']).id).toBe('drama');
+    expect(pickNews(s, ['pawn', 'cat', 'tale']).id).toBe('pawn');
   });
 
   it('потом — не каждое утро; одно и то же утро даёт одного и того же гостя', () => {

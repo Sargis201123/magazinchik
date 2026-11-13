@@ -8,7 +8,8 @@
 //
 // Всё — от зерна магазина и дня (как находки кота, cat.ts): перезапуск утра ничего не перекатывает, а общий генератор
 // симулятора не сдвигается. Чем кончится залог, решается в момент, когда вещь взяли, и хранится в залоге — игроку не видно.
-// Окно утра — ui/pawnshop.ts, полка «Разное» в подсобке — scenes/pawnFx.ts.
+// Гость — одна из новостей утра (game/headlines.ts, 'pawn'), итоги залогов — строкой в «Почте»; окна — ui/pawnshop.ts,
+// полка «Разное» в подсобке — scenes/pawnFx.ts.
 
 import type { StoreState } from './economy';
 import { rng } from './random';
@@ -101,6 +102,11 @@ export interface PawnState {
   shelf: PawnSale[];
   /** В какое утро уже ответили на предложение (взяли или отказали): второго за утро не будет. */
   answered?: number;
+  /**
+   * Утро, когда первого гостя впервые показали (pawnMet). В этот день он приходит наверняка, а дальше — как всем,
+   * в 35% утр, даже если на него так и не ответили (13.11: иначе молчание звало гостя каждое утро).
+   */
+  first?: number;
   /** Новости этого утра и прочитаны ли они. */
   news?: { day: number; events: PawnEvent[]; seen?: boolean };
   /** Заработано на процентах и продажах (сверх отданного) и сколько пропало с краденым — для карточки. */
@@ -157,15 +163,17 @@ export function dayTake(state: StoreState): number {
 }
 
 /**
- * Кто пришёл сегодня утром и с чем (или никто). Первый раз в жизни ломбарда (state.pawn ещё нет) гость приходит
- * наверняка — вместе с подсказкой «Новое!», и вещь у него честная: сначала игрок видит, как это работает.
+ * Кто пришёл сегодня утром и с чем (или никто). Пока первого гостя не показали (state.pawn ещё нет) — и в то утро,
+ * когда его показали, — он приходит наверняка, и вещь у него честная: сначала игрок видит, как это работает.
+ * Ждёт он только до первого показа: утро, занятое главной новостью (game/headlines.ts), гостя не «съедает».
  */
 export function pawnOffer(state: StoreState): PawnOffer | null {
   if (!pawnOpen(state)) return null;
   const p = state.pawn;
   if (p?.answered === state.day || pawnOf(state).loans.length >= pawnSlots(state)) return null;
+  const first = !p || p.first === state.day;
   const r = dice(state, 1);
-  if (r() >= PAWN_CHANCE && p) return null;
+  if (r() >= PAWN_CHANCE && !first) return null;
   const item = PAWN_ITEM_IDS[Math.floor(r() * PAWN_ITEM_IDS.length)];
   const term = Math.floor(r() * PAWN_TERMS.length);
   const days = PAWN_TERMS[term];
@@ -173,12 +181,21 @@ export function pawnOffer(state: StoreState): PawnOffer | null {
   const lent = Math.max(PAWN_MIN, round10(dayTake(state) * PAWN_SHARE * PAWN_ITEMS[item].worth * (0.8 + 0.4 * r())));
   const roll = r();
   let fate: PawnFate = roll < PAWN_STOLEN ? 'stolen' : roll < PAWN_STOLEN + PAWN_FORFEIT ? 'forfeit' : 'repay';
-  if (!p && fate === 'stolen') fate = 'repay';
+  if (first && fate === 'stolen') fate = 'repay';
   const shady = r() < (fate === 'stolen' ? PAWN_SHADY_STOLEN : PAWN_SHADY_CLEAN);
   const tellN = r() < 0.5 ? 0 : 1;
   // Полиция — со второго утра и не позже срока: краденое никогда не успевает встать на полку.
   const police = fate === 'stolen' ? 2 + Math.floor(r() * (days - 1)) : undefined;
   return { item, lent, back: round10(lent * (1 + rate)), days, rate, tell: shady ? 'shady' : 'calm', tellN, fate, ...(police ? { police } : {}) };
+}
+
+/**
+ * Первого гостя показали утром (ui/morning.ts, когда очередь новостей выбрала его): ломбард «начался». Ответ не
+ * нужен — завтра гость уже не наверняка. Сегодня он остаётся тем же (first), пока не взяли или не отказали.
+ */
+export function pawnMet(state: StoreState): StoreState {
+  if (state.pawn || !pawnOffer(state)) return state;
+  return { ...state, pawn: { loans: [], shelf: [], earned: 0, lost: 0, first: state.day } };
 }
 
 /** Взять вещь: деньги из кассы — гостю, вещь — в подсобку. null — гостя нет или не хватает денег. */
@@ -199,7 +216,7 @@ export function refusePawn(state: StoreState): StoreState {
 
 /**
  * Утро (после смены дня, day.ts): вчерашние покупатели разобрали что-то с полки «Разное», пришла полиция за краденым,
- * у кого срок — выкупили или не пришли. Что случилось — в news (карточка утра).
+ * у кого срок — выкупили или не пришли. Что случилось — в news (одна строка «Почты», ui/mail.ts).
  */
 export function pawnMorning(state: StoreState): StoreState {
   if (!state.pawn) return state;
@@ -240,10 +257,10 @@ export function pawnMorning(state: StoreState): StoreState {
   return { ...state, money, rating, pawn: next };
 }
 
-/** Новости ломбарда этим утром, если их ещё не закрыли. */
-export const pawnNews = (state: StoreState): PawnEvent[] => {
+/** Новости ломбарда этим утром, если их ещё не закрыли (withSeen — и закрытые: строка «Почты» после «Забрать всё»). */
+export const pawnNews = (state: StoreState, withSeen = false): PawnEvent[] => {
   const news = state.pawn?.news;
-  return news && news.day === state.day && !news.seen ? news.events.filter((e) => known(e.item)) : [];
+  return news && news.day === state.day && (withSeen || !news.seen) ? news.events.filter((e) => known(e.item)) : [];
 };
 
 export function seePawnNews(state: StoreState): StoreState {

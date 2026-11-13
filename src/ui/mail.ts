@@ -29,6 +29,7 @@ import { markTaken, mailBag, type MailBag } from './mailbag';
 import { burst, letterFrom, returnStyles, showLetter } from './returns';
 import { showOpened } from './presents';
 import { showLiveCard } from './live';
+import { pawnMail } from './pawnshop';
 import { button, el, rollNumber, toast, UI_FONT } from './dom';
 import { IS_YANDEX } from '../platform/target';
 import { rewardedAvailable, showRewardedAd } from '../platform/yandex';
@@ -237,11 +238,17 @@ const adventSource: Source = ({ state, getState, update }) => {
   };
 };
 
+/** Ломбард (game/pawnshop.ts): что ночью стало с залогами — одной строкой; деньги уже в кассе. */
+const pawnSource: Source = ({ state, getState, update, bag }) => {
+  const mail = pawnMail(state, Boolean(bag?.taken.includes('pawn')), getState, update);
+  return mail && { id: 'pawn', ...mail };
+};
+
 /**
  * Все источники почты по порядку строк. Убрать механику — убрать строку. Торговая неделя, гильдия,
  * «Чёрная пятница» и угощения кофе убраны 01.11 (nx-social2): их незабранное — farewellSource и подарки.
  */
-const SOURCES: Source[] = [chestSource, giftSource, letterSource, presentsSource, thanksSource, rivalSource, leagueSource, farewellSource, passSource, adventSource];
+const SOURCES: Source[] = [chestSource, giftSource, letterSource, presentsSource, thanksSource, rivalSource, leagueSource, farewellSource, passSource, adventSource, pawnSource];
 
 // ---------- Карточка ----------
 

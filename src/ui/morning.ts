@@ -249,8 +249,8 @@ import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toas
 import { gardenBox, harvestNow } from './garden';
 import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
-import { pawnBox, pawnCard } from './pawnshop';
-import { pawnOf, pawnOpen, pawnSlots } from '../game/pawnshop';
+import { pawnBox, pawnOfferBox } from './pawnshop';
+import { pawnMet, pawnOf, pawnOffer, pawnOpen, pawnSlots } from '../game/pawnshop';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
@@ -814,6 +814,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('event', state.plan?.event && !state.plan.decided);
     add('career', careerDue(state));
     add('trick', !zarHere && trickToday(state));
+    add('pawn', pawnOffer(state));
     add('tale', taleToday(state));
     add('life', !zarHere && lifeNews(state));
     add('staffEvent', staffEventDue(state));
@@ -823,7 +824,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('careerLeft', state.career?.left);
     add('arc', !zarHere && arcToday(state));
     const picked = pickNews(state, ready);
-    if (picked.state !== state) setState(picked.state);
+    // Первого гостя ломбарда показали — дальше он приходит как все, даже без ответа (game/pawnshop.ts pawnMet).
+    const met = picked.id === 'pawn' ? pawnMet(picked.state) : picked.state;
+    if (met !== state) setState(met);
     if (story && picked.id === 'story') {
       cue('story', `story:${story.kind}:${state.story.chapter}`);
       card.replaceChildren(storyBox(state, story.kind, story.chapter));
@@ -997,8 +1000,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...(touring ? [] : mailBox(state, getState, mailUpdate, render)),
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
-      // Ломбард в подсобке (game/pawnshop.ts): гость с вещью и что стало с залогами.
-      ...(touring ? [] : pawnCard(state, getState, update)),
       ...(touring ? [] : zarSwitchBox(state, (where) => update(switchToday(getState(), where)))),
       ...(touring ? [] : liveBox(state)),
       ...(touring ? [] : weekBox(state, guestsToday(state))),
@@ -2025,6 +2026,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return careerBox(state, 'offer');
       case 'careerLeft':
         return careerBox(state, 'left');
+      case 'pawn':
+        return pawnOfferBox(state, getState, update);
       default:
         return [];
     }

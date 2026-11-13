@@ -1,13 +1,14 @@
 // Ломбард в подсобке (game/pawnshop.ts) в меню утра.
-// Сверху, над вкладками, — карточка утра: что случилось с залогами (выкупили, не пришли, продали с полки, полиция)
-// и гость с вещью — кто, что, сколько просит, на сколько дней и сколько вернёт; «Взять» или «Отказать». Нет ни гостя,
-// ни новостей — карточки нет. В «Уголках» — плитка ломбарда: что в залоге, что на полке «Разное», итог.
+// Гость с вещью — одна из новостей утра (game/headlines.ts, не больше одной за утро): кто, что, сколько просит, на
+// сколько дней и сколько вернёт; «Взять» или «Отказать». Что случилось с залогами (выкупили, не пришли, продали
+// с полки, полиция) — одной строкой в «Почте» (ui/mail.ts), без своей карточки и «Понятно» (13.11, по ревью).
+// В «Уголках» — плитка ломбарда: что в залоге, что на полке «Разное», итог.
 // Вещи везде — те же пиксельные картинки, что на полке в подсобке (art/pawnshop.py), а не эмодзи: эмодзи часов
 // и фотоаппарата в пиксельный набор окна не входят и выглядели бы чужими.
 
 import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
-import { pawnNews, pawnOf, pawnOffer, pawnSlots, refusePawn, seePawnNews, takePawn, type PawnEvent, type PawnItemId } from '../game/pawnshop';
+import { pawnNews, pawnOf, pawnOffer, pawnSlots, refusePawn, seePawnNews, takePawn, type PawnItemId } from '../game/pawnshop';
 import { track } from '../platform/analytics';
 import { button, el } from './dom';
 import { sheetPng } from './sheet';
@@ -33,24 +34,29 @@ function itemLine(id: PawnItemId, text: string, cls = 'ui-item-sub'): HTMLElemen
   return row;
 }
 
-const eventLine = (e: PawnEvent): HTMLElement => {
-  const police = e.kind === 'police';
-  const line = itemLine(e.item, `${police ? '👮 ' : ''}${t(`pawn.ev.${e.kind}`, { item: itemName(e.item), n: e.n })}`, police ? 'ui-note' : 'ui-muted');
-  if (police) line.style.color = '#b13e53';
-  return line;
-};
+/**
+ * Строка «Почты»: что этим утром стало с залогами — все события одной строкой (деньги уже в кассе с ночи). Забрать —
+ * только отметить прочитанным. taken — строку уже забрали (после «Забрать всё» она остаётся бледной).
+ */
+export function pawnMail(state: StoreState, taken: boolean, getState: () => StoreState, update: (next: StoreState) => void): { icon: string; text: string; take: () => boolean } | null {
+  const events = pawnNews(state, taken);
+  if (!events.length) return null;
+  return {
+    icon: events.some((e) => e.kind === 'police') ? '👮' : '🏷',
+    text: events.map((e) => t(`pawn.ev.${e.kind}`, { item: itemName(e.item), n: e.n })).join(' · '),
+    take: () => {
+      update(seePawnNews(getState()));
+      return true;
+    },
+  };
+}
 
-/** Карточка утра над вкладками: новости залогов и гость с вещью. */
-export function pawnCard(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
-  const news = pawnNews(state);
+/** Гость с вещью — новость утра (очередь game/headlines.ts выбрала его сегодня). */
+export function pawnOfferBox(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
   const offer = pawnOffer(state);
-  if (!news.length && !offer) return [];
+  if (!offer) return [];
   const box = el('div', 'ui-box ui-pawn');
-  box.append(el('b', '', `🏷 ${t('pawn.title')}`), ...news.map(eventLine));
-  if (!offer) {
-    box.append(button(t('tip.ok'), () => update(seePawnNews(getState())), 'ui-chip'));
-    return [box];
-  }
+  box.append(el('b', '', `🏷 ${t('pawn.title')}`));
   const row = el('div', 'ui-item');
   const body = el('div');
   const short = state.money < offer.lent;
@@ -72,7 +78,7 @@ export function pawnCard(state: StoreState, getState: () => StoreState, update: 
     button(
       t('pawn.take'),
       () => {
-        const next = takePawn(seePawnNews(getState()));
+        const next = takePawn(getState());
         if (!next) return;
         track('pawn', next.day, offer.lent);
         update(next, 'success');
@@ -80,7 +86,7 @@ export function pawnCard(state: StoreState, getState: () => StoreState, update: 
       'ui-chip hood-buy',
       short,
     ),
-    button(t('pawn.refuse'), () => update(refusePawn(seePawnNews(getState()))), 'ui-chip'),
+    button(t('pawn.refuse'), () => update(refusePawn(getState())), 'ui-chip'),
   );
   body.append(actions);
   const big = itemImg(offer.item, 36);
