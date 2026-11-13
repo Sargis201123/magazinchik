@@ -26,6 +26,7 @@ import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import type { Rect } from './paths';
 import type { Passer } from './stride';
+import type { TillBelt } from './tillBelt';
 import { ambience, type AmbLife } from '../platform/ambience';
 import { setListener } from '../platform/mixer';
 import { haptic, telegramUserId, trustedNow } from '../platform/telegram';
@@ -563,6 +564,11 @@ export class StoreScene extends Phaser.Scene {
   valyaCame = false;
   /** Серия у кассы (game/series.ts): сколько покупателей подряд игрок пробил, не заставив ждать. */
   combo = 0;
+  /** Касса в ритме (game/tillRhythm.ts): «Идеально» подряд; лента, пока она едет (scenes/tillBelt.ts). */
+  rhythm = 0;
+  belt?: TillBelt;
+  /** Идёт час пик: чаевые за ритм вдвое (tillRhythm.ts, RUSH_RHYTHM). */
+  rushNow = false;
   nextSpawn = 1;
   running = false;
   /** Подсказка «что дальше» в зале (game/nudge.ts): когда игрок последний раз касался экрана, какая подсказка и до каких пор. */
@@ -956,6 +962,7 @@ export class StoreScene extends Phaser.Scene {
     }
     const rushAt = this.state.plan?.rushAt;
     const rush = !this.night && rushAt !== undefined && elapsed >= rushAt && elapsed < rushAt + RUSH_SECONDS;
+    this.rushNow = rush;
     if (rush && !this.rushAnnounced) {
       this.rushAnnounced = true;
       haptic.tap();

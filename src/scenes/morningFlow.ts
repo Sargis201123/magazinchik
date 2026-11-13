@@ -700,6 +700,7 @@ export function prepareDay(scene: StoreScene): void {
   scene.binFullFor = 0;
   building.refreshBin(scene);
   scene.combo = 0;
+  scene.rhythm = 0;
   if (scene.awaitingBoxes > 0) void deliveries.deliver(scene);
   liveFx.endLiveEvent(scene);
   shoppers.scheduleRegulars(scene);

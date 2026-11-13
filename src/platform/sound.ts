@@ -60,6 +60,8 @@ const RULE = {
   // Касса: расплатились у хозяина — отклик (feedback), у кассира — событие мира (тише, на ×2 через одно).
   // «Пик» сканера — всегда событие мира: награда — сама касса, а пищалка лишь отмечает товар.
   scan: { gap: 0.3, max: 1 },
+  // «Пик» в такт (касса в ритме, 13.11) — ответ на касание игрока: звучит всегда и на ×2 не прореживается.
+  beat: { gap: 0.06, max: 2, tier: 'feedback', game: false },
   till: { gap: 0.25, max: 2 },
   thanks: { gap: 3, max: 1 },
   pop: { gap: 0.06, max: 3, low: true },
@@ -683,6 +685,27 @@ export const sound = {
       ],
       { x, lp: 3000, cents: 15, db: 1.5, limit: ['scan', rule] },
     );
+  },
+  /**
+   * Касса в ритме (game/tillRhythm.ts): игрок «пикнул» товар касанием. «Идеально» — ясное «пик» чуть выше и
+   * звонкая искорка сверху; просто в окне — обычное «пик»; промах — тихое низкое «бу-бу» (не ошибка, а «ещё разок»).
+   */
+  beat: (grade: 'perfect' | 'good' | 'miss') => {
+    const rule: [string, VoiceRule] = ['beat', RULE.beat];
+    if (grade === 'miss') {
+      play(
+        [
+          { freq: 330, dur: 0.07, wave: 'triangle', vol: 0.03, attack: 0.006 },
+          { freq: 262, at: 0.09, dur: 0.09, wave: 'triangle', vol: 0.03, attack: 0.006 },
+        ],
+        { bus: 'ui', lp: 1800, limit: rule },
+      );
+      return;
+    }
+    const perfect = grade === 'perfect';
+    const main = sample('scan', { bus: 'ui', cents: 6, db: 1, gain: 0.85, rate: perfect ? 1.12 : 1, lp: 3200, limit: rule });
+    if (main === null) play([{ freq: perfect ? 1319 : 1175, dur: 0.09, wave: 'sine', vol: 0.03, attack: 0.006 }], { bus: 'ui', lp: 3200, limit: rule });
+    if (perfect && main !== false) play([{ freq: 2093, at: 0.05, dur: 0.12, wave: 'sine', vol: 0.012, attack: 0.004 }], { bus: 'ui', lp: 5000, layer: 'beat' });
   },
   /** Деньги: звон монеток в горсти (пока нет записи — два мягких касания, высота каждый раз своя). */
   coin: (x?: number) => {
