@@ -3,7 +3,7 @@
 // Лишних гостей нет: раньше было «+30% гостей», но касса и полки не успевали, лишние гости
 // уходили злыми, и ярмарочный день выходил хуже обычного (это видно в симуляторе).
 
-import { MONTH_DAYS, PRODUCT_IDS, PRODUCTS, type ProductId, type StoreState } from './economy';
+import { MONTH_DAYS, PRODUCT_IDS, PRODUCTS, restricted, type ProductId, type StoreState } from './economy';
 import { holidayFor } from './calendar';
 import { zarFairDay } from './zarechye';
 
@@ -42,7 +42,8 @@ export const stallPrice = (state: StoreState, id: ProductId): number =>
 
 /** Лоток продал штуку со склада (самую старую) с ярмарочной наценкой. null — склад пуст. */
 export function stallSale(state: StoreState, random: () => number): { state: StoreState; id: ProductId; price: number } | null {
-  const options = PRODUCT_IDS.filter((id) => (state.warehouse[id] ?? []).some((u) => !u.pending));
+  // Пиво и сигареты с лотка на ярмарке не продают — только в магазине, из витрины 18+ (license.ts).
+  const options = PRODUCT_IDS.filter((id) => !restricted(id) && (state.warehouse[id] ?? []).some((u) => !u.pending));
   if (!options.length) return null;
   const id = options[Math.floor(random() * options.length)];
   const units = state.warehouse[id]!;

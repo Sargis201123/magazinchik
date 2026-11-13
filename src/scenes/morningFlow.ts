@@ -6,7 +6,7 @@ import { setPlaying } from '../platform/yandex';
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { DAY_SECONDS, emptyDayStats, shelveAll, warehouseCount } from '../game/economy';
-import { zarLook } from '../game/zarechye';
+import { inZar, zarLook } from '../game/zarechye';
 import { seasonFor } from '../game/endless';
 import { saveGame } from '../game/save';
 import { branchLook } from '../game/branch';
@@ -21,7 +21,7 @@ import { trustedNow } from '../platform/telegram';
 import { toast, UI_FONT } from '../ui/dom';
 import { giantLook } from '../game/giant';
 import { lazy, prefetch, withLazy } from '../platform/lazy';
-import { weatherFor } from '../game/weather';
+import { weatherToday } from '../game/crisis';
 import { claimGift, giftTomorrow } from '../game/gift';
 import { postMail } from '../ui/mailbag';
 import { askWriteAccessOnce } from '../platform/social';
@@ -48,6 +48,7 @@ import { castsShadow } from './floor';
 import { eduardLook } from '../game/eduard';
 import { cafeDeliver } from '../game/cafe';
 import { hasRadio } from '../game/radio';
+import { hasLottery } from '../game/lottery';
 import { LIVE_REPEAT, liveEventsFor } from '../game/minievents';
 import { CALLS_MAX, planAttention, thin } from '../game/attention';
 import { callsPossible } from '../game/delivery';
@@ -59,6 +60,9 @@ import { takeLiteNote } from '../platform/quality';
 import { quietDays } from '../game/firstday';
 import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
 import * as skitsFx from './skitsFx';
+import * as crisisFx from './crisisFx';
+import { clueToday } from '../game/cases';
+import * as lotteryFx from './lotteryFx';
 import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -100,10 +104,10 @@ export const prefetchMorning = (): void => prefetch(morningUi);
 
 /**
  * Что распаковывают из коробки, когда оно впервые появилось в зале: оборудование (терминал, касса
- * самообслуживания, радио, кассы, климат, камеры, склад, кофемашина, печь) и украшения.
+ * самообслуживания, радио, кассы, климат, камеры, склад, кофемашина, печь, стойка лотереи) и украшения.
  */
 const UNBOX =
-  /^(card_terminal|kiosk\d?|radio|phone|counter\d|bin_t\d_0|fan_base|ac_wall|cam|air_curtain|mat_grate|autostore|pallet_jack|forklift|carts|coffee_machine\d?|cafe_table|oven\d?|rug|neon|plant_big|art_[a-z]+|light_(sconce|pendant|lantern|chandelier)|gumball|aquarium|lucky_cat|fountain|jukebox)$/;
+  /^(card_terminal|kiosk\d?|radio|phone|counter\d|bin_t\d_0|fan_base|ac_wall|cam|air_curtain|mat_grate|autostore|pallet_jack|forklift|carts|coffee_machine\d?|cafe_table|oven\d?|lottery_stand|rug|neon|plant_big|art_[a-z]+|light_(sconce|pendant|lantern|chandelier)|gumball|aquarium|lucky_cat|fountain|jukebox)$/;
 /** Новинки распаковывают по очереди, с таким шагом. */
 const UNBOX_STEP = 350;
 /** Флажок «НОВОЕ» висит над новинкой два часа по часам зала (смена идёт с 8:00 до 20:00). */
@@ -193,7 +197,8 @@ export function showMorning(scene: StoreScene): void {
   linesFx.applyLines(scene);
   scene.awaitingBoxes = 0;
   scene.hud.update(scene.state, DAY_SECONDS);
-  if (weatherFor(scene.state.day) !== scene.weather) weatherFx.applyWeather(scene);
+  // Погода дня — или беда района поверх неё (её вещи на улице тоже перерисовать: crisisFx.ts).
+  if (weatherToday(scene.state) !== scene.weather || crisisFx.crisisLook(scene) !== scene.builtCrisis) weatherFx.applyWeather(scene);
   // Примерка премиальной вещи кончилась вчера — убрать её из зала.
   const trial = scene.state.decor.trial;
   const trialOver = Boolean(trial && trial.day < scene.state.day);
@@ -202,6 +207,8 @@ export function showMorning(scene: StoreScene): void {
   const cupChanged = (contestOf(scene.state)?.wins ?? 0) !== scene.builtCup;
   const gift = scene.giftRebuild;
   scene.giftRebuild = false;
+  // Утро: зал больше не закрыт — перестройка ниже зажжёт лампы, сумрак ритуала закрытия снят (lightsOn зажжёт ряды).
+  lighting.hallOff(scene, -Infinity);
   if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   // Фургон выездной торговли вернулся вчера после закрытия (или его купили) — на своё место до соседей.
   cars.parkVan(scene);
@@ -239,7 +246,7 @@ export function showMorning(scene: StoreScene): void {
       const decorChanged = s.decor !== scene.state.decor;
       const adsChanged = s.ads !== scene.state.ads || s.adRuns !== scene.state.adRuns;
       // Купили приёмник — его надо поставить на прилавок; сменили волну — только музыка.
-      const upgradesChanged = s.upgrades !== scene.state.upgrades || s.registers !== scene.state.registers || s.kiosks?.n !== scene.state.kiosks?.n || s.kiosks?.tier !== scene.state.kiosks?.tier || s.gear !== scene.state.gear || hasRadio(s) !== hasRadio(scene.state);
+      const upgradesChanged = s.upgrades !== scene.state.upgrades || s.registers !== scene.state.registers || s.kiosks?.n !== scene.state.kiosks?.n || s.kiosks?.tier !== scene.state.kiosks?.tier || s.gear !== scene.state.gear || hasRadio(s) !== hasRadio(scene.state) || hasLottery(s) !== hasLottery(scene.state);
       const radioChanged = s.radio !== scene.state.radio;
       // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
       const was = scene.state;
@@ -690,7 +697,13 @@ export function prepareDay(scene: StoreScene): void {
   }
   // Кафе Ахмеда (хроники района) забирает хлеб в день поставки.
   arcsFx.dealAtOpening(scene);
+  // Беда района: первые гости — за водой и хлебом, раздача старикам к открытию (crisisFx.ts).
+  // 13.11, ревью: раздаём после кафе и Ахмеда, как в симуляторе, — иначе подарок старикам съедает
+  // хлеб из заказа по договору, и кафе молча рвёт договор, хотя утро обещало «товара хватает».
+  crisisFx.openDay(scene);
   visitors.scheduleStoryGuests(scene);
+  // Лотерея (lotteryFx.ts): стойка по сегодняшнему виду (запрет, «счастливые» дни), счастливчик с тортом.
+  lotteryFx.morning(scene);
   const season = seasonFor(scene.state.day);
   if (season) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
   else if (fairToday(scene.state)) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, t('popup.fair'), '#fee761'));
@@ -704,6 +717,7 @@ export function prepareDay(scene: StoreScene): void {
   scene.binFullFor = 0;
   building.refreshBin(scene);
   scene.combo = 0;
+  scene.rhythm = 0;
   if (scene.awaitingBoxes > 0) void deliveries.deliver(scene);
   liveFx.endLiveEvent(scene);
   shoppers.scheduleRegulars(scene);
@@ -718,7 +732,26 @@ export function prepareDay(scene: StoreScene): void {
   const live = liveEventsFor(scene.state, Math.random);
   // Бюджет внимания дня (game/attention.ts): особый гость, звонки, моменты и мини-события делят пять
   // просьб «нажми». Что не влезло — сегодня просто не случается (сюжет и беды — вне бюджета).
-  scene.attention = planAttention({ moments: momentPlan.length, live: live.kinds.length, special: scene.specialToday, calls: scene.phone ? callsPossible(scene.state, CALLS_MAX) : 0 });
+  scene.attention = planAttention({
+    moments: momentPlan.length,
+    live: live.kinds.length,
+    special: scene.specialToday,
+    calls: scene.phone ? callsPossible(scene.state, CALLS_MAX) : 0,
+    // Улика дела недели (game/cases.ts) — в своём районе: в Заречье дело не ведём.
+    clue: !inZar(scene.state) && clueToday(scene.state) !== null,
+  });
+  // Улика дела недели (game/cases.ts) — в своём месте бюджета: не влезла — придёт утром, размытая.
+  // Сам значок (caseFx.ts) — отдельным куском кода, только в день улики (13.11: предел веса основного файла).
+  scene.clueFx?.endClue(scene);
+  scene.clue = null;
+  if (scene.attention.clue) {
+    const day = scene.state.day;
+    void import('./caseFx').then((fx) => {
+      scene.clueFx = fx;
+      // Пока грузилось, день уже сменился — улика придёт утром, размытая.
+      if (scene.state.day === day) fx.armClue(scene, true);
+    });
+  }
   scene.moments.start(thin(momentPlan, scene.attention.moments));
   const kinds = live.kinds.slice(0, scene.attention.live);
   // В очередь недавних — только то, что правда будет (не случившееся не мешает ему завтра).

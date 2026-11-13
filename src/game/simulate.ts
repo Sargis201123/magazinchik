@@ -3,6 +3,7 @@
 // Запуск: npm run sim
 
 import { noThieves } from './firstday';
+import { ownerCatch } from './thiefTells';
 import { grantPets, petItem, type PetId } from './pets';
 import { noteLost } from './losses';
 import { isBroke } from './tips';
@@ -82,6 +83,7 @@ import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from '
 import { canStock, restockPlan } from './restock';
 import { addBed, bedsOf, buildGarden, GARDEN_PRICE, harvest, nextBedCost, plant, type CropId } from './garden';
 import { freeRooms, giveTenant, invitePitch, rentRoom, TENANT_IDS, TENANTS, tenantAsks, tenantsOf, upgradeCost as tenantUpCost, upgradeTenant } from './tenants';
+import { pawnOffer, refusePawn, takePawn } from './pawnshop';
 import { buyLine } from './reorder';
 import { bigDaySeed, setBigDaySeed } from './bigday';
 import { autoActive, autoArrived, autoMorning, autoTopUp, autoAvailable, autoToggle } from './autoorder';
@@ -98,6 +100,7 @@ import { endSale, SALE_CROWD, saleExtraItems, startSale, weekFor } from './weeks
 import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole, RELIEF_ROLE, TILL_ROLES } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
+import { buyLottery, countTicket, hasLottery, LOTTERY_PRICE, ticketChance, TICKET_CUT } from './lottery';
 import { simSmellComplaint } from './rot';
 import { brewSeconds, cameraTheft, coffeePrice, entranceMud, fridgeLeak, gearAvailable, MANUAL_GEAR, nextGear, ovenBatch, ovenBatchCost, REGISTER_JAM_SECONDS, registerJam, upgradeGear, wcDirt } from './gear';
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from './bakery';
@@ -105,8 +108,10 @@ import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight 
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
+import { buyLicense, hasLicense, LICENSE_PRICE, licenseLock } from './license';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
+import { chooseCrisis, crisisAsk, crisisExtraItems, crisisGive, crisisTolerance, type CrisisMode } from './crisis';
 import { deliveryDay } from './delivery';
 import { buyLineTier, LINE_IDS, LINES, lineLock, lineUnitCost, nextLineCost, type LineId } from './lines';
 import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
@@ -116,6 +121,7 @@ import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, next
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft, ownerTiming } from './owner';
+import { rhythmSeconds } from './tillRhythm';
 import { buyVan, loadVan, planTrip, vanEvents, vanFuel, vanOpen, vanPrice, vanWant, VAN_EVENTS, VAN_PRICE } from './van';
 
 export { rng };
@@ -194,6 +200,8 @@ export interface SimOptions {
   pet?: PetId;
   /** Как отвечать на ценовую войну. */
   war?: WarAnswer;
+  /** Как вести себя в беду района (crisis.ts): по умолчанию — держать обычные цены. */
+  crisis?: CrisisMode;
   /** Сколько закладок в печь игрок успевает за день и как часто забывает вынуть. */
   ovenBatches?: number;
   ovenBurn?: number;
@@ -256,6 +264,13 @@ export type Feature =
   // Бабушкин двор (garden.ts): ставит теплицу, докапывает грядки, сажает «яблоки и картошку» и собирает урожай
   // каждое утро — прямо на овощной прилавок.
   | 'garden'
+  // Лицензия на пиво и сигареты (license.ts): покупает, когда есть запас и не копит на расширение. Подросткам
+  // не продаёт (особых гостей симулятор не водит) — нарушений нет, проверки проходят чисто.
+  | 'license'
+  // Ломбард (pawnshop.ts): берёт вещь у гостя со спокойной приметой, если в кассе с запасом; суетливым отказывает.
+  | 'pawn'
+  // Лотерея у кассы (lottery.ts): ставит стойку, когда есть запас; тираж и запреты — в nightCycle, как в игре.
+  | 'lottery'
   // Выездная торговля (van.ts): покупает фургон, в дни событий докупает под выезд что там берут и грузит кузов.
   | 'van';
 
@@ -341,7 +356,8 @@ const OWNER_SECONDS_PER_GUEST = 2.5;
 function serveCapacity(state: StoreState): { total: number; owner: number; kiosk: number } {
   // Старая касса иногда заедает — в среднем столько секунд на покупателя.
   const jam = registerJam(state) * REGISTER_JAM_SECONDS;
-  const owner = checkoutSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
+  // Хозяин пробивает в ритме (tillRhythm.ts, 13.11): средний игрок — то в такт (быстрее), то как прежде.
+  const owner = rhythmSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
   const share = ownerAtRegister(state.level);
   const ownerCap = Math.floor((DAY_SECONDS * share) / owner);
   const cashierCap = (m: StaffMember, part: number) =>
@@ -377,6 +393,7 @@ export function simulate({
   hireStaff = true,
   features = {},
   war = 'wait',
+  crisis = 'hold',
   ovenBatches = 3,
   ovenBurn = 0.1,
   adAlways,
@@ -592,6 +609,10 @@ export function simulate({
         state = buyLineTier(state, next) ?? state;
       }
     }
+    if (features.license && !hasLicense(state) && !licenseLock(state) && state.money >= LICENSE_PRICE + reserve * 2 && canSplurge(LICENSE_PRICE)) {
+      investments += LICENSE_PRICE;
+      state = buyLicense(state) ?? state;
+    }
     // Радио: купить, когда есть запас; со сладостями у кассы — хиты, иначе ретро.
     if (features.radio) {
       if (!hasRadio(state) && state.money >= RADIO_PRICE + reserve) state = buyRadio(state) ?? state;
@@ -664,6 +685,13 @@ export function simulate({
       }
       state = refillRack(state, 999) ?? state;
     }
+    if (features.lottery && !hasLottery(state) && state.money >= LOTTERY_PRICE + reserve * 2) {
+      const bought = buyLottery(state);
+      if (bought) {
+        investments += LOTTERY_PRICE;
+        state = bought;
+      }
+    }
     if (features.coffee && hasUpgrade(state, 'coffee')) state = buyCups(state, 999) ?? state;
     // Кухня без повара: утром по закладке каждого блюда, на что хватает продуктов (с поваром — днём, ниже).
     if (features.kitchen && !kitchenWorking(state)) for (const id of DISH_IDS) state = cook(state, id) ?? state;
@@ -691,6 +719,8 @@ export function simulate({
       const afford = state.money >= counterCost(trick.kind, state.level) + reserve * 2 + (saving ? saving.cost : 0);
       state = answerTrick(state, afford ? 'counter' : trick.kind === 'banner' ? 'ignore' : 'complain', extraRandom) ?? answerTrick(state, 'ignore') ?? state;
     }
+    // Беда района: как решено для прогона (по умолчанию держит цены).
+    if (crisisAsk(state)) state = chooseCrisis(state, crisis) ?? state;
     const opened = districtNews(state);
     if (opened) {
       const saving = nextFor(state);
@@ -778,6 +808,10 @@ export function simulate({
       }
       state = invitePitch(state) ?? state;
       for (const ask of tenantAsks(state)) state = giveTenant(state, ask.id)?.state ?? state;
+    }
+    if (features.pawn) {
+      const offer = pawnOffer(state);
+      if (offer) state = (offer.tell === 'calm' && state.money >= offer.lent + reserve * 2 ? takePawn(state) : null) ?? refusePawn(state);
     }
 
     // ---------- Утро: закупка ----------
@@ -944,6 +978,8 @@ export function simulate({
     const arcRes = arcDeliver(state);
     state = arcRes.state;
     const cafeIncome = (cafeRes.result?.pay ?? 0) + (arcRes.result?.pay ?? 0);
+    // Беда района, выбор «раздавать»: старикам — к открытию, как в игре (crisisFx.openDay).
+    state = crisisGive(state).state;
     state.shelves.forEach((_, i) => (state = moveToShelf(state, i).state));
 
     // ---------- День ----------
@@ -996,6 +1032,13 @@ export function simulate({
           candy += CANDY_PRICE;
         }
       }
+      // Лотерейный билет у кассы: доля магазина — к чеку (lottery.ts). Бросок — только пока стойка работает:
+      // до покупки ход случайностей тот же, что без лотереи (парные сравнения sim:features не шумят).
+      const ticket = features.lottery ? ticketChance(state) : 0;
+      if (ticket > 0 && extraRandom() < ticket) {
+        state = countTicket(state);
+        extra += TICKET_CUT;
+      }
       if (features.coffee && coffees < coffeeCap && extraRandom() < coffeeChance(state)) {
         const next = useCup(state);
         if (next) {
@@ -1020,13 +1063,16 @@ export function simulate({
     const runGuests = (count: number, tolerance: number, cap: number, night: boolean) => {
     for (let g = 0; g < count; g++) {
       if (!noThieves(state) && random() < thiefChance(state.level) * cameraTheft(state) * eyeTheft(state)) {
-        // Вор берёт товар; его ловит охранник или, реже, сам игрок.
+        // Вор берёт товар; его ловит охранник или, реже, сам игрок — по повадкам (thiefTells.ts), за награду.
         const id = sellable[Math.floor(random() * sellable.length)];
         const index = shelfFor(state, id);
         const taken = index >= 0 ? takeFromShelf(state, index, id) : null;
         if (!taken) continue;
-        const caught = random() < (guard ? guardCatchChance(guard) : 0.3);
+        const caught = random() < (guard ? guardCatchChance(guard) : ownerCatch(state));
         state = caught ? returnToShelf(taken.state, [{ id, unit: taken.unit }]) : taken.state;
+        // Награду за пойманного (thiefTells.ts OWNER_BOUNTY) симулятор не начисляет (13.11): это мелочь — десятки
+        // 💰 в день против тысяч выручки, — а лишние монеты сдвигают пороги покупок, и пороговые проверки
+        // баланса (tests/weeks, tests/balanceZar) уезжают от шума, а не от игры. Важное — доля пойманных — учтено.
         if (caught) stats.caught++;
         else stats.stolen += unitSalePrice(state, id, taken.unit);
         continue;
@@ -1048,9 +1094,9 @@ export function simulate({
         }
       }
       const aroma = random() < aromaShare;
-      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + adExtraItems(state, extraRandom) + saleExtraItems(state, extraRandom), (p) => dayDemand(state, p, aroma));
+      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + crisisExtraItems(state) + adExtraItems(state, extraRandom) + saleExtraItems(state, extraRandom), (p) => dayDemand(state, p, aroma));
       const fair = (p: ProductId) =>
-        perceivedBase(state, p) * tolerance * fairTodayTolerance(state) * loyaltyTolerance(state) * radioTolerance(state) * adTrust(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
+        perceivedBase(state, p) * tolerance * fairTodayTolerance(state) * loyaltyTolerance(state) * radioTolerance(state) * adTrust(state) * crisisTolerance(state, p) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
       const cart: CartItem[] = [];
       let sawEmpty = false;
       // Чего не хватило — записываем в отчёт дня (по нему «Закупить нужное» и печь считают спрос).
