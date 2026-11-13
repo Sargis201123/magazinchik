@@ -447,6 +447,11 @@ export function buildShowcases(scene: StoreScene): void {
     const b = shelves.brandSpot(scene);
     scene.obstacles.push({ x: b.x - 15, y: b.y - 6, w: 30, h: 18 });
   }
+  // «Витрина 18+» (game/license.ts) — когда лицензия есть; полка «Еда» и уценка её тоже обходят.
+  if (scene.state.shelves.some((sh) => sh.kind === 'license')) {
+    const v = shelves.licenseSpot(scene);
+    scene.obstacles.push({ x: v.x - 15, y: v.y - 4, w: 30, h: 18 });
+  }
   // Левая стена: вдоль неё не ходят, во флигель — только через двери.
   const { h } = scene.layout;
   let from = -4;

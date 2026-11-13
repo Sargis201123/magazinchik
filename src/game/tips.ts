@@ -8,8 +8,9 @@ import { registerCount, RELIEF_ROLE } from './registers';
 import { noThieves, quietDays } from './firstday';
 import { pawnOpen } from './pawnshop';
 import { echoesOf } from './echoes';
+import { hasLicense } from './license';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'thief';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -60,6 +61,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['rhythm', (s) => s.day >= 2 && !quietDays(s) && !s.staff.some((m) => m.role === RELIEF_ROLE)],
   // Первая сценка кончилась и посадила эхо (echoes.ts): утром — что решения ещё аукнутся.
   ['echo', (s) => echoesOf(s).list.length > 0],
+  // Лицензия на пиво и сигареты (license.ts): наутро после покупки — где товар и чего делать нельзя.
+  ['license', hasLicense],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -78,6 +81,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   case: '🕵',
   rhythm: '🎵',
   echo: '🔁',
+  license: '🔞',
   thief: '🕵️',
 };
 

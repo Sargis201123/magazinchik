@@ -48,6 +48,7 @@ import { laneGuests } from './lanes';
 import { momentCount, momentRating } from './moments';
 import { branchNight, branchReport } from './branch';
 import { makeLines, type LinesNight } from './lines';
+import { licenseGuests, licenseNight } from './license';
 import { countZarDay, inZar, zarBossMorning, zarDuelNight, zarGuests, zarHomeNight, zarReport } from './zarechye';
 import { pawnMorning } from './pawnshop';
 
@@ -100,6 +101,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   s = restStaff(s);
   // «Проверяющий» от конкурента: штраф, ушёл ни с чем или разоблачили (tricks.ts).
   s = trickNight(s, random, Boolean(staffOf(s, 'cleaner')));
+  // Проверка лицензии на пиво и сигареты (license.ts): иногда вечером; нашла продажу подростку — штраф до счетов.
+  s = licenseNight(s);
   const day = s.day;
   // Филиал отдаёт доход за день до счетов: им можно расплатиться.
   const branch = branchNight(s, day);
@@ -182,6 +185,8 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, tenantGuests) *
   homeOnly(state, dogGuests) *
   homeOnly(state, trickGuests) *
+  // Вечерние гости за пивом и сигаретами (license.ts): лицензия — у магазина в Центре.
+  homeOnly(state, licenseGuests) *
   nightBoostGuests(state) *
   homeOnly(state, giantGuests) *
   homeOnly(state, contestGuests) *

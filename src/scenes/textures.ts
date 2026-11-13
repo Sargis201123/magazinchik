@@ -263,6 +263,9 @@ export const SPRITES = [
   'granny_box',
   'brand_stand',
   'brand_sign',
+  // «Витрина 18+» у кассы (art/license.py, game/license.ts); товар — семейства item_ и crate_.
+  'license_stand',
+  'license_stand_front',
   'pitch_seedlings',
   'pitch_icecream',
   'pitch_pumpkins',

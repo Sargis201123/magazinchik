@@ -28,7 +28,7 @@ import {
   propFootprint,
   propRect,
 } from './placement';
-import { brandSpotFor, iceboxRect, iceboxSpotFor, WALL_ROW_Y } from './layout';
+import { brandRect, brandSpotFor, iceboxRect, iceboxSpotFor, licenseSpotFor, WALL_ROW_Y } from './layout';
 import { Halo } from './halo';
 import { PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { gearTier } from '../game/gear';
@@ -58,6 +58,7 @@ const SHELF_LOOK: Record<Category, { texture: string; tint: number }> = {
   icebox: { texture: 'icebox', tint: 0xffffff },
   florist: { texture: 'florist', tint: 0xffffff },
   brand: { texture: 'brand_stand', tint: 0xffffff },
+  license: { texture: 'license_stand', tint: 0xffffff },
 };
 /** Плиточная вставка отдела под полкой — на плитке пола, под тенями живого пола (FLOOR_SHADE_DEPTH). */
 const DEPT_INLAY_DEPTH = 0.2;
@@ -141,6 +142,8 @@ const ITEM_AREA: Partial<Record<Category, { x: number; w: number; y: number; row
   icebox: { x: -13, w: 26, y: -6, row: 4 },
   // Полка «От бабушки»: банки двумя ступенями — задняя повыше, передняя пониже.
   brand: { x: -12, w: 24, y: -1, row: 6 },
+  // «Витрина 18+»: две стеклянные полки — банки сверху, пачки снизу (art/license.py).
+  license: { x: -12, w: 24, y: -5.5, row: 7 },
 };
 /** Вёдра с цветами: в каждом ведре по три букета (заднее ведро выше). */
 const FLORIST_SPOTS = [
@@ -285,7 +288,7 @@ export function buildShelf(scene: StoreScene, index: number, kind: Category): Sh
   const bg = scene.art(slot.x, slot.y - top, look.texture).setTint(look.tint).setDepth(slot.y - 14);
   const front = scene.art(slot.x, slot.y - top, `${look.texture}_front`).setDepth(slot.y - 12);
   // Глубина по нижнему краю: ларь ниже обычной полки, его край — на 10 точек ниже центра.
-  const d = kind === 'icebox' ? slot.y + 10 : kind === 'brand' ? slot.y + 12 : slot.y;
+  const d = kind === 'icebox' ? slot.y + 10 : kind === 'brand' || kind === 'license' ? slot.y + 12 : slot.y;
   bg.setDepth(d - 14);
   front.setDepth(d - 12);
   const cover = undefined;
@@ -294,7 +297,8 @@ export function buildShelf(scene: StoreScene, index: number, kind: Category): Sh
   const backItems = items.map(() => scene.art(slot.x, slot.y, 'item').setDepth(d - 13.5).setTint(0x8f8278).setVisible(false));
   // Уровень улучшения — жёлтые точки над полкой.
   // У полки своей марки над навесом вывеска — точки уровня над ней.
-  const pipY = kind === 'florist' ? 18 : kind === 'brand' ? 25 : 16;
+  // У витрины 18+ посередине карниза табличка — точки над ней.
+  const pipY = kind === 'florist' ? 18 : kind === 'brand' ? 25 : kind === 'license' ? 19 : 16;
   const pips = [0, 1, 2].map((n) => scene.art(slot.x + (fixture ? -6 : -17) + n * 4, slot.y - pipY, 'pip').setDepth(d - 12));
   const glow = new Halo(scene, bg, 0xfee761);
   const low = scene.add
@@ -504,6 +508,7 @@ export function spotOf(scene: StoreScene, index: number): { x: number; y: number
   if (kind === 'icebox') return iceboxSpot(scene);
   if (kind === 'florist') return floristSpot(scene);
   if (kind === 'brand') return brandSpot(scene);
+  if (kind === 'license') return licenseSpot(scene);
   return scene.layout.slots[Math.max(0, slotOf(scene.state, index))];
 }
 
@@ -513,7 +518,7 @@ export function standOf(scene: StoreScene, index: number): { x: number; y: numbe
   const kind = scene.state.shelves[index]?.kind;
   if (kind === 'icebox') return { x: p.x, y: p.y - 16 };
   if (kind === 'florist') return { x: p.x - 14, y: p.y + 6 };
-  if (kind === 'brand') return { x: p.x, y: p.y + 20 };
+  if (kind === 'brand' || kind === 'license') return { x: p.x, y: p.y + 20 };
   // Обычная полка — снизу, боковая у стены — сбоку (placement.ts).
   return standFor(scene.layout, p);
 }
@@ -538,6 +543,21 @@ export function iceboxSpot(scene: StoreScene): { x: number; y: number } {
 export function brandSpot(scene: StoreScene): { x: number; y: number } {
   const ice = scene.state.shelves.some((sh) => sh.kind === 'icebox') ? [iceboxRect(iceboxSpot(scene))] : [];
   return brandSpotFor(scene.layout, registerSlots(scene.state), ice, kioskCount(scene.state));
+}
+
+/** Последнее место витрины 18+ и от чего оно посчитано: поиск по всему залу недешёвый, а спрашивают его часто. */
+let licenseAt: { key: string; at: { x: number; y: number } } | null = null;
+
+/**
+ * «Витрина 18+» (game/license.ts) — как можно ближе к кассе, на свободном полу; ларь и полку «От бабушки»
+ * обходит (они стояли раньше — их не двигаем). Где — layout.ts licenseSpotFor.
+ */
+export function licenseSpot(scene: StoreScene): { x: number; y: number } {
+  const has = (kind: Category) => scene.state.shelves.some((sh) => sh.kind === kind);
+  const avoid = [...(has('icebox') ? [iceboxRect(iceboxSpot(scene))] : []), ...(has('brand') ? [brandRect(brandSpot(scene))] : [])];
+  const key = `${scene.state.level}:${registerSlots(scene.state)}:${kioskCount(scene.state)}:${avoid.map((r) => `${r.x},${r.y}`).join(';')}`;
+  if (licenseAt?.key !== key) licenseAt = { key, at: licenseSpotFor(scene.layout, registerSlots(scene.state), avoid, kioskCount(scene.state)) };
+  return licenseAt.at;
 }
 
 /** Вёдра с цветами — у кассы, в углу у правой стены. */
