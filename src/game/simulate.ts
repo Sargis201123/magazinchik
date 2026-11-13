@@ -82,6 +82,7 @@ import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from '
 import { restockPlan } from './restock';
 import { addBed, bedsOf, buildGarden, GARDEN_PRICE, harvest, nextBedCost, plant, type CropId } from './garden';
 import { freeRooms, giveTenant, invitePitch, rentRoom, TENANT_IDS, TENANTS, tenantAsks, tenantsOf, upgradeCost as tenantUpCost, upgradeTenant } from './tenants';
+import { pawnOffer, refusePawn, takePawn } from './pawnshop';
 import { buyLine } from './reorder';
 import { bigDaySeed, setBigDaySeed } from './bigday';
 import { autoActive, autoArrived, autoMorning, autoTopUp, autoAvailable, autoToggle } from './autoorder';
@@ -254,7 +255,9 @@ export type Feature =
   | 'tenants'
   // Бабушкин двор (garden.ts): ставит теплицу, докапывает грядки, сажает «яблоки и картошку» и собирает урожай
   // каждое утро — прямо на овощной прилавок.
-  | 'garden';
+  | 'garden'
+  // Ломбард (pawnshop.ts): берёт вещь у гостя со спокойной приметой, если в кассе с запасом; суетливым отказывает.
+  | 'pawn';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -775,6 +778,10 @@ export function simulate({
       }
       state = invitePitch(state) ?? state;
       for (const ask of tenantAsks(state)) state = giveTenant(state, ask.id)?.state ?? state;
+    }
+    if (features.pawn) {
+      const offer = pawnOffer(state);
+      if (offer) state = (offer.tell === 'calm' && state.money >= offer.lent + reserve * 2 ? takePawn(state) : null) ?? refusePawn(state);
     }
 
     // ---------- Утро: закупка ----------

@@ -706,6 +706,8 @@ export interface StoreState {
   garden?: import('./garden').GardenState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
+  /** Ломбард в подсобке (pawnshop.ts): вещи в залоге, полка «Разное», изъятое полицией. Нет поля — ещё не открывали. */
+  pawn?: import('./pawnshop').PawnState;
   /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */
   contest?: import('./contest').ContestState;
   /** Сюжет «Папа и Соня»: сколько сцен показано (drama.ts). На экономику не влияет. */

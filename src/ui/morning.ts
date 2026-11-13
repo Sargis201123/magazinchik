@@ -249,6 +249,8 @@ import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toas
 import { gardenBox, harvestNow } from './garden';
 import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
+import { pawnBox, pawnCard } from './pawnshop';
+import { pawnOf, pawnOpen, pawnSlots } from '../game/pawnshop';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
@@ -995,6 +997,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...(touring ? [] : mailBox(state, getState, mailUpdate, render)),
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
+      // Ломбард в подсобке (game/pawnshop.ts): гость с вещью и что стало с залогами.
+      ...(touring ? [] : pawnCard(state, getState, update)),
       ...(touring ? [] : zarSwitchBox(state, (where) => update(switchToday(getState(), where)))),
       ...(touring ? [] : liveBox(state)),
       ...(touring ? [] : weekBox(state, guestsToday(state))),
@@ -2263,6 +2267,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         status: securityOf(state).dog ? '🐕' : '—',
         details: () => [securityBox(getState())],
       },
+      ...(pawnOpen(state) ? [{ id: 'pawn', icon: 'assets/pawn_ring.png', title: t('pawn.title'), status: `${pawnOf(state).loans.length}/${pawnSlots(state)}`, details: () => pawnBox(getState()) }] : []),
       { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${LISTED_UPGRADES.length}`, details: () => [upgradesBox(getState())] },
     ];
     return [
