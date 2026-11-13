@@ -12,8 +12,8 @@ import { sound } from '../platform/sound';
 import { dialogBox } from './dialog';
 import { button, el, openModal } from './dom';
 
-/** Голос героя (высота «пика», если банк слогов ещё не скачан). */
-const PITCH: Record<string, number> = {
+/** Голос героя (высота «пика», если банк слогов ещё не скачан). Его же — у эха сценки (ui/echoes.ts, scenes/echoesFx.ts). */
+export const PITCH: Record<string, number> = {
   skit_tyoma: 760, skit_masha: 720, skit_karina: 640, skit_lyosha: 420, skit_ruslan: 380, skit_fyodor: 260,
   skit_galina: 600, skit_hoodie: 400, skit_painter: 300, skit_viktor: 340, police: 320, caller2: 620, caller4: 360,
 };
@@ -28,12 +28,12 @@ function costLine(option: SkitOption): string | null {
   return parts.length ? t('skit.cost', { list: parts.join(' · ') }) : null;
 }
 
-/** Итог финала строчкой: «+300 💰 · ★ +0.10 · гостей +8% на 5 дн.». */
-function gainLine(e: SkitEffect): string {
+/** Итог строчкой: «+300 💰 · ★ +0.10 · гостей +8% на 5 дн.» (и у эха — «гостей −5%…», ui/echoes.ts). */
+export function gainLine(e: Pick<SkitEffect, 'money' | 'rating' | 'boost'>): string {
   const out: string[] = [];
   if (e.money) out.push(`${e.money > 0 ? '+' : '−'}${Math.abs(e.money)} 💰`);
   if (e.rating) out.push(`★ ${e.rating > 0 ? '+' : '−'}${Math.abs(e.rating).toFixed(2)}`);
-  if (e.boost) out.push(t('skit.boost', { p: Math.round(e.boost[0] * 100), d: e.boost[1] }));
+  if (e.boost) out.push(t(e.boost[0] < 0 ? 'echo.drop' : 'skit.boost', { p: Math.round(Math.abs(e.boost[0]) * 100), d: e.boost[1] }));
   return out.join(' · ');
 }
 
@@ -46,7 +46,7 @@ const TONE_CLASS: Record<SkitTone, string> = { great: 'ui-gift-reward', good: 'u
 export function showSkit(
   id: SkitId,
   getState: () => StoreState,
-  finish: (path: number[]) => { tone: SkitTone; effect: SkitEffect } | null,
+  finish: (path: number[]) => { tone: SkitTone; effect: SkitEffect; echo?: unknown } | null,
   done: (tone: SkitTone | null) => void,
 ): void {
   const { card, close } = openModal();
@@ -82,7 +82,8 @@ export function showSkit(
       card.replaceChildren(
         el('h2', '', t(`skit.tone.${tone}` as TextKey)),
         say({
-          after: gain ? [el('div', TONE_CLASS[tone], gain)] : [],
+          // Финал оставил эхо (game/echoes.ts) — намёк, что история ещё вернётся.
+          after: [...(gain ? [el('div', TONE_CLASS[tone], gain)] : []), ...(result?.echo ? [el('div', 'ui-muted', t('echo.later'))] : [])],
           nextLabel: t('skit.back'),
           onNext: () => {
             close();

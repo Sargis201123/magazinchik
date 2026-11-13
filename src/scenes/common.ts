@@ -385,6 +385,8 @@ export interface Customer {
   reactMs?: number;
   /** Пробил сам игрок: за своей кассой или поторопив сменщика касанием — идёт в серию. */
   byPlayer?: boolean;
+  /** Пробит в ритме (game/tillRhythm.ts): «Идеально» подряд к концу его ленты — прибавка к чаевым серии. */
+  rhythm?: number;
   gone: boolean;
   thief: boolean;
   /** Ходит по полкам: его можно заподозрить касанием (воришка по повадкам, thiefTells.ts) — вора и честного одинаково. */
@@ -427,7 +429,8 @@ export interface Register {
   clerk: { x: number; y: number };
   /** Кто подошёл к этой кассе (идёт к ней, ждёт или уже пробивается). */
   customer: Customer | null;
-  scan: { start: number; total: number; byOwner: boolean; cut?: number } | null;
+  /** Кого пробивают сейчас; rhythm — хозяин пробивает в ритме, по ленте (scenes/tillBelt.ts). */
+  scan: { start: number; total: number; byOwner: boolean; cut?: number; rhythm?: boolean } | null;
   bar: Phaser.GameObjects.Rectangle;
   fill: Phaser.GameObjects.Rectangle;
   screen: Phaser.GameObjects.Rectangle;
@@ -563,6 +566,11 @@ export interface NightLight {
   tint?: number;
   /** Огонь самого магазина (витрины, вывеска, свет из двери): отключили электричество — гаснет. */
   store?: boolean;
+  /**
+   * Горит и в закрытом зале — ритуал закрытия его не гасит, только отключение света. Это премиальный свет
+   * за звёзды: ночью он смотрится лучше всего, гасить его нельзя (13.11, правило автора про покупки за звёзды).
+   */
+  allNight?: boolean;
   /** Свет в карте освещения (nightGlow с map): его сила — яркость × gain, а сама картинка видна только дымкой (× haze). */
   light?: Light;
   gain?: number;

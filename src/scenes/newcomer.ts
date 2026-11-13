@@ -21,6 +21,7 @@ import type { Spot } from '../ui/coach';
 import { ownerTiming } from '../game/owner';
 import { idleRegisters, nextRegisterCount, nextRegisterPrice, registerSlots } from '../game/registers';
 import { seeTip } from '../game/tips';
+import { rhythmTaught } from '../game/tillRhythm';
 import { cleanHall, frameFirstCoin, GRANNY_SCAN_SLOW, grannyServesAfter, grannyStays, grannyStocksNow, praiseAt } from '../game/firstday';
 import { hallNudge, NUDGE_IDLE_MS } from '../game/nudge';
 import { tryNudge } from '../ui/nudge';
@@ -71,6 +72,8 @@ export function currentHint(scene: StoreScene): string {
   if (!deliveries.staffPacks(scene) && !scene.packRequested && scene.parcels.some((p) => p.stage === 'wait')) return t('hint.orderPack');
   if (scene.inspector === 'here') return t('hint.inspector');
   if (!scene.workers.has('guard') && thiefFx.sneakingThief(scene)) return t('hint.thief');
+  // Касса в ритме (13.11): пока не было первого «Идеально» — подсказать, когда жать.
+  if (scene.belt && !rhythmTaught(scene.state)) return t('hint.rhythm');
   if (scene.sellerBusy && scene.ownerRegister()) return t('hint.recall');
   if (scene.ownerRegister() && scene.state.day <= 2 && scene.stats.served < 3) return t('hint.serve');
   // Очередь растёт — подсказать, что поможет. За первой кассой и так хозяин: кассир за свободную
