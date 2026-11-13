@@ -1762,7 +1762,7 @@ export const en: Record<TextKey, string> = {
   "popup.helpDay": "🤝 Friends are helping: faster till",
   "who.police": "Officer Petrovich",
   "tip.thief.title": "Spot the thief",
-  "tip.thief.text": "Thieves no longer stand out by their clothes, only by how they act: they look around, linger by pricey goods, pocket things and walk past the till. Spotted one? Tap them. Guess wrong and an honest shopper leaves offended. Bobik and the cameras help.",
+  "tip.thief.text": "Thieves no longer stand out by their clothes, only by how they act: they look around, linger by pricey goods, pocket things and walk past the till. Spotted one at a shelf? Tap them. Guess wrong and an honest shopper leaves offended. Bobik and the cameras help.",
   "thief.growl": "Grrr!",
   "thief.first": "That's a thief! Watch how they act",
   "thief.offended.0": "I'm not a thief!",

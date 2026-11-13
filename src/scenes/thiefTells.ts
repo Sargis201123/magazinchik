@@ -1,7 +1,7 @@
 // Воришка по повадкам — в зале (правила — game/thiefTells.ts). Вор одет как все; его выдаёт поведение:
 // оглядывается у полки, подолгу стоит у дорогого, прячет товар в карман, идёт к выходу мимо кассы (runThief в
-// shoppers.ts). Бобик рычит на него у входа, камеры на миг берут его в рамку. Касание покупателя в зале —
-// подозрение: вор пойман (товар на полку, награда), честный обижен и уходит без покупки.
+// shoppers.ts). Бобик рычит на него у входа, камеры на миг берут его в рамку. Касание покупателя у полок —
+// подозрение: вор пойман (товар на полку, с поличным — награда), честный обижен и уходит без покупки.
 
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
@@ -27,20 +27,32 @@ const GLANCE_MS = 260;
 const GROWL_REACH = 70;
 
 /**
- * Покупателя в зале можно заподозрить касанием: пока он ходит по полкам (browsing) — а вор, пока он в зале.
- * В очереди, у кассы, у кофе и в туалете касание проходит насквозь — к кассе, полке, мусору под ним. Ловится
- * верх фигуры (голова и плечи): мусор и пятна у ног нажимаются, как раньше.
+ * Покупателя в зале можно заподозрить касанием — вора и честного по одному правилу (13.11): с порога и пока ходит
+ * по полкам (browsing). По пути к кассе или к двери, в очереди, у кофе и в туалете касание проходит насквозь —
+ * иначе «нажимается тот, кто идёт к выходу» выдавало бы вора без риска. Курсор-рука не показывается: он тоже
+ * подсказывал бы, кого можно взять.
+ * Ловится верх фигуры (голова, плечи, пояс) с запасом по бокам — по пальцу на телефоне; мусор и пятна у ног
+ * нажимаются, как раньше. Касание, которое пришлось и на полку (или кота, Бобика) за его спиной, достаётся им:
+ * тянулся разложить товар — покупателя не обидишь.
  */
 export function suspectable(scene: StoreScene, c: Customer): void {
-  const body = new Phaser.Geom.Rectangle(1, 0, 14, 15);
+  const body = new Phaser.Geom.Rectangle(-2, -2, 20, 17);
   c.sprite
     .setSize(16, 22)
     .setInteractive({
       hitArea: body,
-      hitAreaCallback: (area: Phaser.Geom.Rectangle, x: number, y: number) => area.contains(x, y) && canSuspect(scene, c),
-      useHandCursor: true,
+      hitAreaCallback: (area: Phaser.Geom.Rectangle, x: number, y: number) => area.contains(x, y) && canSuspect(scene, c) && !overOther(scene, c, x, y),
     })
     .on('pointerup', () => camera.tap(scene, () => suspect(scene, c)));
+}
+
+/** Точка касания (x, y — в осях фигуры, от левого верхнего угла её рамки 16×22) лежит на полке или питомце. */
+function overOther(scene: StoreScene, c: Customer, x: number, y: number): boolean {
+  const p = c.sprite;
+  const wx = p.x + (x - p.displayOriginX) * p.scaleX;
+  const wy = p.y + (y - p.displayOriginY) * p.scaleY;
+  const hit = (o: Phaser.GameObjects.Image | undefined) => Boolean(o?.active && o.visible && o.input?.enabled && o.getBounds().contains(wx, wy));
+  return hit(scene.catImg) || hit(scene.bobik) || scene.shelfViews.some((v) => hit(v.bg));
 }
 
 function canSuspect(scene: StoreScene, c: Customer): boolean {
@@ -49,7 +61,7 @@ function canSuspect(scene: StoreScene, c: Customer): boolean {
   if (!scene.running || c.gone || !sprite.visible || noThieves(scene.state)) return false;
   // Постоянных и друзей игрок знает в лицо (их встречают по имени) — вором их не считают, касание проходит мимо.
   if (c.regular || c.friend || c.hello) return false;
-  return (c.thief || Boolean(c.browsing)) && sprite.y > scene.layout.wallH && sprite.y < scene.layout.h - 2;
+  return Boolean(c.browsing) && sprite.y > scene.layout.wallH && sprite.y < scene.layout.h - 2;
 }
 
 /** Касание подозреваемого: вор — пойман хозяином; честный — обижается и уходит. */
@@ -166,5 +178,5 @@ export function spotOnShelf(scene: StoreScene, index: number, id: ProductId): Sh
  * Вор, о котором стоит сказать подсказкой (и показать весь зал): уже взялся за своё у полки. Не с порога — иначе
  * подсказка выдавала бы его: «кто сейчас вошёл, тот и вор».
  */
-export const sneakingThief = (scene: StoreScene): Customer | undefined => [...scene.customers].find((c) => c.thief && c.browsing && !c.gone);
+export const sneakingThief = (scene: StoreScene): Customer | undefined => [...scene.customers].find((c) => c.thief && c.sneaking && !c.gone);
 

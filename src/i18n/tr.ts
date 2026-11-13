@@ -1746,7 +1746,7 @@ export const tr: Record<TextKey, string> = {
   "popup.helpDay": "🤝 Arkadaşlar yardımda: kasa hızlı",
   "who.police": "Komiser Petrovich",
   "tip.thief.title": "Hırsızı davranışından tanı",
-  "tip.thief.text": "Hırsız artık kıyafetinden değil, davranışından tanınıyor: etrafına bakınır, pahalı ürünün yanında oyalanır, malı cebine sokar ve kasaya uğramadan geçer. Fark ettin mi? Ona dokun. Yanılırsan dürüst müşteri gücenip gider. Bobik ve kameralar yardım eder.",
+  "tip.thief.text": "Hırsız artık kıyafetinden değil, davranışından tanınıyor: etrafına bakınır, pahalı ürünün yanında oyalanır, malı cebine sokar ve kasaya uğramadan geçer. Rafın başında fark ettin mi? Ona dokun. Yanılırsan dürüst müşteri gücenip gider. Bobik ve kameralar yardım eder.",
   "thief.growl": "Hırrr!",
   "thief.first": "İşte hırsız! Nasıl davrandığına bak",
   "thief.offended.0": "Ben hırsız değilim!",

@@ -490,7 +490,9 @@ export function spawnCustomer(
               ? customerLook(shirt, scene.state.day) // одет как все, но без коляски и собаки: с ними на дело не ходят
               : withCompanionItems(customerLook(shirt, scene.state.day));
   // Ночью — гость с характером: свой образ, свой список и реплика у входа (nightGuests.ts).
-  const nightGuest = scene.night && !forced && !arrived && !thief && !rare && !valya ? pickNightGuest(Math.random) : null;
+  // 13.11: вор ночью тоже в образе ночного гостя (и, бывает, с его репликой у входа) — иначе «тот, кто без образа»
+  // выдавал бы его. Список покупок ночного гостя ему ни к чему: берёт своё (thiefPicks).
+  const nightGuest = scene.night && !forced && !arrived && !rare && !valya ? pickNightGuest(Math.random) : null;
   if (nightGuest) look = nightGuestLook(nightGuest);
   const big = bigDayFor(scene.state.day);
   // Приехавший на машине уже одет (маска в эпидемию — ещё у машины, carCustomer).
@@ -502,7 +504,7 @@ export function spawnCustomer(
   // Гость из здания района: свой образ и свой список покупок (district.ts).
   let wants: ProductId[] | undefined = forced?.wants;
   const fromDistrict = !forced && !arrived && !rare && !thief && !valya && !scene.night ? districtGuest(scene.state, Math.random) : null;
-  if (nightGuest) {
+  if (nightGuest && !thief) {
     const sellable = sellableProducts(scene.state);
     const pool = NIGHT_GUEST_TYPES[nightGuest].wants.filter((id) => sellable.includes(id));
     if (pool.length) wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
@@ -569,7 +571,7 @@ export function spawnCustomer(
 /**
  * Воришка по повадкам (13.11, game/thiefTells.ts): у входа на него рычит Бобик; у полки он, как все, «думает» о
  * товаре, но оглядывается, у самого дорогого стоит подолгу и прячет взятое в карман; потом — мимо кассы к выходу.
- * Камеры берут его в рамку. Касание в любой миг, пока он в зале, — пойман (thiefTells.ts suspect).
+ * Камеры берут его в рамку. Касание, пока он ходит по полкам, — пойман (thiefTells.ts suspect).
  */
 export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
   const { door } = scene.layout;
@@ -580,6 +582,8 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
   if (c.gone) return;
   thiefFx.growl(scene, c);
   if (c.training) thiefFx.teach(scene, c);
+  // Касанием его можно заподозрить ровно тогда же, когда и честного: с порога и пока ходит по полкам (13.11).
+  c.browsing = true;
   const picks = thiefPicks(scene.state, scene.wanted(Phaser.Math.Between(1, 2)));
   for (const [n, id] of picks.entries()) {
     const index = shelfFor(scene.state, id);
@@ -587,7 +591,8 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
     const stand = shelves.standOf(scene, index);
     await persons.walk(scene, c.sprite, stand.x + Phaser.Math.Between(-8, 8), stand.y);
     if (c.gone) return;
-    c.browsing = true;
+    // Взялся за своё у полки — теперь о нём можно сказать подсказкой (thiefTells.ts sneakingThief).
+    c.sneaking = true;
     // Облачко с товаром — как у всех: вора выдаёт не оно, а то, что он делает.
     const thought = motion.think(scene, c.sprite, id);
     thiefFx.camFlash(scene, c, 2);
@@ -607,7 +612,10 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
     if (c.gone) return;
   }
   if (c.gone) return;
-  // Мимо кассы — сразу к выходу.
+  // Мимо кассы — сразу к выходу. Полки позади: касанием его уже не взять, как и честного по пути к кассе, —
+  // иначе «кто идёт к двери и нажимается, тот и вор». Дальше ловят охранник и Бобик.
+  c.browsing = false;
+  c.sneaking = false;
   await persons.walk(scene, c.sprite, door.x, door.y - 10, THIEF_SPEED);
   if (c.gone) return;
   const guard = scene.workers.get('guard');
@@ -639,6 +647,8 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
 export function catchThief(scene: StoreScene, c: Customer, by: 'owner' | 'guard' | 'dog'): void {
   if (c.gone || !scene.running) return;
   c.sprite.disableInteractive();
+  // Награда — только с поличным (thiefTells.ts catchBounty): у порога, с пустыми руками, вор просто уходит.
+  const bounty = by === 'owner' && c.items.length > 0;
   scene.state = returnToShelf(scene.state, c.items);
   c.items = [];
   scene.refreshShelves();
@@ -648,11 +658,11 @@ export function catchThief(scene: StoreScene, c: Customer, by: 'owner' | 'guard'
   haptic.success();
   sound.good();
   // Сам хозяин заметил по повадкам — награда (thiefTells.ts): ловить теперь труднее, а ошибка стоит обиды.
-  if (by === 'owner') {
-    scene.state = catchBounty(scene.state);
+  if (bounty) {
+    scene.state = catchBounty(scene.state, 1);
     effects.tipCoins(scene, c.sprite);
   }
-  const text = by === 'owner' ? `${t('popup.thiefCaught')} +${OWNER_BOUNTY} 💰` : t(by === 'guard' ? 'popup.guardCaught' : 'popup.dogCaught');
+  const text = bounty ? `${t('popup.thiefCaught')} +${OWNER_BOUNTY} 💰` : t(by === 'owner' ? 'popup.thiefCaught' : by === 'guard' ? 'popup.guardCaught' : 'popup.dogCaught');
   scene.popup(c.sprite.x, c.sprite.y - 14, text, '#c8ffb0');
   void leave(scene, c);
 }

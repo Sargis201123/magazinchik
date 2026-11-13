@@ -68,9 +68,15 @@ describe('что берёт вор', () => {
 describe('поймал или обидел', () => {
   it('вор пойман хозяином — награда в кассу, ровно OWNER_BOUNTY', () => {
     const s = shop({ money: 123 });
-    expect(catchBounty(s).money).toBe(123 + OWNER_BOUNTY);
+    expect(catchBounty(s, 1).money).toBe(123 + OWNER_BOUNTY);
+    expect(catchBounty(s, 2).money).toBe(123 + OWNER_BOUNTY);
     expect(OWNER_BOUNTY).toBeGreaterThan(0);
     expect(OWNER_BOUNTY).toBeLessThanOrEqual(50);
+  });
+
+  it('пойман у порога, ещё ничего не взял — без награды (тыкать в каждого входящего невыгодно)', () => {
+    const s = shop({ money: 123 });
+    expect(catchBounty(s, 0)).toBe(s);
   });
 
   it('честный обижен: ушёл без покупки и с жалобой', () => {

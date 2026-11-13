@@ -71,5 +71,8 @@ export function offend(stats: DayStats): void {
   stats.complaints++;
 }
 
-/** Пойман по повадкам — награда в кассу. */
-export const catchBounty = (state: StoreState): StoreState => ({ ...state, money: state.money + OWNER_BOUNTY });
+/**
+ * Пойман по повадкам — награда в кассу, но только с поличным: carried — сколько товара было у вора при себе.
+ * 13.11: у порога, пока ничего не взял, он просто уходит ни с чем — иначе выгодно тыкать в каждого входящего.
+ */
+export const catchBounty = (state: StoreState, carried: number): StoreState => (carried > 0 ? { ...state, money: state.money + OWNER_BOUNTY } : state);
