@@ -50,6 +50,7 @@ import * as liveFx from './liveFx';
 import * as nightShift from './nightShift';
 import * as camera from './camera';
 import * as shelves from './shelves';
+import * as pawnFx from './pawnFx';
 
 const OWNER: Look = { shirt: 0x8fd16a, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short' };
 /** Наряды хозяина за звёзды (decor.ts, раздел «Наряд»). Должно совпадать с art/costumes.py. */
@@ -196,7 +197,7 @@ export function makeRegister(scene: StoreScene, counter: { x: number; y: number 
   // Экран кассы светит зеленоватым на прилавок и кассира: тлеет всегда, ярче — пока пробивает. Ровно, не по
   // мерцанию экрана (оно 7 раз в секунду, при заедании — каждый кадр): карту ради него не перерисовывать.
   const till = scene.light.add('glow', sx, counter.y + 9, 22, 16, 0xb6f58a).attach(screen);
-  till.sync = () => till.set(lighting.powerOn(scene) * (screen.visible ? 0.5 : 0.2));
+  till.sync = () => till.set(lighting.powerOn(scene, Infinity) * (screen.visible ? 0.5 : 0.2));
   const beam = scene.add
     .rectangle(sx, counter.y + 4.2, 8, 4.5, 0xff4a4a)
     .setBlendMode(Phaser.BlendModes.ADD)
@@ -445,6 +446,11 @@ export function buildShowcases(scene: StoreScene): void {
   if (scene.state.shelves.some((sh) => sh.kind === 'brand')) {
     const b = shelves.brandSpot(scene);
     scene.obstacles.push({ x: b.x - 15, y: b.y - 6, w: 30, h: 18 });
+  }
+  // «Витрина 18+» (game/license.ts) — когда лицензия есть; полка «Еда» и уценка её тоже обходят.
+  if (scene.state.shelves.some((sh) => sh.kind === 'license')) {
+    const v = shelves.licenseSpot(scene);
+    scene.obstacles.push({ x: v.x - 15, y: v.y - 4, w: 30, h: 18 });
   }
   // Левая стена: вдоль неё не ходят, во флигель — только через двери.
   const { h } = scene.layout;
@@ -821,6 +827,8 @@ export function buildWarehouse(scene: StoreScene): void {
   scene.art(x + w - 4, doorway.y - 16, 'extinguisher').setDepth(doorway.y - 90);
   lighting.nightGlow(scene, scene.art(x + w / 2, y + 10, 'glow').setScale(40 / 64).setTint(0xfff0c8), 0.5, undefined, { store: true, map: { scale: 1.3, gain: 0.8, haze: 0.12 } });
   roomSign(scene, x, y + 7, w, t('warehouse.label'));
+  // Ломбард (game/pawnshop.ts): полка «Разное» на стене слева от таблички.
+  pawnFx.buildPawnShelf(scene);
 }
 
 export function refreshWarehouse(scene: StoreScene): void {
@@ -841,6 +849,7 @@ export function refreshWarehouse(scene: StoreScene): void {
     const y = warehouseRowY(scene, row);
     img.setPosition(scene.layout.warehouse.x + 8 + (n % WAREHOUSE_COLS) * 9, y).setTexture(`crate_${id}`).setDepth(y - 100);
   });
+  pawnFx.refreshPawnShelf(scene);
 }
 
 export function refreshToilet(scene: StoreScene): void {

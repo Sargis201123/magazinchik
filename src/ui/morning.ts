@@ -29,6 +29,7 @@ import {
   PRICE_STEP,
   PRODUCTS,
   PRODUCT_IDS,
+  restricted,
   resolveBadBatch,
   RETURN_REFUND,
   sellableProducts,
@@ -126,6 +127,8 @@ import { activeEvent, addDays, cardOf, cardWaiting, guestDue, guestOn, nextGuest
 import { liveEvents, todayLocal } from '../platform/live';
 import { dateLabel, GUEST_ICON, showLiveCard, THEME_ICON } from './live';
 import { goalText, weekBox, weekSoonLine } from './weeks';
+import { caseLine, caseNewsBox, showCaseBoard } from './cases';
+import { caseNews } from '../game/caseBoard';
 import { stepReward, WEEK_IDS, WEEKS, type WeekId } from '../game/weeks';
 import { CHARACTERS, currentChapter, finishChapter, finishIntro, linesFor, pendingStory, type Chapter, type Line } from '../game/story';
 import { answerEduard, EDUARD_DEBT, writeSonya } from '../game/notebook';
@@ -195,6 +198,8 @@ import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy'
 import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
 import { arcBox, arcLines } from './arcs';
+import { echoBox, echoLines } from './echoes';
+import { echoNews } from '../game/echoes';
 import { mailBox, takeQuietly } from './mail';
 import { MAIL_EVENT } from './mailbag';
 import { arcToday } from '../game/arcs';
@@ -249,12 +254,16 @@ import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toas
 import { gardenBox, harvestNow } from './garden';
 import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
+import { pawnBox, pawnOfferBox } from './pawnshop';
+import { pawnMet, pawnOf, pawnOffer, pawnOpen, pawnSlots } from '../game/pawnshop';
 import { rentalAlert, rentalBox, rentalStatus, restockButton } from './rental';
 import { KIT_ICON, RENTAL_CAP, rentalKit, rentalOf, rentalOpen } from '../game/rental';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
 import { linesBox } from './lines';
+import { licenseBox, licenseNoticeBox } from './license';
+import { hasLicense, licenseNotice } from '../game/license';
 import { lineOfProduct } from '../game/lines';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
@@ -790,6 +799,13 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       card.replaceChildren(title, qualityBox(pendingBad));
       return;
     }
+    // Проверка лицензии вчера вечером нашла продажу подростку (game/license.ts): штраф, а то и лицензию отобрали.
+    const licenseCheck = licenseNotice(state);
+    if (licenseCheck) {
+      cue('fail', `license:${licenseCheck.day}`);
+      card.replaceChildren(title, licenseNoticeBox(licenseCheck, getState, update));
+      return;
+    }
     // Новости утра (game/headlines.ts): сюжет, повороты, итоги, истории — не больше одной за утро,
     // остальные ждут следующего. Решить срочное (спасение, банк, брак) — выше, вне очереди.
     const zarHere = inZar(state);
@@ -814,6 +830,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('event', state.plan?.event && !state.plan.decided);
     add('career', careerDue(state));
     add('trick', !zarHere && trickToday(state));
+    add('pawn', pawnOffer(state));
+    add('case', !zarHere && caseNews(state));
     add('tale', taleToday(state));
     add('life', !zarHere && lifeNews(state));
     add('staffEvent', staffEventDue(state));
@@ -822,8 +840,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('zarTale', zarTale);
     add('careerLeft', state.career?.left);
     add('arc', !zarHere && arcToday(state));
+    add('echo', !zarHere && echoNews(state));
     const picked = pickNews(state, ready);
-    if (picked.state !== state) setState(picked.state);
+    // Первого гостя ломбарда показали — дальше он приходит как все, даже без ответа (game/pawnshop.ts pawnMet).
+    const met = picked.id === 'pawn' ? pawnMet(picked.state) : picked.state;
+    if (met !== state) setState(met);
     if (story && picked.id === 'story') {
       cue('story', `story:${story.kind}:${state.story.chapter}`);
       card.replaceChildren(storyBox(state, story.kind, story.chapter));
@@ -972,6 +993,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...weekSoonLine(state),
       ...(zarHere ? [] : districtLines(state)),
       ...(zarHere ? [] : arcLines(state)),
+      ...(zarHere ? [] : echoLines(state)),
       ...(zarHere ? [] : trickLines(state)),
       ...nightGuestLines(state),
     );
@@ -1000,6 +1022,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...(touring ? [] : zarSwitchBox(state, (where) => update(switchToday(getState(), where)))),
       ...(touring ? [] : liveBox(state)),
       ...(touring ? [] : weekBox(state, guestsToday(state))),
+      // «Дело недели» (game/cases.ts): строчка с уликами и доской — каждое утро недели, кроме того, когда
+      // о деле сегодня новость (она ниже, в очереди новостей). Доска — отдельным окном (ui/cases.ts).
+      ...(touring || picked.id === 'case' ? [] : caseLine(state, openCaseBoard)),
       // Новость утра, если сегодня это история (game/headlines.ts): одна, остальные ждут завтра.
       ...newsBox(state, picked.id),
       today,
@@ -2004,6 +2029,13 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   /** История с сотрудником, который ещё работает у нас (staffEventBox). */
   const staffEventDue = (state: StoreState): boolean => Boolean(state.staffEvent && state.staff.some((m) => m.role === state.staffEvent!.roles[0]));
 
+  /** Доска «Дела недели» (ui/cases.ts): пишет состояние, утро под окном перерисовывается. */
+  const openCaseBoard = () =>
+    showCaseBoard(getState, (next) => {
+      setState(next);
+      render();
+    });
+
   /** Новость утра над вкладками — одна из историй (game/headlines.ts выбрал, какая сегодня). */
   const newsBox = (state: StoreState, id: NewsId | null): HTMLElement[] => {
     switch (id) {
@@ -2019,10 +2051,16 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return trickBox(state);
       case 'arc':
         return arcBox(state, getState, update);
+      case 'echo':
+        return echoBox(state, getState, update);
       case 'career':
         return careerBox(state, 'offer');
       case 'careerLeft':
         return careerBox(state, 'left');
+      case 'pawn':
+        return pawnOfferBox(state, getState, update);
+      case 'case':
+        return caseNewsBox(state, openCaseBoard, (next) => update(next));
       default:
         return [];
     }
@@ -2269,6 +2307,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         status: securityOf(state).dog ? '🐕' : '—',
         details: () => [securityBox(getState())],
       },
+      ...(pawnOpen(state) ? [{ id: 'pawn', icon: 'assets/pawn_ring.png', title: t('pawn.title'), status: `${pawnOf(state).loans.length}/${pawnSlots(state)}`, details: () => pawnBox(getState()) }] : []),
       { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${LISTED_UPGRADES.length}`, details: () => [upgradesBox(getState())] },
     ];
     return [
@@ -4341,7 +4380,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       fold('gear', gearBox(state)),
       fold('ads', adsBox(state)),
       decorBox(state),
-      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
+      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
@@ -4397,7 +4436,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   const pricesTab = (state: StoreState): HTMLElement[] => {
     const sellable = sellableProducts(state);
     // Сначала то, что сейчас продаётся; закрытые товары — внизу.
-    const order = [...PRODUCT_IDS.filter((pid) => sellable.includes(pid)), ...PRODUCT_IDS.filter((pid) => !sellable.includes(pid))];
+    // Пиво и сигареты без лицензии не показываем даже серыми (game/license.ts): о них — только в «Развитии».
+    const locked = PRODUCT_IDS.filter((pid) => !sellable.includes(pid) && (!restricted(pid) || hasLicense(state)));
+    const order = [...PRODUCT_IDS.filter((pid) => sellable.includes(pid)), ...locked];
     return order.map((pid) => {
       const product = PRODUCTS[pid];
       const card = el('div', 'ui-price');

@@ -49,6 +49,8 @@ const RULE = {
   // Серия у кассы хозяина идёт за касаниями игрока, а не за часами игры.
   combo: { gap: 0.3, max: 1, tier: 'feedback', game: false },
   coin: { gap: 0.25, max: 2, tier: 'feedback' },
+  // Выключатели ритуала закрытия: ряды щёлкают часто (на касании — бегом), но не кашей.
+  switch: { gap: 0.07, max: 2, tier: 'feedback' },
   phone: { gap: 0.8, max: 1, tier: 'feedback' },
   voice: { gap: 0.045, max: 2, tier: 'story', game: false },
   syllable: { gap: 0.04, max: 3, tier: 'story', game: false },
@@ -58,6 +60,8 @@ const RULE = {
   // Касса: расплатились у хозяина — отклик (feedback), у кассира — событие мира (тише, на ×2 через одно).
   // «Пик» сканера — всегда событие мира: награда — сама касса, а пищалка лишь отмечает товар.
   scan: { gap: 0.3, max: 1 },
+  // «Пик» в такт (касса в ритме, 13.11) — ответ на касание игрока: звучит всегда и на ×2 не прореживается.
+  beat: { gap: 0.06, max: 2, tier: 'feedback', game: false },
   till: { gap: 0.25, max: 2 },
   thanks: { gap: 3, max: 1 },
   pop: { gap: 0.06, max: 3, low: true },
@@ -352,6 +356,30 @@ function knock(ac: AudioContext, out: AudioNode, at: number, freq: number, vol: 
   osc.stop(at + 0.14);
 }
 
+/**
+ * Выключатель (ритуал закрытия, 13.11): сухой щелчок клавиши — нажал и отпустил (два коротких шума в узкой
+ * полосе) и лёгкий «ток» корпуса; каждый следующий ряд (step) чуть выше — гаснет волной. Рубильник (main) —
+ * ниже и глуше: «чмок» контакта и деревянный стук щитка. Синтез: записи для него нет.
+ */
+function switchClick(x: number | undefined, step: number, main: boolean): void {
+  const o: Voice = { x, cents: 25, db: 1, limit: ['switch', RULE.switch] };
+  const ac = audio(busOf(o));
+  if (!ac) return;
+  const target = output(ac, o, main ? 0.2 : 0.12);
+  if (!target) return;
+  const now = ac.currentTime + 0.01;
+  if (main) {
+    const r = target.rate;
+    noiseBurst(ac, target.out, now, 0.07, 1300 * r, 2.5, 0.05, 0.001);
+    knock(ac, target.out, now + 0.03, 196 * r, 0.06);
+    return;
+  }
+  const r = target.rate * (1 + 0.05 * Math.min(step, 8));
+  noiseBurst(ac, target.out, now, 0.025, 3600 * r, 5, 0.04, 0.001);
+  noiseBurst(ac, target.out, now + 0.045, 0.02, 2800 * r, 5, 0.022, 0.001);
+  knock(ac, target.out, now, 620 * r, 0.014);
+}
+
 /** Буфер раската грома (бурый шум) — один на всю игру. */
 let rumbleBuffer: AudioBuffer | null = null;
 
@@ -632,6 +660,8 @@ export const sound = {
   tap: () => {
     if (sample('click', { bus: 'ui', cents: 120, db: 1.5, limit: ['tap', RULE.tap] }) === null) synthTap();
   },
+  /** Ритуал закрытия: щелчок выключателя ряда ламп (step — какой по счёту, выше), main — рубильник. */
+  switchOff: (x?: number, step = 0, main = false) => switchClick(x, step, main),
   /** Кнопка в меню — деревянный щелчок, вкладка — шорох страницы. */
   click: (kind: 'button' | 'tab' = 'button') => {
     if (sample(kind === 'tab' ? 'page' : 'click', { bus: 'ui', cents: 100, db: 1.5, gain: 0.85, limit: ['tap', RULE.tap] }) === null) synthTap();
@@ -655,6 +685,27 @@ export const sound = {
       ],
       { x, lp: 3000, cents: 15, db: 1.5, limit: ['scan', rule] },
     );
+  },
+  /**
+   * Касса в ритме (game/tillRhythm.ts): игрок «пикнул» товар касанием. «Идеально» — ясное «пик» чуть выше и
+   * звонкая искорка сверху; просто в окне — обычное «пик»; промах — тихое низкое «бу-бу» (не ошибка, а «ещё разок»).
+   */
+  beat: (grade: 'perfect' | 'good' | 'miss') => {
+    const rule: [string, VoiceRule] = ['beat', RULE.beat];
+    if (grade === 'miss') {
+      play(
+        [
+          { freq: 330, dur: 0.07, wave: 'triangle', vol: 0.03, attack: 0.006 },
+          { freq: 262, at: 0.09, dur: 0.09, wave: 'triangle', vol: 0.03, attack: 0.006 },
+        ],
+        { bus: 'ui', lp: 1800, limit: rule },
+      );
+      return;
+    }
+    const perfect = grade === 'perfect';
+    const main = sample('scan', { bus: 'ui', cents: 6, db: 1, gain: 0.85, rate: perfect ? 1.12 : 1, lp: 3200, limit: rule });
+    if (main === null) play([{ freq: perfect ? 1319 : 1175, dur: 0.09, wave: 'sine', vol: 0.03, attack: 0.006 }], { bus: 'ui', lp: 3200, limit: rule });
+    if (perfect && main !== false) play([{ freq: 2093, at: 0.05, dur: 0.12, wave: 'sine', vol: 0.012, attack: 0.004 }], { bus: 'ui', lp: 5000, layer: 'beat' });
   },
   /** Деньги: звон монеток в горсти (пока нет записи — два мягких касания, высота каждый раз своя). */
   coin: (x?: number) => {

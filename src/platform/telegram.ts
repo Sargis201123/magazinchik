@@ -287,6 +287,8 @@ const feedback = () => (hapticsEnabled() ? webApp()?.HapticFeedback : undefined)
 
 export const haptic = {
   tap: () => feedback()?.impactOccurred('light'),
+  /** Касса в ритме: «Идеально» — чёткий щелчок, заметнее обычного касания. */
+  beat: () => feedback()?.impactOccurred('rigid'),
   success: () => feedback()?.notificationOccurred('success'),
   error: () => feedback()?.notificationOccurred('error'),
 };

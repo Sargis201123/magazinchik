@@ -2,7 +2,7 @@
 // Заходишь подряд — подарок растёт; седьмой день самый щедрый, потом серия начинается заново.
 // Пропустил день — серия с начала.
 
-import { buyStock, sellableProducts, warehouseCapacity, warehouseCount, type ProductId, type StoreState } from './economy';
+import { buyStock, restricted, sellableProducts, warehouseCapacity, warehouseCount, type ProductId, type StoreState } from './economy';
 
 export const GIFT_DAYS = 7;
 /** Множитель денег по дню серии. */
@@ -46,7 +46,8 @@ export function claimGift(state: StoreState, today: string, random: () => number
   const gift: Gift = { day, money: Math.round(giftBase(state) * GIFT_SCALE[day - 1]) };
   let next: StoreState = { ...state, money: state.money + gift.money, gift: { lastDate: today, streak: day } };
   if (GOODS_DAYS.has(day)) {
-    const options = sellableProducts(next);
+    // 13.11: бабушка пива и сигарет внукам не шлёт — товар 18+ в подарок не попадает.
+    const options = sellableProducts(next).filter((id) => !restricted(id));
     const id = options[Math.floor(random() * options.length)];
     const qty = Math.min(GOODS_QTY, warehouseCapacity(next) - warehouseCount(next));
     const withGoods = id && qty > 0 ? buyStock(next, id, qty, 0) : null;
