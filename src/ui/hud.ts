@@ -326,6 +326,12 @@ export class Hud {
     money.classList.add('ui-bump');
   }
 
+  /**
+   * Ритуал закрытия уже ссыпал выручку в ящик кассы со счётчиком «+N»: в итогах плитка выручки — сразу
+   * итоговым числом, второй раз от нуля не докручивается (13.11, автор). Итоги сбрасывают флаг.
+   */
+  revenueShown = false;
+
   /** Подсказка внизу; в первые дни — яркая плашка, чтобы новичок точно заметил. */
   setHint(text: string, tutorial = false): void {
     if (this.hint.textContent !== text) this.hint.textContent = text;
@@ -369,21 +375,23 @@ export class Hud {
     const arrowRating = rating.after > rating.before ? '▲' : rating.after < rating.before ? '▼' : '';
     const records = stamps.flatMap((s) => (s.kind === 'record' ? [s.id] : []));
     const tiles = el('div', 'ui-tiles ui-sum-tiles');
-    const tile = (icon: string | HTMLElement, value: number, label: string, tone = '', record = false, format: (n: number) => string = String) => {
+    const shown = this.revenueShown;
+    this.revenueShown = false;
+    const tile = (icon: string | HTMLElement, value: number, label: string, tone = '', record = false, format: (n: number) => string = String, settled = calm) => {
       const at = TILE_AT + tiles.childElementCount * TILE_STEP;
       const box = el('div', `ui-tile ${tone}${record ? ' record' : ''}`);
       box.style.animationDelay = `${at}ms`;
-      const num = el('span', 'ui-tile-num', format(calm ? value : 0));
+      const num = el('span', 'ui-tile-num', format(settled ? value : 0));
       const b = el('b');
       b.append(icon, ' ', num);
       const caption = el('span', '', label);
       box.append(b, caption);
       tiles.append(box);
-      if (!calm) setTimeout(() => rollNumber(num, 0, value, ROLL_MS, format), at + ROLL_DELAY);
+      if (!settled) setTimeout(() => rollNumber(num, 0, value, ROLL_MS, format), at + ROLL_DELAY);
       return { box, num, caption, at };
     };
     const recordTiles: Partial<Record<RecordId, ReturnType<typeof tile>>> = {
-      revenue: tile('💰', stats.revenue, t('summary.revenue'), 'good', records.includes('revenue')),
+      revenue: tile('💰', stats.revenue, t('summary.revenue'), 'good', records.includes('revenue'), String, calm || shown),
       served: tile('🙂', stats.served, t('summary.served'), '', records.includes('served')),
     };
     // Первый день новичка: никто не ушёл — плитки нет совсем; ушли — без красного.

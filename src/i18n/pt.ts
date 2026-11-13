@@ -3604,6 +3604,8 @@ export const pt: Record<TextKey, string> = {
   "pitch.invited": "{name}: vai ficar na entrada, primeiro aluguel hoje à tarde",
   "news.yard": "🌱 O quintal da vovó fica à esquerda da loja, atrás do depósito: o botão 🌱 mostra. Três canteiros, cada um com sua cultura; o bot avisa quando a colheita amadurecer.",
   "news.tenants": "🔑 Os inquilinos ganharam vida: barbearia, fotos e caixa eletrônico, segunda reforma, pedidos no quadro “Pedidos” — e um vendedor da estação na entrada.",
+  "closing.sign": "Fechado",
+  "closing.skip": "Toque para fechar mais rápido",
   "news.town": "🏘 Bairro: uma meta semanal de todos os jogadores e a “Loja do dia” — visite e deixe a marca “Estive aqui”.",
 };
 

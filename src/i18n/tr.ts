@@ -3594,6 +3594,8 @@ export const tr: Record<TextKey, string> = {
   "pitch.invited": "{name}: girişe kuruluyor, ilk kira bu akşam",
   "news.yard": "🌱 Ninenin bahçesi dükkânın solunda, deponun arkasında: 🌱 düğmesi gösterir. Üç tarh, her birinde ayrı ürün; hasat olgunlaşınca bot yazar.",
   "news.tenants": "🔑 Kiracılar canlandı: berber, fotoğrafçı ve bankamatik, ikinci düzenleme, “Siparişler” panosunda ricalar — ve girişte mevsimlik satıcı.",
+  "closing.sign": "Kapalı",
+  "closing.skip": "Dokun, daha hızlı kapatalım",
   "news.town": "🏘 Mahalle: tüm oyuncuların ortak haftalık hedefi ve “Günün dükkânı” — uğra, “Buradaydım” işareti bırak.",
 };
 
