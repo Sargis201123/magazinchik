@@ -1,37 +1,45 @@
 import { describe, expect, it } from 'vitest';
 import { newGame, type StoreState } from '../src/game/economy';
 import {
-  accuse,
-  accuseToday,
-  askCase,
   CASE_FROM,
   CASE_IDS,
-  CASE_RATING,
+  CLUES,
   caseGuests,
-  caseMoney,
   caseMorning,
   caseOrder,
-  CASES,
-  clueCount,
   clueDay,
   clueToday,
-  closedToday,
-  confrontable,
   dueFrom,
-  extraClues,
   FRIDAY,
   nextWeekly,
   openCase,
   openCaseOf,
   pinClue,
-  seeBoard,
   takeClue,
   weekDay,
   weeklyDue,
 } from '../src/game/cases';
+import {
+  accuse,
+  askCase,
+  CASE_RATING,
+  caseMoney,
+  clueCount,
+  confrontable,
+  extraClues,
+  caseNews,
+  seeBoard,
+  tellCase,
+  CASES,
+  accuseToday,
+  closedToday,
+} from '../src/game/caseBoard';
 import { guestFactor } from '../src/game/day';
 import { planAttention, attentionTotal } from '../src/game/attention';
 import { pendingTip } from '../src/game/tips';
+import { pickNews, NEWS_IDS, NEWS_KIND } from '../src/game/headlines';
+import { SKIT_FROM } from '../src/game/skits';
+import type { PawnState } from '../src/game/pawnshop';
 import { simulate } from '../src/game/simulate';
 import { ru, type TextKey } from '../src/i18n/ru';
 
@@ -68,7 +76,10 @@ describe('дело недели: календарь', () => {
   });
 
   it('первое дело — в понедельник не раньше CASE_FROM; в другие дни и раньше — нет', () => {
-    expect(caseMorning(shop({ day: 8 })).cases).toBeUndefined();
+    // Первый понедельник раньше сценок (SKIT_FROM) — нет; первый после них (8-й день) — уже дело.
+    expect(CASE_FROM).toBe(SKIT_FROM);
+    expect(caseMorning(shop({ day: 1 })).cases).toBeUndefined();
+    expect(openCaseOf(caseMorning(shop({ day: 8 })))?.from).toBe(8);
     expect(caseMorning(shop({ day: 16 })).cases).toBeUndefined();
     expect(MONDAY).toBeGreaterThanOrEqual(CASE_FROM);
     const s = monday();
@@ -87,6 +98,7 @@ describe('дело недели: календарь', () => {
     for (let seed = 1; seed < 20; seed++) expect([...caseOrder(seed)].sort()).toEqual([...CASE_IDS].sort());
     const firsts = new Set(Array.from({ length: 40 }, (_, i) => caseOrder(i + 1)[0]));
     expect(firsts.size).toBeGreaterThan(1);
+    expect([...CASE_IDS].sort()).toEqual(Object.keys(CASES).sort());
   });
 
   it('пятница — не раньше чем через 4 дня после открытия', () => {
@@ -280,7 +292,8 @@ describe('дело недели: тексты и сохранения', () => {
       });
       for (const k of keys) expect(ru[k as TextKey], k).toBeTruthy();
       // Улик четыре — по одной на день с понедельника по четверг, все четыре вида; у виновного своя одна.
-      expect(def.clues.length).toBe(4);
+      expect(def.clues.length).toBe(CLUES);
+      expect(CLUES).toBe(4);
       expect(new Set(def.clues.map((c) => c.src)).size).toBe(4);
       expect(def.clues.filter((c) => c.about === def.culprit).length).toBe(1);
       expect(Object.keys(def.suspects).length).toBeGreaterThanOrEqual(3);
@@ -304,5 +317,65 @@ describe('дело недели: тексты и сохранения', () => {
     expect(done.length).toBeGreaterThanOrEqual(2);
     expect(done.every((d) => d.tone === 'archived')).toBe(true);
     expect(r.final.cases?.fame).toBeUndefined();
+  });
+});
+
+describe('дело недели: новость утра (очередь headlines.ts)', () => {
+  it('новость — в утро открытия, в пятницу и в утро архива; в будни с уликами — только строчка', () => {
+    const mon = monday();
+    expect(caseNews(mon)).toBe(true);
+    // Утро открытия заняла новость поважнее — рассказ ждёт вторника; прочли — дальше только строчка.
+    const tue = after(mon, 1);
+    expect(caseNews(tue)).toBe(true);
+    expect(caseNews(after(tellCase(mon), 1))).toBe(false);
+    expect(caseNews(after(tellCase(tue), 1))).toBe(false);
+    const fri = after(tellCase(mon), 4);
+    expect(accuseToday(fri)).toBe(true);
+    expect(caseNews(fri)).toBe(true);
+    const sat = after(fri, 1);
+    expect(openCaseOf(sat)).toBeNull();
+    expect(closedToday(sat)?.tone).toBe('archived');
+    expect(caseNews(sat)).toBe(true);
+    // Через день после архива — уже не новость.
+    expect(caseNews(after(sat, 1))).toBe(false);
+  });
+
+  it('«Потом» или открытая доска — новость прочитана до завтра; дело остаётся', () => {
+    const mon = monday();
+    const later = tellCase(mon);
+    expect(caseNews(later)).toBe(false);
+    expect(openCaseOf(later)).toEqual(openCaseOf(mon));
+    expect(tellCase(later)).toBe(later);
+    expect(caseNews(seeBoard(mon))).toBe(false);
+    // Прочитанная в понедельник — в пятницу снова новость.
+    expect(caseNews(after(later, 4))).toBe(true);
+  });
+
+  it('в очереди новостей — одна за утро: дело ждёт, если сегодня новость важнее', () => {
+    expect(NEWS_IDS).toContain('case');
+    expect(NEWS_KIND.case).toBe('timed');
+    const mon = monday();
+    const first = pickNews(mon, ['case', 'tale']);
+    expect(first.id).toBe('case');
+    // Поворот (Эдуард) главнее — дело подождёт.
+    expect(pickNews(mon, ['eduard', 'case']).id).toBe('eduard');
+    // Новость о деле прочли — утро занято, история ждёт завтра.
+    const read = tellCase(first.state);
+    expect(pickNews(read, caseNews(read) ? ['case', 'tale'] : ['tale']).id).toBeNull();
+  });
+});
+
+describe('дело недели: ломбард', () => {
+  const pawn = (seized: PawnState['seized']): PawnState => ({ loans: [], shelf: [], earned: 0, lost: 0, seized });
+
+  it('краденое, изъятое полицией за время дела, — улика на доске; раньше дела — нет', () => {
+    const mon = monday();
+    const s = { ...after(mon, 2), pawn: pawn([{ item: 'watch', lent: 300, took: MONDAY - 5, day: MONDAY - 3 }, { item: 'ring', lent: 500, took: MONDAY - 1, day: MONDAY + 1 }]) };
+    const extra = extraClues(s);
+    expect(extra).toHaveLength(1);
+    expect(extra[0]).toMatchObject({ key: 'case.pawn', vars: { item: 'pawn.item.ring' }, icon: '🏷' });
+    expect(ru['case.pawn']).toContain('{item}');
+    // Без дела — ничего, и ломбард от этого не меняется.
+    expect(extraClues({ ...shop(), pawn: s.pawn })).toEqual([]);
   });
 });

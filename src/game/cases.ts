@@ -10,14 +10,17 @@
 // не обвинил — в субботу дело уходит в архив без награды.
 //
 // Всё — от дня и зерна магазина (как сценки): перезапуск дня ничего не перекатывает, симулятор не сдвигается.
-// Другие системы могут открыть дело сами (openCase: «Крыша» — о рэкете) и приколоть свою улику (pinClue:
-// ломбард — «краденая вещь»).
+// Другие системы могут открыть дело сами (openCase: «Крыша» — о рэкете) и приколоть свою улику (pinClue).
+//
+// Здесь — только то, что нужно смене дня и залу (основной файл кода). Доска, допрос, обвинение и новость утра —
+// в caseBoard.ts: их зовёт только утреннее меню, а оно грузится отдельно (13.11: предел веса кода).
 
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
 import { quietDays } from './firstday';
 import { tutStep } from './tutorial';
 import { rng } from './random';
+import { SKIT_FROM } from './skits';
 
 export type CaseId = 'dog' | 'windows' | 'till' | 'crates';
 /** Откуда улика: обронённый чек, запись камеры, находка (Бобик принёс или у порога), разговор у кассы. */
@@ -26,72 +29,27 @@ export type ClueSrc = 'receipt' | 'camera' | 'find' | 'talk';
 export type CaseOrigin = 'week' | 'pawn' | 'racket';
 export type CaseTone = 'great' | 'good' | 'wrong' | 'archived';
 
-export interface CaseDef {
-  /** Кто пострадал: портрет без portrait_ и настроения. Имя — case.<id>.victim, рассказ — case.<id>.intro. */
-  victim: string;
-  /** Подозреваемые: ключ → портрет. Имя — case.<id>.s.<ключ>, ответы — .hi, .where, .seen. */
-  suspects: Record<string, string>;
-  culprit: string;
-  /**
-   * Улики по дням: откуда и о ком. Текст — case.<id>.c<n> (чёткая) и case.<id>.c<n>.weak (размытая). Чёткую улику
-   * «о ком-то» можно показать ему на допросе (ответ — case.<id>.c<n>.ans): невиновный объяснится, виновный признается.
-   * Улика без about — общая: её не покажешь, но она ловит кого-то на вранье.
-   */
-  clues: { src: ClueSrc; about?: string }[];
-}
-
-export const CASES: Record<CaseId, CaseDef> = {
-  // Пудель Жужа пропал с крыльца аптеки. Виктор украл её, чтобы «найти» за награду: перчатка в белой шерсти.
-  dog: {
-    victim: 'case_rosa',
-    suspects: { ruslan: 'skit_ruslan', fyodor: 'skit_fyodor', viktor: 'skit_viktor' },
-    culprit: 'viktor',
-    clues: [{ src: 'camera', about: 'ruslan' }, { src: 'talk', about: 'fyodor' }, { src: 'receipt' }, { src: 'find', about: 'viktor' }],
-  },
-  // Кто-то по ночам бьёт витрины. Маляр Стёпа — «мастер на все руки»: купил стекло ещё до первой разбитой.
-  windows: {
-    victim: 'police',
-    suspects: { hoodie: 'skit_hoodie', lyosha: 'skit_lyosha', painter: 'skit_painter' },
-    culprit: 'painter',
-    clues: [{ src: 'camera', about: 'hoodie' }, { src: 'receipt', about: 'painter' }, { src: 'talk', about: 'lyosha' }, { src: 'find' }],
-  },
-  // У Эдуарда из сейфа пропала выручка: охранник Гоша проигрался в карты и сам вызвался закрывать.
-  till: {
-    victim: 'eduard',
-    suspects: { karina: 'skit_karina', zina: 'case_zina', gosha: 'case_gosha' },
-    culprit: 'gosha',
-    clues: [{ src: 'camera', about: 'karina' }, { src: 'find', about: 'zina' }, { src: 'talk', about: 'gosha' }, { src: 'receipt' }],
-  },
-  // С соседнего склада пропали шесть ящиков яблок: грузчик Валера продал их на рынке в семь утра.
-  crates: {
-    victim: 'case_semyon',
-    suspects: { ruslan: 'skit_ruslan', farmer: 'farmer', valera: 'case_valera' },
-    culprit: 'valera',
-    clues: [{ src: 'talk', about: 'ruslan' }, { src: 'camera', about: 'valera' }, { src: 'find', about: 'farmer' }, { src: 'receipt' }],
-  },
-};
-
-export const CASE_IDS = Object.keys(CASES) as CaseId[];
+/** Дела по порядку; кто пострадал, подозреваемые и улики — CASES в caseBoard.ts. */
+export const CASE_IDS: CaseId[] = ['dog', 'windows', 'till', 'crates'];
+/** Улик в каждом деле: по одной на день с понедельника по четверг (проверяет тест). */
+export const CLUES = 4;
 
 /**
- * С какого дня дела. Сценки (SKIT_FROM) открыты уже с 6-го, но 8–11-й дни и так каждый приносят новое
- * (мини-события, кот, особые гости, кафе) — первое дело ждёт третьего понедельника.
+ * С какого дня дела: когда открыты сценки (автор, 13.11: «начало — когда сценки открыты»). Дело всё равно
+ * открывается в понедельник, так что первое — в первый понедельник после SKIT_FROM (8-й день). Новость о нём
+ * идёт через общую очередь утра (headlines.ts) и не толкается с другими карточками.
  */
-export const CASE_FROM = 15;
+export const CASE_FROM = SKIT_FROM;
 /** День недели по игровому календарю (неделя — игровой месяц, 7 дней): 1 — понедельник, 5 — пятница. */
 export const weekDay = (day: number): number => ((day - 1) % 7) + 1;
 export const FRIDAY = 5;
 /** Сколько самое малое дней от открытия до пятницы-обвинения (чтобы улики успели прийти). */
 export const CASE_MIN_DAYS = 4;
-/** Что даёт раскрытое дело: деньги растут с магазином; признание по улике — вдвое больше. */
-export const caseMoney = (level: number): number => 250 + 150 * level;
-export const CASE_RATING = { great: 0.1, good: 0.05, wrong: -0.05 } as const;
-/** «Слава района»: гостей больше — на сколько и сколько дней. */
-export const CASE_FAME: Record<'great' | 'good', [number, number]> = { great: [0.1, 4], good: [0.06, 3] };
-
 /** Улика из другой системы: текст (ключ словаря), значок и к какому делу (нет — к идущему). */
 export interface ExtraClue {
   key: TextKey;
+  /** Подстановки в текст: имя → ключ словаря (переводится на доске, напр. item → pawn.item.watch). */
+  vars?: Record<string, TextKey>;
   icon: string;
   case?: CaseId;
   day: number;
@@ -129,12 +87,14 @@ export interface CasesState {
   fame?: { pct: number; until: number };
   /** Улики из других систем (ломбард и др.). */
   extra?: ExtraClue[];
+  /** В какое утро новость о деле уже прочли (карточка в очереди новостей, headlines.ts) — второй раз не зовёт. */
+  told?: number;
 }
 
 export const casesOf = (state: StoreState): CasesState => state.cases ?? {};
 export const openCaseOf = (state: StoreState): OpenCase | null => state.cases?.open ?? null;
 
-const withCases = (state: StoreState, next: CasesState): StoreState => ({ ...state, cases: next });
+export const withCases = (state: StoreState, next: CasesState): StoreState => ({ ...state, cases: next });
 
 /** Порядок дел этого магазина: от зерна (Фишер — Йетс на своём генераторе). */
 export function caseOrder(seed: number): CaseId[] {
@@ -174,7 +134,7 @@ export const dueFrom = (day: number): number => {
 export function openCase(state: StoreState, id: CaseId, origin: CaseOrigin): StoreState | null {
   const s = casesOf(state);
   if (s.open || solved(s, id)) return null;
-  const open: OpenCase = { id, origin, from: state.day, due: dueFrom(state.day), got: CASES[id].clues.map(() => 0) };
+  const open: OpenCase = { id, origin, from: state.day, due: dueFrom(state.day), got: Array<number>(CLUES).fill(0) };
   return withCases(state, { ...s, open });
 }
 
@@ -184,12 +144,6 @@ export function pinClue(state: StoreState, clue: Omit<ExtraClue, 'day'>): StoreS
   if ((s.extra ?? []).some((c) => c.key === clue.key && c.case === clue.case)) return state;
   return withCases(state, { ...s, extra: [...(s.extra ?? []), { ...clue, day: state.day }] });
 }
-
-/** Улики других систем на доске идущего дела. */
-export const extraClues = (state: StoreState): ExtraClue[] => {
-  const open = openCaseOf(state);
-  return open ? (casesOf(state).extra ?? []).filter((c) => !c.case || c.case === open.id) : [];
-};
 
 /** В какой день приходит улика n: от открытия до пятницы поровну (неделя — с понедельника по четверг). */
 export const clueDay = (open: OpenCase, n: number): number => open.from + Math.floor((n * (open.due - open.from)) / open.got.length);
@@ -210,7 +164,7 @@ export function takeClue(state: StoreState, n: number): StoreState {
   return withCases(state, { ...casesOf(state), open: { ...open, got } });
 }
 
-const archive = (s: CasesState, rec: CaseRecord): CasesState => {
+export const archive = (s: CasesState, rec: CaseRecord): CasesState => {
   const id = s.open?.id;
   const extra = (s.extra ?? []).filter((c) => c.case && c.case !== id);
   const next: CasesState = { ...s, done: [...(s.done ?? []), rec], extra: extra.length ? extra : undefined };
@@ -244,88 +198,9 @@ export function caseMorning(state: StoreState): StoreState {
   return s;
 }
 
-/** Вопросы допроса: где был, что видел — и чёткие улики о нём (номера). */
-export const confrontable = (open: OpenCase, who: string): number[] =>
-  CASES[open.id].clues.flatMap((c, i) => (c.about === who && open.got[i] === 2 ? [i] : []));
-
-/** Задать вопрос (q — where, seen или c<n> — показать улику n). Признание — если показали виновному его улику. */
-export function askCase(state: StoreState, who: string, q: string): StoreState {
-  const open = openCaseOf(state);
-  if (!open || !(who in CASES[open.id].suspects)) return state;
-  const clue = /^c(\d)$/.exec(q);
-  if (clue && !confrontable(open, who).includes(Number(clue[1]))) return state;
-  if (!clue && q !== 'where' && q !== 'seen') return state;
-  const key = `${who}:${q}`;
-  const confessed = open.confessed || (clue !== null && who === CASES[open.id].culprit);
-  if (open.asked?.includes(key) && confessed === Boolean(open.confessed)) return state;
-  const next: OpenCase = { ...open, asked: [...new Set([...(open.asked ?? []), key])] };
-  if (confessed) next.confessed = true;
-  return withCases(state, { ...casesOf(state), open: next });
-}
-
-/** Отметить, что улики на доске посмотрели. */
-export function seeBoard(state: StoreState): StoreState {
-  const open = openCaseOf(state);
-  const n = open ? open.got.filter(Boolean).length : 0;
-  if (!open || (open.seen ?? 0) >= n) return state;
-  return withCases(state, { ...casesOf(state), open: { ...open, seen: n } });
-}
-
-/** Сколько улик на доске и сколько из них новых. */
-export const clueCount = (open: OpenCase): { got: number; fresh: number } => {
-  const got = open.got.filter(Boolean).length;
-  return { got, fresh: Math.max(0, got - (open.seen ?? 0)) };
-};
-
-/** Сегодня пятница этого дела — можно обвинить. */
-export const accuseToday = (state: StoreState): boolean => openCaseOf(state)?.due === state.day;
-
-export interface CaseGain {
-  money: number;
-  rating: number;
-  fame?: [number, number];
-}
-
-/** Итог обвинения (без применения): кто виноват, признался ли. */
-export function caseGain(level: number, tone: Exclude<CaseTone, 'archived'>): CaseGain {
-  if (tone === 'wrong') return { money: 0, rating: CASE_RATING.wrong };
-  const money = tone === 'great' ? caseMoney(level) : Math.round(caseMoney(level) / 2);
-  return { money, rating: CASE_RATING[tone], fame: CASE_FAME[tone] };
-}
-
-/** Обвинить: только в пятницу дела. Дело закрывается; null — не сегодня или нет такого подозреваемого. */
-export function accuse(state: StoreState, who: string): { state: StoreState; tone: Exclude<CaseTone, 'archived'>; gain: CaseGain } | null {
-  const open = openCaseOf(state);
-  if (!open || !accuseToday(state) || !(who in CASES[open.id].suspects)) return null;
-  const tone = who !== CASES[open.id].culprit ? 'wrong' : open.confessed ? 'great' : 'good';
-  const gain = caseGain(state.level, tone);
-  const rating = Math.round(Math.min(5, Math.max(0, state.rating + gain.rating)) * 100) / 100;
-  let cases = archive(casesOf(state), { id: open.id, tone, day: state.day, who });
-  if (gain.fame) {
-    const [pct, days] = gain.fame;
-    const still = cases.fame && cases.fame.until >= state.day && cases.fame.pct > pct ? cases.fame : undefined;
-    cases = { ...cases, fame: still ?? { pct, until: state.day + days - 1 } };
-  }
-  return { state: { ...state, money: state.money + gain.money, rating, cases }, tone, gain };
-}
-
 /** Множитель гостей от «славы района». */
 export const caseGuests = (state: StoreState): number => {
   const fame = state.cases?.fame;
   return fame && state.day <= fame.until ? 1 + fame.pct : 1;
 };
 
-/** Последнее закрытое дело, если его закрыли сегодня (утром — строчка «ушло в архив»). */
-export const closedToday = (state: StoreState): CaseRecord | null => {
-  const last = casesOf(state).done?.at(-1);
-  return last && last.day === state.day ? last : null;
-};
-
-/** У каких портретов есть настроения (остальные — одно лицо). */
-const MOODY = (base: string): boolean => /^(skit_|case_)/.test(base) || base === 'police' || base === 'eduard';
-
-/** Портрет героя дела с настроением. */
-export function casePortrait(base: string, mood: 'happy' | 'sad' | 'angry' | 'surprised' | null): string {
-  const m = mood === 'angry' && base === 'police' ? null : mood;
-  return `portrait_${base}${m && MOODY(base) ? `_${m}` : ''}`;
-}

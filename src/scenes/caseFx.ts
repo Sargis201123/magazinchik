@@ -3,15 +3,16 @@
 // (нет Бобика — она лежит у порога), постоянный проговорился у кассы (значок над первым в очереди). Голубое
 // кольцо-таймер — не золотое, как у моментов: это не чаевые, а дело. Нажал — улика чёткая; не успел — тает без
 // штрафа, а утром улика всё равно придёт, только размытая. Улика — одна из просьб бюджета внимания дня
-// (game/attention.ts): в этот день на звонок или момент меньше. Ждёт, пока зал свободен (окно, звонок, сценка,
+// (game/attention.ts): в этот день на звонок или момент меньше. Этот файл грузится отдельно, только в день
+// улики (morningFlow.ts prepareDay). Ждёт, пока зал свободен (окно, звонок, сценка,
 // момент); на слабом телефоне (lite) — без покачивания и искр. Без тряски камеры.
 
 import Phaser from 'phaser';
 import type { StoreScene } from './StoreScene';
 import { t, type TextKey } from '../i18n';
-import { CASES, clueToday, openCaseOf, takeClue, type ClueSrc } from '../game/cases';
+import { clueToday, openCaseOf, takeClue, type ClueSrc } from '../game/cases';
+import { CASES } from '../game/caseBoard';
 import { DAY_SECONDS } from '../game/economy';
-import { inZar } from '../game/zarechye';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
 import * as camera from './camera';
@@ -40,9 +41,6 @@ export interface ClueRun {
   pos: { x: number; y: number };
   size: number;
 }
-
-/** Утро: ждёт ли сегодня улика в зале (для бюджета внимания). В Заречье — нет: дело — в своём районе. */
-export const clueWanted = (scene: StoreScene): boolean => !inZar(scene.state) && clueToday(scene.state) !== null;
 
 /** Утро: улика на сегодня, если бюджет внимания дал ей место. Время — для сцены, игре всё равно. */
 export function armClue(scene: StoreScene, allowed: boolean): void {

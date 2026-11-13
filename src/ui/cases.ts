@@ -8,20 +8,23 @@
 import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
 import {
-  accuse,
-  accuseToday,
-  askCase,
-  CASES,
-  casePortrait,
-  clueCount,
-  closedToday,
-  confrontable,
-  extraClues,
   openCaseOf,
-  seeBoard,
-  type CaseGain,
   type ClueSrc,
 } from '../game/cases';
+import {
+  accuse,
+  askCase,
+  casePortrait,
+  clueCount,
+  confrontable,
+  extraClues,
+  seeBoard,
+  tellCase,
+  type CaseGain,
+  CASES,
+  accuseToday,
+  closedToday,
+} from '../game/caseBoard';
 import { track } from '../platform/analytics';
 import { haptic } from '../platform/telegram';
 import { sound } from '../platform/sound';
@@ -39,6 +42,7 @@ const css = `
 .ui-case-note b { display: block; font-size: 11.5px; margin-bottom: 2px; }
 .ui-case-note.weak > div:nth-child(2) { color: #8b7f70; font-style: italic; }
 .ui-case-note.missing { background: #e6dcc4; border-style: dashed; box-shadow: none; }
+.ui-case-line { background: #eef0f6; border: 2px solid #3a4466; border-radius: 8px; padding: 6px 8px; margin: 6px 0; }
 .ui-case-suspect { border-top: 1px dashed #d8ccb0; padding-top: 4px; }
 .ui-chip.ui-case-accuse { background: #e43b44; color: #fff; }
 `;
@@ -65,24 +69,46 @@ const key = (s: string) => s as TextKey;
 /** Портрет для who(): то же имя, что у casePortrait, без «portrait_». */
 const face = (base: string, mood: Parameters<typeof casePortrait>[1]) => casePortrait(base, mood).replace(/^portrait_/, '');
 
-/** Утро: карточка дела над вкладками (или строчка «дело ушло в архив»). */
-export function caseBox(state: StoreState, openBoard: () => void): HTMLElement[] {
+/**
+ * Новость утра о деле (через очередь новостей, game/headlines.ts — одна за утро): в понедельник — кто пострадал и
+ * что случилось, в пятницу — «пора назвать виновного», в субботу — «ушло в архив». «Потом» — карточка уходит,
+ * строчка дела (caseLine) остаётся.
+ */
+export function caseNewsBox(state: StoreState, openBoard: () => void, later: (s: StoreState) => void): HTMLElement[] {
   styles();
   const open = openCaseOf(state);
+  const box = el('div', 'ui-box ui-case');
   if (!open) {
     const last = closedToday(state);
-    return last?.tone === 'archived' ? [el('div', 'ui-note', t('case.archived', { title: t(key(`case.${last.id}.title`)) }))] : [];
+    if (last?.tone !== 'archived') return [];
+    box.append(el('div', '', t('case.archived', { title: t(key(`case.${last.id}.title`)) })), button(t('case.ok'), () => later(tellCase(state)), 'ui-chip'));
+    return [box];
   }
-  const { got, fresh } = clueCount(open);
-  const box = el('div', 'ui-box ui-case');
-  box.append(
-    el('b', '', t('case.box', { title: t(key(`case.${open.id}.title`)) })),
-    el('div', accuseToday(state) ? 'ui-note ui-case-hot' : 'ui-muted', accuseToday(state) ? t('case.boxFriday') : t('case.boxDays', { n: open.due - state.day })),
-  );
-  const row = el('div', 'ui-row');
-  row.append(el('span', '', `${t('case.boxClues', { n: got, total: open.got.length })}${fresh ? ` · ${t('case.boxNew')}` : ''}`), button(t('case.open'), openBoard, 'ui-chip'));
-  box.append(row);
+  const def = CASES[open.id];
+  const friday = accuseToday(state);
+  box.append(el('b', '', t('case.box', { title: t(key(`case.${open.id}.title`)) })));
+  if (friday) box.append(el('div', 'ui-note ui-case-hot', t('case.boxFriday')), el('div', 'ui-muted', t('case.boxClues', { n: clueCount(open).got, total: open.got.length })));
+  else box.append(who(face(def.victim, 'sad'), el('div', '', `${t(key(`case.${open.id}.victim`))}: «${t(key(`case.${open.id}.intro`))}»`)), el('div', 'ui-muted', t('case.boxDays', { n: open.due - state.day })));
+  const acts = el('div', 'ui-chips');
+  acts.append(button(t('case.open'), openBoard, 'ui-chip'), button(t('case.later'), () => later(tellCase(state)), 'ui-chip secondary'));
+  box.append(acts);
   return [box];
+}
+
+/** Строчка дела в утре (когда новость о нём уже была или сегодня не его утро): улики, сколько до пятницы, доска. */
+export function caseLine(state: StoreState, openBoard: () => void): HTMLElement[] {
+  const open = openCaseOf(state);
+  if (!open) return [];
+  styles();
+  const { got, fresh } = clueCount(open);
+  const friday = accuseToday(state);
+  const row = el('div', 'ui-row ui-case-line');
+  const text = el('div', '');
+  text.append(el('b', '', `🕵 «${t(key(`case.${open.id}.title`))}»`));
+  const sub = `${t('case.boxClues', { n: got, total: open.got.length })}${fresh ? ` · ${t('case.boxNew')}` : ''}`;
+  text.append(el('div', friday ? 'ui-case-hot' : 'ui-muted', friday ? `${sub} · ${t('case.lineFriday')}` : sub));
+  row.append(text, button(t('case.open'), openBoard, 'ui-chip'));
+  return [row];
 }
 
 /** Итог дела строчкой: «+700 💰 · ★ +0.10 · слава района: гостей +10% на 4 дн.». */
@@ -123,7 +149,8 @@ export function showCaseBoard(getState: () => StoreState, set: (s: StoreState) =
     });
     for (const extra of extraClues(state)) {
       const note = el('div', 'ui-case-note');
-      note.append(el('b', '', `📌 ${extra.icon}`), el('div', '', t(extra.key)));
+      const vars = Object.fromEntries(Object.entries(extra.vars ?? {}).map(([k, v]) => [k, t(v)]));
+      note.append(el('b', '', `📌 ${extra.icon}`), el('div', '', t(extra.key, vars)));
       notes.append(note);
     }
     const suspects = Object.entries(def.suspects).map(([sus, base]) => {
