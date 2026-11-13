@@ -35,11 +35,22 @@ export const RHYTHM_TIP_STEP = 0.01;
 export const RHYTHM_TIP_MAX = 0.06;
 /** В час пик чаевые за ритм вдвое: самое время держать такт. */
 export const RUSH_RHYTHM = 2;
-/** Симулятор: средний игрок попадает в окно с первого проезда так часто. */
-export const SIM_HIT = 0.85;
+/**
+ * Симулятор: средний игрок попадает в окно с первого проезда в 4 случаях из 5. На телефоне, одной рукой и
+ * с первых дней ленты — скорее так, чем точнее; тогда средний игрок пробивает чуть медленнее прежнего (лишние
+ * проезды), а выигрывает тот, кто держит такт.
+ */
+export const SIM_HIT = 0.8;
 
 /** Лента включена, только когда карточку «Новое: Касса в ритме» уже прочли (tips.ts): правило не застаёт врасплох. */
 export const rhythmOn = (state: StoreState): boolean => (state.seenTips ?? []).includes('rhythm');
+
+/**
+ * Метка в seenTips: первое «Идеально» уже было. До него, пока едет лента, внизу экрана подсказка — куда и когда
+ * жать (карточку утром могли пролистать, а круг у сканера без слов понятен не всем).
+ */
+export const RHYTHM_HIT_TIP = 'rhythmHit';
+export const rhythmTaught = (state: StoreState): boolean => (state.seenTips ?? []).includes(RHYTHM_HIT_TIP);
 
 export type Grade = 'perfect' | 'good' | 'miss';
 /** Как пробит товар: касанием (perfect/good) или самим хозяином после второго промаха (auto). */

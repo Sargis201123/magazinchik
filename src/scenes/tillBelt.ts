@@ -8,7 +8,7 @@
 import Phaser from 'phaser';
 import type { StoreScene } from './StoreScene';
 import { ART, LIGHT_DEPTH, type Customer, type Register } from './common';
-import { beltDone, beltTap, beltTick, GOOD_MS, nextItem, PERFECT_MS, RETURN_MS, rhythmAfter, startBelt, type Belt, type BeltEvent, type BeltPlan } from '../game/tillRhythm';
+import { beltDone, beltTap, beltTick, GOOD_MS, nextItem, PERFECT_MS, RETURN_MS, RHYTHM_HIT_TIP, rhythmAfter, rhythmTaught, startBelt, type Belt, type BeltEvent, type BeltPlan } from '../game/tillRhythm';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
 import { t } from '../i18n';
@@ -23,9 +23,26 @@ const SCAN_DY = 3;
 const LANE_BEATS = 2;
 /** Товар на ленте чуть крупнее, чем в руках: на телефоне его должно быть видно. */
 const ITEM_SCALE = 1.5 / ART;
+/** На общем плане товар на ленте тоже чуть крупнее — но не больше чем в полтора раза: он лежит на кассе. */
+const ITEM_ZOOM_MAX = 1.5;
 /** Круг-подсказка сжимается к рамке за последний шаг до луча: с какого радиуса и до какого. */
 const RING_FROM = 15;
 const RING_TO = 6;
+/** Рамка сканера на экране телефона — не меньше стольких точек CSS в ширину (сама рамка — 14 точек мира). */
+const FRAME_SCREEN = 32;
+const FRAME_W = 14;
+
+/**
+ * Во сколько раз крупнее рисовать рамку и круг. 13.11: в большом магазине на общем плане касса — пара десятков
+ * точек экрана, и круг в 15 точек мира на телефоне не разглядеть. Подсказку такта растим до читаемой (не больше
+ * чем вдвое); товар и сама касса — в масштабе мира. Камера может подойти или отойти, пока едет лента, — считаем
+ * каждый кадр.
+ */
+function beltZoom(scene: StoreScene): number {
+  const canvas = scene.game.canvas;
+  const perWorld = scene.cameras.main.zoom * (canvas.clientWidth > 0 ? canvas.clientWidth / scene.scale.width : 1);
+  return Phaser.Math.Clamp(FRAME_SCREEN / (FRAME_W * perWorld), 1, 2);
+}
 
 /** Лента, пока едет: правила (state) и её часы — для касаний и для проверок снаружи (scripts, e2e). */
 export interface TillBelt {
@@ -89,6 +106,8 @@ export function runBelt(scene: StoreScene, r: Register, c: Customer, plan: BeltP
       sound.beat(grade);
       if (grade === 'good') return haptic.tap();
       haptic.beat();
+      // Первое «Идеально» — подсказка внизу больше не нужна (newcomer.currentHint).
+      if (!rhythmTaught(scene.state)) scene.state = { ...scene.state, seenTips: [...(scene.state.seenTips ?? []), RHYTHM_HIT_TIP] };
       const n = scene.rhythm;
       say(n >= 2 ? t('rhythm.perfectN', { n }) : t('rhythm.perfect'), '#fee761', true);
       if (scene.lite) return;
@@ -171,6 +190,7 @@ export function runBelt(scene: StoreScene, r: Register, c: Customer, plan: BeltP
       belt.state = tick.belt;
       tick.events.forEach(apply);
       if (beltDone(belt.state)) return finish(true);
+      const zoom = beltZoom(scene);
       for (const item of belt.state.items) {
         const s = sprites[item.index];
         if (item.scanned || hopping.has(item.index) || !s?.active) continue;
@@ -185,15 +205,16 @@ export function runBelt(scene: StoreScene, r: Register, c: Customer, plan: BeltP
           scene.tweens.add({ targets: s, alpha: 1, duration: 120 });
         }
         // Проехал окно — ещё чуть-чуть под лучом, пока лента не засчитает промах.
-        s.setPosition(x, Phaser.Math.Clamp(y, top, scanY + 4));
+        s.setPosition(x, Phaser.Math.Clamp(y, top, scanY + 4)).setScale(ITEM_SCALE * Math.min(zoom, ITEM_ZOOM_MAX));
       }
       const next = nextItem(belt.state);
       const dt = next ? next.arrive - belt.clock : Infinity;
       const show = next !== undefined && !hopping.has(next.index) && dt <= plan.beat && dt >= -GOOD_MS;
+      frame.setScale(zoom / ART);
       ring.setVisible(show);
       if (show) {
         const k = Phaser.Math.Clamp(dt / plan.beat, 0, 1);
-        ring.setRadius(RING_TO + (RING_FROM - RING_TO) * k).setStrokeStyle(1, Math.abs(dt) <= PERFECT_MS ? 0xffffff : 0xfee761, 0.4 + 0.6 * (1 - k));
+        ring.setRadius((RING_TO + (RING_FROM - RING_TO) * k) * zoom).setStrokeStyle(zoom, Math.abs(dt) <= PERFECT_MS ? 0xffffff : 0xfee761, 0.4 + 0.6 * (1 - k));
       }
       const inWindow = show && Math.abs(dt) <= GOOD_MS;
       if (inWindow !== hot) {

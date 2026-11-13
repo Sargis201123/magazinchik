@@ -1596,6 +1596,7 @@ export const pt: Record<TextKey, string> = {
   "rhythm.again": "Mais uma vez",
   "summary.rhythm": "Caixa no ritmo: «Perfeito»",
   "summary.rhythmOf": "{n} de {all}",
+  "hint.rhythm": "Toque na tela quando o círculo encontrar a moldura do leitor",
   "kitchen.title": "🍳 Cozinha",
   "kitchen.note": "A comida pronta fica na prateleira «Comida» da entrada — os clientes pegam uma porção a caminho do caixa. O que não vender é descartado à noite (na geladeira, parte dura até de manhã). Na prateleira: {n} de {max}.",
   "kitchen.cook": "Cozinhar ({n} porç.)",

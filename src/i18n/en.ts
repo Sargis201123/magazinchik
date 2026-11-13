@@ -1599,6 +1599,7 @@ export const en: Record<TextKey, string> = {
   "rhythm.again": "Once more",
   "summary.rhythm": "Till rhythm: “Perfect”",
   "summary.rhythmOf": "{n} of {all}",
+  "hint.rhythm": "Tap the screen when the circle meets the frame at the scanner",
   "kitchen.title": "🍳 Kitchen",
   "kitchen.note": "Ready food sits on the “Food” shelf by the door — customers grab a portion on the way to the till. Unsold food is thrown out at night (a fridge keeps part of it till morning). On the shelf: {n} of {max}.",
   "kitchen.cook": "Cook ({n} portions)",

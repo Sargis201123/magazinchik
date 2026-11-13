@@ -1595,6 +1595,7 @@ export const uz: Record<TextKey, string> = {
   "rhythm.again": "Yana bir bor",
   "summary.rhythm": "Ritmdagi kassa: «Zoʻr»",
   "summary.rhythmOf": "{all} tadan {n}",
+  "hint.rhythm": "Doira skanerdagi ramkaga yetganda ekranga bos",
   "kitchen.title": "🍳 Oshxona",
   "kitchen.note": "Tayyor taom kirishdagi «Taom» javonida turadi — xaridorlar kassaga ketayotib bir porsiya oladi. Sotilmagani tunda hisobdan chiqariladi (muzlatgichda bir qismi ertalabgacha saqlanadi). Javonda: {max} dan {n}.",
   "kitchen.cook": "Pishirish ({n} porsiya)",

@@ -1583,6 +1583,7 @@ export const tr: Record<TextKey, string> = {
   "rhythm.again": "Bir daha",
   "summary.rhythm": "Ritimli kasa: “Mükemmel”",
   "summary.rhythmOf": "{n} / {all}",
+  "hint.rhythm": "Halka okuyucudaki çerçeveyle buluşunca ekrana dokun",
   "kitchen.title": "🍳 Mutfak",
   "kitchen.note": "Hazır yemek girişteki “Yemek” rafında durur — müşteriler kasaya giderken bir porsiyon alır. Satılmayan gece atılır (buzdolabında bir kısmı sabaha kalır). Rafta: {n}/{max}.",
   "kitchen.cook": "Pişir ({n} porsiyon)",

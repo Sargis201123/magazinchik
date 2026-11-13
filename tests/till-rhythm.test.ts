@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { checkoutSeconds, newGame, type StoreState } from '../src/game/economy';
 import { seriesTip } from '../src/game/series';
 import { pendingTip, seeTip } from '../src/game/tips';
@@ -23,7 +23,9 @@ import {
   rhythmAfter,
   rhythmOn,
   rhythmSeconds,
+  rhythmTaught,
   rhythmTipRate,
+  RHYTHM_HIT_TIP,
   RUSH_RHYTHM,
   startBelt,
   tillTip,
@@ -223,7 +225,61 @@ describe('касса в ритме: карточка и старые сохра�
   });
 });
 
+describe('касса в ритме: первая подсказка в зале', () => {
+  it('до первого «Идеально» подсказка внизу, после — нет; метка своя, карточку «Новое» не трогает', () => {
+    const s = seeTip(shop(), 'rhythm');
+    expect(rhythmTaught(s)).toBe(false);
+    const hit = { ...s, seenTips: [...(s.seenTips ?? []), RHYTHM_HIT_TIP] };
+    expect(rhythmTaught(hit)).toBe(true);
+    expect(rhythmOn(hit)).toBe(true);
+    // Метка — не карточка: в очереди карточек её нет, и pendingTip её не покажет.
+    expect(pendingTip(hit)).not.toBe(RHYTHM_HIT_TIP);
+  });
+});
+
+describe('касса в ритме: сохранение', () => {
+  afterEach(() => delete (globalThis as Record<string, unknown>).localStorage);
+
+  it('старое сохранение (без карточки ритма и без новых полей дня) грузится без изменений', async () => {
+    const local: Record<string, string> = {};
+    Object.assign(globalThis, {
+      localStorage: {
+        getItem: (k: string) => local[k] ?? null,
+        setItem: (k: string, v: string) => (local[k] = v),
+        removeItem: (k: string) => delete local[k],
+      },
+    });
+    const state: StoreState = { ...newGame(), day: 40, level: 2, money: 1234, seenTips: ['ownerTill'] };
+    local['magazinchik.save'] = JSON.stringify({ version: 11, state });
+    const { loadGame } = await import('../src/game/save');
+    const loaded = loadGame()!;
+    expect(loaded.day).toBe(40);
+    expect(loaded.money).toBe(1234);
+    expect(loaded.seenTips).toEqual(['ownerTill']);
+    expect(rhythmOn(loaded)).toBe(false);
+    expect(rhythmTaught(loaded)).toBe(false);
+  });
+});
+
+describe('касса в ритме: промах не стоит денег', () => {
+  it('после промаха чаевые — ровно чаевые серии, не меньше; ни при каком ритме они не отрицательные', () => {
+    for (const series of [0, 1, 3, 6]) {
+      for (const total of [0, 5, 60, 250]) {
+        const afterMiss = tillTip(series, rhythmAfter(5, 'miss'), total);
+        expect(afterMiss).toBe(seriesTip(series, total));
+        for (const streak of [0, 1, 4, 50]) expect(tillTip(series, streak, total, true)).toBeGreaterThanOrEqual(seriesTip(series, total));
+      }
+    }
+  });
+});
+
 describe('касса в ритме: симулятор', () => {
+  it('один и тот же прогон — один и тот же итог', () => {
+    const a = simulate({ days: 12, seed: 7 }).days.map((d) => [d.money, d.served]);
+    const b = simulate({ days: 12, seed: 7 }).days.map((d) => [d.money, d.served]);
+    expect(a).toEqual(b);
+  });
+
   it('средний игрок пробивает примерно так же, как раньше; идеальный — быстрее', () => {
     for (const t of [owner, { item: 1, pay: 0.7 }, { item: 0.6, pay: 0.42 }]) {
       const before = checkoutSeconds(t, 1.4);
