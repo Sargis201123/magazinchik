@@ -130,6 +130,11 @@ export interface EchoesState {
   boost?: { pct: number; until: number };
   /** Сколько эхо уже вернулось. */
   heard?: number;
+  /**
+   * В какой день на эхо-новость уже ответили. 13.11: эхо копятся (новость «вкусовая» и ждёт за важными),
+   * и без этой отметки после ответа сразу всплывала следующая карточка — одна новость за утро ломалась.
+   */
+  newsDay?: number;
 }
 
 /** Состояние эха; эхо, которого в игре больше нет (сохранение из будущей версии), пропускаем. */
@@ -177,6 +182,8 @@ export function echoVisitToday(state: StoreState): EchoEntry | null {
 
 /** Эхо для новости утра: обычное или гость, который так и не дошёл до зала. */
 export function echoNews(state: StoreState): EchoEntry | null {
+  // Сегодня эхо-новость уже была — следующая ждёт завтрашнего утра.
+  if (state.echoes?.newsDay === state.day) return null;
   return dueNow(state).find((x) => !def(x.id).visit || state.day >= x.due + ECHO_VISIT_DAYS) ?? null;
 }
 
@@ -234,6 +241,12 @@ export function answerEcho(state: StoreState, id: EchoId, choice = 0): StoreStat
   const list = e.list.filter((_, i) => i !== at);
   const s = applyEcho({ ...state, echoes: { ...e, list, heard: (e.heard ?? 0) + 1 } }, pick.effect);
   return s;
+}
+
+/** Ответ на эхо-новость утра: то же, что answerEcho, плюс отметка «сегодняшняя эхо-новость уже была». */
+export function answerEchoNews(state: StoreState, id: EchoId, choice = 0): StoreState | null {
+  const s = answerEcho(state, id, choice);
+  return s && { ...s, echoes: { ...echoesOf(s), newsDay: state.day } };
 }
 
 /** Множитель гостей от эха (клуб собачников, ролик Карины — или разгромный ролик). */

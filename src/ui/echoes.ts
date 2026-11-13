@@ -4,7 +4,7 @@
 
 import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
-import { ECHOES, echoBad, echoChoices, echoesOf, echoNews, echoWage, answerEcho, type EchoEntry } from '../game/echoes';
+import { ECHOES, echoBad, echoChoices, echoesOf, echoNews, echoWage, answerEchoNews, type EchoEntry } from '../game/echoes';
 import { skitPortrait } from '../game/skits';
 import { gainLine } from './skits';
 import { button, el, who } from './dom';
@@ -44,7 +44,7 @@ export function echoBox(state: StoreState, getState: () => StoreState, update: U
     }
     const label = d.choices.length > 1 ? t(`echo.${entry.id}.${i}` as TextKey, { n: wage, full }) : t(bad ? 'echo.ok.bad' : 'echo.ok.good');
     // Плохая новость — спокойная кнопка «принять к сведению», не зелёная «ура».
-    box.append(button(label, () => update(answerEcho(getState(), entry.id, i), bad ? 'tap' : 'success'), k === 0 && !bad ? 'ui-btn' : 'ui-btn secondary'));
+    box.append(button(label, () => update(answerEchoNews(getState(), entry.id, i), bad ? 'tap' : 'success'), k === 0 && !bad ? 'ui-btn' : 'ui-btn secondary'));
   }
   return [box];
 }

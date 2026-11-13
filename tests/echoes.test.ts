@@ -3,6 +3,7 @@ import { newGame, staffOf, wageFor, type StoreState } from '../src/game/economy'
 import { finishSkit, SKIT_IDS, SKITS, skitsOf, skitToday, type SkitId } from '../src/game/skits';
 import {
   answerEcho,
+  answerEchoNews,
   canHireEcho,
   ECHO_DELAY,
   ECHO_HIRE,
@@ -138,6 +139,22 @@ describe('эхо: когда и как приходит', () => {
     expect(echoNews(s)?.id).toBe('tyomaCold');
     expect(pickNews(s, ['echo']).id).toBe('echo');
     expect(pickNews(s, ['story', 'echo']).id).toBe('story');
+  });
+
+  it('два эхо в одно утро: после ответа второе ждёт завтра', () => {
+    let s = plantEcho(plantEcho(shop(), 'stale', 15), 'roses', 18);
+    const ready = (x: typeof s) => (echoNews(x) ? (['echo'] as const) : []);
+    let r = pickNews(s, ready(s));
+    expect(r.id).toBe('echo');
+    s = answerEchoNews(r.state, 'stale')!;
+    expect(echoNews(s)).toBeNull();
+    r = pickNews(s, ready(s));
+    expect(r.id).toBeNull();
+    expect(r.state.newsQ?.done).toBe(1);
+    const next = at(s, s.day + 1);
+    expect(echoNews(next)?.id).toBe('roses');
+    // Гость в зале (не новость) отметку не ставит.
+    expect(echoesOf(answerEcho(plantEcho(shop(), 'stale', 15), 'stale')!).newsDay).toBeUndefined();
   });
 
   it('несколько эхо — кто дольше ждёт, тот первым', () => {
