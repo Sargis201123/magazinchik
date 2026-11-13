@@ -75,13 +75,27 @@ export function dress(scene: StoreScene, keep: Keep): void {
     keep(scene.art(lamp + 36, top + 20, 'crisis_cistern').setOrigin(0.5, 1).setDepth(top + 20));
   } else if (c.kind === 'heat' && !scene.lite) {
     // Солнце бьёт в глаза: тёплый блик над кварталом, чуть дышит (марево — у погоды «жара»).
+    // 13.11, ревью: блик лежит над картой света, и сам он с вечером не гаснет — гасим, как облака
+    // (lighting.ts dayLife: к сумеркам на нет), а ночной сменой его нет совсем. Иначе солнце светит ночью.
     const sun = keep(scene.art(door.x - 160, -90, 'glow'))
       .setDisplaySize(520, 420)
       .setTint(0xfff0b8)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.22)
       .setDepth(LIGHT_DEPTH + 2);
-    scene.tweens.add({ targets: sun, alpha: 0.3, duration: 3200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const breath = { v: 0 };
+    const tween = scene.tweens.add({
+      targets: breath,
+      v: 1,
+      duration: 3200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        if (sun.active) sun.setAlpha(scene.night ? 0 : (0.22 + 0.08 * breath.v) * Phaser.Math.Clamp(1 - scene.evening * 2.5, 0, 1));
+      },
+    });
+    sun.once('destroy', () => tween.remove());
   }
 }
 

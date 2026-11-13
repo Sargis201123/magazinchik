@@ -266,21 +266,35 @@ function nudgeRegulars(state: StoreState, by: number): StoreState {
   return { ...state, regulars };
 }
 
+/** Ценники «поднять цены» — назад; если игрок за беду поставил свою цену — её не трогаем. */
+export function ungouged<P extends Partial<Record<ProductId, number>>>(prices: P, c: CrisisState | undefined): P {
+  if (!c?.was) return prices;
+  const out = { ...prices };
+  for (const [id, was] of Object.entries(c.was) as [ProductId, number][]) if (out[id] === gougePrice(id, was)) (out as Record<ProductId, number>)[id] = was;
+  return out;
+}
+
+/**
+ * Цены и постоянные — у каждого магазина свои (zarechye.ts SHOP_KEYS), а беда — Центра. 13.11, ревью: если
+ * беда кончилась, пока игрок работает в Заречье, Центр лежит в zar.away — правим его там, иначе ценники
+ * Центра навсегда остаются втридорога, а доверие пишется чужим жителям.
+ */
+function atHome(state: StoreState, fn: (home: StoreState) => StoreState): StoreState {
+  const zar = state.zar;
+  if (!zar || !inZar(state)) return fn(state);
+  const home = fn({ ...state, prices: zar.away.prices ?? state.prices, regulars: zar.away.regulars });
+  return { ...state, zar: { ...zar, away: { ...zar.away, prices: home.prices, regulars: home.regulars } } };
+}
+
 function endCrisis(state: StoreState, c: CrisisState): StoreState {
   const { crisis: _done, ...rest } = state;
-  let s: StoreState = rest;
-  // Ценники «поднять цены» — назад; если игрок за беду поставил свою цену — её не трогаем.
-  if (c.was) {
-    const prices = { ...s.prices };
-    for (const [id, was] of Object.entries(c.was) as [ProductId, number][]) if (prices[id] === gougePrice(id, was)) prices[id] = was;
-    s = { ...s, prices };
-  }
+  let s: StoreState = atHome(rest, (home) => ({ ...home, prices: ungouged(home.prices, c) }));
   const mode = crisisVerdict(c);
   const t = c.tally ?? { gouge: 0, hold: 0, give: 0 };
   // Все дни беды магазин простоял в Заречье — району нечего вспомнить; новость не нужна.
   if (!t.gouge && !t.hold && !t.give) return { ...s, crisisEnd: { kind: c.kind, mode, given: 0, sold: 0, delta: 0, day: s.day, seen: true } };
   const bonus = END_GOODWILL[mode];
-  s = nudgeRegulars(addGoodwill(s, bonus), mode === 'gouge' ? -1 : mode === 'give' ? 1 : 0);
+  s = atHome(addGoodwill(s, bonus), (home) => nudgeRegulars(home, mode === 'gouge' ? -1 : mode === 'give' ? 1 : 0));
   return { ...s, crisisEnd: { kind: c.kind, mode, given: c.given ?? 0, sold: c.sold ?? 0, delta: (c.delta ?? 0) + bonus, day: s.day } };
 }
 

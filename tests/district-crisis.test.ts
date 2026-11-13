@@ -36,6 +36,7 @@ import { reviewsFor } from '../src/game/reviews';
 import { pickNews } from '../src/game/headlines';
 import { pendingTip } from '../src/game/tips';
 import { simulate } from '../src/game/simulate';
+import { homeShop, newZarShop, switchDistrict } from '../src/game/zarechye';
 
 // Беда района (crisis.ts) и доброе имя района (goodwill.ts): когда начинается, что меняет в спросе и ценах,
 // сколько стоит раздача, как район судит по ценникам и что помнит потом; старые сохранения — без изменений.
@@ -225,6 +226,29 @@ describe('район судит по ценникам', () => {
     expect(regularState(morning, 'petr').loyalty).toBe(2);
     expect(crisisStarts({ ...morning, day: morning.day + 1 })).toBeNull();
     expect(crisisNews(seeCrisisEnd(morning))).toBeNull();
+  });
+
+  it('беда кончилась, пока работаем в Заречье: ценники и постоянные правятся у Центра, не у лавки', () => {
+    let s = chooseCrisis(inCrisis({}, { regulars: { petr: { loyalty: 3, awayUntil: 0 } } }), 'gouge')!;
+    // Лавку у моста купили посреди беды — цены ей не втридорога.
+    const zarShopNew = newZarShop(s);
+    expect(zarShopNew.prices!.water).toBe(shop().prices.water);
+    s = { ...s, zar: { at: 'home', since: s.day, away: zarShopNew, played: 0, days: { home: 1, zar: 0 } } };
+    s = { ...crisisNight(s, stats()), day: s.day + 1 };
+    // Остальные дни беды — в Заречье.
+    s = switchDistrict(s, 'zar');
+    for (let d = 1; d < 3; d++) s = { ...crisisNight(s, stats()), day: s.day + 1 };
+    const zarBefore = s.prices;
+    const morning = crisisMorning(s);
+    expect(morning.crisis).toBeUndefined();
+    expect(crisisNews(morning)!.mode).toBe('gouge');
+    expect(morning.prices).toEqual(zarBefore);
+    expect(morning.regulars?.petr).toBeUndefined();
+    const home = homeShop(morning);
+    expect(home.prices.water).toBe(shop().prices.water);
+    expect(home.prices.bread).toBe(shop().prices.bread);
+    expect(regularState(home, 'petr').loyalty).toBe(2);
+    expect(switchDistrict(morning, 'home').prices.water).toBe(shop().prices.water);
   });
 
   it('раздавал — доброе имя растёт, постоянные теплеют; простоял всю беду в Заречье — району нечего вспомнить', () => {

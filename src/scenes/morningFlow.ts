@@ -625,8 +625,6 @@ export function prepareDay(scene: StoreScene): void {
   scene.jury = juryDay(scene.state) ? 'pending' : 'none';
   scene.sonya = sonyaVisits(scene.state) ? 'pending' : 'none';
   skitsFx.armSkit(scene);
-  // Беда района: первые гости — за водой и хлебом, раздача старикам к открытию (crisisFx.ts).
-  crisisFx.openDay(scene);
   // Праздничный гость — раз за настоящий день, сколько игровых дней ни сыграй. В первый день
   // (бабушка показывает магазин) не заходит: новичку и так есть на что смотреть.
   const today = todayLocal();
@@ -691,6 +689,10 @@ export function prepareDay(scene: StoreScene): void {
   }
   // Кафе Ахмеда (хроники района) забирает хлеб в день поставки.
   arcsFx.dealAtOpening(scene);
+  // Беда района: первые гости — за водой и хлебом, раздача старикам к открытию (crisisFx.ts).
+  // 13.11, ревью: раздаём после кафе и Ахмеда, как в симуляторе, — иначе подарок старикам съедает
+  // хлеб из заказа по договору, и кафе молча рвёт договор, хотя утро обещало «товара хватает».
+  crisisFx.openDay(scene);
   visitors.scheduleStoryGuests(scene);
   const season = seasonFor(scene.state.day);
   if (season) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
