@@ -75,6 +75,8 @@ export const SHOP_KEYS = [
   'war',
   'trick',
   'plan',
+  // Лицензия на пиво и сигареты (license.ts) — на магазин в Центре, вместе с его «Витриной 18+».
+  'license',
 ] as const satisfies readonly (keyof StoreState)[];
 
 export type ShopKey = (typeof SHOP_KEYS)[number];

@@ -901,6 +901,9 @@ export const ICONS: Record<string, string> = {
   '🐟': 'item_fish',
   '🧼': 'item_soap',
   '🧴': 'item_detergent',
+  // По лицензии (game/license.ts): банки пива и пачка сигарет.
+  '🥫': 'item_beer',
+  '🚬': 'item_cigarettes',
   // Значки меню (art/icons.py).
   '☕': 'ico_coffee',
   '🏷': 'ico_tag',

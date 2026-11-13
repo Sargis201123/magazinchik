@@ -3,11 +3,13 @@
 // - бизнесмен хочет сразу много одного товара, но просит скидку 20% (деньги сразу, товар уходит);
 // - бабушка просит хлеба, а денег нет: дать в долг — рейтинг растёт, часто она возвращает с
 //   пирожками (иногда — с деньгами); отказать — соседи осудят;
-// - ребёнку не хватает мелочи на яблоко или шоколадку: отпустить за сколько есть — рейтинг чуть выше.
+// - ребёнку не хватает мелочи на яблоко или шоколадку: отпустить за сколько есть — рейтинг чуть выше;
+// - с лицензией (license.ts) подросток просит пиво: продать — деньги и нарушение в счёт, отказать — чисто.
 
-import { onShelves, PRODUCTS, sellableProducts, warehouseOf, type ProductId, type StoreState } from './economy';
+import { onShelves, PRODUCTS, restricted, sellableProducts, warehouseOf, type ProductId, type StoreState } from './economy';
+import { answerTeen, TEEN_CANS, teenPay, teenToday } from './license';
 
-export type SpecialKind = 'business' | 'granny' | 'kid';
+export type SpecialKind = 'business' | 'granny' | 'kid' | 'teen';
 
 export interface SpecialVisit {
   kind: SpecialKind;
@@ -27,10 +29,19 @@ export const KID_RATING = 0.02;
 
 const stockOf = (state: StoreState, id: ProductId): number => warehouseOf(state, id) + onShelves(state, id);
 
+/**
+ * Подросток за пивом (license.ts): заходит не по общему генератору, а от зерна магазина и дня, и вместо
+ * обычного особого гостя — место в бюджете внимания у них одно (attention.ts).
+ */
+export function makeTeen(state: StoreState): SpecialVisit | null {
+  return teenToday(state) ? { kind: 'teen', product: 'beer', qty: TEEN_CANS, pay: teenPay(state) } : null;
+}
+
 /** Какой гость зайдёт сегодня (или никто). */
 export function makeSpecial(state: StoreState, random: () => number): SpecialVisit | null {
   if (state.day < SPECIAL_FROM_DAY || random() >= SPECIAL_CHANCE) return null;
-  const sellable = sellableProducts(state);
+  // Пиво и сигареты бизнесмен оптом не берёт (economy.ts restricted).
+  const sellable = sellableProducts(state).filter((id) => !restricted(id));
   const roll = random();
   if (roll < 0.4) {
     // Бизнесмен: товар, которого много.
@@ -72,6 +83,11 @@ export interface SpecialResult {
 
 /** Ответ игрока. Согласиться можно, только если товар ещё есть. */
 export function answerSpecial(state: StoreState, visit: SpecialVisit, accept: boolean): SpecialResult {
+  // Подросток: «да» — продать (нарушение копится до проверки), рейтинг не меняется ни так, ни так.
+  if (visit.kind === 'teen') {
+    const sold = answerTeen(state, accept);
+    return { state: sold.state, money: sold.money, rating: 0 };
+  }
   const clampRating = (r: number) => Math.round(Math.min(5, Math.max(0, r)) * 100) / 100;
   if (!accept) {
     const drop = visit.kind === 'granny' ? REFUSE_RATING : 0;
