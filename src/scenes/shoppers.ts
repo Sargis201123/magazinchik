@@ -44,6 +44,7 @@ import { adExtraItems, adRareBoost, adTrust } from '../game/ads';
 import { saleExtraItems } from '../game/weeks';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular } from '../game/regulars';
+import { cartHere } from '../game/dreams';
 import { CART_SHARE, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { dogCatch } from '../game/watch';
 import { guestCoins, seeGuest, type GuestId } from '../game/live';
@@ -194,7 +195,8 @@ export function scheduleRegulars(scene: StoreScene): void {
   }
   scene.guestOfDayDue = false;
   if (guestOfDay(scene.state)) scene.time.delayedCall(GUEST_OF_DAY_AT * DAY_SECONDS * 1000, () => (scene.guestOfDayDue = true));
-  const coming = regularsToday(scene.state).filter((r) => (!first || r.id !== FIRST_REGULAR) && Math.random() < livedRegular(scene.state, r).every);
+  // Костя со своей тележкой у входа (game/dreams.ts) весь день за ней — в очередь к кассе не встаёт.
+  const coming = regularsToday(scene.state).filter((r) => (!first || r.id !== FIRST_REGULAR) && !(r.id === 'kostya' && cartHere(scene.state)) && Math.random() < livedRegular(scene.state, r).every);
   for (const r of coming) {
     // Пара (life.ts) приходит вместе: второй — спутником первого, отдельно не приходит.
     const partner = companionOf(scene.state, r.id)?.regular;

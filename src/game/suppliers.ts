@@ -1,6 +1,7 @@
 import type { TextKey } from '../i18n/ru';
 import { PRODUCTS, type Category, type ProductId, type StoreState } from './economy';
 import { haggleBonus } from './owner';
+import { breadCut } from './dreams';
 
 export type SupplierId = 'farmer' | 'dairy' | 'butcher' | 'wholesale';
 
@@ -95,7 +96,12 @@ export function unitPrice(s: Supplier, id: ProductId, discount = 0): number | nu
 /** Цены сегодня для этого магазина — со скидкой постоянного покупателя (закупка, автозаказ, подвоз). */
 export const priceFor = (state: StoreState) => {
   const discount = supplierDiscount(state);
-  return (sid: SupplierId, pid: ProductId): number | null => unitPrice(SUPPLIERS[sid], pid, discount);
+  // Хлеб от Аниной пекарни (dreams.ts) — ещё дешевле: и руками, и автозаказом, и в симуляторе.
+  const bread = breadCut(state);
+  return (sid: SupplierId, pid: ProductId): number | null => {
+    const price = unitPrice(SUPPLIERS[sid], pid, discount);
+    return price !== null && bread && pid === 'bread' ? Math.max(1, Math.round(price * (1 - bread))) : price;
+  };
 };
 
 /** Самая низкая цена товара по прайсу (без скидки) у всех поставщиков. null — никто не продаёт. */

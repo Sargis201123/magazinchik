@@ -30,6 +30,8 @@ export const NEWS_IDS = [
   // Для души: истории района и постоянных.
   'tale',
   'life',
+  // Мечта соседа и новость о ней (dreams.ts, 13.11).
+  'dream',
   'staffEvent',
   'district',
   'cat',
@@ -55,6 +57,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   trick: 'timed',
   tale: 'flavour',
   life: 'flavour',
+  dream: 'flavour',
   staffEvent: 'flavour',
   district: 'flavour',
   cat: 'flavour',
