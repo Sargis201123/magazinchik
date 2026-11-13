@@ -14,7 +14,7 @@
 // Phaser 4 затронет только этот файл.
 
 import Phaser from 'phaser';
-import { darkness, mulColor } from './daylight';
+import { darkness, lerpKeys, mulColor } from './daylight';
 
 export type LightTier = 'lite' | 'normal' | 'high';
 
@@ -136,6 +136,9 @@ export class LightMap {
   private inside = 0xffffff;
   private tint = 0xffffff;
   private drawnAmbient = '';
+  /** Ритуал закрытия (shade): зал выше этой y — в сумраке shadeColor. */
+  private shadeEdge = -Infinity;
+  private shadeColor = 0xffffff;
   private dirty = true;
   private drawnAt = -Infinity;
   private shown = true;
@@ -216,6 +219,21 @@ export class LightMap {
     this.tint = tint;
   }
 
+  /**
+   * Закрытый магазин (ритуал закрытия): зал и флигель выше edge — в сумраке color (умножением на фон зала),
+   * под краем — мягкая полоса полутени. Переживает reset: перестройка мира ночью остаётся тёмной.
+   */
+  shade(edge: number, color: number): void {
+    if (edge === this.shadeEdge && color === this.shadeColor) return;
+    this.shadeEdge = edge;
+    this.shadeColor = color;
+    this.dirty = true;
+  }
+
+  private shaded(): boolean {
+    return this.shadeEdge > -Infinity && darkness(this.shadeColor) > 0.002;
+  }
+
   /** Свой источник: картинка key с серединой в x, y размером w × h. */
   add(key: string, x: number, y: number, w: number, h: number, color: number, power = 1): Light {
     const light = new Light();
@@ -280,7 +298,7 @@ export class LightMap {
       if (light.drawn.power > EPS) this.dirty = true;
     }
     // Днём фон белый: карта ничего не меняет — не рисуем ни её, ни рамки.
-    const needed = darkness(this.outdoor) > 0.002 || darkness(this.inside) > 0.002 || darkness(this.tint) > 0.002;
+    const needed = darkness(this.outdoor) > 0.002 || darkness(this.inside) > 0.002 || darkness(this.tint) > 0.002 || this.shaded();
     this.show(needed);
     if (!needed) return;
     const ambient = `${this.outdoor}/${this.inside}/${this.tint}`;
@@ -353,6 +371,15 @@ export class LightMap {
     };
     fill(area.x - texel, area.y - texel, texture.width * texel + 2 * texel, texture.height * texel + 2 * texel, this.outdoor);
     for (const room of this.rooms) fill(room.x, room.y, room.w, room.h, this.inside);
+    if (this.shaded()) {
+      const dim = mulColor(this.inside, this.shadeColor);
+      const half = mulColor(this.inside, lerpKeys([[0, 0xffffff], [1, this.shadeColor]], 0.5));
+      for (const room of this.rooms) {
+        const bottom = Math.min(room.y + room.h, this.shadeEdge);
+        if (bottom > room.y) fill(room.x, room.y, room.w, bottom - room.y, dim);
+        if (this.tier !== 'lite' && bottom >= room.y && bottom < room.y + room.h) fill(room.x, bottom, room.w, Math.min(12, room.y + room.h - bottom), half);
+      }
+    }
     const lite = this.tier === 'lite';
     for (const light of this.lights) {
       const d = light.drawn;

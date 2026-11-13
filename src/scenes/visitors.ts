@@ -42,6 +42,7 @@ import * as persons from './persons';
 import * as camera from './camera';
 import * as building from './building';
 import * as arcsFx from './arcsFx';
+import * as echoesFx from './echoesFx';
 import type { ClientId } from '../game/events';
 
 /** Середина дальнего тротуара — на столько ниже середины нашего (тротуар 24, дорога 40, тот тротуар 22). */
@@ -294,12 +295,15 @@ export function scheduleStoryGuests(scene: StoreScene): void {
   }
   if (eduardLook(scene.state) !== 'vacant' && day % 5 === 1) at(0.5, () => runEduard(scene));
   if (scene.cafeToday) at(0.08, () => runCafeWaiter(scene));
-  // Особый гость с выбором (бизнесмен, бабушка без денег, ребёнок с мелочью). С лицензией иногда вместо него —
-  // подросток за пивом (game/license.ts): его день — от зерна магазина, место в бюджете внимания то же.
-  const special = makeTeen(scene.state) ?? makeSpecial(scene.state, Math.random);
-  scene.specialToday = Boolean(special);
+  // Особый гость с выбором (бизнесмен, бабушка без денег, ребёнок с мелочью). Если сегодня приходит
+  // лично герой давней сценки (echoesFx.ts, «Эхо решений»), он и есть особый гость дня — второго не будет.
+  // С лицензией иногда вместо особого гостя — подросток за пивом (game/license.ts): его день — от зерна магазина.
+  const echo = echoesFx.echoToday(scene);
+  const special = echo ? null : (makeTeen(scene.state) ?? makeSpecial(scene.state, Math.random));
+  scene.specialToday = Boolean(special || echo);
   // Придёт, если влез в бюджет внимания дня (game/attention.ts; делится чуть позже, в prepareDay).
-  if (special) at(Phaser.Math.FloatBetween(0.2, 0.6), () => (scene.attention.special ? runSpecial(scene, special) : Promise.resolve()));
+  if (echo) at(Phaser.Math.FloatBetween(0.2, 0.45), () => (scene.attention.special ? echoesFx.runEchoVisit(scene, echo) : Promise.resolve()));
+  else if (special) at(Phaser.Math.FloatBetween(0.2, 0.6), () => (scene.attention.special ? runSpecial(scene, special) : Promise.resolve()));
   // Добрая бабушка возвращает долг.
   if (scene.state.grannyOwed && Math.random() < 0.5) at(0.35, () => runGrannyRepay(scene));
   // Хроники района: герой истории у кассы, свадебная машина, грузовик с вещами, забег (arcsFx.ts).

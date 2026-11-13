@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { canPlace, newGame, onShelves, PRODUCT_IDS, PRODUCTS, restricted, sellableProducts, SHELF_KINDS, STORE_LEVELS, type StoreState } from '../src/game/economy';
 import {
@@ -33,6 +32,8 @@ import { dealsToday } from '../src/game/deals';
 import { makeCafeOffer } from '../src/game/cafe';
 import { SHOP_KEYS } from '../src/game/zarechye';
 import { simulate } from '../src/game/simulate';
+// Сохранение для e2e — как его видит сборка (без node:fs).
+import SAVE_RAW from '../e2e/save.json?raw';
 
 const units = (n: number) => Array.from({ length: n }, () => ({ age: 0 }));
 
@@ -289,7 +290,7 @@ describe('лицензия: сохранения и симулятор', () => {
 
   it('старое сохранение загружается как было: без лицензии, без витрины, полки те же', async () => {
     vi.resetModules();
-    const raw = readFileSync('e2e/save.json', 'utf8');
+    const raw = SAVE_RAW;
     const local: Record<string, string> = { [KEY]: raw };
     Object.assign(globalThis, { localStorage: { getItem: (k: string) => local[k] ?? null, setItem: (k: string, v: string) => (local[k] = v), removeItem: (k: string) => delete local[k] } });
     const { loadGame } = await import('../src/game/save');

@@ -4,10 +4,13 @@
 import { nextStoreLevel, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
-import { registerCount } from './registers';
+import { registerCount, RELIEF_ROLE } from './registers';
+import { quietDays } from './firstday';
+import { pawnOpen } from './pawnshop';
+import { echoesOf } from './echoes';
 import { hasLicense } from './license';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'license';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -45,6 +48,16 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['oven', (s) => hasUpgrade(s, 'oven')],
   ['coffee', (s) => hasUpgrade(s, 'coffee')],
   ['nightShift', (s) => hasUpgrade(s, 'nightShift')],
+  // Ломбард в подсобке (pawnshop.ts): в первое утро «Минимаркета» — вместе с первым гостем с вещью.
+  ['pawn', pawnOpen],
+  // Первое дело недели (cases.ts): как приходят улики и когда обвинять.
+  ['case', (s) => Boolean(s.cases?.open)],
+  // Касса в ритме (tillRhythm.ts, 13.11): лента включается только после этой карточки — никто не ждёт у кассы
+  // из-за правила, о котором ему не сказали. Новичку — после тихих дней (кассу он уже знает); со сменщиком
+  // хозяин за кассу не встаёт — карточка подождёт, пока касса снова не станет его.
+  ['rhythm', (s) => s.day >= 2 && !quietDays(s) && !s.staff.some((m) => m.role === RELIEF_ROLE)],
+  // Первая сценка кончилась и посадила эхо (echoes.ts): утром — что решения ещё аукнутся.
+  ['echo', (s) => echoesOf(s).list.length > 0],
   // Лицензия на пиво и сигареты (license.ts): наутро после покупки — где товар и чего делать нельзя.
   ['license', hasLicense],
 ];
@@ -61,6 +74,10 @@ export const TIP_ICONS: Record<TipId, string> = {
   oven: '🥖',
   coffee: '☕',
   nightShift: '🌙',
+  pawn: '🏷',
+  case: '🕵',
+  rhythm: '🎵',
+  echo: '🔁',
   license: '🔞',
 };
 

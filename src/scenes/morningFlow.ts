@@ -6,7 +6,7 @@ import { setPlaying } from '../platform/yandex';
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { DAY_SECONDS, emptyDayStats, shelveAll, warehouseCount } from '../game/economy';
-import { zarLook } from '../game/zarechye';
+import { inZar, zarLook } from '../game/zarechye';
 import { seasonFor } from '../game/endless';
 import { saveGame } from '../game/save';
 import { branchLook } from '../game/branch';
@@ -59,6 +59,7 @@ import { takeLiteNote } from '../platform/quality';
 import { quietDays } from '../game/firstday';
 import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
 import * as skitsFx from './skitsFx';
+import { clueToday } from '../game/cases';
 import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -202,6 +203,8 @@ export function showMorning(scene: StoreScene): void {
   const cupChanged = (contestOf(scene.state)?.wins ?? 0) !== scene.builtCup;
   const gift = scene.giftRebuild;
   scene.giftRebuild = false;
+  // Утро: зал больше не закрыт — перестройка ниже зажжёт лампы, сумрак ритуала закрытия снят (lightsOn зажжёт ряды).
+  lighting.hallOff(scene, -Infinity);
   if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   cars.refillParking(scene);
   scene.updateLighting(0);
@@ -698,6 +701,7 @@ export function prepareDay(scene: StoreScene): void {
   scene.binFullFor = 0;
   building.refreshBin(scene);
   scene.combo = 0;
+  scene.rhythm = 0;
   if (scene.awaitingBoxes > 0) void deliveries.deliver(scene);
   liveFx.endLiveEvent(scene);
   shoppers.scheduleRegulars(scene);
@@ -712,7 +716,26 @@ export function prepareDay(scene: StoreScene): void {
   const live = liveEventsFor(scene.state, Math.random);
   // Бюджет внимания дня (game/attention.ts): особый гость, звонки, моменты и мини-события делят пять
   // просьб «нажми». Что не влезло — сегодня просто не случается (сюжет и беды — вне бюджета).
-  scene.attention = planAttention({ moments: momentPlan.length, live: live.kinds.length, special: scene.specialToday, calls: scene.phone ? callsPossible(scene.state, CALLS_MAX) : 0 });
+  scene.attention = planAttention({
+    moments: momentPlan.length,
+    live: live.kinds.length,
+    special: scene.specialToday,
+    calls: scene.phone ? callsPossible(scene.state, CALLS_MAX) : 0,
+    // Улика дела недели (game/cases.ts) — в своём районе: в Заречье дело не ведём.
+    clue: !inZar(scene.state) && clueToday(scene.state) !== null,
+  });
+  // Улика дела недели (game/cases.ts) — в своём месте бюджета: не влезла — придёт утром, размытая.
+  // Сам значок (caseFx.ts) — отдельным куском кода, только в день улики (13.11: предел веса основного файла).
+  scene.clueFx?.endClue(scene);
+  scene.clue = null;
+  if (scene.attention.clue) {
+    const day = scene.state.day;
+    void import('./caseFx').then((fx) => {
+      scene.clueFx = fx;
+      // Пока грузилось, день уже сменился — улика придёт утром, размытая.
+      if (scene.state.day === day) fx.armClue(scene, true);
+    });
+  }
   scene.moments.start(thin(momentPlan, scene.attention.moments));
   const kinds = live.kinds.slice(0, scene.attention.live);
   // В очередь недавних — только то, что правда будет (не случившееся не мешает ему завтра).
