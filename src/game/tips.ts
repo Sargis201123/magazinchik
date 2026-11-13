@@ -4,10 +4,11 @@
 import { nextStoreLevel, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
-import { registerCount } from './registers';
+import { registerCount, RELIEF_ROLE } from './registers';
+import { quietDays } from './firstday';
 import { pawnOpen } from './pawnshop';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -49,6 +50,10 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['pawn', pawnOpen],
   // Первое дело недели (cases.ts): как приходят улики и когда обвинять.
   ['case', (s) => Boolean(s.cases?.open)],
+  // Касса в ритме (tillRhythm.ts, 13.11): лента включается только после этой карточки — никто не ждёт у кассы
+  // из-за правила, о котором ему не сказали. Новичку — после тихих дней (кассу он уже знает); со сменщиком
+  // хозяин за кассу не встаёт — карточка подождёт, пока касса снова не станет его.
+  ['rhythm', (s) => s.day >= 2 && !quietDays(s) && !s.staff.some((m) => m.role === RELIEF_ROLE)],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -65,6 +70,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   nightShift: '🌙',
   pawn: '🏷',
   case: '🕵',
+  rhythm: '🎵',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

@@ -1631,6 +1631,14 @@ export const pt: Record<TextKey, string> = {
   "staffEvent.best.no": "Só elogiar",
   "upgrade.kitchen": "Cozinha",
   "upgrade.kitchen.desc": "Um cômodo acima da cafeteria: salada olivier, borscht, blini, pelmeni, syrniki e ukha — na prateleira «Comida» da entrada, os clientes pegam uma porção a caminho do caixa. Com cozinheiro, a cozinha compra os ingredientes sozinha e cozinha o dia todo",
+  "tip.rhythm.title": "Caixa no ritmo",
+  "tip.rhythm.text": "Quando você mesmo registra, os produtos vão pela esteira até o leitor. Toque na tela quando o círculo encontrar a moldura: bem no tempo é «Perfeito», e as gorjetas crescem (em dobro na hora do rush). Errou — o produto passa de novo.",
+  "rhythm.perfect": "Perfeito!",
+  "rhythm.perfectN": "Perfeito ×{n}",
+  "rhythm.again": "Mais uma vez",
+  "summary.rhythm": "Caixa no ritmo: «Perfeito»",
+  "summary.rhythmOf": "{n} de {all}",
+  "hint.rhythm": "Toque na tela quando o círculo encontrar a moldura do leitor",
   "kitchen.title": "🍳 Cozinha",
   "kitchen.note": "A comida pronta fica na prateleira «Comida» da entrada — os clientes pegam uma porção a caminho do caixa. O que não vender é descartado à noite (na geladeira, parte dura até de manhã). Na prateleira: {n} de {max}.",
   "kitchen.cook": "Cozinhar ({n} porç.)",
@@ -3759,6 +3767,8 @@ export const pt: Record<TextKey, string> = {
   "pitch.invited": "{name}: vai ficar na entrada, primeiro aluguel hoje à tarde",
   "news.yard": "🌱 O quintal da vovó fica à esquerda da loja, atrás do depósito: o botão 🌱 mostra. Três canteiros, cada um com sua cultura; o bot avisa quando a colheita amadurecer.",
   "news.tenants": "🔑 Os inquilinos ganharam vida: barbearia, fotos e caixa eletrônico, segunda reforma, pedidos no quadro “Pedidos” — e um vendedor da estação na entrada.",
+  "closing.sign": "Fechado",
+  "closing.skip": "Toque para fechar mais rápido",
   "news.town": "🏘 Bairro: uma meta semanal de todos os jogadores e a “Loja do dia” — visite e deixe a marca “Estive aqui”.",
 };
 

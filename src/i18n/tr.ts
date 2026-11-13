@@ -1618,6 +1618,14 @@ export const tr: Record<TextKey, string> = {
   "staffEvent.best.no": "Sadece teşekkür et",
   "upgrade.kitchen": "Mutfak",
   "upgrade.kitchen.desc": "Kafenin üstünde bir oda: Olivye salatası, borş, krep, pelmeni, sırniki ve balık çorbası — girişteki “Yemek” rafında, müşteriler kasaya giderken bir porsiyon alır. Aşçıyla mutfak malzemesini kendisi alır ve bütün gün pişirir",
+  "tip.rhythm.title": "Ritimli kasa",
+  "tip.rhythm.text": "Hesabı kendin yaptığında ürünler bantta okuyucuya doğru gider. Halka çerçeveyle buluşunca ekrana dokun: tam zamanında “Mükemmel” olur ve bahşişler artar (yoğun saatte iki kat). Kaçırırsan ürün bir kez daha geçer.",
+  "rhythm.perfect": "Mükemmel!",
+  "rhythm.perfectN": "Mükemmel ×{n}",
+  "rhythm.again": "Bir daha",
+  "summary.rhythm": "Ritimli kasa: “Mükemmel”",
+  "summary.rhythmOf": "{n} / {all}",
+  "hint.rhythm": "Halka okuyucudaki çerçeveyle buluşunca ekrana dokun",
   "kitchen.title": "🍳 Mutfak",
   "kitchen.note": "Hazır yemek girişteki “Yemek” rafında durur — müşteriler kasaya giderken bir porsiyon alır. Satılmayan gece atılır (buzdolabında bir kısmı sabaha kalır). Rafta: {n}/{max}.",
   "kitchen.cook": "Pişir ({n} porsiyon)",
@@ -3749,6 +3757,8 @@ export const tr: Record<TextKey, string> = {
   "pitch.invited": "{name}: girişe kuruluyor, ilk kira bu akşam",
   "news.yard": "🌱 Ninenin bahçesi dükkânın solunda, deponun arkasında: 🌱 düğmesi gösterir. Üç tarh, her birinde ayrı ürün; hasat olgunlaşınca bot yazar.",
   "news.tenants": "🔑 Kiracılar canlandı: berber, fotoğrafçı ve bankamatik, ikinci düzenleme, “Siparişler” panosunda ricalar — ve girişte mevsimlik satıcı.",
+  "closing.sign": "Kapalı",
+  "closing.skip": "Dokun, daha hızlı kapatalım",
   "news.town": "🏘 Mahalle: tüm oyuncuların ortak haftalık hedefi ve “Günün dükkânı” — uğra, “Buradaydım” işareti bırak.",
 };
 

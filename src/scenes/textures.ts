@@ -55,6 +55,9 @@ export const SPRITES = [
   'honor_plate',
   'rank_senior',
   'rank_admin',
+  // Касса в ритме (art/till_rhythm.py, scenes/tillBelt.ts): окно сканера на ленте, спокойное и «жми!».
+  'belt_window',
+  'belt_window_hot',
   // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
   'tip_jar',
   'jam_splat',

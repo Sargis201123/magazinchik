@@ -1634,6 +1634,14 @@ export const en: Record<TextKey, string> = {
   "staffEvent.best.no": "Just say thanks",
   "upgrade.kitchen": "Kitchen",
   "upgrade.kitchen.desc": "A room above the café: salad, borscht, pancakes, pelmeni, syrniki and fish soup — on the “Food” shelf by the door, customers grab a portion on the way to the till. With a cook the kitchen buys its own ingredients and cooks all day",
+  "tip.rhythm.title": "Till rhythm",
+  "tip.rhythm.text": "When you ring people up yourself, items ride the belt to the scanner. Tap the screen when the circle meets the frame: right on the beat is “Perfect”, and tips grow (double in rush hour). Miss — and the item simply comes round again.",
+  "rhythm.perfect": "Perfect!",
+  "rhythm.perfectN": "Perfect ×{n}",
+  "rhythm.again": "Once more",
+  "summary.rhythm": "Till rhythm: “Perfect”",
+  "summary.rhythmOf": "{n} of {all}",
+  "hint.rhythm": "Tap the screen when the circle meets the frame at the scanner",
   "kitchen.title": "🍳 Kitchen",
   "kitchen.note": "Ready food sits on the “Food” shelf by the door — customers grab a portion on the way to the till. Unsold food is thrown out at night (a fridge keeps part of it till morning). On the shelf: {n} of {max}.",
   "kitchen.cook": "Cook ({n} portions)",
@@ -3794,6 +3802,8 @@ export const en: Record<TextKey, string> = {
   "pitch.invited": "{name}: setting up by the entrance, first rent this evening",
   "news.yard": "🌱 Grandma's yard is to the left of the shop, behind the storeroom: the 🌱 button shows it. Three beds, each with its own crop; the bot will write when the harvest is ripe.",
   "news.tenants": "🔑 Tenants have come alive: a barbershop, a photo booth and an ATM, a second fit-out, requests on the “Orders” board — and a seasonal trader by the entrance.",
+  "closing.sign": "Closed",
+  "closing.skip": "Tap to close up faster",
   "news.town": "🏘 District: a weekly goal shared by all players and the “Shop of the day” — drop in and leave an “I was here” mark.",
 };
 

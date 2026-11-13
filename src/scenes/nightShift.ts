@@ -64,6 +64,8 @@ import * as newcomer from './newcomer';
 import * as rivals from './rivals';
 import * as camera from './camera';
 import * as building from './building';
+import { closingRitual } from './closingRitual';
+import { look } from './look';
 import { LINES, linesSold, type LinesNight } from '../game/lines';
 
 // ---------- Ночная смена ----------
@@ -249,6 +251,8 @@ export function finishDay(scene: StoreScene): void {
   scene.running = false;
   motion.straightenPeople(scene);
   bigDays.clearBigDay(scene);
+  // Отработали ночную смену — ритуал закрытия начинается с её сумрака, без скачка яркости.
+  const wasNight = scene.night;
   // Ночные смены подряд — для реплик Сони (drama.ts): отработал — счёт растёт, закрылся вовремя — сброшен.
   scene.state = noteNight(scene.state, scene.night);
   scene.night = false;
@@ -370,7 +374,8 @@ export function finishDay(scene: StoreScene): void {
   // Непроданное с кухни списано — тарелки из витрины убираем.
   food.refreshKitchen(scene);
   if (promoted) staff.syncStaff(scene);
-  const unlocked = scene.checkAchievements(false);
+  // Значки — уже под итогами, а не посреди ритуала закрытия.
+  const unlocked = scene.checkAchievements(false, scene.lite ? 2000 : 3500);
   if (unlocked.length) extra.push([t('ach.summary'), unlocked.map((id) => t(`ach.${id}` as TextKey)).join(', ')]);
   // Новичок доиграл первый день: сколько секунд прошло от «Играть».
   if (finishedDay === 1) newcomer.onbStep(scene, 'day1', 1);
@@ -415,16 +420,16 @@ export function finishDay(scene: StoreScene): void {
   void reportProgress(scene.state);
   scene.refreshShelves();
   building.refreshWarehouse(scene);
-  scene.hud.update(scene.state, 0);
+  // Пока идёт ритуал закрытия, часы говорят «Закрываемся…».
+  scene.hud.update(scene.state, 0, '', false, true);
   // Снимок зала до роллет — для карточки итогов (shareCard.ts).
   scene.dayShot = null;
   scene.game.renderer.snapshot((image) => {
     scene.dayShot = image instanceof HTMLImageElement ? image : null;
   });
   rivals.clearTrick(scene);
-  // Магазин закрывается: опускаются роллеты, потом — итоги дня.
-  closeShop(scene);
-  scene.time.delayedCall(1500, () => {
+  const summary = (): void => {
+    scene.hud.update(scene.state, 0);
     // Первый день кончился раньше, чем бабушка попрощалась (не продали или продали под самое
     // закрытие): она уходит домой, пока на экране итоги, — во второй день в зале её нет.
     if (grannyHome || !onbDone(scene.state, 'bye')) scene.granny?.destroy();
@@ -474,7 +479,9 @@ export function finishDay(scene: StoreScene): void {
     // Первый день доигран, бабушка обещала гостинец: спросить, можно ли боту завтра о нём напомнить. Утром
     // второго дня (как было) — поздно: кто закрыл игру после первого дня, без разрешения напоминаний не получит.
     if (firstDay) setTimeout(() => askWriteAccessOnce((granted) => writeAnswer(finishedDay, granted)), WRITE_ASK_MS);
-  });
+  };
+  // Ритуал закрытия (closingRitual.ts): табличка, свет рядами, выручка в ящик, кот и Бобик, роллеты — потом итоги.
+  closingRitual(scene, { revenue: scene.stats.revenue, wasNight, finishedDay }, summary);
 }
 
 /** Через сколько мс после итогов первого дня спросить разрешение писать: печать «Отличный первый день!» уже легла. */
@@ -676,6 +683,8 @@ export function nightPass(scene: StoreScene, done: () => void): void {
       stars.forEach((st, i) => st.setAlpha(night * (0.5 + 0.5 * Math.sin(scene.time.now / 300 + i * 1.7))));
       // Окна гаснут посреди ночи; к рассвету фонари и вывески выключаются (вечер идёт назад).
       scene.lightsOut = Phaser.Math.Clamp((k - 0.2) / 0.4, 0, 1);
+      // Рассвет: закрытый с вечера зал (ритуал закрытия) светлеет вместе с улицей, а не скачком утром.
+      if (k > 0.7 && scene.hallOffY > -Infinity) lighting.hallOff(scene, scene.hallOffY, Infinity, (1 - k) / 0.3);
       scene.updateLighting(k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3);
       const tx = v.x - 60 + (v.width + 120) * Phaser.Math.Clamp((k - 0.25) / 0.4, 0, 1);
       taxi.x = tx;
@@ -738,8 +747,8 @@ export function flipDoorSign(scene: StoreScene, open: boolean): void {
   scene.tweens.add({ targets: sign, angle: { from: -12, to: 0 }, delay: 320, duration: 700, ease: 'Elastic.easeOut' });
 }
 
-/** Вечером на витрины, дверь и склад опускаются роллеты. */
-export function closeShop(scene: StoreScene): void {
+/** Вечером на витрины, дверь и склад опускаются роллеты; ms — за сколько (меньше 900 — без отскока). */
+export function closeShop(scene: StoreScene, ms = 900): void {
   flipDoorSign(scene, false);
   const { h, door, w, warehouse } = scene.layout;
   const spots = [{ x: door.x, w: 32 }, { x: warehouse.x + warehouse.w / 2, w: 24 }];
@@ -749,22 +758,22 @@ export function closeShop(scene: StoreScene): void {
   for (const spot of spots) {
     const shutter = scene.art(spot.x, h + 0.5, 'shutter').setOrigin(0.5, 0).setDepth(h + 3);
     shutter.setDisplaySize(spot.w, 0.1);
-    scene.tweens.add({ targets: shutter, displayHeight: FACADE_H - 1, duration: 900, ease: 'Bounce.easeOut', delay: Math.random() * 200 });
+    scene.tweens.add({ targets: shutter, displayHeight: FACADE_H - 1, duration: ms, ease: ms < 900 ? 'Quad.easeOut' : 'Bounce.easeOut', delay: look.between(0, ms < 900 ? 120 : 200) });
     scene.shutters.push(shutter);
   }
   nightGuard(scene);
 }
 
-/** Ночь: магазин закрыт, Бобик (если есть) сидит у двери. */
+/** Ночь: магазин закрыт, Бобик (если есть) спит в будке (ритуал закрытия его уже туда увёл). */
 export function nightGuard(scene: StoreScene): void {
   scene.closed = true;
-  pets.bobikSit(scene, 900);
+  void pets.bobikKennel(scene, true);
 }
 
 /** Утром роллеты поднимаются. */
 export function openShop(scene: StoreScene): void {
   scene.closed = false;
-  pets.bobikRest(scene);
+  pets.bobikOut(scene);
   for (const shutter of scene.shutters) {
     scene.tweens.add({ targets: shutter, displayHeight: 0.1, duration: 600, ease: 'Quad.easeIn', onComplete: () => shutter.destroy() });
   }

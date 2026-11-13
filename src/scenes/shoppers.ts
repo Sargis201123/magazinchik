@@ -57,7 +57,8 @@ import type { Point } from './layout';
 import { personGlow } from './halo';
 import { CLASH_FACTOR } from '../game/neighbors';
 import { smellChance } from '../game/rot';
-import { seriesAfter, seriesLost, seriesTip } from '../game/series';
+import { seriesAfter, seriesLost } from '../game/series';
+import { beltPlan, beltRest, rhythmOn, RHYTHM_PACE, tillTip } from '../game/tillRhythm';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { eyeTheft, ownerTiming } from '../game/owner';
 import { radioPatience, radioTolerance } from '../game/radio';
@@ -107,6 +108,7 @@ import * as newcomer from './newcomer';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+import * as tillBelt from './tillBelt';
 
 /** Друзья в гостях: сколько за день, чаевые за уровень их магазина, подарок за угощение (как на сервере). */
 const FRIEND_VISITS = 2;
@@ -981,15 +983,35 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
   while (scene.blackout && scene.sys.isActive()) await scene.wait(250);
   // В блэкаут на весь район касса считает вручную — медленнее.
   const manual = scene.powerCut ? BLACKOUT_CHECKOUT : 1;
-  r.scan = { start: scene.time.now, total: checkoutSeconds(timing, c.items.length) * 1000 * manual, byOwner };
+  // Касса в ритме (game/tillRhythm.ts, 13.11): пробивает сам игрок — первые товары едут по ленте под касание.
+  // Не за бабушку и не в блэкаут (сканер стоит, считают вручную); не на ×2 и не в спешке закрытия — там зал
+  // бежит быстрее, и такт стал бы неловимым. Лента — только после карточки «Новое» (rhythmOn).
+  // Совсем быстрому хозяину ленты нет (taps 0): товар не успел бы доехать до луча быстрее, чем он пробивает сам.
+  const belt = byOwner && !by && !scene.powerCut && scene.speed === 1 && scene.timeLeft > 0 && c.items.length && rhythmOn(scene.state) ? beltPlan(timing, c.items.length) : null;
+  const plan = belt?.taps ? belt : null;
+  r.scan = { start: scene.time.now, total: checkoutSeconds(timing, c.items.length) * 1000 * manual, byOwner, rhythm: Boolean(plan) };
   const { counter } = r;
   const index = scene.registers.indexOf(r);
   // by — кто пробивает вместо хозяина у его кассы (бабушка в первый день, firstday.ts).
   const clerk = by ?? (byOwner ? scene.seller : (scene.operator(index) as Worker | null)?.sprite);
   // Товар и пакет — к тому, кто пробивает: сменщик стоит у стойки чуть выше хозяина.
   const hand = clerk?.active ? { x: clerk.x, y: clerk.y } : r.clerk;
+  let itemMs = timing.item * 1000 * manual;
+  let payMs = timing.pay * 1000;
+  if (plan) {
+    const ran = await tillBelt.runBelt(scene, r, c, plan, clerk, hand);
+    if (!ran) return;
+    c.rhythm = scene.rhythm;
+    // Что сверх ленты (больше RHYTHM_TAPS товаров) хозяин пробивает сам, как раньше, — в общем времени ленты:
+    // в такт — быстрее прежнего, иначе — не дольше прежнего (beltRest).
+    const rest = beltRest(plan, timing, c.items.length, ran.state, ran.clock);
+    const extra = c.items.length - plan.taps;
+    itemMs = extra ? Math.min(timing.item * 1000 * RHYTHM_PACE, rest / extra) : 0;
+    payMs = rest - extra * itemMs;
+  }
   for (const [n, { id }] of c.items.entries()) {
-    await scanWait(scene, r, timing.item * 1000 * manual);
+    if (plan && n < plan.taps) continue;
+    await scanWait(scene, r, itemMs);
     if (!scene.sys.isActive()) return;
     // Товар — на ленту, под красный луч сканера (вспышка), и дальше к кассиру в пакет.
     const item = scene.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2 / ART).setDepth(1000);
@@ -1024,7 +1046,7 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
     await scene.wait(REGISTER_JAM_SECONDS * 1000);
     if (!scene.sys.isActive()) return;
   }
-  await scanWait(scene, r, timing.pay * 1000);
+  await scanWait(scene, r, payMs);
   // Пробил сам игрок: стоял за кассой (не бабушка вместо него) или торопил сменщика касаниями.
   c.byPlayer = (byOwner && !by) || (r.scan.cut ?? 0) > 0;
   r.scan = null;
@@ -1092,8 +1114,9 @@ export function ownerServedOne(scene: StoreScene): void {
 export function updateScanBar(scene: StoreScene): void {
   for (const r of scene.registers) {
     const scan = r.scan;
-    r.bar.setVisible(Boolean(scan));
-    r.fill.setVisible(Boolean(scan));
+    // В ритме полоску заменяет сама лента: сколько ехать — решают касания, а не часы.
+    r.bar.setVisible(Boolean(scan) && !scan?.rhythm);
+    r.fill.setVisible(Boolean(scan) && !scan?.rhythm);
     if (scan) r.fill.width = 16 * Math.min(1, (scene.time.now - scan.start) / scan.total);
     r.screen.setVisible(Boolean(scan));
     // У кассового аппарата нет сканера — луча нет.
@@ -1173,14 +1196,15 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   }
   const shown = where ?? (at ? { x: at.counter.x + (at === scene.registers[0] ? 8 : -8), y: at.counter.y + 0 } : { x: scene.layout.sellerHome.x - 8, y: scene.layout.sellerHome.y - 18 });
   // Серия у кассы (game/series.ts): в неё идёт только то, что пробил сам игрок. Не заставил ждать — растёт,
-  // и с третьей покупки подряд покупатель оставляет чаевые; заставил — начинается заново.
+  // и с третьей покупки подряд покупатель оставляет чаевые; заставил — начинается заново. С 13.11 к ним
+  // прибавляются чаевые за ритм (tillRhythm.ts): «Идеально» подряд на ленте, в час пик — вдвое.
   let series = 0;
   let tip = 0;
   if (c.byPlayer) {
     const before = scene.combo;
     series = scene.combo = seriesAfter(before, c.reactMs ?? 0);
     scene.stats.bestCombo = Math.max(scene.stats.bestCombo, series);
-    tip = seriesTip(series, total);
+    tip = tillTip(series, c.rhythm ?? 0, total, scene.rushNow);
     if (tip) {
       scene.state = { ...scene.state, money: scene.state.money + tip };
       scene.stats.revenue += tip;
@@ -1192,6 +1216,8 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   // Оплата — событие: искры у кассы, монеты фонтаном к счётчику, крупная сумма (в серии — больше монет и «×N»).
   effects.payBurst(scene, shown.x, shown.y, total, series);
   if (series >= 2) scene.celebrateCombo(series, tip);
+  // Серии ещё нет, а чаевые за ритм уже есть — сказать о них отдельно.
+  else if (tip) scene.popup(c.sprite.x, c.sprite.y - 26, t('popup.tip', { tip }), '#fee761');
   // Серия от пяти — весь зал оборачивается на кассу.
   if (series === 5 || series === 10) persons.everyoneLooks(scene, scene.layout.counter.x, scene.layout.counter.y, 'emo_star');
 

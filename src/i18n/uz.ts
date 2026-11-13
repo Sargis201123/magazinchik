@@ -1630,6 +1630,14 @@ export const uz: Record<TextKey, string> = {
   "staffEvent.best.no": "Shunchaki maqta",
   "upgrade.kitchen": "Oshxona",
   "upgrade.kitchen.desc": "Qahvaxona ustidagi xona: olivye, borshch, blinchiklar, chuchvara, sirniki va uxa — kirishdagi «Taom» javonida, xaridorlar kassaga ketayotib bir porsiya oladi. Oshpaz bilan oshxona oʻzi mahsulot xarid qiladi va kun boʻyi pishiradi",
+  "tip.rhythm.title": "Ritmdagi kassa",
+  "tip.rhythm.text": "Oʻzing hisoblaganingda mahsulotlar lentada skaner tomon yuradi. Doira ramkaga yetganda ekranga bos: aynan vaqtida — «Zoʻr», choychaqa koʻpayadi (tigʻiz paytda — ikki baravar). Adashsang — mahsulot yana bir marta oʻtadi.",
+  "rhythm.perfect": "Zoʻr!",
+  "rhythm.perfectN": "Zoʻr ×{n}",
+  "rhythm.again": "Yana bir bor",
+  "summary.rhythm": "Ritmdagi kassa: «Zoʻr»",
+  "summary.rhythmOf": "{all} tadan {n}",
+  "hint.rhythm": "Doira skanerdagi ramkaga yetganda ekranga bos",
   "kitchen.title": "🍳 Oshxona",
   "kitchen.note": "Tayyor taom kirishdagi «Taom» javonida turadi — xaridorlar kassaga ketayotib bir porsiya oladi. Sotilmagani tunda hisobdan chiqariladi (muzlatgichda bir qismi ertalabgacha saqlanadi). Javonda: {max} dan {n}.",
   "kitchen.cook": "Pishirish ({n} porsiya)",
@@ -3758,6 +3766,8 @@ export const uz: Record<TextKey, string> = {
   "pitch.invited": "{name}: kirish oldiga joylashadi, birinchi ijara — bugun kechqurun",
   "news.yard": "🌱 Buvining hovlisi doʻkonning chap tomonida, ombor ortida: 🌱 tugmasi koʻrsatadi. Uchta joʻyak, har birida oʻz ekini; hosil pishganda bot yozadi.",
   "news.tenants": "🔑 Ijarachilar jonlandi: sartaroshxona, foto va bankomat, ikkinchi taʼmir, «Buyurtmalar» taxtasidagi iltimoslar — va kirish oldidagi mavsumiy sotuvchi.",
+  "closing.sign": "Yopiq",
+  "closing.skip": "Bos — tezroq yopamiz",
   "news.town": "🏘 Mahalla: barcha oʻyinchilar uchun umumiy haftalik maqsad va «Kun doʻkoni» — mehmonga borib, «Shu yerda boʻldim» belgisini qoldir.",
 };
 
