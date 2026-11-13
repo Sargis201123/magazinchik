@@ -3357,6 +3357,7 @@ export const tr: Record<TextKey, string> = {
   "watch.kennel.sub": "hırsızı %{p} oranında yakalar",
   "watch.kennel.subGuests": "hırsızı %{p} oranında yakalar · misafir +%{g}: çocuklar sevmeye gelir",
   "lottery.title": "Piyango",
+  "lottery.stand": "Bilet standı",
   "lottery.note": "Kasanın yanında bilet standı: kuyruktakiler bilet alır, her biletten sana {n} 💰 kalır. Mal almaya gerek yok.",
   "lottery.buy": "Kur",
   "lottery.lock": "Stant «{name}» dükkânından itibaren kurulabilir.",

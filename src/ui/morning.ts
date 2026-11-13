@@ -253,7 +253,7 @@ import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
 import { pawnBox, pawnOfferBox } from './pawnshop';
 import { pawnMet, pawnOf, pawnOffer, pawnOpen, pawnSlots } from '../game/pawnshop';
-import { lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
+import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
@@ -2247,7 +2247,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         details: () => [radioBox(getState())],
       },
       // Лотерея у кассы (ui/lottery.ts, 13.11): стойка с билетами — рядом со сладостями.
-      { id: 'lottery', icon: 'assets/lottery_stand.png', title: t('lottery.title'), status: lotteryStatus(state), details: () => lotteryBox(getState(), getState, update) },
+      { id: 'lottery', icon: `assets/${lotteryArt(state)}.png`, title: t('lottery.title'), status: lotteryStatus(state), details: () => lotteryBox(getState(), getState, update) },
       {
         id: 'coffee',
         icon: '☕',

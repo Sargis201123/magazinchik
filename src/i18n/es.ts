@@ -3357,6 +3357,7 @@ export const es: Record<TextKey, string> = {
   "watch.kennel.sub": "atrapa al ladrón el {p}% de las veces",
   "watch.kennel.subGuests": "atrapa al ladrón el {p}% de las veces · clientes +{g}%: los niños vienen a acariciarlo",
   "lottery.title": "Lotería",
+  "lottery.stand": "Puesto de billetes",
   "lottery.note": "Un puesto de billetes junto a la caja: en la cola la gente compra billetes y a ti te quedan {n} 💰 de cada uno. No hay que comprar nada.",
   "lottery.buy": "Instalar",
   "lottery.lock": "El puesto se puede instalar a partir del local «{name}».",

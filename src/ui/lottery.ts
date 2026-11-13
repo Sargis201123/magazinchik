@@ -27,6 +27,12 @@ const LUCKY_P = Math.round(LUCKY_GUESTS * 100);
 /** Последний «счастливый» день. */
 const luckyUntil = (state: StoreState): number => (state.lottery?.win?.day ?? state.day) + LUCKY_DAYS;
 
+/** Картинка стойки по сегодняшнему виду: работает, закрыта по запрету, «счастливая». */
+export const lotteryArt = (state: StoreState): string => {
+  const look = lotteryLook(state);
+  return look === 'closed' ? 'lottery_stand_closed' : look === 'lucky' ? 'lottery_stand_lucky' : 'lottery_stand';
+};
+
 /** Что написать на плитке «Уголков»: цена, закрыта, «счастливая» или работает. */
 export function lotteryStatus(state: StoreState): string {
   if (!hasLottery(state)) return state.level < LOTTERY_MIN_LEVEL ? '🔒' : `${LOTTERY_PRICE} 💰`;
@@ -41,18 +47,18 @@ export function lotteryBox(state: StoreState, getState: () => StoreState, update
   box.append(el('b', '', `🎟 ${t('lottery.title')}`), el('div', 'ui-muted', t('lottery.note', { n: TICKET_CUT })));
   const row = el('div', 'ui-item');
   const img = el('img', 'ui-item-art');
-  setItemIcon(img, `lottery_stand${lotteryLook(state) === 'closed' ? '_closed' : lotteryLook(state) === 'lucky' ? '_lucky' : ''}`);
+  setItemIcon(img, lotteryArt(state));
   img.alt = '';
   const body = el('div');
   const actions = el('div', 'ui-item-actions');
   if (!hasLottery(state)) {
-    const name = el('div', 'ui-item-name', t('lottery.title'));
+    const name = el('div', 'ui-item-name', t('lottery.stand'));
     name.append(el('span', 'ui-tag', `${LOTTERY_PRICE} 💰`));
     body.append(name);
     if (state.level < LOTTERY_MIN_LEVEL) body.append(el('div', 'ui-item-sub', t('lottery.lock', { name: t(STORE_LEVELS[LOTTERY_MIN_LEVEL].nameKey) })));
     else actions.append(button(t('lottery.buy'), () => update(buyLottery(getState()), 'success'), 'ui-chip', state.money < LOTTERY_PRICE));
   } else {
-    body.append(el('div', 'ui-item-name', t('lottery.title')), el('div', 'ui-item-sub', t('lottery.sold', { n: state.lottery?.sold ?? 0, sum: ticketsEarned(state) })));
+    body.append(el('div', 'ui-item-name', t('lottery.stand')), el('div', 'ui-item-sub', t('lottery.sold', { n: state.lottery?.sold ?? 0, sum: ticketsEarned(state) })));
   }
   row.append(img, body, actions);
   box.append(row);

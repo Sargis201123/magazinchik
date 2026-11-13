@@ -231,7 +231,7 @@ describe('утро: новость, подсказка, отзывы', () => {
   });
 
   it('подсказка «Новое!» — когда стойку поставили', () => {
-    const others: TipId[] = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift'];
+    const others: TipId[] = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'pawn', 'case', 'rhythm'];
     const seen = shop({ seenTips: others });
     expect(pendingTip(seen)).toBeNull();
     expect(pendingTip(buyLottery(seen)!)).toBe('lottery');

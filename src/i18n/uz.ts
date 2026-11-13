@@ -3368,6 +3368,7 @@ export const uz: Record<TextKey, string> = {
   "watch.kennel.sub": "oʻgʻrini {p}% hollarda ushlaydi",
   "watch.kennel.subGuests": "oʻgʻrini {p}% hollarda ushlaydi · mehmonlar +{g}%: bolalar silashga keladi",
   "lottery.title": "Lotereya",
+  "lottery.stand": "Chipta stendi",
   "lottery.note": "Kassa yonida chiptalar stendi: navbatdagilar chipta oladi, har biridan senga {n} 💰 qoladi. Hech narsa xarid qilish shart emas.",
   "lottery.buy": "Oʻrnatish",
   "lottery.lock": "Stendni «{name}» binosidan boshlab oʻrnatish mumkin.",
