@@ -33,6 +33,7 @@ import {
   STIPEND,
   takeAppr,
   TRUST_BORED,
+  TRUST_NEW,
   TRUST_PAID,
   TRUST_PRAISE,
   TRUST_REST,
@@ -137,21 +138,23 @@ describe('ночь: стипендия, доверие, навык', () => {
     let s = live(taken(), 3, () => 'till');
     expect(s.appr!.trust).toBe(TRUST_START + 3 * TRUST_PAID);
     expect(apprWorry(s)).toBe('bored');
-    // Сменил место — уже не скучно.
+    // Сменил место — уже не скучно, и новое место в радость.
     expect(apprWorry(setApprPost(s, 'floor')!)).toBeNull();
+    expect(live(s, 1, () => 'floor').appr!.trust).toBe(TRUST_START + 4 * TRUST_PAID + TRUST_NEW);
     s = live(s, 1, () => 'till');
     expect(s.appr!.trust).toBe(TRUST_START + 4 * TRUST_PAID - TRUST_BORED);
   });
 
   it('неделя без выходного — устаёт; выходной после работы радует и всё сбрасывает', () => {
     const order: ApprPost[] = ['till', 'stock', 'floor'];
+    // Каждое новое место после вчерашнего — ещё и +TRUST_NEW (первый день не в счёт: вчера его не было).
     let s = live(taken(), 6, (i) => order[i % 3]);
-    expect(s.appr!.trust).toBe(TRUST_START + 6 * TRUST_PAID);
+    expect(s.appr!.trust).toBe(TRUST_START + 6 * TRUST_PAID + 5 * TRUST_NEW);
     expect(apprWorry(s)).toBe('tired');
     const tired = live(s, 1, () => 'till');
-    expect(tired.appr!.trust).toBe(TRUST_START + 7 * TRUST_PAID - TRUST_TIRED);
+    expect(tired.appr!.trust).toBe(TRUST_START + 7 * TRUST_PAID + 6 * TRUST_NEW - TRUST_TIRED);
     s = live(s, 1, () => 'rest');
-    expect(s.appr!.trust).toBe(TRUST_START + 6 * TRUST_PAID + TRUST_REST);
+    expect(s.appr!.trust).toBe(TRUST_START + 6 * TRUST_PAID + 5 * TRUST_NEW + TRUST_REST);
     expect(s.appr!.worked).toBeUndefined();
     expect(s.appr!.same).toBeUndefined();
     // Выходной денег не стоит и ничему не учит.
@@ -293,7 +296,7 @@ describe('вместе с игрой', () => {
 
   it('карточка «Новое!» — когда ученик появился; история утра встаёт в общую очередь', () => {
     const s = taken();
-    expect(pendingTip({ ...s, seenTips: ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift'] })).toBe('appr');
+    expect(pendingTip({ ...s, seenTips: ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'pawn', 'case', 'rhythm', 'echo', 'thief'] })).toBe('appr');
     expect(pickNews(shop(), ['appr', 'apprOut']).id).toBe('apprOut');
   });
 

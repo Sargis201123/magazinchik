@@ -14,7 +14,7 @@ import * as effects from './effects';
 import * as motion from './motion';
 import * as shelves from './shelves';
 import { shelfToRestock, stockShelf } from './staff';
-import { standFor } from './placement';
+import { slotOf } from '../game/economy';
 
 /** Форма ученика: как на портретах (art/apprentice.py). */
 const SHIRT = 0xf4f4f4;
@@ -43,14 +43,22 @@ function clear(scene: StoreScene): void {
 
 /** Где он стоит без дела на своём месте. */
 function homeOf(scene: StoreScene, post: Exclude<ApprPost, 'rest'>): { x: number; y: number } {
-  const { warehouse, sellerHome, slots } = scene.layout;
+  const { warehouse, sellerHome } = scene.layout;
   if (post === 'till') {
     const clerk = scene.registers[0]?.clerk ?? sellerHome;
     return { x: clerk.x - 2, y: clerk.y + 13 };
   }
-  if (post === 'stock') return { x: warehouse.doorway.x - 8, y: warehouse.doorway.y - 14 };
-  const slot = slots[Math.min(1, slots.length - 1)];
-  return slot ? standFor(scene.layout, slot) : sellerHome;
+  // Склад — рядом с грузчиком у двери склада (тот стоит на doorway +6, −18), но не в нём.
+  if (post === 'stock') return { x: warehouse.doorway.x + 20, y: warehouse.doorway.y - 6 };
+  // Зал — у одной из настоящих полок: по номеру места (layout.slots) можно попасть на пустое место у стены.
+  const shelf = floorShelf(scene, 1);
+  return shelf < 0 ? sellerHome : shelves.standOf(scene, shelf);
+}
+
+/** Полка с товаром для обхода зала (n-я из обычных полок, по кругу); -1 — полок нет. */
+function floorShelf(scene: StoreScene, n: number): number {
+  const list = scene.state.shelves.map((_, i) => i).filter((i) => slotOf(scene.state, i) >= 0);
+  return list.length ? list[n % list.length] : -1;
 }
 
 /** Расставить ученика (вызывается вместе с персоналом, staff.ts syncStaff): на сегодняшнее место или никуда. */
@@ -144,9 +152,9 @@ async function floorLoop(scene: StoreScene, me: Phaser.GameObjects.Container, _b
     const c = scene.running ? shopperNear(scene, me, helped) : undefined;
     if (!c) {
       // Никого — прохаживается вдоль полок.
-      const slot = Phaser.Utils.Array.GetRandom(scene.layout.slots.slice(0, Math.max(1, scene.state.shelves.length)));
-      if (slot) {
-        const stand = standFor(scene.layout, slot);
+      const shelf = floorShelf(scene, Phaser.Math.Between(0, 99));
+      if (shelf >= 0) {
+        const stand = shelves.standOf(scene, shelf);
         await persons.walk(scene, me, stand.x + Phaser.Math.Between(-10, 10), stand.y + 6, STAFF_SPEED * 0.8);
       }
       await scene.wait(1200);

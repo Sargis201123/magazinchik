@@ -1158,7 +1158,7 @@ export const uz: Record<TextKey, string> = {
   "appr.now.floor": "Xaridorlarga yordam beradi — {p}% uzoqroq kutishadi, baʼzan choychaqa qoldirishadi",
   "appr.now.rest": "Bugun uyda dam oladi",
   "appr.trust": "Ishonch: 100 dan {n}",
-  "appr.trustNote": "Stipendiya, maqtov va haftada bir dam olishdan oshadi. Pulsiz, dam olishsiz yoki kunma-kun bir joyda boʻlsa tushadi. Oxirida ishonch {n} va undan yuqori boʻlsa — shogirdning doʻkoni senga doʻst boʻladi.",
+  "appr.trustNote": "Stipendiya, maqtov, joy almashtirish va haftada bir dam olishdan oshadi. Pulsiz, dam olishsiz yoki kunma-kun bir joyda boʻlsa tushadi. Oxirida ishonch {n} va undan yuqori boʻlsa — shogirdning doʻkoni senga doʻst boʻladi.",
   "appr.worry.ok": "🙂 Ishtiyoq bilan oʻrganyapti",
   "appr.worry.unpaid": "😞 Stipendiyasiz xafa",
   "appr.worry.tired": "😩 Charchayapti — dam berish vaqti",

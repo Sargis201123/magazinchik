@@ -1160,7 +1160,7 @@ export const en: Record<TextKey, string> = {
   "appr.now.floor": "Helps shoppers — they wait {p}% longer, sometimes tip",
   "appr.now.rest": "Resting at home today",
   "appr.trust": "Trust: {n} of 100",
-  "appr.trustNote": "Grows with the stipend, praise and a day off once a week. Drops without pay, without days off, or day after day in the same spot. Trust of {n} or more by the end — and the apprentice's shop will be your friend.",
+  "appr.trustNote": "Grows with the stipend, praise, a change of spot and a day off once a week. Drops without pay, without days off, or day after day in the same spot. Trust of {n} or more by the end — and the apprentice's shop will be your friend.",
   "appr.worry.ok": "🙂 Keen to learn",
   "appr.worry.unpaid": "😞 Hurt to go unpaid",
   "appr.worry.tired": "😩 Getting tired — time for a day off",

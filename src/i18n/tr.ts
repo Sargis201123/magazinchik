@@ -1146,7 +1146,7 @@ export const tr: Record<TextKey, string> = {
   "appr.now.floor": "Müşterilere yardım ediyor — %{p} daha uzun bekliyorlar, bazen bahşiş bırakıyorlar",
   "appr.now.rest": "Bugün evde dinleniyor",
   "appr.trust": "Güven: {n} / 100",
-  "appr.trustNote": "Harçlıkla, övgüyle ve haftada bir izinle artar. Parasız, izinsiz ya da her gün aynı yerde kalınca düşer. Sonunda güven {n} ve üstündeyse çırağın dükkânı sana dost olur.",
+  "appr.trustNote": "Harçlıkla, övgüyle, yer değiştirmekle ve haftada bir izinle artar. Parasız, izinsiz ya da her gün aynı yerde kalınca düşer. Sonunda güven {n} ve üstündeyse çırağın dükkânı sana dost olur.",
   "appr.worry.ok": "🙂 Hevesle öğreniyor",
   "appr.worry.unpaid": "😞 Harçlıksız kalmak koyuyor",
   "appr.worry.tired": "😩 Yoruluyor — izin verme zamanı",

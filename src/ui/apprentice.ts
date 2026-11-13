@@ -103,6 +103,8 @@ export function apprCard(state: StoreState, getState: () => StoreState, update: 
   box.append(who(face(a.name), head, true), el('b', '', t('appr.where')));
   // Где сегодня: касса, склад, зал или выходной — выбор держится, пока его не сменят.
   const posts = el('div', 'ui-chips');
+  // Сеткой 2×2: четыре места в строку на телефоне не влезают, а «Выходной» один во второй строке смотрелся сиротой.
+  posts.style.cssText = 'display:grid;grid-template-columns:1fr 1fr';
   for (const p of APPR_POSTS) posts.append(button(t(`appr.post.${p}` as TextKey), () => update(setApprPost(getState(), p)), `ui-chip${a.post === p ? ' active' : ''}`));
   const now =
     a.post === 'till'
@@ -139,12 +141,11 @@ export function apprCard(state: StoreState, getState: () => StoreState, update: 
   // Стипендия и похвала.
   const pay = el('div', 'ui-chips');
   pay.append(
-    el('span', 'ui-item-sub', t('appr.pay', { n: STIPEND })),
     button(t('appr.payOn'), () => update(setApprPay(getState(), true)), `ui-chip${a.unpaid ? '' : ' active'}`),
     button(t('appr.payOff'), () => update(setApprPay(getState(), false)), `ui-chip${a.unpaid ? ' active' : ''}`),
   );
   const praise = canPraise(state);
-  box.append(pay, button(t(praise ? 'appr.praise' : 'appr.praised'), () => update(praiseAppr(getState()), 'success'), 'ui-btn secondary', !praise));
+  box.append(el('div', 'ui-item-sub', t('appr.pay', { n: STIPEND })), pay, button(t(praise ? 'appr.praise' : 'appr.praised'), () => update(praiseAppr(getState()), 'success'), 'ui-btn secondary', !praise));
   return box;
 }
 

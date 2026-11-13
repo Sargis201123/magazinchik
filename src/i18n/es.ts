@@ -1146,7 +1146,7 @@ export const es: Record<TextKey, string> = {
   "appr.now.floor": "Ayuda a los clientes: esperan un {p}% más y a veces dejan propina",
   "appr.now.rest": "Hoy descansa en casa",
   "appr.trust": "Confianza: {n} de 100",
-  "appr.trustNote": "Sube con la beca, los elogios y un día libre a la semana. Baja sin paga, sin días libres o con el mismo puesto día tras día. Con {n} o más al final, la tienda del aprendiz será tu amiga.",
+  "appr.trustNote": "Sube con la beca, los elogios, un cambio de puesto y un día libre a la semana. Baja sin paga, sin días libres o con el mismo puesto día tras día. Con {n} o más al final, la tienda del aprendiz será tu amiga.",
   "appr.worry.ok": "🙂 Aprende con ganas",
   "appr.worry.unpaid": "😞 Le duele trabajar sin beca",
   "appr.worry.tired": "😩 Se cansa: toca un día libre",
