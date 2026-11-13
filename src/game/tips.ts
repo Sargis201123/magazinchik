@@ -5,11 +5,11 @@ import { nextStoreLevel, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } 
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount, RELIEF_ROLE } from './registers';
-import { quietDays } from './firstday';
+import { noThieves, quietDays } from './firstday';
 import { pawnOpen } from './pawnshop';
 import { echoesOf } from './echoes';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'thief';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -39,6 +39,9 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   // Без персонала магазин выше второго помещения не тянет (в симуляторе: рейтинг 2,8, прибыль ~0).
   // Раньше 20-го дня карточку показывает вкладка «Развитие» — у кнопки расширения (soloExpandRisk).
   ['alone', (s) => s.level >= 2 && s.day >= 20 && !hasFloorStaff(s)],
+  // Воришка по повадкам (13.11, thiefTells.ts): новичку — утром первого дня, когда приходят воры (после тихих
+  // дней); старым игрокам — в первое утро после обновления: красной подсветки больше нет, ловят по приметам.
+  ['thief', (s) => s.day >= 2 && !noThieves(s)],
   ['weekly', (s) => Boolean(s.weekly)],
   ['fair', (s) => isFairDay(s.day)],
   ['loyalty', (s) => hasUpgrade(s, 'loyalty')],
@@ -75,6 +78,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   case: '🕵',
   rhythm: '🎵',
   echo: '🔁',
+  thief: '🕵️',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

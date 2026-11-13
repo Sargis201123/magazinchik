@@ -249,7 +249,7 @@ describe('эхо: общий вход и старые сохранения', () 
     expect(echoNews(old)).toBeNull();
     expect(echoVisitToday(old)).toBeNull();
     expect(skitsOf(old).memo).toBeUndefined();
-    expect(pendingTip({ ...old, seenTips: ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'pawn', 'case', 'rhythm'] })).toBeNull();
+    expect(pendingTip({ ...old, seenTips: ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'thief', 'pawn', 'case', 'rhythm'] })).toBeNull();
   });
 
   it('эхо, которого в игре больше нет, из сохранения пропускается', () => {
@@ -259,7 +259,7 @@ describe('эхо: общий вход и старые сохранения', () 
   });
 
   it('первая подсказка — утро после первой сценки с эхом', () => {
-    const seen = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'pawn', 'case', 'rhythm'];
+    const seen = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'thief', 'pawn', 'case', 'rhythm'];
     const res = play('gift', [0, 3, 3], { seenTips: seen });
     expect(pendingTip(res.state)).toBe('echo');
   });
