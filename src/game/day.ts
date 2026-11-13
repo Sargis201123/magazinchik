@@ -16,7 +16,9 @@ import {
 import { storyChances, storyGuests } from './story';
 import { questsFor, rankGuests, rewardQuests, seasonFor } from './endless';
 import { adBoost } from './ads';
-import { WEATHER_EFFECTS, weatherFor } from './weather';
+import { WEATHER_EFFECTS } from './weather';
+import { crisisGuests, crisisMorning, crisisNight, weatherToday } from './crisis';
+import { goodwillGuests } from './goodwill';
 import { endWar } from './war';
 import { eduardGuests, growEduard } from './eduard';
 import { afterBills } from './bankruptcy';
@@ -72,7 +74,8 @@ export interface NightSummary extends NightResult {
 }
 
 export function nightCycle(state: StoreState, stats: DayStats, random: () => number = Math.random): NightSummary {
-  let s = state;
+  // Беда района: вечером район смотрит на ценники — нажился, держал цены или раздавал (crisis.ts).
+  let s = crisisNight(state, stats);
   const order = fulfillOrder(s);
   if (order) {
     s = order.state;
@@ -129,7 +132,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
   // Ломбард (pawnshop.ts): уже утро — выкупили, не пришли, полиция за краденым, продажи с полки «Разное».
   // Дело недели (cases.ts): несданное — в архив, пропущенные улики — размытыми, в понедельник — новое.
-  const next = caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income)));
+  // Утро: доброе имя понемногу забывается, беда подводит итог или начинается новая (crisis.ts).
+  const next = crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income))));
   return {
     ...night,
     state: next,
@@ -174,7 +178,10 @@ export const guestFactor = (state: StoreState): number =>
   (seasonFor(state.day)?.guests ?? 1) *
   rankGuests(state) *
   adBoost(state) *
-  WEATHER_EFFECTS[weatherFor(state.day)].guests *
+  WEATHER_EFFECTS[weatherToday(state)].guests *
+  homeOnly(state, crisisGuests) *
+  // Доброе имя района (goodwill.ts): помнят, как магазин вёл себя в беду.
+  homeOnly(state, goodwillGuests) *
   fairGuests(state.day) *
   weekGuests(state.day) *
   lightsGuests(state) *

@@ -204,6 +204,8 @@ import { mailBox, takeQuietly } from './mail';
 import { MAIL_EVENT } from './mailbag';
 import { arcToday } from '../game/arcs';
 import { lateContestAnnounce, lateContestResult, pickNews, type NewsId } from '../game/headlines';
+import { chooseCrisis, crisisAsk, crisisNews, crisisWeather, crisisDaysLeft, seeCrisisEnd, weatherToday } from '../game/crisis';
+import { crisisChoiceBox, crisisEndBox, crisisLines } from './crisis';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { showSupport } from './support';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
@@ -825,9 +827,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('zarBoss', som);
     add('contestResult', result);
     add('contestAnnounce', announce);
+    add('crisisAsk', crisisAsk(state));
     add('event', state.plan?.event && !state.plan.decided);
     add('career', careerDue(state));
     add('trick', !zarHere && trickToday(state));
+    add('crisis', crisisNews(state));
     add('pawn', pawnOffer(state));
     add('case', !zarHere && caseNews(state));
     add('tale', taleToday(state));
@@ -871,6 +875,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     }
     if (picked.id === 'cat') {
       card.replaceChildren(title, catOfferBox(state));
+      return;
+    }
+    // Беда района (game/crisis.ts): решить, как торговать, пока она идёт.
+    if (picked.id === 'crisisAsk' && crisisAsk(state)) {
+      card.replaceChildren(title, crisisChoiceBox(state, (mode) => update(chooseCrisis(getState(), mode), mode === 'gouge' ? 'tap' : 'success')));
       return;
     }
     if (state.plan?.event && picked.id === 'event') {
@@ -980,6 +989,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const info = infos(
       ...debtLine(state),
       ...bigDayLine(state),
+      ...crisisLines(state),
       goalLine(state),
       ...autoLine(),
       billForecast(state),
@@ -1706,7 +1716,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
 
   /** Прогноз: что сегодня берут чаще и реже, сколько гостей; и погода на завтра. */
   const weatherLine = (state: StoreState): HTMLElement[] => {
-    const weather = weatherFor(state.day);
+    // В беду района на улице её погода (game/crisis.ts) — и прогноз о ней же.
+    const weather = weatherToday(state);
     const effect = WEATHER_EFFECTS[weather];
     const sellable = sellableProducts(state);
     const icons = (keep: (k: number) => boolean) =>
@@ -1721,7 +1732,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     if (less) parts.push(t('forecast.less', { list: less }));
     if (effect.guests !== 1) parts.push(t('forecast.guests', { n: percent(effect.guests) }));
     if (hasUpgrade(state, 'coffee') && effect.coffee !== 1) parts.push(t('forecast.coffee', { n: percent(effect.coffee) }));
-    const tomorrow = weatherFor(state.day + 1);
+    const tomorrow = (crisisDaysLeft(state) > 1 && crisisWeather(state)) || weatherFor(state.day + 1);
     parts.push(t('forecast.tomorrow', { icon: WEATHER_EFFECTS[tomorrow].icon, name: t(`weather.name.${tomorrow}`) }));
     return [el('div', 'ui-muted', parts.join(' · '))];
   };
@@ -2047,6 +2058,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return districtBox(state);
       case 'trick':
         return trickBox(state);
+      case 'crisis': {
+        const end = crisisNews(state);
+        return end ? crisisEndBox(end, () => update(seeCrisisEnd(getState()))) : [];
+      }
       case 'arc':
         return arcBox(state, getState, update);
       case 'echo':
@@ -2417,7 +2432,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       box.append(el('div', 'ui-muted', t('coffee.locked')));
       return box;
     }
-    const chance = Math.min(0.6, COFFEE_CHANCE * WEATHER_EFFECTS[weatherFor(state.day)].coffee * (hasUpgrade(state, 'coffeeTables') ? TABLES_COFFEE : 1));
+    const chance = Math.min(0.6, COFFEE_CHANCE * WEATHER_EFFECTS[weatherToday(state)].coffee * (hasUpgrade(state, 'coffeeTables') ? TABLES_COFFEE : 1));
     box.append(el('div', 'ui-muted', t('coffee.note', { price: coffeePrice(state), cost: CUP_COST, n: Math.max(2, Math.round(1 / chance)) })));
     const free = CUPS_MAX - cupsOf(state);
     const amounts = [...new Set([Math.min(10, free), free])].filter((n) => n > 0);

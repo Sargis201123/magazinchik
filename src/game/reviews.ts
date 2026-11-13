@@ -3,6 +3,7 @@
 
 import type { DayStats } from './economy';
 import { rng } from './random';
+import { goodwillReview } from './goodwill';
 
 export type ReviewTopic =
   | 'noStock'
@@ -22,11 +23,14 @@ export type ReviewTopic =
   | 'candy'
   | 'night'
   | 'quiet'
-  | 'cheap';
+  | 'cheap'
+  // Доброе имя района (goodwill.ts): помнят, как магазин вёл себя в беду.
+  | 'kind'
+  | 'greedy';
 
 /** Сколько раз за день должно случиться, чтобы об этом написали. */
-const BAD: Partial<Record<ReviewTopic, number>> = { noStock: 2, expensive: 2, queue: 1, dirty: 1, smell: 1, toilet: 1, badGoods: 1, slip: 1, thief: 1 };
-const GOOD: Partial<Record<ReviewTopic, number>> = { fresh: 2, coffee: 2, cat: 1, candy: 3, night: 3, cheap: 4 };
+const BAD: Partial<Record<ReviewTopic, number>> = { noStock: 2, expensive: 2, queue: 1, dirty: 1, smell: 1, toilet: 1, badGoods: 1, slip: 1, thief: 1, greedy: 1 };
+const GOOD: Partial<Record<ReviewTopic, number>> = { fresh: 2, coffee: 2, cat: 1, candy: 3, night: 3, cheap: 4, kind: 1 };
 
 /** Серия обслуживания, после которой хвалят за быструю кассу. */
 export const FAST_COMBO = 5;
@@ -49,9 +53,13 @@ export const note = (stats: DayStats, topic: ReviewTopic, n = 1): void => {
 
 export const isGood = (topic: ReviewTopic): boolean => !(topic in BAD) && topic !== 'quiet';
 
-/** Отзывы за день: самое заметное плохое и хорошее вперемешку, не больше трёх. */
-export function reviewsFor(stats: DayStats, day: number): Review[] {
-  const notes = stats.notes ?? {};
+/**
+ * Отзывы за день: самое заметное плохое и хорошее вперемешку, не больше трёх. goodwill — доброе имя района:
+ * громкое (по модулю) — и о нём напишут первым (как помог в беду или как нажился).
+ */
+export function reviewsFor(stats: DayStats, day: number, goodwill = 0): Review[] {
+  const remembered = goodwillReview(goodwill, day);
+  const notes = remembered ? { ...stats.notes, [remembered]: 9 } : (stats.notes ?? {});
   const bad = (Object.keys(BAD) as ReviewTopic[])
     .filter((t) => (notes[t] ?? 0) >= BAD[t]!)
     .sort((a, b) => (notes[b] ?? 0) / BAD[b]! - (notes[a] ?? 0) / BAD[a]!);

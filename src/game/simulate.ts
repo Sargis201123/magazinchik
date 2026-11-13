@@ -110,6 +110,7 @@ import { dayDemand } from './demand';
 import { buyLicense, hasLicense, LICENSE_PRICE, licenseLock } from './license';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
+import { chooseCrisis, crisisAsk, crisisExtraItems, crisisGive, crisisTolerance, type CrisisMode } from './crisis';
 import { deliveryDay } from './delivery';
 import { buyLineTier, LINE_IDS, LINES, lineLock, lineUnitCost, nextLineCost, type LineId } from './lines';
 import { BRAND_BATCH, brandAvailable, brandToBake, buyBrandLevel, nextBrandCost, startBrandBatch } from './brand';
@@ -197,6 +198,8 @@ export interface SimOptions {
   pet?: PetId;
   /** Как отвечать на ценовую войну. */
   war?: WarAnswer;
+  /** Как вести себя в беду района (crisis.ts): по умолчанию — держать обычные цены. */
+  crisis?: CrisisMode;
   /** Сколько закладок в печь игрок успевает за день и как часто забывает вынуть. */
   ovenBatches?: number;
   ovenBurn?: number;
@@ -384,6 +387,7 @@ export function simulate({
   hireStaff = true,
   features = {},
   war = 'wait',
+  crisis = 'hold',
   ovenBatches = 3,
   ovenBurn = 0.1,
   adAlways,
@@ -702,6 +706,8 @@ export function simulate({
       const afford = state.money >= counterCost(trick.kind, state.level) + reserve * 2 + (saving ? saving.cost : 0);
       state = answerTrick(state, afford ? 'counter' : trick.kind === 'banner' ? 'ignore' : 'complain', extraRandom) ?? answerTrick(state, 'ignore') ?? state;
     }
+    // Беда района: как решено для прогона (по умолчанию держит цены).
+    if (crisisAsk(state)) state = chooseCrisis(state, crisis) ?? state;
     const opened = districtNews(state);
     if (opened) {
       const saving = nextFor(state);
@@ -934,6 +940,8 @@ export function simulate({
     const arcRes = arcDeliver(state);
     state = arcRes.state;
     const cafeIncome = (cafeRes.result?.pay ?? 0) + (arcRes.result?.pay ?? 0);
+    // Беда района, выбор «раздавать»: старикам — к открытию, как в игре (crisisFx.openDay).
+    state = crisisGive(state).state;
     state.shelves.forEach((_, i) => (state = moveToShelf(state, i).state));
 
     // ---------- День ----------
@@ -1041,9 +1049,9 @@ export function simulate({
         }
       }
       const aroma = random() < aromaShare;
-      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + adExtraItems(state, extraRandom) + saleExtraItems(state, extraRandom), (p) => dayDemand(state, p, aroma));
+      const wanted = pickWanted(state, random, (random() < AVG_WANTS - 1 ? 2 : 1) + crisisExtraItems(state) + adExtraItems(state, extraRandom) + saleExtraItems(state, extraRandom), (p) => dayDemand(state, p, aroma));
       const fair = (p: ProductId) =>
-        perceivedBase(state, p) * tolerance * fairTodayTolerance(state) * loyaltyTolerance(state) * radioTolerance(state) * adTrust(state) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
+        perceivedBase(state, p) * tolerance * fairTodayTolerance(state) * loyaltyTolerance(state) * radioTolerance(state) * adTrust(state) * crisisTolerance(state, p) * (aroma && p === 'bread' ? AROMA_TOLERANCE : 1);
       const cart: CartItem[] = [];
       let sawEmpty = false;
       // Чего не хватило — записываем в отчёт дня (по нему «Закупить нужное» и печь считают спрос).
