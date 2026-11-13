@@ -52,6 +52,9 @@ import { treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplay
 import { servePortions } from '../game/kitchen';
 import { NIGHT_GUEST_TYPES, pickNightGuest } from '../game/nightGuests';
 import { districtGuest } from '../game/district';
+import { crisisExtraItems, crisisTolerance } from '../game/crisis';
+import { goodwillTips } from '../game/goodwill';
+import * as crisisFx from './crisisFx';
 import { slotSide, standFor } from './placement';
 import type { Point } from './layout';
 import { personGlow } from './halo';
@@ -268,8 +271,8 @@ export function regularVerdict(scene: StoreScene, c: Customer): void {
     pixelFx.burst(scene, 'hearts', c.sprite.x, c.sprite.y, { fade: 1100, zoom: 1 });
     scene.popup(c.sprite.x, y, t('regular.up', { name }), '#c8ffb0');
     const total = c.items.reduce((sum, item) => sum + unitSalePrice(scene.state, item.id, item.unit), 0);
-    // Благоустроенный район (hood.ts): постоянные щедрее.
-    const tip = Math.round(tipFor(regularState(scene.state, r.id).loyalty, total) * hoodTips(scene.state));
+    // Благоустроенный район (hood.ts) и доброе имя магазина (goodwill.ts): постоянные щедрее.
+    const tip = Math.round(tipFor(regularState(scene.state, r.id).loyalty, total) * hoodTips(scene.state) * goodwillTips(scene.state));
     if (tip > 0) {
       scene.state = { ...scene.state, money: scene.state.money + tip };
       scene.time.delayedCall(900, () => {
@@ -514,6 +517,9 @@ export function spawnCustomer(
       wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
     }
   }
+  // Беда района: первые гости дня — за водой и хлебом (crisisFx.ts).
+  const rush = !forced && !arrived && !rare && !thief && !valya && !nightGuest ? crisisFx.rushWants(scene) : null;
+  if (rush) wants = rush;
   // Хроники района: в праздник часть гостей нарядные, в день детей — дети с шарами (arcsFx.ts).
   if (!forced && !arrived && !rare && !thief && !valya && !nightGuest && !fromDistrict) look = arcsFx.dressUp(scene, look);
   const start = forced?.at ?? visitors.streetSpawn(scene);
@@ -543,6 +549,7 @@ export function spawnCustomer(
     const line = t(`nightGuest.${nightGuest}.${Phaser.Math.Between(0, NIGHT_GUEST_TYPES[nightGuest].lines - 1)}` as TextKey);
     scene.time.delayedCall(1300, () => sprite.active && scene.speak(sprite, 16, line));
   }
+  if (rush) crisisFx.rushSay(scene, sprite);
   if (valya) {
     scene.valyaCame = true;
     scene.time.delayedCall(1500, () => scene.speak(sprite, 16, t('popup.valya')));
@@ -572,7 +579,7 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
     { x: door.x, y: door.y - 10 },
   ]);
   // С тележкой у входа покупатель иногда берёт что-то сверх списка.
-  const wanted = scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + adExtraItems(scene.state, Math.random) + saleExtraItems(scene.state, Math.random));
+  const wanted = scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + crisisExtraItems(scene.state) + adExtraItems(scene.state, Math.random) + saleExtraItems(scene.state, Math.random));
   for (const id of wanted) {
     const index = shelfFor(scene.state, id);
     // Ларь у кассы на виду — вор туда не идёт.
@@ -641,7 +648,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   if (!c.first) await persons.walk(scene, c.sprite, door.x + Math.sign(gap) * Math.min(Math.abs(gap), DOOR_TURN), scene.streetY);
   // Тележки у входа: часть покупателей берёт их — кому удобнее.
   if (persons.cartsAtDoor(scene) && Math.random() < CART_SHARE && !c.sprite.getData('stroller') && !c.thief) persons.giveTrolley(scene, c.sprite);
-  const wanted = c.wants ?? scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + adExtraItems(scene.state, Math.random) + saleExtraItems(scene.state, Math.random));
+  const wanted = c.wants ?? scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + crisisExtraItems(scene.state) + adExtraItems(scene.state, Math.random) + saleExtraItems(scene.state, Math.random));
   let disappointed = false;
   let why: { reason: LostReason; id: ProductId } | undefined;
   // Подойти, поискать глазами, взять: к полке в зале, к ларю и к вёдрам у кассы — одинаково.
@@ -820,6 +827,8 @@ export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' 
     loyaltyTolerance(scene.state) *
     radioTolerance(scene.state) *
     adTrust(scene.state) *
+    // В беду района за воду и хлеб готовы платить больше (crisis.ts).
+    crisisTolerance(scene.state, id) *
     // Химия рядом с едой — к еде с этой полки придираются сильнее.
     (shelves.clashes(scene, index) ? CLASH_FACTOR : 1);
   const perUnit = price;

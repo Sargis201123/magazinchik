@@ -12,7 +12,8 @@ import { t, type TextKey } from '../i18n';
 import type { Facing } from './stride';
 import { UI_FONT } from '../ui/dom';
 import { giantLook } from '../game/giant';
-import { isWet, weatherFor } from '../game/weather';
+import { isWet } from '../game/weather';
+import { weatherToday } from '../game/crisis';
 import { yearTime } from '../game/calendar';
 import { activeAds } from '../game/ads';
 import { hasUpgrade } from '../game/upgrades';
@@ -507,7 +508,7 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
   scene.gust = { t: 0, x: 0, on: false };
   // Дерево с тенью на газоне: свет сверху слева — тень ложится вправо-вниз от ствола.
   // Летом в ясный день тень кроны пятнистая и чуть колышется на ветру.
-  const dapple = !scene.lite && yearTime(scene.state.day) === 'summer' && !isWet(weatherFor(scene.state.day));
+  const dapple = !scene.lite && yearTime(scene.state.day) === 'summer' && !isWet(weatherToday(scene.state));
   const plant = (key: string, x: number, y: number, depth: number) => {
     scene.add.image(x + 5, y + 1, 'shadow').setScale(2.1 / ART, 1.5 / ART).setAlpha(0.75).setDepth(depth - 0.01);
     const tree = scene.art(x, y, key).setOrigin(0.5, 0.9).setDepth(depth);
@@ -748,8 +749,8 @@ export function buildAmbient(scene: StoreScene, next: Layout, top: number, left:
   scene.windTimer?.remove();
   scene.windTimer = undefined;
   if (scene.lite) return;
-  // Погоду берём по дню: при сборке квартала this.weather ещё вчерашняя (applyWeather — позже).
-  const weather = weatherFor(scene.state.day);
+  // Погоду берём по дню (с бедой района — её погоду): при сборке квартала this.weather ещё вчерашняя (applyWeather — позже).
+  const weather = weatherToday(scene.state);
   const sunny = weather === 'clear' || weather === 'heat' || weather === 'leaves';
   // Тени облаков: мягкие тёмные пятна медленно плывут через квартал.
   if (sunny) {

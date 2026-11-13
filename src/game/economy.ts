@@ -746,6 +746,11 @@ export interface StoreState {
   gear?: Partial<Record<GearId, number>>;
   /** Рейтинг доставки на дом 1..5 (delivery.ts); нет — 4 звезды. */
   deliveryRating?: number;
+  /** Беда района (crisis.ts): идёт сейчас — и чем кончилась прошлая (новость утром, пауза до следующей). */
+  crisis?: import('./crisis').CrisisState;
+  crisisEnd?: import('./crisis').CrisisEnd;
+  /** Доброе имя района −100…100 (goodwill.ts); нет поля — 0. */
+  goodwill?: number;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */

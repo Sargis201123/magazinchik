@@ -172,6 +172,11 @@ export const SPRITES = [
   'dog0',
   'kennel1',
   'kennel2',
+  // Беда района (art/crisis.py, scenes/crisisFx.ts): мешки с песком, сугроб, объявление «воды нет», бочка-водовоз.
+  'crisis_sandbags',
+  'crisis_drift',
+  'crisis_notice',
+  'crisis_cistern',
   'bobik_walk0',
   'bobik_walk1',
   'dog1',

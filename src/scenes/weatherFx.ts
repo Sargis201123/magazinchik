@@ -6,7 +6,8 @@ import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { DAY_SECONDS } from '../game/economy';
 import { sound } from '../platform/sound';
-import { isWet, weatherFor } from '../game/weather';
+import { isWet } from '../game/weather';
+import { weatherToday } from '../game/crisis';
 import { yearTime } from '../game/calendar';
 import { WING_OUTER } from './layout';
 import { ART, STREET_VIEW, WALL, FACADE_H, LIGHT_DEPTH, CAR_COLORS, type CrownPart } from './common';
@@ -14,6 +15,7 @@ import * as pets from './pets';
 import * as lighting from './lighting';
 import * as decorations from './decorations';
 import * as pixelFx from './pixelFx';
+import * as crisisFx from './crisisFx';
 
 /** Порыв ветра: как быстро волна идёт по кварталу (px/с), сколько длится наклон дерева и на сколько градусов. */
 const GUST_SPEED = 140;
@@ -33,7 +35,8 @@ export function applyWeather(scene: StoreScene): void {
   scene.weatherObjs = [];
   scene.nightLights = scene.nightLights.filter((light) => light.obj.active);
   scene.bats = [];
-  scene.weather = weatherFor(scene.state.day);
+  // В беду района на улице её погода: жара, буран, ливень паводка (game/crisis.ts).
+  scene.weather = weatherToday(scene.state);
   // Камера ещё не пересчитала видимую область — берём её с запасом от планировки.
   const area = { x: -80, y: -140, w: scene.next.w + 160, h: scene.next.h + STREET_VIEW + 220 };
   const keep = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
@@ -126,6 +129,7 @@ export function applyWeather(scene: StoreScene): void {
     })).setDepth(-5);
   }
   weatherExtras(scene, keep);
+  crisisFx.dress(scene, keep);
   decorations.applySeason(scene, keep);
   scene.updateLighting(scene.running ? undefined : 0);
 }

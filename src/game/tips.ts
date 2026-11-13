@@ -5,8 +5,9 @@ import { nextStoreLevel, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } 
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount } from './registers';
+import { crisisToday } from './crisis';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'crisis';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -29,6 +30,8 @@ export const soloExpandRisk = (s: StoreState): boolean => !hasFloorStaff(s) && s
 
 const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['broke', isBroke],
+  // Первая беда района (crisis.ts): беда идёт считанные дни — объяснить сразу, что район запомнит.
+  ['crisis', (s) => Boolean(crisisToday(s))],
   // Касса — хозяина, пробивать можно и касанием улицы: со второго утра (в новом начале об этом
   // уже сказала бабушка в первый день — там карточка отмечена прочитанной). Старым игрокам — в
   // первое же утро после обновления: так они узнают, куда встал их кассир.
@@ -58,6 +61,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   oven: '🥖',
   coffee: '☕',
   nightShift: '🌙',
+  crisis: '🤝',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

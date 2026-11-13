@@ -21,7 +21,7 @@ import { trustedNow } from '../platform/telegram';
 import { toast, UI_FONT } from '../ui/dom';
 import { giantLook } from '../game/giant';
 import { lazy, prefetch, withLazy } from '../platform/lazy';
-import { weatherFor } from '../game/weather';
+import { weatherToday } from '../game/crisis';
 import { claimGift, giftTomorrow } from '../game/gift';
 import { postMail } from '../ui/mailbag';
 import { askWriteAccessOnce } from '../platform/social';
@@ -59,6 +59,7 @@ import { takeLiteNote } from '../platform/quality';
 import { quietDays } from '../game/firstday';
 import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
 import * as skitsFx from './skitsFx';
+import * as crisisFx from './crisisFx';
 import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -193,7 +194,8 @@ export function showMorning(scene: StoreScene): void {
   linesFx.applyLines(scene);
   scene.awaitingBoxes = 0;
   scene.hud.update(scene.state, DAY_SECONDS);
-  if (weatherFor(scene.state.day) !== scene.weather) weatherFx.applyWeather(scene);
+  // Погода дня — или беда района поверх неё (её вещи на улице тоже перерисовать: crisisFx.ts).
+  if (weatherToday(scene.state) !== scene.weather || crisisFx.crisisLook(scene) !== scene.builtCrisis) weatherFx.applyWeather(scene);
   // Примерка премиальной вещи кончилась вчера — убрать её из зала.
   const trial = scene.state.decor.trial;
   const trialOver = Boolean(trial && trial.day < scene.state.day);
@@ -620,6 +622,8 @@ export function prepareDay(scene: StoreScene): void {
   scene.jury = juryDay(scene.state) ? 'pending' : 'none';
   scene.sonya = sonyaVisits(scene.state) ? 'pending' : 'none';
   skitsFx.armSkit(scene);
+  // Беда района: первые гости — за водой и хлебом, раздача старикам к открытию (crisisFx.ts).
+  crisisFx.openDay(scene);
   // Праздничный гость — раз за настоящий день, сколько игровых дней ни сыграй. В первый день
   // (бабушка показывает магазин) не заходит: новичку и так есть на что смотреть.
   const today = todayLocal();

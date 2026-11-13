@@ -27,6 +27,8 @@ export const NEWS_IDS = [
   'event',
   'career',
   'trick',
+  // Итог беды района (crisis.ts): чем кончилось и что запомнил район.
+  'crisis',
   // Для души: истории района и постоянных.
   'tale',
   'life',
@@ -53,6 +55,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   event: 'timed',
   career: 'timed',
   trick: 'timed',
+  crisis: 'timed',
   tale: 'flavour',
   life: 'flavour',
   staffEvent: 'flavour',

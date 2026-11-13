@@ -11,7 +11,7 @@ import { t } from '../i18n';
 import { sound } from '../platform/sound';
 import type { Rect } from './paths';
 import { UI_FONT } from '../ui/dom';
-import { weatherFor } from '../game/weather';
+import { weatherToday } from '../game/crisis';
 import { yearTime } from '../game/calendar';
 import { hasUpgrade } from '../game/upgrades';
 import { KIOSK_ERROR_SECONDS, KIOSK_PREFER, kioskCount, kioskTier } from '../game/lanes';
@@ -99,7 +99,7 @@ export function buildStore(scene: StoreScene): void {
   const floor = activeDecor(scene.state, 'floor')?.texture ?? FLOORS[Math.min(scene.state.level, FLOORS.length - 1)];
   scene.add.tileSprite(0, wallH, w, h - wallH, floor).setOrigin(0).setTileScale(1 / ART);
   scene.glossyFloor = ['floor3', 'floor_gold', 'floor_noir'].includes(floor);
-  scene.coldAir = yearTime(scene.state.day) === 'winter' || weatherFor(scene.state.day) === 'snow';
+  scene.coldAir = yearTime(scene.state.day) === 'winter' || weatherToday(scene.state) === 'snow';
   lighting.floorLight(scene, w, h, wallH);
   // Стены: цветная краска за монеты или премиальная отделка (кирпич, плитка, обои) за звёзды.
   const wallDecor = activeDecor(scene.state, 'wall');
