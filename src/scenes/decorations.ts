@@ -582,7 +582,8 @@ export function buildDecor(scene: StoreScene): void {
       scene.tweens.add({ targets: glow, alpha: { from: 0.8, to: 0.4 }, duration: 900, yoyo: true, repeat: -1 });
       scene.art(62, 10, 'neon').setDepth(2);
       // Неон под картой освещения: ночью светит в ней сам (ровно, без пульса — карту ради него не перерисовывать).
-      scene.light.follow(glow, { key: 'light_pool', w: 44, h: 26, power: () => 0.6 * scene.evening * lighting.powerOn(scene, glow.y) });
+      // Неон куплен за звёзды — ритуал закрытия его не гасит, горит в закрытом зале всю ночь (13.11).
+      scene.light.follow(glow, { key: 'light_pool', w: 44, h: 26, power: () => 0.6 * scene.evening * lighting.powerOn(scene) });
     } else {
       scene.art(62, 9, 'clock_face').setDepth(1);
       scene.clockHands = scene.add.graphics({ x: 62, y: 9 }).setDepth(1.1);

@@ -326,8 +326,9 @@ export function updateLighting(scene: StoreScene, progress?: number): void {
     // Кто-то щёлкнул выключателем: окно иногда гаснет на несколько секунд и загорается снова.
     if (light.from !== undefined && Math.sin(now / 5300 + light.from * 97) > 0.93) alpha = 0;
     // Свет магазина гаснет с ритуалом закрытия по месту: неон на крыше (y < 0) горит всю ночь, витрины и
-    // свет у входа (ниже зала) — до рубильника, окна флигеля — со своим рядом.
-    if (light.store) alpha *= powerOn(scene, light.obj.y > 0 ? light.obj.y : undefined);
+    // свет у входа (ниже зала) — до рубильника, окна флигеля — со своим рядом. Премиальный свет (allNight) —
+    // всю ночь.
+    if (light.store) alpha *= powerOn(scene, light.obj.y > 0 && !light.allNight ? light.obj.y : undefined);
     if (light.light) {
       light.light.set(alpha * (light.gain ?? 1));
       light.obj.setAlpha(alpha * (light.haze ?? 0));
@@ -472,7 +473,7 @@ export function lampAt(scene: StoreScene, x: number): boolean {
  * стекло витрины). С map — это свет на земле и стенах: он вписан в карту освещения (картинка карты —
  * эта же или map.key), а сама картинка видна разве что лёгкой дымкой (map.haze).
  */
-export function nightGlow<T extends NightLight['obj']>(scene: StoreScene, obj: T, alpha: number, neon?: number, extra: Pick<NightLight, 'from' | 'twinkle' | 'lamp' | 'tint' | 'store'> & { map?: GlowMap } = {}): T {
+export function nightGlow<T extends NightLight['obj']>(scene: StoreScene, obj: T, alpha: number, neon?: number, extra: Pick<NightLight, 'from' | 'twinkle' | 'lamp' | 'tint' | 'store' | 'allNight'> & { map?: GlowMap } = {}): T {
   obj.setBlendMode(Phaser.BlendModes.ADD).setDepth(LIGHT_DEPTH + 1).setAlpha(0);
   const { map, ...rest } = extra;
   const entry: NightLight = { obj, alpha, neon, ...rest };
@@ -586,9 +587,10 @@ export function buildLights(scene: StoreScene): void {
     // Гирлянда сама рисуется под картой освещения — ночью карта приглушила бы её вместе со стеной.
     // Поэтому она светит и в карте: тёплая полоса по верху стены (пятна внахлёст — без просветов), вечером
     // ярче, свет отключили — гаснет. Ровно, без мигания огоньков: карту ради них не перерисовывать.
+    // Ритуал закрытия гирлянду не гасит: она куплена за звёзды и ночью в тёмном зале смотрится лучше всего.
     for (let x = 12; x < w + 12; x += 24) {
       const strip = scene.light.add('light_pool', x, 4, 40, 18, 0xffe6b0, 0);
-      strip.sync = () => strip.set(0.55 * scene.evening * powerOn(scene, 4));
+      strip.sync = () => strip.set(0.55 * scene.evening * powerOn(scene));
     }
     return;
   }
@@ -613,11 +615,12 @@ export function buildLights(scene: StoreScene): void {
     }
     scene.tweens.add({ targets: bulb, alpha: { from: 0.45, to: 0.32 }, duration: 1600 + (x % 5) * 140, yoyo: true, repeat: -1 });
     // Светильник тоже под картой освещения: он и стена вокруг светятся в ней сами (свет идёт за лампочкой
-    // и когда она качается), вечером ярче, без электричества гаснут.
+    // и когда она качается), вечером ярче, без электричества гаснут. Ритуал закрытия их не трогает: свет за
+    // звёзды горит в закрытом зале всю ночь, как ночник (13.11).
     const big = light.id === 'light_chandelier';
-    scene.light.follow(bulb, { key: 'light_pool', w: big ? 48 : 34, h: big ? 30 : 26, color: warm, power: () => 0.7 * scene.evening * powerOn(scene, bulb.y) });
+    scene.light.follow(bulb, { key: 'light_pool', w: big ? 48 : 34, h: big ? 30 : 26, color: warm, power: () => 0.7 * scene.evening * powerOn(scene) });
     // Тёплое пятно на полу у стены — вечером ярче.
-    nightGlow(scene, scene.art(x, wallH + 6, 'glow').setDisplaySize(52, 22).setTint(warm), 0.35, undefined, { store: true, map: { scale: 1.5, gain: 2.2, haze: 0.2 } });
+    nightGlow(scene, scene.art(x, wallH + 6, 'glow').setDisplaySize(52, 22).setTint(warm), 0.35, undefined, { store: true, allNight: true, map: { scale: 1.5, gain: 2.2, haze: 0.2 } });
     scene.add.image(x, wallH + 6, 'glow').setScale(52 / 64, 22 / 64).setTint(warm).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.12).setDepth(1);
   }
 }
