@@ -258,6 +258,8 @@ import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
 import { pawnBox, pawnOfferBox } from './pawnshop';
 import { pawnMet, pawnOf, pawnOffer, pawnOpen, pawnSlots } from '../game/pawnshop';
+import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
+import { lotteryNews } from '../game/lottery';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
@@ -834,6 +836,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('crisis', crisisNews(state));
     add('pawn', pawnOffer(state));
     add('case', !zarHere && caseNews(state));
+    add('lottery', lotteryNews(state));
     add('tale', taleToday(state));
     add('life', !zarHere && lifeNews(state));
     add('staffEvent', staffEventDue(state));
@@ -2062,6 +2065,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         const end = crisisNews(state);
         return end ? crisisEndBox(end, () => update(seeCrisisEnd(getState()))) : [];
       }
+      case 'lottery':
+        return lotteryNewsBox(state, getState, update);
       case 'arc':
         return arcBox(state, getState, update);
       case 'echo':
@@ -2272,6 +2277,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         status: hasRadio(state) ? `${STATION_INFO[stationOf(state)].icon} ${t(STATION_INFO[stationOf(state)].nameKey)}` : `${RADIO_PRICE} 💰`,
         details: () => [radioBox(getState())],
       },
+      // Лотерея у кассы (ui/lottery.ts, 13.11): стойка с билетами — рядом со сладостями.
+      { id: 'lottery', icon: `assets/${lotteryArt(state)}.png`, title: t('lottery.title'), status: lotteryStatus(state), details: () => lotteryBox(getState(), getState, update) },
       {
         id: 'coffee',
         icon: '☕',

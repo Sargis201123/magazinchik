@@ -63,6 +63,7 @@ import { smellChance } from '../game/rot';
 import { seriesAfter, seriesLost } from '../game/series';
 import { beltPlan, beltRest, rhythmOn, RHYTHM_PACE, tillTip } from '../game/tillRhythm';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
+import { countTicket } from '../game/lottery';
 import { eyeTheft, ownerTiming } from '../game/owner';
 import { radioPatience, radioTolerance } from '../game/radio';
 import { cameraTheft, entranceMud, gearTier, REGISTER_JAM_SECONDS, registerJam, wcDirt } from '../game/gear';
@@ -113,6 +114,7 @@ import * as shelves from './shelves';
 import * as building from './building';
 import * as thiefFx from './thiefTells';
 import * as tillBelt from './tillBelt';
+import * as lotteryFx from './lotteryFx';
 
 /** Друзья в гостях: сколько за день, чаевые за уровень их магазина, подарок за угощение (как на сервере). */
 const FRIEND_VISITS = 2;
@@ -808,6 +810,8 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   if (c.gone) return;
   // Заскучал в очереди — тянется к стойке со сладостями.
   if (!c.serving && Math.random() < impulseChance(scene.state, scene.queue.indexOf(c) + 1)) grabCandy(scene, c);
+  // И лотерейный билет со стойки рядом (lotteryFx.ts) — тоже на кассу.
+  if (!c.serving) lotteryFx.maybeTicket(scene, c);
   c.waitStart = scene.time.now;
   c.bubble.setVisible(true);
   // С котом рядом и под радио ждут дольше (климат, указатели, тележки и обаяние убраны 02.11 — gear.ts).
@@ -1213,6 +1217,7 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   scene.state = { ...state, money: state.money + extras };
   for (const e of c.extras ?? []) {
     if (e.kind === 'dish') scene.stats.dishes = (scene.stats.dishes ?? 0) + 1;
+    else if (e.kind === 'ticket') scene.state = countTicket(scene.state);
     else note(scene.stats, e.kind);
   }
   // Чаевые «за котика».

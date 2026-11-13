@@ -7,11 +7,12 @@ import { isFairDay } from './fair';
 import { registerCount, RELIEF_ROLE } from './registers';
 import { noThieves, quietDays } from './firstday';
 import { pawnOpen } from './pawnshop';
+import { hasLottery } from './lottery';
 import { echoesOf } from './echoes';
 import { crisisToday } from './crisis';
 import { hasLicense } from './license';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -66,6 +67,7 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['echo', (s) => echoesOf(s).list.length > 0],
   // Лицензия на пиво и сигареты (license.ts): наутро после покупки — где товар и чего делать нельзя.
   ['license', hasLicense],
+  ['lottery', hasLottery],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -87,6 +89,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   license: '🔞',
   thief: '🕵️',
   crisis: '🤝',
+  lottery: '🎟',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

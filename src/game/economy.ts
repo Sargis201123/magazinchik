@@ -615,6 +615,8 @@ export interface StoreState {
   ownerTill?: boolean;
   /** Стаканчики в кофейном уголке (coffee.ts). */
   cups?: number;
+  /** Лотерея у кассы (lottery.ts): с какого дня стоит стойка, проданные билеты, выигрыш и запрет. Нет поля — не куплена. */
+  lottery?: import('./lottery').LotteryState;
   /** Ценовая война с Эдуардом (war.ts). */
   war?: War;
   /** Кот магазина (cat.ts) и с какого дня снова предложить его оставить. */

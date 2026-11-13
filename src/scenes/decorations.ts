@@ -31,6 +31,7 @@ import { fairToday, STALL_EVERY_SECONDS, STALL_MAX, stallSale } from '../game/fa
 import { ART, WALL, FACADE_H, LIGHT_DEPTH, EVENING_FROM, KIOSK_GLOW, type CrownPart } from './common';
 import * as lighting from './lighting';
 import * as deliveries from './deliveries';
+import * as lotteryFx from './lotteryFx';
 import * as food from './food';
 import * as persons from './persons';
 import * as camera from './camera';
@@ -384,6 +385,7 @@ export function buildUpgrades(scene: StoreScene): void {
   food.buildOven(scene);
   buildRadio(scene);
   buildCup(scene);
+  lotteryFx.buildStand(scene);
   deliveries.buildDelivery(scene);
   // Кассы самообслуживания — у очереди, у правой стены над кассами, одна под другой (вместе с кассой переезжают).
   scene.kiosks = [];

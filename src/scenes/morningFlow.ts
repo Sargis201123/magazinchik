@@ -48,6 +48,7 @@ import { castsShadow } from './floor';
 import { eduardLook } from '../game/eduard';
 import { cafeDeliver } from '../game/cafe';
 import { hasRadio } from '../game/radio';
+import { hasLottery } from '../game/lottery';
 import { LIVE_REPEAT, liveEventsFor } from '../game/minievents';
 import { CALLS_MAX, planAttention, thin } from '../game/attention';
 import { callsPossible } from '../game/delivery';
@@ -61,6 +62,7 @@ import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
 import * as skitsFx from './skitsFx';
 import * as crisisFx from './crisisFx';
 import { clueToday } from '../game/cases';
+import * as lotteryFx from './lotteryFx';
 import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -102,10 +104,10 @@ export const prefetchMorning = (): void => prefetch(morningUi);
 
 /**
  * Что распаковывают из коробки, когда оно впервые появилось в зале: оборудование (терминал, касса
- * самообслуживания, радио, кассы, климат, камеры, склад, кофемашина, печь) и украшения.
+ * самообслуживания, радио, кассы, климат, камеры, склад, кофемашина, печь, стойка лотереи) и украшения.
  */
 const UNBOX =
-  /^(card_terminal|kiosk\d?|radio|phone|counter\d|bin_t\d_0|fan_base|ac_wall|cam|air_curtain|mat_grate|autostore|pallet_jack|forklift|carts|coffee_machine\d?|cafe_table|oven\d?|rug|neon|plant_big|art_[a-z]+|light_(sconce|pendant|lantern|chandelier)|gumball|aquarium|lucky_cat|fountain|jukebox)$/;
+  /^(card_terminal|kiosk\d?|radio|phone|counter\d|bin_t\d_0|fan_base|ac_wall|cam|air_curtain|mat_grate|autostore|pallet_jack|forklift|carts|coffee_machine\d?|cafe_table|oven\d?|lottery_stand|rug|neon|plant_big|art_[a-z]+|light_(sconce|pendant|lantern|chandelier)|gumball|aquarium|lucky_cat|fountain|jukebox)$/;
 /** Новинки распаковывают по очереди, с таким шагом. */
 const UNBOX_STEP = 350;
 /** Флажок «НОВОЕ» висит над новинкой два часа по часам зала (смена идёт с 8:00 до 20:00). */
@@ -242,7 +244,7 @@ export function showMorning(scene: StoreScene): void {
       const decorChanged = s.decor !== scene.state.decor;
       const adsChanged = s.ads !== scene.state.ads || s.adRuns !== scene.state.adRuns;
       // Купили приёмник — его надо поставить на прилавок; сменили волну — только музыка.
-      const upgradesChanged = s.upgrades !== scene.state.upgrades || s.registers !== scene.state.registers || s.kiosks?.n !== scene.state.kiosks?.n || s.kiosks?.tier !== scene.state.kiosks?.tier || s.gear !== scene.state.gear || hasRadio(s) !== hasRadio(scene.state);
+      const upgradesChanged = s.upgrades !== scene.state.upgrades || s.registers !== scene.state.registers || s.kiosks?.n !== scene.state.kiosks?.n || s.kiosks?.tier !== scene.state.kiosks?.tier || s.gear !== scene.state.gear || hasRadio(s) !== hasRadio(scene.state) || hasLottery(s) !== hasLottery(scene.state);
       const radioChanged = s.radio !== scene.state.radio;
       // Кота оставили, купили лежанку или он вернулся с прогулки — перерисовать вход.
       const was = scene.state;
@@ -694,6 +696,8 @@ export function prepareDay(scene: StoreScene): void {
   // хлеб из заказа по договору, и кафе молча рвёт договор, хотя утро обещало «товара хватает».
   crisisFx.openDay(scene);
   visitors.scheduleStoryGuests(scene);
+  // Лотерея (lotteryFx.ts): стойка по сегодняшнему виду (запрет, «счастливые» дни), счастливчик с тортом.
+  lotteryFx.morning(scene);
   const season = seasonFor(scene.state.day);
   if (season) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
   else if (fairToday(scene.state)) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, t('popup.fair'), '#fee761'));

@@ -43,6 +43,7 @@ import { careerMorning, careerNight } from './career';
 import { districtGuests } from './district';
 import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
+import { lotteryGuests, lotteryNight } from './lottery';
 import { tallyNight, type StaffRecord } from './staffStats';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
@@ -113,6 +114,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Арендаторы флигеля платят за день — тоже до счетов (tenants.ts).
   const rent = tenantsNight(s);
   s = rent.state;
+  // Вечерний тираж и решения города о лотереях (lottery.ts): премия за счастливый билет — тоже до счетов.
+  s = lotteryNight(s);
   // Игрок в Заречье — гипермаркет в Центре торговал сам и тоже отдаёт доход до счетов (zarechye.ts).
   const home = zarHomeNight(s, day);
   s = home.state;
@@ -190,6 +193,7 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, districtGuests) *
   homeOnly(state, hoodGuests) *
   homeOnly(state, tenantGuests) *
+  homeOnly(state, lotteryGuests) *
   homeOnly(state, dogGuests) *
   homeOnly(state, trickGuests) *
   // Вечерние гости за пивом и сигаретами (license.ts): лицензия — у магазина в Центре.

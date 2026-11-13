@@ -33,6 +33,8 @@ export const NEWS_IDS = [
   'crisis',
   'pawn',
   'case',
+  // Лотерея у кассы (lottery.ts, 13.11): счастливый билет или запрет — пока идут свои дни.
+  'lottery',
   // Для души: истории района и постоянных.
   'tale',
   'life',
@@ -69,6 +71,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   // «Дело недели» (cases.ts, 13.11): открылось, пятница — обвинять, ушло в архив. Не «только сегодня»: пятничную
   // карточку перебил поворот — обвинить можно и со строчки дела в утре.
   case: 'timed',
+  lottery: 'timed',
   tale: 'flavour',
   life: 'flavour',
   staffEvent: 'flavour',
