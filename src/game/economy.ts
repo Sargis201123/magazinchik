@@ -358,6 +358,8 @@ export interface StaffMember {
   friend?: { id: number; name: string };
   /** Сын Светы на летней подработке (arcs.ts): уйдёт учиться в конце лета. */
   summer?: boolean;
+  /** Герой сценки на работе (echoes.ts, Денис-грузчик): ключ текста с его именем — вместо имени из списка. */
+  alias?: string;
   /** Карьера (career.ts): с какого дня работает, опыт, звание, «сотрудник месяца», летопись. */
   career?: import('./career').Career;
   /** Статистика (staffStats.ts): дела за всё время, рекорд смены, пройденные метры. */
@@ -672,6 +674,8 @@ export interface StoreState {
   skits?: import('./skits').SkitsState;
   /** Хроники района после финала: истории постоянных, договор с кафе, летний помощник (arcs.ts). */
   arcs?: import('./arcs').ArcsState;
+  /** «Эхо решений» (echoes.ts): что вернётся через недели и прибавка (или убыль) гостей от эха. */
+  echoes?: import('./echoes').EchoesState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */
   legacy?: Legacy;
   /** Сколько должна добрая бабушка, которой дали хлеба в долг (special.ts). */

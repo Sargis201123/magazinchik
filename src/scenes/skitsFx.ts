@@ -23,8 +23,8 @@ import * as visitors from './visitors';
 /** На какой секунде дня заходит гость (после Сони, инспектора, праздничного гостя и жюри — 18…40 с). */
 export const SKIT_AT = 48;
 
-/** Как гость одет в зале — как на портрете (art/skits.py). */
-const LOOK: Record<SkitId, () => Look> = {
+/** Как гость одет в зале — как на портрете (art/skits.py). Тот же гость возвращается эхом (echoesFx.ts). */
+export const LOOK: Record<SkitId, () => Look> = {
   robbery: () => ({ ...randomLook(0xb55088), hair: 0xc0cbdc, style: 'bun', glasses: true, hat: 'headscarf', hatTint: 0x68386c, skin: 0xf2d3ab }),
   puppy: () => ({ ...randomLook(0xfeae34), kid: true, hair: 0xbe4a2f, style: 'short', skin: 0xf2d3ab }),
   counterfeit: () => ({ ...randomLook(0x3a4466), hair: 0x181425, style: 'short', skin: 0xeec39a }),
