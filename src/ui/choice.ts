@@ -8,6 +8,8 @@ export interface ChoiceOptions {
   note?: string;
   yes: string;
   no: string;
+  /** Верный ответ — «нет» (подросток за пивом): тогда отказ — главной кнопкой и первым. */
+  primaryNo?: boolean;
   onYes: () => void;
   onNo: () => void;
 }
@@ -22,13 +24,9 @@ export function showChoice(o: ChoiceOptions): () => void {
     close();
     fn();
   };
-  card.append(
-    el('h2', '', o.title),
-    el('p', '', o.text),
-    ...(o.note ? [el('div', 'ui-muted', o.note)] : []),
-    button(o.yes, answer(o.onYes)),
-    button(o.no, answer(o.onNo), 'ui-btn secondary'),
-  );
+  const yes = button(o.yes, answer(o.onYes), o.primaryNo ? 'ui-btn secondary' : undefined);
+  const no = button(o.no, answer(o.onNo), o.primaryNo ? undefined : 'ui-btn secondary');
+  card.append(el('h2', '', o.title), el('p', '', o.text), ...(o.note ? [el('div', 'ui-muted', o.note)] : []), ...(o.primaryNo ? [no, yes] : [yes, no]));
   return () => {
     if (done) return;
     done = true;

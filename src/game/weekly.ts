@@ -1,7 +1,7 @@
 // Испытания недели: три цели на игровой месяц (7 дней) — копятся по дням, за каждую награда.
 // В отличие от заданий дня, их можно растянуть: плохой день не ломает всю неделю.
 
-import { monthOf, MONTH_DAYS, sellableProducts, type DayStats, type ProductId, type StoreState } from './economy';
+import { monthOf, MONTH_DAYS, restricted, sellableProducts, type DayStats, type ProductId, type StoreState } from './economy';
 import { rng } from './random';
 import { hasUpgrade } from './upgrades';
 import type { TextKey } from '../i18n/ru';
@@ -38,7 +38,8 @@ export function weeklyFor(state: StoreState, guests: number): NonNullable<StoreS
   const random = rng(month * 48271 + 17);
   const reward = weeklyReward(state.level);
   const days = 5;
-  const sellable = sellableProducts(state);
+  // Пиво и сигареты в испытания не попадают (economy.ts restricted): их не рекламируем.
+  const sellable = sellableProducts(state).filter((id) => !restricted(id));
   const pool: Challenge[] = [
     { kind: 'serve', target: Math.max(30, Math.round(guests * 0.55 * days)), progress: 0, reward },
     { kind: 'revenue', target: Math.max(800, Math.round((guests * 22 * days) / 50) * 50), progress: 0, reward },

@@ -22,6 +22,8 @@ export const MATERIAL: Record<Category, Material> = {
   icebox: 'paper',
   florist: 'paper',
   brand: 'glass',
+  // Витрина 18+ (license.ts): банки и пачки — стук жести.
+  license: 'tin',
 };
 
 /** С такой покупки платят бумажками — касса шуршит купюрами, а не звенит мелочью. */

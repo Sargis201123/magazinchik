@@ -5382,6 +5382,10 @@ def main():
     import moments
 
     moments.main()
+    # Касса в ритме: окно сканера на ленте (13.11).
+    import till_rhythm
+
+    till_rhythm.main()
     print("готово:", sorted(p.name for p in OUT.glob("*.png")))
 
 
