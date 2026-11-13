@@ -49,6 +49,8 @@ const RULE = {
   // Серия у кассы хозяина идёт за касаниями игрока, а не за часами игры.
   combo: { gap: 0.3, max: 1, tier: 'feedback', game: false },
   coin: { gap: 0.25, max: 2, tier: 'feedback' },
+  // Выключатели ритуала закрытия: ряды щёлкают часто (на касании — бегом), но не кашей.
+  switch: { gap: 0.07, max: 2, tier: 'feedback' },
   phone: { gap: 0.8, max: 1, tier: 'feedback' },
   voice: { gap: 0.045, max: 2, tier: 'story', game: false },
   syllable: { gap: 0.04, max: 3, tier: 'story', game: false },
@@ -354,6 +356,30 @@ function knock(ac: AudioContext, out: AudioNode, at: number, freq: number, vol: 
   osc.stop(at + 0.14);
 }
 
+/**
+ * Выключатель (ритуал закрытия, 13.11): сухой щелчок клавиши — нажал и отпустил (два коротких шума в узкой
+ * полосе) и лёгкий «ток» корпуса; каждый следующий ряд (step) чуть выше — гаснет волной. Рубильник (main) —
+ * ниже и глуше: «чмок» контакта и деревянный стук щитка. Синтез: записи для него нет.
+ */
+function switchClick(x: number | undefined, step: number, main: boolean): void {
+  const o: Voice = { x, cents: 25, db: 1, limit: ['switch', RULE.switch] };
+  const ac = audio(busOf(o));
+  if (!ac) return;
+  const target = output(ac, o, main ? 0.2 : 0.12);
+  if (!target) return;
+  const now = ac.currentTime + 0.01;
+  if (main) {
+    const r = target.rate;
+    noiseBurst(ac, target.out, now, 0.07, 1300 * r, 2.5, 0.05, 0.001);
+    knock(ac, target.out, now + 0.03, 196 * r, 0.06);
+    return;
+  }
+  const r = target.rate * (1 + 0.05 * Math.min(step, 8));
+  noiseBurst(ac, target.out, now, 0.025, 3600 * r, 5, 0.04, 0.001);
+  noiseBurst(ac, target.out, now + 0.045, 0.02, 2800 * r, 5, 0.022, 0.001);
+  knock(ac, target.out, now, 620 * r, 0.014);
+}
+
 /** Буфер раската грома (бурый шум) — один на всю игру. */
 let rumbleBuffer: AudioBuffer | null = null;
 
@@ -634,6 +660,8 @@ export const sound = {
   tap: () => {
     if (sample('click', { bus: 'ui', cents: 120, db: 1.5, limit: ['tap', RULE.tap] }) === null) synthTap();
   },
+  /** Ритуал закрытия: щелчок выключателя ряда ламп (step — какой по счёту, выше), main — рубильник. */
+  switchOff: (x?: number, step = 0, main = false) => switchClick(x, step, main),
   /** Кнопка в меню — деревянный щелчок, вкладка — шорох страницы. */
   click: (kind: 'button' | 'tab' = 'button') => {
     if (sample(kind === 'tab' ? 'page' : 'click', { bus: 'ui', cents: 100, db: 1.5, gain: 0.85, limit: ['tap', RULE.tap] }) === null) synthTap();

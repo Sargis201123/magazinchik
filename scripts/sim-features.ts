@@ -41,6 +41,8 @@ const scenarios: [string, Partial<SimOptions>][] = [
   // Карьера сотрудников: повышения (быстрее, с прибавкой), премии лучшему, свой управляющий филиала.
   ['карьера сотрудников', { features: { career: true } }],
   ['карьера + филиал', { features: { career: true, branch: true } }],
+  // Ломбард в подсобке (13.11): берёт вещи у спокойных гостей, суетливым отказывает.
+  ['ломбард', { features: { pawn: true } }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 

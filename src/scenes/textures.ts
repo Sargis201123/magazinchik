@@ -63,6 +63,15 @@ export const SPRITES = [
   'jam_splat',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
+  // Ломбард в подсобке (art/pawnshop.py, scenes/pawnFx.ts): полка «Разное» на стене склада, вещи и ценник.
+  'pawn_shelf',
+  'pawn_watch',
+  'pawn_guitar',
+  'pawn_bike',
+  'pawn_ring',
+  'pawn_camera',
+  'pawn_phone',
+  'pawn_tag',
   // Праздники по календарю (art/holidays.py): вещи за открытки и новогодний набор за звёзды.
   'holiday_tree',
   'holiday_ship',

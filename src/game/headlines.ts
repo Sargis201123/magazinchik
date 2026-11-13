@@ -27,6 +27,7 @@ export const NEWS_IDS = [
   'event',
   'career',
   'trick',
+  'pawn',
   // Для души: истории района и постоянных.
   'tale',
   'life',
@@ -53,6 +54,9 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   event: 'timed',
   career: 'timed',
   trick: 'timed',
+  // Гость с вещью в ломбард (pawnshop.ts, 13.11): решение дня, завтра придёт другой (или никто). Не «только сегодня»:
+  // гость приходит в треть утр, и ставить его выше главных поворотов незачем — в утро поворота он просто не придёт.
+  pawn: 'timed',
   tale: 'flavour',
   life: 'flavour',
   staffEvent: 'flavour',
