@@ -47,6 +47,7 @@ import { momentCount, momentRating } from './moments';
 import { branchNight, branchReport } from './branch';
 import { makeLines, type LinesNight } from './lines';
 import { countZarDay, inZar, zarBossMorning, zarDuelNight, zarGuests, zarHomeNight, zarReport } from './zarechye';
+import { pawnMorning } from './pawnshop';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -121,7 +122,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const lines = makeLines(billed.state, lineCtx);
   const night = { ...billed, state: lines.state };
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income);
+  // Ломбард (pawnshop.ts): уже утро — выкупили, не пришли, полиция за краденым, продажи с полки «Разное».
+  const next = pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income));
   return {
     ...night,
     state: next,

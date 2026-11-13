@@ -50,6 +50,7 @@ import * as liveFx from './liveFx';
 import * as nightShift from './nightShift';
 import * as camera from './camera';
 import * as shelves from './shelves';
+import * as pawnFx from './pawnFx';
 
 const OWNER: Look = { shirt: 0x8fd16a, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short' };
 /** Наряды хозяина за звёзды (decor.ts, раздел «Наряд»). Должно совпадать с art/costumes.py. */
@@ -821,6 +822,8 @@ export function buildWarehouse(scene: StoreScene): void {
   scene.art(x + w - 4, doorway.y - 16, 'extinguisher').setDepth(doorway.y - 90);
   lighting.nightGlow(scene, scene.art(x + w / 2, y + 10, 'glow').setScale(40 / 64).setTint(0xfff0c8), 0.5, undefined, { store: true, map: { scale: 1.3, gain: 0.8, haze: 0.12 } });
   roomSign(scene, x, y + 7, w, t('warehouse.label'));
+  // Ломбард (game/pawnshop.ts): полка «Разное» на стене слева от таблички.
+  pawnFx.buildPawnShelf(scene);
 }
 
 export function refreshWarehouse(scene: StoreScene): void {
@@ -841,6 +844,7 @@ export function refreshWarehouse(scene: StoreScene): void {
     const y = warehouseRowY(scene, row);
     img.setPosition(scene.layout.warehouse.x + 8 + (n % WAREHOUSE_COLS) * 9, y).setTexture(`crate_${id}`).setDepth(y - 100);
   });
+  pawnFx.refreshPawnShelf(scene);
 }
 
 export function refreshToilet(scene: StoreScene): void {
