@@ -790,11 +790,6 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       card.replaceChildren(title, qualityBox(pendingBad));
       return;
     }
-    // Беда района (game/crisis.ts): решить, как торговать, — до всего остального утра, вне очереди новостей.
-    if (crisisAsk(state)) {
-      card.replaceChildren(title, crisisChoiceBox(state, (mode) => update(chooseCrisis(getState(), mode), mode === 'gouge' ? 'tap' : 'success')));
-      return;
-    }
     // Новости утра (game/headlines.ts): сюжет, повороты, итоги, истории — не больше одной за утро,
     // остальные ждут следующего. Решить срочное (спасение, банк, брак) — выше, вне очереди.
     const zarHere = inZar(state);
@@ -816,6 +811,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('zarBoss', som);
     add('contestResult', result);
     add('contestAnnounce', announce);
+    add('crisisAsk', crisisAsk(state));
     add('event', state.plan?.event && !state.plan.decided);
     add('career', careerDue(state));
     add('trick', !zarHere && trickToday(state));
@@ -858,6 +854,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     }
     if (picked.id === 'cat') {
       card.replaceChildren(title, catOfferBox(state));
+      return;
+    }
+    // Беда района (game/crisis.ts): решить, как торговать, пока она идёт.
+    if (picked.id === 'crisisAsk' && crisisAsk(state)) {
+      card.replaceChildren(title, crisisChoiceBox(state, (mode) => update(chooseCrisis(getState(), mode), mode === 'gouge' ? 'tap' : 'success')));
       return;
     }
     if (state.plan?.event && picked.id === 'event') {

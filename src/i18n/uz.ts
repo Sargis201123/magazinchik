@@ -1340,7 +1340,7 @@ export const uz: Record<TextKey, string> = {
   "goodwill.warm": "yaxshi",
   "goodwill.good": "oltinday",
   "tip.crisis.title": "Mahallada qiyin kun",
-  "tip.crisis.text": "Qiyin kunlarda kerakli mollar uch baravar tez sotiladi va ular uchun koʻproq toʻlashadi. Qanday sotishni hal qil: mahalla haftalab eslab yuradi — yaxshi nom mehmonlarga, doimiylarning choychaqasiga va sharhlarga taʼsir qiladi.",
+  "tip.crisis.text": "Qiyin kunlarda kerakli mollar uch baravar tez sotiladi va ular uchun koʻproq toʻlashadi. Mahalla har kech narxlaringga qaraydi va haftalab eslab yuradi — yaxshi nom mehmonlarga, doimiylarning choychaqasiga va sharhlarga taʼsir qiladi.",
   "review.kind.0": "Qiyin kunda bu yerda narxni oshirishmadi. Endi faqat shu yerga kelaman!",
   "review.kind.1": "Doʻkon egasi qiyin kunda foyda quvmadi, yordam berdi. Hurmat.",
   "review.greedy.0": "Qiyin kunda suvni uch baravar qimmatga sotishganini unutmayman. Uyat!",

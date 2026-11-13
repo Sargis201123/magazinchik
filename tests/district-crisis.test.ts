@@ -216,7 +216,8 @@ describe('район судит по ценникам', () => {
     const end = crisisNews(morning)!;
     expect(end.mode).toBe('gouge');
     expect(end.delta).toBe(3 * DAY_GOODWILL.gouge + END_GOODWILL.gouge);
-    expect(goodwillOf(morning)).toBe(3 * DAY_GOODWILL.gouge + END_GOODWILL.gouge + 1);
+    // Утро 63-го дня нечётное: дурное в этот день не забывается (goodwill.ts).
+    expect(goodwillOf(morning)).toBe(3 * DAY_GOODWILL.gouge + END_GOODWILL.gouge);
     // Ценники «поднять» вернулись; свою цену игрока (картошка 35) не трогаем.
     expect(morning.prices.water).toBe(shop().prices.water);
     expect(morning.prices.bread).toBe(shop().prices.bread);
@@ -252,7 +253,9 @@ describe('доброе имя района', () => {
     const s = addGoodwill(newGame(), 2);
     expect(goodwillOf(fadeGoodwill(s))).toBe(1);
     expect('goodwill' in fadeGoodwill(fadeGoodwill(s))).toBe(false);
-    expect(goodwillOf(fadeGoodwill(addGoodwill(newGame(), -3)))).toBe(-2);
+    // Дурное помнят дольше: забывают только по чётным дням.
+    expect(goodwillOf(fadeGoodwill({ ...addGoodwill(newGame(), -3), day: 40 }))).toBe(-2);
+    expect(goodwillOf(fadeGoodwill({ ...addGoodwill(newGame(), -3), day: 41 }))).toBe(-3);
     expect(fadeGoodwill(newGame())).toEqual(newGame());
   });
 
@@ -288,6 +291,17 @@ describe('утро и новости', () => {
     expect(pickNews(s, ['tale', 'crisis']).id).toBe('crisis');
     expect(pendingTip({ ...inCrisis(), seenTips: ['ownerTill'] })).toBe('crisis');
     expect(pendingTip({ ...shop(), seenTips: ['ownerTill'] })).not.toBe('crisis');
+  });
+
+  it('выбор в беду — через очередь новостей: раньше поворотов и историй, после главы сюжета; решили — карточка уходит', () => {
+    const s = inCrisis();
+    expect(pickNews(s, ['eduard', 'tale', 'crisisAsk']).id).toBe('crisisAsk');
+    expect(pickNews(s, ['story', 'crisisAsk']).id).toBe('story');
+    const shown = pickNews(s, ['crisisAsk', 'tale']).state;
+    // Ответили — выбор больше не готов, утро своё отработало: остальное ждёт завтра.
+    const after = pickNews(chooseCrisis(shown, 'give')!, ['tale']);
+    expect(crisisAsk(chooseCrisis(shown, 'give')!)).toBe(false);
+    expect(after.id).toBeNull();
   });
 
   it('смена дня: вечером район судит, утром беда идёт дальше', () => {

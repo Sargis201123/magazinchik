@@ -68,9 +68,11 @@ export function dress(scene: StoreScene, keep: Keep): void {
       })).setDepth(-5);
     }
   } else if (c.kind === 'water') {
-    // Объявление на двери и бочка-водовоз у бордюра.
-    keep(scene.art(door.x + 15, front - 12, 'crisis_notice').setDepth(front + 1));
-    keep(scene.art(door.x + 92, top + 4, 'crisis_cistern').setOrigin(0.5, 1).setDepth(top + 4));
+    // Объявление на двери и бочка-водовоз на тротуаре — между фонарями справа от входа (streets.ts ставит
+    // их через 72 px от x = −100): у стены тесно (скамейка, доска, домик кота), на дороге — машины.
+    keep(scene.art(door.x + 14, front - 4, 'crisis_notice').setDepth(front + 1));
+    const lamp = -100 + 72 * Math.ceil((door.x + 20 + 100) / 72);
+    keep(scene.art(lamp + 36, top + 20, 'crisis_cistern').setOrigin(0.5, 1).setDepth(top + 20));
   } else if (c.kind === 'heat' && !scene.lite) {
     // Солнце бьёт в глаза: тёплый блик над кварталом, чуть дышит (марево — у погоды «жара»).
     const sun = keep(scene.art(door.x - 160, -90, 'glow'))
@@ -144,8 +146,9 @@ async function elder(scene: StoreScene, id: ProductId, delay: number, i: number)
   if (!alive()) return;
   effects.emote(scene, sprite, 'emo_heart');
   pixelFx.burst(scene, 'hearts', sprite.x, sprite.y, { fade: 1100, zoom: 1 });
-  scene.speak(sprite, 16, t(`crisis.thanks.${i % 3}` as TextKey));
   sound.thanks(sprite.x, false);
+  // Спасибо — чуть позже сердечка: иначе значок над головой закрывает первые буквы.
+  scene.time.delayedCall(600, () => alive() && scene.speak(sprite, 16, t(`crisis.thanks.${i % 3}` as TextKey)));
   await scene.wait(1500);
   if (!alive()) return;
   await persons.walkVia(scene, sprite, [{ x: door.x, y: door.y - 10 }, { x: door.x, y: h + 16 }], 26);

@@ -1328,7 +1328,7 @@ export const tr: Record<TextKey, string> = {
   "goodwill.warm": "iyi",
   "goodwill.good": "altın gibi",
   "tip.crisis.title": "Mahallede zor günler",
-  "tip.crisis.text": "Zor günler sürerken temel ürünler üç kat hızlı satılır ve insanlar daha fazla öder. Nasıl satacağına karar ver: mahalle haftalarca unutmaz — iyi adın müşterileri, müdavimlerin bahşişini ve yorumları etkiler.",
+  "tip.crisis.text": "Zor günler sürerken temel ürünler üç kat hızlı satılır ve insanlar daha fazla öder. Mahalle her akşam etiketlerine bakar ve haftalarca unutmaz — iyi adın müşterileri, müdavimlerin bahşişini ve yorumları etkiler.",
   "review.kind.0": "Zor günde burada fiyatları şişirmediler. Artık sadece buraya geliyorum!",
   "review.kind.1": "Dükkân sahibi zor günde kazanç peşine düşmedi, yardım etti. Saygılar.",
   "review.greedy.0": "Zor günde suyu üç katına sattıklarını unutmadım. Ayıp!",

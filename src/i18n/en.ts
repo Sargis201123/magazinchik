@@ -1344,7 +1344,7 @@ export const en: Record<TextKey, string> = {
   "goodwill.warm": "good",
   "goodwill.good": "golden",
   "tip.crisis.title": "Trouble in the district",
-  "tip.crisis.text": "While the trouble lasts, essentials sell three times faster and people pay more for them. Decide how to trade: the district remembers for weeks — your good name affects guests, regulars' tips and reviews.",
+  "tip.crisis.text": "While the trouble lasts, essentials sell three times faster and people pay more for them. Every evening the district looks at your price tags and remembers for weeks — your good name affects guests, regulars' tips and reviews.",
   "review.kind.0": "They didn't hike prices here when times were hard. This is my only shop now!",
   "review.kind.1": "The owner didn't cash in on a hard day — he helped. Respect.",
   "review.greedy.0": "I remember them selling water at triple price during the crisis. Shameful!",

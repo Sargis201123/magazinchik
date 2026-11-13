@@ -24,6 +24,8 @@ export const NEWS_IDS = [
   // в сохранении снимает normalizeNews.
   'contestResult',
   'contestAnnounce',
+  // Беда района началась (crisis.ts): как торговать, пока она идёт (13.11).
+  'crisisAsk',
   'event',
   'career',
   'trick',
@@ -52,6 +54,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   zarBoss: 'main',
   contestResult: 'timed',
   contestAnnounce: 'timed',
+  crisisAsk: 'timed',
   event: 'timed',
   career: 'timed',
   trick: 'timed',
@@ -69,8 +72,9 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
 /**
  * Что пропадёт, если не показать сегодня: решение дня (событие, пакость конкурента) — завтра у дня
  * своё. Такое идёт раньше главных поворотов (кроме главы сюжета): поворот подождёт до завтра, а это — нет.
+ * Беда района (crisisAsk) — туда же: она идёт три-четыре дня, и каждый день без решения — день «как обычно».
  */
-export const TODAY_ONLY: ReadonlySet<NewsId> = new Set<NewsId>(['event', 'trick']);
+export const TODAY_ONLY: ReadonlySet<NewsId> = new Set<NewsId>(['event', 'trick', 'crisisAsk']);
 
 /** Сколько новостей за утро (глава сюжета не в счёт). */
 export const NEWS_PER_MORNING = 1;

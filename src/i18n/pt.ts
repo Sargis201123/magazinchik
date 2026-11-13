@@ -1341,7 +1341,7 @@ export const pt: Record<TextKey, string> = {
   "goodwill.warm": "bom",
   "goodwill.good": "de ouro",
   "tip.crisis.title": "Problemas no bairro",
-  "tip.crisis.text": "Enquanto dura o problema, o básico vende três vezes mais rápido e pagam mais por ele. Decida como vender: o bairro lembra por semanas — seu bom nome muda os clientes, as gorjetas dos fiéis e as avaliações.",
+  "tip.crisis.text": "Enquanto dura o problema, o básico vende três vezes mais rápido e pagam mais por ele. Toda noite o bairro olha seus preços e lembra por semanas — seu bom nome muda os clientes, as gorjetas dos fiéis e as avaliações.",
   "review.kind.0": "Aqui não subiram os preços na hora difícil. Agora só compro aqui!",
   "review.kind.1": "O dono não lucrou num dia difícil — ajudou. Respeito.",
   "review.greedy.0": "Lembro que vendiam água pelo triplo na crise. Que vergonha!",

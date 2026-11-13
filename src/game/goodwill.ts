@@ -7,7 +7,7 @@
 import type { StoreState } from './economy';
 
 export const GOODWILL_MAX = 100;
-/** Каждое утро доброе имя на столько ближе к нулю: −30 после жадной беды забывают примерно за месяц. */
+/** Каждое утро доброе имя на столько ближе к нулю (дурное — через утро): −30 после жадной беды забывают за два месяца. */
 export const GOODWILL_FADE = 1;
 /**
  * Гости: каждая единица — 0,15% (на +100 гостей на 15% больше, на −100 — на 15% меньше). После жадной беды
@@ -36,10 +36,13 @@ export function addGoodwill(state: StoreState, delta: number): StoreState {
   return { ...state, goodwill: next };
 }
 
-/** Утро: район понемногу забывает — и хорошее, и плохое. */
+/**
+ * Утро: район понемногу забывает — и хорошее, и плохое. Дурное помнят вдвое дольше (шаг через день):
+ * так нажиться на беде — деньги сейчас, а косые взгляды — месяца на два (13.11, автор: «район помнит»).
+ */
 export function fadeGoodwill(state: StoreState): StoreState {
   const g = goodwillOf(state);
-  if (!g) return state;
+  if (!g || (g < 0 && state.day % 2)) return state;
   return addGoodwill(state, -Math.sign(g) * Math.min(GOODWILL_FADE, Math.abs(g)));
 }
 
