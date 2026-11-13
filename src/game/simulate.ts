@@ -116,6 +116,7 @@ import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, next
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft, ownerTiming } from './owner';
+import { rhythmSeconds } from './tillRhythm';
 
 export { rng };
 
@@ -338,7 +339,8 @@ const OWNER_SECONDS_PER_GUEST = 2.5;
 function serveCapacity(state: StoreState): { total: number; owner: number; kiosk: number } {
   // Старая касса иногда заедает — в среднем столько секунд на покупателя.
   const jam = registerJam(state) * REGISTER_JAM_SECONDS;
-  const owner = checkoutSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
+  // Хозяин пробивает в ритме (tillRhythm.ts, 13.11): средний игрок — то в такт, то с лишним проездом товара.
+  const owner = rhythmSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
   const share = ownerAtRegister(state.level);
   const ownerCap = Math.floor((DAY_SECONDS * share) / owner);
   const cashierCap = (m: StaffMember, part: number) =>

@@ -521,6 +521,8 @@ export class Hud {
     row(t('summary.spoiled'), stats.spoiled);
     if (stats.nightRevenue) row(t('summary.night'), `+${stats.nightRevenue} 💰`);
     if (stats.seriesTips) row(t('summary.seriesTips'), `+${stats.seriesTips} 💰`);
+    // Касса в ритме (13.11): сколько товаров ленты пробито «Идеально» — видно, растёт ли рука.
+    if (stats.beats) row(t('summary.rhythm'), t('summary.rhythmOf', { n: stats.perfects ?? 0, all: stats.beats }));
     if (stats.rushBonus) row(t('summary.rushBonus'), `+${stats.rushBonus} 💰`);
     if (stats.stolen) row(t('summary.stolen'), `−${stats.stolen} 💰`);
     if (stats.caught) row(t('summary.caught'), stats.caught);
