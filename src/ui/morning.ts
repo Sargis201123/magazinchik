@@ -253,6 +253,8 @@ import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
 import { linesBox } from './lines';
+import { licenseBox, licenseNoticeBox } from './license';
+import { licenseNotice } from '../game/license';
 import { lineOfProduct } from '../game/lines';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
@@ -786,6 +788,13 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     }
     if (pendingBad) {
       card.replaceChildren(title, qualityBox(pendingBad));
+      return;
+    }
+    // Проверка лицензии вчера вечером нашла продажу подростку (game/license.ts): штраф, а то и лицензию отобрали.
+    const licenseCheck = licenseNotice(state);
+    if (licenseCheck) {
+      cue('fail', `license:${licenseCheck.day}`);
+      card.replaceChildren(title, licenseNoticeBox(licenseCheck, getState, update));
       return;
     }
     // Новости утра (game/headlines.ts): сюжет, повороты, итоги, истории — не больше одной за утро,
@@ -4332,7 +4341,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       fold('gear', gearBox(state)),
       fold('ads', adsBox(state)),
       decorBox(state),
-      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
+      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {

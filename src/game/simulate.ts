@@ -105,6 +105,7 @@ import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight 
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
+import { buyLicense, hasLicense, LICENSE_PRICE, licenseLock } from './license';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
 import { deliveryDay } from './delivery';
@@ -254,7 +255,10 @@ export type Feature =
   | 'tenants'
   // Бабушкин двор (garden.ts): ставит теплицу, докапывает грядки, сажает «яблоки и картошку» и собирает урожай
   // каждое утро — прямо на овощной прилавок.
-  | 'garden';
+  | 'garden'
+  // Лицензия на пиво и сигареты (license.ts): покупает, когда есть запас и не копит на расширение. Подросткам
+  // не продаёт (особых гостей симулятор не водит) — нарушений нет, проверки проходят чисто.
+  | 'license';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -588,6 +592,10 @@ export function simulate({
         investments += cost;
         state = buyLineTier(state, next) ?? state;
       }
+    }
+    if (features.license && !hasLicense(state) && !licenseLock(state) && state.money >= LICENSE_PRICE + reserve * 2 && canSplurge(LICENSE_PRICE)) {
+      investments += LICENSE_PRICE;
+      state = buyLicense(state) ?? state;
     }
     // Радио: купить, когда есть запас; со сладостями у кассы — хиты, иначе ретро.
     if (features.radio) {

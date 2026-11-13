@@ -5,8 +5,9 @@ import { nextStoreLevel, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } 
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount } from './registers';
+import { hasLicense } from './license';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'license';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -44,6 +45,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['oven', (s) => hasUpgrade(s, 'oven')],
   ['coffee', (s) => hasUpgrade(s, 'coffee')],
   ['nightShift', (s) => hasUpgrade(s, 'nightShift')],
+  // Лицензия на пиво и сигареты (license.ts): наутро после покупки — где товар и чего делать нельзя.
+  ['license', hasLicense],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -58,6 +61,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   oven: '🥖',
   coffee: '☕',
   nightShift: '🌙',
+  license: '🔞',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */
