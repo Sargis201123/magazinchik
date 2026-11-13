@@ -14,11 +14,13 @@ type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') 
 /** Заголовок, имя и текст эха — общие для карточки утра и разговора в зале. */
 export function echoTexts(entry: EchoEntry): { head: string; name: string; text: string; portrait: string } {
   const d = ECHOES[entry.id];
+  // Эхо не из сценки (plantEcho других историй) — свои заголовок и имя, портрет по ключу героя.
+  const from = d.skit ? `skit.${d.skit}` : `echo.${entry.id}`;
   return {
-    head: t('echo.head', { icon: d.icon, title: t(`skit.${d.skit}.title` as TextKey) }),
-    name: t(`skit.${d.skit}.cast.${d.who}` as TextKey),
+    head: t('echo.head', { icon: d.icon, title: t(`${from}.title` as TextKey) }),
+    name: t((d.skit ? `${from}.cast.${d.who}` : `${from}.name`) as TextKey),
     text: t(`echo.${entry.id}` as TextKey, entry.data),
-    portrait: skitPortrait(d.skit, d.who, d.mood),
+    portrait: d.skit ? skitPortrait(d.skit, d.who, d.mood) : `portrait_${d.who}`,
   };
 }
 

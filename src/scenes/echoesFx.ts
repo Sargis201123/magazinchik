@@ -47,7 +47,7 @@ export async function runEchoVisit(scene: StoreScene, entry: EchoEntry): Promise
   const { door, sellerHome } = scene.layout;
   const world = scene.worldGen;
   const start = visitors.streetSpawn(scene);
-  const guest = persons.makePerson(scene, start.x, start.y, (VISIT_LOOK[entry.id] ?? (() => LOOK[d.skit]()))());
+  const guest = persons.makePerson(scene, start.x, start.y, (VISIT_LOOK[entry.id] ?? (() => (d.skit ? LOOK[d.skit]() : randomLook(0x5a6988))))());
   // Что принёс — в руках (art/echoes.py).
   if (d.item) guest.add(scene.art(5, 2, d.item));
   const alive = () => guest.active && scene.worldGen === world;
@@ -122,7 +122,7 @@ function talk(scene: StoreScene, entry: EchoEntry, gain: string, done: () => voi
       portrait,
       name,
       text: `«${text}»`,
-      pitch: PITCH[SKITS[d.skit].cast[d.who] ?? ''] ?? 500,
+      pitch: PITCH[(d.skit && SKITS[d.skit].cast[d.who]) || d.who] ?? 500,
       after: gain ? [el('div', 'ui-gift-reward', gain)] : [],
       nextLabel: t('skit.back'),
       onNext: () => {

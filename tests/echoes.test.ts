@@ -280,8 +280,13 @@ describe('эхо: тексты и герои', () => {
     for (const id of ECHO_IDS) {
       const d = ECHOES[id];
       expect(keys[`echo.${id}`], id).toBeTruthy();
-      expect(SKITS[d.skit].cast[d.who], `${id}: ${d.who}`).toBeTruthy();
-      expect(keys[`skit.${d.skit}.cast.${d.who}`], `${id}: имя`).toBeTruthy();
+      if (d.skit) {
+        expect(SKITS[d.skit].cast[d.who], `${id}: ${d.who}`).toBeTruthy();
+        expect(keys[`skit.${d.skit}.cast.${d.who}`], `${id}: имя`).toBeTruthy();
+      } else {
+        // Эхо других историй (plantEcho): свои заголовок и имя.
+        expect(keys[`echo.${id}.title`] && keys[`echo.${id}.name`], `${id}: заголовок и имя`).toBeTruthy();
+      }
       if (d.choices.length > 1) d.choices.forEach((_, i) => expect(keys[`echo.${id}.${i}`], `${id}.${i}`).toBeTruthy());
     }
   });
