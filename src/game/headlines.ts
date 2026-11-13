@@ -42,6 +42,8 @@ export const NEWS_IDS = [
   'zarTale',
   'careerLeft',
   'arc',
+  // Эхо решений (echoes.ts): герой сценки вернулся через недели — ждёт, сколько нужно.
+  'echo',
 ] as const;
 export type NewsId = (typeof NEWS_IDS)[number];
 
@@ -75,6 +77,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   zarTale: 'flavour',
   careerLeft: 'flavour',
   arc: 'flavour',
+  echo: 'flavour',
 };
 
 /**

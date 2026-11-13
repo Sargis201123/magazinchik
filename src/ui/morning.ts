@@ -197,6 +197,8 @@ import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy'
 import { premiumDecor, restartGame } from '../game/restart';
 import { answerTale, canChoose, taleToday, TALES } from '../game/tales';
 import { arcBox, arcLines } from './arcs';
+import { echoBox, echoLines } from './echoes';
+import { echoNews } from '../game/echoes';
 import { mailBox, takeQuietly } from './mail';
 import { MAIL_EVENT } from './mailbag';
 import { arcToday } from '../game/arcs';
@@ -830,6 +832,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('zarTale', zarTale);
     add('careerLeft', state.career?.left);
     add('arc', !zarHere && arcToday(state));
+    add('echo', !zarHere && echoNews(state));
     const picked = pickNews(state, ready);
     // Первого гостя ломбарда показали — дальше он приходит как все, даже без ответа (game/pawnshop.ts pawnMet).
     const met = picked.id === 'pawn' ? pawnMet(picked.state) : picked.state;
@@ -988,6 +991,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...weekSoonLine(state),
       ...(zarHere ? [] : districtLines(state)),
       ...(zarHere ? [] : arcLines(state)),
+      ...(zarHere ? [] : echoLines(state)),
       ...(zarHere ? [] : trickLines(state)),
       ...nightGuestLines(state),
     );
@@ -2050,6 +2054,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       }
       case 'arc':
         return arcBox(state, getState, update);
+      case 'echo':
+        return echoBox(state, getState, update);
       case 'career':
         return careerBox(state, 'offer');
       case 'careerLeft':

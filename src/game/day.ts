@@ -33,6 +33,7 @@ import { legacyGuests } from './legacy';
 import { taleGuests, talesMorning } from './tales';
 import { skitGuests } from './skits';
 import { caseGuests, caseMorning } from './cases';
+import { echoGuests } from './echoes';
 import { arcGuests, arcsMorning } from './arcs';
 import { addPassXp } from './pass';
 import { rushGuests } from './rush';
@@ -166,6 +167,7 @@ export const guestFactor = (state: StoreState): number =>
   legacyGuests(state) *
   taleGuests(state) *
   skitGuests(state) *
+  homeOnly(state, echoGuests) *
   homeOnly(state, arcGuests) *
   rushGuests(state) *
   priceAppeal(state) *
