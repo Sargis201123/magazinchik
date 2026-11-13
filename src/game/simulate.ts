@@ -3,6 +3,7 @@
 // Запуск: npm run sim
 
 import { noThieves } from './firstday';
+import { ownerCatch } from './thiefTells';
 import { grantPets, petItem, type PetId } from './pets';
 import { noteLost } from './losses';
 import { isBroke } from './tips';
@@ -82,6 +83,7 @@ import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from '
 import { restockPlan } from './restock';
 import { addBed, bedsOf, buildGarden, GARDEN_PRICE, harvest, nextBedCost, plant, type CropId } from './garden';
 import { freeRooms, giveTenant, invitePitch, rentRoom, TENANT_IDS, TENANTS, tenantAsks, tenantsOf, upgradeCost as tenantUpCost, upgradeTenant } from './tenants';
+import { pawnOffer, refusePawn, takePawn } from './pawnshop';
 import { buyLine } from './reorder';
 import { bigDaySeed, setBigDaySeed } from './bigday';
 import { autoActive, autoArrived, autoMorning, autoTopUp, autoAvailable, autoToggle } from './autoorder';
@@ -117,6 +119,7 @@ import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, next
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft, ownerTiming } from './owner';
+import { rhythmSeconds } from './tillRhythm';
 
 export { rng };
 
@@ -256,6 +259,8 @@ export type Feature =
   // Бабушкин двор (garden.ts): ставит теплицу, докапывает грядки, сажает «яблоки и картошку» и собирает урожай
   // каждое утро — прямо на овощной прилавок.
   | 'garden'
+  // Ломбард (pawnshop.ts): берёт вещь у гостя со спокойной приметой, если в кассе с запасом; суетливым отказывает.
+  | 'pawn'
   // Ученик (apprentice.ts): берёт, когда просится; ставит по кругу на кассу, склад и в зал, раз в неделю —
   // выходной, стипендию платит, хвалит, когда можно (так выпускник — друг).
   | 'apprentice';
@@ -342,7 +347,8 @@ const OWNER_SECONDS_PER_GUEST = 2.5;
 function serveCapacity(state: StoreState): { total: number; owner: number; kiosk: number } {
   // Старая касса иногда заедает — в среднем столько секунд на покупателя.
   const jam = registerJam(state) * REGISTER_JAM_SECONDS;
-  const owner = checkoutSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
+  // Хозяин пробивает в ритме (tillRhythm.ts, 13.11): средний игрок — то в такт (быстрее), то как прежде.
+  const owner = rhythmSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
   const share = ownerAtRegister(state.level);
   const ownerCap = Math.floor((DAY_SECONDS * share) / owner);
   const cashierCap = (m: StaffMember, part: number) =>
@@ -788,6 +794,10 @@ export function simulate({
       state = invitePitch(state) ?? state;
       for (const ask of tenantAsks(state)) state = giveTenant(state, ask.id)?.state ?? state;
     }
+    if (features.pawn) {
+      const offer = pawnOffer(state);
+      if (offer) state = (offer.tell === 'calm' && state.money >= offer.lent + reserve * 2 ? takePawn(state) : null) ?? refusePawn(state);
+    }
 
     // ---------- Утро: закупка ----------
     const sellable = sellableProducts(state);
@@ -1005,13 +1015,16 @@ export function simulate({
     const runGuests = (count: number, tolerance: number, cap: number, night: boolean) => {
     for (let g = 0; g < count; g++) {
       if (!noThieves(state) && random() < thiefChance(state.level) * cameraTheft(state) * eyeTheft(state)) {
-        // Вор берёт товар; его ловит охранник или, реже, сам игрок.
+        // Вор берёт товар; его ловит охранник или, реже, сам игрок — по повадкам (thiefTells.ts), за награду.
         const id = sellable[Math.floor(random() * sellable.length)];
         const index = shelfFor(state, id);
         const taken = index >= 0 ? takeFromShelf(state, index, id) : null;
         if (!taken) continue;
-        const caught = random() < (guard ? guardCatchChance(guard) : 0.3);
+        const caught = random() < (guard ? guardCatchChance(guard) : ownerCatch(state));
         state = caught ? returnToShelf(taken.state, [{ id, unit: taken.unit }]) : taken.state;
+        // Награду за пойманного (thiefTells.ts OWNER_BOUNTY) симулятор не начисляет (13.11): это мелочь — десятки
+        // 💰 в день против тысяч выручки, — а лишние монеты сдвигают пороги покупок, и пороговые проверки
+        // баланса (tests/weeks, tests/balanceZar) уезжают от шума, а не от игры. Важное — доля пойманных — учтено.
         if (caught) stats.caught++;
         else stats.stolen += unitSalePrice(state, id, taken.unit);
         continue;

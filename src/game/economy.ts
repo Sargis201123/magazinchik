@@ -358,6 +358,8 @@ export interface StaffMember {
   friend?: { id: number; name: string };
   /** Сын Светы на летней подработке (arcs.ts): уйдёт учиться в конце лета. */
   summer?: boolean;
+  /** Герой сценки на работе (echoes.ts, Денис-грузчик): ключ текста с его именем — вместо имени из списка. */
+  alias?: string;
   /** Карьера (career.ts): с какого дня работает, опыт, звание, «сотрудник месяца», летопись. */
   career?: import('./career').Career;
   /** Статистика (staffStats.ts): дела за всё время, рекорд смены, пройденные метры. */
@@ -670,8 +672,12 @@ export interface StoreState {
   tales?: TalesState;
   /** Сценки дня (skits.ts): идущая история, законченные, прибавка гостей. */
   skits?: import('./skits').SkitsState;
+  /** «Дело недели» (cases.ts): идущее дело с уликами и допросами, закрытые дела, «слава района». */
+  cases?: import('./cases').CasesState;
   /** Хроники района после финала: истории постоянных, договор с кафе, летний помощник (arcs.ts). */
   arcs?: import('./arcs').ArcsState;
+  /** «Эхо решений» (echoes.ts): что вернётся через недели и прибавка (или убыль) гостей от эха. */
+  echoes?: import('./echoes').EchoesState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */
   legacy?: Legacy;
   /** Сколько должна добрая бабушка, которой дали хлеба в долг (special.ts). */
@@ -710,6 +716,8 @@ export interface StoreState {
   apprAsk?: number;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
+  /** Ломбард в подсобке (pawnshop.ts): вещи в залоге, полка «Разное», изъятое полицией. Нет поля — ещё не открывали. */
+  pawn?: import('./pawnshop').PawnState;
   /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */
   contest?: import('./contest').ContestState;
   /** Сюжет «Папа и Соня»: сколько сцен показано (drama.ts). На экономику не влияет. */
@@ -797,8 +805,11 @@ export interface DayStats {
   trashCleaned: number;
   /** Самая длинная серия: покупатели, которых игрок пробил подряд, не заставив ждать у кассы (series.ts). */
   bestCombo: number;
-  /** Чаевые за серию у кассы за день (входят в revenue). */
+  /** Чаевые за серию у кассы за день (входят в revenue; с 13.11 — вместе с чаевыми за ритм, tillRhythm.ts). */
   seriesTips?: number;
+  /** Касса в ритме: сколько товаров проехало по ленте под касание и сколько из них пробито «Идеально». */
+  beats?: number;
+  perfects?: number;
   /** Премия за час пик без потерь (rushHour.ts; в revenue не входит — как награды заданий). */
   rushBonus?: number;
   /** Что заметили покупатели — для отзывов (reviews.ts). */

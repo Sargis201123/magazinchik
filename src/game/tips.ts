@@ -4,9 +4,12 @@
 import { nextStoreLevel, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } from './economy';
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
-import { registerCount } from './registers';
+import { registerCount, RELIEF_ROLE } from './registers';
+import { noThieves, quietDays } from './firstday';
+import { pawnOpen } from './pawnshop';
+import { echoesOf } from './echoes';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'appr';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'thief' | 'appr';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -36,6 +39,9 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   // Без персонала магазин выше второго помещения не тянет (в симуляторе: рейтинг 2,8, прибыль ~0).
   // Раньше 20-го дня карточку показывает вкладка «Развитие» — у кнопки расширения (soloExpandRisk).
   ['alone', (s) => s.level >= 2 && s.day >= 20 && !hasFloorStaff(s)],
+  // Воришка по повадкам (13.11, thiefTells.ts): новичку — утром первого дня, когда приходят воры (после тихих
+  // дней); старым игрокам — в первое утро после обновления: красной подсветки больше нет, ловят по приметам.
+  ['thief', (s) => s.day >= 2 && !noThieves(s)],
   ['weekly', (s) => Boolean(s.weekly)],
   ['fair', (s) => isFairDay(s.day)],
   ['loyalty', (s) => hasUpgrade(s, 'loyalty')],
@@ -44,6 +50,16 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['oven', (s) => hasUpgrade(s, 'oven')],
   ['coffee', (s) => hasUpgrade(s, 'coffee')],
   ['nightShift', (s) => hasUpgrade(s, 'nightShift')],
+  // Ломбард в подсобке (pawnshop.ts): в первое утро «Минимаркета» — вместе с первым гостем с вещью.
+  ['pawn', pawnOpen],
+  // Первое дело недели (cases.ts): как приходят улики и когда обвинять.
+  ['case', (s) => Boolean(s.cases?.open)],
+  // Касса в ритме (tillRhythm.ts, 13.11): лента включается только после этой карточки — никто не ждёт у кассы
+  // из-за правила, о котором ему не сказали. Новичку — после тихих дней (кассу он уже знает); со сменщиком
+  // хозяин за кассу не встаёт — карточка подождёт, пока касса снова не станет его.
+  ['rhythm', (s) => s.day >= 2 && !quietDays(s) && !s.staff.some((m) => m.role === RELIEF_ROLE)],
+  // Первая сценка кончилась и посадила эхо (echoes.ts): утром — что решения ещё аукнутся.
+  ['echo', (s) => echoesOf(s).list.length > 0],
   // Ученик (apprentice.ts): как только взяли — в двух словах, чем его место отличается и от чего зависит доверие.
   ['appr', (s) => Boolean(s.appr)],
 ];
@@ -60,6 +76,11 @@ export const TIP_ICONS: Record<TipId, string> = {
   oven: '🥖',
   coffee: '☕',
   nightShift: '🌙',
+  pawn: '🏷',
+  case: '🕵',
+  rhythm: '🎵',
+  echo: '🔁',
+  thief: '🕵️',
   appr: '🧢',
 };
 

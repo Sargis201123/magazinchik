@@ -55,13 +55,29 @@ export const SPRITES = [
   'honor_plate',
   'rank_senior',
   'rank_admin',
+  // Касса в ритме (art/till_rhythm.py, scenes/tillBelt.ts): окно сканера на ленте, спокойное и «жми!».
+  'belt_window',
+  'belt_window_hot',
   // Ученик (art/apprentice.py): бумажный пакет, который он пакует на кассе.
   'appr_bag',
   // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
   'tip_jar',
   'jam_splat',
+  // «Эхо решений» (art/echoes.py): что герои давних сценок приносят в зал.
+  'echo_pies',
+  'echo_diploma',
+  'echo_card',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
+  // Ломбард в подсобке (art/pawnshop.py, scenes/pawnFx.ts): полка «Разное» на стене склада, вещи и ценник.
+  'pawn_shelf',
+  'pawn_watch',
+  'pawn_guitar',
+  'pawn_bike',
+  'pawn_ring',
+  'pawn_camera',
+  'pawn_phone',
+  'pawn_tag',
   // Праздники по календарю (art/holidays.py): вещи за открытки и новогодний набор за звёзды.
   'holiday_tree',
   'holiday_ship',
@@ -99,6 +115,9 @@ export const SPRITES = [
   'bobik_sit1',
   'bobik_bark',
   'kennel',
+  // Воришка по повадкам (art/thief_tells.py, scenes/thiefTells.ts): камеры берут вора в рамку, над ним — значок камеры.
+  'tell_cam',
+  'tell_frame',
   // Гипермаркет «Гигант» за дорогой (art/giant.py).
   'giant_site',
   'giant_store',
@@ -553,6 +572,11 @@ export const SPRITES = [
   'zar_willow',
   'zar_tourboat',
   'zar_fish_sign',
+  // Улики «Дела недели» в зале (art/cases.py, scenes/caseFx.ts): чек, камера, находка, разговор у кассы.
+  'clue_receipt',
+  'clue_camera',
+  'clue_find',
+  'clue_talk',
 ];
 
 /**

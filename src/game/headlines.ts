@@ -27,6 +27,8 @@ export const NEWS_IDS = [
   'event',
   'career',
   'trick',
+  'pawn',
+  'case',
   // Ученик открыл свою лавку (apprentice.ts): итог сезона учёбы — друг или конкурент.
   'apprOut',
   // Для души: истории района и постоянных.
@@ -40,6 +42,8 @@ export const NEWS_IDS = [
   'zarTale',
   'careerLeft',
   'arc',
+  // Эхо решений (echoes.ts): герой сценки вернулся через недели — ждёт, сколько нужно.
+  'echo',
 ] as const;
 export type NewsId = (typeof NEWS_IDS)[number];
 
@@ -57,6 +61,12 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   event: 'timed',
   career: 'timed',
   trick: 'timed',
+  // Гость с вещью в ломбард (pawnshop.ts, 13.11): решение дня, завтра придёт другой (или никто). Не «только сегодня»:
+  // гость приходит в треть утр, и ставить его выше главных поворотов незачем — в утро поворота он просто не придёт.
+  pawn: 'timed',
+  // «Дело недели» (cases.ts, 13.11): открылось, пятница — обвинять, ушло в архив. Не «только сегодня»: пятничную
+  // карточку перебил поворот — обвинить можно и со строчки дела в утре.
+  case: 'timed',
   apprOut: 'timed',
   tale: 'flavour',
   life: 'flavour',
@@ -67,6 +77,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   zarTale: 'flavour',
   careerLeft: 'flavour',
   arc: 'flavour',
+  echo: 'flavour',
 };
 
 /**

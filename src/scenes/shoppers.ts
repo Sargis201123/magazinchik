@@ -57,7 +57,8 @@ import type { Point } from './layout';
 import { personGlow } from './halo';
 import { CLASH_FACTOR } from '../game/neighbors';
 import { smellChance } from '../game/rot';
-import { seriesAfter, seriesLost, seriesTip } from '../game/series';
+import { seriesAfter, seriesLost } from '../game/series';
+import { beltPlan, beltRest, rhythmOn, RHYTHM_PACE, tillTip } from '../game/tillRhythm';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
 import { eyeTheft, ownerTiming } from '../game/owner';
 import { radioPatience, radioTolerance } from '../game/radio';
@@ -71,6 +72,7 @@ import { warLeaves } from '../game/war';
 import { noteLost } from '../game/losses';
 import { fairTodayTolerance } from '../game/fair';
 import { FIRST_REGULAR, firstRegularVisit, gentleDay, noThieves, GUEST_OF_DAY_AT, guestOfDay, grannyServesAfter, grannyStays, quietDays, shelfWaits } from '../game/firstday';
+import { catchBounty, GLANCES, HONEST_GLANCE, LINGER_MS, OWNER_BOUNTY, PICK_MS, thiefPicks, trainingThief } from '../game/thiefTells';
 import {
   ART,
   LIGHT_DEPTH,
@@ -79,7 +81,6 @@ import {
   TOILET_DIRTY,
   SHIRTS,
   type Look,
-  randomLook,
   customerLook,
   nightLook,
   nightGuestLook,
@@ -108,6 +109,8 @@ import * as newcomer from './newcomer';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+import * as thiefFx from './thiefTells';
+import * as tillBelt from './tillBelt';
 
 /** Друзья в гостях: сколько за день, чаевые за уровень их магазина, подарок за угощение (как на сервере). */
 const FRIEND_VISITS = 2;
@@ -139,8 +142,7 @@ const TOILET_DIRT_PER_VISIT = 20;
 const DOOR_TURN = 16;
 /** Насколько в сторону от середины двери можно пройти проём (дверь — около 24 точек шириной). */
 const DOOR_EDGE = 8;
-/** Тёмная кофта — так игрок может заметить вора. */
-const THIEF_SHIRT = 0x45444f;
+/** К выходу вор торопится — и это тоже примета (thiefTells.ts). */
 const THIEF_SPEED = 52;
 /** Сколько кассир пробивает одного покупателя при обычной скорости. */
 const INSPECTOR_SHIRT = 0x222034;
@@ -469,7 +471,8 @@ export function spawnCustomer(
 ): void {
   const thief = !forced && !arrived && !noThieves(scene.state) && Math.random() < thiefChance(scene.state.level) * cameraTheft(scene.state) * eyeTheft(scene.state);
   const valya = !forced && !arrived && !thief && !scene.night && !scene.valyaCame && scene.state.day > 1 && Math.random() < 0.15;
-  const shirt = thief ? THIEF_SHIRT : valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
+  // Воришка по повадкам (13.11): одет как все — ни тёмной кофты, ни красного контура; выдаёт его поведение.
+  const shirt = valya ? VALYA.shirt : Phaser.Utils.Array.GetRandom(SHIRTS);
   // Блогер сегодня снимает обзор — редкие гости заходят вдвое чаще. В тихие дни новичка (firstday.ts) случайных нет:
   // редкий гость там один — «гость дня», с объявлением; второй, нечаянный, — лишний шум посреди обучения.
   const rareChance = quietDays(scene.state) ? 0 : rareGuestChance(scene.state.level) * adRareBoost(scene.state);
@@ -484,17 +487,19 @@ export function spawnCustomer(
         ? (rare.look as Look)
         : valya
           ? VALYA
-          : thief
-            ? { ...randomLook(shirt), style: 'long' as const, hair: THIEF_SHIRT }
-            : scene.night
-              ? nightLook()
+          : scene.night
+            ? nightLook()
+            : thief
+              ? customerLook(shirt, scene.state.day) // одет как все, но без коляски и собаки: с ними на дело не ходят
               : withCompanionItems(customerLook(shirt, scene.state.day));
   // Ночью — гость с характером: свой образ, свой список и реплика у входа (nightGuests.ts).
-  const nightGuest = scene.night && !forced && !arrived && !thief && !rare && !valya ? pickNightGuest(Math.random) : null;
+  // 13.11: вор ночью тоже в образе ночного гостя (и, бывает, с его репликой у входа) — иначе «тот, кто без образа»
+  // выдавал бы его. Список покупок ночного гостя ему ни к чему: берёт своё (thiefPicks).
+  const nightGuest = scene.night && !forced && !arrived && !rare && !valya ? pickNightGuest(Math.random) : null;
   if (nightGuest) look = nightGuestLook(nightGuest);
   const big = bigDayFor(scene.state.day);
   // Приехавший на машине уже одет (маска в эпидемию — ещё у машины, carCustomer).
-  if (!rare && !thief && !valya && !arrived) {
+  if (!rare && !valya && !arrived) {
     // Ремонт дороги: рабочие в касках приходят за обедом. Болезнь: почти все в масках.
     if (big === 'roadworks' && !forced && !scene.night && Math.random() < ROADWORKERS) look = { ...look, ...wearOf('builder', Math.random) };
     if (big && BIG_DAYS[big].masks && !look.face && Math.random() < MASKS) look = { ...look, face: 'medmask' };
@@ -502,7 +507,7 @@ export function spawnCustomer(
   // Гость из здания района: свой образ и свой список покупок (district.ts).
   let wants: ProductId[] | undefined = forced?.wants;
   const fromDistrict = !forced && !arrived && !rare && !thief && !valya && !scene.night ? districtGuest(scene.state, Math.random) : null;
-  if (nightGuest) {
+  if (nightGuest && !thief) {
     const sellable = sellableProducts(scene.state);
     const pool = NIGHT_GUEST_TYPES[nightGuest].wants.filter((id) => sellable.includes(id));
     if (pool.length) wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
@@ -516,7 +521,7 @@ export function spawnCustomer(
     }
   }
   // Хроники района: в праздник часть гостей нарядные, в день детей — дети с шарами (arcsFx.ts).
-  if (!forced && !arrived && !rare && !thief && !valya && !nightGuest && !fromDistrict) look = arcsFx.dressUp(scene, look);
+  if (!forced && !arrived && !rare && !valya && !nightGuest && !fromDistrict) look = arcsFx.dressUp(scene, look);
   const start = forced?.at ?? visitors.streetSpawn(scene);
   const sprite = arrived?.sprite ?? persons.makePerson(scene, start.x, start.y, look);
   if (!arrived) weatherFx.addUmbrella(scene, sprite);
@@ -551,46 +556,69 @@ export function spawnCustomer(
   const bubble = scene.art(0, -14, 'bubble').setVisible(false);
   sprite.add(bubble);
   const customer: Customer = { sprite, bubble, items: [], unhappy: false, waitStart: 0, gone: false, thief, rare: rare?.id, wants, first: forced?.first, car: arrived?.car };
-  // Вора без охранника видно по красному контуру — его можно поймать касанием. Редкий гость — в золотом.
-  if (thief && !scene.workers.has('guard')) personGlow(scene, sprite, 0xe43b44, 3);
+  // Редкий гость — в золотом контуре. Вор — без контура (13.11): только самый первый, учебный, подсвечен красным,
+  // пока игрок не поймал ни одного, — видно, как ведёт себя воришка (thiefTells.ts trainingThief).
+  if (thief && !scene.workers.has('guard') && trainingThief(scene.state, scene.stats.caught)) {
+    customer.training = true;
+    personGlow(scene, sprite, 0xe43b44, 3);
+  }
   if (rare) personGlow(scene, sprite, 0xfee761, 3);
   scene.customers.add(customer);
-  if (thief) {
-    // Вора можно поймать касанием.
-    sprite.setSize(16, 22).setInteractive({ useHandCursor: true }).on('pointerup', () => camera.tap(scene, () => catchThief(scene, customer, 'owner')));
-    void runThief(scene, customer);
-  } else {
-    void runCustomer(scene, customer);
-  }
+  // Любого незнакомого покупателя в зале можно заподозрить касанием (друзья, постоянные и редкие гости — свои).
+  if (!rare && !forced?.first) thiefFx.suspectable(scene, customer);
+  void (thief ? runThief(scene, customer) : runCustomer(scene, customer));
 }
 
 // ---------- Воры ----------
 
+/**
+ * Воришка по повадкам (13.11, game/thiefTells.ts): у входа на него рычит Бобик; у полки он, как все, «думает» о
+ * товаре, но оглядывается, у самого дорогого стоит подолгу и прячет взятое в карман; потом — мимо кассы к выходу.
+ * Камеры берут его в рамку. Касание, пока он ходит по полкам, — пойман (thiefTells.ts suspect).
+ */
 export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
   const { door } = scene.layout;
   await persons.walkVia(scene, c.sprite, [
     { x: door.x, y: scene.streetY },
     { x: door.x, y: door.y - 10 },
   ]);
-  // С тележкой у входа покупатель иногда берёт что-то сверх списка.
-  const wanted = scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + adExtraItems(scene.state, Math.random) + saleExtraItems(scene.state, Math.random));
-  for (const id of wanted) {
+  if (c.gone) return;
+  thiefFx.growl(scene, c);
+  if (c.training) thiefFx.teach(scene, c);
+  // Касанием его можно заподозрить ровно тогда же, когда и честного: с порога и пока ходит по полкам (13.11).
+  c.browsing = true;
+  const picks = thiefPicks(scene.state, scene.wanted(Phaser.Math.Between(1, 2)));
+  for (const [n, id] of picks.entries()) {
     const index = shelfFor(scene.state, id);
-    // Ларь у кассы на виду — вор туда не идёт.
-    if (index < 0 || c.gone || scene.state.shelves[index].kind === 'icebox') continue;
+    if (index < 0 || c.gone) continue;
     const stand = shelves.standOf(scene, index);
     await persons.walk(scene, c.sprite, stand.x + Phaser.Math.Between(-8, 8), stand.y);
     if (c.gone) return;
-    await scene.wait(400);
+    // Взялся за своё у полки — теперь о нём можно сказать подсказкой (thiefTells.ts sneakingThief).
+    c.sneaking = true;
+    // Облачко с товаром — как у всех: вора выдаёт не оно, а то, что он делает.
+    const thought = motion.think(scene, c.sprite, id);
+    thiefFx.camFlash(scene, c, 2);
+    await thiefFx.glance(scene, c, GLANCES);
+    // Первым идёт самое дорогое — у него стоит подолгу, ждёт, пока никто не смотрит.
+    if (!c.gone) await scene.wait(n === 0 ? LINGER_MS : PICK_MS);
+    motion.endThought(scene, thought, false);
+    if (c.gone) return;
+    const from = thiefFx.spotOnShelf(scene, index, id);
     const taken = takeFromShelf(scene.state, index, id);
-    if (taken && !c.gone) {
-      scene.state = taken.state;
-      c.items.push({ id, unit: taken.unit });
-      scene.refreshShelves();
-    }
+    if (!taken) continue;
+    scene.state = taken.state;
+    c.items.push({ id, unit: taken.unit });
+    scene.refreshShelves();
+    thiefFx.pocket(scene, c, from);
+    await scene.wait(450);
+    if (c.gone) return;
   }
   if (c.gone) return;
-  // Мимо кассы — сразу к выходу.
+  // Мимо кассы — сразу к выходу. Полки позади: касанием его уже не взять, как и честного по пути к кассе, —
+  // иначе «кто идёт к двери и нажимается, тот и вор». Дальше ловят охранник и Бобик.
+  c.browsing = false;
+  c.sneaking = false;
   await persons.walk(scene, c.sprite, door.x, door.y - 10, THIEF_SPEED);
   if (c.gone) return;
   const guard = scene.workers.get('guard');
@@ -622,6 +650,8 @@ export async function runThief(scene: StoreScene, c: Customer): Promise<void> {
 export function catchThief(scene: StoreScene, c: Customer, by: 'owner' | 'guard' | 'dog'): void {
   if (c.gone || !scene.running) return;
   c.sprite.disableInteractive();
+  // Награда — только с поличным (thiefTells.ts catchBounty): у порога, с пустыми руками, вор просто уходит.
+  const bounty = by === 'owner' && c.items.length > 0;
   scene.state = returnToShelf(scene.state, c.items);
   c.items = [];
   scene.refreshShelves();
@@ -630,7 +660,13 @@ export function catchThief(scene: StoreScene, c: Customer, by: 'owner' | 'guard'
   if (by === 'guard') staff.credit(scene, 'guard');
   haptic.success();
   sound.good();
-  scene.popup(c.sprite.x, c.sprite.y - 14, t(by === 'guard' ? 'popup.guardCaught' : by === 'dog' ? 'popup.dogCaught' : 'popup.thiefCaught'), '#c8ffb0');
+  // Сам хозяин заметил по повадкам — награда (thiefTells.ts): ловить теперь труднее, а ошибка стоит обиды.
+  if (bounty) {
+    scene.state = catchBounty(scene.state, 1);
+    effects.tipCoins(scene, c.sprite);
+  }
+  const text = bounty ? `${t('popup.thiefCaught')} +${OWNER_BOUNTY} 💰` : t(by === 'owner' ? 'popup.thiefCaught' : by === 'guard' ? 'popup.guardCaught' : 'popup.dogCaught');
+  scene.popup(c.sprite.x, c.sprite.y - 14, text, '#c8ffb0');
   void leave(scene, c);
 }
 
@@ -655,6 +691,8 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     const along = !fixture && slotSide(scene.layout, shelves.spotOf(scene, index)) ? 'y' : 'x';
     const jitter = Phaser.Math.Between(-8, 8) * (fixture ? 0.4 : 1);
     await persons.walk(scene, c.sprite, stand.x + (along === 'x' ? jitter : 0), stand.y + (along === 'y' ? jitter : 0));
+    // Иной честный тоже разок оглянется (thiefTells.ts HONEST_GLANCE): вора выдаёт не одна примета, а все вместе.
+    if (!c.gone && !noThieves(scene.state) && Math.random() < HONEST_GLANCE) void thiefFx.glance(scene, c, 1);
     await scene.wait(500);
     // Пока шёл — магазин захватили (или ушёл по другой причине): к полке уже не тянется.
     if (c.gone) {
@@ -697,6 +735,8 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     scene.speak(c.sprite, 20, t(c.hello === 'meet' ? 'first.regularMeet' : 'first.regularBack', { name: t(regularById(c.regular!).nameKey), shop: scene.shopTitle() }));
   } else if (c.regular) scene.popup(c.sprite.x, c.sprite.y - 20, t('regular.hello', { name: t(regularById(c.regular).nameKey) }), '#fff3b0');
   if (c.friend) scene.popup(c.sprite.x, c.sprite.y - 20, t('visit.hello', { name: c.friend.name }), '#fee761');
+  // Пока ходит по полкам — его можно заподозрить касанием (thiefTells.ts); у кассы, кофе, в туалете — нет.
+  c.browsing = true;
   await building.visitBargain(scene, c);
   if (c.gone) return;
   // Соседняя полка-пара: взяв хлеб, заодно берут и молоко (один раз за покупку).
@@ -716,6 +756,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
     await visit(extra.id, extra.index);
     if (c.gone) return;
   }
+  c.browsing = false;
 
   if (!c.first && Math.random() < TRASH_CHANCE) staff.dropTrash(scene, c.sprite.x, c.sprite.y);
   if (c.regular) regularVerdict(scene, c);
@@ -984,15 +1025,35 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
   while (scene.blackout && scene.sys.isActive()) await scene.wait(250);
   // В блэкаут на весь район касса считает вручную — медленнее.
   const manual = scene.powerCut ? BLACKOUT_CHECKOUT : 1;
-  r.scan = { start: scene.time.now, total: checkoutSeconds(timing, c.items.length) * 1000 * manual, byOwner };
+  // Касса в ритме (game/tillRhythm.ts, 13.11): пробивает сам игрок — первые товары едут по ленте под касание.
+  // Не за бабушку и не в блэкаут (сканер стоит, считают вручную); не на ×2 и не в спешке закрытия — там зал
+  // бежит быстрее, и такт стал бы неловимым. Лента — только после карточки «Новое» (rhythmOn).
+  // Совсем быстрому хозяину ленты нет (taps 0): товар не успел бы доехать до луча быстрее, чем он пробивает сам.
+  const belt = byOwner && !by && !scene.powerCut && scene.speed === 1 && scene.timeLeft > 0 && c.items.length && rhythmOn(scene.state) ? beltPlan(timing, c.items.length) : null;
+  const plan = belt?.taps ? belt : null;
+  r.scan = { start: scene.time.now, total: checkoutSeconds(timing, c.items.length) * 1000 * manual, byOwner, rhythm: Boolean(plan) };
   const { counter } = r;
   const index = scene.registers.indexOf(r);
   // by — кто пробивает вместо хозяина у его кассы (бабушка в первый день, firstday.ts).
   const clerk = by ?? (byOwner ? scene.seller : (scene.operator(index) as Worker | null)?.sprite);
   // Товар и пакет — к тому, кто пробивает: сменщик стоит у стойки чуть выше хозяина.
   const hand = clerk?.active ? { x: clerk.x, y: clerk.y } : r.clerk;
+  let itemMs = timing.item * 1000 * manual;
+  let payMs = timing.pay * 1000;
+  if (plan) {
+    const ran = await tillBelt.runBelt(scene, r, c, plan, clerk, hand);
+    if (!ran) return;
+    c.rhythm = scene.rhythm;
+    // Что сверх ленты (больше RHYTHM_TAPS товаров) хозяин пробивает сам, как раньше, — в общем времени ленты:
+    // в такт — быстрее прежнего, иначе — не дольше прежнего (beltRest).
+    const rest = beltRest(plan, timing, c.items.length, ran.state, ran.clock);
+    const extra = c.items.length - plan.taps;
+    itemMs = extra ? Math.min(timing.item * 1000 * RHYTHM_PACE, rest / extra) : 0;
+    payMs = rest - extra * itemMs;
+  }
   for (const [n, { id }] of c.items.entries()) {
-    await scanWait(scene, r, timing.item * 1000 * manual);
+    if (plan && n < plan.taps) continue;
+    await scanWait(scene, r, itemMs);
     if (!scene.sys.isActive()) return;
     // Товар — на ленту, под красный луч сканера (вспышка), и дальше к кассиру в пакет.
     const item = scene.art(c.sprite.x, c.sprite.y - 2, `item_${id}`).setScale(2 / ART).setDepth(1000);
@@ -1027,7 +1088,7 @@ export async function scanCustomer(scene: StoreScene, r: Register, c: Customer, 
     await scene.wait(REGISTER_JAM_SECONDS * 1000);
     if (!scene.sys.isActive()) return;
   }
-  await scanWait(scene, r, timing.pay * 1000);
+  await scanWait(scene, r, payMs);
   // Пробил сам игрок: стоял за кассой (не бабушка вместо него) или торопил сменщика касаниями.
   c.byPlayer = (byOwner && !by) || (r.scan.cut ?? 0) > 0;
   r.scan = null;
@@ -1095,8 +1156,9 @@ export function ownerServedOne(scene: StoreScene): void {
 export function updateScanBar(scene: StoreScene): void {
   for (const r of scene.registers) {
     const scan = r.scan;
-    r.bar.setVisible(Boolean(scan));
-    r.fill.setVisible(Boolean(scan));
+    // В ритме полоску заменяет сама лента: сколько ехать — решают касания, а не часы.
+    r.bar.setVisible(Boolean(scan) && !scan?.rhythm);
+    r.fill.setVisible(Boolean(scan) && !scan?.rhythm);
     if (scan) r.fill.width = 16 * Math.min(1, (scene.time.now - scan.start) / scan.total);
     r.screen.setVisible(Boolean(scan));
     // У кассового аппарата нет сканера — луча нет.
@@ -1185,14 +1247,15 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   }
   const shown = where ?? (at ? { x: at.counter.x + (at === scene.registers[0] ? 8 : -8), y: at.counter.y + 0 } : { x: scene.layout.sellerHome.x - 8, y: scene.layout.sellerHome.y - 18 });
   // Серия у кассы (game/series.ts): в неё идёт только то, что пробил сам игрок. Не заставил ждать — растёт,
-  // и с третьей покупки подряд покупатель оставляет чаевые; заставил — начинается заново.
+  // и с третьей покупки подряд покупатель оставляет чаевые; заставил — начинается заново. С 13.11 к ним
+  // прибавляются чаевые за ритм (tillRhythm.ts): «Идеально» подряд на ленте, в час пик — вдвое.
   let series = 0;
   let tip = 0;
   if (c.byPlayer) {
     const before = scene.combo;
     series = scene.combo = seriesAfter(before, c.reactMs ?? 0);
     scene.stats.bestCombo = Math.max(scene.stats.bestCombo, series);
-    tip = seriesTip(series, total);
+    tip = tillTip(series, c.rhythm ?? 0, total, scene.rushNow);
     if (tip) {
       scene.state = { ...scene.state, money: scene.state.money + tip };
       scene.stats.revenue += tip;
@@ -1204,6 +1267,8 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   // Оплата — событие: искры у кассы, монеты фонтаном к счётчику, крупная сумма (в серии — больше монет и «×N»).
   effects.payBurst(scene, shown.x, shown.y, total, series);
   if (series >= 2) scene.celebrateCombo(series, tip);
+  // Серии ещё нет, а чаевые за ритм уже есть — сказать о них отдельно.
+  else if (tip) scene.popup(c.sprite.x, c.sprite.y - 26, t('popup.tip', { tip }), '#fee761');
   // Серия от пяти — весь зал оборачивается на кассу.
   if (series === 5 || series === 10) persons.everyoneLooks(scene, scene.layout.counter.x, scene.layout.counter.y, 'emo_star');
 

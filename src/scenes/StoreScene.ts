@@ -26,6 +26,7 @@ import { sound } from '../platform/sound';
 import { music } from '../platform/music';
 import type { Rect } from './paths';
 import type { Passer } from './stride';
+import type { TillBelt } from './tillBelt';
 import { ambience, type AmbLife } from '../platform/ambience';
 import { setListener } from '../platform/mixer';
 import { haptic, telegramUserId, trustedNow } from '../platform/telegram';
@@ -417,6 +418,11 @@ export class StoreScene extends Phaser.Scene {
   cullAt = '';
   /** Ночь между днями: какая доля окон в домах уже погасла (0 — все горят). */
   lightsOut = 0;
+  /**
+   * Ритуал закрытия (closingRitual.ts): свет зала выше этой y погашен (lighting.powerOn); -Infinity — день,
+   * Infinity — погашен весь зал. Утро сбрасывает; в сохранении его нет.
+   */
+  hallOffY = -Infinity;
   /** Стрелки настенных часов: идут по ходу смены с 8:00 до 20:00. */
   clockHands?: Phaser.GameObjects.Graphics;
   /** Неоновая вывеска в зале (декор), если висит, — по x: жужжит. */
@@ -561,6 +567,11 @@ export class StoreScene extends Phaser.Scene {
   valyaCame = false;
   /** Серия у кассы (game/series.ts): сколько покупателей подряд игрок пробил, не заставив ждать. */
   combo = 0;
+  /** Касса в ритме (game/tillRhythm.ts): «Идеально» подряд; лента, пока она едет (scenes/tillBelt.ts). */
+  rhythm = 0;
+  belt?: TillBelt;
+  /** Идёт час пик: чаевые за ритм вдвое (tillRhythm.ts, RUSH_RHYTHM). */
+  rushNow = false;
   nextSpawn = 1;
   running = false;
   /** Подсказка «что дальше» в зале (game/nudge.ts): когда игрок последний раз касался экрана, какая подсказка и до каких пор. */
@@ -593,7 +604,10 @@ export class StoreScene extends Phaser.Scene {
   /** Пёс Бобик у будки и таймер, который машет его хвостом. */
   bobik?: Phaser.GameObjects.Image;
   bobikWag?: Phaser.Time.TimerEvent;
-  /** Магазин закрыт на ночь (роллеты опущены): Бобик сидит настороже, у двери — сторож. */
+  /** Будка Бобика и его место у неё (pets.buildBobik): ритуал закрытия уводит его в будку, утро выводит. */
+  kennelImg?: Phaser.GameObjects.Image;
+  bobikHome?: { x: number; y: number; depth: number; door: { x: number; y: number } };
+  /** Магазин закрыт на ночь (табличка «Закрыто», роллеты): Бобик спит в будке, у двери — сторож. */
   closed = false;
   /** Рабочий день идёт (от «Открыть магазин» до итогов) — для сторожа зависаний. */
   dayOpen = false;
@@ -621,6 +635,10 @@ export class StoreScene extends Phaser.Scene {
   sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
   /** Сценка дня (skitsFx.ts): какая и где она сейчас. */
   skit: { id: import('../game/skits').SkitId; phase: 'pending' | 'here' | 'done' } | null = null;
+  /** Улика «Дела недели» в зале сегодня (caseFx.ts): какая, когда и показана ли. */
+  clue: import('./caseFx').ClueRun | null = null;
+  /** Сам caseFx.ts — грузится отдельным куском кода только в день улики (morningFlow.ts): в остальные дни он не нужен. */
+  clueFx: typeof import('./caseFx') | null = null;
   /** Праздничный гость сегодня (game/live.ts): кто, ждём / пришёл / ушёл и настоящая дата визита. */
   liveGuest: { who: GuestId; phase: 'pending' | 'here' | 'done'; date: string } | null = null;
   catHome = { x: 0, y: 0 };
@@ -951,6 +969,7 @@ export class StoreScene extends Phaser.Scene {
     }
     const rushAt = this.state.plan?.rushAt;
     const rush = !this.night && rushAt !== undefined && elapsed >= rushAt && elapsed < rushAt + RUSH_SECONDS;
+    this.rushNow = rush;
     if (rush && !this.rushAnnounced) {
       this.rushAnnounced = true;
       haptic.tap();
@@ -993,6 +1012,7 @@ export class StoreScene extends Phaser.Scene {
     const busy = this.inspector === 'here' || this.jury === 'here' || this.sonya === 'here' || this.liveGuest?.phase === 'here';
     if (!this.night && this.skit?.phase === 'pending' && elapsed >= skitsFx.SKIT_AT && this.timeLeft > 0 && !busy) void skitsFx.runSkit(this);
     if (!this.night) this.moments.tick(elapsed, deltaMs);
+    if (!this.night) this.clueFx?.tickClue(this, elapsed, deltaMs);
     weeksFx.tick(this);
 
     if (this.timeLeft > 0) {
@@ -1258,6 +1278,7 @@ export class StoreScene extends Phaser.Scene {
   private disposeWorld(): void {
     this.worldGen++;
     this.moments.clear();
+    this.clueFx?.endClue(this);
     // killAll не вызывает onStop: незаконченный шаг продавца никогда не завершится, и он
     // навсегда остался бы «занят» (не убирал бы мусор и не носил товар). Начинаем его дела заново.
     this.tweens.killAll();
@@ -1402,8 +1423,11 @@ export class StoreScene extends Phaser.Scene {
     return this.add.image(x, y, key).setScale(1 / ART);
   }
 
-  /** Открывает выполненные достижения; новые — всплывашкой по очереди. Возвращает, что открылось. */
-  checkAchievements(live: boolean): AchievementId[] {
+  /**
+   * Открывает выполненные достижения; новые — всплывашкой по очереди. Возвращает, что открылось.
+   * after — через сколько мс первая всплывашка (вечером — после ритуала закрытия, уже под итогами).
+   */
+  checkAchievements(live: boolean, after = 0): AchievementId[] {
     // Тихие дни новичка (firstday.ts): открытое днём ждёт вечера — откроется в итогах дня (строка «Достижения»),
     // а не всплывашкой поверх обучения. Сегодняшний счёт к вечеру уже в счётчиках (recordDay) — ничего не теряется.
     if (live && quietDays(this.state)) return [];
@@ -1412,7 +1436,7 @@ export class StoreScene extends Phaser.Scene {
     this.state = state;
     saveGame(state);
     unlocked.forEach((id, i) =>
-      this.time.delayedCall(i * 3800, () => {
+      this.time.delayedCall(after + i * 3800, () => {
         announceAchievement(id);
         // Значок выезжает сверху через полторы секунды — в тот же миг над продавцом вспыхивает медаль-солнце.
         if (live) this.time.delayedCall(1500, () => this.running && pixelFx.burst(this, 'sunburst', this.layout.sellerHome.x - 20, this.layout.sellerHome.y - 40, { zoom: 1 }));
