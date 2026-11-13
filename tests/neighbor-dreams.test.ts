@@ -33,7 +33,7 @@ import {
 import { MAX_LOYALTY, regularState } from '../src/game/regulars';
 import { priceFor } from '../src/game/suppliers';
 import { guestFactor, nightCycle } from '../src/game/day';
-import { pendingTip } from '../src/game/tips';
+import { pendingTip, TIP_ICONS, type TipId } from '../src/game/tips';
 import { pickNews } from '../src/game/headlines';
 import { simulate } from '../src/game/simulate';
 
@@ -132,7 +132,8 @@ describe('мечты: вложиться или «Не сейчас»', () => {
   });
 
   it('первое вложение — карточка «Новое» о том, когда ждать новостей и где список', () => {
-    const s = { ...shop(), seenTips: ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift'] };
+    // Все прочие подсказки уже видены (список — из TIP_ICONS, чтобы новые подсказки main не ломали тест).
+    const s = { ...shop(), seenTips: (Object.keys(TIP_ICONS) as TipId[]).filter((id) => id !== 'dreams') };
     expect(pendingTip(s)).toBeNull();
     expect(pendingTip(investDream(s, 'kostya')!)).toBe('dreams');
   });

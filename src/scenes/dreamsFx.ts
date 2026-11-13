@@ -20,6 +20,8 @@ import { entranceBusy, nearLamp, pitchSpot } from './tenantsFx';
 
 /** Полуширина тележки и указателя (точек мира) и где их пробовать ставить (x от двери). */
 const CART_HALF = 14;
+/** Костя стоит слева от тележки: столько ещё занимает он сам. */
+const KOSTYA_W = 8;
 const CART_SPOTS = [-56, 68, -68, 84, -84, 100, -100, 124, -124, 152, -152];
 /** Скамейка и урна у входа (streets.buildStreet: +44 и −32) — тележку на них не ставим. */
 const BENCH_BIN: [number, number][] = [
@@ -43,15 +45,13 @@ function clear(scene: StoreScene): void {
 }
 
 /**
- * Первое свободное место из списка: не на занятом и не у фонарного столба. Фонари — через 72 от −100 (streets.ts):
- * широкая тележка не должна задевать столб и краем, а не только серединой (nearLamp — для середины).
+ * Первое свободное место из списка: не на занятом и не на фонарном столбе. Фонари — через 72 от −100 (streets.ts).
+ * left/right — сколько вещь занимает влево и вправо от середины (у тележки слева стоит сам Костя): 13.11 Костя
+ * встал ровно на столб — проверяли только середину тележки.
  */
-function spot(busy: [number, number][], spots: number[], half: number, d: number): number | null {
-  const lampGap = (x: number) => {
-    const m = (((x + 100) % 72) + 72) % 72;
-    return Math.min(m, 72 - m);
-  };
-  return spots.find((dx) => busy.every(([a, b]) => dx + half <= a || dx - half >= b) && !nearLamp(d + dx) && lampGap(d + dx) > half + 2) ?? null;
+function spot(busy: [number, number][], spots: number[], left: number, right: number, d: number): number | null {
+  const lampIn = (a: number, b: number) => -100 + 72 * Math.ceil((a + 100) / 72) <= b;
+  return spots.find((dx) => busy.every(([a, b]) => dx + right <= a || dx - left >= b) && !nearLamp(d + dx) && !lampIn(d + dx - left - 2, d + dx + right + 2)) ?? null;
 }
 
 /** Нажатие на вещь — подпись над ней: что даёт сбывшаяся мечта. */
@@ -83,9 +83,9 @@ export function applyDreams(scene: StoreScene): void {
     busy.push([p.x - d - 22, p.x - d + 22]);
   }
   if (cart) {
-    const dx = spot(busy, CART_SPOTS, CART_HALF, d);
+    const dx = spot(busy, CART_SPOTS, CART_HALF + KOSTYA_W, CART_HALF, d);
     if (dx !== null) {
-      busy.push([dx - CART_HALF, dx + CART_HALF]);
+      busy.push([dx - CART_HALF - KOSTYA_W, dx + CART_HALF]);
       const x = d + dx;
       const img = scene.art(x, y + 1, 'dream_cart').setOrigin(0.5, 1).setDepth(y);
       objs.push(img);
@@ -107,7 +107,7 @@ export function applyDreams(scene: StoreScene): void {
     }
   }
   if (boat) {
-    const dx = spot(busy, SIGN_SPOTS, SIGN_HALF, d);
+    const dx = spot(busy, SIGN_SPOTS, SIGN_HALF, SIGN_HALF, d);
     if (dx !== null) {
       const sign = scene.art(d + dx, y + 1, 'dream_boat_sign').setOrigin(0.5, 1).setDepth(y);
       objs.push(sign);
