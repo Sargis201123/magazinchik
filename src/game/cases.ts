@@ -10,10 +10,11 @@
 // не обвинил — в субботу дело уходит в архив без награды.
 //
 // Всё — от дня и зерна магазина (как сценки): перезапуск дня ничего не перекатывает, симулятор не сдвигается.
-// Другие системы могут открыть дело сами (openCase: «Крыша» — о рэкете) и приколоть свою улику (pinClue).
+// Другие системы могут открыть дело сами (openCase: «Крыша» — о рэкете) и приколоть свою улику (pinClue в caseBoard.ts).
 //
-// Здесь — только то, что нужно смене дня и залу (основной файл кода). Доска, допрос, обвинение и новость утра —
-// в caseBoard.ts: их зовёт только утреннее меню, а оно грузится отдельно (13.11: предел веса кода).
+// Здесь — только то, что нужно смене дня (основной файл кода). Доска, допрос, обвинение, новость утра, нажатая
+// улика (takeClue) и чужие улики (pinClue) — в caseBoard.ts: их зовут только утреннее меню и значок улики, а они
+// грузятся отдельно (13.11: предел веса кода).
 
 import type { TextKey } from '../i18n/ru';
 import type { StoreState } from './economy';
@@ -138,13 +139,6 @@ export function openCase(state: StoreState, id: CaseId, origin: CaseOrigin): Sto
   return withCases(state, { ...s, open });
 }
 
-/** Приколоть улику из другой системы (дубли по тексту не множатся). Дело ещё не открыто — она подождёт его. */
-export function pinClue(state: StoreState, clue: Omit<ExtraClue, 'day'>): StoreState {
-  const s = casesOf(state);
-  if ((s.extra ?? []).some((c) => c.key === clue.key && c.case === clue.case)) return state;
-  return withCases(state, { ...s, extra: [...(s.extra ?? []), { ...clue, day: state.day }] });
-}
-
 /** В какой день приходит улика n: от открытия до пятницы поровну (неделя — с понедельника по четверг). */
 export const clueDay = (open: OpenCase, n: number): number => open.from + Math.floor((n * (open.due - open.from)) / open.got.length);
 
@@ -154,14 +148,6 @@ export function clueToday(state: StoreState): number | null {
   if (!open || state.day >= open.due) return null;
   const n = open.got.findIndex((g, i) => !g && clueDay(open, i) === state.day);
   return n < 0 ? null : n;
-}
-
-/** Нажали значок в зале: улика чёткая. */
-export function takeClue(state: StoreState, n: number): StoreState {
-  const open = openCaseOf(state);
-  if (!open || open.got[n] === undefined || open.got[n] === 2 || clueDay(open, n) > state.day) return state;
-  const got = open.got.map((g, i) => (i === n ? 2 : g));
-  return withCases(state, { ...casesOf(state), open: { ...open, got } });
 }
 
 export const archive = (s: CasesState, rec: CaseRecord): CasesState => {

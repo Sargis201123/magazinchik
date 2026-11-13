@@ -7,6 +7,7 @@ import type { StoreState } from './economy';
 import {
   archive,
   casesOf,
+  clueDay,
   openCaseOf,
   withCases,
   type CaseId,
@@ -178,4 +179,19 @@ const MOODY = (base: string): boolean => /^(skit_|case_)/.test(base) || base ===
 export function casePortrait(base: string, mood: 'happy' | 'sad' | 'angry' | 'surprised' | null): string {
   const m = mood === 'angry' && base === 'police' ? null : mood;
   return `portrait_${base}${m && MOODY(base) ? `_${m}` : ''}`;
+}
+
+/** Приколоть улику из другой системы (дубли по тексту не множатся). Дело ещё не открыто — она подождёт его. */
+export function pinClue(state: StoreState, clue: Omit<ExtraClue, 'day'>): StoreState {
+  const s = casesOf(state);
+  if ((s.extra ?? []).some((c) => c.key === clue.key && c.case === clue.case)) return state;
+  return withCases(state, { ...s, extra: [...(s.extra ?? []), { ...clue, day: state.day }] });
+}
+
+/** Нажали значок в зале: улика чёткая. */
+export function takeClue(state: StoreState, n: number): StoreState {
+  const open = openCaseOf(state);
+  if (!open || open.got[n] === undefined || open.got[n] === 2 || clueDay(open, n) > state.day) return state;
+  const got = open.got.map((g, i) => (i === n ? 2 : g));
+  return withCases(state, { ...casesOf(state), open: { ...open, got } });
 }

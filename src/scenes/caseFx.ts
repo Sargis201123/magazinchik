@@ -1,6 +1,6 @@
 // Улика «Дела недели» в зале (правила — game/cases.ts, доска — ui/cases.ts). В день улики посреди смены — короткий
 // момент со значком: покупатель обронил чек (у ног гостя), камера над входом что-то сняла, Бобик принёс находку
-// (нет Бобика — она лежит у порога), постоянный проговорился у кассы (значок над первым в очереди). Голубое
+// (нет Бобика — она лежит у порога), постоянный проговорился у кассы (значок сбоку от первого в очереди). Голубое
 // кольцо-таймер — не золотое, как у моментов: это не чаевые, а дело. Нажал — улика чёткая; не успел — тает без
 // штрафа, а утром улика всё равно придёт, только размытая. Улика — одна из просьб бюджета внимания дня
 // (game/attention.ts): в этот день на звонок или момент меньше. Этот файл грузится отдельно, только в день
@@ -10,8 +10,8 @@
 import Phaser from 'phaser';
 import type { StoreScene } from './StoreScene';
 import { t, type TextKey } from '../i18n';
-import { clueToday, openCaseOf, takeClue, type ClueSrc } from '../game/cases';
-import { CASES } from '../game/caseBoard';
+import { clueToday, openCaseOf, type ClueSrc } from '../game/cases';
+import { CASES, takeClue } from '../game/caseBoard';
 import { DAY_SECONDS } from '../game/economy';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
@@ -23,7 +23,9 @@ import * as liveFx from './liveFx';
 const WINDOW_MS = 6000;
 /** Зал занят дольше стольких секунд дня — улика сегодня не покажется (придёт утром, размытая). */
 const PATIENCE = 20;
-const DEPTH = 899;
+// 13.11: выше надписей и реплик (popup — 1000…1002): у кассы гость как раз заговаривает, и его пузырь
+// прятал значок — улику нельзя было заметить. Ниже зон-нажатий (2000), чтобы не перехватывать чужие касания.
+const DEPTH = 1005;
 const CYAN = 0x2ce8f5;
 const HIT = 30;
 const ICON: Record<ClueSrc, string> = { receipt: 'clue_receipt', camera: 'clue_camera', find: 'clue_find', talk: 'clue_talk' };
@@ -62,7 +64,7 @@ export function tickClue(scene: StoreScene, elapsed: number, realMs: number): vo
   }
   if (c.follow) {
     if (!c.follow.active || !c.follow.visible) c.left = 0;
-    else c.pos = { x: c.follow.x, y: c.follow.y - 24 };
+    else c.pos = beside(c.follow, c.size);
     c.icon?.setPosition(c.pos.x, c.pos.y);
   }
   if (!busy) c.left -= realMs;
@@ -99,13 +101,13 @@ function show(scene: StoreScene, c: ClueRun): void {
     if (!dog) label = 'case.hall.door';
   } else {
     c.follow = first ?? guest ?? undefined;
-    c.pos = c.follow ? { x: c.follow.x, y: c.follow.y - 24 } : { x: door.x, y: door.y - 30 };
   }
   // На дальнем плане (большой магазин целиком) значок крупнее — палец попадает всегда (как у моментов).
   const cam = scene.cameras.main;
   const canvas = scene.game.canvas;
   const css = (cam.zoom * (canvas.clientWidth || canvas.width)) / canvas.width;
   c.size = Phaser.Math.Clamp(1.8 / css, 1, 3);
+  if (src === 'talk') c.pos = c.follow ? beside(c.follow, c.size) : { x: door.x, y: door.y - 30 };
   const scale = c.size / 2;
   const icon = scene.add.image(c.pos.x, c.pos.y, ICON[src]).setScale(scale * 0.3).setDepth(DEPTH);
   const ring = scene.add.graphics().setDepth(DEPTH - 1);
@@ -127,6 +129,11 @@ function show(scene: StoreScene, c: ClueRun): void {
   scene.popup(c.pos.x, c.pos.y - 14 * c.size, t(label), '#c8f0ff');
   sound.tap();
   drawRing(scene, c);
+}
+
+/** «Разговор у кассы»: значок сбоку от плеча, а не над головой — над головой висит реплика гостя. */
+function beside(who: Phaser.GameObjects.Container, size: number): { x: number; y: number } {
+  return { x: who.x + 6 + 10 * size, y: who.y - 10 };
 }
 
 function drawRing(scene: StoreScene, c: ClueRun): void {

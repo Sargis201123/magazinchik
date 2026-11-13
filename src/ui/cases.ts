@@ -86,7 +86,8 @@ export function caseNewsBox(state: StoreState, openBoard: () => void, later: (s:
   }
   const def = CASES[open.id];
   const friday = accuseToday(state);
-  box.append(el('b', '', t('case.box', { title: t(key(`case.${open.id}.title`)) })));
+  // Заголовок собирается из «🕵 Дело недели» и названия (как в строчке дела ниже): лишний ключ — лишний вес основного кода.
+  box.append(el('b', '', `${t('case.title')}: «${t(key(`case.${open.id}.title`))}»`));
   if (friday) box.append(el('div', 'ui-note ui-case-hot', t('case.boxFriday')), el('div', 'ui-muted', t('case.boxClues', { n: clueCount(open).got, total: open.got.length })));
   else box.append(who(face(def.victim, 'sad'), el('div', '', `${t(key(`case.${open.id}.victim`))}: «${t(key(`case.${open.id}.intro`))}»`)), el('div', 'ui-muted', t('case.boxDays', { n: open.due - state.day })));
   const acts = el('div', 'ui-chips');
@@ -170,7 +171,9 @@ export function showCaseBoard(getState: () => StoreState, set: (s: StoreState) =
       el('h2', '', t('case.title')),
       el('div', 'ui-case-name', `«${t(key(`case.${id}.title`))}»`),
       who(face(def.victim, 'sad'), el('div', '', `${t(key(`case.${id}.victim`))}: «${t(key(`case.${id}.intro`))}»`)),
-      el('div', friday ? 'ui-note ui-case-hot' : 'ui-note', friday ? t('case.hintFriday') : t('case.hint')),
+      // 13.11: подсказки доски — те же тексты, что в карточке «Новое!» и в пятничной новости: свои почти повторяли
+      // их, а русский словарь лежит в основном коде (предел веса).
+      el('div', friday ? 'ui-note ui-case-hot' : 'ui-note', friday ? t('case.boxFriday') : t('tip.case.text')),
       el('h3', '', t('case.clues')),
       notes,
       el('h3', '', t('case.suspects')),

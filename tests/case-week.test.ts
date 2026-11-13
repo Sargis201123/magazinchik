@@ -14,8 +14,6 @@ import {
   nextWeekly,
   openCase,
   openCaseOf,
-  pinClue,
-  takeClue,
   weekDay,
   weeklyDue,
 } from '../src/game/cases';
@@ -27,6 +25,8 @@ import {
   clueCount,
   confrontable,
   extraClues,
+  pinClue,
+  takeClue,
   caseNews,
   seeBoard,
   tellCase,
