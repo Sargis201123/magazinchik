@@ -670,6 +670,8 @@ export interface StoreState {
   tales?: TalesState;
   /** Сценки дня (skits.ts): идущая история, законченные, прибавка гостей. */
   skits?: import('./skits').SkitsState;
+  /** «Дело недели» (cases.ts): идущее дело с уликами и допросами, закрытые дела, «слава района». */
+  cases?: import('./cases').CasesState;
   /** Хроники района после финала: истории постоянных, договор с кафе, летний помощник (arcs.ts). */
   arcs?: import('./arcs').ArcsState;
   /** Наследие проданных магазинов (legacy.ts): очки и вечные бонусы. */

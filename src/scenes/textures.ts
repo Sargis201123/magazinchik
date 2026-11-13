@@ -563,6 +563,11 @@ export const SPRITES = [
   'zar_willow',
   'zar_tourboat',
   'zar_fish_sign',
+  // Улики «Дела недели» в зале (art/cases.py, scenes/caseFx.ts): чек, камера, находка, разговор у кассы.
+  'clue_receipt',
+  'clue_camera',
+  'clue_find',
+  'clue_talk',
 ];
 
 /**

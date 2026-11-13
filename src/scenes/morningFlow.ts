@@ -6,7 +6,7 @@ import { setPlaying } from '../platform/yandex';
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { DAY_SECONDS, emptyDayStats, shelveAll, warehouseCount } from '../game/economy';
-import { zarLook } from '../game/zarechye';
+import { inZar, zarLook } from '../game/zarechye';
 import { seasonFor } from '../game/endless';
 import { saveGame } from '../game/save';
 import { branchLook } from '../game/branch';
@@ -59,6 +59,7 @@ import { takeLiteNote } from '../platform/quality';
 import { quietDays } from '../game/firstday';
 import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
 import * as skitsFx from './skitsFx';
+import { clueToday } from '../game/cases';
 import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -715,7 +716,26 @@ export function prepareDay(scene: StoreScene): void {
   const live = liveEventsFor(scene.state, Math.random);
   // Бюджет внимания дня (game/attention.ts): особый гость, звонки, моменты и мини-события делят пять
   // просьб «нажми». Что не влезло — сегодня просто не случается (сюжет и беды — вне бюджета).
-  scene.attention = planAttention({ moments: momentPlan.length, live: live.kinds.length, special: scene.specialToday, calls: scene.phone ? callsPossible(scene.state, CALLS_MAX) : 0 });
+  scene.attention = planAttention({
+    moments: momentPlan.length,
+    live: live.kinds.length,
+    special: scene.specialToday,
+    calls: scene.phone ? callsPossible(scene.state, CALLS_MAX) : 0,
+    // Улика дела недели (game/cases.ts) — в своём районе: в Заречье дело не ведём.
+    clue: !inZar(scene.state) && clueToday(scene.state) !== null,
+  });
+  // Улика дела недели (game/cases.ts) — в своём месте бюджета: не влезла — придёт утром, размытая.
+  // Сам значок (caseFx.ts) — отдельным куском кода, только в день улики (13.11: предел веса основного файла).
+  scene.clueFx?.endClue(scene);
+  scene.clue = null;
+  if (scene.attention.clue) {
+    const day = scene.state.day;
+    void import('./caseFx').then((fx) => {
+      scene.clueFx = fx;
+      // Пока грузилось, день уже сменился — улика придёт утром, размытая.
+      if (scene.state.day === day) fx.armClue(scene, true);
+    });
+  }
   scene.moments.start(thin(momentPlan, scene.attention.moments));
   const kinds = live.kinds.slice(0, scene.attention.live);
   // В очередь недавних — только то, что правда будет (не случившееся не мешает ему завтра).
