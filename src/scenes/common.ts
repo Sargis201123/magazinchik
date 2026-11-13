@@ -387,6 +387,10 @@ export interface Customer {
   byPlayer?: boolean;
   gone: boolean;
   thief: boolean;
+  /** Ходит по полкам: его можно заподозрить касанием (воришка по повадкам, thiefTells.ts). */
+  browsing?: boolean;
+  /** Учебный воришка: подсвечен красным, пока игрок не поймал ни одного (в дни обучения над ним и стрелка). */
+  training?: boolean;
   /** Уже пробивается на кассе — из очереди не уйдёт. */
   serving?: boolean;
   /** Редкий гость для альбома. */
