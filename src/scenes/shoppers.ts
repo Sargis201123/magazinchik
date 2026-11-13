@@ -486,7 +486,9 @@ export function spawnCustomer(
           ? VALYA
           : scene.night
             ? nightLook()
-            : withCompanionItems(customerLook(shirt, scene.state.day));
+            : thief
+              ? customerLook(shirt, scene.state.day) // одет как все, но без коляски и собаки: с ними на дело не ходят
+              : withCompanionItems(customerLook(shirt, scene.state.day));
   // Ночью — гость с характером: свой образ, свой список и реплика у входа (nightGuests.ts).
   const nightGuest = scene.night && !forced && !arrived && !thief && !rare && !valya ? pickNightGuest(Math.random) : null;
   if (nightGuest) look = nightGuestLook(nightGuest);

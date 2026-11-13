@@ -1759,7 +1759,7 @@ export const pt: Record<TextKey, string> = {
   "popup.helpDay": "🤝 Amigos ajudando: caixa rápido",
   "who.police": "Policial Petrovitch",
   "tip.thief.title": "Descubra o ladrão",
-  "tip.thief.text": "O ladrão já não se reconhece pela roupa. Repare no jeito: olha para os lados, demora perto do mais caro, enfia a mercadoria no bolso e vai para a saída sem passar pelo caixa. Viu? Toque nele. Se errar, um cliente honesto vai se ofender e ir embora. O Bobik e as câmeras ajudam.",
+  "tip.thief.text": "O ladrão já não se reconhece pela roupa, só pelo jeito: olha para os lados, demora perto do que é caro, põe a mercadoria no bolso e passa direto pelo caixa. Viu? Toque nele. Se errar, um cliente honesto se ofende e vai embora. O Bobik e as câmeras ajudam.",
   "thief.growl": "Grrr!",
   "thief.first": "É um ladrão! Veja como ele age",
   "thief.offended.0": "Eu não sou ladrão!",

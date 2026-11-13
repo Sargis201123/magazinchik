@@ -1746,7 +1746,7 @@ export const es: Record<TextKey, string> = {
   "popup.helpDay": "🤝 Amigos ayudando: caja rápida",
   "who.police": "El agente Petróvich",
   "tip.thief.title": "Descubre al ladrón",
-  "tip.thief.text": "Al ladrón ya no se le reconoce por la ropa. Fíjate en cómo actúa: mira a todos lados, se queda mucho junto a lo más caro, se mete la mercancía en el bolsillo y va a la salida sin pasar por caja. ¿Lo viste? Tócalo. Si te equivocas, un cliente honrado se ofenderá y se irá. Bobik y las cámaras ayudan.",
+  "tip.thief.text": "Al ladrón ya no se le reconoce por la ropa, solo por cómo actúa: mira a todos lados, se queda junto a lo caro, se guarda la mercancía y pasa de largo la caja. ¿Lo viste? Tócalo. Si fallas, un cliente honrado se ofende y se va. Bobik y las cámaras ayudan.",
   "thief.growl": "¡Grrr!",
   "thief.first": "¡Es un ladrón! Mira cómo actúa",
   "thief.offended.0": "¡No soy un ladrón!",

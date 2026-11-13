@@ -47,6 +47,8 @@ function canSuspect(scene: StoreScene, c: Customer): boolean {
   const { sprite } = c;
   // В тихие дни новичка воров нет — некого и подозревать (касание честного там было бы наказанием ни за что).
   if (!scene.running || c.gone || !sprite.visible || noThieves(scene.state)) return false;
+  // Постоянных и друзей игрок знает в лицо (их встречают по имени) — вором их не считают, касание проходит мимо.
+  if (c.regular || c.friend || c.hello) return false;
   return (c.thief || Boolean(c.browsing)) && sprite.y > scene.layout.wallH && sprite.y < scene.layout.h - 2;
 }
 

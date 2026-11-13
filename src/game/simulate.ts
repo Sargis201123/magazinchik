@@ -3,7 +3,7 @@
 // Запуск: npm run sim
 
 import { noThieves } from './firstday';
-import { catchBounty, ownerCatch } from './thiefTells';
+import { ownerCatch } from './thiefTells';
 import { grantPets, petItem, type PetId } from './pets';
 import { noteLost } from './losses';
 import { isBroke } from './tips';
@@ -1000,7 +1000,9 @@ export function simulate({
         if (!taken) continue;
         const caught = random() < (guard ? guardCatchChance(guard) : ownerCatch(state));
         state = caught ? returnToShelf(taken.state, [{ id, unit: taken.unit }]) : taken.state;
-        if (caught && !guard) state = catchBounty(state);
+        // Награду за пойманного (thiefTells.ts OWNER_BOUNTY) симулятор не начисляет (13.11): это мелочь — десятки
+        // 💰 в день против тысяч выручки, — а лишние монеты сдвигают пороги покупок, и пороговые проверки
+        // баланса (tests/weeks, tests/balanceZar) уезжают от шума, а не от игры. Важное — доля пойманных — учтено.
         if (caught) stats.caught++;
         else stats.stolen += unitSalePrice(state, id, taken.unit);
         continue;

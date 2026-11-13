@@ -1758,7 +1758,7 @@ export const uz: Record<TextKey, string> = {
   "popup.helpDay": "🤝 Doʻstlar yordamda: kassa tezroq",
   "who.police": "Uchastka noziri Petrovich",
   "tip.thief.title": "Oʻgʻrini qiligʻidan tani",
-  "tip.thief.text": "Oʻgʻrini endi kiyimidan tanib boʻlmaydi. Qiligʻiga qara: atrofga alanglaydi, eng qimmat mahsulot yonida uzoq turadi, molni choʻntagiga soladi va kassaga kirmay chiqishga yoʻl oladi. Payqadingmi — unga bos. Adashsang, halol xaridor xafa boʻlib ketadi. Bobik va kameralar yordam beradi.",
+  "tip.thief.text": "Oʻgʻrini endi kiyimidan emas, qiligʻidan tanisan: atrofga alanglaydi, qimmat mahsulot yonida uzoq turadi, molni choʻntagiga soladi va kassadan oʻtmay ketadi. Payqadingmi — unga bos. Adashsang, halol xaridor xafa boʻlib ketadi. Bobik va kameralar yordam beradi.",
   "thief.growl": "Rrr!",
   "thief.first": "Bu — oʻgʻri! Qanday yurishiga qara",
   "thief.offended.0": "Men oʻgʻri emasman!",
