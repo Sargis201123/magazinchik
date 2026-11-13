@@ -417,6 +417,11 @@ export class StoreScene extends Phaser.Scene {
   cullAt = '';
   /** Ночь между днями: какая доля окон в домах уже погасла (0 — все горят). */
   lightsOut = 0;
+  /**
+   * Ритуал закрытия (closingRitual.ts): свет зала выше этой y погашен (lighting.powerOn); -Infinity — день,
+   * Infinity — погашен весь зал. Утро сбрасывает; в сохранении его нет.
+   */
+  hallOffY = -Infinity;
   /** Стрелки настенных часов: идут по ходу смены с 8:00 до 20:00. */
   clockHands?: Phaser.GameObjects.Graphics;
   /** Неоновая вывеска в зале (декор), если висит, — по x: жужжит. */
@@ -590,7 +595,10 @@ export class StoreScene extends Phaser.Scene {
   /** Пёс Бобик у будки и таймер, который машет его хвостом. */
   bobik?: Phaser.GameObjects.Image;
   bobikWag?: Phaser.Time.TimerEvent;
-  /** Магазин закрыт на ночь (роллеты опущены): Бобик сидит настороже, у двери — сторож. */
+  /** Будка Бобика и его место у неё (pets.buildBobik): ритуал закрытия уводит его в будку, утро выводит. */
+  kennelImg?: Phaser.GameObjects.Image;
+  bobikHome?: { x: number; y: number; depth: number; door: { x: number; y: number } };
+  /** Магазин закрыт на ночь (табличка «Закрыто», роллеты): Бобик спит в будке, у двери — сторож. */
   closed = false;
   /** Рабочий день идёт (от «Открыть магазин» до итогов) — для сторожа зависаний. */
   dayOpen = false;
@@ -1399,8 +1407,11 @@ export class StoreScene extends Phaser.Scene {
     return this.add.image(x, y, key).setScale(1 / ART);
   }
 
-  /** Открывает выполненные достижения; новые — всплывашкой по очереди. Возвращает, что открылось. */
-  checkAchievements(live: boolean): AchievementId[] {
+  /**
+   * Открывает выполненные достижения; новые — всплывашкой по очереди. Возвращает, что открылось.
+   * after — через сколько мс первая всплывашка (вечером — после ритуала закрытия, уже под итогами).
+   */
+  checkAchievements(live: boolean, after = 0): AchievementId[] {
     // Тихие дни новичка (firstday.ts): открытое днём ждёт вечера — откроется в итогах дня (строка «Достижения»),
     // а не всплывашкой поверх обучения. Сегодняшний счёт к вечеру уже в счётчиках (recordDay) — ничего не теряется.
     if (live && quietDays(this.state)) return [];
@@ -1409,7 +1420,7 @@ export class StoreScene extends Phaser.Scene {
     this.state = state;
     saveGame(state);
     unlocked.forEach((id, i) =>
-      this.time.delayedCall(i * 3800, () => {
+      this.time.delayedCall(after + i * 3800, () => {
         announceAchievement(id);
         // Значок выезжает сверху через полторы секунды — в тот же миг над продавцом вспыхивает медаль-солнце.
         if (live) this.time.delayedCall(1500, () => this.running && pixelFx.burst(this, 'sunburst', this.layout.sellerHome.x - 20, this.layout.sellerHome.y - 40, { zoom: 1 }));

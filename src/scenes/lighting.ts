@@ -19,6 +19,14 @@ import { look } from './look';
 
 /** Ночная смена: во сколько темнее фон зала (сумрак с лиловым оттенком, свет — от ламп и витрин). */
 const NIGHT_HALL = 0x6e6896;
+/**
+ * Закрытый магазин (ритуал закрытия → ночь): фон зала — как в ночную смену, только без ламп; светлеет к
+ * рассвету (nightPass). 13.11, автор: тон ночной смены, не светлее. Светлее/темнее — здесь.
+ */
+export const CLOSED_HALL = NIGHT_HALL;
+/** Ряды потолочных ламп (floorLight): первый — на столько ниже стены, дальше — через LAMP_ROW точек. */
+const LAMP_ROW_TOP = 46;
+const LAMP_ROW = 62;
 /** Ночью пятна ламп в карте света теплее и уже: свет лежит кругами под лампами, а не сплошь. */
 const NIGHT_POOL = 1.25;
 /** Яркость пятен света от потолочных ламп на полу. */
@@ -73,9 +81,25 @@ export function resetLight(scene: StoreScene, next: Layout): void {
   scene.light.reset(area, rooms, LIGHT_DEPTH);
 }
 
-/** Электричество в магазине: отключили (событие дня или квартал без света) — лампы, полки и экраны гаснут. */
-export function powerOn(scene: StoreScene): number {
-  return scene.blackout || scene.powerCut ? 0 : 1;
+/**
+ * Электричество в магазине: отключили (событие дня или квартал без света) — лампы, полки и экраны гаснут.
+ * y — где висит свет: ритуал закрытия гасит зал рядами сверху вниз (hallOff), и свет выше погашенного края
+ * гаснет. y = Infinity — гаснет только с рубильником (касса, витрины); без y — не гаснет вовсе (холодильники).
+ */
+export function powerOn(scene: StoreScene, y?: number): number {
+  return scene.blackout || scene.powerCut || (y !== undefined && (scene.hallOffY === Infinity || y < scene.hallOffY)) ? 0 : 1;
+}
+
+/** Нижний край ряда ламп row (точки мира): до него ритуал закрытия гасит зал, когда выключает этот ряд. */
+export const lampRowBottom = (scene: StoreScene, row: number): number => scene.layout.wallH + LAMP_ROW_TOP + LAMP_ROW * row + LAMP_ROW / 2;
+
+/**
+ * Ритуал закрытия: свет зала выше power погашен (powerOn), зал выше shade — в сумраке CLOSED_HALL
+ * (k < 1 — сумрак наполовину: рассвет). -Infinity — день, всё горит; Infinity — погашен весь зал.
+ */
+export function hallOff(scene: StoreScene, power: number, shade = power, k = 1): void {
+  scene.hallOffY = power;
+  scene.light?.shade(shade, k >= 1 ? CLOSED_HALL : lerpKeys([[0, 0xffffff], [1, CLOSED_HALL]], Math.max(0, k)));
 }
 
 /**
@@ -100,7 +124,7 @@ export function buildLighting(scene: StoreScene, next: Layout): void {
   const led = gearTier(scene.state, 'lights');
   for (const room of building.openRooms(scene)) {
     const lamp = scene.light.add('light_pool', room.x + room.w / 2, room.y + room.h / 2 + 4, room.w * 1.5, room.h * 1.5, led ? HALL_LED : HALL_WARM);
-    lamp.sync = () => lamp.set(0.62 * powerOn(scene));
+    lamp.sync = () => lamp.set(0.62 * powerOn(scene, room.y + room.h / 2));
   }
   // Вечером под карнизом задней стены загораются бра: мягкие конусы света вниз по стене — над каждой
   // картиной и окном, которые не закрыты полкой (как в buildDecor), и над дверью туалета. Сама стена
@@ -108,7 +132,8 @@ export function buildLighting(scene: StoreScene, next: Layout): void {
   // не темнеют (они выше). С премиальным светом (buildLights) у стены свои светильники.
   scene.wallCones = [];
   scene.wallDusk = undefined;
-  scene.furnitureOn = { wall: 1, vending: 1 };
+  // Перестроили мир после ритуала закрытия — бра остаются погашенными до утра.
+  scene.furnitureOn = { wall: scene.hallOffY > -Infinity ? 0 : 1, vending: 1 };
   if (!activeDecor(scene.state, 'light')) {
     const { wallH, wc } = scene.layout;
     const ink = 0x181425;
@@ -127,7 +152,8 @@ export function buildLighting(scene: StoreScene, next: Layout): void {
       for (const img of [cone, bulb]) scene.wallCones.push(img.setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setDepth(1.05));
     }
   }
-  scene.updateLighting(scene.running ? undefined : 0);
+  // Перестройка под итогами и ночью — вечерний свет, а не дневной (утро showMorning ставит своё сразу же).
+  scene.updateLighting(scene.running ? undefined : scene.closed ? 1 : 0);
 }
 
 /**
@@ -206,7 +232,7 @@ export function furnitureLight(scene: StoreScene): void {
   // Днём бра чуть теплят стену (утром видно, как они щёлкнули), вечером светят в полную силу.
   for (const cone of scene.wallCones) if (cone.active) cone.setAlpha(wall * (0.1 + 0.7 * e));
   if (scene.wallDusk?.active) scene.wallDusk.setAlpha(e);
-  for (const strip of scene.shelfStrips) if (strip.active) strip.setAlpha(scene.lite ? 0 : power * 0.55 * e);
+  for (const strip of scene.shelfStrips) if (strip.active) strip.setAlpha(scene.lite || strip.y < scene.hallOffY ? 0 : power * 0.55 * e);
   const vending = scene.vendingGlow;
   if (vending?.glass.active) {
     const on = power * scene.furnitureOn.vending;
@@ -237,6 +263,8 @@ export function buildDust(scene: StoreScene): void {
       lifespan: 7000,
       frequency: 650,
       quantity: 1,
+      // Зал закрыт (перестройка ночью) — пылинки не летают, утро (lightsOn) их запускает.
+      emitting: scene.hallOffY === -Infinity,
     })
     .setDepth(LIGHT_DEPTH - 1);
   // В солнечных лучах из окон кружат золотые пылинки: ярче, пока лучи светят (updateDaylight их включает и гасит).
@@ -297,7 +325,9 @@ export function updateLighting(scene: StoreScene, progress?: number): void {
     if (light.twinkle !== undefined) alpha *= 0.55 + 0.45 * Math.sin(now / 260 + light.twinkle);
     // Кто-то щёлкнул выключателем: окно иногда гаснет на несколько секунд и загорается снова.
     if (light.from !== undefined && Math.sin(now / 5300 + light.from * 97) > 0.93) alpha = 0;
-    if (light.store) alpha *= powerOn(scene);
+    // Свет магазина гаснет с ритуалом закрытия по месту: неон на крыше (y < 0) горит всю ночь, витрины и
+    // свет у входа (ниже зала) — до рубильника, окна флигеля — со своим рядом.
+    if (light.store) alpha *= powerOn(scene, light.obj.y > 0 ? light.obj.y : undefined);
     if (light.light) {
       light.light.set(alpha * (light.gain ?? 1));
       light.obj.setAlpha(alpha * (light.haze ?? 0));
@@ -480,9 +510,10 @@ export function floorLight(scene: StoreScene, w: number, h: number, wallH: numbe
   // Утром они загораются ряд за рядом (lightsOn), свет отключили — гаснут.
   scene.lampPools = [];
   const color = gearTier(scene.state, 'lights') ? HALL_LED : HALL_WARM;
-  for (let y = wallH + 46, row = 0; y < h - 20; y += 62, row++) {
-    for (let x = 34 + ((y / 62) % 2) * 20; x < w - 20; x += 66) {
-      const img = scene.add.image(x, y, 'glow').setDisplaySize(84, 46).setTint(0xfff0cf).setBlendMode(Phaser.BlendModes.ADD).setAlpha(LAMP_POOL_ALPHA).setDepth(0.45);
+  for (let y = wallH + LAMP_ROW_TOP, row = 0; y < h - 20; y += LAMP_ROW, row++) {
+    for (let x = 34 + ((y / LAMP_ROW) % 2) * 20; x < w - 20; x += 66) {
+      // Перестроили мир после ритуала закрытия — лампы погашены до утра (lightsOn зажжёт).
+      const img = scene.add.image(x, y, 'glow').setDisplaySize(84, 46).setTint(0xfff0cf).setBlendMode(Phaser.BlendModes.ADD).setAlpha(scene.hallOffY > -Infinity ? 0 : LAMP_POOL_ALPHA).setDepth(0.45);
       scene.lampPools.push({ img, row });
       scene.light.follow(img, { key: 'light_pool', w: HALL_LAMP.w, h: HALL_LAMP.h, dy: -4, color, power: () => Math.min(1, (img.alpha / LAMP_POOL_ALPHA) * HALL_LAMP.power) * powerOn(scene) * (scene.night ? NIGHT_POOL : 1) });
     }
@@ -491,6 +522,7 @@ export function floorLight(scene: StoreScene, w: number, h: number, wallH: numbe
 
 /** Утро: лампы в зале загораются ряд за рядом, от двери вглубь, — с коротким ярким «щелчком»; за ними бра и автомат. */
 export function lightsOn(scene: StoreScene): void {
+  scene.hallDust?.start();
   const rows = Math.max(0, ...scene.lampPools.map((p) => p.row));
   for (const { img, row } of scene.lampPools) {
     img.setAlpha(0);
@@ -556,7 +588,7 @@ export function buildLights(scene: StoreScene): void {
     // ярче, свет отключили — гаснет. Ровно, без мигания огоньков: карту ради них не перерисовывать.
     for (let x = 12; x < w + 12; x += 24) {
       const strip = scene.light.add('light_pool', x, 4, 40, 18, 0xffe6b0, 0);
-      strip.sync = () => strip.set(0.55 * scene.evening * powerOn(scene));
+      strip.sync = () => strip.set(0.55 * scene.evening * powerOn(scene, 4));
     }
     return;
   }
@@ -583,7 +615,7 @@ export function buildLights(scene: StoreScene): void {
     // Светильник тоже под картой освещения: он и стена вокруг светятся в ней сами (свет идёт за лампочкой
     // и когда она качается), вечером ярче, без электричества гаснут.
     const big = light.id === 'light_chandelier';
-    scene.light.follow(bulb, { key: 'light_pool', w: big ? 48 : 34, h: big ? 30 : 26, color: warm, power: () => 0.7 * scene.evening * powerOn(scene) });
+    scene.light.follow(bulb, { key: 'light_pool', w: big ? 48 : 34, h: big ? 30 : 26, color: warm, power: () => 0.7 * scene.evening * powerOn(scene, bulb.y) });
     // Тёплое пятно на полу у стены — вечером ярче.
     nightGlow(scene, scene.art(x, wallH + 6, 'glow').setDisplaySize(52, 22).setTint(warm), 0.35, undefined, { store: true, map: { scale: 1.5, gain: 2.2, haze: 0.2 } });
     scene.add.image(x, wallH + 6, 'glow').setScale(52 / 64, 22 / 64).setTint(warm).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.12).setDepth(1);
@@ -600,7 +632,7 @@ export function roomLamp(scene: StoreScene, x: number, ceiling: number, floorY: 
   const bulb = scene.add.image(x, ceiling + 11, 'glow').setDisplaySize(16, 10).setTint(warm).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.4).setDepth(2.4);
   if (!scene.lite) scene.tweens.add({ targets: bulb, alpha: { from: 0.4, to: 0.28 }, duration: 1700, yoyo: true, repeat: -1 });
   const pool = scene.add.image(x, floorY, 'glow').setDisplaySize(w, 18).setTint(warm).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.1).setDepth(1.2);
-  scene.light.follow(pool, { key: 'light_pool', w: w * 1.1, h: 34, color: warm, power: () => (0.25 + 0.6 * scene.evening) * powerOn(scene) });
+  scene.light.follow(pool, { key: 'light_pool', w: w * 1.1, h: 34, color: warm, power: () => (0.25 + 0.6 * scene.evening) * powerOn(scene, floorY) });
 }
 
 /**
@@ -613,5 +645,6 @@ export function shelfLight(scene: StoreScene, bg: Phaser.GameObjects.Image, kind
   const cold = SHELF_KINDS[kind].fridge || kind === 'drinks';
   const color = kind === 'meat' ? SHELF_MEAT : cold ? SHELF_COLD : SHELF_WARM;
   const power = cold ? 0.6 : 0.42;
-  scene.light.follow(bg, { key: 'light_pool', w, h, dy, color, power: () => power * powerOn(scene) });
+  // Холодильники и напитки светят всю ночь (закрытый зал ими и живёт), тёплая подсветка гаснет со своим рядом.
+  scene.light.follow(bg, { key: 'light_pool', w, h, dy, color, power: () => power * powerOn(scene, cold ? undefined : bg.y) });
 }

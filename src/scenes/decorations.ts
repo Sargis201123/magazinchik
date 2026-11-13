@@ -396,7 +396,7 @@ export function buildUpgrades(scene: StoreScene): void {
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.3)
       .setDepth(at.y + 10);
-    scene.light.follow(screen, { key: 'glow', w: 20, h: 18, dy: 4, power: () => screen.alpha * 0.8 * lighting.powerOn(scene) });
+    scene.light.follow(screen, { key: 'glow', w: 20, h: 18, dy: 4, power: () => screen.alpha * 0.8 * lighting.powerOn(scene, screen.y) });
     scene.obstacles.push({ x: at.x - 7, y: at.y - 12, w: 14, h: 16 });
     scene.kiosks.push({ img, screen, busy: false });
   }
@@ -582,7 +582,7 @@ export function buildDecor(scene: StoreScene): void {
       scene.tweens.add({ targets: glow, alpha: { from: 0.8, to: 0.4 }, duration: 900, yoyo: true, repeat: -1 });
       scene.art(62, 10, 'neon').setDepth(2);
       // Неон под картой освещения: ночью светит в ней сам (ровно, без пульса — карту ради него не перерисовывать).
-      scene.light.follow(glow, { key: 'light_pool', w: 44, h: 26, power: () => 0.6 * scene.evening * lighting.powerOn(scene) });
+      scene.light.follow(glow, { key: 'light_pool', w: 44, h: 26, power: () => 0.6 * scene.evening * lighting.powerOn(scene, glow.y) });
     } else {
       scene.art(62, 9, 'clock_face').setDepth(1);
       scene.clockHands = scene.add.graphics({ x: 62, y: 9 }).setDepth(1.1);

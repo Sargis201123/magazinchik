@@ -196,7 +196,7 @@ export function makeRegister(scene: StoreScene, counter: { x: number; y: number 
   // Экран кассы светит зеленоватым на прилавок и кассира: тлеет всегда, ярче — пока пробивает. Ровно, не по
   // мерцанию экрана (оно 7 раз в секунду, при заедании — каждый кадр): карту ради него не перерисовывать.
   const till = scene.light.add('glow', sx, counter.y + 9, 22, 16, 0xb6f58a).attach(screen);
-  till.sync = () => till.set(lighting.powerOn(scene) * (screen.visible ? 0.5 : 0.2));
+  till.sync = () => till.set(lighting.powerOn(scene, Infinity) * (screen.visible ? 0.5 : 0.2));
   const beam = scene.add
     .rectangle(sx, counter.y + 4.2, 8, 4.5, 0xff4a4a)
     .setBlendMode(Phaser.BlendModes.ADD)
