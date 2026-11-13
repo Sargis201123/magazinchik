@@ -48,6 +48,7 @@ import * as persons from './persons';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as building from './building';
+import * as thiefFx from './thiefTells';
 
 /** Сколько мс видна подсказка «что дальше» в зале (если игрок так и не коснулся экрана). */
 const NUDGE_SHOW_MS = 7000;
@@ -70,7 +71,7 @@ export function currentHint(scene: StoreScene): string {
   if (scene.call) return t((scene.state.seenTips ?? []).includes(CALL_CARD_TIP) ? 'hint.order' : 'hint.orderFirst');
   if (!deliveries.staffPacks(scene) && !scene.packRequested && scene.parcels.some((p) => p.stage === 'wait')) return t('hint.orderPack');
   if (scene.inspector === 'here') return t('hint.inspector');
-  if (!scene.workers.has('guard') && [...scene.customers].some((c) => c.thief && !c.gone)) return t('hint.thief');
+  if (!scene.workers.has('guard') && thiefFx.sneakingThief(scene)) return t('hint.thief');
   // Касса в ритме (13.11): пока не было первого «Идеально» — подсказать, когда жать.
   if (scene.belt && !rhythmTaught(scene.state)) return t('hint.rhythm');
   if (scene.sellerBusy && scene.ownerRegister()) return t('hint.recall');
@@ -133,7 +134,8 @@ export function updateTutorialArrow(scene: StoreScene): void {
 
 export function tutorialTarget(scene: StoreScene): { x: number; y: number } | null {
   const { counter, wc } = scene.layout;
-  const thief = !scene.workers.has('guard') ? [...scene.customers].find((c) => c.thief && !c.gone) : undefined;
+  // Стрелка — только над учебным воришкой (thiefTells.ts trainingThief): остальных ищут по повадкам.
+  const thief = !scene.workers.has('guard') ? [...scene.customers].find((c) => c.thief && c.training && !c.gone) : undefined;
   if (thief) return { x: thief.sprite.x, y: thief.sprite.y - 12 };
   const waitingAt = scene.ownerRegister();
   if (waitingAt && (scene.sellerBusy || scene.stats.served < 3 || scene.nudge === 'serve')) return { x: waitingAt.counter.x, y: waitingAt.counter.y - 28 };

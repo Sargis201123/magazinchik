@@ -113,6 +113,9 @@ export const SPRITES = [
   'bobik_sit1',
   'bobik_bark',
   'kennel',
+  // Воришка по повадкам (art/thief_tells.py, scenes/thiefTells.ts): камеры берут вора в рамку, над ним — значок камеры.
+  'tell_cam',
+  'tell_frame',
   // Гипермаркет «Гигант» за дорогой (art/giant.py).
   'giant_site',
   'giant_store',
