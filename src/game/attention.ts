@@ -3,13 +3,14 @@
 // Раньше всё это планировалось само по себе, и в середине игры выходила просьба каждые десять секунд.
 // Теперь у дня маленький общий бюджет: утром он делится по очереди (гость, звонок, момент, мини-событие,
 // снова звонок…), лишнее просто не случается сегодня. Сюжет и беды (пожар, ограбление) — вне бюджета.
+// Улика «Дела недели» (cases.ts, 13.11) — тоже просьба: в день улики она занимает место (второго звонка или момента).
 
 /** Сколько просьб о внимании за день, не считая сюжета и бед. */
 export const ATTENTION_CAP = 5;
 /** Звонков доставки за день — не больше стольких (их место в бюджете держится, даже если не позвонят). */
 export const CALLS_MAX = 2;
 
-export type AttentionKind = 'special' | 'call' | 'moment' | 'live';
+export type AttentionKind = 'special' | 'clue' | 'call' | 'moment' | 'live';
 
 /** Что дню хотелось бы: сколько моментов, мини-событий, будет ли особый гость, есть ли доставка. */
 export interface AttentionWant {
@@ -18,6 +19,8 @@ export interface AttentionWant {
   special: boolean;
   /** Сколько звонков может быть (0 — доставки нет). */
   calls: number;
+  /** Сегодня в зале ждёт улика дела недели (cases.ts). */
+  clue?: boolean;
 }
 
 /** Сколько чего можно сегодня. */
@@ -26,13 +29,16 @@ export interface AttentionPlan {
   live: number;
   special: boolean;
   calls: number;
+  /** Улика дела недели будет (нет поля — нет улики). */
+  clue?: boolean;
 }
 
 /**
  * Очередь дележа: по одному каждого вида по кругу — так в обычный день есть и звонок, и момент,
- * и мини-событие, а не пять моментов подряд. Особый гость первым: он редкий и с выбором.
+ * и мини-событие, а не пять моментов подряд. Особый гость первым: он редкий и с выбором; улика — следом
+ * (без неё дело недели пришлось бы раскрывать по размытым).
  */
-const ROUND: AttentionKind[] = ['special', 'call', 'moment', 'live', 'call', 'moment', 'live', 'moment'];
+const ROUND: AttentionKind[] = ['special', 'clue', 'call', 'moment', 'live', 'call', 'moment', 'live', 'moment'];
 
 /** Разделить бюджет дня между желающими. */
 export function planAttention(want: AttentionWant, cap = ATTENTION_CAP): AttentionPlan {
@@ -42,6 +48,9 @@ export function planAttention(want: AttentionWant, cap = ATTENTION_CAP): Attenti
     if (left <= 0) break;
     if (kind === 'special' && want.special && !plan.special) {
       plan.special = true;
+      left--;
+    } else if (kind === 'clue' && want.clue && !plan.clue) {
+      plan.clue = true;
       left--;
     } else if (kind === 'call' && plan.calls < Math.min(CALLS_MAX, want.calls)) {
       plan.calls++;
@@ -58,7 +67,7 @@ export function planAttention(want: AttentionWant, cap = ATTENTION_CAP): Attenti
 }
 
 /** Сколько просьб всего в плане (звонки — сколько места держится под них). */
-export const attentionTotal = (plan: AttentionPlan): number => plan.moments + plan.live + plan.calls + (plan.special ? 1 : 0);
+export const attentionTotal = (plan: AttentionPlan): number => plan.moments + plan.live + plan.calls + (plan.special ? 1 : 0) + (plan.clue ? 1 : 0);
 
 /** Оставить n из списка, равномерно по дню (первый, последний и между ними), порядок прежний. */
 export function thin<T>(list: readonly T[], n: number): T[] {
