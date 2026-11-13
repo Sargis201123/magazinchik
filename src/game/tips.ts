@@ -7,7 +7,7 @@ import { isFairDay } from './fair';
 import { registerCount } from './registers';
 import { pawnOpen } from './pawnshop';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -47,6 +47,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['nightShift', (s) => hasUpgrade(s, 'nightShift')],
   // Ломбард в подсобке (pawnshop.ts): в первое утро «Минимаркета» — вместе с первым гостем с вещью.
   ['pawn', pawnOpen],
+  // Первое дело недели (cases.ts): как приходят улики и когда обвинять.
+  ['case', (s) => Boolean(s.cases?.open)],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -62,6 +64,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   coffee: '☕',
   nightShift: '🌙',
   pawn: '🏷',
+  case: '🕵',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

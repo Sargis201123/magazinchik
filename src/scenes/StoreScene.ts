@@ -146,6 +146,7 @@ import * as camera from './camera';
 import * as gardenFx from './gardenFx';
 import * as shelves from './shelves';
 import * as skitsFx from './skitsFx';
+import * as caseFx from './caseFx';
 import * as building from './building';
 import * as collections from './collections';
 
@@ -618,6 +619,8 @@ export class StoreScene extends Phaser.Scene {
   sonya: 'none' | 'pending' | 'here' | 'done' = 'none';
   /** Сценка дня (skitsFx.ts): какая и где она сейчас. */
   skit: { id: import('../game/skits').SkitId; phase: 'pending' | 'here' | 'done' } | null = null;
+  /** Улика «Дела недели» в зале сегодня (caseFx.ts): какая, когда и показана ли. */
+  clue: caseFx.ClueRun | null = null;
   /** Праздничный гость сегодня (game/live.ts): кто, ждём / пришёл / ушёл и настоящая дата визита. */
   liveGuest: { who: GuestId; phase: 'pending' | 'here' | 'done'; date: string } | null = null;
   catHome = { x: 0, y: 0 };
@@ -990,6 +993,7 @@ export class StoreScene extends Phaser.Scene {
     const busy = this.inspector === 'here' || this.jury === 'here' || this.sonya === 'here' || this.liveGuest?.phase === 'here';
     if (!this.night && this.skit?.phase === 'pending' && elapsed >= skitsFx.SKIT_AT && this.timeLeft > 0 && !busy) void skitsFx.runSkit(this);
     if (!this.night) this.moments.tick(elapsed, deltaMs);
+    if (!this.night) caseFx.tickClue(this, elapsed, deltaMs);
     weeksFx.tick(this);
 
     if (this.timeLeft > 0) {
@@ -1255,6 +1259,7 @@ export class StoreScene extends Phaser.Scene {
   private disposeWorld(): void {
     this.worldGen++;
     this.moments.clear();
+    caseFx.endClue(this);
     // killAll не вызывает onStop: незаконченный шаг продавца никогда не завершится, и он
     // навсегда остался бы «занят» (не убирал бы мусор и не носил товар). Начинаем его дела заново.
     this.tweens.killAll();
