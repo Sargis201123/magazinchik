@@ -30,6 +30,7 @@ import { coffeeTablesGuests } from './coffee';
 import { legacyGuests } from './legacy';
 import { taleGuests, talesMorning } from './tales';
 import { skitGuests } from './skits';
+import { caseGuests, caseMorning } from './cases';
 import { echoGuests } from './echoes';
 import { arcGuests, arcsMorning } from './arcs';
 import { addPassXp } from './pass';
@@ -48,6 +49,7 @@ import { momentCount, momentRating } from './moments';
 import { branchNight, branchReport } from './branch';
 import { makeLines, type LinesNight } from './lines';
 import { countZarDay, inZar, zarBossMorning, zarDuelNight, zarGuests, zarHomeNight, zarReport } from './zarechye';
+import { pawnMorning } from './pawnshop';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -122,7 +124,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const lines = makeLines(billed.state, lineCtx);
   const night = { ...billed, state: lines.state };
   // Строка в отчёт недели: что продали, что испортилось, где дорого, чего не хватило.
-  const next = zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income);
+  // Ломбард (pawnshop.ts): уже утро — выкупили, не пришли, полиция за краденым, продажи с полки «Разное».
+  // Дело недели (cases.ts): несданное — в архив, пропущенные улики — размытыми, в понедельник — новое.
+  const next = caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income)));
   return {
     ...night,
     state: next,
@@ -181,6 +185,7 @@ export const guestFactor = (state: StoreState): number =>
   nightBoostGuests(state) *
   homeOnly(state, giantGuests) *
   homeOnly(state, contestGuests) *
+  homeOnly(state, caseGuests) *
   laneGuests(state) *
   knownBigDayGuests(state.day) *
   zarGuests(state);
