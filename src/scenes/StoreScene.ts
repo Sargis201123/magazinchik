@@ -361,6 +361,8 @@ export class StoreScene extends Phaser.Scene {
   /** Парковка за магазином и проезд к ней: места, машины на них и кто сейчас едет (живая днём). */
   parking: ParkingLot | null = null;
   parkingTimer?: Phaser.Time.TimerEvent;
+  /** В какой день фургон магазина уехал на выезд и ещё не вернулся (0 — стоит на месте; cars.ts vanDepart). */
+  vanOut = 0;
   /** Машины на улице и их полоса: с парковки выезжают в просвет. */
   roadTraffic = new Set<RoadCar>();
   /** Когда последняя машина полосы доедет до края (время сцены): следующая приезжает не раньше — без обгонов насквозь. */
@@ -991,6 +993,8 @@ export class StoreScene extends Phaser.Scene {
     if (!this.night && this.skit?.phase === 'pending' && elapsed >= skitsFx.SKIT_AT && this.timeLeft > 0 && !busy) void skitsFx.runSkit(this);
     if (!this.night) this.moments.tick(elapsed, deltaMs);
     weeksFx.tick(this);
+    // Фургон выездной торговли под вечер возвращается на парковку (cars.ts, game/van.ts).
+    if (!this.night) cars.vanTick(this);
 
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;

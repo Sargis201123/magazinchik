@@ -704,6 +704,8 @@ export interface StoreState {
   pitch?: { kind: import('./tenants').PitchKind; until: number };
   /** «Бабушкина теплица» (garden.ts): когда посажено и сколько урожаев собрано. */
   garden?: import('./garden').GardenState;
+  /** Фургон выездной торговли (van.ts): сегодняшний выезд, итог прошлого. Нет поля — фургона нет. */
+  van?: import('./van').VanState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Конкурсы «Лучший магазин района, города…» — финал истории и звания (contest.ts). */

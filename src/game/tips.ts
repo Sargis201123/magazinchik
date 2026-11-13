@@ -5,8 +5,9 @@ import { nextStoreLevel, onShelves, PRODUCT_IDS, warehouseOf, type StoreState } 
 import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount } from './registers';
+import { vanOpen } from './van';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'van';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -44,6 +45,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['oven', (s) => hasUpgrade(s, 'oven')],
   ['coffee', (s) => hasUpgrade(s, 'coffee')],
   ['nightShift', (s) => hasUpgrade(s, 'nightShift')],
+  // Выездная торговля (van.ts, 13.11): с минимаркета в «Уголках» продаётся фургон — сказать, пока его нет.
+  ['van', (s) => vanOpen(s) && !s.van],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -58,6 +61,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   oven: '🥖',
   coffee: '☕',
   nightShift: '🌙',
+  van: '🚐',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

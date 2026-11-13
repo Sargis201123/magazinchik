@@ -249,6 +249,9 @@ import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toas
 import { gardenBox, harvestNow } from './garden';
 import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
+import { vanBox, vanIdle, vanStatus, vanToday } from './van';
+import { vanEventName } from './vanText';
+import { vanOpen, VAN_EVENTS } from '../game/van';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
@@ -2263,6 +2266,24 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         status: securityOf(state).dog ? '🐕' : '—',
         details: () => [securityBox(getState())],
       },
+      // Фургон выездной торговли (game/van.ts) — с минимаркета, в Центре.
+      ...(vanOpen(state)
+        ? [
+            {
+              id: 'van',
+              icon: 'assets/shop_van.png',
+              title: t('van.title'),
+              status: vanStatus(state),
+              alert: vanIdle(state),
+              details: () =>
+                vanBox(getState(), getState, update, () => {
+                  tab = 'buy';
+                  slideTab = true;
+                  render();
+                }),
+            },
+          ]
+        : []),
       { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${LISTED_UPGRADES.length}`, details: () => [upgradesBox(getState())] },
     ];
     return [
@@ -3643,6 +3664,19 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         t('todo.low', { list: low.map((id) => PRODUCTS[id].icon).join('') }),
         button(t('todo.lowBtn'), () => {
           tab = 'buy';
+          slideTab = true;
+          render();
+        }, 'ui-chip'),
+      );
+    }
+    // Сегодня есть куда выехать, а фургон пуст — к его плитке в «Уголках» (game/van.ts).
+    const vanEvent = vanToday(state);
+    if (vanEvent && vanIdle(state)) {
+      row(
+        t('van.todo', { icon: VAN_EVENTS[vanEvent].icon, name: vanEventName(state, vanEvent) }),
+        button(t('van.todoBtn'), () => {
+          tab = 'extras';
+          openCorner = 'van';
           slideTab = true;
           render();
         }, 'ui-chip'),

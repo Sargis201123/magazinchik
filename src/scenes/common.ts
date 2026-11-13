@@ -303,8 +303,8 @@ export interface LotCar {
   headlights: Light;
   /** Едет (фары горят) или стоит заглушённая. */
   moving: boolean;
-  /** Чья: покупателя (уедет, когда он вернётся из магазина) или соседей (уезжают сами, parkingTick). */
-  owner: 'customer' | 'neighbor';
+  /** Чья: покупателя (уедет, когда он вернётся из магазина), соседей (уезжают сами, parkingTick) или фургон магазина (game/van.ts). */
+  owner: 'customer' | 'neighbor' | 'shop';
   /** За ней уже идёт водитель. */
   leaving: boolean;
 }
@@ -319,6 +319,8 @@ export interface LotCar {
  */
 export interface ParkingLot {
   spots: ParkSpot[];
+  /** Своё место фургона магазина (game/van.ts) — вне spots: туда не паркуются ни соседи, ни покупатели. */
+  van?: ParkSpot;
   left: number;
   right: number;
   top: number;

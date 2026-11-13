@@ -39,6 +39,7 @@ import { careerMorning, careerNight } from './career';
 import { districtGuests } from './district';
 import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
+import { settleVan, type VanResult } from './van';
 import { tallyNight, type StaffRecord } from './staffStats';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
@@ -57,6 +58,8 @@ export interface NightSummary extends NightResult {
   branch: number;
   /** Аренда от арендаторов флигеля за день (tenants.ts). */
   rent: number;
+  /** Итог выезда фургона (van.ts) или null — сегодня не выезжал. */
+  van: VanResult | null;
   /** Сколько принёс Центр без игрока, пока он работал в Заречье (zarechye.ts; 0 — был в Центре). */
   home: number;
   /** Пройденный сегодня шаг сезонной недели (weeks.ts) или null. */
@@ -104,6 +107,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Арендаторы флигеля платят за день — тоже до счетов (tenants.ts).
   const rent = tenantsNight(s);
   s = rent.state;
+  // Фургон вернулся с выезда (van.ts): выручка — до счетов, остаток — на склад до ночи (там он и стареет).
+  const van = settleVan(s);
+  s = van.state;
   // Игрок в Заречье — гипермаркет в Центре торговал сам и тоже отдаёт доход до счетов (zarechye.ts).
   const home = zarHomeNight(s, day);
   s = home.state;
@@ -130,6 +136,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
     rent: rent.income,
+    van: van.result,
     home: home.income,
     week: week.done,
     lines: lines.night,
