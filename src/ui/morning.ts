@@ -29,6 +29,7 @@ import {
   PRICE_STEP,
   PRODUCTS,
   PRODUCT_IDS,
+  restricted,
   resolveBadBatch,
   RETURN_REFUND,
   sellableProducts,
@@ -260,7 +261,7 @@ import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms
 import { hoodBox } from './hood';
 import { linesBox } from './lines';
 import { licenseBox, licenseNoticeBox } from './license';
-import { licenseNotice } from '../game/license';
+import { hasLicense, licenseNotice } from '../game/license';
 import { lineOfProduct } from '../game/lines';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
@@ -4426,7 +4427,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   const pricesTab = (state: StoreState): HTMLElement[] => {
     const sellable = sellableProducts(state);
     // Сначала то, что сейчас продаётся; закрытые товары — внизу.
-    const order = [...PRODUCT_IDS.filter((pid) => sellable.includes(pid)), ...PRODUCT_IDS.filter((pid) => !sellable.includes(pid))];
+    // Пиво и сигареты без лицензии не показываем даже серыми (game/license.ts): о них — только в «Развитии».
+    const locked = PRODUCT_IDS.filter((pid) => !sellable.includes(pid) && (!restricted(pid) || hasLicense(state)));
+    const order = [...PRODUCT_IDS.filter((pid) => sellable.includes(pid)), ...locked];
     return order.map((pid) => {
       const product = PRODUCTS[pid];
       const card = el('div', 'ui-price');
