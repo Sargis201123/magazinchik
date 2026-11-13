@@ -267,7 +267,7 @@ describe('касса в ритме: карточка и старые сохра�
   });
 
   it('карточка — хозяину за кассой; со сменщиком и в тихие дни новичка — нет', () => {
-    const seenOthers = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift'];
+    const seenOthers = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'thief'];
     const s = shop({ seenTips: seenOthers, money: 5000 });
     expect(pendingTip(s)).toBe('rhythm');
     expect(pendingTip(seeTip(s, 'rhythm'))).toBeNull();

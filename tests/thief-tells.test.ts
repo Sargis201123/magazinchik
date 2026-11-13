@@ -135,7 +135,7 @@ describe('помощники и учёба', () => {
 });
 
 describe('карточка «Новое!»', () => {
-  const seenAll = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift'];
+  const seenAll = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'pawn', 'case', 'rhythm', 'echo'];
 
   it('старому игроку — в первое же утро после обновления, один раз', () => {
     const s = shop({ day: 40, seenTips: seenAll });
