@@ -17,6 +17,7 @@ import { framesThrottled } from '../platform/frameCap';
 import { INSETS_EVENT, safeTopCss } from '../platform/telegram';
 import { HUD_TOP, ART, FACADE_H, LIGHT_DEPTH, STREET_TAP_MS } from './common';
 import * as motion from './motion';
+import * as thiefFx from './thiefTells';
 
 /** Снизу подсказки — магазин рисуем над ними (в базовых точках, × res; сверху — HUD_TOP в common.ts). */
 const HUD_BOTTOM = 80;
@@ -418,8 +419,8 @@ export const bigStore = (scene: StoreScene): boolean => scene.layout.w >= RUSH_M
 function calledElsewhere(scene: StoreScene): boolean {
   if (scene.liveEvent || scene.moments.showing || scene.clue?.phase === 'shown' || scene.call || scene.inspector === 'here') return true;
   if (scene.oven?.state === 'ready') return true;
-  if (!scene.workers.has('guard')) for (const c of scene.customers) if (c.thief && !c.gone) return true;
-  return false;
+  // Вор взялся за своё у полки (thiefTells.ts) — показать весь зал: искать его по повадкам.
+  return !scene.workers.has('guard') && Boolean(thiefFx.sneakingThief(scene));
 }
 
 /**

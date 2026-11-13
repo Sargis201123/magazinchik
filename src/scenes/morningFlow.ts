@@ -21,7 +21,7 @@ import { trustedNow } from '../platform/telegram';
 import { toast, UI_FONT } from '../ui/dom';
 import { giantLook } from '../game/giant';
 import { lazy, prefetch, withLazy } from '../platform/lazy';
-import { weatherFor } from '../game/weather';
+import { weatherToday } from '../game/crisis';
 import { claimGift, giftTomorrow } from '../game/gift';
 import { postMail } from '../ui/mailbag';
 import { askWriteAccessOnce } from '../platform/social';
@@ -60,6 +60,7 @@ import { takeLiteNote } from '../platform/quality';
 import { quietDays } from '../game/firstday';
 import { ART, WALL, FACADE_H, LIGHT_DEPTH, staffKey } from './common';
 import * as skitsFx from './skitsFx';
+import * as crisisFx from './crisisFx';
 import { clueToday } from '../game/cases';
 import * as lotteryFx from './lotteryFx';
 import * as starPets from './starPets';
@@ -196,7 +197,8 @@ export function showMorning(scene: StoreScene): void {
   linesFx.applyLines(scene);
   scene.awaitingBoxes = 0;
   scene.hud.update(scene.state, DAY_SECONDS);
-  if (weatherFor(scene.state.day) !== scene.weather) weatherFx.applyWeather(scene);
+  // Погода дня — или беда района поверх неё (её вещи на улице тоже перерисовать: crisisFx.ts).
+  if (weatherToday(scene.state) !== scene.weather || crisisFx.crisisLook(scene) !== scene.builtCrisis) weatherFx.applyWeather(scene);
   // Примерка премиальной вещи кончилась вчера — убрать её из зала.
   const trial = scene.state.decor.trial;
   const trialOver = Boolean(trial && trial.day < scene.state.day);
@@ -689,6 +691,10 @@ export function prepareDay(scene: StoreScene): void {
   }
   // Кафе Ахмеда (хроники района) забирает хлеб в день поставки.
   arcsFx.dealAtOpening(scene);
+  // Беда района: первые гости — за водой и хлебом, раздача старикам к открытию (crisisFx.ts).
+  // 13.11, ревью: раздаём после кафе и Ахмеда, как в симуляторе, — иначе подарок старикам съедает
+  // хлеб из заказа по договору, и кафе молча рвёт договор, хотя утро обещало «товара хватает».
+  crisisFx.openDay(scene);
   visitors.scheduleStoryGuests(scene);
   // Лотерея (lotteryFx.ts): стойка по сегодняшнему виду (запрет, «счастливые» дни), счастливчик с тортом.
   lotteryFx.morning(scene);

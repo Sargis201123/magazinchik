@@ -61,8 +61,9 @@ export const staffName = (index: number): string => {
   return list[index % list.length];
 };
 
-/** Имя сотрудника: у друга из Telegram — его имя. */
-export const memberName = (m: { name: number; friend?: { name: string } }): string => (m.friend ? `👋 ${m.friend.name}` : staffName(m.name));
+/** Имя сотрудника: у друга из Telegram — его имя, у героя сценки (echoes.ts) — его имя из сценки. */
+export const memberName = (m: { name: number; friend?: { name: string }; alias?: string }): string =>
+  m.friend ? `👋 ${m.friend.name}` : m.alias ? t(m.alias as TextKey) : staffName(m.name);
 
 async function load(which: Exclude<Lang, 'ru'>): Promise<void> {
   if (dictionaries[which]) return;

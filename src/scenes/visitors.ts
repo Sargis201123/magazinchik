@@ -13,7 +13,7 @@ import { bigDayFor } from '../game/bigday';
 import { isWet } from '../game/weather';
 import { WING_OUTER } from './layout';
 import { eduardLook } from '../game/eduard';
-import { answerSpecial, grannyRepays, makeSpecial, type SpecialKind, type SpecialVisit } from '../game/special';
+import { answerSpecial, grannyRepays, makeSpecial, makeTeen, type SpecialKind, type SpecialVisit } from '../game/special';
 import { showChoice } from '../ui/choice';
 import {
   ART,
@@ -42,6 +42,7 @@ import * as persons from './persons';
 import * as camera from './camera';
 import * as building from './building';
 import * as arcsFx from './arcsFx';
+import * as echoesFx from './echoesFx';
 import type { ClientId } from '../game/events';
 
 /** Середина дальнего тротуара — на столько ниже середины нашего (тротуар 24, дорога 40, тот тротуар 22). */
@@ -294,11 +295,15 @@ export function scheduleStoryGuests(scene: StoreScene): void {
   }
   if (eduardLook(scene.state) !== 'vacant' && day % 5 === 1) at(0.5, () => runEduard(scene));
   if (scene.cafeToday) at(0.08, () => runCafeWaiter(scene));
-  // Особый гость с выбором (бизнесмен, бабушка без денег, ребёнок с мелочью).
-  const special = makeSpecial(scene.state, Math.random);
-  scene.specialToday = Boolean(special);
+  // Особый гость с выбором (бизнесмен, бабушка без денег, ребёнок с мелочью). Если сегодня приходит
+  // лично герой давней сценки (echoesFx.ts, «Эхо решений»), он и есть особый гость дня — второго не будет.
+  // С лицензией иногда вместо особого гостя — подросток за пивом (game/license.ts): его день — от зерна магазина.
+  const echo = echoesFx.echoToday(scene);
+  const special = echo ? null : (makeTeen(scene.state) ?? makeSpecial(scene.state, Math.random));
+  scene.specialToday = Boolean(special || echo);
   // Придёт, если влез в бюджет внимания дня (game/attention.ts; делится чуть позже, в prepareDay).
-  if (special) at(Phaser.Math.FloatBetween(0.2, 0.6), () => (scene.attention.special ? runSpecial(scene, special) : Promise.resolve()));
+  if (echo) at(Phaser.Math.FloatBetween(0.2, 0.45), () => (scene.attention.special ? echoesFx.runEchoVisit(scene, echo) : Promise.resolve()));
+  else if (special) at(Phaser.Math.FloatBetween(0.2, 0.6), () => (scene.attention.special ? runSpecial(scene, special) : Promise.resolve()));
   // Добрая бабушка возвращает долг.
   if (scene.state.grannyOwed && Math.random() < 0.5) at(0.35, () => runGrannyRepay(scene));
   // Хроники района: герой истории у кассы, свадебная машина, грузовик с вещами, забег (arcsFx.ts).
@@ -315,7 +320,10 @@ export async function runSpecial(scene: StoreScene, visit: SpecialVisit): Promis
     business: { shirt: 0x262b44, skin: Phaser.Utils.Array.GetRandom(SKINS), pants: 0x181425, hair: 0x181425, style: 'short', acc: 'tie' },
     granny: { shirt: 0x8f563b, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0xd8d8e0, style: 'bun', glasses: true },
     kid: { ...randomLook(Phaser.Utils.Array.GetRandom(HAT_COLORS)), kid: true, style: 'short', bag: 'backpack', bagTint: 0xe43b44 },
+    // Подросток: уже не малыш, но ещё школьник — толстовка, кепка, рюкзак.
+    teen: { ...randomLook(Phaser.Utils.Array.GetRandom(HAT_COLORS)), style: 'cap', outfit: 'hoodie', outfitTint: Phaser.Utils.Array.GetRandom([0x5a6988, 0x3e8948, 0x68386c]), bag: 'backpack', bagTint: 0x262b44 },
   };
+  const teen = visit.kind === 'teen';
   const start = streetSpawn(scene);
   const sprite = persons.makePerson(scene, start.x, start.y, looks[visit.kind]);
   await persons.walkVia(scene, sprite, [
@@ -352,6 +360,8 @@ export async function runSpecial(scene: StoreScene, visit: SpecialVisit): Promis
           note: t(`special.${visit.kind}.note` as TextKey),
           yes: t(`special.${visit.kind}.yes` as TextKey),
           no: t(`special.${visit.kind}.no` as TextKey),
+          // Подростку правильный ответ — «нет»: отказ — главной кнопкой и первым.
+          primaryNo: teen,
           onYes: () => finish(true),
           onNo: () => finish(false),
         });
@@ -380,9 +390,14 @@ export async function runSpecial(scene: StoreScene, visit: SpecialVisit): Promis
   }
   if (res.rating > 0) scene.time.delayedCall(500, () => scene.popup(sprite.x, sprite.y - 26, `★ +${res.rating}`, '#fee761'));
   if (res.rating < 0) scene.time.delayedCall(500, () => scene.popup(sprite.x, sprite.y - 26, `★ ${res.rating}`, '#ffd0d0'));
-  effects.emote(scene, sprite, yes ? 'emo_heart' : 'emo_angry');
+  if (teen) {
+    // Продал — без сердечка и без банки в руках: это нарушение, игра о нём напоминает. Отказал — он надулся.
+    if (yes) scene.time.delayedCall(500, () => scene.popup(sprite.x, sprite.y - 26, t('special.teen.strike'), '#ffd0d0'));
+    else scene.speak(sprite, 18, t('special.teen.sulk'));
+    effects.emote(scene, sprite, yes ? 'emo_sigh' : 'emo_angry');
+  } else effects.emote(scene, sprite, yes ? 'emo_heart' : 'emo_angry');
   if (yes && visit.kind === 'business') sprite.add(scene.art(0, 3, 'box'));
-  if (yes) sprite.add(scene.art(5, 1, `item_${visit.product}`).setScale(1 / ART));
+  if (yes && !teen) sprite.add(scene.art(5, 1, `item_${visit.product}`).setScale(1 / ART));
   await scene.wait(1200);
   await persons.walk(scene, sprite, door.x, door.y - 10);
   await strollAway(scene, sprite);

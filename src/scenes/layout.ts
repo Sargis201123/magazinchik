@@ -350,3 +350,31 @@ export function brandSpotFor(layout: Layout, registers = 1, avoid: { x: number; 
   // Тесный зал (между нижним рядом полок и стеной нет места на зазор под подпись) — вывеска может её прикрыть.
   return candidates.find((p) => free(p, LABEL_GAP)) ?? candidates.find((p) => free(p, 0)) ?? { x: Math.max(20, door.x - 46), y: h - 40 };
 }
+
+/** «Витрина 18+» (game/license.ts): шкаф 30×28 в мире вокруг середины. */
+export const licenseRect = ({ x, y }: Point): { x: number; y: number; w: number; h: number } => ({ x: x - 15, y: y - 16, w: 30, h: 30 });
+
+/**
+ * Куда поставить «Витрину 18+» (13.11): как можно ближе к кассе — пиво и сигареты продают у кассы, на виду у
+ * продавца. Не на местах под полки и кассы, не в проходах и дверях, не на ларе и полке «От бабушки» (avoid);
+ * перед витриной — место покупателя (18 точек вниз), над ней — зазор под подпись отдела на полу у полки выше
+ * (как у полки своей марки). Нет места — в угол у входа слева.
+ */
+export function licenseSpotFor(layout: Layout, registers = 1, avoid: { x: number; y: number; w: number; h: number }[] = [], kiosks = 1): Point {
+  const { w, h, door, wallH, counter } = layout;
+  const pad = 2;
+  // Тележки и корзинки у входа (decorations.ts ставит их по обе стороны двери) — витрина их не загораживает.
+  const byDoor = [-46, -26, 26, 46].map((dx) => ({ x: door.x + dx - 11, y: h - 22, w: 22, h: 22 }));
+  const blocked = [...fixtureBlocked(layout, registers, avoid, kiosks), { x: door.x - 16, y: h - 70, w: 32, h: 70 }, ...byDoor];
+  const free = (p: Point, gap: number) => {
+    const r = licenseRect(p);
+    const stand = { x: r.x, y: r.y - gap, w: r.w, h: r.h + 18 + gap };
+    if (stand.x < 2 || stand.x + stand.w > w - 2 || r.y < wallH + 6 || stand.y + stand.h > h - 4) return false;
+    return blocked.every((b) => stand.x + stand.w + pad <= b.x || b.x + b.w + pad <= stand.x || stand.y + stand.h + pad <= b.y || b.y + b.h + pad <= stand.y);
+  };
+  const candidates: Point[] = [];
+  for (let y = h - 36; y >= wallH + 40; y -= 4) for (let x = 20; x <= w - 20; x += 2) candidates.push({ x, y });
+  const near = (p: Point) => Math.hypot(p.x - counter.x, (p.y - counter.y) * 1.5);
+  candidates.sort((a, b) => near(a) - near(b));
+  return candidates.find((p) => free(p, LABEL_GAP)) ?? candidates.find((p) => free(p, 0)) ?? { x: Math.max(20, door.x - 46), y: h - 40 };
+}

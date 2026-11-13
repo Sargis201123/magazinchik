@@ -44,14 +44,15 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
     requires: 'meat',
     color: 0xb83a4b,
   },
-  // Оптовик: напитки, заморозка и бытовая химия для новых отделов.
+  // Оптовик: напитки, заморозка и бытовая химия для новых отделов; с лицензией (license.ts) — пиво и сигареты.
+  // Без «Витрины 18+» их у него не видно: закупка показывает только то, чему есть полка (restock.ts canStock).
   wholesale: {
     id: 'wholesale',
     nameKey: 'supplier.wholesale',
     hello: 'supplier.wholesale.hello',
-    products: { water: 1, juice: 1, dumplings: 1, fish: 1, soap: 1, detergent: 1 },
+    products: { water: 1, juice: 1, dumplings: 1, fish: 1, soap: 1, detergent: 1, beer: 1, cigarettes: 1 },
     badChance: 0.03,
-    requires: ['drinks', 'frozen', 'household'],
+    requires: ['drinks', 'frozen', 'household', 'license'],
     color: 0x3a4466,
   },
 };

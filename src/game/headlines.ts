@@ -24,9 +24,13 @@ export const NEWS_IDS = [
   // в сохранении снимает normalizeNews.
   'contestResult',
   'contestAnnounce',
+  // Беда района началась (crisis.ts): как торговать, пока она идёт (13.11).
+  'crisisAsk',
   'event',
   'career',
   'trick',
+  // Итог беды района (crisis.ts): чем кончилось и что запомнил район.
+  'crisis',
   'pawn',
   'case',
   // Лотерея у кассы (lottery.ts, 13.11): счастливый билет или запрет — пока идут свои дни.
@@ -40,6 +44,8 @@ export const NEWS_IDS = [
   'zarTale',
   'careerLeft',
   'arc',
+  // Эхо решений (echoes.ts): герой сценки вернулся через недели — ждёт, сколько нужно.
+  'echo',
 ] as const;
 export type NewsId = (typeof NEWS_IDS)[number];
 
@@ -54,9 +60,11 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   zarBoss: 'main',
   contestResult: 'timed',
   contestAnnounce: 'timed',
+  crisisAsk: 'timed',
   event: 'timed',
   career: 'timed',
   trick: 'timed',
+  crisis: 'timed',
   // Гость с вещью в ломбард (pawnshop.ts, 13.11): решение дня, завтра придёт другой (или никто). Не «только сегодня»:
   // гость приходит в треть утр, и ставить его выше главных поворотов незачем — в утро поворота он просто не придёт.
   pawn: 'timed',
@@ -72,13 +80,15 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   zarTale: 'flavour',
   careerLeft: 'flavour',
   arc: 'flavour',
+  echo: 'flavour',
 };
 
 /**
  * Что пропадёт, если не показать сегодня: решение дня (событие, пакость конкурента) — завтра у дня
  * своё. Такое идёт раньше главных поворотов (кроме главы сюжета): поворот подождёт до завтра, а это — нет.
+ * Беда района (crisisAsk) — туда же: она идёт три-четыре дня, и каждый день без решения — день «как обычно».
  */
-export const TODAY_ONLY: ReadonlySet<NewsId> = new Set<NewsId>(['event', 'trick']);
+export const TODAY_ONLY: ReadonlySet<NewsId> = new Set<NewsId>(['event', 'trick', 'crisisAsk']);
 
 /** Сколько новостей за утро (глава сюжета не в счёт). */
 export const NEWS_PER_MORNING = 1;

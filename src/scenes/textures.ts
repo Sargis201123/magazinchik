@@ -61,6 +61,10 @@ export const SPRITES = [
   // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
   'tip_jar',
   'jam_splat',
+  // «Эхо решений» (art/echoes.py): что герои давних сценок приносят в зал.
+  'echo_pies',
+  'echo_diploma',
+  'echo_card',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
   // Ломбард в подсобке (art/pawnshop.py, scenes/pawnFx.ts): полка «Разное» на стене склада, вещи и ценник.
@@ -109,6 +113,9 @@ export const SPRITES = [
   'bobik_sit1',
   'bobik_bark',
   'kennel',
+  // Воришка по повадкам (art/thief_tells.py, scenes/thiefTells.ts): камеры берут вора в рамку, над ним — значок камеры.
+  'tell_cam',
+  'tell_frame',
   // Гипермаркет «Гигант» за дорогой (art/giant.py).
   'giant_site',
   'giant_store',
@@ -184,6 +191,11 @@ export const SPRITES = [
   'dog0',
   'kennel1',
   'kennel2',
+  // Беда района (art/crisis.py, scenes/crisisFx.ts): мешки с песком, сугроб, объявление «воды нет», бочка-водовоз.
+  'crisis_sandbags',
+  'crisis_drift',
+  'crisis_notice',
+  'crisis_cistern',
   'bobik_walk0',
   'bobik_walk1',
   'dog1',
@@ -256,6 +268,9 @@ export const SPRITES = [
   'granny_box',
   'brand_stand',
   'brand_sign',
+  // «Витрина 18+» у кассы (art/license.py, game/license.ts); товар — семейства item_ и crate_.
+  'license_stand',
+  'license_stand_front',
   'pitch_seedlings',
   'pitch_icecream',
   'pitch_pumpkins',
