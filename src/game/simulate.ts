@@ -116,6 +116,7 @@ import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, next
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft, ownerTiming } from './owner';
+import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
 
 export { rng };
 
@@ -254,7 +255,10 @@ export type Feature =
   | 'tenants'
   // Бабушкин двор (garden.ts): ставит теплицу, докапывает грядки, сажает «яблоки и картошку» и собирает урожай
   // каждое утро — прямо на овощной прилавок.
-  | 'garden';
+  | 'garden'
+  // Прокат у входа (rental.ts, 13.11): ставит стойку, когда не копит на помещение, и каждое утро докупает пропавшее;
+  // залог — средний (по умолчанию).
+  | 'rental';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -775,6 +779,17 @@ export function simulate({
       }
       state = invitePitch(state) ?? state;
       for (const ask of tenantAsks(state)) state = giveTenant(state, ask.id)?.state ?? state;
+    }
+    if (features.rental) {
+      if (!state.rental && state.money >= STAND_COST * 2 + reserve && canSplurge(STAND_COST)) {
+        const stand = buyStand(state);
+        if (stand) {
+          state = stand;
+          investments += STAND_COST;
+        }
+      }
+      const missing = RENTAL_CAP - (rentalOf(state)?.stock ?? RENTAL_CAP);
+      if (missing && state.money >= missing * ITEM_COST + reserve) state = restockRental(state, missing) ?? state;
     }
 
     // ---------- Утро: закупка ----------

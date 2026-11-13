@@ -7,6 +7,7 @@ import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { PRODUCTS, billTotal, shelfFor, takeFromShelf, type DayStats, type StoreState } from '../game/economy';
 import { nightCycle } from '../game/day';
+import { KIT_ICON } from '../game/rental';
 import { rankName, rankOf } from '../game/endless';
 import { saveGame } from '../game/save';
 import { memberName, t, type TextKey } from '../i18n';
@@ -320,6 +321,12 @@ export function finishDay(scene: StoreScene): void {
   if (branch) extra.push([t('branch.summary'), t('branch.summaryValue', { n: branch })]);
   // Арендаторы флигеля (tenants.ts): аренда за день одной строкой.
   if (rent) extra.push([t('tenant.summary'), t('branch.summaryValue', { n: rent })]);
+  // Прокат у входа (rental.ts): сколько раз взяли и сколько денег; кто не вернул — залог остался у нас.
+  const rental = night.rental;
+  if (rental?.rented) {
+    const lost = rental.lost ? ` · ${t('rental.summaryLost', { n: rental.lost, kept: rental.kept })}` : '';
+    extra.push([t('rental.summary'), `${t('rental.summaryValue', { icon: KIT_ICON[rental.kit], n: rental.rented, sum: rental.income })}${lost}`]);
+  }
   // Работали в Заречье — гипермаркет в Центре торговал сам (zarechye.ts).
   if (home) extra.push([t('zar.summary.home'), t('branch.summaryValue', { n: home })]);
   // Своя марка на полках (lines.ts): сколько продали за день и что наделали за ночь.

@@ -411,19 +411,26 @@ async function visit(scene: StoreScene): Promise<void> {
  * на том, что уже стоит у входа — бак, будка, уголки своей марки (brandLines), ярмарочный лоток, лотки и музыканты
  * недели (weeks.ts). 11.11: в «Ярмарку урожая» фермер с лотком стоял прямо перед прилавком.
  */
-function pitchSpot(scene: StoreScene, top: number): { x: number; y: number } {
+export function pitchSpot(scene: StoreScene, top: number): { x: number; y: number } {
+  return sidewalkSpot(scene, top, 21, [-40, -52, 40, 52, -64, -88, 88, -112, 112, -136, 136]);
+}
+
+/**
+ * Свободное место у бордюра шириной 2·half (x — середина) из кандидатов order (от двери); taken — ещё занятое.
+ * 13.11: общее для торговца и стойки проката (rentalFx.ts) — стойка обходит и торговца.
+ */
+export function sidewalkSpot(scene: StoreScene, top: number, half: number, order: number[], taken: [number, number][] = []): { x: number; y: number } {
   const d = scene.layout.door.x;
   const state = scene.state;
   // Фонари стоят через 72 от −100 (streets.ts): рядом со столбом тележку не ставим.
   const nearLamp = (x: number) => Math.abs(((((x + 100) % 72) + 72) % 72) - 36) > 24;
-  const busy: [number, number][] = [...streetTaken(state, d), ...lineStreetSpots(state, d).spans, [-14, 14]];
+  const busy: [number, number][] = [...streetTaken(state, d), ...lineStreetSpots(state, d).spans, [-14, 14], ...taken];
   if (fairToday(state)) busy.push([-76, -40]);
   const week = weekFor(state.day)?.id;
   if (week === 'harvest') busy.push(...(fairToday(state) ? [] : ([[-76, -14]] as [number, number][])), [12, 26], [44, 108]);
   if (week === 'summer') busy.push([-70, -22]);
-  const half = 21;
   const free = (dx: number) => busy.every(([a, b]) => dx + half <= a || dx - half >= b);
-  const dx = [-40, -52, 40, 52, -64, -88, 88, -112, 112, -136, 136].find((cx) => free(cx) && !nearLamp(d + cx)) ?? -40;
+  const dx = order.find((cx) => free(cx) && !nearLamp(d + cx)) ?? order[0];
   return { x: d + dx, y: top + 19 };
 }
 
