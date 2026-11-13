@@ -31,6 +31,7 @@ import { weeklyFor } from '../src/game/weekly';
 import { dealsToday } from '../src/game/deals';
 import { makeCafeOffer } from '../src/game/cafe';
 import { SHOP_KEYS } from '../src/game/zarechye';
+import { claimGift } from '../src/game/gift';
 import { simulate } from '../src/game/simulate';
 // Сохранение для e2e — как его видит сборка (без node:fs).
 import SAVE_RAW from '../e2e/save.json?raw';
@@ -280,6 +281,16 @@ describe('лицензия: вечерние гости и спрос', () => {
       let k = d;
       const offer = makeCafeOffer(s, () => ((k = (k * 9301 + 49297) % 233280) / 233280));
       for (const id of Object.keys(offer?.items ?? {})) expect(restricted(id as never)).toBe(false);
+    }
+  });
+
+  it('бабушкин гостинец на 3-й день — не пиво и не сигареты', () => {
+    const base = licensed({ warehouse: {}, gift: { lastDate: '2026-11-12', streak: 2 } });
+    // Случайность пробегает весь список товаров — 18+ не выпадает ни при каком значении.
+    for (let i = 0; i < 50; i++) {
+      const got = claimGift(base, '2026-11-13', () => i / 50);
+      expect(got?.gift.goods).toBeTruthy();
+      expect(restricted(got!.gift.goods!.id)).toBe(false);
     }
   });
 });
