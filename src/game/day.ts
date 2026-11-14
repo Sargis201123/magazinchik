@@ -46,6 +46,7 @@ import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
 import { settleVan, type VanResult } from './van';
 import { rentalNight, type RentalDay } from './rental';
+import { basementGuests, basementNight, type SlotsDay } from './basement';
 import { dreamGuests, dreamsNight } from './dreams';
 import { lotteryGuests, lotteryNight } from './lottery';
 import { tallyNight, type StaffRecord } from './staffStats';
@@ -74,6 +75,8 @@ export interface NightSummary extends NightResult {
   van: VanResult | null;
   /** Прокат у входа за день (rental.ts): сколько взяли и не вернули, сколько денег; null — стойки нет или закрыта. */
   rental: RentalDay | null;
+  /** Вечер у автоматов в подвале (basement.ts): доход, доля «крыши», облава; null — автоматов нет. */
+  slots: SlotsDay | null;
   /** Доля с Костиной тележки у входа за день (dreams.ts; 0 — тележки нет). */
   cart: number;
   /** Сколько принёс Центр без игрока, пока он работал в Заречье (zarechye.ts; 0 — был в Центре). */
@@ -136,6 +139,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Прокат у входа — тоже до счетов (rental.ts). Прохожие — гости дня по утреннему состоянию: как в прогнозе утра.
   const rental = rentalNight(s, guestsToday(state));
   s = rental.state;
+  // Автоматы в подвале (basement.ts): доход и доля «крыши» — до счетов; облава приходит к закрытию.
+  const slots = basementNight(s);
+  s = slots.state;
   // Сбывшаяся мечта Кости: тележка у входа, доля с неё — тоже до счетов (dreams.ts).
   const cart = dreamsNight(s);
   s = cart.state;
@@ -173,6 +179,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     rent: rent.income,
     van: van.result,
     rental: rental.day,
+    slots: slots.day,
     cart: cart.income,
     home: home.income,
     week: week.done,
@@ -233,6 +240,8 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, licenseGuests) *
   // Опечатан до обеда после серой схемы (grey.ts): гостей вдвое меньше.
   homeOnly(state, greyGuests) *
+  // Автоматы в подвале (basement.ts): мамы с детьми обходят магазин.
+  homeOnly(state, basementGuests) *
   nightBoostGuests(state) *
   homeOnly(state, giantGuests) *
   homeOnly(state, contestGuests) *

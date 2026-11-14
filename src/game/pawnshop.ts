@@ -14,6 +14,7 @@
 import type { StoreState } from './economy';
 import { rng } from './random';
 import { homeLevel, inZar } from './zarshop';
+import { backSlots } from './basement';
 
 export type PawnItemId = 'watch' | 'guitar' | 'bike' | 'ring' | 'camera' | 'phone';
 /** Чем кончится залог: выкупят, не придут или вещь краденая. */
@@ -139,8 +140,11 @@ const dice = (state: StoreState, salt: number): (() => number) =>
 /** Ломбард открыт: в Центре, с «Минимаркета». В Заречье своей подсобки под это нет. */
 export const pawnOpen = (state: StoreState): boolean => !inZar(state) && homeLevel(state) >= PAWN_FROM_LEVEL;
 
-/** Сколько вещей одновременно можно держать в залоге: в большом магазине подсобка больше. */
-export const pawnSlots = (state: StoreState): number => (homeLevel(state) >= 4 ? 3 : 2);
+/**
+ * Сколько вещей одновременно можно держать в залоге: в большом магазине подсобка больше, а «серая» подсобка
+ * в подвале (basement.ts, 13.11) — ещё на две вещи: полка «Разное» переезжает вниз.
+ */
+export const pawnSlots = (state: StoreState): number => (homeLevel(state) >= 4 ? 3 : 2) + backSlots(state);
 
 const known = (id: unknown): id is PawnItemId => typeof id === 'string' && id in PAWN_ITEMS;
 

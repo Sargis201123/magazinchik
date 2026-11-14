@@ -76,6 +76,7 @@ import * as decorations from './decorations';
 import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
 import * as rentalFx from './rentalFx';
+import * as basementFx from './basementFx';
 import * as dreamsFx from './dreamsFx';
 import { endSale } from '../game/weeks';
 import * as deliveries from './deliveries';
@@ -291,6 +292,8 @@ export function showMorning(scene: StoreScene): void {
       if (s.lines !== was.lines) linesFx.applyLines(scene);
       // Поставили стойку проката, докупили вещи или сменили залог.
       if (s.rental !== was.rental) rentalFx.applyRental(scene);
+      // Открыли подвал или поставили автоматы — спуск у стены и завсегдатаи сразу (game/basement.ts).
+      if (s.floors !== was.floors || s.basement !== was.basement) basementFx.applyBasement(scene);
       // Прочитали новость о мечте соседа — тележка Кости или указатель к станции встают сразу.
       if (s.dreams !== was.dreams) {
         dreamsFx.applyDreams(scene);
