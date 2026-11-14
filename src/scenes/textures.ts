@@ -311,6 +311,7 @@ export const SPRITES = [
   'estate_sale',
   'estate_works',
   'estate_plate',
+  'estate_pointer',
   'yard_ground',
   'yard_ground_snow',
   'yard_fence',

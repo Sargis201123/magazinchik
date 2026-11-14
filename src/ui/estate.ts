@@ -15,6 +15,7 @@ import {
   LOT_PRICES,
   LOTS,
   NAMED_GUESTS,
+  leaseWait,
   OPEN_DAYS,
   opensIn,
   ownedLots,
@@ -26,7 +27,6 @@ import {
   SHOP_KINDS,
   shopWorks,
   streetNamed,
-  SWAP_DAYS,
   vacate,
   lotOf,
   type ShopKind,
@@ -61,7 +61,6 @@ const chips = (): HTMLElement => {
 
 /** Кандидаты в помещение i: кто, что даёт и кнопка «Пустить» (кто уже на улице — без кнопки). */
 function candidates(state: StoreState, i: number, getState: () => StoreState, update: Update): HTMLElement[] {
-  const swap = Boolean(shopIn(state, i));
   return SHOP_KINDS.filter((k) => leaseLock(state, i, k) !== 'here').map((kind) => {
     const lock = leaseLock(state, i, kind);
     const row = el('div', 'ui-item');
@@ -78,7 +77,7 @@ function candidates(state: StoreState, i: number, getState: () => StoreState, up
             if (!next) return;
             picking.delete(i);
             track('estate_lease', next.day, SHOP_KINDS.indexOf(kind));
-            toast('assets/ico_shop.png', t('estate.leased'), t('estate.leasedText', { name: t(shopName(kind)), n: swap ? SWAP_DAYS : OPEN_DAYS }));
+            toast('assets/ico_shop.png', t('estate.leased'), t('estate.leasedText', { name: t(shopName(kind)), n: opensIn(next, i) }));
             update(next, 'success');
           },
           'ui-chip hood-buy',
@@ -164,9 +163,11 @@ export function estateBox(state: StoreState, getState: () => StoreState, update:
     body.append(actions);
     row.append(icon(kind ? SHOPS[kind].icon : '🔑'), body, el('div'));
     box.append(row);
-    // Пустое помещение — сразу кандидаты; занятое — по кнопке «Сменить» (с паузой: новый въедет не сразу).
+    // Пустое помещение — сразу кандидаты; занятое — по кнопке «Сменить». Если прежний работал, новый въедет не сразу
+    // (estate.ts leaseWait) — честный срок видно до выбора, и при выселении тоже.
     if (!kind || picking.has(i)) {
-      if (kind) box.append(el('div', 'ui-muted', t('estate.swapNote', { n: SWAP_DAYS })));
+      const wait = leaseWait(state, i);
+      if (kind || wait > OPEN_DAYS) box.append(el('div', 'ui-muted', t('estate.swapNote', { n: wait })));
       box.append(...candidates(state, i, getState, update));
     }
   }

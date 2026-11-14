@@ -129,6 +129,12 @@ export interface EstateLot {
   kind?: ShopKind;
   /** С какого дня он работает (до того — отделка или переезд). */
   from?: number;
+  /**
+   * День, когда съехал последний работавший арендатор. Пауза на смену считается от него, а не от того, занято ли
+   * помещение сейчас (13.11, ревью: «Выселить» и сразу «Пустить» обходили паузу, а замена так и не открывшегося — зря
+   * ждала три дня). Нет — работавших здесь ещё не было.
+   */
+  left?: number;
 }
 
 export interface EstateState {
@@ -147,7 +153,8 @@ const isKind = (k: unknown): k is ShopKind => typeof k === 'string' && k in SHOP
 export function lotOf(state: StoreState, i: number): EstateLot | null {
   const lot = state.estate?.lots?.[i];
   if (!lot || typeof lot !== 'object' || i < 0 || i >= LOTS) return null;
-  return isKind(lot.kind) ? { kind: lot.kind, from: typeof lot.from === 'number' ? lot.from : 0 } : {};
+  const left = typeof lot.left === 'number' ? { left: lot.left } : {};
+  return isKind(lot.kind) ? { kind: lot.kind, from: typeof lot.from === 'number' ? lot.from : 0, ...left } : left;
 }
 
 export const ownedLots = (state: StoreState): number => LOT_PRICES.filter((_, i) => lotOf(state, i)).length;
@@ -201,22 +208,41 @@ export function leaseLock(state: StoreState, i: number, kind: ShopKind): 'notOwn
   return LOT_PRICES.some((_, j) => j !== i && shopIn(state, j) === kind) ? 'taken' : null;
 }
 
+/** Когда съехал (или съедет сегодня, если его сменить) последний работавший здесь арендатор. */
+function leftDay(state: StoreState, lot: EstateLot): number | undefined {
+  return lot.kind && state.day >= (lot.from ?? 0) ? state.day : lot.left;
+}
+
 /**
- * Пустить арендатора. В пустое помещение он въезжает назавтра (OPEN_DAYS), вместо прежнего — через SWAP_DAYS:
- * прежний съезжает сразу, и всё это время аренды нет. Отделку делает сам арендатор — хозяин не платит.
+ * Через сколько дней откроется новый арендатор, если пустить его сегодня: назавтра (OPEN_DAYS), но не раньше чем
+ * через SWAP_DAYS после того, как съехал прежний работавший. Так «Выселить» и «Пустить» не короче «Сменить», а кто
+ * передумал до открытия — ждёт, как с первым арендатором.
+ */
+export function leaseWait(state: StoreState, i: number): number {
+  const lot = lotOf(state, i);
+  const left = lot ? leftDay(state, lot) : undefined;
+  return Math.max(OPEN_DAYS, left === undefined ? 0 : left + SWAP_DAYS - state.day);
+}
+
+/**
+ * Пустить арендатора (откроется через leaseWait): прежний съезжает сразу, и до открытия нового аренды нет.
+ * Отделку делает сам арендатор — хозяин не платит.
  */
 export function lease(state: StoreState, i: number, kind: ShopKind): StoreState | null {
   if (inZar(state) || leaseLock(state, i, kind)) return null;
   const lots = lotsOf(state);
-  lots[i] = { kind, from: state.day + (lots[i]?.kind ? SWAP_DAYS : OPEN_DAYS) };
+  const left = leftDay(state, lots[i] ?? {});
+  lots[i] = { kind, from: state.day + leaseWait(state, i), ...(left === undefined ? {} : { left }) };
   return withLots(state, lots);
 }
 
-/** Освободить помещение: арендатор съезжает сразу, помещение остаётся нашим. */
+/** Освободить помещение: арендатор съезжает сразу, помещение остаётся нашим (и помнит, когда съехал работавший). */
 export function vacate(state: StoreState, i: number): StoreState {
-  if (!shopIn(state, i)) return state;
+  const lot = lotOf(state, i);
+  if (!lot?.kind) return state;
   const lots = lotsOf(state);
-  lots[i] = {};
+  const left = leftDay(state, lot);
+  lots[i] = left === undefined ? {} : { left };
   return withLots(state, lots);
 }
 

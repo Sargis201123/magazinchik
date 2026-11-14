@@ -132,9 +132,34 @@ describe('улица: арендаторы', () => {
     expect(estateRent({ ...swapped, day: swapped.day + SWAP_DAYS })).toBe(SHOPS.florist.rent);
     // Освободить: помещение остаётся нашим, аренды нет.
     const empty = vacate(s, 1);
-    expect(lotOf(empty, 1)).toEqual({});
+    expect(lotOf(empty, 1)).toEqual({ left: s.day });
     expect(estateRent(empty)).toBe(0);
     expect(vacate(empty, 1)).toBe(empty);
+  });
+
+  it('«Выселить» и сразу «Пустить» паузу не обходит: срок — от ухода работавшего арендатора', () => {
+    const s = opened(shop(), 1, 'shoes');
+    const relet = lease(vacate(s, 1), 1, 'florist')!;
+    expect(opensIn(relet, 1)).toBe(SWAP_DAYS);
+    // Через день после выселения ждать уже меньше, но не меньше OPEN_DAYS.
+    const later = { ...vacate(s, 1), day: s.day + 1 };
+    expect(opensIn(lease(later, 1, 'florist')!, 1)).toBe(SWAP_DAYS - 1);
+    const long = { ...vacate(s, 1), day: s.day + 10 };
+    expect(opensIn(lease(long, 1, 'florist')!, 1)).toBe(OPEN_DAYS);
+    // Сменить въезжающего (ещё не открылся) — срок прежний, а не новый отсчёт: выселить и пустить третьего — тоже.
+    const swapped = lease(s, 1, 'florist')!;
+    const again = { ...swapped, day: swapped.day + 1 };
+    expect(opensIn(lease(again, 1, 'gym')!, 1)).toBe(SWAP_DAYS - 1);
+    expect(opensIn(lease(vacate(again, 1), 1, 'gym')!, 1)).toBe(SWAP_DAYS - 1);
+  });
+
+  it('передумал до открытия — ждать как с первым арендатором, а не паузу смены', () => {
+    const bought = buyLot(shop(), 2)!;
+    const kids = lease(bought, 2, 'kids')!;
+    expect(opensIn(kids, 2)).toBe(OPEN_DAYS);
+    expect(opensIn(lease(kids, 2, 'gym')!, 2)).toBe(OPEN_DAYS);
+    expect(opensIn(lease(vacate(kids, 2), 2, 'gym')!, 2)).toBe(OPEN_DAYS);
+    expect(lotOf(vacate(kids, 2), 2)).toEqual({});
   });
 
   it('лавки дают гостей и свой спрос — в guestFactor и dayDemand тоже', () => {

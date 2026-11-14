@@ -3,10 +3,11 @@
 // вверх, и они смотрят через дорогу на дома жителей. Не купленное — тёмные окна и во дворике «Продаётся» с ценой;
 // купленное и пустое — тёмные окна; въезжает арендатор — вывеска без света и козлы у входа; работает — витрины
 // вечером светятся, над входом его вывеска. Выкупил всю улицу — у перехода напротив входа столб с табличкой «ул. <название>»:
-// её видно в обычном кадре. Всё неподвижное — в лёгкой графике то же самое, лишних эффектов нет.
+// её видно в обычном кадре. А до того на том же столбе указатель: стрелка к задней улице, значки лавок и «Продаётся» —
+// иначе дорогую покупку в обычном кадре не видно вовсе (13.11, ревью). Всё неподвижное — в лёгкой графике то же самое.
 
 import type { StoreScene } from './StoreScene';
-import { estateLook, LOT_PRICES, lotOf, shopIn, shopSign, shopWorks, streetNamed } from '../game/estate';
+import { estateLook, estateOpen, LOT_PRICES, lotOf, ownedLots, SHOPS, shopIn, shopSign, shopWorks, streetNamed } from '../game/estate';
 import { t } from '../i18n';
 import { inZar } from '../game/zarshop';
 import { UI_FONT } from '../ui/dom';
@@ -70,15 +71,38 @@ export function dressLot(scene: StoreScene, i: number, doorX: number, front: num
 /** Название магазина для таблички (как на вывеске: своё имя или имя помещения). Сцена не тянет ui/estate.ts. */
 const streetTitle = (scene: StoreScene): string => scene.state.shopName?.trim() || t(storeLevel(scene.state).nameKey);
 
-/** Табличка «ул. <название магазина>» на столбе у перехода напротив входа — когда вся улица наша. */
+/**
+ * Столб у перехода напротив входа: вся улица наша — табличка «ул. <название магазина>»; до того, пока улицу продают
+ * или что-то куплено, — указатель к задней улице: значки лавок (въезжающие — тоже, вывеску уже повесили) и
+ * «Продаётся», если есть что купить.
+ */
 export function buildPlate(scene: StoreScene, top: number): void {
-  if (inZar(scene.state) || !streetNamed(scene.state)) return;
+  const s = scene.state;
+  if (inZar(s) || (!estateOpen(s) && !ownedLots(s))) return;
   // На том тротуаре, у перехода напротив двери: в обычном кадре его видно целиком, а на своём тротуаре высокий столб
   // заслонял бы витрину (сверху он ложится на фасад).
   const x = scene.layout.door.x + 30;
   const y = top + 72;
-  scene.art(x, y, 'estate_plate').setOrigin(0.5, 0.95).setDepth(y);
-  label(scene, x, y - 25.5, t('estate.plate', { name: streetTitle(scene) }), 4.5, '#ffffff', y + 0.01, 27);
+  if (streetNamed(s)) {
+    scene.art(x, y, 'estate_plate').setOrigin(0.5, 0.95).setDepth(y);
+    label(scene, x, y - 25.5, t('estate.plate', { name: streetTitle(scene) }), 4.5, '#ffffff', y + 0.01, 27);
+    return;
+  }
+  scene.art(x, y, 'estate_pointer').setOrigin(0.5, 0.95).setDepth(y);
+  const icons = LOT_PRICES.map((_, i) => shopIn(s, i))
+    .filter((k) => k !== null)
+    .map((k) => SHOPS[k].icon)
+    .join('');
+  const sale = estateOpen(s) && ownedLots(s) < LOT_PRICES.length ? t('estate.sale') : '';
+  // Поле доски — правее стрелки (50×16 точек мира, середина на 23 выше основания столба); две строки, если есть и
+  // лавки, и что продать.
+  const cx = x + 3.5;
+  const mid = y - 23;
+  const depth = y + 0.01;
+  if (icons && sale) {
+    label(scene, cx, mid - 2.8, icons, 6, '#262b44', depth, 40);
+    label(scene, cx, mid + 3.6, sale, 4, '#a22633', depth, 40);
+  } else label(scene, cx, mid, icons || sale, icons ? 7 : 5, icons ? '#262b44' : '#a22633', depth, 40);
 }
 
 /** Запомнить, с чем построена улица (morningFlow.ts сравнивает и перестраивает мир). */
