@@ -1476,7 +1476,6 @@ export const pt: Record<TextKey, string> = {
   "review.greedy.1": "Lucraram com a desgraça dos outros. Passo longe.",
   "regular.nadya": "Nádia",
   "regular.nadya.habit": "Mãe de três: compra leite para a turma toda. Se encarece um pouco, vai aonde é mais barato.",
-  "col.hint.movesIn": "muda-se para o bairro se o bairro estiver contente conosco",
   "res.line": "🏘 Famílias no bairro: {n}",
   "res.line.up": "🏘 Famílias no bairro: {n} ↑ {why}",
   "res.line.down": "🏘 Famílias no bairro: {n} ↓ {why}",

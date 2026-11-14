@@ -1475,7 +1475,6 @@ export const uz: Record<TextKey, string> = {
   "review.greedy.1": "Birovning boshiga tushgan kulfatdan foyda qilishdi. Yaqin yoʻlamayman.",
   "regular.nadya": "Nadya",
   "regular.nadya.habit": "Uch bolaning onasi: butun guruhga sut oladi. Sal qimmatlasa — arzonroq joyga ketadi.",
-  "col.hint.movesIn": "mahalla bizdan rozi bo‘lsa, ko‘chib keladi",
   "res.line": "🏘 Mahalladagi oilalar: {n}",
   "res.line.up": "🏘 Mahalladagi oilalar: {n} ↑ {why}",
   "res.line.down": "🏘 Mahalladagi oilalar: {n} ↓ {why}",

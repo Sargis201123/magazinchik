@@ -30,6 +30,14 @@ export const RES_EVERY = 4;
  * (goodwill.ts, до ±15%): жители — медленный хвост тех же решений, а не новый рычаг.
  */
 export const RES_GUESTS = 0.0075;
+/**
+ * 13.11, ревью: новый магазин (3★, цены чуть выше обычных) не должен с порога терять жильцов. Поэтому рейтинг
+ * между RATING_CALM_LO и RATING_CALM_HI району безразличен, а от цен вычитается PRICE_CALM: наценка до ~10%
+ * (−1,2 по ценам) сама по себе никого не выгоняет — нужна заметная жадность или вторая причина.
+ */
+export const RATING_CALM_LO = 3;
+export const RATING_CALM_HI = 4;
+export const PRICE_CALM = 0.5;
 /** Настроение района, с которого семьи начинают ехать (по модулю), и шанс переезда за единицу настроения. */
 export const MOOD_MOVE = 1;
 export const MOVE_CHANCE = 0.15;
@@ -86,17 +94,21 @@ export function addResidents(state: StoreState, delta: number): StoreState {
   return { ...state, residents: { ...state.residents, n } };
 }
 
+/** Мелочь (до by по модулю) району безразлична: остаётся только то, что сверх. */
+const calm = (v: number, by: number): number => Math.sign(v) * Math.max(0, Math.abs(v) - by);
+
 export type MoodWhy = 'price' | 'goodwill' | 'rating' | 'dreams';
 
 /**
- * Настроение района: доброе имя (±5 на краях), цены (средняя на 10% ниже обычной — +1,2), рейтинг (5★ — +1, 3★ — −1)
- * и сбывшиеся мечты соседей (+0,5 каждая). Около нуля — никто не едет; why — что сейчас весит больше всего.
+ * Настроение района: доброе имя (±5 на краях), цены (средняя на 10% ниже обычной — +0,7, на 25% выше — −2,5), рейтинг
+ * (5★ — +1, 2★ — −1, от 3★ до 4★ — ноль) и сбывшиеся мечты соседей (+0,5 каждая). Около нуля — никто не едет;
+ * why — что сейчас весит больше всего.
  */
 export function residentsMood(state: StoreState): { mood: number; why: MoodWhy } {
   const parts: Record<MoodWhy, number> = {
     goodwill: goodwillOf(state) / 20,
-    price: (priceAppeal(state) - 1) * 20,
-    rating: state.rating - 4,
+    price: calm((priceAppeal(state) - 1) * 20, PRICE_CALM),
+    rating: Math.max(0, state.rating - RATING_CALM_HI) + Math.min(0, state.rating - RATING_CALM_LO),
     dreams: investsOf(state).filter((v) => v.end === 'ok').length * 0.5,
   };
   const mood = Object.values(parts).reduce((a, b) => a + b, 0);

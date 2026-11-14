@@ -1463,7 +1463,6 @@ export const es: Record<TextKey, string> = {
   "review.greedy.1": "Se aprovecharon de la desgracia ajena. No vuelvo.",
   "regular.nadya": "Nadia",
   "regular.nadya.habit": "Madre de tres: compra leche para toda la tropa. Si sube un poco, se va donde es más barato.",
-  "col.hint.movesIn": "se muda al barrio si el barrio está contento con nosotros",
   "res.line": "🏘 Familias en el barrio: {n}",
   "res.line.up": "🏘 Familias en el barrio: {n} ↑ {why}",
   "res.line.down": "🏘 Familias en el barrio: {n} ↓ {why}",

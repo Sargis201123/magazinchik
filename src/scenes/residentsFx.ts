@@ -7,7 +7,7 @@
 import type { StoreScene } from './StoreScene';
 import { RES_FLATS, movingFlat, movingToday, residents } from '../game/residents';
 import { inZar } from '../game/zarshop';
-import { randomLook, SHIRTS } from './common';
+import { CUSTOMER_SPEED, randomLook, SHIRTS } from './common';
 import * as persons from './persons';
 import { outsideDepth } from './cars';
 
@@ -66,7 +66,9 @@ export function rentSign(scene: StoreScene, x: number, y: number): void {
  */
 export function moving(scene: StoreScene, doorX: number, doorY: number, walkY: number, laneY: number): void {
   const m = movingToday(scene.state);
-  if (!m || scene.lite) return;
+  if (!m) return;
+  void frontTrips(scene, m.dir);
+  if (scene.lite) return;
   scene.art(doorX + 30, laneY, 'res_truck').setDepth(outsideDepth(laneY));
   scene.art(doorX - 16, walkY - 3, 'res_boxes').setDepth(outsideDepth(walkY));
   const mover = persons.makePerson(scene, doorX + 6, laneY + 2, randomLook(SHIRTS[0]));
@@ -87,4 +89,44 @@ export function moving(scene: StoreScene, doorX: number, doorY: number, walkY: n
     }
   };
   void loop();
+}
+
+/** Сколько раз за день переезда грузчик с коробкой проходит мимо магазина (в лёгкой графике — реже). */
+const FRONT_TRIPS = 3;
+const FRONT_TRIPS_LITE = 1;
+
+/**
+ * 13.11, ревью: задняя улица в обычном кадре — под верхней панелью, фургон там мало кто увидит. Поэтому в день переезда
+ * грузчик с коробкой проходит и по тротуару перед магазином (как прохожие, visitors.ts), а у двери над ним всплывает 📦.
+ * Въехали — несёт от края квартала к домам (влево), съехали — от домов прочь (вправо). Без тряски камеры, только люди.
+ */
+async function frontTrips(scene: StoreScene, dir: 1 | -1): Promise<void> {
+  const world = scene.worldGen;
+  const trips = scene.lite ? FRONT_TRIPS_LITE : FRONT_TRIPS;
+  for (let i = 0; i < trips; i++) {
+    await scene.wait(i ? 9000 + Math.random() * 9000 : 2500);
+    if (world !== scene.worldGen) return;
+    const left = -60;
+    const right = scene.next.w + 60;
+    const toLeft = dir > 0;
+    const y = scene.streetY + 2 + Math.round(Math.random() * 4);
+    const mover = persons.makePerson(scene, toLeft ? right : left, y, randomLook(SHIRTS[0]));
+    // Коробка крупнее, чем у грузчика на задней улице: в обычном кадре её должно быть видно издалека.
+    mover.add(scene.art(0, -2, 'box').setScale(0.8 / 2));
+    const door = scene.layout.door.x;
+    // Шаг у человека свой (persons.ownPace), поэтому не считаем время, а смотрим, когда он поравнялся с дверью.
+    const watch = scene.time.addEvent({
+      delay: 120,
+      loop: true,
+      callback: () => {
+        if (!mover.active || world !== scene.worldGen) return watch.remove();
+        if ((mover.x - door) * (toLeft ? 1 : -1) > 0) return;
+        scene.popup(mover.x, mover.y - 18, '📦', '#ead4aa');
+        watch.remove();
+      },
+    });
+    await persons.walk(scene, mover, toLeft ? left : right, y, CUSTOMER_SPEED * 0.7);
+    watch.remove();
+    if (mover.active) mover.destroy();
+  }
 }

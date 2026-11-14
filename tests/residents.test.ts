@@ -32,6 +32,7 @@ import { pickNews } from '../src/game/headlines';
 import { pendingTip, TIP_ICONS, type TipId } from '../src/game/tips';
 import { simulate } from '../src/game/simulate';
 import { letterSenders } from '../src/game/returns';
+import { COLLECTION_SETS } from '../src/game/collections';
 
 // Жители района (residents.ts, 13.11): сколько семей, кто въезжает и уезжает, от чего; исход — от зерна и дня;
 // гости, постоянные (Надя въезжает, обиженный уезжает и может вернуться), новость, старые сохранения, симулятор.
@@ -39,7 +40,7 @@ import { letterSenders } from '../src/game/returns';
 const shop = (over: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 40, level: 2, money: 5000, debt: 0, rating: 4, seed: 7, ...over });
 /** Району у нас хорошо: доброе имя, 5★ — настроение +4. */
 const good = (over: Partial<StoreState> = {}) => shop({ goodwill: 60, rating: 5, ...over });
-/** Району у нас плохо: нажились в беду, 3★ — настроение −4. */
+/** Району у нас плохо: нажились в беду, 3★ (рейтинг тут не в счёт) — настроение −3. */
 const bad = (over: Partial<StoreState> = {}) => shop({ goodwill: -60, rating: 3, ...over });
 
 /** Прожить утра с day по day+days (только решение района), не меняя остального. */
@@ -95,6 +96,17 @@ describe('жители: настроение района', () => {
     for (const x of mornings(s, 60)) expect(x.residents).toBeUndefined();
   });
 
+  it('новая игра (3★, имя ноль) и чуть дороже обычного — район спокоен (ревью 13.11)', () => {
+    const s = { ...newGame(), day: RES_FROM + 10 };
+    expect(residentsMood(s).mood).toBeCloseTo(0);
+    expect(residentsTrend(s)).toBe(0);
+    for (const x of mornings(s, 80)) expect(x.residents).toBeUndefined();
+    const pricier = { ...s, prices: Object.fromEntries(Object.entries(s.prices).map(([k, v]) => [k, Math.round(v * 1.1)])) } as StoreState;
+    expect(residentsTrend(pricier)).toBe(0);
+    // А вот 2★ — уже беда: рейтинг ниже 3★ тянет вниз.
+    expect(residentsMood({ ...s, rating: 2 }).mood).toBeCloseTo(-1);
+  });
+
   it('доброе имя и рейтинг тянут вверх, нажива — вниз; причина — самая весомая', () => {
     expect(residentsTrend(good())).toBe(1);
     expect(residentsTrend(bad())).toBe(-1);
@@ -112,8 +124,8 @@ describe('жители: настроение района', () => {
   });
 
   it('сбывшиеся мечты соседей — плюс', () => {
-    const s = shop({ dreams: { inv: [{ id: 'kostya', day: 30, sum: 800, end: 'ok' }, { id: 'anya', day: 30, sum: 900, end: 'ok' }] } });
-    expect(residentsMood(s).mood).toBeCloseTo(1);
+    const s = shop({ rating: 4.5, dreams: { inv: [{ id: 'kostya', day: 30, sum: 800, end: 'ok' }, { id: 'anya', day: 30, sum: 900, end: 'ok' }] } });
+    expect(residentsMood(s).mood).toBeCloseTo(1.5);
     expect(residentsTrend(s)).toBe(1);
   });
 
@@ -185,6 +197,10 @@ describe('жители: постоянные', () => {
     expect(letterSenders(good({ day: 100 }))).not.toContain('nadya');
     // До NADYA_FROM — только безымянные семьи.
     for (const s of mornings(good({ day: RES_FROM }), NADYA_FROM - RES_FROM - 1)) expect(s.residents?.move?.who).toBeUndefined();
+  });
+
+  it('Надя — не обязательный предмет альбома: «Друзья» и «Открытки» собираются и без неё (ревью 13.11)', () => {
+    for (const set of COLLECTION_SETS.filter((x) => x.id === 'friends' || x.id === 'cards')) expect(set.items.some((i) => i.id === 'nadya')).toBe(false);
   });
 
   it('обиженный постоянный уезжает при плохом районе: больше не заходит, его новостей нет', () => {

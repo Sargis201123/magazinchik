@@ -63,7 +63,8 @@ export const FACES: Record<RegularId, string> = {
   akhmed: 'portrait_caller3',
   olga: 'portrait_caller0',
   misha: 'portrait_caller1',
-  nadya: 'portrait_caller4',
+  // Надя въезжает позже всех (residents.ts) — у неё своё лицо (art/residents.py), а не чужое из звонков.
+  nadya: 'portrait_nadya',
 };
 
 export const regularName = (id: RegularId): string => t(REGULARS.find((r) => r.id === id)!.nameKey);

@@ -1479,7 +1479,6 @@ export const en: Record<TextKey, string> = {
   "review.greedy.1": "They profited from other people's trouble. I stay away.",
   "regular.nadya": "Nadya",
   "regular.nadya.habit": "Mom of three: buys milk for the whole crew. A bit pricier — and she goes where it's cheaper.",
-  "col.hint.movesIn": "moves in if the neighbourhood is happy with us",
   "res.line": "🏘 Families nearby: {n}",
   "res.line.up": "🏘 Families nearby: {n} ↑ {why}",
   "res.line.down": "🏘 Families nearby: {n} ↓ {why}",

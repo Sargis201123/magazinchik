@@ -1463,7 +1463,6 @@ export const tr: Record<TextKey, string> = {
   "review.greedy.1": "Başkasının derdinden kazanç sağladılar. Uzak duruyorum.",
   "regular.nadya": "Nadya",
   "regular.nadya.habit": "Üç çocuk annesi: tüm tayfaya süt alır. Biraz pahalanırsa daha ucuz yere gider.",
-  "col.hint.movesIn": "mahalle bizden memnunsa taşınır",
   "res.line": "🏘 Mahalledeki aileler: {n}",
   "res.line.up": "🏘 Mahalledeki aileler: {n} ↑ {why}",
   "res.line.down": "🏘 Mahalledeki aileler: {n} ↓ {why}",

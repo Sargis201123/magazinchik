@@ -10,10 +10,12 @@
   res_truck  92×40 — мебельный фургон сверху: синяя кабина, светлый кузов с оранжевой полосой, двери открыты;
   res_boxes  40×26 — коробки, свёрнутый ковёр и торшер на тротуаре;
   res_rent   12×9  — листок «Сдаётся» в окне: белый, красная рамка, строчки (букв не разобрать — и не надо).
+  portrait_nadya 64×64 — Надя, мама троих детей (regulars.ts): рыжеватый хвостик с жёлтой резинкой, прядь у щеки,
+             зелёная кофта (как в зале), за спиной голубой — цвет её коляски. Своё лицо, а не чужое из звонков.
 """
 
 from premium import H, lit
-from sprites import Canvas, shadowed
+from sprites import Canvas, portrait, shadowed
 
 BLUE, BLUE_D, BLUE_L = H("#0099db"), H("#124e89"), H("#2ce8f5")
 CREAM, CREAM_D = H("#ead4aa"), H("#c0a888")
@@ -122,7 +124,35 @@ def rent_sign():
     c.save("res_rent")
 
 
+def hair_ponytail(p, hair):
+    """Хвостик набок (13.11): гладко назад, чёлка набок, выбившаяся прядь у щеки, резинка — жёлтая."""
+    p.ellipse(16, 8, 8.5, 5, hair)
+    p.rect(8, 8, 2, 6, hair)
+    p.rect(22, 8, 2, 4, hair)
+    p.hline(10, 10, 5, hair)
+    p.px(9, 14, hair)
+    p.px(9, 15, hair)
+    # Хвост за правым ухом, сужается к плечу.
+    p.rect(24, 9, 3, 4, hair)
+    p.rect(25, 13, 2, 5, hair)
+    p.px(25, 18, hair)
+    p.rect(24, 10, 2, 2, YELLOW)
+    p.px(13, 6, lit(hair, 0.25))
+
+
+def nadya_extras(p, skin, hair, shirt):
+    """Ворот кофты и бусы из макарон, что сделали дети."""
+    p.hline(13, 25, 6, lit(shirt, 0.25))
+    for x, col in ((12, ORANGE), (14, YELLOW), (16, BLUE), (18, ORANGE), (20, YELLOW)):
+        p.px(x, 26 + (1 if 13 < x < 19 else 0), col)
+
+
+def portraits():
+    portrait("nadya", "#2ce8f5", "#eec39a", "#b86f50", "#63c74d", hair_ponytail, nadya_extras)
+
+
 if __name__ == "__main__":
+    portraits()
     truck()
     boxes()
     rent_sign()
