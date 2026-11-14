@@ -1179,7 +1179,12 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     // В «Зале» утром делать нечего: уценка теперь вечером сама, сломанных холодильников больше нет (02.11).
     const hall = 0;
     const rack = rackOf(state);
-    const extras = (state.cat && !fedToday(state) ? 1 : 0) + (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0);
+    // Фудкорт ждёт ответа (праздник или жалоба) — точка на «Уголках»: без ответа жалоба закрывает точку
+    // на вечер, и игрок должен увидеть выбор, не открывая вкладку (13.11).
+    const extras =
+      (state.cat && !fedToday(state) ? 1 : 0) +
+      (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0) +
+      (foodcourtOf(state) && foodcourtAlert(state) ? 1 : 0);
     const next = nextStoreLevel(state);
     const grow = next && state.debt === 0 && state.money >= next.cost ? 1 : 0;
     // Ученик скучает, устал или без стипендии — точка на «Персонале» (game/apprentice.ts apprWorry).
