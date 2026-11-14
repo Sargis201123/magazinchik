@@ -28,6 +28,7 @@
     "sim:calm": "vite-node scripts/sim-staffcalm.ts",
     "sim:systems": "vite-node scripts/systems-count.ts",
     "sim:buy": "vite-node scripts/sim-buy.ts",
+    "sim:van": "vite-node scripts/sim-van.ts",
     "decisions": "vite-node scripts/decisions.ts"
   },
   "dependencies": {

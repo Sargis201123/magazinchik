@@ -20,6 +20,7 @@ import { WEATHER_EFFECTS } from './weather';
 import { crisisGuests, crisisMorning, crisisNight, weatherToday } from './crisis';
 import { goodwillGuests } from './goodwill';
 import { racketGuests, racketMorning } from './racket';
+import { residentsGuests, residentsMorning } from './residents';
 import { endWar } from './war';
 import { eduardGuests, growEduard } from './eduard';
 import { afterBills } from './bankruptcy';
@@ -45,6 +46,7 @@ import { districtGuests } from './district';
 import { districtNight } from './districtPlots';
 import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
+import { settleVan, type VanResult } from './van';
 import { rentalNight, type RentalDay } from './rental';
 import { dreamGuests, dreamsNight } from './dreams';
 import { lotteryGuests, lotteryNight } from './lottery';
@@ -59,6 +61,7 @@ import { makeLines, type LinesNight } from './lines';
 import { licenseGuests, licenseNight } from './license';
 import { countZarDay, inZar, zarBossMorning, zarDuelNight, zarGuests, zarHomeNight, zarReport } from './zarechye';
 import { pawnMorning } from './pawnshop';
+import { greyGuests, greyNight } from './grey';
 
 export interface NightSummary extends NightResult {
   order: Omit<OrderResult, 'state'> | null;
@@ -69,6 +72,8 @@ export interface NightSummary extends NightResult {
   branch: number;
   /** Аренда от арендаторов флигеля за день (tenants.ts). */
   rent: number;
+  /** Итог выезда фургона (van.ts) или null — сегодня не выезжал. */
+  van: VanResult | null;
   /** Прокат у входа за день (rental.ts): сколько взяли и не вернули, сколько денег; null — стойки нет или закрыта. */
   rental: RentalDay | null;
   /** Доля с Костиной тележки у входа за день (dreams.ts; 0 — тележки нет). */
@@ -118,6 +123,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   s = trickNight(s, random, Boolean(staffOf(s, 'cleaner')));
   // Проверка лицензии на пиво и сигареты (license.ts): иногда вечером; нашла продажу подростку — штраф до счетов.
   s = licenseNight(s);
+  // Серая схема (grey.ts): пришёл день сделки, на которой попался, — штраф до счетов, наутро магазин опечатан.
+  s = greyNight(s);
   const day = s.day;
   // Филиал отдаёт доход за день до счетов: им можно расплатиться.
   const branch = branchNight(s, day);
@@ -125,6 +132,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Арендаторы флигеля платят за день — тоже до счетов (tenants.ts).
   const rent = tenantsNight(s);
   s = rent.state;
+  // Фургон вернулся с выезда (van.ts): выручка — до счетов, остаток — на склад до ночи (там он и стареет).
+  const van = settleVan(s);
+  s = van.state;
   // Прокат у входа — тоже до счетов (rental.ts). Прохожие — гости дня по утреннему состоянию: как в прогнозе утра.
   const rental = rentalNight(s, guestsToday(state));
   s = rental.state;
@@ -155,7 +165,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Утро: доброе имя понемногу забывается, беда подводит итог или начинается новая (crisis.ts).
   // Район (districtPlots.ts, 13.11): завтра на участке начинают стройку — что строить, решает отчёт с сегодняшней строкой.
   // «Крыша» (racket.ts) — после утра дел: видит, чем кончилось дело в полиции, и не приходит в первое утро беды.
-  const next = racketMorning(crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(districtNight(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled))))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income)))));
+  // Жители района (residents.ts): в свой день район решает, въезжает ли кто-то или съезжает — по утреннему доброму имени.
+  const next = residentsMorning(racketMorning(crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(districtNight(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled))))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income))))));
   return {
     ...night,
     state: next,
@@ -164,6 +175,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
     rent: rent.income,
+    van: van.result,
     rental: rental.day,
     cart: cart.income,
     home: home.income,
@@ -208,6 +220,8 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, goodwillGuests) *
   // Мусор у входа от «крыши» (racket.ts): гости обходят.
   homeOnly(state, racketGuests) *
+  // Жители района (residents.ts): семей в домах вдоль улицы больше или меньше, чем было.
+  homeOnly(state, residentsGuests) *
   fairGuests(state.day) *
   weekGuests(state.day) *
   lightsGuests(state) *
@@ -223,6 +237,8 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, trickGuests) *
   // Вечерние гости за пивом и сигаретами (license.ts): лицензия — у магазина в Центре.
   homeOnly(state, licenseGuests) *
+  // Опечатан до обеда после серой схемы (grey.ts): гостей вдвое меньше.
+  homeOnly(state, greyGuests) *
   nightBoostGuests(state) *
   homeOnly(state, giantGuests) *
   homeOnly(state, contestGuests) *

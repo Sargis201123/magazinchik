@@ -58,7 +58,7 @@ describe('когда открыт ломбард', () => {
   });
 
   it('первая подсказка — когда ломбард открылся', () => {
-    const seen = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'thief', 'rhythm', 'rental'];
+    const seen = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'thief', 'rhythm', 'rental', 'van'];
     expect(pendingTip(shop({ level: 1, seenTips: seen }))).toBeNull();
     expect(pendingTip(shop({ seenTips: seen }))).toBe('pawn');
     expect(pendingTip(shop({ seenTips: [...seen, 'pawn'] }))).toBeNull();

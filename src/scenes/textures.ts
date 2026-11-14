@@ -60,6 +60,8 @@ export const SPRITES = [
   'belt_window_hot',
   // Ученик (art/apprentice.py): бумажный пакет, который он пакует на кассе.
   'appr_bag',
+  // Серая схема (art/grey.py): ленты с печатью на двери в день, когда магазин опечатан.
+  'grey_seal',
   // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
   'tip_jar',
   'jam_splat',
@@ -295,6 +297,10 @@ export const SPRITES = [
   'rent_tube_pull',
   'rent_umbrella',
   'rent_umbrella_open',
+  // Жители района (art/residents.py, game/residents.ts): грузовик с мебелью у подъезда, коробки, «Сдаётся» в окне.
+  'res_truck',
+  'res_boxes',
+  'res_rent',
   'yard_ground',
   'yard_ground_snow',
   'yard_fence',
@@ -518,6 +524,8 @@ export const SPRITES = [
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),
   // Легковые носом вверх и вниз — на парковке и в проезде к ней (art/sprites.py, cars_vertical).
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van'].flatMap((k) => ['up', 'down'].flatMap((d) => [`${k}_${d}`, `${k}_${d}_lights`])),
+  // Фургон магазина для выездной торговли (art/van.py, game/van.ts): вбок, носом вверх и вниз, с фарами.
+  ...['shop_van', 'shop_van_up', 'shop_van_down'].flatMap((k) => [k, `${k}_lights`]),
   'mat',
   'glow',
   'coin',

@@ -49,6 +49,7 @@ import { fpsSummary } from '../platform/quality';
 import { BOX_FROM_DAY, BOX_OPENS_DAY, firstDayGift, gentleDay, grannyBox, grannyStays, learningEvening, quietRating } from '../game/firstday';
 import { tomorrowTeaser } from '../game/nudge';
 import { teaserText } from '../ui/nudge';
+import { vanResultText } from '../ui/vanText';
 import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook } from './common';
 import * as starPets from './starPets';
 import * as motion from './motion';
@@ -329,6 +330,11 @@ export function finishDay(scene: StoreScene): void {
   if (branch) extra.push([t('branch.summary'), t('branch.summaryValue', { n: branch })]);
   // Арендаторы флигеля (tenants.ts): аренда за день одной строкой.
   if (rent) extra.push([t('tenant.summary'), t('branch.summaryValue', { n: rent })]);
+  // Выезд фургона (van.ts): что продал, случай в дороге, что привёз назад, итого.
+  if (night.van) {
+    extra.push([t('van.summary'), vanResultText(night.van)]);
+    track('van_trip', finishedDay, night.van.net);
+  }
   // Прокат у входа (rental.ts): сколько раз взяли и сколько денег; кто не вернул — залог остался у нас.
   const rental = night.rental;
   if (rental?.rented) {
@@ -371,8 +377,9 @@ export function finishDay(scene: StoreScene): void {
   }
   const promoted = state.staff !== scene.state.staff;
   // Вечером посетители пишут отзывы: они висят на доске у входа и видны в итогах дня. Громкое доброе
-  // (или дурное) имя района вспоминают и там (goodwill.ts).
-  const reviews = reviewsFor(scene.stats, finishedDay, goodwillOf(state));
+  // (или дурное) имя района вспоминают и там (goodwill.ts). Магазин сегодня стоял опечатанным после серой
+  // схемы (grey.ts) — разгромный отзыв первым.
+  const reviews = reviewsFor(scene.stats, finishedDay, goodwillOf(state), state.grey?.sealed === finishedDay);
   const best = updateRecords({ ...recordDay(state, scene.stats), reviews }, scene.stats, finishedDay);
   scene.state = best.state;
   // Повод вернуться (returns.ts): сосед просит отложить на завтра, письмо придёт на следующий настоящий день.

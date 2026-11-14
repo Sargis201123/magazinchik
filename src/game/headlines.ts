@@ -39,6 +39,8 @@ export const NEWS_IDS = [
   'racket',
   // Лотерея у кассы (lottery.ts, 13.11): счастливый билет или запрет — пока идут свои дни.
   'lottery',
+  // Серая схема (grey.ts, 13.11): Жора с предложением мимо закона — только в своё утро.
+  'grey',
   // Ученик открыл свою лавку (apprentice.ts): итог сезона учёбы — друг или конкурент.
   'apprOut',
   // Для души: истории района и постоянных.
@@ -46,6 +48,8 @@ export const NEWS_IDS = [
   'life',
   // Мечта соседа и новость о ней (dreams.ts, 13.11).
   'dream',
+  // Переезд в районе (residents.ts, 13.11): въехали новые соседи или кто-то уехал — ждёт пару дней.
+  'residents',
   'staffEvent',
   // На участке начали стройку по нашим продажам (districtPlots.ts, 13.11) — перед открытиями района.
   'plot',
@@ -58,6 +62,8 @@ export const NEWS_IDS = [
   'arc',
   // Эхо решений (echoes.ts): герой сценки вернулся через недели — ждёт, сколько нужно.
   'echo',
+  // Выездная торговля (van.ts, 13.11): вчера в дороге что-то случилось — пробка, колесо, дождь, щедрый покупатель.
+  'van',
 ] as const;
 export type NewsId = (typeof NEWS_IDS)[number];
 
@@ -85,11 +91,13 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   // карточку перебил поворот — обвинить можно и со строчки дела в утре.
   case: 'timed',
   lottery: 'timed',
+  grey: 'timed',
   apprOut: 'timed',
   racket: 'timed',
   tale: 'flavour',
   life: 'flavour',
   dream: 'flavour',
+  residents: 'flavour',
   staffEvent: 'flavour',
   plot: 'flavour',
   district: 'flavour',
@@ -99,6 +107,8 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   careerLeft: 'flavour',
   arc: 'flavour',
   echo: 'flavour',
+  // Случай в дороге — история для души: сам итог уже был в итогах дня, новость живёт три дня (van.ts vanNews).
+  van: 'flavour',
 };
 
 /**

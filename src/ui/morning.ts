@@ -268,12 +268,17 @@ import { rentalAlert, rentalBox, rentalStatus, restockButton } from './rental';
 import { KIT_ICON, RENTAL_CAP, kitToday, rentalOf, rentalOpen } from '../game/rental';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
+import { vanBox, vanIdle, vanNewsBox, vanStatus, vanToday } from './van';
+import { vanEventName } from './vanText';
+import { vanNews, vanOpen, VAN_EVENTS } from '../game/van';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
 import { linesBox } from './lines';
 import { licenseBox, licenseNoticeBox } from './license';
 import { hasLicense, licenseNotice } from '../game/license';
+import { greyCaughtBox, greyLines, greyOfferBox } from './grey';
+import { greyCaught, greyOffer } from '../game/grey';
 import { lineOfProduct } from '../game/lines';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
@@ -282,6 +287,8 @@ import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
 import { breadCut, dreamNews } from '../game/dreams';
 import { dreamBox, dreamsBox } from './dreams';
+import { residentsNews } from '../game/residents';
+import { residentsBox, residentsLines } from './residents';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
 import { albumButton, showAlbum } from './album';
 import { freshCount } from '../game/collections';
@@ -818,6 +825,13 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       card.replaceChildren(title, licenseNoticeBox(licenseCheck, getState, update));
       return;
     }
+    // Попался на серой схеме (game/grey.ts): штраф уже списан ночью, сегодня магазин опечатан до обеда.
+    const caught = greyCaught(state) && greyCaughtBox(state, getState, update);
+    if (caught) {
+      cue('fail', `grey:${state.day}`);
+      card.replaceChildren(title, caught);
+      return;
+    }
     // Новости утра (game/headlines.ts): сюжет, повороты, итоги, истории — не больше одной за утро,
     // остальные ждут следующего. Решить срочное (спасение, банк, брак) — выше, вне очереди.
     const zarHere = inZar(state);
@@ -849,9 +863,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('case', !zarHere && caseNews(state));
     add('lottery', lotteryNews(state));
     add('racket', racketNews(state));
+    add('grey', greyOffer(state));
     add('tale', taleToday(state));
     add('life', !zarHere && lifeNews(state));
     add('dream', dreamNews(state));
+    add('residents', residentsNews(state));
     add('staffEvent', staffEventDue(state));
     add('plot', !zarHere && plotNews(state));
     add('district', !zarHere && districtNews(state));
@@ -862,6 +878,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('careerLeft', state.career?.left);
     add('arc', !zarHere && arcToday(state));
     add('echo', !zarHere && echoNews(state));
+    add('van', !zarHere && vanNews(state));
     const picked = pickNews(state, ready);
     // Первого гостя ломбарда показали — дальше он приходит как все, даже без ответа (game/pawnshop.ts pawnMet).
     const met = picked.id === 'pawn' ? pawnMet(picked.state) : picked.state;
@@ -1015,6 +1032,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...bigDayLine(state),
       ...crisisLines(state),
       ...(zarHere ? [] : racketLines(state, (mode) => update(stopPaying(getState(), mode), 'success'))),
+      // Опечатан до обеда после серой схемы (game/grey.ts) — это сегодня важнее цели главы.
+      ...greyLines(state),
       goalLine(state),
       ...apprLines(state),
       ...autoLine(),
@@ -1026,6 +1045,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...seasonLine(state),
       ...weekSoonLine(state),
       ...(zarHere ? [] : districtLines(state)),
+      ...(zarHere ? [] : residentsLines(state)),
       ...(zarHere ? [] : arcLines(state)),
       ...(zarHere ? [] : echoLines(state)),
       ...(zarHere ? [] : trickLines(state)),
@@ -2086,6 +2106,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return lifeBox(state);
       case 'dream':
         return dreamBox(state, getState, update);
+      // Переезд в районе (game/residents.ts): въехали новые соседи или кто-то уехал.
+      case 'residents':
+        return residentsBox(state, getState, update);
       case 'staffEvent':
         return staffEventBox(state);
       case 'plot':
@@ -2104,6 +2127,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         const news = racketNews(state);
         return news ? racketNewsBox(news, () => update(seeRacketNews(getState()))) : [];
       }
+      // Серая схема (game/grey.ts): Жора с предложением мимо закона.
+      case 'grey':
+        return greyOfferBox(state, getState, update);
+      case 'van':
+        return vanNewsBox(state, getState, update);
       case 'arc':
         return arcBox(state, getState, update);
       case 'echo':
@@ -2370,6 +2398,24 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         details: () => [securityBox(getState())],
       },
       ...(pawnOpen(state) ? [{ id: 'pawn', icon: 'assets/pawn_ring.png', title: t('pawn.title'), status: `${pawnOf(state).loans.length}/${pawnSlots(state)}`, details: () => pawnBox(getState()) }] : []),
+      // Фургон выездной торговли (game/van.ts) — с минимаркета, в Центре.
+      ...(vanOpen(state)
+        ? [
+            {
+              id: 'van',
+              icon: 'assets/shop_van.png',
+              title: t('van.title'),
+              status: vanStatus(state),
+              alert: vanIdle(state),
+              details: () =>
+                vanBox(getState(), getState, update, () => {
+                  tab = 'buy';
+                  slideTab = true;
+                  render();
+                }),
+            },
+          ]
+        : []),
       { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${LISTED_UPGRADES.length}`, details: () => [upgradesBox(getState())] },
     ];
     return [
@@ -3750,6 +3796,19 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         t('todo.low', { list: low.map((id) => PRODUCTS[id].icon).join('') }),
         button(t('todo.lowBtn'), () => {
           tab = 'buy';
+          slideTab = true;
+          render();
+        }, 'ui-chip'),
+      );
+    }
+    // Сегодня есть куда выехать, а фургон пуст — к его плитке в «Уголках» (game/van.ts).
+    const vanEvent = vanToday(state);
+    if (vanEvent && vanIdle(state)) {
+      row(
+        t('van.todo', { icon: VAN_EVENTS[vanEvent].icon, name: vanEventName(state, vanEvent) }),
+        button(t('van.todoBtn'), () => {
+          tab = 'extras';
+          openCorner = 'van';
           slideTab = true;
           render();
         }, 'ui-chip'),
