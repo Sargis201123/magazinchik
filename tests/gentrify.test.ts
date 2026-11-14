@@ -36,6 +36,7 @@ import { guestFactor, nightCycle } from '../src/game/day';
 import { pickNews } from '../src/game/headlines';
 import { pendingTip, TIP_ICONS, type TipId } from '../src/game/tips';
 import { simulate } from '../src/game/simulate';
+import { zarAwayBill } from '../src/game/zarshop';
 import type { HoodState } from '../src/game/hood';
 
 // Район дорожает (gentrify.ts, 13.11): престиж района от жителей, доброго имени, рейтинга, мечт и благоустройства;
@@ -125,6 +126,19 @@ describe('что дорожает', () => {
     expect(bill.utilities).toBe(Math.round(STORE_LEVELS[s.level].utilities * (1 + GENT_RENT)));
     expect(bill.salaries).toBe(plain.salaries);
     expect(gentRises(gent({ p: 50 }))).toEqual({ rent: 4, supply: 2 });
+  });
+
+  it('Заречье: его доля счёта от престижа Центра не дорожает, доля Центра — дорожает', () => {
+    const days = { home: 10, zar: 10 };
+    // Сегодня в Центре: второй магазин — Заречье (ларёк), его счёт тот же при любом престиже.
+    const home = (p: number) => gent({ p }, { zar: { at: 'home', since: 1, days, away: { level: 1, shelves: [], staff: [] } } as unknown as StoreState['zar'] });
+    expect(zarAwayBill(home(100))).toEqual(zarAwayBill(home(0)));
+    // Сегодня в Заречье: свой счёт без надбавки, а вот доля Центра (away) — с ней.
+    const there = (p: number) => gent({ p }, { level: 1, shelves: [], staff: [], zar: { at: 'zar', since: 1, days, away: { level: 3 } } as unknown as StoreState['zar'] });
+    const hot = zarAwayBill(there(100));
+    const cold = zarAwayBill(there(0));
+    expect(hot.rent).toBeGreaterThan(cold.rent);
+    expect(monthlyBill(there(100)).rent - hot.rent).toBe(monthlyBill(there(0)).rent - cold.rent);
   });
 
   it('поставщики: прайс на 100 престижа +4%', () => {
