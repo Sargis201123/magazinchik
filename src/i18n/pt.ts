@@ -3393,6 +3393,7 @@ export const pt: Record<TextKey, string> = {
   "bsm.empty": "Por enquanto, tudo vazio e quieto aqui embaixo.",
   "tip.basement.title": "Porão",
   "tip.basement.text": "Há um porão vazio debaixo da loja — abra-o em «Evolução», seção «Andares». Uma câmara fria lá embaixo aumenta o depósito, e um depósito ajuda a casa de penhores. Caça-níqueis rendem dinheiro toda noite, mas famílias com crianças vão começar a evitar a loja, e às vezes há batidas.",
+  "floor.hall": "Algo está acontecendo lá em cima",
   "skit.caption": "🎭 {title} · loja pausada",
   "skit.next": "Continuar",
   "skit.back": "Voltar ao trabalho",

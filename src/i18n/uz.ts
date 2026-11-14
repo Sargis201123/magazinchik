@@ -3392,6 +3392,7 @@ export const uz: Record<TextKey, string> = {
   "bsm.empty": "Pastda hozircha boʻsh va jimjit.",
   "tip.basement.title": "Yertoʻla",
   "tip.basement.text": "Doʻkon ostida boʻsh yertoʻla turibdi — uni «Rivojlanish» boʻlimidagi «Qavatlar»da ochish mumkin. Pastdagi sovutgich omborni kattalashtiradi, xona lombardga yordam beradi. Avtomatlar har kechqurun pul keltiradi, lekin bolali oilalar doʻkonni chetlab oʻta boshlaydi, baʼzan reyd ham boʻladi.",
+  "floor.hall": "Tepada nimadir boʻlyapti",
   "skit.caption": "🎭 {title} · doʻkon pauzada",
   "skit.next": "Keyingi",
   "skit.back": "Ishga qaytish",

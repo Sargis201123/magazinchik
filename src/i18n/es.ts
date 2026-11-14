@@ -3381,6 +3381,7 @@ export const es: Record<TextKey, string> = {
   "bsm.empty": "Aquí abajo, de momento, todo está vacío y tranquilo.",
   "tip.basement.title": "Sótano",
   "tip.basement.text": "Bajo la tienda hay un sótano vacío: ábrelo en «Crecer», sección «Plantas». Una cámara frigorífica amplía el almacén y una trastienda ayuda a la casa de empeño. Las tragaperras dan dinero cada tarde, pero las familias con niños empezarán a evitar la tienda, y a veces hay redadas.",
+  "floor.hall": "Algo pasa arriba",
   "skit.caption": "🎭 {title} · tienda en pausa",
   "skit.next": "Siguiente",
   "skit.back": "Volver al trabajo",

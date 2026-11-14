@@ -3381,6 +3381,7 @@ export const tr: Record<TextKey, string> = {
   "bsm.empty": "Aşağısı şimdilik boş ve sessiz.",
   "tip.basement.title": "Bodrum",
   "tip.basement.text": "Dükkânın altında boş bir bodrum var — «Gelişim» sekmesinde, «Katlar» bölümünde açabilirsin. Aşağıdaki soğuk depo depoyu büyütür, arka oda rehinciye yarar. Kumar makineleri her akşam para getirir ama çocuklu aileler dükkândan uzak durmaya başlar, bazen de baskın olur.",
+  "floor.hall": "Yukarıda bir şeyler oluyor",
   "skit.caption": "🎭 {title} · dükkân duraklatıldı",
   "skit.next": "Devam",
   "skit.back": "İşe dön",

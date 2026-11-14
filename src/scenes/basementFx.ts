@@ -34,6 +34,13 @@ let stops: (() => void)[] = [];
 let shown = { day: 0, n: 0 };
 /** Камера ушла на этаж (или летит туда): второе касание не считается. */
 let away = false;
+/**
+ * Кадр до спуска и кадр, где камера погасла у двери. 13.11, ревью: этаж закрывается и сам — когда день встал на
+ * паузу (сценка, ночная смена, итоги). Тот, кто остановил день, мог уже навести камеру магазина (сценка — на гостя);
+ * тогда при возврате не уводим её — только возвращаем прежний масштаб.
+ */
+let before = { x: 0, y: 0, zoom: 1 };
+let dived = { x: 0, y: 0 };
 
 /** Насколько точка фасада далеко от фонаря на тротуаре (фонари — через 72 от −100, tenantsFx.nearLamp). */
 const lampGap = (x: number): number => {
@@ -121,6 +128,7 @@ export function floorDown(scene: StoreScene, id: FloorId): void {
   scene.input.enabled = false;
   const at = hatchSpot(scene);
   const mod = floorView.load();
+  before = { x: cam.midPoint.x, y: cam.midPoint.y, zoom: cam.zoom };
   cam.panEffect.reset();
   cam.zoomEffect.reset();
   cam.pan(at.x, at.y - 10, DIVE_MS, 'Sine.easeInOut', true);
@@ -128,6 +136,7 @@ export function floorDown(scene: StoreScene, id: FloorId): void {
   scene.time.delayedCall(DIVE_MS - FADE_MS, () => {
     cam.fadeOut(FADE_MS, 24, 20, 37);
     cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      dived = { x: cam.midPoint.x, y: cam.midPoint.y };
       mod.then(
         (m) => {
           // Этаж не открылся — магазин не должен остаться тёмным и глухим к касаниям.
@@ -144,16 +153,23 @@ export function floorDown(scene: StoreScene, id: FloorId): void {
   });
 }
 
-/** Наверх: этаж закрылся — камера светлеет у спуска и возвращается в обычный кадр. */
+/**
+ * Наверх: этаж закрылся — магазин снова рисуется (пока смотрели этаж, его не рисовали — floorView.create), камера
+ * светлеет. Куда смотреть: камеру навёл кто-то другой (сценка — на гостя) — остаёмся там, только прежний масштаб;
+ * день идёт — в обычный кадр; день встал (итоги, ночная смена) — туда, где игрок смотрел до спуска.
+ */
 export function floorUp(scene: StoreScene): void {
   away = false;
+  scene.scene.setVisible(true);
   if (!scene.sys.isActive()) return;
   scene.input.enabled = true;
   scene.dragged = false;
   const cam = scene.cameras.main;
   cam.resetFX();
   cam.fadeIn(FADE_MS, 24, 20, 37);
-  const view = scene.rushView ?? { x: scene.home.x, y: scene.home.y, zoom: scene.baseZoom };
-  cam.pan(view.x, view.y, DIVE_MS + 200, 'Sine.easeInOut', true);
+  const steered = cam.panEffect.isRunning || Math.hypot(cam.midPoint.x - dived.x, cam.midPoint.y - dived.y) > 3;
+  const home = scene.rushView ?? { x: scene.home.x, y: scene.home.y, zoom: scene.baseZoom };
+  const view = steered ? { x: cam.midPoint.x, y: cam.midPoint.y, zoom: before.zoom } : scene.running ? home : before;
+  if (!steered) cam.pan(view.x, view.y, DIVE_MS + 200, 'Sine.easeInOut', true);
   cam.zoomTo(view.zoom, DIVE_MS + 200, 'Sine.easeOut', true);
 }

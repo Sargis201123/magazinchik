@@ -15,12 +15,12 @@ import type { FloorId } from '../game/floors';
 import { basementOf, raidLock, slotPlaces, slotsPlan } from '../game/basement';
 import { pawnOf } from '../game/pawnshop';
 import { t } from '../i18n';
-import { button, UI_FONT } from '../ui/dom';
+import { button, el, UI_FONT } from '../ui/dom';
 import { haptic } from '../platform/telegram';
 import { sound } from '../platform/sound';
 import { ART, HUD_TOP, SHIRTS, customerLook } from './common';
 import { crispZoom } from './pixels';
-import { safeTop } from './camera';
+import { calledElsewhere, safeTop } from './camera';
 import * as persons from './persons';
 import * as basementFx from './basementFx';
 
@@ -53,6 +53,10 @@ export class FloorView extends Phaser.Scene {
   private leaving = false;
   private host!: PersonHost;
   private players: (Phaser.GameObjects.Container | null)[] = [];
+  /** Наверху что-то ждёт касания (camera.calledElsewhere) — «Наверх» светится, над ней строка; когда проверить снова. */
+  private hallCall = false;
+  private hallLine?: HTMLElement;
+  private checkAt = 0;
 
   constructor() {
     super({ key: 'floor' });
@@ -63,6 +67,8 @@ export class FloorView extends Phaser.Scene {
     this.id = data.id;
     this.leaving = false;
     this.players = [];
+    this.hallCall = false;
+    this.checkAt = 0;
   }
 
   art(x: number, y: number, key: string): Phaser.GameObjects.Image {
@@ -89,16 +95,42 @@ export class FloorView extends Phaser.Scene {
       document.head.append(style);
     }
     document.body.classList.add('on-floor');
+    // 13.11, ревью: этаж закрывает весь экран — магазин под ним не рисуем (вдвое меньше работы на кадр). День
+    // наверху идёт как шёл: update сцены магазина работает, пропускается только отрисовка. Обратно — basementFx.floorUp.
+    this.store.scene.setVisible(false);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.frame, this);
       this.upBtn?.remove();
+      this.hallLine?.remove();
+      this.hallLine = undefined;
       document.body.classList.remove('on-floor');
     });
   }
 
-  update(): void {
+  update(time: number): void {
     // День кончился (ритуал закрытия, итоги) или магазин закрыли — наверх сами.
     if (!this.leaving && (!this.store.sys.isActive() || !this.store.running)) this.leave();
+    if (this.leaving || time < this.checkAt) return;
+    this.checkAt = time + 300;
+    this.callUp(calledElsewhere(this.store));
+  }
+
+  /**
+   * 13.11, ревью: касания магазина на время этажа выключены, а наверху вор у полки, «момент» дня или готовая печь
+   * ждут игрока. Наверху на такое зовёт камера (общий план); здесь — «Наверх» светится, над ней строка и лёгкий
+   * отклик. Сами не уводим: игрок решает, когда подняться.
+   */
+  private callUp(call: boolean): void {
+    if (call === this.hallCall) return;
+    this.hallCall = call;
+    this.upBtn?.classList.toggle('ui-nudge', call);
+    this.hallLine?.remove();
+    this.hallLine = undefined;
+    if (!call) return;
+    haptic.tap();
+    this.hallLine = el('div', 'ui-nudge-line', `👀 ${t('floor.hall')}`);
+    this.hallLine.style.cssText = 'position: fixed; left: 50%; bottom: calc(66px + env(safe-area-inset-bottom)); transform: translateX(-50%); margin: 0; white-space: nowrap; z-index: 30; pointer-events: none;';
+    document.body.append(this.hallLine);
   }
 
   /** Камера: весь зал этажа в кадре между верхней панелью и кнопкой «Наверх», масштаб ровный, где можно. */
@@ -120,6 +152,7 @@ export class FloorView extends Phaser.Scene {
     this.leaving = true;
     haptic.tap();
     this.upBtn?.remove();
+    this.hallLine?.remove();
     const cam = this.cameras.main;
     cam.fadeOut(FADE_MS, 24, 20, 37);
     cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {

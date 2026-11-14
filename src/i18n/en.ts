@@ -3425,6 +3425,7 @@ export const en: Record<TextKey, string> = {
   "bsm.empty": "Empty and quiet down here for now.",
   "tip.basement.title": "Basement",
   "tip.basement.text": "There's an empty basement under the shop — open it in “Growth”, section “Floors”. A cold store down there makes the stockroom bigger, a back room helps the pawnshop. Slot machines bring money every evening, but families with kids will start avoiding the shop, and sometimes there are raids.",
+  "floor.hall": "Something's going on upstairs",
   "skit.caption": "🎭 {title} · shop paused",
   "skit.next": "Next",
   "skit.back": "Back to work",
