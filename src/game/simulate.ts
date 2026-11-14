@@ -114,6 +114,7 @@ import { buyLicense, hasLicense, LICENSE_PRICE, licenseLock } from './license';
 import { answerGrey, greyCover, greyOffer } from './grey';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
+import { chooseRacket, racketAsk, type RacketMode } from './racket';
 import { chooseCrisis, crisisAsk, crisisExtraItems, crisisGive, crisisTolerance, type CrisisMode } from './crisis';
 import { deliveryDay } from './delivery';
 import { buyLineTier, LINE_IDS, LINES, lineLock, lineUnitCost, nextLineCost, type LineId } from './lines';
@@ -124,6 +125,7 @@ import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, next
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft, ownerTiming } from './owner';
+import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
 import { rhythmSeconds } from './tillRhythm';
 
 export { rng };
@@ -204,6 +206,8 @@ export interface SimOptions {
   war?: WarAnswer;
   /** Как вести себя в беду района (crisis.ts): по умолчанию — держать обычные цены. */
   crisis?: CrisisMode;
+  /** Как ответить «крыше» (racket.ts): по умолчанию — отказать (две недели пакостей, потом тихо). */
+  racket?: RacketMode;
   /** Сколько закладок в печь игрок успевает за день и как часто забывает вынуть. */
   ovenBatches?: number;
   ovenBurn?: number;
@@ -271,6 +275,9 @@ export type Feature =
   | 'license'
   // Ломбард (pawnshop.ts): берёт вещь у гостя со спокойной приметой, если в кассе с запасом; суетливым отказывает.
   | 'pawn'
+  // Прокат у входа (rental.ts, 13.11): ставит стойку, когда не копит на помещение, и каждое утро докупает пропавшее;
+  // залог — средний (по умолчанию).
+  | 'rental'
   // Лотерея у кассы (lottery.ts): ставит стойку, когда есть запас; тираж и запреты — в nightCycle, как в игре.
   | 'lottery'
   // Ученик (apprentice.ts): берёт, когда просится; ставит по кругу на кассу, склад и в зал, раз в неделю —
@@ -400,6 +407,7 @@ export function simulate({
   features = {},
   war = 'wait',
   crisis = 'hold',
+  racket = 'refuse',
   ovenBatches = 3,
   ovenBurn = 0.1,
   adAlways,
@@ -740,6 +748,8 @@ export function simulate({
     }
     // Беда района: как решено для прогона (по умолчанию держит цены).
     if (crisisAsk(state)) state = chooseCrisis(state, crisis) ?? state;
+    // «Крыша»: как решено для прогона (в полиции дело без игрока уходит в архив — значит, пакости).
+    if (racketAsk(state)) state = chooseRacket(state, racket) ?? state;
     const opened = districtNews(state);
     if (opened) {
       const saving = nextFor(state);
@@ -831,6 +841,17 @@ export function simulate({
     if (features.pawn) {
       const offer = pawnOffer(state);
       if (offer) state = (offer.tell === 'calm' && state.money >= offer.lent + reserve * 2 ? takePawn(state) : null) ?? refusePawn(state);
+    }
+    if (features.rental) {
+      if (!state.rental && state.money >= STAND_COST * 2 + reserve && canSplurge(STAND_COST)) {
+        const stand = buyStand(state);
+        if (stand) {
+          state = stand;
+          investments += STAND_COST;
+        }
+      }
+      const missing = RENTAL_CAP - (rentalOf(state)?.stock ?? RENTAL_CAP);
+      if (missing && state.money >= missing * ITEM_COST + reserve) state = restockRental(state, missing) ?? state;
     }
 
     // ---------- Утро: закупка ----------

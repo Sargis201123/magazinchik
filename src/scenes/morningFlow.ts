@@ -63,6 +63,7 @@ import * as skitsFx from './skitsFx';
 import * as crisisFx from './crisisFx';
 import { clueToday } from '../game/cases';
 import * as lotteryFx from './lotteryFx';
+import { racketHit } from '../game/racket';
 import * as starPets from './starPets';
 import * as motion from './motion';
 import * as effects from './effects';
@@ -74,6 +75,7 @@ import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
 import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
+import * as rentalFx from './rentalFx';
 import * as dreamsFx from './dreamsFx';
 import { endSale } from '../game/weeks';
 import * as deliveries from './deliveries';
@@ -99,6 +101,10 @@ import * as collections from './collections';
  * титул (prefetchMorning), так что к «Играть» / «Продолжить» обычно уже на месте.
  */
 const morningUi = lazy('morning', () => import('../ui/morning'));
+/** «Крыша» в зале (racketFx.ts): нужна в считанные дни — грузится, только когда ей есть что показать. */
+const racketFx = lazy('racketFx', () => import('./racketFx'));
+/** Сколько секунд дня фургон с поставкой опаздывает, когда ему прокололи шины. */
+const VAN_LATE = 0.25 * DAY_SECONDS;
 /** Через сколько после открытия дня подкачивать утреннее окно (у новичка его до завтра не будет). */
 const MORNING_PREFETCH_MS = 20_000;
 export const prefetchMorning = (): void => prefetch(morningUi);
@@ -196,6 +202,8 @@ export function showMorning(scene: StoreScene): void {
   scene.state = endSale(scene.state);
   weeksFx.applyWeek(scene);
   linesFx.applyLines(scene);
+  // Стойка проката: набор дня — по погоде, вещей — сколько осталось после вчерашнего (game/rental.ts).
+  rentalFx.applyRental(scene);
   dreamsFx.applyDreams(scene);
   scene.awaitingBoxes = 0;
   scene.hud.update(scene.state, DAY_SECONDS);
@@ -277,8 +285,14 @@ export function showMorning(scene: StoreScene): void {
       if (radioChanged) decorations.applyRadio(scene, true);
       // Открыли линейку своей марки — её уголок сразу на тротуаре или на кухне.
       if (s.lines !== was.lines) linesFx.applyLines(scene);
+      // Поставили стойку проката, докупили вещи или сменили залог.
+      if (s.rental !== was.rental) rentalFx.applyRental(scene);
       // Прочитали новость о мечте соседа — тележка Кости или указатель к станции встают сразу.
-      if (s.dreams !== was.dreams) dreamsFx.applyDreams(scene);
+      if (s.dreams !== was.dreams) {
+        dreamsFx.applyDreams(scene);
+        // Стойка проката обходит тележку Кости — встала тележка, переставить и стойку.
+        rentalFx.applyRental(scene);
+      }
       scene.awaitingBoxes = deliveries.boxesToDeliver(scene);
       scene.refreshShelves();
       building.refreshWarehouse(scene);
@@ -704,6 +718,10 @@ export function prepareDay(scene: StoreScene): void {
   visitors.scheduleStoryGuests(scene);
   // Лотерея (lotteryFx.ts): стойка по сегодняшнему виду (запрет, «счастливые» дни), счастливчик с тортом.
   lotteryFx.morning(scene);
+  // «Крыша» (game/racket.ts): вчерашнее у входа убрали; сегодня — витрина, мусор, шины или «девятка» за долей.
+  racketFx.get()?.clear();
+  const racket = racketHit(scene.state);
+  if (racket || scene.state.racket?.from === scene.state.day) withLazy(racketFx, (fx) => fx.morning(scene));
   const season = seasonFor(scene.state.day);
   if (season) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, `${season.icon} ${t(season.nameKey)}!`, '#fee761'));
   else if (fairToday(scene.state)) scene.time.delayedCall(600, () => scene.popup(scene.layout.w / 2, scene.layout.h / 2, t('popup.fair'), '#fee761'));
@@ -718,7 +736,9 @@ export function prepareDay(scene: StoreScene): void {
   building.refreshBin(scene);
   scene.combo = 0;
   scene.rhythm = 0;
-  if (scene.awaitingBoxes > 0) void deliveries.deliver(scene);
+  // Фургону прокололи шины («крыша», game/racket.ts) — поставка приезжает к середине утра, а не к открытию.
+  if (scene.awaitingBoxes > 0 && racket?.kind === 'tires') scene.time.delayedCall(VAN_LATE * 1000, () => scene.running && void deliveries.deliver(scene));
+  else if (scene.awaitingBoxes > 0) void deliveries.deliver(scene);
   liveFx.endLiveEvent(scene);
   shoppers.scheduleRegulars(scene);
   shoppers.scheduleFriends(scene);

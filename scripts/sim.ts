@@ -6,8 +6,8 @@ const days = Number(process.argv[2] ?? 120);
 const runs = Number(process.argv[3] ?? 20);
 
 // Игрок сдаёт комнаты флигеля и ведёт бабушкин двор (simulate.ts, features tenants и garden) — как в игре с 11.11;
-// с 13.11 ещё и учит учеников (apprentice): за 150 дней — три лавки-друга, денег к концу ≈ +1% (в пределах шума, npm run sim:features).
-const features = { tenants: true, garden: true, apprentice: true };
+// с 13.11 ещё и учит учеников (apprentice, ≈ +1% денег) и ставит стойку проката у входа (rental, ≈ +3,5% к 120-му дню).
+const features = { tenants: true, garden: true, apprentice: true, rental: true };
 const { days: log } = simulate({ days, seed: 1, features });
 console.log('день ур  деньги   долг  ★    гости обсл ушли выручка закупка расходы прибыль вложения порча');
 for (const d of log.filter((x) => x.day <= 12 || x.day % 5 === 0)) {

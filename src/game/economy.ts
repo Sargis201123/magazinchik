@@ -730,6 +730,8 @@ export interface StoreState {
   tenantAsk?: { day: number; done: import('./tenants').TenantId[] };
   /** Сезонный торговец у входа (tenants.ts): кто и до какого дня стоит. */
   pitch?: { kind: import('./tenants').PitchKind; until: number };
+  /** Стойка проката у входа (rental.ts, 13.11): сколько вещей, какой залог и как прошёл прошлый день. */
+  rental?: import('./rental').Rental;
   /** «Бабушкина теплица» (garden.ts): когда посажено и сколько урожаев собрано. */
   garden?: import('./garden').GardenState;
   /** Ученик из района (apprentice.ts), выпускники с лавками на улице и с какого дня снова предложить ученика. */
@@ -785,6 +787,8 @@ export interface StoreState {
   /** Беда района (crisis.ts): идёт сейчас — и чем кончилась прошлая (новость утром, пауза до следующей). */
   crisis?: import('./crisis').CrisisState;
   crisisEnd?: import('./crisis').CrisisEnd;
+  /** «Крыша» (racket.ts): пришли ли ребята, что решили, пакости и доля. Нет поля — ещё не приходили. */
+  racket?: import('./racket').RacketState;
   /** Доброе имя района −100…100 (goodwill.ts); нет поля — 0. */
   goodwill?: number;
   /** 0..5 звёзд, влияет на поток покупателей. */

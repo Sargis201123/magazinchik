@@ -71,6 +71,27 @@ function tappable(scene: StoreScene, obj: Phaser.GameObjects.Image, text: () => 
   );
 }
 
+/** Что тележка обходит (x от двери): занятое у входа, скамейка с урной и торговец сезона (он встаёт раньше). */
+function cartBusy(scene: StoreScene): [number, number][] {
+  const d = scene.layout.door.x;
+  const busy = [...entranceBusy(scene.state, d), ...BENCH_BIN];
+  if (pitchNow(scene.state)) {
+    const p = pitchSpot(scene, scene.streetY - 12);
+    busy.push([p.x - d - 22, p.x - d + 22]);
+  }
+  return busy;
+}
+
+/**
+ * Где стоят тележка с Костей и скамейка с урной (x от двери) — их обходит стойка проката (rentalFx.ts; 13.11, автор:
+ * «не ставь стойку на то же место»). Тот же расчёт, что в applyDreams, — порядок отрисовки не важен.
+ */
+export function cartTaken(scene: StoreScene): [number, number][] {
+  if (!cartHere(scene.state)) return BENCH_BIN;
+  const dx = spot(cartBusy(scene), CART_SPOTS, CART_HALF + KOSTYA_W, CART_HALF, scene.layout.door.x);
+  return dx === null ? BENCH_BIN : [...BENCH_BIN, [dx - CART_HALF - KOSTYA_W, dx + CART_HALF]];
+}
+
 export function applyDreams(scene: StoreScene): void {
   clear(scene);
   const state = scene.state;
@@ -83,12 +104,7 @@ export function applyDreams(scene: StoreScene): void {
   const d = scene.layout.door.x;
   const top = scene.streetY - 12;
   const y = top + 19;
-  const busy = [...entranceBusy(state, d), ...BENCH_BIN];
-  // Торговец сезона встал раньше (streets.buildStreet) — тележка его обходит.
-  if (pitchNow(state)) {
-    const p = pitchSpot(scene, top);
-    busy.push([p.x - d - 22, p.x - d + 22]);
-  }
+  const busy = cartBusy(scene);
   if (cart) {
     const dx = spot(busy, CART_SPOTS, CART_HALF + KOSTYA_W, CART_HALF, d);
     if (dx !== null) {

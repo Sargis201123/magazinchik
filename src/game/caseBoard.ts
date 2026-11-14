@@ -61,6 +61,14 @@ export const CASES: Record<CaseId, CaseDef> = {
     culprit: 'valera',
     clues: [{ src: 'talk', about: 'ruslan' }, { src: 'camera', about: 'valera' }, { src: 'find', about: 'farmer' }, { src: 'receipt' }],
   },
+  // «Крыша» (racket.ts, 13.11): кто стоит за ребятами в кожанках? Борис с автомойки — чёрная «девятка» моется у него
+  // бесплатно, «для своих». Эдуард и Виктор — на виду, но ни при чём.
+  racket: {
+    victim: 'police',
+    suspects: { eduard: 'eduard', viktor: 'skit_viktor', boris: 'case_boris' },
+    culprit: 'boris',
+    clues: [{ src: 'camera', about: 'eduard' }, { src: 'talk', about: 'viktor' }, { src: 'receipt', about: 'boris' }, { src: 'find' }],
+  },
 };
 
 /** Сегодня пятница этого дела — можно обвинить. */
@@ -86,9 +94,13 @@ export const extraClues = (state: StoreState): ExtraClue[] => {
   const open = openCaseOf(state);
   if (!open) return [];
   const pinned = (casesOf(state).extra ?? []).filter((c) => !c.case || c.case === open.id);
+  // В деле о «крыше» краденое из ломбарда — с её же «точек»: годится всё, что полиция изымала, а не только за неделю
+  // дела (две последние вещи), и сержант узнаёт почерк банды.
+  const racket = open.id === 'racket';
   const pawned: ExtraClue[] = (state.pawn?.seized ?? [])
-    .filter((p) => p.day >= open.from)
-    .map((p) => ({ key: 'case.pawn', vars: { item: `pawn.item.${p.item}` as TextKey }, icon: '🏷', day: p.day }));
+    .filter((p) => racket || p.day >= open.from)
+    .slice(racket ? -2 : 0)
+    .map((p) => ({ key: racket ? 'case.racket.pawn' : 'case.pawn', vars: { item: `pawn.item.${p.item}` as TextKey }, icon: '🏷', day: p.day }));
   return [...pinned, ...pawned];
 };
 
