@@ -803,6 +803,8 @@ export interface StoreState {
   residents?: import('./residents').ResidentsState;
   /** Район дорожает (gentrify.ts): престиж района 0…100 и ответ «для кого магазин». Нет поля — престиж 0. */
   gentrify?: import('./gentrify').GentState;
+  /** Скупленная улица (estate.ts): какие помещения наши и кто в них. Нет поля — ничего не куплено. */
+  estate?: import('./estate').EstateState;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */

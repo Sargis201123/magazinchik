@@ -47,6 +47,7 @@ import { districtGuests } from './district';
 import { districtNight } from './districtPlots';
 import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
+import { estateGuests, estateMorning, estateNight } from './estate';
 import { settleVan, type VanResult } from './van';
 import { rentalNight, type RentalDay } from './rental';
 import { basementGuests, basementNight, type SlotsDay } from './basement';
@@ -74,6 +75,8 @@ export interface NightSummary extends NightResult {
   branch: number;
   /** Аренда от арендаторов флигеля за день (tenants.ts). */
   rent: number;
+  /** Аренда с лавок скупленной улицы за день (estate.ts; 0 — никого). */
+  estate: number;
   /** Итог выезда фургона (van.ts) или null — сегодня не выезжал. */
   van: VanResult | null;
   /** Прокат у входа за день (rental.ts): сколько взяли и не вернули, сколько денег; null — стойки нет или закрыта. */
@@ -136,6 +139,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Арендаторы флигеля платят за день — тоже до счетов (tenants.ts).
   const rent = tenantsNight(s);
   s = rent.state;
+  // Лавки скупленной улицы — тоже до счетов; бар иногда шумит (estate.ts).
+  const estate = estateNight(s);
+  s = estate.state;
   // Фургон вернулся с выезда (van.ts): выручка — до счетов, остаток — на склад до ночи (там он и стареет).
   const van = settleVan(s);
   s = van.state;
@@ -175,7 +181,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Жители района (residents.ts): в свой день район решает, въезжает ли кто-то или съезжает — по утреннему доброму имени.
   // Район дорожает (gentrify.ts): престиж на шаг к заслуженному; при высоком кто-то из старых может уехать от цен —
   // после жителей, чтобы в один день не было двух переездов.
-  const next = gentMorning(residentsMorning(racketMorning(crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(districtNight(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled))))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income)))))));
+  // Скупленная улица (estate.ts): кто открылся сегодня впервые — от того семьи въезжают или съезжают (после решения района).
+  const next = estateMorning(gentMorning(residentsMorning(racketMorning(crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(districtNight(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled))))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income))))))));
   return {
     ...night,
     state: next,
@@ -184,6 +191,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
     rent: rent.income,
+    estate: estate.income,
     van: van.result,
     rental: rental.day,
     slots: slots.day,
@@ -242,6 +250,8 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, districtGuests) *
   homeOnly(state, hoodGuests) *
   homeOnly(state, tenantGuests) *
+  // Лавки скупленной улицы (estate.ts) и табличка «улица вашего имени».
+  homeOnly(state, estateGuests) *
   homeOnly(state, dreamGuests) *
   homeOnly(state, lotteryGuests) *
   homeOnly(state, apprGuests) *
