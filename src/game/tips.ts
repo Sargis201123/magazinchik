@@ -54,6 +54,11 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   // Воришка по повадкам (13.11, thiefTells.ts): новичку — утром первого дня, когда приходят воры (после тихих
   // дней); старым игрокам — в первое утро после обновления: красной подсветки больше нет, ловят по приметам.
   ['thief', (s) => s.day >= 2 && !noThieves(s)],
+  // Касса в ритме (tillRhythm.ts, 13.11): лента включается только после этой карточки — никто не ждёт у кассы
+  // из-за правила, о котором ему не сказали. Новичку — после тихих дней (кассу он уже знает); со сменщиком
+  // хозяин за кассу не встаёт — карточка подождёт, пока касса снова не станет его.
+  // 14.11, аудит: сразу за воришкой — при одной карточке в утро ломбард и фургон отложили бы её на неделю.
+  ['rhythm', (s) => s.day >= 2 && !quietDays(s) && !s.staff.some((m) => m.role === RELIEF_ROLE)],
   ['weekly', (s) => Boolean(s.weekly)],
   ['fair', (s) => isFairDay(s.day)],
   ['loyalty', (s) => hasUpgrade(s, 'loyalty')],
@@ -66,10 +71,6 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['pawn', pawnOpen],
   // Первое дело недели (cases.ts): как приходят улики и когда обвинять.
   ['case', (s) => Boolean(s.cases?.open)],
-  // Касса в ритме (tillRhythm.ts, 13.11): лента включается только после этой карточки — никто не ждёт у кассы
-  // из-за правила, о котором ему не сказали. Новичку — после тихих дней (кассу он уже знает); со сменщиком
-  // хозяин за кассу не встаёт — карточка подождёт, пока касса снова не станет его.
-  ['rhythm', (s) => s.day >= 2 && !quietDays(s) && !s.staff.some((m) => m.role === RELIEF_ROLE)],
   // Первая сценка кончилась и посадила эхо (echoes.ts): утром — что решения ещё аукнутся.
   ['echo', (s) => echoesOf(s).list.length > 0],
   // Лицензия на пиво и сигареты (license.ts): наутро после покупки — где товар и чего делать нельзя.
@@ -138,10 +139,40 @@ export const TIP_ICONS: Record<TipId, string> = {
   foodcourt: '🍕',
 };
 
-/** Первая ещё не показанная подсказка, которая сейчас к месту. */
+/**
+ * 14.11, аудит: срочные — без очереди и сверх нормы. Касса пуста, беда района и Жора с предложением идут
+ * считанные дни (серое — одно утро), завтра карточка будет уже не к месту.
+ */
+const URGENT: ReadonlySet<TipId> = new Set<TipId>(['broke', 'crisis', 'grey']);
+
+/**
+ * Первая ещё не показанная подсказка, которая сейчас к месту. 14.11, аудит: не больше одной «Новое!» за утро —
+ * в утро «Минимаркета» их шло 4–5 подряд (ломбард, прокат, фургон, подвал), у вернувшегося игрока — 7.
+ * tipDay ставит только кнопка «Понятно» утром (ui/morning.ts): seeTip зовут и молча (newcomer.ts, сцены).
+ */
 export function pendingTip(state: StoreState): TipId | null {
   const seen = new Set(state.seenTips ?? []);
-  return WHEN.find(([id, when]) => !seen.has(id) && when(state))?.[0] ?? null;
+  const fits = ([id, when]: (typeof WHEN)[number]) => !seen.has(id) && when(state);
+  const urgent = WHEN.find((w) => URGENT.has(w[0]) && fits(w));
+  if (urgent) return urgent[0];
+  return state.tipDay === state.day ? null : (WHEN.find(fits)?.[0] ?? null);
 }
 
 export const seeTip = (state: StoreState, id: TipId): StoreState => ({ ...state, seenTips: [...(state.seenTips ?? []), id] });
+
+/** Карточки до 13.11: у кого видены только они — игрок со старым сохранением. */
+const OLD_TIPS: ReadonlySet<string> = new Set<string>(['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift']);
+/** Карточки «механика открылась» (а не «с тобой случилось»): их вернувшемуся игроку заменяет «Что нового». */
+const OPEN_TIPS: ReadonlySet<TipId> = new Set<TipId>(['pawn', 'rental', 'van', 'basement', 'clothes', 'gentrify', 'estate', 'foodcourt']);
+
+/**
+ * При загрузке (save.ts). 14.11, аудит: старое сохранение после обновления 13.11 получало 7 карточек подряд.
+ * Уже открытые механики отмечаем прочитанными — о них одной строкой говорит «Что нового» (news.mechs).
+ * Воришку и ритм кассы не трогаем: они меняют знакомое (ритм и включается карточкой).
+ */
+export function catchUpTips(state: StoreState): StoreState {
+  const seen = state.seenTips ?? [];
+  if (state.day <= 20 || seen.some((id) => !OLD_TIPS.has(id))) return state;
+  const open = WHEN.filter(([id, when]) => OPEN_TIPS.has(id) && when(state)).map(([id]) => id);
+  return open.length ? { ...state, seenTips: [...seen, ...open] } : state;
+}

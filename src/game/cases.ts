@@ -111,7 +111,8 @@ export function caseOrder(seed: number): CaseId[] {
   return out;
 }
 
-const solved = (s: CasesState, id: CaseId): boolean => (s.done ?? []).some((r) => r.id === id && (r.tone === 'great' || r.tone === 'good'));
+const isSolved = (r: CaseRecord): boolean => r.tone === 'great' || r.tone === 'good';
+const solved = (s: CasesState, id: CaseId): boolean => (s.done ?? []).some((r) => r.id === id && isSolved(r));
 
 /**
  * Следующее дело недели: по порядку магазина, раскрытые — не повторяются. Нераскрытые (ошибка, архив)
@@ -153,10 +154,23 @@ export function clueToday(state: StoreState): number | null {
   return n < 0 ? null : n;
 }
 
+/**
+ * 14.11, аудит: архив рос без конца (к 1600-му дню — 199 записей, 8,7 КБ сохранения) — держим последние
+ * CASE_ARCHIVE. Раскрытые раньше оставляем по одной на дело: по ним nextWeekly не повторяет раскрытое. Счёт
+ * попыток (tries) дальше идёт по окну — дела по кругу всё равно чередуются; доска и крыша смотрят на свежие.
+ */
+export const CASE_ARCHIVE = 12;
+const trimDone = (done: CaseRecord[]): CaseRecord[] => {
+  if (done.length <= CASE_ARCHIVE) return done;
+  const tail = done.slice(-CASE_ARCHIVE);
+  const keep = done.slice(0, -CASE_ARCHIVE).filter((r, i, old) => isSolved(r) && !tail.some((t) => t.id === r.id && isSolved(t)) && old.findIndex((o) => o.id === r.id && isSolved(o)) === i);
+  return [...keep, ...tail];
+};
+
 export const archive = (s: CasesState, rec: CaseRecord): CasesState => {
   const id = s.open?.id;
   const extra = (s.extra ?? []).filter((c) => c.case && c.case !== id);
-  const next: CasesState = { ...s, done: [...(s.done ?? []), rec], extra: extra.length ? extra : undefined };
+  const next: CasesState = { ...s, done: trimDone([...(s.done ?? []), rec]), extra: extra.length ? extra : undefined };
   delete next.open;
   if (!next.extra) delete next.extra;
   return next;
