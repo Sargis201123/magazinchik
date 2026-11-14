@@ -35,6 +35,8 @@ export const NEWS_IDS = [
   'case',
   // Лотерея у кассы (lottery.ts, 13.11): счастливый билет или запрет — пока идут свои дни.
   'lottery',
+  // Серая схема (grey.ts, 13.11): Жора с предложением мимо закона — только в своё утро.
+  'grey',
   // Ученик открыл свою лавку (apprentice.ts): итог сезона учёбы — друг или конкурент.
   'apprOut',
   // Для души: истории района и постоянных.
@@ -78,6 +80,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   // карточку перебил поворот — обвинить можно и со строчки дела в утре.
   case: 'timed',
   lottery: 'timed',
+  grey: 'timed',
   apprOut: 'timed',
   tale: 'flavour',
   life: 'flavour',

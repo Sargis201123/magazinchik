@@ -736,6 +736,8 @@ export interface StoreState {
   appr?: import('./apprentice').Apprentice;
   apprGrads?: import('./apprentice').ApprGrad[];
   apprAsk?: number;
+  /** Серая схема (grey.ts): сделки с Жорой, скрытые «хвосты», «договорённость» с проверяющим, опечатанный день. */
+  grey?: import('./grey').GreyState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Ломбард в подсобке (pawnshop.ts): вещи в залоге, полка «Разное», изъятое полицией. Нет поля — ещё не открывали. */

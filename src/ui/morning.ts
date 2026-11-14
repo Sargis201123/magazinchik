@@ -268,6 +268,8 @@ import { hoodBox } from './hood';
 import { linesBox } from './lines';
 import { licenseBox, licenseNoticeBox } from './license';
 import { hasLicense, licenseNotice } from '../game/license';
+import { greyCaughtBox, greyLines, greyOfferBox } from './grey';
+import { greyCaught, greyOffer } from '../game/grey';
 import { lineOfProduct } from '../game/lines';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
@@ -812,6 +814,13 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       card.replaceChildren(title, licenseNoticeBox(licenseCheck, getState, update));
       return;
     }
+    // Попался на серой схеме (game/grey.ts): штраф уже списан ночью, сегодня магазин опечатан до обеда.
+    const caught = greyCaught(state) && greyCaughtBox(state, getState, update);
+    if (caught) {
+      cue('fail', `grey:${state.day}`);
+      card.replaceChildren(title, caught);
+      return;
+    }
     // Новости утра (game/headlines.ts): сюжет, повороты, итоги, истории — не больше одной за утро,
     // остальные ждут следующего. Решить срочное (спасение, банк, брак) — выше, вне очереди.
     const zarHere = inZar(state);
@@ -841,6 +850,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('pawn', pawnOffer(state));
     add('case', !zarHere && caseNews(state));
     add('lottery', lotteryNews(state));
+    add('grey', greyOffer(state));
     add('tale', taleToday(state));
     add('life', !zarHere && lifeNews(state));
     add('dream', dreamNews(state));
@@ -1000,6 +1010,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...debtLine(state),
       ...bigDayLine(state),
       ...crisisLines(state),
+      // Опечатан до обеда после серой схемы (game/grey.ts) — это сегодня важнее цели главы.
+      ...greyLines(state),
       goalLine(state),
       ...apprLines(state),
       ...autoLine(),
@@ -2081,6 +2093,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       }
       case 'lottery':
         return lotteryNewsBox(state, getState, update);
+      // Серая схема (game/grey.ts): Жора с предложением мимо закона.
+      case 'grey':
+        return greyOfferBox(state, getState, update);
       case 'arc':
         return arcBox(state, getState, update);
       case 'echo':

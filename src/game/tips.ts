@@ -11,8 +11,9 @@ import { hasLottery } from './lottery';
 import { echoesOf } from './echoes';
 import { crisisToday } from './crisis';
 import { hasLicense } from './license';
+import { greyOffer } from './grey';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'grey';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -72,6 +73,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['dreams', (s) => Boolean(s.dreams?.inv?.length)],
   // Ученик (apprentice.ts): как только взяли — в двух словах, чем его место отличается и от чего зависит доверие.
   ['appr', (s) => Boolean(s.appr)],
+  // Серая схема (grey.ts): в утро первого предложения Жоры — чем такие сделки кончаются.
+  ['grey', (s) => Boolean(greyOffer(s))],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -96,6 +99,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   lottery: '🎟',
   dreams: '🌱',
   appr: '🧢',
+  grey: '🕶',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

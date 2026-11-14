@@ -47,6 +47,8 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['ломбард', { features: { pawn: true } }],
   // Лицензия на пиво и сигареты (13.11): берёт к «Универмагу», подросткам не продаёт — проверки чистые.
   ['лицензия на пиво и сигареты', { features: { license: true } }],
+  // Серая схема (13.11): соглашается на всё — выгода сразу, штрафы и опечатанные дни потом.
+  ['серая схема (на всё согласен)', { features: { grey: true } }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 
