@@ -17,7 +17,7 @@ import { rentalOpen } from './rental';
 import { floorAvailable, hasFloor } from './floors';
 import { residents, RES_START } from './residents';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement' | 'clothes';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -91,6 +91,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['plots', (s) => Boolean(s.district?.plots?.some((p) => p.sold))],
   // Подвал (floors.ts, basement.ts, 13.11): как только его можно открыть — что внизу и чем платишь за автоматы.
   ['basement', (s) => floorAvailable(s, 'basement') || hasFloor(s, 'basement')],
+  // Второй этаж — одежда (clothes.ts, 13.11): как только его можно открыть — что наверху, сезоны и распродажа.
+  ['clothes', (s) => floorAvailable(s, 'second') || hasFloor(s, 'second')],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -122,6 +124,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   residents: '🏘',
   plots: '🏗',
   basement: '🪜',
+  clothes: '👗',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

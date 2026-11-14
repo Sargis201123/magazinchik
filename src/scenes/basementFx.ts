@@ -114,10 +114,10 @@ async function regular(scene: StoreScene, x: number, y: number): Promise<void> {
 }
 
 /**
- * Вниз на этаж: камера плавно подлетает к спуску и гаснет, сцена этажа встаёт поверх (floorView.ts). Касания
+ * Вниз на этаж (или наверх — второй этаж подлетает к своей двери, at: clothesFx.ts): камера плавно подлетает к спуску и гаснет, сцена этажа встаёт поверх (floorView.ts). Касания
  * магазина на это время выключены — палец не пробьёт покупку и не сдвинет камеру наверху.
  */
-export function floorDown(scene: StoreScene, id: FloorId): void {
+export function floorDown(scene: StoreScene, id: FloorId, at: { x: number; y: number } = hatchSpot(scene)): void {
   if (away || !scene.running || !hasFloor(scene.state, id)) return;
   away = true;
   haptic.tap();
@@ -126,7 +126,6 @@ export function floorDown(scene: StoreScene, id: FloorId): void {
   const cam = scene.cameras.main;
   scene.homeTimer?.remove();
   scene.input.enabled = false;
-  const at = hatchSpot(scene);
   const mod = floorView.load();
   before = { x: cam.midPoint.x, y: cam.midPoint.y, zoom: cam.zoom };
   cam.panEffect.reset();

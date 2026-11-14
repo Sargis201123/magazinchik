@@ -796,6 +796,8 @@ export interface StoreState {
   floors?: import('./floors').FloorsState;
   /** Подвал (basement.ts): автоматы, склад-холодильник, «серая» подсобка, облава. Нет поля — внизу пусто. */
   basement?: import('./basement').BasementState;
+  /** Второй этаж — магазин одежды (clothes.ts, 13.11): вещи на стойках, распродажа, продавец. Нет поля — наверху пусто. */
+  clothes?: import('./clothes').ClothesState;
   /** Доброе имя района −100…100 (goodwill.ts); нет поля — 0. */
   goodwill?: number;
   /** Жители района (residents.ts): сколько семей, последний переезд, кто из постоянных уехал или въехал. Нет поля — 12 семей. */

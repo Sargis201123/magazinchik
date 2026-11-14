@@ -57,6 +57,7 @@ import * as rentalFx from './rentalFx';
 import * as residentsFx from './residentsFx';
 import { residentsLook } from '../game/residents';
 import * as basementFx from './basementFx';
+import * as clothesFx from './clothesFx';
 import { townFlags } from '../game/town';
 import * as zarFx from './zarechye';
 import { inZar } from '../game/zarechye';
@@ -570,6 +571,8 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
   if (!zar) rentalFx.applyRental(scene);
   // Спуск в подвал у правой стены зала и завсегдатаи автоматов (game/basement.ts).
   if (!zar) basementFx.applyBasement(scene);
+  // Дверь на второй этаж (одежда, game/clothes.ts) у левого угла фасада и её покупатели.
+  if (!zar) clothesFx.applyClothes(scene);
   // Район набрал общую цель недели (game/town.ts) — над улицей флажки до конца следующей недели.
   if (!zar && townFlags(scene.state, Date.now())) townBunting(scene, next, top);
   // «Бабушкин двор» с теплицей (game/garden.ts): слева от магазина, за флигелем; стадию грядок проверяем раз в 10 с.

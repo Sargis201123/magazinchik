@@ -49,6 +49,7 @@ import { tenantGuests, tenantsNight } from './tenants';
 import { settleVan, type VanResult } from './van';
 import { rentalNight, type RentalDay } from './rental';
 import { basementGuests, basementNight, type SlotsDay } from './basement';
+import { clothesNight, type ClothesDay } from './clothes';
 import { dreamGuests, dreamsNight } from './dreams';
 import { lotteryGuests, lotteryNight } from './lottery';
 import { tallyNight, type StaffRecord } from './staffStats';
@@ -79,6 +80,8 @@ export interface NightSummary extends NightResult {
   rental: RentalDay | null;
   /** Вечер у автоматов в подвале (basement.ts): доход, доля «крыши», облава; null — автоматов нет. */
   slots: SlotsDay | null;
+  /** Вечер на втором этаже (clothes.ts): сколько вещей продали и с распродажи, деньги, плата продавцу; null — пусто. */
+  clothes: ClothesDay | null;
   /** Доля с Костиной тележки у входа за день (dreams.ts; 0 — тележки нет). */
   cart: number;
   /** Сколько принёс Центр без игрока, пока он работал в Заречье (zarechye.ts; 0 — был в Центре). */
@@ -144,6 +147,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Автоматы в подвале (basement.ts): доход и доля «крыши» — до счетов; облава приходит к закрытию.
   const slots = basementNight(s);
   s = slots.state;
+  // Второй этаж — одежда (clothes.ts): наверх поднимается часть гостей дня (по утреннему состоянию, как прокат).
+  const clothes = clothesNight(s, guestsToday(state));
+  s = clothes.state;
   // Сбывшаяся мечта Кости: тележка у входа, доля с неё — тоже до счетов (dreams.ts).
   const cart = dreamsNight(s);
   s = cart.state;
@@ -184,6 +190,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     van: van.result,
     rental: rental.day,
     slots: slots.day,
+    clothes: clothes.day,
     cart: cart.income,
     home: home.income,
     week: week.done,

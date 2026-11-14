@@ -10,8 +10,8 @@ import type { StoreState } from './economy';
 import { homeLevel, inZar } from './zarshop';
 
 /** Этажи здания. Второй этаж и третий допишутся сюда же (тип, FLOORS, вид в floorView). */
-export type FloorId = 'basement';
-export const FLOOR_IDS: FloorId[] = ['basement'];
+export type FloorId = 'basement' | 'second';
+export const FLOOR_IDS: FloorId[] = ['basement', 'second'];
 
 export interface FloorDef {
   /** С какого помещения (индекс STORE_LEVELS) этаж можно открыть. */
@@ -30,6 +30,9 @@ export interface FloorDef {
  */
 export const FLOORS: Record<FloorId, FloorDef> = {
   basement: { minLevel: 2, cost: 3000, finish: [2500], icon: '🪜' },
+  // Второй этаж — магазин одежды (clothes.ts, 13.11): с «Супермаркета». У него ≈ 130 гостей в день — наверх
+  // поднимаются 3–4 покупателя, этаж окупается примерно за месяц, если вовремя завозить партии по сезону.
+  second: { minLevel: 3, cost: 8000, finish: [6000], icon: '👗' },
 };
 
 /** Этаж в сохранении: с какого дня открыт и ступень отделки (0 — голые стены). */

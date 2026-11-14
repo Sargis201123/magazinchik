@@ -344,6 +344,12 @@ export function finishDay(scene: StoreScene): void {
   // Автоматы в подвале (game/basement.ts): сколько дали за вечер (после доли «крыши») или облава.
   const slots = night.slots;
   if (slots) extra.push([t('bsm.summary'), slots.raid ? t('bsm.raid', { n: slots.raid.n, fine: slots.raid.fine }) : t('bsm.summaryValue', { n: slots.players, sum: slots.income - slots.share })]);
+  // Второй этаж — одежда (game/clothes.ts): сколько вещей ушло (с распродажи — отдельно) и сколько осталось после продавца.
+  const clothes = night.clothes;
+  if (clothes && (clothes.sold || clothes.sale || clothes.wage)) {
+    const sale = clothes.sale ? ` · ${t('cl.summarySale', { n: clothes.sale })}` : '';
+    extra.push([t('cl.summary'), `${t('cl.summaryValue', { n: clothes.sold, sum: clothes.income - clothes.wage })}${sale}`]);
+  }
   // Доля с Костиной тележки у входа (game/dreams.ts) — тоже строкой.
   if (night.cart) extra.push([t('dream.cart.summary'), t('branch.summaryValue', { n: night.cart })]);
   // Работали в Заречье — гипермаркет в Центре торговал сам (zarechye.ts).

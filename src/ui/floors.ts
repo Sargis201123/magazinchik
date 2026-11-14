@@ -1,8 +1,8 @@
 // Раздел «Этажи» во вкладке «Развитие» (game/floors.ts, game/basement.ts, 13.11): открыть этаж, отделать его и
-// обустроить то, что на нём живёт. Сейчас этаж один — подвал; второй и третий допишутся сюда же своим блоком.
+// обустроить то, что на нём живёт. Подвал — здесь; второй этаж (одежда) — своим блоком в ui/clothes.ts.
 // Автоматы подаём сухо: что дают и чем за них платишь (гости, облавы, «крыша») — рядом, одной строкой, без «азарта».
 
-import { t } from '../i18n';
+import { t, type TextKey } from '../i18n';
 import { STORE_LEVELS, type StoreState } from '../game/economy';
 import { buyFloor, finishCost, finishFloor, floorLock, floorOf, FLOORS, type FloorId } from '../game/floors';
 import {
@@ -29,6 +29,8 @@ import {
 import { track } from '../platform/analytics';
 import { button, el, toast } from './dom';
 import { setItemIcon } from './sheet';
+import { clothesRows } from './clothes';
+import { clothesOf, stockTotal } from '../game/clothes';
 
 type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void;
 
@@ -53,10 +55,12 @@ const warn = (text: string): HTMLElement => {
   return note;
 };
 
-/** Сводка свёрнутого раздела: что открыто и сколько автоматов. */
+/** Сводка свёрнутого раздела: что открыто и сколько автоматов (и вещей на стойках второго этажа). */
 export function floorsSummary(state: StoreState): string {
   const b = basementOf(state);
-  return b ? t('floors.summary', { n: b.slots, max: slotPlaces(state) }) : t('floors.closed');
+  const c = clothesOf(state);
+  const parts = [...(b ? [t('floors.summary', { n: b.slots, max: slotPlaces(state) })] : []), ...(c ? [t('floors.second', { n: stockTotal(c) })] : [])];
+  return parts.length ? parts.join(' · ') : t('floors.closed');
 }
 
 /** Раздел «Этажи»: до «Магазинчика» и в Заречье его нет — меньше шума в меню. */
@@ -65,28 +69,39 @@ export function floorsBox(state: StoreState, getState: () => StoreState, update:
   if (lock === 'zar' || (lock === 'level' && state.level < FLOORS.basement.minLevel - 1)) return [];
   const box = el('div', 'ui-box');
   box.append(el('b', '', `${FLOORS.basement.icon} ${t('floors.title')}`), el('div', 'ui-muted', t('floors.note')));
-  if (!floorOf(state, 'basement')) {
-    box.append(openRow(state, 'basement', getState, update));
-    return [box];
+  if (!floorOf(state, 'basement')) box.append(openRow(state, 'basement', getState, update));
+  else box.append(...basementRows(state, getState, update));
+  // Второй этаж — одежда (game/clothes.ts, 13.11): показываем с «Минимаркета» (за шаг до «Супермаркета»), чтобы
+  // было видно, к чему расти.
+  const second = floorLock(state, 'second');
+  if (second !== 'zar' && !(second === 'level' && state.level < FLOORS.second.minLevel - 1)) {
+    if (!floorOf(state, 'second')) box.append(openRow(state, 'second', getState, update));
+    else box.append(...clothesRows(state, getState, update, row, warn));
   }
-  box.append(...basementRows(state, getState, update));
   return [box];
 }
+
+/** Что показать у закрытого этажа: картинка, название, что там, и что сказать после открытия. */
+const OPEN_ROW: Record<FloorId, { art: string; name: TextKey; note: TextKey; opened: TextKey }> = {
+  basement: { art: 'bsm_stairs', name: 'floor.basement', note: 'floor.basement.note', opened: 'floor.opened' },
+  second: { art: 'fl2_front', name: 'floor.second', note: 'floor.second.note', opened: 'floor.second.opened' },
+};
 
 /** Этаж ещё не открыт: картинка, что внизу, и кнопка (или замок до нужного помещения). */
 function openRow(state: StoreState, id: FloorId, getState: () => StoreState, update: Update): HTMLElement {
   const def = FLOORS[id];
+  const look = OPEN_ROW[id];
   const lock = floorLock(state, id);
-  const notes = [t('floor.basement.note')];
+  const notes = [t(look.note)];
   if (lock === 'level') notes.push(`🔒 ${t('floors.lock', { name: t(STORE_LEVELS[def.minLevel].nameKey) })}`);
-  return row('bsm_stairs', t('floor.basement'), notes, [
+  return row(look.art, t(look.name), notes, [
     button(
       t('floor.open', { cost: def.cost }),
       () => {
         const next = buyFloor(getState(), id);
         if (!next) return;
         track('floor_open', next.day, def.cost);
-        toast('assets/ico_shop.png', t('floor.basement'), t('floor.opened'));
+        toast('assets/ico_shop.png', t(look.name), t(look.opened));
         update(next, 'success');
       },
       'ui-chip',
