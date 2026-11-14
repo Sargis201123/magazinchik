@@ -71,6 +71,12 @@ describe('«Новое!»: вернувшийся игрок', () => {
     expect(s.seenTips).not.toContain('foodcourt');
   });
 
+  it('метки сцен в seenTips (мусор, звонок) не мешают догонялке', () => {
+    const s = catchUpTips(old({ seenTips: [...OLD, 'rot', 'deliveryCard'] }));
+    expect(s.seenTips).toEqual(expect.arrayContaining(['rot', 'deliveryCard', 'pawn', 'rental', 'van', 'basement', 'clothes', 'estate']));
+    expect(pendingTip(s)).toBe('thief');
+  });
+
   it('новичок и игрок после 13.11 — без изменений (тот же объект)', () => {
     const fresh = old({ day: 15 });
     expect(catchUpTips(fresh)).toBe(fresh);

@@ -172,7 +172,9 @@ const OPEN_TIPS: ReadonlySet<TipId> = new Set<TipId>(['pawn', 'rental', 'van', '
  */
 export function catchUpTips(state: StoreState): StoreState {
   const seen = state.seenTips ?? [];
-  if (state.day <= 20 || seen.some((id) => !OLD_TIPS.has(id))) return state;
+  // 14.11, аудит: в seenTips лежат и метки сцен ('rot', 'deliveryCard' — с 25.10), они есть почти в любом
+  // старом сохранении. Считаем только настоящие карточки, иначе догонялка не срабатывала у вернувшихся.
+  if (state.day <= 20 || seen.some((id) => id in TIP_ICONS && !OLD_TIPS.has(id))) return state;
   const open = WHEN.filter(([id, when]) => OPEN_TIPS.has(id) && when(state)).map(([id]) => id);
   return open.length ? { ...state, seenTips: [...seen, ...open] } : state;
 }
