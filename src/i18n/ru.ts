@@ -2546,7 +2546,7 @@ export const ru = {
   "fup.second.showcase": "Витрины и свет",
   "fup.second.showcase.note": "Подиумы под манекенами, споты и неон на стене — наверх поднимаются на 15% чаще.",
   "fup.second.fitting": "3-я примерочная",
-  "fup.second.fitting.note": "Без очереди к шторке — вещь берут на 12% чаще.",
+  "fup.second.fitting.note": "Без очереди к шторке — вещь берут на 15% чаще.",
   "fup.second.brands": "Бренды",
   "fup.second.brands.note": "Витрина с сумками и таблички марок — на бирке на 25% дороже.",
   "drama.55.4": "И медовик по пятницам.",

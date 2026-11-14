@@ -2544,7 +2544,7 @@ export const uz: Record<TextKey, string> = {
   "fup.second.showcase": "Vitrinalar va yoritish",
   "fup.second.showcase.note": "Manekenlarga podium, spot chiroqlar va devorda neon — tepaga 15% ko‘proq xaridor chiqadi.",
   "fup.second.fitting": "Uchinchi kiyinish xonasi",
-  "fup.second.fitting.note": "Parda oldida navbat yo‘q — 12% ko‘proq sotib olishadi.",
+  "fup.second.fitting.note": "Parda oldida navbat yo‘q — 15% ko‘proq sotib olishadi.",
   "fup.second.brands": "Brendlar",
   "fup.second.brands.note": "Sumkalar solingan shisha vitrina va brend lavhalari — narx yorlig‘i 25% qimmat.",
   "drama.55.4": "Va juma kunlari medovik.",

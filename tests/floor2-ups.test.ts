@@ -64,7 +64,7 @@ describe('улучшения второго этажа', () => {
     const lit = clothesPlan(shop(['showcase']), guests)!;
     const both = clothesPlan(shop(['showcase', 'fitting']), guests)!;
     expect(upsBoost(shop(['showcase']))).toBeCloseTo(1.15);
-    expect(upsBoost(shop(['showcase', 'fitting']))).toBeCloseTo(1.15 * 1.12);
+    expect(upsBoost(shop(['showcase', 'fitting']))).toBeCloseTo(1.15 * 1.15);
     expect(lit.buyers).toBeGreaterThan(base.buyers);
     expect(both.buyers).toBeGreaterThan(lit.buyers);
     const brands = shop(['showcase', 'fitting', 'brands'], { level: 4 });
@@ -74,6 +74,17 @@ describe('улучшения второго этажа', () => {
     const plan = clothesPlan(brands, guests)!;
     const coll = collectionFor(brands.day);
     expect(plan.income).toBe(plan.sold * tagPrice(brands, coll) + plan.sale * salePrice(brands, 'warm'));
+  });
+
+  // 14.11, ревью баланса: закупка — половина бирки, и +25% к бирке давали +50% наценки — «Бренды» окупались втрое
+  // быстрее остальных ступеней. Теперь за процент прибыли этажа каждая ступень просит сопоставимо (в пределах 1.5 раза).
+  it('за процент прибыли этажа ступени просят сопоставимо', () => {
+    const margin = (s: StoreState, id: 'summer'): number => tagPrice(s, id) - COLLECTION_DEFS[id].cost;
+    const profit = (s: StoreState): number => upsBoost(s) * margin(s, 'summer');
+    const steps = [shop(), shop(['showcase']), shop(['showcase', 'fitting']), shop(['showcase', 'fitting', 'brands'], { level: 4 })];
+    const base = profit(steps[0]);
+    const perPct = CLOTHES_UPS.map((u, i) => u.price / (((profit(steps[i + 1]) - profit(steps[i])) / base) * 100));
+    expect(Math.max(...perPct) / Math.min(...perPct)).toBeLessThan(1.5);
   });
 
   it('вечер считает то же, что прогноз, и от перезапуска не меняется', () => {

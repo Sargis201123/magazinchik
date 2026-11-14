@@ -2542,7 +2542,7 @@ export const kk: Record<TextKey, string> = {
   "fup.second.showcase": "Витриналар мен жарық",
   "fup.second.showcase.note": "Манекендерге подиум, спот шамдар мен қабырғада неон — жоғарыға 15% көп адам көтеріледі.",
   "fup.second.fitting": "Үшінші киім өлшейтін бөлме",
-  "fup.second.fitting.note": "Перде алдында кезек жоқ — 12% жиі сатып алады.",
+  "fup.second.fitting.note": "Перде алдында кезек жоқ — 15% жиі сатып алады.",
   "fup.second.brands": "Брендтер",
   "fup.second.brands.note": "Сөмкелері бар шыны витрина мен бренд тақтайшалары — баға 25% қымбат.",
   "drama.55.4": "Және жұма сайын бал торт.",

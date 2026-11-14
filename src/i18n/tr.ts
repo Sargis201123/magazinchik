@@ -2532,7 +2532,7 @@ export const tr: Record<TextKey, string> = {
   "fup.second.showcase": "Vitrinler ve ışıklar",
   "fup.second.showcase.note": "Mankenlere podyum, spot ışıklar ve duvarda neon — yukarı %15 daha fazla müşteri çıkar.",
   "fup.second.fitting": "Üçüncü kabin",
-  "fup.second.fitting.note": "Perde için sıra yok — %12 daha fazla alan olur.",
+  "fup.second.fitting.note": "Perde için sıra yok — %15 daha fazla alan olur.",
   "fup.second.brands": "Markalar",
   "fup.second.brands.note": "Çantalı cam vitrin ve marka levhaları — etiketler %25 daha pahalı.",
   "drama.55.4": "Bir de cumaları ballı pasta.",

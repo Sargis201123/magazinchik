@@ -2545,7 +2545,7 @@ export const pt: Record<TextKey, string> = {
   "fup.second.showcase": "Vitrines e iluminação",
   "fup.second.showcase.note": "Pódios para os manequins, spots e um neon na parede — sobem 15% mais clientes.",
   "fup.second.fitting": "Terceiro provador",
-  "fup.second.fitting.note": "Sem fila para a cortina — compram 12% mais.",
+  "fup.second.fitting.note": "Sem fila para a cortina — compram 15% mais.",
   "fup.second.brands": "Marcas",
   "fup.second.brands.note": "Uma vitrine com bolsas e placas de marcas — etiquetas 25% mais caras.",
   "drama.55.4": "E bolo de mel às sextas.",

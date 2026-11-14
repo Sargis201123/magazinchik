@@ -16,9 +16,14 @@ import type { FloorUpgrade } from './floors';
 /**
  * Цены — как неделя-две выручки этажа на «Супермаркете» (этаж приносит ≈ 400–700 в день): улучшения окупаются за
  * месяц-два, а не за вечер. Бонусы скромные — этаж остаётся побочной лавкой (BUY_SHARE в clothes.ts).
+ *
+ * 14.11, ревью баланса (прогон этажа на год, «Супермаркет» и «Универмаг»): закупка — половина бирки, поэтому +25% к
+ * бирке — это +50% к наценке с каждой вещи, и «Бренды» за 9000 окупались за 2–3 недели — втрое быстрее остальных.
+ * А примерочная за 5000 с +12% давала меньше витрин за 3500. Выровняли: за каждый процент прибыли этажа все три
+ * ступени просят примерно одинаково (≈ 220–290 монет) — примерочная +15%, бренды — 14000.
  */
 export const CLOTHES_UPS: FloorUpgrade[] = [
   { id: 'showcase', icon: '💡', art: 'fl2b_neon', price: 3500, effect: { guests: 0.15 } },
-  { id: 'fitting', icon: '🚪', art: 'fl2b_booth', price: 5000, needs: 'showcase', effect: { buyers: 0.12 } },
-  { id: 'brands', icon: '👜', art: 'fl2b_brand', price: 9000, needs: 'fitting', minLevel: 4, effect: { price: 0.25 } },
+  { id: 'fitting', icon: '🚪', art: 'fl2b_booth', price: 5000, needs: 'showcase', effect: { buyers: 0.15 } },
+  { id: 'brands', icon: '👜', art: 'fl2b_brand', price: 14000, needs: 'fitting', minLevel: 4, effect: { price: 0.25 } },
 ];

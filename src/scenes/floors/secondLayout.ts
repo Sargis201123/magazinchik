@@ -47,7 +47,8 @@ export const RACKS: Point[] = [
 ];
 export const RACK_W = 24;
 
-export const SHOES = { x: 13, y: 104 };
+// 14.11, ревью: при x 13 левый край стойки с обувью заезжал на тёмную боковую стену (боковина 0–5) — сдвинули.
+export const SHOES = { x: 16, y: 104 };
 export const MIRROR = { x: 150, y: 110 };
 export const POUF = { x: 132, y: 110 };
 export const BRAND = { x: 150, y: 148 };
@@ -68,7 +69,7 @@ export const SPOTS = {
   stairsBottom: { x: 22, y: 230 },
   shelf: { x: 51, y: 76 },
   window: WINDOWS.map((x) => ({ x: x + 9, y: 76 })),
-  shoes: { x: 14, y: 112 },
+  shoes: { x: 16, y: 112 },
   mirror: { x: MIRROR.x, y: 112 },
   table: { x: TABLE.x, y: 196 },
   bin: { x: BIN.x, y: 196 },
