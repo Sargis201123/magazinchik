@@ -127,6 +127,8 @@ import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft, ownerTiming } from './owner';
 import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
+import { buyFloor, finishCost, finishFloor, floorAvailable, FLOORS, hasFloor } from './floors';
+import { basementOf, buyPart, buySlot, PARTS, SLOT_COST, slotPlaces } from './basement';
 import { rhythmSeconds } from './tillRhythm';
 import { buyVan, loadVan, planTrip, vanEvents, vanFuel, vanOpen, vanPrice, vanWant, VAN_EVENTS, VAN_PRICE } from './van';
 
@@ -292,6 +294,10 @@ export type Feature =
   // Серая схема (grey.ts): соглашается на всё, что предлагает Жора, — сколько это стоит в итоге (штрафы, опечатанные
   // дни, доброе имя). Эхо (отравление, месть) симулятор не разбирает — как и эхо сценок.
   | 'grey'
+  // Подвал (floors.ts, basement.ts, 13.11): открывает, когда не копит на помещение, ставит склад-холодильник
+  // (и подсобку, если ведёт ломбард), потом автоматы — до мест в подвале, ремонт — когда два уже стоят.
+  // Облавы и уход мам с детьми — в nightCycle и гостях дня, как в игре.
+  | 'basement'
   // Район дорожает (gentrify.ts, 13.11): престиж растёт сам, на выбор утром отвечает как в SimOptions.gentrify.
   // Без этой механики престиж в прогоне не копится: на прежних прогонах откалиброван баланс (аренда и прайс — как были).
   | 'gentrify';
@@ -853,6 +859,23 @@ export function simulate({
     if (features.pawn) {
       const offer = pawnOffer(state);
       if (offer) state = (offer.tell === 'calm' && state.money >= offer.lent + reserve * 2 ? takePawn(state) : null) ?? refusePawn(state);
+    }
+    if (features.basement) {
+      const spend = (price: number, next: StoreState | null): void => {
+        if (!next || state.money < price * 2 + reserve || !canSplurge(price)) return;
+        state = next;
+        investments += price;
+      };
+      if (floorAvailable(state, 'basement')) spend(FLOORS.basement.cost, buyFloor(state, 'basement'));
+      if (hasFloor(state, 'basement')) {
+        const parts = basementOf(state)?.parts ?? [];
+        if (!parts.includes('cold')) spend(PARTS.cold.cost, buyPart(state, 'cold'));
+        else if (features.pawn && !parts.includes('back')) spend(PARTS.back.cost, buyPart(state, 'back'));
+        const slots = basementOf(state)?.slots ?? 0;
+        const fin = finishCost(state, 'basement');
+        if (slots < slotPlaces(state)) spend(SLOT_COST, buySlot(state));
+        else if (fin !== null) spend(fin, finishFloor(state, 'basement'));
+      }
     }
     if (features.rental) {
       if (!state.rental && state.money >= STAND_COST * 2 + reserve && canSplurge(STAND_COST)) {

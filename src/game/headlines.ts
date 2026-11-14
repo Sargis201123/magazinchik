@@ -53,6 +53,8 @@ export const NEWS_IDS = [
   // Переезд в районе (residents.ts, 13.11): въехали новые соседи или кто-то уехал — ждёт пару дней.
   'residents',
   'staffEvent',
+  // На участке начали стройку по нашим продажам (districtPlots.ts, 13.11) — перед открытиями района.
+  'plot',
   'district',
   'cat',
   // Подросток из района просится в ученики (apprentice.ts).
@@ -100,6 +102,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   dream: 'flavour',
   residents: 'flavour',
   staffEvent: 'flavour',
+  plot: 'flavour',
   district: 'flavour',
   cat: 'flavour',
   appr: 'flavour',

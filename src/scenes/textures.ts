@@ -71,6 +71,16 @@ export const SPRITES = [
   'echo_card',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
+  // Подвал (art/basement.py, scenes/floorView.ts, scenes/basementFx.ts): кирпич и пол, лестница, автоматы, склад-холодильник,
+  // «серая» подсобка и спуск у правой стены зала.
+  'bsm_brick',
+  'bsm_floor',
+  'bsm_stairs',
+  'bsm_slot',
+  'bsm_slot_lit',
+  'bsm_cold',
+  'bsm_back',
+  'bsm_hatch',
   // Ломбард в подсобке (art/pawnshop.py, scenes/pawnFx.ts): полка «Разное» на стене склада, вещи и ценник.
   'pawn_shelf',
   'pawn_watch',
@@ -391,6 +401,13 @@ export const SPRITES = [
   'roof_cross',
   'roof_laundry',
   'flagpole',
+  // Крыши зданий участков и щит «Здесь будет» на заборе стройки (art/district_plots.py, 13.11).
+  'roof_gym',
+  'roof_wedding',
+  'roof_cowork',
+  'roof_kids',
+  'roof_canteen',
+  'site_board',
   // Разные деревья и кусты сквера (art/flora.py) и их зимние варианты.
   'tree_birch',
   'tree_pine',

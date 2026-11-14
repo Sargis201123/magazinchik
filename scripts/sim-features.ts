@@ -54,6 +54,9 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['крыша: в полицию', { racket: 'police' }],
   // Серая схема (13.11): соглашается на всё — выгода сразу, штрафы и опечатанные дни потом.
   ['серая схема (на всё согласен)', { features: { grey: true } }],
+  // Подвал (13.11): склад-холодильник, автоматы до мест, ремонт; облавы и уход мам с детьми — как в игре.
+  ['подвал с автоматами', { features: { basement: true } }],
+  ['подвал + ломбард', { features: { basement: true, pawn: true } }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 

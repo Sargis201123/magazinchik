@@ -415,8 +415,11 @@ export function setPrefersWide(wide: boolean): void {
 /** Магазин достаточно велик, чтобы ближний кадр имел смысл (ларёк и так крупный). */
 export const bigStore = (scene: StoreScene): boolean => scene.layout.w >= RUSH_MIN_W;
 
-/** В зале что-то ждёт касания не у касс: камере лучше показать весь магазин. */
-function calledElsewhere(scene: StoreScene): boolean {
+/**
+ * В зале что-то ждёт касания не у касс: камере лучше показать весь магазин. Ещё этим зовёт наверх вид этажа
+ * (floorView.ts): пока игрок в подвале, вор или «момент» наверху иначе прошли бы мимо него.
+ */
+export function calledElsewhere(scene: StoreScene): boolean {
   if (scene.liveEvent || scene.moments.showing || scene.clue?.phase === 'shown' || scene.call || scene.inspector === 'here') return true;
   if (scene.oven?.state === 'ready') return true;
   // Вор взялся за своё у полки (thiefTells.ts) — показать весь зал: искать его по повадкам.

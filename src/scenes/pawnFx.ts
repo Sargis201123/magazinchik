@@ -4,6 +4,7 @@
 
 import type { StoreScene } from './StoreScene';
 import { pawnOf, pawnOpen } from '../game/pawnshop';
+import { backSlots } from '../game/basement';
 
 /** Мест на полке и шаг между ними (точки мира); первое место — от левого края комнаты. */
 const SLOTS = 3;
@@ -16,7 +17,7 @@ interface Slot {
 }
 
 /** Места полки по сценам: при перестройке мира картинки пересоздаются (buildWarehouse). */
-const shelves = new WeakMap<StoreScene, Slot[]>();
+const shelves = new WeakMap<StoreScene, { board: Phaser.GameObjects.Image; slots: Slot[] }>();
 
 /** Повесить полку в подсобку (из building.buildWarehouse). Ломбард ещё закрыт — полки нет. */
 export function buildPawnShelf(scene: StoreScene): void {
@@ -25,26 +26,30 @@ export function buildPawnShelf(scene: StoreScene): void {
   const { x, y } = scene.layout.warehouse;
   // Ниже стеллажа и таблички по глубине — они к стене ближе не бывают: полка висит над первым ярусом.
   const depth = y - 90;
-  scene.art(x + 12, y + 6, 'pawn_shelf').setDepth(depth);
-  shelves.set(
-    scene,
-    Array.from({ length: SLOTS }, (_, n) => ({
+  const board = scene.art(x + 12, y + 6, 'pawn_shelf').setDepth(depth);
+  shelves.set(scene, {
+    board,
+    slots: Array.from({ length: SLOTS }, (_, n) => ({
       item: scene.art(x + FIRST + n * STEP, y + 5, 'pawn_watch').setDepth(depth + 0.1).setVisible(false),
       tag: scene.art(x + FIRST + n * STEP + 2.5, y + 3, 'pawn_tag').setDepth(depth + 0.2).setVisible(false),
     })),
-  );
+  });
   refreshPawnShelf(scene);
 }
 
 /** Что сейчас на полке: на продажу — первыми, потом залоги (из building.refreshWarehouse). */
 export function refreshPawnShelf(scene: StoreScene): void {
-  const slots = shelves.get(scene);
-  if (!slots) return;
+  const shelf = shelves.get(scene);
+  if (!shelf) return;
+  // «Серая» подсобка в подвале (game/basement.ts): полка «Разное» переехала вниз — на складе её больше нет.
+  const moved = backSlots(scene.state) > 0;
+  if (shelf.board.active) shelf.board.setVisible(!moved);
+  const slots = shelf.slots;
   const p = pawnOf(scene.state);
   const things = [...p.shelf.map((s) => ({ id: s.item, sale: true })), ...p.loans.map((l) => ({ id: l.item, sale: false }))];
   slots.forEach(({ item, tag }, n) => {
     if (!item.active || !tag.active) return;
-    const thing = things[n];
+    const thing = moved ? undefined : things[n];
     item.setVisible(Boolean(thing));
     tag.setVisible(Boolean(thing?.sale));
     if (thing) item.setTexture(`pawn_${thing.id}`);
