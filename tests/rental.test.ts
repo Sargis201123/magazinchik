@@ -12,6 +12,7 @@ import {
   rentalDay,
   rentalDemand,
   rentalKit,
+  kitToday,
   rentalLook,
   rentalNight,
   rentalOf,
@@ -94,6 +95,19 @@ describe('прокат: набор и спрос по погоде', () => {
     const summer = dayWhen((d) => yearTime(d) === 'summer' && weatherFor(d) === 'clear');
     const autumn = dayWhen((d) => yearTime(d) === 'autumn' && weatherFor(d) === 'clear');
     expect(rentalDemand(summer)).toBeGreaterThan(rentalDemand(autumn));
+  });
+
+  it('беда района меняет набор: в буран — санки, в паводок — зонты, и спрос вслед за погодой', () => {
+    const summer = dayWhen((d) => yearTime(d) === 'summer' && weatherFor(d) === 'clear');
+    const calm = rented('medium', { day: summer });
+    const flood = { ...calm, crisis: { kind: 'flood' as const, from: summer, days: 3 } };
+    const blizzard = { ...calm, crisis: { kind: 'blizzard' as const, from: summer, days: 3 } };
+    expect(kitToday(calm)).toBe('wheels');
+    expect(kitToday(flood)).toBe('rain');
+    expect(kitToday(blizzard)).toBe('winter');
+    expect(rentalDay(flood, 100)!.kit).toBe('rain');
+    // Зонтов в ливень паводка берут больше, чем колёс в ясный день (прохожих столько же).
+    expect(rentalDay({ ...flood, rental: { stock: RENTAL_CAP, deposit: 'medium' } }, 60)!.rented).toBeGreaterThanOrEqual(rentalDay(calm, 60)!.rented);
   });
 });
 

@@ -10,7 +10,7 @@ import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { t } from '../i18n';
 import { UI_FONT } from '../ui/dom';
-import { DEPOSITS, KIT_ICON, KIT_ITEMS, RENTAL_CAP, rentalDay, rentalKit, rentalOf, type RentalItem, type RentalKit } from '../game/rental';
+import { DEPOSITS, KIT_ICON, KIT_ITEMS, RENTAL_CAP, rentalDay, kitToday, rentalOf, type RentalItem, type RentalKit } from '../game/rental';
 import { guestsToday } from '../game/day';
 import { pitchNow } from '../game/tenants';
 import { inZar } from '../game/zarshop';
@@ -19,6 +19,7 @@ import { SHIRTS, customerLook } from './common';
 import * as camera from './camera';
 import * as persons from './persons';
 import { pitchSpot, sidewalkSpot } from './tenantsFx';
+import { cartTaken } from './dreamsFx';
 
 /** Где на стойке стоит каждая вещь набора (от середины стойки и её низа). */
 interface Slot {
@@ -96,8 +97,10 @@ export function applyRental(scene: StoreScene): void {
   const top = scene.streetY - 12;
   // Торговец у входа уже стоит (tenantsFx.buildPitch) — стойка встаёт рядом, а не на него.
   const pitch = pitchNow(state) ? pitchSpot(scene, top).x - scene.layout.door.x : null;
-  const { x, y } = sidewalkSpot(scene, top, 17, [44, 56, -44, -56, 68, -68, 92, -92, 116, -116, 140, -140], pitch === null ? [] : [[pitch - 23, pitch + 23]]);
-  const kit = rentalKit(state.day);
+  // И тележку Кости со скамейкой и урной (dreamsFx.cartTaken) — 13.11: стойка вставала на скамейку у входа.
+  const occupied: [number, number][] = [...cartTaken(scene), ...(pitch === null ? [] : [[pitch - 23, pitch + 23] as [number, number]])];
+  const { x, y } = sidewalkSpot(scene, top, 17, [-58, 76, -76, 92, -92, 116, -116, 140, -140, 164, -164], occupied);
+  const kit = kitToday(state);
   const stand = keep(scene.art(x, y + 1, 'rent_stand').setOrigin(0.5, 1).setDepth(y));
   SLOTS[kit].forEach((slot, i) => {
     const img = keep(scene.art(x + slot.dx, y + slot.dy, slot.key));

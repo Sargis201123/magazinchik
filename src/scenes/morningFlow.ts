@@ -281,7 +281,11 @@ export function showMorning(scene: StoreScene): void {
       // Поставили стойку проката, докупили вещи или сменили залог.
       if (s.rental !== was.rental) rentalFx.applyRental(scene);
       // Прочитали новость о мечте соседа — тележка Кости или указатель к станции встают сразу.
-      if (s.dreams !== was.dreams) dreamsFx.applyDreams(scene);
+      if (s.dreams !== was.dreams) {
+        dreamsFx.applyDreams(scene);
+        // Стойка проката обходит тележку Кости — встала тележка, переставить и стойку.
+        rentalFx.applyRental(scene);
+      }
       scene.awaitingBoxes = deliveries.boxesToDeliver(scene);
       scene.refreshShelves();
       building.refreshWarehouse(scene);

@@ -14,7 +14,7 @@ import {
   KIT_ITEMS,
   RENTAL_CAP,
   rentalDay,
-  rentalKit,
+  kitToday,
   rentalOf,
   restockRental,
   setDeposit,
@@ -45,7 +45,7 @@ function row(texture: string, name: string, actions: HTMLElement[], price?: numb
 /** Что на плитке «Уголков»: вещей на стойке или цена стойки. */
 export const rentalStatus = (state: StoreState): string => {
   const r = rentalOf(state);
-  return r ? `${KIT_ICON[rentalKit(state.day)]} ${r.stock}/${RENTAL_CAP}` : `${STAND_COST} 💰`;
+  return r ? `${KIT_ICON[kitToday(state)]} ${r.stock}/${RENTAL_CAP}` : `${STAND_COST} 💰`;
 };
 /** Плитка горит, когда половины вещей уже нет. */
 export const rentalAlert = (state: StoreState): boolean => (rentalOf(state)?.stock ?? RENTAL_CAP) <= RENTAL_CAP / 2;
@@ -60,7 +60,7 @@ export function restockButton(state: StoreState, getState: () => StoreState, upd
 
 export function rentalBox(state: StoreState, getState: () => StoreState, update: Update): HTMLElement {
   const box = el('div', 'ui-box');
-  const kit = rentalKit(state.day);
+  const kit = kitToday(state);
   box.append(el('b', '', `${KIT_ICON[kit]} ${t('rental.title')}`), el('div', 'ui-muted', t('rental.note')));
   const r = rentalOf(state);
   if (!r) {

@@ -10,7 +10,8 @@
 // В мире — scenes/rentalFx.ts (стойка и прохожие с вещами), в меню — ui/rental.ts.
 
 import type { StoreState } from './economy';
-import { isWet, weatherFor } from './weather';
+import { isWet, weatherFor, type Weather } from './weather';
+import { weatherToday } from './crisis';
 import { yearTime } from './calendar';
 import { homeLevel, inZar } from './zarshop';
 
@@ -61,15 +62,13 @@ export const DEPOSITS: Record<Deposit, { sum: number; take: number; lose: number
 };
 
 /** Набор дня: дождь — зонты в любое время года; зима или снег — санки и ватрушки; иначе — колёса. */
-export function rentalKit(day: number): RentalKit {
-  const weather = weatherFor(day);
+export function rentalKit(day: number, weather: Weather = weatherFor(day)): RentalKit {
   if (isWet(weather)) return 'rain';
   return weather === 'snow' || yearTime(day) === 'winter' ? 'winter' : 'wheels';
 }
 
 /** Спрос на прокат: в ливень зонты нарасхват, в снег — санки; летом катаются охотнее, чем весной и осенью. */
-export function rentalDemand(day: number): number {
-  const weather = weatherFor(day);
+export function rentalDemand(day: number, weather: Weather = weatherFor(day)): number {
   if (weather === 'storm') return 2;
   if (weather === 'rain') return 1.8;
   if (weather === 'snow') return 1.4;
@@ -80,6 +79,13 @@ export function rentalDemand(day: number): number {
   if (season === 'spring') return 0.9;
   return weather === 'leaves' ? 0.8 : 0.7;
 }
+
+/**
+ * Набор и спрос сегодня — по погоде дня с поправкой на беду района (crisis.ts: в буран — санки, в паводок — зонты,
+ * в жару — колёса), как её видит игрок на улице.
+ */
+export const kitToday = (state: StoreState): RentalKit => rentalKit(state.day, weatherToday(state));
+const demandToday = (state: StoreState): number => rentalDemand(state.day, weatherToday(state));
 
 /** Стойка в сохранении — с поправкой на испорченные поля; нет стойки — null. */
 export function rentalOf(state: StoreState): Rental | null {
@@ -143,11 +149,11 @@ function dayRoll(state: StoreState): () => number {
 export function rentalDay(state: StoreState, passers: number): RentalDay | null {
   const r = rentalOf(state);
   if (!r || inZar(state)) return null;
-  const kit = rentalKit(state.day);
+  const kit = kitToday(state);
   const dep = DEPOSITS[r.deposit];
   const roll = dayRoll(state);
   // День на день не приходится: ±20% к желающим.
-  const want = Math.round(Math.max(0, passers) * RENT_SHARE * rentalDemand(state.day) * dep.take * (0.8 + 0.4 * roll()));
+  const want = Math.round(Math.max(0, passers) * RENT_SHARE * demandToday(state) * dep.take * (0.8 + 0.4 * roll()));
   const rented = Math.min(r.stock, want);
   let lost = 0;
   for (let i = 0; i < rented; i++) if (roll() < dep.lose) lost++;
@@ -167,5 +173,5 @@ export function rentalNight(state: StoreState, passers: number): { state: StoreS
 /** Что видно в мире: стойка есть и что на ней. Изменилось — сцена ставит стойку заново. */
 export const rentalLook = (state: StoreState): string => {
   const r = rentalOf(state);
-  return r && !inZar(state) ? `${rentalKit(state.day)}:${r.stock}` : '';
+  return r && !inZar(state) ? `${kitToday(state)}:${r.stock}` : '';
 };
