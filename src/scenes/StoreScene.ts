@@ -148,6 +148,7 @@ import * as morningFlow from './morningFlow';
 import * as newcomer from './newcomer';
 import * as camera from './camera';
 import * as gardenFx from './gardenFx';
+import * as floorNav from './floors/nav';
 import * as shelves from './shelves';
 import * as skitsFx from './skitsFx';
 import * as crisisFx from './crisisFx';
@@ -837,6 +838,7 @@ export class StoreScene extends Phaser.Scene {
     this.hud.onSpeed = () => this.running && this.setSpeed(this.speed > 1 ? 1 : 2);
     this.hud.onView = () => this.running && camera.toggleView(this);
     this.hud.onYard = () => this.running && gardenFx.showYard(this);
+    this.hud.floors.onPick = (id) => floorNav.pick(this, id);
     this.hud.onHelp = () => void nightShift.callForHelp(this);
     // Карточка звонка и плашка доставки живут в DOM — уходят вместе со сценой.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.deliveryUi.destroy());
@@ -947,6 +949,8 @@ export class StoreScene extends Phaser.Scene {
     this.hud.showHelp(this.running && !this.night && this.time.now < this.helpUntil && nightShift.canCallForHelp(this), this.helpBusy);
     this.hud.showView(this.running && camera.bigStore(this) && !this.arranging, !camera.prefersWide());
     this.hud.showYard(this.running && !this.arranging && gardenVisible(this.state) && !quietDays(this.state), this.yardRipe());
+    // Переключатель этажей слева (14.11): виден, пока идёт день или игрок на этаже.
+    floorNav.syncSwitch(this);
     music.setMood(decorations.musicMood(this), this.winterTune);
     // Дверь двигается только в рабочие часы: день кончился — стекло снова закрывает улицу.
     if (!this.running) {

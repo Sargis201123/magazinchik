@@ -71,7 +71,7 @@ export const SPRITES = [
   'echo_card',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
-  // Подвал (art/basement.py, scenes/floorView.ts, scenes/basementFx.ts): кирпич и пол, лестница, автоматы, склад-холодильник,
+  // Подвал (art/basement.py, scenes/floors/basementFloor.ts, scenes/basementFx.ts): кирпич и пол, лестница, автоматы, склад-холодильник,
   // «серая» подсобка и спуск у правой стены зала.
   'bsm_brick',
   'bsm_floor',
@@ -81,7 +81,7 @@ export const SPRITES = [
   'bsm_cold',
   'bsm_back',
   'bsm_hatch',
-  // Второй этаж — одежда (art/clothes_floor.py, scenes/clothesFloor.ts, scenes/clothesFx.ts): обои и паркет, окно,
+  // Второй этаж — одежда (art/clothes_floor.py, scenes/floors/secondFloor.ts, scenes/clothesFx.ts): обои и паркет, окно,
   // лестница, стойки по сезону, примерочная, зеркало, касса, пакет, стол уценки и вход с улицы.
   'fl2_wall',
   'fl2_floor',
@@ -100,7 +100,7 @@ export const SPRITES = [
   'fl2_sale',
   'fl2_web',
   'fl2_front',
-  // Фудкорт на третьем этаже (art/foodcourt.py, scenes/foodcourtView.ts, scenes/foodcourtFx.ts): плитка и окна зала,
+  // Фудкорт на третьем этаже (art/foodcourt.py, scenes/floors/thirdFloor.ts, scenes/foodcourtFx.ts): плитка и окна зала,
   // четыре точки еды, жалюзи закрытой точки, общий стол, еда на столах, шарики дня рождения и лифт в фасаде.
   'fc_floor',
   'fc_wall',

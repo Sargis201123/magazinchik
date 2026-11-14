@@ -1,6 +1,6 @@
 // Фудкорт в виде этажа (game/foodcourt.ts, 13.11): то, что FloorView (floorView.ts) рисует для третьего этажа.
-// Отдельным модулем — чтобы подвал и будущий второй этаж не толкались в одном файле; грузится вместе с видом этажа
-// (по требованию), в первый файл игры не входит.
+// 14.11 — модуль этажа на общей основе floors/kit.ts (вид не менялся); грузится вместе с видом этажа (по требованию),
+// в первый файл игры не входит.
 //
 // Светлый зал: задняя стена — панорамные окна на крыши района, слева в ней — лифт, по ней — точки еды (закрытая по
 // жалобе — под жалюзи), в зале — общие столы со скамьями. За столами сидит столько людей, сколько сегодня едоков
@@ -8,26 +8,12 @@
 // Люди меняются: кто-то уходит к лифту, кто-то приходит и садится. В лёгкой графике — без смены людей и мигания.
 
 import Phaser from 'phaser';
-import type { StoreScene } from './StoreScene';
-import { foodPlan, isFoodWeekend, partyOn, stallPlaces, stallsOf, STALLS, type StallId } from '../game/foodcourt';
-import { t, type TextKey } from '../i18n';
-import { sound } from '../platform/sound';
-import { ART, SHIRTS, customerLook, type Look } from './common';
-import * as persons from './persons';
-
-/** Что вид этажа даёт фудкорту: свою сцену, магазин и пару рисовалок (FloorView держит их у себя). */
-export interface FloorKit {
-  scene: Phaser.Scene;
-  store: StoreScene;
-  W: number;
-  H: number;
-  WALL: number;
-  art(x: number, y: number, key: string): Phaser.GameObjects.Image;
-  text(x: number, y: number, s: string, size: number, color: string): Phaser.GameObjects.Text;
-  popup(x: number, y: number, s: string): void;
-  person(x: number, y: number, look: Look): Phaser.GameObjects.Container;
-  leaving(): boolean;
-}
+import { foodPlan, isFoodWeekend, partyOn, stallPlaces, stallsOf, STALLS, type StallId } from '../../game/foodcourt';
+import { t, type TextKey } from '../../i18n';
+import { sound } from '../../platform/sound';
+import { ART, SHIRTS, customerLook, type Look } from '../common';
+import * as persons from '../persons';
+import { chalkSpot, lightPool, prop, shell, title, type FloorKit } from './kit';
 
 /** Лифт у левого края задней стены, точки — правее (середины мест), низ стойки. */
 const LIFT_X = 13;
@@ -55,21 +41,13 @@ interface Seat {
   who: Phaser.GameObjects.Container | null;
 }
 
-export function buildFoodcourt(kit: FloorKit): void {
-  const { scene, store, W, H, WALL } = kit;
+export function buildThird(kit: FloorKit): void {
+  const { scene, store, W, H, WALL, lite } = kit;
   const state = store.state;
-  const lite = store.lite;
-  const tile = (x: number, y: number, w: number, h: number, key: string, depth: number) =>
-    scene.add.tileSprite(x, y, w, h, key).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
-  tile(0, 0, W, WALL, 'fc_wall', -10);
-  tile(0, WALL, W, H - WALL, 'fc_floor', -10);
-  scene.add.rectangle(0, WALL, W, 2, 0x181425, 0.25).setOrigin(0).setDepth(-9);
   // Боковые стены — тёплые, не тёмные: этаж светлый.
-  scene.add.rectangle(0, 0, 4, H, 0x733e39).setOrigin(0).setDepth(-8);
-  scene.add.rectangle(W - 4, 0, 4, H, 0x733e39).setOrigin(0).setDepth(-8);
-  const head = kit.text(W / 2, 7, `🍕 ${t('fc.header')}`, 7, '#fee761').setDepth(1);
-  head.setBackgroundColor('#181425aa').setPadding(3, 1, 3, 1);
-  kit.art(LIFT_X, STALL_BOTTOM - 8, 'fc_lift').setOrigin(0.5, 1).setDepth(STALL_BOTTOM - 8);
+  shell(kit, { wall: 'fc_wall', floor: 'fc_floor', side: 0x733e39, sideW: 4, strips: [[WALL, 2, 0x181425, 0.25]] });
+  title(kit, W / 2, 7, `🍕 ${t('fc.header')}`, '#fee761', '#181425aa');
+  prop(kit, LIFT_X, STALL_BOTTOM - 8, 'fc_lift');
 
   // Точки еды вдоль задней стены; свободные места — меловой контур на полу.
   const plan = foodPlan(state);
@@ -79,7 +57,7 @@ export function buildFoodcourt(kit: FloorKit): void {
     const x = STALL_X[i];
     const id = stalls[i];
     if (!id) {
-      scene.add.rectangle(x, STALL_BOTTOM - 6, 24, 10).setStrokeStyle(0.5, 0xb86f50, 0.7).setDepth(-7);
+      chalkSpot(kit, x, STALL_BOTTOM - 6, 24, 10, 0xb86f50, 0.7);
       continue;
     }
     buildStall(kit, id, x, plan?.stalls.find((p) => p.id === id));
@@ -92,11 +70,11 @@ export function buildFoodcourt(kit: FloorKit): void {
   for (let k = 0; k < tables; k++) {
     const x = TABLE_X[k % 2];
     const y = TABLE_Y[Math.floor(k / 2)];
-    kit.art(x, y, 'fc_table').setOrigin(0.5, 1).setDepth(y - 2);
+    prop(kit, x, y, 'fc_table', { depth: y - 2 });
     for (const s of SEATS) seats.push({ x: x + s.dx, y: y + s.dy, back: s.back, depth: s.back ? y - 3 : y + 4, who: null });
   }
   // Растения по углам и у колонн: зал живой.
-  for (const [x, y] of [[W - 12, WALL + 30], [10, H - 8], [W - 12, H - 8], [85, 134]] as const) kit.art(x, y, 'plant_big').setOrigin(0.5, 1).setScale(0.7 / ART).setDepth(y);
+  for (const [x, y] of [[W - 12, WALL + 30], [10, H - 8], [W - 12, H - 8], [85, 134]] as const) prop(kit, x, y, 'plant_big', { scale: 0.7 });
 
   // Сколько сидит: по едокам дня, не больше мест. Выходные — семьи (у каждого второго стола ребёнок).
   const seated = Math.min(seats.length, Math.ceil((plan?.eaters ?? 0) / EATERS_PER_SEAT));
@@ -105,8 +83,8 @@ export function buildFoodcourt(kit: FloorKit): void {
   // День рождения: первый стол — праздничный, за ним дети с шариками, на столе торт, рядом связка шариков.
   if (party) {
     const [x, y] = [TABLE_X[0], TABLE_Y[0]];
-    kit.art(x - 24, y + 2, 'fc_balloons').setOrigin(0.5, 1).setDepth(y + 2);
-    kit.art(x, y - 9, 'item_honeycake').setScale(0.9 / ART).setOrigin(0.5, 1).setDepth(y - 1);
+    prop(kit, x - 24, y + 2, 'fc_balloons');
+    prop(kit, x, y - 9, 'item_honeycake', { depth: y - 1, scale: 0.9 });
     // Растяжка над праздничным столом — поверх всех (люди у стоек её не заслоняют).
     const sign = kit.text(x, y - 34, `🎂 ${t('fc.birthday')}`, 5, '#fee761').setDepth(H + 20);
     sign.setBackgroundColor('#b55088cc').setPadding(2, 1, 2, 1);
@@ -177,13 +155,12 @@ export function buildFoodcourt(kit: FloorKit): void {
 
 /** Точка: стойка, свет вывески, очередь из одного-двух человек; закрытая — под жалюзи и с табличкой. */
 function buildStall(kit: FloorKit, id: StallId, x: number, plan: { eaters: number; income: number; closed: boolean } | undefined): void {
-  const { scene, store } = kit;
-  const stall = kit.art(x, STALL_BOTTOM, `fc_${id}`).setOrigin(0.5, 1).setDepth(STALL_BOTTOM);
+  const { store } = kit;
+  const stall = prop(kit, x, STALL_BOTTOM, `fc_${id}`);
   // Тёплый отсвет вывески на полу перед точкой; в обычной графике чуть дышит.
-  const glow = kit.art(x, STALL_BOTTOM + 3, 'glow').setDisplaySize(30, 12).setTint(0xfeae34).setAlpha(0.22).setBlendMode(Phaser.BlendModes.ADD).setDepth(STALL_BOTTOM - 1);
-  if (!store.lite) scene.tweens.add({ targets: glow, alpha: 0.12, duration: 1400 + x * 4, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  const glow = lightPool(kit, x, STALL_BOTTOM + 3, { w: 30, h: 12, tint: 0xfeae34, alpha: 0.22, depth: STALL_BOTTOM - 1, breathe: { alpha: 0.12, ms: 1400 + x * 4 } });
   if (plan?.closed) {
-    kit.art(x, STALL_BOTTOM - 4, 'fc_shutter').setOrigin(0.5, 1).setDepth(STALL_BOTTOM + 0.2);
+    prop(kit, x, STALL_BOTTOM - 4, 'fc_shutter', { depth: STALL_BOTTOM + 0.2 });
     const sign = kit.text(x, STALL_BOTTOM - 8, t('fc.closedSign'), 4.5, '#ffffff').setDepth(STALL_BOTTOM + 0.3);
     sign.setBackgroundColor('#a22633').setPadding(1.5, 0.5, 1.5, 0.5);
     glow.setVisible(false);

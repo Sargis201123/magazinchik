@@ -17,6 +17,7 @@ import { injectAudioStyles, muteIcon, toggleMute } from './audio';
 import type { Goal } from '../game/nudge';
 import { goalText } from './nudge';
 import { QuestChip, type QuestRow } from './today';
+import { FloorSwitch } from './floorSwitch';
 
 /** Сколько штук на полках считается «мало» и сколько таких товаров показывать в панели. */
 const LOW_ON_SHELF = 3;
@@ -99,6 +100,8 @@ export class Hud {
   onYard: () => void = () => {};
   /** Быстрое «без звука» — напротив ускорения, видно всегда, пока идёт игра. */
   private readonly mute = el('button', 'ui-speed ui-mute');
+  /** Переключатель этажей слева (ui/floorSwitch.ts, 14.11): что показать — scenes/floors/nav.syncSwitch. */
+  readonly floors = new FloorSwitch();
   private day = 1;
   private readonly money = el('span');
   private readonly moneyText = document.createTextNode('');
@@ -157,7 +160,7 @@ export class Hud {
     row.append(this.goal, this.quests.chip);
     this.goalWrap.append(row, this.goalNext, this.quests.list);
     this.stock.append(this.goalWrap);
-    document.body.append(this.top, this.stock, this.hint, this.speed, this.help, this.view, this.yard, this.mute);
+    document.body.append(this.top, this.stock, this.hint, this.speed, this.help, this.view, this.yard, this.mute, this.floors.root);
   }
 
   /** Цель на полоске; null — спрятать. Перерисовывается, только когда что-то поменялось. */

@@ -3,6 +3,8 @@
 // больше нескольких за день) и спускаются вниз. Касание спуска — камера плавно подлетает к нему, гаснет и
 // открывает вид этажа (scenes/floorView.ts — отдельная сцена поверх магазина, подгружается по требованию).
 // Магазин наверху всё это время работает: день идёт, покупатели ходят. Без тряски; в лёгкой графике — меньше людей.
+// 14.11: главный путь на этажи теперь — переключатель слева (floors/nav.ts, ui/floorSwitch.ts); двери в фасаде
+// остались и тоже ведут на этаж — через тот же nav.goFloor.
 
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
@@ -11,36 +13,19 @@ import { UI_FONT } from '../ui/dom';
 import { hasFloor, type FloorId } from '../game/floors';
 import { slotsPlan } from '../game/basement';
 import { inZar } from '../game/zarshop';
-import { lazy } from '../platform/lazy';
-import { sound } from '../platform/sound';
-import { haptic } from '../platform/telegram';
-import { track } from '../platform/analytics';
 import { FACADE_H, SHIRTS, STREET_TAP_MS, customerLook } from './common';
 import * as camera from './camera';
 import * as persons from './persons';
-
-const floorView = lazy('floorView', () => import('./floorView'));
+import { goFloor } from './floors/nav';
 
 /** Сколько завсегдатаев показать на улице за день (остальные пришли «за кадром») и как часто идёт следующий. */
 const SHOWN_MAX = 6;
 const LITE_SHOWN = 2;
 const PLAYER_EVERY = 9000;
-/** Подлёт к спуску и затемнение перед видом этажа (мс). */
-const DIVE_MS = 650;
-const FADE_MS = 320;
 
 let objs: Phaser.GameObjects.GameObject[] = [];
 let stops: (() => void)[] = [];
 let shown = { day: 0, n: 0 };
-/** Камера ушла на этаж (или летит туда): второе касание не считается. */
-let away = false;
-/**
- * Кадр до спуска и кадр, где камера погасла у двери. 13.11, ревью: этаж закрывается и сам — когда день встал на
- * паузу (сценка, ночная смена, итоги). Тот, кто остановил день, мог уже навести камеру магазина (сценка — на гостя);
- * тогда при возврате не уводим её — только возвращаем прежний масштаб.
- */
-let before = { x: 0, y: 0, zoom: 1 };
-let dived = { x: 0, y: 0 };
 
 /** Насколько точка фасада далеко от фонаря на тротуаре (фонари — через 72 от −100, tenantsFx.nearLamp). Её же берёт лифт фудкорта. */
 export const lampGap = (x: number): number => {
@@ -114,64 +99,10 @@ async function regular(scene: StoreScene, x: number, y: number): Promise<void> {
 }
 
 /**
- * Вниз на этаж (или наверх): камера плавно подлетает к двери этажа и гаснет, сцена этажа встаёт поверх (floorView.ts).
- * Касания магазина на это время выключены — палец не пробьёт покупку и не сдвинет камеру наверху. Другой этаж передаёт
- * свою дверь (второй — дверь с навесом, clothesFx.ts; фудкорт — лифт, foodcourtFx.liftSpot), иначе камера летит к
- * спуску в подвал.
+ * На этаж через дверь в фасаде: камера плавно подлетает к двери и гаснет, сцена этажа встаёт поверх (floorView.ts).
+ * Другой этаж передаёт свою дверь (второй — дверь с навесом, clothesFx.ts; фудкорт — лифт, foodcourtFx.liftSpot),
+ * иначе камера летит к спуску в подвал. Как едут и как возвращаются — floors/nav.ts.
  */
 export function floorDown(scene: StoreScene, id: FloorId, door?: { x: number; y: number }): void {
-  if (away || !scene.running || !hasFloor(scene.state, id)) return;
-  away = true;
-  haptic.tap();
-  sound.tap();
-  track('floor_view', scene.state.day, 0);
-  const cam = scene.cameras.main;
-  scene.homeTimer?.remove();
-  scene.input.enabled = false;
-  const at = door ?? hatchSpot(scene);
-  const mod = floorView.load();
-  before = { x: cam.midPoint.x, y: cam.midPoint.y, zoom: cam.zoom };
-  cam.panEffect.reset();
-  cam.zoomEffect.reset();
-  cam.pan(at.x, at.y - 10, DIVE_MS, 'Sine.easeInOut', true);
-  cam.zoomTo(Math.min(cam.zoom * 2, scene.baseZoom * 2.4), DIVE_MS, 'Sine.easeIn', true);
-  scene.time.delayedCall(DIVE_MS - FADE_MS, () => {
-    cam.fadeOut(FADE_MS, 24, 20, 37);
-    cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      dived = { x: cam.midPoint.x, y: cam.midPoint.y };
-      mod.then(
-        (m) => {
-          // Этаж не открылся — магазин не должен остаться тёмным и глухим к касаниям.
-          try {
-            m.openFloor(scene, id);
-          } catch (error) {
-            floorUp(scene);
-            throw error;
-          }
-        },
-        () => floorUp(scene),
-      );
-    });
-  });
-}
-
-/**
- * Наверх: этаж закрылся — магазин снова рисуется (пока смотрели этаж, его не рисовали — floorView.create), камера
- * светлеет. Куда смотреть: камеру навёл кто-то другой (сценка — на гостя) — остаёмся там, только прежний масштаб;
- * день идёт — в обычный кадр; день встал (итоги, ночная смена) — туда, где игрок смотрел до спуска.
- */
-export function floorUp(scene: StoreScene): void {
-  away = false;
-  scene.scene.setVisible(true);
-  if (!scene.sys.isActive()) return;
-  scene.input.enabled = true;
-  scene.dragged = false;
-  const cam = scene.cameras.main;
-  cam.resetFX();
-  cam.fadeIn(FADE_MS, 24, 20, 37);
-  const steered = cam.panEffect.isRunning || Math.hypot(cam.midPoint.x - dived.x, cam.midPoint.y - dived.y) > 3;
-  const home = scene.rushView ?? { x: scene.home.x, y: scene.home.y, zoom: scene.baseZoom };
-  const view = steered ? { x: cam.midPoint.x, y: cam.midPoint.y, zoom: before.zoom } : scene.running ? home : before;
-  if (!steered) cam.pan(view.x, view.y, DIVE_MS + 200, 'Sine.easeInOut', true);
-  cam.zoomTo(view.zoom, DIVE_MS + 200, 'Sine.easeOut', true);
+  goFloor(scene, id, door ?? hatchSpot(scene));
 }
