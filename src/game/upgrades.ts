@@ -7,6 +7,7 @@ import type { TextKey } from '../i18n/ru';
 import { CARRY, managerBoost, type ScanTiming, type StoreState } from './economy';
 import { gearTier, registerScan } from './gear';
 import { helpScan } from './help';
+import { apprScan } from './apprentice';
 
 export type UpgradeId = 'terminal' | 'selfCheckout' | 'loyalty' | 'delivery' | 'coffee' | 'oven' | 'nightShift' | 'wholesale' | 'coffeeTables' | 'kitchen' | 'bargain';
 /**
@@ -56,8 +57,9 @@ export function buyUpgrade(state: StoreState, id: UpgradeId): StoreState | null 
 
 /** Время пробивки с учётом модели кассы, терминала, менеджера и подмоги друзей (help.ts). */
 export const withUpgrades = (state: StoreState, timing: ScanTiming): ScanTiming => ({
-  item: (timing.item * registerScan(state)) / managerBoost(state) / helpScan(state),
-  pay: (hasUpgrade(state, 'terminal') ? timing.pay * TERMINAL_PAY : timing.pay) / managerBoost(state) / helpScan(state),
+  // Ученик на кассе (apprentice.ts) пакует покупки — пробивка и расчёт чуть быстрее.
+  item: (timing.item * registerScan(state)) / managerBoost(state) / helpScan(state) / apprScan(state),
+  pay: (hasUpgrade(state, 'terminal') ? timing.pay * TERMINAL_PAY : timing.pay) / managerBoost(state) / helpScan(state) / apprScan(state),
 });
 
 /** Со склада с рохлей (gear.ts, склад от 1-й модели) за один поход несут вдвое больше. */

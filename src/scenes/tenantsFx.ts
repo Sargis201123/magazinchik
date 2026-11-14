@@ -425,11 +425,18 @@ export function entranceBusy(state: StoreScene['state'], d: number): [number, nu
  * недели (weeks.ts). 11.11: в «Ярмарку урожая» фермер с лотком стоял прямо перед прилавком.
  */
 export function pitchSpot(scene: StoreScene, top: number): { x: number; y: number } {
+  return sidewalkSpot(scene, top, 21, [-40, -52, 40, 52, -64, -88, 88, -112, 112, -136, 136]);
+}
+
+/**
+ * Свободное место у бордюра шириной 2·half (x — середина) из кандидатов order (от двери); taken — ещё занятое.
+ * 13.11: общее для торговца и стойки проката (rentalFx.ts) — стойка обходит и торговца, и тележку Кости.
+ */
+export function sidewalkSpot(scene: StoreScene, top: number, half: number, order: number[], taken: [number, number][] = []): { x: number; y: number } {
   const d = scene.layout.door.x;
-  const busy = entranceBusy(scene.state, d);
-  const half = 21;
+  const busy = [...entranceBusy(scene.state, d), ...taken];
   const free = (dx: number) => busy.every(([a, b]) => dx + half <= a || dx - half >= b);
-  const dx = [-40, -52, 40, 52, -64, -88, 88, -112, 112, -136, 136].find((cx) => free(cx) && !nearLamp(d + cx)) ?? -40;
+  const dx = order.find((cx) => free(cx) && !nearLamp(d + cx)) ?? order[0];
   return { x: d + dx, y: top + 19 };
 }
 

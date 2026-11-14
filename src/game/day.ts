@@ -44,9 +44,11 @@ import { careerMorning, careerNight } from './career';
 import { districtGuests } from './district';
 import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
+import { rentalNight, type RentalDay } from './rental';
 import { dreamGuests, dreamsNight } from './dreams';
 import { lotteryGuests, lotteryNight } from './lottery';
 import { tallyNight, type StaffRecord } from './staffStats';
+import { apprGuests, apprNight } from './apprentice';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
 import { laneGuests } from './lanes';
@@ -66,6 +68,8 @@ export interface NightSummary extends NightResult {
   branch: number;
   /** Аренда от арендаторов флигеля за день (tenants.ts). */
   rent: number;
+  /** Прокат у входа за день (rental.ts): сколько взяли и не вернули, сколько денег; null — стойки нет или закрыта. */
+  rental: RentalDay | null;
   /** Доля с Костиной тележки у входа за день (dreams.ts; 0 — тележки нет). */
   cart: number;
   /** Сколько принёс Центр без игрока, пока он работал в Заречье (zarechye.ts; 0 — был в Центре). */
@@ -107,6 +111,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const tally = tallyNight(s, stats.deeds, stats.walked);
   s = tally.state;
   s = restStaff(s);
+  // Ученик (apprentice.ts): стипендия, доверие, навык; отучился сезон — уходит открывать свою лавку.
+  s = apprNight(s, stats.appr);
   // «Проверяющий» от конкурента: штраф, ушёл ни с чем или разоблачили (tricks.ts).
   s = trickNight(s, random, Boolean(staffOf(s, 'cleaner')));
   // Проверка лицензии на пиво и сигареты (license.ts): иногда вечером; нашла продажу подростку — штраф до счетов.
@@ -118,6 +124,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Арендаторы флигеля платят за день — тоже до счетов (tenants.ts).
   const rent = tenantsNight(s);
   s = rent.state;
+  // Прокат у входа — тоже до счетов (rental.ts). Прохожие — гости дня по утреннему состоянию: как в прогнозе утра.
+  const rental = rentalNight(s, guestsToday(state));
+  s = rental.state;
   // Сбывшаяся мечта Кости: тележка у входа, доля с неё — тоже до счетов (dreams.ts).
   const cart = dreamsNight(s);
   s = cart.state;
@@ -153,6 +162,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
     rent: rent.income,
+    rental: rental.day,
     cart: cart.income,
     home: home.income,
     week: week.done,
@@ -206,6 +216,7 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, tenantGuests) *
   homeOnly(state, dreamGuests) *
   homeOnly(state, lotteryGuests) *
+  homeOnly(state, apprGuests) *
   homeOnly(state, dogGuests) *
   homeOnly(state, trickGuests) *
   // Вечерние гости за пивом и сигаретами (license.ts): лицензия — у магазина в Центре.

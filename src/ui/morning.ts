@@ -206,6 +206,8 @@ import { arcToday } from '../game/arcs';
 import { lateContestAnnounce, lateContestResult, pickNews, type NewsId } from '../game/headlines';
 import { chooseCrisis, crisisAsk, crisisNews, crisisWeather, crisisDaysLeft, seeCrisisEnd, weatherToday } from '../game/crisis';
 import { crisisChoiceBox, crisisEndBox, crisisLines } from './crisis';
+import { apprNews, apprOffer, apprWorry } from '../game/apprentice';
+import { apprCard, apprLines, apprOfferBox, apprOutBox, gradLines } from './apprentice';
 import { chooseRacket, racketAsk, racketNews, seeRacketNews, stopPaying } from '../game/racket';
 import { racketChoiceBox, racketLines, racketNewsBox } from './racket';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
@@ -260,6 +262,8 @@ import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
 import { pawnBox, pawnOfferBox } from './pawnshop';
 import { pawnMet, pawnOf, pawnOffer, pawnOpen, pawnSlots } from '../game/pawnshop';
+import { rentalAlert, rentalBox, rentalStatus, restockButton } from './rental';
+import { KIT_ICON, RENTAL_CAP, kitToday, rentalOf, rentalOpen } from '../game/rental';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
 import { applyTownGifts, townBox } from './town';
@@ -849,6 +853,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('staffEvent', staffEventDue(state));
     add('district', !zarHere && districtNews(state));
     add('cat', catOffer(state));
+    add('appr', apprOffer(state));
+    add('apprOut', apprNews(state));
     add('zarTale', zarTale);
     add('careerLeft', state.career?.left);
     add('arc', !zarHere && arcToday(state));
@@ -1007,6 +1013,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...crisisLines(state),
       ...(zarHere ? [] : racketLines(state, (mode) => update(stopPaying(getState(), mode), 'success'))),
       goalLine(state),
+      ...apprLines(state),
       ...autoLine(),
       billForecast(state),
       ...weatherLine(state),
@@ -1149,7 +1156,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const extras = (state.cat && !fedToday(state) ? 1 : 0) + (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0);
     const next = nextStoreLevel(state);
     const grow = next && state.debt === 0 && state.money >= next.cost ? 1 : 0;
-    return { buy: empty, hall, extras, grow };
+    // Ученик скучает, устал или без стипендии — точка на «Персонале» (game/apprentice.ts apprWorry).
+    return { buy: empty, hall, extras, grow, staff: apprWorry(state) ? 1 : 0 };
   };
 
   /**
@@ -2101,6 +2109,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return pawnOfferBox(state, getState, update);
       case 'case':
         return caseNewsBox(state, openCaseBoard, (next) => update(next));
+      // Ученик (game/apprentice.ts): просится в ученики; отучился и открыл свою лавку.
+      case 'appr':
+        return apprOfferBox(state, getState, update);
+      case 'apprOut':
+        return apprOutBox(state, getState, update);
       default:
         return [];
     }
@@ -2329,6 +2342,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
               details: () => kitchenBox(getState()),
             },
           ]
+        : []),
+      // Прокат у входа (game/rental.ts, 13.11): плитка — когда стойку можно поставить или она уже стоит.
+      ...(rentalOpen(state) || state.rental
+        ? [{ id: 'rental', icon: KIT_ICON[kitToday(state)], title: t('rental.title'), status: rentalStatus(state), alert: rentalAlert(state), details: () => [rentalBox(getState(), getState, update)] }]
         : []),
       {
         id: 'cat',
@@ -3741,6 +3758,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     if (rack.stock <= rackCapacity(state) / 3 && rackFree > 0) {
       row(t('todo.rack', { n: rack.stock }), button(t('todo.rackBtn', { n: rackFree * CANDY_COST }), () => update(refillRack(getState(), rackFree), 'success'), 'ui-chip', state.money < rackFree * CANDY_COST));
     }
+    // Прокат: вещи пропали (не вернули) — докупить, иначе стойка беднеет (game/rental.ts).
+    const rentRefill = restockButton(state, getState, update);
+    if (rentRefill) row(t('todo.rental', { n: rentalOf(state)?.stock ?? 0, max: RENTAL_CAP }), rentRefill);
     if (hasUpgrade(state, 'coffee') && cupsOf(state) < 8) {
       const n = CUPS_MAX - cupsOf(state);
       row(t('todo.cups', { n: cupsOf(state) }), button(t('todo.cupsBtn', { n, cost: n * CUP_COST }), () => update(buyCups(getState(), n), 'success'), 'ui-chip', state.money < n * CUP_COST));
@@ -4047,6 +4067,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       const wages = state.staff.reduce((sum, m) => sum + m.wage, 0);
       out.push(foldBox('staff:list', `👥 ${t('staffTab.list', { n: state.staff.length, w: wages })}`, (body) => body.append(...getState().staff.map((m) => staffRow(getState(), m)))));
     } else for (const m of state.staff) out.push(staffRow(state, m));
+    // Ученик (game/apprentice.ts): где он сегодня, доверие, чему научился; ниже — лавки выпускников.
+    const appr = apprCard(state, getState, update);
+    if (appr) out.push(appr);
+    out.push(...gradLines(state));
     // Карьера: когда следующий «сотрудник месяца», кто на доске почёта, кто правит филиалом.
     if (state.staff.length && state.career?.since !== undefined) out.push(el('div', 'ui-muted', t('career.nextBest', { n: Math.max(1, BEST_EVERY - (state.day - state.career.since)) })));
     const plaques = state.career?.plaques ?? [];

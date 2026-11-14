@@ -11,6 +11,7 @@ const only = process.argv[4];
 
 const scenarios: [string, Partial<SimOptions>][] = [
   ['кот', { features: { cat: true } }],
+  ['ученик', { features: { apprentice: true } }],
   ['карта лояльности', { features: { loyalty: true } }],
   ['новые отделы', { features: { departments: true } }],
   ['сладости у кассы', { features: { candy: true } }],
@@ -46,6 +47,8 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['ломбард', { features: { pawn: true } }],
   // Лицензия на пиво и сигареты (13.11): берёт к «Универмагу», подросткам не продаёт — проверки чистые.
   ['лицензия на пиво и сигареты', { features: { license: true } }],
+  // Прокат у входа (13.11): ставит стойку с третьей недели, средний залог, пропавшее докупает каждое утро.
+  ['прокат по погоде', { features: { rental: true } }],
   // «Крыша» (13.11): по умолчанию прогон отказывает; здесь — платить долю или идти в полицию (дело без игрока — в архив).
   ['крыша: платить', { racket: 'pay' }],
   ['крыша: в полицию', { racket: 'police' }],

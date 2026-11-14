@@ -39,6 +39,8 @@ export const NEWS_IDS = [
   'racket',
   // Лотерея у кассы (lottery.ts, 13.11): счастливый билет или запрет — пока идут свои дни.
   'lottery',
+  // Ученик открыл свою лавку (apprentice.ts): итог сезона учёбы — друг или конкурент.
+  'apprOut',
   // Для души: истории района и постоянных.
   'tale',
   'life',
@@ -47,6 +49,8 @@ export const NEWS_IDS = [
   'staffEvent',
   'district',
   'cat',
+  // Подросток из района просится в ученики (apprentice.ts).
+  'appr',
   'zarTale',
   'careerLeft',
   'arc',
@@ -79,6 +83,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   // карточку перебил поворот — обвинить можно и со строчки дела в утре.
   case: 'timed',
   lottery: 'timed',
+  apprOut: 'timed',
   racket: 'timed',
   tale: 'flavour',
   life: 'flavour',
@@ -86,6 +91,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   staffEvent: 'flavour',
   district: 'flavour',
   cat: 'flavour',
+  appr: 'flavour',
   zarTale: 'flavour',
   careerLeft: 'flavour',
   arc: 'flavour',

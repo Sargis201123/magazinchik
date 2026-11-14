@@ -730,8 +730,14 @@ export interface StoreState {
   tenantAsk?: { day: number; done: import('./tenants').TenantId[] };
   /** Сезонный торговец у входа (tenants.ts): кто и до какого дня стоит. */
   pitch?: { kind: import('./tenants').PitchKind; until: number };
+  /** Стойка проката у входа (rental.ts, 13.11): сколько вещей, какой залог и как прошёл прошлый день. */
+  rental?: import('./rental').Rental;
   /** «Бабушкина теплица» (garden.ts): когда посажено и сколько урожаев собрано. */
   garden?: import('./garden').GardenState;
+  /** Ученик из района (apprentice.ts), выпускники с лавками на улице и с какого дня снова предложить ученика. */
+  appr?: import('./apprentice').Apprentice;
+  apprGrads?: import('./apprentice').ApprGrad[];
+  apprAsk?: number;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Ломбард в подсобке (pawnshop.ts): вещи в залоге, полка «Разное», изъятое полицией. Нет поля — ещё не открывали. */
@@ -867,6 +873,8 @@ export interface DayStats {
   lostWhy?: Partial<Record<LostReason, number>>;
   missing?: Partial<Record<ProductId, number>>;
   pricey?: Partial<Record<ProductId, number>>;
+  /** Сколько дел за день сделал ученик (apprentice.ts): упаковал покупок, разложил коробок, подсказал гостям. */
+  appr?: number;
   /** Активные моменты дня (moments.ts): сколько показали, сколько поймали и сколько из них — искорки к рейтингу. */
   momentsShown?: number;
   moments?: number;
