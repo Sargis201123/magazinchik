@@ -66,6 +66,8 @@ export interface ResidentMove {
   who?: RegularId;
   back?: boolean;
   tale?: number;
+  /** Почему уехал постоянный: 'rent' — район подорожал (gentrify.ts); нет — обиделся на магазин. */
+  why?: 'rent';
   /** Новость прочитана. */
   seen?: boolean;
 }
@@ -183,6 +185,17 @@ export function residentsMorning(state: StoreState): StoreState {
   }
   if (!next.gone?.length) delete next.gone;
   return { ...state, regulars, residents: { ...next, move } };
+}
+
+/**
+ * Постоянный уезжает по чужой причине (13.11, gentrify.ts: район подорожал, жить стало не по карману) — с прощальной
+ * историей утром. Семей столько же: в его квартиру въезжают новые, побогаче. Вернуться он может, как любой уехавший.
+ */
+export function regularLeaves(state: StoreState, who: RegularId, why: 'rent'): StoreState {
+  const cur = state.residents;
+  const gone = cur?.gone ?? [];
+  if (gone.includes(who)) return state;
+  return { ...state, residents: { ...cur, n: residents(state), gone: [...gone, who], move: { day: state.day, dir: -1, who, why } } };
 }
 
 /** Новость утра о переезде (ждёт RES_NEWS_DAYS, пока не прочитана). */

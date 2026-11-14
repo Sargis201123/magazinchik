@@ -287,6 +287,8 @@ import { breadCut, dreamNews } from '../game/dreams';
 import { dreamBox, dreamsBox } from './dreams';
 import { residentsNews } from '../game/residents';
 import { residentsBox, residentsLines } from './residents';
+import { chooseGent, gentAsk } from '../game/gentrify';
+import { gentChoiceBox, gentLines } from './gentrify';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
 import { albumButton, showAlbum } from './album';
 import { freshCount } from '../game/collections';
@@ -850,6 +852,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('zarCard', zarCardDue(state));
     add('zarBoss', som);
     add('racketAsk', racketAsk(state));
+    add('gentrify', gentAsk(state));
     add('contestResult', result);
     add('contestAnnounce', announce);
     add('crisisAsk', crisisAsk(state));
@@ -918,6 +921,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     // «Крыша» (game/racket.ts): ребята у входа ждут ответа — платить, отказать или в полицию.
     if (picked.id === 'racketAsk' && racketAsk(state)) {
       card.replaceChildren(title, racketChoiceBox(state, (mode) => update(chooseRacket(getState(), mode), mode === 'pay' ? 'tap' : 'success')));
+      return;
+    }
+    // Район подорожал (game/gentrify.ts): для кого магазин — для новых богатых или для своих.
+    if (picked.id === 'gentrify' && gentAsk(state)) {
+      card.replaceChildren(title, gentChoiceBox(state, (c) => update(chooseGent(getState(), c), c === 'own' ? 'success' : 'tap')));
       return;
     }
     if (state.plan?.event && picked.id === 'event') {
@@ -1043,6 +1051,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...weekSoonLine(state),
       ...(zarHere ? [] : districtLines(state)),
       ...(zarHere ? [] : residentsLines(state)),
+      ...gentLines(state),
       ...(zarHere ? [] : arcLines(state)),
       ...(zarHere ? [] : echoLines(state)),
       ...(zarHere ? [] : trickLines(state)),

@@ -24,6 +24,7 @@ import { afterLoanPayment, loanDue } from './bank';
 import { SALE_DISCOUNT, saleOn, weekDemand, weekProductOk } from './weeks';
 import { fridgeLife, fridgePower, lightsPower, warehouseRoom, type GearId } from './gear';
 import { inZar, zarAwayBill, zarBillShare, zarNextLevel } from './zarshop';
+import { gentBill } from './gentrify';
 
 /**
  * Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу.
@@ -795,6 +796,8 @@ export interface StoreState {
   goodwill?: number;
   /** Жители района (residents.ts): сколько семей, последний переезд, кто из постоянных уехал или въехал. Нет поля — 12 семей. */
   residents?: import('./residents').ResidentsState;
+  /** Район дорожает (gentrify.ts): престиж района 0…100 и ответ «для кого магазин». Нет поля — престиж 0. */
+  gentrify?: import('./gentrify').GentState;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -1287,9 +1290,11 @@ export function monthlyBill(state: StoreState): Bill {
   const share = state.zar ? zarBillShare(state, state.zar.at) : 1;
   const other = zarAwayBill(state);
   const part = (n: number) => Math.round(n * share);
+  // Район подорожал (gentrify.ts, 13.11): аренда и коммуналка магазина в Центре — на несколько процентов выше.
+  const dear = gentBill(state);
   return {
-    rent: part(STORE_LEVELS[old].rent) + other.rent,
-    utilities: part(STORE_LEVELS[old].utilities) + other.utilities,
+    rent: part(STORE_LEVELS[old].rent * dear) + other.rent,
+    utilities: part(STORE_LEVELS[old].utilities * dear) + other.utilities,
     // Свет в зале дешевле с LED, холодильники — с новыми моделями (gear.ts; солнечные панели убраны 02.11).
     power: part(Math.round(level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state))) + other.power,
     salaries: part(state.staff.reduce((sum, m) => sum + m.wage, 0)) + other.salaries,

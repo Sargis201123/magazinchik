@@ -55,6 +55,8 @@ import * as gardenFx from './gardenFx';
 import * as tenantsFx from './tenantsFx';
 import * as rentalFx from './rentalFx';
 import * as residentsFx from './residentsFx';
+import * as gentrifyFx from './gentrifyFx';
+import { gentLook } from '../game/gentrify';
 import { residentsLook } from '../game/residents';
 import { townFlags } from '../game/town';
 import * as zarFx from './zarechye';
@@ -235,8 +237,18 @@ export function buildNeighbors(scene: StoreScene, next: Layout): void {
     { x: next.w + SIDE_SHOP_X, w: SIDE_SHOP_W, ...side },
     { x: next.w + 182, w: 110, h: 120, name: 'neighbor.bakery', sign: 0xb55088, awning: 0xf6757a, roof: 0xf2d0dc, neon: 0xff8ad8 },
   ];
+  // Район подорожал (gentrify.ts): цветочный стал кофейней третьей волны, аптека — барбершопом.
+  scene.builtGent = gentLook(scene.state);
+  let coffeeDoor: number | null = null;
+  for (const n of neighbors) {
+    const swap = gentrifyFx.neighborSwap(scene, n.name);
+    if (!swap) continue;
+    Object.assign(n, swap);
+    if (swap.name === 'neighbor.coffee3') coffeeDoor = n.x + n.w * 0.62;
+  }
   const rnd = new Phaser.Math.RandomDataGenerator(['neighbors']);
   for (const n of neighbors) drawNeighbor(scene, n, base - (n.back ?? 0), rnd);
+  gentrifyFx.dressStreet(scene, next.w, coffeeDoor, base);
   // Остановка на тротуаре слева.
   // Купили остановку с навесом (hood.ts) — вместо столбика со скамейкой.
   if (hasHood(scene.state, 'bus')) scene.art(-70 - WING_OUTER, scene.streetY - 2, 'hood_bus').setOrigin(0.5, 0.75).setDepth(scene.streetY);

@@ -301,6 +301,10 @@ export const SPRITES = [
   'res_truck',
   'res_boxes',
   'res_rent',
+  // Район дорожает (art/gentrify.py, game/gentrify.ts): штендер кофейни, табличка «премиум», дощечка «для своих».
+  'gent_board',
+  'gent_plaque',
+  'gent_own',
   'yard_ground',
   'yard_ground_snow',
   'yard_fence',
@@ -517,6 +521,8 @@ export const SPRITES = [
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),
   // Легковые носом вверх и вниз — на парковке и в проезде к ней (art/sprites.py, cars_vertical).
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van'].flatMap((k) => ['up', 'down'].flatMap((d) => [`${k}_${d}`, `${k}_${d}_lights`])),
+  // Дорогая машина района, который подорожал (art/gentrify.py): всегда чёрная, не под тинт.
+  ...['car_lux', 'car_lux_lights', 'car_lux_up', 'car_lux_up_lights', 'car_lux_down', 'car_lux_down_lights'],
   // Фургон магазина для выездной торговли (art/van.py, game/van.ts): вбок, носом вверх и вниз, с фарами.
   ...['shop_van', 'shop_van_up', 'shop_van_down'].flatMap((k) => [k, `${k}_lights`]),
   'mat',
