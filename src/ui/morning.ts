@@ -260,9 +260,9 @@ import { pawnBox, pawnOfferBox } from './pawnshop';
 import { pawnMet, pawnOf, pawnOffer, pawnOpen, pawnSlots } from '../game/pawnshop';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
-import { vanBox, vanIdle, vanStatus, vanToday } from './van';
+import { vanBox, vanIdle, vanNewsBox, vanStatus, vanToday } from './van';
 import { vanEventName } from './vanText';
-import { vanOpen, VAN_EVENTS } from '../game/van';
+import { vanNews, vanOpen, VAN_EVENTS } from '../game/van';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
@@ -849,6 +849,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('careerLeft', state.career?.left);
     add('arc', !zarHere && arcToday(state));
     add('echo', !zarHere && echoNews(state));
+    add('van', !zarHere && vanNews(state));
     const picked = pickNews(state, ready);
     // Первого гостя ломбарда показали — дальше он приходит как все, даже без ответа (game/pawnshop.ts pawnMet).
     const met = picked.id === 'pawn' ? pawnMet(picked.state) : picked.state;
@@ -2070,6 +2071,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       }
       case 'lottery':
         return lotteryNewsBox(state, getState, update);
+      case 'van':
+        return vanNewsBox(state, getState, update);
       case 'arc':
         return arcBox(state, getState, update);
       case 'echo':

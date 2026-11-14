@@ -2,8 +2,8 @@
 // и что грузить. Грузят из магазина — сначала склад, потом полки; кнопка «Загрузить под событие»
 // берёт каждого товара столько, сколько там обычно разбирают. Итог вчерашнего выезда — строкой сверху.
 
-import { t } from '../i18n';
-import { PRODUCTS, type ProductId, type StoreState } from '../game/economy';
+import { t, type TextKey } from '../i18n';
+import { PRODUCTS, type StoreState } from '../game/economy';
 import {
   autoLoad,
   buyVan,
@@ -19,8 +19,11 @@ import {
   vanFuel,
   vanGoods,
   vanLoaded,
+  vanNews,
   vanOpen,
   vanWant,
+  vanWanted,
+  seeVanNews,
   VAN_CAP,
   VAN_EVENTS,
   VAN_PRICE,
@@ -88,9 +91,8 @@ export function vanBox(state: StoreState, getState: () => StoreState, update: Up
   box.append(el('h3', '', t('van.where')), chips);
   if (!trip) return done(box, state);
   const event = VAN_EVENTS[trip.event];
-  const wanted = Object.keys(event.wants) as ProductId[];
   box.append(
-    el('div', 'ui-muted', t('van.terms', { list: wanted.map((id) => PRODUCTS[id].icon).join(''), p: Math.round((event.markup - 1) * 100), fuel: vanFuel(state, trip.event) })),
+    el('div', 'ui-muted', t('van.terms', { list: vanWanted(state, trip.event).map((id) => PRODUCTS[id].icon).join(''), p: Math.round((event.markup - 1) * 100), fuel: vanFuel(state, trip.event) })),
     el('div', 'ui-item-name', t('van.cargo', { n: vanLoaded(state), max: VAN_CAP })),
   );
   const goods = vanGoods(state, trip.event);
@@ -130,5 +132,19 @@ export function vanBox(state: StoreState, getState: () => StoreState, update: Up
 function done(box: HTMLElement, state: StoreState): HTMLElement[] {
   const van = state.van;
   if (van?.trips) box.append(el('div', 'ui-muted', t('van.total', { n: van.trips, sum: van.earned ?? 0 })));
+  return [box];
+}
+
+/** Новость утра (headlines.ts, 'van'): что вчера случилось в дороге — и итог выезда строкой. */
+export function vanNewsBox(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
+  const last = vanNews(state);
+  if (!last?.incident) return [];
+  const box = el('div', 'ui-box ui-tale');
+  box.append(
+    el('b', '', t('van.news.title')),
+    el('p', '', t(`van.story.${last.incident}` as TextKey, { n: Math.abs(last.extra) })),
+    el('div', 'ui-muted', vanResultText(last, false)),
+    button(t('van.news.ok'), () => update(seeVanNews(getState())), 'ui-btn'),
+  );
   return [box];
 }

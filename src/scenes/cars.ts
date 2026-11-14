@@ -798,9 +798,15 @@ export async function vanDepart(scene: StoreScene): Promise<void> {
     spot.car = null;
     return;
   }
+  // Встаёт в очередь на выезд, как водитель у края парковки (lot.waiting): новые машины не въезжают,
+  // пока он ждёт, — иначе в людный день проезд занят без просвета, и фургон простоял бы до вечера.
+  // Не дождался до вечера — так и не уехал: тогда над ним просто покажут итог (vanReturn).
+  const day = scene.state.day;
+  lot.waiting++;
   await scene.wait(1200);
-  await until(scene, () => lotTake(scene, lot, ['drive', 'aisle']));
-  if (!car.box.active) return;
+  await until(scene, () => scene.vanOut !== day || scene.parking !== lot || lotTake(scene, lot, ['drive', 'aisle']));
+  lot.waiting = Math.max(0, lot.waiting - 1);
+  if (scene.vanOut !== day || scene.parking !== lot || !car.box.active) return;
   car.leaving = true;
   await lotDepart(scene, lot, spot, car);
 }
@@ -815,19 +821,21 @@ export function vanTick(scene: StoreScene): void {
 async function vanReturn(scene: StoreScene): Promise<void> {
   const lot = scene.parking;
   const spot = vanSpot(scene);
-  if (!lot || !spot || spot.car) return;
+  if (!lot || !spot) return;
   // Итог считает та же чистая функция, что вечером зачислит деньги (game/van.ts): цифра над фургоном — та же.
   const net = vanOutcome(scene.state)?.net ?? 0;
   const show = (): void => {
     if (spot.car?.box.active) scene.popup(spot.x, spot.y - 14, t('van.popupBack', { n: net >= 0 ? `+${net}` : `−${-net}` }), net > 0 ? '#c8ffb0' : '#ffd0d0');
   };
-  if (scene.lite) {
+  // Так и не выехал (проезд весь день был занят) или лёгкая графика — итог сразу над местом.
+  if ((spot.car && !spot.car.leaving) || scene.lite) {
     parkVan(scene);
     show();
     return;
   }
   // Подъезжает, когда проезд свободен и на улице есть просвет (как машины покупателей).
-  await until(scene, () => !lot.busy.drive && lot.waiting === 0 && !lot.onRoad && arrivalSide(scene, lot) !== null);
+  // Ещё только выезжает (тронулся под самый вечер) — сначала пусть уедет.
+  await until(scene, () => !spot.car && !lot.busy.drive && lot.waiting === 0 && !lot.onRoad && arrivalSide(scene, lot) !== null);
   if (scene.parking !== lot || spot.car) return;
   await arriveByCar(scene, lot, spot, arrivalSide(scene, lot) ?? 'left', true);
   show();

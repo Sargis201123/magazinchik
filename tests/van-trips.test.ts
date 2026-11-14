@@ -21,7 +21,10 @@ import {
   vanOpen,
   vanOutcome,
   vanPrice,
+  vanNews,
   vanWant,
+  vanWanted,
+  seeVanNews,
   weekendDay,
   VAN_CAP,
   VAN_EVENTS,
@@ -37,7 +40,9 @@ import { yearTime } from '../src/game/calendar';
 import { weatherFor } from '../src/game/weather';
 import { nightCycle } from '../src/game/day';
 import { emptyDayStats } from '../src/game/economy';
-import { pendingTip, seeTip } from '../src/game/tips';
+import { pendingTip, seeTip, TIP_ICONS, type TipId } from '../src/game/tips';
+import { pickNews } from '../src/game/headlines';
+import { switchDistrict } from '../src/game/zarechye';
 import { simulate } from '../src/game/simulate';
 import { ru } from '../src/i18n/ru';
 
@@ -293,7 +298,8 @@ describe('старые сохранения и подсказка', () => {
   });
 
   it('подсказка «Новое»: с минимаркета, пока фургона нет', () => {
-    const seen = ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift'];
+    // Все остальные подсказки уже видели (список — из TIP_ICONS: новые подсказки на main его не ломают).
+    const seen = (Object.keys(TIP_ICONS) as TipId[]).filter((id) => id !== 'van');
     expect(pendingTip(shop({ seenTips: seen }))).toBe('van');
     expect(pendingTip(shop({ seenTips: seen, level: 1 }))).toBeNull();
     expect(pendingTip(withVan({ seenTips: seen }))).toBeNull();
@@ -307,5 +313,54 @@ describe('старые сохранения и подсказка', () => {
     expect(van.final.van?.trips ?? 0).toBeGreaterThan(5);
     expect(van.levelDay).toEqual(base.levelDay);
     expect(Math.abs(van.final.money - base.final.money)).toBeLessThan(base.final.money * 0.25);
+  });
+});
+
+describe('фургон: утренняя новость и лицензия', () => {
+  const loaded = (day: number, seed = 7) => autoLoad(planTrip(withVan({ day, seed }), 'match')!);
+
+  it('случай в дороге — новость утра (одна, в общей очереди), прочли — больше нет; без случая — новости нет', () => {
+    const day = findDay('match', 'wheel');
+    const night = settleVan(loaded(day)).state;
+    const morning = { ...night, day: day + 1 };
+    expect(vanNews(morning)?.incident).toBe('wheel');
+    expect(pickNews(morning, ['van', 'tale']).id).toBe('tale');
+    expect(pickNews(morning, ['van']).id).toBe('van');
+    const seen = seeVanNews(morning);
+    expect(vanNews(seen)).toBeNull();
+    expect(seen.van?.last?.seen).toBe(true);
+    // Через неделю старая история уже не новость.
+    expect(vanNews({ ...night, day: day + 5 })).toBeNull();
+    const calm = settleVan(loaded(findDay('match', undefined))).state;
+    expect(vanNews({ ...calm, day: calm.day + 1 })).toBeNull();
+  });
+
+  it('пиво и сигареты на матч — только с лицензией', () => {
+    const s = planTrip(withVan(), 'match')!;
+    expect(vanWant(s, 'match', 'beer')).toBe(0);
+    expect(vanWanted(s, 'match')).not.toContain('beer');
+    expect(vanWanted(s, 'match')).not.toContain('cigarettes');
+    const licensed = { ...s, license: { since: 1 } } as StoreState;
+    expect(vanWant(licensed, 'match', 'beer')).toBeGreaterThan(0);
+    expect(vanWanted(licensed, 'match')).toContain('beer');
+  });
+
+  it('уехали работать в Заречье — кузов назад на склад Центра, ночью Заречье его не трогает', () => {
+    const s = loadVan(planTrip(withVan({ zar: { at: 'home', since: 1, away: {} } as unknown as StoreState['zar'] }), 'match')!, 'water', 10)!;
+    const away = switchDistrict(s, 'zar');
+    expect(away.van?.trip).toBeUndefined();
+    const back = switchDistrict(away, 'home');
+    expect(inStore(back, 'water')).toBe(inStore(s, 'water') + 10);
+    // Старый кузов в Заречье ночью не разбирают (склад там чужой).
+    const stale = { ...s, zar: { ...s.zar!, at: 'zar' as const } };
+    expect(settleVan(stale).state).toBe(stale);
+  });
+
+  it('кузов с прошлого дня при новом выборе — сначала на склад', () => {
+    const s = loadVan(planTrip(withVan(), 'match')!, 'water', 10)!;
+    const day = s.day + 7;
+    const next = planTrip({ ...s, day }, 'match')!;
+    expect(vanLoaded(next)).toBe(0);
+    expect(inStore(next, 'water')).toBe(inStore(withVan(), 'water'));
   });
 });

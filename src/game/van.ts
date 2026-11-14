@@ -2,7 +2,7 @@
 // Фургон магазина продаёт там, где сегодня людно: матч на стадионе (свой, если он уже построен, иначе — в
 // соседнем районе), дачи в выходные, пляж в жару, свадьба в соседнем районе. Каждое событие хочет своё: на
 // матч — воду, сок, мороженое и выпечку, на дачи — мясо на шашлык, хлеб и картошку, на свадьбу — торт и
-// цветы. Пива нет: лицензии пока нет. Грузят утром из магазина (сначала склад, потом полки) — этот товар
+// цветы. Пиво и сигареты на матч и на дачи — только с лицензией (license.ts). Грузят утром из магазина (сначала склад, потом полки) — этот товар
 // весь день не в зале. Вечером фургон возвращается: продал по цене выезда (дороже обычной), остаток — на
 // склад; мясо, молочное и мороженое весь день без холодильника, а свежая выпечка черствеет — часть может
 // испортиться. В дороге бывает всякое: пробка, щедрый покупатель, дождь на пляже, спустило колесо.
@@ -10,9 +10,11 @@
 
 import { yearTime } from './calendar';
 import { MATCH_EVERY, buildingWorks } from './district';
-import { MONTH_DAYS, PRODUCTS, unitLife, type ProductId, type Stock, type StoreState, type Unit } from './economy';
+import { MONTH_DAYS, PRODUCTS, restricted, unitLife, type ProductId, type Stock, type StoreState, type Unit } from './economy';
+import { weatherToday } from './crisis';
+import { hasLicense } from './license';
 import { rng } from './random';
-import { weatherDemand, weatherFor } from './weather';
+import { weatherDemand, weatherFor, type Weather } from './weather';
 import { inZar } from './zarshop';
 
 export type VanEventId = 'match' | 'dacha' | 'beach' | 'wedding';
@@ -41,8 +43,8 @@ export interface VanEvent {
  * минимаркете: заметно, но не дороже одного хорошего дня в зале (фургон окупается за две-три недели).
  */
 export const VAN_EVENTS: Record<VanEventId, VanEvent> = {
-  match: { icon: '🏟', markup: 1.2, fuel: 80, wants: { water: 8, juice: 5, icecream: 5, pies: 4, buns: 4, kvass: 4 } },
-  dacha: { icon: '🏡', markup: 1.15, fuel: 70, wants: { meat: 6, potatoes: 6, bread: 5, water: 5, juice: 3, apples: 3, pickles: 3, kvass: 3 } },
+  match: { icon: '🏟', markup: 1.2, fuel: 80, wants: { water: 8, juice: 5, icecream: 5, beer: 5, pies: 4, buns: 4, kvass: 4, cigarettes: 2 } },
+  dacha: { icon: '🏡', markup: 1.15, fuel: 70, wants: { meat: 6, potatoes: 6, bread: 5, water: 5, beer: 4, juice: 3, apples: 3, pickles: 3, kvass: 3 } },
   beach: { icon: '🏖', markup: 1.3, fuel: 60, wants: { water: 9, icecream: 8, juice: 5, watermelons: 4, kvass: 4 } },
   wedding: { icon: '💒', markup: 1.25, fuel: 80, wants: { flowers: 6, juice: 5, honeycake: 4, apples: 4, meat: 4, tangerines: 4, water: 4 } },
 };
@@ -82,6 +84,8 @@ export interface VanResult {
   fuel: number;
   /** Чистыми в кассу: выручка ± случай − бензин. */
   net: number;
+  /** Утреннюю новость о случае в дороге уже прочли (headlines.ts, 'van'). */
+  seen?: boolean;
 }
 
 export interface VanState {
@@ -89,7 +93,7 @@ export interface VanState {
   since: number;
   /** Сегодняшний выезд: куда и что в кузове. */
   trip?: VanTrip;
-  /** Итог последнего выезда — для утренней карточки. */
+  /** Итог последнего выезда — для утренней карточки и строки «Вчера» у фургона. */
   last?: VanResult;
   /** Выездов и чистыми за всё время. */
   trips?: number;
@@ -106,13 +110,16 @@ const roll = (state: StoreState, day: number, salt: number): (() => number) => r
 /** Свадьба в соседнем районе — примерно раз в неделю, по зерну магазина. */
 export const weddingDay = (state: StoreState, day: number): boolean => roll(state, day, 11)() < 1 / 6;
 
+/** Погода дня: сегодня — с бедой района поверх прогноза (жара беды тоже зовёт на пляж), дальше — прогноз. */
+const weatherOn = (state: StoreState, day: number): Weather => (day === state.day ? weatherToday(state) : weatherFor(day));
+
 /** Куда можно поехать в этот день (по умолчанию — сегодня). */
 export function vanEvents(state: StoreState, day = state.day): VanEventId[] {
   const out: VanEventId[] = [];
   // Матч — в тот же день недели, что и на своём стадионе (district.ts isMatchDay): свой ещё не построен — едем к соседям.
   if (day % MATCH_EVERY === 4) out.push('match');
   if (weekendDay(day) && yearTime(day) !== 'winter') out.push('dacha');
-  if (weatherFor(day) === 'heat') out.push('beach');
+  if (weatherOn(state, day) === 'heat') out.push('beach');
   if (weddingDay(state, day)) out.push('wedding');
   return out;
 }
@@ -160,8 +167,10 @@ const byAge = (units: Unit[]): Unit[] => [...units].sort((a, b) => b.age - a.age
 /** Выбрать, куда едем сегодня (кузов остаётся загруженным). null — фургона нет или туда сегодня не едут. */
 export function planTrip(state: StoreState, event: VanEventId): StoreState | null {
   if (!state.van || !vanOpen(state) || !vanEvents(state).includes(event)) return null;
-  const trip = tripToday(state);
-  return { ...state, van: { ...state.van, trip: { day: state.day, event, load: trip?.load ?? {} } } };
+  // Кузов с прошлого дня (ночь не дошла: закрыли игру посреди дня) — сначала на склад, иначе товар пропал бы.
+  const base = state.van.trip && !tripToday(state) ? cancelTrip(state) : state;
+  const trip = tripToday(base);
+  return { ...base, van: { ...base.van!, trip: { day: base.day, event, load: trip?.load ?? {} } } };
 }
 
 /**
@@ -223,7 +232,19 @@ export function cancelTrip(state: StoreState): StoreState {
 
 /** Сколько штук товара обычно разбирают на этом событии (без толпы и случая) — подсказка при погрузке. */
 export const vanWant = (state: StoreState, event: VanEventId, id: ProductId): number =>
-  Math.floor((VAN_EVENTS[event].wants[id] ?? 0) * Math.min(1, weatherDemand(weatherFor(state.day), id)));
+  restricted(id) && !hasLicense(state) ? 0 : Math.floor((VAN_EVENTS[event].wants[id] ?? 0) * Math.min(1, weatherDemand(weatherToday(state), id)));
+
+/** Что берут на событии — для строки «Берут: …» (пиво и сигареты — только с лицензией). */
+export const vanWanted = (state: StoreState, event: VanEventId): ProductId[] =>
+  (Object.keys(VAN_EVENTS[event].wants) as ProductId[]).filter((id) => !restricted(id) || hasLicense(state));
+
+/** Новость утра (headlines.ts): вчера в дороге что-то случилось, и её ещё не прочли. */
+export const vanNews = (state: StoreState): VanResult | null => {
+  const last = state.van?.last;
+  return last?.incident && !last.seen && state.day - last.day <= 3 ? last : null;
+};
+export const seeVanNews = (state: StoreState): StoreState =>
+  vanNews(state) ? { ...state, van: { ...state.van!, last: { ...state.van!.last!, seen: true } } } : state;
 
 /** Товары события, которые сейчас вообще можно погрузить или уже в кузове, — по спросу. */
 export const vanGoods = (state: StoreState, event: VanEventId): ProductId[] =>
@@ -305,7 +326,9 @@ export function vanOutcome(state: StoreState): (VanResult & { home: Stock }) | n
  */
 export function settleVan(state: StoreState): { state: StoreState; result: VanResult | null } {
   const van = state.van;
-  if (!van?.trip) return { state, result: null };
+  // В Заречье склад и полки — его, а кузов грузили в Центре: выезд подождёт возвращения (switchDistrict
+  // и так разгружает кузов перед отъездом — это на случай старого кузова).
+  if (!van?.trip || inZar(state)) return { state, result: null };
   const outcome = vanOutcome(state);
   if (!outcome) return { state: cancelTrip(state), result: null };
   const { home, ...result } = outcome;

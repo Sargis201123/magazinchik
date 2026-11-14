@@ -46,6 +46,8 @@ export const NEWS_IDS = [
   'arc',
   // Эхо решений (echoes.ts): герой сценки вернулся через недели — ждёт, сколько нужно.
   'echo',
+  // Выездная торговля (van.ts, 13.11): вчера в дороге что-то случилось — пробка, колесо, дождь, щедрый покупатель.
+  'van',
 ] as const;
 export type NewsId = (typeof NEWS_IDS)[number];
 
@@ -81,6 +83,8 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   careerLeft: 'flavour',
   arc: 'flavour',
   echo: 'flavour',
+  // Случай в дороге — история для души: сам итог уже был в итогах дня, новость живёт три дня (van.ts vanNews).
+  van: 'flavour',
 };
 
 /**
