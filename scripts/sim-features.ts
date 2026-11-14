@@ -62,6 +62,14 @@ const scenarios: [string, Partial<SimOptions>][] = [
   // Фудкорт (13.11): этаж с «Универмага», точки по одной (своя — если на кухне повар), ремонт, праздники, жалобы.
   ['фудкорт', { features: { foodcourt: true } }],
   ['фудкорт + кухня с поваром', { features: { foodcourt: true, kitchen: true } }],
+  // 14.11, аудит: механики 13.11, которых тут не было. Фургон — выезды в дни событий; район дорожает — «для новых» и
+  // «для своих»; беда района — нажиться или помочь (по умолчанию держит цены); улица — помещения из лишних денег.
+  ['выездная торговля', { features: { van: true } }],
+  ['район дорожает: для новых', { features: { gentrify: true } }],
+  ['район дорожает: для своих', { features: { gentrify: true }, gentrify: 'own' }],
+  ['беда района: нажиться', { crisis: 'gouge' }],
+  ['беда района: помочь', { crisis: 'give' }],
+  ['улица (помещения из лишних)', { features: { estate: true } }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 

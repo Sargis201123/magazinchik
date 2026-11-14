@@ -51,7 +51,13 @@ export function zarAwayBill(state: StoreState): { rent: number; utilities: numbe
   for (const key of ['movedFrom', 'upgrades', 'gear'] as const) if (zar.away[key] === undefined) delete view[key];
   // 13.11: престиж района (gentrify.ts) — только у Центра. Если сегодня в Центре, второй магазин — Заречье,
   // и его счёт не должен дорожать от престижа Центра (вид без zar для gentBill выглядел бы как Центр).
-  if (zar.at === 'home') delete view.gentrify;
+  // 14.11, аудит: этажи здания (подвал с холодильником, floors.ts) — тоже только у Центра: иначе Заречье платило бы
+  // за свет холодильника в подвале Центра.
+  if (zar.at === 'home') {
+    delete view.gentrify;
+    delete view.basement;
+    delete view.floors;
+  }
   const bill = monthlyBill(view);
   const part = (n: number) => Math.round(n * share);
   return { rent: part(bill.rent), utilities: part(bill.utilities), power: part(bill.power), salaries: part(bill.salaries) };

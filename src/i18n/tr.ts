@@ -4171,6 +4171,7 @@ export const tr: Record<TextKey, string> = {
   "dream.akhmed.fail": "Akhmed'in arabası bir hafta sonra bozuldu, parça olarak sattı. Para gitti ama Akhmed artık her cuma seni pilava çağırıyor.",
   "tip.dreams.title": "Komşuların hayalleri",
   "tip.dreams.text": "2–3 hafta sonra bir sabah haber gelecek: iş tutarsa her gün bir faydası olur, batarsa para gider ama komşun bunu unutmaz. Bütün yatırımlar “Gelişim” sekmesinde.",
+  "racket.guard": "🛡 Karşılığında korurlar: bodruma baskın olmaz, rakip de Jora da bulaşmaz.",
   "zar.tale.yegor.3": "Beni staja aldılar — gemiye! Turistleri sizin iskeleye getireceğim. Al, bu bütün sınıftan — sınav dönemi boyunca bizi doyurduğun için.",
   "zar.tale.stepan.1": "Stepan İlyiç, köprünün yanındaki kayık istasyonu. Balık çorbası patatessiz pişmez, unutma. İstersen sana kayık veririm, gezersin.",
   "zar.tale.stepan.2": "İlkbaharda taşkın kayıkları neredeyse alıp götürüyordu. Komşu koşup geldi, yardım etti. Nehir Yakası'nda böyledir: birbirimize sahip çıkarız.",

@@ -4180,6 +4180,7 @@ export const uz: Record<TextKey, string> = {
   "dream.akhmed.fail": "Axmedning mashinasi bir haftada buzildi — ehtiyot qismlarga sotib yubordi. Pul yoʻq, lekin endi Axmed seni har juma palovga chaqiradi.",
   "tip.dreams.title": "Qoʻshnilarning orzulari",
   "tip.dreams.text": "2–3 haftadan keyin bir kuni ertalab xabar keladi: ish yursa — har kuni foyda, kuyib ketsa — pul ketadi, lekin qoʻshning unutmaydi. Barcha sarmoyalar — «Rivojlanish» boʻlimida.",
+  "racket.guard": "🛡 Evaziga himoya qilishadi: yertoʻlaga reyd boʻlmaydi, raqib ham, Jora ham tegmaydi.",
   "zar.tale.yegor.3": "Meni amaliyotga olishdi — teploxodga! Sizning iskalangizga sayyohlarni olib kelaman. Ma, bu butun guruhdan — butun sessiya bizni boqqaning uchun.",
   "zar.tale.stepan.1": "Stepan Ilyich, koʻprik yonidagi qayiq bekati. Baliq shoʻrvasi kartoshkasiz pishmaydi, esingda tut. Xohlasang, qayiq beraman, aylanib kelasan.",
   "zar.tale.stepan.2": "Bahorda toshqin qayiqlarni oqizib ketishiga oz qoldi. Qoʻshni yugurib kelib, yordam berdi. Daryo boʻyida shunaqa: bir-birimizga suyanamiz.",

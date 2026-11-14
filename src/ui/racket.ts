@@ -19,6 +19,8 @@ export function racketChoiceBox(state: StoreState, choose: (mode: RacketMode) =>
       button(t(`racket.mode.${mode}` as TextKey, { n }), () => choose(mode), mode === 'pay' ? 'ui-btn secondary' : 'ui-btn'),
       el('div', 'ui-muted', t(`racket.mode.${mode}.hint` as TextKey, { sum: racketShare(state, n) })),
     );
+    // 14.11, аудит: что покупает доля — видно сразу (game/racket.ts racketGuard), иначе «платить» — дань ни за что.
+    if (mode === 'pay') box.append(el('div', 'ui-muted', t('racket.guard')));
   }
   return box;
 }

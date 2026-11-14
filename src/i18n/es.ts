@@ -4171,6 +4171,7 @@ export const es: Record<TextKey, string> = {
   "dream.akhmed.fail": "El coche de Ajmed se averió a la semana y lo vendió por piezas. El dinero se perdió, pero ahora Ajmed te invita a comer plov cada viernes.",
   "tip.dreams.title": "Sueños de los vecinos",
   "tip.dreams.text": "En 2–3 semanas llegará la noticia una mañana: si sale bien, tendrás un beneficio cada día; si fracasa, el dinero se pierde, pero tu vecino no lo olvidará. Todas las inversiones están en la pestaña «Crecer».",
+  "racket.guard": "🛡 A cambio, te cubren: sin redadas en el sótano; ni el rival ni Zhora se meten.",
   "zar.tale.yegor.3": "¡Me aceptaron en las prácticas, en un barco! Voy a traer turistas a tu muelle. Toma, esto es de todo el grupo, por alimentarnos todos los exámenes.",
   "zar.tale.stepan.1": "Stepan Ilyich, del embarcadero junto al puente. La sopa de pescado sin papas no se hace, recuérdalo. Si quieres, te presto un bote para dar una vuelta.",
   "zar.tale.stepan.2": "En primavera la crecida casi se lleva los botes. Un vecino vino corriendo a ayudar. Así somos en La Ribera: nos cuidamos unos a otros.",

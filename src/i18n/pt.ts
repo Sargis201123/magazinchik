@@ -4181,6 +4181,7 @@ export const pt: Record<TextKey, string> = {
   "dream.akhmed.fail": "O carro do Akhmed quebrou em uma semana — vendeu como peças. O dinheiro se foi, mas agora toda sexta Akhmed te chama para comer plov.",
   "tip.dreams.title": "Sonhos dos vizinhos",
   "tip.dreams.text": "Em 2–3 semanas a notícia chega numa manhã: se der certo, um benefício todo dia; se não der, o dinheiro se vai, mas o vizinho não esquece. Todos os investimentos ficam na aba “Evolução”.",
+  "racket.guard": "🛡 Em troca, eles protegem: nada de batidas no porão, o rival e o Zhora não se metem.",
   "zar.tale.yegor.3": "Me pegaram para o estágio — num barco de passeio! Vou trazer turistas para o seu píer. Tome, isto é da turma toda — por alimentar a gente na época de provas.",
   "zar.tale.stepan.1": "Stepan Ilyich, da estação de barcos perto da ponte. Sopa de peixe sem batata não existe, lembre disso. Se quiser, empresto um barco para você passear.",
   "zar.tale.stepan.2": "Na primavera, a cheia quase levou os barcos. Um vizinho veio correndo ajudar. É assim aqui na Beira-Rio: um cuida do outro.",
