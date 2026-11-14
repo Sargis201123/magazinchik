@@ -1,5 +1,5 @@
 // Фудкорт в мире наверху (game/foodcourt.ts, 13.11): вход на третий этаж — стеклянный лифт в фасаде у левого угла
-// зала (подвал — у правого, basementFx.ts), рядом табличка «🍕 Фудкорт». С улицы к лифту идут едоки, к вечеру — чаще
+// зала (подвал — у правого, basementFx.ts; дверь второго этажа — правее лифта, clothesFx.ts), над ним табличка «🍕 Фудкорт». С улицы к лифту идут едоки, к вечеру — чаще
 // (вечерний наплыв), а кто-то выходит из лифта и сворачивает в магазин: «спустились за продуктами». Касание лифта —
 // камера подлетает к нему и открывает вид этажа (scenes/floorView.ts) — тот же путь, что у подвала. Без тряски;
 // в лёгкой графике людей меньше.
@@ -13,6 +13,7 @@ import { hasFloor } from '../game/floors';
 import { inZar } from '../game/zarshop';
 import { FACADE_H, SHIRTS, STREET_TAP_MS, customerLook } from './common';
 import { floorDown, lampGap } from './basementFx';
+import { stairsSpot } from './clothesFx';
 import * as camera from './camera';
 import * as persons from './persons';
 
@@ -29,10 +30,14 @@ let objs: Phaser.GameObjects.GameObject[] = [];
 let stops: (() => void)[] = [];
 let shown = { day: 0, n: 0, tick: 0 };
 
-/** Где лифт: в фасаде у левого угла зала, на месте без фонаря и подальше от входа (как спуск в подвал справа). */
+/**
+ * Где лифт: в фасаде у левого угла зала, на месте без фонаря и подальше от входа (как спуск в подвал справа) и от
+ * двери второго этажа — та тоже слева (clothesFx.stairsSpot), вплотную их не различить.
+ */
 export function liftSpot(scene: StoreScene): { x: number; y: number } {
   const { h, door } = scene.layout;
-  const x = [14, 24, 34, 44].find((cx) => lampGap(cx) >= 10 && Math.abs(cx - door.x) > 30) ?? 14;
+  const stairs = hasFloor(scene.state, 'second') ? stairsSpot(scene).x : null;
+  const x = [14, 24, 34, 44].find((cx) => lampGap(cx) >= 10 && Math.abs(cx - door.x) > 30 && (stairs === null || Math.abs(cx - stairs) > 28)) ?? 14;
   return { x, y: h + FACADE_H + 4 };
 }
 
@@ -52,12 +57,13 @@ export function applyFoodcourt(scene: StoreScene): void {
   const lift = keep(scene.art(at.x, at.y, 'fc_lift').setOrigin(0.5, 1).setDepth(scene.layout.h + 2.5));
   const label = keep(
     scene.add
-      .text(at.x + 7, at.y - 9, `🍕 ${t('floor.third')}`, { fontFamily: UI_FONT, fontSize: '3.6px', fontStyle: 'bold', color: '#fee761', backgroundColor: '#a22633', padding: { x: 1.2, y: 0.4 } })
-      .setOrigin(0, 0.5)
+      // Над лифтом, как табличка второго этажа: сбоку она ложилась на фонарь и упиралась в дверь «Одежды».
+      .text(at.x, at.y - 15, `🍕 ${t('floor.third')}`, { fontFamily: UI_FONT, fontSize: '3.6px', fontStyle: 'bold', color: '#fee761', backgroundColor: '#a22633', padding: { x: 1.2, y: 0.4 } })
+      .setOrigin(0.5, 1)
       .setResolution(scene.textRes(8))
       .setDepth(scene.layout.h + 2.6),
   );
-  if (label.width > 28) label.setScale(28 / label.width);
+  if (label.width > 26) label.setScale(26 / label.width);
   for (const obj of [lift, label])
     obj.setInteractive({ useHandCursor: true }).on('pointerup', (p: Phaser.Input.Pointer) => {
       if (scene.arranging || p.upTime - p.downTime > STREET_TAP_MS) return;
