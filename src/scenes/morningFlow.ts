@@ -281,9 +281,10 @@ export function showMorning(scene: StoreScene): void {
       scene.state = s;
       saveGame(s);
       // Переехали на сегодня в другой район (game/zarechye.ts) — другой магазин целиком, а не расширение.
+      // 14.11, аудит: и ответ «для кого магазин» (gentLook) — иначе табличка на крыше появлялась только назавтра.
       if (zarLook(s) !== scene.builtZar) scene.buildWorld();
       else if (s.level > scene.builtLevel) void effects.celebrateExpansion(scene);
-      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || tenantsLook(s) !== scene.builtTenants || estateLook(s) !== scene.builtEstate || zarLook(s) !== scene.builtZar) scene.buildWorld(bought);
+      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || tenantsLook(s) !== scene.builtTenants || estateLook(s) !== scene.builtEstate || gentLook(s) !== scene.builtGent || zarLook(s) !== scene.builtZar) scene.buildWorld(bought);
       else {
         if (staffChanged) staff.syncStaff(scene);
         // Купили, позвали другого или отправили домой питомца за звёзды — только он, без перестройки зала.

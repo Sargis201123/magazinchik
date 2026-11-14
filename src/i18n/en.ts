@@ -1269,6 +1269,7 @@ export const en: Record<TextKey, string> = {
   "district.plot.soon": "📋 In {n} days building starts on the corner. What opens there depends on your sales this week.",
   "tip.plots.title": "The neighbourhood adapts",
   "tip.plots.text": "What opens on free plots depends on what you sell most: water — a gym, flowers — a bridal salon, coffee — a coworking space, ice cream — a kids' club, meat — a canteen. The new neighbours buy exactly that.",
+  "news.mechs": "🆕 New: a pawnshop in the back room, rentals and a van in “Corners”, the basement, upper floors and houses behind the shop in “Growth”.",
   "tour.hall": "Empty shelf — tap it to bring goods from storage. Clean up trash and spills, take out the bin. In the evening you'll see what you earned. Good luck, dear!",
   // Новое начало (game/onboarding.ts): бабушка облачком в зале, первая продажа, вкладки по одной.
   "onb.hello": "Sweetie, the shop is yours now! Look — here they come.",

@@ -630,6 +630,8 @@ export interface StoreState {
   weekly?: { month: number; challenges: { kind: string; target: number; product?: ProductId; progress: number; reward: number; done?: boolean }[] };
   /** Какие подсказки о новых механиках уже показаны (tips.ts). */
   seenTips?: string[];
+  /** 14.11, аудит: в какой день утром закрыли карточку «Новое!» — вторая в то же утро не идёт (tips.ts pendingTip). */
+  tipDay?: number;
   /** Кредит в банке: сколько осталось вернуть и платёж в месяц (bank.ts). */
   /** day — когда взят (в старых сохранениях нет): в тот же вечер платёж не берут. */
   loan?: { left: number; payment: number; day?: number };

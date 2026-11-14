@@ -1255,6 +1255,7 @@ export const tr: Record<TextKey, string> = {
   "district.plot.soon": "📋 {n} gün sonra köşede inşaat başlıyor. Orada ne açılacağına bu haftaki satışların karar verecek.",
   "tip.plots.title": "Mahalle sana uyuyor",
   "tip.plots.text": "Boş arsalarda ne açılacağı en çok ne sattığına bağlı: su — spor salonu, çiçek — gelinlik salonu, kahve — ortak ofis, dondurma — çocuk kulübü, et — yemekhane. Yeni komşular tam da bunu alır.",
+  "news.mechs": "🆕 Yeni: arka odada rehinci, «Köşeler»de kiralama ve minibüs, «Gelişim»de bodrum, katlar ve dükkânın arkasındaki evler.",
   "tour.hall": "Raf boş mu — dokun, depodan mal getir. Çöpleri ve su birikintilerini temizle, kovayı boşalt. Akşam ne kazandığını görürsün. Kolay gelsin, yavrum!",
   "onb.hello": "Yavrum, dükkân artık senin! Bak — geliyorlar bile.",
   "onb.shop": "Müşteriler malı raftan alıp kasaya getirir.",

@@ -333,11 +333,13 @@ type ProfilePage = 'trophies' | 'friends' | 'settings';
  * Номер карточки «Что нового»: увеличить, когда появятся новые заметные вещи. Видевшие прежнюю
  * (2: звук, перестановка, друзья…) увидят новую один раз.
  */
-const WHATS_NEW = 6;
+const WHATS_NEW = 7;
 /** Сколько верхних строк — новые в этой карточке: видевшим прошлую показываем только их, а не весь список заново. */
-const WHATS_NEW_FRESH = 3;
+const WHATS_NEW_FRESH = 1;
 /** Строки карточки «Что нового» — самое свежее сверху. */
 const WHATS_NEW_LINES: TextKey[] = [
+  // 14.11, аудит: механики 13.11 одной строкой — вернувшемуся их карточки «Новое!» отмечены прочитанными (tips.ts catchUpTips).
+  'news.mechs',
   'news.yard',
   'news.tenants',
   'news.town',
@@ -1041,7 +1043,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const today = todoBox(state);
     // Сводка дня — не больше шести строк по важности (долг, особый день, цель главы, привоз, счета, погода);
     // остальное — под «Ещё». Рейтинг и гостей и так видно значками в заголовке «Сегодня».
+    const bill = billForecast(state);
     const info = infos(
+      bill,
       ...debtLine(state),
       ...bigDayLine(state),
       ...crisisLines(state),
@@ -1051,7 +1055,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       goalLine(state),
       ...apprLines(state),
       ...autoLine(),
-      billForecast(state),
+      bill,
       ...weatherLine(state),
       ...warLine(state),
       ...fairLine(state),
@@ -3767,7 +3771,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   /** Сводка утра одной аккуратной плашкой. */
   /** Строк сводки дня на виду; остальные — под «Ещё N» (раскрывается без перерисовки утра). */
   const INFO_LINES = 6;
-  const infos = (...lines: HTMLElement[]) => {
+  const infos = (pin: HTMLElement, ...lines: HTMLElement[]) => {
+    // 14.11, аудит: прогноз счетов всегда на виду — в утро с крышей, бедой и серой схемой строки статуса
+    // выше цели главы сталкивали его под «Ещё», и счёт приходил как сюрприз.
+    const at = lines.indexOf(pin);
+    if (at >= INFO_LINES) lines.splice(INFO_LINES - 1, 0, ...lines.splice(at, 1));
     const box = el('div', 'ui-infos');
     box.append(...lines.slice(0, INFO_LINES));
     const rest = lines.slice(INFO_LINES);
@@ -3787,7 +3795,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     box.append(
       el('b', '', `${t('tip.new')}: ${TIP_ICONS[tip]} ${t(`tip.${tip}.title` as TextKey)}`),
       el('div', '', t(`tip.${tip}.text` as TextKey)),
-      button(t('tip.ok'), () => update(seeTip(getState(), tip)), 'ui-chip'),
+      // 14.11, аудит: день ставим только здесь — следующая «Новое!» придёт завтра (tips.ts pendingTip).
+      button(t('tip.ok'), () => update({ ...seeTip(getState(), tip), tipDay: getState().day }), 'ui-chip'),
     );
     return [box];
   };
