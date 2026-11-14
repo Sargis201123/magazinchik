@@ -52,6 +52,8 @@ const scenarios: [string, Partial<SimOptions>][] = [
   // «Крыша» (13.11): по умолчанию прогон отказывает; здесь — платить долю или идти в полицию (дело без игрока — в архив).
   ['крыша: платить', { racket: 'pay' }],
   ['крыша: в полицию', { racket: 'police' }],
+  // Серая схема (13.11): соглашается на всё — выгода сразу, штрафы и опечатанные дни потом.
+  ['серая схема (на всё согласен)', { features: { grey: true } }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 

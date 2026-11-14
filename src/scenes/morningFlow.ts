@@ -221,6 +221,8 @@ export function showMorning(scene: StoreScene): void {
   lighting.hallOff(scene, -Infinity);
   if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   cars.refillParking(scene);
+  // Опечатан ли сегодня магазин после серой схемы (game/grey.ts): ленты на двери.
+  building.refreshSeal(scene);
   scene.updateLighting(0);
   nightShift.openShop(scene);
   // Новый день: после ночной смены — снова дневная музыка; зима могла начаться или кончиться.

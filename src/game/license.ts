@@ -14,6 +14,7 @@
 import { PRODUCT_IDS, restricted, SHELF_KINDS, type ProductId, type Shelf, type StoreState } from './economy';
 import { inZar } from './zarshop';
 import { rng } from './random';
+import { greyCovered, useGreyCover } from './grey';
 
 /**
  * С какого помещения можно купить лицензию (= SHELF_KINDS.license.minLevel): с «Супермаркета» — в «Минимаркете»
@@ -149,6 +150,8 @@ export function licenseNight(state: StoreState): StoreState {
   if (!license || !inspectionToday(state)) return state;
   const found = license.strikes;
   if (!found) return { ...state, license: { ...license, last: { day: state.day, found: 0, fine: 0, seen: true } } };
+  // Проверяющий «прикормлен» (grey.ts, серая схема): нарушений «не нашёл» — счёт с чистого листа, договорённость израсходована.
+  if (greyCovered(state)) return { ...useGreyCover(state), license: { ...license, strikes: 0, last: { day: state.day, found: 0, fine: 0, seen: true } } };
   const fine = LICENSE_FINE * found;
   const revoked = license.fined > 0;
   const paid: StoreState = {

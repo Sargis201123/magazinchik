@@ -371,8 +371,9 @@ export function finishDay(scene: StoreScene): void {
   }
   const promoted = state.staff !== scene.state.staff;
   // Вечером посетители пишут отзывы: они висят на доске у входа и видны в итогах дня. Громкое доброе
-  // (или дурное) имя района вспоминают и там (goodwill.ts).
-  const reviews = reviewsFor(scene.stats, finishedDay, goodwillOf(state));
+  // (или дурное) имя района вспоминают и там (goodwill.ts). Магазин сегодня стоял опечатанным после серой
+  // схемы (grey.ts) — разгромный отзыв первым.
+  const reviews = reviewsFor(scene.stats, finishedDay, goodwillOf(state), state.grey?.sealed === finishedDay);
   const best = updateRecords({ ...recordDay(state, scene.stats), reviews }, scene.stats, finishedDay);
   scene.state = best.state;
   // Повод вернуться (returns.ts): сосед просит отложить на завтра, письмо придёт на следующий настоящий день.

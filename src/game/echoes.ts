@@ -91,6 +91,11 @@ const ECHO_DEFS = {
   // разбирает racket.ts answerRaise); сдал банду — соседи благодарят.
   racketRaise: { icon: '🕶', who: 'racket_tolik', mood: null, choices: [{ effect: {} }, { effect: {} }, { effect: {} }] },
   racketThanks: { icon: '🤝', who: 'valya_happy', mood: 'happy', choices: once({ rating: 0.03, boost: [0.06, 4] }) },
+  // Серая схема (grey.ts, 13.11): отказался от партии без накладных — она краденая, участковый благодарит;
+  // перебил этикетки на просрочке — покупательница отравилась; отказал Жоре — он мелко мстит.
+  greyStolen: { icon: '👮', who: 'police_happy', mood: 'happy', choices: once({ rating: 0.03, boost: [0.04, 3] }) },
+  greyPoison: { icon: '🤢', who: 'inspector_angry', mood: 'angry', choices: once({ rating: -0.04, boost: [-0.05, 4] }) },
+  greyRevenge: { icon: '🕶', who: 'grey_angry', mood: 'angry', choices: once({ money: -150, boost: [-0.03, 2] }) },
 } satisfies Record<string, EchoDef>;
 
 export type EchoId = keyof typeof ECHO_DEFS;
