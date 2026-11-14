@@ -308,7 +308,9 @@ describe('касса в ритме: сохранение', () => {
     const loaded = loadGame()!;
     expect(loaded.day).toBe(40);
     expect(loaded.money).toBe(1234);
-    expect(loaded.seenTips).toEqual(['ownerTill']);
+    // 14.11, аудит: карточки уже открытых механик (ломбард, прокат…) отмечаются при загрузке (tips.ts catchUpTips) — ритм нет.
+    expect(loaded.seenTips?.[0]).toBe('ownerTill');
+    expect(loaded.seenTips).not.toContain('rhythm');
     expect(rhythmOn(loaded)).toBe(false);
     expect(rhythmTaught(loaded)).toBe(false);
   });

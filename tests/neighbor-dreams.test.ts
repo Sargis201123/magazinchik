@@ -140,8 +140,9 @@ describe('мечты: вложиться или «Не сейчас»', () => {
 
   it('новость стоит в общей очереди утра — одна за утро', () => {
     const s = shop();
+    // 14.11, аудит: мечта — денежное решение и идёт со сроками (headlines.ts), раньше историй для души.
     const picked = pickNews(s, ['dream', 'life']);
-    expect(picked.id).toBe('life');
+    expect(picked.id).toBe('dream');
     expect(pickNews(s, ['dream']).id).toBe('dream');
   });
 });

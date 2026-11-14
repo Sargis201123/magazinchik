@@ -12,6 +12,7 @@ import { normalizePets } from './pets';
 import { normalizeZar } from './zarechye';
 import { normalizeNews } from './headlines';
 import { migrateCalm } from './calm';
+import { catchUpTips } from './tips';
 import { readCloud, writeCloud } from '../platform/cloud';
 import { telegramUserId, trustedNow } from '../platform/telegram';
 import { IS_YANDEX } from '../platform/target';
@@ -97,7 +98,8 @@ export function loadGame(): StoreState | null {
   // Оборудование упростили 02.11: за убранные указатели, солнечные панели и тележки — монеты назад (gear.ts).
   // Перестановку полок убрали (08.11, решение автора): своя расстановка из старых сохранений больше не
   // применяется — у всех стандартная планировка помещения (и у второго магазина в Заречье).
-  return dropPlacement(normalizeZar(migrateGear(migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11))))));
+  // 14.11, аудит: вернувшемуся после 13.11 — карточки уже открытых механик прочитаны, их назовёт «Что нового» (tips.ts).
+  return catchUpTips(dropPlacement(normalizeZar(migrateGear(migrateCareer(migrateCollections(normalizeShelves(state, save.version < 11)))))));
 }
 
 /** Своя расстановка полок, кассы и вещей зала (перестановка, убрана 08.11) — снять, в том числе у второго магазина. */

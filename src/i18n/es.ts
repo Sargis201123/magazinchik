@@ -1255,6 +1255,7 @@ export const es: Record<TextKey, string> = {
   "district.plot.soon": "📋 En {n} días empieza una obra en la esquina. Lo que abra allí dependerá de tus ventas de la semana.",
   "tip.plots.title": "El barrio se adapta",
   "tip.plots.text": "Lo que abre en los solares libres depende de lo que más vendes: agua — gimnasio, flores — salón de novias, café — coworking, helado — club infantil, carne — comedor. Los nuevos vecinos compran justo eso.",
+  "news.mechs": "🆕 Novedades: casa de empeño en la trastienda, alquiler y furgoneta en «Rincones», sótano, plantas y casas detrás de la tienda en «Crecer».",
   "tour.hall": "Si un estante está vacío, tócalo para traer mercancía del almacén. Limpia la basura y los charcos, y saca el cesto. Por la noche verás cuánto ganaste. ¡Suerte, cariño!",
   "onb.hello": "¡Cariño, el quiosco ya es tuyo! Mira, ya vienen.",
   "onb.shop": "El cliente toma las cosas del estante y las lleva a la caja.",

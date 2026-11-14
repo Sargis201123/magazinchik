@@ -102,7 +102,9 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   racket: 'timed',
   tale: 'flavour',
   life: 'flavour',
-  dream: 'flavour',
+  // 14.11, аудит: мечта соседа — денежное решение (вложиться, итог), как серое и ломбард. «Для души» она ждала
+  // ломбард и дело недели неделями: из четырёх мечт к 120-му дню доходила половина, четвёртая — никогда.
+  dream: 'timed',
   residents: 'flavour',
   staffEvent: 'flavour',
   plot: 'flavour',
@@ -158,7 +160,19 @@ export interface NewsQueue {
   wait?: Partial<Record<NewsId, number>>;
 }
 
-const rank = (id: NewsId): number => (id === 'story' ? 0 : TODAY_ONLY.has(id) ? 1 : { main: 2, timed: 3, flavour: 4 }[NEWS_KIND[id]]);
+/**
+ * 14.11, аудит: почти каждое утро готовы гость ломбарда (треть утр, каждый день заново) и дело недели (две
+ * трети утр) — с 30-го дня в 94% утр «для души» не доходила очередь: терялись 3 из 4 историй постоянных
+ * (а только через них бонус лояльности), 97% случаев фургона, переезды и стройка района.
+ */
+const RECURRING: ReadonlySet<NewsId> = new Set<NewsId>(['pawn', 'case']);
+
+/**
+ * Порядок: глава сюжета, «только сегодня», главное, сроки. История для души, прождавшая день, идёт раньше
+ * ломбарда и дела недели (они вернутся завтра), но после остальных сроков и событий дня; свежая — последней.
+ */
+const rank = (id: NewsId, waited: number): number =>
+  id === 'story' ? 0 : TODAY_ONLY.has(id) ? 1 : RECURRING.has(id) ? 3.5 : NEWS_KIND[id] === 'flavour' ? (waited >= 1 ? 3.25 : 4) : NEWS_KIND[id] === 'main' ? 2 : 3;
 
 /**
  * Какую новость показать этим утром. ready — что готово сейчас (условия своих модулей). Возвращает
@@ -174,7 +188,9 @@ export function pickNews(state: StoreState, ready: readonly NewsId[]): { id: New
   let id: NewsId | null = q.shown ?? null;
   if (!id && q.done < NEWS_PER_MORNING && ready.length) {
     const wait = q.wait ?? {};
-    id = [...ready].sort((a, b) => rank(a) - rank(b) || (wait[a] ?? state.day) - (wait[b] ?? state.day) || NEWS_IDS.indexOf(a) - NEWS_IDS.indexOf(b))[0];
+    const since = (x: NewsId) => wait[x] ?? state.day;
+    const r = (x: NewsId) => rank(x, state.day - since(x));
+    id = [...ready].sort((a, b) => r(a) - r(b) || since(a) - since(b) || NEWS_IDS.indexOf(a) - NEWS_IDS.indexOf(b))[0];
     q = { ...q, shown: id };
   }
   // Каждая готовая помнит, с какого дня ждёт (и показанная — вдруг сегодня её не дочитают); ушедшие — из очереди.
