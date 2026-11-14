@@ -260,6 +260,8 @@ import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
 import { pawnBox, pawnOfferBox } from './pawnshop';
 import { pawnMet, pawnOf, pawnOffer, pawnOpen, pawnSlots } from '../game/pawnshop';
+import { rentalAlert, rentalBox, rentalStatus, restockButton } from './rental';
+import { KIT_ICON, RENTAL_CAP, kitToday, rentalOf, rentalOpen } from '../game/rental';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
 import { applyTownGifts, townBox } from './town';
@@ -2327,6 +2329,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
             },
           ]
         : []),
+      // Прокат у входа (game/rental.ts, 13.11): плитка — когда стойку можно поставить или она уже стоит.
+      ...(rentalOpen(state) || state.rental
+        ? [{ id: 'rental', icon: KIT_ICON[kitToday(state)], title: t('rental.title'), status: rentalStatus(state), alert: rentalAlert(state), details: () => [rentalBox(getState(), getState, update)] }]
+        : []),
       {
         id: 'cat',
         icon: '🐱',
@@ -3738,6 +3744,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     if (rack.stock <= rackCapacity(state) / 3 && rackFree > 0) {
       row(t('todo.rack', { n: rack.stock }), button(t('todo.rackBtn', { n: rackFree * CANDY_COST }), () => update(refillRack(getState(), rackFree), 'success'), 'ui-chip', state.money < rackFree * CANDY_COST));
     }
+    // Прокат: вещи пропали (не вернули) — докупить, иначе стойка беднеет (game/rental.ts).
+    const rentRefill = restockButton(state, getState, update);
+    if (rentRefill) row(t('todo.rental', { n: rentalOf(state)?.stock ?? 0, max: RENTAL_CAP }), rentRefill);
     if (hasUpgrade(state, 'coffee') && cupsOf(state) < 8) {
       const n = CUPS_MAX - cupsOf(state);
       row(t('todo.cups', { n: cupsOf(state) }), button(t('todo.cupsBtn', { n, cost: n * CUP_COST }), () => update(buyCups(getState(), n), 'success'), 'ui-chip', state.money < n * CUP_COST));

@@ -123,6 +123,7 @@ import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, next
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft, ownerTiming } from './owner';
+import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
 import { rhythmSeconds } from './tillRhythm';
 
 export { rng };
@@ -270,6 +271,9 @@ export type Feature =
   | 'license'
   // Ломбард (pawnshop.ts): берёт вещь у гостя со спокойной приметой, если в кассе с запасом; суетливым отказывает.
   | 'pawn'
+  // Прокат у входа (rental.ts, 13.11): ставит стойку, когда не копит на помещение, и каждое утро докупает пропавшее;
+  // залог — средний (по умолчанию).
+  | 'rental'
   // Лотерея у кассы (lottery.ts): ставит стойку, когда есть запас; тираж и запреты — в nightCycle, как в игре.
   | 'lottery'
   // Ученик (apprentice.ts): берёт, когда просится; ставит по кругу на кассу, склад и в зал, раз в неделю —
@@ -826,6 +830,17 @@ export function simulate({
     if (features.pawn) {
       const offer = pawnOffer(state);
       if (offer) state = (offer.tell === 'calm' && state.money >= offer.lent + reserve * 2 ? takePawn(state) : null) ?? refusePawn(state);
+    }
+    if (features.rental) {
+      if (!state.rental && state.money >= STAND_COST * 2 + reserve && canSplurge(STAND_COST)) {
+        const stand = buyStand(state);
+        if (stand) {
+          state = stand;
+          investments += STAND_COST;
+        }
+      }
+      const missing = RENTAL_CAP - (rentalOf(state)?.stock ?? RENTAL_CAP);
+      if (missing && state.money >= missing * ITEM_COST + reserve) state = restockRental(state, missing) ?? state;
     }
 
     // ---------- Утро: закупка ----------

@@ -296,7 +296,7 @@ describe('вместе с игрой', () => {
 
   it('карточка «Новое!» — когда ученик появился; история утра встаёт в общую очередь', () => {
     const s = taken();
-    expect(pendingTip({ ...s, seenTips: ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'pawn', 'case', 'rhythm', 'echo', 'thief'] })).toBe('appr');
+    expect(pendingTip({ ...s, seenTips: ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift', 'pawn', 'case', 'rhythm', 'echo', 'thief', 'rental'] })).toBe('appr');
     expect(pickNews(shop(), ['appr', 'apprOut']).id).toBe('apprOut');
   });
 
