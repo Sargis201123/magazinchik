@@ -208,6 +208,8 @@ import { chooseCrisis, crisisAsk, crisisNews, crisisWeather, crisisDaysLeft, see
 import { crisisChoiceBox, crisisEndBox, crisisLines } from './crisis';
 import { apprNews, apprOffer, apprWorry } from '../game/apprentice';
 import { apprCard, apprLines, apprOfferBox, apprOutBox, gradLines } from './apprentice';
+import { chooseRacket, racketAsk, racketNews, seeRacketNews, stopPaying } from '../game/racket';
+import { racketChoiceBox, racketLines, racketNewsBox } from './racket';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { showSupport } from './support';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
@@ -273,6 +275,8 @@ import { hoodBox } from './hood';
 import { linesBox } from './lines';
 import { licenseBox, licenseNoticeBox } from './license';
 import { hasLicense, licenseNotice } from '../game/license';
+import { greyCaughtBox, greyLines, greyOfferBox } from './grey';
+import { greyCaught, greyOffer } from '../game/grey';
 import { lineOfProduct } from '../game/lines';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
@@ -817,6 +821,13 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       card.replaceChildren(title, licenseNoticeBox(licenseCheck, getState, update));
       return;
     }
+    // Попался на серой схеме (game/grey.ts): штраф уже списан ночью, сегодня магазин опечатан до обеда.
+    const caught = greyCaught(state) && greyCaughtBox(state, getState, update);
+    if (caught) {
+      cue('fail', `grey:${state.day}`);
+      card.replaceChildren(title, caught);
+      return;
+    }
     // Новости утра (game/headlines.ts): сюжет, повороты, итоги, истории — не больше одной за утро,
     // остальные ждут следующего. Решить срочное (спасение, банк, брак) — выше, вне очереди.
     const zarHere = inZar(state);
@@ -836,6 +847,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('giant', giantPhase);
     add('zarCard', zarCardDue(state));
     add('zarBoss', som);
+    add('racketAsk', racketAsk(state));
     add('contestResult', result);
     add('contestAnnounce', announce);
     add('crisisAsk', crisisAsk(state));
@@ -846,6 +858,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('pawn', pawnOffer(state));
     add('case', !zarHere && caseNews(state));
     add('lottery', lotteryNews(state));
+    add('racket', racketNews(state));
+    add('grey', greyOffer(state));
     add('tale', taleToday(state));
     add('life', !zarHere && lifeNews(state));
     add('dream', dreamNews(state));
@@ -896,6 +910,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     // Беда района (game/crisis.ts): решить, как торговать, пока она идёт.
     if (picked.id === 'crisisAsk' && crisisAsk(state)) {
       card.replaceChildren(title, crisisChoiceBox(state, (mode) => update(chooseCrisis(getState(), mode), mode === 'gouge' ? 'tap' : 'success')));
+      return;
+    }
+    // «Крыша» (game/racket.ts): ребята у входа ждут ответа — платить, отказать или в полицию.
+    if (picked.id === 'racketAsk' && racketAsk(state)) {
+      card.replaceChildren(title, racketChoiceBox(state, (mode) => update(chooseRacket(getState(), mode), mode === 'pay' ? 'tap' : 'success')));
       return;
     }
     if (state.plan?.event && picked.id === 'event') {
@@ -1006,6 +1025,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...debtLine(state),
       ...bigDayLine(state),
       ...crisisLines(state),
+      ...(zarHere ? [] : racketLines(state, (mode) => update(stopPaying(getState(), mode), 'success'))),
+      // Опечатан до обеда после серой схемы (game/grey.ts) — это сегодня важнее цели главы.
+      ...greyLines(state),
       goalLine(state),
       ...apprLines(state),
       ...autoLine(),
@@ -2087,6 +2109,13 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       }
       case 'lottery':
         return lotteryNewsBox(state, getState, update);
+      case 'racket': {
+        const news = racketNews(state);
+        return news ? racketNewsBox(news, () => update(seeRacketNews(getState()))) : [];
+      }
+      // Серая схема (game/grey.ts): Жора с предложением мимо закона.
+      case 'grey':
+        return greyOfferBox(state, getState, update);
       case 'van':
         return vanNewsBox(state, getState, update);
       case 'arc':

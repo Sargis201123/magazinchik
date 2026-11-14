@@ -740,6 +740,8 @@ export interface StoreState {
   appr?: import('./apprentice').Apprentice;
   apprGrads?: import('./apprentice').ApprGrad[];
   apprAsk?: number;
+  /** Серая схема (grey.ts): сделки с Жорой, скрытые «хвосты», «договорённость» с проверяющим, опечатанный день. */
+  grey?: import('./grey').GreyState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Ломбард в подсобке (pawnshop.ts): вещи в залоге, полка «Разное», изъятое полицией. Нет поля — ещё не открывали. */
@@ -787,6 +789,8 @@ export interface StoreState {
   /** Беда района (crisis.ts): идёт сейчас — и чем кончилась прошлая (новость утром, пауза до следующей). */
   crisis?: import('./crisis').CrisisState;
   crisisEnd?: import('./crisis').CrisisEnd;
+  /** «Крыша» (racket.ts): пришли ли ребята, что решили, пакости и доля. Нет поля — ещё не приходили. */
+  racket?: import('./racket').RacketState;
   /** Доброе имя района −100…100 (goodwill.ts); нет поля — 0. */
   goodwill?: number;
   /** 0..5 звёзд, влияет на поток покупателей. */

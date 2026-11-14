@@ -60,6 +60,8 @@ export const SPRITES = [
   'belt_window_hot',
   // Ученик (art/apprentice.py): бумажный пакет, который он пакует на кассе.
   'appr_bag',
+  // Серая схема (art/grey.py): ленты с печатью на двери в день, когда магазин опечатан.
+  'grey_seal',
   // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
   'tip_jar',
   'jam_splat',
@@ -462,6 +464,10 @@ export const SPRITES = [
   'lottery_stand_lucky',
   'lottery_ticket',
   'lottery_cake',
+  // «Крыша» (art/racket.py): трещины поверх витрины, осколки на тротуаре, мешки с мусором у двери.
+  'racket_crack',
+  'racket_shards',
+  'racket_trash',
   'icebox',
   'trolley',
   'boat',

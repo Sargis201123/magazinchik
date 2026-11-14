@@ -111,8 +111,10 @@ import { APPR_SKILLS, APPR_TIP, apprOffer, apprPatience, apprStockPace, apprTipC
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
 import { buyLicense, hasLicense, LICENSE_PRICE, licenseLock } from './license';
+import { answerGrey, greyCover, greyOffer } from './grey';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
+import { chooseRacket, racketAsk, type RacketMode } from './racket';
 import { chooseCrisis, crisisAsk, crisisExtraItems, crisisGive, crisisTolerance, type CrisisMode } from './crisis';
 import { deliveryDay } from './delivery';
 import { buyLineTier, LINE_IDS, LINES, lineLock, lineUnitCost, nextLineCost, type LineId } from './lines';
@@ -205,6 +207,8 @@ export interface SimOptions {
   war?: WarAnswer;
   /** Как вести себя в беду района (crisis.ts): по умолчанию — держать обычные цены. */
   crisis?: CrisisMode;
+  /** Как ответить «крыше» (racket.ts): по умолчанию — отказать (две недели пакостей, потом тихо). */
+  racket?: RacketMode;
   /** Сколько закладок в печь игрок успевает за день и как часто забывает вынуть. */
   ovenBatches?: number;
   ovenBurn?: number;
@@ -281,7 +285,10 @@ export type Feature =
   | 'van'
   // Ученик (apprentice.ts): берёт, когда просится; ставит по кругу на кассу, склад и в зал, раз в неделю —
   // выходной, стипендию платит, хвалит, когда можно (так выпускник — друг).
-  | 'apprentice';
+  | 'apprentice'
+  // Серая схема (grey.ts): соглашается на всё, что предлагает Жора, — сколько это стоит в итоге (штрафы, опечатанные
+  // дни, доброе имя). Эхо (отравление, месть) симулятор не разбирает — как и эхо сценок.
+  | 'grey';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -403,6 +410,7 @@ export function simulate({
   features = {},
   war = 'wait',
   crisis = 'hold',
+  racket = 'refuse',
   ovenBatches = 3,
   ovenBurn = 0.1,
   adAlways,
@@ -693,6 +701,7 @@ export function simulate({
         state = praiseAppr(state) ?? state;
       }
     }
+    if (features.grey && greyOffer(state)) state = answerGrey(state, true) ?? state;
     // Бобика симулятор не берёт: ночных воров больше нет (02.11), днём он только помогает поймать воришку.
     if (features.candy) {
       const next = nextRack(state);
@@ -742,6 +751,8 @@ export function simulate({
     }
     // Беда района: как решено для прогона (по умолчанию держит цены).
     if (crisisAsk(state)) state = chooseCrisis(state, crisis) ?? state;
+    // «Крыша»: как решено для прогона (в полиции дело без игрока уходит в архив — значит, пакости).
+    if (racketAsk(state)) state = chooseRacket(state, racket) ?? state;
     const opened = districtNews(state);
     if (opened) {
       const saving = nextFor(state);
@@ -1266,7 +1277,9 @@ export function simulate({
     // Проверка: с уборщиком чисто почти всегда, в одиночку — как повезёт.
     if (state.plan?.inspection) {
       const clean = random() < (staffOf(state, 'cleaner') ? 0.9 : 0.6);
-      state = inspectionDone(state, inspect(state, { trash: clean ? 0 : 3, toiletDirt: clean ? 0 : 70 }));
+      // «Прикормленный» проверяющий (grey.ts) нарушений не видит.
+      const cover = greyCover(state, inspect(state, { trash: clean ? 0 : 3, toiletDirt: clean ? 0 : 70 }));
+      state = inspectionDone(cover.state, cover.result);
     }
 
     // Активные моменты дня (moments.ts): пойманные — чаевые сразу в кассу, искорки к рейтингу вечером.

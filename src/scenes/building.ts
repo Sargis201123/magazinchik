@@ -51,6 +51,16 @@ import * as nightShift from './nightShift';
 import * as camera from './camera';
 import * as shelves from './shelves';
 import * as pawnFx from './pawnFx';
+import { greyRate } from '../game/grey';
+
+/** Ленты с печатью на двери (серая схема) — по сценам: при перестройке мира создаются заново. */
+const seals = new WeakMap<StoreScene, Phaser.GameObjects.Image>();
+
+/** Ленты на двери, пока магазин опечатан: утром и до обеда (из buildStore, утром — morningFlow, днём — StoreScene). */
+export function refreshSeal(scene: StoreScene, share = 0): void {
+  const seal = seals.get(scene);
+  if (seal?.active) seal.setVisible(!scene.night && greyRate(scene.state, share) === 0);
+}
 
 const OWNER: Look = { shirt: 0x8fd16a, skin: 0xf2d3ab, pants: 0x3a4466, hair: 0x4a2c1a, style: 'short' };
 /** Наряды хозяина за звёзды (decor.ts, раздел «Наряд»). Должно совпадать с art/costumes.py. */
@@ -380,6 +390,10 @@ export function buildShell(scene: StoreScene): void {
   const style = facadeStyle(scene);
   scene.add.tileSprite(-WALL, h, w + 2 * WALL, FACADE_H, potTile(scene, style.texture)).setOrigin(0).setTileScale(1 / ART).setDepth(h + 1);
   scene.doorImg = scene.art(door.x, h + 5, doorKey(scene.state.level, 0)).setDepth(h + 2);
+  // Попался на серой схеме (game/grey.ts): в опечатанный день дверь крест-накрест в бумажных лентах с печатью.
+  // Мир утром не перестраивается — ленты висят всегда, их видимость меняет refreshSeal.
+  seals.set(scene, scene.art(door.x, h + 5, 'grey_seal').setDepth(h + 41));
+  refreshSeal(scene);
   scene.doorSign = scene.art(door.x + 11, h + 8, scene.running ? 'door_sign_open' : 'door_sign_closed').setDepth(h + 42);
   // Витрины с маленькими навесами слева и справа от двери, в каждой — выкладка по времени года.
   const segments: [number, number][] = [
