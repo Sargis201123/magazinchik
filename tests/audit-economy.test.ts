@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { HYPER_LEVEL, newGame, type StoreState } from '../src/game/economy';
 import { simulate, type Feature } from '../src/game/simulate';
-import { RACKET_RATE, RACKET_RATE_MAX, racketGuard, racketMorning, racketShare, troubleCost, TROUBLE_CASH } from '../src/game/racket';
+import { answerRaise, RACKET_RATE, RACKET_RATE_MAX, racketGuard, racketMorning, racketRate, racketShare, raiseTo, troubleCost, TROUBLE_CASH } from '../src/game/racket';
 import { raidChance, slotsPlan } from '../src/game/basement';
 import { tricksMorning } from '../src/game/tricks';
 import { answerGrey, greyGoodsGain, greyFine, greyOffer, greyRisk, type GreyOffer } from '../src/game/grey';
-import { echoesOf } from '../src/game/echoes';
+import { echoesOf, plantEcho } from '../src/game/echoes';
 import { lotteryNight } from '../src/game/lottery';
 import { zarAwayBill } from '../src/game/zarshop';
 import { buyZar, switchDistrict } from '../src/game/zarechye';
@@ -156,6 +156,31 @@ describe('«крыша»: дешевле, но с защитой; доля — �
     const inZar = { ...atHome, history: Array(7).fill(5000), zar: { at: 'zar', since: 1, played: 0, away: { history: centre } } } as unknown as StoreState;
     expect(racketShare(inZar)).toBe(racketShare(atHome));
     expect(racketShare(atHome)).toBe(Math.round((7 * 20000 * RACKET_RATE) / 100));
+  });
+
+  it('сейв до аудита: ставка 10% читается как потолок 5%, неделя берёт 5%', () => {
+    const old = paying({ history: Array(7).fill(20000), racket: { from: 50, mode: 'pay', since: 52, rate: 10 } });
+    expect(racketRate(old)).toBe(RACKET_RATE_MAX);
+    expect(racketShare(old)).toBe(Math.round((7 * 20000 * RACKET_RATE_MAX) / 100));
+    // День 80 — 28 дней от решения: день доли.
+    const out = racketMorning({ ...old, racket: { ...old.racket!, since: 52 } });
+    expect(old.money - out.money).toBe(7000);
+    expect(out.racket?.rate).toBe(10); // сейв не трогаем — только читаем с потолком
+  });
+
+  it('сейв до аудита: старое эхо «поднимаем ставку» не обещает больше потолка', () => {
+    // 4% и эхо «6%» — покажут и возьмут 5%.
+    const low = plantEcho(paying({ racket: { from: 50, mode: 'pay', since: 51, rate: 4 } }), 'racketRaise', 80, { n: 6 });
+    expect(raiseTo(low)).toBe(RACKET_RATE_MAX);
+    const fixed = racketMorning(low);
+    expect(echoesOf(fixed).list.find((e) => e.id === 'racketRaise')?.data?.n).toBe(RACKET_RATE_MAX);
+    expect(answerRaise(fixed, 'racketRaise', 0)?.racket?.rate).toBe(RACKET_RATE_MAX);
+    // 8% и эхо «10%» — поднимать некуда, эхо уходит, а не «поднимает» до 5%.
+    const high = plantEcho(paying({ racket: { from: 50, mode: 'pay', since: 51, rate: 8 } }), 'racketRaise', 80, { n: 10 });
+    expect(echoesOf(racketMorning(high)).list.some((e) => e.id === 'racketRaise')).toBe(false);
+    // Новое эхо по новым правилам не трогаем.
+    const fresh = plantEcho(paying(), 'racketRaise', 90, { n: RACKET_RATE + 1 });
+    expect(echoesOf(racketMorning(fresh)).list).toEqual(echoesOf(fresh).list);
   });
 
   it('в окне выбора видно, что покупает доля', () => {

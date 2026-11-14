@@ -124,10 +124,20 @@ const avgDay = (state: StoreState): number => {
   return week.length ? week.reduce((a, b) => a + b, 0) / week.length : 0;
 };
 
+/**
+ * Ставка, которую берут на деле. 14.11, аудит: в сохранениях до аудита ставка могла дорасти до 10% (старые 4% + 2%),
+ * а сейвы не мигрируем — поэтому потолок RACKET_RATE_MAX применяем при каждом чтении, иначе старый плательщик до
+ * конца игры отдавал бы вдвое больше нового максимума.
+ */
+export const rateOf = (r?: RacketState): number => Math.min(RACKET_RATE_MAX, r?.rate ?? RACKET_RATE);
+export const racketRate = (state: StoreState): number => rateOf(state.racket);
+/** Сколько станет после поднятия — это и показываем в эхе (сохранённое в нём {n} могло остаться от старых правил). */
+export const raiseTo = (state: StoreState): number => Math.min(RACKET_RATE_MAX, racketRate(state) + RACKET_RAISE);
+
 /** Доля недели: процент от выручки Центра за последние семь дней, не меньше RACKET_MIN. */
-export function racketShare(state: StoreState, rate = state.racket?.rate ?? RACKET_RATE): number {
+export function racketShare(state: StoreState, rate = racketRate(state)): number {
   const week = homeWeek(state).reduce((a, b) => a + b, 0);
-  return Math.max(RACKET_MIN, Math.round((week * rate) / 100));
+  return Math.max(RACKET_MIN, Math.round((week * Math.min(RACKET_RATE_MAX, rate)) / 100));
 }
 
 /** Платят «крыше», и она прикрывает: облав на автоматы нет, конкурент не пакостит, Жора не мстит. */
@@ -135,7 +145,7 @@ export const racketGuard = (state: StoreState): boolean => state.racket?.mode ==
 
 /** Забрать долю: сколько есть в кассе, не больше. */
 function collect(state: StoreState, r: RacketState): StoreState {
-  const cost = Math.min(Math.max(0, state.money), racketShare(state, r.rate));
+  const cost = Math.min(Math.max(0, state.money), racketShare(state, rateOf(r)));
   return set({ ...state, money: state.money - cost }, { ...r, paid: (r.paid ?? 0) + cost, hit: { day: state.day, kind: 'pay', cost } });
 }
 
@@ -174,7 +184,7 @@ export function answerRaise(state: StoreState, id: EchoId, choice: number): Stor
   if (!s || !r || r.mode !== 'pay' || r.end) return s;
   if (choice === 1) return refuse(s, r);
   if (choice === 2) return police(s, r);
-  const rate = Math.min(RACKET_RATE_MAX, (r.rate ?? RACKET_RATE) + RACKET_RAISE);
+  const rate = Math.min(RACKET_RATE_MAX, rateOf(r) + RACKET_RAISE);
   const next = set(s, { ...r, rate });
   return rate < RACKET_RATE_MAX ? plantEcho(next, 'racketRaise', s.day + raiseIn(s), { n: Math.min(RACKET_RATE_MAX, rate + RACKET_RAISE) }) : next;
 }
@@ -190,6 +200,20 @@ export function stopPaying(state: StoreState, mode: Exclude<RacketMode, 'pay'>):
   const e = echoesOf(state);
   const s = { ...state, echoes: { ...e, list: e.list.filter((x) => x.id !== 'racketRaise') } };
   return mode === 'refuse' ? refuse(s, r) : police(s, r);
+}
+
+/**
+ * Эхо «поднимаем ставку» из сейва до аудита (14.11): его {n} посчитано по старым правилам (6, 8, 10%). На потолке
+ * поднимать нечего — эхо убираем; ниже — переписываем {n} на то, что реально возьмут. Совпадает — тот же объект.
+ */
+function fixRaise(state: StoreState): StoreState {
+  const e = echoesOf(state);
+  const at = e.list.findIndex((x) => x.id === 'racketRaise');
+  if (at < 0 || e.list[at].data?.n === raiseTo(state)) return state;
+  const list = racketRate(state) >= RACKET_RATE_MAX
+    ? e.list.filter((_, i) => i !== at)
+    : e.list.map((x, i) => (i === at ? { ...x, data: { ...x.data, n: raiseTo(state) } } : x));
+  return { ...state, echoes: { ...e, list } };
 }
 
 /** Пакость этого утра (или null): первая — наутро после отказа, витрина; дальше — от зерна и дня. */
@@ -215,7 +239,10 @@ export function racketMorning(state: StoreState): StoreState {
   const s = r === r0 ? state : set(state, r);
   if (r.end || !r.mode) return s;
   const since = r.since ?? r.from;
-  if (r.mode === 'pay') return (state.day - since) % 7 === 0 && state.day > since ? collect(s, r) : s;
+  if (r.mode === 'pay') {
+    const p = fixRaise(s);
+    return (state.day - since) % 7 === 0 && state.day > since ? collect(p, r) : p;
+  }
   if (r.mode === 'police') {
     const rec = racketCase(s, since);
     if (!rec) return openCaseOf(s) ? s : (openCase(s, 'racket', 'racket') ?? s);
