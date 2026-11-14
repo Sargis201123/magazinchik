@@ -15,6 +15,7 @@ import {
   type StoreState,
 } from './economy';
 import { rng } from './random';
+import { gentTolerance } from './gentrify';
 
 // ---------------------------------------------------------------- сезоны
 
@@ -73,7 +74,8 @@ export function pickWanted(state: StoreState, random: () => number, count: numbe
 
 /** «Справедливая» цена в глазах покупателя сегодня (в праздник к ценам терпимее). */
 export const perceivedBase = (state: StoreState, id: ProductId): number =>
-  PRODUCTS[id].basePrice * (seasonFor(state.day)?.priceTolerance ?? 1);
+  // «Для новых» (gentrify.ts, 13.11): богатые соседи на ценник смотрят меньше — к наценке терпимее.
+  PRODUCTS[id].basePrice * (seasonFor(state.day)?.priceTolerance ?? 1) * gentTolerance(state);
 
 // ---------------------------------------------------------------- задания дня
 

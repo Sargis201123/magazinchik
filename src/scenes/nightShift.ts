@@ -330,6 +330,8 @@ export function finishDay(scene: StoreScene): void {
   if (branch) extra.push([t('branch.summary'), t('branch.summaryValue', { n: branch })]);
   // Арендаторы флигеля (tenants.ts): аренда за день одной строкой.
   if (rent) extra.push([t('tenant.summary'), t('branch.summaryValue', { n: rent })]);
+  // Лавки скупленной улицы (estate.ts): аренда за день одной строкой.
+  if (night.estate) extra.push([t('estate.summary'), t('branch.summaryValue', { n: night.estate })]);
   // Выезд фургона (van.ts): что продал, случай в дороге, что привёз назад, итого.
   if (night.van) {
     extra.push([t('van.summary'), vanResultText(night.van)]);

@@ -13,6 +13,8 @@ import { branchLook } from '../game/branch';
 import { hoodLook } from '../game/hood';
 import { tenantsLook } from '../game/tenants';
 import { residentsLook } from '../game/residents';
+import { gentLook } from '../game/gentrify';
+import { estateLook } from '../game/estate';
 import { streetKey } from '../game/street';
 import { fetchStreet, streetInfo } from '../platform/multiplayer';
 import { t } from '../i18n';
@@ -222,7 +224,7 @@ export function showMorning(scene: StoreScene): void {
   scene.giftRebuild = false;
   // Утро: зал больше не закрыт — перестройка ниже зажжёт лампы, сумрак ритуала закрытия снят (lightsOn зажжёт ряды).
   lighting.hallOff(scene, -Infinity);
-  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || residentsLook(scene.state) !== scene.builtResidents || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
+  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || residentsLook(scene.state) !== scene.builtResidents || gentLook(scene.state) !== scene.builtGent || estateLook(scene.state) !== scene.builtEstate || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   // Фургон выездной торговли вернулся вчера после закрытия (или его купили) — на своё место до соседей.
   cars.parkVan(scene);
   cars.refillParking(scene);
@@ -280,7 +282,7 @@ export function showMorning(scene: StoreScene): void {
       // Переехали на сегодня в другой район (game/zarechye.ts) — другой магазин целиком, а не расширение.
       if (zarLook(s) !== scene.builtZar) scene.buildWorld();
       else if (s.level > scene.builtLevel) void effects.celebrateExpansion(scene);
-      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || tenantsLook(s) !== scene.builtTenants || zarLook(s) !== scene.builtZar) scene.buildWorld(bought);
+      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || tenantsLook(s) !== scene.builtTenants || estateLook(s) !== scene.builtEstate || zarLook(s) !== scene.builtZar) scene.buildWorld(bought);
       else {
         if (staffChanged) staff.syncStaff(scene);
         // Купили, позвали другого или отправили домой питомца за звёзды — только он, без перестройки зала.
