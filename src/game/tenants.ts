@@ -14,6 +14,7 @@ import type { TextKey } from '../i18n';
 import { take } from './tales';
 import { homeLevel, inZar } from './zarshop';
 import { yearTime, type YearTime } from './calendar';
+import { gentTenantRent } from './gentrify';
 
 export type TenantId = 'pickup' | 'pharmacy' | 'repair' | 'toys' | 'barber' | 'photo' | 'atm';
 export const TENANT_IDS: TenantId[] = ['pickup', 'pharmacy', 'repair', 'toys', 'barber', 'photo', 'atm'];
@@ -194,7 +195,12 @@ export function invitePitch(state: StoreState): StoreState | null {
 // ---------- Итоги ----------
 
 /** Аренда за день со всех комнат и с площадки у входа. */
-export const tenantRent = (state: StoreState): number => tenantsOf(state).reduce((sum, id) => sum + rentOf(state, id), 0) + (pitchNow(state) ? pitchRent(state) : 0);
+export const tenantRent = (state: StoreState): number => {
+  const sum = tenantsOf(state).reduce((s, id) => s + rentOf(state, id), 0) + (pitchNow(state) ? pitchRent(state) : 0);
+  // Район подорожал (gentrify.ts, 13.11): за комнаты во флигеле арендаторы платят больше — как и мы за своё помещение.
+  const dear = gentTenantRent(state);
+  return dear > 1 ? Math.round(sum * dear) : sum;
+};
 
 /** Множитель гостей зала от арендаторов (только в Центре — day.ts, homeOnly). */
 export const tenantGuests = (state: StoreState): number => 1 + tenantsOf(state).reduce((sum, id) => sum + guestsOf(state, id), 0) + (pitchNow(state) ? PITCH_GUESTS : 0);

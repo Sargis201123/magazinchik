@@ -21,6 +21,7 @@ import { crisisGuests, crisisMorning, crisisNight, weatherToday } from './crisis
 import { goodwillGuests } from './goodwill';
 import { racketGuests, racketMorning } from './racket';
 import { residentsGuests, residentsMorning } from './residents';
+import { gentGuests, gentMorning } from './gentrify';
 import { endWar } from './war';
 import { eduardGuests, growEduard } from './eduard';
 import { afterBills } from './bankruptcy';
@@ -172,7 +173,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Район (districtPlots.ts, 13.11): завтра на участке начинают стройку — что строить, решает отчёт с сегодняшней строкой.
   // «Крыша» (racket.ts) — после утра дел: видит, чем кончилось дело в полиции, и не приходит в первое утро беды.
   // Жители района (residents.ts): в свой день район решает, въезжает ли кто-то или съезжает — по утреннему доброму имени.
-  const next = residentsMorning(racketMorning(crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(districtNight(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled))))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income))))));
+  // Район дорожает (gentrify.ts): престиж на шаг к заслуженному; при высоком кто-то из старых может уехать от цен —
+  // после жителей, чтобы в один день не было двух переездов.
+  const next = gentMorning(residentsMorning(racketMorning(crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(districtNight(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled))))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income)))))));
   return {
     ...night,
     state: next,
@@ -229,6 +232,8 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, racketGuests) *
   // Жители района (residents.ts): семей в домах вдоль улицы больше или меньше, чем было.
   homeOnly(state, residentsGuests) *
+  // Район дорожает (gentrify.ts): «для новых» — богатые заходят, «для своих» — обходят.
+  homeOnly(state, gentGuests) *
   fairGuests(state.day) *
   weekGuests(state.day) *
   lightsGuests(state) *

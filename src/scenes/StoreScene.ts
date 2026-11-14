@@ -185,6 +185,8 @@ export class StoreScene extends Phaser.Scene {
   builtTenants = '';
   /** Что нарисовано у домов жителей (game/residents.ts residentsLook): число семей и фургон переезда. */
   builtResidents = '';
+  /** Как выглядит подорожавший район (game/gentrify.ts gentLook): витрины соседей и ответ «для кого магазин». */
+  builtGent = '';
   /** Сколько посетителей арендаторов сейчас идёт по залу (scenes/tenantsFx.ts). */
   tenantGuests = 0;
   /** «Бабушкина теплица» в мире (scenes/gardenFx.ts): её картинки, стадия, с которой нарисована, и где стоит. */

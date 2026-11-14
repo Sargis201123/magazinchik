@@ -24,6 +24,8 @@ export const NEWS_IDS = [
   // в сохранении снимает normalizeNews.
   // «Крыша» пришла (racket.ts, 13.11): платить, отказать или в полицию — ждёт ответа, как поворот сюжета.
   'racketAsk',
+  // Район подорожал (gentrify.ts, 13.11): для кого магазин — ждёт ответа, как поворот сюжета.
+  'gentrify',
   'contestResult',
   'contestAnnounce',
   // Беда района началась (crisis.ts): как торговать, пока она идёт (13.11).
@@ -77,6 +79,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   zarCard: 'main',
   zarBoss: 'main',
   racketAsk: 'main',
+  gentrify: 'main',
   contestResult: 'timed',
   contestAnnounce: 'timed',
   crisisAsk: 'timed',

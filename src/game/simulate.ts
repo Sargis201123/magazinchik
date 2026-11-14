@@ -115,6 +115,7 @@ import { answerGrey, greyCover, greyOffer } from './grey';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
 import { chooseRacket, racketAsk, type RacketMode } from './racket';
+import { chooseGent, gentAsk, type GentChoice } from './gentrify';
 import { chooseCrisis, crisisAsk, crisisExtraItems, crisisGive, crisisTolerance, type CrisisMode } from './crisis';
 import { deliveryDay } from './delivery';
 import { buyLineTier, LINE_IDS, LINES, lineLock, lineUnitCost, nextLineCost, type LineId } from './lines';
@@ -211,6 +212,8 @@ export interface SimOptions {
   crisis?: CrisisMode;
   /** Как ответить «крыше» (racket.ts): по умолчанию — отказать (две недели пакостей, потом тихо). */
   racket?: RacketMode;
+  /** С features.gentrify: как ответить, когда район подорожал (gentrify.ts): по умолчанию — «для новых». */
+  gentrify?: GentChoice;
   /** Сколько закладок в печь игрок успевает за день и как часто забывает вынуть. */
   ovenBatches?: number;
   ovenBurn?: number;
@@ -294,7 +297,10 @@ export type Feature =
   // Подвал (floors.ts, basement.ts, 13.11): открывает, когда не копит на помещение, ставит склад-холодильник
   // (и подсобку, если ведёт ломбард), потом автоматы — до мест в подвале, ремонт — когда два уже стоят.
   // Облавы и уход мам с детьми — в nightCycle и гостях дня, как в игре.
-  | 'basement';
+  | 'basement'
+  // Район дорожает (gentrify.ts, 13.11): престиж растёт сам, на выбор утром отвечает как в SimOptions.gentrify.
+  // Без этой механики престиж в прогоне не копится: на прежних прогонах откалиброван баланс (аренда и прайс — как были).
+  | 'gentrify';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -417,6 +423,7 @@ export function simulate({
   war = 'wait',
   crisis = 'hold',
   racket = 'refuse',
+  gentrify = 'rich',
   ovenBatches = 3,
   ovenBurn = 0.1,
   adAlways,
@@ -708,6 +715,8 @@ export function simulate({
       }
     }
     if (features.grey && greyOffer(state)) state = answerGrey(state, true) ?? state;
+    // Район подорожал: для кого магазин — как решено для прогона.
+    if (features.gentrify && gentAsk(state)) state = chooseGent(state, gentrify) ?? state;
     // Бобика симулятор не берёт: ночных воров больше нет (02.11), днём он только помогает поймать воришку.
     if (features.candy) {
       const next = nextRack(state);
@@ -1324,6 +1333,11 @@ export function simulate({
     purchases += night.lines.spent;
     const before = night.state;
     state = night.state;
+    // Без механики «Район дорожает» престиж не копится (утро nightCycle поднимает его на шаг — снимаем).
+    if (!features.gentrify && state.gentrify) {
+      const { gentrify: _off, ...rest } = state;
+      state = rest;
+    }
     if (state.giant && state.giant.phase !== giantLog[giantLog.length - 1]?.phase) giantLog.push({ day: state.day, phase: state.giant.phase });
     const contest = state.contest;
     if (contest?.last && contest.phase === 'wait' && contest.since === state.day) contests.push({ day: state.day, tier: contest.last.tier, won: contest.last.won });
