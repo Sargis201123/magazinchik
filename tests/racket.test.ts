@@ -182,10 +182,12 @@ describe('отказать', () => {
     expect(s.money).toBe(5000);
     expect(s.racket).toMatchObject({ mode: 'refuse', since: 50, until: 50 + TROUBLE_DAYS });
     s = next(s);
-    expect(racketHit(s)).toEqual({ day: 51, kind: 'glass', cost: troubleCost('glass', 2) });
-    expect(s.money).toBe(5000 - troubleCost('glass', 2));
+    // 14.11, аудит: цена пакости — от средней выручки дня Центра (здесь неделя WEEK, в среднем 1000).
+    const avg = WEEK.reduce((a, b) => a + b) / WEEK.length;
+    expect(racketHit(s)).toEqual({ day: 51, kind: 'glass', cost: troubleCost('glass', 2, avg) });
+    expect(s.money).toBe(5000 - troubleCost('glass', 2, avg));
     const hits: string[] = ['glass'];
-    let spent = troubleCost('glass', 2);
+    let spent = troubleCost('glass', 2, avg);
     for (let i = 0; i < TROUBLE_DAYS - 1; i++) {
       const before = s.money;
       s = next(s);
@@ -196,7 +198,8 @@ describe('отказать', () => {
     }
     expect(hits.length).toBeGreaterThanOrEqual(3);
     expect(hits.length).toBeLessThanOrEqual(TROUBLE_DAYS);
-    expect(spent).toBeLessThan(1500);
+    // Две недели пакостей — заметно, но не разорение: меньше четырёх дней выручки (было: меньше 1500 при плоских ценах).
+    expect(spent).toBeLessThan(4 * avg);
     // Две недели прошли — отстали: новость, больше ничего.
     s = next(next(s));
     expect(s.racket?.end).toBe('quit');

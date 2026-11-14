@@ -7,7 +7,7 @@ import type { StoreState } from '../game/economy';
 import { ECHOES, echoBad, echoChoices, echoesOf, echoNews, echoWage, answerEchoNews, type EchoEntry } from '../game/echoes';
 import { skitPortrait } from '../game/skits';
 import { gainLine } from './skits';
-import { answerRaise } from '../game/racket';
+import { answerRaise, raiseTo } from '../game/racket';
 import { button, el, who } from './dom';
 
 type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void;
@@ -27,8 +27,10 @@ export function echoTexts(entry: EchoEntry): { head: string; name: string; text:
 
 /** Карточка утра: эхо вернулось — портрет, рассказ, итог и ответ. */
 export function echoBox(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
-  const entry = echoNews(state);
-  if (!entry) return [];
+  const news = echoNews(state);
+  if (!news) return [];
+  // 14.11, аудит: ставку «крыши» показываем ту, что реально возьмут, а не {n} из сейва по старым правилам.
+  const entry = news.id === 'racketRaise' ? { ...news, data: { ...news.data, n: raiseTo(state) } } : news;
   const d = ECHOES[entry.id];
   const { head, name, text, portrait } = echoTexts(entry);
   const box = el('div', 'ui-box ui-tale');

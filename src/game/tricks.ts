@@ -8,6 +8,7 @@
 //   заплатит нам за беспокойство).
 
 import type { StoreState } from './economy';
+import { racketGuard } from './racket';
 
 export type TrickKind = 'promoter' | 'banner' | 'inspector';
 export type TrickAnswer = 'counter' | 'complain' | 'ignore';
@@ -74,6 +75,9 @@ export function tricksMorning(state: StoreState, random: () => number): StoreSta
   if (random() >= TRICK_CHANCE) return state;
   const kinds: TrickKind[] = ['promoter', 'banner', 'inspector'];
   const kind = kinds[Math.floor(random() * kinds.length)];
+  // 14.11, аудит: к магазину под «крышей» (racket.ts, платят) конкурент не лезет — это часть того, за что платят.
+  // Броски выше — всё равно: иначе сдвинулись бы случайности дня у тех, кто не платит.
+  if (racketGuard(state)) return state;
   return { ...state, trick: { kind, day: state.day, until: state.day + (kind === 'banner' ? BANNER_DAYS - 1 : 0) } };
 }
 

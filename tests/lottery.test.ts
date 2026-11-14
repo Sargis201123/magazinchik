@@ -269,7 +269,9 @@ describe('симулятор', () => {
     // Один прогон шумит (сдвигаются случайности дня) — сравниваем в среднем по нескольким сидам.
     const days = 60;
     const seeds = [1, 2, 3, 4, 5, 6];
-    const money = (r: ReturnType<typeof simulate>) => r.days[r.days.length - 1].money;
+    // Деньги плюс вложения: 14.11, аудит — с зерном магазина на каждый прогон один сид мог купить помещение на
+    // 60-й день, а другой ещё копить, и голые деньги в кассе расходились в полтора раза при равном заработке.
+    const money = (r: ReturnType<typeof simulate>) => r.days[r.days.length - 1].money + r.days.reduce((a, d) => a + d.investments, 0);
     let base = 0;
     let lot = 0;
     for (const seed of seeds) {

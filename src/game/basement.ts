@@ -3,7 +3,7 @@
 //  · игровые автоматы (1–4 шт.) — каждый вечер дают деньги, к ним спускаются свои завсегдатаи (лестница у входа).
 //    Цена — видна сразу: мамы с детьми начинают обходить магазин (гостей меньше, и тем меньше, чем больше
 //    автоматов); иногда облава — автоматы изымают, штраф, рейтинг и доброе имя района падают; «крыша»
-//    (racket.ts), если ей платят, забирает долю и с автоматов. Подаём нейтрально: это доход с ясной ценой
+//    (racket.ts), если ей платят, забирает долю и с автоматов, зато облав при ней нет. Подаём нейтрально: это доход с ясной ценой
 //    для репутации, а не «азарт» — ни выигрышей, ни мигающих сумм;
 //  · склад-холодильник — склад магазина больше (warehouseCapacity, economy.ts), но гудит и ест свет (счета);
 //  · «серая» подсобка — полка «Разное» ломбарда (pawnshop.ts) переезжает вниз и вмещает больше вещей в залог.
@@ -52,7 +52,7 @@ export const SLOT_RESALE = 0.5;
  * Вечерний доход автомата (в среднем; ± 30% от зерна и дня): растёт с помещением — у большого магазина и людей
  * у входа больше. «Минимаркет» — 120, универмаг — 170.
  * 13.11, симулятор (npm run sim:features 120 12 подвал: холодильник, четыре автомата, ремонт): к 120-му дню денег
- * столько же, сколько без подвала (±0%, шум ±3%) — автоматы окупают себя ровно настолько, сколько уводят гостей и
+ * столько же, сколько без подвала (14.11, аудит, своё зерно на прогон: +1%, шум ±2%, лучше в 5 из 12) — автоматы окупают себя ровно настолько, сколько уводят гостей и
  * съедают облавы. Выгода — у маленького магазина, у большого уход мам с детьми дороже вечерней выручки.
  */
 export const slotIncome = (level: number): number => 70 + 25 * level;
@@ -70,8 +70,11 @@ export const RAID_RATING = 0.2;
 export const RAID_GOODWILL = -6;
 /** После облавы новых автоматов неделю не поставить: участковый заходит проверить. */
 export const RAID_COOLDOWN = 7;
-/** «Крыша» (racket.ts), которой платят, забирает и с автоматов: треть вечернего дохода. */
-export const RACKET_SLOT_SHARE = 0.3;
+/**
+ * «Крыша» (racket.ts), которой платят, забирает и с автоматов — седьмую часть вечернего дохода, зато облав при ней
+ * нет. 14.11, аудит: при трети доля съедала всю выгоду от защиты, и «платить» с подвалом было не лучше, чем без.
+ */
+export const RACKET_SLOT_SHARE = 0.15;
 
 /** Склад-холодильник: склад больше на 40% от склада помещения, свет — как ещё один холодильник в месяц. */
 export const PARTS: Record<BasementPart, { cost: number }> = { cold: { cost: 2500 }, back: { cost: 2000 } };
@@ -99,6 +102,12 @@ export function basementOf(state: StoreState): BasementState | null {
 }
 
 const set = (state: StoreState, basement: BasementState): StoreState => ({ ...state, basement });
+
+/**
+ * Платят «крыше» (racket.ts racketGuard): она берёт долю с автоматов и прикрывает от облав. Копия, а не импорт:
+ * economy.ts грузит подвал, а racket.ts тянет дела и сценки — модули пошли бы по кругу.
+ */
+const racketGuard = (state: StoreState): boolean => state.racket?.mode === 'pay' && !state.racket.end;
 
 /** Сколько автоматов помещается: по отделке подвала. */
 export const slotPlaces = (state: StoreState): number => SLOT_PLACES[Math.min(SLOT_PLACES.length - 1, floorOf(state, 'basement')?.finish ?? 0)];
@@ -141,15 +150,15 @@ export const backSlots = (state: StoreState): number => (hasPart(state, 'back') 
 /** Мамы с детьми обходят магазин с автоматами в подвале: гостей меньше. */
 export const basementGuests = (state: StoreState): number => 1 - MOMS_PER_SLOT * slotCount(state);
 
-/** Шанс облавы этим вечером (0 — автоматов нет или первая неделя). */
+/**
+ * Шанс облавы этим вечером (0 — автоматов нет, первая неделя или платят «крыше»). 14.11, аудит: «крыша» договорилась
+ * с участковым — иначе её треть с автоматов была бы платой ни за что.
+ */
 export function raidChance(state: StoreState): number {
   const b = basementOf(state);
-  if (!b?.slots || state.day - (b.since ?? state.day) < RAID_GRACE) return 0;
+  if (!b?.slots || state.day - (b.since ?? state.day) < RAID_GRACE || racketGuard(state)) return 0;
   return RAID_BASE + RAID_PER_SLOT * b.slots;
 }
-
-/** Платят «крыше» (racket.ts): она берёт долю и с автоматов. */
-const racketPays = (state: StoreState): boolean => state.racket?.mode === 'pay' && !state.racket.end;
 
 /**
  * Вечер у автоматов, как он пройдёт: завсегдатаи и деньги (без облавы). Утром — тот же расчёт: прогноз в карточке
@@ -161,7 +170,7 @@ export function slotsPlan(state: StoreState): { players: number; income: number;
   const r = roll(state, 1);
   const players = b.slots * 2 + Math.floor(r * (b.slots * 2 + 1));
   const income = Math.round((b.slots * slotIncome(state.level) * (0.7 + 0.6 * r)) / 10) * 10;
-  return { players, income, share: racketPays(state) ? Math.round(income * RACKET_SLOT_SHARE) : 0 };
+  return { players, income, share: racketGuard(state) ? Math.round(income * RACKET_SLOT_SHARE) : 0 };
 }
 
 /**

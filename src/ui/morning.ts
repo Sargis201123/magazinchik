@@ -871,7 +871,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('crisis', crisisNews(state));
     add('pawn', pawnOffer(state));
     add('case', !zarHere && caseNews(state));
-    add('lottery', lotteryNews(state));
+    add('lottery', !zarHere && lotteryNews(state));
     add('racket', racketNews(state));
     add('grey', greyOffer(state));
     add('tale', taleToday(state));

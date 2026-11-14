@@ -108,7 +108,9 @@ export const ticketsEarned = (state: StoreState): number => (lotteryOf(state)?.s
 export function lotteryNight(state: StoreState): StoreState {
   const lot = lotteryOf(state);
   const day = state.day;
-  if (!lot || day - lot.since < GRACE_DAYS) return state;
+  // 14.11, аудит: хозяин в Заречье — стойка Центра закрыта, билетов не продают (ticketChance 0), значит, и тиража
+  // с премией нет; запрет города тоже ждёт — закрывать нечего.
+  if (!lot || day - lot.since < GRACE_DAYS || inZar(state)) return state;
   const next = day + 1;
   if (lotteryOpen(state, day) && !luckyOn(state, day) && lotteryRoll(state, day, WIN_SALT) < WIN_CHANCE) {
     return { ...state, money: state.money + WIN_BONUS, lottery: { ...lot, win: { day } } };

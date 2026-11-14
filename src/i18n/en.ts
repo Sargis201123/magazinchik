@@ -4217,6 +4217,7 @@ export const en: Record<TextKey, string> = {
   "dream.akhmed.fail": "Akhmed's car broke down within a week — he sold it for parts. The money's gone, but now Akhmed invites you for plov every Friday.",
   "tip.dreams.title": "Neighbors' dreams",
   "tip.dreams.text": "In 2–3 weeks the news will come one morning: if it works out — a benefit every day; if it fails — the money's gone, but your neighbor won't forget. All investments are in the “Growth” tab.",
+  "racket.guard": "🛡 In return they cover you: no basement raids, and the rival and Zhora stay away.",
   "zar.tale.yegor.3": "They took me for an internship — on the riverboat! I'll bring tourists to your pier. Here, this is from the whole group — for feeding us all exam season.",
   "zar.tale.stepan.1": "Stepan Ilyich, the boat station by the bridge. You don't make fish soup without potatoes, remember that. If you like, I'll lend you a boat for a ride.",
   "zar.tale.stepan.2": "In spring the flood nearly carried the boats away. A neighbour came running and helped. That's how it is in Riverside: we look out for each other.",
