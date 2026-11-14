@@ -46,6 +46,7 @@ import { tenantGuests, tenantsNight } from './tenants';
 import { dreamGuests, dreamsNight } from './dreams';
 import { lotteryGuests, lotteryNight } from './lottery';
 import { tallyNight, type StaffRecord } from './staffStats';
+import { apprGuests, apprNight } from './apprentice';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
 import { laneGuests } from './lanes';
@@ -106,6 +107,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   const tally = tallyNight(s, stats.deeds, stats.walked);
   s = tally.state;
   s = restStaff(s);
+  // Ученик (apprentice.ts): стипендия, доверие, навык; отучился сезон — уходит открывать свою лавку.
+  s = apprNight(s, stats.appr);
   // «Проверяющий» от конкурента: штраф, ушёл ни с чем или разоблачили (tricks.ts).
   s = trickNight(s, random, Boolean(staffOf(s, 'cleaner')));
   // Проверка лицензии на пиво и сигареты (license.ts): иногда вечером; нашла продажу подростку — штраф до счетов.
@@ -202,6 +205,7 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, tenantGuests) *
   homeOnly(state, dreamGuests) *
   homeOnly(state, lotteryGuests) *
+  homeOnly(state, apprGuests) *
   homeOnly(state, dogGuests) *
   homeOnly(state, trickGuests) *
   // Вечерние гости за пивом и сигаретами (license.ts): лицензия — у магазина в Центре.

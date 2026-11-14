@@ -107,6 +107,7 @@ import { brewSeconds, cameraTheft, coffeePrice, entranceMud, fridgeLeak, gearAva
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from './bakery';
 import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
+import { APPR_SKILLS, APPR_TIP, apprOffer, apprPatience, apprStockPace, apprTipChance, praiseAppr, setApprPost, takeAppr, TIRED_FROM } from './apprentice';
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
 import { buyLicense, hasLicense, LICENSE_PRICE, licenseLock } from './license';
@@ -270,7 +271,10 @@ export type Feature =
   // Ломбард (pawnshop.ts): берёт вещь у гостя со спокойной приметой, если в кассе с запасом; суетливым отказывает.
   | 'pawn'
   // Лотерея у кассы (lottery.ts): ставит стойку, когда есть запас; тираж и запреты — в nightCycle, как в игре.
-  | 'lottery';
+  | 'lottery'
+  // Ученик (apprentice.ts): берёт, когда просится; ставит по кругу на кассу, склад и в зал, раз в неделю —
+  // выходной, стипендию платит, хвалит, когда можно (так выпускник — друг).
+  | 'apprentice';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -674,6 +678,14 @@ export function simulate({
         state = buyBed(state, bed) ?? state;
       }
     }
+    if (features.apprentice) {
+      if (apprOffer(state)) state = takeAppr(state);
+      const a = state.appr;
+      if (a) {
+        state = setApprPost(state, (a.worked ?? 0) + 1 >= TIRED_FROM ? 'rest' : APPR_SKILLS[state.day % APPR_SKILLS.length]) ?? state;
+        state = praiseAppr(state) ?? state;
+      }
+    }
     // Бобика симулятор не берёт: ночных воров больше нет (02.11), днём он только помогает поймать воришку.
     if (features.candy) {
       const next = nextRack(state);
@@ -966,10 +978,11 @@ export function simulate({
     const dayGuests = Math.max(0, Math.round(guests * (0.85 + random() * 0.3)));
     // Один игрок не успевает всё: чем больше магазин, тем больше теряется без персонала.
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
-    let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
+    // Ученик на складе (apprentice.ts) сам носит коробки на полки — как грузчик на полставки.
+    let trips = (tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level) + Math.round(apprStockPace(state) * 6);
     // С котом и радио в очереди ждут дольше — уходят реже. Климат, указатели, тележки и обаяние хозяина
     // убраны 02.11: из шести «терпений» остались два, что игрок замечает (docs/BALANCE.md).
-    const lossInQueue = (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / radioPatience(state);
+    const lossInQueue = (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / radioPatience(state) / apprPatience(state);
     // Доставка на дом: звонки идут весь день, а здесь заказы забирают товар раньше покупателей
     // (осторожная оценка). Без менеджера и грузчика заказ собирает хозяин — это время не за кассой
     // (сменщик, если нанят, в это время стоит за его кассой).
@@ -1122,7 +1135,8 @@ export function simulate({
       // Сначала чек, потом шоколадка и стаканчик (extras списывает их из state): иначе чек затёр бы списание.
       const paid = checkout(state, cart, night ? NIGHT_MARKUP : 1);
       state = paid.state;
-      const extra = extras(night) + (extraRandom() < catTipChance(state) ? CAT_TIP : 0);
+      // Чаевые «за помощь» ученику в зале — свой генератор не трогаем, пока ученика в зале нет.
+      const extra = extras(night) + (extraRandom() < catTipChance(state) ? CAT_TIP : 0) + (!night && apprTipChance(state) > 0 && extraRandom() < apprTipChance(state) ? APPR_TIP : 0);
       state = { ...state, money: state.money + extra };
       const dish = dishExtra(night);
       stats.revenue += paid.total + extra + dish;
