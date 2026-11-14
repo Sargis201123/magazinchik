@@ -54,10 +54,17 @@ function spot(busy: [number, number][], spots: number[], left: number, right: nu
   return spots.find((dx) => busy.every(([a, b]) => dx + right <= a || dx - left >= b) && !nearLamp(d + dx) && !lampIn(d + dx - left - 2, d + dx + right + 2)) ?? null;
 }
 
-/** Нажатие на вещь — подпись над ней: что даёт сбывшаяся мечта. */
+/**
+ * Нажатие на вещь — подпись над ней: что даёт сбывшаяся мечта. 13.11, ревью: тележка стоит у входа насовсем,
+ * ровно там, куда днём пальцем пробивают покупателей (касание улицы, camera.ts), а касание по нажимаемой вещи
+ * улица не берёт. Поэтому как домик друга (friendStreet.ts): есть кого пробить — пробиваем, подпись — когда у
+ * кассы пусто.
+ */
 function tappable(scene: StoreScene, obj: Phaser.GameObjects.Image, text: () => string): void {
-  obj.setInteractive({ useHandCursor: true }).on('pointerup', () =>
+  obj.setInteractive({ useHandCursor: true }).on('pointerup', (p: Phaser.Input.Pointer) =>
     camera.tap(scene, () => {
+      const at = scene.cameras.main.getWorldPoint(p.x, p.y);
+      if (camera.serveFromStreet(scene, at.x, at.y)) return;
       sound.tap();
       scene.popup(obj.x, obj.y - obj.displayHeight - 4, text(), '#fff3b0');
     }),
