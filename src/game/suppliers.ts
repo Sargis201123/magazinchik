@@ -3,6 +3,7 @@ import { PRODUCTS, type Category, type ProductId, type StoreState } from './econ
 import { haggleBonus } from './owner';
 import { breadCut } from './dreams';
 import { apprSupplies } from './apprentice';
+import { gentSupply } from './gentrify';
 
 export type SupplierId = 'farmer' | 'dairy' | 'butcher' | 'wholesale';
 
@@ -101,8 +102,11 @@ export const priceFor = (state: StoreState) => {
   const discount = supplierDiscount(state);
   // Хлеб от Аниной пекарни (dreams.ts) — ещё дешевле: и руками, и автозаказом, и в симуляторе.
   const bread = breadCut(state);
+  // Район подорожал (gentrify.ts, 13.11): поставщики тоже поднимают прайс — на несколько процентов.
+  const dear = gentSupply(state);
   return (sid: SupplierId, pid: ProductId): number | null => {
-    const price = unitPrice(SUPPLIERS[sid], pid, discount);
+    const base = unitPrice(SUPPLIERS[sid], pid, discount);
+    const price = base !== null && dear > 1 ? Math.max(1, Math.round(base * dear)) : base;
     return price !== null && bread && pid === 'bread' ? Math.max(1, Math.round(price * (1 - bread))) : price;
   };
 };

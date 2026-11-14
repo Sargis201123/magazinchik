@@ -23,10 +23,13 @@ export function residentsBox(state: StoreState, getState: () => StoreState, upda
     label.append(el('b', '', name));
     box.append(who(FACES[m.who].replace(/^portrait_/, ''), label, true));
   }
-  const text = m.who ? (m.back ? t('res.back', { name }) : t(`res.${up ? 'in' : 'out'}.${m.who}` as TextKey)) : t(`res.${up ? 'in' : 'out'}.${m.tale ?? 0}` as TextKey);
+  // Уехал от цен (gentrify.ts, район подорожал) — своя прощальная история, без обиды на магазин.
+  const story = m.why === 'rent' ? `gent.out.${m.who}` : `res.${up ? 'in' : 'out'}.${m.who}`;
+  const text = m.who ? (m.back ? t('res.back', { name }) : t(story as TextKey)) : t(`res.${up ? 'in' : 'out'}.${m.tale ?? 0}` as TextKey);
   box.append(el('p', '', text));
   if (m.who) box.append(el('div', up ? 'ui-note' : 'ui-muted', t(up ? 'res.note.regIn' : 'res.note.regOut', { name })));
-  box.append(el('div', 'ui-muted', t(up ? 'res.note.in' : 'res.note.out', { n: residents(state) })));
+  // Квартира от цен не пустеет: в неё въезжают новые, побогаче.
+  box.append(el('div', 'ui-muted', m.why === 'rent' ? t('gent.out.note') : t(up ? 'res.note.in' : 'res.note.out', { n: residents(state) })));
   box.append(button(t(up ? 'res.ok.in' : 'res.ok.out'), () => update(seeResidents(getState()), up ? 'success' : 'tap')));
   return [box];
 }

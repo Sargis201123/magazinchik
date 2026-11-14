@@ -26,6 +26,8 @@ export const NEWS_IDS = [
   // в сохранении снимает normalizeNews.
   // «Крыша» пришла (racket.ts, 13.11): платить, отказать или в полицию — ждёт ответа, как поворот сюжета.
   'racketAsk',
+  // Район подорожал (gentrify.ts, 13.11): для кого магазин — ждёт ответа, как поворот сюжета.
+  'gentrify',
   'contestResult',
   'contestAnnounce',
   // Беда района началась (crisis.ts): как торговать, пока она идёт (13.11).
@@ -53,6 +55,8 @@ export const NEWS_IDS = [
   // Переезд в районе (residents.ts, 13.11): въехали новые соседи или кто-то уехал — ждёт пару дней.
   'residents',
   'staffEvent',
+  // На участке начали стройку по нашим продажам (districtPlots.ts, 13.11) — перед открытиями района.
+  'plot',
   'district',
   'cat',
   // Подросток из района просится в ученики (apprentice.ts).
@@ -78,6 +82,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   zarBoss: 'main',
   estate: 'main',
   racketAsk: 'main',
+  gentrify: 'main',
   contestResult: 'timed',
   contestAnnounce: 'timed',
   crisisAsk: 'timed',
@@ -100,6 +105,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   dream: 'flavour',
   residents: 'flavour',
   staffEvent: 'flavour',
+  plot: 'flavour',
   district: 'flavour',
   cat: 'flavour',
   appr: 'flavour',

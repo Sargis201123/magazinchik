@@ -71,6 +71,16 @@ export const SPRITES = [
   'echo_card',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
+  // Подвал (art/basement.py, scenes/floorView.ts, scenes/basementFx.ts): кирпич и пол, лестница, автоматы, склад-холодильник,
+  // «серая» подсобка и спуск у правой стены зала.
+  'bsm_brick',
+  'bsm_floor',
+  'bsm_stairs',
+  'bsm_slot',
+  'bsm_slot_lit',
+  'bsm_cold',
+  'bsm_back',
+  'bsm_hatch',
   // Ломбард в подсобке (art/pawnshop.py, scenes/pawnFx.ts): полка «Разное» на стене склада, вещи и ценник.
   'pawn_shelf',
   'pawn_watch',
@@ -301,6 +311,10 @@ export const SPRITES = [
   'res_truck',
   'res_boxes',
   'res_rent',
+  // Район дорожает (art/gentrify.py, game/gentrify.ts): штендер кофейни, табличка «премиум», дощечка «для своих».
+  'gent_board',
+  'gent_plaque',
+  'gent_own',
   // Скупленная улица (art/estate.py, scenes/estateFx.ts): вывески лавок, «Продаётся», козлы отделки, табличка улицы.
   'estate_sign_pharmacy',
   'estate_sign_bar',
@@ -398,6 +412,13 @@ export const SPRITES = [
   'roof_cross',
   'roof_laundry',
   'flagpole',
+  // Крыши зданий участков и щит «Здесь будет» на заборе стройки (art/district_plots.py, 13.11).
+  'roof_gym',
+  'roof_wedding',
+  'roof_cowork',
+  'roof_kids',
+  'roof_canteen',
+  'site_board',
   // Разные деревья и кусты сквера (art/flora.py) и их зимние варианты.
   'tree_birch',
   'tree_pine',
@@ -528,6 +549,8 @@ export const SPRITES = [
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),
   // Легковые носом вверх и вниз — на парковке и в проезде к ней (art/sprites.py, cars_vertical).
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van'].flatMap((k) => ['up', 'down'].flatMap((d) => [`${k}_${d}`, `${k}_${d}_lights`])),
+  // Дорогая машина района, который подорожал (art/gentrify.py): всегда чёрная, не под тинт.
+  ...['car_lux', 'car_lux_lights', 'car_lux_up', 'car_lux_up_lights', 'car_lux_down', 'car_lux_down_lights'],
   // Фургон магазина для выездной торговли (art/van.py, game/van.ts): вбок, носом вверх и вниз, с фарами.
   ...['shop_van', 'shop_van_up', 'shop_van_down'].flatMap((k) => [k, `${k}_lights`]),
   'mat',

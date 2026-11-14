@@ -38,6 +38,7 @@ import * as effects from './effects';
 import * as weatherFx from './weatherFx';
 import * as food from './food';
 import * as cars from './cars';
+import * as gentrifyFx from './gentrifyFx';
 import * as persons from './persons';
 import * as camera from './camera';
 import * as building from './building';
@@ -72,7 +73,8 @@ export function streetLife(scene: StoreScene): void {
   if (Math.random() < (flood ? 1 : 0.45)) {
     const fromLeft = Math.random() < 0.5;
     const y = scene.streetY + Phaser.Math.Between(-5, 5);
-    const person = persons.makePerson(scene, fromLeft ? left : right, y, withCompanionItems(customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day)));
+    // Район подорожал (gentrifyFx.ts): среди прохожих — «новые» в пальто.
+    const person = persons.makePerson(scene, fromLeft ? left : right, y, withCompanionItems(gentrifyFx.poshLook(scene, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day))));
     weatherFx.addUmbrella(scene, person);
     if (Math.random() < 0.1) persons.addCompanion(scene, person);
     void persons.walk(scene, person, fromLeft ? right : left, y, persons.ownPace(scene, person, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.75, 1.1))).then(() => person.destroy());
@@ -82,7 +84,7 @@ export function streetLife(scene: StoreScene): void {
   if (!scene.lite && Math.random() < 0.3) {
     const fromLeft = Math.random() < 0.5;
     const y = scene.streetY + FAR_WALK_Y + Phaser.Math.Between(-4, 4);
-    const person = persons.makePerson(scene, fromLeft ? left : right, y, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day));
+    const person = persons.makePerson(scene, fromLeft ? left : right, y, gentrifyFx.poshLook(scene, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day)));
     weatherFx.addUmbrella(scene, person);
     void persons.walk(scene, person, fromLeft ? right : left, y, persons.ownPace(scene, person, CUSTOMER_SPEED * Phaser.Math.FloatBetween(0.7, 1))).then(() => person.destroy());
   }
@@ -103,7 +105,8 @@ export function streetLife(scene: StoreScene): void {
     const y = scene.streetY + (toRight ? 24 : 42);
     const total = CAR_TYPES.reduce((sum, [, , weight]) => sum + weight, 0);
     let roll = Math.random() * total;
-    const [key, color] = CAR_TYPES.find(([, , weight]) => (roll -= weight) < 0) ?? CAR_TYPES[0];
+    // Район подорожал (gentrifyFx.ts): иногда мимо едет длинная чёрная машина.
+    const [key, color] = gentrifyFx.luxCar(scene) ? gentrifyFx.LUX_CAR : (CAR_TYPES.find(([, , weight]) => (roll -= weight) < 0) ?? CAR_TYPES[0]);
     const body = scene.art(0, 0, key);
     if (color !== null) body.setTint(color || Phaser.Utils.Array.GetRandom(CAR_COLORS));
     const lights = scene.art(0, 0, `${key}_lights`);

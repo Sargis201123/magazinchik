@@ -115,6 +115,7 @@ import { answerGrey, greyCover, greyOffer } from './grey';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
 import { chooseRacket, racketAsk, type RacketMode } from './racket';
+import { chooseGent, gentAsk, type GentChoice } from './gentrify';
 import { chooseCrisis, crisisAsk, crisisExtraItems, crisisGive, crisisTolerance, type CrisisMode } from './crisis';
 import { deliveryDay } from './delivery';
 import { buyLineTier, LINE_IDS, LINES, lineLock, lineUnitCost, nextLineCost, type LineId } from './lines';
@@ -126,6 +127,8 @@ import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft, ownerTiming } from './owner';
 import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
+import { buyFloor, finishCost, finishFloor, floorAvailable, FLOORS, hasFloor } from './floors';
+import { basementOf, buyPart, buySlot, PARTS, SLOT_COST, slotPlaces } from './basement';
 import { rhythmSeconds } from './tillRhythm';
 import { buyVan, loadVan, planTrip, vanEvents, vanFuel, vanOpen, vanPrice, vanWant, VAN_EVENTS, VAN_PRICE } from './van';
 
@@ -209,6 +212,8 @@ export interface SimOptions {
   crisis?: CrisisMode;
   /** Как ответить «крыше» (racket.ts): по умолчанию — отказать (две недели пакостей, потом тихо). */
   racket?: RacketMode;
+  /** С features.gentrify: как ответить, когда район подорожал (gentrify.ts): по умолчанию — «для новых». */
+  gentrify?: GentChoice;
   /** Сколько закладок в печь игрок успевает за день и как часто забывает вынуть. */
   ovenBatches?: number;
   ovenBurn?: number;
@@ -288,7 +293,14 @@ export type Feature =
   | 'apprentice'
   // Серая схема (grey.ts): соглашается на всё, что предлагает Жора, — сколько это стоит в итоге (штрафы, опечатанные
   // дни, доброе имя). Эхо (отравление, месть) симулятор не разбирает — как и эхо сценок.
-  | 'grey';
+  | 'grey'
+  // Подвал (floors.ts, basement.ts, 13.11): открывает, когда не копит на помещение, ставит склад-холодильник
+  // (и подсобку, если ведёт ломбард), потом автоматы — до мест в подвале, ремонт — когда два уже стоят.
+  // Облавы и уход мам с детьми — в nightCycle и гостях дня, как в игре.
+  | 'basement'
+  // Район дорожает (gentrify.ts, 13.11): престиж растёт сам, на выбор утром отвечает как в SimOptions.gentrify.
+  // Без этой механики престиж в прогоне не копится: на прежних прогонах откалиброван баланс (аренда и прайс — как были).
+  | 'gentrify';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -411,6 +423,7 @@ export function simulate({
   war = 'wait',
   crisis = 'hold',
   racket = 'refuse',
+  gentrify = 'rich',
   ovenBatches = 3,
   ovenBurn = 0.1,
   adAlways,
@@ -702,6 +715,8 @@ export function simulate({
       }
     }
     if (features.grey && greyOffer(state)) state = answerGrey(state, true) ?? state;
+    // Район подорожал: для кого магазин — как решено для прогона.
+    if (features.gentrify && gentAsk(state)) state = chooseGent(state, gentrify) ?? state;
     // Бобика симулятор не берёт: ночных воров больше нет (02.11), днём он только помогает поймать воришку.
     if (features.candy) {
       const next = nextRack(state);
@@ -844,6 +859,23 @@ export function simulate({
     if (features.pawn) {
       const offer = pawnOffer(state);
       if (offer) state = (offer.tell === 'calm' && state.money >= offer.lent + reserve * 2 ? takePawn(state) : null) ?? refusePawn(state);
+    }
+    if (features.basement) {
+      const spend = (price: number, next: StoreState | null): void => {
+        if (!next || state.money < price * 2 + reserve || !canSplurge(price)) return;
+        state = next;
+        investments += price;
+      };
+      if (floorAvailable(state, 'basement')) spend(FLOORS.basement.cost, buyFloor(state, 'basement'));
+      if (hasFloor(state, 'basement')) {
+        const parts = basementOf(state)?.parts ?? [];
+        if (!parts.includes('cold')) spend(PARTS.cold.cost, buyPart(state, 'cold'));
+        else if (features.pawn && !parts.includes('back')) spend(PARTS.back.cost, buyPart(state, 'back'));
+        const slots = basementOf(state)?.slots ?? 0;
+        const fin = finishCost(state, 'basement');
+        if (slots < slotPlaces(state)) spend(SLOT_COST, buySlot(state));
+        else if (fin !== null) spend(fin, finishFloor(state, 'basement'));
+      }
     }
     if (features.rental) {
       if (!state.rental && state.money >= STAND_COST * 2 + reserve && canSplurge(STAND_COST)) {
@@ -1301,6 +1333,11 @@ export function simulate({
     purchases += night.lines.spent;
     const before = night.state;
     state = night.state;
+    // Без механики «Район дорожает» престиж не копится (утро nightCycle поднимает его на шаг — снимаем).
+    if (!features.gentrify && state.gentrify) {
+      const { gentrify: _off, ...rest } = state;
+      state = rest;
+    }
     if (state.giant && state.giant.phase !== giantLog[giantLog.length - 1]?.phase) giantLog.push({ day: state.day, phase: state.giant.phase });
     const contest = state.contest;
     if (contest?.last && contest.phase === 'wait' && contest.since === state.day) contests.push({ day: state.day, tier: contest.last.tier, won: contest.last.won });

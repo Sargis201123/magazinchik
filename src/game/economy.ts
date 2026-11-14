@@ -24,6 +24,8 @@ import { afterLoanPayment, loanDue } from './bank';
 import { SALE_DISCOUNT, saleOn, weekDemand, weekProductOk } from './weeks';
 import { fridgeLife, fridgePower, lightsPower, warehouseRoom, type GearId } from './gear';
 import { inZar, zarAwayBill, zarBillShare, zarNextLevel } from './zarshop';
+import { coldPower, coldRoom } from './basement';
+import { gentBill } from './gentrify';
 
 /**
  * Тип полки определяет, какой товар на неё можно ставить: мясо не кладут к хлебу.
@@ -791,10 +793,16 @@ export interface StoreState {
   crisisEnd?: import('./crisis').CrisisEnd;
   /** «Крыша» (racket.ts): пришли ли ребята, что решили, пакости и доля. Нет поля — ещё не приходили. */
   racket?: import('./racket').RacketState;
+  /** Этажи здания (floors.ts, 13.11): какие открыты и отделка. Нет поля — этажей нет, всё как раньше. */
+  floors?: import('./floors').FloorsState;
+  /** Подвал (basement.ts): автоматы, склад-холодильник, «серая» подсобка, облава. Нет поля — внизу пусто. */
+  basement?: import('./basement').BasementState;
   /** Доброе имя района −100…100 (goodwill.ts); нет поля — 0. */
   goodwill?: number;
   /** Жители района (residents.ts): сколько семей, последний переезд, кто из постоянных уехал или въехал. Нет поля — 12 семей. */
   residents?: import('./residents').ResidentsState;
+  /** Район дорожает (gentrify.ts): престиж района 0…100 и ответ «для кого магазин». Нет поля — престиж 0. */
+  gentrify?: import('./gentrify').GentState;
   /** Скупленная улица (estate.ts): какие помещения наши и кто в них. Нет поля — ничего не куплено. */
   estate?: import('./estate').EstateState;
   /** 0..5 звёзд, влияет на поток покупателей. */
@@ -938,7 +946,8 @@ export const nextStoreLevel = (state: StoreState): StoreLevel | undefined =>
   // В Заречье — своя, короткая лестница помещений (zarechye.ts).
   inZar(state) ? zarNextLevel(state) : state.level + 1 === HYPER_LEVEL && !state.branch ? undefined : STORE_LEVELS[state.level + 1];
 /** Сколько мест на складе: по помещению и оборудованию склада (gear.ts). */
-export const warehouseCapacity = (state: StoreState): number => Math.round(storeLevel(state).warehouse * warehouseRoom(state));
+// Склад-холодильник в подвале (basement.ts) — ещё доля к складу помещения.
+export const warehouseCapacity = (state: StoreState): number => Math.round(storeLevel(state).warehouse * (warehouseRoom(state) + coldRoom(state)));
 export const freeSlots = (state: StoreState): number => storeLevel(state).slots - state.shelves.filter((s) => !isFixture(s)).length;
 
 export const emptyDayStats = (): DayStats => ({
@@ -1289,11 +1298,14 @@ export function monthlyBill(state: StoreState): Bill {
   const share = state.zar ? zarBillShare(state, state.zar.at) : 1;
   const other = zarAwayBill(state);
   const part = (n: number) => Math.round(n * share);
+  // Район подорожал (gentrify.ts, 13.11): аренда и коммуналка магазина в Центре — на несколько процентов выше.
+  const dear = gentBill(state);
   return {
-    rent: part(STORE_LEVELS[old].rent) + other.rent,
-    utilities: part(STORE_LEVELS[old].utilities) + other.utilities,
+    rent: part(STORE_LEVELS[old].rent * dear) + other.rent,
+    utilities: part(STORE_LEVELS[old].utilities * dear) + other.utilities,
     // Свет в зале дешевле с LED, холодильники — с новыми моделями (gear.ts; солнечные панели убраны 02.11).
-    power: part(Math.round(level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state))) + other.power,
+    // Склад-холодильник в подвале (basement.ts) гудит как ещё один холодильник.
+    power: part(Math.round(level.power * lightsPower(state) + fridges * FRIDGE_POWER * fridgePower(state) + coldPower(state))) + other.power,
     salaries: part(state.staff.reduce((sum, m) => sum + m.wage, 0)) + other.salaries,
     debt: Math.min(DEBT_PAYMENT, state.debt),
     loan: loanDue(state),

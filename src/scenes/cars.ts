@@ -29,6 +29,7 @@ import { t } from '../i18n';
 import { tripToday, vanGoes, vanOutcome, VAN_EVENTS } from '../game/van';
 import { inZar } from '../game/zarshop';
 import * as lighting from './lighting';
+import * as gentrifyFx from './gentrifyFx';
 import * as weatherFx from './weatherFx';
 import * as persons from './persons';
 import * as visitors from './visitors';
@@ -191,7 +192,7 @@ export function buildParking(scene: StoreScene, next: Layout, street: number): {
       spots.push(spot);
       stops.fillStyle(0xa8a8a8, 1).fillRect(spot.x - 6, up ? top + 6 : bottom - 8, 12, 2);
       stops.lineStyle(0.5, 0x5a6988, 1).strokeRect(spot.x - 6, up ? top + 6 : bottom - 8, 12, 2);
-      if (rnd.frac() < full) spot.car = lotCar(scene, lotCarType(() => rnd.frac()), spot.x, spot.y, up ? -90 : 90, 'neighbor');
+      if (rnd.frac() < full) spot.car = lotCar(scene, pickCar(scene, () => rnd.frac()), spot.x, spot.y, up ? -90 : 90, 'neighbor');
     }
   }
   scene.parking = {
@@ -253,6 +254,10 @@ export function lotCarType(random: () => number = Math.random): [string, number 
   let roll = random() * total;
   return LOT_CARS.find(([, , weight]) => (roll -= weight) < 0) ?? LOT_CARS[0];
 }
+
+/** Машина у магазина с поправкой на район: подорожал — среди обычных попадаются длинные чёрные (gentrifyFx.ts). */
+export const pickCar = (scene: StoreScene, random: () => number = Math.random): [string, number | null, number] =>
+  gentrifyFx.luxCar(scene) ? gentrifyFx.LUX_CAR : lotCarType(random);
 
 /**
  * Машина в точке (x, y) носом по heading: кадр — ближайший из четырёх (вбок, вверх, вниз; влево —
@@ -537,7 +542,7 @@ export async function arriveByCar(scene: StoreScene, lot: ParkingLot, spot: Park
   lot.busy.drive = true;
   lot.onRoad = true;
   const from = side === 'left' ? -70 : scene.next.w + 90;
-  const car = lotCar(scene, shop ? SHOP_VAN : lotCarType(), from, side === 'left' ? road : far, side === 'left' ? 0 : 180, shop ? 'shop' : 'customer');
+  const car = lotCar(scene, shop ? SHOP_VAN : pickCar(scene), from, side === 'left' ? road : far, side === 'left' ? 0 : 180, shop ? 'shop' : 'customer');
   car.moving = true;
   spot.car = car;
   // Перед самым поворотом смотрит на тротуар: кто уже на въезде — пропускает (тормозит до конца и ждёт),
@@ -747,7 +752,7 @@ export function refillParking(scene: StoreScene): void {
   let have = lot.spots.filter((s) => s.car?.owner === 'neighbor' && !s.car.leaving).length;
   for (const spot of Phaser.Utils.Array.Shuffle(lot.spots.filter((s) => !s.car))) {
     if (have >= want) break;
-    spot.car = lotCar(scene, lotCarType(), spot.x, spot.y, spot.up ? -90 : 90, 'neighbor');
+    spot.car = lotCar(scene, pickCar(scene), spot.x, spot.y, spot.up ? -90 : 90, 'neighbor');
     have++;
   }
 }

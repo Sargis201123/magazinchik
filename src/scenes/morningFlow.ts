@@ -13,6 +13,7 @@ import { branchLook } from '../game/branch';
 import { hoodLook } from '../game/hood';
 import { tenantsLook } from '../game/tenants';
 import { residentsLook } from '../game/residents';
+import { gentLook } from '../game/gentrify';
 import { estateLook } from '../game/estate';
 import { streetKey } from '../game/street';
 import { fetchStreet, streetInfo } from '../platform/multiplayer';
@@ -78,6 +79,7 @@ import * as decorations from './decorations';
 import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
 import * as rentalFx from './rentalFx';
+import * as basementFx from './basementFx';
 import * as dreamsFx from './dreamsFx';
 import { endSale } from '../game/weeks';
 import * as deliveries from './deliveries';
@@ -221,7 +223,7 @@ export function showMorning(scene: StoreScene): void {
   scene.giftRebuild = false;
   // Утро: зал больше не закрыт — перестройка ниже зажжёт лампы, сумрак ритуала закрытия снят (lightsOn зажжёт ряды).
   lighting.hallOff(scene, -Infinity);
-  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || residentsLook(scene.state) !== scene.builtResidents || estateLook(scene.state) !== scene.builtEstate || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
+  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || residentsLook(scene.state) !== scene.builtResidents || gentLook(scene.state) !== scene.builtGent || estateLook(scene.state) !== scene.builtEstate || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   // Фургон выездной торговли вернулся вчера после закрытия (или его купили) — на своё место до соседей.
   cars.parkVan(scene);
   cars.refillParking(scene);
@@ -293,6 +295,8 @@ export function showMorning(scene: StoreScene): void {
       if (s.lines !== was.lines) linesFx.applyLines(scene);
       // Поставили стойку проката, докупили вещи или сменили залог.
       if (s.rental !== was.rental) rentalFx.applyRental(scene);
+      // Открыли подвал или поставили автоматы — спуск у стены и завсегдатаи сразу (game/basement.ts).
+      if (s.floors !== was.floors || s.basement !== was.basement) basementFx.applyBasement(scene);
       // Прочитали новость о мечте соседа — тележка Кости или указатель к станции встают сразу.
       if (s.dreams !== was.dreams) {
         dreamsFx.applyDreams(scene);

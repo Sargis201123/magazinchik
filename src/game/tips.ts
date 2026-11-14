@@ -14,10 +14,12 @@ import { hasLicense } from './license';
 import { vanOpen } from './van';
 import { greyOffer } from './grey';
 import { rentalOpen } from './rental';
+import { floorAvailable, hasFloor } from './floors';
 import { residents, RES_START } from './residents';
 import { estateOpen } from './estate';
+import { GENT_SEEN, prestigeOf } from './gentrify';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'estate';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement' | 'gentrify' | 'estate';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -87,6 +89,12 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['van', (s) => vanOpen(s) && !s.van],
   // Жители района (residents.ts, 13.11): после первого переезда — откуда берутся и уходят семьи (и гости с ними).
   ['residents', (s) => Boolean(s.residents?.move) || residents(s) !== RES_START],
+  // Район подстраивается (districtPlots.ts, 13.11): как только участок застроили по нашим продажам — что это значит.
+  ['plots', (s) => Boolean(s.district?.plots?.some((p) => p.sold))],
+  // Подвал (floors.ts, basement.ts, 13.11): как только его можно открыть — что внизу и чем платишь за автоматы.
+  ['basement', (s) => floorAvailable(s, 'basement') || hasFloor(s, 'basement')],
+  // Район дорожает (gentrify.ts, 13.11): как только престиж стало видно — откуда он и что дорожает.
+  ['gentrify', (s) => prestigeOf(s) >= GENT_SEEN],
   // Скупать улицу (estate.ts, 13.11): в первое утро «Супермаркета» — что дома за магазином продаются и где их купить.
   ['estate', estateOpen],
 ];
@@ -118,6 +126,9 @@ export const TIP_ICONS: Record<TipId, string> = {
   grey: '🦊',
   van: '🚐',
   residents: '🏘',
+  plots: '🏗',
+  basement: '🪜',
+  gentrify: '💎',
   estate: '🏠',
 };
 

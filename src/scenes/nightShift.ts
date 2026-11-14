@@ -343,6 +343,9 @@ export function finishDay(scene: StoreScene): void {
     const lost = rental.lost ? ` · ${t('rental.summaryLost', { n: rental.lost, kept: rental.kept })}` : '';
     extra.push([t('rental.summary'), `${t('rental.summaryValue', { icon: KIT_ICON[rental.kit], n: rental.rented, sum: rental.income })}${lost}`]);
   }
+  // Автоматы в подвале (game/basement.ts): сколько дали за вечер (после доли «крыши») или облава.
+  const slots = night.slots;
+  if (slots) extra.push([t('bsm.summary'), slots.raid ? t('bsm.raid', { n: slots.raid.n, fine: slots.raid.fine }) : t('bsm.summaryValue', { n: slots.players, sum: slots.income - slots.share })]);
   // Доля с Костиной тележки у входа (game/dreams.ts) — тоже строкой.
   if (night.cart) extra.push([t('dream.cart.summary'), t('branch.summaryValue', { n: night.cart })]);
   // Работали в Заречье — гипермаркет в Центре торговал сам (zarechye.ts).
