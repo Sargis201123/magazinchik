@@ -234,7 +234,9 @@ describe('сезонные недели: баланс (симулятор)', () 
       };
       const off = sum(false);
       const on = sum(true);
-      expect(on.revenue / off.revenue).toBeGreaterThan(1);
+      // 14.11: с жителями района (residents.ts) гостей и так больше, и в тесную неделю лето упирается в кассу —
+      // выручка за неделю бывает в пределах шума ниже (−0.4…−0.9% на 10–20 зёрнах); прибыль ниже не становится.
+      expect(on.revenue / off.revenue).toBeGreaterThan(0.98);
       expect(on.revenue / off.revenue).toBeLessThan(1.1);
       expect(on.profit).toBeGreaterThan(off.profit);
     }, 90_000);

@@ -285,6 +285,8 @@ import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
 import { breadCut, dreamNews } from '../game/dreams';
 import { dreamBox, dreamsBox } from './dreams';
+import { residentsNews } from '../game/residents';
+import { residentsBox, residentsLines } from './residents';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
 import { albumButton, showAlbum } from './album';
 import { freshCount } from '../game/collections';
@@ -863,6 +865,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('tale', taleToday(state));
     add('life', !zarHere && lifeNews(state));
     add('dream', dreamNews(state));
+    add('residents', residentsNews(state));
     add('staffEvent', staffEventDue(state));
     add('district', !zarHere && districtNews(state));
     add('cat', catOffer(state));
@@ -1039,6 +1042,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...seasonLine(state),
       ...weekSoonLine(state),
       ...(zarHere ? [] : districtLines(state)),
+      ...(zarHere ? [] : residentsLines(state)),
       ...(zarHere ? [] : arcLines(state)),
       ...(zarHere ? [] : echoLines(state)),
       ...(zarHere ? [] : trickLines(state)),
@@ -2097,6 +2101,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return lifeBox(state);
       case 'dream':
         return dreamBox(state, getState, update);
+      // Переезд в районе (game/residents.ts): въехали новые соседи или кто-то уехал.
+      case 'residents':
+        return residentsBox(state, getState, update);
       case 'staffEvent':
         return staffEventBox(state);
       case 'district':
