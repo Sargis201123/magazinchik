@@ -277,6 +277,8 @@ import { hoodBox } from './hood';
 import { linesBox } from './lines';
 import { licenseBox, licenseNoticeBox } from './license';
 import { floorsBox, floorsSummary } from './floors';
+import { foodcourtAlert, foodcourtBox, foodcourtStatus } from './foodcourt';
+import { foodcourtOf } from '../game/foodcourt';
 import { hasLicense, licenseNotice } from '../game/license';
 import { greyCaughtBox, greyLines, greyOfferBox } from './grey';
 import { greyCaught, greyOffer } from '../game/grey';
@@ -2378,6 +2380,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
               details: () => kitchenBox(getState()),
             },
           ]
+        : []),
+      // Фудкорт третьего этажа (game/foodcourt.ts, 13.11): рядом с кухней — своя кухня может вести точки еды.
+      ...(foodcourtOf(state)
+        ? [{ id: 'foodcourt', icon: 'assets/fc_pizza.png', title: t('floor.third'), status: foodcourtStatus(state), alert: foodcourtAlert(state), details: () => foodcourtBox(getState(), getState, update) }]
         : []),
       // Прокат у входа (game/rental.ts, 13.11): плитка — когда стойку можно поставить или она уже стоит.
       ...(rentalOpen(state) || state.rental

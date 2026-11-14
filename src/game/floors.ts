@@ -9,9 +9,9 @@
 import type { StoreState } from './economy';
 import { homeLevel, inZar } from './zarshop';
 
-/** Этажи здания. Второй этаж и третий допишутся сюда же (тип, FLOORS, вид в floorView). */
-export type FloorId = 'basement';
-export const FLOOR_IDS: FloorId[] = ['basement'];
+/** Этажи здания. Второй этаж допишется сюда же (тип, FLOORS, вид в floorView). Третий — фудкорт (foodcourt.ts). */
+export type FloorId = 'basement' | 'third';
+export const FLOOR_IDS: FloorId[] = ['basement', 'third'];
 
 export interface FloorDef {
   /** С какого помещения (индекс STORE_LEVELS) этаж можно открыть. */
@@ -22,6 +22,11 @@ export interface FloorDef {
   finish: number[];
   /** Значок в меню и над дверью этажа в мире. */
   icon: string;
+  /**
+   * Какой этаж должен быть открыт раньше (третий — над вторым). 13.11: второй этаж делается параллельно, его id —
+   * 'second'; пока такого этажа в FLOORS нет, условие не действует (floorLock) — третий открывается по помещению.
+   */
+  needs?: string;
 }
 
 /**
@@ -30,6 +35,9 @@ export interface FloorDef {
  */
 export const FLOORS: Record<FloorId, FloorDef> = {
   basement: { minLevel: 2, cost: 3000, finish: [2500], icon: '🪜' },
+  // Третий этаж — фудкорт (foodcourt.ts, 13.11): с «Универмага», дорого — как неделя выручки большого магазина.
+  // Ремонт (витражи, свет) — четвёртое место под точку еды и зал наряднее.
+  third: { minLevel: 4, cost: 30000, finish: [18000], icon: '🍕', needs: 'second' },
 };
 
 /** Этаж в сохранении: с какого дня открыт и ступень отделки (0 — голые стены). */
@@ -55,11 +63,16 @@ export const hasFloor = (state: StoreState, id: FloorId): boolean => floorOf(sta
 /** Открытые этажи по порядку. */
 export const openFloors = (state: StoreState): FloorId[] => FLOOR_IDS.filter((id) => hasFloor(state, id));
 
-/** Почему этаж ещё нельзя открыть: Заречье, мало помещение или уже открыт; null — можно (если хватает денег). */
-export function floorLock(state: StoreState, id: FloorId): 'zar' | 'level' | 'open' | null {
+/**
+ * Почему этаж ещё нельзя открыть: Заречье, мало помещение, не открыт этаж ниже или уже открыт; null — можно (если
+ * хватает денег). Этажа ниже нет в FLOORS (старая сборка без второго этажа) — это условие пропускаем.
+ */
+export function floorLock(state: StoreState, id: FloorId): 'zar' | 'level' | 'below' | 'open' | null {
   if (inZar(state)) return 'zar';
   if (state.floors?.[id]) return 'open';
-  return homeLevel(state) < FLOORS[id].minLevel ? 'level' : null;
+  if (homeLevel(state) < FLOORS[id].minLevel) return 'level';
+  const below = FLOORS[id].needs;
+  return below && known(below) && !hasFloor(state, below) ? 'below' : null;
 }
 
 /** Этаж уже можно открыть (помещение позволяет), но ещё не открыли — для подсказки и меню. */

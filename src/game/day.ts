@@ -49,6 +49,7 @@ import { tenantGuests, tenantsNight } from './tenants';
 import { settleVan, type VanResult } from './van';
 import { rentalNight, type RentalDay } from './rental';
 import { basementGuests, basementNight, type SlotsDay } from './basement';
+import { foodcourtGuests, foodcourtNight, type FoodDay } from './foodcourt';
 import { dreamGuests, dreamsNight } from './dreams';
 import { lotteryGuests, lotteryNight } from './lottery';
 import { tallyNight, type StaffRecord } from './staffStats';
@@ -79,6 +80,8 @@ export interface NightSummary extends NightResult {
   rental: RentalDay | null;
   /** Вечер у автоматов в подвале (basement.ts): доход, доля «крыши», облава; null — автоматов нет. */
   slots: SlotsDay | null;
+  /** Вечер на фудкорте третьего этажа (foodcourt.ts): едоки и деньги; null — точек нет. */
+  food: FoodDay | null;
   /** Доля с Костиной тележки у входа за день (dreams.ts; 0 — тележки нет). */
   cart: number;
   /** Сколько принёс Центр без игрока, пока он работал в Заречье (zarechye.ts; 0 — был в Центре). */
@@ -144,6 +147,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Автоматы в подвале (basement.ts): доход и доля «крыши» — до счетов; облава приходит к закрытию.
   const slots = basementNight(s);
   s = slots.state;
+  // Фудкорт (foodcourt.ts): аренда точек и выручка своих — тоже до счетов.
+  const food = foodcourtNight(s);
+  s = food.state;
   // Сбывшаяся мечта Кости: тележка у входа, доля с неё — тоже до счетов (dreams.ts).
   const cart = dreamsNight(s);
   s = cart.state;
@@ -184,6 +190,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     van: van.result,
     rental: rental.day,
     slots: slots.day,
+    food: food.day,
     cart: cart.income,
     home: home.income,
     week: week.done,
@@ -248,6 +255,8 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, greyGuests) *
   // Автоматы в подвале (basement.ts): мамы с детьми обходят магазин.
   homeOnly(state, basementGuests) *
+  // Фудкорт на третьем этаже (foodcourt.ts): часть едоков спускается за продуктами.
+  homeOnly(state, foodcourtGuests) *
   nightBoostGuests(state) *
   homeOnly(state, giantGuests) *
   homeOnly(state, contestGuests) *

@@ -128,6 +128,7 @@ import { carryBonus, eyeTheft, ownerTiming } from './owner';
 import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
 import { buyFloor, finishCost, finishFloor, floorAvailable, FLOORS, hasFloor } from './floors';
 import { basementOf, buyPart, buySlot, PARTS, SLOT_COST, slotPlaces } from './basement';
+import { answerInspection, answerParty, inspectionToday, openStall, ownAllowed, partyToday, setStallMode, stallLock, stallMode, stallPlaces, stallsOf, STALL_IDS, STALLS } from './foodcourt';
 import { rhythmSeconds } from './tillRhythm';
 import { buyVan, loadVan, planTrip, vanEvents, vanFuel, vanOpen, vanPrice, vanWant, VAN_EVENTS, VAN_PRICE } from './van';
 
@@ -294,7 +295,11 @@ export type Feature =
   // Подвал (floors.ts, basement.ts, 13.11): открывает, когда не копит на помещение, ставит склад-холодильник
   // (и подсобку, если ведёт ломбард), потом автоматы — до мест в подвале, ремонт — когда два уже стоят.
   // Облавы и уход мам с детьми — в nightCycle и гостях дня, как в игре.
-  | 'basement';
+  | 'basement'
+  // Фудкорт на третьем этаже (floors.ts, foodcourt.ts, 13.11): открывает этаж, когда не копит на помещение, точки —
+  // по одной, своей точку ведёт, только если повар на смене (иначе сдаёт); ремонт — когда места кончились. Праздник
+  // берёт, если товар есть; на жалобу — наводит порядок.
+  | 'foodcourt';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -866,6 +871,24 @@ export function simulate({
         const fin = finishCost(state, 'basement');
         if (slots < slotPlaces(state)) spend(SLOT_COST, buySlot(state));
         else if (fin !== null) spend(fin, finishFloor(state, 'basement'));
+      }
+    }
+    if (features.foodcourt) {
+      const spend = (price: number, next: StoreState | null): void => {
+        if (!next || state.money < price * 2 + reserve || !canSplurge(price)) return;
+        state = next;
+        investments += price;
+      };
+      if (floorAvailable(state, 'third')) spend(FLOORS.third.cost, buyFloor(state, 'third'));
+      if (hasFloor(state, 'third')) {
+        const mode = ownAllowed(state) && staffOf(state, 'cook') ? 'own' : 'rent';
+        const next = STALL_IDS.find((id) => stallLock(state, id) === null);
+        const fin = finishCost(state, 'third');
+        if (next) spend(STALLS[next].setup, openStall(state, next, mode));
+        else if (fin !== null && stallsOf(state).length >= stallPlaces(state)) spend(fin, finishFloor(state, 'third'));
+        for (const id of stallsOf(state)) if (stallMode(state, id) !== mode) state = setStallMode(state, id, mode) ?? state;
+        if (partyToday(state)?.ready) state = answerParty(state, true) ?? state;
+        if (inspectionToday(state)) state = answerInspection(state, true) ?? answerInspection(state, false) ?? state;
       }
     }
     if (features.rental) {
