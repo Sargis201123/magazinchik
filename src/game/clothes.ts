@@ -200,8 +200,9 @@ export function clothesPlan(state: StoreState, guests: number): ClothesDay | nul
   return { coll, buyers, sold, sale, income, wage: c.clerk ? CLERK_WAGE : 0 };
 }
 
-/** Сколько продано каждой коллекции по плану (своя — sold, прошлые — с распродажи по старшинству). */
-function soldBy(c: ClothesState, plan: ClothesDay): Partial<Record<Collection, number>> {
+/** Сколько продано каждой коллекции по плану (своя — sold, прошлые — с распродажи по старшинству). Сцена этажа берёт
+ *  отсюда же, кого и за сколько показать на кассе. */
+export function soldBy(c: ClothesState, plan: ClothesDay): Partial<Record<Collection, number>> {
   const out: Partial<Record<Collection, number>> = { [plan.coll]: plan.sold };
   let left = plan.sale;
   for (const id of COLLECTIONS) {

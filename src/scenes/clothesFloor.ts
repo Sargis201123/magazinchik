@@ -13,7 +13,7 @@ import type { StoreScene } from './StoreScene';
 import { t } from '../i18n';
 import { UI_FONT } from '../ui/dom';
 import { sound } from '../platform/sound';
-import { clothesOf, clothesPlan, collectionFor, COLLECTION_DEFS, oldStock, rackPlaces, stockTotal, type Collection } from '../game/clothes';
+import { clothesOf, clothesPlan, collectionFor, COLLECTION_DEFS, COLLECTIONS, oldStock, rackPlaces, SALE_OFF, soldBy, stockTotal, type Collection } from '../game/clothes';
 import { guestsToday } from '../game/day';
 import { ART, SHIRTS, customerLook, type Look } from './common';
 import * as persons from './persons';
@@ -41,6 +41,9 @@ const SPEED = 30;
 const MAX_PEOPLE = 4;
 const LITE_PEOPLE = 2;
 const SPAWN_EVERY = 2600;
+/** Кого уже показали на кассе сегодня: 13.11, ревью — этаж не должен «продавать» больше, чем продаст вечер, даже
+ *  если вид открывают по нескольку раз за день. */
+let shown = { day: 0, n: 0 };
 
 /** Манекены и обновки — что носят в этой коллекции (гардероб wardrobe.ts и куртки persons.ts). */
 function wear(coll: Collection, i: number): Partial<Look> {
@@ -65,6 +68,7 @@ export function build(view: View, store: StoreScene, W: number, H: number, WALL:
     label.setX(Phaser.Math.Clamp(label.x, 2 + label.displayWidth / 2, W - 2 - label.displayWidth / 2));
     view.tweens.add({ targets: label, y: y - 6, alpha: 0, delay: 1400, duration: 600, onComplete: () => label.destroy() });
   };
+  const pause = (ms: number): Promise<void> => new Promise((done) => view.time.delayedCall(ms, done));
   const tile = (x: number, y: number, w: number, h: number, key: string) => view.add.tileSprite(x, y, w, h, key).setOrigin(0).setTileScale(1 / ART).setDepth(-10);
 
   // Стены и пол.
@@ -127,33 +131,47 @@ export function build(view: View, store: StoreScene, W: number, H: number, WALL:
   // Продавец-консультант: ходит между стойками и поправляет вещи.
   if (c?.clerk) {
     const clerk = persons.makePerson(host, 50, 124, { ...customerLook(0x68386c, 0), acc: 'tie' });
+    // Следующий обход — только когда закончен прежний: 13.11, ревью — по таймеру длинный путь (4–5 с) накладывался на
+    // новый, и продавец дёргался между двумя целями.
     if (!lite) {
-      let k = 0;
-      view.time.addEvent({
-        delay: 3400,
-        loop: true,
-        callback: () => {
+      const round = async (): Promise<void> => {
+        for (let k = 0; clerk.active; k++) {
+          const p = racks[k % racks.length];
+          await walk(clerk, { x: p.x + 6, y: p.y + 8 });
           if (!clerk.active) return;
-          const p = racks[k++ % racks.length];
-          void walk(clerk, { x: p.x + 6, y: p.y + 8 }).then(() => clerk.active && persons.setFacing(clerk, 'up'));
-        },
-      });
+          persons.setFacing(clerk, 'up');
+          await pause(1800);
+        }
+      };
+      void pause(1200).then(round);
     }
   }
 
+  // Покупки дня — ровно по прогнозу: сначала вещи сезона по полной цене, потом уценка прошлых коллекций за полцены
+  // (тот же порядок, что и вечером в clothesNight). Показали всех — больше никто не поднимается.
   const plan = clothesPlan(state, guestsToday(state));
-  const today = plan ? plan.sold + plan.sale : 0;
-  if (!today || !fresh) return;
+  const sales: { price: number; bin: boolean }[] = [];
+  if (plan && c) {
+    const by = soldBy(c, plan);
+    for (const id of COLLECTIONS) {
+      const own = id === coll;
+      const price = own ? COLLECTION_DEFS[id].price : Math.round(COLLECTION_DEFS[id].price * SALE_OFF);
+      for (let i = 0; i < (by[id] ?? 0); i++) sales[own ? 'unshift' : 'push']({ price, bin: !own });
+    }
+  }
+  if (shown.day !== state.day) shown = { day: state.day, n: 0 };
+  if (shown.n >= sales.length) return;
   let people = 0;
-  let made = 0;
-  const max = Math.min(today, lite ? LITE_PEOPLE : MAX_PEOPLE);
-  view.time.addEvent({
+  const max = lite ? LITE_PEOPLE : MAX_PEOPLE;
+  const spawner = view.time.addEvent({
     delay: SPAWN_EVERY,
     loop: true,
     callback: () => {
+      if (shown.n >= sales.length) return spawner.remove();
       if (people >= max) return;
       people++;
-      void shopper(made++).finally(() => people--);
+      const n = shown.n++;
+      void shopper(n, sales[n]).finally(() => people--);
     },
   });
 
@@ -187,22 +205,20 @@ export function build(view: View, store: StoreScene, W: number, H: number, WALL:
     );
   }
 
-  const pause = (ms: number): Promise<void> => new Promise((done) => view.time.delayedCall(ms, done));
-
-  /** Покупатель: лестница → стойка → (примерочная → зеркало) → касса → с пакетом вниз. */
-  async function shopper(n: number): Promise<void> {
+  /** Покупатель: лестница → стойка (уценка — стол распродажи) → (примерочная → зеркало) → касса → с пакетом вниз. */
+  async function shopper(n: number, buy: { price: number; bin: boolean }): Promise<void> {
     let look = customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day);
     let man = persons.makePerson(host, 22, H - 18, look).setAlpha(0);
     persons.setFacing(man, 'up');
     await new Promise<void>((done) => view.tweens.add({ targets: man, y: H - 38, alpha: 1, duration: 900, onComplete: () => done() }));
-    const rack = racks[Math.floor(Math.random() * Math.min(racks.length, Math.max(1, full)))];
+    const rack = buy.bin ? { x: 138, y: 116 } : racks[Math.floor(Math.random() * Math.min(racks.length, Math.max(1, full)))];
     await walk(man, { x: rack.x + Phaser.Math.Between(-6, 6), y: rack.y + 8 });
     if (!man.active) return;
     persons.setFacing(man, 'up');
     await pause(1300);
     // Примерочная (в лёгкой графике — сразу на кассу): заходит, занавеска задёргивается, выходит в обновке.
     const b = busy.indexOf(false);
-    if (!lite && b >= 0 && man.active) {
+    if (!lite && !buy.bin && b >= 0 && man.active) {
       busy[b] = true;
       const booth = booths[b];
       await walk(man, { x: booth.x, y: WALL + 28 });
@@ -231,8 +247,7 @@ export function build(view: View, store: StoreScene, W: number, H: number, WALL:
     if (!man.active) return;
     persons.setFacing(man, 'up');
     await pause(800);
-    const price = COLLECTION_DEFS[coll].price;
-    popup(man.x, man.y - 16, `+${price} 💰`);
+    popup(man.x, man.y - 16, `+${buy.price} 💰`);
     man.add(view.art(4, 3, 'fl2_bag'));
     // Вниз по лестнице: тает в проёме.
     await walk(man, { x: 22, y: H - 38 });
