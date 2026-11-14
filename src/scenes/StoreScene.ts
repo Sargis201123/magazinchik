@@ -71,6 +71,7 @@ import { FloorShade, furnitureCasters, type WearLayer } from './floor';
 import { decodeWear, encodeWear, oldPaths, wearGrid, type WearGrid } from '../game/wear';
 import { dayDemand } from '../game/demand';
 import { eveningPull, licenseRate } from '../game/license';
+import { greyRate } from '../game/grey';
 import { Rotting } from './rotting';
 import type { EduardLook } from '../game/eduard';
 import type { CafeDelivery } from '../game/cafe';
@@ -370,6 +371,8 @@ export class StoreScene extends Phaser.Scene {
   /** Парковка за магазином и проезд к ней: места, машины на них и кто сейчас едет (живая днём). */
   parking: ParkingLot | null = null;
   parkingTimer?: Phaser.Time.TimerEvent;
+  /** В какой день фургон магазина уехал на выезд и ещё не вернулся (0 — стоит на месте; cars.ts vanDepart). */
+  vanOut = 0;
   /** Машины на улице и их полоса: с парковки выезжают в просвет. */
   roadTraffic = new Set<RoadCar>();
   /** Когда последняя машина полосы доедет до края (время сцены): следующая приезжает не раньше — без обгонов насквозь. */
@@ -1022,18 +1025,23 @@ export class StoreScene extends Phaser.Scene {
     if (!this.night) this.moments.tick(elapsed, deltaMs);
     if (!this.night) this.clueFx?.tickClue(this, elapsed, deltaMs);
     weeksFx.tick(this);
+    // Фургон выездной торговли под вечер возвращается на парковку (cars.ts, game/van.ts).
+    if (!this.night) cars.vanTick(this);
 
     if (this.timeLeft > 0) {
       this.nextSpawn -= dt;
       const maxCustomers = storeLevel(this.state).maxCustomers + (rush ? 3 : 0) + (isCrowdDay(this.state.day) && !this.night ? CROWD_EXTRA_GUESTS : 0) + weeksFx.crowdExtra(this);
-      if (this.nextSpawn <= 0 && this.customers.size < maxCustomers && !this.siege) {
+      // Опечатан после серой схемы (game/grey.ts): до обеда гостей нет, ленты на двери снимают в полдень.
+      const sealed = this.night ? 1 : greyRate(this.state, elapsed / DAY_SECONDS);
+      if (this.state.grey?.sealed === this.state.day) building.refreshSeal(this, elapsed / DAY_SECONDS);
+      if (this.nextSpawn <= 0 && this.customers.size < maxCustomers && !this.siege && sealed > 0) {
         // Очередной покупатель иногда приезжает на машине: сначала паркуется, потом идёт в магазин.
         // Этого гостя позвал к себе конкурент (game/rival.ts) — он не придёт.
         if (this.rivalLost > 0 && !this.night) this.rivalLost--;
         else if (!cars.carCustomer(this)) this.spawnCustomer();
         // С лицензией (game/license.ts) лишние гости дня приходят вечером: днём реже, в последнюю треть — гуще.
         const interval =
-          spawnIntervalToday(this.state) / (rush ? 2 : 1) / weeksFx.crowd(this) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : licenseRate(this.state, elapsed / DAY_SECONDS));
+          spawnIntervalToday(this.state) / (rush ? 2 : 1) / weeksFx.crowd(this) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : licenseRate(this.state, elapsed / DAY_SECONDS) * sealed);
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
         // Беда района: первые гости дня бегут за водой один за другим (crisisFx.ts).
         if (this.crisisRush > 0 && !this.night && --this.crisisRush > 0) this.nextSpawn = crisisFx.RUSH_GAP;

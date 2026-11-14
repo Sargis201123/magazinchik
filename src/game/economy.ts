@@ -734,10 +734,14 @@ export interface StoreState {
   rental?: import('./rental').Rental;
   /** «Бабушкина теплица» (garden.ts): когда посажено и сколько урожаев собрано. */
   garden?: import('./garden').GardenState;
+  /** Фургон выездной торговли (van.ts): сегодняшний выезд, итог прошлого. Нет поля — фургона нет. */
+  van?: import('./van').VanState;
   /** Ученик из района (apprentice.ts), выпускники с лавками на улице и с какого дня снова предложить ученика. */
   appr?: import('./apprentice').Apprentice;
   apprGrads?: import('./apprentice').ApprGrad[];
   apprAsk?: number;
+  /** Серая схема (grey.ts): сделки с Жорой, скрытые «хвосты», «договорённость» с проверяющим, опечатанный день. */
+  grey?: import('./grey').GreyState;
   /** Ночная охрана: пёс Бобик, сторож и новость о ночных ворах (watch.ts). */
   security?: import('./watch').Security;
   /** Ломбард в подсобке (pawnshop.ts): вещи в залоге, полка «Разное», изъятое полицией. Нет поля — ещё не открывали. */
@@ -785,6 +789,8 @@ export interface StoreState {
   /** Беда района (crisis.ts): идёт сейчас — и чем кончилась прошлая (новость утром, пауза до следующей). */
   crisis?: import('./crisis').CrisisState;
   crisisEnd?: import('./crisis').CrisisEnd;
+  /** «Крыша» (racket.ts): пришли ли ребята, что решили, пакости и доля. Нет поля — ещё не приходили. */
+  racket?: import('./racket').RacketState;
   /** Доброе имя района −100…100 (goodwill.ts); нет поля — 0. */
   goodwill?: number;
   /** Жители района (residents.ts): сколько семей, последний переезд, кто из постоянных уехал или въехал. Нет поля — 12 семей. */
@@ -952,7 +958,13 @@ export const emptyDayStats = (): DayStats => ({
 
 const countStock = (stock: Stock): number => Object.values(stock).reduce((sum, units) => sum + (units?.length ?? 0), 0);
 
-export const warehouseCount = (state: StoreState): number => countStock(state.warehouse);
+/**
+ * Занято мест на складе. Кузов фургона (van.ts) тоже держит свои места: вечером остаток с выезда
+ * возвращается на склад, и докупить на освободившиеся места нельзя — иначе фургон работал бы как
+ * лишние 24 места мимо вместимости склада (13.11, ревью). В Заречье склад свой, кузов — центровой.
+ */
+export const warehouseCount = (state: StoreState): number =>
+  countStock(state.warehouse) + (state.van?.trip && !inZar(state) ? countStock(state.van.trip.load) : 0);
 export const warehouseOf = (state: StoreState, id: ProductId): number => state.warehouse[id]?.length ?? 0;
 export const shelfCapacity = (shelf: Shelf): number => SHELF_LEVELS[shelf.level].capacity;
 export const shelfCount = (shelf: Shelf): number => countStock(shelf.items);

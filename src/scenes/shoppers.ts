@@ -29,6 +29,7 @@ import {
 } from '../game/economy';
 import { inspectionDone } from '../game/day';
 import { inspect } from '../game/events';
+import { greyCover } from '../game/grey';
 import { ALBUM_REWARD, collectRareGuest, perceivedBase, pickRareGuest, RARE_GUESTS, RARE_TIP, rareGuestChance } from '../game/endless';
 import { saveGame } from '../game/save';
 import { hoodTips } from '../game/hood';
@@ -322,10 +323,15 @@ export async function runInspector(scene: StoreScene): Promise<void> {
   if (!scene.sys.isActive()) return;
 
   // Переполненное ведро инспектор считает как две кучки мусора.
-  const result = inspect(scene.state, { trash: scene.trash.size + (building.binFull(scene) ? 2 : 0) + ([...scene.trash].some((piece) => piece.getData('rot')) ? 1 : 0), toiletDirt: scene.toiletDirt });
+  const found = inspect(scene.state, { trash: scene.trash.size + (building.binFull(scene) ? 2 : 0) + ([...scene.trash].some((piece) => piece.getData('rot')) ? 1 : 0), toiletDirt: scene.toiletDirt });
+  // «Прикормленный» проверяющий (серая схема, grey.ts) нарушений не замечает — и это видно: не «всё чисто», а «ничего не заметил».
+  const { state: covered, result, covered: blind } = greyCover(scene.state, found);
   scene.inspection = result;
-  scene.state = inspectionDone(scene.state, result);
-  if (result.passed) {
+  scene.state = inspectionDone(covered, result);
+  if (blind) {
+    haptic.tap();
+    scene.popup(sprite.x, sprite.y - 16, t('grey.blind'), '#d8d0e8');
+  } else if (result.passed) {
     haptic.success();
     sound.good();
     scene.popup(sprite.x, sprite.y - 16, t('popup.inspectionPassed'), '#c8ffb0');

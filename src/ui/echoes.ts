@@ -7,6 +7,7 @@ import type { StoreState } from '../game/economy';
 import { ECHOES, echoBad, echoChoices, echoesOf, echoNews, echoWage, answerEchoNews, type EchoEntry } from '../game/echoes';
 import { skitPortrait } from '../game/skits';
 import { gainLine } from './skits';
+import { answerRaise } from '../game/racket';
 import { button, el, who } from './dom';
 
 type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void;
@@ -42,9 +43,12 @@ export function echoBox(state: StoreState, getState: () => StoreState, update: U
       const gain = gainLine(effect);
       if (gain) box.append(el('div', bad ? 'ui-note' : 'ui-gift-reward', gain));
     }
-    const label = d.choices.length > 1 ? t(`echo.${entry.id}.${i}` as TextKey, { n: wage, full }) : t(bad ? 'echo.ok.bad' : 'echo.ok.good');
+    // Подстановки эха (ставка «крыши» и пр.) важнее зарплаты Дениса: у них свой {n}.
+    const label = d.choices.length > 1 ? t(`echo.${entry.id}.${i}` as TextKey, { n: wage, full, ...entry.data }) : t(bad ? 'echo.ok.bad' : 'echo.ok.good');
+    // «Крыша» поднимает ставку (game/racket.ts): ответ меняет и её — платить больше, отказать или в полицию.
+    const answer = entry.id === 'racketRaise' ? answerRaise : answerEchoNews;
     // Плохая новость — спокойная кнопка «принять к сведению», не зелёная «ура».
-    box.append(button(label, () => update(answerEchoNews(getState(), entry.id, i), bad ? 'tap' : 'success'), k === 0 && !bad ? 'ui-btn' : 'ui-btn secondary'));
+    box.append(button(label, () => update(answer(getState(), entry.id, i), bad ? 'tap' : 'success'), k === 0 && !bad ? 'ui-btn' : 'ui-btn secondary'));
   }
   return [box];
 }
