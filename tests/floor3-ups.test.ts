@@ -29,7 +29,7 @@ const weekend = (s: StoreState): StoreState => {
 describe('улучшения фудкорта', () => {
   it('три ступени в «Этажах»: дизайн → детская зона → сцена', () => {
     expect(FLOOR_UPGRADES.third.map((u) => u.id)).toEqual(['design', 'kids', 'stage']);
-    expect(FOOD_UPS.map((u) => u.price)).toEqual([9000, 12000, 16000]);
+    expect(FOOD_UPS.map((u) => u.price)).toEqual([9000, 10000, 14000]);
     expect(FOOD_UPS[1].needs).toBe('design');
     expect(FOOD_UPS[2].needs).toBe('kids');
   });
@@ -89,7 +89,7 @@ describe('улучшения фудкорта', () => {
     const before = foodPlan(court(['design', 'kids'], 1))!;
     const after = foodPlan(court(['design', 'kids', 'stage'], 1))!;
     expect(after.eaters / before.eaters).toBeGreaterThan(1.1);
-    expect(floorBonus(court(['design', 'kids', 'stage'], 1), 'third', 'rent')).toBeCloseTo(0.25);
+    expect(floorBonus(court(['design', 'kids', 'stage'], 1), 'third', 'rent')).toBeCloseTo(0.3);
     // Вечер с улучшениями — детерминирован: тот же день, то же зерно — те же числа.
     expect(foodPlan(court(['design', 'kids', 'stage'], 1))).toEqual(after);
   });

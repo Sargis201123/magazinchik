@@ -31,7 +31,8 @@ const VARIANTS = [
 
 /** Куда ходят на этом наборе: лифт, подносы, урна, очереди и выход из них, подходы к местам, детская зона. */
 function targets(v: (typeof VARIANTS)[number]): L.Pt[] {
-  const out: L.Pt[] = [L.LIFT_IN, L.TRAY_SPOT, L.BIN_SPOT];
+  const out: L.Pt[] = [L.LIFT_IN, L.TRAY_SPOT];
+  for (let k = 0; k < L.BIN_QUEUE; k++) out.push(L.binSlot(k));
   L.STALL_X.forEach((x, i) => out.push({ x, y: L.AISLES[0] }, { x, y: L.QUEUE_Y[1] }, { x, y: L.QUEUE_Y[0] }, L.queueExit(i)));
   L.TABLES.forEach((t, k) => {
     if (t.row === 2 && (!v.row3 || (k === 4 && v.kids) || (k === 5 && v.stage))) return;
@@ -48,28 +49,50 @@ describe('фудкорт: люди не ходят сквозь мебель', (
       const spots = targets(v);
       // Сами точки свободны.
       for (const p of spots) expect(boxes.find((b) => hits(p, b)), `точка ${p.x},${p.y}`).toBeUndefined();
-      // Между любыми двумя — путь по проходам, ни один отрезок не задевает мебель.
-      for (const from of spots) {
-        for (const to of spots) {
-          let at = from;
-          for (const p of L.route(from, to)) {
-            const box = crosses(at, p, boxes);
-            expect(box, `${from.x},${from.y} → ${to.x},${to.y}: отрезок ${at.x},${at.y} → ${p.x},${p.y}`).toBeNull();
-            at = p;
+      // Между любыми двумя — путь по проходам, ни один отрезок не задевает мебель. И по середине прохода, и по
+      // крайним полосам (у каждого человека своя, до ±LANE — 14.11).
+      for (const lane of [-L.LANE, 0, L.LANE]) {
+        for (const from of spots) {
+          for (const to of spots) {
+            let at = from;
+            for (const p of L.route(from, to, lane)) {
+              const box = crosses(at, p, boxes);
+              expect(box, `полоса ${lane}, ${from.x},${from.y} → ${to.x},${to.y}: отрезок ${at.x},${at.y} → ${p.x},${p.y}`).toBeNull();
+              at = p;
+            }
+            expect(at).toEqual(to);
           }
-          expect(at).toEqual(to);
         }
       }
     });
   }
 
+  it('очередь к урне: места свободны, от места к месту — шаг без мебели, первое — у урны', () => {
+    expect(L.binSlot(0)).toEqual(L.BIN_SPOT);
+    expect(L.binSlot(99)).toEqual(L.binSlot(L.BIN_QUEUE - 1));
+    for (const v of VARIANTS) {
+      const boxes = L.obstacles(v);
+      for (let k = 1; k < L.BIN_QUEUE; k++) {
+        expect(crosses(L.binSlot(k), L.binSlot(k - 1), boxes), `место ${k} → ${k - 1}`).toBeNull();
+        expect(L.binSlot(k)).not.toEqual(L.binSlot(k - 1));
+      }
+    }
+  });
+
   it('путь кончается в цели, без лишних точек; по коридору у лифта — напрямую', () => {
-    const path = L.route(L.BIN_SPOT, L.LIFT_IN);
+    const path = L.route(L.TRAY_SPOT, L.LIFT_IN);
     expect(path).toEqual([L.LIFT_IN]);
+    // От урны (у правой стены) к лифту — по проходу у стоек, без крюка вниз (14.11).
+    const out = L.route(L.BIN_SPOT, L.LIFT_IN);
+    expect(out.every((q) => q.y <= L.BIN_SPOT.y)).toBe(true);
+    expect(out.at(-1)).toEqual(L.LIFT_IN);
     const seat = L.seatsOf(1)[3].approach;
     const p = L.route(L.LIFT_IN, seat);
     expect(p.at(-1)).toEqual(seat);
     for (let k = 1; k < p.length; k++) expect(p[k]).not.toEqual(p[k - 1]);
+    // Своя полоса: по коридору у лифта идут сбоку от середины и только у цели шагают на неё.
+    expect(L.route(L.TRAY_SPOT, L.LIFT_IN, 3)).toEqual([{ x: L.LIFT_X + 1.5, y: L.LIFT_IN.y }, L.LIFT_IN]);
+    expect(L.route(L.LIFT_IN, seat, 2).slice(0, -1).every((q) => q.x !== seat.x || q.y !== seat.y)).toBe(true);
   });
 
   it('места за столами: у верхних рядов — по шесть, у нижнего — три (спереди край зала)', () => {

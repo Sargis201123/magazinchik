@@ -47,11 +47,30 @@ export const queueExit = (i: number): Pt => ({ x: STALL_X[i] + (i === STALL_X.le
 export const AISLES = [104, 150, 192];
 export const CORRIDORS = [LIFT_X, 84];
 
-/** Стойка с подносами и урны у левой стены: где стоят они и где встаёт тот, кто берёт или сдаёт поднос. */
+/**
+ * Стойка с подносами — у левой стены, у лифта; урна для подносов — у правой: где стоят они и где встаёт тот, кто
+ * берёт или сдаёт поднос. 14.11, ревью: урна стояла слева под подносами, и узкий коридор у лифта (слева подносы,
+ * справа столы) был дорогой в обе стороны на всю высоту зала — к закрытию в нём выстраивался столбик из десятка
+ * человек один поверх другого. Теперь приходят слева, а уходят через зал: сдали поднос справа — и по проходу у
+ * стоек к лифту; в коридоре у лифта встречаются только на коротком куске у подносов.
+ */
 export const TRAYS: Pt = { x: 9, y: 86 };
 export const TRAY_SPOT: Pt = { x: LIFT_X, y: 84 };
-export const BINS: Pt = { x: 9, y: 132 };
-export const BIN_SPOT: Pt = { x: LIFT_X, y: 128 };
+export const BINS: Pt = { x: 158, y: 131 };
+/** Чуть выше середины между проходами — ближний проход верхний (у стоек), к лифту — без крюка вниз. */
+export const BIN_SPOT: Pt = { x: 148, y: 126 };
+/** Сколько мест в очереди к урне (дальше — встают на последнее). */
+export const BIN_QUEUE = 9;
+/**
+ * Очередь к урне: первый — у урны, второй — над ним, дальше — влево вдоль края столов (ниже прохода, чтобы не
+ * стоять на пути). Без неё все, кто уходил разом, вставали в одну точку один поверх другого (14.11, ревью).
+ */
+export function binSlot(k: number): Pt {
+  const n = Math.max(0, Math.min(BIN_QUEUE - 1, k));
+  if (n === 0) return BIN_SPOT;
+  // Над столами ряд на высоте 112: ниже — угол стола, выше — проход.
+  return { x: BIN_SPOT.x - 9 * (n - 1), y: 112 };
+}
 
 /** Стол на шестерых: середина, низ (y), ряд. Места — по три с каждой стороны. */
 export interface Table {
@@ -110,12 +129,12 @@ export const HORSE_WAY: Pt = { x: 68, y: 203 };
 export const STAGE: Box = { x0: 92, y0: 197, x1: 144, y1: 224 };
 export const MUSICIAN: Pt = { x: 118, y: 211 };
 
-/** Растения и кулер у правой стены. */
+/** Растения у правой стены (под урной), кулер — у левой, под подносами. */
 export const PLANTS: Pt[] = [
-  { x: 156, y: 126 },
+  { x: 156, y: 176 },
   { x: 156, y: 222 },
 ];
-export const COOLER: Pt = { x: 157, y: 170 };
+export const COOLER: Pt = { x: 9, y: 132 };
 
 /** Что занимает пол (ноги людей сюда не заходят): прямоугольники по низу предметов. */
 export function obstacles(o: { row3: boolean; kids: boolean; stage: boolean }): Box[] {
@@ -142,22 +161,38 @@ export function aisleOf(p: Pt): number {
   return AISLES.reduce((a, b) => (Math.abs(b - p.y) < Math.abs(a - p.y) ? b : a));
 }
 
+/** На сколько точек в сторону от середины прохода может идти человек (своя «полоса»): см. route. */
+export const LANE = 3;
+
 /**
  * Путь от точки до точки: до своего прохода прямо по вертикали, по проходу — к коридору, по коридору — к проходу
  * цели, по нему — к цели и прямо к ней. Повторяющиеся точки выкинуты.
+ *
+ * lane (14.11, ревью): у каждого своя полоса — смещение от середины проходов и коридоров (до ±LANE). Без неё все
+ * шли ровно по одной линии и в коридоре у лифта сливались в «паровозик» один поверх другого (к закрытию — до
+ * десятка в столбик). Концы пути (место, очередь, лифт) не смещаются; проходы шире полосы с запасом — тест
+ * tests/floor3-layout.test.ts проверяет и крайние полосы.
  */
-export function route(from: Pt, to: Pt): Pt[] {
-  // Оба конца на одном коридоре (лифт, поднос, урна) — прямо по нему.
-  if (Math.abs(from.x - to.x) < 0.5 && CORRIDORS.includes(from.x)) return [to];
-  const a = aisleOf(from);
-  const b = aisleOf(to);
+export function route(from: Pt, to: Pt, lane = 0): Pt[] {
+  const d = Math.max(-LANE, Math.min(LANE, lane));
+  // Коридор у лифта узкий (подносы и кулер слева, столы справа) — там полоса уже: от −0,5 до +1,5.
+  const side = (x: number): number => x + (x === LIFT_X ? (d > 0 ? d / 2 : d / 6) : d);
+  // Оба конца на одном коридоре (лифт, подносы) — по нему, своей полосой, у цели — шаг на середину.
+  if (Math.abs(from.x - to.x) < 0.5 && CORRIDORS.includes(from.x)) return tidy(from, [{ x: side(to.x), y: to.y }, to]);
+  const a = aisleOf(from) + d;
+  const b = aisleOf(to) + d;
   const pts: Pt[] = [{ x: from.x, y: a }];
   if (a === b) pts.push({ x: to.x, y: a });
   else {
-    const via = CORRIDORS.reduce((p, q) => (Math.abs(q - from.x) + Math.abs(q - to.x) < Math.abs(p - from.x) + Math.abs(p - to.x) ? q : p));
+    const via = side(CORRIDORS.reduce((p, q) => (Math.abs(q - from.x) + Math.abs(q - to.x) < Math.abs(p - from.x) + Math.abs(p - to.x) ? q : p)));
     pts.push({ x: via, y: a }, { x: via, y: b }, { x: to.x, y: b });
   }
   pts.push(to);
+  return tidy(from, pts);
+}
+
+/** Без повторяющихся точек (шаг меньше полточки — не шаг). */
+function tidy(from: Pt, pts: Pt[]): Pt[] {
   const out: Pt[] = [];
   let last = from;
   for (const p of pts) {

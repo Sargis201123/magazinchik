@@ -10,10 +10,11 @@
 //    садятся за общий стол и едят (тарелка пустеет, кивают, переговариваются облачками), сдают поднос в урну и
 //    уезжают. Сколько людей сразу на этаже — от едоков дня (foodPlan): тот же расчёт, что и вечерние деньги. По
 //    выходным — семьи: ребёнок занимает место, родитель несёт еду; день рождения и закрытая по жалобе точка — как было;
-//  · УЛУЧШЕНИЯ (game/foodcourtUps.ts) видны: «дизайн зала» — деревянные столы, настил, обшивка, светильники над
-//    столами и высокие фикусы; «детская зона» — коврик, горка, сухой бассейн и лошадка, по выходным там играют дети;
+//  · УЛУЧШЕНИЯ (game/foodcourtUps.ts) видны: «дизайн зала» — деревянные столы, настил, обшивка, тёплый свет на
+//    столах и высокие фикусы; «детская зона» — коврик, горка, сухой бассейн и лошадка, там играют дети (по выходным
+//    — больше);
 //    «сцена» — помост с колонками, вечером на ней играет музыкант, к нему тянутся ноты, в зале наплыв;
-//  · вечером зал темнеет (как ночь в основном зале), над столами — гирлянды, вывески и светильники светят.
+//  · вечером зал темнеет (как ночь в основном зале), над столами — гирлянды, вывески светят.
 // Глубина — по ногам, как в зале; ходят только по проходам (тест tests/floor3-layout.test.ts). Без тряски. В лёгкой
 // графике людей меньше, облака стоят, свет не дышит, гирлянды не мигают.
 
@@ -200,6 +201,8 @@ export function buildThird(kit: FloorKit): void {
     const man = kit.person(at.x, at.y - L.FOOT, look).setDepth(depthAt(at.y));
     man.setData('step', { x: man.x, y: man.y, phase: Math.random() * 4, idle: Math.random() * 3000 });
     man.setData('speed', SPEED * (look.kid ? 1.12 : Phaser.Math.FloatBetween(0.9, 1.1)));
+    // Своя полоса в проходах (thirdLayout.ts route): иначе идущие друг за другом сливаются в столбик.
+    man.setData('lane', Phaser.Math.FloatBetween(-L.LANE, L.LANE));
     people.add(man);
     man.once('destroy', () => people.delete(man));
     return man;
@@ -220,7 +223,7 @@ export function buildThird(kit: FloorKit): void {
       });
     });
   /** Дойти по проходам (floors/thirdLayout.ts route): сквозь столы и стойки не ходят. */
-  const walkTo = (man: Man, to: L.Pt): Promise<void> => L.route(feet(man), to).reduce<Promise<void>>((prev, p) => prev.then(() => stepTo(man, p)), Promise.resolve());
+  const walkTo = (man: Man, to: L.Pt): Promise<void> => L.route(feet(man), to, (man.getData('lane') as number | undefined) ?? 0).reduce<Promise<void>>((prev, p) => prev.then(() => stepTo(man, p)), Promise.resolve());
   const face = (man: Man, f: Facing): void => {
     if (man.active) persons.setFacing(man, f);
   };
@@ -452,15 +455,34 @@ export function buildThird(kit: FloorKit): void {
   }
   const stallFor = (): StallId => (open.length ? (pickStall() ?? open[0]).id : 'coffee');
 
+  /** Очередь к урне: первый сдаёт поднос, остальные ждут за ним. */
+  const binQ: Man[] = [];
   /** Уйти: сдать поднос в урну и уехать на лифте. */
   async function leave(man: Man): Promise<void> {
     if (!man.active) return;
     if (man.getData('hand')) {
-      await walkTo(man, L.BIN_SPOT);
+      // К урне — очередью (thirdLayout.ts binSlot): подошёл на своё место, ушёл передний — шаг вперёд.
+      binQ.push(man);
+      let at = -1;
+      while (man.active) {
+        const idx = binQ.indexOf(man);
+        if (idx !== at) {
+          const first = at < 0;
+          at = idx;
+          await (first ? walkTo(man, L.binSlot(idx)) : stepTo(man, L.binSlot(idx)));
+          // Первый — к урне; второй стоит над ним и смотрит на него; дальние — вдоль столов, к урне.
+          face(man, idx === 1 ? 'down' : 'right');
+          continue;
+        }
+        if (idx === 0) break;
+        await pause(kit, 200);
+      }
+      if (man.active) {
+        await pause(kit, 380);
+        hold(man, null);
+      }
+      binQ.splice(binQ.indexOf(man), 1);
       if (!man.active) return;
-      face(man, 'left');
-      await pause(kit, 380);
-      hold(man, null);
     }
     // У лифта двери уже открываются — к кабине подходят, когда створки разъехались.
     await walkTo(man, { x: L.LIFT_X, y: 70 });
@@ -529,7 +551,9 @@ export function buildThird(kit: FloorKit): void {
     hold(parent, 'fc3_tray');
     const s = pickStall();
     if (!s || !(await order(parent, s))) {
-      b.held = false;
+      // Место родителя отпускаем (иначе оно «занято» до конца дня — 14.11, ревью); место ребёнка держит sit, пока
+      // ребёнок до него не дошёл, — отпускать его здесь значило бы отдать место, к которому он уже бежит.
+      a.held = false;
       void kidGoes.then(() => (b.who === kid ? stand(kid, b).then(() => leave(kid)) : undefined));
       return void leave(parent);
     }
@@ -743,7 +767,8 @@ export function buildThird(kit: FloorKit): void {
     run(async () => {
       const man = make(guestLook(), seat.approach);
       await sit(man, seat);
-      await eat(man, seat, id, Phaser.Math.Between(1, 7));
+      // Доедают вразнобой (до 10 укусов): иначе сидевшие с порога встают почти разом и толпятся у урны.
+      await eat(man, seat, id, Phaser.Math.Between(1, 10));
       await stand(man, seat);
       hold(man, 'fc3_tray_done');
       await leave(man);
