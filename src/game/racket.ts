@@ -1,7 +1,9 @@
 // «Крыша» (13.11, задача автора: «рэкет требует платить — платить, отказать или в полицию»). Однажды утром
 // середины игры у входа встаёт чёрная «девятка», и вежливые ребята в кожанках предлагают «присмотреть» за
 // магазином за долю недельной выручки. Без драк и угроз на экране — только последствия выбора:
-//  · платить — каждую неделю забирают долю, спокойно; через недели «крыша» поднимает ставку (эхо решений);
+//  · платить — каждую неделю забирают долю, спокойно; через недели «крыша» поднимает ставку (эхо решений). Зато
+//    «крыша» прикрывает (14.11, аудит): облав на автоматы в подвале нет (basement.ts), конкурент не пакостит
+//    (tricks.ts), Жора не мстит за отказ (grey.ts);
 //  · отказать — недели две пакостят: разбитая витрина, проколотые шины фургона, мусор у входа; потом отстают;
 //  · в полицию — «Дело недели» о рэкете (cases.ts openCase); назвал главного — их нет навсегда, район
 //    благодарен (доброе имя, goodwill.ts, и эхо соседей), не вышло — пакости, как при отказе.
@@ -27,17 +29,36 @@ export const RACKET_FROM = 35;
 export const RACKET_LEVEL = 2;
 /** Шанс, что придут этим утром (после RACKET_FROM): в среднем — через полторы недели. */
 export const RACKET_CHANCE = 0.1;
-/** Доля недельной выручки и как она растёт после каждого эха «поднимаем ставку». */
-export const RACKET_RATE = 4;
-export const RACKET_RAISE = 2;
-export const RACKET_RATE_MAX = 10;
+/**
+ * Доля недельной выручки и как она растёт после каждого эха «поднимаем ставку». 14.11, аудит: было 4% + 2% до 10%
+ * при пользе ноль — «платить» в симуляторе всегда −11% денег и ни одного выигрышного сида. Теперь 2–5% и защита.
+ */
+export const RACKET_RATE = 2;
+export const RACKET_RAISE = 1;
+export const RACKET_RATE_MAX = 5;
 /** Меньше этого с недели не берут (неделя была пустая — всё равно «за беспокойство»). */
 export const RACKET_MIN = 40;
-/** Отказали (или дело развалилось): сколько дней пакостят и шанс пакости в день (первая — наутро наверняка). */
+/**
+ * Отказали (или дело развалилось): сколько дней пакостят и шанс пакости в день (первая — наутро наверняка). 14.11,
+ * аудит: у большого магазина ребята злее — шанс растёт на TROUBLE_STEP за помещение после «Минимаркета», иначе
+ * отказ к концу игры ничего не стоил против недельной доли.
+ */
 export const TROUBLE_DAYS = 14;
 export const TROUBLE_CHANCE = 0.4;
-/** Ремонт витрины и шиномонтаж: растут с магазином. */
-export const troubleCost = (kind: Trouble, level: number): number => (kind === 'glass' ? 60 + 40 * level : kind === 'tires' ? 30 + 15 * level : 0);
+export const TROUBLE_STEP = 0.1;
+export const troubleChance = (level: number): number => Math.min(0.7, TROUBLE_CHANCE + TROUBLE_STEP * Math.max(0, level - RACKET_LEVEL));
+/**
+ * Ремонт витрины и шиномонтаж: растут с магазином и с выручкой (avg — средняя выручка дня). 14.11, аудит: при
+ * плоских 60 + 40 × ур. отказ стоил ~1–1,5 тыс. один раз — к концу игры это мелочь, и выбор пропадал. Витрина
+ * большого магазина — 0,7 дня выручки, шины — треть дня: две недели пакостей ≈ 2–3 дня выручки. При целом дне за
+ * витрину отказ после расширения разорял (симулятор: одиннадцать пакостей подряд — −60 тыс.).
+ */
+export const GLASS_REVENUE = 0.7;
+export const TIRES_REVENUE = 0.35;
+/** Пакость берёт не больше этой доли кассы. */
+export const TROUBLE_CASH = 0.5;
+export const troubleCost = (kind: Trouble, level: number, avg = 0): number =>
+  kind === 'glass' ? Math.max(60 + 40 * level, Math.round(avg * GLASS_REVENUE)) : kind === 'tires' ? Math.max(30 + 15 * level, Math.round(avg * TIRES_REVENUE)) : 0;
 /** Мусор у входа: гостей меньше, пока не уберут (весь день — уборщица выносит, но люди уже видели). */
 export const TRASH_GUESTS = 0.92;
 /** Банду взяли — доброе имя района. */
@@ -91,15 +112,40 @@ export function racketStarts(state: StoreState): boolean {
 /** Утро ждёт ответа: платить, отказать или в полицию. */
 export const racketAsk = (state: StoreState): boolean => Boolean(state.racket && !state.racket.mode && !state.racket.end);
 
-/** Доля недели: процент от выручки последних семи дней, не меньше RACKET_MIN. */
-export function racketShare(state: StoreState, rate = state.racket?.rate ?? RACKET_RATE): number {
-  const week = (state.history ?? []).slice(-7).reduce((a, b) => a + b, 0);
-  return Math.max(RACKET_MIN, Math.round((week * rate) / 100));
+/**
+ * Выручка Центра за последние семь дней. 14.11, аудит: «крыша» — у Центра; в Заречье state.history — выручка лавки
+ * у реки, и в день доли в Заречье платили в ~2,5 раза меньше (уезжай в день доли — и плати копейки).
+ */
+const homeWeek = (state: StoreState): number[] => ((inZar(state) ? state.zar!.away.history : state.history) ?? []).slice(-7);
+
+/** Средняя выручка дня Центра за неделю — для цены пакостей. */
+const avgDay = (state: StoreState): number => {
+  const week = homeWeek(state);
+  return week.length ? week.reduce((a, b) => a + b, 0) / week.length : 0;
+};
+
+/**
+ * Ставка, которую берут на деле. 14.11, аудит: в сохранениях до аудита ставка могла дорасти до 10% (старые 4% + 2%),
+ * а сейвы не мигрируем — поэтому потолок RACKET_RATE_MAX применяем при каждом чтении, иначе старый плательщик до
+ * конца игры отдавал бы вдвое больше нового максимума.
+ */
+export const rateOf = (r?: RacketState): number => Math.min(RACKET_RATE_MAX, r?.rate ?? RACKET_RATE);
+export const racketRate = (state: StoreState): number => rateOf(state.racket);
+/** Сколько станет после поднятия — это и показываем в эхе (сохранённое в нём {n} могло остаться от старых правил). */
+export const raiseTo = (state: StoreState): number => Math.min(RACKET_RATE_MAX, racketRate(state) + RACKET_RAISE);
+
+/** Доля недели: процент от выручки Центра за последние семь дней, не меньше RACKET_MIN. */
+export function racketShare(state: StoreState, rate = racketRate(state)): number {
+  const week = homeWeek(state).reduce((a, b) => a + b, 0);
+  return Math.max(RACKET_MIN, Math.round((week * Math.min(RACKET_RATE_MAX, rate)) / 100));
 }
+
+/** Платят «крыше», и она прикрывает: облав на автоматы нет, конкурент не пакостит, Жора не мстит. */
+export const racketGuard = (state: StoreState): boolean => state.racket?.mode === 'pay' && !state.racket.end;
 
 /** Забрать долю: сколько есть в кассе, не больше. */
 function collect(state: StoreState, r: RacketState): StoreState {
-  const cost = Math.min(Math.max(0, state.money), racketShare(state, r.rate));
+  const cost = Math.min(Math.max(0, state.money), racketShare(state, rateOf(r)));
   return set({ ...state, money: state.money - cost }, { ...r, paid: (r.paid ?? 0) + cost, hit: { day: state.day, kind: 'pay', cost } });
 }
 
@@ -138,7 +184,7 @@ export function answerRaise(state: StoreState, id: EchoId, choice: number): Stor
   if (!s || !r || r.mode !== 'pay' || r.end) return s;
   if (choice === 1) return refuse(s, r);
   if (choice === 2) return police(s, r);
-  const rate = Math.min(RACKET_RATE_MAX, (r.rate ?? RACKET_RATE) + RACKET_RAISE);
+  const rate = Math.min(RACKET_RATE_MAX, rateOf(r) + RACKET_RAISE);
   const next = set(s, { ...r, rate });
   return rate < RACKET_RATE_MAX ? plantEcho(next, 'racketRaise', s.day + raiseIn(s), { n: Math.min(RACKET_RATE_MAX, rate + RACKET_RAISE) }) : next;
 }
@@ -156,11 +202,25 @@ export function stopPaying(state: StoreState, mode: Exclude<RacketMode, 'pay'>):
   return mode === 'refuse' ? refuse(s, r) : police(s, r);
 }
 
+/**
+ * Эхо «поднимаем ставку» из сейва до аудита (14.11): его {n} посчитано по старым правилам (6, 8, 10%). На потолке
+ * поднимать нечего — эхо убираем; ниже — переписываем {n} на то, что реально возьмут. Совпадает — тот же объект.
+ */
+function fixRaise(state: StoreState): StoreState {
+  const e = echoesOf(state);
+  const at = e.list.findIndex((x) => x.id === 'racketRaise');
+  if (at < 0 || e.list[at].data?.n === raiseTo(state)) return state;
+  const list = racketRate(state) >= RACKET_RATE_MAX
+    ? e.list.filter((_, i) => i !== at)
+    : e.list.map((x, i) => (i === at ? { ...x, data: { ...x.data, n: raiseTo(state) } } : x));
+  return { ...state, echoes: { ...e, list } };
+}
+
 /** Пакость этого утра (или null): первая — наутро после отказа, витрина; дальше — от зерна и дня. */
 export function troubleFor(state: StoreState, r: RacketState): Trouble | null {
   if (inZar(state) || state.day <= (r.since ?? state.day)) return null;
   if (state.day === (r.since ?? 0) + 1) return 'glass';
-  if (roll(state, 3) >= TROUBLE_CHANCE) return null;
+  if (roll(state, 3) >= troubleChance(state.level)) return null;
   return TROUBLES[Math.floor(roll(state, 4) * TROUBLES.length)];
 }
 
@@ -179,7 +239,10 @@ export function racketMorning(state: StoreState): StoreState {
   const s = r === r0 ? state : set(state, r);
   if (r.end || !r.mode) return s;
   const since = r.since ?? r.from;
-  if (r.mode === 'pay') return (state.day - since) % 7 === 0 && state.day > since ? collect(s, r) : s;
+  if (r.mode === 'pay') {
+    const p = fixRaise(s);
+    return (state.day - since) % 7 === 0 && state.day > since ? collect(p, r) : p;
+  }
   if (r.mode === 'police') {
     const rec = racketCase(s, since);
     if (!rec) return openCaseOf(s) ? s : (openCase(s, 'racket', 'racket') ?? s);
@@ -194,7 +257,9 @@ export function racketMorning(state: StoreState): StoreState {
   if (s.day > (r.until ?? 0)) return set(s, { ...r, end: 'quit', news: { kind: 'quit', day: s.day } });
   const kind = troubleFor(s, r);
   if (!kind) return s;
-  const cost = Math.min(Math.max(0, s.money), troubleCost(kind, s.level));
+  // Не больше половины кассы: пакость от выручки после расширения (касса почти пуста) иначе забирала всё до монеты,
+  // закупать было не на что, и магазин неделями стоял пустым (симулятор, 14.11).
+  const cost = Math.min(Math.floor(Math.max(0, s.money) * TROUBLE_CASH), troubleCost(kind, s.level, avgDay(s)));
   return set({ ...s, money: s.money - cost }, { ...r, hit: { day: s.day, kind, cost } });
 }
 

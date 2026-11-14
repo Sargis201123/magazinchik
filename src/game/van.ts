@@ -367,8 +367,10 @@ export function settleVan(state: StoreState): { state: StoreState; result: VanRe
   const warehouse = { ...state.warehouse };
   for (const id of Object.keys(home) as ProductId[]) warehouse[id] = byAge([...(warehouse[id] ?? []), ...(home[id] ?? [])]);
   const { trip: _trip, ...rest } = van;
+  // 14.11, аудит: колесо и бензин в неудачный выезд могли увести кассу в минус — нехватка уходит в долг, как у всех.
+  const money = state.money + result.net;
   return {
-    state: { ...state, money: state.money + result.net, warehouse, van: { ...rest, last: result, trips: (van.trips ?? 0) + 1, earned: (van.earned ?? 0) + result.net } },
+    state: { ...state, money: Math.max(0, money), debt: state.debt + Math.max(0, -money), warehouse, van: { ...rest, last: result, trips: (van.trips ?? 0) + 1, earned: (van.earned ?? 0) + result.net } },
     result,
   };
 }

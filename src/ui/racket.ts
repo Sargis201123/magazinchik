@@ -4,7 +4,7 @@
 
 import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
-import { JAILED_GOODWILL, RACKET_MODES, RACKET_RATE, racketHit, racketShare, type RacketMode, type RacketState } from '../game/racket';
+import { JAILED_GOODWILL, RACKET_MODES, RACKET_RATE, racketHit, racketRate, racketShare, type RacketMode, type RacketState } from '../game/racket';
 import { openCaseOf } from '../game/cases';
 import { button, el, who } from './dom';
 
@@ -19,6 +19,8 @@ export function racketChoiceBox(state: StoreState, choose: (mode: RacketMode) =>
       button(t(`racket.mode.${mode}` as TextKey, { n }), () => choose(mode), mode === 'pay' ? 'ui-btn secondary' : 'ui-btn'),
       el('div', 'ui-muted', t(`racket.mode.${mode}.hint` as TextKey, { sum: racketShare(state, n) })),
     );
+    // 14.11, аудит: что покупает доля — видно сразу (game/racket.ts racketGuard), иначе «платить» — дань ни за что.
+    if (mode === 'pay') box.append(el('div', 'ui-muted', t('racket.guard')));
   }
   return box;
 }
@@ -33,7 +35,7 @@ export function racketLines(state: StoreState, stop: (mode: 'refuse' | 'police')
   const since = r.since ?? r.from;
   if (r.mode === 'pay') {
     // 14.11: выход из «крыши» всегда под рукой — на потолке ставки эхо больше не спрашивает (racket.ts stopPaying).
-    const line = el('div', 'ui-muted', t('racket.line.pay', { n: r.rate ?? RACKET_RATE, d: 7 - ((state.day - since) % 7) }));
+    const line = el('div', 'ui-muted', t('racket.line.pay', { n: racketRate(state), d: 7 - ((state.day - since) % 7) }));
     line.append(el('br'), button(t('racket.stop.refuse'), () => stop('refuse'), 'ui-chip secondary'), ' ', button(t('racket.stop.police'), () => stop('police'), 'ui-chip secondary'));
     out.push(line);
   }

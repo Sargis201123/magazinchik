@@ -3,7 +3,7 @@
 //   • товар без накладных за полцены — партия на склад;
 //   • «договориться» с проверяющим — следующий штраф санинспекции или проверки лицензии не выпишут;
 //   • продать просрочку под новой этикеткой — уценка и то, что испортится этой ночью, уходит по полной цене.
-// Согласился — выгода сразу, но за каждой сделкой прячется риск попасться через несколько дней: штраф (втрое
+// Согласился — выгода сразу, но за каждой сделкой прячется риск попасться через несколько дней: штраф (вдвое
 // больше выгоды, не меньше порога), магазин опечатан до обеда (гостей вдвое меньше), район шепчется (goodwill),
 // разгромный отзыв. Риск копится: чем больше сделок за плечами, тем вернее следующая кончится плохо.
 // Отказал — Жора обижается и иногда мелко мстит; а партия «без накладных» нередко оказывается краденой —
@@ -18,6 +18,7 @@ import { fridgeLife } from './gear';
 import { addGoodwill } from './goodwill';
 import { plantEcho } from './echoes';
 import { inZar } from './zarshop';
+import { racketGuard } from './racket';
 import { rng } from './random';
 
 export type GreyKind = 'goods' | 'bribe' | 'relabel';
@@ -55,10 +56,16 @@ export const GREY_FROM_LEVEL = 1;
 /** После любого ответа — не раньше чем через столько дней; потом заходит в такую долю утр (в среднем раз в ~2 недели). */
 export const GREY_GAP = 10;
 export const GREY_CHANCE = 0.3;
-/** Партия без накладных: штук (10 + 5 на помещение, сколько влезет на склад) по такой доле обычной закупки. */
-export const GREY_QTY_BASE = 10;
-export const GREY_QTY_LEVEL = 5;
+/**
+ * Партия без накладных: штук (20 + 12 на помещение, сколько влезет на склад) по такой доле обычной закупки.
+ * 14.11, аудит: при 10 + 5 выгода была 125–450 рядом с выручкой дня 7–12 тыс. — ни одна партия не окупала риск.
+ * Теперь ~600–2000, а партию, что сэкономит меньше greyGoodsGain (примерно 1/16 выручки дня — ниже риск её не
+ * окупает), Жора не везёт: выбора в ней нет.
+ */
+export const GREY_QTY_BASE = 20;
+export const GREY_QTY_LEVEL = 12;
 export const GREY_GOODS_MIN = 6;
+export const greyGoodsGain = (level: number): number => 200 + 150 * level;
 export const GREY_GOODS_CUT = 0.5;
 /** Портящееся быстрее стольких дней Жора не возит: партия хлеба на два дня — не «выгода», а ловушка. */
 export const GREY_GOODS_LIFE = 4;
@@ -69,16 +76,20 @@ export const GREY_BRIBE_BASE = 300;
 export const GREY_BRIBE_LEVEL = 200;
 /** Перебить этикетки — если набралось хотя бы столько штук уценки и того, что испортится ночью. */
 export const GREY_RELABEL_MIN = 4;
-/** Риск попасться: с первой сделки 20%, каждая следующая — ещё +15%, не выше 85%. */
-export const GREY_RISK_BASE = 0.2;
+/**
+ * Риск попасться: с первой сделки 10%, каждая следующая — ещё +15%, не выше 85%. 14.11, аудит: с 20% и штрафом ×3
+ * даже первая сделка была в минусе в среднем (0 из 202 партий); теперь осторожный игрок с одной-двумя сделками
+ * может остаться в плюсе, а «на всё согласен» к третьей-четвёртой уходит в минус.
+ */
+export const GREY_RISK_BASE = 0.1;
 export const GREY_RISK_STEP = 0.15;
 export const GREY_RISK_MAX = 0.85;
 /** Попадаются через 3–8 дней после сделки. */
 export const GREY_BUST_DELAY: [number, number] = [3, 8];
-/** Штраф: втрое больше выгоды сделки, но не меньше 1000 + 500 за помещение. */
-export const GREY_FINE_X = 3;
-export const GREY_FINE_BASE = 1000;
-export const GREY_FINE_LEVEL = 500;
+/** Штраф: вдвое больше выгоды сделки, но не меньше 500 + 250 за помещение (порог не должен глушить малые сделки). */
+export const GREY_FINE_X = 2;
+export const GREY_FINE_BASE = 500;
+export const GREY_FINE_LEVEL = 250;
 /** Попался: район шепчется (доброе имя), рейтинг вниз, наутро магазин опечатан до обеда — гостей вдвое меньше. */
 export const GREY_GOODWILL = -10;
 export const GREY_RATING = 0.05;
@@ -151,8 +162,9 @@ function build(state: StoreState, kind: GreyKind): GreyOffer | null {
   const qty = Math.min(room, GREY_QTY_BASE + GREY_QTY_LEVEL * state.level);
   const unit = Math.max(1, Math.round(PRODUCTS[product].cost * GREY_GOODS_CUT));
   const price = qty * unit;
-  if (qty < GREY_GOODS_MIN || price > state.money) return null;
-  return { kind, product, qty, price, gain: qty * PRODUCTS[product].cost - price };
+  const gain = qty * PRODUCTS[product].cost - price;
+  if (qty < GREY_GOODS_MIN || gain < greyGoodsGain(state.level) || price > state.money) return null;
+  return { kind, product, qty, price, gain };
 }
 
 /**
@@ -204,7 +216,8 @@ export function answerGrey(state: StoreState, yes: boolean): StoreState | null {
   if (!yes) {
     let s: StoreState = { ...state, grey: { ...g, ...done, refused: (g.refused ?? 0) + 1 } };
     if (offer.kind === 'goods' && roll(state, 6) < GREY_STOLEN) return plantEcho(s, 'greyStolen', state.day + between(roll(state, 7), GREY_ECHO_DELAY));
-    if (roll(state, 8) < GREY_REVENGE) s = plantEcho(s, 'greyRevenge', state.day + between(roll(state, 9), GREY_REVENGE_DELAY));
+    // 14.11, аудит: за кого «вписалась крыша» (racket.ts), тому Жора не мстит — это часть того, за что платят.
+    if (!racketGuard(state) && roll(state, 8) < GREY_REVENGE) s = plantEcho(s, 'greyRevenge', state.day + between(roll(state, 9), GREY_REVENGE_DELAY));
     return s;
   }
   let s: StoreState = state;

@@ -1269,6 +1269,7 @@ export const en: Record<TextKey, string> = {
   "district.plot.soon": "📋 In {n} days building starts on the corner. What opens there depends on your sales this week.",
   "tip.plots.title": "The neighbourhood adapts",
   "tip.plots.text": "What opens on free plots depends on what you sell most: water — a gym, flowers — a bridal salon, coffee — a coworking space, ice cream — a kids' club, meat — a canteen. The new neighbours buy exactly that.",
+  "news.mechs": "🆕 New: a pawnshop in the back room, rentals and a van in “Corners”, the basement, upper floors and houses behind the shop in “Growth”.",
   "tour.hall": "Empty shelf — tap it to bring goods from storage. Clean up trash and spills, take out the bin. In the evening you'll see what you earned. Good luck, dear!",
   // Новое начало (game/onboarding.ts): бабушка облачком в зале, первая продажа, вкладки по одной.
   "onb.hello": "Sweetie, the shop is yours now! Look — here they come.",
@@ -4214,6 +4215,7 @@ export const en: Record<TextKey, string> = {
   "dream.akhmed.fail": "Akhmed's car broke down within a week — he sold it for parts. The money's gone, but now Akhmed invites you for plov every Friday.",
   "tip.dreams.title": "Neighbors' dreams",
   "tip.dreams.text": "In 2–3 weeks the news will come one morning: if it works out — a benefit every day; if it fails — the money's gone, but your neighbor won't forget. All investments are in the “Growth” tab.",
+  "racket.guard": "🛡 In return they cover you: no basement raids, and the rival and Zhora stay away.",
   "zar.tale.yegor.3": "They took me for an internship — on the riverboat! I'll bring tourists to your pier. Here, this is from the whole group — for feeding us all exam season.",
   "zar.tale.stepan.1": "Stepan Ilyich, the boat station by the bridge. You don't make fish soup without potatoes, remember that. If you like, I'll lend you a boat for a ride.",
   "zar.tale.stepan.2": "In spring the flood nearly carried the boats away. A neighbour came running and helped. That's how it is in Riverside: we look out for each other.",

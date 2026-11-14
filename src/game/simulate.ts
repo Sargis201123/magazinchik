@@ -114,7 +114,9 @@ import { buyLicense, hasLicense, LICENSE_PRICE, licenseLock } from './license';
 import { answerGrey, greyCover, greyOffer } from './grey';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
-import { chooseRacket, racketAsk, type RacketMode } from './racket';
+import { answerRaise, chooseRacket, racketAsk, type RacketMode } from './racket';
+import { echoesOf } from './echoes';
+import { buyLot, lease, LOT_PRICES, lotOf, SHOP_KINDS, SHOPS, shopIn } from './estate';
 import { chooseGent, gentAsk, type GentChoice } from './gentrify';
 import { chooseCrisis, crisisAsk, crisisExtraItems, crisisGive, crisisTolerance, type CrisisMode } from './crisis';
 import { deliveryDay } from './delivery';
@@ -310,7 +312,10 @@ export type Feature =
   // Фудкорт на третьем этаже (floors.ts, foodcourt.ts, 13.11): открывает этаж, когда не копит на помещение, точки —
   // по одной, своей точку ведёт, только если повар на смене (иначе сдаёт); ремонт — когда места кончились. Праздник
   // берёт, если товар есть; на жалобу — наводит порядок. Третий стоит на втором: без него сначала открывает второй.
-  | 'foodcourt';
+  | 'foodcourt'
+  // Улица (estate.ts, 13.11): помещения на задней улице из лишних денег — после района (с features.hood), арендатор —
+  // кто платит больше всех.
+  | 'estate';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -451,7 +456,10 @@ export function simulate({
   // после прогона — прежнее зерно.
   const bigDaySeedBefore = bigDaySeed();
   setBigDaySeed(seed);
-  let state = ensurePlan(newGame());
+  // Зерно магазина — своё на каждый прогон, как в игре (StoreScene). 14.11, аудит: без него все броски
+  // `state.seed ?? 1` (крыша, Жора, лотерея, подвал…) шли по одному расписанию — «40 прогонов» были одним.
+  // Хеш, а не сам seed: тесты с зашитыми маленькими зёрнами (3, 5, 7) не совпадают с прогонами.
+  let state = ensurePlan({ ...newGame(), seed: 1 + ((Math.imul(seed, 0x9e3779b1) >>> 0) % 1_000_000_000) });
   if (pet) state = grantPets(state, [petItem(pet)]);
   for (const id of PRODUCT_IDS) state = setPrice(state, id, Math.round((PRODUCTS[id].basePrice * priceMult) / 5) * 5);
   const out: SimDay[] = [];
@@ -707,6 +715,24 @@ export function simulate({
         state = buyHood(state, id) ?? state;
       }
     }
+    // Улица (estate.ts): помещения — из лишних денег, когда район благоустроен (или им не занимается) и не копит
+    // на помещение; в купленное пускает того, кто платит больше всех. 14.11, аудит: без этого прогон «со всем»
+    // копил деньги, которые в игре уходят на улицу.
+    if (features.estate && (!features.hood || !nextHood(state))) {
+      const lot = LOT_PRICES.findIndex((_, i) => !lotOf(state, i));
+      const saving = nextFor(state)?.cost ?? 0;
+      if (lot >= 0 && state.money >= LOT_PRICES[lot] + saving + reserve * 3) {
+        const bought = buyLot(state, lot);
+        if (bought) {
+          investments += LOT_PRICES[lot];
+          state = bought;
+        }
+      }
+      LOT_PRICES.forEach((_, i) => {
+        const kind = lotOf(state, i) && !shopIn(state, i) && [...SHOP_KINDS].sort((a, b) => SHOPS[b].rent - SHOPS[a].rent).find((k) => !LOT_PRICES.some((__, j) => shopIn(state, j) === k));
+        if (kind) state = lease(state, i, kind) ?? state;
+      });
+    }
     if (features.cat) {
       if (catOffer(state)) state = adoptCat(state, 'Барсик');
       state = feedCat(state) ?? state;
@@ -778,6 +804,8 @@ export function simulate({
     if (crisisAsk(state)) state = chooseCrisis(state, crisis) ?? state;
     // «Крыша»: как решено для прогона (в полиции дело без игрока уходит в архив — значит, пакости).
     if (racketAsk(state)) state = chooseRacket(state, racket) ?? state;
+    // 14.11, аудит: платящий соглашается и на «поднимаем ставку» — иначе прогон всю игру платил стартовую долю.
+    if (racket === 'pay' && echoesOf(state).list.some((e) => e.id === 'racketRaise' && e.due <= state.day)) state = answerRaise(state, 'racketRaise', 0) ?? state;
     const opened = districtNews(state);
     if (opened) {
       const saving = nextFor(state);
