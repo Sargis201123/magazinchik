@@ -7,7 +7,8 @@
 //    нарасхват, в жару куртки никому не нужны), продавца-консультанта и ремонта этажа;
 //  · сезон сменился — остатки старой коллекции либо распродаются за полцены (распродажа), либо пылятся на стойках
 //    и занимают места до своего сезона через год;
-//  · продавец-консультант этажа: платим каждый вечер, зато покупают заметно больше.
+//  · продавец-консультант этажа: платим каждый вечер, зато покупают заметно больше;
+//  · улучшения этажа (14.11, clothesUps.ts): витрины и примерочная — покупателей больше, бренды — бирка дороже.
 //
 // Всё — от зерна магазина и номера дня (как находки кота, cat.ts): перезапуск дня ничего не перекатывает, прогноз
 // утра честный, симулятор считает то же. Нет поля clothes — на втором этаже пусто (или этажа нет): всё как раньше.
@@ -17,7 +18,7 @@
 import type { StoreState } from './economy';
 import { monthInYear } from './calendar';
 import { weatherToday } from './crisis';
-import { floorOf } from './floors';
+import { floorBonus, floorOf } from './floors';
 import type { Weather } from './weather';
 
 export type Collection = 'warm' | 'rain' | 'summer';
@@ -144,6 +145,15 @@ export const oldStock = (state: StoreState): number => stockTotal(clothesOf(stat
 /** Сколько вещей ещё влезет на стойки. */
 export const freePlaces = (state: StoreState): number => Math.max(0, rackPlaces(state) - stockTotal(clothesOf(state)));
 
+/**
+ * Цена на бирке с учётом улучшения «Бренды» (clothesUps.ts, 14.11): вещь той же коллекции, но дороже. Уценка
+ * прошлых сезонов — половина этой цены. Сцена этажа и меню берут цену отсюда же — касса этажа и вечер сходятся.
+ */
+export const tagPrice = (state: StoreState, id: Collection): number => Math.round(COLLECTION_DEFS[id].price * (1 + floorBonus(state, 'second', 'price')));
+export const salePrice = (state: StoreState, id: Collection): number => Math.round(tagPrice(state, id) * SALE_OFF);
+/** Во сколько раз улучшения этажа (витрины — гостей наверх больше, примерочная — вещь берут чаще) умножают покупателей. */
+export const upsBoost = (state: StoreState): number => (1 + floorBonus(state, 'second', 'guests')) * (1 + floorBonus(state, 'second', 'buyers'));
+
 /** Цена партии текущей коллекции (или сколько влезет, если мест меньше партии). */
 export function batchSize(state: StoreState): number {
   return Math.min(BATCH, freePlaces(state));
@@ -182,10 +192,10 @@ export function clothesPlan(state: StoreState, guests: number): ClothesDay | nul
   const c = clothesOf(state);
   if (!c || (!stockTotal(c) && !c.clerk)) return null;
   const coll = collectionFor(state.day);
-  const boost = (c.clerk ? CLERK_BOOST : 1) * ((floorOf(state, 'second')?.finish ?? 0) > 0 ? FINISH_BOOST : 1);
+  const boost = (c.clerk ? CLERK_BOOST : 1) * ((floorOf(state, 'second')?.finish ?? 0) > 0 ? FINISH_BOOST : 1) * upsBoost(state);
   const buyers = Math.round(Math.max(0, guests) * BUY_SHARE * weatherFit(coll, weatherToday(state)) * boost * (0.75 + 0.5 * roll(state, 1)));
   const sold = Math.min(c.stock?.[coll] ?? 0, buyers);
-  let income = sold * COLLECTION_DEFS[coll].price;
+  let income = sold * tagPrice(state, coll);
   // Распродажа: на скидку заглядывают свои покупатели — остатки уходят по старшинству коллекций.
   let sale = 0;
   if (c.sale) {
@@ -195,7 +205,7 @@ export function clothesPlan(state: StoreState, guests: number): ClothesDay | nul
       const n = Math.min(want, c.stock?.[id] ?? 0);
       want -= n;
       sale += n;
-      income += n * Math.round(COLLECTION_DEFS[id].price * SALE_OFF);
+      income += n * salePrice(state, id);
     }
   }
   return { coll, buyers, sold, sale, income, wage: c.clerk ? CLERK_WAGE : 0 };

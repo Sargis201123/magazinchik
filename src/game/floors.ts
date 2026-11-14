@@ -8,6 +8,7 @@
 
 import type { StoreState } from './economy';
 import { homeLevel, inZar } from './zarshop';
+import { CLOTHES_UPS } from './clothesUps';
 
 /** Этажи здания: подвал, второй (одежда, clothes.ts), третий (фудкорт, foodcourt.ts). Новый этаж — тип, FLOORS, модуль вида в scenes/floors/ и строка BUILD в floorView. */
 export type FloorId = 'basement' | 'second' | 'third';
@@ -167,6 +168,8 @@ export interface FloorUpgrade {
 
 /** Улучшения по этажам (порядок — как в меню). Пусто — у этажа их пока нет. Заполняют модули этажей. */
 export const FLOOR_UPGRADES: Record<FloorId, FloorUpgrade[]> = { basement: [], second: [], third: [] };
+// Второй этаж — одежда: витрины, примерочная, бренды (clothesUps.ts, 14.11).
+FLOOR_UPGRADES.second.push(...CLOTHES_UPS);
 
 const upgradeDef = (id: FloorId, up: string): FloorUpgrade | undefined => FLOOR_UPGRADES[id].find((u) => u.id === up);
 
