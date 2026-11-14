@@ -27,6 +27,8 @@ export interface DayReport {
   home?: number;
   /** День торговли в Заречье: спрос лавки у реки считаем по её дням (bakery.ts usualSales). */
   zar?: boolean;
+  /** Стаканчиков кофе за день: по ним район решает, не открыть ли коворкинг (districtPlots.ts, 13.11). */
+  coffees?: number;
 }
 
 export function addReport(state: StoreState, day: number, stats: DayStats, spoiled: Partial<Record<ProductId, number>>, dishSpoiled = 0): StoreState {
@@ -40,6 +42,7 @@ export function addReport(state: StoreState, day: number, stats: DayStats, spoil
     pricey: { ...(stats.pricey ?? {}) },
     missing: { ...(stats.missing ?? {}) },
     ...(state.zar?.at === 'zar' ? { zar: true } : {}),
+    ...(stats.coffees ? { coffees: stats.coffees } : {}),
     // Кухня работала: по этой строке повар «по спросу» и закупка знают, сколько порций берут.
     ...(stats.dishWanted !== undefined || dishSpoiled || stats.kitchenSpent
       ? { kitchen: { sold: stats.dishes ?? 0, wanted: stats.dishWanted ?? 0, spoiled: dishSpoiled, ...(stats.kitchenSpent ? { spent: stats.kitchenSpent } : {}) } }

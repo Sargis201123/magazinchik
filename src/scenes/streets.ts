@@ -18,7 +18,7 @@ import { yearTime } from '../game/calendar';
 import { activeAds } from '../game/ads';
 import { hasUpgrade } from '../game/upgrades';
 import { sunflowersPlanted } from '../game/drama';
-import { BUILDINGS, BUILDING_IDS, buildingStage, districtKey, isMatchDay, type BuildingId } from '../game/district';
+import { BUILDINGS, districtBuildings, districtKey, isMatchDay, type BuildingId } from '../game/district';
 import { COURIER_SPAN, freeStreetX, ICE_CART_SPAN, type StreetSpan } from './placement';
 import * as linesFx from './brandLines';
 import { WING_OUTER, type Layout } from './layout';
@@ -62,7 +62,7 @@ import { streetInfo } from '../platform/multiplayer';
 
 /** Здание по соседству; back — отступ от тротуара (у кафе перед ним веранда). */
 /** Особая крыша: вертолётная площадка, красный крест, бельё, солнечные панели (art/rooftops.py). */
-type RoofKit = 'office' | 'clinic' | 'dorm' | 'school';
+type RoofKit = Exclude<BuildingId, 'stadium'>;
 
 type Neighbor = { x: number; w: number; h: number; name: TextKey; label?: string; sign: number; awning: number; roof: number; neon: number; dark?: boolean; back?: number; roofKit?: RoofKit };
 
@@ -337,6 +337,9 @@ export function dressRoof(scene: StoreScene, n: Neighbor, y: number, h: number, 
     if (key === 'skylight') lighting.nightGlow(scene, scene.art(px, py, 'glow').setDisplaySize(26, 20).setTint(0xffd890), 0.7);
   };
   if (n.roofKit === 'office' && w >= 70 && h >= 60) put(cx, cy, 'roof_helipad', 32, 2.6);
+  // Здания участков (13.11): эмблема круга — как крест поликлиники, террасы и площадки — пошире.
+  if (n.roofKit === 'gym' || n.roofKit === 'wedding' || n.roofKit === 'canteen') put(cx, cy, `roof_${n.roofKit}`, 26, 3);
+  if (n.roofKit === 'cowork' || n.roofKit === 'kids') put(cx, cy, `roof_${n.roofKit}`, 40, 3);
   if (n.roofKit === 'clinic') put(cx, cy, 'roof_cross', 26, 3);
   if (n.roofKit === 'dorm') {
     put(cx - 6, cy - 12, 'roof_laundry', 30, 1.8);
@@ -822,9 +825,10 @@ export function buildAmbient(scene: StoreScene, next: Layout, top: number, left:
 }
 
 /**
- * Район растёт (district.ts): за дорогой — поликлиника, общежитие и школа слева от конкурента,
- * бизнес-центр и стадион справа. Пока строят — забор, кран и табличка «Скоро». Возвращает,
- * где стоят здания, чтобы сквер не сажал на них деревья.
+ * Район растёт (district.ts): за дорогой — два участка (там, где раньше по расписанию вставали поликлиника
+ * и общежитие) и школа слева от конкурента, бизнес-центр и стадион справа; третий участок — за аллеей
+ * парка, слева. Пока строят — забор, кран и табличка «Скоро». Возвращает, где стоят здания, чтобы сквер
+ * не сажал на них деревья.
  */
 export function buildDistrict(scene: StoreScene, next: Layout, top: number): { x: number; y: number; w: number; h: number }[] {
   scene.builtDistrict = districtKey(scene.state);
@@ -834,41 +838,53 @@ export function buildDistrict(scene: StoreScene, next: Layout, top: number): { x
   const leftEdge = -395;
   const w3 = Math.min(130, Math.floor((d - 88 - leftEdge - 20) / 3));
   const stadiumX = d + 222;
-  const spots: Record<BuildingId, { x: number; y: number; w: number; h: number; across: boolean }> = {
-    clinic: { x: leftEdge, y: across, w: w3, h: 116, across: true },
-    dorm: { x: leftEdge + w3 + 10, y: across, w: w3, h: 124, across: true },
+  const spots: Record<string, { x: number; y: number; w: number; h: number; across: boolean }> = {
+    plot1: { x: leftEdge, y: across, w: w3, h: 116, across: true },
+    plot0: { x: leftEdge + w3 + 10, y: across, w: w3, h: 124, across: true },
     school: { x: leftEdge + 2 * (w3 + 10), y: across, w: w3, h: 104, across: true },
     office: { x: d + 90, y: across, w: 120, h: 130, across: true },
     stadium: { x: stadiumX, y: across, w: Math.min(180, next.w + 395 - stadiumX), h: 128, across: true },
-  };
-  const looks: Record<Exclude<BuildingId, 'stadium'>, Omit<Neighbor, 'x' | 'w' | 'h' | 'name'>> = {
-    school: { sign: 0x3b5dc9, awning: 0xfeae34, roof: 0xf2d8a0, neon: 0xffe080 },
-    office: { sign: 0x262b44, awning: 0x5fcde4, roof: 0xb8c8d8, neon: 0x9cd8ff },
-    dorm: { sign: 0x733e39, awning: 0xc28569, roof: 0xe0c0a8, neon: 0xffb860 },
-    clinic: { sign: 0xe43b44, awning: 0xffffff, roof: 0xe8f0f0, neon: 0xff6070 },
+    // За аллеей парка (buildPark: аллея на top + 268), левее площади и клумб: фасадом к аллее.
+    plot2: { x: leftEdge, y: top + 268 + 20, w: w3, h: 110, across: true },
   };
   const rnd = new Phaser.Math.RandomDataGenerator(['district']);
   const areas: { x: number; y: number; w: number; h: number }[] = [];
-  for (const id of BUILDING_IDS) {
-    const stage = buildingStage(scene.state, id);
-    if (stage === 'none') continue;
-    const spot = spots[id];
+  for (const { id, spot: at, stage } of districtBuildings(scene.state)) {
+    const spot = spots[at];
+    if (!spot) continue;
     areas.push(spot);
     const name = t(`district.${id}` as TextKey);
     if (stage === 'site') {
-      buildSite(scene, spot, name);
+      buildSite(scene, spot, name, ROOF_BADGE[id]);
       continue;
     }
     if (id === 'stadium') {
       buildStadium(scene, spot, name);
       continue;
     }
-    drawNeighbor(scene, { ...looks[id], x: spot.x, w: spot.w, h: spot.h, name: 'district.school', label: name, roofKit: id }, spot.y + spot.h, rnd, true);
+    drawNeighbor(scene, { ...DISTRICT_LOOKS[id], x: spot.x, w: spot.w, h: spot.h, name: 'district.school', label: name, roofKit: id }, spot.y + spot.h, rnd, true);
     // У школы на тротуаре — флагшток.
     if (id === 'school') scene.art(spot.x + 8, spot.y + 4, 'flagpole').setOrigin(0.5, 1).setDepth(spot.y + 44);
   }
   return areas;
 }
+
+/** Цвета зданий района: вывеска, навес, кровля, неон. */
+const DISTRICT_LOOKS: Record<Exclude<BuildingId, 'stadium'>, Omit<Neighbor, 'x' | 'w' | 'h' | 'name'>> = {
+  school: { sign: 0x3b5dc9, awning: 0xfeae34, roof: 0xf2d8a0, neon: 0xffe080 },
+  office: { sign: 0x262b44, awning: 0x5fcde4, roof: 0xb8c8d8, neon: 0x9cd8ff },
+  dorm: { sign: 0x733e39, awning: 0xc28569, roof: 0xe0c0a8, neon: 0xffb860 },
+  clinic: { sign: 0xe43b44, awning: 0xffffff, roof: 0xe8f0f0, neon: 0xff6070 },
+  // Здания участков (13.11): цвет — по тому, что внутри.
+  gym: { sign: 0xf77622, awning: 0x3a4466, roof: 0xc8ccd8, neon: 0xffa040 },
+  wedding: { sign: 0xb55088, awning: 0xf6c6d6, roof: 0xf4e4ec, neon: 0xff8ad8 },
+  cowork: { sign: 0x265c42, awning: 0x63c74d, roof: 0xd8d0c0, neon: 0x9cff7a },
+  kids: { sign: 0x0099db, awning: 0xfee761, roof: 0xe8ecd0, neon: 0x6cd8ff },
+  canteen: { sign: 0x8f563b, awning: 0xe43b44, roof: 0xe0d0b8, neon: 0xffc070 },
+};
+
+/** Значок здания участка: он же на кровле и на щите «Здесь будет» у забора стройки (art/district_plots.py). */
+const ROOF_BADGE: Partial<Record<BuildingId, string>> = { gym: 'roof_gym', wedding: 'roof_wedding', cowork: 'roof_cowork', kids: 'roof_kids', canteen: 'roof_canteen', clinic: 'roof_cross', dorm: 'roof_laundry' };
 
 /**
  * Парк за домами напротив: аллея с фонарями и скамейками, пруд с утками и камышом, клумбы.
@@ -1155,8 +1171,8 @@ export function buildHood(scene: StoreScene, next: Layout, top: number): { x: nu
   return areas;
 }
 
-/** Стройка: забор, котлован, кран и табличка «Скоро: …». */
-export function buildSite(scene: StoreScene, a: { x: number; y: number; w: number; h: number; across: boolean }, name: string): void {
+/** Стройка: забор, котлован, кран и табличка «Скоро: …»; у стройки участка — щит со значком будущего здания. */
+export function buildSite(scene: StoreScene, a: { x: number; y: number; w: number; h: number; across: boolean }, name: string, badge?: string): void {
   const base = a.y + a.h;
   scene.add.rectangle(a.x, a.y, a.w, a.h, 0x8f563b).setOrigin(0).setDepth(-8);
   for (let i = 0; i < 6; i++) scene.add.rectangle(a.x + 10 + rnd(a.w - 30), a.y + 10 + rnd(a.h - 30), 14 + rnd(10), 8 + rnd(6), 0x733e39).setOrigin(0).setDepth(-7.9);
@@ -1183,6 +1199,14 @@ export function buildSite(scene: StoreScene, a: { x: number; y: number; w: numbe
     .setOrigin(0.5)
     .setResolution(scene.textRes(4))
     .setDepth(signY + 21);
+  // Щит «Здесь будет» за забором слева (13.11): по значку видно, что откроется, и с высоты.
+  if (badge) {
+    const bx = a.x + 23;
+    const by = a.y + 36;
+    // Щит вдвое крупнее обычного спрайта: с улицы читается, как вывеска.
+    scene.art(bx, by, 'site_board').setOrigin(0.5, 1).setScale(1).setDepth(by);
+    scene.art(bx, by - 21.5, badge).setScale(0.6).setDepth(by + 0.1);
+  }
   function rnd(n: number): number {
     return Math.floor(Math.random() * Math.max(1, n));
   }

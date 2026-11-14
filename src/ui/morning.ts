@@ -210,6 +210,8 @@ import { apprNews, apprOffer, apprWorry } from '../game/apprentice';
 import { apprCard, apprLines, apprOfferBox, apprOutBox, gradLines } from './apprentice';
 import { chooseRacket, racketAsk, racketNews, seeRacketNews, stopPaying } from '../game/racket';
 import { racketChoiceBox, racketLines, racketNewsBox } from './racket';
+import { plotNewsBox, plotSoonLine, plotWhy } from './districtPlots';
+import { plotNews, seePlotNews } from '../game/districtPlots';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { showSupport } from './support';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
@@ -851,6 +853,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('life', !zarHere && lifeNews(state));
     add('dream', dreamNews(state));
     add('staffEvent', staffEventDue(state));
+    add('plot', !zarHere && plotNews(state));
     add('district', !zarHere && districtNews(state));
     add('cat', catOffer(state));
     add('appr', apprOffer(state));
@@ -1954,6 +1957,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     box.append(
       el('b', '', t('district.title', { icon: b.icon, name })),
       el('p', '', t(`district.${id}.open` as TextKey)),
+      ...plotWhy(state, id),
       button(t('district.gift', { n: b.gift, d: OPENING_DAYS }), () => update(answerOpening(getState(), id, true), 'success'), 'ui-btn', state.money < b.gift),
       button(t('district.skip'), () => update(answerOpening(getState(), id, false)), 'ui-btn secondary'),
     );
@@ -1966,6 +1970,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const site = districtSite(state);
     const named = (id: BuildingId) => ({ icon: BUILDINGS[id].icon, name: t(`district.${id}` as TextKey) });
     if (site) out.push(el('div', 'ui-muted', t('district.site', { ...named(site.id), n: site.days })));
+    else out.push(...plotSoonLine(state));
     if (isMatchDay(state)) out.push(el('div', 'ui-note', t('district.match')));
     const boost = state.district?.boost;
     if (boost && boost.until >= state.day) out.push(el('div', 'ui-muted', t('district.boost', { ...named(boost.id), n: boost.until - state.day + 1 })));
@@ -2083,6 +2088,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return dreamBox(state, getState, update);
       case 'staffEvent':
         return staffEventBox(state);
+      case 'plot':
+        return plotNewsBox(state, () => update(seePlotNews(getState())));
       case 'district':
         return districtBox(state);
       case 'trick':
