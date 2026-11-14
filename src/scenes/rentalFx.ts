@@ -3,7 +3,8 @@
 // видно — по запасу. Днём прохожие подходят, берут вещь и уходят с ней: санки и ватрушку тянут за собой, зонт
 // раскрывают над головой, на самокате и велосипеде уезжают; погодя возвращают — вещь снова на стойке. Кто не
 // вернёт (столько, сколько посчитала игра на вечер), тот не приходит: место на стойке так и пустеет до утра.
-// Денег сцена не считает — их считает вечер (day.ts). В лёгкой графике — только стойка, без прохожих.
+// Денег сцена не считает — их считает вечер (day.ts). В лёгкой графике прохожих с вещами меньше: двое за день и
+// по одному на улице (13.11, автор: «в лёгком режиме — меньше прохожих с вещами»).
 
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
@@ -19,12 +20,11 @@ import * as camera from './camera';
 import * as persons from './persons';
 import { pitchSpot, sidewalkSpot } from './tenantsFx';
 
-/** Где на стойке стоит каждая вещь набора (от середины стойки и её низа; angle — прислонена к перекладине). */
+/** Где на стойке стоит каждая вещь набора (от середины стойки и её низа). */
 interface Slot {
   key: string;
   dx: number;
   dy: number;
-  angle?: number;
   /** Висит на крючке (верх картинки — на перекладине). */
   hang?: boolean;
 }
@@ -35,17 +35,20 @@ const SLOTS: Record<RentalKit, Slot[]> = {
     { key: 'rent_kick', dx: -9, dy: 1 },
     { key: 'rent_kick', dx: 3, dy: 1 },
   ],
+  // 13.11: санки, прислонённые стоймя, в мире читались красными закорючками — лежат стопкой, как на катке.
   winter: [
-    { key: 'rent_sled', dx: -9, dy: 0, angle: -80 },
-    { key: 'rent_sled', dx: -4, dy: 0, angle: -80 },
-    { key: 'rent_tube', dx: 6, dy: 0 },
-    { key: 'rent_tube', dx: 6, dy: -2.5 },
+    { key: 'rent_sled', dx: -7, dy: 0 },
+    { key: 'rent_tube', dx: 7.5, dy: 0 },
+    { key: 'rent_sled', dx: -7, dy: -2.5 },
+    { key: 'rent_tube', dx: 7.5, dy: -2.8 },
   ],
   rain: [-10, -6, -2, 2, 6, 10].map((dx) => ({ key: 'rent_umbrella', dx, dy: -10.5, hang: true })),
 };
-/** Сколько прохожих с вещами показать за день (остальные взяли «за кадром») и сколько на улице сразу. */
+/** Сколько прохожих с вещами показать за день (остальные взяли «за кадром») и сколько на улице сразу; в лёгкой — меньше. */
 const SHOWN_MAX = 5;
 const WALKERS = 2;
+const LITE_SHOWN = 2;
+const LITE_WALKERS = 1;
 /** Как часто к стойке подходит следующий и через сколько возвращают (мс времени игры). */
 const RENTER_EVERY = 6000;
 const BACK_AFTER: [number, number] = [11000, 19000];
@@ -99,7 +102,6 @@ export function applyRental(scene: StoreScene): void {
   SLOTS[kit].forEach((slot, i) => {
     const img = keep(scene.art(x + slot.dx, y + slot.dy, slot.key));
     img.setOrigin(0.5, slot.hang ? 0 : 1).setDepth(y + 0.1 + i * 0.01);
-    if (slot.angle) img.setAngle(slot.angle).setOrigin(0.5, 1).setPosition(x + slot.dx, y + slot.dy - 1);
     slots.push(img);
   });
   // Вывеска на козырьке: та же грифельная доска, что у торговца, надпись мелом.
@@ -128,18 +130,16 @@ export function applyRental(scene: StoreScene): void {
       scene.popup(x, y - 22, t('rental.tap', { icon: KIT_ICON[kit], n: plan.rented, stock: now.stock, max: RENTAL_CAP, sum: DEPOSITS[now.deposit].sum }), '#c8f0ff');
     }),
   );
-  if (scene.lite) return;
   const world = scene.worldGen;
   stops.push(
     scene.worldTimer(RENTER_EVERY, () => {
-      if (!scene.sys.isActive() || !scene.running || scene.worldGen !== world || walkers >= WALKERS) return;
+      if (!scene.sys.isActive() || !scene.running || scene.worldGen !== world || walkers >= (scene.lite ? LITE_WALKERS : WALKERS)) return;
       if (day !== scene.state.day) {
         day = scene.state.day;
         taken = 0;
       }
       const plan = rentalDay(scene.state, guestsToday(scene.state));
-      const shown = Math.min(plan?.rented ?? 0, SHOWN_MAX);
-      console.log('RENT plan', JSON.stringify(plan), taken, walkers);
+      const shown = Math.min(plan?.rented ?? 0, scene.lite ? LITE_SHOWN : SHOWN_MAX);
       if (!plan || taken >= shown) return;
       // Последние из показанных — те, кто не вернёт (сколько не вернут за день, столько и здесь, не больше).
       const keeps = taken >= shown - Math.min(plan.lost, shown);
@@ -206,7 +206,6 @@ async function renter(scene: StoreScene, item: RentalItem, x: number, y: number,
   // Путь вдоль улицы: пешком — по тротуару, на колёсах — краем дороги.
   const along = (to: boolean) => (ride ? { x: far(to), y: front + 2 } : { x: far(to), y: walkY });
   const guest = persons.makePerson(scene, far(fromLeft), walkY, look);
-  console.log('RENT spawn', guest.x, guest.y, x, y);
   await persons.walkVia(scene, guest, [{ x: x + side * 22, y: walkY }, { x: x + side * 4, y: front }]);
   if (!alive(guest)) return;
   persons.setFacing(guest, 'up');

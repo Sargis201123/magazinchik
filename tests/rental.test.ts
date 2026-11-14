@@ -24,8 +24,9 @@ import {
 import { guestsToday, nightCycle } from '../src/game/day';
 import { weatherFor } from '../src/game/weather';
 import { yearTime } from '../src/game/calendar';
-import { pendingTip } from '../src/game/tips';
+import { pendingTip, TIP_ICONS, type TipId } from '../src/game/tips';
 import { ru } from '../src/i18n/ru';
+import { simulate } from '../src/game/simulate';
 
 // Прокат у входа (rental.ts, 13.11): стойка, набор по погоде, деньги вечером, залог и пропавшие вещи.
 
@@ -220,7 +221,9 @@ describe('прокат: старые сохранения и мир', () => {
   });
 
   it('подсказка «Новое» — когда стойку можно поставить, и один раз', () => {
-    const early = shop({ day: RENTAL_FROM_DAY - 1, seenTips: ['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift'] });
+    // Все прочие карточки уже видены (их на main много) — остаётся только прокат.
+    const others = (Object.keys(TIP_ICONS) as TipId[]).filter((id) => id !== 'rental');
+    const early = shop({ day: RENTAL_FROM_DAY - 1, seenTips: others });
     expect(pendingTip(early)).toBeNull();
     expect(pendingTip({ ...early, day: RENTAL_FROM_DAY })).toBe('rental');
     expect(pendingTip({ ...early, day: RENTAL_FROM_DAY, seenTips: [...early.seenTips!, 'rental'] })).toBeNull();
@@ -254,4 +257,24 @@ describe('прокат: сохранение в телефоне', () => {
     saveGame(old);
     expect(loadGame()!.rental).toBeUndefined();
   });
+});
+
+describe('прокат: симулятор', () => {
+  // Стойка — приятная добавка, а не новая главная статья: к сотому дню денег чуть больше, не вдвое.
+  it('ставит стойку, докупает пропавшее и не ломает баланс', () => {
+    const features = { tenants: true, garden: true };
+    let base = 0;
+    let withRental = 0;
+    let earned = 0;
+    for (let seed = 1; seed <= 3; seed++) {
+      base += simulate({ days: 100, seed, features }).days.at(-1)!.money;
+      const run = simulate({ days: 100, seed, features: { ...features, rental: true } });
+      withRental += run.days.at(-1)!.money;
+      earned += run.final.rental?.earned ?? 0;
+      expect(run.final.rental).toBeTruthy();
+    }
+    expect(earned).toBeGreaterThan(0);
+    expect(withRental).toBeGreaterThan(base * 0.97);
+    expect(withRental).toBeLessThan(base * 1.25);
+  }, 60_000);
 });
