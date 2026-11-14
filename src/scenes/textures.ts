@@ -307,6 +307,10 @@ export const SPRITES = [
   'rent_tube_pull',
   'rent_umbrella',
   'rent_umbrella_open',
+  // Жители района (art/residents.py, game/residents.ts): грузовик с мебелью у подъезда, коробки, «Сдаётся» в окне.
+  'res_truck',
+  'res_boxes',
+  'res_rent',
   'yard_ground',
   'yard_ground_snow',
   'yard_fence',
@@ -393,6 +397,13 @@ export const SPRITES = [
   'roof_cross',
   'roof_laundry',
   'flagpole',
+  // Крыши зданий участков и щит «Здесь будет» на заборе стройки (art/district_plots.py, 13.11).
+  'roof_gym',
+  'roof_wedding',
+  'roof_cowork',
+  'roof_kids',
+  'roof_canteen',
+  'site_board',
   // Разные деревья и кусты сквера (art/flora.py) и их зимние варианты.
   'tree_birch',
   'tree_pine',
