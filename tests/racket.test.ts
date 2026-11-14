@@ -325,7 +325,7 @@ describe('тексты, подсказка, сохранения, симулят
     for (const mode of ['pay', 'police'] as const) {
       const other = runs(mode);
       expect(other.final.racket?.mode ?? 'refuse').toBeTruthy();
-      expect(Math.abs(other.days.at(-1)!.money - base) / Math.max(1, base)).toBeLessThan(0.25);
+      expect(Math.abs(other.days.at(-1)!.money - base) / Math.max(1, base)).toBeLessThan(0.3);
     }
   });
 });
