@@ -23,14 +23,17 @@ import { tutStep } from './tutorial';
 import { rng } from './random';
 import { SKIT_FROM } from './skits';
 
-export type CaseId = 'dog' | 'windows' | 'till' | 'crates';
+export type CaseId = 'dog' | 'windows' | 'till' | 'crates' | 'racket';
 /** Откуда улика: обронённый чек, запись камеры, находка (Бобик принёс или у порога), разговор у кассы. */
 export type ClueSrc = 'receipt' | 'camera' | 'find' | 'talk';
-/** Кто открыл дело: неделя сама или другая система (ломбард, «Крыша» — позже). */
+/** Кто открыл дело: неделя сама или другая система (ломбард, «Крыша» — racket.ts). */
 export type CaseOrigin = 'week' | 'pawn' | 'racket';
 export type CaseTone = 'great' | 'good' | 'wrong' | 'archived';
 
-/** Дела по порядку; кто пострадал, подозреваемые и улики — CASES в caseBoard.ts. */
+/**
+ * Дела недели по порядку; кто пострадал, подозреваемые и улики — CASES в caseBoard.ts. Дела «racket» тут нет:
+ * его открывает только «Крыша» (racket.ts), когда хозяин идёт в полицию, — неделя его сама не берёт.
+ */
 export const CASE_IDS: CaseId[] = ['dog', 'windows', 'till', 'crates'];
 /** Улик в каждом деле: по одной на день с понедельника по четверг (проверяет тест). */
 export const CLUES = 4;

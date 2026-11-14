@@ -19,6 +19,7 @@ import { adBoost } from './ads';
 import { WEATHER_EFFECTS } from './weather';
 import { crisisGuests, crisisMorning, crisisNight, weatherToday } from './crisis';
 import { goodwillGuests } from './goodwill';
+import { racketGuests, racketMorning } from './racket';
 import { endWar } from './war';
 import { eduardGuests, growEduard } from './eduard';
 import { afterBills } from './bankruptcy';
@@ -142,7 +143,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Ломбард (pawnshop.ts): уже утро — выкупили, не пришли, полиция за краденым, продажи с полки «Разное».
   // Дело недели (cases.ts): несданное — в архив, пропущенные улики — размытыми, в понедельник — новое.
   // Утро: доброе имя понемногу забывается, беда подводит итог или начинается новая (crisis.ts).
-  const next = crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income))));
+  // «Крыша» (racket.ts) — после утра дел: видит, чем кончилось дело в полиции, и не приходит в первое утро беды.
+  const next = racketMorning(crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income)))));
   return {
     ...night,
     state: next,
@@ -192,6 +194,8 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, crisisGuests) *
   // Доброе имя района (goodwill.ts): помнят, как магазин вёл себя в беду.
   homeOnly(state, goodwillGuests) *
+  // Мусор у входа от «крыши» (racket.ts): гости обходят.
+  homeOnly(state, racketGuests) *
   fairGuests(state.day) *
   weekGuests(state.day) *
   lightsGuests(state) *

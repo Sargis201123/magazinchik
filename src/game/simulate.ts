@@ -112,6 +112,7 @@ import { dayDemand } from './demand';
 import { buyLicense, hasLicense, LICENSE_PRICE, licenseLock } from './license';
 import { recordDay } from './achievements';
 import { answerCafe, cafeDeliver } from './cafe';
+import { chooseRacket, racketAsk, type RacketMode } from './racket';
 import { chooseCrisis, crisisAsk, crisisExtraItems, crisisGive, crisisTolerance, type CrisisMode } from './crisis';
 import { deliveryDay } from './delivery';
 import { buyLineTier, LINE_IDS, LINES, lineLock, lineUnitCost, nextLineCost, type LineId } from './lines';
@@ -202,6 +203,8 @@ export interface SimOptions {
   war?: WarAnswer;
   /** Как вести себя в беду района (crisis.ts): по умолчанию — держать обычные цены. */
   crisis?: CrisisMode;
+  /** Как ответить «крыше» (racket.ts): по умолчанию — отказать (две недели пакостей, потом тихо). */
+  racket?: RacketMode;
   /** Сколько закладок в печь игрок успевает за день и как часто забывает вынуть. */
   ovenBatches?: number;
   ovenBurn?: number;
@@ -392,6 +395,7 @@ export function simulate({
   features = {},
   war = 'wait',
   crisis = 'hold',
+  racket = 'refuse',
   ovenBatches = 3,
   ovenBurn = 0.1,
   adAlways,
@@ -723,6 +727,8 @@ export function simulate({
     }
     // Беда района: как решено для прогона (по умолчанию держит цены).
     if (crisisAsk(state)) state = chooseCrisis(state, crisis) ?? state;
+    // «Крыша»: как решено для прогона (в полиции дело без игрока уходит в архив — значит, пакости).
+    if (racketAsk(state)) state = chooseRacket(state, racket) ?? state;
     const opened = districtNews(state);
     if (opened) {
       const saving = nextFor(state);

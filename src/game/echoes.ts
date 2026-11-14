@@ -87,6 +87,10 @@ const ECHO_DEFS = {
   scarf: { icon: '🧣', skit: 'rain', who: 'ruslan', mood: 'happy', choices: once({ rating: 0.04 }) },
   dispatcher: { icon: '📞', skit: 'rain', who: 'boss', mood: null, choices: once({ boost: [-0.04, 4] }) },
   fired: { icon: '🌧', skit: 'rain', who: 'ruslan', mood: 'sad', choices: once({ rating: -0.02 }) },
+  // «Крыша» (racket.ts, 13.11): платил — через недели ставка выше (платить больше, хватит, в полицию: ответы
+  // разбирает racket.ts answerRaise); сдал банду — соседи благодарят.
+  racketRaise: { icon: '🕶', who: 'racket_tolik', mood: null, choices: [{ effect: {} }, { effect: {} }, { effect: {} }] },
+  racketThanks: { icon: '🤝', who: 'valya_happy', mood: 'happy', choices: once({ rating: 0.03, boost: [0.06, 4] }) },
 } satisfies Record<string, EchoDef>;
 
 export type EchoId = keyof typeof ECHO_DEFS;

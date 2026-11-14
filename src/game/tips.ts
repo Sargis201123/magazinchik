@@ -12,7 +12,7 @@ import { echoesOf } from './echoes';
 import { crisisToday } from './crisis';
 import { hasLicense } from './license';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'racket';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -70,6 +70,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['lottery', hasLottery],
   // Первое вложение в мечту соседа (dreams.ts): сразу после «Вложиться» — когда ждать новостей и где список.
   ['dreams', (s) => Boolean(s.dreams?.inv?.length)],
+  // «Крыша» (racket.ts): сразу после ответа — чего теперь ждать и когда путь можно будет сменить.
+  ['racket', (s) => Boolean(s.racket?.mode && !s.racket.end)],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -93,6 +95,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   crisis: '🤝',
   lottery: '🎟',
   dreams: '🌱',
+  racket: '🕶',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */
