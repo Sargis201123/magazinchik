@@ -276,6 +276,9 @@ export const SPRITES = [
   'pitch_pumpkins',
   'pitch_trees',
   'pitch_sign',
+  // Мечты соседей (art/dreams.py, game/dreams.ts): тележка Кости у входа и указатель к лодочной станции.
+  'dream_cart',
+  'dream_boat_sign',
   'vitrine_spring',
   'vitrine_summer',
   'vitrine_autumn',

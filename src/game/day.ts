@@ -43,6 +43,7 @@ import { careerMorning, careerNight } from './career';
 import { districtGuests } from './district';
 import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
+import { dreamGuests, dreamsNight } from './dreams';
 import { lotteryGuests, lotteryNight } from './lottery';
 import { tallyNight, type StaffRecord } from './staffStats';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
@@ -64,6 +65,8 @@ export interface NightSummary extends NightResult {
   branch: number;
   /** Аренда от арендаторов флигеля за день (tenants.ts). */
   rent: number;
+  /** Доля с Костиной тележки у входа за день (dreams.ts; 0 — тележки нет). */
+  cart: number;
   /** Сколько принёс Центр без игрока, пока он работал в Заречье (zarechye.ts; 0 — был в Центре). */
   home: number;
   /** Пройденный сегодня шаг сезонной недели (weeks.ts) или null. */
@@ -114,6 +117,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Арендаторы флигеля платят за день — тоже до счетов (tenants.ts).
   const rent = tenantsNight(s);
   s = rent.state;
+  // Сбывшаяся мечта Кости: тележка у входа, доля с неё — тоже до счетов (dreams.ts).
+  const cart = dreamsNight(s);
+  s = cart.state;
   // Вечерний тираж и решения города о лотереях (lottery.ts): премия за счастливый билет — тоже до счетов.
   s = lotteryNight(s);
   // Игрок в Заречье — гипермаркет в Центре торговал сам и тоже отдаёт доход до счетов (zarechye.ts).
@@ -145,6 +151,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
     rent: rent.income,
+    cart: cart.income,
     home: home.income,
     week: week.done,
     lines: lines.night,
@@ -193,6 +200,7 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, districtGuests) *
   homeOnly(state, hoodGuests) *
   homeOnly(state, tenantGuests) *
+  homeOnly(state, dreamGuests) *
   homeOnly(state, lotteryGuests) *
   homeOnly(state, dogGuests) *
   homeOnly(state, trickGuests) *

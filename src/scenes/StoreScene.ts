@@ -131,6 +131,7 @@ import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
 import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
+import * as dreamsFx from './dreamsFx';
 import * as starPets from './starPets';
 import * as deliveries from './deliveries';
 import * as food from './food';
@@ -1204,6 +1205,8 @@ export class StoreScene extends Phaser.Scene {
     this.lineObjs = [];
     this.lineTimers = [];
     linesFx.applyLines(this);
+    // Сбывшиеся мечты соседей (game/dreams.ts): тележка Кости у входа, указатель к лодочной станции.
+    dreamsFx.applyDreams(this);
     starPets.buildStarPet(this);
     morningFlow.noteNewProps(this, bought);
     // Пол — последним: тени ложатся от всей мебели, что уже стоит в зале и во флигеле.

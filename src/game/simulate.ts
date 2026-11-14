@@ -12,6 +12,7 @@ import { cook, cookBatch, cookRoundsPerDay, DISHES, DISH_IDS, kitchenWorking, se
 import { answerStaffEvent, eventCost } from './staffEvents';
 import { answerCeremony, answerOffer, bestBonus } from './career';
 import { answerTale, taleToday } from './tales';
+import { dreamNews, investDream, seeDream, skipDream } from './dreams';
 import { answerArc, arcDeliver, arcToday } from './arcs';
 import { answerOpening, BUILDINGS, districtNews } from './district';
 import { answerTrick, counterCost, trickToday } from './tricks';
@@ -707,6 +708,10 @@ export function simulate({
     }
     if (state.staffEvent) state = answerStaffEvent(state, state.money >= eventCost(state.staffEvent) + reserve * 2) ?? answerStaffEvent(state, false) ?? state;
     if (taleToday(state)) state = answerTale(state, 0) ?? answerTale(state, 1) ?? state;
+    // Мечта соседа (dreams.ts): вкладывается, если хватает с запасом и не копит на помещение; новость — читает.
+    const dream = dreamNews(state);
+    if (dream?.kind === 'ask') state = (canSplurge(dream.sum) && state.money >= dream.sum + reserve * 3 ? investDream(state, dream.id) : null) ?? skipDream(state, dream.id);
+    else if (dream) state = seeDream(state) ?? state;
     if (arcToday(state)) state = answerArc(state, 0) ?? answerArc(state, 1) ?? answerArc(state, 2) ?? state;
     // Открылось здание в районе — поздравляет, если деньги есть с запасом и не копит на расширение.
     // Козни конкурента: отвечает, если деньги есть с запасом и не копит на расширение; иначе жалуется (или молчит).

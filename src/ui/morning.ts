@@ -72,7 +72,7 @@ import {
   shelfKindOpen,
   roleOpen,
 } from '../game/economy';
-import { SUPPLIER_IDS, SUPPLIERS, unitPrice, type SupplierId, supplierOpen, badBatch, priceFor, supplierDiscount } from '../game/suppliers';
+import { SUPPLIER_IDS, SUPPLIERS, type SupplierId, supplierOpen, badBatch, priceFor, supplierDiscount } from '../game/suppliers';
 import { guestsGain, guestsToday } from '../game/day';
 import { buyKiosk, KIOSK_TIERS, kioskCount, kioskSlots, KIOSKS_BY_LEVEL, kioskTier, kioskTierIndex, laneGuests, nextKioskPrice, nextKioskTier, openRegisters, upgradeKiosks, withNextTill } from '../game/lanes';
 import {
@@ -272,6 +272,8 @@ import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '
 import { tryNudge } from './nudge';
 import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
+import { breadCut, dreamNews } from '../game/dreams';
+import { dreamBox, dreamsBox } from './dreams';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
 import { albumButton, showAlbum } from './album';
 import { freshCount } from '../game/collections';
@@ -839,6 +841,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('lottery', lotteryNews(state));
     add('tale', taleToday(state));
     add('life', !zarHere && lifeNews(state));
+    add('dream', dreamNews(state));
     add('staffEvent', staffEventDue(state));
     add('district', !zarHere && districtNews(state));
     add('cat', catOffer(state));
@@ -1470,6 +1473,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
           filters,
           ...productRows(now),
           el('div', 'ui-muted', `🤝 ${t('buy.discountNote', { p: Math.round(supplierDiscount(now) * 100) })}`),
+          // Сбылась мечта Ани (game/dreams.ts): хлеб дешевле — пусть видно, откуда скидка.
+          ...(breadCut(now) ? [el('div', 'ui-muted', `🥖 ${t('dream.anya.name')}: ${t('dream.perk.bread', { p: Math.round(breadCut(now) * 100) })}`)] : []),
           ...suppliers.map((sid) => supplierBox(sid, now)),
         );
       }),
@@ -1487,9 +1492,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       box.append(el('div', 'ui-muted', t('buy.needShelf', { shelf: kinds.map((k) => t(SHELF_KINDS[k].nameKey)).join(' / ') })));
       return box;
     }
-    const discount = supplierDiscount(state);
+    // Цены — как при покупке (priceFor): со скидкой постоянного и с дешёвым хлебом от Ани (dreams.ts).
+    const price = priceFor(state);
     const offers = PRODUCT_IDS.filter((pid) => canStock(state, pid))
-      .map((pid) => ({ pid, price: unitPrice(s, pid, discount) }))
+      .map((pid) => ({ pid, price: price(sid, pid) }))
       .filter((o): o is { pid: ProductId; price: number } => o.price !== null);
     box.append(el('div', 'ui-item-sub', offers.map((o) => `${PRODUCTS[o.pid].icon}${o.price}`).join('  ')));
     return box;
@@ -2055,6 +2061,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return taleBox(state);
       case 'life':
         return lifeBox(state);
+      case 'dream':
+        return dreamBox(state, getState, update);
       case 'staffEvent':
         return staffEventBox(state);
       case 'district':
@@ -4386,6 +4394,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     // Разделы свёрнуты: заголовок и строка-сводка, остальное — нажатием.
     const fold = (id: string, box: HTMLElement, summary?: string) => foldSection(`grow:${id}`, box, summary);
     const pets = petsBox(state, getState, update);
+    // Мечты соседей (game/dreams.ts): во что вложились и что это даёт — раздел появляется с первым вложением.
+    const dreams = inZar(state) ? null : dreamsBox(state);
     out.push(
       grow,
       fold('registers', registersBox(state), t('registers.count', { n: registerCount(state), max: registerSlots(state) })),
@@ -4393,7 +4403,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       fold('gear', gearBox(state)),
       fold('ads', adsBox(state)),
       decorBox(state),
-      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
+      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...(dreams ? [foldSection('grow:dreams', dreams.box, dreams.summary)] : []), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {

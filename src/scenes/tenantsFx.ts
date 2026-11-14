@@ -406,21 +406,27 @@ async function visit(scene: StoreScene): Promise<void> {
 
 // ---------- Сезонная площадка у входа (game/tenants.ts, pitchNow) ----------
 
-/**
- * Где встаёт торговец (x — середина прилавка): на нашем тротуаре у бордюра, ближе к входу, не у фонарного столба и не
- * на том, что уже стоит у входа — бак, будка, уголки своей марки (brandLines), ярмарочный лоток, лотки и музыканты
- * недели (weeks.ts). 11.11: в «Ярмарку урожая» фермер с лотком стоял прямо перед прилавком.
- */
-function pitchSpot(scene: StoreScene, top: number): { x: number; y: number } {
-  const d = scene.layout.door.x;
-  const state = scene.state;
-  // Фонари стоят через 72 от −100 (streets.ts): рядом со столбом тележку не ставим.
-  const nearLamp = (x: number) => Math.abs(((((x + 100) % 72) + 72) % 72) - 36) > 24;
+/** Фонари стоят через 72 от −100 (streets.ts): рядом со столбом тележку не ставим (и Костину — dreamsFx.ts). */
+export const nearLamp = (x: number): boolean => Math.abs(((((x + 100) % 72) + 72) % 72) - 36) > 24;
+
+/** Что сегодня занято на тротуаре у входа (x от двери d): то же видит и тележка Кости (dreamsFx.ts). */
+export function entranceBusy(state: StoreScene['state'], d: number): [number, number][] {
   const busy: [number, number][] = [...streetTaken(state, d), ...lineStreetSpots(state, d).spans, [-14, 14]];
   if (fairToday(state)) busy.push([-76, -40]);
   const week = weekFor(state.day)?.id;
   if (week === 'harvest') busy.push(...(fairToday(state) ? [] : ([[-76, -14]] as [number, number][])), [12, 26], [44, 108]);
   if (week === 'summer') busy.push([-70, -22]);
+  return busy;
+}
+
+/**
+ * Где встаёт торговец (x — середина прилавка): на нашем тротуаре у бордюра, ближе к входу, не у фонарного столба и не
+ * на том, что уже стоит у входа — бак, будка, уголки своей марки (brandLines), ярмарочный лоток, лотки и музыканты
+ * недели (weeks.ts). 11.11: в «Ярмарку урожая» фермер с лотком стоял прямо перед прилавком.
+ */
+export function pitchSpot(scene: StoreScene, top: number): { x: number; y: number } {
+  const d = scene.layout.door.x;
+  const busy = entranceBusy(scene.state, d);
   const half = 21;
   const free = (dx: number) => busy.every(([a, b]) => dx + half <= a || dx - half >= b);
   const dx = [-40, -52, 40, 52, -64, -88, 88, -112, 112, -136, 136].find((cx) => free(cx) && !nearLamp(d + cx)) ?? -40;

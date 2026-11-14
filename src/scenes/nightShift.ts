@@ -328,6 +328,8 @@ export function finishDay(scene: StoreScene): void {
   if (branch) extra.push([t('branch.summary'), t('branch.summaryValue', { n: branch })]);
   // Арендаторы флигеля (tenants.ts): аренда за день одной строкой.
   if (rent) extra.push([t('tenant.summary'), t('branch.summaryValue', { n: rent })]);
+  // Доля с Костиной тележки у входа (game/dreams.ts) — тоже строкой.
+  if (night.cart) extra.push([t('dream.cart.summary'), t('branch.summaryValue', { n: night.cart })]);
   // Работали в Заречье — гипермаркет в Центре торговал сам (zarechye.ts).
   if (home) extra.push([t('zar.summary.home'), t('branch.summaryValue', { n: home })]);
   // Своя марка на полках (lines.ts): сколько продали за день и что наделали за ночь.

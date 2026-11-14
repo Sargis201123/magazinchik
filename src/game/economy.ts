@@ -688,6 +688,8 @@ export interface StoreState {
   pets?: import('./pets').PetsState;
   /** Истории постоянных покупателей (tales.ts). */
   tales?: TalesState;
+  /** Мечты соседей (dreams.ts): во что вложились, кому отказали и когда была последняя карточка. */
+  dreams?: import('./dreams').DreamsState;
   /** Лицензия на пиво и сигареты (license.ts): с какого дня, нарушения, штрафы, последняя проверка. */
   license?: import('./license').LicenseState;
   /** Сценки дня (skits.ts): идущая история, законченные, прибавка гостей. */
