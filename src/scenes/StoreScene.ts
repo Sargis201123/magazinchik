@@ -182,6 +182,8 @@ export class StoreScene extends Phaser.Scene {
   builtHood = '';
   /** Арендаторы флигеля, с которыми построен мир (tenants.ts, tenantsLook). */
   builtTenants = '';
+  /** Что нарисовано у домов жителей (game/residents.ts residentsLook): число семей и фургон переезда. */
+  builtResidents = '';
   /** Сколько посетителей арендаторов сейчас идёт по залу (scenes/tenantsFx.ts). */
   tenantGuests = 0;
   /** «Бабушкина теплица» в мире (scenes/gardenFx.ts): её картинки, стадия, с которой нарисована, и где стоит. */

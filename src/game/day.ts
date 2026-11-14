@@ -19,6 +19,7 @@ import { adBoost } from './ads';
 import { WEATHER_EFFECTS } from './weather';
 import { crisisGuests, crisisMorning, crisisNight, weatherToday } from './crisis';
 import { goodwillGuests } from './goodwill';
+import { residentsGuests, residentsMorning } from './residents';
 import { endWar } from './war';
 import { eduardGuests, growEduard } from './eduard';
 import { afterBills } from './bankruptcy';
@@ -151,7 +152,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Ломбард (pawnshop.ts): уже утро — выкупили, не пришли, полиция за краденым, продажи с полки «Разное».
   // Дело недели (cases.ts): несданное — в архив, пропущенные улики — размытыми, в понедельник — новое.
   // Утро: доброе имя понемногу забывается, беда подводит итог или начинается новая (crisis.ts).
-  const next = crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income))));
+  // Жители района (residents.ts): в свой день район решает, въезжает ли кто-то или съезжает — по утреннему доброму имени.
+  const next = residentsMorning(crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income)))));
   return {
     ...night,
     state: next,
@@ -202,6 +204,8 @@ export const guestFactor = (state: StoreState): number =>
   homeOnly(state, crisisGuests) *
   // Доброе имя района (goodwill.ts): помнят, как магазин вёл себя в беду.
   homeOnly(state, goodwillGuests) *
+  // Жители района (residents.ts): семей в домах вдоль улицы больше или меньше, чем было.
+  homeOnly(state, residentsGuests) *
   fairGuests(state.day) *
   weekGuests(state.day) *
   lightsGuests(state) *

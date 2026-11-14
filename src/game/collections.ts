@@ -78,8 +78,8 @@ const HOLIDAY_ICONS: Record<GameHoliday | `live_${(typeof LIVE_THEMES)[number]}`
 };
 
 const SENDERS = ['grandma', 'valya', 'sonya', ...REGULARS.map((r) => r.id)] as const;
-const SENDER_ICONS: Record<string, string> = { grandma: '👵', valya: '🌸', sonya: '👧', petr: '🧓', sveta: '👩', kostya: '🧑', akhmed: '🧔', olga: '👓', misha: '🎒' };
-const FRIEND_ICONS: Record<string, string> = { petr: '🧓', sveta: '👩', kostya: '🧑', akhmed: '🧔', olga: '👓', misha: '🎒', cat: '🐱', bobik: '🐶' };
+const SENDER_ICONS: Record<string, string> = { grandma: '👵', valya: '🌸', sonya: '👧', petr: '🧓', sveta: '👩', kostya: '🧑', akhmed: '🧔', olga: '👓', misha: '🎒', nadya: '🍼' };
+const FRIEND_ICONS: Record<string, string> = { petr: '🧓', sveta: '👩', kostya: '🧑', akhmed: '🧔', olga: '👓', misha: '🎒', nadya: '🍼', cat: '🐱', bobik: '🐶' };
 const SHOP_ICONS = ['🏚', '🏠', '🏪', '🏬', '🏢', '🏙', '🏛'];
 
 export const COLLECTION_SETS: CollectionSet[] = [
@@ -99,7 +99,8 @@ export const COLLECTION_SETS: CollectionSet[] = [
         id,
         icon: SENDER_ICONS[id] ?? '✉️',
         nameKey: regular ? regular.nameKey : (`col.from.${id}` as TextKey),
-        ...(regular ? { hintKey: 'col.hint.cardsRegular' as TextKey, hintParams: { day: regular.from } } : id === 'sonya' ? { hintKey: 'col.hint.cardsSonya' as TextKey } : {}),
+        // Надя въезжает с переездом (residents.ts): у неё не день, а условие.
+        ...(regular?.movesIn ? { hintKey: 'col.hint.movesIn' as TextKey } : regular ? { hintKey: 'col.hint.cardsRegular' as TextKey, hintParams: { day: regular.from } } : id === 'sonya' ? { hintKey: 'col.hint.cardsSonya' as TextKey } : {}),
       };
     }),
   },
@@ -123,7 +124,7 @@ export const COLLECTION_SETS: CollectionSet[] = [
     icon: '🤝',
     coins: true,
     items: [
-      ...REGULARS.map((r) => ({ id: r.id, icon: FRIEND_ICONS[r.id] ?? '🙂', nameKey: r.nameKey, hintKey: 'col.hint.friendDay' as TextKey, hintParams: { day: r.from } })),
+      ...REGULARS.map((r) => ({ id: r.id, icon: FRIEND_ICONS[r.id] ?? '🙂', nameKey: r.nameKey, ...(r.movesIn ? { hintKey: 'col.hint.movesIn' as TextKey } : { hintKey: 'col.hint.friendDay' as TextKey, hintParams: { day: r.from } }) })),
       { id: 'cat', icon: FRIEND_ICONS.cat, nameKey: 'col.friend.cat', hintKey: 'col.hint.cat' },
       { id: 'bobik', icon: FRIEND_ICONS.bobik, nameKey: 'col.friend.bobik', hintKey: 'col.hint.bobik' },
     ],

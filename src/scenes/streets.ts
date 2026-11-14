@@ -54,6 +54,8 @@ import * as friendStreet from './friendStreet';
 import * as gardenFx from './gardenFx';
 import * as tenantsFx from './tenantsFx';
 import * as rentalFx from './rentalFx';
+import * as residentsFx from './residentsFx';
+import { residentsLook } from '../game/residents';
 import { townFlags } from '../game/town';
 import * as zarFx from './zarechye';
 import { inZar } from '../game/zarechye';
@@ -550,6 +552,8 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
     scene.art(door.x, top + 92, key).setOrigin(0.5, 0).setDepth(top + 92 + 88);
   }
   // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
+  // Дома жителей (residentsFx.ts) перестраиваются утром, если сменилось число семей или сегодня переезд.
+  scene.builtResidents = residentsLook(scene.state);
   const districtAreas = zar ? [...zarFx.buildRiver(scene, next, top, left, width), ...cars.buildParking(scene, next, top)] : [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildBackStreet(scene, next), ...buildHood(scene, next, top), ...friendStreet.buildFriendStreet(scene, top)];
   // Бабушкин двор слева от магазина держит своё место всегда: сквер не сажает туда деревья (и не тасует их, когда двор появляется).
   if (!zar) {
@@ -1431,12 +1435,18 @@ export function buildBackStreet(scene: StoreScene, next: Layout): { x: number; y
   g.fillStyle(0x5a6988, 1).fillRect(gateX, streetBottom, 40, 1);
   const areas = [{ x: x0, y: streetTop - BACK_ST.walk - 4, w, h: BACK_ST.h + 2 * BACK_ST.walk + 8 }];
   const rnd = new Phaser.Math.RandomDataGenerator(['homes']);
-  // Северная сторона — дома фасадом к улице (вниз), во всю ширину квартала.
+  // Северная сторона — дома фасадом к улице (вниз), во всю ширину квартала. Ближние к магазину — дома жителей
+  // района (residentsFx.ts, 13.11): пустые квартиры с «Сдаётся», в день переезда у подъезда фургон.
   const northBase = streetTop - BACK_ST.walk;
-  for (let x = -396, i = 0; x + HOME.w < next.w + 400; x += HOME.step, i++) {
-    home(scene, x, northBase - HOME.h, HOME.w, HOME.h, HOME_ROOFS[i % HOME_ROOFS.length], false, rnd);
+  const homesX: number[] = [];
+  for (let x = -396; x + HOME.w < next.w + 400; x += HOME.step) homesX.push(x);
+  const flats = residentsFx.flatsOf(scene, homesX, HOME.w, next.w / 2);
+  homesX.forEach((x, i) => {
+    const f = flats.get(x);
+    home(scene, x, northBase - HOME.h, HOME.w, HOME.h, HOME_ROOFS[i % HOME_ROOFS.length], false, rnd, f?.empty);
+    if (f?.moving) residentsFx.moving(scene, x + HOME.w / 2, northBase - 12, northBase + BACK_ST.walk / 2, streetTop + 9);
     areas.push({ x: x - 6, y: northBase - HOME.h - 12, w: HOME.w + 12, h: HOME.h + 12 });
-  }
+  });
   // Южная сторона, слева от парковки (над флигелем) — дома фасадом к улице (вверх), до флигеля не доходят.
   const southTop = streetBottom + BACK_ST.walk;
   const southH = Math.min(HOME.h, -WALL_CLEAR - southTop);
@@ -1461,7 +1471,7 @@ const WALL_CLEAR = 30;
  * Жилой дом сверху: скатная черепичная крыша (hipRoof), узкий фасад к улице с окнами и дверью, перед ним
  * палисадник с заборчиком и дорожкой к тротуару. faceUp — фасад сверху (дом к югу от улицы).
  */
-function home(scene: StoreScene, x: number, y: number, w: number, h: number, roof: number, faceUp: boolean, rnd: Phaser.Math.RandomDataGenerator): void {
+function home(scene: StoreScene, x: number, y: number, w: number, h: number, roof: number, faceUp: boolean, rnd: Phaser.Math.RandomDataGenerator, empty?: boolean[]): void {
   const yard = 12;
   const front = faceUp ? y + yard : y + h - yard - FACADE_H;
   const roofY = faceUp ? front + FACADE_H : y;
@@ -1477,13 +1487,20 @@ function home(scene: StoreScene, x: number, y: number, w: number, h: number, roo
   const doorX = x + w / 2;
   f.fillStyle(0x733e39, 1).fillRect(doorX - 3, front + 2, 6, FACADE_H - 2);
   f.fillStyle(0xfeae34, 1).fillRect(doorX + 1.5, front + 5, 1, 1);
-  for (const dx of [-28, -15, 15, 28]) {
+  // Квартиры жителей (residentsFx.ts): пустая — тёмное стекло и листок «Сдаётся», вечером не светится.
+  residentsFx.HOME_WINDOWS.forEach((dx, i) => {
     const wx = doorX + dx;
+    const from = rnd.frac() * 0.6;
     f.fillStyle(0xffffff, 1).fillRect(wx - 4, front + 2, 8, 6);
+    if (empty?.[i]) {
+      f.fillStyle(0x3a4466, 1).fillRect(wx - 3, front + 3, 6, 4);
+      residentsFx.rentSign(scene, wx, front + 5);
+      return;
+    }
     f.fillStyle(0x4b6a9c, 1).fillRect(wx - 3, front + 3, 6, 4);
     f.fillStyle(0xa8c8e8, 1).fillRect(wx - 3, front + 3, 2, 1);
-    lighting.nightGlow(scene, scene.add.rectangle(wx, front + 5, 6, 4, 0xffc870).setDepth(-2.7), 0.85, undefined, { from: rnd.frac() * 0.6 });
-  }
+    lighting.nightGlow(scene, scene.add.rectangle(wx, front + 5, 6, 4, 0xffc870).setDepth(-2.7), 0.85, undefined, { from });
+  });
   // Палисадник: газон потемнее, заборчик, дорожка от двери к тротуару, куст.
   const yardY = faceUp ? y : y + h - yard;
   const p = scene.add.graphics().setDepth(-9.42);

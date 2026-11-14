@@ -12,6 +12,7 @@ import { saveGame } from '../game/save';
 import { branchLook } from '../game/branch';
 import { hoodLook } from '../game/hood';
 import { tenantsLook } from '../game/tenants';
+import { residentsLook } from '../game/residents';
 import { streetKey } from '../game/street';
 import { fetchStreet, streetInfo } from '../platform/multiplayer';
 import { t } from '../i18n';
@@ -214,7 +215,7 @@ export function showMorning(scene: StoreScene): void {
   scene.giftRebuild = false;
   // Утро: зал больше не закрыт — перестройка ниже зажжёт лампы, сумрак ритуала закрытия снят (lightsOn зажжёт ряды).
   lighting.hallOff(scene, -Infinity);
-  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
+  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || residentsLook(scene.state) !== scene.builtResidents || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   cars.refillParking(scene);
   scene.updateLighting(0);
   nightShift.openShop(scene);

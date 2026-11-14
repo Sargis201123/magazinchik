@@ -295,6 +295,10 @@ export const SPRITES = [
   'rent_tube_pull',
   'rent_umbrella',
   'rent_umbrella_open',
+  // Жители района (art/residents.py, game/residents.ts): грузовик с мебелью у подъезда, коробки, «Сдаётся» в окне.
+  'res_truck',
+  'res_boxes',
+  'res_rent',
   'yard_ground',
   'yard_ground_snow',
   'yard_fence',

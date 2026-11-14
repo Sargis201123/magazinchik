@@ -787,6 +787,8 @@ export interface StoreState {
   crisisEnd?: import('./crisis').CrisisEnd;
   /** Доброе имя района −100…100 (goodwill.ts); нет поля — 0. */
   goodwill?: number;
+  /** Жители района (residents.ts): сколько семей, последний переезд, кто из постоянных уехал или въехал. Нет поля — 12 семей. */
+  residents?: import('./residents').ResidentsState;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */

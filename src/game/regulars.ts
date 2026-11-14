@@ -8,7 +8,7 @@ import { perceivedBase } from './endless';
 import { sellableProducts, type ProductId, type StoreState } from './economy';
 import { goodwillGrudge } from './goodwill';
 
-export type RegularId = 'petr' | 'sveta' | 'kostya' | 'akhmed' | 'olga' | 'misha';
+export type RegularId = 'petr' | 'sveta' | 'kostya' | 'akhmed' | 'olga' | 'misha' | 'nadya';
 /** Жители Заречья (zarechye.ts): ходят только в лавку у реки, знакомятся по дням, сыгранным там. */
 export type ZarRegularId = 'nina' | 'yegor' | 'stepan' | 'lida' | 'tolik';
 
@@ -38,6 +38,8 @@ export interface Regular {
   every: number;
   /** С какого дня начинает ходить (знакомимся постепенно). */
   from: number;
+  /** Живёт не здесь с начала, а въезжает с переездом (residents.ts): до того его в районе нет. */
+  movesIn?: boolean;
   look: RegularLook;
 }
 
@@ -102,6 +104,18 @@ export const REGULARS: (Regular & { id: RegularId })[] = [
     every: 0.6,
     from: 180,
     look: { shirt: 0xfeae34, skin: 0xeec39a, pants: 0x3a4466, hair: 0x733e39, style: 'short', kid: true, bag: 'backpack', bagTint: 0xe43b44 },
+  },
+  {
+    // Надя, мама троих детей (13.11, residents.ts): въезжает в район, когда району у нас хорошо. Молоко — на всю ораву.
+    id: 'nadya',
+    nameKey: 'regular.nadya',
+    habitKey: 'regular.nadya.habit',
+    favorite: 'milk',
+    tolerance: 1.1,
+    every: 0.7,
+    from: 30,
+    movesIn: true,
+    look: { shirt: 0x63c74d, skin: 0xf2c9a0, pants: 0x5a6988, hair: 0xb86f50, style: 'ponytail', bag: 'bag', bagTint: 0xfeae34, stroller: 0x0099db },
   },
 ];
 
@@ -180,8 +194,17 @@ export function regularState(state: StoreState, id: RegularId | ZarRegularId): {
   return state.regulars?.[id] ?? { loyalty: START_LOYALTY, awayUntil: 0 };
 }
 
-/** Уже знакомы (пора ходить по дням). */
-export const met = (state: StoreState, r: Regular): boolean => (ZAR_REGULARS.some((z) => z.id === r.id) ? (state.zar?.played ?? 0) >= r.from : state.day >= r.from);
+/** Уехал из района (residents.ts): не заходит, пока не вернётся. */
+export const movedOut = (state: StoreState, id: RegularId | ZarRegularId): boolean => Boolean(state.residents?.gone?.includes(id as RegularId));
+
+/**
+ * Уже знакомы (пора ходить по дням). 13.11: уехавший из района (residents.ts) — уже нет; кто въезжает с переездом
+ * (movesIn) — только после переезда. От met зависят и мечты, и хроники, и беда района — все сразу видят, кто здесь живёт.
+ */
+export const met = (state: StoreState, r: Regular): boolean =>
+  ZAR_REGULARS.some((z) => z.id === r.id)
+    ? (state.zar?.played ?? 0) >= r.from
+    : state.day >= r.from && !movedOut(state, r.id) && (!r.movesIn || Boolean(state.residents?.came?.includes(r.id as RegularId)));
 
 /** Кто может прийти сегодня: знакомы, не в обиде, и любимый товар здесь вообще продаётся. В Заречье — свои жители. */
 export function regularsToday(state: StoreState): Regular[] {

@@ -4,7 +4,7 @@
 // подрастает и ходит за соком сам. Новость приходит утром: можно сделать подарок (доверие растёт
 // сильнее) или просто поздравить. События по дням игры; кто начал давно — видит уже прожитое.
 
-import { MAX_LOYALTY, regularById, regularState, type Regular, type RegularId, type RegularLook, type ZarRegularId } from './regulars';
+import { MAX_LOYALTY, movedOut, regularById, regularState, type Regular, type RegularId, type RegularLook, type ZarRegularId } from './regulars';
 import type { StoreState } from './economy';
 import type { TextKey } from '../i18n/ru';
 
@@ -45,7 +45,8 @@ const happened = (state: StoreState, id: string): boolean => state.day >= LIFE.f
 /** Новость утра: недавнее событие, которое ещё не видели (давние — уже прожиты, без новости). */
 export function lifeNews(state: StoreState): LifeEvent | null {
   const seen = state.lifeSeen ?? [];
-  return LIFE.find((e) => e.day <= state.day && state.day - e.day <= LIFE_NEWS_DAYS && !seen.includes(e.id)) ?? null;
+  // Уехавший из района (residents.ts, 13.11) — его новостей мы уже не узнаём.
+  return LIFE.find((e) => e.day <= state.day && state.day - e.day <= LIFE_NEWS_DAYS && !seen.includes(e.id) && !e.who.some((id) => movedOut(state, id))) ?? null;
 }
 
 /** Ответ на новость: подарок (дороже, доверие +2) или поздравить (+1). */
@@ -76,6 +77,8 @@ export function livedRegular(state: StoreState, r: Regular): Regular {
 export function companionOf(state: StoreState, id: RegularId | ZarRegularId): { look: RegularLook; regular?: RegularId } | null {
   if (happened(state, 'petr_olga') && (id === 'petr' || id === 'olga')) {
     const other: RegularId = id === 'petr' ? 'olga' : 'petr';
+    // Второй уехал из района (residents.ts) — заходит один.
+    if (movedOut(state, other)) return null;
     return { look: livedRegular(state, regularById(other)).look, regular: other };
   }
   if (id === 'kostya' && happened(state, 'kostya_wedding')) return { look: KOSTYA_WIFE };
