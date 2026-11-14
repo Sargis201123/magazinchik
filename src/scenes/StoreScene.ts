@@ -474,6 +474,9 @@ export class StoreScene extends Phaser.Scene {
   /** Мусор, за которым уже кто-то пошёл. */
   claimedTrash = new Set<Phaser.GameObjects.Image>();
   workers = new Map<StaffRole, Worker>();
+  /** Ученик в зале и пакет у него на кассе (scenes/apprentice.ts). */
+  appr?: Phaser.GameObjects.Container;
+  apprBag?: Phaser.GameObjects.Image;
   /** Смена номера останавливает циклы работы старых сотрудников. */
   staffGen = 0;
   toiletDirt = 0;

@@ -58,6 +58,8 @@ export const SPRITES = [
   // Касса в ритме (art/till_rhythm.py, scenes/tillBelt.ts): окно сканера на ленте, спокойное и «жми!».
   'belt_window',
   'belt_window_hot',
+  // Ученик (art/apprentice.py): бумажный пакет, который он пакует на кассе.
+  'appr_bag',
   // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
   'tip_jar',
   'jam_splat',

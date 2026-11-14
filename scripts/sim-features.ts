@@ -11,6 +11,7 @@ const only = process.argv[4];
 
 const scenarios: [string, Partial<SimOptions>][] = [
   ['кот', { features: { cat: true } }],
+  ['ученик', { features: { apprentice: true } }],
   ['карта лояльности', { features: { loyalty: true } }],
   ['новые отделы', { features: { departments: true } }],
   ['сладости у кассы', { features: { candy: true } }],

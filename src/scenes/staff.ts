@@ -58,6 +58,7 @@ import * as visitors from './visitors';
 import * as newcomer from './newcomer';
 import * as shelves from './shelves';
 import * as building from './building';
+import { syncAppr } from './apprentice';
 
 /** Как часто покупатель у пустой кассы зовёт продавца. */
 const CALL_EVERY_MS = 3000;
@@ -611,6 +612,8 @@ export function syncStaff(scene: StoreScene): void {
     if (fresh) void walkIn(scene, worker, gen).then(work);
     else work();
   }
+  // Ученик (game/apprentice.ts) — на сегодняшнее место, в своей форме.
+  syncAppr(scene, gen);
   // Новеньких встретили — в следующий раз они уже свои.
   if (scene.dayOpen) scene.newHires.clear();
   // Хозяин — за своей кассой (если не занят делом).
