@@ -55,6 +55,7 @@ import * as gardenFx from './gardenFx';
 import * as tenantsFx from './tenantsFx';
 import * as rentalFx from './rentalFx';
 import * as residentsFx from './residentsFx';
+import * as estateFx from './estateFx';
 import { residentsLook } from '../game/residents';
 import { townFlags } from '../game/town';
 import * as zarFx from './zarechye';
@@ -554,6 +555,9 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
   // Здания района (district.ts): стройки и готовые — на газоне за дорогой и за магазином.
   // Дома жителей (residentsFx.ts) перестраиваются утром, если сменилось число семей или сегодня переезд.
   scene.builtResidents = residentsLook(scene.state);
+  // Скупленная улица (estateFx.ts): помещения на задней улице и табличка на углу — тоже утром, если что-то сменилось.
+  estateFx.markBuilt(scene);
+  if (!zar) estateFx.buildPlate(scene, top);
   const districtAreas = zar ? [...zarFx.buildRiver(scene, next, top, left, width), ...cars.buildParking(scene, next, top)] : [...buildDistrict(scene, next, top), ...buildPark(scene, next, top), ...cars.buildParking(scene, next, top), ...buildBackStreet(scene, next), ...buildHood(scene, next, top), ...friendStreet.buildFriendStreet(scene, top)];
   // Бабушкин двор слева от магазина держит своё место всегда: сквер не сажает туда деревья (и не тасует их, когда двор появляется).
   if (!zar) {
@@ -1451,15 +1455,21 @@ export function buildBackStreet(scene: StoreScene, next: Layout): { x: number; y
   const southTop = streetBottom + BACK_ST.walk;
   const southH = Math.min(HOME.h, -WALL_CLEAR - southTop);
   if (southH >= 50) {
-    for (let x = lotLeft - 12 - HOME.w, i = 0; x > -400; x -= HOME.step, i++) {
-      home(scene, x, southTop, HOME.w, southH, HOME_ROOFS[(i + 2) % HOME_ROOFS.length], true, rnd);
+    // Первые этажи двух ближних к парковке домов с каждой стороны продаются (estateFx.ts, 13.11 «Скупать улицу»).
+    const leftXs: number[] = [];
+    const rightXs: number[] = [];
+    for (let x = lotLeft - 12 - HOME.w; x > -400; x -= HOME.step) leftXs.push(x);
+    for (let x = lotRight + 16; x + HOME.w < next.w + 400; x += HOME.step) rightXs.push(x);
+    const lots = inZar(scene.state) ? new Map<number, number>() : estateFx.lotHomes(leftXs, rightXs);
+    const southHome = (x: number, roof: number) => {
+      const lot = lots.get(x);
+      home(scene, x, southTop, HOME.w, southH, roof, true, rnd, undefined, lot === undefined ? undefined : estateFx.lotDark(scene, lot) ? 'dark' : 'open');
+      if (lot !== undefined) estateFx.dressLot(scene, lot, x + HOME.w / 2, southTop + 12, southTop);
       areas.push({ x: x - 6, y: southTop - 4, w: HOME.w + 12, h: southH + 16 });
-    }
+    };
+    leftXs.forEach((x, i) => southHome(x, HOME_ROOFS[(i + 2) % HOME_ROOFS.length]));
     // И справа от проезда к парковке.
-    for (let x = lotRight + 16, i = 0; x + HOME.w < next.w + 400; x += HOME.step, i++) {
-      home(scene, x, southTop, HOME.w, southH, HOME_ROOFS[(i + 4) % HOME_ROOFS.length], true, rnd);
-      areas.push({ x: x - 6, y: southTop - 4, w: HOME.w + 12, h: southH + 16 });
-    }
+    rightXs.forEach((x, i) => southHome(x, HOME_ROOFS[(i + 4) % HOME_ROOFS.length]));
   }
   return areas;
 }
@@ -1471,7 +1481,7 @@ const WALL_CLEAR = 30;
  * Жилой дом сверху: скатная черепичная крыша (hipRoof), узкий фасад к улице с окнами и дверью, перед ним
  * палисадник с заборчиком и дорожкой к тротуару. faceUp — фасад сверху (дом к югу от улицы).
  */
-function home(scene: StoreScene, x: number, y: number, w: number, h: number, roof: number, faceUp: boolean, rnd: Phaser.Math.RandomDataGenerator, empty?: boolean[]): void {
+function home(scene: StoreScene, x: number, y: number, w: number, h: number, roof: number, faceUp: boolean, rnd: Phaser.Math.RandomDataGenerator, empty?: boolean[], shop?: 'dark' | 'open'): void {
   const yard = 12;
   const front = faceUp ? y + yard : y + h - yard - FACADE_H;
   const roofY = faceUp ? front + FACADE_H : y;
@@ -1491,7 +1501,14 @@ function home(scene: StoreScene, x: number, y: number, w: number, h: number, roo
   residentsFx.HOME_WINDOWS.forEach((dx, i) => {
     const wx = doorX + dx;
     const from = rnd.frac() * 0.6;
-    f.fillStyle(0xffffff, 1).fillRect(wx - 4, front + 2, 8, 6);
+    if (shop !== 'open') f.fillStyle(0xffffff, 1).fillRect(wx - 4, front + 2, 8, 6);
+    // Помещение на продажу или без арендатора (estateFx.ts): окна первого этажа тёмные, вечером не горят.
+    // Лавка работает — вместо окон её витрины (их рисует estateFx.dressLot).
+    if (shop === 'open') return;
+    if (shop === 'dark') {
+      f.fillStyle(0x3a4466, 1).fillRect(wx - 3, front + 3, 6, 4);
+      return;
+    }
     if (empty?.[i]) {
       f.fillStyle(0x3a4466, 1).fillRect(wx - 3, front + 3, 6, 4);
       residentsFx.rentSign(scene, wx, front + 5);

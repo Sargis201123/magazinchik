@@ -795,6 +795,8 @@ export interface StoreState {
   goodwill?: number;
   /** Жители района (residents.ts): сколько семей, последний переезд, кто из постоянных уехал или въехал. Нет поля — 12 семей. */
   residents?: import('./residents').ResidentsState;
+  /** Скупленная улица (estate.ts): какие помещения наши и кто в них. Нет поля — ничего не куплено. */
+  estate?: import('./estate').EstateState;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */

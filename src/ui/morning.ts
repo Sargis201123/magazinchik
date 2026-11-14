@@ -287,6 +287,8 @@ import { breadCut, dreamNews } from '../game/dreams';
 import { dreamBox, dreamsBox } from './dreams';
 import { residentsNews } from '../game/residents';
 import { residentsBox, residentsLines } from './residents';
+import { estateBox, estateNewsBox, estateSummary } from './estate';
+import { estateNews } from '../game/estate';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
 import { albumButton, showAlbum } from './album';
 import { freshCount } from '../game/collections';
@@ -866,6 +868,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('life', !zarHere && lifeNews(state));
     add('dream', dreamNews(state));
     add('residents', residentsNews(state));
+    add('estate', estateNews(state));
     add('staffEvent', staffEventDue(state));
     add('district', !zarHere && districtNews(state));
     add('cat', catOffer(state));
@@ -2104,6 +2107,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       // Переезд в районе (game/residents.ts): въехали новые соседи или кто-то уехал.
       case 'residents':
         return residentsBox(state, getState, update);
+      // Вся улица выкуплена (game/estate.ts): табличка с названием магазина на столбе.
+      case 'estate':
+        return estateNewsBox(state, getState, update);
       case 'staffEvent':
         return staffEventBox(state);
       case 'district':
@@ -4500,7 +4506,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       fold('gear', gearBox(state)),
       fold('ads', adsBox(state)),
       decorBox(state),
-      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...(dreams ? [foldSection('grow:dreams', dreams.box, dreams.summary)] : []), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
+      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...estateBox(state, getState, update).map((b) => foldSection('grow:estate', b, estateSummary(state))), ...(dreams ? [foldSection('grow:dreams', dreams.box, dreams.summary)] : []), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
