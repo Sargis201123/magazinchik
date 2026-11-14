@@ -280,7 +280,7 @@ describe('серая схема: утро и подсказка', () => {
     const others = (Object.keys(TIP_ICONS) as TipId[]).filter((id) => id !== 'grey');
     expect(pendingTip({ ...state, seenTips: others })).toBe('grey');
     expect(pendingTip({ ...state, day: state.day + 1, seenTips: others, grey: { next: state.day + 99 } })).toBeNull();
-    expect(TIP_ICONS.grey).toBe('🕶');
+    expect(TIP_ICONS.grey).toBe('🦊');
   });
 });
 
