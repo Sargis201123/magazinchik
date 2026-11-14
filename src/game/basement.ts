@@ -13,7 +13,7 @@
 // в подвале пусто (или подвала нет): всё как раньше. В Заречье подвал Центра стоит закрытым.
 
 import type { StoreState } from './economy';
-import { floorOf } from './floors';
+import { FLOOR_UPGRADES, floorBonus, floorOf, type FloorUpgrade } from './floors';
 import { addGoodwill } from './goodwill';
 import { inZar } from './zarshop';
 
@@ -80,6 +80,23 @@ export const COLD_POWER = 100;
 /** «Серая» подсобка: на столько больше вещей в залоге у ломбарда (pawnSlots). */
 export const BACK_PAWN_SLOTS = 2;
 
+/**
+ * Улучшения подвала (14.11, автор: «и улучшения — всё как в основном зале»): три ступени одной линейки на общей основе
+ * этажей (floors.ts FLOOR_UPGRADES, state.floors.basement.up). Каждая видна внизу (scenes/floors/basementFloor.ts):
+ *  · неон и свет над автоматами — вечерняя выручка автоматов +20% (slotsPlan);
+ *  · вытяжка и ремонт стен — сырости и лужи нет, мамы с детьми обходят магазин на треть реже (basementGuests);
+ *  · охрана у лестницы (пост, охранник, камера) — облавы вдвое реже (raidChance); только после отделки подвала.
+ * Числа читаем через floorBonus по именам slots / moms / raid. Нет поля up (старое сохранение) — всё как раньше.
+ * Цены — как неделя-две вечерней выручки четырёх автоматов: окупается, но не даром.
+ */
+export const BASEMENT_UPS: FloorUpgrade[] = [
+  { id: 'neon', icon: '💡', art: 'bsm_ico_neon', price: 1500, effect: { slots: 0.2 } },
+  { id: 'vent', icon: '🌀', art: 'bsm_ico_fan', price: 3000, needs: 'neon', effect: { moms: 1 / 3 } },
+  { id: 'guard', icon: '🛡️', art: 'bsm_post', price: 4000, needs: 'vent', finish: 1, effect: { raid: 0.5 } },
+];
+// Список этажа заполняем на месте (splice, а не push): горячая перезагрузка модуля не задвоит строки в меню.
+FLOOR_UPGRADES.basement.splice(0, FLOOR_UPGRADES.basement.length, ...BASEMENT_UPS);
+
 /** Случайность подвала: зерно магазина, день и «соль» — у каждого броска своя (как у «крыши»). */
 function roll(state: StoreState, salt: number): number {
   let h = ((state.seed ?? 1) * 2654435761 + state.day * 2246822519 + salt * 3266489917) >>> 0;
@@ -139,13 +156,13 @@ export const coldPower = (state: StoreState): number => (hasPart(state, 'cold') 
 export const backSlots = (state: StoreState): number => (hasPart(state, 'back') ? BACK_PAWN_SLOTS : 0);
 
 /** Мамы с детьми обходят магазин с автоматами в подвале: гостей меньше. */
-export const basementGuests = (state: StoreState): number => 1 - MOMS_PER_SLOT * slotCount(state);
+export const basementGuests = (state: StoreState): number => 1 - MOMS_PER_SLOT * (1 - floorBonus(state, 'basement', 'moms')) * slotCount(state);
 
 /** Шанс облавы этим вечером (0 — автоматов нет или первая неделя). */
 export function raidChance(state: StoreState): number {
   const b = basementOf(state);
   if (!b?.slots || state.day - (b.since ?? state.day) < RAID_GRACE) return 0;
-  return RAID_BASE + RAID_PER_SLOT * b.slots;
+  return (RAID_BASE + RAID_PER_SLOT * b.slots) * (1 - floorBonus(state, 'basement', 'raid'));
 }
 
 /** Платят «крыше» (racket.ts): она берёт долю и с автоматов. */
@@ -160,7 +177,7 @@ export function slotsPlan(state: StoreState): { players: number; income: number;
   if (!b?.slots || inZar(state)) return null;
   const r = roll(state, 1);
   const players = b.slots * 2 + Math.floor(r * (b.slots * 2 + 1));
-  const income = Math.round((b.slots * slotIncome(state.level) * (0.7 + 0.6 * r)) / 10) * 10;
+  const income = Math.round((b.slots * slotIncome(state.level) * (0.7 + 0.6 * r) * (1 + floorBonus(state, 'basement', 'slots'))) / 10) * 10;
   return { players, income, share: racketPays(state) ? Math.round(income * RACKET_SLOT_SHARE) : 0 };
 }
 

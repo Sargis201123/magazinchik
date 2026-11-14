@@ -210,12 +210,15 @@ function basementRows(state: StoreState, getState: () => StoreState, update: Upd
     );
   }
   if (b.slots) actions.push(button(t('bsm.slot.sell', { n: Math.round(SLOT_COST * SLOT_RESALE) }), () => update(sellSlot(getState())), 'ui-chip'));
-  out.push(row('bsm_slot', t('bsm.slots', { n: b.slots, max }), notes, actions));
+  out.push(row('bsm_slot2', t('bsm.slots', { n: b.slots, max }), notes, actions));
   for (const part of PART_IDS) out.push(partRow(state, part, getState, update));
   return out;
 }
 
-/** Склад-холодильник и подсобка ломбарда: что дают и кнопка «Обустроить». */
+/**
+ * Склад-холодильник и подсобка ломбарда: что дают и кнопка «Обустроить». Картинки строк (и строки автоматов) —
+ * из нового рисунка подвала (art/basement_art.py, 14.11): в меню то же, что игрок видит внизу.
+ */
 function partRow(state: StoreState, part: BasementPart, getState: () => StoreState, update: Update): HTMLElement {
   const has = basementOf(state)?.parts?.includes(part);
   const cost = PARTS[part].cost;
@@ -224,5 +227,5 @@ function partRow(state: StoreState, part: BasementPart, getState: () => StoreSta
   const action = has
     ? el('span', 'ui-tag', t('bsm.part.on'))
     : button(`${cost} 💰`, () => update(buyPart(getState(), part), 'success'), 'ui-chip', state.money < cost);
-  return row(part === 'cold' ? 'bsm_cold' : 'bsm_back', t(part === 'cold' ? 'bsm.cold' : 'bsm.back'), [note], [action]);
+  return row(part === 'cold' ? 'bsm_cold2' : 'bsm_pawn', t(part === 'cold' ? 'bsm.cold' : 'bsm.back'), [note], [action]);
 }
