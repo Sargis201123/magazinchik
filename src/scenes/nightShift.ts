@@ -7,6 +7,7 @@ import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { PRODUCTS, billTotal, shelfFor, takeFromShelf, type DayStats, type StoreState } from '../game/economy';
 import { nightCycle } from '../game/day';
+import { KIT_ICON } from '../game/rental';
 import { rankName, rankOf } from '../game/endless';
 import { saveGame } from '../game/save';
 import { memberName, t, type TextKey } from '../i18n';
@@ -334,6 +335,14 @@ export function finishDay(scene: StoreScene): void {
     extra.push([t('van.summary'), vanResultText(night.van)]);
     track('van_trip', finishedDay, night.van.net);
   }
+  // Прокат у входа (rental.ts): сколько раз взяли и сколько денег; кто не вернул — залог остался у нас.
+  const rental = night.rental;
+  if (rental?.rented) {
+    const lost = rental.lost ? ` · ${t('rental.summaryLost', { n: rental.lost, kept: rental.kept })}` : '';
+    extra.push([t('rental.summary'), `${t('rental.summaryValue', { icon: KIT_ICON[rental.kit], n: rental.rented, sum: rental.income })}${lost}`]);
+  }
+  // Доля с Костиной тележки у входа (game/dreams.ts) — тоже строкой.
+  if (night.cart) extra.push([t('dream.cart.summary'), t('branch.summaryValue', { n: night.cart })]);
   // Работали в Заречье — гипермаркет в Центре торговал сам (zarechye.ts).
   if (home) extra.push([t('zar.summary.home'), t('branch.summaryValue', { n: home })]);
   // Своя марка на полках (lines.ts): сколько продали за день и что наделали за ночь.

@@ -12,6 +12,7 @@ import { cook, cookBatch, cookRoundsPerDay, DISHES, DISH_IDS, kitchenWorking, se
 import { answerStaffEvent, eventCost } from './staffEvents';
 import { answerCeremony, answerOffer, bestBonus } from './career';
 import { answerTale, taleToday } from './tales';
+import { dreamNews, investDream, seeDream, skipDream } from './dreams';
 import { answerArc, arcDeliver, arcToday } from './arcs';
 import { answerOpening, BUILDINGS, districtNews } from './district';
 import { answerTrick, counterCost, trickToday } from './tricks';
@@ -106,6 +107,7 @@ import { brewSeconds, cameraTheft, coffeePrice, entranceMud, fridgeLeak, gearAva
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from './bakery';
 import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
+import { APPR_SKILLS, APPR_TIP, apprOffer, apprPatience, apprStockPace, apprTipChance, praiseAppr, setApprPost, takeAppr, TIRED_FROM } from './apprentice';
 import { answerWar, warLeaves, type WarAnswer } from './war';
 import { dayDemand } from './demand';
 import { buyLicense, hasLicense, LICENSE_PRICE, licenseLock } from './license';
@@ -121,6 +123,7 @@ import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, next
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
 import { carryBonus, eyeTheft, ownerTiming } from './owner';
+import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
 import { rhythmSeconds } from './tillRhythm';
 import { buyVan, loadVan, planTrip, vanEvents, vanFuel, vanOpen, vanPrice, vanWant, VAN_EVENTS, VAN_PRICE } from './van';
 
@@ -269,10 +272,16 @@ export type Feature =
   | 'license'
   // Ломбард (pawnshop.ts): берёт вещь у гостя со спокойной приметой, если в кассе с запасом; суетливым отказывает.
   | 'pawn'
+  // Прокат у входа (rental.ts, 13.11): ставит стойку, когда не копит на помещение, и каждое утро докупает пропавшее;
+  // залог — средний (по умолчанию).
+  | 'rental'
   // Лотерея у кассы (lottery.ts): ставит стойку, когда есть запас; тираж и запреты — в nightCycle, как в игре.
   | 'lottery'
   // Выездная торговля (van.ts): покупает фургон, в дни событий докупает под выезд что там берут и грузит кузов.
-  | 'van';
+  | 'van'
+  // Ученик (apprentice.ts): берёт, когда просится; ставит по кругу на кассу, склад и в зал, раз в неделю —
+  // выходной, стипендию платит, хвалит, когда можно (так выпускник — друг).
+  | 'apprentice';
 
 /** В каком порядке разумный игрок докупает полки. */
 const SHELF_PRIORITY: Category[] = ['dairy', 'meat', 'produce', 'bakery', 'dairy', 'produce', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'bakery', 'produce', 'dairy', 'meat', 'produce', 'bakery'];
@@ -676,6 +685,14 @@ export function simulate({
         state = buyBed(state, bed) ?? state;
       }
     }
+    if (features.apprentice) {
+      if (apprOffer(state)) state = takeAppr(state);
+      const a = state.appr;
+      if (a) {
+        state = setApprPost(state, (a.worked ?? 0) + 1 >= TIRED_FROM ? 'rest' : APPR_SKILLS[state.day % APPR_SKILLS.length]) ?? state;
+        state = praiseAppr(state) ?? state;
+      }
+    }
     // Бобика симулятор не берёт: ночных воров больше нет (02.11), днём он только помогает поймать воришку.
     if (features.candy) {
       const next = nextRack(state);
@@ -710,6 +727,10 @@ export function simulate({
     }
     if (state.staffEvent) state = answerStaffEvent(state, state.money >= eventCost(state.staffEvent) + reserve * 2) ?? answerStaffEvent(state, false) ?? state;
     if (taleToday(state)) state = answerTale(state, 0) ?? answerTale(state, 1) ?? state;
+    // Мечта соседа (dreams.ts): вкладывается, если хватает с запасом и не копит на помещение; новость — читает.
+    const dream = dreamNews(state);
+    if (dream?.kind === 'ask') state = (canSplurge(dream.sum) && state.money >= dream.sum + reserve * 3 ? investDream(state, dream.id) : null) ?? skipDream(state, dream.id);
+    else if (dream) state = seeDream(state) ?? state;
     if (arcToday(state)) state = answerArc(state, 0) ?? answerArc(state, 1) ?? answerArc(state, 2) ?? state;
     // Открылось здание в районе — поздравляет, если деньги есть с запасом и не копит на расширение.
     // Козни конкурента: отвечает, если деньги есть с запасом и не копит на расширение; иначе жалуется (или молчит).
@@ -812,6 +833,17 @@ export function simulate({
     if (features.pawn) {
       const offer = pawnOffer(state);
       if (offer) state = (offer.tell === 'calm' && state.money >= offer.lent + reserve * 2 ? takePawn(state) : null) ?? refusePawn(state);
+    }
+    if (features.rental) {
+      if (!state.rental && state.money >= STAND_COST * 2 + reserve && canSplurge(STAND_COST)) {
+        const stand = buyStand(state);
+        if (stand) {
+          state = stand;
+          investments += STAND_COST;
+        }
+      }
+      const missing = RENTAL_CAP - (rentalOf(state)?.stock ?? RENTAL_CAP);
+      if (missing && state.money >= missing * ITEM_COST + reserve) state = restockRental(state, missing) ?? state;
     }
 
     // ---------- Утро: закупка ----------
@@ -989,10 +1021,11 @@ export function simulate({
     const dayGuests = Math.max(0, Math.round(guests * (0.85 + random() * 0.3)));
     // Один игрок не успевает всё: чем больше магазин, тем больше теряется без персонала.
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
-    let trips = tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level;
+    // Ученик на складе (apprentice.ts) сам носит коробки на полки — как грузчик на полставки.
+    let trips = (tripsPerDay ? tripsPerDay(state.level) : has('loader') ? 60 : 3 + state.level) + Math.round(apprStockPace(state) * 6);
     // С котом и радио в очереди ждут дольше — уходят реже. Климат, указатели, тележки и обаяние хозяина
     // убраны 02.11: из шести «терпений» остались два, что игрок замечает (docs/BALANCE.md).
-    const lossInQueue = (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / radioPatience(state);
+    const lossInQueue = (queueLoss ?? (hasCashier(state) ? 0.02 : 0.05 + 0.05 * state.level)) / catPatience(state) / radioPatience(state) / apprPatience(state);
     // Доставка на дом: звонки идут весь день, а здесь заказы забирают товар раньше покупателей
     // (осторожная оценка). Без менеджера и грузчика заказ собирает хозяин — это время не за кассой
     // (сменщик, если нанят, в это время стоит за его кассой).
@@ -1145,7 +1178,8 @@ export function simulate({
       // Сначала чек, потом шоколадка и стаканчик (extras списывает их из state): иначе чек затёр бы списание.
       const paid = checkout(state, cart, night ? NIGHT_MARKUP : 1);
       state = paid.state;
-      const extra = extras(night) + (extraRandom() < catTipChance(state) ? CAT_TIP : 0);
+      // Чаевые «за помощь» ученику в зале — свой генератор не трогаем, пока ученика в зале нет.
+      const extra = extras(night) + (extraRandom() < catTipChance(state) ? CAT_TIP : 0) + (!night && apprTipChance(state) > 0 && extraRandom() < apprTipChance(state) ? APPR_TIP : 0);
       state = { ...state, money: state.money + extra };
       const dish = dishExtra(night);
       stats.revenue += paid.total + extra + dish;

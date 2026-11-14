@@ -58,6 +58,8 @@ export const SPRITES = [
   // Касса в ритме (art/till_rhythm.py, scenes/tillBelt.ts): окно сканера на ленте, спокойное и «жми!».
   'belt_window',
   'belt_window_hot',
+  // Ученик (art/apprentice.py): бумажный пакет, который он пакует на кассе.
+  'appr_bag',
   // Активные моменты дня (art/moments.py): банка для чаевых и разбитая банка варенья.
   'tip_jar',
   'jam_splat',
@@ -276,10 +278,23 @@ export const SPRITES = [
   'pitch_pumpkins',
   'pitch_trees',
   'pitch_sign',
+  // Мечты соседей (art/dreams.py, game/dreams.ts): тележка Кости у входа и указатель к лодочной станции.
+  'dream_cart',
+  'dream_boat_sign',
   'vitrine_spring',
   'vitrine_summer',
   'vitrine_autumn',
   'vitrine_winter',
+  // Прокат у входа (art/rental.py, game/rental.ts): стойка, вещи на ней и в руках прохожих.
+  'rent_stand',
+  'rent_bike',
+  'rent_kick',
+  'rent_sled',
+  'rent_tube',
+  'rent_sled_pull',
+  'rent_tube_pull',
+  'rent_umbrella',
+  'rent_umbrella_open',
   'yard_ground',
   'yard_ground_snow',
   'yard_fence',

@@ -12,8 +12,9 @@ import { echoesOf } from './echoes';
 import { crisisToday } from './crisis';
 import { hasLicense } from './license';
 import { vanOpen } from './van';
+import { rentalOpen } from './rental';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'van';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'van';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -68,7 +69,13 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['echo', (s) => echoesOf(s).list.length > 0],
   // Лицензия на пиво и сигареты (license.ts): наутро после покупки — где товар и чего делать нельзя.
   ['license', hasLicense],
+  // Прокат у входа (rental.ts, 13.11): как только стойку можно поставить — где она и что решает залог.
+  ['rental', (s) => rentalOpen(s) || Boolean(s.rental)],
   ['lottery', hasLottery],
+  // Первое вложение в мечту соседа (dreams.ts): сразу после «Вложиться» — когда ждать новостей и где список.
+  ['dreams', (s) => Boolean(s.dreams?.inv?.length)],
+  // Ученик (apprentice.ts): как только взяли — в двух словах, чем его место отличается и от чего зависит доверие.
+  ['appr', (s) => Boolean(s.appr)],
   // Выездная торговля (van.ts, 13.11): с минимаркета в «Уголках» продаётся фургон — сказать, пока его нет.
   ['van', (s) => vanOpen(s) && !s.van],
 ];
@@ -91,8 +98,11 @@ export const TIP_ICONS: Record<TipId, string> = {
   echo: '🔁',
   license: '🔞',
   thief: '🕵️',
+  rental: '🛷',
   crisis: '🤝',
   lottery: '🎟',
+  dreams: '🌱',
+  appr: '🧢',
   van: '🚐',
 };
 
