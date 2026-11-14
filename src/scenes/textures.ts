@@ -462,6 +462,10 @@ export const SPRITES = [
   'lottery_stand_lucky',
   'lottery_ticket',
   'lottery_cake',
+  // «Крыша» (art/racket.py): трещины поверх витрины, осколки на тротуаре, мешки с мусором у двери.
+  'racket_crack',
+  'racket_shards',
+  'racket_trash',
   'icebox',
   'trolley',
   'boat',

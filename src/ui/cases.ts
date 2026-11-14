@@ -61,7 +61,7 @@ const SRC_ICON: Record<ClueSrc, string> = { receipt: '🧾', camera: '📹', fin
 
 /** Голос героя (высота «пика», пока банк слогов не скачан). */
 const PITCH: Record<string, number> = {
-  case_rosa: 640, case_zina: 600, case_gosha: 300, case_semyon: 260, case_valera: 340, police: 320, eduard: 240, farmer: 300,
+  case_rosa: 640, case_zina: 600, case_boris: 220, case_gosha: 300, case_semyon: 260, case_valera: 340, police: 320, eduard: 240, farmer: 300,
   skit_ruslan: 380, skit_fyodor: 260, skit_viktor: 340, skit_hoodie: 400, skit_lyosha: 420, skit_painter: 300, skit_karina: 640,
 };
 

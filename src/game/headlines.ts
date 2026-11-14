@@ -22,6 +22,8 @@ export const NEWS_IDS = [
   // Сегодня кончится: итог и начало конкурса, решение дня, сотрудники (церемония, филиал).
   // Ночных краж, увольнений от обиды и просьб о прибавке больше нет (02.11): старые id из очереди
   // в сохранении снимает normalizeNews.
+  // «Крыша» пришла (racket.ts, 13.11): платить, отказать или в полицию — ждёт ответа, как поворот сюжета.
+  'racketAsk',
   'contestResult',
   'contestAnnounce',
   // Беда района началась (crisis.ts): как торговать, пока она идёт (13.11).
@@ -33,6 +35,8 @@ export const NEWS_IDS = [
   'crisis',
   'pawn',
   'case',
+  // Чем кончилось с «крышей»: взяли, дело развалилось, отстали сами.
+  'racket',
   // Лотерея у кассы (lottery.ts, 13.11): счастливый билет или запрет — пока идут свои дни.
   'lottery',
   // Ученик открыл свою лавку (apprentice.ts): итог сезона учёбы — друг или конкурент.
@@ -64,6 +68,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   giant: 'main',
   zarCard: 'main',
   zarBoss: 'main',
+  racketAsk: 'main',
   contestResult: 'timed',
   contestAnnounce: 'timed',
   crisisAsk: 'timed',
@@ -79,6 +84,7 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   case: 'timed',
   lottery: 'timed',
   apprOut: 'timed',
+  racket: 'timed',
   tale: 'flavour',
   life: 'flavour',
   dream: 'flavour',

@@ -49,6 +49,9 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['лицензия на пиво и сигареты', { features: { license: true } }],
   // Прокат у входа (13.11): ставит стойку с третьей недели, средний залог, пропавшее докупает каждое утро.
   ['прокат по погоде', { features: { rental: true } }],
+  // «Крыша» (13.11): по умолчанию прогон отказывает; здесь — платить долю или идти в полицию (дело без игрока — в архив).
+  ['крыша: платить', { racket: 'pay' }],
+  ['крыша: в полицию', { racket: 'police' }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 

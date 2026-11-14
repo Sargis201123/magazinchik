@@ -98,7 +98,8 @@ describe('дело недели: календарь', () => {
     for (let seed = 1; seed < 20; seed++) expect([...caseOrder(seed)].sort()).toEqual([...CASE_IDS].sort());
     const firsts = new Set(Array.from({ length: 40 }, (_, i) => caseOrder(i + 1)[0]));
     expect(firsts.size).toBeGreaterThan(1);
-    expect([...CASE_IDS].sort()).toEqual(Object.keys(CASES).sort());
+    // Дело о «крыше» (racket.ts) — в CASES, но не в очереди недели: его открывает только поход в полицию.
+    expect([...CASE_IDS, 'racket'].sort()).toEqual(Object.keys(CASES).sort());
   });
 
   it('пятница — не раньше чем через 4 дня после открытия', () => {
@@ -282,7 +283,7 @@ describe('дело недели: очередь дел и другие сист�
 
 describe('дело недели: тексты и сохранения', () => {
   it('у каждого дела есть все тексты: рассказ, подозреваемые, улики, ответы', () => {
-    for (const id of CASE_IDS) {
+    for (const id of [...CASE_IDS, 'racket' as const]) {
       const def = CASES[id];
       const keys = [`case.${id}.title`, `case.${id}.victim`, `case.${id}.intro`, `case.${id}.thanks`];
       for (const sus of Object.keys(def.suspects)) keys.push(...['', '.hi', '.where', '.seen'].map((q) => `case.${id}.s.${sus}${q}`));
