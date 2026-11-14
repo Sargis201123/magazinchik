@@ -131,6 +131,7 @@ import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
 import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
+import * as dreamsFx from './dreamsFx';
 import * as starPets from './starPets';
 import * as deliveries from './deliveries';
 import * as food from './food';
@@ -148,6 +149,7 @@ import * as camera from './camera';
 import * as gardenFx from './gardenFx';
 import * as shelves from './shelves';
 import * as skitsFx from './skitsFx';
+import * as crisisFx from './crisisFx';
 import * as building from './building';
 import * as collections from './collections';
 
@@ -284,6 +286,9 @@ export class StoreScene extends Phaser.Scene {
   rainFx?: { rain: Phaser.GameObjects.Particles.ParticleEmitter; splash: Phaser.GameObjects.Particles.ParticleEmitter; base: number; puddles: (Phaser.GameObjects.Image | Phaser.GameObjects.Sprite)[]; ripple?: Phaser.GameObjects.Particles.ParticleEmitter; sheen?: Phaser.GameObjects.Rectangle };
   /** Дождь сегодня уже кончился: зонты закрыты, лужи сохнут. */
   rainStopped = false;
+  /** Беда района (crisisFx.ts): какая нарисована на улице и сколько первых гостей ещё бегут за водой. */
+  builtCrisis = '';
+  crisisRush = 0;
   /** Доля прошедшего дня (0 — утро, 1 — конец смены): солнце, туман, тени. */
   dayProgress = 0;
   /** Мусорный контейнер на улице (его трясёт мусоровоз). */
@@ -1025,6 +1030,8 @@ export class StoreScene extends Phaser.Scene {
         const interval =
           spawnIntervalToday(this.state) / (rush ? 2 : 1) / weeksFx.crowd(this) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : licenseRate(this.state, elapsed / DAY_SECONDS));
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
+        // Беда района: первые гости дня бегут за водой один за другим (crisisFx.ts).
+        if (this.crisisRush > 0 && !this.night && --this.crisisRush > 0) this.nextSpawn = crisisFx.RUSH_GAP;
       }
     } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here' && this.liveGuest?.phase !== 'here' && this.skit?.phase !== 'here') {
       this.endOfDay();
@@ -1198,6 +1205,8 @@ export class StoreScene extends Phaser.Scene {
     this.lineObjs = [];
     this.lineTimers = [];
     linesFx.applyLines(this);
+    // Сбывшиеся мечты соседей (game/dreams.ts): тележка Кости у входа, указатель к лодочной станции.
+    dreamsFx.applyDreams(this);
     starPets.buildStarPet(this);
     morningFlow.noteNewProps(this, bought);
     // Пол — последним: тени ложатся от всей мебели, что уже стоит в зале и во флигеле.

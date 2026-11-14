@@ -4,6 +4,7 @@
 
 import { buyChance, canPlace, CARRY, homemade, PRODUCT_IDS, PRODUCTS, shelfCapacity, shelfFree, shelveAll, productAvailable, seasonalDemand, sellableProducts, warehouseCapacity, warehouseCount, type Category, type ProductId, type StoreState } from './economy';
 import { perceivedBase, seasonFor } from './endless';
+import { crisisExtraItems, crisisTolerance } from './crisis';
 import { dayDemand } from './demand';
 import { bigDayDemand } from './bigday';
 import { bakeModeOf, bakeryWorking, stockOf, usualSales } from './bakery';
@@ -42,7 +43,8 @@ export function restockTarget(state: StoreState, pid: ProductId, guests: number)
   // Свою выпечку и банки своей марки специально не ищут — они не делят спрос с остальным.
   const pool = sellableProducts(state).filter((id) => !homemade(id));
   const total = pool.reduce((sum, id) => sum + weight(id), 0) || 1;
-  const modelled = guests * ITEMS_PER_GUEST * (weight(pid) / total) * buyChance(state.prices[pid], perceivedBase(state, pid));
+  // В беду района берут впрок и не торгуются за воду и хлеб (crisis.ts) — «Закупить нужное» это знает.
+  const modelled = guests * (ITEMS_PER_GUEST + crisisExtraItems(state)) * (weight(pid) / total) * buyChance(state.prices[pid], perceivedBase(state, pid) * crisisTolerance(state, pid));
   const usual = usualSales(state, pid) ?? 0;
   // Больше, чем встанет на полки (плюс пара походов со склада), не берём: лишнее лежит и портится,
   // а деньги нужны на расширение.

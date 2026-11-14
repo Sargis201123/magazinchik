@@ -29,6 +29,7 @@ import { homeLevel, inZar, ZAR_LEVEL_COST, ZAR_MAX_LEVEL, zarBillShare, zarAwayB
 export { homeLevel, inZar, ZAR_LEVEL_COST, ZAR_MAX_LEVEL, zarBillShare, zarAwayBill, zarNextLevel };
 import type { ZarRegularId } from './regulars';
 import { ensurePlan } from './day';
+import { ungouged } from './crisis';
 
 export type Where = 'home' | 'zar';
 
@@ -156,8 +157,9 @@ export function newZarShop(state: StoreState): ShopSlice {
   const slice = pick(fresh);
   return {
     ...slice,
-    // Цены — те же, что в Центре: игрок их уже подобрал.
-    prices: { ...fresh.prices, ...homeShop(state).prices },
+    // Цены — те же, что в Центре: игрок их уже подобрал. Но не «беда района» втридорога (crisis.ts):
+    // её ценники Центру вернут, а у новой лавки они остались бы навсегда.
+    prices: { ...fresh.prices, ...ungouged(homeShop(state).prices, state.crisis) },
     rating: 3.5,
     history: [],
     regulars: {},

@@ -615,6 +615,8 @@ export interface StoreState {
   ownerTill?: boolean;
   /** Стаканчики в кофейном уголке (coffee.ts). */
   cups?: number;
+  /** Лотерея у кассы (lottery.ts): с какого дня стоит стойка, проданные билеты, выигрыш и запрет. Нет поля — не куплена. */
+  lottery?: import('./lottery').LotteryState;
   /** Ценовая война с Эдуардом (war.ts). */
   war?: War;
   /** Кот магазина (cat.ts) и с какого дня снова предложить его оставить. */
@@ -686,6 +688,8 @@ export interface StoreState {
   pets?: import('./pets').PetsState;
   /** Истории постоянных покупателей (tales.ts). */
   tales?: TalesState;
+  /** Мечты соседей (dreams.ts): во что вложились, кому отказали и когда была последняя карточка. */
+  dreams?: import('./dreams').DreamsState;
   /** Лицензия на пиво и сигареты (license.ts): с какого дня, нарушения, штрафы, последняя проверка. */
   license?: import('./license').LicenseState;
   /** Сценки дня (skits.ts): идущая история, законченные, прибавка гостей. */
@@ -774,6 +778,11 @@ export interface StoreState {
   gear?: Partial<Record<GearId, number>>;
   /** Рейтинг доставки на дом 1..5 (delivery.ts); нет — 4 звезды. */
   deliveryRating?: number;
+  /** Беда района (crisis.ts): идёт сейчас — и чем кончилась прошлая (новость утром, пауза до следующей). */
+  crisis?: import('./crisis').CrisisState;
+  crisisEnd?: import('./crisis').CrisisEnd;
+  /** Доброе имя района −100…100 (goodwill.ts); нет поля — 0. */
+  goodwill?: number;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */

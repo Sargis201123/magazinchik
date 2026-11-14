@@ -28,6 +28,7 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['радио (ретро)', { features: { radio: true } }],
   ['радио (хиты) + сладости', { features: { radio: true, candy: true } }],
   ['сладости', { features: { candy: true } }],
+  ['лотерея у кассы', { features: { lottery: true } }],
   ['кофе + печь', { features: { coffee: true, oven: true } }],
   ['кофе + печь + оборудование', { features: { coffee: true, oven: true, gear: true } }],
   ['война: сравнять цену', { war: 'match' }],

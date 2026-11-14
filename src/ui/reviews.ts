@@ -1,13 +1,13 @@
 import { t } from '../i18n';
 import type { TextKey } from '../i18n/ru';
-import { isGood, type Review } from '../game/reviews';
+import { isGood, isNeutral, type Review } from '../game/reviews';
 import { button, el, openModal } from './dom';
 
 /** Карточки отзывов: звёзды, текст и кто написал. */
 export function reviewCards(reviews: Review[]): HTMLElement[] {
   const authors = t('review.authors').split(',');
   return reviews.map((r) => {
-    const card = el('div', `ui-review ${r.topic === 'quiet' ? '' : isGood(r.topic) ? 'good' : 'bad'}`);
+    const card = el('div', `ui-review ${isNeutral(r.topic) ? '' : isGood(r.topic) ? 'good' : 'bad'}`);
     card.append(
       el('div', 'ui-review-stars', '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars)),
       el('div', 'ui-review-text', `«${t(`review.${r.topic}.${r.variant}` as TextKey)}»`),

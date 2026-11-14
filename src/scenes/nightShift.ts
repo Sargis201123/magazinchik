@@ -43,6 +43,7 @@ import { BRAND_BATCH } from '../game/brand';
 import { sellWholesale, takeOutBread } from '../game/bakery';
 import { canWorkNight, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, startNight } from '../game/night';
 import { reviewsFor } from '../game/reviews';
+import { goodwillOf } from '../game/goodwill';
 import { lossAdvice } from '../game/losses';
 import { fpsSummary } from '../platform/quality';
 import { BOX_FROM_DAY, BOX_OPENS_DAY, firstDayGift, gentleDay, grannyBox, grannyStays, learningEvening, quietRating } from '../game/firstday';
@@ -334,6 +335,8 @@ export function finishDay(scene: StoreScene): void {
     const lost = rental.lost ? ` · ${t('rental.summaryLost', { n: rental.lost, kept: rental.kept })}` : '';
     extra.push([t('rental.summary'), `${t('rental.summaryValue', { icon: KIT_ICON[rental.kit], n: rental.rented, sum: rental.income })}${lost}`]);
   }
+  // Доля с Костиной тележки у входа (game/dreams.ts) — тоже строкой.
+  if (night.cart) extra.push([t('dream.cart.summary'), t('branch.summaryValue', { n: night.cart })]);
   // Работали в Заречье — гипермаркет в Центре торговал сам (zarechye.ts).
   if (home) extra.push([t('zar.summary.home'), t('branch.summaryValue', { n: home })]);
   // Своя марка на полках (lines.ts): сколько продали за день и что наделали за ночь.
@@ -367,8 +370,9 @@ export function finishDay(scene: StoreScene): void {
     ]);
   }
   const promoted = state.staff !== scene.state.staff;
-  // Вечером посетители пишут отзывы: они висят на доске у входа и видны в итогах дня.
-  const reviews = reviewsFor(scene.stats, finishedDay);
+  // Вечером посетители пишут отзывы: они висят на доске у входа и видны в итогах дня. Громкое доброе
+  // (или дурное) имя района вспоминают и там (goodwill.ts).
+  const reviews = reviewsFor(scene.stats, finishedDay, goodwillOf(state));
   const best = updateRecords({ ...recordDay(state, scene.stats), reviews }, scene.stats, finishedDay);
   scene.state = best.state;
   // Повод вернуться (returns.ts): сосед просит отложить на завтра, письмо придёт на следующий настоящий день.

@@ -7,11 +7,13 @@ import { isFairDay } from './fair';
 import { registerCount, RELIEF_ROLE } from './registers';
 import { noThieves, quietDays } from './firstday';
 import { pawnOpen } from './pawnshop';
+import { hasLottery } from './lottery';
 import { echoesOf } from './echoes';
+import { crisisToday } from './crisis';
 import { hasLicense } from './license';
 import { rentalOpen } from './rental';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'rental';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'rental';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -34,6 +36,8 @@ export const soloExpandRisk = (s: StoreState): boolean => !hasFloorStaff(s) && s
 
 const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['broke', isBroke],
+  // Первая беда района (crisis.ts): беда идёт считанные дни — объяснить сразу, что район запомнит.
+  ['crisis', (s) => Boolean(crisisToday(s))],
   // Касса — хозяина, пробивать можно и касанием улицы: со второго утра (в новом начале об этом
   // уже сказала бабушка в первый день — там карточка отмечена прочитанной). Старым игрокам — в
   // первое же утро после обновления: так они узнают, куда встал их кассир.
@@ -66,6 +70,9 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['license', hasLicense],
   // Прокат у входа (rental.ts, 13.11): как только стойку можно поставить — где она и что решает залог.
   ['rental', (s) => rentalOpen(s) || Boolean(s.rental)],
+  ['lottery', hasLottery],
+  // Первое вложение в мечту соседа (dreams.ts): сразу после «Вложиться» — когда ждать новостей и где список.
+  ['dreams', (s) => Boolean(s.dreams?.inv?.length)],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -87,6 +94,9 @@ export const TIP_ICONS: Record<TipId, string> = {
   license: '🔞',
   thief: '🕵️',
   rental: '🛷',
+  crisis: '🤝',
+  lottery: '🎟',
+  dreams: '🌱',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */
