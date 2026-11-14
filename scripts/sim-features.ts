@@ -29,6 +29,7 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['радио (ретро)', { features: { radio: true } }],
   ['радио (хиты) + сладости', { features: { radio: true, candy: true } }],
   ['сладости', { features: { candy: true } }],
+  ['лотерея у кассы', { features: { lottery: true } }],
   ['кофе + печь', { features: { coffee: true, oven: true } }],
   ['кофе + печь + оборудование', { features: { coffee: true, oven: true, gear: true } }],
   ['война: сравнять цену', { war: 'match' }],
@@ -44,6 +45,8 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['карьера + филиал', { features: { career: true, branch: true } }],
   // Ломбард в подсобке (13.11): берёт вещи у спокойных гостей, суетливым отказывает.
   ['ломбард', { features: { pawn: true } }],
+  // Лицензия на пиво и сигареты (13.11): берёт к «Универмагу», подросткам не продаёт — проверки чистые.
+  ['лицензия на пиво и сигареты', { features: { license: true } }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 

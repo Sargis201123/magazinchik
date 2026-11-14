@@ -4,7 +4,7 @@
 // кафе приходит договориться снова, и если всё привозили исправно, платит чуть больше.
 // Не хватило товара — день не оплачен; два срыва — кафе обижается и уходит на неделю.
 
-import { onShelves, PRODUCTS, SEASONAL, sellableProducts, warehouseOf, type ProductId, type StoreState } from './economy';
+import { onShelves, PRODUCTS, restricted, SEASONAL, sellableProducts, warehouseOf, type ProductId, type StoreState } from './economy';
 
 /** С какого дня кафе начинает предлагать договор (02.11: было с 6-го), на сколько дней и сколько срывов терпит. */
 export const CAFE_FROM_DAY = 11;
@@ -47,7 +47,8 @@ export const cafePay = (state: StoreState, items: Partial<Record<ProductId, numb
 
 /** Новое предложение: 2 товара из тех, что продаются в магазине, по 3–6 штук в день. */
 export function makeCafeOffer(state: StoreState, random: () => number): CafeState['offer'] | undefined {
-  const sellable = sellableProducts(state).filter((id) => !SEASONAL[id]);
+  // Кафе пиво и сигареты не заказывает (economy.ts restricted).
+  const sellable = sellableProducts(state).filter((id) => !SEASONAL[id] && !restricted(id));
   const liked = CAFE_LIKES.filter((id) => sellable.includes(id));
   const pool = liked.length >= 2 ? liked : sellable;
   if (pool.length === 0) return undefined;

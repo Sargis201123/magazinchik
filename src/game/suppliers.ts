@@ -1,6 +1,7 @@
 import type { TextKey } from '../i18n/ru';
 import { PRODUCTS, type Category, type ProductId, type StoreState } from './economy';
 import { haggleBonus } from './owner';
+import { breadCut } from './dreams';
 import { apprSupplies } from './apprentice';
 
 export type SupplierId = 'farmer' | 'dairy' | 'butcher' | 'wholesale';
@@ -45,14 +46,15 @@ export const SUPPLIERS: Record<SupplierId, Supplier> = {
     requires: 'meat',
     color: 0xb83a4b,
   },
-  // Оптовик: напитки, заморозка и бытовая химия для новых отделов.
+  // Оптовик: напитки, заморозка и бытовая химия для новых отделов; с лицензией (license.ts) — пиво и сигареты.
+  // Без «Витрины 18+» их у него не видно: закупка показывает только то, чему есть полка (restock.ts canStock).
   wholesale: {
     id: 'wholesale',
     nameKey: 'supplier.wholesale',
     hello: 'supplier.wholesale.hello',
-    products: { water: 1, juice: 1, dumplings: 1, fish: 1, soap: 1, detergent: 1 },
+    products: { water: 1, juice: 1, dumplings: 1, fish: 1, soap: 1, detergent: 1, beer: 1, cigarettes: 1 },
     badChance: 0.03,
-    requires: ['drinks', 'frozen', 'household'],
+    requires: ['drinks', 'frozen', 'household', 'license'],
     color: 0x3a4466,
   },
 };
@@ -97,7 +99,12 @@ export function unitPrice(s: Supplier, id: ProductId, discount = 0): number | nu
 /** Цены сегодня для этого магазина — со скидкой постоянного покупателя (закупка, автозаказ, подвоз). */
 export const priceFor = (state: StoreState) => {
   const discount = supplierDiscount(state);
-  return (sid: SupplierId, pid: ProductId): number | null => unitPrice(SUPPLIERS[sid], pid, discount);
+  // Хлеб от Аниной пекарни (dreams.ts) — ещё дешевле: и руками, и автозаказом, и в симуляторе.
+  const bread = breadCut(state);
+  return (sid: SupplierId, pid: ProductId): number | null => {
+    const price = unitPrice(SUPPLIERS[sid], pid, discount);
+    return price !== null && bread && pid === 'bread' ? Math.max(1, Math.round(price * (1 - bread))) : price;
+  };
 };
 
 /** Самая низкая цена товара по прайсу (без скидки) у всех поставщиков. null — никто не продаёт. */

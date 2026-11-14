@@ -6,6 +6,7 @@
 import type { TextKey } from '../i18n/ru';
 import { perceivedBase } from './endless';
 import { sellableProducts, type ProductId, type StoreState } from './economy';
+import { goodwillGrudge } from './goodwill';
 
 export type RegularId = 'petr' | 'sveta' | 'kostya' | 'akhmed' | 'olga' | 'misha';
 /** Жители Заречья (zarechye.ts): ходят только в лавку у реки, знакомятся по дням, сыгранным там. */
@@ -193,10 +194,13 @@ export const acceptsPrice = (state: StoreState, r: Regular, price: number): bool
 
 export type VisitResult = 'up' | 'down' | 'left';
 
-/** Итог визита: доверие растёт или падает; упало до нуля — обиделся на неделю. */
+/**
+ * Итог визита: доверие растёт или падает; упало до нуля — обиделся на неделю. Насколько падает — от доброго
+ * имени района (goodwill.ts): у магазина, что помог в беду, прощают легче, у нажившегося — обижаются сильнее.
+ */
 export function recordVisit(state: StoreState, id: RegularId | ZarRegularId, happy: boolean): { state: StoreState; result: VisitResult } {
   const cur = regularState(state, id);
-  let loyalty = happy ? Math.min(MAX_LOYALTY, cur.loyalty + 1) : cur.loyalty - 2;
+  let loyalty = happy ? Math.min(MAX_LOYALTY, cur.loyalty + 1) : cur.loyalty - goodwillGrudge(state);
   let awayUntil = cur.awayUntil;
   let result: VisitResult = happy ? 'up' : 'down';
   if (loyalty <= 0) {

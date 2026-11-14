@@ -29,6 +29,7 @@ import { homeLevel, inZar, ZAR_LEVEL_COST, ZAR_MAX_LEVEL, zarBillShare, zarAwayB
 export { homeLevel, inZar, ZAR_LEVEL_COST, ZAR_MAX_LEVEL, zarBillShare, zarAwayBill, zarNextLevel };
 import type { ZarRegularId } from './regulars';
 import { ensurePlan } from './day';
+import { ungouged } from './crisis';
 
 export type Where = 'home' | 'zar';
 
@@ -74,6 +75,8 @@ export const SHOP_KEYS = [
   'war',
   'trick',
   'plan',
+  // Лицензия на пиво и сигареты (license.ts) — на магазин в Центре, вместе с его «Витриной 18+».
+  'license',
 ] as const satisfies readonly (keyof StoreState)[];
 
 export type ShopKey = (typeof SHOP_KEYS)[number];
@@ -154,8 +157,9 @@ export function newZarShop(state: StoreState): ShopSlice {
   const slice = pick(fresh);
   return {
     ...slice,
-    // Цены — те же, что в Центре: игрок их уже подобрал.
-    prices: { ...fresh.prices, ...homeShop(state).prices },
+    // Цены — те же, что в Центре: игрок их уже подобрал. Но не «беда района» втридорога (crisis.ts):
+    // её ценники Центру вернут, а у новой лавки они остались бы навсегда.
+    prices: { ...fresh.prices, ...ungouged(homeShop(state).prices, state.crisis) },
     rating: 3.5,
     history: [],
     regulars: {},

@@ -44,6 +44,7 @@ import { adExtraItems, adRareBoost, adTrust } from '../game/ads';
 import { saleExtraItems } from '../game/weeks';
 import { companionOf, livedRegular } from '../game/life';
 import { acceptsPrice, recordVisit, regularById, regularsToday, regularState, tipFor, type Regular } from '../game/regulars';
+import { cartHere } from '../game/dreams';
 import { CART_SHARE, loyaltyTolerance, withUpgrades } from '../game/upgrades';
 import { dogCatch } from '../game/watch';
 import { guestCoins, seeGuest, type GuestId } from '../game/live';
@@ -52,6 +53,9 @@ import { treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplay
 import { servePortions } from '../game/kitchen';
 import { NIGHT_GUEST_TYPES, pickNightGuest } from '../game/nightGuests';
 import { districtGuest } from '../game/district';
+import { crisisExtraItems, crisisTolerance } from '../game/crisis';
+import { goodwillTips } from '../game/goodwill';
+import * as crisisFx from './crisisFx';
 import { slotSide, standFor } from './placement';
 import type { Point } from './layout';
 import { personGlow } from './halo';
@@ -60,6 +64,7 @@ import { smellChance } from '../game/rot';
 import { seriesAfter, seriesLost } from '../game/series';
 import { beltPlan, beltRest, rhythmOn, RHYTHM_PACE, tillTip } from '../game/tillRhythm';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
+import { countTicket } from '../game/lottery';
 import { eyeTheft, ownerTiming } from '../game/owner';
 import { radioPatience, radioTolerance } from '../game/radio';
 import { cameraTheft, entranceMud, gearTier, REGISTER_JAM_SECONDS, registerJam, wcDirt } from '../game/gear';
@@ -111,6 +116,7 @@ import * as shelves from './shelves';
 import * as building from './building';
 import * as thiefFx from './thiefTells';
 import * as tillBelt from './tillBelt';
+import * as lotteryFx from './lotteryFx';
 
 /** Друзья в гостях: сколько за день, чаевые за уровень их магазина, подарок за угощение (как на сервере). */
 const FRIEND_VISITS = 2;
@@ -197,7 +203,8 @@ export function scheduleRegulars(scene: StoreScene): void {
   }
   scene.guestOfDayDue = false;
   if (guestOfDay(scene.state)) scene.time.delayedCall(GUEST_OF_DAY_AT * DAY_SECONDS * 1000, () => (scene.guestOfDayDue = true));
-  const coming = regularsToday(scene.state).filter((r) => (!first || r.id !== FIRST_REGULAR) && Math.random() < livedRegular(scene.state, r).every);
+  // Костя со своей тележкой у входа (game/dreams.ts) весь день за ней — в очередь к кассе не встаёт.
+  const coming = regularsToday(scene.state).filter((r) => (!first || r.id !== FIRST_REGULAR) && !(r.id === 'kostya' && cartHere(scene.state)) && Math.random() < livedRegular(scene.state, r).every);
   for (const r of coming) {
     // Пара (life.ts) приходит вместе: второй — спутником первого, отдельно не приходит.
     const partner = companionOf(scene.state, r.id)?.regular;
@@ -271,8 +278,8 @@ export function regularVerdict(scene: StoreScene, c: Customer): void {
     pixelFx.burst(scene, 'hearts', c.sprite.x, c.sprite.y, { fade: 1100, zoom: 1 });
     scene.popup(c.sprite.x, y, t('regular.up', { name }), '#c8ffb0');
     const total = c.items.reduce((sum, item) => sum + unitSalePrice(scene.state, item.id, item.unit), 0);
-    // Благоустроенный район (hood.ts): постоянные щедрее.
-    const tip = Math.round(tipFor(regularState(scene.state, r.id).loyalty, total) * hoodTips(scene.state));
+    // Благоустроенный район (hood.ts) и доброе имя магазина (goodwill.ts): постоянные щедрее.
+    const tip = Math.round(tipFor(regularState(scene.state, r.id).loyalty, total) * hoodTips(scene.state) * goodwillTips(scene.state));
     if (tip > 0) {
       scene.state = { ...scene.state, money: scene.state.money + tip };
       scene.time.delayedCall(900, () => {
@@ -520,6 +527,9 @@ export function spawnCustomer(
       wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
     }
   }
+  // Беда района: первые гости дня — за водой и хлебом (crisisFx.ts).
+  const rush = !forced && !arrived && !rare && !thief && !valya && !nightGuest ? crisisFx.rushWants(scene) : null;
+  if (rush) wants = rush;
   // Хроники района: в праздник часть гостей нарядные, в день детей — дети с шарами (arcsFx.ts).
   if (!forced && !arrived && !rare && !valya && !nightGuest && !fromDistrict) look = arcsFx.dressUp(scene, look);
   const start = forced?.at ?? visitors.streetSpawn(scene);
@@ -549,6 +559,7 @@ export function spawnCustomer(
     const line = t(`nightGuest.${nightGuest}.${Phaser.Math.Between(0, NIGHT_GUEST_TYPES[nightGuest].lines - 1)}` as TextKey);
     scene.time.delayedCall(1300, () => sprite.active && scene.speak(sprite, 16, line));
   }
+  if (rush) crisisFx.rushSay(scene, sprite);
   if (valya) {
     scene.valyaCame = true;
     scene.time.delayedCall(1500, () => scene.speak(sprite, 16, t('popup.valya')));
@@ -678,7 +689,7 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   if (!c.first) await persons.walk(scene, c.sprite, door.x + Math.sign(gap) * Math.min(Math.abs(gap), DOOR_TURN), scene.streetY);
   // Тележки у входа: часть покупателей берёт их — кому удобнее.
   if (persons.cartsAtDoor(scene) && Math.random() < CART_SHARE && !c.sprite.getData('stroller') && !c.thief) persons.giveTrolley(scene, c.sprite);
-  const wanted = c.wants ?? scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + adExtraItems(scene.state, Math.random) + saleExtraItems(scene.state, Math.random));
+  const wanted = c.wants ?? scene.wanted(Phaser.Math.Between(1, 2) + bigDayExtraItems(scene.state.day) + crisisExtraItems(scene.state) + adExtraItems(scene.state, Math.random) + saleExtraItems(scene.state, Math.random));
   let disappointed = false;
   let why: { reason: LostReason; id: ProductId } | undefined;
   // Подойти, поискать глазами, взять: к полке в зале, к ларю и к вёдрам у кассы — одинаково.
@@ -802,6 +813,8 @@ export async function runCustomer(scene: StoreScene, c: Customer): Promise<void>
   if (c.gone) return;
   // Заскучал в очереди — тянется к стойке со сладостями.
   if (!c.serving && Math.random() < impulseChance(scene.state, scene.queue.indexOf(c) + 1)) grabCandy(scene, c);
+  // И лотерейный билет со стойки рядом (lotteryFx.ts) — тоже на кассу.
+  if (!c.serving) lotteryFx.maybeTicket(scene, c);
   c.waitStart = scene.time.now;
   c.bubble.setVisible(true);
   // С котом рядом и под радио ждут дольше (климат, указатели, тележки и обаяние убраны 02.11 — gear.ts).
@@ -864,6 +877,8 @@ export function tryTake(scene: StoreScene, c: Customer, id: ProductId): 'taken' 
     loyaltyTolerance(scene.state) *
     radioTolerance(scene.state) *
     adTrust(scene.state) *
+    // В беду района за воду и хлеб готовы платить больше (crisis.ts).
+    crisisTolerance(scene.state, id) *
     // Химия рядом с едой — к еде с этой полки придираются сильнее.
     (shelves.clashes(scene, index) ? CLASH_FACTOR : 1);
   const perUnit = price;
@@ -1207,6 +1222,7 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   scene.state = { ...state, money: state.money + extras };
   for (const e of c.extras ?? []) {
     if (e.kind === 'dish') scene.stats.dishes = (scene.stats.dishes ?? 0) + 1;
+    else if (e.kind === 'ticket') scene.state = countTicket(scene.state);
     else note(scene.stats, e.kind);
   }
   // Чаевые «за котика».

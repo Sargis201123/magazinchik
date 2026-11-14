@@ -29,6 +29,7 @@ import {
   PRICE_STEP,
   PRODUCTS,
   PRODUCT_IDS,
+  restricted,
   resolveBadBatch,
   RETURN_REFUND,
   sellableProducts,
@@ -71,7 +72,7 @@ import {
   shelfKindOpen,
   roleOpen,
 } from '../game/economy';
-import { SUPPLIER_IDS, SUPPLIERS, unitPrice, type SupplierId, supplierOpen, badBatch, priceFor, supplierDiscount } from '../game/suppliers';
+import { SUPPLIER_IDS, SUPPLIERS, type SupplierId, supplierOpen, badBatch, priceFor, supplierDiscount } from '../game/suppliers';
 import { guestsGain, guestsToday } from '../game/day';
 import { buyKiosk, KIOSK_TIERS, kioskCount, kioskSlots, KIOSKS_BY_LEVEL, kioskTier, kioskTierIndex, laneGuests, nextKioskPrice, nextKioskTier, openRegisters, upgradeKiosks, withNextTill } from '../game/lanes';
 import {
@@ -203,6 +204,8 @@ import { mailBox, takeQuietly } from './mail';
 import { MAIL_EVENT } from './mailbag';
 import { arcToday } from '../game/arcs';
 import { lateContestAnnounce, lateContestResult, pickNews, type NewsId } from '../game/headlines';
+import { chooseCrisis, crisisAsk, crisisNews, crisisWeather, crisisDaysLeft, seeCrisisEnd, weatherToday } from '../game/crisis';
+import { crisisChoiceBox, crisisEndBox, crisisLines } from './crisis';
 import { apprNews, apprOffer, apprWorry } from '../game/apprentice';
 import { apprCard, apprLines, apprOfferBox, apprOutBox, gradLines } from './apprentice';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
@@ -257,16 +260,22 @@ import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox } from './tenants';
 import { pawnBox, pawnOfferBox } from './pawnshop';
 import { pawnMet, pawnOf, pawnOffer, pawnOpen, pawnSlots } from '../game/pawnshop';
+import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
+import { lotteryNews } from '../game/lottery';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
 import { linesBox } from './lines';
+import { licenseBox, licenseNoticeBox } from './license';
+import { hasLicense, licenseNotice } from '../game/license';
 import { lineOfProduct } from '../game/lines';
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, BRANCH_TRACKS, branchGain, branchInOldShop, branchLock, branchOf, branchShare, branchSignName, branchTier, branchUsual, branchWeek, buyBranch, hyperLock, nextBranchTier, upgradeBranch } from '../game/branch';
 import { morningNudge, NUDGE_IDLE_MS, NUDGE_LAST_DAY, type MorningNudge } from '../game/nudge';
 import { tryNudge } from './nudge';
 import { audioBox } from './audio';
 import { answerLife, LIFE_GIFT, lifeNews } from '../game/life';
+import { breadCut, dreamNews } from '../game/dreams';
+import { dreamBox, dreamsBox } from './dreams';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
 import { albumButton, showAlbum } from './album';
 import { freshCount } from '../game/collections';
@@ -796,6 +805,13 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       card.replaceChildren(title, qualityBox(pendingBad));
       return;
     }
+    // Проверка лицензии вчера вечером нашла продажу подростку (game/license.ts): штраф, а то и лицензию отобрали.
+    const licenseCheck = licenseNotice(state);
+    if (licenseCheck) {
+      cue('fail', `license:${licenseCheck.day}`);
+      card.replaceChildren(title, licenseNoticeBox(licenseCheck, getState, update));
+      return;
+    }
     // Новости утра (game/headlines.ts): сюжет, повороты, итоги, истории — не больше одной за утро,
     // остальные ждут следующего. Решить срочное (спасение, банк, брак) — выше, вне очереди.
     const zarHere = inZar(state);
@@ -817,13 +833,17 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('zarBoss', som);
     add('contestResult', result);
     add('contestAnnounce', announce);
+    add('crisisAsk', crisisAsk(state));
     add('event', state.plan?.event && !state.plan.decided);
     add('career', careerDue(state));
     add('trick', !zarHere && trickToday(state));
+    add('crisis', crisisNews(state));
     add('pawn', pawnOffer(state));
     add('case', !zarHere && caseNews(state));
+    add('lottery', lotteryNews(state));
     add('tale', taleToday(state));
     add('life', !zarHere && lifeNews(state));
+    add('dream', dreamNews(state));
     add('staffEvent', staffEventDue(state));
     add('district', !zarHere && districtNews(state));
     add('cat', catOffer(state));
@@ -865,6 +885,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     }
     if (picked.id === 'cat') {
       card.replaceChildren(title, catOfferBox(state));
+      return;
+    }
+    // Беда района (game/crisis.ts): решить, как торговать, пока она идёт.
+    if (picked.id === 'crisisAsk' && crisisAsk(state)) {
+      card.replaceChildren(title, crisisChoiceBox(state, (mode) => update(chooseCrisis(getState(), mode), mode === 'gouge' ? 'tap' : 'success')));
       return;
     }
     if (state.plan?.event && picked.id === 'event') {
@@ -974,6 +999,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const info = infos(
       ...debtLine(state),
       ...bigDayLine(state),
+      ...crisisLines(state),
       goalLine(state),
       ...apprLines(state),
       ...autoLine(),
@@ -1453,6 +1479,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
           filters,
           ...productRows(now),
           el('div', 'ui-muted', `🤝 ${t('buy.discountNote', { p: Math.round(supplierDiscount(now) * 100) })}`),
+          // Сбылась мечта Ани (game/dreams.ts): хлеб дешевле — пусть видно, откуда скидка.
+          ...(breadCut(now) ? [el('div', 'ui-muted', `🥖 ${t('dream.anya.name')}: ${t('dream.perk.bread', { p: Math.round(breadCut(now) * 100) })}`)] : []),
           ...suppliers.map((sid) => supplierBox(sid, now)),
         );
       }),
@@ -1470,9 +1498,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       box.append(el('div', 'ui-muted', t('buy.needShelf', { shelf: kinds.map((k) => t(SHELF_KINDS[k].nameKey)).join(' / ') })));
       return box;
     }
-    const discount = supplierDiscount(state);
+    // Цены — как при покупке (priceFor): со скидкой постоянного и с дешёвым хлебом от Ани (dreams.ts).
+    const price = priceFor(state);
     const offers = PRODUCT_IDS.filter((pid) => canStock(state, pid))
-      .map((pid) => ({ pid, price: unitPrice(s, pid, discount) }))
+      .map((pid) => ({ pid, price: price(sid, pid) }))
       .filter((o): o is { pid: ProductId; price: number } => o.price !== null);
     box.append(el('div', 'ui-item-sub', offers.map((o) => `${PRODUCTS[o.pid].icon}${o.price}`).join('  ')));
     return box;
@@ -1702,7 +1731,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
 
   /** Прогноз: что сегодня берут чаще и реже, сколько гостей; и погода на завтра. */
   const weatherLine = (state: StoreState): HTMLElement[] => {
-    const weather = weatherFor(state.day);
+    // В беду района на улице её погода (game/crisis.ts) — и прогноз о ней же.
+    const weather = weatherToday(state);
     const effect = WEATHER_EFFECTS[weather];
     const sellable = sellableProducts(state);
     const icons = (keep: (k: number) => boolean) =>
@@ -1717,7 +1747,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     if (less) parts.push(t('forecast.less', { list: less }));
     if (effect.guests !== 1) parts.push(t('forecast.guests', { n: percent(effect.guests) }));
     if (hasUpgrade(state, 'coffee') && effect.coffee !== 1) parts.push(t('forecast.coffee', { n: percent(effect.coffee) }));
-    const tomorrow = weatherFor(state.day + 1);
+    const tomorrow = (crisisDaysLeft(state) > 1 && crisisWeather(state)) || weatherFor(state.day + 1);
     parts.push(t('forecast.tomorrow', { icon: WEATHER_EFFECTS[tomorrow].icon, name: t(`weather.name.${tomorrow}`) }));
     return [el('div', 'ui-muted', parts.join(' · '))];
   };
@@ -2037,12 +2067,20 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         return taleBox(state);
       case 'life':
         return lifeBox(state);
+      case 'dream':
+        return dreamBox(state, getState, update);
       case 'staffEvent':
         return staffEventBox(state);
       case 'district':
         return districtBox(state);
       case 'trick':
         return trickBox(state);
+      case 'crisis': {
+        const end = crisisNews(state);
+        return end ? crisisEndBox(end, () => update(seeCrisisEnd(getState()))) : [];
+      }
+      case 'lottery':
+        return lotteryNewsBox(state, getState, update);
       case 'arc':
         return arcBox(state, getState, update);
       case 'echo':
@@ -2258,6 +2296,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         status: hasRadio(state) ? `${STATION_INFO[stationOf(state)].icon} ${t(STATION_INFO[stationOf(state)].nameKey)}` : `${RADIO_PRICE} 💰`,
         details: () => [radioBox(getState())],
       },
+      // Лотерея у кассы (ui/lottery.ts, 13.11): стойка с билетами — рядом со сладостями.
+      { id: 'lottery', icon: `assets/${lotteryArt(state)}.png`, title: t('lottery.title'), status: lotteryStatus(state), details: () => lotteryBox(getState(), getState, update) },
       {
         id: 'coffee',
         icon: '☕',
@@ -2418,7 +2458,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       box.append(el('div', 'ui-muted', t('coffee.locked')));
       return box;
     }
-    const chance = Math.min(0.6, COFFEE_CHANCE * WEATHER_EFFECTS[weatherFor(state.day)].coffee * (hasUpgrade(state, 'coffeeTables') ? TABLES_COFFEE : 1));
+    const chance = Math.min(0.6, COFFEE_CHANCE * WEATHER_EFFECTS[weatherToday(state)].coffee * (hasUpgrade(state, 'coffeeTables') ? TABLES_COFFEE : 1));
     box.append(el('div', 'ui-muted', t('coffee.note', { price: coffeePrice(state), cost: CUP_COST, n: Math.max(2, Math.round(1 / chance)) })));
     const free = CUPS_MAX - cupsOf(state);
     const amounts = [...new Set([Math.min(10, free), free])].filter((n) => n > 0);
@@ -4369,6 +4409,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     // Разделы свёрнуты: заголовок и строка-сводка, остальное — нажатием.
     const fold = (id: string, box: HTMLElement, summary?: string) => foldSection(`grow:${id}`, box, summary);
     const pets = petsBox(state, getState, update);
+    // Мечты соседей (game/dreams.ts): во что вложились и что это даёт — раздел появляется с первым вложением.
+    const dreams = inZar(state) ? null : dreamsBox(state);
     out.push(
       grow,
       fold('registers', registersBox(state), t('registers.count', { n: registerCount(state), max: registerSlots(state) })),
@@ -4376,7 +4418,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       fold('gear', gearBox(state)),
       fold('ads', adsBox(state)),
       decorBox(state),
-      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
+      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...(dreams ? [foldSection('grow:dreams', dreams.box, dreams.summary)] : []), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
@@ -4432,7 +4474,9 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   const pricesTab = (state: StoreState): HTMLElement[] => {
     const sellable = sellableProducts(state);
     // Сначала то, что сейчас продаётся; закрытые товары — внизу.
-    const order = [...PRODUCT_IDS.filter((pid) => sellable.includes(pid)), ...PRODUCT_IDS.filter((pid) => !sellable.includes(pid))];
+    // Пиво и сигареты без лицензии не показываем даже серыми (game/license.ts): о них — только в «Развитии».
+    const locked = PRODUCT_IDS.filter((pid) => !sellable.includes(pid) && (!restricted(pid) || hasLicense(state)));
+    const order = [...PRODUCT_IDS.filter((pid) => sellable.includes(pid)), ...locked];
     return order.map((pid) => {
       const product = PRODUCTS[pid];
       const card = el('div', 'ui-price');

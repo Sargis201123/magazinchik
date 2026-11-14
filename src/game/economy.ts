@@ -30,7 +30,7 @@ import { inZar, zarAwayBill, zarBillShare, zarNextLevel } from './zarshop';
  * Ларь с мороженым (у входа) и цветы у кассы — тоже «полки», но стоят на своих местах,
  * а не на местах под полки в зале.
  */
-export type Category = 'bakery' | 'produce' | 'dairy' | 'meat' | 'drinks' | 'frozen' | 'household' | 'icebox' | 'florist' | 'brand';
+export type Category = 'bakery' | 'produce' | 'dairy' | 'meat' | 'drinks' | 'frozen' | 'household' | 'icebox' | 'florist' | 'brand' | 'license';
 
 export type ProductId =
   | 'bread'
@@ -57,7 +57,10 @@ export type ProductId =
   | 'jam'
   | 'pickles'
   | 'pelmeni'
-  | 'kvass';
+  | 'kvass'
+  // По лицензии (license.ts): без неё их нет ни у поставщика, ни на полках.
+  | 'beer'
+  | 'cigarettes';
 
 export interface Product {
   id: ProductId;
@@ -105,7 +108,17 @@ export const PRODUCTS: Record<ProductId, Product> = {
   pickles: { id: 'pickles', nameKey: 'product.pickles', icon: '🥒', category: 'brand', cost: 24, basePrice: 60, shelfLife: 40, color: 0x3e8948 },
   pelmeni: { id: 'pelmeni', nameKey: 'product.pelmeni', icon: '🥟', category: 'brand', cost: 57, basePrice: 130, shelfLife: 20, color: 0xf4ecd8 },
   kvass: { id: 'kvass', nameKey: 'product.kvass', icon: '🍺', category: 'brand', cost: 14, basePrice: 45, shelfLife: 4, color: 0x8f563b },
+  // По лицензии (license.ts, 13.11): наценка высокая — розница вдвое с лишним дороже закупки. Пиво в банках
+  // (значок — банка, а не кружка: у кваса своя 🍺), сигареты не портятся.
+  beer: { id: 'beer', nameKey: 'product.beer', icon: '🥫', category: 'license', cost: 30, basePrice: 65, shelfLife: 30, color: 0xf2a65e },
+  cigarettes: { id: 'cigarettes', nameKey: 'product.cigarettes', icon: '🚬', category: 'license', cost: 75, basePrice: 150, shelfLife: NEVER, color: 0xc0cbdc },
 };
+
+/**
+ * Товар только для взрослых — пиво и сигареты (license.ts). Им не место в заданиях дня, испытаниях недели,
+ * заказах кафе, скидках дня, у оптовика-бизнесмена и в гостинце от бабушки (gift.ts): игра для всех возрастов, их не рекламируем — просто продаём.
+ */
+export const restricted = (id: ProductId): boolean => PRODUCTS[id].category === 'license';
 
 /** Своя выпечка по ступеням марки «От бабушки»: первая ступень — пирожки, вторая — булочки, третья — медовик. */
 export const OWN_PRODUCTS: ProductId[] = ['pies', 'buns', 'honeycake'];
@@ -189,6 +202,9 @@ export const SHELF_KINDS: Record<Category, ShelfKind> = {
   // Полка «От бабушки» у входа (09.11, решение автора): вся своя марка — варенье, соленья, пельмени, квас —
   // на ней, а не вперемешку на обычных полках. Появляется сама с первой открытой линейкой (lines.ts).
   brand: { nameKey: 'shelf.brand', price: 0, fridge: true, fixture: true },
+  // «Витрина 18+» у кассы (license.ts): встаёт сама с лицензией и уходит, если её отберут. С «Супермаркета»:
+  // в «Минимаркете» у кассы нет свободного пола (layout.ts licenseSpotFor).
+  license: { nameKey: 'shelf.license', price: 0, fridge: false, fixture: true, minLevel: 3 },
 };
 
 /** Ларь с мороженым у входа и цветы у кассы: стоят на своих местах, мест под полки не занимают. */
@@ -599,6 +615,8 @@ export interface StoreState {
   ownerTill?: boolean;
   /** Стаканчики в кофейном уголке (coffee.ts). */
   cups?: number;
+  /** Лотерея у кассы (lottery.ts): с какого дня стоит стойка, проданные билеты, выигрыш и запрет. Нет поля — не куплена. */
+  lottery?: import('./lottery').LotteryState;
   /** Ценовая война с Эдуардом (war.ts). */
   war?: War;
   /** Кот магазина (cat.ts) и с какого дня снова предложить его оставить. */
@@ -670,6 +688,10 @@ export interface StoreState {
   pets?: import('./pets').PetsState;
   /** Истории постоянных покупателей (tales.ts). */
   tales?: TalesState;
+  /** Мечты соседей (dreams.ts): во что вложились, кому отказали и когда была последняя карточка. */
+  dreams?: import('./dreams').DreamsState;
+  /** Лицензия на пиво и сигареты (license.ts): с какого дня, нарушения, штрафы, последняя проверка. */
+  license?: import('./license').LicenseState;
   /** Сценки дня (skits.ts): идущая история, законченные, прибавка гостей. */
   skits?: import('./skits').SkitsState;
   /** «Дело недели» (cases.ts): идущее дело с уликами и допросами, закрытые дела, «слава района». */
@@ -758,6 +780,11 @@ export interface StoreState {
   gear?: Partial<Record<GearId, number>>;
   /** Рейтинг доставки на дом 1..5 (delivery.ts); нет — 4 звезды. */
   deliveryRating?: number;
+  /** Беда района (crisis.ts): идёт сейчас — и чем кончилась прошлая (новость утром, пауза до следующей). */
+  crisis?: import('./crisis').CrisisState;
+  crisisEnd?: import('./crisis').CrisisEnd;
+  /** Доброе имя района −100…100 (goodwill.ts); нет поля — 0. */
+  goodwill?: number;
   /** 0..5 звёзд, влияет на поток покупателей. */
   rating: number;
   /** Склад рядом с магазином: сюда приезжает закупка. */
@@ -891,7 +918,7 @@ export const newGame = (): StoreState => ({
     // Вёдра для цветов у кассы — с самого начала, весной в них ставят букеты.
     { kind: 'florist', level: 0, items: {} },
   ],
-  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70, pumpkins: 45, watermelons: 60, water: 25, juice: 50, dumplings: 80, fish: 110, soap: 35, detergent: 99, pies: 45, buns: 40, honeycake: 110, jam: 75, pickles: 60, pelmeni: 130, kvass: 45 },
+  prices: { bread: 40, apples: 30, potatoes: 20, milk: 60, meat: 150, icecream: 55, tangerines: 40, flowers: 70, pumpkins: 45, watermelons: 60, water: 25, juice: 50, dumplings: 80, fish: 110, soap: 35, detergent: 99, pies: 45, buns: 40, honeycake: 110, jam: 75, pickles: 60, pelmeni: 130, kvass: 45, beer: 65, cigarettes: 150 },
 });
 
 export const storeLevel = (state: StoreState): StoreLevel => STORE_LEVELS[state.level];
@@ -1073,7 +1100,8 @@ export function shelveAll(state: StoreState): StoreState {
 export const FIXTURE_MAX_LEVEL = 1;
 /** Ларь с мороженым растёт вместе с магазином, как обычная полка (было — только раз). */
 export const ICEBOX_MAX_LEVEL = 3;
-const fixtureMax = (kind: Category): number => (kind === 'icebox' ? ICEBOX_MAX_LEVEL : FIXTURE_MAX_LEVEL);
+// Витрина 18+ растёт, как ларь: в большом магазине пива и сигарет берут больше.
+const fixtureMax = (kind: Category): number => (kind === 'icebox' || kind === 'license' ? ICEBOX_MAX_LEVEL : FIXTURE_MAX_LEVEL);
 
 export function upgradeCost(shelf: Shelf): number | null {
   if (SHELF_KINDS[shelf.kind].fixture && shelf.level >= fixtureMax(shelf.kind)) return null;

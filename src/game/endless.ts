@@ -7,6 +7,7 @@ import {
   onShelves,
   homemade,
   PRODUCTS,
+  restricted,
   sellableProducts,
   seasonalDemand,
   type DayStats,
@@ -113,7 +114,8 @@ export function questsFor(state: StoreState, guests: number, moments = 0): Quest
   if (state.day < QUESTS_FROM_DAY) return [];
   const random = rng(state.day * 31337 + 11);
   const reward = questReward(state.level);
-  const sellable = sellableProducts(state);
+  // Пиво и сигареты в задания дня не попадают (economy.ts restricted).
+  const sellable = sellableProducts(state).filter((id) => !restricted(id));
   const pool: Quest[] = [
     { kind: 'serve', target: Math.max(5, Math.round(guests * 0.55)), reward },
     { kind: 'revenue', target: Math.max(150, Math.round((guests * 22) / 10) * 10), reward },

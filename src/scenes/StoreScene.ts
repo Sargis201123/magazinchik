@@ -70,6 +70,7 @@ import { Halo } from './halo';
 import { FloorShade, furnitureCasters, type WearLayer } from './floor';
 import { decodeWear, encodeWear, oldPaths, wearGrid, type WearGrid } from '../game/wear';
 import { dayDemand } from '../game/demand';
+import { eveningPull, licenseRate } from '../game/license';
 import { Rotting } from './rotting';
 import type { EduardLook } from '../game/eduard';
 import type { CafeDelivery } from '../game/cafe';
@@ -130,6 +131,7 @@ import * as weatherFx from './weatherFx';
 import * as decorations from './decorations';
 import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
+import * as dreamsFx from './dreamsFx';
 import * as starPets from './starPets';
 import * as deliveries from './deliveries';
 import * as food from './food';
@@ -147,6 +149,7 @@ import * as camera from './camera';
 import * as gardenFx from './gardenFx';
 import * as shelves from './shelves';
 import * as skitsFx from './skitsFx';
+import * as crisisFx from './crisisFx';
 import * as building from './building';
 import * as collections from './collections';
 
@@ -283,6 +286,9 @@ export class StoreScene extends Phaser.Scene {
   rainFx?: { rain: Phaser.GameObjects.Particles.ParticleEmitter; splash: Phaser.GameObjects.Particles.ParticleEmitter; base: number; puddles: (Phaser.GameObjects.Image | Phaser.GameObjects.Sprite)[]; ripple?: Phaser.GameObjects.Particles.ParticleEmitter; sheen?: Phaser.GameObjects.Rectangle };
   /** Дождь сегодня уже кончился: зонты закрыты, лужи сохнут. */
   rainStopped = false;
+  /** Беда района (crisisFx.ts): какая нарисована на улице и сколько первых гостей ещё бегут за водой. */
+  builtCrisis = '';
+  crisisRush = 0;
   /** Доля прошедшего дня (0 — утро, 1 — конец смены): солнце, туман, тени. */
   dayProgress = 0;
   /** Мусорный контейнер на улице (его трясёт мусоровоз). */
@@ -1023,9 +1029,12 @@ export class StoreScene extends Phaser.Scene {
         // Этого гостя позвал к себе конкурент (game/rival.ts) — он не придёт.
         if (this.rivalLost > 0 && !this.night) this.rivalLost--;
         else if (!cars.carCustomer(this)) this.spawnCustomer();
+        // С лицензией (game/license.ts) лишние гости дня приходят вечером: днём реже, в последнюю треть — гуще.
         const interval =
-          spawnIntervalToday(this.state) / (rush ? 2 : 1) / weeksFx.crowd(this) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : 1);
+          spawnIntervalToday(this.state) / (rush ? 2 : 1) / weeksFx.crowd(this) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : licenseRate(this.state, elapsed / DAY_SECONDS));
         this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
+        // Беда района: первые гости дня бегут за водой один за другим (crisisFx.ts).
+        if (this.crisisRush > 0 && !this.night && --this.crisisRush > 0) this.nextSpawn = crisisFx.RUSH_GAP;
       }
     } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here' && this.liveGuest?.phase !== 'here' && this.skit?.phase !== 'here') {
       this.endOfDay();
@@ -1199,6 +1208,8 @@ export class StoreScene extends Phaser.Scene {
     this.lineObjs = [];
     this.lineTimers = [];
     linesFx.applyLines(this);
+    // Сбывшиеся мечты соседей (game/dreams.ts): тележка Кости у входа, указатель к лодочной станции.
+    dreamsFx.applyDreams(this);
     starPets.buildStarPet(this);
     morningFlow.noteNewProps(this, bought);
     // Пол — последним: тени ложатся от всей мебели, что уже стоит в зале и во флигеле.
@@ -1467,10 +1478,11 @@ export class StoreScene extends Phaser.Scene {
     return shoppers.spawnCustomer(this, forced, arrived);
   }
 
-  /** Корзина покупателя с учётом спроса дня: погода, ценовая война, запах хлеба. */
+  /** Корзина покупателя с учётом спроса дня: погода, ценовая война, запах хлеба; к вечеру — пиво и сигареты (license.ts). */
   wanted(count: number): ProductId[] {
     const aroma = this.aroma();
-    return pickWanted(this.state, Math.random, count, (id) => dayDemand(this.state, id, aroma));
+    const share = this.night ? 1 : (DAY_SECONDS - this.timeLeft) / DAY_SECONDS;
+    return pickWanted(this.state, Math.random, count, (id) => dayDemand(this.state, id, aroma) * eveningPull(id, share));
   }
 
   /** В зале пахнет свежим хлебом из печи. */

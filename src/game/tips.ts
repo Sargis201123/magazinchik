@@ -7,9 +7,12 @@ import { isFairDay } from './fair';
 import { registerCount, RELIEF_ROLE } from './registers';
 import { noThieves, quietDays } from './firstday';
 import { pawnOpen } from './pawnshop';
+import { hasLottery } from './lottery';
 import { echoesOf } from './echoes';
+import { crisisToday } from './crisis';
+import { hasLicense } from './license';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'thief' | 'appr';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -32,6 +35,8 @@ export const soloExpandRisk = (s: StoreState): boolean => !hasFloorStaff(s) && s
 
 const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['broke', isBroke],
+  // Первая беда района (crisis.ts): беда идёт считанные дни — объяснить сразу, что район запомнит.
+  ['crisis', (s) => Boolean(crisisToday(s))],
   // Касса — хозяина, пробивать можно и касанием улицы: со второго утра (в новом начале об этом
   // уже сказала бабушка в первый день — там карточка отмечена прочитанной). Старым игрокам — в
   // первое же утро после обновления: так они узнают, куда встал их кассир.
@@ -60,6 +65,11 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['rhythm', (s) => s.day >= 2 && !quietDays(s) && !s.staff.some((m) => m.role === RELIEF_ROLE)],
   // Первая сценка кончилась и посадила эхо (echoes.ts): утром — что решения ещё аукнутся.
   ['echo', (s) => echoesOf(s).list.length > 0],
+  // Лицензия на пиво и сигареты (license.ts): наутро после покупки — где товар и чего делать нельзя.
+  ['license', hasLicense],
+  ['lottery', hasLottery],
+  // Первое вложение в мечту соседа (dreams.ts): сразу после «Вложиться» — когда ждать новостей и где список.
+  ['dreams', (s) => Boolean(s.dreams?.inv?.length)],
   // Ученик (apprentice.ts): как только взяли — в двух словах, чем его место отличается и от чего зависит доверие.
   ['appr', (s) => Boolean(s.appr)],
 ];
@@ -80,7 +90,11 @@ export const TIP_ICONS: Record<TipId, string> = {
   case: '🕵',
   rhythm: '🎵',
   echo: '🔁',
+  license: '🔞',
   thief: '🕵️',
+  crisis: '🤝',
+  lottery: '🎟',
+  dreams: '🌱',
   appr: '🧢',
 };
 

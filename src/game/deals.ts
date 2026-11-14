@@ -3,14 +3,15 @@
 // руками — кнопкой «Закупить нужное» или «+1 / +5» по товарам. «Закупать сам» скидок не ловит: удобно, но по обычным
 // ценам. Какие товары — от дня и зерна магазина (общий генератор симулятора не трогается).
 
-import { sellableProducts, type ProductId, type StoreState } from './economy';
+import { restricted, sellableProducts, type ProductId, type StoreState } from './economy';
 import { canStock } from './restock';
 
 export const DEAL_CUTS = [0.2, 0.15, 0.1] as const;
 
 /** Скидки дня: товар → доля скидки. Только то, что магазин сейчас продаёт и может поставить на полку. */
 export function dealsToday(state: StoreState): Partial<Record<ProductId, number>> {
-  const pool = sellableProducts(state).filter((pid) => canStock(state, pid));
+  // На пиво и сигареты скидок дня не бывает (economy.ts restricted): их не рекламируем.
+  const pool = sellableProducts(state).filter((pid) => canStock(state, pid) && !restricted(pid));
   if (pool.length < 2) return {};
   let h = (((state.seed ?? 1) * 2246822519) ^ (state.day * 3266489917)) >>> 0;
   const next = () => {
