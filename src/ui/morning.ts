@@ -206,7 +206,7 @@ import { arcToday } from '../game/arcs';
 import { lateContestAnnounce, lateContestResult, pickNews, type NewsId } from '../game/headlines';
 import { chooseCrisis, crisisAsk, crisisNews, crisisWeather, crisisDaysLeft, seeCrisisEnd, weatherToday } from '../game/crisis';
 import { crisisChoiceBox, crisisEndBox, crisisLines } from './crisis';
-import { chooseRacket, racketAsk, racketNews, seeRacketNews } from '../game/racket';
+import { chooseRacket, racketAsk, racketNews, seeRacketNews, stopPaying } from '../game/racket';
 import { racketChoiceBox, racketLines, racketNewsBox } from './racket';
 import { claimPass, EXCLUSIVE_LEVELS, grantPass, passCoins, passDecor, passExclusive, passItem, passLevel, passReady, PASS_DAYS, PASS_LEVELS, PASS_STARS, seasonDaysLeft, seasonExclusives, XP_DAY, XP_PER_LEVEL, XP_QUEST, XP_WEEKLY } from '../game/pass';
 import { showSupport } from './support';
@@ -1005,7 +1005,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...debtLine(state),
       ...bigDayLine(state),
       ...crisisLines(state),
-      ...(zarHere ? [] : racketLines(state)),
+      ...(zarHere ? [] : racketLines(state, (mode) => update(stopPaying(getState(), mode), 'success'))),
       goalLine(state),
       ...autoLine(),
       billForecast(state),

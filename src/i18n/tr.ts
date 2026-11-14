@@ -3959,6 +3959,8 @@ export const tr: Record<TextKey, string> = {
   "racket.mode.police": "🚓 Polise git",
   "racket.mode.police.hint": "Bir dava açılır. Cuma günü patronu bul, sonsuza dek giderler — mahalle sana teşekkür eder. Olmazsa reddetmekle aynı dertler.",
   "racket.line.pay": "🕶 “Koruma”: haftada %{n} · sonraki ödeme {d} gün sonra",
+  "racket.stop.refuse": "✋ Ödemeyi kes",
+  "racket.stop.police": "🚓 Yeter, polise git",
   "racket.line.refuse": "🕶 Adamlar kızgın: {d} gün daha sorun",
   "racket.line.police": "🚓 Şikâyetin poliste: dava, mevcut dava kapanınca açılacak",
   "racket.hit.pay": "🕶 “Koruma” haftanın payını aldı: −{sum} 💰",

@@ -11,7 +11,7 @@
 
 import type { StoreState } from './economy';
 import { casesOf, openCase, openCaseOf } from './cases';
-import { echoDelay, plantEcho, answerEchoNews, type EchoId } from './echoes';
+import { echoDelay, echoesOf, plantEcho, answerEchoNews, type EchoId } from './echoes';
 import { addGoodwill } from './goodwill';
 import { inZar } from './zarshop';
 import { tutStep } from './tutorial';
@@ -141,6 +141,19 @@ export function answerRaise(state: StoreState, id: EchoId, choice: number): Stor
   const rate = Math.min(RACKET_RATE_MAX, (r.rate ?? RACKET_RATE) + RACKET_RAISE);
   const next = set(s, { ...r, rate });
   return rate < RACKET_RATE_MAX ? plantEcho(next, 'racketRaise', s.day + raiseIn(s), { n: Math.min(RACKET_RATE_MAX, rate + RACKET_RAISE) }) : next;
+}
+
+/**
+ * Перестать платить в любое утро (строка «Сегодня», ui/racket.ts): отказать или в полицию. 14.11, ревью:
+ * на потолке ставки новых поднятий нет, и без этой кнопки платящий застревал на 10% до конца игры.
+ * Несостоявшееся поднятие ставки убираем — иначе потом пришло бы «Платить {n}%» тому, кто уже не платит.
+ */
+export function stopPaying(state: StoreState, mode: Exclude<RacketMode, 'pay'>): StoreState | null {
+  const r = state.racket;
+  if (r?.mode !== 'pay' || r.end) return null;
+  const e = echoesOf(state);
+  const s = { ...state, echoes: { ...e, list: e.list.filter((x) => x.id !== 'racketRaise') } };
+  return mode === 'refuse' ? refuse(s, r) : police(s, r);
 }
 
 /** Пакость этого утра (или null): первая — наутро после отказа, витрина; дальше — от зерна и дня. */

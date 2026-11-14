@@ -24,14 +24,19 @@ export function racketChoiceBox(state: StoreState, choose: (mode: RacketMode) =>
 }
 
 /** Строки «Сегодня»: что стряслось утром и что дальше (доля через сколько дней, сколько ещё пакостят, дело ждёт). */
-export function racketLines(state: StoreState): HTMLElement[] {
+export function racketLines(state: StoreState, stop: (mode: 'refuse' | 'police') => void): HTMLElement[] {
   const r = state.racket;
   if (!r?.mode || r.end) return [];
   const out: HTMLElement[] = [];
   const hit = racketHit(state);
   if (hit) out.push(el('div', 'ui-note', t(`racket.hit.${hit.kind}` as TextKey, { sum: hit.cost })));
   const since = r.since ?? r.from;
-  if (r.mode === 'pay') out.push(el('div', 'ui-muted', t('racket.line.pay', { n: r.rate ?? RACKET_RATE, d: 7 - ((state.day - since) % 7) })));
+  if (r.mode === 'pay') {
+    // 14.11: выход из «крыши» всегда под рукой — на потолке ставки эхо больше не спрашивает (racket.ts stopPaying).
+    const line = el('div', 'ui-muted', t('racket.line.pay', { n: r.rate ?? RACKET_RATE, d: 7 - ((state.day - since) % 7) }));
+    line.append(el('br'), button(t('racket.stop.refuse'), () => stop('refuse'), 'ui-chip secondary'), ' ', button(t('racket.stop.police'), () => stop('police'), 'ui-chip secondary'));
+    out.push(line);
+  }
   else if (r.mode === 'refuse') out.push(el('div', 'ui-muted', t('racket.line.refuse', { d: Math.max(1, (r.until ?? state.day) - state.day + (state.day > since ? 1 : 0)) })));
   // Дело о «крыше» ещё не открылось: идёт другое (его строчку видно выше) — заявление ждёт.
   else if (openCaseOf(state)?.id !== 'racket') out.push(el('div', 'ui-muted', t('racket.line.police')));

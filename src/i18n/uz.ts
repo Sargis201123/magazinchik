@@ -3968,6 +3968,8 @@ export const uz: Record<TextKey, string> = {
   "racket.mode.police": "🚓 Politsiyaga borish",
   "racket.mode.police.hint": "Ish ochiladi. Jumada boshligʻini aytsang — butunlay ketishadi, mahalla rahmat aytadi. Chiqmasa — rad etgandagidek zarar.",
   "racket.line.pay": "🕶 «Tom»: haftasiga {n}% · keyingi ulush {d} kundan keyin",
+  "racket.stop.refuse": "✋ Endi toʻlamayman",
+  "racket.stop.police": "🚓 Yetar, politsiyaga",
   "racket.line.refuse": "🕶 Yigitlar jahldor: yana {d} kun zarar",
   "racket.line.police": "🚓 «Tom» haqidagi arizang politsiyada: joriy ish yopilgach ochiladi",
   "racket.hit.pay": "🕶 «Tom» haftalik ulushni oldi: −{sum} 💰",

@@ -3959,6 +3959,8 @@ export const es: Record<TextKey, string> = {
   "racket.mode.police": "🚓 Ir a la policía",
   "racket.mode.police.hint": "Se abre un caso. Señala al jefe el viernes y se irán para siempre: el barrio te lo agradecerá. Si no, los mismos líos que al negarse.",
   "racket.line.pay": "🕶 «Protección»: {n}% semanal · próximo pago en {d} d.",
+  "racket.stop.refuse": "✋ Dejar de pagar",
+  "racket.stop.police": "🚓 Basta, a la policía",
   "racket.line.refuse": "🕶 Los tipos están enfadados: líos {d} d. más.",
   "racket.line.police": "🚓 Tu denuncia está en la policía: el caso se abrirá cuando cierre el actual",
   "racket.hit.pay": "🕶 La «protección» se llevó su parte: −{sum} 💰",

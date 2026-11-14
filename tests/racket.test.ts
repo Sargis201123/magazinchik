@@ -18,6 +18,7 @@ import {
   racketShare,
   racketStarts,
   seeRacketNews,
+  stopPaying,
   TRASH_GUESTS,
   troubleCost,
   TROUBLE_DAYS,
@@ -146,12 +147,32 @@ describe('платить', () => {
     expect(openCaseOf(cops)).toMatchObject({ id: 'racket', origin: 'racket' });
   });
 
-  it('ставка не растёт выше потолка, и тогда новых поднятий нет', () => {
+  it('ставка не растёт выше потолка, и тогда новых поднятий нет — но перестать платить можно', () => {
     const top: RacketState = { from: 40, mode: 'pay', since: 40, rate: RACKET_RATE_MAX - 1 };
     const s = shop({ racket: top, echoes: { list: [{ id: 'racketRaise', due: 50, data: { n: RACKET_RATE_MAX } }] } });
     const out = answerRaise(s, 'racketRaise', 0)!;
     expect(out.racket?.rate).toBe(RACKET_RATE_MAX);
     expect(echoesOf(out).list).toEqual([]);
+    // Но выход остаётся: перестать платить можно и на потолке.
+    const quit = stopPaying({ ...out, day: 60 }, 'refuse')!;
+    expect(quit.racket).toMatchObject({ mode: 'refuse', since: 60, until: 60 + TROUBLE_DAYS });
+    expect(quit.racket?.rate).toBeUndefined();
+  });
+
+  it('перестать платить в любое утро: отказ или полиция, несостоявшееся поднятие ставки уходит', () => {
+    const s = chooseRacket(visited(), 'pay')!;
+    expect(echoesOf(s).list.some((e) => e.id === 'racketRaise')).toBe(true);
+    const later = { ...s, day: s.day + 3 };
+    const quit = stopPaying(later, 'refuse')!;
+    expect(quit.racket).toMatchObject({ mode: 'refuse', since: later.day });
+    expect(echoesOf(quit).list.some((e) => e.id === 'racketRaise')).toBe(false);
+    const cops = stopPaying(later, 'police')!;
+    expect(cops.racket?.mode).toBe('police');
+    expect(openCaseOf(cops)).toMatchObject({ id: 'racket', origin: 'racket' });
+    expect(echoesOf(cops).list.some((e) => e.id === 'racketRaise')).toBe(false);
+    // Не платишь — и перестать нечего.
+    expect(stopPaying(quit, 'police')).toBeNull();
+    expect(stopPaying(visited(), 'refuse')).toBeNull();
   });
 });
 
