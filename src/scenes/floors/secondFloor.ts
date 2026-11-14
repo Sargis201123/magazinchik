@@ -1,135 +1,309 @@
-// Второй этаж — магазин одежды в виде этажа (scenes/floorView.ts, game/clothes.ts, 13.11; 14.11 — на общей основе
-// floors/kit.ts, вид не менялся). Светлый зал: обои и
-// паркет, окна на улицу, у окон — манекены в вещах сезона, справа — примерочные с занавесками и зеркало, посередине —
-// стойки (сколько вещей на этаже, столько стоек и заполнено), стол уценки с прошлым сезоном (на распродаже — красная
-// бирка, без неё — паутинка), касса этажа с кассиром, внизу слева — лестница из магазина.
+// Второй этаж — бутик одежды (game/clothes.ts; 13.11 — первый вид, 14.11 — «как настоящий зал»).
 //
-// Покупатели поднимаются по лестнице, смотрят вещи у стойки, заходят в примерочную (занавеска задёргивается) и
-// выходят уже в обновке, крутятся у зеркала, платят на кассе и уходят вниз с розовым пакетом. Сколько их — от
-// прогноза дня (clothesPlan): стойки пусты — никто не поднимается. В лёгкой графике — меньше людей, без примерочной
-// и без бликов. Модуль — в том же отдельном файле, что и вид этажа: в первый файл игры не входит.
+// 14.11, автор: «нужно отрисовать красиво и подвал, и второй этаж, и третий. И трафик туда, и улучшения — всё как
+// в основном зале, чтобы было красиво». Прежний этаж был схемой (голые стойки на паркете, люди скользили без шагов).
+// Теперь — светлый бутик (рисунок art/clothes_art.py, план — floors/secondLayout.ts): окна во всю стену с улицей
+// и солнцем на полу, паркет «ёлочкой» с потёртостями там, где ходят, стеллаж со сложенными вещами, обувь, манекены
+// в вещах сезона, ряды стоек (сколько вещей сезона — столько стоек заполнено), примерочные со шторами, большое
+// зеркало с пуфом, круглый стол с аксессуарами на ковре, стол уценки, касса с витриной и кассиром, растения,
+// тёплые пятна света.
+//
+// Трафик — как в зале: покупатели поднимаются по лестнице и шагают (ноги и руки в такт, как motion.ts в зале, своим
+// маленьким шагомером — сцена этажа не крутит animatePeople), ходят только по проходам между мебелью (тест
+// floor2-layout), смотрят вещь у стойки, стеллажа, стола или обуви, идут в примерочную (штора задёргивается) и
+// выходят в обновке, крутятся у зеркала, встают в очередь на кассу, платят и уходят вниз с пакетом. Продавец-
+// консультант подходит к тем, кто выбирает, и подсказывает. Сколько людей — ровно покупки дня по прогнозу
+// (clothesPlan/soldBy): этаж не «продаёт» больше, чем посчитает вечер.
+//
+// Улучшения этажа (game/clothesUps.ts) видны: «Витрины» — подиумы под манекенами, споты на рейках и неоновая
+// вешалка; «Ещё примерочная» — третья кабинка на месте фикуса; «Бренды» — витрина с сумками, таблички марок на
+// стене и чёрные пакеты с золотом. Глубина — по ногам у людей и по низу у мебели: кто ниже, тот ближе. В лёгкой
+// графике — меньше людей, без пятен света и солнца на полу, свет не дышит. Без тряски. Модуль — в отдельном файле
+// вида этажа, в первый файл игры не входит.
 
 import Phaser from 'phaser';
 import { t } from '../../i18n';
 import { sound } from '../../platform/sound';
-import { clothesOf, clothesPlan, collectionFor, COLLECTION_DEFS, COLLECTIONS, oldStock, rackPlaces, SALE_OFF, soldBy, stockTotal, type Collection } from '../../game/clothes';
+import { clothesOf, clothesPlan, collectionFor, COLLECTION_DEFS, COLLECTIONS, oldStock, rackPlaces, salePrice, soldBy, stockTotal, tagPrice, type Collection } from '../../game/clothes';
+import { hasFloorUp } from '../../game/floors';
 import { guestsToday } from '../../game/day';
-import { SHIRTS, customerLook, type Look } from '../common';
+import { weatherToday } from '../../game/crisis';
+import { SHIRTS, VIEW_SUFFIX, customerLook, type Look } from '../common';
 import * as persons from '../persons';
-import { crowd, lightPool, pause as wait, prop, shell, tweenTo, walker, type FloorKit, type Point } from './kit';
+import { crowd, facingOf, lightPool, pause as wait, prop, shell, tweenTo, type Facing, type FloorKit } from './kit';
+import * as L from './secondLayout';
 
-/** Стойки: где стоят (низ) — голый этаж занимает первые четыре, после ремонта — все шесть. */
-const RACKS: Point[] = [
-  { x: 34, y: 110 },
-  { x: 66, y: 110 },
-  { x: 34, y: 152 },
-  { x: 66, y: 152 },
-  { x: 98, y: 110 },
-  { x: 98, y: 152 },
-];
+type Person = Phaser.GameObjects.Container;
+type Point = L.Point;
+
 /** Сколько вещей изображает одна полная стойка. */
 const PER_RACK = 10;
-/** Проходы (по высоте) и коридоры (по ширине): люди ходят по ним, а не сквозь стойки. */
-const AISLES = [74, 124, 168, 192];
-const CORRIDORS = [16, 118];
-const SPEED = 30;
+/** Шаг людей этажа (точек мира в секунду) — чуть спокойнее, чем в зале: в бутике не спешат. */
+const SPEED = 26;
+/** Сколько пройти на один кадр шага (как FRAME_STRIDE в зале, stride.ts — под этот темп). */
+const STRIDE = 3.2;
 /** Сколько покупателей одновременно на этаже и как часто поднимается следующий (мс). */
-const MAX_PEOPLE = 4;
+const MAX_PEOPLE = 5;
 const LITE_PEOPLE = 2;
-const SPAWN_EVERY = 2600;
+const SPAWN_EVERY = 2300;
+/** Слои, у которых есть кадры взмаха рук (art/walk.py; как SWING_LAYERS в motion.ts). */
+const SWING = new Set(['p_shirt', 'p_skin', 'p_skin_happy', 'p_skin_frown']);
 /** Кого уже показали на кассе сегодня: 13.11, ревью — этаж не должен «продавать» больше, чем продаст вечер, даже
  *  если вид открывают по нескольку раз за день. */
 let shown = { day: 0, n: 0 };
 
-/** Манекены и обновки — что носят в этой коллекции (гардероб wardrobe.ts и куртки persons.ts). */
+/** Обновка из примерочной — что носят в этой коллекции (гардероб wardrobe.ts и куртки persons.ts). */
 function wear(coll: Collection, i: number): Partial<Look> {
   if (coll === 'warm') return { coat: [0xa22633, 0x262b44, 0x3e8948][i % 3], scarf: [0xfee761, 0xe43b44, 0xffffff][i % 3], hat: i % 2 ? 'ushanka' : 'furhat', hatTint: [0x8f563b, 0xc0cbdc][i % 2] };
   if (coll === 'rain') return { outfit: 'trench', outfitTint: [0xe4a672, 0xfeae34, 0xc28569][i % 3], hat: 'beret', hatTint: [0x124e89, 0xa22633][i % 2] };
   return { outfit: 'hawaii', outfitTint: [0xffffff, 0x9cd8ff, 0xfee761][i % 3], hat: i % 2 ? 'straw' : 'sunhat', hatTint: 0xffffff };
 }
 
-const MANNEQUIN: Look = { shirt: 0xc0cbdc, skin: 0xc0cbdc, pants: 0x8b9bb4, style: 'bald' };
-
 export function buildSecond(kit: FloorKit): void {
-  const { scene: view, store, W, H, WALL, lite } = kit;
+  const { scene: view, store, W, WALL, lite } = kit;
   const state = store.state;
   const c = clothesOf(state);
   const coll = collectionFor(state.day);
-  const text = kit.text;
+  const fresh = c?.stock?.[coll] ?? 0;
+  const ups = { showcase: hasFloorUp(state, 'second', 'showcase'), fitting: hasFloorUp(state, 'second', 'fitting'), brands: hasFloorUp(state, 'second', 'brands') };
   const popup = (x: number, y: number, s: string, color = '#fee761'): void => kit.popup(x, y, s, { color, depth: 400, hold: 1400 });
   const pause = (ms: number): Promise<void> => wait(kit, ms);
-  const { walk } = walker(kit, { aisles: AISLES, corridors: CORRIDORS, speed: SPEED });
+  const season = (key: string): string => (fresh ? `${key}_${coll}` : key);
 
-  // Стены и пол.
-  shell(kit, { wall: 'fl2_wall', floor: 'fl2_floor', side: 0x3e2731, sideW: 5, strips: [[WALL - 2, 2, 0xb86f50], [WALL, 1.5, 0x733e39, 0.5]] });
-  text(W / 2 - 14, 8, `👗 ${t('floor.second')}`, 7, '#b55088').setDepth(1);
-  // Окна на улицу, у окон — манекены в вещах сезона.
-  for (const [k, x] of [24, 66].entries()) {
-    prop(kit, x, WALL - 3, 'fl2_window', { depth: 0 });
-    const m = kit.person(x, WALL + 13, { ...MANNEQUIN, ...wear(coll, k) }).setDepth(WALL + 13);
-    view.add.ellipse(x, WALL + 21, 10, 3, 0xb86f50).setDepth(WALL + 12);
-    m.setData('mannequin', true);
+  // ------------------------------------------------------------ зал: стены, пол, свет из окон
+
+  shell(kit, { wall: 'fl2b_wall', floor: 'fl2b_floor', side: 0x3e2731, sideW: 5, strips: [[WALL, 3, 0x733e39, 0.22], [WALL + 3, 3, 0x733e39, 0.08]] });
+  // Потёртости паркета — там, где ходят чаще всего: у лестницы, у кассы, перед примерочными, на перекрёстках.
+  for (const [x, y, s] of [[24, 192, 1], [128, 198, 1.1], [130, 78, 1], [52, 114, 0.8], [84, 156, 0.9], [118, 150, 0.7], [60, 196, 0.8]] as const) {
+    kit.art(x, y, 'fl2b_wear').setScale(s / 2).setDepth(-7);
   }
-  // Примерочные и зеркало у правой стены.
-  const booths = [128, 150].map((x) => prop(kit, x, WALL + 22, 'fl2_fitting'));
-  const busy = [false, false];
-  prop(kit, 105, WALL + 22, 'fl2_mirror');
-  // Стойки: пустые места (ещё не отделали — только четыре), заполненные — по запасу коллекции.
+  // Ковёр под столом аксессуаров.
+  kit.art(L.TABLE.x, L.TABLE.y - 6, 'fl2b_rug').setDepth(-6);
+  // За окнами — сезон коллекции (снег к холодам, пасмурно в сезон плащей, солнце летом), а в дождь и снег дня — сама
+  // погода. Солнце из окон ложится на пол наискось, только когда за окном ясно (в лёгкой графике — без него:
+  // сложение света по большой площади).
+  const weather = weatherToday(state);
+  const outside: Collection = weather === 'rain' || weather === 'storm' ? 'rain' : weather === 'snow' ? 'warm' : coll;
+  const sunny = (weather === 'clear' || weather === 'heat') && outside !== 'rain';
+  if (!lite && sunny) for (const x of L.WINDOWS) kit.art(x + 8, WALL, 'fl2b_sun').setOrigin(0.5, 0).setTint(0xfee761).setAlpha(0.32).setBlendMode(Phaser.BlendModes.ADD).setDepth(-5);
+
+  // ------------------------------------------------------------ задняя стена
+
+  for (const x of L.WINDOWS) prop(kit, x, WALL, outside === 'summer' ? 'fl2b_window' : `fl2b_window_${outside}`, { depth: 0 });
+  prop(kit, L.SHELF.x, L.SHELF.y, season('fl2b_shelf'));
+  // Примерочные: две, с улучшением — три (на месте фикуса).
+  const boothXs = ups.fitting ? L.BOOTHS : L.BOOTHS.slice(1);
+  const booths = boothXs.map((x) => ({ x, img: prop(kit, x, L.BOOTH_Y, 'fl2b_booth'), busy: false }));
+  if (!ups.fitting) prop(kit, L.BOOTHS[0], L.BOOTH_Y - 4, 'fl2b_ficus');
+  // «Витрины»: неоновая вешалка над примерочными и рейки со спотами над окнами; «Бренды» — таблички марок.
+  if (ups.showcase) {
+    const neon = prop(kit, L.BOOTHS[1], 29, 'fl2b_neon', { depth: 1 });
+    if (!lite) view.tweens.add({ targets: neon, alpha: 0.82, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    for (const x of L.WINDOWS) prop(kit, x, 5, 'fl2b_track', { depth: 2 });
+  }
+  // Над примерочными: до улучшений — модные картинки в рамах, с «Брендами» — таблички марок по краям.
+  if (ups.brands) for (const x of [L.BOOTHS[0], L.BOOTHS[2]]) prop(kit, x, 28, 'fl2b_logo', { depth: 1 });
+  else {
+    prop(kit, L.BOOTHS[2], 28, 'fl2b_poster1', { depth: 1 });
+    if (ups.fitting) prop(kit, L.BOOTHS[0], 28, 'fl2b_poster0', { depth: 1 });
+  }
+  if (!ups.showcase) prop(kit, L.BOOTHS[1], 28, 'fl2b_poster0', { depth: 1 });
+  // Манекены у окон в вещах сезона (свои картинки без лица — не серые люди): на подиумах («Витрины») или на своей
+  // подставке.
+  L.MANNEQUINS.forEach((m, k) => {
+    if (ups.showcase) prop(kit, m.x, m.y + 3, 'fl2b_podium', { depth: m.y - 0.5 });
+    prop(kit, m.x, m.y + 1 - (ups.showcase ? 3 : 0), `fl2b_manq_${coll}${k}`, { depth: m.y });
+  });
+
+  // ------------------------------------------------------------ зал: стойки, обувь, зеркало, стол, уценка, касса
+
   const places = rackPlaces(state);
-  const racks = RACKS.slice(0, places / PER_RACK > 4 ? 6 : 4);
-  const fresh = c?.stock?.[coll] ?? 0;
+  const racks = L.RACKS.slice(0, places / PER_RACK > 4 ? 6 : 4);
   const full = Math.ceil(fresh / PER_RACK);
-  racks.forEach((p, i) => {
-    const key = i < full ? `fl2_rack_${coll}` : 'fl2_rack';
-    const rack = prop(kit, p.x, p.y, key);
-    rack.setInteractive({ useHandCursor: true }).on('pointerup', () => {
+  const rackImgs = racks.map((p, i) => {
+    const img = prop(kit, p.x, p.y, i < full ? `fl2b_rack_${coll}` : 'fl2b_rack');
+    img.setInteractive({ useHandCursor: true }).on('pointerup', () => {
       sound.tap();
-      popup(p.x, p.y - 24, `${COLLECTION_DEFS[coll].icon} ${t('cl.stock', { n: stockTotal(c), max: places })}`, '#ffffff');
+      popup(p.x, p.y - 28, `${COLLECTION_DEFS[coll].icon} ${t('cl.stock', { n: stockTotal(c), max: places })}`, '#ffffff');
     });
+    return img;
   });
+  prop(kit, L.SHOES.x, L.SHOES.y, season('fl2b_shoes'));
+  prop(kit, L.MIRROR.x, L.MIRROR.y, 'fl2b_mirror');
+  prop(kit, L.POUF.x, L.POUF.y, 'fl2b_pouf');
+  if (ups.brands) {
+    prop(kit, L.BRAND.x, L.BRAND.y, 'fl2b_brand')
+      .setInteractive({ useHandCursor: true })
+      .on('pointerup', () => {
+        sound.tap();
+        popup(L.BRAND.x, L.BRAND.y - 34, `👜 ${t('fup.second.brands')} · ${tagPrice(state, coll)} 💰`);
+      });
+  }
+  // Без витрины марок на её месте — портновский бюст в вещи сезона: середина зала справа не пустует.
+  if (!ups.brands) prop(kit, L.BRAND.x, L.BRAND.y, season('fl2b_form'));
+  prop(kit, L.TABLE.x, L.TABLE.y, season('fl2b_table'));
   // Прошлый сезон: стол уценки. На распродаже — бирка, без неё вещи пылятся (паутинка).
-  const old = oldStock(state);
-  if (old) {
-    prop(kit, 138, 116, 'fl2_bin');
+  if (oldStock(state)) {
+    prop(kit, L.BIN.x, L.BIN.y, 'fl2b_bin');
     if (c?.sale) {
-      const tag = kit.art(138, 98, 'fl2_sale').setDepth(117);
+      const tag = kit.art(L.BIN.x, L.BIN.y - 19, 'fl2_sale').setDepth(L.BIN.y + 1);
       if (!lite) view.tweens.add({ targets: tag, angle: { from: -6, to: 6 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    } else kit.art(131, 105, 'fl2_web').setDepth(117).setAlpha(0.8);
+    } else kit.art(L.BIN.x - 8, L.BIN.y - 12, 'fl2_web').setDepth(L.BIN.y + 1).setAlpha(0.8);
   }
-  // Касса этажа: кассир за стойкой.
-  const cashier = kit.person(140, 160, { ...customerLook(0xb55088, 0), acc: 'badge' });
-  cashier.setDepth(160);
-  prop(kit, 138, 172, 'fl2_till').setInteractive({ useHandCursor: true }).on('pointerup', () => {
-    sound.tap();
-    const plan = clothesPlan(store.state, guestsToday(store.state));
-    popup(138, 146, plan && fresh ? t('cl.tap', { n: plan.sold + plan.sale, sum: plan.income - plan.wage }) : t('cl.floorEmpty'));
-  });
-  // Лестница из магазина — внизу слева.
-  prop(kit, 22, H - 31, 'fl2_stairs', { oy: 0 });
-  // Свет: тёплые пятна от люстр (в лёгкой графике — без них).
-  if (!lite) {
-    for (const [x, y] of [[50, 100], [118, 150], [60, 180]] as const) lightPool(kit, x, y, { w: 90, h: 70, tint: 0xfee761, alpha: 0.12, depth: 300 });
-  }
-  if (!fresh) text(W / 2 - 10, 132, t('cl.floorEmpty'), 6, '#733e39').setDepth(301);
+  // Касса: кассир за стойкой (стойка закрывает ему ноги).
+  const cashier = kit.person(L.CASHIER.x, L.CASHIER.y - L.FOOT, { ...customerLook(0xb55088, 0), acc: 'badge' }).setDepth(L.CASHIER.y);
+  prop(kit, L.TILL.x, L.TILL.y, 'fl2b_till')
+    .setInteractive({ useHandCursor: true })
+    .on('pointerup', () => {
+      sound.tap();
+      const plan = clothesPlan(store.state, guestsToday(store.state));
+      popup(L.TILL.x, L.TILL.y - 30, plan && fresh ? t('cl.tap', { n: plan.sold + plan.sale, sum: plan.income - plan.wage }) : t('cl.floorEmpty'));
+    });
+  // Лестница из магазина — внизу слева, растения по углам.
+  prop(kit, L.STAIRS.x, L.STAIRS.y, 'fl2b_stairs', { oy: 0, depth: -4 });
+  prop(kit, L.PLANTS[0].x, L.PLANTS[0].y, 'fl2b_plant');
+  prop(kit, L.PLANTS[1].x, L.PLANTS[1].y, 'fl2b_ficus');
 
-  // Продавец-консультант: ходит между стойками и поправляет вещи.
-  if (c?.clerk) {
-    const clerk = kit.person(50, 124, { ...customerLook(0x68386c, 0), acc: 'tie' });
-    // Следующий обход — только когда закончен прежний: 13.11, ревью — по таймеру длинный путь (4–5 с) накладывался на
-    // новый, и продавец дёргался между двумя целями.
-    if (!lite) {
-      const round = async (): Promise<void> => {
-        for (let k = 0; clerk.active; k++) {
-          const p = racks[k % racks.length];
-          await walk(clerk, { x: p.x + 6, y: p.y + 8 });
-          if (!clerk.active) return;
-          persons.setFacing(clerk, 'up');
-          await pause(1800);
-        }
-      };
-      void pause(1200).then(round);
+  // ------------------------------------------------------------ свет
+
+  if (!lite) {
+    // Тёплые пятна люстр — как свет зала (lighting.ts): мягко, поверх всего, сложением.
+    for (const [x, y] of [[52, 100], [100, 140], [140, 196], [60, 190], [140, 96]] as const) lightPool(kit, x, y, { w: 96, h: 66, tint: 0xfee761, alpha: 0.1, depth: 300, breathe: { alpha: '-=0.03', ms: 1700 + x * 7 } });
+    if (ups.showcase) {
+      // Споты — узкие конусы на манекены и стеллаж.
+      for (const m of L.MANNEQUINS) lightPool(kit, m.x, m.y - 10, { w: 28, h: 44, tint: 0xfee761, alpha: 0.32, depth: 300 });
+      lightPool(kit, L.SHELF.x, L.SHELF.y - 18, { w: 40, h: 46, tint: 0xfee761, alpha: 0.14, depth: 300 });
     }
+    if (ups.brands) lightPool(kit, L.BRAND.x, L.BRAND.y - 14, { w: 34, h: 36, tint: 0xfee761, alpha: 0.18, depth: 300 });
   }
+  if (!fresh) kit.text(W / 2 + 4, 132, t('cl.floorEmpty'), 6, '#733e39').setDepth(301).setBackgroundColor('#ead4aacc').setPadding(3, 1, 3, 1);
+
+  // ------------------------------------------------------------ люди: шаг, ходьба по проходам
+
+  const people = new Set<Person>();
+  const feet = (man: Person): Point => ({ x: man.x, y: man.y + L.FOOT });
+  /** Человечек ногами в точке p: глубина — по ногам. */
+  const spawn = (p: Point, look: Look): Person => {
+    const man = kit.person(p.x, p.y - L.FOOT, look).setDepth(p.y);
+    man.setData('step', { x: man.x, y: man.y, phase: Math.random() * 4, idle: Math.random() * 1000 });
+    people.add(man);
+    man.once('destroy', () => people.delete(man));
+    return man;
+  };
+  /** Идёт по проходам к точке ног `to`: ровным шагом, лицом туда, куда идёт. */
+  const walk = (man: Person, to: Point): Promise<void> =>
+    L.route(feet(man), to).reduce<Promise<void>>(
+      (prev, p) =>
+        prev.then(
+          () =>
+            new Promise<void>((done) => {
+              const dx = p.x - man.x;
+              const dy = p.y - L.FOOT - man.y;
+              const d = Math.hypot(dx, dy);
+              if (!man.active || d < 0.5) return done();
+              persons.setFacing(man, facingOf(dx, dy));
+              view.tweens.add({ targets: man, x: p.x, y: p.y - L.FOOT, duration: (d / SPEED) * 1000, onUpdate: () => man.setDepth(man.y + L.FOOT), onComplete: () => done() });
+            }),
+        ),
+      Promise.resolve(),
+    );
+  /** Шагомер: ноги и руки в такт пройденному пути (кадры зала, art/walk.py), стоя — чуть дышит. */
+  const step = (time: number): void => {
+    for (const man of people) {
+      if (!man.active) continue;
+      const st = man.getData('step') as { x: number; y: number; phase: number; idle: number };
+      const moved = Math.hypot(man.x - st.x, man.y - st.y);
+      st.x = man.x;
+      st.y = man.y;
+      const facing = (man.getData('facing') as Facing | undefined) ?? 'down';
+      const suffix = VIEW_SUFFIX[facing];
+      let key = `p_legs0${suffix}`;
+      let flip = facing === 'left';
+      let arms = '';
+      let bob = 0;
+      if (moved > 0.01) {
+        st.phase = (st.phase + moved / STRIDE) % 4;
+        const frame = Math.floor(st.phase);
+        if (frame === 1) key = `p_legs1${suffix}`;
+        if (frame === 3) {
+          if (suffix === '_s') key = 'p_legs2_s';
+          else {
+            key = `p_legs1${suffix}`;
+            flip = !flip;
+          }
+        }
+        arms = frame === 1 ? '_w1' : frame === 3 ? '_w2' : '';
+        bob = frame % 2 === 0 ? -0.5 : 0;
+      } else if (!lite) bob = Math.sin((time + st.idle) / 650) > 0.35 ? -0.5 : 0;
+      const legs = man.getData('legs') as Phaser.GameObjects.Image | undefined;
+      if (legs && (legs.texture.key !== key || legs.flipX !== flip)) legs.setTexture(key).setFlipX(flip);
+      for (const [img, base] of (man.getData('layers') as [Phaser.GameObjects.Image, string][] | undefined) ?? []) {
+        if (!SWING.has(base)) continue;
+        const want = base + suffix + arms;
+        if (img.texture.key !== want) img.setTexture(want);
+      }
+      for (const img of (man.getData('upper') as Phaser.GameObjects.Image[] | undefined) ?? []) img.y = bob + ((img.getData('dy') as number | undefined) ?? 0);
+    }
+  };
+  view.events.on(Phaser.Scenes.Events.UPDATE, step);
+  view.events.once(Phaser.Scenes.Events.SHUTDOWN, () => view.events.off(Phaser.Scenes.Events.UPDATE, step));
+  /** Значок над головой: всплывает и тает. */
+  const emote = (man: Person, key: string, delay = 500): void => {
+    if (!man.active) return;
+    const icon = kit.art(man.x, man.y - 14, key).setDepth(400);
+    view.tweens.add({ targets: icon, y: icon.y - 4, alpha: 0, delay, duration: 500, onComplete: () => icon.destroy() });
+  };
+  /** Вещь на стойке качнулась — её сняли посмотреть или поправили. */
+  const nudge = (img: Phaser.GameObjects.Image | undefined): void => {
+    if (img && !lite) view.tweens.add({ targets: img, angle: { from: -1.5, to: 1.5 }, duration: 160, yoyo: true, repeat: 1, onComplete: () => img.setAngle(0) });
+  };
+
+  // Кассир стоит не столбом: иногда поворачивается к пакетам.
+  if (!lite) {
+    void (async () => {
+      for (let k = 0; cashier.active; k++) {
+        await pause(3200 + (k % 3) * 900);
+        if (!cashier.active) return;
+        persons.setFacing(cashier, k % 2 ? 'left' : 'down');
+      }
+    })();
+  }
+
+  /** Кто сейчас выбирает вещь (к нему подходит консультант): где стоит и подходил ли уже. */
+  const browsing = new Map<Person, { at: Point; helped: boolean }>();
+
+  // Продавец-консультант: подходит к тем, кто выбирает, подсказывает; свободен — поправляет вещи на стойках.
+  if (c?.clerk) {
+    const clerk = spawn({ x: L.CORRIDORS[1], y: L.AISLES[1] }, { ...customerLook(0x68386c, 0), acc: 'tie' });
+    void (async () => {
+      await pause(900);
+      for (let k = 0; clerk.active; k++) {
+        const guest = [...browsing].find(([man, b]) => man.active && !b.helped);
+        if (guest) {
+          const [man, b] = guest;
+          b.helped = true;
+          const side = b.at.x > W / 2 ? -9 : 9;
+          await walk(clerk, { x: b.at.x + side, y: b.at.y });
+          if (!clerk.active) return;
+          persons.setFacing(clerk, side > 0 ? 'left' : 'right');
+          if (man.active) persons.setFacing(man, side > 0 ? 'right' : 'left');
+          emote(clerk, 'emo_question', 700);
+          await pause(1100);
+          emote(man, 'emo_star', 500);
+          await pause(900);
+          continue;
+        }
+        const i = k % racks.length;
+        await walk(clerk, L.SPOTS.rack(racks[i], 6));
+        if (!clerk.active) return;
+        persons.setFacing(clerk, 'up');
+        nudge(rackImgs[i]);
+        await pause(1500);
+      }
+    })();
+  }
+
+  // ------------------------------------------------------------ покупатели дня
 
   // Покупки дня — ровно по прогнозу: сначала вещи сезона по полной цене, потом уценка прошлых коллекций за полцены
   // (тот же порядок, что и вечером в clothesNight). Показали всех — больше никто не поднимается.
@@ -139,63 +313,111 @@ export function buildSecond(kit: FloorKit): void {
     const by = soldBy(c, plan);
     for (const id of COLLECTIONS) {
       const own = id === coll;
-      const price = own ? COLLECTION_DEFS[id].price : Math.round(COLLECTION_DEFS[id].price * SALE_OFF);
+      const price = own ? tagPrice(state, id) : salePrice(state, id);
       for (let i = 0; i < (by[id] ?? 0); i++) sales[own ? 'unshift' : 'push']({ price, bin: !own });
     }
   }
   if (shown.day !== state.day) shown = { day: state.day, n: 0 };
   if (shown.n >= sales.length) return;
+
+  /** Очередь на кассу: первый — у кассы, остальные — левее по нижнему проходу; каждый сам шагает вперёд. */
+  const queue: Person[] = [];
+  const queueSpot = (i: number): Point => ({ x: L.SPOTS.till.x - i * 11, y: L.SPOTS.till.y });
+
   crowd(kit, { every: SPAWN_EVERY, max: MAX_PEOPLE, liteMax: LITE_PEOPLE, next: () => (shown.n < sales.length ? shown.n++ : null), run: (n) => shopper(n, sales[n]) });
 
-  /** Покупатель: лестница → стойка (уценка — стол распродажи) → (примерочная → зеркало) → касса → с пакетом вниз. */
+  /** Что посмотреть: уценка — стол распродажи; своя коллекция — чаще стойка, иногда стеллаж, стол или обувь. */
+  function pick(n: number, bin: boolean): { at: Point; img?: Phaser.GameObjects.Image; rack: boolean } {
+    if (bin) return { at: L.SPOTS.bin, rack: false };
+    const filled = Math.max(1, Math.min(racks.length, full));
+    const r = n % 7;
+    if (r === 3) return { at: L.SPOTS.shelf, rack: false };
+    if (r === 5) return { at: L.SPOTS.table, rack: false };
+    if (r === 6) return { at: L.SPOTS.shoes, rack: false };
+    const i = (n * 5 + 1) % filled;
+    return { at: L.SPOTS.rack(racks[i], ((n * 7) % 13) - 6), img: rackImgs[i], rack: true };
+  }
+
+  /** Покупатель: лестница → (манекен) → вещь → (примерочная → зеркало) → очередь → касса → с пакетом вниз. */
   async function shopper(n: number, buy: { price: number; bin: boolean }): Promise<void> {
     let look = customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day);
-    let man = kit.person(22, H - 18, look).setAlpha(0);
+    let man = spawn(L.SPOTS.stairsBottom, look).setAlpha(0);
     persons.setFacing(man, 'up');
-    await tweenTo(kit, man, { y: H - 38, alpha: 1, duration: 900 });
-    const rack = buy.bin ? { x: 138, y: 116 } : racks[Math.floor(Math.random() * Math.min(racks.length, Math.max(1, full)))];
-    await walk(man, { x: rack.x + Phaser.Math.Between(-6, 6), y: rack.y + 8 });
-    if (!man.active) return;
-    persons.setFacing(man, 'up');
-    await pause(1300);
-    // Примерочная (в лёгкой графике — сразу на кассу): заходит, занавеска задёргивается, выходит в обновке.
-    const b = busy.indexOf(false);
-    if (!lite && !buy.bin && b >= 0 && man.active) {
-      busy[b] = true;
-      const booth = booths[b];
-      await walk(man, { x: booth.x, y: WALL + 28 });
+    await tweenTo(kit, man, { y: L.SPOTS.stairsTop.y - L.FOOT, alpha: 1, duration: 1100, onUpdate: () => man.setDepth(man.y + L.FOOT) });
+    // С «Витринами» каждый третий сперва засматривается на манекен у окна.
+    if (ups.showcase && n % 3 === 0) {
+      await walk(man, L.SPOTS.window[n % 2]);
       if (!man.active) return;
       persons.setFacing(man, 'up');
-      await tweenTo(kit, man, { y: WALL + 20, alpha: 0, duration: 400 });
-      booth.setTexture('fl2_fitting_shut');
-      await pause(1900);
-      booth.setTexture('fl2_fitting');
-      busy[b] = false;
-      look = { ...look, ...wear(coll, n), ...(coll === 'warm' ? { outfit: undefined } : { coat: undefined }) };
-      man.destroy();
-      man = kit.person(booth.x, WALL + 20, look).setAlpha(0);
-      persons.setFacing(man, 'down');
-      await tweenTo(kit, man, { y: WALL + 28, alpha: 1, duration: 400 });
-      // У зеркала: повернулся, полюбовался.
-      await walk(man, { x: 105, y: WALL + 32 });
-      if (!man.active) return;
-      persons.setFacing(man, 'up');
-      const heart = kit.art(man.x, man.y - 14, 'emo_heart').setDepth(400);
-      view.tweens.add({ targets: heart, y: heart.y - 4, alpha: 0, delay: 600, duration: 500, onComplete: () => heart.destroy() });
+      emote(man, 'emo_star', 400);
       await pause(1000);
     }
-    // Касса: платит и получает пакет.
-    await walk(man, { x: 134, y: 182 });
+    const goal = pick(n, buy.bin);
+    await walk(man, goal.at);
     if (!man.active) return;
     persons.setFacing(man, 'up');
-    await pause(800);
+    browsing.set(man, { at: goal.at, helped: false });
+    nudge(goal.img);
+    await pause(1500 + (n % 3) * 400);
+    if (man.active && browsing.get(man)?.helped) await pause(1600);
+    browsing.delete(man);
+    if (!man.active) return;
+    // Примерочная (вещь сезона, есть свободная): заходит, штора задёргивается, выходит в обновке.
+    const booth = buy.bin || !goal.rack ? undefined : booths.find((b) => !b.busy);
+    if (booth) {
+      booth.busy = true;
+      await walk(man, L.SPOTS.booth(booth.x));
+      if (!man.active) return void (booth.busy = false);
+      persons.setFacing(man, 'up');
+      await tweenTo(kit, man, { y: man.y - 5, alpha: 0, duration: 400 });
+      booth.img.setTexture('fl2b_booth_shut');
+      await pause(ups.fitting ? 1700 : 2100);
+      booth.img.setTexture('fl2b_booth');
+      look = { ...look, ...wear(coll, n), ...(coll === 'warm' ? { outfit: undefined } : { coat: undefined }) };
+      const at = feet(man);
+      man.destroy();
+      man = spawn({ x: at.x, y: at.y }, look).setAlpha(0);
+      persons.setFacing(man, 'down');
+      await tweenTo(kit, man, { y: man.y + 5, alpha: 1, duration: 400, onUpdate: () => man.setDepth(man.y + L.FOOT) });
+      booth.busy = false;
+      // У зеркала: повернулся, полюбовался.
+      await walk(man, L.SPOTS.mirror);
+      if (!man.active) return;
+      persons.setFacing(man, 'up');
+      emote(man, 'emo_heart', 600);
+      await pause(700);
+      persons.setFacing(man, 'left');
+      await pause(400);
+      persons.setFacing(man, 'up');
+      await pause(500);
+    }
+    // Очередь на кассу: подошёл на своё место, ушёл кто-то впереди — шагнул вперёд.
+    queue.push(man);
+    for (let at = -1; man.active; ) {
+      const i = queue.indexOf(man);
+      if (i !== at) {
+        at = i;
+        await walk(man, queueSpot(i));
+        continue;
+      }
+      if (i === 0) break;
+      persons.setFacing(man, 'right');
+      await pause(300);
+    }
+    if (!man.active) return;
+    persons.setFacing(man, 'up');
+    persons.setFacing(cashier, 'down');
+    await pause(900);
+    if (!man.active) return;
     popup(man.x, man.y - 16, `+${buy.price} 💰`);
-    man.add(kit.art(4, 3, 'fl2_bag'));
+    man.add(kit.art(4, 3, ups.brands ? 'fl2b_bag_lux' : 'fl2_bag'));
+    emote(cashier, 'emo_heart', 300);
+    queue.shift();
     // Вниз по лестнице: тает в проёме.
-    await walk(man, { x: 22, y: H - 38 });
+    await walk(man, L.SPOTS.stairsTop);
     if (!man.active) return;
     persons.setFacing(man, 'down');
-    await tweenTo(kit, man, { y: H - 18, alpha: 0, duration: 900 });
+    await tweenTo(kit, man, { y: L.SPOTS.stairsBottom.y - L.FOOT, alpha: 0, duration: 1100, onUpdate: () => man.setDepth(man.y + L.FOOT) });
     man.destroy();
   }
 }
