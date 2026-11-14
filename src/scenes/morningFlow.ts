@@ -220,6 +220,8 @@ export function showMorning(scene: StoreScene): void {
   // Утро: зал больше не закрыт — перестройка ниже зажжёт лампы, сумрак ритуала закрытия снят (lightsOn зажжёт ряды).
   lighting.hallOff(scene, -Infinity);
   if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
+  // Фургон выездной торговли вернулся вчера после закрытия (или его купили) — на своё место до соседей.
+  cars.parkVan(scene);
   cars.refillParking(scene);
   // Опечатан ли сегодня магазин после серой схемы (game/grey.ts): ленты на двери.
   building.refreshSeal(scene);
@@ -282,6 +284,8 @@ export function showMorning(scene: StoreScene): void {
         if (s.pets?.active !== was.pets?.active || s.pets?.owned !== was.pets?.owned) starPets.buildStarPet(scene);
       }
       if (adsChanged) streets.applyAds(scene);
+      // Купили фургон (game/van.ts) — сразу на парковке.
+      if (s.van && !was.van) cars.parkVan(scene);
       if (radioChanged) decorations.applyRadio(scene, true);
       // Открыли линейку своей марки — её уголок сразу на тротуаре или на кухне.
       if (s.lines !== was.lines) linesFx.applyLines(scene);
@@ -344,6 +348,8 @@ export function startDay(scene: StoreScene): void {
   lighting.lightsOn(scene);
   nightShift.flipDoorSign(scene, true);
   visitors.morningCrew(scene);
+  // Кузов загружен — фургон уезжает на выезд, под вечер вернётся (cars.ts, game/van.ts).
+  void cars.vanDepart(scene);
   // Утром рассказали, чем кончился вчерашний «проверяющий» (tricks.ts) — больше не показываем.
   if (trickResult(scene.state)) scene.state = seeTrickResult(scene.state);
   scene.stallMs = 0;

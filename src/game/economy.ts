@@ -734,6 +734,8 @@ export interface StoreState {
   rental?: import('./rental').Rental;
   /** «Бабушкина теплица» (garden.ts): когда посажено и сколько урожаев собрано. */
   garden?: import('./garden').GardenState;
+  /** Фургон выездной торговли (van.ts): сегодняшний выезд, итог прошлого. Нет поля — фургона нет. */
+  van?: import('./van').VanState;
   /** Ученик из района (apprentice.ts), выпускники с лавками на улице и с какого дня снова предложить ученика. */
   appr?: import('./apprentice').Apprentice;
   apprGrads?: import('./apprentice').ApprGrad[];
@@ -954,7 +956,13 @@ export const emptyDayStats = (): DayStats => ({
 
 const countStock = (stock: Stock): number => Object.values(stock).reduce((sum, units) => sum + (units?.length ?? 0), 0);
 
-export const warehouseCount = (state: StoreState): number => countStock(state.warehouse);
+/**
+ * Занято мест на складе. Кузов фургона (van.ts) тоже держит свои места: вечером остаток с выезда
+ * возвращается на склад, и докупить на освободившиеся места нельзя — иначе фургон работал бы как
+ * лишние 24 места мимо вместимости склада (13.11, ревью). В Заречье склад свой, кузов — центровой.
+ */
+export const warehouseCount = (state: StoreState): number =>
+  countStock(state.warehouse) + (state.van?.trip && !inZar(state) ? countStock(state.van.trip.load) : 0);
 export const warehouseOf = (state: StoreState, id: ProductId): number => state.warehouse[id]?.length ?? 0;
 export const shelfCapacity = (shelf: Shelf): number => SHELF_LEVELS[shelf.level].capacity;
 export const shelfCount = (shelf: Shelf): number => countStock(shelf.items);

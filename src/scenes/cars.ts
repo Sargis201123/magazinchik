@@ -25,6 +25,9 @@ import {
   CAR_COLORS,
   CAR_TYPES,
 } from './common';
+import { t } from '../i18n';
+import { tripToday, vanGoes, vanOutcome, VAN_EVENTS } from '../game/van';
+import { inZar } from '../game/zarshop';
 import * as lighting from './lighting';
 import * as weatherFx from './weatherFx';
 import * as persons from './persons';
@@ -209,6 +212,8 @@ export function buildParking(scene: StoreScene, next: Layout, street: number): {
   };
   scene.parkingTimer?.remove();
   scene.parkingTimer = scene.time.addEvent({ delay: 4000, loop: true, callback: () => parkingTick(scene) });
+  // Фургон выездной торговли — на своём месте, если он сейчас не в пути (game/van.ts).
+  parkVan(scene);
   return [
     { x: left - 8, y: top - 8, w: LOT.w + 16, h: LOT.h + 16 },
     { x: footX - 4, y: bottom, w: right - footX + 8, h: street - bottom },
@@ -521,9 +526,10 @@ export function carCustomer(scene: StoreScene): boolean {
  * тротуару перед въездом кто-то идёт — останавливается и пропускает его. В конце проезда —
  * на парковку (если там кто-то паркуется — ждёт), по ней — к своему месту, заезжает носом по дуге
  * и глохнет. Водитель выходит и по дорожке вдоль стены идёт на тротуар — там он уже обычный
- * покупатель (spawnCustomer), а после покупок вернётся к машине (driveHome).
+ * покупатель (spawnCustomer), а после покупок вернётся к машине (driveHome). shop — это фургон магазина
+ * возвращается с выезда (vanReturn): тот же путь, только из него никто не выходит.
  */
-export async function arriveByCar(scene: StoreScene, lot: ParkingLot, spot: ParkSpot, side: 'left' | 'right'): Promise<void> {
+export async function arriveByCar(scene: StoreScene, lot: ParkingLot, spot: ParkSpot, side: 'left' | 'right', shop = false): Promise<void> {
   const { laneX, aisleY } = lot;
   const road = scene.streetY + 24;
   const far = scene.streetY + 42;
@@ -531,7 +537,7 @@ export async function arriveByCar(scene: StoreScene, lot: ParkingLot, spot: Park
   lot.busy.drive = true;
   lot.onRoad = true;
   const from = side === 'left' ? -70 : scene.next.w + 90;
-  const car = lotCar(scene, lotCarType(), from, side === 'left' ? road : far, side === 'left' ? 0 : 180, 'customer');
+  const car = lotCar(scene, shop ? SHOP_VAN : lotCarType(), from, side === 'left' ? road : far, side === 'left' ? 0 : 180, shop ? 'shop' : 'customer');
   car.moving = true;
   spot.car = car;
   // Перед самым поворотом смотрит на тротуар: кто уже на въезде — пропускает (тормозит до конца и ждёт),
@@ -591,6 +597,10 @@ export async function arriveByCar(scene: StoreScene, lot: ParkingLot, spot: Park
   }
   car.moving = false;
   placeCar(scene, car, spot.x, spot.y, spot.up ? -90 : 90);
+  if (shop) {
+    lot.busy.aisle = false;
+    return;
+  }
   // Водитель выходит (дверь слева по ходу) и идёт по парковке к дорожке вдоль стены, по ней — на тротуар.
   let look = scene.night ? nightLook() : customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), scene.state.day);
   const big = bigDayFor(scene.state.day);
@@ -740,4 +750,93 @@ export function refillParking(scene: StoreScene): void {
     spot.car = lotCar(scene, lotCarType(), spot.x, spot.y, spot.up ? -90 : 90, 'neighbor');
     have++;
   }
+}
+
+// ---------- Фургон магазина (game/van.ts, 13.11) ----------
+
+/** Фургон магазина: свой рисунок в цветах магазина (art/van.py), без тинта. */
+const SHOP_VAN: [string, number | null, number] = ['shop_van', null, 0];
+/** За сколько секунд до закрытия фургон возвращается с выезда. */
+const VAN_BACK_SECONDS = 18;
+
+/**
+ * Своё место фургона — крайнее справа в нижнем ряду, ближе всех к проезду: уезжать и возвращаться
+ * короче. Место забирается из общих (соседская машина, вставшая туда за ночь, уезжает, пока открыто утро).
+ */
+function vanSpot(scene: StoreScene): ParkSpot | null {
+  const lot = scene.parking;
+  if (!lot || !scene.state.van || inZar(scene.state)) return null;
+  if (lot.van) return lot.van;
+  const spot = lot.spots.filter((s) => !s.up).pop();
+  if (!spot || (spot.car && spot.car.owner !== 'neighbor')) return null;
+  spot.car?.box.destroy();
+  spot.car = null;
+  lot.spots = lot.spots.filter((s) => s !== spot);
+  lot.van = spot;
+  return spot;
+}
+
+/** Фургон стоит на своём месте, если он не в пути (зовут при постройке парковки, утром и после покупки). */
+export function parkVan(scene: StoreScene): void {
+  const spot = vanSpot(scene);
+  if (!spot || spot.car || scene.vanOut === scene.state.day) return;
+  spot.car = lotCar(scene, SHOP_VAN, spot.x, spot.y, spot.up ? -90 : 90, 'shop');
+}
+
+/** Магазин открылся, кузов загружен — фургон уезжает на выезд (в лёгкой графике просто исчезает с места). */
+export async function vanDepart(scene: StoreScene): Promise<void> {
+  const lot = scene.parking;
+  const spot = vanSpot(scene);
+  const trip = tripToday(scene.state);
+  if (!lot || !spot || !trip || !vanGoes(scene.state)) return;
+  scene.vanOut = scene.state.day;
+  const car = spot.car;
+  if (!car) return;
+  scene.popup(spot.x, spot.y - 14, t('van.popupOff', { icon: VAN_EVENTS[trip.event].icon }), '#fff3b0');
+  if (scene.lite) {
+    car.box.destroy();
+    spot.car = null;
+    return;
+  }
+  // Встаёт в очередь на выезд, как водитель у края парковки (lot.waiting): новые машины не въезжают,
+  // пока он ждёт, — иначе в людный день проезд занят без просвета, и фургон простоял бы до вечера.
+  // Не дождался до вечера — так и не уехал: тогда над ним просто покажут итог (vanReturn).
+  const day = scene.state.day;
+  lot.waiting++;
+  await scene.wait(1200);
+  await until(scene, () => scene.vanOut !== day || scene.parking !== lot || lotTake(scene, lot, ['drive', 'aisle']));
+  lot.waiting = Math.max(0, lot.waiting - 1);
+  if (scene.vanOut !== day || scene.parking !== lot || !car.box.active) return;
+  car.leaving = true;
+  await lotDepart(scene, lot, spot, car);
+}
+
+/** Под вечер фургон возвращается: по улице, в проезд — и на своё место; над ним — итог выезда. */
+export function vanTick(scene: StoreScene): void {
+  if (scene.vanOut !== scene.state.day || scene.timeLeft > VAN_BACK_SECONDS) return;
+  scene.vanOut = 0;
+  void vanReturn(scene);
+}
+
+async function vanReturn(scene: StoreScene): Promise<void> {
+  const lot = scene.parking;
+  const spot = vanSpot(scene);
+  if (!lot || !spot) return;
+  // Итог считает та же чистая функция, что вечером зачислит деньги (game/van.ts): цифра над фургоном — та же.
+  const net = vanOutcome(scene.state)?.net ?? 0;
+  const show = (): void => {
+    if (spot.car?.box.active) scene.popup(spot.x, spot.y - 14, t('van.popupBack', { n: net >= 0 ? `+${net}` : `−${-net}` }), net > 0 ? '#c8ffb0' : '#ffd0d0');
+  };
+  // Так и не выехал (проезд весь день был занят) или лёгкая графика — итог сразу над местом.
+  if ((spot.car && !spot.car.leaving) || scene.lite) {
+    parkVan(scene);
+    show();
+    return;
+  }
+  // Подъезжает, когда проезд свободен и на улице есть просвет (как машины покупателей).
+  // Ещё только выезжает (тронулся под самый вечер) — сначала пусть уедет.
+  await until(scene, () => !spot.car && !lot.busy.drive && lot.waiting === 0 && !lot.onRoad && arrivalSide(scene, lot) !== null);
+  if (scene.parking !== lot || spot.car) return;
+  await arriveByCar(scene, lot, spot, arrivalSide(scene, lot) ?? 'left', true);
+  show();
 }

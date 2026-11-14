@@ -44,6 +44,7 @@ import { careerMorning, careerNight } from './career';
 import { districtGuests } from './district';
 import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
+import { settleVan, type VanResult } from './van';
 import { rentalNight, type RentalDay } from './rental';
 import { dreamGuests, dreamsNight } from './dreams';
 import { lotteryGuests, lotteryNight } from './lottery';
@@ -69,6 +70,8 @@ export interface NightSummary extends NightResult {
   branch: number;
   /** Аренда от арендаторов флигеля за день (tenants.ts). */
   rent: number;
+  /** Итог выезда фургона (van.ts) или null — сегодня не выезжал. */
+  van: VanResult | null;
   /** Прокат у входа за день (rental.ts): сколько взяли и не вернули, сколько денег; null — стойки нет или закрыта. */
   rental: RentalDay | null;
   /** Доля с Костиной тележки у входа за день (dreams.ts; 0 — тележки нет). */
@@ -127,6 +130,9 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Арендаторы флигеля платят за день — тоже до счетов (tenants.ts).
   const rent = tenantsNight(s);
   s = rent.state;
+  // Фургон вернулся с выезда (van.ts): выручка — до счетов, остаток — на склад до ночи (там он и стареет).
+  const van = settleVan(s);
+  s = van.state;
   // Прокат у входа — тоже до счетов (rental.ts). Прохожие — гости дня по утреннему состоянию: как в прогнозе утра.
   const rental = rentalNight(s, guestsToday(state));
   s = rental.state;
@@ -165,6 +171,7 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
     weekly: { completed: weekly.completed, earned: weekly.earned },
     branch: branch.income,
     rent: rent.income,
+    van: van.result,
     rental: rental.day,
     cart: cart.income,
     home: home.income,

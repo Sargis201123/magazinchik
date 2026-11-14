@@ -81,7 +81,7 @@ import {
 import { activeAds, AD_IDS, adBasket, adBlock, adExtraItems, adGuests, adPrice, adTrust, buyAd, type AdId } from './ads';
 import { actualGuestsToday, ensurePlan, guestsToday, inspectionDone, nightCycle } from './day';
 import { buyZar, homeShop, inZar, switchToday, ZAR_MAX_LEVEL, ZAR_PRICE } from './zarechye';
-import { restockPlan } from './restock';
+import { canStock, restockPlan } from './restock';
 import { addBed, bedsOf, buildGarden, GARDEN_PRICE, harvest, nextBedCost, plant, type CropId } from './garden';
 import { freeRooms, giveTenant, invitePitch, rentRoom, TENANT_IDS, TENANTS, tenantAsks, tenantsOf, upgradeCost as tenantUpCost, upgradeTenant } from './tenants';
 import { pawnOffer, refusePawn, takePawn } from './pawnshop';
@@ -127,6 +127,7 @@ import { simMoments } from './moments';
 import { carryBonus, eyeTheft, ownerTiming } from './owner';
 import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
 import { rhythmSeconds } from './tillRhythm';
+import { buyVan, loadVan, planTrip, vanEvents, vanFuel, vanOpen, vanPrice, vanWant, VAN_EVENTS, VAN_PRICE } from './van';
 
 export { rng };
 
@@ -280,6 +281,8 @@ export type Feature =
   | 'rental'
   // Лотерея у кассы (lottery.ts): ставит стойку, когда есть запас; тираж и запреты — в nightCycle, как в игре.
   | 'lottery'
+  // Выездная торговля (van.ts): покупает фургон, в дни событий докупает под выезд что там берут и грузит кузов.
+  | 'van'
   // Ученик (apprentice.ts): берёт, когда просится; ставит по кругу на кассу, склад и в зал, раз в неделю —
   // выходной, стипендию платит, хвалит, когда можно (так выпускник — друг).
   | 'apprentice'
@@ -984,6 +987,31 @@ export function simulate({
         state = buyStock(state, id, qty, best!.price, bad) ?? state;
         if (bad) state = resolveBadBatch(state, id, 'markdown', best!.price);
         purchases += qty * best!.price;
+      }
+    }
+    // Выездная торговля (van.ts): фургон — когда на него есть лишние деньги; в день события — самое выгодное
+    // из событий дня, под него докупает сколько там обычно разбирают (у самого дешёвого поставщика) и грузит.
+    if (features.van) {
+      if (!state.van && vanOpen(state) && state.money >= VAN_PRICE * 2 + reserve && canSplurge(VAN_PRICE)) {
+        state = buyVan(state) ?? state;
+        investments += VAN_PRICE;
+      }
+      const best = vanEvents(state)
+        .map((id) => ({ id, gain: (Object.keys(VAN_EVENTS[id].wants) as ProductId[]).reduce((sum, p) => sum + (canStock(state, p) ? vanWant(state, id, p) * vanPrice(p, id) : 0), 0) - vanFuel(state, id) }))
+        .sort((a, b) => b.gain - a.gain)[0];
+      const planned = state.van && best ? planTrip(state, best.id) : null;
+      if (planned && best) {
+        state = planned;
+        for (const p of (Object.keys(VAN_EVENTS[best.id].wants) as ProductId[]).filter((x) => canStock(state, x))) {
+          const offers = SUPPLIER_IDS.map((sid) => priceOf(sid, p)).filter((x): x is number => x !== null);
+          const price = Math.min(...offers);
+          const qty = Math.min(vanWant(state, best.id, p), Math.floor((state.money - reserve) / price), warehouseCapacity(state) - warehouseCount(state));
+          if (!offers.length || qty <= 0) continue;
+          const bought = buyStock(state, p, qty, price);
+          if (!bought) continue;
+          purchases += state.money - bought.money;
+          state = loadVan(bought, p, qty) ?? bought;
+        }
       }
     }
     // Кафе по соседству забирает заказ, как только магазин открылся.

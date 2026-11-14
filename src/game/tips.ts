@@ -11,10 +11,11 @@ import { hasLottery } from './lottery';
 import { echoesOf } from './echoes';
 import { crisisToday } from './crisis';
 import { hasLicense } from './license';
+import { vanOpen } from './van';
 import { greyOffer } from './grey';
 import { rentalOpen } from './rental';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -80,6 +81,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['racket', (s) => Boolean(s.racket?.mode && !s.racket.end)],
   // Серая схема (grey.ts): в утро первого предложения Жоры — чем такие сделки кончаются.
   ['grey', (s) => Boolean(greyOffer(s))],
+  // Выездная торговля (van.ts, 13.11): с минимаркета в «Уголках» продаётся фургон — сказать, пока его нет.
+  ['van', (s) => vanOpen(s) && !s.van],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -107,6 +110,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   appr: '🧢',
   racket: '🕶',
   grey: '🦊',
+  van: '🚐',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

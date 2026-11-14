@@ -513,6 +513,8 @@ export const SPRITES = [
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),
   // Легковые носом вверх и вниз — на парковке и в проезде к ней (art/sprites.py, cars_vertical).
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van'].flatMap((k) => ['up', 'down'].flatMap((d) => [`${k}_${d}`, `${k}_${d}_lights`])),
+  // Фургон магазина для выездной торговли (art/van.py, game/van.ts): вбок, носом вверх и вниз, с фарами.
+  ...['shop_van', 'shop_van_up', 'shop_van_down'].flatMap((k) => [k, `${k}_lights`]),
   'mat',
   'glow',
   'coin',

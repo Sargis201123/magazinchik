@@ -266,6 +266,9 @@ import { rentalAlert, rentalBox, rentalStatus, restockButton } from './rental';
 import { KIT_ICON, RENTAL_CAP, kitToday, rentalOf, rentalOpen } from '../game/rental';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
+import { vanBox, vanIdle, vanNewsBox, vanStatus, vanToday } from './van';
+import { vanEventName } from './vanText';
+import { vanNews, vanOpen, VAN_EVENTS } from '../game/van';
 import { applyTownGifts, townBox } from './town';
 import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
@@ -869,6 +872,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     add('careerLeft', state.career?.left);
     add('arc', !zarHere && arcToday(state));
     add('echo', !zarHere && echoNews(state));
+    add('van', !zarHere && vanNews(state));
     const picked = pickNews(state, ready);
     // Первого гостя ломбарда показали — дальше он приходит как все, даже без ответа (game/pawnshop.ts pawnMet).
     const met = picked.id === 'pawn' ? pawnMet(picked.state) : picked.state;
@@ -2112,6 +2116,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       // Серая схема (game/grey.ts): Жора с предложением мимо закона.
       case 'grey':
         return greyOfferBox(state, getState, update);
+      case 'van':
+        return vanNewsBox(state, getState, update);
       case 'arc':
         return arcBox(state, getState, update);
       case 'echo':
@@ -2378,6 +2384,24 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         details: () => [securityBox(getState())],
       },
       ...(pawnOpen(state) ? [{ id: 'pawn', icon: 'assets/pawn_ring.png', title: t('pawn.title'), status: `${pawnOf(state).loans.length}/${pawnSlots(state)}`, details: () => pawnBox(getState()) }] : []),
+      // Фургон выездной торговли (game/van.ts) — с минимаркета, в Центре.
+      ...(vanOpen(state)
+        ? [
+            {
+              id: 'van',
+              icon: 'assets/shop_van.png',
+              title: t('van.title'),
+              status: vanStatus(state),
+              alert: vanIdle(state),
+              details: () =>
+                vanBox(getState(), getState, update, () => {
+                  tab = 'buy';
+                  slideTab = true;
+                  render();
+                }),
+            },
+          ]
+        : []),
       { id: 'upgrades', icon: '⭐', title: t('upgrade.title'), status: `${owned}/${LISTED_UPGRADES.length}`, details: () => [upgradesBox(getState())] },
     ];
     return [
@@ -3758,6 +3782,19 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         t('todo.low', { list: low.map((id) => PRODUCTS[id].icon).join('') }),
         button(t('todo.lowBtn'), () => {
           tab = 'buy';
+          slideTab = true;
+          render();
+        }, 'ui-chip'),
+      );
+    }
+    // Сегодня есть куда выехать, а фургон пуст — к его плитке в «Уголках» (game/van.ts).
+    const vanEvent = vanToday(state);
+    if (vanEvent && vanIdle(state)) {
+      row(
+        t('van.todo', { icon: VAN_EVENTS[vanEvent].icon, name: vanEventName(state, vanEvent) }),
+        button(t('van.todoBtn'), () => {
+          tab = 'extras';
+          openCorner = 'van';
           slideTab = true;
           render();
         }, 'ui-chip'),
