@@ -6,6 +6,7 @@
 // Нет поля floors (старое сохранение) — этажей нет, всё как раньше. Этаж принадлежит зданию в Центре: в Заречье
 // (zarshop.ts) его не видно и не купить — как ломбард в подсобке.
 
+import { FOOD_UPS } from './foodcourtUps';
 import type { StoreState } from './economy';
 import { homeLevel, inZar } from './zarshop';
 
@@ -169,6 +170,8 @@ export interface FloorUpgrade {
 export const FLOOR_UPGRADES: Record<FloorId, FloorUpgrade[]> = { basement: [], second: [], third: [] };
 
 const upgradeDef = (id: FloorId, up: string): FloorUpgrade | undefined => FLOOR_UPGRADES[id].find((u) => u.id === up);
+// Третий этаж — фудкорт: дизайн зала, детская зона, сцена (foodcourtUps.ts, 14.11).
+FLOOR_UPGRADES.third.push(...FOOD_UPS);
 
 /** Купленные улучшения этажа (только известные этой сборке; кривое поле старого сохранения — как пусто). */
 export function floorUps(state: StoreState, id: FloorId): string[] {

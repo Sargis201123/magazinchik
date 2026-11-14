@@ -15,7 +15,7 @@
 // нет): всё как раньше. В Заречье этаж Центра стоит закрытым.
 
 import { PRODUCTS, onShelves, sellableProducts, warehouseOf, type ProductId, type StoreState } from './economy';
-import { floorOf } from './floors';
+import { floorBonus, floorOf } from './floors';
 import { addGoodwill } from './goodwill';
 import { kitchenOpen, kitchenWorking } from './kitchen';
 import { take } from './tales';
@@ -166,15 +166,21 @@ export function closeStall(state: StoreState, id: StallId): StoreState | null {
 /** Выходные по игровому календарю (cases.ts weekDay: 6 — суббота, 7 — воскресенье): за столиками семьи. */
 export const isFoodWeekend = (state: StoreState): boolean => ((state.day - 1) % 7) + 1 >= 6;
 
-/** Поток едоков: ремонт, выходные (семьи), помещение выше «Универмага». */
+/**
+ * Поток едоков: ремонт, выходные (семьи), помещение выше «Универмага». 14.11 — и улучшения этажа (foodcourtUps.ts):
+ * дизайн зала (eaters), детская зона — к выходному множителю (family), сцена — вечерний наплыв (evening). Нет
+ * улучшений (старое сохранение) — бонусы нулевые, всё как раньше.
+ */
 function eatersFactor(state: StoreState): number {
   const finish = (floorOf(state, 'third')?.finish ?? 0) > 0 ? 1 + FINISH_BOOST : 1;
-  return finish * (isFoodWeekend(state) ? WEEKEND_EATERS : 1) * (1 + LEVEL_EATERS * Math.max(0, homeLevel(state) - 4));
+  const weekend = isFoodWeekend(state) ? WEEKEND_EATERS + floorBonus(state, 'third', 'family') : 1;
+  const ups = (1 + floorBonus(state, 'third', 'eaters')) * (1 + floorBonus(state, 'third', 'evening'));
+  return finish * weekend * ups * (1 + LEVEL_EATERS * Math.max(0, homeLevel(state) - 4));
 }
 
-/** Аренда точки за вечер: после ремонта зал наряднее — платят больше. */
+/** Аренда точки за вечер: после ремонта и с улучшениями этажа (rent, 14.11) зал наряднее — платят больше. */
 export const stallRent = (state: StoreState, id: StallId): number =>
-  Math.round(STALLS[id].rent * ((floorOf(state, 'third')?.finish ?? 0) > 0 ? 1 + FINISH_BOOST : 1));
+  Math.round(STALLS[id].rent * ((floorOf(state, 'third')?.finish ?? 0) > 0 ? 1 + FINISH_BOOST : 1) * (1 + floorBonus(state, 'third', 'rent')));
 
 // ---------- Жалоба и праздник ----------
 
