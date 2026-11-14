@@ -23,6 +23,7 @@ import { crispZoom } from './pixels';
 import { calledElsewhere, safeTop } from './camera';
 import * as persons from './persons';
 import * as basementFx from './basementFx';
+import * as clothesFloor from './clothesFloor';
 import { buildFoodcourt, type FloorKit } from './foodcourtView';
 
 /**
@@ -83,6 +84,8 @@ export class FloorView extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.frame, this);
     // Этаж по id: второй и третий допишут сюда свой build.
     if (this.id === 'basement') this.buildBasement();
+    // Второй этаж — магазин одежды (game/clothes.ts): свой модуль, тот же размер зала.
+    else if (this.id === 'second') clothesFloor.build(this, this.store, W, H, WALL);
     else if (this.id === 'third') buildFoodcourt(this.kit());
     this.cameras.main.fadeIn(FADE_MS, 24, 20, 37);
     // «Наверх» — кнопкой интерфейса внизу, как остальные кнопки игры.

@@ -346,6 +346,12 @@ export function finishDay(scene: StoreScene): void {
   // Автоматы в подвале (game/basement.ts): сколько дали за вечер (после доли «крыши») или облава.
   const slots = night.slots;
   if (slots) extra.push([t('bsm.summary'), slots.raid ? t('bsm.raid', { n: slots.raid.n, fine: slots.raid.fine }) : t('bsm.summaryValue', { n: slots.players, sum: slots.income - slots.share })]);
+  // Второй этаж — одежда (game/clothes.ts): сколько вещей ушло (с распродажи — отдельно) и сколько осталось после продавца.
+  const clothes = night.clothes;
+  if (clothes && (clothes.sold || clothes.sale || clothes.wage)) {
+    const sale = clothes.sale ? ` · ${t('cl.summarySale', { n: clothes.sale })}` : '';
+    extra.push([t('cl.summary'), `${t('cl.summaryValue', { n: clothes.sold, sum: clothes.income - clothes.wage })}${sale}`]);
+  }
   // Фудкорт на третьем этаже (game/foodcourt.ts): едоки и деньги за вечер; точку закрыли по жалобе — тоже строкой.
   const court = night.food;
   if (court) extra.push([t('floor.third'), `${t('fc.summaryValue', { n: court.eaters, sum: court.income })}${court.closed ? ` · ${t('fc.summaryClosed', { name: t(`fc.stall.${court.closed}` as TextKey) })}` : ''}`]);

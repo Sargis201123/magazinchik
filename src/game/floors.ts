@@ -9,9 +9,9 @@
 import type { StoreState } from './economy';
 import { homeLevel, inZar } from './zarshop';
 
-/** Этажи здания. Второй этаж допишется сюда же (тип, FLOORS, вид в floorView). Третий — фудкорт (foodcourt.ts). */
-export type FloorId = 'basement' | 'third';
-export const FLOOR_IDS: FloorId[] = ['basement', 'third'];
+/** Этажи здания: подвал, второй (одежда, clothes.ts), третий (фудкорт, foodcourt.ts). Новый этаж — тип, FLOORS, вид в floorView. */
+export type FloorId = 'basement' | 'second' | 'third';
+export const FLOOR_IDS: FloorId[] = ['basement', 'second', 'third'];
 
 export interface FloorDef {
   /** С какого помещения (индекс STORE_LEVELS) этаж можно открыть. */
@@ -23,8 +23,8 @@ export interface FloorDef {
   /** Значок в меню и над дверью этажа в мире. */
   icon: string;
   /**
-   * Какой этаж должен быть открыт раньше (третий — над вторым). 13.11: второй этаж делается параллельно, его id —
-   * 'second'; пока такого этажа в FLOORS нет, условие не действует (floorLock) — третий открывается по помещению.
+   * Какой этаж должен быть открыт раньше (третий — над вторым). Этажа с таким id нет в FLOORS (старая сборка) —
+   * условие не действует (floorLock).
    */
   needs?: string;
 }
@@ -35,6 +35,9 @@ export interface FloorDef {
  */
 export const FLOORS: Record<FloorId, FloorDef> = {
   basement: { minLevel: 2, cost: 3000, finish: [2500], icon: '🪜' },
+  // Второй этаж — магазин одежды (clothes.ts, 13.11): с «Супермаркета». У него ≈ 130 гостей в день — наверх
+  // поднимаются 3–4 покупателя, этаж окупается примерно за месяц, если вовремя завозить партии по сезону.
+  second: { minLevel: 3, cost: 8000, finish: [6000], icon: '👗' },
   // Третий этаж — фудкорт (foodcourt.ts, 13.11): с «Универмага», дорого — как неделя выручки большого магазина.
   // Ремонт (витражи, свет) — четвёртое место под точку еды и зал наряднее.
   third: { minLevel: 4, cost: 30000, finish: [18000], icon: '🍕', needs: 'second' },

@@ -129,6 +129,7 @@ import { carryBonus, eyeTheft, ownerTiming } from './owner';
 import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
 import { buyFloor, finishCost, finishFloor, floorAvailable, FLOORS, hasFloor } from './floors';
 import { basementOf, buyPart, buySlot, PARTS, SLOT_COST, slotPlaces } from './basement';
+import { batchCost, buyBatch, clothesOf, freePlaces, setClerk, setSale } from './clothes';
 import { answerInspection, answerParty, inspectionToday, openStall, ownAllowed, partyToday, setStallMode, stallLock, stallMode, stallPlaces, stallsOf, STALL_IDS, STALLS } from './foodcourt';
 import { rhythmSeconds } from './tillRhythm';
 import { buyVan, loadVan, planTrip, vanEvents, vanFuel, vanOpen, vanPrice, vanWant, VAN_EVENTS, VAN_PRICE } from './van';
@@ -299,12 +300,16 @@ export type Feature =
   // (и подсобку, если ведёт ломбард), потом автоматы — до мест в подвале, ремонт — когда два уже стоят.
   // Облавы и уход мам с детьми — в nightCycle и гостях дня, как в игре.
   | 'basement'
+  // Второй этаж — одежда (floors.ts, clothes.ts, 13.11): открывает, когда не копит на помещение; каждое утро
+  // докупает партии текущей коллекции до полных стоек, остатки прошлого сезона всегда распродаёт, продавца
+  // нанимает с универмага (там гостей хватает, чтобы он окупался), ремонт — когда стойки полны.
+  | 'clothes'
   // Район дорожает (gentrify.ts, 13.11): престиж растёт сам, на выбор утром отвечает как в SimOptions.gentrify.
   // Без этой механики престиж в прогоне не копится: на прежних прогонах откалиброван баланс (аренда и прайс — как были).
   | 'gentrify'
   // Фудкорт на третьем этаже (floors.ts, foodcourt.ts, 13.11): открывает этаж, когда не копит на помещение, точки —
   // по одной, своей точку ведёт, только если повар на смене (иначе сдаёт); ремонт — когда места кончились. Праздник
-  // берёт, если товар есть; на жалобу — наводит порядок.
+  // берёт, если товар есть; на жалобу — наводит порядок. Третий стоит на втором: без него сначала открывает второй.
   | 'foodcourt';
 
 /** В каком порядке разумный игрок докупает полки. */
@@ -882,12 +887,29 @@ export function simulate({
         else if (fin !== null) spend(fin, finishFloor(state, 'basement'));
       }
     }
+    if (features.clothes) {
+      const spend = (price: number, next: StoreState | null): void => {
+        if (!next || state.money < price * 2 + reserve || !canSplurge(price)) return;
+        state = next;
+        investments += price;
+      };
+      if (floorAvailable(state, 'second')) spend(FLOORS.second.cost, buyFloor(state, 'second'));
+      if (clothesOf(state)) {
+        state = setSale(state, true) ?? state;
+        if (state.level >= 4) state = setClerk(state, true) ?? state;
+        for (let k = 0; k < 6 && freePlaces(state) > 0 && state.money >= batchCost(state) + reserve; k++) state = buyBatch(state) ?? state;
+        const fin = finishCost(state, 'second');
+        if (fin !== null && !freePlaces(state)) spend(fin, finishFloor(state, 'second'));
+      }
+    }
     if (features.foodcourt) {
       const spend = (price: number, next: StoreState | null): void => {
         if (!next || state.money < price * 2 + reserve || !canSplurge(price)) return;
         state = next;
         investments += price;
       };
+      // Третий этаж стоит на втором (FLOORS.third.needs): без одежды второй открывают пустым — как проход наверх.
+      if (floorAvailable(state, 'second')) spend(FLOORS.second.cost, buyFloor(state, 'second'));
       if (floorAvailable(state, 'third')) spend(FLOORS.third.cost, buyFloor(state, 'third'));
       if (hasFloor(state, 'third')) {
         const mode = ownAllowed(state) && staffOf(state, 'cook') ? 'own' : 'rent';

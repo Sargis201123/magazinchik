@@ -280,9 +280,9 @@ describe('подсказка и симулятор', () => {
   it('симулятор с фудкортом идёт до конца, открывает этаж и ставит точки', () => {
     const run = simulate({ days: 110, seed: 3, features: { foodcourt: true } });
     expect(run.days.length).toBe(110);
-    if (!below) {
-      expect(hasFloor(run.final, 'third')).toBe(true);
-      expect(stallsOf(run.final).length).toBeGreaterThan(0);
-    }
+    // Третий стоит на втором: симулятор сперва открывает второй (пустым), потом фудкорт.
+    if (below) expect(hasFloor(run.final, below)).toBe(true);
+    expect(hasFloor(run.final, 'third')).toBe(true);
+    expect(stallsOf(run.final).length).toBeGreaterThan(0);
   });
 });

@@ -1,6 +1,7 @@
 // Раздел «Этажи» во вкладке «Развитие» (game/floors.ts, game/basement.ts, 13.11): открыть этаж, отделать его и
-// обустроить то, что на нём живёт. Подвал — целиком здесь; третий этаж (фудкорт, game/foodcourt.ts) — открыть и
-// отделать здесь, а точки еды и то, что на нём случается за день, — в плитке «Фудкорт» вкладки «Уголки».
+// обустроить то, что на нём живёт. Подвал — целиком здесь; второй этаж (одежда) — открыть здесь, стойки и партии —
+// своим блоком в ui/clothes.ts; третий этаж (фудкорт, game/foodcourt.ts) — открыть и отделать здесь, а точки еды и то,
+// что на нём случается за день, — в плитке «Фудкорт» вкладки «Уголки».
 // Автоматы подаём сухо: что дают и чем за них платишь (гости, облавы, «крыша») — рядом, одной строкой, без «азарта».
 
 import { t, type TextKey } from '../i18n';
@@ -30,6 +31,8 @@ import {
 import { track } from '../platform/analytics';
 import { button, el, toast } from './dom';
 import { setItemIcon } from './sheet';
+import { clothesRows } from './clothes';
+import { clothesOf, stockTotal } from '../game/clothes';
 import { stallPlaces, stallsOf, STALL_PLACES } from '../game/foodcourt';
 
 type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void;
@@ -55,10 +58,12 @@ export const warn = (text: string): HTMLElement => {
   return note;
 };
 
-/** Сводка свёрнутого раздела: что открыто и сколько автоматов (и точек фудкорта). */
+/** Сводка свёрнутого раздела: что открыто и сколько автоматов (вещей на стойках второго этажа, точек фудкорта). */
 export function floorsSummary(state: StoreState): string {
   const b = basementOf(state);
+  const c = clothesOf(state);
   const parts = b ? [t('floors.summary', { n: b.slots, max: slotPlaces(state) })] : [];
+  if (c) parts.push(t('floors.second', { n: stockTotal(c) }));
   if (floorOf(state, 'third')) parts.push(t('floors.summaryFood', { n: stallsOf(state).length, max: stallPlaces(state) }));
   return parts.length ? parts.join(' · ') : t('floors.closed');
 }
@@ -76,21 +81,28 @@ export function floorsBox(state: StoreState, getState: () => StoreState, update:
   box.append(el('b', '', `${FLOORS.basement.icon} ${t('floors.title')}`), el('div', 'ui-muted', t('floors.note')));
   if (!floorOf(state, 'basement')) box.append(openRow(state, 'basement', getState, update));
   else box.append(...basementRows(state, getState, update));
-  // Третий этаж — фудкорт: с «Супермаркета» видно, что он будет (замок до «Универмага»).
+  // Второй этаж — одежда (game/clothes.ts, 13.11): показываем с «Минимаркета» (за шаг до «Супермаркета»), чтобы
+  // было видно, к чему расти.
+  if (nearFloor(state, 'second')) {
+    if (!floorOf(state, 'second')) box.append(openRow(state, 'second', getState, update));
+    else box.append(...clothesRows(state, getState, update, row, warn));
+  }
+  // Третий этаж — фудкорт: с «Супермаркета» видно, что он будет (замок до «Универмага» и до второго этажа).
   if (nearFloor(state, 'third')) box.append(...thirdRows(state, getState, update));
   return [box];
 }
 
-/** Что показать у закрытого этажа: картинка, название, что там. */
-const FLOOR_ROW: Partial<Record<FloorId, { art: string; name: TextKey; note: TextKey; opened: TextKey }>> = {
+/** Что показать у закрытого этажа: картинка, название, что там, и что сказать после открытия. */
+const FLOOR_ROW: Record<FloorId, { art: string; name: TextKey; note: TextKey; opened: TextKey }> = {
   basement: { art: 'bsm_stairs', name: 'floor.basement', note: 'floor.basement.note', opened: 'floor.opened' },
+  second: { art: 'fl2_front', name: 'floor.second', note: 'floor.second.note', opened: 'floor.second.opened' },
   third: { art: 'fc_lift', name: 'floor.third', note: 'floor.third.note', opened: 'floor.third.opened' },
 };
 
 /** Этаж ещё не открыт: картинка, что там, и кнопка (или замок до нужного помещения / этажа ниже). */
 function openRow(state: StoreState, id: FloorId, getState: () => StoreState, update: Update): HTMLElement {
   const def = FLOORS[id];
-  const look = FLOOR_ROW[id] ?? FLOOR_ROW.basement!;
+  const look = FLOOR_ROW[id];
   const lock = floorLock(state, id);
   const notes = [t(look.note)];
   if (lock === 'level') notes.push(`🔒 ${t('floors.lock', { name: t(STORE_LEVELS[def.minLevel].nameKey) })}`);
