@@ -6,7 +6,7 @@
 
 import { t, type TextKey } from '../i18n';
 import { STORE_LEVELS, type StoreState } from '../game/economy';
-import { buyFloor, finishCost, finishFloor, floorLock, floorOf, FLOORS, type FloorId } from '../game/floors';
+import { buyFloor, buyFloorUp, finishCost, finishFloor, FLOOR_UPGRADES, floorLock, floorOf, FLOORS, floorUpLock, type FloorId } from '../game/floors';
 import {
   BACK_PAWN_SLOTS,
   basementOf,
@@ -80,16 +80,46 @@ export function floorsBox(state: StoreState, getState: () => StoreState, update:
   const box = el('div', 'ui-box');
   box.append(el('b', '', `${FLOORS.basement.icon} ${t('floors.title')}`), el('div', 'ui-muted', t('floors.note')));
   if (!floorOf(state, 'basement')) box.append(openRow(state, 'basement', getState, update));
-  else box.append(...basementRows(state, getState, update));
+  else box.append(...basementRows(state, getState, update), ...floorUpRows(state, 'basement', getState, update));
   // Второй этаж — одежда (game/clothes.ts, 13.11): показываем с «Минимаркета» (за шаг до «Супермаркета»), чтобы
   // было видно, к чему расти.
   if (nearFloor(state, 'second')) {
     if (!floorOf(state, 'second')) box.append(openRow(state, 'second', getState, update));
-    else box.append(...clothesRows(state, getState, update, row, warn));
+    else box.append(...clothesRows(state, getState, update, row, warn), ...floorUpRows(state, 'second', getState, update));
   }
   // Третий этаж — фудкорт: с «Супермаркета» видно, что он будет (замок до «Универмага» и до второго этажа).
-  if (nearFloor(state, 'third')) box.append(...thirdRows(state, getState, update));
+  if (nearFloor(state, 'third')) box.append(...thirdRows(state, getState, update), ...floorUpRows(state, 'third', getState, update));
   return [box];
+}
+
+/**
+ * Улучшения открытого этажа (game/floors.ts FLOOR_UPGRADES, 14.11): строка на каждое — название, что даёт, кнопка с
+ * ценой или почему пока нельзя. Тексты — fup.<этаж>.<id> и fup.<этаж>.<id>.note: их добавляет модуль этажа вместе
+ * с улучшением. Этаж закрыт или улучшений нет — строк нет.
+ */
+export function floorUpRows(state: StoreState, id: FloorId, getState: () => StoreState, update: Update): HTMLElement[] {
+  if (!floorOf(state, id)) return [];
+  return FLOOR_UPGRADES[id].map((u) => {
+    const lock = floorUpLock(state, id, u.id);
+    const notes = [t(`fup.${id}.${u.id}.note` as TextKey)];
+    if (lock === 'level') notes.push(`🔒 ${t('floors.lock', { name: t(STORE_LEVELS[u.minLevel ?? 0].nameKey) })}`);
+    if (lock === 'finish') notes.push(`🔒 ${t('fup.lockFinish')}`);
+    if (lock === 'needs') notes.push(`🔒 ${t('fup.lockNeeds', { name: t(`fup.${id}.${u.needs}` as TextKey) })}`);
+    const action =
+      lock === 'owned'
+        ? el('span', 'ui-tag', t('bsm.part.on'))
+        : button(
+            `${u.price} 💰`,
+            () => {
+              const next = buyFloorUp(getState(), id, u.id);
+              if (next) track('floor_up', next.day, u.price);
+              update(next, 'success');
+            },
+            'ui-chip',
+            Boolean(lock) || state.money < u.price,
+          );
+    return row(u.art ?? FLOOR_ROW[id].art, `${u.icon} ${t(`fup.${id}.${u.id}` as TextKey)}`, notes, [action]);
+  });
 }
 
 /** Что показать у закрытого этажа: картинка, название, что там, и что сказать после открытия. */
@@ -180,12 +210,15 @@ function basementRows(state: StoreState, getState: () => StoreState, update: Upd
     );
   }
   if (b.slots) actions.push(button(t('bsm.slot.sell', { n: Math.round(SLOT_COST * SLOT_RESALE) }), () => update(sellSlot(getState())), 'ui-chip'));
-  out.push(row('bsm_slot', t('bsm.slots', { n: b.slots, max }), notes, actions));
+  out.push(row('bsm_slot2', t('bsm.slots', { n: b.slots, max }), notes, actions));
   for (const part of PART_IDS) out.push(partRow(state, part, getState, update));
   return out;
 }
 
-/** Склад-холодильник и подсобка ломбарда: что дают и кнопка «Обустроить». */
+/**
+ * Склад-холодильник и подсобка ломбарда: что дают и кнопка «Обустроить». Картинки строк (и строки автоматов) —
+ * из нового рисунка подвала (art/basement_art.py, 14.11): в меню то же, что игрок видит внизу.
+ */
 function partRow(state: StoreState, part: BasementPart, getState: () => StoreState, update: Update): HTMLElement {
   const has = basementOf(state)?.parts?.includes(part);
   const cost = PARTS[part].cost;
@@ -194,5 +227,5 @@ function partRow(state: StoreState, part: BasementPart, getState: () => StoreSta
   const action = has
     ? el('span', 'ui-tag', t('bsm.part.on'))
     : button(`${cost} 💰`, () => update(buyPart(getState(), part), 'success'), 'ui-chip', state.money < cost);
-  return row(part === 'cold' ? 'bsm_cold' : 'bsm_back', t(part === 'cold' ? 'bsm.cold' : 'bsm.back'), [note], [action]);
+  return row(part === 'cold' ? 'bsm_cold2' : 'bsm_pawn', t(part === 'cold' ? 'bsm.cold' : 'bsm.back'), [note], [action]);
 }

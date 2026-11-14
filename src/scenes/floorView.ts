@@ -1,76 +1,75 @@
 // Вид этажа (game/floors.ts, 13.11): отдельная сцена Phaser поверх магазина. Магазин под ней работает как обычно —
-// день идёт, покупатели ходят, касса считает; эта сцена только показывает этаж и закрывается кнопкой «Наверх» (или
-// сама, когда день кончился). Своя сцена, а не угол того же мира: у подвала свой свет — лампочки под потолком, — и
-// ни карта освещения улицы, ни цветокоррекция часа (light.ts, grade.ts) его не трогают. Модуль подгружается, только
-// когда игрок впервые спускается (basementFx.floorDown), — в первый файл игры он не входит.
+// день идёт, покупатели ходят, касса считает; эта сцена только показывает этаж. Своя сцена, а не угол того же мира:
+// у каждого этажа свой свет (лампочки подвала, люстры одежды, вывески фудкорта), и ни карта освещения улицы, ни
+// цветокоррекция часа (light.ts, grade.ts) его не трогают. Модуль подгружается, только когда игрок впервые едет на
+// этаж (floors/nav.ts), — в первый файл игры он не входит.
 //
-// Подвал (game/basement.ts): кирпич, бетонный пол, лестница сверху слева, автоматы у задней стены (их экраны мигают;
-// в лёгкой графике горят ровно), у автоматов — завсегдатаи (меняются: кто-то уходит наверх, кто-то спускается),
-// справа — склад-холодильник, внизу справа — «серая» подсобка с полкой «Разное» ломбарда. После облавы на месте
-// автоматов — лента с печатью. Третий этаж — фудкорт — строит foodcourtView.ts (через FloorKit); второй допишет свой build по id.
+// 14.11, автор: «в левой части экрана — переключение между этажами». Ездят переключателем слева (ui/floorSwitch.ts,
+// floors/nav.ts): с этажа на этаж — сцена гаснет и уезжает вверх или вниз, как кабина лифта, и встаёт заново с
+// другим этажом (перезапуск сцены); в зал — гаснет, магазин светлеет (nav.floorUp). Без тряски, в лёгкой графике —
+// только затемнение. Кнопки «Наверх» больше нет: её место занял переключатель, а кадр этажа сдвинут вправо, чтобы
+// переключатель не закрывал зал. Что на каком этаже — модули floors/basementFloor.ts, secondFloor.ts,
+// thirdFloor.ts на общей основе floors/kit.ts.
 
 import Phaser from 'phaser';
 import type { StoreScene } from './StoreScene';
-import type { FloorId } from '../game/floors';
-import { basementOf, raidLock, slotPlaces, slotsPlan } from '../game/basement';
-import { pawnOf } from '../game/pawnshop';
-import { t } from '../i18n';
-import { button, el, UI_FONT } from '../ui/dom';
-import { haptic } from '../platform/telegram';
-import { sound } from '../platform/sound';
-import { ART, HUD_TOP, SHIRTS, customerLook } from './common';
+import { stopLevel, type FloorId, type FloorStop } from '../game/floors';
+import { UI_FONT } from '../ui/dom';
+import { ART, HUD_TOP } from './common';
 import { crispZoom } from './pixels';
-import { calledElsewhere, safeTop } from './camera';
+import { safeTop } from './camera';
 import * as persons from './persons';
-import * as basementFx from './basementFx';
-import * as clothesFloor from './clothesFloor';
-import { buildFoodcourt, type FloorKit } from './foodcourtView';
+import * as nav from './floors/nav';
+import type { FloorBuild, FloorKit, PopupStyle } from './floors/kit';
+import { buildBasement } from './floors/basementFloor';
+import { buildSecond } from './floors/secondFloor';
+import { buildThird } from './floors/thirdFloor';
 
 /**
- * Размер зала подвала в точках мира и высота задней стены. Зал выше, чем шире: телефон держат вертикально — так
- * подвал занимает экран по ширине при ровном масштабе, а не полоской посередине.
+ * Размер зала этажа в точках мира и высота задней стены. Зал выше, чем шире: телефон держат вертикально — так
+ * этаж занимает экран по ширине при ровном масштабе, а не полоской посередине.
  */
 const W = 168;
 const H = 230;
 const WALL = 44;
-/** Места автоматов у задней стены (середины) и где стоит тот, кто играет. */
-const SLOT_X = [50, 72, 94, 116];
-const SLOT_Y = WALL + 6;
-const PLAYER_DY = 11;
-/** Внизу экрана — кнопка «Наверх» (в базовых точках интерфейса, как HUD_BOTTOM у камеры магазина). */
-const BOTTOM = 96;
-/** Низ лестницы: отсюда спускаются и сюда уходят завсегдатаи. */
-const STAIRS_FOOT = { x: 22, y: WALL + 8 };
-/** Как часто у автомата меняется человек (мс). */
-const SWAP_EVERY = 5200;
+/** Снизу — кнопки звука и ускорения (в базовых точках интерфейса, как HUD_BOTTOM у камеры магазина). */
+const BOTTOM = 64;
+/** Сколько места слева занимает переключатель этажей (CSS px), если его не измерить: см. ui/floorSwitch.ts. */
+const SWITCH_CSS = 66;
+/** Ровный масштаб берём, если он не мельче «впритык» больше чем на столько. */
+const CRISP_MIN = 0.92;
 const FADE_MS = 320;
+/** На сколько (доля высоты экрана) кадр уезжает вверх или вниз при переезде между этажами. */
+const SLIDE = 0.1;
+
+/** Модули этажей: новый этаж — тип в game/floors.ts и строка здесь. */
+const BUILD: Record<FloorId, FloorBuild> = {
+  basement: buildBasement,
+  second: buildSecond,
+  third: buildThird,
+};
 
 /** Человечки сцены этажа: persons.makePerson ждёт сцену магазина — даём ей «магазин» с тем, что ему нужно. */
 type PersonHost = Pick<StoreScene, 'art' | 'add' | 'people'>;
 
 export class FloorView extends Phaser.Scene {
   private store!: StoreScene;
-  private id: FloorId = 'basement';
-  private upBtn?: HTMLButtonElement;
+  /** Какой этаж показан (переключатель берёт отсюда, где мы). */
+  id: FloorId = 'basement';
+  /** Откуда приехали: из зала или с другого этажа — с какой стороны въезжает кадр. */
+  private from: FloorStop = 'hall';
   private leaving = false;
   private host!: PersonHost;
-  private players: (Phaser.GameObjects.Container | null)[] = [];
-  /** Наверху что-то ждёт касания (camera.calledElsewhere) — «Наверх» светится, над ней строка; когда проверить снова. */
-  private hallCall = false;
-  private hallLine?: HTMLElement;
-  private checkAt = 0;
 
   constructor() {
     super({ key: 'floor' });
   }
 
-  init(data: { store: StoreScene; id: FloorId }): void {
+  init(data: { store: StoreScene; id: FloorId; from?: FloorStop }): void {
     this.store = data.store;
     this.id = data.id;
+    this.from = data.from ?? 'hall';
     this.leaving = false;
-    this.players = [];
-    this.hallCall = false;
-    this.checkAt = 0;
   }
 
   art(x: number, y: number, key: string): Phaser.GameObjects.Image {
@@ -82,17 +81,9 @@ export class FloorView extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x181425);
     this.frame();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.frame, this);
-    // Этаж по id: второй и третий допишут сюда свой build.
-    if (this.id === 'basement') this.buildBasement();
-    // Второй этаж — магазин одежды (game/clothes.ts): свой модуль, тот же размер зала.
-    else if (this.id === 'second') clothesFloor.build(this, this.store, W, H, WALL);
-    else if (this.id === 'third') buildFoodcourt(this.kit());
-    this.cameras.main.fadeIn(FADE_MS, 24, 20, 37);
-    // «Наверх» — кнопкой интерфейса внизу, как остальные кнопки игры.
-    this.upBtn = button(`⬆️ ${t('floor.up')}`, () => this.leave(), 'ui-btn floor-up');
-    this.upBtn.style.cssText = 'position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: auto; padding: 10px 22px; z-index: 30;';
-    document.body.append(this.upBtn);
-    // Кнопки вида и двора двигают камеру магазина, подсказка зала ложится на «Наверх» — пока смотрим этаж, их нет (ui/hud.ts).
+    BUILD[this.id](this.kit());
+    this.arrive();
+    // Кнопки вида и двора двигают камеру магазина, подсказка зала ложится на этаж — пока смотрим этаж, их нет (ui/hud.ts).
     if (!document.getElementById('floor-style')) {
       const style = document.createElement('style');
       style.id = 'floor-style';
@@ -101,68 +92,80 @@ export class FloorView extends Phaser.Scene {
     }
     document.body.classList.add('on-floor');
     // 13.11, ревью: этаж закрывает весь экран — магазин под ним не рисуем (вдвое меньше работы на кадр). День
-    // наверху идёт как шёл: update сцены магазина работает, пропускается только отрисовка. Обратно — basementFx.floorUp.
+    // наверху идёт как шёл: update сцены магазина работает, пропускается только отрисовка. Обратно — nav.floorUp.
     this.store.scene.setVisible(false);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.frame, this);
-      this.upBtn?.remove();
-      this.hallLine?.remove();
-      this.hallLine = undefined;
       document.body.classList.remove('on-floor');
     });
   }
 
-  update(time: number): void {
-    // День кончился (ритуал закрытия, итоги) или магазин закрыли — наверх сами.
-    if (!this.leaving && (!this.store.sys.isActive() || !this.store.running)) this.leave();
-    if (this.leaving || time < this.checkAt) return;
-    this.checkAt = time + 300;
-    this.callUp(calledElsewhere(this.store));
+  update(): void {
+    // День кончился (ритуал закрытия, итоги) или магазин закрыли — в зал сами.
+    if (!this.leaving && (!this.store.sys.isActive() || !this.store.running)) this.leave('hall');
+  }
+
+  /** Въезд: кадр светлеет; приехали с другой высоты — заодно доезжает сверху или снизу (в лёгкой графике — без этого). */
+  private arrive(): void {
+    const cam = this.cameras.main;
+    cam.fadeIn(FADE_MS, 24, 20, 37);
+    const dir = Math.sign(stopLevel(this.id) - stopLevel(this.from));
+    if (!this.store.lite && dir) {
+      // Едем вверх — новый этаж опускается сверху на место (камера была ниже и поднимается), вниз — наоборот.
+      const rest = cam.scrollY;
+      cam.scrollY = rest + dir * this.slide();
+      this.tweens.add({ targets: cam, scrollY: rest, duration: FADE_MS + 120, ease: 'Sine.easeOut' });
+    }
+    nav.arrived();
+  }
+
+  /** Насколько уезжает кадр (в точках мира этажа). */
+  private slide(): number {
+    return (this.scale.height * SLIDE) / this.cameras.main.zoom;
   }
 
   /**
-   * 13.11, ревью: касания магазина на время этажа выключены, а наверху вор у полки, «момент» дня или готовая печь
-   * ждут игрока. Наверху на такое зовёт камера (общий план); здесь — «Наверх» светится, над ней строка и лёгкий
-   * отклик. Сами не уводим: игрок решает, когда подняться.
+   * Камера: весь зал этажа в кадре между верхней панелью и низом, правее переключателя этажей, масштаб ровный, где
+   * можно. Переключатель меряем по его месту на экране (нет его — по ширине из CSS).
    */
-  private callUp(call: boolean): void {
-    if (call === this.hallCall) return;
-    this.hallCall = call;
-    this.upBtn?.classList.toggle('ui-nudge', call);
-    this.hallLine?.remove();
-    this.hallLine = undefined;
-    if (!call) return;
-    haptic.tap();
-    this.hallLine = el('div', 'ui-nudge-line', `👀 ${t('floor.hall')}`);
-    this.hallLine.style.cssText = 'position: fixed; left: 50%; bottom: calc(66px + env(safe-area-inset-bottom)); transform: translateX(-50%); margin: 0; white-space: nowrap; z-index: 30; pointer-events: none;';
-    document.body.append(this.hallLine);
-  }
-
-  /** Камера: весь зал этажа в кадре между верхней панелью и кнопкой «Наверх», масштаб ровный, где можно. */
   private frame(): void {
     const cam = this.cameras.main;
     const { width, height } = this.scale;
     const res = width / 720;
+    const canvas = this.game.canvas?.getBoundingClientRect();
+    const px = canvas && canvas.width > 0 ? width / canvas.width : 1;
+    const box = document.querySelector('.ui-floors')?.getBoundingClientRect();
+    const left = Math.max(0, ((box && box.width > 0 ? box.right : SWITCH_CSS) - (canvas?.left ?? 0)) * px);
     const top = HUD_TOP * res + safeTop(this.store);
-    const avail = height - top - BOTTOM * res;
-    const fit = Math.min(width / (W + 8), avail / (H + 8));
-    const zoom = crispZoom(fit, ART, 0, fit) || fit;
+    const availW = width - left;
+    const availH = height - top - BOTTOM * res;
+    const fit = Math.min(availW / (W + 8), availH / (H + 8));
+    // Ровный масштаб — только если он почти не мельче «впритык»: справа от переключателя места меньше, и ровный
+    // шаг вниз делал зал на четверть мельче (14.11).
+    const zoom = crispZoom(fit, ART, fit * CRISP_MIN, fit) || fit;
     cam.setZoom(zoom);
-    cam.centerOn(W / 2, H / 2 + (height / 2 - (top + avail / 2)) / zoom);
+    cam.centerOn(W / 2 + (width / 2 - (left + availW / 2)) / zoom, H / 2 + (height / 2 - (top + availH / 2)) / zoom);
   }
 
-  /** Наверх: этаж гаснет, магазин светлеет (basementFx.floorUp), сцена этажа останавливается. */
-  leave(): void {
-    if (this.leaving) return;
+  /**
+   * Уехать: в зал (кадр гаснет, магазин светлеет — nav.floorUp) или на другой этаж (кадр гаснет и уезжает
+   * вверх/вниз, сцена встаёт заново с другим этажом). Второй вызов, пока уезжаем, ничего не делает.
+   */
+  leave(to: FloorStop): void {
+    if (this.leaving || to === this.id) return;
     this.leaving = true;
-    haptic.tap();
-    this.upBtn?.remove();
-    this.hallLine?.remove();
     const cam = this.cameras.main;
+    const dir = Math.sign(stopLevel(to) - stopLevel(this.id));
+    // Едем вверх — этаж уходит вниз (камера поднимается), вниз — вверх.
+    if (!this.store.lite && dir) this.tweens.add({ targets: cam, scrollY: cam.scrollY - dir * this.slide(), duration: FADE_MS, ease: 'Sine.easeIn' });
     cam.fadeOut(FADE_MS, 24, 20, 37);
     cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      basementFx.floorUp(this.store);
-      this.scene.stop();
+      if (to === 'hall' || !this.store.sys.isActive() || !this.store.running) {
+        nav.floorUp(this.store, this.id);
+        this.scene.stop();
+        return;
+      }
+      this.scene.restart({ store: this.store, id: to, from: this.id });
     });
   }
 
@@ -171,7 +174,7 @@ export class FloorView extends Phaser.Scene {
     return this.add.text(x, y, s, { fontFamily: UI_FONT, fontSize: `${size}px`, fontStyle: 'bold', color }).setOrigin(0.5).setResolution(Math.max(1, Math.round(zoom)));
   }
 
-  /** Что нужно чужому build этажа (фудкорт, foodcourtView.ts): своё рисование, подписи и человечки этой сцены. */
+  /** Что модуль этажа получает от сцены: своё рисование, подписи, всплывашки и человечки (floors/kit.ts). */
   private kit(): FloorKit {
     return {
       scene: this,
@@ -179,146 +182,28 @@ export class FloorView extends Phaser.Scene {
       W,
       H,
       WALL,
+      lite: this.store.lite,
       art: (x, y, key) => this.art(x, y, key),
       text: (x, y, s, size, color) => this.text(x, y, s, size, color),
-      popup: (x, y, s) => this.popup(x, y, s),
+      popup: (x, y, s, style) => this.popup(x, y, s, style),
       person: (x, y, look) => persons.makePerson(this.host as unknown as StoreScene, x, y, look),
       leaving: () => this.leaving,
     };
   }
 
-  private buildBasement(): void {
-    const state = this.store.state;
-    const lite = this.store.lite;
-    const tile = (x: number, y: number, w: number, h: number, key: string, depth: number) =>
-      this.add.tileSprite(x, y, w, h, key).setOrigin(0).setTileScale(1 / ART).setDepth(depth);
-    tile(0, 0, W, WALL, 'bsm_brick', -10);
-    tile(0, WALL, W, H - WALL, 'bsm_floor', -10);
-    // Плинтус и тень у стены, боковые стены — темнее.
-    this.add.rectangle(0, WALL, W, 2, 0x181425, 0.6).setOrigin(0).setDepth(-9);
-    this.add.rectangle(0, 0, 5, H, 0x181425).setOrigin(0).setDepth(-8);
-    this.add.rectangle(W - 5, 0, 5, H, 0x181425).setOrigin(0).setDepth(-8);
-    this.art(5, 0, 'bsm_stairs').setOrigin(0).setDepth(2);
-    this.text(W / 2 + 14, 9, `🪜 ${t('floor.basement')}`, 7, '#fee761').setDepth(1);
-    const b = basementOf(state);
-    const plan = slotsPlan(state);
-    const n = b?.slots ?? 0;
-    // Автоматы у задней стены; экран мигает (в лёгкой графике — горит ровно), под ним — отсвет на полу.
-    for (let i = 0; i < n; i++) {
-      const x = SLOT_X[i];
-      const glow = this.art(x, SLOT_Y + 4, 'glow').setDisplaySize(22, 12).setTint(0x2ce8f5).setAlpha(0.25).setBlendMode(Phaser.BlendModes.ADD).setDepth(SLOT_Y - 1);
-      const slot = this.art(x, SLOT_Y, 'bsm_slot').setOrigin(0.5, 1).setDepth(SLOT_Y);
-      const lit = this.art(x, SLOT_Y, 'bsm_slot_lit').setOrigin(0.5, 1).setDepth(SLOT_Y + 0.1);
-      if (!lite) this.tweens.add({ targets: [lit, glow], alpha: { from: 1, to: 0.45 }, duration: 380 + i * 70, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [3], delay: i * 160 });
-      slot.setInteractive({ useHandCursor: true }).on('pointerup', () => {
-        sound.tap();
-        if (plan) this.popup(x, SLOT_Y - 26, t('bsm.tap', { n: plan.players, sum: plan.income - plan.share }));
-      });
-    }
-    // Свободные места под автоматы — меловой контур на полу; после облавы — лента с печатью.
-    const places = slotPlaces(state);
-    for (let i = n; i < places; i++) this.add.rectangle(SLOT_X[i], SLOT_Y - 1, 12, 4).setStrokeStyle(0.5, 0x8b9bb4, 0.6).setDepth(-7);
-    if (raidLock(state)) this.art((SLOT_X[0] + SLOT_X[places - 1]) / 2, SLOT_Y - 12, 'grey_seal').setDepth(SLOT_Y + 1);
-    // Склад-холодильник — у правой стены, иней светится холодным.
-    if (b?.parts?.includes('cold')) {
-      this.art(W - 26, SLOT_Y, 'bsm_cold').setOrigin(0.5, 1).setDepth(SLOT_Y);
-      // Перед холодильником — поддон с водой: склад магазина теперь и здесь.
-      this.art(W - 26, SLOT_Y + 24, 'pallet_water').setScale(0.7 / ART).setOrigin(0.5, 1).setDepth(SLOT_Y + 24);
-      this.art(W - 26, SLOT_Y + 3, 'glow').setDisplaySize(26, 10).setTint(0x9cd8ff).setAlpha(0.25).setBlendMode(Phaser.BlendModes.ADD).setDepth(SLOT_Y - 1);
-    }
-    if (b?.parts?.includes('back')) this.buildBack(W - 42, H - 34);
-    if (!n && !b?.parts?.length) this.text(W / 2 + 10, WALL + 60, t('bsm.empty'), 6, '#8b9bb4').setDepth(5);
-    // Своя жизнь подвала: трубы вдоль левой стены, старые коробки в углу, лужица под трубой.
-    this.add.rectangle(7, WALL, 1.6, H - WALL, 0x5a6988).setOrigin(0).setDepth(-6);
-    this.add.rectangle(10, WALL, 1.2, H - WALL, 0x3a4466).setOrigin(0).setDepth(-6);
-    this.add.ellipse(16, H - 70, 14, 4, 0x3a4466, 0.7).setDepth(-6);
-    for (const [x, y] of [[24, H - 22], [38, H - 20], [30, H - 30]] as const) this.art(x, y, 'box').setOrigin(0.5, 1).setDepth(y);
-    // Стол, за которым завсегдатаи пьют чай между заходами, и огнетушитель на стене у лестницы.
-    this.art(70, 136, 'cafe_table').setOrigin(0.5, 1).setDepth(136);
-    this.art(40, 30, 'extinguisher').setDepth(1);
-    // Лампочки: под потолком у стены — на шнурах, дальше по залу — голые лампы; вокруг — тёплый круг света.
-    // В обычной графике свет чуть дышит, в лёгкой — горит ровно.
-    const lamps: [number, number, boolean][] = [[40, 16, true], [84, 16, true], [128, 16, true], [56, 120, false], [118, 170, false]];
-    for (const [x, y, cord] of lamps) {
-      if (cord) this.add.rectangle(x, 0, 0.6, y - 1, 0x181425).setOrigin(0.5, 0).setDepth(20);
-      this.add.circle(x, y, 1.6, 0xfee761).setDepth(20);
-      const pool = this.art(x, cord ? y + 38 : y + 4, 'glow').setDisplaySize(88, 70).setTint(0xfeae34).setAlpha(0.22).setBlendMode(Phaser.BlendModes.ADD).setDepth(19);
-      const halo = this.art(x, y, 'glow').setDisplaySize(18, 18).setTint(0xfee761).setAlpha(0.6).setBlendMode(Phaser.BlendModes.ADD).setDepth(21);
-      if (!lite) this.tweens.add({ targets: [pool, halo], alpha: '-=0.06', duration: 900 + x * 3, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    }
-    // Тёмный низ: подвал освещён пятнами, не ровно.
-    this.add.rectangle(0, H - 40, W, 40, 0x181425, 0.35).setOrigin(0).setDepth(18);
-    // Завсегдатаи у автоматов: сколько сегодня придёт, но не больше мест.
-    const busy = Math.min(n, plan?.players ?? 0);
-    for (let i = 0; i < busy; i++) this.players[i] = this.player(SLOT_X[i], SLOT_Y + PLAYER_DY);
-    if (!lite && n) this.time.addEvent({ delay: SWAP_EVERY, loop: true, callback: () => this.swap(n) });
-  }
-
-  /** «Серая» подсобка: перегородка, занавеска, на полке — вещи ломбарда (на продажу — с ценником). */
-  private buildBack(x: number, bottom: number): void {
-    this.art(x, bottom, 'bsm_back').setOrigin(0.5, 1).setDepth(bottom);
-    const p = pawnOf(this.store.state);
-    const things = [...p.shelf.map((s) => ({ id: s.item, sale: true })), ...p.loans.map((l) => ({ id: l.item, sale: false }))];
-    const left = x - 18 + 13;
-    const rows = [bottom - 26 + 8, bottom - 26 + 17];
-    things.slice(0, 12).forEach((thing, k) => {
-      const ix = left + (k % 6) * 4.6;
-      const iy = rows[Math.floor(k / 6)];
-      this.art(ix, iy, `pawn_${thing.id}`).setOrigin(0.5, 1).setDepth(bottom + 0.1 + k * 0.01);
-      if (thing.sale) this.art(ix + 2, iy - 4, 'pawn_tag').setDepth(bottom + 0.3);
-    });
-  }
-
-  /** Человек у автомата — спиной к нам, лицом к экрану. */
-  private player(x: number, y: number): Phaser.GameObjects.Container {
-    const look = customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), this.store.state.day);
-    const man = persons.makePerson(this.host as unknown as StoreScene, x, y, look).setDepth(y);
-    persons.setFacing(man, 'up');
-    return man;
-  }
-
-  /** Один уходит к лестнице и тает, другой спускается и встаёт к свободному автомату. */
-  private swap(n: number): void {
-    if (this.leaving) return;
-    const i = Phaser.Math.Between(0, n - 1);
-    const old = this.players[i];
-    if (old?.active) {
-      this.players[i] = null;
-      persons.setFacing(old, 'left');
-      this.tweens.add({ targets: old, x: STAIRS_FOOT.x + 8, y: STAIRS_FOOT.y + 2, duration: 1800, ease: 'Linear' });
-      this.tweens.add({ targets: old, alpha: 0, delay: 1500, duration: 400, onComplete: () => old.destroy() });
-      return;
-    }
-    const man = this.player(STAIRS_FOOT.x, STAIRS_FOOT.y - 18);
-    man.setAlpha(0);
-    persons.setFacing(man, 'down');
-    this.players[i] = man;
-    this.tweens.add({ targets: man, alpha: 1, duration: 300 });
-    this.tweens.add({
-      targets: man,
-      y: STAIRS_FOOT.y + 2,
-      duration: 900,
-      onComplete: () => {
-        if (!man.active) return;
-        persons.setFacing(man, 'right');
-        this.tweens.add({ targets: man, x: SLOT_X[i], y: SLOT_Y + PLAYER_DY, duration: 1600, onComplete: () => man.active && persons.setFacing(man, 'up') });
-      },
-    });
-  }
-
-  private popup(x: number, y: number, s: string): void {
-    const label = this.text(x, y, s, 5, '#c8f0ff').setDepth(40);
+  /** Строка над точкой: держится hold мс, потом всплывает и тает; у краёв зала не вылезает за стену. */
+  private popup(x: number, y: number, s: string, style: PopupStyle = {}): void {
+    const label = this.text(x, y, s, 5, style.color ?? '#c8f0ff').setDepth(style.depth ?? 40);
     label.setBackgroundColor('#181425cc').setPadding(2, 1, 2, 1);
-    if (label.x - label.displayWidth / 2 < 2) label.setX(2 + label.displayWidth / 2);
-    if (label.x + label.displayWidth / 2 > W - 2) label.setX(W - 2 - label.displayWidth / 2);
-    this.tweens.add({ targets: label, y: y - 6, alpha: 0, delay: 1600, duration: 600, onComplete: () => label.destroy() });
+    label.setX(Phaser.Math.Clamp(label.x, 2 + label.displayWidth / 2, W - 2 - label.displayWidth / 2));
+    this.tweens.add({ targets: label, y: y - 6, alpha: 0, delay: style.hold ?? 1600, duration: 600, onComplete: () => label.destroy() });
   }
 }
 
 /** Открыть вид этажа поверх магазина (сцена создаётся один раз, дальше — перезапуск). */
-export function openFloor(store: StoreScene, id: FloorId): void {
+export function openFloor(store: StoreScene, id: FloorId, from: FloorStop = 'hall'): void {
   const scenes = store.game.scene;
   if (!scenes.getScene('floor')) scenes.add('floor', FloorView, false);
-  store.scene.launch('floor', { store, id });
+  store.scene.launch('floor', { store, id, from });
   store.scene.bringToTop('floor');
 }

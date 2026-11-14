@@ -6,10 +6,12 @@
 // Нет поля floors (старое сохранение) — этажей нет, всё как раньше. Этаж принадлежит зданию в Центре: в Заречье
 // (zarshop.ts) его не видно и не купить — как ломбард в подсобке.
 
+import { FOOD_UPS } from './foodcourtUps';
 import type { StoreState } from './economy';
 import { homeLevel, inZar } from './zarshop';
+import { CLOTHES_UPS } from './clothesUps';
 
-/** Этажи здания: подвал, второй (одежда, clothes.ts), третий (фудкорт, foodcourt.ts). Новый этаж — тип, FLOORS, вид в floorView. */
+/** Этажи здания: подвал, второй (одежда, clothes.ts), третий (фудкорт, foodcourt.ts). Новый этаж — тип, FLOORS, модуль вида в scenes/floors/ и строка BUILD в floorView. */
 export type FloorId = 'basement' | 'second' | 'third';
 export const FLOOR_IDS: FloorId[] = ['basement', 'second', 'third'];
 
@@ -43,10 +45,12 @@ export const FLOORS: Record<FloorId, FloorDef> = {
   third: { minLevel: 4, cost: 30000, finish: [18000], icon: '🍕', needs: 'second' },
 };
 
-/** Этаж в сохранении: с какого дня открыт и ступень отделки (0 — голые стены). */
+/** Этаж в сохранении: с какого дня открыт, ступень отделки (0 — голые стены) и купленные улучшения этажа. */
 export interface Floor {
   since: number;
   finish: number;
+  /** Улучшения этажа (FLOOR_UPGRADES, 14.11): id купленных. Нет поля (старое сохранение) — ничего не куплено. */
+  up?: string[];
 }
 
 export type FloorsState = Partial<Record<FloorId, Floor>>;
@@ -97,4 +101,112 @@ export function finishFloor(state: StoreState, id: FloorId): StoreState | null {
   const cost = finishCost(state, id);
   if (!f || cost === null || state.money < cost) return null;
   return { ...state, money: state.money - cost, floors: { ...state.floors, [id]: { ...f, finish: f.finish + 1 } } };
+}
+
+// ---------------------------------------------------------------- переключатель этажей
+//
+// 14.11, автор: «в левой части экрана должно появиться переключение между этажами — нажимать в углу магазина на
+// подвал не очень удобно». Какие остановки показывает лифт (ui/floorSwitch.ts, scenes/floors/nav.ts) — решает игра:
+// открытые этажи, зал и один серый — следующий этаж, до которого игрок может дорасти. Чистая функция от состояния.
+
+/** Остановка лифта: этаж здания или зал магазина. */
+export type FloorStop = FloorId | 'hall';
+/** Остановки сверху вниз — как кнопки в лифте: третий, второй, зал, подвал. */
+export const STOP_ORDER: FloorStop[] = ['third', 'second', 'hall', 'basement'];
+/** Высота остановки: подвал −1, зал 0, второй 1, третий 2 — куда ехать, вверх или вниз (переход в виде этажа). */
+export const stopLevel = (stop: FloorStop): number => (stop === 'basement' ? -1 : stop === 'hall' ? 0 : stop === 'second' ? 1 : 2);
+
+export interface StopInfo {
+  id: FloorStop;
+  /** Можно поехать: зал или открытый этаж. Нет — серая кнопка с замком (почему — lock). */
+  open: boolean;
+  /** Почему этаж закрыт (floorLock): null — можно открыть в «Развитии» хоть сейчас, если хватает денег. */
+  lock?: ReturnType<typeof floorLock>;
+}
+
+/**
+ * Кнопки лифта сверху вниз. Пусто — переключателя нет: Заречье, или ни один этаж не открыт и открыть пока нечего
+ * (до «Минимаркета» — меньше шума на экране новичка). Серый — только ближайший неоткрытый этаж (по порядку подвал →
+ * второй → третий): показать, к чему расти, а не весь список замков.
+ */
+export function floorStops(state: StoreState): StopInfo[] {
+  if (inZar(state)) return [];
+  const open = new Set(openFloors(state));
+  const next = FLOOR_IDS.find((id) => !open.has(id));
+  const nextLock = next ? floorLock(state, next) : 'open';
+  if (!open.size && nextLock !== null) return [];
+  return STOP_ORDER.flatMap((id): StopInfo[] => {
+    if (id === 'hall' || open.has(id)) return [{ id, open: true }];
+    return id === next && nextLock !== 'open' && nextLock !== 'zar' ? [{ id, open: false, lock: nextLock }] : [];
+  });
+}
+
+// ---------------------------------------------------------------- улучшения этажей
+//
+// 14.11: общая основа улучшений для всех этажей — как оборудование основного зала (gear.ts): ступени с ценой и
+// условием, купленное меняет вид этажа и даёт числа, которые модуль этажа читает сам (floorBonus). Списки по
+// этажам заполняют их модули; здесь — только правила: сохранение (state.floors[id].up), условия, покупка.
+
+export interface FloorUpgrade {
+  id: string;
+  /** Значок в меню и в подписи на этаже. */
+  icon: string;
+  /** Картинка строки в меню (кадр атласа); нет — картинка этажа. */
+  art?: string;
+  price: number;
+  /** С какого помещения (индекс STORE_LEVELS); нет — с любого, где открыт этаж. */
+  minLevel?: number;
+  /** Какая ступень отделки этажа нужна (FLOORS[id].finish); нет — и на голых стенах. */
+  finish?: number;
+  /** Какое улучшение этого же этажа нужно раньше (ступени одной линейки). */
+  needs?: string;
+  /**
+   * Что даёт: числа по именам, которые читает модуль этажа (floorBonus): { guests: 0.1 } — гостей этажа +10%.
+   * Имена — договорённость модуля этажа; одинаковые у нескольких улучшений складываются.
+   */
+  effect?: Readonly<Record<string, number>>;
+}
+
+/** Улучшения по этажам (порядок — как в меню). Пусто — у этажа их пока нет. Заполняют модули этажей. */
+export const FLOOR_UPGRADES: Record<FloorId, FloorUpgrade[]> = { basement: [], second: [], third: [] };
+// Второй этаж — одежда: витрины, примерочная, бренды (clothesUps.ts, 14.11).
+FLOOR_UPGRADES.second.push(...CLOTHES_UPS);
+
+const upgradeDef = (id: FloorId, up: string): FloorUpgrade | undefined => FLOOR_UPGRADES[id].find((u) => u.id === up);
+// Третий этаж — фудкорт: дизайн зала, детская зона, сцена (foodcourtUps.ts, 14.11).
+FLOOR_UPGRADES.third.push(...FOOD_UPS);
+
+/** Купленные улучшения этажа (только известные этой сборке; кривое поле старого сохранения — как пусто). */
+export function floorUps(state: StoreState, id: FloorId): string[] {
+  const up = floorOf(state, id)?.up;
+  return Array.isArray(up) ? up.filter((u): u is string => typeof u === 'string' && Boolean(upgradeDef(id, u))) : [];
+}
+
+export const hasFloorUp = (state: StoreState, id: FloorId, up: string): boolean => floorUps(state, id).includes(up);
+
+/**
+ * Почему улучшение нельзя купить: этаж не открыт, нет такого, уже есть, мало помещение, мало отделки, нет ступени
+ * раньше; null — можно (если хватает денег).
+ */
+export function floorUpLock(state: StoreState, id: FloorId, up: string): 'closed' | 'unknown' | 'owned' | 'level' | 'finish' | 'needs' | null {
+  const f = floorOf(state, id);
+  if (!f) return 'closed';
+  const def = upgradeDef(id, up);
+  if (!def) return 'unknown';
+  if (hasFloorUp(state, id, up)) return 'owned';
+  if (def.minLevel !== undefined && homeLevel(state) < def.minLevel) return 'level';
+  if (def.finish !== undefined && f.finish < def.finish) return 'finish';
+  return def.needs && !hasFloorUp(state, id, def.needs) ? 'needs' : null;
+}
+
+export function buyFloorUp(state: StoreState, id: FloorId, up: string): StoreState | null {
+  const def = upgradeDef(id, up);
+  const f = floorOf(state, id);
+  if (!def || !f || floorUpLock(state, id, up) || state.money < def.price) return null;
+  return { ...state, money: state.money - def.price, floors: { ...state.floors, [id]: { ...f, up: [...floorUps(state, id), up] } } };
+}
+
+/** Сумма чисел key по купленным улучшениям этажа (0 — ничего не куплено или этажа нет). */
+export function floorBonus(state: StoreState, id: FloorId, key: string): number {
+  return floorUps(state, id).reduce((sum, up) => sum + (upgradeDef(id, up)?.effect?.[key] ?? 0), 0);
 }
