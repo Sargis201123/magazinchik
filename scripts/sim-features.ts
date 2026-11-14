@@ -57,6 +57,9 @@ const scenarios: [string, Partial<SimOptions>][] = [
   // Подвал (13.11): склад-холодильник, автоматы до мест, ремонт; облавы и уход мам с детьми — как в игре.
   ['подвал с автоматами', { features: { basement: true } }],
   ['подвал + ломбард', { features: { basement: true, pawn: true } }],
+  // Фудкорт (13.11): этаж с «Универмага», точки по одной (своя — если на кухне повар), ремонт, праздники, жалобы.
+  ['фудкорт', { features: { foodcourt: true } }],
+  ['фудкорт + кухня с поваром', { features: { foodcourt: true, kitchen: true } }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 

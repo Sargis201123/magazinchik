@@ -1,8 +1,9 @@
 // Раздел «Этажи» во вкладке «Развитие» (game/floors.ts, game/basement.ts, 13.11): открыть этаж, отделать его и
-// обустроить то, что на нём живёт. Сейчас этаж один — подвал; второй и третий допишутся сюда же своим блоком.
+// обустроить то, что на нём живёт. Подвал — целиком здесь; третий этаж (фудкорт, game/foodcourt.ts) — открыть и
+// отделать здесь, а точки еды и то, что на нём случается за день, — в плитке «Фудкорт» вкладки «Уголки».
 // Автоматы подаём сухо: что дают и чем за них платишь (гости, облавы, «крыша») — рядом, одной строкой, без «азарта».
 
-import { t } from '../i18n';
+import { t, type TextKey } from '../i18n';
 import { STORE_LEVELS, type StoreState } from '../game/economy';
 import { buyFloor, finishCost, finishFloor, floorLock, floorOf, FLOORS, type FloorId } from '../game/floors';
 import {
@@ -29,11 +30,12 @@ import {
 import { track } from '../platform/analytics';
 import { button, el, toast } from './dom';
 import { setItemIcon } from './sheet';
+import { stallPlaces, stallsOf, STALL_PLACES } from '../game/foodcourt';
 
 type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void;
 
-/** Строка с картинкой из атласа (как artRow утра, morning.ts — своя, чтобы не тянуть утро сюда). */
-function row(texture: string, name: string, notes: (string | HTMLElement)[], actions: HTMLElement[]): HTMLElement {
+/** Строка с картинкой из атласа (как artRow утра, morning.ts — своя, чтобы не тянуть утро сюда). Её же берёт ui/foodcourt.ts. */
+export function row(texture: string, name: string, notes: (string | HTMLElement)[], actions: HTMLElement[]): HTMLElement {
   const item = el('div', 'ui-item');
   const img = el('img', 'ui-item-art');
   setItemIcon(img, texture);
@@ -47,52 +49,81 @@ function row(texture: string, name: string, notes: (string | HTMLElement)[], act
 }
 
 /** Красная строка — цена для репутации. */
-const warn = (text: string): HTMLElement => {
+export const warn = (text: string): HTMLElement => {
   const note = el('div', 'ui-item-sub', text);
   note.style.color = '#b13e53';
   return note;
 };
 
-/** Сводка свёрнутого раздела: что открыто и сколько автоматов. */
+/** Сводка свёрнутого раздела: что открыто и сколько автоматов (и точек фудкорта). */
 export function floorsSummary(state: StoreState): string {
   const b = basementOf(state);
-  return b ? t('floors.summary', { n: b.slots, max: slotPlaces(state) }) : t('floors.closed');
+  const parts = b ? [t('floors.summary', { n: b.slots, max: slotPlaces(state) })] : [];
+  if (floorOf(state, 'third')) parts.push(t('floors.summaryFood', { n: stallsOf(state).length, max: stallPlaces(state) }));
+  return parts.length ? parts.join(' · ') : t('floors.closed');
 }
+
+/** Этаж показывать в разделе: открыт или до него одно помещение. */
+const nearFloor = (state: StoreState, id: FloorId): boolean => {
+  const lock = floorLock(state, id);
+  return lock !== 'zar' && !(lock === 'level' && state.level < FLOORS[id].minLevel - 1);
+};
 
 /** Раздел «Этажи»: до «Магазинчика» и в Заречье его нет — меньше шума в меню. */
 export function floorsBox(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
-  const lock = floorLock(state, 'basement');
-  if (lock === 'zar' || (lock === 'level' && state.level < FLOORS.basement.minLevel - 1)) return [];
+  if (!nearFloor(state, 'basement')) return [];
   const box = el('div', 'ui-box');
   box.append(el('b', '', `${FLOORS.basement.icon} ${t('floors.title')}`), el('div', 'ui-muted', t('floors.note')));
-  if (!floorOf(state, 'basement')) {
-    box.append(openRow(state, 'basement', getState, update));
-    return [box];
-  }
-  box.append(...basementRows(state, getState, update));
+  if (!floorOf(state, 'basement')) box.append(openRow(state, 'basement', getState, update));
+  else box.append(...basementRows(state, getState, update));
+  // Третий этаж — фудкорт: с «Супермаркета» видно, что он будет (замок до «Универмага»).
+  if (nearFloor(state, 'third')) box.append(...thirdRows(state, getState, update));
   return [box];
 }
 
-/** Этаж ещё не открыт: картинка, что внизу, и кнопка (или замок до нужного помещения). */
+/** Что показать у закрытого этажа: картинка, название, что там. */
+const FLOOR_ROW: Partial<Record<FloorId, { art: string; name: TextKey; note: TextKey; opened: TextKey }>> = {
+  basement: { art: 'bsm_stairs', name: 'floor.basement', note: 'floor.basement.note', opened: 'floor.opened' },
+  third: { art: 'fc_lift', name: 'floor.third', note: 'floor.third.note', opened: 'floor.third.opened' },
+};
+
+/** Этаж ещё не открыт: картинка, что там, и кнопка (или замок до нужного помещения / этажа ниже). */
 function openRow(state: StoreState, id: FloorId, getState: () => StoreState, update: Update): HTMLElement {
   const def = FLOORS[id];
+  const look = FLOOR_ROW[id] ?? FLOOR_ROW.basement!;
   const lock = floorLock(state, id);
-  const notes = [t('floor.basement.note')];
+  const notes = [t(look.note)];
   if (lock === 'level') notes.push(`🔒 ${t('floors.lock', { name: t(STORE_LEVELS[def.minLevel].nameKey) })}`);
-  return row('bsm_stairs', t('floor.basement'), notes, [
+  if (lock === 'below') notes.push(`🔒 ${t('floors.lockBelow')}`);
+  return row(look.art, t(look.name), notes, [
     button(
       t('floor.open', { cost: def.cost }),
       () => {
         const next = buyFloor(getState(), id);
         if (!next) return;
         track('floor_open', next.day, def.cost);
-        toast('assets/ico_shop.png', t('floor.basement'), t('floor.opened'));
+        toast('assets/ico_shop.png', t(look.name), t(look.opened));
         update(next, 'success');
       },
       'ui-chip',
       Boolean(lock) || state.money < def.cost,
     ),
   ]);
+}
+
+/** Третий этаж: открыть; открыт — как попасть, ремонт и где точки еды. */
+function thirdRows(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
+  if (!floorOf(state, 'third')) return [openRow(state, 'third', getState, update)];
+  const out: HTMLElement[] = [el('div', 'ui-item-sub', `🍕 ${t('floor.third.up')}`)];
+  const fin = finishCost(state, 'third');
+  if (fin !== null) {
+    out.push(
+      row('fc_wall', t('floor.third.finish'), [t('floor.third.finish.note', { n: STALL_PLACES[STALL_PLACES.length - 1] })], [
+        button(`${fin} 💰`, () => update(finishFloor(getState(), 'third'), 'success'), 'ui-chip', state.money < fin),
+      ]),
+    );
+  }
+  return out;
 }
 
 function basementRows(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {

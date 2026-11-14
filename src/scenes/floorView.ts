@@ -7,7 +7,7 @@
 // Подвал (game/basement.ts): кирпич, бетонный пол, лестница сверху слева, автоматы у задней стены (их экраны мигают;
 // в лёгкой графике горят ровно), у автоматов — завсегдатаи (меняются: кто-то уходит наверх, кто-то спускается),
 // справа — склад-холодильник, внизу справа — «серая» подсобка с полкой «Разное» ломбарда. После облавы на месте
-// автоматов — лента с печатью. Второй и третий этаж допишут сюда свой build по id.
+// автоматов — лента с печатью. Третий этаж — фудкорт — строит foodcourtView.ts (через FloorKit); второй допишет свой build по id.
 
 import Phaser from 'phaser';
 import type { StoreScene } from './StoreScene';
@@ -23,6 +23,7 @@ import { crispZoom } from './pixels';
 import { calledElsewhere, safeTop } from './camera';
 import * as persons from './persons';
 import * as basementFx from './basementFx';
+import { buildFoodcourt, type FloorKit } from './foodcourtView';
 
 /**
  * Размер зала подвала в точках мира и высота задней стены. Зал выше, чем шире: телефон держат вертикально — так
@@ -82,6 +83,7 @@ export class FloorView extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.frame, this);
     // Этаж по id: второй и третий допишут сюда свой build.
     if (this.id === 'basement') this.buildBasement();
+    else if (this.id === 'third') buildFoodcourt(this.kit());
     this.cameras.main.fadeIn(FADE_MS, 24, 20, 37);
     // «Наверх» — кнопкой интерфейса внизу, как остальные кнопки игры.
     this.upBtn = button(`⬆️ ${t('floor.up')}`, () => this.leave(), 'ui-btn floor-up');
@@ -164,6 +166,22 @@ export class FloorView extends Phaser.Scene {
   private text(x: number, y: number, s: string, size: number, color: string): Phaser.GameObjects.Text {
     const zoom = this.cameras.main.zoom;
     return this.add.text(x, y, s, { fontFamily: UI_FONT, fontSize: `${size}px`, fontStyle: 'bold', color }).setOrigin(0.5).setResolution(Math.max(1, Math.round(zoom)));
+  }
+
+  /** Что нужно чужому build этажа (фудкорт, foodcourtView.ts): своё рисование, подписи и человечки этой сцены. */
+  private kit(): FloorKit {
+    return {
+      scene: this,
+      store: this.store,
+      W,
+      H,
+      WALL,
+      art: (x, y, key) => this.art(x, y, key),
+      text: (x, y, s, size, color) => this.text(x, y, s, size, color),
+      popup: (x, y, s) => this.popup(x, y, s),
+      person: (x, y, look) => persons.makePerson(this.host as unknown as StoreScene, x, y, look),
+      leaving: () => this.leaving,
+    };
   }
 
   private buildBasement(): void {

@@ -19,7 +19,7 @@ import { residents, RES_START } from './residents';
 import { estateOpen } from './estate';
 import { GENT_SEEN, prestigeOf } from './gentrify';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement' | 'gentrify' | 'estate';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement' | 'gentrify' | 'estate' | 'foodcourt';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -97,6 +97,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['gentrify', (s) => prestigeOf(s) >= GENT_SEEN],
   // Скупать улицу (estate.ts, 13.11): в первое утро «Супермаркета» — что дома за магазином продаются и где их купить.
   ['estate', estateOpen],
+  // Фудкорт (floors.ts, foodcourt.ts, 13.11): третий этаж можно открыть — что там и чем он помогает залу.
+  ['foodcourt', (s) => floorAvailable(s, 'third') || hasFloor(s, 'third')],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -130,6 +132,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   basement: '🪜',
   gentrify: '💎',
   estate: '🏠',
+  foodcourt: '🍕',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

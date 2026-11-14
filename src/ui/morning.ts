@@ -277,6 +277,8 @@ import { hoodBox } from './hood';
 import { linesBox } from './lines';
 import { licenseBox, licenseNoticeBox } from './license';
 import { floorsBox, floorsSummary } from './floors';
+import { foodcourtAlert, foodcourtBox, foodcourtStatus } from './foodcourt';
+import { foodcourtOf } from '../game/foodcourt';
 import { hasLicense, licenseNotice } from '../game/license';
 import { greyCaughtBox, greyLines, greyOfferBox } from './grey';
 import { greyCaught, greyOffer } from '../game/grey';
@@ -1189,7 +1191,12 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     // В «Зале» утром делать нечего: уценка теперь вечером сама, сломанных холодильников больше нет (02.11).
     const hall = 0;
     const rack = rackOf(state);
-    const extras = (state.cat && !fedToday(state) ? 1 : 0) + (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0);
+    // Фудкорт ждёт ответа (праздник или жалоба) — точка на «Уголках»: без ответа жалоба закрывает точку
+    // на вечер, и игрок должен увидеть выбор, не открывая вкладку (13.11).
+    const extras =
+      (state.cat && !fedToday(state) ? 1 : 0) +
+      (rack.stock <= rackCapacity(state) / 3 && rack.stock < rackCapacity(state) ? 1 : 0) +
+      (foodcourtOf(state) && foodcourtAlert(state) ? 1 : 0);
     const next = nextStoreLevel(state);
     const grow = next && state.debt === 0 && state.money >= next.cost ? 1 : 0;
     // Ученик скучает, устал или без стипендии — точка на «Персонале» (game/apprentice.ts apprWorry).
@@ -2393,6 +2400,10 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
               details: () => kitchenBox(getState()),
             },
           ]
+        : []),
+      // Фудкорт третьего этажа (game/foodcourt.ts, 13.11): рядом с кухней — своя кухня может вести точки еды.
+      ...(foodcourtOf(state)
+        ? [{ id: 'foodcourt', icon: 'assets/fc_pizza.png', title: t('floor.third'), status: foodcourtStatus(state), alert: foodcourtAlert(state), details: () => foodcourtBox(getState(), getState, update) }]
         : []),
       // Прокат у входа (game/rental.ts, 13.11): плитка — когда стойку можно поставить или она уже стоит.
       ...(rentalOpen(state) || state.rental
