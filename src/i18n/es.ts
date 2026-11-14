@@ -818,7 +818,7 @@ export const es: Record<TextKey, string> = {
   "tip.pawn.text": "Algunas mañanas traen un objeto y piden dinero. Si lo recuperan, ganas el interés; si no, lo vendes más caro. Pero lo robado se lo lleva la policía: fíjate bien en quién viene.",
   "fup.basement.neon": "Neón y luces",
   "fup.basement.neon.note": "Un letrero de neón y luces junto a las máquinas: la recaudación nocturna de las máquinas +20%.",
-  "fup.basement.vent": "Ventilación y reforma",
+  "fup.basement.vent": "Ventilación",
   "fup.basement.vent.note": "Aire fresco y paredes secas, sin humedad ni charco: las mamás con niños evitan la tienda un tercio menos.",
   "fup.basement.guard": "Guardia en la entrada",
   "fup.basement.guard.note": "Un guardia y un puesto junto a la escalera, una cámara en la pared: las redadas, la mitad de veces.",

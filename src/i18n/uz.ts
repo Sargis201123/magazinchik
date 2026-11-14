@@ -830,7 +830,7 @@ export const uz: Record<TextKey, string> = {
   "tip.pawn.text": "Baʼzan ertalab buyum olib kelib, pul soʻrashadi. Qaytarib olishsa — foiz olasan, olishmasa — buyumni qimmatroq sotasan. Lekin oʻgʻirlangan buyumni politsiya olib ketadi: kelgan odamga diqqat bilan qara.",
   "fup.basement.neon": "Neon va chiroqlar",
   "fup.basement.neon.note": "Avtomatlar yonida neon yozuv va yoritish: avtomatlarning kechki tushumi +20%.",
-  "fup.basement.vent": "Shamollatish va taʼmir",
+  "fup.basement.vent": "Shamollatish",
   "fup.basement.vent.note": "Toza havo va quruq devorlar, namlik ham, koʻlmak ham yoʻq: bolali onalar doʻkondan uchdan bir marta kamroq qochadi.",
   "fup.basement.guard": "Kirishda qoʻriqchi",
   "fup.basement.guard.note": "Zinapoya yonida qoʻriqchi va post, devorda kamera: reydlar ikki baravar kamroq.",

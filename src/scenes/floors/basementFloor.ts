@@ -406,8 +406,15 @@ export function buildBasement(kit: FloorKit): void {
     barBusy[bar] = null;
   };
 
-  /** Уйти наверх по лестнице и растаять. */
+  /**
+   * Уйти наверх по лестнице и растаять. 14.11 (ревью): кто пошёл к лестнице, уже не «внизу» — сразу спускается
+   * следующий; иначе автоматы пустели, пока уходящие шли через весь зал.
+   */
   const leave = async (m: Man): Promise<void> => {
+    if (m.getData('stay')) {
+      m.setData('stay', false);
+      staying--;
+    }
     await go(m, STAIR_FOOT);
     if (!m.active) return;
     persons.setFacing(m, 'up');
@@ -415,22 +422,26 @@ export function buildBasement(kit: FloorKit): void {
     m.destroy();
   };
 
-  /** Сыграть за автоматом i (человек уже у прохода или на табурете) и встать. */
-  const session = async (m: Man, i: number, seated: boolean): Promise<void> => {
+  /**
+   * Сыграть за автоматом i (человек уже у прохода или на табурете) и встать. 14.11 (ревью): у тех, кто уже сидел, когда
+   * мы спустились, раундов меньше и разное число, у новых — больше: иначе все вставали разом и автоматы стояли пустыми,
+   * пока толпа шла к лестнице (новые не спускаются, пока внизу «полно»).
+   */
+  const session = async (m: Man, i: number, seated: boolean, rounds = Phaser.Math.Between(3, 6)): Promise<void> => {
     slots[i].who = m;
     if (!seated) {
       await go(m, { x: SLOT_X[i], y: AISLE.a });
       if (!m.active) return;
       await sit(m, SLOT_X[i], STOOL_Y);
     }
-    await play(m, i, Phaser.Math.Between(2, 5));
+    await play(m, i, rounds);
     if (m.active) await stand(m, AISLE.a);
     slots[i].who = null;
   };
 
   /** Завсегдатай: спустился, заплатил у окошка, сыграл (если есть свободный автомат), иногда отдохнул, ушёл. */
   const regular = async (): Promise<void> => {
-    const m = man(STAIR_TOP.x, STAIR_TOP.y, nightLook()).setAlpha(0);
+    const m = arrive(man(STAIR_TOP.x, STAIR_TOP.y, nightLook())).setAlpha(0);
     persons.setFacing(m, 'down');
     await new Promise<void>((done) =>
       scene.tweens.add({ targets: m, y: STAIR_FOOT.y - FEET, alpha: 1, duration: 1100, onUpdate: () => m.setDepth(m.y + FEET), onComplete: () => done() }),
@@ -457,26 +468,28 @@ export function buildBasement(kit: FloorKit): void {
 
   // Кто уже внизу, когда спустились мы: за автоматами и на отдыхе — доля сегодняшних завсегдатаев.
   const present = plan ? presentOf(plan.players, n, lite) : 0;
-  let alive = 0;
-  const run = (job: () => Promise<void>): void => {
-    alive++;
-    void job().finally(() => alive--);
+  let staying = 0;
+  /** Новый человек внизу: считаем, пока он не пошёл к лестнице (leave). */
+  const arrive = (m: Man): Man => {
+    staying++;
+    return m.setData('stay', true);
   };
+  const run = (job: () => Promise<void>): void => void job();
   const seated = Math.min(n, Math.ceil(present * 0.7));
   for (let k = 0; k < seated; k++) {
     const i = k;
     run(async () => {
-      const m = man(SLOT_X[i], STOOL_Y, nightLook());
+      const m = arrive(man(SLOT_X[i], STOOL_Y, nightLook()));
       await sit(m, SLOT_X[i], STOOL_Y);
       await pause(kit, Math.random() * 2500);
-      await session(m, i, true);
+      await session(m, i, true, 1 + ((i * 3 + Phaser.Math.Between(0, 1)) % 5));
       if (m.active && Math.random() < 0.4) await rest(m);
       if (m.active) await leave(m);
     });
   }
   if (present > seated) {
     run(async () => {
-      const m = man(BAR_STOOLS[1], BAR_STOOL_Y, nightLook());
+      const m = arrive(man(BAR_STOOLS[1], BAR_STOOL_Y, nightLook()));
       barBusy[1] = m;
       await sit(m, BAR_STOOLS[1], BAR_STOOL_Y);
       await pause(kit, 3000 + Math.random() * 4000);
@@ -491,14 +504,19 @@ export function buildBasement(kit: FloorKit): void {
       delay: lite ? 4200 : 2600,
       loop: true,
       callback: () => {
-        if (!kit.leaving() && alive < present) run(regular);
+        if (!kit.leaving() && staying < present) run(regular);
       },
     });
   }
   // Двое за столиком с чаем — когда завсегдатаев много (в лёгкой графике — нет).
+  // 14.11 (ревью): сидят на табуретах столика (ноги спрятаны, бёдра на сиденье), а не стоят рядом с ними.
   if (!lite && plan && plan.players >= 6) {
-    persons.setFacing(man(TABLE.x - 9, TABLE.y - 2, nightLook()), 'right');
-    persons.setFacing(man(TABLE.x + 9, TABLE.y - 2, nightLook()), 'left');
+    for (const [dx, face] of [[-9, 'right'], [9, 'left']] as const) {
+      const m = man(TABLE.x + dx, TABLE.y, nightLook());
+      persons.setFacing(m, face);
+      (m.getData('legs') as Phaser.GameObjects.Image | undefined)?.setVisible(false);
+      m.setY(TABLE.y - 11).setDepth(TABLE.y - 0.5);
+    }
   }
 
   // ------------------------------------------------------------ грузчик: из лифта паллету в холодильник
@@ -603,16 +621,20 @@ function buildPawn(kit: FloorKit, tap: (s: string, x: number, y: number) => void
   const p = pawnOf(kit.store.state);
   const room = prop(kit, PAWN.x, PAWN.y, 'bsm_pawn');
   room.setInteractive({ useHandCursor: true }).on('pointerup', () => tap(t('bsm.pawn.tap', { n: p.shelf.length, k: p.loans.length }), PAWN.x, PAWN.y - 46));
-  const things = [...p.shelf.map((s) => ({ id: s.item, sale: true })), ...p.loans.map((l) => ({ id: l.item, sale: false }))];
-  // Окно: x от −24 до +8 от середины, полки — на 22 и 14 выше низа.
-  const left = PAWN.x - 25;
+  // Окно: x от −23 до +7 от середины, полки — на 22 и 14 выше низа. 14.11 (ревью): верхняя полка — на продажу (с
+  // ценником), нижняя — в залоге; раньше всё вставало в верхний ряд, а нижняя полка пустовала. Пять вещей в ряд —
+  // по середине окна (вещей меньше — ряд всё равно по середине): с краю первая вещь торчала из кирпича слева.
+  const mid = PAWN.x - 8;
   const rows = [PAWN.y - 22, PAWN.y - 14];
-  things.slice(0, 10).forEach((thing, k) => {
-    const ix = left + (k % 5) * 6.2;
-    const iy = rows[Math.floor(k / 5)];
-    prop(kit, ix, iy, `pawn_${thing.id}`, { depth: PAWN.y + 0.1 + k * 0.01 });
-    if (thing.sale) kit.art(ix + 2.5, iy - 4.5, 'pawn_tag').setDepth(PAWN.y + 0.15);
-  });
+  const shelfRows = [p.shelf.map((s) => s.item), p.loans.map((l) => l.item)];
+  shelfRows.forEach((ids, row) =>
+    ids.slice(0, 5).forEach((id, k, row5) => {
+      const ix = mid + (k - (row5.length - 1) / 2) * 6.2;
+      const iy = rows[row];
+      prop(kit, ix, iy, `pawn_${id}`, { depth: PAWN.y + 0.1 + (row * 5 + k) * 0.01 });
+      if (row === 0) kit.art(ix + 2.5, iy - 4.5, 'pawn_tag').setDepth(PAWN.y + 0.15);
+    }),
+  );
   prop(kit, PAWN.x, PAWN.y, 'bsm_pawn_bars', { depth: PAWN.y + 0.2 });
   // Настольная лампа за решёткой — тёплый свет в окне.
   lightPool(kit, PAWN.x - 16, PAWN.y - 22, { w: 40, h: 26, tint: 0xfeae34, alpha: 0.32, depth: LIGHT });

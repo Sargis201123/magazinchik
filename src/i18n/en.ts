@@ -832,7 +832,7 @@ export const en: Record<TextKey, string> = {
   "tip.pawn.text": "Some mornings people bring an item and ask for cash. Bought back — you get interest; not bought back — you sell it for more. But the police take stolen goods: look closely at the guest.",
   "fup.basement.neon": "Neon and lights",
   "fup.basement.neon.note": "A neon sign and lights by the machines: evening takings of the machines +20%.",
-  "fup.basement.vent": "Ventilation and repairs",
+  "fup.basement.vent": "Ventilation",
   "fup.basement.vent.note": "Fresh air and dry walls, no damp or puddle: moms with kids avoid the shop a third less often.",
   "fup.basement.guard": "Guard at the door",
   "fup.basement.guard.note": "A guard and a post by the stairs, a camera on the wall: raids happen half as often.",

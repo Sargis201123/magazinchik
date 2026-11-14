@@ -818,7 +818,7 @@ export const tr: Record<TextKey, string> = {
   "tip.pawn.text": "Bazı sabahlar biri eşya getirip para ister. Geri alırsa faizi kazanırsın, almazsa eşyayı daha pahalıya satarsın. Ama çalıntıyı polis alır: gelene dikkatli bak.",
   "fup.basement.neon": "Neon ve ışıklar",
   "fup.basement.neon.note": "Makinelerin yanında neon tabela ve ışıklar: makinelerin akşam hasılatı +%20.",
-  "fup.basement.vent": "Havalandırma ve tadilat",
+  "fup.basement.vent": "Havalandırma",
   "fup.basement.vent.note": "Temiz hava ve kuru duvarlar, rutubet ve su birikintisi yok: çocuklu anneler dükkândan üçte bir daha az kaçınır.",
   "fup.basement.guard": "Kapıda güvenlik",
   "fup.basement.guard.note": "Merdivende bekçi ve nöbet yeri, duvarda kamera: baskınlar yarı yarıya azalır.",
