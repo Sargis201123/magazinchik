@@ -16,8 +16,10 @@ import { greyOffer } from './grey';
 import { rentalOpen } from './rental';
 import { floorAvailable, hasFloor } from './floors';
 import { residents, RES_START } from './residents';
+import { estateOpen } from './estate';
+import { GENT_SEEN, prestigeOf } from './gentrify';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement' | 'clothes';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement' | 'clothes' | 'gentrify' | 'estate' | 'foodcourt';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -93,6 +95,12 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['basement', (s) => floorAvailable(s, 'basement') || hasFloor(s, 'basement')],
   // Второй этаж — одежда (clothes.ts, 13.11): как только его можно открыть — что наверху, сезоны и распродажа.
   ['clothes', (s) => floorAvailable(s, 'second') || hasFloor(s, 'second')],
+  // Район дорожает (gentrify.ts, 13.11): как только престиж стало видно — откуда он и что дорожает.
+  ['gentrify', (s) => prestigeOf(s) >= GENT_SEEN],
+  // Скупать улицу (estate.ts, 13.11): в первое утро «Супермаркета» — что дома за магазином продаются и где их купить.
+  ['estate', estateOpen],
+  // Фудкорт (floors.ts, foodcourt.ts, 13.11): третий этаж можно открыть — что там и чем он помогает залу.
+  ['foodcourt', (s) => floorAvailable(s, 'third') || hasFloor(s, 'third')],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -125,6 +133,9 @@ export const TIP_ICONS: Record<TipId, string> = {
   plots: '🏗',
   basement: '🪜',
   clothes: '👗',
+  gentrify: '💎',
+  estate: '🏠',
+  foodcourt: '🍕',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

@@ -100,6 +100,22 @@ export const SPRITES = [
   'fl2_sale',
   'fl2_web',
   'fl2_front',
+  // Фудкорт на третьем этаже (art/foodcourt.py, scenes/foodcourtView.ts, scenes/foodcourtFx.ts): плитка и окна зала,
+  // четыре точки еды, жалюзи закрытой точки, общий стол, еда на столах, шарики дня рождения и лифт в фасаде.
+  'fc_floor',
+  'fc_wall',
+  'fc_pizza',
+  'fc_grill',
+  'fc_sushi',
+  'fc_coffee',
+  'fc_shutter',
+  'fc_table',
+  'fc_food0',
+  'fc_food1',
+  'fc_food2',
+  'fc_food3',
+  'fc_balloons',
+  'fc_lift',
   // Ломбард в подсобке (art/pawnshop.py, scenes/pawnFx.ts): полка «Разное» на стене склада, вещи и ценник.
   'pawn_shelf',
   'pawn_watch',
@@ -330,6 +346,21 @@ export const SPRITES = [
   'res_truck',
   'res_boxes',
   'res_rent',
+  // Район дорожает (art/gentrify.py, game/gentrify.ts): штендер кофейни, табличка «премиум», дощечка «для своих».
+  'gent_board',
+  'gent_plaque',
+  'gent_own',
+  // Скупленная улица (art/estate.py, scenes/estateFx.ts): вывески лавок, «Продаётся», козлы отделки, табличка улицы.
+  'estate_sign_pharmacy',
+  'estate_sign_bar',
+  'estate_sign_kids',
+  'estate_sign_gym',
+  'estate_sign_florist',
+  'estate_sign_shoes',
+  'estate_sale',
+  'estate_works',
+  'estate_plate',
+  'estate_pointer',
   'yard_ground',
   'yard_ground_snow',
   'yard_fence',
@@ -553,6 +584,8 @@ export const SPRITES = [
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van', 'car_truck'].flatMap((k) => [k, `${k}_lights`]),
   // Легковые носом вверх и вниз — на парковке и в проезде к ней (art/sprites.py, cars_vertical).
   ...['car_sedan', 'car_hatch', 'car_taxi', 'car_van'].flatMap((k) => ['up', 'down'].flatMap((d) => [`${k}_${d}`, `${k}_${d}_lights`])),
+  // Дорогая машина района, который подорожал (art/gentrify.py): всегда чёрная, не под тинт.
+  ...['car_lux', 'car_lux_lights', 'car_lux_up', 'car_lux_up_lights', 'car_lux_down', 'car_lux_down_lights'],
   // Фургон магазина для выездной торговли (art/van.py, game/van.ts): вбок, носом вверх и вниз, с фарами.
   ...['shop_van', 'shop_van_up', 'shop_van_down'].flatMap((k) => [k, `${k}_lights`]),
   'mat',

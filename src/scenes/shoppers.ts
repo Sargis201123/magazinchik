@@ -54,6 +54,8 @@ import { treatFriend, visitsInfo, type VisitFriend } from '../platform/multiplay
 import { servePortions } from '../game/kitchen';
 import { NIGHT_GUEST_TYPES, pickNightGuest } from '../game/nightGuests';
 import { districtGuest } from '../game/district';
+import { estateGuest } from '../game/estate';
+import { EVENING_FROM } from '../game/license';
 import { crisisExtraItems, crisisTolerance } from '../game/crisis';
 import { goodwillTips } from '../game/goodwill';
 import * as crisisFx from './crisisFx';
@@ -96,6 +98,7 @@ import {
   VALYA,
   SKINS,
   type Customer,
+  HAT_COLORS,
   type Register,
   type Worker,
 } from './common';
@@ -533,11 +536,23 @@ export function spawnCustomer(
       wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
     }
   }
+  // Гость из лавки скупленной улицы (estate.ts): из аптеки — пожилые, из детского клуба — мамы с колясками, из бара —
+  // к вечеру. Кто пришёл из здания района — уже не отсюда.
+  const evening = scene.timeLeft <= DAY_SECONDS * (1 - EVENING_FROM);
+  const fromStreet = !forced && !arrived && !rare && !thief && !valya && !nightGuest && !fromDistrict ? estateGuest(scene.state, Math.random, evening) : null;
+  if (fromStreet) {
+    const sellable = sellableProducts(scene.state);
+    const pool = fromStreet.wants.filter((id) => sellable.includes(id));
+    if (pool.length) {
+      look = fromStreet.look === 'stroller' ? { ...look, stroller: Phaser.Utils.Array.GetRandom(HAT_COLORS), style: Phaser.Utils.Array.GetRandom(['long', 'ponytail', 'bun'] as const) } : { ...look, ...wearOf(fromStreet.look, Math.random) };
+      wants = Phaser.Utils.Array.Shuffle([...pool]).slice(0, Phaser.Math.Between(1, 2));
+    }
+  }
   // Беда района: первые гости дня — за водой и хлебом (crisisFx.ts).
   const rush = !forced && !arrived && !rare && !thief && !valya && !nightGuest ? crisisFx.rushWants(scene) : null;
   if (rush) wants = rush;
   // Хроники района: в праздник часть гостей нарядные, в день детей — дети с шарами (arcsFx.ts).
-  if (!forced && !arrived && !rare && !valya && !nightGuest && !fromDistrict) look = arcsFx.dressUp(scene, look);
+  if (!forced && !arrived && !rare && !valya && !nightGuest && !fromDistrict && !fromStreet) look = arcsFx.dressUp(scene, look);
   const start = forced?.at ?? visitors.streetSpawn(scene);
   const sprite = arrived?.sprite ?? persons.makePerson(scene, start.x, start.y, look);
   if (!arrived) weatherFx.addUmbrella(scene, sprite);

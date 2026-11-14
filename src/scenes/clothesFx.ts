@@ -15,7 +15,7 @@ import { inZar } from '../game/zarshop';
 import { FACADE_H, SHIRTS, STREET_TAP_MS, customerLook } from './common';
 import * as camera from './camera';
 import * as persons from './persons';
-import { floorDown, hatchSpot } from './basementFx';
+import { floorDown, hatchSpot, lampGap } from './basementFx';
 
 /** Сколько покупателей этажа показать на улице за день и как часто идёт следующий. */
 const SHOWN_MAX = 5;
@@ -25,12 +25,6 @@ const EVERY = 10000;
 let objs: Phaser.GameObjects.GameObject[] = [];
 let stops: (() => void)[] = [];
 let shown = { day: 0, n: 0 };
-
-/** Насколько точка фасада далеко от фонаря (фонари — через 72 от −100, как у спуска в подвал). */
-const lampGap = (x: number): number => {
-  const m = (((x + 100) % 72) + 72) % 72;
-  return Math.min(m, 72 - m);
-};
 
 /** Где дверь наверх: в фасаде левее входа в магазин — подальше от фонаря, самого входа и спуска в подвал. */
 export function stairsSpot(scene: StoreScene): { x: number; y: number } {

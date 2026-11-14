@@ -59,6 +59,9 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['подвал + ломбард', { features: { basement: true, pawn: true } }],
   // Второй этаж — одежда (13.11): партии по сезону до полных стоек, распродажа остатков, продавец с универмага.
   ['второй этаж: одежда', { features: { clothes: true } }],
+  // Фудкорт (13.11): этаж с «Универмага», точки по одной (своя — если на кухне повар), ремонт, праздники, жалобы.
+  ['фудкорт', { features: { foodcourt: true } }],
+  ['фудкорт + кухня с поваром', { features: { foodcourt: true, kitchen: true } }],
   ['всё сразу', { features: { cat: true, candy: true, coffee: true, oven: true, night: true, loyalty: true, gear: true, departments: true, radio: true, brand: true, cafe: true, delivery: true, kitchen: true, kiosks: true }, war: 'match' }],
 ];
 

@@ -42,8 +42,8 @@ let away = false;
 let before = { x: 0, y: 0, zoom: 1 };
 let dived = { x: 0, y: 0 };
 
-/** Насколько точка фасада далеко от фонаря на тротуаре (фонари — через 72 от −100, tenantsFx.nearLamp). */
-const lampGap = (x: number): number => {
+/** Насколько точка фасада далеко от фонаря на тротуаре (фонари — через 72 от −100, tenantsFx.nearLamp). Её же берёт лифт фудкорта. */
+export const lampGap = (x: number): number => {
   const m = (((x + 100) % 72) + 72) % 72;
   return Math.min(m, 72 - m);
 };
@@ -114,10 +114,12 @@ async function regular(scene: StoreScene, x: number, y: number): Promise<void> {
 }
 
 /**
- * Вниз на этаж (или наверх — второй этаж подлетает к своей двери, at: clothesFx.ts): камера плавно подлетает к спуску и гаснет, сцена этажа встаёт поверх (floorView.ts). Касания
- * магазина на это время выключены — палец не пробьёт покупку и не сдвинет камеру наверху.
+ * Вниз на этаж (или наверх): камера плавно подлетает к двери этажа и гаснет, сцена этажа встаёт поверх (floorView.ts).
+ * Касания магазина на это время выключены — палец не пробьёт покупку и не сдвинет камеру наверху. Другой этаж передаёт
+ * свою дверь (второй — дверь с навесом, clothesFx.ts; фудкорт — лифт, foodcourtFx.liftSpot), иначе камера летит к
+ * спуску в подвал.
  */
-export function floorDown(scene: StoreScene, id: FloorId, at: { x: number; y: number } = hatchSpot(scene)): void {
+export function floorDown(scene: StoreScene, id: FloorId, door?: { x: number; y: number }): void {
   if (away || !scene.running || !hasFloor(scene.state, id)) return;
   away = true;
   haptic.tap();
@@ -126,6 +128,7 @@ export function floorDown(scene: StoreScene, id: FloorId, at: { x: number; y: nu
   const cam = scene.cameras.main;
   scene.homeTimer?.remove();
   scene.input.enabled = false;
+  const at = door ?? hatchSpot(scene);
   const mod = floorView.load();
   before = { x: cam.midPoint.x, y: cam.midPoint.y, zoom: cam.zoom };
   cam.panEffect.reset();

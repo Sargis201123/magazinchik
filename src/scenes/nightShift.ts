@@ -330,6 +330,8 @@ export function finishDay(scene: StoreScene): void {
   if (branch) extra.push([t('branch.summary'), t('branch.summaryValue', { n: branch })]);
   // Арендаторы флигеля (tenants.ts): аренда за день одной строкой.
   if (rent) extra.push([t('tenant.summary'), t('branch.summaryValue', { n: rent })]);
+  // Лавки скупленной улицы (estate.ts): аренда за день одной строкой.
+  if (night.estate) extra.push([t('estate.summary'), t('branch.summaryValue', { n: night.estate })]);
   // Выезд фургона (van.ts): что продал, случай в дороге, что привёз назад, итого.
   if (night.van) {
     extra.push([t('van.summary'), vanResultText(night.van)]);
@@ -350,6 +352,9 @@ export function finishDay(scene: StoreScene): void {
     const sale = clothes.sale ? ` · ${t('cl.summarySale', { n: clothes.sale })}` : '';
     extra.push([t('cl.summary'), `${t('cl.summaryValue', { n: clothes.sold, sum: clothes.income - clothes.wage })}${sale}`]);
   }
+  // Фудкорт на третьем этаже (game/foodcourt.ts): едоки и деньги за вечер; точку закрыли по жалобе — тоже строкой.
+  const court = night.food;
+  if (court) extra.push([t('floor.third'), `${t('fc.summaryValue', { n: court.eaters, sum: court.income })}${court.closed ? ` · ${t('fc.summaryClosed', { name: t(`fc.stall.${court.closed}` as TextKey) })}` : ''}`]);
   // Доля с Костиной тележки у входа (game/dreams.ts) — тоже строкой.
   if (night.cart) extra.push([t('dream.cart.summary'), t('branch.summaryValue', { n: night.cart })]);
   // Работали в Заречье — гипермаркет в Центре торговал сам (zarechye.ts).

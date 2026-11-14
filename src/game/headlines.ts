@@ -19,11 +19,15 @@ export const NEWS_IDS = [
   'giant',
   'zarCard',
   'zarBoss',
+  // Вся улица выкуплена (estate.ts, 13.11): «улица вашего имени» — раз за игру, как поворот сюжета.
+  'estate',
   // Сегодня кончится: итог и начало конкурса, решение дня, сотрудники (церемония, филиал).
   // Ночных краж, увольнений от обиды и просьб о прибавке больше нет (02.11): старые id из очереди
   // в сохранении снимает normalizeNews.
   // «Крыша» пришла (racket.ts, 13.11): платить, отказать или в полицию — ждёт ответа, как поворот сюжета.
   'racketAsk',
+  // Район подорожал (gentrify.ts, 13.11): для кого магазин — ждёт ответа, как поворот сюжета.
+  'gentrify',
   'contestResult',
   'contestAnnounce',
   // Беда района началась (crisis.ts): как торговать, пока она идёт (13.11).
@@ -76,7 +80,9 @@ export const NEWS_KIND: Record<NewsId, NewsKind> = {
   giant: 'main',
   zarCard: 'main',
   zarBoss: 'main',
+  estate: 'main',
   racketAsk: 'main',
+  gentrify: 'main',
   contestResult: 'timed',
   contestAnnounce: 'timed',
   crisisAsk: 'timed',
