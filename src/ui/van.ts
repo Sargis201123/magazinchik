@@ -7,20 +7,22 @@ import { PRODUCTS, type StoreState } from '../game/economy';
 import {
   autoLoad,
   buyVan,
-  cancelTrip,
   inStore,
   loadedOf,
   loadVan,
   nextVanEvent,
   planTrip,
+  skipTrip,
   tripToday,
   unloadVan,
   vanEvents,
   vanFuel,
   vanGoods,
+  vanIdle,
   vanLoaded,
   vanNews,
   vanOpen,
+  vanTakeable,
   vanWant,
   vanWanted,
   seeVanNews,
@@ -42,11 +44,13 @@ export function vanStatus(state: StoreState): string {
   const trip = tripToday(state);
   const [event] = vanEvents(state);
   if (trip && vanLoaded(state)) return t('van.statusLoaded', { icon: VAN_EVENTS[trip.event].icon, n: vanLoaded(state), max: VAN_CAP });
+  // Сказал «Не едем» — на плитке так и написано, не «ждёт груза».
+  if (state.van.skip === state.day) return t('van.stay');
   return event ? t('van.statusWait', { icon: VAN_EVENTS[event].icon }) : '—';
 }
 
-/** Сегодня есть куда ехать, а кузов пуст — плитка просит внимания. */
-export const vanIdle = (state: StoreState): boolean => Boolean(state.van) && vanEvents(state).length > 0 && !vanLoaded(state);
+// Плитка просит внимания по vanIdle (game/van.ts): после «Не едем» и при пустом магазине — молчит.
+export { vanIdle };
 
 /** Первое событие сегодня (для строки «Главное на сегодня»). */
 export const vanToday = (state: StoreState): VanEventId | null => (vanOpen(state) && state.van ? (vanEvents(state)[0] ?? null) : null);
@@ -87,7 +91,7 @@ export function vanBox(state: StoreState, getState: () => StoreState, update: Up
   const chips = el('div', 'ui-chips');
   for (const id of events)
     chips.append(button(`${VAN_EVENTS[id].icon} ${vanEventName(state, id)}`, () => update(planTrip(getState(), id)), `ui-chip${trip?.event === id ? ' active' : ''}`));
-  chips.append(button(t('van.stay'), () => update(cancelTrip(getState())), `ui-chip${trip ? '' : ' active'}`));
+  chips.append(button(t('van.stay'), () => update(skipTrip(getState())), `ui-chip${trip ? '' : ' active'}`));
   box.append(el('h3', '', t('van.where')), chips);
   if (!trip) return done(box, state);
   const event = VAN_EVENTS[trip.event];
@@ -101,7 +105,11 @@ export function vanBox(state: StoreState, getState: () => StoreState, update: Up
     return done(box, state);
   }
   const full = vanLoaded(state) >= VAN_CAP;
+  // Товар есть только на полках, а склад полон: кузов держит места на складе — с полок не берём (economy.ts warehouseCount).
+  let blocked = false;
   for (const id of goods) {
+    const takeable = vanTakeable(state, id);
+    if (!takeable && inStore(state, id)) blocked = true;
     const row = el('div', 'ui-item');
     const icon = el('img', 'ui-item-icon');
     setItemIcon(icon, `item_${id}_0`);
@@ -114,7 +122,7 @@ export function vanBox(state: StoreState, getState: () => StoreState, update: Up
     const actions = el('div', 'ui-item-actions');
     actions.append(
       button('−', () => update(unloadVan(getState(), id, 1)), 'ui-chip secondary', !loadedOf(state, id)),
-      button('+5', () => update(loadVan(getState(), id, 5)), 'ui-chip', full || !inStore(state, id)),
+      button('+5', () => update(loadVan(getState(), id, 5)), 'ui-chip', full || !takeable),
     );
     row.append(icon, body, actions);
     box.append(row);
@@ -124,7 +132,9 @@ export function vanBox(state: StoreState, getState: () => StoreState, update: Up
     button(t('van.auto'), () => update(autoLoad(getState()), 'success'), 'ui-chip', full),
     button(t('van.unload'), () => update(unloadVan(getState())), 'ui-chip secondary', !vanLoaded(state)),
   );
-  box.append(row, el('div', 'ui-muted', t('van.cold')));
+  box.append(row);
+  if (blocked && !full) box.append(el('div', 'ui-note', t('van.roomFull')));
+  box.append(el('div', 'ui-muted', t('van.cold')));
   return done(box, state);
 }
 

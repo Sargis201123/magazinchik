@@ -3295,6 +3295,7 @@ export const uz: Record<TextKey, string> = {
   "van.nothing": "Doʻkonda kerakli mol yoʻq — «Xarid» boʻlimida sotib ol.",
   "van.toBuy": "🛒 Xaridga",
   "van.cold": "Goʻsht, sut mahsulotlari va muzqaymoq kun boʻyi sovutgichsiz yuradi: sotilmagani buzilishi mumkin.",
+  "van.roomFull": "📦 Ombor toʻla — javonlardan yuklamaymiz: kechqurun qolgani omborga qaytadi, unga joy kerak.",
   "van.yesterday": "Kecha: {text}",
   "van.sold": "{icon} {n} ta sotildi, {sum} 💰",
   "van.back": "{n} ta qaytarib keldi",

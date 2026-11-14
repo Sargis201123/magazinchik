@@ -3284,6 +3284,7 @@ export const tr: Record<TextKey, string> = {
   "van.nothing": "Dükkânda gereken mal yok — “Alım” sekmesinden al.",
   "van.toBuy": "🛒 Alıma git",
   "van.cold": "Et, süt ürünleri ve dondurma bütün gün buzdolabı olmadan gider: satılmayan bozulabilir.",
+  "van.roomFull": "📦 Depo dolu, raflardan yükleme yok: artanlar akşam depoya döner, yer lazım.",
   "van.yesterday": "Dün: {text}",
   "van.sold": "{icon} {n} satıldı, {sum} 💰",
   "van.back": "{n} geri geldi",

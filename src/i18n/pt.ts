@@ -3296,6 +3296,7 @@ export const pt: Record<TextKey, string> = {
   "van.nothing": "Não tem na loja o que precisa — compre na aba «Compras».",
   "van.toBuy": "🛒 Para as compras",
   "van.cold": "Carne, laticínios e sorvete passam o dia sem geladeira: o que não vender pode estragar.",
+  "van.roomFull": "📦 O depósito está cheio, então nada das prateleiras: a sobra volta ao depósito à noite e precisa de espaço.",
   "van.yesterday": "Ontem: {text}",
   "van.sold": "{icon} vendido {n} por {sum} 💰",
   "van.back": "trouxe de volta {n}",

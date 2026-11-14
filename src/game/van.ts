@@ -10,7 +10,7 @@
 
 import { yearTime } from './calendar';
 import { MATCH_EVERY, buildingWorks } from './district';
-import { MONTH_DAYS, PRODUCTS, restricted, unitLife, type ProductId, type Stock, type StoreState, type Unit } from './economy';
+import { MONTH_DAYS, PRODUCTS, restricted, unitLife, warehouseCapacity, warehouseCount, type ProductId, type Stock, type StoreState, type Unit } from './economy';
 import { weatherToday } from './crisis';
 import { hasLicense } from './license';
 import { rng } from './random';
@@ -98,6 +98,8 @@ export interface VanState {
   /** Выездов и чистыми за всё время. */
   trips?: number;
   earned?: number;
+  /** В этот день игрок сказал «Не едем»: плитка и «Главное на сегодня» больше не просят загрузить кузов. */
+  skip?: number;
 }
 
 // ---------- Когда и куда ----------
@@ -170,8 +172,20 @@ export function planTrip(state: StoreState, event: VanEventId): StoreState | nul
   // Кузов с прошлого дня (ночь не дошла: закрыли игру посреди дня) — сначала на склад, иначе товар пропал бы.
   const base = state.van.trip && !tripToday(state) ? cancelTrip(state) : state;
   const trip = tripToday(base);
-  return { ...base, van: { ...base.van!, trip: { day: base.day, event, load: trip?.load ?? {} } } };
+  const { skip: _skip, ...van } = base.van!;
+  return { ...base, van: { ...van, trip: { day: base.day, event, load: trip?.load ?? {} } } };
 }
+
+/**
+ * Сколько мест склада свободно под товар с полок. Кузов держит места на складе (economy.ts warehouseCount):
+ * со склада грузить можно всегда, а с полок — только пока вечером остатку есть куда вернуться.
+ */
+const shelfRoom = (state: StoreState): number => Math.max(0, warehouseCapacity(state) - warehouseCount(state));
+
+/** Сколько штук товара можно погрузить прямо сейчас: склад целиком, с полок — сколько вернётся на склад. */
+export const vanTakeable = (state: StoreState, id: ProductId): number =>
+  (state.warehouse[id] ?? []).filter((u) => !u.pending).length +
+  Math.min(shelfRoom(state), state.shelves.reduce((sum, s) => sum + (s.items[id]?.length ?? 0), 0));
 
 /**
  * Погрузить до n штук товара: сначала со склада, потом с полок, самые старые — первыми (в зале остаётся
@@ -190,11 +204,14 @@ export function loadVan(state: StoreState, id: ProductId, n: number): StoreState
     else keep.push(u);
   }
   let shelves = state.shelves;
-  if (taken.length < room) {
+  // С полок — не больше свободных мест склада (со склада взятое места не меняет: кузов держит их же).
+  const fromShelves = Math.min(room - taken.length, shelfRoom(state));
+  if (fromShelves > 0) {
+    const limit = taken.length + fromShelves;
     shelves = state.shelves.map((s) => {
       const units = s.items[id];
-      if (!units?.length || taken.length >= room) return s;
-      const k = Math.min(units.length, room - taken.length);
+      if (!units?.length || taken.length >= limit) return s;
+      const k = Math.min(units.length, limit - taken.length);
       taken.push(...units.slice(0, k));
       return { ...s, items: { ...s.items, [id]: units.slice(k) } };
     });
@@ -222,13 +239,28 @@ export function unloadVan(state: StoreState, id?: ProductId, n = Infinity): Stor
   return { ...state, warehouse, van: { ...state.van, trip: { ...trip, load } } };
 }
 
-/** Не едем: кузов — на склад, выезд отменён. */
+/** Кузов — на склад, выезд отменён (ночью, перед Заречьем, перед новым выбором). */
 export function cancelTrip(state: StoreState): StoreState {
   if (!state.van?.trip) return state;
   const back = unloadVan(state);
   const { trip: _trip, ...van } = back.van!;
   return { ...back, van };
 }
+
+/** «Не едем» на плитке: выезд отменён, и до завтра фургон больше не напоминает о себе. */
+export function skipTrip(state: StoreState): StoreState {
+  if (!state.van) return state;
+  const next = cancelTrip(state);
+  return { ...next, van: { ...next.van!, skip: state.day } };
+}
+
+/**
+ * Сегодня есть куда ехать, кузов пуст, игрок не отказался и грузить есть что — плитка и строка
+ * «Главное на сегодня» просят внимания. Отказ («Не едем») или пустой магазин — не просим (attention.ts:
+ * лишнее касание каждое второе утро раздражает).
+ */
+export const vanIdle = (state: StoreState): boolean =>
+  Boolean(state.van) && state.van?.skip !== state.day && !vanLoaded(state) && vanEvents(state).some((e) => vanGoods(state, e).length > 0);
 
 /** Сколько штук товара обычно разбирают на этом событии (без толпы и случая) — подсказка при погрузке. */
 export const vanWant = (state: StoreState, event: VanEventId, id: ProductId): number =>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { newGame, PRODUCTS, type ProductId, type Stock, type StoreState, type Unit } from '../src/game/economy';
+import { buyStock, newGame, PRODUCTS, warehouseCapacity, warehouseCount, type ProductId, type Stock, type StoreState, type Unit } from '../src/game/economy';
 import {
   autoLoad,
   buyVan,
@@ -25,6 +25,9 @@ import {
   vanWant,
   vanWanted,
   seeVanNews,
+  skipTrip,
+  vanIdle,
+  vanTakeable,
   weekendDay,
   VAN_CAP,
   VAN_EVENTS,
@@ -362,5 +365,66 @@ describe('фургон: утренняя новость и лицензия', ()
     const next = planTrip({ ...s, day }, 'match')!;
     expect(vanLoaded(next)).toBe(0);
     expect(inStore(next, 'water')).toBe(inStore(withVan(), 'water'));
+  });
+});
+
+describe('фургон: места на складе и «Не едем» (13.11, ревью)', () => {
+  /** Склад забит под завязку: к тому, что есть, — картошка до вместимости. */
+  const packed = (s: StoreState): StoreState => ({
+    ...s,
+    warehouse: { ...s.warehouse, potatoes: units(warehouseCapacity(s) - warehouseCount(s)) },
+  });
+
+  it('кузов держит места склада: погрузил со склада — докупить на эти места нельзя, выгрузка влезает', () => {
+    const s = planTrip(packed(withVan()), 'match')!;
+    expect(warehouseCount(s)).toBe(warehouseCapacity(s));
+    const a = loadVan(s, 'water', 10)!;
+    expect(vanLoaded(a)).toBe(10);
+    expect(warehouseCount(a)).toBe(warehouseCapacity(a));
+    expect(buyStock(a, 'water', 1, 1)).toBeNull();
+    const back = unloadVan(a);
+    expect(warehouseCount(back)).toBe(warehouseCapacity(back));
+  });
+
+  it('склад полон — с полок в кузов не берут; есть два места — берут два', () => {
+    const s = planTrip(packed(withVan({ warehouse: { water: units(4) } })), 'match')!;
+    // Мороженое только в ларе: склад полон — грузить нечего.
+    expect(vanTakeable(s, 'icecream')).toBe(0);
+    expect(loadVan(s, 'icecream', 3)).toBeNull();
+    // Вода: склад целиком (4), с полок — ни штуки.
+    expect(vanTakeable(s, 'water')).toBe(4);
+    expect(vanLoaded(loadVan(s, 'water', 8)!)).toBe(4);
+    const roomy = { ...s, warehouse: { ...s.warehouse, potatoes: s.warehouse.potatoes!.slice(2) } };
+    expect(vanTakeable(roomy, 'icecream')).toBe(2);
+    const ice = loadVan(roomy, 'icecream', 3)!;
+    expect(vanLoaded(ice)).toBe(2);
+    expect(warehouseCount(ice)).toBe(warehouseCapacity(ice));
+  });
+
+  it('ночью остаток выезда возвращается на склад и не переполняет его', () => {
+    const s = autoLoad(planTrip(packed(withVan()), 'match')!);
+    expect(vanLoaded(s)).toBeGreaterThan(0);
+    const night = settleVan(s).state;
+    expect(night.van?.trip).toBeUndefined();
+    expect(warehouseCount(night)).toBeLessThanOrEqual(warehouseCapacity(night));
+  });
+
+  it('«Не едем» — до завтра фургон не просит внимания; в следующий день события — снова просит', () => {
+    const s = withVan();
+    expect(vanIdle(s)).toBe(true);
+    const skipped = skipTrip(planTrip(s, 'match')!);
+    expect(skipped.van?.trip).toBeUndefined();
+    expect(vanIdle(skipped)).toBe(false);
+    // Передумал и выбрал событие — отказ снят.
+    expect(planTrip(skipped, 'match')!.van?.skip).toBeUndefined();
+    const nextMatch = { ...skipped, day: skipped.day + 7 };
+    expect(vanEvents(nextMatch)).toContain('match');
+    expect(vanIdle(nextMatch)).toBe(true);
+  });
+
+  it('грузить нечего — не просим', () => {
+    const empty = withVan({ warehouse: {}, shelves: [] });
+    expect(vanEvents(empty).length).toBeGreaterThan(0);
+    expect(vanIdle(empty)).toBe(false);
   });
 });

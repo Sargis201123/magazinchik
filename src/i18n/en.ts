@@ -3328,6 +3328,7 @@ export const en: Record<TextKey, string> = {
   "van.nothing": "None of the right goods in the shop — buy some in the Buy tab.",
   "van.toBuy": "🛒 To buying",
   "van.cold": "Meat, dairy and ice cream ride all day without a fridge: whatever doesn't sell may spoil.",
+  "van.roomFull": "📦 The warehouse is full, so nothing from the shelves: leftovers come back to the warehouse tonight and need room.",
   "van.yesterday": "Yesterday: {text}",
   "van.sold": "{icon} sold {n} for {sum} 💰",
   "van.back": "brought back {n}",
