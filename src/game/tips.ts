@@ -16,7 +16,7 @@ import { greyOffer } from './grey';
 import { rentalOpen } from './rental';
 import { residents, RES_START } from './residents';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -86,6 +86,8 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['van', (s) => vanOpen(s) && !s.van],
   // Жители района (residents.ts, 13.11): после первого переезда — откуда берутся и уходят семьи (и гости с ними).
   ['residents', (s) => Boolean(s.residents?.move) || residents(s) !== RES_START],
+  // Район подстраивается (districtPlots.ts, 13.11): как только участок застроили по нашим продажам — что это значит.
+  ['plots', (s) => Boolean(s.district?.plots?.some((p) => p.sold))],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -115,6 +117,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   grey: '🦊',
   van: '🚐',
   residents: '🏘',
+  plots: '🏗',
 };
 
 /** Первая ещё не показанная подсказка, которая сейчас к месту. */

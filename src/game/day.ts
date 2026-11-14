@@ -43,6 +43,7 @@ import { spoilDishes } from './kitchen';
 import { staffMorning } from './staffEvents';
 import { careerMorning, careerNight } from './career';
 import { districtGuests } from './district';
+import { districtNight } from './districtPlots';
 import { hoodGuests } from './hood';
 import { tenantGuests, tenantsNight } from './tenants';
 import { settleVan, type VanResult } from './van';
@@ -162,9 +163,10 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Ломбард (pawnshop.ts): уже утро — выкупили, не пришли, полиция за краденым, продажи с полки «Разное».
   // Дело недели (cases.ts): несданное — в архив, пропущенные улики — размытыми, в понедельник — новое.
   // Утро: доброе имя понемногу забывается, беда подводит итог или начинается новая (crisis.ts).
+  // Район (districtPlots.ts, 13.11): завтра на участке начинают стройку — что строить, решает отчёт с сегодняшней строкой.
   // «Крыша» (racket.ts) — после утра дел: видит, чем кончилось дело в полиции, и не приходит в первое утро беды.
   // Жители района (residents.ts): в свой день район решает, въезжает ли кто-то или съезжает — по утреннему доброму имени.
-  const next = residentsMorning(racketMorning(crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled)))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income))))));
+  const next = residentsMorning(racketMorning(crisisMorning(caseMorning(pawnMorning(zarReport(zarBossMorning(branchReport(contestNight(dogNight(giantNight(nightMorning(tricksMorning(careerMorning(staffMorning(arcsMorning(talesMorning(cafeMorning(ensurePlan(growEduard(endWar(districtNight(addReport(night.state, day, stats, night.spoiledBy, dishes.spoiled))))), random), random)), random)), random), random), stats.revenue)), stats), day, branch.income)), day, home.income))))));
   return {
     ...night,
     state: next,
