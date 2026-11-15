@@ -5,7 +5,9 @@
 import { t, type TextKey } from '../i18n';
 import type { StoreState } from '../game/economy';
 import {
+  backRoomFree,
   evict,
+  freeRooms,
   guestsOf,
   invitePitch,
   PITCH_DAYS,
@@ -43,6 +45,12 @@ import {
 import { inZar } from '../game/zarshop';
 import { track } from '../platform/analytics';
 import { button, el, staffFace, toast, who } from './dom';
+
+/** Подпись свёрнутого раздела: сколько комнат занято, и что есть свободная — её видно, не раскрывая (15.11). */
+export const tenantsSummary = (state: StoreState): string => {
+  const n = tenantsOf(state).length;
+  return t(n && freeRooms(state) > 0 ? 'tenant.roomsFree' : 'tenant.rooms', { n, max: tenantRooms(state) });
+};
 
 const effect = (state: StoreState, id: TenantId): string => t('tenant.effect', { n: rentOf(state, id), g: Math.round(guestsOf(state, id) * 100) });
 
@@ -85,6 +93,12 @@ export function tenantsBox(state: StoreState, getState: () => StoreState, update
   }
   if (!rooms) return [box];
   box.append(el('div', 'ui-muted', t('tenant.note')), el('div', '', t('tenant.rooms', { n: here.length, max: rooms })));
+  // 15.11: комнат стало больше — у кого уже есть арендаторы, видят, что место освободилось и где новая комната.
+  if (here.length && freeRooms(state) > 0) {
+    const free = el('div', 'ui-item-sub', `${t('tenant.freeRoom')}${backRoomFree(state) ? ` · ${t('tenant.backRoom')}` : ''}`);
+    free.style.cssText = 'color: #fee761; font-weight: 700;';
+    box.append(free);
+  }
   if (here.length) box.append(el('div', '', t('tenant.total', { n: tenantRent(state), g: Math.round((tenantGuests(state) - 1) * 100) })));
   // Сначала те, кто уже работает, потом кого можно пустить.
   for (const id of [...here, ...TENANT_IDS.filter((other) => !here.includes(other))]) {

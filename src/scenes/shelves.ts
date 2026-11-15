@@ -28,7 +28,7 @@ import {
   propFootprint,
   propRect,
 } from './placement';
-import { brandRect, brandSpotFor, iceboxRect, iceboxSpotFor, licenseSpotFor, WALL_ROW_Y } from './layout';
+import { BACK_DOOR_HALF, backDoorX, brandRect, brandSpotFor, iceboxRect, iceboxSpotFor, licenseSpotFor, WALL_ROW_Y } from './layout';
 import { Halo } from './halo';
 import { PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { gearTier } from '../game/gear';
@@ -497,9 +497,14 @@ export function pairPick(scene: StoreScene, index: number, wanted: ProductId[]):
   return options.length ? options[Math.floor(Math.random() * options.length)] : null;
 }
 
-/** Вещь на стене (центр x, полуширина half) целиком за полкой у задней стены — её не вешаем, чтобы не торчал краешек. */
+/**
+ * Вещь на стене (центр x, полуширина half) целиком за полкой у задней стены — её не вешаем, чтобы не торчал краешек.
+ * 15.11: и не на двери задней комнаты под аренду (layout.backRoom) — картины, щиток и бра её обходят.
+ */
 export function behindShelf(scene: StoreScene, x: number, half = 6): boolean {
   const n = scene.state.shelves.filter((sh) => !isFixture(sh)).length;
+  const door = backDoorX(scene.layout, scene.state);
+  if (door !== null && Math.abs(door - x) < BACK_DOOR_HALF + 2 + half) return true;
   return scene.layout.slots.slice(0, n).some((p) => p.y === WALL_ROW_Y && Math.abs(p.x - x) < 20 + half);
 }
 

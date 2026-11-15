@@ -516,11 +516,14 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
   scene.art(door.x - 32, top + 6, 'bin').setDepth(top + 6);
   // Деревья и кусты на газоне вокруг здания.
   // Справа от зала — проезд к парковке и дорожка вдоль стены (buildParking): деревьев там нет.
+  // 15.11: за задней стеной справа может стоять задняя комната под аренду (layout.backRoom) — на её месте ни дерева,
+  // ни кустов, ни сквера.
+  const backRoom = zar ? undefined : next.tenants.find((r) => r.back);
   const trees: [number, number][] = [
     [-14 - WING_OUTER, next.h * 0.35],
     [-16 - WING_OUTER, next.h * 0.8],
     [next.w * 0.25, -12],
-    [next.w * 0.75, -16],
+    ...(backRoom ? [] : ([[next.w * 0.75, -16]] as [number, number][])),
   ];
   scene.greenery = [];
   // Что качает ветер (windGust): деревья отсюда и с парковки, навесы соседей (drawNeighbor) и зонтики веранды.
@@ -544,7 +547,10 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
     scene.tweens.add({ targets: leaves, x: x + 6.5, duration: Phaser.Math.Between(1700, 2600), yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   };
   for (const [x, y] of trees) plant('tree', x, y, y);
-  for (let x = 10; x < next.w; x += 34) scene.greenery.push(scene.art(x, -6, 'bush').setDepth(-6));
+  for (let x = 10; x < next.w; x += 34) {
+    if (backRoom && x > backRoom.x - 16 && x < backRoom.x + backRoom.w + 16) continue;
+    scene.greenery.push(scene.art(x, -6, 'bush').setDepth(-6));
+  }
   // Сквер за кварталом и за дорогой: деревья, кусты и клумбы — газон не пустует, когда отдаляешь камеру.
   const rnd = new Phaser.Math.RandomDataGenerator(['park']);
   // «Гигант» за дорогой: напротив входа, на месте сквера (giant.ts).
@@ -581,6 +587,7 @@ export function buildStreet(scene: StoreScene, next: Layout): void {
   if (!zar) {
     const yard = gardenFx.yardRect(next);
     districtAreas.push(yard, { x: yard.x + yard.w - 4, y: yard.y + yard.h, w: 14, h: top - yard.y - yard.h });
+    if (backRoom) districtAreas.push({ x: backRoom.x - 6, y: backRoom.y - 4, w: backRoom.w + 12, h: backRoom.h + 4 });
   }
   // Сезонный торговец у входа (game/tenants.ts): тележка с мороженым, тыквы, ёлочный базар или рассада.
   if (!zar) tenantsFx.buildPitch(scene, top);

@@ -1266,6 +1266,10 @@ export const tr: Record<TextKey, string> = {
   "tip.plots.title": "Mahalle sana uyuyor",
   "tip.plots.text": "Boş arsalarda ne açılacağı en çok ne sattığına bağlı: su — spor salonu, çiçek — gelinlik salonu, kahve — ortak ofis, dondurma — çocuk kulübü, et — yemekhane. Yeni komşular tam da bunu alır.",
   "news.mechs": "🆕 Yeni: arka odada rehinci, «Köşeler»de kiralama ve minibüs, «Gelişim»de bodrum, katlar ve dükkânın arkasındaki evler.",
+  // Kiraya bir oda daha (15.11): salonun arka duvarının ardındaki oda.
+  "tenant.freeRoom": "🔑 Kiraya verilecek bir oda daha boşaldı",
+  "tenant.backRoom": "Salonun arka duvarının ardında — kapısı tuvaletin yanında.",
+  "tenant.roomsFree": "Dolu oda: {n} / {max} · biri boş 🔑",
   "tour.hall": "Raf boş mu — dokun, depodan mal getir. Çöpleri ve su birikintilerini temizle, kovayı boşalt. Akşam ne kazandığını görürsün. Kolay gelsin, yavrum!",
   "onb.hello": "Yavrum, dükkân artık senin! Bak — geliyorlar bile.",
   "onb.shop": "Müşteriler malı raftan alıp kasaya getirir.",

@@ -27,6 +27,8 @@ const scenarios: [string, Partial<SimOptions>][] = [
   ['кухня + оборудование', { features: { kitchen: true, gear: true } }],
   ['кассы самообслуживания', { features: { kiosks: true } }],
   ['радио (ретро)', { features: { radio: true } }],
+  // 15.11: комнат под аренду стало на одну больше с «Минимаркета» — сколько дают арендаторы целиком.
+  ['арендаторы', { features: { tenants: true } }],
   ['радио (хиты) + сладости', { features: { radio: true, candy: true } }],
   ['сладости', { features: { candy: true } }],
   ['лотерея у кассы', { features: { lottery: true } }],

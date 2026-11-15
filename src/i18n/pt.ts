@@ -1279,6 +1279,10 @@ export const pt: Record<TextKey, string> = {
   "tip.plots.title": "O bairro se adapta",
   "tip.plots.text": "O que abre nos terrenos livres depende do que você mais vende: água — academia, flores — ateliê de noivas, café — coworking, sorvete — clube infantil, carne — refeitório. Os novos vizinhos compram justamente isso.",
   "news.mechs": "🆕 Novidades: casa de penhores no depósito, aluguel e furgão em «Cantinhos», porão, andares e casas atrás da loja em «Evolução».",
+  // Mais uma sala para alugar (15.11): a dos fundos, atrás da parede do salão.
+  "tenant.freeRoom": "🔑 Vagou mais uma sala para alugar",
+  "tenant.backRoom": "Fica atrás da parede do fundo — a porta é ao lado do banheiro.",
+  "tenant.roomsFree": "Salas ocupadas: {n} de {max} · há uma livre 🔑",
   "tour.hall": "Prateleira vazia — toque nela para trazer mercadoria do estoque. Recolha o lixo e as poças, esvazie a lixeira. À noite você vê quanto ganhou. Boa sorte, meu bem!",
   "onb.hello": "Meu bem, o quiosque agora é seu! Olhe — já estão vindo.",
   "onb.shop": "O cliente pega da prateleira e leva ao caixa.",

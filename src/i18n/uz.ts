@@ -1278,6 +1278,10 @@ export const uz: Record<TextKey, string> = {
   "tip.plots.title": "Mahalla moslashadi",
   "tip.plots.text": "Boʻsh uchastkalarda nima ochilishi sizdan eng koʻp nima olinishiga bogʻliq: suv — sport zali, gul — toʻy saloni, qahva — kovorking, muzqaymoq — bolalar klubi, goʻsht — oshxona. Yangi qoʻshnilar aynan shuni oladi.",
   "news.mechs": "🆕 Yangi: orqa xonada lombard, «Burchaklar»da prokat va furgon, «Rivojlanish»da yertoʻla, qavatlar va doʻkon ortidagi uylar.",
+  // Ijaraga yana bir xona (15.11): zalning orqa devori ortidagi xona.
+  "tenant.freeRoom": "🔑 Ijaraga beriladigan yana bir xona boʻshadi",
+  "tenant.backRoom": "U zalning orqa devori ortida — eshigi hojatxona yonida.",
+  "tenant.roomsFree": "Band xonalar: {n} / {max} · bittasi boʻsh 🔑",
   "tour.hall": "Boʻsh javon — ustiga bosib, ombordan tovar olib kel. Axlat va koʻlmaklarni tozala, chelakni chiqar. Kechqurun qancha ishlaganingni koʻrasan. Omad, nevaram!",
   "onb.hello": "Nevaram, kiosk endi seniki! Qara — kelishyapti.",
   "onb.shop": "Xaridor javondan oʻzi olib, kassaga olib keladi.",
