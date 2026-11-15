@@ -70,6 +70,7 @@ import * as camera from './camera';
 import * as building from './building';
 import { closingRitual } from './closingRitual';
 import * as floorNav from './floors/nav';
+import { stopFloorLife } from './floors/life';
 import { look } from './look';
 import { LINES, linesSold, type LinesNight } from '../game/lines';
 
@@ -87,6 +88,8 @@ export function endOfDay(scene: StoreScene): void {
   setPlaying(false);
   // Момент, не дождавшийся нажатия к закрытию, уходит вместе с днём (и в ночную смену не остаётся), и улика тоже.
   scene.moments.stop();
+  // 15.11, ревью: и момент этажа тоже — ждущий к закрытию не пойман, кнопка этажа гаснет до ночной смены.
+  stopFloorLife(scene);
   scene.clueFx?.endClue(scene);
   // Срочный заказ не успел доехать до закрытия — водитель всё равно выгрузил.
   deliveries.receiveUrgentOrders(scene);
@@ -251,6 +254,8 @@ export async function runNightStory(scene: StoreScene, story: NightStoryId): Pro
 
 export function finishDay(scene: StoreScene): void {
   scene.moments.stop();
+  // Моменты этажей (floors/life.ts): ждущий — не пойман, кнопка этажа гаснет.
+  stopFloorLife(scene);
   // И улика дела недели (caseFx.ts): не нажали до закрытия — придёт утром, размытая.
   scene.clueFx?.endClue(scene);
   scene.dayOpen = false;
@@ -320,6 +325,8 @@ export function finishDay(scene: StoreScene): void {
   if (filmed) extra.push(['🎬', t('summary.filming')]);
   if (quests.total) extra.push([t('summary.quests'), t('summary.questsValue', { done: quests.done, total: quests.total, n: quests.earned })]);
   if (scene.stats.momentsShown) extra.push([t('summary.moments'), t('summary.momentsValue', { n: scene.stats.moments ?? 0, total: scene.stats.momentsShown })]);
+  // Моменты этажей (game/floorLife.ts, 15.11): сколько поймали из позвавших и сколько денег это дало.
+  if (scene.stats.floorShown) extra.push([t('flm.summary'), t('flm.summaryValue', { n: scene.stats.floorCaught ?? 0, total: scene.stats.floorShown, sum: scene.stats.floorMoney ?? 0 })]);
   if (weekly.completed.length) extra.push([t('summary.weekly'), t('summary.weeklyDone', { n: weekly.completed.length, money: weekly.earned })]);
   // Кто из персонала побил свой рекорд за смену (game/staffStats.ts).
   if (night.staffRecords.length)

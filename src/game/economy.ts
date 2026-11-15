@@ -901,6 +901,10 @@ export interface DayStats {
   momentsShown?: number;
   moments?: number;
   momentStars?: number;
+  /** Моменты этажей (floorLife.ts, 15.11): сколько позвали, сколько поймали и сколько денег они дали. */
+  floorShown?: number;
+  floorCaught?: number;
+  floorMoney?: number;
 }
 
 export type LostReason = 'queue' | 'empty' | 'expensive' | 'eduard';

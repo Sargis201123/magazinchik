@@ -440,6 +440,8 @@ const css = `
 .ui-fold { all: unset; display: block; width: 100%; box-sizing: border-box; cursor: pointer; font: 700 15px ${UI_FONT}; color: #2b2233; }
 /* Несколько длинных кнопок — столбиком, чтобы не вылезали за рамку. */
 .ui-item-actions.stack { flex-direction: column; align-items: stretch; }
+.ui-item-wide { grid-template-columns: 34px 1fr; }
+.ui-item-wide .ui-item-actions { grid-column: 2; flex-wrap: wrap; justify-content: flex-end; }
 .ui-tag { display: inline-flex; align-items: center; gap: 2px; background: #fee761; border: 2px solid #2b2233; border-radius: 6px;
   padding: 0 5px; font: 800 13px ${UI_FONT}; line-height: 1.5; }
 /* Оформление: сетка карточек с превью. Поставленное — зелёное, премиум — с золотой рамкой. */
