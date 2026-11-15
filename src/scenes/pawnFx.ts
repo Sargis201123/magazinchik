@@ -51,6 +51,9 @@ const doors = new WeakMap<StoreScene, Door>();
 /** Поставить дверь «Подсобка» (building.buildShell, рядом с туалетом). Ломбард закрыт или он в подвале — двери нет. */
 export function buildPawnDoor(scene: StoreScene): void {
   doors.delete(scene);
+  // 15.11, ревью: запомнить, для какого места ломбарда строили зал — купили подвал, и утро перестроит зал без двери
+  // (morningFlow.ts сверяет builtPawn с pawnPlace), иначе дверь висела бы до любой другой перестройки.
+  scene.builtPawn = pawnPlace(scene.state) ?? '';
   const x = pawnDoorX(scene.layout, scene.state);
   if (x === null) return;
   const img = scene.art(x, DOOR_Y, 'pawn_door').setDepth(2);
@@ -84,7 +87,8 @@ export function buildPawnDoor(scene: StoreScene): void {
 export function refreshPawn(scene: StoreScene): void {
   const door = doors.get(scene);
   if (!door?.img.active) return;
-  const on = pawnWaiting(scene.state);
+  // Ломбард уже не в зале (переехал в подвал до перестройки) — метку у двери не зажигать: гость ждёт внизу.
+  const on = pawnPlace(scene.state) === 'hall' && pawnWaiting(scene.state);
   door.halo.set(on ? 2 : 0);
   door.mark.setVisible(on);
   if (on) door.bob?.resume();

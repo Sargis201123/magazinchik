@@ -62,7 +62,7 @@ export function pawnMail(state: StoreState, taken: boolean, getState: () => Stor
 }
 
 /** Гость с вещью: кто, что просит, примета и «Взять» / «Отказать». В новости утра — ещё и где ломбард (where). */
-function offerBody(state: StoreState, getState: () => StoreState, update: Update, where: boolean): HTMLElement | null {
+function offerBody(state: StoreState, getState: () => StoreState | null, update: Update, where: boolean): HTMLElement | null {
   const offer = pawnOffer(state);
   if (!offer) return null;
   const row = el('div', 'ui-item');
@@ -86,7 +86,9 @@ function offerBody(state: StoreState, getState: () => StoreState, update: Update
     button(
       t('pawn.take'),
       () => {
-        const next = takePawn(getState());
+        // null — день уже другой (карточка закрывается): гость не тот, что на экране.
+        const cur = getState();
+        const next = cur && takePawn(cur);
         if (!next) return;
         track('pawn', next.day, offer.lent);
         update(next, 'success');
@@ -94,7 +96,14 @@ function offerBody(state: StoreState, getState: () => StoreState, update: Update
       'ui-chip hood-buy',
       short,
     ),
-    button(t('pawn.refuse'), () => update(refusePawn(getState())), 'ui-chip'),
+    button(
+      t('pawn.refuse'),
+      () => {
+        const cur = getState();
+        if (cur) update(refusePawn(cur));
+      },
+      'ui-chip',
+    ),
   );
   body.append(actions);
   if (where) body.append(el('div', 'ui-muted', whereLine(state)));
@@ -123,7 +132,7 @@ export function pawnLines(state: StoreState, picked: NewsId | null): HTMLElement
 }
 
 /** Тело карточки: как это работает, «Сегодня», залоги, полка «Разное», итог. */
-function cardBody(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
+function cardBody(state: StoreState, getState: () => StoreState | null, update: Update): HTMLElement[] {
   const p = pawnOf(state);
   const how = el('div', 'ui-muted', t('pawn.how'));
   const today = el('div', 'ui-box');
@@ -154,16 +163,37 @@ function cardBody(state: StoreState, getState: () => StoreState, update: Update)
  */
 export function openPawnCard(getState: () => StoreState, update: Update): void {
   const { card, close } = openModal();
+  // 15.11, ревью: день идёт и при открытой карточке. Кончился — на экране вчерашний гость, а «Взять» взяло бы
+  // сегодняшнего (другая вещь, другая сумма). Поэтому карточка живёт один день: сменился день — закрываем, кнопки
+  // ничего не делают.
+  const day = getState().day;
+  let open = true;
+  const shut = (): void => {
+    if (!open) return;
+    open = false;
+    clearInterval(watch);
+    close();
+  };
+  const watch = setInterval(() => {
+    if (!card.isConnected || getState().day !== day) shut();
+  }, 1000);
+  const live = (): StoreState | null => {
+    const s = getState();
+    if (s.day === day) return s;
+    shut();
+    return null;
+  };
   const draw = (): void => {
-    const state = getState();
+    const state = live();
+    if (!state) return;
     const head = el('h3', '', `🏷 ${t('pawn.title')}`);
     card.replaceChildren(
       head,
-      ...cardBody(state, getState, (next, feedback) => {
+      ...cardBody(state, live, (next, feedback) => {
         update(next, feedback);
         draw();
       }),
-      button(t('pawn.close'), close, 'ui-btn secondary'),
+      button(t('pawn.close'), shut, 'ui-btn secondary'),
     );
   };
   draw();
