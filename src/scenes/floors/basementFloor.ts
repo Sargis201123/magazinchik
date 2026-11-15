@@ -96,6 +96,9 @@ export function buildBasement(kit: FloorKit): void {
   scene.add.rectangle(0, WALL, W, 6, 0x181425, 0.45).setOrigin(0).setDepth(-9);
   scene.add.rectangle(0, 0, 4, H, 0x181425).setOrigin(0).setDepth(-8);
   scene.add.rectangle(W - 4, 0, 4, H, 0x181425).setOrigin(0).setDepth(-8);
+  // 14.11: выше и ниже кадра подвал продолжается (floorView.drawAround): кирпич сводов вверх, пол вниз, лестница
+  // уходит в тёмный пролёт; притушено, как и сам подвал под вуалью.
+  kit.surround({ wall: 0x3e2731, floor: finish ? 'bsm_floor_fin' : 'bsm_floor2', floorY: WALL, floorStep: 16, side: 0x181425, sideW: 4, shafts: { top: [[6, 26]] }, veil: 0.5 });
   if (!vent) kit.art(0, 0, 'bsm_damp').setOrigin(0).setDepth(-9.5);
   else {
     // Вытяжка: короб под сводом и вентилятор в стене (лопасти крутятся; в лёгкой графике — стоят).

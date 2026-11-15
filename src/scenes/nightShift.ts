@@ -68,6 +68,7 @@ import * as rivals from './rivals';
 import * as camera from './camera';
 import * as building from './building';
 import { closingRitual } from './closingRitual';
+import * as floorNav from './floors/nav';
 import { look } from './look';
 import { LINES, linesSold, type LinesNight } from '../game/lines';
 
@@ -75,6 +76,12 @@ import { LINES, linesSold, type LinesNight } from '../game/lines';
 
 /** Вечер: если куплена ночная смена — спросить, работать ли ещё; иначе закрываемся. */
 export function endOfDay(scene: StoreScene): void {
+  // 14.11, аудит: игрок на этаже — сначала возвращаемся в зал, и только потом окно и итоги (не поверх этажа). День
+  // уже стоит: update магазина endOfDay больше не зовёт, позовёт floorNav.hallFirst.
+  if (floorNav.hallFirst(scene, () => endOfDay(scene))) {
+    scene.running = false;
+    return;
+  }
   // Яндекс Игры: магазин закрылся — GameplayAPI.stop (platform/yandex.ts).
   setPlaying(false);
   // Момент, не дождавшийся нажатия к закрытию, уходит вместе с днём (и в ночную смену не остаётся), и улика тоже.
