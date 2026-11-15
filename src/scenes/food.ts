@@ -22,6 +22,7 @@ import {
   kitchenWorking,
   pantryOf,
   portionsOf,
+  portionsTotal,
   servePortions,
   stoveSeconds,
   stoveSprite,
@@ -64,6 +65,8 @@ import { look } from './look';
  * (у медленного — дольше). До закрытия меньше — новое не ставит; сколько ставить — по спросу после того, как сварится.
  */
 const COOK_LATE = 14;
+/** Повар без дела выходит глянуть на полку «Еда» не чаще, чем раз в столько мс сцены (15.11). */
+const COOK_PEEK_MS = 15000;
 /** Сколько человек может ждать кофе сразу и что заказывают у стойки. */
 const COFFEE_WAITING = 3;
 const COFFEE_ORDERS: TextKey[] = ['popup.order1', 'popup.order2', 'popup.order3', 'popup.order4'];
@@ -754,7 +757,7 @@ export async function cookLoop(scene: StoreScene, w: Worker, gen: number): Promi
         scene.cookNoFoodDay = scene.state.day;
         scene.popup(w.sprite.x, w.sprite.y - 18, t('popup.cookNoFood'), '#ffd0d0');
       }
-      await cookIdle(scene, w);
+      await cookIdle(scene, w, gen);
       continue;
     }
     const taken = await fetchIngredients(scene, w, gen, k, plan);
@@ -842,11 +845,78 @@ export async function carryToFood(scene: StoreScene, w: Worker, gen: number, k: 
   await staff.workerWalkVia(scene, w, [room.doorway, room.inside, w.home]);
 }
 
-/** Готовить нечего — стоит у стола. */
-export async function cookIdle(scene: StoreScene, w: Worker): Promise<void> {
-  if (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2) await staff.workerWalk(scene, w, w.home.x, w.home.y);
+/**
+ * Готовить пока нечего (на полке хватает до вечера) — 15.11, автор: «а то у нас повар просто стоит на месте».
+ * Как у пекаря (bakerIdle), одно дело за раз: протирает стол, пробует из кастрюли у плиты, перебирает
+ * ящик-кладовую, а иногда выходит в зал глянуть на полку «Еда» и поправить тарелки. В лёгкой графике —
+ * без пара и брызг, но ходит так же. Магазин закрыт или ночь — стоит у стола.
+ */
+export async function cookIdle(scene: StoreScene, w: Worker, gen: number): Promise<void> {
+  const k = scene.kitchenView;
+  const home = () => (Phaser.Math.Distance.Between(w.sprite.x, w.sprite.y, w.home.x, w.home.y) > 2 ? staff.workerWalk(scene, w, w.home.x, w.home.y) : Promise.resolve());
+  if (!k?.stove.active || !scene.running || scene.night) {
+    await home();
+    persons.setFacing(w.sprite, 'up');
+    await scene.wait(600);
+    return;
+  }
+  const roll = Math.random();
+  // В зал к полке — не чаще раза в COOK_PEEK_MS: иначе он больше гуляет, чем готовит.
+  const stand = foodStand(scene);
+  if (stand && roll < 0.25 && scene.time.now - (scene.cookPeekAt ?? 0) > COOK_PEEK_MS) {
+    scene.cookPeekAt = scene.time.now;
+    const room = scene.layout.kitchen!;
+    await staff.workerWalkVia(scene, w, [room.inside, room.doorway, { x: stand.x - 5, y: stand.y }]);
+    if (!scene.alive(gen)) return;
+    persons.setFacing(w.sprite, 'down');
+    await staff.workerWait(scene, w, 500);
+    if (!scene.alive(gen)) return;
+    // Поправил тарелки: полка чуть вздрагивает; сколько на ней — его репликой (раз в несколько выходов).
+    const f = scene.foodView;
+    if (f?.img.active) motion.squash(scene, f.img, 1.04, 0.96, 110);
+    sound.place('glass', 2, stand.x);
+    if (portionsTotal(scene.state) > 0 && Math.random() < 0.5) scene.speak(w.sprite, 22, t('say.cookShelf', { n: portionsTotal(scene.state) }));
+    await staff.workerWait(scene, w, 700);
+    if (!scene.alive(gen)) return;
+    await staff.workerWalkVia(scene, w, [room.doorway, room.inside, w.home]);
+    return;
+  }
+  if (roll < 0.5) {
+    // Пробует из кастрюли у плиты: наклон, пар (если что-то варилось — над ним и так пар).
+    await staff.workerWalk(scene, w, k.stove.x + 11, w.home.y);
+    if (!scene.alive(gen)) return;
+    persons.setFacing(w.sprite, 'left');
+    motion.squash(scene, w.sprite, 0.96, 1.04, 160);
+    if (!scene.lite) steamPuff(scene, k.stove.x + 2, k.stove.y - 8, 0xc0cbdc);
+    await staff.workerWait(scene, w, 700);
+    if (!scene.alive(gen)) return;
+    if (Math.random() < 0.3) scene.speak(w.sprite, 22, t('say.cookTaste'));
+    await staff.workerWait(scene, w, 600);
+    return;
+  }
+  if (roll < 0.7) {
+    // Перебирает ящик-кладовую: что осталось к следующей закладке.
+    await staff.workerWalk(scene, w, k.crate.x - 2, w.home.y);
+    if (!scene.alive(gen)) return;
+    persons.setFacing(w.sprite, 'up');
+    for (let i = 0; i < 2; i++) {
+      motion.squash(scene, k.crate, 1.05, 0.95, 110);
+      sound.place('bump', i, k.crate.x);
+      await staff.workerWait(scene, w, 420);
+      if (!scene.alive(gen)) return;
+    }
+    return;
+  }
+  // Протирает стол: несколько движений, в нормальной графике — лёгкое облачко над доской.
+  await home();
+  if (!scene.alive(gen)) return;
   persons.setFacing(w.sprite, 'up');
-  await scene.wait(600);
+  for (let i = 0; i < 3; i++) {
+    motion.squash(scene, w.sprite, 1.04, 0.97, 120);
+    if (i === 1 && !scene.lite) steamPuff(scene, k.knife.x + 3, k.knife.y - 1, 0xffffff);
+    await scene.wait(380);
+    if (!scene.alive(gen)) return;
+  }
 }
 
 /**

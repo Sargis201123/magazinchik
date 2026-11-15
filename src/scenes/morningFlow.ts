@@ -42,7 +42,7 @@ import { pendingStory } from '../game/story';
 import { tutAt, tutIndex, tutMorning, tutTell } from '../game/tutorial';
 import { ensureSeason } from '../game/pass';
 import { ensureRush } from '../game/rush';
-import { stockKitchen, autoCook } from '../game/kitchen';
+import { stockKitchen, autoCook, morningCook } from '../game/kitchen';
 import { seeTrickResult, trickResult } from '../game/tricks';
 import { districtKey } from '../game/district';
 import { reportError } from '../platform/errors';
@@ -699,6 +699,17 @@ export function prepareDay(scene: StoreScene): void {
     scene.stats.kitchenSpent = pantry.spent;
     const crate = scene.kitchenView?.crate;
     if (crate) scene.time.delayedCall(900, () => crate.active && scene.popup(crate.x, crate.y - 12, t('popup.kitchenBought', { n: pantry.spent }), '#fff3b0'));
+  }
+  // 15.11, автор: «пусть сам готовит и на полку кладёт, как пекарь». Повар приходит пораньше и до открытия
+  // варит первые кастрюли — к первым гостям на полке «Еда» уже тарелки (kitchen.ts morningCook).
+  const early = morningCook(scene.state);
+  if (early.portions || early.spent) {
+    scene.state = early.state;
+    scene.stats.kitchenSpent = (scene.stats.kitchenSpent ?? 0) + early.spent;
+    for (const id of early.dishes) collections.note(scene, 'recipes', id);
+    food.refreshKitchen(scene);
+    const at = food.foodStand(scene);
+    if (at && early.portions) scene.time.delayedCall(1300, () => scene.running && scene.popup(at.x, at.y - 4, t('popup.cookMorning', { n: early.portions }), '#c8ffb0'));
   }
   // Сытый вчера кот иногда находит под прилавком монетку — так видно, что кормить его выгодно (cat.ts catFind).
   const found = catFind(scene.state);

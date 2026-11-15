@@ -8,7 +8,7 @@ import { grantPets, petItem, type PetId } from './pets';
 import { noteLost } from './losses';
 import { isBroke } from './tips';
 import { loanOptions, takeLoan } from './bank';
-import { cook, cookBatch, cookRoundsPerDay, DISHES, DISH_IDS, kitchenWorking, sellDish, servePortions, stockKitchen, takeIngredients, topUpKitchen } from './kitchen';
+import { cook, cookBatch, cookRoundsPerDay, DISHES, DISH_IDS, kitchenWorking, morningCook, sellDish, servePortions, stockKitchen, takeIngredients, topUpKitchen } from './kitchen';
 import { answerStaffEvent, eventCost } from './staffEvents';
 import { answerCeremony, answerOffer, bestBonus } from './career';
 import { answerTale, taleToday } from './tales';
@@ -1003,6 +1003,10 @@ export function simulate({
       const pantry = stockKitchen(state);
       state = pantry.state;
       purchases += pantry.spent;
+      // 15.11: повар, как пекарь, варит до открытия — к первым гостям полка «Еда» уже не пустая.
+      const early = morningCook(state);
+      state = early.state;
+      purchases += early.spent;
     }
     if (buyMode === 'auto' && autoActive(state)) {
       // «Закупать сам»: тот же расчёт и те же цены, что у кнопки, только без брака.

@@ -170,6 +170,9 @@ export class StoreScene extends Phaser.Scene {
   foodView?: { at: { x: number; y: number }; img: Phaser.GameObjects.Image; plates: Phaser.GameObjects.Image[] };
   /** В какой день повар уже пожаловался, что не из чего готовить (раз в день, не чаще). */
   cookNoFoodDay = 0;
+  /** Когда повар без дела последний раз выходил к полке «Еда» (food.ts cookIdle) и менеджер подгонял кассу (staff.ts). */
+  cookPeekAt?: number;
+  managerHurryAt?: number;
   /** Чей магазин друга нарисован сбоку (торговая неделя). */
   builtFriend?: string;
   /** Магазин босса района стоит за дорогой (на месте «Гиганта»), а не сбоку. */
