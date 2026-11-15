@@ -364,7 +364,7 @@ export function buildShell(scene: StoreScene): void {
     scene.add.tileSprite(x, y, ww, hh, 'wall_cap').setOrigin(0).setTileScale(1 / ART).setDepth(2);
   cap(-WALL, -4, w + 2 * WALL, 4);
   // Левая стена с проёмами в открытые комнаты флигеля.
-  const gaps = openRooms(scene)
+  const gaps = wingRooms(scene)
     .map((room) => room.doorway.y)
     .sort((a, b) => a - b);
   let from = 0;
@@ -470,7 +470,7 @@ export function buildShowcases(scene: StoreScene): void {
   // Левая стена: вдоль неё не ходят, во флигель — только через двери.
   const { h } = scene.layout;
   let from = -4;
-  for (const y of openRooms(scene).map((room) => room.doorway.y).sort((a, b) => a - b)) {
+  for (const y of wingRooms(scene).map((room) => room.doorway.y).sort((a, b) => a - b)) {
     scene.obstacles.push({ x: -WALL - 2, y: from, w: WALL + 2, h: y - 8 - from });
     from = y + 8;
   }
@@ -720,6 +720,9 @@ export function openRooms(scene: StoreScene): Room[] {
   return [warehouse, ...(food.bakeryOpen(scene) ? [bakery] : []), ...(food.coffeeOpen(scene) ? [coffee] : []), ...(kitchen && kitchenOpen(scene.state) ? [kitchen] : []), ...tenantsFx.rentedRooms(scene)];
 }
 
+/** Открытые комнаты с дверью в левой стене зала (задняя комната под аренду — с дверью в задней, tenantsFx.ts). */
+export const wingRooms = (scene: StoreScene): Room[] => openRooms(scene).filter((room) => !room.back);
+
 /**
  * Флигель слева от зала: наружные стены, стены между комнатами, фасад склада с воротами
  * и подъезд к ним с улицы. Пекарня и кофейня, пока не открыты, стоят тёмные и запертые.
@@ -900,5 +903,6 @@ export function potTile(scene: StoreScene, key: string): string {
 /** Где на стене висит электрощиток (в точках мира по x): первое открытое место левее туалета. */
 export function fuseSpot(scene: StoreScene): number {
   const { wc } = scene.layout;
-  return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12).find((x) => x > 10 && !shelves.behindShelf(scene, x, 6)) ?? wc.x - 24;
+  // 15.11: последним — вплотную к туалету: левее места нет, когда в просвете стены дверь задней комнаты.
+  return [...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12), wc.x - 18].find((x) => x > 10 && !shelves.behindShelf(scene, x, 6)) ?? wc.x - 24;
 }

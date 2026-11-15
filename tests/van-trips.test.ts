@@ -313,7 +313,9 @@ describe('старые сохранения и подсказка', () => {
   it('симулятор с фургоном идёт: выезды есть, баланс не уезжает', () => {
     const base = simulate({ days: 60, seed: 3, features: { tenants: true, garden: true } });
     const van = simulate({ days: 60, seed: 3, features: { tenants: true, garden: true, van: true } });
-    expect(van.final.van?.trips ?? 0).toBeGreaterThan(5);
+    // 15.11: с ещё одной комнатой под аренду симулятор тратит на отделку раньше и покупает фургон на пару дней позже —
+    // к 60-му дню на выезд меньше (6 → 5).
+    expect(van.final.van?.trips ?? 0).toBeGreaterThanOrEqual(5);
     expect(van.levelDay).toEqual(base.levelDay);
     expect(Math.abs(van.final.money - base.final.money)).toBeLessThan(base.final.money * 0.25);
   });

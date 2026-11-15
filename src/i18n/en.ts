@@ -1280,6 +1280,10 @@ export const en: Record<TextKey, string> = {
   "tip.plots.title": "The neighbourhood adapts",
   "tip.plots.text": "What opens on free plots depends on what you sell most: water — a gym, flowers — a bridal salon, coffee — a coworking space, ice cream — a kids' club, meat — a canteen. The new neighbours buy exactly that.",
   "news.mechs": "🆕 New: a pawnshop in the back room, rentals and a van in “Corners”, the basement, upper floors and houses behind the shop in “Growth”.",
+  // One more room to let (15.11): the back room behind the hall's back wall.
+  "tenant.freeRoom": "🔑 Another room is free to let",
+  "tenant.backRoom": "It's behind the hall's back wall — the door is next to the restroom.",
+  "tenant.roomsFree": "Rooms rented: {n} of {max} · one is free 🔑",
   "tour.hall": "Empty shelf — tap it to bring goods from storage. Clean up trash and spills, take out the bin. In the evening you'll see what you earned. Good luck, dear!",
   // Новое начало (game/onboarding.ts): бабушка облачком в зале, первая продажа, вкладки по одной.
   "onb.hello": "Sweetie, the shop is yours now! Look — here they come.",

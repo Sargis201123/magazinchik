@@ -10,19 +10,20 @@ import { ru } from '../src/i18n/ru';
 const shop = (over: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 60, level: 4, money: 50_000, debt: 0, rating: 4, ...over });
 
 describe('арендаторы: комнаты', () => {
-  it('в ларьке и «Магазинчике» комнат нет, дальше — больше, в гипермаркете три', () => {
+  it('в ларьке и «Магазинчике» комнат нет, дальше — больше, в гипермаркете четыре (15.11)', () => {
     expect(TENANT_ROOMS).toHaveLength(STORE_LEVELS.length);
     expect(TENANT_ROOMS.slice(0, 2)).toEqual([0, 0]);
     for (let i = 1; i < TENANT_ROOMS.length; i++) expect(TENANT_ROOMS[i]).toBeGreaterThanOrEqual(TENANT_ROOMS[i - 1]);
-    expect(TENANT_ROOMS.at(-1)).toBe(3);
+    expect(TENANT_ROOMS.at(-1)).toBe(4);
   });
 
-  it('у каждой комнаты есть место во флигеле: над остальными, не выше зала, с дверью в зал', () => {
+  it('у каждой комнаты флигеля есть место: над остальными, не выше зала, с дверью в зал', () => {
     STORE_LEVELS.forEach((_, level) => {
       const layout = layoutFor(level);
       expect(layout.tenants, `уровень ${level}`).toHaveLength(TENANT_ROOMS[level]);
       let below = layout.wing.y;
-      for (const room of layout.tenants) {
+      // Задняя комната (за задней стеной) — в tests/tenant-rooms.test.ts.
+      for (const room of layout.tenants.filter((r) => !r.back)) {
         expect(room.y + room.h).toBeLessThan(below);
         expect(room.y).toBeGreaterThanOrEqual(4);
         expect(room.doorway.y).toBeGreaterThan(room.y);

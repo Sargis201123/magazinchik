@@ -6,8 +6,9 @@
 // внизу склад (ворота на улицу для подвоза), над ним пекарня, выше кофейня, в больших помещениях
 // над кофейней ещё кухня.
 
-import { TENANT_ROOMS } from '../game/tenants';
-import { STORE_LEVELS } from '../game/economy';
+import { BACK_ROOM_FROM, TENANT_ROOMS, tenantsOf } from '../game/tenants';
+import { STORE_LEVELS, type StoreState } from '../game/economy';
+import { inZar } from '../game/zarshop';
 
 export interface Point {
   x: number;
@@ -43,7 +44,8 @@ export interface Layout {
   wing: { x: number; y: number; w: number; h: number };
   /**
    * Комнаты под аренду (game/tenants.ts) над верхней комнатой флигеля, снизу вверх. Во флигель (wing) не входят:
-   * их стены рисует scenes/tenantsFx.ts, и только в Центре.
+   * их стены рисует scenes/tenantsFx.ts, и только в Центре. С «Супермаркета» последняя из них — задняя комната
+   * за задней стеной зала (back), дверь у неё в задней стене, а не в левой.
    */
   tenants: Room[];
 }
@@ -57,6 +59,11 @@ export interface Room {
   /** Точка у двери со стороны зала и со стороны комнаты. */
   doorway: Point;
   inside: Point;
+  /**
+   * Задняя комната под аренду (15.11): стоит за задней стеной зала, справа, у туалета. Дверь — в задней стене:
+   * doorway — на полу зала под дверью, inside — на полу комнаты за порогом.
+   */
+  back?: boolean;
 }
 
 /** Ширина и длина зала, сколько полок вдоль стены и где острова (колонка, ряд). */
@@ -116,6 +123,8 @@ const COFFEE_H = 60;
 const KITCHEN_H = 52;
 /** Комната под аренду (game/tenants.ts). */
 const TENANT_H = 48;
+/** Толщина карниза над задней стеной зала (buildShell: cap(-WALL, -4, …)). */
+const BACK_CAP = 4;
 /** С какого помещения во флигеле есть кухня (улучшение «Кухня» — с того же уровня). */
 export const KITCHEN_FROM = 3;
 /** Сколько занимает флигель слева от зала вместе со стенами. */
@@ -175,16 +184,19 @@ export function layoutFor(level: number): Layout {
   const showcases: Point[] = [];
   // Комнаты под аренду — над кухней (а где её нет — над кофейней), сколько положено помещению.
   const tenants: Room[] = [];
-  for (let i = 0, roof = kitchen ? kitchenY : coffeeY; i < (TENANT_ROOMS[level] ?? 0); i++) {
+  const back = level >= BACK_ROOM_FROM && (TENANT_ROOMS[level] ?? 0) > 0;
+  for (let i = 0, roof = kitchen ? kitchenY : coffeeY; i < (TENANT_ROOMS[level] ?? 0) - (back ? 1 : 0); i++) {
     roof -= WING_WALL + TENANT_H;
     tenants.push(room(roof, TENANT_H, roof + TENANT_H - 7));
   }
+  const wc = { x: w - 13, y: 20, spotY: WALL_H + 12 };
+  if (back) tenants.push(backRoom(w, wall, wc.x));
   return {
     w,
     h,
     wallH: WALL_H,
     slots,
-    wc: { x: w - 13, y: 20, spotY: WALL_H + 12 },
+    wc,
     counter: { x: w - 30, y: h - 66 },
     sellerHome: { x: w - 14, y: h - 50 },
     queue: { x: queueX, y: h - 50, step: 17, minY: WALL_H + 44 },
@@ -199,10 +211,40 @@ export function layoutFor(level: number): Layout {
   };
 }
 
-// Комнаты под аренду помещаются во флигель: верхняя не выше задней стены зала.
+/**
+ * Задняя комната под аренду (15.11, game/tenants.ts, BACK_ROOM_FROM). Во флигеле над кухней места больше нет — левая
+ * стена зала занята дверями до самой задней стены, а зал выше делать нельзя: дольше ходить — меньше гостей за день
+ * (в больших залах покупателей и так столько, сколько помещается, maxCustomers). Свободное место есть за задней
+ * стеной справа. Дверь — в просвете задней стены между последней полкой у стены и туалетом, ближе к полке (у туалета
+ * остаётся место электрощитку, building.fuseSpot); комната — над дверью на газоне за зданием, правым краем к правой
+ * стене зала (если дверь далеко от угла — сдвигается к ней).
+ */
+function backRoom(w: number, wall: number, wcX: number): Room {
+  const doorX = 20 + WALL_STEP * (wall - 1) + BACK_SHELF_HALF + BACK_DOOR_HALF + 3;
+  const x = Math.min(w - WING_W, doorX - 10);
+  const y = -BACK_CAP - TENANT_H;
+  if (doorX + BACK_DOOR_HALF + 14 > wcX - 8) throw new Error(`layout: задней двери нет места у туалета (${doorX})`);
+  return { x, y, w: WING_W, h: TENANT_H, doorway: { x: doorX, y: WALL_H + 10 }, inside: { x: doorX, y: y + TENANT_H - 8 }, back: true };
+}
+/** Полка у задней стены на вид — 40 точек (behindShelf); дверь в задней стене — 14 точек с косяками. */
+const BACK_SHELF_HALF = 20;
+export const BACK_DOOR_HALF = 7;
+
+/**
+ * Дверь задней комнаты (x её середины), если комнату сняли (в Центре): тогда в задней стене проём, и картины,
+ * часы, щиток и бра на стене его обходят (shelves.behindShelf). Свободная комната стоит запертой — стена целая.
+ */
+export function backDoorX(layout: Pick<Layout, 'tenants'>, state: StoreState): number | null {
+  const i = layout.tenants.findIndex((r) => r.back);
+  return i >= 0 && !inZar(state) && tenantsOf(state).length > i ? layout.tenants[i].doorway.x : null;
+}
+
+// Комнаты под аренду помещаются: во флигеле — не выше задней стены зала, задняя — за ней.
 TENANT_ROOMS.forEach((n, i) => {
-  const top = layoutFor(i).tenants[n - 1];
+  const wing = layoutFor(i).tenants.filter((r) => !r.back);
+  const top = wing[wing.length - 1];
   if (top && top.y < 4) throw new Error(`layout ${i}: комната под аренду выше зала (${top.y})`);
+  if (layoutFor(i).tenants.length !== n) throw new Error(`layout ${i}: комнат под аренду ${layoutFor(i).tenants.length}, нужно ${n}`);
 });
 
 // Каждое место под полку должно быть в планировке своего уровня.
@@ -281,6 +323,8 @@ function fixtureBlocked(layout: Layout, registers: number, avoid: { x: number; y
     { x: queue.x - 12, y: queue.minY - 12, w: 24, h: queue.y - queue.minY + 26 },
     // Двери во флигель у левой стены (склад, пекарня, кофейня, кухня) — к ним тоже ходят.
     ...[layout.warehouse, layout.bakery, layout.coffee, layout.kitchen].filter((r): r is Room => Boolean(r)).map((r) => ({ x: -2, y: r.doorway.y - 16, w: 34, h: 32 })),
+    // Дверь задней комнаты под аренду (15.11) — проход к ней от задней стены.
+    ...layout.tenants.filter((r) => r.back).map((r) => ({ x: r.doorway.x - 14, y: wallH, w: 28, h: 30 })),
     // Вещи, которые игрок переставил сам (автомат, ведро, растения), — ларь их обходит.
     ...avoid,
   ];

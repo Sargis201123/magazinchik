@@ -1273,7 +1273,7 @@ export class StoreScene extends Phaser.Scene {
       { x: 0, y: wallH, w, h: h - wallH },
       { x: warehouse.x, y: warehouse.y, w: warehouse.w, h: warehouse.h },
       ...[bakery, coffee, ...(kitchen ? [kitchen] : [])].map((r) => ({ x: r.x, y: r.y + 14, w: r.w, h: r.h - 14 })),
-      ...building.openRooms(this).map((r) => ({ x: -WALL, y: r.doorway.y - 8, w: WALL, h: 16 })),
+      ...building.wingRooms(this).map((r) => ({ x: -WALL, y: r.doorway.y - 8, w: WALL, h: 16 })),
     ];
     const plan = {
       area: { x: -WING_OUTER, y: top, w: w + WING_OUTER, h: h - top },
