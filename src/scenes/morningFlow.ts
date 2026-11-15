@@ -12,6 +12,7 @@ import { saveGame } from '../game/save';
 import { branchLook } from '../game/branch';
 import { hoodLook } from '../game/hood';
 import { tenantsLook } from '../game/tenants';
+import { pawnPlace } from '../game/pawnshop';
 import { residentsLook } from '../game/residents';
 import { gentLook } from '../game/gentrify';
 import { estateLook } from '../game/estate';
@@ -227,7 +228,7 @@ export function showMorning(scene: StoreScene): void {
   scene.giftRebuild = false;
   // Утро: зал больше не закрыт — перестройка ниже зажжёт лампы, сумрак ритуала закрытия снят (lightsOn зажжёт ряды).
   lighting.hallOff(scene, -Infinity);
-  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || residentsLook(scene.state) !== scene.builtResidents || gentLook(scene.state) !== scene.builtGent || estateLook(scene.state) !== scene.builtEstate || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
+  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || (pawnPlace(scene.state) ?? '') !== scene.builtPawn || residentsLook(scene.state) !== scene.builtResidents || gentLook(scene.state) !== scene.builtGent || estateLook(scene.state) !== scene.builtEstate || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   // Фургон выездной торговли вернулся вчера после закрытия (или его купили) — на своё место до соседей.
   cars.parkVan(scene);
   cars.refillParking(scene);
@@ -286,7 +287,9 @@ export function showMorning(scene: StoreScene): void {
       // 14.11, аудит: и ответ «для кого магазин» (gentLook) — иначе табличка на крыше появлялась только назавтра.
       if (zarLook(s) !== scene.builtZar) scene.buildWorld();
       else if (s.level > scene.builtLevel) void effects.celebrateExpansion(scene);
-      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || tenantsLook(s) !== scene.builtTenants || estateLook(s) !== scene.builtEstate || gentLook(s) !== scene.builtGent || zarLook(s) !== scene.builtZar) scene.buildWorld(bought);
+      // 15.11, ревью: купили подвал — ломбард переехал вниз (pawnPlace), дверь «Подсобка» из зала убрать сразу, а картины
+      // и щиток, что её обходили, переставить — поэтому целая перестройка, а не одна дверь.
+      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || tenantsLook(s) !== scene.builtTenants || (pawnPlace(s) ?? '') !== scene.builtPawn || estateLook(s) !== scene.builtEstate || gentLook(s) !== scene.builtGent || zarLook(s) !== scene.builtZar) scene.buildWorld(bought);
       else {
         if (staffChanged) staff.syncStaff(scene);
         // Купили, позвали другого или отправили домой питомца за звёзды — только он, без перестройки зала.

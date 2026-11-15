@@ -34,6 +34,8 @@ import { setItemIcon } from './sheet';
 import { clothesRows } from './clothes';
 import { clothesOf, stockTotal } from '../game/clothes';
 import { stallPlaces, stallsOf, STALL_PLACES } from '../game/foodcourt';
+import { pawnOf, pawnPlace, pawnSlots, pawnWaiting } from '../game/pawnshop';
+import { openPawnCard } from './pawnshop';
 
 type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void;
 
@@ -216,6 +218,13 @@ function basementRows(state: StoreState, getState: () => StoreState, update: Upd
   if (b.slots) actions.push(button(t('bsm.slot.sell', { n: Math.round(SLOT_COST * SLOT_RESALE) }), () => update(sellSlot(getState())), 'ui-chip'));
   out.push(row('bsm_slot2', t('bsm.slots', { n: b.slots, max }), notes, actions));
   for (const part of PART_IDS) out.push(partRow(state, part, getState, update));
+  // 15.11, автор: ломбард ушёл из «Уголков» в подвал — комнатой с окошком. Найти его из меню можно здесь (карточку
+  // открывает и касание окошка внизу); гость с вещью ждёт ответа — строка об этом.
+  if (pawnPlace(state) === 'basement') {
+    const notes = [t('pawn.loans', { n: pawnOf(state).loans.length, max: pawnSlots(state) })];
+    if (pawnWaiting(state)) notes.push(t('pawn.waiting'));
+    out.push(row('bsm_pawn', t('pawn.down.row'), notes, [button(t('pawn.open'), () => openPawnCard(getState, update), 'ui-chip')]));
+  }
   return out;
 }
 
@@ -231,5 +240,5 @@ function partRow(state: StoreState, part: BasementPart, getState: () => StoreSta
   const action = has
     ? el('span', 'ui-tag', t('bsm.part.on'))
     : button(`${cost} 💰`, () => update(buyPart(getState(), part), 'success'), 'ui-chip', state.money < cost);
-  return row(part === 'cold' ? 'bsm_cold2' : 'bsm_pawn', t(part === 'cold' ? 'bsm.cold' : 'bsm.back'), [note], [action]);
+  return row(part === 'cold' ? 'bsm_cold2' : 'pawn_safe', t(part === 'cold' ? 'bsm.cold' : 'bsm.back'), [note], [action]);
 }

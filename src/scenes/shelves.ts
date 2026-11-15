@@ -28,7 +28,7 @@ import {
   propFootprint,
   propRect,
 } from './placement';
-import { BACK_DOOR_HALF, backDoorX, brandRect, brandSpotFor, iceboxRect, iceboxSpotFor, licenseSpotFor, WALL_ROW_Y } from './layout';
+import { BACK_DOOR_HALF, backDoorX, PAWN_DOOR_HALF, pawnDoorX, brandRect, brandSpotFor, iceboxRect, iceboxSpotFor, licenseSpotFor, WALL_ROW_Y } from './layout';
 import { Halo } from './halo';
 import { PAIR_CHANCE, shelfLinks, type Link } from '../game/neighbors';
 import { gearTier } from '../game/gear';
@@ -505,6 +505,9 @@ export function behindShelf(scene: StoreScene, x: number, half = 6): boolean {
   const n = scene.state.shelves.filter((sh) => !isFixture(sh)).length;
   const door = backDoorX(scene.layout, scene.state);
   if (door !== null && Math.abs(door - x) < BACK_DOOR_HALF + 2 + half) return true;
+  // 15.11: и не на двери «Подсобка» ломбарда (layout.pawnDoorX), пока подвала нет.
+  const pawn = pawnDoorX(scene.layout, scene.state);
+  if (pawn !== null && Math.abs(pawn - x) < PAWN_DOOR_HALF + 2 + half) return true;
   return scene.layout.slots.slice(0, n).some((p) => p.y === WALL_ROW_Y && Math.abs(p.x - x) < 20 + half);
 }
 

@@ -96,7 +96,7 @@ import { FACES, regularName } from './returns';
 
 import { daysToFair, fairToday, isFairDay } from '../game/fair';
 import { WEEKLY_TEXT, weeklyUntil, type Challenge } from '../game/weekly';
-import { pendingTip, seeTip, soloExpandRisk, TIP_ICONS } from '../game/tips';
+import { pendingTip, seeTip, soloExpandRisk, TIP_ICONS, tipTextKey } from '../game/tips';
 import { toggleDonate } from '../game/economy';
 import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingStep } from '../game/staff';
 import { DEED_ICON, DEED_OF, deedsPerShift, quirkOf } from '../game/staffStats';
@@ -263,8 +263,8 @@ import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toas
 import { gardenBox, harvestNow } from './garden';
 import { gardenRipe, hasGarden } from '../game/garden';
 import { tenantsBox, tenantsSummary } from './tenants';
-import { pawnBox, pawnOfferBox } from './pawnshop';
-import { pawnMet, pawnOf, pawnOffer, pawnOpen, pawnSlots } from '../game/pawnshop';
+import { pawnLines, pawnOfferBox } from './pawnshop';
+import { pawnMet, pawnOffer } from '../game/pawnshop';
 import { rentalAlert, rentalBox, rentalStatus, restockButton } from './rental';
 import { KIT_ICON, RENTAL_CAP, kitToday, rentalOf, rentalOpen } from '../game/rental';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
@@ -1059,6 +1059,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       bill,
       // Фургон сегодня едет или завтра выезд (ui/van.ts, 15.11): когда он едет — видно с утра.
       ...(zarHere ? [] : vanLines(state)),
+      // Гость ломбарда ждёт, а новостью утра стал не он — ответить днём у двери или окошка (ui/pawnshop.ts).
+      ...pawnLines(state, picked.id),
       ...weatherLine(state),
       ...warLine(state),
       ...fairLine(state),
@@ -2433,7 +2435,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         status: securityOf(state).dog ? '🐕' : '—',
         details: () => [securityBox(getState())],
       },
-      ...(pawnOpen(state) ? [{ id: 'pawn', icon: 'assets/pawn_ring.png', title: t('pawn.title'), status: `${pawnOf(state).loans.length}/${pawnSlots(state)}`, details: () => pawnBox(getState()) }] : []),
+      // Ломбарда здесь больше нет (15.11, автор): он в мире — дверь «Подсобка» в зале или окошко в подвале (ui/pawnshop.ts).
       // Фургон выездной торговли (game/van.ts) — с минимаркета, в Центре.
       ...(vanOpen(state)
         ? [
@@ -3808,7 +3810,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const box = el('div', 'ui-box ui-tip');
     box.append(
       el('b', '', `${t('tip.new')}: ${TIP_ICONS[tip]} ${t(`tip.${tip}.title` as TextKey)}`),
-      el('div', '', t(`tip.${tip}.text` as TextKey)),
+      // У ломбарда текст — по месту: дверь в зале или окошко в подвале (tips.ts tipTextKey).
+      el('div', '', t(tipTextKey(state, tip) as TextKey)),
       // 14.11, аудит: день ставим только здесь — следующая «Новое!» придёт завтра (tips.ts pendingTip).
       button(t('tip.ok'), () => update({ ...seeTip(getState(), tip), tipDay: getState().day }), 'ui-chip'),
     );
