@@ -1,6 +1,8 @@
 // Плитка «Фургон» во вкладке «Уголки» (game/van.ts, 13.11): купить фургон, выбрать, куда едем сегодня,
 // и что грузить. Грузят из магазина — сначала склад, потом полки; кнопка «Загрузить под событие»
-// берёт каждого товара столько, сколько там обычно разбирают. Итог вчерашнего выезда — строкой сверху.
+// берёт каждого товара столько, сколько там обычно разбирают.
+// 15.11, автор: «непонятно, когда он едет, сколько продаёт, сколько испортилось». Теперь сверху — итог
+// последнего выезда маленькой таблицей, ниже — календарь ближайших выездов с ожидаемым спросом.
 
 import { t, type TextKey } from '../i18n';
 import { PRODUCTS, type StoreState } from '../game/economy';
@@ -10,11 +12,11 @@ import {
   inStore,
   loadedOf,
   loadVan,
-  nextVanEvent,
   planTrip,
   skipTrip,
   tripToday,
   unloadVan,
+  vanCalendar,
   vanEvents,
   vanFuel,
   vanGoods,
@@ -22,6 +24,7 @@ import {
   vanLoaded,
   vanNews,
   vanOpen,
+  vanTaken,
   vanTakeable,
   vanWant,
   vanWanted,
@@ -30,11 +33,12 @@ import {
   VAN_EVENTS,
   VAN_PRICE,
   type VanEventId,
+  type VanResult,
 } from '../game/van';
 import { track } from '../platform/analytics';
-import { button, el } from './dom';
+import { button, el, kvTable } from './dom';
 import { setItemIcon, sheetPng } from './sheet';
-import { vanEventName, vanResultText } from './vanText';
+import { signed, vanEventName, vanResultText } from './vanText';
 
 type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') => void;
 
@@ -57,7 +61,7 @@ export const vanToday = (state: StoreState): VanEventId | null => (vanOpen(state
 
 export function vanBox(state: StoreState, getState: () => StoreState, update: Update, toBuy: () => void): HTMLElement[] {
   const box = el('div', 'ui-box');
-  box.append(el('b', '', `🚐 ${t('van.title')}`), el('div', 'ui-muted', t('van.note')));
+  box.append(el('b', '', `🚐 ${t('van.title')}`), el('div', 'ui-item-sub', t('van.how')), el('div', 'ui-muted', t('van.note')));
   const art = el('img', 'ui-item-art');
   art.src = sheetPng('shop_van');
   art.alt = '';
@@ -79,11 +83,12 @@ export function vanBox(state: StoreState, getState: () => StoreState, update: Up
     return [box];
   }
   const last = state.van.last;
-  if (last && last.day === state.day - 1) box.append(el('div', 'ui-note', t('van.yesterday', { text: vanResultText(last) })));
+  // Итог последнего выезда — таблицей: вчерашний на виду всегда, давний — пока не было нового.
+  if (last) box.append(resultTable(state, last));
+  box.append(calendar(state));
   const events = vanEvents(state);
   if (!events.length) {
-    const next = nextVanEvent(state);
-    box.append(el('div', 'ui-note', next ? t('van.none', { icon: VAN_EVENTS[next.id].icon, name: vanEventName(state, next.id), n: next.days }) : t('van.noneAtAll')));
+    box.append(el('div', 'ui-note', t('van.noneAtAll')));
     return done(box, state);
   }
   // Куда едем: события дня кнопками, «Не едем» — кузов на склад.
@@ -136,6 +141,44 @@ export function vanBox(state: StoreState, getState: () => StoreState, update: Up
   if (blocked && !full) box.append(el('div', 'ui-note', t('van.roomFull')));
   box.append(el('div', 'ui-muted', t('van.cold')));
   return done(box, state);
+}
+
+/** Итог выезда маленькой таблицей: взял, продал, случай в дороге, привёз назад, испортилось, бензин, итого. */
+function resultTable(state: StoreState, r: VanResult): HTMLElement {
+  const where = { icon: VAN_EVENTS[r.event].icon, name: vanEventName(state, r.event) };
+  const title = r.day === state.day - 1 ? t('van.res.yesterday', where) : t('van.res.day', { d: r.day, ...where });
+  const pcs = (n: number) => t('van.res.pcs', { n });
+  const rows: [string, string, boolean?][] = [
+    [t('van.res.taken'), pcs(vanTaken(r))],
+    [t('van.res.sold'), t('van.res.soldV', { n: r.sold, sum: r.revenue })],
+    [t('van.res.back'), pcs(r.back)],
+    [t('van.res.spoiled'), pcs(r.spoiled)],
+  ];
+  if (r.incident) rows.push([t('van.res.road'), t(`van.inc.${r.incident}` as TextKey, { n: Math.abs(r.extra) })]);
+  rows.push([t('van.res.fuel'), `−${r.fuel} 💰`], [t('van.res.net'), `${signed(r.net)} 💰`, true]);
+  return kvTable(title, rows);
+}
+
+/** Календарь: ближайшие выезды — когда, куда и сколько там обычно разбирают. */
+function calendar(state: StoreState): HTMLElement {
+  const plan = vanCalendar(state);
+  if (!plan.length) return el('div', 'ui-muted', t('van.cal.none'));
+  const when = (day: number) => (day === state.day ? t('van.cal.today') : day === state.day + 1 ? t('van.cal.tomorrow') : t('van.cal.day', { d: day }));
+  return kvTable(
+    t('van.cal'),
+    plan.map((p) => [`${when(p.day)} · ${VAN_EVENTS[p.event].icon} ${vanEventName(state, p.event)}`, t('van.cal.demand', { n: p.demand })]),
+  );
+}
+
+/** Строка утренней сводки «Сегодня»: фургон сегодня едет (кузов загружен) или завтра выезд. Касаний не просит. */
+export function vanLines(state: StoreState): HTMLElement[] {
+  if (!state.van || !vanOpen(state)) return [];
+  const trip = tripToday(state);
+  if (trip && vanLoaded(state)) return [el('div', '', t('van.today', { icon: VAN_EVENTS[trip.event].icon, name: vanEventName(state, trip.event), n: vanLoaded(state) }))];
+  // Сегодня выезда нет — предупредить про завтрашний, чтобы утром было что грузить.
+  if (vanEvents(state).length) return [];
+  const [next] = vanCalendar(state, 1, 1);
+  return next ? [el('div', 'ui-muted', t('van.tomorrow', { icon: VAN_EVENTS[next.event].icon, name: vanEventName(state, next.event) }))] : [];
 }
 
 /** Внизу карточки — сколько выездов и сколько заработано за всё время. */

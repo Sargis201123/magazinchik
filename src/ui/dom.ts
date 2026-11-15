@@ -110,6 +110,12 @@ const css = `
 .ui-career-rewards { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 4px; }
 .ui-career-rewards .ui-btn { margin: 0; }
 .ui-career-log { margin-top: 4px; padding: 4px 6px; border-left: 3px solid #feae34; }
+.ui-kv { margin: 4px 0 6px; padding: 2px 8px; border: 1px solid #d8ccb0; border-radius: 6px; background: #fbf6ea; font-size: 13px; }
+.ui-kv > b { display: block; padding: 4px 0 2px; font-size: 13px; }
+.ui-kv-row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; color: #3a3046; }
+.ui-kv-row + .ui-kv-row { border-top: 1px dashed #d8ccb0; }
+.ui-kv-row > span:last-child { white-space: nowrap; font-weight: bold; }
+.ui-kv-row.total { border-top: 1px solid #2b2233; }
 .ui-rank { margin-left: 4px; font-size: 10px; color: #feae34; text-shadow: 0 0 1px #181425, 0 0 1px #181425; letter-spacing: -1px; }
 .ui-box.ui-goals { background: #fff3b0; border-color: #f7c948; }
 .ui-goals .ui-goals-week { display: block; margin-top: 8px; }
@@ -763,6 +769,21 @@ export function button(
   btn.disabled = disabled;
   btn.addEventListener('click', onClick);
   return btn;
+}
+
+/**
+ * Маленькая таблица «подпись — число» (15.11, автор: итог фургона одной длинной строкой не читался). Строка с
+ * total — итоговая, с чертой сверху.
+ */
+export function kvTable(title: string, rows: [label: string, value: string, total?: boolean][]): HTMLElement {
+  const box = el('div', 'ui-kv');
+  if (title) box.append(el('b', '', title));
+  for (const [label, value, total] of rows) {
+    const row = el('div', `ui-kv-row${total ? ' total' : ''}`);
+    row.append(el('span', '', label), el('span', '', value));
+    box.append(row);
+  }
+  return box;
 }
 
 /** Открывает модальное окно. Возвращает карточку и функцию закрытия. */

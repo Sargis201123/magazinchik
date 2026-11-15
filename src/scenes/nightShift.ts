@@ -50,6 +50,7 @@ import { BOX_FROM_DAY, BOX_OPENS_DAY, firstDayGift, gentleDay, grannyBox, granny
 import { tomorrowTeaser } from '../game/nudge';
 import { teaserText } from '../ui/nudge';
 import { vanResultText } from '../ui/vanText';
+import { lotteryDay, WIN_BONUS } from '../game/lottery';
 import { ART, TUTORIAL_DAYS, FACADE_H, LIGHT_DEPTH, nightGuestLook } from './common';
 import * as starPets from './starPets';
 import * as motion from './motion';
@@ -309,6 +310,7 @@ export function finishDay(scene: StoreScene): void {
   const learning = learningEvening(scene.state);
   const grannyHome = grannyStays(scene.state);
   if (grannyHome) newcomer.onbStep(scene, 'bye');
+  const before = scene.state;
   const night = nightCycle(scene.state, scene.stats);
   const { spoiled, bill, shortfall, skimmed, order, quests, weekly, branch, home, rent } = night;
   const state = { ...night.state, rating: quietRating(scene.state, ratingBefore, night.state.rating) };
@@ -351,6 +353,9 @@ export function finishDay(scene: StoreScene): void {
     extra.push([t('van.summary'), vanResultText(night.van)]);
     track('van_trip', finishedDay, night.van.net);
   }
+  // Лотерея (game/lottery.ts, 15.11): сколько билетов взяли, доля магазина, сколько выиграло, крупный тираж.
+  const lot = lotteryDay(before, night.state, finishedDay);
+  if (lot) extra.push([t('lottery.summary'), [t('lottery.summaryValue', { n: lot.n, sum: lot.sum, w: lot.w }), ...(lot.big ? [t('lottery.summaryBig', { n: WIN_BONUS })] : [])].join(' · ')]);
   // Прокат у входа (rental.ts): сколько раз взяли и сколько денег; кто не вернул — залог остался у нас.
   const rental = night.rental;
   if (rental?.rented) {
