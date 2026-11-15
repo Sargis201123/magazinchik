@@ -6,7 +6,7 @@ import { hasUpgrade } from './upgrades';
 import { isFairDay } from './fair';
 import { registerCount, RELIEF_ROLE } from './registers';
 import { noThieves, quietDays } from './firstday';
-import { pawnOpen } from './pawnshop';
+import { pawnOpen, pawnPlace } from './pawnshop';
 import { hasLottery } from './lottery';
 import { echoesOf } from './echoes';
 import { crisisToday } from './crisis';
@@ -20,7 +20,7 @@ import { estateOpen } from './estate';
 import { GENT_SEEN, prestigeOf } from './gentrify';
 import { floorMomentsFor } from './floorLife';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement' | 'clothes' | 'gentrify' | 'estate' | 'foodcourt' | 'floorLife';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement' | 'clothes' | 'gentrify' | 'estate' | 'foodcourt' | 'floorLife' | 'pawnMoved';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -106,7 +106,20 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   // Моменты этажей (floorLife.ts, 15.11): в первое утро, когда на этаже есть кого звать (автоматы стоят, вещи висят), —
   // что кнопка этажа будет светиться и что пропустить не страшно.
   ['floorLife', (s) => floorMomentsFor(s).length > 0],
+  // Ломбард переехал из «Уголков» в мир (15.11, pawnshop.ts pawnPlace): тем, кто уже им пользовался (state.pawn есть),
+  // — где он теперь. Новичку хватает карточки 'pawn' (её «Понятно» отмечает и эту, ALSO).
+  ['pawnMoved', (s) => pawnOpen(s) && Boolean(s.pawn) && (s.seenTips ?? []).includes('pawn')],
 ];
+
+/** Карточка, у которой текст зависит от места: ломбард — дверь в зале или окошко в подвале (tip.<id>.down). */
+const PLACED: ReadonlySet<TipId> = new Set<TipId>(['pawn', 'pawnMoved']);
+
+/** Ключ текста карточки: tip.<id>.text, а у ломбарда с подвалом — tip.<id>.down. */
+export const tipTextKey = (state: StoreState, id: TipId): `tip.${TipId}.${'text' | 'down'}` =>
+  `tip.${id}.${PLACED.has(id) && pawnPlace(state) === 'basement' ? 'down' : 'text'}`;
+
+/** Прочитал одну — и эти уже не нужны: новичку «ломбард переехал» не о чем сообщать. */
+const ALSO: Partial<Record<TipId, TipId[]>> = { pawn: ['pawnMoved'] };
 
 export const TIP_ICONS: Record<TipId, string> = {
   broke: '🏦',
@@ -142,6 +155,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   estate: '🏠',
   foodcourt: '🍕',
   floorLife: '✨',
+  pawnMoved: '🚪',
 };
 
 /**
@@ -163,7 +177,7 @@ export function pendingTip(state: StoreState): TipId | null {
   return state.tipDay === state.day ? null : (WHEN.find(fits)?.[0] ?? null);
 }
 
-export const seeTip = (state: StoreState, id: TipId): StoreState => ({ ...state, seenTips: [...(state.seenTips ?? []), id] });
+export const seeTip = (state: StoreState, id: TipId): StoreState => ({ ...state, seenTips: [...(state.seenTips ?? []), id, ...(ALSO[id] ?? [])] });
 
 /** Карточки до 13.11: у кого видены только они — игрок со старым сохранением. */
 const OLD_TIPS: ReadonlySet<string> = new Set<string>(['broke', 'ownerTill', 'alone', 'weekly', 'fair', 'loyalty', 'delivery', 'register2', 'oven', 'coffee', 'nightShift']);

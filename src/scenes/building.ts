@@ -163,6 +163,8 @@ export function buildStore(scene: StoreScene): void {
     .zone(wc.x, wc.y + 4, 24, 36)
     .setInteractive({ useHandCursor: true })
     .on('pointerup', () => camera.tap(scene, () => staff.cleanToilet(scene)));
+  // Ломбард до подвала (15.11): дверь «Подсобка» в задней стене между последней полкой и туалетом (pawnFx.ts).
+  pawnFx.buildPawnDoor(scene);
 
   scene.art(counter.x + 2, counter.y + 3, 'shadow_wide').setScale(0.62, 0.7).setAngle(90).setDepth(counter.y + 19);
   const registerImg = scene.art(counter.x, counter.y + FURNITURE_TOP / 2, registerSprite(scene.state)).setDepth(counter.y + 20);
@@ -846,8 +848,6 @@ export function buildWarehouse(scene: StoreScene): void {
   scene.art(x + w - 4, doorway.y - 16, 'extinguisher').setDepth(doorway.y - 90);
   lighting.nightGlow(scene, scene.art(x + w / 2, y + 10, 'glow').setScale(40 / 64).setTint(0xfff0c8), 0.5, undefined, { store: true, map: { scale: 1.3, gain: 0.8, haze: 0.12 } });
   roomSign(scene, x, y + 7, w, t('warehouse.label'));
-  // Ломбард (game/pawnshop.ts): полка «Разное» на стене слева от таблички.
-  pawnFx.buildPawnShelf(scene);
 }
 
 export function refreshWarehouse(scene: StoreScene): void {
@@ -868,7 +868,8 @@ export function refreshWarehouse(scene: StoreScene): void {
     const y = warehouseRowY(scene, row);
     img.setPosition(scene.layout.warehouse.x + 8 + (n % WAREHOUSE_COLS) * 9, y).setTexture(`crate_${id}`).setDepth(y - 100);
   });
-  pawnFx.refreshPawnShelf(scene);
+  // Ломбард (pawnFx.ts): гость с вещью ждёт ответа — метка над дверью «Подсобка».
+  pawnFx.refreshPawn(scene);
 }
 
 export function refreshToilet(scene: StoreScene): void {
@@ -904,5 +905,7 @@ export function potTile(scene: StoreScene, key: string): string {
 export function fuseSpot(scene: StoreScene): number {
   const { wc } = scene.layout;
   // 15.11: последним — вплотную к туалету: левее места нет, когда в просвете стены дверь задней комнаты.
-  return [...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12), wc.x - 18].find((x) => x > 10 && !shelves.behindShelf(scene, x, 6)) ?? wc.x - 24;
+  // 15.11, ломбард: у туалета бывает и дверь «Подсобка» (layout.pawnDoorX) — тогда щиток в самой щели между ней
+  // и туалетом (щиток узкий, полуширина 4: проверяем без запаса).
+  return [...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => wc.x - 24 - k * 12), wc.x - 18].find((x) => x > 10 && !shelves.behindShelf(scene, x, 6)) ?? (shelves.behindShelf(scene, wc.x - 12, 3) ? wc.x - 24 : wc.x - 12);
 }

@@ -14,6 +14,7 @@ import { activeDecor } from '../game/decor';
 import { LIGHT_DEPTH } from './common';
 import * as camera from './camera';
 import * as shelves from './shelves';
+import { pawnDoorX } from './layout';
 import * as effects from './effects';
 import * as pixelFx from './pixelFx';
 
@@ -47,7 +48,8 @@ export function frameSpot(scene: StoreScene): number | null {
 /** Шкатулка стоит на полу у стены, под рамкой — «уголок памяти»; рамки нет — у двери туалета. */
 function boxSpot(scene: StoreScene): { x: number; y: number } {
   const { wc, wallH } = scene.layout;
-  return { x: frameSpot(scene) ?? wc.x - 20, y: wallH + 9 };
+  // 15.11: у туалета бывает дверь «Подсобка» ломбарда (layout.pawnDoorX) — шкатулка не встаёт у её порога.
+  return { x: frameSpot(scene) ?? (pawnDoorX(scene.layout, scene.state) === null ? wc.x - 20 : wc.x - 11), y: wallH + 9 };
 }
 
 /** Рамка с монетой: касание — когда и сколько. */

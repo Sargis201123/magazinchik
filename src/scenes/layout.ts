@@ -9,6 +9,7 @@
 import { BACK_ROOM_FROM, TENANT_ROOMS, tenantsOf } from '../game/tenants';
 import { STORE_LEVELS, type StoreState } from '../game/economy';
 import { inZar } from '../game/zarshop';
+import { pawnPlace } from '../game/pawnshop';
 
 export interface Point {
   x: number;
@@ -237,6 +238,17 @@ export const BACK_DOOR_HALF = 7;
 export function backDoorX(layout: Pick<Layout, 'tenants'>, state: StoreState): number | null {
   const i = layout.tenants.findIndex((r) => r.back);
   return i >= 0 && !inZar(state) && tenantsOf(state).length > i ? layout.tenants[i].doorway.x : null;
+}
+
+/**
+ * Дверь «Подсобка» ломбарда (15.11, game/pawnshop.ts pawnPlace): x её середины, пока ломбард в зале (подвала нет),
+ * иначе null. В задней стене у туалета: правее двери задней комнаты под аренду (она сразу за последней полкой,
+ * backRoom) и левее щитка (building.fuseSpot встаёт в щель у туалета). Картины, часы и бра её обходят
+ * (shelves.behindShelf). Ширина с косяками — 12 точек.
+ */
+export const PAWN_DOOR_HALF = 6;
+export function pawnDoorX(layout: Pick<Layout, 'wc'>, state: StoreState): number | null {
+  return pawnPlace(state) === 'hall' ? layout.wc.x - 23 : null;
 }
 
 // Комнаты под аренду помещаются: во флигеле — не выше задней стены зала, задняя — за ней.

@@ -11,7 +11,10 @@
 //    числа завсегдатаев дня (slotsPlan, то же число, что в карточке «Этажей»);
 //  · грузовой лифт и холодильник-склад: грузчик выкатывает из лифта паллету на рохле, увозит в холодильник (дверь
 //    отъезжает, внутри синий свет) и возвращается за следующей;
-//  · подсобка ломбарда: кирпичная перегородка, окно с полками «Разное» за решёткой (вещи — из pawnshop.ts);
+//  · ломбард (15.11, автор: «в подвале его держать как комнату в подвале со своей вывеской»): будка с окном, световой
+//    короб «ЛОМБАРД» и три золотых шара, за прилавком — ломбардщик, на полках вещи (сверху на продажу с ценником,
+//    снизу в залоге). К окошку спускаются с вещами: отдал вещь — получил монеты, выкупил — уходит с вещью. Касание
+//    будки — карточка ломбарда (scenes/pawnFx.openPawn); гость ждёт ответа — над вывеской прыгает метка;
 //  · улучшения подвала (BASEMENT_UPS) видны: «неон» — большая вывеска и розовая подсветка у автоматов; без «вытяжки»
 //    на стене потёки и плесень, на полу лужа и капает, с ней — короб вытяжки и вентилятор; «охрана» — пост у
 //    лестницы, охранник и камера с мигающим глазком.
@@ -22,7 +25,8 @@ import Phaser from 'phaser';
 import { basementOf, raidLock, slotPlaces, slotsPlan, COLD_ROOM } from '../../game/basement';
 import { floorOf, hasFloorUp } from '../../game/floors';
 import { STORE_LEVELS } from '../../game/economy';
-import { pawnOf } from '../../game/pawnshop';
+import { pawnOf, pawnPlace, pawnWaiting, PAWN_ITEM_IDS, type PawnItemId } from '../../game/pawnshop';
+import { openPawn } from '../pawnFx';
 import { t } from '../../i18n';
 import { sound } from '../../platform/sound';
 import { nightGuestLook, nightLook, VIEW_SUFFIX, type Look } from '../common';
@@ -61,9 +65,17 @@ const COLD = { x: 144, y: 146, door: 139 };
 /** Путь грузчика: из лифта вниз до своей полосы (ниже табуретов у автоматов), по ней влево, по коридору к холодильнику. */
 const LOADER_X = 116;
 const LOAD_Y = 88;
-/** Подсобка ломбарда (низ) и где стоят у её окна. */
+/** Ломбард (низ будки) и где стоят у его окошка. */
 const PAWN = { x: 138, y: 214 };
 const PAWN_SPOT = { x: 128, y: AISLE.c };
+/** У окошка — тот, кто пришёл с вещью; ломбардщик за прилавком (по ногам: их закрывает прилавок). */
+const PAWN_WINDOW = { x: 134, y: AISLE.c };
+const BROKER = { x: 147, y: 211 };
+/** Верх прилавка: вещи и монеты переходят из рук в руки над ним. */
+const COUNTER_Y = 201;
+/** Как часто к окошку пробуют спуститься с вещью (мс) в обычной и лёгкой графике. */
+const PAWN_EVERY = 9000;
+const PAWN_EVERY_LITE = 20000;
 /** Шаг (точек мира в секунду), свет и вуаль. */
 const SPEED = 22;
 const VEIL = 800;
@@ -214,9 +226,9 @@ export function buildBasement(kit: FloorKit): void {
     prop(kit, 152, 124, 'box');
   }
 
-  // ------------------------------------------------------------ подсобка ломбарда
-  if (parts.includes('back')) buildPawn(kit, tap);
-  else if (!n && !parts.length) kit.text(W / 2 + 6, WALL + 60, t('bsm.empty'), 6, '#8b9bb4').setDepth(UI);
+  // ------------------------------------------------------------ ломбард (15.11: комната подвала, а не плитка меню)
+  const pawn = pawnPlace(state) === 'basement' ? buildPawn(kit, parts.includes('back')) : null;
+  if (!pawn && !n && !parts.length) kit.text(W / 2 + 6, WALL + 60, t('bsm.empty'), 6, '#8b9bb4').setDepth(UI);
   // Табличка этажа — внизу по середине, поверх вуали (наверху — вывеска и своды).
   kit.text(W / 2 - 4, H - 7, `🪜 ${t('floor.basement')}`, 7, '#fee761').setDepth(UI).setBackgroundColor('#181425cc').setPadding(3, 1, 3, 1);
 
@@ -500,7 +512,7 @@ export function buildBasement(kit: FloorKit): void {
     else if (m.active) await watch(m);
     if (m.active && Math.random() < 0.45) await rest(m);
     // Иногда — к окну ломбарда: посмотреть, что на полке «Разное».
-    if (m.active && parts.includes('back') && Math.random() < 0.2) {
+    if (m.active && pawn && Math.random() < 0.2) {
       await go(m, PAWN_SPOT);
       if (m.active) persons.setFacing(m, 'up');
       await pause(kit, 1800);
@@ -607,6 +619,77 @@ export function buildBasement(kit: FloorKit): void {
         await pause(kit, 9000 + (k % 3) * 3000);
       }
     })();
+  }
+
+  // ------------------------------------------------------------ ломбард: с вещью к окошку (15.11)
+  // Спустился, встал у окошка: принёс — вещь уходит через прилавок к ломбардщику, в ответ монеты; пришёл выкупить —
+  // наоборот. Живые случайности этажа (на деньги не влияют, их считает game/pawnshop.ts). Один гость за раз; чем
+  // больше вещей в залоге и на полке, тем чаще. Взяли вещь в карточке — гость с ней спускается сразу.
+  if (pawn) {
+    const broker = pawn.broker;
+    let busy = false;
+    /** Вещь или монета летит над прилавком из рук в руки. */
+    const pass = (key: string, from: Point, to: Point): Promise<void> => {
+      const img = kit.art(from.x, from.y, key).setDepth(UI - 1);
+      return new Promise((done) => scene.tweens.add({ targets: img, x: to.x, y: to.y, duration: lite ? 250 : 450, ease: 'Sine.easeInOut', onComplete: () => (img.destroy(), done()) }));
+    };
+    const visitor = async (item: PawnItemId, bring: boolean): Promise<void> => {
+      if (busy || kit.leaving()) return;
+      busy = true;
+      try {
+        const m = man(STAIR_TOP.x, STAIR_TOP.y, nightLook()).setAlpha(0);
+        const held = kit.art(5, 2, `pawn_${item}`).setVisible(bring);
+        m.add(held);
+        persons.setFacing(m, 'down');
+        await new Promise<void>((done) => scene.tweens.add({ targets: m, y: STAIR_FOOT.y - FEET, alpha: 1, duration: 1100, onUpdate: () => m.setDepth(m.y + FEET), onComplete: () => done() }));
+        if (!m.active) return;
+        await go(m, PAWN_WINDOW);
+        if (!m.active) return;
+        persons.setFacing(m, 'up');
+        persons.setFacing(broker, 'down');
+        await pause(kit, 500);
+        const hand = { x: m.x + 3, y: COUNTER_Y };
+        const desk = { x: broker.x - 3, y: COUNTER_Y - 2 };
+        if (bring) {
+          held.setVisible(false);
+          await pass(`pawn_${item}`, hand, desk);
+          await pause(kit, lite ? 300 : 700);
+          sound.coin(m.x);
+          await pass('coin', desk, { x: m.x, y: m.y - 12 });
+          if (m.active) bubble(m, 'emo_heart');
+        } else {
+          sound.coin(m.x);
+          await pass('coin', { x: m.x, y: m.y - 12 }, desk);
+          await pause(kit, lite ? 300 : 700);
+          await pass(`pawn_${item}`, desk, hand);
+          if (m.active) {
+            held.setVisible(true);
+            bubble(m, 'emo_star');
+          }
+        }
+        await pause(kit, 900);
+        persons.setFacing(broker, 'left');
+        if (m.active) await leave(m);
+      } finally {
+        busy = false;
+      }
+    };
+    const pick = (): PawnItemId => {
+      const p = pawnOf(store.state);
+      const own = [...p.loans.map((l) => l.item), ...p.shelf.map((x) => x.item)];
+      return Phaser.Utils.Array.GetRandom(own.length ? own : PAWN_ITEM_IDS);
+    };
+    pawn.onTap(() => openPawn(store, (item) => void visitor(item, true), pawn.refresh));
+    scene.time.delayedCall(2500, () => void visitor(pick(), Math.random() < 0.55));
+    scene.time.addEvent({
+      delay: lite ? PAWN_EVERY_LITE : PAWN_EVERY,
+      loop: true,
+      callback: () => {
+        if (busy || kit.leaving()) return;
+        const p = pawnOf(store.state);
+        if (Math.random() < Math.min(0.9, 0.4 + 0.12 * (p.loans.length + p.shelf.length))) void visitor(pick(), Math.random() < 0.55);
+      },
+    });
   }
 
   // ------------------------------------------------------------ моменты подвала (game/floorLife.ts, 15.11)
@@ -807,26 +890,51 @@ function lamp(kit: FloorKit, x: number, y: number, size: number): void {
   if (!kit.lite) scene.tweens.add({ targets: [pool, halo], alpha: '-=0.06', duration: 1100 + x * 4, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 }
 
-/** Подсобка ломбарда: перегородка с окном, вещи на полках «Разное» (на продажу — с ценником), решётка поверх. */
-function buildPawn(kit: FloorKit, tap: (s: string, x: number, y: number) => void): void {
-  const p = pawnOf(kit.store.state);
+/**
+ * Ломбард (15.11): будка с окном, световой короб с вывеской (слово — на языке игрока), за прилавком — ломбардщик, на
+ * полках вещи: сверху на продажу (с ценником), снизу в залоге. Решётка и прилавок — поверх вещей и ломбардщика.
+ * С «серой» подсобкой (basement.ts, back) у будки — сейф. Гость с вещью ждёт ответа — над вывеской прыгает метка
+ * (в лёгкой графике — просто висит). Возвращает ломбардщика, касание будки и как обновить метку.
+ */
+function buildPawn(kit: FloorKit, safe: boolean): { broker: Man; onTap: (fn: () => void) => void; refresh: () => void } {
+  const { scene, store, lite } = kit;
+  const p = pawnOf(store.state);
   const room = prop(kit, PAWN.x, PAWN.y, 'bsm_pawn');
-  room.setInteractive({ useHandCursor: true }).on('pointerup', () => tap(t('bsm.pawn.tap', { n: p.shelf.length, k: p.loans.length }), PAWN.x, PAWN.y - 46));
-  // Окно: x от −23 до +7 от середины, полки — на 22 и 14 выше низа. 14.11 (ревью): верхняя полка — на продажу (с
-  // ценником), нижняя — в залоге; раньше всё вставало в верхний ряд, а нижняя полка пустовала. Пять вещей в ряд —
-  // по середине окна (вещей меньше — ряд всё равно по середине): с краю первая вещь торчала из кирпича слева.
-  const mid = PAWN.x - 8;
-  const rows = [PAWN.y - 22, PAWN.y - 14];
+  // Будка: левый край — PAWN.x − 28, верх — PAWN.y − 42. Полки — на 23 и 16 выше низа, окно — от +3 до +47 точек
+  // от левого края. Пять вещей в ряд — от левого края окна: справа у прилавка стоит ломбардщик.
+  const rows = [PAWN.y - 23, PAWN.y - 16];
   const shelfRows = [p.shelf.map((s) => s.item), p.loans.map((l) => l.item)];
   shelfRows.forEach((ids, row) =>
-    ids.slice(0, 5).forEach((id, k, row5) => {
-      const ix = mid + (k - (row5.length - 1) / 2) * 6.2;
-      const iy = rows[row];
-      prop(kit, ix, iy, `pawn_${id}`, { depth: PAWN.y + 0.1 + (row * 5 + k) * 0.01 });
-      if (row === 0) kit.art(ix + 2.5, iy - 4.5, 'pawn_tag').setDepth(PAWN.y + 0.15);
+    ids.slice(0, 5).forEach((id, k) => {
+      const ix = PAWN.x - 23 + k * 5.2;
+      prop(kit, ix, rows[row], `pawn_${id}`, { depth: PAWN.y + 0.1 + (row * 5 + k) * 0.01 });
+      if (row === 0) kit.art(ix + 2.5, rows[row] - 4.5, 'pawn_tag').setDepth(PAWN.y + 0.15);
     }),
   );
-  prop(kit, PAWN.x, PAWN.y, 'bsm_pawn_bars', { depth: PAWN.y + 0.2 });
-  // Настольная лампа за решёткой — тёплый свет в окне.
-  lightPool(kit, PAWN.x - 16, PAWN.y - 22, { w: 40, h: 26, tint: 0xfeae34, alpha: 0.32, depth: LIGHT });
+  const broker = kit.person(BROKER.x, BROKER.y - FEET, { ...nightLook(), shirt: 0x3a4466, acc: 'vest', accTint: 0x733e39, glasses: true, style: 'bald', hair: 0xc0cbdc }).setDepth(PAWN.y + 0.3);
+  persons.setFacing(broker, 'down');
+  if (!lite) scene.time.addEvent({ delay: 3600, loop: true, callback: () => broker.active && persons.setFacing(broker, Phaser.Utils.Array.GetRandom(['down', 'down', 'left'] as Facing[])) });
+  prop(kit, PAWN.x, PAWN.y, 'bsm_pawn_bars', { depth: PAWN.y + 0.5 });
+  if (safe) prop(kit, PAWN.x - 37, PAWN.y, 'pawn_safe');
+  // Вывеска светится: слово поверх вуали, тёплое пятно под ним; настольная лампа в окне.
+  const sign = kit.text(PAWN.x - 7, PAWN.y - 33.5, t('pawn.sign'), 5, '#fee761').setDepth(LIGHT + 2);
+  if (sign.displayWidth > 32) sign.setScale(32 / sign.displayWidth);
+  lightPool(kit, PAWN.x - 7, PAWN.y - 34, { w: 46, h: 16, tint: 0xfeae34, alpha: 0.38, depth: LIGHT, flicker: !lite });
+  lightPool(kit, PAWN.x + 16, PAWN.y - 18, { w: 34, h: 24, tint: 0xfeae34, alpha: 0.3, depth: LIGHT });
+  lightPool(kit, PAWN.x + 19, PAWN.y - 32, { w: 20, h: 16, tint: 0xfee761, alpha: 0.28, depth: LIGHT });
+  // Метка «ждут ответа» над вывеской.
+  const mark = kit.art(PAWN.x - 21, PAWN.y - 45, 'pawn_mark').setDepth(UI).setVisible(false);
+  const bob = lite ? null : scene.tweens.add({ targets: mark, y: mark.y - 2, duration: 450, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', paused: true });
+  const refresh = (): void => {
+    const on = pawnWaiting(store.state);
+    mark.setVisible(on);
+    if (on) bob?.resume();
+    else bob?.pause();
+  };
+  refresh();
+  return {
+    broker,
+    onTap: (fn) => void room.setInteractive({ useHandCursor: true }).on('pointerup', fn),
+    refresh,
+  };
 }

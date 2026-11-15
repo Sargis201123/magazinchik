@@ -229,8 +229,11 @@ export const SPRITES = [
   'fc3_horse',
   'fc3_stage',
   'fc3_guitar',
-  // Ломбард в подсобке (art/pawnshop.py, scenes/pawnFx.ts): полка «Разное» на стене склада, вещи и ценник.
-  'pawn_shelf',
+  // Ломбард (art/pawnshop.py): вещи и ценник; дверь «Подсобка» в зале (scenes/pawnFx.ts), метка «ждут ответа»
+  // над дверью или окошком и сейф «серой» подсобки в подвале (floors/basementFloor.ts).
+  'pawn_door',
+  'pawn_mark',
+  'pawn_safe',
   'pawn_watch',
   'pawn_guitar',
   'pawn_bike',
