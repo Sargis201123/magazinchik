@@ -268,7 +268,7 @@ import { rentalAlert, rentalBox, rentalStatus, restockButton } from './rental';
 import { KIT_ICON, RENTAL_CAP, kitToday, rentalOf, rentalOpen } from '../game/rental';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
-import { vanBox, vanIdle, vanNewsBox, vanStatus, vanToday } from './van';
+import { vanBox, vanIdle, vanLines, vanNewsBox, vanStatus, vanToday } from './van';
 import { vanEventName } from './vanText';
 import { vanNews, vanOpen, VAN_EVENTS } from '../game/van';
 import { applyTownGifts, townBox } from './town';
@@ -1056,6 +1056,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...apprLines(state),
       ...autoLine(),
       bill,
+      // Фургон сегодня едет или завтра выезд (ui/van.ts, 15.11): когда он едет — видно с утра.
+      ...(zarHere ? [] : vanLines(state)),
       ...weatherLine(state),
       ...warLine(state),
       ...fairLine(state),
@@ -4160,7 +4162,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   const staffTab = (state: StoreState): HTMLElement[] => {
     const limit = staffLimit(state);
     const out: HTMLElement[] = [
-      ownerBox(state),
+      // 15.11, автор: «Хозяин уровень — свернуть это меню». Свёрнут в одну строку с уровнем, раскрытый помним.
+      foldSection('staff:owner', tuckNotes(ownerBox(state))),
       helpRow(`👥 ${t('staffTab.count', { n: state.staff.length, max: limit })}`, t('staffTab.wageNote')),
     ];
     if (state.staff.length === 0) out.push(el('div', 'ui-note', t('staffTab.none')));
