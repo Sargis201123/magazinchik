@@ -389,13 +389,14 @@ export function buildSecond(kit: FloorKit): void {
     let looks = 0;
     const most = floorCrowd('second', guestsToday(state), false);
     crowd(kit, { every: LOOK_EVERY, max: most, liteMax: floorCrowd('second', guestsToday(state), true), next: () => looks++, run: (n) => looker(n) });
-    // 15.11: этаж открыли — а там уже кто-то выбирает (не все ждут, пока поднимется первый).
-    for (let k = 0; k < (lite ? 1 : 3); k++) void browse(looks++, pick(k * 5 + 1, false), 0, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day), k === 1, true);
+    // 15.11: этаж открыли — а там уже кто-то выбирает (не все ждут, пока поднимется первый). В лёгкой графике —
+    // без них, без болтунов, грузчика и охранника: там людей ровно столько, сколько даёт floorCrowd (ревью 15.11).
     if (!lite) {
+      for (let k = 0; k < 3; k++) void browse(looks++, pick(k * 5 + 1, false), 0, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day), k === 1, true);
       void chatter();
       void loader();
+      void patrol();
     }
-    void patrol();
   }
 
   // ------------------------------------------------------------ моменты этажа (game/floorLife.ts, 15.11)
@@ -528,7 +529,8 @@ export function buildSecond(kit: FloorKit): void {
   async function looker(n: number): Promise<void> {
     const goal = pick(n * 3 + 2, false);
     const look = customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day);
-    const group = n % 5 === 0 ? 'pair' : n % 5 === 3 ? 'kid' : null;
+    // Лёгкая графика — только поодиночке: одно место в толпе = один человечек (ревью 15.11).
+    const group = lite ? null : n % 5 === 0 ? 'pair' : n % 5 === 3 ? 'kid' : null;
     if (!group) return browse(n, goal, 0, look, n % 4 === 1);
     const other = group === 'kid' ? { ...customerLook(look.shirt, state.day), kid: true, bag: undefined } : customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day);
     await Promise.all([browse(n, goal, 0, look, group === 'pair'), pause(500).then(() => browse(n + 1, goal, 8, other, false, false, true))]);

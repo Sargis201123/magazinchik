@@ -11,6 +11,7 @@ import {
   floorKinds,
   floorMomentGain,
   floorMomentsFor,
+  FLOOR_MOMENT_WAIT,
   noteFloorMoment,
 } from '../src/game/floorLife';
 import { ATTENTION_CAP, attentionTotal, planAttention } from '../src/game/attention';
@@ -19,6 +20,8 @@ import { DAY_SECONDS, emptyDayStats, newGame, type StoreState } from '../src/gam
 import { pendingTip } from '../src/game/tips';
 import { collectionFor, COLLECTIONS } from '../src/game/clothes';
 import { blocks, CHATS, PATROL, RACKS, route, SPOTS, type Point, type Rect } from '../src/scenes/floors/secondLayout';
+import { floorLeft, floorWaiting, startFloorLife, stopFloorLife, takeFloorMoment, tickFloorLife } from '../src/scenes/floors/life';
+import type { StoreScene } from '../src/scenes/StoreScene';
 
 const base = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), day: 120, level: 4, seed: 7, ...patch });
 const withBasement = (s: StoreState, slots = 3): StoreState => ({ ...s, floors: { ...s.floors, basement: { since: 1, finish: 1 } }, basement: { slots, since: 1 } });
@@ -191,5 +194,50 @@ describe('второй этаж: новые места для людей', () =>
         }
       }
     }
+  });
+});
+
+describe('расписание моментов этажей: конец дня и ночная смена', () => {
+  // Сцена-заглушка: расписанию нужны только часы дня, флаги и статистика.
+  const fakeScene = (timeLeft: number) =>
+    ({ running: true, night: false, timeLeft, stats: emptyDayStats(), state: base() }) as unknown as StoreScene;
+
+  it('момент под самое закрытие ждёт только до конца дня, а не 25 секунд', () => {
+    const scene = fakeScene(DAY_SECONDS - 70);
+    startFloorLife([{ floor: 'second', kind: 'size', at: 70 }]);
+    tickFloorLife(scene);
+    expect(floorWaiting()?.kind).toBe('size');
+    // Окно обрезано закрытием: 20 секунд из 25.
+    expect(floorLeft(scene)).toBeCloseTo(20 / FLOOR_MOMENT_WAIT, 5);
+  });
+
+  it('закрытие гасит ждущий момент как не пойманный; ночью он не оживает и не платит', () => {
+    const scene = fakeScene(DAY_SECONDS - 66);
+    startFloorLife([{ floor: 'basement', kind: 'jam', at: 66 }]);
+    tickFloorLife(scene);
+    expect(floorWaiting()).not.toBeNull();
+    scene.timeLeft = 0;
+    stopFloorLife(scene);
+    expect(floorWaiting()).toBeNull();
+    expect(scene.stats.floorShown).toBe(1);
+    expect(scene.stats.floorCaught ?? 0).toBe(0);
+    scene.night = true;
+    scene.timeLeft = 45;
+    tickFloorLife(scene);
+    expect(floorWaiting()).toBeNull();
+    expect(takeFloorMoment(scene)).toBeNull();
+  });
+
+  it('если момент всё же дожил до ночи — первый же кадр ночи его гасит', () => {
+    const scene = fakeScene(DAY_SECONDS - 60);
+    startFloorLife([{ floor: 'second', kind: 'queue', at: 60 }]);
+    tickFloorLife(scene);
+    expect(floorWaiting()).not.toBeNull();
+    scene.night = true;
+    scene.timeLeft = 45;
+    tickFloorLife(scene);
+    expect(floorWaiting()).toBeNull();
+    expect(scene.stats.floorShown).toBe(1);
+    expect(scene.stats.floorCaught ?? 0).toBe(0);
   });
 });

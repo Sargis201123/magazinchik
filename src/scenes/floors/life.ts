@@ -33,6 +33,14 @@ export function stopFloorLife(scene: StoreScene): void {
 
 /** Каждый кадр (из переключателя этажей): пора — начать, прошло окно — тихо убрать. */
 export function tickFloorLife(scene: StoreScene): void {
+  // 15.11, ревью: ночью дневной момент не живёт — если вдруг дожил до ночной смены, гасим его как не пойманный
+  // (иначе кнопка этажа светилась бы всю ночь, а касание платило бы ночью).
+  if (scene.night && live) {
+    noteFloorMoment(scene.stats, false);
+    live = null;
+    plan = [];
+    notify();
+  }
   if (!scene.running || scene.night) return;
   const elapsed = DAY_SECONDS - scene.timeLeft;
   if (live && elapsed > live.until) {
@@ -44,7 +52,8 @@ export function tickFloorLife(scene: StoreScene): void {
     const m = plan.shift()!;
     // Опоздали (день стоял на паузе дольше окна) — не начинаем.
     if (elapsed - m.at < FLOOR_MOMENT_WAIT) {
-      live = { m, until: m.at + FLOOR_MOMENT_WAIT };
+      // Окно не длиннее дня: момент в конце дня ждёт только до закрытия (кольцо-таймер честно короче).
+      live = { m, until: Math.min(m.at + FLOOR_MOMENT_WAIT, DAY_SECONDS) };
       notify();
     }
   }

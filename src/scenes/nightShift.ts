@@ -87,6 +87,8 @@ export function endOfDay(scene: StoreScene): void {
   setPlaying(false);
   // Момент, не дождавшийся нажатия к закрытию, уходит вместе с днём (и в ночную смену не остаётся), и улика тоже.
   scene.moments.stop();
+  // 15.11, ревью: и момент этажа тоже — ждущий к закрытию не пойман, кнопка этажа гаснет до ночной смены.
+  stopFloorLife(scene);
   scene.clueFx?.endClue(scene);
   // Срочный заказ не успел доехать до закрытия — водитель всё равно выгрузил.
   deliveries.receiveUrgentOrders(scene);
