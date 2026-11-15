@@ -141,6 +141,32 @@ export function nextVanEvent(state: StoreState): { id: VanEventId; days: number 
   return null;
 }
 
+/** Выезд в календаре фургона: день, куда и сколько штук там обычно разбирают (без погоды и случая). */
+export interface VanPlan {
+  day: number;
+  event: VanEventId;
+  demand: number;
+}
+
+/** Сколько штук всего разбирают на событии в обычный день (пиво и сигареты — только с лицензией). */
+export const vanDemand = (state: StoreState, event: VanEventId): number =>
+  (Object.entries(VAN_EVENTS[event].wants) as [ProductId, number][]).reduce((sum, [id, n]) => sum + (restricted(id) && !hasLicense(state) ? 0 : n), 0);
+
+/**
+ * 15.11, автор: «непонятно, когда он едет». Ближайшие выезды — с сегодняшнего дня, не больше n штук и не дальше
+ * horizon дней: календарь в карточке фургона. Пляж дальше сегодняшнего дня — по прогнозу погоды.
+ */
+export function vanCalendar(state: StoreState, n = 4, horizon = 14): VanPlan[] {
+  const out: VanPlan[] = [];
+  for (let d = 0; d <= horizon && out.length < n; d++) {
+    for (const event of vanEvents(state, state.day + d)) if (out.length < n) out.push({ day: state.day + d, event, demand: vanDemand(state, event) });
+  }
+  return out;
+}
+
+/** Сколько штук было в кузове на выезде: продано, привезено и испортилось. */
+export const vanTaken = (r: VanResult): number => r.sold + r.back + r.spoiled;
+
 // ---------- Фургон и кузов ----------
 
 /** Можно купить фургон: минимаркет и больше, в Центре (в Заречье — своя лавка без фургона). */

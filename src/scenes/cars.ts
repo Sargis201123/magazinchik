@@ -26,7 +26,7 @@ import {
   CAR_TYPES,
 } from './common';
 import { t } from '../i18n';
-import { tripToday, vanGoes, vanOutcome, VAN_EVENTS } from '../game/van';
+import { tripToday, vanGoes, vanLoaded, vanOutcome, VAN_EVENTS } from '../game/van';
 import { inZar } from '../game/zarshop';
 import * as lighting from './lighting';
 import * as gentrifyFx from './gentrifyFx';
@@ -797,7 +797,8 @@ export async function vanDepart(scene: StoreScene): Promise<void> {
   scene.vanOut = scene.state.day;
   const car = spot.car;
   if (!car) return;
-  scene.popup(spot.x, spot.y - 14, t('van.popupOff', { icon: VAN_EVENTS[trip.event].icon }), '#fff3b0');
+  // 15.11, автор: «непонятно, когда он едет» — над фургоном куда и сколько штук везёт.
+  scene.popup(spot.x, spot.y - 14, t('van.popupGo', { icon: VAN_EVENTS[trip.event].icon, n: vanLoaded(scene.state) }), '#fff3b0');
   if (scene.lite) {
     car.box.destroy();
     spot.car = null;
@@ -828,9 +829,13 @@ async function vanReturn(scene: StoreScene): Promise<void> {
   const spot = vanSpot(scene);
   if (!lot || !spot) return;
   // Итог считает та же чистая функция, что вечером зачислит деньги (game/van.ts): цифра над фургоном — та же.
-  const net = vanOutcome(scene.state)?.net ?? 0;
+  const out = vanOutcome(scene.state);
+  const net = out?.net ?? 0;
   const show = (): void => {
-    if (spot.car?.box.active) scene.popup(spot.x, spot.y - 14, t('van.popupBack', { n: net >= 0 ? `+${net}` : `−${-net}` }), net > 0 ? '#c8ffb0' : '#ffd0d0');
+    if (!spot.car?.box.active) return;
+    scene.popup(spot.x, spot.y - 14, t('van.popupBack', { n: net >= 0 ? `+${net}` : `−${-net}` }), net > 0 ? '#c8ffb0' : '#ffd0d0');
+    // Следом — сколько продал, привёз и сколько испортилось (подробно — в итогах дня и в карточке утром).
+    if (out) scene.time.delayedCall(1100, () => scene.popup(spot.x, spot.y - 14, t('van.popupSold', { sold: out.sold, back: out.back, spoiled: out.spoiled }), '#fff3b0'));
   };
   // Так и не выехал (проезд весь день был занят) или лёгкая графика — итог сразу над местом.
   if ((spot.car && !spot.car.leaving) || scene.lite) {
