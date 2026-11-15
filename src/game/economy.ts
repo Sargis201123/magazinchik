@@ -382,6 +382,8 @@ export interface StaffMember {
   career?: import('./career').Career;
   /** Статистика (staffStats.ts): дела за всё время, рекорд смены, пройденные метры. */
   tally?: import('./staffStats').StaffTally;
+  /** Только у менеджера зала: что он сделал вчера и за всё время (managerLog.ts, с 15.11). */
+  mgr?: import('./managerLog').ManagerLog;
 }
 
 /** Звание (career.ts): старший работает чуть быстрее, администратор зала — ещё быстрее. */
@@ -886,6 +888,8 @@ export interface DayStats {
   dishWanted?: number;
   /** Сколько кухня потратила за день на продукты в свою кладовую (утром и докупая днём). */
   kitchenSpent?: number;
+  /** Дела менеджера зала за день: звонки, заказы на дом, срочный подвоз и экономия на нём (managerLog.ts). */
+  mgr?: import('./managerLog').ManagerDayStats;
   /** Сделано сотрудниками за день по должностям: пробили, убрали, разложили, испекли (career.ts). */
   work?: Partial<Record<StaffRole, number>>;
   /** То же поштучно (без весов «сотрудника месяца») и сколько прошли по залу, точек мира (staffStats.ts). */

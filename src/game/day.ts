@@ -56,6 +56,7 @@ import { foodcourtGuests, foodcourtNight, type FoodDay } from './foodcourt';
 import { dreamGuests, dreamsNight } from './dreams';
 import { lotteryGuests, lotteryNight } from './lottery';
 import { tallyNight, type StaffRecord } from './staffStats';
+import { managerNight } from './managerLog';
 import { apprGuests, apprNight } from './apprentice';
 import { trickGuests, trickNight, tricksMorning } from './tricks';
 import { nightBoostGuests, nightMorning } from './nightGuests';
@@ -129,6 +130,8 @@ export function nightCycle(state: StoreState, stats: DayStats, random: () => num
   // Статистика персонала (staffStats.ts): дела, рекорды, шаги.
   const tally = tallyNight(s, stats.deeds, stats.walked);
   s = tally.state;
+  // Что сделал менеджер зала — в его карточку: вчера и за всё время (managerLog.ts, 15.11).
+  s = managerNight(s, stats.mgr, stats.served);
   s = restStaff(s);
   // Ученик (apprentice.ts): стипендия, доверие, навык; отучился сезон — уходит открывать свою лавку.
   s = apprNight(s, stats.appr);

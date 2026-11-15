@@ -288,7 +288,8 @@ export function kitchenNeeds(state: StoreState): Partial<Record<ProductId, numbe
   if (!kitchenWorking(state) || !chef) return {};
   const menu = cookMenu(state);
   const want = dishDemand(state);
-  const batches = cookRoundsPerDay(state, DAY_SECONDS, workSpeed(chef)) * stovePots(state);
+  // Утренние закладки до открытия (morningCook) — тоже из этой закупки.
+  const batches = (cookRoundsPerDay(state, DAY_SECONDS, workSpeed(chef)) + MORNING_ROUNDS) * stovePots(state);
   const out: Partial<Record<ProductId, number>> = {};
   let s = state;
   for (let i = 0; menu.length && i < batches; i++) {
@@ -300,6 +301,63 @@ export function kitchenNeeds(state: StoreState): Partial<Record<ProductId, numbe
     for (const [p, n] of Object.entries(DISHES[best].needs)) out[p as ProductId] = (out[p as ProductId] ?? 0) + (n ?? 0);
   }
   return out;
+}
+
+// ---------- Утро повара: первые кастрюли до открытия ----------
+
+/**
+ * 15.11, автор: «пусть сам готовит и на полку кладёт, как пекарь — а то полка 0 из 20, вчера не хватило 4».
+ * Повар днём ставит первую закладку только через ~20 с (продукты, нарезка, варка, дорога), а гости идут
+ * с открытия — им доставалась пустая полка. Теперь он, как пекарь (bakery.ts morningBake), приходит
+ * пораньше и до открытия варит MORNING_ROUNDS раз — порций на первую часть дня (MORNING_SHARE спроса).
+ * Остальное доваривает днём, как полка пустеет (cookBatch). Лишнего не варит: сколько — от того же спроса.
+ */
+export const MORNING_ROUNDS = 2;
+export const MORNING_SHARE = 0.4;
+
+export interface MorningCook {
+  state: StoreState;
+  /** Сколько порций встало на полку к открытию и какие блюда. */
+  portions: number;
+  dishes: DishId[];
+  /** Сколько кухня докупила к этим закладкам (из кассы). */
+  spent: number;
+}
+
+/** Повар на смене варит до открытия: продукты — из кладовой (не хватает — кухня докупает из кассы). */
+export function morningCook(state: StoreState): MorningCook {
+  const none = { state, portions: 0, dishes: [], spent: 0 };
+  if (!kitchenWorking(state)) return none;
+  let s = state;
+  let spent = 0;
+  const dishes: DishId[] = [];
+  for (let round = 0; round < MORNING_ROUNDS; round++) {
+    const wish = cookBatch(s, MORNING_SHARE, 0, stovePots(s), true);
+    if (!wish.length) break;
+    const top = topUpKitchen(s, wish);
+    s = top.state;
+    spent += top.spent;
+    const plan = cookBatch(s, MORNING_SHARE);
+    if (!plan.length) break;
+    for (const id of plan) {
+      const taken = takeIngredients(s, id);
+      if (!taken) continue;
+      s = servePortions(taken, id);
+      dishes.push(id);
+    }
+  }
+  const portions = portionsTotal(s) - portionsTotal(state);
+  return portions || spent ? { state: s, portions, dishes, spent } : none;
+}
+
+/**
+ * Что будет на полке к открытию — для утреннего меню (там полка ещё пустая, и автору казалось, что надо
+ * жать «Приготовить»): с поваром — его утренние закладки после закупки, без повара — autoCook.
+ */
+export function openingPortions(state: StoreState): number {
+  if (!kitchenOpen(state)) return 0;
+  if (kitchenWorking(state)) return morningCook(stockKitchen(state).state).portions;
+  return autoCook(state).portions;
 }
 
 // ---------- Продажа и ночь ----------

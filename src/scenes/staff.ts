@@ -17,7 +17,7 @@ import {
   cashierScan,
   type StaffRole,
 } from '../game/economy';
-import { t } from '../i18n';
+import { t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
 import { carryOf, withUpgrades } from '../game/upgrades';
@@ -30,6 +30,7 @@ import { binSmell, ROTS, rotStage, smellLevel, type RotStage } from '../game/rot
 import { TRASH_KEYS } from './textures';
 import { carryBonus } from '../game/owner';
 import { MANAGER_QTY, managerPick } from '../game/urgent';
+import { urgentSaving } from '../game/managerLog';
 import { binCapacity, gearTier, warehouseSpeed } from '../game/gear';
 import { registerOfRole, RELIEF_ROLE } from '../game/registers';
 import { note } from '../game/reviews';
@@ -711,9 +712,14 @@ export function stopMop(scene: StoreScene, who?: Phaser.GameObjects.Container): 
 /**
  * Менеджер обходит зал: заглядывает к полкам, а когда товар кончился и на полке, и на складе —
  * сам звонит и заказывает срочный подвоз (если хватает денег).
+ * 15.11, автор: «не могу понять, чем занят менеджер». Теперь каждое его дело видно и сосчитано
+ * (scene.stats.mgr → ночью в карточку, game/managerLog.ts): трубку берёт с репликой, заказ на дом
+ * выносит курьеру, срочный подвоз — с ценой и экономией, а когда у касс очередь — встаёт рядом
+ * с кассой и подгоняет (пузырь с репликой и звёздочка; все и так быстрее на 10% — это его «+10%» вживую).
  */
 export async function managerLoop(scene: StoreScene, w: Worker, gen: number): Promise<void> {
   scene.managerOnFloor = true;
+  const mgr = () => (scene.stats.mgr ??= {});
   while (scene.alive(gen)) {
     if (!scene.running) {
       await scene.wait(400);
@@ -723,23 +729,35 @@ export async function managerLoop(scene: StoreScene, w: Worker, gen: number): Pr
     const parcel = deliveries.nextParcel(scene);
     if (parcel) {
       await deliveries.packParcel(scene, w, gen, parcel);
+      if (parcel.stage === 'ready' || parcel.stage === 'riding') mgr().parcels = (mgr().parcels ?? 0) + 1;
       credit(scene, w.member.role);
       continue;
     }
     if (scene.call && scene.phone) {
       await workerWalk(scene, w, scene.phone.x - 10, scene.phone.y + 14);
       if (!scene.alive(gen)) return;
-      if (scene.call) deliveries.acceptOrder(scene);
+      if (scene.call) {
+        persons.setFacing(w.sprite, 'up');
+        scene.speak(w.sprite, 22, t('say.mgrPhone'));
+        deliveries.acceptOrder(scene);
+        mgr().calls = (mgr().calls ?? 0) + 1;
+      }
       credit(scene, w.member.role);
       continue;
     }
     const pick = managerPick(scene.state);
     if (pick && !scene.urgentOrders.some((o) => o.id === pick)) {
+      const saved = urgentSaving(scene.state, pick, MANAGER_QTY);
       if (deliveries.orderUrgentDelivery(scene, pick, MANAGER_QTY)) {
-        scene.popup(w.sprite.x, w.sprite.y - 20, t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
+        mgr().urgent = (mgr().urgent ?? 0) + 1;
+        mgr().saved = (mgr().saved ?? 0) + saved;
+        scene.popup(w.sprite.x, w.sprite.y - 20, saved ? t('popup.managerOrderSaved', { icon: PRODUCTS[pick].icon, n: saved }) : t('popup.managerOrder', { icon: PRODUCTS[pick].icon }), '#fff3b0');
         credit(scene, w.member.role, 2);
       }
     }
+    // Очередь у касс — подгоняет того, кто пробивает (не чаще раза в MANAGER_HURRY_MS).
+    if (scene.waiting() >= 2 && scene.time.now - (scene.managerHurryAt ?? -MANAGER_HURRY_MS) > MANAGER_HURRY_MS && (await hurryTill(scene, w, gen))) continue;
+    if (!scene.alive(gen)) return;
     const slot = Phaser.Utils.Array.GetRandom(scene.layout.slots.slice(0, Math.max(1, scene.state.shelves.length)));
     if (slot) {
       const stand = standFor(scene.layout, slot);
@@ -747,6 +765,30 @@ export async function managerLoop(scene: StoreScene, w: Worker, gen: number): Pr
     }
     await workerWait(scene, w, 2500);
   }
+}
+
+/** Менеджер подгоняет кассу не чаще, чем раз в столько мс сцены: иначе он только у касс и стоит. */
+const MANAGER_HURRY_MS = 12000;
+
+/**
+ * Менеджер подходит к кассе, где сейчас пробивают (сбоку, не загораживая очередь), подгоняет репликой,
+ * над ним звёздочка, касса вздрагивает (в лёгкой графике без звёздочки). false — пробивать некому, подгонять нечего.
+ */
+async function hurryTill(scene: StoreScene, w: Worker, gen: number): Promise<boolean> {
+  const r = scene.registers.find((reg) => reg.scan) ?? scene.registers.find((reg) => reg.customer);
+  if (!r) return false;
+  scene.managerHurryAt = scene.time.now;
+  await workerWalk(scene, w, r.clerk.x + 11, r.clerk.y + 3);
+  if (!scene.alive(gen)) return true;
+  persons.setFacing(w.sprite, 'left');
+  // Пауза до следующего раза — от того, как подогнал, а не как пошёл к кассе.
+  scene.managerHurryAt = scene.time.now;
+  scene.speak(w.sprite, 22, t(`say.mgrHurry.${Math.floor(Math.random() * 3)}` as TextKey));
+  motion.squash(scene, w.sprite, 1.06, 0.94, 130);
+  if (!scene.lite) effects.emote(scene, w.sprite, 'emo_star');
+  if (r.img?.active) motion.squash(scene, r.img, 1.05, 0.95, 110);
+  await workerWait(scene, w, 1800);
+  return true;
 }
 
 /**

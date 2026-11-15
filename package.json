@@ -25,6 +25,7 @@
     "sim:career": "vite-node scripts/sim-career.ts",
     "sim:zar": "vite-node scripts/sim-zar.ts",
     "sim:gear": "vite-node scripts/sim-gear.ts",
+    "sim:kitchen": "vite-node scripts/sim-kitchen.ts",
     "gear:count": "vite-node scripts/gear-count.ts",
     "sim:calm": "vite-node scripts/sim-staffcalm.ts",
     "sim:systems": "vite-node scripts/systems-count.ts",

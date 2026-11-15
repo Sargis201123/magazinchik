@@ -100,6 +100,7 @@ import { pendingTip, seeTip, soloExpandRisk, TIP_ICONS } from '../game/tips';
 import { toggleDonate } from '../game/economy';
 import { currentCandidates, friendCandidates, JOB_AD_COST, startJobSearch, train, trainingStep } from '../game/staff';
 import { DEED_ICON, DEED_OF, deedsPerShift, quirkOf } from '../game/staffStats';
+import { type ManagerDay } from '../game/managerLog';
 import { answerCeremony, answerOffer, holderOf, BEST_EVERY, BEST_REWARDS, bestBonus, bestGift, careerOf, dismissLeft, nextRank, promotedWage, rankKey, xpToNext, type BestReward } from '../game/career';
 import { BRANCH_HEAD_BONUS } from '../game/branch';
 import {
@@ -217,7 +218,7 @@ import { showSupport } from './support';
 import { answerStaffEvent, eventCost } from '../game/staffEvents';
 import { activeTrick, answerTrick, counterCost, trickResult, trickToday, type TrickAnswer } from '../game/tricks';
 import { answerOpening, BUILDINGS, districtNews, districtSite, isMatchDay, OPENING_DAYS, type BuildingId } from '../game/district';
-import { selfCookOn, toggleSelfCook, canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, foodSlots, foodSprite, kitchenOpen, kitchenWorking, menuAuto, morningOrder, orderCost, pantryOf, portionsOf, portionsTotal, toggleMenu } from '../game/kitchen';
+import { selfCookOn, toggleSelfCook, canCook, cook, cookMenu, dishPortions, DISHES, DISH_IDS, foodSlots, foodSprite, kitchenOpen, kitchenWorking, menuAuto, morningOrder, openingPortions, orderCost, pantryOf, portionsOf, portionsTotal, toggleMenu } from '../game/kitchen';
 import { addFriend, MP_EVENT, visitsInfo } from '../platform/multiplayer';
 import { buyPerk, canSell, CAPITAL_STEP, CROWD_STEP, FAME_STEP, legacyOf, perkCost, perkLevel, PERK_IDS, PERKS, salePoints, sellBusiness, SUPPLIERS_STEP, type PerkId } from '../game/legacy';
 import { RECORD_ICONS, RECORD_IDS } from '../game/records';
@@ -2398,9 +2399,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
               id: 'kitchen',
               icon: '🍲',
               title: t('kitchen.title'),
-              status: `${portionsTotal(state)}/${foodSlots(state)}`,
-              // Витрина пуста и повара нет — сегодня кухне нечего продавать.
-              alert: portionsTotal(state) === 0 && !kitchenWorking(state),
+              // 15.11: сколько будет на полке к открытию (повар или кухня сами сварят утром), а не «0/20»
+              // ночной пустой полки — автор думал, что надо жать «Приготовить».
+              status: `${portionsTotal(state) + openingPortions(state)}/${foodSlots(state)}`,
+              // К открытию на полке ничего и повара нет — сегодня кухне нечего продавать.
+              alert: portionsTotal(state) + openingPortions(state) === 0 && !kitchenWorking(state),
               details: () => kitchenBox(getState()),
             },
           ]
@@ -2473,6 +2476,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     shelfImg.alt = '';
     shelf.append(shelfImg, el('div', 'ui-item-sub', t('kitchen.shelf', { name: t(GEAR.foodShelf.models[gearTier(state, 'foodShelf')].nameKey), n: portionsTotal(state), max: foodSlots(state) })));
     box.append(shelf);
+    // 15.11: что встанет на полку само, без касаний: повар варит до открытия и доваривает днём, без повара —
+    // кухня варит утром из продуктов магазина. Нажимать ничего не нужно — так и написано.
+    const opening = openingPortions(state);
+    if (kitchenWorking(state)) box.append(el('div', 'ui-note', opening ? t('kitchen.cookPlan', { n: opening }) : t('kitchen.cookPlanNone')));
+    else if (selfCookOn(state)) box.append(el('div', 'ui-note', opening ? t('kitchen.selfPlan', { n: opening }) : t('kitchen.selfPlanNone')));
     const chef = staffOf(state, 'cook');
     const who = chef ? t('kitchen.chef', { name: memberName(chef) }) : t('kitchen.noChef');
     // Кто готовит — главное правило кухни: строкой на виду, а не за «❔».
@@ -2512,7 +2520,11 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       chips.append(button(`🍳 ${t('kitchen.selfAuto')}`, () => update(toggleSelfCook(getState())), `ui-chip${selfCookOn(state) ? ' active' : ''}`));
       box.append(chips, el('div', 'ui-muted', t(selfCookOn(state) ? 'kitchen.selfOnNote' : 'kitchen.selfOffNote')));
     }
-    box.append(el('h3', '', t('kitchen.recipes')));
+    // Готовить руками — по желанию: свёрнуто, пока кухня варит сама (раскрыто, только если самоготовку выключили).
+    const byHand = el('details', 'ui-infos-more') as HTMLDetailsElement;
+    byHand.open = !kitchenWorking(state) && !selfCookOn(state);
+    byHand.append(el('summary', 'ui-muted', t('kitchen.byHand')));
+    box.append(byHand);
     for (const id of DISH_IDS) {
       const d = DISHES[id];
       const row = el('div', 'ui-item');
@@ -2525,7 +2537,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       const actions = el('div', 'ui-item-actions');
       actions.append(button(t('kitchen.cook', { n: dishPortions(state, id) }), () => update(cook(getState(), id), 'success'), 'ui-chip', !canCook(state, id)));
       row.append(el('div', 'ui-ad-icon', d.icon), body, actions);
-      box.append(row);
+      byHand.append(row);
     }
     return [box];
   };
@@ -4093,6 +4105,31 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     return box;
   };
 
+  /**
+   * Что сделал менеджер зала (game/managerLog.ts, 15.11, автор: «не понимаю, чем он занят»): дела списком —
+   * звонки, заказы на дом, срочный подвоз с экономией, касса быстрее ≈ на N покупателей. Пустые пункты не пишем.
+   */
+  const managerDeeds = (d: ManagerDay): string =>
+    [
+      d.calls ? t('mgr.calls', { n: d.calls }) : '',
+      d.parcels ? t('mgr.parcels', { n: d.parcels }) : '',
+      d.urgent ? t('mgr.urgent', { n: d.urgent, saved: d.saved }) : '',
+      d.faster ? t('mgr.faster', { n: d.faster }) : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  const managerBox = (m: StaffMember): HTMLElement => {
+    const box = el('div', 'ui-career-log');
+    box.append(el('b', '', t('mgr.title')));
+    const log = m.mgr;
+    if (!log?.last) box.append(el('div', 'ui-muted', t('mgr.none')));
+    else {
+      box.append(el('div', 'ui-item-sub', t('mgr.yesterday', { list: managerDeeds(log.last) || t('mgr.quiet') })));
+      if (log.shifts > 1) box.append(el('div', 'ui-item-sub', t('mgr.total', { n: log.shifts, list: managerDeeds(log.total) })));
+    }
+    return box;
+  };
+
   /** Сотрудник одной строкой: роль, имя, полоска роста (курсы и звания), метки; действия — по нажатию. */
   const staffRow = (state: StoreState, m: StaffMember): HTMLElement => {
     const box = el('div', 'ui-box ui-staff');
@@ -4120,12 +4157,19 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     );
     head.append(who(staffFace(m.name), name, true), bar, ...(tags.length ? [el('span', 'ui-staff-tags', tags.join(' '))] : []));
     box.append(head);
+    // Менеджер: что сделал вчера — коротко значками прямо в списке (15.11); раскрыл — там подробно.
+    const last = m.mgr?.last;
+    if (last && openStaff !== m.role) {
+      const short = [last.calls && `☎️${last.calls}`, last.parcels && `📦${last.parcels}`, last.urgent && `🚚${last.urgent}`, last.faster && `🧾+${last.faster}`].filter(Boolean).join(' · ');
+      if (short) box.append(el('div', 'ui-muted', t('mgr.short', { list: short })));
+    }
     if (openStaff !== m.role) return box;
     box.append(
       el('div', 'ui-muted', t(STAFF_ROLES[m.role].descKey)),
       el('div', 'ui-item-sub', traitLine(m)),
       el('div', 'ui-item-sub', m.months ? t('staffTab.months', { n: m.months }) : t('staffTab.new')),
       ...careerLines(state, m),
+      ...(m.role === 'manager' ? [managerBox(m)] : []),
       statsBox(state, m),
     );
     const actions = el('div', 'ui-chips');

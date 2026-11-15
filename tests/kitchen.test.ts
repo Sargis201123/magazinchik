@@ -36,6 +36,7 @@ import {
   autoCook,
   selfCookOn,
   toggleSelfCook,
+  MORNING_ROUNDS,
 } from '../src/game/kitchen';
 import { addReport } from '../src/game/reports';
 import { nightCycle } from '../src/game/day';
@@ -263,8 +264,8 @@ describe('повар', () => {
     const base = at({ staff: [chef()], warehouse: {}, shelves, cookMenu: ['olivier'], gear: { stove: 1 } });
     // Хотят 20 порций: оливье по 4 и +1 с газовой плиты — четыре закладки, хотя повар успел бы больше.
     expect(kitchenNeeds({ ...base, ...demand(20) }).meat).toBe(4);
-    // Хотят 500 — столько закладок, сколько раз за день повар успеет поставить кастрюли.
-    const cap = cookRoundsPerDay(base, 90, 1) * stovePots(base);
+    // Хотят 500 — столько закладок, сколько раз за день повар успеет поставить кастрюли (с 15.11 — и до открытия).
+    const cap = (cookRoundsPerDay(base, 90, 1) + MORNING_ROUNDS) * stovePots(base);
     expect(kitchenNeeds({ ...base, ...demand(500) }).meat).toBe(cap);
     // Полка вмещает foodSlots, но за день порции разбирают: закупка не упирается в неё.
     expect(cap * DISHES.olivier.portions).toBeGreaterThan(foodSlots(base));
