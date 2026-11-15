@@ -152,6 +152,17 @@ export const SPRITES = [
   'fl2b_poster1',
   ...['warm', 'rain', 'summer'].flatMap((c) => [`fl2b_manq_${c}0`, `fl2b_manq_${c}1`, `fl2b_form_${c}`]),
   'fl2b_form',
+  // Живые этажи (art/floors_life.py, 15.11): второй набор стоек, стол со стопками, лампы, бра, гирлянда, блик на
+  // паркете; значки моментов этажей (scenes/floors/momentFx.ts).
+  ...['warm', 'rain', 'summer'].flatMap((c) => [`fl2c_rack_${c}`, `fl2c_fold_${c}`]),
+  'fl2c_fold',
+  'fl2c_pendant',
+  'fl2c_sconce',
+  'fl2c_garland',
+  'fl2c_gloss',
+  'flm_size',
+  'flm_fix',
+  'flm_token',
   // Фудкорт на третьем этаже (art/foodcourt.py, scenes/floors/thirdFloor.ts, scenes/foodcourtFx.ts): окно зала и четыре
   // точки еды (картинки строк меню), шарики дня рождения и лифт в фасаде. 14.11: плитка, жалюзи, столы и еда первой
   // версии убраны — зал рисуют картинки fc3_* ниже (art/foodcourt_art.py).
@@ -636,6 +647,7 @@ export const SPRITES = [
   'lottery_stand_closed',
   'lottery_stand_lucky',
   'lottery_ticket',
+  'lottery_ticket_win',
   'lottery_cake',
   // «Крыша» (art/racket.py): трещины поверх витрины, осколки на тротуаре, мешки с мусором у двери.
   'racket_crack',

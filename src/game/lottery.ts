@@ -21,6 +21,26 @@ export interface LotteryState {
   win?: { day: number; seen?: boolean };
   /** Запрет города: с какого по какой день стойка закрыта, прочитана ли новость. */
   ban?: { from: number; until: number; seen?: boolean };
+  // 15.11, автор: «непонятно, кто что выиграл и получил ли игрок деньги». Ниже — статистика для карточки.
+  /** Последний день с проданными билетами: сколько их было и сколько выиграли (вчера — если day = сегодня − 1). */
+  today?: { day: number; n: number; w?: number };
+  /** Вечерних тиражей, пока стойка работала. */
+  draws?: number;
+  /** Выигравших билетов из нашего магазина (мелких и крупных) и сколько всего выиграли наши покупатели. */
+  wins?: number;
+  prizes?: number;
+  /** Крупных выигрышей (за каждый — премия магазину WIN_BONUS). */
+  bigs?: number;
+  /** Последние выигрыши — для списка в карточке (не больше LOG_MAX, новые в конце). */
+  log?: LotteryWin[];
+}
+
+/** Выигрыш билета из нашего магазина: день, кто (номер имени, staffName), сколько, крупный ли. */
+export interface LotteryWin {
+  day: number;
+  who: number;
+  prize: number;
+  big?: boolean;
 }
 
 /** Цена стойки: как терминал (600) — дороже радио (350), дешевле печи и кофейни. */
@@ -45,6 +65,18 @@ export const BAN_CHANCE = 0.025;
 export const BAN_DAYS = 3;
 /** Первые дни после покупки — ни запретов, ни тиражей: стойка успевает себя показать. */
 export const GRACE_DAYS = 3;
+/**
+ * Мелкие выигрыши (15.11): примерно каждый восьмой билет что-то выигрывает — 20, 50 или 100. Платит их лотерея,
+ * не касса магазина: деньги игрока это не трогает, зато видно, что билеты «работают» и людям везёт.
+ */
+export const SMALL_WIN_CHANCE = 0.12;
+export const SMALL_PRIZES = [20, 20, 20, 50, 50, 100] as const;
+/** Крупный выигрыш счастливчика (тоже платит лотерея): от 10 000 до 100 000. */
+export const JACKPOTS = [10000, 25000, 50000, 100000] as const;
+/** Сколько последних выигрышей помнить для карточки. */
+export const LOG_MAX = 5;
+/** Сколько имён у счастливчиков (staffName: тот же список имён, что у сотрудников). */
+export const WHO_COUNT = 16;
 
 const lotteryOf = (state: StoreState): LotteryState | undefined => state.lottery;
 export const hasLottery = (state: StoreState): boolean => state.lottery !== undefined;
@@ -58,6 +90,9 @@ export function lotteryRoll(state: StoreState, day: number, salt: number): numbe
 }
 const WIN_SALT = 59;
 const BAN_SALT = 137;
+const SMALL_SALT = 211;
+const PRIZE_SALT = 263;
+const WHO_SALT = 331;
 
 /** Стойка закрыта по запрету в этот день. */
 export const lotteryBanned = (state: StoreState, day = state.day): boolean => {
@@ -91,11 +126,63 @@ export function buyLottery(state: StoreState): StoreState | null {
   return { ...state, money: state.money - LOTTERY_PRICE, lottery: { since: state.day } };
 }
 
-/** Билет пробили на кассе: деньги идут вместе с чеком (extras), здесь — только счёт проданных. */
+/**
+ * Выиграл ли билет номер n (по счёту проданных за всё время) и сколько — от зерна магазина и номера: тот же
+ * билет выигрывает одинаково, сколько ни перезапускай день. 0 — пусто.
+ */
+export function ticketPrize(state: StoreState, n: number): number {
+  if (lotteryRoll(state, n, SMALL_SALT) >= SMALL_WIN_CHANCE) return 0;
+  return SMALL_PRIZES[Math.floor(lotteryRoll(state, n, PRIZE_SALT) * SMALL_PRIZES.length)];
+}
+
+/** Кто выиграл: номер имени — от зерна, дня и соли (у крупного — свой). */
+const whoWon = (state: StoreState, n: number): number => Math.floor(lotteryRoll(state, n, WHO_SALT) * WHO_COUNT);
+
+/** Выигрыш — в статистику и в короткий список последних. */
+function addWin(lot: LotteryState, win: LotteryWin): LotteryState {
+  return {
+    ...lot,
+    wins: (lot.wins ?? 0) + 1,
+    prizes: (lot.prizes ?? 0) + win.prize,
+    ...(win.big ? { bigs: (lot.bigs ?? 0) + 1 } : {}),
+    log: [...(lot.log ?? []), win].slice(-LOG_MAX),
+  };
+}
+
+/**
+ * Билет пробили на кассе: деньги магазину идут вместе с чеком (extras), здесь — счёт проданных (всего и за
+ * сегодня) и мгновенный выигрыш билета (ticketPrize: стираешь слой — и сразу видно). Выигрыш платит лотерея.
+ */
 export function countTicket(state: StoreState): StoreState {
   const lot = lotteryOf(state);
-  return lot ? { ...state, lottery: { ...lot, sold: (lot.sold ?? 0) + 1 } } : state;
+  if (!lot) return state;
+  const sold = (lot.sold ?? 0) + 1;
+  const prize = ticketPrize(state, sold);
+  const same = lot.today?.day === state.day;
+  const w = (same ? (lot.today?.w ?? 0) : 0) + (prize ? 1 : 0);
+  const today = { day: state.day, n: same ? lot.today!.n + 1 : 1, ...(w ? { w } : {}) };
+  const next: LotteryState = { ...lot, sold, today };
+  return { ...state, lottery: prize ? addWin(next, { day: state.day, who: whoWon(state, sold), prize }) : next };
 }
+
+/** Сколько билетов взяли вчера (для карточки утром). */
+export const ticketsYesterday = (state: StoreState): number => (lotteryOf(state)?.today?.day === state.day - 1 ? lotteryOf(state)!.today!.n : 0);
+/** Сколько билетов взяли сегодня. */
+export const ticketsToday = (state: StoreState): number => (lotteryOf(state)?.today?.day === state.day ? lotteryOf(state)!.today!.n : 0);
+/**
+ * Строка лотереи в итогах дня (nightShift): сколько билетов взяли за день day, доля магазина, сколько билетов
+ * выиграло и был ли в вечернем тираже крупный выигрыш (after — состояние после ночи). null — нечего показать.
+ */
+export function lotteryDay(before: StoreState, after: StoreState, day: number): { n: number; sum: number; w: number; big: boolean } | null {
+  const today = lotteryOf(before)?.today;
+  const n = today?.day === day ? today.n : 0;
+  const big = lotteryOf(after)?.win?.day === day && lotteryOf(before)?.win?.day !== day;
+  if (!n && !big) return null;
+  return { n, sum: n * TICKET_CUT, w: today?.day === day ? (today.w ?? 0) : 0, big };
+}
+
+/** Премий магазину за крупные выигрыши за всё время. */
+export const bonusEarned = (state: StoreState): number => (lotteryOf(state)?.bigs ?? 0) * WIN_BONUS;
 
 /** Сколько всего принесли билеты (доля магазина). */
 export const ticketsEarned = (state: StoreState): number => (lotteryOf(state)?.sold ?? 0) * TICKET_CUT;
@@ -112,13 +199,18 @@ export function lotteryNight(state: StoreState): StoreState {
   // с премией нет; запрет города тоже ждёт — закрывать нечего.
   if (!lot || day - lot.since < GRACE_DAYS || inZar(state)) return state;
   const next = day + 1;
-  if (lotteryOpen(state, day) && !luckyOn(state, day) && lotteryRoll(state, day, WIN_SALT) < WIN_CHANCE) {
-    return { ...state, money: state.money + WIN_BONUS, lottery: { ...lot, win: { day } } };
+  // 15.11: тираж считаем в карточку, только когда стойка в этот день работала.
+  const open = lotteryOpen(state, day);
+  const drawn: LotteryState = open ? { ...lot, draws: (lot.draws ?? 0) + 1 } : lot;
+  if (open && !luckyOn(state, day) && lotteryRoll(state, day, WIN_SALT) < WIN_CHANCE) {
+    const prize = JACKPOTS[Math.floor(lotteryRoll(state, day, PRIZE_SALT) * JACKPOTS.length)];
+    const won = addWin(drawn, { day, who: whoWon(state, -day), prize, big: true });
+    return { ...state, money: state.money + WIN_BONUS, lottery: { ...won, win: { day } } };
   }
   if (!lotteryBanned(state, next) && !luckyOn(state, next) && lotteryRoll(state, day, BAN_SALT) < BAN_CHANCE) {
-    return { ...state, lottery: { ...lot, ban: { from: next, until: next + BAN_DAYS - 1 } } };
+    return { ...state, lottery: { ...drawn, ban: { from: next, until: next + BAN_DAYS - 1 } } };
   }
-  return state;
+  return open ? { ...state, lottery: drawn } : state;
 }
 
 /** Утренняя новость (headlines.ts, вид 'lottery'): выигрыш — пока идут «счастливые» дни, запрет — пока он идёт. */

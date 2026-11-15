@@ -10,7 +10,9 @@ export const ATTENTION_CAP = 5;
 /** Звонков доставки за день — не больше стольких (их место в бюджете держится, даже если не позвонят). */
 export const CALLS_MAX = 2;
 
-export type AttentionKind = 'special' | 'clue' | 'call' | 'moment' | 'live';
+// Моменты этажей (floorLife.ts, 15.11) — тоже просьбы: делят те же пять мест с залом, а не добавляют своих.
+
+export type AttentionKind = 'special' | 'clue' | 'call' | 'moment' | 'live' | 'floor';
 
 /** Что дню хотелось бы: сколько моментов, мини-событий, будет ли особый гость, есть ли доставка. */
 export interface AttentionWant {
@@ -21,6 +23,8 @@ export interface AttentionWant {
   calls: number;
   /** Сегодня в зале ждёт улика дела недели (cases.ts). */
   clue?: boolean;
+  /** Сколько моментов этажей хотелось бы (floorLife.ts); нет поля — этажей нет. */
+  floor?: number;
 }
 
 /** Сколько чего можно сегодня. */
@@ -31,6 +35,8 @@ export interface AttentionPlan {
   calls: number;
   /** Улика дела недели будет (нет поля — нет улики). */
   clue?: boolean;
+  /** Сколько моментов этажей будет (нет поля — ни одного). */
+  floor?: number;
 }
 
 /**
@@ -38,7 +44,9 @@ export interface AttentionPlan {
  * и мини-событие, а не пять моментов подряд. Особый гость первым: он редкий и с выбором; улика — следом
  * (без неё дело недели пришлось бы раскрывать по размытым).
  */
-const ROUND: AttentionKind[] = ['special', 'clue', 'call', 'moment', 'live', 'call', 'moment', 'live', 'moment'];
+// 15.11: момент этажа — после первого момента зала (в обычный день с этажами: звонок, момент, этаж, мини-событие,
+// звонок). Без этажей очередь та же, что была.
+const ROUND: AttentionKind[] = ['special', 'clue', 'call', 'moment', 'floor', 'live', 'call', 'floor', 'moment', 'live', 'moment'];
 
 /** Разделить бюджет дня между желающими. */
 export function planAttention(want: AttentionWant, cap = ATTENTION_CAP): AttentionPlan {
@@ -61,13 +69,16 @@ export function planAttention(want: AttentionWant, cap = ATTENTION_CAP): Attenti
     } else if (kind === 'live' && plan.live < want.live) {
       plan.live++;
       left--;
+    } else if (kind === 'floor' && (plan.floor ?? 0) < (want.floor ?? 0)) {
+      plan.floor = (plan.floor ?? 0) + 1;
+      left--;
     }
   }
   return plan;
 }
 
 /** Сколько просьб всего в плане (звонки — сколько места держится под них). */
-export const attentionTotal = (plan: AttentionPlan): number => plan.moments + plan.live + plan.calls + (plan.special ? 1 : 0) + (plan.clue ? 1 : 0);
+export const attentionTotal = (plan: AttentionPlan): number => plan.moments + plan.live + plan.calls + (plan.special ? 1 : 0) + (plan.clue ? 1 : 0) + (plan.floor ?? 0);
 
 /** Оставить n из списка, равномерно по дню (первый, последний и между ними), порядок прежний. */
 export function thin<T>(list: readonly T[], n: number): T[] {

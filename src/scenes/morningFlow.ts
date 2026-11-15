@@ -56,6 +56,8 @@ import { LIVE_REPEAT, liveEventsFor } from '../game/minievents';
 import { CALLS_MAX, planAttention, thin } from '../game/attention';
 import { callsPossible } from '../game/delivery';
 import { momentsFor } from '../game/moments';
+import { floorMomentsFor } from '../game/floorLife';
+import { startFloorLife } from './floors/life';
 import { fridgeLeak } from '../game/gear';
 import { catHome, catBrought, catFind } from '../game/cat';
 import { fairToday } from '../game/fair';
@@ -780,6 +782,7 @@ export function prepareDay(scene: StoreScene): void {
   // Мини-события (свет, труба, голубь, курьер, мышь): почти каждый день, по очереди (live.ts).
   // Два за день — первое до обеда, второе ближе к вечеру, чтобы не наложились.
   const live = liveEventsFor(scene.state, Math.random);
+  const floorPlan = floorMomentsFor(scene.state);
   // Бюджет внимания дня (game/attention.ts): особый гость, звонки, моменты и мини-события делят пять
   // просьб «нажми». Что не влезло — сегодня просто не случается (сюжет и беды — вне бюджета).
   scene.attention = planAttention({
@@ -789,6 +792,8 @@ export function prepareDay(scene: StoreScene): void {
     calls: scene.phone ? callsPossible(scene.state, CALLS_MAX) : 0,
     // Улика дела недели (game/cases.ts) — в своём районе: в Заречье дело не ведём.
     clue: !inZar(scene.state) && clueToday(scene.state) !== null,
+    // Моменты этажей (game/floorLife.ts, 15.11): делят те же места, что и зал.
+    floor: floorPlan.length,
   });
   // Улика дела недели (game/cases.ts) — в своём месте бюджета: не влезла — придёт утром, размытая.
   // Сам значок (caseFx.ts) — отдельным куском кода, только в день улики (13.11: предел веса основного файла).
@@ -803,6 +808,7 @@ export function prepareDay(scene: StoreScene): void {
     });
   }
   scene.moments.start(thin(momentPlan, scene.attention.moments));
+  startFloorLife(floorPlan.slice(0, scene.attention.floor ?? 0));
   const kinds = live.kinds.slice(0, scene.attention.live);
   // В очередь недавних — только то, что правда будет (не случившееся не мешает ему завтра).
   scene.state = kinds.length === live.kinds.length ? live.state : { ...live.state, liveRecent: kinds.length ? [...(scene.state.liveRecent ?? []), ...kinds].slice(-LIVE_REPEAT) : scene.state.liveRecent };

@@ -3,7 +3,7 @@
 // сверху вниз — третий (фудкорт), второй (одежда), зал, подвал. Открытые этажи и зал — кнопки; следующий этаж, до
 // которого можно дорасти, — серый с замком: касание — короткая подсказка рядом (с какого помещения, почём, где
 // открыть). Где игрок сейчас — кнопка жёлтая. Пока игрок на этаже, а в зале что-то зовёт (вор, «момент», печь),
-// кнопка «Зал» светится и рядом строка.
+// кнопка «Зал» светится и рядом строка. 15.11: так же светится кнопка этажа, где ждёт момент (game/floorLife.ts).
 //
 // Что показывать — решают game/floors.floorStops и scenes/floors/nav.syncSwitch; здесь — только кнопки. Стоит слева
 // над кнопками двора, вида и звука, оформлен как они (тёмная плашка с золотой рамкой); перерисовывается, только когда
@@ -27,6 +27,8 @@ export interface SwitchStop {
 
 /** Сколько держится подсказка у серой кнопки (мс). */
 const TIP_MS = 3200;
+/** Строка «на этаже что-то случилось» у светящейся кнопки — подольше: её читают посреди дел в зале. */
+const RING_TIP_MS = 4500;
 
 const css = `
 /* Слева, над кнопками двора, вида и звука (bottom 128 + её высота): не закрывает кассы — они у правой стены зала. */
@@ -78,6 +80,8 @@ export class FloorSwitch {
   private tip?: HTMLElement;
   private tipFor: FloorStop | null = null;
   private tipTimer = 0;
+  /** На каком этаже ждёт момент (строку у его кнопки показываем один раз, пока он ждёт). */
+  private ringFor: FloorStop | null = null;
 
   constructor() {
     injectFloorStyles();
@@ -87,26 +91,33 @@ export class FloorSwitch {
     for (const type of ['pointerdown', 'touchstart', 'mousedown'] as const) this.root.addEventListener(type, (e) => e.stopPropagation(), { passive: true });
   }
 
-  /** Кнопки сверху вниз; пусто — спрятать. at — где игрок; call — зал зовёт (кнопка «Зал» светится, рядом строка). */
-  show(stops: SwitchStop[], at: FloorStop, call: boolean): void {
-    const key = `${stops.map((s) => `${s.id}${s.open ? '+' : '-'}${s.label}|${s.hint}`).join(';')}@${at}${call ? '!' : ''}`;
+  /**
+   * Кнопки сверху вниз; пусто — спрятать. at — где игрок; call — зал зовёт (кнопка «Зал» светится, рядом строка);
+   * ring — на каком этаже ждёт момент (game/floorLife.ts, 15.11): его кнопка светится так же, строка — один раз.
+   */
+  show(stops: SwitchStop[], at: FloorStop, call: boolean, ring: FloorStop | null = null, ringText = ''): void {
+    const key = `${stops.map((s) => `${s.id}${s.open ? '+' : '-'}${s.label}|${s.hint}`).join(';')}@${at}${call ? '!' : ''}~${ring ?? ''}`;
     if (key === this.key) return;
     this.key = key;
     this.stops = stops;
     if (!stops.length) {
       this.root.hidden = true;
       this.hideTip();
+      this.ringFor = null;
       return;
     }
     this.root.setAttribute('aria-label', t('floor.sw.title'));
-    this.root.replaceChildren(...stops.map((s) => this.button(s, s.id === at, call && s.id === 'hall')));
+    this.root.replaceChildren(...stops.map((s) => this.button(s, s.id === at, (call && s.id === 'hall') || s.id === ring)));
     const shown = this.root.hidden;
     this.root.hidden = false;
     // Только что появился — анимация въезда (CSS); подсказку пересчитать к новым кнопкам.
     if (shown) this.hideTip();
+    const fresh = ring !== null && ring !== this.ringFor;
+    this.ringFor = ring;
     if (call) this.showTip('hall', `👀 ${t('floor.sw.call')}`, 0);
+    else if (fresh && ringText) this.showTip(ring, ringText, RING_TIP_MS);
     else if (this.tipFor === 'hall') this.hideTip();
-    else if (this.tipFor) {
+    else if (this.tipFor && this.tipFor !== ring) {
       const s = stops.find((x) => x.id === this.tipFor);
       if (!s || s.open) this.hideTip();
     }

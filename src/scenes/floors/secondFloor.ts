@@ -29,7 +29,9 @@ import { clothesOf, clothesPlan, collectionFor, COLLECTION_DEFS, COLLECTIONS, ol
 import { hasFloorUp } from '../../game/floors';
 import { guestsToday } from '../../game/day';
 import { weatherToday } from '../../game/crisis';
-import { SHIRTS, VIEW_SUFFIX, customerLook, type Look } from '../common';
+import { SHIRTS, VIEW_SUFFIX, customerLook, nightGuestLook, type Look } from '../common';
+import { floorCrowd } from '../../game/floorLife';
+import { floorMoments } from './momentFx';
 import * as persons from '../persons';
 import { crowd, facingOf, lightPool, pause as wait, prop, shell, tweenTo, type Facing, type FloorKit } from './kit';
 import * as L from './secondLayout';
@@ -47,9 +49,11 @@ const STRIDE = 3.2;
 const MAX_PEOPLE = 5;
 const LITE_PEOPLE = 2;
 const SPAWN_EVERY = 2300;
-/** Зеваки (смотрят и уходят без покупки, 14.11): не больше двоих сразу, реже покупателей. */
-const LOOKERS = 2;
-const LOOK_EVERY = 5600;
+/**
+ * Зеваки (смотрят и уходят без покупки, 14.11). 15.11, автор: «прям пусто — они просто есть». Сколько их сразу —
+ * от гостей дня, но не меньше трёх (floorLife.floorCrowd); поднимаются чаще, часть — парами, с детьми, с пакетами из зала.
+ */
+const LOOK_EVERY = 2200;
 /** Слои, у которых есть кадры взмаха рук (art/walk.py; как SWING_LAYERS в motion.ts). */
 const SWING = new Set(['p_shirt', 'p_skin', 'p_skin_happy', 'p_skin_frown']);
 /** Кого уже показали на кассе сегодня: 13.11, ревью — этаж не должен «продавать» больше, чем продаст вечер, даже
@@ -135,7 +139,9 @@ export function buildSecond(kit: FloorKit): void {
     for (let k = Math.ceil((c?.stock?.[id] ?? 0) / PER_RACK); k > 0 && rackKeys.length < racks.length; k--) rackKeys.push(`fl2b_rack_${id}`);
   }
   const rackImgs = racks.map((p, i) => {
-    const img = prop(kit, p.x, p.y, rackKeys[i] ?? 'fl2b_rack');
+    // 15.11: соседние стойки одной коллекции — с разным набором вещей (второй рисунок, art/floors_life.py).
+    const key = rackKeys[i] && i % 2 ? rackKeys[i].replace('fl2b_rack_', 'fl2c_rack_') : rackKeys[i];
+    const img = prop(kit, p.x, p.y, key ?? 'fl2b_rack');
     if (i >= full && rackKeys[i]) {
       if (c?.sale) kit.art(p.x + 8, p.y - 22, 'fl2_sale').setScale(0.35).setDepth(p.y + 0.5);
       else img.setTint(0xc0cbdc);
@@ -181,12 +187,34 @@ export function buildSecond(kit: FloorKit): void {
   prop(kit, L.STAIRS.x, L.STAIRS.y, 'fl2b_stairs', { oy: 0, depth: -4 });
   prop(kit, L.PLANTS[0].x, L.PLANTS[0].y, 'fl2b_plant');
   prop(kit, L.PLANTS[1].x, L.PLANTS[1].y, 'fl2b_ficus');
+  // 15.11, автор: «2 этаж дорисуй — красивее». Стол со стопками сложенных вещей у левой стены, бра между
+  // примерочными, гирлянда тёплых огоньков под карнизом, подвесные лампы над залом (art/floors_life.py).
+  prop(kit, L.FOLD.x, L.FOLD.y, fresh ? `fl2c_fold_${coll}` : 'fl2c_fold')
+    .setInteractive({ useHandCursor: true })
+    .on('pointerup', () => {
+      sound.tap();
+      popup(L.FOLD.x + 8, L.FOLD.y - 18, `${COLLECTION_DEFS[coll].icon} ${t('cl.stock', { n: stockTotal(c), max: places })}`, '#ffffff');
+    });
+  for (const x of L.SCONCES) prop(kit, x, 29, 'fl2c_sconce', { depth: 1 });
+  view.add.tileSprite(5, 1, W - 10, 5, 'fl2c_garland').setOrigin(0).setTileScale(0.5).setDepth(3);
+  for (const p of L.PENDANTS) {
+    view.add.rectangle(p.x, p.y - 12, 0.5, 8, 0x262b44).setOrigin(0.5, 0).setDepth(350);
+    kit.art(p.x, p.y, 'fl2c_pendant').setOrigin(0.5, 0.75).setDepth(351);
+  }
 
   // ------------------------------------------------------------ свет
 
   if (!lite) {
-    // Тёплые пятна люстр — как свет зала (lighting.ts): мягко, поверх всего, сложением.
-    for (const [x, y] of [[52, 100], [100, 140], [140, 196], [60, 190], [140, 96]] as const) lightPool(kit, x, y, { w: 96, h: 66, tint: 0xfee761, alpha: 0.1, depth: 300, breathe: { alpha: '-=0.03', ms: 1700 + x * 7 } });
+    // Тёплые пятна люстр — как свет зала (lighting.ts): мягко, поверх всего, сложением. 15.11: пятно — под каждой
+    // подвесной лампой, ярче, с бликом на паркете; у бра и вдоль гирлянды — свой тёплый ореол; у окон — блик от стекла.
+    for (const p of L.PENDANTS) {
+      lightPool(kit, p.x, p.y + 26, { w: 84, h: 58, tint: 0xfee761, alpha: 0.16, depth: 300, breathe: { alpha: '-=0.04', ms: 1700 + p.x * 7 } });
+      kit.art(p.x + 4, p.y + 28, 'fl2c_gloss').setTint(0xfee761).setAlpha(0.45).setBlendMode(Phaser.BlendModes.ADD).setDepth(-5);
+      lightPool(kit, p.x, p.y + 1, { w: 14, h: 12, tint: 0xfee761, alpha: 0.7, depth: 352 });
+    }
+    for (const x of L.SCONCES) lightPool(kit, x, 23, { w: 22, h: 20, tint: 0xfeae34, alpha: 0.5, depth: 300 });
+    lightPool(kit, W / 2, 6, { w: W * 1.1, h: 18, tint: 0xfeae34, alpha: 0.22, depth: 300 });
+    for (const x of L.WINDOWS) kit.art(x + 10, WALL + 16, 'fl2c_gloss').setTint(0xc8f0ff).setAlpha(0.5).setBlendMode(Phaser.BlendModes.ADD).setDepth(-5);
     if (ups.showcase) {
       // Споты — узкие конусы на манекены и стеллаж.
       for (const m of L.MANNEQUINS) lightPool(kit, m.x, m.y - 10, { w: 28, h: 44, tint: 0xfee761, alpha: 0.32, depth: 300 });
@@ -197,9 +225,10 @@ export function buildSecond(kit: FloorKit): void {
   // 14.11, ревью: строка в одну линию упиралась в правую стену (а на других языках длиннее) — переносим по ширине зала.
   // 14.11, аудит: на высоте 132 строка лежала прямо на верхушках нижнего ряда стоек, полупрозрачная. Теперь —
   // табличка с плотным фоном и рамкой в проходе под стойками (между ними и ковром со столом), где мебели нет.
+  // 15.11: над подвесными лампами и их светом (глубина 350–352) — лампа не ложится на строку.
   if (!fresh) {
-    const note = kit.text(W / 2, L.RACKS[2].y + 11, t('cl.floorEmpty'), 5.5, '#733e39').setWordWrapWidth(W - 24).setAlign('center').setDepth(302).setBackgroundColor('#f4e4c1').setPadding(3, 1, 3, 1);
-    view.add.rectangle(note.x, note.y, note.displayWidth + 1, note.displayHeight + 1).setStrokeStyle(0.6, 0xb86f50).setDepth(302.1);
+    const note = kit.text(W / 2, L.RACKS[2].y + 11, t('cl.floorEmpty'), 5.5, '#733e39').setWordWrapWidth(W - 24).setAlign('center').setDepth(360).setBackgroundColor('#f4e4c1').setPadding(3, 1, 3, 1);
+    view.add.rectangle(note.x, note.y, note.displayWidth + 1, note.displayHeight + 1).setStrokeStyle(0.6, 0xb86f50).setDepth(360.1);
   }
 
   // ------------------------------------------------------------ люди: шаг, ходьба по проходам
@@ -345,6 +374,10 @@ export function buildSecond(kit: FloorKit): void {
 
   /** Очередь на кассу: первый — у кассы, остальные — левее по нижнему проходу; каждый сам шагает вперёд. */
   const queue: Person[] = [];
+  /** Момент «очередь» пойман: кассир пробивает быстрее, пока очередь не разойдётся. */
+  let rush = false;
+  /** Охранник этажа (patrol): он и ловит воришку в момент «вор у стойки». */
+  let guard: Person | null = null;
   const queueSpot = (i: number): Point => ({ x: L.SPOTS.till.x - i * 11, y: L.SPOTS.till.y });
 
   if (shown.n < sales.length) crowd(kit, { every: SPAWN_EVERY, max: MAX_PEOPLE, liteMax: LITE_PEOPLE, next: () => (shown.n < sales.length ? shown.n++ : null), run: (n) => shopper(n, sales[n]) });
@@ -354,7 +387,127 @@ export function buildSecond(kit: FloorKit): void {
   // приносят, на кассе не стоят: выручка этажа — только покупатели выше.
   if (c) {
     let looks = 0;
-    crowd(kit, { every: LOOK_EVERY, max: LOOKERS, liteMax: 1, next: () => looks++, run: (n) => looker(n) });
+    const most = floorCrowd('second', guestsToday(state), false);
+    crowd(kit, { every: LOOK_EVERY, max: most, liteMax: floorCrowd('second', guestsToday(state), true), next: () => looks++, run: (n) => looker(n) });
+    // 15.11: этаж открыли — а там уже кто-то выбирает (не все ждут, пока поднимется первый). В лёгкой графике —
+    // без них, без болтунов, грузчика и охранника: там людей ровно столько, сколько даёт floorCrowd (ревью 15.11).
+    if (!lite) {
+      for (let k = 0; k < 3; k++) void browse(looks++, pick(k * 5 + 1, false), 0, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day), k === 1, true);
+      void chatter();
+      void loader();
+      void patrol();
+    }
+  }
+
+  // ------------------------------------------------------------ моменты этажа (game/floorLife.ts, 15.11)
+  // Покупателю в примерочной нужен другой размер, очередь у кассы, воришка у стойки. Нажал — награда и развязка;
+  // не успел — сценка тихо расходится (без штрафа).
+  {
+    let actor: Person | null = null;
+    let booth: (typeof booths)[number] | undefined;
+    let extras: Person[] = [];
+    let rackAt = 0;
+    floorMoments(kit, 'second', {
+      start: (kind) => {
+        if (kind === 'size') {
+          // Выглянул из-за шторы: машет, просит размер побольше. Все кабинки заняты — ждёт у крайней.
+          booth = booths.find((b) => !b.busy);
+          if (booth) {
+            booth.busy = true;
+            booth.img.setTexture('fl2b_booth_shut');
+          }
+          const man = spawn(L.SPOTS.booth((booth ?? booths[booths.length - 1]).x), customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day));
+          persons.setFacing(man, 'down');
+          if (!lite) view.tweens.add({ targets: man, x: man.x + 1, duration: 260, yoyo: true, repeat: -1 });
+          actor = man;
+          return { target: man, icon: 'flm_size', dy: 17 };
+        }
+        if (kind === 'queue') {
+          // Очередь к кассе разом: трое с вещами переминаются, поглядывают на часы.
+          extras = [0, 1, 2].map((i) => {
+            const man = spawn(queueSpot(queue.length + i), customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day)).setAlpha(0);
+            view.tweens.add({ targets: man, alpha: 1, duration: 400, delay: i * 200 });
+            persons.setFacing(man, 'right');
+            emote(man, 'emo_clock', 900 + i * 400);
+            return man;
+          });
+          for (const man of extras) void checkout(man, null);
+          return { target: cashier, icon: 'emo_clock', dy: 17 };
+        }
+        // Воришка: капюшон, у стойки, оглядывается и прячет вещь под куртку.
+        rackAt = Math.max(0, Math.min(racks.length, full) - 1);
+        const spot = L.SPOTS.rack(racks[rackAt], 4);
+        const man = spawn(spot, { ...customerLook(0x262b44, 0), outfit: 'hoodie', outfitTint: 0x3a4466, style: 'beanie', hair: 0x262b44 }).setAlpha(0);
+        view.tweens.add({ targets: man, alpha: 1, duration: 400 });
+        persons.setFacing(man, 'up');
+        if (!lite) {
+          void (async () => {
+            for (let k = 0; man.active && actor === man; k++) {
+              persons.setFacing(man, (['up', 'left', 'up', 'right'] as Facing[])[k % 4]);
+              if (k % 4 === 0) nudge(rackImgs[rackAt]);
+              await pause(700);
+            }
+          })();
+        }
+        actor = man;
+        return { target: man, icon: 'emo_alert', dy: 17 };
+      },
+      caught: (kind) => {
+        const man = actor;
+        actor = null;
+        if (kind === 'size' && man?.active) {
+          // Принесли размер: штора задёргивается, выходит довольный — и на кассу.
+          view.tweens.killTweensOf(man);
+          emote(man, 'emo_heart', 400);
+          void (async () => {
+            await pause(900);
+            if (booth) {
+              booth.img.setTexture('fl2b_booth');
+              booth.busy = false;
+            }
+            if (man.active) await checkout(man, null);
+          })();
+        }
+        if (kind === 'queue') {
+          rush = true;
+          emote(cashier, 'emo_star', 200);
+          view.time.delayedCall(9000, () => (rush = false));
+        }
+        if (kind === 'thief' && man?.active) {
+          // Охранник подходит, вещь возвращается на стойку, воришка уходит вниз быстрым шагом.
+          void (async () => {
+            const g = guard;
+            if (g?.active) {
+              g.setData('busy', true);
+              view.tweens.killTweensOf(g);
+              await walk(g, { x: man.x + 9, y: man.y + L.FOOT });
+              if (g.active) persons.setFacing(g, 'left');
+            }
+            if (!man.active) return;
+            persons.setFacing(man, 'right');
+            emote(man, 'emo_sigh', 300);
+            nudge(rackImgs[rackAt]);
+            await pause(900);
+            g?.setData('busy', false);
+            if (man.active) await leaveDown(man);
+          })();
+        }
+      },
+      missed: (kind) => {
+        const man = actor;
+        actor = null;
+        if (booth && kind === 'size') {
+          booth.img.setTexture('fl2b_booth');
+          booth.busy = false;
+        }
+        extras = [];
+        if (man?.active) {
+          view.tweens.killTweensOf(man);
+          emote(man, 'emo_sigh', 200);
+          void leaveDown(man);
+        }
+      },
+    });
   }
 
   /** Что посмотреть: уценка — стол распродажи; своя коллекция — чаще стойка, иногда стеллаж, стол или обувь. */
@@ -369,32 +522,121 @@ export function buildSecond(kit: FloorKit): void {
     return { at: L.SPOTS.rack(racks[i], ((n * 7) % 13) - 6), img: rackImgs[i], rack: true };
   }
 
-  /** Зевака: лестница → вещь → (зеркало) → вниз без пакета. Консультант к нему не подходит — он занят покупателями. */
+  /**
+   * Зевака (или пара, родитель с ребёнком — 15.11: «пары, друзья, кто-то с пакетами, дети»): поднимаются вместе,
+   * смотрят одну вещь, уходят вниз без покупки. Консультант к ним не подходит — он занят покупателями.
+   */
   async function looker(n: number): Promise<void> {
-    const man = spawn(L.SPOTS.stairsBottom, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day)).setAlpha(0);
-    persons.setFacing(man, 'up');
-    await tweenTo(kit, man, { y: L.SPOTS.stairsTop.y - L.FOOT, alpha: 1, duration: 1100, onUpdate: () => man.setDepth(man.y + L.FOOT) });
     const goal = pick(n * 3 + 2, false);
-    await walk(man, goal.at);
+    const look = customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day);
+    // Лёгкая графика — только поодиночке: одно место в толпе = один человечек (ревью 15.11).
+    const group = lite ? null : n % 5 === 0 ? 'pair' : n % 5 === 3 ? 'kid' : null;
+    if (!group) return browse(n, goal, 0, look, n % 4 === 1);
+    const other = group === 'kid' ? { ...customerLook(look.shirt, state.day), kid: true, bag: undefined } : customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day);
+    await Promise.all([browse(n, goal, 0, look, group === 'pair'), pause(500).then(() => browse(n + 1, goal, 8, other, false, false, true))]);
+  }
+
+  /** Один зевака: лестница (или уже у вещи — here) → вещь → (зеркало) → вниз; bag — пакет из зала в руке. */
+  async function browse(n: number, goal: ReturnType<typeof pick>, dx: number, look: Look, bag: boolean, here = false, follower = false): Promise<void> {
+    const at = { x: goal.at.x + dx, y: goal.at.y };
+    const man = spawn(here ? at : L.SPOTS.stairsBottom, look).setAlpha(0);
+    if (bag) man.add(kit.art(4, 3, 'fl2_bag'));
+    if (here) {
+      persons.setFacing(man, 'up');
+      await tweenTo(kit, man, { alpha: 1, duration: 500 });
+      await pause(800 + (n % 4) * 700);
+    } else {
+      persons.setFacing(man, 'up');
+      await tweenTo(kit, man, { y: L.SPOTS.stairsTop.y - L.FOOT, alpha: 1, duration: 1100, onUpdate: () => man.setDepth(man.y + L.FOOT) });
+      await walk(man, at);
+    }
     if (!man.active) return;
-    persons.setFacing(man, 'up');
+    persons.setFacing(man, follower ? 'left' : 'up');
     nudge(goal.img);
     await pause(1300 + (n % 3) * 500);
     if (!man.active) return;
-    // Пусто — вздохнул; с «Брендами» чаще морщатся от бирки, без них — просто не решились.
-    emote(man, !fresh ? 'emo_sigh' : ups.brands || n % 2 ? 'emo_pricey' : 'emo_question', 300);
+    // Пусто — вздохнул; с «Брендами» чаще морщатся от бирки, без них — просто не решились. Ребёнок и спутник — радуются.
+    emote(man, follower ? 'emo_heart' : !fresh ? 'emo_sigh' : ups.brands || n % 2 ? 'emo_pricey' : 'emo_question', 300);
     await pause(900);
-    if (fresh && n % 3 === 1) {
+    if (fresh && n % 3 === 1 && !follower) {
       await walk(man, L.SPOTS.mirror);
       if (!man.active) return;
       persons.setFacing(man, 'up');
       await pause(900);
     }
+    await leaveDown(man);
+  }
+
+  /** Вниз по лестнице: дошёл до проёма и растаял. */
+  async function leaveDown(man: Person): Promise<void> {
     await walk(man, L.SPOTS.stairsTop);
     if (!man.active) return;
     persons.setFacing(man, 'down');
     await tweenTo(kit, man, { y: L.SPOTS.stairsBottom.y - L.FOOT, alpha: 0, duration: 1100, onUpdate: () => man.setDepth(man.y + L.FOOT) });
     man.destroy();
+  }
+
+  /** Двое знакомых встретились и болтают (по очереди — пузырь, сердечко, смех), потом расходятся. */
+  async function chatter(): Promise<void> {
+    for (let k = 0; view.sys.isActive() && !kit.leaving(); k++) {
+      const pair = L.CHATS[k % L.CHATS.length];
+      const men = pair.map((p, i) => ({ p, man: spawn(L.SPOTS.stairsBottom, customerLook(Phaser.Utils.Array.GetRandom(SHIRTS), state.day)).setAlpha(0), i }));
+      await Promise.all(
+        men.map(async ({ p, man, i }) => {
+          await pause(i * 700);
+          persons.setFacing(man, 'up');
+          await tweenTo(kit, man, { y: L.SPOTS.stairsTop.y - L.FOOT, alpha: 1, duration: 1100, onUpdate: () => man.setDepth(man.y + L.FOOT) });
+          await walk(man, p);
+          if (man.active) persons.setFacing(man, i ? 'left' : 'right');
+        }),
+      );
+      for (let r = 0; r < 4; r++) {
+        const { man } = men[r % 2];
+        emote(man, (['emo_bubble', 'emo_bubble', 'emo_heart', 'emo_star'] as const)[r], 900);
+        await pause(1900);
+      }
+      await Promise.all(men.map(({ man, i }) => pause(i * 400).then(() => (man.active ? leaveDown(man) : undefined))));
+      await pause(5000 + (k % 3) * 2000);
+    }
+  }
+
+  /** Грузчик: снизу коробка с новой партией — к стеллажу, поправил полку, обратно за следующей. */
+  async function loader(): Promise<void> {
+    await pause(3000);
+    for (let k = 0; view.sys.isActive() && !kit.leaving(); k++) {
+      const man = spawn(L.SPOTS.stairsBottom, { ...customerLook(0xf77622, 0), style: 'cap', hair: 0xfeae34, acc: 'vest', accTint: 0xf77622 }).setAlpha(0);
+      const box = kit.art(0, 1, 'box').setScale(0.4);
+      man.add(box);
+      persons.setFacing(man, 'up');
+      await tweenTo(kit, man, { y: L.SPOTS.stairsTop.y - L.FOOT, alpha: 1, duration: 1100, onUpdate: () => man.setDepth(man.y + L.FOOT) });
+      const to = k % 2 ? L.SPOTS.fold : L.SPOTS.shelf;
+      await walk(man, to);
+      if (!man.active) return;
+      persons.setFacing(man, 'up');
+      await pause(900);
+      box.destroy();
+      if (!man.active) return;
+      emote(man, 'emo_star', 200);
+      await pause(600);
+      await leaveDown(man);
+      await pause(14000 + (k % 3) * 4000);
+    }
+  }
+
+  /** Охранник этажа: неспешно обходит зал по кругу, у каждой точки — оглядывается. */
+  async function patrol(): Promise<void> {
+    const man = spawn(L.PATROL[0], nightGuestLook('guard'));
+    guard = man;
+    for (let k = 1; man.active && !kit.leaving(); k++) {
+      if (man.getData('busy')) {
+        await pause(500);
+        continue;
+      }
+      await walk(man, L.PATROL[k % L.PATROL.length]);
+      if (!man.active) return;
+      persons.setFacing(man, (['down', 'left', 'right', 'up'] as Facing[])[k % 4]);
+      await pause(1600 + (k % 3) * 900);
+    }
   }
 
   /** Покупатель: лестница → (манекен) → вещь → (примерочная → зеркало) → очередь → касса → с пакетом вниз. */
@@ -450,7 +692,14 @@ export function buildSecond(kit: FloorKit): void {
       persons.setFacing(man, 'up');
       await pause(500);
     }
-    // Очередь на кассу: подошёл на своё место, ушёл кто-то впереди — шагнул вперёд.
+    await checkout(man, buy.price);
+  }
+
+  /**
+   * Очередь на кассу: подошёл на своё место, ушёл кто-то впереди — шагнул вперёд; у кассы — заплатил и с пакетом
+   * вниз. price — сумма над головой (null — без неё: покупка из момента «очередь», её деньги — в награде момента).
+   */
+  async function checkout(man: Person, price: number | null): Promise<void> {
     queue.push(man);
     for (let at = -1; man.active; ) {
       const i = queue.indexOf(man);
@@ -466,17 +715,13 @@ export function buildSecond(kit: FloorKit): void {
     if (!man.active) return;
     persons.setFacing(man, 'up');
     persons.setFacing(cashier, 'down');
-    await pause(900);
+    await pause(rush ? 350 : price === null ? 2600 : 900);
     if (!man.active) return;
-    popup(man.x, man.y - 16, `+${buy.price} 💰`);
+    if (price !== null) popup(man.x, man.y - 16, `+${price} 💰`);
     man.add(kit.art(4, 3, ups.brands ? 'fl2b_bag_lux' : 'fl2_bag'));
     emote(cashier, 'emo_heart', 300);
     queue.shift();
     // Вниз по лестнице: тает в проёме.
-    await walk(man, L.SPOTS.stairsTop);
-    if (!man.active) return;
-    persons.setFacing(man, 'down');
-    await tweenTo(kit, man, { y: L.SPOTS.stairsBottom.y - L.FOOT, alpha: 0, duration: 1100, onUpdate: () => man.setDepth(man.y + L.FOOT) });
-    man.destroy();
+    await leaveDown(man);
   }
 }

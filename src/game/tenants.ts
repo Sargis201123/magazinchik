@@ -8,6 +8,10 @@
 // «Заказы») — платит чуть выше розницы, а доверие растёт и вместе с ним аренда. Комнату можно отделать второй раз:
 // аренда заметно выше, гостей чуть больше, в мире — гирлянда и вторая витрина. Видов стало семь — комнат по-прежнему
 // не больше трёх, так что есть из кого выбирать.
+//
+// 15.11, автор: «Минимаркет 1, Супермаркет 2, Универмаг 3, Гипермаркет 4» — с «Супермаркета» на одну комнату больше.
+// Новая — задняя комната за задней стеной зала (scenes/layout.ts, backRoom): во флигеле над кухней места нет. Она
+// последняя по порядку, так что у старых сохранений все арендаторы остаются в своих комнатах, а новая — свободна.
 
 import { PRODUCTS, sellableProducts, onShelves, warehouseOf, type ProductId, type StoreState } from './economy';
 import type { TextKey } from '../i18n';
@@ -60,8 +64,13 @@ export const PAL_RENT = 0.05;
 export const ASK_EVERY = 3;
 export const ASK_BONUS = 1.15;
 
-/** Комнат под аренду по помещению: сколько помещается во флигеле над кофейней и кухней (layout.ts, tenantRoomsFor). */
-export const TENANT_ROOMS = [0, 0, 1, 1, 2, 3];
+/**
+ * Комнат под аренду по помещению: во флигеле над кофейней и кухней, а с «Супермаркета» ещё задняя комната
+ * (layout.ts, backRoom). Видов арендаторов семь — даже в гипермаркете есть из кого выбирать.
+ */
+export const TENANT_ROOMS = [0, 0, 1, 2, 3, 4];
+/** С какого помещения последняя из комнат — задняя, за задней стеной зала (scenes/layout.ts, backRoom). */
+export const BACK_ROOM_FROM = 3;
 
 /** Комнаты считаем по магазину в Центре: в Заречье своего флигеля под аренду нет. */
 export const tenantRooms = (state: StoreState): number => TENANT_ROOMS[Math.min(homeLevel(state), TENANT_ROOMS.length - 1)] ?? 0;
@@ -70,6 +79,12 @@ export const tenantRooms = (state: StoreState): number => TENANT_ROOMS[Math.min(
 export const tenantsOf = (state: StoreState): TenantId[] => (state.tenants ?? []).filter((id) => id in TENANTS).slice(0, tenantRooms(state));
 
 export const freeRooms = (state: StoreState): number => tenantRooms(state) - tenantsOf(state).length;
+
+/**
+ * Свободна задняя комната (15.11): комнаты занимают по порядку, задняя — последняя, так что она свободна, как только
+ * свободна хоть одна. Старые сохранения «Супермаркета» и дальше получают её пустой — без всякого переноса.
+ */
+export const backRoomFree = (state: StoreState): boolean => !inZar(state) && homeLevel(state) >= BACK_ROOM_FROM && freeRooms(state) > 0;
 
 /** Почему нельзя пустить арендатора: уже снимает, нет комнаты, не хватает на отделку. null — можно. */
 export function rentLock(state: StoreState, id: TenantId): 'here' | 'full' | 'money' | null {

@@ -28,6 +28,8 @@ import { sound } from '../../platform/sound';
 import { nightGuestLook, nightLook, VIEW_SUFFIX, type Look } from '../common';
 import * as persons from '../persons';
 import { chalkSpot, pause, prop, tile, type Facing, type FloorKit, type Point } from './kit';
+import { floorCrowd } from '../../game/floorLife';
+import { floorMoments } from './momentFx';
 
 type Man = Phaser.GameObjects.Container;
 
@@ -68,11 +70,23 @@ const VEIL = 800;
 const LIGHT = 900;
 const UI = 1000;
 
-/** Сколько человек внизу одновременно: доля завсегдатаев дня, не меньше одного и не больше мест (автоматы + отдых). */
-const presentOf = (players: number, slots: number, lite: boolean): number => {
-  const n = Phaser.Math.Clamp(Math.round(players * 0.6), 1, slots + 3);
-  return lite ? Math.min(n, 3) : n;
-};
+/**
+ * Где болтают двое (по ногам): между диваном и столиком, чуть выше нижнего прохода — не на табличке «Подвал» внизу
+ * (она по середине у самого края, H − 7).
+ */
+const CHAT: [Point, Point] = [
+  { x: 60, y: 206 },
+  { x: 70, y: 206 },
+];
+/** Обход охранника (с улучшением «Охрана»): от поста — вдоль автоматов, по залу, к ломбарду и назад. */
+const PATROL: Point[] = [
+  { x: 28, y: 76 },
+  { x: 104, y: 76 },
+  { x: 104, y: 154 },
+  { x: 68, y: 224 },
+  { x: 68, y: 154 },
+  { x: 28, y: 76 },
+];
 
 export function buildBasement(kit: FloorKit): void {
   const { scene, store, W, H, WALL, lite } = kit;
@@ -116,6 +130,7 @@ export function buildBasement(kit: FloorKit): void {
   for (let i = 0; i < n; i++) wear(SLOT_X[i], STOOL_Y + 6, 0.8);
 
   // ------------------------------------------------------------ лестница, охрана, неон у входа
+  let guardMan: Man | null = null;
   kit.art(42, 18, 'bsm_neon_small').setDepth(-8);
   lightPool(kit, 42, 18, { w: 22, h: 18, tint: 0xff0044, alpha: 0.35, depth: LIGHT, flicker: !lite });
   if (guard) {
@@ -123,9 +138,11 @@ export function buildBasement(kit: FloorKit): void {
     kit.art(38, 34, 'bsm_cam').setDepth(-8);
     const led = scene.add.circle(36.5, 33.5, 0.5, 0xff0044).setDepth(LIGHT);
     if (!lite) scene.tweens.add({ targets: led, alpha: 0.15, duration: 600, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [1] });
-    const guardMan = man(28, 66, nightGuestLook('guard'));
-    // Охранник поглядывает то на лестницу, то в зал.
-    if (!lite) scene.time.addEvent({ delay: 2600, loop: true, callback: () => persons.setFacing(guardMan, Phaser.Utils.Array.GetRandom(['down', 'left', 'right'] as Facing[])) });
+    const g = man(28, 66, nightGuestLook('guard'));
+    guardMan = g;
+    // Охранник поглядывает то на лестницу, то в зал; 15.11 — и обходит подвал: вдоль автоматов, по залу и назад к посту.
+    if (!lite) scene.time.addEvent({ delay: 2600, loop: true, callback: () => !g.getData('walking') && persons.setFacing(g, Phaser.Utils.Array.GetRandom(['down', 'left', 'right'] as Facing[])) });
+
   }
 
   // ------------------------------------------------------------ автоматы
@@ -289,6 +306,11 @@ export function buildBasement(kit: FloorKit): void {
     people.add(m);
     return m;
   }
+  /** Значок над головой: всплывает и тает. */
+  function bubble(m: Man, key: string): void {
+    const icon = kit.art(m.x, m.y - 14, key).setDepth(UI);
+    scene.tweens.add({ targets: icon, y: icon.y - 4, alpha: 0, delay: 700, duration: 500, onComplete: () => icon.destroy() });
+  }
   function tap(s: string, x: number, y: number): void {
     sound.tap();
     kit.popup(x, y, s, { depth: UI });
@@ -373,11 +395,27 @@ export function buildBasement(kit: FloorKit): void {
     s.idle?.resume();
   };
 
+  /** Все автоматы заняты — постоять за плечом играющего (за табуретом, на проходе), порадоваться за него. */
+  const watch = async (m: Man): Promise<void> => {
+    const busy = slots.map((s, k) => (s.who && !watchers[k] ? k : -1)).filter((k) => k >= 0);
+    if (!busy.length) return;
+    const k = Phaser.Utils.Array.GetRandom(busy);
+    watchers[k] = m;
+    await go(m, { x: SLOT_X[k] + 7, y: AISLE.a });
+    if (m.active) {
+      persons.setFacing(m, 'up');
+      await pause(kit, 3500 + Math.random() * 3000);
+      if (m.active && Math.random() < 0.5) persons.setFacing(m, 'left');
+      await pause(kit, 1200);
+    }
+    watchers[k] = null;
+  };
   const freeSlot = (): number => {
     const free = slots.map((s, i) => (s.who ? -1 : i)).filter((i) => i >= 0);
     return free.length ? Phaser.Utils.Array.GetRandom(free) : -1;
   };
   const barBusy: (Man | null)[] = BAR_STOOLS.map(() => null);
+  const watchers: (Man | null)[] = SLOT_X.map(() => null);
   const sofaBusy: (Man | null)[] = SOFA_SEATS.map(() => null);
 
   /** Отдохнуть: чай у стойки или диван у телевизора (если есть свободное место). */
@@ -459,6 +497,7 @@ export function buildBasement(kit: FloorKit): void {
     }
     const i = freeSlot();
     if (i >= 0) await session(m, i, false);
+    else if (m.active) await watch(m);
     if (m.active && Math.random() < 0.45) await rest(m);
     // Иногда — к окну ломбарда: посмотреть, что на полке «Разное».
     if (m.active && parts.includes('back') && Math.random() < 0.2) {
@@ -470,7 +509,9 @@ export function buildBasement(kit: FloorKit): void {
   };
 
   // Кто уже внизу, когда спустились мы: за автоматами и на отдыхе — доля сегодняшних завсегдатаев.
-  const present = plan ? presentOf(plan.players, n, lite) : 0;
+  // 15.11, автор: «прям пусто». Сколько людей внизу — от завсегдатаев дня, но не меньше четырёх (floorLife.floorCrowd):
+  // кому не хватило автомата — смотрит из-за плеча играющего, пьёт чай или болтает у телевизора.
+  const present = plan ? floorCrowd('basement', plan.players, lite) : 0;
   let staying = 0;
   /** Новый человек внизу: считаем, пока он не пошёл к лестнице (leave). */
   const arrive = (m: Man): Man => {
@@ -507,7 +548,10 @@ export function buildBasement(kit: FloorKit): void {
       delay: lite ? 4200 : 2600,
       loop: true,
       callback: () => {
-        if (!kit.leaving() && staying < present) run(regular);
+        if (kit.leaving() || staying >= present) return;
+        run(regular);
+        // Иногда спускаются вдвоём — приятели.
+        if (staying < present && Math.random() < 0.3) scene.time.delayedCall(600, () => !kit.leaving() && run(regular));
       },
     });
   }
@@ -520,6 +564,150 @@ export function buildBasement(kit: FloorKit): void {
       (m.getData('legs') as Phaser.GameObjects.Image | undefined)?.setVisible(false);
       m.setY(TABLE.y - 11).setDepth(TABLE.y - 0.5);
     }
+  }
+
+  // ------------------------------------------------------------ 15.11: охрана обходит, двое болтают у телевизора
+  const g0 = guardMan as Man | null;
+  if (g0 && !lite) {
+    void (async () => {
+      await pause(kit, 6000);
+      while (g0.active && !kit.leaving()) {
+        if (!g0.getData('busy')) {
+          g0.setData('walking', true);
+          await walkPts(g0, PATROL.flatMap((p, k) => (k ? route(PATROL[k - 1], p) : [p])), 18);
+          await walkPts(g0, [{ x: 28, y: 66 }], 18);
+          g0.setData('walking', false);
+          if (g0.active) persons.setFacing(g0, 'down');
+        }
+        await pause(kit, 14000);
+      }
+    })();
+  }
+  if (plan && !lite) {
+    void (async () => {
+      await pause(kit, 2500);
+      for (let k = 0; !kit.leaving() && scene.sys.isActive(); k++) {
+        // Двое спускаются, встают у телевизора лицом друг к другу, болтают (пузыри по очереди) и уходят.
+        const pair = CHAT.map((p, i) => ({ p, m: arrive(man(STAIR_TOP.x, STAIR_TOP.y, nightLook())).setAlpha(0), i }));
+        await Promise.all(
+          pair.map(async ({ p, m, i }) => {
+            await pause(kit, i * 600);
+            persons.setFacing(m, 'down');
+            await new Promise<void>((done) => scene.tweens.add({ targets: m, y: STAIR_FOOT.y - FEET, alpha: 1, duration: 1100, onUpdate: () => m.setDepth(m.y + FEET), onComplete: () => done() }));
+            await go(m, p);
+            if (m.active) persons.setFacing(m, i ? 'left' : 'right');
+          }),
+        );
+        for (let r = 0; r < 4; r++) {
+          const { m } = pair[r % 2];
+          if (m.active) bubble(m, (['emo_bubble', 'emo_bubble', 'emo_star', 'emo_bubble'] as const)[r]);
+          await pause(kit, 1900);
+        }
+        await Promise.all(pair.map(({ m, i }) => pause(kit, i * 400).then(() => (m.active ? leave(m) : undefined))));
+        await pause(kit, 9000 + (k % 3) * 3000);
+      }
+    })();
+  }
+
+  // ------------------------------------------------------------ моменты подвала (game/floorLife.ts, 15.11)
+  // Просят разменять на жетоны у окошка, автомат заело, гость буянит. Нажал — награда и развязка; не успел — тихо
+  // расходится, без штрафа.
+  if (plan) {
+    let actor: Man | null = null;
+    let jam = -1;
+    let jamFx: Phaser.Time.TimerEvent | null = null;
+    const unjam = (): void => {
+      jamFx?.remove();
+      jamFx = null;
+      if (jam >= 0) {
+        slots[jam].lit.clearTint().setTexture('bsm_slot2_lit');
+        slots[jam].glow.clearTint();
+      }
+    };
+    floorMoments(kit, 'basement', {
+      start: (kind) => {
+        if (kind === 'jam') {
+          // Автомат заело: экран мигает красным, за ним — кто-то стучит по корпусу.
+          const busy = slots.map((sl, k) => (sl.who ? k : -1)).filter((k) => k >= 0);
+          jam = busy.length ? busy[0] : 0;
+          const sl = slots[jam];
+          if (!sl) return null;
+          sl.lit.setTint(0xff6060);
+          sl.glow.setTint(0xff0044);
+          if (!lite) jamFx = scene.time.addEvent({ delay: 260, loop: true, callback: () => sl.lit.setAlpha(sl.lit.alpha > 0.7 ? 0.4 : 1) });
+          return { target: { x: SLOT_X[jam], y: SLOT_Y - 6, active: true }, icon: 'flm_fix', dy: 22 };
+        }
+        const m = man(kind === 'change' ? PAY.x : TABLE.x + 2, kind === 'change' ? PAY.y : AISLE.c, nightLook()).setAlpha(0);
+        scene.tweens.add({ targets: m, alpha: 1, duration: 400 });
+        persons.setFacing(m, kind === 'change' ? 'up' : 'down');
+        if (kind === 'change' && admin) persons.setFacing(admin, 'down');
+        // Буян: подпрыгивает и машет кулаком (в лёгкой графике — просто стоит со значком).
+        if (kind === 'rowdy' && !lite) scene.tweens.add({ targets: m, y: m.y - 1.5, duration: 180, yoyo: true, repeat: -1, repeatDelay: 500 });
+        actor = m;
+        return { target: m, icon: kind === 'change' ? 'flm_token' : 'emo_angry', dy: 14 };
+      },
+      caught: (kind) => {
+        if (kind === 'jam') {
+          unjam();
+          const sl = slots[jam];
+          // Починили: барабаны крутанулись, экран снова ровный.
+          sl.reels.setVisible(true);
+          scene.time.delayedCall(900, () => sl.reels.active && !sl.who && sl.reels.setVisible(false));
+          jam = -1;
+          return;
+        }
+        const m = actor;
+        actor = null;
+        if (!m?.active) return;
+        scene.tweens.killTweensOf(m);
+        if (kind === 'change') {
+          bubble(m, 'emo_heart');
+          void (async () => {
+            await pause(kit, 800);
+            const i = freeSlot();
+            if (i >= 0 && m.active) await session(m, i, false, 2);
+            if (m.active) await leave(m);
+          })();
+          return;
+        }
+        // Буяна выводят: охранник (или администратор из-за стойки) подходит и провожает до лестницы.
+        void (async () => {
+          const g = guardMan as Man | null;
+          const who = g?.active ? g : man(STAIR_FOOT.x, STAIR_FOOT.y, nightGuestLook('guard'));
+          who.setData('busy', true);
+          scene.tweens.killTweensOf(who);
+          await go(who, { x: m.x + 8, y: m.y + FEET });
+          if (!m.active || !who.active) return;
+          persons.setFacing(who, 'left');
+          bubble(m, 'emo_sigh');
+          await pause(kit, 700);
+          void leave(m);
+          await pause(kit, 400);
+          await go(who, STAIR_FOOT);
+          if (who === g) {
+            await walkPts(who, [{ x: 28, y: 66 }], 18);
+            who.setData('busy', false);
+            persons.setFacing(who, 'down');
+          } else if (who.active) {
+            await new Promise<void>((done) => scene.tweens.add({ targets: who, y: STAIR_TOP.y - FEET, alpha: 0, duration: 1100, onComplete: () => done() }));
+            who.destroy();
+          }
+        })();
+      },
+      missed: (kind) => {
+        if (kind === 'jam') {
+          unjam();
+          jam = -1;
+          return;
+        }
+        const m = actor;
+        actor = null;
+        if (!m?.active) return;
+        scene.tweens.killTweensOf(m);
+        bubble(m, 'emo_sigh');
+        void leave(m);
+      },
+    });
   }
 
   // ------------------------------------------------------------ грузчик: из лифта паллету в холодильник

@@ -262,18 +262,18 @@ import { showReviews } from './reviews';
 import { anchorScroll, button, el, foldUp, holdPlace, openModal, staffFace, toast, unfold, who } from './dom';
 import { gardenBox, harvestNow } from './garden';
 import { gardenRipe, hasGarden } from '../game/garden';
-import { tenantsBox } from './tenants';
+import { tenantsBox, tenantsSummary } from './tenants';
 import { pawnBox, pawnOfferBox } from './pawnshop';
 import { pawnMet, pawnOf, pawnOffer, pawnOpen, pawnSlots } from '../game/pawnshop';
 import { rentalAlert, rentalBox, rentalStatus, restockButton } from './rental';
 import { KIT_ICON, RENTAL_CAP, kitToday, rentalOf, rentalOpen } from '../game/rental';
 import { lotteryArt, lotteryBox, lotteryNewsBox, lotteryStatus } from './lottery';
 import { lotteryNews } from '../game/lottery';
-import { vanBox, vanIdle, vanNewsBox, vanStatus, vanToday } from './van';
+import { vanBox, vanIdle, vanLines, vanNewsBox, vanStatus, vanToday } from './van';
 import { vanEventName } from './vanText';
 import { vanNews, vanOpen, VAN_EVENTS } from '../game/van';
 import { applyTownGifts, townBox } from './town';
-import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, tenantRooms, TENANTS, tenantSay, tenantsOf, tenantWho } from '../game/tenants';
+import { giveTenant, PAL_MAX, skipTenant, tenantName, tenantPalLine, TENANTS, tenantSay, tenantWho } from '../game/tenants';
 import { hoodBox } from './hood';
 import { linesBox } from './lines';
 import { licenseBox, licenseNoticeBox } from './license';
@@ -1057,6 +1057,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...apprLines(state),
       ...autoLine(),
       bill,
+      // Фургон сегодня едет или завтра выезд (ui/van.ts, 15.11): когда он едет — видно с утра.
+      ...(zarHere ? [] : vanLines(state)),
       ...weatherLine(state),
       ...warLine(state),
       ...fairLine(state),
@@ -4204,7 +4206,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
   const staffTab = (state: StoreState): HTMLElement[] => {
     const limit = staffLimit(state);
     const out: HTMLElement[] = [
-      ownerBox(state),
+      // 15.11, автор: «Хозяин уровень — свернуть это меню». Свёрнут в одну строку с уровнем, раскрытый помним.
+      foldSection('staff:owner', tuckNotes(ownerBox(state))),
       helpRow(`👥 ${t('staffTab.count', { n: state.staff.length, max: limit })}`, t('staffTab.wageNote')),
     ];
     if (state.staff.length === 0) out.push(el('div', 'ui-note', t('staffTab.none')));
@@ -4587,7 +4590,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       fold('gear', gearBox(state)),
       fold('ads', adsBox(state)),
       decorBox(state),
-      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, t('tenant.rooms', { n: tenantsOf(state).length, max: tenantRooms(state) }))), ...(dreams ? [foldSection('grow:dreams', dreams.box, dreams.summary)] : []), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...floorsBox(state, getState, update).map((b) => foldSection('grow:floors', b, floorsSummary(state))), ...estateBox(state, getState, update).map((b) => foldSection('grow:estate', b, estateSummary(state))), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
+      ...pets.map((b, i) => (i === 0 ? foldSection('grow:pets', b) : b)), ...(inZar(state) ? [] : eduardBox(state)), ...gardenBox(state, getState, update).map((b) => (hasGarden(state) ? foldSection('grow:garden', b) : b)), ...tenantsBox(state, getState, update).map((b) => foldSection('grow:tenants', b, tenantsSummary(state))), ...(dreams ? [foldSection('grow:dreams', dreams.box, dreams.summary)] : []), ...branchBox(state), ...zarGrowBox(state, openZar), ...linesBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:lines', b) : b)), ...licenseBox(state, getState, update).map((b) => foldSection('grow:license', b)), ...floorsBox(state, getState, update).map((b) => foldSection('grow:floors', b, floorsSummary(state))), ...estateBox(state, getState, update).map((b) => foldSection('grow:estate', b, estateSummary(state))), ...(inZar(state) ? [] : hoodBox(state, getState, update).map((b, i) => (i === 0 ? foldSection('grow:hood', b) : b))), bankBox(state));
 
     const debt = el('div', 'ui-box');
     if (state.debt > 0) {
