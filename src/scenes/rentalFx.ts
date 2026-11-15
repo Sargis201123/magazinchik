@@ -99,7 +99,8 @@ export function applyRental(scene: StoreScene): void {
   const pitch = pitchNow(state) ? pitchSpot(scene, top).x - scene.layout.door.x : null;
   // И тележку Кости со скамейкой и урной (dreamsFx.cartTaken) — 13.11: стойка вставала на скамейку у входа.
   const occupied: [number, number][] = [...cartTaken(scene), ...(pitch === null ? [] : [[pitch - 23, pitch + 23] as [number, number]])];
-  const { x, y } = sidewalkSpot(scene, top, 17, [-58, 76, -76, 92, -92, 116, -116, 140, -140, 164, -164], occupied);
+  // 14.11: запасные места дальше по улице — у входа теперь заняты и двери этажей (floorDoors.ts).
+  const { x, y } = sidewalkSpot(scene, top, 17, [-58, 76, -76, 92, -92, 116, -116, 140, -140, 164, -164, -188, 188, -212, 212, -236, 236], occupied);
   const kit = kitToday(state);
   const stand = keep(scene.art(x, y + 1, 'rent_stand').setOrigin(0.5, 1).setDepth(y));
   SLOTS[kit].forEach((slot, i) => {

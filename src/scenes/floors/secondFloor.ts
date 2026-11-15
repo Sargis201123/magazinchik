@@ -77,6 +77,8 @@ export function buildSecond(kit: FloorKit): void {
   // ------------------------------------------------------------ зал: стены, пол, свет из окон
 
   shell(kit, { wall: 'fl2b_wall', floor: 'fl2b_floor', side: 0x3e2731, sideW: 5, strips: [[WALL, 3, 0x733e39, 0.22], [WALL + 3, 3, 0x733e39, 0.08]] });
+  // 14.11: выше и ниже кадра зал продолжается (floorView.drawAround): обои вверх, паркет вниз, лестница — в пролёт.
+  kit.surround({ wall: 0xc28569, floor: 'fl2b_floor', floorY: WALL, floorStep: 24, side: 0x3e2731, sideW: 5, shafts: { bottom: [[L.STAIRS.x - 13, 26]] } });
   // Потёртости паркета — там, где ходят чаще всего: у лестницы, у кассы, перед примерочными, на перекрёстках.
   for (const [x, y, s] of [[24, 192, 1], [128, 198, 1.1], [130, 78, 1], [52, 114, 0.8], [84, 156, 0.9], [118, 150, 0.7], [60, 196, 0.8]] as const) {
     kit.art(x, y, 'fl2b_wear').setScale(s / 2).setDepth(-7);
@@ -193,7 +195,12 @@ export function buildSecond(kit: FloorKit): void {
     if (ups.brands) lightPool(kit, L.BRAND.x, L.BRAND.y - 14, { w: 34, h: 36, tint: 0xfee761, alpha: 0.18, depth: 300 });
   }
   // 14.11, ревью: строка в одну линию упиралась в правую стену (а на других языках длиннее) — переносим по ширине зала.
-  if (!fresh) kit.text(W / 2, 132, t('cl.floorEmpty'), 6, '#733e39').setWordWrapWidth(W - 40).setAlign('center').setDepth(301).setBackgroundColor('#ead4aacc').setPadding(3, 1, 3, 1);
+  // 14.11, аудит: на высоте 132 строка лежала прямо на верхушках нижнего ряда стоек, полупрозрачная. Теперь —
+  // табличка с плотным фоном и рамкой в проходе под стойками (между ними и ковром со столом), где мебели нет.
+  if (!fresh) {
+    const note = kit.text(W / 2, L.RACKS[2].y + 11, t('cl.floorEmpty'), 5.5, '#733e39').setWordWrapWidth(W - 24).setAlign('center').setDepth(302).setBackgroundColor('#f4e4c1').setPadding(3, 1, 3, 1);
+    view.add.rectangle(note.x, note.y, note.displayWidth + 1, note.displayHeight + 1).setStrokeStyle(0.6, 0xb86f50).setDepth(302.1);
+  }
 
   // ------------------------------------------------------------ люди: шаг, ходьба по проходам
 

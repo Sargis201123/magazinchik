@@ -25,6 +25,7 @@ import * as motion from './motion';
 import * as persons from './persons';
 import type { Facing } from './stride';
 import { lineStreetSpots, streetTaken } from './brandLines';
+import { floorDoorSpans } from './floorDoors';
 import { fairToday } from '../game/fair';
 import { weekFor } from '../game/weeks';
 
@@ -425,7 +426,8 @@ export function entranceBusy(state: StoreScene['state'], d: number): [number, nu
  * недели (weeks.ts). 11.11: в «Ярмарку урожая» фермер с лотком стоял прямо перед прилавком.
  */
 export function pitchSpot(scene: StoreScene, top: number): { x: number; y: number } {
-  return sidewalkSpot(scene, top, 21, [-40, -52, 40, 52, -64, -88, 88, -112, 112, -136, 136]);
+  // 14.11: запасные места дальше по улице — у входа теперь заняты и двери этажей (floorDoors.ts).
+  return sidewalkSpot(scene, top, 21, [-40, -52, 40, 52, -64, -88, 88, -112, 112, -136, 136, -160, 160, -184, 184, -208, 208]);
 }
 
 /**
@@ -434,7 +436,8 @@ export function pitchSpot(scene: StoreScene, top: number): { x: number; y: numbe
  */
 export function sidewalkSpot(scene: StoreScene, top: number, half: number, order: number[], taken: [number, number][] = []): { x: number; y: number } {
   const d = scene.layout.door.x;
-  const busy = [...entranceBusy(scene.state, d), ...taken];
+  // 14.11, аудит: и не перед дверями этажей в фасаде (floorDoors.ts) — стойка проката закрывала низ двери «Одежды».
+  const busy = [...entranceBusy(scene.state, d), ...floorDoorSpans(scene), ...taken];
   const free = (dx: number) => busy.every(([a, b]) => dx + half <= a || dx - half >= b);
   const dx = order.find((cx) => free(cx) && !nearLamp(d + cx)) ?? order[0];
   return { x: d + dx, y: top + 19 };

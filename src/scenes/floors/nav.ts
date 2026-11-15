@@ -126,6 +126,27 @@ export function goFloor(scene: StoreScene, to: FloorStop, door?: { x: number; y:
   });
 }
 
+/**
+ * День кончился, пока игрок на этаже: сначала в зал, потом then (окно «Ночная смена?», ритуал закрытия). 14.11, аудит:
+ * окно открывалось сразу, и полторы секунды поверх него ещё стоял гаснущий этаж с переключателем. Этажа нет —
+ * false, звать then не нужно (зовущий продолжает сам). Сцена этажа не закрылась (не загрузилась, застряла) — then
+ * всё равно через STUCK_MS: день не должен встать навсегда.
+ */
+export function hallFirst(scene: StoreScene, then: () => void): boolean {
+  const floor = floorScene(scene);
+  if (!floor) return false;
+  let done = false;
+  const go = (): void => {
+    if (done) return;
+    done = true;
+    then();
+  };
+  floor.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.time.delayedCall(0, go));
+  scene.time.delayedCall(STUCK_MS, go);
+  floor.leave('hall');
+  return true;
+}
+
 /** Сцена этажа встала и светлеет: переезд закончен. */
 export function arrived(): void {
   target = null;

@@ -13,10 +13,11 @@ import { UI_FONT } from '../ui/dom';
 import { hasFloor, type FloorId } from '../game/floors';
 import { slotsPlan } from '../game/basement';
 import { inZar } from '../game/zarshop';
-import { FACADE_H, SHIRTS, STREET_TAP_MS, customerLook } from './common';
+import { SHIRTS, STREET_TAP_MS, customerLook } from './common';
 import * as camera from './camera';
 import * as persons from './persons';
 import { goFloor } from './floors/nav';
+import { hatchSpot } from './floorDoors';
 
 /** Сколько завсегдатаев показать на улице за день (остальные пришли «за кадром») и как часто идёт следующий. */
 const SHOWN_MAX = 6;
@@ -27,21 +28,8 @@ let objs: Phaser.GameObjects.GameObject[] = [];
 let stops: (() => void)[] = [];
 let shown = { day: 0, n: 0 };
 
-/** Насколько точка фасада далеко от фонаря на тротуаре (фонари — через 72 от −100, tenantsFx.nearLamp). Её же берёт лифт фудкорта. */
-export const lampGap = (x: number): number => {
-  const m = (((x + 100) % 72) + 72) % 72;
-  return Math.min(m, 72 - m);
-};
-
-/**
- * Где спуск: дверь в фасаде у правого угла зала (низ — у тротуара). 13.11: сначала стоял снаружи у правой стены, но
- * тротуар там в четыре точки — приямок налезал на дорогу. Место — первое у угла, где не мешает фонарь и далеко до входа.
- */
-export function hatchSpot(scene: StoreScene): { x: number; y: number } {
-  const { w, h, door } = scene.layout;
-  const x = [w - 14, w - 24, w - 34, w - 44].find((cx) => lampGap(cx) >= 10 && Math.abs(cx - door.x) > 30) ?? w - 14;
-  return { x, y: h + FACADE_H + 4 };
-}
+// Где спуск и сколько тротуара он занимает — floorDoors.ts (14.11: его обходят тележка, стойка и торговец).
+export { hatchSpot, lampGap } from './floorDoors';
 
 /** Спуск и завсегдатаи: при постройке мира (streets.buildStreet), утром и когда купили подвал или автоматы. */
 export function applyBasement(scene: StoreScene): void {

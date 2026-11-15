@@ -17,12 +17,15 @@ import * as camera from './camera';
 import * as food from './food';
 import * as persons from './persons';
 import { entranceBusy, nearLamp, pitchSpot } from './tenantsFx';
+import { floorDoorSpans } from './floorDoors';
 
 /** Полуширина тележки и указателя (точек мира) и где их пробовать ставить (x от двери). */
 const CART_HALF = 14;
 /** Костя стоит слева от тележки: столько ещё занимает он сам. */
 const KOSTYA_W = 8;
-const CART_SPOTS = [-56, 68, -68, 84, -84, 100, -100, 124, -124, 152, -152];
+// 14.11: и подальше по улице (±176…244) — у входа место теперь занимают и двери этажей (floorDoors.ts), и на
+// «Супермаркете» с тремя этажами тележке у самого здания не оставалось места: без запасных она бы пропала.
+const CART_SPOTS = [-56, 68, -68, 84, -84, 100, -100, 124, -124, 152, -152, -176, 176, -196, 196, -220, 220, -244, 244];
 /** Скамейка и урна у входа (streets.buildStreet: +44 и −32) — тележку на них не ставим. */
 const BENCH_BIN: [number, number][] = [
   [32, 56],
@@ -71,10 +74,14 @@ function tappable(scene: StoreScene, obj: Phaser.GameObjects.Image, text: () => 
   );
 }
 
-/** Что тележка обходит (x от двери): занятое у входа, скамейка с урной и торговец сезона (он встаёт раньше). */
+/**
+ * Что тележка обходит (x от двери): занятое у входа, скамейка с урной, торговец сезона (он встаёт раньше) и двери
+ * этажей в фасаде. 14.11, аудит: на «Минимаркете» и «Супермаркете» тележка с Костей вставала ровно на табличку
+ * «🪜 Подвал» и забирала касания — теперь места дверей этажей (floorDoors.ts) для неё заняты.
+ */
 function cartBusy(scene: StoreScene): [number, number][] {
   const d = scene.layout.door.x;
-  const busy = [...entranceBusy(scene.state, d), ...BENCH_BIN];
+  const busy = [...entranceBusy(scene.state, d), ...BENCH_BIN, ...floorDoorSpans(scene)];
   if (pitchNow(scene.state)) {
     const p = pitchSpot(scene, scene.streetY - 12);
     busy.push([p.x - d - 22, p.x - d + 22]);

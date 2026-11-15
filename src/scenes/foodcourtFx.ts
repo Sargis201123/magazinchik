@@ -11,9 +11,9 @@ import { UI_FONT } from '../ui/dom';
 import { foodPlan } from '../game/foodcourt';
 import { hasFloor } from '../game/floors';
 import { inZar } from '../game/zarshop';
-import { FACADE_H, SHIRTS, STREET_TAP_MS, customerLook } from './common';
-import { floorDown, lampGap } from './basementFx';
-import { stairsSpot } from './clothesFx';
+import { SHIRTS, STREET_TAP_MS, customerLook } from './common';
+import { floorDown } from './basementFx';
+import { liftSpot } from './floorDoors';
 import * as camera from './camera';
 import * as persons from './persons';
 
@@ -30,16 +30,8 @@ let objs: Phaser.GameObjects.GameObject[] = [];
 let stops: (() => void)[] = [];
 let shown = { day: 0, n: 0, tick: 0 };
 
-/**
- * Где лифт: в фасаде у левого угла зала, на месте без фонаря и подальше от входа (как спуск в подвал справа) и от
- * двери второго этажа — та тоже слева (clothesFx.stairsSpot), вплотную их не различить.
- */
-export function liftSpot(scene: StoreScene): { x: number; y: number } {
-  const { h, door } = scene.layout;
-  const stairs = hasFloor(scene.state, 'second') ? stairsSpot(scene).x : null;
-  const x = [14, 24, 34, 44].find((cx) => lampGap(cx) >= 10 && Math.abs(cx - door.x) > 30 && (stairs === null || Math.abs(cx - stairs) > 28)) ?? 14;
-  return { x, y: h + FACADE_H + 4 };
-}
+// Где лифт — floorDoors.ts (14.11: не за мусорным контейнером, тележка и стойка его обходят).
+export { liftSpot } from './floorDoors';
 
 /** Лифт и едоки: при постройке мира (streets.buildStreet), утром и когда открыли этаж или поставили точку. */
 export function applyFoodcourt(scene: StoreScene): void {

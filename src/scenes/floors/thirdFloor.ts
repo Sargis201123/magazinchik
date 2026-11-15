@@ -27,7 +27,7 @@ import { ART, SHIRTS, VIEW_SUFFIX, customerLook, type EmoteKey, type Look } from
 import type { StoreScene } from '../StoreScene';
 import * as effects from '../effects';
 import * as persons from '../persons';
-import { chalkSpot, facingOf, lightPool, pause, prop, tile, type Facing, type FloorKit } from './kit';
+import { AROUND, chalkSpot, facingOf, lightPool, pause, prop, tile, type Facing, type FloorKit } from './kit';
 import * as L from './thirdLayout';
 
 type Man = Phaser.GameObjects.Container;
@@ -117,6 +117,8 @@ export function buildThird(kit: FloorKit): void {
   tile(kit, 0, 0, L.W, L.SILL + 2, 'fc3_frame', -16);
   tile(kit, 0, L.SILL + 2, L.W, L.WALL_BOTTOM - L.SILL - 2, ups.design ? 'fc3_wain_d' : 'fc3_wain', -15);
   tile(kit, 0, L.WALL_BOTTOM, L.W, L.H - L.WALL_BOTTOM, 'fc3_floor', -14);
+  // 14.11: выше и ниже кадра зал продолжается (floorView.drawAround): балка перекрытия вверх, плитка вниз.
+  kit.surround({ wall: 0x262b44, floor: 'fc3_floor', floorY: L.WALL_BOTTOM, floorStep: 16, side: 0x733e39, sideW: 4 });
   scene.add.rectangle(0, L.WALL_BOTTOM, L.W, 2, 0x181425, 0.22).setOrigin(0).setDepth(-12);
   if (ups.design) {
     // Настил под столами: тёплое дерево с тёмной кромкой — зал делится на «кухни» и «столовую».
@@ -697,7 +699,8 @@ export function buildThird(kit: FloorKit): void {
   }
 
   // ------------------------------------------------------------ свет и час дня
-  const night = scene.add.rectangle(0, 0, L.W, L.H, 0xffffff).setOrigin(0).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(NIGHT_DEPTH);
+  // Вечер темнит и продолжение зала над и под кадром (kit.surround) — с запасом AROUND.
+  const night = scene.add.rectangle(0, -AROUND, L.W, L.H + 2 * AROUND, 0xffffff).setOrigin(0).setBlendMode(Phaser.BlendModes.MULTIPLY).setDepth(NIGHT_DEPTH);
   const signGlow = spots
     .filter((s) => !s.plan.closed)
     .map((s) => [

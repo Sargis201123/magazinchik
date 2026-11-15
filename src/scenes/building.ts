@@ -52,6 +52,7 @@ import * as camera from './camera';
 import * as shelves from './shelves';
 import * as pawnFx from './pawnFx';
 import { greyRate } from '../game/grey';
+import { DUMP_X } from './floorDoors';
 
 /** Ленты с печатью на двери (серая схема) — по сценам: при перестройке мира создаются заново. */
 const seals = new WeakMap<StoreScene, Phaser.GameObjects.Image>();
@@ -509,7 +510,8 @@ export function binStand(scene: StoreScene): { x: number; y: number } {
 /** Контейнер у фасада слева от двери, на пути от двери не стоит. */
 export function dumpSpot(scene: StoreScene): { x: number; y: number } {
   const { h } = scene.layout;
-  return { x: 18, y: h + FACADE_H + 9 };
+  // Середина — DUMP_X (floorDoors.ts): её обходит лифт фудкорта.
+  return { x: DUMP_X, y: h + FACADE_H + 9 };
 }
 
 /** Ведро в зале (нажми — продавец вынесет мусор) и зелёный контейнер на улице. */

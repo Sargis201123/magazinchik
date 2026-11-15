@@ -71,15 +71,11 @@ export const SPRITES = [
   'echo_card',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
-  // Подвал (art/basement.py, scenes/floors/basementFloor.ts, scenes/basementFx.ts): кирпич и пол, лестница, автоматы, склад-холодильник,
-  // «серая» подсобка и спуск у правой стены зала.
+  // Подвал (art/basement.py, scenes/floors/basementFloor.ts, scenes/basementFx.ts): кирпич (картинка в меню «Этажи»),
+  // лестница и спуск в фасаде. 14.11: пол, автоматы, холодильник и подсобка первой версии убраны — их заменили
+  // картинки ниже (art/basement_art.py).
   'bsm_brick',
-  'bsm_floor',
   'bsm_stairs',
-  'bsm_slot',
-  'bsm_slot_lit',
-  'bsm_cold',
-  'bsm_back',
   'bsm_hatch',
   // Подвал «как настоящий зал» (art/basement_art.py, 14.11): стена со сводами, сырость и вытяжка, пол и плитка, автоматы
   // с неоном, барная стойка с окошком, грузовой лифт, холодильник-склад, паллеты, ломбард за решёткой, уголок с диваном,
@@ -156,20 +152,14 @@ export const SPRITES = [
   'fl2b_poster1',
   ...['warm', 'rain', 'summer'].flatMap((c) => [`fl2b_manq_${c}0`, `fl2b_manq_${c}1`, `fl2b_form_${c}`]),
   'fl2b_form',
-  // Фудкорт на третьем этаже (art/foodcourt.py, scenes/floors/thirdFloor.ts, scenes/foodcourtFx.ts): плитка и окна зала,
-  // четыре точки еды, жалюзи закрытой точки, общий стол, еда на столах, шарики дня рождения и лифт в фасаде.
-  'fc_floor',
+  // Фудкорт на третьем этаже (art/foodcourt.py, scenes/floors/thirdFloor.ts, scenes/foodcourtFx.ts): окно зала и четыре
+  // точки еды (картинки строк меню), шарики дня рождения и лифт в фасаде. 14.11: плитка, жалюзи, столы и еда первой
+  // версии убраны — зал рисуют картинки fc3_* ниже (art/foodcourt_art.py).
   'fc_wall',
   'fc_pizza',
   'fc_grill',
   'fc_sushi',
   'fc_coffee',
-  'fc_shutter',
-  'fc_table',
-  'fc_food0',
-  'fc_food1',
-  'fc_food2',
-  'fc_food3',
   'fc_balloons',
   'fc_lift',
   // Фудкорт «как настоящий зал» (art/foodcourt_art.py, scenes/floors/thirdFloor.ts, 14.11): панорама района и окна,

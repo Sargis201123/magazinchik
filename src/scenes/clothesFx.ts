@@ -12,10 +12,11 @@ import { hasFloor } from '../game/floors';
 import { clothesPlan } from '../game/clothes';
 import { guestsToday } from '../game/day';
 import { inZar } from '../game/zarshop';
-import { FACADE_H, SHIRTS, STREET_TAP_MS, customerLook } from './common';
+import { SHIRTS, STREET_TAP_MS, customerLook } from './common';
 import * as camera from './camera';
 import * as persons from './persons';
-import { floorDown, hatchSpot, lampGap } from './basementFx';
+import { floorDown } from './basementFx';
+import { stairsSpot } from './floorDoors';
 
 /** Сколько покупателей этажа показать на улице за день и как часто идёт следующий. */
 const SHOWN_MAX = 5;
@@ -26,14 +27,8 @@ let objs: Phaser.GameObjects.GameObject[] = [];
 let stops: (() => void)[] = [];
 let shown = { day: 0, n: 0 };
 
-/** Где дверь наверх: в фасаде левее входа в магазин — подальше от фонаря, самого входа и спуска в подвал. */
-export function stairsSpot(scene: StoreScene): { x: number; y: number } {
-  const { h, door } = scene.layout;
-  const hatch = hatchSpot(scene).x;
-  // 13.11: сперва стояла у самого угла (x = 24), но там на тротуаре мусорный бак, а табличку резал фонарь.
-  const x = [62, 58, 66, 24].find((cx) => lampGap(cx) >= 12 && Math.abs(cx - door.x) > 36 && Math.abs(cx - hatch) > 30) ?? 62;
-  return { x, y: h + FACADE_H + 4 };
-}
+// Где дверь — floorDoors.ts (14.11: рядом с ней ставится лифт фудкорта, а тележка и стойка её обходят).
+export { stairsSpot } from './floorDoors';
 
 /** Дверь и покупатели: при постройке мира (streets.buildStreet), утром и когда открыли этаж или завезли одежду. */
 export function applyClothes(scene: StoreScene): void {
