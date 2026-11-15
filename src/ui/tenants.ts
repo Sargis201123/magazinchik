@@ -96,7 +96,8 @@ export function tenantsBox(state: StoreState, getState: () => StoreState, update
   // 15.11: комнат стало больше — у кого уже есть арендаторы, видят, что место освободилось и где новая комната.
   if (here.length && freeRooms(state) > 0) {
     const free = el('div', 'ui-item-sub', `${t('tenant.freeRoom')}${backRoomFree(state) ? ` · ${t('tenant.backRoom')}` : ''}`);
-    free.style.cssText = 'color: #fee761; font-weight: 700;';
+    // Тёмно-коричневый, а не жёлтый: на кремовой карточке жёлтый почти не читался (контраст ~1.2:1).
+    free.style.cssText = 'color: #8f563b; font-weight: 700;';
     box.append(free);
   }
   if (here.length) box.append(el('div', '', t('tenant.total', { n: tenantRent(state), g: Math.round((tenantGuests(state) - 1) * 100) })));
