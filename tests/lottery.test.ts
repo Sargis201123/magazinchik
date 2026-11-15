@@ -177,7 +177,8 @@ describe('тираж и запреты: от зерна и дня', () => {
       const s = { ...won, day: d };
       const next = lotteryNight(s);
       // Последний «счастливый» вечер может объявить запрет — со следующего утра, когда «счастье» кончилось.
-      if (d < day + LUCKY_DAYS) expect(next).toBe(s);
+      // 15.11: тираж всё равно идёт и считается в карточку (draws) — остальное не меняется.
+      if (d < day + LUCKY_DAYS) expect({ ...next, lottery: { ...next.lottery!, draws: s.lottery?.draws } }).toEqual(s);
       else expect(next.lottery?.win).toEqual(won.lottery?.win);
     }
   });

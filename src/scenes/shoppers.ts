@@ -67,7 +67,6 @@ import { smellChance } from '../game/rot';
 import { seriesAfter, seriesLost } from '../game/series';
 import { beltPlan, beltRest, rhythmOn, RHYTHM_PACE, tillTip } from '../game/tillRhythm';
 import { CANDY_PRICE, impulseChance, returnCandy, takeCandy } from '../game/impulse';
-import { countTicket } from '../game/lottery';
 import { eyeTheft, ownerTiming } from '../game/owner';
 import { radioPatience, radioTolerance } from '../game/radio';
 import { cameraTheft, entranceMud, gearTier, REGISTER_JAM_SECONDS, registerJam, wcDirt } from '../game/gear';
@@ -1243,7 +1242,8 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   scene.state = { ...state, money: state.money + extras };
   for (const e of c.extras ?? []) {
     if (e.kind === 'dish') scene.stats.dishes = (scene.stats.dishes ?? 0) + 1;
-    else if (e.kind === 'ticket') scene.state = countTicket(scene.state);
+    // Билет: счёт и мгновенный выигрыш — с радостью у кассы, если повезло (lotteryFx.ts).
+    else if (e.kind === 'ticket') lotteryFx.ticketPaid(scene, c);
     else note(scene.stats, e.kind);
   }
   // Чаевые «за котика».

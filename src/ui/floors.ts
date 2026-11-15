@@ -39,7 +39,11 @@ type Update = (next: StoreState | null, feedback?: 'tap' | 'success' | 'error') 
 
 /** Строка с картинкой из атласа (как artRow утра, morning.ts — своя, чтобы не тянуть утро сюда). Её же берёт ui/foodcourt.ts. */
 export function row(texture: string, name: string, notes: (string | HTMLElement)[], actions: HTMLElement[]): HTMLElement {
-  const item = el('div', 'ui-item');
+  // 15.11, автор: «Этажи — текст съехал по полной у игровых автоматов, одежда на стойке тоже». Две кнопки
+  // («Поставить · 1500» и «Убрать») или одна длинная («Завезти · 600») забирали почти всю ширину строки, и текст
+  // сжимался в столбик в одно-два слова. Такие кнопки — под текстом, во всю его ширину (ui-item-wide, dom.ts).
+  const wide = actions.length > 1 || actions.some((b) => (b.textContent ?? '').trim().length > 10);
+  const item = el('div', wide ? 'ui-item ui-item-wide' : 'ui-item');
   const img = el('img', 'ui-item-art');
   setItemIcon(img, texture);
   img.alt = '';

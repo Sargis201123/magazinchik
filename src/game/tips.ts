@@ -18,8 +18,9 @@ import { floorAvailable, hasFloor } from './floors';
 import { residents, RES_START } from './residents';
 import { estateOpen } from './estate';
 import { GENT_SEEN, prestigeOf } from './gentrify';
+import { floorMomentsFor } from './floorLife';
 
-export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement' | 'clothes' | 'gentrify' | 'estate' | 'foodcourt';
+export type TipId = 'broke' | 'ownerTill' | 'alone' | 'weekly' | 'fair' | 'loyalty' | 'delivery' | 'register2' | 'oven' | 'coffee' | 'nightShift' | 'pawn' | 'case' | 'rhythm' | 'echo' | 'license' | 'thief' | 'crisis' | 'lottery' | 'dreams' | 'appr' | 'rental' | 'racket' | 'grey' | 'van' | 'residents' | 'plots' | 'basement' | 'clothes' | 'gentrify' | 'estate' | 'foodcourt' | 'floorLife';
 
 /** Касса пуста и товара нет: без закупки не будет и выручки — подсказать про кредит. */
 export const isBroke = (s: StoreState): boolean =>
@@ -102,6 +103,9 @@ const WHEN: [TipId, (s: StoreState) => boolean][] = [
   ['estate', estateOpen],
   // Фудкорт (floors.ts, foodcourt.ts, 13.11): третий этаж можно открыть — что там и чем он помогает залу.
   ['foodcourt', (s) => floorAvailable(s, 'third') || hasFloor(s, 'third')],
+  // Моменты этажей (floorLife.ts, 15.11): в первое утро, когда на этаже есть кого звать (автоматы стоят, вещи висят), —
+  // что кнопка этажа будет светиться и что пропустить не страшно.
+  ['floorLife', (s) => floorMomentsFor(s).length > 0],
 ];
 
 export const TIP_ICONS: Record<TipId, string> = {
@@ -137,6 +141,7 @@ export const TIP_ICONS: Record<TipId, string> = {
   gentrify: '💎',
   estate: '🏠',
   foodcourt: '🍕',
+  floorLife: '✨',
 };
 
 /**

@@ -22,6 +22,8 @@ import { haptic } from '../../platform/telegram';
 import { track } from '../../platform/analytics';
 import type { SwitchStop } from '../../ui/floorSwitch';
 import { calledElsewhere } from '../camera';
+import { floorWaiting, tickFloorLife } from './life';
+import { FLOOR_MOMENT_ICONS } from '../../game/floorLife';
 
 const floorView = lazy('floorView', () => import('../floorView'));
 
@@ -51,6 +53,8 @@ let dived = { x: 0, y: 0 };
 /** Зал зовёт (вор у полки, «момент», готовая печь): кнопка «Зал» светится; когда проверить снова. */
 let call = false;
 let checkAt = 0;
+/** Кнопка какого этажа светилась в прошлый раз (лёгкий отклик — только когда загорелась). */
+let rang: FloorId | null = null;
 
 /** Сцена этажа, если она сейчас показана. */
 function floorScene(scene: StoreScene): FloorView | null {
@@ -219,7 +223,13 @@ export function syncSwitch(scene: StoreScene): void {
   const stops: SwitchStop[] = visible
     ? floorStops(scene.state).map((s) => ({ id: s.id, open: s.open, icon: STOP_ICON[s.id], label: t(`floor.sw.${s.id}` as TextKey), hint: s.open ? '' : lockHint(s) }))
     : [];
-  scene.hud.floors.show(stops, at, call && away);
+  // Моменты этажей (floors/life.ts, 15.11): идут по секундам дня; ждёт момент на другом этаже — его кнопка светится.
+  tickFloorLife(scene);
+  const wait = floorWaiting();
+  const ring = wait && wait.floor !== at && target === null ? wait.floor : null;
+  if (ring && ring !== rang) haptic.tap();
+  rang = ring;
+  scene.hud.floors.show(stops, at, call && away, ring, wait ? `${FLOOR_MOMENT_ICONS[wait.kind]} ${t(`flm.${wait.kind}.call` as TextKey)}` : '');
 }
 
 /** Кнопка переключателя: открытый этаж или зал — едем; серый — подсказку показывает сам переключатель. */
