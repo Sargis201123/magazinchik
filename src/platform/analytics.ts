@@ -78,6 +78,8 @@ export async function reportProgress(state: StoreState, keepalive = false): Prom
         tz: tzOffset(),
         hooks: comebackHooks(state),
         events,
+        // Сохранение тестировщика (game/tester.ts): сервер не пустит магазин в рейтинги и турнир.
+        ...(state.tester ? { tester: true } : {}),
       },
       keepalive,
     );

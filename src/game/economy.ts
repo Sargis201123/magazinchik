@@ -654,6 +654,11 @@ export interface StoreState {
   bankrupt?: boolean;
   /** Сколько игр начато заново. */
   runs?: number;
+  /**
+   * Режим тестировщика (tester.ts, 16.11): игрок брал бесплатные монеты кнопкой. Навсегда — сервер по
+   * этой пометке не пускает магазин в рейтинги и турнир (api/_lib/stats.ts).
+   */
+  tester?: true;
   /** За какую неделю уже забрана награда торговой недели и гильдии (platform/multiplayer.ts). */
   duelClaimed?: number;
   guildClaimed?: number;

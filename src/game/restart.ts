@@ -54,5 +54,7 @@ export function restartGame(old: StoreState): StoreState {
     live: old.live,
     // Альбом коллекций — тоже игрока: собранное и трофеи остаются, награду за набор второй раз не дают.
     collections: old.collections,
+    // Пометка тестировщика (tester.ts) — навсегда: наследие и награды пришли из игры с бесплатными монетами.
+    ...(old.tester ? { tester: true as const } : {}),
   });
 }

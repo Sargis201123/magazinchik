@@ -4574,6 +4574,8 @@ export const es: Record<TextKey, string> = {
   "tip.pawnMoved.down": "Ya no está en «Rincones»: ahora la casa de empeño está en el sótano. Toca la ventanilla del letrero y verás los empeños, el estante «Varios» y el balance. Si brilla una marca, alguien espera con un objeto.",
   "pawn.tookToday": "{item}: aceptado en empeño — devolverán {back} 💰 en {d} d.",
   "pawn.refusedToday": "Hoy has rechazado al cliente que trajo un objeto.",
+  "tester.title": "Tester",
+  "tester.note": "Solo tú lo ves: monedas para probar. La deuda se paga sola y tu tienda queda fuera de los rankings.",
   "news.town": "🏘 Barrio: una meta semanal común para todos los jugadores y la «Tienda del día»: pásate y deja tu marca «Estuve aquí».",
 };
 

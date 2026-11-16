@@ -4584,6 +4584,8 @@ export const pt: Record<TextKey, string> = {
   "tip.pawnMoved.down": "Ela não está mais em «Cantinhos»: agora a casa de penhores fica no porão. Toque na janelinha com a placa para ver os penhores, a prateleira «Diversos» e o saldo. Uma marca brilhando quer dizer que alguém espera com um objeto.",
   "pawn.tookToday": "{item}: aceito em penhor — vão devolver {back} 💰 em {d} d.",
   "pawn.refusedToday": "Hoje você recusou quem trouxe um objeto.",
+  "tester.title": "Testador",
+  "tester.note": "Só você vê isto: moedas para testar. A dívida é quitada e sua loja fica fora dos rankings.",
   "news.town": "🏘 Bairro: uma meta semanal de todos os jogadores e a “Loja do dia” — visite e deixe a marca “Estive aqui”.",
 };
 

@@ -4619,6 +4619,8 @@ export const en: Record<TextKey, string> = {
   "tip.pawnMoved.down": "It’s no longer in “Corners”: the pawnshop is now in the basement. Tap the window with the sign to see pledges, the “Odds & Ends” shelf and totals. A glowing mark means someone is waiting with an item.",
   "pawn.tookToday": "{item}: taken in pawn — {back} 💰 back in {d} d.",
   "pawn.refusedToday": "You turned down today’s guest with an item.",
+  "tester.title": "Tester",
+  "tester.note": "Only you can see this: coins for testing. Debt is paid off, and your shop stays out of the rankings.",
   "news.town": "🏘 District: a weekly goal shared by all players and the “Shop of the day” — drop in and leave an “I was here” mark.",
 };
 

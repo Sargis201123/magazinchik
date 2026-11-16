@@ -18,6 +18,7 @@ import type { Goal } from '../game/nudge';
 import { goalText } from './nudge';
 import { QuestChip, type QuestRow } from './today';
 import { FloorSwitch } from './floorSwitch';
+import { moneyLabel } from '../game/tester';
 
 /** Сколько штук на полках считается «мало» и сколько таких товаров показывать в панели. */
 const LOW_ON_SHELF = 3;
@@ -277,7 +278,8 @@ export class Hud {
   /** Текст счётчика; запоминаем, что показано, — следующая докрутка начнётся отсюда. */
   private moneyLabel(value: number): string {
     this.shownMoney = value;
-    return ` ${value}`;
+    // С миллиона — разряды через узкий пробел (game/tester.ts): у тестера в кассе миллионы.
+    return ` ${moneyLabel(value)}`;
   }
 
   /** «Позвать на помощь»: видна в час пик; busy — ждём окно «Поделиться» (кнопка гаснет). */
