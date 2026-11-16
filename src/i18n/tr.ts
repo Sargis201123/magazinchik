@@ -4574,6 +4574,8 @@ export const tr: Record<TextKey, string> = {
   "tip.pawnMoved.down": "Artık «Köşeler»de değil: rehinci şimdi bodrumda. Tabelalı pencereye dokun: rehinler, «Çeşitli» rafı ve toplam orada. Bir işaret parlıyorsa biri eşyayla bekliyor.",
   "pawn.tookToday": "{item}: rehine alındı — {d} gün sonra {back} 💰 geri gelecek.",
   "pawn.refusedToday": "Bugün eşya getireni geri çevirdin.",
+  "tester.title": "Test",
+  "tester.note": "Bunu sadece sen görüyorsun: test için jeton. Borç kendiliğinden kapanır, dükkânın sıralamalara girmez.",
   "news.town": "🏘 Mahalle: tüm oyuncuların ortak haftalık hedefi ve “Günün dükkânı” — uğra, “Buradaydım” işareti bırak.",
 };
 

@@ -5,7 +5,8 @@
 //
 // Нужны переменные окружения (Vercel: Settings → Environment Variables; Cloudflare: Settings → Variables and Secrets):
 //   BOT_TOKEN       — токен бота от @BotFather;
-//   WEBHOOK_SECRET  — любая длинная случайная строка (защищает вебхук и страницу настройки).
+//   WEBHOOK_SECRET  — любая длинная случайная строка (защищает вебхук и страницу настройки);
+//   TESTER_IDS      — по желанию: номера Telegram тестировщиков через запятую (tester.ts, docs/DEPLOY.md).
 
 import type { Lang } from './lang.js';
 
@@ -35,6 +36,8 @@ export interface Env {
   DB?: D1;
   /** Адрес игры — для кнопки «Играть» в напоминаниях (у cron нет запроса, чтобы его узнать). */
   APP_URL?: string;
+  /** Номера Telegram тестировщиков через запятую (tester.ts): им — кнопки монет, а в рейтинги их не пускаем. */
+  TESTER_IDS?: string;
 }
 
 /** Переменные окружения Node (Vercel). */

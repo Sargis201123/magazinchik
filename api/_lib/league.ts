@@ -13,6 +13,7 @@ import { bandOf, dayCap, LEAGUE_SIZE, leagueScore, nextTier, WEEKEND_BONUS, type
 import { daysLeft, isWeekend, weekOf } from './week.js';
 import { farewell } from './farewell.js';
 import { ready } from './social.js';
+import { isTester } from './tester.js';
 import { json, verifyInitData, type D1, type Env } from './telegram.js';
 
 const DAY = 24 * 3600_000;
@@ -232,7 +233,8 @@ export async function league(request: Request, env: Env, now = Date.now()): Prom
   const bye = await farewell(db, user.id, now);
   const weekend = isWeekend(now);
   // В лигу — только тот, кто уже играл (есть прогресс); иначе запишет первый отчёт.
-  const progress = await db.prepare('SELECT level FROM progress WHERE id = ?').bind(user.id).first<{ level: number }>();
+  // Тестер (tester.ts, 16.11) в лигу не записывается: таблица без него, а ответ — как у новичка.
+  const progress = isTester(env, user.id) ? null : await db.prepare('SELECT level FROM progress WHERE id = ?').bind(user.id).first<{ level: number }>();
   if (!progress) return json({ enabled: true, week, daysLeft: daysLeft(now), weekend, last, farewell: bye });
   const member = await joinLeague(db, user.id, progress.level, now, last?.next ?? 0);
   const frac = (now - weekStart(week)) / (7 * DAY);

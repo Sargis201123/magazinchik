@@ -300,6 +300,7 @@ import { estateNews } from '../game/estate';
 import { keepPlaces, kioskSpotFree } from '../scenes/placement';
 import { albumButton, showAlbum } from './album';
 import { freshCount } from '../game/collections';
+import { testerBox } from './tester';
 
 
 interface MorningOptions {
@@ -4640,6 +4641,8 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     if (bill.loan) row(t('bills.loan'), bill.loan);
     row(t('bills.total'), billTotal(bill));
     out.push(costs);
+    // Раздел тестировщика (ui/tester.ts) — в самом низу, только «своим» и при разработке.
+    out.push(...testerBox(getState, update));
     return out;
   };
 

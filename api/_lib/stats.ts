@@ -7,8 +7,9 @@
 // сколько возвращаются на следующий день и через неделю, откуда пришли (рекламные метки src_<канал>)
 // и как новички прошли первые минуты в двух вариантах начала (onboarding, docs/ONBOARDING.md).
 
-import { markWeek } from './week.js';
-import { markLeague } from './league.js';
+import { markWeek, weekOf } from './week.js';
+import { leagueReady, markLeague } from './league.js';
+import { isTester } from './tester.js';
 import { ready, saveHooks } from './social.js';
 import { rivalKey } from './rival.js';
 import { GOLD_SUPPORT, json, verifyInitData, type D1, type Env } from './telegram.js';
@@ -62,6 +63,17 @@ export async function progress(request: Request, env: Env): Promise<Response> {
   const now = Date.now();
   // Часовой пояс и поводы для напоминаний бота (remind.ts).
   await saveHooks(db, user.id, body, now);
+  // 16.11, режим тестировщика (tester.ts): у тестера — сколько угодно монет. Его магазин убираем из всего,
+  // что видят другие (рейтинг, турнир, гости, магазин дня, цель района) и из воронки сводки. Помеченное
+  // сохранение (tester в состоянии игры) не возвращается в рейтинг, даже если номер убрали из TESTER_IDS.
+  if (body.tester === true || isTester(env, user.id)) {
+    await db.prepare('DELETE FROM progress WHERE id = ?').bind(user.id).run();
+    await db.prepare('DELETE FROM shops WHERE id = ?').bind(user.id).run();
+    await leagueReady(db).catch(() => undefined);
+    await db.prepare('DELETE FROM league_members WHERE id = ? AND week = ?').bind(user.id, weekOf(now)).run().catch(() => undefined);
+    // ok: игра считает события доставленными и не копит их.
+    return json({ ok: true, tester: true });
+  }
   const name = (user.first_name ?? '').trim().slice(0, 20) || '—';
   const rating = Math.max(0, Math.min(5, Number(body.rating) || 0));
   const prev = await db

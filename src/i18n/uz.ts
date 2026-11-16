@@ -4583,6 +4583,8 @@ export const uz: Record<TextKey, string> = {
   "tip.pawnMoved.down": "U endi «Burchaklar»da yoʻq: lombard endi yertoʻlada. Peshlavhali derazachani bos — garovlar, «Har xil» javoni va natija oʻsha yerda. Belgi yonsa — kimdir buyum bilan kutyapti.",
   "pawn.tookToday": "{item}: garovga olindi — {d} kundan keyin {back} 💰 qaytarishadi.",
   "pawn.refusedToday": "Bugun buyum olib kelgan odamga rad javobini berding.",
+  "tester.title": "Tester",
+  "tester.note": "Buni faqat sen koʻrasan: sinash uchun tangalar. Qarz oʻzi uziladi, doʻkoning reytinglarga kirmaydi.",
   "news.town": "🏘 Mahalla: barcha oʻyinchilar uchun umumiy haftalik maqsad va «Kun doʻkoni» — mehmonga borib, «Shu yerda boʻldim» belgisini qoldir.",
 };
 

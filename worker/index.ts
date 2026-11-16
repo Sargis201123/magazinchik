@@ -17,6 +17,7 @@ import { town } from '../api/_lib/town.js';
 import { sendNewspapers } from '../api/_lib/newspaper.js';
 import { card, cardImage, cleanCards } from '../api/_lib/card.js';
 import { help, share } from '../api/_lib/share.js';
+import { tester } from '../api/_lib/tester.js';
 import type { Env } from '../api/_lib/telegram.js';
 
 interface WorkerEnv extends Env {
@@ -52,6 +53,8 @@ const ROUTES: Record<string, { method: string; handler: (request: Request, env: 
   // Календарь праздников по настоящим датам: игре — GET, автору — правка с ключом (docs/EVENTS.md).
   '/api/events': { method: 'GET', handler: events },
   '/api/events-edit': { method: 'POST', handler: eventsEdit },
+  // Режим тестировщика: «свой» ли игрок (номер в TESTER_IDS) — тогда в игре кнопки монет (tester.ts).
+  '/api/tester': { method: 'POST', handler: tester },
 };
 
 export default {

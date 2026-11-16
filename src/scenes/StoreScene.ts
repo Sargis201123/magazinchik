@@ -47,6 +47,8 @@ import { liveLook, type GuestId } from '../game/live';
 import { liveEvents, loadLiveEvents, todayLocal } from '../platform/live';
 import { comebackHooks } from '../game/comeback';
 import { socialPing, WELCOME_GIFT } from '../platform/social';
+import { fetchTester } from '../platform/tester';
+import { markTester } from '../game/tester';
 import { HELP_HOLD, HELP_QUEUE } from '../game/help';
 import { reportProgress, setProgressSource, track } from '../platform/analytics';
 import { pickCohort, startCohort, type Cohort } from '../game/onboarding';
@@ -820,6 +822,12 @@ export class StoreScene extends Phaser.Scene {
     const lookBefore = liveLook(liveEvents(), todayLocal());
     void loadLiveEvents().then((events) => {
       if (!this.running && this.sys.isActive() && liveLook(events, todayLocal()) !== lookBefore) this.buildWorld();
+    });
+    // Режим тестировщика (platform/tester.ts): «свой» — пометить сохранение, кнопки монет ждут в «Развитии».
+    void fetchTester().then((on) => {
+      if (!on || this.state.tester) return;
+      this.state = markTester(this.state);
+      saveGame(this.state);
     });
     void socialPing(getLang(), comebackHooks(this.state)).then((info) => {
       // Друзья: магазин друга встанет на улице рядом, если место свободно (streets.ts).
