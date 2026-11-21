@@ -1439,9 +1439,17 @@ export const PRICE_FORGIVE = 0.5;
  */
 export const AD_FORGIVE = 0.5;
 
+/**
+ * 21.11, трафик: гости «на бегу», не дождавшиеся кассы (traffic.ts, stats.quickQueue), в рейтинг идут на четверть.
+ * Они в зал не заходили и магазина толком не видели — иначе реклама в людный день роняла рейтинг на 0,2 за вечер
+ * (замер: Универмаг с ТВ — 539 ушли, рейтинг −0,2), и спираль «больше гостей — ниже рейтинг» съедала смысл рекламы.
+ */
+export const QUICK_FORGIVE = 0.25;
+
 /** 0..1: доля довольных посетителей. Жалоба считается за «полпокупателя». */
 export function satisfaction(stats: DayStats, lostWeight = 1): number {
-  const priced = Math.max(0, stats.lost - Math.min(stats.lost, stats.lostWhy?.expensive ?? 0) * (1 - PRICE_FORGIVE));
+  const priced0 = Math.max(0, stats.lost - Math.min(stats.lost, stats.lostWhy?.expensive ?? 0) * (1 - PRICE_FORGIVE));
+  const priced = Math.max(0, priced0 - Math.min(priced0, stats.quickQueue ?? 0) * (1 - QUICK_FORGIVE));
   const lost = Math.max(0, priced - Math.min(priced, stats.adGuests ?? 0) * AD_FORGIVE);
   const visitors = stats.served + lost * lostWeight;
   if (visitors === 0) return 0.5;

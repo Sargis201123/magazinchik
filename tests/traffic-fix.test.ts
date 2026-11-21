@@ -285,3 +285,17 @@ describe('сохранения', () => {
     expect(newFlow(s).rate).toBeCloseTo(newFlow(shop).rate, 5);
   });
 });
+
+describe('21.11: гости «на бегу», не дождавшиеся кассы, роняют рейтинг слабо', async () => {
+  const { satisfaction, QUICK_FORGIVE } = await import('../src/game/economy');
+  it('ушедшие из невидимой очереди весят четверть от ушедших из зала', () => {
+    const hall = { ...emptyDayStats(), served: 200, lost: 400, lostWhy: { queue: 400 } } as ReturnType<typeof emptyDayStats>;
+    const quick = { ...hall, quickQueue: 400 } as ReturnType<typeof emptyDayStats>;
+    expect(satisfaction(quick)).toBeGreaterThan(satisfaction(hall));
+    expect(satisfaction(quick)).toBeCloseTo(200 / (200 + 400 * QUICK_FORGIVE), 5);
+  });
+  it('без quickQueue — как раньше', () => {
+    const s = { ...emptyDayStats(), served: 50, lost: 10 } as ReturnType<typeof emptyDayStats>;
+    expect(satisfaction(s)).toBeCloseTo(50 / 60, 5);
+  });
+});
