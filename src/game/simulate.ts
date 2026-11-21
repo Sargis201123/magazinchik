@@ -69,12 +69,9 @@ import {
   staffOf,
   roleOpen,
   thiefChance,
-  type StaffMember,
   type StaffRole,
   type StoreState,
-  cashierScan,
   workSpeed,
-  checkoutSeconds,
   DAY_SECONDS,
   recordSale,
 } from './economy';
@@ -94,16 +91,16 @@ import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { badBatch, SUPPLIER_IDS, SUPPLIERS, supplierOpen, listPrice, priceFor } from './suppliers';
-import { buyUpgrade, carryOf, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId, MARKDOWN_EVENING } from './upgrades';
+import { buyUpgrade, carryOf, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, type UpgradeId, MARKDOWN_EVENING } from './upgrades';
 import { CARRY, homemade } from './economy';
 import { fairToday, fairTodayTolerance, STALL_MAX, stallSale } from './fair';
 import { endSale, SALE_CROWD, saleExtraItems, startSale, weekFor } from './weeks';
-import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole, RELIEF_ROLE, TILL_ROLES } from './registers';
+import { buyRegister, cashierCount, isCashierRole, nextCashierRole, nextRegisterPrice, registerCount, registerOfRole } from './registers';
 import { CANDY_PRICE, impulseChance, nextRack, refillRack, takeCandy, upgradeRack } from './impulse';
 import { buyCups, coffeeChance, useCup } from './coffee';
 import { buyLottery, countTicket, hasLottery, LOTTERY_PRICE, ticketChance, TICKET_CUT } from './lottery';
 import { simSmellComplaint } from './rot';
-import { brewSeconds, cameraTheft, coffeePrice, entranceMud, fridgeLeak, gearAvailable, MANUAL_GEAR, nextGear, ovenBatch, ovenBatchCost, REGISTER_JAM_SECONDS, registerJam, upgradeGear, wcDirt } from './gear';
+import { brewSeconds, cameraTheft, coffeePrice, entranceMud, fridgeLeak, gearAvailable, MANUAL_GEAR, nextGear, ovenBatch, ovenBatchCost, upgradeGear, wcDirt } from './gear';
 import { AROMA_SECONDS, AROMA_TOLERANCE, bakerShouldBake, bakeryWorking, sellWholesale, startBatch, takeOutBread, wholesaleToBake } from './bakery';
 import { NIGHT_GUESTS, NIGHT_MARKUP, NIGHT_SECONDS, NIGHT_TOLERANCE, startNight } from './night';
 import { adoptCat, buyBed, CAT_BED_IDS, CAT_BEDS, CAT_TIP, catOffer, catPatience, catTipChance, feedCat } from './cat';
@@ -127,13 +124,13 @@ import { buyKiosk, kioskCount, kioskTier, laneGuests, nextKioskPrice, nextKioskT
 import { BRANCH_PRICE, BRANCH_TRACK_IDS, branchGain, branchOpen, buyBranch, nextBranchTier, upgradeBranch } from './branch';
 import { buyHood, HOOD, nextHood } from './hood';
 import { simMoments } from './moments';
-import { carryBonus, eyeTheft, ownerTiming } from './owner';
+import { carryBonus, eyeTheft } from './owner';
 import { buyStand, ITEM_COST, RENTAL_CAP, rentalOf, restockRental, STAND_COST } from './rental';
 import { buyFloor, finishCost, finishFloor, floorAvailable, FLOORS, hasFloor } from './floors';
 import { basementOf, buyPart, buySlot, PARTS, SLOT_COST, slotPlaces } from './basement';
 import { batchCost, buyBatch, clothesOf, freePlaces, setClerk, setSale } from './clothes';
 import { answerInspection, answerParty, inspectionToday, openStall, ownAllowed, partyToday, setStallMode, stallLock, stallMode, stallPlaces, stallsOf, STALL_IDS, STALLS } from './foodcourt';
-import { rhythmSeconds } from './tillRhythm';
+import { serveCapacity, smallBasket } from './traffic';
 import { buyVan, loadVan, planTrip, vanEvents, vanFuel, vanOpen, vanPrice, vanWant, VAN_EVENTS, VAN_PRICE } from './van';
 
 export { rng };
@@ -374,57 +371,10 @@ const AD_BUSY_OK = 0.8;
 const SOLO_SERVE_CAP = 30;
 /** Улучшение филиала разумный игрок берёт, если оно окупится не дольше чем за столько дней. */
 const BRANCH_PAYBACK_OK = 60;
-/** Средняя корзина в штуках. */
-const AVG_BASKET = 1.4;
-/** Один игрок стоит за кассой не весь день: ещё бегает на склад и убирает — в большом магазине дел больше. */
-const ownerAtRegister = (level: number): number => 0.65 - 0.07 * level;
-/** Подойти к кассе и отойти — секунды на каждого покупателя. */
-const QUEUE_STEP_SECONDS = 0.3;
-/** Сменщик за кассой хозяина весь день, а хозяин между делами касается кассы — пробивка чуть быстрее (в игре касаниями срезают до 30%). */
-const RELIEF_TAPS = 1.1;
-/** Киоск занят не весь день (к нему идут с небольшой корзиной), дойти и уложить покупки — секунды. */
-const KIOSK_BUSY = 0.5;
-const KIOSK_WALK_SECONDS = 2;
-/** Какая доля гостей с корзиной не больше maxItems штук (корзина в среднем AVG_BASKET). */
-const smallBasket = (maxItems: number): number => (maxItems >= 3 ? 0.9 : 0.75);
 /** Хозяин собирает заказ на дом: сходить на склад, уложить коробку, вынести курьеру. */
 const OWNER_PACK_SECONDS = 8;
 /** Столько секунд кассы в среднем уходит на одного покупателя у хозяина (для «пока собирал заказ»). */
 const OWNER_SECONDS_PER_GUEST = 2.5;
-
-/**
- * Сколько покупателей реально пробить за день (total) и сколько из них — сам хозяин (owner):
- * пробивка занимает время и зависит от навыка.
- */
-function serveCapacity(state: StoreState): { total: number; owner: number; kiosk: number } {
-  // Старая касса иногда заедает — в среднем столько секунд на покупателя.
-  const jam = registerJam(state) * REGISTER_JAM_SECONDS;
-  // Хозяин пробивает в ритме (tillRhythm.ts, 13.11): средний игрок — то в такт (быстрее), то как прежде.
-  const owner = rhythmSeconds(withUpgrades(state, ownerTiming(state)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam;
-  const share = ownerAtRegister(state.level);
-  const ownerCap = Math.floor((DAY_SECONDS * share) / owner);
-  const cashierCap = (m: StaffMember, part: number) =>
-    Math.floor((DAY_SECONDS * part) / (checkoutSeconds(withUpgrades(state, cashierScan(m)), AVG_BASKET) + QUEUE_STEP_SECONDS + jam));
-  // Первая касса — хозяина: он за ней между другими делами. Нанят сменщик — за ней весь день он,
-  // а хозяин свободен и только торопит его касаниями.
-  const relief = staffOf(state, RELIEF_ROLE);
-  let total = relief ? Math.floor(cashierCap(relief, 1) * RELIEF_TAPS) : ownerCap;
-  // Остальные кассы — у каждой свой кассир; без кассира касса стоит закрытой.
-  for (const role of TILL_ROLES.slice(0, registerCount(state) - 1)) {
-    const m = staffOf(state, role);
-    if (m) total += cashierCap(m, 1);
-  }
-  return { total, owner: relief ? 0 : ownerCap, kiosk: kioskCapacity(state) };
-}
-
-/** Сколько покупателей за день пробьют себя сами на киосках (lanes.ts). */
-function kioskCapacity(state: StoreState): number {
-  const n = kioskCount(state);
-  if (!n) return 0;
-  const tier = kioskTier(state);
-  const items = Math.min(tier.maxItems, AVG_BASKET);
-  return Math.floor((n * DAY_SECONDS * KIOSK_BUSY) / (items * tier.item + tier.pay + KIOSK_WALK_SECONDS));
-}
 
 export function simulate({
   days,

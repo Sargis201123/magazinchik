@@ -14,6 +14,33 @@ export function noteLost(stats: DayStats, reason: LostReason, id?: ProductId): v
   if (id && reason === 'expensive') stats.pricey = { ...stats.pricey, [id]: (stats.pricey?.[id] ?? 0) + 1 };
 }
 
+/**
+ * Ушли из очереди зала — без тех, кто не дождался кассы «на бегу» (traffic.ts, quickQueue): ту очередь не видно и
+ * касаниями не ускорить, а час пик и испытание «без очереди» — про то, что игрок может сделать руками.
+ */
+export const hallQueueLost = (stats: DayStats): number => Math.max(0, (stats.lostWhy?.queue ?? 0) - (stats.quickQueue ?? 0));
+
+/**
+ * Кассы не успевают — что сделать завтра. За первой кассой — хозяин. Касса стоит без кассира → нанять; есть место →
+ * поставить кассу; некому встать за кассу хозяина → сменщик (в ларьке его нет — сначала расшириться); есть место
+ * под киоск → киоск; нет места → расширить; дальше — учить.
+ */
+export function queueAdviceKey(state: StoreState): TextKey {
+  return idleRegisters(state) > 0
+    ? 'loss.queue.hire2'
+    : nextRegisterPrice(state) !== null
+      ? 'loss.queue.buy'
+      : !staffOf(state, RELIEF_ROLE)
+        ? state.level < RELIEF_LEVEL
+          ? 'loss.queue.relief'
+          : 'loss.queue.hire'
+        : nextKioskPrice(state) !== null
+          ? 'loss.queue.kiosk'
+          : (nextRegisterCount(state) ?? 0) > registerSlots(state)
+            ? 'loss.queue.register'
+            : 'loss.queue.train';
+}
+
 /** Самые частые товары из счётчика: «🥛🥩». */
 const top = (counts: Partial<Record<ProductId, number>> | undefined, n = 3): string =>
   (Object.entries(counts ?? {}) as [ProductId, number][])
@@ -36,26 +63,8 @@ export function lossAdvice(stats: DayStats, state: StoreState): LossAdvice[] {
     .sort((a, b) => b.count - a.count)
     .map(({ reason, count }): LossAdvice => {
       switch (reason) {
-        case 'queue': {
-          // За первой кассой — хозяин. Касса стоит без кассира → нанять; есть место → поставить кассу;
-          // некому встать за кассу хозяина → сменщик (в ларьке его нет — сначала расшириться); есть место
-          // под киоск → киоск; нет места → расширить; дальше — учить.
-          const key: TextKey =
-            idleRegisters(state) > 0
-              ? 'loss.queue.hire2'
-              : nextRegisterPrice(state) !== null
-                ? 'loss.queue.buy'
-                : !staffOf(state, RELIEF_ROLE)
-                  ? state.level < RELIEF_LEVEL
-                    ? 'loss.queue.relief'
-                    : 'loss.queue.hire'
-                  : nextKioskPrice(state) !== null
-                    ? 'loss.queue.kiosk'
-                    : (nextRegisterCount(state) ?? 0) > registerSlots(state)
-                    ? 'loss.queue.register'
-                    : 'loss.queue.train';
-          return { reason, count, key, params: {} };
-        }
+        case 'queue':
+          return { reason, count, key: queueAdviceKey(state), params: {} };
         case 'empty':
           return { reason, count, key: 'loss.empty', params: { list: top(stats.missing) } };
         case 'expensive':
