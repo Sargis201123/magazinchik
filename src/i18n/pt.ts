@@ -4586,6 +4586,14 @@ export const pt: Record<TextKey, string> = {
   "pawn.refusedToday": "Hoje você recusou quem trouxe um objeto.",
   "tester.title": "Testador",
   "tester.note": "Só você vê isto: moedas para testar. A dívida é quitada e sua loja fica fora dos rankings.",
+  "flow.pop": "+{n} 🛍",
+  "flow.came": "👥 Entraram {n}",
+  "flow.expected": "de manhã esperavam ~{n}",
+  "flow.quick": "🛍 {n} compraram rápido com o salão cheio",
+  "income.title": "💼 Outras receitas: {n}",
+  "income.total": "Total do dia: {n} 💰",
+  "tenant.income": "Ontem: +{last} 💰 · total: +{total} 💰",
+  "ads.yesterday": "Ontem a publicidade trouxe ≈{n} clientes",
   "news.town": "🏘 Bairro: uma meta semanal de todos os jogadores e a “Loja do dia” — visite e deixe a marca “Estive aqui”.",
 };
 

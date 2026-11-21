@@ -351,7 +351,16 @@ export class Hud {
     stats: DayStats,
     rating: { before: number; after: number },
     /** housewarming — счёт пришёл по старой аренде («новоселье» после переезда). */
-    money: { bill: number | null; shortfall: number; total: number; housewarming?: boolean },
+    money: {
+      bill: number | null;
+      shortfall: number;
+      total: number;
+      housewarming?: boolean;
+      /** Прочие доходы вечера (game/day.ts otherIncome): подпись и сумма, мимо кассы зала. */
+      other?: [string, number][];
+      /** Утренний прогноз гостей на этот день (day.ts guestsToday) — рядом с тем, сколько зашло. */
+      expected?: number;
+    },
     extra: [string, string][],
     stamps: SummaryStamp[],
     history: number[],
@@ -422,6 +431,25 @@ export class Hud {
     card.append(tiles);
     // Реклама работала — сразу под плитками видно, окупилась ли она гостями.
     if (stats.adGuests) card.append(el('div', 'ui-muted ui-sum-ads', t('summary.ads', { n: stats.adGuests })));
+    // 21.11: сколько зашло на самом деле — рядом с утренним прогнозом, и сколько купили «на бегу», пока зал был полон
+    // (game/traffic.ts): так видно, что реклама и арендаторы приводят людей, а не только обещают.
+    // Первый день новичка — без этой строки: ему хватает плиток и бабушки.
+    if (stats.came && !firstDay) {
+      const parts = [t('flow.came', { n: stats.came })];
+      if (money.expected) parts.push(t('flow.expected', { n: money.expected }));
+      card.append(el('div', 'ui-muted', parts.join(' · ')));
+      if (stats.quick) card.append(el('div', 'ui-muted', t('flow.quick', { n: stats.quick })));
+    }
+    // Прочие доходы — аренда, этажи, фургон… — каждый день на виду, а не под «Подробнее»: «Выручка» — только касса зала.
+    const other = money.other ?? [];
+    if (other.length) {
+      const sum = other.reduce((s, [, n]) => s + n, 0);
+      const box = el('div', 'ui-note');
+      box.append(el('b', '', t('income.title', { n: `${sum > 0 ? '+' : ''}${sum}` })));
+      box.append(el('div', 'ui-muted', other.map(([name, n]) => `${name} ${n > 0 ? '+' : ''}${n}`).join(' · ')));
+      box.append(el('div', '', t('income.total', { n: stats.revenue + sum })));
+      card.append(box);
+    }
     // Новое звание и побитые рекорды — не в «Подробнее», а печатью: звание золотой, рекорд красной.
     if (stamps.length || firstDay) {
       const row = el('div', 'ui-stamps');

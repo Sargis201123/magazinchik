@@ -178,3 +178,13 @@ export const adGuests = (state: StoreState, visitors: number): number => {
   const boost = adBoost(state);
   return boost > 1 ? Math.round(visitors * (1 - 1 / boost)) : 0;
 };
+
+/**
+ * Сколько гостей привела реклама вчера (по отчёту дня, reports.ts; null — вчера рекламы не было). 21.11, автор:
+ * «большие проблемы с рекламой — нет трафика». Карточка рекламы утром показывает не только обещание (adExtraGuests),
+ * но и то, что было на самом деле.
+ */
+export const adYesterday = (state: StoreState): number | null => {
+  const row = state.reports?.at(-1);
+  return row && row.day === state.day - 1 && row.ads ? row.ads : null;
+};

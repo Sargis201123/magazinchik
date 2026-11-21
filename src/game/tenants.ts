@@ -223,7 +223,17 @@ export const tenantGuests = (state: StoreState): number => 1 + tenantsOf(state).
 /** Вечером арендаторы платят за день — до счетов, как филиал. Платят и когда хозяин работает в Заречье. */
 export function tenantsNight(state: StoreState): { state: StoreState; income: number } {
   const income = tenantRent(state);
-  return income ? { state: { ...state, money: state.money + income }, income } : { state, income: 0 };
+  if (!income) return { state, income: 0 };
+  // 21.11, автор: «не показывает ежедневно доход с аренды — он вообще есть?». Есть, каждый вечер: запоминаем,
+  // сколько пришло вчера и всего, — карточка «Арендаторы» показывает (ui/tenants.ts), итоги дня — строкой «Прочие доходы».
+  const tenantLog = { day: state.day, last: income, total: (state.tenantLog?.total ?? 0) + income };
+  return { state: { ...state, money: state.money + income, tenantLog }, income };
+}
+
+/** Что пришло от арендаторов в прошлый вечер (null — вчера не платили) и всего за всё время. */
+export function tenantIncome(state: StoreState): { last: number; total: number } | null {
+  const log = state.tenantLog;
+  return log && log.day === state.day - 1 ? { last: log.last, total: log.total } : null;
 }
 
 /** Что видно в мире: число комнат, кто в них и чья комната отделана дважды. Изменилось — сцена перестраивает флигель. */

@@ -267,16 +267,19 @@ export interface StoreLevel {
   power: number;
   /** Множитель потока гостей: большой магазин видно с улицы. */
   guests: number;
-  /** Сколько покупателей одновременно бывает в зале. */
+  /**
+   * Сколько покупателей одновременно бывает в зале. 21.11: на одного больше, чем было, — рук хозяина у кассы хватает;
+   * кто не поместился, берёт своё «на бегу» у касс без хозяина (traffic.ts), а не ждёт за дверью.
+   */
   maxCustomers: number;
 }
 
 export const STORE_LEVELS: StoreLevel[] = [
-  { nameKey: 'store.l1', cost: 0, slots: 3, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 5 },
-  { nameKey: 'store.l2', cost: 1500, slots: 7, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 7 },
-  { nameKey: 'store.l3', cost: 4000, slots: 9, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
-  { nameKey: 'store.l4', cost: 20000, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
-  { nameKey: 'store.l5', cost: 40000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
+  { nameKey: 'store.l1', cost: 0, slots: 3, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 6 },
+  { nameKey: 'store.l2', cost: 1500, slots: 7, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 8 },
+  { nameKey: 'store.l3', cost: 4000, slots: 9, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 10 },
+  { nameKey: 'store.l4', cost: 20000, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 12 },
+  { nameKey: 'store.l5', cost: 40000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 14 },
   // Гипермаркет — переезд в здание «Гиганта» за дорогой, когда там уже открыт свой филиал (branch.ts):
   // старый магазин становится филиалом. Цена подобрана симулятором (docs/BALANCE.md «Гипермаркет»).
   { nameKey: 'store.l6', cost: 120000, slots: 22, warehouse: 150, rent: 2300, utilities: 340, power: 260, guests: 5, maxCustomers: 20 },
@@ -739,6 +742,8 @@ export interface StoreState {
   tenantUp?: Partial<Record<import('./tenants').TenantId, 1>>;
   tenantPal?: Partial<Record<import('./tenants').TenantId, number>>;
   tenantAsk?: { day: number; done: import('./tenants').TenantId[] };
+  /** Аренда флигеля (tenants.ts, 21.11): сколько заплатили в последний вечер (за какой день) и всего — для карточки «Арендаторы». */
+  tenantLog?: { day: number; last: number; total: number };
   /** Сезонный торговец у входа (tenants.ts): кто и до какого дня стоит. */
   pitch?: { kind: import('./tenants').PitchKind; until: number };
   /** Стойка проката у входа (rental.ts, 13.11): сколько вещей, какой залог и как прошёл прошлый день. */
@@ -878,6 +883,12 @@ export interface DayStats {
   nightRevenue?: number;
   /** Сколько гостей за день привела реклама (ads.ts). */
   adGuests?: number;
+  /**
+   * 21.11: сколько всего зашло за день — в зал и «на бегу», пока зал был полон (traffic.ts), и сколько из вторых
+   * купили. По ним итоги дня сверяются с утренним прогнозом, а реклама считает приведённых.
+   */
+  came?: number;
+  quick?: number;
   /** Счётчики новых механик за день. */
   fair?: boolean;
   coffees?: number;
