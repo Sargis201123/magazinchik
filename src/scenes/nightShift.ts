@@ -44,7 +44,7 @@ import { sellWholesale, takeOutBread } from '../game/bakery';
 import { canWorkNight, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, startNight } from '../game/night';
 import { reviewsFor } from '../game/reviews';
 import { goodwillOf } from '../game/goodwill';
-import { lossAdvice } from '../game/losses';
+import { lossAdvice, queueAdviceKey } from '../game/losses';
 import { fpsSummary } from '../platform/quality';
 import { BOX_FROM_DAY, BOX_OPENS_DAY, firstDayGift, gentleDay, grannyBox, grannyStays, learningEvening, quietRating } from '../game/firstday';
 import { tomorrowTeaser } from '../game/nudge';
@@ -302,7 +302,8 @@ export function finishDay(scene: StoreScene): void {
   const finishedDay = scene.state.day;
   // Сколько гостей сверх обычного привела реклама — строкой в итогах дня. 21.11: считаем от всех, кто зашёл
   // (в зал и «на бегу», trafficFx.ts), а не только от купивших и ушедших в обиде.
-  scene.stats.adGuests = adGuests(scene.state, scene.stats.came ?? scene.stats.served + scene.stats.lost);
+  // Прошедшие мимо (зал полон, хозяин один за кассой, trafficFx.passBy) — тоже в расчёт: реклама их звала, но не завела.
+  scene.stats.adGuests = adGuests(scene.state, scene.stats.came ?? scene.stats.served + scene.stats.lost, scene.stats.passed ?? 0);
   // Утренний прогноз гостей на этот день — в итогах рядом с тем, сколько зашло на самом деле.
   const expected = guestsToday(scene.state);
   const ratingBefore = scene.state.rating;
@@ -500,6 +501,7 @@ export function finishDay(scene: StoreScene): void {
         housewarming: Boolean(bill?.housewarming),
         other: otherIncome(night).map((r): [string, number] => [t(INCOME_KEYS[r.id]), r.n]),
         expected,
+        passTip: scene.stats.passed ? queueAdviceKey(scene.state) : undefined,
       },
       extra,
       stamps,

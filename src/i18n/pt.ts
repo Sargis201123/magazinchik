@@ -4594,6 +4594,9 @@ export const pt: Record<TextKey, string> = {
   "income.total": "Total do dia: {n} 💰",
   "tenant.income": "Ontem: +{last} 💰 · total: +{total} 💰",
   "ads.yesterday": "Ontem a publicidade trouxe ≈{n} clientes",
+  "flow.busy": "⏳ Cansaram de esperar: {n}",
+  "flow.passed": "🚪 Passaram direto: {n} — o salão estava cheio e você está sozinho no caixa",
+  "ads.passed": "🚪 Ontem {n} passaram direto: o salão estava cheio e você estava sozinho no caixa — a propaganda traz mais gente do que você consegue atender",
   "news.town": "🏘 Bairro: uma meta semanal de todos os jogadores e a “Loja do dia” — visite e deixe a marca “Estive aqui”.",
 };
 

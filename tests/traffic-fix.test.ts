@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { checkout, DAY_SECONDS, emptyDayStats, newGame, onShelves, sellableProducts, shelfFor, STORE_LEVELS, type ProductId, type StoreState } from '../src/game/economy';
+import { checkout, DAY_SECONDS, emptyDayStats, monthOf, newGame, onShelves, sellableProducts, shelfFor, STORE_LEVELS, type ProductId, type StoreState } from '../src/game/economy';
 import {
   autoCapacity,
   CREDIT_DEBT,
@@ -17,7 +17,10 @@ import {
 } from '../src/game/traffic';
 import { nightCycle, otherIncome, type NightSummary } from '../src/game/day';
 import { rentRoom, tenantIncome, tenantRent, tenantsNight } from '../src/game/tenants';
-import { adGuests, adYesterday, grantAd } from '../src/game/ads';
+import { adGuests, adYesterday, grantAd, passedYesterday } from '../src/game/ads';
+import { hallQueueLost, lossAdvice, noteLost, queueAdviceKey } from '../src/game/losses';
+import { progressWeekly } from '../src/game/weekly';
+import { rushOutcome } from '../src/game/rushHour';
 import { addReport } from '../src/game/reports';
 import { simulate } from '../src/game/simulate';
 import { rng } from '../src/game/random';
@@ -221,6 +224,46 @@ describe('реклама: обещание и правда', () => {
     const reported = addReport(shop, shop.day, stats, {});
     expect(reported.reports!.at(-1)!.ads).toBeUndefined();
     expect(adYesterday({ ...reported, day: shop.day + 1 })).toBeNull();
+  });
+});
+
+describe('разбор 21.11: очередь «на бегу» и тесный зал', () => {
+  it('ушедшие из очереди «на бегу» — в итогах и рейтинге, но не в часе пик и не в испытании «без очереди»', () => {
+    const stats = { ...emptyDayStats(), served: 40, lost: 3 };
+    for (let i = 0; i < 3; i++) {
+      noteLost(stats, 'queue');
+      stats.quickQueue = (stats.quickQueue ?? 0) + 1;
+    }
+    expect(stats.lostWhy?.queue).toBe(3);
+    expect(hallQueueLost(stats)).toBe(0);
+    expect(rushOutcome(10, hallQueueLost(stats), 3).kind).toBe('clean');
+    // Совет в итогах остаётся: кассы не успевают — кассир или киоск.
+    expect(lossAdvice(stats, shop)[0]).toMatchObject({ reason: 'queue', count: 3, key: queueAdviceKey(shop) });
+    const weekly = { month: monthOf(shop.day), challenges: [{ kind: 'noQueue' as const, target: 3, progress: 0, reward: 50 }] };
+    const s = { ...shop, weekly } as StoreState;
+    expect((progressWeekly(s, stats).state.weekly!.challenges[0] as { progress: number }).progress).toBe(1);
+    // А ушедший из очереди зала — по-прежнему портит и то и другое.
+    noteLost(stats, 'queue');
+    expect(hallQueueLost(stats)).toBe(1);
+    expect((progressWeekly(s, stats).state.weekly!.challenges[0] as { progress: number }).progress).toBe(0);
+  });
+
+  it('прошедшие мимо (зал полон, хозяин один) — реклама честно не приписывает их себе', () => {
+    const s0 = grantAd({ ...shop, day: shop.day }, 'blogger');
+    // Без прошедших — как было.
+    expect(adGuests(s0, 30)).toBe(Math.round(30 * (1 - 1 / 1.4)));
+    expect(adGuests(s0, 30, 0)).toBe(adGuests(s0, 30));
+    // Зал пропустил 30, ещё 30 прошли мимо: без рекламы шло бы ~43 — 30 и так поместились бы, реклама не прибавила.
+    expect(adGuests(s0, 30, 30)).toBe(0);
+    // Немного прошли мимо — реклама прибавила, но меньше, чем «доля от зашедших».
+    expect(adGuests(s0, 30, 5)).toBeLessThan(adGuests(s0, 30));
+    expect(adGuests(s0, 30, 5)).toBeGreaterThan(0);
+    const stats = { ...emptyDayStats(), served: 20, came: 30, passed: 30 };
+    const reported = addReport(s0, s0.day, stats, {});
+    expect(reported.reports!.at(-1)!.passed).toBe(30);
+    expect(passedYesterday({ ...reported, day: s0.day + 1 })).toBe(30);
+    expect(passedYesterday({ ...reported, day: s0.day + 2 })).toBe(0);
+    expect(passedYesterday(addReport(s0, s0.day, { ...emptyDayStats(), served: 5 }, {}))).toBe(0);
   });
 });
 

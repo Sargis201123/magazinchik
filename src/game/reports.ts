@@ -32,6 +32,8 @@ export interface DayReport {
   /** 21.11: сколько всего зашло (в зал и «на бегу», traffic.ts) и сколько из них привела реклама — карточка рекламы утром. */
   came?: number;
   ads?: number;
+  /** Прошли мимо: зал полон, хозяин один за кассой (DayStats.passed) — подсказка в карточке рекламы. */
+  passed?: number;
 }
 
 export function addReport(state: StoreState, day: number, stats: DayStats, spoiled: Partial<Record<ProductId, number>>, dishSpoiled = 0): StoreState {
@@ -48,6 +50,7 @@ export function addReport(state: StoreState, day: number, stats: DayStats, spoil
     ...(stats.coffees ? { coffees: stats.coffees } : {}),
     ...(stats.came ? { came: stats.came } : {}),
     ...(stats.adGuests ? { ads: stats.adGuests } : {}),
+    ...(stats.passed ? { passed: stats.passed } : {}),
     // Кухня работала: по этой строке повар «по спросу» и закупка знают, сколько порций берут.
     ...(stats.dishWanted !== undefined || dishSpoiled || stats.kitchenSpent
       ? { kitchen: { sold: stats.dishes ?? 0, wanted: stats.dishWanted ?? 0, spoiled: dishSpoiled, ...(stats.kitchenSpent ? { spent: stats.kitchenSpent } : {}) } }

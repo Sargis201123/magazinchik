@@ -360,6 +360,8 @@ export class Hud {
       other?: [string, number][];
       /** Утренний прогноз гостей на этот день (day.ts guestsToday) — рядом с тем, сколько зашло. */
       expected?: number;
+      /** Гости проходили мимо (stats.passed): что сделать, чтобы зал пропускал больше (losses.ts queueAdviceKey). */
+      passTip?: TextKey;
     },
     extra: [string, string][],
     stamps: SummaryStamp[],
@@ -439,6 +441,12 @@ export class Hud {
       if (money.expected) parts.push(t('flow.expected', { n: money.expected }));
       card.append(el('div', 'ui-muted', parts.join(' · ')));
       if (stats.quick) card.append(el('div', 'ui-muted', t('flow.quick', { n: stats.quick })));
+      // Хозяин один за кассой, зал полон — сколько прошли мимо и что с этим сделать (а не «реклама привела ≈N»).
+      if (stats.passed) {
+        const box = el('div', 'ui-note', t('flow.passed', { n: stats.passed }));
+        if (money.passTip) box.append(el('div', 'ui-muted', t(money.passTip)));
+        card.append(box);
+      }
     }
     // Прочие доходы — аренда, этажи, фургон… — каждый день на виду, а не под «Подробнее»: «Выручка» — только касса зала.
     const other = money.other ?? [];
