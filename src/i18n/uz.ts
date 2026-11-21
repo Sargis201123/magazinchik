@@ -4585,6 +4585,9 @@ export const uz: Record<TextKey, string> = {
   "pawn.refusedToday": "Bugun buyum olib kelgan odamga rad javobini berding.",
   "tester.title": "Tester",
   "tester.note": "Buni faqat sen koʻrasan: sinash uchun tangalar. Qarz oʻzi uziladi, doʻkoning reytinglarga kirmaydi.",
+  "income.title": "💼 Boshqa daromad: {n}",
+  "income.total": "Kun boʻyi jami: {n} 💰",
+  "tenant.income": "Kecha: +{last} 💰 · jami: +{total} 💰",
   "news.town": "🏘 Mahalla: barcha oʻyinchilar uchun umumiy haftalik maqsad va «Kun doʻkoni» — mehmonga borib, «Shu yerda boʻldim» belgisini qoldir.",
 };
 

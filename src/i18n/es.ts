@@ -4576,6 +4576,9 @@ export const es: Record<TextKey, string> = {
   "pawn.refusedToday": "Hoy has rechazado al cliente que trajo un objeto.",
   "tester.title": "Tester",
   "tester.note": "Solo tú lo ves: monedas para probar. La deuda se paga sola y tu tienda queda fuera de los rankings.",
+  "income.title": "💼 Otros ingresos: {n}",
+  "income.total": "Total del día: {n} 💰",
+  "tenant.income": "Ayer: +{last} 💰 · en total: +{total} 💰",
   "news.town": "🏘 Barrio: una meta semanal común para todos los jugadores y la «Tienda del día»: pásate y deja tu marca «Estuve aquí».",
 };
 

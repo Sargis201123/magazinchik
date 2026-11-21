@@ -4621,6 +4621,9 @@ export const en: Record<TextKey, string> = {
   "pawn.refusedToday": "You turned down today’s guest with an item.",
   "tester.title": "Tester",
   "tester.note": "Only you can see this: coins for testing. Debt is paid off, and your shop stays out of the rankings.",
+  "income.title": "💼 Other income: {n}",
+  "income.total": "Total for the day: {n} 💰",
+  "tenant.income": "Yesterday: +{last} 💰 · total: +{total} 💰",
   "news.town": "🏘 District: a weekly goal shared by all players and the “Shop of the day” — drop in and leave an “I was here” mark.",
 };
 

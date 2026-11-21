@@ -6,7 +6,7 @@ import { setPlaying } from '../platform/yandex';
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { PRODUCTS, billTotal, shelfFor, takeFromShelf, type DayStats, type StoreState } from '../game/economy';
-import { nightCycle } from '../game/day';
+import { nightCycle, otherIncome, type IncomeId } from '../game/day';
 import { KIT_ICON } from '../game/rental';
 import { rankName, rankOf } from '../game/endless';
 import { saveGame } from '../game/save';
@@ -490,7 +490,14 @@ export function finishDay(scene: StoreScene): void {
       finishedDay,
       scene.stats,
       { before: ratingBefore, after: state.rating },
-      { bill: bill && billTotal(bill), shortfall, total: state.money, housewarming: Boolean(bill?.housewarming) },
+      {
+        bill: bill && billTotal(bill),
+        shortfall,
+        total: state.money,
+        housewarming: Boolean(bill?.housewarming),
+        // 21.11: аренда, этажи, фургон… — каждый вечер на виду одним блоком, а не только под «Подробнее».
+        other: otherIncome(night).map((r): [string, number] => [t(INCOME_KEYS[r.id]), r.n]),
+      },
       extra,
       stamps,
       scene.state.history,
@@ -534,6 +541,20 @@ export function finishDay(scene: StoreScene): void {
   // Ритуал закрытия (closingRitual.ts): табличка, свет рядами, выручка в ящик, кот и Бобик, роллеты — потом итоги.
   closingRitual(scene, { revenue: scene.stats.revenue, wasNight, finishedDay }, summary);
 }
+
+/** Подписи «Прочих доходов» в итогах дня (game/day.ts otherIncome) — те же, что у строк под «Подробнее». */
+const INCOME_KEYS: Record<IncomeId, TextKey> = {
+  rent: 'tenant.summary',
+  estate: 'estate.summary',
+  branch: 'branch.summary',
+  home: 'zar.summary.home',
+  van: 'van.summary',
+  rental: 'rental.summary',
+  slots: 'bsm.summary',
+  clothes: 'cl.summary',
+  food: 'floor.third',
+  cart: 'dream.cart.summary',
+};
 
 /** Через сколько мс после итогов первого дня спросить разрешение писать: печать «Отличный первый день!» уже легла. */
 export const WRITE_ASK_MS = 3000;

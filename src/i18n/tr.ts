@@ -4576,6 +4576,9 @@ export const tr: Record<TextKey, string> = {
   "pawn.refusedToday": "Bugün eşya getireni geri çevirdin.",
   "tester.title": "Test",
   "tester.note": "Bunu sadece sen görüyorsun: test için jeton. Borç kendiliğinden kapanır, dükkânın sıralamalara girmez.",
+  "income.title": "💼 Diğer gelirler: {n}",
+  "income.total": "Günün toplamı: {n} 💰",
+  "tenant.income": "Dün: +{last} 💰 · toplam: +{total} 💰",
   "news.town": "🏘 Mahalle: tüm oyuncuların ortak haftalık hedefi ve “Günün dükkânı” — uğra, “Buradaydım” işareti bırak.",
 };
 
