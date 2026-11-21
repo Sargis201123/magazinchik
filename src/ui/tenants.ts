@@ -30,7 +30,6 @@ import {
   tenantPal,
   tenantPalLine,
   tenantRent,
-  tenantIncome,
   tenantRooms,
   TENANTS,
   tenantsOf,
@@ -50,10 +49,7 @@ import { button, el, staffFace, toast, who } from './dom';
 /** Подпись свёрнутого раздела: сколько комнат занято, и что есть свободная — её видно, не раскрывая (15.11). */
 export const tenantsSummary = (state: StoreState): string => {
   const n = tenantsOf(state).length;
-  const rooms = t(n && freeRooms(state) > 0 ? 'tenant.roomsFree' : 'tenant.rooms', { n, max: tenantRooms(state) });
-  // 21.11: вчерашняя аренда видна и в свёрнутом разделе — «доход с аренды вообще есть?» больше не вопрос.
-  const paid = tenantIncome(state);
-  return paid ? `${rooms} · ${t('branch.summaryValue', { n: paid.last })}` : rooms;
+  return t(n && freeRooms(state) > 0 ? 'tenant.roomsFree' : 'tenant.rooms', { n, max: tenantRooms(state) });
 };
 
 const effect = (state: StoreState, id: TenantId): string => t('tenant.effect', { n: rentOf(state, id), g: Math.round(guestsOf(state, id) * 100) });
@@ -105,9 +101,6 @@ export function tenantsBox(state: StoreState, getState: () => StoreState, update
     box.append(free);
   }
   if (here.length) box.append(el('div', '', t('tenant.total', { n: tenantRent(state), g: Math.round((tenantGuests(state) - 1) * 100) })));
-  // Аренда приходит каждый вечер (tenants.ts tenantsNight): сколько вчера и сколько всего — чтобы её было видно.
-  const paid = tenantIncome(state);
-  if (paid) box.append(el('div', 'ui-muted', t('tenant.income', paid)));
   // Сначала те, кто уже работает, потом кого можно пустить.
   for (const id of [...here, ...TENANT_IDS.filter((other) => !here.includes(other))]) {
     const item = TENANTS[id];

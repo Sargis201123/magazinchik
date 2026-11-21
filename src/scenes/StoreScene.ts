@@ -83,7 +83,6 @@ import { noteMoment } from '../game/moments';
 import { Moments } from './moments';
 import type { AttentionPlan } from '../game/attention';
 import { rushOutcome } from '../game/rushHour';
-import { hallQueueLost } from '../game/losses';
 import { allRows } from '../ui/today';
 import { RELIEF_ROLE, tillRole } from '../game/registers';
 import { NIGHT_GUESTS } from '../game/night';
@@ -157,11 +156,6 @@ import * as skitsFx from './skitsFx';
 import * as crisisFx from './crisisFx';
 import * as building from './building';
 import * as collections from './collections';
-import * as trafficFx from './trafficFx';
-import type { Flow } from '../game/traffic';
-
-/** Сколько гостей «на бегу» (trafficFx.ts) может прийти за один кадр. */
-const SPAWNS_PER_FRAME = 4;
 
 export class StoreScene extends Phaser.Scene {
   state!: StoreState;
@@ -235,8 +229,6 @@ export class StoreScene extends Phaser.Scene {
   /** Ночью у входа играет музыкант — ночных гостей больше (nightGuests.ts). */
   busker = false;
   stats: DayStats = emptyDayStats();
-  /** Поток гостей сверх зала сегодня (game/traffic.ts, scenes/trafficFx.ts): сколько ждут у касс, свободное время касс. */
-  flow: Flow | null = null;
   hud!: Hud;
   shelfViews: ShelfView[] = [];
   /** Сколько раз перерисовывали полки: толчок по нему узнаёт, что товар на картинках уже другой. */
@@ -1016,14 +1008,13 @@ export class StoreScene extends Phaser.Scene {
       sound.bell(this.layout.door.x);
       this.popup(this.layout.door.x, this.layout.door.y - 30, t('popup.rush'), '#fff3b0');
       // Час пик без потерь (game/rushHour.ts): запомнить, с чего начали.
-      // Только очередь зала: «на бегу» (trafficFx.ts) игрок не видит и касаниями не ускорит (losses.ts hallQueueLost).
-      this.rushGoal = { served: this.stats.served, lost: hallQueueLost(this.stats) };
+      this.rushGoal = { served: this.stats.served, lost: this.stats.lostWhy?.queue ?? 0 };
     }
     // Час пик кончился: никто не ушёл из очереди — премия; ушли — сказать сколько (без штрафа).
     if (!rush && this.rushGoal) {
       const goal = this.rushGoal;
       this.rushGoal = undefined;
-      const outcome = rushOutcome(this.stats.served - goal.served, hallQueueLost(this.stats) - goal.lost, this.state.level);
+      const outcome = rushOutcome(this.stats.served - goal.served, (this.stats.lostWhy?.queue ?? 0) - goal.lost, this.state.level);
       const { counter } = this.layout;
       if (outcome.kind === 'clean') {
         this.state = { ...this.state, money: this.state.money + outcome.bonus };
@@ -1064,32 +1055,17 @@ export class StoreScene extends Phaser.Scene {
       // Опечатан после серой схемы (game/grey.ts): до обеда гостей нет, ленты на двери снимают в полдень.
       const sealed = this.night ? 1 : greyRate(this.state, elapsed / DAY_SECONDS);
       if (this.state.grey?.sealed === this.state.day) building.refreshSeal(this, elapsed / DAY_SECONDS);
-      // 21.11 (автор: «35 в день посещало — так и дальше посещает»): зал полон — гость не ждёт за дверью, а берёт
-      // своё «на бегу» и идёт к кассам без хозяина (game/traffic.ts, trafficFx.ts). Раньше поток упирался в
-      // maxCustomers, и реклама, арендаторы и жители гостей не прибавляли.
-      // Гостей «на бегу» за кадр может прийти несколько (до SPAWNS_PER_FRAME): в людный день с рекламой промежуток
-      // короче кадра на медленном телефоне, и раньше лишние просто пропадали. Гость в зал — один за кадр, как было.
-      // С лицензией (game/license.ts) лишние гости дня приходят вечером: днём реже, в последнюю треть — гуще.
-      const interval =
-        spawnIntervalToday(this.state) / (rush ? 2 : 1) / weeksFx.crowd(this) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : licenseRate(this.state, elapsed / DAY_SECONDS) * sealed);
-      for (let n = 0; n < SPAWNS_PER_FRAME && this.nextSpawn <= 0; n++) {
-        const room = this.customers.size < maxCustomers;
-        if (this.siege || sealed <= 0) break;
-        if (!(room || (this.rivalLost > 0 && !this.night) || trafficFx.arrive(this))) {
-          // Зал полон, а за кассой хозяин один: кто сверх ждущего у двери — проходят мимо (trafficFx.passBy).
-          trafficFx.passBy(this, interval);
-          break;
-        }
+      if (this.nextSpawn <= 0 && this.customers.size < maxCustomers && !this.siege && sealed > 0) {
         // Очередной покупатель иногда приезжает на машине: сначала паркуется, потом идёт в магазин.
         // Этого гостя позвал к себе конкурент (game/rival.ts) — он не придёт.
         if (this.rivalLost > 0 && !this.night) this.rivalLost--;
-        else if (room && !cars.carCustomer(this)) this.spawnCustomer();
-        // Перелёт за ноль (не больше кадра) переносится на следующего: иначе каждый гость приходил чуть позже срока, и
-        // при частых гостях терялась заметная доля потока. Ждали места в зале дольше кадра — этот запас не копится.
-        this.nextSpawn = Math.max(this.nextSpawn, -dt) + interval * Phaser.Math.FloatBetween(0.7, 1.3);
+        else if (!cars.carCustomer(this)) this.spawnCustomer();
+        // С лицензией (game/license.ts) лишние гости дня приходят вечером: днём реже, в последнюю треть — гуще.
+        const interval =
+          spawnIntervalToday(this.state) / (rush ? 2 : 1) / weeksFx.crowd(this) / (this.night ? NIGHT_GUESTS * bigDayNightGuests(this.state.day) * (this.busker ? BUSKER_GUESTS : 1) : licenseRate(this.state, elapsed / DAY_SECONDS) * sealed);
+        this.nextSpawn = interval * Phaser.Math.FloatBetween(0.7, 1.3);
         // Беда района: первые гости дня бегут за водой один за другим (crisisFx.ts).
         if (this.crisisRush > 0 && !this.night && --this.crisisRush > 0) this.nextSpawn = crisisFx.RUSH_GAP;
-        if (room) break;
       }
     } else if (this.customers.size === 0 && this.inspector !== 'here' && this.jury !== 'here' && this.sonya !== 'here' && this.liveGuest?.phase !== 'here' && this.skit?.phase !== 'here') {
       this.endOfDay();
@@ -1098,7 +1074,6 @@ export class StoreScene extends Phaser.Scene {
       return;
     }
 
-    trafficFx.tick(this, dt);
     shoppers.markReady(this);
     for (const c of this.queue) persons.updateBubble(this, c);
     for (const r of this.registers) if (r.customer) persons.updateBubble(this, r.customer);
@@ -1461,8 +1436,6 @@ export class StoreScene extends Phaser.Scene {
   /** Переходник к nightShift.endOfDay: метод сцены вызывают и скрипты снаружи (scripts/e2e.ts, scripts/promo). */
   private endOfDay(): void {
     this.setHurry(1);
-    // Кто стоял у касс «на бегу» (trafficFx.ts) — товар обратно на полки до ночных расчётов.
-    trafficFx.close(this);
     // Итоги и утро — в обычном кадре: ближний кадр у касс — только пока идёт торговля.
     this.closeWanted = false;
     this.rushGoal = undefined;
