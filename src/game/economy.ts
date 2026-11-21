@@ -739,6 +739,8 @@ export interface StoreState {
   tenantUp?: Partial<Record<import('./tenants').TenantId, 1>>;
   tenantPal?: Partial<Record<import('./tenants').TenantId, number>>;
   tenantAsk?: { day: number; done: import('./tenants').TenantId[] };
+  /** Аренда флигеля (tenants.ts, 21.11): сколько заплатили в последний вечер (за какой день) и всего — для карточки «Арендаторы». */
+  tenantLog?: { day: number; last: number; total: number };
   /** Сезонный торговец у входа (tenants.ts): кто и до какого дня стоит. */
   pitch?: { kind: import('./tenants').PitchKind; until: number };
   /** Стойка проката у входа (rental.ts, 13.11): сколько вещей, какой залог и как прошёл прошлый день. */

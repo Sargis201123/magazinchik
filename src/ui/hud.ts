@@ -351,7 +351,14 @@ export class Hud {
     stats: DayStats,
     rating: { before: number; after: number },
     /** housewarming — счёт пришёл по старой аренде («новоселье» после переезда). */
-    money: { bill: number | null; shortfall: number; total: number; housewarming?: boolean },
+    money: {
+      bill: number | null;
+      shortfall: number;
+      total: number;
+      housewarming?: boolean;
+      /** Прочие доходы вечера (game/day.ts otherIncome): подпись и сумма, мимо кассы зала. */
+      other?: [string, number][];
+    },
     extra: [string, string][],
     stamps: SummaryStamp[],
     history: number[],
@@ -422,6 +429,19 @@ export class Hud {
     card.append(tiles);
     // Реклама работала — сразу под плитками видно, окупилась ли она гостями.
     if (stats.adGuests) card.append(el('div', 'ui-muted ui-sum-ads', t('summary.ads', { n: stats.adGuests })));
+    // Прочие доходы — аренда, этажи, фургон… — каждый день на виду, а не под «Подробнее»: «Выручка» — только касса зала.
+    // 21.11, автор: «доход с аренды — он вообще есть?». Первый день новичка — без блока: ему хватает плиток и бабушки.
+    const other = firstDay ? [] : (money.other ?? []);
+    if (other.length) {
+      const sum = other.reduce((s, [, n]) => s + n, 0);
+      const signed = (n: number) => `${n > 0 ? '+' : ''}${n}`;
+      const box = el('div', 'ui-note');
+      box.append(el('b', '', t('income.title', { n: signed(sum) })));
+      for (const [name, n] of other) box.append(el('div', 'ui-muted', `${name} ${signed(n)}`));
+      // Итог — то, ради чего блок: касса зала плюс всё остальное за этот вечер.
+      box.append(el('b', '', t('income.total', { n: stats.revenue + sum })));
+      card.append(box);
+    }
     // Новое звание и побитые рекорды — не в «Подробнее», а печатью: звание золотой, рекорд красной.
     if (stamps.length || firstDay) {
       const row = el('div', 'ui-stamps');
