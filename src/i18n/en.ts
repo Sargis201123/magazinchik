@@ -4621,17 +4621,6 @@ export const en: Record<TextKey, string> = {
   "pawn.refusedToday": "You turned down today’s guest with an item.",
   "tester.title": "Tester",
   "tester.note": "Only you can see this: coins for testing. Debt is paid off, and your shop stays out of the rankings.",
-  "flow.pop": "+{n} 🛍",
-  "flow.came": "👥 Came in: {n}",
-  "flow.expected": "expected ~{n} this morning",
-  "flow.quick": "🛍 {n} on the go while the hall was full",
-  "income.title": "💼 Other income: {n}",
-  "income.total": "Total for the day: {n} 💰",
-  "tenant.income": "Yesterday: +{last} 💰 · total: +{total} 💰",
-  "ads.yesterday": "Yesterday ads brought ≈{n} guests",
-  "flow.busy": "⏳ Gave up waiting: {n}",
-  "flow.passed": "🚪 Walked past: {n} — the hall was full and you're alone at the till",
-  "ads.passed": "🚪 Yesterday {n} walked past: the hall was full and you were alone at the till — ads bring more people than you can serve",
   "news.town": "🏘 District: a weekly goal shared by all players and the “Shop of the day” — drop in and leave an “I was here” mark.",
 };
 

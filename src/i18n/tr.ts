@@ -4576,17 +4576,6 @@ export const tr: Record<TextKey, string> = {
   "pawn.refusedToday": "Bugün eşya getireni geri çevirdin.",
   "tester.title": "Test",
   "tester.note": "Bunu sadece sen görüyorsun: test için jeton. Borç kendiliğinden kapanır, dükkânın sıralamalara girmez.",
-  "flow.pop": "+{n} 🛍",
-  "flow.came": "👥 Gelen: {n}",
-  "flow.expected": "sabah ~{n} bekleniyordu",
-  "flow.quick": "🛍 {n} kişi salon doluyken hızlıca aldı",
-  "income.title": "💼 Diğer gelirler: {n}",
-  "income.total": "Günün toplamı: {n} 💰",
-  "tenant.income": "Dün: +{last} 💰 · toplam: +{total} 💰",
-  "ads.yesterday": "Dün reklam ≈{n} müşteri getirdi",
-  "flow.busy": "⏳ Beklemekten vazgeçti: {n}",
-  "flow.passed": "🚪 Uğramadan geçti: {n} — salon dolu, kasada tek başınasın",
-  "ads.passed": "🚪 Dün {n} kişi uğramadan geçti: salon doluydu, kasada tek başınaydın — reklam, yetişebileceğinden fazla müşteri getiriyor",
   "news.town": "🏘 Mahalle: tüm oyuncuların ortak haftalık hedefi ve “Günün dükkânı” — uğra, “Buradaydım” işareti bırak.",
 };
 

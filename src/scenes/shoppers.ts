@@ -77,7 +77,6 @@ import { APPR_TIP, apprPatience, apprTipChance, apprTipped } from '../game/appre
 import { note } from '../game/reviews';
 import { warLeaves } from '../game/war';
 import { noteLost } from '../game/losses';
-import * as trafficFx from './trafficFx';
 import { fairTodayTolerance } from '../game/fair';
 import { FIRST_REGULAR, firstRegularVisit, gentleDay, noThieves, GUEST_OF_DAY_AT, guestOfDay, grannyServesAfter, grannyStays, quietDays, shelfWaits } from '../game/firstday';
 import { catchBounty, GLANCES, HONEST_GLANCE, LINGER_MS, OWNER_BOUNTY, PICK_MS, thiefPicks, trainingThief } from '../game/thiefTells';
@@ -596,9 +595,6 @@ export function spawnCustomer(
   }
   if (rare) personGlow(scene, sprite, 0xfee761, 3);
   scene.customers.add(customer);
-  // Сколько всего зашло за день (вместе с потоком «на бегу», trafficFx.ts) — для итогов и рекламы; ночные гости — не в счёт
-  // утреннего прогноза.
-  if (!scene.night) scene.stats.came = (scene.stats.came ?? 0) + 1;
   // Любого незнакомого покупателя в зале можно заподозрить касанием (друзья, постоянные и редкие гости — свои).
   if (!rare && !forced?.first) thiefFx.suspectable(scene, customer);
   void (thief ? runThief(scene, customer) : runCustomer(scene, customer));
@@ -1276,8 +1272,6 @@ export function finishCheckout(scene: StoreScene, c: Customer, where?: { x: numb
   scene.stats.revenue += total;
   scene.stats.served++;
   recordSale(scene.stats, c.items);
-  // Пробил кассир, сменщик или киоск — это время касс уже не достанется потоку «на бегу» (trafficFx.ts).
-  if (!own) trafficFx.used(scene);
   if (c.rare) rareGuestServed(scene, c, total);
   haptic.success();
   // Касса: рычаг, «дзынь», ящик выезжает; мелочь или купюры — смотря по сумме; большая корзина — «спасибо».
