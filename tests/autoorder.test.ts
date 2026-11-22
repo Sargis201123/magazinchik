@@ -5,6 +5,8 @@ import {
   AUTO_TOPUP_MARKUP,
   AUTO_TOPUP_QTY,
   AUTO_TOPUPS,
+  topUpQty,
+  topUpsPerDay,
   autoArrived,
   autoAvailable,
   autoMorning,
@@ -75,8 +77,8 @@ describe('«Закупать сам» — бесплатный переключ�
     const sold = (id: string) => (id === pid ? 7 : 0);
     const r = autoTopUp(s, sold)!;
     expect(r.pid).toBe(pid);
-    expect(r.qty).toBe(AUTO_TOPUP_QTY);
-    expect(r.cost).toBe(AUTO_TOPUP_QTY * topUpPrice(pid)!);
+    expect(r.qty).toBe(topUpQty(s));
+    expect(r.cost).toBe(topUpQty(s) * topUpPrice(pid)!);
     expect(topUpPrice(pid)! / AUTO_TOPUP_MARKUP).toBeGreaterThan(0);
     expect(r.state.money).toBe(s.money - r.cost);
     expect(r.state.autoOrder!.today!.spent).toBe(r.cost);
@@ -85,7 +87,7 @@ describe('«Закупать сам» — бесплатный переключ�
     expect(autoTopUp({ ...r.state, warehouse: { bread: [{ age: 0 }] } }, sold)).toBeNull();
     // Не продаётся сегодня — не везёт.
     expect(autoTopUp(s, () => 0)).toBeNull();
-    for (let i = 0; i < AUTO_TOPUPS; i++) s = autoTopUp(s, sold)!.state;
+    for (let i = 0; i < topUpsPerDay(s); i++) s = autoTopUp(s, sold)!.state;
     expect(autoTopUp(s, sold)).toBeNull();
     expect(onShelves(s, pid) + warehouseOf(s, pid)).toBe(0);
   });
@@ -93,7 +95,7 @@ describe('«Закупать сам» — бесплатный переключ�
   it('денег мало — подвозит, сколько хватает', () => {
     const s = empty(base({ money: 100 }));
     const r = autoTopUp(s, (id) => (id === 'bread' ? 3 : 0))!;
-    expect(r.qty).toBe(Math.min(AUTO_TOPUP_QTY, Math.floor(100 / topUpPrice('bread')!)));
+    expect(r.qty).toBe(Math.min(topUpQty(s), Math.floor(100 / topUpPrice('bread')!)));
   });
 
   it('подвоз в пути: приехал — вычеркнут; закрыли игру, пока ехал, — при загрузке на складе', () => {
@@ -124,5 +126,14 @@ describe('старые сохранения', () => {
     const old = { ...base(), autoOrder: { on: true, share: 0.5, today } } as unknown as StoreState;
     const s = migrateAutoOrder(old);
     expect(s.autoOrder).toEqual({ on: true, today: { day: 12, spent: 300, lines: today.lines, topUps: 1, inbound: today.inbound } });
+  });
+});
+
+describe('подвоз растёт с помещением (22.11, «Трафик v2»)', () => {
+  it('в ларьке 3 подвоза по 6 штук, на «Универмаге» — 7 по 30', () => {
+    expect(topUpQty(base({ level: 0 }))).toBe(AUTO_TOPUP_QTY);
+    expect(topUpsPerDay(base({ level: 0 }))).toBe(AUTO_TOPUPS);
+    expect(topUpQty(base({ level: 4 }))).toBe(30);
+    expect(topUpsPerDay(base({ level: 4 }))).toBe(7);
   });
 });

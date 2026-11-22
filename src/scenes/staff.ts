@@ -20,7 +20,7 @@ import {
 import { t, type TextKey } from '../i18n';
 import { sound } from '../platform/sound';
 import { haptic } from '../platform/telegram';
-import { carryOf, withUpgrades } from '../game/upgrades';
+import { carryOf, staffCarry, withUpgrades } from '../game/upgrades';
 import { playDayOne } from '../game/onboarding';
 import { slotSide, standFor } from './placement';
 import type { Point } from './layout';
@@ -221,7 +221,7 @@ export function stockShelf(scene: StoreScene, index: number, by: Phaser.GameObje
   const view = scene.shelfViews[index];
   const before = view ? view.items.filter((img) => img.visible).length : 0;
   // Хозяин-силач носит больше (навык «Силач»), сотрудники — как обычно.
-  scene.state = moveToShelf(scene.state, index, undefined, carryOf(scene.state) + (by === scene.seller ? carryBonus(scene.state) : 0)).state;
+  scene.state = moveToShelf(scene.state, index, undefined, by === scene.seller ? carryOf(scene.state) + carryBonus(scene.state) : staffCarry(scene.state)).state;
   // Без съезда: новые штуки сами летят на свои места, а сдвинутые соседи просто встают рядом.
   scene.refreshShelves(false);
   building.refreshWarehouse(scene);

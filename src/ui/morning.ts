@@ -87,7 +87,7 @@ import {
 } from '../game/endless';
 import { answerEvent, answerOrder, CLIENTS, type MorningEvent } from '../game/events';
 import { applyReorder } from '../game/reorder';
-import { AUTO_TOPUP_MARKUP, AUTO_TOPUPS, autoActive, autoAvailable, autoDay, autoMorning, autoToggle } from '../game/autoorder';
+import { AUTO_TOPUP_MARKUP, topUpsPerDay, autoActive, autoAvailable, autoDay, autoMorning, autoToggle } from '../game/autoorder';
 import { declineNeighbour, giveNeighbour, orderBoard, type OrderRow } from '../game/orders';
 import { bestOffer, canStock, restockPlan, restockTarget } from '../game/restock';
 import { dealPrice, dealsToday } from '../game/deals';
@@ -1324,7 +1324,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     else if (!today.cut) box.append(el('div', 'ui-muted', t('auto.nothing')));
     if (today.cut) box.append(el('div', 'ui-note', t('auto.cut')));
     box.append(
-      el('div', 'ui-muted', t('auto.day', { n: AUTO_TOPUPS, p: Math.round((AUTO_TOPUP_MARKUP - 1) * 100) })),
+      el('div', 'ui-muted', t('auto.day', { n: topUpsPerDay(state), p: Math.round((AUTO_TOPUP_MARKUP - 1) * 100) })),
       el('div', 'ui-muted', t('deals.autoNo')),
       button(t('auto.disable'), () => update(autoToggle(getState())), 'ui-chip'),
     );

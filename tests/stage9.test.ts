@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyDayStats, newGame, PRODUCTS, type StoreState } from '../src/game/economy';
+import { emptyDayStats, newGame, PRODUCTS, warehouseCapacity, type StoreState } from '../src/game/economy';
 import { CANDY_COST, impulseChance, rackOf, refillRack, returnCandy, takeCandy, upgradeRack, RACK_LEVELS } from '../src/game/impulse';
 import { buyCups, coffeeChance, CUP_COST, CUPS_MAX, useCup } from '../src/game/coffee';
 import { startBatch, takeOutBread } from '../src/game/bakery';
@@ -76,7 +76,9 @@ describe('печь', () => {
   });
 
   it('нельзя печь, если хлеб некуда положить', () => {
-    const full = rich({ warehouse: { potatoes: Array.from({ length: 80 }, () => ({ age: 0 })) } });
+    // Склад забит до предела (warehouseCapacity: с 22.11 склады больше — «Трафик v2»).
+    const room = warehouseCapacity(rich({}));
+    const full = rich({ warehouse: { potatoes: Array.from({ length: room }, () => ({ age: 0 })) } });
     const shelves = full.shelves.map((sh) => (sh.kind === 'bakery' ? { ...sh, items: { bread: Array.from({ length: 8 }, () => ({ age: 0 })) } } : sh));
     expect(startBatch({ ...full, shelves })).toBeNull();
   });

@@ -276,13 +276,13 @@ export interface StoreLevel {
 
 export const STORE_LEVELS: StoreLevel[] = [
   { nameKey: 'store.l1', cost: 0, slots: 3, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 6 },
-  { nameKey: 'store.l2', cost: 1500, slots: 7, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 8 },
-  { nameKey: 'store.l3', cost: 4000, slots: 9, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 10 },
-  { nameKey: 'store.l4', cost: 20000, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 12 },
-  { nameKey: 'store.l5', cost: 40000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 14 },
+  { nameKey: 'store.l2', cost: 1500, slots: 7, warehouse: 45, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 8 },
+  { nameKey: 'store.l3', cost: 4000, slots: 9, warehouse: 90, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 10 },
+  { nameKey: 'store.l4', cost: 20000, slots: 14, warehouse: 150, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 12 },
+  { nameKey: 'store.l5', cost: 40000, slots: 17, warehouse: 230, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 14 },
   // Гипермаркет — переезд в здание «Гиганта» за дорогой, когда там уже открыт свой филиал (branch.ts):
   // старый магазин становится филиалом. Цена подобрана симулятором (docs/BALANCE.md «Гипермаркет»).
-  { nameKey: 'store.l6', cost: 120000, slots: 22, warehouse: 150, rent: 2300, utilities: 340, power: 260, guests: 5, maxCustomers: 20 },
+  { nameKey: 'store.l6', cost: 120000, slots: 22, warehouse: 320, rent: 2300, utilities: 340, power: 260, guests: 5, maxCustomers: 20 },
 ];
 
 /**

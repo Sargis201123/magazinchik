@@ -97,7 +97,8 @@ describe('баланс гипермаркета', () => {
         return late.reduce((s, d) => s + d.profit + d.branch, 0) / late.length;
       };
       const ratio = net(r.move.days) / net(r.stay.days);
-      expect(ratio).toBeGreaterThan(1.3);
+      // 22.11 «Трафик v2»: склады больше — «Универмаг» без переезда зарабатывает больше, разрыв чуть меньше (было > 1.3).
+      expect(ratio).toBeGreaterThan(1.25);
       expect(ratio).toBeLessThan(1.9);
     }
   });

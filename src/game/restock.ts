@@ -51,7 +51,11 @@ export function restockTarget(state: StoreState, pid: ProductId, guests: number)
   const category = PRODUCTS[pid].category;
   const room = state.shelves.filter((sh) => sh.kind === category).reduce((sum, sh) => sum + shelfCapacity(sh), 0);
   const neighbours = Math.max(1, pool.filter((id) => PRODUCTS[id].category === category).length);
-  return Math.ceil(Math.min(Math.max(usual, modelled) * AUTO_RESERVE, room / neighbours + CARRY * 2));
+  // 22.11 «Трафик v2»: сверх полок — своя доля склада, а не две ходки. В большом магазине гостей вчетверо больше, чем
+  // встаёт на полки, и прежний потолок (полки + 12 штук) оставлял пустые полки к обеду при полупустом складе (замер в
+  // сцене на «Универмаге»: сока купили 24, а хотели 36 — 25 гостей ушли ни с чем). В ларьке склад мал — как было.
+  const stash = Math.max(CARRY * 2, warehouseCapacity(state) / pool.length);
+  return Math.ceil(Math.min(Math.max(usual, modelled) * AUTO_RESERVE, room / neighbours + stash));
 }
 
 /** Сколько закладок своей печи за день считаем, закупая хлеб: пекарь успевает больше, но утром полки пустые. */
