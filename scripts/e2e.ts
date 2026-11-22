@@ -64,7 +64,8 @@ const NOW = Date.UTC(2026, 5, 15, 9, 0, 0);
 const SEED = 20261015;
 /** Телефон на Android: Phaser рисует так же, как у игроков (по одной текстуре за раз, MobilePipeline). */
 const PHONE = {
-  viewport: { width: 390, height: 844 },
+  // VIEW=375x667 — другой экран (кадры этажей на маленьком телефоне); эталон снят на 390×844.
+  viewport: process.env.VIEW ? { width: Number(process.env.VIEW.split('x')[0]), height: Number(process.env.VIEW.split('x')[1]) } : { width: 390, height: 844 },
   deviceScaleFactor: 2,
   isMobile: true,
   hasTouch: true,
