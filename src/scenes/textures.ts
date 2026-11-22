@@ -173,6 +173,22 @@ export const SPRITES = [
   'fl2b_poster1',
   ...['warm', 'rain', 'summer'].flatMap((c) => [`fl2b_manq_${c}0`, `fl2b_manq_${c}1`, `fl2b_form_${c}`]),
   'fl2b_form',
+  // второй этаж 22.11
+  // Зал выше (art/clothes_decor.py): верх стены, лестница у нижнего края и коврик, подиум с вазой и манекенами,
+  // уголок ожидания, вешалка со шляпами, столик с букетом; до ремонта — стойка в плёнке и стремянка.
+  'fl2d_upper',
+  'fl2d_stairs',
+  'fl2d_mat',
+  'fl2d_stage',
+  'fl2d_pampas',
+  ...['warm', 'rain', 'summer'].flatMap((c) => [`fl2d_manq_${c}0`, `fl2d_manq_${c}1`]),
+  'fl2d_sofa',
+  'fl2d_lamp',
+  'fl2d_rug',
+  'fl2d_hatstand',
+  'fl2d_flowers',
+  'fl2d_wrap',
+  'fl2d_reno',
   // Живые этажи (art/floors_life.py, 15.11): второй набор стоек, стол со стопками, лампы, бра, гирлянда, блик на
   // паркете; значки моментов этажей (scenes/floors/momentFx.ts).
   ...['warm', 'rain', 'summer'].flatMap((c) => [`fl2c_rack_${c}`, `fl2c_fold_${c}`]),
