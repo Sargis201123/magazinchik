@@ -152,12 +152,24 @@ export function tick(scene: StoreScene, dt: number): void {
   pop(scene, f, fx);
 }
 
-/** День закрылся, а у касс ещё стоят: товар из их корзин — обратно на полки (как у тех, кто не успел зайти). */
+/**
+ * День закрылся, а у касс ещё стоят: товар из их корзин — обратно на полки (как у тех, кто не успел зайти).
+ * 22.11: и в итогах они — «ушли из-за очереди», иначе «Зашло N» не сходилось с «купили / ушли» на 10-15 гостей.
+ */
 export function close(scene: StoreScene): void {
   const fx = fxOf(scene);
   for (const w of fx.walkers.splice(0)) w.sprite.destroy();
   const f = scene.flow;
-  if (f?.carts.length) for (const cart of f.carts.splice(0)) scene.state = returnToShelf(scene.state, cart);
+  if (f?.carts.length) {
+    for (const cart of f.carts.splice(0)) {
+      scene.state = returnToShelf(scene.state, cart);
+      f.lost++;
+      f.queue++;
+      scene.stats.lost++;
+      noteLost(scene.stats, 'queue');
+      scene.stats.quickQueue = (scene.stats.quickQueue ?? 0) + 1;
+    }
+  }
   fx.dirty = false;
   scene.refreshShelves();
 }

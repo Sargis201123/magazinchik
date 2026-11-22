@@ -437,12 +437,12 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
       const scene = (window as any).game.scene.getScene('store');
       const st = scene.state;
       const count = (o: Record<string, unknown[]>) => Object.values(o ?? {}).reduce((n, a) => n + (Array.isArray(a) ? a.length : 0), 0);
-      const { served, lost, revenue, lostWhy, work, quick, passed, quickQueue } = scene.stats as any;
+      const { served, lost, revenue, lostWhy, work, quick, passed, quickQueue, came } = scene.stats as any;
       const fl = scene.flow ? { rate: scene.flow.rate, came: scene.flow.came, served: scene.flow.served, lost: scene.flow.lost, queue: scene.flow.queue } : null;
       const per: Record<string, string> = {};
       for (const sh of st.shelves) for (const [k, v] of Object.entries(sh.items ?? {})) per[k] = String((Number(per[k]?.split('/')[0]) || 0) + (v as unknown[]).length);
       for (const [k, v] of Object.entries(st.warehouse ?? {})) per[k] = `${per[k] ?? 0}/${(v as unknown[]).length}`;
-      return { missing: scene.stats.missing, per, fl, served, lost, revenue, lostWhy, work, quick, passed, quickQueue, shelves: st.shelves.reduce((n: number, sh: any) => n + count(sh.items), 0), warehouse: count(st.warehouse) };
+      return { came, missing: scene.stats.missing, per, fl, served, lost, revenue, lostWhy, work, quick, passed, quickQueue, shelves: st.shelves.reduce((n: number, sh: any) => n + count(sh.items), 0), warehouse: count(st.warehouse) };
     });
     console.log('MEASURE ' + JSON.stringify(m));
   }
