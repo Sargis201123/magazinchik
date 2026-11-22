@@ -65,6 +65,12 @@ export const withUpgrades = (state: StoreState, timing: ScanTiming): ScanTiming 
 /** Со склада с рохлей (gear.ts, склад от 1-й модели) за один поход несут вдвое больше. */
 export const CART_CARRY = 12;
 export const carryOf = (state: StoreState): number => (gearTier(state, 'warehouse') > 0 ? CART_CARRY : CARRY);
+/**
+ * Сколько за ходку носит сотрудник (грузчик, менеджер, ученик): 22.11 «Трафик v2» — в большом магазине у них
+ * тележки побольше. Замер в сцене на «Универмаге»: грузчик успевает ~25 ходок за день, а гостей вчетверо больше,
+ * чем в ларьке, — с прежней коробкой полки пустели к обеду. Хозяин носит как раньше (carryOf + «Силач»).
+ */
+export const staffCarry = (state: StoreState): number => Math.round(carryOf(state) * (1 + 0.25 * state.level));
 /** Какая доля покупателей катит тележку (только для вида; тележки у входа — с мини-маркета, persons.ts). */
 export const CART_SHARE = 0.3;
 

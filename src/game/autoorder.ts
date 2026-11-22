@@ -17,6 +17,13 @@ export const AUTO_FROM_DAY = 7;
 export const AUTO_TOPUP_MARKUP = 1.25;
 export const AUTO_TOPUP_QTY = 6;
 export const AUTO_TOPUPS = 3;
+/**
+ * 22.11 «Трафик v2»: подвоз растёт с помещением. В большом магазине за день проходит в 3–5 раз больше гостей, чем
+ * в ларьке, и 3 подвоза по 6 штук (замер в сцене на «Универмаге») не спасали — полки пустели к обеду.
+ * Ларёк (уровень 0) — как было: 3 по 6.
+ */
+export const topUpQty = (state: StoreState): number => AUTO_TOPUP_QTY * (1 + state.level);
+export const topUpsPerDay = (state: StoreState): number => AUTO_TOPUPS + state.level;
 /** На полке осталось столько или меньше (а на складе пусто) — пора подвезти. */
 export const AUTO_TOPUP_LOW = 2;
 
@@ -111,7 +118,7 @@ export function autoTopUp(
 ): { state: StoreState; pid: ProductId; qty: number; cost: number } | null {
   if (!autoActive(state)) return null;
   const today = autoDay(state);
-  if (today.topUps >= AUTO_TOPUPS) return null;
+  if (today.topUps >= topUpsPerDay(state)) return null;
   const pid = sellableProducts(state)
     // Хлеб при своей пекарне печёт пекарь — фургон его не везёт.
     .filter((id) => sold(id) > 0 && !busy.includes(id) && canStock(state, id) && !(id === 'bread' && ownBreadOn(state)))
@@ -121,7 +128,7 @@ export function autoTopUp(
   const price = topUpPrice(pid);
   if (price === null) return null;
   const room = warehouseCapacity(state) - warehouseCount(state) - onTheWay;
-  const qty = Math.min(AUTO_TOPUP_QTY, room, Math.floor(state.money / price));
+  const qty = Math.min(topUpQty(state), room, Math.floor(state.money / price));
   if (qty <= 0) return null;
   const cost = qty * price;
   const inbound = [...(today.inbound ?? []), { pid, qty }];

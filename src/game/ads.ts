@@ -172,9 +172,28 @@ export const adPlanned = (state: StoreState, day: number): boolean => allRuns(st
 
 /**
  * Сколько гостей за день привела реклама: из всех, кто зашёл, это доля сверх обычного потока.
- * visitors — обслуженные и ушедшие без покупки.
+ * visitors — обслуженные и ушедшие без покупки. passed — кто заглянул и прошёл мимо (зал полон, хозяин один за
+ * кассой, 21.11): без рекламы шло бы demand / boost, и если столько и так поместилось бы — реклама не прибавила
+ * никого, а не «≈N гостей». Без passed — как было: visitors × (1 − 1/boost).
  */
-export const adGuests = (state: StoreState, visitors: number): number => {
+export const adGuests = (state: StoreState, visitors: number, passed = 0): number => {
   const boost = adBoost(state);
-  return boost > 1 ? Math.round(visitors * (1 - 1 / boost)) : 0;
+  if (boost <= 1) return 0;
+  return passed > 0 ? Math.max(0, Math.round(visitors - (visitors + passed) / boost)) : Math.round(visitors * (1 - 1 / boost));
+};
+
+/**
+ * Сколько гостей привела реклама вчера (по отчёту дня, reports.ts; null — вчера рекламы не было). 21.11, автор:
+ * «большие проблемы с рекламой — нет трафика». Карточка рекламы утром показывает не только обещание (adExtraGuests),
+ * но и то, что было на самом деле.
+ */
+export const adYesterday = (state: StoreState): number | null => {
+  const row = state.reports?.at(-1);
+  return row && row.day === state.day - 1 && row.ads ? row.ads : null;
+};
+
+/** Сколько вчера прошли мимо: зал был полон, а за кассой хозяин один (0 — не было). Звать рекламой больше нет смысла. */
+export const passedYesterday = (state: StoreState): number => {
+  const row = state.reports?.at(-1);
+  return row && row.day === state.day - 1 ? (row.passed ?? 0) : 0;
 };

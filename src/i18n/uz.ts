@@ -4588,6 +4588,14 @@ export const uz: Record<TextKey, string> = {
   "income.title": "💼 Boshqa daromad: {n}",
   "income.total": "Kun boʻyi jami: {n} 💰",
   "tenant.income": "Kecha: +{last} 💰 · jami: +{total} 💰",
+  "flow.pop": "+{n} 🛍",
+  "flow.came": "👥 Kirdi: {n}",
+  "flow.expected": "ertalab ~{n} kutilgandi",
+  "flow.quick": "🛍 {n} — zal toʻla paytda shoshib oldi",
+  "ads.yesterday": "Kecha reklama ≈{n} mehmon olib keldi",
+  "flow.busy": "⏳ Kutmay ketdi: {n}",
+  "flow.passed": "🚪 Kirmay oʻtib ketdi: {n} — zal toʻla, kassada yolgʻiz oʻzingsan",
+  "ads.passed": "🚪 Kecha {n} kishi kirmay oʻtib ketdi: zal toʻla edi, kassada yolgʻiz oʻzing eding — reklama sen ulgurganingdan koʻp odam olib keladi",
   "news.town": "🏘 Mahalla: barcha oʻyinchilar uchun umumiy haftalik maqsad va «Kun doʻkoni» — mehmonga borib, «Shu yerda boʻldim» belgisini qoldir.",
 };
 

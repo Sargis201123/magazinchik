@@ -58,7 +58,8 @@ describe('баланс филиала', () => {
         return late.reduce((s, d) => s + d.profit + d.branch, 0) / late.length;
       };
       const ratio = net(r.with.days) / net(r.without.days);
-      expect(ratio).toBeGreaterThan(1.4);
+      // 22.11 «Трафик v2»: склады больше — сам магазин зарабатывает чуть больше, доля филиала чуть меньше (было > 1.4).
+      expect(ratio).toBeGreaterThan(1.35);
       expect(ratio).toBeLessThan(1.7);
       // И за день филиал приносит меньше, чем сам магазин зарабатывает.
       const late = r.with.days.slice(-30);

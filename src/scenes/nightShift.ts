@@ -6,7 +6,7 @@ import { setPlaying } from '../platform/yandex';
 import type { StoreScene } from './StoreScene';
 import Phaser from 'phaser';
 import { PRODUCTS, billTotal, shelfFor, takeFromShelf, type DayStats, type StoreState } from '../game/economy';
-import { nightCycle, otherIncome, type IncomeId } from '../game/day';
+import { guestsToday, nightCycle, otherIncome, type IncomeId } from '../game/day';
 import { KIT_ICON } from '../game/rental';
 import { rankName, rankOf } from '../game/endless';
 import { saveGame } from '../game/save';
@@ -44,7 +44,7 @@ import { sellWholesale, takeOutBread } from '../game/bakery';
 import { canWorkNight, NIGHT_MARKUP, NIGHT_POWER, NIGHT_SECONDS, startNight } from '../game/night';
 import { reviewsFor } from '../game/reviews';
 import { goodwillOf } from '../game/goodwill';
-import { lossAdvice } from '../game/losses';
+import { lossAdvice, queueAdviceKey } from '../game/losses';
 import { fpsSummary } from '../platform/quality';
 import { BOX_FROM_DAY, BOX_OPENS_DAY, firstDayGift, gentleDay, grannyBox, grannyStays, learningEvening, quietRating } from '../game/firstday';
 import { tomorrowTeaser } from '../game/nudge';
@@ -300,8 +300,12 @@ export function finishDay(scene: StoreScene): void {
   if (neighbour) scene.state = neighbour.paid ? neighbour.state : dropOrder(neighbour.state);
   if (neighbour) track(neighbour.paid ? 'ret_order_eve' : 'ret_order_miss', scene.state.day, neighbour.paid);
   const finishedDay = scene.state.day;
-  // Сколько гостей сверх обычного привела реклама — строкой в итогах дня.
-  scene.stats.adGuests = adGuests(scene.state, scene.stats.served + scene.stats.lost);
+  // Сколько гостей сверх обычного привела реклама — строкой в итогах дня. 21.11: считаем от всех, кто зашёл
+  // (в зал и «на бегу», trafficFx.ts), а не только от купивших и ушедших в обиде.
+  // Прошедшие мимо (зал полон, хозяин один за кассой, trafficFx.passBy) — тоже в расчёт: реклама их звала, но не завела.
+  scene.stats.adGuests = adGuests(scene.state, scene.stats.came ?? scene.stats.served + scene.stats.lost, scene.stats.passed ?? 0);
+  // Утренний прогноз гостей на этот день — в итогах рядом с тем, сколько зашло на самом деле.
+  const expected = guestsToday(scene.state);
   const ratingBefore = scene.state.rating;
   const rankBefore = rankOf(scene.state.totalRevenue);
   // Первый день новичка (firstday.ts): итоги праздничные, бабушка вечером уезжает на дачу.
@@ -495,8 +499,9 @@ export function finishDay(scene: StoreScene): void {
         shortfall,
         total: state.money,
         housewarming: Boolean(bill?.housewarming),
-        // 21.11: аренда, этажи, фургон… — каждый вечер на виду одним блоком, а не только под «Подробнее».
         other: otherIncome(night).map((r): [string, number] => [t(INCOME_KEYS[r.id]), r.n]),
+        expected,
+        passTip: scene.stats.passed ? queueAdviceKey(scene.state) : undefined,
       },
       extra,
       stamps,

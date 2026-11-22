@@ -314,7 +314,15 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
   const scene = (visible: boolean) => page.evaluate((v) => (window as any).game.scene.getScene('store').sys.setVisible(v), visible);
 
   const day = new Date(NOW).toISOString().slice(0, 10);
-  const state = { ...save.state, gift: { lastDate: day, streak: 1 }, ...run.patch(save.state) };
+  const shelfLvl = process.env.SHELF ? Number(process.env.SHELF) : null;
+  const caps = [8, 12, 16, 24];
+  const trimShelves = (shelves: any[]) => shelves.map((sh) => {
+    let left = caps[shelfLvl!];
+    const items: Record<string, unknown[]> = {};
+    for (const [k, v] of Object.entries(sh.items ?? {})) { const take = (v as unknown[]).slice(0, Math.max(0, left)); left -= take.length; items[k] = take; }
+    return { ...sh, level: shelfLvl, items };
+  });
+  const state = { ...save.state, gift: { lastDate: day, streak: 1 }, ...run.patch(save.state), ...(shelfLvl !== null ? { shelves: trimShelves(save.state.shelves as any[]) } : {}), ...(process.env.REG ? { registers: Number(process.env.REG) } : {}), ...(process.env.AUTO ? { autoOrder: { on: true } } : {}) };
   await page.addInitScript(prepare, {
     save: JSON.stringify({ ...save, state }),
     seed: SEED,
@@ -375,6 +383,8 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     await press();
   }
   say('магазин открыт');
+  const openState = await page.evaluate(() => (window as any).game.scene.getScene('store').state);
+  if (process.env.MEASURE) { const c = (o: any) => Object.values(o ?? {}).reduce((n: number, a: any) => n + (Array.isArray(a) ? a.length : 0), 0); console.log('OPENSTOCK shelves', (openState as any).shelves.reduce((n: number, sh: any) => n + c(sh.items), 0), 'warehouse', c((openState as any).warehouse), 'money', (openState as any).money); }
 
   /** Перемотка до условия: окна и диалоги прокликиваем, на ночную смену соглашаемся, итоги не трогаем. */
   const forward = async (done: (s: Look) => boolean, what: string, limitMs: number) => {
@@ -421,6 +431,21 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
   if (s.night) await shot('night');
   else errors.push(`${run.name}: ночной смены не было`);
   await forward((s) => s.summary, 'итогов дня', limit);
+  // MEASURE=1: итоги дня цифрами — сколько гостей, почему ушли, сколько ходок сделал персонал (замер логистики).
+  if (process.env.MEASURE) {
+    const m = await page.evaluate(() => {
+      const scene = (window as any).game.scene.getScene('store');
+      const st = scene.state;
+      const count = (o: Record<string, unknown[]>) => Object.values(o ?? {}).reduce((n, a) => n + (Array.isArray(a) ? a.length : 0), 0);
+      const { served, lost, revenue, lostWhy, work, quick, passed, quickQueue, came } = scene.stats as any;
+      const fl = scene.flow ? { rate: scene.flow.rate, came: scene.flow.came, served: scene.flow.served, lost: scene.flow.lost, queue: scene.flow.queue } : null;
+      const per: Record<string, string> = {};
+      for (const sh of st.shelves) for (const [k, v] of Object.entries(sh.items ?? {})) per[k] = String((Number(per[k]?.split('/')[0]) || 0) + (v as unknown[]).length);
+      for (const [k, v] of Object.entries(st.warehouse ?? {})) per[k] = `${per[k] ?? 0}/${(v as unknown[]).length}`;
+      return { came, missing: scene.stats.missing, per, fl, served, lost, revenue, lostWhy, work, quick, passed, quickQueue, shelves: st.shelves.reduce((n: number, sh: any) => n + count(sh.items), 0), warehouse: count(st.warehouse) };
+    });
+    console.log('MEASURE ' + JSON.stringify(m));
+  }
   // Плитки итогов выезжают по очереди, цифры докручиваются.
   await tick(4000);
   await shot('summary');
