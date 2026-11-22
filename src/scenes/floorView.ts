@@ -30,7 +30,9 @@ import { buildThird } from './floors/thirdFloor';
  * этаж занимает экран по ширине при ровном масштабе, а не полоской посередине.
  */
 const W = 168;
-const H = 230;
+// 22.11, автор: «надо улучшать дизайн этажей». Было 230: на обычном телефоне (390×844) зал не доставал до низа и
+// верха экрана, лишнее заливалось пустой стеной и пустым полом. 290 — зал во весь экран, низ этажи заполняют своим.
+const H = 290;
 const WALL = 44;
 /** Снизу — кнопки звука и ускорения (в базовых точках интерфейса), если их не измерить. */
 const BOTTOM = 76;
@@ -191,13 +193,21 @@ export class FloorView extends Phaser.Scene {
     this.around = [];
     const o = this.aroundOpts;
     const e = Math.ceil(this.ext);
-    if (!o || e < 2) return;
     const keep = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
       this.around.push(obj);
       return obj;
     };
     const rect = (x: number, y: number, w: number, h: number, color: number, alpha = 1, depth = -30) =>
       keep(this.add.rectangle(x, y, w, h, color, alpha).setOrigin(0).setDepth(depth));
+    // 22.11: зал выше (290) — на коротких экранах (iPhone SE, Telegram Desktop) он упирается в высоту и места
+    // вокруг нет (e < 2). Продолжения тогда не рисуем, но то, что этаж нарисовал за краем (стена подвала вверх,
+    // потолок и лестница второго этажа), всё равно закрываем фоном сцены — иначе оно торчит под панелью и кнопками.
+    if (!o || e < 2) {
+      const span = this.scale.width / this.cameras.main.zoom;
+      rect(W / 2 - span, -AROUND, span * 2, AROUND, 0x181425, 1, AROUND_DEPTH);
+      rect(W / 2 - span, H, span * 2, AROUND, 0x181425, 1, AROUND_DEPTH);
+      return;
+    }
     // Стена вверх и пол вниз. Плитка пола начинается на шаг узора, лежащий в зале, — без шва на краю (зал её закрывает).
     rect(0, -e, W, e, o.wall);
     const from = o.floorY + Math.floor((H - o.floorY) / o.floorStep) * o.floorStep;

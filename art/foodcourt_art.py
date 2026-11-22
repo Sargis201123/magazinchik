@@ -8,6 +8,10 @@
 кулер, подносы с едой в руках и тарелки на столах (полная, надкусанная, пустая), облачко разговора и нота, детская
 зона (мягкий коврик, горка, сухой бассейн), сцена с колонками и гитара в руках музыканта.
 
+22.11 (автор: «надо улучшать дизайн этажей, сделать их красивее»): плитка с терракотовыми ромбиками, шашечка
+столовой, столы со стульями и табуретами вместо скамей, детская зона и сцена крупнее, длинная кадка с кустами, узкое
+растение у стены, мозаика в полу, меловой штендер у лифта.
+
 Палитра Endesga 32 (art/sprites.py), двойная детализация: в мире всё вдвое меньше (ART = 2). Старые картинки
 art/foodcourt.py (fc_*) остаются: ими рисуются лифт на фасаде и строки меню.
 
@@ -199,20 +203,49 @@ def wainscot():
 
 
 def floor_tiles():
-    """Пол: светлая плитка 16×16 точек мира — тёплый камень со швом и крошкой терраццо; после «дизайна зала» под
-    столами — деревянный настил (доски вразбежку)."""
-    c = Canvas(32, 32)
+    """Пол (22.11, автор: «сделать этажи красивее»): проходы - крупная светлая плитка 16×16 точек мира с крошкой
+    терраццо и терракотовыми ромбиками-вставками на перекрестьях швов (как в старых кафе); столовая - спокойная
+    шашечка из двух песочных тонов в рамке (рамку рисует сцена); после «дизайна зала» под столами - деревянный
+    настил (доски вразбежку). Плитка повторяется через 32 точки мира - продолжение пола за кадром шагает так же."""
+    c = Canvas(64, 64)
     base = H("#f1ddb6")
-    c.rect(0, 0, 32, 32, base)
-    c.rect(16, 0, 16, 16, lit(base, -0.03))
-    c.rect(0, 16, 16, 16, lit(base, -0.03))
-    c.speckle(1, 1, 30, 30, [H("#d8b88a"), H("#c0cbdc"), H("#e4a672"), lit(base, 0.4)], 22, 41)
-    for k in (0, 16):
-        c.hline(0, k, 32, H("#d8b88a"))
-        c.vline(k, 0, 32, H("#d8b88a"))
-        c.hline(1, k + 1, 15, lit(base, 0.35))
-        c.hline(17, k + 1, 15, lit(base, 0.35))
+    tones = [base, lit(base, -0.03), lit(base, -0.015), base]
+    for k, (ox, oy) in enumerate(((0, 0), (32, 0), (0, 32), (32, 32))):
+        tone = tones[k]
+        c.rect(ox, oy, 32, 32, tone)
+        c.hline(ox + 1, oy + 1, 30, H("#f8ebcf"))
+        c.vline(ox + 1, oy + 1, 30, H("#f8ebcf"))
+        c.hline(ox + 2, oy + 31, 30, H("#d8b88a"))
+        c.vline(ox + 31, oy + 2, 30, H("#d8b88a"))
+        c.speckle(ox + 3, oy + 3, 26, 26, [lit(tone, -0.07), lit(tone, 0.35), SAND, PALE], 14, 40 + k)
+    for i in range(64):
+        for k in (0, 32):
+            c.px(i, k, H("#c49a6c"))
+            c.px(k, i, H("#c49a6c"))
+    # Ромбик-вставка на каждом перекрестье швов: терракота с тёмной кромкой и бликом сверху слева.
+    for cx in (0, 32, 64):
+        for cy in (0, 32, 64):
+            for dy in range(-4, 5):
+                for dx in range(-4, 5):
+                    d = abs(dx) + abs(dy)
+                    if d > 4:
+                        continue
+                    tone = BARK if d == 4 else TAN
+                    if 0 < d <= 2 and dx <= 0 and dy <= 0:
+                        tone = SAND
+                    c.px((cx + dx) % 64, (cy + dy) % 64, tone)
     c.save("fc3_floor")
+    # Столовая: шашечка 8×8 точек мира, два близких песочных тона - зал делится на проходы и места, но не рябит.
+    t = Canvas(32, 32)
+    light, dark = H("#ead4aa"), H("#dcbc8e")[:3] + (255,)
+    for k, (ox, oy) in enumerate(((0, 0), (16, 0), (0, 16), (16, 16))):
+        tone = light if k in (0, 3) else dark
+        t.rect(ox, oy, 16, 16, tone)
+        t.hline(ox, oy, 16, lit(tone, 0.25))
+        t.vline(ox, oy, 16, lit(tone, 0.12))
+        t.hline(ox, oy + 15, 16, lit(tone, -0.08))
+    t.speckle(0, 0, 32, 32, [lit(light, -0.07), lit(light, 0.3)], 10, 5)
+    t.save("fc3_dine")
     # Настил: длинные доски вдоль зала, стыки вразбежку, швы — чуть темнее дерева (не кирпич).
     d = Canvas(64, 32)
     plank = [H("#c28569"), H("#c99070")[:3] + (255,), H("#bd7f60")[:3] + (255,), H("#c68a69")[:3] + (255,)]
@@ -526,50 +559,123 @@ def shutter():
 # ---------------------------------------------------------------- мебель
 
 
+# Места за столом - через 16 точек мира (32 пикселя) от середины: thirdLayout.ts SEAT_DX.
+SEATS_PX = (18, 50, 82)
+
+
 def table(design):
-    """Общий стол на шестерых (50×22 точки мира): столешница, ножки, скамья спереди; скамья сзади — отдельно
-    (fc3_bench), под теми, кто сидит лицом к нам. Голый этаж — светлый пластик на стальных ножках, после «дизайна
-    зала» — массив дерева и зелёные сиденья. Посередине — салфетница, соль и перец."""
+    """Общий стол на шестерых (50×22 точки мира): столешница с кромкой, ножки-тумбы и три табурета спереди (на них
+    сидят спиной к нам); стулья сзади - отдельно (fc3_bench), под теми, кто сидит лицом к нам.
+
+    22.11, автор: «сделать этажи красивее» - столы были светлыми коробками со скамьями, «как заглушки». Голый этаж -
+    закусочная: белый пластик с красной кромкой, хромовые ножки, красные табуреты; на столе салфетница, кетчуп и
+    горчица. После «дизайна зала» - массив дерева, тёмная кромка, деревянные табуреты с зелёными подушками; на столе
+    горшочек с зеленью, салфетница, соль и перец."""
     c = Canvas(100, 44)
     if design:
-        top, edge, bench, seat = H("#cf9a74")[:3] + (255,), WOOD, WOOD_D, H("#3e8948")
+        top, edge, seat, seat_d, post = H("#cf9a74")[:3] + (255,), WOOD_D, GREEN, GREEN_D, WOOD_D
     else:
-        top, edge, bench, seat = H("#dfe6ef")[:3] + (255,), STEEL, METAL, H("#5a6988")
-    # Столешница и торец.
-    c.round_rect(1, 8, 98, 22, top, r=2)
-    c.hline(3, 9, 94, lit(top, 0.45))
-    c.hline(3, 26, 94, lit(top, -0.08))
+        top, edge, seat, seat_d, post = H("#e8edf3")[:3] + (255,), RED, RED, RED_D, STEEL
+    # Ножки-тумбы под столешницей (между табуретами, за ними).
+    for x in (32, 64):
+        c.rect(x, 31, 4, 7, lit(post, -0.15) if design else METAL)
+        c.vline(x, 31, 7, lit(post, 0.2) if design else STEEL)
+        c.hline(x - 2, 37, 8, lit(post, -0.3))
+    # Табуреты спереди (за краем стола, их видно из-под спины сидящего).
+    for x in SEATS_PX:
+        c.rect(x - 1, 38, 3, 5, post)
+        c.vline(x - 1, 38, 5, lit(post, 0.3))
+        c.hline(x - 4, 42, 9, lit(post, -0.3))
+        c.ellipse(x + 0.5, 36.5, 8, 3.4, seat_d)
+        c.ellipse(x + 0.5, 35.5, 7.5, 2.8, seat)
+        c.hline(x - 4, 34, 6, lit(seat, 0.35))
+    # Столешница и кромка.
+    c.round_rect(1, 8, 98, 20, top, r=2)
+    c.hline(3, 9, 94, lit(top, 0.5))
+    c.vline(1, 10, 16, lit(top, 0.3))
+    c.hline(3, 26, 94, lit(top, -0.1))
     if design:
-        for y in (14, 20):
-            c.hline(2, y, 96, lit(top, -0.08))
-        for x in (24, 61, 83):
-            c.vline(x, 9, 20, lit(top, -0.12))
+        # Волокна дерева: длинные штрихи и пара сучков.
+        rnd = random.Random(23)
+        for y in (12, 15, 19, 23):
+            x = rnd.randrange(2, 20)
+            while x < 96:
+                n = rnd.randrange(10, 24)
+                c.hline(x, y, min(n, 97 - x), lit(top, -0.09))
+                x += n + rnd.randrange(4, 12)
+        for x, y in ((40, 17), (88, 13)):
+            c.px(x, y, lit(top, -0.25))
+            c.px(x + 1, y, lit(top, -0.15))
     else:
-        c.speckle(3, 10, 94, 16, [lit(top, 0.25), lit(top, -0.05)], 26, 5)
-    c.rect(1, 28, 98, 4, edge)
-    c.hline(1, 31, 98, lit(edge, -0.35))
-    # Салфетница и соль с перцем — между местами.
-    for x0 in (30, 66):
-        c.rect(x0, 13, 4, 5, WHITE)
-        c.hline(x0, 13, 4, PALE)
-        c.rect(x0 + 5, 15, 2, 3, WHITE)
-        c.rect(x0 + 5, 14, 2, 1, METAL)
-        c.rect(x0 + 8, 15, 2, 3, NAVY)
-    # Ножки.
-    for x in (6, 92):
-        c.rect(x, 32, 3, 5, lit(edge, -0.3))
-    # Скамья спереди.
-    c.rect(5, 36, 90, 6, bench)
-    c.rect(5, 36, 90, 3, seat)
-    c.hline(5, 36, 90, lit(seat, 0.35))
-    c.hline(5, 41, 90, lit(bench, -0.3))
+        c.speckle(3, 10, 94, 15, [lit(top, 0.4), lit(top, -0.05)], 22, 5)
+    c.rect(1, 27, 98, 4, edge)
+    c.hline(1, 27, 98, lit(edge, 0.3))
+    c.hline(1, 30, 98, lit(edge, -0.35))
+    # Между местами: слева салфетница (или горшочек с зеленью), справа - соусы (или соль, перец и салфетки).
+    if design:
+        c.rect(31, 15, 6, 4, BARK)
+        c.hline(31, 15, 6, lit(BARK, 0.35))
+        c.rect(32, 19, 4, 1, WOOD_DD)
+        for x, y in ((31, 13), (33, 11), (35, 12), (34, 13), (32, 12), (36, 14), (30, 14)):
+            c.px(x, y, GREEN)
+        c.px(33, 12, lit(GREEN, 0.35))
+        c.px(34, 11, GREEN_D)
+        c.rect(63, 14, 5, 5, WHITE)
+        c.hline(63, 14, 5, PALE)
+        c.vline(67, 15, 4, STEEL)
+        c.rect(69, 15, 2, 4, WHITE)
+        c.px(69, 14, METAL)
+        c.rect(72, 15, 2, 4, NAVY)
+        c.px(72, 14, METAL)
+    else:
+        c.rect(31, 13, 6, 6, STEEL)
+        c.hline(31, 13, 6, PALE)
+        c.rect(32, 14, 4, 3, WHITE)
+        c.vline(36, 14, 5, METAL)
+        c.rect(64, 13, 3, 6, RED)
+        c.vline(64, 14, 4, lit(RED, 0.35))
+        c.rect(65, 11, 1, 2, WHITE)
+        c.rect(68, 13, 3, 6, GOLD)
+        c.vline(68, 14, 4, GOLD_L)
+        c.rect(69, 11, 1, 2, WHITE)
     c.outline(INK)
     shadowed(c, 50, 42, 48, 2).save("fc3_table_d" if design else "fc3_table")
-    b = Canvas(92, 10)
-    b.rect(1, 1, 90, 8, bench)
-    b.rect(1, 1, 90, 4, seat)
-    b.hline(1, 1, 90, lit(seat, 0.35))
-    b.hline(1, 8, 90, lit(bench, -0.3))
+    chairs(design)
+
+
+def chairs(design):
+    """Три стула за дальним краем стола (50×14 точек мира): спинка и сиденье, ножки прячутся за столешницей.
+    Сидящий лицом к нам закрывает середину стула - видны края спинки; пустой стул виден целиком."""
+    b = Canvas(100, 28)
+    for x in SEATS_PX:
+        if design:
+            # Деревянная рама, мягкая зелёная спинка и сиденье.
+            b.round_rect(x - 9, 1, 19, 15, WOOD_D, r=3)
+            b.round_rect(x - 7, 3, 15, 11, GREEN_D, r=2)
+            b.round_rect(x - 6, 3, 13, 9, GREEN, r=2)
+            b.hline(x - 5, 4, 8, lit(GREEN, 0.35))
+            b.px(x, 8, GREEN_D)
+            b.rect(x - 10, 15, 21, 6, WOOD_D)
+            b.rect(x - 9, 15, 19, 4, GREEN)
+            b.hline(x - 9, 15, 19, lit(GREEN, 0.35))
+            b.hline(x - 9, 18, 19, GREEN_D)
+            for lx in (x - 8, x + 8):
+                b.rect(lx, 21, 2, 7, WOOD_DD)
+        else:
+            # Пластиковый стул закусочной: красная гнутая спинка на хромовой раме.
+            b.vline(x - 9, 4, 18, STEEL)
+            b.vline(x + 9, 4, 18, METAL)
+            b.round_rect(x - 8, 1, 17, 13, RED, r=2)
+            b.hline(x - 6, 2, 13, lit(RED, 0.4))
+            b.vline(x - 7, 3, 9, lit(RED, 0.25))
+            b.rect(x - 3, 4, 7, 2, RED_D)
+            b.hline(x - 3, 6, 7, lit(RED, 0.3))
+            b.hline(x - 7, 13, 15, RED_D)
+            b.rect(x - 9, 15, 19, 5, RED)
+            b.hline(x - 9, 15, 19, lit(RED, 0.35))
+            b.hline(x - 9, 19, 19, RED_D)
+            for lx in (x - 8, x + 7):
+                b.rect(lx, 20, 2, 8, STEEL)
     b.outline(INK)
     b.save("fc3_bench_d" if design else "fc3_bench")
 
@@ -749,100 +855,169 @@ def note():
 
 
 def kids():
-    """Детская зона: мягкий коврик-пазл с бортиком, горка, сухой бассейн с шариками (спереди — бортик отдельно,
-    чтобы ребёнок «сидел» в шариках), лошадка-качалка."""
-    m = Canvas(140, 58)
+    """Детская зона (74×34 точки мира, 22.11 - внизу зала, с местом вокруг): мягкий коврик-пазл пастельных тонов,
+    сзади - низкий мягкий бортик из кубиков, спереди - валик; горка, сухой бассейн с шариками (спереди - бортик
+    отдельно, чтобы ребёнок «сидел» в шариках), лошадка-качалка."""
+    m = Canvas(148, 68)
     tiles = [H("#63c74d"), H("#feae34"), H("#2ce8f5"), H("#f6757a"), H("#b55088"), H("#0099db")]
+    soft = [mix(t, WHITE, 0.28) for t in tiles]
+    # Валик по краю коврика.
+    m.round_rect(0, 6, 148, 62, WHITE, r=4)
+    m.round_rect(2, 8, 144, 58, PALE, r=3)
+    m.hline(3, 7, 142, WHITE)
     for gy in range(4):
-        for gx in range(9):
-            tone = tiles[(gx + gy * 3) % len(tiles)]
-            x, y = 4 + gx * 14, 4 + gy * 12
-            m.rect(x, y, 14, 12, tone)
+        for gx in range(10):
+            tone = soft[(gx + gy * 4) % len(soft)]
+            x, y = 4 + gx * 14, 11 + gy * 13
+            m.rect(x, y, 14, 13, tone)
             m.hline(x, y, 14, lit(tone, 0.3))
-            m.px(x + 7, y, lit(tone, -0.3))
-            m.px(x, y + 6, lit(tone, -0.3))
-    m.rect(130, 4, 6, 48, tiles[0])
-    m.frame(2, 2, 136, 52, WHITE)
-    m.frame(3, 3, 134, 50, PALE)
+            m.vline(x, y, 13, lit(tone, 0.15))
+            # Замки пазла: выступ вправо и вниз.
+            m.rect(x + 13, y + 5, 2, 3, tone)
+            m.rect(x + 6, y + 12, 3, 2, tone)
+            m.px(x + 13, y + 12, lit(tone, -0.25))
+    # Сзади - мягкий бортик из разноцветных кубиков.
+    for k in range(12):
+        tone = tiles[(k * 2 + 1) % len(tiles)]
+        x = 2 + k * 12
+        m.rect(x, 0, 12, 9, tone)
+        m.hline(x, 0, 12, lit(tone, 0.35))
+        m.vline(x, 0, 9, lit(tone, 0.2))
+        m.vline(x + 11, 1, 8, lit(tone, -0.25))
+        m.hline(x, 8, 12, lit(tone, -0.3))
     m.outline(INK)
     m.save("fc3_kmat")
     s = Canvas(40, 44)
-    # Лесенка слева, площадка, жёлтый скат вправо-вниз.
-    for y in range(8, 40, 5):
+    # Лесенка слева, площадка с бортиком, жёлтый скат вправо-вниз с бортиками.
+    for y in range(9, 40, 5):
         s.hline(4, y, 7, WHITE)
-    s.vline(3, 6, 36, RED)
-    s.vline(11, 6, 36, RED)
-    s.rect(2, 4, 12, 3, BLUE)
+        s.hline(4, y + 1, 7, PALE)
+    s.vline(3, 5, 37, RED)
+    s.vline(11, 5, 37, RED)
+    s.vline(2, 5, 37, lit(RED, 0.3))
+    s.rect(1, 3, 14, 4, BLUE)
+    s.hline(1, 3, 14, lit(BLUE, 0.4))
     for k in range(26):
-        s.hline(12 + k, 8 + k, 5, GOLD)
+        s.hline(12 + k, 8 + k, 6, GOLD)
         s.px(12 + k, 8 + k, GOLD_L)
-        s.px(16 + k, 8 + k, ORANGE)
-    s.rect(36, 34, 4, 8, GOLD)
+        s.px(13 + k, 8 + k, GOLD_L)
+        s.px(17 + k, 8 + k, ORANGE)
+    s.rect(36, 34, 5, 6, GOLD)
+    s.hline(36, 39, 5, ORANGE)
+    s.vline(24, 20, 20, METAL_D)
     s.outline(INK)
     shadowed(s, 20, 42, 18, 2).save("fc3_slide")
     p = Canvas(44, 26)
     p.round_rect(0, 0, 44, 24, BLUE, r=5)
+    p.hline(4, 1, 36, lit(BLUE, 0.4))
     p.round_rect(3, 3, 38, 14, lit(BLUE, -0.4), r=4)
     rnd = random.Random(11)
-    for _ in range(70):
+    for _ in range(90):
         x, y = rnd.randrange(4, 40), rnd.randrange(4, 17)
-        p.px(x, y, rnd.choice([RED, GOLD, GREEN, SKY, PINK, WHITE]))
+        if p.get(x, y)[:3] == lit(BLUE, -0.4)[:3]:
+            p.px(x, y, rnd.choice([RED, GOLD, GREEN, SKY, PINK, WHITE]))
     p.outline(INK)
     shadowed(p, 22, 24, 21, 2).save("fc3_pit")
     f = Canvas(44, 12)
     f.round_rect(0, 0, 44, 10, BLUE, r=3)
     f.hline(2, 1, 40, lit(BLUE, 0.4))
+    f.hline(2, 8, 40, lit(BLUE, -0.3))
     rnd = random.Random(12)
     for _ in range(12):
         f.ellipse(rnd.randrange(4, 40), 0.5, 1.6, 1.6, rnd.choice([RED, GOLD, GREEN, PINK]))
     f.outline(INK)
     f.save("fc3_pit_f")
-    h = Canvas(22, 20)
-    h.ellipse(11, 17, 10, 2.4, WOOD_D)
-    h.rect(5, 8, 12, 5, WHITE)
-    h.rect(14, 3, 4, 6, WHITE)
-    h.rect(17, 3, 3, 3, WHITE)
-    h.vline(14, 2, 4, RED)
-    h.vline(6, 13, 3, RED)
-    h.vline(15, 13, 3, RED)
-    h.px(18, 4, INK)
+    # Лошадка-качалка (смотрит вправо): красные полозья, белое тело в пятнах, грива и седло.
+    h = Canvas(26, 24)
+    for x in range(1, 25):
+        y = 20 - round(3.5 * ((x - 13) / 12) ** 2)
+        h.px(x, y, RED)
+        h.px(x, y + 1, RED_D)
+    for lx, top in ((7, 13), (10, 14), (16, 14), (19, 13)):
+        h.vline(lx, top, 19 - top, WOOD_D)
+    h.ellipse(13, 11, 8, 3.6, WHITE)
+    h.hline(7, 13, 13, PALE)
+    h.rect(11, 7, 5, 2, RED)
+    h.hline(11, 7, 5, lit(RED, 0.35))
+    h.rect(18, 3, 3, 8, WHITE)
+    h.rect(19, 2, 5, 4, WHITE)
+    h.hline(20, 5, 4, PALE)
+    h.px(22, 3, INK)
+    h.px(19, 1, WHITE)
+    for y in range(2, 10):
+        h.px(17, y, WOOD_D)
+    h.px(18, 1, WOOD_D)
+    h.vline(4, 9, 4, WOOD_D)
+    h.px(3, 12, WOOD_D)
+    for x, y in ((9, 10), (14, 12), (12, 10)):
+        h.px(x, y, STEEL)
     h.outline(INK)
     h.save("fc3_horse")
 
 
 def stage():
-    """Сцена у правой стены (52×24 точки мира): деревянный помост с юбкой, колонки по краям, стойка микрофона,
-    задник с лампочками."""
-    c = Canvas(104, 50)
-    # Задник: тёмная ткань с рядом лампочек.
-    c.rect(10, 0, 84, 18, PLUM)
-    for x in range(12, 92, 4):
-        c.vline(x, 0, 18, lit(PLUM, -0.2))
-    for x in range(14, 92, 8):
-        c.px(x, 2, GOLD_L)
+    """Сцена (56×30 точек мира, 22.11 - внизу справа, выше и наряднее): тёмный задник со складками и гирляндой
+    лампочек, красные кулисы с золотыми подхватами, деревянный помост с бликом, юбка, колонки по краям, стойка
+    микрофона и усилитель."""
+    c = Canvas(112, 60)
+    # Задник: тёмная ткань со складками.
+    c.rect(8, 0, 96, 30, PLUM)
+    for x in range(10, 102, 5):
+        c.vline(x, 0, 30, lit(PLUM, -0.25))
+        c.vline(x + 1, 0, 30, lit(PLUM, 0.12))
+    c.hline(8, 0, 96, lit(PLUM, -0.4))
+    # Гирлянда лампочек дугой по заднику.
+    for x in range(10, 103, 2):
+        y = 4 + round(5 * math.sin(math.pi * (x - 10) / 92))
+        c.px(x, y, INK)
+        if x % 8 == 2:
+            c.px(x, y + 1, GOLD_L)
+            c.px(x, y + 2, GOLD)
+    # Кулисы по бокам с подхватами.
+    for x0, d in ((8, 1), (92, -1)):
+        c.rect(x0, 0, 12, 30, RED_D)
+        for k in range(0, 12, 3):
+            c.vline(x0 + k, 0, 30, RED)
+        c.vline(x0 + (0 if d > 0 else 11), 0, 30, lit(RED, 0.3))
+        c.rect(x0 + 2, 18, 8, 2, GOLD)
+        c.hline(x0 + 2, 18, 8, GOLD_L)
     # Помост.
-    c.rect(2, 16, 100, 16, BARK)
-    for y in range(18, 32, 4):
-        c.hline(2, y, 100, lit(BARK, -0.25))
-    c.hline(2, 16, 100, lit(BARK, 0.35))
-    c.rect(2, 32, 100, 14, RED_D)
-    for x in range(4, 102, 6):
-        c.vline(x, 32, 14, WINE)
-    c.hline(2, 32, 100, RED)
-    c.hline(2, 45, 100, INK)
+    c.rect(2, 26, 108, 16, BARK)
+    for y in range(29, 42, 4):
+        c.hline(2, y, 108, lit(BARK, -0.25))
+    for x, y in ((20, 26), (48, 30), (74, 26), (90, 34), (34, 34), (60, 38)):
+        c.vline(x, y, 3, lit(BARK, -0.25))
+    c.hline(2, 26, 108, lit(BARK, 0.35))
+    c.hline(2, 41, 108, lit(BARK, 0.25))
+    # Юбка помоста.
+    c.rect(2, 42, 108, 14, RED_D)
+    for x in range(4, 110, 6):
+        c.vline(x, 42, 14, WINE)
+        c.vline(x + 1, 43, 12, lit(RED_D, 0.15))
+    c.hline(2, 42, 108, RED)
+    c.hline(2, 43, 108, GOLD)
+    c.hline(2, 55, 108, INK)
     # Колонки.
-    for x in (2, 88):
-        c.rect(x, 4, 14, 22, NAVY)
-        c.hline(x, 4, 14, METAL)
-        c.ellipse(x + 7, 11, 4, 4, INK)
-        c.ellipse(x + 7, 11, 1.5, 1.5, METAL)
-        c.ellipse(x + 7, 20, 3, 3, INK)
-    # Стойка микрофона.
-    c.vline(52, 6, 22, METAL_D)
-    c.ellipse(52, 5, 2, 2, STEEL)
-    c.hline(48, 28, 9, METAL_D)
+    for x in (3, 95):
+        c.rect(x, 10, 14, 24, NAVY)
+        c.hline(x, 10, 14, METAL)
+        c.vline(x, 10, 24, METAL_D)
+        c.ellipse(x + 7, 17, 4, 4, INK)
+        c.ellipse(x + 7, 17, 1.5, 1.5, METAL)
+        c.ellipse(x + 7, 27, 3, 3, INK)
+        c.px(x + 6, 26, METAL)
+    # Усилитель слева и стойка микрофона.
+    c.rect(22, 28, 12, 8, NAVY)
+    c.hline(22, 28, 12, METAL)
+    c.rect(24, 30, 8, 3, INK)
+    for x in (25, 28, 31):
+        c.px(x, 34, GOLD)
+    c.vline(56, 12, 24, METAL_D)
+    c.vline(55, 12, 24, STEEL)
+    c.ellipse(56, 11, 2, 2, STEEL)
+    c.hline(52, 36, 9, METAL_D)
     c.outline(INK)
-    shadowed(c, 52, 47, 50, 2).save("fc3_stage")
+    shadowed(c, 56, 57, 54, 2).save("fc3_stage")
     g = Canvas(18, 10)
     g.ellipse(5, 6, 4.5, 3.5, WOOD)
     g.ellipse(5, 6, 1.4, 1.4, WOOD_DD)
@@ -850,6 +1025,139 @@ def stage():
     g.rect(16, 4, 2, 4, BARK)
     g.outline(INK)
     g.save("fc3_guitar")
+
+
+# ---------------------------------------------------------------- 22.11: убранство зала
+
+
+def hedge():
+    """Длинная низкая кадка с кустами и цветами (44×15 точек мира): на месте будущего ряда столов и в углах зала,
+    пока там пусто, - зелёная полоса вместо голой плитки."""
+    c = Canvas(88, 30)
+    # Кадка: доски, верхняя кромка светлее, низ темнее.
+    c.rect(2, 16, 84, 12, WOOD)
+    c.hline(2, 16, 84, lit(WOOD, 0.3))
+    for x in range(10, 84, 12):
+        c.vline(x, 17, 11, WOOD_D)
+        c.vline(x + 1, 17, 11, lit(WOOD, 0.15))
+    c.hline(2, 27, 84, WOOD_D)
+    c.rect(1, 14, 86, 3, WOOD_D)
+    c.hline(1, 14, 86, lit(WOOD_D, 0.3))
+    # Кусты шапками, светлее сверху слева.
+    rnd = random.Random(31)
+    blobs = [(8 + k * 10 + rnd.randrange(-2, 3), 9 + rnd.randrange(-2, 2), 7 + rnd.randrange(0, 2), 5 + rnd.randrange(0, 2)) for k in range(8)]
+    for cx, cy, rx, ry in blobs:
+        c.ellipse(cx, cy, rx, ry, GREEN_D)
+    for cx, cy, rx, ry in blobs:
+        c.ellipse(cx - 1, cy - 1, rx - 2, ry - 2, GREEN)
+        c.px(cx - 3, cy - 3, lit(GREEN, 0.4))
+        c.px(cx - 2, cy - 3, lit(GREEN, 0.4))
+    for _ in range(20):
+        x, y = rnd.randrange(4, 84), rnd.randrange(3, 14)
+        if c.get(x, y)[3]:
+            c.px(x, y, GREEN_DD)
+    # Цветы: розовые, жёлтые, белые - по одной точке с серединкой.
+    for k in range(9):
+        x, y = 6 + k * 9 + rnd.randrange(0, 4), rnd.randrange(4, 12)
+        tone = (PINK, GOLD_L, WHITE)[k % 3]
+        c.px(x, y, tone)
+        c.px(x + 1, y, tone)
+        c.px(x, y + 1, tone)
+        c.px(x + 1, y + 1, lit(tone, -0.2))
+    c.outline(INK)
+    shadowed(c, 44, 28, 42, 2).save("fc3_hedge")
+
+
+def plant_slim():
+    """Узкое растение у стены (10×22 точки мира): белое кашпо, высокие острые листья-«языки» с тёмными полосами."""
+    c = Canvas(20, 44)
+    c.rect(4, 32, 12, 10, WHITE)
+    c.vline(4, 32, 10, PALE)
+    c.vline(15, 32, 10, STEEL)
+    c.hline(4, 41, 12, STEEL)
+    c.rect(3, 30, 14, 3, PALE)
+    c.hline(3, 30, 14, WHITE)
+    # Листья: (x низа, верх, наклон) - каждый 3 точки шириной, к верху сужается в острие.
+    leaves = [(6, 9, -1), (12, 11, 1), (9, 2, 0), (4, 15, -1), (14, 17, 1), (10, 13, 0)]
+    for x, top, lean in leaves:
+        for y in range(top, 31):
+            k = (y - top) / (31 - top)
+            dx = round((1 - k) * 2 * lean)
+            w = 1 if y < top + 2 else (2 if y < top + 5 else 3)
+            for i in range(w):
+                tone = GREEN if i == 0 else GREEN_D
+                if (y + x) % 4 == 0 and i:
+                    tone = GREEN_DD
+                c.px(x + dx + i - w // 2, y, tone)
+        c.px(x + round(2 * lean) - 0, top, lit(GREEN, 0.4))
+    c.outline(INK)
+    shadowed(c, 10, 42, 8, 2).save("fc3_plant_slim")
+
+
+def aboard():
+    """Меловой штендер у входа с лифта (8×11 точек мира): деревянная рамка-«домик», на доске - мелом чашка, кусок
+    пиццы и строчки-чёрточки (без надписей - на телефоне их не прочесть)."""
+    c = Canvas(16, 22)
+    c.rect(1, 0, 14, 18, WOOD)
+    c.hline(1, 0, 14, lit(WOOD, 0.3))
+    c.vline(1, 0, 18, lit(WOOD, 0.2))
+    c.vline(14, 0, 18, WOOD_D)
+    c.rect(3, 2, 10, 14, NAVY)
+    c.rect(3, 2, 10, 1, lit(NAVY, -0.3))
+    c.stamp(["..WW..", ".W..W.", "WWWW..", ".WW..."], 4, 4)
+    c.stamp(["YYY", ".s.", ".Y."], 9, 4)
+    c.hline(4, 10, 6, PALE)
+    c.hline(4, 12, 7, PINK)
+    c.hline(4, 14, 5, PALE)
+    c.px(11, 14, GOLD_L)
+    for x in (2, 13):
+        c.vline(x, 18, 4, WOOD_D)
+    c.outline(INK)
+    shadowed(c, 8, 21, 7, 1.5).save("fc3_aboard")
+
+
+def mosaic():
+    """Мозаика в полу (60×28 точек мира) - круг-«роза ветров» из той же терракоты и песка, что ромбики плитки: внизу
+    зала, пока там нет ни детской зоны, ни сцены. Лучи - левая половина светлее (свет сверху слева)."""
+    w, h = 120, 56
+    c = Canvas(w, h)
+    cx, cy = w / 2, h / 2
+    rings = [(1.0, BARK), (0.96, TAN), (0.86, SAND), (0.8, BARK), (0.76, CREAM)]
+    for r, tone in rings:
+        c.ellipse(cx, cy, (w / 2 - 0.5) * r, (h / 2 - 0.5) * r, tone)
+    # Звезда: восемь лучей (по осям длиннее), между ними - внутренние вершины.
+    tips = []
+    for k in range(16):
+        a = k * math.pi / 8
+        r = (0.72 if k % 4 == 0 else 0.5) if k % 2 == 0 else 0.22
+        tips.append((math.cos(a) * r, math.sin(a) * r))
+
+    def inside(u, v):
+        n, hit = len(tips), False
+        for i in range(n):
+            (x1, y1), (x2, y2) = tips[i], tips[(i + 1) % n]
+            if (y1 > v) != (y2 > v) and u < x1 + (v - y1) * (x2 - x1) / (y2 - y1):
+                hit = not hit
+        return hit
+
+    for y in range(h):
+        for x in range(w):
+            u, v = (x + 0.5 - cx) / (w / 2), (y + 0.5 - cy) / (h / 2)
+            if not inside(u, v):
+                continue
+            ang = math.atan2(v, u) % (2 * math.pi)
+            k = round(ang / (math.pi / 4)) % 8
+            side = ((ang - k * math.pi / 4 + math.pi) % (2 * math.pi)) - math.pi
+            long_ray = k % 2 == 0
+            if long_ray:
+                tone = TAN if side < 0 else BARK
+            else:
+                tone = SAND if side < 0 else TAN
+            c.px(x, y, tone)
+    c.ellipse(cx, cy, 6, 3.2, BARK)
+    c.ellipse(cx, cy, 4.5, 2.2, GOLD)
+    c.px(int(cx) - 2, int(cy) - 1, GOLD_L)
+    c.save("fc3_mosaic")
 
 
 def main():
@@ -878,6 +1186,10 @@ def main():
     note()
     kids()
     stage()
+    hedge()
+    plant_slim()
+    mosaic()
+    aboard()
 
 
 if __name__ == "__main__":

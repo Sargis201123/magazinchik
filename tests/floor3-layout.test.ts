@@ -34,8 +34,8 @@ function targets(v: (typeof VARIANTS)[number]): L.Pt[] {
   const out: L.Pt[] = [L.LIFT_IN, L.TRAY_SPOT];
   for (let k = 0; k < L.BIN_QUEUE; k++) out.push(L.binSlot(k));
   L.STALL_X.forEach((x, i) => out.push({ x, y: L.AISLES[0] }, { x, y: L.QUEUE_Y[1] }, { x, y: L.QUEUE_Y[0] }, L.queueExit(i)));
-  L.TABLES.forEach((t, k) => {
-    if (t.row === 2 && (!v.row3 || (k === 4 && v.kids) || (k === 5 && v.stage))) return;
+  L.TABLES.forEach((_, k) => {
+    if (!L.hasTable(k, v.row3)) return;
     for (const s of L.seatsOf(k)) out.push(s.approach);
   });
   if (v.kids) out.push(L.KID_TOP);
@@ -95,15 +95,37 @@ describe('фудкорт: люди не ходят сквозь мебель', (
     expect(L.route(L.LIFT_IN, seat, 2).slice(0, -1).every((q) => q.x !== seat.x || q.y !== seat.y)).toBe(true);
   });
 
-  it('места за столами: у верхних рядов — по шесть, у нижнего — три (спереди край зала)', () => {
+  it('места за столами: по шесть у каждого стола (22.11: и у нижнего ряда - под ним теперь проход)', () => {
     expect(L.seatsOf(0)).toHaveLength(6);
     expect(L.seatsOf(3)).toHaveLength(6);
-    expect(L.seatsOf(4)).toHaveLength(3);
+    expect(L.seatsOf(4)).toHaveLength(6);
     // Сидят лицом к нам — выше столешницы, спиной — ниже; подходят снаружи стола.
     for (const s of L.seatsOf(2)) {
       const t = L.TABLES[s.table];
       if (s.back) expect(s.approach.y).toBeLessThan(t.y - L.TABLE_D);
       else expect(s.approach.y).toBeGreaterThan(t.y);
+    }
+  });
+
+  it('22.11: детская зона и сцена - своей полосой внизу зала, ниже столовой и нижнего прохода, в пределах зала', () => {
+    const dine = L.dine(true);
+    const last = L.AISLES[L.AISLES.length - 1];
+    for (const b of [L.KIDS, L.STAGE]) {
+      expect(b.y0).toBeGreaterThan(dine.y1);
+      expect(b.y0).toBeGreaterThan(last + L.LANE);
+      expect(b.y1).toBeLessThanOrEqual(L.H);
+      expect(b.x0).toBeGreaterThanOrEqual(4);
+      expect(b.x1).toBeLessThanOrEqual(L.W - 4);
+    }
+    // Не наезжают друг на друга, и между ними стоит тот, кто присматривает за детьми.
+    expect(L.KIDS.x1).toBeLessThan(L.STAGE.x0);
+    expect(L.WATCH.x).toBeGreaterThan(L.KIDS.x1);
+    expect(L.WATCH.x).toBeLessThan(L.STAGE.x0);
+    // Все столы - внутри столовой.
+    for (const t of L.TABLES) {
+      expect(t.x - L.TABLE_W / 2).toBeGreaterThan(dine.x0);
+      expect(t.x + L.TABLE_W / 2).toBeLessThan(dine.x1);
+      expect(t.y).toBeLessThan(dine.y1);
     }
   });
 });

@@ -115,6 +115,27 @@ export const SPRITES = [
   'bsm_lamp',
   'bsm_ico_neon',
   'bsm_ico_fan',
+  // подвал 22.11
+  // (art/basement_deco.py): зал выше - внизу кладовая, котёл и верстак; ковёр и торшер в уголке; трещины, пятна, трап
+  // и разметка на полу; лестница уходит выше кадра ступенями.
+  'bsm_rug',
+  'bsm_crack',
+  'bsm_oil',
+  'bsm_drain',
+  'bsm_hazard',
+  'bsm_rack',
+  'bsm_rack2',
+  'bsm_barrel',
+  'bsm_cask',
+  'bsm_sacks',
+  'bsm_crates',
+  'bsm_boiler',
+  'bsm_boiler_lit',
+  'bsm_bench',
+  'bsm_floorlamp',
+  'bsm_mop',
+  'bsm_stairs2',
+  'bsm_steps',
   // Второй этаж — одежда (art/clothes_floor.py, scenes/floors/secondFloor.ts, scenes/clothesFx.ts): обои и паркет, окно,
   // стойки… — с 14.11 всё это в art/clothes_art.py (fl2b_* ниже); отсюда остались пакет, бирка, паутинка и вход с улицы.
   'fl2_bag',
@@ -152,6 +173,22 @@ export const SPRITES = [
   'fl2b_poster1',
   ...['warm', 'rain', 'summer'].flatMap((c) => [`fl2b_manq_${c}0`, `fl2b_manq_${c}1`, `fl2b_form_${c}`]),
   'fl2b_form',
+  // второй этаж 22.11
+  // Зал выше (art/clothes_decor.py): верх стены, лестница у нижнего края и коврик, подиум с вазой и манекенами,
+  // уголок ожидания, вешалка со шляпами, столик с букетом; до ремонта — стойка в плёнке и стремянка.
+  'fl2d_upper',
+  'fl2d_stairs',
+  'fl2d_mat',
+  'fl2d_stage',
+  'fl2d_pampas',
+  ...['warm', 'rain', 'summer'].flatMap((c) => [`fl2d_manq_${c}0`, `fl2d_manq_${c}1`]),
+  'fl2d_sofa',
+  'fl2d_lamp',
+  'fl2d_rug',
+  'fl2d_hatstand',
+  'fl2d_flowers',
+  'fl2d_wrap',
+  'fl2d_reno',
   // Живые этажи (art/floors_life.py, 15.11): второй набор стоек, стол со стопками, лампы, бра, гирлянда, блик на
   // паркете; значки моментов этажей (scenes/floors/momentFx.ts).
   ...['warm', 'rain', 'summer'].flatMap((c) => [`fl2c_rack_${c}`, `fl2c_fold_${c}`]),
@@ -229,6 +266,14 @@ export const SPRITES = [
   'fc3_horse',
   'fc3_stage',
   'fc3_guitar',
+  // фудкорт 22.11
+  // Зал выше - убранство (art/foodcourt_art.py): шашечка столовой, длинная кадка с кустами, узкое растение у стены,
+  // мозаика в полу внизу, меловой штендер у лифта.
+  'fc3_dine',
+  'fc3_hedge',
+  'fc3_plant_slim',
+  'fc3_mosaic',
+  'fc3_aboard',
   // Ломбард (art/pawnshop.py): вещи и ценник; дверь «Подсобка» в зале (scenes/pawnFx.ts), метка «ждут ответа»
   // над дверью или окошком и сейф «серой» подсобки в подвале (floors/basementFloor.ts).
   'pawn_door',

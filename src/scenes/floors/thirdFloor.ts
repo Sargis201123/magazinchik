@@ -17,6 +17,11 @@
 //  · вечером зал темнеет (как ночь в основном зале), над столами — гирлянды, вывески светят.
 // Глубина — по ногам, как в зале; ходят только по проходам (тест tests/floor3-layout.test.ts). Без тряски. В лёгкой
 // графике людей меньше, облака стоят, свет не дышит, гирлянды не мигают.
+//
+// 22.11, автор: «надо улучшать дизайн этажей, сделать их красивее». Зал стал выше (290): пол - плитка с терракотовыми
+// ромбиками, столовая - в рамке (песочная шашечка, после «дизайна» - настил), столы - со стульями и табуретами (у
+// голого этажа - закусочная: белый пластик и красное, у «дизайна» - дерево и зелёное), детская зона и сцена - своей
+// полосой внизу, а не вместо столов; пока их нет - мозаика в полу и кадки, до ремонта на месте нижнего ряда - кусты.
 
 import Phaser from 'phaser';
 import { foodPlan, isFoodWeekend, partyOn, stallPlaces, stallsOf, STALLS, type StallId, type StallPlan } from '../../game/foodcourt';
@@ -117,14 +122,11 @@ export function buildThird(kit: FloorKit): void {
   tile(kit, 0, 0, L.W, L.SILL + 2, 'fc3_frame', -16);
   tile(kit, 0, L.SILL + 2, L.W, L.WALL_BOTTOM - L.SILL - 2, ups.design ? 'fc3_wain_d' : 'fc3_wain', -15);
   tile(kit, 0, L.WALL_BOTTOM, L.W, L.H - L.WALL_BOTTOM, 'fc3_floor', -14);
-  // 14.11: выше и ниже кадра зал продолжается (floorView.drawAround): балка перекрытия вверх, плитка вниз.
-  kit.surround({ wall: 0x262b44, floor: 'fc3_floor', floorY: L.WALL_BOTTOM, floorStep: 16, side: 0x733e39, sideW: 4 });
+  // 14.11: выше и ниже кадра зал продолжается (floorView.drawAround): балка перекрытия вверх, плитка вниз. 22.11: узор
+  // плитки повторяется через 32 точки (ромбики на перекрестьях) - продолжение шагает так же, без шва.
+  kit.surround({ wall: 0x262b44, floor: 'fc3_floor', floorY: L.WALL_BOTTOM, floorStep: 32, side: 0x733e39, sideW: 4 });
   scene.add.rectangle(0, L.WALL_BOTTOM, L.W, 2, 0x181425, 0.22).setOrigin(0).setDepth(-12);
-  if (ups.design) {
-    // Настил под столами: тёплое дерево с тёмной кромкой — зал делится на «кухни» и «столовую».
-    tile(kit, 24, 108, 120, 74, 'fc3_deck', -13);
-    scene.add.rectangle(24, 108, 120, 74).setOrigin(0).setStrokeStyle(1, 0x733e39, 0.9).setDepth(-12.5);
-  }
+  diningFloor(kit, L.dine(finish), ups.design);
   for (const x of [0, L.W - 4]) scene.add.rectangle(x, 0, 4, L.H, 0x733e39).setOrigin(0).setDepth(-11);
 
   // ------------------------------------------------------------ лифт
@@ -175,15 +177,29 @@ export function buildThird(kit: FloorKit): void {
   // ------------------------------------------------------------ мебель
   prop(kit, L.TRAYS.x, L.TRAYS.y, 'fc3_trays');
   prop(kit, L.BINS.x, L.BINS.y, 'fc3_bins');
-  for (const p of L.PLANTS) prop(kit, p.x, p.y, ups.design ? 'fc3_plant_tall' : 'fc3_plant');
+  const bush = ups.design ? 'fc3_plant_tall' : 'fc3_plant';
+  for (const p of L.PLANTS) prop(kit, p.x, p.y, bush);
   prop(kit, L.COOLER.x, L.COOLER.y, 'fc3_cooler');
+  // 22.11: штендер у лифта, узкие кадки у левой стены, кадки в нижних углах; пока внизу пусто - мозаика в полу,
+  // без сцены - кусты.
+  for (const p of L.SLIM) prop(kit, p.x, p.y, 'fc3_plant_slim');
+  // Меловое меню у лифта - только когда есть чем кормить.
+  if (spots.length) prop(kit, L.ABOARD.x, L.ABOARD.y, 'fc3_aboard');
+  prop(kit, L.CORNERS[1].x, L.CORNERS[1].y, bush);
+  if (!ups.kids) prop(kit, L.CORNERS[0].x, L.CORNERS[0].y, bush);
+  if (!ups.kids && !ups.stage) kit.art(L.MOSAIC.x, L.MOSAIC.y, 'fc3_mosaic').setDepth(-12.4);
+  if (ups.kids && !ups.stage) prop(kit, L.MUSICIAN.x, L.STAGE.y1, 'fc3_hedge');
   const seats: SeatSlot[] = [];
   const tables: number[] = [];
   L.TABLES.forEach((tb, k) => {
-    if (tb.row === 2 && (!finish || (k === 4 && ups.kids) || (k === 5 && ups.stage))) return;
+    if (!L.hasTable(k, finish)) {
+      // До ремонта нижнего ряда нет - на его месте длинная кадка с кустами и цветами.
+      prop(kit, tb.x, tb.y - 1, 'fc3_hedge');
+      return;
+    }
     tables.push(k);
-    // Скамья сзади — под теми, кто сидит лицом к нам; столешница со скамьёй спереди — поверх них.
-    prop(kit, tb.x, tb.y - 17, ups.design ? 'fc3_bench_d' : 'fc3_bench', { depth: tb.y - 18 });
+    // Стулья сзади - под теми, кто сидит лицом к нам; столешница с табуретами спереди - поверх них.
+    prop(kit, tb.x, tb.y - 16, ups.design ? 'fc3_bench_d' : 'fc3_bench', { depth: tb.y - 18 });
     prop(kit, tb.x, tb.y, ups.design ? 'fc3_table_d' : 'fc3_table', { depth: tb.y - 12 });
     for (const s of L.seatsOf(k)) seats.push({ ...s, who: null, held: false, plate: null });
     if (ups.design) {
@@ -191,9 +207,6 @@ export function buildThird(kit: FloorKit): void {
       lightPool(kit, tb.x, tb.y - 12, { w: 64, h: 26, tint: 0xfeae34, alpha: 0.16, depth: LIGHT_DEPTH, breathe: { alpha: 0.11, ms: 1700 + k * 130 } });
     }
   });
-  // Пустой угол внизу (нет ряда столов и улучшений) — зелень, чтобы зал не выглядел недостроенным.
-  if (!finish && !ups.kids) prop(kit, 36, 222, 'fc3_plant');
-  if (!finish) prop(kit, 118, 222, 'fc3_plant');
 
   // ------------------------------------------------------------ люди: шагомер, походка, руки
   const feet = (m: Man): L.Pt => ({ x: m.x, y: m.y + L.FOOT });
@@ -589,7 +602,7 @@ export function buildThird(kit: FloorKit): void {
     // По коврику — через две «развилки» (сверху и снизу), чтобы не бегать сквозь горку и бассейн.
     const hub = async (low: boolean): Promise<void> => {
       const f = feet(kid);
-      const near = f.y > 212 ? L.KID_BOTTOM : L.KID_TOP;
+      const near = f.y > L.KID_BOTTOM.y - 8 ? L.KID_BOTTOM : L.KID_TOP;
       await stepTo(kid, near);
       if ((near === L.KID_BOTTOM) !== low) await stepTo(kid, low ? L.KID_BOTTOM : L.KID_TOP);
     };
@@ -627,6 +640,8 @@ export function buildThird(kit: FloorKit): void {
         face(kid, 'right');
         if (!lite) scene.tweens.add({ targets: horse, angle: { from: -7, to: 7 }, duration: 360, yoyo: true, repeat: 3, ease: 'Sine.easeInOut', onComplete: () => horse.setAngle(0) });
         await pause(kit, 1500);
+        // Слезть - назад по верху коврика (не сквозь бассейн).
+        await stepTo(kid, L.HORSE_WAY);
       } else {
         await hub(Math.random() < 0.5);
         face(kid, 'down');
@@ -642,7 +657,7 @@ export function buildThird(kit: FloorKit): void {
       const kid = make(guestLook(true), k % 2 ? L.KID_BOTTOM : L.KID_TOP);
       void pause(kit, k * 900).then(() => play(kid));
     }
-    const mom = make(guestLook(), { x: 84, y: 208 });
+    const mom = make(guestLook(), L.WATCH);
     face(mom, 'left');
     if (!lite) scene.time.addEvent({ delay: 5200, loop: true, callback: () => Math.random() < 0.4 && emote(mom, 'emo_heart') });
   }
@@ -853,6 +868,40 @@ function paintSky(g: Phaser.GameObjects.Graphics, ev: number, weather: string): 
   g.fillRect(0, L.WINDOW_TOP, L.W, L.SILL - L.WINDOW_TOP);
 }
 
+/**
+ * Пол столовой (22.11, автор: «сделать этажи красивее»): под столами - своя плитка в рамке, зал делится на проходы
+ * и места. Голый этаж - песочная шашечка в терракотовой рамке; после «дизайна зала» - деревянный настил с тёмной
+ * кромкой и латунной полосой. Рамка - полосками по краю (в точках мира, ровно по сетке пикселей рисунка).
+ */
+function diningFloor(kit: FloorKit, b: L.Box, design: boolean): void {
+  const w = b.x1 - b.x0;
+  const h = b.y1 - b.y0;
+  tile(kit, b.x0, b.y0, w, h, design ? 'fc3_deck' : 'fc3_dine', -13);
+  const ring = (inset: number, size: number, color: number): void => {
+    const x = b.x0 + inset;
+    const y = b.y0 + inset;
+    const rw = w - 2 * inset;
+    const rh = h - 2 * inset;
+    for (const [rx, ry, rw2, rh2] of [
+      [x, y, rw, size],
+      [x, y + rh - size, rw, size],
+      [x, y, size, rh],
+      [x + rw - size, y, size, rh],
+    ]) {
+      kit.scene.add.rectangle(rx, ry, rw2, rh2, color).setOrigin(0).setDepth(-12.5);
+    }
+  };
+  if (design) {
+    ring(0, 0.5, 0x3e2731);
+    ring(0.5, 0.5, 0x733e39);
+    ring(1, 0.5, 0xfeae34);
+  } else {
+    ring(0, 0.5, 0x8f563b);
+    ring(0.5, 1, 0xc28569);
+    ring(1.5, 0.5, 0xe4a672);
+  }
+}
+
 /** Детская зона: коврик, горка, сухой бассейн (бортик спереди — поверх ребёнка), лошадка. Возвращает лошадку. */
 function buildKids(kit: FloorKit): Phaser.GameObjects.Image {
   kit.art(L.KIDS.x0, L.KIDS.y0, 'fc3_kmat').setOrigin(0).setDepth(-12);
@@ -873,10 +922,11 @@ function buildGarlands(kit: FloorKit): Phaser.GameObjects.Container {
   const { scene, lite } = kit;
   const box = scene.add.container(0, 0).setDepth(GARLAND_DEPTH).setAlpha(0);
   const tints = [0xe43b44, 0xfee761, 0x63c74d, 0x2ce8f5, 0xf6757a];
+  // Над рядами столов (22.11: ряды ниже - зал выше).
   for (const [y0, sag] of [
-    [96, 9],
-    [142, 8],
-    [186, 7],
+    [98, 9],
+    [146, 8],
+    [194, 7],
   ] as const) {
     const g = scene.add.graphics().lineStyle(0.6, 0x262b44, 1);
     const pts: Phaser.Math.Vector2[] = [];

@@ -21,6 +21,7 @@
 //   --only <имя>        только один прогон: l5, rain, l3, l2, l6, pl4
 //   --threshold <доля>  какая доля точек кадра может отличаться от эталона (по умолчанию 0)
 //   --port <номер>      порт своего сервера (по умолчанию 4173, занят — возьмёт следующий)
+//   FLOORSHOT=1         ещё прогоны flbare и flfull: все этажи открыты (голые / отделанные), кадр каждого этажа
 // Нужен Playwright с Chromium: npm i -D playwright && npx playwright install chromium
 // (свой Chromium — переменная CHROMIUM_PATH).
 
@@ -32,6 +33,10 @@ import { DAY_SECONDS, STORE_LEVELS } from '../src/game/economy';
 import { NIGHT_SECONDS } from '../src/game/night';
 import { weatherFor } from '../src/game/weather';
 import { ru, type TextKey } from '../src/i18n/ru';
+import { buyFloor, buyFloorUp, finishFloor, FLOOR_UPGRADES, FLOOR_IDS } from '../src/game/floors';
+import { buyPart, buySlot, PART_IDS } from '../src/game/basement';
+import { buyBatch } from '../src/game/clothes';
+import { openStall, STALL_IDS } from '../src/game/foodcourt';
 import { isLang, type Lang } from '../src/i18n/langs';
 import { decodePng, encodePng } from './png';
 
@@ -59,7 +64,8 @@ const NOW = Date.UTC(2026, 5, 15, 9, 0, 0);
 const SEED = 20261015;
 /** Телефон на Android: Phaser рисует так же, как у игроков (по одной текстуре за раз, MobilePipeline). */
 const PHONE = {
-  viewport: { width: 390, height: 844 },
+  // VIEW=375x667 — другой экран (кадры этажей на маленьком телефоне); эталон снят на 390×844.
+  viewport: process.env.VIEW ? { width: Number(process.env.VIEW.split('x')[0]), height: Number(process.env.VIEW.split('x')[1]) } : { width: 390, height: 844 },
   deviceScaleFactor: 2,
   isMobile: true,
   hasTouch: true,
@@ -90,7 +96,32 @@ const rainDay = (from: number): number => {
 /** Другой уровень помещения: полок не больше, чем мест под них. */
 const level = (n: number) => (state: SaveFile['state']) => ({ level: n, shelves: state.shelves.slice(0, STORE_LEVELS[n].slots) });
 
+/** FLOORSHOT: все этажи открыты — голые (bare) или отделанные до конца (full); точки еды сданы в аренду (своя — только с кухней). */
+function floorsState(base: any, full: boolean): any {
+  let st: any = { ...base, level: 4, money: 10_000_000 };
+  for (const id of FLOOR_IDS) st = buyFloor(st, id) ?? st;
+  if (full) {
+    for (const id of FLOOR_IDS) {
+      for (let i = 0; i < 3; i++) st = finishFloor(st, id) ?? st;
+      for (let k = 0; k < 3; k++) for (const u of FLOOR_UPGRADES[id]) st = buyFloorUp(st, id, u.id) ?? st;
+    }
+    for (const p of PART_IDS) st = buyPart(st, p) ?? st;
+    for (let i = 0; i < 6; i++) st = buySlot(st) ?? st;
+    for (let i = 0; i < 4; i++) st = buyBatch(st) ?? st;
+    for (const id of STALL_IDS) st = openStall(st, id, 'rent') ?? st;
+  }
+  return { ...st, money: 50000 };
+}
+
 const RUNS: Run[] = [
+  // Этажи (22.11): все три открыты — голые (flbare) и отделанные до конца (flfull); после кадра зала — по кадру
+  // на этаж. Только с FLOORSHOT=1 (в общий прогон и эталон не входят): `FLOORSHOT=1 … e2e.ts --only flfull`.
+  ...(process.env.FLOORSHOT
+    ? ([
+        { name: 'flbare', patch: (s) => floorsState(s, false), shots: [['day', 0.2]] },
+        { name: 'flfull', patch: (s) => floorsState(s, true), shots: [['day', 0.2]] },
+      ] as Run[])
+    : []),
   {
     name: 'l5',
     patch: () => ({}),
@@ -423,6 +454,25 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
     const s = await forward((s) => !s.dayOpen || s.night || DAY_SECONDS - s.timeLeft >= p * DAY_SECONDS, `${Math.round(p * 100)}% дня`, DAY_SECONDS * 1000);
     if (!s.dayOpen || s.night) throw new Error(`день кончился раньше кадра «${name}»`);
     await shot(name);
+  }
+  if (process.env.FLOORSHOT && run.name.startsWith('fl')) {
+    for (const id of ['basement', 'second', 'third']) {
+      await page.evaluate(`document.querySelector('[data-floor="${id}"]')?.click()`);
+      for (let i = 0; i < 40; i++) {
+        await tick(100);
+        const lk = await look();
+        if ((lk.dialog || lk.modals) && !lk.summary) await press(undefined);
+      }
+      await page.evaluate(`document.querySelector('[data-floor="${id}"]')?.click()`);
+      for (let i = 0; i < 30; i++) {
+        await tick(100);
+        const lk = await look();
+        if ((lk.dialog || lk.modals) && !lk.summary) await press(undefined);
+      }
+      await page.screenshot({ path: SHOTS + `${run.name}-${id}.png`, animations: 'disabled' });
+      say(`${run.name}-${id}.png`);
+    }
+    return;
   }
   if (!run.fullDay) return;
   // Вечер: ночная смена (она куплена в сохранении) — кадр на её середине, потом итоги дня.
