@@ -115,6 +115,27 @@ export const SPRITES = [
   'bsm_lamp',
   'bsm_ico_neon',
   'bsm_ico_fan',
+  // подвал 22.11
+  // (art/basement_deco.py): зал выше - внизу кладовая, котёл и верстак; ковёр и торшер в уголке; трещины, пятна, трап
+  // и разметка на полу; лестница уходит выше кадра ступенями.
+  'bsm_rug',
+  'bsm_crack',
+  'bsm_oil',
+  'bsm_drain',
+  'bsm_hazard',
+  'bsm_rack',
+  'bsm_rack2',
+  'bsm_barrel',
+  'bsm_cask',
+  'bsm_sacks',
+  'bsm_crates',
+  'bsm_boiler',
+  'bsm_boiler_lit',
+  'bsm_bench',
+  'bsm_floorlamp',
+  'bsm_mop',
+  'bsm_stairs2',
+  'bsm_steps',
   // Второй этаж — одежда (art/clothes_floor.py, scenes/floors/secondFloor.ts, scenes/clothesFx.ts): обои и паркет, окно,
   // стойки… — с 14.11 всё это в art/clothes_art.py (fl2b_* ниже); отсюда остались пакет, бирка, паутинка и вход с улицы.
   'fl2_bag',

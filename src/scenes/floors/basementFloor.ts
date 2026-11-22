@@ -18,6 +18,12 @@
 //  · улучшения подвала (BASEMENT_UPS) видны: «неон» — большая вывеска и розовая подсветка у автоматов; без «вытяжки»
 //    на стене потёки и плесень, на полу лужа и капает, с ней — короб вытяжки и вентилятор; «охрана» — пост у
 //    лестницы, охранник и камера с мигающим глазком.
+// 22.11, автор: «надо улучшать дизайн этажей, сделать их красивее». Зал стал выше (290 вместо 230), и низ подвала
+// остался пустым тёмным полом. Теперь внизу - кладовая (два стеллажа с закрутками, бочка с капустой, мешки картошки,
+// винная бочка), котёл у левой стены с огнём в окошке и верстак с приёмником; в уголке - ковёр и торшер; на бетоне -
+// плиты своего тона, трещины, пятна, трап у лужи, разметка у лифта. Над залом кирпич сводов уходит вверх, лестница -
+// ступенями в темноту (раньше над ней зияла чёрная дыра). Старьё в углу без холодильника - бочка, ящики и мешки
+// вместо одиноких коробок. Рисунок - art/basement_deco.py. Люди туда не ходят: всё ниже нижнего прохода (AISLE.c).
 // Лёгкая графика: людей меньше, свет и неон горят ровно, вентилятор и телевизор не мигают, капель нет. Тряски нет.
 // Глубина — по ногам (низу), как в зале: человек на шаг ниже предмета — перед ним. Ходят только по проходам.
 
@@ -59,6 +65,9 @@ const ADMIN = { x: 48, y: 112 };
 const SOFA = { x: 38, y: 186 };
 const SOFA_SEATS = [32, 44];
 const TABLE = { x: 86, y: 192 };
+/** 22.11: торшер за правым подлокотником (низ) и откуда садятся на диван - правее торшера, чтобы не идти сквозь него. */
+const FLOOR_LAMP = { x: 57, y: 182 };
+const SOFA_ENTRY_X = 66;
 /** Лифт в задней стене, холодильник у правой стены (низ; дверь — середина). */
 const LIFT = { x: 150, y: 46 };
 const COLD = { x: 144, y: 146, door: 139 };
@@ -81,6 +90,16 @@ const SPEED = 22;
 const VEIL = 800;
 const LIGHT = 900;
 const UI = 1000;
+/** 22.11: низ зала, ниже нижнего прохода (туда не ходят): котёл, стеллажи кладовой, верстак (низ предметов). */
+const BOILER = { x: 15, y: 276 };
+const RACKS: [number, string][] = [
+  [42, 'bsm_rack'],
+  [72, 'bsm_rack2'],
+];
+const RACK_Y = 266;
+const BENCH = { x: 134, y: 262 };
+/** Сколько точек мира над залом дорисовано кирпичом и ступенями (дальше - темнота продолжения, floorView.drawAround). */
+const ABOVE = 160;
 
 /**
  * Где болтают двое (по ногам): между диваном и столиком, чуть выше нижнего прохода — не на табличке «Подвал» внизу
@@ -118,13 +137,17 @@ export function buildBasement(kit: FloorKit): void {
   const people = new Set<Man>();
   tile(kit, 0, WALL, W, H - WALL, finish ? 'bsm_floor_fin' : 'bsm_floor2');
   kit.art(0, 0, 'bsm_wall').setOrigin(0).setDepth(-10);
+  // 22.11: над залом кирпич уходит вверх, лестница - ступенями (гаснут в продолжении зала, floorView.drawAround).
+  tile(kit, 4, -ABOVE, W - 8, ABOVE, 'bsm_brick', -28.5);
+  tile(kit, 5, -ABOVE, 23, ABOVE, 'bsm_steps', -28);
   // Тень у стены на полу и тёмные боковины (стены сбоку уходят в темноту).
   scene.add.rectangle(0, WALL, W, 6, 0x181425, 0.45).setOrigin(0).setDepth(-9);
   scene.add.rectangle(0, 0, 4, H, 0x181425).setOrigin(0).setDepth(-8);
   scene.add.rectangle(W - 4, 0, 4, H, 0x181425).setOrigin(0).setDepth(-8);
   // 14.11: выше и ниже кадра подвал продолжается (floorView.drawAround): кирпич сводов вверх, пол вниз, лестница
   // уходит в тёмный пролёт; притушено, как и сам подвал под вуалью.
-  kit.surround({ wall: 0x3e2731, floor: finish ? 'bsm_floor_fin' : 'bsm_floor2', floorY: WALL, floorStep: 16, side: 0x181425, sideW: 4, shafts: { top: [[6, 26]] }, veil: 0.5 });
+  // 22.11: плитка пола - 32 точки мира (было 16); проём лестницы сверху больше не шахта - ступени рисуем сами (выше).
+  kit.surround({ wall: 0x3e2731, floor: finish ? 'bsm_floor_fin' : 'bsm_floor2', floorY: WALL, floorStep: 32, side: 0x181425, sideW: 4, veil: 0.5 });
   if (!vent) kit.art(0, 0, 'bsm_damp').setOrigin(0).setDepth(-9.5);
   else {
     // Вытяжка: короб под сводом и вентилятор в стене (лопасти крутятся; в лёгкой графике — стоят).
@@ -133,13 +156,22 @@ export function buildBasement(kit: FloorKit): void {
     const blade = kit.art(128, 22, 'bsm_fan_blade').setDepth(-8.9);
     if (!lite) scene.tweens.add({ targets: blade, angle: 360, duration: 900, repeat: -1 });
   }
-  prop(kit, 5, 0, 'bsm_stairs', { ox: 0, oy: 0, depth: 2 });
+  prop(kit, 5, 0, 'bsm_stairs2', { ox: 0, oy: 0, depth: 2 });
   // Затёртый пол там, где ходят и стоят чаще всего.
   const wear = (x: number, y: number, s = 1): void => void kit.art(x, y, 'bsm_wear').setScale(s / 2).setDepth(-7).setAlpha(0.55);
   wear(STAIR_FOOT.x + 4, STAIR_FOOT.y + 8);
   wear(PAY.x - 4, PAY.y + 6);
   wear(84, AISLE.b + 2, 1.4);
   for (let i = 0; i < n; i++) wear(SLOT_X[i], STOOL_Y + 6, 0.8);
+  // 22.11: бетон живой - трещины, масляное пятно на пути из лифта, трап у лужи, разметка у дверей лифта.
+  const decal = (x: number, y: number, key: string, alpha = 1): void => void kit.art(x, y, key).setDepth(-7.2).setAlpha(alpha);
+  decal(64, 98, 'bsm_crack', 0.85);
+  decal(108, 246, 'bsm_crack', 0.8);
+  decal(30, 222, 'bsm_crack', 0.7);
+  decal(128, 70, 'bsm_oil', 0.9);
+  decal(142, 279, 'bsm_oil', 0.7);
+  decal(98, 128, 'bsm_drain');
+  tile(kit, 136, 47, 28, 1.5, 'bsm_hazard', -7);
 
   // ------------------------------------------------------------ лестница, охрана, неон у входа
   let guardMan: Man | null = null;
@@ -199,10 +231,31 @@ export function buildBasement(kit: FloorKit): void {
   if (!lite) scene.tweens.add({ targets: [screen, tvGlow], alpha: 0.7, duration: 260, yoyo: true, repeat: -1, ease: 'Stepped', easeParams: [2], repeatDelay: 900 });
   prop(kit, SOFA.x, SOFA.y, 'bsm_sofa');
   prop(kit, TABLE.x, TABLE.y, 'cafe_table');
-  // Коробки и старые ящики в углу у телевизора — подвал живёт своей жизнью.
-  prop(kit, 10, 214, 'box');
-  prop(kit, 20, 216, 'box');
-  prop(kit, 14, 207, 'box');
+  // 22.11: ковёр под диваном и до столика, торшер за подлокотником (тёплый свет), ящик с яблоками у телевизора -
+  // вместо трёх одиноких коробок.
+  kit.art(52, 194, 'bsm_rug').setDepth(-7.1);
+  prop(kit, FLOOR_LAMP.x, FLOOR_LAMP.y, 'bsm_floorlamp');
+  lightPool(kit, FLOOR_LAMP.x, FLOOR_LAMP.y - 18, { w: 22, h: 16, tint: 0xfee761, alpha: 0.45, depth: LIGHT });
+  const shade = lightPool(kit, FLOOR_LAMP.x - 4, FLOOR_LAMP.y + 2, { w: 52, h: 26, tint: 0xfeae34, alpha: 0.3, depth: LIGHT });
+  if (!lite) scene.tweens.add({ targets: shade, alpha: 0.24, duration: 1700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  prop(kit, 13, 216, 'bsm_crates');
+
+  // ------------------------------------------------------------ 22.11: низ зала - кладовая, котёл, верстак
+  // Котёл у левой стены: огонь в окошке поверх вуали (светится), под ним - оранжевое пятно на полу; в обычной
+  // графике огонь чуть пляшет.
+  prop(kit, BOILER.x, BOILER.y, 'bsm_boiler');
+  const fire = prop(kit, BOILER.x, BOILER.y, 'bsm_boiler_lit', { depth: VEIL + 1 });
+  const fireGlow = lightPool(kit, BOILER.x + 1, BOILER.y - 4, { w: 40, h: 20, tint: 0xf77622, alpha: 0.42, depth: LIGHT });
+  if (!lite) scene.tweens.add({ targets: [fire, fireGlow], alpha: 0.72, duration: 160, yoyo: true, repeat: -1, repeatDelay: 380, ease: 'Stepped', easeParams: [2] });
+  // Кладовая: два стеллажа с закрутками, перед ними бочка с капустой и мешки; правее - винная бочка на козлах.
+  for (const [x, key] of RACKS) prop(kit, x, RACK_Y, key);
+  prop(kit, 30, 282, 'bsm_barrel');
+  prop(kit, 45, 285, 'bsm_sacks');
+  prop(kit, 96, 268, 'bsm_cask');
+  // Верстак с приёмником, ящики рядом, ведро со шваброй у края (табличка «Подвал» - по середине, левее).
+  prop(kit, BENCH.x, BENCH.y, 'bsm_bench');
+  prop(kit, 156, 268, 'bsm_crates');
+  prop(kit, 121, 285, 'bsm_mop');
 
   // ------------------------------------------------------------ лифт, холодильник, паллеты
   const lift = prop(kit, LIFT.x, LIFT.y, 'bsm_lift', { depth: 1 });
@@ -215,15 +268,16 @@ export function buildBasement(kit: FloorKit): void {
     coldImg.setInteractive({ useHandCursor: true }).on('pointerup', () => tap(t('bsm.cold.tap', { n: Math.round(STORE_LEVELS[state.level].warehouse * COLD_ROOM) }), COLD.x, COLD.y - 52));
     lightPool(kit, COLD.x + 13, COLD.y - 32, { w: 18, h: 10, tint: 0x2ce8f5, alpha: 0.45, depth: LIGHT });
     coldGlow = lightPool(kit, COLD.door, COLD.y + 2, { w: 34, h: 14, tint: 0x9cd8ff, alpha: 0.18, depth: LIGHT });
-    // Жёлтая разметка: перед лифтом и площадка между холодильником и ломбардом, где паллеты ждут очереди.
-    for (const [x, y, w, h] of [[136, 48, 28, 1], [136, 152, 30, 1], [136, 152, 1, 18]] as const) scene.add.rectangle(x, y, w, h, 0xfee761, 0.55).setOrigin(0).setDepth(-7);
+    // Жёлтая разметка: площадка между холодильником и ломбардом, где паллеты ждут очереди (перед лифтом - полоса выше).
+    for (const [x, y, w, h] of [[136, 152, 30, 1], [136, 152, 1, 18]] as const) scene.add.rectangle(x, y, w, h, 0xfee761, 0.55).setOrigin(0).setDepth(-7);
     prop(kit, 148, 168, 'bsm_pallet');
     prop(kit, 159, 167, 'box');
     prop(kit, 159, 160, 'box');
   } else {
-    // Нет холодильника — в углу старьё.
-    prop(kit, 140, 120, 'box');
-    prop(kit, 152, 124, 'box');
+    // Нет холодильника - в углу старьё: бочка, ящики, мешки (22.11: было две одинокие коробки).
+    prop(kit, 142, 122, 'bsm_barrel');
+    prop(kit, 156, 125, 'bsm_crates');
+    prop(kit, 151, 138, 'bsm_sacks');
   }
 
   // ------------------------------------------------------------ ломбард (15.11: комната подвала, а не плитка меню)
@@ -261,8 +315,10 @@ export function buildBasement(kit: FloorKit): void {
 
   // ------------------------------------------------------------ свет: тёмная вуаль и тёплые пятна ламп
   scene.add.rectangle(0, 0, W, H, 0x181425, 0.42).setOrigin(0).setDepth(VEIL);
-  scene.add.rectangle(0, H - 46, W, 46, 0x181425, 0.22).setOrigin(0).setDepth(VEIL);
-  // Лампы в сетках: над стойкой, у автоматов, над уголком и столиком, у ломбарда, у лифта.
+  // 22.11: внизу больше не пустой пол - затемнение у края зала тоньше (было 46 точек).
+  scene.add.rectangle(0, H - 10, W, 10, 0x181425, 0.16).setOrigin(0).setDepth(VEIL);
+  // Лампы в сетках: над стойкой, у автоматов, над уголком и столиком, у ломбарда, у лифта; 22.11 - посреди зала
+  // (над лужей и трапом), над кладовой и над верстаком.
   const lamps: [number, number, number][] = [
     [31, 92, 64],
     [66, 30, 54],
@@ -271,6 +327,9 @@ export function buildBasement(kit: FloorKit): void {
     [86, 166, 60],
     [138, 168, 52],
     [148, 60, 46],
+    [88, 104, 50],
+    [57, 236, 64],
+    [140, 238, 54],
   ];
   for (const [x, y, size] of lamps) lamp(kit, x, y, size);
 
@@ -437,13 +496,13 @@ export function buildBasement(kit: FloorKit): void {
     if (sofa >= 0 && (bar < 0 || Math.random() < 0.5)) {
       sofaBusy[sofa] = m;
       const seat = { x: SOFA_SEATS[sofa], y: SOFA.y + 0.5 };
-      await go(m, seat, { x: 60, y: seat.y });
+      await go(m, seat, { x: SOFA_ENTRY_X, y: seat.y });
       if (m.active) {
         persons.setFacing(m, 'down');
         await new Promise<void>((done) => scene.tweens.add({ targets: m, y: SOFA.y - 9, duration: 200, onComplete: () => done() }));
         m.setDepth(SOFA.y + 0.5);
         await pause(kit, 5000 + Math.random() * 6000);
-        await walkPts(m, [{ x: 60, y: SOFA.y }]);
+        await walkPts(m, [{ x: SOFA_ENTRY_X, y: SOFA.y }]);
       }
       sofaBusy[sofa] = null;
       return;
