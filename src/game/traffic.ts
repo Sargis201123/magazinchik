@@ -20,6 +20,8 @@ import {
   checkoutSeconds,
   DAY_SECONDS,
   shelfFor,
+  PRODUCTS,
+  PRODUCT_IDS,
   staffOf,
   takeFromShelf,
   unitSalePrice,
@@ -175,6 +177,22 @@ export function flowNext(f: Flow): CartItem[] | null {
   return f.carts.shift() ?? null;
 }
 
+/** Как часто гость на бегу берёт похожее, если нужного нет на полке. */
+export const SWAP_CHANCE = 0.6;
+
+/** Похожий товар того же отдела, который сейчас лежит на полке (больше всего штук — первым); null — нечего предложить. */
+export function substitute(state: StoreState, want: ProductId, taken: Set<ProductId>): ProductId | null {
+  const category = PRODUCTS[want].category;
+  let best: ProductId | null = null;
+  let most = 0;
+  for (const id of PRODUCT_IDS) {
+    if (id === want || taken.has(id) || PRODUCTS[id].category !== category) continue;
+    const n = state.shelves.reduce((sum, sh) => sum + (sh.items[id]?.length ?? 0), 0);
+    if (n > most) [best, most] = [id, n];
+  }
+  return best;
+}
+
 export interface QuickPick {
   state: StoreState;
   cart: CartItem[];
@@ -192,16 +210,31 @@ export function quickPick(state: StoreState, wanted: ProductId[], random: () => 
   const cart: CartItem[] = [];
   let why: LostReason | undefined;
   let id: ProductId | undefined;
-  for (const want of new Set(wanted)) {
-    const index = shelfFor(s, want);
+  const wants = [...new Set(wanted)];
+  // Что гость уже взял или ещё возьмёт — замену ищем среди остального.
+  const taken = new Set(wants);
+  for (const first of wants) {
+    let want = first;
+    let index = shelfFor(s, want);
     if (index < 0) continue;
-    const oldest = s.shelves[index]?.items[want]?.[0];
+    let oldest = s.shelves[index]?.items[want]?.[0];
     if (!oldest) {
-      if (!why) {
-        why = 'empty';
-        id = want;
+      // 22.11 «Трафик v2»: гость на бегу не уходит сразу — нет сока, возьмёт воду (похожее с той же полки отдела).
+      // Замер на «Универмаге» с полками по 12: полки пустели быстрее, чем грузчик успевает, и четверть гостей уходила
+      // ни с чем при полном складе.
+      const swap = random() < SWAP_CHANCE ? substitute(s, want, taken) : null;
+      if (!swap) {
+        if (!why) {
+          why = 'empty';
+          id = want;
+        }
+        continue;
       }
-      continue;
+      want = swap;
+      taken.add(swap);
+      index = shelfFor(s, want);
+      oldest = s.shelves[index]?.items[want]?.[0];
+      if (!oldest) continue;
     }
     if (random() < warLeaves(s, want)) {
       why ??= 'eduard';
