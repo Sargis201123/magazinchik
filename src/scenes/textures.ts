@@ -229,6 +229,14 @@ export const SPRITES = [
   'fc3_horse',
   'fc3_stage',
   'fc3_guitar',
+  // фудкорт 22.11
+  // Зал выше - убранство (art/foodcourt_art.py): шашечка столовой, длинная кадка с кустами, узкое растение у стены,
+  // мозаика в полу внизу, меловой штендер у лифта.
+  'fc3_dine',
+  'fc3_hedge',
+  'fc3_plant_slim',
+  'fc3_mosaic',
+  'fc3_aboard',
   // Ломбард (art/pawnshop.py): вещи и ценник; дверь «Подсобка» в зале (scenes/pawnFx.ts), метка «ждут ответа»
   // над дверью или окошком и сейф «серой» подсобки в подвале (floors/basementFloor.ts).
   'pawn_door',

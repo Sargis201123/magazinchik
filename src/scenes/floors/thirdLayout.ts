@@ -4,9 +4,11 @@
 //
 // Мир этажа — 168×290 точек (22.11: было 230) (floorView.ts W, H). Задняя стена своя, выше общей (58): окна на район до подоконника
 // (40), под ними — обшивка. Вдоль стены — лифт слева и четыре места под точки еды; перед ними — очереди. Дальше —
-// столы в два ряда по два (третий ряд — после ремонта), внизу слева — детская зона, справа — сцена (улучшения
-// заменяют собой стол нижнего ряда). Ходят по проходам поперёк зала (AISLES) и двум коридорам вдоль (CORRIDORS):
-// у лифта и посередине; к столу, к очереди и к урне — от ближнего прохода прямо вверх или вниз.
+// столовая (DINE): столы в два ряда по два (третий ряд - после ремонта). 22.11, автор: «сделать этажи красивее» - зал
+// стал выше, и внизу под столовой своя полоса: слева детская зона, справа сцена (раньше они заменяли столы нижнего
+// ряда и ютились у самого края); пока их нет - мозаика в полу и кадки. Ходят по проходам поперёк зала (AISLES) и
+// двум коридорам вдоль (CORRIDORS): у лифта и посередине; к столу, к очереди и к урне - от ближнего прохода прямо
+// вверх или вниз.
 //
 // Координаты людей — точка у ног (как низ предмета): глубина по ней же. Человечек выше ног на FOOT.
 
@@ -44,7 +46,7 @@ export const QUEUE_Y = [80, 91];
 export const queueExit = (i: number): Pt => ({ x: STALL_X[i] + (i === STALL_X.length - 1 ? -11 : 11), y: 82 });
 
 /** Проходы поперёк зала (высота ног) и коридоры вдоль (x). */
-export const AISLES = [104, 150, 192];
+export const AISLES = [104, 152, 200, 246];
 export const CORRIDORS = [LIFT_X, 84];
 
 /**
@@ -81,10 +83,16 @@ export interface Table {
 export const TABLE_W = 50;
 export const TABLE_D = 22;
 export const SEAT_DX = [-16, 0, 16];
-const ROWS = [136, 176, 220];
+const ROWS = [138, 186, 234];
 const COLS = [50, 118];
-/** Ряды 0–1 — всегда; нижний (2) — после ремонта; детская зона и сцена занимают его левый и правый стол. */
+/** Ряды 0-1 - всегда; нижний (2) - после ремонта (22.11: детская зона и сцена его больше не занимают). */
 export const TABLES: Table[] = ROWS.flatMap((y, row) => COLS.map((x) => ({ x, y, row })));
+/** Есть ли стол сегодня: нижний ряд - только после ремонта. */
+export const hasTable = (k: number, row3: boolean): boolean => TABLES[k].row < 2 || row3;
+/** Столовая - пол под столами другой (шашечка или настил) в рамке; вниз - до последнего ряда, что есть. */
+export function dine(row3: boolean): Box {
+  return { x0: 22, y0: 109, x1: 146, y1: (row3 ? ROWS[2] : ROWS[1]) + 8 };
+}
 
 export interface Seat {
   table: number;
@@ -96,62 +104,87 @@ export interface Seat {
   approach: Pt;
 }
 
-/** Все места за столом: у нижнего ряда — только сзади (спереди — край зала). */
+/** Все места за столом: по три сзади (лицом к нам) и спереди (спиной). 22.11: и у нижнего ряда - под ним теперь проход. */
 export function seatsOf(k: number): Seat[] {
   const t = TABLES[k];
   const out: Seat[] = [];
   for (const dx of SEAT_DX) out.push({ table: k, back: true, x: t.x + dx, sitY: t.y - 23, approach: { x: t.x + dx, y: t.y - TABLE_D - 1 } });
-  if (t.row < 2) for (const dx of SEAT_DX) out.push({ table: k, back: false, x: t.x + dx, sitY: t.y - 9, approach: { x: t.x + dx, y: t.y + 2 } });
+  for (const dx of SEAT_DX) out.push({ table: k, back: false, x: t.x + dx, sitY: t.y - 9, approach: { x: t.x + dx, y: t.y + 2 } });
   return out;
 }
 
-/** Детская зона (нижний левый стол): коврик, горка, сухой бассейн, лошадка; где играют дети. */
-export const KIDS: Box = { x0: 6, y0: 195, x1: 76, y1: 224 };
-export const SLIDE: Pt = { x: 18, y: 218 };
-export const PIT: Pt = { x: 52, y: 219 };
-export const HORSE: Pt = { x: 69, y: 212 };
+/** Детская зона (внизу слева, под столовой): коврик, горка, сухой бассейн, лошадка; где играют дети. */
+export const KIDS: Box = { x0: 6, y0: 252, x1: 80, y1: 286 };
+export const SLIDE: Pt = { x: 18, y: 276 };
+export const PIT: Pt = { x: 54, y: 277 };
+export const HORSE: Pt = { x: 71, y: 270 };
 /** Две «развилки» на коврике: от них — к горке (снизу), к бассейну и лошадке (сверху). */
-export const KID_TOP: Pt = { x: 34, y: 202 };
-export const KID_BOTTOM: Pt = { x: 34, y: 222 };
+export const KID_TOP: Pt = { x: 34, y: 260 };
+export const KID_BOTTOM: Pt = { x: 34, y: 281 };
 /** Горка: к лесенке (по низу коврика, перед горкой), наверх, съехать. */
 export const SLIDE_PATH: Pt[] = [
-  { x: 11, y: 222 },
-  { x: 11, y: 206 },
-  { x: 27, y: 220 },
+  { x: 11, y: 280 },
+  { x: 11, y: 264 },
+  { x: 27, y: 278 },
 ];
 /** Бассейн: край, откуда забираются, и где стоят в шариках. Лошадка: где сидит ребёнок. */
-export const PIT_EDGE: Pt = { x: 48, y: 203 };
-export const PIT_IN: Pt = { x: 52, y: 214 };
-export const HORSE_SEAT: Pt = { x: 68, y: 213 };
+export const PIT_EDGE: Pt = { x: 50, y: 261 };
+export const PIT_IN: Pt = { x: 54, y: 272 };
+export const HORSE_SEAT: Pt = { x: 70, y: 271 };
 /** К лошадке — по верху коврика, мимо бассейна. */
-export const HORSE_WAY: Pt = { x: 68, y: 203 };
-/** Сцена (нижний правый стол) и где стоит музыкант. */
-export const STAGE: Box = { x0: 92, y0: 197, x1: 144, y1: 224 };
-export const MUSICIAN: Pt = { x: 118, y: 211 };
+export const HORSE_WAY: Pt = { x: 70, y: 261 };
+/** Где стоит мама или папа, присматривая за детьми: между ковриком и сценой. */
+export const WATCH: Pt = { x: 86, y: 266 };
+/** Сцена (внизу справа) и где стоит музыкант. */
+export const STAGE: Box = { x0: 94, y0: 255, x1: 150, y1: 285 };
+export const MUSICIAN: Pt = { x: 122, y: 273 };
+/** Мозаика в полу посередине нижней полосы - пока там нет ни детской зоны, ни сцены. */
+export const MOSAIC: Pt = { x: 84, y: 268 };
 
-/** Растения у правой стены (под урной), кулер — у левой, под подносами. */
+/** Растения у правой стены (под урной), кулер - у левой, под подносами; узкие кадки - у левой стены ниже кулера. */
 export const PLANTS: Pt[] = [
-  { x: 156, y: 176 },
-  { x: 156, y: 222 },
+  { x: 157, y: 180 },
+  { x: 157, y: 228 },
 ];
 export const COOLER: Pt = { x: 9, y: 132 };
+export const SLIM: Pt[] = [
+  { x: 8, y: 184 },
+  { x: 8, y: 232 },
+];
+/** Кадки в нижних углах (справа - всегда, слева - пока нет детской зоны). */
+export const CORNERS: Pt[] = [
+  { x: 13, y: 287 },
+  { x: 158, y: 287 },
+];
+/** Меловой штендер у выхода из лифта, между подносами и первой точкой. */
+export const ABOARD: Pt = { x: 29, y: 94 };
+/** Длинная кадка с кустами - на месте стола нижнего ряда до ремонта и на месте сцены, пока её нет. */
+export const HEDGE_W = 44;
 
 /** Что занимает пол (ноги людей сюда не заходят): прямоугольники по низу предметов. */
 export function obstacles(o: { row3: boolean; kids: boolean; stage: boolean }): Box[] {
+  const pot = (p: Pt, half: number, up: number): Box => ({ x0: p.x - half, y0: p.y - up, x1: p.x + half, y1: p.y });
   const out: Box[] = [
     // Стойки точек (кухня у стены и стойка с витриной).
     { x0: STALL_X[0] - 16, y0: WALL_BOTTOM, x1: STALL_X[3] + 16, y1: COUNTER_BOTTOM },
     { x0: TRAYS.x - 5, y0: TRAYS.y - 6, x1: TRAYS.x + 5, y1: TRAYS.y },
     { x0: BINS.x - 5, y0: BINS.y - 6, x1: BINS.x + 5, y1: BINS.y },
-    ...PLANTS.map((p) => ({ x0: p.x - 7, y0: p.y - 5, x1: p.x + 7, y1: p.y })),
-    { x0: COOLER.x - 5, y0: COOLER.y - 5, x1: COOLER.x + 5, y1: COOLER.y },
+    ...PLANTS.map((p) => pot(p, 7, 5)),
+    pot(COOLER, 5, 5),
+    ...SLIM.map((p) => pot(p, 5, 4)),
+    pot(CORNERS[1], 7, 5),
+    pot(ABOARD, 4, 4),
   ];
+  if (!o.kids) out.push(pot(CORNERS[0], 7, 5));
   TABLES.forEach((t, k) => {
-    if (t.row === 2 && (!o.row3 || (k === 4 && o.kids) || (k === 5 && o.stage))) return;
-    out.push({ x0: t.x - TABLE_W / 2, y0: t.y - TABLE_D, x1: t.x + TABLE_W / 2, y1: t.y });
+    // До ремонта на месте нижнего ряда - длинные кадки (по ширине стола, ниже его края).
+    if (!hasTable(k, o.row3)) out.push({ x0: t.x - HEDGE_W / 2, y0: t.y - 10, x1: t.x + HEDGE_W / 2, y1: t.y - 2 });
+    else out.push({ x0: t.x - TABLE_W / 2, y0: t.y - TABLE_D, x1: t.x + TABLE_W / 2, y1: t.y });
   });
-  if (o.kids) out.push({ x0: 6, y0: 204, x1: 28, y1: 219 }, { x0: PIT.x - 11, y0: PIT.y - 12, x1: PIT.x + 11, y1: PIT.y });
+  if (o.kids) out.push({ x0: 6, y0: 262, x1: 28, y1: 277 }, { x0: PIT.x - 11, y0: PIT.y - 12, x1: PIT.x + 11, y1: PIT.y });
+  // Сцена - или, пока её нет (а детская зона есть), длинная кадка на её месте.
   if (o.stage) out.push(STAGE);
+  else if (o.kids) out.push({ x0: MUSICIAN.x - HEDGE_W / 2, y0: STAGE.y1 - 8, x1: MUSICIAN.x + HEDGE_W / 2, y1: STAGE.y1 });
   return out;
 }
 
