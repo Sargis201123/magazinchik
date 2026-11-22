@@ -31,6 +31,7 @@ import {
   tenantPalLine,
   tenantIncome,
   tenantRent,
+  tenantIncome,
   tenantRooms,
   TENANTS,
   tenantsOf,

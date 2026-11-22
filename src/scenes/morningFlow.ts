@@ -103,6 +103,7 @@ import * as rivals from './rivals';
 import * as camera from './camera';
 import * as building from './building';
 import * as collections from './collections';
+import * as trafficFx from './trafficFx';
 
 /**
  * Утреннее окно (ui/morning.ts и всё, что открывается только из него) — отдельным файлом сборки:
@@ -654,6 +655,8 @@ export function newTag(scene: StoreScene, img: Phaser.GameObjects.Image): void {
 /** Утренние дела перед открытием: персонал, события дня, гости сюжета. */
 export function prepareDay(scene: StoreScene): void {
   scene.stats = emptyDayStats();
+  // Поток сверх зала (trafficFx.ts) — свой у каждого дня: создаётся с открытием, когда кассы и персонал выбраны.
+  trafficFx.reset(scene);
   scene.serves = { owner: 0, street: 0 };
   scene.recordCheered = false;
   for (const r of scene.registers) {

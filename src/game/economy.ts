@@ -267,16 +267,19 @@ export interface StoreLevel {
   power: number;
   /** Множитель потока гостей: большой магазин видно с улицы. */
   guests: number;
-  /** Сколько покупателей одновременно бывает в зале. */
+  /**
+   * Сколько покупателей одновременно бывает в зале. 21.11: на одного больше, чем было, — рук хозяина у кассы хватает;
+   * кто не поместился, берёт своё «на бегу» у касс без хозяина (traffic.ts), а не ждёт за дверью.
+   */
   maxCustomers: number;
 }
 
 export const STORE_LEVELS: StoreLevel[] = [
-  { nameKey: 'store.l1', cost: 0, slots: 3, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 5 },
-  { nameKey: 'store.l2', cost: 1500, slots: 7, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 7 },
-  { nameKey: 'store.l3', cost: 4000, slots: 9, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 9 },
-  { nameKey: 'store.l4', cost: 20000, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 11 },
-  { nameKey: 'store.l5', cost: 40000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 13 },
+  { nameKey: 'store.l1', cost: 0, slots: 3, warehouse: 20, rent: 140, utilities: 40, power: 30, guests: 1, maxCustomers: 6 },
+  { nameKey: 'store.l2', cost: 1500, slots: 7, warehouse: 35, rent: 350, utilities: 70, power: 50, guests: 1.3, maxCustomers: 8 },
+  { nameKey: 'store.l3', cost: 4000, slots: 9, warehouse: 55, rent: 600, utilities: 110, power: 80, guests: 1.6, maxCustomers: 10 },
+  { nameKey: 'store.l4', cost: 20000, slots: 14, warehouse: 80, rent: 1000, utilities: 160, power: 120, guests: 1.9, maxCustomers: 12 },
+  { nameKey: 'store.l5', cost: 40000, slots: 17, warehouse: 110, rent: 1500, utilities: 230, power: 170, guests: 2.2, maxCustomers: 14 },
   // Гипермаркет — переезд в здание «Гиганта» за дорогой, когда там уже открыт свой филиал (branch.ts):
   // старый магазин становится филиалом. Цена подобрана симулятором (docs/BALANCE.md «Гипермаркет»).
   { nameKey: 'store.l6', cost: 120000, slots: 22, warehouse: 150, rent: 2300, utilities: 340, power: 260, guests: 5, maxCustomers: 20 },
@@ -880,6 +883,19 @@ export interface DayStats {
   nightRevenue?: number;
   /** Сколько гостей за день привела реклама (ads.ts). */
   adGuests?: number;
+  /**
+   * 21.11: сколько всего зашло за день — в зал и «на бегу», пока зал был полон (traffic.ts), и сколько из вторых
+   * купили. По ним итоги дня сверяются с утренним прогнозом, а реклама считает приведённых.
+   */
+  came?: number;
+  quick?: number;
+  /**
+   * 21.11 (по разбору): из ушедших «не дождались кассы» — сколько стояли в очереди «на бегу» (traffic.ts). Её не видно
+   * и касаниями не ускорить, поэтому час пик и испытание «без очереди» считают только очередь зала (losses.ts hallQueueLost).
+   */
+  quickQueue?: number;
+  /** Хозяин один за кассой, зал полон — столько гостей заглянули и прошли мимо (не в обиде, рейтинг не трогают). */
+  passed?: number;
   /** Счётчики новых механик за день. */
   fair?: boolean;
   coffees?: number;
@@ -1423,9 +1439,17 @@ export const PRICE_FORGIVE = 0.5;
  */
 export const AD_FORGIVE = 0.5;
 
+/**
+ * 21.11, трафик: гости «на бегу», не дождавшиеся кассы (traffic.ts, stats.quickQueue), в рейтинг идут на четверть.
+ * Они в зал не заходили и магазина толком не видели — иначе реклама в людный день роняла рейтинг на 0,2 за вечер
+ * (замер: Универмаг с ТВ — 539 ушли, рейтинг −0,2), и спираль «больше гостей — ниже рейтинг» съедала смысл рекламы.
+ */
+export const QUICK_FORGIVE = 0.25;
+
 /** 0..1: доля довольных посетителей. Жалоба считается за «полпокупателя». */
 export function satisfaction(stats: DayStats, lostWeight = 1): number {
-  const priced = Math.max(0, stats.lost - Math.min(stats.lost, stats.lostWhy?.expensive ?? 0) * (1 - PRICE_FORGIVE));
+  const priced0 = Math.max(0, stats.lost - Math.min(stats.lost, stats.lostWhy?.expensive ?? 0) * (1 - PRICE_FORGIVE));
+  const priced = Math.max(0, priced0 - Math.min(priced0, stats.quickQueue ?? 0) * (1 - QUICK_FORGIVE));
   const lost = Math.max(0, priced - Math.min(priced, stats.adGuests ?? 0) * AD_FORGIVE);
   const visitors = stats.served + lost * lostWeight;
   if (visitors === 0) return 0.5;

@@ -4579,6 +4579,14 @@ export const es: Record<TextKey, string> = {
   "income.title": "💼 Otros ingresos: {n}",
   "income.total": "Total del día: {n} 💰",
   "tenant.income": "Ayer: +{last} 💰 · en total: +{total} 💰",
+  "flow.pop": "+{n} 🛍",
+  "flow.came": "👥 Entraron {n}",
+  "flow.expected": "por la mañana se esperaban ~{n}",
+  "flow.quick": "🛍 {n}: compra rápida con la sala llena",
+  "ads.yesterday": "Ayer la publicidad trajo ≈{n} clientes",
+  "flow.busy": "⏳ Se cansaron de esperar: {n}",
+  "flow.passed": "🚪 Pasaron de largo: {n} — la sala estaba llena y estás solo en la caja",
+  "ads.passed": "🚪 Ayer {n} pasaron de largo: la sala estaba llena y estabas solo en la caja — la publicidad trae más gente de la que puedes atender",
   "news.town": "🏘 Barrio: una meta semanal común para todos los jugadores y la «Tienda del día»: pásate y deja tu marca «Estuve aquí».",
 };
 

@@ -160,6 +160,7 @@ import { buyCups, COFFEE_CHANCE, CUP_COST, cupsOf, CUPS_MAX, TABLES_COFFEE } fro
 import { AUTO_GEAR, coffeePrice, coffeeSprite, GEAR, gearArriving, gearAvailable, gearTier, MANUAL_GEAR, nextGear, ovenBake, ovenBatch, ovenBatchCost, upgradeGear, type GearId } from '../game/gear';
 import { BAKE_MODES, bakeModeOf, setBakeMode } from '../game/bakery';
 import { buyRegister, isCashierRole, nextRegisterCount, nextRegisterPrice, registerCount, registerOfRole, registerSlots } from '../game/registers';
+import { queueAdviceKey } from '../game/losses';
 import { activeWar, answerWar } from '../game/war';
 import {
   adoptCat,
@@ -192,7 +193,7 @@ import { buyZar, homeLevel, inZar, seeZarBoss, seeZarTale, switchToday, zarBossN
 import { achievementsButton } from './achievements';
 import { liteMode, setLiteMode } from '../platform/quality';
 import { setItemIcon, sheetAsset, sheetPng } from './sheet';
-import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adExtraGuests, adGain, ADS, adPrice, adUntil, buyAd, MAX_ADS } from '../game/ads';
+import { activeAd, activeAds, AD_IDS, adBlock, adBoost, adExtraGuests, adGain, ADS, adPrice, adUntil, adYesterday, buyAd, MAX_ADS, passedYesterday } from '../game/ads';
 import { answerCafe, CAFE_DAYS, cafeDaysLeft, cafeLoyalty } from '../game/cafe';
 import { BRAND_BATCH, BRAND_COSTS, BRAND_DEMAND_STEP, BRAND_MAX, brandAvailable, brandBatchCost, brandLevel, buyBrandLevel } from '../game/brand';
 import { debtLimit, seeDebtWarning, seeGrandmaRescue } from '../game/bankruptcy';
@@ -3470,6 +3471,16 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const running = activeAds(state);
     const pct = (x: number) => Math.round(x * 100);
     if (running.length) box.append(el('div', 'ui-note', t('ads.now', { n: pct(adBoost(state) - 1), list: running.map((a) => a.icon).join(' ') })));
+    // Вчера реклама работала — сколько гостей она привела на самом деле (21.11: в зал и «на бегу», game/traffic.ts).
+    const brought = adYesterday(state);
+    if (brought) box.append(el('div', 'ui-note', t('ads.yesterday', { n: brought })));
+    // Зал был полон, а за кассой хозяин один: звать ещё больше рекламой нет смысла — сначала руки (сменщик, киоск…).
+    const passed = passedYesterday(state);
+    if (passed) {
+      const tip = el('div', 'ui-note', t('ads.passed', { n: passed }));
+      tip.append(el('div', 'ui-muted', t(queueAdviceKey(state))));
+      box.append(tip);
+    }
     for (const id of AD_IDS) {
       const ad = ADS[id];
       const block = adBlock(state, id);

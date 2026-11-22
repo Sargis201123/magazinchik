@@ -4624,6 +4624,14 @@ export const en: Record<TextKey, string> = {
   "income.title": "💼 Other income: {n}",
   "income.total": "Total for the day: {n} 💰",
   "tenant.income": "Yesterday: +{last} 💰 · total: +{total} 💰",
+  "flow.pop": "+{n} 🛍",
+  "flow.came": "👥 Came in: {n}",
+  "flow.expected": "expected ~{n} this morning",
+  "flow.quick": "🛍 {n} on the go while the hall was full",
+  "ads.yesterday": "Yesterday ads brought ≈{n} guests",
+  "flow.busy": "⏳ Gave up waiting: {n}",
+  "flow.passed": "🚪 Walked past: {n} — the hall was full and you're alone at the till",
+  "ads.passed": "🚪 Yesterday {n} walked past: the hall was full and you were alone at the till — ads bring more people than you can serve",
   "news.town": "🏘 District: a weekly goal shared by all players and the “Shop of the day” — drop in and leave an “I was here” mark.",
 };
 

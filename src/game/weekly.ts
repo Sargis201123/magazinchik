@@ -3,6 +3,7 @@
 
 import { monthOf, MONTH_DAYS, restricted, sellableProducts, type DayStats, type ProductId, type StoreState } from './economy';
 import { rng } from './random';
+import { hallQueueLost } from './losses';
 import { hasUpgrade } from './upgrades';
 import type { TextKey } from '../i18n/ru';
 
@@ -74,7 +75,8 @@ function gain(c: Challenge, stats: DayStats): number {
     case 'clean':
       return stats.trashCleaned;
     case 'noQueue':
-      return stats.served >= 10 && !(stats.lostWhy?.queue ?? 0) ? 1 : 0;
+      // 21.11: очередь «на бегу» (traffic.ts) не в счёт — её игрок не видит и касаниями не ускорит.
+      return stats.served >= 10 && !hallQueueLost(stats) ? 1 : 0;
     case 'coffee':
       return stats.coffees ?? 0;
     case 'delivery':

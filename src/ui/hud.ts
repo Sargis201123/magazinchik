@@ -358,6 +358,10 @@ export class Hud {
       housewarming?: boolean;
       /** Прочие доходы вечера (game/day.ts otherIncome): подпись и сумма, мимо кассы зала. */
       other?: [string, number][];
+      /** Утренний прогноз гостей на этот день (day.ts guestsToday) — рядом с тем, сколько зашло. */
+      expected?: number;
+      /** Гости проходили мимо (stats.passed): что сделать, чтобы зал пропускал больше (losses.ts queueAdviceKey). */
+      passTip?: TextKey;
     },
     extra: [string, string][],
     stamps: SummaryStamp[],
@@ -429,6 +433,21 @@ export class Hud {
     card.append(tiles);
     // Реклама работала — сразу под плитками видно, окупилась ли она гостями.
     if (stats.adGuests) card.append(el('div', 'ui-muted ui-sum-ads', t('summary.ads', { n: stats.adGuests })));
+    // 21.11: сколько зашло на самом деле — рядом с утренним прогнозом, и сколько купили «на бегу», пока зал был полон
+    // (game/traffic.ts): так видно, что реклама и арендаторы приводят людей, а не только обещают.
+    // Первый день новичка — без этой строки: ему хватает плиток и бабушки.
+    if (stats.came && !firstDay) {
+      const parts = [t('flow.came', { n: stats.came })];
+      if (money.expected) parts.push(t('flow.expected', { n: money.expected }));
+      card.append(el('div', 'ui-muted', parts.join(' · ')));
+      if (stats.quick) card.append(el('div', 'ui-muted', t('flow.quick', { n: stats.quick })));
+      // Хозяин один за кассой, зал полон — сколько прошли мимо и что с этим сделать (а не «реклама привела ≈N»).
+      if (stats.passed) {
+        const box = el('div', 'ui-note', t('flow.passed', { n: stats.passed }));
+        if (money.passTip) box.append(el('div', 'ui-muted', t(money.passTip)));
+        card.append(box);
+      }
+    }
     // Прочие доходы — аренда, этажи, фургон… — каждый день на виду, а не под «Подробнее»: «Выручка» — только касса зала.
     // 21.11, автор: «доход с аренды — он вообще есть?». Первый день новичка — без блока: ему хватает плиток и бабушки.
     const other = firstDay ? [] : (money.other ?? []);
