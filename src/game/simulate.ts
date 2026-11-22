@@ -92,6 +92,7 @@ import { answerEvent, inspect, answerOrder } from './events';
 import { candidatesFor, train, trainingStep } from './staff';
 import { CHAPTERS, finishChapter, finishIntro, pendingStory } from './story';
 import { rng } from './random';
+import { hallCap } from './hall';
 import { perceivedBase, pickWanted, seasonFor } from './endless';
 import { badBatch, SUPPLIER_IDS, SUPPLIERS, supplierOpen, listPrice, priceFor } from './suppliers';
 import { buyUpgrade, carryOf, eveningSales, hasUpgrade, LOYALTY_TOLERANCE, loyaltyTolerance, UPGRADES, withUpgrades, type UpgradeId, MARKDOWN_EVENING } from './upgrades';
@@ -145,6 +146,8 @@ export interface SimDay {
   debt: number;
   rating: number;
   guests: number;
+  /** Сколько гостей звали рейтинг, реклама и прочее (до предела зала). */
+  wanted: number;
   served: number;
   lost: number;
   revenue: number;
@@ -243,6 +246,11 @@ export interface SimOptions {
    * every = 2 — через день, 1 — каждый день.
    */
   zar?: { from: number; every: number; cap?: number };
+  /**
+   * Предел зала (hall.ts): гостей за день не больше, чем зал пропускает. 22.11 — замер для «Трафика v2»;
+   * по умолчанию выключен, пока баланс не пересчитан.
+   */
+  hall?: boolean;
   /** Каждое утро до решений игрока — посмотреть состояние (scripts/decisions.ts считает, что видит игрок). */
   onMorning?: (state: StoreState) => void;
 }
@@ -447,6 +455,7 @@ export function simulate({
   pet,
   zar,
   onMorning,
+  hall = false,
 }: SimOptions): SimResult {
   const random = rng(seed);
   // Случайности новых механик — отдельно: тогда прогоны с механикой и без идут по одним и тем же
@@ -1138,7 +1147,8 @@ export function simulate({
     const stats: DayStats = emptyDayStats();
     // Оплата кафе — тоже выручка дня (деньги уже зачислены при отгрузке).
     stats.revenue += cafeIncome;
-    const dayGuests = Math.max(0, Math.round(guests * (0.85 + random() * 0.3)));
+    const wantedGuests = Math.max(0, Math.round(guests * (0.85 + random() * 0.3)));
+    const dayGuests = hall ? Math.min(wantedGuests, hallCap(state)) : wantedGuests;
     // Один игрок не успевает всё: чем больше магазин, тем больше теряется без персонала.
     const has = (r: StaffRole) => Boolean(staffOf(state, r));
     // Ученик на складе (apprentice.ts) сам носит коробки на полки — как грузчик на полставки.
@@ -1428,6 +1438,7 @@ export function simulate({
       debt: state.debt,
       rating: state.rating,
       guests: dayGuests,
+      wanted: wantedGuests,
       served: stats.served,
       lost: stats.lost,
       revenue: stats.revenue,

@@ -421,6 +421,17 @@ async function play(page: Page, url: string, run: Run, save: SaveFile): Promise<
   if (s.night) await shot('night');
   else errors.push(`${run.name}: ночной смены не было`);
   await forward((s) => s.summary, 'итогов дня', limit);
+  // MEASURE=1: итоги дня цифрами — сколько гостей, почему ушли, сколько ходок сделал персонал (замер логистики).
+  if (process.env.MEASURE) {
+    const m = await page.evaluate(() => {
+      const scene = (window as any).game.scene.getScene('store');
+      const st = scene.state;
+      const count = (o: Record<string, unknown[]>) => Object.values(o ?? {}).reduce((n, a) => n + (Array.isArray(a) ? a.length : 0), 0);
+      const { served, lost, revenue, lostWhy, work } = scene.stats;
+      return { served, lost, revenue, lostWhy, work, shelves: st.shelves.reduce((n: number, sh: any) => n + count(sh.items), 0), warehouse: count(st.warehouse) };
+    });
+    console.log('MEASURE ' + JSON.stringify(m));
+  }
   // Плитки итогов выезжают по очереди, цифры докручиваются.
   await tick(4000);
   await shot('summary');
