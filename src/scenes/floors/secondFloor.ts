@@ -33,12 +33,15 @@ import { SHIRTS, VIEW_SUFFIX, customerLook, nightGuestLook, type Look } from '..
 import { floorCrowd } from '../../game/floorLife';
 import { floorMoments } from './momentFx';
 import * as persons from '../persons';
-import { crowd, facingOf, lightPool, pause as wait, prop, shell, tweenTo, type Facing, type FloorKit } from './kit';
+import { AROUND, crowd, facingOf, lightPool, pause as wait, prop, shell, tweenTo, type Facing, type FloorKit } from './kit';
 import * as L from './secondLayout';
 
 type Person = Phaser.GameObjects.Container;
 type Point = L.Point;
 
+/** Верх стены над залом (art/clothes_decor.py fl2d_upper): высота картинки в точках мира и цвет потолка над ней. */
+const UPPER_H = 64;
+const CEILING = 0x8f574a;
 /** Сколько вещей изображает одна полная стойка. */
 const PER_RACK = 10;
 /** Шаг людей этажа (точек мира в секунду) — чуть спокойнее, чем в зале: в бутике не спешат. */
@@ -83,8 +86,15 @@ export function buildSecond(kit: FloorKit): void {
   shell(kit, { wall: 'fl2b_wall', floor: 'fl2b_floor', side: 0x3e2731, sideW: 5, strips: [[WALL, 3, 0x733e39, 0.22], [WALL + 3, 3, 0x733e39, 0.08]] });
   // 14.11: выше и ниже кадра зал продолжается (floorView.drawAround): обои вверх, паркет вниз, лестница — в пролёт.
   kit.surround({ wall: 0xc28569, floor: 'fl2b_floor', floorY: WALL, floorStep: 24, side: 0x3e2731, sideW: 5, shafts: { bottom: [[L.STAIRS.x - 13, 26]] } });
+  // 22.11, автор: «надо улучшать дизайн этажей». Над залом (на телефоне — до верхней панели) была плоская полоса
+  // стены. Теперь стена продолжается вверх: фрамуги-витражи над окнами, вывеска бутика с золотой вешалкой и
+  // подсветкой, гирлянда из зелени и роз, лепной карниз, тёплый потолок (art/clothes_decor.py). Выше картинки —
+  // тот же потолок; к панели всё гаснет ступенями (floorView.drawAround кладёт затемнение поверх).
+  kit.art(W / 2, 0, 'fl2d_upper').setOrigin(0.5, 1).setDepth(-9.5);
+  view.add.rectangle(5, -AROUND, W - 10, AROUND - UPPER_H + 0.5, CEILING).setOrigin(0).setDepth(-9.6);
   // Потёртости паркета — там, где ходят чаще всего: у лестницы, у кассы, перед примерочными, на перекрёстках.
-  for (const [x, y, s] of [[24, 192, 1], [128, 198, 1.1], [130, 78, 1], [52, 114, 0.8], [84, 156, 0.9], [118, 150, 0.7], [60, 196, 0.8]] as const) {
+  // 22.11: у лестницы — внизу, где она теперь, и на проходе от неё к коридору.
+  for (const [x, y, s] of [[26, 246, 1], [50, 238, 0.8], [128, 198, 1.1], [130, 78, 1], [52, 114, 0.8], [84, 156, 0.9], [118, 150, 0.7], [60, 196, 0.8]] as const) {
     kit.art(x, y, 'fl2b_wear').setScale(s / 2).setDepth(-7);
   }
   // Ковёр под столом аксессуаров.
@@ -183,10 +193,31 @@ export function buildSecond(kit: FloorKit): void {
       const plan = clothesPlan(store.state, guestsToday(store.state));
       popup(L.TILL.x, L.TILL.y - 30, plan && fresh ? t('cl.tap', { n: plan.sold + plan.sale, sum: plan.income - plan.wage }) : t('cl.floorEmpty'));
     });
-  // Лестница из магазина — внизу слева, растения по углам.
-  prop(kit, L.STAIRS.x, L.STAIRS.y, 'fl2b_stairs', { oy: 0, depth: -4 });
+  // Лестница из магазина — у нижнего края слева: проём уходит за край зала, в шахту (22.11; была посреди пола).
+  // На площадке — полукруглый коврик. Монстера у кассы, фикус у входа.
+  prop(kit, L.STAIRS.x, L.STAIRS.y - 4, 'fl2d_stairs', { oy: 0, depth: -4 });
+  prop(kit, L.STAIRS.x, L.STAIRS.y, 'fl2d_mat', { depth: -6 });
   prop(kit, L.PLANTS[0].x, L.PLANTS[0].y, 'fl2b_plant');
   prop(kit, L.PLANTS[1].x, L.PLANTS[1].y, 'fl2b_ficus');
+  // 22.11: низ зала, который раньше пустовал. У входа — вешалка со шляпами и мраморный столик с букетом; у самого
+  // края — подиум «новая коллекция» (манекены в других нарядах сезона, чем у окон, и ваза с пампасом) и уголок
+  // ожидания: изумрудный диван, торшер, ковёр (art/clothes_decor.py).
+  prop(kit, L.HATSTAND.x, L.HATSTAND.y, 'fl2d_hatstand');
+  prop(kit, L.FLOWERS.x, L.FLOWERS.y, 'fl2d_flowers');
+  prop(kit, L.STAGE.x, L.STAGE.y, 'fl2d_stage');
+  prop(kit, L.STAGE.x, L.STAGE.y - 13, 'fl2d_pampas', { depth: L.STAGE.y + 0.2 });
+  for (const [k, dx] of [[0, -10], [1, 10]] as const) prop(kit, L.STAGE.x + dx, L.STAGE.y - 10, `fl2d_manq_${coll}${k}`, { depth: L.STAGE.y + 0.5 });
+  prop(kit, L.SOFA.x + 2, L.SOFA.y - 4, 'fl2d_rug', { oy: 0.5, depth: -6 });
+  prop(kit, L.SOFA.x, L.SOFA.y, 'fl2d_sofa');
+  // У дивана — пакет из бутика (с «Брендами» — чёрный с золотом): кто-то ждёт, пока примеряют.
+  prop(kit, L.SOFA.x - 23, L.SOFA.y, ups.brands ? 'fl2b_bag_lux' : 'fl2_bag');
+  prop(kit, L.LAMP.x, L.LAMP.y, 'fl2d_lamp');
+  // До ремонта (четыре стойки) на месте третьего столбца — новая стойка в плёнке и стремянка с коробками: видно,
+  // куда встанут стойки после отделки.
+  if (racks.length < 6) {
+    prop(kit, L.RACKS[4].x, L.RACKS[4].y, 'fl2d_wrap');
+    prop(kit, L.RACKS[5].x, L.RACKS[5].y, 'fl2d_reno');
+  }
   // 15.11, автор: «2 этаж дорисуй — красивее». Стол со стопками сложенных вещей у левой стены, бра между
   // примерочными, гирлянда тёплых огоньков под карнизом, подвесные лампы над залом (art/floors_life.py).
   prop(kit, L.FOLD.x, L.FOLD.y, fresh ? `fl2c_fold_${coll}` : 'fl2c_fold')
@@ -221,6 +252,14 @@ export function buildSecond(kit: FloorKit): void {
       lightPool(kit, L.SHELF.x, L.SHELF.y - 18, { w: 40, h: 46, tint: 0xfee761, alpha: 0.14, depth: 300 });
     }
     if (ups.brands) lightPool(kit, L.BRAND.x, L.BRAND.y - 14, { w: 34, h: 36, tint: 0xfee761, alpha: 0.18, depth: 300 });
+    // 22.11: верх стены — подсветка вывески, свет в фрамугах, точки ламп в потолке; низ — пятно на подиуме и торшер.
+    lightPool(kit, 130, -6, { w: 64, h: 18, tint: 0xfee761, alpha: 0.3, depth: 300 });
+    for (const x of L.WINDOWS) lightPool(kit, x, -4, { w: 46, h: 20, tint: 0xc8f0ff, alpha: 0.22, depth: 300 });
+    for (const x of [20, 52, 84, 116, 148]) lightPool(kit, x, -28, { w: 12, h: 7, tint: 0xfee761, alpha: 0.55, depth: 300 });
+    lightPool(kit, L.STAGE.x, L.STAGE.y - 18, { w: 54, h: 44, tint: 0xfee761, alpha: ups.showcase ? 0.28 : 0.2, depth: 300 });
+    lightPool(kit, L.LAMP.x, L.LAMP.y - 26, { w: 16, h: 14, tint: 0xfee761, alpha: 0.6, depth: 300 });
+    lightPool(kit, L.LAMP.x - 10, L.LAMP.y - 8, { w: 56, h: 34, tint: 0xfeae34, alpha: 0.2, depth: 300, breathe: { alpha: '-=0.04', ms: 2100 } });
+    lightPool(kit, L.FLOWERS.x, L.FLOWERS.y - 10, { w: 30, h: 26, tint: 0xfee761, alpha: 0.12, depth: 300 });
   }
   // 14.11, ревью: строка в одну линию упиралась в правую стену (а на других языках длиннее) — переносим по ширине зала.
   // 14.11, аудит: на высоте 132 строка лежала прямо на верхушках нижнего ряда стоек, полупрозрачная. Теперь —

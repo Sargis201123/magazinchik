@@ -22,7 +22,8 @@
   fl2b_window[_*]  56×84 — окно во всю стену: улица за стеклом (лето; _warm — снег, _rain — пасмурно и капли),
                            переплёт, бархатные шторы с подхватами;
   fl2b_shelf[_*]   60×84 — стеллаж со сложенными вещами сезона и коробками (без сезона — почти пустой);
-  fl2b_rack[_*]    48×52 — стойка-вешалка: пустая или с вещами сезона warm / rain / summer;
+  fl2b_rack[_*]    48×52 — стойка-вешалка: пустая (с 22.11 — с деревянными плечиками) или с вещами сезона
+                           warm / rain / summer;
   fl2b_table[_*]   48×32 — круглый стол: стопки вещей и аксессуары сезона (шапки, зонт, очки и панама);
   fl2b_shoes[_*]   36×34 — ступенчатая подставка с обувью сезона (сапоги, резиновые, сандалии и кеды);
   fl2b_booth       44×76 — примерочная: карниз, лампа, табурет и крючок, штора сдвинута;
@@ -517,11 +518,23 @@ def rack(kind=None):
     c.px(2, top - 2, METAL_L)
     c.px(45, top - 2, METAL_L)
     if kind is None:
-        for x in range(9, 42, 5):
+        # 22.11: пустая стойка — не голая рама: ровный ряд деревянных плечиков (среднее — бархатное розовое) и бирка;
+        # ждёт коллекцию.
+        for i, x in enumerate(range(9, 42, 8)):
             hook(c, x, top)
-            c.px(x - 2, top + 2, METAL_L)
-            c.px(x + 2, top + 2, METAL_L)
-            c.hline(x - 1, top + 1, 3, METAL_L)
+            tone = PINK_D if i == 2 else WOOD
+            c.vline(x, top + 1, 2, METAL)
+            c.hline(x - 1, top + 3, 3, tone)
+            c.hline(x - 2, top + 4, 5, tone)
+            c.hline(x - 3, top + 5, 7, tone)
+            c.hline(x - 3, top + 6, 7, lit(tone, -0.35))
+            c.px(x - 1, top + 3, lit(tone, 0.35))
+            c.px(x - 2, top + 4, lit(tone, 0.3))
+            c.px(x - 3, top + 5, lit(tone, 0.25))
+        # Бирка на нитке у крайних плечиков.
+        c.vline(41, top + 7, 3, CREAM)
+        c.rect(40, top + 10, 4, 5, WHITE)
+        c.hline(40, top + 12, 4, PINK)
     else:
         items = SEASON_RACK[kind]
         step = 34 / (len(items) - 1)
