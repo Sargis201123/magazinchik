@@ -297,7 +297,10 @@ def _eyes(b, skin, hair, look, mood):
             b.px(ix, 29, WHITE)
             b.hline(ex, 32, 4, shade(skin, 0.88))
             continue
-        top = 27 if kind == "wide" else 29 if kind == "narrow" else 28
+        # Широко раскрытые - на строку выше только от удивления: в диалоге удивлённый не моргает так часто, а обычное
+        # лицо моргает рамкой со строки 27 (src/ui/dialog.ts) - веко выше неё осталось бы чёрной чертой над закрытым глазом.
+        wide_open = kind == "wide" and mood != "surprised"
+        top = 27 if kind == "wide" and not wide_open else 29 if kind == "narrow" else 28
         b.rect(ex, top, 4, 32 - top, WHITE)
         # Радужка 2 клетки шириной, снизу - зрачок; взгляд вбок сдвигает её к краю.
         ix = ex + 1 + look["gaze"]
@@ -314,6 +317,11 @@ def _eyes(b, skin, hair, look, mood):
             b.hline(ex - 1 if side > 0 else ex, top - 1, 5, INK)
             b.px(outer, top, INK)
             b.px(ex if side < 0 else ex + 3, top, shade(skin, 0.86))
+        elif wide_open:
+            # Широко раскрытые без удивления: веко дугой - короткое сверху, уголки опущены (всё в рамке моргания).
+            b.hline(ex, top - 1, 4, INK)
+            b.px(ex - 1, top, INK)
+            b.px(ex + 4, top, INK)
         else:
             b.hline(ex - 1, top - 1, 6, INK)
         if kind == "narrow":
@@ -366,7 +374,10 @@ def _brows(b, skin, hair, look, mood, old):
             y = round(yo + (yi - yo) * i / (len(xs) - 1))
             if bend:
                 y += bend[i]
-            y = min(y, 26)
+            # Бровь - выше рамки моргания (строки 27..31 у x 24..27 и 38..41): вторая строка брови кончается на 26,
+            # иначе при каждом моргании бровь худеет и обрастает крючком.
+            two = second in ("soft", "dark") or (second == "arch" and i >= 2)
+            y = min(y, 25 if two else 26)
             b.px(x, y, brow)
             if second == "soft":
                 b.px(x, y + 1, shade(brow, 1.15))
@@ -374,7 +385,7 @@ def _brows(b, skin, hair, look, mood, old):
                 b.px(x, y + 1, brow)
         if style == "bushy":
             # Лохматые: торчащие волоски над внешним краем и у переносицы.
-            yo2 = min(round(yo), 26)
+            yo2 = min(round(yo), 25)
             b.px(xo + step, yo2 - 1, brow)
             b.px(xo + 3 * step, yo2 - 1, shade(brow, 1.15))
             b.px(xo, yo2 + 1, shade(brow, 1.15))

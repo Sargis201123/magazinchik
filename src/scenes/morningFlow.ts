@@ -104,6 +104,7 @@ import * as camera from './camera';
 import * as building from './building';
 import * as collections from './collections';
 import * as trafficFx from './trafficFx';
+import * as hyperPlan from './hyperPlan';
 
 /**
  * Утреннее окно (ui/morning.ts и всё, что открывается только из него) — отдельным файлом сборки:
@@ -229,7 +230,7 @@ export function showMorning(scene: StoreScene): void {
   scene.giftRebuild = false;
   // Утро: зал больше не закрыт — перестройка ниже зажжёт лампы, сумрак ритуала закрытия снят (lightsOn зажжёт ряды).
   lighting.hallOff(scene, -Infinity);
-  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || (pawnPlace(scene.state) ?? '') !== scene.builtPawn || residentsLook(scene.state) !== scene.builtResidents || gentLook(scene.state) !== scene.builtGent || estateLook(scene.state) !== scene.builtEstate || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
+  if (gift || newcomer.cleanKey(scene) !== scene.builtClean || trialOver || cupChanged || eduardLook(scene.state) !== scene.builtEduard || giantLook(scene.state) !== scene.builtGiant || branchLook(scene.state) !== scene.builtBranch || districtKey(scene.state) !== scene.builtDistrict || hoodLook(scene.state) !== scene.builtHood || tenantsLook(scene.state) !== scene.builtTenants || (pawnPlace(scene.state) ?? '') !== scene.builtPawn || residentsLook(scene.state) !== scene.builtResidents || gentLook(scene.state) !== scene.builtGent || estateLook(scene.state) !== scene.builtEstate || zarLook(scene.state) !== scene.builtZar || decorations.honorLook(scene.state) !== scene.builtHonor || hyperPlan.hyperLook(scene.state) !== scene.builtHyper || streetKey(streetInfo()) !== scene.builtStreet) scene.buildWorld();
   // Фургон выездной торговли вернулся вчера после закрытия (или его купили) — на своё место до соседей.
   cars.parkVan(scene);
   cars.refillParking(scene);
@@ -290,7 +291,7 @@ export function showMorning(scene: StoreScene): void {
       else if (s.level > scene.builtLevel) void effects.celebrateExpansion(scene);
       // 15.11, ревью: купили подвал — ломбард переехал вниз (pawnPlace), дверь «Подсобка» из зала убрать сразу, а картины
       // и щиток, что её обходили, переставить — поэтому целая перестройка, а не одна дверь.
-      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || tenantsLook(s) !== scene.builtTenants || (pawnPlace(s) ?? '') !== scene.builtPawn || estateLook(s) !== scene.builtEstate || gentLook(s) !== scene.builtGent || zarLook(s) !== scene.builtZar) scene.buildWorld(bought);
+      else if (s.level !== scene.builtLevel || placesChanged || decorChanged || upgradesChanged || catChanged || eduardLook(s) !== scene.builtEduard || giantLook(s) !== scene.builtGiant || branchLook(s) !== scene.builtBranch || hoodLook(s) !== scene.builtHood || tenantsLook(s) !== scene.builtTenants || (pawnPlace(s) ?? '') !== scene.builtPawn || estateLook(s) !== scene.builtEstate || gentLook(s) !== scene.builtGent || zarLook(s) !== scene.builtZar || hyperPlan.hyperLook(s) !== scene.builtHyper) scene.buildWorld(bought);
       else {
         if (staffChanged) staff.syncStaff(scene);
         // Купили, позвали другого или отправили домой питомца за звёзды — только он, без перестройки зала.

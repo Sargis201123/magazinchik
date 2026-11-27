@@ -202,6 +202,8 @@ export class StoreScene extends Phaser.Scene {
   builtResidents = '';
   /** Как выглядит подорожавший район (game/gentrify.ts gentLook): витрины соседей и ответ «для кого магазин». */
   builtGent = '';
+  /** Под что расставлен низ зала гипермаркета (scenes/hyperHall.ts hyperLook): полки своей марки и 18+, сезон фотозоны. */
+  builtHyper = '';
   /** Что нарисовано на скупленной улице (game/estate.ts estateLook): кто в каком помещении, табличка на столбе. */
   builtEstate = '';
   /** Сколько посетителей арендаторов сейчас идёт по залу (scenes/tenantsFx.ts). */

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { HYPER_LEVEL } from '../src/game/economy';
+import { HYPER_LEVEL, newGame, type StoreState } from '../src/game/economy';
+import { yearTime } from '../src/game/calendar';
 import { brandRect, brandSpotFor, iceboxRect, iceboxSpotFor, kioskSpot, layoutFor, licenseRect, licenseSpotFor, registerSpot, type Point, type Room } from '../src/scenes/layout';
 import { blockedZones, overlapsRect, standFor, tillZones } from '../src/scenes/placement';
-import { AISLE_H, planAisle, planHyperHall, reachableTargets, type HyperPiece } from '../src/scenes/hyperPlan';
+import { AISLE_H, hyperLook, planAisle, planHyperHall, reachableTargets, seasonArt, type HyperPiece } from '../src/scenes/hyperPlan';
 import type { Rect } from '../src/scenes/paths';
 
 // Низ зала гипермаркета (scenes/hyperHall.ts, 27.11): уголок аттракционов, сезонная фотозона и скамья встают в пустую
@@ -168,5 +169,34 @@ describe('главный проход к кассам', () => {
     expect(aisle).not.toBeNull();
     expect(aisle.x1).toBeLessThanOrEqual(150 - 4);
     expect(planAisle(L, [...keep, showcase(60)])).toBeNull();
+  });
+});
+
+// 27.11, ревью: полку своей марки и витрину 18+ покупают утром без перестройки зала - без этой отметки новая полка
+// вставала на скамью у касс или на коврик уголка; сезон фотозоны меняется за ночь - осенний стог стоял бы до перезапуска.
+describe('отметка низа зала гипермаркета (hyperLook)', () => {
+  const hyper = (patch: Partial<StoreState> = {}): StoreState => ({ ...newGame(), level: HYPER_LEVEL, ...patch });
+  const withShelf = (s: StoreState, kind: string): StoreState => ({ ...s, shelves: [...s.shelves, { kind, level: 0, items: {} } as StoreState['shelves'][number]] });
+
+  it('ниже гипермаркета - пустая: покупки в маленьком магазине зал не перестраивают', () => {
+    const small = { ...newGame(), level: HYPER_LEVEL - 1 };
+    expect(hyperLook(small)).toBe('');
+    expect(hyperLook(withShelf(small, 'license'))).toBe('');
+  });
+
+  it('купили витрину 18+ или первую линию своей марки - отметка другая (зал перестроится)', () => {
+    const base = hyper();
+    expect(hyperLook(withShelf(base, 'license'))).not.toBe(hyperLook(base));
+    expect(hyperLook(withShelf(base, 'brand'))).not.toBe(hyperLook(base));
+    expect(hyperLook(withShelf(withShelf(base, 'brand'), 'license'))).not.toBe(hyperLook(withShelf(base, 'brand')));
+  });
+
+  it('сменился сезон - другая фотозона и другая отметка; внутри сезона - та же', () => {
+    let day = 1;
+    while (yearTime(day + 1) === yearTime(day)) day++;
+    // day - последний день сезона, day + 1 - первый день следующего.
+    expect(seasonArt(hyper({ day: day + 1 }))).not.toBe(seasonArt(hyper({ day })));
+    expect(hyperLook(hyper({ day: day + 1 }))).not.toBe(hyperLook(hyper({ day })));
+    expect(hyperLook(hyper({ day: day - 1 }))).toBe(hyperLook(hyper({ day })));
   });
 });

@@ -1,6 +1,9 @@
 // Расстановка низа зала гипермаркета (scenes/hyperHall.ts): где встают уголок аттракционов, сезонная фотозона и
 // скамья, и что от этого проходы не закрываются. Без Phaser - расчёты проверяют тесты (tests/hyperHall.test.ts).
 
+import { HYPER_LEVEL, type StoreState } from '../game/economy';
+import { yearTime } from '../game/calendar';
+import { activeDecor } from '../game/decor';
 import { overlapsRect, slotSide } from './placement';
 import type { Layout, Point } from './layout';
 import type { Rect } from './paths';
@@ -191,4 +194,24 @@ export function planAisle(layout: Layout, keep: Rect[]): HyperAisle | null {
     if (x1 - x0 >= AISLE_MIN) return { x0, x1: Math.floor(x1), y };
   }
   return null;
+}
+
+/** Картинка сезонной фотозоны на сегодня. */
+export function seasonArt(state: StoreState): string {
+  const season = yearTime(state.day);
+  // Новогодняя ёлка из украшений уже стоит у входа - зимой на подиуме снеговик с санками, а не вторая ёлка.
+  const treeByDoor = activeDecor(state, 'holiday')?.id === 'holiday_tree';
+  return season === 'winter' && treeByDoor ? 'hyper_season_snow' : `hyper_season_${season}`;
+}
+
+/**
+ * От чего зависит низ зала гипермаркета помимо того, что и так перестраивает зал: полка своей марки и витрина 18+
+ * (их покупают утром без перестройки, а встают они на места у входа и касс) и сезон фотозоны (сменился за ночь).
+ * Изменилось - morningFlow перестраивает зал, иначе новая полка встала бы на скамью или коврик, а осенний стог
+ * простоял бы до перезапуска всю новогоднюю неделю.
+ */
+export function hyperLook(state: StoreState): string {
+  if (state.level < HYPER_LEVEL) return '';
+  const has = (kind: string) => (state.shelves.some((sh) => sh.kind === kind) ? 1 : 0);
+  return `${has('brand')}${has('license')}${seasonArt(state)}`;
 }

@@ -15,13 +15,11 @@
 import Phaser from 'phaser';
 import type { StoreScene } from './StoreScene';
 import { HYPER_LEVEL } from '../game/economy';
-import { yearTime } from '../game/calendar';
 import { registerSlots } from '../game/registers';
 import { kioskSlots } from '../game/lanes';
-import { activeDecor } from '../game/decor';
 import { blockedZones, standFor, tillZones } from './placement';
 import { brandRect, iceboxRect, kioskSpot, licenseRect, type Point, type Room } from './layout';
-import { AISLE_H, FEET, planAisle, planHyperHall } from './hyperPlan';
+import { AISLE_H, FEET, hyperLook, planAisle, planHyperHall, seasonArt } from './hyperPlan';
 import type { Rect } from './paths';
 import { ART } from './common';
 import * as shelves from './shelves';
@@ -85,12 +83,10 @@ function targetPoints(scene: StoreScene): Point[] {
 
 /** Убранство низа зала гипермаркета. Зовётся последним при сборке зала - когда всё игровое уже стоит. */
 export function buildHyperHall(scene: StoreScene): void {
+  scene.builtHyper = hyperLook(scene.state);
   if (scene.state.level < HYPER_LEVEL) return;
   buildAisle(scene);
-  const season = yearTime(scene.state.day);
-  // Новогодняя ёлка из украшений уже стоит у входа - зимой на подиуме снеговик с санками, а не вторая ёлка.
-  const treeByDoor = activeDecor(scene.state, 'holiday')?.id === 'holiday_tree';
-  const seasonKey = season === 'winter' && treeByDoor ? 'hyper_season_snow' : `hyper_season_${season}`;
+  const seasonKey = seasonArt(scene.state);
   const pieces = planHyperHall(scene.layout, takenRects(scene), scene.obstacles, targetPoints(scene));
   for (const piece of pieces) {
     scene.obstacles.push(piece.block);
