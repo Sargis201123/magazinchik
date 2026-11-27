@@ -1108,7 +1108,16 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
       ...(touring ? [] : mailBox(state, getState, mailUpdate, render)),
       ...(touring ? [] : whatsNewBox(state)),
       ...(touring ? [] : tipBox(state)),
-      ...(touring ? [] : zarSwitchBox(state, (where) => update(switchToday(getState(), where)))),
+      ...(touring
+        ? []
+        : zarSwitchBox(state, (where) => {
+            const moved = switchToday(getState(), where);
+            // Утро открылось в Заречье - там этажа нет, и одежду Центра не завезли: завоз после переезда (докупит
+            // только недостающее; в Заречье clothesMorning ничего не делает).
+            const filled = clothesMorning(moved);
+            if (filled !== moved) track('clothes_auto', filled.day, moved.money - filled.money);
+            update(filled);
+          })),
       ...(touring ? [] : liveBox(state)),
       ...(touring ? [] : weekBox(state, guestsToday(state))),
       // «Дело недели» (game/cases.ts): строчка с уликами и доской — каждое утро недели, кроме того, когда

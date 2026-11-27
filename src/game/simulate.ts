@@ -906,6 +906,8 @@ export function simulate({
         else if (fin !== null && stallsOf(state).length >= stallPlaces(state)) spend(fin, finishFloor(state, 'third'));
         if (partyToday(state)?.ready) state = answerParty(state, true) ?? state;
       }
+      // Второй этаж открыт ради фудкорта: в игре стойки всё равно заполняются сами (ui/floors.ts, ui/morning.ts fillRacks).
+      state = clothesMorning(state);
     }
     if (features.rental) {
       if (!state.rental && state.money >= STAND_COST * 2 + reserve && canSplurge(STAND_COST)) {

@@ -243,9 +243,12 @@ describe('жалоба в санинспекцию', () => {
     const night = foodcourtNight(at);
     expect(night.day?.closed).toBe(stall);
     expect(night.state.money).toBe(at.money + foodPlan(at)!.income);
-    // Старое сохранение с ответом «навели порядок» сегодня — точка всё равно закрыта (ответ не читаем).
+    // Старое сохранение: утром этого дня уже заплатили «навести порядок» - точка работает (деньги не зря).
     const old = { ...at, foodcourt: { ...at.foodcourt, inspect: { day: at.day, fix: true } } };
-    expect(closedToday(old)).toBe(stall);
+    expect(closedToday(old)).toBeNull();
+    // Ответ «закрыть» или вчерашний ответ - закрыта, как у всех.
+    expect(closedToday({ ...at, foodcourt: { ...at.foodcourt, inspect: { day: at.day, fix: false } } })).toBe(stall);
+    expect(closedToday({ ...at, foodcourt: { ...at.foodcourt, inspect: { day: at.day - 1, fix: true } } })).toBe(stall);
     // Назавтра (если жалобы нет) точка снова работает.
     const next = dayWhen(at, (x) => inspectionToday(x) === null, at.day + 1);
     expect(foodPlan({ ...at, day: next })!.stalls.every((p) => !p.closed && p.income > 0)).toBe(true);
@@ -339,7 +342,7 @@ describe('подсказка и симулятор', () => {
   it('симулятор с фудкортом идёт до конца, открывает этаж и ставит точки', () => {
     const run = simulate({ days: 110, seed: 3, features: { foodcourt: true } });
     expect(run.days.length).toBe(110);
-    // Третий стоит на втором: симулятор сперва открывает второй (пустым), потом фудкорт.
+    // Третий стоит на втором: симулятор сперва открывает второй (стойки там с 27.11 заполняются сами), потом фудкорт.
     if (below) expect(hasFloor(run.final, below)).toBe(true);
     expect(hasFloor(run.final, 'third')).toBe(true);
     expect(stallsOf(run.final).length).toBeGreaterThan(0);

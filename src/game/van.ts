@@ -78,6 +78,14 @@ export interface VanResult {
   fuel: number;
   /** Чистыми в кассу: выручка − товар ± случай − бензин. */
   net: number;
+  /**
+   * Только для отката и старого кэша клиента (код до 27.11, ui/van.ts resultTable): без них старая карточка писала
+   * «NaN шт.» и «{n} шт.», а случай в дороге второй раз выходил утренней новостью. Новый код их не читает - убрать
+   * в следующем выпуске.
+   */
+  back?: number;
+  spoiled?: number;
+  seen?: boolean;
 }
 
 export interface VanState {
@@ -164,6 +172,13 @@ export function vanCargo(state: StoreState, event: VanEventId, day = state.day):
 export const vanGain = (state: StoreState, event: VanEventId, day = state.day): number =>
   vanCargo(state, event, day).reduce((sum, { id, n }) => sum + n * vanMargin(id, event), 0) - vanFuel(state, event);
 
+/**
+ * Худшая толпа (vanCrowd от 0,8) без случая в дороге: выезд, который при ней не окупает бензин, не едет - иначе в
+ * шторм на матч с одним мороженым фургон уезжал и возвращался в минус без понятной причины.
+ */
+const vanFloorGain = (state: StoreState, event: VanEventId, day: number): number =>
+  vanCargo(state, event, day).reduce((sum, { id, n }) => sum + Math.floor(n * 0.8) * vanMargin(id, event), 0) - vanFuel(state, event);
+
 /** Можно купить фургон: минимаркет и больше, в Центре (в Заречье — своя лавка без фургона). */
 export const vanOpen = (state: StoreState): boolean => state.level >= VAN_LEVEL && !inZar(state);
 
@@ -177,7 +192,7 @@ export function vanTripOn(state: StoreState, day = state.day): VanEventId | null
   let gain = 0;
   for (const id of vanEvents(state, day)) {
     const g = vanGain(state, id, day);
-    if (g > gain) [best, gain] = [id, g];
+    if (g > gain && vanFloorGain(state, id, day) > 0) [best, gain] = [id, g];
   }
   return best;
 }
@@ -258,7 +273,7 @@ export function settleVan(state: StoreState, day: StoreState = state): { state: 
   // 14.11, аудит: колесо и бензин в неудачный выезд могли увести кассу в минус — нехватка уходит в долг, как у всех.
   const money = state.money + result.net;
   return {
-    state: { ...state, money: Math.max(0, money), debt: state.debt + Math.max(0, -money), van: { ...van, last: result, trips: (van.trips ?? 0) + 1, earned: (van.earned ?? 0) + result.net } },
+    state: { ...state, money: Math.max(0, money), debt: state.debt + Math.max(0, -money), van: { ...van, last: { ...result, back: 0, spoiled: 0, seen: true }, trips: (van.trips ?? 0) + 1, earned: (van.earned ?? 0) + result.net } },
     result,
   };
 }

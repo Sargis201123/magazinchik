@@ -194,8 +194,14 @@ export function inspectionToday(state: StoreState): StallId | null {
   return stalls[Math.floor(roll(state, 10) * stalls.length)];
 }
 
-/** Какая точка сегодня закрыта по жалобе. */
-export const closedToday = (state: StoreState): StallId | null => inspectionToday(state);
+/**
+ * Какая точка сегодня закрыта по жалобе. Сохранение до 27.11: если утром этого же дня игрок уже заплатил «навести
+ * порядок» (inspect.fix), точка работает - иначе деньги ушли бы зря.
+ */
+export function closedToday(state: StoreState): StallId | null {
+  const paid = foodcourtOf(state)?.inspect;
+  return paid?.day === state.day && paid.fix ? null : inspectionToday(state);
+}
 
 export interface FoodParty {
   /** Торт (медовик, пироги, булочки или мороженое — что продаём) и напитки (сок или вода). */

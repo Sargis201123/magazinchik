@@ -206,7 +206,8 @@ describe('фургон ездит сам (27.11)', () => {
     const night = settleVan(s);
     expect(night.result).toEqual(out);
     expect(night.state.money).toBe(s.money + out.net);
-    expect(night.state.van).toEqual({ since: day, last: out, trips: 1, earned: out.net });
+    // back/spoiled/seen - на один выпуск для старого клиента (откат, кэш): его карточка выезда без них писала NaN.
+    expect(night.state.van).toEqual({ since: day, last: { ...out, back: 0, spoiled: 0, seen: true }, trips: 1, earned: out.net });
     const cycle = nightCycle(s, emptyDayStats(), () => 0.5);
     expect(cycle.van).toEqual(out);
     expect(cycle.state.van?.last?.day).toBe(day);

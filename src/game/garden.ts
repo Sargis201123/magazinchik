@@ -56,7 +56,10 @@ export const gardenVisible = (state: StoreState): boolean => !inZar(state) && (h
 export function bedCount(state: StoreState): number {
   const g = state.garden;
   if (!g) return 0;
-  const n = Number.isFinite(g.beds) ? Math.floor(g.beds!) : 1 + (Array.isArray(g.more) ? g.more.filter((b) => b && typeof b === 'object').length : 0);
+  const old = 1 + (Array.isArray(g.more) ? g.more.filter((b) => b && typeof b === 'object').length : 0);
+  // Больший из двух счётов: старый клиент (откат, кэш) докупает грядку только в more, а beds не трогает - иначе
+  // купленная там грядка пропала бы. Новый код всегда пишет more на одну меньше beds - счёт совпадает.
+  const n = Number.isFinite(g.beds) ? Math.max(Math.floor(g.beds!), old) : old;
   return Math.max(1, Math.min(BEDS_MAX, n));
 }
 

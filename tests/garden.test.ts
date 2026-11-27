@@ -179,6 +179,17 @@ describe('двор: старые сохранения (урожай по час�
     }
   });
 
+  it('грядку докупили в старом клиенте (он пишет только more, beds не трогает) - новый код её не теряет', () => {
+    const s = built({ money: 5000, level: 3 });
+    // Старый addBed: ...g и ещё одна запись в more; beds остаётся 1.
+    const g = { ...s.garden!, more: [...(s.garden!.more ?? []), { crop: 'mix', since: 0 }] };
+    const back = { ...s, garden: g };
+    expect(bedCount(back)).toBe(2);
+    expect(yardIncome(back)).toBe(2 * bedIncome(back));
+    // Вечер переносит грядку в новый вид.
+    expect(yardNight({ ...back, day: 50 }).state.garden?.beds).toBe(2);
+  });
+
   it('бот про урожай больше не зовёт: в поводах игры нет поля ripe', () => {
     expect('ripe' in comebackHooks(old({ since: 1, harvests: 0 }))).toBe(false);
   });
