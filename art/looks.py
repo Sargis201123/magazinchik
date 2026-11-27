@@ -143,12 +143,14 @@ def head(name, p, skin):
     elif HEADS.get(shape):
         HEADS[shape](p, skin)
     if look.get("ears") == "big":
-        # Лопоухие: ухо на клетку длиннее вниз.
+        # Лопоухие: ухо на клетку длиннее вниз. У узкого лица щека на этой строке уже уха -
+        # промежуток до щеки тоже кожа, иначе между ухом и лицом просвечивает фон.
         left = next(x for x in range(4, 16) if p.get(x, 14)[3])
         right = next(x for x in range(28, 16, -1) if p.get(x, 14)[3])
-        for x, color in ((left, skin), (right, shade(skin, 0.9))):
-            if not p.get(x, 15)[3]:
+        for x, color, step in ((left, skin, 1), (right, shade(skin, 0.9), -1)):
+            while not p.get(x, 15)[3]:
                 p.px(x, 15, color)
+                x += step
 
 
 # ---------------------------------------------------------------- выбор черт
@@ -157,7 +159,7 @@ def head(name, p, skin):
 HASHED = {
     "head": ("oval", "full", "long", "heart", "wide", "jowl", "lean", "jaw", "oval"),
     "iris": ("auto", "blue", "green", "grey", "hazel", "brown", "auto", "sky"),
-    "brow": ("std", "thin", "thick", "straight", "short", "std"),
+    "brow": ("std", "arch", "thick", "straight", "short", "std"),
     "nose": ("std", "button", "long", "wide", "hooked", "small", "std"),
     "mouth": ("smile", "small", "wide", "flat", "smile"),
     "blush": ("soft", "soft", "none"),
@@ -168,18 +170,23 @@ MOLES = ((27, 37), (41, 36), (37, 40), (22, 33), (43, 38))
 def look_of(name):
     h = hashlib.md5(name.encode()).digest()
     look = {key: opts[h[i] % len(opts)] for i, (key, opts) in enumerate(HASHED.items())}
-    look.update(eye="std", lash=False, lips=None, gaze=0, ears=None, brow_col=None, brow_dy=0, marks=())
-    if h[8] % 4 == 0:
-        look["mole"] = MOLES[h[9] % len(MOLES)]
-    if h[10] % 7 == 0:
-        look["marks"] = ("freckles",)
+    look.update(eye="std", lash=False, lips=None, gaze=0, ears=None, brow_col=None, brow_dy=0, marks=(), specs=None, mole=None)
+    if name not in LOOKS:
+        # Новый герой без строки: родинка и веснушки - тоже по хэшу. У тех, кто в таблице, - только как записано.
+        if h[8] % 4 == 0:
+            look["mole"] = MOLES[h[9] % len(MOLES)]
+        if h[10] % 7 == 0:
+            look["marks"] = ("freckles",)
     row = LOOKS.get(name, {})
     age = row.get("age")
     if age == "kid":
         look.update(head="child", eye="big", nose="button", blush="kid", mouth="small")
     elif age == "old":
-        look.update(eye="droop", marks=("bags", "crow", "fold"))
+        look.update(eye="droop", marks=("bags", "fold"))
     look.update(row)
+    if look["specs"]:
+        # За стёклами мешки и «лапки» только рябят у оправы.
+        look["marks"] = tuple(m for m in look["marks"] if m not in ("bags", "crow"))
     return look
 
 
@@ -213,47 +220,49 @@ def face(name, b, skin, hair, mood):
     _mouth(b, skin, look, mood)
     _blush(b, look, mood, dab)
     _over(b, skin, look, marks, mood, dab, dim)
+    if look["specs"] == "wire":
+        _wire_specs(b, skin)
     if name in EXTRAS:
         EXTRAS[name](b, skin, hair, mood)
 
 
+# Морщины и тени - цельные штрихи одним тоном, зеркально слева и справа (не россыпь точек).
+WRINKLES = {
+    "bags": [(x, 33) for x in range(24, 28)] + [(x, 33) for x in range(38, 42)],
+    "crow": ((22, 31), (21, 32), (43, 31), (44, 32)),
+    "fold": ((27, 36), (26, 37), (26, 38), (37, 36), (38, 37), (38, 38)),
+    "cheek": ((21, 36), (22, 37), (23, 38), (43, 36), (42, 37), (41, 38)),
+    "chin2": [(x, 45) for x in range(29, 36)] + [(28, 44), (36, 44)],
+}
+AGE_MARKS = ("bags", "crow", "fold", "cheek", "lines", "chin2")
+STUBBLE = H("#5a6988")
+
+
 def _under(b, skin, look, marks, mood, dim):
     """Приметы под глазами, бровями и ртом: возраст, скулы, щетина."""
+    tones = (skin, shade(skin, 0.92), shade(skin, 0.93), shade(skin, 0.9))
     if "lines" in marks:
-        # Морщины на лбу - две дужки, если лоб открыт.
-        for x in range(27, 38):
-            if x != 32:
-                dim(x, 21 if 29 <= x <= 35 else 22, 0.9)
-        for x in range(29, 36):
-            dim(x, 19, 0.9)
-    if "bags" in marks:
-        for ex in EYES:
-            for x in range(ex, ex + 4):
-                dim(x, 33, 0.88)
-            dim(ex + 1, 34, 0.95)
-            dim(ex + 2, 34, 0.95)
-    if "crow" in marks:
-        for x, y in ((22, 30), (21, 31), (22, 32), (43, 30), (44, 31), (43, 32)):
-            dim(x, y, 0.85)
-    if "fold" in marks:
-        for x, y in ((27, 36), (26, 37), (26, 38), (37, 36), (38, 37), (38, 38)):
-            dim(x, y, 0.85)
-    if "cheek" in marks:
-        # Скулы: тень под скулой косой полосой.
-        for x, y in ((21, 36), (22, 37), (23, 38), (43, 36), (42, 37), (41, 38)):
-            dim(x, y, 0.85)
+        # Морщины на лбу - две дужки, если лоб открыт; под чёлкой не рисуем обрывки.
+        for line in ([(x, 21 if 29 <= x <= 35 else 22) for x in range(27, 38) if x != 32], [(x, 19) for x in range(29, 36)]):
+            if all(b.get(x, y) in tones for x, y in line):
+                for x, y in line:
+                    dim(x, y, 0.88)
+    for mark, pts in WRINKLES.items():
+        if mark in marks:
+            for x, y in pts:
+                dim(x, y, 0.85)
     if "stubble" in marks:
-        # Щетина: челюсть, подбородок и над губой чуть сизые, по ним - редкие точки.
-        stub = H("#5a6988")
+        # Щетина: челюсть, подбородок и над губой ровно сизые, по линии челюсти - редкие точки.
         for y in range(35, 48):
             for x in range(16, 49):
                 jaw = y >= 40 or (y >= 36 and (x <= 22 or x >= 42)) or (36 <= y <= 37 and 28 <= x <= 36)
                 here = b.get(x, y)
-                if jaw and here in (skin, shade(skin, 0.92), shade(skin, 0.93), shade(skin, 0.9)):
-                    b.px(x, y, shade(mix(here, stub, 0.2), 0.97 if (x + 2 * y) % 4 else 0.89))
-    if "chin2" in marks:
-        for x in range(28, 37):
-            dim(x, 45 if 29 <= x <= 35 else 44, 0.86)
+                if jaw and here in tones:
+                    b.px(x, y, mix(here, STUBBLE, 0.18))
+        tinted = {mix(t, STUBBLE, 0.18) for t in tones}
+        for x, y in ((21, 40), (24, 43), (28, 45), (36, 45), (40, 43), (43, 40)):
+            if b.get(x, y) in tinted:
+                b.px(x, y, shade(b.get(x, y), 0.82))
     if "cleft" in marks:
         dim(32, 43, 0.82)
         dim(32, 44, 0.86)
@@ -279,6 +288,14 @@ def _eyes(b, skin, hair, look, mood):
             b.px(ex + 4, 31, INK)
             if look["lash"]:
                 b.px(outer + side, 30, INK)
+            continue
+        if kind == "dot":
+            # Глазки-бусинки без белка: тёмный зрачок с бликом под коротким веком (добряки, весельчаки).
+            ix = ex + 1 + look["gaze"]
+            b.hline(ex, 28, 4, shade(skin, 0.62))
+            b.rect(ix, 29, 2, 3, INK)
+            b.px(ix, 29, WHITE)
+            b.hline(ex, 32, 4, shade(skin, 0.88))
             continue
         top = 27 if kind == "wide" else 29 if kind == "narrow" else 28
         b.rect(ex, top, 4, 32 - top, WHITE)
@@ -313,34 +330,48 @@ def _brow_color(hair, look, old):
         return H(look["brow_col"])
     greyish = max(hair[:3]) - min(hair[:3]) < 45 and sum(hair[:3]) > 420
     if old and greyish:
-        return shade(hair, 0.72)
+        # Седые брови - тёмно-серые: светлая полоска на коже не читается, а брови несут настроение.
+        return shade(hair, 0.45)
     return shade(hair, 0.7) if sum(hair[:3]) < 600 else H("#5a4a52")
+
+
+# Брови: ширина (клеток от внешнего края), второй ряд (None - одна линия, "dark" - тем же тоном,
+# "soft" - чуть светлее) и сдвиг по высоте вдоль брови от внешнего края к внутреннему.
+BROWS = {
+    "std": (5, "soft", None),
+    "thin": (5, None, None),
+    "thick": (6, "dark", None),
+    "bushy": (6, "dark", None),
+    "straight": (5, "soft", None),
+    "short": (3, "dark", None),
+    # Дуга: хвостик ниже, середина выше, к переносице - двойная линия.
+    "arch": (6, "arch", (1, 0, -1, -1, 0, 0)),
+    "angled": (5, "dark", None),
+}
 
 
 def _brows(b, skin, hair, look, mood, old):
     brow = _brow_color(hair, look, old)
     style = look["brow"]
-    base = (25, 25, 25, 25) if style == "straight" else (25, 24, 24, 25)
+    width, second, bend = BROWS[style]
+    base = {"straight": (25, 25, 25, 25), "angled": (23, 25, 25, 23)}.get(style, (25, 24, 24, 25))
     lift = {"happy": (24, 24, 24, 24), "sad": (26, 23, 23, 26), "angry": (23, 26, 26, 23), "surprised": (22, 22, 22, 22)}.get(mood, base)
     lift = tuple(v + look["brow_dy"] for v in lift)
-    wide = style in ("thick", "bushy")
     # (внешний край, внутренний край) по x для левой и правой брови.
-    spans = (((22 if wide else 24 if style == "short" else 23), 27), ((42 if wide else 40 if style == "short" else 41), 37))
-    second = {"thin": None, "arch": None, "thick": brow, "bushy": brow}.get(style, shade(brow, 1.15))
+    spans = ((28 - width, 27), (36 + width, 37))
     for (xo, xi), (yo, yi) in ((spans[0], lift[:2]), (spans[1], lift[3:1:-1])):
         step = 1 if xi > xo else -1
         xs = list(range(xo, xi + step, step))
         for i, x in enumerate(xs):
             y = round(yo + (yi - yo) * i / (len(xs) - 1))
-            if style == "arch":
-                # Изящная дуга: тонкая бровь выше обычной, внешний хвостик опущен (в спокойном лице).
-                y -= 1
-                if i == 0 and mood in (None, "happy"):
-                    y += 1
+            if bend:
+                y += bend[i]
             y = min(y, 26)
             b.px(x, y, brow)
-            if second:
-                b.px(x, y + 1, second)
+            if second == "soft":
+                b.px(x, y + 1, shade(brow, 1.15))
+            elif second == "dark" or (second == "arch" and i >= 2):
+                b.px(x, y + 1, brow)
         if style == "bushy":
             # Лохматые: торчащие волоски над внешним краем и у переносицы.
             yo2 = min(round(yo), 26)
@@ -464,10 +495,29 @@ def _over(b, skin, look, marks, mood, dab, dim):
         dim(26 if mood is None else 25, 39, 0.82)
         dim(38 if mood is None else 39, 39, 0.82)
     if "scar" in marks:
+        # Шрам наискось по левой щеке: светлый рубец с тёмной кромкой, только по коже.
         scar = mix(skin, WHITE, 0.4)
-        for x, y in ((24, 21), (25, 22), (25, 23), (26, 24), (26, 25)):
-            b.px(x, y, scar)
-        b.px(27, 25, shade(skin, 0.86))
+        for x, y in ((21, 33), (21, 34), (22, 35), (22, 36), (23, 37)):
+            dab(x, y, scar)
+        for x, y in ((22, 33), (22, 34), (23, 36)):
+            dab(x, y, shade(skin, 0.8))
+
+
+def _wire_specs(b, skin):
+    """Тонкие очки в золотой оправе вокруг глаз: сами глаза видны, моргание - внутри стёкол."""
+    rim, glint = H("#8f563b"), H("#feae34")
+    for x0 in (22, 36):
+        b.hline(x0 + 1, 26, 6, rim)
+        b.hline(x0 + 1, 33, 6, rim)
+        b.vline(x0, 27, 6, rim)
+        b.vline(x0 + 7, 27, 6, rim)
+        b.px(x0 + 1, 26, glint)
+        b.px(x0, 27, glint)
+    b.hline(30, 28, 6, rim)
+    tones = {skin, shade(skin, 0.92), shade(skin, 0.9), shade(skin, 0.93), shade(skin, 1.07)}
+    for x in (19, 20, 21, 44, 45, 46):
+        if b.get(x, 28) in tones:
+            b.px(x, 28, rim)
 
 
 # ---------------------------------------------------------------- свои детали героев сюжета
@@ -570,90 +620,169 @@ EXTRAS = {
 
 # ---------------------------------------------------------------- кто как выглядит
 #
-# head   овал: oval (как было у всех), full, long, heart, wide, jowl, lean, jaw; у героев сюжета - свои
+# head   овал: oval, full, long, heart, wide, jowl, lean, jaw; у героев сюжета - свои
 #        chubby (бабушка), round (Валя), square (Марат), narrow (Эдуард), child (Соня)
-# eye    std, big (ребёнок: крупная радужка), narrow (тяжёлое веко, прищур), droop (опущенный уголок)
+# eye    std, big (ребёнок: крупная радужка), narrow (тяжёлое веко, прищур), droop (опущенный уголок),
+#        wide (широко открытые), dot (бусинки без белка)
 # lash   ресницы стрелкой; gaze  -1/1 - взгляд вбок; iris  цвет радужки (IRIS) или auto - по волосам
-# brow   std, thin, thick, bushy, arch (дугой), straight (прямые), short; brow_dy  +1 ниже (хмурый);
-#        brow_col  свой цвет (светлые волосы)
+# brow   std, thin, thick, bushy, arch (дугой), straight (прямые), short (короткие), angled (домиком к переносице);
+#        brow_dy  +1 ниже (хмурый); brow_col  свой цвет (светлые волосы). У кого есть настроения - не thin:
+#        одна светлая линия не держит эмоцию.
 # nose   std, button, small, long, wide, hooked, potato
 # mouth  smile, small, wide, flat, stern (уголки вниз), smirk (усмешка); lips  full / paint (помада)
 # blush  soft, none, rosy (румяный), kid
-# marks  bags, crow, fold, lines (лоб), cheek (скулы), stubble, chin2, cleft, freckles, dimples, scar
-# mole   (x, y) родинки; ears  big; age  kid / old (подставляет детские / возрастные черты)
+# marks  возраст (bags, crow, fold, lines, cheek, chin2 - не больше двух, cheek без fold), stubble, cleft,
+#        freckles, dimples, scar
+# mole   (x, y) родинки (у накрашенных губ - не ближе 3 клеток ко рту); ears  big;
+# specs  frame - очки рисует модуль героя (глаза за ними почти не видны), wire - тонкая золотая оправа здесь;
+# age    kid / old (подставляет детские / возрастные черты)
 #
-# Глаза за очками (glasses) почти не видны - таким героям разницу дают овал, брови, нос и рот.
+# Проверка, что лица не повторяются: python3 art/looks.py (после перерисовки портретов).
 
 LOOKS = {
     # --- Герои сюжета (sprites.py) и семья (family.py).
-    "grandma": dict(head="chubby", age="old", marks=(), eye="std", iris="blue", brow="thin", nose="button", mouth="smile", blush="rosy"),
-    "valya": dict(head="round", iris="green", brow="arch", nose="small", mouth="smile", blush="soft", lash=True, mole=None),
-    "marat": dict(head="square", iris="dark", brow="thick", nose="wide", mouth="wide", blush="none", mole=None),
-    "eduard": dict(head="narrow", eye="narrow", iris="grey", brow="straight", nose="long", mouth="flat", blush="none", mole=None),
-    "inspector": dict(head="long", iris="grey", brow="straight", brow_dy=1, nose="hooked", mouth="flat", blush="none", mole=None),
-    "sonya": dict(age="kid", iris="hazel", mouth="smile", marks=(), mole=None),
-    "father": dict(head="lean", iris="brown", brow="std", nose="long", mouth="flat", blush="none", mole=None, marks=("fold",)),
+    "grandma": dict(head="chubby", age="old", eye="std", iris="blue", brow="std", brow_col="#5a4a52", nose="button", mouth="smile", blush="rosy", specs="frame", marks=()),
+    "valya": dict(head="round", iris="green", lash=True, brow="arch", nose="small", mouth="smile", lips="paint", blush="soft"),
+    "marat": dict(head="square", iris="dark", brow="thick", nose="wide", mouth="wide", blush="none"),
+    "eduard": dict(head="narrow", eye="narrow", iris="grey", brow="straight", nose="long", mouth="flat", blush="none"),
+    "inspector": dict(head="long", eye="narrow", iris="grey", brow="straight", brow_dy=1, nose="hooked", mouth="flat", lips="paint", blush="none"),
+    "sonya": dict(age="kid", iris="hazel", brow="short", mouth="smile", marks=()),
+    "father": dict(head="lean", iris="brown", brow="std", nose="long", mouth="flat", blush="none", marks=("fold",)),
     # --- Праздники, новости, полиция.
-    "moroz": dict(age="old", head="wide", eye="std", iris="sky", brow="bushy", brow_col="#ffffff", nose="potato", blush="rosy", marks=("crow",), mole=None),
-    "snegurochka": dict(head="heart", iris="sky", lash=True, brow="thin", brow_col="#b86f50", nose="small", mouth="small", lips="full", blush="rosy", mole=None),
-    "anchor": dict(head="heart", iris="blue", lash=True, brow="arch", nose="small", mouth="smile", lips="paint", blush="soft", mole=(40, 37), marks=()),
-    "police": dict(head="jaw", eye="narrow", iris="grey", brow="thick", brow_dy=1, nose="wide", mouth="flat", blush="none", marks=("cleft",), mole=None),
-    "grey": dict(head="lean", eye="narrow", gaze=1, iris="grey", brow="straight", brow_dy=1, nose="hooked", mouth="smirk", blush="none", marks=("scar",), mole=None),
+    "moroz": dict(age="old", head="wide", eye="std", iris="sky", brow="bushy", brow_col="#8b9bb4", nose="potato", mouth="smile", blush="rosy", marks=("crow",)),
+    "snegurochka": dict(head="heart", eye="wide", iris="sky", lash=True, brow="arch", brow_col="#8f563b", nose="small", mouth="small", lips="full", blush="rosy"),
+    "anchor": dict(head="oval", iris="blue", lash=True, brow="straight", nose="long", mouth="wide", lips="paint", blush="soft", mole=(41, 36)),
+    "police": dict(head="jaw", eye="narrow", iris="grey", brow="thick", brow_dy=1, nose="wide", mouth="flat", blush="none", marks=("cleft",)),
+    "grey": dict(head="lean", eye="narrow", gaze=1, iris="grey", brow="angled", nose="hooked", mouth="smirk", blush="none", marks=("scar",)),
     # --- Ученики (apprentice.py).
-    "appr0": dict(head="full", eye="big", iris="sky", brow="short", nose="button", mouth="wide", blush="kid", ears="big", marks=(), mole=None),
-    "appr1": dict(head="heart", eye="big", iris="green", lash=True, brow="thin", nose="small", mouth="smile", blush="kid", marks=("freckles",), mole=None),
+    "appr0": dict(head="full", eye="big", iris="sky", brow="straight", nose="small", mouth="wide", blush="kid", ears="big", marks=("dimples",)),
+    "appr1": dict(head="heart", eye="big", iris="green", lash=True, brow="std", nose="small", mouth="smirk", blush="kid", marks=("freckles",)),
     # --- Поставщики (sprites.py).
-    "farmer": dict(age="old", head="wide", eye="narrow", iris="blue", brow="bushy", nose="potato", blush="rosy", marks=("crow", "fold"), mole=None),
-    "dairy": dict(head="full", iris="blue", lash=True, brow="arch", nose="button", mouth="smile", lips="full", blush="rosy", marks=("dimples",), mole=None),
-    "butcher": dict(head="jowl", eye="narrow", iris="dark", brow="bushy", nose="potato", mouth="smile", blush="rosy", marks=("chin2",), mole=None),
-    "school": dict(head="chubby", iris="hazel", lash=True, brow="thin", nose="button", mouth="small", lips="paint", blush="rosy", mole=(41, 37), marks=()),
-    "wholesale": dict(head="wide", eye="narrow", iris="dark", brow="thick", nose="wide", mouth="flat", blush="none", mole=None, marks=()),
+    "farmer": dict(age="old", head="jaw", eye="narrow", iris="blue", brow="bushy", nose="long", mouth="flat", blush="rosy", marks=("crow", "fold")),
+    "dairy": dict(head="full", eye="dot", iris="blue", brow="thick", brow_col="#733e39", nose="std", mouth="wide", blush="rosy", marks=("dimples",)),
+    "butcher": dict(head="jowl", eye="dot", iris="dark", brow="bushy", nose="potato", mouth="smile", blush="rosy", marks=("chin2",)),
+    "school": dict(head="wide", eye="narrow", iris="hazel", brow="straight", nose="wide", mouth="stern", lips="paint", blush="rosy", mole=(22, 33)),
+    "wholesale": dict(head="wide", eye="dot", iris="dark", brow="straight", nose="potato", mouth="flat", blush="none"),
     # --- Те, кто звонит с заказом, и постоянные покупатели (delivery.py, returns.ts).
-    "caller0": dict(age="old", head="lean", iris="hazel", brow="arch", nose="long", mouth="small", lips="paint", blush="none", mole=(37, 40), marks=("bags", "fold", "cheek")),
-    "caller1": dict(head="long", iris="blue", brow="thick", nose="long", mouth="wide", blush="soft", ears="big", marks=("stubble",), mole=None),
-    "caller2": dict(head="heart", iris="hazel", lash=True, brow="arch", nose="small", mouth="smile", lips="paint", blush="soft", mole=(22, 33), marks=()),
-    "caller3": dict(head="wide", eye="narrow", iris="dark", brow="thick", nose="wide", mouth="smile", blush="none", marks=("dimples",), mole=None),
-    "caller4": dict(head="jaw", iris="blue", brow="straight", nose="std", mouth="flat", blush="none", marks=("cleft",), mole=None),
-    "caller5": dict(age="old", head="long", iris="grey", brow="bushy", nose="potato", mouth="smile", blush="rosy", marks=("bags", "crow", "lines"), mole=None),
+    "caller0": dict(age="old", head="lean", iris="hazel", brow="thick", brow_col="#3e2731", nose="long", mouth="small", lips="paint", blush="none", specs="wire", marks=("fold",)),
+    "caller1": dict(head="long", iris="blue", brow="thick", nose="long", mouth="wide", blush="soft", ears="big", marks=("stubble",)),
+    "caller2": dict(head="jaw", eye="wide", iris="hazel", brow="thick", nose="small", mouth="smirk", blush="soft", marks=("freckles",)),
+    "caller3": dict(head="full", eye="narrow", iris="dark", brow="angled", nose="wide", mouth="smile", blush="none", marks=("dimples",)),
+    "caller4": dict(head="jaw", iris="blue", brow="straight", nose="std", mouth="smile", blush="none", marks=("cleft",)),
+    "caller5": dict(age="old", head="long", eye="droop", iris="grey", brow="bushy", nose="potato", mouth="smile", blush="rosy", marks=("bags", "lines")),
     # --- Дела (cases.py), рэкет (racket.py).
-    "case_rosa": dict(age="old", head="heart", iris="green", lash=True, brow="arch", nose="hooked", mouth="small", lips="paint", blush="none", mole=(37, 40)),
-    "case_zina": dict(head="full", iris="green", lash=True, brow="arch", brow_col="#a22633", nose="small", mouth="smile", lips="paint", blush="soft", marks=("freckles",), mole=None),
-    "case_gosha": dict(head="jaw", eye="narrow", iris="dark", brow="thick", brow_dy=1, nose="wide", mouth="stern", blush="none", marks=("stubble",), mole=None),
-    "case_semyon": dict(age="old", head="jowl", iris="blue", brow="bushy", nose="potato", mouth="smile", blush="rosy", marks=("bags", "crow", "fold", "lines"), mole=None),
-    "case_valera": dict(head="jaw", iris="hazel", brow="thick", nose="wide", mouth="wide", blush="soft", ears="big", marks=("cleft", "dimples"), mole=None),
-    "racket_tolik": dict(head="jowl", eye="narrow", iris="grey", brow="thick", brow_dy=1, nose="wide", mouth="stern", blush="none", ears="big", marks=("scar", "stubble"), mole=None),
-    "case_boris": dict(head="long", eye="droop", iris="grey", brow="bushy", nose="hooked", mouth="flat", blush="none", marks=("fold", "cheek"), mole=None),
+    "case_rosa": dict(age="old", head="heart", iris="green", brow="std", nose="hooked", mouth="small", lips="paint", blush="none", specs="frame", marks=("fold",)),
+    "case_zina": dict(head="full", eye="narrow", iris="green", brow="arch", brow_col="#a22633", nose="button", mouth="smirk", blush="soft", marks=("freckles",)),
+    "case_gosha": dict(head="jaw", eye="narrow", iris="dark", brow="angled", nose="std", mouth="stern", blush="none", marks=("stubble",)),
+    "case_semyon": dict(age="old", head="full", iris="blue", brow="std", nose="long", mouth="smile", blush="rosy", marks=("bags", "chin2")),
+    "case_valera": dict(head="jaw", eye="dot", iris="hazel", brow="bushy", nose="wide", mouth="wide", blush="soft", ears="big", marks=("cleft", "dimples")),
+    "racket_tolik": dict(head="jowl", eye="narrow", iris="grey", brow="thick", brow_dy=1, nose="wide", mouth="stern", blush="none", ears="big", marks=("scar", "stubble")),
+    "case_boris": dict(head="long", eye="droop", iris="grey", brow="bushy", nose="hooked", mouth="flat", blush="none", marks=("fold",)),
     # --- Сценки у кассы (skits.py).
-    "skit_tyoma": dict(age="kid", iris="sky", ears="big", mouth="wide", marks=(), mole=None),
-    "skit_lyosha": dict(head="long", iris="hazel", brow="thin", nose="long", mouth="wide", blush="soft", ears="big", marks=(), mole=None),
-    "skit_karina": dict(head="heart", iris="blue", lash=True, brow="arch", brow_col="#b86f50", nose="small", mouth="smile", lips="paint", blush="soft", mole=(41, 36), marks=()),
-    "skit_fyodor": dict(age="old", head="lean", iris="blue", brow="bushy", nose="long", mouth="flat", blush="soft", marks=("bags", "fold"), mole=None),
-    "skit_masha": dict(age="kid", iris="blue", lash=True, brow="thin", blush="kid", marks=("freckles",), mole=None),
-    "skit_ruslan": dict(head="lean", iris="dark", brow="thick", nose="hooked", mouth="smile", blush="none", marks=("cheek", "stubble"), mole=None),
-    "skit_galina": dict(age="old", head="narrow", iris="grey", brow="arch", nose="long", mouth="stern", lips="full", blush="soft", mole=(27, 37)),
-    "skit_hoodie": dict(head="lean", eye="narrow", iris="grey", brow="straight", nose="std", mouth="flat", blush="none", marks=("stubble",), mole=None),
-    "skit_painter": dict(head="full", iris="blue", brow="bushy", nose="potato", mouth="wide", blush="rosy", marks=("dimples",), mole=None),
-    "skit_viktor": dict(head="heart", eye="narrow", gaze=-1, iris="green", brow="arch", nose="long", mouth="smirk", blush="none", mole=(43, 38), marks=()),
+    "skit_tyoma": dict(age="kid", iris="sky", brow="thick", ears="big", mouth="wide", marks=("dimples",)),
+    "skit_lyosha": dict(head="long", eye="wide", iris="hazel", brow="std", nose="button", mouth="wide", blush="soft", ears="big"),
+    "skit_karina": dict(head="heart", eye="narrow", gaze=1, iris="blue", lash=True, brow="thick", brow_col="#8f563b", nose="small", mouth="smirk", lips="paint", blush="soft"),
+    "skit_fyodor": dict(age="old", head="lean", iris="blue", brow="bushy", nose="long", mouth="flat", blush="soft", specs="frame", marks=("fold",)),
+    "skit_masha": dict(age="kid", iris="blue", lash=True, brow="arch", nose="small", mouth="wide", marks=("freckles",)),
+    "skit_ruslan": dict(head="lean", iris="dark", brow="thick", nose="hooked", mouth="smile", blush="none", marks=("cheek", "stubble")),
+    "skit_galina": dict(age="old", head="narrow", iris="grey", brow="straight", nose="long", mouth="stern", blush="soft", specs="frame", mole=(27, 37), marks=("fold",)),
+    "skit_hoodie": dict(head="oval", eye="narrow", iris="grey", brow="straight", nose="std", mouth="flat", blush="none", marks=("stubble",)),
+    "skit_painter": dict(head="full", eye="wide", iris="blue", brow="short", nose="potato", mouth="wide", blush="rosy", marks=("dimples",)),
+    "skit_viktor": dict(head="full", gaze=-1, iris="green", brow="arch", nose="small", mouth="smirk", blush="none", mole=(43, 38)),
     # --- Мечты соседей (dreams.py), Надя (residents.py).
-    "dream_kostya": dict(head="oval", iris="dark", brow="std", nose="button", mouth="wide", blush="soft", marks=("dimples",), mole=None),
-    "dream_anya": dict(head="heart", iris="blue", lash=True, brow="thin", nose="small", mouth="small", lips="full", blush="soft", marks=("freckles",), mole=None),
-    "dream_petr": dict(age="old", head="long", iris="grey", brow="bushy", nose="long", mouth="flat", blush="none", marks=("bags", "fold", "lines"), mole=None),
-    "dream_akhmed": dict(head="lean", iris="dark", brow="thick", nose="hooked", mouth="smile", blush="none", marks=("cheek",), mole=None),
-    "nadya": dict(head="oval", iris="green", lash=True, brow="arch", nose="button", mouth="smile", blush="soft", marks=("freckles", "dimples"), mole=None),
+    "dream_kostya": dict(head="heart", eye="wide", iris="dark", brow="std", nose="small", mouth="wide", blush="soft", marks=("dimples",)),
+    "dream_anya": dict(head="oval", eye="wide", iris="blue", brow="std", nose="button", mouth="small", lips="full", blush="soft", marks=("freckles",)),
+    "dream_petr": dict(age="old", head="full", iris="grey", brow="straight", nose="potato", mouth="smile", blush="none", specs="frame", marks=("lines",)),
+    "dream_akhmed": dict(head="wide", eye="dot", iris="dark", brow="thick", nose="hooked", mouth="wide", blush="none", marks=("cheek",)),
+    "nadya": dict(head="full", iris="green", lash=True, brow="short", nose="small", mouth="wide", blush="soft", marks=("freckles", "dimples")),
     # --- Сотрудники (career.py): чётные - мужчины, нечётные - женщины.
-    "staff0": dict(head="jaw", iris="blue", brow="std", nose="std", mouth="smile", blush="none", marks=("cleft",), mole=None),
-    "staff1": dict(head="oval", iris="hazel", lash=True, brow="arch", nose="small", mouth="smile", lips="paint", blush="soft", mole=(41, 36), marks=()),
-    "staff2": dict(head="full", iris="dark", brow="thick", nose="wide", mouth="wide", blush="none", marks=("dimples",), mole=None),
-    "staff3": dict(head="heart", iris="green", lash=True, brow="thin", nose="small", mouth="small", lips="full", blush="soft", marks=("freckles",), mole=None),
-    "staff4": dict(head="jowl", eye="narrow", iris="brown", brow="bushy", nose="potato", mouth="smile", blush="rosy", marks=("chin2",), mole=None),
-    "staff5": dict(head="full", iris="dark", lash=True, brow="thick", nose="button", mouth="wide", lips="paint", blush="soft", marks=("dimples",), mole=None),
-    "staff6": dict(head="long", iris="green", brow="thin", nose="long", mouth="wide", blush="soft", ears="big", marks=("freckles",), mole=None),
-    "staff7": dict(head="oval", iris="blue", lash=True, brow="arch", nose="small", mouth="smile", lips="full", blush="soft", mole=(22, 33), marks=()),
+    "staff0": dict(head="oval", eye="wide", iris="blue", brow="std", nose="small", mouth="smile", blush="none"),
+    "staff1": dict(head="long", eye="droop", iris="hazel", brow="thick", nose="hooked", mouth="wide", blush="soft"),
+    "staff2": dict(head="heart", eye="narrow", iris="dark", brow="short", nose="wide", mouth="smile", blush="none"),
+    "staff3": dict(head="heart", iris="green", brow="thick", nose="button", mouth="small", lips="full", blush="soft", specs="frame"),
+    "staff4": dict(head="lean", eye="droop", iris="grey", brow="straight", nose="hooked", mouth="flat", blush="none", marks=("lines",)),
+    "staff5": dict(head="wide", eye="droop", iris="dark", lash=True, brow="arch", nose="wide", mouth="smile", lips="paint", blush="soft", marks=("dimples",)),
+    "staff6": dict(head="oval", eye="dot", iris="green", brow="std", nose="button", mouth="smirk", blush="soft", ears="big", marks=("freckles",)),
+    "staff7": dict(head="lean", iris="blue", brow="short", nose="long", mouth="smirk", lips="full", blush="soft", specs="frame", marks=("dimples",)),
     # --- Заречье (zarechye.py).
-    "zar_som": dict(age="old", head="wide", eye="narrow", iris="sky", brow="bushy", nose="potato", blush="rosy", marks=("crow", "lines"), mole=None),
-    "zar_nina": dict(age="old", head="jowl", iris="blue", brow="thick", nose="wide", mouth="stern", blush="rosy", mole=(27, 37), marks=("crow", "fold", "chin2")),
-    "zar_yegor": dict(head="jaw", iris="hazel", brow="thick", nose="long", mouth="smirk", blush="none", marks=("cheek",), mole=None),
-    "zar_stepan": dict(age="old", head="long", iris="grey", brow="bushy", nose="hooked", mouth="flat", blush="none", marks=("bags", "cheek", "fold"), mole=None),
-    "zar_lida": dict(head="full", iris="green", lash=True, brow="arch", brow_col="#a22633", nose="button", mouth="smile", lips="full", blush="rosy", marks=("freckles",), mole=None),
-    "zar_tolik": dict(head="full", iris="sky", brow="short", nose="button", mouth="wide", blush="soft", ears="big", marks=("freckles",), mole=None),
+    "zar_som": dict(age="old", head="jowl", eye="narrow", iris="sky", brow="bushy", nose="wide", mouth="flat", blush="rosy", marks=("crow", "lines")),
+    "zar_nina": dict(age="old", head="jowl", iris="blue", brow="thick", nose="potato", mouth="stern", blush="rosy", mole=(27, 37), marks=("chin2",)),
+    "zar_yegor": dict(head="jaw", iris="hazel", brow="thick", nose="long", mouth="smirk", blush="none", marks=("cheek",)),
+    "zar_stepan": dict(age="old", head="jaw", iris="grey", brow="straight", nose="potato", mouth="stern", blush="none", marks=("bags", "cheek")),
+    "zar_lida": dict(head="wide", eye="wide", iris="green", brow="arch", brow_col="#8f563b", nose="button", mouth="smile", blush="rosy", marks=("freckles",)),
+    "zar_tolik": dict(head="full", eye="wide", iris="sky", brow="thick", nose="button", mouth="wide", blush="soft", ears="big", marks=("freckles",)),
 }
+
+# Женщины и девочки: у них свой, более строгий порог непохожести (см. check).
+WOMEN = {
+    "grandma", "valya", "inspector", "sonya", "snegurochka", "anchor", "appr1", "dairy", "school", "caller0", "caller2",
+    "case_rosa", "case_zina", "skit_karina", "skit_masha", "skit_galina", "dream_anya", "nadya", "staff1", "staff3",
+    "staff5", "staff7", "zar_nina", "zar_lida",
+}
+
+
+# ---------------------------------------------------------------- проверка: лица не повторяются
+
+KEYS = ("head", "eye", "brow", "nose", "mouth", "lips", "marks", "specs")
+FACE_KEYS = ("head", "eye", "brow", "nose", "mouth", "lips")
+
+
+def differ(a, b, keys=KEYS):
+    """Сколько заметных черт у двух лиц разные (цвет радужки не в счёт - на телефоне его не видно)."""
+    n = 0
+    for key in keys:
+        if key == "eye" and a["specs"] == b["specs"] == "frame":
+            continue  # глаза обоих за толстыми очками
+        x, y = a[key], b[key]
+        if key == "marks":
+            x, y = set(x), set(y)
+        n += x != y
+    return n
+
+
+def check(assets=None):
+    """Ошибки таблицы LOOKS: похожие пары, слабые брови у героев с настроениями, рябь морщин, очки."""
+    from pathlib import Path
+
+    from PIL import Image
+
+    assets = Path(assets or Path(__file__).resolve().parent.parent / "public" / "assets")
+    moods = ("happy", "sad", "angry", "surprised")
+    names = sorted(f.stem[9:] for f in assets.glob("portrait_*.png") if not f.stem.endswith(tuple("_" + m for m in moods)))
+    errors = [f"{n}: нет строки в LOOKS (лицо возьмётся из хэша)" for n in names if n not in LOOKS]
+    errors += [f"{n}: есть в LOOKS, но нет portrait_{n}.png" for n in LOOKS if n not in names]
+    errors += [f"{n}: в WOMEN, но нет в LOOKS" for n in WOMEN if n not in LOOKS]
+    looks = {n: look_of(n) for n in LOOKS}
+    pairs = sorted(looks)
+    for i, a in enumerate(pairs):
+        for b in pairs[i + 1:]:
+            d = differ(looks[a], looks[b])
+            if d < 3:
+                errors.append(f"{a} ~ {b}: разных черт {d} из {len(KEYS)} (нужно 3)")
+            if a in WOMEN and b in WOMEN and differ(looks[a], looks[b], FACE_KEYS) < 3:
+                errors.append(f"{a} ~ {b}: у двух женщин разных черт лица меньше 3 из {len(FACE_KEYS)}")
+    for n, look in looks.items():
+        moody = any((assets / f"portrait_{n}_{m}.png").exists() for m in moods)
+        if moody and BROWS[look["brow"]][1] is None:
+            errors.append(f"{n}: есть настроения, а бровь {look['brow']} в одну линию")
+        age = [m for m in look["marks"] if m in AGE_MARKS]
+        if len(age) > 2 or {"cheek", "fold"} <= set(age):
+            errors.append(f"{n}: морщин {age} - больше двух или скулы вместе со складками")
+        if look["lips"] == "paint" and look["mole"]:
+            x, y = look["mole"]
+            if 26 <= x <= 38 and 35 <= y <= 43:
+                errors.append(f"{n}: родинка {look['mole']} у самых накрашенных губ")
+        png = assets / f"portrait_{n}.png"
+        if png.exists():
+            frame = Image.open(png).convert("RGBA").getpixel((22, 28))[:3] == (0x5A, 0x69, 0x88)
+            if frame != (look["specs"] == "frame"):
+                errors.append(f"{n}: очки в портрете {'есть' if frame else 'нет'}, а specs={look['specs']}")
+    return errors
+
+
+if __name__ == "__main__":
+    import sys
+
+    problems = check()
+    print("\n".join(problems) or f"Лица не повторяются: {len(LOOKS)} героев, у любых двух не меньше 3 разных черт.")
+    sys.exit(1 if problems else 0)
