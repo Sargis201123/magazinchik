@@ -2,17 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { emptyDayStats, newGame, type StaffMember, type StoreState, type Unit } from '../src/game/economy';
 import { buyFloor, finishFloor, floorAvailable, floorLock, FLOORS, hasFloor, openFloors, type FloorId } from '../src/game/floors';
 import {
-  answerInspection,
   answerParty,
   closeStall,
   closedToday,
+  floorEstimate,
   foodcourtGuests,
   foodcourtNight,
   foodcourtOf,
   foodPlan,
-  INSPECT_FIX,
+  foodRun,
   INSPECT_GRACE,
-  INSPECT_TENANT_SHARE,
   inspectionToday,
   OWN_MARGIN,
   OWN_MARGIN_COOK,
@@ -20,7 +19,9 @@ import {
   PARTY_GOODWILL,
   partyOn,
   partyToday,
-  setStallMode,
+  stallEstimate,
+  stallIncome,
+  STALL_IDS,
   STALL_PLACES,
   stallMode,
   stallPlaces,
@@ -36,7 +37,8 @@ import { pendingTip, TIP_ICONS, type TipId } from '../src/game/tips';
 import { simulate } from '../src/game/simulate';
 
 // Третий этаж — фудкорт (floors.ts + foodcourt.ts, 13.11): открывается с «Универмага» (над вторым этажом, если он
-// есть в сборке), точки еды — сдать или вести самим со своей кухней, праздники и жалобы. Всё — от зерна и дня.
+// есть в сборке), точки еды работают сами (27.11: без Кухни — сданы, с Кухней — свои), праздники и жалобы (жалоба
+// закрывает точку на вечер сама). Всё — от зерна и дня.
 
 const units = (n: number): Unit[] => Array.from({ length: n }, () => ({ age: 0 }));
 const cook: StaffMember = { role: 'cook', name: 0, skill: 2, wage: 400, months: 0 };
@@ -100,15 +102,15 @@ describe('точки еды', () => {
   it('мест три, после ремонта — четыре; обустройство платит хозяин', () => {
     let s = court();
     expect(stallPlaces(s)).toBe(STALL_PLACES[0]);
-    for (const id of ['pizza', 'grill', 'coffee'] as const) s = openStall(s, id, 'rent')!;
+    for (const id of ['pizza', 'grill', 'coffee'] as const) s = openStall(s, id)!;
     expect(s.money).toBe(100000 - STALLS.pizza.setup - STALLS.grill.setup - STALLS.coffee.setup);
     expect(stallsOf(s)).toEqual(['pizza', 'grill', 'coffee']);
-    expect(openStall(s, 'sushi', 'rent')).toBeNull();
-    expect(openStall(s, 'pizza', 'rent')).toBeNull();
+    expect(openStall(s, 'sushi')).toBeNull();
+    expect(openStall(s, 'pizza')).toBeNull();
     s = finishFloor(s, 'third')!;
     expect(stallPlaces(s)).toBe(STALL_PLACES[1]);
-    expect(openStall({ ...s, money: STALLS.sushi.setup - 1 }, 'sushi', 'rent')).toBeNull();
-    s = openStall(s, 'sushi', 'rent')!;
+    expect(openStall({ ...s, money: STALLS.sushi.setup - 1 }, 'sushi')).toBeNull();
+    s = openStall(s, 'sushi')!;
     expect(stallsOf(s)).toHaveLength(4);
     // Убрать — место свободно, денег не возвращают.
     const freed = closeStall(s, 'grill')!;
@@ -117,31 +119,59 @@ describe('точки еды', () => {
     expect(closeStall(freed, 'grill')).toBeNull();
   });
 
-  it('вести самим — только со своей кухней; переключить можно бесплатно', () => {
-    const s = court();
-    expect(openStall(s, 'pizza', 'own')).toBeNull();
-    const kitchen = court({}, { upgrades: ['kitchen'] });
-    const own = openStall(kitchen, 'pizza', 'own')!;
-    expect(stallMode(own, 'pizza')).toBe('own');
-    const rented = setStallMode(own, 'pizza', 'rent')!;
-    expect(stallMode(rented, 'pizza')).toBe('rent');
-    expect(rented.money).toBe(own.money);
-    expect(setStallMode(rented, 'pizza', 'rent')).toBeNull();
-    // Кухню убрали (кривое сохранение) — «своя» работает как сданная.
-    expect(stallMode({ ...own, upgrades: [] }, 'pizza')).toBe('rent');
+  it('27.11: выбора нет — без Кухни точки сданы, с Кухней свои, с поваром выгоднее; старые сохранения читаются', () => {
+    const opened = openStall(court(), 'pizza')!;
+    expect(opened.money).toBe(100000 - STALLS.pizza.setup);
+    expect(foodRun(opened)).toBe('rent');
+    expect(stallMode(opened, 'pizza')).toBe('rent');
+    // Кухню купили — ту же точку сразу ведёт своя кухня, ничего не переключая.
+    const kitchen = { ...opened, upgrades: ['kitchen'] } as StoreState;
+    expect(foodRun(kitchen)).toBe('kitchen');
+    expect(stallMode(kitchen, 'pizza')).toBe('own');
+    expect(foodRun({ ...kitchen, staff: [...kitchen.staff, cook] })).toBe('cook');
+    // Сохранение до 27.11: «своя» без Кухни — сдана, «сдана» с Кухней — своя; сохранённое значение не читаем.
+    const old = court({ stalls: { pizza: 'own', grill: 'rent' } });
+    expect(stallsOf(old)).toEqual(['pizza', 'grill']);
+    expect(foodPlan(old)!.stalls.map((p) => p.mode)).toEqual(['rent', 'rent']);
+    const oldKitchen = court({ stalls: { pizza: 'own', grill: 'rent' }, inspect: { day: 57, fix: true } }, { upgrades: ['kitchen'] });
+    expect(foodPlan(oldKitchen)!.stalls.map((p) => p.mode)).toEqual(['own', 'own']);
+    expect(foodcourtNight(oldKitchen).day!.income).toBe(foodPlan(oldKitchen)!.income);
   });
 
-  it('вечер детерминирован; аренда — ровно аренда, своя — доля выручки (с поваром больше)', () => {
+  it('своя точка никогда не даёт меньше аренды; с поваром — больше, чем без него', () => {
+    for (const finish of [0, 1]) {
+      const s = court({ stalls: four }, {}, finish);
+      for (const id of STALL_IDS) {
+        for (const eaters of [0, 5, STALLS[id].eaters, 40]) {
+          const rent = stallIncome(s, id, eaters, 'rent');
+          expect(rent).toBe(stallRent(s, id));
+          expect(stallIncome(s, id, eaters, 'kitchen')).toBeGreaterThanOrEqual(rent);
+          expect(stallIncome(s, id, eaters, 'cook')).toBeGreaterThanOrEqual(stallIncome(s, id, eaters, 'kitchen'));
+        }
+      }
+    }
+    // Суши без повара: доля выручки чуть меньше аренды — тогда аренда (раньше «своя» тут проигрывала).
+    const s = court({ stalls: four });
+    const eaters = STALLS.sushi.eaters;
+    expect(Math.round((eaters * STALLS.sushi.check * OWN_MARGIN) / 10) * 10).toBeLessThan(stallRent(s, 'sushi'));
+    expect(stallIncome(s, 'sushi', eaters, 'kitchen')).toBe(stallRent(s, 'sushi'));
+  });
+
+  it('вечер детерминирован; без Кухни — ровно аренда, с Кухней — доля выручки (с поваром больше)', () => {
+    const rented = court({ stalls: four });
+    expect(foodPlan(rented)).toEqual(foodPlan({ ...rented }));
+    for (const p of foodPlan(rented)!.stalls) expect(p.income).toBe(p.closed ? 0 : stallRent(rented, p.id));
     const s = court({ stalls: four }, { upgrades: ['kitchen'] });
-    expect(foodPlan(s)).toEqual(foodPlan({ ...s }));
     const plan = foodPlan(s)!;
     const pizza = plan.stalls.find((p) => p.id === 'pizza')!;
-    expect(pizza.income).toBe(stallRent(s, 'pizza'));
-    const sushi = plan.stalls.find((p) => p.id === 'sushi')!;
-    expect(sushi.income).toBe(Math.round((sushi.eaters * STALLS.sushi.check * OWN_MARGIN) / 10) * 10);
-    const withCook = foodPlan({ ...s, staff: [...s.staff, cook] })!.stalls.find((p) => p.id === 'sushi')!;
-    expect(withCook.income).toBe(Math.round((withCook.eaters * STALLS.sushi.check * OWN_MARGIN_COOK) / 10) * 10);
-    expect(withCook.income).toBeGreaterThan(sushi.income);
+    expect(pizza.mode).toBe('own');
+    expect(pizza.income).toBe(Math.max(stallRent(s, 'pizza'), Math.round((pizza.eaters * STALLS.pizza.check * OWN_MARGIN) / 10) * 10));
+    const withCook = foodPlan({ ...s, staff: [...s.staff, cook] })!.stalls.find((p) => p.id === 'pizza')!;
+    expect(withCook.income).toBe(Math.round((withCook.eaters * STALLS.pizza.check * OWN_MARGIN_COOK) / 10) * 10);
+    expect(withCook.income).toBeGreaterThan(pizza.income);
+    // «А если бы»: тот же вечер, посчитанный за другого — для строки в плитке.
+    expect(foodPlan(rented, 'cook')).toEqual(foodPlan({ ...s, staff: [...s.staff, cook] }));
+    expect(foodPlan(s, 'rent')!.income).toBe(foodPlan(rented)!.income);
     // Едоков — в разумных пределах (±20% от базы).
     for (const p of plan.stalls) {
       expect(p.eaters).toBeGreaterThanOrEqual(Math.floor(STALLS[p.id].eaters * 0.8));
@@ -194,8 +224,9 @@ describe('жалоба в санинспекцию', () => {
   const at = { ...s, day };
 
   it('бывает изредка, не в первую неделю после открытия; от зерна и дня', () => {
-    const ins = inspectionToday(at)!;
-    expect(inspectionToday({ ...at })).toEqual(ins);
+    const stall = inspectionToday(at)!;
+    expect(STALL_IDS).toContain(stall);
+    expect(inspectionToday({ ...at })).toBe(stall);
     expect(inspectionToday({ ...at, floors: { ...at.floors, third: { since: day - INSPECT_GRACE + 1, finish: 0 } } })).toBeNull();
     let n = 0;
     for (let d = 100; d < 1100; d++) if (inspectionToday({ ...s, day: d })) n++;
@@ -203,25 +234,53 @@ describe('жалоба в санинспекцию', () => {
     expect(n).toBeLessThan(90);
   });
 
-  it('не ответили — точку закрывают на вечер; закрыть — то же; навести порядок — работает', () => {
-    const ins = inspectionToday(at)!;
-    expect(closedToday(at)).toBe(ins.stall);
-    const closed = foodPlan(at)!.stalls.find((p) => p.id === ins.stall)!;
+  it('27.11: решается сама — точка закрыта на вечер, денег не берут, строка в итогах; завтра снова работает', () => {
+    const stall = inspectionToday(at)!;
+    expect(closedToday(at)).toBe(stall);
+    const closed = foodPlan(at)!.stalls.find((p) => p.id === stall)!;
     expect(closed.income).toBe(0);
     expect(closed.eaters).toBe(0);
-    const shut = answerInspection(at, false)!;
-    expect(shut.money).toBe(at.money);
-    expect(closedToday(shut)).toBe(ins.stall);
-    expect(foodcourtNight(shut).day?.closed).toBe(ins.stall);
-    const fixed = answerInspection(at, true)!;
-    expect(fixed.money).toBe(at.money - ins.fix);
-    expect(closedToday(fixed)).toBeNull();
-    expect(foodPlan(fixed)!.stalls.find((p) => p.id === ins.stall)!.income).toBeGreaterThan(0);
-    // Второй раз не ответить; без денег — не навести порядок.
-    expect(answerInspection(fixed, true)).toBeNull();
-    expect(answerInspection({ ...at, money: ins.fix - 1 }, true)).toBeNull();
-    // Цена: своя точка — целиком, сданная — пополам с арендатором.
-    expect(ins.fix).toBe(Math.round(INSPECT_FIX * (stallMode(at, ins.stall) === 'own' ? 1 : INSPECT_TENANT_SHARE)));
+    const night = foodcourtNight(at);
+    expect(night.day?.closed).toBe(stall);
+    expect(night.state.money).toBe(at.money + foodPlan(at)!.income);
+    // Старое сохранение с ответом «навели порядок» сегодня — точка всё равно закрыта (ответ не читаем).
+    const old = { ...at, foodcourt: { ...at.foodcourt, inspect: { day: at.day, fix: true } } };
+    expect(closedToday(old)).toBe(stall);
+    // Назавтра (если жалобы нет) точка снова работает.
+    const next = dayWhen(at, (x) => inspectionToday(x) === null, at.day + 1);
+    expect(foodPlan({ ...at, day: next })!.stalls.every((p) => !p.closed && p.income > 0)).toBe(true);
+  });
+});
+
+describe('сколько точка даст — до того, как её открыли', () => {
+  it('аренда — ровно аренда; своя — по средней неделе, не меньше аренды; ремонт и Кухня с поваром — больше', () => {
+    const s = court();
+    for (const id of STALL_IDS) expect(stallEstimate(s, id)).toBe(STALLS[id].rent);
+    const k = court({}, { upgrades: ['kitchen'] });
+    const kc = court({}, { upgrades: ['kitchen'], staff: [cook] });
+    for (const id of STALL_IDS) {
+      expect(stallEstimate(k, id)).toBeGreaterThanOrEqual(stallEstimate(s, id));
+      expect(stallEstimate(kc, id)).toBeGreaterThan(stallEstimate(k, id));
+      // Тот же расчёт, что вечер: средняя неделя близко к среднему вечеру точки за много дней.
+      const avg = Array.from({ length: 140 }, (_, d) => foodPlan({ ...court({ stalls: { [id]: 'rent' } }, { upgrades: ['kitchen'], staff: [cook] }), day: 300 + d })!)
+        .filter((p) => !p.stalls[0].closed)
+        .reduce((sum, p, _, all) => sum + p.income / all.length, 0);
+      expect(stallEstimate(kc, id)).toBeGreaterThan(avg * 0.93);
+      expect(stallEstimate(kc, id)).toBeLessThan(avg * 1.07);
+    }
+    const fin = court({}, {}, 1);
+    expect(stallEstimate(fin, 'pizza')).toBeGreaterThan(stallEstimate(s, 'pizza'));
+  });
+
+  it('весь этаж: стоящие точки и на свободные места — самые доходные; этаж ещё не открыт — три места', () => {
+    const closedFloor = shop(below ? { floors: { [below]: { since: 1, finish: 0 } } } : {});
+    // Голый этаж без Кухни: три лучшие аренды — суши, пицца, шаурма.
+    expect(floorEstimate(closedFloor)).toBe(STALLS.sushi.rent + STALLS.pizza.rent + STALLS.grill.rent);
+    expect(floorEstimate({ ...closedFloor, upgrades: ['kitchen'], staff: [cook] })).toBeGreaterThan(floorEstimate(closedFloor));
+    // Стоит кофе — оно считается, а на два свободных места — лучшие из остальных.
+    const s = court({ stalls: { coffee: 'rent' } });
+    expect(floorEstimate(s)).toBe(STALLS.coffee.rent + STALLS.sushi.rent + STALLS.pizza.rent);
+    expect(floorEstimate(court({ stalls: four }, {}, 1))).toBe(STALL_IDS.reduce((n, id) => n + stallRent(court({}, {}, 1), id), 0));
   });
 });
 

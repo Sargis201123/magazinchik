@@ -33,7 +33,7 @@ import { button, el, toast } from './dom';
 import { setItemIcon } from './sheet';
 import { clothesRows } from './clothes';
 import { clothesOf, stockTotal } from '../game/clothes';
-import { stallPlaces, stallsOf, STALL_PLACES } from '../game/foodcourt';
+import { floorEstimate, foodPlan, stallPlaces, stallsOf, STALL_PLACES } from '../game/foodcourt';
 import { pawnOf, pawnPlace, pawnSlots, pawnWaiting } from '../game/pawnshop';
 import { openPawnCard } from './pawnshop';
 
@@ -140,7 +140,8 @@ function openRow(state: StoreState, id: FloorId, getState: () => StoreState, upd
   const def = FLOORS[id];
   const look = FLOOR_ROW[id];
   const lock = floorLock(state, id);
-  const notes = [t(look.note)];
+  // Фудкорт (27.11): сколько этаж даст каждый вечер — до покупки, точками на всех местах голого этажа.
+  const notes = [id === 'third' ? t(look.note, { n: STALL_PLACES[0], sum: floorEstimate(state) }) : t(look.note)];
   if (lock === 'level') notes.push(`🔒 ${t('floors.lock', { name: t(STORE_LEVELS[def.minLevel].nameKey) })}`);
   if (lock === 'below') notes.push(`🔒 ${t('floors.lockBelow')}`);
   return row(look.art, t(look.name), notes, [
@@ -159,10 +160,12 @@ function openRow(state: StoreState, id: FloorId, getState: () => StoreState, upd
   ]);
 }
 
-/** Третий этаж: открыть; открыт — как попасть, ремонт и где точки еды. */
+/** Третий этаж: открыть; открыт — как попасть, сколько точки дают сегодня, ремонт и где точки еды. */
 function thirdRows(state: StoreState, getState: () => StoreState, update: Update): HTMLElement[] {
   if (!floorOf(state, 'third')) return [openRow(state, 'third', getState, update)];
   const out: HTMLElement[] = [el('div', 'ui-item-sub', `🍕 ${t('floor.third.up')}`)];
+  const plan = foodPlan(state);
+  out.push(el('div', 'ui-item-sub', plan ? t('fc.today', { n: plan.eaters, sum: plan.income }) : t('fc.empty')));
   const fin = finishCost(state, 'third');
   if (fin !== null) {
     out.push(

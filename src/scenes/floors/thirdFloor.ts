@@ -833,7 +833,9 @@ function buildStall(kit: FloorKit, s: StallSpot): StallSpot {
   const tap = (): void => {
     sound.tap();
     const name = t(`fc.stall.${id}` as TextKey);
-    kit.popup(x, 30, plan.closed ? `${STALLS[id].icon} ${t('fc.inspect.closed', { name })}` : `${STALLS[id].icon} ${t('fc.tap', { n: plan.eaters, sum: plan.income })}`, { depth: POP_DEPTH });
+    // 27.11: и кто ведёт точку (арендатор или наша кухня) — повар у стойки свой у точки, нанимать его не надо.
+    const who = t(plan.mode === 'own' ? 'fc.who.own' : 'fc.who.rent');
+    kit.popup(x, 30, plan.closed ? `${STALLS[id].icon} ${t('fc.inspect.closed', { name })}` : `${STALLS[id].icon} ${t('fc.tap', { n: plan.eaters, sum: plan.income, who })}`, { depth: POP_DEPTH });
   };
   for (const img of [back, front]) img.setInteractive({ useHandCursor: true }).on('pointerup', tap);
   return s;
