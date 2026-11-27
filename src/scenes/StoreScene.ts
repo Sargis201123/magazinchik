@@ -137,6 +137,7 @@ import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
 import * as dreamsFx from './dreamsFx';
 import * as starPets from './starPets';
+import * as hyperHall from './hyperHall';
 import * as deliveries from './deliveries';
 import * as food from './food';
 import * as streets from './streets';
@@ -201,6 +202,8 @@ export class StoreScene extends Phaser.Scene {
   builtResidents = '';
   /** Как выглядит подорожавший район (game/gentrify.ts gentLook): витрины соседей и ответ «для кого магазин». */
   builtGent = '';
+  /** Под что расставлен низ зала гипермаркета (scenes/hyperHall.ts hyperLook): полки своей марки и 18+, сезон фотозоны. */
+  builtHyper = '';
   /** Что нарисовано на скупленной улице (game/estate.ts estateLook): кто в каком помещении, табличка на столбе. */
   builtEstate = '';
   /** Сколько посетителей арендаторов сейчас идёт по залу (scenes/tenantsFx.ts). */
@@ -371,6 +374,8 @@ export class StoreScene extends Phaser.Scene {
   doorSign?: Phaser.GameObjects.Image;
   lawns: { x: number; y: number; w: number; h: number }[] = [];
   greenery: Phaser.GameObjects.Image[] = [];
+  /** Кадки, вазоны, ящики под окнами, подсолнухи и вёдра тюльпанов: в снег - `${база}_winter` (weatherFx). */
+  snowDress: Phaser.GameObjects.Image[] = [];
   /** Снимок зала перед закрытием — для карточки итогов дня. */
   dayShot: HTMLImageElement | null = null;
   doorImg!: Phaser.GameObjects.Image;
@@ -1267,6 +1272,8 @@ export class StoreScene extends Phaser.Scene {
     // Сбывшиеся мечты соседей (game/dreams.ts): тележка Кости у входа, указатель к лодочной станции.
     dreamsFx.applyDreams(this);
     starPets.buildStarPet(this);
+    // Низ зала гипермаркета (hyperHall.ts) - после всего игрового: уступает место всему, что уже стоит.
+    hyperHall.buildHyperHall(this);
     morningFlow.noteNewProps(this, bought);
     // Пол — последним: тени ложатся от всей мебели, что уже стоит в зале и во флигеле.
     this.loadWear();

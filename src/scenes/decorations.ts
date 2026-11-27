@@ -748,7 +748,8 @@ export function buildOutdoorDecor(scene: StoreScene): void {
   const top = scene.streetY - 12;
   const right = yearTime(scene.state.day) === 'summer' ? door.x + 96 : door.x + 62;
   const spots = item.id === 'out_planters' ? [door.x - 60, right] : [door.x - 50];
-  for (const x of spots) scene.art(x, top + 9, item.texture).setOrigin(0.5, 1).setDepth(top + 9);
+  // В снег в кадках не цветы, а еловые лапы под снегом с калиной (out_planters_winter, weatherFx).
+  for (const x of spots) scene.snowDress.push(scene.art(x, top + 9, item.texture).setOrigin(0.5, 1).setDepth(top + 9));
 }
 
 /** Украшение зала (аквариум, фонтан, автомат…) — в свободном месте, с маленькой анимацией. */

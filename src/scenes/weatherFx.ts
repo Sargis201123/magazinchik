@@ -55,6 +55,15 @@ export function applyWeather(scene: StoreScene): void {
     // Цветы на газоне под снегом не цветут.
     if (base === 'flower' || base === 'tulips') g.setVisible(scene.weather !== 'snow');
   }
+  // Кадки, вазоны, ящики под окнами, подсолнухи и вёдра тюльпанов в снег укрыты на зиму (art/winter_beds.py):
+  // вместо цветов лапник, сухие стебли и снег. Меняются вместе со снегом на деревьях - и утром без пересборки.
+  scene.snowDress = scene.snowDress.filter((obj) => obj.active);
+  for (const obj of scene.snowDress) {
+    const base = (obj.getData('base') as string | undefined) ?? obj.texture.key;
+    obj.setData('base', base);
+    const winter = `${base}_winter`;
+    obj.setTexture(scene.weather === 'snow' && scene.textures.exists(winter) ? winter : base);
+  }
 
   scene.rainFx = undefined;
   scene.rainStopped = false;
