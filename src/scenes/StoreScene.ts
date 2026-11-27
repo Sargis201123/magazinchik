@@ -137,6 +137,7 @@ import * as weeksFx from './weeks';
 import * as linesFx from './brandLines';
 import * as dreamsFx from './dreamsFx';
 import * as starPets from './starPets';
+import * as hyperHall from './hyperHall';
 import * as deliveries from './deliveries';
 import * as food from './food';
 import * as streets from './streets';
@@ -1267,6 +1268,8 @@ export class StoreScene extends Phaser.Scene {
     // Сбывшиеся мечты соседей (game/dreams.ts): тележка Кости у входа, указатель к лодочной станции.
     dreamsFx.applyDreams(this);
     starPets.buildStarPet(this);
+    // Низ зала гипермаркета (hyperHall.ts) - после всего игрового: уступает место всему, что уже стоит.
+    hyperHall.buildHyperHall(this);
     morningFlow.noteNewProps(this, bought);
     // Пол — последним: тени ложатся от всей мебели, что уже стоит в зале и во флигеле.
     this.loadWear();
