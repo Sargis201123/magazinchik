@@ -1,14 +1,17 @@
 // Третий этаж — фудкорт (13.11, задача автора #65): светлый зал над магазином с точками еды и общими столиками.
 // Этаж открывается по общей основе (floors.ts: 'third', с «Универмага», над вторым этажом). Что тут живёт:
 //  · точки еды — пицца, шаурма с грилем, суши, кофе с десертами. Мест три, после ремонта (отделка этажа) — четыре,
-//    так что кого пустить — выбор. Точку обустраивает хозяин (один раз), дальше её либо СДАЮТ (аренда каждый
-//    вечер, как у арендаторов флигеля, tenants.ts), либо ВЕДУТ САМИ — выручка больше, но её основа — своя кухня
-//    (kitchen.ts): без кухни вести точку нечем, а без повара на смене заготовки докупаются и прибыль тоньше;
+//    так что кого пустить — выбор. Точку обустраивает хозяин (один раз), дальше она работает сама;
 //  · общие столики — по выходным больше семей. Часть едоков спускается в магазин за продуктами: гостей зала
 //    чуть больше (foodcourtGuests), вечером к лифту на фасаде идёт наплыв (scenes/foodcourtFx.ts);
 //  · иногда утром — день рождения на фудкорте: семья заказывает у магазина торт и напитки (дороже розницы);
-//  · иногда — жалоба в санинспекцию на одну из точек: навести порядок (сдаёшь — делите пополам) или закрыть
-//    точку на день.
+//  · иногда — жалоба в санинспекцию на одну из точек: точка сама закрыта на вечер, строкой в итогах дня.
+//
+// 27.11, автор: «сдать или вести самим? и сотрудника туда нанимать?» Выбора «сдать / своя» больше нет: у него был
+// один правильный ответ (с Кухней своя всегда не хуже аренды, даром и без работы). Точка работает «как выгоднее»
+// сама: без Кухни (kitchen.ts) её ведёт арендатор и платит аренду, с Кухней — своя кухня, и доход не ниже аренды, с
+// поваром на смене — больше. Нанимать на точку никого не надо: за стойками — люди точки. Жалоба тоже решается
+// сама: платное «навести порядок» стоило дороже, чем точка зарабатывает за вечер.
 //
 // Сколько едоков, будет ли праздник и жалоба — только от зерна магазина и номера дня (как в подвале, basement.ts):
 // перезапуск дня ничего не перекатывает, симулятор считает то же. Нет поля foodcourt — на этаже пусто (или этажа
@@ -23,8 +26,11 @@ import { homeLevel, inZar } from './zarshop';
 
 export type StallId = 'pizza' | 'grill' | 'sushi' | 'coffee';
 export const STALL_IDS: StallId[] = ['pizza', 'grill', 'sushi', 'coffee'];
-/** Как работает точка: сдана арендатору или своя. */
+/** Кто ведёт точку: арендатор (платит аренду) или своя кухня. В сохранении у точки тоже стоит 'rent' / 'own' — это
+ * след старого выбора (до 27.11): теперь любое из двух значит только «точка стоит», ведёт её тот, кто выгоднее. */
 export type StallMode = 'rent' | 'own';
+/** Кто ведёт точки сейчас: арендаторы (Кухни нет), своя Кухня без повара, Кухня с поваром. */
+export type FoodRun = 'rent' | 'kitchen' | 'cook';
 
 export interface Stall {
   icon: string;
@@ -43,7 +49,7 @@ export interface Stall {
 /**
  * Цифры (13.11): аренда четырёх точек — ≈ 1150 💰 в вечер, обустройство всех — 23 тыс.; с этажом и ремонтом всё
  * окупается месяца за полтора-два — для конца игры, где денег много, а вложить их почти некуда. Своя точка с
- * поваром даёт в полтора раза больше аренды, без повара — примерно столько же, но с риском жалобы целиком на себя.
+ * поваром даёт в полтора раза больше аренды, без повара — примерно столько же (но не меньше: stallIncome).
  */
 export const STALLS: Record<StallId, Stall> = {
   pizza: { icon: '🍕', setup: 6000, rent: 300, eaters: 22, check: 40, guests: 0.015 },
@@ -66,12 +72,9 @@ export const LEVEL_EATERS = 0.2;
 export const PARTY_CHANCE = 0.12;
 export const PARTY_PAY = 1.3;
 export const PARTY_GOODWILL = 1;
-/** Жалоба санинспекции: шанс утром, первая неделя после открытия — без жалоб; цена «навести порядок». */
+/** Жалоба санинспекции: шанс утром, первая неделя после открытия — без жалоб. Точка закрыта на вечер. */
 export const INSPECT_CHANCE = 0.05;
 export const INSPECT_GRACE = 7;
-export const INSPECT_FIX = 900;
-/** Сданную точку арендатор чинит сам, хозяин помогает половиной. */
-export const INSPECT_TENANT_SHARE = 0.5;
 
 export interface FoodPartyAnswer {
   day: number;
@@ -87,11 +90,11 @@ export interface FoodDay {
 }
 
 export interface FoodcourtState {
-  /** Обустроенные точки и как работают. Порядок не важен: места занимаются по STALL_IDS. */
+  /** Обустроенные точки (значение — след старого выбора, не читается). Порядок не важен: места занимаются по STALL_IDS. */
   stalls?: Partial<Record<StallId, StallMode>>;
   /** Ответ на праздник сегодня (взяли заказ или нет). */
   party?: FoodPartyAnswer;
-  /** Ответ на жалобу сегодня: навели порядок (fix) или закрыли точку. */
+  /** Старое (до 27.11): ответ на жалобу. Жалоба теперь решается сама — поле в старом сохранении не читается. */
   inspect?: { day: number; fix: boolean };
   /** Прошлый вечер — для плитки «Фудкорт». */
   last?: FoodDay & { day: number };
@@ -123,11 +126,12 @@ export function stallsOf(state: StoreState): StallId[] {
   return STALL_IDS.filter((id) => stalls[id] === 'rent' || stalls[id] === 'own').slice(0, stallPlaces(state));
 }
 
-/** Вести точку самим можно только со своей кухней (kitchen.ts); без неё «своя» работает как сданная. */
-export const ownAllowed = (state: StoreState): boolean => kitchenOpen(state);
+/** Кто ведёт точки: без Кухни (kitchen.ts) — арендаторы, с Кухней — она сама, с поваром на смене — выгоднее всего. */
+export const foodRun = (state: StoreState): FoodRun => (!kitchenOpen(state) ? 'rent' : kitchenWorking(state) ? 'cook' : 'kitchen');
+/** Как работает стоящая точка (null — её нет): своя, если есть Кухня, иначе сдана. Сохранённое значение не читаем. */
 export function stallMode(state: StoreState, id: StallId): StallMode | null {
   if (!stallsOf(state).includes(id)) return null;
-  return foodcourtOf(state)?.stalls?.[id] === 'own' && ownAllowed(state) ? 'own' : 'rent';
+  return foodRun(state) === 'rent' ? 'rent' : 'own';
 }
 
 /** Почему точку нельзя обустроить: этажа нет, уже стоит, мест нет, не хватает денег. null — можно. */
@@ -139,19 +143,14 @@ export function stallLock(state: StoreState, id: StallId): 'floor' | 'here' | 'f
   return state.money < STALLS[id].setup ? 'money' : null;
 }
 
-/** Обустроить точку и сразу решить, сдать её или вести самим (своя — только с кухней). */
-export function openStall(state: StoreState, id: StallId, mode: StallMode): StoreState | null {
-  if (!(id in STALLS) || stallLock(state, id) || (mode === 'own' && !ownAllowed(state))) return null;
+/**
+ * Обустроить точку — дальше она работает сама. В сохранение пишем 'rent': значение не читается, а откат на старую
+ * сборку оставит точку сданной — как было бы без выбора.
+ */
+export function openStall(state: StoreState, id: StallId): StoreState | null {
+  if (!(id in STALLS) || stallLock(state, id)) return null;
   const fc = foodcourtOf(state)!;
-  return set({ ...state, money: state.money - STALLS[id].setup }, { ...fc, stalls: { ...fc.stalls, [id]: mode } });
-}
-
-/** Сдать свою точку или забрать сданную себе — бесплатно: стойка та же, меняется только, кто за ней. */
-export function setStallMode(state: StoreState, id: StallId, mode: StallMode): StoreState | null {
-  const now = stallMode(state, id);
-  if (!now || now === mode || (mode === 'own' && !ownAllowed(state))) return null;
-  const fc = foodcourtOf(state)!;
-  return set(state, { ...fc, stalls: { ...fc.stalls, [id]: mode } });
+  return set({ ...state, money: state.money - STALLS[id].setup }, { ...fc, stalls: { ...fc.stalls, [id]: 'rent' } });
 }
 
 /** Убрать точку (место свободно, обустройство не возвращают) — чтобы пустить другую. */
@@ -184,41 +183,19 @@ export const stallRent = (state: StoreState, id: StallId): number =>
 
 // ---------- Жалоба и праздник ----------
 
-export interface Inspection {
-  stall: StallId;
-  /** Сколько стоит навести порядок (сданную — пополам с арендатором). */
-  fix: number;
-}
-
-/** Жалоба санинспекции сегодня утром (null — нет): первая неделя после открытия этажа — тихо. */
-export function inspectionToday(state: StoreState): Inspection | null {
+/**
+ * Жалоба санинспекции сегодня (null — нет): на какую точку. Первая неделя после открытия этажа — тихо. Решается
+ * сама: точка закрыта на вечер (строка в итогах дня), завтра снова работает — спрашивать игрока не о чем.
+ */
+export function inspectionToday(state: StoreState): StallId | null {
   const floor = floorOf(state, 'third');
   const stalls = stallsOf(state);
   if (!floor || !stalls.length || state.day - floor.since < INSPECT_GRACE || roll(state, 9) >= INSPECT_CHANCE) return null;
-  const stall = stalls[Math.floor(roll(state, 10) * stalls.length)];
-  const own = stallMode(state, stall) === 'own';
-  return { stall, fix: Math.round(INSPECT_FIX * (own ? 1 : INSPECT_TENANT_SHARE)) };
+  return stalls[Math.floor(roll(state, 10) * stalls.length)];
 }
 
-/** Что решили с сегодняшней жалобой: null — ещё не решили (вечером точку закроют сами). */
-export function inspectAnswer(state: StoreState): boolean | null {
-  const a = foodcourtOf(state)?.inspect;
-  return a && a.day === state.day ? a.fix : null;
-}
-
-/** Навести порядок (fix) или закрыть точку на день. */
-export function answerInspection(state: StoreState, fix: boolean): StoreState | null {
-  const ins = inspectionToday(state);
-  if (!ins || inspectAnswer(state) !== null || (fix && state.money < ins.fix)) return null;
-  const fc = foodcourtOf(state)!;
-  return set({ ...state, money: state.money - (fix ? ins.fix : 0) }, { ...fc, inspect: { day: state.day, fix } });
-}
-
-/** Какая точка сегодня закрыта по жалобе: жалоба есть и порядок не навели (не ответили — тоже закрыта). */
-export function closedToday(state: StoreState): StallId | null {
-  const ins = inspectionToday(state);
-  return ins && inspectAnswer(state) !== true ? ins.stall : null;
-}
+/** Какая точка сегодня закрыта по жалобе. */
+export const closedToday = (state: StoreState): StallId | null => inspectionToday(state);
 
 export interface FoodParty {
   /** Торт (медовик, пироги, булочки или мороженое — что продаём) и напитки (сок или вода). */
@@ -278,23 +255,51 @@ export interface StallPlan {
 }
 
 /**
- * Как пройдёт вечер на фудкорте: едоки и деньги каждой точки. Утром — тот же расчёт: прогноз в плитке честный, сцена
- * сажает за столики столько же людей.
+ * Сколько точка даст за вечер при стольких едоках: сданная — аренду, своя — долю выручки (с поваром больше), но не
+ * меньше аренды: с Кухней точку ведём сами, только когда это не хуже (суши без повара иначе дали бы чуть меньше).
  */
-export function foodPlan(state: StoreState): { stalls: StallPlan[]; eaters: number; income: number } | null {
+export function stallIncome(state: StoreState, id: StallId, eaters: number, run: FoodRun): number {
+  const rent = stallRent(state, id);
+  if (run === 'rent') return rent;
+  return Math.max(rent, Math.round((eaters * STALLS[id].check * (run === 'cook' ? OWN_MARGIN_COOK : OWN_MARGIN)) / 10) * 10);
+}
+
+/**
+ * Как пройдёт вечер на фудкорте: едоки и деньги каждой точки. Утром — тот же расчёт: прогноз в плитке честный, сцена
+ * сажает за столики столько же людей. run — «а если бы точки вёл другой» (строка в плитке: с Кухной, с поваром);
+ * по умолчанию — кто ведёт сейчас.
+ */
+export function foodPlan(state: StoreState, run: FoodRun = foodRun(state)): { stalls: StallPlan[]; eaters: number; income: number } | null {
   const stalls = stallsOf(state);
   if (!stalls.length || inZar(state)) return null;
   const factor = eatersFactor(state);
   const closed = closedToday(state);
-  const cook = kitchenWorking(state);
+  const mode: StallMode = run === 'rent' ? 'rent' : 'own';
   const plans = stalls.map((id, i): StallPlan => {
-    const mode = stallMode(state, id)!;
     const shut = id === closed;
     const eaters = shut ? 0 : Math.round(STALLS[id].eaters * factor * (0.8 + 0.4 * roll(state, 20 + i)));
-    const own = Math.round((eaters * STALLS[id].check * (cook ? OWN_MARGIN_COOK : OWN_MARGIN)) / 10) * 10;
-    return { id, mode, eaters, income: shut ? 0 : mode === 'own' ? own : stallRent(state, id), closed: shut };
+    return { id, mode, eaters, income: shut ? 0 : stallIncome(state, id, eaters, run), closed: shut };
   });
   return { stalls: plans, eaters: plans.reduce((n, p) => n + p.eaters, 0), income: plans.reduce((n, p) => n + p.income, 0) };
+}
+
+/**
+ * Сколько точка даёт в обычный вечер — до того, как её открыли (кнопка «Открыть» и карточка этажа): средние едоки
+ * недели (выходные — с семьями), без случая и жалоб. Этаж ещё не открыт — как голый этаж без улучшений.
+ */
+export function stallEstimate(state: StoreState, id: StallId, run: FoodRun = foodRun(state)): number {
+  const finish = (floorOf(state, 'third')?.finish ?? 0) > 0 ? 1 + FINISH_BOOST : 1;
+  const week = (5 + 2 * (WEEKEND_EATERS + floorBonus(state, 'third', 'family'))) / 7;
+  const ups = (1 + floorBonus(state, 'third', 'eaters')) * (1 + floorBonus(state, 'third', 'evening'));
+  const eaters = Math.round(STALLS[id].eaters * finish * week * ups * (1 + LEVEL_EATERS * Math.max(0, homeLevel(state) - 4)));
+  return stallIncome(state, id, eaters, run);
+}
+
+/** Обычный вечер всего этажа, когда все места заняты: стоящие точки и на свободные места — самые доходные. */
+export function floorEstimate(state: StoreState, run: FoodRun = foodRun(state)): number {
+  const here = stallsOf(state);
+  const free = STALL_IDS.filter((id) => !here.includes(id)).sort((a, b) => stallEstimate(state, b, run) - stallEstimate(state, a, run));
+  return [...here, ...free].slice(0, stallPlaces(state)).reduce((sum, id) => sum + stallEstimate(state, id, run), 0);
 }
 
 /** Едоки спускаются в магазин за продуктами: гостей зала больше (только в Центре — day.ts, homeOnly). */

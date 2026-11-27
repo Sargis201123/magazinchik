@@ -502,8 +502,16 @@ export function finishDay(scene: StoreScene): void {
         shortfall,
         total: state.money,
         housewarming: Boolean(bill?.housewarming),
-        // Фургон — с названием события: «🚐 Свадьба в соседнем районе +870».
-        other: otherIncome(night).map((r): [string, number] => [r.id === 'van' && night.van ? `🚐 ${vanEventName(scene.state, night.van.event)}` : t(INCOME_KEYS[r.id]), r.n]),
+        // Фургон - с названием события: «🚐 Свадьба в соседнем районе +870». Фудкорт (27.11): точку закрыли по жалобе -
+        // видно прямо в строке дохода, а не только под «Подробнее».
+        other: otherIncome(night).map((r): [string, number] => [
+          r.id === 'van' && night.van
+            ? `🚐 ${vanEventName(scene.state, night.van.event)}`
+            : r.id === 'food' && night.food?.closed
+              ? `${t(INCOME_KEYS.food)} (${t('fc.summaryClosed', { name: t(`fc.stall.${night.food.closed}` as TextKey) })})`
+              : t(INCOME_KEYS[r.id]),
+          r.n,
+        ]),
         expected,
         passTip: scene.stats.passed ? queueAdviceKey(scene.state) : undefined,
       },

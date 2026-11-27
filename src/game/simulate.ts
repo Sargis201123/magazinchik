@@ -130,7 +130,7 @@ import { buyStand, STAND_COST } from './rental';
 import { buyFloor, finishCost, finishFloor, floorAvailable, FLOORS, hasFloor } from './floors';
 import { basementOf, buyPart, buySlot, PARTS, SLOT_COST, slotPlaces } from './basement';
 import { clothesMorning, clothesOf, freePlaces, setClerk } from './clothes';
-import { answerInspection, answerParty, inspectionToday, openStall, ownAllowed, partyToday, setStallMode, stallLock, stallMode, stallPlaces, stallsOf, STALL_IDS, STALLS } from './foodcourt';
+import { answerParty, openStall, partyToday, stallLock, stallPlaces, stallsOf, STALL_IDS, STALLS } from './foodcourt';
 import { autoCapacity, CREDIT_MAX, QUICK_PATIENCE, quickPick, serveCapacity, smallBasket } from './traffic';
 import { levelPace, loaderPace, shelfToFill, tripSeconds } from './loader';
 import { buyVan, vanOpen, VAN_PRICE } from './van';
@@ -325,8 +325,8 @@ export type Feature =
   // Без этой механики престиж в прогоне не копится: на прежних прогонах откалиброван баланс (аренда и прайс — как были).
   | 'gentrify'
   // Фудкорт на третьем этаже (floors.ts, foodcourt.ts, 13.11): открывает этаж, когда не копит на помещение, точки —
-  // по одной, своей точку ведёт, только если повар на смене (иначе сдаёт); ремонт — когда места кончились. Праздник
-  // берёт, если товар есть; на жалобу — наводит порядок. Третий стоит на втором: без него сначала открывает второй.
+  // по одной (ведёт их кто выгоднее — как в игре), ремонт — когда места кончились. Праздник берёт, если товар есть;
+  // жалоба закрывает точку на вечер сама. Третий стоит на втором: без него сначала открывает второй.
   | 'foodcourt'
   // Улица (estate.ts, 13.11): помещения на задней улице из лишних денег — после района (с features.hood), арендатор —
   // кто платит больше всех.
@@ -899,14 +899,12 @@ export function simulate({
       if (floorAvailable(state, 'second')) spend(FLOORS.second.cost, buyFloor(state, 'second'));
       if (floorAvailable(state, 'third')) spend(FLOORS.third.cost, buyFloor(state, 'third'));
       if (hasFloor(state, 'third')) {
-        const mode = ownAllowed(state) && staffOf(state, 'cook') ? 'own' : 'rent';
+        // 27.11: кто ведёт точку, решает игра (с Кухней — своя), жалоба закрывает точку на вечер сама.
         const next = STALL_IDS.find((id) => stallLock(state, id) === null);
         const fin = finishCost(state, 'third');
-        if (next) spend(STALLS[next].setup, openStall(state, next, mode));
+        if (next) spend(STALLS[next].setup, openStall(state, next));
         else if (fin !== null && stallsOf(state).length >= stallPlaces(state)) spend(fin, finishFloor(state, 'third'));
-        for (const id of stallsOf(state)) if (stallMode(state, id) !== mode) state = setStallMode(state, id, mode) ?? state;
         if (partyToday(state)?.ready) state = answerParty(state, true) ?? state;
-        if (inspectionToday(state)) state = answerInspection(state, true) ?? answerInspection(state, false) ?? state;
       }
     }
     if (features.rental) {

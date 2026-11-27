@@ -100,7 +100,7 @@ const rainDay = (from: number): number => {
 /** Другой уровень помещения: полок не больше, чем мест под них. */
 const level = (n: number) => (state: SaveFile['state']) => ({ level: n, shelves: state.shelves.slice(0, STORE_LEVELS[n].slots) });
 
-/** FLOORSHOT: все этажи открыты — голые (bare) или отделанные до конца (full); точки еды сданы в аренду (своя — только с кухней). */
+/** FLOORSHOT: все этажи открыты — голые (bare) или отделанные до конца (full); точки еды стоят (без кухни — сданы). */
 function floorsState(base: any, full: boolean): any {
   let st: any = { ...base, level: 4, money: 10_000_000 };
   for (const id of FLOOR_IDS) st = buyFloor(st, id) ?? st;
@@ -112,7 +112,7 @@ function floorsState(base: any, full: boolean): any {
     for (const p of PART_IDS) st = buyPart(st, p) ?? st;
     for (let i = 0; i < 6; i++) st = buySlot(st) ?? st;
     st = clothesMorning(st);
-    for (const id of STALL_IDS) st = openStall(st, id, 'rent') ?? st;
+    for (const id of STALL_IDS) st = openStall(st, id) ?? st;
   }
   return { ...st, money: 50000 };
 }
