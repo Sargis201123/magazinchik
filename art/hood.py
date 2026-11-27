@@ -8,6 +8,9 @@
     python3 art/hood.py
 """
 
+import random
+
+import winter_beds as wb
 from sprites import Canvas, shadowed
 
 
@@ -38,7 +41,7 @@ def lamp():
 
 
 def planter(winter=False):
-    """Каменный вазон с цветами (зимой — еловые лапы под снегом)."""
+    """Каменный вазон с цветами (зимой - укрыт: сугроб, еловые лапы, сухие стебли и калина)."""
     c = Canvas(36, 22)
     c.rect(2, 10, 32, 10, "W")
     c.hline(2, 10, 32, "w")
@@ -48,13 +51,19 @@ def planter(winter=False):
     for x in (9, 18, 27):
         c.vline(x, 12, 6, "l")
     if winter:
-        for x in range(3, 33, 5):
-            c.ellipse(x + 2, 7, 3, 2.5, "d")
-            c.ellipse(x + 2, 6, 2, 1.4, "e")
-        c.hline(3, 4, 30, "w")
-        c.speckle(3, 4, 30, 3, ["w", "W"], 30, 7)
-        c.px(10, 7, "R")
-        c.px(24, 6, "R")
+        # Укрыт на зиму (winter_beds.py): сугроб буграми, лапник свисает через края, калина и сухие стебли.
+        # Всё внутри картинки: верхний цветной ряд - не выше y=1, лапы кончаются до x=34 (контур - на краю).
+        rnd = random.Random("hood-planter")
+        wb.drift(c, 3, 33, 6, 8, rnd, step=(8, 4))
+        wb.fir(c, 10, 7, 8, -1, rise=-2)
+        wb.fir(c, 26, 7, 8, 1, rise=-2)
+        stems = ((13, 6, 2), (23, 7, 3))
+        for x, base, h in stems:
+            wb.stem(c, x, base, h, "head")
+        wb.berries(c, 18, 7, 3)
+        for x, base, _ in stems:
+            c.hline(x - 1, base - 1, 3, wb.SNOW)
+            c.px(x - 1, base - 1, wb.SNOW_HI)
     else:
         for x in range(3, 33, 3):
             c.vline(x, 5, 4, "e")
@@ -276,6 +285,31 @@ def flowerbox():
     c.save("hood_flowerbox")
 
 
+def flowerbox_winter():
+    """Тот же ящик под окном зимой: на ящике снег, из него торчат еловые веточки и ягоды калины."""
+    c = Canvas(18, 8)
+    c.rect(1, 4, 16, 3, "a")
+    c.hline(1, 4, 16, "B")
+    for x, h in ((3, 2), (7, 3), (11, 2), (14, 3)):
+        c.vline(x, 4 - h, h, "d")
+        c.px(x - 1, 4 - h + 1, "e")
+        c.px(x + 1, 4 - h, "e")
+    c.px(9, 2, "R")
+    c.px(10, 3, "R")
+    c.px(9, 3, "r")
+    c.hline(1, 3, 3, wb.SNOW)
+    c.hline(5, 3, 4, wb.SNOW)
+    c.hline(12, 3, 5, wb.SNOW)
+    c.px(1, 3, wb.SNOW_HI)
+    c.px(5, 3, wb.SNOW_HI)
+    c.px(12, 3, wb.SNOW_HI)
+    c.hline(2, 4, 3, wb.SNOW)
+    c.hline(13, 4, 3, wb.SNOW_SH)
+    c.px(7, 4, wb.SNOW_SH)
+    c.outline("k")
+    c.save("hood_flowerbox_winter")
+
+
 def stall(roof):
     """Ярмарочная лавка: полосатый навес, прилавок с товаром."""
     c = Canvas(44, 44)
@@ -354,6 +388,7 @@ def main():
     fountain()
     playground()
     flowerbox()
+    flowerbox_winter()
     for roof in ("R", "U", "E"):
         stall(roof)
     statue()

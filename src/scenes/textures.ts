@@ -71,6 +71,7 @@ export const SPRITES = [
   'echo_card',
   // Сюжет «Папа и Соня»: подсолнухи у входа (art/family.py).
   'sunflowers',
+  'sunflowers_winter',
   // Подвал (art/basement.py, scenes/floors/basementFloor.ts, scenes/basementFx.ts): кирпич (картинка в меню «Этажи»),
   // лестница и спуск в фасаде. 14.11: пол, автоматы, холодильник и подсобка первой версии убраны — их заменили
   // картинки ниже (art/basement_art.py).
@@ -346,6 +347,7 @@ export const SPRITES = [
   'hood_fountain',
   'hood_playground',
   'hood_flowerbox',
+  'hood_flowerbox_winter',
   'hood_stall_R',
   'hood_stall_U',
   'hood_stall_E',
@@ -417,7 +419,10 @@ export const SPRITES = [
   'bat0',
   'bat1',
   'tulips',
+  'tulips_winter',
   'snowman',
+  // Клумба парка зимой (art/winter_beds.py).
+  'park_bed_snow',
   'bin0',
   'bin1',
   'bin2',
@@ -557,6 +562,7 @@ export const SPRITES = [
   'granny_box_open',
   'coin_frame',
   'out_planters',
+  'out_planters_winter',
   'out_chalkboard',
   'neon',
   'aquarium',

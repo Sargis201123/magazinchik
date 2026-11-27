@@ -13,6 +13,7 @@
 
 import random
 
+import winter_beds
 from premium import H, lit
 from sprites import Canvas
 
@@ -147,15 +148,16 @@ def wheelbarrow(c, x, base):
 
 
 def flowerbed(c, x0, x1, base, snow):
-    """Цветник у переднего забора: камни бордюром, цветы в три цвета."""
+    """Цветник у переднего забора: камни бордюром, цветы в три цвета; зимой - укрытый на зиму (winter_beds.py)."""
     rnd = random.Random(7)
+    if snow:
+        # Зимой - не белая полоса, а цветник, укрытый на зиму (winter_beds.py).
+        winter_beds.yard_bed(c, x0, x1, base, rnd)
+        return
     c.rect(x0, base - 6, x1 - x0, 6, SOIL)
     for x in range(x0, x1, 4):
         c.rect(x, base - 2, 3, 2, H("#8b9bb4"))
         c.px(x, base - 2, H("#c0cbdc"))
-    if snow:
-        c.rect(x0, base - 7, x1 - x0, 3, SNOW_L)
-        return
     for x in range(x0 + 2, x1 - 1, 3):
         col = rnd.choice((H("#e43b44"), H("#fee761"), H("#f6757a"), H("#b55088")))
         top = base - 8 - rnd.randint(0, 2)

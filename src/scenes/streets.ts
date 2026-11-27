@@ -287,7 +287,8 @@ export function drawNeighbor(scene: StoreScene, n: Neighbor, bottom: number, rnd
   }
   // Новые фасады (hood.ts): под окнами — ящики с цветами, вдоль фасада — флажки. Пустующему — нет.
   if (!n.dark && hasHood(scene.state, 'facades')) {
-    for (let x = n.x + 14; x < n.x + n.w - 10; x += 24) if (Math.abs(x - doorX) >= 22) scene.art(x, front - 0.5, 'hood_flowerbox').setDepth(front - 3.9);
+    // В снег в ящиках вместо цветов - еловые веточки под снегом и калина (hood_flowerbox_winter, weatherFx).
+    for (let x = n.x + 14; x < n.x + n.w - 10; x += 24) if (Math.abs(x - doorX) >= 22) scene.snowDress.push(scene.art(x, front - 0.5, 'hood_flowerbox').setDepth(front - 3.9));
     const colors = [0xfee761, 0xe43b44, 0x63c74d, 0x0099db];
     // Флажки одной фигурой на дом — не десятки отдельных треугольников.
     const flags = scene.add.graphics().setDepth(front - 3.8);
@@ -689,7 +690,8 @@ export function buildBranch(scene: StoreScene, x: number, y: number): void {
   lighting.nightGlow(scene, entry, 0.5, undefined, { map: { key: 'light_pool', scale: 1.6, gain: 1.4, haze: 0.15 } });
   // Ремонт: цветы в кадках у входа, потом фонари по бокам.
   const repair = branchTier(scene.state, 'repair');
-  if (repair >= 1) for (const dx of [-30, 30]) scene.art(x + dx, y + 88, 'tulips').setOrigin(0.5, 1).setDepth(depth + 0.5);
+  // В снег в вёдрах вместо тюльпанов - лапник с калиной (tulips_winter, weatherFx).
+  if (repair >= 1) for (const dx of [-30, 30]) scene.snowDress.push(scene.art(x + dx, y + 88, 'tulips').setOrigin(0.5, 1).setDepth(depth + 0.5));
   if (repair >= 3) {
     for (const dx of [-44, 44]) {
       scene.add.rectangle(x + dx, y + 80, 1, 8, 0x262b44).setDepth(depth + 1);
@@ -732,7 +734,7 @@ export function buildOldBranch(scene: StoreScene, x: number, y: number): void {
   const entry = scene.art(x, y + 70, 'glow').setDisplaySize(26, 14).setTint(0xffe6b0);
   lighting.nightGlow(scene, entry, 0.5, undefined, { map: { key: 'light_pool', scale: 1.2, gain: 1.3, haze: 0.15 } });
   const repair = branchTier(scene.state, 'repair');
-  if (repair >= 1) for (const dx of [-24, 24]) scene.art(x + dx, y + 72, 'tulips').setOrigin(0.5, 1).setDepth(depth + 0.5);
+  if (repair >= 1) for (const dx of [-24, 24]) scene.snowDress.push(scene.art(x + dx, y + 72, 'tulips').setOrigin(0.5, 1).setDepth(depth + 0.5));
   if (repair >= 3) {
     for (const dx of [-34, 34]) {
       scene.add.rectangle(x + dx, y + 64, 1, 8, 0x262b44).setDepth(depth + 1);
@@ -998,10 +1000,13 @@ export function buildPark(scene: StoreScene, next: Layout, top: number): { x: nu
   const rnd = new Phaser.Math.RandomDataGenerator(['park-beds']);
   for (const bx of [d - 260, d - 120, d + 250]) {
     const by = alley + 26;
-    scene.add.rectangle(bx, by, 64, 22, 0x8f563b).setOrigin(0).setDepth(-9.46);
-    scene.add.rectangle(bx + 2, by + 2, 60, 18, 0x733e39).setOrigin(0).setDepth(-9.45);
-    // Зимой клумбы под снегом.
-    if (frozen) snowBed(scene, bx + 2, by + 2, 60, 18, rnd);
+    if (frozen) {
+      // Зимой клумба укрыта на зиму (art/winter_beds.py): бортик в снегу, сугроб, лапник, куст в мешковине, сухие стебли и калина.
+      scene.art(bx, by, 'park_bed_snow').setOrigin(0).setDepth(-9.45);
+    } else {
+      scene.add.rectangle(bx, by, 64, 22, 0x8f563b).setOrigin(0).setDepth(-9.46);
+      scene.add.rectangle(bx + 2, by + 2, 60, 18, 0x733e39).setOrigin(0).setDepth(-9.45);
+    }
     for (let i = 0; i < (frozen ? 0 : 9); i++) {
       scene.art(bx + 7 + (i % 5) * 12 + rnd.between(-2, 2), by + 7 + Math.floor(i / 5) * 9, rnd.frac() < 0.6 ? 'flower' : 'tulips')
         .setTint(rnd.pick(flowers))
@@ -1010,28 +1015,6 @@ export function buildPark(scene: StoreScene, next: Layout, top: number): { x: nu
     areas.push({ x: bx, y: by, w: 64, h: 22 });
   }
   return areas;
-}
-
-/** Клумба под снегом: сугроб с голубыми тенями и сухие стебли — а не ровная белая плашка в рамке. */
-function snowBed(scene: StoreScene, x: number, y: number, w: number, h: number, rnd: Phaser.Math.RandomDataGenerator): void {
-  const g = scene.add.graphics().setDepth(-9.44);
-  g.fillStyle(0xe9f0fa, 1).fillRect(x, y, w, h);
-  // Снег лежит и на бортике клумбы.
-  g.fillStyle(0xf4f8ff, 1).fillRect(x - 2, y - 2, w + 4, 1.2).fillRect(x - 2, y - 2, 1.2, h + 4);
-  // Бугры сугроба: под каждым — голубая тень.
-  for (let i = 0; i < 7; i++) {
-    const cx = x + 5 + i * 8.3 + rnd.between(-2, 2);
-    const cy = y + 4 + rnd.between(0, h - 9);
-    g.fillStyle(0xc4d6ee, 1).fillEllipse(cx + 1, cy + 1.5, 10, 4.5);
-    g.fillStyle(0xffffff, 1).fillEllipse(cx, cy, 10, 4.5);
-  }
-  // Сухие стебли прошлогодних цветов.
-  g.fillStyle(0x8a6f4d, 1);
-  for (let i = 0; i < 6; i++) {
-    const sx = x + 4 + rnd.between(0, w - 8);
-    const sy = y + 5 + rnd.between(0, h - 7);
-    g.fillRect(sx, sy - 3.5, 0.6, 3.5).fillRect(sx - 1, sy - 2.6, 1.2, 0.6);
-  }
 }
 
 /** Зимний пруд: следы коньков на льду и двое катающихся по кругу (в лёгкой графике — только следы). */
@@ -1106,7 +1089,8 @@ export function buildHood(scene: StoreScene, next: Layout, top: number): { x: nu
     for (let x = -316; x < next.w + 340; x += 144) {
       if (Math.abs(x - d) < 30) continue;
       // У бордюра: ниже по тротуару висят вывески зданий района.
-      scene.art(x, top + 76, winter ? 'hood_planter_winter' : 'hood_planter').setOrigin(0.5, 0.9).setDepth(top + 76);
+      // В снег - укрыт на зиму (hood_planter_winter, weatherFx).
+      scene.snowDress.push(scene.art(x, top + 76, 'hood_planter').setOrigin(0.5, 0.9).setDepth(top + 76));
     }
   }
   // Велопарковка — на нашем тротуаре у остановки, ближе к углу.
@@ -1304,7 +1288,8 @@ export function buildCritters(scene: StoreScene, next: Layout): void {
   // Подсолнухи, которые посадила Соня, — у самого входа.
   if (sunflowersPlanted(scene.state)) {
     const y = atStreet ? top + 8.5 : front + 10;
-    scene.art(door.x - 11, y + 2, 'sunflowers').setOrigin(0.5, 1).setDepth(y + 3);
+    // В снег - сухие стебли, шляпки поникли и в снегу (sunflowers_winter, weatherFx).
+    scene.snowDress.push(scene.art(door.x - 11, y + 2, 'sunflowers').setOrigin(0.5, 1).setDepth(y + 3));
   }
   building.buildReviewBoard(scene, door.x + 28, atStreet ? top + 13 : front + 13);
 
