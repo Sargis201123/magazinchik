@@ -145,9 +145,11 @@ function buildAisle(scene: StoreScene): void {
   if (!aisle) return;
   const { x0, x1, y } = aisle;
   const DEPTH = 0.19;
-  scene.add.tileSprite(x0 + 2, y, x1 - x0 - 4, AISLE_H, building.potTile(scene, 'hyper_aisle')).setOrigin(0).setTileScale(1 / ART).setDepth(DEPTH);
-  scene.art(x0, y, 'hyper_aisle_l').setOrigin(0).setDepth(DEPTH);
-  scene.art(x1, y, 'hyper_aisle_r').setOrigin(1, 0).setDepth(DEPTH);
+  // Полупрозрачно: сквозь полосу видны швы плитки зала - читается как разметка в полу, а не как плашка-кнопка.
+  const ALPHA = 0.55;
+  scene.add.tileSprite(x0 + 2, y, x1 - x0 - 4, AISLE_H, building.potTile(scene, 'hyper_aisle')).setOrigin(0).setTileScale(1 / ART).setDepth(DEPTH).setAlpha(ALPHA);
+  scene.art(x0, y, 'hyper_aisle_l').setOrigin(0).setDepth(DEPTH).setAlpha(ALPHA);
+  scene.art(x1, y, 'hyper_aisle_r').setOrigin(1, 0).setDepth(DEPTH).setAlpha(ALPHA);
 }
 
 /**
