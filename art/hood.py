@@ -52,16 +52,18 @@ def planter(winter=False):
         c.vline(x, 12, 6, "l")
     if winter:
         # Укрыт на зиму (winter_beds.py): сугроб буграми, лапник свисает через края, калина и сухие стебли.
+        # Всё внутри картинки: верхний цветной ряд - не выше y=1, лапы кончаются до x=34 (контур - на краю).
         rnd = random.Random("hood-planter")
-        wb.drift(c, 3, 33, 5, 8, rnd, step=(8, 4))
-        wb.fir(c, 9, 8, 8, -1)
-        wb.fir(c, 27, 8, 8, 1)
-        for x, h in ((13, 2), (24, 3)):
-            wb.stem(c, x, 5, h, "head", snow_cap=False)
-        wb.berries(c, 19, 5, 3)
-        for x in (13, 24):
-            c.hline(x - 1, 4, 3, wb.SNOW)
-            c.px(x - 1, 4, wb.SNOW_HI)
+        wb.drift(c, 3, 33, 6, 8, rnd, step=(8, 4))
+        wb.fir(c, 10, 7, 8, -1, rise=-2)
+        wb.fir(c, 26, 7, 8, 1, rise=-2)
+        stems = ((13, 6, 2), (23, 7, 3))
+        for x, base, h in stems:
+            wb.stem(c, x, base, h, "head")
+        wb.berries(c, 18, 7, 3)
+        for x, base, _ in stems:
+            c.hline(x - 1, base - 1, 3, wb.SNOW)
+            c.px(x - 1, base - 1, wb.SNOW_HI)
     else:
         for x in range(3, 33, 3):
             c.vline(x, 5, 4, "e")

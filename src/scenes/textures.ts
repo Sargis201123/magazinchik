@@ -419,6 +419,7 @@ export const SPRITES = [
   'bat0',
   'bat1',
   'tulips',
+  'tulips_winter',
   'snowman',
   // Клумба парка зимой (art/winter_beds.py).
   'park_bed_snow',

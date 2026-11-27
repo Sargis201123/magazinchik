@@ -159,7 +159,8 @@ export function buildParking(scene: StoreScene, next: Layout, street: number): {
   const tree = scene.art(right - 23, top + 24, 'tree_round').setOrigin(0.5, 0.9).setDepth(-9.42);
   scene.greenery.push(tree);
   scene.windTrees.push(tree);
-  scene.art(right - 9, top + 20, 'bush_flower').setDepth(-9.42);
+  // Куст - как на газонах: в снег в шапке (bush_flower_snow), качается на ветру.
+  scene.greenery.push(scene.art(right - 9, top + 20, 'bush_flower').setDepth(-9.42));
   // Фонарь парковки загорается первым — у него датчик сумерек; под ним на асфальте — пятно света.
   const lampX = right - 37;
   scene.art(lampX, bottom - 8, 'lamp').setOrigin(0.5, 0.95).setDepth(-9.42);

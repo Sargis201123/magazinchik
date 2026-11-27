@@ -371,6 +371,8 @@ export class StoreScene extends Phaser.Scene {
   doorSign?: Phaser.GameObjects.Image;
   lawns: { x: number; y: number; w: number; h: number }[] = [];
   greenery: Phaser.GameObjects.Image[] = [];
+  /** Кадки, вазоны, ящики под окнами, подсолнухи и вёдра тюльпанов: в снег - `${база}_winter` (weatherFx). */
+  snowDress: Phaser.GameObjects.Image[] = [];
   /** Снимок зала перед закрытием — для карточки итогов дня. */
   dayShot: HTMLImageElement | null = null;
   doorImg!: Phaser.GameObjects.Image;

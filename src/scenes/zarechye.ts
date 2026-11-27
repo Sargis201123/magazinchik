@@ -157,7 +157,7 @@ export function buildNeighbors(scene: StoreScene, next: Layout): void {
   if (look === 'duel') duelDay(scene, somX, base);
   else if (look === 'friends') {
     // Помирились: у лавки Сома — бочка с рыбой «для соседей» и цветы.
-    scene.art(somX + 22, base + 8, 'tulips').setOrigin(0.5, 1).setDepth(base + 8);
+    scene.snowDress.push(scene.art(somX + 22, base + 8, 'tulips').setOrigin(0.5, 1).setDepth(base + 8));
   }
 }
 

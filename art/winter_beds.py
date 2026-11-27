@@ -112,28 +112,39 @@ def grass(c, x, base, h):
     c.px(x, base - h - 1, SNOW_HI)
 
 
-def fir(c, x, y, length, direction=1, snow=True):
-    """Еловый лапник на снегу: веточка вбок и чуть вверх, хвоя ёлочкой назад к основанию (сверху
-    светлее, снизу темнее), кончик - молодая хвоя, на хвое - снег."""
-    tip = (x, y)
-    for k in range(length):
-        px, py = x + k * direction, y - k // 4
-        c.px(px, py, "d")
-        tip = (px, py)
-        if k % 2 == 0 and k < length - 1:
-            c.px(px - direction, py - 1, "e")
-            c.px(px - direction, py + 1, "d")
-            if k > 1:
-                c.px(px - 2 * direction, py - 2, "e")
-                c.px(px - 2 * direction, py + 2, "d")
-    c.px(tip[0] + direction, tip[1], "E")
-    c.px(tip[0], tip[1] - 1, "E")
+def fir(c, x, y, length, direction=1, snow=True, rise=4):
+    """Еловая лапа: сплошная веточка в 3 точки (сверху хвоя светлее, снизу темнее - свет сверху слева),
+    по обе стороны через 3 точки - пучки хвои, отогнутые назад к срезу; срез - коричневый, кончик -
+    молодая светлая хвоя. Не пунктир через точку: хвоя и снег не чередуются. Снег - шапкой у основания,
+    на снегу под лапой - голубая тень вправо вниз.
+    rise - через сколько точек лапа поднимается на 1 (отрицательное - свисает вниз, через край вазона)."""
+    d = direction
+    pts = [(x + k * d, y - k // rise if rise > 0 else y + k // -rise) for k in range(length + 1)]
+    # Тень ложится только на снег (на камне вазона её не видно).
+    for k, (px, py) in enumerate(pts[:-2]):
+        for sy in (py + 2, py + 3) if k < length - 3 else (py + 2,):
+            if c.get(px + 1, sy) in (SNOW, SNOW_HI):
+                c.px(px + 1, sy, SNOW_SH)
+    c.px(x - d, y, "a")
+    for k, (px, py) in enumerate(pts[:-1]):
+        if k == length - 1:
+            c.px(px, py, "E")
+            continue
+        c.px(px, py - 1, "E" if k % 3 == 2 else "e")
+        c.px(px, py, "e" if k % 3 else "d")
+        c.px(px, py + 1, "d")
+        if k % 3 == 1 and k < length - 3:
+            c.px(px - d, py - 2, "e")
+            c.px(px - d, py + 2, "d")
+    # Кончик продолжает изгиб лапы.
+    c.px(*pts[-1], "E")
     if snow:
-        for k in range(3, length - 2, 4):
-            px, py = x + k * direction, y - k // 4
-            c.px(px - 2 * direction, py - 2, SNOW_HI)
-            c.px(px - direction, py - 2, SNOW)
-            c.px(px - direction, py - 1, SNOW_HI)
+        for k in range(1, min(4, length - 2)):
+            px, py = pts[k]
+            c.px(px, py - 2, SNOW_HI if k < 3 else SNOW)
+        for k in range(1, min(3, length - 2)):
+            px, py = pts[k]
+            c.px(px, py - 1, SNOW)
 
 
 def burlap(c, cx, base, w, h):
@@ -261,8 +272,8 @@ def park_bed():
         c.px(x, y + 1, SNOW_HI)
         c.px(x + w - 1, y + 1, SNOW_SH)
         c.hline(x + w // 2, y + 2, w - w // 2 - 1, SNOW_SH)
-    c.vline(0, 6, 7, SNOW)
-    c.vline(1, 7, 4, SNOW_SH)
+    c.vline(1, 6, 7, SNOW)
+    c.vline(2, 7, 4, SNOW_SH)
     # Середина: лапник внахлёст, за ним - калина.
     berries(c, 63, 18, 8)
     for fx, fy, n, d in ((44, 24, 13, 1), (84, 25, 13, -1), (56, 30, 12, 1), (74, 31, 11, -1)):
@@ -290,14 +301,16 @@ def sunflowers_winter():
     """Подсолнухи Сони у входа зимой 20×30 (как летние sunflowers из family.py): сухие стебли,
     шляпки поникли и в снегу, на ящике с землёй - сугроб."""
     c = Canvas(20, 30)
-    for x, top, lean in ((4, 8, -1), (10, 4, 1), (16, 10, 1)):
+    # Стебли чуть ближе к середине, чем летние: поникшие шляпки с контуром целиком внутри картинки.
+    # side - куда висит верхний лист; у правого стебля листья зеркально, чтобы не скрещивались с соседом.
+    for x, top, lean, side in ((5, 8, -1, 1), (10, 4, 1, 1), (15, 10, 1, -1)):
         c.vline(x, top + 3, 26 - top, "t")
         c.vline(x, top + 14, 12 - top // 2, "a")
         # Сухие листья повисли.
-        c.line(x, top + 9, x - 2, top + 11, "a")
-        c.line(x, top + 15, x + 2, top + 17, "a")
+        c.line(x, top + 9, x - 2 * side, top + 11, "a")
+        c.line(x, top + 15, x + 2 * side, top + 17, "a")
         # Шляпка склонилась набок: тёмная серединка, по краю - остатки лепестков, сверху снег.
-        hx, hy = x + lean * 2, top + 3
+        hx, hy = x + lean, top + 3
         c.line(x, top + 4, hx, hy, "t")
         c.ellipse(hx + 0.5, hy + 0.5, 2.4, 2.0, "x")
         c.ellipse(hx + 0.5 - lean * 0.4, hy, 1.6, 1.3, "b")
@@ -321,9 +334,49 @@ def sunflowers_winter():
     shadowed(c, 10, 29, 9, 1.5).save("sunflowers_winter")
 
 
+def tulips_winter():
+    """Ведро с тюльпанами у входа (tulips в sprites.py, 18×20) в снег: то же ведро, в нём - еловые лапы
+    шапкой под снегом, гроздь калины и сухая метёлка. Ставится вместо тюльпанов, пока лежит снег."""
+    c = Canvas(18, 20)
+    c.rect(3, 11, 12, 8, "l")
+    c.hline(3, 11, 12, "W")
+    c.vline(3, 12, 7, "G")
+    # Лапы шапкой над краем ведра: сплошная хвоя, сверху светлее, снизу темнее; по бокам свисают через край.
+    c.ellipse(9, 9, 7, 3.6, "d")
+    c.ellipse(8.4, 8.2, 5.8, 2.8, "e")
+    for x, y in ((4, 8), (6, 7), (9, 6), (12, 7), (5, 10), (13, 9)):
+        c.px(x, y, "E")
+    for x, y in ((2, 11), (15, 11), (2, 12), (15, 12)):
+        c.px(x, y, "d")
+    c.px(2, 10, "e")
+    # Сухая метёлка и веточка калины торчат из лапника.
+    c.vline(12, 2, 5, "a")
+    c.px(11, 3, "t")
+    c.px(13, 2, "t")
+    c.px(11, 1, "N")
+    c.px(12, 1, SNOW_HI)
+    for gx, gy in ((5, 4), (7, 3)):
+        c.px(gx, gy, "R")
+        c.px(gx + 1, gy, "R")
+        c.px(gx, gy + 1, "R")
+        c.px(gx + 1, gy + 1, "r")
+        c.px(gx, gy, "s")
+    c.line(6, 6, 7, 5, "x")
+    # Снег на лапах: шапка слева светлее, справа в голубой тени.
+    c.ellipse(8.2, 6.6, 4.4, 1.5, SNOW)
+    c.hline(5, 6, 3, SNOW_HI)
+    c.px(4, 7, SNOW_HI)
+    c.hline(11, 7, 2, SNOW_SH)
+    c.px(2, 9, SNOW)
+    c.px(14, 8, SNOW)
+    c.outline("k")
+    shadowed(c, 9, 19, 7, 2).save("tulips_winter")
+
+
 def main():
     park_bed()
     sunflowers_winter()
+    tulips_winter()
 
 
 if __name__ == "__main__":

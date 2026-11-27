@@ -287,9 +287,8 @@ export function drawNeighbor(scene: StoreScene, n: Neighbor, bottom: number, rnd
   }
   // Новые фасады (hood.ts): под окнами — ящики с цветами, вдоль фасада — флажки. Пустующему — нет.
   if (!n.dark && hasHood(scene.state, 'facades')) {
-    // Зимой в ящиках вместо цветов - еловые веточки под снегом и калина (art/hood.py).
-    const box = yearTime(scene.state.day) === 'winter' ? 'hood_flowerbox_winter' : 'hood_flowerbox';
-    for (let x = n.x + 14; x < n.x + n.w - 10; x += 24) if (Math.abs(x - doorX) >= 22) scene.art(x, front - 0.5, box).setDepth(front - 3.9);
+    // В снег в ящиках вместо цветов - еловые веточки под снегом и калина (hood_flowerbox_winter, weatherFx).
+    for (let x = n.x + 14; x < n.x + n.w - 10; x += 24) if (Math.abs(x - doorX) >= 22) scene.snowDress.push(scene.art(x, front - 0.5, 'hood_flowerbox').setDepth(front - 3.9));
     const colors = [0xfee761, 0xe43b44, 0x63c74d, 0x0099db];
     // Флажки одной фигурой на дом — не десятки отдельных треугольников.
     const flags = scene.add.graphics().setDepth(front - 3.8);
@@ -691,7 +690,8 @@ export function buildBranch(scene: StoreScene, x: number, y: number): void {
   lighting.nightGlow(scene, entry, 0.5, undefined, { map: { key: 'light_pool', scale: 1.6, gain: 1.4, haze: 0.15 } });
   // Ремонт: цветы в кадках у входа, потом фонари по бокам.
   const repair = branchTier(scene.state, 'repair');
-  if (repair >= 1) for (const dx of [-30, 30]) scene.art(x + dx, y + 88, 'tulips').setOrigin(0.5, 1).setDepth(depth + 0.5);
+  // В снег в вёдрах вместо тюльпанов - лапник с калиной (tulips_winter, weatherFx).
+  if (repair >= 1) for (const dx of [-30, 30]) scene.snowDress.push(scene.art(x + dx, y + 88, 'tulips').setOrigin(0.5, 1).setDepth(depth + 0.5));
   if (repair >= 3) {
     for (const dx of [-44, 44]) {
       scene.add.rectangle(x + dx, y + 80, 1, 8, 0x262b44).setDepth(depth + 1);
@@ -734,7 +734,7 @@ export function buildOldBranch(scene: StoreScene, x: number, y: number): void {
   const entry = scene.art(x, y + 70, 'glow').setDisplaySize(26, 14).setTint(0xffe6b0);
   lighting.nightGlow(scene, entry, 0.5, undefined, { map: { key: 'light_pool', scale: 1.2, gain: 1.3, haze: 0.15 } });
   const repair = branchTier(scene.state, 'repair');
-  if (repair >= 1) for (const dx of [-24, 24]) scene.art(x + dx, y + 72, 'tulips').setOrigin(0.5, 1).setDepth(depth + 0.5);
+  if (repair >= 1) for (const dx of [-24, 24]) scene.snowDress.push(scene.art(x + dx, y + 72, 'tulips').setOrigin(0.5, 1).setDepth(depth + 0.5));
   if (repair >= 3) {
     for (const dx of [-34, 34]) {
       scene.add.rectangle(x + dx, y + 64, 1, 8, 0x262b44).setDepth(depth + 1);
@@ -1089,7 +1089,8 @@ export function buildHood(scene: StoreScene, next: Layout, top: number): { x: nu
     for (let x = -316; x < next.w + 340; x += 144) {
       if (Math.abs(x - d) < 30) continue;
       // У бордюра: ниже по тротуару висят вывески зданий района.
-      scene.art(x, top + 76, winter ? 'hood_planter_winter' : 'hood_planter').setOrigin(0.5, 0.9).setDepth(top + 76);
+      // В снег - укрыт на зиму (hood_planter_winter, weatherFx).
+      scene.snowDress.push(scene.art(x, top + 76, 'hood_planter').setOrigin(0.5, 0.9).setDepth(top + 76));
     }
   }
   // Велопарковка — на нашем тротуаре у остановки, ближе к углу.
@@ -1287,8 +1288,8 @@ export function buildCritters(scene: StoreScene, next: Layout): void {
   // Подсолнухи, которые посадила Соня, — у самого входа.
   if (sunflowersPlanted(scene.state)) {
     const y = atStreet ? top + 8.5 : front + 10;
-    // Зимой - сухие стебли, шляпки поникли и в снегу (art/winter_beds.py).
-    scene.art(door.x - 11, y + 2, yearTime(scene.state.day) === 'winter' ? 'sunflowers_winter' : 'sunflowers').setOrigin(0.5, 1).setDepth(y + 3);
+    // В снег - сухие стебли, шляпки поникли и в снегу (sunflowers_winter, weatherFx).
+    scene.snowDress.push(scene.art(door.x - 11, y + 2, 'sunflowers').setOrigin(0.5, 1).setDepth(y + 3));
   }
   building.buildReviewBoard(scene, door.x + 28, atStreet ? top + 13 : front + 13);
 
