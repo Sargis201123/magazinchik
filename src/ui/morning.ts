@@ -52,6 +52,7 @@ import {
   upgradeCost,
   upgradeShelf,
   warehouseCapacity,
+  levelWarehouse,
   warehouseCount,
   warehouseOf,
   cashierScan,
@@ -4515,7 +4516,7 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
     const current = el('div', 'ui-box');
     current.append(
       el('b', '', t('store.current', { name: t(level.nameKey) })),
-      el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: level.warehouse, r: registerCount(state), g: level.guests })),
+      el('div', 'ui-muted', t('store.stats', { slots: level.slots, wh: warehouseCapacity(state), r: registerCount(state), g: level.guests })),
     );
     const reviews = state.reviews?.length ? [button(t('review.title'), () => showReviews(getState().reviews), 'ui-btn secondary')] : [];
     out.push(current, button(t('report.button'), () => showReport(getState()), 'ui-btn secondary'), ...reviews);
@@ -4555,14 +4556,14 @@ export function showMorning({ getState, setState, lateState, onOpen, onVisit, on
         grow.append(
           el('b', '', `🏬 ${t('hyper.title')}`),
           hyperArt(false),
-          el('div', '', t('hyper.offer', { slots: next.slots, wh: next.warehouse, g: next.guests, rent: next.rent })),
+          el('div', '', t('hyper.offer', { slots: next.slots, wh: levelWarehouse(state, next), g: next.guests, rent: next.rent })),
           // Не в «?»: что станет со старым магазином — главное в этой карточке.
           el('div', '', t('hyper.branch', { name: branchSignName(state, t('branch.defaultName')) })),
         );
       } else {
         grow.append(
           el('b', '', t('store.next', { name: t(next.nameKey) })),
-          el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: next.warehouse, r: nextRegisterCount(state) ?? registerSlots(state), g: next.guests, rent: next.rent })),
+          el('div', 'ui-muted', t('store.nextStats', { slots: next.slots, wh: levelWarehouse(state, next), r: nextRegisterCount(state) ?? registerSlots(state), g: next.guests, rent: next.rent })),
         );
       }
       if (state.debt > 0) grow.append(el('div', 'ui-note', t('store.needNoDebt')));

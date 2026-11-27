@@ -1338,7 +1338,7 @@ export const tr: Record<TextKey, string> = {
   "gear.warehouse.0": "Basit raflar",
   "gear.warehouse.0.fx": "Kutular elde taşınır",
   "gear.warehouse.1": "Transpalet",
-  "gear.warehouse.1.fx": "Depo +%20, reyoncu %15 daha hızlı, bir seferde 6 yerine 12 ürün taşır",
+  "gear.warehouse.1.fx": "Depo +%20, reyoncu %15 daha hızlı, bir seferde iki kat fazla taşır",
   "gear.warehouse.2": "Yüksek raflar ve forklift",
   "gear.warehouse.2.fx": "Depo +%40, reyoncu %30 daha hızlı",
   "gear.warehouse.3": "Otomatik depo",

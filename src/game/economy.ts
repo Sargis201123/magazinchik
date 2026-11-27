@@ -984,7 +984,12 @@ export const nextStoreLevel = (state: StoreState): StoreLevel | undefined =>
   inZar(state) ? zarNextLevel(state) : state.level + 1 === HYPER_LEVEL && !state.branch ? undefined : STORE_LEVELS[state.level + 1];
 /** Сколько мест на складе: по помещению и оборудованию склада (gear.ts). */
 // Склад-холодильник в подвале (basement.ts) — ещё доля к складу помещения.
-export const warehouseCapacity = (state: StoreState): number => Math.round(storeLevel(state).warehouse * (warehouseRoom(state) + coldRoom(state)));
+export const warehouseCapacity = (state: StoreState): number => levelWarehouse(state, storeLevel(state));
+/**
+ * Склад помещения lvl у этого игрока: оборудование склада и холодильник в подвале переезжают вместе с ним.
+ * 27.11: карточка «Развития» писала базу помещения («склад 230»), а у игрока с автоскладом - 368.
+ */
+export const levelWarehouse = (state: StoreState, lvl: StoreLevel): number => Math.round(lvl.warehouse * (warehouseRoom(state) + coldRoom(state)));
 export const freeSlots = (state: StoreState): number => storeLevel(state).slots - state.shelves.filter((s) => !isFixture(s)).length;
 
 export const emptyDayStats = (): DayStats => ({

@@ -1354,7 +1354,7 @@ export const en: Record<TextKey, string> = {
   "gear.warehouse.0": "Plain racks",
   "gear.warehouse.0.fx": "Boxes carried by hand",
   "gear.warehouse.1": "Pallet jack",
-  "gear.warehouse.1.fx": "Storage +20%, loader 15% faster, carries 12 items a trip instead of 6",
+  "gear.warehouse.1.fx": "Storage +20%, loader 15% faster, carries twice as much per trip",
   "gear.warehouse.2": "High racks and a forklift",
   "gear.warehouse.2.fx": "Storage +40%, loader 30% faster",
   "gear.warehouse.3": "Automated storage",
