@@ -214,6 +214,8 @@ export class StoreScene extends Phaser.Scene {
   gardener?: Phaser.GameObjects.Container;
   builtGarden = '';
   gardenAt?: { next: import('./layout').Layout; top: number };
+  /** Утреннее окно (morningFlow.ts: от showMorning до «Открыть магазин»): грядки снова ростки, к вечеру поспеют. */
+  yardMorning = false;
   /** Какой район построен (game/zarechye.ts zarLook): Центр или Заречье, шаг Сома, теплоход. */
   builtZar = '';
   /** Какие домики друзей стоят на «Улице друзей» (friendStreet.ts, game/street.ts streetKey). */

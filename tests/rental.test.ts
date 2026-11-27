@@ -45,12 +45,12 @@ describe('прокат: стойка', () => {
     expect(buyStand(shop({ day: RENTAL_FROM_DAY - 1 }))).toBeNull();
   });
 
-  it('стойку покупают один раз — и всё: ни залога, ни запаса вещей', () => {
+  it('стойку покупают один раз — и всё: выбирать залог и докупать вещи не надо', () => {
     const before = shop();
     const after = buyStand(before)!;
     expect(after.money).toBe(before.money - STAND_COST);
-    expect(after.rental).toEqual({});
-    expect(rentalOf(after)).toEqual({});
+    // Старые поля - только для отката на код до 27.11: там это полная стойка со средним залогом.
+    expect(after.rental).toEqual({ stock: 10, deposit: 'medium' });
     expect(buyStand(after)).toBeNull();
     expect(buyStand(shop({ money: STAND_COST - 1 }))).toBeNull();
   });
@@ -162,7 +162,7 @@ describe('прокат: вечер', () => {
     const { state, day } = rentalNight(s, 150);
     expect(day).toEqual(plan);
     expect(state.money).toBe(s.money + plan.income);
-    expect(state.rental).toEqual({ last: { ...plan, day: 50 }, earned: plan.income });
+    expect(state.rental).toEqual({ last: { ...plan, day: 50 }, earned: plan.income, stock: 10, deposit: 'medium' });
     const next = rentalNight({ ...state, day: 51 }, 150).state;
     expect(rentalLog({ ...next, day: 52 })).toEqual({ n: next.rental!.last!.rented, last: next.rental!.last!.income, total: next.rental!.earned });
     expect(rentalLog({ ...next, day: 55 })).toBeNull();
@@ -193,14 +193,16 @@ describe('прокат: старые сохранения и мир', () => {
     expect(rentalDay(old, 100)).toBeNull();
   });
 
-  it('стойка до 27.11 (запас 4 из 10, маленький залог) работает как полная, первый вечер убирает старые поля', () => {
+  it('стойка до 27.11 (запас 4 из 10, маленький залог) работает как полная, первый вечер пишет её полной', () => {
     const old = shop({ level: 4, day: 60, rental: { stock: 4, deposit: 'small', earned: 900, last: { kit: 'rain', rented: 4, lost: 1, income: 68, kept: 20, day: 59 } } as unknown as StoreState['rental'] });
     const fresh = rented({ level: 4, day: 60 });
     expect(rentalDay(old, 300)).toEqual(rentalDay(fresh, 300));
     expect(rentalDay(old, 300)!.rented).toBeGreaterThan(4);
     expect(rentalLog(old)).toMatchObject({ last: 68, total: 900 });
     const night = rentalNight(old, 300).state;
-    expect(Object.keys(night.rental!).sort()).toEqual(['earned', 'last']);
+    // Для отката на код до 27.11 (rentalOf там читает stock и deposit): стойка полная, залог средний, без «докупить».
+    expect(Object.keys(night.rental!).sort()).toEqual(['deposit', 'earned', 'last', 'stock']);
+    expect(night.rental).toMatchObject({ stock: 10, deposit: 'medium' });
     expect(night.rental!.earned).toBe(900 + rentalDay(old, 300)!.income);
   });
 

@@ -571,7 +571,7 @@ const css = `
 /* Вид камеры в большом магазине: слева, над кнопкой звука. */
 .ui-view { right: auto; left: max(10px, calc((100vw - var(--game-w, min(100vw, 56.25dvh))) / 2 + 10px));
   bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 84px); padding: 5px 8px; }
-/* Бабушкин двор: над кнопкой вида; урожай созрел — жёлтая и мягко светится. */
+/* Бабушкин двор: над кнопкой вида (двор приносит деньги сам, кнопка только показывает его). */
 .ui-yard { bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom)) + 128px); }
 .ui-report-chart { display: flex; align-items: flex-end; gap: 6px; height: 110px; margin: 10px 0; padding: 0 2px; }
 .ui-report-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }

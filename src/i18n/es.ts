@@ -4457,7 +4457,7 @@ export const es: Record<TextKey, string> = {
   "pitch.invite": "Invitar una semana",
   "pitch.left": "{n} d más",
   "pitch.invited": "{name}: se instala junto a la entrada, primer alquiler esta tarde",
-  "news.yard": "🌱 El huerto de la abuela está a la izquierda de la tienda, detrás del almacén: el botón 🌱 lo muestra. Tres bancales, cada uno con su cultivo; el bot avisará cuando madure la cosecha.",
+  "news.yard": "🌱 El huerto de la abuela está a la izquierda de la tienda, detrás del almacén: el botón 🌱 lo muestra. Hasta tres bancales, y cada uno trae dinero cada tarde: no hay nada que recoger.",
   "news.tenants": "🔑 Los inquilinos cobran vida: peluquería, fotos y cajero, segunda reforma, encargos en el tablón «Pedidos» y un vendedor de temporada junto a la entrada.",
   "closing.sign": "Cerrado",
   "closing.skip": "Toca para cerrar más rápido",

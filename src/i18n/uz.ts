@@ -4466,7 +4466,7 @@ export const uz: Record<TextKey, string> = {
   "pitch.invite": "Bir haftaga chaqirish",
   "pitch.left": "yana {n} kun",
   "pitch.invited": "{name}: kirish oldiga joylashadi, birinchi ijara — bugun kechqurun",
-  "news.yard": "🌱 Buvining hovlisi doʻkonning chap tomonida, ombor ortida: 🌱 tugmasi koʻrsatadi. Uchta joʻyak, har birida oʻz ekini; hosil pishganda bot yozadi.",
+  "news.yard": "🌱 Buvining hovlisi doʻkonning chap tomonida, ombor ortida: 🌱 tugmasi koʻrsatadi. Uchtagacha joʻyak, har biri har kech pul keltiradi, hech narsa yigʻish shart emas.",
   "news.tenants": "🔑 Ijarachilar jonlandi: sartaroshxona, foto va bankomat, ikkinchi taʼmir, «Buyurtmalar» taxtasidagi iltimoslar — va kirish oldidagi mavsumiy sotuvchi.",
   "closing.sign": "Yopiq",
   "closing.skip": "Bos — tezroq yopamiz",

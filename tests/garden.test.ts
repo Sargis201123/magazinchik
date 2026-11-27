@@ -38,7 +38,7 @@ describe('двор: поставить и вскопать', () => {
     expect(buildGarden(shop({ money: GARDEN_PRICE - 1 }))).toBeNull();
     const state = built();
     expect(state.money).toBe(1000 - GARDEN_PRICE);
-    expect(state.garden).toEqual({ beds: 1 });
+    expect(state.garden).toEqual({ beds: 1, since: 0, harvests: 0 });
     expect(bedCount(state)).toBe(1);
     expect(buildGarden(state)).toBeNull();
   });
@@ -80,7 +80,7 @@ describe('двор: деньги каждый вечер', () => {
     const first = yardNight(s);
     expect(first.income).toBe(90);
     expect(first.state.money).toBe(s.money + 90);
-    expect(first.state.garden).toEqual({ beds: 1, last: { day: 30, n: 90 }, total: 90 });
+    expect(first.state.garden).toEqual({ beds: 1, last: { day: 30, n: 90 }, total: 90, since: 0, harvests: 0 });
     const second = yardNight({ ...first.state, day: 31 }).state;
     expect(second.garden?.total).toBe(180);
     expect(yardLog({ ...second, day: 32 })).toEqual({ last: 90, total: 180 });
@@ -154,10 +154,29 @@ describe('двор: старые сохранения (урожай по час�
   it('первый вечер переводит двор в новый вид, грядок столько же; докопать можно дальше', () => {
     const s = old({ since: 1, harvests: 5, crop: 'mix', own: 200, watered: 2, more: [{ crop: 'apples', since: 1 }] });
     const night = yardNight({ ...s, day: 50 });
-    expect(night.state.garden).toEqual({ beds: 2, last: { day: 50, n: 300 }, total: 300 });
+    expect(night.state.garden).toEqual({ beds: 2, last: { day: 50, n: 300 }, total: 300, since: 0, harvests: 0, more: [{ crop: 'apples', since: 0 }] });
     const dug = addBed({ ...s, money: 5000 })!;
-    expect(dug.garden).toEqual({ beds: 3 });
+    expect(dug.garden).toEqual({ beds: 3, since: 0, harvests: 0, more: [{ crop: 'apples', since: 0 }, { crop: 'quick', since: 0 }] });
     expect(dug.money).toBe(5000 - BED_COSTS[1]);
+  });
+
+  it('откат на код до 27.11: грядки, купленные и после вечера, он насчитает столько же, таймеры без NaN', () => {
+    // Как грядки читает код до 27.11 (bedsOf на 0a5ba02): первая - since, остальные - more с культурой и since.
+    const oldBeds = (g: StoreState['garden']): number => {
+      const more = (Array.isArray(g?.more) ? g.more : []).filter((b) => {
+        const bed = b as { crop?: unknown; since?: unknown } | null;
+        return Boolean(bed) && ['quick', 'mix', 'apples'].includes(String(bed!.crop)) && Number.isFinite(bed!.since);
+      });
+      return Number.isFinite(g?.since) ? 1 + more.slice(0, BEDS_MAX - 1).length : NaN;
+    };
+    let s = built({ money: 5000, level: 3 });
+    for (let beds = 1; beds <= BEDS_MAX; beds++) {
+      expect(oldBeds(s.garden)).toBe(beds);
+      const evening = yardNight({ ...s, day: 40 + beds }).state;
+      expect(oldBeds(evening.garden)).toBe(beds);
+      expect(typeof evening.garden?.harvests).toBe('number');
+      if (beds < BEDS_MAX) s = addBed(evening)!;
+    }
   });
 
   it('бот про урожай больше не зовёт: в поводах игры нет поля ripe', () => {

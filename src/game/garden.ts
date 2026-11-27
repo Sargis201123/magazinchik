@@ -23,7 +23,8 @@ export interface GardenState {
   /** Сколько двор принёс за всё время. */
   total?: number;
   // До 27.11 (урожай по часам): первая грядка - since/crop, остальные - more; сборы, «своё варенье», поливы друзей.
-  // Читаются только, чтобы посчитать грядки старого сохранения; первый же вечер их убирает.
+  // Новый код читает их, только пока нет beds (старое сохранение). Пишутся на один выпуск (saveGarden) - для отката
+  // и старого кэша клиента; crop, own и watered первый же вечер убирает.
   since?: number;
   crop?: string;
   harvests?: number;
@@ -64,29 +65,41 @@ export const bedIncome = (state: StoreState): number => YARD_PER_BED * (homeLeve
 /** Сколько двор принесёт сегодня вечером: грядки × ставка; двора нет - 0. */
 export const yardIncome = (state: StoreState): number => bedCount(state) * bedIncome(state);
 
+/**
+ * Двор в сохранении: число грядок, вчера и всего. На один выпуск рядом - старые поля, по которым грядки считает код
+ * до 27.11 (bedsOf: первая - since, остальные - more): при откате или со старым кэшем клиента игрок не теряет
+ * купленные грядки и не видит NaN в таймерах (since 0 - «спело», урожай ему можно собрать). Новый код их не читает
+ * (beds есть). Убрать since/harvests/more в следующем выпуске.
+ */
+export const saveGarden = (beds: number, last?: GardenState['last'], total?: number): GardenState => ({
+  beds,
+  ...(last ? { last } : {}),
+  ...(total ? { total } : {}),
+  since: 0,
+  harvests: 0,
+  ...(beds > 1 ? { more: BED_CROPS.slice(1, beds).map((crop) => ({ crop, since: 0 })) } : {}),
+});
+
 /** Поставить теплицу. null - рано, уже стоит, не хватает денег или мы в Заречье. */
 export function buildGarden(state: StoreState): StoreState | null {
   if (hasGarden(state) || inZar(state) || state.day < GARDEN_FROM_DAY || state.money < GARDEN_PRICE) return null;
-  return { ...state, money: state.money - GARDEN_PRICE, garden: { beds: 1 } };
+  return { ...state, money: state.money - GARDEN_PRICE, garden: saveGarden(1) };
 }
 
 export const nextBedCost = (state: StoreState): number | null => (hasGarden(state) ? (BED_COSTS[bedCount(state) - 1] ?? null) : null);
-
-/** Двор в новом виде: число грядок, вчера и всего; старые поля (урожай по часам) уходят. */
-const tidy = (g: GardenState, beds: number): GardenState => ({ beds, ...(g.last ? { last: g.last } : {}), ...(g.total ? { total: g.total } : {}) });
 
 /** Вскопать ещё одну грядку. null - теплицы нет, грядок уже три, не хватает денег или мы в Заречье. */
 export function addBed(state: StoreState): StoreState | null {
   const cost = nextBedCost(state);
   if (inZar(state) || !state.garden || cost === null || state.money < cost) return null;
-  return { ...state, money: state.money - cost, garden: tidy(state.garden, bedCount(state) + 1) };
+  return { ...state, money: state.money - cost, garden: saveGarden(bedCount(state) + 1, state.garden.last, state.garden.total) };
 }
 
 /** Вечер: бабушка продала урожай - деньги в кассу до счетов (day.ts), как аренда; запоминаем «вчера» и «всего». */
 export function yardNight(state: StoreState): { state: StoreState; income: number } {
   const income = yardIncome(state);
   if (!income || !state.garden) return { state, income: 0 };
-  const garden: GardenState = { beds: bedCount(state), last: { day: state.day, n: income }, total: (state.garden.total ?? 0) + income };
+  const garden = saveGarden(bedCount(state), { day: state.day, n: income }, (state.garden.total ?? 0) + income);
   return { state: { ...state, money: state.money + income, garden }, income };
 }
 

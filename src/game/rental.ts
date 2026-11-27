@@ -26,10 +26,17 @@ export interface Rental {
   last?: RentalDay & { day: number };
   /** Сколько стойка принесла за всё время. */
   earned?: number;
-  /** До 27.11: вещей на стойке и залог. Больше не читаются (стойка всегда полная), первый же вечер их убирает. */
+  /** До 27.11: вещей на стойке и залог. Новый код их не читает (стойка всегда полная), пишет на один выпуск (OLD_STAND). */
   stock?: number;
   deposit?: string;
 }
+
+/**
+ * На один выпуск стойка пишется и со старыми полями: код до 27.11 (rentalOf) без них видит пустую стойку
+ * и предлагает «докупить» 10 вещей. При откате или со старым кэшем клиента стойка у игрока полная. Убрать
+ * в следующем выпуске.
+ */
+const OLD_STAND = { stock: 10, deposit: 'medium' } as const;
 
 /** С какого дня и помещения («Магазинчик») можно поставить стойку: не в первые две недели, когда нового и так много. */
 export const RENTAL_FROM_DAY = 16;
@@ -83,7 +90,7 @@ export const rentalOpen = (state: StoreState): boolean => !inZar(state) && homeL
 
 export function buyStand(state: StoreState): StoreState | null {
   if (!rentalOpen(state) || state.rental || state.money < STAND_COST) return null;
-  return { ...state, money: state.money - STAND_COST, rental: {} };
+  return { ...state, money: state.money - STAND_COST, rental: { ...OLD_STAND } };
 }
 
 export interface RentalDay {
@@ -123,7 +130,7 @@ export function rentalNight(state: StoreState, passers: number): { state: StoreS
   const r = state.rental;
   const day = rentalDay(state, passers);
   if (!r || !day) return { state, day: null };
-  const rental: Rental = { last: { ...day, day: state.day }, earned: (r.earned ?? 0) + day.income };
+  const rental: Rental = { last: { ...day, day: state.day }, earned: (r.earned ?? 0) + day.income, ...OLD_STAND };
   return { state: { ...state, money: state.money + day.income, rental }, day };
 }
 

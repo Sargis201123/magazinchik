@@ -50,8 +50,12 @@ function clearYard(scene: StoreScene): void {
   scene.gardenObjs = [];
 }
 
-/** Доля прошедшего дня для грядок: до открытия - утро, ночная смена и после закрытия - вечер (и в лёгкой графике). */
-const dayShare = (scene: StoreScene): number => (scene.night ? 1 : Phaser.Math.Clamp(1 - scene.timeLeft / DAY_SECONDS, 0, 1));
+/**
+ * Доля прошедшего дня для грядок (и в лёгкой графике): утреннее окно - утро, день - по часам смены, ночная смена,
+ * закрытие и итоги - вечер. Утро - по отметке yardMorning (morningFlow.ts): timeLeft до «Открыть магазин»
+ * остаётся от вчерашнего дня (0), и без неё утром грядки стояли бы спелыми.
+ */
+const dayShare = (scene: StoreScene): number => (scene.night ? 1 : scene.yardMorning ? 0 : Phaser.Math.Clamp(1 - scene.timeLeft / DAY_SECONDS, 0, 1));
 /** Что сейчас нарисовано: грядки и стадия по ходу дня, виден ли двор. */
 const yardKey = (scene: StoreScene): string => `${gardenLook(scene.state, dayShare(scene))}|${gardenVisible(scene.state) ? 1 : 0}`;
 

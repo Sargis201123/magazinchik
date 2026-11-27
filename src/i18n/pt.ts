@@ -4467,7 +4467,7 @@ export const pt: Record<TextKey, string> = {
   "pitch.invite": "Chamar por uma semana",
   "pitch.left": "mais {n} d",
   "pitch.invited": "{name}: vai ficar na entrada, primeiro aluguel hoje à tarde",
-  "news.yard": "🌱 O quintal da vovó fica à esquerda da loja, atrás do depósito: o botão 🌱 mostra. Três canteiros, cada um com sua cultura; o bot avisa quando a colheita amadurecer.",
+  "news.yard": "🌱 O quintal da vovó fica à esquerda da loja, atrás do depósito: o botão 🌱 mostra. Até três canteiros, e cada um traz dinheiro toda noite: não precisa colher nada.",
   "news.tenants": "🔑 Os inquilinos ganharam vida: barbearia, fotos e caixa eletrônico, segunda reforma, pedidos no quadro “Pedidos” — e um vendedor da estação na entrada.",
   "closing.sign": "Fechado",
   "closing.skip": "Toque para fechar mais rápido",
