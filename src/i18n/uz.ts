@@ -1350,7 +1350,7 @@ export const uz: Record<TextKey, string> = {
   "gear.warehouse.0": "Oddiy javonlar",
   "gear.warehouse.0.fx": "Qutilarni qoʻlda tashishadi",
   "gear.warehouse.1": "Gidravlik aravacha",
-  "gear.warehouse.1.fx": "Ombor +20%, yukchi 15% tezroq, bir borishda 6 emas, 12 ta narsa olib keladi",
+  "gear.warehouse.1.fx": "Ombor +20%, yukchi 15% tezroq, bir borishda ikki baravar ko‘p olib keladi",
   "gear.warehouse.2": "Baland javonlar va yuklagich",
   "gear.warehouse.2.fx": "Ombor +40%, yukchi 30% tezroq",
   "gear.warehouse.3": "Avto-ombor",

@@ -1351,7 +1351,7 @@ export const pt: Record<TextKey, string> = {
   "gear.warehouse.0": "Estantes simples",
   "gear.warehouse.0.fx": "Caixas carregadas à mão",
   "gear.warehouse.1": "Paleteira",
-  "gear.warehouse.1.fx": "Estoque +20%, repositor 15% mais rápido, leva 12 itens por viagem em vez de 6",
+  "gear.warehouse.1.fx": "Estoque +20%, repositor 15% mais rápido, leva o dobro em cada viagem",
   "gear.warehouse.2": "Estantes altas e empilhadeira",
   "gear.warehouse.2.fx": "Estoque +40%, repositor 30% mais rápido",
   "gear.warehouse.3": "Estoque automático",

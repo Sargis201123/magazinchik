@@ -1348,7 +1348,7 @@ export const kk: Record<TextKey, string> = {
   "gear.warehouse.0": "Жай сөрелер",
   "gear.warehouse.0.fx": "Қораптарды қолмен тасиды",
   "gear.warehouse.1": "Жүк арбасы",
-  "gear.warehouse.1.fx": "Қойма +20%, жүкші 15% жылдамырақ, бір барғанда 6 емес, 12 зат әкеледі",
+  "gear.warehouse.1.fx": "Қойма +20%, жүкші 15% жылдамырақ, бір барғанда екі есе көп әкеледі",
   "gear.warehouse.2": "Биік сөрелер мен жүктиегіш",
   "gear.warehouse.2.fx": "Қойма +40%, жүкші 30% жылдамырақ",
   "gear.warehouse.3": "Автоқойма",
