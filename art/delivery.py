@@ -16,7 +16,6 @@
 from sprites import (
     Canvas,
     beard,
-    glasses,
     hair_bald,
     hair_bun,
     hair_cap,
@@ -176,7 +175,8 @@ def scarf(p, skin, hair, shirt):
 
 def callers():
     """Портреты тех, кто звонит (номер = HomeOrder.caller, имена — delivery.caller<N>)."""
-    portrait("caller0", "#b55088", "#f2d3ab", "#d8d8e0", "#68386c", hair_bun, glasses)
+    # Нина Петровна: не двойник бабушки - свой фон и кофта, тонкие золотые очки (art/looks.py, specs="wire").
+    portrait("caller0", "#265c42", "#f2d3ab", "#d8d8e0", "#a22633", hair_bun)
     portrait("caller1", "#0099db", "#eec39a", "#733e39", "#63c74d", hair_messy)
     portrait("caller2", "#f6757a", "#f2d3ab", "#b86f50", "#feae34", hair_long, scarf)
     portrait("caller3", "#3e8948", "#d9a066", "#4a2c1a", "#5a6988", hair_bald, mustache)

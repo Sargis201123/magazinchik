@@ -342,7 +342,8 @@ def portraits():
     # Семён Сом — хозяин рыбной лавки: седые усы, кепка речника, свитер грубой вязки.
     for mood in (None, "happy", "angry", "surprised"):
         p.portrait("zar_som", "#124e89", "#e4a672", "#c0cbdc", "#5a6988", p.hair_cap, lambda q, *a: (p.mustache(q, *a), p.beard(q, *a)), mood)
-    p.portrait("zar_nina", "#0099db", "#f2d3ab", "#d8d8e0", "#124e89", p.hair_bun, p.glasses)
+    # Нина Петровна без очков: её лицо (брыли, строгий рот) видно, с бабушкой не спутать.
+    p.portrait("zar_nina", "#0099db", "#f2d3ab", "#d8d8e0", "#124e89", p.hair_bun)
     p.portrait("zar_yegor", "#63c74d", "#eec39a", "#4a2c1a", "#3e8948", p.hair_curly)
     p.portrait("zar_stepan", "#8f563b", "#d9a066", "#8b9bb4", "#733e39", p.hair_cap, p.mustache)
     p.portrait("zar_lida", "#f6757a", "#f2d3ab", "#e43b44", "#b55088", p.hair_scarf)
